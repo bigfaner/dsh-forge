@@ -16,7 +16,7 @@ flowchart LR
 | 锚 id | 判据源（官方面） | 消费点 | 退化行为 | 诊断 | 锚定测试 |
 |---|---|---|---|---|---|
 | INV-B-session-cwd | `sessions.list.getSnapshot().byId[*].cwd`（主视图会话行 `retainedBy.mainView > 0` 行的 cwd 字段） | `apps/web/src/client-plugin/start-session-wrap.ts` `officialAnchor`（INV-B cwd 绑定——会话归属判据） | cwd 缺席 → 退成员位投影缓存径（`sessionIds` 包含 + INV-U 选主仲裁） | warn 一行（client 束 = diagnostic-emit-discipline 豁免面，`deps.warn`/console.warn） | `start-session-wrap.test.ts` INV-B 退化径诊断留痕用例 |
-| INV-U-master-predicate | 官方 `workspaces.list` items `{workspaceId, path, sessionIds, createdAt}` 行集 + projects 表 ws_path 唯一性 | wrap 面 `selectMasterRow` ↔ host 面 `worktree-identity.ts` resolveProject 主树锚判（统一选主谓词，bug 0c677db2） | —（谓词本体；漂移面 = items 行形状，INV-L 活性过滤兜底） | — | `master-arbitration.test.ts`（同锚集合两半边裁决一致性） |
+| INV-U-master-predicate | 官方 `workspaces.list` items `{workspaceId, path, sessionIds, createdAt}` 行集 + projects 表 ws_path 唯一性 | wrap 面 `selectMasterRow` ↔ host 面 `worktree-identity.ts` resolveProject 主树锚判（统一选主谓词，bug 0c677db2） | —（谓词本体；漂移面 = items 行形状，INV-L 活性过滤兜底） | — | `master-arbitration.test.ts`（同锚集合两半边裁决一致性；成立域限定 M1 见本文件「INV-U 统一选主谓词」节与该测试头注） |
 | wrap-startSession-face | `uiWorkspace.startSession(workspaceId?)` 方法存在性 | 同文件 `installStartSessionWrap`（属性替换） | 面缺席 = 零安装零抛（no-op dispose） | fail-open warn（判定链异常时） | `start-session-wrap.test.ts` ⑨ |
 
 ## INV-U 统一选主谓词（判据书面化）
@@ -40,3 +40,19 @@ flowchart LR
 是前缀，两半边选主可分叉（wrap 面零 git 探针，不加锚匹配复核）。分叉面 =
 worktree_dir 指向主树子树外的项目配置；默认布局（`<主树>/.forge/worktrees`）下
 前提恒成立。
+
+**分叉域二：祖先非 git 注册根行劫持**——注册行集含非 git 目录、且其 ws_path 位于某
+祖先 git 仓库子树内时，cwd 落该目录所得锚为祖先仓锚，两侧可分叉：
+
+- host 侧有守卫：`worktree-identity.ts` `isGenuineGitRoot` 域归属核验
+  （bug bc81f4b8 收口）——非 git 注册根独占其子树，cwd 落其内（含精确命中）归属即
+  null，祖先仓锚不越权判回 git 项目；同锚退路行亦过同门核验。
+- wrap 前缀判无同锚过滤：`selectMasterRow` 只做祖先前缀/createdAt 仲裁，零 git 探针、
+  不做域归属核验——此分叉域为 host 守卫单侧兜底面，wrap 面不加锚匹配复核。
+
+**口径差边界注（host 精确命中短路 vs wrap 无 cwd 恒主树胜）**：host `resolveProject`
+在行遍历中「cwd 精确命中注册根」即短路返回（`worktree-identity.ts:119-122`），先于
+主树锚判与同锚多行仲裁——host 面输入含 cwd 本身，命中行即归属；wrap 面无 cwd 输入
+（官方 `startSession` 无参径），一律经 INV-U 主树判仲裁。两口径仅在「cwd 精确命中
+非主树注册根」场景下可能各取命中行/主树行——输入集合不同所致，非谓词分叉，不违
+镜像同构契约。

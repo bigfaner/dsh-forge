@@ -113,7 +113,9 @@ function recentWorkspaceId(items: readonly WsItemSlice[], byId: Record<string, u
  * 成立域限定（M1）：① 的 host 判据（锚在行内）与 wrap 祖先前缀判等价的前提是
  * 「worktree 全在主树子树内」——worktree_dir 逐项目可配（host worktree-identity
  * getWorktreeDir），外置布局下主树路径未必是 worktree 行的祖先前缀，两半边可分叉；
- * wrap 面零 git 探针不加复核，分叉面以台账 official-face-contract-anchors.md 为准。
+ * 另设祖先非 git 注册根行劫持分叉域：host 侧有 isGenuineGitRoot 域归属核验守卫
+ * （bug bc81f4b8 收口），wrap 前缀判无同锚过滤、零 git 探针不加复核，分叉面以台账
+ * official-face-contract-anchors.md 为准。
  * 契约锚定测试：master-arbitration.test.ts（同锚集合两半边裁决一致性）。
  */
 export function selectMasterRow(

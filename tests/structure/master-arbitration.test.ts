@@ -4,6 +4,9 @@
 // 主树路径是同仓 worktree 行的祖先前缀 ⇔ 锚 realpath(git-common-dir) 恒坐落在主树内）；
 // createdAt 只是实现近似（主树判缺席时的残留重复行仲裁）。判据书面化正本：
 // docs/conventions/official-face-contract-anchors.md（契约锚台账 INV-U 行）。
+// 成立域限定（M1）：两侧判据等价以「worktree 全在主树子树内」为前提（外置 worktree_dir
+// 分叉域）；另设祖先非 git 注册根行劫持分叉域（host isGenuineGitRoot 守卫单侧兜底，
+// wrap 面零探针不加复核）——分叉域书面化见正本 M1 节。
 //
 // 跨端直引先例：tests/structure/installer-pipeline.test.ts（apps/host 源面直引）。
 import { describe, expect, it } from 'vitest'
