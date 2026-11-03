@@ -156,3 +156,10 @@
 - 3.8 集成套件 = `e2e/specs/knowledge-integration.spec.ts`（两用例：组一知识视图/召回 tab 接线 + 组二真数据面——随 host 通道转正实跑，4.2 验证）。
 - 4.2 dogfood 套件 = `e2e/specs/flywheel.spec.ts`（飞轮 6 步链单流走查，真实模型凭据缺席 = 留痕 skip——Open Question ② 口径）。
 - 4.3 安装包冒烟套件 = `e2e/specs/p1mvp/installer-smoke.spec.ts`（MVP 门第二步 4 步旅程：NSIS 静默安装 → 安装后 exe 直启 → 三区最简 → 会话面板 + 新建会话入口；非 smoke 迁移组——断言面 = 安装形态可用性下限（Story 2），三区最简断言为骨架组 L41/L44/L46 同语义复刻非迁移载体）。**归并记录（2026-10-04，fix-37 ④）**：任务 4.3 产物 `e2e/specs/installer-smoke.spec.ts` 覆盖面并入本 p1mvp contract 溯源版（installer 链单跑——双 NSIS 分钟级安装终结）：①安装/--check 与 ②启动零错（manifest + profile 四文件 + patch 产品插件行内容 + state.db）归 beforeAll + 冒烟前半（patch 内容断言随迁保留）；③三区 = 冒烟前半 Step 3 超集；④会话面板 = 冒烟后半超集；fail-fast 差异面（Step2c 破坏启动路径）保留。NSIS 安装包未构建（`release/installer/`）= 留痕 skip；每跑静默安装至盘根短路径隔离目录（`<仓库盘>:\dsh-forge-smoke\`——MAX_PATH 与 TEMP 盘余量双约束，套件内重定向 TEMP/TMP）+ 静默卸载收尾（注册表/快捷方式卫生）。
+## 7. 收口残留 fixme / skip 逐例背书（e2e-known-reds-triage 1.11，2026-11-03 全量迁移批收口 run）
+
+- **expert-squad-summon 降级① workspace 锚缺席（test.fixme）**：e2e 前置不可构造——官方 dsh home bootstrap 恒物化默认工作区行（probe7a）且 workspaces store 经 WS 水化非 fetch（probe5），fetch 包装触不到；守卫覆盖由单测 `summon-session.test.ts` 持有。spec 头注正本（expert-squad-summon.spec.ts:19）。
+- **expert-squad-summon 降级② preset 被拒（test.fixme）**：注入确证命中但拒绝发生于官方 openWorkspace 视图切换之后（面板已卸载，引导条现流程不可达——probe8）；编排面返回值由 `summon-session.test.ts` 持有。spec 头注正本（expert-squad-summon.spec.ts:24）。
+- **flywheel dogfood（留痕 skip ×1）**：真实模型凭据缺席口径（§6 4.2 行），零凭据 Hard Rule。
+- **installer-smoke NSIS（留痕 skip ×1）**：安装包未构建（`release/installer/`），§6 归并行口径。
+- 背书对账：全量迁移批（53 spec / 159 用例，workers=2，E2E_TMP_ROOT 短路径态）skip 面 = 上列 2 skip，fixme 面 = 上列 2 fixme，零未背书残留。留痕 `proposals/e2e-known-reds-triage/walkthrough/013-final-batch/`。
