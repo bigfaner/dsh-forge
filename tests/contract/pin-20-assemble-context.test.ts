@@ -19,8 +19,11 @@
 //   dsh-api-session-controller lib/index.js fork：create meta 枚举 cwd?/parentSession/isSeeded/agentPreset?
 //     ——无 origin（“A fork shares the lineage field without the origin”，dsh-subagent lib/index.js L2264 注释）
 // Hard Rule：只 pin 上游公开面（npm 包导出、d.ts 随包分发面、公开服务的运行期契约），不 pin 内部实现；
-//   fork meta 枚举一节按 pin-16-jobs-log-channel 先例附机械文本审计（该枚举是 origin 能进入 fork
-//   header 的唯一上游位）。
+//   fork meta 枚举一节为该规则的例外（controller fork 的 meta 构造非公开导出面，无行为径可孤立
+//   驱动）：机械文本审计即 fork 继承性断言的唯一主锚（该枚举是 origin 能进入 fork header 的
+//   唯一上游位）。锚强度弱于 pin-16-jobs-log-channel 先例（行为主锚 + 文本辅证双保险——此处
+//   文本独挑，非「同式」）：上游字段重命名（meta:/agentOptions: 锚位漂移）即假红 = 人工复核
+//   触发（读 controller fork 实现 confirm meta 枚举成员集），非承重假设失效判据。
 // 锚定链（pin-16 同式）：dsh-agent / dsh-subagent / dsh-session 均非宿主直依赖——经 host 实依赖的
 //   @deepseek-ai/dsh-api-session-controller（三包均其 peerDependencies 声明面）解析，pnpm 布局下该包
 //   sibling node_modules 即真相；自宿主锚直解析将被严格布局拒绝。
@@ -29,7 +32,7 @@
 //   ⑳-2 assembleContextFor 形状（运行期 agent/scope 同引用 + 声明面签名与盲区自证）
 //   ⑳-3 SessionHeader origin 单字面值锚（canonical 类型面：成员集 + 全部 origin 声明）
 //   ⑳-4 fork/seed 创建路径不继承 origin（childSessionMeta 出生写 + SessionStore.prepare meta 折叠
-//        + fork meta 文本审计）
+//        + fork meta 文本审计——fork 创建侧唯一主锚，锚强度声明见上 Hard Rule）
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'

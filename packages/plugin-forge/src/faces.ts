@@ -572,6 +572,10 @@ export type ProjectDirServiceFace = Pick<ProjectServiceM2, 'getProject' | 'deriv
  * （{tasksHome}/{flatten}@{hash8} 单源——插件不复制派生逻辑）。两跳皆异步而事件子文件夹
  * 落盘为同步径，以记忆化桥接：resolve 只读记忆（未命中触发懒解析并按 fail-soft 返回
  * undefined——该次详情行省略，后续命中），warm 供装配期逐绑定项目预热。
+ *
+ * 空结果策略（与 ProjectWorkspaceRoots 的缝分叉点）：项目未注册（getProject null）=
+ * delete 记忆、可重试（绑定增量注册后再解析）；派生空（deriveTaskStoreDir 返回
+ * dir === ''）= 解析中占位 '' 永驻——warm 的 has 短路即不再重试。
  */
 export interface ProjectContainerDirs {
   /** 记忆读数（同步；未命中/解析中/解析失败 = undefined + 触发懒解析） */
@@ -593,6 +597,8 @@ export function createProjectContainerDirs(projects: ProjectDirServiceFace): Pro
         return
       }
       const derived = await projects.deriveTaskStoreDir({ workspaceDir: project.wsPath })
+      // 派生空不覆盖占位：'' 永驻 Map，后续 warm 的 has 短路——不重试（空结果策略分叉点：
+      // 另一侧 ProjectWorkspaceRoots 空 = delete 可重试）
       if (derived.dir !== '') dirs.set(projectId, derived.dir)
     })().catch(() => {
       dirs.delete(projectId) // fail-soft：解析失败 = 未记忆（下次事件再触发懒解析，零外抛）
@@ -619,8 +625,10 @@ export type ProjectWsRootServiceFace = Pick<ProjectServiceM2, 'getProject'>
 /**
  * projectId → 项目工作区根（ws_path canonical）记忆（bug 8b041612 修正缝：
  * modelingReportPresent 卷宗探测的 dir 语义 = 工作区根，非容器库目录——两缝分置）。
- * 与 ProjectContainerDirs 同模式记忆化：resolve 只读记忆（未命中触发懒解析并按
- * fail-soft 返回 undefined），warm 供装配期逐绑定项目预热。
+ * 记忆化脚手架与 ProjectContainerDirs 同构（resolve 只读记忆 + warm 预热 + 解析中占位
+ * ''），但空结果策略相反：本缝空（项目未注册 / ws_path 空白）= delete 记忆、下次触发
+ * 可重试；ContainerDirs 派生空 = 占位永驻不重试（分叉点见其接口注释）。分叉为有意保留，
+ * 两缝不预合并——第三缝出现时再抽通用工厂（空结果策略即工厂的参数化差异）。
  */
 export interface ProjectWorkspaceRoots {
   /** 记忆读数（同步；未命中/解析中/解析失败 = undefined + 触发懒解析） */
@@ -638,6 +646,7 @@ export function createProjectWorkspaceRoots(projects: ProjectWsRootServiceFace):
     void (async () => {
       const project = await projects.getProject(projectId)
       if (project !== null && project.wsPath.trim() !== '') roots.set(projectId, project.wsPath)
+      // 空（未注册 / ws_path 空白）= 未记忆可重试——与 ContainerDirs 派生空永驻相反（分叉点）
       else roots.delete(projectId)
     })().catch(() => {
       roots.delete(projectId) // fail-soft：解析失败 = 未记忆（下次再触发，零外抛）
