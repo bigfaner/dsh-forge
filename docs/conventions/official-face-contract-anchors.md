@@ -51,7 +51,7 @@ worktree_dir 指向主树子树外的项目配置；默认布局（`<主树>/.fo
   不做域归属核验——此分叉域为 host 守卫单侧兜底面，wrap 面不加锚匹配复核。
 
 **口径差边界注（host 精确命中短路 vs wrap 无 cwd 恒主树胜）**：host `resolveProject`
-在行遍历中「cwd 精确命中注册根」即短路返回（`worktree-identity.ts:119-122`），先于
+在行遍历中「cwd 精确命中注册根」即短路返回（`apps/host/src/ipc/worktree-identity.ts:119-122`），先于
 主树锚判与同锚多行仲裁——host 面输入含 cwd 本身，命中行即归属；wrap 面无 cwd 输入
 （官方 `startSession` 无参径），一律经 INV-U 主树判仲裁。两口径仅在「cwd 精确命中
 非主树注册根」场景下可能各取命中行/主树行——输入集合不同所致，非谓词分叉，不违

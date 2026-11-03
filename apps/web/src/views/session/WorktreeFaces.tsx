@@ -196,7 +196,7 @@ export function ForgeHeroWorktreeMount({
   // 1.34 确认闩锁（bug ccfcc103）：确认后置位——同行重选零重弹；换目标重选清退
   // （riskLatchReselect，重新判定）。取消 = 本次改选未发生（选中态保持原样），不写抑制集
   // （抑制语义随 arm 效应链退役——再点选即重新判定）。
-  // bug 8913a908：闩锁挂组件 useState 会被 openWorkspace 切主视图的重挂清零（确认 →
+  // bug a944424f：闩锁挂组件 useState 会被 openWorkspace 切主视图的重挂清零（确认 →
   // applySelection → openWorkspace → ForgeHeroWorktreeMount 重挂 → 同行重选重弹）——
   // 闩锁落 hero-picker-model 模块级跨重挂记忆（单窗口单实例 =「按窗口」语义），组件态
   // 只作记忆镜像：初始化惰性读（重挂即水合）+ 每次变更写透（置位/清退同一入口）。

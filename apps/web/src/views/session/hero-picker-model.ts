@@ -197,7 +197,7 @@ export function riskDialogNeeded(path: string, latch: RiskConfirmLatch): boolean
   return latch !== path
 }
 
-// bug 8913a908：闩锁跨重挂记忆。确认 → applySelection 走官方 openWorkspace 切主视图
+// bug a944424f：闩锁跨重挂记忆。确认 → applySelection 走官方 openWorkspace 切主视图
 // （选树即切该树 blank），ForgeHeroWorktreeMount 随主视图切换重挂——组件 useState 闩锁
 // 清零，同行重选重弹。闩锁落模块级记忆（单窗口单实例 = 「按窗口」语义，先例
 // state/selected-tree-window.ts），组件态只作记忆的镜像：初始化惰性读 + 每次变更写透。

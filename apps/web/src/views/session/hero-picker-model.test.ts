@@ -228,8 +228,8 @@ describe('riskLatch（bug ccfcc103 确认闩锁——置位/清退/弹框判定�
   })
 })
 
-// ───────── bug 8913a908：闩锁跨重挂记忆（openWorkspace 切主视图重挂 useState 清零）──
-describe('riskLatchMemory（bug 8913a908——闩锁跨组件重挂存活）', () => {
+// ───────── bug a944424f：闩锁跨重挂记忆（openWorkspace 切主视图重挂 useState 清零）──
+describe('riskLatchMemory（bug a944424f——闩锁跨组件重挂存活）', () => {
   const WT_A = 'C:/repo/.forge/worktrees/wt-a'
 
   it('确认置位写透记忆；「重挂」后（fresh 组件初始化再读）闩锁仍在——同行重选零重弹', () => {
