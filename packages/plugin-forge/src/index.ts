@@ -711,11 +711,15 @@ const forgePlugin: ForgePlugin = Object.assign(
       disposeCommands = undefined
     }
     // S3 启动对账（run-tasks-host-command 图 D）：进程重启 → 插件装配 → reconcileInterrupted
-    // 逐绑定项目 fail-soft 触发。三重判据（in_progress ∧ claim 记录循环来源标记 ∧ 登记表空）
+    // 逐项目 fail-soft 触发。三重判据（in_progress ∧ claim 记录循环来源标记 ∧ 登记表空）
     // 之③在装配时点恒真——循环登记表进程内不持久化，重启即空（活循环启动只会晚于装配），
     // registryEmpty=true 为装配期结构事实。fire-and-forget：失败不阻载装配（对账降级 = 遗留
     // in_progress 原样——skill 幂等重入语义不受伤，下次进程重启重试）。
-    for (const projectId of boundProjectIds) {
+    // 枚举源 = 静态绑定 ∪ 项目注册表（bug 追溯：只认静态绑定表时，动态绑定项目——会话式
+    // 绑定/packaged 形态零静态 config——装配径零执行，孤儿 in_progress 假执行永驻；11-03
+    // 重启取证：runtime bundle 含修复代码但全天零 forge-reconcile 留痕 = 循环体未跑）。
+    // listProjects 故障 = 回退静态绑定表（原覆盖面，fail-soft 同径）。
+    const reconcileProject = (projectId: string): void => {
       try {
         void ctx.forgeTasks
           .reconcileInterrupted({ projectId, registryEmpty: true })
@@ -763,6 +767,16 @@ const forgePlugin: ForgePlugin = Object.assign(
         warnReconcileDegraded(diag, projectId, cause) // 同步抛（服务面缺席等）——fail-soft 同径
       }
     }
+    void (async () => {
+      let projectIds = boundProjectIds
+      try {
+        const listed = await ctx.forgeProjects.listProjects()
+        projectIds = [...new Set([...boundProjectIds, ...listed.map((project) => project.id)])]
+      } catch {
+        // 注册表读面故障 = 回退静态绑定表（原覆盖面——降级不扩不缩语义）
+      }
+      for (const projectId of projectIds) reconcileProject(projectId)
+    })()
     // 1.16 文档位置按会话工作区注入（bug 5adb5960 根治：段此前取 boundProjectIds[0]
     // 首个绑定项目，多项目宿主下所有会话共享同一（错误项目的）文档根）：段 text 用
     // 官方 PromptSection 函数形态——每次 system prompt 装配按上下文 agent.id（SessionId）
