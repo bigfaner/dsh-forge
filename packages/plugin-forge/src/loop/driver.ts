@@ -1055,7 +1055,7 @@ async function suspendWithWakeup(
   input: {
     readonly minor: SuspendMinor
     readonly eventType: string
-    /** 原因全文（落盘 + note 原样；叙述只带摘要 + 子文件夹路径） */
+    /** 原因全文（落盘 + note 原样；叙述只带摘要 + 事件子文件夹绝对路径） */
     readonly reason: string
     /** incident 落盘任务键（localId 口径——既有 incident-log 行为不回归） */
     readonly incidentTaskKey: string
@@ -1085,6 +1085,7 @@ async function suspendWithWakeup(
     ...(input.taskTitle !== undefined ? { taskTitle: input.taskTitle } : {}),
     ...(input.workerSessionId !== undefined ? { workerSessionId: input.workerSessionId } : {}),
   })
+  // 原因全文行 = 事件子文件夹绝对路径（incident-log 数据源拼接产物同源消费——无裸 logs/ 相对形态）
   const detail = incidentPath !== undefined ? `原因全文：${incidentPath}` : '原因全文落盘降级（事件子文件夹不可用）'
   // 唤醒去重（bug 33728995①——同实例同事件恰一张卡：挂起回流续跑再挂起同一事件不再重复
   // send；投影事件与 incident 落盘不去重——留痕单源仍每挂起一条）。键含成因全文

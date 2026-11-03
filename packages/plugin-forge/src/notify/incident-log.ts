@@ -3,13 +3,14 @@
 // 002-worker-aborted/——自增序号+事件类型后缀自明）。同一事件的 error.log（原因/错误全文）/
 // settlement.json（结算载荷）/triage.md（处置记录）内聚，多轮问题互不混档；多模态可扩展。
 // 路径与既有容器事件流同根同维度（#26——{容器目录}/logs/ 下与 logs/<slug>.jsonl 并存，
-// 零新增中间层；FORGE_LOGS_DIR 单源复用）。叙述面只携带本面返回的事件子文件夹相对路径
-// （正斜杠、尾带斜杠——notification-samples.md 详情行口径）；分级呈现三档 = 叙述摘要 /
+// 零新增中间层；FORGE_LOGS_DIR 单源复用）。叙述面只携带本面返回的事件子文件夹**绝对路径**
+// （forge-paths taskLogs 目的地解析器拼接——forge.taskHome 绝对锚，无裸 logs/ 相对形态；
+// notification-samples.md 详情行口径）；分级呈现三档 = 叙述摘要 /
 // 事件子文件夹（人/agent 按需读）/ 裁决问询全文。
 // fail-soft：容器目录缺席/文件面故障 = 返回 undefined 不抛（叙述照发、详情行省略）。
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { FORGE_LOGS_DIR } from '../events/log-listener.js'
+import { taskLogsDirOf } from '../forge-paths.js'
 
 /** 事件子文件夹内聚文件名（同一事件三件套） */
 export const INCIDENT_ERROR_FILE = 'error.log'
@@ -41,9 +42,9 @@ export interface IncidentInput extends IncidentContent {
   readonly eventType: string
 }
 
-/** 事件子文件夹仓（narrator 经此落盘；循环驱动器亦可直用） */
+/** 事件仓（narrator 经此落盘；循环驱动器亦可直用） */
 export interface IncidentStore {
-  /** 落盘并返回事件子文件夹相对路径（正斜杠、尾带斜杠）；fail-soft 失败 = undefined */
+  /** 落盘并返回事件子文件夹绝对路径（数据源 taskLogs 拼接——无裸 logs/ 相对形态）；fail-soft 失败 = undefined */
   record(input: IncidentInput): string | undefined
 }
 
@@ -68,9 +69,9 @@ export function incidentDirNameOf(seq: number, eventType: string): string {
   return `${String(seq).padStart(3, '0')}-${suffix === '' ? 'event' : suffix}`
 }
 
-/** 事件子文件夹相对路径（叙述详情行口径——logs/<slug>/<taskKey>/<dir>/，正斜杠） */
-export function incidentRelPathOf(sourceSlug: string, taskKey: string, dirName: string): string {
-  return `${FORGE_LOGS_DIR}/${sourceSlug}/${taskKey}/${dirName}/`
+/** 事件子文件夹绝对路径（叙述详情行口径——forge.taskHome 绝对锚 + logs/<slug>/<taskKey>/<dir>/，数据源单源拼接） */
+export function incidentAbsPathOf(containerDir: string, sourceSlug: string, taskKey: string, dirName: string): string {
+  return join(taskLogsDirOf(containerDir, sourceSlug, taskKey), dirName)
 }
 
 /** 既有序号扫描（目录缺席 = 从 1 起；取 max+1——外部残渣序号也让位） */
@@ -99,7 +100,7 @@ export function createIncidentStore(deps: IncidentStoreDeps): IncidentStore {
         const slug = sanitizeIncidentSegment(input.sourceSlug)
         const taskKey = sanitizeIncidentSegment(input.taskKey)
         if (slug === '' || taskKey === '') return undefined
-        const taskDir = join(containerDir, FORGE_LOGS_DIR, slug, taskKey)
+        const taskDir = taskLogsDirOf(containerDir, slug, taskKey)
         const dirName = incidentDirNameOf(nextIncidentSeq(taskDir), input.eventType)
         const dir = join(taskDir, dirName)
         mkdirSync(dir, { recursive: true })
@@ -108,7 +109,7 @@ export function createIncidentStore(deps: IncidentStoreDeps): IncidentStore {
           writeFileSync(join(dir, INCIDENT_SETTLEMENT_FILE), `${JSON.stringify(input.settlement, null, 2)}\n`, 'utf8')
         }
         if (input.triage !== undefined) writeFileSync(join(dir, INCIDENT_TRIAGE_FILE), input.triage, 'utf8')
-        return incidentRelPathOf(slug, taskKey, dirName)
+        return incidentAbsPathOf(containerDir, slug, taskKey, dirName)
       } catch {
         return undefined
       }

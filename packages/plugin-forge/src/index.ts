@@ -1043,7 +1043,7 @@ export {
   createIncidentStore,
   createNarrator,
   incidentDirNameOf,
-  incidentRelPathOf,
+  incidentAbsPathOf,
   renderNarrative,
   sanitizeIncidentSegment,
   SCENARIOS,

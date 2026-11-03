@@ -115,7 +115,9 @@ export function blockedAskUser(p: BlockedAskUserPayload): string {
   return [
     typeLine('阻塞', '任务源', p.sourceSlug),
     line('任务', `${p.taskLabel} — 阻塞 — ${p.reasonSummary}`),
-    ...(p.incidentPath !== undefined ? [line('详情', p.incidentPath)] : []),
+    // 详情 = 绝对路径（结构化值，含盘符冒号）——豁免 sanitizeValue 净化（decisions #27 同款先例：
+    // 值内零冒号只约束自由文本值，路径值净化会破坏 Windows 盘符形态）
+    ...(p.incidentPath !== undefined ? [`详情: ${p.incidentPath}`] : []),
     line('系统', '无法自动处理——已向你发起问询（附完整原因与处理历史）'),
     line('处置入口', `响应问询，或任意会话凭任务源 ${p.sourceSlug} 认领挂起循环继续处置`),
     nextActionLine(NEXT_ACTION_NONE),

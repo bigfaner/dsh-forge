@@ -49,7 +49,7 @@ export {
   INCIDENT_SETTLEMENT_FILE,
   INCIDENT_TRIAGE_FILE,
   incidentDirNameOf,
-  incidentRelPathOf,
+  incidentAbsPathOf,
   sanitizeIncidentSegment,
 } from './incident-log.js'
 export type { IncidentContent, IncidentInput, IncidentStore, IncidentStoreDeps } from './incident-log.js'

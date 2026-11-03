@@ -26,11 +26,11 @@ const SAMPLES: readonly SampleCase[] = [
         sourceSlug: 'm2-pipeline',
         taskLabel: '4.2 导出功能',
         reasonSummary: '验收标准与任务约束冲突（原因摘要）',
-        incidentPath: 'logs/m2-pipeline/4.2/001-blocked/',
+        incidentPath: 'D:\\forge-tasks\\logs\\m2-pipeline\\4.2\\001-blocked',
       }),
     expected: `[forge·阻塞] 任务源: m2-pipeline
 任务: 4.2 导出功能 — 阻塞 — 验收标准与任务约束冲突（原因摘要）
-详情: logs/m2-pipeline/4.2/001-blocked/
+详情: D:\\forge-tasks\\logs\\m2-pipeline\\4.2\\001-blocked
 系统: 无法自动处理——已向你发起问询（附完整原因与处理历史）
 处置入口: 响应问询，或任意会话凭任务源 m2-pipeline 认领挂起循环继续处置
 下一步动作: 无`,
@@ -245,9 +245,9 @@ describe('S4 · 阻塞族详情行随落盘降级', () => {
       sourceSlug: 'm2-pipeline',
       taskLabel: '4.2 导出功能',
       reasonSummary: '验收标准与任务约束冲突（原因摘要）',
-      incidentPath: 'logs/m2-pipeline/4.2/001-blocked/',
+      incidentPath: 'D:\\forge-tasks\\logs\\m2-pipeline\\4.2\\001-blocked',
     })
-    expect(text).toContain('logs/m2-pipeline/4.2/001-blocked/')
+    expect(text).toContain('D:\\forge-tasks\\logs\\m2-pipeline\\4.2\\001-blocked')
     expect(text).not.toContain(fullReason)
     expect(text).not.toContain('重试 2 次均失败')
   })

@@ -1745,7 +1745,7 @@ describe('装配接线收口（SC4 端到端——真实 createTriageHook 注册
       incidents: {
         record: (input) => {
           incidentInputs.push(input)
-          return 'logs/feat-x/2.5/001-blocked/'
+          return 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-blocked'
         },
       },
       triage: async () => ({ action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }),
@@ -1763,7 +1763,7 @@ describe('装配接线收口（SC4 端到端——真实 createTriageHook 注册
       }),
     ])
     // 落盘在仓、消息面静默（loop-message-consolidation——自愈阻塞只投影不叙述）
-    expect(built.calls.some((c) => c.text.includes('详情: logs/feat-x/2.5/001-blocked/'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('详情: D:\\forge-tasks\\logs\\feat-x\\2.5\\001-blocked'))).toBe(false)
   })
 })
 
@@ -1959,7 +1959,7 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
     const built = build({
       claim: [claimed()],
       stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
-      incidents: incidentStub(incidentInputs, 'logs/feat-x/2.5/001-spawn-rate-limited/'),
+      incidents: incidentStub(incidentInputs, 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-spawn-rate-limited'),
     })
     built.spawn.setBehavior(async () => {
       throw new Error('provider rejected session start: 429 rate limit exceeded')
@@ -1969,7 +1969,7 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
     expect(suspended.escalation).toMatchObject({ kind: 'rate-limit', taskKey: 'feat-x/2.5' })
     expectWakeupAndProgress(built, {
       scenario: S.suspendSpawnRateLimited,
-      path: 'logs/feat-x/2.5/001-spawn-rate-limited/',
+      path: 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-spawn-rate-limited',
       reasonPart: '429',
       headlinePart: '启动被限流',
     })
@@ -1983,7 +1983,7 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
       claim: [claimed()],
       stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
       query: [queryOf('in_progress')],
-      incidents: incidentStub(incidentInputs, 'logs/feat-x/2.5/001-worker-rate-limited/'),
+      incidents: incidentStub(incidentInputs, 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-worker-rate-limited'),
     })
     built.spawn.setBehavior(async (n) => ({
       workerSessionId: `worker-${n}`,
@@ -1995,7 +1995,7 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
     expect(suspended.escalation).toMatchObject({ kind: 'rate-limit', taskKey: 'feat-x/2.5' })
     expectWakeupAndProgress(built, {
       scenario: S.suspendWorkerRateLimited,
-      path: 'logs/feat-x/2.5/001-worker-rate-limited/',
+      path: 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-worker-rate-limited',
       reasonPart: 'rate limit exceeded',
       headlinePart: '执行被限流',
     })
@@ -2008,7 +2008,7 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
     const built = build({
       claim: [claimed(), claimed(), claimed(), claimed()],
       stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
-      incidents: incidentStub(incidentInputs, 'logs/feat-x/2.5/001-abort-over-limit/'),
+      incidents: incidentStub(incidentInputs, 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-abort-over-limit'),
     })
     built.spawn.setBehavior(async (n) => ({
       workerSessionId: `worker-${n}`,
@@ -2020,7 +2020,7 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
     expect(suspended.escalation).toMatchObject({ kind: 'worker-abort-over-limit', taskKey: 'feat-x/2.5' })
     expectWakeupAndProgress(built, {
       scenario: S.suspendAbortOverLimit,
-      path: 'logs/feat-x/2.5/001-abort-over-limit/',
+      path: 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-abort-over-limit',
       reasonPart: 'worker crashed mid-run',
       headlinePart: '反复异常退出',
     })
@@ -2038,14 +2038,14 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
       stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ interrupted: 1 })],
       query: [queryOf('completed')],
       commitLanding: badLanding,
-      incidents: incidentStub(incidentInputs, 'logs/feat-x/2.5/001-landing-rejected/'),
+      incidents: incidentStub(incidentInputs, 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-landing-rejected'),
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt' })
     const suspended = await untilSuspended(built.driver)
     expect(suspended.escalation).toMatchObject({ kind: 'settle-landing-rejected', taskKey: 'feat-x/2.5' })
     expectWakeupAndProgress(built, {
       scenario: S.suspendLandingRejected,
-      path: 'logs/feat-x/2.5/001-landing-rejected/',
+      path: 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-landing-rejected',
       reasonPart: '[settle-cwd-pin]',
       headlinePart: '落点核验',
     })
@@ -3676,7 +3676,7 @@ describe('异常挂起径唤醒去重与处置入口（bug 33728995 ①②）', 
       incidents: {
         record: (input) => {
           incidentInputs.push(input)
-          return 'logs/feat-x/2.5/001-abort-over-limit/'
+          return 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-abort-over-limit'
         },
       },
     })
@@ -3704,7 +3704,7 @@ describe('异常挂起径唤醒去重与处置入口（bug 33728995 ①②）', 
       claim: [claimed(), claimed(), claimed()],
       stats: Array.from({ length: 8 }, () => statsOf({ in_progress: 1 })),
       query: [queryOf('in_progress'), queryOf('in_progress')],
-      incidents: { record: () => 'logs/feat-x/2.5/001-worker-rate-limited/' },
+      incidents: { record: () => 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-worker-rate-limited' },
     })
     built.spawn.setBehavior(async (n) => ({
       workerSessionId: `worker-${n}`,
@@ -3731,7 +3731,7 @@ describe('异常挂起径唤醒去重与处置入口（bug 33728995 ①②）', 
     const built = build({
       claim: [claimed(), claimed(), claimed(), claimed()],
       stats: Array.from({ length: 8 }, () => statsOf({ in_progress: 1 })),
-      incidents: { record: () => 'logs/feat-x/2.5/001-abort-over-limit/' },
+      incidents: { record: () => 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-abort-over-limit' },
     })
     crashingSpawn(built.spawn)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
@@ -3740,7 +3740,7 @@ describe('异常挂起径唤醒去重与处置入口（bug 33728995 ①②）', 
     expect(wakeups).toHaveLength(1)
     const fold = wakeups[0]!.headline ?? ''
     // 折叠摘要三要素（e2e 径③ infoSet 断言面——组卡条目 textContent 只见摘要）
-    expect(fold).toContain('原因全文：logs/feat-x/2.5/001-abort-over-limit/')
+    expect(fold).toContain('原因全文：D:\\forge-tasks\\logs\\feat-x\\2.5\\001-abort-over-limit')
     expect(fold).toMatch(/第 \d+ 次，超过重试上限/)
     expect(fold).toContain('处置入口: 任意会话凭任务源 feat-x dispatchTask 认领挂起循环继续处置')
     await built.driver.stop({ ownerSessionId: OWNER })

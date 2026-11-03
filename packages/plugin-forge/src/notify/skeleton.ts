@@ -91,6 +91,10 @@ export function findMechanismWords(text: string): readonly string[] {
 
 const KEY_LINE_RE = /^([^:：]+): (.*)$/
 
+/** 冒号豁免行（结构化值行——值内冒号为语义必需，与「时间」行同款豁免，decisions #27
+ *  值内零冒号只约束自由文本值）：详情 = 事件子文件夹绝对路径（Windows 盘符冒号）。 */
+const COLON_EXEMPT_LINE_PREFIXES: readonly string[] = ['详情: ']
+
 /** reason 摘要截断（decisions #24——reason 全文只进裁决问询，叙述面仅摘要） */
 export const REASON_SUMMARY_MAX_CHARS = 80
 
@@ -117,7 +121,8 @@ export function validateNarrative(text: string): readonly string[] {
       return
     }
     const value = match[2] ?? ''
-    if (value.includes(':') || value.includes('：')) problems.push(`L${index + 1}: 值内出现冒号`)
+    const colonExempt = COLON_EXEMPT_LINE_PREFIXES.some((prefix) => raw.startsWith(prefix))
+    if (!colonExempt && (value.includes(':') || value.includes('：'))) problems.push(`L${index + 1}: 值内出现冒号`)
     if (raw.startsWith('下一步动作:')) nextActionIndexes.push(index)
   })
   const last = lines.length - 1

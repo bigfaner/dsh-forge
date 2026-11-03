@@ -135,7 +135,7 @@ describe('S4 · 异常径发射机械防线（reason 全文只落盘）', () => 
 
   it('⑩ blocked-ask-user：全文落盘、叙述仅摘要+子文件夹路径、恒唤醒（wakeup=true）', async () => {
     const channel = recordingChannel()
-    const incidents = incidentSpy('logs/m2-pipeline/4.2/001-blocked/')
+    const incidents = incidentSpy('D:\\forge-tasks\\logs\\m2-pipeline\\4.2\\001-blocked')
     const narrator = createNarrator({ channel, incidents })
     await narrator.blocked(
       'session-1',
@@ -157,7 +157,7 @@ describe('S4 · 异常径发射机械防线（reason 全文只落盘）', () => 
     expect(call?.text).toContain('无法自动处理——已向你发起问询')
     // 处置入口行（挂起径恢复语义——凭任务源认领）
     expect(call?.text).toContain('处置入口: 响应问询，或任意会话凭任务源 m2-pipeline 认领挂起循环继续处置')
-    expect(call?.text).toContain('详情: logs/m2-pipeline/4.2/001-blocked/')
+    expect(call?.text).toContain('详情: D:\\forge-tasks\\logs\\m2-pipeline\\4.2\\001-blocked')
     expect(call?.text).not.toContain(REASON)
     expect(call?.text).not.toContain('依赖树冲突明细第二行')
     expect(call?.text).toMatch(/\n时间: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
@@ -200,7 +200,7 @@ describe('S4 · 解析缝端到端（1.11 装配接线收口——真实事件�
       { projectId: 'p-1', taskKey: '2.5', reason: 'tests hang on flaky selector', settlement: { outcome: 'blocked' } },
     )
     const text = channel.calls[0]?.text ?? ''
-    expect(text).toContain('详情: logs/feat-x/2.5/001-blocked/')
+    expect(text).toContain(`详情: ${join(home!, 'logs', 'feat-x', '2.5', '001-blocked')}`)
     const dir = join(home!, 'logs', 'feat-x', '2.5', '001-blocked')
     expect(existsSync(dir)).toBe(true)
     // 解析未命中（未注册项目）= 详情行省略，叙述照发（fail-soft 保持）
