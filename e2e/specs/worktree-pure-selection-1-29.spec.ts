@@ -22,10 +22,9 @@
 // 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态）；会话开户判读改扫共享 userData 根
 //（支撑层单源定位——SharedLaunchHandle.udDir 透传）内 dsh-home，以夹具工作区目录末段唯一锚定。
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSharedLaunchFixture, wsSegment as wsSegmentOf } from '../support/fixtures.js'
-import { findFixtureSession } from '../support/session-files.js'
 import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
@@ -152,10 +151,26 @@ async function sealBinding(page: Page, sessionId: string): Promise<{ worktreePat
   return seal?.binding === null || seal?.binding === undefined ? undefined : { ...seal.binding, sealed: seal?.sealed }
 }
 
-/** 共享 launch 形态会话开户判读：支撑层单源定位（udDir 透传——本 worker 独立持有）内
- *  dsh-home，按夹具段（fixtureSegment——唯一）定位夹具会话。 */
-function sharedFindSession(udDir: string, fixtureSegment: string): { readonly sessionId: string } | undefined {
-  return findFixtureSession(join(udDir, 'dsh-home'), fixtureSegment)
+/** 绑定语义定位（mtime「最新」启发式在主树/wt-a 双组共享夹具段下竞态歧义——
+ *  根会话与建树 blank 谁后落盘不定，改按 seal 绑定路径选会话：遍历段内会话目录，
+ *  seal 回读 binding.worktreePath 归一化等于目标树者胜）。 */
+async function findSessionIdByBinding(
+  page: Page,
+  udDir: string,
+  fixtureSegment: string,
+  matchPathNorm: string,
+): Promise<string> {
+  const sessionsDir = join(udDir, 'dsh-home', 'sessions')
+  if (!existsSync(sessionsDir)) return ''
+  for (const wsRow of readdirSync(sessionsDir, { withFileTypes: true })) {
+    if (!wsRow.isDirectory() || !wsRow.name.toLowerCase().includes(fixtureSegment.toLowerCase())) continue
+    for (const sRow of readdirSync(join(sessionsDir, wsRow.name), { withFileTypes: true })) {
+      if (!sRow.isDirectory() || !sRow.name.startsWith('session-')) continue
+      const binding = await sealBinding(page, sRow.name).catch(() => undefined)
+      if (norm(binding?.worktreePath) === matchPathNorm) return sRow.name
+    }
+  }
+  return ''
 }
 
 /** 走查截图（非关键路径——失败不阻塞断言链） */
@@ -187,10 +202,11 @@ test('1.29 UI（推导制）：快速切换点选即切换（openWorkspace 显�
     console.log('[1.29] baseline root =', baseRoot)
     // worktree 经产品弹窗创建（流程 A 闭环——选树路由硬前置）
     await createWorktreeViaDialog(page, wsDir, 'feat-a', 'wt-a')
-    // 挂载/默认锚定回填：零新增会话副作用
+    // 建树自动选中链路（4b38af2c 裁决 2026-10-28：applySelection = openWorkspace 开户
+    // 新树 blank——「建树零新增会话」语义随裁决退役，1.7 例18 同族重锚 0→1）
     await page.waitForTimeout(2_000)
     expect(await attachedSessions(page, wsDir, wsDir), '回填零新增主树会话').toBe(baseRoot)
-    expect(await attachedSessions(page, wsDir, wtDir), '建树零新增 wt-a 会话').toBe(0)
+    expect(await attachedSessions(page, wsDir, wtDir), '建树自动选中开户 wt-a blank（4b38af2c 裁决）').toBe(1)
 
     // ── 根树开户（项目行钮——显式项目根 workspaceId 直通官方；wrap 无参路由的官方锚在管
     // 形态）→ 快速切换 feat-a → main → feat-a：点选即建/复用该树 blank（主视图随之切换）──
@@ -198,8 +214,8 @@ test('1.29 UI（推导制）：快速切换点选即切换（openWorkspace 显�
     let rootSessionId = ''
     await expect
       .poll(async () => {
-        const found = sharedFindSession(udDir, wsSegment)
-        if (found !== undefined) rootSessionId = found.sessionId
+        const found = await findSessionIdByBinding(page, udDir, wsSegment, norm(wsDir))
+        if (found !== '') rootSessionId = found
         return rootSessionId
       }, { timeout: 60_000, message: '主树会话应开户（盘侧 cwd 分组）' })
       .not.toBe('')
@@ -242,8 +258,8 @@ test('1.29 UI（推导制）：快速切换点选即切换（openWorkspace 显�
     let wtSessionId = ''
     await expect
       .poll(async () => {
-        const found = sharedFindSession(udDir, 'wt-a')
-        if (found !== undefined) wtSessionId = found.sessionId
+        const found = await findSessionIdByBinding(page, udDir, 'wt-a', norm(wtDir))
+        if (found !== '') wtSessionId = found
         return wtSessionId
       }, { timeout: 60_000, message: 'wt-a 会话应开户（盘侧 cwd 分组 = 所选树）' })
       .not.toBe('')

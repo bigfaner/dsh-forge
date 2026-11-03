@@ -7,10 +7,11 @@
 // e2e-fast-shared-launch 存量迁移（批次三a）：共享 launch fixture——launchHost 整 spec 一次，
 // 夹具工作区即真·非 git 目录（seedWorkspace 播种基准态）；发送落盘判读经支撑层单源定位
 //（SharedLaunchHandle.udDir 透传——魔法前缀扫描退役）内
-// dsh-home/sessions，以夹具工作区全路径段唯一锚定。
+// dsh-home/sessions，以夹具工作区目录末段唯一锚定（官方会话分组目录名 = cwd 扁平化，
+// 分隔符归一为「-」——全路径段含分隔符永不命中，k3 同族锚定缺陷）。
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { createSharedLaunchFixture, wsSegment as wsSegmentOf } from '../support/fixtures.js'
 import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
@@ -56,16 +57,21 @@ async function typeDraft(page: Page, text: string): Promise<void> {
   }
 }
 
-/** 发送重试环（1.29 同款）：以会话日志落盘为唯一发送成功证据 */
+/** 发送重试环（1.29 同款）：以会话日志落盘为唯一发送成功证据。
+ *  已知产品红（bug bc81f4b8——非 git 工作区 composer 发送无效零落账）：两种手势均
+ *  不消费 composer 文本、会话日志零追加，本用例在缺陷修复前恒红——triage 定谳在案。 */
 async function sendUntilLanded(page: Page, udDir: string, wsDir: string, since: number): Promise<string> {
   const composer = page.locator('[data-composer-input]').first()
   const sendButton = page.getByRole('button', { name: '发送消息' })
   for (let attempt = 0; attempt < 4; attempt += 1) {
     await composer.click()
     const enabled = await sendButton.isEnabled().catch(() => false)
-    if (enabled) await sendButton.click().catch(() => {})
-    else await page.keyboard.press('Enter')
-    const deadline = Date.now() + 20_000
+    if (enabled) {
+      await sendButton.click().catch(() => {})
+    } else {
+      await page.keyboard.press('Enter')
+    }
+    const deadline = Date.now() + 30_000
     while (Date.now() < deadline) {
       const hit = findSessionDir(udDir, wsDir, since)
       if (hit !== undefined) return hit
@@ -76,9 +82,9 @@ async function sendUntilLanded(page: Page, udDir: string, wsDir: string, since: 
 }
 
 /** 会话日志落盘定位：支撑层单源定位（udDir 透传——本 worker 独立持有）下 dsh-home/sessions，
- *  取 cwd 分组目录含夹具工作区全路径段、mtime ≥ since 的日志。 */
+ *  取 cwd 分组目录（目录名 = cwd 扁平化）含夹具工作区末段、mtime ≥ since 的日志。 */
 function findSessionDir(udDir: string, wsDir: string, since: number): string | undefined {
-  const fragment = wsDir.replaceAll('\\', '/').toLowerCase()
+  const fragment = wsSegmentOf(wsDir).toLowerCase()
   const root = join(udDir, 'dsh-home', 'sessions')
   if (!existsSync(root)) return undefined
   let hit: string | undefined
@@ -133,7 +139,14 @@ test('真非 git UI：官方原流零拒绝（照常）', async ({ sharedLaunch 
     const MARKER_A = '1-7-k5-plain-first-message'
     await typeDraft(page, MARKER_A)
     const sendStartA = Date.now() - 5_000
-    const dirA = await sendUntilLanded(page, udDir, wsDir, sendStartA)
+    let dirA: string
+    try {
+      dirA = await sendUntilLanded(page, udDir, wsDir, sendStartA)
+    } catch (cause) {
+      // 缺陷取证：发送无效态截图（composer 有文、零落账——bug bc81f4b8 证据帧）
+      await snap(page, 'send-ineffective-state.png')
+      throw cause
+    }
     console.log('[k5-scene-a] plain message landed at', dirA)
     // 非 git 零差异：零拒绝呈现（官方原路径不变，零 host 介入）
     await expect(page.getByText('能力缺席'), '非 git 项目零拒绝呈现（照常）').toHaveCount(0)
