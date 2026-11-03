@@ -109,7 +109,7 @@ export function composeTriagePrompt(input: TriagePromptInput): string {
             : []),
           ...(signals.recurrence !== undefined
             ? [
-                `台账 recurrence 链: ${signals.recurrence.chain.join(' → ')}（同缝计数 ${signals.recurrence.count}）`,
+                `台账 recurrence 链: ${signals.recurrence.chain.join(' → ')}（同缝计数 ${signals.recurrence.count}）（限本任务卷宗归属）`,
                 ...(signals.recurrence.count >= RECURRENCE_ESCALATION_THRESHOLD
                   ? [
                       `同缝计数 ≥ ${RECURRENCE_ESCALATION_THRESHOLD}——禁止选择 add-fix（盲试修复必被宿主守卫软拒绝）；请选择 escalate 上浮排查。`,
