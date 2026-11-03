@@ -307,6 +307,26 @@ export function createSharedLaunchFixture(config: SharedLaunchConfig) {
   return { test }
 }
 
+/**
+ * 活跃项目全量归档（e2e 支撑面——共享 launch 形态修复，e2e-upstream-drift-reds-triage 清账 B）：
+ * 归档当前全部活跃项目行（含夹具 root 行；exceptProjectId 在场则豁免），使 projectAnchorOf
+ * 唯一活跃项目兜底（apps/web/src/workbench/panel-model.ts:91）可收敛于用例注册的项目。
+ * 归因：task-overview-review ×11 红原归因「概览头渲染链变更」不成立（head 渲染链自始未变）
+ * ——真实红因 = 共享 launch 形态下夹具 root 项目保活（archiveLegacyProjects workspaceName
+ * 例外）+ 用例项目注册后多项目在场、主视图会话锚解析回 root 项目 → 锚定漂移（ov-head 呈
+ * root 项目名，任务行缺席）。产品源码零改动——纯 e2e 形态问题。
+ * 时序纪律（run 实证）：必须在用例项目 registerProject **之前**调用——renderer 项目快照
+ * 刷新锚 = 注册写推送（useAnchoredProjects workspace 归属身份变化），update 归档不触发
+ * 刷新；注册后归档则快照残留 root 活跃行，锚定不迁移。注册随后的快照刷新里锚定收敛。
+ */
+export async function archiveActiveProjects(page: Page, exceptProjectId?: string): Promise<void> {
+  const projects = await forgeInvoke<readonly { id: string; archived?: boolean }[]>(page, PROJECTS_CHANNELS.list)
+  for (const row of projects) {
+    if (row.id === exceptProjectId || row.archived === true) continue
+    await forgeInvoke(page, PROJECTS_CHANNELS.update, { id: row.id, patch: { archived: true } })
+  }
+}
+
 // ─── 共享 ud 根定位 / ws 段锚（1.17 支撑层收敛——spec 侧魔法前缀扫描退役） ───
 
 /** wsDir 末段锚（mkdtemp 随机后缀跨 worker 唯一——调用用时点求值；大小写归一由消费侧裁定） */
