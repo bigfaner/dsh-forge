@@ -4,9 +4,11 @@
 //   forgeKnowledge 服务（Interface 2 类型，contracts 单一来源；运行期 inject 解析，
 //   零实现级 import，AC3）；tools / systemPrompt 为 dsh 官方面（非 core）。
 // 装配：两 tool 注册（tools/register）+ forge:knowledge 段注册
-// （systemPrompt.section，order 500）+ knowledge.root 目录键声明（forgeDirs 服务键
-// declare merge——forge-dirs-query-tool 1.2 首个第三方声明者）；交出合并 disposer
-// （fiber 卸载即全注销）。
+// （systemPrompt.section，order 500）+ knowledge.root 目录键声明（根 scope
+// provide('dirKeys.knowledge', entries) 约定名——跨 scope 反向拉取终态缝
+// （bug 04d445f4：plugin-forge 按会话隔离实例化，推式 forgeDirs 注册面跨 scope
+// 不可达，消费侧 collectDeclaredDirKeys 现查拉取；declareDirKeys 推式面为同
+// scope 装配径保留面）；交出合并 disposer（fiber 卸载即全注销）。
 // projectId 解析缝：Interface 2 无路径反查、Hard Rule 禁第二 core 服务——绑定表经
 // 插件 config 进入（会话 cwd → projectId；DF003 调用缝设计期定缝项）。
 import type { KnowledgeContextFace } from './tools/index.js'

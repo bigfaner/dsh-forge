@@ -300,39 +300,62 @@ export interface ReflectDeclarePullFace {
 }
 
 /**
+ * 拉取缝诊断发射面（注入闭包——本模块纯函数零依赖，不 import faces.ts；形状兼容
+ * ForgeDiagBase 子集，装配点（index.ts）以 `(p) => emitForgeDiag(diag, p)` 接线）。
+ * fail-soft 降级不再静默（bug 0520cbaf）：缺席 = 零发射，业务行为不变。
+ */
+export type DirKeysPullDiagFace = (payload: { readonly level: 'warn'; readonly event: string; readonly message: string }) => void
+
+/**
  * 反向拉取第三方目录键声明（AGENTS 1.6 在场性现查——每个消费点现查，检测结果不缓存）：
  * 枚举 reflect.props 中 `dirKeys.` 前缀约定名，逐名现取服务值（数组形态的 DirKeyEntry 集），
  * 逐条形状校验（malformed 跳过不抛——查询工具面 fail-soft；声明方装配质量由其自测把关），
  * 与既有键集（本体 + 推式注册）按 dirKey 去重（既有键胜出——推式/拉取双缝同键不双列）。
- * reflect 缺席 / 读取抛 / 约定名无值 = 该名零贡献零抛。
+ * reflect 缺席 / 读取抛 / 约定名无值 = 该名零贡献零抛——降级径经 onDiag warn 留痕
+ * （bug 0520cbaf：静默降级零可观测不可接受）。
  */
 export function collectDeclaredDirKeys(
   reflect: ReflectDeclarePullFace | undefined,
   known: readonly string[],
+  onDiag?: DirKeysPullDiagFace,
 ): readonly DirKeyEntry[] {
   const knownSet = new Set(known)
   const collected: DirKeyEntry[] = []
   const props = reflect?.props
-  if (props === undefined) return collected
+  if (props === undefined) {
+    if (reflect !== undefined) onDiag?.({ level: 'warn', event: 'forge-dirs-declare', message: '反向拉取缝降级：reflect 在场但 props 名表缺席，第三方 dirKeys.* 声明不可枚举' })
+    return collected
+  }
+  let conventionNames = 0
   for (const name of Object.keys(props)) {
     if (!name.startsWith(DECLARED_DIR_KEYS_PREFIX)) continue
+    conventionNames += 1
     let value: unknown
     try {
       value = reflect?.get(name)
-    } catch {
+    } catch (error) {
+      onDiag?.({ level: 'warn', event: 'forge-dirs-declare', message: `反向拉取缝降级：约定名 ${name} 取值抛（${error instanceof Error ? error.message : String(error)}），该名零贡献` })
       continue
     }
     if (!Array.isArray(value)) continue
     for (const entry of value) {
       try {
         validateDeclareEntry(entry as DirKeyEntry, 0)
-      } catch {
+      } catch (error) {
+        onDiag?.({
+          level: 'warn',
+          event: 'forge-dirs-declare',
+          message: `反向拉取缝降级：约定名 ${name} 声明 malformed 跳过（${error instanceof Error ? error.message : String(error)}）`,
+        })
         continue // malformed 声明跳过——查询面 fail-soft，不让单条坏声明砸掉 forgeDirs 全量查询
       }
       if (knownSet.has((entry as DirKeyEntry).dirKey)) continue
       knownSet.add((entry as DirKeyEntry).dirKey)
       collected.push(entry as DirKeyEntry)
     }
+  }
+  if (conventionNames > 0 && collected.length === 0) {
+    onDiag?.({ level: 'warn', event: 'forge-dirs-declare', message: `反向拉取缝零产出：reflect.props 存在 ${conventionNames} 个 dirKeys.* 约定名但无一条可用声明（取值 undefined/非数组/malformed/既有键去重）` })
   }
   return collected
 }

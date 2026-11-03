@@ -671,7 +671,10 @@ const forgePlugin: ForgePlugin = Object.assign(
       paths: {
         anchorsOf: (projectId) => forgePathsAnchors.anchorsOf(projectId),
         dirKeys: () => dirKeyRegistry.entries(),
-        declaredDirKeys: () => collectDeclaredDirKeys(ctx.reflect, dirKeyRegistry.entries().map((e) => e.dirKey)),
+        declaredDirKeys: () =>
+          // 诊断缝接线（bug 0520cbaf）：拉取缝降级径 warn 留痕经 emitForgeDiag 走
+          // diag/log 事件域（纯函数模块零依赖——闭包注入，分层不破）
+          collectDeclaredDirKeys(ctx.reflect, dirKeyRegistry.entries().map((e) => e.dirKey), (p) => emitForgeDiag(diag, p)),
       },
       // 3b 循环工具装配缝：dispatchTask/stopTaskLoop 与 /run-dag-tasks 指令同源同一循环核心
       // （驱动器 + 登记表单例注入——守卫判活/接管集/单活门控双入口同 registry）。
@@ -1190,8 +1193,12 @@ export type {
   ProjectDirServiceFace,
   SessionActivationFace,
 } from './faces.js'
-// dirKey 数据源（forge-dirs-query-tool——注册表单源 + declare merge 注册面；knowledge 等
-// 第三方插件经 declareDirKeys fail-soft 包装声明自己的目录键）。
+// dirKey 数据源（forge-dirs-query-tool——注册表单源 + declare merge 双缝；knowledge 等
+// 第三方插件经 declareDirKeys（同 scope 装配径保留面）与根 scope dirKeys.* 约定名 provide
+// （跨 scope 反向拉取主缝——bug 04d445f4 裁定：跨 scope 下推式注册与 internal/service 事件
+// 均被隔离过滤，唯一可达方向 = 消费侧拉取 collectDeclaredDirKeys）声明自己的目录键。
+// 脆弱面注记：cordis provide 注销器只删 store 不删 props——provide 注销后约定名残留
+// props 名表而 get 返回 undefined，拉取缝按零贡献处理（warn 留痕——bug 0520cbaf）。
 export {
   createDirKeyRegistry,
   declareDirKeys,

@@ -190,6 +190,60 @@ describe('反向拉取缝（bug 04d445f4——collectDeclaredDirKeys 消费点�
     const reflect = makeReflect({ 'dirKeys.knowledge': [knowledgeRoot] }, { getThrows: ['dirKeys.knowledge'] })
     expect(collectDeclaredDirKeys(reflect, builtinKeys)).toEqual([])
   })
+
+  // ─────────────────── 拉取缝可观测（bug 0520cbaf——降级径不再静默，warn 三分支） ───────────────────
+
+  it('props 缺席（reflect 在场）→ warn 一条；reflect 整体缺席 → 零 warn（缺服务非降级）', () => {
+    const warns: string[] = []
+    const onDiag = (p: { level: string; event: string; message: string }) => warns.push(`${p.level}:${p.event}:${p.message}`)
+    collectDeclaredDirKeys({ get: () => undefined }, builtinKeys, onDiag)
+    expect(warns).toHaveLength(1)
+    expect(warns[0]).toMatch(/props 名表缺席/)
+    warns.length = 0
+    collectDeclaredDirKeys(undefined, builtinKeys, onDiag)
+    expect(warns).toHaveLength(0)
+  })
+
+  it('存在 dirKeys.* 约定名但拉取零产出 → warn 一条（零产出可观测）', () => {
+    const warns: string[] = []
+    const onDiag = (p: { level: string; message: string }) => warns.push(p.message)
+    // 取值 undefined（provide 注销后残名形态）+ 值非数组
+    collectDeclaredDirKeys({ props: { 'dirKeys.knowledge': {} }, get: () => undefined }, builtinKeys, onDiag)
+    collectDeclaredDirKeys({ props: { 'dirKeys.other': {}, unrelated: {} }, get: () => knowledgeRoot }, builtinKeys, onDiag)
+    expect(warns).toHaveLength(2)
+    expect(warns[0]).toMatch(/零产出.*dirKeys\.\* 约定名/)
+    expect(warns[1]).toMatch(/零产出/)
+    // 既有键去重导致零产出 = 正常合并语义，同样留痕一条（可观测不区分成因）
+    warns.length = 0
+    const reflect = makeReflect({ 'dirKeys.knowledge': [knowledgeRoot] })
+    collectDeclaredDirKeys(reflect, [...builtinKeys, 'knowledge.root'], onDiag)
+    expect(warns).toHaveLength(1)
+    expect(collectDeclaredDirKeys(makeReflect({ 'dirKeys.knowledge': [knowledgeRoot] }), builtinKeys, onDiag)).toHaveLength(1)
+  })
+
+  it('get 抛 → 该名 warn 一条 + 零贡献；malformed 跳过 → 每条 warn 一条', () => {
+    const warns: string[] = []
+    const onDiag = (p: { level: string; message: string }) => warns.push(p.message)
+    const reflect = makeReflect({ 'dirKeys.knowledge': [knowledgeRoot] }, { getThrows: ['dirKeys.knowledge'] })
+    expect(collectDeclaredDirKeys(reflect, builtinKeys, onDiag)).toEqual([])
+    expect(warns).toHaveLength(2) // 取值抛 + 尾部零产出
+    expect(warns[0]).toMatch(/取值抛/)
+
+    const bad = makeReflect({
+      'dirKeys.bad': [
+        { ...knowledgeRoot, dirKey: 'forge.hijack' },
+        { ...knowledgeRoot, description: '' },
+      ],
+    })
+    warns.length = 0
+    const pulled = collectDeclaredDirKeys(bad, builtinKeys, onDiag)
+    expect(pulled).toHaveLength(0)
+    expect(warns).toHaveLength(3) // 两条 malformed + 一条零产出
+    expect(warns[0]).toMatch(/malformed/)
+    expect(warns[1]).toMatch(/malformed/)
+    // onDiag 缺席 = 零发射零抛（fail-soft 行为不变）
+    expect(() => collectDeclaredDirKeys(bad, builtinKeys)).not.toThrow()
+  })
 })
 
 describe('锚解析缝（faces.createForgePathsAnchors——与 projects 服务现值同源断言）', () => {
