@@ -41,12 +41,16 @@ export type SameSeamRecurrenceFace = (
   scope: SameSeamRecurrenceScope,
 ) => Promise<readonly BugRecurrenceCandidate[]> | readonly BugRecurrenceCandidate[]
 
-/** 卷宗建模报告在场探测面（T4 旁挂回收的守卫侧消费缝——注入可替换；缺席 = 报告不在场） */
+/**
+ * 卷宗建模报告在场探测面（T4 旁挂回收的守卫侧消费缝——注入可替换）三态：
+ * true = 报告在场（解除判据满足）；false = 真「报告不在场」（目录可读但无报告 .md，
+ * 拦截保守成立）；'error' = 探测 IO 故障（readdirSync 抛错等——机制失能，消费侧放行 + warn 留痕）。
+ */
 export type ModelingReportPresentFace = (input: {
   readonly projectId: string
   readonly slug: string
   readonly localId: string
-}) => boolean
+}) => boolean | 'error'
 
 /**
  * 盲试 fix 派发判别（拦截对象 = blocked 源派生的 fix 链任务——非 fix 任务零拦截，行为零变化）：
@@ -144,7 +148,18 @@ export async function recurrenceEscalationGuard(input: {
       projectId,
     })
   }
-  const reportPresent = modelingReportPresent?.({ projectId, slug: task.slug, localId: task.localId }) === true
+  const probe = modelingReportPresent?.({ projectId, slug: task.slug, localId: task.localId })
+  if (probe === 'error') {
+    // AGENTS §7 降级留痕 + 用户裁决（recurrence-judgment-narrowing 圆桌分歧 2）：探测 IO
+    // 故障 = 机制失能 → 放行不拦（防「报告落错路径即永久拦截需绕行」重演），但必须 warn 留痕。
+    emitForgeDiag(diag, {
+      level: 'warn',
+      event: 'modeling-report-face-error',
+      message: `dispatch-core T3 解除判据降级：报告探测故障，拦截未生效（${task.slug}/${task.localId}）——探测 IO 故障按机制失能放行（核销卷宗目录可读性）`,
+      projectId,
+    })
+  }
+  const reportPresent = probe === true || probe === 'error'
   if (!isModelingPending(count, reportPresent)) return undefined
   return {
     chain,

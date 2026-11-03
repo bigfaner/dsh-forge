@@ -91,6 +91,32 @@ describe('T3 守卫（recurrenceEscalationGuard）两态', () => {
     })
     expect(rejection).toBeUndefined()
   })
+  it('语义分界：探测面真缺席（false）仍拦截；face 整体缺席降级不变（拦截保守成立）', async () => {
+    const candidates = () => [candidate(['b-root', 'b-r1', 'b-r2'])]
+    // 目录存在但无 .md = 真「报告不在场」→ 仍拦截
+    expect(
+      await recurrenceEscalationGuard({ projectId: 'p-1', task: snapshot(), findRecurrenceCandidates: candidates, modelingReportPresent: () => false }),
+    ).toBeDefined()
+    // face 缺席（装配降级）→ 拦截保守成立（既有降级语义，本任务不改）
+    expect(
+      await recurrenceEscalationGuard({ projectId: 'p-1', task: snapshot(), findRecurrenceCandidates: candidates }),
+    ).toBeDefined()
+  })
+  it('探测 IO 故障（face 返回 \'error\'）→ 拦截不生效放行 + warn 留痕（AGENTS §7 降级可观测）', async () => {
+    const diags: Array<{ level: string; event: string; message: string }> = []
+    const rejection = await recurrenceEscalationGuard({
+      projectId: 'p-1',
+      task: snapshot(),
+      findRecurrenceCandidates: () => [candidate(['b-root', 'b-r1', 'b-r2'])],
+      modelingReportPresent: () => 'error',
+      diag: (d) => diags.push(d as { level: string; event: string; message: string }),
+    })
+    expect(rejection).toBeUndefined() // IO 故障 = 机制失能 → 放行（防「永久拦截需绕行」）
+    const warn = diags.find((d) => d.event === 'modeling-report-face-error')
+    expect(warn?.level).toBe('warn')
+    expect(warn?.message).toContain('拦截未生效')
+    expect(warn?.message).toContain('feat-x/fix-2')
+  })
   it('归属 scope 传参：face 收到 {slug, localId, sourceTaskId}（不再传 files 全库口径）；无关提案容器链不进候选集 → 放行', async () => {
     const scopes: unknown[] = []
     const rejection = await recurrenceEscalationGuard({
