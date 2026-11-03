@@ -115,12 +115,14 @@ describe('AC2 全局拒绝集 + forge 面两动词（worker 面不含派发动�
     expect(WORKER_GLOBAL_DENY_TOOLS).not.toContain('subagent')
   })
 
-  it('forge 面 = 四动词（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径——fix-bug coding-fix worker 挂链深查；addTask 不入 worker 面——任务派生权限归主会话；claimTask/queryTask/dispatchTask 不入 worker 面）', () => {
+  it('forge 面 = 六员（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径——fix-bug coding-fix worker 挂链深查；+ forgeDirs/forgeResolvePath 目录查询双只读径——forge-dirs-query-tool §2.3 查询零副作用 worker 双面可用；addTask 不入 worker 面——任务派生权限归主会话；claimTask/queryTask/dispatchTask 不入 worker 面）', () => {
     expect(WORKER_FORGE_TOOLS).toEqual([
       'submitTask',
       'recordBug',
       'resolveBug',
       'getBug',
+      'forgeDirs',
+      'forgeResolvePath',
     ])
     expect(WORKER_FORGE_TOOLS).not.toContain('addTask')
     expect(WORKER_FORGE_TOOLS).not.toContain('claimTask')
@@ -130,10 +132,12 @@ describe('AC2 全局拒绝集 + forge 面两动词（worker 面不含派发动�
 })
 
 describe('AC2 工具名映射表（OQ#2 兑现·5.1——上游 0.2.0-rc.2 standard 组合实面枚举核对）', () => {
-  it('全表 19 名 = forge 四动词 + 五上游族逐名（机械核对记录归 G1 pin #20；addTask 仅主 agent 不入表）', () => {
+  it('全表 21 名 = forge 六员 + 五上游族逐名（机械核对记录归 G1 pin #20；addTask 仅主 agent 不入表）', () => {
     expect(Object.keys(WORKER_TOOL_NAME_FAMILY).sort()).toEqual([
       'bash',
       'edit',
+      'forgeDirs',
+      'forgeResolvePath',
       'getBug',
       'glob',
       'grep',
@@ -152,12 +156,12 @@ describe('AC2 工具名映射表（OQ#2 兑现·5.1——上游 0.2.0-rc.2 stand
     ].sort())
   })
 
-  it('族归属逐名（fs 六 / shell 二含平台行 / jobs 三 / read-image 一 / web 二 / forge 四）', () => {
+  it('族归属逐名（fs 六 / shell 二含平台行 / jobs 三 / read-image 一 / web 二 / forge 六）', () => {
     const byFamily = new Map<WorkerToolFamily, string[]>()
     for (const [name, family] of Object.entries(WORKER_TOOL_NAME_FAMILY)) {
       byFamily.set(family, [...(byFamily.get(family) ?? []), name].sort())
     }
-    expect(byFamily.get('forge')).toEqual(['getBug', 'recordBug', 'resolveBug', 'submitTask'])
+    expect(byFamily.get('forge')).toEqual(['forgeDirs', 'forgeResolvePath', 'getBug', 'recordBug', 'resolveBug', 'submitTask'])
     expect(byFamily.get('fs')).toEqual(['edit', 'glob', 'grep', 'read', 'write'])
     expect(byFamily.get('shell')).toEqual(['bash', 'pwsh'])
     expect(byFamily.get('jobs')).toEqual(['job_kill', 'job_list', 'job_output'])

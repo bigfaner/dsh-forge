@@ -285,6 +285,10 @@ export function deriveTriageToolFilter(registeredTools?: readonly string[]): { d
   deny.delete('getBug')
   deny.delete('listBugs')
   deny.delete('addTask')
+  // 目录查询双只读径放开（forge-dirs-query-tool §2.3——零副作用，与 worker 面同为放行面）：
+  // 处置代理定位卷宗（dossier）/任务日志（taskLogs）经工具同源解析，不落文档口径。
+  deny.delete('forgeDirs')
+  deny.delete('forgeResolvePath')
   return { deny: [...deny].filter((name) => registeredTools === undefined || registeredTools.includes(name)) }
 }
 

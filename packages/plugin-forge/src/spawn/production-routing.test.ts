@@ -184,7 +184,7 @@ describe('生产装配路径（真实 resolver → 投影 → spawnClaimed → �
     // 装配期全局视图（插件 ctx.tools 无作用域面——官方工具 + forge 管线动词全在）
     ;(deps as { globalToolNames?: () => readonly string[] }).globalToolNames = () => [
       'read', 'write', 'pwsh', 'todo_write', 'submitTask', 'recordBug', 'resolveBug', 'getBug',
-      'addTask', 'dispatchTask', 'list_tasks_placeholder',
+      'forgeDirs', 'forgeResolvePath', 'addTask', 'dispatchTask', 'list_tasks_placeholder',
     ]
     const upstreamBefore = upstreamRequests.length
     const stage = await spawnClaimed(deps, exec, claimed, { scope })

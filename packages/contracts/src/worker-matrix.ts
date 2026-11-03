@@ -85,8 +85,10 @@ export const WORKER_GLOBAL_DENY_TOOLS = [
 ] as const
 
 /**
- * forge 工具族的面 = 四动词（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 单条
- * 全卡/链上下文读径——fix-bug coding-fix worker 挂链深查；面分治：addTask 不入 worker 面
+ * forge 工具族的面 = 六员（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 单条
+ * 全卡/链上下文读径——fix-bug coding-fix worker 挂链深查；+ forgeDirs/forgeResolvePath
+ * 双目录查询只读径——forge-dirs-query-tool §2.3：查询零副作用，主会话与 worker 双面可用，
+ * worker 落卷/SOP 探测路径经工具同源解析；面分治：addTask 不入 worker 面
  * （任务派生权限归主会话与循环处置层——worker 拒收 ERR_WORKER_ADDTASK_DENIED），
  * listBugs 查询仅主 agent，claimTask/queryTask/dispatchTask 不入 worker 面——SC7/SC2 断言）。
  */
@@ -95,6 +97,8 @@ export const WORKER_FORGE_TOOLS = [
   'recordBug',
   'resolveBug',
   'getBug',
+  'forgeDirs',
+  'forgeResolvePath',
 ] as const
 
 /**
@@ -107,7 +111,7 @@ export const WORKER_FORGE_TOOLS = [
  *   jobs ← dsh-tool-jobs（job_list/job_output/job_kill）
  *   read-image ← dsh-tool-fs 的 read_image（独立族——矩阵单独收窄）
  *   web ← dsh-tool-web（web_fetch/web_search）
- *   forge ← 我方 WORKER_FORGE_TOOLS（submitTask/recordBug/resolveBug/getBug）
+ *   forge ← 我方 WORKER_FORGE_TOOLS（submitTask/recordBug/resolveBug/getBug/forgeDirs/forgeResolvePath）
  * 不入表（非六族矩阵收窄面）：skill（恒在场不拒）/ plan-mode exit_plan_mode /
  * todo_write（解禁——WORKER_GLOBAL_DENY_TOOLS 注释）/ goal 三命令与 delegation 族、
  * ask-user/present（= WORKER_GLOBAL_DENY_TOOLS 承载）/ subagent（惰性
@@ -115,11 +119,14 @@ export const WORKER_FORGE_TOOLS = [
  */
 export const WORKER_TOOL_NAME_FAMILY: Readonly<Record<string, WorkerToolFamily>> = {
   // forge 面（我方——WORKER_FORGE_TOOLS 单源子集；recordBug/resolveBug = fix-bug bug 写径两动词，
-  // getBug = bug 单条全卡/链上下文读径；addTask 不入表——仅主 agent，worker 面结构缺席）
+  // getBug = bug 单条全卡/链上下文读径；forgeDirs/forgeResolvePath = 目录查询双只读径
+  // （forge-dirs-query-tool）；addTask 不入表——仅主 agent，worker 面结构缺席）
   submitTask: 'forge',
   recordBug: 'forge',
   resolveBug: 'forge',
   getBug: 'forge',
+  forgeDirs: 'forge',
+  forgeResolvePath: 'forge',
   // fs 读写/搜索（上游 dsh-tool-fs / dsh-tool-fs-search）
   read: 'fs',
   write: 'fs',

@@ -27,7 +27,9 @@ import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
-import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, createProjectWorkspaceRoots, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, createProjectWorkspaceRoots, createForgePathsAnchors, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
+import { createDirKeyRegistry } from './forge-paths.js'
+import type { DirKeyEntry } from './forge-paths.js'
 import { globalToolNamesOfToolsFace } from './dispatch-core/index.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, ForgeToolDefinition, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
@@ -417,6 +419,19 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 顶层 .md 在场即 true；探测面只读、fail-soft 缺席 false）。T2 疑似同族警示 / T3 同缝
     // 拦截与解除判据 / triage 两信号 / add-fix vars 四处机制生产生效的装配前提。
     const projectWsRoots = createProjectWorkspaceRoots(ctx.forgeProjects)
+    // dirKey 数据源装配（forge-dirs-query-tool §2.1/§2.2）：合并注册表单例（forge 本体五键 +
+    // declare merge 第三方键）+ 锚解析缝（faces.createForgePathsAnchors——getProject.forgeDir /
+    // deriveTaskStoreDir 单源派生，env DSH_FORGE_TASKS_HOME > dirname(taskHome) 解 projectHome）。
+    // 服务键 provide（forgeDirs.registerDirKeys）：第三方插件 inject 声明消费（AGENTS 1.6 在场性
+    // 现查——forge 缺席环境零生效零抛）；reflect.provide 面缺席/撞车 = fail-soft 不阻载（同
+    // forgeExperts 配方）。
+    const dirKeyRegistry = createDirKeyRegistry()
+    const forgePathsAnchors = createForgePathsAnchors(ctx.forgeProjects)
+    try {
+      ctx.reflect?.provide?.('forgeDirs', { registerDirKeys: (entries: readonly DirKeyEntry[]) => dirKeyRegistry.registerDirKeys(entries) })
+    } catch {
+      // 撞车/反射异常 = 本 scope 已有注册面（双次装配）——本地单例装配不受影响
+    }
     const recurrenceFaces = createRecurrenceFaces({
       bugs: ctx.forgeBugs,
       // bug 8b041612 修正：卷宗探测的 dir 语义 = 项目工作区根（ws_path——与 settle 报告
@@ -649,6 +664,8 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
       // T4 锚有效性预检项目根解析缝（loop-recurrence-hardening——resolveDir 同源 projects face）
       projects: ctx.forgeProjects,
+      // dirKey 数据源消费面（forge-dirs-query-tool——双查询工具 + declare merge 同一注册表实例）
+      paths: { anchorsOf: (projectId) => forgePathsAnchors.anchorsOf(projectId), dirKeys: () => dirKeyRegistry.entries() },
       // 3b 循环工具装配缝：dispatchTask/stopTaskLoop 与 /run-dag-tasks 指令同源同一循环核心
       // （驱动器 + 登记表单例注入——守卫判活/接管集/单活门控双入口同 registry）。
       loop: { driver: loopDriver, registry: loopRegistry },
@@ -896,6 +913,8 @@ const forgePlugin: ForgePlugin = Object.assign(
       registerToolLoud(tools.listImplCheckpoints),
       registerToolLoud(tools.pauseTask),
       registerToolLoud(tools.unblockTask),
+      registerToolLoud(tools.forgeDirs),
+      registerToolLoud(tools.forgeResolvePath),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
       // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；
@@ -1142,6 +1161,7 @@ export type {
 export {
   adaptAgentNarrationChannel,
   createExpertProfileResolver,
+  createForgePathsAnchors,
   createProjectContainerDirs,
   createProjectWorkspaceRoots,
   FORGE_EXPERTS_ROOT_DIR,
@@ -1156,10 +1176,30 @@ export type {
   ForgeCommandInvocation,
   ForgeCommandResult,
   ForgeExpertProfile,
+  ForgePathsAnchorContext,
+  ForgePathsAnchors,
+  ForgePathsProjectsFace,
   ProjectContainerDirs,
   ProjectDirServiceFace,
   SessionActivationFace,
 } from './faces.js'
+// dirKey 数据源（forge-dirs-query-tool——注册表单源 + declare merge 注册面；knowledge 等
+// 第三方插件经 declareDirKeys fail-soft 包装声明自己的目录键）。
+export {
+  createDirKeyRegistry,
+  declareDirKeys,
+  DIR_DESTINATIONS,
+  DIR_KEY_REGISTRY,
+  resolveDestination,
+} from './forge-paths.js'
+export type {
+  DirDestinationEntry,
+  DirDestRequire,
+  DirKeyEntry,
+  DirKeyRegistry,
+  ForgeDirsServiceFace,
+  ForgePathsResolveContext,
+} from './forge-paths.js'
 // 1.17 循环进度事件族（'forge/progress'——declare-module 合并 + append 适配面）。
 export { adaptSessionProgressAppend, FORGE_PROGRESS_EVENT_TYPE, isForgeProgressData } from './progress/index.js'
 export type { ForgeProgressCounts, ForgeProgressEventData, ProgressAppendFace } from './progress/index.js'

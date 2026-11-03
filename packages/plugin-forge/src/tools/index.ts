@@ -35,6 +35,7 @@ import { createDispatchTaskTool } from './dispatch-task.js'
 import type {
   ForgeCheckpointsToolFace,
 } from './impl-checkpoint.js'
+import { createForgeDirsTool, createForgeResolvePathTool } from './forge-paths.js'
 import { createGetBugTool } from './get-bug.js'
 import { createListBugsTool } from './list-bugs.js'
 import { createListTasksTool } from './list-tasks.js'
@@ -175,6 +176,13 @@ export interface ForgeToolDeps {
    * 项目根解析缝，1.4 resolveDir 同源注入；缺席 = 预检机制惰性跳过，core presence 门仍在）。
    */
   projects?: ProjectDirServiceFace
+  /**
+   * dirKey 数据源消费面（forge-dirs-query-tool——可选：缺席 = forgeDirs/forgeResolvePath
+   * 两 tool 执行期 fail-loud 拒绝（同 features 可选降级模式），其余 tool 零影响。
+   * 装配径 = faces.createForgePathsAnchors 锚解析缝 + forge-paths.createDirKeyRegistry
+   * 合并注册表（declare merge 面同实例），见 src/index.ts。
+   */
+  paths?: import('./forge-paths.js').ForgePathsToolFace
 }
 
 /** tool 定义组（顺序 = Interface 4 列序扩展——十七员；注册面与断言面共消费） */
@@ -199,16 +207,19 @@ export interface ForgeTools {
   readonly listImplCheckpoints: ReturnType<typeof createListImplCheckpointsTool>
   readonly pauseTask: ReturnType<typeof createPauseTaskTool>
   readonly unblockTask: ReturnType<typeof createUnblockTaskTool>
+  readonly forgeDirs: ReturnType<typeof createForgeDirsTool>
+  readonly forgeResolvePath: ReturnType<typeof createForgeResolvePathTool>
 }
 
-/** 注册面全集（二十 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
+/** 注册面全集（二十二 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
  *  两 bug 读径 + stopTaskLoop 停止入口（3b——dispatch-loop-hardening 改进 3b③）+ pauseTask
  *  单任务暂停入口（task-pause-primitive）+ transitionFeature 相位转移入口
  *  （implicit-stage-approval §2.3——裁决②局部修订）+ unblockTask blocked→pending 出口
- *  （blocked-verdict-restore-primitive）；面分治：listBugs/transitionFeature
+ *  （blocked-verdict-restore-primitive）+ forgeDirs/forgeResolvePath 目录查询双只读径
+ *  （forge-dirs-query-tool §2.3——主 + worker 双面）；面分治：listBugs/transitionFeature
  *  仅主 agent，getBug 主 + worker，addTask 仅主 agent（worker 面不注入——
  *  execute 面 ERR_WORKER_ADDTASK_DENIED 双保险），pauseTask/unblockTask 仅主 agent——WORKER_FORGE_TOOLS
- *  四动词，其余 worker deny） */
+ *  六员，其余 worker deny） */
 export const FORGE_TOOL_NAMES = [
   'addTask',
   'submitTask',
@@ -230,6 +241,8 @@ export const FORGE_TOOL_NAMES = [
   'listImplCheckpoints',
   'pauseTask',
   'unblockTask',
+  'forgeDirs',
+  'forgeResolvePath',
 ] as const
 
 export type ForgeToolName = (typeof FORGE_TOOL_NAMES)[number]
@@ -256,6 +269,8 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     ...createImplCheckpointTools(deps),
     pauseTask: createPauseTaskTool(deps),
     unblockTask: createUnblockTaskTool(deps),
+    forgeDirs: createForgeDirsTool(deps),
+    forgeResolvePath: createForgeResolvePathTool(deps),
   }
 }
 
@@ -314,6 +329,19 @@ export { parseListBugsArgs, LIST_BUGS_OUTPUT_SCHEMA } from './list-bugs.js'
 export type { ListBugsToolArgs } from './list-bugs.js'
 export { parseGetBugArgs, GET_BUG_OUTPUT_SCHEMA } from './get-bug.js'
 export type { GetBugToolArgs } from './get-bug.js'
+export {
+  FORGE_DIRS_OUTPUT_SCHEMA,
+  FORGE_RESOLVE_PATH_OUTPUT_SCHEMA,
+  parseForgeDirsArgs,
+  parseForgeResolvePathArgs,
+} from './forge-paths.js'
+export type {
+  ForgeDirsResult,
+  ForgeDirsToolArgs,
+  ForgePathsToolFace,
+  ForgeResolvePathResult,
+  ForgeResolvePathToolArgs,
+} from './forge-paths.js'
 export {
   CHECKPOINT_MARKS,
   computeCheckpointMetrics,

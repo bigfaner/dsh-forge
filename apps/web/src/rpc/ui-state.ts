@@ -93,6 +93,9 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   // 覆盖声明段/报告锚行缺席 / 锚指向卷宗不在场 → 错误条（fixed 回填语境原地反馈——文案带协议补证指引）
   ERR_BUG_COVERAGE_DECLARATION_REQUIRED: 'error-bar',
   ERR_BUG_COVERAGE_ANCHOR_INVALID: 'error-bar',
+  // ── forge-dirs-query-tool（双查询工具受控面拒绝）──
+  // 未知 dirKey/dest / requires 缺参 → 错误条（查询语境原地反馈——文案带法集改参重试）
+  ERR_DIR_PATH_INVALID: 'error-bar',
 }
 
 /**

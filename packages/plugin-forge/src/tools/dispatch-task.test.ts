@@ -299,8 +299,9 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     for (const name of FORGE_TOOL_NAMES) {
       if ((WORKER_FORGE_TOOLS as readonly string[]).includes(name)) continue
       expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族四动词之外不可见）`).toBe(true)
-      // triage 放行三面（§2.2.1 只读两具 + addTask 处置派生径）：getBug/listBugs/addTask 不入 triage deny
-      if (name !== 'getBug' && name !== 'listBugs' && name !== 'addTask') {
+      // triage 放行面（§2.2.1 只读两具 + addTask 处置派生径 + 目录查询双只读径——
+      // forge-dirs-query-tool §2.3 零副作用）：getBug/listBugs/addTask/forgeDirs/forgeResolvePath 不入 triage deny
+      if (name !== 'getBug' && name !== 'listBugs' && name !== 'addTask' && name !== 'forgeDirs' && name !== 'forgeResolvePath') {
         expect(triageDeny.has(name), `${name} 应入 triage deny（写面/任务域动词仅主 agent）`).toBe(true)
       }
     }
@@ -352,8 +353,8 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(deriveTriageToolFilter().deny).toContain('bash')
   })
 
-  it('contracts 矩阵单源：WORKER_FORGE_TOOLS 四动词（submitTask + 两 bug 写径 + getBug 读径；addTask 不入 worker 面）——bug-recurrence-chain worker 放行钉住', () => {
-    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'recordBug', 'resolveBug', 'getBug'])
+  it('contracts 矩阵单源：WORKER_FORGE_TOOLS 六员（submitTask + 两 bug 写径 + getBug 读径 + forgeDirs/forgeResolvePath 目录查询双只读径——forge-dirs-query-tool；addTask 不入 worker 面）——bug-recurrence-chain worker 放行钉住', () => {
+    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'recordBug', 'resolveBug', 'getBug', 'forgeDirs', 'forgeResolvePath'])
   })
 })
 
@@ -664,7 +665,8 @@ describe('deriveWorkerToolFilter allow 并集公式（expert-squad-forge 1.4—�
   // ───────────────── bug 3cb118cf worker 面：allow/deny 与真机注册面求交 ─────────────────
 
   describe('registeredTools 求交（bug 3cb118cf：档案 pwsh 落 Mac 拆 worker spawn——989997bd worker 面同族缺口）', () => {
-    const macRegistered = ['read', 'write', 'edit', 'glob', 'grep', 'bash', 'web_fetch', 'web_search', 'job_list', 'job_output', 'job_kill', 'read_image', 'todo_write', 'submitTask', 'addTask', 'recordBug', 'resolveBug', 'getBug', 'ask_user_question', 'subagent_fork', 'list_agents', 'send_message', 'interrupt_agent', 'workflow', 'present', 'create_goal', 'get_goal', 'update_goal']
+    // 真机 Windows 宿主全局工具面样本（retest-1.13-r2 hostlog 已知名表——无 bash）+ forge-dirs-query-tool 双查询工具
+    const macRegistered = ['read', 'write', 'edit', 'glob', 'grep', 'bash', 'web_fetch', 'web_search', 'job_list', 'job_output', 'job_kill', 'read_image', 'todo_write', 'submitTask', 'addTask', 'recordBug', 'resolveBug', 'getBug', 'forgeDirs', 'forgeResolvePath', 'ask_user_question', 'subagent_fork', 'list_agents', 'send_message', 'interrupt_agent', 'workflow', 'present', 'create_goal', 'get_goal', 'update_goal']
 
     it('bug: 档案 allow 含 pwsh 且真机未注册 pwsh 时，解析为在场的同族 shell（bash）', () => {
       const { allow } = deriveWorkerToolFilter('coding-fix', undefined, ['read', 'pwsh'], macRegistered)

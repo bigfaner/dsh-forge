@@ -75,6 +75,8 @@ export const ERROR_CODES = [
   // ── loop-recurrence-hardening T4（覆盖声明闸门——fix_approach 协议 + 锚有效性预检） ──
   'ERR_BUG_COVERAGE_DECLARATION_REQUIRED', // → BugCoverageDeclarationRequiredError：复发家族（recurrence_of 在场）resolveBug(fixed) 的 fix_approach 缺覆盖声明段/报告锚行——core 纯 DB 面 presence 拒写（400；data 带缺席段清单）
   'ERR_BUG_COVERAGE_ANCHOR_INVALID', // → plugin-forge resolveBug tool 锚有效性预检（旁挂侧文件 IO）：报告锚指向的卷宗正本不在场——失效经拒绝路径退回（400；data 带锚与解析路径）
+  // ── forge-dirs-query-tool（目录口径代码化——双查询工具受控面拒绝） ──
+  'ERR_DIR_PATH_INVALID', // → DirPathInvalidError：forgeDirs/forgeResolvePath 受控面拒绝——未知 dirKey/dest（拒绝并列举法集）或目的地 requires 缺参（400；data 带合法集）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

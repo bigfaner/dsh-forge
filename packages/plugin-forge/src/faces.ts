@@ -617,6 +617,52 @@ export function createProjectContainerDirs(projects: ProjectDirServiceFace): Pro
   }
 }
 
+// ─────────────────────────── dirKey 锚解析缝（forge-dirs-query-tool §2.1 ctx 装配——唯一带 IO 层） ───────────────────────────
+
+/**
+ * 项目域服务收窄面（锚解析缝消费两法：getProject 反查 forgeDir/wsPath + deriveTaskStoreDir
+ * 单源派生 taskHome——与 ProjectDirServiceFace 同源两法）。
+ */
+export type ForgePathsProjectsFace = Pick<ProjectServiceM2, 'getProject' | 'deriveTaskStoreDir'>
+
+/** 解析器族上下文骨架（forge-paths.ForgePathsResolveContext 的锚四键——slug/localId 由工具入参补充） */
+export interface ForgePathsAnchorContext {
+  readonly projectHome?: string
+  readonly taskHome?: string
+  readonly forgeDir?: string
+  readonly docsRoot?: string
+}
+
+/** 锚解析缝（forgeDirs/forgeResolvePath 双工具共消费——projectId → 锚四键一次性解析） */
+export interface ForgePathsAnchors {
+  anchorsOf(projectId: string): Promise<ForgePathsAnchorContext>
+}
+
+/**
+ * 建锚解析缝（装配单例）：forgeDir = getProject().forgeDir（projects 行单源）、taskHome =
+ * deriveTaskStoreDir 单源派生（faces 记忆化缝同链——解析器族保持纯函数）、projectHome =
+ * env `DSH_FORGE_TASKS_HOME`（非空，宿主 paths.ts resolveTasksHome 同键）> dirname(taskHome)
+ * （{tasksHome}/{flatten}@{hash8} 布局倒数一段即派生根）。项目未注册/面缺席 = plain Error
+ * fail-loud（装配缺口不静默——主径 requireProjectId 已先行拦截未绑定会话）。
+ */
+export function createForgePathsAnchors(projects: ForgePathsProjectsFace, env: { readonly DSH_FORGE_TASKS_HOME?: string } = process.env): ForgePathsAnchors {
+  return {
+    async anchorsOf(projectId) {
+      const project = await projects.getProject(projectId)
+      if (project === null || typeof project.forgeDir !== 'string' || project.forgeDir.trim() === '') {
+        throw new Error(`forge-paths: project anchors unavailable (projectId=${projectId}——未注册或 forgeDir 缺席)`)
+      }
+      const derived = await projects.deriveTaskStoreDir({ workspaceDir: project.wsPath })
+      if (derived.dir === '') {
+        throw new Error(`forge-paths: taskHome derivation empty (projectId=${projectId}——tasksHome 未注入 core 装配)`)
+      }
+      const taskHome = derived.dir
+      const projectHome = env.DSH_FORGE_TASKS_HOME !== undefined && env.DSH_FORGE_TASKS_HOME !== '' ? env.DSH_FORGE_TASKS_HOME : dirname(taskHome)
+      return { projectHome, taskHome, forgeDir: project.forgeDir }
+    },
+  }
+}
+
 // ─────────────────── 项目工作区根记忆缝（bug 8b041612——T3 卷宗探测 dir 语义修正） ───────────────────
 
 /** 项目域服务收窄面（工作区根缝消费单法：getProject 反查 ws_path） */
