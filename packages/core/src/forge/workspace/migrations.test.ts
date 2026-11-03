@@ -85,6 +85,17 @@ const BUGS_V2_SQL = [
 const BUGS_V3_SQL = [`ALTER TABLE bugs ADD COLUMN recurrence_of TEXT`]
 
 /**
+ * v7（recurrence-signal-tiering）：bugs.container_slug 归属列 pin——守卫式 ALTER
+ * + 迁移层 JOIN 回填（source_task_id → tasks.slug，孤链留空；guard 字段不在文本面）。
+ */
+const BUGS_V7_SQL = [
+  `ALTER TABLE bugs ADD COLUMN container_slug TEXT`,
+  `UPDATE bugs SET container_slug =
+     (SELECT slug FROM tasks WHERE tasks.id = bugs.source_task_id)
+   WHERE container_slug IS NULL`,
+]
+
+/**
  * 机械①（forge-verification-hardening）v5：implementation_checkpoints 实现检查点流水 DDL
  * pin（proposal.md「实体设计」节为契约单源）。
  */
@@ -168,6 +179,7 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
       ...WORKSPACE_MIGRATIONS[3]!.statements.map(stmtText),
       ...CHECKPOINTS_V5_SQL.map(norm),
       ...PARENT_V6_SQL.map(norm),
+      ...BUGS_V7_SQL.map(norm),
     ]
     const actual = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements.map(stmtText))
     expect(actual).toEqual(expected)
@@ -235,7 +247,19 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(WORKSPACE_MIGRATIONS.map((m) => m.version)).toEqual(
       Array.from({ length: FORGE_DB_SCHEMA_VERSION }, (_, i) => i + 1),
     )
-    expect(FORGE_DB_SCHEMA_VERSION).toBe(6)
+    expect(FORGE_DB_SCHEMA_VERSION).toBe(7)
+  })
+
+  it('v7（归属机制）：守卫式 ALTER bugs ADD COLUMN container_slug + JOIN tasks 回填（孤链留空）', () => {
+    const v7 = WORKSPACE_MIGRATIONS.find((m) => m.version === 7)
+    expect(v7?.statements.map(stmtText)).toEqual(BUGS_V7_SQL.map(norm))
+    expect(v7?.statements[0]).toEqual({
+      sql: `ALTER TABLE bugs ADD COLUMN container_slug TEXT`,
+      columnGuard: { table: 'bugs', column: 'container_slug' },
+    })
+    const backfill = stmtText(v7!.statements[1]!)
+    expect(backfill).toContain('SELECT slug FROM tasks WHERE tasks.id = bugs.source_task_id')
+    expect(backfill).toContain('WHERE container_slug IS NULL')
   })
 
   it('v6（机械②）：proposals.parent_proposal_id 承接链——守卫式 ALTER（nullable 自联结 FK）+ 自联结索引', () => {

@@ -6,7 +6,7 @@
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
-export const FORGE_DB_SCHEMA_VERSION = 6
+export const FORGE_DB_SCHEMA_VERSION = 7
 
 /**
  * v1（M3 终态·直改）：八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器。
@@ -322,6 +322,24 @@ BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (de
         columnGuard: { table: 'proposals', column: 'parent_proposal_id' },
       },
       `CREATE INDEX idx_proposals_parent ON proposals(parent_proposal_id)`,
+    ],
+  },
+  {
+    // v7（recurrence-signal-tiering）：bugs.container_slug 归属列（提案「归属机制」节）。
+    // 守卫式 ALTER（v3 recurrence_of 先例——列已在场谱系跳过）+ 迁移层 JOIN 回填
+    // （v4 归档 INSERT…SELECT 先例形态）：按 source_task_id 反查 tasks.slug 写入，
+    // 孤链（无 source_task_id 或反查缺席）留空。写入面后续由 registerBug 事务内
+    // taskId 反查供值（本迁移只回填历史行）；bugs 无 append-only 触发器，UPDATE 直行。
+    // 全新库：v1 建表 → 本版补列（零行，回填 no-op），三谱系终态一致（23 列）。
+    version: 7,
+    statements: [
+      {
+        sql: `ALTER TABLE bugs ADD COLUMN container_slug TEXT`,
+        columnGuard: { table: 'bugs', column: 'container_slug' },
+      },
+      `UPDATE bugs SET container_slug =
+         (SELECT slug FROM tasks WHERE tasks.id = bugs.source_task_id)
+       WHERE container_slug IS NULL`,
     ],
   },
 ]

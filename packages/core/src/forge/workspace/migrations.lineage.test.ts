@@ -76,6 +76,13 @@ function buildLineageFixture(file: string, statements: readonly string[]): void 
            VALUES ('b1', '摘要', '描述', '触发', '期望', '实际', 'open', 'tester', ?, ?)`,
         )
         .run(NOW, NOW)
+      // b2：携带 source_task_id 的登记行——v7 JOIN 回填（source_task_id → tasks.slug）断言面
+      raw
+        .prepare(
+          `INSERT INTO bugs (id, summary, bug_desc, trigger_desc, expected, actual, bug_status, reporter, source_task_id, created_at, updated_at)
+           VALUES ('b2', '委托摘要', '描述', '触发', '期望', '实际', 'open', 'tester', 't1', ?, ?)`,
+        )
+        .run(NOW, NOW)
     }
   } finally {
     raw.close()
@@ -108,9 +115,18 @@ function assertConverged(
   expect(tables).toContain('migration_digests')
   expect(tables).toContain('tasks_surface_archive')
   const bugCols = (db.pragma(`table_info('bugs')`) as Array<{ name: string }>).map((c) => c.name)
-  expect(bugCols).toHaveLength(22)
-  expect(bugCols[bugCols.length - 2]).toBe('fix_approach')
-  expect(bugCols[bugCols.length - 1]).toBe('recurrence_of')
+  expect(bugCols).toHaveLength(23)
+  expect(bugCols[bugCols.length - 2]).toBe('recurrence_of')
+  expect(bugCols[bugCols.length - 1]).toBe('container_slug')
+  // v7 JOIN 回填：source_task_id 行得 tasks.slug（t1 → demo）；孤链（b1 无 source_task_id）留空
+  const slugBackfill = db
+    .prepare<unknown[], { id: string; container_slug: string | null }>(
+      `SELECT id, container_slug FROM bugs ORDER BY id`,
+    )
+    .all()
+  for (const row of slugBackfill) {
+    expect(row.container_slug).toBe(row.id === 'b2' ? 'demo' : null)
+  }
   // v4（surface 退役）：tasks 两列已摘除；存量值无损归档（businessRow 谱系 t1 携带 web/web）
   const taskCols = (db.pragma(`table_info('tasks')`) as Array<{ name: string }>).map((c) => c.name)
   expect(taskCols).not.toContain('surface_key')
@@ -146,7 +162,7 @@ describe('三谱系夹具收敛回归（v2 收敛式：任一 version=1 谱系 �
     buildLineageFixture(join(ws, 'forge.db'), V1_WITH_BUGS)
     const store = createWorkspaceStore({ resolveDir: () => ws })
     const db = store.ensureOpen('p1')
-    assertConverged(db, { bugRows: 1 })
+    assertConverged(db, { bugRows: 2 })
     const bug = db
       .prepare<unknown[], { id: string; fix_approach: string | null }>(
         `SELECT id, fix_approach, recurrence_of FROM bugs WHERE id = 'b1'`,
@@ -354,6 +370,82 @@ describe('数据迁移配方示例·表重建（新形 CREATE → INSERT…SELEC
     expect(raw.prepare(`SELECT COUNT(*) AS n FROM widget_parts`).get()).toEqual({ n: 1 })
     expect(raw.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(1)
     expect(raw.pragma('foreign_key_check')).toEqual([])
+    raw.close()
+  })
+})
+
+describe('v7 JOIN 回填（bugs.container_slug 归属列——recurrence-signal-tiering）', () => {
+  // 谱系外独立配方（无 FK——「反查缺席」行 b3 需可入种；FK 语义由三谱系夹具承载）
+  const BASE_DDL = [
+    `CREATE TABLE tasks (id TEXT PRIMARY KEY, slug TEXT NOT NULL)`,
+    `CREATE TABLE bugs (id TEXT PRIMARY KEY, source_task_id TEXT)`,
+  ]
+  const V7_LIKE: Migration = {
+    version: 2,
+    statements: [
+      {
+        sql: `ALTER TABLE bugs ADD COLUMN container_slug TEXT`,
+        columnGuard: { table: 'bugs', column: 'container_slug' },
+      },
+      `UPDATE bugs SET container_slug =
+         (SELECT slug FROM tasks WHERE tasks.id = bugs.source_task_id)
+       WHERE container_slug IS NULL`,
+    ],
+  }
+
+  it('回填生效：source_task_id 行得 tasks.slug，孤链（无反查 / 反查缺席）留空', () => {
+    const file = join(freshWs('v7-backfill'), 'recipe.db')
+    buildRecipeFixture(file, BASE_DDL)
+    {
+      const raw = new Database(file)
+      raw.prepare(`INSERT INTO tasks (id, slug) VALUES ('t1', 'demo'), ('t2', 'orphan-src')`).run()
+      raw
+        .prepare(
+          `INSERT INTO bugs (id, source_task_id) VALUES ('b1', 't1'), ('b2', NULL), ('b3', 't-missing')`,
+        )
+        .run()
+      raw.close()
+    }
+    const db = openDatabase(file, { migrations: [V7_LIKE], schemaVersion: 2 })
+    const rows = db
+      .prepare<unknown[], { id: string; container_slug: string | null }>(
+        `SELECT id, container_slug FROM bugs ORDER BY id`,
+      )
+      .all()
+    expect(rows).toEqual([
+      { id: 'b1', container_slug: 'demo' },
+      { id: 'b2', container_slug: null },
+      { id: 'b3', container_slug: null },
+    ])
+    db.close()
+  })
+
+  it('原子性：守卫 ALTER + 回填同事务——回填中途失败整体回滚（列不落、数据原状、版本不推进）', () => {
+    const file = join(freshWs('v7-backfill-atomic'), 'recipe.db')
+    buildRecipeFixture(file, BASE_DDL)
+    {
+      const raw = new Database(file)
+      raw.prepare(`INSERT INTO tasks (id, slug) VALUES ('t1', 'demo')`).run()
+      raw.prepare(`INSERT INTO bugs (id, source_task_id) VALUES ('b1', 't1')`).run()
+      raw.close()
+    }
+    const broken: Migration = {
+      version: 2,
+      statements: [
+        V7_LIKE.statements[0]!,
+        `UPDATE bugs SET container_slug =
+           (SELECT slug FROM missing WHERE missing.id = bugs.source_task_id)
+         WHERE container_slug IS NULL`,
+      ],
+    }
+    expect(() => openDatabase(file, { migrations: [broken], schemaVersion: 2 })).toThrowError(
+      /no such table/,
+    )
+    const raw = new Database(file)
+    const cols = (raw.pragma(`table_info('bugs')`) as Array<{ name: string }>).map((c) => c.name)
+    expect(cols).toEqual(['id', 'source_task_id'])
+    expect(raw.prepare(`SELECT COUNT(*) AS n FROM bugs`).get()).toEqual({ n: 1 })
+    expect(raw.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(1)
     raw.close()
   })
 })
