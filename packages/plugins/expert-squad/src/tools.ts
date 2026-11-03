@@ -10,9 +10,19 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import matter from "gray-matter";
 import { z } from "zod";
-import type { AgentPresetRegistry } from "@deepseek-ai/dsh-agent-preset-registry";
+import {
+  createUnionToolNamesProbe,
+  unionAcrossPresets,
+  type AgentPresetsFace,
+  type CatalogEntry,
+  type ToolsSchemasReader,
+} from "@dsh-forge/contracts";
 import type { ExpertsRegistry } from "./registry.js";
 import { parseExpertFile, validateExpertUpdate, type ExpertReasoning } from "./store/frontmatter.js";
+
+// 工具注册面投影/求交族单源 re-export（bug a5b12254 集中化——contracts
+// tool-projection.ts；窄面类型面经此再导出，既有消费面 import 路径零变化）。
+export type { AgentPresetsFace, CatalogEntry, PresetScopeLease, ToolsSchemasReader } from "@dsh-forge/contracts";
 
 // ---------------------------------------------------------------------------
 // faces（官方 dsh-tools ToolDefinition 消费字段子面——md-mermaid faces.ts 同法）
@@ -170,130 +180,27 @@ const listSkillsResult = z.object({
   note: z.string().optional(),
 });
 
-/** 工具目录读取函数子面（ToolRuntime.schemas(scope?)——缺 scope 全局视图，携
- *  preset scope key = 该 preset 装配面视图；bug 6337a936 全模式并集取数面）。 */
-export type ToolsSchemasReader = (
-  scope?: object,
-) => readonly { readonly name: string; readonly description?: string }[] | undefined;
-
 /** 技能目录读取函数子面（ctx.skills.list({cwd, scope?})——AGENTS 1.6 调用点现查不 memoize）。 */
 export interface SkillsListFace {
   list(opts: { cwd: string; scope?: object }): Promise<readonly { name: string; description?: string }[]>;
 }
 
-/** preset scope 租约子面（官方 acquireScope 返回 `{key: ScopeKey} & AsyncDisposable`
- *  的窄面——ScopeKey 为 opaque object（@deepseek-ai/dsh-scope），用后 dispose）。 */
-export type PresetScopeLease = Awaited<ReturnType<AgentPresetsFace["acquireScope"]>>;
+// ToolsSchemasReader / PresetScopeLease / AgentPresetsFace / CatalogEntry /
+// unionAcrossPresets：工具注册面投影族单源（bug a5b12254 集中化——contracts
+// tool-projection.ts，文件头 import + re-export；此处仅保留包域富面消费壳）。
 
-/** 官方 agentPresets 服务窄面（ctx.agentPresets——@deepseek-ai/dsh-agent-preset-registry
- *  AgentPresetRegistry type-only import Pick 派生（AGENTS 1.5——官方签名漂移由 tsc
- *  兜底）；list()/acquireScope() 正门，全模式并集枚举缝）。 */
-export type AgentPresetsFace = Pick<AgentPresetRegistry, "list" | "acquireScope">;
-
-/** 目录条目（name+description 投影——并集去重单元；source = 条目级来源标注，bug
- *  c19eb719：global 层条目 "global"、preset 层条目 preset id，同名先见者保留来源）。 */
-export interface CatalogEntry {
-  name: string;
-  description: string;
-  source: string;
-}
-
-/** 并集去重合并（按 name 去重，description/source 取先见者——全局视图先入即全局优先）。 */
-function mergeCatalog(
-  merged: Map<string, CatalogEntry>,
-  rows: readonly { name: string; description?: string }[] | undefined,
-  source: string,
-): void {
-  for (const row of rows ?? []) {
-    if (!merged.has(row.name))
-      merged.set(row.name, { name: row.name, description: row.description ?? "", source });
-  }
-}
-
-/** agentPresets face 形状校验（缺席/list-acquireScope 非函数 = 不可用，取用点现查）。 */
-function readAgentPresetsFace(face: AgentPresetsFace | undefined): AgentPresetsFace | undefined {
-  return face !== undefined &&
-    typeof face.list === "function" &&
-    typeof face.acquireScope === "function"
-    ? face
-    : undefined;
-}
-
-const PRESETS_ABSENT_NOTE =
-  "preset scope views unavailable (agentPresets absent or malformed) — global view only";
-
-/** 全模式并集取数（bug 6337a936）：全局视图先入（source="global"），逐 preset
- *  acquireScope 租约内取 scope 视图合并（source=preset id，bug c19eb719 条目级来源）；
- *  单 preset 失败不外溢（记 note 部分并集），租约 try/finally 经官方 asyncDispose
- *  机械释放（bug 66e1bd5d——租约形 `{key} & AsyncDisposable`，无 dispose()），单租约
- *  释放失败记 note 不外溢。 */
-async function unionAcrossPresets(
-  readGlobal: () => readonly { name: string; description?: string }[] | undefined,
-  readScoped: (scope: object) => readonly { name: string; description?: string }[] | undefined | Promise<readonly { name: string; description?: string }[] | undefined>,
-  agentPresets: AgentPresetsFace | undefined,
-): Promise<{ entries: CatalogEntry[]; note?: string }> {
-  const merged = new Map<string, CatalogEntry>();
-  mergeCatalog(merged, readGlobal(), "global");
-  const presets = readAgentPresetsFace(agentPresets);
-  if (presets === undefined) {
-    return { entries: [...merged.values()], note: PRESETS_ABSENT_NOTE };
-  }
-  let ids: string[];
-  let note: string | undefined;
-  try {
-    ids = (await presets.list())
-      .map((preset) => preset.id)
-      .filter((id): id is string => typeof id === "string");
-  } catch {
-    return { entries: [...merged.values()], note: "agentPresets unavailable — global view only" };
-  }
-  const failed: string[] = [];
-  const releaseFailed: string[] = [];
-  for (const id of ids) {
-    let lease: PresetScopeLease | undefined;
-    try {
-      lease = await presets.acquireScope(id);
-      mergeCatalog(merged, await readScoped(lease.key), id);
-    } catch {
-      failed.push(id);
-    } finally {
-      if (lease !== undefined) {
-        try {
-          await lease[Symbol.asyncDispose]();
-        } catch (error) {
-          // 单租约释放失败不掩盖取数结果——记 note（点名 preset），不外溢
-          releaseFailed.push(`${id} (${error instanceof Error ? error.message : String(error)})`);
-        }
-      }
-    }
-  }
-  if (failed.length > 0) note = `preset scope views failed: ${failed.join(", ")} — partial union`;
-  if (releaseFailed.length > 0) {
-    note = [note, `preset scope lease release failed: ${releaseFailed.join(", ")}`]
-      .filter((part) => part !== undefined)
-      .join("; ");
-  }
-  return { entries: [...merged.values()], note };
-}
-
-/** 白名单求交探针工厂（bug e3b045dc）：无参 schemas() 是 ScopedLayers global 单层
- * 投影——官方模型工具装在 preset scope 层（agent-preset-registry createScope 装载），
- * 恰好只剩本插件 expert 域工具 → 档案白名单求交空集炸委派。探针改接全模式并集面
- * （unionAcrossPresets，bug 6337a936 同径）：global 视图先入 ∪ 逐 preset acquireScope
- * 租约内 scope 视图。消费点现查禁 memoize（AGENTS 1.6）；agentPresets/schemas 缺席
- * fail-soft 降级（global 层名或空数组——compose 侧空集 = 不裁剪）。 */
+/** 白名单求交探针工厂（bug e3b045dc；薄壳——bug a5b12254 集中化）：无参 schemas()
+ *  是 ScopedLayers global 单层投影——官方模型工具装在 preset scope 层，恰好只剩本插件
+ *  expert 域工具 → 档案白名单求交空集炸委派。探针接全模式并集面（contracts
+ *  createUnionToolNamesProbe）：global 视图先入 ∪ 逐 preset acquireScope 租约内 scope
+ *  视图。消费点现查禁 memoize（AGENTS 1.6）；agentPresets/schemas 缺席 fail-soft 降级
+ *  （global 层名或空数组——compose 侧空集 = 不裁剪）。 */
 export function createKnownToolsProbe(
   toolsSchemas: ToolsSchemasReader,
   agentPresets: () => AgentPresetsFace | undefined,
 ): () => Promise<readonly string[]> {
-  return async () => {
-    const { entries } = await unionAcrossPresets(
-      () => toolsSchemas(),
-      (scope) => toolsSchemas(scope),
-      agentPresets(),
-    );
-    return entries.map((entry) => entry.name);
-  };
+  const probe = createUnionToolNamesProbe(toolsSchemas, agentPresets);
+  return async () => (await probe()) ?? [];
 }
 
 /**
