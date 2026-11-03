@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  EXCLUDED_EXPERT_TOOL_NAMES,
   EXPERT_TOOLS,
   ExpertToolError,
   createExpertTools,
@@ -534,9 +535,11 @@ describe("list_tools / list_skills — 白名单键名取数面", () => {
       }).map((t) => [t.name, t]),
     );
     const result = (await tools.list_tools!.execute({})) as {
-      tools: { name: string; description: string }[];
+      tools: { name: string; description: string; source: string }[];
     };
-    expect(result.tools).toEqual(SCHEMAS.map((s) => ({ name: s.name, description: s.description })));
+    expect(result.tools).toEqual(
+      SCHEMAS.map((s) => ({ name: s.name, description: s.description, source: "global" })),
+    );
     // 每次调用现查（不 memoize）
     await tools.list_tools!.execute({});
     expect(calls).toBe(2);
@@ -575,7 +578,7 @@ describe("list_tools / list_skills — 白名单键名取数面", () => {
     const result = (await tools.list_skills!.execute({})) as {
       skills: { name: string; description: string }[];
     };
-    expect(result.skills).toEqual([{ name: "review", description: "Review skill." }]);
+    expect(result.skills).toEqual([{ name: "review", description: "Review skill.", source: "global" }]);
     expect(listed).toEqual([{ cwd: process.cwd() }]);
   });
 
@@ -666,9 +669,9 @@ describe("list_tools / list_skills — 全模式并集视图（bug 6337a936）",
     };
     // 并集去重：read 取全局（先见者）；hr 独有 summon、dev 独有 shell 均并入
     expect(result.tools).toEqual([
-      { name: "read", description: "global read" },
-      { name: "summon", description: "hr summon" },
-      { name: "shell", description: "dev shell" },
+      { name: "read", description: "global read", source: "global" },
+      { name: "summon", description: "hr summon", source: "hr" },
+      { name: "shell", description: "dev shell", source: "dev" },
     ]);
     expect(result.note).toBeUndefined();
     // 每 preset 各取一次 scope 租约（schemas 携 scope key 现查）
@@ -694,7 +697,7 @@ describe("list_tools / list_skills — 全模式并集视图（bug 6337a936）",
       tools: { name: string }[];
       note?: string;
     };
-    expect(result.tools).toEqual([{ name: "read", description: "global read" }]);
+    expect(result.tools).toEqual([{ name: "read", description: "global read", source: "global" }]);
     expect(result.note).toContain("broken");
     expect(presets.events.disposed).toEqual([presets.keys.broken]);
   });
@@ -721,8 +724,8 @@ describe("list_tools / list_skills — 全模式并集视图（bug 6337a936）",
       note?: string;
     };
     expect(result.skills).toEqual([
-      { name: "review", description: "global review" },
-      { name: "roundtable", description: "hr roundtable" },
+      { name: "review", description: "global review", source: "global" },
+      { name: "roundtable", description: "hr roundtable", source: "hr" },
     ]);
     expect(result.note).toBeUndefined();
     expect(calls).toEqual([
@@ -748,10 +751,10 @@ describe("list_tools / list_skills — 全模式并集视图（bug 6337a936）",
       }).map((t) => [t.name, t]),
     );
     const toolsResult = (await tools.list_tools!.execute({})) as { tools: { name: string; description?: string }[]; note?: string };
-    expect(toolsResult.tools).toEqual([{ name: "read", description: "global read" }]);
+    expect(toolsResult.tools).toEqual([{ name: "read", description: "global read", source: "global" }]);
     expect(toolsResult.note).toContain("agentPresets");
     const skillsResult = (await tools.list_skills!.execute({})) as { skills: { name: string }[]; note?: string };
-    expect(skillsResult.skills).toEqual([{ name: "review", description: "global review" }]);
+    expect(skillsResult.skills).toEqual([{ name: "review", description: "global review", source: "global" }]);
     expect(skillsResult.note).toContain("agentPresets");
     expect(skillCalls).toEqual([{ cwd: process.cwd() }]);
     const rendered = (tools.list_tools!.output.render({}, toolsResult)[0] as { text: string }).text;
@@ -768,7 +771,7 @@ describe("list_tools / list_skills — 全模式并集视图（bug 6337a936）",
       }).map((t) => [t.name, t]),
     );
     const result = (await tools.list_tools!.execute({})) as { tools: { name: string; description?: string }[]; note?: string };
-    expect(result.tools).toEqual([{ name: "read", description: "global read" }]);
+    expect(result.tools).toEqual([{ name: "read", description: "global read", source: "global" }]);
     expect(result.note).toContain("agentPresets");
   });
 
@@ -792,14 +795,52 @@ describe("list_tools / list_skills — 全模式并集视图（bug 6337a936）",
     };
     // hr 释放抛错不影响其取数结果——并集完整
     expect(result.tools).toEqual([
-      { name: "read", description: "global read" },
-      { name: "summon", description: "hr summon" },
-      { name: "shell", description: "dev shell" },
+      { name: "read", description: "global read", source: "global" },
+      { name: "summon", description: "hr summon", source: "hr" },
+      { name: "shell", description: "dev shell", source: "dev" },
     ]);
     // 释放失败记 note（点名 hr），dev 正常释放不记
     expect(result.note).toContain("release failed");
     expect(result.note).toContain("hr");
     expect(presets.events.disposed).toEqual([presets.keys.dev]);
+  });
+  it("并集条目透出条目级来源（bug c19eb719）：global 层 = 'global'、preset 层 = preset id；同名先见者保留来源", async () => {
+    const presets = makePresetFace(["hr", "dev"]);
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: (scope?: object) =>
+          scope === undefined
+            ? [{ name: "read" }]
+            : scope === presets.keys.hr
+              ? [{ name: "read" }, { name: "summon" }]
+              : [{ name: "shell" }, { name: "read" }],
+        agentPresets: () => presets.face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as {
+      tools: { name: string; source: string }[];
+    };
+    expect(result.tools).toEqual([
+      { name: "read", description: "", source: "global" }, // 同名先见者（global）保留来源
+      { name: "summon", description: "", source: "hr" },
+      { name: "shell", description: "", source: "dev" },
+    ]);
+  });
+
+  it("EXCLUDED_EXPERT_TOOL_NAMES 排除集（bug c19eb719 最终口径）：7 枚管理/取数工具；list_experts/delegate_expert 保留", () => {
+    expect([...EXCLUDED_EXPERT_TOOL_NAMES].sort()).toEqual([
+      "disable_expert",
+      "enable_expert",
+      "list_skills",
+      "list_tools",
+      "recruit_expert",
+      "rename_expert",
+      "update_expert",
+    ]);
+    expect(EXCLUDED_EXPERT_TOOL_NAMES).not.toContain("list_experts");
+    expect(EXCLUDED_EXPERT_TOOL_NAMES).not.toContain("delegate_expert");
   });
 });
 

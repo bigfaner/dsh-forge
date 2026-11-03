@@ -26,6 +26,7 @@ import {
   configKeyOf,
   type DetailMutations,
 } from "../src-client/panel/detail-source.js";
+import { defaultCatalogProbe } from "../src-client/panel/expert-panel.js";
 import {
   ExpertDetailDialog,
   attachMselCollapse,
@@ -98,6 +99,29 @@ describe("detail-logic 校验（F2 保存门）", () => {
   });
 });
 
+describe("defaultCatalogProbe（bug c19eb719：候选条目双形状容缺）", () => {
+  it("新宿主条目形状 {name, source} 与旧宿主纯字符串数组均解析（旧形态无来源标注）；非法 = 容缺", async () => {
+    const stub = (payload: unknown): void => {
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })));
+    };
+    try {
+      stub({ tools: [{ name: "read", source: "global" }, { name: "pwsh", source: "expedition" }] });
+      expect(await defaultCatalogProbe()).toEqual({
+        tools: [{ name: "read", source: "global" }, { name: "pwsh", source: "expedition" }],
+      });
+      stub({ tools: ["read", "edit"], skills: [{ name: "review" }] });
+      expect(await defaultCatalogProbe()).toEqual({
+        tools: [{ name: "read" }, { name: "edit" }],
+        skills: [{ name: "review" }],
+      });
+      stub({ tools: [42] });
+      expect(await defaultCatalogProbe()).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe("detail-logic multi-select", () => {
   it("toggleInList 勾选/取消", () => {
     expect(toggleInList(["read"], "edit")).toEqual(["read", "edit"]);
@@ -123,25 +147,40 @@ describe("detail-logic multi-select", () => {
     expect(TOOL_CANDIDATES).toContain("bash");
   });
 
-  it("toolCandidatesOf：目录在场 = 目录清单（去重保序，含插件追加工具）；缺席 = 兜底清单", () => {
-    expect(toolCandidatesOf(["read", "pwsh", "read", "delegate_expert"])).toEqual([
-      "read",
-      "pwsh",
-      "delegate_expert",
+  it("toolCandidatesOf：目录在场 = 条目 {name, source} 清单（去重保序）；缺席 = 兜底清单（无来源标注）", () => {
+    expect(
+      toolCandidatesOf([
+        { name: "read", source: "global" },
+        { name: "pwsh", source: "expedition" },
+        { name: "read", source: "global" },
+        { name: "delegate_expert", source: "global" },
+      ]),
+    ).toEqual([
+      { name: "read", source: "global" },
+      { name: "pwsh", source: "expedition" },
+      { name: "delegate_expert", source: "global" },
     ]);
-    expect(toolCandidatesOf(undefined)).toBe(TOOL_CANDIDATES);
+    expect(toolCandidatesOf(undefined)).toEqual(TOOL_CANDIDATES.map((name) => ({ name })));
   });
 
-  it("skillCandidatesOf：目录在场 = 目录为主源 ∪ 档案技能（历史值保持可选）；缺席 = 并集回退", () => {
+  it("skillCandidatesOf：目录条目为主源 ∪ 档案技能（历史值保持可选、无来源）；缺席 = 并集回退", () => {
     const entries = [entry(), entry({ name: "b", skills: ["tsc", "vue"] })];
-    expect(skillCandidatesOf(["sql", "review"], entries)).toEqual([
-      "sql",
-      "review",
-      "tsc",
-      "vue",
+    expect(
+      skillCandidatesOf(
+        [
+          { name: "sql", source: "global" },
+          { name: "review", source: "hr" },
+        ],
+        entries,
+      ),
+    ).toEqual([
+      { name: "sql", source: "global" },
+      { name: "review", source: "hr" },
+      { name: "tsc" },
+      { name: "vue" },
     ]);
-    expect(skillCandidatesOf([], entries)).toEqual(["review", "tsc", "vue"]);
-    expect(skillCandidatesOf(undefined, entries)).toEqual(["review", "tsc", "vue"]);
+    expect(skillCandidatesOf([], entries)).toEqual([{ name: "review" }, { name: "tsc" }, { name: "vue" }]);
+    expect(skillCandidatesOf(undefined, entries)).toEqual([{ name: "review" }, { name: "tsc" }, { name: "vue" }]);
   });
 
   it("draftOf 深拷贝字段（编辑不污染原档案）", () => {

@@ -19,6 +19,7 @@ import {
   MSEL_MENU_MAX_PX,
   personaBlocks,
   TOOL_CANDIDATES,
+  type CandidateOption,
   type MdInline,
 } from "./detail-logic.js";
 import { maskedPeersLabel, diffFields, entryIdOf, originBadgeLabel, pluginNameOfSource, type ExpertView } from "./filter.js";
@@ -97,7 +98,7 @@ const PERSONA_MIN_PX = TEXTAREA_LINE_PX * 12 + 2;
 const PERSONA_MAX_PX = TEXTAREA_LINE_PX * 100 + 2;
 
 /** 全目录技能候选面（multi-select 技能下拉 + 面板汇总注入）。 */
-export type AllSkills = readonly string[];
+export type AllSkills = readonly CandidateOption[];
 
 /** msel 菜单未测量首帧兜底样式（隐藏先测量——不落 static 位置跳位）。 */
 const MSEL_MENU_HIDDEN = { visibility: "hidden" } as const;
@@ -335,7 +336,7 @@ function MultiSelect(props: {
   readonly field: "tools" | "skills";
   readonly label: string;
   readonly selected: readonly string[];
-  readonly candidates: readonly string[];
+  readonly candidates: readonly CandidateOption[];
   readonly allowAdd: boolean;
   readonly defaultOpen?: boolean;
   readonly onToggle: (value: string) => void;
@@ -372,7 +373,12 @@ function MultiSelect(props: {
       window.removeEventListener("resize", place);
     };
   }, [open]);
-  const options = [...new Set([...props.candidates, ...props.selected])];
+  // 候选并集（bug c19eb719：候选为条目对象——左名称 + 右来源标注；已选但不在候选
+  // 清单的值（旧档案历史值）追加为无来源条目，保序去重）。
+  const options = [...props.candidates];
+  for (const value of props.selected) {
+    if (!options.some((option) => option.name === value)) options.push({ name: value });
+  }
   return (
     <div className="dswf-dlg-field">
       <label>{props.label}</label>
@@ -404,13 +410,18 @@ function MultiSelect(props: {
             data-msel-menu={props.field}
           >
             {options.map((option) => (
-              <label key={option} className="dswf-msel-row">
+              <label key={option.name} className="dswf-msel-row">
                 <input
                   type="checkbox"
-                  checked={props.selected.includes(option)}
-                  onChange={() => props.onToggle(option)}
+                  checked={props.selected.includes(option.name)}
+                  onChange={() => props.onToggle(option.name)}
                 />
-                {option}
+                <span className="dswf-msel-name">{option.name}</span>
+                {option.source !== undefined ? (
+                  <span className="dswf-msel-src" data-src={option.source}>
+                    {option.source === "global" ? "全局" : option.source}
+                  </span>
+                ) : null}
               </label>
             ))}
             {props.allowAdd ? (
@@ -567,8 +578,9 @@ function CompareBody({
 /** 详情 Dialog 呈递件（控制器驱动；F2 组件树逐位）。 */
 export function ExpertDetailDialog(props: {
   readonly controller: ExpertDetailController;
-  /** 工具白名单候选（1.78：宿主 ToolRuntime 目录透出；缺席 = 内置兜底清单）。 */
-  readonly toolCandidates?: readonly string[];
+  /** 工具白名单候选（1.78 / bug c19eb719：list_tools 同款全模式并集条目含来源标注；
+   *  缺席 = 内置兜底清单）。 */
+  readonly toolCandidates?: readonly CandidateOption[];
   readonly allSkills: AllSkills;
   /** multi-select 初始展开态（SSR 测试/调试面；默认收起 = 原型语义）。 */
   readonly mselDefaultOpen?: boolean;
@@ -728,7 +740,7 @@ export function ExpertDetailDialog(props: {
         // 兜底双写注记：toolCandidates prop 已在装配侧经 toolCandidatesOf 兜底
         // （目录缺席 → TOOL_CANDIDATES）；此处 `?? TOOL_CANDIDATES` 是 prop 缺席
         // 形态（旧调用方/透传断链）的二次兜底——双写有意保留，非冗余。
-        candidates={props.toolCandidates ?? TOOL_CANDIDATES}
+        candidates={props.toolCandidates ?? TOOL_CANDIDATES.map((name) => ({ name }))}
         allowAdd={false}
         defaultOpen={props.mselDefaultOpen}
         onToggle={(value) => props.controller.toggleTool(value)}

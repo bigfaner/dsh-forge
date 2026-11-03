@@ -130,6 +130,19 @@ describe("compose 组装内核", () => {
     expect(request.toolFilter.allow).toEqual(["read"]); // grep 未注册 → fail-soft 剔除
   });
 
+  it("bug c19eb719：排除集 7 枚 fail-soft 剔除（同未知名口径，不炸）；list_experts/delegate_expert 保留", async () => {
+    const excluded = [
+      "list_tools", "list_skills", "recruit_expert",
+      "update_expert", "rename_expert", "enable_expert", "disable_expert",
+    ];
+    const compose = createExpertComposer(
+      makeService([{ ...baseEntry, tools: ["read", ...excluded, "delegate_expert", "list_experts"] }]),
+      () => ["read", ...excluded, "delegate_expert", "list_experts"],
+    );
+    const request = await compose("code-reviewer", "t");
+    expect(request.toolFilter.allow).toEqual(["read", "delegate_expert", "list_experts"]);
+  });
+
   it("bug e3b045dc: 异步探针（全模式并集面）被正确 await——跨 preset 并集含金丝雀，求交生效不炸", async () => {
     // 宿主实测形态：global 层仅 expert 域工具，官方工具在 preset scope 层——
     // 探针经 unionAcrossPresets 异步返回并集（含 read）。

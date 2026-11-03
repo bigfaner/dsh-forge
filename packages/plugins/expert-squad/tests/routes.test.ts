@@ -96,8 +96,15 @@ describe("expert-squad fetch 路由族（官方 fetch.register 契约镜像）",
     const withCatalog = {
       ...makeDeps(),
       candidates: async () => ({
-        tools: ["read", "pwsh", "delegate_expert"],
-        skills: ["review-prd", "brainstorm"],
+        tools: [
+          { name: "read", source: "global" },
+          { name: "pwsh", source: "expedition" },
+          { name: "delegate_expert", source: "global" },
+        ],
+        skills: [
+          { name: "review-prd", source: "global" },
+          { name: "brainstorm", source: "global" },
+        ],
       }),
     };
     const routes = expertSquadRoutes(withCatalog);
@@ -105,8 +112,15 @@ describe("expert-squad fetch 路由族（官方 fetch.register 契约镜像）",
     const res = await route.fetch(new Request("http://host/api/expert-squad/candidates"));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      tools: ["read", "pwsh", "delegate_expert"],
-      skills: ["review-prd", "brainstorm"],
+      tools: [
+        { name: "read", source: "global" },
+        { name: "pwsh", source: "expedition" },
+        { name: "delegate_expert", source: "global" },
+      ],
+      skills: [
+        { name: "review-prd", source: "global" },
+        { name: "brainstorm", source: "global" },
+      ],
     });
 
     const bare = expertSquadRoutes(makeDeps());
@@ -120,13 +134,21 @@ describe("expert-squad fetch 路由族（官方 fetch.register 契约镜像）",
   it("GET candidates：单侧目录缺席 = 对应字段缺席（client 回退兜底语义）", async () => {
     const partial = {
       ...makeDeps(),
-      candidates: async () => ({ tools: ["read", "edit"] }),
+      candidates: async () => ({
+        tools: [
+          { name: "read", source: "global" },
+          { name: "edit", source: "global" },
+        ],
+      }),
     };
     const routes = expertSquadRoutes(partial);
     const route = routes.find((r) => r.path === expertSquadRoute("candidates"))!;
     const res = await route.fetch(new Request("http://host/api/expert-squad/candidates"));
     const body = (await res.json()) as { tools?: unknown; skills?: unknown };
-    expect(body.tools).toEqual(["read", "edit"]);
+    expect(body.tools).toEqual([
+      { name: "read", source: "global" },
+      { name: "edit", source: "global" },
+    ]);
     expect("skills" in body).toBe(false);
   });
 

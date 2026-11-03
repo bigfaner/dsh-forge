@@ -20,7 +20,7 @@
 // parent/signal 等 2 面（派发上下文）由下游通道一调用方补齐，不在档案映射内。
 
 import type { ExpertEntry, ExpertsService } from "../registry.js";
-import { ExpertToolError } from "../tools.js";
+import { EXCLUDED_EXPERT_TOOL_NAMES, ExpertToolError } from "../tools.js";
 
 /** 官方 ContentBlock 的文本块子面（prompt 载荷）。 */
 export interface TextContentBlock {
@@ -99,6 +99,8 @@ function probeIsSubdomain(known: readonly string[]): boolean {
 
 /**
  * 白名单平台求交：档案白名单与派发时点全局注册名求交（bug 3cb118cf）。
+ * - 排除集（bug c19eb719，EXCLUDED_EXPERT_TOOL_NAMES 单点）：档案写了管理/取数 7 枚
+ *   → fail-soft 剔除（同未知名口径，不炸；list_experts/delegate_expert 保留）；
  * - 未知名且属 shell 候选族 → 解析为候选中在场的同族者（档案写 pwsh 落 Mac 得 bash）；
  * - 其余未知名 → fail-soft 剔除（同 dsh-graph g-473「缺则静默剔除，不炸 restrict」先例；
  *   dsh-tools restrict() 对未知名硬抛错，逐字透传会让跨机档案必然拆委派）；
@@ -106,10 +108,13 @@ function probeIsSubdomain(known: readonly string[]): boolean {
  * 抛错面：解析后为空集（全未知 = 档案配置错误）→ ExpertToolError fail-loud。
  */
 export function resolveToolAllow(
-  allow: readonly string[],
+  rawAllow: readonly string[],
   known?: readonly string[],
 ): string[] {
-  if (known === undefined || known.length === 0) return [...allow]; // 无探针不裁剪
+  const allow = rawAllow.filter(
+    (name) => !(EXCLUDED_EXPERT_TOOL_NAMES as readonly string[]).includes(name),
+  ); // 排除集前置剔除（bug c19eb719）
+  if (known === undefined || known.length === 0) return allow; // 无探针不裁剪（排除集已生效）
   if (probeIsSubdomain(known)) return [...allow]; // 子域投影不可信——不裁剪（bug 92d642c2 同族）
   const present = new Set(known);
   const resolved: string[] = [];

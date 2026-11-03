@@ -105,15 +105,23 @@ export const candidatesQuerySchema = z.object({}).passthrough();
 
 // ---- 候选目录读口（Dialog 工具/技能下拉候选用——目录缺席 = 字段缺席，client 兜底） ----
 
+/** 候选条目（bug c19eb719：候选面 = list_tools/list_skills 同款全模式并集条目）。
+ *  source = 条目级来源："global" = 全局层，preset id = 该模式 scope 层（同名先见者
+ *  保留来源）；UI 侧呈现「全局」/模式名徽标。 */
+export interface CandidateEntry {
+  readonly name: string;
+  readonly source: string;
+}
+
 /** 候选目录应答（tools/skills 字段缺席 = 对应官方目录缺席——client 侧回退兜底语义）。
- *  口径：全局注册视图——tools 不含 preset 域 scoped deny 效果（守卫态 restrict 只作用
- *  于 preset 域 scoped apply）；skills = root 全局层技能目录视图。 */
+ *  口径：list_tools/list_skills 同款全模式并集（global ∪ 逐 preset scope 层，bug
+ *  6337a936 / c19eb719）；tools 已过滤排除集 EXCLUDED_EXPERT_TOOL_NAMES（7 枚管理/
+ *  取数工具；list_experts/delegate_expert 保留）。 */
 export interface CandidateCatalog {
-  /** 宿主 ToolRuntime 目录工具名（schemas() 全局注册视图——全局视图永不含 scoped deny，
-   *  含插件追加工具；scope 视图不实现，候选是「可选白名单建议」）。 */
-  readonly tools?: readonly string[];
-  /** 官方 skill 目录技能名（ctx.skills 清单面——root 全局层视图）。 */
-  readonly skills?: readonly string[];
+  /** 工具目录条目（unionToolsCatalog 并集投影 + 排除集过滤）。 */
+  readonly tools?: readonly CandidateEntry[];
+  /** 技能目录条目（unionSkillsCatalog 并集投影——SkillRegistry 同为分层视图）。 */
+  readonly skills?: readonly CandidateEntry[];
 }
 
 // ---- delegate 装配状态（观测面-only）---------------------------------------
