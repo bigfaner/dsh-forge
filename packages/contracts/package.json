@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/contracts",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "跨工件类型/常量（RPC DTO、frontmatter 契约常量、错误码、IPC 通道名）——零逻辑零依赖（依赖铁律：契约层不依赖任何包）。",
+  "description": "跨工件类型/常量（RPC DTO、frontmatter 契约常量、错误码、IPC 通道名）与工具注册面投影/求交纯逻辑（tool-projection——运行期零依赖，官方机械仅 type-only import）——依赖铁律：运行期不依赖任何包。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -19,6 +19,7 @@
     "build": "tsc -b"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-agent-preset-registry": "0.2.0-rc.2",
     "@types/node": "24.19.0"
   }
 }

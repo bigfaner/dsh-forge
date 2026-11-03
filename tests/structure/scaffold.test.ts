@@ -36,12 +36,16 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     expect(readJson(join(dir, 'package.json')).name).toBe(name)
   })
 
-  it('contracts 零运行时依赖（fix-33 ⑩ 后 devDependencies 仅允许 @types/node——测试面 node 内建类型）', () => {
+  it('contracts 零运行时依赖（fix-33 ⑩ + bug a5b12254 集中化：devDependencies 仅允许 @types/node 与官方包 type-only——dsh-agent-preset-registry，运行期零依赖）', () => {
     const pkg = readJson('packages/contracts/package.json')
     for (const key of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
       expect(Object.keys((pkg[key] as Record<string, unknown>) ?? {})).toHaveLength(0)
     }
-    expect(Object.keys((pkg.devDependencies as Record<string, unknown>) ?? {}).every((k) => k === '@types/node')).toBe(true)
+    expect(
+      Object.keys((pkg.devDependencies as Record<string, unknown>) ?? {}).every(
+        (k) => k === '@types/node' || k === '@deepseek-ai/dsh-agent-preset-registry',
+      ),
+    ).toBe(true)
   })
 
   it('根 solution tsconfig references 十五工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；md-mermaid/git-worktree/input-history/expert-squad/quote-reference/super-composer/mobile-bridge 先后入 packages/plugins/ 子居所）', () => {
