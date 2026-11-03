@@ -447,9 +447,12 @@ export function bugSearchKeys(card: BugCard): readonly string[] {
 /** Interface：core · forge bug 域服务面（装配注入——recordBug/resolveBug 工具消费 + listBugs RPC） */
 
 /**
- * 台账 recurrence 候选检索 scope（loop-recurrence-hardening T2/T3——跨容器库域口径归本域
- * 定义，tasks 域经只读 face 消费零 import）。files 口径：非空（结算径）→ 按 suspected
- * 修复锚路径收窄（同缝提示性信号）；空（派发径）→ 项目全链成员候选（同缝拦截判据）。
+ * 台账 recurrence 候选检索 scope（跨容器库域口径归本域定义，tasks 域经只读 face 消费零
+ * import）。归属口径（recurrence-judgment-narrowing 启用）：slug = 归属容器——仅返回
+ * 「链内任一成员 source_task_id 落在该容器」（任务 id 形制 `t-<slug>-<localId>`，容器成员
+ * 以 `t-<slug>-` 前缀判定）的链；无关提案容器链不进候选集。files 口径：非空（结算径）→
+ * 在归属过滤之上按 suspected 修复锚路径二次收窄（同缝提示性信号）；空（派发径）→ 容器
+ * 内全链。拦截计数 = activeCount（open 成员最长祖先径边数），与 chain 呈现口径分离。
  */
 export interface BugRecurrenceScope {
   readonly slug: string
@@ -657,10 +660,13 @@ export function createBugsService(deps: BugsServiceDeps) {
     },
 
     /**
-     * 台账 recurrence 候选只读聚合（loop-recurrence-hardening T2 交叉校验 / T3 同缝计数 /
-     * triage 两信号 / add-fix vars 共同消费 face——生产装配 = 本域服务聚合，tasks 域经
-     * 闭包注入消费零 import，四域互禁不破）。候选 = 复发链成员（链长 ≥ 2）；scope.files
-     * 非空按 suspected 锚路径收窄，空 = 全链成员（口径见 BugRecurrenceScope 注）。
+     * 台账 recurrence 候选只读聚合（claim 同缝守卫 / T2 交叉校验 / triage 两信号 / add-fix
+     * vars 共同消费 face——生产装配 = 本域服务聚合，tasks 域经闭包注入消费零 import，四域
+     * 互禁不破）。判据收窄（recurrence-judgment-narrowing）：
+     * ① 归属过滤——仅返回链内任一成员 source_task_id 落 scope 容器（`t-<slug>-` 前缀）的链；
+     * ② 终态过滤——链内 open 成员空集（全 fixed/unresolved）不产出候选；
+     * ③ 计数语义——activeCount = open 成员沿 recurrence_of 前驱回溯的最长祖先径边数
+     *   （不含 BFS 后继收齐）；chain 保持呈现口径（getBug 同构全链），两口径分离。
      */
     async findRecurrenceCandidates(projectId: string, scope: BugRecurrenceScope): Promise<readonly BugRecurrenceCandidate[]> {
       const db = deps.store.ensureOpen(projectId)
@@ -668,13 +674,38 @@ export function createBugsService(deps: BugsServiceDeps) {
       const chains = recurrenceChainsOf(rows)
       const byId = new Map(rows.map((r) => [r.id, r]))
       const files = scope.files.map((f) => f.trim()).filter((f) => f !== '')
+      const containerPrefix = `t-${scope.slug}-`
+      const activeCountOf = (chain: readonly string[]): number => {
+        let max = 0
+        for (const id of chain) {
+          const member = byId.get(id)
+          if (member === undefined || member.bug_status !== 'open') continue
+          let depth = 0
+          let cursor = byId.get(member.recurrence_of ?? '')
+          while (cursor !== undefined) {
+            if (cursor.bug_status === 'open') depth += 1
+            cursor = byId.get(cursor.recurrence_of ?? '')
+          }
+          max = Math.max(max, depth)
+        }
+        return max
+      }
       const candidates: BugRecurrenceCandidate[] = []
       for (const [bugId, chain] of chains) {
+        const members = chain
+          .map((id) => byId.get(id))
+          .filter((m): m is BugStorageRow => m !== undefined)
+        // ① 归属过滤：链内任一成员 source_task_id 落 scope 容器
+        if (!members.some((m) => m.source_task_id !== null && m.source_task_id.startsWith(containerPrefix))) continue
+        // ② 终态过滤：全终态链（无 open 成员）不构成盲试风险；open 席位只落在 open 成员行
+        if (!members.some((m) => m.bug_status === 'open')) continue
+        if (byId.get(bugId)?.bug_status !== 'open') continue
+        const activeCount = activeCountOf(chain)
         if (files.length > 0) {
           const suspected = byId.get(bugId)?.suspected ?? ''
           if (!files.some((f) => suspected.includes(f))) continue
         }
-        candidates.push({ bugId, summary: byId.get(bugId)?.summary ?? '', chain })
+        candidates.push({ bugId, summary: byId.get(bugId)?.summary ?? '', chain, activeCount })
       }
       return candidates
     },

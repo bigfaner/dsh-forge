@@ -588,8 +588,14 @@ export interface TaskBlockClassification {
 export interface BugRecurrenceCandidate {
   bugId: string
   summary: string
-  /** 候选所属复发链（时间正序，链根在前） */
+  /** 候选所属复发链（时间正序，链根在前——呈现口径，与拦截计数分离） */
   chain: readonly string[]
+  /**
+   * 拦截计数（recurrence-judgment-narrowing——core 域聚合时点产出）：沿 recurrence_of
+   * 前驱回溯的最长祖先径边数，只含 bug_status = open 成员（fixed/unresolved 终态不计）。
+   * 与 chain.length（呈现链长，BFS 后继收齐）口径分离；缺席 = 旧 face 消费方回退 chain 判读。
+   */
+  activeCount?: number
 }
 
 /** T2 归类闸门应答增补（提示性负载——非拒绝；upgrade-hint = 同族复发升级提示，suspected-family = 疑似同族警示） */
