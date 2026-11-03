@@ -80,6 +80,15 @@ export function createExpertComposer(
  *  dsh-tool-pwsh / dsh-terminal-bash 装配面；dsh-graph g-473 同口径）。 */
 export const SHELL_TOOL_CANDIDATES = ["bash", "pwsh"] as const;
 
+/** 探针可信金丝雀（bug 92d642c2 同族——官方恒在工具）。knownTools 非空但不含金丝雀
+ *  = 子域投影（退化装配链实测：仅 9 枚 expert 域工具、零官方工具）——不可作为裁剪依据。 */
+const PROBE_CANARY_TOOL = "read";
+
+/** 子域投影判定（纯函数）：非空且不含金丝雀 = 子域采样（不可信——白名单原样承载）。 */
+function probeIsSubdomain(known: readonly string[]): boolean {
+  return known.length > 0 && !known.includes(PROBE_CANARY_TOOL);
+}
+
 /**
  * 白名单平台求交：档案白名单与派发时点全局注册名求交（bug 3cb118cf）。
  * - 未知名且属 shell 候选族 → 解析为候选中在场的同族者（档案写 pwsh 落 Mac 得 bash）；
@@ -93,6 +102,7 @@ export function resolveToolAllow(
   known?: readonly string[],
 ): string[] {
   if (known === undefined || known.length === 0) return [...allow]; // 无探针不裁剪
+  if (probeIsSubdomain(known)) return [...allow]; // 子域投影不可信——不裁剪（bug 92d642c2 同族）
   const present = new Set(known);
   const resolved: string[] = [];
   for (const name of allow) {

@@ -110,4 +110,23 @@ describe("compose 组装内核", () => {
     );
     expect(() => compose("disabled-one", "t")).toThrowError(new ExpertDisabledError("disabled-one"));
   });
+
+  it("bug 92d642c2 同族：探针为子域投影（缺官方金丝雀 read）= 不可信——白名单原样承载不裁剪不炸", () => {
+    // 真机退化装配链实测形态：knownTools 仅 9 枚 expert 域工具（零官方工具）——
+    // 档案 allow（read/grep）与其求交为空集，旧逻辑 ExpertToolError 炸委派。
+    const compose = createExpertComposer(makeService([baseEntry]), () => [
+      "delegate_expert", "recruit_expert", "update_expert", "rename_expert",
+      "enable_expert", "disable_expert", "list_experts", "list_tools", "list_skills",
+    ]);
+    const request = compose("code-reviewer", "t");
+    expect(request.toolFilter.allow).toEqual(["read", "grep"]); // 白名单原样承载
+  });
+
+  it("可信探针（含金丝雀 read）求交语义不变：未知名剔除、命中保留", () => {
+    const compose = createExpertComposer(makeService([baseEntry]), () => [
+      "read", "write", "pwsh", "submitTask", "delegate_expert",
+    ]);
+    const request = compose("code-reviewer", "t");
+    expect(request.toolFilter.allow).toEqual(["read"]); // grep 未注册 → fail-soft 剔除
+  });
 });
