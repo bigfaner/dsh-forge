@@ -1,4 +1,6 @@
-// 单测 —— forge:pipeline / forge:doc-style 段渲染（dual-mode-overhaul 模板化终版）：
+// 单测 —— forge:pipeline / forge:doc-style 段渲染（dual-mode-overhaul 模板化终版；
+// forge-dirs-query-tool §2.5 二分改造：机制指引条退役、目录占位符统一 dirKey 记法、
+// 公约段末目录真值指引句——四模板 + fixture 同步）：
 // 两份自包含模板（六条核心规则双份逐字在场——允许重复、禁止占位抽公共）/ 三段结构
 // MD 段体（总纲与核心规则·文档位置与存储约束·流程）/ 四规则口径（状态库+查询为准，
 // 执行协议与受限面零回渗）/ 双模式独立渲染（mode 键——目录树与流程图各自版本，缺省
@@ -24,6 +26,10 @@ import type { ForgeAssembleContext } from '../faces.js'
 import { FORGE_TOOL_NAMES } from '../tools/index.js'
 
 const text = renderForgePipelineSection()
+
+/** 目录真值指引句（forge-dirs-query-tool §2.5——四模板逐字共享基底之一）。 */
+const DIRECTORY_TRUTH_GUIDANCE =
+  '以上各目录的实际绝对路径一律经 forgeDirs 工具查询获取（dirKey 直接查锚目录；卷宗/任务日志等具体路径经 forgeResolvePath 目的地解析）——目录树承载结构规范，路径真值以工具查询为准。'
 
 describe('段常量（Interface 8 定死）', () => {
   it('forge:pipeline / order 510（knowledge 500 之后）', () => {
@@ -146,19 +152,33 @@ describe('双模式独立渲染（mode 键——缺省回退远征）', () => {
     expect(BLITZ).toContain('└─ roundtables/{slug}/')
   })
 
-  it('产物管理公约四条（放置/临时文件/生命周期/机制指引——提案 §2.1 逐字）双模式在场', () => {
+  it('产物管理公约三条（放置/临时文件/生命周期——目录占位符 dirKey 记法，forge-dirs-query-tool §2.5）双模式在场', () => {
     const CONVENTIONS = [
-      '- **放置纪律**：产物按存储地图对号入座——git 内只放交付物与活正本，过程性产物一律进 `{forgeDir}/docs`，不散落仓库源码树与根目录。',
-      '- **临时文件纪律**：临时文件（调试脚本、一次性探针、中间转储、临时截图）禁止丢在工作目录任意位置——统一放 `{forgeDir}/tmp/`（或项目约定的临时区），用完即清，绝不入 git。',
+      '- **放置纪律**：产物按存储地图对号入座——git 内只放交付物与活正本，过程性产物一律进 `forge.docsRoot`，不散落仓库源码树与根目录。',
+      '- **临时文件纪律**：临时文件（调试脚本、一次性探针、中间转储、临时截图）禁止丢在工作目录任意位置——统一放 `forge.tmp`（或项目约定的临时区），用完即清，绝不入 git。',
       '- **生命周期纪律**：过程文档按「交付 → 复盘 → 知识沉淀 → 提请批准清理」时序管理，批准后删除或归档；`probes/`、`walkthrough/` 等过程文档永不进 git。',
-      '- **机制指引**：保留/清理的运行时机制见 forge-artifact-lifecycle（索引、保留策略扫描、收口清单）。',
     ]
     for (const clause of CONVENTIONS) {
       expect(EXPEDITION).toContain(clause)
       expect(BLITZ).toContain(clause)
     }
-    expect(EXPEDITION).toContain('产物管理公约（四条）')
-    expect(BLITZ).toContain('产物管理公约（四条）')
+    expect(EXPEDITION).toContain('产物管理公约（三条）')
+    expect(BLITZ).toContain('产物管理公约（三条）')
+  })
+
+  it('机制指引条整条退役（产品面不引用项目内部文档 forge-artifact-lifecycle）+ 目录占位符 `{forgeDir}` 记法零残留', () => {
+    for (const v of [EXPEDITION, BLITZ]) {
+      expect(v).not.toContain('机制指引')
+      expect(v).not.toContain('forge-artifact-lifecycle')
+      expect(v).not.toContain('{forgeDir}')
+    }
+  })
+
+  it('目录真值指引句（公约段末——实际路径经 forgeDirs/forgeResolvePath 查询，路径真值以工具查询为准）双模式在场', () => {
+    for (const v of [EXPEDITION, BLITZ]) {
+      expect(v).toContain(DIRECTORY_TRUTH_GUIDANCE)
+      expect(v.indexOf('永不进 git。')).toBeLessThan(v.indexOf(DIRECTORY_TRUTH_GUIDANCE))
+    }
   })
 
   it('存储约束显式清单：远征四类 / 突击四类终态（突击不产特性阶段文档口径保留）', () => {
@@ -253,7 +273,7 @@ describe('段契约（标签包裹 / 无 forge tool 说明 / 禁裸 {{）', () =
     expect(XML_TAGS.forgePipeline).toBe('forge-pipeline')
   })
 
-  it('不含 forge tool 说明（工具名零出现——注册面自描述；环间确认点名的 ask_user_question 为宿主问询工具，不属 forge tool 面）', () => {
+  it('不含 forge tool 说明（工具名零出现——注册面自描述；例外 = forgeDir 注入段的目录真值指引句点名 forgeDirs/forgeResolvePath〔§2.5 唯一事实源指引〕，缺省渲染无该段；环间确认点名的 ask_user_question 为宿主问询工具，不属 forge tool 面）', () => {
     expect(FORGE_TOOL_NAMES).not.toContain('ask_user_question')
     for (const name of FORGE_TOOL_NAMES) {
       expect(text, `段文本不得含工具名 ${name}`).not.toContain(name)
@@ -301,8 +321,8 @@ describe('renderDocStyleSection——独立段（dual-mode-overhaul 拆段）', 
  *  （main=4/sub=3）防公约新条 append-only 只落主版的静默语义漂移。 */
 const CONVENTIONS_SHARED_BASE =
   [
-    '- **放置纪律**：产物按存储地图对号入座——git 内只放交付物与活正本，过程性产物一律进 `{forgeDir}/docs`，不散落仓库源码树与根目录。',
-    '- **临时文件纪律**：临时文件（调试脚本、一次性探针、中间转储、临时截图）禁止丢在工作目录任意位置——统一放 `{forgeDir}/tmp/`（或项目约定的临时区），用完即清，绝不入 git。',
+    '- **放置纪律**：产物按存储地图对号入座——git 内只放交付物与活正本，过程性产物一律进 `forge.docsRoot`，不散落仓库源码树与根目录。',
+    '- **临时文件纪律**：临时文件（调试脚本、一次性探针、中间转储、临时截图）禁止丢在工作目录任意位置——统一放 `forge.tmp`（或项目约定的临时区），用完即清，绝不入 git。',
     '- **生命周期纪律**：过程文档按「交付 → 复盘 → 知识沉淀 → 提请批准清理」时序管理，批准后删除或归档；`probes/`、`walkthrough/` 等过程文档永不进 git。',
   ].join('\n') + '\n'
 
@@ -425,14 +445,18 @@ describe('共享基底 fixture 守卫（主/子 × 远征/突击四模板字节�
     expect(v).toContain(CONVENTIONS_SHARED_BASE)
   })
 
+  it.each(Object.entries(FOUR_TEMPLATES))('%s：目录真值指引句字节相等在场（forge-dirs-query-tool §2.5 共享基底）', (_label, v) => {
+    expect(v).toContain(DIRECTORY_TRUTH_GUIDANCE)
+  })
+
   it.each(Object.entries(FOUR_TEMPLATES))('%s：git 句字节相等在场（isGitRepo=true 前提）', (_label, v) => {
     expect(v).toContain(GIT_RULE_SHARED)
   })
 
-  it('bullet 计数：main=4 / sub=3（公约新条 append-only 只落主版时在此显式失败）', () => {
+  it('bullet 计数：main=3 / sub=3（机制指引条退役后四模板同数；新条 append-only 单版落时在此显式失败）', () => {
     const clauseCount = (v: string) => (v.match(/^- \*\*/gm) ?? []).length
-    expect(clauseCount(FOUR_TEMPLATES['main-expedition'])).toBe(4)
-    expect(clauseCount(FOUR_TEMPLATES['main-blitz'])).toBe(4)
+    expect(clauseCount(FOUR_TEMPLATES['main-expedition'])).toBe(3)
+    expect(clauseCount(FOUR_TEMPLATES['main-blitz'])).toBe(3)
     expect(clauseCount(FOUR_TEMPLATES['sub-expedition'])).toBe(3)
     expect(clauseCount(FOUR_TEMPLATES['sub-blitz'])).toBe(3)
   })
