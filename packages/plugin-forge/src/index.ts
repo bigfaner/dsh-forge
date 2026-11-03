@@ -33,7 +33,7 @@ import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJo
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
-import { adaptSessionProgressAppend, FORGE_PROGRESS_SCENARIO, registerProgressEventVocabulary } from './progress/index.js'
+import { adaptSessionProgressAppend, createSubmitSettleDisplay, FORGE_PROGRESS_SCENARIO, registerProgressEventVocabulary } from './progress/index.js'
 import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
 import { createSettleReportRecovery, createRecurrenceFaces, gitHeadCommit } from './dispatch-core/index.js'
 import type { EscalationAskFace } from './loop/index.js'
@@ -694,6 +694,14 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
       // T4 锚有效性预检项目根解析缝（loop-recurrence-hardening——resolveDir 同源 projects face）
       projects: ctx.forgeProjects,
+      // 越径结算显示同步缝（submitTask 终态事件补发——任务源无活循环时向 claim 会话补发
+      // settle/out-of-band 事件，组卡/面板翻旧「执行中」行；worker 挺过宿主重启直接落账
+      // 的结算径，池态 17/17 与面板执行中计数分裂收口）
+      submitSettleDisplay: createSubmitSettleDisplay({
+        registry: loopRegistry,
+        tasks: ctx.forgeTasks,
+        ...(progressAppend !== undefined ? { progressAppend } : {}),
+      }),
       // 3b 循环工具装配缝：dispatchTask/stopTaskLoop 与 /run-dag-tasks 指令同源同一循环核心
       // （驱动器 + 登记表单例注入——守卫判活/接管集/单活门控双入口同 registry）。
       loop: { driver: loopDriver, registry: loopRegistry },
