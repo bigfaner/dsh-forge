@@ -87,7 +87,7 @@ flowchart LR
     B --> C["阶段 3 · 终态<br/>格式契约单源 knowledge 插件<br/>禁止 forge 反向定义格式"]
 ```
 
-- **阶段 1（现在）**：直写 `.knowledge/{conventions,lessons,examples}/` markdown 条目；forge 对 knowledge 只有目录格式契约耦合，零代码依赖。
+- **阶段 1（现在）**：直写 `knowledge.root` 锚（`.knowledge/`）下 `{conventions,lessons,examples}/` markdown 条目；`.knowledge/` 的实际绝对路径经 forgeDirs 工具查询（dirKey = `knowledge.root`，knowledge 插件已声明——路径真值以工具查询为准）；forge 对 knowledge 只有目录格式契约耦合，零代码依赖。
 - **阶段 2（激活后）**：写入径换 `forgeKnowledge` 服务写入口；字段同构保证存量条目零迁移，只换写入口。
 - **阶段 3（终态）**：格式契约单源 knowledge 插件（contracts 级导出），forge 与其它消费方共同依赖。
 
@@ -96,5 +96,5 @@ flowchart LR
 1. **取材**：读场景材料（对账表 / fix 链 / 裁决台账 / 会话结论）；复盘场景只取多 agent 交叉核验的共识结论。
 2. **分流**：逐条判性质归 conventions / lessons / examples；拿不准按 lessons 兜底并标注候选。
 3. **成条**：按上方同构格式写 frontmatter + 正文，补全溯源字段；keywords 取高信号短词，summary 一句话可判。
-4. **落盘**：直写 `.knowledge/` 对应目录（文件名 = 短横线小写主题词）；域层级 ≤ 3。
+4. **落盘**：直写 `knowledge.root` 锚（`.knowledge/`）对应目录（实际绝对路径经 forgeDirs 工具查询，dirKey = `knowledge.root`——唯一事实源，不猜不拼）；文件名 = 短横线小写主题词；域层级 ≤ 3。
 5. **登记**：沉淀产物条目清单（路径）回填到触发任务的结算证据（如复盘任务 ac_evidence），保证可追溯。

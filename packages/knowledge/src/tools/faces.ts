@@ -88,6 +88,24 @@ export interface KnowledgePromptSection {
   readonly text: string
 }
 
+/** forgeDirs 服务键面（plugin-forge 提供 declare merge 注册面——结构同形，零实现级 import） */
+export interface ForgeDirsDeclareFace {
+  /** 声明第三方目录键（forge.* 占用/同名互撞 = fail-loud 拒绝——校验在 forge 侧单点） */
+  registerDirKeys(entries: readonly KnowledgeDirKeyDeclaration[]): void
+}
+
+/** 第三方目录键声明项（plugin-forge DirKeyEntry 结构同形——消费面最小字段集） */
+export interface KnowledgeDirKeyDeclaration {
+  /** 目录键（插件前缀命名空间，如 knowledge.root；forge.* 保留段禁止占用） */
+  readonly dirKey: string
+  /** 一句话语义（forgeDirs 输出 description 同源） */
+  readonly description: string
+  /** 解析器（纯函数零 IO——入参为 forge 锚上下文子面） */
+  resolve(ctx: { readonly forgeDir?: string }): string
+  /** 声明方标识（同名互撞点名两方用） */
+  readonly declaredBy?: string
+}
+
 /** 插件对宿主 ctx 的结构化消费面（真 Context 结构兼容） */
 export interface KnowledgeContextFace {
   /** core 知识域服务（运行期 Cordis inject 解析——本插件对 core 的唯一依赖） */
@@ -96,4 +114,10 @@ export interface KnowledgeContextFace {
   tools: ToolRegisterFace
   /** dsh 官方系统提示词面 */
   systemPrompt: SystemPromptSectionFace
+  /**
+   * Cordis 反射面（可选服务消费通道）：cordis 4.0.4 无可选 inject（inject 成员缺席即
+   * 阻载），plugin-forge 提供的 forgeDirs 服务键经 reflect.get 防御读取——缺席/异常/
+   * 非函数面 = 声明零生效零抛（AGENTS 1.6 在场性现查 fail-soft）。
+   */
+  readonly reflect?: { get(name: string): unknown }
 }
