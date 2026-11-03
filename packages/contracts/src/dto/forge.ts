@@ -13,6 +13,7 @@
 import type { ForgeEventChannel } from '../channels.js'
 import type { ErrorCode } from '../errors.js'
 import type { FeatureStatus, ProposalStatus, TaskStatus, TaskType } from '../labels.js'
+import type { BugStatus } from './bugs.js'
 import type { BugCard, BugCommitFile, BugCommitFilesQuery, BugFileDiffQuery, ListBugsQuery } from './bugs.js'
 import type { ProjectService } from './project.js'
 
@@ -584,6 +585,12 @@ export interface TaskBlockClassification {
  * 台账 recurrence 候选（T2 交叉校验——TasksVerbDeps 只读 face 返回形；tasks 域不 import
  * bugs 域，四域互禁不破）。chain = 候选所属复发链（链根 → 本条，'slug/localId' 不适用——
  * 呈现为 bug_id 链）。
+ *
+ * recurrence-signal-tiering 候选结构（core face 恒全量产出；字段 optional = 旧 face 消费方
+ * 结构兼容——1.3 收紧）：终态过滤从 core 管线移除（全 fixed 链可产出候选，软动作全史视野），
+ * 「链内有 open」下沉为消费侧触发分量（hasOpen）；计数 = 最长祖先径全边（fixed 段也计，
+ * 分叉兄弟不计——不虚高）。八字段甄别口径（渐进式披露）：suspectedLocation 为甄别主判据，
+ * containerSlug/lastSeenAt/recurrenceOf 判断家族新旧与链拓扑，减少逐条 getBug。
  */
 export interface BugRecurrenceCandidate {
   bugId: string
@@ -591,11 +598,38 @@ export interface BugRecurrenceCandidate {
   /** 候选所属复发链（时间正序，链根在前——呈现口径，与拦截计数分离） */
   chain: readonly string[]
   /**
-   * 拦截计数（recurrence-judgment-narrowing——core 域聚合时点产出）：沿 recurrence_of
-   * 前驱回溯的最长祖先径边数，只含 bug_status = open 成员（fixed/unresolved 终态不计）。
-   * 与 chain.length（呈现链长，BFS 后继收齐）口径分离；缺席 = 旧 face 消费方回退 chain 判读。
+   * 最长祖先径全边数（沿 recurrence_of 前驱回溯的边数，fixed/unresolved 段也计——
+   * 取代 activeCount 活态口径；分叉兄弟径不计，同根多症状不虚高）。
    */
-  activeCount?: number
+  fullEdgeCount?: number
+  /** 链内有 open 成员（终态过滤移除后的独立触发分量——硬动作消费侧判据） */
+  hasOpen?: boolean
+  /** 本条 bug 当前状态（open/fixed/unresolved——全史视野下的候选状态标注） */
+  status?: BugStatus
+  /** 本条 errorType（缺席 = 登记时未归类） */
+  errorType?: string
+  /** 本条归属容器 slug（bugs.container_slug 列——归属过滤同一真源） */
+  containerSlug?: string
+  /** 本条 suspected 修复锚位置（甄别主判据——渐进式披露） */
+  suspectedLocation?: string
+  /** 本条最近活动时刻（updated_at——lastSeenAt 降序限幅基准） */
+  lastSeenAt?: string
+  /** 本条前驱指针（链拓扑判读；链根缺席） */
+  recurrenceOf?: string
+}
+
+/**
+ * errorType 聚合统计（recurrence-signal-tiering 聚合读法——investigate-bug 人工径 + triage
+ * 量化判据双消费）：按 errorType 分组全史计数，lastSeenAt = 组内最新 updated_at。
+ * 量化判据：total ≥ 3 ∧ open ≥ 1 = 「同族复发未根治」（escalate 佐证）。
+ */
+export interface BugErrorTypeAggregate {
+  errorType: string
+  total: number
+  open: number
+  fixed: number
+  /** 组内最近 updated_at（ISO 时间戳） */
+  lastSeenAt: string
 }
 
 /** T2 归类闸门应答增补（提示性负载——非拒绝；upgrade-hint = 同族复发升级提示，suspected-family = 疑似同族警示） */

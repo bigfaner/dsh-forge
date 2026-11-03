@@ -40,10 +40,10 @@ describe('T3 同缝计数口径（台账约定：recurrence count = chain length
     expect(recurrenceCountOf(['b-root', 'b-r1'])).toBe(1)
     expect(recurrenceCountOf(['b-root', 'b-r1', 'b-r2'])).toBe(2)
   })
-  it('候选集取最大家族链；空集 = 0；activeCount（core 域活态祖先径）在场优先于链长回退', () => {
+  it('候选集取最大家族链；空集 = 0；fullEdgeCount（core 域最长祖先径全边）在场优先于链长回退', () => {
     expect(sameSeamCountOf([candidate(['a', 'b']), candidate(['x', 'y', 'z'])])).toBe(2)
     expect(sameSeamCountOf([])).toBe(0)
-    expect(sameSeamCountOf([{ bugId: 'b', summary: 's', chain: ['a', 'b', 'c'], activeCount: 1 }])).toBe(1)
+    expect(sameSeamCountOf([{ bugId: 'b', summary: 's', chain: ['a', 'b', 'c'], fullEdgeCount: 1 }])).toBe(1)
   })
   it('阈值 = 2（提案 T3：同缝 ≥ 2 拒绝盲试 fix 派发）', () => {
     expect(RECURRENCE_ESCALATION_THRESHOLD).toBe(2)
@@ -136,12 +136,12 @@ describe('T3 守卫（recurrenceEscalationGuard）两态', () => {
     ])
     expect('files' in (scopes[0] as { scope: object }).scope).toBe(false)
   })
-  it('本任务缺陷挂链活态祖先径 ≥ 2 → 仍拦截（core 域 activeCount 口径）', async () => {
+  it('本任务缺陷挂链最长祖先径全边 ≥ 2 → 仍拦截（core 域 fullEdgeCount 口径）', async () => {
     const rejection = await recurrenceEscalationGuard({
       projectId: 'p-1',
       task: snapshot({ slug: 'feat-x', localId: 'fix-2' }),
       findRecurrenceCandidates: () => [
-        { bugId: 'b-r2', summary: 's', chain: ['b-root', 'b-r1', 'b-r2'], activeCount: 2 },
+        { bugId: 'b-r2', summary: 's', chain: ['b-root', 'b-r1', 'b-r2'], fullEdgeCount: 2 },
       ],
       modelingReportPresent: () => false,
     })

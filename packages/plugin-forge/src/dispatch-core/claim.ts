@@ -8,7 +8,8 @@
 // scope 携带任务归属标识（sourceTaskId + slug 容器标识）——core bugs 域按 sourceTaskId
 // 结构化解析容器段作锚（slug 为回退键），无关提案历史链不进候选集（守卫侧不再传
 // files 全库口径，files 收窄口径归结算径）。
-// 拦截计数 = 候选 activeCount（core 域产出的活态祖先径边数，终态成员不计）——缺席回退
+// 拦截计数 = 候选 fullEdgeCount（core 域产出的最长祖先径全边数，fixed 段也计——
+// recurrence-signal-tiering；「链内有 open」触发分量 = hasOpen，1.3 落位）——缺席回退
 // chain 呈现链长判读（contracts BugRecurrenceCandidate 既有约定）。
 //
 // 与 ERR_BLOCK_SOURCE_REQUIRED（core add.ts 建链守卫，0a25720c）语义对偶：新问题径建 fix
@@ -70,11 +71,11 @@ export function recurrenceCountOf(chain: readonly string[]): number {
 }
 
 /**
- * 候选集同缝计数（取候选最大值——同 scope 命中多条候选时按最重家族判）：activeCount
- * （core 域活态祖先径，终态不计）在场优先；缺席 = 旧 face 回退 chain 呈现链长判读。
+ * 候选集同缝计数（取候选最大值——同 scope 命中多条候选时按最重家族判）：fullEdgeCount
+ * （core 域最长祖先径全边，fixed 段也计）在场优先；缺席 = 旧 face 回退 chain 呈现链长判读。
  */
 export function sameSeamCountOf(candidates: readonly BugRecurrenceCandidate[]): number {
-  return candidates.reduce((max, c) => Math.max(max, c.activeCount ?? recurrenceCountOf(c.chain)), 0)
+  return candidates.reduce((max, c) => Math.max(max, c.fullEdgeCount ?? recurrenceCountOf(c.chain)), 0)
 }
 
 /** 「待建模」判定（纯函数——派生态现算的机械核）：count ≥ 阈值 ∧ 报告不在场 */

@@ -1058,8 +1058,9 @@ describe('T2 生产装配径（bug 0db72bcb）：findRecurrenceCandidates = crea
       suspected: 'packages/core/src/forge/tasks/submit.ts:96',
       recurrenceOf: root.bugId,
     })
-    // 1.1 收窄口径：链须落本任务容器（`t-<slug>-` 前缀）才产候选——测试链挂容器归属
-    h!.db.prepare(`UPDATE bugs SET source_task_id = 't-f-1.1' WHERE source_task_id IS NULL`).run()
+    // recurrence-signal-tiering：链须落本任务容器（container_slug 列比较）才产候选——
+    // 测试链经源任务行（t-f-1.1，slug=f）反查挂容器归属
+    h!.db.prepare(`UPDATE bugs SET source_task_id = 't-f-1.1', container_slug = 'f' WHERE source_task_id IS NULL`).run()
   }
 
   it('face 经 bugs 域服务聚合：新问题 ∧ scope 命中链上 suspected → suspected-family 警示（链结构 = 域层口径）', async () => {
@@ -1082,7 +1083,7 @@ describe('T2 生产装配径（bug 0db72bcb）：findRecurrenceCandidates = crea
     // 链整体移出无关任务容器（f → other）：模拟其它提案的历史链（source_task_id FK 指向真实任务行）
     seedFeature(h!.db, { slug: 'other', status: 'in-progress' })
     seedTask(h!.db, 'other', '9.9', { status: 'in_progress' })
-    h!.db.prepare(`UPDATE bugs SET source_task_id = 't-other-9.9' WHERE source_task_id IS NOT NULL`).run()
+    h!.db.prepare(`UPDATE bugs SET source_task_id = 't-other-9.9', container_slug = 'other' WHERE source_task_id IS NOT NULL`).run()
     const { findRecurrenceCandidates } = productionFace()
     const r = await submitTask({ store: h!.store, events: h!.events, findRecurrenceCandidates }, {
       ...blockedBase(),
