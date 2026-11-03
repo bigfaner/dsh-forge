@@ -611,6 +611,51 @@ export function createProjectContainerDirs(projects: ProjectDirServiceFace): Pro
   }
 }
 
+// ─────────────────── 项目工作区根记忆缝（bug 8b041612——T3 卷宗探测 dir 语义修正） ───────────────────
+
+/** 项目域服务收窄面（工作区根缝消费单法：getProject 反查 ws_path） */
+export type ProjectWsRootServiceFace = Pick<ProjectServiceM2, 'getProject'>
+
+/**
+ * projectId → 项目工作区根（ws_path canonical）记忆（bug 8b041612 修正缝：
+ * modelingReportPresent 卷宗探测的 dir 语义 = 工作区根，非容器库目录——两缝分置）。
+ * 与 ProjectContainerDirs 同模式记忆化：resolve 只读记忆（未命中触发懒解析并按
+ * fail-soft 返回 undefined），warm 供装配期逐绑定项目预热。
+ */
+export interface ProjectWorkspaceRoots {
+  /** 记忆读数（同步；未命中/解析中/解析失败 = undefined + 触发懒解析） */
+  resolve(projectId: string): string | undefined
+  /** 预热（fire-and-forget 逐项目解析记忆；已记忆/解析中跳过——幂等） */
+  warm(projectIds: readonly string[]): void
+}
+
+/** 建工作区根记忆缝（装配单例——recurrenceFaces.modelingReportPresent 消费） */
+export function createProjectWorkspaceRoots(projects: ProjectWsRootServiceFace): ProjectWorkspaceRoots {
+  const roots = new Map<string, string>()
+  const warm = (projectId: string): void => {
+    if (roots.has(projectId)) return
+    roots.set(projectId, '') // 解析中占位（并发单跳；失败清除重试）
+    void (async () => {
+      const project = await projects.getProject(projectId)
+      if (project !== null && project.wsPath.trim() !== '') roots.set(projectId, project.wsPath)
+      else roots.delete(projectId)
+    })().catch(() => {
+      roots.delete(projectId) // fail-soft：解析失败 = 未记忆（下次再触发，零外抛）
+    })
+  }
+  return {
+    resolve(projectId) {
+      const memo = roots.get(projectId)
+      if (memo !== undefined && memo !== '') return memo
+      warm(projectId)
+      return undefined
+    },
+    warm(projectIds) {
+      for (const id of projectIds) warm(id)
+    },
+  }
+}
+
 // ─────────────────────────── 专家团装配面（expert-squad-forge 1.2——experts 服务接入 + settings 映射表） ───────────────────────────
 
 /** 随包预设专家档案目录（packages/plugin-forge/experts——registerRoot 的 plugin 内置层 root；

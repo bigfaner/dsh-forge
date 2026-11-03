@@ -27,7 +27,7 @@ import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
-import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, createProjectWorkspaceRoots, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
 import { globalToolNamesOfToolsFace } from './dispatch-core/index.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, ForgeToolDefinition, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
@@ -416,12 +416,17 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 报告在场探测 = settle.ts resolveDir 同源 projects face 派生（提案卷宗 issues/<localId>/
     // 顶层 .md 在场即 true；探测面只读、fail-soft 缺席 false）。T2 疑似同族警示 / T3 同缝
     // 拦截与解除判据 / triage 两信号 / add-fix vars 四处机制生产生效的装配前提。
+    const projectWsRoots = createProjectWorkspaceRoots(ctx.forgeProjects)
     const recurrenceFaces = createRecurrenceFaces({
       bugs: ctx.forgeBugs,
-      resolveProjectDir: (projectId) => projectDirs.resolve(projectId),
+      // bug 8b041612 修正：卷宗探测的 dir 语义 = 项目工作区根（ws_path——与 settle 报告
+      // 回收同源），非容器库目录（projectDirs.resolve = deriveTaskStoreDir 派生，incident
+      // 落盘缝——两缝分置，此前错接致探测路径恒不存在、T3 解除判据恒 false）。
+      resolveProjectDir: (projectId) => projectWsRoots.resolve(projectId),
     })
     const boundProjectIds = bindingProjectIds(config.projects ?? [], config.bindingsFile)
     projectDirs.warm(boundProjectIds)
+    projectWsRoots.warm(boundProjectIds)
     const narrator = createNarrator({
       channel: narrationChannel,
       incidents: createIncidentStore({
@@ -1138,6 +1143,7 @@ export {
   adaptAgentNarrationChannel,
   createExpertProfileResolver,
   createProjectContainerDirs,
+  createProjectWorkspaceRoots,
   FORGE_EXPERTS_ROOT_DIR,
   FORGE_NOTICE_SOURCE_KIND,
 } from './faces.js'
