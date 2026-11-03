@@ -130,10 +130,16 @@ export interface ToolRegisterFace {
   register(definition: ForgeToolDefinition): () => void
 }
 
-/** dsh systemPrompt 服务子面（官方 SystemPrompt.section） */
+/** dsh systemPrompt 服务子面（官方 SystemPrompt.section / SystemPrompt.variable） */
 export interface SystemPromptSectionFace {
   /** 注册有序提示词段；返回注销器。text 内 {{var}} 会被插值——段文本禁用裸 {{ */
   section(section: ForgePromptSection): () => void
+  /**
+   * 注册提示词变量（官方 SystemPrompt.variable——每次组装按 AssembleContext 求值，
+   * 段文本以 {{name}} 严格引用；缺席（结构漂移/测试窄面）= 变量零注册，引用它的段
+   * 会在渲染期抛 unknown variable——装配缺口 fail-loud 不静默）。
+   */
+  variable?(name: string, provider: (context: ForgeAssembleContext) => string | undefined): () => void
 }
 
 /**

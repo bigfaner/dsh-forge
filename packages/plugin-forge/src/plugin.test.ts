@@ -30,6 +30,8 @@ class TempRuntime {
   private readonly disposed = { tools: 0, sections: 0 }
   disposedCommands = 0
   disposedProjection = 0
+  /** forge_docs_root 等提示词变量注册面（官方 SystemPrompt.variable 桩） */
+  promptVariables: { name: string; provider: (context: unknown) => string | undefined }[] = []
 
   ctx() {
     return {
@@ -53,6 +55,12 @@ class TempRuntime {
           this.sections.push(s)
           return () => {
             this.disposed.sections += 1
+          }
+        },
+        variable: (name: string, provider: (context: unknown) => string | undefined) => {
+          this.promptVariables.push({ name, provider })
+          return () => {
+            this.promptVariables = this.promptVariables.filter((v) => v.name !== name)
           }
         },
       },
@@ -304,6 +312,13 @@ describe('注册面集合 pin（二十二 tool：M3 九员 + recordBug/resolveBu
   })
 })
 
+/** forge_docs_root 变量 provider 求值（按装配上下文 agent.id 分会话——官方 variable 桩） */
+function docsRootVariableOf(rt: TempRuntime, agentId: string | undefined): string | undefined {
+  const v = rt.promptVariables.find((entry) => entry.name === 'forge_docs_root')
+  if (v === undefined) throw new Error('forge_docs_root 变量未注册（variable 面缺席或装配缺口）')
+  return v.provider({ agent: { id: agentId } })
+}
+
 /** forge:pipeline 段 text 求值（官方函数形态——按装配上下文 agent.id 分会话） */
 function pipelineTextOf(rt: TempRuntime, agentId: string | undefined): string {
   const section = rt.sections.find((s) => s.name === FORGE_SECTION_NAME)
@@ -469,31 +484,32 @@ describe('1.16 段 forgeDir 注入（按会话工作区解析——bug 5adb5960�
     dispose()
   })
 
-  /** 段 text 求值走模块级 pipelineTextOf（函数形态——按装配上下文 agent.id 分会话） */
-  it('bug 复现面：第二绑定项目的会话拿到自己的 forgeDir（不落入首行 learn 项目）', async () => {
+  /** 段 text = {{forge_docs_root}} 占位（真值经官方变量插值）；变量 provider 按会话解析（bug 5adb5960 复现面平移到变量径） */
+  it('bug 复现面：第二绑定项目的会话拿到自己的 docsRoot 变量值（不落入首行 learn 项目）；段文本恒为占位', async () => {
     const { rt, dispose, emit } = assembleWith(projectsWith(ROWS))
     emit('session/created', { id: 'sess-demo', header: { cwd: 'C:\\ws\\demo' } })
     emit('session/created', { id: 'sess-learn', header: { cwd: 'C:\\ws\\learn' } })
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(pipelineTextOf(rt, 'sess-demo')).toContain('C:/ws/demo/.forge\\docs')
-    expect(pipelineTextOf(rt, 'sess-learn')).toContain('C:/ws/learn/.forge\\docs')
+    expect(docsRootVariableOf(rt, 'sess-demo')).toContain('C:/ws/demo/.forge\\docs')
+    expect(docsRootVariableOf(rt, 'sess-learn')).toContain('C:/ws/learn/.forge\\docs')
+    expect(pipelineTextOf(rt, 'sess-demo')).toContain('{{forge_docs_root}}') // 段文本只承载占位，真值由插值器渲染
     dispose()
   })
 
-  it('会话未预热（缓存缺席）/ 项目未注册：缺省段（无文档位置，不注入他人路径）', async () => {
+  it('会话未预热（缓存缺席）/ 项目未注册：变量回退占位说明文本（恒有值——官方插值器对无值引用 fail-loud）', async () => {
     const { rt, dispose, emit } = assembleWith(projectsWith(ROWS))
-    expect(pipelineTextOf(rt, 'sess-cold')).not.toContain('文档位置')
+    expect(docsRootVariableOf(rt, 'sess-cold')).toContain('经 forgeDirs 工具查询')
     emit('session/created', { id: 'sess-null', header: { cwd: 'C:\\ws\\unregistered' } })
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(pipelineTextOf(rt, 'sess-null')).not.toContain('文档位置')
+    expect(docsRootVariableOf(rt, 'sess-null')).toContain('经 forgeDirs 工具查询')
     dispose()
   })
 
-  it('forgeProjects 面缺 getProject / 无绑定：缺省段原样（fail-soft 零外抛）', async () => {
+  it('forgeProjects 面缺 getProject / 无绑定：变量回退文本原样（fail-soft 零外抛）', async () => {
     const { rt, dispose, emit } = assembleWith(projectsWith(null))
     emit('session/created', { id: 'sess-x', header: { cwd: 'C:\\ws\\demo' } })
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(pipelineTextOf(rt, 'sess-x')).not.toContain('文档位置')
+    expect(docsRootVariableOf(rt, 'sess-x')).toContain('经 forgeDirs 工具查询')
     dispose()
     expect(rt.disposedCounts()).toEqual({ tools: 22, sections: 4 })  })
 })

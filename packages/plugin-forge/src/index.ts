@@ -23,7 +23,7 @@
 import { join, dirname } from 'node:path'
 import { existsSync } from 'node:fs'
 import type { DiagLevel, ForgeSettingsService, ProjectServiceM2 } from '@dsh-forge/contracts'
-import { forgeDirOfWorkspace, workspaceDocsRoot } from './forge-paths.js'
+import { docsRootOfForgeDir, forgeDirOfWorkspace, workspaceDocsRoot } from './forge-paths.js'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
@@ -867,6 +867,21 @@ const forgePlugin: ForgePlugin = Object.assign(
         })
       },
     })
+    // forge-dirs-query-tool（用户裁决）：文档根经官方 {{forge_docs_root}} 模板插值——
+    // 变量每次组装按装配会话求值（同 sessionForgeDirs 预热缓存，dirKey forge.docsRoot
+    // 的解析派生 docsRootOfForgeDir 单源）；未绑定会话回退占位说明文本（官方插值器对
+    // 已注册无值引用 fail-loud，故 provider 恒返回字符串）。
+    const disposeDocsRootVariable = ctx.systemPrompt.variable?.('forge_docs_root', (context) => {
+      const forgeDir = context?.agent?.id === undefined ? undefined : sessionForgeDirs.get(context.agent.id)
+      if (typeof forgeDir !== 'string' || forgeDir.trim() === '') {
+        return '（当前会话未绑定 forge 工作区——实际路径经 forgeDirs 工具查询）'
+      }
+      try {
+        return docsRootOfForgeDir(forgeDir.trim().replace(/[\\/]+$/, ''))
+      } catch {
+        return '（当前会话未绑定 forge 工作区——实际路径经 forgeDirs 工具查询）'
+      }
+    })
     // 3b 协作面驻留段（P1 驻留 / 挂起 P3+P9——injection-spec 载体分配：P1/P9 永走系统提示词）。
     // 段 text 每回合现调：agent.id 缺席 = 空串；registry 投影无命中 = 空串（零固定税——
     // 协作外会话提示词与无此插件时逐字节一致）；占位符残留段 fail-soft 跳段（injection.ts 落盘告警）。
@@ -931,6 +946,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       // pipeline 段函数形态单次注册（按装配求值，无重注册升级面）；doc-style
       // 独立段双模式共用（disposeDocStyle 恰一份）。
       () => disposePipeline(),
+      ...(disposeDocsRootVariable !== undefined ? [disposeDocsRootVariable] : []), // forge_docs_root 提示词变量（variable 面在场时注册——插件卸载级摘除）
       () => disposeDispatchLoop(), // forge:dispatch-loop 段——插件卸载级摘除（section() 返回 Cordis disposer）
       () => disposeCommander(), // forge:commander 段——插件卸载级摘除（同上）
       () => disposeDocStyle(),

@@ -44,15 +44,12 @@ describe('段常量（Interface 8 定死）', () => {
 })
 
 describe('renderForgePipelineSection——三段结构 MD 段体', () => {
-  it('### 总纲与核心规则 / ### 文档位置与存储约束 / ### 流程 三段标题按序在场（缺省 forgeDir 时中段省略）', () => {
+  it('### 总纲与核心规则 / ### 文档位置与存储约束 / ### 流程 三段标题按序在场（文档根行 = {{forge_docs_root}} 占位，段恒在）', () => {
     expect(text).toContain('### 总纲与核心规则')
     expect(text).toContain('### 流程')
-    const injected = renderForgePipelineSection({ forgeDir: 'Z:/ws/demo/.forge', mode: 'expedition' })
-    expect(injected).toContain('### 文档位置与存储约束')
-    expect(injected.indexOf('总纲与核心规则')).toBeLessThan(injected.indexOf('文档位置与存储约束'))
-    expect(injected.indexOf('文档位置与存储约束')).toBeLessThan(injected.indexOf('### 流程'))
-    // 缺省回退：中段整段省略，前后两段相邻
-    expect(text).not.toContain('文档位置与存储约束')
+    expect(text).toContain('### 文档位置与存储约束')
+    expect(text.indexOf('总纲与核心规则')).toBeLessThan(text.indexOf('文档位置与存储约束'))
+    expect(text.indexOf('文档位置与存储约束')).toBeLessThan(text.indexOf('### 流程'))
   })
 
   it('标题带模式名（## Forge 任务管线（远征模式）/（突击模式））', () => {
@@ -225,40 +222,19 @@ describe('双模式独立渲染（mode 键——缺省回退远征）', () => {
   })
 })
 
-describe('文档位置与存储约束（forgeDir 注入）', () => {
-  const FORGE_DIR = 'Z:/ws/demo/.forge'
-
-  it('注入 forgeDir：文档根 = forgeDir 的 docs 层（绝对路径）；无中央库注记', () => {
-    const injected = renderForgePipelineSection({ forgeDir: FORGE_DIR, mode: 'expedition' })
-    expect(injected).toContain('文档根')
-    expect(injected).toContain(`${FORGE_DIR}\\docs`)
-    expect(injected.indexOf(`${FORGE_DIR}\\docs`)).toBeLessThan(injected.indexOf('```text'))
-    expect(injected).not.toContain('projects.forge_dir 单源')
+describe('文档位置与存储约束（{{forge_docs_root}} 官方模板占位——变量由装配方注册）', () => {
+  it('文档根行 = {{forge_docs_root}} 占位（官方 {{var}} 模板语法——dsh systemPrompt.variable 注册、组装期插值），占位前于目录树', () => {
+    const v = renderForgePipelineSection({ forgeDir: 'Z:/ws/demo/.forge', mode: 'expedition' })
+    expect(v).toContain('文档根：`{{forge_docs_root}}`（dirKey = forge.docsRoot；实际路径经 forgeDirs 工具查询获取）')
+    expect(v.indexOf('{{forge_docs_root}}')).toBeLessThan(v.indexOf('```text'))
   })
 
-  it('尾部路径分隔符归一（不落双分隔符结尾）', () => {
-    const injected = renderForgePipelineSection({ forgeDir: 'Z:/ws/demo/.forge/' })
-    expect(injected).toContain('Z:/ws/demo/.forge\\docs')
-    expect(injected).not.toContain('//docs')
-  })
-
-  it('POSIX（macOS/Linux）forgeDir：docsRoot 以 `/` 连接（不被拼成 `\\docs`）', () => {
-    const injected = renderForgePipelineSection({ forgeDir: '/Users/p/proj/.forge', mode: 'expedition' })
-    expect(injected).toContain('/Users/p/proj/.forge/docs')
-    expect(injected).not.toContain('/Users/p/proj/.forge\\docs')
-    const trailing = renderForgePipelineSection({ forgeDir: '/Users/p/proj/.forge/' })
-    expect(trailing).toContain('/Users/p/proj/.forge/docs')
-    expect(trailing).not.toContain('//docs')
-  })
-
-  it('回退：缺省/空白 forgeDir = 省略文档位置段（渲染不炸、其余段原样）', () => {
-    for (const vars of [undefined, { forgeDir: undefined }, { forgeDir: '' }, { forgeDir: '   ' }]) {
-      const fallback = renderForgePipelineSection(vars)
-      expect(fallback).not.toContain('### 文档位置与存储约束')
-      expect(fallback).not.toContain('文档根')
-      expect(fallback).not.toContain('```text')
-      expect(fallback).toContain('状态存于 forge 管线的状态库')
-      expect(fallback).toContain('### 流程')
+  it('forgeDir 注入与否段恒在（占位承载真值，段渲染不依赖会话绑定态）', () => {
+    for (const vars of [undefined, { forgeDir: undefined }, { forgeDir: '' }, { forgeDir: 'Z:/ws/demo/.forge' }]) {
+      const v = renderForgePipelineSection(vars)
+      expect(v).toContain('### 文档位置与存储约束')
+      expect(v).toContain('{{forge_docs_root}}')
+      expect(v).toContain('```text')
     }
   })
 })
@@ -273,18 +249,20 @@ describe('段契约（标签包裹 / 无 forge tool 说明 / 禁裸 {{）', () =
     expect(XML_TAGS.forgePipeline).toBe('forge-pipeline')
   })
 
-  it('不含 forge tool 说明（工具名零出现——注册面自描述；例外 = forgeDir 注入段的目录真值指引句点名 forgeDirs/forgeResolvePath〔§2.5 唯一事实源指引〕，缺省渲染无该段；环间确认点名的 ask_user_question 为宿主问询工具，不属 forge tool 面）', () => {
+  it('不含 forge tool 说明（工具名零出现——注册面自描述；例外 = 目录真值指引句与 {{forge_docs_root}} 占位注记点名 forgeDirs/forgeResolvePath〔§2.5 唯一事实源指引〕；环间确认点名的 ask_user_question 为宿主问询工具，不属 forge tool 面）', () => {
     expect(FORGE_TOOL_NAMES).not.toContain('ask_user_question')
     for (const name of FORGE_TOOL_NAMES) {
+      if (name === 'forgeDirs' || name === 'forgeResolvePath') continue // 目录真值指引句唯一例外
       expect(text, `段文本不得含工具名 ${name}`).not.toContain(name)
     }
     expect(text).not.toMatch(/\(string, (required|optional)\)/)
   })
 
-  it('段文本禁用裸 {{（SystemPrompt 默认插值，未知引用会炸渲染）——双模式与 doc-style 同判', () => {
-    for (const v of [text, BLITZ_RENDER, renderDocStyleSection()]) {
-      expect(v).not.toContain('{{')
+  it('段文本 {{ 引用唯一白名单 = forge_docs_root（官方模板变量——装配方经 systemPrompt.variable 注册）；doc-style 禁用一切 {{', () => {
+    for (const v of [text, BLITZ_RENDER]) {
+      expect(v.match(/\{\{[a-z][a-z0-9_]*\}\}/g)).toEqual(['{{forge_docs_root}}'])
     }
+    expect(renderDocStyleSection()).not.toContain('{{')
   })
 })
 
@@ -418,17 +396,17 @@ describe('子会话裁剪版（subagent 键——双模式「Forge 工作纪律�
     }
   })
 
-  it('段契约同主版：forge-pipeline 标签包裹（HTML 块空行边界）+ 禁裸 {{ + forgeDir 缺省回退（docs 段省略不炸渲染）', () => {
+  it('段契约同主版：forge-pipeline 标签包裹（HTML 块空行边界）+ {{ 引用唯一白名单 forge_docs_root + docs 段恒在（占位承载真值）', () => {
     for (const v of [SUB_EXPEDITION, SUB_BLITZ]) {
       expect(v.startsWith(`<${XML_TAGS.forgePipeline}>\n\n`)).toBe(true)
       expect(v.endsWith(`\n\n</${XML_TAGS.forgePipeline}>`)).toBe(true)
-      expect(v).not.toContain('{{')
+      expect(v.match(/\{\{[a-z][a-z0-9_]*\}\}/g)).toEqual(['{{forge_docs_root}}'])
     }
     for (const mode of ['expedition', 'blitz'] as const) {
-      const fallback = renderForgePipelineSection({ subagent: true, mode })
-      expect(fallback).toContain('## Forge 工作纪律（子会话）')
-      expect(fallback).not.toContain('### 文档位置与存储约束')
-      expect(fallback).not.toContain('```text')
+      const v = renderForgePipelineSection({ subagent: true, mode })
+      expect(v).toContain('## Forge 工作纪律（子会话）')
+      expect(v).toContain('### 文档位置与存储约束')
+      expect(v).toContain('```text')
     }
   })
 })

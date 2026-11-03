@@ -2,8 +2,10 @@
 // prompt-scoping-and-desc-trim/1.2 增按会话角色分流）。
 // 结构铁律（用户裁决）：不抽公共文本——主/子会话 × 远征/突击四份自包含模板函数，
 // 核心规则与共享基底多份逐字重复（允许重复，人类可读性优先；共享基底字节相等由
-// index.test.ts fixture 守卫）；docs 块为函数内局部 const、插值自占一行、
-// 尾部单换行（forgeDir 缺省时整体省略，至多多一个空行）；渲染入口纯胶水。
+// index.test.ts fixture 守卫）；docs 块为函数内局部 const、插值自占一行、尾部单换行。
+// 目录口径（forge-dirs-query-tool 用户裁决）：目录占位统一 dirKey 记法 + 官方
+// {{var}} 模板插值——文档根行放 `{{forge_docs_root}}` 占位，变量由装配方经
+// systemPrompt.variable 注册（每次组装按会话求值、dsh 插值器直接渲染）。
 // 角色分流（isSubagentAssembly 判据）：主会话渲染全文；子会话渲染裁剪版「Forge 工作
 // 纪律（子会话）」= 四类目录树存储约束 + 产物管理公约三条 + 目录真值指引句 + git 句；六条总纲与
 // mermaid 流程图为主会话职责面，不入子会话版。受众判据：
@@ -13,10 +15,10 @@
 // 受限面零回渗（操作正本在派发核心文档 docs/business-rules/task-pipeline.md / submit-task 技能）；双 mermaid 含用户裁决节点、
 // 各步固定产物标于箭头、终节点=交付、无 worker 内部节点；doc-style 五要点（mermaid 优先 /
 // 分点阐述 / 文字精简 / 用词规范 / 不留调整修复叙事）。
-// 注意：SystemPrompt 段文本默认 {{var}} 插值（未知引用会炸渲染）——文本禁用裸 {{。
+// 注意：SystemPrompt 段文本默认 {{var}} 插值（未知引用会炸渲染）——本文本唯一 {{ 引用
+// = forge_docs_root（装配方注册的 dirKey 派生变量），其余文本禁用裸 {{。
 import { XML_TAGS } from '@dsh-forge/contracts'
 import type { ForgeAssembleContext } from '../faces.js'
-import { docsRootOfForgeDir } from '../forge-paths.js'
 import { FORGE_COMMANDER_SECTION_NAME, FORGE_COMMANDER_SECTION_ORDER, renderCommanderSection } from './commander.js'
 
 /** 段名（Interface 8 定死） */
@@ -35,13 +37,13 @@ export const FORGE_DOC_STYLE_SECTION_ORDER = 511
 export type ForgePipelineMode = 'expedition' | 'blitz'
 
 /**
- * 段渲染入参（forgeDir 文档位置动态注入 + mode 双模式键）。
+ * 段渲染入参（mode 双模式键 + git 探测结果；docsRoot 经官方 {{forge_docs_root}}
+ * 变量插值承载，不入段渲染入参）。
  */
 export interface ForgePipelineSectionVars {
   /**
-   * 本项目 forge 文档根（绝对路径——调用点经 routing/projects 服务取实际值注入，不假设
-   * `<ws>/.forge`）。缺省/空白/未知 = 回退：整段省略文档位置与存储约束（渲染绝不因此
-   * 炸掉——纯函数零外抛）。
+   * 本项目 forge 目录（绝对路径——调用点经 routing/projects 服务取实际值注入；装配方
+   * 以此探测 isGitRepo 并注册 forge_docs_root 变量，段渲染本身不再消费）。
    */
   readonly forgeDir?: string
   /**
@@ -103,15 +105,15 @@ export function commanderSectionText(
 }
 
 /**
- * 远征模式段模板（自包含；docsRoot 为空 = 省略文档位置与存储约束段）。
- * 四条核心规则与突击版逐字相同——允许重复，人类可读性优先，禁止抽公共。
+ * 远征模式段模板（自包含）。四条核心规则与突击版逐字相同——允许重复，人类可读性优先，禁止抽公共。
+ * 文档根统一 dirKey 记法（forge.docsRoot）——实际绝对路径经 forgeDirs 工具查询（AGENTS 1.7：
+ * 目录真值唯一事实源 = 工具查询，提示词不注入会话级绝对路径）。
  */
-function expeditionSection(docsRoot: string, isGitRepo: boolean): string {
+function expeditionSection(isGitRepo: boolean): string {
   const git = isGitRepo ? '\n- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。' : ''
-  const docs = docsRoot === '' ? '' : `### 文档位置与存储约束
+  const docs = `### 文档位置与存储约束
 
-文档根：
-\`${docsRoot}\`
+文档根：\`{{forge_docs_root}}\`（dirKey = forge.docsRoot；实际路径经 forgeDirs 工具查询获取）
 
 \`\`\`text
 ├─ proposals/{slug}/   提案文档（proposal.md 及配套）
@@ -169,16 +171,15 @@ flowchart LR
 }
 
 /**
- * 远征模式子会话裁剪模板（自包含；docsRoot 为空 = 省略文档位置与存储约束段）。
+ * 远征模式子会话裁剪模板（自包含）。
  * 受众判据见文件头注：六条总纲/公约第四条/mermaid 流程图为主会话职责面，不入本版；
  * 共享基底（四类目录树存储约束 + 公约前三条 + git 句）与主会话远征版逐字双份。
  */
-function expeditionSubagentSection(docsRoot: string, isGitRepo: boolean): string {
+function expeditionSubagentSection(isGitRepo: boolean): string {
   const git = isGitRepo ? '\n- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。\n' : ''
-  const docs = docsRoot === '' ? '' : `### 文档位置与存储约束
+  const docs = `### 文档位置与存储约束
 
-文档根：
-\`${docsRoot}\`
+文档根：\`{{forge_docs_root}}\`（dirKey = forge.docsRoot；实际路径经 forgeDirs 工具查询获取）
 
 \`\`\`text
 ├─ proposals/{slug}/   提案文档（proposal.md 及配套）
@@ -209,15 +210,14 @@ ${docs}${git}`
 }
 
 /**
- * 突击模式段模板（自包含；docsRoot 为空 = 省略文档位置与存储约束段）。
+ * 突击模式段模板（自包含）。
  * 六条核心规则与远征版逐字相同——允许重复，人类可读性优先，禁止抽公共。
  */
-function blitzSection(docsRoot: string, isGitRepo: boolean): string {
+function blitzSection(isGitRepo: boolean): string {
   const git = isGitRepo ? '\n- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。' : ''
-  const docs = docsRoot === '' ? '' : `### 文档位置与存储约束
+  const docs = `### 文档位置与存储约束
 
-文档根：
-\`${docsRoot}\`
+文档根：\`{{forge_docs_root}}\`（dirKey = forge.docsRoot；实际路径经 forgeDirs 工具查询获取）
 
 \`\`\`text
 ├─ proposals/{slug}/   提案 + 直挂任务（无 feature 阶段文档）
@@ -267,16 +267,15 @@ flowchart LR
 }
 
 /**
- * 突击模式子会话裁剪模板（自包含；docsRoot 为空 = 省略文档位置与存储约束段）。
+ * 突击模式子会话裁剪模板（自包含）。
  * 受众判据见文件头注：六条总纲/公约第四条/mermaid 流程图为主会话职责面，不入本版；
  * 共享基底（四类目录树存储约束 + 公约前三条 + git 句）与主会话突击版逐字双份。
  */
-function blitzSubagentSection(docsRoot: string, isGitRepo: boolean): string {
+function blitzSubagentSection(isGitRepo: boolean): string {
   const git = isGitRepo ? '\n- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。\n' : ''
-  const docs = docsRoot === '' ? '' : `### 文档位置与存储约束
+  const docs = `### 文档位置与存储约束
 
-文档根：
-\`${docsRoot}\`
+文档根：\`{{forge_docs_root}}\`（dirKey = forge.docsRoot；实际路径经 forgeDirs 工具查询获取）
 
 \`\`\`text
 ├─ proposals/{slug}/   提案 + 直挂任务（无 feature 阶段文档）
@@ -309,24 +308,20 @@ ${docs}${git}`
 // Windows 风格（盘符/UNC）→ `\docs`，POSIX → `/docs`；dir 已归一去尾分隔符）。
 
 /**
- * 管线段全文（纯胶水：模式归一 → 角色分流（subagent 键）→ docsRoot 归一 → 四模板
- * 选一 → XML 标签包裹）。
- * vars.forgeDir / vars.mode 由调用点程序化注入实际值（非提示词侧插值），段文本天然
- * 不含裸 {{ 占位；不点名 forge 工具（防「提示词与注册面双源漂移」——工具面由 dsh
- * tool 注册面自描述；环间确认点名的 ask_user_question 为宿主问询工具，非 forge 面）。
+ * 管线段全文（纯胶水：模式归一 → 角色分流（subagent 键）→ 四模板选一 → XML 标签包裹）。
+ * vars.mode / vars.isGitRepo 由调用点程序化注入（isGitRepo 由装配方以 forgeDir 探测）；
+ * 段文本天然不含裸 {{ 占位与绝对路径——目录口径统一 dirKey 记法（AGENTS 1.7 工具唯一事实源）。
  */
 export function renderForgePipelineSection(vars: ForgePipelineSectionVars = {}): string {
   const mode = modeOf(typeof vars.mode === 'string' ? vars.mode : undefined)
-  const dir = typeof vars.forgeDir === 'string' ? vars.forgeDir.trim().replace(/[\\/]+$/, '') : ''
-  const docsRoot = dir === '' ? '' : docsRootOfForgeDir(dir)
   const body =
     vars.subagent === true
       ? mode === 'blitz'
-        ? blitzSubagentSection(docsRoot, vars.isGitRepo === true)
-        : expeditionSubagentSection(docsRoot, vars.isGitRepo === true)
+        ? blitzSubagentSection(vars.isGitRepo === true)
+        : expeditionSubagentSection(vars.isGitRepo === true)
       : mode === 'blitz'
-        ? blitzSection(docsRoot, vars.isGitRepo === true)
-        : expeditionSection(docsRoot, vars.isGitRepo === true)
+        ? blitzSection(vars.isGitRepo === true)
+        : expeditionSection(vars.isGitRepo === true)
   // 标签行独立成 HTML 块：开标签后/闭标签前各留空行，段内 markdown（标题/列表/围栏）
   // 才不被 HTML 块吞掉内联化（GUI 按 markdown 渲染系统提示词）。
   return `<${XML_TAGS.forgePipeline}>\n\n${body}\n</${XML_TAGS.forgePipeline}>`
