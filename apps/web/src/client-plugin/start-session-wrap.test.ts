@@ -192,6 +192,7 @@ describe('installStartSessionWrap（绑定推导制：入口锚定 workspaceId �
   it('⑦ fail-open：DTO 抛错回退官方行集 / DTO 与回退双缺席 / 判定链异常 → 官方原流', async () => {
     const base = {
       currentSessionId: 'S1',
+      sessionCwd: { S1: ROOT }, // INV-B 契约锚在场——本组只验解析失败面静默（退化径诊断另案）
       items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
       displayed: TREE_B,
     }
@@ -307,6 +308,22 @@ describe('installStartSessionWrap（绑定推导制：入口锚定 workspaceId �
         dtoWorkspaceId: DTO_ROWS([{ path: TREE_B, workspaceId: TREE_B_WS_ID }]),
       })
       await f.deps.uiWorkspace.startSession!()
+      expect(f.original).toHaveBeenCalledWith(TREE_B_WS_ID)
+    })
+
+    it('INV-B 退化径诊断留痕（bug bae86480）：主视图会话行 cwd 契约锚缺席 → 退成员位径前 warn 一行', async () => {
+      const f = fixture({
+        currentSessionId: 'S1',
+        // snapshotFaces 不注入 cwd（契约锚缺席形态——官方包升级漂移面）
+        items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
+        displayed: TREE_B,
+        dtoWorkspaceId: DTO_ROWS([{ path: TREE_B, workspaceId: TREE_B_WS_ID }]),
+      })
+      await f.deps.uiWorkspace.startSession!()
+      // 退化径零静默（AGENTS §7）：行为零回归 + 诊断一行（契约锚台账登记面）
+      const warn = f.warn as unknown as { mock: { calls: readonly string[][] } }
+      expect(warn.mock.calls).toHaveLength(1)
+      expect(warn.mock.calls[0]?.[0]).toContain('cwd')
       expect(f.original).toHaveBeenCalledWith(TREE_B_WS_ID)
     })
   })

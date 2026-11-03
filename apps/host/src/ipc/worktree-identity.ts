@@ -124,9 +124,14 @@ export function createWorktreeIdentity(
         if (rowAnchor !== null && normalizeFsPath(rowAnchor) === anchorKey) {
           // git 域归属核验同门（非 git 注册根不参与归属——防误判路径自同锚退路复入）
           if (!(await isGenuineGitRoot(row.wsPath, anchorKey))) continue
-          // 主树行必胜仲裁：锚 = realpath(git-common-dir) 恒坐落在主树内（<主树>/.git）——
-          // 「锚目录在该行 ws_path 之下」即主行。同锚多行时 worktree 行按 created_at 序可排
-          // 在主行之前（main-old→redesign→main 演进残留）——树行根/title 会劫持项目归属。
+          // 主树行必胜仲裁（INV-U 统一选主谓词的 host 正本——bug 0c677db2 收口）：锚 =
+          // realpath(git-common-dir) 恒坐落在主树内（<主树>/.git）——「锚目录在该行
+          // ws_path 之下」即主行。同锚多行时 worktree 行按 created_at 序可排在主行之前
+          // （main-old→redesign→main 演进残留）——树行根/title 会劫持项目归属。
+          // wrap 面（apps/web start-session-wrap selectMasterRow）以祖先前缀判镜像同构
+          // 此谓词（零 git 探针），同锚集合两半边裁决恒一致——契约锚定测试
+          // master-arbitration-contract.test.ts；判据书面化正本：
+          // docs/conventions/official-face-contract-anchors.md。
           if (anchorKey.startsWith(`${normalizeFsPath(row.wsPath)}/`)) {
             hit = row
             break

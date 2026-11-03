@@ -99,20 +99,64 @@ function recentWorkspaceId(items: readonly WsItemSlice[], byId: Record<string, u
   return selected
 }
 
-/** INV-U 选主谓词（bug 8c7e847f 三件套——host 侧 worktree-identity.ts:89/96-105 选主先例
- *  的客户端镜像）：同锚多行禁裸 find 首命中，主行 = createdAt 最新（created_at 仲裁；
- *  解析失败视为最早）；平手保快照序首行（确定性序——INV-R 幂等）。 */
-function selectMasterRow(
+/**
+ * INV-U 统一选主谓词（bug 0c677db2 收口——与 host 侧 worktree-identity.ts 主树锚判镜像
+ * 同构，禁止双轨分叉）。统一契约（判据书面化正本：docs/conventions/official-face-contract-anchors.md）：
+ *   ① 主树行必胜：候选集中唯一「归一 path 是其它候选行归一 path 的祖先前缀」的行胜出。
+ *      host 判据（worktree-identity resolveProject：锚 = realpath(git-common-dir) 恒坐落在
+ *      主树内 ⇒ 主树路径是同仓 worktree 行的祖先前缀）的零探针镜像——语义上「主树行必胜」
+ *      是产品裁决语义（fix-1 家族定谳），createdAt 只是实现近似；
+ *   ② 主树判缺席（候选行互不为祖先——同径残留重复行，8c7e847f 实证形态）→ createdAt
+ *      最新胜（解析失败视为最早）；host 行集无同径重复行（projects.ws_path 唯一），此层
+ *      为 wrap 面官方 W 清单特有兜底，不违镜像同构（主树判优先级两侧一致）；
+ *   ③ 平手保快照序首行（确定性序——INV-R 幂等）。
+ * 契约锚定测试：master-arbitration-contract.test.ts（同锚集合两半边裁决一致性）。
+ */
+export function selectMasterRow(
   items: readonly WsItemSlice[],
   predicate: (item: WsItemSlice) => boolean,
 ): WsItemSlice | undefined {
+  const candidates = items.filter(predicate)
+  const pathKeyOf = (item: WsItemSlice): string | undefined => {
+    const path = item.path
+    return typeof path === 'string' && path !== '' ? normPath(path) : undefined
+  }
+  const isAncestorOfAny = (row: WsItemSlice): boolean => {
+    const rowKey = pathKeyOf(row)
+    if (rowKey === undefined) return false
+    return candidates.some((other) => {
+      if (other === row) return false
+      const otherKey = pathKeyOf(other)
+      return otherKey !== undefined && otherKey.startsWith(`${rowKey}/`)
+    })
+  }
   let master: WsItemSlice | undefined
   let masterTime = Number.NEGATIVE_INFINITY
-  for (const item of items) {
-    if (!predicate(item)) continue
+  let masterAncestor = false
+  for (const item of candidates) {
     const parsed = typeof item.createdAt === 'string' ? Date.parse(item.createdAt) : Number.NaN
     const at = Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
-    if (master === undefined || at > masterTime) {
+    const ancestor = isAncestorOfAny(item)
+    if (ancestor && !masterAncestor) {
+      // ① 主树行必胜（首遇即占位——后继非主树行不得凭 createdAt 翻盘）
+      master = item
+      masterTime = at
+      masterAncestor = true
+      continue
+    }
+    if (master === undefined) {
+      master = item
+      masterTime = at
+      continue
+    }
+    // ②③ 同层（均非主树行 / 均为主树行）：createdAt 最新，平手保快照序首行
+    if (!masterAncestor && ancestor) {
+      master = item
+      masterTime = at
+      masterAncestor = true
+      continue
+    }
+    if (at > masterTime) {
       master = item
       masterTime = at
     }
@@ -151,6 +195,15 @@ function officialAnchor(
       typeof currentRow === 'object' && currentRow !== null
         ? (currentRow as { cwd?: unknown }).cwd
         : undefined
+    if (typeof cwd !== 'string' || cwd === '') {
+      // INV-B 退化径诊断留痕（bug bae86480——AGENTS §7 零静默）：cwd 是登记在案的契约锚
+      // 判据源（docs/conventions/official-face-contract-anchors.md），官方包升级漂移致
+      // 缺席时退成员位投影缓存径必须留痕一行。client 束 = diagnostic-emit-discipline
+      // 豁免面，deps.warn（生产 console.warn）即合规诊断通道。
+      deps.warn?.(
+        '[dsh-forge web-client] INV-B 契约锚退化：主视图会话行 cwd 缺席（官方 sessions.list 形状漂移？）——退成员位投影缓存径（INV-U 选主仲裁）',
+      )
+    }
     if (typeof cwd === 'string' && cwd !== '') {
       const cwdKey = normPath(cwd)
       targetId = selectMasterRow(
