@@ -11,6 +11,8 @@ import type { KnowledgePromptSection, KnowledgeToolDefinition } from './tools/in
 interface CtxOverrides {
   readonly reflectGet?: (name: string) => unknown
   readonly reflectThrows?: boolean
+  /** 事件面缺席（默认）或注入（晚到场景）——真 Context ctx.on 经 events mixin 转发 */
+  readonly eventsOn?: (name: string, listener: (...args: unknown[]) => void) => () => boolean
 }
 
 function makeCtx(overrides: CtxOverrides = {}): Record<string, unknown> {
@@ -18,6 +20,7 @@ function makeCtx(overrides: CtxOverrides = {}): Record<string, unknown> {
     forgeKnowledge: {},
     tools: { register: (_d: KnowledgeToolDefinition) => () => {} },
     systemPrompt: { section: (_s: KnowledgePromptSection) => () => {} },
+    ...(overrides.eventsOn !== undefined ? { events: { on: overrides.eventsOn } } : {}),
     ...(overrides.reflectThrows === true
       ? { reflect: { get: () => { throw new Error('cannot get property') } } }
       : overrides.reflectGet !== undefined
@@ -137,5 +140,76 @@ describe('装配期声明（reflect.get 防御读取——AGENTS 1.6 在场性�
 
   it('声明为一次性装配动作，不进 inject 数组（cordis 无可选 inject——forgeDirs 缺席不阻载）', () => {
     expect(knowledgePlugin.inject).toEqual(['forgeKnowledge', 'tools', 'systemPrompt'])
+  })
+})
+
+describe('晚到服务感知（bug 62208a31——cordis internal/service 拦截钩子官方缝）', () => {
+  /** events 面桩：listener 登记 + 手动派发（同构 cordis emit('internal/service', name, value)） */
+  function makeEventBus() {
+    const listeners: { name: string; listener: (...args: unknown[]) => void }[] = []
+    return {
+      on: (name: string, listener: (...args: unknown[]) => void) => {
+        listeners.push({ name, listener })
+        return () => {
+          const i = listeners.findIndex((l) => l.listener === listener)
+          if (i >= 0) listeners.splice(i, 1)
+          return true
+        }
+      },
+      emit: (name: string, ...args: unknown[]) => {
+        for (const { name: n, listener } of listeners) if (n === name) listener(...args)
+      },
+      size: () => listeners.length,
+    }
+  }
+
+  it('初始缺席 → 服务后到（internal/service 派发 forgeDirs + 服务值）→ 注册生效且监听自注销', () => {
+    const fake = makeFakeForgeDirs()
+    const bus = makeEventBus()
+    const dispose = knowledgePlugin(
+      makeCtx({ reflectGet: () => undefined, eventsOn: bus.on }) as never,
+    )
+    expect(fake.listAll(ANCHORS)).toHaveLength(5) // 未注册
+    bus.emit('internal/service', 'forgeDirs', fake.service)
+    const all = fake.listAll(ANCHORS)
+    expect(all).toHaveLength(6)
+    expect(all.map((p) => p.dirKey)).toContain('knowledge.root')
+    expect(bus.size()).toBe(0) // 注册成功即注销监听
+    dispose()
+  })
+
+  it('非目标服务事件不触发；钩子携带非函数面不注册、监听保留', () => {
+    const fake = makeFakeForgeDirs()
+    const bus = makeEventBus()
+    const dispose = knowledgePlugin(makeCtx({ eventsOn: bus.on }) as never)
+    bus.emit('internal/service', 'otherService', {})
+    expect(bus.size()).toBe(1)
+    bus.emit('internal/service', 'forgeDirs', {})
+    expect(bus.size()).toBe(1) // 非函数面不注销
+    expect(fake.listAll(ANCHORS)).toHaveLength(5)
+    bus.emit('internal/service', 'forgeDirs', fake.service)
+    expect(fake.listAll(ANCHORS)).toHaveLength(6)
+    dispose()
+  })
+
+  it('插件卸载注销监听（dispose 后服务到场零注册）', () => {
+    const fake = makeFakeForgeDirs()
+    const bus = makeEventBus()
+    const dispose = knowledgePlugin(makeCtx({ eventsOn: bus.on }) as never)
+    dispose()
+    expect(bus.size()).toBe(0)
+    bus.emit('internal/service', 'forgeDirs', fake.service)
+    expect(fake.listAll(ANCHORS)).toHaveLength(5)
+  })
+
+  it('已在场直接注册：不挂监听（事件面零残留）', () => {
+    const fake = makeFakeForgeDirs()
+    const bus = makeEventBus()
+    const dispose = knowledgePlugin(
+      makeCtx({ reflectGet: (name) => (name === 'forgeDirs' ? fake.service : undefined), eventsOn: bus.on }) as never,
+    )
+    expect(fake.listAll(ANCHORS)).toHaveLength(6)
+    expect(bus.size()).toBe(0)
+    dispose()
   })
 })

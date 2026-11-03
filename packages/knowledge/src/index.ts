@@ -65,27 +65,45 @@ export const KNOWLEDGE_ROOT_DIR_KEY = {
  * 经 reflect.get('forgeDirs') 防御读取 forge 服务面（cordis 4.0.4 无可选 inject，
  * 同 plugin-forge forgeSettings 先例配方——不进 inject 数组，缺席不阻载本插件）。
  * forge 缺席（未装 plugin-forge）/ 读取异常 / 非函数面 = 声明零生效零抛。
+ *
+ * 晚到服务感知（bug 62208a31——真机装载顺序 knowledge 早于 plugin-forge）：
+ * cordis 官方事件面 'internal/service' 拦截钩子（lib index.js provide → notify →
+ * emit('internal/service', name, value)）——服务绑定时派发并携带服务值。
+ * 一次性收口：在场即注册；缺席则挂监听，钩子到场（name === 'forgeDirs' 且
+ * registerDirKeys 为函数）即注册并注销监听；插件卸载注销监听。禁轮询/定时重试。
+ *
+ * @returns 监听注销器（已当场注册时返回 no-op）——并入插件 disposers。
  */
-function declareKnowledgeRootDirKey(ctx: KnowledgeContextFace): void {
+function declareKnowledgeRootDirKey(ctx: KnowledgeContextFace): () => void {
+  const registerFrom = (service: unknown): boolean => {
+    const register = (service as ForgeDirsDeclareFace | undefined)?.registerDirKeys
+    if (typeof register !== 'function') return false
+    register.call(service, [KNOWLEDGE_ROOT_DIR_KEY])
+    return true
+  }
   let service: unknown
   try {
     service = ctx.reflect?.get('forgeDirs')
   } catch {
-    return // reflect 读取抛（服务未就绪）= 缺席，零生效零抛
+    service = undefined // reflect 读取抛（服务未就绪）= 缺席，零生效零抛
   }
-  const register = (service as ForgeDirsDeclareFace | undefined)?.registerDirKeys
-  if (typeof register !== 'function') return
-  register.call(service, [KNOWLEDGE_ROOT_DIR_KEY])
+  if (registerFrom(service)) return () => {}
+  const off = ctx.events?.on?.('internal/service', (...args: unknown[]) => {
+    if (args[0] !== 'forgeDirs') return
+    if (!registerFrom(args[1])) return
+    off?.()
+  })
+  return () => off?.()
 }
 
 const knowledgePlugin: KnowledgePlugin = Object.assign(
   (ctx: KnowledgeContextFace, config: KnowledgePluginConfig = {}): (() => void) => {
-    declareKnowledgeRootDirKey(ctx)
     const tools = createKnowledgeTools({
       knowledge: ctx.forgeKnowledge,
       resolveProjectId: createProjectResolver(config.projects ?? [], config.bindingsFile),
     })
     const disposers = [
+      declareKnowledgeRootDirKey(ctx),
       ctx.tools.register(tools.search),
       ctx.tools.register(tools.readAbstract),
       // 段文本 = 契约内容源渲染（工具定义 + contracts 常量），不在此复述

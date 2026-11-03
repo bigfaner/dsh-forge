@@ -120,4 +120,12 @@ export interface KnowledgeContextFace {
    * 非函数面 = 声明零生效零抛（AGENTS 1.6 在场性现查 fail-soft）。
    */
   readonly reflect?: { get(name: string): unknown }
+  /**
+   * Cordis 事件面（晚到服务感知——bug 62208a31）：装载期 forgeDirs 服务键缺席时，
+   * 经官方 'internal/service' 拦截钩子（服务绑定时派发，携带服务值）在场注册——
+   * 结构同形消费，真 Context 的 ctx.on 即经 events mixin 转发到此。
+   */
+  readonly events?: {
+    on(name: string, listener: (...args: unknown[]) => void): () => boolean
+  }
 }
