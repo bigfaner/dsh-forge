@@ -1,4 +1,5 @@
-// 自持存储 barrel（A2 前两弹）：库初始化/schema 版本线/路径解析/注册表/并发纪律单入口。
+// 自持存储 barrel：库初始化/schema 版本线/路径解析/注册表/并发纪律/轻量种子迁移/
+// 首用 rebuild/诊断发射面——单入口。
 export {
   STORAGE_MIGRATIONS,
   STORAGE_SCHEMA_VERSION,
@@ -26,4 +27,32 @@ export {
   withImmediateTransaction,
   type SingleFlightMutex,
 } from './concurrency.js'
-export { startSelfHostedStorage, type SelfHostedStorage } from './start.js'
+export { startSelfHostedStorage, type SelfHostedStorage, type StartSelfHostedStorageOptions } from './start.js'
+export {
+  runSeedMigration,
+  type SeedMigrationOptions,
+  type SeedMigrationResult,
+  type SeedMigrationStatus,
+} from './migrate.js'
+export { rebuildKnowledgeIndex, type RebuildOptions, type RebuildReport } from './rebuild.js'
+export {
+  scanKnowledgeDir,
+  isSafeRelPath,
+  deriveDomainPath,
+  InvalidKnowledgeDirError,
+  type ScannedKnowledgeFile,
+} from './scan.js'
+export {
+  parseKnowledgeFile,
+  type ParseOutcome,
+  type ParsedEntry,
+  type ParseKnowledgeFileInput,
+  type ParseRejectReason,
+} from './parser.js'
+export {
+  KNOWLEDGE_MIGRATE_EVENT,
+  KNOWLEDGE_REBUILD_EVENT,
+  emitStorageDiag,
+  storageDiag,
+  type DiagEmitter,
+} from './diag.js'

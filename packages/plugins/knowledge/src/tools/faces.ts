@@ -118,4 +118,9 @@ export interface KnowledgeContextFace {
     get(name: string): unknown
     provide?(name: string, service: unknown): (() => void) | undefined
   }
+  /**
+   * Cordis 事件发射面子面（可选结构面——真 Context 结构兼容）：storage 域埋点经装配期
+   * 注入的诊断发射面（DIAG_EVENT 类型化 emit——docs/conventions/diagnostic-emit-discipline.md）。
+   */
+  readonly emit?: (event: 'diag/log', payload: import('@dsh-forge/contracts').DiagEventPayload) => void
 }

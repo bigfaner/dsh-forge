@@ -22,9 +22,11 @@ export interface KnowledgeStorageEnv {
   readonly DSH_HOME?: string
 }
 
-/** config 可配路径子面（KnowledgePluginConfig.dbFile 结构兼容） */
+/** config 可配路径子面（KnowledgePluginConfig 存储子域结构兼容） */
 export interface KnowledgeStorageConfig {
   readonly dbFile?: string
+  /** 旧 core state.db 路径（种子迁移源——config 注入；缺席 = 常规路径零迁移） */
+  readonly legacyStateDb?: string
 }
 
 function nonEmpty(v: string | undefined): boolean {

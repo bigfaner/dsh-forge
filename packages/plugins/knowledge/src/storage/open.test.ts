@@ -33,13 +33,13 @@ describe('A2 open：单文件全表同库 + 并发 PRAGMA + 版本线', () => {
     try {
       expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
       expect(db.pragma('busy_timeout', { simple: true })).toBe(BUSY_TIMEOUT_MS)
-      expect(schemaMetaRows(db).map((r) => r.version)).toEqual([1])
+      expect(schemaMetaRows(db).map((r) => r.version)).toEqual([1, 2])
       const tables = db
         .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
         .all()
         .map((r) => r.name)
       expect(tables).toContain('schema_meta')
-      expect(tables).toContain('projects') // 单库含全部表（后续 entries/recall_logs 随版本追加）
+      expect(tables).toContain('projects') // 单库含全部表（v2：entries/recall_logs/seed_migration）
     } finally {
       db.close()
     }
@@ -51,7 +51,7 @@ describe('A2 open：单文件全表同库 + 并发 PRAGMA + 版本线', () => {
     first.close()
     const second = openKnowledgeDatabase(file)
     try {
-      expect(schemaMetaRows(second)).toHaveLength(1)
+      expect(schemaMetaRows(second)).toHaveLength(2)
     } finally {
       second.close()
     }

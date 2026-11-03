@@ -16,6 +16,7 @@ import { createKnowledgeTools, createProjectResolver } from './tools/index.js'
 import type { ProjectBinding } from './tools/index.js'
 import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from './prompt/index.js'
 import { startSelfHostedStorage } from './storage/index.js'
+import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
 import { joinDirSegment } from '@dsh-forge/path-key'
 
 /** 插件配置（profile cordis.patch.yml 行 config；应用装配期路径经 boot overlay 注入） */
@@ -30,6 +31,11 @@ export interface KnowledgePluginConfig {
    * 双态（阶段①迁移前）：自持库仅作数据面准备，供数仍走 forgeKnowledge。
    */
   dbFile?: string
+  /**
+   * 旧 core state.db 路径（种子迁移源——host 装配注入；缺席 = 常规路径零迁移）。
+   * 轻量种子迁移（裁决 2026-11-19）：注册行唯一种子 / entries 零迁 / recall_logs best-effort。
+   */
+  legacyStateDb?: string
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -99,8 +105,15 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       resolveProjectId: createProjectResolver(config.projects ?? [], config.bindingsFile),
     })
     // A2 自持存储自启（双态：数据面准备，供数仍走 forgeKnowledge；开库失败 fail-soft
-    // 降级纯旧服务形态，锚缺席（裸环境）不自启——不向 ~/.dsh 静默落盘）
-    const storage = startSelfHostedStorage({ dbFile: config.dbFile })
+    // 降级纯旧服务形态，锚缺席（裸环境）不自启——不向 ~/.dsh 静默落盘）+ 首启轻量种子
+    // 迁移（埋点经装配期注入的诊断发射面——DIAG_EVENT 类型化 emit，host main 进程位）
+    const diagEmit =
+      typeof ctx.emit === 'function'
+        ? (payload: DiagEventPayload) => ctx.emit!(DIAG_EVENT, { ...payload, process: 'main' })
+        : undefined
+    const storage = startSelfHostedStorage(
+      { dbFile: config.dbFile, legacyStateDb: config.legacyStateDb, emit: diagEmit },
+    )
     const disposers = [
       storage === undefined ? () => {} : () => storage.close(),
       declareKnowledgeRootDirKey(ctx),
