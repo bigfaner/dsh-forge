@@ -1,14 +1,31 @@
 // dispatch-core · 组装面（S1a 可拆卸壳分层——implementation-blueprint §3 claim→组装→spawn
 // 链的「组装」段）：taskType → 收窄矩阵 → toolFilter；forgeSettings → agentOptions
 // （含档位兼容收口）。纯函数——两消费者（工具壳/循环驱动器）同源。
-import type { ReasoningEffortLevel, TaskType, WorkerToolFamily } from '@dsh-forge/contracts'
+import type { TaskType, WorkerToolFamily } from '@dsh-forge/contracts'
 import {
+  globalToolNamesOfToolsFace as readToolNamesOfToolsFace,
+  intersectToolNames,
+  probeIsSubdomain,
   WORKER_FORGE_TOOLS,
   WORKER_GLOBAL_DENY_TOOLS,
   WORKER_TASK_FAMILY_BY_TYPE,
   WORKER_TOOL_FAMILIES,
   WORKER_TOOL_MATRIX,
   WORKER_TOOL_NAME_FAMILY,
+} from '@dsh-forge/contracts'
+
+// 工具注册面投影/求交族单源 re-export（bug a5b12254 集中化——contracts tool-projection.ts；
+// 既有消费面 import 路径零变化）：金丝雀守卫 / shell 同族候选 / 探针可信判定。
+export { PROBE_CANARY_TOOL, probeIsSubdomain, SHELL_TOOL_CANDIDATES } from '@dsh-forge/contracts'
+
+// agentOptions 折叠族单源 re-export（架构裁决 verification-report §5.1 ⑤ 最小增量——
+// contracts subagent-assemble.ts；既有消费面 import 路径零变化，行为逐字等价）：
+// workerAgentOptionsOf（三级 first-def 折叠公式）/ reconcileWorkerReasoning（异步纯折叠，
+// resolveModelReasoning 注入依赖）/ WorkerRouteLevel（路由级形状）。
+export {
+  reconcileWorkerReasoning,
+  workerAgentOptionsOf,
+  type WorkerRouteLevel,
 } from '@dsh-forge/contracts'
 
 /**
@@ -84,39 +101,16 @@ export const WORKER_PIPELINE_ESSENTIAL_TOOLS: readonly string[] = [...WORKER_FOR
  * 探针可信金丝雀（bug 92d642c2 真机定谳）：全局恒在的官方工具名。Mac/Win 全新构建实测，
  * 循环运行时上下文的 parent.ctx.tools.schemas() 返回**子域投影**（仅 9 个 expert 域工具、
  * 零官方工具）——探针在场 ≠ 投影可信。投影不含金丝雀 = 子域采样，不可作为裁剪/断言依据。
+ * （bug a5b12254 集中化：常量与判定单源迁 contracts tool-projection.ts，本包 re-export。）
  */
-export const PROBE_CANARY_TOOL = 'read'
-
-/** 子域投影判定（纯函数）：非空且不含金丝雀 = 子域采样（不可信——回落不裁剪不断言）。 */
-export function probeIsSubdomain(registeredTools: readonly string[]): boolean {
-  return registeredTools.length > 0 && !registeredTools.includes(PROBE_CANARY_TOOL)
-}
 
 /**
  * 全局工具注册名读取（bug 92d642c2 根因层）：装配期 `ctx.tools` 官方面直读——`schemas()`
  * 无参调用 = 全局视图（官方契约 dsh-tools index.d.ts:711「omitted = the global view」），
  * 无 parent 会话的作用域收窄。形状漂移/调用抛错 = undefined（调用方回落 parent 探针）。
+ * （bug a5b12254 集中化：unknown 面校验实现单源迁 contracts tool-projection.ts，本壳直连。）
  */
-export function globalToolNamesOfToolsFace(tools: unknown): readonly string[] | undefined {
-  if (typeof tools !== 'object' || tools === null) return undefined
-  const schemas = (tools as { schemas?: unknown }).schemas
-  if (typeof schemas !== 'function') return undefined
-  let projected: unknown
-  try {
-    projected = (schemas as (this: unknown) => unknown).call(tools)
-  } catch {
-    return undefined
-  }
-  if (!Array.isArray(projected)) return undefined
-  const names: string[] = []
-  for (const schema of projected) {
-    if (typeof schema !== 'object' || schema === null) return undefined
-    const name = (schema as { name?: unknown }).name
-    if (typeof name !== 'string') return undefined
-    names.push(name)
-  }
-  return names
-}
+export const globalToolNamesOfToolsFace = readToolNamesOfToolsFace
 
 /**
  * taskType → 收窄矩阵 → toolFilter（deny 面；expert-squad-forge 1.4 起 allow 面可选）。
@@ -138,12 +132,17 @@ export function globalToolNamesOfToolsFace(tools: unknown): readonly string[] | 
  *   名两平台互通），其余未知名 fail-soft 剔除（g-473 同口径）；解析空集 fail-loud（keep-only
  *   空表 = 全拒，静默派发必瘫结算链——档案配置错误应显式炸）；
  * - 缺席（取数缝失败/极简 profile）= 双面不裁剪（与既有 loud 行为逐字节等价）。
+ * platform 参数（bug a5b12254 附加要求）：探针不可信（子域投影）/缺席时的 shell 同族
+ * 平台确定性兜底——win32 → pwsh、其余 → bash（contracts platformShellToolName）。仅作用
+ * 于 shell 同族名，其余未知名仍原样放行；缺省 = 不兜底（行为零变化）。
+ * （求交核心单源迁 contracts intersectToolNames——bug a5b12254 集中化。）
  */
 export function deriveWorkerToolFilter(
   taskType: TaskType,
   nameFamily: Readonly<Record<string, WorkerToolFamily>> = WORKER_TOOL_NAME_FAMILY,
   profileTools?: readonly string[],
   registeredTools?: readonly string[],
+  platform?: string,
 ): { allow?: string[]; deny: string[] } {
   // 探针可信门（bug 92d642c2 真机定谳）：子域投影（非空但缺官方金丝雀 read）= 循环运行时
   // 上下文的受限采样，不可作为裁剪/断言依据——回落 undefined（不裁剪不断言，e6669a50 前
@@ -178,23 +177,20 @@ export function deriveWorkerToolFilter(
       )
     }
   }
-  const allow = intersectAllowNames(
+  const allow = intersectToolNames(
     [...new Set<string>([...profileTools, ...WORKER_PIPELINE_ESSENTIAL_TOOLS])],
     registeredTools,
+    ...(platform !== undefined ? [{ platform }] : []),
   )
   return { allow, deny: intersectedDeny }
 }
-
-/** shell 工具名候选（跨平台同族：win32 注册 pwsh、其余平台注册 bash——dsh-tool-pwsh /
- *  dsh-tool-bash 平台 disabled 装配面；dsh-graph g-473 / expert-squad resolveToolAllow 同口径）。 */
-export const SHELL_TOOL_CANDIDATES = ['bash', 'pwsh'] as const
 
 /**
  * 父会话真机已注册全局工具名读取位（bug 989997bd 起——toolFilter 与真机工具面求交的
  * 取数缝，worker/triage 两面共用）：结构化读 parent.ctx.tools.schemas()（官方 dsh-tools
  * 公开投影面，逐 schema 取 name——child restrictableNames 的父域投影）。任一环缺席/
  * 形状不符/调用抛错 = undefined（取数失败回落不裁剪——与修复前 loud 行为一致，不静默
- * 收窄成空表）。
+ * 收窄成空表）。unknown 面校验单源 = contracts globalToolNamesOfToolsFace（bug a5b12254）。
  */
 export function registeredToolNamesOf(parent: unknown): readonly string[] | undefined {
   if (typeof parent !== 'object' || parent === null) return undefined
@@ -202,54 +198,21 @@ export function registeredToolNamesOf(parent: unknown): readonly string[] | unde
   if (typeof ctx !== 'object' || ctx === null) return undefined
   const tools = (ctx as { tools?: unknown }).tools
   if (typeof tools !== 'object' || tools === null) return undefined
-  const schemas = (tools as { schemas?: unknown }).schemas
-  if (typeof schemas !== 'function') return undefined
-  let projected: unknown
-  try {
-    projected = (schemas as (this: unknown) => unknown).call(tools)
-  } catch {
-    return undefined
-  }
-  if (!Array.isArray(projected)) return undefined
-  const names: string[] = []
-  for (const schema of projected) {
-    if (typeof schema !== 'object' || schema === null) return undefined
-    const name = (schema as { name?: unknown }).name
-    if (typeof name !== 'string') return undefined
-    names.push(name)
-  }
-  return names
+  return readToolNamesOfToolsFace(tools)
 }
 
 /**
- * allow 名表与真机注册面求交（bug 3cb118cf）：shell 同族名解析为在场的候选者、其余
- * 未知名 fail-soft 剔除、已知名保序保留。registeredTools 缺席/空 = 不裁剪（无探针不收紧）。
- * 抛错面：入表非空而解析全空 → Error fail-loud（keep-only 空表 = 全拒，必瘫 worker）。
+ * allow 名表与真机注册面求交（兼容再导出壳——bug a5b12254 集中化：实现单源迁 contracts
+ * intersectToolNames；既有消费面 import 路径零变化，语义逐字节等价）。shell 同族名解析为
+ * 在场的候选者、其余未知名 fail-soft 剔除、已知名保序保留。registeredTools 缺席/空 =
+ * 不裁剪（无探针不收紧）。抛错面：入表非空而解析全空 → Error fail-loud（keep-only 空表
+ * = 全拒，必瘫 worker）。
  */
 export function intersectAllowNames(
   names: readonly string[],
   registeredTools?: readonly string[],
 ): string[] {
-  if (registeredTools === undefined || registeredTools.length === 0) return [...names]
-  const present = new Set(registeredTools)
-  const resolved: string[] = []
-  for (const name of names) {
-    if (present.has(name)) {
-      resolved.push(name)
-      continue
-    }
-    if ((SHELL_TOOL_CANDIDATES as readonly string[]).includes(name)) {
-      const sibling = SHELL_TOOL_CANDIDATES.find((c) => c !== name && present.has(c))
-      if (sibling !== undefined) resolved.push(sibling)
-    }
-  }
-  if (names.length > 0 && resolved.length === 0) {
-    throw new Error(
-      `worker allow-list resolves to empty against registered tools [${registeredTools.join(', ')}]; ` +
-        `filter input: [${names.join(', ')}]`,
-    )
-  }
-  return resolved
+  return intersectToolNames(names, registeredTools)
 }
 
 /**
@@ -293,78 +256,10 @@ export function deriveTriageToolFilter(registeredTools?: readonly string[]): { d
 }
 
 /**
- * 路由级形状（expert-squad-default-routing——四级链各级同形）：provider/model 整组同给
- * 同缺（官方 AgentOptions 成对语义）；reasoning 缺省 = 该级不下发档位。
+ * worker agentOptions 组装（单源 contracts subagent-assemble.ts——上方薄壳 re-export；
+ * 优先级链与 reasoning 三级合成语义正本见 contracts 同名函数注）。
  */
-export interface WorkerRouteLevel {
-  readonly provider?: string
-  readonly model?: string
-  readonly reasoning?: ReasoningEffortLevel
-}
 
 /**
- * worker agentOptions 组装（expert-squad-default-routing——配置主权归 expert-squad，
- * forgeSettings.worker 机械读取径退役）：
- *
- * 优先级链（proposal「优先级链」/verification.md §0.3 first-def fold）：
- *   ① experts 条目 agentOptions（experts 服务 get 应答——条目叠加 + 档案 + defaults 已由
- *     expert-squad 侧折叠；本面按整组语义消费）
- *   > ② 档案 provider+model 成对（a599db30 语义：成对即自带完整路由对）
- *   > ③ defaultAgentOptions（全局默认基座；② 单边位与③基座逐位合成——V1-EX1 收口）
- *   > ④ 父会话继承（返回 undefined——spawn 请求零 agentOptions 键）。
- *
- * reasoning 三级合成（同构 first-def）：① entry.reasoning > ② profile.reasoning
- * （档案 frontmatter 出厂值）> ③ defaults.reasoning > 不下发 effort；档位兼容收口
- * 由 reconcileWorkerReasoning 在组装后统一承担（本面零目录知识）。
- *
- * 生产径取数：①②③ 的现值经既有 experts 服务取用面（resolver → experts.get）每次派发
- * 现查（AGENTS 1.6 检测永不缓存——消费点惰性求值，volatile 配置变更即派发即生效）；
- * expert-squad 缺席 = 三级全空 → undefined 回落父继承（语义完整，可移植性）。
+ * 档位兼容收口（单源 contracts subagent-assemble.ts——上方薄壳 re-export）。
  */
-export function workerAgentOptionsOf(levels: {
-  /** ① experts 条目 agentOptions（含 expert-squad 侧折叠应答时即最终路由级） */
-  readonly entry?: WorkerRouteLevel
-  /** ② 档案级（provider+model 成对整组；reasoning = frontmatter 出厂值） */
-  readonly profile?: WorkerRouteLevel
-  /** ③ defaultAgentOptions 全局默认基座 */
-  readonly defaults?: WorkerRouteLevel
-}): { provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined {
-  // 基座 = ② 成对整组（自带完整路由对，a599db30），不成对回落 ③；② 单边位与 ③ 逐位
-  // 合成（仅 model 并入③基座——V1-EX1；仅 provider 不落位回落基座——既有语义）。
-  const profilePaired = levels.profile?.provider !== undefined && levels.profile?.model !== undefined
-  const base = {
-    provider: profilePaired ? levels.profile?.provider : (levels.defaults?.provider ?? levels.profile?.provider),
-    model: profilePaired ? levels.profile?.model : (levels.defaults?.model ?? levels.profile?.model),
-  }
-  const provider = levels.entry?.provider ?? base.provider
-  const model = levels.entry?.model ?? base.model
-  // 成对判据：provider+model 皆在场才有路由——任一缺席 = ④ 父会话继承（undefined）。
-  if (provider === undefined || model === undefined) return undefined
-  const route = { provider, model }
-  const reasoning = levels.entry?.reasoning ?? levels.profile?.reasoning ?? levels.defaults?.reasoning
-  if (reasoning === undefined) return route
-  return { ...route, reasoningEffort: reasoning }
-}
-
-/**
- * 档位兼容收口（不同 provider/model 支持集不同——「无法兼容就不设置」）：
- * 目录已知（efforts 非 undefined）且配置档位不在支持集 → 剥离 reasoningEffort（回落
- * provider/模型默认档），杜绝 UNSUPPORTED_REASONING_EFFORT 级 worker 启动即崩；
- * 目录不可知（解析器缺席/模型不可解析）= 不判，原样携带。
- */
-export async function reconcileWorkerReasoning(
-  options: { provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined,
-  resolveModelReasoning: ((provider: string, model: string) => Promise<readonly string[] | undefined>) | undefined,
-): Promise<{ provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined> {
-  if (options === undefined || options.reasoningEffort === undefined) return options
-  if (resolveModelReasoning === undefined) return options
-  let efforts: readonly string[] | undefined
-  try {
-    efforts = await resolveModelReasoning(options.provider, options.model)
-  } catch {
-    return options // 解析失败 = 目录不可知——不判
-  }
-  if (efforts === undefined) return options
-  if (efforts.includes(options.reasoningEffort)) return options
-  return { provider: options.provider, model: options.model } // 不支持 → 不设置
-}

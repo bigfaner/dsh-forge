@@ -427,6 +427,26 @@ describe('dispatchCore guard 机械（guardKey 参数化）', () => {
   })
 })
 
+// ─────────────────────────── spawn-false-alarm 分桶（ended-without-settlement） ───────────────────────────
+
+describe('spawn-false-alarm 分桶（失败 DTO category）', () => {
+  it('跑完未结算（结算读 in_progress + stopReason: completed）：DTO 冠「worker finished without submitTask」+ ended-without-settlement 桶——非 spawn failed 措辞', async () => {
+    const h = harness()
+    const { exec } = execOf()
+    h.setQuery({
+      task: snapshot({ taskStatus: 'in_progress' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [],
+    })
+    const r = await dispatchCore(h.deps, exec, loopArgs({ guardKey: 'loop-nosettle-1' }))
+    expect(r).toMatchObject({ ok: false, code: 'ERR_SPAWN_FAILED', category: 'ended-without-settlement' })
+    if (!('message' in r)) return expect.fail('expected failure DTO')
+    expect(r.message).toContain('worker finished without submitTask for feat-x/2.5')
+    expect(r.message).toContain('stopReason: completed')
+    expect(r.message).not.toContain('worker spawn failed')
+  })
+})
+
 // ─────────────────────────── 后台径（jobs 包装 + 结算后置 + job 内防线回灌） ───────────────────────────
 
 describe('dispatchCore 后台径（dispatched 回执 + job 内回灌进 guardKey streak）', () => {

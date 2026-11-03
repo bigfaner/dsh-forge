@@ -112,7 +112,13 @@ export interface ForgeBugsToolFace {
    */
   findRecurrenceCandidates(
     projectId: string,
-    scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] },
+    scope: {
+      readonly slug: string
+      readonly localId: string
+      /** 派生源任务 id（可选——core 域结构化解析作归属锚，缺席回退 slug） */
+      readonly sourceTaskId?: string
+      readonly files: readonly string[]
+    },
   ): Promise<readonly BugRecurrenceCandidate[]>
 }
 
@@ -183,6 +189,12 @@ export interface ForgeToolDeps {
    * 合并注册表（declare merge 面同实例），见 src/index.ts。
    */
   paths?: import('./forge-paths.js').ForgePathsToolFace
+  /**
+   * 越径结算显示同步面（可选——submitTask 落账后终态事件补发：任务源无活循环时向最新
+   * claim 会话补发 settle 进度事件，两消费面翻旧 claim「执行中」行）。缺席 = 机制关闭
+   * （纯显示同步——池态真源在 core submitTask，缺面仅损失显示翻行）。
+   */
+  submitSettleDisplay?: (input: { projectId: string; slug: string; localId: string; result: 'completed' | 'blocked' }) => Promise<void>
 }
 
 /** tool 定义组（顺序 = Interface 4 列序扩展——十七员；注册面与断言面共消费） */

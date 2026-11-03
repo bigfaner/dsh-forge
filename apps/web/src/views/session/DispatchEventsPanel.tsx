@@ -139,6 +139,7 @@ export const DISPATCH_EVENT_MINOR_LABELS: Readonly<Record<string, string>> = {
   spawned: '已启动执行',
   interrupted: '恢复中断',
   complete: '完成',
+  'out-of-band': '直接结算',
   'with-fix': '已带修复',
   'auto-fixed': '已自动处理',
   split: '已分割',

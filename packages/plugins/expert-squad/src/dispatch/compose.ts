@@ -19,8 +19,19 @@
 // ContentBlock[]、toolFilter 为 ToolRestriction、agentOptions 为部分覆盖面）；
 // parent/signal 等 2 面（派发上下文）由下游通道一调用方补齐，不在档案映射内。
 
-import type { ExpertEntry, ExpertsService } from "../registry.js";
-import { ExpertToolError } from "../tools.js";
+import { intersectToolNames } from "@dsh-forge/contracts";
+import type { ExpertsService } from "../registry.js";
+import { EXCLUDED_EXPERT_TOOL_NAMES, ExpertToolError } from "../tools.js";
+
+// 求交族单源 re-export（bug a5b12254 集中化——contracts tool-projection.ts；本包
+// 薄壳化：排除集/ExpertToolError 包域差异经 intersectToolNames 参数注入，行为等价）。
+export { PROBE_CANARY_TOOL, probeIsSubdomain, SHELL_TOOL_CANDIDATES } from "@dsh-forge/contracts";
+
+// 人设全文合成单源 re-export（架构裁决 verification-report §5.1 ⑤ 最小增量——contracts
+// subagent-assemble.ts；expert-squad 留薄壳，compose 内核其余部分不动；条目面经
+// contracts PersonaComposeSource 窄结构注入，ExpertEntry 结构满足即兼容，行为逐字等价）。
+export { composePersonaText } from "@dsh-forge/contracts";
+import { composePersonaText } from "@dsh-forge/contracts";
 
 /** 官方 ContentBlock 的文本块子面（prompt 载荷）。 */
 export interface TextContentBlock {
@@ -41,18 +52,6 @@ export interface ExpertSubagentRequest {
   readonly agentOptions?: { readonly provider: string; readonly model: string };
   /** 子会话首条用户消息 = 任务全文（单 text 块）。 */
   readonly prompt: readonly [TextContentBlock];
-}
-
-/** 人设全文合成：身份头（键/岗位/简介）+ 人设 Markdown 原文。 */
-export function composePersonaText(entry: ExpertEntry): string {
-  return [
-    `# ${entry.title}（${entry.name}）`,
-    "",
-    entry.description,
-    "",
-    entry.personaMd.trimEnd(),
-    "",
-  ].join("\n");
 }
 
 /** knownTools 探针面：可同步可异步（bug e3b045dc——探针接全模式并集面，
@@ -84,50 +83,23 @@ export function createExpertComposer(
   };
 }
 
-/** shell 工具名候选（跨平台同族：win32 注册 pwsh，其余平台注册 bash——
- *  dsh-tool-pwsh / dsh-terminal-bash 装配面；dsh-graph g-473 同口径）。 */
-export const SHELL_TOOL_CANDIDATES = ["bash", "pwsh"] as const;
-
-/** 探针可信金丝雀（bug 92d642c2 同族——官方恒在工具）。knownTools 非空但不含金丝雀
- *  = 子域投影（退化装配链实测：仅 9 枚 expert 域工具、零官方工具）——不可作为裁剪依据。 */
-const PROBE_CANARY_TOOL = "read";
-
-/** 子域投影判定（纯函数）：非空且不含金丝雀 = 子域采样（不可信——白名单原样承载）。 */
-function probeIsSubdomain(known: readonly string[]): boolean {
-  return known.length > 0 && !known.includes(PROBE_CANARY_TOOL);
-}
-
 /**
- * 白名单平台求交：档案白名单与派发时点全局注册名求交（bug 3cb118cf）。
+ * 白名单平台求交（薄壳——bug a5b12254 集中化：求交核心单源 contracts
+ * intersectToolNames，本包注入排除集与 ExpertToolError 空集异常，行为等价）。
+ * - 排除集（bug c19eb719，EXCLUDED_EXPERT_TOOL_NAMES 单点）：档案写了管理/取数 7 枚
+ *   → fail-soft 剔除（同未知名口径，不炸；list_experts/delegate_expert 保留）；
  * - 未知名且属 shell 候选族 → 解析为候选中在场的同族者（档案写 pwsh 落 Mac 得 bash）；
  * - 其余未知名 → fail-soft 剔除（同 dsh-graph g-473「缺则静默剔除，不炸 restrict」先例；
  *   dsh-tools restrict() 对未知名硬抛错，逐字透传会让跨机档案必然拆委派）；
- * - 已知名原样保留、顺序不变。
+ * - 已知名原样保留、顺序不变；子域投影（缺金丝雀）不可信 → 不裁剪。
  * 抛错面：解析后为空集（全未知 = 档案配置错误）→ ExpertToolError fail-loud。
  */
 export function resolveToolAllow(
-  allow: readonly string[],
+  rawAllow: readonly string[],
   known?: readonly string[],
 ): string[] {
-  if (known === undefined || known.length === 0) return [...allow]; // 无探针不裁剪
-  if (probeIsSubdomain(known)) return [...allow]; // 子域投影不可信——不裁剪（bug 92d642c2 同族）
-  const present = new Set(known);
-  const resolved: string[] = [];
-  for (const name of allow) {
-    if (present.has(name)) {
-      resolved.push(name);
-      continue;
-    }
-    if ((SHELL_TOOL_CANDIDATES as readonly string[]).includes(name)) {
-      const sibling = SHELL_TOOL_CANDIDATES.find((c) => c !== name && present.has(c));
-      if (sibling !== undefined) resolved.push(sibling);
-    }
-  }
-  if (allow.length > 0 && resolved.length === 0) {
-    throw new ExpertToolError(
-      `expert tools resolve to empty tool allow-list against registered tools ` +
-        `[${[...present].sort().join(", ")}]; archive allow: [${allow.join(", ")}]`,
-    );
-  }
-  return resolved;
+  return intersectToolNames(rawAllow, known, {
+    excluded: EXCLUDED_EXPERT_TOOL_NAMES,
+    emptyError: (message) => new ExpertToolError(message),
+  });
 }

@@ -41,7 +41,8 @@ export interface ForgeProgressCounts {
 
 /**
  * 场景码键单源常量对象（loop-event-delivery 事件清单——22 常规 + 1.16 池级族 1 +
- * bug 3bd8b829 领取确认 1 + triage-progress-row 处置族 1 + T3 同缝拦截挂起 1 = 26 值）：编码 = `{major}/{minor}`
+ * bug 3bd8b829 领取确认 1 + triage-progress-row 处置族 1 + T3 同缝拦截挂起 1 + 越径结算 1
+ * = 27 值）：编码 = `{major}/{minor}`
  * 纯英文 + 中划线，major = 场景族分组 / minor = 组内细分。载荷 scenario 字段值域、
  * 路由消费与 GUI 场景章映射的单一来源（驱动器发射点全部经本表取值，零散落字面量；
  * FORGE_PROGRESS_SCENARIOS 数组与 ForgeProgressScenario 类型均由本对象派生）。
@@ -57,6 +58,8 @@ export const FORGE_PROGRESS_SCENARIO = {
   claimInterrupted: 'claim/interrupted',
   // 任务族（⑥）
   taskComplete: 'task/complete',
+  // 越径结算族（驱动器不在场的直接结算——submitTask 落账后终态事件补发，两消费面翻旧执行行）
+  settleOutOfBand: 'settle/out-of-band',
   // 阻塞族（⑦⑧⑧b⑨⑩）
   blockedWithFix: 'blocked/with-fix',
   blockedAutoFixed: 'blocked/auto-fixed',
@@ -186,6 +189,77 @@ export function isForgeProgressData(value: unknown): value is ForgeProgressEvent
 export interface ProgressAppendFace {
   /** 向 owner 会话 append 一枚 'forge/progress' 事件（同步 fire-and-forget，fail-soft） */
   append(ownerSessionId: string, data: ForgeProgressEventData): void
+}
+
+// ─────────────────── 越径结算显示同步面（submitTask 终态事件补发——驱动器不在场径） ───────────────────
+
+/** 结算任务回查收窄面（core queryTask 结构子集——记录链 + 任务题） */
+export interface SubmitSettleQueryFace {
+  queryTask(q: { projectId: string; taskRef: { slug: string; localId: string }; include?: { records?: boolean } }): Promise<{
+    task: { title: string }
+    records?: readonly { verb: string; sessionId?: string }[]
+  }>
+}
+
+/** 循环登记表收窄面（bySource 单法——同源占用判读，双容器 kind 并查） */
+export interface SubmitSettleRegistryFace {
+  bySource(source: { kind: 'feature' | 'proposal'; slug: string }): unknown | undefined
+}
+
+export interface SubmitSettleDisplayInput {
+  projectId: string
+  slug: string
+  localId: string
+  /** submitTask 结算出口（success→completed / blocked→blocked） */
+  result: 'completed' | 'blocked'
+}
+
+/**
+ * 建越径结算显示同步面：submitTask 落账后，若任务源本进程**无活循环**（驱动器已死——
+ * ⑤ 结算步的 settle 进度事件无人发射），向最新 claim 会话补发一条 settle 终态事件
+ * （scenario=settle/out-of-band），组卡/悬浮面板翻旧 claim「执行中」行——池态与事件流
+ * 分裂收口（判例：1.9 worker 挺过宿主重启、submit 直接落账 completed，面板执行中永驻）。
+ * 门①任务源有活循环 = 驱动器自有结算事件零补发（防双发）；门②claim 记录/领取会话缺席
+ * = 零补发（非循环来源任务本无执行行）。纯显示同步 fail-soft：任何故障零外抛
+ * （池态真源在 core submitTask，显示损失不外溢）。
+ */
+export function createSubmitSettleDisplay(deps: {
+  registry: SubmitSettleRegistryFace
+  tasks: SubmitSettleQueryFace
+  progressAppend?: ProgressAppendFace
+}): (input: SubmitSettleDisplayInput) => Promise<void> {
+  return async (input) => {
+    try {
+      // 门①：任务源有活循环 = 驱动器自有 ⑤ 结算事件——零补发（防双发）
+      const active =
+        deps.registry.bySource({ kind: 'feature', slug: input.slug }) ??
+        deps.registry.bySource({ kind: 'proposal', slug: input.slug })
+      if (active !== undefined) return
+      if (deps.progressAppend === undefined) return
+      const snap = await deps.tasks.queryTask({
+        projectId: input.projectId,
+        taskRef: { slug: input.slug, localId: input.localId },
+        include: { records: true },
+      })
+      // 门②：最新 claim 行的领取会话（循环径 = owner 主会话）缺席 = 零补发
+      const claimSession = snap.records
+        ?.filter((record) => record.verb === 'claim')
+        .at(-1)?.sessionId
+      if (claimSession === undefined || claimSession === '') return
+      deps.progressAppend.append(claimSession, {
+        sourceSlug: input.slug,
+        verb: 'settle',
+        status: input.result,
+        scenario: FORGE_PROGRESS_SCENARIO.settleOutOfBand,
+        taskKey: `${input.slug}/${input.localId}`,
+        taskTitle: snap.task.title,
+        note: '循环外直接结算（驱动器不在场）——终态事件补发同步进度卡',
+        at: Date.now(),
+      })
+    } catch {
+      // fail-soft：纯显示同步，故障零外抛（不阻结算返回面）
+    }
+  }
 }
 
 /**

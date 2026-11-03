@@ -566,8 +566,8 @@ describe('forgeSettings 可选消费（cordis 4.0.4 无 "?" 可选 inject——r
 // ─────────────────────────── S3 启动对账（run-tasks-host-command 图 D——装配期逐绑定项目 fail-soft） ───────────────────────────
 
 describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true 装配期结构事实）', () => {
-  /** 装配桩：reconcileInterrupted 调用记账（静态绑定表一枚 + bindingsFile 去重面） */
-  function reconcileCtx(config: { projects?: { wsPath: string; projectId: string }[]; bindingsFile?: string }, result?: { reconciled: unknown[]; stats?: { inProgress: number; loopSourced: number } }) {
+  /** 装配桩：reconcileInterrupted 调用记账（静态绑定表一枚 + bindingsFile 去重面；projects 注册表面可选注入） */
+  function reconcileCtx(config: { projects?: { wsPath: string; projectId: string }[]; bindingsFile?: string }, result?: { reconciled: unknown[]; stats?: { inProgress: number; loopSourced: number } }, listedProjects?: { id: string }[]) {
     const rt = new TempRuntime()
     const calls: unknown[] = []
     const diagEmits: { level: string; event: string; message: string }[] = []
@@ -584,7 +584,11 @@ describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true �
       },
     } as unknown as ForgeTasksService
     const base = rt.ctx() as Record<string, unknown>
-    const dispose = forgePlugin({ ...base, forgeTasks: tasks, emit: (event: string, payload: { level: string; event: string; message: string }) => diagEmits.push(payload) }, config)
+    const extras: Record<string, unknown> = { forgeTasks: tasks, emit: (event: string, payload: { level: string; event: string; message: string }) => diagEmits.push(payload) }
+    if (listedProjects !== undefined) {
+      extras.forgeProjects = { listProjects: async () => listedProjects }
+    }
+    const dispose = forgePlugin({ ...base, ...extras }, config)
     return { rt, dispose, calls, diagEmits }
   }
 
@@ -621,6 +625,38 @@ describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true �
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(h2.calls).toEqual([])
     h2.dispose()
+  })
+  it('枚举源 = 静态绑定 ∪ 项目注册表（动态绑定项目覆盖——packaged/会话式绑定装配径不再零执行）；注册表故障回退静态表', async () => {
+    // 注册表含动态绑定项目 p-dyn → 与静态 p-9 并集去重逐项目对账
+    const h = reconcileCtx({ projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] }, undefined, [{ id: 'p-dyn' }, { id: 'p-9' }])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(h.calls).toEqual([
+      { projectId: 'p-9', registryEmpty: true },
+      { projectId: 'p-dyn', registryEmpty: true },
+    ])
+    h.dispose()
+    // 注册表故障（抛错）= 回退静态绑定表（原覆盖面）
+    const rt2 = new TempRuntime()
+    const calls2: unknown[] = []
+    const base2 = rt2.ctx() as Record<string, unknown>
+    const dispose2 = forgePlugin(
+      {
+        ...base2,
+        forgeTasks: {
+          claimTask: async () => ({ task: null, dispatchPrompt: '', digest: '', reclaimed: false }),
+          taskStats: async () => ({ total: 0, byStatus: { pending: 0, in_progress: 0, blocked: 0, completed: 0, skipped: 0, rejected: 0, suspended: 0, interrupted: 0 }, unmetPending: 0 }),
+          reconcileInterrupted: async (input: unknown) => {
+            calls2.push(input)
+            return { reconciled: [] }
+          },
+        } as unknown as ForgeTasksService,
+        forgeProjects: { listProjects: async () => { throw new Error('registry gone') } },
+      },
+      { projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] },
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(calls2).toEqual([{ projectId: 'p-9', registryEmpty: true }])
+    dispose2()
   })
 })
 

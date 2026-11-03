@@ -1058,6 +1058,8 @@ describe('T2 生产装配径（bug 0db72bcb）：findRecurrenceCandidates = crea
       suspected: 'packages/core/src/forge/tasks/submit.ts:96',
       recurrenceOf: root.bugId,
     })
+    // 1.1 收窄口径：链须落本任务容器（`t-<slug>-` 前缀）才产候选——测试链挂容器归属
+    h!.db.prepare(`UPDATE bugs SET source_task_id = 't-f-1.1' WHERE source_task_id IS NULL`).run()
   }
 
   it('face 经 bugs 域服务聚合：新问题 ∧ scope 命中链上 suspected → suspected-family 警示（链结构 = 域层口径）', async () => {
@@ -1073,6 +1075,21 @@ describe('T2 生产装配径（bug 0db72bcb）：findRecurrenceCandidates = crea
     expect(advisory.kind).toBe('suspected-family')
     expect(advisory.candidates).toHaveLength(2) // 链两员均候选
     expect(advisory.candidates![0]!.chain).toHaveLength(2) // root → 复发一
+  })
+
+  it('无关链（链成员 source_task_id 落其它容器）：经生产 face 归属过滤后零候选——新问题不再触发疑似同族警示（1.1 收窄口径，T2 随 T3 同 face 同批生效）', async () => {
+    await seedChain()
+    // 链整体移出无关任务容器（f → other）：模拟其它提案的历史链（source_task_id FK 指向真实任务行）
+    seedFeature(h!.db, { slug: 'other', status: 'in-progress' })
+    seedTask(h!.db, 'other', '9.9', { status: 'in_progress' })
+    h!.db.prepare(`UPDATE bugs SET source_task_id = 't-other-9.9' WHERE source_task_id IS NOT NULL`).run()
+    const { findRecurrenceCandidates } = productionFace()
+    const r = await submitTask({ store: h!.store, events: h!.events, findRecurrenceCandidates }, {
+      ...blockedBase(),
+      files: ['packages/core/src/forge/tasks/submit.ts'],
+    })
+    expect(r.status).toBe('blocked')
+    expect(r.recurrenceAdvisories).toBeUndefined()
   })
 
   it('face 缺席 → 降级留痕 recurrence-face-absent（onDiag 类型化 emit，info 级）', async () => {

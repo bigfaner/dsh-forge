@@ -140,6 +140,7 @@ const FORGE_PROGRESS_SCENARIOS_MIRROR = [
   'claim/spawned',
   'claim/interrupted',
   'task/complete',
+  'settle/out-of-band',
   'blocked/with-fix',
   'blocked/auto-fixed',
   'blocked/split',
@@ -184,6 +185,9 @@ export const FORGE_LOOP_SCENARIO_PHASE: Readonly<Record<ProgressScenarioMirror, 
   'claim/spawned': 'running',
   'claim/interrupted': 'running',
   'task/complete': 'running',
+  // 越径结算（settle/out-of-band——驱动器不在场的直接结算）：循环确已不在场（补发门①
+  // registryEmpty 判）→ terminal（侧栏循环相位随事件流归位「已结束」）
+  'settle/out-of-band': 'terminal',
   'blocked/with-fix': 'running',
   'blocked/auto-fixed': 'running',
   'blocked/split': 'running',

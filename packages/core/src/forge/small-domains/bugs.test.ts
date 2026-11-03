@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import type { BugCard } from '@dsh-forge/contracts'
-import { createBugsService, ERROR_TYPE_SUGGESTIONS_LIMIT, type BugsServiceDeps, type GitExecFile } from './bugs.js'
+import { createBugsService, ERROR_TYPE_SUGGESTIONS_LIMIT, parseTaskContainerSlug, type BugsServiceDeps, type GitExecFile } from './bugs.js'
 import { ReasonRequiredError } from './errors.js'
 import { createHarness, type SmallDomainHarness } from './harness.js'
 
@@ -632,35 +632,138 @@ describe('T4 覆盖声明闸门：resolveBug fix_approach 协议（core 纯 DB �
   })
 })
 
-// ─────────────────────────── findRecurrenceCandidates（loop-recurrence-hardening——台账域只读聚合） ───────────────────────────
-describe('findRecurrenceCandidates：链构建（前驱回溯 + 后继收齐）+ scope 口径', () => {
+// ─────────────────────────── findRecurrenceCandidates（recurrence-judgment-narrowing——判据收窄） ───────────────────────────
+describe('findRecurrenceCandidates：归属链过滤 + 终态过滤 + 祖先径计数', () => {
   let h: SmallDomainHarness | undefined
   afterEach(() => h?.dispose())
 
-  /** 种三员链（root → r1 → r2，root/r1 携 suspected 命中锚点，r2 零 suspected） */
-  async function seedChain() {
+  /** 种三员链（root → r1 → r2；可选归属任务与 suspected 锚点），root 携 suspected 命中锚点 */
+  async function seedChain(opts?: {
+    readonly sourceTaskId?: string
+    readonly suspected?: string
+  }) {
     h = createHarness()
+    if (opts?.sourceTaskId !== undefined) seedTask(h.wsDb, opts.sourceTaskId)
     const s = makeService(h, { execFile: stubExecFile({ 'config user.name': 'faner' }).execFile })
-    const root = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, suspected: 'packages/core/src/forge/tasks/submit.ts:78' })).card
-    const r1 = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发一', suspected: 'packages/core/src/forge/tasks/submit.ts:96', recurrenceOf: root.bugId })).card
-    const r2 = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发二', recurrenceOf: r1.bugId })).card
+    const attribution = opts?.sourceTaskId !== undefined ? { sourceTaskId: opts.sourceTaskId } : {}
+    const suspected = opts?.suspected !== undefined ? { suspected: opts.suspected } : {}
+    const root = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, ...attribution, ...suspected })).card
+    const r1 = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发一', ...attribution, recurrenceOf: root.bugId })).card
+    const r2 = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发二', ...attribution, recurrenceOf: r1.bugId })).card
     return { s, root, r1, r2 }
   }
 
-  it('files 空（派发径）→ 全链成员候选，chain = 链根→本条全链时间正序', async () => {
-    const { s, root, r1, r2 } = await seedChain()
-    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: '1', files: [] })
+  /** 种分叉家族（root 一根两子 r1a/r1b——同根多症状） */
+  async function seedFork(sourceTaskId?: string) {
+    h = createHarness()
+    if (sourceTaskId !== undefined) seedTask(h.wsDb, sourceTaskId)
+    const s = makeService(h, { execFile: stubExecFile({ 'config user.name': 'faner' }).execFile })
+    const attribution = sourceTaskId !== undefined ? { sourceTaskId } : {}
+    const root = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, ...attribution })).card
+    const r1a = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '症状甲', ...attribution, recurrenceOf: root.bugId })).card
+    const r1b = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '症状乙', ...attribution, recurrenceOf: root.bugId })).card
+    return { s, root, r1a, r1b }
+  }
+
+  it('归属过滤：链成员 source_task_id 结构化解析落 scope 容器 → 返回', async () => {
+    const { s, root, r1, r2 } = await seedChain({ sourceTaskId: 't-f-1.1' })
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: 'fix-1', files: [] })
     expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId, r2.bugId])
-    expect(candidates.every((c) => c.chain.join(' → ') === `${root.bugId} → ${r1.bugId} → ${r2.bugId}`)).toBe(true)
   })
 
-  it('files 非空（结算径）→ 按 suspected 路径收窄；零 suspected 成员被滤除', async () => {
-    const { s, root, r1 } = await seedChain()
+  it('归属过滤边界：slug 互为 dash 前缀不穿透（loop vs loop-recurrence-hardening，结构化段边界）', async () => {
+    await seedChain({ sourceTaskId: 't-loop-recurrence-hardening-1.2' })
+    // scope.slug='loop' 不应命中 't-loop-recurrence-hardening-1.2'——期望零候选
+    expect(await s_find(h!, 'loop')).toEqual([])
+    // 正向：slug='loop-recurrence-hardening' 精确命中本容器链
+    const { s, root, r1, r2 } = await seedChain({ sourceTaskId: 't-loop-recurrence-hardening-1.2' })
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'loop-recurrence-hardening', localId: '1.2', files: [] })
+    expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId, r2.bugId])
+    // 反向：slug='loop-recurrence-hardening' 不命中 't-loop-1.2'（他容器链不入集）
+    await seedChain({ sourceTaskId: 't-loop-1.2' })
+    expect(await s_find(h!, 'loop-recurrence-hardening')).toEqual([])
+  })
+
+  it('归属锚：scope.sourceTaskId 结构化解析优先——chain 按 sourceTaskId 容器归属，slug 自报仅回退键（bug bdbe8218 消解）', async () => {
+    // 链成员落容器 A；scope 自报 slug=B 但 sourceTaskId 指向 A 任务——归属按 sourceTaskId 解析（A）命中
+    const seededA = await seedChain({ sourceTaskId: 't-owner-a-1.1' })
+    const viaSource = await seededA.s.findRecurrenceCandidates(h!.projectId, {
+      slug: 'owner-b',
+      localId: 'fix-1',
+      sourceTaskId: 't-owner-a-9.9',
+      files: [],
+    })
+    expect(viaSource.map((c) => c.bugId)).toEqual([seededA.root.bugId, seededA.r1.bugId, seededA.r2.bugId])
+    // sourceTaskId 非任务 id 形制（解析 null）→ 回退 slug 自报
+    const viaFallback = await seededA.s.findRecurrenceCandidates(h!.projectId, {
+      slug: 'owner-a',
+      localId: 'fix-1',
+      sourceTaskId: 'not-a-task-id',
+      files: [],
+    })
+    expect(viaFallback.map((c) => c.bugId)).toEqual([seededA.root.bugId, seededA.r1.bugId, seededA.r2.bugId])
+    // 新 harness：sourceTaskId 解析为他容器（B）→ 即便 slug=A 也不命中（锚优先，防 slug 漂移误挂）
+    const seededA2 = await seedChain({ sourceTaskId: 't-owner-a-1.2' })
+    const mismatch = await seededA2.s.findRecurrenceCandidates(h!.projectId, {
+      slug: 'owner-a',
+      localId: 'fix-1',
+      sourceTaskId: 't-owner-b-1.1',
+      files: [],
+    })
+    expect(mismatch).toEqual([])
+  })
+
+  it('归属过滤：无关提案容器链（source_task_id 落他容器）不进候选集', async () => {
+    await seedChain({ sourceTaskId: 't-unrelated-1.1' })
+    const candidates = await s_find(h!, 'f')
+    expect(candidates).toEqual([])
+  })
+
+  it('终态过滤：全 fixed 链不产出候选（open 集空）', async () => {
+    const { s, root, r1, r2 } = await seedChain({ sourceTaskId: 't-f-1.1' })
+    const approach = 'coverage: 覆盖全链共同根因\nanchor: .forge/docs/proposals/f/verification.md'
+    for (const id of [root.bugId, r1.bugId, r2.bugId]) {
+      await s.resolveBug({ projectId: h!.projectId, bugId: id, outcome: 'fixed', commitHash: COMMIT39, fixApproach: approach })
+    }
+    expect(await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: 'fix-1', files: [] })).toEqual([])
+  })
+
+  it('终态过滤：根 fixed 余员 open 仍产出候选，activeCount 只沿 open 祖先径（fixed 根不计）', async () => {
+    const { s, root, r1, r2 } = await seedChain({ sourceTaskId: 't-f-1.1' })
+    await s.resolveBug({ projectId: h!.projectId, bugId: root.bugId, outcome: 'fixed', commitHash: COMMIT39, fixApproach: 'coverage: 覆盖共同根因\nanchor: .forge/docs/proposals/f/v.md' })
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: 'fix-1', files: [] })
+    expect(candidates.map((c) => c.bugId)).toEqual([r1.bugId, r2.bugId])
+    expect(candidates.every((c) => c.activeCount === 1)).toBe(true) // r1→r2 一条 open 边（fixed 根不计）
+  })
+
+  it('计数语义：分叉家族（一根多子链）activeCount = 最长祖先径边数 1，不因 BFS 后继收齐虚高', async () => {
+    const { s, root, r1a, r1b } = await seedFork('t-f-1.1')
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: 'fix-1', files: [] })
+    expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1a.bugId, r1b.bugId])
+    expect(candidates.every((c) => c.activeCount === 1)).toBe(true)
+  })
+
+  it('呈现分离：getBug 链呈现口径保持全链（BFS 后继收齐链长 3）≠ 拦截计数 activeCount 1', async () => {
+    const { s, root, r1a } = await seedFork('t-f-1.1')
+    const view = await s.getBug({ projectId: h!.projectId, bugId: r1a.bugId })
+    // 呈现口径不变：getBug 前驱回溯线（链根→本条），分叉兄弟不入本条呈现链
+    expect(view.chain?.length).toBe(2)
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: 'fix-1', files: [] })
+    // 拦截计数与呈现分离：链根候选链（BFS 后继收齐）链长 3 ≠ activeCount 1
+    expect(candidates.find((c) => c.bugId === root.bugId)?.chain.length).toBe(3)
+    expect(candidates.every((c) => c.activeCount === 1)).toBe(true)
+  })
+
+  it('files 非空（结算径）：归属过滤叠加 suspected 锚路径收窄；零 suspected 成员被滤除', async () => {
+    const { s, root, r1 } = await seedChain({ sourceTaskId: 't-f-1.1', suspected: 'packages/core/src/forge/tasks/submit.ts:78' })
+    // r1 补 suspected
+    h!.wsDb.prepare(`UPDATE bugs SET suspected = 'packages/core/src/forge/tasks/submit.ts:96' WHERE id = ?`).run(r1.bugId)
     const candidates = await s.findRecurrenceCandidates(h!.projectId, {
       slug: 'f', localId: '1',
       files: ['packages/core/src/forge/tasks/submit.ts'],
     })
     expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId])
+    expect(candidates.every((c) => c.activeCount === 2)).toBe(true) // root→r1→r2 两边
   })
 
   it('孤条（无链）不入候选；空台账 = 空集', async () => {
@@ -669,4 +772,41 @@ describe('findRecurrenceCandidates：链构建（前驱回溯 + 后继收齐）+
     await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, suspected: 'a.ts:1' })
     expect(await s.findRecurrenceCandidates(h.projectId, { slug: 'f', localId: '1', files: [] })).toEqual([])
   })
+
+  it('嵌套修复链（dash-localId 形制）：链成员 source_task_id 落 t-<slug>-disc-N → 归属本容器（bug 219076e4）', async () => {
+    const { s, root, r1, r2 } = await seedChain({ sourceTaskId: 't-f-disc-1' })
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: 'disc-2', files: [] })
+    expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId, r2.bugId])
+    // 反向：他容器 dash-localId 链不穿透（t-g-fix-2 ≠ 容器 f）
+    await seedChain({ sourceTaskId: 't-g-fix-2' })
+    expect(await s_find(h!, 'f')).toEqual([])
+  })
 })
+
+// ─────────────────────────── parseTaskContainerSlug（容器归属结构化解析——纯函数边界） ───────────────────────────
+describe('parseTaskContainerSlug：段边界 + 派生词汇白名单', () => {
+  it('数字点 localId：t-<slug>-<N[.N]> → slug', () => {
+    expect(parseTaskContainerSlug('t-f-1.1')).toBe('f')
+    expect(parseTaskContainerSlug('t-loop-recurrence-hardening-1.2')).toBe('loop-recurrence-hardening')
+  })
+  it('dash-localId 派生词汇（fix-N/disc-N）：剥两段回真实容器（bug 219076e4——伪键消除）', () => {
+    expect(parseTaskContainerSlug('t-recurrence-judgment-narrowing-disc-1')).toBe('recurrence-judgment-narrowing')
+    expect(parseTaskContainerSlug('t-fx-fix-1')).toBe('fx')
+    expect(parseTaskContainerSlug('t-loop-fix-2.1')).toBe('loop')
+  })
+  it('非该形制 → null：段数不足 / 无数字点末段 / 剥尽为空', () => {
+    expect(parseTaskContainerSlug('t-f')).toBeNull()
+    expect(parseTaskContainerSlug('t-f-fix')).toBeNull()
+    expect(parseTaskContainerSlug('task-uuid-1')).toBeNull() // 非 t- 前缀 = 非管线任务 id
+    expect(parseTaskContainerSlug('t-fix-1')).toBe('fix') // 单段 slug 容器（歧义按白名单优先解释——文档声明取舍）
+  })
+})
+
+/** 便捷调用（测试局部——省 scope 字面样板） */
+async function s_find(h: SmallDomainHarness, slug: string) {
+  const s = makeService(h, { execFile: stubExecFile({ 'config user.name': 'faner' }).execFile })
+  return s.findRecurrenceCandidates(h.projectId, { slug, localId: 'fix-1', files: [] })
+}
+
+/** 39 位 commit 桩（resolveBug fixed 路径形校验用） */
+const COMMIT39 = 'ddddddddddddddddddddddddddddddddddddddd'

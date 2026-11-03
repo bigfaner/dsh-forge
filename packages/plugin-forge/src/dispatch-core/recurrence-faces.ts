@@ -5,13 +5,14 @@
 //   插件零 import core，链构建与 scope 口径归 core bugs 域层定义）；
 // · modelingReportPresent = 结算旁挂回收（settle.ts）同源的卷宗路径派生：提案卷宗
 //   .forge/docs/proposals/<slug>/issues/<localId>/ 顶层存在报告 .md 即 true（非递归——
-//   incident 等子目录不扫，零清单配置）。探测面只读、fail-soft：项目目录解析缺席/目录
-//   不在/IO 故障一律 false（= 报告不在场，T3 拦截保守成立）。
+//   incident 等子目录不扫，零清单配置）。探测面只读、三态：目录可读缺席 = false（真报告
+//   不在场，T3 拦截保守成立）；readdirSync 抛错（IO 故障）= 'error'（机制失能——消费侧
+//   claim 放行 + warn 留痕，用户裁决：fail-soft 统一向「放行 + 可观测」）。
 //
 // T2 疑似同族警示（core submitTask）/ T3 同缝拦截（claim 守卫）/ triage 两信号 / add-fix
 // vars（T0 判例注入）四处机制生产生效的装配前提——经本工厂注入 createLoopDriver /
 // createTriageHook 生产 deps（plugin-forge index.ts 装配缝）。
-import { readdirSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import type { BugRecurrenceCandidate } from '@dsh-forge/contracts'
 import { dossierIssuesDirOf } from '../forge-paths.js'
 import type { ModelingReportPresentFace, SameSeamRecurrenceFace } from './claim.js'
@@ -20,7 +21,13 @@ import type { ModelingReportPresentFace, SameSeamRecurrenceFace } from './claim.
 export interface RecurrenceBugsFace {
   findRecurrenceCandidates(
     projectId: string,
-    scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] },
+    scope: {
+      readonly slug: string
+      readonly localId: string
+      /** 派生源任务 id（可选——core 域结构化解析作归属锚，缺席回退 slug） */
+      readonly sourceTaskId?: string
+      readonly files: readonly string[]
+    },
   ): Promise<readonly BugRecurrenceCandidate[]>
 }
 
@@ -38,25 +45,35 @@ export interface RecurrenceFaces {
   readonly modelingReportPresent: ModelingReportPresentFace
 }
 
-/** 卷宗建模报告探测（顶层 .md 非递归——与结算旁挂回收同源路径派生，fail-soft 缺席 false） */
+/** 卷宗建模报告探测（顶层 .md 非递归——与结算旁挂回收同源路径派生，三态：在场 true / 真缺席 false / IO 故障 'error'） */
 function modelingReportPresentOf(resolveProjectDir: RecurrenceFacesDeps['resolveProjectDir']): ModelingReportPresentFace {
   return (input) => {
     try {
       const ws = resolveProjectDir(input.projectId)
       if (ws === undefined || ws === '') return false
       const issuesDir = dossierIssuesDirOf(ws, input.slug, input.localId)
+      if (!existsSync(issuesDir)) return false // 目录不存在 = 真「报告不在场」（拦截保守成立）
       return readdirSync(issuesDir, { withFileTypes: true }).some(
         (entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'),
       )
     } catch {
-      return false // fail-soft：解析/IO 故障 = 报告不在场（拦截保守成立，不抛）
+      return 'error' // fail-soft：IO 故障 = 机制失能（消费侧 claim 放行 + warn 留痕，不抛）
     }
   }
 }
 
 export function createRecurrenceFaces(deps: RecurrenceFacesDeps): RecurrenceFaces {
   return {
-    findRecurrenceCandidates: (projectId, scope) => deps.bugs.findRecurrenceCandidates(projectId, scope),
+    // SameSeamRecurrenceScope（归属标识）→ core bugs 域 BugRecurrenceScope 适配：files = []
+    // = 派发径容器内全链（域层口径——files 收窄归结算径）；sourceTaskId 透传——域层按其
+    // 结构化解析容器段作归属锚（bug bdbe8218 消解：参数做实功，非装饰死参）。
+    findRecurrenceCandidates: (projectId, scope) =>
+      deps.bugs.findRecurrenceCandidates(projectId, {
+        slug: scope.slug,
+        localId: scope.localId,
+        ...(scope.sourceTaskId !== undefined ? { sourceTaskId: scope.sourceTaskId } : {}),
+        files: [],
+      }),
     modelingReportPresent: modelingReportPresentOf(deps.resolveProjectDir),
   }
 }

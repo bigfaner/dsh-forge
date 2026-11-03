@@ -7,9 +7,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ForgePluginEvent, ForgeTasksService, TaskStats, TaskStatus } from '@dsh-forge/contracts'
 import { TASK_TYPES, WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
+import { createUnionToolNamesProbe, platformShellToolName, probeIsSubdomain } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import type { ForgeEventSink } from '../events/sink.js'
-import { deriveTriageToolFilter, globalToolNamesOfToolsFace, WORKER_PIPELINE_ESSENTIAL_TOOLS } from '../dispatch-core/assemble.js'
+import {
+  deriveTriageToolFilter,
+  globalToolNamesOfToolsFace,
+  WORKER_PIPELINE_ESSENTIAL_TOOLS,
+} from '../dispatch-core/assemble.js'
 import { createLoopRegistry } from '../loop/index.js'
 import type { LoopDriver, LoopEscalation, LoopRecord, LoopRegistry } from '../loop/index.js'
 import { payloadOf, renderP1 } from '../loop/injection.js'
@@ -724,4 +729,151 @@ describe('deriveWorkerToolFilter allow 并集公式（expert-squad-forge 1.4—�
       expect(globalToolNamesOfToolsFace('garbage')).toBeUndefined()
     })
   })
+
+  // ───────────────── bug a5b12254：求交基准探针改接跨 preset 并集面 + shell 平台兜底 ─────────────────
+
+  describe('createUnionToolNamesProbe 跨 preset 并集（bug a5b12254——global 单层投影只剩 expert 域名）', () => {
+    /** global 层仅 expert 域 10 名形态（bug e3b045dc 已定谳）——官方工具全随 preset 装 preset scope 层 */
+    const globalExpertOnly = [
+      { name: 'recruit_expert' },
+      { name: 'update_expert' },
+      { name: 'rename_expert' },
+      { name: 'enable_expert' },
+      { name: 'disable_expert' },
+      { name: 'list_experts' },
+      { name: 'delegate_expert' },
+      { name: 'list_tools' },
+      { name: 'list_skills' },
+      { name: 'expert_misc' },
+    ]
+    const officialMacView = [
+      { name: 'read' }, { name: 'write' }, { name: 'edit' }, { name: 'bash' },
+      { name: 'todo_write' }, { name: 'submitTask' }, { name: 'recordBug' },
+      { name: 'resolveBug' }, { name: 'getBug' }, { name: 'web_search' },
+      // forge-dirs-query-tool 并入：forge 族六员入 worker 面（contracts WORKER_FORGE_TOOLS）
+      { name: 'forgeDirs' }, { name: 'forgeResolvePath' },
+    ]
+    /** ScopedLayers 双层 tools 面：无参 = global 单层；携 scope key = 该 preset 装配面视图 */
+    function toolsFaceOf(scopeViews: Map<object, readonly { name: string }[]>) {
+      return {
+        schemas: (scope?: object) =>
+          scope === undefined ? [...globalExpertOnly] : [...(scopeViews.get(scope) ?? [])],
+      }
+    }
+
+    it('并集含 read 金丝雀与 bash：探针可信 → 档案 pwsh 经 intersectAllowNames 解析为 bash（不再放行未注册 pwsh 拆 Mac spawn）', async () => {
+      // 单 preset 全官方工具视图：acquireScope → schemas(scope) → 合并
+      const scopedViews = new Map<object, readonly { name: string }[]>()
+      const presets = {
+        list: async () => [{ id: 'default' }],
+        acquireScope: async () => {
+          const key = {}
+          scopedViews.set(key, officialMacView)
+          return { key, [Symbol.asyncDispose]: async () => {} }
+        },
+      }
+      const probe = createUnionToolNamesProbe((scope?: object) => toolsFaceOf(scopedViews).schemas(scope), () => presets)
+      const union = await probe()
+      expect(union).toBeDefined()
+      expect(union!).toContain('read') // 金丝雀在场 → probeIsSubdomain false → 可信
+      expect(union!).toContain('bash')
+      expect(union!).toContain('recruit_expert') // global 层并入
+      expect(probeIsSubdomain(union!)).toBe(false)
+      const { allow } = deriveWorkerToolFilter('coding-fix', undefined, ['read', 'pwsh'], union)
+      expect(allow).toContain('bash')
+      expect(allow).not.toContain('pwsh')
+    })
+
+    it('agentPresets 缺席/形状漂移 = fail-soft 降级 global 单层（金丝雀守卫判不可信 → 不裁剪）', async () => {
+      const probe = createUnionToolNamesProbe((scope?: object) => toolsFaceOf(new Map()).schemas(scope), () => undefined)
+      const union = await probe()
+      expect(union).toEqual(globalExpertOnly.map((s) => s.name))
+      const { allow } = deriveWorkerToolFilter('coding-fix', undefined, ['read', 'pwsh'], union)
+      // 子域投影守卫：不含金丝雀 = 不可信 → 不裁剪（allow 原样携带 pwsh——不借守卫扩大裁剪面）
+      expect(allow).toContain('pwsh')
+    })
+
+    it('agentPresets.list 抛错 = global 单层降级；单 preset acquireScope 失败不外溢（部分并集）；租约 asyncDispose 释放', async () => {
+      const disposed: string[] = []
+      const scopedViews = new Map<object, readonly { name: string }[]>()
+      const presets = {
+        list: async () => [{ id: 'ok' }, { id: 'bad' }],
+        acquireScope: async (id: string) => {
+          if (id === 'bad') throw new Error('lease denied')
+          const key = {}
+          scopedViews.set(key, officialMacView)
+          return { key, [Symbol.asyncDispose]: async () => { disposed.push(id) } }
+        },
+      }
+      const probe = createUnionToolNamesProbe((scope?: object) => toolsFaceOf(scopedViews).schemas(scope), () => presets)
+      const union = await probe()
+      expect(union).toContain('read')
+      expect(union).toContain('bash')
+      expect(disposed).toEqual(['ok']) // 成功租约释放；失败租约无泄漏
+      const probeListThrow = createUnionToolNamesProbe((scope?: object) => toolsFaceOf(scopedViews).schemas(scope), () => ({
+        list: async () => {
+          throw new Error('registry down')
+        },
+        acquireScope: async () => {
+          throw new Error('unreachable')
+        },
+      }))
+      expect(await probeListThrow()).toEqual(globalExpertOnly.map((s) => s.name))
+    })
+
+    it('tools 面缺席/形状漂移 = undefined（调用方回落 parent 探针）', async () => {
+      const probe = createUnionToolNamesProbe(() => undefined, () => ({ list: async () => [] , acquireScope: async () => ({}) }))
+      expect(await probe()).toBeUndefined()
+      const probeMalformed = createUnionToolNamesProbe(() => ({ schemas: () => 'garbage' }) as never, () => undefined)
+      expect(await probeMalformed()).toBeUndefined()
+    })
+  })
+
+  describe('shell 平台确定性兜底（bug a5b12254 附加要求——探针不可信/缺席时按平台解析 shell 同族名）', () => {
+    it('platformShellToolName：win32 → pwsh、其余平台 → bash（与官方装配面一致）', () => {
+      expect(platformShellToolName('win32')).toBe('pwsh')
+      expect(platformShellToolName('darwin')).toBe('bash')
+      expect(platformShellToolName('linux')).toBe('bash')
+    })
+
+    it('探针缺席 + 档案 allow 含 pwsh 落非 win 平台 → 兜底解析为 bash（spawn 不炸）；win32 反向同证', () => {
+      const mac = deriveWorkerToolFilter('coding-fix', undefined, ['read', 'pwsh'], undefined, 'darwin')
+      expect(mac.allow).toContain('bash')
+      expect(mac.allow).not.toContain('pwsh')
+      const win = deriveWorkerToolFilter('coding-fix', undefined, ['read', 'bash'], undefined, 'win32')
+      expect(win.allow).toContain('pwsh')
+      expect(win.allow).not.toContain('bash')
+    })
+
+    it('兜底仅作用于 shell 同族名：其余未知名探针缺席时仍原样放行（不借兜底扩大裁剪面）', () => {
+      const mac = deriveWorkerToolFilter('coding-fix', undefined, ['ghost-unknown-tool', 'pwsh'], undefined, 'darwin')
+      expect(mac.allow).toContain('ghost-unknown-tool')
+      expect(mac.allow).toContain('bash')
+      expect(mac.allow).not.toContain('pwsh')
+    })
+
+    it('探针不可信（子域投影置 undefined）→ 平台兜底同样生效；platform 缺席 = 既有原样放行（行为零变化）', () => {
+      const subdomain = globalExpertOnlyNamesOf()
+      const mac = deriveWorkerToolFilter('coding-fix', undefined, ['read', 'pwsh'], subdomain, 'darwin')
+      expect(mac.allow).toContain('bash')
+      expect(mac.allow).not.toContain('pwsh')
+      const noPlatform = deriveWorkerToolFilter('coding-fix', undefined, ['read', 'pwsh'], undefined)
+      expect(noPlatform.allow).toContain('pwsh')
+    })
+
+    it('探针可信时按在场者互换优先（平台兜底不介入）', () => {
+      // forge-dirs-query-tool 并入：essentials 断言面含 forgeDirs/forgeResolvePath，夹具随注
+      const macRegistered = ['read', 'bash', 'todo_write', 'submitTask', 'recordBug', 'resolveBug', 'getBug', 'forgeDirs', 'forgeResolvePath']
+      const { allow } = deriveWorkerToolFilter('coding-fix', undefined, ['pwsh'], macRegistered, 'darwin')
+      expect(allow).toContain('bash')
+    })
+  })
 })
+
+/** expert 域子域投影名表（守卫不可信判据用例夹具——复用上方 describe 的 global 单层形态） */
+function globalExpertOnlyNamesOf(): readonly string[] {
+  return [
+    'recruit_expert', 'update_expert', 'rename_expert', 'enable_expert', 'disable_expert',
+    'list_experts', 'delegate_expert', 'list_tools', 'list_skills', 'expert_misc',
+  ]
+}

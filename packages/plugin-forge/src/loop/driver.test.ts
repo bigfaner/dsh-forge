@@ -361,7 +361,7 @@ function build(options: {
   /** 诊断埋点桩（AGENTS §7——循环里程碑 diag 录制） */
   diag?: (payload: { readonly level: 'debug' | 'info' | 'warn' | 'error'; readonly event: string; readonly message: string }) => void
   /** T3 同缝拦截（loop-recurrence-hardening）：台账 recurrence 候选 face 桩 */
-  findRecurrenceCandidates?: (projectId: string, scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] }) => Promise<unknown[]> | unknown[]
+  findRecurrenceCandidates?: (projectId: string, scope: { readonly slug: string; readonly localId: string; readonly sourceTaskId: string | undefined }) => Promise<unknown[]> | unknown[]
   /** T3「待建模」解除判据：卷宗建模报告在场桩 */
   modelingReportPresent?: (input: { readonly projectId: string; readonly slug: string; readonly localId: string }) => boolean
 } = {}): Built {
@@ -2539,6 +2539,37 @@ describe('1.5 发射点扩展：retry 族场景码（⑪⑫——自动重试径
       taskKey: 'feat-x/2.5',
       workerSessionId: 'worker-1',
     })
+  })
+
+  it('⑫b 跑完未结算分桶（spawn-false-alarm）：diag 冠「跑完未结算」非「异常退出」——重入后成功收口', async () => {
+    const diag: Array<{ level: string; event: string; message: string }> = []
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+      query: [queryOf('in_progress'), queryOf('completed')],
+      diag: (p) => diag.push(p),
+    })
+    let calls = 0
+    built.spawn.setBehavior(async (n) => {
+      calls += 1
+      if (calls === 1) {
+        return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'completed', output: 'fix-4 完成，两 bug 两阶段落库闭环……' }), dispose: async () => {} }
+      }
+      return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'end_turn', output: 'done' }), dispose: async () => {} }
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    const retryDiag = diag.find((d) => d.event === 'loop-retry')
+    expect(retryDiag?.message).toContain('worker 跑完未结算第 1/3 次')
+    expect(retryDiag?.message).toContain('ended-without-settlement')
+    expect(retryDiag?.message).not.toContain('worker 异常退出')
   })
 })
 

@@ -1,7 +1,7 @@
 // 3.5 单测 —— submitTask tool：两显式参定位必填（slug = 容器 slug——M3 容器化口径）
 // + result 双径 + gate 平铺（all-or-none / coverage 依赖门）+ sessionId 提取 +
 // 映射与双友好返回面渲染（formatOk ✓ 含恢复钩子回报行 / typed 错误 → 失败 DTO）。
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ForgeTasksService, SubmitTaskInput } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import { createSubmitTaskTool, gateOf, parseSubmitTaskArgs } from './submit-task.js'
@@ -378,6 +378,38 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
     })
     await tool.execute({ slug: 'f1', local_id: '2.4', result: 'blocked', reason: 'missing key' }, EXEC)
     expect(events[0]).toMatchObject({ type: 'task-submitted', payload: { outcome: 'blocked', reason: 'missing key' } })
+  })
+
+  it('越径结算显示同步：face 在场 = 结算后调用（success→completed / blocked→blocked）；face 缺席 = 零影响；face 故障 = 不外溢', async () => {
+    const calls: Array<{ slug: string; localId: string; result: string }> = []
+    const display = vi.fn(async (input: { slug: string; localId: string; result: 'completed' | 'blocked' }) => {
+      calls.push({ slug: input.slug, localId: input.localId, result: input.result })
+    })
+    const throwing = vi.fn(async () => {
+      throw new Error('display gone')
+    })
+    const base = () =>
+      ({
+        submitTask: async () => ({ taskId: 't-1', status: 'completed', restored: [] }),
+      }) as unknown as ForgeTasksService
+    // success → completed
+    const t1 = createSubmitTaskTool({ tasks: base(), proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1', submitSettleDisplay: display })
+    await t1.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 's' }, EXEC)
+    // blocked → blocked
+    const t2 = createSubmitTaskTool({ tasks: base(), proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1', submitSettleDisplay: display })
+    await t2.execute({ slug: 'f1', local_id: '2.4', result: 'blocked', reason: 'x' }, EXEC)
+    expect(calls).toEqual([
+      { slug: 'f1', localId: '3.2', result: 'completed' },
+      { slug: 'f1', localId: '2.4', result: 'blocked' },
+    ])
+    // face 故障不外溢（结算返回面照常）
+    const t3 = createSubmitTaskTool({ tasks: base(), proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1', submitSettleDisplay: throwing })
+    const out = await t3.execute({ slug: 'f1', local_id: '1.1', result: 'success', summary: 's' }, EXEC)
+    expect(out).toMatchObject({ taskId: 't-1' })
+    // face 缺席 = 零影响
+    const t4 = createSubmitTaskTool({ tasks: base(), proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1' })
+    const out4 = await t4.execute({ slug: 'f1', local_id: '1.2', result: 'success', summary: 's' }, EXEC)
+    expect(out4).toMatchObject({ taskId: 't-1' })
   })
 
   it('typed 错误 → tool-error（verb=submitTask）+ 失败 DTO 照常', async () => {

@@ -35,6 +35,12 @@ export interface DispatchCoreFailure {
   readonly code: ErrorCode
   /** 人话原因（首行承重；多段消息整段保留） */
   readonly message: string
+  /**
+   * 失败分桶（spawn-false-alarm——缺席 = spawn-failed 缺省桶）：ended-without-settlement =
+   * worker 跑完未调 submitTask（协议违约，非 spawn/进程故障）——报文措辞与诊断 warn 按桶分流，
+   * 消除「跑完未结算被冠以 spawn failed」的误报类别词。
+   */
+  readonly category?: 'ended-without-settlement'
   /** 违规清单（自然键/AC 条目/环路径——逐行投影；无结构化载荷 = 空数组） */
   readonly violations: readonly string[]
 }

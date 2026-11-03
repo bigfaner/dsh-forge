@@ -184,8 +184,66 @@ describe("candidates skills 具名正门（AGENTS 1.5 / 同 bug 5a1e1132 先例�
 
   it("skills 经 ctx.skills 具名正门读取并透出 candidates.skills（reflect 不供服务也能取到——具名正门在场）", async () => {
     const body = await bootCandidates(TOOLS_FACE, SKILLS_FACE, undefined);
-    expect(body.skills).toEqual(["review-prd", "brainstorm"]);
-    expect(body.tools).toEqual(["read", "edit"]);
+    expect(body.skills).toEqual([
+      { name: "review-prd", source: "global" },
+      { name: "brainstorm", source: "global" },
+    ]);
+    expect(body.tools).toEqual([
+      { name: "read", source: "global" },
+      { name: "edit", source: "global" },
+    ]);
+  });
+
+  it("candidates tools = list_tools 同款全模式并集条目 {name, source} 且过滤排除集 7 枚（bug c19eb719）", async () => {
+    const body = await bootCandidates(
+      {
+        ...TOOLS_FACE,
+        schemas: () => [
+          { name: "list_tools" },
+          { name: "list_skills" },
+          { name: "recruit_expert" },
+          { name: "update_expert" },
+          { name: "rename_expert" },
+          { name: "enable_expert" },
+          { name: "disable_expert" },
+          { name: "delegate_expert" },
+          { name: "list_experts" },
+          { name: "read" },
+        ],
+      },
+      undefined,
+    );
+    // 排除集 7 枚不进候选；list_experts/delegate_expert 保留（专家互查/互派合法用法）
+    expect(body.tools).toEqual([
+      { name: "delegate_expert", source: "global" },
+      { name: "list_experts", source: "global" },
+      { name: "read", source: "global" },
+    ]);
+  });
+
+  it("bug 66b588e3：schemas 为依赖 this 的官方面形态（类方法）时经宿主对象调用不炸——候选正常透出", async () => {
+    // 官方 dsh-tools face 的 schemas 是类方法（体内 this.view）——抽出裸调丢 this
+    // 即抛 "Cannot read properties of undefined (reading 'view')"，路由归一 400。
+    class OfficialToolsFace {
+      private readonly layers = { names: [{ name: "read" }, { name: "glob" }] };
+      register(): () => void {
+        return () => undefined;
+      }
+      restrict(): () => void {
+        return () => undefined;
+      }
+      schemas(): Array<{ name: string }> {
+        if (this.layers === undefined) {
+          throw new Error("Cannot read properties of undefined (reading 'view')");
+        }
+        return this.layers.names;
+      }
+    }
+    const body = await bootCandidates(new OfficialToolsFace(), SKILLS_FACE, undefined);
+    expect(body.tools).toEqual([
+      { name: "read", source: "global" },
+      { name: "glob", source: "global" },
+    ]);
   });
 
   it("skills 取法失配负向断言：仅 reflect 字符串键供给、具名正门缺席 = 字段缺席（不误认）", async () => {

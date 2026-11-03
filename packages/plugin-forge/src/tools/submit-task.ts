@@ -488,6 +488,17 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
             // fail-soft：落戳故障不阻断结算
           }
         }
+        // 越径结算显示同步（驱动器不在场径——任务源无活循环时向 claim 会话补发 settle
+        // 终态事件，组卡/面板翻旧「执行中」行；装配注入面，缺席 = 机制关闭；fail-soft
+        // 在面内——fire-and-forget 不阻结算返回）
+        if (parsed.result === 'success' || parsed.result === 'blocked') {
+          void deps.submitSettleDisplay?.({
+            projectId,
+            slug: parsed.slug,
+            localId: parsed.local_id,
+            result: parsed.result === 'success' ? 'completed' : 'blocked',
+          })
+        }
         // task-submitted 事件（worker 自身会话 id——串联读法「submit = 执行会话」；AC gate 已过）
         deps.events?.emit({
           ts: Date.now(),

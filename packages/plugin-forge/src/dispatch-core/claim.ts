@@ -1,15 +1,18 @@
-// dispatch-core · T3 同缝拦截守卫（loop-recurrence-hardening 提案 §2.2 T3 + §2.3）：
+// dispatch-core · T3 同缝拦截守卫（loop-recurrence-hardening 提案 §2.2 T3 + §2.3 + 
+// recurrence-judgment-narrowing 判据收窄适配）：
 // 「待建模」软拒绝 = 派发前置条件非任务本体状态——零持久标记零清理，标记载体 = 派生态
 // （claim 时点现算：同缝计数 ≥ 阈值 ∧ 卷宗建模报告不在场 → 拒绝盲试 fix 派发并提示升级）。
 //
-// 同缝判据 = 台账 recurrence_of 链计数（结构化主判据，经只读 face 跨容器查询——跨容器库域
-// 口径归域层，插件层不直连库文件）；scope 文件/服务缝重叠仅为提示性信号，不计入拦截判定。
-// 阈值语义沿台账既有约定（get-bug 链区「recurrence count = chain length - 1」）：链上
-// recurrence_of 边数 ≥ 2 = 已反复盲修仍复发，拒绝继续盲试。
+// 同缝判据 = 台账 recurrence 链计数（结构化主判据，经只读 face 跨容器查询——跨容器库域
+// 口径归域层，插件层不直连库文件）。归属 scope（recurrence-judgment-narrowing）：face
+// scope 携带任务归属标识（sourceTaskId + slug 容器标识）——core bugs 域按 sourceTaskId
+// 结构化解析容器段作锚（slug 为回退键），无关提案历史链不进候选集（守卫侧不再传
+// files 全库口径，files 收窄口径归结算径）。
+// 拦截计数 = 候选 activeCount（core 域产出的活态祖先径边数，终态成员不计）——缺席回退
+// chain 呈现链长判读（contracts BugRecurrenceCandidate 既有约定）。
 //
 // 与 ERR_BLOCK_SOURCE_REQUIRED（core add.ts 建链守卫，0a25720c）语义对偶：新问题径建 fix
-// 链须 block_source=true；同族复发径盲试 fix 派发被本守卫软拒绝转升级——两错误码指引文案
-// 互相指路（本面 violations 指向前者，core errors.ts BlockSourceRequiredError 消息指向本码）。
+// 链须 block_source=true；同族复发径盲试 fix 派发被本守卫软拒绝转升级。
 import type { BugRecurrenceCandidate, TaskSnapshot } from '@dsh-forge/contracts'
 import { emitForgeDiag } from '../faces.js'
 import type { ForgeDiagEmitFace } from '../faces.js'
@@ -18,25 +21,44 @@ import type { DispatchCoreFailure } from './result.js'
 /** 同缝拦截阈值（提案 T3：同缝 ≥ 2 → 拒绝盲试 fix 派发，提示先升级排查） */
 export const RECURRENCE_ESCALATION_THRESHOLD = 2
 
-/** T3 软拒绝错误码（与 ERR_BLOCK_SOURCE_REQUIRED 文案互指——对偶守卫族） */
+/** T3 软拒绝错误码（对偶守卫族——core 建链径 block_source 守卫语义对偶） */
 export const ERR_RECURRENCE_ESCALATION_REQUIRED = 'ERR_RECURRENCE_ESCALATION_REQUIRED' as const
+
+/**
+ * 台账 recurrence 候选检索归属 scope（跨容器库域口径归 core bugs 域定义，插件层只传任务
+ * 归属标识）：sourceTaskId = fix 链派生源任务 id——域层按其结构化解析容器段（`t-<slug>-<localId>`
+ * 末段剥离）作归属锚，解析失败/缺席回退 slug；slug 为调用方容器标识（回退键）。
+ */
+export interface SameSeamRecurrenceScope {
+  readonly slug: string
+  readonly localId: string
+  readonly sourceTaskId: string | undefined
+}
 
 /** 台账 recurrence 候选只读检索面（结构兼容 core add.ts T2 注入形——跨容器口径归域层） */
 export type SameSeamRecurrenceFace = (
   projectId: string,
-  scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] },
+  scope: SameSeamRecurrenceScope,
 ) => Promise<readonly BugRecurrenceCandidate[]> | readonly BugRecurrenceCandidate[]
 
-/** 卷宗建模报告在场探测面（T4 旁挂回收的守卫侧消费缝——注入可替换；缺席 = 报告不在场） */
+/**
+ * 卷宗建模报告在场探测面（T4 旁挂回收的守卫侧消费缝——注入可替换）三态：
+ * true = 报告在场（解除判据满足）；false = 真「报告不在场」（目录可读但无报告 .md，
+ * 拦截保守成立）；'error' = 探测 IO 故障（readdirSync 抛错等——机制失能，消费侧放行 + warn 留痕）。
+ */
 export type ModelingReportPresentFace = (input: {
   readonly projectId: string
   readonly slug: string
   readonly localId: string
-}) => boolean
+}) => boolean | 'error'
 
 /**
  * 盲试 fix 派发判别（拦截对象 = blocked 源派生的 fix 链任务——非 fix 任务零拦截，行为零变化）：
  * taskType = coding-fix ∧ sourceTaskId 在场（fix 链派生）。
+ *
+ * 已知绕行面（formal-verifier/architect 共识）：本判别以 taskType 锚定——taskType 为任务
+ * 创建方自标字段，可被标注规避（coding-feature 命名即绕过），是已知绕行面；本守卫维持
+ * 软拒绝不另加反绕行判别面，守卫升级硬闸前须先解耦该锚。
  */
 export function isBlindFixDispatch(task: TaskSnapshot): boolean {
   return task.taskType === 'coding-fix' && task.sourceTaskId !== undefined
@@ -47,9 +69,12 @@ export function recurrenceCountOf(chain: readonly string[]): number {
   return Math.max(0, chain.length - 1)
 }
 
-/** 候选集同缝计数（取候选链最大值——同任务 scope 命中多条候选时按最重家族判） */
+/**
+ * 候选集同缝计数（取候选最大值——同 scope 命中多条候选时按最重家族判）：activeCount
+ * （core 域活态祖先径，终态不计）在场优先；缺席 = 旧 face 回退 chain 呈现链长判读。
+ */
 export function sameSeamCountOf(candidates: readonly BugRecurrenceCandidate[]): number {
-  return candidates.reduce((max, c) => Math.max(max, recurrenceCountOf(c.chain)), 0)
+  return candidates.reduce((max, c) => Math.max(max, c.activeCount ?? recurrenceCountOf(c.chain)), 0)
 }
 
 /** 「待建模」判定（纯函数——派生态现算的机械核）：count ≥ 阈值 ∧ 报告不在场 */
@@ -94,7 +119,13 @@ export async function recurrenceEscalationGuard(input: {
   }
   let candidates: readonly BugRecurrenceCandidate[]
   try {
-    candidates = await findRecurrenceCandidates(projectId, { slug: task.slug, localId: task.localId, files: [] })
+    // 归属 scope（recurrence-judgment-narrowing）：传任务归属标识——core 域按 sourceTaskId
+    // 结构化解析锚过滤（slug 回退），无关提案历史链不进候选集；files 收窄口径归结算径，派发径不传 files。
+    candidates = await findRecurrenceCandidates(projectId, {
+      slug: task.slug,
+      localId: task.localId,
+      sourceTaskId: task.sourceTaskId,
+    })
   } catch (cause) {
     emitForgeDiag(diag, {
       level: 'warn',
@@ -117,7 +148,18 @@ export async function recurrenceEscalationGuard(input: {
       projectId,
     })
   }
-  const reportPresent = modelingReportPresent?.({ projectId, slug: task.slug, localId: task.localId }) === true
+  const probe = modelingReportPresent?.({ projectId, slug: task.slug, localId: task.localId })
+  if (probe === 'error') {
+    // AGENTS §7 降级留痕 + 用户裁决（recurrence-judgment-narrowing 圆桌分歧 2）：探测 IO
+    // 故障 = 机制失能 → 放行不拦（防「报告落错路径即永久拦截需绕行」重演），但必须 warn 留痕。
+    emitForgeDiag(diag, {
+      level: 'warn',
+      event: 'modeling-report-face-error',
+      message: `dispatch-core T3 解除判据降级：报告探测故障，拦截未生效（${task.slug}/${task.localId}）——探测 IO 故障按机制失能放行（核销卷宗目录可读性）`,
+      projectId,
+    })
+  }
+  const reportPresent = probe === true || probe === 'error'
   if (!isModelingPending(count, reportPresent)) return undefined
   return {
     chain,
@@ -126,7 +168,12 @@ export async function recurrenceEscalationGuard(input: {
   }
 }
 
-/** 软拒绝 DTO（code + 升级提示 + 对偶守卫互指 + 解除指引——Hard Rule：文案带指引不裸码） */
+/**
+ * 软拒绝 DTO（code + 升级提示 + 解除指引——Hard Rule：文案带指引不裸码）。解除指引
+ * 三要件（事故判例 4545fde4 直接对策：unblock/报告落错位/resolveBug 无效处置三连的
+ * 根因是指引缺口）：顶层路径模板 + .md 形态 + 报告在场后重新 claim 放行（防 unblock/
+ * resolve 死锁重演）。
+ */
 export function rejectionFailureOf(taskKey: string, chain: readonly string[], count: number): DispatchCoreFailure {
   return {
     ok: false,
@@ -137,8 +184,7 @@ export function rejectionFailureOf(taskKey: string, chain: readonly string[], co
       `（「待建模」派生态现算，零持久标记）`,
     violations: [
       'escalate: 同缝 ≥2 建议先升级排查建模（判别实验清单逐条排除后再开修；委派目标由主会话自行决定，本提示零专家键）',
-      'related: 新问题径建 fix 链的对偶守卫为 ERR_BLOCK_SOURCE_REQUIRED（补 block_source=true）——两码指引文案互相指路',
-      `release: 建模报告落卷后（卷宗报告在场）重新派发本任务——守卫派生态现算即放行`,
+      'release: 在 .forge/docs/proposals/<slug>/issues/<localId>/ 顶层落排查建模报告（.md），报告在场后重新 claim 本任务即放行',
     ],
   }
 }

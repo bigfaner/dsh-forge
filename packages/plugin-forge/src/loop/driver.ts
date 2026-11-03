@@ -2066,9 +2066,12 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         headline: '子代理执行被限流——循环已挂起，择时重派由你决定',
       })
     }
+    // 分桶（spawn-false-alarm——失败 DTO category）：跑完未结算（协议违约）与进程异常退出
+    // 分开措辞——diag warn / incident / 挂起判词不再一律冠「异常退出」（判例 014 误报）
+    const noSettlement = settled.category === 'ended-without-settlement'
     loop.workerAborts += 1
     const attempt = loop.workerAborts
-    loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'worker-aborted', error: settled.message })
+    loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: noSettlement ? 'worker-no-settlement' : 'worker-aborted', error: settled.message })
     if (attempt > LOOP_WORKER_ABORT_MAX_RETRIES) {
       // 3b 裁决①：worker-abort-over-limit → 挂起待裁决（执行面反复崩溃需人裁决——非终局）
       // ⑳ 静默挂起径补录：incident 落盘 + forge/progress suspend + send(nextStep, true) 唤醒
@@ -2086,7 +2089,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         progressTaskKey: taskKey,
         taskTitle: task.title,
         workerSessionId,
-        headline: `子代理反复异常退出（第 ${attempt} 次，超过重试上限）——循环已挂起待处置`,
+        headline: noSettlement
+          ? `worker 反复跑完未结算（第 ${attempt} 次，超过重试上限）——循环已挂起待处置`
+          : `子代理反复异常退出（第 ${attempt} 次，超过重试上限）——循环已挂起待处置`,
       })
     }
     // ⑫ 子代理异常退出（自动重试）——零消息，重试计数进进度事件；claim 面幂等重入同任务
@@ -2099,7 +2104,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       workerSessionId,
       note: `第 ${attempt}/${LOOP_WORKER_ABORT_MAX_RETRIES} 次 — ${settled.message}`,
     })
-    emitLoopDiag(loop, 'warn', 'loop-retry', `worker 异常退出第 ${attempt}/${LOOP_WORKER_ABORT_MAX_RETRIES} 次 — ${taskKey}: ${settled.message}`)
+    emitLoopDiag(loop, 'warn', 'loop-retry', noSettlement
+      ? `worker 跑完未结算第 ${attempt}/${LOOP_WORKER_ABORT_MAX_RETRIES} 次 — ${taskKey}: ${settled.message}`
+      : `worker 异常退出第 ${attempt}/${LOOP_WORKER_ABORT_MAX_RETRIES} 次 — ${taskKey}: ${settled.message}`)
     return 'continue'
   }
 
@@ -2230,7 +2237,11 @@ async function recurrenceChainVarsOf(loop: ActiveLoop, task: TaskSnapshot): Prom
     return undefined
   }
   try {
-    const candidates = await find(loop.scope.projectId, { slug: task.slug, localId: task.localId, files: [] })
+    const candidates = await find(loop.scope.projectId, {
+      slug: task.slug,
+      localId: task.localId,
+      sourceTaskId: task.sourceTaskId,
+    })
     if (candidates.length === 0) return undefined
     const top = candidates.reduce((a, b) => (recurrenceCountOf(b.chain) > recurrenceCountOf(a.chain) ? b : a))
     return { RECURRENCE_CHAIN: top.chain.join(' → '), RECURRENCE_COUNT: String(recurrenceCountOf(top.chain)) }

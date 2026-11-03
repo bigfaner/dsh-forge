@@ -8,7 +8,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "tsc -b && pnpm -C packages/plugins/input-history build && pnpm -C packages/plugins/quote-reference build && pnpm -C packages/plugins/super-composer build && pnpm -C packages/plugins/expert-squad build && node scripts/copy-preset-assets.mjs && pnpm -C apps/web build:vite && pnpm build:mobile",
+    "build": "node scripts/check-package-json.mjs && tsc -b && pnpm -C packages/plugins/input-history build && pnpm -C packages/plugins/quote-reference build && pnpm -C packages/plugins/super-composer build && pnpm -C packages/plugins/expert-squad build && node scripts/copy-preset-assets.mjs && pnpm -C apps/web build:vite && pnpm build:mobile",
     "build:mobile": "pnpm -C apps/mobile build",
     "dev": "node scripts/dev.mjs",
     "dev:debug": "node scripts/dev.mjs --remote-debugging-port=9222 --enable-logging",
@@ -24,7 +24,8 @@
     "dist:stage": "node scripts/assemble-installer-resources.mjs",
     "dist:check": "node scripts/assemble-installer-resources.mjs --check",
     "dist:win": "pnpm build && pnpm dist:stage && node scripts/dist-win.mjs",
-    "lint:test-types": "tsc -p packages/contracts/tsconfig.test.json && tsc -p packages/path-key/tsconfig.test.json && tsc -p packages/core/tsconfig.test.json && tsc -p packages/knowledge/tsconfig.test.json && tsc -p packages/plugin-forge/tsconfig.test.json && tsc -p packages/plugin-forge-spec/tsconfig.test.json && tsc -p apps/host/tsconfig.test.json && tsc -p apps/web/tsconfig.test.json && tsc -p apps/mobile/tsconfig.json && tsc -p apps/mobile/tsconfig.test.json && tsc -p tests/tsconfig.json"
+    "lint:test-types": "tsc -p packages/contracts/tsconfig.test.json && tsc -p packages/path-key/tsconfig.test.json && tsc -p packages/core/tsconfig.test.json && tsc -p packages/knowledge/tsconfig.test.json && tsc -p packages/plugin-forge/tsconfig.test.json && tsc -p packages/plugin-forge-spec/tsconfig.test.json && tsc -p apps/host/tsconfig.test.json && tsc -p apps/web/tsconfig.test.json && tsc -p apps/mobile/tsconfig.json && tsc -p apps/mobile/tsconfig.test.json && tsc -p tests/tsconfig.json",
+    "check:manifests": "node scripts/check-package-json.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
