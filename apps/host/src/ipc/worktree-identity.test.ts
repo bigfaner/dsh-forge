@@ -97,6 +97,38 @@ describe('1.7 扩展点注入装配（集成层实现——真机 git 链）', (
     expect(await identity.resolveProject(other)).toBeNull()
   })
 
+  it('bug bc81f4b8/57b494f5：祖先仓内的非 git 注册根 → null（git 域归属核验——锚命中≠受本仓治理）', async () => {
+    // k5 夹具现场同构：plain 目录落 REPO 之内（git rev-parse 向上行走得 REPO 锚），
+    // 注册为项目根——精确 ws_path 命中分支不得据此判 git（祖先仓 worktree 清单不含该目录）
+    const plainInside = join(REPO, 'plain-inside')
+    mkdirSync(plainInside, { recursive: true })
+    writeFileSync(join(plainInside, 'notes.txt'), 'plain (non-git) inside repo\n')
+    const identity = createWorktreeIdentity(
+      stubProjects([
+        { id: 'p-plain', wsPath: plainInside },
+        { id: 'p-main', wsPath: REPO },
+      ]),
+      createGitIdentityPort(),
+    )
+    // 非 git 注册根本体 → null（能力位 false——防 seal 误封存拒发/list 误注入祖先仓清单）
+    expect(await identity.resolveProject(plainInside)).toBeNull()
+    // plain 项目内子目录 cwd 同判 null（同锚退路不得复入）
+    const subInside = join(plainInside, 'sub')
+    mkdirSync(subInside, { recursive: true })
+    expect(await identity.resolveProject(subInside)).toBeNull()
+    // 真 git 注册根不受影响（核验只拒非 git 根）
+    expect(await identity.resolveProject(REPO)).toMatchObject({ projectId: 'p-main', projectRoot: REPO, isGit: true })
+    expect(await identity.resolveProject(WTA)).toMatchObject({ projectId: 'p-main', projectRoot: REPO, isGit: true })
+  })
+
+  it('git 域核验判据②：附属 worktree 注册为项目根（锚在主树外）仍归真 git（worktree 清单成员）', async () => {
+    const identity = createWorktreeIdentity(
+      stubProjects([{ id: 'p-wt', wsPath: WTA }]),
+      createGitIdentityPort(),
+    )
+    expect(await identity.resolveProject(WTA)).toMatchObject({ projectId: 'p-wt', projectRoot: WTA, isGit: true })
+  })
+
   it('同锚多行仲裁：主树行（ws_path ≡ 锚）必胜——created_at 更早的同锚 worktree 行不劫持归属', async () => {
     // 残留演进形态（redesign→main 切换）：同锚 worktree 行在前（created_at 序），主行在后；
     // cwd = 未注册树（无精确命中）→ 走锚匹配，主行必胜

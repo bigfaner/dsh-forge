@@ -16,9 +16,11 @@ import { createGitIdentityPort } from '@dsh-forge/core'
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { Project, ProjectService, ProjectSummary } from '@dsh-forge/contracts'
 
-/** core GitIdentityPort 归并键窄面（结构化本地声明——仅锚查询，零包类型依赖） */
+/** core GitIdentityPort 归并键窄面（结构化本地声明——锚查询 + worktree 清单，零包类型依赖） */
 interface GitAnchorFace {
   commonDirAnchor(dir: string): Promise<string | null>
+  /** 在场 worktree 清单（缺席 = 旧桩形状——git 域成员核验退主树判据单径） */
+  worktrees?(dir: string): Promise<readonly { readonly path: string }[] | null>
 }
 
 /** 注入缝服务名（boot/child.ts provide ↔ 插件惰性 get——双侧同锚常量，各自本地声明） */
@@ -78,6 +80,23 @@ export function createWorktreeIdentity(
     }
   }
 
+  /**
+   * git 域归属核验（bug bc81f4b8/57b494f5——非 git 注册项目被祖先仓锚误判为 git 项目的
+   * 收口面）：git rev-parse 向上行走，非 git 目录落任一祖先 git 仓库内即得非空锚——锚
+   * 命中不等于该目录受本仓库治理。判据（两条任一成立 = 该行 ws_path 是真 git 工作树）：
+   *   ① 主树判据（本函数下方同款）：锚（realpath git-common-dir）坐落在行 ws_path 内；
+   *   ② 附属 worktree 根：行 ws_path 在本仓 worktree 清单内（git worktree list 现读）。
+   * 两者皆不成立（祖先仓清单不含该行）= 非 git 目录误判 → 拒绝归属（能力位 false）。
+   * worktrees 探针缺席（旧桩）= 退主树判据单径。
+   */
+  const isGenuineGitRoot = async (rowPath: string, anchorKey: string): Promise<boolean> => {
+    if (anchorKey.startsWith(`${normalizeFsPath(rowPath)}/`)) return true
+    const list = await git.worktrees?.(rowPath).catch(() => null)
+    if (list === null || list === undefined) return false
+    const rowKey = normalizeFsPath(rowPath)
+    return list.some((entry) => normalizeFsPath(entry.path) === rowKey)
+  }
+
   const resolveProject = async (cwd: string): Promise<WorktreeProjectResolution | null> => {
     try {
       const anchor = await git.commonDirAnchor(cwd)
@@ -85,15 +104,26 @@ export function createWorktreeIdentity(
       const anchorKey = normalizeFsPath(anchor)
       const rows: readonly ProjectSummary[] = await projects.listProjects().catch(() => [])
       let hit: ProjectSummary | undefined
+      const cwdKey = normalizeFsPath(cwd)
       for (const row of rows) {
         if (row.archived) continue // 归档行不参与归属（同锚存量双行按 created_at 序，归档行在前会劫持解析）
-        // 精确命中（cwd 即注册根）短路——退路 = 同锚首行（存量双行归 core 注册链仲裁归档，读面不重判）
-        if (normalizeFsPath(row.wsPath) === normalizeFsPath(cwd)) {
+        const rowKey = normalizeFsPath(row.wsPath)
+        // 非 git 注册根独占其子树（bug bc81f4b8/57b494f5）：cwd 落在非 git 注册根内（含精确
+        // 命中）→ 归属即 null——祖先仓锚不越权把该子树判回 git 项目（防 seal 误封存拒发 /
+        // list 误注入祖先仓清单）。核验只对包含 cwd 的行做（其余行与本 cwd 归属无关）。
+        if ((cwdKey === rowKey || cwdKey.startsWith(`${rowKey}/`)) && !(await isGenuineGitRoot(row.wsPath, anchorKey))) {
+          return null
+        }
+        // 精确命中（cwd 即注册根）短路——退路 = 同锚首行（存量双行归 core 注册链仲裁归档，
+        // 读面不重判）。
+        if (rowKey === cwdKey) {
           hit = row
           break
         }
         const rowAnchor = await git.commonDirAnchor(row.wsPath)
         if (rowAnchor !== null && normalizeFsPath(rowAnchor) === anchorKey) {
+          // git 域归属核验同门（非 git 注册根不参与归属——防误判路径自同锚退路复入）
+          if (!(await isGenuineGitRoot(row.wsPath, anchorKey))) continue
           // 主树行必胜仲裁：锚 = realpath(git-common-dir) 恒坐落在主树内（<主树>/.git）——
           // 「锚目录在该行 ws_path 之下」即主行。同锚多行时 worktree 行按 created_at 序可排
           // 在主行之前（main-old→redesign→main 演进残留）——树行根/title 会劫持项目归属。
