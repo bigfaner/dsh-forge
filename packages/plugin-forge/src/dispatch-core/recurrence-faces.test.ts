@@ -62,7 +62,7 @@ describe('createRecurrenceFaces（bug 0db72bcb 生产装配工厂）', () => {
       },
       resolveProjectDir: () => undefined,
     })
-    const out = await faces.findRecurrenceCandidates('p-1', { slug: 'feat-x', localId: '2.1', files: [] })
+    const out = await faces.findRecurrenceCandidates('p-1', { slug: 'feat-x', localId: '2.1', sourceTaskId: 't-feat-x-2.1' })
     expect(out).toEqual(CHAIN3)
     expect(calls).toEqual([{ projectId: 'p-1', scope: { slug: 'feat-x', localId: '2.1', files: [] } }])
   })

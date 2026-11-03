@@ -40,9 +40,10 @@ describe('T3 同缝计数口径（台账约定：recurrence count = chain length
     expect(recurrenceCountOf(['b-root', 'b-r1'])).toBe(1)
     expect(recurrenceCountOf(['b-root', 'b-r1', 'b-r2'])).toBe(2)
   })
-  it('候选集取最大家族链；空集 = 0', () => {
+  it('候选集取最大家族链；空集 = 0；activeCount（core 域活态祖先径）在场优先于链长回退', () => {
     expect(sameSeamCountOf([candidate(['a', 'b']), candidate(['x', 'y', 'z'])])).toBe(2)
     expect(sameSeamCountOf([])).toBe(0)
+    expect(sameSeamCountOf([{ bugId: 'b', summary: 's', chain: ['a', 'b', 'c'], activeCount: 1 }])).toBe(1)
   })
   it('阈值 = 2（提案 T3：同缝 ≥ 2 拒绝盲试 fix 派发）', () => {
     expect(RECURRENCE_ESCALATION_THRESHOLD).toBe(2)
@@ -77,9 +78,9 @@ describe('T3 守卫（recurrenceEscalationGuard）两态', () => {
     expect(rejection!.failure.message).toContain('同缝拦截')
     expect(rejection!.failure.message).toContain('升级')
     const text = JSON.stringify(rejection!.failure)
-    expect(text).toContain('ERR_BLOCK_SOURCE_REQUIRED') // 对偶守卫互指
     expect(text).toContain('升级排查建模')
-    expect(text).toContain('放行')
+    expect(text).toContain('.forge/docs/proposals/<slug>/issues/<localId>/')
+    expect(text).toContain('重新 claim')
   })
   it('报告在场（卷宗报告落卷）→ 放行（undefined）——「待建模」解除', async () => {
     const rejection = await recurrenceEscalationGuard({
@@ -89,6 +90,38 @@ describe('T3 守卫（recurrenceEscalationGuard）两态', () => {
       modelingReportPresent: () => true,
     })
     expect(rejection).toBeUndefined()
+  })
+  it('归属 scope 传参：face 收到 {slug, localId, sourceTaskId}（不再传 files 全库口径）；无关提案容器链不进候选集 → 放行', async () => {
+    const scopes: unknown[] = []
+    const rejection = await recurrenceEscalationGuard({
+      projectId: 'p-1',
+      task: snapshot({ slug: 'feat-x', localId: 'fix-2', sourceTaskId: 't-feat-x-2.1' }),
+      // 1.1 归属链过滤的守卫侧消费：仅本任务归属容器（t-<slug>- 前缀）的链进候选——
+      // 无关提案历史链在场时返回空集，守卫放行。
+      findRecurrenceCandidates: (projectId, scope) => {
+        scopes.push({ projectId, scope })
+        return scope.slug === 'feat-x' ? [] : [candidate(['foreign-root', 'f1', 'f2'])]
+      },
+      modelingReportPresent: () => false,
+    })
+    expect(rejection).toBeUndefined()
+    expect(scopes).toEqual([
+      { projectId: 'p-1', scope: { slug: 'feat-x', localId: 'fix-2', sourceTaskId: 't-feat-x-2.1' } },
+    ])
+    expect('files' in (scopes[0] as { scope: object }).scope).toBe(false)
+  })
+  it('本任务缺陷挂链活态祖先径 ≥ 2 → 仍拦截（core 域 activeCount 口径）', async () => {
+    const rejection = await recurrenceEscalationGuard({
+      projectId: 'p-1',
+      task: snapshot({ slug: 'feat-x', localId: 'fix-2' }),
+      findRecurrenceCandidates: () => [
+        { bugId: 'b-r2', summary: 's', chain: ['b-root', 'b-r1', 'b-r2'], activeCount: 2 },
+      ],
+      modelingReportPresent: () => false,
+    })
+    expect(rejection).toBeDefined()
+    expect(rejection!.count).toBe(2)
+    expect(rejection!.failure.code).toBe(ERR_RECURRENCE_ESCALATION_REQUIRED)
   })
   it('count < 2 → 放行（< 阈值不受影响）', async () => {
     const rejection = await recurrenceEscalationGuard({
@@ -114,13 +147,19 @@ describe('T3 守卫（recurrenceEscalationGuard）两态', () => {
   })
 })
 
-describe('拒绝 DTO 形状（rejectionFailureOf——文案互指 ERR_BLOCK_SOURCE_REQUIRED）', () => {
-  it('code/message/violations 承载四要素', () => {
+describe('拒绝 DTO 形状（rejectionFailureOf——release 解除指引三要件）', () => {
+  it('code/message/violations 承载解除指引三要件（顶层路径模板 / .md 形态 / 重新 claim 放行）', () => {
     const dto = rejectionFailureOf('feat-x/fix-2', ['a', 'b', 'c'], 2)
     expect(dto.ok).toBe(false)
     expect(dto.code).toBe(ERR_RECURRENCE_ESCALATION_REQUIRED)
     expect(dto.message).toContain('feat-x/fix-2')
     expect(dto.message).toContain('a → b → c')
-    expect(dto.violations.some((v) => v.includes('ERR_BLOCK_SOURCE_REQUIRED'))).toBe(true)
+    const release = dto.violations.find((v) => v.startsWith('release:'))
+    expect(release).toBeDefined()
+    expect(release!).toContain('.forge/docs/proposals/<slug>/issues/<localId>/')
+    expect(release!).toContain('.md')
+    expect(release!).toContain('重新 claim')
+    // 事故判例 4545fde4：与解除形态无关的 related 条不进指引文案
+    expect(dto.violations.some((v) => v.includes('ERR_BLOCK_SOURCE_REQUIRED'))).toBe(false)
   })
 })

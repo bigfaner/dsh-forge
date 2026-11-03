@@ -2236,7 +2236,11 @@ async function recurrenceChainVarsOf(loop: ActiveLoop, task: TaskSnapshot): Prom
     return undefined
   }
   try {
-    const candidates = await find(loop.scope.projectId, { slug: task.slug, localId: task.localId, files: [] })
+    const candidates = await find(loop.scope.projectId, {
+      slug: task.slug,
+      localId: task.localId,
+      sourceTaskId: task.sourceTaskId,
+    })
     if (candidates.length === 0) return undefined
     const top = candidates.reduce((a, b) => (recurrenceCountOf(b.chain) > recurrenceCountOf(a.chain) ? b : a))
     return { RECURRENCE_CHAIN: top.chain.join(' → '), RECURRENCE_COUNT: String(recurrenceCountOf(top.chain)) }
