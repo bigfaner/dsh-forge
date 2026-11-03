@@ -20,12 +20,18 @@
 // parent/signal 等 2 面（派发上下文）由下游通道一调用方补齐，不在档案映射内。
 
 import { intersectToolNames } from "@dsh-forge/contracts";
-import type { ExpertEntry, ExpertsService } from "../registry.js";
+import type { ExpertsService } from "../registry.js";
 import { EXCLUDED_EXPERT_TOOL_NAMES, ExpertToolError } from "../tools.js";
 
 // 求交族单源 re-export（bug a5b12254 集中化——contracts tool-projection.ts；本包
 // 薄壳化：排除集/ExpertToolError 包域差异经 intersectToolNames 参数注入，行为等价）。
 export { PROBE_CANARY_TOOL, probeIsSubdomain, SHELL_TOOL_CANDIDATES } from "@dsh-forge/contracts";
+
+// 人设全文合成单源 re-export（架构裁决 verification-report §5.1 ⑤ 最小增量——contracts
+// subagent-assemble.ts；expert-squad 留薄壳，compose 内核其余部分不动；条目面经
+// contracts PersonaComposeSource 窄结构注入，ExpertEntry 结构满足即兼容，行为逐字等价）。
+export { composePersonaText } from "@dsh-forge/contracts";
+import { composePersonaText } from "@dsh-forge/contracts";
 
 /** 官方 ContentBlock 的文本块子面（prompt 载荷）。 */
 export interface TextContentBlock {
@@ -46,18 +52,6 @@ export interface ExpertSubagentRequest {
   readonly agentOptions?: { readonly provider: string; readonly model: string };
   /** 子会话首条用户消息 = 任务全文（单 text 块）。 */
   readonly prompt: readonly [TextContentBlock];
-}
-
-/** 人设全文合成：身份头（键/岗位/简介）+ 人设 Markdown 原文。 */
-export function composePersonaText(entry: ExpertEntry): string {
-  return [
-    `# ${entry.title}（${entry.name}）`,
-    "",
-    entry.description,
-    "",
-    entry.personaMd.trimEnd(),
-    "",
-  ].join("\n");
 }
 
 /** knownTools 探针面：可同步可异步（bug e3b045dc——探针接全模式并集面，
