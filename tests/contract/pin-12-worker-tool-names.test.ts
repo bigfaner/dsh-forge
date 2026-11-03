@@ -278,7 +278,7 @@ describe('pin ⑳-3 映射表 ↔ 上游枚举对账（WORKER_TOOL_NAME_FAMILY �
     }
   })
 
-  it('forge 面 = 恰 WORKER_FORGE_TOOLS 两动词（我方工具非上游枚举面）', () => {
+  it('forge 面 = 恰 WORKER_FORGE_TOOLS 四动词（我方工具非上游枚举面）', () => {
     const forgeNames = Object.entries(WORKER_TOOL_NAME_FAMILY)
       .filter(([, f]) => f === 'forge')
       .map(([n]) => n)
