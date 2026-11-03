@@ -461,7 +461,12 @@ async function rejectLanding(
 /** worker 终态结算判定（settleWorkerRun 产物——失败支合并 run 拒绝与无结算，kill 由调用方 taxonomy 判定） */
 export type WorkerSettlement =
   | { readonly case: 'settled'; readonly result: Omit<DispatchSpawnedResult, 'kind'>; readonly durationMs: number }
-  | { readonly case: 'failed'; readonly cause: unknown }
+  | {
+      readonly case: 'failed'
+      readonly cause: unknown
+      /** 分桶标记（spawn-false-alarm——run 正常结束但未 submitTask = 协议违约，非 spawn/进程故障） */
+      readonly noSettlement?: boolean
+    }
   | { readonly case: 'landing-rejected'; readonly cause: Error }
 
 /**
@@ -551,6 +556,7 @@ export async function settleWorkerRun(
     return {
       case: 'failed',
       cause: new Error(`worker run ended without a settlement (stopReason: ${run.stopReason})${detail !== '' ? `: ${detail}` : ''}`),
+      noSettlement: true, // 分桶：跑完未结算（协议违约）——报文类别不得冠 spawn-failed（判例 014 误报）
     }
   }
 

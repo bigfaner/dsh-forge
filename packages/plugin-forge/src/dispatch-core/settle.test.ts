@@ -153,6 +153,18 @@ describe('settleWorkerRun 失败判词（bug 63112ab2）', () => {
     const message = settlement.cause instanceof Error ? settlement.cause.message : String(settlement.cause)
     expect(message).toBe('worker run ended without a settlement (stopReason: error)')
   })
+
+  it('跑完未结算（stopReason: completed）= 协议违约分桶：noSettlement 标记落面（spawn-false-alarm——不得冠 spawn failed）', async () => {
+    const handle: SpawnWorkerHandle = {
+      workerSessionId: 'worker-1',
+      result: Promise.resolve({ stopReason: 'completed', output: 'fix-4 完成，两 bug 两阶段落库闭环……' }),
+      dispose: async () => {},
+    }
+    const settlement = await settleWorkerRun({ tasks: harness() }, { projectId: 'p-1', task: snapshot(), digest: 'd', handle, spawnStartedAt: Date.now() })
+    expect(settlement.case).toBe('failed')
+    if (settlement.case !== 'failed') return
+    expect(settlement.noSettlement).toBe(true)
+  })
 })
 
 describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () => {

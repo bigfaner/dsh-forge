@@ -2540,6 +2540,37 @@ describe('1.5 发射点扩展：retry 族场景码（⑪⑫——自动重试径
       workerSessionId: 'worker-1',
     })
   })
+
+  it('⑫b 跑完未结算分桶（spawn-false-alarm）：diag 冠「跑完未结算」非「异常退出」——重入后成功收口', async () => {
+    const diag: Array<{ level: string; event: string; message: string }> = []
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+      query: [queryOf('in_progress'), queryOf('completed')],
+      diag: (p) => diag.push(p),
+    })
+    let calls = 0
+    built.spawn.setBehavior(async (n) => {
+      calls += 1
+      if (calls === 1) {
+        return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'completed', output: 'fix-4 完成，两 bug 两阶段落库闭环……' }), dispose: async () => {} }
+      }
+      return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'end_turn', output: 'done' }), dispose: async () => {} }
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    const retryDiag = diag.find((d) => d.event === 'loop-retry')
+    expect(retryDiag?.message).toContain('worker 跑完未结算第 1/3 次')
+    expect(retryDiag?.message).toContain('ended-without-settlement')
+    expect(retryDiag?.message).not.toContain('worker 异常退出')
+  })
 })
 
 // ─────────────────────────── S2 面（any-active 读数 + projectId 会话覆盖） ───────────────────────────
