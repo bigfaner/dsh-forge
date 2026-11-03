@@ -214,6 +214,26 @@ export function riskLatchMemorySync(next: RiskConfirmLatch): void {
   riskLatchMemory = next
 }
 
+// bug e2a10cd4：「不再提示」跨重挂记忆（与上同族——确认框多弹面的第二状态）。riskDismissed
+// 挂组件 useState 会被 openWorkspace 切主视图的重挂清零，且 settings.set fire-and-forget
+// 写透未及回读（竞态窗内重挂读不到 true）→ 换跨分支目标重弹确认框，用户级一票失守。
+// 值域 = 布尔用户级一票（settings worktree.crossBranchRiskDismissed 持久化口径同域）——
+// 无路径成分，跨项目/跨会话路径失配面天然不存在（review-arch 确认闩锁单值泄漏面判定同构：
+// 值域不含路径 = 无失配抑制面）。落模块级记忆（单窗口单实例 = 「按窗口」语义），组件态只作
+// 记忆镜像：初始化惰性读（重挂即水合）+ 每次变更写透。
+
+let riskDismissedMemory: boolean = false
+
+/** 「不再提示」跨重挂记忆读面（组件 useState 惰性初始化消费——重挂即水合） */
+export function riskDismissedMemoryOf(): boolean {
+  return riskDismissedMemory
+}
+
+/** 「不再提示」跨重挂记忆写面（每次变更写透——装载回填/确认勾选同一入口） */
+export function riskDismissedMemorySync(next: boolean): void {
+  riskDismissedMemory = next
+}
+
 // ───────────── bug 4a30b193 陈旧选中自愈（纯判定单源）─────────────
 
 /** 自愈判定行（WorktreeEntryDto 行模型最小面——present = 盘上实存，host list 兑现） */
