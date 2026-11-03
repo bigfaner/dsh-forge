@@ -113,7 +113,7 @@ function expeditionSection(isGitRepo: boolean): string {
   const git = isGitRepo ? '\n- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。' : ''
   const docs = `### 文档位置与存储约束
 
-文档根：\`{{forge_docs_root}}\`（dirKey = forge.docsRoot；实际路径经 forgeDirs 工具查询获取）
+文档根：\`{{forge_docs_root}}\`
 
 \`\`\`text
 ├─ proposals/{slug}/   提案文档（proposal.md 及配套）
@@ -179,7 +179,7 @@ function expeditionSubagentSection(isGitRepo: boolean): string {
   const git = isGitRepo ? '\n- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。\n' : ''
   const docs = `### 文档位置与存储约束
 
-文档根：\`{{forge_docs_root}}\`（dirKey = forge.docsRoot；实际路径经 forgeDirs 工具查询获取）
+文档根：\`{{forge_docs_root}}\`
 
 \`\`\`text
 ├─ proposals/{slug}/   提案文档（proposal.md 及配套）
@@ -217,7 +217,7 @@ function blitzSection(isGitRepo: boolean): string {
   const git = isGitRepo ? '\n- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。' : ''
   const docs = `### 文档位置与存储约束
 
-文档根：\`{{forge_docs_root}}\`（dirKey = forge.docsRoot；实际路径经 forgeDirs 工具查询获取）
+文档根：\`{{forge_docs_root}}\`
 
 \`\`\`text
 ├─ proposals/{slug}/   提案 + 直挂任务（无 feature 阶段文档）
@@ -275,7 +275,7 @@ function blitzSubagentSection(isGitRepo: boolean): string {
   const git = isGitRepo ? '\n- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。\n' : ''
   const docs = `### 文档位置与存储约束
 
-文档根：\`{{forge_docs_root}}\`（dirKey = forge.docsRoot；实际路径经 forgeDirs 工具查询获取）
+文档根：\`{{forge_docs_root}}\`
 
 \`\`\`text
 ├─ proposals/{slug}/   提案 + 直挂任务（无 feature 阶段文档）

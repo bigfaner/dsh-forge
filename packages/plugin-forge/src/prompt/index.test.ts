@@ -223,9 +223,9 @@ describe('双模式独立渲染（mode 键——缺省回退远征）', () => {
 })
 
 describe('文档位置与存储约束（{{forge_docs_root}} 官方模板占位——变量由装配方注册）', () => {
-  it('文档根行 = {{forge_docs_root}} 占位（官方 {{var}} 模板语法——dsh systemPrompt.variable 注册、组装期插值），占位前于目录树', () => {
+  it('文档根行 = {{forge_docs_root}} 占位纯值（变量名 = dirKey 下划线形，无附加说明——与 {{model}}/{{cwd}} 同风格），占位前于目录树', () => {
     const v = renderForgePipelineSection({ forgeDir: 'Z:/ws/demo/.forge', mode: 'expedition' })
-    expect(v).toContain('文档根：`{{forge_docs_root}}`（dirKey = forge.docsRoot；实际路径经 forgeDirs 工具查询获取）')
+    expect(v).toContain('文档根：`{{forge_docs_root}}`')
     expect(v.indexOf('{{forge_docs_root}}')).toBeLessThan(v.indexOf('```text'))
   })
 
