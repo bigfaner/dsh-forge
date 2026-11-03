@@ -54,8 +54,10 @@ export type { CommitLandingVerifier, WorkerSettlement } from './settle.js'
 export {
   ERR_RECURRENCE_ESCALATION_REQUIRED,
   RECURRENCE_ESCALATION_THRESHOLD,
+  REJECTION_LIST_LIMIT,
   isBlindFixDispatch,
   isModelingPending,
+  recurrenceCandidateLines,
   recurrenceCountOf,
   recurrenceEscalationGuard,
   rejectionFailureOf,

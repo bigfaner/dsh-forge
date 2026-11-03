@@ -363,7 +363,7 @@ function build(options: {
   /** T3 同缝拦截（loop-recurrence-hardening）：台账 recurrence 候选 face 桩 */
   findRecurrenceCandidates?: (projectId: string, scope: { readonly slug: string; readonly localId: string; readonly sourceTaskId: string | undefined }) => Promise<unknown[]> | unknown[]
   /** T3「待建模」解除判据：卷宗建模报告在场桩 */
-  modelingReportPresent?: (input: { readonly projectId: string; readonly slug: string; readonly localId: string }) => boolean
+  modelingReportPresent?: (input: { readonly projectId: string; readonly slug: string; readonly localId: string; readonly bugIds: readonly string[] }) => boolean
 } = {}): Built {
   const h = tasksHarness({ addTaskFailures: options.addTaskFailures })
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -3994,8 +3994,9 @@ describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-pro
 // ─────────────────────────── T3 同缝拦截 + 待建模软拒绝（loop-recurrence-hardening） ───────────────────────────
 
 describe('T3 同缝拦截（claim 被拒 → 转 escalation 分支）', () => {
-  const CHAIN3 = [{ bugId: 'b-r2', summary: '写径拒写复发', chain: ['b-root', 'b-r1', 'b-r2'] }]
-  const CHAIN2 = [{ bugId: 'b-r1', summary: '首轮复发', chain: ['b-root', 'b-r1'] }]
+  // recurrence-signal-tiering 触发公式口径：fullEdgeCount（最长祖先径全边）+ hasOpen（链内有 open 分量）
+  const CHAIN3 = [{ bugId: 'b-r2', summary: '写径拒写复发', chain: ['b-root', 'b-r1', 'b-r2'], fullEdgeCount: 2, hasOpen: true }]
+  const CHAIN2 = [{ bugId: 'b-r1', summary: '首轮复发', chain: ['b-root', 'b-r1'], fullEdgeCount: 1, hasOpen: true }]
 
   /** fix 链派生任务（coding-fix ∧ sourceTaskId——盲试 fix 派发判别对象） */
   function fixClaimed(localId = 'fix-2'): ClaimTaskResult {

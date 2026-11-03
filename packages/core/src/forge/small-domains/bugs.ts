@@ -31,6 +31,7 @@ import type {
   BugCommitFile,
   BugCommitFilesQuery,
   BugFileDiffQuery,
+  BugErrorTypeAggregate,
   BugRecurrenceCandidate,
   BugRecurrenceDanglingData,
   BugStatus,
@@ -358,6 +359,7 @@ interface BugStorageRow {
   reporter: string
   fixer: string | null
   recurrence_of: string | null
+  container_slug: string | null
   created_at: string
   updated_at: string
 }
@@ -365,7 +367,7 @@ interface BugStorageRow {
 const SELECT_BUG =
   `SELECT id, summary, bug_desc, trigger_desc, expected, actual, suspected, error_type, bug_status,
            commit_hash, worktree, branch, unresolved_reason, fix_approach, source_task_id, report_session_id,
-           fix_session_id, reporter, fixer, recurrence_of, created_at, updated_at
+           fix_session_id, reporter, fixer, recurrence_of, container_slug, created_at, updated_at
    FROM bugs`
 
 /** bugs 行 → BugCard DTO。NULL 列条件展开 = 键缺席（tool 返回面 lossless JSON 合规——
@@ -428,8 +430,9 @@ export interface ResolveBugInput {
 }
 
 /**
- * bug 卡 search 键集（六字段任一命中——summary / bugDesc / triggerDesc / expected / actual /
- * errorType；另携状态中英标签——列表标签命中同构）。
+ * bug 卡 search 键集（七字段任一命中——summary / bugDesc / triggerDesc / expected / actual /
+ * errorType / suspected 位置（recurrence-signal-tiering：按「哪个文件出过事」检索可行）；
+ * 另携状态中英标签——列表标签命中同构）。
  */
 export function bugSearchKeys(card: BugCard): readonly string[] {
   return [
@@ -439,6 +442,7 @@ export function bugSearchKeys(card: BugCard): readonly string[] {
     card.expected,
     card.actual,
     ...(card.errorType !== undefined ? [card.errorType] : []),
+    ...(card.suspected !== undefined ? [card.suspected] : []),
     BUG_STATUS_LABELS[card.bugStatus].zh,
     BUG_STATUS_LABELS[card.bugStatus].en,
   ]
@@ -448,27 +452,26 @@ export function bugSearchKeys(card: BugCard): readonly string[] {
 
 /**
  * 台账 recurrence 候选检索 scope（跨容器库域口径归本域定义，tasks 域经只读 face 消费零
- * import）。归属口径（recurrence-judgment-narrowing 启用）：容器锚优先取 sourceTaskId
- * 结构化解析（`t-<slug>-<localId>` 段边界剥离末段）——fix 链派生任务携源任务 id 时以
- * 解析结果为归属键；缺席回退 slug。无关提案容器链不进候选集。files 口径：非空（结算径）→
- * 在归属过滤之上按 suspected 修复锚路径二次收窄（同缝提示性信号）；空（派发径）→ 容器
- * 内全链。拦截计数 = activeCount（open 成员最长祖先径边数），与 chain 呈现口径分离。
+ * import）。归属口径（recurrence-signal-tiering）：容器锚优先取 sourceTaskId 事务级反查
+ * tasks.slug（生产 sourceTaskId 为 UUID——taskId 反查是唯一可靠形态，注入形态钉死）；
+ * 反查缺席/失败回退 slug。无关提案容器链不进候选集（container_slug 列直接比较，双向
+ * 语义）。files 口径：非空（结算径）→ 在归属过滤之上按 suspected 修复锚路径二次收窄
+ * （同缝提示性信号）；空（派发径）→ 容器内全链。
  */
 export interface BugRecurrenceScope {
   readonly slug: string
   readonly localId: string
-  /** fix 链派生源任务 id（`t-<slug>-<localId>` 形制）——在场时结构化解析结果优先作容器归属锚 */
+  /** fix 链派生源任务 id（生产 UUID；harness t- 形制兼容）——在场时反查 tasks.slug 作容器归属锚 */
   readonly sourceTaskId?: string
   readonly files: readonly string[]
 }
 
 /**
- * source_task_id 容器归属结构化解析（recurrence-judgment-narrowing 1.1——dash 前缀碰撞
- * 穿透修复；bug 219076e4——dash-localId 伪容器键修复）：形制 `t-<slug>-<localId>`。
- * localId 两族：① 数字点字面（`1.2`）；② 派生链词汇 `fix-N` / `disc-N`（循环修复链/disc
- * 派生径命名）。解析 = 剥末段数字点段后，若新末段 ∈ 派生词汇再剥一段，余段拼回容器 slug。
- * 非该形制（无数字点末段/剥尽为空）→ null（不归属）。不可约歧义（容器 slug 本身为
- * `<x>-fix` 且 localId 为纯数字点）按词汇白名单优先解释，属已知取舍——伪键静默产出消除。
+ * source_task_id 容器归属结构化解析（**退役兼容层**——recurrence-signal-tiering 归属改
+ * bugs.container_slug 列直接比较后，本函数退出生产消费面，仅保留测试 harness `t-` 形制
+ * 纯函数边界）：形制 `t-<slug>-<localId>`。localId 两族：① 数字点字面（`1.2`）；
+ * ② 派生链词汇 `fix-N` / `disc-N`。解析 = 剥末段数字点段后，若新末段 ∈ 派生词汇再剥一段，
+ * 余段拼回容器 slug。非该形制 → null（不归属）。
  */
 const DERIVED_LOCAL_ID_HEADS = ['fix', 'disc'] as const
 
@@ -535,11 +538,19 @@ export function createBugsService(deps: BugsServiceDeps) {
       }
       const bugId = randomUUID()
       const now = new Date().toISOString()
+      const sourceTaskId = input.sourceTaskId?.trim() || undefined
       withTransaction(db, () => {
+        // 归属列反查（事务内）：按 source_task_id 反查 tasks.slug 写 container_slug
+        // （生产 taskId 为 UUID——taskId 反查是唯一可靠形态）；无 source_task_id（standalone）
+        // 或反查缺席列留空，人工径兜底。
+        const containerSlug =
+          sourceTaskId !== undefined
+            ? (db.prepare<unknown[], { slug: string }>('SELECT slug FROM tasks WHERE id = ?').get(sourceTaskId)?.slug ?? null)
+            : null
         db.prepare(
           `INSERT INTO bugs (id, summary, bug_desc, trigger_desc, expected, actual, suspected, error_type,
-                             bug_status, source_task_id, report_session_id, recurrence_of, reporter, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
+                             bug_status, source_task_id, report_session_id, recurrence_of, container_slug, reporter, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           bugId,
           summary,
@@ -549,9 +560,10 @@ export function createBugsService(deps: BugsServiceDeps) {
           input.actual,
           input.suspected ?? null,
           input.errorType ?? null,
-          input.sourceTaskId ?? null,
+          sourceTaskId ?? null,
           input.reportSessionId ?? null,
           recurrenceOf ?? null,
+          containerSlug,
           reporter,
           now,
           now,
@@ -688,12 +700,14 @@ export function createBugsService(deps: BugsServiceDeps) {
     /**
      * 台账 recurrence 候选只读聚合（claim 同缝守卫 / T2 交叉校验 / triage 两信号 / add-fix
      * vars 共同消费 face——生产装配 = 本域服务聚合，tasks 域经闭包注入消费零 import，四域
-     * 互禁不破）。判据收窄（recurrence-judgment-narrowing）：
-     * ① 归属过滤——仅返回链内任一成员 source_task_id 结构化解析（parseTaskContainerSlug：
-     *   sourceTaskId 锚优先、slug 回退键）落 scope 容器的链；
-     * ② 终态过滤——链内 open 成员空集（全 fixed/unresolved）不产出候选；
-     * ③ 计数语义——activeCount = open 成员沿 recurrence_of 前驱回溯的最长祖先径边数
-     *   （不含 BFS 后继收齐）；chain 保持呈现口径（getBug 同构全链），两口径分离。
+     * 互禁不破）。recurrence-signal-tiering 口径：
+     * ① 归属过滤——链内任一成员 container_slug 列值 = scope 容器锚（双向语义：链任一成员
+     *   落本缝即整链入选）；锚 = sourceTaskId 事务级反查 tasks.slug（UUID 可靠），回退 slug；
+     * ② 终态过滤移除——全 fixed 链也产出候选（软动作全史视野），「链内有 open」以 hasOpen
+     *   分量交消费侧裁决；
+     * ③ 计数语义——fullEdgeCount = 本条沿 recurrence_of 前驱回溯的最长祖先径全边数
+     *   （fixed/unresolved 段也计，分叉兄弟径不计——同根多症状不虚高）；chain 保持呈现口径
+     *   （getBug 同构全链），两口径分离。
      */
     async findRecurrenceCandidates(projectId: string, scope: BugRecurrenceScope): Promise<readonly BugRecurrenceCandidate[]> {
       const db = deps.store.ensureOpen(projectId)
@@ -701,48 +715,82 @@ export function createBugsService(deps: BugsServiceDeps) {
       const chains = recurrenceChainsOf(rows)
       const byId = new Map(rows.map((r) => [r.id, r]))
       const files = scope.files.map((f) => f.trim()).filter((f) => f !== '')
-      // 容器归属锚：sourceTaskId 结构化解析优先（fix 链派生任务携源任务 id——按 id 本体
-      // 定归属，不信赖调用方自报 slug）；解析失败/缺席回退 slug。
-      const containerSlug = parseTaskContainerSlug(scope.sourceTaskId ?? '') ?? scope.slug
-      const activeCountOf = (chain: readonly string[]): number => {
-        let max = 0
-        for (const id of chain) {
-          const member = byId.get(id)
-          if (member === undefined || member.bug_status !== 'open') continue
-          let depth = 0
-          let cursor = byId.get(member.recurrence_of ?? '')
-          while (cursor !== undefined) {
-            if (cursor.bug_status === 'open') depth += 1
-            cursor = byId.get(cursor.recurrence_of ?? '')
-          }
-          max = Math.max(max, depth)
+      // 容器归属锚：sourceTaskId 反查 tasks.slug 优先（生产 UUID——taskId 反查唯一可靠，
+      // 不信赖调用方自报 slug）；反查缺席/任务行不在场回退 slug。
+      const anchorSlug =
+        scope.sourceTaskId !== undefined
+          ? db.prepare<unknown[], { slug: string }>('SELECT slug FROM tasks WHERE id = ?').get(scope.sourceTaskId)?.slug
+          : undefined
+      const containerSlug = anchorSlug ?? scope.slug
+      /** 本条最长祖先径全边数（前驱链逐级计数——fixed/unresolved 段也计） */
+      const fullEdgeCountOf = (id: string): number => {
+        let depth = 0
+        let cursor = byId.get(byId.get(id)?.recurrence_of ?? '')
+        while (cursor !== undefined) {
+          depth += 1
+          cursor = byId.get(cursor.recurrence_of ?? '')
         }
-        return max
+        return depth
       }
       const candidates: BugRecurrenceCandidate[] = []
       for (const [bugId, chain] of chains) {
         const members = chain
           .map((id) => byId.get(id))
           .filter((m): m is BugStorageRow => m !== undefined)
-        // ① 归属过滤：链内任一成员 source_task_id 结构化解析出的容器 slug 与 scope 精确相等
-        if (
-          !members.some(
-            (m) =>
-              m.source_task_id !== null &&
-              parseTaskContainerSlug(m.source_task_id) === containerSlug,
-          )
-        ) continue
-        // ② 终态过滤：全终态链（无 open 成员）不构成盲试风险；open 席位只落在 open 成员行
-        if (!members.some((m) => m.bug_status === 'open')) continue
-        if (byId.get(bugId)?.bug_status !== 'open') continue
-        const activeCount = activeCountOf(chain)
+        // ① 归属过滤：链内任一成员 container_slug 列值与 scope 容器锚精确相等（双向语义）
+        if (!members.some((m) => m.container_slug === containerSlug)) continue
+        const row = byId.get(bugId)
+        if (row === undefined) continue
         if (files.length > 0) {
-          const suspected = byId.get(bugId)?.suspected ?? ''
+          const suspected = row.suspected ?? ''
           if (!files.some((f) => suspected.includes(f))) continue
         }
-        candidates.push({ bugId, summary: byId.get(bugId)?.summary ?? '', chain, activeCount })
+        // ② hasOpen 独立分量（终态过滤已移除——全 fixed 链照产候选，硬动作判据归消费侧）
+        const hasOpen = members.some((m) => m.bug_status === 'open')
+        // ③ 计数 = 全边口径 + 八字段渐进式披露（core face 恒全量产出）
+        candidates.push({
+          bugId,
+          summary: row.summary,
+          chain,
+          fullEdgeCount: fullEdgeCountOf(bugId),
+          hasOpen,
+          status: row.bug_status,
+          ...(row.error_type !== null ? { errorType: row.error_type } : {}),
+          ...(row.container_slug !== null ? { containerSlug: row.container_slug } : {}),
+          ...(row.suspected !== null ? { suspectedLocation: row.suspected } : {}),
+          lastSeenAt: row.updated_at,
+          ...(row.recurrence_of !== null ? { recurrenceOf: row.recurrence_of } : {}),
+        })
       }
       return candidates
+    },
+
+    /**
+     * errorType 聚合读法（recurrence-signal-tiering 聚合统计——investigate-bug 人工径 +
+     * triage 量化判据双消费）：按 errorType 分组全史计数 {total, open, fixed, lastSeenAt}
+     * （unresolved 计入 total 不入单列）；lastSeenAt = 组内最新 updated_at。排序 = total
+     * 降序、同频词面升序（errorTypeSuggestions 同族口径）。空/纯空白 errorType 不入组。
+     */
+    async aggregateByErrorType(projectId: string): Promise<readonly BugErrorTypeAggregate[]> {
+      const db = deps.store.ensureOpen(projectId)
+      const rows = db
+        .prepare<unknown[], { error_type: string; bug_status: BugStatus; updated_at: string }>(
+          `SELECT error_type, bug_status, updated_at FROM bugs
+           WHERE error_type IS NOT NULL AND TRIM(error_type) <> ''`,
+        )
+        .all() as { error_type: string; bug_status: BugStatus; updated_at: string }[]
+      const groups = new Map<string, { total: number; open: number; fixed: number; lastSeenAt: string }>()
+      for (const r of rows) {
+        const g = groups.get(r.error_type) ?? { total: 0, open: 0, fixed: 0, lastSeenAt: r.updated_at }
+        g.total += 1
+        if (r.bug_status === 'open') g.open += 1
+        if (r.bug_status === 'fixed') g.fixed += 1
+        if (r.updated_at > g.lastSeenAt) g.lastSeenAt = r.updated_at
+        groups.set(r.error_type, g)
+      }
+      return [...groups.entries()]
+        .map(([errorType, g]) => ({ errorType, total: g.total, open: g.open, fixed: g.fixed, lastSeenAt: g.lastSeenAt }))
+        .sort((a, b) => (a.total === b.total ? (a.errorType < b.errorType ? -1 : 1) : b.total - a.total))
     },
 
     /**

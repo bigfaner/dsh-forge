@@ -1,5 +1,6 @@
 // listBugs tool 定义（bug-recurrence-chain——主 agent 专属台账查询面：关键词/状态/offset/limit）。
-// 四参直透 core ListBugsQuery（search 六字段命中 / status 三态 chips / sort active|created /
+// 四参直透 core ListBugsQuery（search 七字段命中——recurrence-signal-tiering 纳入 suspected
+// 位置，「哪个文件出过事」检索可行 / status 三态 chips / sort active|created /
 // offset+limit 服务端排序后切片——core small-domains/bugs.ts listBugs 承载，本壳零 core 改动）。
 // 面分治：仅主 agent——worker 面 deny（assemble.ts FORGE_DENY_IN_WORKER 承载）。
 // 参照 list-tasks.ts 薄壳模式：参数执行点防御收窄 / callToolFace 路由（typed 错误 → 失败
@@ -78,6 +79,7 @@ export const LIST_BUGS_OUTPUT_SCHEMA = withFailureVariant({
           summary: { type: 'string' },
           bugStatus: { type: 'string', description: "'open' | 'fixed' | 'unresolved'." },
           errorType: { type: 'string' },
+          suspected: { type: 'string', description: 'Suspected location (file:line) — search-hit dimension (recurrence-signal-tiering).' },
           reporter: { type: 'string' },
           createdAt: { type: 'string' },
           commitHash: { type: 'string', description: 'fixed evidence (absent until backfilled).' },
@@ -113,11 +115,11 @@ export function createListBugsTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'List bug ledger cards (main agent and the read-only triage agent). Filters pass straight through to the core service: search (substring hit on any of the six text fields — summary / bugDesc / triggerDesc / expected / actual / errorType), status (subset of open/fixed/unresolved), sort (active = active-first, created = newest first), and offset/limit pagination (server slices after sorting; omit limit = full result). Use to survey the ledger, to find recurrence-chain candidates before recordBug (pass the found bug_id as recurrenceOf), and to answer "which bugs exist".',
+      'List bug ledger cards (main agent and the read-only triage agent). Filters pass straight through to the core service: search (substring hit on any of the seven text fields — summary / bugDesc / triggerDesc / expected / actual / errorType / suspected location, so "which file has misbehaved before" queries work), status (subset of open/fixed/unresolved), sort (active = active-first, created = newest first), and offset/limit pagination (server slices after sorting; omit limit = full result). Use to survey the ledger, to find recurrence-chain candidates before recordBug (pass the found bug_id as recurrenceOf), and to answer "which bugs exist".',
     parameters: {
       type: 'object',
       properties: {
-        search: { type: 'string', description: 'Free-text filter — matched server-side against any of the six text fields (summary / bugDesc / triggerDesc / expected / actual / errorType).' },
+        search: { type: 'string', description: 'Free-text filter — matched server-side against any of the seven text fields (summary / bugDesc / triggerDesc / expected / actual / errorType / suspected location).' },
         status: { type: 'array', items: { type: 'string' }, description: "Status chips filter (subset of 'open'/'fixed'/'unresolved'); empty or omitted = all." },
         sort: { type: 'string', description: 'active = active-first / created = newest first.' },
         offset: { type: 'number', description: 'Pagination offset after server-side sort (default 0; non-negative integer).' },

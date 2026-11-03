@@ -19,6 +19,7 @@ import { createRecordBugTool } from './record-bug.js'
 import { createResolveBugTool } from './resolve-bug.js'
 import { createListBugsTool } from './list-bugs.js'
 import { createGetBugTool } from './get-bug.js'
+import { createAggregateBugsTool } from './aggregate-bugs.js'
 import { createCreateProposalTool } from './create-proposal.js'
 import { createTransitionProposalTool } from './transition-proposal.js'
 import { createDispatchTaskTool } from './dispatch-task.js'
@@ -243,6 +244,12 @@ describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执�
         length: 2,
         rootBugId: 'b-0',
       },
+    })
+  })
+
+  it('aggregateBugs：{groups: BugErrorTypeAggregate[]} 计数表（recurrence-signal-tiering）', () => {
+    expectValid('aggregateBugs', schemaOf(createAggregateBugsTool(DEPS)), {
+      groups: [{ errorType: 'stale-anchor', total: 3, open: 1, fixed: 2, lastSeenAt: '2026-11-03T00:00:00.000Z' }],
     })
   })
 

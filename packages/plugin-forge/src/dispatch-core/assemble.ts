@@ -55,6 +55,7 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'taskStats',
   'listTasks',
   'listBugs',
+  'aggregateBugs', // recurrence-signal-tiering——聚合读径仅主 agent + triage（worker 拒）
   'recordImplCheckpoint', // 机械⑥实现检查点三工具——仅主 agent 面（记录/查询/跨容器清单）
   'queryImplCheckpoint',
   'listImplCheckpoints',
@@ -223,7 +224,7 @@ export function intersectAllowNames(
  * resolveBug/submitTask）与任务域动词恒 deny）。
  */
 const TRIAGE_FORGE_DENY: readonly string[] = FORGE_DENY_IN_WORKER.filter(
-  (name) => name !== 'listBugs' && name !== 'addTask',
+  (name) => name !== 'listBugs' && name !== 'aggregateBugs' && name !== 'addTask',
 )
 
 /**

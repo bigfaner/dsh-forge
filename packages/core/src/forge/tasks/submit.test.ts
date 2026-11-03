@@ -936,10 +936,15 @@ describe('T2 归类闸门（loop-recurrence-hardening）：blocked 归类 presen
     expect(cols.some((c) => c.name.includes('classification'))).toBe(false)
   })
 
-  it('归类=新问题 ∧ scope 命中 recurrence 候选 → 应答携 suspected-family「疑似同族」警示（不硬拒，status=blocked）', async () => {
+  it('归类=新问题 ∧ scope 命中 recurrence 候选 → 应答携 suspected-family「疑似同族」警示（列表式八字段 + status 标注，不硬拒，status=blocked）', async () => {
     seed()
     const candidates = [
-      { bugId: 'b-root', summary: '写径拒写', chain: ['b-root', 'b-mid', 'b-leaf'] },
+      {
+        bugId: 'b-root', summary: '写径拒写', chain: ['b-root', 'b-mid', 'b-leaf'],
+        status: 'fixed', errorType: 'db-guard', containerSlug: 'f',
+        suspectedLocation: 'packages/core/src/forge/tasks/submit.ts:78',
+        lastSeenAt: '2026-11-01T00:00:00.000Z', recurrenceOf: undefined,
+      },
     ]
     const depsWithFace = {
       store: h!.store,
@@ -954,8 +959,41 @@ describe('T2 归类闸门（loop-recurrence-hardening）：blocked 归类 presen
     expect(r.recurrenceAdvisories).toHaveLength(1)
     const advisory = r.recurrenceAdvisories![0]!
     expect(advisory.kind).toBe('suspected-family')
-    expect(advisory.message).toContain('疑似同族')
     expect(advisory.candidates).toEqual(candidates)
+    // 列表式八字段（渐进式披露——与 T3 拒绝载荷/triage signals 同形呈现口径）
+    expect(advisory.message).toContain('疑似同族')
+    expect(advisory.message).toContain('全史含 fixed')
+    const line = advisory.message.split('\n').find((l) => l.startsWith('- ')) ?? ''
+    expect(line).toContain('b-root [fixed] 写径拒写')
+    expect(line).toContain('errorType=db-guard')
+    expect(line).toContain('container=f')
+    expect(line).toContain('suspected=packages/core/src/forge/tasks/submit.ts:78')
+    expect(line).toContain('lastSeen=2026-11-01T00:00:00.000Z')
+    expect(line).toContain('recurrenceOf=链根')
+    expect(advisory.message).toContain('getBug')
+  })
+
+  it('候选 >5 条：top-5 限幅（lastSeenAt 降序）+ 其余按 errorType 计数（控呈现不控召回）', async () => {
+    seed()
+    const candidates = [8, 7, 6, 5, 4, 3, 2, 1, 0].map((i) => ({
+      bugId: `b-${i}`, summary: `候选 ${i}`, chain: ['b-root', `b-${i}`],
+      status: i % 2 === 0 ? 'open' : 'fixed', errorType: i % 3 === 0 ? 'type-a' : 'type-b',
+      containerSlug: 'f', suspectedLocation: `src/f${i}.ts:${i}`,
+      lastSeenAt: `2026-11-0${i + 1}T00:00:00.000Z`, recurrenceOf: 'b-root',
+    }))
+    const r = await submitTask({ store: h!.store, events: h!.events, findRecurrenceCandidates: () => candidates }, {
+      ...blockedBase(),
+      files: ['packages/core/src/forge/tasks/submit.ts'],
+    })
+    const message = r.recurrenceAdvisories![0]!.message
+    const entryLines = message.split('\n').filter((l) => l.startsWith('- '))
+    expect(entryLines).toHaveLength(5)
+    expect(entryLines[0]).toContain('b-8') // lastSeenAt 降序首条
+    const overflow = message.split('\n').find((l) => l.includes('其余 4 条'))
+    expect(overflow).toBeDefined()
+    expect(overflow).toContain('type-a×')
+    expect(overflow).toContain('type-b×')
+    expect(overflow).toContain('getBug')
   })
 
   it('TasksVerbDeps face 缺席 → 交叉校验降级跳过不阻载（新问题无警示照常 blocked）', async () => {
@@ -1058,8 +1096,9 @@ describe('T2 生产装配径（bug 0db72bcb）：findRecurrenceCandidates = crea
       suspected: 'packages/core/src/forge/tasks/submit.ts:96',
       recurrenceOf: root.bugId,
     })
-    // 1.1 收窄口径：链须落本任务容器（`t-<slug>-` 前缀）才产候选——测试链挂容器归属
-    h!.db.prepare(`UPDATE bugs SET source_task_id = 't-f-1.1' WHERE source_task_id IS NULL`).run()
+    // recurrence-signal-tiering：链须落本任务容器（container_slug 列比较）才产候选——
+    // 测试链经源任务行（t-f-1.1，slug=f）反查挂容器归属
+    h!.db.prepare(`UPDATE bugs SET source_task_id = 't-f-1.1', container_slug = 'f' WHERE source_task_id IS NULL`).run()
   }
 
   it('face 经 bugs 域服务聚合：新问题 ∧ scope 命中链上 suspected → suspected-family 警示（链结构 = 域层口径）', async () => {
@@ -1077,12 +1116,30 @@ describe('T2 生产装配径（bug 0db72bcb）：findRecurrenceCandidates = crea
     expect(advisory.candidates![0]!.chain).toHaveLength(2) // root → 复发一
   })
 
+  it('连坐消除对照（recurrence-signal-tiering 验收 3）：全 fixed 本缝链 → T2 suspected-family 警示在场（全史视野，status 标注 fixed）；T3 对同链不拦（无 open 分量——claim.test 钉住）', async () => {
+    await seedChain()
+    // 链两员全部终态 fixed——终态过滤已从 core face 管线移除（软动作全史视野）
+    h!.db.prepare(`UPDATE bugs SET bug_status = 'fixed'`).run()
+    const { findRecurrenceCandidates } = productionFace()
+    const r = await submitTask({ store: h!.store, events: h!.events, findRecurrenceCandidates }, {
+      ...blockedBase(),
+      files: ['packages/core/src/forge/tasks/submit.ts'],
+    })
+    expect(r.status).toBe('blocked')
+    expect(r.recurrenceAdvisories).toHaveLength(1) // T2 有信号（软动作不连坐）
+    const advisory = r.recurrenceAdvisories![0]!
+    expect(advisory.kind).toBe('suspected-family')
+    expect(advisory.candidates).toHaveLength(2)
+    expect(advisory.candidates!.every((c) => c.status === 'fixed')).toBe(true) // status 标注
+    expect(advisory.message).toContain('[fixed]')
+  })
+
   it('无关链（链成员 source_task_id 落其它容器）：经生产 face 归属过滤后零候选——新问题不再触发疑似同族警示（1.1 收窄口径，T2 随 T3 同 face 同批生效）', async () => {
     await seedChain()
     // 链整体移出无关任务容器（f → other）：模拟其它提案的历史链（source_task_id FK 指向真实任务行）
     seedFeature(h!.db, { slug: 'other', status: 'in-progress' })
     seedTask(h!.db, 'other', '9.9', { status: 'in_progress' })
-    h!.db.prepare(`UPDATE bugs SET source_task_id = 't-other-9.9' WHERE source_task_id IS NOT NULL`).run()
+    h!.db.prepare(`UPDATE bugs SET source_task_id = 't-other-9.9', container_slug = 'other' WHERE source_task_id IS NOT NULL`).run()
     const { findRecurrenceCandidates } = productionFace()
     const r = await submitTask({ store: h!.store, events: h!.events, findRecurrenceCandidates }, {
       ...blockedBase(),
