@@ -75,7 +75,7 @@ source_bug: f9a23367
 正文：现象、根因、避免方式（何时/为何翻车、如何避免）。
 ```
 
-格式正例参照 `packages/knowledge/src/` 既有条目（如 `integration-core.test.ts` 内条目样例），不得发明平行字段体系；检索关键词纪律遵循 knowledge 插件口径：短词、精确匹配、先 search 后按需读摘要。
+格式正例参照 `packages/plugins/knowledge/src/` 既有条目（如 `integration-core.test.ts` 内条目样例），不得发明平行字段体系；检索关键词纪律遵循 knowledge 插件口径：短词、精确匹配、先 search 后按需读摘要。
 
 ## 写入三阶段依赖演进
 

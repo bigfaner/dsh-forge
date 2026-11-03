@@ -8,10 +8,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 // core 源码相对引入（测试面专用）；插件生产面仅依赖 forgeKnowledge 服务类型（AC3）
-import corePlugin from '../../core/src/index.js'
-import type { CoreContextFace } from '../../core/src/index.js'
+import corePlugin from '../../../core/src/index.js'
+import type { CoreContextFace } from '../../../core/src/index.js'
 // workspaceRegistry 桩（create 幂等语义最小面）——fix-34 收编 core testutil 单份（superset）
-import { StubRegistry } from '../../core/src/testutil/registry-stub.js'
+import { StubRegistry } from '../../../core/src/testutil/registry-stub.js'
 import knowledgePlugin from './index.js'
 import type { KnowledgePromptSection, KnowledgeToolDefinition } from './tools/index.js'
 import type { EntryAbstract, KnowledgeService, ProjectService, SearchHit } from '@dsh-forge/contracts'

@@ -10,8 +10,8 @@
 //   ⑥-4 forge:knowledge 段形状（Interface 3 对上游约定；真实渲染无裸 {{ 插值炸点）
 import { describe, expect, it } from 'vitest'
 import type { KnowledgeService } from '../../packages/contracts/src/index.js'
-import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from '../../packages/knowledge/src/prompt/index.js'
-import { createKnowledgeTools, createProjectResolver } from '../../packages/knowledge/src/tools/index.js'
+import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from '../../packages/plugins/knowledge/src/prompt/index.js'
+import { createKnowledgeTools, createProjectResolver } from '../../packages/plugins/knowledge/src/tools/index.js'
 import { expectPinnedVersion, importUpstream, interfaceMembers, norm, readUpstream } from './pins.js'
 
 /** cordis Context 结构化最小面（真实 Context 结构兼容——探针实测） */

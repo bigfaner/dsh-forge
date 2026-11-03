@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
     "types": ["node"],
@@ -9,5 +9,5 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../contracts" }, { "path": "../path-key" }]
+  "references": [{ "path": "../../contracts" }, { "path": "../../path-key" }]
 }

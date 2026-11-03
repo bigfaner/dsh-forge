@@ -4,7 +4,7 @@
     { "path": "packages/contracts" },
     { "path": "packages/path-key" },
     { "path": "packages/core" },
-    { "path": "packages/knowledge" },
+    { "path": "packages/plugins/knowledge" },
     { "path": "packages/plugin-forge" },
     { "path": "packages/plugin-forge-spec" },
     { "path": "packages/plugins/git-worktree" },

@@ -37,9 +37,9 @@ describe('AC3 插件仅依赖 forgeKnowledge 服务类型（构建图机械自�
       references?: { path: string }[]
     }
     const refs = (ts.references ?? []).map((r) => r.path)
-    expect(refs).toContain('../contracts')
-    // fix-33：../core 引用删除——knowledge build 面零 core import（类型经 contracts 引入）；
+    expect(refs).toContain('../../contracts')
+    // fix-33：core 引用删除——knowledge build 面零 core import（类型经 contracts 引入）；
     // 测试面 core 源相对引入（integration-core）由 tsconfig.test.json 承载（不经 references）
-    expect(refs).not.toContain('../core')
+    expect(refs).not.toContain('../../core')
   })
 })

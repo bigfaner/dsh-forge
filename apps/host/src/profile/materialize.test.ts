@@ -263,7 +263,7 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dsh.profile.bundles).toEqual(packaged.dsh.profile.bundles)
     // dev 直链 workspace 构建产物（4.2：装载面 = loader 行 import 以 profileDir 为锚）
     expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')
-    expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/knowledge')
+    expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/plugins/knowledge')
     expect(dev.dependencies['@dsh-forge/contracts']).toBe('link:../../../packages/contracts')
     expect(dev.dependencies['@dsh-forge/plugin-forge']).toBe('link:../../../packages/plugin-forge')
     // M3 3.7：远征组合 in-preset plugin-forge-spec 行的 loader 解析锚（预设装配 dev 供应面）

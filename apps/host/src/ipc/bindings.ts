@@ -10,7 +10,7 @@
 // 陈旧行（worktree 已删）随全量重写自愈消失；探测失败（非 git/git 缺席）= 该项目零
 // worktree 行（刷新间隙残留无害——对应会话已封存）。行形与主行同形 {wsPath, projectId}
 // 并入 projects 数组（消费端 cwd→projectId 路由零改动即获 worktree 路由能力）。
-// 插件侧 exec 点惰性读取（packages/knowledge tools/session.ts）——无 watch/无投影
+// 插件侧 exec 点惰性读取（packages/plugins/knowledge tools/session.ts）——无 watch/无投影
 // （SC2 纪律域 = UI 状态副本；本文件是装配配置数据，逐写逐读）。
 // 失败口径：绑定表写失败只降级记日志，永不抛断注册/启动流程（对齐 Error Handling
 // 传播策略「关键异常永不抛断用户流程」；后果 = 会话 tool 解析失败回落常规检索，

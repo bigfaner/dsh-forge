@@ -22,7 +22,7 @@ export default defineConfig({
       { test: { name: 'contracts', include: ['packages/contracts/src/**/*.test.ts'] } },
       { test: { name: 'path-key', include: ['packages/path-key/src/**/*.test.ts'] } },
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
-      { test: { name: 'knowledge', include: ['packages/knowledge/src/**/*.test.ts'] } },
+      { test: { name: 'knowledge', include: ['packages/plugins/knowledge/src/**/*.test.ts'] } },
       { test: { name: 'plugin-forge', include: ['packages/plugin-forge/src/**/*.test.ts'] } },
       // 3b④ 契约 pin 扩池：pin-dispatch-injection（dispatchTask description ↔ 注入模板同源断言）
       { test: { name: 'plugin-forge-contract', include: ['packages/plugin-forge/tests/contract/**/*.test.ts'] } },
