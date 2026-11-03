@@ -5,8 +5,8 @@
 //
 // 同缝判据 = 台账 recurrence 链计数（结构化主判据，经只读 face 跨容器查询——跨容器库域
 // 口径归域层，插件层不直连库文件）。归属 scope（recurrence-judgment-narrowing）：face
-// scope 携带任务归属标识（sourceTaskId + slug 容器标识）——core bugs 域按「链内任一成员
-// source_task_id 落 `t-<slug>-` 容器前缀」过滤，无关提案历史链不进候选集（守卫侧不再传
+// scope 携带任务归属标识（sourceTaskId + slug 容器标识）——core bugs 域按 sourceTaskId
+// 结构化解析容器段作锚（slug 为回退键），无关提案历史链不进候选集（守卫侧不再传
 // files 全库口径，files 收窄口径归结算径）。
 // 拦截计数 = 候选 activeCount（core 域产出的活态祖先径边数，终态成员不计）——缺席回退
 // chain 呈现链长判读（contracts BugRecurrenceCandidate 既有约定）。
@@ -119,8 +119,8 @@ export async function recurrenceEscalationGuard(input: {
   }
   let candidates: readonly BugRecurrenceCandidate[]
   try {
-    // 归属 scope（recurrence-judgment-narrowing）：传任务归属标识——core 域按容器前缀过滤，
-    // 无关提案历史链不进候选集；files 收窄口径归结算径，派发径不传 files。
+    // 归属 scope（recurrence-judgment-narrowing）：传任务归属标识——core 域按 sourceTaskId
+    // 结构化解析锚过滤（slug 回退），无关提案历史链不进候选集；files 收窄口径归结算径，派发径不传 files。
     candidates = await findRecurrenceCandidates(projectId, {
       slug: task.slug,
       localId: task.localId,

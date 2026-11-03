@@ -111,7 +111,13 @@ export interface ForgeBugsToolFace {
    */
   findRecurrenceCandidates(
     projectId: string,
-    scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] },
+    scope: {
+      readonly slug: string
+      readonly localId: string
+      /** 派生源任务 id（可选——core 域结构化解析作归属锚，缺席回退 slug） */
+      readonly sourceTaskId?: string
+      readonly files: readonly string[]
+    },
   ): Promise<readonly BugRecurrenceCandidate[]>
 }
 

@@ -88,7 +88,9 @@ export interface TasksServiceDeps {
   readonly stampEvidenceValidity?: (input: { projectId: string; slug: string; localId: string; checkoutRoot: string }) => void
   /**
    * bug 台账 recurrence 候选只读检索（loop-recurrence-hardening T2 交叉校验——可选，透传
-   * TasksVerbDeps；缺席 = 交叉校验降级跳过不阻载）。
+   * TasksVerbDeps；缺席 = 交叉校验降级跳过不阻载）。口径记账（recurrence-judgment-narrowing
+   * 评审 R3）：本径 scope 不携 sourceTaskId——T2 结算径走 slug 回退锚，与 claim 派发径的
+   * sourceTaskId 锚优先并存（两径口径差异在此显式记账；T2 警示为提示性信号，回退锚够用）。
    */
   readonly findRecurrenceCandidates?: (
     projectId: string,

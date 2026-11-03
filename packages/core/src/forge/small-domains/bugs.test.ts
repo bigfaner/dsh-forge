@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import type { BugCard } from '@dsh-forge/contracts'
-import { createBugsService, ERROR_TYPE_SUGGESTIONS_LIMIT, type BugsServiceDeps, type GitExecFile } from './bugs.js'
+import { createBugsService, ERROR_TYPE_SUGGESTIONS_LIMIT, parseTaskContainerSlug, type BugsServiceDeps, type GitExecFile } from './bugs.js'
 import { ReasonRequiredError } from './errors.js'
 import { createHarness, type SmallDomainHarness } from './harness.js'
 
@@ -665,7 +665,7 @@ describe('findRecurrenceCandidates：归属链过滤 + 终态过滤 + 祖先径�
     return { s, root, r1a, r1b }
   }
 
-  it('归属过滤：链成员 source_task_id 落 scope 容器（t-<slug>- 前缀）→ 返回', async () => {
+  it('归属过滤：链成员 source_task_id 结构化解析落 scope 容器 → 返回', async () => {
     const { s, root, r1, r2 } = await seedChain({ sourceTaskId: 't-f-1.1' })
     const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: 'fix-1', files: [] })
     expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId, r2.bugId])
@@ -771,6 +771,34 @@ describe('findRecurrenceCandidates：归属链过滤 + 终态过滤 + 祖先径�
     const s = makeService(h, { execFile: stubExecFile({ 'config user.name': 'faner' }).execFile })
     await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, suspected: 'a.ts:1' })
     expect(await s.findRecurrenceCandidates(h.projectId, { slug: 'f', localId: '1', files: [] })).toEqual([])
+  })
+
+  it('嵌套修复链（dash-localId 形制）：链成员 source_task_id 落 t-<slug>-disc-N → 归属本容器（bug 219076e4）', async () => {
+    const { s, root, r1, r2 } = await seedChain({ sourceTaskId: 't-f-disc-1' })
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: 'disc-2', files: [] })
+    expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId, r2.bugId])
+    // 反向：他容器 dash-localId 链不穿透（t-g-fix-2 ≠ 容器 f）
+    await seedChain({ sourceTaskId: 't-g-fix-2' })
+    expect(await s_find(h!, 'f')).toEqual([])
+  })
+})
+
+// ─────────────────────────── parseTaskContainerSlug（容器归属结构化解析——纯函数边界） ───────────────────────────
+describe('parseTaskContainerSlug：段边界 + 派生词汇白名单', () => {
+  it('数字点 localId：t-<slug>-<N[.N]> → slug', () => {
+    expect(parseTaskContainerSlug('t-f-1.1')).toBe('f')
+    expect(parseTaskContainerSlug('t-loop-recurrence-hardening-1.2')).toBe('loop-recurrence-hardening')
+  })
+  it('dash-localId 派生词汇（fix-N/disc-N）：剥两段回真实容器（bug 219076e4——伪键消除）', () => {
+    expect(parseTaskContainerSlug('t-recurrence-judgment-narrowing-disc-1')).toBe('recurrence-judgment-narrowing')
+    expect(parseTaskContainerSlug('t-fx-fix-1')).toBe('fx')
+    expect(parseTaskContainerSlug('t-loop-fix-2.1')).toBe('loop')
+  })
+  it('非该形制 → null：段数不足 / 无数字点末段 / 剥尽为空', () => {
+    expect(parseTaskContainerSlug('t-f')).toBeNull()
+    expect(parseTaskContainerSlug('t-f-fix')).toBeNull()
+    expect(parseTaskContainerSlug('task-uuid-1')).toBeNull() // 非 t- 前缀 = 非管线任务 id
+    expect(parseTaskContainerSlug('t-fix-1')).toBe('fix') // 单段 slug 容器（歧义按白名单优先解释——文档声明取舍）
   })
 })
 

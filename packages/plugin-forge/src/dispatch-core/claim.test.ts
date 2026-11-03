@@ -64,7 +64,7 @@ describe('盲试 fix 派发判别 + 「待建模」派生态现算', () => {
 })
 
 describe('T3 守卫（recurrenceEscalationGuard）两态', () => {
-  it('count ≥ 2 ∧ 报告不在场 → 软拒绝（错误码 + 升级提示 + 对偶守卫互指 + 解除指引）', async () => {
+  it('count ≥ 2 ∧ 报告不在场 → 软拒绝（错误码 + 升级提示 + release 解除指引三要件）', async () => {
     const rejection = await recurrenceEscalationGuard({
       projectId: 'p-1',
       task: snapshot(),
@@ -122,7 +122,7 @@ describe('T3 守卫（recurrenceEscalationGuard）两态', () => {
     const rejection = await recurrenceEscalationGuard({
       projectId: 'p-1',
       task: snapshot({ slug: 'feat-x', localId: 'fix-2', sourceTaskId: 't-feat-x-2.1' }),
-      // 1.1 归属链过滤的守卫侧消费：仅本任务归属容器（t-<slug>- 前缀）的链进候选——
+      // 1.1 归属链过滤的守卫侧消费：仅本任务归属容器（sourceTaskId 结构化解析锚）的链进候选——
       // 无关提案历史链在场时返回空集，守卫放行。
       findRecurrenceCandidates: (projectId, scope) => {
         scopes.push({ projectId, scope })

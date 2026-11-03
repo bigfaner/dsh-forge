@@ -464,16 +464,26 @@ export interface BugRecurrenceScope {
 
 /**
  * source_task_id 容器归属结构化解析（recurrence-judgment-narrowing 1.1——dash 前缀碰撞
- * 穿透修复）：形制 `t-<slug>-<localId>`，按段边界剥离末段 localId（数字/点字面，如
- * `1.2`），余下段拼回容器 slug 精确比较。非简单 startsWith——slug 互为 dash 前缀
- * （`loop` vs `loop-recurrence-hardening`）不再穿透。非该形制（段数不足/localId 段非
- * 数字点字面）→ null（不归属）。
+ * 穿透修复；bug 219076e4——dash-localId 伪容器键修复）：形制 `t-<slug>-<localId>`。
+ * localId 两族：① 数字点字面（`1.2`）；② 派生链词汇 `fix-N` / `disc-N`（循环修复链/disc
+ * 派生径命名）。解析 = 剥末段数字点段后，若新末段 ∈ 派生词汇再剥一段，余段拼回容器 slug。
+ * 非该形制（无数字点末段/剥尽为空）→ null（不归属）。不可约歧义（容器 slug 本身为
+ * `<x>-fix` 且 localId 为纯数字点）按词汇白名单优先解释，属已知取舍——伪键静默产出消除。
  */
+const DERIVED_LOCAL_ID_HEADS = ['fix', 'disc'] as const
+
 export function parseTaskContainerSlug(sourceTaskId: string): string | null {
   const parts = sourceTaskId.split('-')
+  if (parts[0] !== 't' || parts.length < 3) return null // 非管线任务 id 形制 → 不归属
   const localId = parts[parts.length - 1] ?? ''
-  if (parts.length < 3 || localId === '' || !/^[0-9.]+$/.test(localId)) return null
-  return parts.slice(1, -1).join('-')
+  if (localId === '' || !/^[0-9.]+$/.test(localId)) return null
+  const stripped = parts.slice(0, -1)
+  const head = stripped[stripped.length - 1] ?? ''
+  if ((DERIVED_LOCAL_ID_HEADS as readonly string[]).includes(head) && stripped.length > 2) {
+    stripped.pop()
+  }
+  const slug = stripped.slice(1).join('-')
+  return slug === '' ? null : slug
 }
 
 /** 链成员映射（前驱回溯至链根 + 后继正向收齐——getBug 同口径提取；孤条不入） */
@@ -679,7 +689,8 @@ export function createBugsService(deps: BugsServiceDeps) {
      * 台账 recurrence 候选只读聚合（claim 同缝守卫 / T2 交叉校验 / triage 两信号 / add-fix
      * vars 共同消费 face——生产装配 = 本域服务聚合，tasks 域经闭包注入消费零 import，四域
      * 互禁不破）。判据收窄（recurrence-judgment-narrowing）：
-     * ① 归属过滤——仅返回链内任一成员 source_task_id 落 scope 容器（`t-<slug>-` 前缀）的链；
+     * ① 归属过滤——仅返回链内任一成员 source_task_id 结构化解析（parseTaskContainerSlug：
+     *   sourceTaskId 锚优先、slug 回退键）落 scope 容器的链；
      * ② 终态过滤——链内 open 成员空集（全 fixed/unresolved）不产出候选；
      * ③ 计数语义——activeCount = open 成员沿 recurrence_of 前驱回溯的最长祖先径边数
      *   （不含 BFS 后继收齐）；chain 保持呈现口径（getBug 同构全链），两口径分离。
