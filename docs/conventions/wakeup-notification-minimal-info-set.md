@@ -22,7 +22,7 @@
 ## 应用面
 
 - 凡新增 wakeup 径（guard 粘住、suspendWithWakeup、终局结算等），验收清单直接按信息集**逐项断言**，不凭「文本看起来够用」放行；
-- review-proposal 检查项已挂钩：提案含新增 wakeup 径而 AC 未逐要素断言 = Blocker（见 `packages/plugin-forge/skills/review-proposal/SKILL.md`）。
+- proposal-reviewer 检查项已挂钩：提案含新增 wakeup 径而 AC 未逐要素断言 = Blocker（见 `packages/plugin-forge/experts/proposal-reviewer.md`）。
 
 ## 实证
 
