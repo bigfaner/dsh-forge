@@ -135,14 +135,14 @@ describe('pin-dispatch-injection · description ↔ 模板语义锚对', () => {
     expect(OWNER_ACTIVE_GUIDANCE.join('\n')).toContain('stopTaskLoop')
   })
 
-  it('re-entry 幂等不重跑：description 英文锚 ↔ P3/P9 中文锚', () => {
-    expect(description).toContain('completed tasks are not re-run')
+  it('re-entry 幂等不重跑：description 英文锚（idempotent re-entry——ddf9a49a 终版措辞）↔ P3/P9 中文锚', () => {
+    expect(description).toContain('idempotent re-entry')
     expect(renderP3(PAYLOAD)).toContain('已完成任务不会重跑')
     expect(renderP9(PAYLOAD)).toContain('不重跑已完成任务')
   })
 
-  it('挂起摘要兜底：description 承诺 ↔ 工具壳消费 renderP3 兑现', () => {
-    expect(description).toContain('the response always carries the suspension summary')
+  it('挂起摘要兜底：description 承诺（responses always carry——ddf9a49a 终版措辞）↔ 工具壳消费 renderP3 兑现', () => {
+    expect(description).toContain('responses always carry the suspension summary')
     expect(DISPATCH_TASK_SOURCE).toContain('summary: renderP3(payload)')
   })
 
@@ -153,10 +153,10 @@ describe('pin-dispatch-injection · description ↔ 模板语义锚对', () => {
     expect(OWNER_ACTIVE_GUIDANCE[0]).toContain('at most one dispatch loop')
   })
 
-  it('守卫归属与入口：拒绝响应点名 owner session id + slug（P2 模板已删——生产径自建单分支文案，零静态双分支）', () => {
+  it('守卫归属与入口：拒绝响应点名 owner session id + slug（description 侧锚单活门 owner 占用句——ddf9a49a 五结局语义下沉响应面；生产径自建单分支文案，零静态双分支）', () => {
     expect(DISPATCH_TASK_SOURCE).toContain('is owned by an active dispatch loop')
     expect(DISPATCH_TASK_SOURCE).toContain('owner session ${record.ownerSessionId}')
-    expect(description).toContain('the response names the loop owner and the correct entries')
+    expect(description).toContain('A session runs at most one loop at a time')
   })
 
   it('section 注册单点：段名常量 ↔ 注入模板消费面同源', () => {
