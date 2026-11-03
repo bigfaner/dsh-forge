@@ -239,7 +239,6 @@ function captureBugsFace(
     listBugs: async () => [],
     findRecurrenceCandidates: async () => [],
     aggregateByErrorType: async () => [],
-    aggregateByErrorType: async () => [],
     getBug: async () => ({ card: getBugCard }),
   }
 }
@@ -296,6 +295,34 @@ describe('T4 锚有效性预检（旁挂侧文件 IO，失效退回拒绝路径�
     const result = await t.execute({ bug_id: 'bug-1', outcome: 'fixed', commit_hash: 'a1b2c3d', fix_approach: approach }, EXEC)
     expect(result).toMatchObject({ bugId: 'bug-1', bugStatus: 'fixed' })
     expect(captured[0]).toMatchObject({ fixApproach: approach }) // 原样透传——预检不改写
+  })
+
+  it('probes 卷宗锚（recurrence-signal-tiering 落点双轨）：anchor 指向 probes/<bugId>/ 在场报告 → 预检通过（专家产物落 probes 后 T4 过闸）', async () => {
+    const { mkdtemp, mkdir, writeFile } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const dir = await mkdtemp(join(tmpdir(), 't4-anchor-probes-'))
+    const probesDir = join(dir, '.forge', 'docs', 'probes', 'bug-1')
+    await mkdir(probesDir, { recursive: true })
+    const report = join(probesDir, 'investigation.md')
+    await writeFile(report, '# 深挖方案', 'utf8')
+    const captured: CapturedInput[] = []
+    const card = { ...fixedCard(), bugStatus: 'open' as const, recurrenceOf: 'root-1' }
+    const t = createResolveBugTool({
+      tasks: {} as ForgeToolDeps['tasks'],
+      proposals: {} as ForgeToolDeps['proosals'],
+      bugs: captureBugsFace(captured, async () => fixedCard(), card),
+      projects: {
+        getProject: async () => projectRow(dir),
+        deriveTaskStoreDir: async () => ({ dir }),
+      } as ForgeToolDeps['projects'],
+      resolveProjectId: () => 'p-1',
+      checkpoints,
+    })
+    const approach = `coverage: 覆盖整链共同根因\nanchor: ${report}`
+    const result = await t.execute({ bug_id: 'bug-1', outcome: 'fixed', commit_hash: 'a1b2c3d', fix_approach: approach }, EXEC)
+    expect(result).toMatchObject({ bugId: 'bug-1', bugStatus: 'fixed' })
+    expect(captured[0]).toMatchObject({ fixApproach: approach })
   })
 
   it('非复发家族：零文件 IO 预检（行为零变化——presence 门归 core）', async () => {
