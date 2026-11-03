@@ -57,6 +57,17 @@ function start(name, cmd, env = {}) {
 	return p;
 }
 
+// 包清单编码/JSON 机检（bug 家族 eaea8cea 收口）：dev 起跑先于一切构建/拉起——坏清单
+// （非 UTF-8/非法 JSON）在此即红，不再靠 tsc TS1287 雪崩或 electron 崩溃暴露。
+// 失败拦 dev（fail-loud：清单坏了后续构建产物不可信）。
+const manifestCheck = spawnSync(process.execPath, [join(ROOT, 'scripts', 'check-package-json.mjs')], {
+	stdio: 'inherit'
+});
+if (manifestCheck.status !== 0) {
+	console.error('[dev] 包清单机检失败——先修复 package.json（node JSON 往返或 git 父本回写，禁非 UTF-8 文本替换）');
+	process.exit(manifestCheck.status ?? 1);
+}
+
 // host dist 新鲜度自检须先于两 watch：tsc watch 初始 pass 信 tsbuildinfo，脱节状态零
 // emit 不自愈；后置则与其 emit 竞写同一 dist。失败不拦 dev（fail-soft 沿 vite+tsc 继续，
 // electron 由下方 existsSync 守卫兜底不拉起）。
