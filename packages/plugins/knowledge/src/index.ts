@@ -15,6 +15,7 @@ import type { KnowledgeContextFace } from './tools/index.js'
 import { createKnowledgeTools, createProjectResolver } from './tools/index.js'
 import type { ProjectBinding } from './tools/index.js'
 import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from './prompt/index.js'
+import { startSelfHostedStorage } from './storage/index.js'
 import { joinDirSegment } from '@dsh-forge/path-key'
 
 /** 插件配置（profile cordis.patch.yml 行 config；应用装配期路径经 boot overlay 注入） */
@@ -23,6 +24,12 @@ export interface KnowledgePluginConfig {
   projects?: readonly ProjectBinding[]
   /** 绑定表文件路径（host 装配方维护——tool 执行点惰性读取，条目优先于静态表；4.2） */
   bindingsFile?: string
+  /**
+   * 自持库文件路径（config 可配——裁决① 2026-11-19）；缺席按宿主数据域子目录缺省解析
+   * （dsh-forge → 数据域根/knowledge/，dsh desktop → DSH_HOME/knowledge/）。
+   * 双态（阶段①迁移前）：自持库仅作数据面准备，供数仍走 forgeKnowledge。
+   */
+  dbFile?: string
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -91,7 +98,11 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       knowledge: ctx.forgeKnowledge,
       resolveProjectId: createProjectResolver(config.projects ?? [], config.bindingsFile),
     })
+    // A2 自持存储自启（双态：数据面准备，供数仍走 forgeKnowledge；开库失败 fail-soft
+    // 降级纯旧服务形态，锚缺席（裸环境）不自启——不向 ~/.dsh 静默落盘）
+    const storage = startSelfHostedStorage({ dbFile: config.dbFile })
     const disposers = [
+      storage === undefined ? () => {} : () => storage.close(),
       declareKnowledgeRootDirKey(ctx),
       ctx.tools.register(tools.search),
       ctx.tools.register(tools.readAbstract),

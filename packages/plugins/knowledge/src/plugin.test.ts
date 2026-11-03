@@ -2,11 +2,27 @@
 // 装配 core 桩 + 插件，验证 inject 面（实现Notes口径）与注册/disposer 全生命周期。
 // 假宿主语义锚定 Cordis：inject 声明的服务全部可提供才加载（service-availability）；
 // register/section 各返回注销器（effect disposer 同型）。
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import type { KnowledgeService } from '@dsh-forge/contracts'
 import knowledgePlugin from './index.js'
 import { KNOWLEDGE_SECTION_NAME } from './prompt/index.js'
 import type { KnowledgePromptSection, KnowledgeToolDefinition } from './tools/index.js'
+
+// 自持存储自启的宿主环境锚摘除（hermetic）：本文件全部装配断言走纯旧服务形态——
+// 开发机 shell 携带 DSH_HOME/DSH_FORGE_TASKS_HOME 时装配会真开库落盘，摘除锚使其
+// 确定性不自启（自启路径面钉在 storage/start.test.ts 显式注入 env）。
+const prevEnv = {
+  DSH_HOME: process.env.DSH_HOME,
+  DSH_FORGE_TASKS_HOME: process.env.DSH_FORGE_TASKS_HOME,
+}
+delete process.env.DSH_HOME
+delete process.env.DSH_FORGE_TASKS_HOME
+afterAll(() => {
+  for (const [k, v] of Object.entries(prevEnv)) {
+    if (v === undefined) delete process.env[k]
+    else process.env[k] = v
+  }
+})
 
 /** 临时 runtime：服务表 + 注册捕获 + disposer 记账 */
 class TempRuntime {
