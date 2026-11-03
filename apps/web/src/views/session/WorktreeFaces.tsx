@@ -40,7 +40,11 @@ import { EditableCombobox } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 import {
   riskDialogNeeded,
+  riskDismissedMemoryOf,
+  riskDismissedMemorySync,
   riskLatchConfirm,
+  riskLatchMemoryOf,
+  riskLatchMemorySync,
   riskLatchReselect,
   staleSelectionResetOf,
   type RiskConfirmLatch,
@@ -175,14 +179,24 @@ export function ForgeHeroWorktreeMount({
 
   // 跨分支确认「不再提示」（forge settings worktree.crossBranchRiskDismissed 持久化——
   // 用户级一票：装载读 + 勾选确认写；装载缺席/通道失败 = false 不抑制，fail-soft）
-  const [riskDismissed, setRiskDismissed] = useState(false)
+  // bug e2a10cd4：组件 useState 被 openWorkspace 重挂清零且 settings 写透未及回读（竞态窗）
+  // → 换跨分支目标重弹——落模块级跨重挂记忆（a944424f 同族形态）：初始化惰性读 + 每次变更
+  // 写透（装载回填/勾选置位同一入口），组件态只作记忆镜像。
+  const [riskDismissed, setDismissedState] = useState<boolean>(() => riskDismissedMemoryOf())
+  const setRiskDismissed = useCallback((next: boolean): void => {
+    riskDismissedMemorySync(next)
+    setDismissedState(next)
+  }, [])
   const [riskDismissChecked, setRiskDismissChecked] = useState(false)
   useEffect(() => {
     let alive = true
     makeRpc()
       .settings.get()
       .then((settings) => {
-        if (alive) setRiskDismissed(settings.worktree?.crossBranchRiskDismissed === true)
+        // 装载回填只升不降（bug e2a10cd4）：记忆 true = 本窗口已有用户勾选——settings 读
+        // 到 false（写透竞态窗/通道缺字段）不得降级镜像，否则重挂竞态窗内一票失守重弹；
+        // 一票语义无合法「撤销」路径，false 分支零写入
+        if (alive && settings.worktree?.crossBranchRiskDismissed === true) setRiskDismissed(true)
       })
       .catch((cause: unknown) => {
         console.warn(`[dswf-worktree] 跨分支确认记忆读失败（默认重问）：${String(cause)}`)
@@ -194,7 +208,18 @@ export function ForgeHeroWorktreeMount({
   // 1.34 确认闩锁（bug ccfcc103）：确认后置位——同行重选零重弹；换目标重选清退
   // （riskLatchReselect，重新判定）。取消 = 本次改选未发生（选中态保持原样），不写抑制集
   // （抑制语义随 arm 效应链退役——再点选即重新判定）。
-  const [riskConfirmedLatch, setRiskConfirmedLatch] = useState<RiskConfirmLatch>(null)
+  // bug a944424f：闩锁挂组件 useState 会被 openWorkspace 切主视图的重挂清零（确认 →
+  // applySelection → openWorkspace → ForgeHeroWorktreeMount 重挂 → 同行重选重弹）——
+  // 闩锁落 hero-picker-model 模块级跨重挂记忆（单窗口单实例 =「按窗口」语义），组件态
+  // 只作记忆镜像：初始化惰性读（重挂即水合）+ 每次变更写透（置位/清退同一入口）。
+  const [riskConfirmedLatch, setLatchState] = useState<RiskConfirmLatch>(() => riskLatchMemoryOf())
+  const setRiskConfirmedLatch = useCallback((resolve: (prev: RiskConfirmLatch) => RiskConfirmLatch): void => {
+    setLatchState((prev) => {
+      const next = resolve(prev)
+      riskLatchMemorySync(next)
+      return next
+    })
+  }, [])
   // 点选时点跨分支确认待决（1.19 语义回归）：待决期间选中态不变（确认/取消前零改选）
   const [pendingRiskPath, setPendingRiskPath] = useState<string | null>(null)
 

@@ -197,6 +197,43 @@ export function riskDialogNeeded(path: string, latch: RiskConfirmLatch): boolean
   return latch !== path
 }
 
+// bug a944424f：闩锁跨重挂记忆。确认 → applySelection 走官方 openWorkspace 切主视图
+// （选树即切该树 blank），ForgeHeroWorktreeMount 随主视图切换重挂——组件 useState 闩锁
+// 清零，同行重选重弹。闩锁落模块级记忆（单窗口单实例 = 「按窗口」语义，先例
+// state/selected-tree-window.ts），组件态只作记忆的镜像：初始化惰性读 + 每次变更写透。
+
+let riskLatchMemory: RiskConfirmLatch = null
+
+/** 跨重挂记忆读面（组件 useState 惰性初始化消费——重挂即水合） */
+export function riskLatchMemoryOf(): RiskConfirmLatch {
+  return riskLatchMemory
+}
+
+/** 跨重挂记忆写面（闩锁每次变更写透——置位/清退同一入口） */
+export function riskLatchMemorySync(next: RiskConfirmLatch): void {
+  riskLatchMemory = next
+}
+
+// bug e2a10cd4：「不再提示」跨重挂记忆（与上同族——确认框多弹面的第二状态）。riskDismissed
+// 挂组件 useState 会被 openWorkspace 切主视图的重挂清零，且 settings.set fire-and-forget
+// 写透未及回读（竞态窗内重挂读不到 true）→ 换跨分支目标重弹确认框，用户级一票失守。
+// 值域 = 布尔用户级一票（settings worktree.crossBranchRiskDismissed 持久化口径同域）——
+// 无路径成分，跨项目/跨会话路径失配面天然不存在（review-arch 确认闩锁单值泄漏面判定同构：
+// 值域不含路径 = 无失配抑制面）。落模块级记忆（单窗口单实例 = 「按窗口」语义），组件态只作
+// 记忆镜像：初始化惰性读（重挂即水合）+ 每次变更写透。
+
+let riskDismissedMemory: boolean = false
+
+/** 「不再提示」跨重挂记忆读面（组件 useState 惰性初始化消费——重挂即水合） */
+export function riskDismissedMemoryOf(): boolean {
+  return riskDismissedMemory
+}
+
+/** 「不再提示」跨重挂记忆写面（每次变更写透——装载回填/确认勾选同一入口） */
+export function riskDismissedMemorySync(next: boolean): void {
+  riskDismissedMemory = next
+}
+
 // ───────────── bug 4a30b193 陈旧选中自愈（纯判定单源）─────────────
 
 /** 自愈判定行（WorktreeEntryDto 行模型最小面——present = 盘上实存，host list 兑现） */

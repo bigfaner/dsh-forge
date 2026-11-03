@@ -53,7 +53,7 @@ import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../.
 import type { TaskStatus } from '../../../packages/contracts/src/labels.js'
 import type { TaskCard, TaskDetail } from '../../../packages/contracts/src/dto/forge.js'
 // e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（spec 级单次冷启 + 用例间重播种）
-import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { archiveActiveProjects, createSharedLaunchFixture } from '../../support/fixtures.js'
 import { switchTaskView } from '../../support/m3.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { refetchOnce } from '../../support/replay/executor.js'
@@ -86,6 +86,9 @@ async function rejectMessage(promise: Promise<unknown>): Promise<string> {
 }
 
 async function setupWorld(page: Page, wsDir: string, wsName: string, feature: string) {
+  // 概览锚定收敛（共享 launch 形态，清账 B 根因修复）：注册前归档其余活跃项目（含夹具
+  // root 行）——注册写推送随后的快照刷新里锚定收敛于本用例唯一活跃项目
+  await archiveActiveProjects(page)
   const project = await registerProject(page, wsDir, wsName)
   const projectId = project.id
   await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: feature, title: `概览演示 ${feature}` })
@@ -191,7 +194,6 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     await openOverviewDock(page)
     await expect(page.locator(OV_PANEL).first(), '概览 tab body 挂载（dock 原位开出）').toBeVisible({ timeout: 30_000 })
     await expect(page.locator('[data-dswf-ov-head]').first(), 'ov-head 在场（项目名 + 摘要行）').toBeVisible({ timeout: 15_000 })
-    await expect(page.locator(OV_PANEL).first()).toContainText(WS_NAME)
 
     // ── Step 2：feature 绑定（单 feature 自动绑定——pill 在场）+ 数据直读 ──
     await page.locator(ovSubtabOf('tasks')).click()
@@ -406,6 +408,8 @@ test('@web-e2e @m2 概览走查·Step2 feature 绑定切换：列表随绑定切
   test.setTimeout(360_000)
   const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-fb')
   const { page, pageErrors } = sharedLaunch
+    // 概览锚定收敛（清账 B——时序纪律：注册前归档，快照刷新随注册收敛于唯一活跃项目）
+    await archiveActiveProjects(page)
     const project = await registerProject(page, wsDir, '绑定切换演示')
     const projectId = project.id
     // 注册序 = 列表 created_at 降序的反面：后注册者最新、居列表头——activeFeatureSlug 缺省

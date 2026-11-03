@@ -99,7 +99,76 @@ function recentWorkspaceId(items: readonly WsItemSlice[], byId: Record<string, u
   return selected
 }
 
-/** 官方锚点复刻：currentWorkspaceId ?? recent（官方 startSession 同判的快照窄镜像） */
+/**
+ * INV-U 统一选主谓词（bug 0c677db2 收口——与 host 侧 worktree-identity.ts 主树锚判镜像
+ * 同构，禁止双轨分叉）。统一契约（判据书面化正本：docs/conventions/official-face-contract-anchors.md）：
+ *   ① 主树行必胜：候选集中唯一「归一 path 是其它候选行归一 path 的祖先前缀」的行胜出。
+ *      host 判据（worktree-identity resolveProject：锚 = realpath(git-common-dir) 恒坐落在
+ *      主树内 ⇒ 主树路径是同仓 worktree 行的祖先前缀）的零探针镜像——语义上「主树行必胜」
+ *      是产品裁决语义（fix-1 家族定谳），createdAt 只是实现近似；
+ *   ② 主树判缺席（候选行互不为祖先——同径残留重复行，8c7e847f 实证形态）→ createdAt
+ *      最新胜（解析失败视为最早）；host 行集无同径重复行（projects.ws_path 唯一），此层
+ *      为 wrap 面官方 W 清单特有兜底，不违镜像同构（主树判优先级两侧一致）；
+ *   ③ 平手保快照序首行（确定性序——INV-R 幂等）。
+ * 成立域限定（M1）：① 的 host 判据（锚在行内）与 wrap 祖先前缀判等价的前提是
+ * 「worktree 全在主树子树内」——worktree_dir 逐项目可配（host worktree-identity
+ * getWorktreeDir），外置布局下主树路径未必是 worktree 行的祖先前缀，两半边可分叉；
+ * 另设祖先非 git 注册根行劫持分叉域：host 侧有 isGenuineGitRoot 域归属核验守卫
+ * （bug bc81f4b8 收口），wrap 前缀判无同锚过滤、零 git 探针不加复核，分叉面以台账
+ * official-face-contract-anchors.md 为准。
+ * 契约锚定测试：master-arbitration.test.ts（同锚集合两半边裁决一致性）。
+ */
+export function selectMasterRow(
+  items: readonly WsItemSlice[],
+  predicate: (item: WsItemSlice) => boolean,
+): WsItemSlice | undefined {
+  const candidates = items.filter(predicate)
+  const pathKeyOf = (item: WsItemSlice): string | undefined => {
+    const path = item.path
+    return typeof path === 'string' && path !== '' ? normPath(path) : undefined
+  }
+  const isAncestorOfAny = (row: WsItemSlice): boolean => {
+    const rowKey = pathKeyOf(row)
+    if (rowKey === undefined) return false
+    return candidates.some((other) => {
+      if (other === row) return false
+      const otherKey = pathKeyOf(other)
+      return otherKey !== undefined && otherKey.startsWith(`${rowKey}/`)
+    })
+  }
+  let master: WsItemSlice | undefined
+  let masterTime = Number.NEGATIVE_INFINITY
+  let masterAncestor = false
+  for (const item of candidates) {
+    const parsed = typeof item.createdAt === 'string' ? Date.parse(item.createdAt) : Number.NaN
+    const at = Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
+    const ancestor = isAncestorOfAny(item)
+    if (ancestor && !masterAncestor) {
+      // ① 主树行必胜（首遇即占位——后继非主树行不得凭 createdAt 翻盘）
+      master = item
+      masterTime = at
+      masterAncestor = true
+      continue
+    }
+    if (master === undefined) {
+      master = item
+      masterTime = at
+      continue
+    }
+    if (masterAncestor) continue // ① 主树行占位即冻结选主（后继非主树行不得凭 createdAt 翻盘——bug 143328f1）
+    // ②③ 同层（均非主树行）：createdAt 最新，平手保快照序首行
+    if (at > masterTime) {
+      master = item
+      masterTime = at
+    }
+  }
+  return master
+}
+
+/** 官方锚点复刻：currentWorkspaceId ?? recent（官方 startSession 同判的快照窄镜像）。
+ *  bug 8c7e847f 三件套：INV-B cwd 绑定——mainView 会话归属 = normalizeFsPath(cwd) 同锚行，
+ *  成员位 sessionIds 只作 cwd 缺席时的投影缓存退路；INV-U——命中处一律 selectMasterRow，
+ *  禁裸 find 首命中（残留行/归档行前置清单劫持面）。 */
 function officialAnchor(
   deps: StartSessionWrapDeps,
   items: readonly WsItemSlice[],
@@ -120,13 +189,42 @@ function officialAnchor(
   }
   let targetId: string | undefined
   if (current !== undefined) {
-    targetId = items.find(
-      (item) => Array.isArray(item.sessionIds) && item.sessionIds.includes(current),
-    )?.workspaceId as string | undefined
+    // INV-B cwd 绑定：会话行 cwd 在场（官方 byId 行字段——E3 实证）= 归属判据；
+    // cwd 缺席（旧面形状漂移）退成员位投影缓存（INV-U 选主谓词替代裸 find）
+    const currentRow = byId[current]
+    const cwd =
+      typeof currentRow === 'object' && currentRow !== null
+        ? (currentRow as { cwd?: unknown }).cwd
+        : undefined
+    if (typeof cwd !== 'string' || cwd === '') {
+      // INV-B 退化径诊断留痕（bug bae86480——AGENTS §7 零静默）：cwd 是登记在案的契约锚
+      // 判据源（docs/conventions/official-face-contract-anchors.md），官方包升级漂移致
+      // 缺席时退成员位投影缓存径必须留痕一行。client 束 = diagnostic-emit-discipline
+      // 豁免面，deps.warn（生产 console.warn）即合规诊断通道。
+      deps.warn?.(
+        '[dsh-forge web-client] INV-B 契约锚退化：主视图会话行 cwd 缺席（官方 sessions.list 形状漂移？）——退成员位投影缓存径（INV-U 选主仲裁）',
+      )
+    }
+    if (typeof cwd === 'string' && cwd !== '') {
+      const cwdKey = normPath(cwd)
+      targetId = selectMasterRow(
+        items,
+        (item) =>
+          typeof item.path === 'string' &&
+          item.path !== '' &&
+          normPath(item.path) === cwdKey,
+      )?.workspaceId as string | undefined
+    }
+    if (targetId === undefined || targetId === '') {
+      targetId = selectMasterRow(
+        items,
+        (item) => Array.isArray(item.sessionIds) && item.sessionIds.includes(current),
+      )?.workspaceId as string | undefined
+    }
   }
   if (targetId === undefined || targetId === '') targetId = recentWorkspaceId(items, byId)
   if (targetId === undefined || targetId === '') return { targetPath: undefined }
-  const targetPath = items.find((item) => item.workspaceId === targetId)?.path
+  const targetPath = selectMasterRow(items, (item) => item.workspaceId === targetId)?.path
   return { targetPath: typeof targetPath === 'string' && targetPath !== '' ? targetPath : undefined }
 }
 
@@ -172,7 +270,9 @@ export function installStartSessionWrap(deps: StartSessionWrapDeps): () => void 
       //    官方 session.create({workspaceId}) 原生 blank 复用，零 forge 改道
       const fromDto = await deps.worktreeWorkspaceId(displayed, projectRoot).catch(() => undefined)
       if (typeof fromDto === 'string' && fromDto !== '') return { workspaceId: fromDto }
-      const row = items.find(
+      // INV-U 选主：同锚多行（残留行前置）禁裸 find 首命中——createdAt 最新主行胜
+      const row = selectMasterRow(
+        items,
         (item) =>
           typeof item.workspaceId === 'string' &&
           item.workspaceId !== '' &&

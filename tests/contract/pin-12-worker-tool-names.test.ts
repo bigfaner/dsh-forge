@@ -331,7 +331,8 @@ describe('pin ⑳-5 收窄矩阵常量（Interface 2 逐格——G1 层常驻复
     expect(Object.keys(WORKER_TASK_FAMILY_BY_TYPE).sort()).toEqual([...TASK_TYPES].sort())
   })
 
-  it('worker forge 面 = 六员（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径 + forgeDirs/forgeResolvePath 目录查询双只读径——forge-dirs-query-tool §2.3 查询零副作用；addTask 不入 worker 面——任务派生权限归主会话；dispatchTask/queryTask/listBugs 不入 worker 面——与 contracts worker-matrix 判别单测同锚）', () => {
+
+    it('worker forge 面 = 六员（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径 + forgeDirs/forgeResolvePath 目录查询双只读径——forge-dirs-query-tool §2.3 查询零副作用；addTask 不入 worker 面——任务派生权限归主会话；dispatchTask/queryTask/listBugs 不入 worker 面——与 contracts worker-matrix 判别单测同锚）', () => {
     expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'recordBug', 'resolveBug', 'getBug', 'forgeDirs', 'forgeResolvePath'])
     expect(WORKER_FORGE_TOOLS).not.toContain('addTask')
   })

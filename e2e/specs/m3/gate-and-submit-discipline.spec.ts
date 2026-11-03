@@ -265,6 +265,7 @@ test('@web-e2e @m3 gate 提交定式·受阻径：blocked submit 不经双门（
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: acBlocked.slug, localId: acBlocked.localId }, result: 'blocked',
       reason: 'Jgsd 受阻（AC 证据缺口——修复后重试）', sessionId: 'e2e-jgsd3-executor',
+      blockClassification: { kind: 'new-problem' },
     })
 
     // ── gate-failure：gate 任务失败结算（可附失败 gate 载荷原样落账）→ blocked 承接 fix 链 ──
@@ -274,6 +275,7 @@ test('@web-e2e @m3 gate 提交定式·受阻径：blocked submit 不经双门（
       projectId, taskRef: { slug: gateFailed.slug, localId: gateFailed.localId }, result: 'blocked',
       reason: 'Jgsd gate 失败（lint/test 双红——走 fix 链处置）', gate: { compile: true, fmt: true, lint: false, test: false },
       sessionId: 'e2e-jgsd3-executor',
+      blockClassification: { kind: 'new-problem' },
     })
 
     const db = openForgeDbAt(dir)

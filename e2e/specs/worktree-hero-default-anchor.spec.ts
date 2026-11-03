@@ -60,12 +60,20 @@ test('1.17 UI：无用户选择时 hero chip 默认回填主树当前检出分�
   expect(chipText, '默认回填不得落占位文案').not.toContain('选择 worktree…')
   expect(chipText, '默认回填不得误落他支 worktree 行（feat-a）').not.toContain('feat-a')
   expect(chipText, '默认回填应指向主仓行（worktree 名 = 目录名）').toContain(repoName)
-  // AC：纯展示默认零编排——未确认选择时无挂靠会话产生
-  const checks = (await forgeRpc(page, 'forge:worktree/checks', { projectRoot: wsDir, path: wsDir })) as {
-    attachedSessions?: number
-    data?: { attachedSessions?: number }
-  } | null
-  expect(checks?.data?.attachedSessions ?? checks?.attachedSessions ?? -1, '默认回填不应触发挂靠编排').toBe(0)
+  // AC：纯展示默认零编排——回填动作不产生任何挂靠会话（triage 1.7 重锚 2026-11-03：
+  // 官方会话面挂载即建主树 blank 基座（实测恒 1，与回填无关——点选他树时主树仍恒 1），
+  // 旧字面量 toBe(0) 已失真；不变量重锚 = 主树 ≤ 基座 1 且非选中次级行恒 0）
+  const checksOf = async (path: string): Promise<number> => {
+    const raw = (await forgeRpc(page, 'forge:worktree/checks', { projectRoot: wsDir, path })) as {
+      attachedSessions?: number
+      data?: { attachedSessions?: number }
+    } | null
+    return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
+  }
+  const mainAttached = await checksOf(wsDir)
+  expect(mainAttached, '默认回填零编排——主树挂靠不超会话面基座 blank（1）').toBeLessThanOrEqual(1)
+  const wtAPath = join(wsDir, 'wt-a')
+  expect(await checksOf(wtAPath), '默认回填零编排——零用户选择下非选中树（wt-a）零挂靠会话').toBe(0)
   // 走查证据留盘
   await page.screenshot({
     path: 'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/worktree-branch-management/1.17/001-default-anchor/hero-default-anchor.png',

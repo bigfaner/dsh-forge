@@ -12,6 +12,8 @@ import {
   selectedProjectRootStrictOf,
   riskDialogNeeded,
   riskLatchConfirm,
+  riskLatchMemoryOf,
+  riskLatchMemorySync,
   riskLatchReselect,
   staleSelectionResetOf,
 } from './hero-picker-model.js'
@@ -223,6 +225,25 @@ describe('riskLatch（bug ccfcc103 确认闩锁——置位/清退/弹框判定�
     expect(riskDialogNeeded(WT_A, null)).toBe(true) // 未确认 → 弹框
     expect(riskDialogNeeded(WT_A, WT_A)).toBe(false) // 已确认闩锁 → 零重弹
     expect(riskDialogNeeded(WT_A, 'C:/other')).toBe(true) // 闩锁他行 → 仍弹框
+  })
+})
+
+// ───────── bug a944424f：闩锁跨重挂记忆（openWorkspace 切主视图重挂 useState 清零）──
+describe('riskLatchMemory（bug a944424f——闩锁跨组件重挂存活）', () => {
+  const WT_A = 'C:/repo/.forge/worktrees/wt-a'
+
+  it('确认置位写透记忆；「重挂」后（fresh 组件初始化再读）闩锁仍在——同行重选零重弹', () => {
+    riskLatchMemorySync(null) // 基线
+    // 组件实例一：确认置位（useState 惰性初始化读记忆 + 写透）
+    riskLatchMemorySync(riskLatchConfirm(riskLatchMemoryOf(), WT_A))
+    // 组件实例二（openWorkspace 切主视图重挂）：useState 初始化再读——记忆不失
+    expect(riskLatchMemoryOf()).toBe(WT_A)
+  })
+
+  it('换目标清退写透记忆：重挂后读到 null（重新判定语义跨重挂一致）', () => {
+    riskLatchMemorySync(WT_A)
+    riskLatchMemorySync(riskLatchReselect(riskLatchMemoryOf(), 'C:/other'))
+    expect(riskLatchMemoryOf()).toBeNull()
   })
 })
 

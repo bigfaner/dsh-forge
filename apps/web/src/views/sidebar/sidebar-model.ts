@@ -44,6 +44,12 @@ export interface LedgerSessionRow {
    */
   readonly retainedBy?: { readonly mainView?: number }
   /**
+   * 会话工作目录（官方 SessionSummary 行字段——INV-B cwd 绑定判据源，bug 8c7e847f）：
+   * 会话归属工作区唯一定义为 normalizeFsPath(cwd) = normalizeFsPath(w.path)；缺席
+   * （旧面形状漂移）退行成员位投影缓存径。
+   */
+  readonly cwd?: string
+  /**
    * 宿主投影整值（上游账本行 projectionValues 消费切片——session.list 逐行 hints 块
    * 经 ProjectionValueStore 落值；S7 派发循环徽标窄读键 = 'forge-dispatch-events'（§2.4 判据换源——旧 'forge-dispatch-loop' 指令折叠投影已退役）。
    * 键缺席 = 能力缺席（上游既定语义），形状漂移 = 徽标不渲染（sessionLoopBadge 防御读）。
@@ -399,20 +405,33 @@ export function buildSidebarTree(input: {
   for (const workspace of input.workspaces.items) {
     rowsByWorkspace.set(workspace.workspaceId, workspace.sessionIds)
   }
-  // 树工作区 → 项目归并（host 裁决映射直读——客户端零仲裁）
-  const treeSessionsByProject = new Map<string, readonly string[]>()
+  const archivedIds = new Set(input.workspaces.archivedSessionIds ?? [])
+  // 树工作区 → 项目归并（host 裁决映射直读——客户端零仲裁）。
+  // bug 8c7e847f 三件套（家族链 #6——分组归并消费面，与 wrap 锚 start-session-wrap 同犯
+  // 一谓词形态；E1 离线复现红：归档残留行前置 × 成员位滞后交叉致错挂/双挂）：
+  //   INV-L 活性过滤——path 缺席/空残留行不进归并；
+  //   INV-U 选主——同会话多行声明只归首个命中项目（快照序确定性，INV-R 幂等）；
+  //   INV-B cwd 绑定——normalizeFsPath(cwd) = normalizeFsPath(w.path) 才归属，
+  //   成员位 sessionIds 只作 cwd 缺席时的投影缓存退路（滞后/残留不作归属判据）。
+  const treeSessionOwners = new Map<string, string>()
   if (input.workspaceProject !== undefined) {
     for (const workspace of input.workspaces.items) {
       if (typeof workspace.path !== 'string' || workspace.path === '') continue
-      const projectId = input.workspaceProject.get(normalizeFsPath(workspace.path))
+      const pathKey = normalizeFsPath(workspace.path)
+      const projectId = input.workspaceProject.get(pathKey)
       if (projectId === undefined) continue
-      const prev = treeSessionsByProject.get(projectId) ?? []
-      treeSessionsByProject.set(projectId, [...prev, ...workspace.sessionIds])
+      for (const sessionId of workspace.sessionIds) {
+        if (treeSessionOwners.has(sessionId)) continue
+        const row = input.sessions.byId[sessionId]
+        if (row === undefined) continue
+        const cwd = typeof row.cwd === 'string' && row.cwd !== '' ? normalizeFsPath(row.cwd) : undefined
+        if (cwd !== undefined && cwd !== pathKey) continue
+        treeSessionOwners.set(sessionId, projectId)
+      }
     }
   }
   const pinnedOrder = new Map<string, number>()
   input.workspaces.pinnedSessionIds?.forEach((id, index) => pinnedOrder.set(id, index))
-  const archivedIds = new Set(input.workspaces.archivedSessionIds ?? [])
   const tree: SidebarProjectNode[] = []
   for (const project of input.projects) {
     // 成员 = 主工作区会话 ∪ 树工作区会话（主区序在前，树区随快照序；跨源去重保序）
@@ -423,7 +442,8 @@ export function buildSidebarTree(input: {
       seen.add(sessionId)
       memberIds.push(sessionId)
     }
-    for (const sessionId of treeSessionsByProject.get(project.id) ?? []) {
+    for (const [sessionId, ownerProjectId] of treeSessionOwners) {
+      if (ownerProjectId !== project.id) continue
       if (seen.has(sessionId)) continue
       seen.add(sessionId)
       memberIds.push(sessionId)

@@ -300,6 +300,7 @@ test('@web-e2e @m3 突击直达链·Step3b/4b：受阻结算落账 + AC 缺证�
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: tBlocked.slug, localId: tBlocked.localId }, result: 'blocked',
       reason: 'Jbdc 受阻演示（重大问题——逃生通道前缀语义归 worker-provisioning 旅程）', sessionId: 'e2e-jbdc3-executor',
+      blockClassification: { kind: 'new-problem' },
     })
     const db = openForgeDbAt(dir)
     try {

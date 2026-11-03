@@ -377,6 +377,7 @@ test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入�
     const REASON = '5b 演示受阻：质量门 lint 未过'
     const submit = (await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'blocked', reason: REASON, sessionId: EXEC_SESSION,
+      blockClassification: { kind: 'new-problem' },
     })) as SubmitTaskResult
     expect(submit.status, 'in_progress→blocked').toBe('blocked')
 

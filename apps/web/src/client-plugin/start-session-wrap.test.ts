@@ -27,6 +27,8 @@ function snapshotFaces(options?: {
   currentSessionId?: string
   items?: ItemShape[]
   sessionUpdatedAt?: number
+  /** 会话 cwd（INV-B cwd 绑定判据源——官方 byId 行字段镜像） */
+  sessionCwd?: Record<string, string>
 }) {
   const byId: Record<string, unknown> = {}
   for (const item of options?.items ?? []) {
@@ -35,6 +37,7 @@ function snapshotFaces(options?: {
         id: sessionId,
         updatedAt: options?.sessionUpdatedAt ?? 100,
         retainedBy: sessionId === options?.currentSessionId ? { mainView: 1 } : {},
+        ...(options?.sessionCwd?.[sessionId] !== undefined ? { cwd: options.sessionCwd[sessionId] } : {}),
       }
     }
   }
@@ -47,10 +50,14 @@ function snapshotFaces(options?: {
 function fixture(options?: {
   currentSessionId?: string
   items?: ItemShape[]
+  /** 会话 cwd（INV-B cwd 绑定判据源——直通 snapshotFaces） */
+  sessionCwd?: Record<string, string>
   /** 显示真源（chip 本地投影同源——bug 05c712a4 根治面）；缺省 = 未设 */
   displayed?: string | undefined
   resolveRoot?: string | null
   resolveRootThrows?: boolean
+  /** 输入敏感 resolveRoot（新测试用——按入参 path 裁决；缺省 = 常量 stub） */
+  resolveRootFn?: (path: string) => Promise<string | null>
   /** chip 双发数据源（WorktreeEntryDto.workspaceId）：path → workspaceId；缺省 = 行缺席（undefined） */
   dtoWorkspaceId?: (worktreePath: string, projectRoot: string) => Promise<string | undefined>
   dtoThrows?: boolean
@@ -65,7 +72,8 @@ function fixture(options?: {
     uiWorkspace: { startSession: original },
     sessionsList,
     workspacesList,
-    resolveRoot: async () => {
+    resolveRoot: async (path) => {
+      if (options?.resolveRootFn) return options.resolveRootFn(path)
       if (options?.resolveRootThrows) throw new Error('resolve 失败')
       return options?.resolveRoot !== undefined ? options.resolveRoot : ROOT
     },
@@ -184,6 +192,7 @@ describe('installStartSessionWrap（绑定推导制：入口锚定 workspaceId �
   it('⑦ fail-open：DTO 抛错回退官方行集 / DTO 与回退双缺席 / 判定链异常 → 官方原流', async () => {
     const base = {
       currentSessionId: 'S1',
+      sessionCwd: { S1: ROOT }, // INV-B 契约锚在场——本组只验解析失败面静默（退化径诊断另案）
       items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
       displayed: TREE_B,
     }
@@ -253,5 +262,69 @@ describe('installStartSessionWrap（绑定推导制：入口锚定 workspaceId �
     // 归属门：displayed 不归属 projectRoot → 视同未选回落主行 → 直通根 workspace（非他项目树）
     expect(f.original).toHaveBeenCalledWith(ROOT_WS_ID)
     expect(f.worktreeWorkspaceId).toHaveBeenCalledWith(ROOT, ROOT)
+  })
+
+  // ── bug 8c7e847f 三件套（家族链 #6——wrap 锚消费面 INV-L/INV-U/INV-B）──
+  // 定谳：官方 W 清单不干净（残留行在场、成员位滞后）＋消费面首命中劫持（E1 离线复现红）。
+  describe('bug 8c7e847f：清单仲裁三件套（INV-L 活性过滤 / INV-U 选主 / INV-B cwd 绑定）', () => {
+    it('INV-B cwd 绑定：mainView 会话锚 = cwd 同锚行（成员位滞后残留行不得劫持 targetPath）', async () => {
+      const f = fixture({
+        currentSessionId: 'S1',
+        sessionCwd: { S1: ROOT },
+        items: [
+          // 残留行（旧路径）成员位仍声明 S1（滞后投影缓存）——裸 find 首命中即劫持
+          { workspaceId: 'ws-stale', path: 'C:/repo-old', sessionIds: ['S1'], createdAt: '2026-01-01T00:00:00Z' },
+          { workspaceId: ROOT_WS_ID, path: ROOT, sessionIds: [], createdAt: '2026-06-01T00:00:00Z' },
+        ],
+        resolveRootFn: async (path) => (path === ROOT ? ROOT : null),
+        displayed: undefined,
+      })
+      await f.deps.uiWorkspace.startSession!()
+      // cwd 同锚行（ROOT）被选中 → 回落主行径命中根 workspace；残留旧路径不得进命中集
+      expect(f.original).toHaveBeenCalledWith(ROOT_WS_ID)
+    })
+
+    it('INV-U 选主：同锚多行回退径禁裸 find 首命中（createdAt 最新主行胜）', async () => {
+      const f = fixture({
+        currentSessionId: 'S1',
+        sessionCwd: { S1: ROOT },
+        items: [
+          // 同锚（TREE_A）双行：残留旧行前置——首命中即劫持（E1 形态）
+          { workspaceId: 'ws-stale', path: TREE_A, sessionIds: ['S1'], createdAt: '2026-01-01T00:00:00Z' },
+          { workspaceId: ROOT_WS_ID, path: ROOT, sessionIds: [], createdAt: '2026-05-01T00:00:00Z' },
+          { workspaceId: 'ws-tree-a-new', path: TREE_A, sessionIds: [], createdAt: '2026-06-01T00:00:00Z' },
+        ],
+        displayed: TREE_A,
+      })
+      await f.deps.uiWorkspace.startSession!()
+      expect(f.original).toHaveBeenCalledWith('ws-tree-a-new')
+    })
+
+    it('INV-B 退路：会话行 cwd 缺席（旧面形状漂移）退成员位投影缓存径——既有行为零回归', async () => {
+      const f = fixture({
+        currentSessionId: 'S1',
+        items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
+        displayed: TREE_B,
+        dtoWorkspaceId: DTO_ROWS([{ path: TREE_B, workspaceId: TREE_B_WS_ID }]),
+      })
+      await f.deps.uiWorkspace.startSession!()
+      expect(f.original).toHaveBeenCalledWith(TREE_B_WS_ID)
+    })
+
+    it('INV-B 退化径诊断留痕（bug bae86480）：主视图会话行 cwd 契约锚缺席 → 退成员位径前 warn 一行', async () => {
+      const f = fixture({
+        currentSessionId: 'S1',
+        // snapshotFaces 不注入 cwd（契约锚缺席形态——官方包升级漂移面）
+        items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
+        displayed: TREE_B,
+        dtoWorkspaceId: DTO_ROWS([{ path: TREE_B, workspaceId: TREE_B_WS_ID }]),
+      })
+      await f.deps.uiWorkspace.startSession!()
+      // 退化径零静默（AGENTS §7）：行为零回归 + 诊断一行（契约锚台账登记面）
+      const warn = f.warn as unknown as { mock: { calls: readonly string[][] } }
+      expect(warn.mock.calls).toHaveLength(1)
+      expect(warn.mock.calls[0]?.[0]).toContain('cwd')
+      expect(f.original).toHaveBeenCalledWith(TREE_B_WS_ID)
+    })
   })
 })

@@ -35,7 +35,12 @@ export function interceptSessionSends(
           // 1.19 SessionCwdMismatch 读侧拒绝位随预铸绑定事件退役消失（binding-derivation
           // §2.1——seal 判读改 header.cwd 推导即真，无漂移可判）。
           const name = (cause as Error)?.name
-          if (name === 'SessionSealedError') throw cause
+          if (name === 'SessionSealedError') {
+            // bug bc81f4b8 可观测性：封存拒发是正确性拦截，必须留痕（不静默）——
+            // 非 git 误封存拒发的现场排查面（seal 判定链入参/结果随 bindDiag 对账）。
+            warn(`[git-worktree] 发送拦截拒绝（会话封存）：sessionId=${sessionId} method=${methodName}`)
+            throw cause
+          }
           warn(`[git-worktree] 发送拦截判读失败（fail-open 放行）：${String(cause)}`)
         }
       }

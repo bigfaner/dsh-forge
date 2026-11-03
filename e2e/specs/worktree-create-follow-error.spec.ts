@@ -132,16 +132,17 @@ test('1.24 UI：同名去重 + 创建成功自动跟进 + 失败错误呈现', a
   await snap(page, 'menu-row-dedup.png')
   await page.keyboard.press('Escape')
 
-  // 创建跟进选中（bug 05c712a4 后语义：选中确认即 openWorkspace 开户该树 blank；
-  // 跨分支确认待决期间选中态不变——自动跟进无人工确认，不开户）
+  // 创建跟进选中（用户裁决 2026-10-28，commit 4b38af2c：建树自动选中走完整选中链路
+  // applySelection = openWorkspace 开户该树 blank——1.29「建树零新增会话」随裁决退役；
+  // 显示 = 实际生效状态：新树 blank 会话即开户，挂靠计数 1）
   const created = (await listEntries(page, wsDir)).find((entry) => entry.name === 'dup-row')
   expect(created, '新 worktree 路径在场').toBeTruthy()
   await expect
     .poll(async () => attachedSessions(page, wsDir, created!.path), {
       timeout: 30_000,
-      message: '创建跟进不自动开户（跨分支确认待决——确认前选中态不变）',
+      message: '创建跟进开户新树 blank（4b38af2c 裁决：自动跟进走完整选中链路，workspace record 挂账 1）',
     })
-    .toBe(0)
+    .toBe(1)
 
   // 零 checkout 语义不回归：主树 HEAD 恒 = main
   expect(headBranch(wsDir), '主树 HEAD 不动').toBe('main')
