@@ -97,6 +97,7 @@ test('@web-e2e @m2 fix链·冒烟：受阻→建链→修复→恢复→三视�
     const REASON = 'fxr 冒烟：测试面红灯受阻'
     const blocked = (await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: REASON, sessionId: EXEC,
+      blockClassification: { kind: 'new-problem' },
     })) as SubmitResult
     expect(blocked.status, '源任务落账 blocked').toBe('blocked')
 
@@ -235,6 +236,7 @@ test('@web-e2e @m2 fix链·Step1 源已被人工处置：blocked 结算被矩阵
 
     const rejection = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: FEATURE, localId: '2.1' }, result: 'blocked', reason: '迟到的受阻结算', sessionId: EXEC,
+      blockClassification: { kind: 'new-problem' },
     }))
     expect(rejection, 'from 不匹配 → ERR_INVALID_TRANSITION（submit 唯一合法 from = in_progress）').toContain('非法任务转移')
     expect(rejection, '矩阵呈现实际当前态 suspended').toContain('suspended')
@@ -308,12 +310,14 @@ test('@web-e2e @m2 fix链·Step2 链深 6 上限：第 7 层拒绝 + 提示人�
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: current.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: FEATURE, localId: current.localId }, result: 'blocked', reason: '链深演示：层 1 受阻', sessionId: EXEC,
+      blockClassification: { kind: 'new-problem' },
     })
     for (let level = 2; level <= 7; level++) {
       current = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, current, `fix 层 ${level}`))) as AddResult
       await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: current.localId }, sessionId: DISP })
       await driver.call('forgeTasks', 'submitTask', {
         projectId, taskRef: { slug: FEATURE, localId: current.localId }, result: 'blocked', reason: `链深演示：层 ${level} 受阻`, sessionId: EXEC,
+        blockClassification: { kind: 'same-family-recurrence' },
       })
     }
 
@@ -351,6 +355,7 @@ test('@web-e2e @m2 fix链·Step2 重复受阻重试：任务级去重复用（�
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: '去重演示受阻', sessionId: EXEC,
+      blockClassification: { kind: 'new-problem' },
     })
     const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, src, '既有修复任务'))) as AddResult
     expect(fix.reused, '首建非复用').toBe(false)
@@ -398,11 +403,13 @@ test('@web-e2e @m2 fix链·Step3 fix 自身受阻：fix-of-fix 链深 +1（单�
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: x.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: FEATURE, localId: x.localId }, result: 'blocked', reason: 'ff 演示：X 受阻', sessionId: EXEC,
+      blockClassification: { kind: 'new-problem' },
     })
     const f = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, x, 'fix F'))) as AddResult
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: f.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: FEATURE, localId: f.localId }, result: 'blocked', reason: 'ff 演示：F 亦受阻（质量门未过）', sessionId: EXEC,
+      blockClassification: { kind: 'same-family-recurrence' },
     })
     expect((await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: f.taskId })).taskStatus, 'F 落账 blocked').toBe('blocked')
 
@@ -443,6 +450,7 @@ test('@web-e2e @m2 fix链·Step4 人工跳过 fix：skipped ∈ 满足集 → �
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: 'sk 演示：源受阻', sessionId: EXEC,
+      blockClassification: { kind: 'new-problem' },
     })
     const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, src, '将被人工跳过的 fix'))) as AddResult
 
@@ -487,6 +495,7 @@ test('@web-e2e @m2 fix链·blocked 源建链守卫：disc 径缺省被拒 → fi
     await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: 'bg 演示：源受阻', sessionId: EXEC,
+      blockClassification: { kind: 'new-problem' },
     })
 
     // 被拒径：携源对 + block_source 缺省（disc 径）→ ERR_BLOCK_SOURCE_REQUIRED（文案带指引）

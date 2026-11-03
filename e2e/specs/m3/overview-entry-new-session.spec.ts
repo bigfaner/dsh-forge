@@ -373,6 +373,7 @@ test('@web-e2e @m3 概览入口·T3：blocked 任务「诊断失败」→ 发送
     await driver.call('forgeTasks', 'submitTask', {
       projectId, taskRef: { slug: blocked.slug, localId: blocked.localId }, result: 'blocked',
       reason: 'Joe 失败诊断演示（AC 证据缺口）', sessionId: 'e2e-joes3-executor',
+      blockClassification: { kind: 'new-problem' },
     })
 
     // 任务子 tab → 突击容器 → blocked 行抽屉
