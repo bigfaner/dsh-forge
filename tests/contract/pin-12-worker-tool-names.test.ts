@@ -10,7 +10,7 @@
 //     jobs        job_list/job_output/job_kill（dsh-tool-jobs）
 //     read-image  read_image（dsh-tool-fs——独立族）
 //     web         web_fetch/web_search（dsh-tool-web）
-//     forge       submitTask/addTask/recordBug/resolveBug/getBug（我方 WORKER_FORGE_TOOLS——fix-bug 写径 + 链读径放行）
+//     forge       submitTask/recordBug/resolveBug/getBug（我方 WORKER_FORGE_TOOLS 四动词——bug 写径 + 链读径放行）
 //   全局拒绝（WORKER_GLOBAL_DENY_TOOLS——fix-1/drift #10 实面实名 + worker-lean-execution
 //   S5 迁移：todo_write 解禁 / goal 三件套入拒）：
 //     ask_user_question（tool-ask-user）· subagent_fork（delegation 行 provider:fork 的
@@ -278,7 +278,7 @@ describe('pin ⑳-3 映射表 ↔ 上游枚举对账（WORKER_TOOL_NAME_FAMILY �
     }
   })
 
-  it('forge 面 = 恰 WORKER_FORGE_TOOLS 两动词（我方工具非上游枚举面）', () => {
+  it('forge 面 = 恰 WORKER_FORGE_TOOLS 四动词（我方工具非上游枚举面）', () => {
     const forgeNames = Object.entries(WORKER_TOOL_NAME_FAMILY)
       .filter(([, f]) => f === 'forge')
       .map(([n]) => n)
@@ -331,8 +331,9 @@ describe('pin ⑳-5 收窄矩阵常量（Interface 2 逐格——G1 层常驻复
     expect(Object.keys(WORKER_TASK_FAMILY_BY_TYPE).sort()).toEqual([...TASK_TYPES].sort())
   })
 
-  it('worker forge 面 = 四动词（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径——fix-bug coding-fix worker 放行；addTask 不入 worker 面——任务派生权限归主会话/循环处置层，eeb7d447 有意收口；dispatchTask/queryTask/listBugs 不入 worker 面）', () => {
+  it('worker forge 面 = 四动词（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径——fix-bug coding-fix worker 放行；addTask 不入 worker 面——任务派生权限归主会话/循环处置层，eeb7d447 有意收口；dispatchTask/queryTask/listBugs 不入 worker 面——与 contracts worker-matrix 判别单测同锚）', () => {
     expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'recordBug', 'resolveBug', 'getBug'])
+    expect(WORKER_FORGE_TOOLS).not.toContain('addTask')
   })
 
   it('主 agent 专用新工具面不入 worker 面（3b stopTaskLoop 停止入口——WORKER_TOOL_NAME_FAMILY 与 WORKER_FORGE_TOOLS 均不含；worker deny 由 FORGE_DENY_IN_WORKER 同步守护）', () => {

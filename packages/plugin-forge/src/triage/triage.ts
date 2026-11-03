@@ -132,7 +132,7 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
           const candidates = await deps.findRecurrenceCandidates(input.projectId, {
             slug: input.task.slug,
             localId: input.task.localId,
-            files: [],
+            sourceTaskId: input.task.sourceTaskId,
           })
           if (candidates.length > 0) {
             const top = candidates.reduce((a, b) => (recurrenceCountOf(b.chain) > recurrenceCountOf(a.chain) ? b : a))

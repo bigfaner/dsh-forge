@@ -33,7 +33,15 @@ import {
 } from "./registry.js";
 import { registerExpertSquadRoutes, type ConnectionLike, type DelegateAssemblyState } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
-import { registerExpertTools, serializeExpertMd, type ToolRegisterFace } from "./tools.js";
+import {
+  EXCLUDED_EXPERT_TOOL_NAMES,
+  createKnownToolsProbe,
+  registerExpertTools,
+  serializeExpertMd,
+  unionSkillsCatalog,
+  unionToolsCatalog,
+  type ToolRegisterFace,
+} from "./tools.js";
 import {
   ExpertRunPanelState,
   observeSubagentEnd,
@@ -440,23 +448,37 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     runState: () => panel.list(),
     // delegate 装配状态读口：读口应答随 delegate 字段透出（观测面-only）。
     delegateState: () => delegateAssembly,
-    // 候选目录读口（Dialog 工具/技能候选——AGENTS 1.2 复用官方目录机械）：
-    // tools = ToolRuntime.schemas() 全局注册视图——无 scope 即全局视图，不含 preset
-    // 域 scoped deny 效果（守卫态 restrict 只作用于 preset 域 scoped apply，全局
-    // 视图永不含 deny；scope 视图不实现——候选是「可选白名单建议」，注记裁定）；
-    // skills = SkillRegistry.list root 全局层技能目录视图（无 scope 视图链，cwd 取
-    // 注册工作区）。对应官方服务缺席 = 字段缺席（client 回退兜底）。
+    // 候选目录读口（bug c19eb719：Dialog 工具/技能候选 = list_tools/list_skills 同款
+    // 全模式并集条目 {name, source}——共用取数面 unionToolsCatalog/unionSkillsCatalog，
+    // 不另立平行取数点）：tools 并集过滤排除集 EXCLUDED_EXPERT_TOOL_NAMES（7 枚管理/
+    // 取数工具；list_experts/delegate_expert 保留）；skills 同径并集（SkillRegistry
+    // 分层视图，官方源码核销 dsh-skill lib/types/index.d.ts:214-224/263-266）。
+    // 对应官方服务缺席 = 字段缺席（client 回退兜底）。
     candidates: async () => {
+      // bug 66b588e3：bind 宿主保 this——抽出裸调丢 this，官方 schemas 方法体
+      // this.view 抛错归一 400，client 回退兜底残缺
+      const schemasRead = toolsFace?.schemas?.bind(toolsFace);
       const tools =
-        typeof toolsFace?.schemas === "function"
-          ? Array.from(new Set(toolsFace.schemas().map((schema) => schema.name)))
+        schemasRead !== undefined
+          ? (
+              await unionToolsCatalog(
+                (scope?: object) =>
+                  scope === undefined ? schemasRead() : schemasRead(scope),
+                ctx.agentPresets,
+              )
+            )?.entries
+              .filter(
+                (entry) => !(EXCLUDED_EXPERT_TOOL_NAMES as readonly string[]).includes(entry.name),
+              )
+              .map((entry) => ({ name: entry.name, source: entry.source }))
           : undefined;
       const skillsFace = ctx.skills;
       const skills =
         typeof skillsFace?.list === "function"
-          ? Array.from(
-              new Set((await skillsFace.list({ cwd: process.cwd() })).map((skill) => skill.name)),
-            )
+          ? (await unionSkillsCatalog(skillsFace, ctx.agentPresets))?.entries.map((entry) => ({
+              name: entry.name,
+              source: entry.source,
+            }))
           : undefined;
       return {
         ...(tools !== undefined ? { tools } : {}),
@@ -550,13 +572,16 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       subagents,
       panel,
       provider: "spawn",
-      // 白名单平台求交探针（bug 3cb118cf）：每派发现调 schemas() 取全局注册名，
-      // 消费点现查禁 memoize（工作区约定 §1.6）；toolsFace.schemas 缺席 → undefined
-      // → compose 侧无探针不裁剪（fail-soft 同 dsh-graph g-473 口径）。
-      knownTools: () => {
-        const schemas = toolsFace.schemas?.();
-        return schemas === undefined ? undefined : schemas.map((schema) => schema.name);
-      },
+      // 白名单平台求交探针（bug 3cb118cf / e3b045dc）：无参 schemas() 是 global 单层
+      // 投影（官方工具在 preset scope 层，恰好只剩本插件 expert 域工具 → 求交空集炸
+      // 委派）——改接全模式并集面 createKnownToolsProbe（global ∪ 逐 preset scope 租约，
+      // bug 6337a936 同径）。每派发现调禁 memoize（AGENTS 1.6）；缺席面 fail-soft
+      // （空并集 = 不裁剪；金丝雀防护保留兜底）。
+      knownTools: createKnownToolsProbe(
+        (scope?: object) =>
+          scope === undefined ? toolsFace.schemas?.() : toolsFace.schemas?.(scope),
+        () => ctx.agentPresets,
+      ),
     });
     delegateAssembly = { status: "registered" };
   }

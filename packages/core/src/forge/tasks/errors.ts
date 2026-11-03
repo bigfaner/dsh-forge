@@ -518,7 +518,7 @@ export class BlockSourceRequiredError extends Error {
       `源任务已 blocked：${data.taskRef.slug}/${data.taskRef.localId}——不带 block_source 的派生（disc 径）` +
         `不会建等待边，fix 完成无法恢复源。请补 block_source=true 建 fix 链（等待边 + auto-block；` +
         `fix 完成即恢复源）。对偶守卫：同族复发（同缝计数 ≥2）的盲试 fix 派发另被 ` +
-        `ERR_RECURRENCE_ESCALATION_REQUIRED 软拒绝——先升级排查建模再派发（其指引文案同样指路本码）`,
+        `ERR_RECURRENCE_ESCALATION_REQUIRED 软拒绝——先升级排查建模再派发`,
     )
     this.name = 'BlockSourceRequiredError'
     this.data = data

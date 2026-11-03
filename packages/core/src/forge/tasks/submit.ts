@@ -59,7 +59,9 @@ const BLOCK_CLASSIFICATION_KINDS = new Set(['new-problem', 'same-family-recurren
  * T2 归类闸门应答增补推导（事务提交后——只读 face 消费点，fail-soft 降级不阻载）：
  * 同族复发 → upgrade-hint 升级提示（face 无关恒挂）；新问题 ∧ face 在场 → 候选检索，
  * 命中即 suspected-family「疑似同族」警示（不硬拒——主会话裁决）。face 缺席/检索异常 =
- * 交叉校验降级跳过（先例 stampEvidenceValidity）。
+ * 交叉校验降级跳过（先例 stampEvidenceValidity）。检索口径 = 台账域 face 的归属链收窄
+ * （recurrence-judgment-narrowing 1.1：scope 容器归属 + 终态过滤——T2 与 T3/triage 同
+ * face 同批生效，无关链不再触发「疑似同族」；本函数零独立计数/传参残留）。
  */
 async function deriveRecurrenceAdvisories(
   deps: TasksVerbDeps,

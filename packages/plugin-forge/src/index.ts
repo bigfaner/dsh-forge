@@ -22,18 +22,18 @@
 // {wsPath,projectId} JSON 经插件 config 进入，生产端 3.4）。
 import { join, dirname } from 'node:path'
 import { existsSync } from 'node:fs'
-import type { DiagLevel, ForgeSettingsService, ProjectServiceM2 } from '@dsh-forge/contracts'
+import type { AgentPresetsFace, DiagLevel, ForgeSettingsService, ProjectServiceM2, ToolsSchemasReader } from '@dsh-forge/contracts'
+import { createUnionToolNamesProbe } from '@dsh-forge/contracts'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
-import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
-import { globalToolNamesOfToolsFace } from './dispatch-core/index.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, createProjectWorkspaceRoots, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, ForgeToolDefinition, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
-import { adaptSessionProgressAppend, FORGE_PROGRESS_SCENARIO, registerProgressEventVocabulary } from './progress/index.js'
+import { adaptSessionProgressAppend, createSubmitSettleDisplay, FORGE_PROGRESS_SCENARIO, registerProgressEventVocabulary } from './progress/index.js'
 import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
 import { createSettleReportRecovery, createRecurrenceFaces, gitHeadCommit } from './dispatch-core/index.js'
 import type { EscalationAskFace } from './loop/index.js'
@@ -416,12 +416,17 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 报告在场探测 = settle.ts resolveDir 同源 projects face 派生（提案卷宗 issues/<localId>/
     // 顶层 .md 在场即 true；探测面只读、fail-soft 缺席 false）。T2 疑似同族警示 / T3 同缝
     // 拦截与解除判据 / triage 两信号 / add-fix vars 四处机制生产生效的装配前提。
+    const projectWsRoots = createProjectWorkspaceRoots(ctx.forgeProjects)
     const recurrenceFaces = createRecurrenceFaces({
       bugs: ctx.forgeBugs,
-      resolveProjectDir: (projectId) => projectDirs.resolve(projectId),
+      // bug 8b041612 修正：卷宗探测的 dir 语义 = 项目工作区根（ws_path——与 settle 报告
+      // 回收同源），非容器库目录（projectDirs.resolve = deriveTaskStoreDir 派生，incident
+      // 落盘缝——两缝分置，此前错接致探测路径恒不存在、T3 解除判据恒 false）。
+      resolveProjectDir: (projectId) => projectWsRoots.resolve(projectId),
     })
     const boundProjectIds = bindingProjectIds(config.projects ?? [], config.bindingsFile)
     projectDirs.warm(boundProjectIds)
+    projectWsRoots.warm(boundProjectIds)
     const narrator = createNarrator({
       channel: narrationChannel,
       incidents: createIncidentStore({
@@ -509,13 +514,58 @@ const forgePlugin: ForgePlugin = Object.assign(
         return false
       }
     }
+    // 官方 tools 面 schemas 读取子面（bug a5b12254——跨 preset 并集探针注入缝：
+    // ToolRuntime.schemas(scope?)，缺 scope = global 单层、携 preset scope key = 该
+    // preset 装配面视图；ctx.tools 类型面仅 ToolRegisterFace，schemas 经结构化窄取）
+    function toolsSchemasReaderOf(hostCtx: ForgeContextFace): ToolsSchemasReader {
+      return (scope?: object) => {
+        const tools = hostCtx.tools as unknown as {
+          schemas?: (this: unknown, scope?: object) => readonly { name: string }[] | undefined
+        }
+        return tools.schemas?.call(hostCtx.tools, scope)
+      }
+    }
+    // 官方 agentPresets 服务现查（AGENTS 1.6 双通道——ctx 具名属性 + reflect.get，与
+    // expertsServicePresent 同径；缺席/异常 = undefined → 探针 fail-soft 降级 global 单层）
+    function agentPresetsOf(): AgentPresetsFace | undefined {
+      try {
+        const viaInject = (ctx as ForgeContextFace & { readonly agentPresets?: AgentPresetsFace }).agentPresets
+        if (
+          viaInject !== undefined &&
+          typeof viaInject.list === 'function' &&
+          typeof viaInject.acquireScope === 'function'
+        ) {
+          return viaInject
+        }
+      } catch {
+        // 注入服务未就绪 = 降级到 reflect 通道
+      }
+      try {
+        const viaReflect = ctx.reflect?.get('agentPresets') as AgentPresetsFace | undefined
+        if (
+          viaReflect !== undefined &&
+          typeof viaReflect.list === 'function' &&
+          typeof viaReflect.acquireScope === 'function'
+        ) {
+          return viaReflect
+        }
+      } catch {
+        // reflect 通道异常 = 缺席
+      }
+      return undefined
+    }
     const loopDriverBase = createLoopDriver({
       registry: loopRegistry,
       expertsPresent: expertsServicePresent,
-      // 全局工具注册名读取面（bug 92d642c2 根因层——worker toolFilter 求交基准优先全局
-      // 视图：装配期 ctx.tools 无作用域面；parent 会话视图是作用域收窄面——专家委派会话
-      // restrict 后仅剩档案工具域，对其求交曾把管线必备静默剔除/守卫假阳性炸 spawn）
-      globalToolNames: () => globalToolNamesOfToolsFace(ctx.tools),
+      // 跨 preset 并集探针（bug a5b12254——求交基准不接 global 单层投影：官方工具全随
+      // preset 装 preset scope 层，无参 schemas() 只剩 expert 域名 → 金丝雀守卫判不可信
+      // → 不裁剪 → 档案 pwsh 落 Mac 原样放行拆 spawn。改接 contracts
+      // createUnionToolNamesProbe：global 视图 ∪ 逐 preset acquireScope 租约内 scope
+      // 视图，含 read 金丝雀 → 可信求交 + pwsh→bash 同族解析；探针不可信/缺席时 shell
+      // 名按平台确定性兜底（core.ts spawnClaimed 注入 process.platform）。消费点现查禁
+      // memoize（AGENTS 1.6）；agentPresets 经 ctx 具名属性 + reflect 双通道现查，缺席
+      // fail-soft 降级 global 单层（expert-squad 0.25.5 同径——本包不反依赖其实现）。
+      globalToolNames: createUnionToolNamesProbe(toolsSchemasReaderOf(ctx), agentPresetsOf),
       ...(e2eBaseline !== undefined ? { e2eBaseline } : {}),
       tasks: ctx.forgeTasks,
       spawn,
@@ -644,6 +694,14 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
       // T4 锚有效性预检项目根解析缝（loop-recurrence-hardening——resolveDir 同源 projects face）
       projects: ctx.forgeProjects,
+      // 越径结算显示同步缝（submitTask 终态事件补发——任务源无活循环时向 claim 会话补发
+      // settle/out-of-band 事件，组卡/面板翻旧「执行中」行；worker 挺过宿主重启直接落账
+      // 的结算径，池态 17/17 与面板执行中计数分裂收口）
+      submitSettleDisplay: createSubmitSettleDisplay({
+        registry: loopRegistry,
+        tasks: ctx.forgeTasks,
+        ...(progressAppend !== undefined ? { progressAppend } : {}),
+      }),
       // 3b 循环工具装配缝：dispatchTask/stopTaskLoop 与 /run-dag-tasks 指令同源同一循环核心
       // （驱动器 + 登记表单例注入——守卫判活/接管集/单活门控双入口同 registry）。
       loop: { driver: loopDriver, registry: loopRegistry },
@@ -706,11 +764,15 @@ const forgePlugin: ForgePlugin = Object.assign(
       disposeCommands = undefined
     }
     // S3 启动对账（run-tasks-host-command 图 D）：进程重启 → 插件装配 → reconcileInterrupted
-    // 逐绑定项目 fail-soft 触发。三重判据（in_progress ∧ claim 记录循环来源标记 ∧ 登记表空）
+    // 逐项目 fail-soft 触发。三重判据（in_progress ∧ claim 记录循环来源标记 ∧ 登记表空）
     // 之③在装配时点恒真——循环登记表进程内不持久化，重启即空（活循环启动只会晚于装配），
     // registryEmpty=true 为装配期结构事实。fire-and-forget：失败不阻载装配（对账降级 = 遗留
     // in_progress 原样——skill 幂等重入语义不受伤，下次进程重启重试）。
-    for (const projectId of boundProjectIds) {
+    // 枚举源 = 静态绑定 ∪ 项目注册表（bug 追溯：只认静态绑定表时，动态绑定项目——会话式
+    // 绑定/packaged 形态零静态 config——装配径零执行，孤儿 in_progress 假执行永驻；11-03
+    // 重启取证：runtime bundle 含修复代码但全天零 forge-reconcile 留痕 = 循环体未跑）。
+    // listProjects 故障 = 回退静态绑定表（原覆盖面，fail-soft 同径）。
+    const reconcileProject = (projectId: string): void => {
       try {
         void ctx.forgeTasks
           .reconcileInterrupted({ projectId, registryEmpty: true })
@@ -758,6 +820,16 @@ const forgePlugin: ForgePlugin = Object.assign(
         warnReconcileDegraded(diag, projectId, cause) // 同步抛（服务面缺席等）——fail-soft 同径
       }
     }
+    void (async () => {
+      let projectIds = boundProjectIds
+      try {
+        const listed = await ctx.forgeProjects.listProjects()
+        projectIds = [...new Set([...boundProjectIds, ...listed.map((project) => project.id)])]
+      } catch {
+        // 注册表读面故障 = 回退静态绑定表（原覆盖面——降级不扩不缩语义）
+      }
+      for (const projectId of projectIds) reconcileProject(projectId)
+    })()
     // 1.16 文档位置按会话工作区注入（bug 5adb5960 根治：段此前取 boundProjectIds[0]
     // 首个绑定项目，多项目宿主下所有会话共享同一（错误项目的）文档根）：段 text 用
     // 官方 PromptSection 函数形态——每次 system prompt 装配按上下文 agent.id（SessionId）
@@ -1138,6 +1210,7 @@ export {
   adaptAgentNarrationChannel,
   createExpertProfileResolver,
   createProjectContainerDirs,
+  createProjectWorkspaceRoots,
   FORGE_EXPERTS_ROOT_DIR,
   FORGE_NOTICE_SOURCE_KIND,
 } from './faces.js'

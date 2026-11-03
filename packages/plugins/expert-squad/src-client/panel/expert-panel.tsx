@@ -109,10 +109,16 @@ export function runStateUrl(): string {
   return "/api/expert-squad/run-state";
 }
 
-/** 候选目录快照（candidates 读口容缺切片——字段缺席 = 对应官方目录缺席）。 */
+/** 候选目录快照（candidates 读口容缺切片——字段缺席 = 对应官方目录缺席；条目带
+ *  来源标注，旧宿主纯字符串载荷解析为无来源条目——bug c19eb719 双形状容缺）。 */
+export interface CandidateEntrySnapshot {
+  readonly name: string
+  readonly source?: string
+}
+
 export interface CandidateCatalogSnapshot {
-  readonly tools?: readonly string[]
-  readonly skills?: readonly string[]
+  readonly tools?: readonly CandidateEntrySnapshot[]
+  readonly skills?: readonly CandidateEntrySnapshot[]
 }
 
 /** /api/expert-squad/candidates 请求 URL（宿主 ToolRuntime/skill 目录候选读口）。 */
@@ -120,18 +126,31 @@ export function candidatesUrl(): string {
   return "/api/expert-squad/candidates"
 }
 
-/** 默认候选目录探针（GET candidates 读口；失败/载荷漂移 = 容缺 undefined——旧宿主兼容）。 */
+/** 默认候选目录探针（GET candidates 读口；失败/载荷漂移 = 容缺 undefined——旧宿主兼容。
+ *  bug c19eb719 双形状：条目对象 {name, source}（新宿主）与纯字符串数组（旧宿主，
+ *  来源缺席）均解析；数组含非法项 = 该字段容缺）。 */
 export function defaultCatalogProbe(): Promise<CandidateCatalogSnapshot | undefined> {
   return (async () => {
     const response = await fetch(candidatesUrl())
     if (!response.ok) return undefined
     const payload = (await response.json()) as { tools?: unknown; skills?: unknown }
-    const strArr = (value: unknown): readonly string[] | undefined =>
-      Array.isArray(value) && value.every((item) => typeof item === "string")
-        ? (value as readonly string[])
-        : undefined
-    const tools = strArr(payload?.tools)
-    const skills = strArr(payload?.skills)
+    const entryArr = (value: unknown): readonly CandidateEntrySnapshot[] | undefined => {
+      if (!Array.isArray(value)) return undefined
+      const out: CandidateEntrySnapshot[] = []
+      for (const item of value) {
+        if (typeof item === "string") {
+          out.push({ name: item })
+          continue
+        }
+        if (typeof item !== "object" || item === null) return undefined
+        const { name, source } = item as { name?: unknown; source?: unknown }
+        if (typeof name !== "string") return undefined
+        out.push(typeof source === "string" ? { name, source } : { name })
+      }
+      return out
+    }
+    const tools = entryArr(payload?.tools)
+    const skills = entryArr(payload?.skills)
     if (tools === undefined && skills === undefined) return undefined
     return { ...(tools !== undefined ? { tools } : {}), ...(skills !== undefined ? { skills } : {}) }
   })()

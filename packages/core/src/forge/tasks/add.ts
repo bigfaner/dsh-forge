@@ -85,7 +85,9 @@ export interface TasksVerbDeps {
    * bug 台账 recurrence 候选只读检索（loop-recurrence-hardening T2 交叉校验——可选依赖注入，
    * 先例 stampEvidenceValidity）：按任务 scope 检索台账 recurrence 候选。四域互禁不破——
    * tasks 域不 import bugs 域，台账检索经装配方注入只读闭包（生产装配 = bugs 域服务聚合）。
-   * 缺席 = 交叉校验降级跳过不阻载；实现侧异常由消费点 fail-soft 同路降级。
+   * 缺席 = 交叉校验降级跳过不阻载；实现侧异常由消费点 fail-soft 同路降级。口径记账：
+   * 本径 scope 不携 sourceTaskId——T2 结算径走 slug 回退锚（与 claim 派发径锚优先并存，
+   * 差异记账见 service.ts 同名 face 注释）。
    */
   readonly findRecurrenceCandidates?: (
     projectId: string,

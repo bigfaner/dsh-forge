@@ -1,8 +1,12 @@
 /**
- * ComposerBarProps 结构同型镜像（official-input 复制件的对接 contract）�? * PROVENANCE：官方源�?ui-conversation/src/client/contract/slots.ts �?ComposerBarProps
+ * ComposerBarProps 结构同型镜像（official-input 复制件的对接 contract）。
+ * PROVENANCE：官方源 = ui-conversation/src/client/contract/slots.ts 的 ComposerBarProps
  * 不整体复制——原类型依赖包内 slots runtime 类型族（PropsRuntime/PropsRenderSlots/
  * InjectFace/PropsLocale），替身只消费其中的结构面。本文件按复制件 InputBar/
- * view-binding/ContextMeter 实际消费字段承载同型结构（字段逐一对照官方 0.2.0-rc.2�? * repo f059f01ce367748392d8f665c0705fb4302a626b�?026-10-22）。renderSlot 等槽位面�? * 替身装配层给空实现（不申请官方槽位授权——declaring-is-claiming 红线）�? */
+ * view-binding/ContextMeter 实际消费字段承载同型结构（字段逐一对照官方 0.2.0-rc.2，
+ * repo f059f01ce367748392d8f665c0705fb4302a626b，2026-10-22）。renderSlot 等槽位面由
+ * 替身装配层给空实现（不申请官方槽位授权——declaring-is-claiming 红线）。
+ */
 import type { ReactNode } from 'react'
 import type { Translate } from './translate.js'
 import type { ComposerKeyboard } from './draft-editor.js'
@@ -10,7 +14,7 @@ import type { InputActions, InputState } from './input.js'
 import type { BusyEnterBehavior } from './composer-submission.js'
 import type { ObservableSnapshot } from '../store.js'
 
-/** 会话事实切片（官�?useSession store 消费面——InputBar �?promptError/running/subagent/removed�?*/
+/** 会话事实切片（官方 useSession store 消费面——InputBar 的 promptError/running/subagent/removed） */
 export interface SessionFacts {
   readonly promptError: { readonly error: { readonly code: string; readonly message: string; readonly details: { readonly reason: string } } } | null
   readonly running: boolean | null
@@ -30,10 +34,10 @@ export interface ComposerAttachment {
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 export type UseProjection = <K extends string>(key: K, select?: (value: any) => any) => any
 
-/** 快照�?hook 面（官方 useStore 适配形——getSnapshot + subscribe �?React 绑定�?*/
+/** 快照 hook 面（官方 useStore 适配形——getSnapshot + subscribe 的 React 绑定） */
 export type SnapshotHook<T> = <S>(selector: (snapshot: T) => S) => S
 
-/** 复制�?InputBar 的完�?props（结构同型——官�?ComposerBarProps 消费子集�?*/
+/** 复制件 InputBar 的完整 props（结构同型——官方 ComposerBarProps 消费子集） */
 export interface ComposerBarProps {
   useSession: SnapshotHook<SessionFacts>
   useInput: SnapshotHook<InputState | undefined>

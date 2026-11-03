@@ -86,12 +86,12 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
     expect(files).not.toContain('spawn-worker.ts')
   })
 
-  it('注册块逐行对账：plugin index.ts 恰注册二十员（tools.<name> 形——名面 = FORGE_TOOL_NAMES）', () => {
+  it('注册块逐行对账：plugin index.ts 恰注册二十员（registerToolLoud(tools.<name>) 形——f7f805c3 起注册经响亮包装器（内部仍 ctx.tools.register），名面 = FORGE_TOOL_NAMES）', () => {
     const index = readFileSync(join(ROOT, 'packages/plugin-forge/src/index.ts'), 'utf8')
     for (const name of FORGE_TOOL_NAMES) {
-      expect(index, `index.ts 应含 ctx.tools.register(tools.${name})`).toContain(`ctx.tools.register(tools.${name})`)
+      expect(index, `index.ts 应含 registerToolLoud(tools.${name})`).toContain(`registerToolLoud(tools.${name})`)
     }
-    const registerCalls = index.match(/ctx\.tools\.register\(tools\.(\w+)\)/g) ?? []
+    const registerCalls = index.match(/registerToolLoud\(tools\.(\w+)\)/g) ?? []
     expect(registerCalls).toHaveLength(FORGE_TOOL_NAMES.length)
   })
 })

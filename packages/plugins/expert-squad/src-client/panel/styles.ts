@@ -169,6 +169,8 @@ export const PANEL_CSS = `
    overflow:auto 裁切上下文，允许溢出 Dialog 视觉范围（真机回归修正） */
 .dswf-msel-menu { position: fixed; z-index: 10; max-height: ${MSEL_MENU_MAX_PX}px; overflow: auto; padding: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); }
 .dswf-msel-row { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xs-13); padding: 4px 0; cursor: var(--dsh-cursor-pointer, pointer); }
+.dswf-msel-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* bug c19eb719：候选行左名称（可收缩截断，不顶破菜单宽） */
+.dswf-msel-src { margin-left: auto; flex: none; font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-tertiary); white-space: nowrap; } /* 候选行右来源徽标（「全局」/模式名；弱化三级标签色，双主题经 alias 令牌） */
 .dswf-msel-add input { width: 100%; font: var(--dsw-font-xs-13); padding: ${T.gap8}; margin-top: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
 .dswf-toast { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); padding: ${T.gap8} ${T.pad16}; border-radius: ${T.r8}; background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-layer-2); font: var(--dsw-font-xs-13); white-space: nowrap; }
 /* [召唤] 降级引导条（猎头预设被拒/会话打开失败/工作区锚缺席——明确引导，不炸面板） */

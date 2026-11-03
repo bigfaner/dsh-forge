@@ -23,7 +23,7 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 | SQL schema | `upsertFeatureDoc` `doc_kind: sql-schema` |
 | 页面地图（有 UI 时） | `upsertFeatureDoc` `doc_kind: page-map` |
 
-`api-handbook.md` / `cli-handbook.md` / `screen-map.md`（下方设计手册）**没有注册 kind**——它们是 gen-contracts/gen-test-scripts 消费的盘面工件，不得虚构注册。
+`api-handbook.md` / `cli-handbook.md` / `screen-map.md`（下方设计手册）**没有注册 kind**——它们是契约作者/脚本作者（`test-gen-contracts` / `test-gen-scripts` 任务）消费的盘面工件，不得虚构注册。
 
 ## 意图适配
 

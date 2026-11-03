@@ -30,7 +30,7 @@ import type {
   TextContentBlock,
   ToolRegisterFace,
 } from "../tools.js";
-import { createExpertComposer } from "./compose.js";
+import { createExpertComposer, type KnownToolsProbe } from "./compose.js";
 
 // ---------------------------------------------------------------------------
 // faces（官方 ctx.subagents 结构最小面——md-mermaid faces 同法）
@@ -145,10 +145,11 @@ export interface DelegateToolDeps {
   readonly panel: ExpertRunPanelState;
   /** 派发 provider 名（in-process 才落地 toolFilter——派发面由装配钉死）。 */
   readonly provider: string;
-  /** 全局注册工具名现查面（每派发现调，禁 memoize——装配取 ctx.tools.schemas()；
-   *  返回 undefined 或函数缺席均 fail-soft：白名单不裁剪原样承载，见
-   *  compose.resolveToolAllow）。 */
-  readonly knownTools?: () => readonly string[] | undefined;
+  /** 注册名现查面（每派发现调，禁 memoize——装配接全模式并集探针 createKnownToolsProbe，
+   *  bug e3b045dc：global 层仅 expert 域工具，官方工具在 preset scope 层）；可同步可
+   *  异步（并集取 preset scope 租约）；返回 undefined/空/函数缺席均 fail-soft：白名单
+   *  不裁剪原样承载，见 compose.resolveToolAllow。 */
+  readonly knownTools?: KnownToolsProbe;
 }
 
 const text = (t: string): TextContentBlock => ({ type: "text", text: t });
@@ -196,7 +197,7 @@ export function createDelegateExpertTool(deps: DelegateToolDeps): ExpertToolDefi
       const { expert, task } = parsed.data;
       const parent = exec.agent;
       const signal = exec.signal;
-      const request = compose(expert, task); // 不存在/禁用 → ExpertAccessError 原样上抛（AD1）
+      const request = await compose(expert, task); // 不存在/禁用 → ExpertAccessError 原样上抛（AD1）
       const spec: ContinuableStartSpec = {
         provider: deps.provider,
         label: delegateLabel(task),

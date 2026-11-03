@@ -734,10 +734,10 @@ describe('sessionLoopBadge（forge-dispatch-events 投影键账本行窄读—�
     }
   }
 
-  it('场景码 → 三态映射表：FORGE_PROGRESS_SCENARIOS 单源镜像全键覆盖（终态族 4 + suspend 族 4 + 其余 running）', () => {
+  it('场景码 → 三态映射表：FORGE_PROGRESS_SCENARIOS 单源镜像全键覆盖（终态族 5 + suspend 族 4 + 其余 running）', () => {
     const phases = Object.values(FORGE_LOOP_SCENARIO_PHASE)
-    expect(Object.keys(FORGE_LOOP_SCENARIO_PHASE)).toHaveLength(25)
-    expect(phases.filter((p) => p === 'terminal')).toEqual(['terminal', 'terminal', 'terminal', 'terminal'])
+    expect(Object.keys(FORGE_LOOP_SCENARIO_PHASE)).toHaveLength(26)
+    expect(phases.filter((p) => p === 'terminal')).toEqual(['terminal', 'terminal', 'terminal', 'terminal', 'terminal'])
     expect(phases.filter((p) => p === 'suspended')).toHaveLength(4)
     // 终态族逐值断言（无 "settled"——提案 §2.4 明示）。bug 6d98a275 验证 M2：orphan-reconciled
     // 是任务级事件（携 taskKey）且循环随即 claim-resume——映射 running 不映射 terminal
@@ -747,6 +747,8 @@ describe('sessionLoopBadge（forge-dispatch-events 投影键账本行窄读—�
     expect(FORGE_LOOP_SCENARIO_PHASE['loop/timeout']).toBe('terminal')
     expect(FORGE_LOOP_SCENARIO_PHASE['loop/stopped']).toBe('terminal')
     expect(FORGE_LOOP_SCENARIO_PHASE['loop/orphan-reconciled']).toBe('running')
+    // 越径结算（settle/out-of-band）：补发门① registryEmpty 判——循环确已不在场 → terminal
+    expect(FORGE_LOOP_SCENARIO_PHASE['settle/out-of-band']).toBe('terminal')
     // suspend 族逐场景断言：四径载荷均携 taskKey（driver suspendWithWakeup）= 非 loop 级，
     // 但驱动器挂起退出待处置 → 循环级效果映射挂起态
     expect(FORGE_LOOP_SCENARIO_PHASE['suspend/spawn-rate-limited']).toBe('suspended')

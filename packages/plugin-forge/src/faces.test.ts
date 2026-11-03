@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import type { Project } from '@dsh-forge/contracts'
-import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createProjectContainerDirs } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createProjectContainerDirs, createProjectWorkspaceRoots } from './faces.js'
 import { DIAG_EVENT } from '@dsh-forge/contracts'
 import type { DispatchJobsRegistryFace } from './faces.js'
 import type { NarrationChannel } from './notify/index.js'
@@ -329,6 +329,69 @@ describe('createProjectContainerDirs（1.11 装配接线收口——反向解析
     expect(dirs.resolve('p-1')).toBeUndefined() // 失败未记忆——不拖垮调用方
     await flush()
     expect(spy.getCalls).toEqual(['p-1', 'p-1']) // 占位已清除——再次触发懒解析（可自愈重试）
+  })
+})
+
+// ─────────────────────────── bug 8b041612 createProjectWorkspaceRoots（projectId→工作区根记忆缝） ───────────────────────────
+// 复现钉根因：T3 卷宗探测（modelingReportPresent）的 dir 语义 = 工作区根（ws_path——settle
+// 报告回收同源），此前错接容器库目录缝（deriveTaskStoreDir 派生）致探测路径恒不存在、
+// T3 解除判据恒 false。两缝分置——本缝只记忆 ws_path 本身。
+
+describe('createProjectWorkspaceRoots（bug 8b041612——工作区根记忆化，容器目录缝分置）', () => {
+  const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+  const DEMO_PROJECT = { wsPath: 'C:\\ws\\demo' } as unknown as Project
+
+  function projectSpy(over: { project?: Project | null; getThrows?: boolean } = {}) {
+    const getCalls: string[] = []
+    const projects = {
+      getProject: async (id: string): Promise<Project | null> => {
+        getCalls.push(id)
+        if (over.getThrows === true) throw new Error('get exploded')
+        return over.project === undefined ? DEMO_PROJECT : over.project
+      },
+    }
+    return { projects, getCalls }
+  }
+
+  it('warm→resolve 命中：记忆 ws_path 本身（非容器库目录派生）', async () => {
+    const spy = projectSpy()
+    const roots = createProjectWorkspaceRoots(spy.projects)
+    roots.warm(['p-1'])
+    await flush()
+    expect(spy.getCalls).toEqual(['p-1'])
+    expect(roots.resolve('p-1')).toBe('C:\\ws\\demo')
+    expect(spy.getCalls).toEqual(['p-1']) // 记忆命中零二次解析
+  })
+
+  it('resolve 未命中 = undefined + 懒解析（下次命中）；warm 幂等去重', async () => {
+    const spy = projectSpy()
+    const roots = createProjectWorkspaceRoots(spy.projects)
+    expect(roots.resolve('p-1')).toBeUndefined()
+    await flush()
+    expect(roots.resolve('p-1')).toBe('C:\\ws\\demo')
+    roots.warm(['p-1', 'p-1'])
+    await flush()
+    expect(spy.getCalls).toEqual(['p-1'])
+  })
+
+  it('项目不存在/空白 ws_path = 永不记忆零抛；getProject 拒绝 = 清除占位可重试', async () => {
+    const missing = createProjectWorkspaceRoots(projectSpy({ project: null }).projects)
+    missing.warm(['p-404'])
+    await flush()
+    expect(missing.resolve('p-404')).toBeUndefined()
+
+    const blank = createProjectWorkspaceRoots(projectSpy({ project: { wsPath: '  ' } as unknown as Project }).projects)
+    blank.warm(['p-blank'])
+    await flush()
+    expect(blank.resolve('p-blank')).toBeUndefined()
+
+    const spy = projectSpy({ getThrows: true })
+    const roots = createProjectWorkspaceRoots(spy.projects)
+    roots.warm(['p-1'])
+    await flush()
+    expect(roots.resolve('p-1')).toBeUndefined()
+    await flush()
+    expect(spy.getCalls).toEqual(['p-1', 'p-1']) // 占位已清除——可自愈重试
   })
 })
 

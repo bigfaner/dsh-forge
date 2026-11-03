@@ -37,7 +37,7 @@ domains: [mode, container, proposal, chaining, snapshot]
 
 ### BIZ-mode-005: L1 物理边界（模式边界靠机制不靠提示词）
 
-**Rule**: 突击预设组合物理不含规格技能（write-prd / ui-design / tech-design / gen-journeys / gen-contracts / gen-test-scripts / breakdown-tasks——技能枚举断言）；远征全量可见；核心包技能目录无 git-commit / git-checkout 条目；边界靠装载组合物理隔离，不靠提示词叮嘱。
+**Rule**: 突击预设组合物理不含规格技能（write-prd / ui-design / tech-design / breakdown-tasks / review-prd / review-tech——技能枚举断言）；远征全量可见；核心包技能目录无 git-commit / git-checkout 条目；边界靠装载组合物理隔离，不靠提示词叮嘱。
 **Context**: 模式边界机制化——升级 dsh 不悄悄破边界（spike S6-3 实证同构边界）；装配技术形态见 conventions/preset-assembly.md TECH-preset-001。
 **Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-005（prd-spec §Goals SC2·§In Scope ① / prd-user-stories Story 6）
 

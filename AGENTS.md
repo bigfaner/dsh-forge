@@ -67,7 +67,7 @@
 | test | `npx vitest run <受影响的测试文件或目录>` | **针对性执行受影响功能的单元测试，不跑全局**；契约测试用 `pnpm test:contract`；e2e 用 `pnpm test:e2e` |
 
 - **test 纪律**：`pnpm test`（全局 `vitest run`）只作参考口径；agent 执行质量门时按本次改动定位受影响的测试文件/项目，针对性运行；全局跑仅在跨包重构或收口验收时使用。
-- **测试策略正本**：测试分层、执行树布局、旅程/脚本目录约定与环境约束见 `docs/conventions/testing/core.md`——应用向 forge 测试链（gen-journeys → gen-contracts → gen-test-scripts → run-tests）声明的策略与约束；技能在仓内探测该目录，在场即装载遵循。
+- **测试策略正本**：测试分层、执行树布局、旅程/脚本目录约定与环境约束见 `docs/conventions/testing/core.md`——应用向 forge 测试链（test-gen-journeys → test-gen-contracts → test-gen-scripts → test-run）声明的策略与约束；技能在仓内探测该目录，在场即装载遵循。
 
 ## 5. Git 与提交
 
@@ -77,6 +77,7 @@
 ### 5.2 提交纪律
 - 提交按逻辑单元分批，指名路径 add，禁 `add -A/.` 一把梭；不夹带无关改动与过程产物。
 - **插件版本随改动同步 bump**（`packages/plugins/*/package.json`，semver 位）：修 bug → patch 位 +1（0.1.**x**）；功能升级/新增 → minor 位 +1（0.**x**.0）；bump 与对应改动同一提交落。先例：input-history 0.1.1（bug ce803be8 修复）。
+- **package.json 变更唯一正道 = node JSON 往返**（`node scripts/bump-version.mjs <目录> <新版本>`，写后自检；`pnpm build`/`pnpm dev` 前置 `scripts/check-package-json.mjs` 全仓机检）：**禁任何非 UTF-8 文本替换重写**（PowerShell Set-Content 等）——多字节截断损坏已六度复发（判例家族 eaea8cea）；bump 后跑 pin-19（`npx vitest run tests/contract/pin-19-package-json-encoding.test.ts`）。
 - **不要提交过程文件**：走查截图、临时取证图、探针脚本输出等过程产物一律不进 git 提交。
   - `.forge/docs/**/*.png` 已被 `.gitignore` 默认忽略——**禁止 force-add**（d32/d35 的 force-add 归档是旧先例，已被本裁决取代）。
   - 过程文件归档到 `.forge/docs/proposals/<slug>/walkthrough/` 等工作区目录即可（留在盘上、留在 git 外），在提交说明里用相对路径引用。

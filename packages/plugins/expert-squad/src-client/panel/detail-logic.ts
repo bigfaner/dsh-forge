@@ -80,6 +80,15 @@ export const DESCRIPTION_MAX = 120;
 export const TOOL_CANDIDATES: readonly string[] = ["read", "edit", "bash", "grep", "web", "skill"];
 
 /**
+ * multi-select 候选选项（bug c19eb719）：左名称 + 右来源标注。source = 候选读口条目级
+ * 来源（"global" / preset id）；缺席 = 旧宿主纯字符串载荷或兜底清单——不显示徽标。
+ */
+export interface CandidateOption {
+  readonly name: string;
+  readonly source?: string;
+}
+
+/**
  * multi-select 下拉菜单纵向封顶（px）——单点对齐正本：styles.ts .dswf-msel-menu
  * max-height 与 placement 视口封顶（mselMenuPlacement maxHeight 扣减）同源此常量。
  */
@@ -206,33 +215,41 @@ export function unionSkills(entries: readonly ExpertView[]): readonly string[] {
 }
 
 /**
- * 工具候选裁定（1.78）：目录字段在场 = 官方 ToolRuntime 目录透出（含插件追加工具，
- * 保序去重）；缺席 = 兜底清单（TOOL_CANDIDATES——旧宿主/目录缺席场景）。
+ * 工具候选裁定（1.78 / bug c19eb719）：目录字段在场 = 全模式并集条目透出（含来源
+ * 标注，保序去重）；缺席 = 兜底清单（TOOL_CANDIDATES——旧宿主/目录缺席场景，无来源）。
  */
 export function toolCandidatesOf(
-  catalogTools: readonly string[] | undefined,
-): readonly string[] {
-  if (catalogTools === undefined) return TOOL_CANDIDATES;
-  return Array.from(new Set(catalogTools));
+  catalogTools: readonly CandidateOption[] | undefined,
+): readonly CandidateOption[] {
+  if (catalogTools === undefined) return TOOL_CANDIDATES.map((name) => ({ name }));
+  const seen = new Set<string>();
+  const out: CandidateOption[] = [];
+  for (const entry of catalogTools) {
+    if (!seen.has(entry.name)) {
+      seen.add(entry.name);
+      out.push(entry);
+    }
+  }
+  return out;
 }
 
 /**
- * 技能候选裁定（1.78）：目录字段在场 = 官方 skill 目录名为主源（并集既有档案技能
- * ——已保存的历史技能值保持下拉可选，不为零的向后兼容加法）；缺席 = 并集语义回退
- * （unionSkills——目录缺席注记）。
+ * 技能候选裁定（1.78 / bug c19eb719）：目录字段在场 = 官方技能目录条目为主源（含
+ * 来源标注）∪ 既有档案技能（已保存的历史技能值保持下拉可选，不为零的向后兼容加法，
+ * 无来源标注）；缺席 = 并集语义回退（unionSkills——目录缺席注记）。
  */
 export function skillCandidatesOf(
-  catalogSkills: readonly string[] | undefined,
+  catalogSkills: readonly CandidateOption[] | undefined,
   entries: readonly ExpertView[],
-): readonly string[] {
+): readonly CandidateOption[] {
   const union = unionSkills(entries);
-  if (catalogSkills === undefined) return union;
-  const seen = new Set<string>(catalogSkills);
-  const out = [...catalogSkills];
+  if (catalogSkills === undefined) return union.map((name) => ({ name }));
+  const out: CandidateOption[] = [...toolCandidatesOf(catalogSkills)];
+  const seen = new Set(out.map((entry) => entry.name));
   for (const skill of union) {
     if (!seen.has(skill)) {
       seen.add(skill);
-      out.push(skill);
+      out.push({ name: skill });
     }
   }
   return out;

@@ -2,7 +2,7 @@
 // 鸭子消费）+ 链断/抛错 fail-soft。declare-module 合并不可运行期断言——键身份锚由
 // ForgeProgressEventKeyAssertion 编译期承担（dispatch-loop 同款）。
 import { describe, expect, it, vi } from 'vitest'
-import { adaptSessionProgressAppend, FORGE_PROGRESS_SCENARIO as S, FORGE_PROGRESS_EVENT_TYPE, FORGE_PROGRESS_SCENARIOS, isForgeProgressData, registerProgressEventVocabulary } from './index.js'
+import { adaptSessionProgressAppend, createSubmitSettleDisplay, FORGE_PROGRESS_SCENARIO as S, FORGE_PROGRESS_EVENT_TYPE, FORGE_PROGRESS_SCENARIOS, isForgeProgressData, registerProgressEventVocabulary, type ForgeProgressEventData, type SubmitSettleDisplayInput } from './index.js'
 import type { AgentLookupFace } from '../faces.js'
 
 const DATA = {
@@ -63,11 +63,12 @@ describe("isForgeProgressData（'forge/progress' 数据守卫）", () => {
   })
 })
 
-describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——27 值）', () => {
-  it('恰 27 值，值域 = 提案事件清单 {major}/{minor} 七族 + 1.16 池级族 + bug 3bd8b829 领取确认 + triage 处置族 + T3 同缝拦截挂起 + bug 6d98a275 孤儿回收', () => {
-    expect(FORGE_PROGRESS_SCENARIOS).toHaveLength(27)
-    expect(new Set(FORGE_PROGRESS_SCENARIOS).size).toBe(27)
+describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——28 值）', () => {
+  it('恰 28 值，值域 = 提案事件清单 {major}/{minor} 七族 + 1.16 池级族 + bug 3bd8b829 领取确认 + triage 处置族 + T3 同缝拦截挂起 + bug 6d98a275 孤儿回收 + 越径直接结算', () => {
+    expect(FORGE_PROGRESS_SCENARIOS).toHaveLength(28)
+    expect(new Set(FORGE_PROGRESS_SCENARIOS).size).toBe(28)
     expect([...FORGE_PROGRESS_SCENARIOS]).toEqual(Object.values(S))
+    expect(S.settleOutOfBand).toBe('settle/out-of-band')
   })
   it('编码格式：纯英文 + 中划线，{major}/{minor} 两段', () => {
     for (const code of FORGE_PROGRESS_SCENARIOS) {
@@ -117,5 +118,76 @@ describe('adaptSessionProgressAppend（append 权限链鸭子消费——第二�
     expect(() => face.append('s-1', DATA)).not.toThrow()
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('forge progress append failed'))
     warn.mockRestore()
+  })
+})
+
+describe('createSubmitSettleDisplay（越径结算显示同步——submitTask 终态事件补发）', () => {
+  const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+  function harness(overrides?: { activeSource?: unknown; records?: readonly { verb: string; sessionId?: string }[]; queryThrows?: boolean }) {
+    const appended: Array<{ sessionId: string; event: ForgeProgressEventData }> = []
+    const display = createSubmitSettleDisplay({
+      registry: {
+        bySource: (source) => (overrides?.activeSource !== undefined && source.slug === 'feat-x' ? overrides.activeSource : undefined),
+      },
+      tasks: {
+        queryTask: overrides?.queryThrows
+          ? async () => {
+              throw new Error('query gone')
+            }
+          : async () => ({ task: { title: '任务甲' }, records: overrides?.records ?? [{ verb: 'claim', sessionId: 'owner-1' }] }),
+      },
+      progressAppend: {
+        append: (sessionId, event) => {
+          appended.push({ sessionId, event })
+        },
+      },
+    })
+    const input: SubmitSettleDisplayInput = { projectId: 'p-1', slug: 'feat-x', localId: '2.1', result: 'completed' }
+    return { display, input, appended }
+  }
+  it('无活循环 + claim 会话在场：向 claim 会话补发 settle/out-of-band 终态事件', async () => {
+    const h = harness()
+    await h.display(h.input)
+    await flush()
+    expect(h.appended).toHaveLength(1)
+    expect(h.appended[0]).toMatchObject({
+      sessionId: 'owner-1',
+      event: {
+        sourceSlug: 'feat-x',
+        verb: 'settle',
+        status: 'completed',
+        scenario: 'settle/out-of-band',
+        taskKey: 'feat-x/2.1',
+        taskTitle: '任务甲',
+      },
+    })
+    expect(isForgeProgressData(h.appended[0]!.event)).toBe(true)
+  })
+  it('门①：任务源有活循环 = 零补发（驱动器自有结算事件——防双发）', async () => {
+    const h = harness({ activeSource: { id: 'loop-1' } })
+    await h.display(h.input)
+    await flush()
+    expect(h.appended).toHaveLength(0)
+  })
+  it('门②：claim 记录缺席 / 领取会话缺席 = 零补发；补发面缺席 = 零操作；queryTask 故障 = fail-soft 零外抛', async () => {
+    const noClaim = harness({ records: [{ verb: 'add' }] })
+    await noClaim.display(noClaim.input)
+    await flush()
+    expect(noClaim.appended).toHaveLength(0)
+
+    const noSession = harness({ records: [{ verb: 'claim' }] })
+    await noSession.display(noSession.input)
+    await flush()
+    expect(noSession.appended).toHaveLength(0)
+
+    const noAppend = createSubmitSettleDisplay({
+      registry: { bySource: () => undefined },
+      tasks: { queryTask: async () => ({ task: { title: 'x' }, records: [{ verb: 'claim', sessionId: 's' }] }) },
+    })
+    await expect(noAppend({ projectId: 'p', slug: 's', localId: '1', result: 'blocked' })).resolves.toBeUndefined()
+
+    const throwing = harness({ queryThrows: true })
+    await expect(throwing.display(throwing.input)).resolves.toBeUndefined()
+    expect(throwing.appended).toHaveLength(0)
   })
 })
