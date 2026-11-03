@@ -64,17 +64,21 @@ m3Test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化
     expect(/default:\s*blitz/.test(overlay), 'registry default = blitz（bug 2ba146d8 缺省=blitz）').toBe(true)
     expect(overlay.includes('!!js'), '物化输出零 !!js 残留（绝对路径 only）').toBe(false)
 
-    // L1 物理边界（数据直证）：远征组合 = [core, spec] 双目录；突击组合 = [core, skills-blitz]
+    // L1 物理边界（数据直证·成员资格式——expert-squad 可装卸，不做总数快照）：
+    //   远征必含 core + spec；突击必含 core + skills-blitz、物理不含 spec；
+    //   expert-squad/skills 双预设同挂（用户裁决 2026-11-01 / 19d9da56——在场断不断数）。
     const isSpecDir = (d: string): boolean => d.toLowerCase().includes('plugin-forge-spec')
     const isCoreDir = (d: string): boolean => !isSpecDir(d) && d.toLowerCase().includes('plugin-forge')
+    const isSquadDir = (d: string): boolean => d.toLowerCase().includes('expert-squad')
+    const isBlitzDir = (d: string): boolean => d.toLowerCase().includes('skills-blitz')
     const expDirs = presetSkillDirs(overlay, 'expedition')
     const blitzDirs = presetSkillDirs(overlay, 'blitz')
-    expect(expDirs.length, `远征组合双技能目录（dirs=${JSON.stringify(expDirs)}）`).toBe(2)
-    expect(expDirs.filter(isSpecDir).length, '远征含 spec 技能目录（全量挂载）').toBe(1)
-    expect(expDirs.filter(isCoreDir).length, '远征含 core 技能目录').toBe(1)
-    expect(blitzDirs.length, `突击组合双技能目录 core+blitz（dirs=${JSON.stringify(blitzDirs)}）`).toBe(2)
+    expect(expDirs.some(isSpecDir), '远征含 spec 技能目录（全量挂载）').toBe(true)
+    expect(expDirs.some(isCoreDir), '远征含 core 技能目录').toBe(true)
+    expect(expDirs.some(isSquadDir), '远征含 expert-squad 技能目录（双预设同挂）').toBe(true)
     expect(blitzDirs.every((d) => !isSpecDir(d)), '突击组合 spec 目录物理缺席（L1 边界——突击会话技能清单不含规格技能全集）').toBe(true)
-    expect(blitzDirs.filter((d) => d.toLowerCase().includes('skills-blitz')).length, '突击含 blitz 专属技能目录（grilling 挂载源）').toBe(1)
+    expect(blitzDirs.some(isCoreDir), '突击含 core 技能目录').toBe(true)
+    expect(blitzDirs.some(isBlitzDir), '突击含 blitz 专属技能目录（grilling 挂载源）').toBe(true)
 
     // ── ② 技能目录枚举（fs 面）──
     const coreEntries = readdirSync(CORE_SKILLS).filter((e) => e !== 'README.md')

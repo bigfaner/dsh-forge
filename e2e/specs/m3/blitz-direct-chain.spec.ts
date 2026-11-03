@@ -200,7 +200,7 @@ test('@web-e2e @m3 突击直达链·冒烟：quick-tasks 产出 → accepted 无
     // ── Step5：全程技能清单核查（L1 数据直证——SC2① 同源）──
     const overlay = sharedOverlayText(udDir)
     const blitzDirs = presetSkillDirs(overlay, 'blitz')
-    expect(blitzDirs.length, `突击组合技能目录 core+blitz（dirs=${JSON.stringify(blitzDirs)}）`).toBe(2)
+    expect(blitzDirs.some((d) => d.toLowerCase().includes('skills-blitz')), '突击组合含 blitz 专属技能目录（skills-blitz 在场——成员资格式，expert-squad 可装卸不断总数）').toBe(true)
     expect(blitzDirs.every((d) => !d.toLowerCase().includes('plugin-forge-spec')), '规格技能目录物理缺席（七者零在场——枚举面即证）').toBe(true)
     expect(overlay.includes('!!js'), '物化零 !!js（绝对路径 only）').toBe(false)
 
