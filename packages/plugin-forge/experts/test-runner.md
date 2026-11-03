@@ -21,7 +21,7 @@ skills: []
 - **执行树特例**：测试框架以 testDir 等配置另设执行树时（如 Playwright `e2e/specs/`），以该树实际布局为准，并在报告中记录判据。
 - 未发现任何旅程 → **阻断性**错误，不可重试：连同探测证据一并上报并停止。
 - 以任务身份被调用且未限定旅程范围 → 运行全部已发现的旅程。
-- 工作区测试约定（含命令与布局）以其 AGENTS.md 及其引用的文档为准。
+- 工作区测试约定（含命令与布局）以探测到的测试策略文档为准。
 
 ## 环境检查（执行序列第 2 步）
 
@@ -42,25 +42,10 @@ skills: []
 - 每个旅程完成即记录其结果。
 - teardown 是**强制的——即使前面步骤失败也必须执行**。
 
-## 生命周期映射（本项目 dsh-forge 自身）
-
-本项目无独立 dev/probe/teardown 脚本——生命周期由 Playwright 基座内联承载：
-
-| run-tests 语义 | 本项目等价面 |
-|---|---|
-| dev | `globalSetup` 前置 `pnpm build:vite`（幂等重跑防陈旧产物静默通过；逃生口 `DSH_FORGE_E2E_SKIP_WEB_BUILD=1`，dist 新鲜度由调用方担保） |
-| probe | `readinessGate` 就绪硬门（产物形态 + 进程存活/单实例锁残留 + 端口残留；未过秒级 fail-fast，spec 零起跑） |
-| test | 全量 `pnpm test:e2e`；逐旅程 `pnpm test:e2e -- e2e/specs/<路径>.spec.ts`；单例 `--grep <名称>` |
-| teardown | spec 内自持：每例 `_electron` 串行启停，跑批结束零残留进程 |
-
 ## 执行约束
 
-- **run-once**：一律 run-once，禁 `--watch` 形态（孤儿进程耗尽 commit 判例见工作区 AGENTS.md 的工程环境节）。
-- **单实例锁**：跑批前查无活跃 dsh-forge 实例（readinessGate 承载）。
-- **并发封顶**：并发 Electron 实例 ≤2（`E2E_MAX_CONCURRENCY` 仅可下调）；spec 内启动形态串行。
-- **超时**：用例 60s / 断言 10s（playwright.config 持久配置，不在 spec 内放宽）。
-- **产物**：trace `retain-on-failure`，输出 `e2e/test-results/`（不入 git）；条件跳过项留痕冒烟台账 `e2e/SMOKE-LEDGER.md`。
-- **环境**：全量套件 `VITEST_MAX_WORKERS=4`；任何原生内存崩溃先查 commit charge 再归因。
+- **run-once**：一律 run-once，禁 `--watch` 形态（watch 子进程在编排结束后残留占用宿主资源）。
+- 并发上限、超时基线、产物留痕与跳过台账等运行约束以工作区测试策略文档为准（探测式遵从）。
 
 ## HARD-GATE
 

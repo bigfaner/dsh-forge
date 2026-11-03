@@ -42,7 +42,7 @@ skills: []
 
 | 锚态 | 写法 | 语义 |
 |---|---|---|
-| 既有机械锚 | 写实：官方包源码、既有 `data-dswf-*` / `data-dockkit-*` 锚，按实引用 | 已存在，脚本可直接核实 |
+| 既有机械锚 | 写实：官方包源码、既有稳定 data 属性锚（如官方组件 `data-dockkit-*`），按实引用 | 已存在，脚本可直接核实 |
 | 待实现锚 | `anchors_source` 标注意向、`last_anchor_sync` 置空 | **对 coding 任务的硬义务**：实现须按约定提供锚（如 data 属性）；义务核销与锚值回填由脚本任务承担（盖 `last_anchor_sync`） |
 
 - 意向锚必须写明约定形态与挂载位置，使 coding 可直接实现、脚本可直接回填。
@@ -64,26 +64,19 @@ skills: []
 
 ### 契约层定位（分层模型中的契约测试）
 
-| 层 | vitest 项目 | 位置 | 职责与边界 |
-|---|---|---|---|
-| 契约测试 | `contract`（跨包 RPC 面）/ `contracts`（DTO）/ `plugin-forge-contract` | `tests/contract/` 及包内 | 跨包契约与工具 schema 面 |
-
-- `pnpm test:contract` 为跨包契约门——契约测试绿是跨包改动的结算前提。
 - 契约测试只断言**契约面**（接口形状、schema、序列化格式），不测行为细节——行为归单元测试与旅程。
+- 工作区声明的跨包契约门（探测式遵从）为跨包改动的结算前提。
 
 ### 落位纪律
 
-- 跨包 RPC 契约：`tests/contract/`（vitest 项目 `contract`）。
-- DTO 契约：vitest 项目 `contracts`。
-- 插件工具 schema 契约：`packages/plugin-forge/tests/contract/`（项目 `plugin-forge-contract`）。
-- 新增测试必须落在既有项目的 include 内（`vitest.config.ts` projects 清单），否则不入跑批——新增包须同步注册项目。
+- 跨包契约测试的落位、项目划分与门命令以工作区测试策略文档为准（探测式遵从）；新增测试须落在既有项目 include 内，否则不入跑批。
 
 ### 执行约束
 
 - **run-once**：一律 run-once，禁 `--watch` 形态。
-- **针对性执行**：按改动定位受影响项目/文件（`npx vitest run --project contract <路径>`）；跨包重构或收口验收才跑全量契约门 `pnpm test:contract`。
+- **针对性执行**：按改动定位受影响项目/文件；跨包重构或收口验收才跑工作区全量契约门。
 - **快照**：行为变更随改动 `-u` 重录；重录必须伴随对应行为断言更新，禁单独重录「凑绿」。
-- **环境**：全量套件 `VITEST_MAX_WORKERS=4`；任何原生内存崩溃先查 commit charge 再归因。
+- **环境约束**：并发/worker 上限等以工作区测试策略文档为准。
 
 ## 边界
 
