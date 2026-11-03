@@ -198,12 +198,14 @@ test('hero-chip UI（推导制）：chip 实时分支 + 内联 ahead/behind + §
     }).toContain('main')
 
     // ── 建两个会话（主树 + wt-a）供切换重挂（blank 复用天然命中：每树恒一个）──
-    await createWorktreeViaDialog(page, wsDir, 'feat-a', 'wt-a')
+    // 顺序纪律：root 会话基线必须取自干净启动态（仅 root blank 在场）——worktree 创建
+    // 自动选中树 blank（WYSIWYG），先建树再取基线会与创建时序竞态误捕获（run6–run9 判例）
     await clickNewSession(page)
     let rootSessionId = ''
     await expect
       .poll(async () => (rootSessionId = await activeSessionId(page)), { timeout: 60_000, message: '主树会话应激活' })
       .not.toBe('')
+    await createWorktreeViaDialog(page, wsDir, 'feat-a', 'wt-a')
     await selectWorktree(page, 'feat-a')
     await clickOfficialNewSession(page)
     // wt-a 会话应激活（id ≠ 主树会话——官方 create 落所选树）
@@ -214,6 +216,12 @@ test('hero-chip UI（推导制）：chip 实时分支 + 内联 ahead/behind + §
         return id !== '' && !id.includes(rootUuid) ? id : ''
       }, { timeout: 60_000, message: 'wt-a 会话应激活' })
       .not.toBe('')
+
+    // ── bug 8c7e847f 静置对照（C3 观察义务）：15s 零操作后主视图仍在 wt-a 会话——
+    // 自发回切主树 blank（零点击 ~1-2s 回切签名）= 复发即转 triage ──
+    const wtSessionId = await activeSessionId(page)
+    await page.waitForTimeout(15_000)
+    expect(await activeSessionId(page), '静置 15s 无自发回切（零点击零新建）').toBe(wtSessionId)
 
     // ── AC：§2.3.1 目标形态（主树会话，main ahead 1 / behind 1）——项目行「新会话」
     // 重开主树视图；header actions 槽 chip 在会话非空后渲染，先发一条 marker 消息 ──

@@ -99,7 +99,31 @@ function recentWorkspaceId(items: readonly WsItemSlice[], byId: Record<string, u
   return selected
 }
 
-/** 官方锚点复刻：currentWorkspaceId ?? recent（官方 startSession 同判的快照窄镜像） */
+/** INV-U 选主谓词（bug 8c7e847f 三件套——host 侧 worktree-identity.ts:89/96-105 选主先例
+ *  的客户端镜像）：同锚多行禁裸 find 首命中，主行 = createdAt 最新（created_at 仲裁；
+ *  解析失败视为最早）；平手保快照序首行（确定性序——INV-R 幂等）。 */
+function selectMasterRow(
+  items: readonly WsItemSlice[],
+  predicate: (item: WsItemSlice) => boolean,
+): WsItemSlice | undefined {
+  let master: WsItemSlice | undefined
+  let masterTime = Number.NEGATIVE_INFINITY
+  for (const item of items) {
+    if (!predicate(item)) continue
+    const parsed = typeof item.createdAt === 'string' ? Date.parse(item.createdAt) : Number.NaN
+    const at = Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
+    if (master === undefined || at > masterTime) {
+      master = item
+      masterTime = at
+    }
+  }
+  return master
+}
+
+/** 官方锚点复刻：currentWorkspaceId ?? recent（官方 startSession 同判的快照窄镜像）。
+ *  bug 8c7e847f 三件套：INV-B cwd 绑定——mainView 会话归属 = normalizeFsPath(cwd) 同锚行，
+ *  成员位 sessionIds 只作 cwd 缺席时的投影缓存退路；INV-U——命中处一律 selectMasterRow，
+ *  禁裸 find 首命中（残留行/归档行前置清单劫持面）。 */
 function officialAnchor(
   deps: StartSessionWrapDeps,
   items: readonly WsItemSlice[],
@@ -120,13 +144,33 @@ function officialAnchor(
   }
   let targetId: string | undefined
   if (current !== undefined) {
-    targetId = items.find(
-      (item) => Array.isArray(item.sessionIds) && item.sessionIds.includes(current),
-    )?.workspaceId as string | undefined
+    // INV-B cwd 绑定：会话行 cwd 在场（官方 byId 行字段——E3 实证）= 归属判据；
+    // cwd 缺席（旧面形状漂移）退成员位投影缓存（INV-U 选主谓词替代裸 find）
+    const currentRow = byId[current]
+    const cwd =
+      typeof currentRow === 'object' && currentRow !== null
+        ? (currentRow as { cwd?: unknown }).cwd
+        : undefined
+    if (typeof cwd === 'string' && cwd !== '') {
+      const cwdKey = normPath(cwd)
+      targetId = selectMasterRow(
+        items,
+        (item) =>
+          typeof item.path === 'string' &&
+          item.path !== '' &&
+          normPath(item.path) === cwdKey,
+      )?.workspaceId as string | undefined
+    }
+    if (targetId === undefined || targetId === '') {
+      targetId = selectMasterRow(
+        items,
+        (item) => Array.isArray(item.sessionIds) && item.sessionIds.includes(current),
+      )?.workspaceId as string | undefined
+    }
   }
   if (targetId === undefined || targetId === '') targetId = recentWorkspaceId(items, byId)
   if (targetId === undefined || targetId === '') return { targetPath: undefined }
-  const targetPath = items.find((item) => item.workspaceId === targetId)?.path
+  const targetPath = selectMasterRow(items, (item) => item.workspaceId === targetId)?.path
   return { targetPath: typeof targetPath === 'string' && targetPath !== '' ? targetPath : undefined }
 }
 
@@ -172,7 +216,9 @@ export function installStartSessionWrap(deps: StartSessionWrapDeps): () => void 
       //    官方 session.create({workspaceId}) 原生 blank 复用，零 forge 改道
       const fromDto = await deps.worktreeWorkspaceId(displayed, projectRoot).catch(() => undefined)
       if (typeof fromDto === 'string' && fromDto !== '') return { workspaceId: fromDto }
-      const row = items.find(
+      // INV-U 选主：同锚多行（残留行前置）禁裸 find 首命中——createdAt 最新主行胜
+      const row = selectMasterRow(
+        items,
         (item) =>
           typeof item.workspaceId === 'string' &&
           item.workspaceId !== '' &&

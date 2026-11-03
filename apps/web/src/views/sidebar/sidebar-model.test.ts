@@ -277,6 +277,76 @@ describe('buildSidebarTree（项目树派生）', () => {
     expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1', 's2'])
     expect(out.tree[0]!.sessions.every((r) => !r.pinned && !r.archived)).toBe(true)
   })
+
+  // ── bug 8c7e847f 三件套（家族链 #6——分组归并消费面 INV-L/INV-U/INV-B）──
+  describe('bug 8c7e847f：清单仲裁三件套（INV-L 活性过滤 / INV-U 选主 / INV-B cwd 绑定）', () => {
+    it('INV-B cwd 绑定：会话归属 = cwd 同锚行——成员位滞后跨行残留不造成同会话双组', () => {
+      const treeA = 'Z:/w/p1/.forge/worktrees/wt-a'
+      const treeB = 'Z:/w/p2/.forge/worktrees/wt-b'
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' }), project('p2', 'w2', { wsPath: 'Z:/w/p2' })],
+        sessions: ledger([ledgerRow('s2', { cwd: treeA, updatedAt: 10 })]),
+        workspaces: workspaces([
+          { workspaceId: 'w1', sessionIds: [] },
+          // 成员位滞后：p2 树行残留声明 s2（E1 归档行前置 × 残留行交叉形态）
+          { workspaceId: 'wt-a', path: treeA, sessionIds: ['s2'] },
+          { workspaceId: 'wt-b', path: treeB, sessionIds: ['s2'] },
+        ]),
+        workspaceProject: new Map([
+          [normalizeFsPath(treeA), 'p1'],
+          [normalizeFsPath(treeB), 'p2'],
+        ]),
+      })
+      expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s2'])
+      expect(out.tree[1]!.sessions).toEqual([])
+    })
+
+    it('INV-U 选主：同锚双行声明同会话 → 单组单行（双行声明不再双挂）', () => {
+      const treeA = 'Z:/w/p1/.forge/worktrees/wt-a'
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+        sessions: ledger([ledgerRow('s1', { updatedAt: 10 })]),
+        workspaces: workspaces([
+          { workspaceId: 'w1', sessionIds: [] },
+          // 同锚双行（E1 形态——归档残留行前置 × 现行行）均声明 s1
+          { workspaceId: 'wt-a-old', path: treeA, sessionIds: ['s1'] },
+          { workspaceId: 'wt-a-new', path: treeA, sessionIds: ['s1'] },
+        ]),
+        workspaceProject: new Map([[normalizeFsPath(treeA), 'p1']]),
+      })
+      expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
+    })
+
+    it('INV-L 活性过滤：无 path 残留行不入归并（path 缺席行成员不进命中集）', () => {
+      const treeA = 'Z:/w/p1/.forge/worktrees/wt-a'
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+        sessions: ledger([ledgerRow('s1', { cwd: treeA })]),
+        workspaces: workspaces([
+          { workspaceId: 'w1', sessionIds: [] },
+          { workspaceId: 'wt-a', path: treeA, sessionIds: ['s1'] },
+          // 已删路径残留行（path 空）——成员位仍声明 s1
+          { workspaceId: 'wt-dead', path: '', sessionIds: ['s1'] },
+        ]),
+        workspaceProject: new Map([[normalizeFsPath(treeA), 'p1']]),
+      })
+      expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
+    })
+
+    it('INV-B 退路：cwd 缺席（旧行形状）退成员位径——bug ef8b3a45 场景零回归', () => {
+      const treePath = 'Z:/w/p1/.forge/worktrees/test-02'
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+        sessions: ledger([ledgerRow('s-main'), ledgerRow('s-tree')]),
+        workspaces: workspaces([
+          { workspaceId: 'w1', sessionIds: ['s-main'] },
+          { workspaceId: 'wt-02', path: treePath, sessionIds: ['s-tree'] },
+        ]),
+        workspaceProject: new Map([[normalizeFsPath(treePath), 'p1']]),
+      })
+      expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s-main', 's-tree'])
+    })
+  })
 })
 
 describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原型 renderProjects 同型）', () => {
