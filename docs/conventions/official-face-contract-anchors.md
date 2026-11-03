@@ -16,7 +16,7 @@ flowchart LR
 | 锚 id | 判据源（官方面） | 消费点 | 退化行为 | 诊断 | 锚定测试 |
 |---|---|---|---|---|---|
 | INV-B-session-cwd | `sessions.list.getSnapshot().byId[*].cwd`（主视图会话行 `retainedBy.mainView > 0` 行的 cwd 字段） | `apps/web/src/client-plugin/start-session-wrap.ts` `officialAnchor`（INV-B cwd 绑定——会话归属判据） | cwd 缺席 → 退成员位投影缓存径（`sessionIds` 包含 + INV-U 选主仲裁） | warn 一行（client 束 = diagnostic-emit-discipline 豁免面，`deps.warn`/console.warn） | `start-session-wrap.test.ts` INV-B 退化径诊断留痕用例 |
-| INV-U-master-predicate | 官方 `workspaces.list` items `{workspaceId, path, sessionIds, createdAt}` 行集 + projects 表 ws_path 唯一性 | wrap 面 `selectMasterRow` ↔ host 面 `worktree-identity.ts` resolveProject 主树锚判（统一选主谓词，bug 0c677db2） | —（谓词本体；漂移面 = items 行形状，INV-L 活性过滤兜底） | — | `master-arbitration-contract.test.ts`（同锚集合两半边裁决一致性） |
+| INV-U-master-predicate | 官方 `workspaces.list` items `{workspaceId, path, sessionIds, createdAt}` 行集 + projects 表 ws_path 唯一性 | wrap 面 `selectMasterRow` ↔ host 面 `worktree-identity.ts` resolveProject 主树锚判（统一选主谓词，bug 0c677db2） | —（谓词本体；漂移面 = items 行形状，INV-L 活性过滤兜底） | — | `master-arbitration.test.ts`（同锚集合两半边裁决一致性） |
 | wrap-startSession-face | `uiWorkspace.startSession(workspaceId?)` 方法存在性 | 同文件 `installStartSessionWrap`（属性替换） | 面缺席 = 零安装零抛（no-op dispose） | fail-open warn（判定链异常时） | `start-session-wrap.test.ts` ⑨ |
 
 ## INV-U 统一选主谓词（判据书面化）
@@ -32,3 +32,11 @@ flowchart LR
 3. **平手保快照序首行**（确定性序——INV-R 幂等）。
 
 仲裁优先级两侧一致（主树判 ≻ createdAt ≻ 快照序），同锚集合两半边裁决恒一致。
+
+**成立域限定（M1）**：镜像同构成立的前提是「worktree 全在主树子树内」。host 判据
+（锚 `realpath(git-common-dir)` 恒坐落在主树内）不依赖 worktree 位置，但 wrap 祖先
+前缀判要求主树路径是 worktree 行 path 的前缀——`worktree_dir` 逐项目可配
+（host `worktree-identity.ts` `getWorktreeDir`），外置 worktree 布局下主树路径未必
+是前缀，两半边选主可分叉（wrap 面零 git 探针，不加锚匹配复核）。分叉面 =
+worktree_dir 指向主树子树外的项目配置；默认布局（`<主树>/.forge/worktrees`）下
+前提恒成立。

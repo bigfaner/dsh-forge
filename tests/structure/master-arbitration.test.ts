@@ -65,6 +65,50 @@ describe('INV-U 选主谓词统一契约（bug 0c677db2：同锚集合两半边�
     expect(master?.workspaceId).toBe('ws-main')
   })
 
+  it('反向序：同锚集合 {主树行(createdAt 旧, 前置), worktree 行(createdAt 新, 后置)} → 主树行必胜（bug 143328f1——后继非主树行不得凭 createdAt 翻盘）', async () => {
+    // host 半边：resolveProject 锚匹配——主树行前置时按精确/锚判命中，worktree 行后置不翻盘
+    const identity = createWorktreeIdentity(
+      stubProjects([
+        { id: 'p-main', wsPath: ROOT, name: 'main' },
+        { id: 'p-wt-new', wsPath: WT_A, name: 'new-worktree' },
+      ]),
+      gitStub,
+    )
+    expect(await identity.resolveProject(WT_B)).toMatchObject({ projectId: 'p-main' })
+
+    // wrap 半边：主树行前置占位后，后置新 worktree 行落入 createdAt 通用分支翻盘 = bug 形态
+    const master = selectMasterRow(
+      [
+        { workspaceId: 'ws-main', path: ROOT, sessionIds: [], createdAt: '2026-01-01T00:00:00Z' },
+        { workspaceId: 'ws-wt-new', path: WT_A, sessionIds: [], createdAt: '2026-07-01T00:00:00Z' },
+      ],
+      () => true,
+    )
+    expect(master?.workspaceId).toBe('ws-main')
+  })
+
+  it('createdAt 平手：主树判缺席 → 快照序首行胜（统一契约③——三态补齐：在场/缺席/平手）', () => {
+    // 主树行在场：平手不翻盘（主树行必胜不依赖 createdAt）
+    const withMaster = selectMasterRow(
+      [
+        { workspaceId: 'ws-main', path: ROOT, sessionIds: [], createdAt: '2026-01-01T00:00:00Z' },
+        { workspaceId: 'ws-wt', path: WT_A, sessionIds: [], createdAt: '2026-01-01T00:00:00Z' },
+      ],
+      () => true,
+    )
+    expect(withMaster?.workspaceId).toBe('ws-main')
+
+    // 主树行缺席：同 createdAt 平手 → 快照序首行（确定性序——INV-R 幂等）
+    const noMaster = selectMasterRow(
+      [
+        { workspaceId: 'ws-wt-a', path: WT_A, sessionIds: [], createdAt: '2026-06-01T00:00:00Z' },
+        { workspaceId: 'ws-wt-a-dup', path: WT_A, sessionIds: [], createdAt: '2026-06-01T00:00:00Z' },
+      ],
+      () => true,
+    )
+    expect(noMaster?.workspaceId).toBe('ws-wt-a')
+  })
+
   it('主树判缺席（多 worktree 行互不为祖先）→ 同锚集合退 createdAt 仲裁（统一契约②——两半边同退路）', async () => {
     // host 半边：无主树行注册（仅 worktree 行）→ 锚匹配首个真 git 行（created_at 序首行）
     const identity = createWorktreeIdentity(stubProjects([{ id: 'p-wt', wsPath: WT_A, name: 'wt' }]), gitStub)

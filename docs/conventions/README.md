@@ -12,6 +12,7 @@ domains: [index, convention]
 | [error-handling.md](./error-handling.md) | 错误处理约定 |
 | [event-logging.md](./event-logging.md) | 事件总线与业务日志约定 |
 | [monorepo-structure.md](./monorepo-structure.md) | monorepo 结构与落点约定 |
+| [official-face-contract-anchors.md](./official-face-contract-anchors.md) | 契约锚台账：官方包机械面的结构镜像消费登记（判据源/消费点/退化行为/锚定测试） |
 | [packaging.md](./packaging.md) | 打包约定 |
 | [preset-assembly.md](./preset-assembly.md) | 预设装配约定 |
 | [quality-gates.md](./quality-gates.md) | 质量门约定 |

@@ -130,8 +130,11 @@ export function createWorktreeIdentity(
           // （main-old→redesign→main 演进残留）——树行根/title 会劫持项目归属。
           // wrap 面（apps/web start-session-wrap selectMasterRow）以祖先前缀判镜像同构
           // 此谓词（零 git 探针），同锚集合两半边裁决恒一致——契约锚定测试
-          // master-arbitration-contract.test.ts；判据书面化正本：
-          // docs/conventions/official-face-contract-anchors.md。
+          // master-arbitration.test.ts；判据书面化正本：
+          // docs/conventions/official-face-contract-anchors.md。成立域限定（M1）：镜像
+          // 同构的前提是「worktree 全在主树子树内」——worktree_dir 逐项目可配
+          // （getWorktreeDir），外置布局下主树路径未必是 worktree 行的祖先前缀，
+          // wrap 祖先前缀判与 host 锚判可分叉。
           if (anchorKey.startsWith(`${normalizeFsPath(row.wsPath)}/`)) {
             hit = row
             break

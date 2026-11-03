@@ -110,7 +110,11 @@ function recentWorkspaceId(items: readonly WsItemSlice[], byId: Record<string, u
  *      最新胜（解析失败视为最早）；host 行集无同径重复行（projects.ws_path 唯一），此层
  *      为 wrap 面官方 W 清单特有兜底，不违镜像同构（主树判优先级两侧一致）；
  *   ③ 平手保快照序首行（确定性序——INV-R 幂等）。
- * 契约锚定测试：master-arbitration-contract.test.ts（同锚集合两半边裁决一致性）。
+ * 成立域限定（M1）：① 的 host 判据（锚在行内）与 wrap 祖先前缀判等价的前提是
+ * 「worktree 全在主树子树内」——worktree_dir 逐项目可配（host worktree-identity
+ * getWorktreeDir），外置布局下主树路径未必是 worktree 行的祖先前缀，两半边可分叉；
+ * wrap 面零 git 探针不加复核，分叉面以台账 official-face-contract-anchors.md 为准。
+ * 契约锚定测试：master-arbitration.test.ts（同锚集合两半边裁决一致性）。
  */
 export function selectMasterRow(
   items: readonly WsItemSlice[],
@@ -149,13 +153,8 @@ export function selectMasterRow(
       masterTime = at
       continue
     }
-    // ②③ 同层（均非主树行 / 均为主树行）：createdAt 最新，平手保快照序首行
-    if (!masterAncestor && ancestor) {
-      master = item
-      masterTime = at
-      masterAncestor = true
-      continue
-    }
+    if (masterAncestor) continue // ① 主树行占位即冻结选主（后继非主树行不得凭 createdAt 翻盘——bug 143328f1）
+    // ②③ 同层（均非主树行）：createdAt 最新，平手保快照序首行
     if (at > masterTime) {
       master = item
       masterTime = at
