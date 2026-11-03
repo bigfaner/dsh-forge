@@ -460,6 +460,20 @@ export interface BugRecurrenceScope {
   readonly files: readonly string[]
 }
 
+/**
+ * source_task_id 容器归属结构化解析（recurrence-judgment-narrowing 1.1——dash 前缀碰撞
+ * 穿透修复）：形制 `t-<slug>-<localId>`，按段边界剥离末段 localId（数字/点字面，如
+ * `1.2`），余下段拼回容器 slug 精确比较。非简单 startsWith——slug 互为 dash 前缀
+ * （`loop` vs `loop-recurrence-hardening`）不再穿透。非该形制（段数不足/localId 段非
+ * 数字点字面）→ null（不归属）。
+ */
+export function parseTaskContainerSlug(sourceTaskId: string): string | null {
+  const parts = sourceTaskId.split('-')
+  const localId = parts[parts.length - 1] ?? ''
+  if (parts.length < 3 || localId === '' || !/^[0-9.]+$/.test(localId)) return null
+  return parts.slice(1, -1).join('-')
+}
+
 /** 链成员映射（前驱回溯至链根 + 后继正向收齐——getBug 同口径提取；孤条不入） */
 function recurrenceChainsOf(rows: readonly BugStorageRow[]): Map<string, string[]> {
   const byId = new Map(rows.map((r) => [r.id, r]))
@@ -674,7 +688,7 @@ export function createBugsService(deps: BugsServiceDeps) {
       const chains = recurrenceChainsOf(rows)
       const byId = new Map(rows.map((r) => [r.id, r]))
       const files = scope.files.map((f) => f.trim()).filter((f) => f !== '')
-      const containerPrefix = `t-${scope.slug}-`
+      const containerSlug = scope.slug
       const activeCountOf = (chain: readonly string[]): number => {
         let max = 0
         for (const id of chain) {
@@ -695,8 +709,14 @@ export function createBugsService(deps: BugsServiceDeps) {
         const members = chain
           .map((id) => byId.get(id))
           .filter((m): m is BugStorageRow => m !== undefined)
-        // ① 归属过滤：链内任一成员 source_task_id 落 scope 容器
-        if (!members.some((m) => m.source_task_id !== null && m.source_task_id.startsWith(containerPrefix))) continue
+        // ① 归属过滤：链内任一成员 source_task_id 结构化解析出的容器 slug 与 scope 精确相等
+        if (
+          !members.some(
+            (m) =>
+              m.source_task_id !== null &&
+              parseTaskContainerSlug(m.source_task_id) === containerSlug,
+          )
+        ) continue
         // ② 终态过滤：全终态链（无 open 成员）不构成盲试风险；open 席位只落在 open 成员行
         if (!members.some((m) => m.bug_status === 'open')) continue
         if (byId.get(bugId)?.bug_status !== 'open') continue

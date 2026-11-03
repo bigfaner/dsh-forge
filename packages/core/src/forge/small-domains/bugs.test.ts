@@ -671,6 +671,19 @@ describe('findRecurrenceCandidates：归属链过滤 + 终态过滤 + 祖先径�
     expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId, r2.bugId])
   })
 
+  it('归属过滤边界：slug 互为 dash 前缀不穿透（loop vs loop-recurrence-hardening，结构化段边界）', async () => {
+    await seedChain({ sourceTaskId: 't-loop-recurrence-hardening-1.2' })
+    // scope.slug='loop' 不应命中 't-loop-recurrence-hardening-1.2'——期望零候选
+    expect(await s_find(h!, 'loop')).toEqual([])
+    // 正向：slug='loop-recurrence-hardening' 精确命中本容器链
+    const { s, root, r1, r2 } = await seedChain({ sourceTaskId: 't-loop-recurrence-hardening-1.2' })
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'loop-recurrence-hardening', localId: '1.2', files: [] })
+    expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId, r2.bugId])
+    // 反向：slug='loop-recurrence-hardening' 不命中 't-loop-1.2'（他容器链不入集）
+    await seedChain({ sourceTaskId: 't-loop-1.2' })
+    expect(await s_find(h!, 'loop-recurrence-hardening')).toEqual([])
+  })
+
   it('归属过滤：无关提案容器链（source_task_id 落他容器）不进候选集', async () => {
     await seedChain({ sourceTaskId: 't-unrelated-1.1' })
     const candidates = await s_find(h!, 'f')
