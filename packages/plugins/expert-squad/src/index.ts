@@ -455,12 +455,15 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     // 分层视图，官方源码核销 dsh-skill lib/types/index.d.ts:214-224/263-266）。
     // 对应官方服务缺席 = 字段缺席（client 回退兜底）。
     candidates: async () => {
-      const schemas = toolsFace?.schemas;
+      // bug 66b588e3：bind 宿主保 this——抽出裸调丢 this，官方 schemas 方法体
+      // this.view 抛错归一 400，client 回退兜底残缺
+      const schemasRead = toolsFace?.schemas?.bind(toolsFace);
       const tools =
-        typeof schemas === "function"
+        schemasRead !== undefined
           ? (
               await unionToolsCatalog(
-                (scope?: object) => (scope === undefined ? schemas() : schemas(scope)),
+                (scope?: object) =>
+                  scope === undefined ? schemasRead() : schemasRead(scope),
                 ctx.agentPresets,
               )
             )?.entries
