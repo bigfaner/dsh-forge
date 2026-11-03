@@ -269,6 +269,8 @@ export interface ForgeContextFace {
     get(name: string, strict?: boolean): unknown
     /** 可选 provide 面（expert-squad-forge 1.2——档案取用面 'forgeExperts' 依赖注入；缺席 = 不提供） */
     provide?(name: string, service: unknown): void
+    /** 已声明服务名表（bug 04d445f4 反向拉取缝——dirKeys.* 约定名枚举；缺席 = 零第三方键拉取） */
+    readonly props?: Readonly<Record<string, unknown>>
   }
   /** dsh 官方 tool 注册面 */
   tools: ToolRegisterFace

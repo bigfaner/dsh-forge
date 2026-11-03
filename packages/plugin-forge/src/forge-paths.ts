@@ -281,3 +281,58 @@ export function declareDirKeys(readForgeDirs: () => unknown, entries: readonly D
   if (typeof register !== 'function') return
   ;(register as (e: readonly DirKeyEntry[]) => void).call(service, entries)
 }
+
+// ─────────────────── 反向拉取缝（bug 04d445f4——跨 scope 装配形态的 declare merge） ───────────────────
+
+/**
+ * 第三方声明约定服务名前缀：声明方插件在根 scope `reflect.provide('dirKeys.<declarer>', entries)`
+ * 提供自己的目录键数组（plugin-forge 按会话隔离实例化、声明方为全局行——跨 scope 下推式注册
+ * （reflect.get / internal/service 事件）均被隔离过滤，唯一可达方向 = 消费侧拉取）。
+ */
+export const DECLARED_DIR_KEYS_PREFIX = 'dirKeys.'
+
+/** cordis reflect 面消费子面（反向拉取缝——props 枚举约定名 + get 取值） */
+export interface ReflectDeclarePullFace {
+  /** 已声明服务名表（ReflectService.props——根级单例，含全部已声明属性名） */
+  readonly props?: Readonly<Record<string, unknown>>
+  /** 按名取服务值（未隔离名解析至根 scope 实现） */
+  get(name: string): unknown
+}
+
+/**
+ * 反向拉取第三方目录键声明（AGENTS 1.6 在场性现查——每个消费点现查，检测结果不缓存）：
+ * 枚举 reflect.props 中 `dirKeys.` 前缀约定名，逐名现取服务值（数组形态的 DirKeyEntry 集），
+ * 逐条形状校验（malformed 跳过不抛——查询工具面 fail-soft；声明方装配质量由其自测把关），
+ * 与既有键集（本体 + 推式注册）按 dirKey 去重（既有键胜出——推式/拉取双缝同键不双列）。
+ * reflect 缺席 / 读取抛 / 约定名无值 = 该名零贡献零抛。
+ */
+export function collectDeclaredDirKeys(
+  reflect: ReflectDeclarePullFace | undefined,
+  known: readonly string[],
+): readonly DirKeyEntry[] {
+  const knownSet = new Set(known)
+  const collected: DirKeyEntry[] = []
+  const props = reflect?.props
+  if (props === undefined) return collected
+  for (const name of Object.keys(props)) {
+    if (!name.startsWith(DECLARED_DIR_KEYS_PREFIX)) continue
+    let value: unknown
+    try {
+      value = reflect?.get(name)
+    } catch {
+      continue
+    }
+    if (!Array.isArray(value)) continue
+    for (const entry of value) {
+      try {
+        validateDeclareEntry(entry as DirKeyEntry, 0)
+      } catch {
+        continue // malformed 声明跳过——查询面 fail-soft，不让单条坏声明砸掉 forgeDirs 全量查询
+      }
+      if (knownSet.has((entry as DirKeyEntry).dirKey)) continue
+      knownSet.add((entry as DirKeyEntry).dirKey)
+      collected.push(entry as DirKeyEntry)
+    }
+  }
+  return collected
+}

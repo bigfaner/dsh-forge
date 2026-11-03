@@ -25,6 +25,12 @@ export interface ForgePathsToolFace {
   anchorsOf(projectId: string): Promise<ForgePathsAnchorContext>
   /** 现读合并注册表（forge 本体五键 + declare merge 第三方键） */
   dirKeys(): readonly DirKeyEntry[]
+  /**
+   * 反向拉取第三方声明（bug 04d445f4——消费点现查，AGENTS 1.6 检测不缓存）：
+   * 枚举根 scope `dirKeys.*` 约定服务名现取声明数组；与 dirKeys() 按 dirKey 去重合并。
+   * 可选：缺席 = 零第三方键拉取（同 scope 装配径纯推式注册表即足）。
+   */
+  declaredDirKeys?(): readonly DirKeyEntry[]
 }
 
 /** 受控面 typed 拒绝（code = contracts ERR_DIR_PATH_INVALID；message 携带法集/缺参） */
@@ -128,6 +134,13 @@ function requirePathsFace(deps: ForgeToolDeps): ForgePathsToolFace {
   return deps.paths
 }
 
+/** 合并视图（注册表键在前 + 反向拉取声明追加去重——既有键胜出，单次查询现算不落注册表） */
+function mergedDirKeyEntries(paths: ForgePathsToolFace): readonly DirKeyEntry[] {
+  const registryEntries = paths.dirKeys()
+  const known = new Set(registryEntries.map((e) => e.dirKey))
+  return [...registryEntries, ...(paths.declaredDirKeys?.() ?? []).filter((e) => !known.has(e.dirKey))]
+}
+
 /** tool 定义工厂（forgeDirs——锚级查询，dirKey 可选/缺省全量） */
 export function createForgeDirsTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
@@ -148,7 +161,7 @@ export function createForgeDirsTool(deps: ForgeToolDeps): ForgeToolDefinition {
         const paths = requirePathsFace(deps)
         const projectId = requireProjectId(deps.resolveProjectId, session)
         const anchors = await paths.anchorsOf(projectId)
-        const entries = paths.dirKeys()
+        const entries = mergedDirKeyEntries(paths)
         if (parsed.dirKey !== undefined) {
           const entry = entries.find((e) => e.dirKey === parsed.dirKey)
           if (entry === undefined) {

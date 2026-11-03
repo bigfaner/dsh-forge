@@ -88,12 +88,6 @@ export interface KnowledgePromptSection {
   readonly text: string
 }
 
-/** forgeDirs 服务键面（plugin-forge 提供 declare merge 注册面——结构同形，零实现级 import） */
-export interface ForgeDirsDeclareFace {
-  /** 声明第三方目录键（forge.* 占用/同名互撞 = fail-loud 拒绝——校验在 forge 侧单点） */
-  registerDirKeys(entries: readonly KnowledgeDirKeyDeclaration[]): void
-}
-
 /** 第三方目录键声明项（plugin-forge DirKeyEntry 结构同形——消费面最小字段集） */
 export interface KnowledgeDirKeyDeclaration {
   /** 目录键（插件前缀命名空间，如 knowledge.root；forge.* 保留段禁止占用） */
@@ -116,16 +110,12 @@ export interface KnowledgeContextFace {
   systemPrompt: SystemPromptSectionFace
   /**
    * Cordis 反射面（可选服务消费通道）：cordis 4.0.4 无可选 inject（inject 成员缺席即
-   * 阻载），plugin-forge 提供的 forgeDirs 服务键经 reflect.get 防御读取——缺席/异常/
-   * 非函数面 = 声明零生效零抛（AGENTS 1.6 在场性现查 fail-soft）。
+   * 阻载）。bug 04d445f4 裁定反向拉取缝：本插件在根 scope `provide('dirKeys.knowledge',
+   * entries)` 提供目录键声明（plugin-forge 消费点枚举 `dirKeys.*` 现取——跨 scope 装配
+   * 形态下唯一可达方向）；provide 缺席/抛 = 声明零生效零抛（fail-soft 不阻载）。
    */
-  readonly reflect?: { get(name: string): unknown }
-  /**
-   * Cordis 事件面（晚到服务感知——bug 62208a31）：装载期 forgeDirs 服务键缺席时，
-   * 经官方 'internal/service' 拦截钩子（服务绑定时派发，携带服务值）在场注册——
-   * 结构同形消费，真 Context 的 ctx.on 即经 events mixin 转发到此。
-   */
-  readonly events?: {
-    on(name: string, listener: (...args: unknown[]) => void): () => boolean
+  readonly reflect?: {
+    get(name: string): unknown
+    provide?(name: string, service: unknown): (() => void) | undefined
   }
 }

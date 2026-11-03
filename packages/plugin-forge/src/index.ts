@@ -29,7 +29,7 @@ import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, createProjectWorkspaceRoots, createForgePathsAnchors, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
-import { createDirKeyRegistry } from './forge-paths.js'
+import { collectDeclaredDirKeys, createDirKeyRegistry } from './forge-paths.js'
 import type { DirKeyEntry } from './forge-paths.js'
 import { globalToolNamesOfToolsFace } from './dispatch-core/index.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, ForgeToolDefinition, SessionActivationFace } from './faces.js'
@@ -665,8 +665,14 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
       // T4 锚有效性预检项目根解析缝（loop-recurrence-hardening——resolveDir 同源 projects face）
       projects: ctx.forgeProjects,
-      // dirKey 数据源消费面（forge-dirs-query-tool——双查询工具 + declare merge 同一注册表实例）
-      paths: { anchorsOf: (projectId) => forgePathsAnchors.anchorsOf(projectId), dirKeys: () => dirKeyRegistry.entries() },
+      // dirKey 数据源消费面（forge-dirs-query-tool——双查询工具 + declare merge 同一注册表实例；
+      // declaredDirKeys = 反向拉取缝（bug 04d445f4）：消费点现查根 scope dirKeys.* 约定声明，
+      // 跨 scope 装配形态（plugin-forge 按会话隔离实例化）下第三方键唯一可达径）
+      paths: {
+        anchorsOf: (projectId) => forgePathsAnchors.anchorsOf(projectId),
+        dirKeys: () => dirKeyRegistry.entries(),
+        declaredDirKeys: () => collectDeclaredDirKeys(ctx.reflect, dirKeyRegistry.entries().map((e) => e.dirKey)),
+      },
       // 3b 循环工具装配缝：dispatchTask/stopTaskLoop 与 /run-dag-tasks 指令同源同一循环核心
       // （驱动器 + 登记表单例注入——守卫判活/接管集/单活门控双入口同 registry）。
       loop: { driver: loopDriver, registry: loopRegistry },

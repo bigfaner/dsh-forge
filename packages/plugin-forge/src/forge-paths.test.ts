@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import {
+  collectDeclaredDirKeys,
   createDirKeyRegistry,
   declareDirKeys,
   DIR_DESTINATIONS,
@@ -85,14 +86,15 @@ describe('目的地注册表（AC1：3 目的地受控枚举 + requires + 锚绑
   })
 })
 
-describe('declare merge 注册面（AC1a 四断言）', () => {
-  const knowledgeRoot: DirKeyEntry = {
-    dirKey: 'knowledge.root',
-    description: '工作区知识库根（.knowledge/）',
-    resolve: (ctx) => `${ctx.forgeDir ?? ''}\\..\\.knowledge`,
-    declaredBy: 'knowledge',
-  }
+/** 第三方声明样张（knowledge.root 同形——推式注册与反向拉取双缝共消费） */
+const knowledgeRoot: DirKeyEntry = {
+  dirKey: 'knowledge.root',
+  description: '工作区知识库根（.knowledge/）',
+  resolve: (ctx) => `${ctx.forgeDir ?? ''}\\..\\.knowledge`,
+  declaredBy: 'knowledge',
+}
 
+describe('declare merge 注册面（AC1a 四断言）', () => {
   it('第三方键注册后全量可见（forge 本体五键在前 + knowledge.root 追加）', () => {
     const registry = createDirKeyRegistry()
     registry.registerDirKeys([knowledgeRoot])
@@ -132,6 +134,61 @@ describe('declare merge 注册面（AC1a 四断言）', () => {
     // 在场且面齐备 = 声明生效（读取闭包现查，不缓存）
     declareDirKeys(() => ({ registerDirKeys: (e: readonly DirKeyEntry[]) => { registered = e } }), [knowledgeRoot])
     expect(registered).toEqual([knowledgeRoot])
+  })
+})
+
+describe('反向拉取缝（bug 04d445f4——collectDeclaredDirKeys 消费点现查）', () => {
+  /** reflect 桩：props（约定名表）+ get（按名取值）——枚举与取值分离同构 cordis ReflectService */
+  function makeReflect(services: Record<string, unknown>, opts: { getThrows?: readonly string[] } = {}) {
+    return {
+      props: Object.fromEntries(Object.keys(services).map((k) => [k, {}])),
+      get: (name: string) => {
+        if (opts.getThrows?.includes(name)) throw new Error('inactive fiber')
+        return services[name]
+      },
+    }
+  }
+  const builtinKeys = DIR_KEY_REGISTRY.map((e) => e.dirKey)
+
+  it('枚举 dirKeys.* 约定名现取声明数组（非约定名/非数组值零贡献）', () => {
+    const reflect = makeReflect({
+      'dirKeys.knowledge': [knowledgeRoot],
+      'dirKeys.other': [knowledgeRoot],
+      unrelated: [knowledgeRoot],
+      'dirKeys.notArray': knowledgeRoot,
+    })
+    const pulled = collectDeclaredDirKeys(reflect, builtinKeys)
+    expect(pulled.map((e) => e.dirKey)).toEqual(['knowledge.root'])
+  })
+
+  it('与既有键集去重（推式注册键胜出，拉取同键跳过；拉取内部同键亦去重）', () => {
+    const reflect = makeReflect({
+      'dirKeys.knowledge': [knowledgeRoot],
+      'dirKeys.other': [knowledgeRoot],
+    })
+    const pulled = collectDeclaredDirKeys(reflect, [...builtinKeys, 'knowledge.root'])
+    expect(pulled).toHaveLength(0)
+    const pulled2 = collectDeclaredDirKeys(reflect, builtinKeys)
+    expect(pulled2).toHaveLength(1)
+  })
+
+  it('malformed 声明跳过不抛（forge.* 占用/缺字段——查询面 fail-soft）', () => {
+    const reflect = makeReflect({
+      'dirKeys.bad': [
+        { ...knowledgeRoot, dirKey: 'forge.hijack' },
+        { ...knowledgeRoot, description: '' },
+        knowledgeRoot,
+      ],
+    })
+    const pulled = collectDeclaredDirKeys(reflect, builtinKeys)
+    expect(pulled.map((e) => e.dirKey)).toEqual(['knowledge.root'])
+  })
+
+  it('reflect 缺席 / props 缺席 / get 抛 = 零贡献零抛（fail-soft）', () => {
+    expect(collectDeclaredDirKeys(undefined, builtinKeys)).toEqual([])
+    expect(collectDeclaredDirKeys({ get: () => [knowledgeRoot] }, builtinKeys)).toEqual([])
+    const reflect = makeReflect({ 'dirKeys.knowledge': [knowledgeRoot] }, { getThrows: ['dirKeys.knowledge'] })
+    expect(collectDeclaredDirKeys(reflect, builtinKeys)).toEqual([])
   })
 })
 

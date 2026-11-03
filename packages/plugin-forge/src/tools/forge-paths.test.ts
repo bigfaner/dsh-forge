@@ -86,6 +86,22 @@ describe('forgeDirs（锚级查询）', () => {
     expect(out.paths.find((p) => p.dirKey === 'knowledge.root')!.dir).toBe(`${WS}\\.forge\\.knowledge`)
   })
 
+  it('反向拉取缝（bug 04d445f4）：declaredDirKeys 现取第三方键全量可见；与注册表同键去重不双列', async () => {
+    // 拉取径独有（注册表零注册）——跨 scope 装配形态的真机径
+    const pullOnly = depsOf()
+    pullOnly.paths = { ...pullOnly.paths!, declaredDirKeys: () => [knowledgeRoot] }
+    const out = (await createForgeDirsTool(pullOnly).execute({}, EXEC)) as {
+      paths: { dirKey: string; dir: string }[]
+    }
+    expect(out.paths.map((p) => p.dirKey)).toContain('knowledge.root')
+    expect(out.paths).toHaveLength(DIR_KEY_REGISTRY.length + 1)
+    // 推式已注册 + 拉取同键 = 去重单列（既有键胜出）
+    const both = depsOf({ extraKeys: [knowledgeRoot] })
+    both.paths = { ...both.paths!, declaredDirKeys: () => [knowledgeRoot] }
+    const out2 = (await createForgeDirsTool(both).execute({}, EXEC)) as { paths: { dirKey: string }[] }
+    expect(out2.paths.filter((p) => p.dirKey === 'knowledge.root')).toHaveLength(1)
+  })
+
   it('未知 dirKey → typed 拒绝（ERR_DIR_PATH_INVALID）并列出全部合法键', async () => {
     const out = (await createForgeDirsTool(depsOf()).execute({ dirKey: 'forge.nope' }, EXEC)) as {
       ok: boolean
