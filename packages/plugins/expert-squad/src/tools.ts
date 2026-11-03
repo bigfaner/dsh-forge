@@ -263,6 +263,26 @@ async function unionAcrossPresets(
   return { entries: [...merged.values()], note };
 }
 
+/** 白名单求交探针工厂（bug e3b045dc）：无参 schemas() 是 ScopedLayers global 单层
+ * 投影——官方模型工具装在 preset scope 层（agent-preset-registry createScope 装载），
+ * 恰好只剩本插件 expert 域工具 → 档案白名单求交空集炸委派。探针改接全模式并集面
+ * （unionAcrossPresets，bug 6337a936 同径）：global 视图先入 ∪ 逐 preset acquireScope
+ * 租约内 scope 视图。消费点现查禁 memoize（AGENTS 1.6）；agentPresets/schemas 缺席
+ * fail-soft 降级（global 层名或空数组——compose 侧空集 = 不裁剪）。 */
+export function createKnownToolsProbe(
+  toolsSchemas: ToolsSchemasReader,
+  agentPresets: () => AgentPresetsFace | undefined,
+): () => Promise<readonly string[]> {
+  return async () => {
+    const { entries } = await unionAcrossPresets(
+      () => toolsSchemas(),
+      (scope) => toolsSchemas(scope),
+      agentPresets(),
+    );
+    return entries.map((entry) => entry.name);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // zod → 受支持 JSON Schema 子集净化（annotutor tools.ts 先例）
 // ---------------------------------------------------------------------------

@@ -33,7 +33,7 @@ import {
 } from "./registry.js";
 import { registerExpertSquadRoutes, type ConnectionLike, type DelegateAssemblyState } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
-import { registerExpertTools, serializeExpertMd, type ToolRegisterFace } from "./tools.js";
+import { createKnownToolsProbe, registerExpertTools, serializeExpertMd, type ToolRegisterFace } from "./tools.js";
 import {
   ExpertRunPanelState,
   observeSubagentEnd,
@@ -550,13 +550,16 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       subagents,
       panel,
       provider: "spawn",
-      // 白名单平台求交探针（bug 3cb118cf）：每派发现调 schemas() 取全局注册名，
-      // 消费点现查禁 memoize（工作区约定 §1.6）；toolsFace.schemas 缺席 → undefined
-      // → compose 侧无探针不裁剪（fail-soft 同 dsh-graph g-473 口径）。
-      knownTools: () => {
-        const schemas = toolsFace.schemas?.();
-        return schemas === undefined ? undefined : schemas.map((schema) => schema.name);
-      },
+      // 白名单平台求交探针（bug 3cb118cf / e3b045dc）：无参 schemas() 是 global 单层
+      // 投影（官方工具在 preset scope 层，恰好只剩本插件 expert 域工具 → 求交空集炸
+      // 委派）——改接全模式并集面 createKnownToolsProbe（global ∪ 逐 preset scope 租约，
+      // bug 6337a936 同径）。每派发现调禁 memoize（AGENTS 1.6）；缺席面 fail-soft
+      // （空并集 = 不裁剪；金丝雀防护保留兜底）。
+      knownTools: createKnownToolsProbe(
+        (scope?: object) =>
+          scope === undefined ? toolsFace.schemas?.() : toolsFace.schemas?.(scope),
+        () => ctx.agentPresets,
+      ),
     });
     delegateAssembly = { status: "registered" };
   }

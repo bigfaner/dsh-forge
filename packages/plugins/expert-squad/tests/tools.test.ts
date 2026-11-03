@@ -11,6 +11,7 @@ import {
   EXPERT_TOOLS,
   ExpertToolError,
   createExpertTools,
+  createKnownToolsProbe,
   registerExpertTools,
   type ExpertToolDefinition,
 } from "../src/tools.js";
@@ -799,5 +800,51 @@ describe("list_tools / list_skills — 全模式并集视图（bug 6337a936）",
     expect(result.note).toContain("release failed");
     expect(result.note).toContain("hr");
     expect(presets.events.disposed).toEqual([presets.keys.dev]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createKnownToolsProbe：delegate_expert 白名单求交探针（bug e3b045dc）——
+// 无参 schemas() 是 ScopedLayers global 单层投影（官方工具装在 preset scope 层，
+// 恰好只剩 expert 域 10 枚）→ 探针改接全模式并集面（bug 6337a936 同径）。
+// ---------------------------------------------------------------------------
+
+describe("createKnownToolsProbe — 白名单求交探针接全模式并集（bug e3b045dc）", () => {
+  it("探针返回跨 preset 并集：global 层（仅 expert 域工具）∪ preset scope 层（read/write 等官方工具），含金丝雀 read", async () => {
+    const presets = makePresetFace(["expedition"]);
+    const probe = createKnownToolsProbe(
+      (scope?: object) => {
+        if (scope === undefined)
+          return [{ name: "delegate_expert" }, { name: "list_tools" }]; // global 层投影（实测形态）
+        return [{ name: "read" }, { name: "write" }, { name: "edit" }, { name: "pwsh" }];
+      },
+      () => presets.face,
+    );
+    const known = await probe();
+    expect(known).toEqual(["delegate_expert", "list_tools", "read", "write", "edit", "pwsh"]);
+    // 租约用后 dispose（不泄漏 preset scope 租约）
+    expect(presets.events.disposed).toEqual([presets.keys.expedition]);
+  });
+
+  it("agentPresets 缺席 → fail-soft 降级仅 global 层名（金丝雀防护兜底路径）", async () => {
+    const probe = createKnownToolsProbe(
+      () => [{ name: "delegate_expert" }],
+      () => undefined,
+    );
+    const known = await probe();
+    expect(known).toEqual(["delegate_expert"]);
+  });
+
+  it("schemas 面缺席且 agentPresets 缺席 → 空数组（compose 侧空集 = 不裁剪）", async () => {
+    const probe = createKnownToolsProbe(() => undefined, () => undefined);
+    expect(await probe()).toEqual([]);
+  });
+
+  it("消费点现查禁 memoize：每次调用重新取数（preset 装配换代后探针跟随）", async () => {
+    let globalView: readonly { name: string }[] = [{ name: "read" }];
+    const probe = createKnownToolsProbe(() => globalView, () => undefined);
+    expect(await probe()).toEqual(["read"]);
+    globalView = [{ name: "read" }, { name: "bash" }];
+    expect(await probe()).toEqual(["read", "bash"]);
   });
 });

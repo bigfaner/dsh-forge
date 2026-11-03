@@ -55,19 +55,27 @@ export function composePersonaText(entry: ExpertEntry): string {
   ].join("\n");
 }
 
-/** 工厂：绑定取用服务的 compose(key, task)。knownTools = 全局注册名现查面
- *  （每派发现调、禁 memoize；返回 undefined 同探针缺席）；缺席（探针不在场）
- *  不裁剪，白名单原样承载。 */
+/** knownTools 探针面：可同步可异步（bug e3b045dc——探针接全模式并集面，
+ *  unionAcrossPresets 异步取 preset scope 租约）；返回 undefined 或空数组均
+ *  fail-soft：白名单不裁剪原样承载，见 compose.resolveToolAllow。 */
+export type KnownToolsProbe = () =>
+  | readonly string[]
+  | undefined
+  | Promise<readonly string[] | undefined>;
+
+/** 工厂：绑定取用服务的 compose(key, task)。knownTools = 注册名现查面
+ *  （每派发现调、禁 memoize；探针缺席或返回空 = 不裁剪，白名单原样承载）。 */
 export function createExpertComposer(
   experts: ExpertsService,
-  knownTools?: () => readonly string[] | undefined,
-): (key: string, task: string) => ExpertSubagentRequest {
-  return (key, task) => {
+  knownTools?: KnownToolsProbe,
+): (key: string, task: string) => Promise<ExpertSubagentRequest> {
+  return async (key, task) => {
     const entry = experts.get(key); // 不存在/禁用在此 fail-loud（AD1）
     const persona = composePersonaText(entry);
+    const known = await knownTools?.(); // 并集探针异步取数（bug e3b045dc）
     return {
       persona,
-      toolFilter: { allow: resolveToolAllow(entry.tools, knownTools?.()) },
+      toolFilter: { allow: resolveToolAllow(entry.tools, known) },
       ...(entry.provider !== undefined && entry.model !== undefined
         ? { agentOptions: { provider: entry.provider, model: entry.model } }
         : {}),
