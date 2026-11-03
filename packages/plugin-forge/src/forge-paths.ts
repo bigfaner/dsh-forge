@@ -75,22 +75,23 @@ function requireAnchor(ctx: ForgePathsResolveContext, key: 'projectHome' | 'task
  * 锚键注册表（forge 本体五键——只收稳定锚：无参、即查即得；带参派生路径不设键，
  * 经 DIR_DESTINATIONS 目的地解析）。派生链单向无环：
  * projectHome → taskHome；forgeDir → docsRoot/tmp/worktrees。
+ * dirKey 命名格式（用户裁决）：forge.{snake_case}——点前缀 = 命名空间，段内蛇形。
  */
 export const DIR_KEY_REGISTRY: readonly DirKeyEntry[] = [
   {
-    dirKey: 'forge.projectHome',
+    dirKey: 'forge.project_home',
     description: '宿主任务库派生根（env DSH_FORGE_TASKS_HOME > userData/forge-workspaces，随宿主形态解析）',
     resolve: (ctx) => requireAnchor(ctx, 'projectHome'),
     declaredBy: 'plugin-forge',
   },
   {
-    dirKey: 'forge.taskHome',
+    dirKey: 'forge.task_home',
     description: '本工作区任务管线状态库（forge.db 四域状态与任务运行日志所在；deriveTaskStoreDir 产物）',
     resolve: (ctx) => requireAnchor(ctx, 'taskHome'),
     declaredBy: 'plugin-forge',
   },
   {
-    dirKey: 'forge.docsRoot',
+    dirKey: 'forge.docs_root',
     description: '本工作区 forge 文档根（提案/探针/圆桌纪要/特性阶段文档树之父）',
     resolve: (ctx) => (ctx.docsRoot !== undefined && ctx.docsRoot !== '' ? ctx.docsRoot : joinDirSegment(requireAnchor(ctx, 'forgeDir'), 'docs')),
     declaredBy: 'plugin-forge',
@@ -116,21 +117,21 @@ export const DIR_DESTINATIONS: readonly DirDestinationEntry[] = [
   {
     dest: 'dossier',
     description: '提案卷宗目录（T3 建模报告探测位 / settle 回收位）',
-    anchor: 'forge.docsRoot',
+    anchor: 'forge.docs_root',
     template: 'proposals/{slug}/issues/{localId}',
     requires: ['slug', 'localId'],
   },
   {
     dest: 'taskLogs',
     description: '任务执行日志目录（= forge.task_logs_dir）',
-    anchor: 'forge.taskHome',
+    anchor: 'forge.task_home',
     template: 'logs/{slug}/{localId}',
     requires: ['slug', 'localId'],
   },
   {
     dest: 'proposalDir',
     description: '提案文档目录（proposal.md 及配套之父）',
-    anchor: 'forge.docsRoot',
+    anchor: 'forge.docs_root',
     template: 'proposals/{slug}',
     requires: ['slug'],
   },

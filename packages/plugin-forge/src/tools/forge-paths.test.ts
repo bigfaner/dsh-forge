@@ -57,21 +57,21 @@ describe('forgeDirs（锚级查询）', () => {
     }
     // §2.6 样张对照：五锚键的 dir 与 description 与注册表同源逐项一致
     const byKey = new Map(out.paths.map((p) => [p.dirKey, p]))
-    expect(byKey.get('forge.projectHome')).toMatchObject({
+    expect(byKey.get('forge.project_home')).toMatchObject({
       dir: 'D:\\software\\dsh-forge\\data\\forge-workspaces',
       description: '宿主任务库派生根（env DSH_FORGE_TASKS_HOME > userData/forge-workspaces，随宿主形态解析）',
     })
-    expect(byKey.get('forge.docsRoot')!.dir).toBe(`${WS}\\.forge\\docs`)
+    expect(byKey.get('forge.docs_root')!.dir).toBe(`${WS}\\.forge\\docs`)
   })
 
   it('单 key 查询返回同结构单项（§2.6：单 key 返回同结构单项）', async () => {
-    const out = (await createForgeDirsTool(depsOf()).execute({ dirKey: 'forge.taskHome' }, EXEC)) as {
+    const out = (await createForgeDirsTool(depsOf()).execute({ dirKey: 'forge.task_home' }, EXEC)) as {
       ok: boolean
       paths: { dirKey: string; dir: string; description: string }[]
     }
     expect(out.paths).toEqual([
       {
-        dirKey: 'forge.taskHome',
+        dirKey: 'forge.task_home',
         dir: TASK_HOME,
         description: '本工作区任务管线状态库（forge.db 四域状态与任务运行日志所在；deriveTaskStoreDir 产物）',
       },
@@ -118,7 +118,7 @@ describe('forgeDirs（锚级查询）', () => {
     const deps = depsOf({
       anchorsOf: async () => ({ ...ANCHORS, taskHome: 'D:\\real\\store\\dir' }),
     })
-    const out = (await createForgeDirsTool(deps).execute({ dirKey: 'forge.taskHome' }, EXEC)) as {
+    const out = (await createForgeDirsTool(deps).execute({ dirKey: 'forge.task_home' }, EXEC)) as {
       paths: { dir: string }[]
     }
     expect(out.paths[0]!.dir).toBe('D:\\real\\store\\dir')

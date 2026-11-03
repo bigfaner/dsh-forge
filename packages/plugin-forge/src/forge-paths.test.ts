@@ -30,9 +30,9 @@ const CTX = {
 describe('锚键注册表（AC1：5 键全量——每项纯函数解析 + description 在场）', () => {
   it('恰 5 锚键，dirKey 集合 = 提案 §2.1 锚键表', () => {
     expect(DIR_KEY_REGISTRY.map((e) => e.dirKey)).toEqual([
-      'forge.projectHome',
-      'forge.taskHome',
-      'forge.docsRoot',
+      'forge.project_home',
+      'forge.task_home',
+      'forge.docs_root',
       'forge.tmp',
       'forge.worktrees',
     ])
@@ -51,7 +51,7 @@ describe('锚键注册表（AC1：5 键全量——每项纯函数解析 + descr
   })
 
   it('docsRoot 显式注入优先（ctx 装配层可覆盖派生缺省）；锚前提缺席 = fail-loud 不静默', () => {
-    const docsRoot = DIR_KEY_REGISTRY.find((e) => e.dirKey === 'forge.docsRoot')!
+    const docsRoot = DIR_KEY_REGISTRY.find((e) => e.dirKey === 'forge.docs_root')!
     expect(docsRoot.resolve({ ...CTX, docsRoot: 'W:\\ext\\docs' })).toBe('W:\\ext\\docs')
     expect(() => docsRoot.resolve({})).toThrow('forgeDir')
     expect(() => DIR_KEY_REGISTRY[0]!.resolve({})).toThrow('projectHome')
@@ -68,9 +68,9 @@ describe('锚键注册表（AC1：5 键全量——每项纯函数解析 + descr
 describe('目的地注册表（AC1：3 目的地受控枚举 + requires + 锚绑定单点）', () => {
   it('恰 3 目的地——锚与模板与提案 §2.1 表逐行一致', () => {
     expect(DIR_DESTINATIONS.map((d) => [d.dest, d.anchor, d.template, ...d.requires])).toEqual([
-      ['dossier', 'forge.docsRoot', 'proposals/{slug}/issues/{localId}', 'slug', 'localId'],
-      ['taskLogs', 'forge.taskHome', 'logs/{slug}/{localId}', 'slug', 'localId'],
-      ['proposalDir', 'forge.docsRoot', 'proposals/{slug}', 'slug'],
+      ['dossier', 'forge.docs_root', 'proposals/{slug}/issues/{localId}', 'slug', 'localId'],
+      ['taskLogs', 'forge.task_home', 'logs/{slug}/{localId}', 'slug', 'localId'],
+      ['proposalDir', 'forge.docs_root', 'proposals/{slug}', 'slug'],
     ])
   })
 

@@ -48,9 +48,9 @@ function makeFakeReflect() {
 /** forge 侧同构模拟：本体五键 + 反向拉取合并（tools/forge-paths.ts mergedDirKeyEntries 同构） */
 function makeFakeForgeDirs() {
   const forgeAnchors = [
-    'forge.projectHome',
-    'forge.taskHome',
-    'forge.docsRoot',
+    'forge.project_home',
+    'forge.task_home',
+    'forge.docs_root',
     'forge.tmp',
     'forge.worktrees',
   ].map((dirKey) => ({ dirKey, description: `${dirKey} 桩`, resolve: () => `D:\\stub\\${dirKey}` }))

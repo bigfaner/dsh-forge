@@ -4,7 +4,7 @@
 // settlement.json（结算载荷）/triage.md（处置记录）内聚，多轮问题互不混档；多模态可扩展。
 // 路径与既有容器事件流同根同维度（#26——{容器目录}/logs/ 下与 logs/<slug>.jsonl 并存，
 // 零新增中间层；FORGE_LOGS_DIR 单源复用）。叙述面只携带本面返回的事件子文件夹**绝对路径**
-// （forge-paths taskLogs 目的地解析器拼接——forge.taskHome 绝对锚，无裸 logs/ 相对形态；
+// （forge-paths taskLogs 目的地解析器拼接——forge.task_home 绝对锚，无裸 logs/ 相对形态；
 // notification-samples.md 详情行口径）；分级呈现三档 = 叙述摘要 /
 // 事件子文件夹（人/agent 按需读）/ 裁决问询全文。
 // fail-soft：容器目录缺席/文件面故障 = 返回 undefined 不抛（叙述照发、详情行省略）。
@@ -69,7 +69,7 @@ export function incidentDirNameOf(seq: number, eventType: string): string {
   return `${String(seq).padStart(3, '0')}-${suffix === '' ? 'event' : suffix}`
 }
 
-/** 事件子文件夹绝对路径（叙述详情行口径——forge.taskHome 绝对锚 + logs/<slug>/<taskKey>/<dir>/，数据源单源拼接） */
+/** 事件子文件夹绝对路径（叙述详情行口径——forge.task_home 绝对锚 + logs/<slug>/<taskKey>/<dir>/，数据源单源拼接） */
 export function incidentAbsPathOf(containerDir: string, sourceSlug: string, taskKey: string, dirName: string): string {
   return join(taskLogsDirOf(containerDir, sourceSlug, taskKey), dirName)
 }

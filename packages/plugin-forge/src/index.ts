@@ -868,7 +868,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       },
     })
     // forge-dirs-query-tool（用户裁决）：文档根经官方 {{forge_docs_root}} 模板插值——
-    // 变量每次组装按装配会话求值（同 sessionForgeDirs 预热缓存，dirKey forge.docsRoot
+    // 变量每次组装按装配会话求值（同 sessionForgeDirs 预热缓存，dirKey forge.docs_root
     // 的解析派生 docsRootOfForgeDir 单源）；未绑定会话回退占位说明文本（官方插值器对
     // 已注册无值引用 fail-loud，故 provider 恒返回字符串）。
     const disposeDocsRootVariable = ctx.systemPrompt.variable?.('forge_docs_root', (context) => {

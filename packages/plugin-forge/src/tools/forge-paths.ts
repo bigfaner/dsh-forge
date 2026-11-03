@@ -150,7 +150,7 @@ export function createForgeDirsTool(deps: ForgeToolDeps): ForgeToolDefinition {
     parameters: {
       type: 'object',
       properties: {
-        dirKey: { type: 'string', description: 'Optional anchor key to look up (e.g. forge.taskHome); omitted = list all anchors.' },
+        dirKey: { type: 'string', description: 'Optional anchor key to look up (e.g. forge.task_home); omitted = list all anchors.' },
       },
     },
     output: { schema: FORGE_DIRS_OUTPUT_SCHEMA, render: renderForgeDirsResult },
