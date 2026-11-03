@@ -101,6 +101,61 @@ describe('openWorkspace 面安装器（bug 267dcac1——promise 契约 + 草稿
   })
 })
 
+// ───────── bug bd7d7977 基线在场门（d353536f 同因面——点选链 openWorkspace 竞速拒认收口）─────────
+
+describe('openWorkspace 面·基线在场门（bug bd7d7977）', () => {
+  beforeEach(() => {
+    delete (globalThis as unknown as Record<string, unknown>)['__dshForgeOpenWorkspace']
+  })
+  afterEach(() => {
+    delete (globalThis as unknown as Record<string, unknown>)['__dshForgeOpenWorkspace']
+  })
+
+  /** 官方 workspaces.list 快照桩（getSnapshot → items 窄形状；可后置补行） */
+  function listStore(): { store: unknown; admit: (workspaceId: string) => void } {
+    let items: Array<{ workspaceId: string }> = []
+    const store = { getSnapshot: () => ({ items }) }
+    return { store, admit: (workspaceId) => { items = [...items, { workspaceId }] } }
+  }
+
+  function installFace(world: { openWorkspace: ReturnType<typeof vi.fn>; list?: unknown; wait?: { pollMs?: number; timeoutMs?: number } }): (workspaceId: string) => Promise<void> {
+    installOpenWorkspaceFace({
+      uiWorkspace: { openWorkspace: world.openWorkspace },
+      workspacesList: world.list,
+      wait: world.wait,
+    })
+    return (globalThis as unknown as Record<string, unknown>)['__dshForgeOpenWorkspace'] as (workspaceId: string) => Promise<void>
+  }
+
+  it('id 未入基线即调用：等基线推送抵达后再委派（竞速窗零拒认）', async () => {
+    const openWorkspace = vi.fn(async (_id: string) => {})
+    const { store, admit } = listStore()
+    const face = installFace({ openWorkspace, list: store, wait: { pollMs: 10, timeoutMs: 2_000 } })
+    const pending = face('ws-late')
+    await new Promise((r) => setTimeout(r, 60))
+    expect(openWorkspace, '基线未抵达不得提前委派').not.toHaveBeenCalled()
+    admit('ws-late')
+    await pending
+    expect(openWorkspace).toHaveBeenCalledTimes(1)
+    expect(openWorkspace.mock.calls[0]?.[0]).toBe('ws-late')
+  })
+
+  it('上限到点仍缺席 = 放行委派（fail-open，真不在场由官方错误面呈现）', async () => {
+    const openWorkspace = vi.fn(async (_id: string) => {})
+    const { store } = listStore()
+    const face = installFace({ openWorkspace, list: store, wait: { pollMs: 10, timeoutMs: 80 } })
+    await face('ws-never')
+    expect(openWorkspace).toHaveBeenCalledTimes(1)
+  })
+
+  it('快照面缺席（形状漂移/旧环境）= 不可核验即放行（零新等待）', async () => {
+    const openWorkspace = vi.fn(async (_id: string) => {})
+    const face = installFace({ openWorkspace, list: { broken: true } })
+    await face('ws-any')
+    expect(openWorkspace).toHaveBeenCalledTimes(1)
+  })
+})
+
 // ───────── bug 4b89d984 resolveDraftShellFace（形状适配单源；this 敏感 setDraft 保 receiver）─────────
 
 describe('resolveDraftShellFace（bug 4b89d984）', () => {

@@ -2313,8 +2313,12 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // 「the one way another plugin stops a session's input」，blocked 即官方 inert
         // 禁用卡 + reason 占位）对当前主会话置位，敛棋/3s 超时清退（原会话锚定）。
         installWorktreeSwitchGate({ clientCtx, uiWorkspace, warn: (message) => console.warn(message) })
+        const workspaces = clientCtx.get('workspaces') as ForgeWorkspacesService
         installOpenWorkspaceFace({
           uiWorkspace,
+          // bug bd7d7977 基线在场门取数源：官方 workspaces.list 快照——点选链委派前有界等
+          // 基线抵达（d353536f 同因面，open-session 编排径同门随动）。
+          workspacesList: workspaces.list,
           // bug 267dcac1 草稿迁移 shell 解析（官方 selectWorkspace 同语义）：sessions.binding
           // 借已 retain 绑定 → conversation.input.for 取 shell（queue dock 同径，
           // bugReferenceServicesOf 先例）；未 retain/面缺席 = undefined fail-soft 零迁移。
@@ -2322,7 +2326,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             resolveDraftShellFace(clientCtx, sessions, sessionId),
           warn: (message) => console.warn(message),
         })
-        const workspaces = clientCtx.get('workspaces') as ForgeWorkspacesService
         const sidebarRight = clientCtx.get('sidebarRight') as ForgeSidebarRightService
         const sidebarRightTabs = clientCtx.get('sidebarRightTabs') as ForgeSidebarRightTabsService
         const layout = clientCtx.get('layout') as ForgeLayoutService

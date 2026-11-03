@@ -13,6 +13,8 @@
 //    写入旧 blank 草稿、旧 blank 清空——beforeOpen 时点新旧两态皆在 retain（replaceMain
 //    client.js:971-992：新引用先 retain、旧 main 后 release），迁移窗成立。
 
+import { waitForWorkspacePresent, type OpenSessionWaitOptions } from './open-session.js'
+
 const KEY = '__dshForgeOpenWorkspace'
 
 /** 官方 openWorkspace 窄面承诺（beforeOpen：草稿迁移窗钩子——官方 replaceMain 换主前回调） */
@@ -78,6 +80,11 @@ export interface OpenWorkspaceInstallOptions {
   readonly resolveShell?: (sessionId: string) => DraftShellFace | undefined
   /** fail-soft 诊断行（缺省 console.warn） */
   readonly warn?: (message: string) => void
+  /** 官方 workspaces.list 快照面（getSnapshot → items——bug bd7d7977 基线在场门取数源；
+   *  缺席 = 不可核验即放行，零新等待） */
+  readonly workspacesList?: unknown
+  /** 基线在场门等待参数（缺省 50ms 轮询 / 2s 上限——d353536f 同口径） */
+  readonly wait?: OpenSessionWaitOptions
 }
 
 export function installOpenWorkspaceFace(options: OpenWorkspaceInstallOptions): void {
@@ -91,7 +98,9 @@ export function installOpenWorkspaceFace(options: OpenWorkspaceInstallOptions): 
     return
   }
   const open = svc.openWorkspace.bind(svc)
-  ;(globalThis as unknown as Record<string, unknown>)[KEY] = (workspaceId: string): Promise<void> => {
+  ;(globalThis as unknown as Record<string, unknown>)[KEY] = async (
+    workspaceId: string,
+  ): Promise<void> => {
     // 官方 selectWorkspace 同语义的草稿迁移钩子（文本径；附件迁移依赖官方内部面
     // rebindDraftFiles——附件在场整体跳过 fail-soft）。shell 面缺席 = 零迁移不阻切换。
     const from =
@@ -115,6 +124,14 @@ export function installOpenWorkspaceFace(options: OpenWorkspaceInstallOptions): 
               warn(`[dswf-client] worktree 切换草稿迁移失败（fail-soft——不阻切换）：${String(cause)}`)
             }
           }
+    // bug bd7d7977 基线在场门（d353536f 同因面收口——open-session 编排径同门随动）：
+    // 官方 connectWorkspace 只查客户端本地快照，host 侧 ensureWorkspace/registry 建档到
+    // workspaces.list 投影推送抵达存在竞速窗——窗口内委派即被一次性拒认（unknown workspace），
+    // face fail-soft 零重试 → 点选仅显示态、composer 系旧树。有界等基线在场再委派；
+    // 快照面缺席 = 不可核验即放行；上限到点仍缺席 = 放行（真不在场由官方错误面呈现）。
+    if (options.workspacesList !== undefined) {
+      await waitForWorkspacePresent(options.workspacesList, workspaceId, options.wait)
+    }
     return open(workspaceId, beforeOpen).catch((cause: unknown): void => {
       warn(`[dswf-client] openWorkspace 失败（fail-soft）：${String(cause)}`)
     })
