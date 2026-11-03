@@ -260,19 +260,31 @@ test('@feature expert-squad step-2 success：卡片字段集逐位（灯/名称/
   // 字段集逐位（ui-design F1 数据绑定）
   await expect(card.locator('.dot.on'), '启用状态灯 on').toBeVisible()
   await expect(card.locator('.xc-name'), '名称 ← name').toHaveText('test-reviewer')
-  // 路由 chip（xc-title-row 右侧二态标识——default-routing AC3）。二态判定链（registry
-  // buildEntry 折叠）：① experts 条目 > ② 档案成对 > ③ defaultAgentOptions 基座——夹具
-  // 档案未配置路由时，宿主 profile 若注册了 defaultAgentOptions 则解析出生效模型（kind=
-  // model，chip 显模型名 + data-tip 展 provider），否则继承父Agent（kind=inherit）。
-  // 断言锚二态一致性而非字面量（kind 与文本/tooltip 互证，宿主 profile 配置差异不翻红）
+  // 路由 chip（xc-title-row 右侧二态标识——default-routing AC3）。断言确定性判读（bug
+  // bf719481）：面板同源读口 GET /api/expert-squad/get（registry get 折叠——①experts 条目
+  // > ②档案成对 > ③defaultAgentOptions 基座，f54876fa）取当次 run 的折叠路由配置，按
+  // routeChipOf 同一判定（provider+model 成对 = model 态：chip 显模型名 + tooltip 展
+  // provider[· reasoning 档位]；皆缺 = inherit 态：显「继承父Agent」）推导唯一期望值后
+  // 逐位断言相等——任一态皆绿的分支禁保留，配置源漂移必红。
   const routeChip = card.locator('.xc-title-row .chip[data-xc-route]')
-  const routeKind = await routeChip.getAttribute('data-xc-route')
-  if (routeKind === 'inherit') {
-    await expect(routeChip, '路由 chip·inherit = 继承父Agent 弱化 chip').toHaveText('继承父Agent')
+  const workspace = await captureWorkspaceParam(page)
+  const routeView = await page.evaluate(async ({ ws }) => {
+    const url = `/api/expert-squad/get?key=test-reviewer&workspace=${encodeURIComponent(ws)}`
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`experts get !ok：${String(response.status)}`)
+    return (await response.json()) as { provider?: string; model?: string; reasoning?: string }
+  }, { ws: workspace })
+  // reasoning 档位中文标签（routeChipOf tooltip 展开面同源——expert-panel.tsx D5 微文案）
+  const REASONING_LEVEL_LABEL: Readonly<Record<string, string>> = { low: '低', medium: '中', high: '高' }
+  if (routeView.provider !== undefined && routeView.model !== undefined) {
+    const level = routeView.reasoning === undefined ? undefined : REASONING_LEVEL_LABEL[routeView.reasoning]
+    const expectedTip = level === undefined ? routeView.provider : `${routeView.provider} · reasoning ${level}`
+    await expect(routeChip, '路由 chip kind=model（与折叠配置一致）').toHaveAttribute('data-xc-route', 'model')
+    await expect(routeChip, '路由 chip 文本 = 配置生效模型名').toHaveText(routeView.model)
+    await expect(routeChip, '路由 chip tooltip = provider（含 reasoning 档位时展开）').toHaveAttribute('data-tip', expectedTip)
   } else {
-    expect(routeKind, '路由 chip kind ∈ 二态锚').toBe('model')
-    expect((await routeChip.innerText()).trim().length, '路由 chip·model 显非空模型名').toBeGreaterThan(0)
-    await expect(routeChip, '路由 chip·model tooltip 展 provider').toHaveAttribute('data-tip', /.+/)
+    await expect(routeChip, '路由 chip kind=inherit（折叠配置无成对路由）').toHaveAttribute('data-xc-route', 'inherit')
+    await expect(routeChip, '路由 chip 文本 = 继承父Agent').toHaveText('继承父Agent')
   }
   await expect(card.locator('.xc-tags .chip.tool').first(), '工具 chip ← tools').toHaveText('read')
   await expect(card.locator('.xc-title'), '岗位 ← title').toHaveText('夹具评审')
