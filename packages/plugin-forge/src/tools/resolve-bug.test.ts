@@ -85,6 +85,7 @@ function toolWithCapture(resolve: (input: CapturedInput) => Promise<BugCard>): {
     },
     listBugs: async () => [],
     findRecurrenceCandidates: async () => [],
+    aggregateByErrorType: async () => [],
     getBug: async () => {
       throw new Error('not used')
     },
@@ -189,6 +190,7 @@ describe('resolveBug execute（路由 + 服务端解析径）', () => {
         },
         listBugs: async () => [],
         findRecurrenceCandidates: async () => [],
+        aggregateByErrorType: async () => [],
         getBug: async () => {
           throw new Error('not used')
         },
@@ -236,6 +238,8 @@ function captureBugsFace(
     },
     listBugs: async () => [],
     findRecurrenceCandidates: async () => [],
+    aggregateByErrorType: async () => [],
+    aggregateByErrorType: async () => [],
     getBug: async () => ({ card: getBugCard }),
   }
 }

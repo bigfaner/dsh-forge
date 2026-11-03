@@ -4,7 +4,8 @@
 // 身份/会话/仓库态解析下沉服务端——report_session_id（ToolSessionContext 执行会话）与
 // reporter（服务端 git config user.name 缺席回退 user.email）由服务端注入；source_task_id
 // 由派发上下文注入（worker 来源任务注册表——dispatch-core spawnClaimed 登记；standalone
-// 路径缺席）。会话/工作区绑定同 addTask 径（requireProjectId + requireSessionId）。
+// 路径缺席）。归属列 containerSlug 由 core 侧 registerBug 事务内按 source_task_id 反查
+// tasks.slug 写入（recurrence-signal-tiering——工具面零参变更，本文件随动仅注释核销）。会话/工作区绑定同 addTask 径（requireProjectId + requireSessionId）。
 // 返回面双友好（裁决⑨）：成功 formatOk（✓ + bugId 键值行）；typed 服务错误 → 失败 DTO
 // formatErr（✗ code + 人话——format.ts 单源）。
 import type { BugCard } from '@dsh-forge/contracts'

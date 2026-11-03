@@ -454,11 +454,11 @@ describe('getBug：全卡 + 链上下文（沿前驱指针回溯全链，时间�
   })
 })
 
-describe('listBugs：六字段 search + offset/limit 分页（排序后切片，稳定）', () => {
+describe('listBugs：七字段 search + offset/limit 分页（排序后切片，稳定）', () => {
   let h: SmallDomainHarness | undefined
   afterEach(() => h?.dispose())
 
-  it('AC2 关键词命中六字段任一（bugDesc/triggerDesc/expected/actual/errorType）', async () => {
+  it('AC2 关键词命中六文本字段任一（bugDesc/triggerDesc/expected/actual/errorType）', async () => {
     h = createHarness()
     const { execFile } = stubExecFile({ 'config user.name': 'faner' })
     const s = makeService(h, { execFile })
@@ -476,6 +476,23 @@ describe('listBugs：六字段 search + offset/limit 分页（排序后切片，
       const hit = await s.listBugs({ projectId: h.projectId, search: q })
       expect(hit.map((b) => b.bugId)).toEqual([b1.bugId])
     }
+  })
+
+  it('AC2-recurrence-signal-tiering 关键词命中 suspected 位置（按「哪个文件出过事」检索）', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner' })
+    const s = makeService(h, { execFile })
+    const { card: b1 } = await s.registerBug({
+      projectId: h.projectId,
+      summary: '甲',
+      bugDesc: 'd',
+      triggerDesc: 't',
+      expected: 'e',
+      actual: 'a',
+      suspected: 'src/tools/format.ts:42',
+    })
+    await s.registerBug({ projectId: h.projectId, summary: '乙', bugDesc: 'x', triggerDesc: 'y', expected: 'z', actual: 'w' })
+    expect((await s.listBugs({ projectId: h.projectId, search: 'format.ts' })).map((b) => b.bugId)).toEqual([b1.bugId])
   })
 
   it('AC2 offset/limit 切片（服务端排序后）；越界 = 空集', async () => {

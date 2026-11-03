@@ -430,8 +430,9 @@ export interface ResolveBugInput {
 }
 
 /**
- * bug 卡 search 键集（六字段任一命中——summary / bugDesc / triggerDesc / expected / actual /
- * errorType；另携状态中英标签——列表标签命中同构）。
+ * bug 卡 search 键集（七字段任一命中——summary / bugDesc / triggerDesc / expected / actual /
+ * errorType / suspected 位置（recurrence-signal-tiering：按「哪个文件出过事」检索可行）；
+ * 另携状态中英标签——列表标签命中同构）。
  */
 export function bugSearchKeys(card: BugCard): readonly string[] {
   return [
@@ -441,6 +442,7 @@ export function bugSearchKeys(card: BugCard): readonly string[] {
     card.expected,
     card.actual,
     ...(card.errorType !== undefined ? [card.errorType] : []),
+    ...(card.suspected !== undefined ? [card.suspected] : []),
     BUG_STATUS_LABELS[card.bugStatus].zh,
     BUG_STATUS_LABELS[card.bugStatus].en,
   ]

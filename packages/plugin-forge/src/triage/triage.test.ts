@@ -158,6 +158,8 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
     }
     expect(req.toolFilter.deny).not.toContain('getBug')
     expect(req.toolFilter.deny).not.toContain('listBugs')
+    // recurrence-signal-tiering：聚合读径同面放开（量化判据 SOP 消费——组级只读零写径）
+    expect(req.toolFilter.deny).not.toContain('aggregateBugs')
     expect(req.toolFilter.deny).not.toContain('addTask')
     expect(req.parent).toEqual({ agentTag: 'owner-root' })
     expect(req.label).toBe('feat-x/3.2 · 处置分析')

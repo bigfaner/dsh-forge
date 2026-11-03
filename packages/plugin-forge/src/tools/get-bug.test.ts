@@ -50,6 +50,7 @@ function toolWithCapture(): {
     },
     listBugs: async () => [],
     findRecurrenceCandidates: async () => [],
+    aggregateByErrorType: async () => [],
     getBug: async (q) => {
       captured.push(q)
       return response

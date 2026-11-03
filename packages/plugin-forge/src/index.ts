@@ -1000,6 +1000,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       registerToolLoud(tools.resolveBug),
       registerToolLoud(tools.listBugs),
       registerToolLoud(tools.getBug),
+      registerToolLoud(tools.aggregateBugs), // recurrence-signal-tiering——聚合读径（主 agent + triage）
       registerToolLoud(tools.recordImplCheckpoint),
       registerToolLoud(tools.queryImplCheckpoint),
       registerToolLoud(tools.listImplCheckpoints),
