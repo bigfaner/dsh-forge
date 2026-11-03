@@ -12,8 +12,8 @@
 // vars（T0 判例注入）四处机制生产生效的装配前提——经本工厂注入 createLoopDriver /
 // createTriageHook 生产 deps（plugin-forge index.ts 装配缝）。
 import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
 import type { BugRecurrenceCandidate } from '@dsh-forge/contracts'
+import { dossierIssuesDirOf } from '../forge-paths.js'
 import type { ModelingReportPresentFace, SameSeamRecurrenceFace } from './claim.js'
 
 /** core bugs 域服务的插件侧结构化消费面收窄（本工厂消费位——tools ForgeBugsToolFace 结构兼容） */
@@ -44,7 +44,7 @@ function modelingReportPresentOf(resolveProjectDir: RecurrenceFacesDeps['resolve
     try {
       const ws = resolveProjectDir(input.projectId)
       if (ws === undefined || ws === '') return false
-      const issuesDir = join(ws, '.forge', 'docs', 'proposals', input.slug, 'issues', input.localId)
+      const issuesDir = dossierIssuesDirOf(ws, input.slug, input.localId)
       return readdirSync(issuesDir, { withFileTypes: true }).some(
         (entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'),
       )

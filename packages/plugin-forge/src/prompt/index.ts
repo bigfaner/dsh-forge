@@ -16,6 +16,7 @@
 // 注意：SystemPrompt 段文本默认 {{var}} 插值（未知引用会炸渲染）——文本禁用裸 {{。
 import { XML_TAGS } from '@dsh-forge/contracts'
 import type { ForgeAssembleContext } from '../faces.js'
+import { docsRootOfForgeDir } from '../forge-paths.js'
 import { FORGE_COMMANDER_SECTION_NAME, FORGE_COMMANDER_SECTION_ORDER, renderCommanderSection } from './commander.js'
 
 /** 段名（Interface 8 定死） */
@@ -298,14 +299,8 @@ function blitzSubagentSection(docsRoot: string, isGitRepo: boolean): string {
 ${docs}${git}`
 }
 
-/**
- * forgeDir → docsRoot（平台独立连接：Windows 风格（盘符/UNC）→ `\docs`，POSIX →
- * `/docs`——dir 已归一去尾分隔符，此处只补一段）。
- */
-function docsRootOfForgeDir(dir: string): string {
-  const sep = /^[A-Za-z]:[\\/]/.test(dir) || dir.startsWith('\\\\') ? '\\' : '/'
-  return `${dir}${sep}docs`
-}
+// docsRoot 派生单源 = contracts docsRootOfForgeDir（§2.8 收编——平台独立连接：
+// Windows 风格（盘符/UNC）→ `\docs`，POSIX → `/docs`；dir 已归一去尾分隔符）。
 
 /**
  * 管线段全文（纯胶水：模式归一 → 角色分流（subagent 键）→ docsRoot 归一 → 四模板

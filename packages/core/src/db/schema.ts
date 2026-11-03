@@ -1,6 +1,8 @@
 // schema 前向迁移（单一来源对齐 design/schema.sql——蓝本逐条拷贝，schema.test.ts pin 防漂移）。
 // 前向单向：只追加新版本 Migration（不直改已发布版本）；旧应用打开新 schema 由版本门明确拒绝。
 // 本文件为机制层零域语义代码：表名/列名是蓝本蓝图本身，不含任何表消费逻辑。
+// `.forge` 段名字面消费 contracts 单源常量（§2.8 收编——语句文本逐字节不变）。
+import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
 
 /**
  * 守卫语句：SQLite 无 ADD/DROP COLUMN IF [NOT] EXISTS——columnGuard 命中（table.column 已在场）时
@@ -33,7 +35,7 @@ export const SCHEMA_VERSION = 3
 export const WORKTREE_DIR_BACKFILL_SQL = `UPDATE projects SET worktree_dir =
     ws_path
     || (CASE WHEN instr(ws_path, '\\') > 0 THEN '\\' ELSE '/' END)
-    || '.forge'
+    || '${FORGE_DIR_SEGMENT}'
     || (CASE WHEN instr(ws_path, '\\') > 0 THEN '\\' ELSE '/' END)
     || 'worktrees'
   WHERE worktree_dir = ''`

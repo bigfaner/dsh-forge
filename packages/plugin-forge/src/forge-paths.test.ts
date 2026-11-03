@@ -3,12 +3,18 @@
 // 锚绑定单点）+ declare merge 注册面四断言（第三方键合并可见 / forge.* 占用拒绝 / 同名
 // 互撞 fail-loud 点名两方 / forge 缺席环境零生效零抛）+ 锚解析缝与 projects 服务现值同源。
 import { describe, expect, it } from 'vitest'
+import { join } from 'node:path'
 import {
   createDirKeyRegistry,
   declareDirKeys,
   DIR_DESTINATIONS,
   DIR_KEY_REGISTRY,
+  dossierIssuesDirOf,
+  docsRootOfForgeDir,
+  forgeDirOfWorkspace,
   resolveDestination,
+  taskLogsDirOf,
+  workspaceDocsRoot,
   type DirKeyEntry,
 } from './forge-paths.js'
 import { createForgePathsAnchors } from './faces.js'
@@ -166,5 +172,24 @@ describe('锚解析缝（faces.createForgePathsAnchors——与 projects 服务�
     await expect(
       createForgePathsAnchors({ ...projects, deriveTaskStoreDir: async () => ({ dir: '' }) }, {}).anchorsOf('p-1'),
     ).rejects.toThrow(/taskHome derivation empty/)
+  })
+})
+
+describe('§2.8 散点收编派生导出（AC2 逐字节等价——每收编点一条等价断言，平台原生拼写）', () => {
+  it('dossierIssuesDirOf === join(ws, .forge, docs, proposals, slug, issues, localId)（settle 回收 + recurrence 探测双探测位单点收口）', () => {
+    expect(dossierIssuesDirOf(WS, 'feat-x', '2.1')).toBe(join(WS, '.forge', 'docs', 'proposals', 'feat-x', 'issues', '2.1'))
+    expect(dossierIssuesDirOf('C:\\ws\\proj', 'a-slug', 'fix-1')).toBe(join('C:\\ws\\proj', '.forge', 'docs', 'proposals', 'a-slug', 'issues', 'fix-1'))
+  })
+
+  it('taskLogsDirOf === join(taskHome, logs, slug, localId)（运行时任务目录同径）', () => {
+    expect(taskLogsDirOf(CTX.taskHome, 'feat-x', '2.1')).toBe(join(CTX.taskHome, 'logs', 'feat-x', '2.1'))
+  })
+
+  it('contracts 派生导出等价：forgeDirOfWorkspace / workspaceDocsRoot / docsRootOfForgeDir（与 node join 及 prompt 旧实现逐字节等价）', () => {
+    expect(forgeDirOfWorkspace(WS)).toBe(join(WS, '.forge'))
+    expect(workspaceDocsRoot(WS)).toBe(join(WS, '.forge', 'docs'))
+    // prompt docsRootOfForgeDir 旧实现口径（平台独立单段连接）
+    const sep = /^[A-Za-z]:[\\/]/.test(WS) || WS.startsWith('\\\\') ? '\\' : '/'
+    expect(docsRootOfForgeDir(`${WS}\\.forge`)).toBe(`${WS}\\.forge${sep}docs`)
   })
 })

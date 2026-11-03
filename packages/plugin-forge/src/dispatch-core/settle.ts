@@ -13,6 +13,7 @@ import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, Ta
 import { emitForgeDiag } from '../faces.js'
 import type { ForgeDiagEmitFace, ProjectDirServiceFace } from '../faces.js'
 import { forgetWorkerSourceTask } from './assemble.js'
+import { dossierIssuesDirOf, taskLogsDirOf } from '../forge-paths.js'
 import type { SpawnWorkerHandle } from './spawn.js'
 import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchSpawnedResult } from './result.js'
@@ -246,7 +247,7 @@ export function createSettleReportRecovery(deps: {
         const ws = await workspaceOf(projectId)
         if (ws === undefined) return undefined
         const derived = await deps.projects.deriveTaskStoreDir({ workspaceDir: ws })
-        return derived.dir !== '' ? join(derived.dir, 'logs', slug, localId) : undefined
+        return derived.dir !== '' ? taskLogsDirOf(derived.dir, slug, localId) : undefined
       } catch {
         return undefined
       }
@@ -254,7 +255,7 @@ export function createSettleReportRecovery(deps: {
     async resolveProposalIssuesDir({ projectId, slug, localId }) {
       try {
         const ws = await workspaceOf(projectId)
-        return ws !== undefined ? join(ws, '.forge', 'docs', 'proposals', slug, 'issues', localId) : undefined
+        return ws !== undefined ? dossierIssuesDirOf(ws, slug, localId) : undefined
       } catch {
         return undefined
       }

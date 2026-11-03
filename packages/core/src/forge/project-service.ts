@@ -32,7 +32,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
-import { isAbsolute, join, relative, sep } from 'node:path'
+import { isAbsolute, relative, sep } from 'node:path'
 import type Database from 'better-sqlite3'
 import type {
   DeriveTaskStoreDirRequest,
@@ -46,6 +46,8 @@ import type {
   RegisterProjectInput,
   RegisterResult,
 } from '@dsh-forge/contracts'
+import { joinDirSegment } from '@dsh-forge/path-key'
+import { forgeDirOfWorkspace } from './workspace/dir-segments.js'
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import { errMessage } from '../util.js'
 import { ensureDirReadable } from '../fs-ensure.js'
@@ -114,7 +116,7 @@ export interface ProjectServiceDeps {
  * 分隔符随平台 join）。单一来源 = 本函数（注册链未输入即落此默认）。
  */
 export function defaultWorktreeDir(wsPath: string): string {
-  return join(wsPath, '.forge', 'worktrees')
+  return joinDirSegment(forgeDirOfWorkspace(wsPath), 'worktrees')
 }
 
 /** Interface 5 服务面（P1 五法不动 + deriveTaskStoreDir 第六动词——ctx.forgeProjects M2 形状） */

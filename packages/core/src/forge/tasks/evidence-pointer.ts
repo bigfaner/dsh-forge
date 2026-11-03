@@ -26,6 +26,7 @@
 // 侧镜像同规则——四域/包互禁 import，规则文本以本文件为 core 单源）。fail-soft：任何缺席/
 // 故障 = undefined，绝不抛。
 import { RESUME_POINTER_FILE } from './prompt/compose.js'
+import { FORGE_LOGS_DIR } from '@dsh-forge/contracts'
 
 export { RESUME_POINTER_FILE }
 
@@ -89,7 +90,7 @@ export function readEvidencePointerState(
   const s = sanitizeSegment(slug)
   const k = sanitizeSegment(localId)
   if (s === '' || k === '') return { stale: false }
-  const rel = `logs/${s}/${k}/${RESUME_POINTER_FILE}`
+  const rel = `${FORGE_LOGS_DIR}/${s}/${k}/${RESUME_POINTER_FILE}`
   try {
     if (!io.exists(`${containerDir}/${rel}`)) return { stale: false }
   } catch {
@@ -98,7 +99,7 @@ export function readEvidencePointerState(
   if (current === undefined) return { pointer: rel, stale: false } // 机制惰性——效度域不可读不判
   let stored: EvidenceValidityStamp | undefined
   try {
-    const parsed = JSON.parse(io.readTextFile(`${containerDir}/logs/${s}/${k}/${RESUME_VALIDITY_FILE}`)) as {
+    const parsed = JSON.parse(io.readTextFile(`${containerDir}/${FORGE_LOGS_DIR}/${s}/${k}/${RESUME_VALIDITY_FILE}`)) as {
       head?: unknown
       baseline?: unknown
     }
@@ -128,7 +129,7 @@ export function writeEvidenceValidityStamp(
   const k = sanitizeSegment(localId)
   if (s === '' || k === '') return false
   try {
-    const dir = `${containerDir}/logs/${s}/${k}`
+    const dir = `${containerDir}/${FORGE_LOGS_DIR}/${s}/${k}`
     if (!io.exists(`${dir}/${RESUME_POINTER_FILE}`)) return false
     io.writeTextFile(`${dir}/${RESUME_VALIDITY_FILE}`, `${JSON.stringify(stamp, null, 2)}\n`)
     return true

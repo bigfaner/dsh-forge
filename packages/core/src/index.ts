@@ -16,6 +16,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { FORGE_LOGS_DIR } from '@dsh-forge/contracts'
 import { openDatabase } from './db/index.js'
 import { createProjectService } from './forge/project-service.js'
 import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
@@ -270,7 +271,7 @@ const corePlugin: CorePlugin = Object.assign(
           resolveWorkerContext: (projectId, source, localId) =>
             renderWorkerContext({
               forgeDir: routing.forgeDir(projectId),
-              logsRoot: join(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), 'logs'),
+              logsRoot: join(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), FORGE_LOGS_DIR),
               localId,
               source,
             }),

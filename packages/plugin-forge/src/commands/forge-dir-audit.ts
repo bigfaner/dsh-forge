@@ -9,6 +9,7 @@
 // 不建任何派发面；清理建议统一出口归 forge-artifact-lifecycle（提案 §2.4）。
 import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
 import { forgeCommandLineMessage, emitForgeDiag } from '../faces.js'
 import type { ForgeCommandInvocation, ForgeCommandResult, ForgeDiagEmitFace } from '../faces.js'
 import { STORAGE_MAP_DIRS } from './forge-dir-init.js'
@@ -41,12 +42,15 @@ const SKIP_DIR_NAMES: ReadonlySet<string> = new Set([
 /** 游离散件的临时文件后缀判据（次职责「临时文件是否散落」机械面——根目录散落即命中） */
 const TEMP_FILE_EXTENSIONS: ReadonlySet<string> = new Set(['.log', '.tmp', '.bak', '.dump', '.swp'])
 
+/** .forge 前缀相对路径（段名单源 contracts——地图比对/差异格式化统一口径） */
+const FORGE_REL = `${FORGE_DIR_SEGMENT}/`
+
 /** 地图分区允许集（.forge 前缀相对路径——含分区前缀目录 docs 与 legacy 备份命名空间（提案 §2.2）） */
 const MAP_ALLOWED_DIRS: ReadonlySet<string> = new Set([
-  '.forge',
-  '.forge/docs',
-  '.forge/docs/legacy',
-  ...STORAGE_MAP_DIRS.map((dir) => `.forge/${dir}`),
+  FORGE_DIR_SEGMENT,
+  `${FORGE_DIR_SEGMENT}/docs`,
+  `${FORGE_DIR_SEGMENT}/docs/legacy`,
+  ...STORAGE_MAP_DIRS.map((dir) => `${FORGE_REL}${dir}`),
 ])
 
 /** 扫描条目（rel = '/' 分隔的根相对路径；kind = dir|file|symlink） */
@@ -106,14 +110,14 @@ export interface DirAuditDiff {
  */
 export function auditFromScan(entries: readonly ScanEntry[]): DirAuditDiff {
   const dirSet = new Set(entries.filter((entry) => entry.kind === 'dir').map((entry) => entry.rel))
-  const missingPartitions = STORAGE_MAP_DIRS.filter((dir) => !dirSet.has(`.forge/${dir}`)).map((dir) => dir)
+  const missingPartitions = STORAGE_MAP_DIRS.filter((dir) => !dirSet.has(`${FORGE_REL}${dir}`)).map((dir) => dir)
   const misplacedDirs = entries
-    .filter((entry) => entry.kind === 'dir' && entry.rel.startsWith('.forge/') && !MAP_ALLOWED_DIRS.has(entry.rel))
+    .filter((entry) => entry.kind === 'dir' && entry.rel.startsWith(FORGE_REL) && !MAP_ALLOWED_DIRS.has(entry.rel))
     .map((entry) => entry.rel)
   const strayFiles = entries
     .filter((entry) => {
       if (entry.kind !== 'file' && entry.kind !== 'symlink') return false
-      if (entry.rel.startsWith('.forge/') && !entry.rel.slice('.forge/'.length).includes('/')) return true
+      if (entry.rel.startsWith(FORGE_REL) && !entry.rel.slice(FORGE_REL.length).includes('/')) return true
       return !entry.rel.includes('/') && TEMP_FILE_EXTENSIONS.has(entry.rel.slice(entry.rel.lastIndexOf('.')))
     })
     .map((entry) => entry.rel)
@@ -137,7 +141,7 @@ export function formatAuditPayload(diff: DirAuditDiff): string {
     '请按产物存储地图公约分析，只输出目录处理建议清单（纯文本消息呈报用户）——只建议不执行：不删除、不创建、不移动任何文件，不创建任何任务或派发。',
   ]
   if (diff.missingPartitions.length > 0) {
-    lines.push(`缺失分区（应在 .forge 下而缺席）：${diff.missingPartitions.map((dir) => `.forge/${dir}`).join('、')}`)
+    lines.push(`缺失分区（应在 .forge 下而缺席）：${diff.missingPartitions.map((dir) => `${FORGE_REL}${dir}`).join('、')}`)
   }
   if (diff.misplacedDirs.length > 0) {
     lines.push(`越位目录（.forge 域内不在地图允许集）：${diff.misplacedDirs.join('、')}`)

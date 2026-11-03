@@ -5,6 +5,8 @@
 // 零模型消息、零任务循环改动（§2.6——gitignore 环境边界兜底，任务流程零感知）。
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { FORGE_DIR_SEGMENT, FORGE_LOGS_DIR } from '@dsh-forge/contracts'
+import { forgeDirOfWorkspace } from '../forge-paths.js'
 import type { ForgeCommandInvocation, ForgeCommandResult } from '../faces.js'
 
 /** 指令名（无 input 描述符——无参指令，composer 不展示占位） */
@@ -18,7 +20,7 @@ export const STORAGE_MAP_DIRS = [
   'docs/features',
   'worktrees',
   'tmp',
-  'logs',
+  FORGE_LOGS_DIR,
 ] as const
 
 /**
@@ -26,7 +28,7 @@ export const STORAGE_MAP_DIRS = [
  * 天然进不了 git）。docs 侧仅 probes/ 为「永不进 git」的过程域；proposals/features/roundtables
  * 的 `.md` 台账类按 AGENTS 5.2 属文档可提交，不设条目。
  */
-export const GITIGNORE_ENTRIES = ['.forge/worktrees/', '.forge/logs/', '.forge/tmp/', '.forge/docs/probes/'] as const
+export const GITIGNORE_ENTRIES = [`${FORGE_DIR_SEGMENT}/worktrees/`, `${FORGE_DIR_SEGMENT}/logs/`, `${FORGE_DIR_SEGMENT}/tmp/`, `${FORGE_DIR_SEGMENT}/docs/probes/`] as const
 
 /** gitignore 追加段注释（标注来源——人工可辨归属） */
 const GITIGNORE_SECTION_HEADER = '# forge storage map (/forge-dir-init)'
@@ -66,7 +68,7 @@ export function createForgeDirInitHandler(): (invocation: ForgeCommandInvocation
     if (root === undefined || root.trim() === '') {
       return { kind: 'error', text: '无法解析会话工作区根（header.cwd 缺席），目录初始化未执行' }
     }
-    const forgeDir = join(root, '.forge')
+    const forgeDir = forgeDirOfWorkspace(root)
 
     // ① 分区目录初始化（已存在跳过，幂等；mkdirSync recursive 天然覆盖嵌套 docs 层）
     const created: string[] = []

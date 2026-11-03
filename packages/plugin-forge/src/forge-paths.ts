@@ -9,6 +9,11 @@
 // 保留给 forge 本体（第三方占用即拒），同名互撞 fail-loud 点名两方，前缀归属由声明方自选。
 // 受控面拒绝（未知 dirKey/dest、目的地 requires 缺参）的工具面 typed 承载 =
 // ERR_DIR_PATH_INVALID（contracts errors.ts——tools/forge-paths.ts）。
+// §2.8 散点收编：段名与平台独立连接单源 = contracts forge-dir-segments（本模块消费）；
+// dossier/taskLogs 目的地派生导出（dossierIssuesDirOf/taskLogsDirOf）= 程序内拼接点
+// 的单点消费位（settle 回收 / recurrence 探测 / 运行时任务目录同径）。
+import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
+import { joinDirSegment } from '@dsh-forge/path-key'
 
 /** 解析上下文（唯一带 IO 的装配层构造——解析器族只读本形状，单测只需构造 ctx） */
 export interface ForgePathsResolveContext {
@@ -55,15 +60,7 @@ export interface DirDestinationEntry {
   readonly requires: readonly DirDestRequire[]
 }
 
-/**
- * 平台独立单段连接（dir 已归一去尾分隔符，按既有风格判定分隔符：Windows 盘符/UNC → `\`，
- * POSIX → `/`——与 prompt docsRootOfForgeDir、core derive-dir joinHome 同构口径）。
- */
-function joinSegment(base: string, segment: string): string {
-  const dir = base.replace(/[\\/]+$/, '')
-  const sep = /^[A-Za-z]:[\\/]/.test(dir) || dir.startsWith('\\\\') ? '\\' : '/'
-  return `${dir}${sep}${segment}`
-}
+// 平台独立单段连接单源 = path-key joinDirSegment（本地零副本）。
 
 /** 锚键缺席的装配缺口（fail-loud——宿主装配恒给，缺席即装配 bug 不静默） */
 function requireAnchor(ctx: ForgePathsResolveContext, key: 'projectHome' | 'taskHome' | 'forgeDir'): string {
@@ -95,19 +92,19 @@ export const DIR_KEY_REGISTRY: readonly DirKeyEntry[] = [
   {
     dirKey: 'forge.docsRoot',
     description: '本工作区 forge 文档根（提案/探针/圆桌纪要/特性阶段文档树之父）',
-    resolve: (ctx) => (ctx.docsRoot !== undefined && ctx.docsRoot !== '' ? ctx.docsRoot : joinSegment(requireAnchor(ctx, 'forgeDir'), 'docs')),
+    resolve: (ctx) => (ctx.docsRoot !== undefined && ctx.docsRoot !== '' ? ctx.docsRoot : joinDirSegment(requireAnchor(ctx, 'forgeDir'), 'docs')),
     declaredBy: 'plugin-forge',
   },
   {
     dirKey: 'forge.tmp',
     description: '临时文件统一区（用完即清，不入 git）',
-    resolve: (ctx) => joinSegment(requireAnchor(ctx, 'forgeDir'), 'tmp'),
+    resolve: (ctx) => joinDirSegment(requireAnchor(ctx, 'forgeDir'), 'tmp'),
     declaredBy: 'plugin-forge',
   },
   {
     dirKey: 'forge.worktrees',
     description: '派发工作树区（任务终态后回收）',
-    resolve: (ctx) => joinSegment(requireAnchor(ctx, 'forgeDir'), 'worktrees'),
+    resolve: (ctx) => joinDirSegment(requireAnchor(ctx, 'forgeDir'), 'worktrees'),
     declaredBy: 'plugin-forge',
   },
 ]
@@ -152,9 +149,60 @@ export function resolveDestination(
   let dir = anchorEntry.resolve(anchors)
   for (const segment of dest.template.split('/')) {
     const replaced = segment.replace(/\{slug\}/g, params.slug ?? '').replace(/\{localId\}/g, params.localId ?? '')
-    dir = joinSegment(dir, replaced)
+    dir = joinDirSegment(dir, replaced)
   }
   return dir
+}
+
+// ───────────────────────── §2.8 散点收编派生导出（程序内拼接点单点消费位） ─────────────────────────
+
+/** 段名常量再导出（contracts 单源词汇——plugin-forge 消费面单一入口） */
+export { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
+
+/** forgeDir → 文档根（forgeDir/docs——prompt 管线段等消费） */
+export function docsRootOfForgeDir(forgeDir: string): string {
+  return joinDirSegment(forgeDir, 'docs')
+}
+
+/** 工作区根 → forge 目录（workspaceRoot/.forge） */
+export function forgeDirOfWorkspace(wsPath: string): string {
+  return joinDirSegment(wsPath, FORGE_DIR_SEGMENT)
+}
+
+/** 工作区根 → 文档根（workspaceRoot/.forge/docs——两段派生链） */
+export function workspaceDocsRoot(wsPath: string): string {
+  return docsRootOfForgeDir(forgeDirOfWorkspace(wsPath))
+}
+
+/** 目的地注册表查项（dest 受控枚举成员——缺席即注册表内部不一致，fail-loud） */
+function dirDestinationOf(dest: string): DirDestinationEntry {
+  const entry = DIR_DESTINATIONS.find((e) => e.dest === dest)
+  if (entry === undefined) {
+    throw new Error(`forge-paths: destination ${dest} missing from DIR_DESTINATIONS（注册表内部不一致）`)
+  }
+  return entry
+}
+
+/**
+ * 工作区根 → 提案卷宗 issues 目录（dossier 目的地解析器单点消费——锚/模板绑定在
+ * DIR_DESTINATIONS 注册表；settle 结算回收与 recurrence-faces 建模报告探测共消费，
+ * 双探测位同径）。对平台原生拼写的 wsPath，与 node:path
+ * join(ws, '.forge', 'docs', 'proposals', slug, 'issues', localId) 逐字节等价。
+ */
+export function dossierIssuesDirOf(wsPath: string, slug: string, localId: string): string {
+  return resolveDestination(
+    dirDestinationOf('dossier'),
+    { forgeDir: joinDirSegment(wsPath, FORGE_DIR_SEGMENT) },
+    { slug, localId },
+  )
+}
+
+/**
+ * 任务库根 → 任务执行日志目录（taskLogs 目的地解析器单点消费——= forge.task_logs_dir）。
+ * 对平台原生拼写的 taskHome，与 node:path join(taskHome, 'logs', slug, localId) 逐字节等价。
+ */
+export function taskLogsDirOf(taskHome: string, slug: string, localId: string): string {
+  return resolveDestination(dirDestinationOf('taskLogs'), { taskHome }, { slug, localId })
 }
 
 /** forgeDirs 服务键面（declare merge 注册面——第三方插件 inject 声明消费） */

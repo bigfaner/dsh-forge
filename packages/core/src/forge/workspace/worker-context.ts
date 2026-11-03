@@ -29,6 +29,7 @@
 import { readdirSync, type Dirent } from 'node:fs'
 import { join, sep } from 'node:path'
 import type { ContainerRef } from '@dsh-forge/contracts'
+import { docsRootOfForgeDir } from './dir-segments.js'
 
 /** 目录树深度上限（相对锚点根；超过截断） */
 const TREE_DEPTH_LIMIT = 3
@@ -105,14 +106,15 @@ export function renderWorkerContext(input: {
 }): string {
   const { forgeDir, logsRoot, localId, source } = input
   const blocks: string[] = []
+  const docsRoot = docsRootOfForgeDir(forgeDir)
   const taskLogsDir = join(logsRoot, source.slug, localId)
   if (source.kind === 'feature') {
-    const proposal = renderDirBlock('proposal_dir', join(forgeDir, 'docs', 'proposals', source.slug), DIR_ROLE_NOTES.proposal_dir!)
+    const proposal = renderDirBlock('proposal_dir', join(docsRoot, 'proposals', source.slug), DIR_ROLE_NOTES.proposal_dir!)
     if (proposal !== undefined) blocks.push(proposal)
   }
   const mainLabel = source.kind === 'feature' ? 'feature_dir' : 'proposal_dir'
   const mainKindDir = source.kind === 'feature' ? 'features' : 'proposals'
-  const main = renderDirBlock(mainLabel, join(forgeDir, 'docs', mainKindDir, source.slug), DIR_ROLE_NOTES[mainLabel]!)
+  const main = renderDirBlock(mainLabel, join(docsRoot, mainKindDir, source.slug), DIR_ROLE_NOTES[mainLabel]!)
   if (main !== undefined) blocks.push(main)
   blocks.push(renderLogsRootBlock(logsRoot), renderTaskLogsBlock(taskLogsDir))
   return [

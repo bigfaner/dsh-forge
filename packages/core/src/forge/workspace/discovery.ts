@@ -30,6 +30,7 @@ import {
   type FeatureStatus,
   type ProposalStatus,
 } from '@dsh-forge/contracts'
+import { docsRootOfForgeDir } from './dir-segments.js'
 import { withTransaction } from '../../db/transaction.js'
 import { emitDiagOrFallback, type DiagEventPayload } from '../../telemetry/diag-events.js'
 import { errMessage } from '../../util.js'
@@ -232,7 +233,7 @@ interface ScannedFeature {
 /** docs/proposals/<slug>/proposal.md 扫描：畸形/非 UTF-8 → 跳过该文件（提案不建档）+ warn */
 function scanProposals(forgeDir: string, warn: (e: DiscoverySkippedEntry) => void, debug?: DiscoveryDebug): ScannedProposal[] {
   const out: ScannedProposal[] = []
-  const proposalsRoot = join(forgeDir, 'docs', 'proposals')
+  const proposalsRoot = join(docsRootOfForgeDir(forgeDir), 'proposals')
   for (const name of listDirs(proposalsRoot, debug)) {
     if (!isLegalSlugDirName(name)) {
       warn({ target: `docs/proposals/${name}/`, reason: '非法目录名', disposition: '跳过该目录（不阻断其余吸收）' })
@@ -266,7 +267,7 @@ function scanProposals(forgeDir: string, warn: (e: DiscoverySkippedEntry) => voi
  */
 function scanFeatures(forgeDir: string, warn: (e: DiscoverySkippedEntry) => void, debug?: DiscoveryDebug): ScannedFeature[] {
   const out: ScannedFeature[] = []
-  const featuresRoot = join(forgeDir, 'docs', 'features')
+  const featuresRoot = join(docsRootOfForgeDir(forgeDir), 'features')
   for (const name of listDirs(featuresRoot, debug)) {
     if (!isLegalSlugDirName(name)) {
       warn({ target: `docs/features/${name}/`, reason: '非法目录名', disposition: '跳过该目录（不阻断其余吸收）' })

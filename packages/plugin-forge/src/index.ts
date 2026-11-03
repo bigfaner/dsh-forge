@@ -23,6 +23,7 @@
 import { join, dirname } from 'node:path'
 import { existsSync } from 'node:fs'
 import type { DiagLevel, ForgeSettingsService, ProjectServiceM2 } from '@dsh-forge/contracts'
+import { forgeDirOfWorkspace, workspaceDocsRoot } from './forge-paths.js'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
@@ -508,7 +509,7 @@ const forgePlugin: ForgePlugin = Object.assign(
             cacheFile: (input: { readonly slug: string; readonly worktree?: string }): string | undefined =>
               input.worktree === undefined
                 ? undefined
-                : join(input.worktree, '.forge', 'caches', input.slug, 'e2e-baseline', 'cache.json'),
+                : join(forgeDirOfWorkspace(input.worktree), 'caches', input.slug, 'e2e-baseline', 'cache.json'),
           }
         : undefined
     // 专家团服务在场探测（AGENTS 1.6——检测永不缓存，每次消费点调用期现查；bug 0b83e3aa
@@ -623,7 +624,7 @@ const forgePlugin: ForgePlugin = Object.assign(
             if (typeof projects.getProject === 'function') {
               const project = await projects.getProject(input.projectId)
               if (project !== null && typeof project.wsPath === 'string' && project.wsPath.trim() !== '') {
-                docsRoot = join(project.wsPath, '.forge', 'docs')
+                docsRoot = workspaceDocsRoot(project.wsPath)
               }
             }
           } catch {

@@ -23,3 +23,15 @@ export function normalizeFsPath(p: string): string {
   const slashed = p.replace(/\\/g, '/').replace(/\/+$/, '')
   return platformOf() === 'win32' ? slashed.toLowerCase() : slashed
 }
+
+/**
+ * 平台独立单段连接（forge-dirs-query-tool §2.8 散点收编单源）：base 去尾分隔符后按既有
+ * 风格判定分隔符（Windows 盘符/UNC → `\`，POSIX → `/`）——与 prompt 旧 docsRootOfForgeDir、
+ * core derive-dir joinHome 同构口径。对平台原生拼写的 base，与 node:path
+ * join(base, segment) 逐字节等价（等价断言钉于 core/plugin-forge 两侧单测）。
+ */
+export function joinDirSegment(base: string, segment: string): string {
+  const dir = base.replace(/[\\/]+$/, '')
+  const sep = /^[A-Za-z]:[\\/]/.test(dir) || dir.startsWith('\\\\') ? '\\' : '/'
+  return `${dir}${sep}${segment}`
+}

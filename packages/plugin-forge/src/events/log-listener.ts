@@ -11,14 +11,15 @@
 // task_records（DB）——两纪律不混不重复。
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
+import { FORGE_LOGS_DIR } from '@dsh-forge/contracts'
 import type { ForgePluginEvent } from '@dsh-forge/contracts'
+// logs 段名单源迁 contracts forge-dir-segments（§2.8——core 侧裸字符串同源收编）；
+// 此处再导出维持既有消费面 import 路径稳定。
+export { FORGE_LOGS_DIR }
 import type { ForgeEventBus } from './bus.js'
 
 /** 兜底文件 slug（logs/_pool.jsonl——皆无归属事件的纯兜底面） */
 export const FORGE_LOG_POOL_SLUG = '_pool'
-
-/** 容器库内日志目录名（{容器目录}/logs/{slug}.jsonl） */
-export const FORGE_LOGS_DIR = 'logs'
 
 /** 归属三分支判定（图 5 节点 E——监听器单源；畸形输入防御性落 _pool） */
 export function resolveLogSlug(event: ForgePluginEvent): string {

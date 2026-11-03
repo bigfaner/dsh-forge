@@ -10,6 +10,7 @@
 export * from './channels.js'
 export * from './diag.js'
 export * from './errors.js'
+export * from './forge-dir-segments.js'
 export * from './frontmatter.js'
 export * from './labels.js'
 export * from './product-plugins.js'
