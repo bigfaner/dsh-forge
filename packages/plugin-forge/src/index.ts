@@ -22,13 +22,13 @@
 // {wsPath,projectId} JSON 经插件 config 进入，生产端 3.4）。
 import { join, dirname } from 'node:path'
 import { existsSync } from 'node:fs'
-import type { DiagLevel, ForgeSettingsService, ProjectServiceM2 } from '@dsh-forge/contracts'
+import type { AgentPresetsFace, DiagLevel, ForgeSettingsService, ProjectServiceM2, ToolsSchemasReader } from '@dsh-forge/contracts'
+import { createUnionToolNamesProbe } from '@dsh-forge/contracts'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, createProjectWorkspaceRoots, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
-import { globalToolNamesOfToolsFace } from './dispatch-core/index.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, ForgeToolDefinition, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
@@ -514,13 +514,58 @@ const forgePlugin: ForgePlugin = Object.assign(
         return false
       }
     }
+    // 官方 tools 面 schemas 读取子面（bug a5b12254——跨 preset 并集探针注入缝：
+    // ToolRuntime.schemas(scope?)，缺 scope = global 单层、携 preset scope key = 该
+    // preset 装配面视图；ctx.tools 类型面仅 ToolRegisterFace，schemas 经结构化窄取）
+    function toolsSchemasReaderOf(hostCtx: ForgeContextFace): ToolsSchemasReader {
+      return (scope?: object) => {
+        const tools = hostCtx.tools as unknown as {
+          schemas?: (this: unknown, scope?: object) => readonly { name: string }[] | undefined
+        }
+        return tools.schemas?.call(hostCtx.tools, scope)
+      }
+    }
+    // 官方 agentPresets 服务现查（AGENTS 1.6 双通道——ctx 具名属性 + reflect.get，与
+    // expertsServicePresent 同径；缺席/异常 = undefined → 探针 fail-soft 降级 global 单层）
+    function agentPresetsOf(): AgentPresetsFace | undefined {
+      try {
+        const viaInject = (ctx as ForgeContextFace & { readonly agentPresets?: AgentPresetsFace }).agentPresets
+        if (
+          viaInject !== undefined &&
+          typeof viaInject.list === 'function' &&
+          typeof viaInject.acquireScope === 'function'
+        ) {
+          return viaInject
+        }
+      } catch {
+        // 注入服务未就绪 = 降级到 reflect 通道
+      }
+      try {
+        const viaReflect = ctx.reflect?.get('agentPresets') as AgentPresetsFace | undefined
+        if (
+          viaReflect !== undefined &&
+          typeof viaReflect.list === 'function' &&
+          typeof viaReflect.acquireScope === 'function'
+        ) {
+          return viaReflect
+        }
+      } catch {
+        // reflect 通道异常 = 缺席
+      }
+      return undefined
+    }
     const loopDriverBase = createLoopDriver({
       registry: loopRegistry,
       expertsPresent: expertsServicePresent,
-      // 全局工具注册名读取面（bug 92d642c2 根因层——worker toolFilter 求交基准优先全局
-      // 视图：装配期 ctx.tools 无作用域面；parent 会话视图是作用域收窄面——专家委派会话
-      // restrict 后仅剩档案工具域，对其求交曾把管线必备静默剔除/守卫假阳性炸 spawn）
-      globalToolNames: () => globalToolNamesOfToolsFace(ctx.tools),
+      // 跨 preset 并集探针（bug a5b12254——求交基准不接 global 单层投影：官方工具全随
+      // preset 装 preset scope 层，无参 schemas() 只剩 expert 域名 → 金丝雀守卫判不可信
+      // → 不裁剪 → 档案 pwsh 落 Mac 原样放行拆 spawn。改接 contracts
+      // createUnionToolNamesProbe：global 视图 ∪ 逐 preset acquireScope 租约内 scope
+      // 视图，含 read 金丝雀 → 可信求交 + pwsh→bash 同族解析；探针不可信/缺席时 shell
+      // 名按平台确定性兜底（core.ts spawnClaimed 注入 process.platform）。消费点现查禁
+      // memoize（AGENTS 1.6）；agentPresets 经 ctx 具名属性 + reflect 双通道现查，缺席
+      // fail-soft 降级 global 单层（expert-squad 0.25.5 同径——本包不反依赖其实现）。
+      globalToolNames: createUnionToolNamesProbe(toolsSchemasReaderOf(ctx), agentPresetsOf),
       ...(e2eBaseline !== undefined ? { e2eBaseline } : {}),
       tasks: ctx.forgeTasks,
       spawn,

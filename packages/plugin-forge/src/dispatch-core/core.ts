@@ -125,13 +125,16 @@ export interface DispatchCoreDeps {
   /** 诊断发射缝（diag-face-consolidation——结算核 fail-soft 告警走 diag 面；透传 settleWorkerRun） */
   readonly diag?: ForgeDiagEmitFace
   /**
-   * 全局工具注册名读取面（bug 92d642c2 根因层——可选）：装配期捕获的插件 ctx.tools
-   * **无作用域全局视图**。worker toolFilter 求交基准 = 本面优先——parent 会话视图是
-   * 作用域收窄面（专家委派会话 restrict 后仅剩档案工具域），对其求交会把管线必备静默
-   * 剔除/守卫假阳性炸 spawn（真机 Mac/Win 实证）。缺席 = 回落 parent 探针（含金丝雀
-   * 子域判定——单测/旧装配形态兼容）。
+   * 全局工具注册名读取面（bug 92d642c2 根因层 / bug a5b12254 改接并集面——可选）：
+   * 跨 preset 并集探针（contracts createUnionToolNamesProbe——global 视图 ∪ 逐 preset
+   * acquireScope 租约内 scope 视图；无参 schemas() 是 global 单层投影，官方工具全随
+   * preset 装 preset scope 层，单层只剩子域名）。可同步可异步（acquireScope 是 async）。
+   * worker toolFilter 求交基准 = 本面优先——parent 会话视图是作用域收窄面（专家委派
+   * 会话 restrict 后仅剩档案工具域），对其求交会把管线必备静默剔除/守卫假阳性炸 spawn。
+   * 缺席 = 回落 parent 探针（含金丝雀子域判定——单测/旧装配形态兼容）；global 读取失败
+   * （undefined）同回落。
    */
-  readonly globalToolNames?: () => readonly string[] | undefined
+  readonly globalToolNames?: () => readonly string[] | undefined | Promise<readonly string[] | undefined>
   /**
    * 台账 recurrence 候选只读检索面（loop-recurrence-hardening T3 同缝拦截——可选，跨容器
    * 口径归域层；缺席/异常 = 守卫降级放行，行为零变化）。结构兼容 core add.ts T2 注入形。
@@ -223,7 +226,7 @@ interface ChainClosures {
     slug: string,
     taskKey: string,
     cause: unknown,
-    options?: { readonly guard?: boolean },
+    options?: { readonly guard?: boolean; readonly noSettlement?: boolean },
   ) => DispatchCoreFailure | HaltedOutcome
 }
 
@@ -254,9 +257,10 @@ function chainClosuresOf(deps: DispatchCoreDeps, exec: DispatchCoreExec, scope: 
     if (deps.events === undefined) return
     deps.events.emit({ ts: Date.now(), sessionId: scope.sessionId, slug, type, payload } as ForgePluginEvent)
   }
-  const failureDto = (taskKey: string, message: string): DispatchCoreFailure => ({
+  const failureDto = (taskKey: string, message: string, category?: 'ended-without-settlement'): DispatchCoreFailure => ({
     ok: false,
     code: 'ERR_SPAWN_FAILED',
+    ...(category !== undefined ? { category } : {}),
     message,
     violations: [
       `retry: call dispatchTask again to re-enter ${taskKey} (in_progress idempotent re-claim, briefing re-synthesized)`,
@@ -267,14 +271,20 @@ function chainClosuresOf(deps: DispatchCoreDeps, exec: DispatchCoreExec, scope: 
     emit,
     poolRead: poolReadOf(deps, scope),
     spawnFailed: (slug, taskKey, cause, options) => {
-      const message = `worker spawn failed for ${taskKey}: ${cause instanceof Error ? cause.message : String(cause)}`
+      const detail = cause instanceof Error ? cause.message : String(cause)
+      // 分桶（spawn-false-alarm）：跑完未结算（协议违约）不得冠 spawn-failed 类别词——判例
+      // e2e-known-reds-triage/1.12（014 误报复盘）：正常收官被读成 spawn 阶段崩溃。
+      const noSettlement = options?.noSettlement === true
+      const message = noSettlement
+        ? `worker finished without submitTask for ${taskKey} (ended-without-settlement — protocol violation, not a spawn failure): ${detail}`
+        : `worker spawn failed for ${taskKey}: ${detail}`
       if (options?.guard === false) {
-        return failureDto(taskKey, message)
+        return failureDto(taskKey, message, noSettlement ? 'ended-without-settlement' : undefined)
       }
       const { stuck } = bumpSpawnFailures(scope.guardKey, taskKey, cause)
       emitToolError(deps.events, scope.sessionId, slug, exec.verb, { ok: false, code: 'ERR_SPAWN_FAILED', message, violations: [] })
       if (stuck) return { kind: 'halted', reason: HALTED_REASON }
-      return failureDto(taskKey, message)
+      return failureDto(taskKey, message, noSettlement ? 'ended-without-settlement' : undefined)
     },
   }
 }
@@ -471,16 +481,19 @@ export async function spawnClaimed(
   let agentOptions: Awaited<ReturnType<typeof reconcileWorkerReasoning>>
   try {
     const profile = await deps.resolveWorkerProfile?.(task.taskType)
-    // toolFilter 与真机注册面求交（bug 3cb118cf）：求交基准 = 全局注册视图优先
-    // （bug 92d642c2 根因层——deps.globalToolNames 装配期捕获的无作用域面）；缺席回落
-    // parent 探针（含金丝雀子域判定）。档案 allow 携带平台禁用 shell 名（Mac 无 pwsh）
-    // 时同族解析——keep-only allow 含未知名会在 child 创建窗口 loud 拆 spawn。
-    const registered = deps.globalToolNames?.() ?? registeredToolNamesOf(exec.parent)
+    // toolFilter 与真机注册面求交（bug 3cb118cf）：求交基准 = 跨 preset 并集探针优先
+    // （bug 92d642c2 根因层 → bug a5b12254 改接并集面——deps.globalToolNames 异步取数，
+    // acquireScope 租约）；缺席/读取失败回落 parent 探针（含金丝雀子域判定）。档案 allow
+    // 携带平台禁用 shell 名（Mac 无 pwsh）时同族解析——探针不可信/缺席时按平台确定性
+    // 兜底（platform 参数注入，win32 → pwsh 其余 → bash），keep-only allow 含未知名不再
+    // 在 child 创建窗口 loud 拆 spawn。
+    const registered = (await deps.globalToolNames?.()) ?? registeredToolNamesOf(exec.parent)
     toolFilter = deriveWorkerToolFilter(
       task.taskType,
       WORKER_TOOL_NAME_FAMILY,
       profile?.tools,
       registered,
+      process.platform,
     )
     // persona 由 claim 阶段合成（S2a 组成矩阵）——此处仅透传
     agentOptions = await reconcileWorkerReasoning(
@@ -625,7 +638,10 @@ export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreEx
   if (settlement.case === 'landing-rejected') {
     return { kind: 'landing-rejected', reason: settlement.cause.message }
   }
-  const failure = spawnFailed(task.slug, taskKey, settlement.cause, input.guardOnFailure === false ? { guard: false } : undefined)
+  const failure = spawnFailed(task.slug, taskKey, settlement.cause, {
+    ...(input.guardOnFailure === false ? { guard: false } : {}),
+    ...(settlement.case === 'failed' && settlement.noSettlement === true ? { noSettlement: true } : {}),
+  })
   return failure
 }
 
