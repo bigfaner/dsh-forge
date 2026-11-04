@@ -2,7 +2,7 @@
 // 边界纪律（1.17 forge-progress-data 先例）：守卫归唯一 runtime 消费者（壳树视图），
 // client 树零引用（定义面数据透传 unknown 不窄读）。
 // 数据纪律：形状防御（client-plugin forgeEventGroupDefinition.buildViewNode data 窄收投影
-// 镜像——仅投影视图所需字段，实态缺 turnId 等未投影位；他形不猜不抛，组件 null 收口零残留）。
+// 镜像——仅投影视图所需字段（turnId 戳已随 D3 退役，实态无该位）；他形不猜不抛，组件 null 收口零残留）。
 
 /** 组内单条事件条目（client-plugin ForgeEventEntry 窄收投影镜像） */
 export interface ForgeEventEntryData {
@@ -27,7 +27,7 @@ export interface ForgeEventGroupData {
   readonly progress?: readonly ForgeProgressEntryData[]
 }
 
-/** 组内单条 'forge/progress' 事件条目（client-plugin ForgeProgressEntry 窄收投影镜像——实态含 turnId，此处不投影） */
+/** 组内单条 'forge/progress' 事件条目（client-plugin ForgeProgressEntry 窄收投影镜像——turnId 戳已随 D3 退役） */
 export interface ForgeProgressEntryData {
   readonly seq: number
   readonly sourceSlug: string
