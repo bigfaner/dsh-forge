@@ -48,6 +48,7 @@ import {
   type RecallRow,
 } from './internal.js'
 import { createWriteGateway } from './write.js'
+import { createMergeGateway } from './merge.js'
 import { createScanRegister } from './scan-register.js'
 import type {
   BackflowConfig,
@@ -401,6 +402,9 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
   // ── 写门三法（write.ts 网关——knowledgeDir 每调用期传入） ──
   const gateway = createWriteGateway({ db, emit })
 
+  // ── distill 归并执行面（merge.ts——§2.6 裁决 #8 四件套） ──
+  const merges = createMergeGateway({ db, emit })
+
   // ── 存量收编面（scan-register.ts——scan 只读体检 + register 幂等注册） ──
   const scanRegister = createScanRegister({ db, emit })
 
@@ -615,5 +619,15 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     },
 
     registerKnowledge: (q) => scanRegister.registerKnowledge(q),
+
+    mergeKnowledge: async (q) => {
+      requireProject(q.projectId, 'mergeKnowledge')
+      return merges.merge(q)
+    },
+
+    revertMerge: async (q) => {
+      requireProject(q.projectId, 'revertMerge')
+      return merges.revertMerge(q)
+    },
   }
 }

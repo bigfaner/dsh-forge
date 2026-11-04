@@ -96,6 +96,11 @@ export interface KnowledgeService {
   scanKnowledge(q: { projectId: string }): Promise<KnowledgeScanReport>
   /** register 幂等注册：realpath canonical / deny 系统目录 / reparse 拒收 + 入库默认 unconfirmed */
   registerKnowledge(q: RegisterKnowledgeQuery): Promise<RegisterKnowledgeOutcome>
+  // ── stage② distill 归并执行面（§2.6 裁决 #8——服务方法非 tool，confirm 同口径） ──
+  /** 归并执行四件套：loser 正本回写 merged_into + 台账 actor=agent + hash 校验中止 + CAS 前置 */
+  mergeKnowledge(q: KnowledgeMergeQuery): Promise<KnowledgeMergeOutcome>
+  /** 驳回逆向（actor=human）：loser 解除 redirect 恢复检索地位，winner 融合正文不回退 */
+  revertMerge(q: KnowledgeRevertQuery): Promise<KnowledgeRevertOutcome>
 }
 
 /** Interface 2 + 第八法聚合面：KnowledgeService 七法 + browse 域树聚合（forge:knowledge/browse 通道 handler 本体）+ 注册行写入（第九法） */
@@ -234,6 +239,66 @@ export interface KnowledgeConfirmQuery {
 export type KnowledgeConfirmOutcome =
   | { readonly outcome: 'confirmed'; readonly id: string; readonly versionTs: string; readonly demoted: readonly string[] }
   | { readonly outcome: 'cas-failed'; readonly id: string; readonly reason: 'merged'; readonly detail: string }
+
+// ── stage② distill 归并执行面（§2.6 裁决 #8——服务方法非 tool） ──
+
+/** 归并入参（评估通过即执行——零等待零删除） */
+export interface KnowledgeMergeQuery {
+  readonly projectId: string
+  readonly winnerId: string
+  /** 被归并条目（文件保留、frontmatter 写 merged_into——redirect 沉底可回看正文） */
+  readonly loserId: string
+  /** 归并理由（台账留行） */
+  readonly reason?: string
+  /** 评估期 loser 权威文件 content_hash（sha256 hex）快照——写前校验，失配中止该项（INV-F） */
+  readonly expectedLoserHash?: string
+}
+
+/** 归并回执联合：merged / aborted（hash 失配中止）/ cas-failed（重复归并/未命中/交错） */
+export type KnowledgeMergeOutcome =
+  | {
+      readonly outcome: 'merged'
+      readonly winnerId: string
+      readonly loserId: string
+      /** loser 权威版曾 confirmed——同笔降 superseded（保 confirmed_at；终态无 confirmed+redirect 并存） */
+      readonly demotedFromConfirmed: boolean
+    }
+  | { readonly outcome: 'aborted'; readonly loserId: string; readonly reason: 'hash-mismatch'; readonly detail: string }
+  | {
+      readonly outcome: 'cas-failed'
+      readonly loserId: string
+      /** merged（已处归并态/自归并）/ not-found（winner/loser 未命中或版本文件不可读） */
+      readonly reason: 'merged' | 'not-found'
+      readonly detail: string
+    }
+
+/** 驳回逆向入参（人工经台账执行——actor=human 留行） */
+export interface KnowledgeRevertQuery {
+  readonly projectId: string
+  readonly loserId: string
+  /** 归并指向校验（缺省 = 当前 merged_into 指向） */
+  readonly winnerId?: string
+  readonly reason?: string
+  /** 逆向写前 hash 校验（同 merge 口径——失配中止） */
+  readonly expectedLoserHash?: string
+}
+
+/** 逆向回执联合：reverted / rejected（未处归并态/台账行缺失——不可凭空回滚） */
+export type KnowledgeRevertOutcome =
+  | {
+      readonly outcome: 'reverted'
+      readonly loserId: string
+      readonly winnerId: string
+      /** 恢复后的自身 status 档（rank 按此重算——confirmed 曾审标记在场则恢复 confirmed） */
+      readonly restoredStatus: string
+    }
+  | {
+      readonly outcome: 'rejected'
+      readonly loserId: string
+      /** not-merged（未处归并态/指向不符/文件不可读）/ ledger-missing（无 agent 归并行） */
+      readonly reason: 'not-merged' | 'ledger-missing'
+      readonly detail: string
+    }
 
 /** 回流配置面（§2.4：阈值归插件 config，非代码常量） */
 export interface BackflowConfig {

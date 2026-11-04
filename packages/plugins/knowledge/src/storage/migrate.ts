@@ -166,7 +166,12 @@ export function runSeedMigration(
            domain_snap, query_json, hit_count, duration_ms, created_at
          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      // 整体替换式拷贝（幂等：崩溃重跑先清后拷，零重复行）+ 标记行同事务落账
+      // 整表拷贝语义（非增量合并）：先 DELETE 自持库 recall_logs 全表、后整份拷入旧表
+      // 全行——单向种子迁移时点语义（旧库 = 唯一事实源，自持库此表尚无独立生产流量）。
+      // 幂等性由先清后拷承载：崩溃重跑零重复行（自增 id 重排，行数等价口径）；
+      // 标记行同事务落账（拷贝完成与完成标记原子——无「已拷未标记」重拷窗口）。
+      // 边界：迁移时点之后自持库新产生的召回行会在重跑时被旧表覆盖——由 seed_migration
+      // 标记行首启即落、二启整体跳过保证实际不可达（重跑仅发生于首迁未完成的失败路径）。
       withImmediateTransaction(db, () => {
         db.prepare(`DELETE FROM knowledge_recall_logs`).run()
         for (const r of rows) {

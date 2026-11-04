@@ -197,7 +197,12 @@ export function rebuildKnowledgeIndex(db: Database.Database, opts: RebuildOption
       }
     }
 
-    // 对账前置：库内版本行文件缺失 → knowledge-entry-purge 分级埋点（随重建同步消失）
+    // 对账前置：库内版本行文件缺失 → knowledge-entry-purge 分级埋点（随重建同步消失）。
+    // 分级口径与边缘情形：级位取自缺失前 entries 投影的 status（LEFT JOIN，entries 行
+    // 缺席 = status NULL）——unconfirmed = info（纯新稿未审，缺失预期内）；
+    // confirmed / superseded / NULL 均 = warn（曾审或已出索引面的意外缺失应被看见：
+    // confirmed 直判；superseded 曾审同判；NULL = 版本在而投影行不在的边缘态——
+    // 该文件曾入版本表即承载知识面，按已审面 warn 从严，不静默）。
     const priorVersions = db
       .prepare<
         unknown[],

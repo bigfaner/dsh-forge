@@ -743,6 +743,12 @@ describe('createBridgeProxy（主侧代理）', () => {
       'write',
       'read',
       'confirm',
+      // 1.6 存量收编双法（服务方法非 web 通道）
+      'scanKnowledge',
+      'registerKnowledge',
+      // stage② distill 归并执行面双法（§2.6 裁决 #8——服务方法非 tool，confirm 同口径）
+      'mergeKnowledge',
+      'revertMerge',
     ])
     expect([...TASKS_SERVICE_METHODS]).toEqual([
       'addTask',
@@ -945,7 +951,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     assertType<never>(undefined as ApprovalWhitelistCoverage) // fix-2 审批桥白名单覆盖完备性
     assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
-    expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(12) // 1.15 +registerProject；stage② 1.4 +write/read/confirm
+    expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(16) // 1.15 +registerProject；stage② 1.4 +write/read/confirm；1.6 +scan/register；1.10 distill +mergeKnowledge/revertMerge
     expect(TASKS_SERVICE_METHODS).toHaveLength(16) // S3 +reconcileInterrupted…；1.16 +taskSettlementserrupted；1.1 +updateTask；78b9227e +recordSpawn；blocked-verdict-restore-primitive +unblockTask
     expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(6) // +listDerivedProposals（承接链自联结读面）

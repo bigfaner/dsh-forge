@@ -4,17 +4,18 @@
 //   .forge/docs/proposals/knowledge-stage2-write-gateway/testing/contracts/contract-distill-integration.md
 //   （CT-DI-01..12 ← journey DI-G1..G7 / DI-E1..E8）。
 // 策略：distill 整合执行循环 = agent 技能面（packages/plugins/knowledge/skills/distill/SKILL.md，
-// 随包交付——提案 §2.6「skills/distill 新增」），无程序态执行器；vitest 层承载该循环
-// 消费的**确定性基元**（真实代码锚）：候选发现 findMergeSuggestions、归并执行形态
-// （winner version_of 版本化 + loser 正本写 merged_into + 台账行——SKILL ②执行形态的
-// 组装件）、redirect rank 派生、confirm CAS、文件亡→记录亡、rebuild 再生白名单。
-// Agent 循环语义面（hash 失配中止时序、驳回回滚交互、报告四计数、部分失败编排）
+// 随包交付——提案 §2.6），循环消费的确定性基元承载于真实服务面（fix 6ca979cf——
+// 归并执行四件套经 service/merge.ts 落码：正本回写 merged_into / 台账 actor=agent /
+// 驳回逆向 revertMerge / 写前 content_hash 校验中止；CT-DI-02 证据 = 真实实现能力，
+// 非夹具直写合成）。候选发现 findMergeSuggestions、redirect rank 派生、confirm CAS、
+// rebuild 再生白名单同为本套断言锚。编排语义面（报告四计数、批量部分失败编排）
 // = 真机限定面，末尾 skip 留痕归 test-run。
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseFm, withFmField } from '../journey-fm.js'
+import { parseFm } from '../journey-fm.js'
 import type { DiagEventPayload } from '../../../packages/contracts/src/index.js'
 import { startSelfHostedStorage } from '../../../packages/plugins/knowledge/src/storage/start.js'
 import { rebuildKnowledgeIndex } from '../../../packages/plugins/knowledge/src/storage/rebuild.js'
@@ -74,6 +75,7 @@ function writeQ(partial: Partial<KnowledgeWriteQuery> = {}): KnowledgeWriteQuery
 }
 
 const purgeEvents = (events: readonly DiagEventPayload[]): DiagEventPayload[] => events.filter((e) => e.event === 'knowledge-entry-purge')
+const mergeEvents = (events: readonly DiagEventPayload[]): DiagEventPayload[] => events.filter((e) => e.event === 'knowledge-merge')
 
 const nRows = (w: World, table: string, where = ''): number =>
   w.db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM ${table} ${where}`).get()?.n ?? 0
@@ -83,14 +85,24 @@ const entryRow = (w: World, id: string) =>
     `SELECT id, status, effective_rank, merged_into FROM knowledge_entries WHERE id = ?`,
   ).get(id)
 
-/** distill 归并执行形态（SKILL ②）：loser 正本写 merged_into redirect + 台账 actor=agent 落行 */
-function applyRedirect(w: World, loserFile: string, loserId: string, winnerId: string, reason: string): void {
-  writeFileSync(loserFile, withFmField(readFileSync(loserFile, 'utf8'), 'merged_into', winnerId), 'utf8')
-  w.db.prepare(
-    `INSERT INTO knowledge_merge_ledger (winner_id, loser_id, reason, actor, merged_at) VALUES (?, ?, ?, 'agent', ?)`,
-  ).run(winnerId, loserId, reason, new Date().toISOString())
-  rebuildKnowledgeIndex(w.db, {}) // redirect rank 由正本派生（真实再生面）
+/** distill 归并执行（真实服务面——service/merge.ts 四件套；expectedHash 模拟评估期快照） */
+async function applyMerge(
+  w: World,
+  winnerId: string,
+  loserId: string,
+  reason: string,
+  expectedHash?: string,
+): Promise<ReturnType<World['service']['mergeKnowledge']>> {
+  return w.service.mergeKnowledge({
+    projectId: w.projectId,
+    winnerId,
+    loserId,
+    reason,
+    ...(expectedHash !== undefined ? { expectedLoserHash: expectedHash } : {}),
+  })
 }
+
+const sha256 = (s: string): string => createHash('sha256').update(s, 'utf8').digest('hex')
 
 // ── CT-DI-01 候选发现（溯源 DI-G2） ──
 
@@ -113,7 +125,7 @@ describe('CT-DI-01 distill 候选发现：三类候选源（DI-G2）', () => {
   })
 })
 
-// ── CT-DI-02 归并执行形态（溯源 DI-G3，裁决 #8） ──
+// ── CT-DI-02 归并执行形态（溯源 DI-G3，裁决 #8——真实服务面 mergeKnowledge） ──
 
 describe('CT-DI-02 归并执行：winner 新版本 + loser redirect + 台账 actor=agent（DI-G3，裁决 #8）', () => {
   it('O1 成功：winner version_of 产融合新版本（真实 write 路径）+ loser 文件保留写 merged_into + rank 0.2 沉底 + 台账留行', async () => {
@@ -135,35 +147,77 @@ describe('CT-DI-02 归并执行：winner 新版本 + loser redirect + 台账 act
     if (fused.outcome !== 'written') throw new Error('融合版未写入')
     expect(fused.id).toBe(winner.id) // 同 id 版本化（supersedes 链前进）
     expect(fused.supersedes).toBe(winner.versionTs)
-    applyRedirect(w, loser.filePath, loser.id, winner.id, '同义异名重复对：agent 归并')
+    // 归并执行 = 真实服务面（评估期 hash 快照随调用传入——INV-F 写前校验径）
+    const merged = await applyMerge(w, winner.id, loser.id, '同义异名重复对：agent 归并', sha256(readFileSync(loser.filePath, 'utf8')))
+    expect(merged).toMatchObject({ outcome: 'merged', winnerId: winner.id, loserId: loser.id, demotedFromConfirmed: true }) // CT-DI-02 O1：服务回执
     // 四锚逐项成立（CT-DI-02 O1）
     expect(existsSync(loser.filePath)).toBe(true) // loser 文件保留（零删除可逆——INV-C）
-    expect(parseFm(readFileSync(loser.filePath, 'utf8')).data.merged_into).toBe(winner.id) // frontmatter redirect
+    expect(parseFm(readFileSync(loser.filePath, 'utf8')).data.merged_into).toBe(winner.id) // frontmatter redirect（生产写径）
     const lRow = entryRow(w, loser.id)
     expect(lRow?.merged_into).toBe(winner.id) // DB 再生投影
+    expect(lRow?.status).toBe('superseded') // 曾 confirmed 同笔降档——终态无 confirmed+redirect 并存（INV-D）
     expect(lRow?.effective_rank).toBe(0.2) // redirect 沉底最高优先档（merged_into 压过 confirmed）
-    expect(nRows(w, 'knowledge_merge_ledger', `WHERE winner_id = '${winner.id}' AND loser_id = '${loser.id}' AND actor = 'agent'`)).toBe(1) // 台账留行
+    expect(nRows(w, 'knowledge_merge_ledger', `WHERE winner_id = '${winner.id}' AND loser_id = '${loser.id}' AND actor = 'agent'`)).toBe(1) // 台账留行（生产写径）
+    expect(mergeEvents(w.events).some((e) => e.level === 'info' && e.message.includes(loser.id))).toBe(true) // 归并成功埋点
     w.storage.close()
-    // 注：台账落行/正本回写由技能组装（无服务方法——提案 §2.6 技能面交付形态），
-    // 本例经同一写径基元组装后断言终态四锚。
   })
 })
 
-// ── CT-DI-04 归并与 confirm CAS 交错（溯源 DI-E2，裁决 #9） ──
+// ── CT-DI-03 归并：hash 失配中止（溯源 DI-E1——真实服务面） ──
+
+describe('CT-DI-03 归并：hash 失配中止（DI-E1，INV-F）', () => {
+  it('O1 中止 + O2 不牵连：失配项零变更零台账；同批其余项照常终态', async () => {
+    const w = makeWorld('e1')
+    const winnerA = await w.service.write(writeQ({ projectId: w.projectId, title: 'Hash Guard Winner', keywords: ['hg'] }))
+    if (winnerA.outcome !== 'written') throw new Error('WA 未写入')
+    const stale = await w.service.write(writeQ({ projectId: w.projectId, title: 'Stale Candidate Doc', keywords: ['stale'] }))
+    if (stale.outcome !== 'written') throw new Error('S 未写入')
+    const winnerB = await w.service.write(writeQ({ projectId: w.projectId, title: 'Fresh Pair Winner', keywords: ['fp'] }))
+    if (winnerB.outcome !== 'written') throw new Error('WB 未写入')
+    const fresh = await w.service.write(writeQ({ projectId: w.projectId, title: 'Fresh Pair Loser', keywords: ['fp'] }))
+    if (fresh.outcome !== 'written') throw new Error('FL 未写入')
+    // 评估期快照后、执行写前——手改 S 正本（模拟评估期间外部改动）
+    const staleBefore = readFileSync(stale.filePath, 'utf8')
+    const snapshot = sha256(staleBefore)
+    writeFileSync(stale.filePath, `${staleBefore}\n<!-- 手改 -->`, 'utf8')
+    const aborted = await applyMerge(w, winnerA.id, stale.id, '陈旧归并', snapshot)
+    expect(aborted).toMatchObject({ outcome: 'aborted', reason: 'hash-mismatch' }) // CT-DI-03 O1：中止回执
+    expect(entryRow(w, stale.id)?.merged_into ?? null).toBeNull() // L 零变更（无 merged_into 写入）
+    expect(parseFm(readFileSync(stale.filePath, 'utf8')).data.merged_into).toBeUndefined()
+    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${stale.id}'`)).toBe(0) // 无台账行
+    expect(mergeEvents(w.events).some((e) => e.level === 'warn' && e.message.includes('中止'))).toBe(true) // 中止埋点
+    // 同批其余项照常终态（不牵连）
+    const ok = await applyMerge(w, winnerB.id, fresh.id, '同批健康项')
+    expect(ok).toMatchObject({ outcome: 'merged', loserId: fresh.id }) // CT-DI-03 O2
+    expect(entryRow(w, fresh.id)?.merged_into).toBe(winnerB.id)
+    w.storage.close()
+  })
+})
+
+// ── CT-DI-04 归并与 confirm 交错 CAS（溯源 DI-E2，裁决 #9） ──
 
 describe('CT-DI-04 归并与 confirm 交错 CAS（DI-E2，裁决 #9）', () => {
   it('O2 归并先到：confirm 被 CAS 拒（merged_into≠空）+ 终态无 confirmed+redirect 并存（INV-D）', async () => {
     const w = makeWorld('e2')
     const x = await w.service.write(writeQ({ projectId: w.projectId, title: 'Cas Interleave Doc', keywords: ['cas'] }))
     if (x.outcome !== 'written') throw new Error('X 未写入')
-    // 归并先到：X 被 redirect
-    applyRedirect(w, x.filePath, x.id, 'canonical-doc', '交错场景归并')
+    // 归并先到（真实服务面）：X 被 redirect
+    const merged = await applyMerge(w, 'canonical-doc', x.id, '交错场景归并')
+    expect(merged).toMatchObject({ outcome: 'cas-failed', loserId: x.id }) // winner 未命中 → cas-failed（同批该项中止）
+    // 换合法 winner 重执行归并
+    const winner = await w.service.write(writeQ({ projectId: w.projectId, title: 'Cas Winner Doc', keywords: ['casw'] }))
+    if (winner.outcome !== 'written') throw new Error('W 未写入')
+    const m2 = await applyMerge(w, winner.id, x.id, '交错场景归并')
+    expect(m2).toMatchObject({ outcome: 'merged' })
     const r = await w.service.confirm({ projectId: w.projectId, id: x.id })
     expect(r).toMatchObject({ outcome: 'cas-failed', reason: 'merged' }) // CT-DI-04 O2：后到者失败回执
     const both = w.db.prepare<unknown[], { n: number }>(
       `SELECT COUNT(*) AS n FROM knowledge_entries WHERE status = 'confirmed' AND merged_into IS NOT NULL AND merged_into != ''`,
     ).get()?.n
     expect(both).toBe(0) // INV-D 终态断言
+    // 重复归并亦被 CAS 拒（merged_into 已在场）
+    const again = await applyMerge(w, winner.id, x.id, '重复归并')
+    expect(again).toMatchObject({ outcome: 'cas-failed', reason: 'merged' }) // CAS 前置
     w.storage.close()
     // O1（confirm 先到 → 归并执行被 CAS 拒）= distill 技能侧前置检查（agent 面），
     // vitest 等价锚 = confirm 升格后条目 status=confirmed（归并评估在真实正本上可见）
@@ -182,12 +236,62 @@ describe('CT-DI-05 search：redirect 沉底（DI-G4）', () => {
     const loser = await w.service.write(writeQ({ projectId: w.projectId, title: 'Redirect Search Doc', keywords: ['lkey'] }))
     if (loser.outcome !== 'written') throw new Error('L 未写入')
     await w.service.confirm({ projectId: w.projectId, id: loser.id })
-    applyRedirect(w, loser.filePath, loser.id, winner.id, '沉底可见性场景')
+    const merged = await applyMerge(w, winner.id, loser.id, '沉底可见性场景')
+    expect(merged).toMatchObject({ outcome: 'merged' })
     expect(entryRow(w, loser.id)?.effective_rank).toBe(0.2) // CT-DI-05 O1：rank 实查 0.2
     const hits = await w.service.search({ projectId: w.projectId, keywords: ['wkey'] })
     const wHit = hits.find((h) => h.frontmatterId === winner.id)
     expect(wHit).toBeDefined() // W 正常命中
     expect(wHit?.effectiveRank).toBe(1.0)
+    w.storage.close()
+  })
+})
+
+// ── CT-DI-06 驳回回滚（溯源 DI-G5，裁决 #8——真实服务面 revertMerge） ──
+
+describe('CT-DI-06 驳回回滚：解除 redirect 恢复检索地位（DI-G5，裁决 #8）', () => {
+  it('O1 回滚成功：merged_into 清空 + rank 回自身 status 档 + winner 正文不回退 + 台账逆向行 actor=human', async () => {
+    const w = makeWorld('g5')
+    const winner = await w.service.write(writeQ({ projectId: w.projectId, title: 'Revert Winner Doc', keywords: ['rvw'] }))
+    if (winner.outcome !== 'written') throw new Error('W 未写入')
+    const loser = await w.service.write(writeQ({ projectId: w.projectId, title: 'Revert Loser Doc', keywords: ['rvl'] }))
+    if (loser.outcome !== 'written') throw new Error('L 未写入')
+    await w.service.confirm({ projectId: w.projectId, id: loser.id })
+    // 融合新版本（winner 正文演进）+ 归并
+    const fused = await w.service.write(writeQ({ projectId: w.projectId, title: 'Revert Winner Doc', keywords: ['rvw'], versionOf: winner.id, body: '# 融合后正文' }))
+    if (fused.outcome !== 'written') throw new Error('融合版未写入')
+    const merged = await applyMerge(w, winner.id, loser.id, '待驳回归并')
+    expect(merged).toMatchObject({ outcome: 'merged', demotedFromConfirmed: true })
+    const winnerBodyBefore = readFileSync(fused.filePath, 'utf8')
+    // 人工经台账逆向（真实服务面）
+    const reverted = await w.service.revertMerge({ projectId: w.projectId, loserId: loser.id, reason: '人工复核：非重复对' })
+    expect(reverted).toMatchObject({ outcome: 'reverted', loserId: loser.id, winnerId: winner.id, restoredStatus: 'confirmed' }) // CT-DI-06 O1
+    const lRow = entryRow(w, loser.id)
+    expect(lRow?.merged_into ?? null).toBeNull() // redirect 解除
+    expect(lRow?.status).toBe('confirmed') // 曾审标记在场 → 恢复自身 confirmed 档
+    expect(lRow?.effective_rank).toBe(1.0) // rank 按自身 status 重算（非 0.2 redirect 档）
+    expect(parseFm(readFileSync(loser.filePath, 'utf8')).data.merged_into).toBeUndefined() // 正本同步解除
+    expect(readFileSync(fused.filePath, 'utf8')).toBe(winnerBodyBefore) // W 融合正文 diff 为空（不回退）
+    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${loser.id}' AND actor = 'human'`)).toBe(1) // 逆向台账行
+    // O3 回滚后再判定：L 可再次入候选再归并（不产生永久免疫，往返逐行可审计）
+    const remerged = await applyMerge(w, winner.id, loser.id, '复审后再归并')
+    expect(remerged).toMatchObject({ outcome: 'merged' }) // CT-DI-06 O3
+    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${loser.id}' AND actor = 'agent'`)).toBe(2) // 逐行可审计
+    w.storage.close()
+  })
+
+  it('O2 台账行缺失：拒绝逆向，状态零变更（不可凭空回滚）', async () => {
+    const w = makeWorld('g5b')
+    const winner = await w.service.write(writeQ({ projectId: w.projectId, title: 'No Ledger Winner', keywords: ['nlw'] }))
+    if (winner.outcome !== 'written') throw new Error('W 未写入')
+    const loser = await w.service.write(writeQ({ projectId: w.projectId, title: 'No Ledger Loser', keywords: ['nll'] }))
+    if (loser.outcome !== 'written') throw new Error('L 未写入')
+    expect(await applyMerge(w, winner.id, loser.id, '将清账归并')).toMatchObject({ outcome: 'merged' })
+    w.db.prepare(`DELETE FROM knowledge_merge_ledger`).run() // 夹具侧清账（模拟台账行缺失）
+    const rejected = await w.service.revertMerge({ projectId: w.projectId, loserId: loser.id, reason: '无账可溯' })
+    expect(rejected).toMatchObject({ outcome: 'rejected', reason: 'ledger-missing' }) // CT-DI-06 O2
+    expect(entryRow(w, loser.id)?.merged_into).toBe(winner.id) // 状态零变更
+    expect(nRows(w, 'knowledge_merge_ledger')).toBe(0) // 零新行
     w.storage.close()
   })
 })
@@ -202,7 +306,7 @@ describe('CT-DI-07 loser 手删：文件亡记录亡 + 台账可溯（DI-E3，�
     const loser = await w.service.write(writeQ({ projectId: w.projectId, title: 'Vanishing Loser Doc', keywords: ['vanish'] }))
     if (loser.outcome !== 'written') throw new Error('L 未写入')
     await w.service.confirm({ projectId: w.projectId, id: loser.id }) // Preconditions：CT-DI-02 完成态（曾审）
-    applyRedirect(w, loser.filePath, loser.id, winner.id, '手删前归并')
+    expect(await applyMerge(w, winner.id, loser.id, '手删前归并')).toMatchObject({ outcome: 'merged' })
     rmSync(loser.filePath) // 磁盘直删（真实文件系统夹具）
     await w.service.rebuildIndex(w.projectId) // 触发同步检查（对账删除——CT-DI-07 Input）
     const after = await w.service.search({ projectId: w.projectId, keywords: ['keep'] })
@@ -229,7 +333,7 @@ describe('CT-DI-08 rebuild：redirect 再生与业务账白名单（DI-E4）', (
     const loser = await w.service.write(writeQ({ projectId: w.projectId, title: 'Rebuild Redirect Doc', keywords: ['regen2'] }))
     if (loser.outcome !== 'written') throw new Error('L 未写入')
     await w.service.confirm({ projectId: w.projectId, id: loser.id })
-    applyRedirect(w, loser.filePath, loser.id, winner.id, '再生场景归并')
+    expect(await applyMerge(w, winner.id, loser.id, '再生场景归并')).toMatchObject({ outcome: 'merged' })
     await w.service.search({ projectId: w.projectId, keywords: ['regen'] }) // 召回账产生非零行
     // 重建前快照（语义级：entries/versions/rank + 业务账行数 n1/n2）
     const beforeEntries = w.db.prepare<unknown[], { id: string; status: string; effective_rank: number; merged_into: string | null }>(
@@ -278,16 +382,12 @@ describe('CT-DI-09 版本对不当归并路由（DI-E6）', () => {
 })
 
 // ── 真机限定面（distill 执行循环 = agent 技能面；vitest 层不承载，归 test-run 收口） ──
-// · CT-DI-03（hash 失配中止时序）：评估期快照与执行期 content_hash 比对 = 技能执行循环
-//   编排语义；vitest 等价锚 = 版本行 content_hash 落列（write 真实路径）与 rebuild 对账。
 // · CT-DI-04 O1（confirm 先到 → 归并侧 CAS 拒）：归并侧前置检查在技能执行序内。
-// · CT-DI-06（驳回回滚 + 台账行缺失拒绝 + 回滚后再判定）：人工经台账逆向 = 技能/人工
-//   交互面；vitest 等价锚 = redirect rank 派生可逆性（rebuild 从正本再派生，CT-DI-08）
-//   与台账行在场（CT-DI-02）。
 // · CT-DI-10（多版本收敛/压缩重写执行）/ CT-DI-11（批量部分失败编排 + 报告计数对账）/
 //   CT-DI-12（空库报告四计数）：整合循环编排与报告产出 = 技能收尾面；vitest 等价锚 =
-//   版本化 write 路径（CT-WG-02/CT-DI-02）与候选发现（CT-DI-01）。
-describe('真机面留痕（distill 执行循环：hash 中止 / 驳回回滚 / 收敛重写 / 报告计数 / 空库）', () => {
+//   版本化 write 路径（CT-WG-02/CT-DI-02）、hash 中止与不牵连（CT-DI-03）与
+//   候选发现（CT-DI-01）。
+describe('真机面留痕（distill 执行循环：CAS 先到序 / 收敛重写 / 报告计数 / 空库）', () => {
   it.skip('distill 技能四步整合循环（候选→评估→执行→报告）端到端：需真机 agent 装载 skills/distill（归 test-run 收口）', () => {
     expect(true).toBe(true)
   })

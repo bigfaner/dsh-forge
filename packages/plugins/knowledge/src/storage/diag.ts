@@ -28,6 +28,9 @@ export const KNOWLEDGE_CONFIRM_EVENT = 'knowledge-confirm'
 /** supersedes 回流事件域（stage② §2.7 回流频率——info=误判回流 / warn=震荡回流） */
 export const KNOWLEDGE_BACKFLOW_EVENT = 'knowledge-backflow'
 
+/** 归并执行事件域（stage② §2.6 裁决 #8——info=归并/逆向成功里程碑 / warn=CAS 拒与中止） */
+export const KNOWLEDGE_MERGE_EVENT = 'knowledge-merge'
+
 /** 装配期注入的诊断发射面（host 侧 = ctx.emit(DIAG_EVENT, payload)；storage 域零 cordis 依赖） */
 export type DiagEmitter = (payload: DiagEventPayload) => void
 
