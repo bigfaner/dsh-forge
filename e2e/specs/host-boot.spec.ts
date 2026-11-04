@@ -10,9 +10,10 @@ import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import { closeApp, launchElectron } from '../support/launch.js'
 
-// 【再禁用 2026-11-04 14:57】fix-3 真机无效（同窗 installer-smoke 复杀 GUI，复发
-// 167b5121 链）——根因二查（fix-4）+ 隔离实证前留痕 skip。
-test.skip(true, 'host-boot 再禁用：fix-3 修复真机无效，根因二查中')
+// 【解禁 2026-11-04 15:35 用户裁决】本 spec 两例（dev 直启 + packaged exe 直启）不涉
+// NSIS 安装链（杀手径仅在安装器/卸载器执行路径——disc-1 坐实），可在本 GUI 运行期安全
+// 执行；历史四轮跑批 host-boot 均通过、死亡均发生于其后的 installer-smoke。
+// installer-smoke 仍整体禁用（取证归 CI/停机窗口）。
 
 const PROFILE_FILES = ['cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml', 'cordis.yml'] as const
 
