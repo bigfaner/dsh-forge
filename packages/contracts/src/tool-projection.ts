@@ -188,6 +188,16 @@ export function createUnionToolNamesProbe(
   }
 }
 
+/**
+ * dsh tools 域保留传输名（官方 @deepseek-ai/dsh-tools lib/index.js RUN_CODE_NAME：
+ * register（:2885）与 restrict allow/deny（:2905）均硬拒）。transport 由 registry 在
+ * 创建窗口对 ptc 模式 scope 自动追加（:2979），schemas() 投影（:3023）永不返回 →
+ * 可信求交分支天然不含；仅不可信透传分支需要显式剔除——剔除零能力损失。
+ * 字面量单源（运行期零依赖铁律，禁 value import dsh-tools）；官方版本升级时以源码
+ * 核销更新。禁作「可注册工具全集」或通配裁剪依据使用。
+ */
+export const RESERVED_TOOL_TRANSPORT_NAMES = ['run_code'] as const
+
 /** intersectToolNames 参数化差异面（包域语义注入缝——集中不抹平行为差异） */
 export interface IntersectToolNamesOptions {
   /** 前置排除集（expert-squad EXCLUDED_EXPERT_TOOL_NAMES——所有分支恒生效，含无探针分支） */
@@ -205,6 +215,9 @@ export interface IntersectToolNamesOptions {
 /**
  * 白名单/allow 名表与真机注册面求交（两包求交核心单源——bug 3cb118cf / e3b045dc /
  * a5b12254）：
+ * - 保留传输名（RESERVED_TOOL_TRANSPORT_NAMES）与排除集前置剔除——所有分支恒生效，
+ *   优先级最高、不可被 opts 豁免；仅保留名入表（剔除后空）与全未知同口径 fail-loud
+ *   （避免 allow:[] 空表炸官方 restrict empty-filter 守卫）；
  * - 排除集前置剔除（opts.excluded——所有分支恒生效）；
  * - 探针缺席/空/子域投影（不可信）→ 不裁剪；opts.platform 在场时 shell 同族名兜底
  *   解析为平台确定名（pwsh 落 Mac 得 bash——spawn 不炸）；
@@ -218,7 +231,24 @@ export function intersectToolNames(
   opts?: IntersectToolNamesOptions,
 ): string[] {
   const excluded = opts?.excluded
-  const allow = excluded === undefined ? [...rawNames] : rawNames.filter((name) => !excluded.includes(name))
+  // Root cause: bug 0a6a1055 —— 不可信透传分支原样携带保留传输名（run_code）落官方
+  // tools.restrict 硬抛；保留名剔除须在 allow 构造拍完成（全分支恒生效）。
+  const reserved = RESERVED_TOOL_TRANSPORT_NAMES as readonly string[]
+  const isReserved = (name: string) => reserved.includes(name)
+  const hadReserved = rawNames.some(isReserved)
+  const allow = rawNames.filter(
+    (name) => !isReserved(name) && (excluded === undefined || !excluded.includes(name)),
+  )
+  const throwEmpty = (input: readonly string[]): never => {
+    const message =
+      `tools resolve to empty tool allow-list against registered tools [${
+        registered !== undefined ? [...new Set(registered)].sort().join(', ') : '(unknown — probe absent or untrusted)'
+      }]; ` + `input: [${input.join(', ')}]`
+    throw (opts?.emptyError ?? ((m: string) => new Error(m)))(message)
+  }
+  // 仅保留名入表（剔除后空，含混排除集/平台兜底清空的组合）= 档案配置错误，与全未知
+  // 同口径 fail-loud——避免 allow:[] 空表落官方 restrict empty-filter 守卫
+  if (allow.length === 0 && rawNames.length > 0 && hadReserved) throwEmpty(rawNames)
   const trusted =
     registered !== undefined && registered.length > 0 && !probeIsSubdomain(registered)
   if (!trusted) {
@@ -244,11 +274,6 @@ export function intersectToolNames(
       if (sibling !== undefined) resolved.push(sibling)
     }
   }
-  if (allow.length > 0 && resolved.length === 0) {
-    const message =
-      `tools resolve to empty tool allow-list against registered tools [${[...present].sort().join(', ')}]; ` +
-      `input: [${allow.join(', ')}]`
-    throw (opts?.emptyError ?? ((m: string) => new Error(m)))(message)
-  }
+  if (allow.length > 0 && resolved.length === 0) throwEmpty(allow)
   return resolved
 }
