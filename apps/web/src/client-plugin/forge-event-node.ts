@@ -15,6 +15,13 @@
 //   - D4 裁决让渡：折叠/位置归属由官方谓词单点裁决，本模块残余官方口径依赖收敛至
 //     forgeEventGroupAnchorSeq 单一纯函数入口（契约面注释见该函数）。
 //
+// forge-progress-card-invariant-hardening 1.4（D2 分态交保 + fail-visible）：
+//   - D2 分态交保：曾物化（emit 过）的组 → hidden 交棒必须携带真成员序列与真锚
+//     （anchorSeq 从交棒数据重导出——禁止非空组降为 hidden 空组顶掉已渲染卡）；从未
+//     物化的组 → 不注册 chat target（回 null——withdrew 断言只禁已物化回 null）+ 诊断留痕。
+//   - fail-visible（提案配套纪律 3）：物化缺口/镜像击穿显式诊断站点（诊断通道经
+//     setForgeEventNodeDiag 注入面——纯模块零 import 纪律下的合规发射面）。
+//
 //   ① forgeEventStreamDefinition（状态机，无 target——官方 inboxDefinition 同型）：
 //      常量 id 单 Context 折叠全会话 user/message 流 → 分组模型（人类插话 = 分组
 //      锚点：插话后事件开新组）。每次 user/message 到达 Context revision++ → 依赖
@@ -43,6 +50,24 @@ const CHAT_TARGET = 'chat'
 
 /** 'forge/progress' 会话事件类型键（plugin-forge FORGE_PROGRESS_EVENT_TYPE 字面量镜像——零跨包 import） */
 export const FORGE_PROGRESS_EVENT_TYPE = 'forge/progress'
+
+/**
+ * 诊断发射注入面（D2 fail-visible——AGENTS §7 可观测性纪律）：本模块纯模块零 import
+ * （classic script bundle 自含纪律），诊断发射经装配期注入（先例 start-session-wrap.ts
+ * deps.warn——client 束属 diagnostic-emit-discipline 豁免面，注入的 warn 即合规诊断
+ * 通道）；缺席 = fail-soft 静默（调用点现查在场性，不缓存判定）。
+ */
+let forgeEventNodeWarn: ((message: string) => void) | undefined
+
+/** 装配缝注入诊断通道（plugin.ts registerEventEntriesNode 调用；传 undefined 摘除） */
+export function setForgeEventNodeDiag(warn: ((message: string) => void) | undefined): void {
+  forgeEventNodeWarn = warn
+}
+
+/** 诊断站点（物化缺口/镜像击穿显式上报——零静默吞卡） */
+function forgeEventNodeDiag(message: string): void {
+  forgeEventNodeWarn?.(message)
+}
 /** progress 组块节点 Context id 前缀（与消息 id 命名空间隔离——1.17 'forge-progress-<seq>' 避撞） */
 export const FORGE_EVENT_PROGRESS_ID_PREFIX = 'forge-event-progress-'
 
@@ -405,37 +430,49 @@ export const forgeEventGroupDefinition = {
   update: (context: { state: ForgeEventGroupNodeState }): ForgeEventGroupNodeState => context.state,
   publication: (): 'none' => 'none',
   buildViewNode: (context: ForgeEventNodeContext & { state?: ForgeEventGroupNodeState }): unknown => {
-    // 永不回 null（官方钦定，dsh-client-ui-conversation client.js:2505 buildTargetUpserts
-    // 对已物化 target 回 null 即抛 withdrew materialized target）。bug ede8af10：官方
-    // replayContexts/refreshStarts 对窗口外 start match 置 context.state = void 0——
-    // Context 仍留 contextsByTarget，state===undefined ≠ 从未物化。
+    // withdrew 红线：已物化 target 永不回 null（官方钦定，dsh-client-ui-conversation
+    // client.js:2505 buildTargetUpserts 对「已物化」target 回 null 即抛 withdrew
+    // materialized target）——bug ede8af10：官方 replayContexts/refreshStarts 对窗口外
+    // start match 置 context.state = void 0——Context 仍留 contextsByTarget，
+    // state===undefined ≠ 从未物化。D2 起只有「从未物化」态可 null（见下）。
     //
-    // D1 单快照：visible / anchorSeq 物化决策只由当帧 fold 全量状态（context.state）
-    // 现算——previousStateOf 恢复值退出决策路径（判例 fafc1fb7：跨时刻拼接使同数据
-    // 先在场后消失不自愈），仅保留组数据透传（同 key 组快照保真，withdrew 断言保活）。
-    // bug 141624ed：不产可见碎片卡——state 缺席一律 hidden（组归属在 contextSnapshot
-    // 内不可判定，无现算源②）。
+    // D2 分态交保（曾物化 / 从未物化两态分治——hidden 空组形态在本路径不可产出）：
+    //   - 曾物化（context.current 持上次物化真数据）：state 缺席帧 hidden 交棒必须携带
+    //     真成员序列与真锚（anchorSeq 从交棒数据经 forgeEventGroupAnchorSeq 重导出）——
+    //     禁非空组降为空组顶掉已渲染卡（判例 fafc1fb7 根治面）。
+    //   - 从未物化（无当帧组数据 + 无上次物化数据）：不注册 chat target（回 null——
+    //     withdrew 断言只禁「已物化回 null」，从未物化可 null）+ 诊断留痕（fail-visible）。
     const state = streamStateOk(context.state) ? context.state : undefined
-    const previousGroup = state === undefined ? previousStateOf(context.current, context.id) : undefined
-    const fallbackSeq = context.start?.event?.seq ?? context.matches?.[0]?.event?.seq ?? 0
-    const group = state?.group ?? previousGroup ?? { key: context.id, firstSeq: fallbackSeq, lastSeq: fallbackSeq, entries: [] }
+    const stateGroup = state?.group
+    // 当帧组数据为空（start 保底空组/窗口裁剪）→ 交棒数据（上次物化真数据）接管
+    const stateGroupEmpty =
+      stateGroup === undefined || (stateGroup.entries.length === 0 && (stateGroup.progress?.length ?? 0) === 0)
+    const previousGroup = stateGroupEmpty ? previousStateOf(context.current, context.id) : undefined
+    const group = stateGroupEmpty ? previousGroup : stateGroup
+    if (group === undefined) {
+      forgeEventNodeDiag(
+        `[dswf-client] forge-event-node 物化缺口：id=${context.id} 无当帧 fold 组数据且从未物化——不注册 chat 节点（fail-visible 留痕）`,
+      )
+      return null
+    }
     // location 契约必填（ChatConversationViewNode.location——官方 store updateTurnKind
     // 直读 location.kind）：start/matches 携带 location 则透传，否则 unresolved。
     const location = context.start?.location ?? context.matches?.[0]?.location ?? { kind: 'unresolved' }
-    const visible = state !== undefined && state.emit && (group.entries.length > 0 || (group.progress?.length ?? 0) > 0)
+    const visible = group === stateGroup && state !== undefined && state.emit
     return {
       key: context.key,
       kind: FORGE_EVENT_NODE_KIND,
       id: context.id,
       target: CHAT_TARGET,
-      anchorSeq: state?.anchorSeq ?? fallbackSeq,
+      // D2/D3 真锚：从组模型数据（当帧或交棒）重导出组末成员真实 seq——不从恢复帧快照
+      anchorSeq: forgeEventGroupAnchorSeq(group),
       location,
       visibility: visible ? 'visible' : 'hidden',
       data: {
         key: group.key,
         firstSeq: group.firstSeq,
         lastSeq: group.lastSeq,
-        isLatest: state?.isLatest ?? false,
+        isLatest: group === stateGroup ? (state?.isLatest ?? false) : false,
         entries: group.entries,
         progress: group.progress ?? [],
       },
@@ -454,7 +491,8 @@ function streamStateOk(value: unknown): value is ForgeEventGroupNodeState {
  * 裁剪/replay 置 void 后，Context 仍留 contextsByTarget 且 current 保有上次物化节点。
  * D1 起只透传组模型数据（key/firstSeq/lastSeq/entries/progress——hidden 节点组快照
  * 不丢、不触 withdrew 断言）；visible / anchorSeq / isLatest 物化决策一律不由恢复值
- * 参与（state 缺席 = hidden 保底，锚取 fallbackSeq）。空内容/畸形 = undefined。
+ * 参与（D2：state 缺席 = hidden 交棒携本数据，锚经 forgeEventGroupAnchorSeq 重导出）。
+ * 空内容/畸形 = undefined（镜像击穿诊断留痕后弃置——fail-visible）。
  */
 function previousStateOf(current: unknown, id: string): ForgeEventGroup | undefined {
   if (typeof current !== 'object' || current === null) return undefined
@@ -464,10 +502,18 @@ function previousStateOf(current: unknown, id: string): ForgeEventGroup | undefi
   if (typeof node !== 'object' || node === null) return undefined
   const raw = node as { data?: unknown }
   const data = raw.data as { key?: unknown; firstSeq?: unknown; lastSeq?: unknown; entries?: unknown; progress?: unknown } | undefined
-  if (data === undefined || !Array.isArray(data.entries)) return undefined
+  // 镜像击穿 fail-visible：上次物化节点在场但数据形状不可读（entries 非数组/全空）——
+  // 显式留痕后走 null 分态（此前曾物化现不可恢复 = 物化缺口）
+  if (data === undefined || !Array.isArray(data.entries)) {
+    forgeEventNodeDiag(`[dswf-client] forge-event-node 镜像击穿：id=${id} 上次物化节点 data 形状不可读（entries 非数组）——交棒数据弃置`)
+    return undefined
+  }
   const entries = data.entries
   const progress = Array.isArray(data.progress) ? data.progress : []
-  if (entries.length === 0 && progress.length === 0) return undefined
+  if (entries.length === 0 && progress.length === 0) {
+    forgeEventNodeDiag(`[dswf-client] forge-event-node 镜像击穿：id=${id} 上次物化节点为空组数据（entries/progress 全空）——交棒数据弃置`)
+    return undefined
+  }
   const lastSeq = typeof data.lastSeq === 'number' && Number.isFinite(data.lastSeq) ? data.lastSeq : 0
   const key = typeof data.key === 'string' && data.key !== '' ? data.key : id
   return {

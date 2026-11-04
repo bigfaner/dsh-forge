@@ -19,6 +19,7 @@ import {
   forgeEventStreamDefinition,
   forgeEventTitle,
   foldForgeEventMessage,
+  setForgeEventNodeDiag,
   type ForgeEventStreamState,
   type ForgeMessageEventLike,
 } from './forge-event-node.js'
@@ -104,6 +105,13 @@ function simulate(events: readonly ForgeMessageEventLike[]): {
 function expectHidden(node: unknown): void {
   expect(node).not.toBeNull()
   expect(node).toMatchObject({ kind: FORGE_EVENT_NODE_KIND, visibility: 'hidden' })
+}
+
+/** D2 fail-visible 诊断采集（注入面装配 + 用例毕还原——零泄漏） */
+function collectDiag(): { lines: string[]; restore(): void } {
+  const lines: string[] = []
+  setForgeEventNodeDiag((message) => lines.push(message))
+  return { lines, restore: () => setForgeEventNodeDiag(undefined) }
 }
 
 describe('foldForgeEventMessage 分组语义（人类插话 = 分组锚点）', () => {
@@ -215,10 +223,18 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
     expect((g2 as { data: { entries: unknown[] } }).data.entries).toHaveLength(1)
     expect(nodes.size).toBe(3)
   })
-  it('stream 缺席（reader 空）= 不发射（fail-soft——hidden 保底不回 null）', () => {
-    const state = forgeEventGroupDefinition.start(undefined, { event: forgeMsg(1, 'm1', '启动', 'x') }, { previous: () => undefined })
-    expect(state.emit).toBe(false)
-    expectHidden(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1', state }))
+  it('D2：stream 缺席（reader 空）= 从未物化——不注册节点（null）+ 诊断留痕一行', () => {
+    const diag = collectDiag()
+    try {
+      const state = forgeEventGroupDefinition.start(undefined, { event: forgeMsg(1, 'm1', '启动', 'x') }, { previous: () => undefined })
+      expect(state.emit).toBe(false)
+      const node = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1', state })
+      expect(node).toBeNull() // 从未物化 target 可 null——不产 hidden 空组
+      expect(diag.lines).toHaveLength(1)
+      expect(diag.lines[0]).toContain('物化缺口')
+    } finally {
+      diag.restore()
+    }
   })
   it('D3：turn/end 到达不改锚——anchorSeq 恒组末成员真实 seq（台账 re-anchor 退役，改写自旧 re-anchor 用例）', () => {
     const { nodes } = simulate([
@@ -367,7 +383,7 @@ describe('forgeEventStreamDefinition（状态机注册形状）', () => {
   })
 })
 
-describe('bug：交棒/空组回 null 撞官方 withdrew 断言（hidden 保底）', () => {
+describe('bug：交棒/空组回 null 撞官方 withdrew 断言（D2 分态交保——hidden 真数据交棒）', () => {
   it('emit true→false 交棒：同 key 同 id + visibility hidden（官方钦定，client.js:2505），组快照保留', () => {
     const { nodes } = simulate([forgeMsg(1, 'm1', '启动', 'a'), forgeMsg(2, 'm2', '领取', 'b')])
     const handoff = nodes.get('m1') as { key: string; id: string; visibility: string; data: { entries: unknown[] } } | null
@@ -377,74 +393,97 @@ describe('bug：交棒/空组回 null 撞官方 withdrew 断言（hidden 保底�
     expect(handoff?.visibility).toBe('hidden')
     expect(handoff?.data.entries).toHaveLength(2) // 组快照不丢
   })
-  it('空组保底（entries+progress 全空）：hidden 而非 null', () => {
-    const state = forgeEventGroupDefinition.start(undefined, { event: forgeMsg(1, 'm1', '启动', 'x') }, { previous: () => undefined })
-    expect(state.group.entries).toHaveLength(0)
-    expectHidden(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1', state, start: { location: { kind: 'unresolved' } } }))
+  it('D2：空组（entries+progress 全空）保底退役——不产 hidden 空组节点，null + 诊断留痕', () => {
+    const diag = collectDiag()
+    try {
+      const state = forgeEventGroupDefinition.start(undefined, { event: forgeMsg(1, 'm1', '启动', 'x') }, { previous: () => undefined })
+      expect(state.group.entries).toHaveLength(0)
+      expect(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1', state, start: { location: { kind: 'unresolved' } } })).toBeNull()
+      expect(diag.lines).toHaveLength(1)
+      expect(diag.lines[0]).toContain('物化缺口')
+    } finally {
+      diag.restore()
+    }
   })
-  it('bug f511c6a7：state === undefined（官方 replayContexts 淘汰 start match 置空）已物化 Context 回 hidden 保底而非 null——同 key 同 id 不触 withdrew 断言', () => {
-    const node = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1' })
-    expect(node).not.toBeNull()
-    expectHidden(node)
-    expect(node).toMatchObject({ key: 'k', id: 'm1', target: 'chat' })
-    expect((node as { data: { entries: unknown[]; progress: unknown[] } }).data.entries).toHaveLength(0)
+  it('bug f511c6a7 + D2：state === undefined（官方 replayContexts 淘汰 start match 置空）且从未物化——null 不触 withdrew 断言（断言只禁已物化回 null）+ 诊断留痕', () => {
+    const diag = collectDiag()
+    try {
+      const node = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1' })
+      expect(node).toBeNull()
+      expect(diag.lines).toHaveLength(1)
+      expect(diag.lines[0]).toContain('物化缺口')
+    } finally {
+      diag.restore()
+    }
   })
 })
 
-describe('bug 141624ed：现算源②碎片卡防护（组归属不可判定 = 让位 hidden）', () => {
+describe('bug 141624ed + D2：碎片卡防护 = 从未物化不注册（null + 诊断，不产 hidden 空组）', () => {
   /** 官方 buildNode 以单参 contextSnapshot 调 buildViewNode——座上无 reader，携带成员
-   *  是否组末不可判定；现算源②一律让位 hidden（透传面 previousStateOf 承担组数据保真）。 */
-  it('窗口裁剪（state=undefined + current 缺失，携带组内事件）：让位 hidden 空组——不产 key=自身 id 的可见碎片卡', () => {
-    const carried = forgeMsg(12, 'm9', '完成', 'c')
-    const node = forgeEventGroupDefinition.buildViewNode({
-      key: 'k',
-      id: 'm9',
-      start: { location: { kind: 'unresolved' }, event: carried },
-      matches: [{ event: carried }],
-    })
-    expectHidden(node)
-    expect((node as { data: { entries: unknown[]; progress: unknown[] } }).data.entries).toHaveLength(0)
-    expect((node as { data: { entries: unknown[]; progress: unknown[] } }).data.progress).toHaveLength(0)
+   *  是否组末不可判定；现算源②一律不注册节点（D2：从未物化态回 null——碎片卡面零产出）。 */
+  it('窗口裁剪（state=undefined + current 缺失，携带组内事件）：不注册节点——不产 key=自身 id 的可见碎片卡', () => {
+    const diag = collectDiag()
+    try {
+      const carried = forgeMsg(12, 'm9', '完成', 'c')
+      const node = forgeEventGroupDefinition.buildViewNode({
+        key: 'k',
+        id: 'm9',
+        start: { location: { kind: 'unresolved' }, event: carried },
+        matches: [{ event: carried }],
+      })
+      expect(node).toBeNull()
+      expect(diag.lines).toHaveLength(1)
+      expect(diag.lines[0]).toContain('物化缺口')
+    } finally {
+      diag.restore()
+    }
   })
-  it('初始分页（start 被裁，matches 仍携带事件）：同判 hidden（progress 组同型）', () => {
-    const carried = progressEvt(20, { taskKey: 'feat-x/1.9', status: 'running' })
-    const node = forgeEventGroupDefinition.buildViewNode({
-      key: 'k',
-      id: 'forge-event-progress-20',
-      matches: [{ event: carried }],
-    })
-    expectHidden(node)
-    expect((node as { data: { progress: unknown[] } }).data.progress).toHaveLength(0)
+  it('初始分页（start 被裁，matches 仍携带事件）：同判 null（progress 组同型）', () => {
+    const diag = collectDiag()
+    try {
+      const carried = progressEvt(20, { taskKey: 'feat-x/1.9', status: 'running' })
+      const node = forgeEventGroupDefinition.buildViewNode({
+        key: 'k',
+        id: 'forge-event-progress-20',
+        matches: [{ event: carried }],
+      })
+      expect(node).toBeNull()
+      expect(diag.lines).toHaveLength(1)
+    } finally {
+      diag.restore()
+    }
   })
-  it('progress 载荷畸形（progressEntryOf 回 undefined）：组空仍 hidden（不回 null——withdrew 红线）', () => {
+  it('progress 载荷畸形（progressEntryOf 回 undefined）：null（从未物化态可 null——不再走 hidden 空组保底）', () => {
     const malformed = { type: 'forge/progress', seq: 7, data: { sourceSlug: '', verb: 'claim' } }
     const node = forgeEventGroupDefinition.buildViewNode({
       key: 'k',
       id: 'forge-event-progress-7',
       matches: [{ event: malformed }],
     })
-    expect(node).not.toBeNull()
-    expectHidden(node)
-    expect((node as { data: { progress: unknown[] } }).data.progress).toHaveLength(0)
+    expect(node).toBeNull()
   })
-  it('非 forge source 消息（人类插话 / 注入）：组空仍 hidden（不产可见碎片卡）', () => {
-    const human = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'h9', matches: [{ event: humanMsg(9, 'h9', '继续') }] })
-    expectHidden(human)
-    expect((human as { data: { entries: unknown[] } }).data.entries).toHaveLength(0)
-    const inject = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'i9', matches: [{ event: injectMsg(10, 'i9') }] })
-    expectHidden(inject)
-    expect((inject as { data: { entries: unknown[] } }).data.entries).toHaveLength(0)
+  it('非 forge source 消息（人类插话 / 注入）：null（不产可见碎片卡）', () => {
+    expect(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'h9', matches: [{ event: humanMsg(9, 'h9', '继续') }] })).toBeNull()
+    expect(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'i9', matches: [{ event: injectMsg(10, 'i9') }] })).toBeNull()
   })
-  it('D1 单快照：context.current 恢复值只透传组数据——visible/anchorSeq 不由恢复值参与（原 visible 卡在 state 缺席帧降 hidden，改写自「visible 保 visible」用例）', () => {
-    const group = { key: 'g1', firstSeq: 2, lastSeq: 6, isLatest: false, entries: [{ id: 'm1' }, { id: 'm2' }], progress: [] }
+  it('D1 单快照 + D2 真锚：context.current 恢复值只透传组数据（hidden 交棒）——anchorSeq 从交棒数据重导出 = 组末成员真实 seq（判例 fafc1fb7 根治面，改写自「visible 保 visible」用例）', () => {
+    const group = {
+      key: 'g1',
+      firstSeq: 2,
+      lastSeq: 6,
+      isLatest: false,
+      entries: [{ id: 'm1', seq: 2 }, { id: 'm2', seq: 6 }],
+      progress: [],
+    }
     const recovered = forgeEventGroupDefinition.buildViewNode({
       key: 'k',
       id: 'm2',
       current: new Map([['chat', { visibility: 'visible', anchorSeq: 9, data: group }]]),
     })
-    // 判例 fafc1fb7 根治：决策只由当帧 fold 状态现算——恢复值不再把 hidden 帧顶回 visible
+    // D1：决策只由当帧 fold 状态现算——恢复值不再把 hidden 帧顶回 visible（state 缺席 = hidden）
     expectHidden(recovered)
-    expect((recovered as { anchorSeq: number }).anchorSeq).toBe(0) // fallbackSeq（无 start/matches 携带事件）
+    // D2 真锚：anchorSeq 从交棒数据重导出（组末成员 m2 seq=6），非恢复帧快照 9、非 fallbackSeq 0
+    expect((recovered as { anchorSeq: number }).anchorSeq).toBe(6)
     expect((recovered as { data: { entries: unknown[] } }).data.entries).toHaveLength(2) // 组数据透传保真
     const handoff = forgeEventGroupDefinition.buildViewNode({
       key: 'k',
@@ -452,11 +491,16 @@ describe('bug 141624ed：现算源②碎片卡防护（组归属不可判定 = �
       current: new Map([['chat', { visibility: 'hidden', anchorSeq: 6, data: group }]]),
     })
     expectHidden(handoff)
+    expect((handoff as { anchorSeq: number }).anchorSeq).toBe(6)
   })
-  it('零数据（无 state/start/matches/current）：hidden 空组保底不变（不回 null——withdrew 红线）', () => {
-    const node = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1' })
-    expectHidden(node)
-    expect((node as { data: { entries: unknown[]; progress: unknown[] } }).data.entries).toHaveLength(0)
+  it('零数据（无 state/start/matches/current）：null（D2 从未物化态——hidden 空组保底退役）', () => {
+    const diag = collectDiag()
+    try {
+      expect(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1' })).toBeNull()
+      expect(diag.lines).toHaveLength(1)
+    } finally {
+      diag.restore()
+    }
   })
 })
 
@@ -525,5 +569,98 @@ describe('D1+D3 形态回归：锚定/物化不随 turn 形态分叉（裁决让
       { type: 'assistant/message', seq: 14, data: { message: { content: [] } } },
     ])
     expect(nodes.get('m1')).toMatchObject({ anchorSeq: 12 })
+  })
+})
+
+describe('D2 分态交保（曾物化真数据真锚交棒 / 从未物化不注册 + 诊断 / hidden 空组不可产出）', () => {
+  /** 上次物化节点 data 构造（previousStateOf 窄读面——entries 携 seq 供真锚重导出） */
+  const materialized = {
+    key: 'm1',
+    firstSeq: 2,
+    lastSeq: 2,
+    entries: [
+      { id: 'm1', seq: 2, time: 0, badge: '启动', title: '', summary: '', text: 'a' },
+      { id: 'm2', seq: 6, time: 0, badge: '领取', title: '', summary: '', text: 'b' },
+    ],
+    progress: [{ seq: 9, sourceSlug: 'feat-x', status: 'running', verb: 'claim', at: 0 }],
+  }
+
+  it('曾物化 → hidden 交棒携带真成员序列与真锚：entries/progress 非空、anchorSeq = 组末成员真实 seq（双轨取尾 progress=9）', () => {
+    const diag = collectDiag()
+    try {
+      const node = forgeEventGroupDefinition.buildViewNode({
+        key: 'k',
+        id: 'm1',
+        current: new Map([['chat', { visibility: 'visible', anchorSeq: 6, data: materialized }]]),
+      }) as { visibility: string; anchorSeq: number; data: { entries: unknown[]; progress: unknown[]; key: string } }
+      expect(node.visibility).toBe('hidden') // state 缺席帧 hidden 交棒（不回 null——已物化）
+      expect(node.data.entries).toHaveLength(2) // 真成员序列（非空组降级禁绝）
+      expect(node.data.progress).toHaveLength(1)
+      expect(node.anchorSeq).toBe(9) // 真锚 = 组末成员真实 seq（尾 progress 9 > 尾消息 6），非恢复帧快照 6
+      expect(node.data.key).toBe('m1')
+      expect(diag.lines).toHaveLength(0) // 健康交棒零诊断
+    } finally {
+      diag.restore()
+    }
+  })
+  it('曾物化 → 纯消息组交棒真锚 = 尾消息 seq（entries 轨主导）', () => {
+    const diag = collectDiag()
+    try {
+      const node = forgeEventGroupDefinition.buildViewNode({
+        key: 'k',
+        id: 'm2',
+        current: new Map([['chat', { visibility: 'hidden', anchorSeq: 99, data: { ...materialized, progress: [] } }]]),
+      }) as { anchorSeq: number }
+      expect(node.anchorSeq).toBe(6) // 恢复帧锚 99 弃置——从数据重导出
+      expect(diag.lines).toHaveLength(0)
+    } finally {
+      diag.restore()
+    }
+  })
+  it('从未物化 → 不注册 chat target（null）+ 诊断留痕（通道经注入面 setForgeEventNodeDiag）', () => {
+    const diag = collectDiag()
+    try {
+      const node = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1', matches: [{ event: forgeMsg(1, 'm1', '启动', 'x') }] })
+      expect(node).toBeNull() // 不产发射节点
+      expect(diag.lines).toHaveLength(1) // 诊断恰一行、显式点名缺口
+      expect(diag.lines[0]).toContain('物化缺口')
+      expect(diag.lines[0]).toContain('m1')
+    } finally {
+      diag.restore()
+    }
+  })
+  it('镜像击穿 fail-visible：上次物化节点 data 形状不可读（entries 非数组）→ 诊断留痕后 null 分态', () => {
+    const diag = collectDiag()
+    try {
+      const node = forgeEventGroupDefinition.buildViewNode({
+        key: 'k',
+        id: 'm1',
+        current: new Map([['chat', { visibility: 'visible', data: { key: 'm1', entries: 'not-array' } }]]),
+      })
+      expect(node).toBeNull()
+      expect(diag.lines.some((line) => line.includes('镜像击穿'))).toBe(true)
+    } finally {
+      diag.restore()
+    }
+  })
+  it('hidden 空组不可产出（负向断言）：simulate 全形态扫描——每个非 null 节点 hidden 必携真成员序列', () => {
+    const events = [
+      forgeMsg(1, 'm1', '启动', 'a'),
+      forgeMsg(2, 'm2', '领取', 'b'),
+      humanMsg(3, 'h1', '继续'),
+      progressEvt(4, { taskKey: 'feat-x/1.2', status: 'running' }),
+      progressEvt(5, { taskKey: 'feat-x/1.2', status: 'completed', verb: 'settle' }),
+      { type: 'turn/start', seq: 6, data: { turn: 8 } },
+      { type: 'turn/end', seq: 9, data: { turn: 8, reason: { kind: 'completed' } } },
+    ]
+    const { nodes } = simulate(events)
+    expect(nodes.size).toBeGreaterThan(0)
+    for (const node of nodes.values()) {
+      expect(node).not.toBeNull()
+      const typed = node as { visibility: string; anchorSeq: number; data: { entries: unknown[]; progress: unknown[] } }
+      const members = typed.data.entries.length + typed.data.progress.length
+      expect(members).toBeGreaterThan(0) // hidden 空组形态不可产出
+      expect(typed.anchorSeq).toBeGreaterThan(0) // 真锚恒在（非 fallback 0）
+    }
   })
 })
