@@ -5,9 +5,9 @@ import type { KnowledgeService, SearchHit, SearchQuery } from '../service/types.
 import { createSearchTool, parseSearchArgs } from './search.js'
 import { createProjectResolver } from './session.js'
 
-/** 命中夹具（contracts SearchHit 全六字段——摘要先行） */
+/** 命中夹具（SearchHit 七字段——摘要先行 + 四档 rank） */
 function hit(over: Partial<SearchHit> = {}): SearchHit {
-  return { entryId: 7, frontmatterId: 'kb-001', title: '安全编码规范', summary: '输入校验基线', domainPath: '后端', score: 0.92, ...over }
+  return { entryId: 7, frontmatterId: 'kb-001', title: '安全编码规范', summary: '输入校验基线', domainPath: '后端', score: 0.92, effectiveRank: 1.0, ...over }
 }
 
 /** 服务桩：记录收到的 query，回预设 hits */
@@ -100,11 +100,11 @@ describe('output.render（摘要先行投影）', () => {
   it('命中行含域/标题/id/得分/摘要；零命中显式回落指引', () => {
     const { service } = stubService()
     const tool = createSearchTool(deps(service))
-    const blocks = tool.output.render({}, [hit(), hit({ entryId: 8, frontmatterId: null, title: '网关', domainPath: '后端/api', score: 0.5 })])
+    const blocks = tool.output.render({}, [hit(), hit({ entryId: 8, frontmatterId: null, title: '网关', domainPath: '后端/api', score: 0.5, effectiveRank: 0.6 })])
     expect(blocks).toHaveLength(1)
     const text = blocks[0]?.text ?? ''
-    expect(text).toContain('[后端] 安全编码规范 (kb-001, score 0.92) — 输入校验基线')
-    expect(text).toContain('[后端/api] 网关 (#8, score 0.50)')
+    expect(text).toContain('[后端] 安全编码规范 (kb-001, score 0.92, rank 1.0) — 输入校验基线')
+    expect(text).toContain('[后端/api] 网关 (#8, score 0.50, rank 0.6)')
     const empty = tool.output.render({}, [])
     expect(empty[0]?.text).toContain('no knowledge entries matched')
     expect(empty[0]?.text).toContain('grep')

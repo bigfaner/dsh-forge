@@ -72,12 +72,14 @@ function buildLegacyDb(
 function seedCorpus(wsDir: string, relPaths: readonly string[]): string {
   const knowledgeDir = join(wsDir, '.knowledge')
   mkdirSync(knowledgeDir, { recursive: true })
+  let seq = 1
   for (const rel of relPaths) {
     const abs = join(knowledgeDir, ...rel.split('/'))
     mkdirSync(join(abs, '..'), { recursive: true })
+    // stage② v4：id 缺席不入实体表——种子语料带确定性 id
     writeFileSync(
       abs,
-      `---\nsummary: ${rel} 摘要\nkeywords: [seed]\nupdated: "2026-01-15T00:00:00.000Z"\n---\n正文`,
+      `---\nid: kb-seed-${String(seq++).padStart(3, '0')}\nsummary: ${rel} 摘要\nkeywords: [seed]\nupdated: "2026-01-15T00:00:00.000Z"\n---\n正文`,
       'utf8',
     )
   }

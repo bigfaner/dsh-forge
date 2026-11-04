@@ -174,7 +174,7 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
     }
   })
 
-  it('inject 消费全链路（1.7 A2 后形态：knowledge 零 core 依赖）：knowledge 插件注入两官方面 → 自有 knowledge 服务 provide + 两 tool 注册 + forge:knowledge 段入真实装配', async () => {
+  it('inject 消费全链路（1.7 A2 后形态：knowledge 零 core 依赖）：knowledge 插件注入两官方面 → 自有 knowledge 服务 provide + 四 tool 注册 + forge:knowledge 段入真实装配', async () => {
     const { ctx, sys, tools } = await bootRuntime()
     try {
       ctx.reflect.provide('workspaceRegistry', registryStub())
@@ -182,7 +182,13 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
       await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
       await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [], dbFile: dbFile() })
       expect(ctx.get('knowledge'), 'knowledge 插件 provide 自有服务（去 forge 前缀）').toBeDefined()
-      expect(tools.registered.map((t) => t.name)).toEqual(['knowledge_search', 'knowledge_read_abstract'])
+      expect(tools.registered.map((t) => t.name)).toEqual([
+        'knowledge_search',
+        'knowledge_read_abstract',
+        // stage② 1.4 写门双 tool（§2.3 读 + 写）
+        'knowledge_write',
+        'knowledge_read',
+      ])
       const assembly = await sys.assemble()
       expect(assembly.sections.map((s) => s.name)).toContain('forge:knowledge')
     } finally {
@@ -206,11 +212,11 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
         'core 服务级联注销',
       ).toBe(true)
       expect(ctx.get('knowledge'), 'knowledge 独立于 core（SC-2）').toBeDefined()
-      expect(tools.registered).toHaveLength(2)
+      expect(tools.registered).toHaveLength(4)
       // knowledge 依赖面 = dsh 官方面（tools）——撤销 tools 即依赖失效自卸（官方 waking dependents 语义）
       disposeTools()
       expect(await waitFor(() => ctx.get('knowledge') === undefined), 'knowledge 服务随 fiber 卸载注销').toBe(true)
-      expect(await waitFor(() => tools.disposed.length === 2), 'tool 注册随 fiber 卸载全清').toBe(true)
+      expect(await waitFor(() => tools.disposed.length === 4), 'tool 注册随 fiber 卸载全清').toBe(true)
       expect(
         await waitFor(() => sys.assemble().then((a) => !a.sections.some((s) => s.name === 'forge:knowledge'))),
         'forge:knowledge 段随插件卸载移除',

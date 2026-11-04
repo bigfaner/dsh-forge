@@ -32,7 +32,7 @@
         },
         {
           "entryId": 4,
-          "frontmatterId": null,
+          "frontmatterId": "kb-be-002",
           "title": "网关",
           "domainPath": "后端",
           "heat": 1
@@ -83,7 +83,7 @@
       "hits": [
         {
           "entryId": 1,
-          "frontmatterId": null,
+          "frontmatterId": "kb-fe-002",
           "title": "样式令牌",
           "domainPath": "前端",
           "heat": 1

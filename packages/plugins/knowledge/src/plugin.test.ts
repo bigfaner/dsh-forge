@@ -115,16 +115,16 @@ describe('AC3 inject 面（零 core 依赖——A2 服务切换后仅 dsh 官方
   })
 })
 
-describe('AC1/AC2 装配：服务 provide + 两 tool 注册 + forge:knowledge 段注册', () => {
-  it('默认装配（自持库 dbFile）：provide knowledge 服务（八法）+ 两 tool + 段（name/order 500/文本三部分在场）', () => {
+describe('AC1/AC2 装配：服务 provide + 四 tool 注册 + forge:knowledge 段注册', () => {
+  it('默认装配（自持库 dbFile）：provide knowledge 服务（八法 + 写门三法）+ 四 tool + 段（name/order 500/文本三部分在场）', () => {
     const rt = freshRt()
     const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
     const service = rt.provided.get(KNOWLEDGE_SERVICE_NAME) as BrowseKnowledgeService
     expect(service).toBeDefined()
-    for (const method of ['rebuildIndex', 'search', 'readAbstract', 'listEntries', 'getEntryDetail', 'heatByEntry', 'sessionRecall', 'browse']) {
+    for (const method of ['rebuildIndex', 'search', 'readAbstract', 'listEntries', 'getEntryDetail', 'heatByEntry', 'sessionRecall', 'browse', 'write', 'read', 'confirm']) {
       expect(typeof (service as unknown as Record<string, unknown>)[method], `knowledge.${method}`).toBe('function')
     }
-    expect(rt.registeredTools.map((t) => t.name).sort()).toEqual(['knowledge_read_abstract', 'knowledge_search'])
+    expect(rt.registeredTools.map((t) => t.name).sort()).toEqual(['knowledge_read', 'knowledge_read_abstract', 'knowledge_search', 'knowledge_write'])
     expect(rt.sections).toHaveLength(1)
     const section = rt.sections[0]
     expect(section?.name).toBe(KNOWLEDGE_SECTION_NAME)
@@ -133,15 +133,17 @@ describe('AC1/AC2 装配：服务 provide + 两 tool 注册 + forge:knowledge �
     expect(section?.text).toContain('Project knowledge base')
     expect(section?.text).toContain('knowledge_search')
     expect(section?.text).toContain('knowledge_read_abstract')
+    expect(section?.text).toContain('knowledge_read')
+    expect(section?.text).toContain('knowledge_write')
     dispose()
   })
 
-  it('disposer 全注销（服务 provide + tool×2 + 段×1，各恰一次；自持库关闭）', () => {
+  it('disposer 全注销（服务 provide + tool×4 + 段×1，各恰一次；自持库关闭）', () => {
     const rt = freshRt()
     const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
     dispose()
     expect(rt.provided.size).toBe(0)
-    expect(rt.disposedCounts()).toEqual({ tools: 2, sections: 1, services: [KNOWLEDGE_SERVICE_NAME, 'dirKeys.knowledge'] })
+    expect(rt.disposedCounts()).toEqual({ tools: 4, sections: 1, services: [KNOWLEDGE_SERVICE_NAME, 'dirKeys.knowledge'] })
   })
 
   it('config.projects 绑定表进入解析链（装配缝消费验证——工具面 cwd→projectId）', async () => {

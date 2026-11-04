@@ -16,6 +16,18 @@ export const KNOWLEDGE_REGISTER_EVENT = 'knowledge-register'
 /** 条目清理事件域（stage② §2.7：文件亡→记录亡同步删除——unconfirmed=info / confirmed/superseded=warn） */
 export const KNOWLEDGE_PURGE_EVENT = 'knowledge-entry-purge'
 
+/** 写入拒收事件域（stage② §2.7 严契约三拒收逐例——info 级） */
+export const KNOWLEDGE_WRITE_REJECT_EVENT = 'knowledge-write-reject'
+
+/** 写入成功事件域（stage② §2.7 可观测性——info 级成功里程碑） */
+export const KNOWLEDGE_WRITE_EVENT = 'knowledge-write'
+
+/** confirm 升格事件域（stage② §2.7——info 级） */
+export const KNOWLEDGE_CONFIRM_EVENT = 'knowledge-confirm'
+
+/** supersedes 回流事件域（stage② §2.7 回流频率——info=误判回流 / warn=震荡回流） */
+export const KNOWLEDGE_BACKFLOW_EVENT = 'knowledge-backflow'
+
 /** 装配期注入的诊断发射面（host 侧 = ctx.emit(DIAG_EVENT, payload)；storage 域零 cordis 依赖） */
 export type DiagEmitter = (payload: DiagEventPayload) => void
 

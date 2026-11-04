@@ -63,7 +63,8 @@ function fakeCtx(): {
 
 function registryRowCount(dbFile: string): number {
   const db = openKnowledgeDatabase(dbFile)
-  const row = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()
+  // stage② v4：projects → knowledge_registry（ALTER RENAME——行集不变）
+  const row = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_registry`).get()
   db.close()
   return row?.n ?? 0
 }
@@ -80,7 +81,7 @@ describe('CT-isolated-profile-1（J3-1：仅 knowledge 行 → 装配面在场�
     expect(typeof dispose).toBe('function')
 
     // 面②：knowledge tool schema 在场（结构可判定——name/object 根 schema/描述/输出渲染）
-    expect(tools.map((t) => t.name).sort()).toEqual(['knowledge_read_abstract', 'knowledge_search'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['knowledge_read', 'knowledge_read_abstract', 'knowledge_search', 'knowledge_write'])
     for (const tool of tools) {
       expect(tool.parameters.type).toBe('object') // JSON Schema object 根（注册面消费形状）
       expect(tool.description.length).toBeGreaterThan(0)
@@ -169,7 +170,7 @@ describe('CT-isolated-profile-3（J3-3：对照面隔离——config 未命中�
     const dbFile = join(root, 'knowledge', 'knowledge.db')
     const { ctx, tools } = fakeCtx()
     const dispose = knowledgePlugin(ctx, { dbFile }) // 无 projects 绑定（config 未注入映射）
-    expect(tools).toHaveLength(2) // 插件本体装配在（面①②在场），仅解析面未命中
+    expect(tools).toHaveLength(4) // 插件本体装配在（面①②在场），仅解析面未命中
 
     // 未绑定会话 → 可判定缺席语义（unboundSessionError 同语义：不挂、非静默）
     const search = tools.find((t) => t.name === 'knowledge_search')!

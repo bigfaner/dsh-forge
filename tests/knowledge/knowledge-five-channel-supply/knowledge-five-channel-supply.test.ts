@@ -21,24 +21,36 @@ import { assertSameStructure, loadGoldenFixture } from '../../../e2e/support/kno
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', '..', '..', 'e2e', 'support', 'knowledge-golden', 'fixtures')
 
-/** 双项目装配（CT-five-channel-3 串库对照：A = golden 语料项目；B = 他项目独立语料） */
+/** 双项目装配（CT-five-channel-3 串库对照：A = golden 语料项目；B = 他项目独立语料——
+ *  stage② v4 全局 slug id：B 语料用独立 id，不复用 A 的 golden 条目 id） */
 function buildProject(
   home: string,
   wsName: string,
   projectId: string,
-  relPaths: readonly string[],
+  entries: readonly { relPath: string; frontmatter: string; body?: string }[],
 ): { wsDir: string; knowledgeDir: string; projectId: string } {
   const wsDir = join(home, wsName)
   const knowledgeDir = join(wsDir, 'knowledge')
   mkdirSync(knowledgeDir, { recursive: true })
-  for (const entry of GOLDEN_CORPUS) {
-    if (!relPaths.includes(entry.relPath)) continue
+  for (const entry of entries) {
     const abs = join(knowledgeDir, ...entry.relPath.split('/'))
     mkdirSync(join(abs, '..'), { recursive: true })
     writeFileSync(abs, `---\n${entry.frontmatter}\n---\n${entry.body ?? '正文'}`, 'utf8')
   }
   return { wsDir, knowledgeDir, projectId }
 }
+
+/** B 项目独立语料（id 与 golden 语料互斥——v4 全局 id 语义下的不串库对照） */
+const CORPUS_B: readonly { relPath: string; frontmatter: string }[] = [
+  {
+    relPath: '后端/API规范.md',
+    frontmatter: 'title: API 规范\nid: kb-other-api\nstatus: confirmed\nsummary: 他项目接口规范\nkeywords: [api, backend]\nupdated: "2026-03-01T00:00:00.000Z"',
+  },
+  {
+    relPath: '后端/网关.md',
+    frontmatter: 'id: kb-other-gateway\nsummary: 他项目网关路由\nkeywords: [api, backend]\nupdated: "2026-03-05T00:00:00.000Z"',
+  },
+]
 
 let home: string
 let dbFile: string
@@ -50,8 +62,8 @@ let projectIdB: string
 beforeAll(() => {
   home = mkdtempSync(join(tmpdir(), 'dsh-forge-j5ch-'))
   dbFile = join(home, 'knowledge.db')
-  const a = buildProject(home, 'ws-a', 'p-golden-a', GOLDEN_CORPUS.map((e) => e.relPath))
-  const b = buildProject(home, 'ws-b', 'p-other-b', ['后端/API规范.md', '后端/网关.md'])
+  const a = buildProject(home, 'ws-a', 'p-golden-a', GOLDEN_CORPUS)
+  const b = buildProject(home, 'ws-b', 'p-other-b', CORPUS_B)
   projectIdA = a.projectId
   projectIdB = b.projectId
   db = openKnowledgeDatabase(dbFile)
@@ -72,15 +84,15 @@ afterAll(() => {
   rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
-/** entryId 经 title 确定性解析（harness 同法——不锁自增 id 实现） */
+/** entryId 经 title 确定性解析（harness 同法——不锁 rowid 分配实现；v4 主键 = slug id，浏览面 entryId = rowid） */
 function entryIdOf(title: string): number {
   const probe = openKnowledgeDatabase(dbFile)
   const row = probe
-    .prepare(`SELECT id FROM knowledge_entries WHERE title = ? ORDER BY id LIMIT 1`)
-    .get(title) as { id: number } | undefined
+    .prepare(`SELECT rowid AS rid FROM knowledge_entries WHERE title = ? ORDER BY rid LIMIT 1`)
+    .get(title) as { rid: number } | undefined
   probe.close()
   if (row === undefined) throw new Error(`条目不在索引：${title}`)
-  return row.id
+  return row.rid
 }
 
 describe('CT-five-channel-1（J2-1：同一 fixture 五通道 golden 零变化）', () => {
@@ -119,7 +131,7 @@ describe('CT-five-channel-1（J2-1：同一 fixture 五通道 golden 零变化�
     )
     const detail = await service.getEntryDetail({ projectId: projectIdA, entryId: entryIdOf('API 规范') })
     expect([detail.title, detail.summary, detail.status, detail.authors, detail.body, detail.domainPath]).toEqual([
-      'API 规范', '接口设计规范', 'draft', '平台组', '正文-接口细则', '后端',
+      'API 规范', '接口设计规范', 'unconfirmed', '平台组', '正文-接口细则', '后端',
     ])
     const heat = await service.heatByEntry(projectIdA)
     expect(heat.size).toBeGreaterThan(0)

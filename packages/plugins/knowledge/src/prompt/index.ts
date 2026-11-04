@@ -23,9 +23,9 @@ function parameterLines(parameters: { properties: Readonly<Record<string, { type
   })
 }
 
-/** 两 tool 用法说明（名称/描述/参数全部来自定义对象机械渲染） */
+/** 四 tool 用法说明（名称/描述/参数全部来自定义对象机械渲染） */
 function renderToolUsage(tools: KnowledgeTools): string {
-  return [tools.search, tools.readAbstract]
+  return [tools.search, tools.readAbstract, tools.read, tools.write]
     .map((t) => `${t.name}: ${t.description}\n${parameterLines(t.parameters).join('\n')}`)
     .join('\n\n')
 }
@@ -49,7 +49,9 @@ export function renderKnowledgeSection(tools: KnowledgeTools): string {
     '2. Keep queries short and iterative: keyword tags narrow by exact match (all tags must hit) and text matches by substring — start with one high-signal term, then refine; a full question sentence rarely matches.',
     '3. Hits are summary-first: evaluate titles and summaries before reading further.',
     '4. Call knowledge_read_abstract with a hit\'s entry_id only when its summary is not enough; it never returns the full body.',
-    '5. These knowledge tools sit alongside grep/glob as retrieval primitives — compose them freely, and fall back to regular file retrieval when the knowledge base has no relevant hits.',
+    '5. Call knowledge_read with a hit\'s id for the full markdown document — confirmed entries (and once-confirmed superseded versions) are readable; unconfirmed drafts are denied.',
+    '6. To persist new knowledge, use knowledge_write — it enforces a mandatory self-judged necessity gate (long-term stable / non-commonsense / project value: all three or the write is skipped) and returns duplicate merge suggestions; pass version_of to version an existing entry instead of duplicating it.',
+    '7. These knowledge tools sit alongside grep/glob as retrieval primitives — compose them freely, and fall back to regular file retrieval when the knowledge base has no relevant hits.',
     '',
     'Tools:',
     renderToolUsage(tools),

@@ -22,14 +22,14 @@ export const GOLDEN_CORPUS: readonly GoldenCorpusEntry[] = [
   {
     relPath: '前端/框架选型.md',
     frontmatter: [
-      'title: 框架选型', 'id: kb-fe-001', 'status: published',
+      'title: 框架选型', 'id: kb-fe-001', 'status: confirmed',
       'summary: 前端框架选型基线', 'keywords: [react, frontend]',
       'updated: "2026-01-15T00:00:00.000Z"',
     ].join('\n'),
   },
   {
     relPath: '前端/样式令牌.md',
-    frontmatter: 'summary: 设计令牌与主题联动\nkeywords: [css, frontend]\nupdated: "2026-01-20T00:00:00.000Z"',
+    frontmatter: 'id: kb-fe-002\nsummary: 设计令牌与主题联动\nkeywords: [css, frontend]\nupdated: "2026-01-20T00:00:00.000Z"',
   },
   {
     relPath: '后端/API规范.md',
@@ -40,9 +40,9 @@ export const GOLDEN_CORPUS: readonly GoldenCorpusEntry[] = [
     ].join('\n'),
     body: '正文-接口细则',
   },
-  { relPath: '后端/网关.md', frontmatter: 'summary: API 网关路由规则\nkeywords: [api, backend]\nupdated: "2026-02-05T00:00:00.000Z"' },
-  { relPath: '编程/java/并发手册.md', frontmatter: 'summary: Java 并发实践\nkeywords: [java, concurrency]\nupdated: "2026-02-10T00:00:00.000Z"' },
-  { relPath: '指南.md', frontmatter: 'summary: 新手指引\nkeywords: [guide]\nupdated: "2026-01-01T00:00:00.000Z"' },
+  { relPath: '后端/网关.md', frontmatter: 'id: kb-be-002\nsummary: API 网关路由规则\nkeywords: [api, backend]\nupdated: "2026-02-05T00:00:00.000Z"' },
+  { relPath: '编程/java/并发手册.md', frontmatter: 'id: kb-java-001\nsummary: Java 并发实践\nkeywords: [java, concurrency]\nupdated: "2026-02-10T00:00:00.000Z"' },
+  { relPath: '指南.md', frontmatter: 'id: kb-guide-001\nsummary: 新手指引\nkeywords: [guide]\nupdated: "2026-01-01T00:00:00.000Z"' },
 ]
 
 /** 召回场景会话 id（sessionRecall/heat 典型载荷的确定性分组键） */

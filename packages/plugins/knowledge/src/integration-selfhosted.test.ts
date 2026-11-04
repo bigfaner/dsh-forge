@@ -80,8 +80,8 @@ async function mount(corpus: Record<string, string>) {
 
 describe('tool 调用链穿透插件自有服务并落 recall_logs（集成自证——零 core）', () => {
   const CORPUS = {
-    'backend/api-spec.md': '---\ntitle: API 规范\nid: kb-api\nsummary: 接口设计规范\nkeywords: [api, backend]\n---\n正文',
-    'backend/auth.md': '---\ntitle: 认证基线\nid: kb-auth\nsummary: 会话与令牌认证基线\nkeywords: [api, security]\n---\n正文',
+    'backend/api-spec.md': '---\ntitle: API 规范\nid: kb-api\nstatus: confirmed\nsummary: 接口设计规范\nkeywords: [api, backend]\n---\n正文',
+    'backend/auth.md': '---\ntitle: 认证基线\nid: kb-auth\nstatus: confirmed\nsummary: 会话与令牌认证基线\nkeywords: [api, security]\n---\n正文',
     'frontend/theme.md': '---\ntitle: 主题令牌\nsummary: 设计令牌与主题联动\nkeywords: [css, frontend]\n---\n正文',
   }
 

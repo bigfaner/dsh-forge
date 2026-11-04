@@ -6,8 +6,10 @@ import type { KnowledgeService } from '../service/types.js'
 import type { ProjectIdResolver } from './session.js'
 import { createSearchTool } from './search.js'
 import { createReadAbstractTool } from './read-abstract.js'
+import { createWriteTool } from './write.js'
+import { createReadTool } from './read.js'
 
-/** 两 tool 共享的执行期依赖（index.ts 装配注入） */
+/** 四 tool 共享的执行期依赖（index.ts 装配注入） */
 export interface KnowledgeToolDeps {
   /** knowledge 服务面（插件自有 'knowledge' 服务——自持库供数） */
   knowledge: KnowledgeService
@@ -15,14 +17,21 @@ export interface KnowledgeToolDeps {
   resolveProjectId: ProjectIdResolver
 }
 
-/** 两 tool 定义组（prompt 段渲染同源消费——单一内容源，AC5） */
+/** 四 tool 定义组（prompt 段渲染同源消费——单一内容源，AC5） */
 export interface KnowledgeTools {
   readonly search: ReturnType<typeof createSearchTool>
   readonly readAbstract: ReturnType<typeof createReadAbstractTool>
+  readonly write: ReturnType<typeof createWriteTool>
+  readonly read: ReturnType<typeof createReadTool>
 }
 
 export function createKnowledgeTools(deps: KnowledgeToolDeps): KnowledgeTools {
-  return { search: createSearchTool(deps), readAbstract: createReadAbstractTool(deps) }
+  return {
+    search: createSearchTool(deps),
+    readAbstract: createReadAbstractTool(deps),
+    write: createWriteTool(deps),
+    read: createReadTool(deps),
+  }
 }
 
 export { createProjectResolver, createWsPathResolver, sessionContextOf, unboundSessionError } from './session.js'
@@ -45,3 +54,7 @@ export { parseSearchArgs } from './search.js'
 export type { SearchToolArgs } from './search.js'
 export { parseReadAbstractArgs } from './read-abstract.js'
 export type { ReadAbstractToolArgs } from './read-abstract.js'
+export { parseWriteArgs } from './write.js'
+export type { WriteToolArgs } from './write.js'
+export { parseReadArgs } from './read.js'
+export type { ReadToolArgs } from './read.js'

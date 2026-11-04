@@ -43,10 +43,10 @@ export function parseSearchArgs(args: unknown): SearchToolArgs {
   return out
 }
 
-/** 单命中行（摘要先行：标题/域/摘要/得分/entryId——read-abstract 的钥匙） */
+/** 单命中行（摘要先行：标题/域/摘要/得分/rank/id——read-abstract/read 的钥匙） */
 function renderHit(hit: SearchHit): string {
   const id = hit.frontmatterId ?? `#${hit.entryId}`
-  return `- [${hit.domainPath}] ${hit.title} (${id}, score ${hit.score.toFixed(2)}) — ${hit.summary}`
+  return `- [${hit.domainPath}] ${hit.title} (${id}, score ${hit.score.toFixed(2)}, rank ${hit.effectiveRank.toFixed(1)}) — ${hit.summary}`
 }
 
 /** SearchHit 数组 → 模型可见文本（零命中显式声明 + 收窄查询自纠提示，供 agent 决策回落检索原语） */
@@ -72,8 +72,9 @@ const SEARCH_OUTPUT_SCHEMA = {
       summary: { type: 'string' },
       domainPath: { type: 'string' },
       score: { type: 'number' },
+      effectiveRank: { type: 'number', description: 'admission rank: 1.0 confirmed / 0.6 unconfirmed / 0.4 conflict-isolated / 0.2 superseded-redirect' },
     },
-    required: ['entryId', 'frontmatterId', 'title', 'summary', 'domainPath', 'score'],
+    required: ['entryId', 'frontmatterId', 'title', 'summary', 'domainPath', 'score', 'effectiveRank'],
   },
 } as const
 

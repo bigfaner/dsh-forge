@@ -1,14 +1,16 @@
-// knowledge 插件服务面（1.7 A2 服务切换）：core 八法随迁为插件服务面——行为等价
-//（rebuildIndex/search/readAbstract/listEntries/getEntryDetail/heatByEntry/sessionRecall/browse，
-// 供数 = 自持库 storage/）。两级解析（用户裁决 Q19）：projectId →（config 静态绑定表）
-// → wsPath →（自持注册表 canonical 键）→ 注册行（knowledge_dir）。
-// 键口径：knowledge_entries 项目键 = ws_path（注册表键同源）；knowledge_recall_logs
-// project_id 列承载 API 级 projectId 值（种子迁移行同口径——旧 core id 快照列不违）。
-// 关键异常降级：core 走 app_key_logs；本域经 storage rebuild 事件面（SC-10），检索面
-// 异常语义（EntryNotFound/IndexStale/InvalidDir 三码）逐字保留。
+// knowledge 插件服务面（stage② 1.4 v4 形收口）：读面（rebuildIndex/search/
+// readAbstract/listEntries/getEntryDetail/heatByEntry/sessionRecall/browse）按 v4 实体表
+//（entries 全局 slug id + 版本行 + FTS 权威面）供数；写门三法（write/read/confirm）
+// 经 write.ts 网关。两级解析（用户裁决 Q19）：projectId →（config 静态绑定表）→
+// wsPath →（自持注册表 canonical 键）→ 注册行（knowledge_dir）。
+// 项目域归属（v4 实体表全局无项目键——§2.9）：条目 id ∈ 其任一版本文件落在该项目
+// knowledge_dir 下的 id 集（每调用期 SQL 子查询现算——判例 d24a4464：read/search 解析
+// 须每调用期求值，禁装配期静态快照）。
+// 召回准入（§2.4 裁决 #10）：同 id 有 confirmed 版时 unconfirmed 权威投影不进召回；
+// 0.4/0.2 两档经回流（滞回限次+冷却，阈值归 config）保留轻量召回出口；readAbstract/
+// read 对 unconfirmed 拒且不露存在性。
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
 import matter from 'gray-matter'
 import type Database from 'better-sqlite3'
 import { joinDirSegment } from '@dsh-forge/path-key'
@@ -27,22 +29,35 @@ import { withImmediateTransaction } from '../storage/concurrency.js'
 import { canonicalWsPath, createKnowledgeRegistry } from '../storage/registry.js'
 import { rebuildKnowledgeIndex } from '../storage/rebuild.js'
 import { InvalidKnowledgeDirError as StorageInvalidKnowledgeDirError } from '../storage/scan.js'
-import { KNOWLEDGE_REGISTER_EVENT, emitStorageDiag, storageDiag, type DiagEmitter } from '../storage/diag.js'
+import {
+  KNOWLEDGE_BACKFLOW_EVENT,
+  KNOWLEDGE_REGISTER_EVENT,
+  emitStorageDiag,
+  storageDiag,
+  type DiagEmitter,
+} from '../storage/diag.js'
 import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
 import {
   aggregateDomainTree,
+  escapeLike,
   groupRecallRows,
   isNonEmptyString,
   normalizeUpdated,
-  parseKeywords,
   prepareHeatByEntry,
   rankEntries,
-  selectRowsByDomain,
   type RecallRow,
 } from './internal.js'
+import { createWriteGateway } from './write.js'
 import type {
+  BackflowConfig,
   BrowseKnowledgeService,
   EntryAbstract,
+  KnowledgeConfirmOutcome,
+  KnowledgeConfirmQuery,
+  KnowledgeReadOutcome,
+  KnowledgeReadQuery,
+  KnowledgeWriteOutcome,
+  KnowledgeWriteQuery,
   ReadAbstractQuery,
   SearchHit,
   SearchQuery,
@@ -56,43 +71,39 @@ export interface KnowledgeServiceDeps {
   readonly resolveWsPath: (projectId: string) => string | undefined
   /** 装配期注入诊断发射面（rebuild 事件域——SC-10；缺席走 diag.ts 兜底） */
   readonly emit?: DiagEmitter
+  /** 回流配置面（§2.4：阈值归插件 config，非代码常量——滞回限次/冷却窗/两档分阈） */
+  readonly backflow?: BackflowConfig
   /**
-   * 索引重建缝（缺省 = storage rebuildKnowledgeIndex；注入缝供测试替身——core
-   * index-service 注入缝同型先例，行为等价面测试 ERR_INDEX_STALE 降级路径）。
+   * 索引重建缝（缺省 = storage rebuildKnowledgeIndex；注入缝供测试替身）。
    */
   readonly rebuild?: (wsPath: string, opts: { emit?: DiagEmitter; silent?: boolean }) => { indexed: number; skipped: number }
 }
 
-// ── 行形状 ──
+// ── 行形状（v4：entries 权威投影 + FTS 权威面 join） ──
 
 interface EntryRow {
-  id: number
-  frontmatter_id: string | null
-  domain_path: string
+  rid: number
+  id: string
   title: string
   summary: string
   keywords: string
   status: string
+  domain_path: string
+  effective_rank: number
+  confirmed_version_id: string | null
 }
 
-/** EntryRow 的可打分形态（keywords 解码为 string[]） */
-type RankableRow = Omit<EntryRow, 'keywords'> & { entryId: number; keywords: string[] }
-
-/** 浏览面条目行（rel_path 供按需读文件；indexed_at 供 updated 回退） */
+/** 浏览面条目行 */
 interface BrowseEntryRow {
-  id: number
-  domain_path: string
+  rid: number
+  id: string
   title: string
   summary: string
   keywords: string
   status: string
-  rel_path: string
-  indexed_at: string
-}
-
-/** 详情行（较浏览行多 frontmatter_id） */
-interface DetailEntryRow extends BrowseEntryRow {
-  frontmatter_id: string | null
+  domain_path: string
+  effective_rank: number
+  confirmed_version_id: string | null
 }
 
 /** recall_logs 单行插入参数（列序） */
@@ -120,34 +131,32 @@ function searchSnapshot(q: SearchQuery): RecallQuerySnapshot {
   return snap
 }
 
-/**
- * 惰性 prepared 语句（stage② v4 过渡态）：首次访问才 prepare——旧形语句对 v4 新形表
- * 的列校验延迟到调用点，装配/服务注册面不受过渡期 schema 形态牵动；调用点 fail-loud
- * （SqliteError 裸错上抛——零静默）。
- */
-function lazyStatement<Bind extends unknown[] = unknown[], Result = unknown>(
-  db: Database.Database,
-  sql: string,
-): Database.Statement<Bind, Result> {
-  let stmt: Database.Statement<Bind, Result> | undefined
-  return new Proxy({} as Database.Statement<Bind, Result>, {
-    get(_target, prop) {
-      stmt ??= db.prepare<Bind, Result>(sql)
-      const value = Reflect.get(stmt as object, prop)
-      return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(stmt) : value
-    },
-  })
+/** FTS keywords 列解码（空格连接受控词表 → string[]——写入面单一来源保证形状可解析） */
+function splitKeywords(stored: string): string[] {
+  return stored.split(/\s+/).filter((k) => k !== '')
+}
+
+/** 回流滞回账（每对（id, 版本档）限次 + 冷却窗——服务实例内存态；级次与阈值为 config 面） */
+interface BackflowPairState {
+  count: number
+  windowStart: number
+}
+
+/** 回流滞回缺省（每对 2 次 / 24h 冷却——§2.4 裁决 9；分阈缺省 = 检索分下限） */
+const DEFAULT_BACKFLOW = {
+  maxPerPair: 2,
+  cooldownMs: 24 * 60 * 60 * 1000,
+  conflictThreshold: 1,
+  supersededThreshold: 1,
 }
 
 /**
- * 服务面工厂（八法）。projectId 未命中绑定表/注册行 fail-loud 裸错（非六码——core 先例
- * 同语义：fail-loud 原样上抛）。rebuildIndex 经 storage rebuild 单源（含埋点与事务纪律）。
+ * 服务面工厂。projectId 未命中绑定表/注册行 fail-loud 裸错（非六码——core 先例
+ * 同语义）。rebuildIndex 经 storage rebuild 单源（含埋点与事务纪律）。
  */
 export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowledgeService {
   const { db } = deps
   const emit = deps.emit
-  // stage② 起 rebuild 为整库再生（实体表全局无项目键——storage/rebuild.ts v4）；wsPath
-  // 仅保留缝签名（服务面 stage② 改写任务收口后随接口退役）。
   const rebuild = deps.rebuild ?? ((wsPath: string, opts: { emit?: DiagEmitter; silent?: boolean }) =>
     rebuildKnowledgeIndex(db, opts))
 
@@ -183,43 +192,60 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     return { wsPath: row.ws_path, knowledgeDir: row.knowledge_dir }
   }
 
-  // ── 语句（工厂内一次性 prepared） ──
-  // stage② v4 过渡态：下述旧形缓存查询（v2 knowledge_entries 项目键/rel_path 形态——v4
-  // 已由 slug id 实体表承接）改惰性 prepare——装配/服务 provide 照常加载，检索面首次
-  // 调用对旧列 fail-loud 裸错；服务面 stage② 改写任务按 §2.9 新形收口后退役。
-  const selectAll = lazyStatement<unknown[], EntryRow>(db,
-    `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status
-     FROM knowledge_entries WHERE ws_path = ? ORDER BY id`,
+  // ── 项目域归属（v4：版本文件前缀——每调用期求值；JS 侧 startsWith 双分隔符匹配，
+  //    免 LIKE ESCAPE 转义域） ──
+
+  /** knowledgeDir → 该项目域内的条目 id 集（任一版本文件落在 knowledge_dir 下） */
+  function projectEntryIds(knowledgeDir: string): Set<string> {
+    const ids = new Set<string>()
+    const dirPosix = knowledgeDir.replace(/[\\/]+$/, '')
+    for (const v of selectVersionPaths.all()) {
+      if (v.file_path.startsWith(`${dirPosix}/`) || v.file_path.startsWith(`${dirPosix}\\`)) ids.add(v.id)
+    }
+    return ids
+  }
+
+  const ENTRY_COLUMNS = `e.rowid AS rid, e.id, e.title, e.status, e.domain AS domain_path, e.effective_rank, e.confirmed_version_id, f.summary, f.keywords`
+
+  const selectAll = db.prepare<unknown[], EntryRow>(
+    `SELECT ${ENTRY_COLUMNS} FROM knowledge_entries e JOIN knowledge_fts f ON f.id = e.id`,
   )
-  const selectByDomain = lazyStatement<[string, string, string], EntryRow>(db,
-    `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status
-     FROM knowledge_entries
-     WHERE ws_path = ? AND (domain_path = ? OR domain_path LIKE ? ESCAPE '\\')
-     ORDER BY id`,
+  const selectByDomain = db.prepare<[string, string], EntryRow>(
+    `SELECT ${ENTRY_COLUMNS} FROM knowledge_entries e JOIN knowledge_fts f ON f.id = e.id
+     WHERE (e.domain = ? OR e.domain LIKE ? ESCAPE '\\')`,
   )
-  // 浏览底表（rel_path 供按需读文件；indexed_at 供 updated 回退）
-  const browseAll = lazyStatement<unknown[], BrowseEntryRow>(db,
-    `SELECT id, domain_path, title, summary, keywords, status, rel_path, indexed_at
-     FROM knowledge_entries WHERE ws_path = ? ORDER BY domain_path, id`,
+  const browseAllStmt = db.prepare<unknown[], BrowseEntryRow>(
+    `SELECT ${ENTRY_COLUMNS} FROM knowledge_entries e JOIN knowledge_fts f ON f.id = e.id ORDER BY e.domain, e.id`,
   )
-  const browseByDomain = lazyStatement<[string, string, string], BrowseEntryRow>(db,
-    `SELECT id, domain_path, title, summary, keywords, status, rel_path, indexed_at
-     FROM knowledge_entries
-     WHERE ws_path = ? AND (domain_path = ? OR domain_path LIKE ? ESCAPE '\\')
-     ORDER BY domain_path, id`,
+  const browseByDomainStmt = db.prepare<[string, string], BrowseEntryRow>(
+    `SELECT ${ENTRY_COLUMNS} FROM knowledge_entries e JOIN knowledge_fts f ON f.id = e.id
+     WHERE (e.domain = ? OR e.domain LIKE ? ESCAPE '\\') ORDER BY e.domain, e.id`,
   )
-  const selectEntry = lazyStatement<[string, number], EntryRow>(db,
-    `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status
-     FROM knowledge_entries WHERE ws_path = ? AND id = ?`,
+  const selectEntryByRowid = db.prepare<[number], BrowseEntryRow>(
+    `SELECT ${ENTRY_COLUMNS} FROM knowledge_entries e JOIN knowledge_fts f ON f.id = e.id WHERE e.rowid = ?`,
   )
-  const selectDetailEntry = lazyStatement<[string, number], DetailEntryRow>(db,
-    `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status, rel_path, indexed_at
-     FROM knowledge_entries WHERE ws_path = ? AND id = ?`,
+  /** 项目条目数（域归属 id 集大小对账 entries 行——版本在而 entries 缺 = 0 面子） */
+  const countProjectEntries = (knowledgeDir: string): number => projectEntryIds(knowledgeDir).size
+
+  /** 项目域行读取（全域/域前缀——JS 侧按 id 集过滤） */
+  function selectRows<R extends { id: string }>(
+    stmt: { all(...a: unknown[]): R[] },
+    knowledgeDir: string,
+    prefix: string | undefined,
+    ...args: unknown[]
+  ): R[] {
+    const ids = projectEntryIds(knowledgeDir)
+    const rows = args.length === 0 ? stmt.all() : (stmt as { all(...a: unknown[]): R[] }).all(...args)
+    return rows.filter((r) => ids.has(r.id))
+  }
+
+  const selectVersionPaths = db.prepare<unknown[], { id: string; file_path: string }>(
+    `SELECT id, file_path FROM knowledge_entry_versions`,
   )
-  // 索引存在性口径（core fix-31 同口径）：项目级无过滤 COUNT——域过滤零行 ≠ 索引缺失
-  const countEntries = lazyStatement<unknown[], { c: number }>(db,
-    `SELECT COUNT(*) AS c FROM knowledge_entries WHERE ws_path = ?`,
+  const selectAuthorityFile = db.prepare<[string], { version_ts: string; file_path: string }>(
+    `SELECT version_ts, file_path FROM knowledge_entry_versions WHERE id = ? ORDER BY version_ts DESC`,
   )
+
   const selectHeatByEntry = prepareHeatByEntry(db)
   const selectHeatByFrontmatterId = db.prepare<unknown[], { frontmatter_id: string; heat: number }>(
     `SELECT frontmatter_id, COUNT(*) AS heat FROM knowledge_recall_logs
@@ -233,7 +259,7 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
   )
   const selectSessionRows = db.prepare<[string, string], RecallRow>(
     `SELECT call_id, verb, entry_id, frontmatter_id, title_snap, domain_snap, query_json, hit_count, duration_ms, created_at
-     FROM knowledge_recall_logs WHERE project_id = ? AND session_id = ? ORDER BY created_at, id`,
+      FROM knowledge_recall_logs WHERE project_id = ? AND session_id = ? ORDER BY created_at, id`,
   )
 
   /** 一次调用的事务原子写入：N 命中 N 行；零命中 = 单哨兵行（entry_id NULL / hit_count 0 / 快照 NULL） */
@@ -242,7 +268,7 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     callId: string
     sessionId: string
     verb: RecallVerb
-    hits: readonly { entryId: number; frontmatterId: string | null; titleSnap: string; domainSnap: string }[]
+    hits: readonly { entryId: number | null; frontmatterId: string | null; titleSnap: string; domainSnap: string }[]
     query: RecallQuerySnapshot
     hitCount: number
     durationMs: number
@@ -269,20 +295,21 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     })
   }
 
-  /** 打分产物 → SearchHit（摘要先行六字段） */
-  function rankedToHits(ranked: readonly { entry: RankableRow; score: number }[]): SearchHit[] {
+  /** 打分产物 → SearchHit（摘要先行 + 四档 effective_rank——CT-WG-12） */
+  type HitSource = { rid: number; id: string; title: string; summary: string; domain_path: string; effective_rank: number }
+function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): SearchHit[] {
     return ranked.map(({ entry, score }) => ({
-      entryId: entry.id,
-      frontmatterId: entry.frontmatter_id,
+      entryId: entry.rid,
+      frontmatterId: entry.id,
       title: entry.title,
       summary: entry.summary,
       domainPath: entry.domain_path,
       score,
+      effectiveRank: entry.effective_rank,
     }))
   }
 
-  /** 索引缺失（项目级零行）静默重建联动（core rebuildMissingIndex 同语义）：
-   *  失败按因降级——目录不可达原样上抛 InvalidKnowledgeDirError；其余包装 IndexStaleError。 */
+  /** 索引缺失（项目级零行）静默重建联动：失败按因降级（core rebuildMissingIndex 同语义） */
   async function rebuildMissingIndex(projectId: string, wsPath: string): Promise<void> {
     try {
       runRebuild(wsPath, { emit, silent: true })
@@ -292,25 +319,25 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     }
   }
 
-  /** 卡片 updated 展示位：按需读文件 frontmatter（缺省 mtime）；不可读回退本次索引时间 */
-  function readCardUpdated(knowledgeDir: string, row: BrowseEntryRow): string {
+  /** 卡片 updated 展示位：权威版本文件 frontmatter.updated（缺省 mtime）；不可读回退当前时间 */
+  function readCardUpdated(row: BrowseEntryRow): string {
+    const versions = selectAuthorityFile.all(row.id)
+    const authority = versions.find((v) => v.version_ts === row.confirmed_version_id) ?? versions[0]
+    if (authority === undefined) return new Date().toISOString()
     try {
-      const absPath = join(knowledgeDir, ...row.rel_path.split('/'))
-      const mtimeMs = statSync(absPath).mtimeMs
-      const content = readFileSync(absPath, 'utf8')
+      const mtimeMs = statSync(authority.file_path).mtimeMs
+      const content = readFileSync(authority.file_path, 'utf8')
       return normalizeUpdated(matter(content).data.updated, mtimeMs)
     } catch {
-      return row.indexed_at // 外部删除/不可读：卡片仍在（索引直读），展示位回退最后已知索引时间
+      return new Date().toISOString()
     }
   }
 
   /** 注册表 upsert 单源（storage/registry.ts——canonical 键 + 幂等） */
   const registry = createKnowledgeRegistry(db)
 
-  /** 注册行写入（第九法——1.15 进表径）：目录缺则递归建（fix-39 建面语义随 knowledge_dir
-   *  列退役迁本域）→ upsert 注册行（幂等，projectId 落 project_id 列——fix-2 一级解析
-   *  动态化）；成败均发 knowledge-register 事件（SC-10）。
-   *  建目录失败 = 抛（host wiring 侧 fail-soft 记账，不抛断项目注册）。 */
+  /** 注册行写入（第九法）：目录缺则递归建 → upsert 注册行（幂等，projectId 落 project_id 列）；
+   *  成败均发 knowledge-register 事件（SC-10）。建目录失败 = 抛（host wiring 侧 fail-soft 记账）。 */
   async function registerProjectRow(input: { wsPath: string; knowledgeDir?: string; projectId?: string }): Promise<void> {
     const dir = input.knowledgeDir ?? joinDirSegment(input.wsPath, '.knowledge')
     try {
@@ -336,14 +363,58 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     )
   }
 
+  // ── 回流滞回（§2.4：0.4/0.2 两档轻量召回出口——每对限次 + 冷却；diag 区分震荡/误判） ──
+  const backflowCfg = { ...DEFAULT_BACKFLOW, ...deps.backflow }
+  const backflowLedger = new Map<string, BackflowPairState>()
+
+  /**
+   * 回流闸：0.4/0.2 档命中是否放行进召回。每对（id+档）窗内限 maxPerPair 次，
+   * 冷却窗内超额 → 拒并记 warn（震荡回流——supersedes 判定需人工复核提示）；
+   * 放行记 info（误判回流——回流命中即观测点）。
+   */
+  function backflowGate(id: string, rank: number, score: number): boolean {
+    const threshold = rank <= 0.2 ? backflowCfg.supersededThreshold : backflowCfg.conflictThreshold
+    if (score < threshold) return false
+    const pairKey = `${id}@${rank}`
+    const now = Date.now()
+    const state = backflowLedger.get(pairKey)
+    if (state !== undefined && now - state.windowStart < backflowCfg.cooldownMs) {
+      if (state.count >= backflowCfg.maxPerPair) {
+        emitStorageDiag(
+          emit,
+          storageDiag('warn', KNOWLEDGE_BACKFLOW_EVENT, `震荡回流拦截：${id}（rank ${rank}）冷却窗内已回流 ${state.count} 次——supersedes 判定建议人工复核`, { cwd: id }),
+        )
+        return false
+      }
+      state.count += 1
+    } else {
+      backflowLedger.set(pairKey, { count: 1, windowStart: now })
+    }
+    emitStorageDiag(
+      emit,
+      storageDiag('info', KNOWLEDGE_BACKFLOW_EVENT, `回流命中：${id}（rank ${rank}，score ${score}）——疑似 supersedes 误判回流`, { cwd: id }),
+    )
+    return true
+  }
+
+  // ── 写门三法（write.ts 网关——knowledgeDir 每调用期传入） ──
+  const gateway = createWriteGateway({ db, emit })
+
   // ── 浏览底表（browse 聚合与通道面共用同一实现——底表口径不漂移） ──
   const listEntries = async (q: ListEntriesQuery): Promise<KnowledgeCard[]> => {
     const { wsPath, knowledgeDir } = requireProject(q.projectId, 'listEntries')
 
-    let rows = selectRowsByDomain(browseAll, browseByDomain, { wsPath, domainPrefix: q.domainPrefix })
-    if (rows.length === 0 && countEntries.get(wsPath)!.c === 0) {
+    const prefix = q.domainPrefix === undefined ? undefined : q.domainPrefix.replace(/\/+$/, '')
+    let rows: BrowseEntryRow[] =
+      prefix === undefined
+        ? selectRows(browseAllStmt, knowledgeDir, prefix)
+        : selectRows(browseByDomainStmt, knowledgeDir, prefix, prefix, `${escapeLike(prefix)}/%`)
+    if (rows.length === 0 && countProjectEntries(knowledgeDir) === 0) {
       await rebuildMissingIndex(q.projectId, wsPath)
-      rows = selectRowsByDomain(browseAll, browseByDomain, { wsPath, domainPrefix: q.domainPrefix })
+      rows =
+        prefix === undefined
+          ? selectRows(browseAllStmt, knowledgeDir, prefix)
+          : selectRows(browseByDomainStmt, knowledgeDir, prefix, prefix, `${escapeLike(prefix)}/%`)
     }
 
     const keyword = q.keyword?.trim().toLowerCase() ?? ''
@@ -352,18 +423,18 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     return rows
       .filter((row) => {
         if (keyword === '') return true
-        const keywords = parseKeywords(row.keywords)
+        const keywords = splitKeywords(row.keywords)
         return keywords.some((k) => k.toLowerCase().includes(keyword))
       })
       .map((row) => ({
-        entryId: row.id,
+        entryId: row.rid,
         title: row.title,
         summary: row.summary,
-        keywords: parseKeywords(row.keywords),
+        keywords: splitKeywords(row.keywords),
         status: row.status,
         domainPath: row.domain_path,
-        updated: readCardUpdated(knowledgeDir, row),
-        heat: heatByEntry.get(row.id) ?? 0,
+        updated: readCardUpdated(row),
+        heat: heatByEntry.get(row.rid) ?? 0,
       }))
   }
 
@@ -375,17 +446,34 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
 
     async search(q: SearchQuery): Promise<SearchHit[]> {
       const startMs = Date.now()
-      const { wsPath } = requireProject(q.projectId, 'search')
+      const { wsPath, knowledgeDir } = requireProject(q.projectId, 'search')
 
-      const rows: EntryRow[] = selectRowsByDomain(selectAll, selectByDomain, { wsPath, domainPrefix: q.domainPrefix })
-      if (rows.length === 0 && countEntries.get(wsPath)!.c === 0) {
+      const prefix = q.domainPrefix === undefined ? undefined : q.domainPrefix.replace(/\/+$/, '')
+      let rows: EntryRow[] =
+        prefix === undefined
+          ? selectRows(selectAll, knowledgeDir, prefix)
+          : selectRows(selectByDomain, knowledgeDir, prefix, prefix, `${escapeLike(prefix)}/%`)
+      if (rows.length === 0 && countProjectEntries(knowledgeDir) === 0) {
         await rebuildMissingIndex(q.projectId, wsPath)
-        rows.push(...selectRowsByDomain(selectAll, selectByDomain, { wsPath, domainPrefix: q.domainPrefix }))
+        rows =
+          prefix === undefined
+            ? selectRows(selectAll, knowledgeDir, prefix)
+            : selectRows(selectByDomain, knowledgeDir, prefix, prefix, `${escapeLike(prefix)}/%`)
       }
 
-      const rankable: RankableRow[] = rows.map((r) => ({ ...r, entryId: r.id, keywords: parseKeywords(r.keywords) }))
+      const rankable = rows.map((r) => ({ rid: r.rid, id: r.id, title: r.title, summary: r.summary, domain_path: r.domain_path, status: r.status, effective_rank: r.effective_rank, confirmed_version_id: r.confirmed_version_id, keywords: splitKeywords(r.keywords), entryId: r.rid }))
       const ranked = rankEntries(rankable, q)
-      const limited = q.limit !== undefined && q.limit > 0 ? ranked.slice(0, q.limit) : ranked
+      const admitted: { entry: HitSource; score: number }[] = []
+      for (const { entry, score } of ranked) {
+        // 条件式召回排除（裁决 #10）：同 id 有 confirmed 版时 unconfirmed 权威投影不进召回
+        if (entry.status === 'unconfirmed' && entry.confirmed_version_id !== null) continue
+        // 0.4/0.2 两档 = 回流对象（滞回闸放行才进召回）
+        if (entry.effective_rank <= 0.4) {
+          if (!backflowGate(entry.id, entry.effective_rank, score)) continue
+        }
+        admitted.push({ entry, score })
+      }
+      const limited = q.limit !== undefined && q.limit > 0 ? admitted.slice(0, q.limit) : admitted
       const hits = rankedToHits(limited)
 
       writeRecallLog({
@@ -405,11 +493,14 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
 
     async readAbstract(q: ReadAbstractQuery): Promise<EntryAbstract> {
       const startMs = Date.now()
-      const { wsPath } = requireProject(q.projectId, 'readAbstract')
+      requireProject(q.projectId, 'readAbstract')
 
-      const row = selectEntry.get(wsPath, q.entryId)
+      const row = selectEntryByRowid.get(q.entryId)
       if (row === undefined) {
-        // 未命中 = ID 漂移语义（Error Handling 表 404 行）——不联动重建（AUTOINCREMENT 重建后 id 不复用）
+        throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.entryId })
+      }
+      // 准入（CT-WG-14 O2 同口径）：unconfirmed 拒摘要且不露存在性（EntryNotFound 语义面）
+      if (row.status === 'unconfirmed') {
         throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.entryId })
       }
 
@@ -418,16 +509,16 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
         callId: randomUUID(),
         sessionId: q.sessionId ?? '',
         verb: 'read-abstract',
-        hits: [{ entryId: row.id, frontmatterId: row.frontmatter_id, titleSnap: row.title, domainSnap: row.domain_path }],
+        hits: [{ entryId: row.rid, frontmatterId: row.id, titleSnap: row.title, domainSnap: row.domain_path }],
         query: { entryId: q.entryId },
         hitCount: 1,
         durationMs: Date.now() - startMs,
       })
       return {
-        entryId: row.id,
+        entryId: row.rid,
         title: row.title,
         summary: row.summary,
-        keywords: parseKeywords(row.keywords),
+        keywords: splitKeywords(row.keywords),
         status: row.status,
         domainPath: row.domain_path,
       }
@@ -436,29 +527,37 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     listEntries,
 
     async getEntryDetail(q): Promise<EntryDetail> {
-      const { wsPath, knowledgeDir } = requireProject(q.projectId, 'getEntryDetail')
+      const { knowledgeDir } = requireProject(q.projectId, 'getEntryDetail')
 
-      const row = selectDetailEntry.get(wsPath, q.entryId)
+      const row = selectEntryByRowid.get(q.entryId)
       if (row === undefined) {
         throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.entryId })
       }
+      // 项目域归属 + 权威版本文件（confirmed 指针优先，缺省最新版本）
+      const versions = selectAuthorityFile.all(row.id)
+      const authority = versions.find((v) => v.version_ts === row.confirmed_version_id) ?? versions[0]
+      if (authority === undefined) {
+        throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.entryId })
+      }
+      if (!authority.file_path.startsWith(`${knowledgeDir}/`) && !authority.file_path.startsWith(`${knowledgeDir}\\`)) {
+        throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.entryId })
+      }
 
-      const absPath = join(knowledgeDir, ...row.rel_path.split('/'))
       let parsed: { data: Record<string, unknown>; body: string }
       let mtimeMs: number
       try {
-        mtimeMs = statSync(absPath).mtimeMs
-        const { data, content } = matter(readFileSync(absPath, 'utf8'))
+        mtimeMs = statSync(authority.file_path).mtimeMs
+        const { data, content } = matter(readFileSync(authority.file_path, 'utf8'))
         parsed = { data: data as Record<string, unknown>, body: content.trim() }
       } catch (cause) {
-        throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.entryId, reason: `源文件不可读：${row.rel_path}` }, cause)
+        throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.entryId, reason: `源文件不可读：${authority.file_path}` }, cause)
       }
 
       return {
-        entryId: row.id,
+        entryId: row.rid,
         title: row.title,
         summary: row.summary,
-        keywords: parseKeywords(row.keywords),
+        keywords: splitKeywords(row.keywords),
         status: row.status,
         domainPath: row.domain_path,
         authors: isNonEmptyString(parsed.data.authors) ? parsed.data.authors : null,
@@ -490,5 +589,20 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     },
 
     registerProject: registerProjectRow,
+
+    write: async (q: KnowledgeWriteQuery): Promise<KnowledgeWriteOutcome> => {
+      const { knowledgeDir } = requireProject(q.projectId, 'write')
+      return gateway.write(q, knowledgeDir)
+    },
+
+    read: async (q: KnowledgeReadQuery): Promise<KnowledgeReadOutcome> => {
+      const { knowledgeDir } = requireProject(q.projectId, 'read')
+      return gateway.read(q, knowledgeDir)
+    },
+
+    confirm: async (q: KnowledgeConfirmQuery): Promise<KnowledgeConfirmOutcome> => {
+      requireProject(q.projectId, 'confirm')
+      return gateway.confirm(q)
+    },
   }
 }

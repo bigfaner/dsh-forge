@@ -15,6 +15,7 @@ import { createKnowledgeService } from './service/index.js'
 import { startSelfHostedStorage } from './storage/index.js'
 import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
 import { joinDirSegment } from '@dsh-forge/path-key'
+import type { BackflowConfig } from './service/types.js'
 import type { KnowledgeContextFace } from './tools/index.js'
 
 /** 插件配置（profile cordis.patch.yml 行 config；应用装配期路径经 boot overlay 注入） */
@@ -35,6 +36,11 @@ export interface KnowledgePluginConfig {
    * 轻量种子迁移（裁决 2026-11-19）：注册行唯一种子 / entries 零迁 / recall_logs best-effort。
    */
   legacyStateDb?: string
+  /**
+   * 回流配置面（stage② §2.4：阈值归插件 config，非代码常量——0.4/0.2 两档轻量索引
+   * 回流的检索分阈 + 滞回（每对限次 + 冷却窗））。
+   */
+  backflow?: BackflowConfig
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -114,11 +120,12 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
     )
     if (storage === undefined) return () => {}
 
-    // A2 服务切换：八法服务面（自持库供数 + 两级解析第一级 config 静态绑定表）
+    // A2 服务切换：八法服务面 + stage② 写门三法（自持库供数 + 两级解析第一级 config 静态绑定表）
     const service = createKnowledgeService({
       db: storage.db,
       resolveWsPath: createWsPathResolver(config.projects ?? []),
       emit: diagEmit,
+      ...(config.backflow !== undefined ? { backflow: config.backflow } : {}),
     })
     const tools = createKnowledgeTools({
       knowledge: service,
@@ -144,6 +151,8 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       declareKnowledgeRootDirKey(ctx),
       ctx.tools.register(tools.search),
       ctx.tools.register(tools.readAbstract),
+      ctx.tools.register(tools.write),
+      ctx.tools.register(tools.read),
       // 段文本 = 契约内容源渲染（工具定义 + contracts 常量），不在此复述
       ctx.systemPrompt.section({
         name: KNOWLEDGE_SECTION_NAME,
@@ -176,12 +185,21 @@ export {
   InvalidKnowledgeDirError,
 } from './service/index.js'
 export type {
+  BackflowConfig,
   BrowseKnowledgeService,
   EntryAbstract,
   IndexReport,
+  KnowledgeConfirmOutcome,
+  KnowledgeConfirmQuery,
+  KnowledgeReadOutcome,
+  KnowledgeReadQuery,
   KnowledgeRegistryWriter,
   KnowledgeService,
   KnowledgeServiceDeps,
+  KnowledgeWriteOutcome,
+  KnowledgeWriteQuery,
+  MergeSuggestion,
+  NecessityAnswers,
   ReadAbstractQuery,
   RegisterProjectWrite,
   SearchHit,

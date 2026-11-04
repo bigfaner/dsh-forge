@@ -285,9 +285,10 @@ export type ProjectWhitelistCoverage = AssertNever<Exclude<keyof ProjectService,
 
 /**
  * KnowledgeService + browse + registerProject 方法白名单（Interface 2 七法 + 聚合第八法
- * + 注册行写入第九法——1.15 进表径）。
+ * + 注册行写入第九法 + stage② 写门三法 write/read/confirm——1.4）。
  * 类型锚：@dsh-forge/knowledge BrowseKnowledgeService（1.7 服务面归属随迁——单一来源）。
- * registerProject 仅 host 注册链 wiring 消费（renderer ipc 面不注册）。
+ * registerProject 仅 host 注册链 wiring 消费（renderer ipc 面不注册）；write/read/
+ * confirm 为服务方法非 web 通道（双门分工：agent 面 = 插件 tool，宿主只 wiring）。
  */
 export const KNOWLEDGE_SERVICE_METHODS = [
   'rebuildIndex',
@@ -299,6 +300,9 @@ export const KNOWLEDGE_SERVICE_METHODS = [
   'sessionRecall',
   'browse',
   'registerProject',
+  'write',
+  'read',
+  'confirm',
 ] as const satisfies readonly (keyof BrowseKnowledgeService)[]
 
 /** 白名单覆盖完备性（= never：缺席的 BrowseKnowledgeService 方法在此编译期点名） */

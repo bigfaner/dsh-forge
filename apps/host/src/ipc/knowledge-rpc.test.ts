@@ -206,9 +206,10 @@ function realFixture(opts: { absentDir?: boolean; failRebuild?: boolean } = {}) 
     writeFileSync(join(home, 'absent'), '占位文件', 'utf8') // 路径为普通文件 → scan 前置门现行六码面
   } else {
     mkdirSync(knowledgeDir)
-    writeMd(knowledgeDir, '前端/框架选型.md', 'title: 框架选型\nsummary: 前端框架选型基线\nkeywords: [react, frontend]')
-    writeMd(knowledgeDir, '前端/样式令牌.md', 'summary: 设计令牌与主题联动\nkeywords: [css, frontend]')
-    writeMd(knowledgeDir, '后端/API规范.md', 'title: API 规范\nsummary: 接口设计规范\nkeywords: [api, backend]')
+    // stage② v4：id 缺席不入实体表——夹具全部带 id（正本 frontmatter 契约）
+    writeMd(knowledgeDir, '前端/框架选型.md', 'title: 框架选型\nid: kb-fe-framework\nsummary: 前端框架选型基线\nkeywords: [react, frontend]')
+    writeMd(knowledgeDir, '前端/样式令牌.md', 'id: kb-fe-tokens\nsummary: 设计令牌与主题联动\nkeywords: [css, frontend]')
+    writeMd(knowledgeDir, '后端/API规范.md', 'title: API 规范\nid: kb-be-api\nsummary: 接口设计规范\nkeywords: [api, backend]')
   }
   const projectId = 'p-knrpc'
   const dirUsed = opts.absentDir ? join(home, 'absent') : knowledgeDir
@@ -246,11 +247,11 @@ describe('3.5 AC1 实层：五通道真身实跑', () => {
     expect(list).toMatchObject({ ok: true })
     expect((list as { data: KnowledgeCard[] }).data.map((c) => c.title)).toEqual(['样式令牌']) // 过滤参数端到端
 
-    // entryDetail 用后端条目（实索引行 id）
-    const entries = f.db.prepare<unknown[], { id: number; title: string }>(
-      `SELECT id, title FROM knowledge_entries WHERE ws_path = ? AND title = 'API 规范'`,
-    ).all(f.wsDir)
-    const detail = await f.call(KNOWLEDGE_CHANNELS.entryDetail, { projectId: f.projectId, entryId: entries[0]!.id })
+    // entryDetail 用后端条目（实索引行 rowid——v4 entries 主键 = slug id，浏览面 entryId = rowid）
+    const entries = f.db.prepare<unknown[], { rid: number; title: string }>(
+      `SELECT rowid AS rid, title FROM knowledge_entries WHERE title = 'API 规范'`,
+    ).all()
+    const detail = await f.call(KNOWLEDGE_CHANNELS.entryDetail, { projectId: f.projectId, entryId: entries[0]!.rid })
     expect(detail).toMatchObject({ ok: true, data: { title: 'API 规范', body: '正文', domainPath: '后端' } })
 
     const heat = await f.call(KNOWLEDGE_CHANNELS.heat, { projectId: f.projectId })
