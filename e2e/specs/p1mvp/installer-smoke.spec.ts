@@ -29,11 +29,14 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
 
-// 【再禁用 2026-11-04 14:57】fix-3（2b302624）静态取证全绿但真机仍复现强杀本 GUI
-// （installer.nsh customCheckAppRunning 宏已接线 electron-builder include，14:55 e2e
-// 跑批 GUI 仍死）——修复运行实效未证实，复发 bug 167b5121 链。根因二查（fix-4）落地并
-// 经隔离环境实证前，本 spec 整套留痕 skip（用户硬禁令：GUI 运行期禁止 NSIS 静默安装）。
-test.skip(true, 'installer-smoke 再禁用：fix-3 修复真机无效（14:57 复杀 GUI），根因二查中')
+// 【再禁用 2026-11-04 14:57；fix-4 后维持】fix-3（2b302624）静态全绿但真机仍复现强杀本 GUI
+// ——fix-4 根因二查（纯静态）：14:51 产物自身已路径域（安装/卸载两上下文 PPO 展开均零按名
+// taskkill），真机杀手 = installSection uninstallOldVersion 拉起机器注册的旧版卸载器
+// （app-builder-lib installUtil.nsh ExecWait，appId 派生 HKCU 键跨版本恒定——冒烟静默安装
+// 即对真机 GUI 本尊安装目录执行旧卸载器，查杀 + 反卸真机安装）。上游行为无宏缝可接管，
+// 该径真机执行取证归 CI/停机窗口（bug 0ebcc9f8 / 167b5121 链）；本 spec 维持留痕 skip
+//（用户硬禁令：GUI 运行期禁止 NSIS 静默安装）。复位纪律已改 rmSync（fix-4）。
+test.skip(true, 'installer-smoke 维持禁用：uninstallOldVersion 拉起机器旧卸载器径未隔离（fix-4 静态裁定，执行取证归 CI/停机窗口）')
 import { closeApp, launchElectron, launchHost } from '../../support/launch.js'
 import { decodeSessionFile, findFixtureSession, sessionLogById, type SessionEvent } from '../../support/session-files.js'
 import { forgeInvoke } from '../../support/rpc.js'
@@ -111,17 +114,11 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
+  // fix-4（bug 0ebcc9f8）机器复位纪律：禁跑卸载器，rmSync 目录直收。卸载器静默执行
+  // 属按名查杀残留面——修复前构建的卸载器 un.checkAppRunning 仍按
+  // 名/其自身 INSTDIR 查杀 dsh-forge.exe；复位纪律不得依赖任何卸载器二进制。
   const installDir = installState.installDir
-  const zTmp = installState.tmp
   if (installDir === undefined) return
-  const uninstaller = existsSync(installDir)
-    ? readdirSync(installDir).find((f) => f.startsWith('Uninstall') && f.endsWith('.exe'))
-    : undefined
-  if (uninstaller !== undefined) {
-    spawnSync(join(installDir, uninstaller), ['/S'], { timeout: 120_000, env: { ...process.env, TEMP: zTmp, TMP: zTmp } })
-    const deadline = Date.now() + 240_000
-    while (existsSync(installDir) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 3_000))
-  }
   rmSync(join(installDir, '..'), { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
 })
 

@@ -621,3 +621,70 @@ describe('fix-3 bug 167b5121：customCheckAppRunning 路径域查杀（installer
     expect(psUnavailableBranch).toContain('Quit')
   })
 })
+
+// bug 0ebcc9f8（167b5121 复发链）根因二查（fix-4，纯静态）：fix-3 静态全绿但真机无效——
+// 三疑点裁定：①宏展开时序排除（builder-debug.yml 中 build/installer.nsh include 在全部
+// CHECK_APP_RUNNING 插入点之前）；②un 上下文排除（下方 PPO 产物级断言）；③根因成立：
+// 真机杀手 = app-builder-lib installUtil.nsh uninstallOldVersion 经 appId 派生 HKCU 卸载键
+// 拉起机器注册的旧版卸载器（ExecWait '"$uninstallerFileName" /S ... _?=$installationDir'，
+// installSection.nsh:52/56 插入）——旧二进制不受新宏修复约束，静默冒烟安装即对真机 GUI
+// 本尊安装目录执行旧卸载器（查杀 + 反卸真机安装）。上游 Function 无宏缝可接管；真机执行
+// 取证归 CI/停机窗口。仓内可控面 = 机器复位纪律禁跑卸载器（rmSync 直收）+ 展开产物级锚。
+describe('fix-4 bug 0ebcc9f8：展开产物级静态锚（PPO 快照）+ 复位纪律禁跑卸载器', () => {
+  // fixture = 14:51 构建最终 NSIS 脚本的 makensis -PPO 展开产物快照（un.checkAppRunning
+  // 整段，纯预处理零执行；来源与生成方式见文件头 provenance 注释）
+  const ppo = readFileSync(join(ROOT, 'tests', 'structure', 'fixtures', 'nsis-ppo-un-checkAppRunning.nsi'), 'utf8')
+
+  it('展开产物（卸载器上下文）：customCheckAppRunning 本体真实出现在编译后脚本（非源文件级）', () => {
+    expect(ppo).toContain('Function un.checkAppRunning')
+    expect(ppo).toContain('StrCpy $DshfPsPath "$SYSDIR\\WindowsPowerShell\\v1.0\\powershell.exe"')
+    expect(ppo).toContain('Call un._GetProcessInfo') // getProcessInfo BUILD_UNINSTALLER 分支
+    expect(ppo).toMatch(/Win32_Process \| \? \{\$\$_\.Path -and \$\$_\.Path\.StartsWith\('\$INSTDIR', 'CurrentCultureIgnoreCase'\)\}\)\.Count -gt 0/)
+    expect(ppo).toMatch(/Win32_Process \| \? \{\$\$_\.Path -and \$\$_\.Path\.StartsWith\('\$INSTDIR', 'CurrentCultureIgnoreCase'\)\} \| % \{ Stop-Process -Id \$\$_\.ProcessId/)
+  })
+
+  it('展开产物：PowerShell 不可用即 Quit（拒绝降级按名查杀）', () => {
+    expect(ppo).toContain('MessageBox MB_OK|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDOK')
+    expect(ppo).toMatch(/MessageBox[^\n]*\n\s*Quit/)
+  })
+
+  it('展开产物：全段零按名查杀（无 taskkill / IMAGENAME）', () => {
+    expect(ppo).not.toContain('taskkill')
+    expect(ppo).not.toContain('IMAGENAME')
+  })
+
+  it('复位纪律禁跑卸载器：两 e2e spec afterAll 无 Uninstall*.exe /S spawn（rmSync 直收）', () => {
+    for (const spec of [
+      join(ROOT, 'e2e', 'specs', 'p1mvp', 'installer-smoke.spec.ts'),
+      join(ROOT, 'e2e', 'specs', 'blitz', 'probe-installer-composer.spec.ts'),
+    ]) {
+      const source = readFileSync(spec, 'utf8')
+      const afterAll = source.slice(source.indexOf('test.afterAll'), source.indexOf('test.afterAll') + 1_200)
+      expect(afterAll, `${spec} afterAll 不得依赖卸载器二进制`).not.toMatch(/Uninstall|uninstaller/)
+      expect(afterAll, `${spec} afterAll 须 rmSync 直收`).toContain('rmSync(')
+    }
+  })
+
+  it('根因留痕：uninstallOldVersion 拉起机器旧卸载器径（上游 installUtil.nsh ExecWait）——模板源级 pin，升版漂移即显性', () => {
+    const installUtil = readFileSync(
+      join(
+        ROOT,
+        'node_modules',
+        '.pnpm',
+        [...readdirSync(join(ROOT, 'node_modules', '.pnpm'))].find((d) => d.startsWith('app-builder-lib@'))!,
+        'node_modules',
+        'app-builder-lib',
+        'templates',
+        'nsis',
+        'include',
+        'installUtil.nsh',
+      ),
+      'utf8',
+    )
+    // 上游无宏缝可接管的直接证据：uninstallOldVersion 是 Function（非 custom 宏缝），由
+    // installSection 无条件 !insertmacro 调用——app-builder-lib 升级若改此形态，本 pin 失配
+    // 提示重估（本轮裁定：26.17.0 下仓内无法静态接管该径）。
+    expect(installUtil).toContain('Function uninstallOldVersion')
+    expect(installUtil).toMatch(/ExecWait '"\$uninstallerFileName(?:Temp)?" \/S \/KEEP_APP_DATA/)
+  })
+})

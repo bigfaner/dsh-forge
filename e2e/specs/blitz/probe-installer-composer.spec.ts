@@ -58,17 +58,10 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
+  // fix-4（bug 0ebcc9f8）机器复位纪律：禁跑卸载器，rmSync 目录直收（installer-smoke 同款
+  // 裁决——卸载器静默执行属按名查杀残留面，复位纪律不得依赖任何卸载器二进制）。
   const installDir = installState.installDir
-  const zTmp = installState.tmp
   if (installDir === undefined) return
-  const uninstaller = existsSync(installDir)
-    ? readdirSync(installDir).find((f) => f.startsWith('Uninstall') && f.endsWith('.exe'))
-    : undefined
-  if (uninstaller !== undefined) {
-    spawnSync(join(installDir, uninstaller), ['/S'], { timeout: 120_000, env: { ...process.env, TEMP: zTmp, TMP: zTmp } })
-    const deadline = Date.now() + 240_000
-    while (existsSync(installDir) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 3_000))
-  }
   rmSync(join(installDir, '..'), { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
 })
 
