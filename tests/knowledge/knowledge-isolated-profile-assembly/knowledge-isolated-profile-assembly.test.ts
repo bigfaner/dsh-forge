@@ -6,13 +6,9 @@
 // 策略：vitest 装配链面——knowledgePlugin 真身 + 结构化 ctx 子面（tools/systemPrompt/
 // reflect/emit 收集器，faces.ts 官方面结构兼容）驱动装配，断言三面在场性（机械可检，
 // 不依赖模型凭据）；profile 物化机械（paths/presets/overlay）真机面 skip 留痕。
-// 契约↔实现不一致上报（禁止脚本内就地调和）：
-//   CT-isolated-profile-1 面③「自持注册表落行 + knowledge-register 事件」——实现侧无
-//   `knowledge-register` 诊断事件域（storage/diag.ts 仅 knowledge-migrate /
-//   knowledge-index-rebuild），且常规路径无注册行写入面（注册行仅经种子迁移/显式 upsert
-//   落表）。归因待裁：提案 §2.3 声明该事件域 → 倾向归因实现（fix 链补 coding）；下方
-//   以 skip 留痕，不弱化断言凑绿。
-import { mkdtempSync, rmSync } from 'node:fs'
+// 面③不一致已消解：fix-2（659ab59a）落地 registerProject 第九法 + knowledge-register
+//   事件域（storage/diag.ts）——skip 解除，落真断言（成败两径）。
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -23,6 +19,7 @@ import type {
   KnowledgePromptSection,
   KnowledgeToolDefinition,
 } from '../../../packages/plugins/knowledge/src/tools/index.js'
+import type { KnowledgeService } from '../../../packages/plugins/knowledge/src/service/types.js'
 import { openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/index.js'
 
 /** 'knowledge' 服务 provide 名（A2 去前缀键——index.ts KNOWLEDGE_SERVICE_NAME 同值，host 在场判定键） */
@@ -101,9 +98,48 @@ describe('CT-isolated-profile-1（J3-1：仅 knowledge 行 → 装配面在场�
     dispose()
   })
 
-  // 面③（注册表落行 + knowledge-register 事件）实现缺席——契约不一致上报，skip 留痕
-  it.skip('面③：自持注册表落行 + knowledge-register 事件产生——实现侧无该事件域/常规落行面（不一致已上报 fix/disc，禁止就地调和）', () => {
-    expect(true).toBe(true)
+  // 面③（注册表落行 + knowledge-register 事件）——fix-2（659ab59a）已落地第九法 +
+  // knowledge-register 事件域（storage/diag.ts），skip 解除、落真断言。
+  it('面③-成功径：registerProject 落注册行 + info 级 knowledge-register 事件产生', async () => {
+    const root = tmpRoot()
+    const dbFile = join(root, 'knowledge', 'knowledge.db')
+    const { ctx, provides, diag } = fakeCtx()
+    const dispose = knowledgePlugin(ctx, { dbFile })
+    const service = provides.get(KNOWLEDGE_SERVICE_KEY) as KnowledgeService & {
+      registerProject: (input: { wsPath: string; knowledgeDir?: string; projectId?: string }) => Promise<void>
+    }
+
+    const ws = join(root, 'ws-reg')
+    await expect(service.registerProject({ wsPath: ws, projectId: 'p-reg' })).resolves.toBeUndefined()
+    // 注册行落表（自持注册表——常规路径唯一产品写径）
+    expect(registryRowCount(dbFile)).toBe(1)
+    // info 级 knowledge-register 事件（SC-10 埋点，携 projectId）
+    const info = diag.find((d) => d.level === 'info' && d.event === 'knowledge-register')
+    expect(info).toBeDefined()
+    expect(info!.cwd).toBe(ws)
+    expect(info!.projectId).toBe('p-reg')
+    dispose()
+  })
+
+  it('面③-失败径：知识目录建失败 → 抛 + 注册行不落 + error 级 knowledge-register 事件', async () => {
+    const root = tmpRoot()
+    const dbFile = join(root, 'knowledge', 'knowledge.db')
+    const { ctx, provides, diag } = fakeCtx()
+    const dispose = knowledgePlugin(ctx, { dbFile })
+    const service = provides.get(KNOWLEDGE_SERVICE_KEY) as KnowledgeService & {
+      registerProject: (input: { wsPath: string; knowledgeDir?: string; projectId?: string }) => Promise<void>
+    }
+
+    // 父级为普通文件 → mkdir 失败：抛、零注册行、error 级事件留痕（fail-loud 不静默）
+    const parentFile = join(root, 'parent-file')
+    writeFileSync(parentFile, '占位', 'utf8')
+    const ws = join(root, 'ws-fail')
+    await expect(
+      service.registerProject({ wsPath: ws, knowledgeDir: join(parentFile, 'sub', '.knowledge') }),
+    ).rejects.toThrow()
+    expect(registryRowCount(dbFile)).toBe(0)
+    expect(diag.some((d) => d.level === 'error' && d.event === 'knowledge-register')).toBe(true)
+    dispose()
   })
 })
 
