@@ -346,8 +346,6 @@ export interface ForgeEventGroupNodeState {
   readonly isLatest: boolean
   /** 组模型快照 */
   readonly group: ForgeEventGroup
-  /** 本消息 seq（发射时点 = 组末 seq——anchorSeq 锚） */
-  readonly seq: number
   /** 组卡锚 seq = 组末成员真实 seq（每帧从组模型数据重导出——见 forgeEventGroupAnchorSeq） */
   readonly anchorSeq: number
 }
@@ -363,6 +361,8 @@ function streamStateOf(value: unknown): ForgeEventStreamState | undefined {
 /**
  * 组卡锚 seq（D3+D4 单一纯函数入口——数据即锚 + 裁决让渡）：
  * 返回组末成员（entries/progress 双轨取真实尾成员）的 seq；空组回 group.lastSeq。
+ * 合法 fold 下与 group.lastSeq 恒等——双轨取尾仅为畸形/交棒数据防御（组数据与 lastSeq
+ * 失配时不猜不抛，以真成员 seq 为准）。
  * 每帧从组模型数据重导出，不依赖任何跨帧台账。
  *
  * 契约面声明（官方口径依赖逐条标注；版本 pin：@deepseek-ai/dsh-client-ui-chat@0.2.0-rc.2，
@@ -417,13 +417,12 @@ export const forgeEventGroupDefinition = {
         : candidate.entries.some((entry) => entry.id === msgId),
     )
     if (stream === undefined || group === undefined)
-      return { emit: false, isLatest: false, group: { key: msgId, firstSeq: seq, lastSeq: seq, entries: [] }, seq, anchorSeq: seq }
+      return { emit: false, isLatest: false, group: { key: msgId, firstSeq: seq, lastSeq: seq, entries: [] }, anchorSeq: seq }
     const last = stream.groups.at(-1)
     return {
       emit: group.lastSeq === seq,
       isLatest: last !== undefined && last.key === group.key,
       group,
-      seq,
       anchorSeq: forgeEventGroupAnchorSeq(group),
     }
   },
