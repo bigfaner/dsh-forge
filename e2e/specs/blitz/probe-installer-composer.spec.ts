@@ -20,7 +20,7 @@ test.skip(true, 'probe-installer-composer 暂时禁用：NSIS 静默安装按名
 
 import { launchHost } from '../../support/launch.js'
 import { forgeInvoke } from '../../support/rpc.js'
-import { COMPOSER_INPUT, CONVERSATION_CONTENT, CONVERSATION_HEADER, MAIN_CONVERSATION, WORKBENCH } from '../../support/anchors.js'
+import { COMPOSER_INPUT, CONVERSATION_CONTENT, CONVERSATION_HEADER, HERO_WORKSPACE_CHIP_NAME, MAIN_CONVERSATION, WORKBENCH } from '../../support/anchors.js'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..', '..')
 const INSTALLER_DIR = join(ROOT, 'release', 'installer')
@@ -107,7 +107,8 @@ test('@web-e2e @probe installer composer 回显定性探针', async () => {
     await expect(page.locator(CONVERSATION_HEADER).first()).toBeAttached()
     const composer = page.locator(COMPOSER_INPUT).last()
     await expect(composer).toBeVisible({ timeout: 30_000 })
-    const chip = page.locator('button', { hasText: /^默认工作区$|^选择工作区$/ }).first()
+    // chip 锚 = HERO_WORKSPACE_CHIP_NAME 单源（可访问名形态——hasText 孪生已收口）
+    const chip = page.getByRole('button', { name: HERO_WORKSPACE_CHIP_NAME }).first()
     await expect(chip).toBeVisible({ timeout: 30_000 })
     const menu = page.locator('[role="menu"]').first()
     const wsItem = menu

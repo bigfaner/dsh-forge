@@ -43,6 +43,7 @@ import {
   CONVERSATION_HEADER,
   HERO,
   KNOWLEDGE_ENTRY,
+  HERO_WORKSPACE_CHIP_NAME,
   MAIN_CONVERSATION,
   NAV_SHELL,
   PROJECT_ROW_ANY,
@@ -278,7 +279,8 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
     // 新会话入口：composer 工作区芯片流（首装真实路径——rail 钮锚跟随回跳归单测 pin）
     const composer = page.locator(COMPOSER_INPUT).last()
     await expect(composer).toBeVisible({ timeout: 30_000 })
-    const chip = page.locator('button', { hasText: /^默认工作区$|^选择工作区$/ }).first()
+    // chip 锚 = HERO_WORKSPACE_CHIP_NAME 单源（可访问名形态——hasText 孪生已收口）
+    const chip = page.getByRole('button', { name: HERO_WORKSPACE_CHIP_NAME }).first()
     await expect(chip).toBeVisible({ timeout: 30_000 })
     // 菜单 = 开启瞬间的账本快照——注册实体经官方订阅传播有滞后，重开轮询（≤45s）
     const menu = page.locator('[role="menu"]').first()

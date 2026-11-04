@@ -20,8 +20,10 @@ import { join } from 'node:path'
 import { expect, test as base, type ElectronApplication, type Page } from '@playwright/test'
 import { bridgeDispatch, closeApp, launchHost, stablePhase, type LaunchHostOptions } from './launch.js'
 import { forgeInvoke, registerProject } from './rpc.js'
-import { COLLAPSE_RIGHTBAR_BUTTON, AP_ANY, OV_PANEL, RIGHTBAR_COLLAPSED, ovSubtabOf } from './anchors.js'
+import { COLLAPSE_RIGHTBAR_BUTTON, AP_ANY, HERO_WORKSPACE_CHIP_NAME, OV_PANEL, RIGHTBAR_COLLAPSED, ovSubtabOf } from './anchors.js'
 import { openOverviewDock } from './navigation.js'
+import { newBlankSession } from './m3.js'
+import { ensureNoBlockingDialog } from './modals.js'
 import { PROJECTS_CHANNELS } from '../../packages/contracts/src/channels.js'
 
 /** 摘除 dir 子树内全部文件、保留全部目录（目录 inode 不变——watcher 句柄存续；dir
@@ -177,6 +179,29 @@ export class SharedLaunchSession {
       }
     }
     await bridgeDispatch(page, 'show-session').catch(() => undefined)
+    // ③′ 会话态复位（bug 09f5b987 共享 launch 序态泄漏）：bridgeDispatch 只回官方会话
+    // 面板、不换会话——上用例遗留的主视图会话锚（非 blank 会话面）使 hero 工作区 chip
+    // 锚缺席（selectWorkspaceViaChip 30s 恒 miss，uf3 第二用例判例）。hero chip 在场 =
+    // 已在 fresh-launch 基准面零操作；缺席时经官方「新会话」入口重开 blank 会话归基准。
+    // settle 窗（1.8）：复位链后 UI 未渲染即判读 = 瞬态假阴性 → 多余 newBlankSession 开户
+    // （blank 会话目录污染 fixtureSessionIds birthtime 枚举与两会话锚——overview T1）。
+    // 有界等待 chip 挂载（retryTransientWindow 同语义的判读形态），窗内未现才走重开径。
+    // fail-soft（入口缺席 = 无残留可复位，零操作）。
+    const heroChip = page.getByRole('button', { name: HERO_WORKSPACE_CHIP_NAME }).first()
+    const heroChipSettled = await heroChip
+      .waitFor({ state: 'visible', timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (!heroChipSettled) {
+      // fail-soft 显式豁免注记（与 m3.ts newBlankSession「不吞失败、异常上抛」口径对齐）：
+      // m3 侧本函数两径失败均上抛（spec 侧调用方如实判红）；此处复位链吞异常是唯一豁免点
+      // ——复位链全步 fail-soft（页面瞬态不阻塞用例，见本函数头注），newBlankSession 失败
+      // = 无残留可复位或入口瞬态缺席，上抛会把夹具复位瞬态误判为产品红，故显式豁免吞掉。
+      await newBlankSession(page).catch(() => undefined)
+      // 晚到模态收口（同一泄漏族的拦截面）：上用例零凭据模型失败面可晚数十秒挂载
+      // API Key onboarding（mask 拦指针）——复位窗内点掉，防残入用例体拦截 chip 点击。
+      await ensureNoBlockingDialog(page)
+    }
     // ④ 侧栏视图态复位（序列态轮转红：视图态机 useState 挂 ForgeWorkspacePanel——共享
     //   launch 下面板跨用例存活，上用例遗留 archivedFilter=only / groupBy=flat 使下用例
     //   项目行锚失配（项目改名用例锚不外——D2 triage 判例）。经视图菜单点回缺省基准
@@ -189,20 +214,23 @@ export class SharedLaunchSession {
    * 侧栏视图态复位（④）：宽态侧栏段头视图菜单（[data-dswf-view-menu]）点回缺省两维
    * （按项目树 + 不含归档）。菜单 onSelect 即收，两维各开一轮；幂等（已选中项再点
    * zero-op）且全步 fail-soft（侧栏收起/菜单缺席 = 无遗留可复位，零操作）。
+   * 步超时 3s 有界（bug 09f5b987 定谳探针：③′ 会话态复位把主视图归 hero 面后侧栏
+   * 段头在场、菜单项失配——缺省 15s click 超时 ×2 轮烧满 30s 顶穿 beginTest 预算；
+   * fail-soft 步不配长等，失配即让步）。
    */
   private async resetSidebarView(page: Page): Promise<void> {
     for (const label of ['按项目树', '不含归档']) {
       const trigger = page.locator('[data-dswf-view-menu]').first()
       if ((await trigger.isVisible().catch(() => false)) !== true) return
-      await trigger.click().catch(() => undefined)
+      await trigger.click({ timeout: 3_000 }).catch(() => undefined)
       const menu = page.locator('[role="menu"]').first()
       if ((await menu.isVisible().catch(() => false)) !== true) return
       const item = menu
         .locator('button, [role="menuitem"], [role="menuitemradio"], [role="option"]')
         .filter({ hasText: label })
         .first()
-      await item.click().catch(() => undefined)
-      await menu.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => undefined)
+      await item.click({ timeout: 3_000 }).catch(() => undefined)
+      await menu.waitFor({ state: 'hidden', timeout: 3_000 }).catch(() => undefined)
     }
   }
 

@@ -109,6 +109,10 @@ export const CTA_ADD_PROJECT = '[data-dswf-cta="add-project"]'
 export const NAV_ADD_PROJECT = '[data-dswf-nav="add-project"]'
 /** hero 相位面板 */
 export const HERO = '[data-dswf-hero]'
+/** hero 工作区 chip 可访问名锚（role=button 的 aria-name，非 CSS 值锚——判读走
+ *  getByRole name；「默认工作区|选择工作区」二态 + 项目绑定后 aria-label 可带后缀，
+ *  故为包含匹配正则。单源：fixtures 复位判读与 rpc selectWorkspaceViaChip 同锚）。 */
+export const HERO_WORKSPACE_CHIP_NAME = /默认工作区|选择工作区/
 /** 知识浏览视图壳（含锚属性 data-dswf-kn-anchor 值断言） */
 export const KNOWLEDGE_VIEW = '[data-dswf-knowledge-view]'
 
