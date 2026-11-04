@@ -309,7 +309,7 @@ describe('T4 锚有效性预检（旁挂侧文件 IO，失效退回拒绝路径�
     const card = { ...fixedCard(), bugStatus: 'open' as const, recurrenceOf: 'root-1' }
     const t = createResolveBugTool({
       tasks: {} as ForgeToolDeps['tasks'],
-      proposals: {} as ForgeToolDeps['proosals'],
+      proposals: {} as ForgeToolDeps['proposals'],
       bugs: captureBugsFace(captured, async () => fixedCard(), card),
       projects: {
         getProject: async () => projectRow(dir),

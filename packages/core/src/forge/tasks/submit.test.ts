@@ -28,6 +28,7 @@ import {
   type TasksHarness,
 } from './harness.js'
 import { createBugsService } from '../small-domains/bugs.js'
+import type { BugRecurrenceCandidate } from '@dsh-forge/contracts'
 import { queryTask } from './query.js'
 import { submitTask } from './submit.js'
 
@@ -938,7 +939,7 @@ describe('T2 归类闸门（loop-recurrence-hardening）：blocked 归类 presen
 
   it('归类=新问题 ∧ scope 命中 recurrence 候选 → 应答携 suspected-family「疑似同族」警示（列表式八字段 + status 标注，不硬拒，status=blocked）', async () => {
     seed()
-    const candidates = [
+    const candidates: BugRecurrenceCandidate[] = [
       {
         bugId: 'b-root', summary: '写径拒写', chain: ['b-root', 'b-mid', 'b-leaf'],
         status: 'fixed', errorType: 'db-guard', containerSlug: 'f',
@@ -975,7 +976,7 @@ describe('T2 归类闸门（loop-recurrence-hardening）：blocked 归类 presen
 
   it('候选 >5 条：top-5 限幅（lastSeenAt 降序）+ 其余按 errorType 计数（控呈现不控召回）', async () => {
     seed()
-    const candidates = [8, 7, 6, 5, 4, 3, 2, 1, 0].map((i) => ({
+    const candidates: BugRecurrenceCandidate[] = [8, 7, 6, 5, 4, 3, 2, 1, 0].map((i) => ({
       bugId: `b-${i}`, summary: `候选 ${i}`, chain: ['b-root', `b-${i}`],
       status: i % 2 === 0 ? 'open' : 'fixed', errorType: i % 3 === 0 ? 'type-a' : 'type-b',
       containerSlug: 'f', suspectedLocation: `src/f${i}.ts:${i}`,
