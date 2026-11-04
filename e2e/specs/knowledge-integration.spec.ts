@@ -37,12 +37,12 @@ function makeKnowledgeFixture(): string {
   mkdirSync(join(kn, '后端'), { recursive: true })
   writeFileSync(
     join(kn, '前端', 'deploy.md'),
-    '---\ntitle: 部署规范\nsummary: 项目部署流程与上线检查单\nkeywords:\n  - 部署\n  - 上线\n---\n\n# 部署规范\n\n部署前核对回滚预案。\n',
+    '---\nid: deploy-spec\ntitle: 部署规范\nsummary: 项目部署流程与上线检查单\nkeywords:\n  - 部署\n  - 上线\n---\n\n# 部署规范\n\n部署前核对回滚预案。\n',
     'utf8',
   )
   writeFileSync(
     join(kn, '后端', 'rollback.md'),
-    '---\ntitle: 回滚手册\nsummary: 服务回滚步骤与注意事项\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
+    '---\nid: rollback-manual\ntitle: 回滚手册\nsummary: 服务回滚步骤与注意事项\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
     'utf8',
   )
   return root

@@ -44,9 +44,10 @@ beforeAll(() => {
     resolveWsPath: (id) => (id === projectId ? wsDir : undefined),
   })
   entryIdByTitle = (title: string) => {
+    // v4：entries 全局 slug id 键——entryId = rowid（readAbstract/getEntryDetail 按行键取）
     const row = db
-      .prepare(`SELECT id FROM knowledge_entries WHERE ws_path = ? AND title = ?`)
-      .get(wsDir, title) as { id: number } | undefined
+      .prepare(`SELECT rowid AS id FROM knowledge_entries WHERE title = ?`)
+      .get(title) as { id: number } | undefined
     if (row === undefined) throw new Error(`条目不在索引：${title}`)
     return row.id
   }

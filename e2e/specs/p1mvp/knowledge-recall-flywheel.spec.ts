@@ -61,19 +61,19 @@ function makeFlywheelFixture(): string {
   mkdirSync(join(kn, '后端'), { recursive: true })
   writeFileSync(
     join(kn, '前端', 'deploy.md'),
-    '---\ntitle: 部署规范\nsummary: 部署前核对回滚预案与环境变量清单\nkeywords:\n  - 部署\n  - 上线\n---\n\n# 部署规范\n\n部署前核对回滚预案，按检查单逐项执行。\n',
+    '---\nid: deploy-spec\ntitle: 部署规范\nsummary: 部署前核对回滚预案与环境变量清单\nkeywords:\n  - 部署\n  - 上线\n---\n\n# 部署规范\n\n部署前核对回滚预案，按检查单逐项执行。\n',
     'utf8',
   )
   // K2 正文数量级超长（必超 token 预算极简值——4e 摘要先行场景）
   const longBody = Array.from({ length: 400 }, (_, i) => `构建流水线第 ${String(i + 1)} 步：依赖装配与制品归档的详细说明段落。`).join('\n\n')
   writeFileSync(
     join(kn, '前端', 'build.md'),
-    `---\ntitle: 构建规范\nsummary: 构建流水线约定与制品口径\nkeywords:\n  - 构建\n  - 流水线\n---\n\n# 构建规范\n\n${longBody}\n`,
+    `---\nid: build-spec\ntitle: 构建规范\nsummary: 构建流水线约定与制品口径\nkeywords:\n  - 构建\n  - 流水线\n---\n\n# 构建规范\n\n${longBody}\n`,
     'utf8',
   )
   writeFileSync(
     join(kn, '后端', 'rollback.md'),
-    '---\ntitle: 回滚手册\nsummary: 服务回滚步骤\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
+    '---\nid: rollback-manual\ntitle: 回滚手册\nsummary: 服务回滚步骤\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
     'utf8',
   )
   return root
@@ -86,7 +86,7 @@ function makeUnrelatedFixture(): string {
   mkdirSync(join(kn, '运维'), { recursive: true })
   writeFileSync(
     join(kn, '运维', 'runbook.md'),
-    '---\ntitle: 值班手册\nsummary: 值班响应流程\nkeywords:\n  - 值班\n  - 响应\n---\n\n# 值班手册\n\n按响应等级处置。\n',
+    '---\nid: ops-runbook\ntitle: 值班手册\nsummary: 值班响应流程\nkeywords:\n  - 值班\n  - 响应\n---\n\n# 值班手册\n\n按响应等级处置。\n',
     'utf8',
   )
   return root

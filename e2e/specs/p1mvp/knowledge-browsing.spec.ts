@@ -1,6 +1,6 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
 // 【批次五裁定（e2e-fast-shared-launch）】保留原形态，不迁共享 launch fixture：知识面
-// 预置（冒烟 seedUsageEventsByWsPath / Step1c clearKnowledgeIndexByWsPath）经
+// 预置（冒烟 seedUsageEventsByTitle / Step1c clearKnowledgeIndexByWsPath）经
 // openKnowledgeDb(userData) 在 launch 前对 userData 根预置——共享 fixture userData 自管
 // 不外露（SharedLaunchHandle 无 userData 缝），无法定位/预置；且本文件全文件单 boot 纪律
 // （同 userData 复启工作台挂载竞态，文件头注）与 fixture 用例间不 closeApp 语义冲突，
@@ -35,7 +35,7 @@ import type { KnowledgeCard } from '../../../packages/contracts/src/dto/knowledg
 import { bridgeDispatch, closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { dismissOnboardingModals } from '../../support/modals.js'
 import { forgeInvoke } from '../../support/rpc.js'
-import { clearKnowledgeIndexByWsPath, openKnowledgeDb, seedUsageEventsByWsPath } from '../../support/knowledge-db.js'
+import { clearKnowledgeIndexByWsPath, openKnowledgeDb, seedUsageEventsByTitle } from '../../support/knowledge-db.js'
 import { rmDirBestEffort, rmFileBestEffort } from '../../support/cleanup.js'
 import { fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
 import {
@@ -57,22 +57,22 @@ function makeKnowledgeFixture(): string {
   mkdirSync(join(kn, '后端'), { recursive: true })
   writeFileSync(
     join(kn, '前端', 'deploy.md'),
-    '---\ntitle: 部署规范\nsummary: 部署前核对回滚预案\nkeywords:\n  - 部署\n  - 上线\nstatus: final\n---\n\n# 部署规范\n\n按检查单逐项执行。\n',
+    '---\nid: deploy-spec\ntitle: 部署规范\nsummary: 部署前核对回滚预案\nkeywords:\n  - 部署\n  - 上线\nstatus: final\n---\n\n# 部署规范\n\n按检查单逐项执行。\n',
     'utf8',
   )
   writeFileSync(
     join(kn, '前端', 'build.md'),
-    '---\ntitle: 构建规范\nsummary: 构建流水线约定\nkeywords:\n  - 构建\n---\n\n# 构建规范\n\n统一走流水线。\n',
+    '---\nid: build-spec\ntitle: 构建规范\nsummary: 构建流水线约定\nkeywords:\n  - 构建\n---\n\n# 构建规范\n\n统一走流水线。\n',
     'utf8',
   )
   writeFileSync(
     join(kn, '前端', '规范', 'React', 'hooks.md'),
-    '---\ntitle: Hooks 约定\nsummary: React Hooks 使用约定\nkeywords:\n  - hooks\n---\n\n# Hooks 约定\n\n副作用统一收口。\n',
+    '---\nid: hooks-convention\ntitle: Hooks 约定\nsummary: React Hooks 使用约定\nkeywords:\n  - hooks\n---\n\n# Hooks 约定\n\n副作用统一收口。\n',
     'utf8',
   )
   writeFileSync(
     join(kn, '后端', 'rollback.md'),
-    '---\ntitle: 回滚手册\nsummary: 服务回滚步骤\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
+    '---\nid: rollback-manual\ntitle: 回滚手册\nsummary: 服务回滚步骤\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
     'utf8',
   )
   return root
@@ -133,8 +133,7 @@ test('@web-e2e @p1mvp knowledge-browsing·冒烟：浏览→过滤→细分→�
       // 1.8 后知识面预置走插件自持库（core state.db 知识表已退役）
       const db = openKnowledgeDb(userData)
       try {
-        seedUsageEventsByWsPath(db, {
-          wsPath: realpathSync(join(fixtureRoot, 'kb-demo')),
+        seedUsageEventsByTitle(db, {
           projectId,
           entryTitle: '部署规范',
           count: 3,
@@ -253,7 +252,7 @@ test('@web-e2e @p1mvp knowledge-browsing·Step1c stale-cache-two-phase：首显�
     // 应用外修改知识目录：新增 api.md + 删除 build.md（K2）——索引相对目录过期
     writeFileSync(
       join(fixtureRoot, 'kb-demo', '.knowledge', '后端', 'api.md'),
-      '---\ntitle: API 网关规范\nsummary: 网关路由约定\nkeywords:\n  - 网关\n---\n\n# API 网关规范\n\n路由统一收口。\n',
+      '---\nid: api-gateway-spec\ntitle: API 网关规范\nsummary: 网关路由约定\nkeywords:\n  - 网关\n---\n\n# API 网关规范\n\n路由统一收口。\n',
       'utf8',
     )
     // unlinkSync（Node24 Windows：rmSync 对 CJK 父目录下单文件静默不删——实测坑）

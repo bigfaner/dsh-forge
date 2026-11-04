@@ -1,11 +1,11 @@
 // e2e 知识面自持库访问面（knowledge-stage1-foundation 1.8——core 知识域退役后 kb 预置
-// 通道）：打开 knowledge 插件自持库 + 热度事件预置/索引零行化（entries 按 ws_path 键、
-// recall_logs 携 project_id——插件 schema 口径；WAL 活写兼容 app 在场）。
-// fix-1（1.13 收口）：注册行预置 + config.projects 绑定叠层——A2 后两级解析
-// （projectId→wsPath 走 config.projects 纯静态注入（Q19），wsPath→注册行走自持注册表）
-// 对 e2e 运行期注册项目两头皆空，供数恒 fail（「项目不存在」）；预置正道 = 自持库落
-// 注册行（ws_path canonical 键——registry.ts 同口径 SQL）+ boot 外部叠层携带绑定表
-// （projectId uuid 运行期产物，静态 config 须在已知 uuid 后经第二次 boot 注入）。
+// 通道）：打开 knowledge 插件自持库 + 热度事件预置/索引零行化（recall_logs 携
+// project_id；WAL 活写兼容 app 在场）。
+// fix-1（v4 schema 对齐）：注册表 projects → knowledge_registry（含 v3 project_id 列）；
+// knowledge_entries 改全局 slug id 键（无 ws_path 列）——热度预置按 title 查 rowid
+//（recall_logs.entry_id = 新表 rowid——service.ts ENTRY_COLUMNS 同口径），索引零行化
+// 按注册行 knowledge_dir 域清 entries/versions/fts（service.projectEntryIds 同口径 JS
+// 前缀匹配——两级解析第二级仍走自持注册表 canonical 键）。
 import { realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
@@ -35,15 +35,15 @@ export function openKnowledgeDb(userData: string): SeedDb {
   return db
 }
 
-/** 预置使用事件 ×count（entries 按 canonical ws_path 查条目；条目不在索引 = fail-loud） */
-export function seedUsageEventsByWsPath(
+/** 预置使用事件 ×count（v4：条目全局 slug 键——按 title 查 rowid；热度 = recall_logs 按 project_id + entry_id 计数；条目不在索引 = fail-loud） */
+export function seedUsageEventsByTitle(
   db: SeedDb,
-  o: { readonly wsPath: string; readonly projectId: string; readonly entryTitle: string; readonly count: number; readonly domainSnap?: string },
+  o: { readonly projectId: string; readonly entryTitle: string; readonly count: number; readonly domainSnap?: string },
 ): void {
   const entry = db
-    .prepare('SELECT id FROM knowledge_entries WHERE ws_path = ? AND title = ?')
-    .get(o.wsPath, o.entryTitle) as { id: number } | undefined
-  if (entry === undefined) throw new Error(`seedUsageEventsByWsPath：条目不在索引（${o.entryTitle}）`)
+    .prepare('SELECT rowid AS id FROM knowledge_entries WHERE title = ?')
+    .get(o.entryTitle) as { id: number } | undefined
+  if (entry === undefined) throw new Error(`seedUsageEventsByTitle：条目不在索引（${o.entryTitle}）`)
   const insert = db.prepare(
     `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, title_snap, domain_snap, hit_count, created_at)
      VALUES (?, ?, 'e2e-seed-session', 'search', ?, ?, ?, 1, ?)`,
@@ -60,21 +60,39 @@ export function seedUsageEventsByWsPath(
   }
 }
 
-/** 索引零行化（kb 阶段②显式触发重建通道——fact KNOWLEDGE_INDEX_REBUILD 认可载体） */
+/**
+ * 索引零行化（v4——kb 阶段②显式触发重建通道，fact KNOWLEDGE_INDEX_REBUILD 认可载体）：
+ * 按注册行 knowledge_dir 域清该项目的 entries/versions/fts 三缓存行（rebuild 白名单同集，
+ * 业务账零波及）——countProjectEntries 归零 → listEntries 内联重建。
+ */
 export function clearKnowledgeIndexByWsPath(db: SeedDb, wsPath: string): void {
-  db.prepare('DELETE FROM knowledge_entries WHERE ws_path = ?').run(wsPath)
+  const key = realpathSync(wsPath)
+  const row = db
+    .prepare('SELECT knowledge_dir FROM knowledge_registry WHERE ws_path = ?')
+    .get(key) as { knowledge_dir: string } | undefined
+  if (row === undefined) throw new Error(`clearKnowledgeIndexByWsPath：注册行不在表（${key}）`)
+  const dir = row.knowledge_dir.replace(/[\\/]+$/, '')
+  const versions = db
+    .prepare('SELECT id, file_path FROM knowledge_entry_versions')
+    .all() as { id: string; file_path: string }[]
+  for (const v of versions) {
+    if (!v.file_path.startsWith(`${dir}/`) && !v.file_path.startsWith(`${dir}\\`)) continue
+    db.prepare('DELETE FROM knowledge_fts WHERE id = ?').run(v.id)
+    db.prepare('DELETE FROM knowledge_entry_versions WHERE id = ?').run(v.id)
+    db.prepare('DELETE FROM knowledge_entries WHERE id = ?').run(v.id)
+  }
 }
 
 /**
- * 预置自持注册行（projects 表——ws_path canonical（realpath）键 + knowledge_dir 列；
- * SQL/键口径镜像 packages/plugins/knowledge/src/storage/registry.ts upsert）。
- * 1.8 后新注册项目的注册行进表径现仅种子迁移——e2e 预置通道由此承接。
+ * 预置自持注册行（v4：knowledge_registry 表——ws_path canonical（realpath）键 + knowledge_dir
+ * + project_id 可空列；SQL/键口径镜像 packages/plugins/knowledge/src/storage/registry.ts upsert）。
+ * 运行期注册径由服务面承接——e2e 预置通道用于 boot 停机窗落行。
  */
 export function seedKnowledgeRegistryRow(db: SeedDb, wsPath: string, knowledgeDir: string): void {
   const key = realpathSync(wsPath)
   const now = new Date().toISOString()
   db.prepare(
-    `INSERT INTO projects (ws_path, knowledge_dir, created_at, updated_at) VALUES (?, ?, ?, ?)
+    `INSERT INTO knowledge_registry (ws_path, knowledge_dir, project_id, created_at, updated_at) VALUES (?, ?, NULL, ?, ?)
      ON CONFLICT(ws_path) DO UPDATE SET knowledge_dir = excluded.knowledge_dir, updated_at = excluded.updated_at`,
   ).run(key, knowledgeDir, now, now)
 }
