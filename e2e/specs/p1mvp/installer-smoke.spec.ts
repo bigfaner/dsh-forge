@@ -29,10 +29,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
 
-// 【临时禁用 2026-11-04】安装链 e2e 跑批窗口内本 GUI（安装版 dsh-forge）三次被外力强杀
-// （harness.log 11:06/11:10/11:25 无优雅关闭标记即死 + 重启进安全模式），疑本套件
-// 安装/清理面按进程名误杀同名 GUI。根因坐实前整套留痕 skip（用户裁决：先禁用再深查）。
-test.skip(true, 'installer-smoke 暂时禁用：安装链 e2e 疑似按进程名误杀安装版 GUI（排查中，bug 待立案）')
+// 【解禁 2026-11-04】bug 167b5121 已根治（installer.nsh customCheckAppRunning 宏接管，
+// 进程查杀改 $INSTDIR 路径域，按名全机 taskkill 分支缺席）。本机不执行本 spec（真机
+// 执行取证归 1.14 / CI 停机窗口，用户硬禁令：GUI 运行期间禁止 NSIS 静默安装）。
 import { closeApp, launchElectron, launchHost } from '../../support/launch.js'
 import { decodeSessionFile, findFixtureSession, sessionLogById, type SessionEvent } from '../../support/session-files.js'
 import { forgeInvoke } from '../../support/rpc.js'

@@ -10,9 +10,9 @@ import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import { closeApp, launchElectron } from '../support/launch.js'
 
-// 【临时禁用 2026-11-04】packaged 形态直启安装版 dsh-forge.exe，与 installer-smoke 同属
-// 疑似误杀窗口（GUI 于 11:25:30 被外力强杀、重启进安全模式）。根因坐实前整套留痕 skip。
-test.skip(true, 'host-boot 暂时禁用：packaged 直启链疑似按进程名误杀安装版 GUI（排查中，bug 待立案）')
+// 【解禁 2026-11-04】bug 167b5121 已根治（installer.nsh customCheckAppRunning 宏接管，
+// 进程查杀改 $INSTDIR 路径域，按名全机 taskkill 分支缺席）。本机不执行本 spec（真机
+// 执行取证归 1.14 / CI 停机窗口，用户硬禁令：GUI 运行期间禁止 NSIS 静默安装）。
 
 const PROFILE_FILES = ['cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml', 'cordis.yml'] as const
 

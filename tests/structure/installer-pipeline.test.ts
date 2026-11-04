@@ -594,3 +594,30 @@ describe('STAGING_EXTRAS 白名单自动比对守卫（stagingExtrasDrift——s
     expect(failBranch).toContain('process.exit(check.status ?? 1)')
   })
 })
+
+// bug 167b5121：NSIS 安装器进程查杀改路径域——installer.nsh 接管 customCheckAppRunning 宏
+//（app-builder-lib 模板 CHECK_APP_RUNNING 的 !ifmacrodef 分支），按名全机 taskkill 分支
+// 因宏被接管而缺席。真机执行取证受硬禁令约束（GUI 运行期禁 NSIS 静默安装），此 pin 为
+// 静态源码锚。
+describe('fix-3 bug 167b5121：customCheckAppRunning 路径域查杀（installer.nsh 静态锚）', () => {
+  const nsh = readFileSync(join(ROOT, 'build', 'installer.nsh'), 'utf8')
+
+  it('customCheckAppRunning 宏在场 + 查/杀均按 $INSTDIR 路径前缀（Win32_Process Path.StartsWith）', () => {
+    expect(nsh).toContain('!macro customCheckAppRunning')
+    expect(nsh).toMatch(/Get-CimInstance -ClassName Win32_Process \| \? \{\$\$_\.Path -and \$\$_\.Path\.StartsWith\('\$INSTDIR', 'CurrentCultureIgnoreCase'\)\}\)\.Count -gt 0/)
+    expect(nsh).toMatch(/Get-CimInstance -ClassName Win32_Process \| \? \{\$\$_\.Path -and \$\$_\.Path\.StartsWith\('\$INSTDIR', 'CurrentCultureIgnoreCase'\)\} \| % \{ Stop-Process -Id \$\$_\.ProcessId/)
+  })
+
+  it('按名查杀分支缺席：无 taskkill /IM、无 IMAGENAME tasklist 匹配（注释提及不算执行面）', () => {
+    const code = nsh.replace(/#.*$/gm, '')
+    expect(code).not.toContain('taskkill')
+    expect(code).not.toContain('IMAGENAME')
+  })
+
+  it('PowerShell 不可用即拒绝安装（Quit），不降级按名查杀；getProcessInfo 自备（模板守卫不代劳）', () => {
+    expect(nsh).toContain('!include "getProcessInfo.nsh"')
+    const macroStart = nsh.indexOf('!macro customCheckAppRunning')
+    const psUnavailableBranch = nsh.slice(nsh.lastIndexOf('!macro', macroStart), nsh.indexOf('!macroend', macroStart))
+    expect(psUnavailableBranch).toContain('Quit')
+  })
+})
