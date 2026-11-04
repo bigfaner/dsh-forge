@@ -10,6 +10,10 @@ import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import { closeApp, launchElectron } from '../support/launch.js'
 
+// 【临时禁用 2026-11-04】packaged 形态直启安装版 dsh-forge.exe，与 installer-smoke 同属
+// 疑似误杀窗口（GUI 于 11:25:30 被外力强杀、重启进安全模式）。根因坐实前整套留痕 skip。
+test.skip(true, 'host-boot 暂时禁用：packaged 直启链疑似按进程名误杀安装版 GUI（排查中，bug 待立案）')
+
 const PROFILE_FILES = ['cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml', 'cordis.yml'] as const
 
 test('AC5+AC3 dev 形态：runProfile 拉起 dsh 插件面，renderer 收到 boot manifest', async () => {
