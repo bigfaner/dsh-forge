@@ -20,7 +20,7 @@ import { join } from 'node:path'
 import { expect, test as base, type ElectronApplication, type Page } from '@playwright/test'
 import { bridgeDispatch, closeApp, launchHost, stablePhase, type LaunchHostOptions } from './launch.js'
 import { forgeInvoke, registerProject } from './rpc.js'
-import { COLLAPSE_RIGHTBAR_BUTTON, AP_ANY, OV_PANEL, RIGHTBAR_COLLAPSED, ovSubtabOf } from './anchors.js'
+import { COLLAPSE_RIGHTBAR_BUTTON, AP_ANY, HERO_WORKSPACE_CHIP_NAME, OV_PANEL, RIGHTBAR_COLLAPSED, ovSubtabOf } from './anchors.js'
 import { openOverviewDock } from './navigation.js'
 import { newBlankSession } from './m3.js'
 import { ensureNoBlockingDialog } from './modals.js'
@@ -183,9 +183,16 @@ export class SharedLaunchSession {
     // 面板、不换会话——上用例遗留的主视图会话锚（非 blank 会话面）使 hero 工作区 chip
     // 锚缺席（selectWorkspaceViaChip 30s 恒 miss，uf3 第二用例判例）。hero chip 在场 =
     // 已在 fresh-launch 基准面零操作；缺席时经官方「新会话」入口重开 blank 会话归基准。
+    // settle 窗（1.8）：复位链后 UI 未渲染即判读 = 瞬态假阴性 → 多余 newBlankSession 开户
+    // （blank 会话目录污染 fixtureSessionIds birthtime 枚举与两会话锚——overview T1）。
+    // 有界等待 chip 挂载（retryTransientWindow 同语义的判读形态），窗内未现才走重开径。
     // fail-soft（入口缺席 = 无残留可复位，零操作）。
-    const heroChip = page.getByRole('button', { name: /默认工作区|选择工作区/ }).first()
-    if ((await heroChip.isVisible().catch(() => false)) !== true) {
+    const heroChip = page.getByRole('button', { name: HERO_WORKSPACE_CHIP_NAME }).first()
+    const heroChipSettled = await heroChip
+      .waitFor({ state: 'visible', timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (!heroChipSettled) {
       await newBlankSession(page).catch(() => undefined)
       // 晚到模态收口（同一泄漏族的拦截面）：上用例零凭据模型失败面可晚数十秒挂载
       // API Key onboarding（mask 拦指针）——复位窗内点掉，防残入用例体拦截 chip 点击。

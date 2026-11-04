@@ -5,7 +5,7 @@
 import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
 import type { ProjectSummary, RegisterResult } from '../../packages/contracts/src/dto/project.js'
-import { COMPOSER_INPUT, TAB_ITEM, workbenchOfView } from './anchors.js'
+import { COMPOSER_INPUT, HERO_WORKSPACE_CHIP_NAME, TAB_ITEM, workbenchOfView } from './anchors.js'
 import { ensureNoBlockingDialog } from './modals.js'
 
 /** renderer forge RPC 面（preload dshForge.invoke——信封 {ok,data} 由本面解包） */
@@ -62,6 +62,11 @@ export async function registerProject(page: Page, dir: string, name: string): Pr
 /**
  * composer 工作区芯片流（选定工作区 = 官方会话面新会话入口——installer/flywheel/krf/sw 同径）。
  * 菜单 = 开启瞬间的账本快照（注册实体传播滞后 → 需要时调用侧重开轮询）。
+ *
+ * 契约（1.8 显式化）：前置模态收口（ensureNoBlockingDialog）是本函数契约的一部分，非
+ * 可选加固——共享 launch 零凭据形态下 API Key onboarding 可晚数十秒挂载、mask 恒拦
+ * chip 点击（bug 09f5b987 族）。移除前置收口 = 破坏本函数在本 e2e 环境下的可用性。
+ * hero chip 锚 = anchors.ts HERO_WORKSPACE_CHIP_NAME 单源（fixtures 复位判读同锚）。
  */
 export async function selectWorkspaceViaChip(page: Page, workspaceName: string): Promise<void> {
   const composer = page.locator(COMPOSER_INPUT).last()
@@ -73,7 +78,7 @@ export async function selectWorkspaceViaChip(page: Page, workspaceName: string):
   // Root cause: 项目绑定后芯片 innerText 是项目名、「选择工作区/默认工作区」在 aria-label
   // 可访问名（error-context.md:51 证 button "选择工作区": telem-obs-ws）——hasText 不匹配
   // aria-label，须走 getByRole name（可访问名，非 ^…$ 精确锚，带后缀仍命中）。
-  const chip = page.getByRole('button', { name: /默认工作区|选择工作区/ }).first()
+  const chip = page.getByRole('button', { name: HERO_WORKSPACE_CHIP_NAME }).first()
   await expect(chip).toBeVisible({ timeout: 30_000 })
   await chip.click()
   // Root cause（bug 5ea038be）: 开请求可被瞬时吞没（owner pickerOpen 翻转后 Menu 外点/

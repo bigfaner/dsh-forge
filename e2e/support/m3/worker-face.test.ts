@@ -15,22 +15,22 @@ const GLOBAL_DENY = ['ask_user_question', 'subagent_fork', 'list_agents', 'send_
 const FORGE_DENY = ['addTask', 'queryTask', 'createProposal', 'transitionProposal', 'transitionFeature', 'dispatchTask', 'stopTaskLoop', 'updateTask', 'taskStats', 'listTasks', 'listBugs', 'aggregateBugs', 'recordImplCheckpoint', 'queryImplCheckpoint', 'listImplCheckpoints', 'pauseTask', 'unblockTask', 'validateMermaid']
 
 describe('M3 5.2 SC2 worker toolFilter（deriveWorkerToolFilter 实函数——族收窄 deny 集）', () => {
-  it('coding：基座 28 + web 二名（30 deny——web 族收窄）', () => {
+  it('coding：基座 deny 集 + web 二名（web 族收窄）', () => {
     const { deny } = deriveWorkerToolFilter('coding-feature')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'web_fetch', 'web_search'].sort())
   })
 
-  it('doc：+job 三名 + read_image + web 二名（34 deny）', () => {
+  it('doc：+job 三名 + read_image + web 二名', () => {
     const { deny } = deriveWorkerToolFilter('doc')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'job_list', 'job_output', 'job_kill', 'read_image', 'web_fetch', 'web_search'].sort())
   })
 
-  it('gate：+read_image + web 二名（31 deny）', () => {
+  it('gate：+read_image + web 二名', () => {
     const { deny } = deriveWorkerToolFilter('gate')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'read_image', 'web_fetch', 'web_search'].sort())
   })
 
-  it('validation：恰基座 28（零族收窄）', () => {
+  it('validation：恰基座 deny 集（零族收窄）', () => {
     const { deny } = deriveWorkerToolFilter('validation-code')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY].sort())
     const evalDeny = deriveWorkerToolFilter('eval-contract').deny
