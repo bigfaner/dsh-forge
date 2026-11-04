@@ -48,6 +48,7 @@ import {
   type RecallRow,
 } from './internal.js'
 import { createWriteGateway } from './write.js'
+import { createScanRegister } from './scan-register.js'
 import type {
   BackflowConfig,
   BrowseKnowledgeService,
@@ -400,6 +401,9 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
   // ── 写门三法（write.ts 网关——knowledgeDir 每调用期传入） ──
   const gateway = createWriteGateway({ db, emit })
 
+  // ── 存量收编面（scan-register.ts——scan 只读体检 + register 幂等注册） ──
+  const scanRegister = createScanRegister({ db, emit })
+
   // ── 浏览底表（browse 聚合与通道面共用同一实现——底表口径不漂移） ──
   const listEntries = async (q: ListEntriesQuery): Promise<KnowledgeCard[]> => {
     const { wsPath, knowledgeDir } = requireProject(q.projectId, 'listEntries')
@@ -604,5 +608,12 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       requireProject(q.projectId, 'confirm')
       return gateway.confirm(q)
     },
+
+    scanKnowledge: async (q: { projectId: string }) => {
+      const { knowledgeDir } = requireProject(q.projectId, 'scanKnowledge')
+      return scanRegister.scanKnowledge(knowledgeDir)
+    },
+
+    registerKnowledge: (q) => scanRegister.registerKnowledge(q),
   }
 }

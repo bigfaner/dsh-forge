@@ -147,9 +147,18 @@ export function rebuildKnowledgeIndex(db: Database.Database, opts: RebuildOption
             continue
           }
           const { frontmatter: fm, meta } = outcome.entry
+          // 双轨归并降指向（1.6）：canonical 在场 = docs 正本承载权威，本条目出索引
+          if (meta.canonical !== undefined && meta.canonical !== '') {
+            skipped += 1
+            continue
+          }
           const id = meta.id
           if (id === undefined || id.trim() === '') {
             skipped += 1 // id 缺席：不入实体表（存量收编任务补发 id）
+            continue
+          }
+          if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(id)) {
+            skipped += 1 // id 字符集非法（英文+数字+连字符——§2.2）：不入实体表
             continue
           }
           const versionTs =

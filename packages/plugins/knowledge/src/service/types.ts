@@ -91,6 +91,11 @@ export interface KnowledgeService {
   read(q: KnowledgeReadQuery): Promise<KnowledgeReadOutcome>
   /** confirm 升格（服务方法非 tool）：CAS 前置（未归并）+ 事务内旧版降 superseded + 指针前移 */
   confirm(q: KnowledgeConfirmQuery): Promise<KnowledgeConfirmOutcome>
+  // ── stage② 1.6 存量收编（§2.5——服务方法非 tool） ──
+  /** scan 只读体检：违规 + 重复清单逐文件指名（零写入） */
+  scanKnowledge(q: { projectId: string }): Promise<KnowledgeScanReport>
+  /** register 幂等注册：realpath canonical / deny 系统目录 / reparse 拒收 + 入库默认 unconfirmed */
+  registerKnowledge(q: RegisterKnowledgeQuery): Promise<RegisterKnowledgeOutcome>
 }
 
 /** Interface 2 + 第八法聚合面：KnowledgeService 七法 + browse 域树聚合（forge:knowledge/browse 通道 handler 本体）+ 注册行写入（第九法） */
@@ -241,3 +246,55 @@ export interface BackflowConfig {
   /** 回流冷却窗毫秒（默认 24h） */
   readonly cooldownMs?: number
 }
+
+// ── stage② 1.6 存量收编：scan 体检 + register 注册（§2.5/§2.6——服务方法非 tool） ──
+
+/** scan 体检违规项（逐文件指名——违规清单每文件一行，reasons 累积） */
+export interface ScanViolation {
+  /** 相对知识目录的规范化路径 */
+  readonly relPath: string
+  /** 违规原因（frontmatter/summary/keywords/domain-depth/id-missing/id-invalid） */
+  readonly reasons: readonly string[]
+}
+
+/** 重复清单组（title_norm 归一重复 / 全文 content_hash 重复——逐文件指名） */
+export interface ScanDuplicateGroup {
+  readonly basis: 'title' | 'content'
+  readonly relPaths: readonly string[]
+}
+
+/** scan 只读体检报告（零写入——不建目录不落行） */
+export interface KnowledgeScanReport {
+  readonly knowledgeDir: string
+  readonly fileCount: number
+  readonly violations: readonly ScanViolation[]
+  readonly duplicates: readonly ScanDuplicateGroup[]
+}
+
+/** register 入参（wsPath canonical 化 + 系统目录拒绝 + reparse 拒收——幂等） */
+export interface RegisterKnowledgeQuery {
+  /** 工作区路径（realpath canonical 化后作注册行键） */
+  readonly wsPath: string
+  /** 知识目录（缺省 = `<wsPath>/.knowledge`） */
+  readonly knowledgeDir?: string
+  /** API 级 projectId（一级解析回查列） */
+  readonly projectId?: string
+}
+
+/** register 回执联合：registered（幂等重入同值）/ rejected（三类拒绝） */
+export type RegisterKnowledgeOutcome =
+  | {
+      readonly outcome: 'registered'
+      readonly wsPath: string
+      readonly knowledgeDir: string
+      /** 入库条目数（rebuild 后；默认 unconfirmed） */
+      readonly indexed: number
+      /** 不入索引文件数（违规/出索引） */
+      readonly skipped: number
+    }
+  | {
+      readonly outcome: 'rejected'
+      /** system-dir（系统目录拒收）/ reparse-point（符号链接/junction 拒收）/ unreachable（不可达且不可建） */
+      readonly reason: 'system-dir' | 'reparse-point' | 'unreachable'
+      readonly detail: string
+    }

@@ -80,39 +80,69 @@ export function generateSlugBase(q: { title: string; slugHint?: string; keywords
   return hashFallback(`${q.title}\u0000${q.keywords.join(',')}`)
 }
 
-// ── 五类 type 机器预判（五句判定式——§2.1/§2.3） ──
+// ── 五类 type 机器预判（五句判定式——§2.1/§2.3；1.6 v3：结构化加权） ──
+//
+// v1 词面命中取最高在存量 121 篇对人工定标一致率仅 32.5%（1.6 抽检驱动修订）；
+// v3 改结构化加权：五类各一路主证据（规范性密度/失败叙事链/复盘归纳/决策论证/
+// 机制陈述），词频 ×2 + 小节头结构性证据 ×2，并列按 §2.1 重要性序断序。
+// 判定式是入闸预判非语义终审：低置信/与 agent 申报不符 → procedure 默认 + 待定
+// 标记（升格审核面消费），存量收编最终归类以人工定标为准（台账留痕）。
 
-/** 判定式词面（每类一句——命中计数取最高；零命中/并列 = 低置信） */
+/** 全局匹配计数（g 标志归一） */
+function countMatches(pattern: RegExp, text: string): number {
+  return (text.match(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`)) ?? []).length
+}
+
+/** 判定式词面（每类一句——§2.1 五句主证据） */
 const TYPE_SIGNALS: ReadonlyArray<readonly [KnowledgeType, readonly RegExp[]]> = [
-  ['conventions', [/必须|禁止|不允许|规范|约定|惯例|always|never|must not|forbidden|convention|standard/i]],
-  ['pitfalls', [/坑|陷阱|误诊|失败|踩|规避|教训性错误|pitfall|trap|gotcha|regression|break/i]],
-  ['decisions', [/决策|选型|裁决|为什么选|取舍|decision|chose|trade-?off|adr|rationale/i]],
-  ['lessons', [/归纳|总结|经验|事后|复盘|lesson|learned|retrospective|takeaway/i]],
-  ['facts', [/版本|路径|环境|当前为|事实上|fact|currently|version|environment/i]],
+  ['conventions', [/必须|禁止|不允许|不得|一律|禁用|铁律|红线|先于|违反即错|唯一正道|正门|规范|守则|硬约束|纪律|白名单|判据/]],
+  ['pitfalls', [/坑|误诊|误判|复发|根因|症状|排查|崩溃|强杀|污染|漂移|失效|阻断|漏网|翻车|中招|踩|bug|缺陷|故障|意外|误伤|弯路|反例|盲区/]],
+  ['lessons', [/复盘|归纳|事后|总结|经验|教训|方法论|范式|沉淀|对照|闭环验证|最小形态|可复用|判例对照/]],
+  ['decisions', [/为什么|为何|取舍|裁决|选型|定案|终局|推翻|改用|决策|设计考量|方案[AB12二一]/]],
+  ['facts', [/当前为|事实上|现状|机制为|结构为|字段|生命周期|落位|位于|存储在|承载|进程名|目录为|路径为|版本|表结构|数据模型|架构/]],
 ]
 
-/** type 预判产物：判定值 + 置信（零命中/最高分不唯一 = 低置信） */
+/** 判定式次级词面（机制行为陈述 / 设计论证措辞——facts/decisions 词面稀疏的补强） */
+const FACT_EXTRA = /生效条件|语义为|定义为|表现为|时序|行为|机制上|实质上|事实上是|落盘|触发的|才会|仅在|上限|配额|限制为|落定|定格|时点|触发一轮|环境为|当前环境/
+const DECISION_EXTRA = /全序|排序|镜像|增量化|key 前缀|设计为|此设计|该方案|这样设计|权衡|定位为|界定为|口径为/
+
+/** 结构性小节头证据（失败叙事链「现象→避免方式/处置」与复盘/规范小节） */
+const PITFALL_SECTION = /^#{2,3}\s*(现象|避免方式|处置|排查|根因|症状)/m
+const AVOIDANCE_SECTION = /^#{2,3}\s*(避免方式|处置)\s*$/m
+const CASE_SECTION = /^#{2,3}\s*(现象|判例)/m
+const LESSON_SECTION = /^#{2,3}\s*(复盘|总结|归纳|经验|教训|方法论|判例)/m
+const NORM_SECTION = /^#{2,3}\s*(规范|约束|要求|规则|约定|做法|纪律)/m
+const FACT_SECTION = /^#{2,3}\s*(事实|现状|环境|机制|结构|架构|行为|语义)/m
+const DECISION_SECTION = /^#{2,3}\s*(决策|选型|取舍|方案|设计)/m
+
+/** 并列断序（§2.1 重要性参考序：conventions > pitfalls > decisions > lessons > facts） */
+const TYPE_PRIORITY: readonly KnowledgeType[] = ['conventions', 'pitfalls', 'decisions', 'lessons', 'facts']
+
+/** type 预判产物：判定值 + 置信（零分/并列 = 低置信） */
 export interface TypeJudgement {
   readonly type: KnowledgeType | undefined
   readonly confident: boolean
 }
 
-/** 五句判定式执行面（title + summary + body 词面命中计数——确定性纯函数） */
+/** 五句判定式执行面（title + summary + body 结构化加权——确定性纯函数） */
 export function predictType(text: string): TypeJudgement {
-  let best: KnowledgeType | undefined
-  let bestScore = 0
-  let tie = false
+  const scores = new Map<KnowledgeType, number>()
   for (const [type, patterns] of TYPE_SIGNALS) {
-    const score = patterns.reduce((n, p) => n + (p.test(text) ? 1 : 0), 0)
-    if (score > bestScore) {
-      best = type
-      bestScore = score
-      tie = false
-    } else if (score === bestScore && score > 0) {
-      tie = true
-    }
+    scores.set(type, countMatches(patterns[0]!, text) * 2)
   }
-  return { type: best, confident: bestScore > 0 && !tie }
+  scores.set('facts', scores.get('facts')! + countMatches(FACT_EXTRA, text) * 2)
+  // decisions 词面语义密度高（词少而专）——1.5× + 次级词面补强
+  scores.set('decisions', Math.round(scores.get('decisions')! * 1.5) + countMatches(DECISION_EXTRA, text) * 2)
+  if (NORM_SECTION.test(text)) scores.set('conventions', scores.get('conventions')! + 6)
+  if (PITFALL_SECTION.test(text)) scores.set('pitfalls', scores.get('pitfalls')! + 8)
+  if (AVOIDANCE_SECTION.test(text) && CASE_SECTION.test(text)) scores.set('pitfalls', scores.get('pitfalls')! + 6)
+  if (LESSON_SECTION.test(text)) scores.set('lessons', scores.get('lessons')! + 6)
+  if (FACT_SECTION.test(text)) scores.set('facts', scores.get('facts')! + 6)
+  if (DECISION_SECTION.test(text)) scores.set('decisions', scores.get('decisions')! + 4)
+  const max = Math.max(...scores.values())
+  if (max === 0) return { type: undefined, confident: false }
+  const top = TYPE_PRIORITY.filter((t) => scores.get(t) === max)
+  return { type: top[0], confident: top.length === 1 }
 }
 
 // ── 查重三通道（§2.3：给归并建议不拒收） ──

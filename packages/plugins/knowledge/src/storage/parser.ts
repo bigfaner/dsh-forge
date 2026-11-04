@@ -37,6 +37,11 @@ export interface KnowledgeEntryMetadata {
   slugHint?: string
   type?: string
   procedure?: boolean
+  /**
+   * 双轨归并降指向（1.6）：非空 = 本条目以 docs 正本为权威（纯约定 docs=治理正册），
+   * 检索层出索引（rebuild 不入实体表），值 = docs 正本仓库相对路径。
+   */
+  canonical?: string
 }
 
 export type ParseOutcome =
@@ -124,6 +129,7 @@ export function parseKnowledgeFile(input: ParseKnowledgeFileInput): ParseOutcome
     ...(isNonEmptyString(data.candidate_of) ? { candidateOf: data.candidate_of } : {}),
     ...(isNonEmptyString(data.slug_hint) ? { slugHint: data.slug_hint } : {}),
     ...(isNonEmptyString(data.type) ? { type: data.type } : {}),
+    ...(isNonEmptyString(data.canonical) ? { canonical: data.canonical } : {}),
     ...(typeof data.procedure === 'boolean'
       ? { procedure: data.procedure }
       : data.procedure === 'true'
