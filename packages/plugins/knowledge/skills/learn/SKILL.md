@@ -1,4 +1,4 @@
----
+﻿---
 name: learn
 description: 知识提取/沉淀唯一入口——输入场景材料（复盘对账表/fix 链/走查裁决/会话经验），提取分流三类沉淀（conventions/lessons/examples）直写 .knowledge/，条目与 knowledge 插件格式同构并带溯源字段。何时用：特性复盘（内嵌调用，以多 agent 交叉核验结论为输入）、bug 修复收口、会话中的经验捕获等随手场景。
 ---
@@ -41,7 +41,7 @@ flowchart TD
 
 ## 条目格式（与 knowledge 插件同构）
 
-直写格式 = `.knowledge/` 对应目录下的 markdown 条目，frontmatter 字段与 knowledge 插件条目格式同构（契约见 `packages/contracts/src/frontmatter.ts`、解析器 `packages/core/src/knowledge/parser.ts`），**非自定义格式**：
+直写格式 = `.knowledge/` 对应目录下的 markdown 条目，frontmatter 字段与 knowledge 插件条目格式同构（契约见 `packages/contracts/src/frontmatter.ts`、解析器 `packages/plugins/knowledge/src/storage/parser.ts`），**非自定义格式**：
 
 | 字段 | 必填 | 说明 |
 |---|---|---|
@@ -83,12 +83,12 @@ source_bug: f9a23367
 
 ```mermaid
 flowchart LR
-    A["阶段 1 · 现在<br/>直写 .knowledge/ 目录 markdown<br/>字段同构 · 零代码依赖"] -->|"插件激活"| B["阶段 2<br/>写入径换 forgeKnowledge 服务调用<br/>字段同构 → 存量条目零迁移"]
+    A["阶段 1 · 现在<br/>直写 .knowledge/ 目录 markdown<br/>字段同构 · 零代码依赖"] -->|"插件激活"| B["阶段 2<br/>写入径换 knowledge 服务调用<br/>字段同构 → 存量条目零迁移"]
     B --> C["阶段 3 · 终态<br/>格式契约单源 knowledge 插件<br/>禁止 forge 反向定义格式"]
 ```
 
 - **阶段 1（现在）**：直写 `knowledge.root` 锚（`.knowledge/`）下 `{conventions,lessons,examples}/` markdown 条目；`.knowledge/` 的实际绝对路径经 forgeDirs 工具查询（dirKey = `knowledge.root`，knowledge 插件已声明——路径真值以工具查询为准）；forge 对 knowledge 只有目录格式契约耦合，零代码依赖。
-- **阶段 2（激活后）**：写入径换 `forgeKnowledge` 服务写入口；字段同构保证存量条目零迁移，只换写入口。
+- **阶段 2（激活后）**：写入径换 `knowledge` 服务写入口；字段同构保证存量条目零迁移，只换写入口。
 - **阶段 3（终态）**：格式契约单源 knowledge 插件（contracts 级导出），forge 与其它消费方共同依赖。
 
 ## 执行步骤

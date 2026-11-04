@@ -84,13 +84,20 @@ describe('AC4 迁移 DDL 与 design/schema.sql 单一来源对齐', () => {
   })
 
   it('v3（project-manual-order）：守卫式 ALTER projects ADD COLUMN sort_order INTEGER DEFAULT NULL（无回填——存量行保持 NULL）', () => {
-    expect(SCHEMA_VERSION).toBe(3)
     const v3 = MIGRATIONS.find((m) => m.version === 3)
     expect(v3?.statements).toEqual([
       {
         sql: `ALTER TABLE projects ADD COLUMN sort_order INTEGER DEFAULT NULL`,
         columnGuard: { table: 'projects', column: 'sort_order' },
       },
+    ])
+  })
+
+  it('v4（knowledge-stage1-foundation 1.8——core 退役）：知识域两表 DROP（子表在前；存量已由插件种子迁移消费）', () => {
+    expect(SCHEMA_VERSION).toBe(4)
+    expect(MIGRATIONS.find((m) => m.version === 4)?.statements).toEqual([
+      `DROP TABLE IF EXISTS knowledge_recall_logs`,
+      `DROP TABLE IF EXISTS knowledge_entries`,
     ])
   })
 })
@@ -128,13 +135,15 @@ function buildLegacyV2(file: string): void {
 }
 
 describe('v3 sort_order 迁移行为（project-manual-order 1.1）', () => {
-  it('存量 v2 库首启自动执行一次：版本到位 + v3 指纹落 migration_digests + 存量行 sort_order 保持 NULL', () => {
+  it('存量 v2 库首启自动执行一次：版本到位 + v3/v4 指纹落 migration_digests + 存量行 sort_order 保持 NULL', () => {
     const file = behaviorFile('legacy-v2.db')
     buildLegacyV2(file)
     const db = openDatabase(file)
-    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(3)
-    const digest = db.prepare<unknown[], { digest: string }>(`SELECT digest FROM migration_digests WHERE version = 3`).get()
-    expect(digest?.digest).toBeTruthy()
+    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(4)
+    const digest3 = db.prepare<unknown[], { digest: string }>(`SELECT digest FROM migration_digests WHERE version = 3`).get()
+    expect(digest3?.digest).toBeTruthy()
+    const digest4 = db.prepare<unknown[], { digest: string }>(`SELECT digest FROM migration_digests WHERE version = 4`).get()
+    expect(digest4?.digest).toBeTruthy()
     const cols = (db.pragma(`table_info('projects')`) as Array<{ name: string }>).map((c) => c.name)
     expect(cols).toContain('sort_order')
     expect(db.prepare<unknown[], { sort_order: number | null }>(`SELECT sort_order FROM projects WHERE id = 'p1'`).get()).toEqual({
@@ -165,7 +174,7 @@ describe('v3 sort_order 迁移行为（project-manual-order 1.1）', () => {
   it('全新空库首启：迁移链一次走完，projects 表含 sort_order 列且新行默认 NULL', () => {
     const file = behaviorFile('fresh.db')
     const db = openDatabase(file)
-    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(3)
+    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(4)
     const cols = (db.pragma(`table_info('projects')`) as Array<{ name: string }>).map((c) => c.name)
     expect(cols).toContain('sort_order')
     db.prepare(

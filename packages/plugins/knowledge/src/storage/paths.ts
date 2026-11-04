@@ -55,7 +55,8 @@ export function resolveKnowledgeDbFile(
 /**
  * 自启判定（双态缝——旧服务在场时以自持库为数据面准备）：config.dbFile 显式、或任一
  * 宿主数据域锚（DSH_FORGE_TASKS_HOME / DSH_HOME）在场才自启；双锚全缺席（裸测试/无宿主
- * 环境）不自启——不向 ~/.dsh 兜底路径静默落盘（插件仍以 forgeKnowledge 旧服务供数）。
+ * 环境）不自启——不向 ~/.dsh 兜底路径静默落盘（core forgeKnowledge 旧服务已随 1.8 退役，
+ * 自持库自启即唯一供数面）。
  */
 export function autoStartDbFile(
   config: KnowledgeStorageConfig = {},

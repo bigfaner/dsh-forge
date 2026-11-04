@@ -25,7 +25,7 @@ export interface Migration {
 }
 
 /** 本应用支持的 schema 版本上限（版本门：库内 version 超出即拒绝打开）。 */
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 /**
  * worktree_dir 存量行回填语句（纯 SQL——默认绝对路径相对各行 ws_path 解析 `.forge/worktrees/`：
@@ -144,6 +144,19 @@ export const MIGRATIONS: readonly Migration[] = [
         sql: `ALTER TABLE projects ADD COLUMN sort_order INTEGER DEFAULT NULL`,
         columnGuard: { table: 'projects', column: 'sort_order' },
       },
+    ],
+  },
+  {
+    // v4（knowledge-stage1-foundation 1.8——core 退役）：知识域两表结构退役。
+    // 存量数据已由 knowledge 插件轻量种子迁移消费（注册行唯一必迁种子 → 自持注册表；
+    // entries 可再生零迁、recall_logs best-effort 拷贝）——本版只做结构退役（DROP），
+    // 不做数据搬移。子表先删（recall_logs 引用 entries 的可空 FK）；IF EXISTS 兜多谱系。
+    // projects.knowledge_dir 列保留：注册链（contracts/host/web 表单面）仍消费，退役随
+    // 后续产品面任务收口。
+    version: 4,
+    statements: [
+      `DROP TABLE IF EXISTS knowledge_recall_logs`,
+      `DROP TABLE IF EXISTS knowledge_entries`,
     ],
   },
 ]

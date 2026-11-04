@@ -1,10 +1,10 @@
 // 测试/夹具 seed 帮助器（fix-37 ⑤）——projects 行种入与 e2e 注入面单源。
-// 收编动机：e2e 曾直写 core 私有 schema SQL（compensation INSERT/UPDATE/DELETE projects、
-// kb INSERT recall_logs / DELETE knowledge_entries）与 core 测试（project-service /
-// reconcile-queries 的 seedRow）互为拷贝——本模块成为唯一源（core 测试与 e2e support
-// 双消费；e2e 经 e2e/support/sqlite.ts 相对源引——包 manifest 面零变化，本目录仍不进
-// 任何生产 import 图）。e2e 侧无 @types/better-sqlite3——入参取结构化最小面
-// （better-sqlite3 Database 结构兼容）。
+// 收编动机：e2e 曾直写 core 私有 schema SQL（compensation INSERT/UPDATE/DELETE projects）
+// 与 core 测试（project-service / reconcile-queries 的 seedRow）互为拷贝——本模块成为唯一源
+// （core 测试与 e2e support 双消费；e2e 经 e2e/support/sqlite.ts 相对源引——包 manifest 面
+// 零变化，本目录仍不进任何生产 import 图）。e2e 侧无 @types/better-sqlite3——入参取结构化
+// 最小面（better-sqlite3 Database 结构兼容）。
+// （知识域表 seed 帮助器已随 core 知识域退役移除——1.8；知识面 e2e 预置走插件自持库。）
 //
 // 注入语义随行注记（取舍）：③ 应用库写入失败注入 = INSERT 触发器恒 ABORT
 // （fix-27 起 ws_path 冲突行已被服务面自愈消费，触发器为唯一残余注入面）；
@@ -113,38 +113,9 @@ export function seedWorkspaceIdConflictRow(db: SeedDb, workspaceId: string): voi
 }
 
 /**
- * 预置使用事件 ×count（kb Setup fixture 通道——knowledge_recall_logs 直注，app 在场
- * WAL 活写兼容；heat/召回统计同源单表）。条目不在索引 = fail-loud（返回条目 id）。
+ * 预置使用事件（kb Setup fixture 通道）与索引零行化已随 core 知识域退役移除
+ * （knowledge-stage1-foundation 1.8——知识面数据归插件自持库）。
  */
-export function seedUsageEvents(
-  db: SeedDb,
-  o: { readonly projectId: string; readonly entryTitle: string; readonly count: number; readonly domainSnap?: string },
-): number {
-  const entry = db
-    .prepare('SELECT id FROM knowledge_entries WHERE project_id = ? AND title = ?')
-    .get(o.projectId, o.entryTitle) as { id: number } | undefined
-  if (entry === undefined) throw new Error(`seedUsageEvents：条目不在索引（${o.entryTitle}）`)
-  const insert = db.prepare(
-    `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, title_snap, domain_snap, hit_count, created_at)
-     VALUES (?, ?, 'e2e-seed-session', 'search', ?, ?, ?, 1, ?)`,
-  )
-  for (let i = 0; i < o.count; i++) {
-    insert.run(
-      o.projectId,
-      `e2e-seed-call-${i}`,
-      entry.id,
-      o.entryTitle,
-      o.domainSnap ?? '前端',
-      new Date().toISOString(),
-    )
-  }
-  return entry.id
-}
-
-/** 索引零行化（kb 阶段②显式触发重建通道——fact KNOWLEDGE_INDEX_REBUILD 认可载体） */
-export function clearKnowledgeIndex(db: SeedDb, projectId: string): void {
-  db.prepare('DELETE FROM knowledge_entries WHERE project_id = ?').run(projectId)
-}
 
 /** 只读探针：对账修复记账行数（scope=reconcile warn——boot 自动对账实证面） */
 export function countReconcileWarnLogs(db: SeedDb): number {

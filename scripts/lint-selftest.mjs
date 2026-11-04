@@ -21,19 +21,14 @@ const FIXTURES = [
   },
   {
     path: 'packages/core/src/db/_lintneg_db_to_domains.ts',
-    code: `import { f } from '../forge/service.js'\nimport { k } from '../knowledge/index.js'\nexport const v = [f, k]\n`,
+    code: `import { f } from '../forge/service.js'\nexport const v = f\n`,
     ox: ['基础↛业务'],
   },
   {
-    path: 'packages/core/src/forge/_lintneg_peer_and_watch.ts',
-    code: `import { k } from '../knowledge/index.js'\nimport { watch } from 'node:fs'\nexport const v = [k, watch]\n`,
-    ox: ['同级业务互禁'],
+    // core knowledge 域已退役（1.8）——forge↛knowledge 铁律面随之移除；本样例只保留 watch 面
+    path: 'packages/core/src/forge/_lintneg_watch.ts',
+    code: `import { watch } from 'node:fs'\nexport const v = watch\n`,
     imp: ['SC2 无投影'],
-  },
-  {
-    path: 'packages/core/src/knowledge/_lintneg_knowledge_to_forge.ts',
-    code: `import { f } from '../forge/index.js'\nexport const v = f\n`,
-    ox: ['同级业务互禁'],
   },
   {
     path: 'apps/web/src/views/session/_lintneg_session_to_knowledge.tsx',

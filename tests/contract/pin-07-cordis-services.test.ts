@@ -1,16 +1,18 @@
-// G1 pin ⑦（M1 批，任务 3.9）：Cordis 服务定义/注入模式——`ctx.forgeProjects` / `ctx.forgeKnowledge`
-// 属性面 + inject 消费（真实 cordis runtime 全链路自证）。
+// G1 pin ⑦（M1 批，任务 3.9）：Cordis 服务定义/注入模式——`ctx.forgeProjects` 属性面 +
+// inject 消费（真实 cordis runtime 全链路自证）。
 // 权威：tech-design Appendix 契约面清单第 7 项 + Overview 关键缝（Cordis 服务模式——
 // workspaceRegistry/agentPresets 同型先例，进程内零 RPC）+ 上游公开面 `@deepseek-ai/cordis`
 // （host 锚；dsh 0.2.0-rc.2 栈闭包解析版本 = 4.0.4，独立版本线精确 pin——漂移即红）。
-// 我方镜像：packages/core/src/index.ts（双服务 provide，fix-35 前为 service.ts）+ packages/plugins/knowledge/src/index.ts
-// （inject 消费）。同型先例 WorkspaceRegistry 的 Service 基类面已由 pin-04 锚定。
-// Hard Rule：只 pin 上游公开面（cordis 导出 + 服务生命周期契约）+ 我方双服务对官方面的
+// 我方镜像：packages/core/src/index.ts（forgeProjects provide——knowledge 域已随
+// knowledge-stage1-foundation 1.8 退役，forgeKnowledge 面移除）+
+// packages/plugins/knowledge/src/index.ts（自有 knowledge 服务 provide）。
+// 同型先例 WorkspaceRegistry 的 Service 基类面已由 pin-04 锚定。
+// Hard Rule：只 pin 上游公开面（cordis 导出 + 服务生命周期契约）+ 我方服务对官方面的
 // 符合性（真实 runtime 装配，非结构化桩模拟——与 2.2/3.4 产品单测的桩面互补）。
 // 分层：
 //   ⑦-1 版本锚（cordis 独立版本线）
 //   ⑦-2 官方面语义锚（registry/reflect/service d.ts：inject 门控 + provide 生命周期 + Service 注册径）
-//   ⑦-3 运行期双服务注入面（门控加载 → 双属性面五法/七法 → knowledge 插件消费 → 级联卸载）
+//   ⑦-3 运行期服务注入面（门控加载 → 属性面五法 → knowledge 插件消费 → 级联卸载）
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -136,7 +138,7 @@ describe('pin ⑦-2 官方面语义锚（cordis d.ts 随包分发面）', () => 
   })
 })
 
-describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/knowledge 插件 + 临时 SQLite）', () => {
+describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowledge 插件 + 临时 SQLite）', () => {
   it('inject 门控：双依赖（fix-24 ② 后 registry+controller）任一缺席 core 不加载；双 provide 后加载（Plugin.Base 语义实跑）', async () => {
     const { ctx } = await bootRuntime()
     try {
@@ -156,7 +158,7 @@ describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/kn
     }
   })
 
-  it('双服务属性面：forgeProjects 五法 + forgeKnowledge 七法（Interface 1/2 全法在场）', async () => {
+  it('服务属性面：forgeProjects 五法（Interface 1 全法在场）；forgeKnowledge 已退役（1.8——零注册）', async () => {
     const { ctx } = await bootRuntime()
     try {
       ctx.reflect.provide('workspaceRegistry', registryStub())
@@ -166,18 +168,7 @@ describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/kn
       for (const method of ['registerProject', 'listProjects', 'getProject', 'updateProject', 'reconcileAtStartup']) {
         expect(typeof projects[method], `forgeProjects.${method}`).toBe('function')
       }
-      const knowledge = ctx.get('forgeKnowledge') as Record<string, unknown>
-      for (const method of [
-        'rebuildIndex',
-        'search',
-        'readAbstract',
-        'listEntries',
-        'getEntryDetail',
-        'heatByEntry',
-        'sessionRecall',
-      ]) {
-        expect(typeof knowledge[method], `forgeKnowledge.${method}`).toBe('function')
-      }
+      expect(ctx.get('forgeKnowledge'), 'knowledge 域退役：core 零 forgeKnowledge 注册').toBeUndefined()
     } finally {
       await ctx.fiber.dispose()
     }
@@ -208,11 +199,11 @@ describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/kn
       await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [], dbFile: dbFile() })
       expect(ctx.get('forgeProjects')).toBeDefined()
       disposeWs()
-      // 官方语义：unregistered (waking dependents)——core fiber 卸载、core 双服务注销；
+      // 官方语义：unregistered (waking dependents)——core fiber 卸载、core 服务注销；
       // knowledge 零 core 依赖（1.7 A2）——独立存活，服务/tool/段不受牵动
       expect(
-        await waitFor(() => ctx.get('forgeProjects') === undefined && ctx.get('forgeKnowledge') === undefined),
-        'core 双服务级联注销',
+        await waitFor(() => ctx.get('forgeProjects') === undefined),
+        'core 服务级联注销',
       ).toBe(true)
       expect(ctx.get('knowledge'), 'knowledge 独立于 core（SC-2）').toBeDefined()
       expect(tools.registered).toHaveLength(2)

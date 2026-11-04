@@ -29,8 +29,8 @@ function insertProject(db: Database.Database, id: string, wsPath: string) {
   ).run(id, `ws-${id}`, wsPath, id, `C:\\ws\\${id}\\.forge`, `C:\\ws\\${id}\\.knowledge`, '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z')
 }
 
-describe('AC1 全 DDL 在临时库执行零错（五表 + 七索引 + FK pragma）', () => {
-  it('打开全新库：五表全部存在', () => {
+describe('AC1 全 DDL 在临时库执行零错（v4 后四表 + 索引 + FK pragma）', () => {
+  it('打开全新库：四表全部存在（知识域两表已随 v4 退役）', () => {
     const db = openDatabase(dbPath())
     const tables = db
       .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
@@ -38,8 +38,6 @@ describe('AC1 全 DDL 在临时库执行零错（五表 + 七索引 + FK pragma�
       .map((r) => r.name)
     expect(tables).toEqual([
       'app_key_logs',
-      'knowledge_entries',
-      'knowledge_recall_logs',
       'migration_digests',
       'projects',
       'schema_meta',
@@ -47,7 +45,7 @@ describe('AC1 全 DDL 在临时库执行零错（五表 + 七索引 + FK pragma�
     db.close()
   })
 
-  it('七索引全部创建', () => {
+  it('索引全部创建（知识域索引随表退役）', () => {
     const db = openDatabase(dbPath())
     const indexes = db
       .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name`)
@@ -55,11 +53,6 @@ describe('AC1 全 DDL 在临时库执行零错（五表 + 七索引 + FK pragma�
       .map((r) => r.name)
     expect(indexes).toEqual([
       'idx_akl_scope_time',
-      'idx_ke_frontmatter_id',
-      'idx_ke_project_domain',
-      'idx_krl_call',
-      'idx_krl_entry',
-      'idx_krl_project_session',
       'idx_projects_ws_path',
     ])
     db.close()
@@ -78,49 +71,45 @@ describe('AC1 全 DDL 在临时库执行零错（五表 + 七索引 + FK pragma�
   })
 })
 
-describe('AC2 FK 全解析（负样例 + 级联）', () => {
-  it('子行引用不存在的 project_id 被拒（SQLITE_CONSTRAINT_FOREIGNKEY）', () => {
+describe('v4 知识域两表结构退役（knowledge-stage1-foundation 1.8）', () => {
+  it('全新库：knowledge_entries / knowledge_recall_logs 不存在', () => {
     const db = openDatabase(dbPath())
-    expect(() =>
-      db.prepare(
-        `INSERT INTO knowledge_entries (project_id, rel_path, domain_path, title, summary, digest, indexed_at)
-         VALUES ('missing-project', 'a.md', '编程', 't', 's', 'd', '2026-10-02T00:00:00.000Z')`,
-      ).run(),
-    ).toThrowError(/FOREIGN KEY/)
+    const tables = db
+      .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'knowledge_%'`)
+      .all()
+      .map((r) => r.name)
+    expect(tables).toEqual([])
     db.close()
   })
 
-  it('ON DELETE CASCADE 生效：删项目 → 知识条目与召回日志随行清除', () => {
-    const db = openDatabase(dbPath())
-    insertProject(db, 'p1', 'C:\\ws\\p1')
-    db.prepare(
+  it('存量 v3 库（含两表与数据）前向迁移：两表退役、projects 行原状', () => {
+    const path = dbPath()
+    // v3 形态库：v1 建表 + v2/v3 补列（版本行直注 3）
+    const v1 = openDatabase(path, { migrations: [MIGRATIONS[0]!], schemaVersion: 1 })
+    for (const m of MIGRATIONS.slice(1, 3)) {
+      for (const stmt of m.statements) v1.prepare(typeof stmt === 'string' ? stmt : stmt.sql).run()
+    }
+    v1.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (2, '2026-11-01T00:00:00.000Z'), (3, '2026-11-01T00:00:00.000Z')`).run()
+    insertProject(v1, 'p1', 'C:\\ws\\p1')
+    v1.prepare(
       `INSERT INTO knowledge_entries (project_id, rel_path, domain_path, title, summary, digest, indexed_at)
-       VALUES ('p1', 'a.md', '编程', 't', 's', 'd', '2026-10-02T00:00:00.000Z')`,
+       VALUES ('p1', 'a.md', '编程', 't', 's', 'd', '2026-11-01T00:00:00.000Z')`,
     ).run()
-    db.prepare(
-      `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, hit_count, created_at)
-       VALUES ('p1', 'c1', 's1', 'search', 1, 1, '2026-10-02T00:00:00.000Z')`,
-    ).run()
-    db.prepare(`DELETE FROM projects WHERE id = ?`).run('p1')
-    expect(db.prepare(`SELECT COUNT(*) AS n FROM knowledge_entries WHERE project_id='p1'`).get()).toEqual({ n: 0 })
-    expect(db.prepare(`SELECT COUNT(*) AS n FROM knowledge_recall_logs WHERE project_id='p1'`).get()).toEqual({ n: 0 })
-    db.close()
-  })
+    v1.close()
 
-  it('entry_id 引用不存在的 knowledge_entries 被拒（可空 FK 仍校验解析）', () => {
-    const db = openDatabase(dbPath())
-    insertProject(db, 'p2', 'C:\\ws\\p2')
-    expect(() =>
-      db.prepare(
-        `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, hit_count, created_at)
-         VALUES ('p2', 'c1', 's1', 'read-abstract', 9999, 1, '2026-10-02T00:00:00.000Z')`,
-      ).run(),
-    ).toThrowError(/FOREIGN KEY/)
+    const db = openDatabase(path)
+    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(4)
+    const tables = db
+      .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'knowledge_%'`)
+      .all()
+      .map((r) => r.name)
+    expect(tables).toEqual([])
+    expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()?.n).toBe(1)
     db.close()
   })
 })
 
-describe('AC2 CHECK 约束负样例（verb / level / scope / forge_dir_external）', () => {
+describe('AC2 CHECK 约束负样例（level / scope / forge_dir_external）', () => {
   it('forge_dir_external 仅 0/1；2 被拒', () => {
     const db = openDatabase(dbPath())
     const insert = db.prepare(
@@ -136,19 +125,6 @@ describe('AC2 CHECK 约束负样例（verb / level / scope / forge_dir_external�
     expect(() =>
       insert.run('p1x', 'ws-p1x', 'C:\\ws\\p1x', 'p1x', 'C:\\ws\\p1x\\.forge', 1, 'C:\\ws\\p1x\\.knowledge', '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z'),
     ).not.toThrow()
-    db.close()
-  })
-
-  it('verb 仅 search / read-abstract；fetch 被拒', () => {
-    const db = openDatabase(dbPath())
-    insertProject(db, 'pv', 'C:\\ws\\pv')
-    const insert = db.prepare(
-      `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, hit_count, created_at)
-       VALUES ('pv', 'c1', 's1', ?, 0, '2026-10-02T00:00:00.000Z')`,
-    )
-    expect(() => insert.run('fetch')).toThrowError(/CHECK/)
-    expect(() => insert.run('search')).not.toThrow()
-    expect(() => insert.run('read-abstract')).not.toThrow()
     db.close()
   })
 
@@ -177,18 +153,18 @@ describe('AC2 CHECK 约束负样例（verb / level / scope / forge_dir_external�
 })
 
 describe('AC3 schema_meta 前向门', () => {
-  it('v1/v2 写入 applied_at（ISO-8601）；重开幂等不重复插入', () => {
+  it('v1–v4 写入 applied_at（ISO-8601）；重开幂等不重复插入', () => {
     const path = dbPath()
     const db = openDatabase(path)
     const rows = db.prepare<unknown[], { version: number; applied_at: string }>(
       `SELECT version, applied_at FROM schema_meta`,
     ).all()
-    expect(rows.map((r) => r.version)).toEqual([1, 2, SCHEMA_VERSION])
+    expect(rows.map((r) => r.version)).toEqual(Array.from({ length: SCHEMA_VERSION }, (_, i) => i + 1))
     for (const r of rows) expect(isParseableDateStyle(r.applied_at)).toBe(true)
     db.close()
 
     const db2 = openDatabase(path)
-    expect(db2.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: 3 })
+    expect(db2.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: SCHEMA_VERSION })
     db2.close()
   })
 
@@ -220,15 +196,13 @@ describe('AC3 schema_meta 前向门', () => {
     raw.close()
 
     const db = openDatabase(path)
-    expect(db.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: 3 })
+    expect(db.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: SCHEMA_VERSION })
     const tables = db
       .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
       .all()
       .map((r) => r.name)
     expect(tables).toEqual([
       'app_key_logs',
-      'knowledge_entries',
-      'knowledge_recall_logs',
       'migration_digests',
       'projects',
       'schema_meta',
@@ -436,7 +410,7 @@ describe('迁移指纹守卫：记录 / 校验 / 篡改拒开 / 回填幂等', (
     const rows = db.prepare<unknown[], { version: number; digest: string }>(
       `SELECT version, digest FROM migration_digests`,
     ).all()
-    expect(rows.map((r) => r.version)).toEqual([1, 2, SCHEMA_VERSION])
+    expect(rows.map((r) => r.version)).toEqual(Array.from({ length: SCHEMA_VERSION }, (_, i) => i + 1))
     for (const r of rows) expect(r.digest).toMatch(/^[0-9a-f]{64}$/)
     db.close()
   })

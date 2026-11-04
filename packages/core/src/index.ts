@@ -1,7 +1,6 @@
-// @dsh-forge/core 插件定义（定位：装配；入口文件 index.ts——fix-35 与 knowledge=index.ts
-// 对称化，contracts/path-key 同惯例）——注册 ctx.forgeProjects（2.2：registerProject
-// 四步补偿链）与 ctx.forgeKnowledge（3.3 收口：Interface 2 全七法——rebuildIndex/search/
-// readAbstract/listEntries/getEntryDetail/heatByEntry/sessionRecall）。M2（2.7）：tasksHome
+// @dsh-forge/core 插件定义（定位：装配；入口文件 index.ts——fix-35 对称化，
+// contracts/path-key 同惯例）——注册 ctx.forgeProjects（2.2：registerProject
+// 四步补偿链）。M2（2.7）：tasksHome
 // 注入时增注册四域服务 ctx.forgeTasks/forgeFeatures/forgeProposals/forgeDocs（装配壳 +
 // 三小域实现；tasks 动词面 2.2–2.6 接线）——共享 ForgeWorkspaceStore 惰性多句柄 +
 // 事件发射器装配单例；首建挂点 = 发现面只读扫描（交互二/三）。M3（2.7）：settingsFile
@@ -44,7 +43,6 @@ import { createProjectRouting } from './forge/workspace/routing.js'
 import { renderWorkerContext } from './forge/workspace/worker-context.js'
 import { createWorkspaceStore, type ForgeWorkspaceStore } from './forge/workspace/store.js'
 import { DIAG_EVENT, type DiagEventPayload } from './telemetry/diag-events.js'
-import { createKnowledgeService } from './knowledge/knowledge-service.js'
 
 // worker agent 级提示词（expert-squad-forge 1.3 合成点：composePersona 程序段渲染 +
 // composePersonaWithProfile 档案人格段两段组装——plugin-forge spawn 链的唯一 persona 源）
@@ -178,7 +176,6 @@ const corePlugin: CorePlugin = Object.assign(
         onDiag,
       }),
     )
-    ctx.reflect.provide('forgeKnowledge', createKnowledgeService({ db })) // Interface 2 全七法（3.3 收口）
     if (settings !== undefined) {
       ctx.reflect.provide('forgeSettings', settings) // Interface 1（M3）设置域两法——单门读写（3.8 host 接线）
     }

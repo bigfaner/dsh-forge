@@ -16,8 +16,6 @@ export {
   installProjectInsertFailure,
   removeProjectInsertFailure,
   seedWorkspaceIdConflictRow,
-  seedUsageEvents,
-  clearKnowledgeIndex,
   countReconcileWarnLogs,
   type SeedDb,
 } from '../../packages/core/src/testutil/db-seeds.js'
