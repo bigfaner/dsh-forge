@@ -193,6 +193,10 @@ export class SharedLaunchSession {
       .then(() => true)
       .catch(() => false)
     if (!heroChipSettled) {
+      // fail-soft 显式豁免注记（与 m3.ts newBlankSession「不吞失败、异常上抛」口径对齐）：
+      // m3 侧本函数两径失败均上抛（spec 侧调用方如实判红）；此处复位链吞异常是唯一豁免点
+      // ——复位链全步 fail-soft（页面瞬态不阻塞用例，见本函数头注），newBlankSession 失败
+      // = 无残留可复位或入口瞬态缺席，上抛会把夹具复位瞬态误判为产品红，故显式豁免吞掉。
       await newBlankSession(page).catch(() => undefined)
       // 晚到模态收口（同一泄漏族的拦截面）：上用例零凭据模型失败面可晚数十秒挂载
       // API Key onboarding（mask 拦指针）——复位窗内点掉，防残入用例体拦截 chip 点击。

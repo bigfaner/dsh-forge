@@ -36,7 +36,7 @@ import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../suppor
 import { waitForFixtureSession, waitForSessionEvents } from '../support/session-files.js'
 import { realCredentials, seedDshHome, writeDogfoodOverlay } from '../support/dogfood.js'
 import { rmDirBestEffort, rmFileBestEffort } from '../support/cleanup.js'
-import { COMPOSER_INPUT, KNOWLEDGE_ENTRY, WORKBENCH } from '../support/anchors.js'
+import { COMPOSER_INPUT, HERO_WORKSPACE_CHIP_NAME, KNOWLEDGE_ENTRY, WORKBENCH } from '../support/anchors.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 知识夹具：{root}/demo-proj/.knowledge/{前端,后端}（frontmatter 最小契约——沿 3.8 夹具口径）
@@ -111,13 +111,13 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     const projectId = projects[0]!.id
 
     // ── 步 2/6 发起会话（官方工作区菜单选夹具工作区——会话 cwd = 工作区根，绑定解析锚） ──
-    // 官方 composer 工作区芯片（「默认工作区」/「选择工作区」两态文案）→ role=menu 列既有
-    // workspace（含注册链 registry.create 的夹具工作区——dsh 幂等口径同实体）→ 选 demo-proj
+    // 官方 composer 工作区芯片（「默认工作区」/「选择工作区」两态可访问名）→ role=menu
+    // 列既有 workspace（含注册链 registry.create 的夹具工作区——dsh 幂等口径同实体）→ 选 demo-proj
     const composer = page.locator(COMPOSER_INPUT).last()
     await expect(composer, '官方会话面 composer 在场（官方 hero 相位承载空会话引导）').toBeVisible({ timeout: 60_000 })
-    const workspaceChip = page
-      .locator('button', { hasText: /^默认工作区$|^选择工作区$/ })
-      .first()
+    // chip 锚 = anchors.ts HERO_WORKSPACE_CHIP_NAME 单源（可访问名形态，getByRole name；
+    // 项目绑定后 innerText 换项目名，hasText 形态恒 miss——root cause 见 rpc.ts:78）
+    const workspaceChip = page.getByRole('button', { name: HERO_WORKSPACE_CHIP_NAME }).first()
     await expect(workspaceChip, '工作区芯片在场（composer 绑定面）').toBeVisible({ timeout: 30_000 })
     await workspaceChip.click()
     const workspaceMenu = page.locator('[role="menu"]').first()
