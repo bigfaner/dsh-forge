@@ -92,7 +92,7 @@ export function runSeedMigration(
     try {
       legacyProjects = legacy
         .prepare<unknown[], { ws_path: string; knowledge_dir: string }>(
-          `SELECT ws_path, knowledge_dir FROM projects`,
+          `SELECT ws_path, knowledge_dir FROM projects`, // 旧 core 库表名（现役正本）——非自持库 v4 改名面
         )
         .all()
     } catch (cause) {
@@ -119,7 +119,7 @@ export function runSeedMigration(
 
     // ①注册行种子：canonical 化后逐条落自持注册表（单事务——中途失败零半行回滚）
     const upsert = db.prepare(
-      `INSERT INTO projects (ws_path, knowledge_dir, created_at, updated_at) VALUES (?, ?, ?, ?)
+      `INSERT INTO knowledge_registry (ws_path, knowledge_dir, created_at, updated_at) VALUES (?, ?, ?, ?)
        ON CONFLICT(ws_path) DO UPDATE SET knowledge_dir = excluded.knowledge_dir, updated_at = excluded.updated_at`,
     )
     try {

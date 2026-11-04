@@ -13,6 +13,9 @@ export const KNOWLEDGE_REBUILD_EVENT = 'knowledge-index-rebuild'
 /** 注册行读写事件域（proposal §2.3：解析与注册行读写路径——1.15 进表径埋点面） */
 export const KNOWLEDGE_REGISTER_EVENT = 'knowledge-register'
 
+/** 条目清理事件域（stage② §2.7：文件亡→记录亡同步删除——unconfirmed=info / confirmed/superseded=warn） */
+export const KNOWLEDGE_PURGE_EVENT = 'knowledge-entry-purge'
+
 /** 装配期注入的诊断发射面（host 侧 = ctx.emit(DIAG_EVENT, payload)；storage 域零 cordis 依赖） */
 export type DiagEmitter = (payload: DiagEventPayload) => void
 

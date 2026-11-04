@@ -89,7 +89,7 @@ describe('runSeedMigration（注册行种子 + recall best-effort + 幂等 + 只
     expect(result.recallRows).toBe(237)
 
     const rows = self.prepare<{ ws_path: string; knowledge_dir: string }[]>(
-      `SELECT ws_path, knowledge_dir FROM projects`,
+      `SELECT ws_path, knowledge_dir FROM knowledge_registry`,
     ).all()
     expect(rows).toEqual([{ ws_path: canonicalWsPath(join(root, 'ws-a')), knowledge_dir: join(root, 'ws-a', '.knowledge') }])
     expect(self.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_recall_logs`).get()).toEqual({ n: 237 })
@@ -112,7 +112,7 @@ describe('runSeedMigration（注册行种子 + recall best-effort + 幂等 + 只
     const again = runSeedMigration(self, { legacyStateDb: legacy, emit })
     expect(again.status).toBe('skipped-done')
     expect(events).toEqual([])
-    expect(self.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()).toEqual({ n: 1 })
+    expect(self.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_registry`).get()).toEqual({ n: 1 })
     self.close()
   })
 
@@ -164,7 +164,7 @@ describe('runSeedMigration（注册行种子 + recall best-effort + 幂等 + 只
     const result = runSeedMigration(self, { legacyStateDb: legacy, emit })
     expect(result.status).toBe('recall-degraded')
     expect(result.registryRows).toBe(1)
-    expect(self.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()).toEqual({ n: 1 })
+    expect(self.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_registry`).get()).toEqual({ n: 1 })
     const warn = events.find((e) => e.level === 'warn')
     expect(warn).toBeDefined()
     expect(warn!.message).toContain('recall_logs')

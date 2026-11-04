@@ -3,6 +3,7 @@
 export {
   STORAGE_MIGRATIONS,
   STORAGE_SCHEMA_VERSION,
+  downgradeKnowledgeSchema,
   type StorageMigration,
 } from './schema.js'
 export {
@@ -34,7 +35,17 @@ export {
   type SeedMigrationResult,
   type SeedMigrationStatus,
 } from './migrate.js'
-export { rebuildKnowledgeIndex, type RebuildOptions, type RebuildReport } from './rebuild.js'
+export {
+  rebuildKnowledgeIndex,
+  deriveEffectiveRank,
+  normalizeEntryStatus,
+  normalizeTitleNorm,
+  ENTRY_STATUS_VALUES,
+  type EffectiveRank,
+  type EntryStatus,
+  type RebuildOptions,
+  type RebuildReport,
+} from './rebuild.js'
 export {
   scanKnowledgeDir,
   isSafeRelPath,
@@ -44,6 +55,7 @@ export {
 } from './scan.js'
 export {
   parseKnowledgeFile,
+  type KnowledgeEntryMetadata,
   type ParseOutcome,
   type ParsedEntry,
   type ParseKnowledgeFileInput,
@@ -51,6 +63,7 @@ export {
 } from './parser.js'
 export {
   KNOWLEDGE_MIGRATE_EVENT,
+  KNOWLEDGE_PURGE_EVENT,
   KNOWLEDGE_REBUILD_EVENT,
   emitStorageDiag,
   storageDiag,

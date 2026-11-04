@@ -121,14 +121,35 @@ function searchSnapshot(q: SearchQuery): RecallQuerySnapshot {
 }
 
 /**
+ * 惰性 prepared 语句（stage② v4 过渡态）：首次访问才 prepare——旧形语句对 v4 新形表
+ * 的列校验延迟到调用点，装配/服务注册面不受过渡期 schema 形态牵动；调用点 fail-loud
+ * （SqliteError 裸错上抛——零静默）。
+ */
+function lazyStatement<Bind extends unknown[] = unknown[], Result = unknown>(
+  db: Database.Database,
+  sql: string,
+): Database.Statement<Bind, Result> {
+  let stmt: Database.Statement<Bind, Result> | undefined
+  return new Proxy({} as Database.Statement<Bind, Result>, {
+    get(_target, prop) {
+      stmt ??= db.prepare<Bind, Result>(sql)
+      const value = Reflect.get(stmt as object, prop)
+      return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(stmt) : value
+    },
+  })
+}
+
+/**
  * 服务面工厂（八法）。projectId 未命中绑定表/注册行 fail-loud 裸错（非六码——core 先例
  * 同语义：fail-loud 原样上抛）。rebuildIndex 经 storage rebuild 单源（含埋点与事务纪律）。
  */
 export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowledgeService {
   const { db } = deps
   const emit = deps.emit
+  // stage② 起 rebuild 为整库再生（实体表全局无项目键——storage/rebuild.ts v4）；wsPath
+  // 仅保留缝签名（服务面 stage② 改写任务收口后随接口退役）。
   const rebuild = deps.rebuild ?? ((wsPath: string, opts: { emit?: DiagEmitter; silent?: boolean }) =>
-    rebuildKnowledgeIndex(db, wsPath, opts))
+    rebuildKnowledgeIndex(db, opts))
 
   /** 重建包装：storage 内部 InvalidKnowledgeDirError（无 code/data）→ 服务边界六码面（core 行为等价） */
   function runRebuild(wsPath: string, opts: { emit?: DiagEmitter; silent?: boolean }): { indexed: number; skipped: number } {
@@ -146,10 +167,10 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
   // ── 两级解析：projectId → wsPath（config 静态表，未命中回查注册行 project_id 列——fix-2
   //    动态化：运行期 registerProject 落列，无需重启/无绑定表文件）→ 注册行（canonical 键存在性） ──
   const selectRegistryRow = db.prepare<unknown[], { ws_path: string; knowledge_dir: string }>(
-    `SELECT ws_path, knowledge_dir FROM projects WHERE ws_path = ?`,
+    `SELECT ws_path, knowledge_dir FROM knowledge_registry WHERE ws_path = ?`,
   )
   const selectWsPathByProjectId = db.prepare<[string], { ws_path: string }>(
-    `SELECT ws_path FROM projects WHERE project_id = ?`,
+    `SELECT ws_path FROM knowledge_registry WHERE project_id = ?`,
   )
 
   /** projectId → { wsPath, knowledgeDir }（两级任一未命中 fail-loud） */
@@ -163,37 +184,40 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
   }
 
   // ── 语句（工厂内一次性 prepared） ──
-  const selectAll = db.prepare<unknown[], EntryRow>(
+  // stage② v4 过渡态：下述旧形缓存查询（v2 knowledge_entries 项目键/rel_path 形态——v4
+  // 已由 slug id 实体表承接）改惰性 prepare——装配/服务 provide 照常加载，检索面首次
+  // 调用对旧列 fail-loud 裸错；服务面 stage② 改写任务按 §2.9 新形收口后退役。
+  const selectAll = lazyStatement<unknown[], EntryRow>(db,
     `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status
      FROM knowledge_entries WHERE ws_path = ? ORDER BY id`,
   )
-  const selectByDomain = db.prepare<[string, string, string], EntryRow>(
+  const selectByDomain = lazyStatement<[string, string, string], EntryRow>(db,
     `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status
      FROM knowledge_entries
      WHERE ws_path = ? AND (domain_path = ? OR domain_path LIKE ? ESCAPE '\\')
      ORDER BY id`,
   )
   // 浏览底表（rel_path 供按需读文件；indexed_at 供 updated 回退）
-  const browseAll = db.prepare<unknown[], BrowseEntryRow>(
+  const browseAll = lazyStatement<unknown[], BrowseEntryRow>(db,
     `SELECT id, domain_path, title, summary, keywords, status, rel_path, indexed_at
      FROM knowledge_entries WHERE ws_path = ? ORDER BY domain_path, id`,
   )
-  const browseByDomain = db.prepare<[string, string, string], BrowseEntryRow>(
+  const browseByDomain = lazyStatement<[string, string, string], BrowseEntryRow>(db,
     `SELECT id, domain_path, title, summary, keywords, status, rel_path, indexed_at
      FROM knowledge_entries
      WHERE ws_path = ? AND (domain_path = ? OR domain_path LIKE ? ESCAPE '\\')
      ORDER BY domain_path, id`,
   )
-  const selectEntry = db.prepare<[string, number], EntryRow>(
+  const selectEntry = lazyStatement<[string, number], EntryRow>(db,
     `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status
      FROM knowledge_entries WHERE ws_path = ? AND id = ?`,
   )
-  const selectDetailEntry = db.prepare<[string, number], DetailEntryRow>(
+  const selectDetailEntry = lazyStatement<[string, number], DetailEntryRow>(db,
     `SELECT id, frontmatter_id, domain_path, title, summary, keywords, status, rel_path, indexed_at
      FROM knowledge_entries WHERE ws_path = ? AND id = ?`,
   )
   // 索引存在性口径（core fix-31 同口径）：项目级无过滤 COUNT——域过滤零行 ≠ 索引缺失
-  const countEntries = db.prepare<unknown[], { c: number }>(
+  const countEntries = lazyStatement<unknown[], { c: number }>(db,
     `SELECT COUNT(*) AS c FROM knowledge_entries WHERE ws_path = ?`,
   )
   const selectHeatByEntry = prepareHeatByEntry(db)

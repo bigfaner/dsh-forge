@@ -37,11 +37,11 @@ describe('BEGIN IMMEDIATE 短事务', () => {
     try {
       expect(() =>
         withImmediateTransaction(db, () => {
-          db.prepare(`INSERT INTO projects (ws_path, knowledge_dir, created_at, updated_at) VALUES ('x', 'y', '1', '1')`).run()
+          db.prepare(`INSERT INTO knowledge_registry (ws_path, knowledge_dir, created_at, updated_at) VALUES ('x', 'y', '1', '1')`).run()
           throw new Error('boom')
         }),
       ).toThrow('boom')
-      expect(db.prepare(`SELECT COUNT(*) AS c FROM projects`).get()).toEqual({ c: 0 })
+      expect(db.prepare(`SELECT COUNT(*) AS c FROM knowledge_registry`).get()).toEqual({ c: 0 })
       expect(db.inTransaction).toBe(false)
     } finally {
       db.close()
@@ -55,7 +55,7 @@ describe('BEGIN IMMEDIATE 短事务', () => {
     try {
       withImmediateTransaction(a, () => dbInsert(a, 'a-1'))
       withImmediateTransaction(b, () => dbInsert(b, 'b-1'))
-      const rows = a.prepare(`SELECT ws_path FROM projects ORDER BY ws_path`).all() as Array<{ ws_path: string }>
+      const rows = a.prepare(`SELECT ws_path FROM knowledge_registry ORDER BY ws_path`).all() as Array<{ ws_path: string }>
       expect(rows.map((r) => r.ws_path)).toEqual(['a-1', 'b-1'])
     } finally {
       a.close()
@@ -65,7 +65,7 @@ describe('BEGIN IMMEDIATE 短事务', () => {
 })
 
 function dbInsert(db: Parameters<typeof withImmediateTransaction>[0], ws: string): void {
-  db.prepare(`INSERT INTO projects (ws_path, knowledge_dir, created_at, updated_at) VALUES (?, 'd', '1', '1')`).run(ws)
+  db.prepare(`INSERT INTO knowledge_registry (ws_path, knowledge_dir, created_at, updated_at) VALUES (?, 'd', '1', '1')`).run(ws)
 }
 
 describe('rebuild 单飞（进程内 mutex）', () => {

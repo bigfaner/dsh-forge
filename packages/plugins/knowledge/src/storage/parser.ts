@@ -19,6 +19,24 @@ export interface ParsedEntry {
   domainPath: string
   /** 全文内容摘要 sha256 hex（变更检测） */
   digest: string
+  /**
+   * stage② 版本化元数据透传（提案 §2.2：正本权威 frontmatter 字段——id/version_ts/
+   * supersedes/merged_into/candidate_of/slug_hint/type/procedure）。contracts 最小契约
+   * 形状（KnowledgeFrontmatter）不动；本包存储面扩展消费，缺席字段缺省（存量收编前旧文件可无）。
+   */
+  meta: KnowledgeEntryMetadata
+}
+
+/** stage② 版本化元数据（frontmatter 透传面——全部可选，调用方判空走缺省链） */
+export interface KnowledgeEntryMetadata {
+  id?: string
+  versionTs?: string
+  supersedes?: string
+  mergedInto?: string
+  candidateOf?: string
+  slugHint?: string
+  type?: string
+  procedure?: boolean
 }
 
 export type ParseOutcome =
@@ -90,9 +108,39 @@ export function parseKnowledgeFile(input: ParseKnowledgeFileInput): ParseOutcome
     updated: normalizeUpdated(data.updated, input.mtime.getTime()),
   }
 
+  const meta: KnowledgeEntryMetadata = {
+    ...(isNonEmptyString(data.id) ? { id: data.id } : {}),
+    ...(isNonEmptyString(data.version_ts)
+      ? { versionTs: data.version_ts }
+      : data.version_ts instanceof Date && !Number.isNaN(data.version_ts.getTime())
+        ? { versionTs: data.version_ts.toISOString() }
+        : {}),
+    ...(isNonEmptyString(data.supersedes)
+      ? { supersedes: data.supersedes }
+      : data.supersedes instanceof Date && !Number.isNaN(data.supersedes.getTime())
+        ? { supersedes: data.supersedes.toISOString() }
+        : {}),
+    ...(isNonEmptyString(data.merged_into) ? { mergedInto: data.merged_into } : {}),
+    ...(isNonEmptyString(data.candidate_of) ? { candidateOf: data.candidate_of } : {}),
+    ...(isNonEmptyString(data.slug_hint) ? { slugHint: data.slug_hint } : {}),
+    ...(isNonEmptyString(data.type) ? { type: data.type } : {}),
+    ...(typeof data.procedure === 'boolean'
+      ? { procedure: data.procedure }
+      : data.procedure === 'true'
+        ? { procedure: true }
+        : data.procedure === 'false'
+          ? { procedure: false }
+          : {}),
+  }
+
   return {
     ok: true,
-    entry: { frontmatter, domainPath: input.domainPath, digest: digestOf(input.content) },
+    entry: {
+      frontmatter,
+      domainPath: input.domainPath,
+      digest: digestOf(input.content),
+      meta,
+    },
   }
 }
 

@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import type Database from 'better-sqlite3'
 import { withImmediateTransaction } from './concurrency.js'
 
-/** 注册行（projects 表行投影；projectId 可空——v3 前行/种子迁移行无值） */
+/** 注册行（knowledge_registry 表行投影——v4 由 projects 改名；projectId 可空——v3 前行/种子迁移行无值） */
 export interface RegistryRow {
   readonly wsPath: string
   readonly knowledgeDir: string
@@ -46,18 +46,18 @@ export interface KnowledgeRegistry {
 /** 建注册表（句柄由 open.ts 唯一产出） */
 export function createKnowledgeRegistry(db: Database.Database): KnowledgeRegistry {
   const select = db.prepare<[string], { ws_path: string; knowledge_dir: string; project_id: string | null; created_at: string; updated_at: string }>(
-    `SELECT ws_path, knowledge_dir, project_id, created_at, updated_at FROM projects WHERE ws_path = ?`,
+    `SELECT ws_path, knowledge_dir, project_id, created_at, updated_at FROM knowledge_registry WHERE ws_path = ?`,
   )
   const selectByProjectId = db.prepare<[string], { ws_path: string; knowledge_dir: string; project_id: string | null; created_at: string; updated_at: string }>(
-    `SELECT ws_path, knowledge_dir, project_id, created_at, updated_at FROM projects WHERE project_id = ?`,
+    `SELECT ws_path, knowledge_dir, project_id, created_at, updated_at FROM knowledge_registry WHERE project_id = ?`,
   )
   const listAll = db.prepare<unknown[], { ws_path: string; knowledge_dir: string; project_id: string | null; created_at: string; updated_at: string }>(
-    `SELECT ws_path, knowledge_dir, project_id, created_at, updated_at FROM projects ORDER BY ws_path`,
+    `SELECT ws_path, knowledge_dir, project_id, created_at, updated_at FROM knowledge_registry ORDER BY ws_path`,
   )
   const upsertStmt = db.prepare(
-    `INSERT INTO projects (ws_path, knowledge_dir, project_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO knowledge_registry (ws_path, knowledge_dir, project_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(ws_path) DO UPDATE SET knowledge_dir = excluded.knowledge_dir,
-       project_id = COALESCE(excluded.project_id, projects.project_id),
+       project_id = COALESCE(excluded.project_id, knowledge_registry.project_id),
        updated_at = excluded.updated_at`,
   )
 
