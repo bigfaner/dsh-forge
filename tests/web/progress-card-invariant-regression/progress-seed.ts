@@ -1,4 +1,4 @@
-﻿// progress-card-invariant-regression e2e 播种器（durable 会话日志确定性代位——零真实模型）。
+// progress-card-invariant-regression e2e 播种器（durable 会话日志确定性代位——零真实模型）。
 // 形状来源（实锚，非杜撰）：
 //  - e2e/support/replay/transcript-seed.ts —— v4 会话日志帧纪律（zstd 新帧追加、seq 连续
 //    续编、首帧 header 唯一消费）与 assistant settlement 形状（replayState/usage/stream——
@@ -210,11 +210,14 @@ export class SeedLogBuilder {
     }
     let assistantMsgId: string | undefined
     if (spec.assistantText === null) {
-      // 工具收尾（无 answer）：tool-call 广告 → tool/call → tool/result
+      // 工具收尾（无 answer）：tool-call 广告 → tool/call → tool/result。
+      // sourceEventSeqs 须引用 tool/call 事件 seq（官方 v3 校验：成员必须 < 自身 seq——
+      // 对象字面量属性从左求值，nextSeq() 已推进 this.seq，禁用它推目标）。
       this.assistantMessage({ type: 'tool-call', id: callId, name: spec.tool?.name ?? 'seed_noop', arguments: spec.tool?.arguments ?? '{}' })
-      this.events.push({ type: 'tool/call', seq: this.nextSeq(), time: this.t(), data: { turn: this.turnNo, step: 1, callId, name: spec.tool?.name ?? 'seed_noop', arguments: spec.tool?.arguments ?? '{}' } })
+      const callSeq = this.nextSeq()
+      this.events.push({ type: 'tool/call', seq: callSeq, time: this.t(), data: { turn: this.turnNo, step: 1, callId, name: spec.tool?.name ?? 'seed_noop', arguments: spec.tool?.arguments ?? '{}' } })
       this.events.push({
-        type: 'tool/result', seq: this.nextSeq(), time: this.t(), surfaceOp: 'append', sourceEventSeqs: [this.seq - 1],
+        type: 'tool/result', seq: this.nextSeq(), time: this.t(), surfaceOp: 'append', sourceEventSeqs: [callSeq],
         data: { turn: this.turnNo, step: 1, message: { role: 'tool', source: { kind: 'tool', callId }, toolCallId: callId, content: [{ type: 'text', text: spec.tool?.resultText ?? 'ok' }], isError: false, id: randomUUID() } },
       })
     } else {
