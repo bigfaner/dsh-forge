@@ -73,7 +73,9 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
 
   it.each([
     ['packages/contracts', []],
-    ['packages/core', ['packages/contracts', 'packages/path-key']],
+    // knowledge-stage1 1.7：core 增 plugins/knowledge 引用——Interface 2 服务类型随 A2
+    // 迁 knowledge 包（过渡型 type-only 边，core 知识域退役任务随迁收口）
+    ['packages/core', ['packages/contracts', 'packages/path-key', 'packages/plugins/knowledge']],
     // fix-33 ⑯：knowledge ../core 引用删除——build 面零 core import（残留引用无消费）；
     // 测试面 core 源相对引入由 tsconfig.test.json 承载（不经 references）
     ['packages/plugins/knowledge', ['packages/contracts', 'packages/path-key']],

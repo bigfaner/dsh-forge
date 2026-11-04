@@ -368,6 +368,9 @@ importers:
         specifier: 4.0.3
         version: 4.0.3
     devDependencies:
+      '@dsh-forge/knowledge':
+        specifier: workspace:*
+        version: link:../plugins/knowledge
       '@types/better-sqlite3':
         specifier: 9.6.0
         version: 9.6.0

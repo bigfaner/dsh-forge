@@ -1,8 +1,8 @@
 // knowledge_search tool 定义（定位：业务）。参数 schema 与 KnowledgeService.search
 // 同构（Interface 3）：projectId/sessionId 由会话上下文解析（session.ts），agent 面
 // 仅见 domain_prefix（可选，省略 = 全域，agent 自主选域）/ keywords / text / limit；
-// 返回 = contracts SearchHit[]（摘要先行），不自定形状（DTO 复用，AC1）。
-import type { SearchHit, SearchQuery } from '@dsh-forge/contracts'
+// 返回 = SearchHit[]（摘要先行），不自定形状（DTO 复用，AC1）。
+import type { SearchHit, SearchQuery } from '../service/types.js'
 import type { KnowledgeToolDefinition, ToolExecFace } from './faces.js'
 import type { KnowledgeToolDeps } from './index.js'
 import { sessionContextOf, unboundSessionError } from './session.js'

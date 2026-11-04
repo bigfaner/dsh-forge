@@ -6,7 +6,7 @@ import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/contracts'
 import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from './index.js'
 import { createKnowledgeTools } from '../tools/index.js'
 import { createProjectResolver } from '../tools/session.js'
-import type { KnowledgeService } from '@dsh-forge/contracts'
+import type { KnowledgeService } from '../service/types.js'
 
 const tools = createKnowledgeTools({
   knowledge: {} as KnowledgeService, // 渲染纯消费定义形状，不触服务

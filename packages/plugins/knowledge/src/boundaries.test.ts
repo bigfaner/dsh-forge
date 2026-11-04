@@ -1,4 +1,5 @@
-// 3.4 单测 —— AC3 机械自证：插件仅依赖 forgeKnowledge 服务类型，零实现级 import。
+// SC-2 机械自证（1.7 A2 后口径）：插件零 core / expert-squad 依赖——服务类型自有
+//（src/service/types.ts，Interface 2 随迁），信封类型经 contracts。
 // 构建图三面：package.json dependencies（发版运行期面）、src 非测试源（import 面）、
 // tsconfig references（tsc 拓扑——设计裁定为「仅类型依赖」边，由 tests/structure pin）。
 import { readdirSync, readFileSync } from 'node:fs'
@@ -8,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 
 const PKG_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-describe('AC3 插件仅依赖 forgeKnowledge 服务类型（构建图机械自证）', () => {
+describe('SC-2 插件零 core 依赖（构建图机械自证）', () => {
   it('package.json dependencies 不含 @dsh-forge/core（发版运行期零 core 边——可独立发版前提）', () => {
     const pkg = JSON.parse(readFileSync(join(PKG_DIR, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>
@@ -16,7 +17,7 @@ describe('AC3 插件仅依赖 forgeKnowledge 服务类型（构建图机械自�
     expect(Object.keys(pkg.dependencies ?? {})).not.toContain('@dsh-forge/core')
   })
 
-  it('src 非测试源零 @dsh-forge/core import（服务类型出自 contracts 单一来源）', () => {
+  it('src 非测试源零 @dsh-forge/core import（服务类型自有 src/service/types.ts——零实现级依赖）', () => {
     const files: string[] = []
     const walk = (dir: string): void => {
       for (const ent of readdirSync(dir, { withFileTypes: true })) {

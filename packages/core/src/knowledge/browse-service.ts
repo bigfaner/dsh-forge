@@ -24,8 +24,8 @@ import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import matter from 'gray-matter'
 import type Database from 'better-sqlite3'
+import type { BrowseKnowledgeService } from '@dsh-forge/knowledge'
 import type {
-  BrowseKnowledgeService,
   DomainNode,
   EntryDetail,
   KnowledgeCard,

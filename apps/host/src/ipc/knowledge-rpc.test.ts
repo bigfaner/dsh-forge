@@ -1,22 +1,22 @@
-// 任务 3.5 集成层——forge:knowledge/* 五通道经 1.4 ipc/ 机制注册端到端（双层自证）：
+// forge:knowledge/* 五通道经 1.4 ipc/ 机制注册端到端（双层自证；1.7 A2 服务切换后
+// 实层句柄来源 = knowledge 插件服务域）：
 //   双层之一（替身层）：fake 浏览面服务（browse 聚合 + 浏览四法）× 五通道 → typed 结果 + 负载映射；
-//   双层之二（实层）  ：core 知识域真身（3.2/3.3 服务组 + 临时 SQLite + 知识目录语料）→ 五通道
+//   双层之二（实层）  ：knowledge 插件服务真身（自持库 + 注册表 + 两级解析）→ 五通道
 //                      实跑（含 browse 聚合真值与过滤参数）+ 知识域三码 typed error 过真实注册
-//                      机制入信封保真。
+//                      机制入信封保真 + 在场/缺席双态（main wiring 判定缝同构）。
 // AC 对照：AC1 五通道端到端 / AC2 三码边界往返 / AC3 通道名仅出自 contracts + 未知通道拒绝 /
 // AC4 search/readAbstract 不在 web RPC 面（双门分工——注入面类型收窄 + 注册面负样例）。
-// 注：实层经相对路径引 core 源码仅限测试文件（结构 pin 豁免 *.test.*；生产面 host 禁 import core）。
-import { randomUUID } from 'node:crypto'
+// 注：实层经相对路径引插件源码仅限测试文件（结构 pin 豁免 *.test.*；生产面 host 经
+// @dsh-forge/knowledge 类型 + boot 桥服务注入，禁 import 实现源码）。
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { KNOWLEDGE_CHANNELS, type EntryDetail, type KnowledgeCard, type RecallGroup } from '@dsh-forge/contracts'
-// core 源码相对引入（测试面专用——见文件头注）
-import { openDatabase } from '../../../../packages/core/src/db/index.js'
-import { createKnowledgeIndexService } from '../../../../packages/core/src/knowledge/index-service.js'
-import { createKnowledgeRecallService } from '../../../../packages/core/src/knowledge/recall-service.js'
-import { createKnowledgeBrowseService } from '../../../../packages/core/src/knowledge/browse-service.js'
+// 插件源码相对引入（测试面专用——见文件头注）
+import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../../packages/plugins/knowledge/src/storage/index.js'
+import { createKnowledgeService } from '../../../../packages/plugins/knowledge/src/service/index.js'
+import type { BrowseKnowledgeService } from '../../../../packages/plugins/knowledge/src/service/index.js'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { registerKnowledgeChannels, type KnowledgeChannelService } from './knowledge-rpc.js'
 
@@ -89,6 +89,29 @@ describe('3.5 五通道注册（AC3/AC4）', () => {
     expect(() => ipc.register('forge:knowledge/search' as never, () => 1)).toThrow(/allowlist/)
     expect(() => ipc.register('forge:knowledge/drop-table' as never, () => 1)).toThrow(/allowlist/)
     expect(handlers.has('forge:knowledge/drop-table')).toBe(false)
+  })
+})
+
+// ── 1.7 在场/缺席双态（A2 服务切换——main.ts wiring 判定缝同构，判例 2ffb0a82 反例核验） ──
+
+describe('1.7 在场/缺席双态：knowledge 服务缺席 = 五通道整体不挂', () => {
+  it('服务在场 → 五通道注册齐备；服务缺席（插件行未装载/降级）→ 通道整体不注册（invoke 无 handler）', () => {
+    // 在场态（main.ts if 分支同构：service !== undefined 才注册）
+    const present = fakeIpcMain()
+    const presentIpc = createForgeIpc(present.ipcMain)
+    const service = fakeKnowledgeService()
+    if (service !== undefined) registerKnowledgeChannels(presentIpc, service)
+    expect([...presentIpc.registered()].sort()).toEqual(Object.values(KNOWLEDGE_CHANNELS).slice().sort())
+
+    // 缺席态（main.ts else 分支同构：仅 warn，不注册——判例 2ffb0a82 的通道面语义）
+    const absent = fakeIpcMain()
+    const absentIpc = createForgeIpc(absent.ipcMain)
+    const missing: KnowledgeChannelService | undefined = undefined
+    if (missing !== undefined) registerKnowledgeChannels(absentIpc, missing)
+    expect(absentIpc.registered()).toEqual([])
+    for (const channel of Object.values(KNOWLEDGE_CHANNELS)) {
+      expect(absent.handlers.has(channel), `${channel} 不应有 handler`).toBe(false)
+    }
   })
 })
 
@@ -169,15 +192,15 @@ function writeMd(knowledgeDir: string, relPath: string, frontmatter: string, bod
 }
 
 /**
- * 实层素材：每用例独占临时库 + 知识目录语料（前端 2 / 后端 1）+ projects 行直插
- * （注册链路归 forge 域 2.2 已测）。indexService 注入缝：failRebuild = 重建器替身恒炸
+ * 实层素材：每用例独占临时自持库 + 知识目录语料（前端 2 / 后端 1）+ 注册行种子
+ * （registry.upsert——种子迁移径等价）。rebuild 注入缝：failRebuild = 重建器替身恒炸
  * （ERR_INDEX_STALE 实层素材）；absentDir = 知识目录非法（ERR_INVALID_KNOWLEDGE_DIR——
- * fix-39 后缺失态被 rebuildIndex 前置门自愈，非法面载体 = 路径为普通文件）。
+ * 路径为普通文件）。
  */
 function realFixture(opts: { absentDir?: boolean; failRebuild?: boolean } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'dsh-forge-knrpc-'))
   dirs.push(home)
-  const db = openDatabase(join(home, 'state.db'))
+  const db = openKnowledgeDatabase(join(home, 'knowledge.db'))
   const knowledgeDir = join(home, 'knowledge')
   if (opts.absentDir) {
     writeFileSync(join(home, 'absent'), '占位文件', 'utf8') // 路径为普通文件 → scan 前置门现行六码面
@@ -187,26 +210,21 @@ function realFixture(opts: { absentDir?: boolean; failRebuild?: boolean } = {}) 
     writeMd(knowledgeDir, '前端/样式令牌.md', 'summary: 设计令牌与主题联动\nkeywords: [css, frontend]')
     writeMd(knowledgeDir, '后端/API规范.md', 'title: API 规范\nsummary: 接口设计规范\nkeywords: [api, backend]')
   }
-  const projectId = randomUUID()
+  const projectId = 'p-knrpc'
   const dirUsed = opts.absentDir ? join(home, 'absent') : knowledgeDir
-  const now = new Date().toISOString()
-  db.prepare(
-    `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at)
-     VALUES (?, ?, ?, 'knrpc', ?, 0, ?, 0, ?, ?)`,
-  ).run(projectId, randomUUID(), home, join(home, '.forge'), dirUsed, now, now)
+  const wsDir = join(home, 'ws')
+  createKnowledgeRegistry(db).upsert(wsDir, dirUsed)
 
-  const indexService = opts.failRebuild
-    ? { rebuildIndex: async () => { throw new Error('重建器内部异常') } }
-    : createKnowledgeIndexService({ db })
   // 结构面 ⊇ KnowledgeChannelService（search/readAbstract 在场但通道面不触及——双门分工）
-  const service = {
-    ...createKnowledgeRecallService({ db, indexService }),
-    ...createKnowledgeBrowseService({ db, indexService }),
-  }
+  const service: BrowseKnowledgeService = createKnowledgeService({
+    db,
+    resolveWsPath: (id) => (id === projectId ? wsDir : undefined),
+    ...(opts.failRebuild ? { rebuild: () => { throw new Error('重建器内部异常') } } : {}),
+  })
   const { ipcMain, handlers } = fakeIpcMain()
   registerKnowledgeChannels(createForgeIpc(ipcMain), service)
   const call = (channel: string, payload?: unknown) => invoke(handlers, channel, payload)
-  return { db, service, projectId, knowledgeDir: dirUsed, call }
+  return { db, service, projectId, wsDir, knowledgeDir: dirUsed, call }
 }
 
 describe('3.5 AC1 实层：五通道真身实跑', () => {
@@ -230,8 +248,8 @@ describe('3.5 AC1 实层：五通道真身实跑', () => {
 
     // entryDetail 用后端条目（实索引行 id）
     const entries = f.db.prepare<unknown[], { id: number; title: string }>(
-      `SELECT id, title FROM knowledge_entries WHERE project_id = ? AND title = 'API 规范'`,
-    ).all(f.projectId)
+      `SELECT id, title FROM knowledge_entries WHERE ws_path = ? AND title = 'API 规范'`,
+    ).all(f.wsDir)
     const detail = await f.call(KNOWLEDGE_CHANNELS.entryDetail, { projectId: f.projectId, entryId: entries[0]!.id })
     expect(detail).toMatchObject({ ok: true, data: { title: 'API 规范', body: '正文', domainPath: '后端' } })
 
@@ -279,8 +297,6 @@ describe('3.5 AC2 实层：知识域三码 typed error 过 RPC 边界保真', ()
     expect(envelope.error.code).toBe('ERR_INVALID_KNOWLEDGE_DIR')
     expect(envelope.error.message).toBe(`知识目录不可达或非法：${f.knowledgeDir}`)
     expect(envelope.error.data).toEqual({ knowledgeDir: f.knowledgeDir })
-    // 关键异常降级 app_key_logs（单事件单条）——不抛断流程
-    expect(f.db.prepare(`SELECT COUNT(*) AS n FROM app_key_logs`).get()).toEqual({ n: 1 })
     f.db.close()
   })
 

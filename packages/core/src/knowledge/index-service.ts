@@ -7,7 +7,7 @@
 // 届时并齐 contracts KnowledgeService 全七法后由 service.ts 装配注册 ctx.forgeKnowledge。
 import { readFileSync } from 'node:fs'
 import type Database from 'better-sqlite3'
-import type { IndexReport, KnowledgeService } from '@dsh-forge/contracts'
+import type { IndexReport, KnowledgeService } from '@dsh-forge/knowledge'
 import { withTransaction } from '../db/index.js'
 import { ensureDirReadable } from '../fs-ensure.js'
 import { parseKnowledgeFile } from './parser.js'

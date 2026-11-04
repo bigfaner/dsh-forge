@@ -8,7 +8,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { openKnowledgeDatabase } from './open.js'
 import { createKnowledgeRegistry } from './registry.js'
 import { rebuildKnowledgeIndex } from './rebuild.js'
-import { KNOWLEDGE_REBUILD_EVENT, type DiagEmitter, type DiagEventPayload } from './index.js'
+import { KNOWLEDGE_REBUILD_EVENT, type DiagEmitter } from './index.js'
+import type { DiagEventPayload } from '@dsh-forge/contracts'
 
 const roots: string[] = []
 function tmpRoot(): string {
@@ -53,7 +54,7 @@ describe('rebuildKnowledgeIndex（entries 零迁 → 首用再生全集）', () 
     const root = tmpRoot()
     const { db, wsPath } = setup(root)
     buildCorpus(join(wsPath, '.knowledge'))
-    expect(db.prepare<{ n: number }>(`SELECT COUNT(*) AS n FROM knowledge_entries`).get()).toEqual({ n: 0 })
+    expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_entries`).get()).toEqual({ n: 0 })
 
     const { emit, events } = collector()
     const report = rebuildKnowledgeIndex(db, wsPath, { emit })
@@ -78,7 +79,7 @@ describe('rebuildKnowledgeIndex（entries 零迁 → 首用再生全集）', () 
     buildCorpus(join(wsPath, '.knowledge'))
     rebuildKnowledgeIndex(db, wsPath)
     rebuildKnowledgeIndex(db, wsPath)
-    expect(db.prepare<{ n: number }>(`SELECT COUNT(*) AS n FROM knowledge_entries`).get()).toEqual({ n: 2 })
+    expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_entries`).get()).toEqual({ n: 2 })
     db.close()
   })
 

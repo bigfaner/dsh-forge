@@ -4,7 +4,7 @@
 // ——铁律③ 只禁跨域 ../forge/，域内同层共享不破界）。零行为变化：SQL/消息文案/降级路径
 // 逐字保留（rebuildMissingIndex 仅 scope 与触发面动词参数化——fix-31 存在性口径注释随迁）。
 import type Database from 'better-sqlite3'
-import type { IndexReport } from '@dsh-forge/contracts'
+import type { IndexReport } from '@dsh-forge/knowledge'
 import { errMessage } from '../util.js'
 import { IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
 

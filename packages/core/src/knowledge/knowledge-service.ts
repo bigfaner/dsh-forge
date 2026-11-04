@@ -5,7 +5,7 @@
 // browse = Interface 2 之外的第八法（forge:knowledge/browse 通道 handler 挂接，host 侧
 // structural 消费）；search/readAbstract 仍仅经插件 tool 面（双门分工）。
 import type Database from 'better-sqlite3'
-import type { BrowseKnowledgeService } from '@dsh-forge/contracts'
+import type { BrowseKnowledgeService } from '@dsh-forge/knowledge'
 import { createKnowledgeIndexService } from './index-service.js'
 import { createKnowledgeRecallService } from './recall-service.js'
 import { createKnowledgeBrowseService } from './browse-service.js'

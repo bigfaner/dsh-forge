@@ -9,7 +9,7 @@
 //   ⑥-3 运行期 order 约定（真实装配：升序 + 同 order 码序 tiebreak + 重复名抛错 + disposer）
 //   ⑥-4 forge:knowledge 段形状（Interface 3 对上游约定；真实渲染无裸 {{ 插值炸点）
 import { describe, expect, it } from 'vitest'
-import type { KnowledgeService } from '../../packages/contracts/src/index.js'
+import type { KnowledgeService } from '../../packages/plugins/knowledge/src/index.js'
 import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from '../../packages/plugins/knowledge/src/prompt/index.js'
 import { createKnowledgeTools, createProjectResolver } from '../../packages/plugins/knowledge/src/tools/index.js'
 import { expectPinnedVersion, importUpstream, interfaceMembers, norm, readUpstream } from './pins.js'

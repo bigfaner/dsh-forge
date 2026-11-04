@@ -204,7 +204,7 @@ describe('asReadyMessage（ready 守卫）', () => {
       injections: [{ url: 'x.js' }],
       services: {
         forgeProjects: true,
-        forgeKnowledge: false,
+        knowledge: false,
         forgeTasks: true,
         forgeFeatures: true,
         forgeProposals: false,
@@ -222,7 +222,7 @@ describe('asReadyMessage（ready 守卫）', () => {
       injections: [{ url: 'x.js' }],
       services: {
         forgeProjects: true,
-        forgeKnowledge: false,
+        knowledge: false,
         forgeTasks: true,
         forgeFeatures: true,
         forgeProposals: false,
@@ -240,7 +240,7 @@ describe('asReadyMessage（ready 守卫）', () => {
     for (const missing of ['forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings', 'forgeBugs', 'approval', 'remotePsk'] as const) {
       const services = {
         forgeProjects: true,
-        forgeKnowledge: true,
+        knowledge: true,
         forgeTasks: true,
         forgeFeatures: true,
         forgeProposals: true,
@@ -270,7 +270,7 @@ describe('asReadyMessage（ready 守卫）', () => {
       injections: [],
       services: {
         forgeProjects: true,
-        forgeKnowledge: true,
+        knowledge: true,
         forgeTasks: true,
         forgeFeatures: true,
         forgeProposals: true,
@@ -295,7 +295,7 @@ describe('asReadyMessage（ready 守卫）', () => {
       injections: [],
       services: {
         forgeProjects: true,
-        forgeKnowledge: true,
+        knowledge: true,
         forgeTasks: true,
         forgeFeatures: true,
         forgeProposals: true,
@@ -320,7 +320,7 @@ describe('asReadyMessage（ready 守卫）', () => {
       injections: [],
       services: {
         forgeProjects: true,
-        forgeKnowledge: true,
+        knowledge: true,
         forgeTasks: true,
         forgeFeatures: true,
         forgeProposals: true,
@@ -347,7 +347,7 @@ describe('asReadyMessage（ready 守卫）', () => {
       injections: [],
       services: {
         forgeProjects: true,
-        forgeKnowledge: true,
+        knowledge: true,
         forgeTasks: true,
         forgeFeatures: true,
         forgeProposals: true,
@@ -409,7 +409,7 @@ describe('asReadyMessage/asPairMessage PIN 读数透传（fix-17 ③）', () => 
     injections: [],
     services: {
       forgeProjects: true,
-      forgeKnowledge: true,
+      knowledge: true,
       forgeTasks: true,
       forgeFeatures: true,
       forgeProposals: true,
@@ -496,7 +496,7 @@ describe('fix-26 ready/pair：remotePinDurable 透传（长效位——UI hint �
     injections: [],
     services: {
       forgeProjects: true,
-      forgeKnowledge: true,
+      knowledge: true,
       forgeTasks: true,
       forgeFeatures: true,
       forgeProposals: true,
@@ -623,8 +623,8 @@ describe('dispatchRpc（子侧派发——结果面永不 reject）', () => {
 
   it('ok 态：方法执行 + wire 编码应用（Map → 信封）', async () => {
     const result = await dispatchRpc(
-      { forgeKnowledge: { heatByEntry: async () => new Map([[3, 5]]) } },
-      request({ service: 'forgeKnowledge', method: 'heatByEntry' }),
+      { knowledge: { heatByEntry: async () => new Map([[3, 5]]) } },
+      request({ service: 'knowledge', method: 'heatByEntry' }),
     )
     expect(result).toEqual({ type: 'rpc-result', id: 7, ok: true, data: { __dshForgeMap__: [[3, 5]] } })
   })
@@ -664,7 +664,7 @@ describe('dispatchRpc（子侧派发——结果面永不 reject）', () => {
   })
 
   it('服务/方法不在场 → ok=false（白名单外不可达）', async () => {
-    expect((await dispatchRpc(services, request({ service: 'forgeKnowledge' }))).ok).toBe(false)
+    expect((await dispatchRpc(services, request({ service: 'knowledge' }))).ok).toBe(false)
     expect((await dispatchRpc(services, request({ method: 'nope' }))).ok).toBe(false)
   })
 })
@@ -710,12 +710,12 @@ describe('rebuildBridgeError（主侧双形态解码——fix-28 wire 兼容）'
 describe('createBridgeProxy（主侧代理）', () => {
   it('白名单方法逐一转发 (service, method, args) 并 wire 解码', async () => {
     const calls: Array<[string, string, readonly unknown[]]> = []
-    const proxy = createBridgeProxy<Record<string, () => Promise<unknown>>>('forgeKnowledge', ['heatByEntry'], async (s, m, a) => {
+    const proxy = createBridgeProxy<Record<string, () => Promise<unknown>>>('knowledge', ['heatByEntry'], async (s, m, a) => {
       calls.push([s, m, a])
       return { __dshForgeMap__: [[2, 9]] } // 子侧 encodeWire 产物形状
     })
     const heat = (await proxy.heatByEntry!()) as Map<number, number>
-    expect(calls).toEqual([['forgeKnowledge', 'heatByEntry', []]])
+    expect(calls).toEqual([['knowledge', 'heatByEntry', []]])
     expect(heat).toBeInstanceOf(Map)
     expect(heat.get(2)).toBe(9)
   })
@@ -785,7 +785,7 @@ describe('createBridgeProxy（主侧代理）', () => {
     expect([...PROJECTS_M2_SERVICE_METHODS]).toEqual(['deriveTaskStoreDir'])
     expect([...BRIDGE_SERVICE_NAMES]).toEqual([
       'forgeProjects',
-      'forgeKnowledge',
+      'knowledge',
       'forgeTasks',
       'forgeFeatures',
       'forgeProposals',
@@ -894,7 +894,7 @@ describe('sendGuarded（fix-33 ①：子侧消息发送防护）', () => {
     }
     const sixBits = {
       forgeProjects: true,
-      forgeKnowledge: true,
+      knowledge: true,
       forgeTasks: true,
       forgeFeatures: true,
       forgeProposals: true,

@@ -1,7 +1,7 @@
 // 3.4 单测 —— knowledge_search tool（AC1：参数/返回与 KnowledgeService.search 同构，
 // DTO 复用 contracts 不自定形状；AC4 前置：执行链 = 会话解析 → 服务调用，透传不记账）。
 import { describe, expect, it, vi } from 'vitest'
-import type { KnowledgeService, SearchHit, SearchQuery } from '@dsh-forge/contracts'
+import type { KnowledgeService, SearchHit, SearchQuery } from '../service/types.js'
 import { createSearchTool, parseSearchArgs } from './search.js'
 import { createProjectResolver } from './session.js'
 

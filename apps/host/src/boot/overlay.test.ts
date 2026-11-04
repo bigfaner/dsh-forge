@@ -2,8 +2,8 @@
 // 用户层之后应用，按 row id 整体替换 config；YAML 双引号标量承载 Windows 路径）。
 // fix-12：welcome ack 预置行形状 + 上游版本常量 pin（升级窗口机械核查）。
 // fix-26：凭据桥行形状（credentialsPath 在场注入 / 缺席不桥）+ 官方缝 pin。
-// 3.4 M2 装配缝两面：core 行 tasksHome / knowledge 行 bindingsFile（产品裁决：knowledge
-// 行条件化——打包形态暂不含知识库插件，knowledgeRow 门控注行；dev 形态在场才注）。产品裁决
+// 3.4 M2 装配缝：core 行 tasksHome / settingsFile。knowledge 行 config 注入退役（1.7 Q19——
+// knowledge 插件零 host 注入 config，自持库按宿主数据域锚自启）。产品裁决
 // （2026-10-09：标准模式零 forge 面）：全局 plugin-forge 行与全局 skill-filesystem 行
 // 废除——forge 工具/技能仅远征/突击预设组合携带（预设行内增量行 + customSkillDirs）。
 // M3 3.7 预设装配：registry default 覆写 + 远征/突击/HR 预设行每启注行（物化分叉——
@@ -17,10 +17,9 @@ import { hostRoot } from '../profile/paths.js'
 import { loadPresetPatches } from '../profile/presets.js'
 
 describe('renderBootOverlay（纯函数形状）', () => {
-  it('产品行 config 注入：core 行 dbFile 双引号标量（反斜杠转义）；knowledge 行缺席（默认 knowledgeRow 门关——打包形态暂不含知识库插件）', () => {
+  it('产品行 config 注入：core 行 dbFile 双引号标量（反斜杠转义）；knowledge 行零注行（1.7 Q19 退役）', () => {
     const text = renderBootOverlay({
       stateDb: 'C:\\app-data\\dsh-forge\\state.db',
-      bindingsFile: 'C:\\app-data\\dsh-forge\\knowledge-bindings.json',
     })
     expect(text).toBe(
       [
@@ -36,34 +35,28 @@ describe('renderBootOverlay（纯函数形状）', () => {
     )
   })
 
-  it('knowledge 行注行门（产品裁决：知识库功能不完整，打包形态不开放）：knowledgeRow: true（dev 形态 profile 树在场）→ bindingsFile 行注入（双引号标量）', () => {
+  it('knowledge 行 config 注入退役（1.7 Q19——绑定表文件随 knowledge 消费面退役）：任意输入零 dsh-forge-knowledge 行', () => {
     const text = renderBootOverlay({
       stateDb: 'C:\\app-data\\dsh-forge\\state.db',
-      bindingsFile: 'C:\\app-data\\dsh-forge\\knowledge-bindings.json',
-      knowledgeRow: true,
     })
-    expect(text).toContain(
-      ['- id: dsh-forge-knowledge', '  config:', '    bindingsFile: "C:\\\\app-data\\\\dsh-forge\\\\knowledge-bindings.json"'].join('\n'),
-    )
-    expect(text).toContain('- id: dsh-forge-core') // core 行不受门控（恒注）
+    expect(text).not.toContain('dsh-forge-knowledge')
+    expect(text).not.toContain('bindingsFile')
   })
 
   it('git-worktree 插件行注行门（worktree-branch-management 1.7）：gitWorktreeRow: true → loader 行以 insert 形态注入（新 id 裸行被 loader 补丁按 unknown target 静默跳过——fix-4）；默认门关零注行（config-less——扩展点注入走 ctx 服务缝非 config）', () => {
     const on = renderBootOverlay({
       stateDb: 'C:\\app-data\\dsh-forge\\state.db',
-      bindingsFile: 'C:\\app-data\\dsh-forge\\knowledge-bindings.json',
       gitWorktreeRow: true,
     })
     expect(on).toContain(`- insert:\n    - id: dsh-forge-git-worktree\n      name: '@dsh-forge/git-worktree'`)
     const off = renderBootOverlay({
       stateDb: 'C:\\app-data\\dsh-forge\\state.db',
-      bindingsFile: 'C:\\app-data\\dsh-forge\\knowledge-bindings.json',
     })
     expect(off).not.toContain('git-worktree')
   })
 
   it('行 id 定位用户层产品行（patch 按 row id 整体替换 config——非 insert 新行）；全局零 forge 面（产品裁决 2026-10-09：plugin-forge/skill-filesystem 全局行废除——标准模式不带 forge 工具/技能，仅预设组合携带）', () => {
-    const text = renderBootOverlay({ stateDb: '/x/state.db', bindingsFile: '/x/b.json' })
+    const text = renderBootOverlay({ stateDb: '/x/state.db' })
     expect(text).toContain('- id: dsh-forge-core')
     expect(text).not.toContain('- id: dsh-forge-knowledge') // 默认门关（打包形态——用户层无该行）
     expect(text).not.toContain('dsh-forge-plugin-forge')
@@ -75,12 +68,12 @@ describe('renderBootOverlay（纯函数形状）', () => {
   })
 
   it('正斜杠路径不转义（POSIX 形态原样）', () => {
-    const text = renderBootOverlay({ stateDb: '/tmp/ud/state.db', bindingsFile: '/tmp/ud/b.json' })
+    const text = renderBootOverlay({ stateDb: '/tmp/ud/state.db' })
     expect(text).toContain('dbFile: "/tmp/ud/state.db"')
   })
 
   it('welcome ack 预置行：官方等值比对常量双引号标量（fix-12）', () => {
-    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
+    const text = renderBootOverlay({ stateDb: '/x/s.db' })
     // 官方 WelcomeNoticeStore 逐字等值比对（===）——YAML 引号标量防日期式再解析
     expect(text).toContain(`- id: ui-settings-general\n  config:\n    welcomeNoticeVersion: "${WELCOME_NOTICE_ACK_VERSION}"`)
   })
@@ -88,7 +81,6 @@ describe('renderBootOverlay（纯函数形状）', () => {
   it('凭据桥行（fix-26）：credentialsPath 在场 → credentials 行 config.path 注入（反斜杠转义同产品行）', () => {
     const text = renderBootOverlay({
       stateDb: '/x/state.db',
-      bindingsFile: '/x/b.json',
       credentialsPath: 'C:\\Users\\u\\.dsh\\.credentials.yaml',
     })
     expect(text).toContain(
@@ -97,27 +89,26 @@ describe('renderBootOverlay（纯函数形状）', () => {
   })
 
   it('凭据桥门（fix-26）：credentialsPath 缺席 → 无 credentials 行（e2e/测试隔离态不读真凭据）', () => {
-    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
+    const text = renderBootOverlay({ stateDb: '/x/s.db' })
     expect(text).not.toContain('- id: credentials')
     expect(text).not.toContain('credentials.yaml')
   })
 
   it('M2 装配缝（3.4）：tasksHome 在场 → core 行 config 增字段（dbFile 重述——整行替换纪律）', () => {
-    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json', tasksHome: 'C:\\ws\\tasks' })
+    const text = renderBootOverlay({ stateDb: '/x/s.db', tasksHome: 'C:\\ws\\tasks' })
     expect(text).toContain(
       ['- id: dsh-forge-core', '  config:', '    dbFile: "/x/s.db"', '    tasksHome: "C:\\\\ws\\\\tasks"'].join('\n'),
     )
   })
 
   it('M2 装配缝（3.4）：tasksHome 缺席 → core 行仅 dbFile（M2 四域降级装配形态）', () => {
-    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
+    const text = renderBootOverlay({ stateDb: '/x/s.db' })
     expect(text).not.toContain('tasksHome')
   })
 
   it('M3 设置缝（3.8）：settingsFile 在场 → core 行 config 增字段（{userData}/forge-settings.json 注行——恒与 dbFile 同目录，core 守卫基准 dirname(dbFile)）', () => {
     const text = renderBootOverlay({
       stateDb: '/x/state.db',
-      bindingsFile: '/x/b.json',
       settingsFile: 'C:\\app-data\\dsh-forge\\forge-settings.json',
     })
     expect(text).toContain(
@@ -130,7 +121,6 @@ describe('renderBootOverlay（纯函数形状）', () => {
   it('M3 设置缝（3.8）：settingsFile 与 tasksHome 并存 → core 行两字段齐备（双缝独立注行）', () => {
     const text = renderBootOverlay({
       stateDb: '/x/state.db',
-      bindingsFile: '/x/b.json',
       tasksHome: '/x/forge-workspaces',
       settingsFile: '/x/forge-settings.json',
     })
@@ -142,19 +132,19 @@ describe('renderBootOverlay（纯函数形状）', () => {
   })
 
   it('M3 设置缝（3.8）：settingsFile 缺席 → 无该字段（forgeSettings 服务降级缺席——六服务形制）', () => {
-    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
+    const text = renderBootOverlay({ stateDb: '/x/s.db' })
     expect(text).not.toContain('settingsFile')
   })
 
   it('标准模式技能面口径（2026-10-09 裁决 + 2026-11-01 裁决精确化）：无 squad 锚时基础渲染零 skill-filesystem / customSkillDirs / includeDefaultRoots——forge 技能恒零，expert-squad 技能挂载见专测（squad 锚在场分支）', () => {
-    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
+    const text = renderBootOverlay({ stateDb: '/x/s.db' })
     expect(text).not.toContain('skill-filesystem')
     expect(text).not.toContain('customSkillDirs')
     expect(text).not.toContain('includeDefaultRoots')
   })
 
   it('fix-3 远程暴露缝：remoteExpose:true → webserver 行覆写（host 0.0.0.0 全卡绑定 + port 字面量 + 官方 bundle 行全键重述——patch 按 row id 整体替换 config）', () => {
-    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json', remoteExpose: true, port: 19400 })
+    const text = renderBootOverlay({ stateDb: '/x/s.db', remoteExpose: true, port: 19400 })
     expect(text).toContain(
       [
         '- id: webserver',
@@ -169,9 +159,9 @@ describe('renderBootOverlay（纯函数形状）', () => {
   })
 
   it('fix-3 缺省门：remoteExpose 缺席/false → 无 webserver 行（回环绑定官方默认形制零变化）', () => {
-    expect(renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })).not.toContain('- id: webserver')
+    expect(renderBootOverlay({ stateDb: '/x/s.db' })).not.toContain('- id: webserver')
     expect(
-      renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json', remoteExpose: false }),
+      renderBootOverlay({ stateDb: '/x/s.db', remoteExpose: false }),
     ).not.toContain('- id: webserver')
   })
 })
@@ -233,19 +223,18 @@ describe('凭据桥官方缝 pin（fix-26）', () => {
 })
 
 describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
-  const base = { stateDb: '/x/s.db', bindingsFile: '/x/b.json' }
+  const base = { stateDb: '/x/s.db' }
   // 真实四底稿（src 同邻装载——presets.test.ts 另 pin 底稿契约面）
   const patches = loadPresetPatches()!
   const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string; blitzSkillsDir?: string; squadSkillsDir?: string } = {}) => ({
     ...base,
-    knowledgeRow: true, // dev 形态口径（profile.dev 树在场——knowledge 行注行）
     presets: {
       ...patches,
       coreSkillsDir: '/c/skills',
       specSkillsDir: '/c/spec-skills',
       blitzSkillsDir: '/c/blitz-skills',
       squadSkillsDir: '/c/squad-skills',
-      bindingsFile: base.bindingsFile, // fix-1：预设行内产品行 config 物化锚（同值单源）
+      bindingsFile: '/x/b.json', // fix-1：预设行内产品行 config 物化锚（plugin-forge Interface 8 数据缝）
       ...over,
     },
   })
@@ -311,7 +300,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(absent).not.toContain('{{expert-squad')
   })
 
-  it('预设行内产品行携同 config（fix-1/drift #9）：plugin-forge[+spec] 行 bindingsFile 物化 = knowledge 全局行同值单源（产品裁决 2026-10-09：全局 plugin-forge 行已废除——预设行内实例是唯一 forge 工具面）', () => {
+  it('预设行内产品行携同 config（fix-1/drift #9）：plugin-forge[+spec] 行 bindingsFile 物化 = PresetOverlayInput.bindingsFile 单源（产品裁决 2026-10-09：全局 plugin-forge 行已废除——预设行内实例是唯一 forge 工具面；knowledge 全局行已随 1.7 Q19 退役）', () => {
     const text = renderBootOverlay(withPresets())
     const row = (name: string) =>
       [
@@ -322,10 +311,9 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
       ].join('\n')
     expect(text).toContain(row('plugin-forge'))
     expect(text).toContain(row('plugin-forge-spec'))
-    // 同值行计数：knowledge 全局一行（knowledgeRow: true——dev 形态口径）+ 远征行内
-    // plugin-forge/plugin-forge-spec 两行 + 突击行内 plugin-forge 一行 = 恰 4（全局 plugin-forge 行废除——预设会话行内实例
-    // 自足 cwd 路由，标准组合零 forge 面）
-    expect(text.split('\n').filter((l) => l.trim() === 'bindingsFile: "/x/b.json"')).toHaveLength(4)
+    // 同值行计数：远征行内 plugin-forge/plugin-forge-spec 两行 + 突击行内 plugin-forge 一行 = 恰 3
+    //（knowledge 全局行已退役——1.7 Q19；全局 plugin-forge 行废除——预设会话行内实例自足 cwd 路由）
+    expect(text.split('\n').filter((l) => l.trim() === 'bindingsFile: "/x/b.json"')).toHaveLength(3)
     expect(text).not.toContain('{{plugin-forge-bindings}}')
   })
 
@@ -396,9 +384,9 @@ describe('writeBootOverlay（落地机制）', () => {
 
   it('返回目标路径并写入渲染文本（深层目录自动创建；重写幂等）', () => {
     const target = join(dir, 'nested', 'boot-overlay.yml')
-    expect(writeBootOverlay(target, { stateDb: 'C:\\s.db', bindingsFile: 'C:\\b.json' })).toBe(target)
-    expect(readFileSync(target, 'utf8')).toBe(renderBootOverlay({ stateDb: 'C:\\s.db', bindingsFile: 'C:\\b.json' }))
-    writeBootOverlay(target, { stateDb: 'C:\\s2.db', bindingsFile: 'C:\\b2.json' })
+    expect(writeBootOverlay(target, { stateDb: 'C:\\s.db' })).toBe(target)
+    expect(readFileSync(target, 'utf8')).toBe(renderBootOverlay({ stateDb: 'C:\\s.db' }))
+    writeBootOverlay(target, { stateDb: 'C:\\s2.db' })
     expect(readFileSync(target, 'utf8')).toContain('s2.db')
   })
 })

@@ -1,7 +1,7 @@
 // 3.4 单测 —— knowledge_read_abstract tool（AC1：与 readAbstract 同构；
 // 场景⑤口径：返回不含正文；AC4 前置：会话解析 → 服务调用透传）。
 import { describe, expect, it, vi } from 'vitest'
-import type { EntryAbstract, KnowledgeService, ReadAbstractQuery } from '@dsh-forge/contracts'
+import type { EntryAbstract, KnowledgeService, ReadAbstractQuery } from '../service/types.js'
 import { createReadAbstractTool, parseReadAbstractArgs } from './read-abstract.js'
 import { createProjectResolver } from './session.js'
 

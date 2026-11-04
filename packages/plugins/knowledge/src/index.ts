@@ -1,34 +1,33 @@
-// @dsh-forge/knowledge 插件定义（定位：装配——3.4）。
-// 形态：Cordis Plugin.Function（loader 取 default 导出，与 core/index.ts 同型）：
-//   inject = ['forgeKnowledge', 'tools', 'systemPrompt'] —— 对 core 的唯一依赖 =
-//   forgeKnowledge 服务（Interface 2 类型，contracts 单一来源；运行期 inject 解析，
-//   零实现级 import，AC3）；tools / systemPrompt 为 dsh 官方面（非 core）。
-// 装配：两 tool 注册（tools/register）+ forge:knowledge 段注册
-// （systemPrompt.section，order 500）+ knowledge.root 目录键声明（根 scope
-// provide('dirKeys.knowledge', entries) 约定名——跨 scope 反向拉取终态缝
-// （bug 04d445f4：plugin-forge 按会话隔离实例化，推式 forgeDirs 注册面跨 scope
-// 不可达，消费侧 collectDeclaredDirKeys 现查拉取；declareDirKeys 推式面为同
-// scope 装配径保留面）；交出合并 disposer（fiber 卸载即全注销）。
-// projectId 解析缝：Interface 2 无路径反查、Hard Rule 禁第二 core 服务——绑定表经
-// 插件 config 进入（会话 cwd → projectId；DF003 调用缝设计期定缝项）。
-import type { KnowledgeContextFace } from './tools/index.js'
-import { createKnowledgeTools, createProjectResolver } from './tools/index.js'
-import type { ProjectBinding } from './tools/index.js'
+// @dsh-forge/knowledge 插件定义（定位：装配——3.4；1.7 A2 服务切换：自有服务面）。
+// 形态：Cordis Plugin.Function（loader 取 default 导出）：
+//   inject = ['tools', 'systemPrompt'] —— 零 core 依赖（SC-2）：五通道供数 = 自有
+//   'knowledge' 服务（reflect.provide；core 八法随迁 service/，自持库 storage/ 供数），
+//   tools / systemPrompt 为 dsh 官方面。
+// 装配：自持存储自启（失败/锚缺席 fail-soft 降级零注册）→ 'knowledge' 服务 provide →
+// 两 tool 注册（tools/register）+ forge:knowledge 段注册（systemPrompt.section，
+// order 500）+ knowledge.root 目录键声明（根 scope provide('dirKeys.knowledge', entries)
+// 约定名——跨 scope 反向拉取终态缝，bug 04d445f4）；交出合并 disposer。
+// projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
+// 数据源（bindingsFile 文件与刷新缝退役）；服务面两级解析 projectId→wsPath→注册行。
+import { createKnowledgeTools, createProjectResolver, createWsPathResolver } from './tools/index.js'
 import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from './prompt/index.js'
+import { createKnowledgeService } from './service/index.js'
 import { startSelfHostedStorage } from './storage/index.js'
 import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
 import { joinDirSegment } from '@dsh-forge/path-key'
+import type { KnowledgeContextFace } from './tools/index.js'
 
 /** 插件配置（profile cordis.patch.yml 行 config；应用装配期路径经 boot overlay 注入） */
 export interface KnowledgePluginConfig {
-  /** 会话 cwd → projectId 绑定表（wsPath 与 projects.ws_path 同口径 canonical path） */
-  projects?: readonly ProjectBinding[]
-  /** 绑定表文件路径（host 装配方维护——tool 执行点惰性读取，条目优先于静态表；4.2） */
-  bindingsFile?: string
+  /**
+   * 会话 cwd → projectId 绑定表（纯 config 静态注入——Q19 裁决；wsPath 与自持注册表
+   * ws_path 同口径 canonical path）。服务面两级解析第一级（反向：projectId → wsPath）。
+   */
+  projects?: readonly import('./tools/index.js').ProjectBinding[]
   /**
    * 自持库文件路径（config 可配——裁决① 2026-11-19）；缺席按宿主数据域子目录缺省解析
    * （dsh-forge → 数据域根/knowledge/，dsh desktop → DSH_HOME/knowledge/）。
-   * 双态（阶段①迁移前）：自持库仅作数据面准备，供数仍走 forgeKnowledge。
+   * 自启缺席（裸环境）/开库失败 = fail-soft 零注册零供数（不向 ~/.dsh 静默落盘）。
    */
   dbFile?: string
   /**
@@ -41,7 +40,7 @@ export interface KnowledgePluginConfig {
 /** 函数插件形状（Plugin.Function + inject 元数据） */
 export interface KnowledgePlugin {
   (ctx: KnowledgeContextFace, config?: KnowledgePluginConfig): () => void
-  /** 依赖声明：三服务齐备才加载（core 面 = forgeKnowledge 唯一） */
+  /** 依赖声明：dsh 官方面齐备才加载（零 core 面） */
   readonly inject: readonly string[]
 }
 
@@ -86,6 +85,9 @@ export const KNOWLEDGE_ROOT_DIR_KEY = {
  */
 const DIR_KEYS_SERVICE_NAME = 'dirKeys.knowledge'
 
+/** knowledge 服务 provide 名（A2 服务切换：去 forge 前缀——host 在场判定/通道句柄同键） */
+export const KNOWLEDGE_SERVICE_NAME = 'knowledge'
+
 function declareKnowledgeRootDirKey(ctx: KnowledgeContextFace): () => void {
   const reflect = ctx.reflect
   const provide = reflect?.provide
@@ -100,22 +102,45 @@ function declareKnowledgeRootDirKey(ctx: KnowledgeContextFace): () => void {
 
 const knowledgePlugin: KnowledgePlugin = Object.assign(
   (ctx: KnowledgeContextFace, config: KnowledgePluginConfig = {}): (() => void) => {
-    const tools = createKnowledgeTools({
-      knowledge: ctx.forgeKnowledge,
-      resolveProjectId: createProjectResolver(config.projects ?? [], config.bindingsFile),
-    })
-    // A2 自持存储自启（双态：数据面准备，供数仍走 forgeKnowledge；开库失败 fail-soft
-    // 降级纯旧服务形态，锚缺席（裸环境）不自启——不向 ~/.dsh 静默落盘）+ 首启轻量种子
-    // 迁移（埋点经装配期注入的诊断发射面——DIAG_EVENT 类型化 emit，host main 进程位）
+    // 诊断发射面（埋点经装配期注入——DIAG_EVENT 类型化 emit，host main 进程位）
     const diagEmit =
       typeof ctx.emit === 'function'
         ? (payload: DiagEventPayload) => ctx.emit!(DIAG_EVENT, { ...payload, process: 'main' })
         : undefined
+    // 自持存储自启 + 首启轻量种子迁移（开库失败 fail-soft 降级零注册——锚缺席（裸环境）
+    // 不自启，不向 ~/.dsh 静默落盘）
     const storage = startSelfHostedStorage(
       { dbFile: config.dbFile, legacyStateDb: config.legacyStateDb, emit: diagEmit },
     )
+    if (storage === undefined) return () => {}
+
+    // A2 服务切换：八法服务面（自持库供数 + 两级解析第一级 config 静态绑定表）
+    const service = createKnowledgeService({
+      db: storage.db,
+      resolveWsPath: createWsPathResolver(config.projects ?? []),
+      emit: diagEmit,
+    })
+    const tools = createKnowledgeTools({
+      knowledge: service,
+      resolveProjectId: createProjectResolver(config.projects ?? []),
+    })
+
+    /** 'knowledge' 服务 provide（host servicesFace.get 消费；缺席 reflect 面 = 零供数不阻载） */
+    function provideKnowledgeService(): () => void {
+      const reflect = ctx.reflect
+      const provide = reflect?.provide
+      if (typeof provide !== 'function') return () => {}
+      try {
+        const dispose = provide.call(reflect, KNOWLEDGE_SERVICE_NAME, service)
+        return typeof dispose === 'function' ? () => dispose() : () => {}
+      } catch {
+        return () => {} // provide 抛（同名已注册等）= 零生效零抛（fail-soft）
+      }
+    }
+
     const disposers = [
-      storage === undefined ? () => {} : () => storage.close(),
+      () => storage.close(),
+      provideKnowledgeService(),
       declareKnowledgeRootDirKey(ctx),
       ctx.tools.register(tools.search),
       ctx.tools.register(tools.readAbstract),
@@ -130,11 +155,33 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       for (const dispose of disposers) dispose()
     }
   },
-  { inject: ['forgeKnowledge', 'tools', 'systemPrompt'] as const },
+  { inject: ['tools', 'systemPrompt'] as const },
 )
 
 export default knowledgePlugin
 export { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from './prompt/index.js'
-export { createKnowledgeTools, createProjectResolver } from './tools/index.js'
-export type { KnowledgeTools, KnowledgeToolDeps, ProjectBinding, ProjectIdResolver } from './tools/index.js'
+export { createKnowledgeTools, createProjectResolver, createWsPathResolver } from './tools/index.js'
+export type {
+  KnowledgeTools,
+  KnowledgeToolDeps,
+  ProjectBinding,
+  ProjectIdResolver,
+  WsPathResolver,
+} from './tools/index.js'
 export type { KnowledgeDirKeyDeclaration } from './tools/faces.js'
+export {
+  createKnowledgeService,
+  EntryNotFoundError,
+  IndexStaleError,
+  InvalidKnowledgeDirError,
+} from './service/index.js'
+export type {
+  BrowseKnowledgeService,
+  EntryAbstract,
+  IndexReport,
+  KnowledgeService,
+  KnowledgeServiceDeps,
+  ReadAbstractQuery,
+  SearchHit,
+  SearchQuery,
+} from './service/index.js'

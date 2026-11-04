@@ -1,8 +1,8 @@
 // knowledge_read_abstract tool 定义（定位：业务）。参数 schema 与
 // KnowledgeService.readAbstract 同构（Interface 3）：projectId/sessionId 由会话
-// 上下文解析，agent 面仅见 entry_id（search 命中的钥匙）；返回 = contracts
+// 上下文解析，agent 面仅见 entry_id（search 命中的钥匙）；返回 =
 // EntryAbstract（摘要先行，不含正文——场景⑤口径），不自定形状（AC1）。
-import type { EntryAbstract, ReadAbstractQuery } from '@dsh-forge/contracts'
+import type { EntryAbstract, ReadAbstractQuery } from '../service/types.js'
 import type { KnowledgeToolDefinition, ToolExecFace } from './faces.js'
 import type { KnowledgeToolDeps } from './index.js'
 import { sessionContextOf, unboundSessionError } from './session.js'

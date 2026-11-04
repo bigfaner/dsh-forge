@@ -15,7 +15,7 @@ import { KNOWLEDGE_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import type { KnowledgeChannel } from '../../../packages/contracts/src/channels.js'
 import { openDatabase } from '../../../packages/core/src/db/index.js'
 import { createKnowledgeService } from '../../../packages/core/src/knowledge/knowledge-service.js'
-import type { BrowseKnowledgeService } from '../../../packages/contracts/src/index.js'
+import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/index.js'
 
 /** golden 语料（六条目 / 三域 + 根域；全部显式 updated——录制/比对确定性口径） */
 export interface GoldenCorpusEntry {

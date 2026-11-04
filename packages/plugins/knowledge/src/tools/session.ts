@@ -1,17 +1,12 @@
-// 会话上下文解析（定位：业务——Interface 3「projectId 由会话上下文解析」的执行面）。
+// 会话上下文解析与绑定表（定位：业务——Interface 3「projectId 由会话上下文解析」执行面）。
 // 两步：
 //   ① exec → { sessionId, cwd }：官方 dsh-tool-fs sessionCwd 同型（会话头承载
 //      工作区根），sessionId 缺省空串 = 无会话上下文（contracts SearchQuery 注释口径）。
-//   ② cwd → projectId：绑定表解析（装配期 config 供给）。Interface 2 七法不含
-//      路径反查、Hard Rule 禁第二 core 服务——绑定数据经插件 config 进入（P1 装配缝，
-//      DF003「调用缝为设计期定缝项」），插件不触 core 实现。
-// 4.2 动态面：projectId 是运行期注册产物（randomUUID）——静态 config.projects 之外，
-// bindingsFile（host 装配方维护的绑定表文件，boot/注册后全量刷新）在 tool 执行点
-// 惰性读取（fail-soft：读失败按无该源处理），文件条目优先于静态表（装配方最新事实）。
-// 无 watch 无缓存直投——SC2 纪律域为 UI 状态副本，本缝是装配配置数据逐写逐读。
-import { readFileSync } from 'node:fs'
-// fix-30：比对归一口径收编 @dsh-forge/path-key 单一来源（core 注册链同源消费——
-// 同一变体拼写在 core 命中既有行 ⟺ 在此命中绑定行，消「同源数据两种归一口径」分裂）
+//   ② cwd → projectId：绑定表解析（装配期 config 静态供给）。用户裁决 Q19（2026-11-19）：
+//      bindingsFile 绑定表文件与刷新缝退役——projectId→wsPath 映射改纯 config 静态注入
+//     （本文件静态表为唯一数据源，无文件读取、无运行期刷新）。
+// 两级解析（projectId→wsPath→注册行）第一级 = createWsPathResolver（同表反向）；
+// 第二级 = storage/registry.ts findByWsPath（canonical 键）。
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { ToolExecFace } from './faces.js'
 
@@ -23,9 +18,9 @@ export interface ToolSessionContext {
   readonly cwd: string | undefined
 }
 
-/** 会话 cwd → projectId 绑定行（插件 config.projects 表项） */
+/** 会话 cwd → projectId 绑定行（插件 config.projects 表项——纯静态注入） */
 export interface ProjectBinding {
-  /** 工作区 canonical path（projects.ws_path 同口径） */
+  /** 工作区 canonical path（自持注册表 ws_path 键同口径） */
   readonly wsPath: string
   /** 应用生成 project uuid（projects.id） */
   readonly projectId: string
@@ -34,45 +29,27 @@ export interface ProjectBinding {
 /** cwd → projectId 解析器 */
 export type ProjectIdResolver = (cwd: string) => string | undefined
 
-/** 路径归一（比对用）：@dsh-forge/path-key 同源（fix-30 前本文件私有的 normalizePath 收编单一来源） */
+/** projectId → wsPath 解析器（两级解析第一级） */
+export type WsPathResolver = (projectId: string) => string | undefined
 
 /**
- * 绑定表 → 解析器。语义：归一后整串相等（会话 cwd = 工作区根，非前缀匹配）；
- * 无绑定/不匹配 → undefined（调用方决定失败口径）。
- * bindingsFile 在场时执行点惰性读取（文件条目优先；读/解析失败按无该源降级不抛）。
+ * 绑定表 → cwd 解析器。语义：归一后整串相等（会话 cwd = 工作区根，非前缀匹配）；
+ * 无绑定/不匹配 → undefined（调用方决定失败口径）。纯内存表（Q19：绑定表文件退役）。
  */
-export function createProjectResolver(
-  bindings: readonly ProjectBinding[],
-  bindingsFile?: string,
-): ProjectIdResolver {
+export function createProjectResolver(bindings: readonly ProjectBinding[]): ProjectIdResolver {
   const table = new Map<string, string>()
   for (const b of bindings) table.set(normalizeFsPath(b.wsPath), b.projectId)
-  if (bindingsFile === undefined) {
-    return (cwd: string) => table.get(normalizeFsPath(cwd))
-  }
-  return (cwd: string) => readBindingsFile(bindingsFile).get(normalizeFsPath(cwd)) ?? table.get(normalizeFsPath(cwd))
+  return (cwd: string) => table.get(normalizeFsPath(cwd))
 }
 
-/** 绑定表文件单次读取（fail-soft：任何失败返回空表——调用回落静态表） */
-function readBindingsFile(file: string): Map<string, string> {
-  try {
-    const parsed = JSON.parse(readFileSync(file, 'utf8')) as {
-      version?: unknown
-      projects?: unknown
-    }
-    if (parsed.version !== 1 || !Array.isArray(parsed.projects)) return new Map()
-    const table = new Map<string, string>()
-    for (const row of parsed.projects) {
-      if (typeof row !== 'object' || row === null) continue
-      const { wsPath, projectId } = row as { wsPath?: unknown; projectId?: unknown }
-      if (typeof wsPath === 'string' && typeof projectId === 'string') {
-        table.set(normalizeFsPath(wsPath), projectId)
-      }
-    }
-    return table
-  } catch {
-    return new Map()
-  }
+/**
+ * 绑定表 → projectId 反查解析器（服务面两级解析第一级：projectId → wsPath）。
+ * 未命中 → undefined（服务面 requireProject fail-loud 收口）。
+ */
+export function createWsPathResolver(bindings: readonly ProjectBinding[]): WsPathResolver {
+  const table = new Map<string, string>()
+  for (const b of bindings) table.set(b.projectId, b.wsPath)
+  return (projectId: string) => table.get(projectId)
 }
 
 /** exec → 会话上下文（无 agent / 无 session → sessionId 空串 + cwd undefined） */

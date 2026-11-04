@@ -90,7 +90,7 @@ afterAll(() => {
 const dbFile = () => join((dir ??= mkdtempSync(join(tmpdir(), 'dsh-forge-pin07-'))), `${randomUUID()}.db`)
 
 /** 起一套真实 runtime：cordis Context + 真实 SystemPrompt + tools 桩（调方负责 fiber.dispose） */
-async function bootRuntime(): Promise<{ ctx: PluginCtxFace; sys: SystemPromptFace; tools: ReturnType<typeof toolCollector> }> {
+async function bootRuntime(): Promise<{ ctx: PluginCtxFace; sys: SystemPromptFace; tools: ReturnType<typeof toolCollector>; disposeTools: () => void }> {
   const cordis = await importUpstream('host', '@deepseek-ai/cordis')
   const sp = await importUpstream('host', '@deepseek-ai/dsh-system-prompt')
   const Ctx = cordis['Context'] as new () => PluginCtxFace
@@ -98,8 +98,8 @@ async function bootRuntime(): Promise<{ ctx: PluginCtxFace; sys: SystemPromptFac
   const ctx = new Ctx()
   const sys = new SystemPromptCtor(ctx, {}) // 提供 systemPrompt 服务（官方 Service 注册径）
   const tools = toolCollector()
-  ctx.reflect.provide('tools', tools.face) // dsh 官方 tools 面占位（注册收集桩）
-  return { ctx, sys, tools }
+  const disposeTools = ctx.reflect.provide('tools', tools.face) // dsh 官方 tools 面占位（注册收集桩）
+  return { ctx, sys, tools, disposeTools }
 }
 
 describe('pin ⑦-1 版本锚（cordis 独立版本线）', () => {
@@ -183,13 +183,14 @@ describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/kn
     }
   })
 
-  it('inject 消费全链路：knowledge 插件注入三服务 → 两 tool 注册 + forge:knowledge 段入真实装配', async () => {
+  it('inject 消费全链路（1.7 A2 后形态：knowledge 零 core 依赖）：knowledge 插件注入两官方面 → 自有 knowledge 服务 provide + 两 tool 注册 + forge:knowledge 段入真实装配', async () => {
     const { ctx, sys, tools } = await bootRuntime()
     try {
       ctx.reflect.provide('workspaceRegistry', registryStub())
       ctx.reflect.provide('workspaceController', renameStub())
       await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
-      await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [] })
+      await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [], dbFile: dbFile() })
+      expect(ctx.get('knowledge'), 'knowledge 插件 provide 自有服务（去 forge 前缀）').toBeDefined()
       expect(tools.registered.map((t) => t.name)).toEqual(['knowledge_search', 'knowledge_read_abstract'])
       const assembly = await sys.assemble()
       expect(assembly.sections.map((s) => s.name)).toContain('forge:knowledge')
@@ -198,20 +199,26 @@ describe('pin ⑦-3 运行期双服务注入面（真实 cordis + 真实 core/kn
     }
   })
 
-  it('级联卸载：撤销 workspaceRegistry → core 卸载（服务注销+关库）→ 依赖者随之卸载（tool/段全清）', async () => {
-    const { ctx, sys, tools } = await bootRuntime()
+  it('级联卸载（1.7 A2 后形态）：core 卸载不牵动 knowledge（零依赖独立性——SC-2）；knowledge 依赖失效自卸 = 服务注销 + tool/段全清', async () => {
+    const { ctx, sys, tools, disposeTools } = await bootRuntime()
     try {
       const disposeWs = ctx.reflect.provide('workspaceRegistry', registryStub())
       ctx.reflect.provide('workspaceController', renameStub())
       await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
-      await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [] })
+      await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [], dbFile: dbFile() })
       expect(ctx.get('forgeProjects')).toBeDefined()
       disposeWs()
-      // 官方语义：unregistered (waking dependents)——core fiber 卸载、双服务注销、knowledge 依赖失效卸载
+      // 官方语义：unregistered (waking dependents)——core fiber 卸载、core 双服务注销；
+      // knowledge 零 core 依赖（1.7 A2）——独立存活，服务/tool/段不受牵动
       expect(
         await waitFor(() => ctx.get('forgeProjects') === undefined && ctx.get('forgeKnowledge') === undefined),
-        '双服务级联注销',
+        'core 双服务级联注销',
       ).toBe(true)
+      expect(ctx.get('knowledge'), 'knowledge 独立于 core（SC-2）').toBeDefined()
+      expect(tools.registered).toHaveLength(2)
+      // knowledge 依赖面 = dsh 官方面（tools）——撤销 tools 即依赖失效自卸（官方 waking dependents 语义）
+      disposeTools()
+      expect(await waitFor(() => ctx.get('knowledge') === undefined), 'knowledge 服务随 fiber 卸载注销').toBe(true)
       expect(await waitFor(() => tools.disposed.length === 2), 'tool 注册随 fiber 卸载全清').toBe(true)
       expect(
         await waitFor(() => sys.assemble().then((a) => !a.sections.some((s) => s.name === 'forge:knowledge'))),

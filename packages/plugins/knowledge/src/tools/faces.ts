@@ -1,10 +1,9 @@
 // 结构化最小面（定位：业务——插件对 dsh 宿主服务的消费形状锚定）。
-// 与 core/index.ts 的 CoreContextFace 同一纪律：插件不依赖 dsh 运行时包
+// 与官方插件的 Context Face 同一纪律：插件不依赖 dsh 运行时包
 // （@deepseek-ai/dsh-tools / dsh-system-prompt / cordis），仅以结构化子面
 // 消费官方面——真实现（ToolRuntime / SystemPrompt / 真 Context）结构兼容，
-// 运行期由 profile 装配注入。对 core 的唯一依赖 = forgeKnowledge 服务接口
-// 类型（contracts 单一来源），零实现级 import（AC3，可独立发版前提）。
-import type { KnowledgeService } from '@dsh-forge/contracts'
+// 运行期由 profile 装配注入。零 core 依赖（SC-2；1.7 A2 服务切换后服务面
+// = 自有 'knowledge' 服务，本插件不再消费任何 forge 服务）。
 
 /** dsh 官方 ContentBlock 的文本块子面（output.render 产物） */
 export interface TextContentBlock {
@@ -102,8 +101,6 @@ export interface KnowledgeDirKeyDeclaration {
 
 /** 插件对宿主 ctx 的结构化消费面（真 Context 结构兼容） */
 export interface KnowledgeContextFace {
-  /** core 知识域服务（运行期 Cordis inject 解析——本插件对 core 的唯一依赖） */
-  forgeKnowledge: KnowledgeService
   /** dsh 官方 tool 注册面 */
   tools: ToolRegisterFace
   /** dsh 官方系统提示词面 */

@@ -15,7 +15,6 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type {
-  BrowseKnowledgeService,
   ForgeBugsService,
   ForgeDocsService,
   ForgeFeaturesService,
@@ -25,6 +24,7 @@ import type {
   ProjectServiceM2,
   TasksChangedEvent,
 } from '@dsh-forge/contracts'
+import type { BrowseKnowledgeService } from '@dsh-forge/knowledge'
 import {
   APPROVAL_SERVICE_METHODS,
   asEventMessage,
@@ -95,9 +95,9 @@ export interface BootDshOptions {
 export interface DshHostServices {
   /** P1 五法 + M2 派生行第六法（Interface 5；tasksHome 缺席时子侧服务无扩法——代理调用失败面） */
   forgeProjects: ProjectServiceM2
-  /** Interface 2 七法 + browse 聚合第八法（3.5：forge:knowledge/browse 通道挂接；
-   * fix-33 起 = contracts BrowseKnowledgeService 命名类型——第八法四处手工同步收口） */
-  forgeKnowledge: BrowseKnowledgeService
+  /** Interface 2 七法 + browse 聚合第八法（1.7 A2 服务切换：knowledge 插件 provide
+   *  'knowledge' 自有服务——去 forge 前缀；类型 = @dsh-forge/knowledge 单一来源） */
+  knowledge: BrowseKnowledgeService
   // ── M2 四域（Interface 1–4；tasksHome 注入时 core provide，缺席 = M2 面降级 undefined） ──
   forgeTasks: ForgeTasksService
   forgeFeatures: ForgeFeaturesService
@@ -475,8 +475,8 @@ export async function bootDshHost(
             call,
           )
         : undefined,
-      forgeKnowledge: ready.services.forgeKnowledge
-        ? createBridgeProxy<DshHostServices['forgeKnowledge']>('forgeKnowledge', KNOWLEDGE_SERVICE_METHODS, call)
+      knowledge: ready.services.knowledge
+        ? createBridgeProxy<DshHostServices['knowledge']>('knowledge', KNOWLEDGE_SERVICE_METHODS, call)
         : undefined,
       forgeTasks: ready.services.forgeTasks
         ? createBridgeProxy<DshHostServices['forgeTasks']>('forgeTasks', TASKS_SERVICE_METHODS, call)

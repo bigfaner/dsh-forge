@@ -11,9 +11,7 @@
 // fix-26：凭据桥入同一缝——dsh-base credentials 行注 config.path 指真 home
 // {homedir}/.dsh/.credentials.yaml（官方 resolveSpec 显式 path 优先缝），数据走隔离
 // dshHome 而凭据留真 home（单一真相源，原生 dsh 同步可见/可改；e2e 隔离态缺席不桥）。
-// M2 3.4 装配缝两行：core 行增 tasksHome（M2 派生根注入——四域服务装配门）；knowledge
-// 行 bindingsFile（Interface 8 cwd 路由数据缝——与 knowledge 同一 {wsPath,projectId}
-// 表文件，生产端 = ipc/bindings.ts 刷新面单源）。
+// M2 3.4 装配缝：core 行增 tasksHome（M2 派生根注入——四域服务装配门）。
 // 产品裁决（2026-10-09：标准模式零 forge 面）：全局 plugin-forge 行与全局 skill-filesystem
 // 行（3.4/5.4 形态）废除——全局 patch 行对一切组合生效（含 dsh 出厂标准预设）＝ forge
 // 工具/技能泄漏进标准会话。forge 面仅远征/突击预设组合携带：plugin-forge[+spec] 行与
@@ -31,8 +29,11 @@
 // packaged = resources 物化路径）；!!js 全形态死刑（spike S5-4 判决反转）——物化输出零
 // 表达式残留（平台门行就地求值具体布尔，路径 only 绝对路径）。
 // fix-1（drift #9）：预设行内 plugin-forge[+spec] 增量行携带 bindingsFile 占位符——物化
-// 单源 = knowledge 全局行同值（预设会话行内实例须自带 config：config-less 行内实例
+// 单源 = PresetOverlayInput.bindingsFile（预设会话行内实例须自带 config：config-less 行内实例
 // 遮蔽配置实例的 cwd 路由断链处置）。
+// knowledge-stage1 1.7（Q19 裁决）：knowledge 行 config 注入退役——knowledge 插件不再
+// 消费 bindingsFile（projectId→wsPath 纯 config 静态注入；绑定表文件继续服务 plugin-forge
+// Interface 8 cwd 路由，预设行内物化照旧）。
 // 产物：{userData}/boot-overlay.yml（每启重写，非用户层状态）。
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -49,14 +50,6 @@ export const WELCOME_NOTICE_ACK_VERSION = '2026-09-28.1'
 export interface BootOverlayInput {
   /** core 插件 dbFile（应用状态库） */
   readonly stateDb: string
-  /** knowledge 插件 bindingsFile（会话 cwd → projectId 绑定表） */
-  readonly bindingsFile: string
-  /** knowledge 插件行注行门（产品裁决：知识库功能不完整，打包形态不开放——行缺席
-   *  时用户层无 dsh-forge-knowledge 行，patch 按 id 整体替换无的放矢；true = 该插件
-   *  确在 profile 树装载（child 按 profileDir/node_modules/@dsh-forge/knowledge 在场
-   *  判定——dev 形态 link 在场 / 打包形态暂不含），方注 bindingsFile 行。绑定表文件
-   *  本体与刷新面不动：预设行内 plugin-forge 行仍消费同一 bindingsFile（单源）。 */
-  readonly knowledgeRow?: boolean
   /** M2 派生根（3.4：core 行 config.tasksHome 注入——缺席 = M2 四域整体降级） */
   readonly tasksHome?: string
   /** 设置域存储文件（M3 3.8：core 行 config.settingsFile 注入——{userData}/forge-settings.json；
@@ -96,8 +89,8 @@ export interface PresetOverlayInput extends PresetPatches {
   /** expert-squad skills 当形态绝对路径（customSkillDirs[squad]；缺席 = 剔除——squad
    *  技能面降级 fail-soft） */
   readonly squadSkillsDir?: string
-  /** cwd 绑定表文件（fix-1/drift #9：预设行内 plugin-forge[+spec] 增量行 config 物化锚——
-   *  与 knowledge 全局行同值单源；必填：BootOverlayInput.bindingsFile 本就必填，无缺席分支） */
+  /** cwd 绑定表文件（fix-1/drift #9：预设行内 plugin-forge[+spec] 增量行 config 物化锚
+   *  ——plugin-forge Interface 8 cwd 路由数据缝；knowledge 消费面已随 Q19 退役） */
   readonly bindingsFile: string
 }
 
@@ -228,10 +221,8 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     `    dbFile: ${yamlQuote(input.stateDb)}`,
     ...(input.tasksHome !== undefined ? [`    tasksHome: ${yamlQuote(input.tasksHome)}`] : []),
     ...(input.settingsFile !== undefined ? [`    settingsFile: ${yamlQuote(input.settingsFile)}`] : []),
-    // knowledge 行 config 注入（条件化——见 BootOverlayInput.knowledgeRow；缺席不注行）
-    ...(input.knowledgeRow === true
-      ? ['- id: dsh-forge-knowledge', '  config:', `    bindingsFile: ${yamlQuote(input.bindingsFile)}`]
-      : []),
+    // 1.7 Q19：knowledge 行 config 注入退役（bindingsFile 消费面随绑定表退役——
+    // knowledge 插件零 host 注入 config，自持库按宿主数据域锚自启）。
     // 产品裁决（2026-10-09：标准模式零 forge 面）：无全局 plugin-forge 行、无全局
     // skill-filesystem 行——forge 工具/技能仅预设组合携带（预设底稿行内增量行，下方）。
     ...(input.credentialsPath !== undefined

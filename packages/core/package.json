@@ -19,6 +19,7 @@
     "build": "tsc -b"
   },
   "devDependencies": {
+    "@dsh-forge/knowledge": "workspace:*",
     "@types/better-sqlite3": "9.6.0"
   },
   "dependencies": {

@@ -346,10 +346,10 @@ async function main(): Promise<void> {
   const knowledgeRow = existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'knowledge', 'package.json'))
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
-    bindingsFile: options.bindingsFile,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
-    knowledgeRow, // 知识库插件行注行门（dev 树在场才注——打包形态暂不含该插件）
+    // 1.7 Q19：knowledge 行 config 注入退役（bindingsFile 缺席——纯 config 静态注入；
+    // knowledgeRow 装载位另行上送 ready，不再注 overlay 行）
     gitWorktreeRow, // 1.7 git-worktree 插件行注行门（dev 树 link 在场才注——打包形态暂不含该插件）
     mobileBridgeRow, // mobile ask 桥插件行注行门（组合期 answerer 注册）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
@@ -1205,7 +1205,9 @@ async function main(): Promise<void> {
   }
   const services: Partial<Record<BridgeServiceName, object>> = {
     forgeProjects: (servicesFace.get('forgeProjects') as object | undefined) ?? undefined,
-    forgeKnowledge: (servicesFace.get('forgeKnowledge') as object | undefined) ?? undefined,
+    // 1.7 A2 服务切换：knowledge 插件 provide 自有 'knowledge' 服务（去 forge 前缀）；
+    // 插件行缺席/降级 = undefined，main 侧 forge:knowledge/* 通道不注册
+    knowledge: (servicesFace.get('knowledge') as object | undefined) ?? undefined,
     // M2 四域（Interface 1–4；tasksHome 缺席时 core 不 provide——在场位 false，main 侧降级）
     forgeTasks: (servicesFace.get('forgeTasks') as object | undefined) ?? undefined,
     forgeFeatures: (servicesFace.get('forgeFeatures') as object | undefined) ?? undefined,
@@ -1269,7 +1271,7 @@ async function main(): Promise<void> {
       : {}), // fix-5：官方配对地址（单源透传）
     services: {
       forgeProjects: services.forgeProjects !== undefined,
-      forgeKnowledge: services.forgeKnowledge !== undefined,
+      knowledge: services.knowledge !== undefined,
       forgeTasks: services.forgeTasks !== undefined,
       forgeFeatures: services.forgeFeatures !== undefined,
       forgeProposals: services.forgeProposals !== undefined,

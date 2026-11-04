@@ -16,13 +16,15 @@ import { randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import type {
   EntryAbstract,
-  HeatByEntry,
   KnowledgeService,
   ReadAbstractQuery,
-  RecallQuerySnapshot,
-  RecallVerb,
   SearchHit,
   SearchQuery,
+} from '@dsh-forge/knowledge'
+import type {
+  HeatByEntry,
+  RecallQuerySnapshot,
+  RecallVerb,
 } from '@dsh-forge/contracts'
 import { withTransaction } from '../db/index.js'
 import { createKnowledgeIndexService, type KnowledgeIndexService } from './index-service.js'

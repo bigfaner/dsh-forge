@@ -8,7 +8,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { openKnowledgeDatabase } from './open.js'
 import { runSeedMigration } from './migrate.js'
 import { canonicalWsPath } from './registry.js'
-import { KNOWLEDGE_MIGRATE_EVENT, type DiagEmitter, type DiagEventPayload } from './index.js'
+import { KNOWLEDGE_MIGRATE_EVENT, type DiagEmitter } from './index.js'
+import type { DiagEventPayload } from '@dsh-forge/contracts'
 
 const roots: string[] = []
 function tmpRoot(): string {
@@ -91,8 +92,8 @@ describe('runSeedMigration（注册行种子 + recall best-effort + 幂等 + 只
       `SELECT ws_path, knowledge_dir FROM projects`,
     ).all()
     expect(rows).toEqual([{ ws_path: canonicalWsPath(join(root, 'ws-a')), knowledge_dir: join(root, 'ws-a', '.knowledge') }])
-    expect(self.prepare<{ n: number }>(`SELECT COUNT(*) AS n FROM knowledge_recall_logs`).get()).toEqual({ n: 237 })
-    expect(self.prepare<{ n: number }>(`SELECT COUNT(*) AS n FROM knowledge_entries`).get()).toEqual({ n: 0 })
+    expect(self.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_recall_logs`).get()).toEqual({ n: 237 })
+    expect(self.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_entries`).get()).toEqual({ n: 0 })
 
     const seq = events.map((e) => `${e.event}:${e.level}`)
     expect(seq[0]).toBe(`${KNOWLEDGE_MIGRATE_EVENT}:info`)
@@ -111,7 +112,7 @@ describe('runSeedMigration（注册行种子 + recall best-effort + 幂等 + 只
     const again = runSeedMigration(self, { legacyStateDb: legacy, emit })
     expect(again.status).toBe('skipped-done')
     expect(events).toEqual([])
-    expect(self.prepare<{ n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()).toEqual({ n: 1 })
+    expect(self.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()).toEqual({ n: 1 })
     self.close()
   })
 
@@ -163,7 +164,7 @@ describe('runSeedMigration（注册行种子 + recall best-effort + 幂等 + 只
     const result = runSeedMigration(self, { legacyStateDb: legacy, emit })
     expect(result.status).toBe('recall-degraded')
     expect(result.registryRows).toBe(1)
-    expect(self.prepare<{ n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()).toEqual({ n: 1 })
+    expect(self.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()).toEqual({ n: 1 })
     const warn = events.find((e) => e.level === 'warn')
     expect(warn).toBeDefined()
     expect(warn!.message).toContain('recall_logs')
