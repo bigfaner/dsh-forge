@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
 import type { ProjectSummary, RegisterResult } from '../../packages/contracts/src/dto/project.js'
 import { COMPOSER_INPUT, TAB_ITEM, workbenchOfView } from './anchors.js'
+import { ensureNoBlockingDialog } from './modals.js'
 
 /** renderer forge RPC 面（preload dshForge.invoke——信封 {ok,data} 由本面解包） */
 export async function forgeInvoke<T>(page: Page, channel: string, payload?: unknown): Promise<T> {
@@ -65,6 +66,10 @@ export async function registerProject(page: Page, dir: string, name: string): Pr
 export async function selectWorkspaceViaChip(page: Page, workspaceName: string): Promise<void> {
   const composer = page.locator(COMPOSER_INPUT).last()
   await expect(composer, '官方会话面 composer 在场').toBeVisible({ timeout: 60_000 })
+  // 晚到模态防拦截（bug 09f5b987 族拦截面）：共享 launch 用例间零凭据模型失败面可晚
+  // 数十秒挂载 API Key onboarding——mask 恒拦 chip 点击（30s click 超时实证）；chip 面
+  // 单源前置收口（无模态零操作）。
+  await ensureNoBlockingDialog(page)
   // Root cause: 项目绑定后芯片 innerText 是项目名、「选择工作区/默认工作区」在 aria-label
   // 可访问名（error-context.md:51 证 button "选择工作区": telem-obs-ws）——hasText 不匹配
   // aria-label，须走 getByRole name（可访问名，非 ^…$ 精确锚，带后缀仍命中）。
