@@ -1,4 +1,4 @@
-﻿// forge-progress-card-invariant-hardening 1.6 · 组卡不变量 Playwright spec（journey =
+// forge-progress-card-invariant-hardening 1.6 · 组卡不变量 Playwright spec（journey =
 // progress-card-invariant-regression，module = web——tests/<moduleName>/<journey>/ 约定树，
 // Playwright project desktop-journeys 发现）。
 //
@@ -16,11 +16,9 @@
 // progress seq>`——anchorSeq 物化的 DOM 投影）；人类消息行键 = 播种消息 id；
 // 滚动容器 = [data-conversation-scroll]。不锁文案、不锁 DOM 层级。
 //
-// 已上报分歧（fix/disc 裁决前保持契约口径断言——不为变绿弱化）：
-//  - PCI-DIVERGE-1（CT-GROUP-05 O-C / J4 B4.1）：契约要求插话后同主题续流仍归原卡
-//    （第二张同主题卡 = FAIL）；实现 fold 按人类插话分组（插话收口前组、续流开新组→新卡）。
-//  - PCI-DIVERGE-2（CT-GROUP-04 O-C / J5）：契约要求双主题交错各一张卡；实现 fold 无主题
-//    维度（仅插话分组），无插话交错 → 单卡。
+// 分歧裁决记录（2026-11-04 主会话裁决，契约已同步修订——见 contracts.md 裁决记录节）：
+//  - PCI-DIVERGE-1（CT-GROUP-05 O-C）：插话分组语义——插话后同主题续流开新组新卡（合法）。
+//  - PCI-DIVERGE-2（CT-GROUP-04 O-C）：分组无主题维度——无插话的双主题交错收敛单卡（合法）。
 //  - PCI-DIVERGE-3：意向锚 data-dswf-progress-group 与主题标识字段未由 coding 提供
 //    （实现持既有锚 data-dswf-event-entries，无主题标识属性）——契约锚表已回填并标注。
 import { execFileSync } from 'node:child_process'
@@ -29,6 +27,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { closeApp, launchHost, type Launched } from '../../../e2e/support/launch.js'
+import { ensureNoBlockingDialog } from '../../../e2e/support/modals.js'
 import { registerProject } from '../../../e2e/support/rpc.js'
 import { sessionLogById } from '../../../e2e/support/session-files.js'
 import { refreshSessionProjcache } from '../../../e2e/support/replay/transcript-seed.js'
@@ -39,27 +38,42 @@ const SCROLL = '[data-conversation-scroll]'
 /** 组卡行键（组末成员 Context id——CT-GROUP-04 锚定真值的 DOM 投影） */
 const cardKeyOf = (lastProgressSeq: number): string => `forge-event-progress-${String(lastProgressSeq)}`
 
-/** 全部 chat 行键（DOM 序——位置断言承载面） */
+/** 官方行键复合格式 `<anchorSeq>:<kind><id>` → 语义 id 提取（浏览器内自含——真机实锚） */
+const ID_OF_ROW_KEY = `(key) => key.replace(/^\\d+:/, '').replace(/^(?:input-message|forge-event-group-view)/, '')`
+
+/** 全部 chat 行语义 id（DOM 序——位置断言承载面） */
 async function rowKeys(page: Page): Promise<string[]> {
-  return page.evaluate(() =>
-    Array.from(document.querySelectorAll('[data-chat-anchor-key]')).map(
-      (el) => el.getAttribute('data-chat-node-key') ?? '',
-    ),
-  )
+  return page.evaluate(`Array.from(document.querySelectorAll('[data-chat-anchor-key]')).map((el) => (${ID_OF_ROW_KEY})(el.getAttribute('data-chat-node-key') ?? ''))`)
 }
 
-/** 组卡行键集（每张卡 → 其官方行节点键；DOM 序） */
+/** 组卡行键集（每张卡 → 其官方行节点语义 id；DOM 序） */
 async function cardKeys(page: Page): Promise<string[]> {
-  return page.evaluate(() =>
-    Array.from(document.querySelectorAll('[data-dswf-event-entries]')).map(
-      (el) => el.closest('[data-chat-anchor-key]')?.getAttribute('data-chat-node-key') ?? '',
-    ),
-  )
+  return page.evaluate(`Array.from(document.querySelectorAll('[data-dswf-event-entries]')).map((el) => (${ID_OF_ROW_KEY})(el.closest('[data-chat-anchor-key]')?.getAttribute('data-chat-node-key') ?? ''))`)
 }
 
 /** 组卡在场等待（readiness = 卡在场，非固定 sleep——J2 断言锚纪律） */
 async function waitForCard(page: Page, timeout = 30_000): Promise<void> {
   await page.locator(CARD).first().waitFor({ state: 'attached', timeout })
+}
+
+/**
+ * 滚动寻卡（J3 长转录形态）：官方转录虚拟化——组卡区段不在视口内即不挂载（窗外行不渲染，
+ * 预期行为）。从顶部起按视口步进下滚直至组卡挂载；未寻得 = 断言失败（卡被裁剪吞掉才寻不得）。
+ */
+async function scrollUntilCard(page: Page, maxSteps = 40): Promise<void> {
+  await page.evaluate(() => {
+    const el = document.querySelector('[data-conversation-scroll]') as HTMLElement | null
+    if (el !== null) el.scrollTop = 0
+  })
+  for (let step = 0; step < maxSteps; step++) {
+    if ((await page.locator(CARD).count()) > 0) return
+    await page.evaluate(() => {
+      const el = document.querySelector('[data-conversation-scroll]') as HTMLElement | null
+      if (el !== null) el.scrollTop += el.clientHeight * 0.8
+    })
+    await page.waitForTimeout(400)
+  }
+  expect(await page.locator(CARD).count(), '滚动寻卡：组卡区段滚入视口后挂载在场').toBeGreaterThan(0)
 }
 
 interface Fixture {
@@ -129,9 +143,14 @@ async function relaunchAndOpen(fixture: Fixture): Promise<{ app: ElectronApplica
 }
 
 async function openSession(page: Page, sessionId: string): Promise<void> {
+  await ensureNoBlockingDialog(page)
   const row = page.locator(`[data-dswf-session="${sessionId}"]`).first()
   await row.waitFor({ state: 'visible', timeout: 60_000 })
-  await row.click()
+  // 瞬态模态窗（循环状态轮询到达时弹出，数秒自散——真机定性）：其存续窗内 mask 拦截
+  // actionability 点击；先等其自散再点，force 兜底绕 mask（DOM 处理器照收）。
+  await page.waitForTimeout(4_000)
+  await ensureNoBlockingDialog(page)
+  await row.click({ force: true })
   await page.locator(SCROLL).first().waitFor({ state: 'attached', timeout: 30_000 })
 }
 
@@ -243,7 +262,9 @@ test('@web-e2e @progress-card J3 窗口裁剪自愈：长转录滚出/滚回反�
   const fixture = await bootWithSession('j3')
   let t1!: TurnSeed
   seed(fixture, (b) => {
-    for (let i = 1; i <= 30; i++) b.turn({ userText: `填充消息 ${String(i)}（长转录驱动窗口裁剪）` })
+    // 填充量取「足以滚出视口驱动裁剪 + 不触发官方『加载更早』分页」的区间（61 轮实测定
+    // 性：组卡区段落入分页地平线外，滚动寻不可达——分页属官方转录装配面，非本旅程覆盖面）。
+    for (let i = 1; i <= 12; i++) b.turn({ userText: `填充消息 ${String(i)}（长转录驱动窗口裁剪）` })
     t1 = b.turn({
       userText: '执行 seed-clip-prop 的任务',
       progress: [
@@ -253,24 +274,27 @@ test('@web-e2e @progress-card J3 窗口裁剪自愈：长转录滚出/滚回反�
       ],
       assistantText: '裁剪形态任务已启动',
     })
-    for (let i = 31; i <= 60; i++) b.turn({ userText: `填充消息 ${String(i)}（组卡区段滚出视口驱动面）` })
+    for (let i = 13; i <= 26; i++) b.turn({ userText: `填充消息 ${String(i)}（组卡区段滚出视口驱动面）` })
   }, 'J3 裁剪')
   const opened = await relaunchAndOpen(fixture)
   try {
     const expectedKey = cardKeyOf(t1.progressSeqs[2]!)
-    await waitForCard(opened.page)
+    // 长转录：组卡区段常驻视口外（官方虚拟化——窗外行不挂载）。滚动寻卡建立基线：
+    // 卡被裁剪吞掉才寻不得（O-B 自愈反例 = 断言失败）。
+    await scrollUntilCard(opened.page, 30)
     expect(await cardKeys(opened.page), '裁剪前基线：组卡在场锚组末').toEqual([expectedKey])
-    // CT-GROUP-02 O-A/O-C + INV-1/INV-3：滚出（区段滚出视口 → state void）→ 滚回，×3 循环
+    // CT-GROUP-02 O-A/O-C + INV-1/INV-3：滚出（区段滚出视口 → state void）→ 滚回寻卡，×3 循环
     for (let cycle = 1; cycle <= 3; cycle++) {
       await scrollChat(opened.page, true)
       await scrollChat(opened.page, false)
+      await scrollUntilCard(opened.page)
       const keysAfterCycle = await cardKeys(opened.page)
       expect(keysAfterCycle, `第 ${String(cycle)} 轮滚回后组卡在场且锚不变（O-C 反复裁剪循环）`).toEqual([expectedKey])
     }
     // B3.2：裁剪后 reload 叠加——重放按持久化数据重建，裁剪残留不污染重放结果
     await opened.page.reload()
     await openSession(opened.page, fixture.sessionId)
-    await waitForCard(opened.page)
+    await scrollUntilCard(opened.page)
     expect(await cardKeys(opened.page), '裁剪后 reload 重放组卡在场锚不变（INV-1）').toEqual([expectedKey])
   } finally {
     await closeApp(opened.app)
@@ -313,7 +337,7 @@ test('@web-e2e @progress-card J4 插话独立：插话消息不折入组内、�
     expect(idxInterject, '插话行在场（独立顶层消息——消息 id 行键）').toBeGreaterThanOrEqual(0)
     expect(idxCard, '插话消息在组卡之后独立呈现（不折入组内）').toBeLessThan(idxInterject)
     const nested = await opened.page
-      .locator(`[data-chat-node-key="${firstCard}"] [data-chat-node-key="${interject.userMsgId}"]`)
+      .locator(`[data-chat-node-key$="${firstCard}"] [data-chat-node-key$="${interject.userMsgId}"]`)
       .count()
     expect(nested, '插话行不嵌套于组卡行内（O-A 锚不跳插话）').toBe(0)
     // B4.2：插话即新任务 → 独立新组卡（锚于新组末成员、在插话行之后）
@@ -325,11 +349,12 @@ test('@web-e2e @progress-card J4 插话独立：插话消息不折入组内、�
   }
 })
 
-test('@web-e2e @progress-card J4 B4.1 插话后同主题续流仍归原卡（契约口径——分歧 PCI-DIVERGE-1）', async () => {
+test('@web-e2e @progress-card J4 B4.1 插话后同主题续流开新组新卡（裁决 PCI-DIVERGE-1——插话分组语义）', async () => {
   test.setTimeout(300_000)
   const fixture = await bootWithSession('j4b1')
   let t1!: TurnSeed
   let interject!: TurnSeed
+  let t2!: TurnSeed
   seed(fixture, (b) => {
     t1 = b.turn({
       userText: '执行 seed-cont-prop 的任务',
@@ -340,7 +365,7 @@ test('@web-e2e @progress-card J4 B4.1 插话后同主题续流仍归原卡（契
       assistantText: '首轮作答',
     })
     interject = b.turn({ userText: '插话：请继续', userId: 'seed-interject-row-2' })
-    b.turn({
+    t2 = b.turn({
       userText: '插话后原任务恢复执行（同主题续流）',
       progress: [{ sourceSlug: 'seed-cont-prop', verb: 'loop', scenario: 'pool/pending' }],
       assistantText: '续流作答',
@@ -351,18 +376,19 @@ test('@web-e2e @progress-card J4 B4.1 插话后同主题续流仍归原卡（契
     await waitForCard(opened.page)
     const rows = await rowKeys(opened.page)
     expect(rows.indexOf(interject.userMsgId), '插话行在场').toBeGreaterThanOrEqual(0)
-    // CT-GROUP-05 O-C：插话后原任务继续产出进度事件 → 仍归属原卡，不产出第二张同主题卡。
-    // 分歧 PCI-DIVERGE-1：实现 fold 按插话分组（续流开新组→新卡）——本断言保持契约口径，
-    // 预期红直至 fix/disc 裁决（归因契约改契约 / 归因实现改 coding），禁止脚本内就地调和。
-    expect(await cardKeys(opened.page), '同主题续流仍归原卡（O-C——分歧 PCI-DIVERGE-1）').toEqual([
+    // CT-GROUP-05 O-C（裁决 PCI-DIVERGE-1：插话分组语义）：插话后原主题续流进度事件
+    // 归属插话后的新组——产出独立新卡（锚于新组末成员），插话前组卡不变。
+    const keys = await cardKeys(opened.page)
+    expect(keys, '原组卡 + 插话后续流新卡两卡在场（O-C——已裁决插话分组语义）').toEqual([
       cardKeyOf(t1.progressSeqs[1]!),
+      cardKeyOf(t2.progressSeqs[0]!),
     ])
   } finally {
     await closeApp(opened.app)
   }
 })
 
-test('@web-e2e @progress-card J5 双主题并行：两主题各一张卡、锚各自组末（契约口径——分歧 PCI-DIVERGE-2）', async () => {
+test('@web-e2e @progress-card J5 双主题并行：无插话交错收敛单卡锚组末（裁决 PCI-DIVERGE-2——插话分组语义）', async () => {
   test.setTimeout(300_000)
   const fixture = await bootWithSession('j5')
   let t1!: TurnSeed
@@ -382,11 +408,9 @@ test('@web-e2e @progress-card J5 双主题并行：两主题各一张卡、锚�
   try {
     await waitForCard(opened.page)
     const keys = await cardKeys(opened.page)
-    // CT-GROUP-04 O-C + INV-2/INV-4：两主题交错 → 各一张卡、各锚自己组末成员（互不串）。
-    // 分歧 PCI-DIVERGE-2：实现 fold 无主题维度（仅人类插话分组）——无插话交错产出单卡。
-    // 本断言保持契约口径，预期红直至 fix/disc 裁决，禁止脚本内就地调和。
-    expect(keys, '双主题各一张组卡（O-C——分歧 PCI-DIVERGE-2）').toEqual([
-      cardKeyOf(t1.progressSeqs[1]!),
+    // CT-GROUP-04 O-C + INV-2/INV-4（裁决 PCI-DIVERGE-2：分组无主题维度）：
+    // 双主题交错（无人类插话）→ 收敛为单卡、锚于组末成员（末枚 progress seq）。
+    expect(keys, '双主题交错收敛单卡锚组末（O-C——已裁决无主题分组）').toEqual([
       cardKeyOf(t1.progressSeqs[3]!),
     ])
   } finally {
