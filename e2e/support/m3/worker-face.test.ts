@@ -11,26 +11,26 @@ import { deriveWorkerToolFilter, workerAgentOptionsOf } from '../../../packages/
 
 /** 全局 deny 十员（WORKER_GLOBAL_DENY_TOOLS 实面实名——drift #10/fix-1 + worker-lean-execution S5） */
 const GLOBAL_DENY = ['ask_user_question', 'subagent_fork', 'list_agents', 'send_message', 'interrupt_agent', 'workflow', 'present', 'create_goal', 'get_goal', 'update_goal']
-/** forge 闭环禁入十七动词（addTask 任务派生权限归主会话/循环处置层——dispatch-loop-hardening 改进 5 eeb7d447 有意收口 + updateTask/taskStats/listTasks/listBugs 仅主 agent 面 + transitionFeature 相位转移仅主 agent + recordImplCheckpoint/queryImplCheckpoint/listImplCheckpoints 实现检查点三工具仅主 agent + pauseTask/unblockTask 单任务暂停与 blocked 出口仅主 agent + validateMermaid 插件面 + stopTaskLoop 循环停止面主 agent 专属——getBug 自 bug-recurrence-chain 1.3 起 worker 放行） */
-const FORGE_DENY = ['addTask', 'queryTask', 'createProposal', 'transitionProposal', 'transitionFeature', 'dispatchTask', 'stopTaskLoop', 'updateTask', 'taskStats', 'listTasks', 'listBugs', 'recordImplCheckpoint', 'queryImplCheckpoint', 'listImplCheckpoints', 'pauseTask', 'unblockTask', 'validateMermaid']
+/** forge 闭环禁入十八动词（addTask 任务派生权限归主会话/循环处置层——dispatch-loop-hardening 改进 5 eeb7d447 有意收口 + updateTask/taskStats/listTasks/listBugs 仅主 agent 面 + transitionFeature 相位转移仅主 agent + recordImplCheckpoint/queryImplCheckpoint/listImplCheckpoints 实现检查点三工具仅主 agent + pauseTask/unblockTask 单任务暂停与 blocked 出口仅主 agent + validateMermaid 插件面 + stopTaskLoop 循环停止面主 agent 专属——getBug 自 bug-recurrence-chain 1.3 起 worker 放行 + aggregateBugs 聚合检索面仅主 agent） */
+const FORGE_DENY = ['addTask', 'queryTask', 'createProposal', 'transitionProposal', 'transitionFeature', 'dispatchTask', 'stopTaskLoop', 'updateTask', 'taskStats', 'listTasks', 'listBugs', 'aggregateBugs', 'recordImplCheckpoint', 'queryImplCheckpoint', 'listImplCheckpoints', 'pauseTask', 'unblockTask', 'validateMermaid']
 
 describe('M3 5.2 SC2 worker toolFilter（deriveWorkerToolFilter 实函数——族收窄 deny 集）', () => {
-  it('coding：基座 27 + web 二名（29 deny——web 族收窄）', () => {
+  it('coding：基座 28 + web 二名（30 deny——web 族收窄）', () => {
     const { deny } = deriveWorkerToolFilter('coding-feature')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'web_fetch', 'web_search'].sort())
   })
 
-  it('doc：+job 三名 + read_image + web 二名（33 deny）', () => {
+  it('doc：+job 三名 + read_image + web 二名（34 deny）', () => {
     const { deny } = deriveWorkerToolFilter('doc')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'job_list', 'job_output', 'job_kill', 'read_image', 'web_fetch', 'web_search'].sort())
   })
 
-  it('gate：+read_image + web 二名（30 deny）', () => {
+  it('gate：+read_image + web 二名（31 deny）', () => {
     const { deny } = deriveWorkerToolFilter('gate')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'read_image', 'web_fetch', 'web_search'].sort())
   })
 
-  it('validation：恰基座 27（零族收窄）', () => {
+  it('validation：恰基座 28（零族收窄）', () => {
     const { deny } = deriveWorkerToolFilter('validation-code')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY].sort())
     const evalDeny = deriveWorkerToolFilter('eval-contract').deny
