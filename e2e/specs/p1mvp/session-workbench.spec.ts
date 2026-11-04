@@ -388,9 +388,11 @@ test('@web-e2e @p1mvp session-workbench·Step1b-r tree-row-toggle：项目行整
     const block = page.locator(projectRowOf(project.id))
     const row = block.locator('.dswf-sidebar-project-row').first()
     await expect(row, '项目行在场').toBeVisible({ timeout: 30_000 })
-    // 零会话项目行为不变：expandable=false → 无 aria-expanded/整行翻转面（暂无会话提示如常）
-    await expect(block.locator('.dswf-sidebar-no-session'), '零会话提示（账本收敛）').toBeVisible({ timeout: 30_000 })
-    await expect(row, '零会话行无 aria-expanded（expandable=false）').not.toHaveAttribute('aria-expanded')
+    // 注册随动语义（官方 reuse-or-create blank——fix-3② 裁决口径）：注册选中工作区后当前
+    // blank 会话归属该项目，仅当前选中 blank 可见 → 行在场 = expandable=true + aria-expanded
+    // 缺省展开（原「零会话前置」断言随该语义退役；零会话占位面由 Step4b 项目乙承载）
+    await expect(block.locator('[data-dswf-session]'), '当前 blank 会话行在场（仅当前选中可见）').toBeVisible({ timeout: 30_000 })
+    await expect(row, 'expandable 后 aria-expanded 在场（缺省展开）').toHaveAttribute('aria-expanded', 'true')
 
     // 夹具：新会话钮（startSession 建 blank）→ 发消息（用户事件 = 非 blank → 行入树）
     await row.hover()
