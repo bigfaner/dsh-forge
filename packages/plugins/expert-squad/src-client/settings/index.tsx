@@ -51,30 +51,14 @@ export const DETAIL_SECTION_SLOT = "plugins.detail.section";
 export const DETAIL_SECTION_ID = "expert-squad-default-agent-options";
 /** 本插件包名（subject.pkg.name 门控判等键——detail.section 消费面 subject 契约）。 */
 export const EXPERT_SQUAD_PKG = "@dsh-forge/expert-squad";
-/** 本插件 settings namespace 短名（候选一——行 id 恰为短名的部署直配）。 */
+/** 本插件 settings namespace 短名（候选一——dev bundle 组合行 id 恰为短名）。 */
 export const SETTINGS_NAMESPACE = "expert-squad";
-/** 官方插件管理页 item list 槽键（官方四件同款注册缝——调研报告
- *  2026-11-builtin-plugin-manageable-presentation §1：dsh-client-ui-settings-subagent
- *  lib/client.js:839-846 同型；消费面 client.js:2330/2322 view page/summary、
- *  client.js:3384 官方组卡片合成）。 */
-export const ITEM_SLOT = "plugins.item";
-/** 本插件 item 登记 id（官方组卡片 + item 详情页判同键；id 异于 detail.section 缝的
- *  DETAIL_SECTION_ID——两缝并存零冲突）。 */
-export const ITEM_ID = "expert-squad";
-/** item 行排位（官方 subagent order 30 之后留序——同槽行序不挤官方四件）。 */
-const ITEM_ORDER = 40;
-/** item 行 label（locale NS 接入前的字面量——插件页官方组卡片标题；dsh-forge 品牌标识
- *  与官方四件可区分：官方 client.js ITEM_ARTWORK 映射无本包 id、注册面不收 icon 选项
- *  → 无可达品牌资产，名称标识兜底；卡片与 item 详情页头部同读本 label，单源不双写）。 */
-const ITEM_LABEL = "专家团（dsh-forge）";
-/** item 卡片一行简介（view:"summary" 渲染面——ItemDetail one-liner client.js:2322；
- *  携 dsh-forge 标识与条目名同源。 */
-const ITEM_DESCRIPTION = "dsh-forge 专家团配置与默认 Agent 路由";
 /**
  * namespace 候选集（bug 9577a867）：官方 Host settings describe 的 ns = profile 行 id
  * （dsh-settings describe `ns: entry.options.id`），产品模板生成行 id = `dsh-forge-expert-squad`
- *（apps/host/src/profile/template.ts）而 dev profile 手写行 id = `expert-squad`——候选双
- * 覆盖，实际 namespace 在注册时点从 served 集解析（读写同源）。
+ *（apps/host/src/profile/template.ts）而 dev bundle 组合行 id = `expert-squad`（本包
+ * cordis.patch.yml insert id）——候选双覆盖，实际 namespace 在注册时点从 served 集
+ * 解析（读写同源）。
  */
 const NAMESPACE_CANDIDATES: readonly string[] = [SETTINGS_NAMESPACE, `dsh-forge-${SETTINGS_NAMESPACE}`];
 /** 配置字段（cordis Config volatile 字段一）。 */
@@ -194,84 +178,6 @@ export function registerDefaultAgentOptionsSection(
     return typeof ctx.effect === "function" ? ctx.effect(watch, "expert-squad: settings tab watch") : watch();
   }
   return mount();
-}
-
-/**
- * 注册官方插件管理页 item 条目（plugins.item list slot——官方四件同构呈现：官方组卡片 +
- * item 详情页配置表单；ItemDetail 结构性无卸载按钮，调研报告 §5 落点 A）。id = ITEM_ID、
- * order = 40（subagent 之后）、label = 专家团（dsh-forge）；inject 面携本插件 namespace 的 ConfigForm
- *（读写径与 whileServed namespace 解析同 detail.section 缝不变）。configForms/slots 缺席 =
- * 降级不注册（console.warn 留痕——registerDefaultAgentOptionsSection 同纪律）；
- * whileServed 在场 = 经官方在场门（namespace 未被服务即拆卸）。两缝并存：本缝与
- * plugins.detail.section 注册 id 异槽异键，零冲突。
- */
-export function registerPluginsItemEntry(
-  ctx: {
-    configForms?: unknown;
-    reflect?: { get(name: string): unknown };
-    effect?(factory: () => (() => void) | undefined, name?: string): (() => void) | undefined;
-  },
-  slots: {
-    inject?(key: string, callback: () => (() => void) | undefined): (() => void) | undefined;
-    register?(options: Record<string, unknown>, component: unknown): (() => void) | undefined;
-  },
-): (() => void) | undefined {
-  const forms = configFormsFaceOf(ctx);
-  const inject = slots.inject;
-  if (forms === undefined || typeof inject !== "function") {
-    console.warn("[dsh-forge/expert-squad] ctx.configForms/slots absent; plugins.item entry not registered");
-    return undefined;
-  }
-  let namespace: string = SETTINGS_NAMESPACE;
-  const mount = (): (() => void) | undefined =>
-    slots.inject!(ITEM_SLOT, () =>
-      safeRegister(
-        slots,
-        {
-          name: ITEM_SLOT,
-          id: ITEM_ID,
-          order: ITEM_ORDER,
-          label: ITEM_LABEL,
-          inject: () => ({
-            // Root cause（bug cd4816a3）：plugins.item 页面以 ownerProp `form` 注入官方
-            // 契约形状 {state, mutate}（plugin-manager ItemDetail formFor），与 inject face
-            // 同名会被覆盖——本缝 mirror 改走 `configForm` 键避撞（官方四件同款不消费
-            // ownerProp form，键名无官方契约约束）。
-            configForm: forms.get(namespace),
-            modelCatalogLoader: modelCatalogLoaderOf(ctx),
-          }),
-        },
-        ExpertSquadItemEntry,
-      ),
-    );
-  if (typeof forms.whileServed === "function") {
-    const watch = (): (() => void) | undefined => {
-      const disposer = forms.whileServed!(NAMESPACE_CANDIDATES, (served) => {
-        namespace = NAMESPACE_CANDIDATES.find((candidate) => served.has(candidate)) ?? SETTINGS_NAMESPACE;
-        const registered = mount();
-        return () => registered?.();
-      });
-      return () => disposer();
-    };
-    return typeof ctx.effect === "function" ? ctx.effect(watch, "expert-squad: plugins.item watch") : watch();
-  }
-  return mount();
-}
-
-/**
- * plugins.item 缝消费组件（官方四件同构——SubagentCard view 契约）：view:"summary" =
- * 卡片一行简介（ItemDetail one-liner）；view:"page"（表单体区）/缺省（组卡片）= 默认
- * Agent 选项表单（DefaultAgentOptionsTab 复用——configForms.get(namespace) 读写径不变）。
- * mirror 从 `configForm` 键取（bug cd4816a3：页面 ownerProp `form` 为官方 {state,mutate}
- * 契约形状，禁消费也不可撞键）。
- */
-export function ExpertSquadItemEntry(props: {
-  readonly view?: unknown;
-  readonly configForm?: ConfigFormMirror;
-  readonly modelCatalogLoader?: ModelCatalogLoader;
-}): ReactNode {
-  if (props.view === "summary") return ITEM_DESCRIPTION;
-  return <DefaultAgentOptionsTab form={props.configForm} modelCatalogLoader={props.modelCatalogLoader} />;
 }
 
 /**

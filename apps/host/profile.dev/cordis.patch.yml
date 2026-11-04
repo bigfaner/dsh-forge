@@ -27,16 +27,14 @@
 #    apps/host/src/boot/overlay.ts）。
 #    dev 形态链 workspace 构建产物（package.json link: 四件——plugin-forge[-spec] 行
 #    保留链接：预设底稿行内增量行的 loader 解析锚）。──
-#    expert-squad 用户层 insert 行（2026-11-02 插件页单记录裁决——包不再声明 dsh.bundle：
-#    非 bundle 形态 = plugin-manager 已安装清单不收，装载走本行，git-worktree 同款模式；
-#    1.22「经自身 bundle 装载」径随之退役，config 行 id 同步对齐 insert 行 id）。──
+#    expert-squad 不在本块 insert——经自身 bundle 装载（package.json dsh.profile.bundles
+#    声明，dsh.client.inject 装配边承载；bundle 行 id=expert-squad，此处重复 insert
+#    即组合双行，settings 写核销 first-hit 恒拒不落盘）。──
 - insert:
     - id: dsh-forge-core
       name: '@dsh-forge/core'
     - id: dsh-forge-knowledge
       name: '@dsh-forge/knowledge'
-    - id: dsh-forge-expert-squad
-      name: '@dsh-forge/expert-squad'
 - id: llm-pi-ai
   name: "@deepseek-ai/dsh-llm-pi-ai"
   config:
@@ -69,9 +67,3 @@
         sandbox: danger-full-access
         approval: never
     defaultPreset: danger-full-access
-- id: dsh-forge-expert-squad
-  name: "@dsh-forge/expert-squad"
-  config:
-    defaultAgentOptions:
-      provider: zai-coding-cn
-      model: glm-5.3-flash

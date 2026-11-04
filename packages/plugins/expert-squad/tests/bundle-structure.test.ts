@@ -19,9 +19,8 @@ const pkg = JSON.parse(readFileSync(resolve(pkgDir, "package.json"), "utf8")) as
 };
 
 describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面）", () => {
-  it("不再声明 dsh.bundle（2026-11-02 插件页单记录裁决——非 bundle 形态 = plugin-manager 已安装清单不收；装载走产品 userLayerRow/overlay 注行，git-worktree 同款模式）", () => {
-    expect(pkg.dsh?.bundle).toBeUndefined();
-    // 组合行文件保留（dev overlay/产品 insert 行的语义参照物——文件本身仍是 insert 形态）
+  it("dsh.bundle.patch 指向 cordis.patch.yml 且文件在场（bundle 形态恢复——plugin-manager 已安装清单收行，插件页呈现单源）", () => {
+    expect(pkg.dsh?.bundle?.patch).toBe("./cordis.patch.yml");
     expect(readFileSync(resolve(pkgDir, "cordis.patch.yml"), "utf8")).toContain("- insert:");
   });
 
@@ -73,11 +72,9 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(clientApply).toBeTypeOf("function");
   });
 
-  it("client apply 装配 plugins.item 缝（官方组卡片呈现——官方四件同款注册缝）", () => {
-    const clientSrc = readFileSync(resolve(pkgDir, "src-client", "index.ts"), "utf8");
-    expect(clientSrc).toContain("registerPluginsItemEntry");
+  it("client apply 装配 detail.section 缝（已安装卡片详情页配置面——官方组 plugins.item 条目注册已随 bundle 恢复裁决退役）", () => {
     const settingsSrc = readFileSync(resolve(pkgDir, "src-client", "settings", "index.tsx"), "utf8");
-    expect(settingsSrc).toContain('"plugins.item"');
     expect(settingsSrc).toContain("plugins.detail.section");
+    expect(settingsSrc).not.toContain('"plugins.item"');
   });
 });
