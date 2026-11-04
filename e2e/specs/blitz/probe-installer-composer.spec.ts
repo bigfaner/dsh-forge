@@ -1,4 +1,7 @@
 // @web-e2e @probe
+// 【临时禁用 2026-11-04】beforeAll NSIS 静默安装与 installer-smoke/host-boot（3c1fe3e6）
+// 同属 CHECK_APP_RUNNING 按名全机查杀面——禁用清单漏网件，14:11 再次强杀本 GUI。bug 167b5121
+// 根治（customCheckAppRunning 按 INSTDIR 域杀）落地前留痕 skip。
 // 过程件（不进 git——worker-lean-execution/fix-8 case4 取证）：installer composer 回显
 // 空定性探针——复刻冒烟后半链（NSIS 安装 → 启动 → 注册 → 芯片流 → 会话面），在键入前后
 // 采样 composer 状态（数量/可编辑/焦点/内容/元素身份存续），定位「insertText 零回显」归属
@@ -9,6 +12,12 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect } from '@playwright/test'
 import { closeApp } from '../../support/launch.js'
+
+// 【临时禁用 2026-11-04】beforeAll NSIS 静默安装与 installer-smoke/host-boot（3c1fe3e6）
+// 同属 CHECK_APP_RUNNING 按名全机查杀面——禁用清单漏网件，14:11 再次强杀本 GUI。bug 167b5121
+// 根治（customCheckAppRunning 按 INSTDIR 域杀）落地前留痕 skip。
+test.skip(true, 'probe-installer-composer 暂时禁用：NSIS 静默安装按名查杀 dsh-forge.exe（bug 167b5121）')
+
 import { launchHost } from '../../support/launch.js'
 import { forgeInvoke } from '../../support/rpc.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, CONVERSATION_HEADER, MAIN_CONVERSATION, WORKBENCH } from '../../support/anchors.js'
