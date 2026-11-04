@@ -107,6 +107,20 @@ describe('registerProject（第九法——1.15 注册链进表径）', () => {
     expect(createKnowledgeRegistry(db).findByWsPath(ws)?.knowledgeDir).toBe(dir)
   })
 
+  it('一级解析动态化（fix-2）：config 静态表未命中 → 回查注册行 project_id 列', async () => {
+    const svc = createKnowledgeService({ db, resolveWsPath: () => undefined }) // 静态表空
+    const ws = join(home, 'ws-dyn')
+    const dir = join(ws, '.knowledge')
+    mkdirSync(join(dir, '域'), { recursive: true })
+    writeFileSync(join(dir, '域', 'a.md'), '---\ntitle: A\nsummary: s\nkeywords: [k]\n---\n正文', 'utf8')
+    await svc.registerProject({ wsPath: ws, projectId: 'p-dyn' })
+    await expect(svc.rebuildIndex('p-dyn')).resolves.toEqual({ indexed: 1, skipped: 0 })
+    const cards = await svc.listEntries({ projectId: 'p-dyn' })
+    expect(cards.map((c) => c.title)).toEqual(['A'])
+    // 静态表与注册行 project_id 均未命中 → 仍 fail-loud
+    await expect(svc.listEntries({ projectId: 'p-unknown' })).rejects.toThrow(/项目不存在/)
+  })
+
   it('建目录失败（父级为普通文件）→ 抛 + 注册行不落 + error 级埋点（SC-10 register 域）', async () => {
     const diag: DiagEventPayload[] = []
     const svc = createKnowledgeService({ db, resolveWsPath: () => undefined, emit: (p) => diag.push(p) })

@@ -52,7 +52,7 @@ import type {
 export interface KnowledgeServiceDeps {
   /** 自持库句柄（storage/open.ts 唯一产出；一切 SQL prepared） */
   readonly db: Database.Database
-  /** 两级解析第一级：projectId → wsPath（config 静态绑定表反向——session.ts createWsPathResolver） */
+  /** 两级解析第一级：projectId → wsPath（config 静态绑定表反向——session.ts createWsPathResolver；未命中回查注册行 project_id 列） */
   readonly resolveWsPath: (projectId: string) => string | undefined
   /** 装配期注入诊断发射面（rebuild 事件域——SC-10；缺席走 diag.ts 兜底） */
   readonly emit?: DiagEmitter
@@ -143,14 +143,18 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     }
   }
 
-  // ── 两级解析：projectId → wsPath（config 静态表）→ 注册行（canonical 键存在性） ──
+  // ── 两级解析：projectId → wsPath（config 静态表，未命中回查注册行 project_id 列——fix-2
+  //    动态化：运行期 registerProject 落列，无需重启/无绑定表文件）→ 注册行（canonical 键存在性） ──
   const selectRegistryRow = db.prepare<unknown[], { ws_path: string; knowledge_dir: string }>(
     `SELECT ws_path, knowledge_dir FROM projects WHERE ws_path = ?`,
+  )
+  const selectWsPathByProjectId = db.prepare<[string], { ws_path: string }>(
+    `SELECT ws_path FROM projects WHERE project_id = ?`,
   )
 
   /** projectId → { wsPath, knowledgeDir }（两级任一未命中 fail-loud） */
   function requireProject(projectId: string, verb: string): { wsPath: string; knowledgeDir: string } {
-    const bound = deps.resolveWsPath(projectId)
+    const bound = deps.resolveWsPath(projectId) ?? selectWsPathByProjectId.get(projectId)?.ws_path
     const row = bound === undefined ? undefined : selectRegistryRow.get(canonicalWsPath(bound))
     if (row === undefined) {
       throw new Error(`项目不存在：${verb}(${projectId})——id 未命中绑定表/注册行`)
@@ -280,9 +284,10 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
   const registry = createKnowledgeRegistry(db)
 
   /** 注册行写入（第九法——1.15 进表径）：目录缺则递归建（fix-39 建面语义随 knowledge_dir
-   *  列退役迁本域）→ upsert 注册行（幂等）；成败均发 knowledge-register 事件（SC-10）。
+   *  列退役迁本域）→ upsert 注册行（幂等，projectId 落 project_id 列——fix-2 一级解析
+   *  动态化）；成败均发 knowledge-register 事件（SC-10）。
    *  建目录失败 = 抛（host wiring 侧 fail-soft 记账，不抛断项目注册）。 */
-  async function registerProjectRow(input: { wsPath: string; knowledgeDir?: string }): Promise<void> {
+  async function registerProjectRow(input: { wsPath: string; knowledgeDir?: string; projectId?: string }): Promise<void> {
     const dir = input.knowledgeDir ?? joinDirSegment(input.wsPath, '.knowledge')
     try {
       mkdirSync(dir, { recursive: true })
@@ -291,16 +296,18 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
         emit,
         storageDiag('error', KNOWLEDGE_REGISTER_EVENT, `知识目录建失败，注册行未落：${dir}：${String(cause)}`, {
           cwd: input.wsPath,
+          projectId: input.projectId,
           stack: cause instanceof Error ? cause.stack : undefined,
         }),
       )
       throw cause
     }
-    const row = registry.upsert(input.wsPath, dir)
+    const row = registry.upsert(input.wsPath, dir, input.projectId)
     emitStorageDiag(
       emit,
       storageDiag('info', KNOWLEDGE_REGISTER_EVENT, `注册行落表：${row.wsPath} → ${row.knowledgeDir}`, {
         cwd: input.wsPath,
+        projectId: row.projectId ?? input.projectId,
       }),
     )
   }

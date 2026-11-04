@@ -240,13 +240,13 @@ describe('withKnowledgeRegistryRow（1.15 注册链进表径）', () => {
     return { service, registerProject, getProject }
   }
 
-  it('注册成功 → getProject 取 canonical wsPath → knowledge.registerProject({wsPath}) 落注册行', async () => {
+  it('注册成功 → getProject 取 canonical wsPath → knowledge.registerProject({wsPath, projectId}) 落注册行（fix-2）', async () => {
     const { service, registerProject } = registryService()
     const knowledge = { registerProject: vi.fn().mockResolvedValue(undefined) }
     const wrapped = withKnowledgeRegistryRow(service, knowledge)
     await expect(wrapped.registerProject({ workspaceDir: 'C:\\ws\\new', name: 'new', forgeDir: 'C:\\ws\\new\\.forge' })).resolves.toBe(result)
     expect(registerProject).toHaveBeenCalledOnce()
-    expect(knowledge.registerProject).toHaveBeenCalledWith({ wsPath: 'C:\\ws\\new' })
+    expect(knowledge.registerProject).toHaveBeenCalledWith({ wsPath: 'C:\\ws\\new', projectId: result.projectId })
   })
 
   it('knowledge 服务缺席 = 原样透传（插件未装载——注册不受影响）', async () => {

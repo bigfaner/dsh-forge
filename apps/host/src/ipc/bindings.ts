@@ -156,7 +156,8 @@ export function withKnowledgeRegistryRow(
       const result = await service.registerProject(input)
       try {
         const project = await service.getProject(result.projectId)
-        if (project !== null) await knowledge.registerProject({ wsPath: project.wsPath })
+        // fix-2 一级解析动态化：projectId 落注册行 project_id 列（注册后知识通道立即可用）
+        if (project !== null) await knowledge.registerProject({ wsPath: project.wsPath, projectId: result.projectId })
       } catch (cause) {
         log(`[host] knowledge 注册行落表失败（该项目知识面降级至无注册行）：${String(cause)}`)
       }

@@ -14,7 +14,7 @@ export interface StorageMigration {
 }
 
 /** 本插件支持的自持库 schema 版本上限（版本门：库内 version 超出即拒绝打开） */
-export const STORAGE_SCHEMA_VERSION = 2
+export const STORAGE_SCHEMA_VERSION = 3
 
 /**
  * v1：schema_meta（版本线本体）+ 自持注册表 projects。
@@ -86,5 +86,12 @@ export const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
     recall_rows   INTEGER NOT NULL
 )`,
     ],
+  },
+  {
+    // v3（fix-2 一级解析动态化）：注册表增 project_id 列（API 级 projectId——运行期
+    // registerProject 落列；可空：种子迁移/预置行无该值）。服务面两级解析第一级在
+    // config 静态表未命中时回查本列（动态注册项目无需重启即命中）。
+    version: 3,
+    statements: [`ALTER TABLE projects ADD COLUMN project_id TEXT`],
   },
 ]

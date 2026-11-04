@@ -96,6 +96,8 @@ export interface RegisterProjectWrite {
   readonly wsPath: string
   /** 知识目录（缺省 = `<wsPath>/.knowledge`——列退役后产品面恒缺省派生） */
   readonly knowledgeDir?: string
+  /** API 级 projectId（fix-2 一级解析动态化：落注册行 project_id 列——config 静态表未命中时回查此列） */
+  readonly projectId?: string
 }
 
 /** 注册行写入面（BrowseKnowledgeService 第九法：host 注册链 wiring 消费，fail-soft 于 host 侧） */

@@ -79,3 +79,33 @@ describe('注册表读写（wsPath 键 + knowledge_dir 列）', () => {
     }
   })
 })
+
+describe('project_id 列（fix-2 一级解析动态化——API 级 projectId 承载列）', () => {
+  it('upsert 落 project_id + findByProjectId 命中（projectId → wsPath 反查）', () => {
+    const ws = join(tmpRoot(), 'pid-ws')
+    mkdirSync(ws)
+    const db = openKnowledgeDatabase(join(tmpRoot(), 'knowledge.db'))
+    try {
+      const reg = createKnowledgeRegistry(db)
+      reg.upsert(ws, join(ws, '.knowledge'), 'p-api-1')
+      expect(reg.findByProjectId('p-api-1')?.wsPath).toBe(canonicalWsPath(ws))
+      expect(reg.findByProjectId('p-absent')).toBeUndefined()
+    } finally {
+      db.close()
+    }
+  })
+
+  it('再 upsert 不带 projectId = 保留既有列值（COALESCE——种子迁移行不洗掉动态注册值）', () => {
+    const ws = join(tmpRoot(), 'pid-keep')
+    mkdirSync(ws)
+    const db = openKnowledgeDatabase(join(tmpRoot(), 'knowledge.db'))
+    try {
+      const reg = createKnowledgeRegistry(db)
+      reg.upsert(ws, join(ws, '.knowledge'), 'p-api-2')
+      reg.upsert(ws, join(ws, '.knowledge2'))
+      expect(reg.findByProjectId('p-api-2')?.knowledgeDir).toBe(join(ws, '.knowledge2'))
+    } finally {
+      db.close()
+    }
+  })
+})
