@@ -183,22 +183,22 @@ test('@web-e2e @p1mvp installer-smoke·冒烟前半：安装→启动零错→�
     expect(manifest.injections.length).toBeGreaterThan(0)
     await expect(page.locator(WORKBENCH).first()).toBeVisible({ timeout: 60_000 })
     // 首启落地 profile（安装形态真实落地链回归——fix-37 ④ 归并面：4.3 套件的插件行内容
-    // 断言随迁：patch 含 @dsh-forge/core 产品行；knowledge 行暂不含——产品裁决：知识库
-    // 功能不完整，打包形态不开放）
+    // 断言随迁：patch 含 @dsh-forge/core 产品行；knowledge 行携带——knowledge-stage1
+    // 1.9 A5 重开放：用户层全局行 + 随包（PRODUCT_PLUGINS userLayerRow: true））
     for (const f of PROFILE_FILES) {
       expect(existsSync(join(userData, 'profile', f)), `首启落地 profile/${f}`).toBe(true)
     }
     const patch = readFileSync(join(userData, 'profile', 'cordis.patch.yml'), 'utf8')
     expect(patch, 'profile patch 含 @dsh-forge/core 产品插件行（4.3 归并断言）').toContain("name: '@dsh-forge/core'")
-    expect(patch, 'profile patch 不含 @dsh-forge/knowledge 插件行（暂不开放）').not.toContain("name: '@dsh-forge/knowledge'")
+    expect(patch, 'profile patch 含 @dsh-forge/knowledge 插件行（1.9 A5 重开放——独立装底稿携带）').toContain("name: '@dsh-forge/knowledge'")
     expect(existsSync(join(userData, 'state.db')), 'state.db 落盘（SQLite 句柄已开）').toBe(true)
 
     // ── Step 3 success：主界面可达——三区工作台骨架（零项目 hero 确定相位） ──
     await expect(page.locator(NAV_SHELL).first(), '左栏导航 rail 入口在位').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(SIDEBAR_ANY).first(), '产品工作区面板').toBeVisible()
-    // bug 2ffb0a82：knowledge 插件不随包（staged:false）→ 宿主插件位 false → 左栏
-    // 「知识库」入口行零登记（打包形态知识面整组隐藏）
-    await expect(page.locator(KNOWLEDGE_ENTRY).first(), '知识库入口（打包形态插件缺席 = 隐藏）').toHaveCount(0)
+    // knowledge 1.9 A5 重开放：插件随包 + 用户层行装载 → 宿主插件位 true → 左栏
+    // 「知识库」入口行登记（原 bug 2ffb0a82 隐藏态翻转——探测已改双形态两探针）
+    await expect(page.locator(KNOWLEDGE_ENTRY).first(), '知识库入口（插件装载位 true = 在场）').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(PROJECT_ROW_ANY), '零项目态：项目树空').toHaveCount(0)
     // fix-7 定性收口（smoke-skeleton L44 同源矛盾）：view 镜像 = 官方面板态投影（hero 相位
     // 产品 'dswf-hero' 面板替换呈现 → 镜像恒 'hero'）；本组自带零项目 hero 确定相位（组题

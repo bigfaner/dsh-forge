@@ -59,7 +59,7 @@ describe('dev 启动 ensure 清单通用覆盖（bug 021d2655 回归守卫）', 
 //   · boot overlay 在场门注行（apps/host/src/boot/overlay.ts——git-worktree 等门控行）；
 //   · 预设底稿携带行（presets/*.patch.yml——boot overlay 每启注行，dev 同径）。
 // 期望集 = PRODUCT_PLUGINS 全部 staged（非 staged:false kill-switch）插件 ∪ 预设携带插件。
-// staged:false（如 knowledge）不进期望集但允许 dev 行在场（产品裁决：dev 形态全量可用）。
+// knowledge 1.9 A5 重开放（userLayerRow:true）→ 入期望集（profile.dev 行在场对账成立）。
 
 /** dev/overlay 文本中的插件装载行短名（name: '@dsh-forge/<短名>'；跳过 # 注释行）。 */
 function pluginLoadRowShorts(text: string): string[] {

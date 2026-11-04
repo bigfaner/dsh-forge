@@ -497,6 +497,8 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
   const blitzSkillsDir = typeof o.blitzSkillsDir === 'string' && o.blitzSkillsDir !== '' ? o.blitzSkillsDir : undefined
   // squad skills 物化锚（预设 customSkillDirs[squad]——expert-squad 专家域技能；缺席 = squad 技能面降级）
   const squadSkillsDir = typeof o.squadSkillsDir === 'string' && o.squadSkillsDir !== '' ? o.squadSkillsDir : undefined
+  // knowledge skills 物化锚（knowledge-stage1 1.9 A5：预设 customSkillDirs[knowledge]；缺席 = knowledge 技能面降级）
+  const knowledgeSkillsDir = typeof o.knowledgeSkillsDir === 'string' && o.knowledgeSkillsDir !== '' ? o.knowledgeSkillsDir : undefined
   // M3 3.8：设置域存储路径（boot overlay 注 core 行 config.settingsFile——缺席 = forgeSettings 服务降级）
   const settingsFile = typeof o.settingsFile === 'string' && o.settingsFile !== '' ? o.settingsFile : undefined
   return {
@@ -511,6 +513,7 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
     specSkillsDir,
     blitzSkillsDir,
     squadSkillsDir,
+    knowledgeSkillsDir,
     settingsFile,
   }
 }

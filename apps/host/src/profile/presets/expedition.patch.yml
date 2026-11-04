@@ -6,6 +6,8 @@
 #（fix-1/drift #9：两增量行携带 bindingsFile 同 config（占位符物化——与全局行同值单源），
 # 预设会话行内实例自足 cwd 路由；config-less 行内实例会遮蔽全局配置实例致 forge 动词
 # ERR_WORKSPACE_NOT_REGISTERED——3.9 实跑双证）。
+# knowledge-stage1 1.9 A5：customSkillDirs 增 knowledge 技能目录（skills/learn——
+# 知识沉淀技能；knowledge 插件本体走用户层全局行，非预设组合专行）。
 # 镜像行 config 全集必须重述——缺必填键 = 行 schema 拒 → 整预设 broken 不上菜单（spike S5 教训）。
 # 平台门行（tool-bash/tool-pwsh 的 disabled: !!js）= 上游逐字转写；物化时由 renderBootOverlay
 # 就地求值为具体布尔（!!js 全形态死刑——物化输出零表达式残留，绝对路径 only）。
@@ -57,6 +59,7 @@
                 - "{{plugin-forge-skills}}"
                 - "{{plugin-forge-spec-skills}}"
                 - "{{expert-squad-skills}}"
+                - "{{knowledge-skills}}"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: command-goal

@@ -89,6 +89,9 @@ export interface PresetOverlayInput extends PresetPatches {
   /** expert-squad skills 当形态绝对路径（customSkillDirs[squad]；缺席 = 剔除——squad
    *  技能面降级 fail-soft） */
   readonly squadSkillsDir?: string
+  /** knowledge skills 当形态绝对路径（knowledge-stage1 1.9 A5：customSkillDirs[knowledge]
+   *  ——skills/learn 沉淀技能；缺席 = 剔除 fail-soft，knowledge tool/段面不受牵连） */
+  readonly knowledgeSkillsDir?: string
   /** cwd 绑定表文件（fix-1/drift #9：预设行内 plugin-forge[+spec] 增量行 config 物化锚
    *  ——plugin-forge Interface 8 cwd 路由数据缝；knowledge 消费面已随 Q19 退役） */
   readonly bindingsFile: string
@@ -100,6 +103,7 @@ const PRESET_SKILL_DIR_TOKENS = {
   spec: '{{plugin-forge-spec-skills}}',
   blitz: '{{plugin-forge-blitz-skills}}',
   squad: '{{expert-squad-skills}}',
+  knowledge: '{{knowledge-skills}}',
 } as const
 
 /**
@@ -160,6 +164,11 @@ function materializePresetLines(patch: string, input: PresetOverlayInput): strin
     const squadToken = `- "${PRESET_SKILL_DIR_TOKENS.squad}"`
     if (trimmed === squadToken) {
       if (input.squadSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.squadSkillsDir)}`)
+      continue
+    }
+    const knowledgeToken = `- "${PRESET_SKILL_DIR_TOKENS.knowledge}"`
+    if (trimmed === knowledgeToken) {
+      if (input.knowledgeSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.knowledgeSkillsDir)}`)
       continue
     }
     if (trimmed === PRESET_BINDINGS_LINE_TOKEN) {

@@ -70,6 +70,11 @@ export interface HostPaths {
    *  （roundtable）挂载锚；dev = workspace 链接、packaged = runtime/node_modules 邻接。
    *  解析失败 = undefined 不注入（squad 技能面降级 fail-soft，不抛断启动） */
   squadSkillsDir?: string
+  /** knowledge skills 物理挂载目录（knowledge-stage1 1.9 A5：预设装配
+   *  customSkillDirs[knowledge]——skills/learn 沉淀技能挂载锚；dev = workspace 链接、
+   *  packaged = runtime/node_modules 邻接。解析失败 = undefined 不注入（knowledge
+   *  技能面降级 fail-soft，tool/段面照常——插件行不依赖本锚） */
+  knowledgeSkillsDir?: string
   /** 安装包 resources 根（仅 DSH_FORGE_RESOURCES_DIR 置位时存在；e2e/4.3 冒烟消费） */
   resourcesDir?: string
 }
@@ -145,6 +150,7 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
     specSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge-spec'),
     blitzSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge', 'skills-blitz'),
     squadSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/expert-squad'),
+    knowledgeSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/knowledge'),
     resourcesDir,
   }
 }

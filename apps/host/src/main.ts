@@ -90,6 +90,7 @@ void (async () => {
       bindingsFile: paths.bindingsFile,
       tasksHome: paths.tasksHome, settingsFile: paths.settingsFile, // core 行 config 双注：3.4 派生根（四域装配门）+ 3.8 设置域（forgeSettings 装配门）
       skillsDir: paths.skillsDir, specSkillsDir: paths.specSkillsDir, blitzSkillsDir: paths.blitzSkillsDir, squadSkillsDir: paths.squadSkillsDir, // skills 物理挂载（M3 3.7：core/spec/blitz 三目录 + squad 专家域——预设 customSkillDirs 物化锚）
+      knowledgeSkillsDir: paths.knowledgeSkillsDir, // knowledge 技能目录（1.9 A5：customSkillDirs[knowledge]——skills/learn 物化锚）
       credentialsPath: paths.credentialsPath, resourcesDir: paths.resourcesDir, // fix-26 隔离态凭据桥真 home + 4.1 打包资源根（boot child runtime/host-dist 入口）
     }, {
       stdioSink: tele.childStdioSink, // 1.2：child stdio pipe 行 → 诊断事件（回显双写在管道消费侧）

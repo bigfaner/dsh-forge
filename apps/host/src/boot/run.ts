@@ -81,6 +81,10 @@ export interface BootDshOptions {
   /** expert-squad skills 物理挂载目录（预设装配 customSkillDirs[squad]——专家域技能
    *  （roundtable）挂载锚；缺席 = squad 技能面降级 fail-soft 不注入） */
   squadSkillsDir?: string
+  /** knowledge skills 物理挂载目录（knowledge-stage1 1.9 A5：预设装配
+   *  customSkillDirs[knowledge]——skills/learn 沉淀技能挂载锚；缺席 = knowledge
+   *  技能面降级 fail-soft 不注入） */
+  knowledgeSkillsDir?: string
   /** 设置域存储文件绝对路径（M3 3.8：boot overlay 注 core 行 config.settingsFile——
    *  {userData}/forge-settings.json；缺席 = forgeSettings 服务降级缺席（六服务形制）） */
   settingsFile?: string

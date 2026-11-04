@@ -194,8 +194,10 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@deepseek-ai/dsh-web-app/package.json',
       'runtime/node_modules/@dsh-forge/core/dist/index.js',
       'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
-      // knowledge 暂不含（产品裁决：知识库功能不完整，打包形态不开放——dev 形态仍含；
-      // 重开放 = 翻转 contracts PRODUCT_PLUGINS staged 布尔，本口径随之派生）
+      // knowledge 1.9 A5 重开放：用户层全局行 + skills/learn 技能面（customSkillDirs[knowledge]
+      // 挂载源——STAGING_EXTRAS 承载）
+      'runtime/node_modules/@dsh-forge/knowledge/dist/index.js',
+      'runtime/node_modules/@dsh-forge/knowledge/skills/learn/SKILL.md',
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
       'runtime/node_modules/@dsh-forge/plugin-forge/skills/submit-task/SKILL.md',
       // blitz 专属技能面（plugin-forge 包内 skills-blitz 旁目录——blitz 预设 customSkillDirs
@@ -252,8 +254,9 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     expect(presetCarriedPlugins()).toEqual(['md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
     // git-worktree = staged:true 覆写种子（2026-10-18 安装版启动崩 fix：host dist 静态 import 面）
+    // knowledge = userLayerRow 种子（1.9 A5 重开放——用户层全局行 + skills/learn 技能面）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/md-mermaid'].sort(),
+      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/knowledge', 'plugins/md-mermaid'].sort(),
     )
   })
 
@@ -386,10 +389,10 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     )
   })
 
-  it('knowledge 暂不开放 pin（产品裁决：知识库功能不完整，打包形态不开放——dev 形态 profile.dev 仍含；重开放 = 改 contracts PRODUCT_PLUGINS knowledge 行，本 pin 同步反转）', () => {
-    expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为关（userLayerRow:false + staged:false kill-switch）').toEqual({ userLayerRow: false, staged: false })
-    expect(stagedPackages.has('knowledge'), 'knowledge 应暂缺席 staging（推导制下无种子 + kill-switch 双保险）').toBe(false)
-    expect(KEY_FILES.some((rel) => rel.includes('@dsh-forge/knowledge')), '关键文件口径不应含 knowledge 行（暂不开放）').toBe(false)
+  it('knowledge 重开放 pin（knowledge-stage1-foundation 1.9 A5：用户层全局行 + staging 种子随包 + skills/learn 技能面口径）', () => {
+    expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为开（userLayerRow:true）').toEqual({ userLayerRow: true })
+    expect(stagedPackages.has('knowledge'), 'knowledge 应在场 staging（userLayerRow 种子自动推导）').toBe(true)
+    expect(KEY_FILES.some((rel) => rel.includes('@dsh-forge/knowledge')), '关键文件口径应含 knowledge 行（技能面 + dist）').toBe(true)
   })
 })
 

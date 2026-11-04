@@ -170,6 +170,7 @@ for (const preset of ['expedition', 'blitz'] as const) {
       const skill = rows.get('skill-filesystem')!
       expect(skill).toContain('                - "{{plugin-forge-skills}}"')
       expect(skill).toContain('                - "{{expert-squad-skills}}"') // expert-squad 专家域技能（roundtable）——双预设同挂
+      expect(skill).toContain('                - "{{knowledge-skills}}"') // knowledge 技能（skills/learn）——1.9 A5 双预设同挂（插件本体走用户层全局行）
       if (isExpedition) {
         expect(skill).toContain('                - "{{plugin-forge-spec-skills}}"')
         expect(skill).not.toContain('{{plugin-forge-blitz-skills}}')

@@ -226,7 +226,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
   const base = { stateDb: '/x/s.db' }
   // 真实四底稿（src 同邻装载——presets.test.ts 另 pin 底稿契约面）
   const patches = loadPresetPatches()!
-  const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string; blitzSkillsDir?: string; squadSkillsDir?: string } = {}) => ({
+  const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string; blitzSkillsDir?: string; squadSkillsDir?: string; knowledgeSkillsDir?: string } = {}) => ({
     ...base,
     presets: {
       ...patches,
@@ -234,6 +234,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
       specSkillsDir: '/c/spec-skills',
       blitzSkillsDir: '/c/blitz-skills',
       squadSkillsDir: '/c/squad-skills',
+      knowledgeSkillsDir: '/c/knowledge-skills', // 1.9 A5：customSkillDirs[knowledge]（skills/learn）
       bindingsFile: '/x/b.json', // fix-1：预设行内产品行 config 物化锚（plugin-forge Interface 8 数据缝）
       ...over,
     },
@@ -258,26 +259,31 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
 
   it('物化绝对路径（AC2）：customSkillDirs 占位符 → 当形态绝对路径双引号标量——远征 [core,spec] / 突击 [core,blitz]', () => {
     const text = renderBootOverlay(
-      withPresets({ coreSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills', specSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge-spec\\skills', blitzSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills-blitz', squadSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\expert-squad\\skills' }),
+      withPresets({ coreSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills', specSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge-spec\\skills', blitzSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills-blitz', squadSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\expert-squad\\skills', knowledgeSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\knowledge\\skills' }),
     )
     const core = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge\\\\skills"'
     const spec = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge-spec\\\\skills"'
     const blitz = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge\\\\skills-blitz"'
     const squad = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\expert-squad\\\\skills"'
+    const knowledge = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\knowledge\\\\skills"'
     expect(text).toContain(core)
     expect(text).toContain(spec)
     expect(text).toContain(blitz)
     expect(text).toContain(squad)
+    expect(text).toContain(knowledge) // 1.9 A5：knowledge skills/learn 物化（双预设同挂）
     // 段级物理隔离（L1）：远征段物理不含 blitz 路径；突击段物理不含 spec 路径
     const expeditionSection = text.slice(text.indexOf('preset-expedition'), text.indexOf('preset-blitz'))
     const blitzSection = text.slice(text.indexOf('preset-blitz'))
     expect(expeditionSection).toContain(core)
     expect(expeditionSection).not.toContain(blitz)
+    expect(expeditionSection).toContain(knowledge)
     expect(blitzSection).toContain(core)
     expect(blitzSection).toContain(blitz)
     expect(blitzSection).not.toContain(spec)
+    expect(blitzSection).toContain(knowledge)
     expect(text).not.toContain('{{plugin-forge') // 占位符零残留
     expect(text).not.toContain('{{expert-squad')
+    expect(text).not.toContain('{{knowledge')
   })
 
   it('标准模式 expert-squad 技能面（用户裁决 2026-11-01）：基础渲染 skill-filesystem 行 customSkillDirs 仅挂 squad 技能目录（占位符经预设物化链既有 squad 分支 → 当形态绝对路径；patch 按 row id 补 config——上游 standard 预设自带 skill-filesystem 裸行，零插件行注册）；squadSkillsDir 缺席 → 整行剔除零占位符残留。forge 技能仍零（2026-10-09 裁决对 forge 部分不变），预设行为零变化', () => {
@@ -287,11 +293,13 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
       "- id: skill-filesystem\n  name: '@deepseek-ai/dsh-skill-filesystem'\n  config:\n    customSkillDirs:\n      - \"/c/squad-skills\"",
     )
     expect(text).not.toContain('{{expert-squad') // 物化链复用：占位符零残留
-    // forge 技能仍零：基础渲染段零 plugin-forge 系技能目录（core/spec/blitz 仅预设行内）
+    // forge 技能仍零：基础渲染段零 plugin-forge 系技能目录（core/spec/blitz 仅预设行内；
+    // knowledge 技能亦仅预设行内——标准模式 learn 技能面不在本缝）
     const baseSection = text.slice(0, text.indexOf('preset-expedition'))
     expect(baseSection).not.toContain('/c/skills')
     expect(baseSection).not.toContain('/c/spec-skills')
     expect(baseSection).not.toContain('/c/blitz-skills')
+    expect(baseSection).not.toContain('/c/knowledge-skills')
     // 预设行为零变化：远征行内 core 目录仍物化（既有 10 空缩进预设行形态）
     expect(text).toContain('customSkillDirs:\n                - "/c/skills"')
     // 缺席 fail-soft：squadSkillsDir undefined → 基础渲染行整行剔除、无占位符残留
@@ -347,8 +355,16 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(text).toContain('/c/skills') // core 锚不受牵连
   })
 
+  it('knowledge 目录缺席 fail-soft（1.9 A5）：双预设 customSkillDirs 剔除 knowledge 行（knowledge 技能面降级·无占位符残留；其余锚不受牵连）', () => {
+    const text = renderBootOverlay(withPresets({ knowledgeSkillsDir: undefined }))
+    expect(text).not.toContain('/c/knowledge-skills')
+    expect(text).not.toContain('{{knowledge')
+    expect(text).toContain('/c/skills') // core 锚不受牵连
+    expect(text).toContain('/c/squad-skills') // squad 锚不受牵连
+  })
+
   it('全目录皆缺席：预设内 skill-filesystem 行回归上游裸形态（config 空块整除——schema 面零残留）', () => {
-    const text = renderBootOverlay(withPresets({ coreSkillsDir: undefined, specSkillsDir: undefined, blitzSkillsDir: undefined, squadSkillsDir: undefined }))
+    const text = renderBootOverlay(withPresets({ coreSkillsDir: undefined, specSkillsDir: undefined, blitzSkillsDir: undefined, squadSkillsDir: undefined, knowledgeSkillsDir: undefined }))
     expect(text).toContain(
       "          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill",
     )

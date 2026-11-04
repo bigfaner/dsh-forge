@@ -32,11 +32,10 @@ export interface ProductPluginSwitch {
 
 /**
  * 产品插件意图开关表（键序 = insert 行序）。
- * 现值裁决：knowledge——知识库功能不完整，暂不开放：不进用户层（userLayerRow:
- * false）也不随包（staged: false kill-switch——当前无预设引用、无包依赖它，本就
- * 不入闭包，显式声明是防将来有人加引用时静默带出）；dev 形态仍含。
- * 重开放 = 删本行（或改 userLayerRow: true）——模板行/staging/关键文件/前置
- * 全随之派生，仅需同步两处现值 pin（materialize.test.ts / installer-pipeline.test.ts）。
+ * knowledge（knowledge-stage1-foundation 1.9 A5 重开放）：知识库阶段①地基落位
+ * （自持存储 + 自有服务 + 技能物化装配）——进用户层（全局装载：tool 双件 +
+ * forge:knowledge 段 + knowledge.root 声明全组合继承）并作 staging 种子随包
+ * （skills/learn 技能面由 STAGING_EXTRAS 承载）。
  */
 export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   core: { userLayerRow: true },
@@ -52,5 +51,5 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // （userLayerRow/预设/依赖闭包）均不可达（本包零 @dsh-forge 依赖），故 staged:true
   // 显式入 staging。行装载不走用户层：boot overlay presence 门注行（dev 同径单源）。
   'git-worktree': { userLayerRow: false, staged: true },
-  knowledge: { userLayerRow: false, staged: false },
+  knowledge: { userLayerRow: true },
 }

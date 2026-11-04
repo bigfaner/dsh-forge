@@ -342,8 +342,11 @@ async function main(): Promise<void> {
     }
   }
   // bug 2ffb0a82：knowledge 插件装载位（与 overlay 注行门同源单值——child 侧唯一探测点，
-  // ready 消息上送 renderer 知识面门控；dev 树在场 true / 打包形态暂不含 false）
-  const knowledgeRow = existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'knowledge', 'package.json'))
+  // ready 消息上送 renderer 知识面门控）。1.9 A5 重开放随包：探测改双形态两探针
+  // （productPackagePresent——gitWorktreeRow/mobileBridgeRow 同径；旧口径单探
+  // profileDir/node_modules，打包形态 profile 目录无 node_modules → 恒 false，
+  // 插件已装载而 UI 门控错隐）。
+  const knowledgeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/knowledge')
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
@@ -363,6 +366,7 @@ async function main(): Promise<void> {
             specSkillsDir: options.specSkillsDir, // customSkillDirs[spec]（缺席 = spec 技能面降级）
             blitzSkillsDir: options.blitzSkillsDir, // customSkillDirs[blitz]（缺席 = blitz 技能面降级）
             squadSkillsDir: options.squadSkillsDir, // customSkillDirs[squad]（expert-squad——缺席 = squad 技能面降级）
+            knowledgeSkillsDir: options.knowledgeSkillsDir, // customSkillDirs[knowledge]（1.9 A5——缺席 = knowledge 技能面降级）
             bindingsFile: options.bindingsFile, // fix-1/drift #9：预设行内产品行 config 物化（与全局行同值单源）
           },
         }
