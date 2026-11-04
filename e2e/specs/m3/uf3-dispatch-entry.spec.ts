@@ -161,6 +161,10 @@ test('@web-e2e @m3 UF-3·新开路由：突击提案容器派发 → 突击模�
   const { app, page, pageErrors, wsDir } = sharedLaunch
   const PROP = 'uf3-blitz-prop'
   try {
+    // 用例隔离（bug 09f5b987）：用例一终态泄漏（当前会话 = 跳转会话 A + 重播种后其
+    // workspace 挂靠悬空）可致 hero 工作区 chip 锚缺席——开用例先显式回 blank/hero 面，
+    // 消除对前一用例终态的隐式依赖。
+    await newBlankSession(page)
     // 同上：注册前归档其余活跃项目（豁免夹具 root 同名行）——chip 锚定收敛
     await anchorConverge(page)
     const project = await registerProject(page, wsDir, WS_NAME)

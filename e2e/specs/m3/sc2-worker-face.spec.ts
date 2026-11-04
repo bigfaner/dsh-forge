@@ -4,7 +4,7 @@
 //      含 [core, spec] 双目录、突击组合仅 core（spec 目录物理缺席 = L1 物理边界的数据直证）；
 //      registry default = 突击（bug 2ba146d8 缺省=blitz）；物化输出零 !!js（绝对路径 only）；
 //   ② 核心包技能目录无 git-commit / git-checkout 条目（移除/未迁断言——PRD SC2 预设层）；
-//      spec 包 8 技能在盘（远征全量可见的物理前提）；
+//      spec 包技能成员在盘（远征全量可见的物理前提——清单随技能退役随动）；
 //   ③ worker model 与 Forge设置 一致的数据面：forge:settings/set 落 {userData}/
 //      forge-settings.json（core 单写者）+ get 回读一致——dispatchTask 组装面（agentOptions
 //      显式携带）消费本法（运行期 relay = 3.9 W 用例实证——VERIFICATION-3.9.md；
@@ -89,9 +89,14 @@ m3Test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化
     expect(coreEntries, '核心包无 git-commit 条目（M3 移除断言）').not.toContain('git-commit')
     expect(coreEntries, '核心包无 git-checkout 条目（未迁断言）').not.toContain('git-checkout')
     const specEntries = readdirSync(SPEC_SKILLS).filter((e) => e !== 'README.md')
-    for (const skill of ['write-prd', 'ui-design', 'tech-design', 'gen-journeys', 'gen-contracts', 'gen-test-scripts', 'breakdown-tasks']) {
+    // 物理前提清单随技能面随动（bug a9997185）：63486994 退役 gen-journeys/gen-contracts/
+    // gen-test-scripts（生成纪律归 test-*-author 专家档案）——清单改锚当前盘面成员全集。
+    for (const skill of ['write-prd', 'ui-design', 'tech-design', 'breakdown-tasks', 'review-prd', 'review-tech']) {
       expect(specEntries, `spec 包技能在盘（${skill}——远征全量可见的物理前提）`).toContain(skill)
     }
+    expect(specEntries, 'spec 包无 gen-journeys（63486994 退役断言）').not.toContain('gen-journeys')
+    expect(specEntries, 'spec 包无 gen-contracts（63486994 退役断言）').not.toContain('gen-contracts')
+    expect(specEntries, 'spec 包无 gen-test-scripts（63486994 退役断言）').not.toContain('gen-test-scripts')
     expect(specEntries, 'spec 包无 git-commit（拆包后移除断言）').not.toContain('git-commit')
 
     // ── ③ Forge设置 单写者数据面：set → {userData}/forge-settings.json 落盘 + get 回读一致 ──
