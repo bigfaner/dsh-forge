@@ -19,6 +19,11 @@ const ASSEMBLE_SCRIPT = join(ROOT, 'scripts', 'assemble-installer-resources.mjs'
 const SMOKE_ROOT = join(`${ROOT.split('\\')[0]}\\`, 'dsh-forge-smoke')
 const WALKTHROUGH = join('.forge', 'docs', 'proposals', 'worker-lean-execution', 'walkthrough')
 
+// 【临时禁用 2026-11-04】本 spec beforeAll 走 NSIS 静默安装（/S）——与 installer-smoke 同
+// 击穿路径：CHECK_APP_RUNNING 按进程名全机 taskkill dsh-forge.exe（bug 167b5121，第五次
+// 实杀 14:11:15）。guard 补齐：根治落地前一律 skip，任何会话不得启用（用户指令）。
+test.skip(true, 'probe-installer-composer 暂时禁用：NSIS 静默安装链按进程名误杀安装版 GUI（bug 167b5121，同 installer-smoke）')
+
 const installState: { exe?: string; installDir?: string; tmp?: string } = {}
 
 test.beforeAll(async () => {
