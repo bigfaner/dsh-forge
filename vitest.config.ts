@@ -19,6 +19,10 @@ export default defineConfig({
       { test: { name: 'contract', include: ['tests/contract/**/*.test.ts'] } },
       // mobile 表面 Journey 回归池（gen-test-scripts——回放 fixtures 驱动的契约钉面测试）
       { test: { name: 'mobile-journeys', include: ['tests/mobile/**/*.test.ts'] } },
+      // knowledge 表面 Journey 回归池（knowledge-stage1-foundation 1.10 脚本任务——
+      // 断言-契约溯源：每条断言标注 testing/contracts/knowledge-* 契约条目 id；
+      // 真机 Electron 面用例在 spec 内 skip 留痕，归 Playwright test-run 收口）
+      { test: { name: 'knowledge-journeys', include: ['tests/knowledge/**/*.test.ts'] } },
       { test: { name: 'contracts', include: ['packages/contracts/src/**/*.test.ts'] } },
       { test: { name: 'path-key', include: ['packages/path-key/src/**/*.test.ts'] } },
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
