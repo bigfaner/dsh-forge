@@ -1,11 +1,23 @@
 ---
 title: 跨效度域证据全量重跑判例（loop-message-consolidation 1.4）
-summary: HEAD 从 1561d7fe 推进到 3310f1c4 后 resume 效度戳失配，上轮全部走查证据跨效度域——旧证据原目录归档（1-4-prev-1561d7fe/），三径 e2e 全量重跑重取（3 passed / 39.1m），新旧目录并存可考、不覆盖。
-keywords: [效度戳, 证据重跑, 走查, 归档, e2e]
+summary: >-
+  HEAD 从 1561d7fe 推进到 3310f1c4 后 resume
+  效度戳失配，上轮全部走查证据跨效度域——旧证据原目录归档（1-4-prev-1561d7fe/），三径 e2e 全量重跑重取（3 passed /
+  39.1m），新旧目录并存可考、不覆盖。
+keywords:
+  - 效度戳
+  - 证据重跑
+  - 走查
+  - 归档
+  - e2e
 domainPath: .knowledge/examples/
 来源容器: loop-message-consolidation
 来源任务: first-pass 复盘（1.8）
 bug id: 无
+id: walkthrough-evidence-validity-stamp-rerun
+status: unconfirmed
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 跨效度域证据全量重跑判例（1.4）

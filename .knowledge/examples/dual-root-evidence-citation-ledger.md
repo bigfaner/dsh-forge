@@ -1,11 +1,22 @@
 ---
 title: 跨 git/非 git 证据引用的双根口径——对账表头书面化两枚留痕根，表内用相对根记号
-summary: 对账表头注书面化「证据留痕根」两枚：forge 运行日志目录（盘上不进 git）与提案 walkthrough 目录（在盘相对根）；表内引用用相对根记号（{1.x}/、walkthrough/）。该结构使「commit 未含对账表改动」与「证据在盘已修正」两事实兼容，消解评审分歧（review2-code vs review2-spec 判例）。
-keywords: [证据引用, 双根, 对账表, walkthrough, 评审分歧]
-status: draft
+summary: >-
+  对账表头注书面化「证据留痕根」两枚：forge 运行日志目录（盘上不进 git）与提案 walkthrough
+  目录（在盘相对根）；表内引用用相对根记号（{1.x}/、walkthrough/）。该结构使「commit
+  未含对账表改动」与「证据在盘已修正」两事实兼容，消解评审分歧（review2-code vs review2-spec 判例）。
+keywords:
+  - 证据引用
+  - 双根
+  - 对账表
+  - walkthrough
+  - 评审分歧
+status: unconfirmed
 source_container: e2e-upstream-drift-reds-triage
 source_task: 1.7
 source_bug: —
+id: dual-root-evidence-citation-ledger
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 双根证据引用口径

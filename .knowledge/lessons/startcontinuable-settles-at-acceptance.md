@@ -1,11 +1,23 @@
 ---
 title: startContinuable 接受点即结算，无成果回传通道
-summary: ctx.subagents.startContinuable 在子会话 inbox 接受首条 prompt 时即 resolve，仅返回 {childId, messageId}，不等待不收集结果；成果呈现走官方子会话记录，追问走 dsh-tool-subagent-control send_message——不得画成同步返回成果。
-keywords: [startContinuable, continuable, subagent, 结算语义, send_message]
+summary: >-
+  ctx.subagents.startContinuable 在子会话 inbox 接受首条 prompt 时即 resolve，仅返回 {childId,
+  messageId}，不等待不收集结果；成果呈现走官方子会话记录，追问走 dsh-tool-subagent-control
+  send_message——不得画成同步返回成果。
+keywords:
+  - startContinuable
+  - continuable
+  - subagent
+  - 结算语义
+  - send_message
 domainPath: docs/conventions/official-mechanics-interception.md
 来源容器: expert-squad
 来源任务: 评审 B2 → 1.15 实现（review-tech-report v4/三审）
 bug id: 无
+id: startcontinuable-settles-at-acceptance
+status: unconfirmed
+type: facts
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # startContinuable 接受点即结算

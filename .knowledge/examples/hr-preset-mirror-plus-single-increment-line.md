@@ -1,11 +1,23 @@
 ---
 title: 角色 preset = 全量镜像 + 单增量行 + 插件守卫微件承担权限
-summary: HR 预设底稿以 standard 全量镜像为基，唯一差异一行插件 config.denyTools=[delegate_expert]——权限面由插件 scoped apply 内官方 tools.restrict({deny}) fail-closed 承担，restrict 缺席/抛错 fail-soft warn 不拖垮 preset mount；preset 不自建权限机制。
-keywords: [preset, denyTools, scoped restrict, HR, 镜像]
+summary: >-
+  HR 预设底稿以 standard 全量镜像为基，唯一差异一行插件 config.denyTools=[delegate_expert]——权限面由插件
+  scoped apply 内官方 tools.restrict({deny}) fail-closed 承担，restrict 缺席/抛错
+  fail-soft warn 不拖垮 preset mount；preset 不自建权限机制。
+keywords:
+  - preset
+  - denyTools
+  - scoped restrict
+  - HR
+  - 镜像
 domainPath: .knowledge/examples/
 来源容器: expert-squad
 来源任务: 1.23（phase-4-summary.md）
 bug id: 无
+id: hr-preset-mirror-plus-single-increment-line
+status: unconfirmed
+type: decisions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 角色 preset = 全量镜像 + 单增量行

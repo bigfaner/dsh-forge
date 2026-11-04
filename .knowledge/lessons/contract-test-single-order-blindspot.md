@@ -1,11 +1,21 @@
 ---
 title: 契约测试只钉单一序即留盲区——自 declare 契约必须配反向序与平手态用例
-summary: 契约测试只钉单一序（主树行后置）时，既有用例全绿恰是盲区证明而非正确性证据。自 declare 契约必须覆盖三态用例：主树行在场 / 缺席 / createdAt 平手；本案评审红灯由「反例序」触发而非既有绿（bug 143328f1 判例）。
-keywords: [contract-test, 反例序, 平手态, 盲区, declare]
-status: draft
+summary: >-
+  契约测试只钉单一序（主树行后置）时，既有用例全绿恰是盲区证明而非正确性证据。自 declare 契约必须覆盖三态用例：主树行在场 / 缺席 /
+  createdAt 平手；本案评审红灯由「反例序」触发而非既有绿（bug 143328f1 判例）。
+keywords:
+  - contract-test
+  - 反例序
+  - 平手态
+  - 盲区
+  - declare
+status: unconfirmed
 source_container: e2e-known-reds-triage
 source_task: 1.12 / 1.14
 source_bug: 143328f1
+id: contract-test-single-order-blindspot
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 单一序契约测试的盲区判例

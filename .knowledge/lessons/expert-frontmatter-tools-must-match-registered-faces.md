@@ -1,11 +1,24 @@
 ---
 title: 专家档案工具面名实核对——frontmatter tools 须与插件注册工具面一致
-summary: 内置专家 frontmatter 声明的 tools 必须与插件实际注册的工具面（如 plugin-forge FORGE_TOOL_NAMES）名实一致；交付自测须显式核对二者，不能只信提案承诺。判例 cd369951：提案 AC9 承诺 getBug/listBugs/聚合只读，专家实际只持 [read,grep,glob]，深挖靠主会话预取注入，评审才发现。
-keywords: [expert-squad, frontmatter, tools, 工具面, 名实一致, 交付自测]
+summary: >-
+  内置专家 frontmatter 声明的 tools 必须与插件实际注册的工具面（如 plugin-forge
+  FORGE_TOOL_NAMES）名实一致；交付自测须显式核对二者，不能只信提案承诺。判例 cd369951：提案 AC9 承诺
+  getBug/listBugs/聚合只读，专家实际只持 [read,grep,glob]，深挖靠主会话预取注入，评审才发现。
+keywords:
+  - expert-squad
+  - frontmatter
+  - tools
+  - 工具面
+  - 名实一致
+  - 交付自测
 domainPath: .knowledge/lessons/
 来源容器: recurrence-signal-tiering
 来源任务: 1.6 / 1.8
 bug id: cd369951（修复 2d54c664）
+id: expert-frontmatter-tools-must-match-registered-faces
+status: unconfirmed
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 专家档案工具面名实核对

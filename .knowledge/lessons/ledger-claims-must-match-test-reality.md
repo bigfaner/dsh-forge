@@ -1,11 +1,21 @@
 ---
 title: 台账/注释宣称一致性前必须逐位核对实现并配跨端契约测试
-summary: 台账/注释宣称「客户端镜像」「恒一致」前必须逐位核对实现并有跨端契约测试背书——fix-1 卷宗宣称不实被评审证伪（bug 0c677db2 判例）；台账引用的测试文件名须与实际路径一致，指称断裂自伤（Mi1 判例）。
-keywords: [ledger, 宣称, 契约测试, 指称断裂, 镜像]
-status: draft
+summary: >-
+  台账/注释宣称「客户端镜像」「恒一致」前必须逐位核对实现并有跨端契约测试背书——fix-1 卷宗宣称不实被评审证伪（bug 0c677db2
+  判例）；台账引用的测试文件名须与实际路径一致，指称断裂自伤（Mi1 判例）。
+keywords:
+  - ledger
+  - 宣称
+  - 契约测试
+  - 指称断裂
+  - 镜像
+status: unconfirmed
 source_container: e2e-known-reds-triage
 source_task: 1.12 / 1.14
 source_bug: 0c677db2
+id: ledger-claims-must-match-test-reality
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 台账宣称须与测试现实对齐

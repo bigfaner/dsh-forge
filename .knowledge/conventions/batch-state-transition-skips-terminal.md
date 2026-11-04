@@ -1,11 +1,21 @@
 ---
 title: 批量状态转移必须过滤 terminal 终态
-summary: 循环停止/批量扫描径做状态转移前必须跳过 completed/failed 等 terminal 终态任务，否则刚完成的任务被扫成 interrupted 并触发重派死循环。
-keywords: [状态机, transition, 终态, 停止, 重派]
-status: draft
+summary: >-
+  循环停止/批量扫描径做状态转移前必须跳过 completed/failed 等 terminal 终态任务，否则刚完成的任务被扫成 interrupted
+  并触发重派死循环。
+keywords:
+  - 状态机
+  - transition
+  - 终态
+  - 停止
+  - 重派
+status: unconfirmed
 source_container: expert-squad-forge-2
 source_task: expert-squad-forge-2/1.21
 source_bug: 3ccb4e96
+id: batch-state-transition-skips-terminal
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 批量状态转移必须过滤 terminal 终态

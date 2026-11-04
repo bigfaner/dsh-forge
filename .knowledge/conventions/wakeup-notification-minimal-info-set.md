@@ -1,11 +1,24 @@
 ---
 title: 唤醒类消息的最小充分信息集判据
-summary: 异常/结算等唤醒（wakeup）消息以「主 agent 凭消息本身可精确排查/收口」为验收判据：任务标识、错误原文（含全文引用）、发生阶段、重试计数、处置入口五要素逐一打勾，缺一即 FAIL——loop-message-consolidation AC3 复跑实证处置入口缺失可被该判据捕获。
-keywords: [wakeup, 异常通知, 信息集, 验收判据, 结算卡]
+summary: >-
+  异常/结算等唤醒（wakeup）消息以「主 agent
+  凭消息本身可精确排查/收口」为验收判据：任务标识、错误原文（含全文引用）、发生阶段、重试计数、处置入口五要素逐一打勾，缺一即
+  FAIL——loop-message-consolidation AC3 复跑实证处置入口缺失可被该判据捕获。
+keywords:
+  - wakeup
+  - 异常通知
+  - 信息集
+  - 验收判据
+  - 结算卡
 domainPath: .knowledge/conventions/
 来源容器: loop-message-consolidation
 来源任务: first-pass 复盘（1.8）
 bug id: 无
+id: wakeup-notification-minimal-info-set
+status: unconfirmed
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
+canonical: docs/conventions/wakeup-notification-minimal-info-set.md
 ---
 
 # 唤醒类消息的最小充分信息集判据

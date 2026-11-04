@@ -1,11 +1,22 @@
 ---
 title: 官方 smooth 追底动画在飞窗口的 settle 释放窗
-summary: 官方 chat-view 贴底跟随的释放窗 = smooth 追底动画在飞期间内容增高阶跃（>25px 容差）落地，settle() 落点超容差即释放；补落底修复须以「增高前偏离 ≤ 容差」为守门判据，用户已上滚不拉拽。
-keywords: [bottom-follow, followingTail, settle, smooth 滚动, 容差]
+summary: >-
+  官方 chat-view 贴底跟随的释放窗 = smooth 追底动画在飞期间内容增高阶跃（>25px 容差）落地，settle()
+  落点超容差即释放；补落底修复须以「增高前偏离 ≤ 容差」为守门判据，用户已上滚不拉拽。
+keywords:
+  - bottom-follow
+  - followingTail
+  - settle
+  - smooth 滚动
+  - 容差
 domainPath: .knowledge/lessons/
 来源容器: loop-consol-flywheel-improvement
 来源任务: 1.4 CDP 归因定谳；first-pass 复盘（1.9）沉淀
 bug id: 无
+id: smooth-follow-inflight-window-release
+status: unconfirmed
+type: facts
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 官方 smooth 追底动画在飞窗口的 settle 释放窗

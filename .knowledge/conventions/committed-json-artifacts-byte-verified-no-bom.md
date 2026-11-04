@@ -1,11 +1,21 @@
 ---
 title: 提交的 JSON/文本产物须字节级校验防 BOM 与坏字节
-summary: 本特性三轮提交产物损坏（plugin-forge 与 md-mermaid 的 package.json BOM/坏字节）阻塞 pnpm 全链；工具写文件后、提交前对关键 JSON 做字节级核验（UTF-8 无 BOM）。
-keywords: [BOM, 坏字节, package.json, 提交, 构建阻塞]
-status: draft
+summary: >-
+  本特性三轮提交产物损坏（plugin-forge 与 md-mermaid 的 package.json BOM/坏字节）阻塞 pnpm
+  全链；工具写文件后、提交前对关键 JSON 做字节级核验（UTF-8 无 BOM）。
+keywords:
+  - BOM
+  - 坏字节
+  - package.json
+  - 提交
+  - 构建阻塞
+status: unconfirmed
 source_container: expert-squad-forge-2
 source_task: expert-squad-forge-2/1.21
 source_bug: 98e3e249
+id: committed-json-artifacts-byte-verified-no-bom
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 提交产物字节级校验（无 BOM / 无坏字节）

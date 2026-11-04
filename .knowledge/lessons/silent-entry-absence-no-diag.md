@@ -1,11 +1,22 @@
 ---
 title: 入口静默缺席无告警——装配缺席也须 emitDiag，取证发现后挂主会话裁决
-summary: 真机走查发现「＋ 添加项目」入口在 dev 实机点击无任何 dialog 呈现，控制台也无告警——静默失败违反可观测性纪律（AGENTS §7：不得以 fail-soft 吞掉为由静默失败）。取证改走 preload RPC 真身完成验收，入口缺陷本身作为待裁决项如实挂出，不就地猜修。
-keywords: [静默失败, emitDiag, 可观测性, 取证降级, 待裁决]
+summary: >-
+  真机走查发现「＋ 添加项目」入口在 dev 实机点击无任何 dialog 呈现，控制台也无告警——静默失败违反可观测性纪律（AGENTS §7：不得以
+  fail-soft 吞掉为由静默失败）。取证改走 preload RPC 真身完成验收，入口缺陷本身作为待裁决项如实挂出，不就地猜修。
+keywords:
+  - 静默失败
+  - emitDiag
+  - 可观测性
+  - 取证降级
+  - 待裁决
 domainPath: .knowledge/lessons/
 来源容器: project-manual-order
 来源任务: first-pass 复盘（1.4）
 bug id: 无
+id: silent-entry-absence-no-diag
+status: unconfirmed
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 入口静默缺席无告警（walkthrough/batch1 判例）

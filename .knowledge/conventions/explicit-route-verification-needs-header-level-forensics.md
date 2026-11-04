@@ -1,10 +1,20 @@
 ---
 title: 显式 provider/model 路由验证必须 header 级真机取证且双通道各自取证
-summary: 子会话「用了哪家的模型」不能靠 console/描述断言——必须取 request/header config 与 subagent descriptor 原文；对话式委派（通道一）通过不代表 worker claim（通道二）通过，两通道须各自取证。
-keywords: [provider, model, 路由, 真机取证, header]
-status: draft
+summary: >-
+  子会话「用了哪家的模型」不能靠 console/描述断言——必须取 request/header config 与 subagent descriptor
+  原文；对话式委派（通道一）通过不代表 worker claim（通道二）通过，两通道须各自取证。
+keywords:
+  - provider
+  - model
+  - 路由
+  - 真机取证
+  - header
+status: unconfirmed
 source_container: expert-squad-forge-2
 source_task: expert-squad-forge-2/1.21
+id: explicit-route-verification-needs-header-level-forensics
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 显式路由验证 = header 级取证 × 双通道独立取证

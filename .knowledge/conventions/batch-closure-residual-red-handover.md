@@ -1,11 +1,22 @@
 ---
 title: 收口批残红移交范式——稳定复现且归因上游变更漂移的残红按 known-reds 口径移交派生提案
-summary: 收口批残红经隔离复跑稳定复现且全部归因上游变更漂移时，按 known-reds 维护口径移交派生提案（本案 e2e-upstream-drift-reds-triage，proposalId b3569515）——「新增红由归属任务补录」；验收口径修订须显式裁决留档，移交清单逐例归因不静默。
-keywords: [batch-closure, handover, known-reds, derived-proposal, 上游漂移]
-status: draft
+summary: >-
+  收口批残红经隔离复跑稳定复现且全部归因上游变更漂移时，按 known-reds 维护口径移交派生提案（本案
+  e2e-upstream-drift-reds-triage，proposalId
+  b3569515）——「新增红由归属任务补录」；验收口径修订须显式裁决留档，移交清单逐例归因不静默。
+keywords:
+  - batch-closure
+  - handover
+  - known-reds
+  - derived-proposal
+  - 上游漂移
+status: unconfirmed
 source_container: e2e-known-reds-triage
 source_task: 1.11
 source_bug: —
+id: batch-closure-residual-red-handover
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 收口批残红移交范式

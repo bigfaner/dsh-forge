@@ -1,11 +1,24 @@
 ---
 title: 裸 catch 豁免判据五族分类
-summary: 全仓 `} catch {` 裸吞审计的豁免判据五族——注释化 fail-soft 缺席语义、诊断面红线不反压、错误显式回传、官方面防御读取、测试夹具；五族之外一律补点。另注意字符串内嵌脚本里的 catch 非 TS 吞没面、登记时点采样数与 HEAD 数漂移需对账说明。
-keywords: [裸 catch, 吞没审计, fail-soft, 豁免判据, 台账]
+summary: >-
+  全仓 `} catch {` 裸吞审计的豁免判据五族——注释化 fail-soft
+  缺席语义、诊断面红线不反压、错误显式回传、官方面防御读取、测试夹具；五族之外一律补点。另注意字符串内嵌脚本里的 catch 非 TS
+  吞没面、登记时点采样数与 HEAD 数漂移需对账说明。
+keywords:
+  - 裸 catch
+  - 吞没审计
+  - fail-soft
+  - 豁免判据
+  - 台账
 domainPath: .knowledge/conventions/
 来源容器: diag-milestone-coverage
 来源任务: 1.6 全量吞没审计（audit.md，364 处全豁免收口）
 bug id: 无
+id: bare-catch-exemption-five-families
+status: unconfirmed
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
+related_doc: docs/conventions/diagnostic-emit-discipline.md
 ---
 
 # 裸 catch 豁免判据五族分类

@@ -1,11 +1,23 @@
 ---
 title: 评审 Note 实现期事实回填以单源门槛兜底
-summary: 评审发现「实现期即可定谳的事实缺口」（词表对齐、场景归属等）不要求提案期强判定，改为在提案中内置单源映射表/清单门槛（实现前必须以常量单源列全量映射），缺口被门槛兜住不构成 Blocker。
-keywords: [评审, Note, 映射表, 单源, 事实回填]
+summary: >-
+  评审发现「实现期即可定谳的事实缺口」（词表对齐、场景归属等）不要求提案期强判定，改为在提案中内置单源映射表/清单门槛（实现前必须以常量单源列全量映射），缺口被门槛兜住不构成
+  Blocker。
+keywords:
+  - 评审
+  - Note
+  - 映射表
+  - 单源
+  - 事实回填
 domainPath: .knowledge/conventions/
 来源容器: loop-consol-flywheel-improvement
 来源任务: first-pass 复盘（1.9）；先例见 review/report-round2.md N-1/N-2
 bug id: 无
+id: review-note-deferred-fact-backfill-gate
+status: unconfirmed
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
+canonical: docs/conventions/review-note-deferred-fact-backfill-gate.md
 ---
 
 # 评审 Note 实现期事实回填以单源门槛兜底

@@ -1,11 +1,23 @@
 ---
 title: worktree 清单仲裁不变式三件套——INV-L 活性过滤 + INV-U 选主谓词 + INV-B cwd 绑定
-summary: worktree 清单消费面修复范式：INV-L 活性过滤（归档残留行不入命中集）+ INV-U 选主谓词（禁裸 find 首命中）+ INV-B cwd 绑定（normalizeFsPath 精确匹配，成员位 sessionIds 只作投影缓存退路）。已知残余：INV-U 双轨分叉（bug 0c677db2）与 INV-B 契约锚未登记（bug bae86480）修复中。
-keywords: [worktree, invariants, INV-L, INV-U, INV-B, 清单]
-status: draft
+summary: >-
+  worktree 清单消费面修复范式：INV-L 活性过滤（归档残留行不入命中集）+ INV-U 选主谓词（禁裸 find 首命中）+ INV-B cwd
+  绑定（normalizeFsPath 精确匹配，成员位 sessionIds 只作投影缓存退路）。已知残余：INV-U 双轨分叉（bug
+  0c677db2）与 INV-B 契约锚未登记（bug bae86480）修复中。
+keywords:
+  - worktree
+  - invariants
+  - INV-L
+  - INV-U
+  - INV-B
+  - 清单
+status: unconfirmed
 source_container: e2e-known-reds-triage
 source_task: fix-1 (commit 532318d9)
 source_bug: 8c7e847f
+id: worktree-manifest-invariants-lub
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 清单仲裁不变式三件套

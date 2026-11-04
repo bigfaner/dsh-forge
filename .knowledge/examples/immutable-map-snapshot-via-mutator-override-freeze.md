@@ -1,11 +1,22 @@
 ---
 title: Map 不可变快照 = 覆写 mutator 后 freeze
-summary: Object.freeze 不拦截 Map 内部槽；实现不可变快照须先覆写 set/delete/clear 三个 mutator（抛错）再 freeze 整个实例——快照契约「整体换代无半代索引」由此兑现。
-keywords: [Object.freeze, Map, 不可变, 快照, 整体换代]
+summary: >-
+  Object.freeze 不拦截 Map 内部槽；实现不可变快照须先覆写 set/delete/clear 三个 mutator（抛错）再 freeze
+  整个实例——快照契约「整体换代无半代索引」由此兑现。
+keywords:
+  - Object.freeze
+  - Map
+  - 不可变
+  - 快照
+  - 整体换代
 domainPath: .knowledge/examples/
 来源容器: expert-squad
 来源任务: 1.3（D-3，phase-1-summary.md）
 bug id: 无
+id: immutable-map-snapshot-via-mutator-override-freeze
+status: unconfirmed
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # Map 不可变快照 = 覆写 mutator 后 freeze

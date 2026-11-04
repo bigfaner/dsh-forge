@@ -1,11 +1,22 @@
 ---
 title: 批内版本 bump 时点——多任务批取首笔 feat 随 bump 落
-summary: §5.2「bump 与对应改动同一提交落」在多任务批内的执行口径：feat 改动自 1.3 起，bump 0.17.0 却落 1.5，mid-batch 的中间提交成为「有 feat 未 bump」态；应取批内首笔 feat 提交随 bump。判例：plugin-forge 0.17.0 bump 落点滞后两笔提交。
-keywords: [版本 bump, 提交纪律, semver, 多任务批]
+summary: >-
+  §5.2「bump 与对应改动同一提交落」在多任务批内的执行口径：feat 改动自 1.3 起，bump 0.17.0 却落 1.5，mid-batch
+  的中间提交成为「有 feat 未 bump」态；应取批内首笔 feat 提交随 bump。判例：plugin-forge 0.17.0 bump
+  落点滞后两笔提交。
+keywords:
+  - 版本 bump
+  - 提交纪律
+  - semver
+  - 多任务批
 domainPath: .knowledge/lessons/
 来源容器: recurrence-signal-tiering
 来源任务: 1.3 / 1.5
 bug id: 无
+id: version-bump-rides-first-feat-in-batch
+status: unconfirmed
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 批内版本 bump 时点

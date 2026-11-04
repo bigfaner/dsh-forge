@@ -1,11 +1,20 @@
 ---
 title: 承重机制未钉死不放行 breakdown
 summary: 技术评审中，凡是被下游任务承重的机制（结算语义、装配归属、取值点），必须在设计文档钉死唯一落点后才放行拆任务；「两头都占」的表述等同未设计。
-keywords: [tech-design, review, breakdown, 官方缝, 承重机制]
+keywords:
+  - tech-design
+  - review
+  - breakdown
+  - 官方缝
+  - 承重机制
 domainPath: docs/conventions/reuse-official-mechanisms.md
 来源容器: expert-squad
 来源任务: 评审环节（B1/B2，review-tech-report.md）
 bug id: 无
+id: pin-load-bearing-mechanism-before-breakdown
+status: unconfirmed
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 承重机制未钉死不放行 breakdown

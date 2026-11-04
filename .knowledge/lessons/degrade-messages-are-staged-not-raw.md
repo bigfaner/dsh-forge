@@ -1,11 +1,21 @@
 ---
 title: 降级文案阶段化，不透原始异常
-summary: fail-soft 降级引导条/错误条的用户可见文案须按阶段归因（create/preset 阶段人话），原始异常只留 console 留痕——降级条透出底层 TypeError 即为走查不合格。
-keywords: [fail-soft, 降级, 错误文案, 走查]
+summary: >-
+  fail-soft 降级引导条/错误条的用户可见文案须按阶段归因（create/preset 阶段人话），原始异常只留 console
+  留痕——降级条透出底层 TypeError 即为走查不合格。
+keywords:
+  - fail-soft
+  - 降级
+  - 错误文案
+  - 走查
 domainPath: .knowledge/lessons/
 来源容器: expert-squad
 来源任务: 阶段四走查（walkthrough-phase4.md D-3，fix14 已正）
 bug id: 无
+id: degrade-messages-are-staged-not-raw
+status: unconfirmed
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 降级文案阶段化，不透原始异常

@@ -1,11 +1,23 @@
 ---
 title: 工作区隔离 = canonical key 前缀 + 双取值点钉死
-summary: 官方 storage 无工作区隔离时，用 key 前缀 disabled/<canonicalWorkspacePath>/<expertId> 承担隔离；取值点按消费面分双路钉死——tool 面取 agent scope cwd，fetch 路由取 client 显式 workspace 参数（zod 门），杜绝进程级 cwd 串域。
-keywords: [storage, 工作区隔离, canonical path, key 前缀, zod]
+summary: >-
+  官方 storage 无工作区隔离时，用 key 前缀 disabled/<canonicalWorkspacePath>/<expertId>
+  承担隔离；取值点按消费面分双路钉死——tool 面取 agent scope cwd，fetch 路由取 client 显式 workspace
+  参数（zod 门），杜绝进程级 cwd 串域。
+keywords:
+  - storage
+  - 工作区隔离
+  - canonical path
+  - key 前缀
+  - zod
 domainPath: .knowledge/examples/
 来源容器: expert-squad
 来源任务: 1.5/1.10（Q2/Q3 核销，phase-1/2-summary.md）
 bug id: 无
+id: workspace-isolation-key-prefix-dual-value-points
+status: unconfirmed
+type: decisions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 工作区隔离 = canonical key 前缀 + 双取值点钉死

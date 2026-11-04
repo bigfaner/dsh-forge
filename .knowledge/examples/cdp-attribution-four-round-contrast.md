@@ -1,11 +1,22 @@
 ---
 title: CDP 归因四轮对照法
-summary: 官方组件内部行为归因的 CDP 探针方法：仪表化引发错误风暴 → 零仪表化对照轮排除脚本侧致因 → 只读监听 + 定间隔几何采样 → 竞态窗口收窄定谳；仪表化只能在对照轮之后叠加。
-keywords: [CDP, 探针, 归因, 对照轮, 采样]
+summary: >-
+  官方组件内部行为归因的 CDP 探针方法：仪表化引发错误风暴 → 零仪表化对照轮排除脚本侧致因 → 只读监听 + 定间隔几何采样 →
+  竞态窗口收窄定谳；仪表化只能在对照轮之后叠加。
+keywords:
+  - CDP
+  - 探针
+  - 归因
+  - 对照轮
+  - 采样
 domainPath: .knowledge/examples/
 来源容器: loop-consol-flywheel-improvement
 来源任务: 1.4 CDP 归因；first-pass 复盘（1.9）沉淀
 bug id: 无
+id: cdp-attribution-four-round-contrast
+status: unconfirmed
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # CDP 归因四轮对照法

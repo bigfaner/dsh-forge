@@ -1,11 +1,21 @@
 ---
 title: 断言重锚纪律——重锚是判据升级不是放松，禁 text/正则/位置锚，二态断言让漂移不翻红
-summary: 断言重锚 = 「判据升级」：结构锚/data 属性 + 状态后效；禁 text/正则/位置锚。二态 if/else 断言使漂移不翻红（panel-grid 判例）；放松面必须随附互证断言并留痕裁决依据。
-keywords: [assertion, reanchor, e2e, 漂移, panel-grid]
-status: draft
+summary: >-
+  断言重锚 = 「判据升级」：结构锚/data 属性 + 状态后效；禁 text/正则/位置锚。二态 if/else 断言使漂移不翻红（panel-grid
+  判例）；放松面必须随附互证断言并留痕裁决依据。
+keywords:
+  - assertion
+  - reanchor
+  - e2e
+  - 漂移
+  - panel-grid
+status: unconfirmed
 source_container: e2e-known-reds-triage
 source_task: 1.1–1.6 / 1.8 triage
 source_bug: bf719481
+id: assertion-reanchor-upgrade-not-loosen
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 断言重锚纪律判例

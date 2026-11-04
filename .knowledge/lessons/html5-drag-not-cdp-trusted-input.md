@@ -1,11 +1,23 @@
 ---
 title: Electron HTML5 拖拽无法经 CDP Input 受信驱动——写通道取证降级用合成事件并记录边界
-summary: CDP Input.dispatchMouseEvent 只覆盖指针事件序列，不支持 dragstart/drop 等 HTML5 drag 事件，真机拖拽无法走受信输入取证。降级路径：合成 DragEvent 走 React 委托面验证写通道（写回成功+重启持久），同时在走查记录中如实标注「非受信输入」边界，不粉饰为完整取证。
-keywords: [CDP, 受信输入, HTML5 拖拽, 取证降级, Electron]
+summary: >-
+  CDP Input.dispatchMouseEvent 只覆盖指针事件序列，不支持 dragstart/drop 等 HTML5 drag
+  事件，真机拖拽无法走受信输入取证。降级路径：合成 DragEvent 走 React
+  委托面验证写通道（写回成功+重启持久），同时在走查记录中如实标注「非受信输入」边界，不粉饰为完整取证。
+keywords:
+  - CDP
+  - 受信输入
+  - HTML5 拖拽
+  - 取证降级
+  - Electron
 domainPath: .knowledge/lessons/
 来源容器: project-manual-order
 来源任务: first-pass 复盘（1.4）
 bug id: 无
+id: html5-drag-not-cdp-trusted-input
+status: unconfirmed
+type: facts
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 拖拽取证边界：合成事件非受信输入（walkthrough/batch1 判例）
