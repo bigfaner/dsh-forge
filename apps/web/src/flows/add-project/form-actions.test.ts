@@ -39,7 +39,7 @@ describe('直输改（edit：值更新 + touched 置位——AC4 手改判据）
     const h = harness()
     h.actions.edit('name', '我的项目')
     expect(h.form.values.name).toBe('我的项目')
-    expect(h.form.touched).toEqual({ name: true, forgeDir: false, knowledgeDir: false, worktreeDir: false })
+    expect(h.form.touched).toEqual({ name: true, forgeDir: false, worktreeDir: false })
   })
 
   it('直输改 forge 目录 → touched 置位（后续换选工作区保留的判据）', () => {
@@ -55,8 +55,8 @@ describe('浏览相位（repick / browse / cancelBrowse）', () => {
     const h = harness()
     h.actions.repick()
     expect(h.browsing).toBe('workspace')
-    h.actions.browse('knowledgeDir')
-    expect(h.browsing).toBe('knowledgeDir')
+    h.actions.browse('worktreeDir')
+    expect(h.browsing).toBe('worktreeDir')
     h.actions.browse('forgeDir')
     expect(h.browsing).toBe('forgeDir')
   })
@@ -72,7 +72,7 @@ describe('浏览相位（repick / browse / cancelBrowse）', () => {
 })
 
 describe('浏览确认落值（applyPick：AC4 两分支的动作级走查）', () => {
-  it('工作区改选：未手改字段随新工作区重构（name/forge/kn = 新默认值；worktree 留空 = 缺省）', () => {
+  it('工作区改选：未手改字段随新工作区重构（name/forge = 新默认值；worktree 留空 = 缺省）', () => {
     const h = harness()
     h.actions.applyPick('workspace', NEW_WS)
     expect(h.browsing).toBeNull()
@@ -80,12 +80,11 @@ describe('浏览确认落值（applyPick：AC4 两分支的动作级走查）', 
       workspaceDir: NEW_WS,
       name: 'alpha',
       forgeDir: 'D:\\work\\alpha\\.forge',
-      knowledgeDir: 'D:\\work\\alpha\\.knowledge',
       worktreeDir: '',
     })
   })
 
-  it('工作区改选：手改过的项目名保留；未手改的两目录重构', () => {
+  it('工作区改选：手改过的项目名保留；未手改的目录重构', () => {
     const h = harness()
     h.actions.edit('name', '我的项目')
     h.actions.applyPick('workspace', NEW_WS)
@@ -99,10 +98,9 @@ describe('浏览确认落值（applyPick：AC4 两分支的动作级走查）', 
     expect(h.browsing).toBeNull()
     expect(h.form.values.forgeDir).toBe('E:\\docs\\dsh')
     expect(h.form.touched.forgeDir).toBe(true)
-    // 后续换选工作区：浏览选定过的 forge 目录保留，未动的知识库目录重构
+    // 后续换选工作区：浏览选定过的 forge 目录保留
     h.actions.applyPick('workspace', NEW_WS)
     expect(h.form.values.forgeDir).toBe('E:\\docs\\dsh')
-    expect(h.form.values.knowledgeDir).toBe('D:\\work\\alpha\\.knowledge')
   })
 })
 
@@ -171,7 +169,7 @@ describe('原生浏览改选（fix-14 nativeBrowseAction：三 target 同桥直�
     await Promise.resolve()
     expect(n.pickArgs).toEqual(['Z:\\project'])
     const m = nativeHarness('X:')
-    m.action('knowledgeDir')
+    m.action('worktreeDir')
     m.settle(null)
     await Promise.resolve()
     expect(m.pickArgs).toEqual([undefined])
@@ -198,7 +196,7 @@ describe('原生浏览改选（fix-14 nativeBrowseAction：三 target 同桥直�
 
   it('pick 失败（reject = 错误面）→ 错误文案回写 + 零落值（不改值）', async () => {
     const n = nativeHarness('X:')
-    n.action('knowledgeDir')
+    n.action('worktreeDir')
     n.settle(new Error('E:\\gone 不可达'))
     await Promise.resolve()
     await Promise.resolve()

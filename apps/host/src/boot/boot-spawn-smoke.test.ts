@@ -119,7 +119,6 @@ it(
         workspaceDir: wsDir,
         name: 'demo-ws',
         forgeDir: join(wsDir, '.forge'),
-        knowledgeDir: join(wsDir, '.knowledge'),
       })
       const bindings = JSON.parse(readFileSync(paths.bindingsFile, 'utf8')) as {
         version: number

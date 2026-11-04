@@ -20,6 +20,7 @@ import { dirname } from 'node:path'
 import { createGitIdentityPort } from '@dsh-forge/core'
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { ProjectService, ProjectSummary } from '@dsh-forge/contracts'
+import type { KnowledgeRegistryWriter } from '@dsh-forge/knowledge'
 import { invalidateResolveCaches } from './worktree-rpc.js'
 
 /** 绑定表文件形状（版本化——消费方 = knowledge 插件 tools/session.ts 惰性读取） */
@@ -130,6 +131,35 @@ export function withKnowledgeBindingsRefresh(
       // bug 9eb9d6cb 后续收口：新注册路径的两级解析缓存失效（注册前该路径被探测为
       // 非 git/未注册时，清单停在 isGit:false、解析停在陈旧 null 直到重启）。
       invalidateResolveCaches(input.workspaceDir)
+      return result
+    },
+  }
+}
+
+/**
+ * projects 服务包装面（1.15 注册链进表径）：registerProject 成功后向 knowledge 插件
+ * 自持注册表落注册行（wsPath canonical 键 → 缺省 `<wsPath>/.knowledge`，目录缺则建——
+ * projects.knowledge_dir 列退役后注册行唯一产品写径）。fail-soft：knowledge 服务缺席
+ * （插件未装载）= 原样透传（知识面整体缺席，boot 处已有一次性 warn）；落表失败 = 记
+ * 日志不抛断注册（后果 = 该项目知识面无注册行降级，browse 空 projectName 面）。
+ * 知识域语义（目录建面/幂等 upsert/埋点）归插件服务（host 只 wiring）。
+ */
+export function withKnowledgeRegistryRow(
+  service: ProjectService,
+  knowledge: Pick<KnowledgeRegistryWriter, 'registerProject'> | undefined,
+  log: (message: string) => void = console.warn,
+): ProjectService {
+  if (knowledge === undefined) return service
+  return {
+    ...service,
+    async registerProject(input: Parameters<ProjectService['registerProject']>[0]) {
+      const result = await service.registerProject(input)
+      try {
+        const project = await service.getProject(result.projectId)
+        if (project !== null) await knowledge.registerProject({ wsPath: project.wsPath })
+      } catch (cause) {
+        log(`[host] knowledge 注册行落表失败（该项目知识面降级至无注册行）：${String(cause)}`)
+      }
       return result
     },
   }

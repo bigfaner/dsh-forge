@@ -2,8 +2,7 @@
 // 5.2 SC4 文档浏览（AC2）：仓内/仓外各一 + erDiagram 渲染（DOM 增强器出图）+
 // 非法源官方代码块纯文本兜底——tech-design Per-Layer e2e 行 + PRD ③。
 //   · 仓内 = 本仓 worktree 注册为项目（forge_dir = 仓根 .forge——docs/features 与 docs/
-//     proposals 迁移后所在 docs 根；knowledgeDir 重定向 tmp 隔离目录 + forge_dir 下两目录 → 注册链 fix-39 建面
-//     零写入，仓树只读）→ 真实发现面建行 → 提案子 tab 文档行 → dock 开文档 tab；
+//     proposals 迁移后所在 docs 根 → 注册链 fix-39 建面零写入，仓树只读）→ 真实发现面建行 → 提案子 tab 文档行 → dock 开文档 tab；
 //   · 仓外 = 临时夹具预置约定目录结构（docs/proposals/<slug>/proposal.md 内嵌 mermaid
 //     段——erDiagram 验收锚 / 非法源）→ 真实发现链建行（S9① 口径）→ 只读渲染 +
 //     canonical 路径栏 + 回退占位卡；
@@ -24,8 +23,6 @@
 //（批次一同径，语义收紧）。
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { expect, type Page } from '@playwright/test'
 import type { ProjectSummary } from '../../../packages/contracts/src/dto/project.js'
@@ -33,7 +30,6 @@ import { PROPOSALS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { ROOT } from '../../support/launch.js'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import {
   DOCKKIT_STRIP_TAB,
@@ -92,18 +88,17 @@ const { test: testShared } = createSharedLaunchFixture({
 })
 
 /**
- * 注册负载直注（custom forgeDir/knowledgeDir 形态——发现面以 forge_dir 为 docs/ 根扫描；
+ * 注册负载直注（custom forgeDir 形态——发现面以 forge_dir 为 docs/ 根扫描；
  * rpc.ts registerProject 固定 {ws}/.forge 载荷不适用于文档发现夹具）。返回应用库行。
  */
 async function registerProjectAt(
   page: Page,
-  o: { readonly workspaceDir: string; readonly name: string; readonly forgeDir: string; readonly knowledgeDir: string },
+  o: { readonly workspaceDir: string; readonly name: string; readonly forgeDir: string },
 ): Promise<ProjectSummary> {
   const result = await forgeInvoke<{ projectId: string }>(page, 'forge:projects/register', {
     workspaceDir: o.workspaceDir,
     name: o.name,
     forgeDir: o.forgeDir,
-    knowledgeDir: o.knowledgeDir,
   })
   const projects = await forgeInvoke<readonly ProjectSummary[]>(page, 'forge:projects/list')
   const row = projects.find((p) => p.id === result.projectId)
@@ -139,13 +134,10 @@ async function openProposalDoc(page: Page, docRel: string, rowTitle: string): Pr
 testIn('@web-e2e @m2 5.2 SC4 仓内：本仓注册发现链 → 提案文档 dock tab 只读渲染 + canonical 路径栏', async ({ sharedLaunch }) => {
   testIn.setTimeout(360_000)
   const { page, pageErrors } = sharedLaunch
-  // knowledgeDir 重定向仓外 tmp（本仓无 .knowledge——注册链 fix-39 递归建面即写入仓树，
-  // e2e 禁污染仓树）；workspaceDir/forgeDir = 本仓主检出（worktree 检出的 .forge/docs/
-  // proposals 为 git 外工作数据、检出稀疏无 proposal.md——真实发现面锚主检出根 + 其
-  // .forge docs 根；两目录在场 → 零建面零写入）
-  const knowledgeDir = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-sc4-in-kn-'))
+  // workspaceDir/forgeDir = 本仓主检出（worktree 检出的 .forge/docs/proposals 为 git 外
+  // 工作数据、检出稀疏无 proposal.md——真实发现面锚主检出根 + 其 .forge docs 根）
   const repoRoot = resolve(ROOT, '..', '..', '..') // <main>/.forge/worktrees/<name> → 主检出根
-  const project = await registerProjectAt(page, { workspaceDir: repoRoot, name: 'dsh-forge 本仓', forgeDir: join(repoRoot, '.forge'), knowledgeDir })
+  const project = await registerProjectAt(page, { workspaceDir: repoRoot, name: 'dsh-forge 本仓', forgeDir: join(repoRoot, '.forge') })
   const projectId = project.id
 
   // 概览提案子 tab 是选中项目作用域（主视图会话锚）：选中本仓项目（hero chip picker）
@@ -179,7 +171,6 @@ testIn('@web-e2e @m2 5.2 SC4 仓内：本仓注册发现链 → 提案文档 doc
   await expect(panel.locator('button[aria-label="在编辑器中打开"]')).toBeVisible()
 
   expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  rmDirBestEffort(knowledgeDir)
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

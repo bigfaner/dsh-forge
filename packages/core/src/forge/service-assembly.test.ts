@@ -102,7 +102,6 @@ describe('service.ts 装配：ctx.forgeProjects 注册（Plugin.Function 形态�
         workspaceDir: 'C:\\proj',
         name: 'p',
         forgeDir: 'C:\\proj\\.forge',
-        knowledgeDir: 'C:\\proj\\.knowledge',
       })
       .catch((e) => e)
     expect(err).toBeInstanceOf(ProjectWriteError) // 库已关 → ③ 失败；挂接路径 → ownership 保护无补偿
@@ -159,19 +158,19 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
       for (const method of ['appendCheckpoint', 'ensureCheckpoint', 'listCheckpoints']) {
         expect(typeof checkpoints?.[method]).toBe('function')
       }
-      // P1 双服务不受 M2 装配影响
+      // P1 projects 服务不受 M2 装配影响；knowledge 服务已随 1.7/1.8 A2 迁 knowledge 插件——core 零知识面
       expect(provided.has('forgeProjects')).toBe(true)
-      expect(provided.has('forgeKnowledge')).toBe(true)
+      expect(provided.has('forgeKnowledge')).toBe(false)
       dispose()
     } finally {
       rmSync(tasksHome, { recursive: true, force: true })
     }
   })
 
-  it('tasksHome 缺席：四域降级缺席（P1 双服务零变化）——1.4 降级语义同径', () => {
+  it('tasksHome 缺席：四域降级缺席（projects 服务零变化）——1.4 降级语义同径', () => {
     const { ctx, provided } = stubCtx()
     const dispose = corePlugin(ctx, { dbFile: dbPath() })
-    expect([...provided.keys()].sort()).toEqual(['forgeKnowledge', 'forgeProjects'])
+    expect([...provided.keys()].sort()).toEqual(['forgeProjects'])
     dispose()
   })
 
@@ -341,13 +340,12 @@ describe('2.7(M3) provide ×1 装配：ctx.forgeSettings（六服务 → 七）'
     try {
       const dispose = corePlugin(ctx, { dbFile: dbPath(), tasksHome })
       expect(provided.has('forgeSettings')).toBe(false)
-      // 六服务仍齐（P1 双服务 + M2 四域 + fix-bug bug 域 + 机械① checkpoints 域）
+      // 七服务仍齐（projects + M2 四域 + fix-bug bug 域 + 机械① checkpoints 域）
       expect([...provided.keys()].sort()).toEqual([
         'forgeBugs',
         'forgeCheckpoints',
         'forgeDocs',
         'forgeFeatures',
-        'forgeKnowledge',
         'forgeProjects',
         'forgeProposals',
         'forgeTasks',

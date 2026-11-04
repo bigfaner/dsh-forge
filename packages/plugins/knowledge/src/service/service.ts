@@ -7,10 +7,11 @@
 // 关键异常降级：core 走 app_key_logs；本域经 storage rebuild 事件面（SC-10），检索面
 // 异常语义（EntryNotFound/IndexStale/InvalidDir 三码）逐字保留。
 import { randomUUID } from 'node:crypto'
-import { readFileSync, statSync } from 'node:fs'
+import { mkdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import matter from 'gray-matter'
 import type Database from 'better-sqlite3'
+import { joinDirSegment } from '@dsh-forge/path-key'
 import type {
   DomainNode,
   EntryDetail,
@@ -23,10 +24,10 @@ import type {
   SessionRecallQuery,
 } from '@dsh-forge/contracts'
 import { withImmediateTransaction } from '../storage/concurrency.js'
-import { canonicalWsPath } from '../storage/registry.js'
+import { canonicalWsPath, createKnowledgeRegistry } from '../storage/registry.js'
 import { rebuildKnowledgeIndex } from '../storage/rebuild.js'
 import { InvalidKnowledgeDirError as StorageInvalidKnowledgeDirError } from '../storage/scan.js'
-import type { DiagEmitter } from '../storage/diag.js'
+import { KNOWLEDGE_REGISTER_EVENT, emitStorageDiag, storageDiag, type DiagEmitter } from '../storage/diag.js'
 import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
 import {
   aggregateDomainTree,
@@ -275,6 +276,35 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     }
   }
 
+  /** 注册表 upsert 单源（storage/registry.ts——canonical 键 + 幂等） */
+  const registry = createKnowledgeRegistry(db)
+
+  /** 注册行写入（第九法——1.15 进表径）：目录缺则递归建（fix-39 建面语义随 knowledge_dir
+   *  列退役迁本域）→ upsert 注册行（幂等）；成败均发 knowledge-register 事件（SC-10）。
+   *  建目录失败 = 抛（host wiring 侧 fail-soft 记账，不抛断项目注册）。 */
+  async function registerProjectRow(input: { wsPath: string; knowledgeDir?: string }): Promise<void> {
+    const dir = input.knowledgeDir ?? joinDirSegment(input.wsPath, '.knowledge')
+    try {
+      mkdirSync(dir, { recursive: true })
+    } catch (cause) {
+      emitStorageDiag(
+        emit,
+        storageDiag('error', KNOWLEDGE_REGISTER_EVENT, `知识目录建失败，注册行未落：${dir}：${String(cause)}`, {
+          cwd: input.wsPath,
+          stack: cause instanceof Error ? cause.stack : undefined,
+        }),
+      )
+      throw cause
+    }
+    const row = registry.upsert(input.wsPath, dir)
+    emitStorageDiag(
+      emit,
+      storageDiag('info', KNOWLEDGE_REGISTER_EVENT, `注册行落表：${row.wsPath} → ${row.knowledgeDir}`, {
+        cwd: input.wsPath,
+      }),
+    )
+  }
+
   // ── 浏览底表（browse 聚合与通道面共用同一实现——底表口径不漂移） ──
   const listEntries = async (q: ListEntriesQuery): Promise<KnowledgeCard[]> => {
     const { wsPath, knowledgeDir } = requireProject(q.projectId, 'listEntries')
@@ -427,5 +457,7 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     async browse(q: { projectId: string }): Promise<DomainNode[]> {
       return aggregateDomainTree(await listEntries({ projectId: q.projectId }))
     },
+
+    registerProject: registerProjectRow,
   }
 }

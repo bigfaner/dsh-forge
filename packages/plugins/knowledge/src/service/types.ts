@@ -84,8 +84,22 @@ export interface KnowledgeService {
   sessionRecall(q: SessionRecallQuery): Promise<RecallGroup[]>
 }
 
-/** Interface 2 + 第八法聚合面：KnowledgeService 七法 + browse 域树聚合（forge:knowledge/browse 通道 handler 本体） */
-export interface BrowseKnowledgeService extends KnowledgeService {
+/** Interface 2 + 第八法聚合面：KnowledgeService 七法 + browse 域树聚合（forge:knowledge/browse 通道 handler 本体）+ 注册行写入（第九法） */
+export interface BrowseKnowledgeService extends KnowledgeService, KnowledgeRegistryWriter {
   /** 域树聚合（Interface 2 之外；listEntries 兼作底表 → aggregateDomainTree） */
   browse(q: { projectId: string }): Promise<DomainNode[]>
+}
+
+/** registerProject 入参（第九法——1.15 注册链进表径：projects.knowledge_dir 列退役后注册行唯一产品写径） */
+export interface RegisterProjectWrite {
+  /** 工作区 canonical 路径（注册行 ws_path 键——upsert 内 canonical 化） */
+  readonly wsPath: string
+  /** 知识目录（缺省 = `<wsPath>/.knowledge`——列退役后产品面恒缺省派生） */
+  readonly knowledgeDir?: string
+}
+
+/** 注册行写入面（BrowseKnowledgeService 第九法：host 注册链 wiring 消费，fail-soft 于 host 侧） */
+export interface KnowledgeRegistryWriter {
+  /** 目录缺则递归建（fix-39 建面语义随列退役迁本域）+ upsert 注册行（幂等） */
+  registerProject(input: RegisterProjectWrite): Promise<void>
 }

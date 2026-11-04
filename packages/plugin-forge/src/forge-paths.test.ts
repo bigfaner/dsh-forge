@@ -255,7 +255,6 @@ describe('锚解析缝（faces.createForgePathsAnchors——与 projects 服务�
       name: 'demo',
       forgeDir: `${WS}\\.forge`,
       forgeDirExternal: false,
-      knowledgeDir: `${WS}\\.knowledge`,
       archived: false,
       createdAt: '',
       updatedAt: '',

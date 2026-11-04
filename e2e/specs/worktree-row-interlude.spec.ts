@@ -163,7 +163,6 @@ test('切换序列回归：选树 X → 非 git 项目折返 → 选树 Y → �
             workspaceDir: plainDir,
             name: 'plain-proj',
             forgeDir: join(plainDir, '.forge'),
-            knowledgeDir: join(plainDir, '.knowledge'),
           })) as { ok?: boolean; data?: { projectId?: string }; projectId?: string } | null
           const projectId = raw?.data?.projectId ?? raw?.projectId
           return typeof projectId === 'string'

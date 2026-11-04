@@ -122,13 +122,10 @@ test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 �
     const ws = page.locator(rfField('ws'))
     const name = page.locator(rfField('name'))
     const forge = page.locator(rfField('forge'))
-    const kn = page.locator(rfField('kn'))
     await expect(ws).toHaveValue(targetDir)
     expect(await ws.getAttribute('readonly'), '工作区目录只读回填').not.toBeNull()
     await expect(name).toHaveValue('reg-demo')
     await expect(forge).toHaveValue(`${join(targetDir, '.forge')}`)
-    await expect(kn).toHaveValue(`${join(targetDir, '.knowledge')}`)
-    expect(await kn.getAttribute('readonly'), '知识库目录可改').toBeNull()
     // fix-7 载体适配（4.3 派生行 RPC 化——unit pin「非 input value」）：任务清单派生 =
     // DerivedTaskStoreRow 单源下发全路径逐字呈现（workspace-registration 同律：core 单源
     // 计算 ≡ 表单呈现）；旧 rf-tasks input 形态废除，只读语义升级 = 零输入位
@@ -137,7 +134,7 @@ test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 �
     expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), '任务清单与记录只读派生（core 单源同值）').toBe(derivedExpected)
     expect(await page.locator('.dswf-rf input[type="radio"]').count(), '仓内/仓外无 radio 字段').toBe(0)
     await expect(page.locator('.dswf-rf-relation', { hasText: '仓内' }).first()).toBeVisible()
-    await expect(page.locator('.dswf-rf input'), '表单字段全集 = 5（ws/name/forge/kn/wt——1.6 AC3 worktree 输入随迁）').toHaveCount(5)
+    await expect(page.locator('.dswf-rf input'), '表单字段全集 = 4（ws/name/forge/wt——1.6 AC3 worktree 输入随迁；知识库目录字段随注册链退役移除）').toHaveCount(4)
     await expect(page.locator('.dswf-rf-confirm')).toHaveText('确认')
 
     // Step 4 success：确认 → 不可交互中断执行态 → 四步链
@@ -211,7 +208,6 @@ test('@web-e2e @p1mvp project-registration·Step2 attach-existing-workspace：�
       workspaceDir: targetDir,
       name: 'attach-demo',
       forgeDir: join(targetDir, '.forge'),
-      knowledgeDir: join(targetDir, '.knowledge'),
     })
     expect(first.attachedToExisting, '首次注册 = 新建分支').toBe(false)
     {
@@ -332,30 +328,14 @@ test('@web-e2e @p1mvp project-registration·Step3 cancel-return-clean-exit：表
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 3 Outcome "reselect-rederive-fields"（journey Step 3c：换选工作区字段联动）
 // ─────────────────────────────────────────────────────────────────────────────
-test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换选重构未触碰字段、保留已触碰字段', async () => {
+test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换选重构未触碰字段', async () => {
   test.setTimeout(240_000)
   const fixtureRoot = makeWorkspaceFixture('rederive-a')
   mkdirSync(join(fixtureRoot, 'rederive-b'), { recursive: true })
-  // 浏览改选目标目录预置（浏览面板起点 = 当前知识库目录 .knowledge → 上一级选 .forge）
-  mkdirSync(join(fixtureRoot, 'rederive-a', '.knowledge'), { recursive: true })
-  mkdirSync(join(fixtureRoot, 'rederive-a', '.forge'), { recursive: true })
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-reg-ud-'))
   const { app, page } = await launchHost({ userData, expectPhase: 'hero' })
   try {
-    const dirA = await selectWorkspaceAndNext(page, fixtureRoot, 'rederive-a')
-    // 经「浏览…」改选知识库目录（字段标记为已触碰）
-    await page
-      .locator('.dswf-rf-row')
-      .filter({ has: page.locator(rfField('kn')) })
-      .getByRole('button', { name: '浏览…' })
-      .click()
-    await expect(page.locator(rfBrowsing('knowledgeDir'))).toBeVisible()
-    // Root cause: browseStartDirOf 语义 = 输入框值的父目录（39f03ab9），起点即 rederive-a，无需上一级
-    await expect(page.locator('.dswf-fb-crumb-current')).toHaveText('rederive-a', { timeout: 15_000 })
-    await dirRow(page, '.forge').click()
-    await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
-    await expect(page.locator(addProjectPhase('form'))).toBeVisible()
-    await expect(page.locator(rfField('kn')), '浏览选定知识库目录 = 已触碰').toHaveValue(`${join(dirA, '.forge')}`)
+    await selectWorkspaceAndNext(page, fixtureRoot, 'rederive-a')
 
     // 重新选择 → 换选 rederive-b
     await page.getByRole('button', { name: '重新选择' }).click()
@@ -375,7 +355,6 @@ test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换
     await expect(page.locator(dsrOf('ready')), '任务清单派生行 ready（换选复检收敛）').toBeVisible({ timeout: 30_000 })
     // toHaveText 自带轮询：换选触发 loading→ready 重渲染，非重试式 toBe 会读到旧 ready 值
     await expect(page.locator(DSR_DIR), '任务清单重新派生（core 单源同值）').toHaveText(rederivedExpected, { timeout: 30_000 })
-    await expect(page.locator(rfField('kn')), '浏览选定过的知识库目录保留原值').toHaveValue(`${join(dirA, '.forge')}`)
   } finally {
     await closeApp(app)
     await rmDirBestEffort(userData)
@@ -403,12 +382,8 @@ test('@web-e2e @p1mvp project-registration·Step3 illegal-path-blocked：非法�
     await page.locator(rfField('forge')).fill('relative\\path')
     await expect(page.locator(rfIssue('forgeDir'))).toContainText('需为绝对路径')
     await expect(confirm).toBeDisabled()
-    // 知识库目录同口径
-    await page.locator(rfField('kn')).fill('rel-kn')
-    await expect(page.locator(rfIssue('knowledgeDir'))).toContainText('需为绝对路径')
     // 修正回合法绝对路径 → 提示消解、确认解禁（可修正语义）
     await page.locator(rfField('forge')).fill(join(fixtureRoot, 'illegal-demo', '.forge'))
-    await page.locator(rfField('kn')).fill(join(fixtureRoot, 'illegal-demo', '.knowledge'))
     await expect(page.locator('[data-dswf-rf-issue]')).toHaveCount(0)
     await expect(confirm).toBeEnabled()
     // State：不进入注册执行——关闭后零变更

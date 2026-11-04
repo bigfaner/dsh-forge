@@ -36,26 +36,24 @@ export interface SeedProjectRowInput {
   readonly name?: string
   readonly archived?: 0 | 1
   readonly forgeDir?: string
-  readonly knowledgeDir?: string
   readonly createdAt?: string
   readonly updatedAt?: string
 }
 
 /**
  * 种入 projects 行（直接 SQL——对账/查询/挂接场景的输入面，与 registry 桩状态解耦编排；
- * forge/knowledge 目录缺省按 wsPath 派生、name 缺省取 id、时间缺省 SEED_TS）。
+ * forge 目录缺省按 wsPath 派生、name 缺省取 id、时间缺省 SEED_TS）。
  */
 export function seedProjectRow(db: SeedDb, o: SeedProjectRowInput): void {
   db.prepare(
-    `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, knowledge_dir, archived, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, archived, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     o.id,
     o.workspaceId,
     o.wsPath,
     o.name ?? o.id,
     o.forgeDir ?? join(o.wsPath, '.forge'),
-    o.knowledgeDir ?? join(o.wsPath, '.knowledge'),
     o.archived ?? 0,
     o.createdAt ?? SEED_TS,
     o.updatedAt ?? SEED_TS,
@@ -99,14 +97,13 @@ export function removeProjectInsertFailure(db: SeedDb): void {
 export function seedWorkspaceIdConflictRow(db: SeedDb, workspaceId: string): void {
   const other = `Z:\\dsh-forge-e2e-other-${Math.random().toString(36).slice(2, 10)}`
   db.prepare(
-    `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at)
-     VALUES (?, ?, ?, 'seed-own', ?, 0, ?, 0, ?, ?)`,
+    `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, archived, created_at, updated_at)
+     VALUES (?, ?, ?, 'seed-own', ?, 0, 0, ?, ?)`,
   ).run(
     `seed-${Math.random().toString(36).slice(2, 10)}`,
     workspaceId,
     other,
     `${other}\\.forge`,
-    `${other}\\.knowledge`,
     new Date().toISOString(),
     new Date().toISOString(),
   )

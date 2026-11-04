@@ -68,7 +68,6 @@ function stubProjects(
             name: r.name ?? 'n',
             forgeDir: join(r.wsPath, '.forge'),
             forgeDirExternal: false,
-            knowledgeDir: join(r.wsPath, '.knowledge'),
             ...(r.worktreeDir !== undefined ? { worktreeDir: r.worktreeDir } : {}),
             archived: r.archived ?? false,
             createdAt: '2026-01-01T00:00:00.000Z',

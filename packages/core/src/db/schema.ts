@@ -25,7 +25,7 @@ export interface Migration {
 }
 
 /** 本应用支持的 schema 版本上限（版本门：库内 version 超出即拒绝打开）。 */
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 /**
  * worktree_dir 存量行回填语句（纯 SQL——默认绝对路径相对各行 ws_path 解析 `.forge/worktrees/`：
@@ -157,6 +157,20 @@ export const MIGRATIONS: readonly Migration[] = [
     statements: [
       `DROP TABLE IF EXISTS knowledge_recall_logs`,
       `DROP TABLE IF EXISTS knowledge_entries`,
+    ],
+  },
+  {
+    // v5（knowledge-stage1-foundation 1.15——knowledge_dir 列注册链全线退役）：注册链
+    // （contracts DTO / host projects-rpc / web 表单与视图）不再消费知识目录——目录真值
+    // 归 knowledge 插件自持注册表（1.7 A2；注册行进表径 = host wiring registerProject）。
+    // 存量数据已由轻量种子迁移消费（1.7），本版只做结构退役（DROP 列）。dropGuard 收敛：
+    // 列不在场谱系（预播夹具等）跳过。
+    version: 5,
+    statements: [
+      {
+        sql: `ALTER TABLE projects DROP COLUMN knowledge_dir`,
+        dropGuard: { table: 'projects', column: 'knowledge_dir' },
+      },
     ],
   },
 ]

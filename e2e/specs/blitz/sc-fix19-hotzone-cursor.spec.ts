@@ -26,7 +26,7 @@ test('@web-e2e @probe 1.25 替身热区 chevron 单向光标两态真机取证',
   const { app, page, pageErrors } = launched
   try {
     await forgeInvoke(page, 'forge:projects/register', {
-      workspaceDir: wsDir, name: 'sc-125-ws', forgeDir: wsDir, knowledgeDir: join(wsDir, '.knowledge'),
+      workspaceDir: wsDir, name: 'sc-125-ws', forgeDir: wsDir,
     })
     for (let attempt = 0; ; attempt++) {
       try {

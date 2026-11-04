@@ -61,7 +61,6 @@ async function registerProject(page: Page, wsDir: string, name: string): Promise
           workspaceDir: wsDir,
           name,
           forgeDir: join(wsDir, '.forge'),
-          knowledgeDir: join(wsDir, '.knowledge'),
         })) as { ok?: boolean; data?: { projectId?: string }; projectId?: string } | null
         const projectId = raw?.data?.projectId ?? raw?.projectId
         return typeof projectId === 'string'

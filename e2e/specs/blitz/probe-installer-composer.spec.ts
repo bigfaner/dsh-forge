@@ -85,7 +85,7 @@ test('@web-e2e @probe installer composer 回显定性探针', async () => {
     const projDir = join(userData, '..', 'probe-composer-fixture')
     mkdirSync(projDir, { recursive: true })
     const registered = await forgeInvoke<{ projectId: string }>(page, 'forge:projects/register', {
-      workspaceDir: projDir, name: 'probe-composer', forgeDir: join(projDir, '.forge'), knowledgeDir: join(projDir, '.knowledge'),
+      workspaceDir: projDir, name: 'probe-composer', forgeDir: join(projDir, '.forge'),
     })
     expect(registered.projectId).toBeTruthy()
     await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 60_000 })

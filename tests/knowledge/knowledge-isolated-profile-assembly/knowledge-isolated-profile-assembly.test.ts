@@ -66,7 +66,7 @@ function fakeCtx(): {
 
 function registryRowCount(dbFile: string): number {
   const db = openKnowledgeDatabase(dbFile)
-  const row = db.prepare<{ n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()
+  const row = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM projects`).get()
   db.close()
   return row?.n ?? 0
 }

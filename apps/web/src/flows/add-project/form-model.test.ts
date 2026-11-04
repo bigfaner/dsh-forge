@@ -1,6 +1,7 @@
 // form-model 单测 —— UF-3 段二派生/联动/校验纯函数面（AC1 回填默认值 / AC3 仓内外推导 /
 // AC4 换选联动两分支 / AC5 表单态校验）。4.3：任务清单派生自算路径废除（Hard Rule 单源
 // = core deriveTaskStoreDir RPC 下发——AC2 断言面迁 derive-source.test，本件零派生断言）。
+// 1.15：知识库目录随 knowledge_dir 列退役退出采集面（缺省派生保留供知识视图引导文案）。
 import { describe, expect, it } from 'vitest'
 import type { BrowserSelection } from './browser-model.js'
 import {
@@ -23,16 +24,15 @@ const SELECTION: BrowserSelection = { path: 'Z:\\project\\dsh', registered: fals
 const NEW_WS = 'D:\\work\\alpha'
 
 describe('AC1 回填与默认值（initialFormState / derive）', () => {
-  it('初始态：工作区回填 + 项目名 = 文件夹名 + 两目录默认值 + 全字段未手改', () => {
+  it('初始态：工作区回填 + 项目名 = 文件夹名 + forge 目录默认值 + 全字段未手改', () => {
     const state = initialFormState(SELECTION)
     expect(state.values).toEqual({
       workspaceDir: 'Z:\\project\\dsh',
       name: 'dsh',
       forgeDir: 'Z:\\project\\dsh\\.forge',
-      knowledgeDir: 'Z:\\project\\dsh\\.knowledge',
       worktreeDir: '',
     })
-    expect(state.touched).toEqual({ name: false, forgeDir: false, knowledgeDir: false, worktreeDir: false })
+    expect(state.touched).toEqual({ name: false, forgeDir: false, worktreeDir: false })
   })
 
   it('folderNameOf 边界：尾分隔符 / 盘符根 / UNC / POSIX', () => {
@@ -63,7 +63,6 @@ describe('AC1 回填与默认值（initialFormState / derive）', () => {
       workspaceDir: '/Users/panda/proj',
       name: 'proj',
       forgeDir: '/Users/panda/proj/.forge',
-      knowledgeDir: '/Users/panda/proj/.knowledge',
       worktreeDir: '',
     })
     expect(validateFormValues(posixState.values)).toEqual([])
@@ -105,13 +104,12 @@ describe('AC3 仓内/仓外推导（isForgeDirExternal = forge 目录是否位�
 })
 
 describe('AC4 换选工作区联动（relinkWorkspace 两分支）', () => {
-  it('全未手改：三字段随新工作区重构（文件夹名 / forge 默认 / 知识库默认）', () => {
+  it('全未手改：字段随新工作区重构（文件夹名 / forge 默认）', () => {
     const next = relinkWorkspace(initialFormState(SELECTION), NEW_WS)
     expect(next.values).toEqual({
       workspaceDir: NEW_WS,
       name: 'alpha',
       forgeDir: 'D:\\work\\alpha\\.forge',
-      knowledgeDir: 'D:\\work\\alpha\\.knowledge',
       worktreeDir: '',
     })
   })
@@ -128,12 +126,11 @@ describe('AC4 换选工作区联动（relinkWorkspace 两分支）', () => {
     expect(next.touched.worktreeDir).toBe(true)
   })
 
-  it('仅项目名手改：name 保留，两目录随新工作区重构', () => {
+  it('仅项目名手改：name 保留，forge 目录随新工作区重构', () => {
     const edited = editFieldValue(initialFormState(SELECTION), 'name', '我的项目')
     const next = relinkWorkspace(edited, NEW_WS)
     expect(next.values.name).toBe('我的项目')
     expect(next.values.forgeDir).toBe('D:\\work\\alpha\\.forge')
-    expect(next.values.knowledgeDir).toBe('D:\\work\\alpha\\.knowledge')
   })
 
   it('forge 目录经「浏览…」选定：保留（不再随工作区重构），未动字段重构', () => {
@@ -141,25 +138,22 @@ describe('AC4 换选工作区联动（relinkWorkspace 两分支）', () => {
     const next = relinkWorkspace(browsed, NEW_WS)
     expect(next.values.forgeDir).toBe('E:\\docs\\dsh')
     expect(next.values.name).toBe('alpha')
-    expect(next.values.knowledgeDir).toBe('D:\\work\\alpha\\.knowledge')
   })
 
   it('全字段手改/浏览选定：全部保留，仅工作区目录换新', () => {
     let state = initialFormState(SELECTION)
     state = editFieldValue(state, 'name', '自定义名')
     state = editFieldValue(state, 'forgeDir', 'E:\\docs\\dsh')
-    state = editFieldValue(state, 'knowledgeDir', 'E:\\kn\\dsh')
     state = editFieldValue(state, 'worktreeDir', 'E:\\wt\\dsh')
     const next = relinkWorkspace(state, NEW_WS)
     expect(next.values).toEqual({
       workspaceDir: NEW_WS,
       name: '自定义名',
       forgeDir: 'E:\\docs\\dsh',
-      knowledgeDir: 'E:\\kn\\dsh',
       worktreeDir: 'E:\\wt\\dsh',
     })
     // 手改标记在换选后保持（后续再换选仍保留）
-    expect(next.touched).toEqual({ name: true, forgeDir: true, knowledgeDir: true, worktreeDir: true })
+    expect(next.touched).toEqual({ name: true, forgeDir: true, worktreeDir: true })
   })
 })
 
@@ -178,19 +172,13 @@ describe('AC5 表单态校验（validateFormValues：非法路径拦截于表单
     ])
   })
 
-  it('forge 目录 / 知识库目录：空与相对路径分别拦截', () => {
+  it('forge 目录：空与相对路径分别拦截', () => {
     const base = initialFormState(SELECTION).values
     expect(validateFormValues({ ...base, forgeDir: '' })).toEqual([
       { field: 'forgeDir', message: '文档位置（forge 目录）不能为空' },
     ])
     expect(validateFormValues({ ...base, forgeDir: 'relative\\path' })).toEqual([
       { field: 'forgeDir', message: '文档位置（forge 目录）需为绝对路径' },
-    ])
-    expect(validateFormValues({ ...base, knowledgeDir: 'docs' })).toEqual([
-      { field: 'knowledgeDir', message: '知识库目录需为绝对路径' },
-    ])
-    expect(validateFormValues({ ...base, knowledgeDir: '' })).toEqual([
-      { field: 'knowledgeDir', message: '知识库目录不能为空' },
     ])
   })
 
@@ -216,9 +204,8 @@ describe('AC5 表单态校验（validateFormValues：非法路径拦截于表单
 describe('浏览改选起始目录（browseStartDirOf）', () => {
   const BASE = initialFormState(SELECTION).values
 
-  it('bug: 两目录浏览起始 = 输入框值的父目录（非值本身——落在容器可平级改选）', () => {
+  it('bug: 目录浏览起始 = 输入框值的父目录（非值本身——落在容器可平级改选）', () => {
     expect(browseStartDirOf('forgeDir', BASE)).toBe('Z:\\project\\dsh')
-    expect(browseStartDirOf('knowledgeDir', BASE)).toBe('Z:\\project\\dsh')
   })
 
   it('workspace 目标（重新选择）起始 = 工作区自身（无输入框改选语境，口径不变）', () => {
@@ -227,15 +214,13 @@ describe('浏览改选起始目录（browseStartDirOf）', () => {
 
   it('尾分隔符值取父不受干扰；POSIX 风格随 `/` 推导', () => {
     expect(browseStartDirOf('forgeDir', { ...BASE, forgeDir: 'Z:\\proj\\x\\.forge\\' })).toBe('Z:\\proj\\x')
-    expect(
-      browseStartDirOf('knowledgeDir', { ...BASE, knowledgeDir: '/home/u/ws/.knowledge' }),
-    ).toBe('/home/u/ws')
+    expect(browseStartDirOf('worktreeDir', { ...BASE, worktreeDir: '/home/u/ws/.forge/worktrees' })).toBe('/home/u/ws/.forge')
   })
 
   it('空值 → undefined（浏览器缺省主目录）；根级值开根目录（盘符根回写分隔符 / POSIX 根）', () => {
     expect(browseStartDirOf('forgeDir', { ...BASE, forgeDir: '' })).toBeUndefined()
     expect(browseStartDirOf('forgeDir', { ...BASE, forgeDir: 'Z:\\.forge' })).toBe('Z:\\')
-    expect(browseStartDirOf('knowledgeDir', { ...BASE, knowledgeDir: '/x' })).toBe('/')
+    expect(browseStartDirOf('worktreeDir', { ...BASE, worktreeDir: '/x' })).toBe('/')
   })
 })
 
@@ -245,14 +230,12 @@ describe('采集载荷（toRegisterInput → RegisterProjectInput）', () => {
       workspaceDir: 'Z:\\project\\dsh ',
       name: ' dsh ',
       forgeDir: ' Z:\\project\\dsh\\.forge',
-      knowledgeDir: 'Z:\\project\\dsh\\.knowledge ',
       worktreeDir: '',
     })
     expect(input).toEqual({
       workspaceDir: 'Z:\\project\\dsh',
       name: 'dsh',
       forgeDir: 'Z:\\project\\dsh\\.forge',
-      knowledgeDir: 'Z:\\project\\dsh\\.knowledge',
     })
   })
 

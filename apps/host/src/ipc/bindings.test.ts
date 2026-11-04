@@ -13,6 +13,7 @@ import {
   refreshKnowledgeBindings,
   serializeBindings,
   withKnowledgeBindingsRefresh,
+  withKnowledgeRegistryRow,
   writeKnowledgeBindings,
   type WorktreeLister,
 } from './bindings.js'
@@ -171,7 +172,7 @@ describe('withKnowledgeBindingsRefresh（registerProject 增量锚）', () => {
         return null
       },
       async updateProject(_id, patch) {
-        return { id: 'p1', workspaceId: 'w', name: patch.name ?? 'n', wsPath: 'C:\\w', forgeDir: 'C:\\w\\.forge', forgeDirExternal: false, knowledgeDir: 'C:\\w\\.knowledge', archived: false, createdAt: '', updatedAt: '' }
+        return { id: 'p1', workspaceId: 'w', name: patch.name ?? 'n', wsPath: 'C:\\w', forgeDir: 'C:\\w\\.forge', forgeDirExternal: false, archived: false, createdAt: '', updatedAt: '' }
       },
       async reconcileAtStartup() {
         return { repaired: [], orphans: [] }
@@ -185,7 +186,7 @@ describe('withKnowledgeBindingsRefresh（registerProject 增量锚）', () => {
     const rows: ProjectSummary[] = []
     const wrapped = withKnowledgeBindingsRefresh(makeService(rows), target, console.warn, noWorktrees)
     rows.push(summary('p-new', 'C:\\ws\\new'))
-    await wrapped.registerProject({ workspaceDir: 'C:\\ws\\new', name: 'new', forgeDir: 'C:\\ws\\new\\.forge', knowledgeDir: 'C:\\ws\\new\\.knowledge' })
+    await wrapped.registerProject({ workspaceDir: 'C:\\ws\\new', name: 'new', forgeDir: 'C:\\ws\\new\\.forge' })
     expect(JSON.parse(readFileSync(target, 'utf8'))).toEqual(await bindingsOf(rows, noWorktrees))
   })
 
@@ -203,7 +204,7 @@ describe('withKnowledgeBindingsRefresh（registerProject 增量锚）', () => {
     const wrapped = withKnowledgeBindingsRefresh(svc, target, log, noWorktrees)
     fail = true
     await expect(
-      wrapped.registerProject({ workspaceDir: 'C:\\ws', name: 'n', forgeDir: 'C:\\ws\\.forge', knowledgeDir: 'C:\\ws\\.knowledge' }),
+      wrapped.registerProject({ workspaceDir: 'C:\\ws', name: 'n', forgeDir: 'C:\\ws\\.forge' }),
     ).resolves.toBe(result)
   })
 
@@ -214,5 +215,61 @@ describe('withKnowledgeBindingsRefresh（registerProject 增量锚）', () => {
     const wrapped = withKnowledgeBindingsRefresh(svc, target, console.warn, noWorktrees)
     await wrapped.updateProject('p1', { name: 'renamed' })
     expect(refreshSpy).not.toHaveBeenCalled()
+  })
+})
+
+// ── 1.15 进表径：registerProject 成功后向 knowledge 注册表落注册行（fail-soft 包装面） ──
+
+describe('withKnowledgeRegistryRow（1.15 注册链进表径）', () => {
+  const result: RegisterResult = { projectId: 'p9', workspaceId: 'ws9', attachedToExisting: false }
+  const project = {
+    id: 'p-1', workspaceId: 'w', wsPath: 'C:\\ws\\new', name: 'new',
+    forgeDir: 'C:\\ws\\new\\.forge', forgeDirExternal: false, archived: false,
+    createdAt: '', updatedAt: '',
+  }
+  function registryService(): { service: ProjectService; registerProject: ReturnType<typeof vi.fn>; getProject: ReturnType<typeof vi.fn> } {
+    const registerProject = vi.fn().mockResolvedValue(result)
+    const getProject = vi.fn().mockResolvedValue({ ...project, id: result.projectId })
+    const service = {
+      registerProject,
+      getProject,
+      listProjects: vi.fn().mockResolvedValue([]),
+      updateProject: vi.fn(),
+      reconcileAtStartup: vi.fn().mockResolvedValue({ repaired: [], orphans: [] }),
+    } satisfies ProjectService
+    return { service, registerProject, getProject }
+  }
+
+  it('注册成功 → getProject 取 canonical wsPath → knowledge.registerProject({wsPath}) 落注册行', async () => {
+    const { service, registerProject } = registryService()
+    const knowledge = { registerProject: vi.fn().mockResolvedValue(undefined) }
+    const wrapped = withKnowledgeRegistryRow(service, knowledge)
+    await expect(wrapped.registerProject({ workspaceDir: 'C:\\ws\\new', name: 'new', forgeDir: 'C:\\ws\\new\\.forge' })).resolves.toBe(result)
+    expect(registerProject).toHaveBeenCalledOnce()
+    expect(knowledge.registerProject).toHaveBeenCalledWith({ wsPath: 'C:\\ws\\new' })
+  })
+
+  it('knowledge 服务缺席 = 原样透传（插件未装载——注册不受影响）', async () => {
+    const { service } = registryService()
+    const wrapped = withKnowledgeRegistryRow(service, undefined)
+    await expect(wrapped.registerProject({ workspaceDir: 'C:\\ws\\new', name: 'new', forgeDir: 'C:\\ws\\new\\.forge' })).resolves.toBe(result)
+  })
+
+  it('落表失败 = fail-soft：记日志不抛断注册（结果原样返回）', async () => {
+    const { service } = registryService()
+    const knowledge = { registerProject: vi.fn().mockRejectedValue(new Error('db locked')) }
+    const log = vi.fn()
+    const wrapped = withKnowledgeRegistryRow(service, knowledge, log)
+    await expect(wrapped.registerProject({ workspaceDir: 'C:\\ws\\new', name: 'new', forgeDir: 'C:\\ws\\new\\.forge' })).resolves.toBe(result)
+    expect(log).toHaveBeenCalledOnce()
+  })
+
+  it('非注册方法原样透传（getProject 不触发落表）', async () => {
+    const { service, getProject } = registryService()
+    const knowledge = { registerProject: vi.fn() }
+    const wrapped = withKnowledgeRegistryRow(service, knowledge)
+    await wrapped.getProject('p-1')
+    expect(getProject).toHaveBeenCalledOnce()
+    expect(knowledge.registerProject).not.toHaveBeenCalled()
   })
 })

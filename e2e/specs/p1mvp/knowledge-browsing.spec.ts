@@ -93,7 +93,6 @@ async function registerKbProject(page: Page, fixtureRoot: string): Promise<strin
     workspaceDir: wsDir,
     name: 'kb-demo',
     forgeDir: join(wsDir, '.forge'),
-    knowledgeDir: join(wsDir, '.knowledge'),
   })
   await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
   return result.projectId

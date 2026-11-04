@@ -1,10 +1,12 @@
 // 服务面单测（1.7 A2 随迁行为等价）：自持库供数八法——rebuild 幂等/静默重建联动/
 // 零命中哨兵行/热度口径/EntryNotFound 六码/两级解析 fail-loud。结构性全面对照另由
 // e2e/support/knowledge-golden（fixture 结构等价）与 host knowledge-rpc 实层承载。
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+// 1.15：registerProject 第九法（注册链进表径）。
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import type { DiagEventPayload } from '@dsh-forge/contracts'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../storage/index.js'
 import { createKnowledgeService } from './service.js'
 import { EntryNotFoundError } from './errors.js'
@@ -82,5 +84,37 @@ describe('八法行为等价（core 随迁）', () => {
 
   it('两级解析 fail-loud：projectId 未命中静态绑定表 → 裸错（非六码）', async () => {
     await expect(service.listEntries({ projectId: 'p-other' })).rejects.toThrow(/项目不存在/)
+  })
+})
+
+describe('registerProject（第九法——1.15 注册链进表径）', () => {
+  it('缺省派生：knowledgeDir 缺席 = <wsPath>/.knowledge，目录缺则递归建 + 注册行 upsert（幂等）', async () => {
+    const ws = join(home, 'ws-new')
+    const dir = join(ws, '.knowledge')
+    await service.registerProject({ wsPath: ws })
+    expect(existsSync(dir)).toBe(true) // 建面（fix-39 语义随列退役迁本域）
+    expect(createKnowledgeRegistry(db).findByWsPath(ws)?.knowledgeDir).toBe(dir)
+    // 幂等重入：不抛、行不重复（canonical 键单行）
+    await expect(service.registerProject({ wsPath: ws })).resolves.toBeUndefined()
+    const rows = createKnowledgeRegistry(db).list().filter((r) => r.knowledgeDir === dir)
+    expect(rows).toHaveLength(1)
+  })
+
+  it('显式 knowledgeDir 透传落行（测试/e2e 预置同径）', async () => {
+    const ws = join(home, 'ws-custom')
+    const dir = join(home, 'kn-custom')
+    await service.registerProject({ wsPath: ws, knowledgeDir: dir })
+    expect(createKnowledgeRegistry(db).findByWsPath(ws)?.knowledgeDir).toBe(dir)
+  })
+
+  it('建目录失败（父级为普通文件）→ 抛 + 注册行不落 + error 级埋点（SC-10 register 域）', async () => {
+    const diag: DiagEventPayload[] = []
+    const svc = createKnowledgeService({ db, resolveWsPath: () => undefined, emit: (p) => diag.push(p) })
+    const parentFile = join(home, 'parent-file')
+    writeFileSync(parentFile, '占位', 'utf8')
+    const ws = join(home, 'ws-fail')
+    await expect(svc.registerProject({ wsPath: ws, knowledgeDir: join(parentFile, 'sub', '.knowledge') })).rejects.toThrow()
+    expect(createKnowledgeRegistry(db).findByWsPath(ws)).toBeUndefined() // 行未落
+    expect(diag.some((d) => d.level === 'error' && d.event === 'knowledge-register')).toBe(true)
   })
 })

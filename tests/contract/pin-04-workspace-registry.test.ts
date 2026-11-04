@@ -175,7 +175,6 @@ describe('pin ④-5 集成（真实 registerProject × S4 语义桩 + 临时 SQL
       workspaceDir: WS,
       name: 'p1',
       forgeDir: join(WS, 'docs'),
-      knowledgeDir: join(WS, 'know'),
     })
     expect(result.attachedToExisting).toBe(true)
     expect(result.workspaceId).toBe(seeded.id)
@@ -194,7 +193,6 @@ describe('pin ④-5 集成（真实 registerProject × S4 语义桩 + 临时 SQL
         workspaceDir: WS,
         name: 'p1',
         forgeDir: join(WS, 'docs'),
-        knowledgeDir: join(WS, 'know'),
       }),
     ).rejects.toThrow(/写入失败|补偿/)
     // 补偿后：注册记录已删（list 无该 path）但目录保留（保目录保日志）

@@ -43,7 +43,6 @@ export interface OverviewHeadBundle {
   readonly projectName: string
   readonly workspaceDir: string
   readonly forgeDir: string
-  readonly knowledgeDir: string | null
   /** {tasksHome}/{flatten}@{hash8} 单源（派生预检位 RPC；失败 fail-soft = null → 行回退「—」） */
   readonly taskStoreDir: string | null
   /** 无搜索全量 feature 卡（ov-head 摘要活跃 feature + 提案子 tab 谱系查找源） */
@@ -55,12 +54,11 @@ export interface OverviewHeadBundle {
   readonly stats: TaskStats
 }
 
-/** 概览 ov-head 四行（AC1：工作区/文档位置/知识目录/任务清单@hash8） */
+/** 概览 ov-head 三行（AC1：工作区/文档位置/任务清单@hash8；知识目录行随 knowledge_dir 列退役移除——1.15） */
 export function overviewHeadRows(head: OverviewHeadBundle): readonly { readonly label: string; readonly value: string }[] {
   return [
     { label: '工作区', value: head.workspaceDir },
     { label: '文档位置', value: head.forgeDir },
-    { label: '知识目录', value: head.knowledgeDir ?? '—' },
     { label: '任务清单', value: head.taskStoreDir ?? '—' },
   ]
 }
@@ -91,7 +89,6 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
         projectName: project.name,
         workspaceDir: project.wsPath,
         forgeDir: project.forgeDir,
-        knowledgeDir: project.knowledgeDir,
         taskStoreDir,
         features,
         proposals,

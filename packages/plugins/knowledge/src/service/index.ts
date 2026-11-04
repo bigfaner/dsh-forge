@@ -8,8 +8,10 @@ export type {
   BrowseKnowledgeService,
   EntryAbstract,
   IndexReport,
+  KnowledgeRegistryWriter,
   KnowledgeService,
   ReadAbstractQuery,
+  RegisterProjectWrite,
   SearchHit,
   SearchQuery,
 } from './types.js'

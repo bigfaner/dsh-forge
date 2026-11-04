@@ -103,13 +103,12 @@ const BAD_BLOCK = ['```mermaid', 'this is :: not <valid mermaid> at all', '```']
 /** 注册负载直注（发现面以 forge_dir 为 docs/ 根扫描——rpc.ts 固定 {ws}/.forge 载荷不适用） */
 async function registerProjectAt(
   page: Page,
-  o: { readonly workspaceDir: string; readonly name: string; readonly forgeDir: string; readonly knowledgeDir: string },
+  o: { readonly workspaceDir: string; readonly name: string; readonly forgeDir: string },
 ): Promise<ProjectSummary> {
   const result = await forgeInvoke<{ projectId: string }>(page, 'forge:projects/register', {
     workspaceDir: o.workspaceDir,
     name: o.name,
     forgeDir: o.forgeDir,
-    knowledgeDir: o.knowledgeDir,
   })
   const projects = await forgeInvoke<readonly ProjectSummary[]>(page, 'forge:projects/list')
   const row = projects.find((p) => p.id === result.projectId)
@@ -300,7 +299,7 @@ test('@web-e2e @m2 文档浏览·零命中项目：提案/feature 子 tab 空态
   const { app, page, pageErrors } = launched
   try {
     const project = await registerProjectAt(page, {
-      workspaceDir: wsDir, name: '零命中演示', forgeDir: wsDir, knowledgeDir: join(wsDir, '.knowledge'),
+      workspaceDir: wsDir, name: '零命中演示', forgeDir: wsDir,
     })
     const projectId = project.id
 

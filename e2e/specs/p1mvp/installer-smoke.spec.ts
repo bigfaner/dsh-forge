@@ -269,7 +269,6 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
       workspaceDir: projDir,
       name: 'smoke-proj',
       forgeDir: join(projDir, '.forge'),
-      knowledgeDir: join(projDir, '.knowledge'),
     })
     expect(registered.projectId, '安装形态注册落库（IPC → core 双服务 → registry → SQLite 全链）').toBeTruthy()
     await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 60_000 })

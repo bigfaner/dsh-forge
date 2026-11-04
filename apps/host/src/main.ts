@@ -11,7 +11,7 @@ import {
   parentWindowOf, refreshKnowledgeBindings, registerBootChannel, registerDirectoryPickerChannel,
   registerFsChannels, registerHarnessChannels, registerKnowledgeChannels, registerM2Channels,
   registerProjectsChannels, removeHarnessChannels, removeTunnelChannel, runStartupReconcile,
-  registerTunnelChannel, withKnowledgeBindingsRefresh,
+  registerTunnelChannel, withKnowledgeBindingsRefresh, withKnowledgeRegistryRow,
 } from './ipc/index.js'
 import { ensureProfileMaterialized, ensureSafeModeProfile, isDevForm, isPackagedForm, resolveHostPaths } from './profile/index.js'
 import { attachHostTelemetry } from './telemetry/index.js'
@@ -111,7 +111,14 @@ void (async () => {
     // forge:projects/* + forge:knowledge/*；绑定表随 boot 全量刷新 + 增量刷新（fail-soft，
     // 1.7 Q19 后消费面 = plugin-forge Interface 8 cwd 路由——knowledge 已改纯 config 静态注入）。
     if (host.services.forgeProjects !== undefined) {
-      registerProjectsChannels(forgeIpc, withKnowledgeBindingsRefresh(host.services.forgeProjects, paths.bindingsFile))
+      registerProjectsChannels(
+        forgeIpc,
+        // 1.15 进表径：注册成功后向 knowledge 自持注册表落注册行（fail-soft；插件缺席透传）
+        withKnowledgeRegistryRow(
+          withKnowledgeBindingsRefresh(host.services.forgeProjects, paths.bindingsFile),
+          host.services.knowledge,
+        ),
+      )
       void refreshKnowledgeBindings(host.services.forgeProjects, paths.bindingsFile)
       runStartupReconcile(host.services.forgeProjects) // fix-27：启动对账（§交互三）——悬空引用启动即修
     } else console.warn('[host] forgeProjects 服务缺席（core 插件行未装载）——forge:projects/* 通道未注册')

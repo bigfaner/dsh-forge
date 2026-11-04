@@ -179,9 +179,11 @@ export type {
   BrowseKnowledgeService,
   EntryAbstract,
   IndexReport,
+  KnowledgeRegistryWriter,
   KnowledgeService,
   KnowledgeServiceDeps,
   ReadAbstractQuery,
+  RegisterProjectWrite,
   SearchHit,
   SearchQuery,
 } from './service/index.js'

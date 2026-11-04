@@ -49,10 +49,10 @@ export function createHarness(): SmallDomainHarness {
   const central = openDatabase(join(root, 'state.db'))
   central
     .prepare(
-      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, knowledge_dir, archived, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, archived, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
     )
-    .run(projectId, randomUUID(), wsDir, 'demo', forgeDir, join(wsDir, '.knowledge'), '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+    .run(projectId, randomUUID(), wsDir, 'demo', forgeDir, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
 
   const routing = createProjectRouting(central)
   const store = createWorkspaceStore({

@@ -21,7 +21,6 @@ function projectRow(wsPath: string): Project {
     wsPath,
     forgeDir: `${wsPath}/.forge`,
     forgeDirExternal: false,
-    knowledgeDir: `${wsPath}/.knowledge`,
     archived: false,
     createdAt: '2026-11-02T00:00:00.000Z',
     updatedAt: '2026-11-02T00:00:00.000Z',

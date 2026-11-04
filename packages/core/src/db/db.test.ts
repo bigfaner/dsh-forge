@@ -98,7 +98,7 @@ describe('v4 知识域两表结构退役（knowledge-stage1-foundation 1.8）', 
     v1.close()
 
     const db = openDatabase(path)
-    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(4)
+    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(5)
     const tables = db
       .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'knowledge_%'`)
       .all()
@@ -113,17 +113,17 @@ describe('AC2 CHECK 约束负样例（level / scope / forge_dir_external）', ()
   it('forge_dir_external 仅 0/1；2 被拒', () => {
     const db = openDatabase(dbPath())
     const insert = db.prepare(
-      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, forge_dir_external, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     expect(() =>
-      insert.run('px', 'ws-px', 'C:\\ws\\px', 'px', 'C:\\ws\\px\\.forge', 2, 'C:\\ws\\px\\.knowledge', '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z'),
+      insert.run('px', 'ws-px', 'C:\\ws\\px', 'px', 'C:\\ws\\px\\.forge', 2, '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z'),
     ).toThrowError(/CHECK/)
     expect(() =>
-      insert.run('p0', 'ws-p0', 'C:\\ws\\p0', 'p0', 'C:\\ws\\p0\\.forge', 0, 'C:\\ws\\p0\\.knowledge', '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z'),
+      insert.run('p0', 'ws-p0', 'C:\\ws\\p0', 'p0', 'C:\\ws\\p0\\.forge', 0, '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z'),
     ).not.toThrow()
     expect(() =>
-      insert.run('p1x', 'ws-p1x', 'C:\\ws\\p1x', 'p1x', 'C:\\ws\\p1x\\.forge', 1, 'C:\\ws\\p1x\\.knowledge', '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z'),
+      insert.run('p1x', 'ws-p1x', 'C:\\ws\\p1x', 'p1x', 'C:\\ws\\p1x\\.forge', 1, '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z'),
     ).not.toThrow()
     db.close()
   })
@@ -357,8 +357,8 @@ describe('v2 worktree_dir 列迁移（守卫式 ALTER + 存量回填默认绝对
     expect(col?.notnull).toBe(1)
     expect(col?.dflt_value).toBe(`''`)
     db.prepare(
-      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, knowledge_dir, created_at, updated_at)
-       VALUES ('pn', 'ws-pn', 'C:\\ws\\pn', 'pn', 'C:\\ws\\pn\\.forge', 'C:\\ws\\pn\\.knowledge', '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z')`,
+      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, created_at, updated_at)
+       VALUES ('pn', 'ws-pn', 'C:\\ws\\pn', 'pn', 'C:\\ws\\pn\\.forge', '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z')`,
     ).run()
     const row = db.prepare<unknown[], { worktree_dir: string }>(`SELECT worktree_dir FROM projects WHERE id='pn'`).get()
     expect(row?.worktree_dir).toBe('')

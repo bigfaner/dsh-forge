@@ -10,6 +10,9 @@ export const KNOWLEDGE_MIGRATE_EVENT = 'knowledge-migrate'
 /** 索引重建事件域（proposal §2.3：成败 + 静默重建 warn） */
 export const KNOWLEDGE_REBUILD_EVENT = 'knowledge-index-rebuild'
 
+/** 注册行读写事件域（proposal §2.3：解析与注册行读写路径——1.15 进表径埋点面） */
+export const KNOWLEDGE_REGISTER_EVENT = 'knowledge-register'
+
 /** 装配期注入的诊断发射面（host 侧 = ctx.emit(DIAG_EVENT, payload)；storage 域零 cordis 依赖） */
 export type DiagEmitter = (payload: DiagEventPayload) => void
 

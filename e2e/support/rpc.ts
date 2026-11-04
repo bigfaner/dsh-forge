@@ -37,7 +37,6 @@ function registerPayload(dir: string, name: string): Record<string, string> {
     workspaceDir: dir,
     name,
     forgeDir: join(dir, '.forge'),
-    knowledgeDir: join(dir, '.knowledge'),
   }
 }
 

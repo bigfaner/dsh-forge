@@ -57,15 +57,13 @@ describe('AC1 回填与默认值（View 静态结构）', () => {
     expect(markup).toContain('value="dsh"')
   })
 
-  it('forge 目录 / 知识库目录 / worktree 目录默认值 + 各带「浏览…」改选钮（1.6 AC3：worktree 行 = 空占位默认）', () => {
+  it('forge 目录 / worktree 目录默认值 + 各带「浏览…」改选钮（1.6 AC3：worktree 行 = 空占位默认）', () => {
     expect(markup).toContain('data-dswf-rf-forge')
     expect(markup).toContain('value="Z:\\project\\dsh\\.forge"')
-    expect(markup).toContain('data-dswf-rf-kn')
-    expect(markup).toContain('value="Z:\\project\\dsh\\.knowledge"')
     expect(markup).toContain('data-dswf-rf-wt')
     expect(markup).toContain('placeholder=".forge/worktrees/"')
     expect(markup).toContain('value=""') // worktree 留空 = 缺省
-    expect(markup.match(/浏览…/g)?.length).toBe(3)
+    expect(markup.match(/浏览…/g)?.length).toBe(2)
   })
 
   it('任务清单与记录：DerivedTaskStoreRow 嵌入（4.3 整行替换——RPC 下发值逐字呈现，非 input value）', () => {
@@ -134,16 +132,16 @@ describe('AC3 仓内/仓外推导呈现（无 radio）', () => {
 describe('AC5 非法路径拦截于表单态（错误行 + 确认禁用）', () => {
   const ISSUES: FormIssue[] = [
     { field: 'forgeDir', message: '文档位置（forge 目录）需为绝对路径' },
-    { field: 'knowledgeDir', message: '知识库目录不能为空' },
+    { field: 'worktreeDir', message: 'worktree 目录需为绝对路径（留空使用默认 .forge/worktrees/）' },
   ]
 
   it('字段级错误行 role=alert + 归属锚；「确认」禁用', () => {
-    const markup = view({ values: { ...VALUES, forgeDir: 'rel\\path', knowledgeDir: '' }, issues: ISSUES })
+    const markup = view({ values: { ...VALUES, forgeDir: 'rel\\path', worktreeDir: 'wt' }, issues: ISSUES })
     expect(markup.match(/role="alert"/g)?.length).toBe(2)
     expect(markup).toContain('data-dswf-rf-issue="forgeDir"')
     expect(markup).toContain('文档位置（forge 目录）需为绝对路径')
-    expect(markup).toContain('data-dswf-rf-issue="knowledgeDir"')
-    expect(markup).toContain('知识库目录不能为空')
+    expect(markup).toContain('data-dswf-rf-issue="worktreeDir"')
+    expect(markup).toContain('worktree 目录需为绝对路径')
     expect(confirmBtn(markup)).toContain('disabled')
   })
 
@@ -187,10 +185,10 @@ describe('工作区已注册挂接提示（fix-14：pick 时标记的表单相�
   })
 })
 
-describe('原生改选在途/错误面（fix-14：三改选钮防双开 + 失败呈现）', () => {
-  it('browseBusy → 「重新选择」/三「浏览…」钮全禁用（系统对话框打开中）；「确认」不受在途影响', () => {
+describe('原生改选在途/错误面（fix-14：改选钮防双开 + 失败呈现）', () => {
+  it('browseBusy → 「重新选择」/两「浏览…」钮全禁用（系统对话框打开中）；「确认」不受在途影响', () => {
     const markup = view({ browseBusy: true })
-    expect(markup.match(/disabled=""/g)?.length).toBe(4)
+    expect(markup.match(/disabled=""/g)?.length).toBe(3)
     expect(confirmBtn(markup)).not.toContain('disabled') // 提交不受对话框在途影响
   })
 

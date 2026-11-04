@@ -207,7 +207,6 @@ describe('AC4 查询面：list/get/update 与 Interface 1 一致（archived 过�
       name: 'alpha',
       forgeDir: resolve(a.path, '.forge'),
       forgeDirExternal: false,
-      knowledgeDir: resolve(a.path, '.knowledge'),
       worktreeDir: '', // v2 前种子行 DEFAULT ''（生产链恒回填/注册供真值——列 NOT NULL）
       archived: false,
       createdAt: T0,
@@ -227,7 +226,6 @@ describe('AC4 查询面：list/get/update 与 Interface 1 一致（archived 过�
     expect(updated.archived).toBe(false)
     expect(updated.wsPath).toBe(a.path)
     expect(updated.forgeDir).toBe(resolve(a.path, '.forge'))
-    expect(updated.knowledgeDir).toBe(resolve(a.path, '.knowledge'))
     expect(updated.updatedAt > T0).toBe(true)
     expect(updated.createdAt).toBe(T0) // 创建时间不动
   })
