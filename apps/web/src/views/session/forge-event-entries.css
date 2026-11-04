@@ -201,9 +201,9 @@
  * 最小刻度：10px 字阶 + 4px 内距；单行不换行） */
 .dswf-event-entries-triage-flag {
   display: inline-block;
-  margin-right: 4px; /* 同 #N 前缀列距刻度 */
-  padding: 0 4px;
-  font-size: 10px;
+  margin-right: 4px; /* dsw-raw 同 #N 前缀列距刻度（195 行同款豁免） */
+  padding: 0 4px; /* dsw-raw 处置徽标紧凑小胶囊最小内距刻度（官方 Tag 先例） */
+  font-size: 10px; /* dsw-raw 处置徽标最小字阶刻度（caption 之下单行胶囊专用） */
   line-height: 14px;
   border-radius: 999px; /* dsw-raw 官方胶囊刻度同值（Tag 先例） */
   border: 0.5px solid var(--dsw-alias-state-business-primary);

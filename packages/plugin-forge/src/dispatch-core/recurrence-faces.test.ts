@@ -42,8 +42,8 @@ describe('createRecurrenceFaces（bug 0db72bcb 生产装配工厂）', () => {
     })
     await faces.findRecurrenceCandidates('p-1', { slug: 'feat-x', localId: '2.1', sourceTaskId: 't-feat-x-1.1' })
     expect(captured[0]).toMatchObject({ slug: 'feat-x', localId: '2.1', sourceTaskId: 't-feat-x-1.1', files: [] })
-    // 缺席 = 键缺席（core 回退 slug 锚）
-    await faces.findRecurrenceCandidates('p-1', { slug: 'feat-x', localId: '2.1' })
+    // 缺席 = 键缺席（core 回退 slug 锠）——类型面必填，运行期缺席径以 as 承载（捕获面断言 in）
+    await faces.findRecurrenceCandidates('p-1', { slug: 'feat-x', localId: '2.1' } as Parameters<typeof faces.findRecurrenceCandidates>[1])
     expect('sourceTaskId' in captured[1]!).toBe(false)
   })
 

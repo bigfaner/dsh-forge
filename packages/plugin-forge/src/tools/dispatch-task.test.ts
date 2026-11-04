@@ -822,7 +822,7 @@ describe('deriveWorkerToolFilter allow 并集公式（expert-squad-forge 1.4—�
     })
 
     it('tools 面缺席/形状漂移 = undefined（调用方回落 parent 探针）', async () => {
-      const probe = createUnionToolNamesProbe(() => undefined, () => ({ list: async () => [] , acquireScope: async () => ({}) }))
+      const probe = createUnionToolNamesProbe(() => undefined, () => ({ list: async () => [] , acquireScope: async () => ({ key: Symbol('scope') }) as never }))
       expect(await probe()).toBeUndefined()
       const probeMalformed = createUnionToolNamesProbe(() => ({ schemas: () => 'garbage' }) as never, () => undefined)
       expect(await probeMalformed()).toBeUndefined()

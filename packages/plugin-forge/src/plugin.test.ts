@@ -16,6 +16,7 @@ import type { ForgeCommandDefinition, ForgeEventRegisterFace } from './faces.js'
 import { createForgeTools, FORGE_TOOL_NAMES } from './tools/index.js'
 import { createLoopRegistry } from './loop/index.js'
 import { FORGE_SECTION_NAME } from './prompt/index.js'
+import type { ForgeAssembleContext } from './faces.js'
 import type { ForgePromptSection, ForgeToolDefinition, ForgeToolDeps } from './tools/index.js'
 
 /** 容器目录桩值（平台无关绝对路径——#61：'D:/...' 盘符拼写 POSIX 下为相对路径，
@@ -31,7 +32,7 @@ class TempRuntime {
   disposedCommands = 0
   disposedProjection = 0
   /** forge_docs_root 等提示词变量注册面（官方 SystemPrompt.variable 桩） */
-  promptVariables: { name: string; provider: (context: unknown) => string | undefined }[] = []
+  promptVariables: { name: string; provider: (context: ForgeAssembleContext) => string | undefined }[] = []
 
   ctx() {
     return {
@@ -57,7 +58,7 @@ class TempRuntime {
             this.disposed.sections += 1
           }
         },
-        variable: (name: string, provider: (context: unknown) => string | undefined) => {
+        variable: (name: string, provider: (context: ForgeAssembleContext) => string | undefined) => {
           this.promptVariables.push({ name, provider })
           return () => {
             this.promptVariables = this.promptVariables.filter((v) => v.name !== name)
@@ -588,7 +589,7 @@ describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true �
     if (listedProjects !== undefined) {
       extras.forgeProjects = { listProjects: async () => listedProjects }
     }
-    const dispose = forgePlugin({ ...base, ...extras }, config)
+    const dispose = forgePlugin({ ...base, ...extras } as never, config)
     return { rt, dispose, calls, diagEmits }
   }
 
@@ -638,10 +639,9 @@ describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true �
     // 注册表故障（抛错）= 回退静态绑定表（原覆盖面）
     const rt2 = new TempRuntime()
     const calls2: unknown[] = []
-    const base2 = rt2.ctx() as Record<string, unknown>
     const dispose2 = forgePlugin(
       {
-        ...base2,
+        ...rt2.ctx(),
         forgeTasks: {
           claimTask: async () => ({ task: null, dispatchPrompt: '', digest: '', reclaimed: false }),
           taskStats: async () => ({ total: 0, byStatus: { pending: 0, in_progress: 0, blocked: 0, completed: 0, skipped: 0, rejected: 0, suspended: 0, interrupted: 0 }, unmetPending: 0 }),
@@ -650,8 +650,8 @@ describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true �
             return { reconciled: [] }
           },
         } as unknown as ForgeTasksService,
-        forgeProjects: { listProjects: async () => { throw new Error('registry gone') } },
-      },
+        forgeProjects: { listProjects: async () => { throw new Error('registry gone') } } as unknown as ProjectServiceM2,
+      } as never,
       { projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] },
     )
     await new Promise((resolve) => setTimeout(resolve, 0))
