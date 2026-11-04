@@ -77,9 +77,10 @@ const STAGING_EXTRAS = {
   // + 组合装配行本体 cordis.patch.yml（package.json dsh.bundle.patch 声明指向——loader
   // 按声明读包内该文件触发 apply 注册，缺席即 ENOENT，bug a1f13abf）
   'expert-squad': { files: ['experts', 'skills', 'cordis.patch.yml'], keyFiles: ['experts/code-reviewer.md', 'skills/roundtable/SKILL.md', 'cordis.patch.yml'] },
-  // knowledge 技能面（knowledge-stage1 1.9 A5：customSkillDirs[knowledge] 挂载源——
-  // skills/learn 沉淀技能；缺席即预设组合 knowledge 技能面静默缺失）
-  knowledge: { files: ['skills'], keyFiles: ['skills/learn/SKILL.md'] },
+  // knowledge 技能面（knowledge-stage1 1.9 A5 挂载源；stage② 1.5 增 skills/distill
+  // 整合技能——learn（写入径）+ distill（存量整合）双技能面；缺席即预设组合
+  // knowledge 技能面静默缺失）
+  knowledge: { files: ['skills'], keyFiles: ['skills/learn/SKILL.md', 'skills/distill/SKILL.md'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */

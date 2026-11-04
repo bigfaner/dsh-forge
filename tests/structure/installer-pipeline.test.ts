@@ -195,9 +195,10 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/core/dist/index.js',
       'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
       // knowledge 1.9 A5 重开放：用户层全局行 + skills/learn 技能面（customSkillDirs[knowledge]
-      // 挂载源——STAGING_EXTRAS 承载）
+      // 挂载源——STAGING_EXTRAS 承载）；stage② 1.5 增 skills/distill 整合技能（随包交付面同步）
       'runtime/node_modules/@dsh-forge/knowledge/dist/index.js',
       'runtime/node_modules/@dsh-forge/knowledge/skills/learn/SKILL.md',
+      'runtime/node_modules/@dsh-forge/knowledge/skills/distill/SKILL.md',
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
       'runtime/node_modules/@dsh-forge/plugin-forge/skills/submit-task/SKILL.md',
       // blitz 专属技能面（plugin-forge 包内 skills-blitz 旁目录——blitz 预设 customSkillDirs
