@@ -285,6 +285,19 @@ const SUBMIT_TASK_OUTPUT_SCHEMA = withFailureVariant({
       },
       description: 'slug/localId natural keys auto-restored by the recovery hook (source tasks whose fix completed).',
     },
+    recurrenceAdvisories: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', description: "'upgrade-hint' | 'suspected-family'." },
+          message: { type: 'string', description: 'Advisory text (suspected-family = candidate list, 8 fields per entry, top-5 by lastSeenAt).' },
+        },
+        required: ['kind', 'message'],
+        description: 'T2 recurrence advisories (blocked submit cross-check — soft signals, not rejections).',
+      },
+      description: 'Recurrence advisories attached to the settlement (present only when triggered).',
+    },
   },
   required: ['taskId', 'status', 'restored'],
 })
@@ -298,6 +311,8 @@ function renderSubmitResult(args: unknown, value: unknown): readonly { type: 'te
   const lines = [
     `- taskId: ${v.taskId}`,
     ...v.restored.map((r) => `- restored: ${r.slug}/${r.localId} (source unblocked)`),
+    // T2 advisory 渲染（recurrence-signal-tiering 列表式随动——提示信息进 worker 视野，软动作不硬拒）
+    ...(v.recurrenceAdvisories ?? []).map((a) => `- advisory[${a.kind}]: ${a.message}`),
   ]
   return formatOk(`Task ${where}submitted — ${v.status}`, lines)
 }

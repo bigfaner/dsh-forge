@@ -59,6 +59,7 @@ import {
   FORGE_EVENT_NODE_SLOT,
   forgeEventGroupDefinition,
   forgeEventStreamDefinition,
+  setForgeEventNodeDiag,
 } from './forge-event-node.js'
 // 4.6 打开新会话编排器（open-session.ts = 纯模块零 import——bundle 自含纪律不破）
 import {
@@ -1221,6 +1222,9 @@ function registerEventEntriesNode(ctx: ForgeClientCtx, views: PublishedViews, di
   }
   const registerEvents = uiConversation?.events?.register
   if (uiConversation === undefined || typeof registerEvents !== 'function') return
+  // D2 fail-visible 诊断注入面（start-session-wrap deps.warn 先例——client 束豁免面，
+  // 装配期注入、调用点现查在场性）：组卡物化缺口/镜像击穿经注入 warn 上报。
+  setForgeEventNodeDiag((message) => console.warn(message))
   try {
     // stream 状态机注册经回放录取薄包装（match 纯观察旁路——fold 语义零改动，
     // loop-message-consolidation 1.3 消费侧回放数据通道）

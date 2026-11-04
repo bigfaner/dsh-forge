@@ -350,88 +350,18 @@ describe("openPluginConfigTab 导航序列", () => {
   });
 });
 
-// ── 「⚙ 配置」跳转官方导航缝（pluginNavigation——item 详情页正门）──
+// ── 「⚙ 配置」跳转官方导航缝（pluginNavigation——bundle 详情页正门）──
 describe("pluginConfigJumpOf 官方导航缝", () => {
-  it("官方 openItem 正门在场：跳转闭包即 openItem(expert-squad)——不触 DOM", async () => {
+  it("openBundle 在场：跳转闭包即 openBundle(@dsh-forge/expert-squad)——直达本包详情页", async () => {
     const { pluginConfigJumpOf } = await import("../src-client/panel/config-jump.js");
     const calls: string[] = [];
-    const clicked: string[] = [];
-    const doc = { querySelector: (sel: string) => { clicked.push(sel); return { click(): void {} }; } };
     const resolve = pluginConfigJumpOf(
-      { reflect: { get: (n: string) => (n === "pluginNavigation" ? { openItem: (id: string) => { calls.push(id); } } : undefined) } },
-      doc,
-      () => undefined,
+      { reflect: { get: (n: string) => (n === "pluginNavigation" ? { openBundle: (pkg: string) => { calls.push(pkg); } } : undefined) } },
     );
     const jump = resolve();
     expect(typeof jump).toBe("function");
     jump!();
-    expect(calls).toEqual(["expert-squad"]);
-    expect(clicked).toEqual([]);
-  });
-
-  it("layout.selectPanel 面板直切优先（跳过 package view 双渲染）：selectPanel(plugins) + DOM 点卡片，不调 openBundle", async () => {
-    const { pluginConfigJumpOf } = await import("../src-client/panel/config-jump.js");
-    const calls: string[] = [];
-    const clicked: string[] = [];
-    const doc = {
-      querySelector: (sel: string) =>
-        sel === '[data-plugin-item="expert-squad"] button' ? { click: () => clicked.push(sel) } : null,
-    };
-    const scheduled: (() => void)[] = [];
-    const resolve = pluginConfigJumpOf(
-      {
-        reflect: {
-          get: (n: string) =>
-            n === "pluginNavigation"
-              ? { openBundle: (pkg: string) => { calls.push(`bundle:${pkg}`); } }
-              : n === "layout"
-                ? { selectPanel: (id: string) => { calls.push(`panel:${id}`); } }
-                : undefined,
-        },
-      },
-      doc,
-      (fn) => { scheduled.push(fn); },
-    );
-    resolve()!();
-    scheduled[0]!();
-    expect(calls).toEqual(["panel:plugins"]); // openBundle 未被调用
-    expect(clicked).toEqual(['[data-plugin-item="expert-squad"] button']);
-  });
-
-  it("仅 openBundle（layout 缺席兼容径）：借道 openBundle + 落列表 → DOM 点官方组卡片「查看」钮", async () => {
-    const { pluginConfigJumpOf } = await import("../src-client/panel/config-jump.js");
-    const calls: string[] = [];
-    const clicked: string[] = [];
-    const doc = {
-      querySelector: (sel: string) =>
-        sel === '[data-plugin-item="expert-squad"] button' ? { click: () => clicked.push(sel) } : null,
-    };
-    const scheduled: (() => void)[] = [];
-    const resolve = pluginConfigJumpOf(
-      { reflect: { get: (n: string) => (n === "pluginNavigation" ? { openBundle: (pkg: string) => { calls.push(pkg); } } : undefined) } },
-      doc,
-      (fn) => { scheduled.push(fn); },
-    );
-    const jump = resolve();
-    jump!();
     expect(calls).toEqual(["@dsh-forge/expert-squad"]);
-    expect(scheduled).toHaveLength(1);
-    scheduled[0]!(); // 面板渲染等待轮（首击即命中卡片钮）
-    expect(clicked).toEqual(['[data-plugin-item="expert-squad"] button']);
-  });
-
-  it("DOM 卡片缺席（面板未渲染完）：16ms 逐帧轮询重试 20 次上限（标签漂移 = 静默停在列表页）", async () => {
-    const { pluginConfigJumpOf } = await import("../src-client/panel/config-jump.js");
-    const doc = { querySelector: (): null => null };
-    const scheduled: (() => void)[] = [];
-    const resolve = pluginConfigJumpOf(
-      { reflect: { get: () => ({ openBundle: () => undefined }) } },
-      doc,
-      (fn) => { scheduled.push(fn); },
-    );
-    resolve()!();
-    for (let i = 0; i < 25; i += 1) scheduled.splice(0).forEach((fn) => fn());
-    expect(scheduled).toHaveLength(0); // 20 次上限耗尽即停
   });
 
   it("缝缺席/形状漂移：解析返回 undefined（降级 DOM 导航先例，不炸）", async () => {

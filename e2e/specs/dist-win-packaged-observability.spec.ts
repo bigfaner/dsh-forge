@@ -30,6 +30,11 @@ const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
 const UNPACKED_DIR = join(ROOT, 'release', 'installer', 'win-unpacked')
 const EXE = join(UNPACKED_DIR, 'dsh-forge.exe')
 const ASSEMBLE_SCRIPT = join(ROOT, 'scripts', 'assemble-installer-resources.mjs')
+
+// 【临时禁用 2026-11-04】packaged 形态直启 dsh-forge.exe——与 host-boot 同属疑似误杀窗口
+// （bug 167b5121 家族：安装/打包链 e2e 跑批窗内安装版 GUI 被按进程名强杀）。guard 补齐：
+// 根治落地前一律 skip，任何会话不得启用（用户指令 2026-11-04）。
+test.skip(true, 'dist-win-packaged-observability 暂时禁用：packaged 直启链疑似误杀安装版 GUI（bug 167b5121 家族，同 host-boot）')
 // 证据归档目录（slug 面，不进 git——AGENTS §5.2 过程产物纪律）：env 优先（派发侧注入
 // forge 任务 logs 面），缺省落 release/evidence/（git 外产物树，零用户机器路径硬编码）
 const KEEP_DIR =

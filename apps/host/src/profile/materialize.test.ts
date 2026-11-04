@@ -256,11 +256,10 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     for (const [name, version] of Object.entries(packaged.dependencies)) {
       expect(dev.dependencies[name], `dev profile 缺官方行 ${name}`).toBe(version)
     }
-    // dev bundles = 模板官方两行（2026-11-02 插件页单记录裁决：expert-squad 退役 bundle
-    // 形态——非 bundle = plugin-manager 已安装清单不收；dev 装载改走 profile.dev 用户层
-    // insert 行（git-worktree 同款模式），1.22「经自身 bundle 装载」径退役。config face
-    // 与全局工具注册不依赖 bundles 选择——settings describe ns 与 loader 行独立供给）。
-    expect(dev.dsh.profile.bundles).toEqual(packaged.dsh.profile.bundles)
+    // dev bundles = 模板官方两行 + expert-squad 行（bundle 形态恢复裁决：包重声明
+    // dsh.bundle——dev 装载走 bundle 选择（plugins.bundle.config 单入口），插件页呈现
+    // 单源 = 已安装卡片（官方组 plugins.item 条目注册已退役））。
+    expect(dev.dsh.profile.bundles).toEqual([...packaged.dsh.profile.bundles, '@dsh-forge/expert-squad', '@dsh-forge/snapnote'])
     // dev 直链 workspace 构建产物（4.2：装载面 = loader 行 import 以 profileDir 为锚）
     expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')
     expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/plugins/knowledge')

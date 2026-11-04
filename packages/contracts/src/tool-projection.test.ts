@@ -159,6 +159,20 @@ describe('intersectToolNames——求交/同族解析/平台兜底/空集 fail-l
     expect(intersectToolNames(['delegate_expert'], macRegistered, { excluded: ['delegate_expert'] })).toEqual([])
   })
 
+  it('保留传输名 run_code 全分支剔除：不可信透传分支/平台兜底分支/可信分支均不携带（bug 0a6a1055）', () => {
+    expect(intersectToolNames(['read', 'run_code'], undefined)).toEqual(['read'])
+    expect(intersectToolNames(['read', 'run_code'], undefined, { platform: 'win32' })).toEqual(['read'])
+    expect(intersectToolNames(['read', 'run_code'], globalExpertOnly)).toEqual(['read'])
+    expect(intersectToolNames(['read', 'run_code'], macRegistered)).toEqual(['read'])
+    // 保留名剔除不可被 excluded 豁免（excluded 不含 run_code 也剔除）
+    expect(intersectToolNames(['run_code', 'pwsh'], undefined, { excluded: ['delegate_expert'] })).toEqual(['pwsh'])
+  })
+
+  it('仅保留名入表 = 档案配置错误，fail-loud（可信/不可信分支同口径，避免 allow:[] 空表炸官方 empty-filter 守卫）', () => {
+    expect(() => intersectToolNames(['run_code'], macRegistered)).toThrow(/empty tool allow-list/)
+    expect(() => intersectToolNames(['run_code'], undefined)).toThrow(/empty tool allow-list/)
+  })
+
   it('解析后空集 fail-loud（异常类型经 emptyError 注入）；排除集清空入表 = 空集不炸', () => {
     expect(() => intersectToolNames(['ghost'], macRegistered)).toThrow(/empty tool allow-list/)
     class CustomError extends Error {}

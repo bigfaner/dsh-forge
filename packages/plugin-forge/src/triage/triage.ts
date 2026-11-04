@@ -20,7 +20,7 @@ import {
   deriveTriageToolFilter,
   poolOf,
   reconcileWorkerReasoning,
-  recurrenceCountOf,
+  sameSeamCountOf,
   workerAgentOptionsOf,
 } from '../dispatch-core/index.js'
 import type { PoolSnapshot, SameSeamRecurrenceFace, SpawnWorker } from '../dispatch-core/index.js'
@@ -135,8 +135,9 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
             sourceTaskId: input.task.sourceTaskId,
           })
           if (candidates.length > 0) {
-            const top = candidates.reduce((a, b) => (recurrenceCountOf(b.chain) > recurrenceCountOf(a.chain) ? b : a))
-            recurrence = { chain: top.chain, count: recurrenceCountOf(top.chain) }
+            // recurrence-signal-tiering：全史候选列表透传（呈现限幅归提示词组装）+
+            // 同缝计数 = fullEdgeCount 最大值（单一计数源，core face 恒产出）
+            recurrence = { candidates, count: sameSeamCountOf(candidates) }
           }
         } catch (cause) {
           // fail-soft：台账读故障降级——两信号缺席，提示词照常组装 + warn 留痕

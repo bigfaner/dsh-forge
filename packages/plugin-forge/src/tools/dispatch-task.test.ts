@@ -236,6 +236,7 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     // 全局十 + forge 闭环（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS + validateMermaid，含 3b
     // stopTaskLoop）为共同底座；族收窄增量 = 名表五上游族按矩阵逐格进 deny
     const base = [
+      'aggregateBugs',
       'ask_user_question',
       'createProposal',
       'create_goal',
@@ -305,8 +306,9 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       if ((WORKER_FORGE_TOOLS as readonly string[]).includes(name)) continue
       expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族四动词之外不可见）`).toBe(true)
       // triage 放行面（§2.2.1 只读两具 + addTask 处置派生径 + 目录查询双只读径——
-      // forge-dirs-query-tool §2.3 零副作用）：getBug/listBugs/addTask/forgeDirs/forgeResolvePath 不入 triage deny
-      if (name !== 'getBug' && name !== 'listBugs' && name !== 'addTask' && name !== 'forgeDirs' && name !== 'forgeResolvePath') {
+      // forge-dirs-query-tool §2.3 零副作用 + aggregateBugs 聚合读径 recurrence-signal-tiering）：
+      // getBug/listBugs/aggregateBugs/addTask/forgeDirs/forgeResolvePath 不入 triage deny
+      if (name !== 'getBug' && name !== 'listBugs' && name !== 'aggregateBugs' && name !== 'addTask' && name !== 'forgeDirs' && name !== 'forgeResolvePath') {
         expect(triageDeny.has(name), `${name} 应入 triage deny（写面/任务域动词仅主 agent）`).toBe(true)
       }
     }
@@ -318,6 +320,9 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(workerDeny.has('getBug')).toBe(false)
     // listBugs 台账查询面分治：worker deny（仅主 agent）；triage 只读放开（§2.2.1）
     expect(workerDeny.has('listBugs')).toBe(true)
+    // aggregateBugs 聚合读径（recurrence-signal-tiering）：worker deny；triage 放开（量化判据 SOP）
+    expect(workerDeny.has('aggregateBugs')).toBe(true)
+    expect(triageDeny.has('aggregateBugs')).toBe(false)
     expect(triageDeny.has('recordBug')).toBe(true)
     expect(triageDeny.has('resolveBug')).toBe(true)
     // triage 放行三工具：只读深挖两具（§2.2.1）+ addTask（处置派生径——用户裁决 2026-11-02）

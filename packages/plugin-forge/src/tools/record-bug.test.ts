@@ -29,6 +29,7 @@ function stubBugsFace(registerBug: ForgeBugsToolFace['registerBug']): ForgeBugsT
     },
     listBugs: async () => [],
     findRecurrenceCandidates: async () => [],
+    aggregateByErrorType: async () => [],
     getBug: async () => {
       throw new Error('not used')
     },

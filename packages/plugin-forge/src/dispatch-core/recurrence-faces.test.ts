@@ -10,8 +10,16 @@ import { createRecurrenceFaces } from './recurrence-faces.js'
 import { recurrenceEscalationGuard } from './claim.js'
 
 const CHAIN3: readonly BugRecurrenceCandidate[] = [
-  { bugId: 'b-root', summary: '根', chain: ['b-root', 'b-r1', 'b-r2'] },
+  { bugId: 'b-r2', summary: '根', chain: ['b-root', 'b-r1', 'b-r2'], fullEdgeCount: 2, hasOpen: true },
 ]
+
+/** 报告探测输入（bugIds = 命中链成员——probes/<bugId>/ 备选探测锚） */
+const probeInput = (slug: string, localId: string) => ({
+  projectId: 'p-1',
+  slug,
+  localId,
+  bugIds: ['b-root', 'b-r1', 'b-r2'],
+})
 
 function snapshot(taskType: string, sourceTaskId?: string) {
   return {
@@ -53,20 +61,35 @@ describe('createRecurrenceFaces（bug 0db72bcb 生产装配工厂）', () => {
     mkdirSync(issuesDir, { recursive: true })
     writeFileSync(join(issuesDir, 'modeling-report.md'), '# 判别实验清单\n')
     const faces = createRecurrenceFaces({ bugs: { findRecurrenceCandidates: async () => [] }, resolveProjectDir: () => ws })
-    expect(faces.modelingReportPresent({ projectId: 'p-1', slug: 'feat-x', localId: '2.1' })).toBe(true)
-    expect(faces.modelingReportPresent({ projectId: 'p-1', slug: 'feat-x', localId: '2.2' })).toBe(false) // 无卷宗
+    expect(faces.modelingReportPresent(probeInput('feat-x', '2.1'))).toBe(true)
+    expect(faces.modelingReportPresent(probeInput('feat-x', '2.2'))).toBe(false) // 无卷宗
   })
 
-  it('modelingReportPresent：子目录 .md 不计（顶层非递归）；探测面只读 fail-soft 缺席 false', () => {
+  it('modelingReportPresent：probes/<bugId>/ 备选路径（命中链任一成员顶层 .md 在场 = true——报告落 probes 即解除）', () => {
+    ws = mkdtempSync(join(tmpdir(), 'recurrence-faces-'))
+    const probesDir = join(ws, '.forge', 'docs', 'probes', 'b-r1')
+    mkdirSync(probesDir, { recursive: true })
+    writeFileSync(join(probesDir, 'investigation.md'), '# 判别实验清单\n')
+    const faces = createRecurrenceFaces({ bugs: { findRecurrenceCandidates: async () => [] }, resolveProjectDir: () => ws })
+    expect(faces.modelingReportPresent(probeInput('feat-x', '2.1'))).toBe(true) // 链成员 b-r1 的 probes 卷
+    // 非链成员的 probes 卷不算
+    const other = createRecurrenceFaces({ bugs: { findRecurrenceCandidates: async () => [] }, resolveProjectDir: () => ws })
+    expect(other.modelingReportPresent({ projectId: 'p-1', slug: 'feat-x', localId: '2.1', bugIds: ['b-other'] })).toBe(false)
+  })
+
+  it('modelingReportPresent：双轨子目录 .md 不计（顶层非递归）；探测面只读 fail-soft 缺席 false', () => {
     ws = mkdtempSync(join(tmpdir(), 'recurrence-faces-'))
     const issuesDir = join(ws, '.forge', 'docs', 'proposals', 'feat-x', 'issues', '2.1', 'incident')
     mkdirSync(issuesDir, { recursive: true })
     writeFileSync(join(issuesDir, 'note.md'), 'x')
+    const probesSub = join(ws, '.forge', 'docs', 'probes', 'b-r1', 'evidence')
+    mkdirSync(probesSub, { recursive: true })
+    writeFileSync(join(probesSub, 'dump.md'), 'x')
     const faces = createRecurrenceFaces({ bugs: { findRecurrenceCandidates: async () => [] }, resolveProjectDir: () => ws })
-    expect(faces.modelingReportPresent({ projectId: 'p-1', slug: 'feat-x', localId: '2.1' })).toBe(false)
+    expect(faces.modelingReportPresent(probeInput('feat-x', '2.1'))).toBe(false)
     // 项目目录解析缺席 = false（不抛）
     const absent = createRecurrenceFaces({ bugs: { findRecurrenceCandidates: async () => [] }, resolveProjectDir: () => undefined })
-    expect(absent.modelingReportPresent({ projectId: 'p-1', slug: 'feat-x', localId: '2.1' })).toBe(false)
+    expect(absent.modelingReportPresent(probeInput('feat-x', '2.1'))).toBe(false)
   })
 
   it('三态钉住（recurrence-judgment-narrowing）：IO 正常在场 = true / IO 正常缺席 = false / IO 故障 = \'error\'', () => {
@@ -76,11 +99,11 @@ describe('createRecurrenceFaces（bug 0db72bcb 生产装配工厂）', () => {
     mkdirSync(dirname(broken), { recursive: true })
     writeFileSync(broken, 'not a dir')
     const faces = createRecurrenceFaces({ bugs: { findRecurrenceCandidates: async () => [] }, resolveProjectDir: () => ws })
-    expect(faces.modelingReportPresent({ projectId: 'p-1', slug: 'feat-x', localId: '2.1' })).toBe('error')
+    expect(faces.modelingReportPresent(probeInput('feat-x', '2.1'))).toBe('error')
     // IO 正常缺席：目录存在但无 .md = 真「报告不在场」（仍拦截）
     const issuesDir = join(ws, '.forge', 'docs', 'proposals', 'feat-x', 'issues', '2.2')
     mkdirSync(issuesDir, { recursive: true })
-    expect(faces.modelingReportPresent({ projectId: 'p-1', slug: 'feat-x', localId: '2.2' })).toBe(false)
+    expect(faces.modelingReportPresent(probeInput('feat-x', '2.2'))).toBe(false)
   })
 
   it('IO 故障降级（守卫全径）：生产 face 返回 \'error\' → claim 消费为放行 + warn 留痕', async () => {
@@ -135,5 +158,21 @@ describe('createRecurrenceFaces（bug 0db72bcb 生产装配工厂）', () => {
     mkdirSync(issuesDir, { recursive: true })
     writeFileSync(join(issuesDir, 'modeling-report.md'), '# 判别实验清单\n')
     expect(await recurrenceEscalationGuard(input)).toBeUndefined()
+  })
+
+  it('T3 解除判据 probes 备选（生产全径）：报告落 probes/<bugId>/ → 守卫现算即放行（单测钉住）', async () => {
+    ws = mkdtempSync(join(tmpdir(), 'recurrence-faces-'))
+    const faces = createRecurrenceFaces({ bugs: { findRecurrenceCandidates: async () => CHAIN3 }, resolveProjectDir: () => ws })
+    const input = {
+      projectId: 'p-1',
+      task: snapshot('coding-fix', 't-src'),
+      findRecurrenceCandidates: faces.findRecurrenceCandidates,
+      modelingReportPresent: faces.modelingReportPresent,
+    }
+    expect(await recurrenceEscalationGuard(input)).toBeDefined() // 双轨均无报告 → 软拒绝
+    const probesDir = join(ws, '.forge', 'docs', 'probes', 'b-r1')
+    mkdirSync(probesDir, { recursive: true })
+    writeFileSync(join(probesDir, 'investigation.md'), '# 判别实验清单\n')
+    expect(await recurrenceEscalationGuard(input)).toBeUndefined() // 报告落 probes 即解除
   })
 })

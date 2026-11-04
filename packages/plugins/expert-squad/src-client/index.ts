@@ -7,7 +7,7 @@
 // 返回值铁律：apply 必须返回 undefined（cordis 组合把返回值当 effect 消费）。
 import { ExpertPanelApp, ExpertPanelGlyph, type SummonOpener } from "./panel/index.js";
 import { modelCatalogLoaderOf } from "./panel/model-catalog.js";
-import { registerDefaultAgentOptionsSection, registerPluginsItemEntry, expertsConfigWriteOf } from "./settings/index.js";
+import { registerDefaultAgentOptionsSection, expertsConfigWriteOf } from "./settings/index.js";
 import { pluginConfigJumpOf } from "./panel/config-jump.js";
 import {
   openSummonSession,
@@ -168,9 +168,8 @@ export const expertSquadClient = {
     // 消费点在「包含的组件」RowsSection 之后；configForms 缺席 = 降级不注册——登记面
     // 异常只降本行，不炸面板装配）。
     registerDefaultAgentOptionsSection(ctx as { configForms?: unknown; reflect?: { get(name: string): unknown } }, slots)
-    // 官方插件管理页 item 条目（官方四件同款 plugins.item list slot——官方组卡片 +
-    // item 详情页配置表单；configForms 缺席 = 降级不注册，与上一缝同纪律；两缝 id 异键并存）。
-    registerPluginsItemEntry(ctx as { configForms?: unknown; reflect?: { get(name: string): unknown } }, slots)
+    // 插件页呈现单源 = bundle 形态已安装卡片（package.json dsh.bundle 声明——plugin-manager
+    // bundleManifest 收行；官方组 plugins.item 条目注册已随 bundle 恢复裁决退役）。
   },
 }
 

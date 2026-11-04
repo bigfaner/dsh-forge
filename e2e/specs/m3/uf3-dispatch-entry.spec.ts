@@ -11,9 +11,10 @@
 // 载体：写动词经测试钩子直调（回放主径）；会话夹具 = 零凭据 composer 消息（M2 SC6③ 同径）。
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
-import { createSharedLaunchFixture, requireInSharedUdRoot, wsSegment as wsSegmentOf } from '../../support/fixtures.js'
+import { archiveActiveProjects, createSharedLaunchFixture, requireInSharedUdRoot, wsSegment as wsSegmentOf } from '../../support/fixtures.js'
+import { PROJECTS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { findFixtureSession } from '../../support/session-files.js'
 import { openOverviewDock } from '../../support/navigation.js'
@@ -47,10 +48,28 @@ function sharedUf3DshHome(udDir: string, wsDir: string): string {
   }, `shared-launch: 段 ${segment} 会话目录未找到（共享 userData 根缺失）`)
 }
 
+/**
+ * 概览锚定收敛（C8 对账定谳，先例 task-overview-review.spec.ts:91）：注册前归档其余
+ * 活跃项目——注册写推送随后的快照刷新里锚定收敛于本用例唯一活跃项目，消除多项目
+ * 在场导致的 chip 锚漂移（selectWorkspaceViaChip 解析回 root）。
+ * 豁免差异：本 spec 夹具 root 行 = workspaceName WS_NAME 与用例注册行同目录同名
+ * （registerProject 幂等返回同一行）——归档该行会把工作区任务库置隔离
+ * （ERR_WORKSPACE_DB_UNAVAILABLE，run2 实证），故按名豁免夹具 root 行。
+ */
+async function anchorConverge(page: Page): Promise<void> {
+  const rows = await forgeInvoke<readonly { id: string; name: string; archived?: boolean }[]>(page, PROJECTS_CHANNELS.list)
+  const root = rows.find((row) => row.name === WS_NAME && row.archived !== true)
+  await archiveActiveProjects(page, root?.id)
+}
+
 test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置灰 + 无单任务执行入口', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
   const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
+    // 概览锚定收敛（共享 launch 形态，先例 task-overview-review.spec.ts:91）：
+    // 注册前归档其余活跃项目（豁免本 spec 夹具 root 同名行）——注册写推送随后的
+    // 快照刷新里锚定收敛，消除多项目在场导致的 chip 锚漂移
+    await anchorConverge(page)
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
     const driver = createBridgeDriver(app)
@@ -142,6 +161,8 @@ test('@web-e2e @m3 UF-3·新开路由：突击提案容器派发 → 突击模�
   const { app, page, pageErrors, wsDir } = sharedLaunch
   const PROP = 'uf3-blitz-prop'
   try {
+    // 同上：注册前归档其余活跃项目（豁免夹具 root 同名行）——chip 锚定收敛
+    await anchorConverge(page)
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
     const driver = createBridgeDriver(app)

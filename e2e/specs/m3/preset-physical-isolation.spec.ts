@@ -90,15 +90,13 @@ test('@web-e2e @m3 预设物理隔离·T1：突击组合 spec 物理缺席（枚
   const isSpecDir = (d: string): boolean => d.toLowerCase().includes('plugin-forge-spec')
   const isCoreDir = (d: string): boolean => !isSpecDir(d) && d.toLowerCase().includes('plugin-forge')
   const blitzDirs = presetSkillDirs(overlay, 'blitz')
-  expect(blitzDirs.length, `突击组合双目录 core+blitz（dirs=${JSON.stringify(blitzDirs)}）`).toBe(2)
   expect(blitzDirs.every((d) => !isSpecDir(d)), '突击组合 spec 目录物理缺席（七规格技能零在场——物理调不到，非被叮嘱不要）').toBe(true)
-  expect(blitzDirs.filter(isCoreDir).length, '核心包技能目录在场（core+skills-blitz 双条——阳性对照枚举通道有效性）').toBe(2)
+  expect(blitzDirs.some(isCoreDir), '核心包技能目录在场（成员资格式——expert-squad 可装卸不断总数；阳性对照枚举通道有效性）').toBe(true)
 
-  // ── Step1b：远征对照——双目录全量挂载 ──
+  // ── Step1b：远征对照——全量挂载 ──
   const expDirs = presetSkillDirs(overlay, 'expedition')
-  expect(expDirs.length, `远征组合双目录（dirs=${JSON.stringify(expDirs)}）`).toBe(2)
-  expect(expDirs.filter(isSpecDir).length, '远征含 spec 技能目录（规格全集物理前提）').toBe(1)
-  expect(expDirs.filter(isCoreDir).length, '远征含 core 技能目录').toBe(1)
+  expect(expDirs.some(isSpecDir), '远征含 spec 技能目录（规格全集物理前提）').toBe(true)
+  expect(expDirs.some(isCoreDir), '远征含 core 技能目录').toBe(true)
 
   // ── 核心包技能行 fs 阳性对照（枚举通道有效性证明——缺席断言不空洞通过）──
   const coreEntries = readdirSync(join(ROOT, 'packages', 'plugin-forge', 'skills')).filter((e) => e !== 'README.md')

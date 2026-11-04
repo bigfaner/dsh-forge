@@ -94,7 +94,9 @@ export async function newBlankSession(page: Page): Promise<void> {
   }
   const byText = page.getByText('新会话', { exact: true }).first()
   if (await byText.isVisible().catch(() => false)) {
-    await byText.click({ timeout: 5_000 }).catch(() => undefined)
+    // 文本回退径 click 不吞失败（1.8：.catch 静默吞点击异常 → 假成功 return，调用侧以为
+    // 已重开 blank 会话——可观测失败：异常上抛由调用侧/用例如实判红）
+    await byText.click({ timeout: 5_000 })
     await page.waitForTimeout(2_000)
     return
   }

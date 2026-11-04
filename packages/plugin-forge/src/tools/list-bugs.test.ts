@@ -51,6 +51,7 @@ function toolWithCapture(): {
       return [bugCard('b-1', '游标漂移')]
     },
     findRecurrenceCandidates: async () => [],
+    aggregateByErrorType: async () => [],
     getBug: async () => {
       throw new Error('not used')
     },

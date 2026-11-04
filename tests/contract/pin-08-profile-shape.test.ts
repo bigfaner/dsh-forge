@@ -116,11 +116,13 @@ describe('pin ⑧-4 实跑：loadProfileDirectory × profile.dev（真实已安�
     )
   }
 
-  it('bundle 层序 = package.json dsh.profile.bundles 声明序（dsh-base → dsh-web-app——2026-11-02 插件页单记录裁决：expert-squad 退役 bundle 形态，装载走 profile.dev 用户层 insert 行）', async () => {
+  it('bundle 层序 = package.json dsh.profile.bundles 声明序（dsh-base → dsh-web-app → expert-squad → snapnote——expert-squad bundle 形态恢复裁决：dev 装载走 bundle 选择，插件页呈现单源 = 已安装卡片）', async () => {
     const profile = await load()
     expect(profile.layers.map((l) => l.packageName)).toEqual([
       '@deepseek-ai/dsh-base',
       '@deepseek-ai/dsh-web-app',
+      '@dsh-forge/expert-squad',
+      '@dsh-forge/snapnote',
     ])
   })
 

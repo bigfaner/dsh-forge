@@ -4,7 +4,7 @@
 //      含 [core, spec] 双目录、突击组合仅 core（spec 目录物理缺席 = L1 物理边界的数据直证）；
 //      registry default = 突击（bug 2ba146d8 缺省=blitz）；物化输出零 !!js（绝对路径 only）；
 //   ② 核心包技能目录无 git-commit / git-checkout 条目（移除/未迁断言——PRD SC2 预设层）；
-//      spec 包 8 技能在盘（远征全量可见的物理前提）；
+//      spec 包技能成员在盘（远征全量可见的物理前提——清单随技能退役随动）；
 //   ③ worker model 与 Forge设置 一致的数据面：forge:settings/set 落 {userData}/
 //      forge-settings.json（core 单写者）+ get 回读一致——dispatchTask 组装面（agentOptions
 //      显式携带）消费本法（运行期 relay = 3.9 W 用例实证——VERIFICATION-3.9.md；
@@ -64,17 +64,21 @@ m3Test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化
     expect(/default:\s*blitz/.test(overlay), 'registry default = blitz（bug 2ba146d8 缺省=blitz）').toBe(true)
     expect(overlay.includes('!!js'), '物化输出零 !!js 残留（绝对路径 only）').toBe(false)
 
-    // L1 物理边界（数据直证）：远征组合 = [core, spec] 双目录；突击组合 = [core, skills-blitz]
+    // L1 物理边界（数据直证·成员资格式——expert-squad 可装卸，不做总数快照）：
+    //   远征必含 core + spec；突击必含 core + skills-blitz、物理不含 spec；
+    //   expert-squad/skills 双预设同挂（用户裁决 2026-11-01 / 19d9da56——在场断不断数）。
     const isSpecDir = (d: string): boolean => d.toLowerCase().includes('plugin-forge-spec')
     const isCoreDir = (d: string): boolean => !isSpecDir(d) && d.toLowerCase().includes('plugin-forge')
+    const isSquadDir = (d: string): boolean => d.toLowerCase().includes('expert-squad')
+    const isBlitzDir = (d: string): boolean => d.toLowerCase().includes('skills-blitz')
     const expDirs = presetSkillDirs(overlay, 'expedition')
     const blitzDirs = presetSkillDirs(overlay, 'blitz')
-    expect(expDirs.length, `远征组合双技能目录（dirs=${JSON.stringify(expDirs)}）`).toBe(2)
-    expect(expDirs.filter(isSpecDir).length, '远征含 spec 技能目录（全量挂载）').toBe(1)
-    expect(expDirs.filter(isCoreDir).length, '远征含 core 技能目录').toBe(1)
-    expect(blitzDirs.length, `突击组合双技能目录 core+blitz（dirs=${JSON.stringify(blitzDirs)}）`).toBe(2)
+    expect(expDirs.some(isSpecDir), '远征含 spec 技能目录（全量挂载）').toBe(true)
+    expect(expDirs.some(isCoreDir), '远征含 core 技能目录').toBe(true)
+    expect(expDirs.some(isSquadDir), '远征含 expert-squad 技能目录（双预设同挂）').toBe(true)
     expect(blitzDirs.every((d) => !isSpecDir(d)), '突击组合 spec 目录物理缺席（L1 边界——突击会话技能清单不含规格技能全集）').toBe(true)
-    expect(blitzDirs.filter((d) => d.toLowerCase().includes('skills-blitz')).length, '突击含 blitz 专属技能目录（grilling 挂载源）').toBe(1)
+    expect(blitzDirs.some(isCoreDir), '突击含 core 技能目录').toBe(true)
+    expect(blitzDirs.some(isBlitzDir), '突击含 blitz 专属技能目录（grilling 挂载源）').toBe(true)
 
     // ── ② 技能目录枚举（fs 面）──
     const coreEntries = readdirSync(CORE_SKILLS).filter((e) => e !== 'README.md')
@@ -85,9 +89,14 @@ m3Test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化
     expect(coreEntries, '核心包无 git-commit 条目（M3 移除断言）').not.toContain('git-commit')
     expect(coreEntries, '核心包无 git-checkout 条目（未迁断言）').not.toContain('git-checkout')
     const specEntries = readdirSync(SPEC_SKILLS).filter((e) => e !== 'README.md')
-    for (const skill of ['write-prd', 'ui-design', 'tech-design', 'gen-journeys', 'gen-contracts', 'gen-test-scripts', 'breakdown-tasks']) {
+    // 物理前提清单随技能面随动（bug a9997185）：63486994 退役 gen-journeys/gen-contracts/
+    // gen-test-scripts（生成纪律归 test-*-author 专家档案）——清单改锚当前盘面成员全集。
+    for (const skill of ['write-prd', 'ui-design', 'tech-design', 'breakdown-tasks', 'review-prd', 'review-tech']) {
       expect(specEntries, `spec 包技能在盘（${skill}——远征全量可见的物理前提）`).toContain(skill)
     }
+    expect(specEntries, 'spec 包无 gen-journeys（63486994 退役断言）').not.toContain('gen-journeys')
+    expect(specEntries, 'spec 包无 gen-contracts（63486994 退役断言）').not.toContain('gen-contracts')
+    expect(specEntries, 'spec 包无 gen-test-scripts（63486994 退役断言）').not.toContain('gen-test-scripts')
     expect(specEntries, 'spec 包无 git-commit（拆包后移除断言）').not.toContain('git-commit')
 
     // ── ③ Forge设置 单写者数据面：set → {userData}/forge-settings.json 落盘 + get 回读一致 ──

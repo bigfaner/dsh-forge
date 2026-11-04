@@ -25,7 +25,7 @@ import type {
   FeatureRow,
   TransitionFeatureInput,
 } from '@dsh-forge/contracts'
-import type { BugCard, BugChainContext, BugRecurrenceCandidate, GetBugResponse, ListBugsQuery } from '@dsh-forge/contracts'
+import type { BugCard, BugChainContext, BugErrorTypeAggregate, BugRecurrenceCandidate, GetBugResponse, ListBugsQuery } from '@dsh-forge/contracts'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobsFace, ProjectDirServiceFace } from '../faces.js'
 import type { ProjectIdResolver } from './session.js'
@@ -47,6 +47,7 @@ import { createSubmitTaskTool } from './submit-task.js'
 import { createStopTaskLoopTool } from './stop-task-loop.js'
 import { createTaskStatsTool } from './task-stats.js'
 import type { LoopToolDeps } from './dispatch-task.js'
+import { createAggregateBugsTool } from './aggregate-bugs.js'
 import { createTransitionProposalTool } from './transition-proposal.js'
 import { createTransitionFeatureTool } from './transition-feature.js'
 import { createUnblockTaskTool } from './unblock-task.js'
@@ -120,6 +121,12 @@ export interface ForgeBugsToolFace {
       readonly files: readonly string[]
     },
   ): Promise<readonly BugRecurrenceCandidate[]>
+  /**
+   * errorType 聚合读法（recurrence-signal-tiering 聚合统计——主 agent aggregateBugs 工具 +
+   * triage 只读 face 双消费）：按 errorType 分组全史计数 {total, open, fixed, lastSeenAt}；
+   * core aggregateByErrorType 结构兼容，分组/计数/排序归 core bugs 域层定义。
+   */
+  aggregateByErrorType(projectId: string): Promise<readonly BugErrorTypeAggregate[]>
 }
 
 /**
@@ -197,7 +204,7 @@ export interface ForgeToolDeps {
   submitSettleDisplay?: (input: { projectId: string; slug: string; localId: string; result: 'completed' | 'blocked' }) => Promise<void>
 }
 
-/** tool 定义组（顺序 = Interface 4 列序扩展——十七员；注册面与断言面共消费） */
+/** tool 定义组（顺序 = Interface 4 列序扩展——二十三员；注册面与断言面共消费） */
 export interface ForgeTools {
   readonly addTask: ReturnType<typeof createAddTaskTool>
   readonly submitTask: ReturnType<typeof createSubmitTaskTool>
@@ -214,6 +221,7 @@ export interface ForgeTools {
   readonly resolveBug: ReturnType<typeof createResolveBugTool>
   readonly listBugs: ReturnType<typeof createListBugsTool>
   readonly getBug: ReturnType<typeof createGetBugTool>
+  readonly aggregateBugs: ReturnType<typeof createAggregateBugsTool>
   readonly recordImplCheckpoint: ReturnType<typeof createRecordImplCheckpointTool>
   readonly queryImplCheckpoint: ReturnType<typeof createQueryImplCheckpointTool>
   readonly listImplCheckpoints: ReturnType<typeof createListImplCheckpointsTool>
@@ -223,13 +231,15 @@ export interface ForgeTools {
   readonly forgeResolvePath: ReturnType<typeof createForgeResolvePathTool>
 }
 
-/** 注册面全集（二十二 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
- *  两 bug 读径 + stopTaskLoop 停止入口（3b——dispatch-loop-hardening 改进 3b③）+ pauseTask
+/** 注册面全集（二十三 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
+ *  两 bug 读径 + aggregateBugs 聚合读径（recurrence-signal-tiering）+ stopTaskLoop 停止入口
+ *  （3b——dispatch-loop-hardening 改进 3b③）+ pauseTask
  *  单任务暂停入口（task-pause-primitive）+ transitionFeature 相位转移入口
  *  （implicit-stage-approval §2.3——裁决②局部修订）+ unblockTask blocked→pending 出口
  *  （blocked-verdict-restore-primitive）+ forgeDirs/forgeResolvePath 目录查询双只读径
  *  （forge-dirs-query-tool §2.3——主 + worker 双面）；面分治：listBugs/transitionFeature
- *  仅主 agent，getBug 主 + worker，addTask 仅主 agent（worker 面不注入——
+ *  仅主 agent，getBug 主 + worker，aggregateBugs 主 + triage（聚合只读，worker 面 deny
+ *  ——assemble.ts FORGE_DENY_IN_WORKER），addTask 仅主 agent（worker 面不注入——
  *  execute 面 ERR_WORKER_ADDTASK_DENIED 双保险），pauseTask/unblockTask 仅主 agent——WORKER_FORGE_TOOLS
  *  六员，其余 worker deny） */
 export const FORGE_TOOL_NAMES = [
@@ -248,6 +258,7 @@ export const FORGE_TOOL_NAMES = [
   'resolveBug',
   'listBugs',
   'getBug',
+  'aggregateBugs',
   'recordImplCheckpoint',
   'queryImplCheckpoint',
   'listImplCheckpoints',
@@ -278,6 +289,7 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     resolveBug: createResolveBugTool(deps),
     listBugs: createListBugsTool(deps),
     getBug: createGetBugTool(deps),
+    aggregateBugs: createAggregateBugsTool(deps),
     ...createImplCheckpointTools(deps),
     pauseTask: createPauseTaskTool(deps),
     unblockTask: createUnblockTaskTool(deps),
@@ -341,6 +353,8 @@ export { parseListBugsArgs, LIST_BUGS_OUTPUT_SCHEMA } from './list-bugs.js'
 export type { ListBugsToolArgs } from './list-bugs.js'
 export { parseGetBugArgs, GET_BUG_OUTPUT_SCHEMA } from './get-bug.js'
 export type { GetBugToolArgs } from './get-bug.js'
+export { AGGREGATE_BUGS_OUTPUT_SCHEMA, parseAggregateBugsArgs } from './aggregate-bugs.js'
+export type { AggregateBugsToolArgs } from './aggregate-bugs.js'
 export {
   FORGE_DIRS_OUTPUT_SCHEMA,
   FORGE_RESOLVE_PATH_OUTPUT_SCHEMA,

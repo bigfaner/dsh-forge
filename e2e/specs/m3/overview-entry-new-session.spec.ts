@@ -68,7 +68,7 @@ import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import { expect } from '@playwright/test'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { createSharedLaunchFixture, openOverviewSubtab } from '../../support/fixtures.js'
+import { createSharedLaunchFixture, openOverviewSubtab, wsSegment as wsSegmentOf } from '../../support/fixtures.js'
 import { registerProject, selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt, seedEdge, seedTask } from '../../support/replay/db-insert.js'
@@ -80,8 +80,8 @@ const WS_NAME = 'ws-joes'
 
 // e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
 // 夹具工作区 = 空目录（提案/feature slug 隔离：joe-* 各自作用域）；会话开户判读改扫共享
-// userData 根内 dsh-home（支撑层单源定位——udDir 透传），按夹具段（WS_NAME——本 spec 独有）
-// 锚定；T1 会话预设收口 = 突击（无溯源渠道落点），T2 远征 / T3 突击各自用例内显式导航。
+// userData 根内 dsh-home（支撑层单源定位——udDir 透传），按夹具段（共享 wsDir 末段——
+// mkdtemp 随机后缀跨 worker 唯一）锚定；T1 会话预设收口 = 突击（无溯源渠道落点），T2 远征 / T3 突击各自用例内显式导航。
 const { test } = createSharedLaunchFixture({
   seedWorkspace: (dir) => mkdirSync(dir, { recursive: true }),
   workspaceName: WS_NAME,
@@ -102,8 +102,9 @@ function writeProposalDocs(wsDir: string, slug: string, docs: readonly string[])
 
 /**
  * 共享 launch 形态夹具会话枚举（支撑层单源定位——udDir 透传本 worker 独立持有，魔法前缀
- * 扫描退役；夹具段 = WS_NAME 本 spec 独有零跨 spec 串扰；目录创建时间升序 = 发送先后序
- * ——fix-3② Step1e 回访锚，birthtime 口径与原形态逐字保持）。
+ * 扫描退役；夹具段 = 共享 wsDir 末段（mkdtemp 随机后缀跨 worker 唯一——共享形态会话 cwd
+ * = 共享 wsDir 本体，WS_NAME 命名段不复存在；uf3-dispatch-entry 同径）；目录创建时间
+ * 升序 = 发送先后序——fix-3② Step1e 回访锚，birthtime 口径与原形态逐字保持）。
  */
 function fixtureSessionIds(udDir: string, fixtureSegment: string): string[] {
   const found: { id: string; born: number }[] = []
@@ -245,7 +246,7 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     // blank 仅当前选中者可见——回访断言取非 blank 行（sc6「用户事件落地」同径）。
     // 行点回 → 转录恢复 = 中区会话面常驻（Page Composition）+ 既有会话内容不受新开影响。
     const projBlock = page.locator(projectRowOf(projectId))
-    const [firstId, secondId] = fixtureSessionIds(udDir, WS_NAME)
+    const [firstId, secondId] = fixtureSessionIds(udDir, wsSegmentOf(wsDir))
     expect(firstId, '首会话目录在盘（发送落地开户）').toBeDefined()
     expect(secondId, '第二会话目录在盘（两会话各自开户）').toBeDefined()
     const rowFirst = projBlock.locator(sessionRowOf(firstId as string)).first()
