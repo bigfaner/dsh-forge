@@ -29,9 +29,11 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
 
-// 【解禁 2026-11-04】bug 167b5121 已根治（installer.nsh customCheckAppRunning 宏接管，
-// 进程查杀改 $INSTDIR 路径域，按名全机 taskkill 分支缺席）。本机不执行本 spec（真机
-// 执行取证归 1.14 / CI 停机窗口，用户硬禁令：GUI 运行期间禁止 NSIS 静默安装）。
+// 【再禁用 2026-11-04 14:57】fix-3（2b302624）静态取证全绿但真机仍复现强杀本 GUI
+// （installer.nsh customCheckAppRunning 宏已接线 electron-builder include，14:55 e2e
+// 跑批 GUI 仍死）——修复运行实效未证实，复发 bug 167b5121 链。根因二查（fix-4）落地并
+// 经隔离环境实证前，本 spec 整套留痕 skip（用户硬禁令：GUI 运行期禁止 NSIS 静默安装）。
+test.skip(true, 'installer-smoke 再禁用：fix-3 修复真机无效（14:57 复杀 GUI），根因二查中')
 import { closeApp, launchElectron, launchHost } from '../../support/launch.js'
 import { decodeSessionFile, findFixtureSession, sessionLogById, type SessionEvent } from '../../support/session-files.js'
 import { forgeInvoke } from '../../support/rpc.js'

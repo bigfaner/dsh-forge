@@ -10,9 +10,9 @@ import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import { closeApp, launchElectron } from '../support/launch.js'
 
-// 【解禁 2026-11-04】bug 167b5121 已根治（installer.nsh customCheckAppRunning 宏接管，
-// 进程查杀改 $INSTDIR 路径域，按名全机 taskkill 分支缺席）。本机不执行本 spec（真机
-// 执行取证归 1.14 / CI 停机窗口，用户硬禁令：GUI 运行期间禁止 NSIS 静默安装）。
+// 【再禁用 2026-11-04 14:57】fix-3 真机无效（同窗 installer-smoke 复杀 GUI，复发
+// 167b5121 链）——根因二查（fix-4）+ 隔离实证前留痕 skip。
+test.skip(true, 'host-boot 再禁用：fix-3 修复真机无效，根因二查中')
 
 const PROFILE_FILES = ['cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml', 'cordis.yml'] as const
 
