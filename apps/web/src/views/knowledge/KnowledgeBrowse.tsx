@@ -15,6 +15,7 @@ import {
   useKnowledgeBrowse,
   type KnowledgeBrowseActions,
   type KnowledgeBrowseState,
+  type KnowledgeMultiSelectActions,
 } from './use-knowledge-browse.js'
 import './knowledge.css'
 
@@ -40,6 +41,8 @@ export interface KnowledgeBrowseBodyProps {
   readonly state: KnowledgeBrowseState
   /** 浏览动作（过滤态机事件 + 重试） */
   readonly actions: KnowledgeBrowseActions
+  /** 多选与裁决动作（SC-F——entryAction 执行 + 动作后重拉；缺席 = 多选面零动作形态） */
+  readonly multiActions?: KnowledgeMultiSelectActions
   /** 当前项目 id（范围切换菜单选中行） */
   readonly currentProjectId?: string
   /** 可切换项目行集（范围切换控件；缺省 = 纯文本范围 Pill） */
@@ -59,6 +62,7 @@ export interface KnowledgeBrowseBodyProps {
 export function KnowledgeBrowseBody({
   state,
   actions,
+  multiActions,
   currentProjectId,
   scopeProjects,
   onScopePick,
@@ -70,6 +74,7 @@ export function KnowledgeBrowseBody({
     cardCount: state.cards.length,
     filterActive: hasActiveFilter(state.filter),
   })
+  const filteredIds = state.cards.map((card) => card.entryId)
   return (
     <section
       className="dswf-kn-browse"
@@ -80,6 +85,31 @@ export function KnowledgeBrowseBody({
       <KnowledgeToolbar
         keyword={state.filter.keyword}
         onKeywordChange={actions.setKeyword}
+        statusFilter={state.filter.statusFilter ?? 'all'}
+        onStatusFilterChange={actions.setStatusFilter}
+        multiSelectActive={state.multiSelect.active}
+        selectedCount={state.multiSelect.selected.length}
+        totalCount={filteredIds.length}
+        onToggleMultiSelect={() => {
+          if (multiActions === undefined) return
+          if (state.multiSelect.active) multiActions.exitMultiSelect()
+          else multiActions.enterMultiSelect()
+        }}
+        onSelectAll={multiActions?.selectAll}
+        onConfirmSelected={
+          multiActions === undefined
+            ? undefined
+            : () => {
+                void multiActions.confirmSelected()
+              }
+        }
+        onRejectSelected={
+          multiActions === undefined
+            ? undefined
+            : () => {
+                void multiActions.rejectSelected()
+              }
+        }
         projectName={state.projectName}
         currentProjectId={currentProjectId}
         scopeProjects={scopeProjects}
@@ -105,6 +135,17 @@ export function KnowledgeBrowseBody({
             onClearFilters={actions.clearFilters}
             onRetry={actions.retry}
             onEntryOpen={onEntryOpen}
+            multiSelect={state.multiSelect.active}
+            selectedEntryIds={state.multiSelect.selected}
+            onToggleSelect={multiActions?.toggleEntry}
+            onEntryConfirm={
+              multiActions === undefined ||
+              !(state.filter.statusFilter === undefined || state.filter.statusFilter === 'all' || state.filter.statusFilter === 'unconfirmed')
+                ? undefined
+                : (entryId) => {
+                    void multiActions.confirmEntry(entryId)
+                  }
+            }
           />
         </div>
       </div>
@@ -125,11 +166,12 @@ export function KnowledgeBrowse({
   now,
   onEntryOpen,
 }: KnowledgeBrowseProps): ReactNode {
-  const [state, actions] = useKnowledgeBrowse(projectId, makeClient, active)
+  const [state, actions, multiActions] = useKnowledgeBrowse(projectId, makeClient, active)
   return (
     <KnowledgeBrowseBody
       state={state}
       actions={actions}
+      multiActions={multiActions}
       currentProjectId={projectId}
       scopeProjects={scopeProjects}
       onScopePick={onScopePick}

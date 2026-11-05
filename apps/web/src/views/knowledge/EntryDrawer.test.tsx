@@ -61,6 +61,7 @@ function recordingClient(
       entryDetail: mark('knowledge.entryDetail', (q) => entryDetailImpl(q as EntryDetailQuery)),
       heat: mark('knowledge.heat', () => Promise.resolve(new Map())),
       sessionRecall: mark('knowledge.sessionRecall', () => Promise.resolve([])),
+      entryAction: mark('knowledge.entryAction', () => Promise.resolve({ results: [] })),
     },
     tasks: {
       transition: mark('tasks.transition', () => Promise.resolve({})),

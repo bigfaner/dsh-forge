@@ -48,6 +48,8 @@ import {
   type DirListing,
   type DomainNode,
   type EntryDetail,
+  type EntryActionReceipt,
+  type EntryActionRequest,
   type EntryDetailQuery,
   type BugCard,
   type BugCommitFile,
@@ -140,11 +142,12 @@ export interface ForgeFsRpc {
 /**
  * forge:knowledge/* 面方法集（Interface 2 浏览面通道同构镜像；键 = KNOWLEDGE_CHANNELS 键）。
  * search/readAbstract 不在面——agent 面唯一门 = knowledge 插件 tool（双门分工）。
+ * knowledge-review-ui 增 entryAction 第六方法：web 人工裁决写面（confirm/reject 批量 + 单条/树级动词）。
  */
 export interface ForgeKnowledgeRpc {
   /** 域树聚合（domainPath 派生 ≤3 层，节点计数含子域；底表 = listEntries） */
   browse(projectId: string): Promise<DomainNode[]>
-  /** 浏览卡片（组合过滤：目录路径前缀 × 关键词细分） */
+  /** 浏览卡片（组合过滤：目录路径前缀 × 关键词细分 × 状态片——服务端执行） */
   listEntries(q: ListEntriesQuery): Promise<KnowledgeCard[]>
   /** 详情抽屉（含 Markdown 正文按需读取） */
   entryDetail(q: EntryDetailQuery): Promise<EntryDetail>
@@ -152,6 +155,8 @@ export interface ForgeKnowledgeRpc {
   heat(projectId: string): Promise<Map<number, number>>
   /** 召回 tab 数据源（call_id 聚合分组 + 命中快照展开） */
   sessionRecall(q: SessionRecallQuery): Promise<RecallGroup[]>
+  /** 人工裁决（判别联合动词；逐条回执 code 封闭码集——文案分派键） */
+  entryAction(req: EntryActionRequest): Promise<EntryActionReceipt>
 }
 
 /**
@@ -290,6 +295,7 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       entryDetail: (q) => invokeRpc<EntryDetail>(transport, KNOWLEDGE_CHANNELS.entryDetail, q),
       heat: (projectId) => invokeRpc<Map<number, number>>(transport, KNOWLEDGE_CHANNELS.heat, { projectId }),
       sessionRecall: (q) => invokeRpc<RecallGroup[]>(transport, KNOWLEDGE_CHANNELS.sessionRecall, q),
+      entryAction: (req) => invokeRpc<EntryActionReceipt>(transport, KNOWLEDGE_CHANNELS.entryAction, req),
     },
     tasks: {
       transition: (input) => invokeRpc<TaskSnapshot>(transport, TASKS_CHANNELS.transition, input),

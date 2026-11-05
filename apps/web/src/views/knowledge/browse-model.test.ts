@@ -7,12 +7,16 @@ import { describe, expect, it } from 'vitest'
 import type { DomainNode } from '@dsh-forge/contracts'
 import {
   EMPTY_FILTER,
+  EMPTY_MULTI_SELECT,
   browseFaceState,
   browseFilterReducer,
   cardTimeLabel,
   domainRows,
   entriesQueryOf,
+  entryActionFailureText,
+  entryActionNotice,
   hasActiveFilter,
+  multiSelectReducer,
 } from './browse-model.js'
 
 describe('browseFilterReducer（过滤态机）', () => {
@@ -130,5 +134,107 @@ describe('cardTimeLabel（卡片时间标签）', () => {
 
   it('非法字面量原样展示（fail-soft）', () => {
     expect(cardTimeLabel('not-a-date', 0)).toBe('not-a-date')
+  })
+})
+
+describe('statusFilter（状态过滤片——服务端执行，零客户端过滤语义）', () => {
+  it('set-status-filter 置片；同值幂等（原引用返回）；all = 清片（键剥离，回零态形态）', () => {
+    const unconfirmed = browseFilterReducer(EMPTY_FILTER, { type: 'set-status-filter', statusFilter: 'unconfirmed' })
+    expect(unconfirmed).toEqual({ keyword: '', statusFilter: 'unconfirmed' })
+    expect(browseFilterReducer(unconfirmed, { type: 'set-status-filter', statusFilter: 'unconfirmed' })).toBe(unconfirmed)
+    const cleared = browseFilterReducer(unconfirmed, { type: 'set-status-filter', statusFilter: 'all' })
+    expect(cleared).toEqual(EMPTY_FILTER)
+  })
+
+  it('statusFilter 计入激活判据（非 all = 过滤在场——零结果落「无结果」而非空库）', () => {
+    expect(hasActiveFilter({ keyword: '', statusFilter: 'unconfirmed' })).toBe(true)
+    expect(hasActiveFilter({ keyword: '', statusFilter: 'confirmed' })).toBe(true)
+    expect(hasActiveFilter({ keyword: '', statusFilter: 'all' })).toBe(false)
+  })
+
+  it('statusFilter 透传查询（非 all 出键；all/缺席不出键——服务端口径不漂移）', () => {
+    expect(entriesQueryOf('p-1', { keyword: '', statusFilter: 'unconfirmed' })).toEqual({
+      projectId: 'p-1',
+      statusFilter: 'unconfirmed',
+    })
+    expect(entriesQueryOf('p-1', { keyword: '', statusFilter: 'all' })).toEqual({ projectId: 'p-1' })
+    expect(entriesQueryOf('p-1', { keyword: 'css', statusFilter: 'confirmed' })).toEqual({
+      projectId: 'p-1',
+      keyword: 'css',
+      statusFilter: 'confirmed',
+    })
+  })
+})
+
+describe('multiSelectReducer（多选态机）', () => {
+  it('enter 进入多选模式；重复 enter 幂等（原引用返回）', () => {
+    const active = multiSelectReducer(EMPTY_MULTI_SELECT, { type: 'enter' })
+    expect(active).toEqual({ active: true, selected: [] })
+    expect(multiSelectReducer(active, { type: 'enter' })).toBe(active)
+  })
+
+  it('exit 退出多选模式：勾选清零零残留（回 EMPTY_MULTI_SELECT 同形态）', () => {
+    const active = multiSelectReducer(EMPTY_MULTI_SELECT, { type: 'enter' })
+    const selected = multiSelectReducer(active, { type: 'toggle', entryId: 7 })
+    const selected2 = multiSelectReducer(selected, { type: 'toggle', entryId: 9 })
+    expect(multiSelectReducer(selected2, { type: 'exit' })).toEqual({ active: false, selected: [] })
+  })
+
+  it('toggle 勾选/取消（保序去重）；仅多选模式在场生效', () => {
+    const active = multiSelectReducer(EMPTY_MULTI_SELECT, { type: 'enter' })
+    const on = multiSelectReducer(active, { type: 'toggle', entryId: 7 })
+    expect(on).toEqual({ active: true, selected: [7] })
+    const both = multiSelectReducer(on, { type: 'toggle', entryId: 3 })
+    expect(both.selected).toEqual([7, 3])
+    const dup = multiSelectReducer(both, { type: 'toggle', entryId: 7 })
+    expect(dup.selected).toEqual([3])
+    // 非多选模式 toggle = 零效果
+    expect(multiSelectReducer(EMPTY_MULTI_SELECT, { type: 'toggle', entryId: 7 })).toBe(EMPTY_MULTI_SELECT)
+  })
+
+  it('select-all 全选当前过滤结果集（全量替换）；同集幂等（原引用返回）', () => {
+    const active = multiSelectReducer(EMPTY_MULTI_SELECT, { type: 'enter' })
+    const partial = multiSelectReducer(active, { type: 'toggle', entryId: 7 })
+    const all = multiSelectReducer(partial, { type: 'select-all', entryIds: [1, 2, 3] })
+    expect(all).toEqual({ active: true, selected: [1, 2, 3] })
+    expect(multiSelectReducer(all, { type: 'select-all', entryIds: [1, 2, 3] })).toBe(all)
+    // 非多选模式 select-all = 零效果
+    expect(multiSelectReducer(EMPTY_MULTI_SELECT, { type: 'select-all', entryIds: [1] })).toBe(EMPTY_MULTI_SELECT)
+  })
+})
+
+describe('entryAction 回执 code→错误文案分派（封闭码集）', () => {
+  it('逐码文案分派：封闭联合逐成员有中文文案', () => {
+    const codes = [
+      'rejected-confirmed',
+      'stale',
+      'cas-failed',
+      'not-found',
+      'domain-depth',
+      'yaml-invalid',
+      'precheck-failed',
+    ] as const
+    for (const code of codes) {
+      const text = entryActionFailureText(code)
+      expect(text.length).toBeGreaterThan(0)
+    }
+    expect(entryActionFailureText('rejected-confirmed')).toContain('已确认')
+    expect(entryActionFailureText('cas-failed')).toContain('状态')
+    expect(entryActionFailureText('not-found')).toContain('不存在')
+  })
+
+  it('entryActionNotice：全成功 = undefined（静默成功）；部分失败 = 成功/失败计数 + 逐条 code 文案', () => {
+    expect(entryActionNotice({ results: [{ entryId: 1, outcome: 'success' }, { entryId: 2, outcome: 'success' }] })).toBeUndefined()
+    const notice = entryActionNotice({
+      results: [
+        { entryId: 1, outcome: 'success' },
+        { entryId: 2, outcome: 'failure', code: 'cas-failed', message: '状态漂移' },
+        { entryId: 3, outcome: 'failure', code: 'not-found', message: '未命中' },
+      ],
+    })
+    expect(notice).toContain('成功 1')
+    expect(notice).toContain('失败 2')
+    expect(notice).toContain('#2')
+    expect(notice).toContain('#3')
   })
 })

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { DomainNode, KnowledgeCard } from '@dsh-forge/contracts'
 import { KnowledgeBrowse, KnowledgeBrowseBody } from './KnowledgeBrowse.js'
-import { EMPTY_FILTER } from './browse-model.js'
+import { EMPTY_FILTER, EMPTY_MULTI_SELECT } from './browse-model.js'
 import type { KnowledgeBrowseActions, KnowledgeBrowseState } from './use-knowledge-browse.js'
 
 const NOW = Date.parse('2026-10-02T12:00:00.000Z')
@@ -33,6 +33,7 @@ const ACTIONS: KnowledgeBrowseActions = {
   selectDomain: () => {},
   setKeyword: () => {},
   clearFilters: () => {},
+  setStatusFilter: () => {},
   retry: () => {},
 }
 
@@ -47,6 +48,8 @@ function stateOf(overrides: Partial<KnowledgeBrowseState>): KnowledgeBrowseState
     error: undefined,
     projectName: 'demo',
     knowledgeDir: 'Z:/ws/demo/.knowledge',
+    multiSelect: EMPTY_MULTI_SELECT,
+    actionNotice: undefined,
     ...overrides,
   }
 }

@@ -112,3 +112,104 @@ describe('KnowledgeToolbar 工具栏', () => {
     expect(isEscapeKey('Enter')).toBe(false)
   })
 })
+
+import { statusFilterChips, statusChipIsActive, selectCountLabel } from './KnowledgeToolbar.js'
+
+describe('SC-E 状态 chips（官方 Pill——服务端 statusFilter）', () => {
+  it('chip 行集：全部/待审核/已确认（EntryStatusFilter 封闭值域）', () => {
+    expect(statusFilterChips().map((chip) => chip.value)).toEqual(['all', 'unconfirmed', 'confirmed'])
+    expect(statusFilterChips().map((chip) => chip.label)).toEqual(['全部', '待审核', '已确认'])
+  })
+
+  it('激活判据：当前片激活（Pill active）；all 零态 = 「全部」激活', () => {
+    expect(statusChipIsActive('all', 'all')).toBe(true)
+    expect(statusChipIsActive('unconfirmed', 'unconfirmed')).toBe(true)
+    expect(statusChipIsActive('all', 'unconfirmed')).toBe(false)
+    expect(statusChipIsActive('unconfirmed', undefined)).toBe(false)
+  })
+
+  it('状态 chips 在场：三枚 chip 锚（data-dswf-kn-statuschip）+ 当前片激活态', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeToolbar keyword="" onKeywordChange={() => {}} statusFilter="unconfirmed" onStatusFilterChange={() => {}} />,
+    )
+    expect(markup.match(/data-dswf-kn-statuschip/g)?.length).toBe(3)
+    expect(markup).toContain('data-dswf-kn-statuschip="unconfirmed"')
+    expect(markup).toContain('aria-pressed="true"')
+  })
+
+  it('回调缺席 = 状态 chips 不在场（装配缝合前的纯读形态）', () => {
+    const markup = renderToStaticMarkup(<KnowledgeToolbar keyword="" onKeywordChange={() => {}} />)
+    expect(markup).not.toContain('data-dswf-kn-statuschip')
+  })
+})
+
+describe('SC-F 多选功能组（工具栏右端五钮）', () => {
+  it('F1 非多选模式：仅「多选」切换钮在场（data-dswf-kn-multiselect），功能组不在场', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeToolbar
+        keyword=""
+        onKeywordChange={() => {}}
+        multiSelectActive={false}
+        selectedCount={0}
+        totalCount={4}
+        onToggleMultiSelect={() => {}}
+      />,
+    )
+    expect(markup).toContain('data-dswf-kn-multiselect')
+    expect(markup).toContain('aria-pressed="false"')
+    expect(markup).not.toContain('data-dswf-kn-selcount')
+    expect(markup).not.toContain('data-dswf-kn-act-confirm')
+    expect(markup).not.toContain('data-dswf-kn-act-reject')
+    expect(markup).not.toContain('data-dswf-kn-act-selectall')
+  })
+
+  it('F1 多选模式：钮变「取消」（aria-pressed=true）+ 功能组三钮与计数在场（语义色 class）', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeToolbar
+        keyword=""
+        onKeywordChange={() => {}}
+        multiSelectActive={true}
+        selectedCount={2}
+        totalCount={5}
+        onToggleMultiSelect={() => {}}
+        onSelectAll={() => {}}
+        onConfirmSelected={() => {}}
+        onRejectSelected={() => {}}
+      />,
+    )
+    expect(markup).toContain('aria-pressed="true"')
+    expect(markup).toContain('data-dswf-kn-selcount')
+    expect(markup).toContain('已选 2 / 共 5')
+    expect(markup).toContain('data-dswf-kn-act-confirm')
+    expect(markup).toContain('data-dswf-kn-act-reject')
+    expect(markup).toContain('data-dswf-kn-act-selectall')
+    // 语义色：通过 accent / 驳回 error / 全选中性
+    expect(markup).toMatch(/dswf-kn-act[^"]*is-accent/)
+    expect(markup).toMatch(/dswf-kn-act[^"]*is-error/)
+    expect(markup).toMatch(/dswf-kn-act-selectall[^"]*"/)
+  })
+
+  it('F5 零勾选：通过/驳回禁用（disabled）；驳回确认框闭态不在静态标记', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeToolbar
+        keyword=""
+        onKeywordChange={() => {}}
+        multiSelectActive={true}
+        selectedCount={0}
+        totalCount={3}
+        onToggleMultiSelect={() => {}}
+        onSelectAll={() => {}}
+        onConfirmSelected={() => {}}
+        onRejectSelected={() => {}}
+      />,
+    )
+    expect(markup).toMatch(/data-dswf-kn-act-confirm[^>]*disabled/)
+    expect(markup).toMatch(/data-dswf-kn-act-reject[^>]*disabled/)
+    expect(markup).not.toContain('role="dialog"')
+  })
+
+  it('selectCountLabel：计数文案 = 已选 N / 共 M（M = 过滤结果集计数）', () => {
+    expect(selectCountLabel(0, 4)).toBe('已选 0 / 共 4')
+    expect(selectCountLabel(3, 7)).toBe('已选 3 / 共 7')
+  })
+})

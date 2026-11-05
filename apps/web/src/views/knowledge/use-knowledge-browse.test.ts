@@ -21,11 +21,15 @@ import {
   browseActions,
   browseLoadPlan,
   consumedBrowseState,
+  entryActionNotice,
   fetchFilteredCards,
   initialBrowseState,
   loadBrowseBundle,
   mapBrowseError,
+  multiSelectActions,
   pendingBrowseState,
+  pruneSelection,
+  runEntryAction,
   runFullLoad,
   type BrowseBundle,
   type KnowledgeBrowseState,
@@ -425,5 +429,139 @@ describe('browseActions（动作绑定——过滤态机事件形状 + 重试）
       { type: 'clear-filters' },
     ])
     expect(retries).toBe(1)
+  })
+})
+
+describe('runEntryAction（entryAction 批量裁决异步面）', () => {
+  it('confirm 批量：entryAction 通道收 { projectId, action, entryIds }，回执原样透传', async () => {
+    const seen: unknown[] = []
+    const receipt = { results: [{ entryId: 1, outcome: 'success' }] }
+    const client = clientResponding((channel, payload) => {
+      if (channel === KNOWLEDGE_CHANNELS.entryAction) {
+        seen.push(payload)
+        return receipt
+      }
+      throw new Error(`unexpected channel: ${channel}`)
+    })
+    const out = await runEntryAction(client, 'p-1', 'confirm', [1, 2])
+    expect(seen).toEqual([{ projectId: 'p-1', action: 'confirm', entryIds: [1, 2] }])
+    expect(out).toEqual({ ok: true, data: receipt })
+  })
+
+  it('通道失败 → BrowseFetch error 归一（typed code 三态映射，永不 reject）', async () => {
+    const client = clientResponding((channel) => {
+      if (channel === KNOWLEDGE_CHANNELS.entryAction) {
+        throw new RpcClientError({ code: 'ERR_INDEX_STALE', message: '索引不可用' })
+      }
+      throw new Error('unexpected')
+    })
+    const out = await runEntryAction(client, 'p-1', 'reject', [3])
+    expect(out).toEqual({ ok: false, error: { message: '索引不可用', uiState: 'empty-state' } })
+  })
+})
+
+describe('multiSelectActions（多选动作绑定）', () => {
+  it('enter/exit/toggle 派发多选态机事件；selectAll 以当前过滤结果集 entryIds 全量替换', () => {
+    const dispatched: unknown[] = []
+    let refetches = 0
+    const actions = multiSelectActions(
+      (event) => {
+        dispatched.push(event)
+      },
+      () => {
+        refetches += 1
+      },
+      [4],
+      [4, 5, 6],
+    )
+    actions.enterMultiSelect()
+    actions.toggleEntry(4)
+    actions.selectAll()
+    actions.exitMultiSelect()
+    expect(dispatched).toEqual([
+      { type: 'enter' },
+      { type: 'toggle', entryId: 4 },
+      { type: 'select-all', entryIds: [4, 5, 6] },
+      { type: 'exit' },
+    ])
+    expect(refetches).toBe(0)
+  })
+
+  it('confirmSelected/rejectSelected：runEntryAction 成功后重拉（nonce 递增——seq 竞态守卫沿既有装载链）；失败不重拉', async () => {
+    const receipt = {
+      results: [
+        { entryId: 1, outcome: 'success' },
+        { entryId: 2, outcome: 'failure' as const, code: 'cas-failed' as const, message: 'x' },
+      ],
+    }
+    let calls = 0
+    const client = clientResponding((channel) => {
+      if (channel === KNOWLEDGE_CHANNELS.entryAction) {
+        calls += 1
+        return receipt
+      }
+      throw new Error('unexpected')
+    })
+    let refetches = 0
+    const notices: (string | undefined)[] = []
+    const actions = multiSelectActions(
+      () => {},
+      () => {
+        refetches += 1
+      },
+      [1, 2],
+      [1, 2],
+      async (action, ids) => {
+        const out = await runEntryAction(client, 'p-1', action, ids)
+        if (out.ok) notices.push(entryActionNotice(out.data))
+        return out.ok
+      },
+    )
+    await actions.confirmSelected()
+    expect(calls).toBe(1)
+    expect(refetches).toBe(1)
+    expect(notices[0]).toContain('成功 1')
+    expect(notices[0]).toContain('失败 1')
+
+    const failing = multiSelectActions(
+      () => {},
+      () => {
+        refetches += 1
+      },
+      [1],
+      [1],
+      async () => false,
+    )
+    await failing.rejectSelected()
+    expect(refetches).toBe(1) // 失败不重拉（错误态保持）
+  })
+
+  it('空勾选集 = 零请求零重拉（空数组 = 请求级拒收码的前置守卫）', async () => {
+    let calls = 0
+    let refetches = 0
+    const actions = multiSelectActions(
+      () => {},
+      () => {
+        refetches += 1
+      },
+      [],
+      [],
+      async () => {
+        calls += 1
+        return true
+      },
+    )
+    await actions.confirmSelected()
+    await actions.rejectSelected()
+    expect(calls).toBe(0)
+    expect(refetches).toBe(0)
+  })
+})
+
+describe('pruneSelection（重拉落点勾选残影修剪）', () => {
+  it('重拉后不在结果集的 entryId 剪除（动作后删除条目零残留）；交集保持', () => {
+    expect(pruneSelection([1, 2, 3], [2, 3, 9])).toEqual([2, 3])
+    expect(pruneSelection([1], [])).toEqual([])
+    expect(pruneSelection([], [1])).toEqual([])
   })
 })

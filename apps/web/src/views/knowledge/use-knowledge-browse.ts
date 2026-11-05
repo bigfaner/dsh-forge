@@ -10,20 +10,31 @@
 // 交互与转移逻辑抽纯函数面（browseLoadPlan / pendingBrowseState / applyBrowseLoad /
 // browseActions——browser-actions 同形制）；effect 仅剩编排胶水（Node 测面外的部分沿
 // use-forge-projects 先例，归 3.8 装配 + e2e）。
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import type { DomainNode, KnowledgeCard } from '@dsh-forge/contracts'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import type { DomainNode, EntryActionReceipt, KnowledgeCard } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
 import { deriveKnowledgeDir } from '../../flows/add-project/form-model.js'
 import {
   EMPTY_FILTER,
+  EMPTY_MULTI_SELECT,
   browseFilterReducer,
   entriesQueryOf,
+  entryActionNotice,
   hasActiveFilter,
+  multiSelectReducer,
   type BrowseFilter,
   type BrowseFilterEvent,
+  type MultiSelectEvent,
+  type MultiSelectState,
 } from './browse-model.js'
+
+// 回执文案分派单源再导出（消费面同点引用——browse-model 纯函数面唯一实现）
+export { entryActionFailureText, entryActionNotice } from './browse-model.js'
+
+/** 裁决动词（批量两动词——confirm/reject；move/editMeta/createDomain 归单条/树级径非本面） */
+export type EntryActionVerb = 'confirm' | 'reject'
 
 /** 装载相位（error 附载见 BrowseErrorInfo） */
 export type KnowledgeLoadPhase = 'loading' | 'ready' | 'error'
@@ -63,6 +74,10 @@ export interface KnowledgeBrowseState {
   readonly projectName: string
   /** 知识目录绝对路径（空库引导说明位；projects.get 失败/缺席 = null） */
   readonly knowledgeDir: string | null
+  /** 多选模式态（SC-F——态机单一来源 = multiSelectReducer，返回面合并注入） */
+  readonly multiSelect: MultiSelectState
+  /** 最近一次裁决动作的回执提示（全成功 = undefined 静默；部分失败 = code 分派文案） */
+  readonly actionNotice: string | undefined
 }
 
 /** 浏览动作（过滤态机事件 + 重试） */
@@ -73,8 +88,28 @@ export interface KnowledgeBrowseActions {
   setKeyword(keyword: string): void
   /** 清除过滤（无结果空态入口——域 + 关键词一并复位） */
   clearFilters(): void
+  /** 状态过滤片（工具栏 chips——undefined 入参归一 'all' 清片） */
+  setStatusFilter(statusFilter: 'all' | 'unconfirmed' | 'confirmed'): void
   /** 重试（错误态/不可用态——全量重装载） */
   retry(): void
+}
+
+/** 多选与裁决动作（SC-F——态机事件 + entryAction 执行 + 动作后重拉） */
+export interface KnowledgeMultiSelectActions {
+  /** 进入多选模式（工具栏「多选」钮） */
+  enterMultiSelect(): void
+  /** 退出多选模式（勾选清零零残留——SC-F2） */
+  exitMultiSelect(): void
+  /** 勾选/取消单条（checkbox） */
+  toggleEntry(entryId: number): void
+  /** 全选当前过滤结果集（SC-F4——M = 过滤结果集计数） */
+  selectAll(): void
+  /** 批量通过勾选集（免确认框——SC-B 链）；成功后按当前过滤重拉 */
+  confirmSelected(): Promise<void>
+  /** 批量驳回勾选集（确认框后调用——SC-C 链）；成功后按当前过滤重拉 */
+  rejectSelected(): Promise<void>
+  /** 单条快速通过（卡片 chip 点击入口——同一通道收敛） */
+  confirmEntry(entryId: number): Promise<void>
 }
 
 /** 错误归一（纯函数）：RpcClientError → code 三态映射；其余（传输/构造期）→ 错误条 */
@@ -120,7 +155,7 @@ export async function loadBrowseBundle(client: ForgeRpcClient, projectId: string
   }
 }
 
-/** 过滤重拉（纯异步面）：listEntries(域前缀 + 关键词)——查询由 entriesQueryOf 透传构造 */
+/** 过滤重拉（纯异步面）：listEntries(域前缀 + 关键词 + 状态片)——查询由 entriesQueryOf 透传构造 */
 export async function fetchFilteredCards(
   client: ForgeRpcClient,
   projectId: string,
@@ -169,6 +204,8 @@ export function initialBrowseState(): KnowledgeBrowseState {
     error: undefined,
     projectName: '',
     knowledgeDir: null,
+    multiSelect: EMPTY_MULTI_SELECT,
+    actionNotice: undefined,
   }
 }
 
@@ -248,8 +285,75 @@ export function browseActions(
     clearFilters: () => {
       dispatchFilter({ type: 'clear-filters' })
     },
+    setStatusFilter: (statusFilter) => {
+      dispatchFilter({ type: 'set-status-filter', statusFilter })
+    },
     retry: () => {
       bumpNonce()
+    },
+  }
+}
+
+/**
+ * entryAction 批量裁决（纯异步面）：forge:knowledge/entryAction 单通道 confirm/reject 批量；
+ * 回执归一 BrowseFetch（永不 reject）——逐条回执文案分派归 entryActionNotice。
+ */
+export async function runEntryAction(
+  client: ForgeRpcClient,
+  projectId: string,
+  action: EntryActionVerb,
+  entryIds: readonly number[],
+): Promise<BrowseFetch<EntryActionReceipt>> {
+  try {
+    const receipt = await client.knowledge.entryAction({ projectId, action, entryIds: [...entryIds] })
+    return { ok: true, data: receipt }
+  } catch (error) {
+    return { ok: false, error: mapBrowseError(error) }
+  }
+}
+
+/** 重拉落点勾选残影修剪（纯函数）：不在重拉结果集的 entryId 剪除（动作后删除零残留） */
+export function pruneSelection(selected: readonly number[], aliveIds: readonly number[]): readonly number[] {
+  return selected.filter((id) => aliveIds.includes(id))
+}
+
+/**
+ * 多选与裁决动作绑定（纯函数——browseActions 同形制）：态机事件 + entryAction 执行 +
+ * 动作后重拉（nonce 递增——seq 竞态守卫沿既有装载链，仅最新落点生效）。
+ * confirm/reject 作用于勾选集（selectedIds）；selectAll = 当前过滤结果集全量替换（filteredIds）。
+ * 空勾选集 = 零请求零重拉（空数组在通道侧是请求级拒收码——前置守卫）；执行失败不重拉。
+ */
+export function multiSelectActions(
+  dispatchMulti: (event: MultiSelectEvent) => void,
+  refetch: () => void,
+  selectedIds: readonly number[],
+  filteredIds: readonly number[],
+  runAction?: (action: EntryActionVerb, entryIds: readonly number[]) => Promise<boolean>,
+): KnowledgeMultiSelectActions {
+  const act = async (action: EntryActionVerb, entryIds: readonly number[]): Promise<void> => {
+    if (entryIds.length === 0) return
+    const ok = runAction === undefined || (await runAction(action, entryIds))
+    if (!ok) return
+    dispatchMulti({ type: 'exit' })
+    refetch()
+  }
+  return {
+    enterMultiSelect: () => {
+      dispatchMulti({ type: 'enter' })
+    },
+    exitMultiSelect: () => {
+      dispatchMulti({ type: 'exit' })
+    },
+    toggleEntry: (entryId) => {
+      dispatchMulti({ type: 'toggle', entryId })
+    },
+    selectAll: () => {
+      dispatchMulti({ type: 'select-all', entryIds: filteredIds })
+    },
+    confirmSelected: () => act('confirm', selectedIds),
+    rejectSelected: () => act('reject', selectedIds),
+    confirmEntry: async (entryId) => {
+      await act('confirm', [entryId])
     },
   }
 }
@@ -271,9 +375,11 @@ export function useKnowledgeBrowse(
   projectId: string,
   makeClient: RpcClientFactory = preloadRpcClientFactory,
   active = true,
-): readonly [KnowledgeBrowseState, KnowledgeBrowseActions] {
+): readonly [KnowledgeBrowseState, KnowledgeBrowseActions, KnowledgeMultiSelectActions] {
   const [filter, dispatchFilter] = useReducer(browseFilterReducer, EMPTY_FILTER)
+  const [multiSelect, dispatchMulti] = useReducer(multiSelectReducer, EMPTY_MULTI_SELECT)
   const [state, setState] = useState<KnowledgeBrowseState>(initialBrowseState)
+  const [notice, setNotice] = useState<string | undefined>(undefined)
   const [nonce, setNonce] = useState(0)
   const [activation, setActivation] = useState(0)
   const wasActiveRef = useRef(active)
@@ -320,6 +426,11 @@ export function useKnowledgeBrowse(
       if (!alive || seq !== seqRef.current) return
       if (plan.isFull && out.kind === 'bundle') hasBundleRef.current = true
       setState((prev) => applyBrowseLoad(prev, out))
+      // 重拉落点勾选残影修剪：动作后删除/过滤外条目不残留（SC-F2 零残留口径）
+      if (out.kind !== 'error') {
+        const aliveIds = out.cards.map((card) => card.entryId)
+        dispatchMulti({ type: 'prune', aliveIds })
+      }
     })
     return () => {
       alive = false
@@ -329,7 +440,27 @@ export function useKnowledgeBrowse(
   const retry = useCallback(() => {
     setNonce((n) => n + 1)
   }, [])
+
+  // 裁决执行面：entryAction → 回执文案分派 → 成功后按当前过滤重拉（nonce 递增走既有 seq 守卫）
+  const multiActions = useMemo(() => {
+    const runAction = async (action: EntryActionVerb, entryIds: readonly number[]): Promise<boolean> => {
+      const out = await runEntryAction(makeClient(), projectId, action, entryIds)
+      if (!out.ok) {
+        setNotice(out.error.message)
+        return false
+      }
+      setNotice(entryActionNotice(out.data))
+      return true
+    }
+    return multiSelectActions(dispatchMulti, () => {
+      setNonce((n) => n + 1)
+    }, multiSelect.selected, state.cards.map((card) => card.entryId), runAction)
+  }, [makeClient, projectId, multiSelect.selected, state.cards])
+
   const actions = browseActions(dispatchFilter, retry)
-  // 消费态合成（fix-5）：装载态字段 + 实时过滤态（reducer 单一来源）——防滞后快照弹回键入值
-  return [consumedBrowseState(state, filter), actions] as const
+  // 消费态合成（fix-5）：装载态字段 + 实时过滤态（reducer 单一来源）——防滞后快照弹回键入值；
+  // 多选态/裁决提示同面合并注入（态机单一来源 = reducer/执行面）
+  const consumed = consumedBrowseState(state, filter)
+  const merged: KnowledgeBrowseState = { ...consumed, multiSelect, actionNotice: notice }
+  return [merged, actions, multiActions] as const
 }

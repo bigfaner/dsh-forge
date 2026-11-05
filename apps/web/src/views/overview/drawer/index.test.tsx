@@ -400,6 +400,7 @@ describe('fetchTaskDetail（数据面——rpc tasks.detail 唯一通道）', ()
           entryDetail: mark('knowledge.entryDetail', () => Promise.resolve({})),
           heat: mark('knowledge.heat', () => Promise.resolve(new Map())),
           sessionRecall: mark('knowledge.sessionRecall', () => Promise.resolve([])),
+          entryAction: mark('knowledge.entryAction', () => Promise.resolve({ results: [] })),
         },
         tasks: {
           transition: mark('tasks.transition', () => Promise.resolve({})),
@@ -465,7 +466,7 @@ describe('TaskDrawer（装载壳——静态首帧）', () => {
     return {
       projects: { register: stub, list: stub, get: stub, update: stub, reconcile: stub, deriveTaskStoreDir: stub },
       fs: { listDir: stub },
-      knowledge: { browse: stub, listEntries: stub, entryDetail: stub, heat: stub, sessionRecall: stub },
+      knowledge: { browse: stub, listEntries: stub, entryDetail: stub, heat: stub, sessionRecall: stub, entryAction: stub },
       tasks: {
         transition: stub,
         query: stub,

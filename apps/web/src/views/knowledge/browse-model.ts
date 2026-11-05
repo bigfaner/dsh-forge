@@ -6,14 +6,22 @@
 //     执行，本模块零客户端过滤语义，不引入其它过滤维度）；
 //   - 关键词 = keywords 维度细分（同样服务端执行——工具栏输入原样传递）。
 import { isoTimeLabelZh } from '../../components/index.js'
-import type { DomainNode, ListEntriesQuery } from '@dsh-forge/contracts'
+import type {
+  DomainNode,
+  EntryActionFailureCode,
+  EntryActionReceipt,
+  EntryStatusFilter,
+  ListEntriesQuery,
+} from '@dsh-forge/contracts'
 
-/** 浏览过滤态（域 = 目录路径前缀；关键词 = 工具栏输入原样） */
+/** 浏览过滤态（域 = 目录路径前缀；关键词 = 工具栏输入原样；状态片 = statusFilter 服务端执行） */
 export interface BrowseFilter {
   /** 选中的域路径（undefined = 全部域——域树根行） */
   readonly domain?: string
   /** 关键词（空串 = 未过滤；空白 = 未过滤判据见 hasActiveFilter，与服务端 trim 口径一致） */
   readonly keyword: string
+  /** 状态过滤片（undefined/all = 全部——工具栏状态 chips 单一来源；过滤语义归服务端） */
+  readonly statusFilter?: EntryStatusFilter
 }
 
 /** 过滤零态（结构常量——引用稳定，reducer 复位原样返回） */
@@ -23,43 +31,150 @@ export const EMPTY_FILTER: BrowseFilter = { keyword: '' }
 export type BrowseFilterEvent =
   | { readonly type: 'select-domain'; readonly domain: string | undefined }
   | { readonly type: 'set-keyword'; readonly keyword: string }
+  | { readonly type: 'set-status-filter'; readonly statusFilter: EntryStatusFilter }
   | { readonly type: 'clear-filters' }
 
 /**
  * 过滤态 reducer（纯函数；同值事件原引用返回——effect 依赖过滤对象身份不重拉）。
  * - select-domain：幂等（重复选当前域不产生新引用）；
- * - clear-filters：组合过滤无结果的「清除过滤入口」——域 + 关键词一并复位。
+ * - set-status-filter：幂等；'all' = 清片（键剥离——查询不出键防服务端口径漂移）；
+ * - clear-filters：组合过滤无结果的「清除过滤入口」——域 + 关键词 + 状态片一并复位。
  */
 export function browseFilterReducer(filter: BrowseFilter, event: BrowseFilterEvent): BrowseFilter {
   switch (event.type) {
     case 'select-domain': {
       if (event.domain === filter.domain) return filter
-      return event.domain === undefined ? { keyword: filter.keyword } : { ...filter, domain: event.domain }
+      return event.domain === undefined
+        ? { keyword: filter.keyword, statusFilter: filter.statusFilter }
+        : { ...filter, domain: event.domain }
     }
     case 'set-keyword': {
       if (event.keyword === filter.keyword) return filter
       return { ...filter, keyword: event.keyword }
     }
+    case 'set-status-filter': {
+      if (event.statusFilter === (filter.statusFilter ?? 'all')) return filter
+      return event.statusFilter === 'all' ? { domain: filter.domain, keyword: filter.keyword } : { ...filter, statusFilter: event.statusFilter }
+    }
     case 'clear-filters': {
-      return filter.domain === undefined && filter.keyword === '' ? filter : EMPTY_FILTER
+      return filter.domain === undefined && filter.keyword === '' && (filter.statusFilter ?? 'all') === 'all'
+        ? filter
+        : EMPTY_FILTER
     }
   }
 }
 
 /** 过滤激活判据（无结果空态 ⇄ 空库引导的分流依据；空白关键词 = 未过滤，与服务端 trim 同口径） */
 export function hasActiveFilter(filter: BrowseFilter): boolean {
-  return filter.domain !== undefined || filter.keyword.trim() !== ''
+  return filter.domain !== undefined || filter.keyword.trim() !== '' || (filter.statusFilter ?? 'all') !== 'all'
 }
 
 /**
- * 过滤态 → listEntries 查询（域前缀 + 关键词原样透传——前缀/关键词细分语义在 core 执行；
- * 未激活的维度不出现在查询对象上，防服务端口径漂移）。
+ * 过滤态 → listEntries 查询（域前缀 + 关键词 + 状态片原样透传——前缀/关键词细分/statusFilter
+ * 语义在 core 执行；未激活的维度不出现在查询对象上，防服务端口径漂移）。
  */
 export function entriesQueryOf(projectId: string, filter: BrowseFilter): ListEntriesQuery {
   const query: ListEntriesQuery = { projectId }
   if (filter.domain !== undefined) query.domainPrefix = filter.domain
   if (filter.keyword.trim() !== '') query.keyword = filter.keyword
+  if (filter.statusFilter !== undefined && filter.statusFilter !== 'all') query.statusFilter = filter.statusFilter
   return query
+}
+
+// ───────────────── 多选模式态机（knowledge-review-ui SC-F——纯派生层） ─────────────────
+
+/** 多选态（active = 模式在场；selected = 勾选集——保序数组，退出即清零零残留） */
+export interface MultiSelectState {
+  readonly active: boolean
+  readonly selected: readonly number[]
+}
+
+/** 多选零态（结构常量——退出多选 = 回此形态，勾选零残留） */
+export const EMPTY_MULTI_SELECT: MultiSelectState = { active: false, selected: [] }
+
+/** 多选态事件（select-all = 当前过滤结果集全量替换——SC-F4 全选口径） */
+export type MultiSelectEvent =
+  | { readonly type: 'enter' }
+  | { readonly type: 'exit' }
+  | { readonly type: 'toggle'; readonly entryId: number }
+  | { readonly type: 'select-all'; readonly entryIds: readonly number[] }
+  | { readonly type: 'prune'; readonly aliveIds: readonly number[] }
+
+/**
+ * 多选态 reducer（纯函数；同态事件原引用返回）。
+ * - enter：进入多选模式（幂等）；exit：退出并清零勾选（零残留）；
+ * - toggle / select-all / prune：仅多选模式在场生效（非多选模式零效果原引用返回）；
+ * - prune：重拉落点后剪除已不在结果集的勾选残影（动作后删除的条目不残留）。
+ */
+export function multiSelectReducer(state: MultiSelectState, event: MultiSelectEvent): MultiSelectState {
+  switch (event.type) {
+    case 'enter': {
+      return state.active ? state : { ...state, active: true }
+    }
+    case 'exit': {
+      return state.active || state.selected.length > 0 ? EMPTY_MULTI_SELECT : state
+    }
+    case 'toggle': {
+      if (!state.active) return state
+      const selected = state.selected.includes(event.entryId)
+        ? state.selected.filter((id) => id !== event.entryId)
+        : [...state.selected, event.entryId]
+      return { ...state, selected }
+    }
+    case 'select-all': {
+      if (!state.active) return state
+      if (sameIdSet(state.selected, event.entryIds)) return state
+      return { ...state, selected: [...event.entryIds] }
+    }
+    case 'prune': {
+      const selected = state.selected.filter((id) => event.aliveIds.includes(id))
+      if (selected.length === state.selected.length) return state
+      return { ...state, selected }
+  }
+  }
+}
+
+/** 同集判据（同长度 + 逐位相等——保序数组的集合等价） */
+function sameIdSet(a: readonly number[], b: readonly number[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i])
+}
+
+// ───────────────── entryAction 回执 code→错误文案分派（code 枚举 = UI 文案分派键） ─────────────────
+
+/** 逐条失败码 → 中文文案（封闭码集逐成员分派——新增契约码成员必须同点补文案） */
+export function entryActionFailureText(code: EntryActionFailureCode): string {
+  switch (code) {
+    case 'rejected-confirmed':
+      return '已确认条目不可驳回'
+    case 'stale':
+      return '条目已被他人更新，请刷新后重试'
+    case 'cas-failed':
+      return '条目状态已变化，已跳过'
+    case 'not-found':
+      return '条目不存在，可能已被删除'
+    case 'domain-depth':
+      return '域层级超过 3 层上限'
+    case 'yaml-invalid':
+      return '内容含非法 YAML 结构字符，已拒收'
+    case 'precheck-failed':
+      return '条目文件不可删除（预检失败）'
+  }
+}
+
+/**
+ * entryAction 回执 → 用户提示文案（纯函数）：
+ * - 全成功 = undefined（静默成功——视图重拉即反馈）；
+ * - 部分失败 = 成功/失败计数 + 逐条 `#id 失败文案`（部分失败不回滚已成功条目——如实呈现）。
+ */
+export function entryActionNotice(receipt: EntryActionReceipt): string | undefined {
+  const failures = receipt.results.filter((result) => result.outcome === 'failure')
+  if (failures.length === 0) return undefined
+  const successCount = receipt.results.length - failures.length
+  const detail = failures
+    .map((result) => (result.outcome === 'failure' ? `#${String(result.entryId)} ${entryActionFailureText(result.code)}` : ''))
+    .filter((text) => text !== '')
+    .join('；')
+  return `成功 ${String(successCount)} 条，失败 ${String(failures.length)} 条：${detail}`
 }
 
 /** 浏览主体网格相位（UF-6 States 四态 + 错误态；推导见 browseFaceState） */

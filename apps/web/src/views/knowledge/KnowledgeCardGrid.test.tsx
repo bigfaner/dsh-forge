@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { KnowledgeCard } from '@dsh-forge/contracts'
-import { KnowledgeCardGrid } from './KnowledgeCardGrid.js'
+import { KnowledgeCardGrid, isEntryConfirmable } from './KnowledgeCardGrid.js'
 
 const NOW = Date.parse('2026-10-02T12:00:00.000Z')
 
@@ -130,5 +130,48 @@ describe('KnowledgeCardGrid 四态', () => {
     )
     expect(fallback).toContain('知识暂不可用')
     expect(fallback).toContain('索引不可用，稍后自动恢复')
+  })
+})
+
+const UNCONFIRMED: readonly KnowledgeCard[] = [
+  { ...CARDS[0]!, status: 'unconfirmed' },
+  { ...CARDS[1]!, status: 'confirmed' },
+]
+
+describe('SC-F3 多选 checkbox（卡片右端与标题同行）', () => {
+  it('F3 多选模式：官方 Checkbox 在卡片右端（data-dswf-kn-card-check + input[type=checkbox]）', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeCardGrid state="cards" cards={UNCONFIRMED} now={NOW} multiSelect selectedEntryIds={[1]} onToggleSelect={() => {}} />,
+    )
+    expect(markup.match(/data-dswf-kn-card-check/g)?.length).toBe(2)
+    expect(markup).toContain('type="checkbox"')
+    expect(markup).toContain('checked')
+  })
+
+  it('F3 非多选模式反向断言：checkbox DOM 不在场', () => {
+    const markup = renderToStaticMarkup(<KnowledgeCardGrid state="cards" cards={UNCONFIRMED} now={NOW} />)
+    expect(markup).not.toContain('data-dswf-kn-card-check')
+    expect(markup).not.toContain('type="checkbox"')
+  })
+
+  it('isEntryConfirmable：仅 unconfirmed 可通过（confirmed/superseded 只读——可点性与状态同源）', () => {
+    expect(isEntryConfirmable('unconfirmed')).toBe(true)
+    expect(isEntryConfirmable('confirmed')).toBe(false)
+    expect(isEntryConfirmable('superseded')).toBe(false)
+  })
+})
+
+describe('SC 卡片 chip 可点态（快速通过入口）', () => {
+  it('unconfirmed 卡片 chip 可点（data-dswf-kn-chip-confirm 锚 + aria-label 点击通过）；confirmed 只读无锚', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeCardGrid state="cards" cards={UNCONFIRMED} now={NOW} onEntryConfirm={() => {}} />,
+    )
+    expect(markup.match(/data-dswf-kn-chip-confirm/g)?.length).toBe(1)
+    expect(markup).toContain('aria-label="点击通过"')
+  })
+
+  it('onEntryConfirm 缺席 = chip 全体只读（无可点锚）', () => {
+    const markup = renderToStaticMarkup(<KnowledgeCardGrid state="cards" cards={UNCONFIRMED} now={NOW} />)
+    expect(markup).not.toContain('data-dswf-kn-chip-confirm')
   })
 })

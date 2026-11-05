@@ -189,10 +189,17 @@ describe('3.5 knowledge 面（forge:knowledge/* 五通道——浏览数据面�
     expect(t.calls[4]?.payload).toEqual({ projectId: 'p-1', sessionId: 'sess-1' })
   })
 
-  it('AC4 双门分工：knowledge 面恰五方法，search/readAbstract 不在面（agent 面唯一门 = 插件 tool）', () => {
+  it('AC4 双门分工：knowledge 面恰六方法（knowledge-review-ui 增 entryAction 人工裁决写面），search/readAbstract 不在面（agent 面唯一门 = 插件 tool）', () => {
     const t = fakeTransport()
     const client = createForgeRpcClient(t.transport)
-    expect(Object.keys(client.knowledge).sort()).toEqual(['browse', 'entryDetail', 'heat', 'listEntries', 'sessionRecall'])
+    expect(Object.keys(client.knowledge).sort()).toEqual([
+      'browse',
+      'entryAction',
+      'entryDetail',
+      'heat',
+      'listEntries',
+      'sessionRecall',
+    ])
     expect('search' in client.knowledge).toBe(false)
     expect('readAbstract' in client.knowledge).toBe(false)
   })

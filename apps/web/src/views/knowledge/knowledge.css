@@ -416,7 +416,7 @@
   flex: none;
   box-sizing: border-box;
   width: 78px; /* dsw-raw 原型元数据标签列宽刻度 */
-  padding: 4px var(--dsw-font-xs-13-line-height); /* 紧凑行距（用户裁决——行高收紧） */
+  padding: 4px var(--dsw-font-xs-13-line-height); /* dsw-raw 紧凑行距（用户裁决——行高收紧） */
   background: var(--dsw-alias-bg-layer-3); /* 弹窗面上抬一阶（原型暗色同型：表底 layer-1 · 标签 layer-2） */
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
@@ -430,7 +430,7 @@
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
   min-width: 0;
-  padding: 4px var(--dsw-font-xs-13-line-height); /* 紧凑行距（用户裁决——行高收紧） */
+  padding: 4px var(--dsw-font-xs-13-line-height); /* dsw-raw 紧凑行距（用户裁决——行高收紧） */
   color: var(--dsw-alias-label-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -523,4 +523,110 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+/* ── 工具栏扩展（knowledge-review-ui SC-E/SC-F：状态 chips + 多选功能组五钮）──
+ * 状态 chips = 官方 Pill 三片（服务端 statusFilter——零客户端过滤语义）；
+ * 多选功能组 = 同刻度胶囊实线描边（语义色：通过 accent / 驳回 error / 其余中性——
+ * 色一律官方令牌）；工具栏右端 = 尾部推齐位。 */
+.dswf-kn-statuschips {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-statuschip {
+  flex: none;
+}
+
+.dswf-kn-toolbar-tail {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: auto;
+}
+
+.dswf-kn-multiselect {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-selcount {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+/* 功能组胶囊实线描边钮（官方 Pill button 形态 + 语义色覆盖——同刻度） */
+.dswf-kn-act {
+  flex: none;
+  border: 1px solid var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+}
+
+.dswf-kn-act:hover {
+  border-color: var(--dsw-alias-border-l4);
+}
+
+.dswf-kn-act.is-accent {
+  border-color: var(--dsw-alias-link);
+  color: var(--dsw-alias-link);
+}
+
+.dswf-kn-act.is-accent:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-kn-act.is-error {
+  border-color: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-kn-act.is-error:hover {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+.dswf-kn-act:disabled {
+  border-color: var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+/* ── 卡片多选 checkbox（SC-F3：右端与标题同行——官方 Checkbox，非多选模式不在场） ── */
+.dswf-kn-card-check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+/* 官方 Checkbox 要求 caller-owned 可见 label——卡片行语言收口为视觉隐藏（可访问名保留） */
+.dswf-kn-card-check .dswf-kn-check {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── 卡片 chip 快速通过可点态（SC：仅 unconfirmed 可点——hover 手型 + 焦点环官方令牌） ── */
+.dswf-kn-card-chip {
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--dsw-radius-sm);
+  cursor: default;
+}
+
+.dswf-kn-card-chip.is-actionable {
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-card-chip.is-actionable:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color);
+  outline-offset: 1px;
 }
