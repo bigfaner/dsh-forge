@@ -236,6 +236,36 @@ describe('updateEntry 元数据编辑', () => {
     const missing = await service.updateEntry({ projectId: PROJECT, entryId: 999999, title: 'x', keywords: ['x'], summary: 'x', body: 'x' })
     expect(missing).toMatchObject({ outcome: 'failure', code: 'not-found', entryId: 999999 })
   })
+
+  it('YAML 结构字符正文（--- 开头）round-trip 零损坏：不误拒、新文件正文逐字保留', async () => {
+    // bug：matter.stringify(string, fm) 对 string 入参先 matter(body) 解析——正文以 --- 开头时
+    // 正文被误当 frontmatter（正文丢失 + 字符序号键污染 fm）→ round-trip 恒不等 → 误拒 yaml-invalid
+    const cc = await entryIdOf('kb-cc')
+    const versionsBefore = db
+      .prepare<unknown[], { version_ts: string }>(`SELECT version_ts FROM knowledge_entry_versions WHERE id = ?`)
+      .all('kb-cc')
+    const body = '---\n结构字符正文'
+    const result = await service.updateEntry({
+      projectId: PROJECT,
+      entryId: cc,
+      title: '注入样例: 标题 [括号] 引号"x"',
+      keywords: ['前端', 'a: [b, c]'],
+      summary: '预置已确认条目',
+      body,
+    })
+    expect(result).toMatchObject({ outcome: 'success' })
+    const versions = db
+      .prepare<unknown[], { version_ts: string; file_path: string }>(
+        `SELECT version_ts, file_path FROM knowledge_entry_versions WHERE id = ? ORDER BY version_ts`,
+      )
+      .all('kb-cc')
+    expect(versions).toHaveLength(versionsBefore.length + 1)
+    const raw = readFileSync(versions[versions.length - 1]!.file_path, 'utf8')
+    const reparsed = matter(raw)
+    expect(reparsed.data.title).toBe('注入样例: 标题 [括号] 引号"x"')
+    expect(reparsed.data.keywords).toEqual(['前端', 'a: [b, c]'])
+    expect(reparsed.content.trim()).toBe(body)
+  })
 })
 
 describe('statusFilter 与徽记口径', () => {

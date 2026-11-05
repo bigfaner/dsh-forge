@@ -674,6 +674,9 @@ export function EntryDrawerHeadActions({
 /** Toast 自动消失时长（专家 detail-source 同值 3s——一次性提示不自留） */
 const KN_TOAST_MS = 3000
 
+/** onMutated 缺省（零通知——缺省形态下不触碰浏览面） */
+const NOOP_MUTATED = (): void => {}
+
 /** 空草稿（detail 缺席兜底——不渲染编辑体，仅型位占位） */
 const KN_EMPTY_DRAFT: KnEditDraft = { title: '', keywords: [], summary: '', body: '' }
 
@@ -685,6 +688,8 @@ interface KnDialogActionDeps {
   readonly onClose: () => void
   /** 保存成功后详情重拉（版本链前进后呈现新值） */
   readonly refetch: () => void
+  /** 动作落盘成功后浏览列表重拉通知（bug c21a3d0c——卡片网格呈现新状态/新标题/零残留的唯一链） */
+  readonly onMutated: () => void
 }
 
 /** dialog controller 输出面（controller 同型消费形状） */
@@ -712,7 +717,7 @@ interface KnDialogController {
  * 模式 + toast + 详情重拉；校验/回执错误留 dialog（errors.form）。
  */
 function useKnDialogController(deps: KnDialogActionDeps): KnDialogController {
-  const { projectId, detail, makeClient, onClose, refetch } = deps
+  const { projectId, detail, makeClient, onClose, refetch, onMutated } = deps
   const [mode, setMode] = useState<KnDialogMode>('view')
   const [draft, setDraft] = useState<KnEditDraft>(KN_EMPTY_DRAFT)
   const [errors, setErrors] = useState<KnEditErrors>({})
@@ -774,8 +779,9 @@ function useKnDialogController(deps: KnDialogActionDeps): KnDialogController {
       setMode('view')
       showToast('已保存')
       refetch()
+      onMutated() // 浏览列表重拉（保存成功卡片呈现新标题——装配级 refetch 链）
     })
-  }, [detail, busy, draft, makeClient, projectId, refetch, showToast])
+  }, [detail, busy, draft, makeClient, projectId, refetch, onMutated, showToast])
 
   const confirmEntry = useCallback((): void => {
     const target = detail
@@ -787,9 +793,10 @@ function useKnDialogController(deps: KnDialogActionDeps): KnDialogController {
         showToast(`操作失败：${out.message}`)
         return
       }
-      onClose() // 通过成功 → 关闭回浏览上下文（重拉归装配方既有链）
+      onMutated() // 浏览列表重拉（chip 呈新状态——装配级 refetch 链）
+      onClose() // 通过成功 → 关闭回浏览上下文
     })
-  }, [detail, busy, makeClient, projectId, onClose, showToast])
+  }, [detail, busy, makeClient, projectId, onClose, onMutated, showToast])
 
   const confirmReject = useCallback((): void => {
     const target = detail
@@ -802,9 +809,10 @@ function useKnDialogController(deps: KnDialogActionDeps): KnDialogController {
         showToast(`操作失败：${out.message}`)
         return
       }
+      onMutated() // 浏览列表重拉（卡片零残留——装配级 refetch 链）
       onClose() // 驳回 = 条目删除（不可逆）→ dialog 关闭
     })
-  }, [detail, busy, makeClient, projectId, onClose, showToast])
+  }, [detail, busy, makeClient, projectId, onClose, onMutated, showToast])
 
   const requestReject = useCallback((): void => {
     setRejectConfirming(true)
@@ -894,6 +902,8 @@ export interface EntryDrawerProps {
   readonly makeClient?: RpcClientFactory
   /** 元数据时间标签基准（缺省当次渲染时刻） */
   readonly now?: number
+  /** 动作落盘成功通知（保存/通过/驳回确认成功后由装配级触发浏览列表重拉；缺省 = 零通知） */
+  readonly onMutated?: () => void
 }
 
 /** 拖移会话快照（move / resize 双形态——起点几何归装载壳本地态，关闭即弃） */
@@ -913,7 +923,7 @@ interface KnDragSession {
  * SC-G（1.8）：双模式 controller（Esc 链 编辑→查看→关闭，capture 同现役序）+
  * head-actions 右置描边钮组 + 驳回官方 Modal 叠层 + toast 面。
  */
-export function EntryDrawer({ projectId, entryId, onClose, makeClient = preloadRpcClientFactory, now }: EntryDrawerProps): ReactNode {
+export function EntryDrawer({ projectId, entryId, onClose, makeClient = preloadRpcClientFactory, now, onMutated }: EntryDrawerProps): ReactNode {
   const [state, { retry }] = useEntryDetail(projectId, entryId, makeClient)
   const controller = useKnDialogController({
     projectId,
@@ -921,6 +931,7 @@ export function EntryDrawer({ projectId, entryId, onClose, makeClient = preloadR
     makeClient,
     onClose,
     refetch: retry,
+    onMutated: onMutated ?? NOOP_MUTATED,
   })
   const [width, setWidth] = useState(KN_DIALOG_WIDTH_DEFAULT)
   const widthRef = useRef(KN_DIALOG_WIDTH_DEFAULT)

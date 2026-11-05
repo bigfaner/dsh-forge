@@ -399,7 +399,9 @@ export function createReviewGateway(deps: ReviewGatewayDeps) {
     fm.version_ts = versionTs
     fm.updated = versionTs
     fm.supersedes = authority.version_ts
-    const serialized = matter.stringify(q.body, fm)
+    // 对象形态 stringify（bug c21a3d0c）：matter.stringify(string, fm) 对 string 入参先 matter(body)
+    // 解析——正文以 --- 开头时正文被误当 frontmatter（正文丢失 + 字符序号键污染 fm）→ 误拒 yaml-invalid
+    const serialized = matter.stringify({ content: q.body }, fm)
     let roundtripOk = false
     try {
       const reparsed = matter(serialized)
@@ -415,7 +417,8 @@ export function createReviewGateway(deps: ReviewGatewayDeps) {
     const oldParsed = matter(raw)
     const oldFm = { ...oldParsed.data } as Record<string, unknown>
     oldFm.status = 'superseded'
-    writeFileSync(authority.file_path, matter.stringify(oldParsed.content, oldFm), 'utf8')
+    // 同缝对象形态（旧正文可能以 --- 开头——string 形态误解析，见上注）
+    writeFileSync(authority.file_path, matter.stringify({ content: oldParsed.content }, oldFm), 'utf8')
     const digest = createHash('sha256').update(serialized, 'utf8').digest('hex')
     // DB 派生列从重写后文件重新解析（不信任入参副本）
     const nf = matter(readFileSync(newPath, 'utf8')).data as Record<string, unknown>

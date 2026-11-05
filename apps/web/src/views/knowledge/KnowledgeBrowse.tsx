@@ -5,7 +5,7 @@
 // （KnowledgeToolbar / DomainTree / KnowledgeCardGrid）。网格相位 = browseFaceState
 // 纯函数推导（本件零相位判据；error 相位内的三态分流归 KnowledgeCardGrid）。
 // 详情抽屉（3.7）经 onEntryOpen 注入，卡片行语言不变。
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { RpcClientFactory } from '../../rpc/index.js'
 import { browseFaceState, hasActiveFilter } from './browse-model.js'
 import { DomainTree } from './DomainTree.js'
@@ -34,6 +34,12 @@ export interface KnowledgeBrowseProps {
   readonly now?: number
   /** 卡片点击 → 详情抽屉打开（3.7/3.8 装配；缺席 = 不可点开） */
   readonly onEntryOpen?: (entryId: number) => void
+  /**
+   * 浏览重拉句柄绑定（bug c21a3d0c——dialog 标题栏动作成功后浏览重拉链）：
+   * 装载壳挂载时把 retry 句柄交给装配面（KnowledgeView 持引用 → EntryDrawer onMutated 触发）。
+   * 恒等回调（装配面 useCallback）只绑一次；缺省 = 不绑定。
+   */
+  readonly bindRefetch?: (refetch: () => void) => void
 }
 
 export interface KnowledgeBrowseBodyProps {
@@ -165,8 +171,19 @@ export function KnowledgeBrowse({
   active,
   now,
   onEntryOpen,
+  bindRefetch,
 }: KnowledgeBrowseProps): ReactNode {
   const [state, actions, multiActions] = useKnowledgeBrowse(projectId, makeClient, active)
+  // 重拉句柄绑定（bug c21a3d0c）：retry 恒定（useCallback 零依赖），经 ref 透出恒等包装——
+  // effect 仅随 bindRefetch 恒等回调跑一次
+  const retryRef = useRef(actions.retry)
+  retryRef.current = actions.retry
+  useEffect(() => {
+    if (bindRefetch === undefined) return
+    bindRefetch(() => {
+      retryRef.current()
+    })
+  }, [bindRefetch])
   return (
     <KnowledgeBrowseBody
       state={state}

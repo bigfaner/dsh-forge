@@ -7,7 +7,7 @@
 // 文案——跟随会话锚定路径；零/未就绪 = 引导空态原文案。P1 浏览范围 = 项目级——UF-6
 // 工具栏「范围显示 P1 项目级」）；面板互换/右栏联动机制归官方面板径
 // （layout.selectPanel + ShellHost 右栏联动，fix-25）。
-import type { ReactNode } from 'react'
+import { useCallback, useRef, type ReactNode } from 'react'
 import { EmptyState } from '../../components/index.js'
 import type { RpcClientFactory } from '../../rpc/index.js'
 import { EntryDrawer } from './EntryDrawer.js'
@@ -65,6 +65,15 @@ export function KnowledgeView({
   makeClient,
   now,
 }: KnowledgeViewProps): ReactNode {
+  // dialog 动作 → 浏览重拉链（bug c21a3d0c）：浏览面 retry 句柄经 bindRefetch 归本壳持有，
+  // EntryDrawer 动作成功（onMutated）触发浏览列表重拉——卡片呈现新状态/新标题/零残留的唯一链
+  const refetchRef = useRef<(() => void) | undefined>(undefined)
+  const bindRefetch = useCallback((refetch: () => void): void => {
+    refetchRef.current = refetch
+  }, [])
+  const handleMutated = useCallback((): void => {
+    refetchRef.current?.()
+  }, [])
   if (projectId === null) {
     const copy = anchorlessCopy(unanchoredProjectCount)
     return (
@@ -85,12 +94,14 @@ export function KnowledgeView({
         onEntryOpen={(entryId) => {
           onOpenEntryChange(entryId)
         }}
+        bindRefetch={bindRefetch}
       />
       <EntryDrawer
         projectId={projectId}
         entryId={openEntryId}
         makeClient={makeClient}
         now={now}
+        onMutated={handleMutated}
         onClose={() => {
           onOpenEntryChange(null)
         }}
