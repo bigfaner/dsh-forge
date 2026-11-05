@@ -37,7 +37,7 @@ interface EntryRow {
 
 function entryByTitle(db: import('../../../packages/core/src/testutil/db-seeds.js').SeedDb, title: string): EntryRow {
   const row = db
-    .prepare('SELECT rowid AS rid, id AS slug, status, domain_path AS domainPath FROM knowledge_entries WHERE title = ?')
+    .prepare('SELECT rowid AS rid, id AS slug, status, domain AS domainPath FROM knowledge_entries WHERE title = ?')
     .get(title) as EntryRow | undefined
   expect(row, `条目在索引（${title}）`).toBeDefined()
   return row as EntryRow

@@ -59,6 +59,10 @@ export interface KnowledgeBrowseBodyProps {
   readonly now?: number
   /** 卡片点击 → 详情抽屉打开（缺席 = 不可点开） */
   readonly onEntryOpen?: (entryId: number) => void
+  /** 新建目录（DomainTree 树头「＋」上抛——entryAction createDomain；缺席 = 钮不渲染） */
+  readonly onCreateDomain?: (domainPath: string) => void
+  /** 拖拽落位（DomainTree 域行 drop 上抛——entryAction move；缺席 = 行非落点） */
+  readonly onMoveEntry?: (entryId: number, targetDomain: string) => void
 }
 
 /**
@@ -74,6 +78,8 @@ export function KnowledgeBrowseBody({
   onScopePick,
   now,
   onEntryOpen,
+  onCreateDomain,
+  onMoveEntry,
 }: KnowledgeBrowseBodyProps): ReactNode {
   const face = browseFaceState({
     phase: state.phase,
@@ -128,6 +134,8 @@ export function KnowledgeBrowseBody({
             total={state.total}
             active={state.filter.domain}
             onSelect={actions.selectDomain}
+            onCreateDomain={onCreateDomain}
+            onMoveEntry={onMoveEntry}
           />
         </aside>
         <div className="dswf-kn-main">
@@ -173,7 +181,7 @@ export function KnowledgeBrowse({
   onEntryOpen,
   bindRefetch,
 }: KnowledgeBrowseProps): ReactNode {
-  const [state, actions, multiActions] = useKnowledgeBrowse(projectId, makeClient, active)
+  const [state, actions, multiActions, treeActions] = useKnowledgeBrowse(projectId, makeClient, active)
   // 重拉句柄绑定（bug c21a3d0c）：retry 恒定（useCallback 零依赖），经 ref 透出恒等包装——
   // effect 仅随 bindRefetch 恒等回调跑一次
   const retryRef = useRef(actions.retry)
@@ -194,6 +202,12 @@ export function KnowledgeBrowse({
       onScopePick={onScopePick}
       now={now}
       onEntryOpen={onEntryOpen}
+      onCreateDomain={(domainPath) => {
+        void treeActions.createDomain(domainPath)
+      }}
+      onMoveEntry={(entryId, targetDomain) => {
+        void treeActions.moveEntry(entryId, targetDomain)
+      }}
     />
   )
 }

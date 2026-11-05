@@ -92,6 +92,22 @@ describe('KnowledgeBrowseBody（纯渲染装配）', () => {
     expect(markup).not.toContain('data-dswf-kn-skeleton')
   })
 
+  it('SC-H 树接线贯通：onCreateDomain/onMoveEntry 注入 → ＋钮与拖拽落点锚在场；卡片 draggable 源', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeBrowseBody
+        state={stateOf({})}
+        actions={ACTIONS}
+        now={NOW}
+        onCreateDomain={() => {}}
+        onMoveEntry={() => {}}
+      />,
+    )
+    expect(markup).toContain('data-dswf-kn-dom-add')
+    expect(markup).toContain('data-dswf-kn-drop="true"')
+    expect(markup).toContain('draggable="true"')
+    expect(markup).toContain('data-dswf-entry="1"')
+  })
+
   it('装载中零数据 → 骨架态（无空库文案闪现）', () => {
     const markup = renderToStaticMarkup(
       <KnowledgeBrowseBody

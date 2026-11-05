@@ -10,7 +10,8 @@
 // 0.4/0.2 两档经回流（滞回限次+冷却，阈值归 config）保留轻量召回出口；readAbstract/
 // read 对 unconfirmed 拒且不露存在性。
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, statSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import matter from 'gray-matter'
 import type Database from 'better-sqlite3'
 import { joinDirSegment } from '@dsh-forge/path-key'
@@ -25,6 +26,7 @@ import type {
   RecallVerb,
   SessionRecallQuery,
 } from '@dsh-forge/contracts'
+import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/contracts'
 import { withImmediateTransaction } from '../storage/concurrency.js'
 import { canonicalWsPath, createKnowledgeRegistry } from '../storage/registry.js'
 import { rebuildKnowledgeIndex } from '../storage/rebuild.js'
@@ -244,6 +246,27 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     `SELECT ${ENTRY_COLUMNS} FROM knowledge_entries e JOIN knowledge_fts f ON f.id = e.id
      WHERE (e.domain = ? OR e.domain LIKE ? ESCAPE '\\') ORDER BY e.domain, e.id`,
   )
+/** 目录即域（≤3 层）——knowledgeDir 现盘目录枚举（隐藏目录跳过；每调用期实时对账） */
+function listDomainDirs(knowledgeDir: string, maxDepth: number): string[] {
+  const out: string[] = []
+  const walk = (rel: string[], depth: number): void => {
+    if (depth > maxDepth) return
+    let entries: import('node:fs').Dirent[]
+    try {
+      entries = readdirSync(join(knowledgeDir, ...rel), { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+      const child = [...rel, entry.name]
+      out.push(child.join('/'))
+      walk(child, depth + 1)
+    }
+  }
+  walk([], 1)
+  return out
+}
   const selectEntryByRowid = db.prepare<[number], BrowseEntryRow>(
     `SELECT ${ENTRY_COLUMNS} FROM knowledge_entries e JOIN knowledge_fts f ON f.id = e.id WHERE e.rowid = ?`,
   )
@@ -716,7 +739,28 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     async browse(q: { projectId: string }): Promise<DomainNode[]> {
       // 徽记口径（1.4）：恒走未过滤 listEntries 独立查询面（不带 statusFilter）——
       // unconfirmedCount 与 entryCount 同底表聚合，「哪里有待审核」不随状态过滤抖动
-      return aggregateDomainTree(await listEntries({ projectId: q.projectId }))
+      const { knowledgeDir } = requireProject(q.projectId, 'browse')
+      const nodes = aggregateDomainTree(await listEntries({ projectId: q.projectId }))
+      // 目录即域并集（H2 新目录即时在场）：knowledgeDir 现盘目录树（≤3 层，目录即域）
+      // 含零条目域/带外 mkdir 目录——条目聚合不含即补入（计数 0）；序 = depth 升序再路径升序
+      const byPath = new Map(nodes.map((node) => [node.domainPath, node]))
+      for (const domain of listDomainDirs(knowledgeDir, FRONTMATTER_DOMAIN_MAX_DEPTH)) {
+        const segments = domain.split('/')
+        for (let i = 1; i <= segments.length; i++) {
+          const path = segments.slice(0, i).join('/')
+          if (byPath.has(path)) continue
+          const node: DomainNode = {
+            domainPath: path,
+            label: segments[i - 1] ?? '',
+            depth: i,
+            entryCount: 0,
+            unconfirmedCount: 0,
+          }
+          byPath.set(path, node)
+          nodes.push(node)
+        }
+      }
+      return nodes.sort((a, b) => a.depth - b.depth || (a.domainPath < b.domainPath ? -1 : 1))
     },
 
     registerProject: registerProjectRow,

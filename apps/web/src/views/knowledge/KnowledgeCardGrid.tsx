@@ -10,6 +10,7 @@
 // knowledge-review-ui（SC-F/SC-B 单卡入口）：多选模式 checkbox 卡片右端与标题同行
 // （仅多选模式在场、stopPropagation 不触发卡片开 dialog）；StateChip 仅 unconfirmed 态
 // 可点（Tooltip「点击通过」——可点性与状态显示同源），confirmed/superseded 严格只读。
+// SC-H 拖拽源：卡片 draggable + dragstart 携 entryId（'text/knowledge-entry' 键，text/plain 兜底）。
 import type { ReactNode } from 'react'
 import { Checkbox, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { KnowledgeCard } from '@dsh-forge/contracts'
@@ -119,6 +120,13 @@ function KnowledgeCardView({
       type="button"
       className="dswf-kn-card"
       data-dswf-entry={card.entryId}
+      draggable
+      onDragStart={(event) => {
+        // 拖拽源（H3——卡片 → 域行落位链源侧）：同键约定 'text/knowledge-entry' + text/plain 兜底
+        event.dataTransfer.setData('text/knowledge-entry', String(card.entryId))
+        event.dataTransfer.setData('text/plain', String(card.entryId))
+        event.dataTransfer.effectAllowed = 'move'
+      }}
       onClick={onEntryOpen === undefined ? undefined : () => {
         onEntryOpen(card.entryId)
       }}

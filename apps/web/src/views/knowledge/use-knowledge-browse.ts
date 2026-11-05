@@ -2,7 +2,8 @@
 // 数据纪律（AC5 索引直读首显不阻塞）：
 //   - 全量装载 = listEntries（无过滤底表，兼 total 计数源）∥ browse（域树聚合）∥ projects.get
 //     （项目名 + 知识目录位置——空库引导文案数据）三路并发，索引缓存直读即瞬时呈现；
-//   - 过滤重拉 = listEntries(域前缀 + 关键词) 单路——旧卡片保持可见（busy 标注），
+//   - 过滤重拉 = listEntries(域前缀 + 关键词) ∥ browse 域树重建——旧卡片保持可见（busy 标注），
+//     树随重拉与现盘目录对账（目录即域——带外新建目录即时在场）；
 //     索引缺失静默重建期（core 侧）表现为本侧在途等待，首装零数据时呈现骨架；
 //   - 竞态守卫 = 序号递增，仅最新一次装载的落点生效（快速连续过滤不串台）。
 // 相位机：loading → ready | error（fail-soft：typed error 经 rpcUiState 映射三态——
@@ -11,7 +12,7 @@
 // browseActions——browser-actions 同形制）；effect 仅剩编排胶水（Node 测面外的部分沿
 // use-forge-projects 先例，归 3.8 装配 + e2e）。
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import type { DomainNode, EntryActionReceipt, KnowledgeCard } from '@dsh-forge/contracts'
+import type { DomainNode, EntryActionReceipt, EntryActionRequest, KnowledgeCard } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
@@ -112,6 +113,14 @@ export interface KnowledgeMultiSelectActions {
   confirmEntry(entryId: number): Promise<void>
 }
 
+/** 域树动作（SC-H——entryAction 树级径 move/createDomain 执行 + 动作后重拉） */
+export interface KnowledgeTreeActions {
+  /** 拖拽改域（DomainTree 域行 drop 上抛——entryAction move 单条）；成功后重拉 */
+  moveEntry(entryId: number, targetDomain: string): Promise<void>
+  /** 新建目录（DomainTree 树头「＋」上抛——entryAction createDomain）；成功后重拉 */
+  createDomain(domainPath: string): Promise<void>
+}
+
 /** 错误归一（纯函数）：RpcClientError → code 三态映射；其余（传输/构造期）→ 错误条 */
 export function mapBrowseError(error: unknown): BrowseErrorInfo {
   if (error instanceof RpcClientError) {
@@ -168,10 +177,10 @@ export async function fetchFilteredCards(
   }
 }
 
-/** 装载落点（effect 任务产物——全量装载可携过滤补拉后的卡片视图） */
+/** 装载落点（effect 任务产物——全量装载可携过滤补拉后的卡片视图；过滤重拉携带重建后的域树） */
 export type LoadApply =
   | { readonly kind: 'bundle'; readonly bundle: BrowseBundle; readonly cards: readonly KnowledgeCard[] }
-  | { readonly kind: 'cards'; readonly cards: readonly KnowledgeCard[] }
+  | { readonly kind: 'cards'; readonly cards: readonly KnowledgeCard[]; readonly nodes?: readonly DomainNode[] }
   | { readonly kind: 'error'; readonly error: BrowseErrorInfo }
 
 /**
@@ -209,6 +218,23 @@ export function initialBrowseState(): KnowledgeBrowseState {
   }
 }
 
+/** 过滤重拉（纯异步面）：listEntries(域前缀 + 关键词 + 状态片) ∥ browse 域树重建——
+ *  目录即域（SC-H）：树每次重拉与 knowledgeDir 现盘对账（带外新建目录即时在场）；
+ *  browse 失败 fail-soft（保留旧树，卡片重拉不受牵连）。 */
+export async function runFilteredLoad(
+  client: ForgeRpcClient,
+  projectId: string,
+  filter: BrowseFilter,
+): Promise<LoadApply> {
+  const cards = await fetchFilteredCards(client, projectId, filter)
+  if (!cards.ok) return { kind: 'error', error: cards.error }
+  const nodes = await client.knowledge
+    .browse(projectId)
+    .then((value) => value)
+    .catch(() => undefined)
+  return { kind: 'cards', cards: cards.data, nodes }
+}
+
 /** 装载判定输入（browseLoadPlan 消费——refs 快照） */
 export interface BrowseLoadPlanInput {
   /** 本次装载全量键（projectId#nonce） */
@@ -236,7 +262,7 @@ export function pendingBrowseState(prev: KnowledgeBrowseState, mustClear: boolea
   return mustClear ? { ...initialBrowseState(), filter: prev.filter } : { ...prev, busy: true }
 }
 
-/** 落点应用（纯函数）：LoadApply → 下一状态（bundle 落全量元数据；cards 仅换卡片；error 带旧域树） */
+/** 落点应用（纯函数）：LoadApply → 下一状态（bundle 落全量元数据；cards 换卡片/树；error 带旧域树） */
 export function applyBrowseLoad(prev: KnowledgeBrowseState, out: LoadApply): KnowledgeBrowseState {
   if (out.kind === 'error') {
     return { ...prev, phase: 'error', busy: false, error: out.error }
@@ -254,7 +280,7 @@ export function applyBrowseLoad(prev: KnowledgeBrowseState, out: LoadApply): Kno
       knowledgeDir: out.bundle.knowledgeDir,
     }
   }
-  return { ...prev, phase: 'ready', busy: false, error: undefined, cards: out.cards }
+  return { ...prev, phase: 'ready', busy: false, error: undefined, cards: out.cards, ...(out.nodes !== undefined ? { nodes: out.nodes } : {}) }
 }
 
 /**
@@ -294,6 +320,18 @@ export function browseActions(
   }
 }
 
+/** entryAction 执行入口（全动词共用——runEntryActionRequest 单点透传通道） */
+export async function runEntryActionRequest(
+  client: ForgeRpcClient,
+  request: EntryActionRequest,
+): Promise<BrowseFetch<EntryActionReceipt>> {
+  try {
+    return { ok: true, data: await client.knowledge.entryAction(request) }
+  } catch (error) {
+    return { ok: false, error: mapBrowseError(error) }
+  }
+}
+
 /**
  * entryAction 批量裁决（纯异步面）：forge:knowledge/entryAction 单通道 confirm/reject 批量；
  * 回执归一 BrowseFetch（永不 reject）——逐条回执文案分派归 entryActionNotice。
@@ -304,12 +342,7 @@ export async function runEntryAction(
   action: EntryActionVerb,
   entryIds: readonly number[],
 ): Promise<BrowseFetch<EntryActionReceipt>> {
-  try {
-    const receipt = await client.knowledge.entryAction({ projectId, action, entryIds: [...entryIds] })
-    return { ok: true, data: receipt }
-  } catch (error) {
-    return { ok: false, error: mapBrowseError(error) }
-  }
+  return runEntryActionRequest(client, { projectId, action, entryIds: [...entryIds] })
 }
 
 /** 重拉落点勾选残影修剪（纯函数）：不在重拉结果集的 entryId 剪除（动作后删除零残留） */
@@ -375,7 +408,7 @@ export function useKnowledgeBrowse(
   projectId: string,
   makeClient: RpcClientFactory = preloadRpcClientFactory,
   active = true,
-): readonly [KnowledgeBrowseState, KnowledgeBrowseActions, KnowledgeMultiSelectActions] {
+): readonly [KnowledgeBrowseState, KnowledgeBrowseActions, KnowledgeMultiSelectActions, KnowledgeTreeActions] {
   const [filter, dispatchFilter] = useReducer(browseFilterReducer, EMPTY_FILTER)
   const [multiSelect, dispatchMulti] = useReducer(multiSelectReducer, EMPTY_MULTI_SELECT)
   const [state, setState] = useState<KnowledgeBrowseState>(initialBrowseState)
@@ -419,9 +452,7 @@ export function useKnowledgeBrowse(
     let alive = true
     const task: Promise<LoadApply> = plan.isFull
       ? runFullLoad(client, projectId, filter)
-      : fetchFilteredCards(client, projectId, filter).then((out) =>
-          out.ok ? { kind: 'cards', cards: out.data } : { kind: 'error', error: out.error },
-        )
+      : runFilteredLoad(client, projectId, filter)
     void task.then((out) => {
       if (!alive || seq !== seqRef.current) return
       if (plan.isFull && out.kind === 'bundle') hasBundleRef.current = true
@@ -457,10 +488,32 @@ export function useKnowledgeBrowse(
     }, multiSelect.selected, state.cards.map((card) => card.entryId), runAction)
   }, [makeClient, projectId, multiSelect.selected, state.cards])
 
+  // 域树动作（SC-H）：entryAction 树级径 move/createDomain——回执文案分派同 multiActions，
+  // 成功后全量重拉（树/徽记/卡片即时刷新——nonce 递增走既有 seq 守卫）
+  const treeActions = useMemo<KnowledgeTreeActions>(() => {
+    const runTree = async (request: EntryActionRequest): Promise<void> => {
+      const out = await runEntryActionRequest(makeClient(), request)
+      if (!out.ok) {
+        setNotice(out.error.message)
+        return
+      }
+      setNotice(entryActionNotice(out.data))
+      setNonce((n) => n + 1)
+    }
+    return {
+      moveEntry: (entryId, targetDomain) => {
+        return runTree({ projectId, action: 'move', entryIds: [entryId], targetDomain })
+      },
+      createDomain: (domainPath) => {
+        return runTree({ projectId, action: 'createDomain', domain: domainPath })
+      },
+    }
+  }, [makeClient, projectId])
+
   const actions = browseActions(dispatchFilter, retry)
   // 消费态合成（fix-5）：装载态字段 + 实时过滤态（reducer 单一来源）——防滞后快照弹回键入值；
   // 多选态/裁决提示同面合并注入（态机单一来源 = reducer/执行面）
   const consumed = consumedBrowseState(state, filter)
   const merged: KnowledgeBrowseState = { ...consumed, multiSelect, actionNotice: notice }
-  return [merged, actions, multiActions] as const
+  return [merged, actions, multiActions, treeActions] as const
 }

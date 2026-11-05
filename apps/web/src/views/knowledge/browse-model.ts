@@ -167,9 +167,11 @@ export function entryActionFailureText(code: EntryActionFailureCode): string {
  * - 部分失败 = 成功/失败计数 + 逐条 `#id 失败文案`（部分失败不回滚已成功条目——如实呈现）。
  */
 export function entryActionNotice(receipt: EntryActionReceipt): string | undefined {
-  const failures = receipt.results.filter((result) => result.outcome === 'failure')
+  // 树级 outcome（createDomain——无逐条回执维度）视同全成功静默；逐条回执面照常分派
+  const results = receipt.results ?? []
+  const failures = results.filter((result) => result.outcome === 'failure')
   if (failures.length === 0) return undefined
-  const successCount = receipt.results.length - failures.length
+  const successCount = results.length - failures.length
   const detail = failures
     .map((result) => (result.outcome === 'failure' ? `#${String(result.entryId)} ${entryActionFailureText(result.code)}` : ''))
     .filter((text) => text !== '')

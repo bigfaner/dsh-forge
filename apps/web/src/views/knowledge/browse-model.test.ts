@@ -4,7 +4,7 @@
 //   AC2 关键词细分 + 组合过滤 / 清除过滤；
 //   AC4 空库引导 ⇄ 过滤无结果分流；AC5 缓存先行相位序（cards > skeleton）。
 import { describe, expect, it } from 'vitest'
-import type { DomainNode } from '@dsh-forge/contracts'
+import type { DomainNode, EntryActionReceipt } from '@dsh-forge/contracts'
 import {
   EMPTY_FILTER,
   EMPTY_MULTI_SELECT,
@@ -287,5 +287,9 @@ describe('entryAction 回执 code→错误文案分派（封闭码集）', () =>
     expect(notice).toContain('失败 2')
     expect(notice).toContain('#2')
     expect(notice).toContain('#3')
+  })
+
+  it('entryActionNotice：树级 outcome（createDomain——results 缺席）= undefined 静默（不抛零长度炸点）', () => {
+    expect(entryActionNotice({} as EntryActionReceipt)).toBeUndefined()
   })
 })

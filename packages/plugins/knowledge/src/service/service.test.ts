@@ -95,6 +95,20 @@ describe('读面行为等价（v4 实体表）', () => {
     expect(detail.title).toBe('AUTH')
   })
 
+  it('browse 域表并集：knowledge_domains 零条目域（createDomain 径）即时在场 + 祖先前缀占位', async () => {
+    await service.createDomain({ projectId, domain: '新域' })
+    await service.createDomain({ projectId, domain: 'a/b' })
+    const nodes = await service.browse({ projectId })
+    const empty = nodes.filter((node) => node.entryCount === 0)
+    expect(empty).toEqual([
+      { domainPath: 'a', label: 'a', depth: 1, entryCount: 0, unconfirmedCount: 0 },
+      { domainPath: '新域', label: '新域', depth: 1, entryCount: 0, unconfirmedCount: 0 },
+      { domainPath: 'a/b', label: 'b', depth: 2, entryCount: 0, unconfirmedCount: 0 },
+    ])
+    // 既有条目聚合零漂移
+    expect(nodes.find((node) => node.domainPath === 'backend')).toMatchObject({ entryCount: 2, unconfirmedCount: 1 })
+  })
+
   it('两级解析 fail-loud：projectId 未命中静态绑定表/注册行 → 裸错（非六码）', async () => {
     await expect(service.listEntries({ projectId: 'p-other' })).rejects.toThrow(/项目不存在/)
   })
