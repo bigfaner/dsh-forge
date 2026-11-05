@@ -1,6 +1,7 @@
 // 单测 —— knowledge_supersede tool（fix-评审2：裁决 #1 修订——merge/revert 开为 agent tool；
 // followups #1 重命名 2026-11-05：knowledge_merge → knowledge_supersede；
-// 参数防御性收窄 + 描述面/参数 schema 契约锚，同 write.test.ts 口径）。
+// 参数防御性收窄 + 描述面/参数 schema 契约锚，同 write.test.ts 口径；
+// followups #3：补 execute 错误路径（unbound session / projectId 未绑定））。
 import { describe, expect, it, vi } from 'vitest'
 import type { KnowledgeMergeOutcome, KnowledgeService } from '../service/types.js'
 import { createSupersedeTool, parseSupersedeArgs } from './supersede.js'
@@ -81,6 +82,32 @@ describe('execute：会话上下文解析 → 服务调用 → snake→camel 映
         expectedLoserHash: 'a'.repeat(64),
       },
     ])
+  })
+})
+
+describe('execute 错误路径：unbound session / projectId 未绑定（followups #3）', () => {
+  it('无 agent 会话上下文（cwd undefined）→ no session workspace，服务零调用', async () => {
+    const { service, calls } = stubService()
+    const tool = createSupersedeTool(deps(service))
+    await expect(tool.execute(validArgs, {})).rejects.toThrow(/no session workspace/)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('有会话但 cwd 不在绑定表（projectId 未绑定）→ not bound，服务零调用', async () => {
+    const { service, calls } = stubService()
+    const tool = createSupersedeTool(deps(service))
+    const unboundExec = { agent: { session: { id: 'sess-2', header: { cwd: 'C:\\ws\\elsewhere' } } } }
+    await expect(tool.execute(validArgs, unboundExec)).rejects.toThrow(/C:\\ws\\elsewhere[\s\S]*not bound to a registered project/)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('header.cwd 缺席回落顶层 cwd 同口径（sessionCwd 兼容位）', async () => {
+    const { service, calls } = stubService()
+    const tool = createSupersedeTool(deps(service))
+    const bareSession = { agent: { session: { id: 'sess-3', cwd: 'C:\\ws\\demo' } } }
+    const out = await tool.execute(validArgs, bareSession)
+    expect(out).toEqual(mergedOutcome())
+    expect(calls).toHaveLength(1)
   })
 })
 
