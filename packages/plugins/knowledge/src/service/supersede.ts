@@ -27,7 +27,7 @@ import matter from 'gray-matter'
 import type Database from 'better-sqlite3'
 import { withImmediateTransaction } from '../storage/concurrency.js'
 import { deriveEffectiveRank, type EntryStatus } from '../storage/rebuild.js'
-import { KNOWLEDGE_MERGE_EVENT, emitStorageDiag, storageDiag, type DiagEmitter } from '../storage/diag.js'
+import { KNOWLEDGE_SUPERSEDE_EVENT, emitStorageDiag, storageDiag, type DiagEmitter } from '../storage/diag.js'
 import type { KnowledgeMergeOutcome, KnowledgeMergeQuery, KnowledgeRevertOutcome, KnowledgeRevertQuery } from './types.js'
 
 /** 归并面依赖（service 工厂注入） */
@@ -97,7 +97,7 @@ export function createSupersedeGateway(deps: SupersedeGatewayDeps) {
       detail: string,
       reason: 'merged' | 'not-found' | 'cross-project' = 'merged',
     ): KnowledgeMergeOutcome => {
-      emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_MERGE_EVENT, `归并 CAS 拒：${detail}`, { cwd: q.loserId }))
+      emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_SUPERSEDE_EVENT, `归并 CAS 拒：${detail}`, { cwd: q.loserId }))
       return { outcome: 'cas-failed', loserId: q.loserId, reason, detail }
     }
     if (q.loserId === q.winnerId) return casFailed('winner 与 loser 同 id——自归并拒绝')
@@ -126,7 +126,7 @@ export function createSupersedeGateway(deps: SupersedeGatewayDeps) {
     // ④ INV-F：写前 content_hash 校验——失配即中止该项（评估期间被手改）
     if (!hashMatches(read.raw, q.expectedLoserHash)) {
       const detail = `content_hash 失配（评估期快照 ≠ 当前文件）——中止该项，绝不基于陈旧内容归并：${q.loserId}`
-      emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_MERGE_EVENT, `归并中止：${detail}`, { cwd: read.authority.file_path }))
+      emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_SUPERSEDE_EVENT, `归并中止：${detail}`, { cwd: read.authority.file_path }))
       return { outcome: 'aborted', loserId: q.loserId, reason: 'hash-mismatch', detail }
     }
     // ① 正本回写（文件面先行——正本权威）：merged_into + confirmed 降 superseded（保 confirmed_at）
@@ -150,7 +150,7 @@ export function createSupersedeGateway(deps: SupersedeGatewayDeps) {
       emit,
       storageDiag(
         'info',
-        KNOWLEDGE_MERGE_EVENT,
+        KNOWLEDGE_SUPERSEDE_EVENT,
         `归并执行：${q.loserId} → ${q.winnerId}${wasConfirmed ? '（loser 曾 confirmed，同笔降 superseded）' : ''}（actor=agent）`,
         { cwd: read.authority.file_path },
       ),
@@ -160,7 +160,7 @@ export function createSupersedeGateway(deps: SupersedeGatewayDeps) {
 
   async function reinstate(q: KnowledgeRevertQuery): Promise<KnowledgeRevertOutcome> {
     const rejected = (reason: 'not-merged' | 'ledger-missing', detail: string): KnowledgeRevertOutcome => {
-      emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_MERGE_EVENT, `驳回逆向拒：${detail}`, { cwd: q.loserId }))
+      emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_SUPERSEDE_EVENT, `驳回逆向拒：${detail}`, { cwd: q.loserId }))
       return { outcome: 'rejected', loserId: q.loserId, reason, detail }
     }
     const loser = selectEntry.get(q.loserId)
@@ -179,7 +179,7 @@ export function createSupersedeGateway(deps: SupersedeGatewayDeps) {
     if (read === undefined) return rejected('not-merged', `loser 权威文件不可读/无版本行：${q.loserId}`)
     if (!hashMatches(read.raw, q.expectedLoserHash)) {
       const detail = `content_hash 失配——中止逆向（文件已被外部改动）：${q.loserId}`
-      emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_MERGE_EVENT, `逆向中止：${detail}`, { cwd: read.authority.file_path }))
+      emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_SUPERSEDE_EVENT, `逆向中止：${detail}`, { cwd: read.authority.file_path }))
       // fix-评审2 Minor：与 supersede 侧对称的 aborted/hash-mismatch 口径（原 rejected/not-merged）
       return { outcome: 'aborted', loserId: q.loserId, reason: 'hash-mismatch', detail }
     }
@@ -204,7 +204,7 @@ export function createSupersedeGateway(deps: SupersedeGatewayDeps) {
     })
     emitStorageDiag(
       emit,
-      storageDiag('info', KNOWLEDGE_MERGE_EVENT, `驳回逆向：${q.loserId} 解除 redirect（rank 回 ${restoredStatus} 档）→ ${loser.merged_into} 正文保留（actor=human）`, { cwd: read.authority.file_path }),
+      storageDiag('info', KNOWLEDGE_SUPERSEDE_EVENT, `驳回逆向：${q.loserId} 解除 redirect（rank 回 ${restoredStatus} 档）→ ${loser.merged_into} 正文保留（actor=human）`, { cwd: read.authority.file_path }),
     )
     return { outcome: 'reverted', loserId: q.loserId, winnerId: loser.merged_into, restoredStatus }
   }

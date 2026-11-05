@@ -75,7 +75,7 @@ function writeQ(partial: Partial<KnowledgeWriteQuery> = {}): KnowledgeWriteQuery
 }
 
 const purgeEvents = (events: readonly DiagEventPayload[]): DiagEventPayload[] => events.filter((e) => e.event === 'knowledge-entry-purge')
-const mergeEvents = (events: readonly DiagEventPayload[]): DiagEventPayload[] => events.filter((e) => e.event === 'knowledge-merge')
+const mergeEvents = (events: readonly DiagEventPayload[]): DiagEventPayload[] => events.filter((e) => e.event === 'knowledge-supersede')
 
 const nRows = (w: World, table: string, where = ''): number =>
   w.db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM ${table} ${where}`).get()?.n ?? 0
