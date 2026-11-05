@@ -428,7 +428,6 @@
   flex: 1;
   flex-wrap: nowrap; /* 单行不换行（用户裁决）——溢出省略号收口 */
   align-items: center;
-  justify-content: center; /* 四列同行值居中（用户裁决——域/状态/作者/更新时间） */
   gap: var(--dsw-font-xs-13-line-height);
   min-width: 0;
   padding: 4px var(--dsw-font-xs-13-line-height); /* 紧凑行距（用户裁决——行高收紧） */
@@ -436,6 +435,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left; /* 表格左对齐（用户裁决 2026-11-05——值居中退役） */
 }
 
 /* 关键词整行例外：chips 左对齐 + 可换行（多词流式排布） */
