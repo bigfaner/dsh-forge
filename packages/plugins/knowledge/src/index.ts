@@ -13,6 +13,7 @@
 // projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
 // 数据源（bindingsFile 文件与刷新缝退役）；服务面两级解析 projectId→wsPath→注册行。
 import { createKnowledgeTools, createProjectResolver, createWsPathResolver } from './tools/index.js'
+import type { ProjectIdResolver, WsPathResolver } from './tools/index.js'
 import { domainTreeIndexOf } from './service/internal.js'
 import { registerKnowledgeScopedPrompt } from './service/session-prompt.js'
 import { createKnowledgeService } from './service/index.js'
@@ -124,9 +125,17 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
     )
     if (storage === undefined) return () => {}
 
-    // 两级解析器（config 静态绑定表——服务面第一级 + scoped 提示词接线共用）
-    const resolveProjectId = createProjectResolver(config.projects ?? [])
-    const resolveWsPath = createWsPathResolver(config.projects ?? [])
+    // 两级解析器（config 静态绑定表 + 注册表行回退径——服务面第一级 + scoped 提示词接线共用）。
+    // 回退径（bug：Q19 退役 host config.projects 注入后静态表恒空，工具面 cwd→projectId
+    // 永远 miss → not bound）：注册表行（ws_path realpath canonical 键 → project_id）为
+    // 动态事实源——host 注册链/boot 回填径（5e5592dc）落行后即解析可用。静态表优先（显式
+    // config 注入仍是第一正径），miss 时回查注册表。
+    const staticResolveProjectId = createProjectResolver(config.projects ?? [])
+    const staticResolveWsPath = createWsPathResolver(config.projects ?? [])
+    const resolveProjectId: ProjectIdResolver = (cwd) =>
+      staticResolveProjectId(cwd) ?? storage.registry.findByWsPath(cwd)?.projectId ?? undefined
+    const resolveWsPath: WsPathResolver = (projectId) =>
+      staticResolveWsPath(projectId) ?? storage.registry.findByProjectId(projectId)?.wsPath ?? undefined
     // A2 服务切换：八法服务面 + stage② 写门三法（自持库供数 + 两级解析第一级 config 静态绑定表）
     const service = createKnowledgeService({
       db: storage.db,

@@ -216,6 +216,54 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词�
     }
   })
 
+  it('注册表行回退径（bug：Q19 退役 config.projects 注入后一级解析恒空）：config 零绑定、注册行在场 → 工具面 cwd→projectId 经注册表解析，非 not bound', async () => {
+    const rt = freshRt()
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-regfb-'))
+    try {
+      const wsDir = join(root, 'ws')
+      mkdirSync(wsDir, { recursive: true })
+      const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() }) // 零 config.projects
+      const service = rt.provided.get(KNOWLEDGE_SERVICE_NAME) as {
+        registerProject(q: { wsPath: string; projectId: string }): Promise<unknown>
+      }
+      await service.registerProject({ wsPath: wsDir, projectId: 'p-reg' }) // 注册行唯一写径（host 回填径同型）
+      const search = rt.registeredTools.find((t) => t.name === 'knowledge_search')
+      // cwd 命中注册行 → 解析出 p-reg 注入服务（空知识库零命中、不抛 not bound）
+      const result = (await search?.execute({}, { agent: { session: { id: 's', header: { cwd: wsDir } } } })) as {
+        content?: string
+      }
+      expect(result).toBeDefined()
+      expect(JSON.stringify(result)).not.toContain('not bound')
+      // 注册行缺席的 cwd 仍 not bound（失败口径不变）
+      await expect(
+        search?.execute({}, { agent: { session: { id: 's', header: { cwd: join(root, 'other') } } } }),
+      ).rejects.toThrow(/not bound/)
+      dispose()
+    } finally {
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    }
+  })
+
+  it('服务面反向解析同获注册表回退径（projectId→wsPath 两级解析第二级）：config 零绑定、注册行在场 → sessionRecall 可用', async () => {
+    const rt = freshRt()
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-regfb2-'))
+    try {
+      const wsDir = join(root, 'ws')
+      mkdirSync(join(wsDir, '.knowledge'), { recursive: true })
+      const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
+      const service = rt.provided.get(KNOWLEDGE_SERVICE_NAME) as {
+        registerProject(q: { wsPath: string; projectId: string }): Promise<unknown>
+        sessionRecall(q: { projectId: string }): Promise<unknown>
+      }
+      await service.registerProject({ wsPath: wsDir, projectId: 'p-reg2' })
+      // projectId → wsPath 解析命中注册行（回退前恒 undefined → 项目不存在）
+      await expect(service.sessionRecall({ projectId: 'p-reg2' })).resolves.toBeDefined()
+      dispose()
+    } finally {
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    }
+  })
+
   it('裸环境降级（锚缺席且无 dbFile）：fail-soft 零注册零 provide（不向 ~/.dsh 静默落盘）', () => {
     const rt = freshRt()
     const dispose = knowledgePlugin(rt.ctx())
