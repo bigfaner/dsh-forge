@@ -128,7 +128,9 @@ function KnowledgeCardView({
         {chipFace}
         <HeatBadge count={card.heat} />
         {/* 多选 checkbox（SC-F3）：官方 Checkbox——卡片右端与标题同行；事件隔离层
-            stopPropagation（勾选不触发卡片开 dialog）；非多选模式 DOM 不在场 */}
+            stopPropagation（勾选不触发卡片开 dialog）；非多选模式 DOM 不在场。
+            卡片本体开 dialog 不随多选模式停用（mockup ②：本体=开详情唯一主行为，
+            多选模式下依旧可点——勾选隔离只在 checkbox 自身） */}
         {multiSelect ? (
           <span
             className="dswf-kn-card-check"
@@ -258,7 +260,7 @@ export function KnowledgeCardGrid({
           key={card.entryId}
           card={card}
           now={now}
-          onEntryOpen={multiSelect ? undefined : onEntryOpen}
+          onEntryOpen={onEntryOpen}
           multiSelect={multiSelect}
           selected={selectedEntryIds?.includes(card.entryId)}
           onToggleSelect={onToggleSelect}
