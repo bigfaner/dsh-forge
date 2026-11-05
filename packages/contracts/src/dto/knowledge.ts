@@ -1,18 +1,26 @@
-// forge:knowledge/* 五通道信封 DTO（通道面负载/响应——web rpc client 与 host 通道注册
+// forge:knowledge/* 六通道信封 DTO（通道面负载/响应——web rpc client 与 host 通道注册
 // 共享；卡片/抽屉/分组行字段依据 prd/prd-ui-functions.md UF-4 / UF-6）。
 // 1.7（A2 服务切换）：Interface 2 七法服务类型（KnowledgeService/BrowseKnowledgeService
 // 及其专有入出参 SearchQuery/SearchHit/ReadAbstractQuery/EntryAbstract/IndexReport）
 // 随服务面归属迁 @dsh-forge/knowledge 包——contracts 只留通道信封类型（五通道 DTO 不动）。
+// knowledge-review-ui（1.3）增补：人工裁决写面——ListEntriesQuery 扩 statusFilter、
+// EntryAction 入参/回执 DTO（forge:knowledge/entryAction 第六通道；形状/码集契约正本：
+// .forge/docs/proposals/knowledge-review-ui/testing/contracts/entry-action-channel.md §1/§2）、
+// DomainNode 扩 unconfirmedCount（待审核徽记，未过滤口径独立查询面供数）。
 // 定位铁律：纯类型，零逻辑零依赖。
 
 /** 召回动词（knowledge_recall_logs.verb CHECK 口径） */
 export type RecallVerb = 'search' | 'read-abstract'
 
-/** listEntries 入参（组合过滤：目录路径前缀 + 关键词） */
+/** 状态过滤片（UI chips 全部/待审核/已确认——服务端执行，零客户端过滤语义铁律维持） */
+export type EntryStatusFilter = 'all' | 'unconfirmed' | 'confirmed'
+
+/** listEntries 入参（组合过滤：目录路径前缀 + 关键词 + 状态片；statusFilter 缺省 = 全部） */
 export interface ListEntriesQuery {
   projectId: string
   domainPrefix?: string
   keyword?: string
+  statusFilter?: EntryStatusFilter
 }
 
 /** 浏览卡片（UF-6：标题/摘要/关键词/状态/时间 + 热度徽章；兼作域树聚合数据源——domainPath 前缀派生） */
@@ -64,6 +72,73 @@ export interface DomainNode {
   depth: number
   /** 该域条目计数（含子域，与域前缀过滤同口径） */
   entryCount: number
+  /** 该域待审核条目计数（含子域；未过滤口径独立查询面供数——不随 statusFilter 抖动） */
+  unconfirmedCount: number
+}
+
+// ───────────────────────── knowledge-review-ui（1.3）人工裁决写面 ─────────────────────────
+
+/**
+ * entryAction 入参（`forge:knowledge/entryAction`——action 判别联合）。
+ * entryIds 校验语义（运行期校验归服务/通道层，形状在此锚定）：
+ * - confirm/reject：批量数组（语义 = 当前过滤结果集勾选集；空数组 = 请求级拒收）；
+ * - move/editMeta：恰 1 条——元组 `[number]` 锚定单条形状（多条/零条 = 请求级拒收）；
+ * - createDomain：无 entryIds（树级操作）。
+ * entryId → slug id 映射归服务门面（`selectEntryByRowid` 惯例）；通道层/host 零解析。
+ */
+export type EntryActionRequest =
+  | { projectId: string; action: 'confirm' | 'reject'; entryIds: number[] }
+  | { projectId: string; action: 'move'; entryIds: [number]; targetDomain: string }
+  | {
+      projectId: string
+      action: 'editMeta'
+      entryIds: [number]
+      title: string
+      keywords: string[]
+      summary: string
+      body: string
+    }
+  | { projectId: string; action: 'createDomain'; domain: string }
+
+/**
+ * 逐条失败码——封闭字面量联合（码集封闭：实现不得引入联合外成员；新增成员必须
+ * 经 fix/disc 链修订契约正本并同步夹具样例）。already-confirmed 不是 failure 码：
+ * confirm 混入已 confirmed 条目 = 幂等成功等价回执（outcome 'success'），无重复记账。
+ */
+export type EntryActionFailureCode =
+  /** reject 作用于 confirmed 条目（仅 unconfirmed 可驳回） */
+  | 'rejected-confirmed'
+  /** editMeta 提交时条目已前进（并发编辑窗口，CAS） */
+  | 'stale'
+  /** TOCTOU：勾选与执行间状态漂移（confirm 径 = 已归并 merged / reject 径 = 已升格） */
+  | 'cas-failed'
+  /** entryId 未命中（外部删除/错误 id）/ move 目标域不存在 */
+  | 'not-found'
+  /** 域 >3 层（createDomain/move/editMeta 三径同函数校验） */
+  | 'domain-depth'
+  /** YAML round-trip 注入拒收（editMeta 重写校验） */
+  | 'yaml-invalid'
+  /** reject 文件前置预检失败（文件不可删/不可读） */
+  | 'precheck-failed'
+
+/** 请求级拒收码（整请求拒回，不进逐条数组） */
+export type EntryActionRequestRejectCode = 'invalid-request'
+
+/** 逐条回执项：成功（含 already-confirmed 幂等等价）或失败（code ∈ 封闭码集） */
+export type EntryActionResult =
+  | { entryId: number; outcome: 'success' }
+  | { entryId: number; outcome: 'failure'; code: EntryActionFailureCode; message: string }
+
+/** entryAction 回执（逐条结果数组；部分失败不回滚已成功条目） */
+export interface EntryActionReceipt {
+  results: EntryActionResult[]
+}
+
+/** entryAction 请求级拒收（action 非法 / move·editMeta 条数 ≠ 恰 1 / 批量空数组 / 载荷字段不符） */
+export interface EntryActionRequestReject {
+  outcome: 'rejected-request'
+  code: EntryActionRequestRejectCode
+  message: string
 }
 
 /** sessionRecall 入参 */

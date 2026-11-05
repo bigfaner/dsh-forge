@@ -86,7 +86,7 @@ describe('读面行为等价（v4 实体表）', () => {
 
   it('browse/listEntries/getEntryDetail：域树聚合 + 正文按需读取', async () => {
     const nodes = await service.browse({ projectId })
-    expect(nodes).toEqual([{ domainPath: 'backend', label: 'backend', depth: 1, entryCount: 2 }])
+    expect(nodes).toEqual([{ domainPath: 'backend', label: 'backend', depth: 1, entryCount: 2, unconfirmedCount: 1 }])
     const cards = await service.listEntries({ projectId, keyword: 'security' })
     expect(cards.map((c) => c.title)).toEqual(['AUTH'])
     const entryId = cards[0]!.entryId

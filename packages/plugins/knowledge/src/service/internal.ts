@@ -306,17 +306,26 @@ export function domainTreeIndexOf(db: Database.Database, wsPath: string): Domain
  */
 export function aggregateDomainTree(cards: readonly KnowledgeCard[]): DomainNode[] {
   const counts = new Map<string, number>()
+  const unconfirmed = new Map<string, number>()
   for (const card of cards) {
     const segments = card.domainPath.split('/').filter((s) => s !== '')
+    const isUnconfirmed = card.status === 'unconfirmed'
     for (let depth = 1; depth <= segments.length; depth += 1) {
       const path = segments.slice(0, depth).join('/')
       counts.set(path, (counts.get(path) ?? 0) + 1)
+      if (isUnconfirmed) unconfirmed.set(path, (unconfirmed.get(path) ?? 0) + 1)
     }
   }
   return [...counts.entries()]
     .map(([domainPath, entryCount]) => {
       const segments = domainPath.split('/')
-      return { domainPath, label: segments[segments.length - 1]!, depth: segments.length, entryCount }
+      return {
+        domainPath,
+        label: segments[segments.length - 1]!,
+        depth: segments.length,
+        entryCount,
+        unconfirmedCount: unconfirmed.get(domainPath) ?? 0,
+      }
     })
     .sort((a, b) => a.depth - b.depth || (a.domainPath < b.domainPath ? -1 : 1))
 }

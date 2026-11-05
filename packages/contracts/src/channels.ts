@@ -35,13 +35,16 @@ export const PROJECTS_M2_CHANNELS = {
 
 export type ProjectsM2Channel = (typeof PROJECTS_M2_CHANNELS)[keyof typeof PROJECTS_M2_CHANNELS]
 
-/** forge:knowledge/*（五通道信封——服务面归 knowledge 插件域 provide 'knowledge' 服务；search / readAbstract 走 agent 面插件 tool，不经 web RPC——双门分工） */
+/** forge:knowledge/*（六通道信封——服务面归 knowledge 插件域 provide 'knowledge' 服务；search / readAbstract 走 agent 面插件 tool，不经 web RPC——双门分工。
+ *  knowledge-review-ui（1.3）增补 entryAction 第六通道：人工裁决写面（confirm/reject 批量 + move/editMeta/createDomain，
+ *  action 判别联合单通道形态，先例 TASKS_CHANNELS.transition） */
 export const KNOWLEDGE_CHANNELS = {
   browse: 'forge:knowledge/browse',
   listEntries: 'forge:knowledge/listEntries',
   entryDetail: 'forge:knowledge/entryDetail',
   heat: 'forge:knowledge/heat',
   sessionRecall: 'forge:knowledge/sessionRecall',
+  entryAction: 'forge:knowledge/entryAction',
 } as const
 
 export type KnowledgeChannel = (typeof KNOWLEDGE_CHANNELS)[keyof typeof KNOWLEDGE_CHANNELS]

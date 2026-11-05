@@ -55,8 +55,8 @@ const CARDS: readonly KnowledgeCard[] = [
 ]
 
 const NODES: readonly DomainNode[] = [
-  { domainPath: '前端', label: '前端', depth: 1, entryCount: 1 },
-  { domainPath: '后端', label: '后端', depth: 1, entryCount: 1 },
+  { domainPath: '前端', label: '前端', depth: 1, entryCount: 1, unconfirmedCount: 0 },
+  { domainPath: '后端', label: '后端', depth: 1, entryCount: 1, unconfirmedCount: 0 },
 ]
 
 const PROJECT: Project = {

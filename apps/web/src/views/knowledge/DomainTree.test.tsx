@@ -5,9 +5,9 @@ import type { DomainNode } from '@dsh-forge/contracts'
 import { DomainTree } from './DomainTree.js'
 
 const NODES: readonly DomainNode[] = [
-  { domainPath: '前端', label: '前端', depth: 1, entryCount: 3 },
-  { domainPath: '前端/组件', label: '组件', depth: 2, entryCount: 1 },
-  { domainPath: '后端', label: '后端', depth: 1, entryCount: 2 },
+  { domainPath: '前端', label: '前端', depth: 1, entryCount: 3, unconfirmedCount: 0 },
+  { domainPath: '前端/组件', label: '组件', depth: 2, entryCount: 1, unconfirmedCount: 0 },
+  { domainPath: '后端', label: '后端', depth: 1, entryCount: 2, unconfirmedCount: 0 },
 ]
 
 describe('DomainTree 域目录树', () => {

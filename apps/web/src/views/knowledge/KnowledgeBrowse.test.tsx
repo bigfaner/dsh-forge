@@ -12,8 +12,8 @@ import type { KnowledgeBrowseActions, KnowledgeBrowseState } from './use-knowled
 const NOW = Date.parse('2026-10-02T12:00:00.000Z')
 
 const NODES: readonly DomainNode[] = [
-  { domainPath: '前端', label: '前端', depth: 1, entryCount: 1 },
-  { domainPath: '后端', label: '后端', depth: 1, entryCount: 1 },
+  { domainPath: '前端', label: '前端', depth: 1, entryCount: 1, unconfirmedCount: 0 },
+  { domainPath: '后端', label: '后端', depth: 1, entryCount: 1, unconfirmedCount: 0 },
 ]
 
 const CARDS: readonly KnowledgeCard[] = [

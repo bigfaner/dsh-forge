@@ -135,8 +135,8 @@ describe('2.8 fs 面（forge:fs/listDir——文件浏览器数据源）', () =>
 
 describe('3.5 knowledge 面（forge:knowledge/* 五通道——浏览数据面）', () => {
   const domainNodes: DomainNode[] = [
-    { domainPath: '前端', label: '前端', depth: 1, entryCount: 2 },
-    { domainPath: '编程/java', label: 'java', depth: 2, entryCount: 1 },
+    { domainPath: '前端', label: '前端', depth: 1, entryCount: 2, unconfirmedCount: 0 },
+    { domainPath: '编程/java', label: 'java', depth: 2, entryCount: 1, unconfirmedCount: 0 },
   ]
   const cards: KnowledgeCard[] = [
     { entryId: 1, title: '框架选型', summary: '前端框架选型基线', keywords: ['react', 'frontend'], status: 'draft', domainPath: '前端', updated: '2026-10-01T00:00:00.000Z', heat: 2 },

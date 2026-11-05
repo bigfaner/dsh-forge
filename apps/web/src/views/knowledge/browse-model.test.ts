@@ -97,9 +97,9 @@ describe('browseFaceState（网格相位推导——UF-6 States 表）', () => {
 
 describe('domainRows（域树行投影）', () => {
   const nodes: readonly DomainNode[] = [
-    { domainPath: '前端', label: '前端', depth: 1, entryCount: 3 },
-    { domainPath: '前端/组件', label: '组件', depth: 2, entryCount: 1 },
-    { domainPath: '后端', label: '后端', depth: 1, entryCount: 2 },
+    { domainPath: '前端', label: '前端', depth: 1, entryCount: 3, unconfirmedCount: 0 },
+    { domainPath: '前端/组件', label: '组件', depth: 2, entryCount: 1, unconfirmedCount: 0 },
+    { domainPath: '后端', label: '后端', depth: 1, entryCount: 2, unconfirmedCount: 0 },
   ]
 
   it('「全部域」根行居首（计数 = 全量，含根域文件），节点原序跟随（父先于子）', () => {
