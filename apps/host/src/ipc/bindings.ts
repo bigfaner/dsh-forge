@@ -165,3 +165,31 @@ export function withKnowledgeRegistryRow(
     },
   }
 }
+
+/**
+ * boot 回填径（bug 5e5592dc）：注册行唯一产品写径 = registerProject 时点（1.15），
+ * 转正前注册/自持库丢行的存量项目两级解析全落空——knowledge 通道恒「项目不存在」。
+ * boot 期对活跃项目逐个幂等 upsert 注册行（服务面 registerProject 幂等，目录缺则建）。
+ * fail-soft：单项目失败记日志继续，listProjects 异常整体静默——永不抛断启动。
+ */
+export async function backfillKnowledgeRegistryRows(
+  projects: Pick<ProjectService, 'listProjects'>,
+  knowledge: Pick<KnowledgeRegistryWriter, 'registerProject'> | undefined,
+  log: (message: string) => void = console.warn,
+): Promise<void> {
+  if (knowledge === undefined) return
+  let rows: readonly ProjectSummary[]
+  try {
+    rows = await projects.listProjects()
+  } catch (cause) {
+    log(`[host] knowledge 注册行回填跳过（listProjects 异常）：${String(cause)}`)
+    return
+  }
+  for (const project of rows.filter((p) => !p.archived)) {
+    try {
+      await knowledge.registerProject({ wsPath: project.wsPath, projectId: project.id })
+    } catch (cause) {
+      log(`[host] knowledge 注册行回填失败（${project.id} 知识面降级）：${String(cause)}`)
+    }
+  }
+}

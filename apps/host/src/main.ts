@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, ipcMain, protocol, session, shell } from 'electron'
 import { bootDshHost } from './boot/index.js'
 import {
-  BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, electronDirectoryDialog,
+  backfillKnowledgeRegistryRows, BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, electronDirectoryDialog,
   electronHarnessActions, harnessLogPathOf, HARNESS_SAFE_MODE_ENV, noteHarnessLog,
   parentWindowOf, refreshKnowledgeBindings, registerBootChannel, registerDirectoryPickerChannel,
   registerFsChannels, registerHarnessChannels, registerKnowledgeChannels, registerM2Channels,
@@ -120,6 +120,7 @@ void (async () => {
         ),
       )
       void refreshKnowledgeBindings(host.services.forgeProjects, paths.bindingsFile)
+      void backfillKnowledgeRegistryRows(host.services.forgeProjects, host.services.knowledge) // bug 5e5592dc：注册行 boot 回填——存量项目知识通道免「项目不存在」
       runStartupReconcile(host.services.forgeProjects) // fix-27：启动对账（§交互三）——悬空引用启动即修
     } else console.warn('[host] forgeProjects 服务缺席（core 插件行未装载）——forge:projects/* 通道未注册')
     // 1.7 A2 服务切换：在场判定键 knowledge（插件自有服务，去 forge 前缀）；插件缺席 =
