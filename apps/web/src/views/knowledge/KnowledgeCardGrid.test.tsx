@@ -1,6 +1,8 @@
 // KnowledgeCardGrid 单测 —— UF-6 卡片网格 + 主体四态（AC2/AC3/AC4）。
 // AC3：卡片字段 frontmatter 驱动 + 热度徽章 = card.heat 原样（使用事件计数——UI 零再推导）。
 import { describe, expect, it } from 'vitest'
+// @ts-expect-error —— web tsconfig types 仅 vite/client；node:fs 仅测试内读取样式表源文
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { KnowledgeCard } from '@dsh-forge/contracts'
 import { KnowledgeCardGrid, isEntryConfirmable } from './KnowledgeCardGrid.js'
@@ -146,6 +148,20 @@ describe('SC-F3 多选 checkbox（卡片右端与标题同行）', () => {
     expect(markup.match(/data-dswf-kn-card-check/g)?.length).toBe(2)
     expect(markup).toContain('type="checkbox"')
     expect(markup).toContain('checked')
+  })
+
+  it('F3 视觉面契约：sr-only 只收口 label 文本 span——官方 Checkbox 勾选框本体（input 16×16）可见（bug cfad7c63 反证：整件视觉隐藏 rect 0×0）', () => {
+    const css = readFileSync(new URL('./knowledge.css', import.meta.url), 'utf8')
+    const rules: readonly string[] = css.match(/\.dswf-kn-card-check [^{]+\{[^}]*\}/g) ?? []
+    // sr-only 规则必须落在 span（label 文本）上，不得落在 .dswf-kn-check 根（label=勾选框载体）
+    const srOnly = rules.find((rule) => rule.includes('clip-path: inset(50%)'))
+    expect(srOnly, 'sr-only 规则应在场（可访问名保留手段）').toBeTruthy()
+    expect(srOnly).toContain('.dswf-kn-check span')
+    // 勾选框本体与 input 不得被压缩/隐藏
+    for (const rule of rules) {
+      if (rule.includes('span')) continue
+      expect(rule).not.toMatch(/width|height|clip-path|position:\s*absolute/)
+    }
   })
 
   it('F3 非多选模式反向断言：checkbox DOM 不在场', () => {

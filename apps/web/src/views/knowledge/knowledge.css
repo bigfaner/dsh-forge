@@ -705,8 +705,9 @@
   align-items: center;
 }
 
-/* 官方 Checkbox 要求 caller-owned 可见 label——卡片行语言收口为视觉隐藏（可访问名保留） */
-.dswf-kn-card-check .dswf-kn-check {
+/* 官方 Checkbox 要求 caller-owned 可见 label——sr-only 只收口 label 文本 span；
+   勾选框本体（input 16×16）保持可见可点（bug cfad7c63：整件隐藏 → rect 0×0） */
+.dswf-kn-card-check .dswf-kn-check span {
   position: absolute;
   width: 1px;
   height: 1px;
