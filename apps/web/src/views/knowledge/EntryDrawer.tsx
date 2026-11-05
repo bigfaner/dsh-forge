@@ -478,7 +478,6 @@ export function EntryDrawer({ projectId, entryId, onClose, makeClient, now }: En
       data-dswf-kn-dialog=""
     >
       <div className="dswf-kn-dialog-head" data-dswf-kn-dialog-head="" {...dragProps}>
-        <span aria-hidden="true">⠿</span>
         <span>知识详情</span>
         <span className="dswf-kn-dialog-spacer" />
         <Button variant="ghost" size="sm" className="dswf-kn-dialog-close" data-dswf-kn-dialog-close="" aria-label="关闭弹窗" onClick={onClose}>

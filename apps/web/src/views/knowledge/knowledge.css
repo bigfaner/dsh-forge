@@ -290,8 +290,8 @@
   box-shadow: var(--dsw-elevation-prominent);
 }
 
-/* 标题栏：白底（与专家详情 dialog 统一——无灰条/无分隔线），行尾关闭位；
- * ⠿ 拖移手柄 + cursor move 保留（可拖移语义位） */
+/* 标题栏：白底（与专家详情 dialog 统一——无灰条/无分隔线/无手柄图形），行尾关闭位；
+ * 整头拖移 + cursor move 保留（可拖移语义位） */
 .dswf-kn-dialog-head {
   display: flex;
   align-items: center;
