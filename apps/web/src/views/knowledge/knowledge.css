@@ -297,7 +297,8 @@
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
   min-height: 30px; /* 任务弹窗标题栏收紧刻度（D43 同值） */
-  padding-inline: var(--dsw-font-xs-13-line-height);
+  padding-block: var(--dsw-font-xs-13-line-height); /* 头行下移留白（标题/关闭钮垂直呼吸——专家 dialog 同感） */
+  padding-inline: var(--dsw-font-s-14-line-height);
   cursor: var(--dsh-cursor-move, move);
   user-select: none;
   touch-action: none;
