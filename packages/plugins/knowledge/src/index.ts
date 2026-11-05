@@ -4,14 +4,17 @@
 //   'knowledge' 服务（reflect.provide；core 八法随迁 service/，自持库 storage/ 供数），
 //   tools / systemPrompt 为 dsh 官方面。
 // 装配：自持存储自启（失败/锚缺席 fail-soft 降级零注册）→ 'knowledge' 服务 provide →
-// 六 tool 注册（tools/register——search/readAbstract/write/read/merge/revert，
-// 裁决 #1 修订 2026-11-05：merge/revert 开为 agent tool）+ forge:knowledge 段注册（systemPrompt.section，
-// order 500）+ knowledge.root 目录键声明（根 scope provide('dirKeys.knowledge', entries)
+// 六 tool 注册（tools/register——search/readAbstract/write/read/supersede/reinstate，
+// 裁决 #1 修订 2026-11-05：supersede/reinstate 开为 agent tool）+ scoped 提示词接线
+// （stage③ C2：agent/created 时刻在该会话 scope 注册 forge:knowledge(910)/
+// forge:knowledge-domains(911) 两段——service/session-prompt.ts，全局段注册退役）+
+// knowledge.root 目录键声明（根 scope provide('dirKeys.knowledge', entries)
 // 约定名——跨 scope 反向拉取终态缝，bug 04d445f4）；交出合并 disposer。
 // projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
 // 数据源（bindingsFile 文件与刷新缝退役）；服务面两级解析 projectId→wsPath→注册行。
 import { createKnowledgeTools, createProjectResolver, createWsPathResolver } from './tools/index.js'
-import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from './prompt/index.js'
+import { topDomainIndexOf } from './service/internal.js'
+import { registerKnowledgeScopedPrompt } from './service/session-prompt.js'
 import { createKnowledgeService } from './service/index.js'
 import { startSelfHostedStorage } from './storage/index.js'
 import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
@@ -121,16 +124,24 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
     )
     if (storage === undefined) return () => {}
 
+    // 两级解析器（config 静态绑定表——服务面第一级 + scoped 提示词接线共用）
+    const resolveProjectId = createProjectResolver(config.projects ?? [])
+    const resolveWsPath = createWsPathResolver(config.projects ?? [])
     // A2 服务切换：八法服务面 + stage② 写门三法（自持库供数 + 两级解析第一级 config 静态绑定表）
     const service = createKnowledgeService({
       db: storage.db,
-      resolveWsPath: createWsPathResolver(config.projects ?? []),
+      resolveWsPath,
       emit: diagEmit,
       ...(config.backflow !== undefined ? { backflow: config.backflow } : {}),
     })
+    /** 注册库在场判定 + 顶域实时聚合（scoped 两段 text 闭包供数面——同生同退门） */
+    const promptBindDeps = {
+      isRegistered: (wsPath: string) => storage.registry.findByWsPath(wsPath) !== undefined,
+      topDomains: (wsPath: string) => topDomainIndexOf(storage.db, wsPath),
+    }
     const tools = createKnowledgeTools({
       knowledge: service,
-      resolveProjectId: createProjectResolver(config.projects ?? []),
+      resolveProjectId,
     })
 
     /** 'knowledge' 服务 provide（host servicesFace.get 消费；缺席 reflect 面 = 零供数不阻载） */
@@ -156,12 +167,12 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       ctx.tools.register(tools.read),
       ctx.tools.register(tools.supersede),
       ctx.tools.register(tools.reinstate),
-      // 段文本 = 契约内容源渲染（工具定义 + contracts 常量），不在此复述
-      ctx.systemPrompt.section({
-        name: KNOWLEDGE_SECTION_NAME,
-        order: KNOWLEDGE_SECTION_ORDER,
-        text: renderKnowledgeSection(tools),
-      }),
+      // stage③ C2 scoped 注册接线：session-bind 时刻在该会话 scope 注册
+      // forge:knowledge(910)/forge:knowledge-domains(911) 两段（闭包捕获 ws_path、
+      // 未绑定不注册、重绑随 scope 移除）；on 缺席（旧宿主/桩）= 零 scoped 接线 fail-soft
+      ...(typeof ctx.on === 'function'
+        ? [registerKnowledgeScopedPrompt({ on: ctx.on, resolveProjectId, resolveWsPath, ...promptBindDeps })]
+        : []),
     ]
     return () => {
       for (const dispose of disposers) dispose()
@@ -171,7 +182,20 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
 )
 
 export default knowledgePlugin
-export { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from './prompt/index.js'
+export {
+  KNOWLEDGE_DOMAINS_MAX_ROWS,
+  KNOWLEDGE_DOMAINS_SECTION_NAME,
+  KNOWLEDGE_DOMAINS_SECTION_ORDER,
+  KNOWLEDGE_SECTION_NAME,
+  KNOWLEDGE_SECTION_ORDER,
+  renderKnowledgeDomainsSection,
+  renderKnowledgeStaticSection,
+} from './prompt/index.js'
+export {
+  bindKnowledgePromptSections,
+  registerKnowledgeScopedPrompt,
+} from './service/session-prompt.js'
+export type { KnowledgePromptBindDeps, ScopedPromptWiringInput } from './service/session-prompt.js'
 export { createKnowledgeTools, createProjectResolver, createWsPathResolver } from './tools/index.js'
 export type {
   KnowledgeTools,

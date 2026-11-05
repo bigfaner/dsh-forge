@@ -79,12 +79,29 @@ export interface SystemPromptSectionFace {
   section(section: KnowledgePromptSection): () => void
 }
 
-/** forge:knowledge 段形状（Interface 3：name/order/text） */
+/** forge:knowledge 段形状（Interface 3：name/order/text——stage③ C2 text 函数化） */
 export interface KnowledgePromptSection {
   readonly name: string
   /** 升序拼接；同 order 按名称码序 */
   readonly order: number
-  readonly text: string
+  /** 固定文本或每 turn 求值函数（空串段在官方装配渲染期自然消失） */
+  readonly text: string | (() => string)
+}
+
+/** 官方 agent/created 载荷的 Agent 结构子面（session + agent-scoped ctx） */
+export interface ScopedAgentFace {
+  /** 该 agent 驱动的活会话（header.cwd = 会话工作区根） */
+  readonly session?: ToolSessionFace
+  /**
+   * agent-scoped cordis context（官方 Agent.ctx）：经它注册的段只对该会话生效，
+   * 随 scope 生命周期移除（重绑 = 新 scope 新注册，旧注册随旧 scope unwind）。
+   */
+  readonly ctx?: { readonly systemPrompt?: SystemPromptSectionFace }
+}
+
+/** 官方 agent/created 事件订阅子面（cordis ctx.on 同型——返回注销器） */
+export interface AgentCreatedSubscribeFace {
+  (event: 'agent/created', handler: (payload: { readonly agent: ScopedAgentFace }) => unknown): () => void
 }
 
 /** 第三方目录键声明项（plugin-forge DirKeyEntry 结构同形——消费面最小字段集） */
@@ -120,4 +137,10 @@ export interface KnowledgeContextFace {
    * 注入的诊断发射面（DIAG_EVENT 类型化 emit——docs/conventions/diagnostic-emit-discipline.md）。
    */
   readonly emit?: (event: 'diag/log', payload: import('@dsh-forge/contracts').DiagEventPayload) => void
+  /**
+   * 官方 agent/created 事件订阅子面（可选结构面——stage③ C2 scoped 注册缝）：
+   * session-bind 时刻在该会话 scope 注册动态域索引段（闭包捕获 ws_path）。缺席 =
+   * 零 scoped 接线（静态/动态两段均不注入，工具面不受影响）。
+   */
+  readonly on?: AgentCreatedSubscribeFace
 }

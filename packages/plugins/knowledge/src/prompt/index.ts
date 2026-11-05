@@ -1,60 +1,71 @@
-// forge:knowledge 系统提示词段渲染（定位：业务——DF006）。
-// 契约内容源渲染（AC5 / Hard Rule 2）：事实不自插件私藏——工具名/描述/参数说明
-// 机械取自两 tool 定义对象（tools/ 单一来源），域层级上限等契约事实取自
-// @dsh-forge/contracts 常量（frontmatter 契约单一来源）；本模块只提供连接性散文。
-// 段文本三部分（任务 3.4）：知识库存在声明 + agentic search 流程指引 + 两 tool 用法。
-// 注意：SystemPrompt 段文本默认 {{var}} 插值（未知引用会炸渲染）——文本禁用裸 {{。
+// forge:knowledge 系统提示词两段（定位：业务——stage③ C2 / 提案 §2.2 + §7 审核稿）。
+// 两段函数化、独立注册、同生同退（无注册库整体不注入——text 空返 ''，空段在官方
+// 装配渲染期自然消失）：
+//   · 静态瘦身段 forge:knowledge（order 910）：XML 标签制固定文本，零工具说明
+//     （工具加载由 dsh 机械承载——renderToolUsage 退役）；
+//   · 动态域索引段 forge:knowledge-domains（order 911）：text 函数每 turn 实时
+//     聚合顶域清单 `域名(N entries) — 简介`（降级 <无简介>；>10 截断 + 计数枚举行）。
+// 两段经 scoped 注册缝随会话绑定注入（service/session-prompt.ts——AssembleContext
+// 无会话信息，绑定经 session-bind 时刻 scoped 注册闭包承载）。
+// 契约单一来源：域层级上限取 @dsh-forge/contracts 常量插值；本模块零工具定义引用。
+// 注意：SystemPrompt 段文本默认 {{var}} 插值（未知引用会炸渲染）——两段文本禁用裸 {{。
 import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/contracts'
-import type { KnowledgeTools } from '../tools/index.js'
+import type { TopDomainStat } from '../service/internal.js'
 
-/** 段名（Interface 3 定死） */
+/** 静态段名（提案 §7 审核稿定死） */
 export const KNOWLEDGE_SECTION_NAME = 'forge:knowledge'
 
-/** 段序（Interface 3 定死：order 500，升序拼接） */
-export const KNOWLEDGE_SECTION_ORDER = 500
+/** 静态段序（§2.2：910——原 500 与官方 FILE_REFERENCE 900 撞位已上移队尾区） */
+export const KNOWLEDGE_SECTION_ORDER = 910
 
-/** 单 tool 参数行（参数说明机械取自定义——改定义即改提示词，无副本） */
-function parameterLines(parameters: { properties: Readonly<Record<string, { type: string; description: string }>>; required?: readonly string[] }): string[] {
-  const required = new Set(parameters.required ?? [])
-  return Object.entries(parameters.properties).map(([key, prop]) => {
-    const shape = prop.type === 'array' ? 'array of string' : prop.type
-    const tag = required.has(key) ? 'required' : 'optional'
-    return `  - ${key} (${shape}, ${tag}): ${prop.description}`
-  })
-}
+/** 动态域索引段名（提案 §7 审核稿定死） */
+export const KNOWLEDGE_DOMAINS_SECTION_NAME = 'forge:knowledge-domains'
 
-/** 六 tool 用法说明（名称/描述/参数全部来自定义对象机械渲染） */
-function renderToolUsage(tools: KnowledgeTools): string {
-  return [tools.search, tools.readAbstract, tools.read, tools.write, tools.supersede, tools.reinstate]
-    .map((t) => `${t.name}: ${t.description}\n${parameterLines(t.parameters).join('\n')}`)
-    .join('\n\n')
+/** 动态段序（静态段紧后） */
+export const KNOWLEDGE_DOMAINS_SECTION_ORDER = 911
+
+/** 顶域清单行数上限（>10 截断并附被截域名计数枚举行——消盲区） */
+export const KNOWLEDGE_DOMAINS_MAX_ROWS = 10
+
+/**
+ * 静态段全文（提案 §7 审核稿逐字——固定文本，零工具说明）。
+ * 与动态段的协调：`<knowledge-domains>` 互指（同名标签互相指认）、
+ * domain_prefix 指引与截断计数行同词、zero hits 诚实口径不承担兜底。
+ */
+export function renderKnowledgeStaticSection(): string {
+  const depth = String(FRONTMATTER_DOMAIN_MAX_DEPTH)
+  return [
+    '<knowledge-base>',
+    'A curated project knowledge base is registered for this workspace. It is the',
+    'preferred source for project conventions, decisions, pitfalls, and domain',
+    'knowledge — search it on demand before falling back to raw file retrieval.',
+    'Hits are summary-first: judge from titles and summaries first, read deeper',
+    'only when needed. Zero hits means zero hits — rephrase the query or switch',
+    'retrieval primitives yourself.',
+    '',
+    'The registered top-level domains and their descriptions are listed in the',
+    '<knowledge-domains> block below. Pass one as domain_prefix to narrow a search;',
+    `sub-domains (up to ${depth} levels) are explorable the same way — a domain exists`,
+    'when an entry is written into it.',
+    '</knowledge-base>',
+  ].join('\n')
 }
 
 /**
- * 知识段全文（纯函数）。流程指引锚 PRD 流程三 / 召回飞轮流：
- * 先 search 相应域（域前缀可选、自主选域、省略 = 全域）→ 摘要先行 →
- * 按需 read-abstract → 与 grep/glob 同位自主编排；零命中回落常规检索原语。
+ * 动态域索引段全文（纯函数——行集由实时聚合的 TopDomainStat[] 供数）。
+ * 行格式 `域名(N entries) — 简介`；简介缺席降级 `域名(N entries) — <无简介>`；
+ * 单数 entry；count ≤ 0 域隐去（空域行保留于表、段内自然隐去）；
+ * >10 顶域截断并附 `… and N more domains (search with domain_prefix)` 行。
+ * 空行集 → 空串（段整体退场）。
  */
-export function renderKnowledgeSection(tools: KnowledgeTools): string {
-  const depth = String(FRONTMATTER_DOMAIN_MAX_DEPTH)
-  return [
-    '## Project knowledge base',
-    '',
-    'A project knowledge base may be registered for this workspace: curated project documents with summary-first abstracts, keyword tags, and domain classification (domains are directory paths of at most '
-      + depth
-      + ' levels). Prefer it as the first source for project conventions, decisions, and domain knowledge.',
-    '',
-    'Retrieval flow (agentic search):',
-    '1. Call knowledge_search first when a question touches project knowledge. Pick the domain_prefix yourself from the question, or omit it to search all domains.',
-    '2. Keep queries short and iterative: keyword tags narrow by exact match (all tags must hit) and text matches by substring — start with one high-signal term, then refine; a full question sentence rarely matches.',
-    '3. Hits are summary-first: evaluate titles and summaries before reading further.',
-    '4. Call knowledge_read_abstract with a hit\'s entry_id only when its summary is not enough; it never returns the full body.',
-    '5. Call knowledge_read with a hit\'s id for the full markdown document — confirmed entries (and once-confirmed superseded versions) are readable; unconfirmed drafts are denied.',
-    '6. To persist new knowledge, use knowledge_write — it enforces a mandatory self-judged necessity gate (long-term stable / non-commonsense / project value: all three or the write is skipped) and returns duplicate merge suggestions; pass version_of to version an existing entry instead of duplicating it.',
-    '7. When consolidating duplicates (e.g. after distill evaluation), use knowledge_supersede to redirect a loser entry into a winner (automatic, reversible, hash-guarded); use knowledge_reinstate to undo a supersede when a human rejects it.',
-    '8. These knowledge tools sit alongside grep/glob as retrieval primitives — compose them freely, and fall back to regular file retrieval when the knowledge base has no relevant hits.',
-    '',
-    'Tools:',
-    renderToolUsage(tools),
-  ].join('\n')
+export function renderKnowledgeDomainsSection(stats: readonly TopDomainStat[]): string {
+  const rows = stats.filter((s) => s.entryCount > 0)
+  if (rows.length === 0) return ''
+  const lines = rows.slice(0, KNOWLEDGE_DOMAINS_MAX_ROWS).map(
+    (s) => `- ${s.domain}(${s.entryCount} ${s.entryCount === 1 ? 'entry' : 'entries'}) — ${s.description ?? '<无简介>'}`,
+  )
+  if (rows.length > KNOWLEDGE_DOMAINS_MAX_ROWS) {
+    lines.push(`… and ${rows.length - KNOWLEDGE_DOMAINS_MAX_ROWS} more domains (search with domain_prefix)`)
+  }
+  return ['<knowledge-domains>', ...lines, '</knowledge-domains>'].join('\n')
 }

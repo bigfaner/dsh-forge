@@ -45,9 +45,11 @@ export function createKnowledgeTools(deps: KnowledgeToolDeps): KnowledgeTools {
 export { createProjectResolver, createWsPathResolver, sessionContextOf, unboundSessionError } from './session.js'
 export type { ProjectBinding, ProjectIdResolver, ToolSessionContext, WsPathResolver } from './session.js'
 export type {
+  AgentCreatedSubscribeFace,
   KnowledgeContextFace,
   KnowledgePromptSection,
   KnowledgeToolDefinition,
+  ScopedAgentFace,
   SystemPromptSectionFace,
   TextContentBlock,
   ToolAgentFace,
