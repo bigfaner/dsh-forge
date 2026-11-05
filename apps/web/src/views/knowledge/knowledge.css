@@ -428,12 +428,24 @@
 .dswf-kn-drawer-mv {
   display: flex;
   flex: 1;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; /* 单行不换行（用户裁决）——溢出省略号收口 */
   align-items: center;
+  justify-content: center; /* 四列同行值居中（用户裁决——域/状态/作者/更新时间） */
   gap: var(--dsw-font-xs-13-line-height);
   min-width: 0;
   padding: 4px var(--dsw-font-xs-13-line-height); /* 紧凑行距（用户裁决——行高收紧） */
   color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 关键词整行例外：chips 左对齐 + 可换行（多词流式排布） */
+.dswf-kn-drawer-mrow.is-span .dswf-kn-drawer-mv {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  white-space: normal;
+  overflow: visible;
 }
 
 /* 区二·摘要块（元数据置顶后次区：条目标题 + 醒目摘要——原型 kd-head + kd-abs 同型） */

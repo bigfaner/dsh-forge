@@ -8,6 +8,13 @@ import { RpcClientError } from '../../rpc/errors.js'
 import type { ForgeRpcClient } from '../../rpc/index.js'
 import { EntryDrawer, EntryDrawerBody, entryMetaRows, fetchEntryDetail } from './EntryDrawer.js'
 
+/** 本地时刻期望值（测试侧独立现算——与实现同语义非同源引用） */
+function expectedLocalStamp(iso: string): string {
+  const d = new Date(iso)
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 const NOW = Date.parse('2026-10-02T12:00:00.000Z')
 
 const DETAIL: EntryDetail = {
@@ -108,7 +115,7 @@ describe('entryMetaRows（元数据投影——纯函数）', () => {
     const rows = entryMetaRows(DETAIL, NOW)
     expect(rows[0]?.value).toEqual({ kind: 'text', text: '编程/java' })
     expect(rows[2]?.value).toEqual({ kind: 'text', text: 'alice' })
-    expect(rows[3]?.value).toEqual({ kind: 'text', text: '3 小时前' })
+    expect(rows[3]?.value).toEqual({ kind: 'text', text: expectedLocalStamp(DETAIL.updated) })
     expect(rows[1]?.value).toEqual({ kind: 'status', status: 'draft' })
     expect(rows[4]?.value).toEqual({ kind: 'keywords', keywords: ['security', 'backend'] })
 
@@ -140,7 +147,7 @@ describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
     expect(html).toContain('编程/java')
     expect(html).not.toContain('热度') // EntryDetail 无热度字段（抽屉不另调 heat 通道）
     expect(html).toContain('alice')
-    expect(html).toContain('3 小时前')
+    expect(html).toContain(expectedLocalStamp(DETAIL.updated)) // 更新时间 = 本地时刻（用户裁决 localdatetime）
     // 内容体锚（弹窗壳/头行归装载壳）
     expect(html).toContain('data-dswf-kn-drawer')
     // 区三：正文（MarkdownDoc 统一包装，variant=body）

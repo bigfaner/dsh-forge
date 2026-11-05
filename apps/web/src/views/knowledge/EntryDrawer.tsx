@@ -19,7 +19,6 @@ import { Button, IconCloseFillRegular, Tag, Tooltip } from '@deepseek-ai/dsh-cli
 import type { EntryDetail } from '@dsh-forge/contracts'
 import { EmptyState, ErrorBar, MD_PREVIEW_MARKDOWN_LABELS, MarkdownDoc, StateChip } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
-import { cardTimeLabel } from './browse-model.js'
 import { mapBrowseError, type BrowseErrorInfo } from './use-knowledge-browse.js'
 import {
   defaultDrawerPosition,
@@ -71,9 +70,10 @@ export interface EntryMetaRow {
 
 /**
  * 元数据行投影（纯函数）：首区四列同行（域/状态/作者/更新时间）+ 关键词整行；
- * 空域回退「根」（与卡片行语言同口径）、authors 缺省「—」、更新时间 = 相对时间标签。
+ * 空域回退「根」（与卡片行语言同口径）、authors 缺省「—」、更新时间 = 本地时刻
+ * `YYYY-MM-DD HH:mm`（用户裁决 localdatetime——不用相对时间标签）。
  */
-export function entryMetaRows(detail: EntryDetail, now: number): readonly EntryMetaRow[] {
+export function entryMetaRows(detail: EntryDetail, _now: number): readonly EntryMetaRow[] {
   return [
     {
       key: 'domain',
@@ -87,7 +87,7 @@ export function entryMetaRows(detail: EntryDetail, now: number): readonly EntryM
       key: 'updated',
       label: '更新时间',
       span: false,
-      value: { kind: 'text', text: cardTimeLabel(detail.updated, now) },
+      value: { kind: 'text', text: localDateTimeOf(detail.updated) },
     },
     {
       key: 'keywords',
@@ -96,6 +96,14 @@ export function entryMetaRows(detail: EntryDetail, now: number): readonly EntryM
       value: { kind: 'keywords', keywords: detail.keywords },
     },
   ]
+}
+
+/** ISO-8601 → 本地时刻 `YYYY-MM-DD HH:mm`（非法/缺席 = 原样回退——fullStampOf 同防御形） */
+export function localDateTimeOf(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 /** 详情拉取结果（ok/error 归一——永不 reject） */
