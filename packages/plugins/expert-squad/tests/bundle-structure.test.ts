@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -16,6 +16,8 @@ const pkg = JSON.parse(readFileSync(resolve(pkgDir, "package.json"), "utf8")) as
   };
   exports?: Record<string, unknown>;
   peerDependencies?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
 };
 
 describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面）", () => {
@@ -76,5 +78,28 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     const settingsSrc = readFileSync(resolve(pkgDir, "src-client", "settings", "index.tsx"), "utf8");
     expect(settingsSrc).toContain("plugins.detail.section");
     expect(settingsSrc).not.toContain('"plugins.item"');
+  });
+
+  // bug 6a46cc75 守卫：官方 dsh-plugin-manager 安装 = profile 裸跑 pnpm add，无
+  // workspace 协议处理——dependencies 必须全 registry 可解析，workspace:* 即堵死
+  // 独立安装形态（ERR_PNPM_WORKSPACE_PKG_NOT_FOUND）。
+  it("dependencies 零 workspace/file 协议（独立安装自含声明面——@dsh-forge/* 只允许 devDependencies）", () => {
+    for (const [name, range] of Object.entries(pkg.dependencies ?? {})) {
+      expect(range, `${name} 使用 workspace/file 协议，独立安装形态断链`).not.toMatch(/^(workspace|file|link):/);
+      expect(name.startsWith("@dsh-forge/"), "@dsh-forge/* private 包不可 registry 解析，不得入 dependencies").toBe(false);
+    }
+    expect(Object.keys(pkg.devDependencies ?? {})).toContain("@dsh-forge/contracts");
+  });
+
+  // 产物面断言（dist 构建后在场才跑——CI/本地 build 后恒在场）。
+  it("host bundle 产物自含：@dsh-forge/* 值依赖内联，官方机械与外部依赖外置", () => {
+    const distEntry = resolve(pkgDir, "dist", "index.js");
+    if (!existsSync(distEntry)) return; // 未构建（纯 src 测试树）——结构面其余用例已覆盖声明面
+    const bundled = readFileSync(distEntry, "utf8");
+    expect(bundled).not.toContain("@dsh-forge/contracts"); // 内联后字面量残留 = bundle 未生效
+    expect(bundled).toContain("intersectToolNames"); // contracts 纯逻辑族闭包内联锚
+    expect(bundled).toContain("composePersonaText");
+    expect(bundled).toMatch(/["']@deepseek-ai\//); // 官方机械外置保留（内联第二副本分裂单例语义）
+    expect(bundled).toMatch(/["']chokidar["']/); // 真实外部依赖外置保留（registry 可装）
   });
 });

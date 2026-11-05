@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/expert-squad",
-  "version": "0.28.0",
+  "version": "0.28.1",
   "private": true,
   "type": "module",
   "description": "expert-squad cordis 插件（双面包装载范式）：专家档案三层扫描/注册取用、通道一委派（delegate_expert）与双通道热刷新（chokidar + fs/observed）。",
@@ -33,10 +33,9 @@
     "cordis.patch.yml"
   ],
   "scripts": {
-    "build": "tsc -b && node scripts/bundle-client.mjs"
+    "build": "tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs"
   },
   "dependencies": {
-    "@dsh-forge/contracts": "workspace:*",
     "@deepseek-ai/schemastery": "3.18.4",
     "chokidar": "5.0.0",
     "gray-matter": "4.0.3"
@@ -45,6 +44,7 @@
     "@deepseek-ai/cordis": "4.0.4"
   },
   "devDependencies": {
+    "@dsh-forge/contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/dsh-agent-preset-registry": "0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.2",
