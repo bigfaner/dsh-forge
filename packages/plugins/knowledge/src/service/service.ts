@@ -31,7 +31,11 @@ import { rebuildKnowledgeIndex } from '../storage/rebuild.js'
 import { InvalidKnowledgeDirError as StorageInvalidKnowledgeDirError } from '../storage/scan.js'
 import {
   KNOWLEDGE_BACKFLOW_EVENT,
+  KNOWLEDGE_CONFIRM_EVENT,
   KNOWLEDGE_DOMAIN_UPDATE_EVENT,
+  KNOWLEDGE_ENTRY_MOVE_EVENT,
+  KNOWLEDGE_META_EDIT_EVENT,
+  KNOWLEDGE_REJECT_EVENT,
   KNOWLEDGE_REGISTER_EVENT,
   emitStorageDiag,
   storageDiag,
@@ -40,6 +44,7 @@ import {
 import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
 import {
   aggregateDomainTree,
+  applyStatusFilter,
   buildKeywordAdmissionMatch,
   buildSearchFtsMatch,
   collectEntryIdsUnderDir,
@@ -56,14 +61,22 @@ import {
 import { createWriteGateway } from './write.js'
 import { createSupersedeGateway } from './supersede.js'
 import { createScanRegister } from './scan-register.js'
+import { createReviewGateway } from './review.js'
 import type {
   BackflowConfig,
   BrowseKnowledgeService,
   EntryAbstract,
+  EntryActionResult,
+  KnowledgeConfirmBatchQuery,
   KnowledgeConfirmOutcome,
   KnowledgeConfirmQuery,
+  KnowledgeCreateDomainOutcome,
+  KnowledgeCreateDomainQuery,
+  KnowledgeMoveEntryQuery,
   KnowledgeReadOutcome,
   KnowledgeReadQuery,
+  KnowledgeRejectBatchQuery,
+  KnowledgeUpdateEntryQuery,
   KnowledgeWriteOutcome,
   KnowledgeWriteQuery,
   ReadAbstractQuery,
@@ -441,6 +454,42 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
   // ── 存量收编面（scan-register.ts——scan 只读体检 + register 幂等注册） ──
   const scanRegister = createScanRegister({ db, emit })
 
+  // ── 人工裁决写面（review.ts——confirmBatch/rejectBatch/moveEntry/updateEntry/createDomain；
+  //    entryId→slug 映射在本门面（selectEntryByRowid 惯例），通道层/host 零解析） ──
+  const review = createReviewGateway({ db, emit })
+
+  /** entryId 批量 → slug id 解析（selectEntryByRowid 惯例；未命中不入 gateway 批） */
+  function resolveEntrySlugs(entryIds: readonly number[]): { slugs: string[]; slugByEntry: Map<number, string> } {
+    const slugByEntry = new Map<number, string>()
+    const slugs: string[] = []
+    for (const eid of entryIds) {
+      const row = selectEntryByRowid.get(eid)
+      if (row !== undefined && !slugByEntry.has(eid)) {
+        slugByEntry.set(eid, row.id)
+        slugs.push(row.id)
+      }
+    }
+    return { slugs, slugByEntry }
+  }
+
+  /** 批量执行编排：entryId→slug 解析 → gateway 集合批 → 按 entryId 序合并回执（未命中 = not-found + warn 埋点） */
+  async function runEntryBatch(
+    entryIds: readonly number[],
+    event: string,
+    run: (ids: readonly string[]) => Promise<Map<string, EntryActionResult>>,
+  ): Promise<EntryActionResult[]> {
+    const { slugs, slugByEntry } = resolveEntrySlugs(entryIds)
+    const gatewayResults = await run(slugs)
+    return entryIds.map((eid): EntryActionResult => {
+      const slug = slugByEntry.get(eid)
+      if (slug === undefined) {
+        emitStorageDiag(emit, storageDiag('warn', event, `entryId 未命中：${eid}（actor=human）`))
+        return { entryId: eid, outcome: 'failure', code: 'not-found', message: `entryId 未命中：${eid}` }
+      }
+      return gatewayResults.get(slug) ?? { entryId: eid, outcome: 'failure', code: 'not-found', message: `条目未回执：${slug}` }
+    })
+  }
+
   // ── 浏览底表（browse 聚合与通道面共用同一实现——底表口径不漂移） ──
   const listEntries = async (q: ListEntriesQuery): Promise<KnowledgeCard[]> => {
     const { wsPath, knowledgeDir } = requireProject(q.projectId, 'listEntries')
@@ -457,6 +506,8 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
           ? selectRows(browseAllStmt, knowledgeDir, prefix)
           : selectRows(browseByDomainStmt, knowledgeDir, prefix, prefix, `${escapeLike(prefix)}/%`)
     }
+    // statusFilter 服务端执行（1.4——零客户端过滤语义铁律维持）
+    rows = applyStatusFilter(rows, q.statusFilter)
 
     const keyword = q.keyword?.trim().toLowerCase() ?? ''
     const heatByEntry = new Map(selectHeatByEntry.all(q.projectId).map((r) => [r.entry_id, r.heat] as const))
@@ -663,6 +714,8 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     },
 
     async browse(q: { projectId: string }): Promise<DomainNode[]> {
+      // 徽记口径（1.4）：恒走未过滤 listEntries 独立查询面（不带 statusFilter）——
+      // unconfirmedCount 与 entryCount 同底表聚合，「哪里有待审核」不随状态过滤抖动
       return aggregateDomainTree(await listEntries({ projectId: q.projectId }))
     },
 
@@ -725,6 +778,52 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     reinstateEntry: async (q) => {
       requireProject(q.projectId, 'reinstateEntry')
       return supersedes.reinstate(q)
+    },
+
+    // ── knowledge-review-ui 1.4：人工裁决写面（entryAction 通道服务面——entryId→slug 门面解析） ──
+
+    confirmBatch: async (q: KnowledgeConfirmBatchQuery): Promise<EntryActionResult[]> => {
+      requireProject(q.projectId, 'confirmBatch')
+      return runEntryBatch(q.entryIds, KNOWLEDGE_CONFIRM_EVENT, (ids) => review.confirmBatch(ids))
+    },
+
+    rejectBatch: async (q: KnowledgeRejectBatchQuery): Promise<EntryActionResult[]> => {
+      requireProject(q.projectId, 'rejectBatch')
+      return runEntryBatch(q.entryIds, KNOWLEDGE_REJECT_EVENT, (ids) => review.rejectBatch(ids))
+    },
+
+    moveEntry: async (q: KnowledgeMoveEntryQuery): Promise<EntryActionResult> => {
+      const { wsPath, knowledgeDir } = requireProject(q.projectId, 'moveEntry')
+      const row = selectEntryByRowid.get(q.entryId)
+      if (row === undefined) {
+        emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_ENTRY_MOVE_EVENT, `改域拒收：entryId 未命中 ${q.entryId}（actor=human）`, { projectId: q.projectId }))
+        return { entryId: q.entryId, outcome: 'failure', code: 'not-found', message: `entryId 未命中：${q.entryId}` }
+      }
+      const result = await review.moveEntry({ id: row.id, targetDomain: q.targetDomain, wsPath, knowledgeDir })
+      return result.outcome === 'success' ? result : { ...result, entryId: q.entryId }
+    },
+
+    updateEntry: async (q: KnowledgeUpdateEntryQuery): Promise<EntryActionResult> => {
+      const { knowledgeDir } = requireProject(q.projectId, 'updateEntry')
+      const row = selectEntryByRowid.get(q.entryId)
+      if (row === undefined) {
+        emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_META_EDIT_EVENT, `元数据编辑拒收：entryId 未命中 ${q.entryId}（actor=human）`, { projectId: q.projectId }))
+        return { entryId: q.entryId, outcome: 'failure', code: 'not-found', message: `entryId 未命中：${q.entryId}` }
+      }
+      const result = await review.updateEntry({
+        id: row.id,
+        title: q.title,
+        keywords: q.keywords,
+        summary: q.summary,
+        body: q.body,
+        knowledgeDir,
+      })
+      return result.outcome === 'success' ? result : { ...result, entryId: q.entryId }
+    },
+
+    createDomain: async (q: KnowledgeCreateDomainQuery): Promise<KnowledgeCreateDomainOutcome> => {
+      const { wsPath, knowledgeDir } = requireProject(q.projectId, 'createDomain')
+      return review.createDomain({ domain: q.domain, wsPath, knowledgeDir })
     },
   }
 }

@@ -310,6 +310,13 @@ export const KNOWLEDGE_SERVICE_METHODS = [
   'supersedeEntry',
   'reinstateEntry',
   'setDomainDescription',
+  // knowledge-review-ui 1.4：人工裁决写面五法（entryAction 通道服务面——web 径接线归
+  // knowledge-rpc 挂接任务；白名单锚服务面全集，缺席即编译期点名）
+  'confirmBatch',
+  'rejectBatch',
+  'moveEntry',
+  'updateEntry',
+  'createDomain',
 ] as const satisfies readonly (keyof BrowseKnowledgeService)[]
 
 /** 白名单覆盖完备性（= never：缺席的 BrowseKnowledgeService 方法在此编译期点名） */

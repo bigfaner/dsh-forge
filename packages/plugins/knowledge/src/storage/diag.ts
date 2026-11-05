@@ -31,6 +31,15 @@ export const KNOWLEDGE_BACKFLOW_EVENT = 'knowledge-backflow'
 /** 归并执行事件域（stage② §2.6 裁决 #8——info=归并/逆向成功里程碑 / warn=CAS 拒与中止） */
 export const KNOWLEDGE_SUPERSEDE_EVENT = 'knowledge-supersede'
 
+/** 批量驳回事件域（knowledge-review-ui §2.5——不可逆删除显眼记账，恒 warn 级，actor=human） */
+export const KNOWLEDGE_REJECT_EVENT = 'knowledge-reject'
+
+/** 改域事件域（knowledge-review-ui §2.5——info=移动成功 / warn=域校验拒收等失败，actor=human） */
+export const KNOWLEDGE_ENTRY_MOVE_EVENT = 'knowledge-entry-move'
+
+/** 元数据编辑事件域（knowledge-review-ui §2.5——info=编辑成功 / warn=YAML 拒收等失败，actor=human） */
+export const KNOWLEDGE_META_EDIT_EVENT = 'knowledge-meta-edit'
+
 /** 域简介写径事件域（stage③ §2.2 setDomainDescription——info=写入成功 / warn=校验拒收） */
 export const KNOWLEDGE_DOMAIN_UPDATE_EVENT = 'knowledge-domain-update'
 

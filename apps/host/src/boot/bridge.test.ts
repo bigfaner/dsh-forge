@@ -750,6 +750,14 @@ describe('createBridgeProxy（主侧代理）', () => {
       // followups #1 重命名 2026-11-05：supersedeEntry/reinstateEntry）
       'supersedeEntry',
       'reinstateEntry',
+      // stage③ §2.2 C2：域简介写径（服务方法非 tool）
+      'setDomainDescription',
+      // knowledge-review-ui 1.4：人工裁决写面五法（entryAction 通道服务面）
+      'confirmBatch',
+      'rejectBatch',
+      'moveEntry',
+      'updateEntry',
+      'createDomain',
     ])
     expect([...TASKS_SERVICE_METHODS]).toEqual([
       'addTask',
@@ -952,7 +960,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     assertType<never>(undefined as ApprovalWhitelistCoverage) // fix-2 审批桥白名单覆盖完备性
     assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
-    expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(16) // 1.15 +registerProject；stage② 1.4 +write/read/confirm；1.6 +scan/register；1.10 distill +supersedeEntry/reinstateEntry（followups #1 重命名）
+    expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(22) // 1.15 +registerProject；stage② 1.4 +write/read/confirm；1.6 +scan/register；1.10 distill 双法；stage③ C2 +setDomainDescription；review-ui 1.4 +裁决五法
     expect(TASKS_SERVICE_METHODS).toHaveLength(16) // S3 +reconcileInterrupted…；1.16 +taskSettlementserrupted；1.1 +updateTask；78b9227e +recordSpawn；blocked-verdict-restore-primitive +unblockTask
     expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(6) // +listDerivedProposals（承接链自联结读面）

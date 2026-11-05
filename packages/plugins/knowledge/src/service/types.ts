@@ -5,6 +5,8 @@
 // 定位铁律：纯类型，零逻辑（类型依赖仅 contracts 信封）。
 import type {
   DomainNode,
+  EntryActionFailureCode,
+  EntryActionResult,
   EntryDetail,
   EntryDetailQuery,
   HeatByEntry,
@@ -13,6 +15,9 @@ import type {
   RecallGroup,
   SessionRecallQuery,
 } from '@dsh-forge/contracts'
+
+// contracts 信封码集/回执类型再导出（service.ts 消费单源——类型仍以 contracts 为单一来源）
+export type { EntryActionFailureCode, EntryActionResult }
 
 /** rebuildIndex 返回体（容错计数：不合格条目不入索引不硬拒——硬拒收归 M4 写入面） */
 export interface IndexReport {
@@ -106,6 +111,19 @@ export interface KnowledgeService {
   // ── stage③ §2.2 C2：域简介写径（服务方法非 tool——内部链/UI 提案消费） ──
   /** 域简介 upsert（domain 校验与 write 严契约共用同一校验函数；成败两径 knowledge-domain-update 埋点） */
   setDomainDescription(q: SetDomainDescriptionQuery): Promise<void>
+  // ── knowledge-review-ui 1.4：人工裁决写面（web entryAction 通道服务面——非 tool；
+  //    批量两法为集合语义原生方法（单事务 set-based），非门面循环调用（提案 §2.2 裁决 #8）；
+  //    entryId→slug 映射由服务门面承担（service.ts selectEntryByRowid 惯例）） ──
+  /** 批量通过：单事务集合升格（IN(...) + 行集差分回执；already-confirmed = 幂等成功等价） */
+  confirmBatch(q: KnowledgeConfirmBatchQuery): Promise<EntryActionResult[]>
+  /** 批量驳回：文件前置逐例预检 → 单事务条件式删除（版本行+FTS+主行；recall_logs 热度史保留） */
+  rejectBatch(q: KnowledgeRejectBatchQuery): Promise<EntryActionResult[]>
+  /** 改域（单条）：文件 rename 先行 → 事务 upsert（domain 由文件落点推导；status 不变） */
+  moveEntry(q: KnowledgeMoveEntryQuery): Promise<EntryActionResult>
+  /** 编辑元数据（单条）：标题/关键词/摘要/正文重写、版本链前进+指针前移、status 不变、DB 派生列从重写后文件重解析 */
+  updateEntry(q: KnowledgeUpdateEntryQuery): Promise<EntryActionResult>
+  /** 新建域（树级）：mkdir + 域行 upsert（description NULL；≤3 层校验与 write 严契约同函数） */
+  createDomain(q: KnowledgeCreateDomainQuery): Promise<KnowledgeCreateDomainOutcome>
 }
 
 /** Interface 2 + 第八法聚合面：KnowledgeService 七法 + browse 域树聚合（forge:knowledge/browse 通道 handler 本体）+ 注册行写入（第九法） */
@@ -310,6 +328,48 @@ export type KnowledgeRevertOutcome =
       readonly reason: 'not-merged' | 'ledger-missing'
       readonly detail: string
     }
+
+// ── knowledge-review-ui 1.4：人工裁决写面（服务方法入出参——通道信封在 contracts） ──
+
+/** confirmBatch 入参（entryIds = rowid 集合；空集由通道层请求级拒收） */
+export interface KnowledgeConfirmBatchQuery {
+  readonly projectId: string
+  readonly entryIds: readonly number[]
+}
+
+/** rejectBatch 入参（同上；仅作用于 unconfirmed——confirmed = rejected-confirmed 逐条回执） */
+export interface KnowledgeRejectBatchQuery {
+  readonly projectId: string
+  readonly entryIds: readonly number[]
+}
+
+/** moveEntry 入参（恰单条；targetDomain = 目录相对路径，'' = 根域） */
+export interface KnowledgeMoveEntryQuery {
+  readonly projectId: string
+  readonly entryId: number
+  readonly targetDomain: string
+}
+
+/** updateEntry 入参（恰单条；域不在编辑面——改域唯一入口 = moveEntry） */
+export interface KnowledgeUpdateEntryQuery {
+  readonly projectId: string
+  readonly entryId: number
+  readonly title: string
+  readonly keywords: readonly string[]
+  readonly summary: string
+  readonly body: string
+}
+
+/** createDomain 入参（树级操作，无 entryIds） */
+export interface KnowledgeCreateDomainQuery {
+  readonly projectId: string
+  readonly domain: string
+}
+
+/** createDomain 回执（无 entryId 维度——树级；>3 层 = domain-depth 拒收） */
+export type KnowledgeCreateDomainOutcome =
+  | { readonly outcome: 'success' }
+  | { readonly outcome: 'failure'; readonly code: EntryActionFailureCode; readonly message: string }
 
 /** 回流配置面（§2.4：阈值归插件 config，非代码常量）。
  *  分阈迁移提示（stage③ C1 跨内核校准）：两档阈值缺省已由旧词面核 1 校准为 0.25

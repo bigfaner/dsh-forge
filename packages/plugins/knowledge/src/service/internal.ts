@@ -194,6 +194,22 @@ export function textSubstringHit(title: string, summary: string, text: string): 
   return title.toLowerCase().includes(t) || summary.toLowerCase().includes(t)
 }
 
+// ── knowledge-review-ui 1.4：statusFilter 服务端执行（零客户端过滤语义铁律维持） ──
+
+/**
+ * listEntries 状态片过滤（服务端执行）：undefined/'all' = 全量透传；
+ * 'unconfirmed'/'confirmed' = 按行 status 精确过滤。徽记面（browse →
+ * aggregateDomainTree.unconfirmedCount）不吃此过滤——browse 恒走未过滤 listEntries
+ * 独立查询面，「哪里有待审核」导航口径不随 statusFilter 抖动（与 entryCount 同底表聚合）。
+ */
+export function applyStatusFilter<R extends { status: string }>(
+  rows: readonly R[],
+  statusFilter: 'all' | 'unconfirmed' | 'confirmed' | undefined,
+): R[] {
+  if (statusFilter === undefined || statusFilter === 'all') return [...rows]
+  return rows.filter((r) => r.status === statusFilter)
+}
+
 // ── 共享域路径校验（stage③ §2.2：setDomainDescription 与 write 严契约同一校验函数） ──
 
 /**
