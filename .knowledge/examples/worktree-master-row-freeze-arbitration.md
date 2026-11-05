@@ -1,11 +1,22 @@
 ---
 title: worktree 清单选主「占位即冻结」范式——主树行在场恒裁主树行，后继不得凭 createdAt 翻盘
-summary: 候选集存在主树行（祖先前缀判）时恒裁主树行，后继非主树行不得凭 createdAt 更新翻盘（commit f734c29e，bug 143328f1/0c677db2）。成立域限定：镜像同构前提 = worktree 全在主树子树内；外置 worktree_dir 布局两半边可分叉（台账 official-face-contract-anchors.md M1 节）。
-keywords: [worktree, 选主, INV-U, createdAt, 占位即冻结]
-status: draft
+summary: >-
+  候选集存在主树行（祖先前缀判）时恒裁主树行，后继非主树行不得凭 createdAt 更新翻盘（commit f734c29e，bug
+  143328f1/0c677db2）。成立域限定：镜像同构前提 = worktree 全在主树子树内；外置 worktree_dir 布局两半边可分叉（台账
+  official-face-contract-anchors.md M1 节）。
+keywords:
+  - worktree
+  - 选主
+  - INV-U
+  - createdAt
+  - 占位即冻结
+status: unconfirmed
 source_container: e2e-known-reds-triage
 source_task: 1.14 fix-6
 source_bug: 143328f1 / 0c677db2
+id: worktree-master-row-freeze-arbitration
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 主树行「占位即冻结」选主范式

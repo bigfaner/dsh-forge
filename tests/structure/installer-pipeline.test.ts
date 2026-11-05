@@ -194,8 +194,11 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@deepseek-ai/dsh-web-app/package.json',
       'runtime/node_modules/@dsh-forge/core/dist/index.js',
       'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
-      // knowledge 暂不含（产品裁决：知识库功能不完整，打包形态不开放——dev 形态仍含；
-      // 重开放 = 翻转 contracts PRODUCT_PLUGINS staged 布尔，本口径随之派生）
+      // knowledge 1.9 A5 重开放：用户层全局行 + skills/learn 技能面（customSkillDirs[knowledge]
+      // 挂载源——STAGING_EXTRAS 承载）；stage② 1.5 增 skills/distill 整合技能（随包交付面同步）
+      'runtime/node_modules/@dsh-forge/knowledge/dist/index.js',
+      'runtime/node_modules/@dsh-forge/knowledge/skills/learn/SKILL.md',
+      'runtime/node_modules/@dsh-forge/knowledge/skills/distill/SKILL.md',
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
       'runtime/node_modules/@dsh-forge/plugin-forge/skills/submit-task/SKILL.md',
       // blitz 专属技能面（plugin-forge 包内 skills-blitz 旁目录——blitz 预设 customSkillDirs
@@ -252,8 +255,9 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     expect(presetCarriedPlugins()).toEqual(['md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
     // git-worktree = staged:true 覆写种子（2026-10-18 安装版启动崩 fix：host dist 静态 import 面）
+    // knowledge = userLayerRow 种子（1.9 A5 重开放——用户层全局行 + skills/learn 技能面）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/md-mermaid'].sort(),
+      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/knowledge', 'plugins/md-mermaid'].sort(),
     )
   })
 
@@ -386,10 +390,10 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     )
   })
 
-  it('knowledge 暂不开放 pin（产品裁决：知识库功能不完整，打包形态不开放——dev 形态 profile.dev 仍含；重开放 = 改 contracts PRODUCT_PLUGINS knowledge 行，本 pin 同步反转）', () => {
-    expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为关（userLayerRow:false + staged:false kill-switch）').toEqual({ userLayerRow: false, staged: false })
-    expect(stagedPackages.has('knowledge'), 'knowledge 应暂缺席 staging（推导制下无种子 + kill-switch 双保险）').toBe(false)
-    expect(KEY_FILES.some((rel) => rel.includes('@dsh-forge/knowledge')), '关键文件口径不应含 knowledge 行（暂不开放）').toBe(false)
+  it('knowledge 重开放 pin（knowledge-stage1-foundation 1.9 A5：用户层全局行 + staging 种子随包 + skills/learn 技能面口径）', () => {
+    expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为开（userLayerRow:true）').toEqual({ userLayerRow: true })
+    expect(stagedPackages.has('knowledge'), 'knowledge 应在场 staging（userLayerRow 种子自动推导）').toBe(true)
+    expect(KEY_FILES.some((rel) => rel.includes('@dsh-forge/knowledge')), '关键文件口径应含 knowledge 行（技能面 + dist）').toBe(true)
   })
 })
 
@@ -589,5 +593,99 @@ describe('STAGING_EXTRAS 白名单自动比对守卫（stagingExtrasDrift——s
     const failBranch = source.slice(checkIdx)
     expect(failBranch).toContain('PACKAGING_CHECK_FAILED')
     expect(failBranch).toContain('process.exit(check.status ?? 1)')
+  })
+})
+
+// bug 167b5121：NSIS 安装器进程查杀改路径域——installer.nsh 接管 customCheckAppRunning 宏
+//（app-builder-lib 模板 CHECK_APP_RUNNING 的 !ifmacrodef 分支），按名全机 taskkill 分支
+// 因宏被接管而缺席。真机执行取证受硬禁令约束（GUI 运行期禁 NSIS 静默安装），此 pin 为
+// 静态源码锚。
+describe('fix-3 bug 167b5121：customCheckAppRunning 路径域查杀（installer.nsh 静态锚）', () => {
+  const nsh = readFileSync(join(ROOT, 'build', 'installer.nsh'), 'utf8')
+
+  it('customCheckAppRunning 宏在场 + 查/杀均按 $INSTDIR 路径前缀（Win32_Process Path.StartsWith）', () => {
+    expect(nsh).toContain('!macro customCheckAppRunning')
+    expect(nsh).toMatch(/Get-CimInstance -ClassName Win32_Process \| \? \{\$\$_\.Path -and \$\$_\.Path\.StartsWith\('\$INSTDIR', 'CurrentCultureIgnoreCase'\)\}\)\.Count -gt 0/)
+    expect(nsh).toMatch(/Get-CimInstance -ClassName Win32_Process \| \? \{\$\$_\.Path -and \$\$_\.Path\.StartsWith\('\$INSTDIR', 'CurrentCultureIgnoreCase'\)\} \| % \{ Stop-Process -Id \$\$_\.ProcessId/)
+  })
+
+  it('按名查杀分支缺席：无 taskkill /IM、无 IMAGENAME tasklist 匹配（注释提及不算执行面）', () => {
+    const code = nsh.replace(/#.*$/gm, '')
+    expect(code).not.toContain('taskkill')
+    expect(code).not.toContain('IMAGENAME')
+  })
+
+  it('PowerShell 不可用即拒绝安装（Quit），不降级按名查杀；getProcessInfo 自备（模板守卫不代劳）', () => {
+    expect(nsh).toContain('!include "getProcessInfo.nsh"')
+    const macroStart = nsh.indexOf('!macro customCheckAppRunning')
+    const psUnavailableBranch = nsh.slice(nsh.lastIndexOf('!macro', macroStart), nsh.indexOf('!macroend', macroStart))
+    expect(psUnavailableBranch).toContain('Quit')
+  })
+})
+
+// bug 0ebcc9f8（167b5121 复发链）根因二查（fix-4，纯静态）：fix-3 静态全绿但真机无效——
+// 三疑点裁定：①宏展开时序排除（builder-debug.yml 中 build/installer.nsh include 在全部
+// CHECK_APP_RUNNING 插入点之前）；②un 上下文排除（下方 PPO 产物级断言）；③根因成立：
+// 真机杀手 = app-builder-lib installUtil.nsh uninstallOldVersion 经 appId 派生 HKCU 卸载键
+// 拉起机器注册的旧版卸载器（ExecWait '"$uninstallerFileName" /S ... _?=$installationDir'，
+// installSection.nsh:52/56 插入）——旧二进制不受新宏修复约束，静默冒烟安装即对真机 GUI
+// 本尊安装目录执行旧卸载器（查杀 + 反卸真机安装）。上游 Function 无宏缝可接管；真机执行
+// 取证归 CI/停机窗口。仓内可控面 = 机器复位纪律禁跑卸载器（rmSync 直收）+ 展开产物级锚。
+describe('fix-4 bug 0ebcc9f8：展开产物级静态锚（PPO 快照）+ 复位纪律禁跑卸载器', () => {
+  // fixture = 14:51 构建最终 NSIS 脚本的 makensis -PPO 展开产物快照（un.checkAppRunning
+  // 整段，纯预处理零执行；来源与生成方式见文件头 provenance 注释）
+  const ppo = readFileSync(join(ROOT, 'tests', 'structure', 'fixtures', 'nsis-ppo-un-checkAppRunning.nsi'), 'utf8')
+
+  it('展开产物（卸载器上下文）：customCheckAppRunning 本体真实出现在编译后脚本（非源文件级）', () => {
+    expect(ppo).toContain('Function un.checkAppRunning')
+    expect(ppo).toContain('StrCpy $DshfPsPath "$SYSDIR\\WindowsPowerShell\\v1.0\\powershell.exe"')
+    expect(ppo).toContain('Call un._GetProcessInfo') // getProcessInfo BUILD_UNINSTALLER 分支
+    expect(ppo).toMatch(/Win32_Process \| \? \{\$\$_\.Path -and \$\$_\.Path\.StartsWith\('\$INSTDIR', 'CurrentCultureIgnoreCase'\)\}\)\.Count -gt 0/)
+    expect(ppo).toMatch(/Win32_Process \| \? \{\$\$_\.Path -and \$\$_\.Path\.StartsWith\('\$INSTDIR', 'CurrentCultureIgnoreCase'\)\} \| % \{ Stop-Process -Id \$\$_\.ProcessId/)
+  })
+
+  it('展开产物：PowerShell 不可用即 Quit（拒绝降级按名查杀）', () => {
+    expect(ppo).toContain('MessageBox MB_OK|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDOK')
+    expect(ppo).toMatch(/MessageBox[^\n]*\n\s*Quit/)
+  })
+
+  it('展开产物：全段零按名查杀（无 taskkill / IMAGENAME）', () => {
+    expect(ppo).not.toContain('taskkill')
+    expect(ppo).not.toContain('IMAGENAME')
+  })
+
+  it('复位纪律禁跑卸载器：两 e2e spec afterAll 无 Uninstall*.exe /S spawn（rmSync 直收）', () => {
+    for (const spec of [
+      join(ROOT, 'e2e', 'specs', 'p1mvp', 'installer-smoke.spec.ts'),
+      join(ROOT, 'e2e', 'specs', 'blitz', 'probe-installer-composer.spec.ts'),
+    ]) {
+      const source = readFileSync(spec, 'utf8')
+      const afterAll = source.slice(source.indexOf('test.afterAll'), source.indexOf('test.afterAll') + 1_200)
+      expect(afterAll, `${spec} afterAll 不得依赖卸载器二进制`).not.toMatch(/Uninstall|uninstaller/)
+      expect(afterAll, `${spec} afterAll 须 rmSync 直收`).toContain('rmSync(')
+    }
+  })
+
+  it('根因留痕：uninstallOldVersion 拉起机器旧卸载器径（上游 installUtil.nsh ExecWait）——模板源级 pin，升版漂移即显性', () => {
+    const installUtil = readFileSync(
+      join(
+        ROOT,
+        'node_modules',
+        '.pnpm',
+        [...readdirSync(join(ROOT, 'node_modules', '.pnpm'))].find((d) => d.startsWith('app-builder-lib@'))!,
+        'node_modules',
+        'app-builder-lib',
+        'templates',
+        'nsis',
+        'include',
+        'installUtil.nsh',
+      ),
+      'utf8',
+    )
+    // 上游无宏缝可接管的直接证据：uninstallOldVersion 是 Function（非 custom 宏缝），由
+    // installSection 无条件 !insertmacro 调用——app-builder-lib 升级若改此形态，本 pin 失配
+    // 提示重估（本轮裁定：26.17.0 下仓内无法静态接管该径）。
+    expect(installUtil).toContain('Function uninstallOldVersion')
+    expect(installUtil).toMatch(/ExecWait '"\$uninstallerFileName(?:Temp)?" \/S \/KEEP_APP_DATA/)
   })
 })

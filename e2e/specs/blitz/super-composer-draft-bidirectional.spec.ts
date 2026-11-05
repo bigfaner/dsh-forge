@@ -65,7 +65,7 @@ test('@web-e2e @blitz 主↔替身草稿双向互通：A 主键入替身读 / B 
   try {
     // ── 会话装配：注册工作区 → chip 流开会话 → 首条消息（composer 在场、草稿清零基线）──
     await forgeInvoke(page, 'forge:projects/register', {
-      workspaceDir: wsDir, name: 'sc-bidirect-ws', forgeDir: wsDir, knowledgeDir: join(wsDir, '.knowledge'),
+      workspaceDir: wsDir, name: 'sc-bidirect-ws', forgeDir: wsDir,
     })
     await selectWorkspaceViaChip(page, 'sc-bidirect-ws')
     await ensureNoBlockingDialog(page)

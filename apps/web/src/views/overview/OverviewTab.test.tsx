@@ -18,7 +18,6 @@ const HEAD: OverviewHeadBundle = {
   projectName: 'demo',
   workspaceDir: 'Z:/ws/demo',
   forgeDir: 'Z:/ws/demo/.forge',
-  knowledgeDir: 'Z:/ws/demo/.knowledge',
   taskStoreDir: 'C:/forge-home/demo@a1b2c3d4',
   features: [
     {

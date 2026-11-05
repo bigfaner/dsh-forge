@@ -33,7 +33,6 @@ const INPUT: RegisterProjectInput = {
   workspaceDir: 'Z:\\project\\dsh',
   name: 'dsh',
   forgeDir: 'Z:\\project\\dsh\\.forge',
-  knowledgeDir: 'Z:\\project\\dsh\\.knowledge',
 }
 const RESULT: RegisterResult = { projectId: 'p1', workspaceId: 'w1', attachedToExisting: false }
 const REGISTERED: ReadonlySet<string> = new Set(['D:\\already'])

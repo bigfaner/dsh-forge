@@ -13,6 +13,7 @@ import type { ForgeEventSink } from '../events/sink.js'
 import {
   deriveTriageToolFilter,
   globalToolNamesOfToolsFace,
+  WORKER_EXPERT_RELEASABLE_DENY,
   WORKER_PIPELINE_ESSENTIAL_TOOLS,
 } from '../dispatch-core/assemble.js'
 import { createLoopRegistry } from '../loop/index.js'
@@ -243,6 +244,8 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'dispatchTask',
       'get_goal',
       'interrupt_agent',
+      'knowledge_reinstate',
+      'knowledge_supersede',
       'list_agents',
       'listBugs',
       'listImplCheckpoints',
@@ -336,6 +339,53 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       expect(deriveWorkerToolFilter(t).deny, `${t} worker deny 应含 validateMermaid`).toContain('validateMermaid')
     }
     expect(deriveTriageToolFilter().deny).toContain('validateMermaid')
+  })
+
+  // ───────── knowledge 归并双 tool 裁决（knowledge-stage2-followups #2——用户裁决 2026-11-05） ─────────
+
+  /** distill 专属专家档案 tools 白名单（项目层 .dsh/experts/distill.md 正本——本常量 = 结构测试钉死面） */
+  const DISTILL_EXPERT_TOOLS = [
+    'knowledge_supersede',
+    'knowledge_reinstate',
+    'knowledge_write',
+    'knowledge_read',
+    'knowledge_search',
+    'knowledge_read_abstract',
+    'read',
+    'glob',
+    'grep',
+  ] as const
+
+  it('knowledge 双 tool 默认 deny：一切 spawn worker 面不见（档案缺席 = 双 tool 在 deny、allow 不携带）；triage 同拒（处置代理不执行归并）', () => {
+    expect([...WORKER_EXPERT_RELEASABLE_DENY].sort()).toEqual(['knowledge_reinstate', 'knowledge_supersede'])
+    for (const t of TASK_TYPES) {
+      const { deny, allow } = deriveWorkerToolFilter(t)
+      expect(deny, `${t} worker deny 应含 knowledge_supersede`).toContain('knowledge_supersede')
+      expect(deny, `${t} worker deny 应含 knowledge_reinstate`).toContain('knowledge_reinstate')
+      expect(allow).toBeUndefined()
+    }
+    expect(deriveTriageToolFilter().deny).toContain('knowledge_supersede')
+    expect(deriveTriageToolFilter().deny).toContain('knowledge_reinstate')
+  })
+
+  it('distill 专家面显式放行：档案 tools 白名单 → 双 tool 入 allow 且从 deny 剔除（allow∩deny 保持零交集）', () => {
+    const { allow, deny } = deriveWorkerToolFilter('doc', undefined, [...DISTILL_EXPERT_TOOLS])
+    for (const name of DISTILL_EXPERT_TOOLS) {
+      expect(allow, `distill allow 应含 ${name}`).toContain(name)
+    }
+    expect(deny).not.toContain('knowledge_supersede')
+    expect(deny).not.toContain('knowledge_reinstate')
+    expect(allow!.filter((n) => deny.includes(n))).toEqual([])
+  })
+
+  it('可放行面收窄钉死：其余 deny 名不随档案解锁（addTask/validateMermaid 即便写入档案 tools 仍在 deny）；未列双 tool 的普通档案默认 deny 不失守', () => {
+    const { deny } = deriveWorkerToolFilter('doc', undefined, ['addTask', 'validateMermaid', ...DISTILL_EXPERT_TOOLS])
+    expect(deny).toContain('addTask')
+    expect(deny).toContain('validateMermaid')
+    const plain = deriveWorkerToolFilter('doc', undefined, ['read', 'grep'])
+    expect(plain.deny).toContain('knowledge_supersede')
+    expect(plain.deny).toContain('knowledge_reinstate')
+    expect(plain.allow).not.toContain('knowledge_supersede')
   })
 
   it('bug 989997bd：triage deny 表与真机注册面求交——未注册名（win 域无 bash）不入 deny；注册面缺席 = 全表兼容', () => {
@@ -827,7 +877,7 @@ describe('deriveWorkerToolFilter allow 并集公式（expert-squad-forge 1.4—�
     })
 
     it('tools 面缺席/形状漂移 = undefined（调用方回落 parent 探针）', async () => {
-      const probe = createUnionToolNamesProbe(() => undefined, () => ({ list: async () => [] , acquireScope: async () => ({}) }))
+      const probe = createUnionToolNamesProbe(() => undefined, () => ({ list: async () => [] , acquireScope: async () => ({ key: Symbol('scope') }) as never }))
       expect(await probe()).toBeUndefined()
       const probeMalformed = createUnionToolNamesProbe(() => ({ schemas: () => 'garbage' }) as never, () => undefined)
       expect(await probeMalformed()).toBeUndefined()

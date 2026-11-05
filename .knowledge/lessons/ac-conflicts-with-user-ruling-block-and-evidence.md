@@ -1,11 +1,22 @@
 ---
 title: AC 与用户裁决冲突时 blocked 上报取证
-summary: 任务 AC 与后续用户裁决返工冲突时，不自行取舍实现口径——先取证落盘（spec-conflict.md），以 blocked 结算上报，待以现行实现口径重新结算收口。
-keywords: [AC 冲突, 用户裁决, blocked, 取证, 重新结算]
+summary: >-
+  任务 AC 与后续用户裁决返工冲突时，不自行取舍实现口径——先取证落盘（spec-conflict.md），以 blocked
+  结算上报，待以现行实现口径重新结算收口。
+keywords:
+  - AC 冲突
+  - 用户裁决
+  - blocked
+  - 取证
+  - 重新结算
 domainPath: .knowledge/lessons/
 来源容器: expert-squad
 来源任务: 1.21（D-7，phase-4-summary.md）
 bug id: 无
+id: ac-conflicts-with-user-ruling-block-and-evidence
+status: unconfirmed
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # AC 与用户裁决冲突时 blocked 上报取证

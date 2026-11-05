@@ -170,7 +170,6 @@ test('@web-e2e @p1mvp compensation·冒烟：③写入失败 → ④补偿删除
       workspaceDir: dirA,
       name: 'comp-a',
       forgeDir: join(dirA, '.forge'),
-      knowledgeDir: join(dirA, '.knowledge'),
     })
     expect(first.attachedToExisting, '①预检未命中 = 新建分支（非挂接）').toBe(false)
     expect(first.workspaceId, '②workspaceId 在场（uuid——应用库外键素材）').toBeTruthy()
@@ -259,7 +258,6 @@ test('@web-e2e @p1mvp compensation·Step1/2 attach-branch + create-idempotent：
       workspaceDir: dirA,
       name: 'idem-a',
       forgeDir: join(dirA, '.forge'),
-      knowledgeDir: join(dirA, '.knowledge'),
     })
     expect(first.attachedToExisting, '①预检未命中 = 新建分支').toBe(false)
     // fix-7：基线取趋稳快照（首用 boot 期官方写落盘竞态除净——helper 头注）
@@ -318,7 +316,6 @@ test('@web-e2e @p1mvp compensation·Step3c existing-workspace-protected：挂接
       workspaceDir: dirA,
       name: 'own-a',
       forgeDir: join(dirA, '.forge'),
-      knowledgeDir: join(dirA, '.knowledge'),
     })
     expect(first.attachedToExisting).toBe(false)
     {
@@ -385,7 +382,6 @@ test('@web-e2e @p1mvp compensation·fix-27 boot 自愈 + 重注册幂等：悬�
       workspaceDir: dirA,
       name: 'fix27-a',
       forgeDir: join(dirA, '.forge'),
-      knowledgeDir: join(dirA, '.knowledge'),
     })
     const projects1 = await forgeInvoke<readonly ProjectSummary[]>(launched.page, 'forge:projects/list')
     const projectId = projects1.find((p) => p.wsPath === dirA)!.id
@@ -433,7 +429,6 @@ test('@web-e2e @p1mvp compensation·fix-27 boot 自愈 + 重注册幂等：悬�
       workspaceDir: dirA,
       name: 'fix27-a',
       forgeDir: join(dirA, '.forge'),
-      knowledgeDir: join(dirA, '.knowledge'),
     })
     expect(again, '重注册幂等成功（返回既有项目）').toMatchObject({
       projectId,

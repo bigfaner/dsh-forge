@@ -1,11 +1,23 @@
 ---
 title: 非 git 项目根上 first-pass 循环不收敛
-summary: 循环在非 git 项目根上每 settle 后继续派生 first-pass 复盘任务不收敛（1.2→1.4→1.5…），伴 warn「first-pass mark skipped (no base commit)」逐轮重复，需手动 /stop-dag-tasks 终止——疑似 first-pass 收敛判定依赖 base commit、缺席时无兜底。
-keywords: [first-pass, 收敛判定, 非 git 根, base commit, 循环不收敛]
+summary: >-
+  循环在非 git 项目根上每 settle 后继续派生 first-pass 复盘任务不收敛（1.2→1.4→1.5…），伴 warn「first-pass
+  mark skipped (no base commit)」逐轮重复，需手动 /stop-dag-tasks 终止——疑似 first-pass
+  收敛判定依赖 base commit、缺席时无兜底。
+keywords:
+  - first-pass
+  - 收敛判定
+  - 非 git 根
+  - base commit
+  - 循环不收敛
 domainPath: .knowledge/lessons/
 来源容器: diag-milestone-coverage
-来源任务: 1.9 真机走查 batch-1（裁决.md 观察与偏差候选 #1）
+来源任务: 1.9 真机走查 batch-1（裁决.md 观察与偏差候选
 bug id: 无（留档偏差候选，未立案）
+id: first-pass-no-convergence-non-git-root
+status: unconfirmed
+type: facts
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 非 git 项目根上 first-pass 循环不收敛

@@ -66,7 +66,6 @@ const PROJECT: Project = {
   name: 'demo',
   forgeDir: 'Z:/ws/demo/.forge',
   forgeDirExternal: false,
-  knowledgeDir: 'Z:/ws/demo/.knowledge',
   archived: false,
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
@@ -92,11 +91,11 @@ function bundleClient(overrides: { listEntries?: (q: unknown) => unknown } = {})
 }
 
 describe('loadBrowseBundle（全量装载）', () => {
-  it('三路并发归一：cards/nodes/total（= 全量计数）/ 项目名 + 知识目录位置（AC4 空库引导数据）', async () => {
+  it('三路并发归一：cards/nodes/total（= 全量计数）/ 项目名 + 知识目录位置（wsPath 缺省派生——AC4 空库引导数据）', async () => {
     const out = await loadBrowseBundle(bundleClient(), 'p-1')
     expect(out).toEqual({
       ok: true,
-      data: { cards: CARDS, nodes: NODES, total: 2, projectName: 'demo', knowledgeDir: 'Z:/ws/demo/.knowledge' },
+      data: { cards: CARDS, nodes: NODES, total: 2, projectName: 'demo', knowledgeDir: 'Z:\\ws\\demo\\.knowledge' },
     })
   })
 
@@ -204,7 +203,7 @@ describe('runFullLoad（全量装载 + 过滤补拉）', () => {
     expect(seen).toEqual([{ projectId: 'p-1' }, { projectId: 'p-1', domainPrefix: '前端' }])
     expect(out).toEqual({
       kind: 'bundle',
-      bundle: { cards: CARDS, nodes: NODES, total: 2, projectName: 'demo', knowledgeDir: 'Z:/ws/demo/.knowledge' },
+      bundle: { cards: CARDS, nodes: NODES, total: 2, projectName: 'demo', knowledgeDir: 'Z:\\ws\\demo\\.knowledge' },
       cards: CARDS.slice(0, 1),
     })
   })

@@ -1,11 +1,22 @@
 ---
 title: 隔离夹具内归属模型自主处置不可约束
-summary: 真机走查夹具中，归属会话的模型对 followup 消息自作处置（误判容器、停循环、自行重启），状态窗口被淹没且压制手段（切模型/掐 owner 轮）不彻底——状态窗口类断言的走查预案必须声明模型约束方式。
-keywords: [走查, 夹具, 归属模型, 自主处置, 状态窗口]
+summary: >-
+  真机走查夹具中，归属会话的模型对 followup 消息自作处置（误判容器、停循环、自行重启），状态窗口被淹没且压制手段（切模型/掐 owner
+  轮）不彻底——状态窗口类断言的走查预案必须声明模型约束方式。
+keywords:
+  - 走查
+  - 夹具
+  - 归属模型
+  - 自主处置
+  - 状态窗口
 domainPath: .knowledge/lessons/
 来源容器: loop-consol-flywheel-improvement
 来源任务: 1.5 真机走查会（001/002/003 三轮复现）；first-pass 复盘（1.9）沉淀
 bug id: 无
+id: walkthrough-fixture-model-self-disposition
+status: unconfirmed
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 隔离夹具内归属模型自主处置不可约束

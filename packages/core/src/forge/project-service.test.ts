@@ -68,7 +68,6 @@ const input = (o: { workspaceDir?: string; forgeDir?: string; worktreeDir?: stri
   workspaceDir: o.workspaceDir ?? join(WS, 'proj'),
   name: 'proj',
   forgeDir: o.forgeDir ?? join(WS, 'proj', '.forge'),
-  knowledgeDir: join(WS, 'proj', '.knowledge'),
   ...(o.worktreeDir === undefined ? {} : { worktreeDir: o.worktreeDir }),
 })
 
@@ -91,7 +90,6 @@ describe('AC1 新建路径全链成功：create + 行落库 + attachedToExisting
       name: 'proj',
       forge_dir: join(WS, 'proj', '.forge'),
       forge_dir_external: 0,
-      knowledge_dir: join(WS, 'proj', '.knowledge'),
       archived: 0,
     })
     expect(isParseableDateStyle(row?.created_at ?? '')).toBe(true)
@@ -400,7 +398,7 @@ describe('fix-30 拼写变体注册：幂等 / 零身份 churn / 既有实体绝
     const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fix30-case-'))
     try {
       const { db, registry, service } = setup()
-      const reg = { workspaceDir: root, name: 'learn', forgeDir: join(root, '.forge'), knowledgeDir: join(root, '.knowledge') }
+      const reg = { workspaceDir: root, name: 'learn', forgeDir: join(root, '.forge') }
       const first = await service.registerProject(reg)
       expect(first.attachedToExisting).toBe(false)
       const variant = flipCase(root) + '\\'
@@ -408,7 +406,6 @@ describe('fix-30 拼写变体注册：幂等 / 零身份 churn / 既有实体绝
         ...reg,
         workspaceDir: variant,
         forgeDir: join(variant, '.forge'),
-        knowledgeDir: join(variant, '.knowledge'),
       })
       expect(second).toEqual({ projectId: first.projectId, workspaceId: first.workspaceId, attachedToExisting: true })
       expect(registry.createCalls).toEqual([root]) // 变体径零 create——归一键在 ①/自愈面命中
@@ -476,13 +473,12 @@ describe('fix-30 拼写变体注册：幂等 / 零身份 churn / 既有实体绝
     }
     try {
       const { db, registry, service } = setup()
-      const reg = { workspaceDir: root, name: 'sym', forgeDir: join(root, '.forge'), knowledgeDir: join(root, '.knowledge') }
+      const reg = { workspaceDir: root, name: 'sym', forgeDir: join(root, '.forge') }
       const first = await service.registerProject(reg)
       const second = await service.registerProject({
         ...reg,
         workspaceDir: link,
         forgeDir: join(link, '.forge'),
-        knowledgeDir: join(link, '.knowledge'),
       })
       expect(second).toEqual({ projectId: first.projectId, workspaceId: first.workspaceId, attachedToExisting: true })
       expect(registry.deleteCalls).toEqual([])
@@ -569,36 +565,34 @@ describe('fix-33 ⑬ 对账记账防护（记账抛错不截断本轮剩余行�
   })
 })
 
-// ── fix-39 注册链目录自愈：新建径三目录缺则建；挂接/自愈径零盘副作用（Hard Rule） ──
+// ── fix-39 注册链目录自愈：新建径两目录缺则建；挂接/自愈径零盘副作用（Hard Rule） ──
+// 1.15：知识目录建面随 knowledge_dir 列退役迁 knowledge 插件注册径（本域不再建）。
 
 describe('fix-39 注册链目录自愈（② 前置步）', () => {
-  it('新建径：全新空工作区（无 .forge/.knowledge）注册 → 成功且两目录落盘（验收①）', async () => {
+  it('新建径：全新空工作区（无 .forge）注册 → 成功且目录落盘（验收①）', async () => {
     const { service } = setup()
-    const ws = join(WS_ROOT, 'fresh-ws') // 全新空目录——三目录均不存在
+    const ws = join(WS_ROOT, 'fresh-ws') // 全新空目录——两目录均不存在
     const result = await service.registerProject({
       workspaceDir: ws,
       name: 'fresh',
       forgeDir: join(ws, '.forge'),
-      knowledgeDir: join(ws, '.knowledge'),
     })
     expect(result.attachedToExisting).toBe(false)
     expect(existsSync(ws)).toBe(true)
     expect(existsSync(join(ws, '.forge'))).toBe(true)
-    expect(existsSync(join(ws, '.knowledge'))).toBe(true)
   })
 
-  it('直输多级缺失路径 → 注册成功，目录递归创建（验收②：D:\\a\\b\\c\\.knowledge 同构面）', async () => {
+  it('直输多级缺失路径 → 注册成功，目录递归创建（验收②：D:\\a\\b\\c\\.forge 同构面）', async () => {
     const { service } = setup()
     const ws = join(WS_ROOT, 'deep-ws')
-    const knowledgeDir = join(WS_ROOT, 'deep-ws', 'a', 'b', 'c', '.knowledge') // 多级缺失
+    const deepDir = join(WS_ROOT, 'deep-ws', 'a', 'b', 'c', '.forge') // 多级缺失
     const result = await service.registerProject({
       workspaceDir: ws,
       name: 'deep',
-      forgeDir: join(ws, '.forge'),
-      knowledgeDir,
+      forgeDir: deepDir,
     })
     expect(result.attachedToExisting).toBe(false)
-    expect(existsSync(knowledgeDir)).toBe(true) // 递归建齐
+    expect(existsSync(deepDir)).toBe(true) // 递归建齐
   })
 
   it('workspaceDir 选定后被删再注册 → 注册成功（目录自愈）而非 ERR_WORKSPACE_CREATE（验收④）', async () => {
@@ -610,13 +604,12 @@ describe('fix-39 注册链目录自愈（② 前置步）', () => {
       workspaceDir: ws,
       name: 'racy',
       forgeDir: join(ws, '.forge'),
-      knowledgeDir: join(ws, '.knowledge'),
     })
     expect(result.attachedToExisting).toBe(false)
     expect(existsSync(ws)).toBe(true) // 自愈重建
   })
 
-  it('挂接径（① 预检命中 dsh 既有）零建目录：.forge/.knowledge 缺失不落盘（Hard Rule）', async () => {
+  it('挂接径（① 预检命中 dsh 既有）零建目录：.forge 缺失不落盘（Hard Rule）', async () => {
     const { registry, service } = setup()
     const ws = join(WS_ROOT, 'attach-ws')
     registry.seed(ws) // dsh 侧既有 → ① 命中（挂接径）
@@ -624,12 +617,10 @@ describe('fix-39 注册链目录自愈（② 前置步）', () => {
       workspaceDir: ws,
       name: 'attach',
       forgeDir: join(ws, '.forge'),
-      knowledgeDir: join(ws, '.knowledge'),
     })
     expect(result.attachedToExisting).toBe(true)
     expect(existsSync(ws)).toBe(false) // 挂接径零 mkdir——工作区目录亦不建
     expect(existsSync(join(ws, '.forge'))).toBe(false)
-    expect(existsSync(join(ws, '.knowledge'))).toBe(false)
   })
 
   it('自愈径（attachExistingRow 既有行幂等重注册）零建目录（Hard Rule：幂等语义不破）', async () => {
@@ -641,11 +632,10 @@ describe('fix-39 注册链目录自愈（② 前置步）', () => {
       workspaceDir: ws,
       name: 'reattach',
       forgeDir: join(ws, '.forge'),
-      knowledgeDir: join(ws, '.knowledge'),
     })
     expect(result).toMatchObject({ projectId: 'row-39', attachedToExisting: true })
     expect(existsSync(ws)).toBe(false) // 自愈径零 mkdir
-    expect(existsSync(join(ws, '.knowledge'))).toBe(false)
+    expect(existsSync(join(ws, '.forge'))).toBe(false)
   })
 
   it('workspaceDir 建失败（路径为普通文件）→ WorkspaceCreateError（现行六码面承接；② 未启动无补偿）', async () => {
@@ -657,7 +647,6 @@ describe('fix-39 注册链目录自愈（② 前置步）', () => {
         workspaceDir: fileWs,
         name: 'x',
         forgeDir: join(WS_ROOT, 'f-forge'),
-        knowledgeDir: join(WS_ROOT, 'f-kn'),
       })
       .catch((e) => e)
     expect(err).toBeInstanceOf(WorkspaceCreateError)
@@ -667,16 +656,15 @@ describe('fix-39 注册链目录自愈（② 前置步）', () => {
     expect(readRows(db)).toEqual([])
   })
 
-  it('knowledgeDir 建失败（父级为普通文件）→ ProjectWriteError 前置（建失败沿现行六码面，不扩码）', async () => {
+  it('forgeDir 建失败（父级为普通文件）→ ProjectWriteError 前置（建失败沿现行六码面，不扩码）', async () => {
     const { db, registry, service } = setup()
-    const parentFile = join(WS_ROOT, 'kn-parent-file')
+    const parentFile = join(WS_ROOT, 'forge-parent-file')
     writeFileSync(parentFile, '占位文件', 'utf8')
     const err: unknown = await service
       .registerProject({
-        workspaceDir: join(WS_ROOT, 'kn-fail-ws'),
+        workspaceDir: join(WS_ROOT, 'forge-fail-ws'),
         name: 'x',
-        forgeDir: join(WS_ROOT, 'kn-fail-ws', '.forge'),
-        knowledgeDir: join(parentFile, 'sub', '.knowledge'), // 父级为文件 → mkdir ENOTDIR
+        forgeDir: join(parentFile, 'sub', '.forge'), // 父级为文件 → mkdir ENOTDIR
       })
       .catch((e) => e)
     expect(err).toBeInstanceOf(ProjectWriteError)

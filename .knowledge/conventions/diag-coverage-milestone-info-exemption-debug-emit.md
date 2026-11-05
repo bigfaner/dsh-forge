@@ -1,11 +1,25 @@
 ---
 title: 可观测性覆盖补齐配方：成功里程碑 info + 豁免点 debug emit + 裸 catch 二分
-summary: 诊断覆盖面缺口的三段补齐配方——成功路径终点补 info 埋点（event 功能域前缀 + payload 携带 slug/localId 等可得字段）；吞没点逐点核对，豁免（注释化理由 + 零影响）也补 debug 级 emit 不静默，其余补 warn；裸 catch 全仓扫描产「豁免/补点」二分台账落档。
-keywords: [诊断埋点, 成功里程碑, fail-soft, debug 级别, 裸 catch 审计, emitDiag]
+summary: >-
+  诊断覆盖面缺口的三段补齐配方——成功路径终点补 info 埋点（event 功能域前缀 + payload 携带 slug/localId
+  等可得字段）；吞没点逐点核对，豁免（注释化理由 + 零影响）也补 debug 级 emit 不静默，其余补 warn；裸 catch
+  全仓扫描产「豁免/补点」二分台账落档。
+keywords:
+  - 诊断埋点
+  - 成功里程碑
+  - fail-soft
+  - debug 级别
+  - 裸 catch 审计
+  - emitDiag
 domainPath: .knowledge/conventions/
 来源容器: diag-milestone-coverage
 来源任务: 提案全循环（1.2 补点 / 1.6 补点 / 1.9 真机走查裁决通过）
 bug id: 无
+id: diag-coverage-milestone-info-exemption-debug-emit
+status: unconfirmed
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
+related_doc: docs/conventions/diagnostic-emit-discipline.md
 ---
 
 # 可观测性覆盖补齐配方：成功里程碑 info + 豁免点 debug emit + 裸 catch 二分

@@ -15,6 +15,7 @@ import type { DomainNode, KnowledgeCard } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
+import { deriveKnowledgeDir } from '../../flows/add-project/form-model.js'
 import {
   EMPTY_FILTER,
   browseFilterReducer,
@@ -90,11 +91,13 @@ interface ProjectMeta {
   knowledgeDir: string | null
 }
 
-/** 项目元数据拉取（fail-soft：get null / 失败 = 名称空 + 目录 null——浏览主数据不因此失败） */
+/** 项目元数据拉取（fail-soft：get null / 失败 = 名称空 + 目录 null——浏览主数据不因此失败）。
+ *  知识目录 = wsPath 缺省派生 `<工作区>/.knowledge`（knowledge_dir 列退役后产品口径恒缺省——
+ *  派生单源 = flows/add-project form-model deriveKnowledgeDir）。 */
 async function fetchProjectMeta(client: ForgeRpcClient, projectId: string): Promise<ProjectMeta> {
   try {
     const project = await client.projects.get(projectId)
-    return { projectName: project?.name ?? '', knowledgeDir: project?.knowledgeDir ?? null }
+    return { projectName: project?.name ?? '', knowledgeDir: project === null ? null : deriveKnowledgeDir(project.wsPath) }
   } catch {
     return { projectName: '', knowledgeDir: null }
   }

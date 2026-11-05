@@ -1,11 +1,24 @@
 ---
 title: client 插件装载契约用镜像测试守卫
-summary: client 半插件的四条装载契约（apply 插件面 / slots.inject 挂载缝 / apply 返回 undefined / exports["./client"] 装载形态）由 bundle-structure + client-bundle-dom 镜像测试锚定，防回归与官方门静默拒绝。
-keywords: [client bundle, 装载契约, slots.inject, apply, 镜像测试]
+summary: >-
+  client 半插件的四条装载契约（apply 插件面 / slots.inject 挂载缝 / apply 返回 undefined /
+  exports["./client"] 装载形态）由 bundle-structure + client-bundle-dom
+  镜像测试锚定，防回归与官方门静默拒绝。
+keywords:
+  - client bundle
+  - 装载契约
+  - slots.inject
+  - apply
+  - 镜像测试
 domainPath: docs/conventions/reuse-official-mechanisms.md
 来源容器: expert-squad
 来源任务: 1.16（phase-3-summary.md）
 bug id: 无
+id: client-plugin-loading-contract-guards
+status: unconfirmed
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
+related_doc: docs/conventions/monorepo-structure.md
 ---
 
 # client 插件装载契约用镜像测试守卫

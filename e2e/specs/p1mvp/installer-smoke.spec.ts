@@ -29,10 +29,14 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
 
-// 【临时禁用 2026-11-04】安装链 e2e 跑批窗口内本 GUI（安装版 dsh-forge）三次被外力强杀
-// （harness.log 11:06/11:10/11:25 无优雅关闭标记即死 + 重启进安全模式），疑本套件
-// 安装/清理面按进程名误杀同名 GUI。根因坐实前整套留痕 skip（用户裁决：先禁用再深查）。
-test.skip(true, 'installer-smoke 暂时禁用：安装链 e2e 疑似按进程名误杀安装版 GUI（排查中，bug 待立案）')
+// 【再禁用 2026-11-04 14:57；fix-4 后维持】fix-3（2b302624）静态全绿但真机仍复现强杀本 GUI
+// ——fix-4 根因二查（纯静态）：14:51 产物自身已路径域（安装/卸载两上下文 PPO 展开均零按名
+// taskkill），真机杀手 = installSection uninstallOldVersion 拉起机器注册的旧版卸载器
+// （app-builder-lib installUtil.nsh ExecWait，appId 派生 HKCU 键跨版本恒定——冒烟静默安装
+// 即对真机 GUI 本尊安装目录执行旧卸载器，查杀 + 反卸真机安装）。上游行为无宏缝可接管，
+// 该径真机执行取证归 CI/停机窗口（bug 0ebcc9f8 / 167b5121 链）；本 spec 维持留痕 skip
+//（用户硬禁令：GUI 运行期禁止 NSIS 静默安装）。复位纪律已改 rmSync（fix-4）。
+test.skip(true, 'installer-smoke 维持禁用：uninstallOldVersion 拉起机器旧卸载器径未隔离（fix-4 静态裁定，执行取证归 CI/停机窗口）')
 import { closeApp, launchElectron, launchHost } from '../../support/launch.js'
 import { decodeSessionFile, findFixtureSession, sessionLogById, type SessionEvent } from '../../support/session-files.js'
 import { forgeInvoke } from '../../support/rpc.js'
@@ -43,7 +47,6 @@ import {
   CONVERSATION_HEADER,
   HERO,
   KNOWLEDGE_ENTRY,
-  HERO_WORKSPACE_CHIP_NAME,
   MAIN_CONVERSATION,
   NAV_SHELL,
   PROJECT_ROW_ANY,
@@ -111,17 +114,11 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
+  // fix-4（bug 0ebcc9f8）机器复位纪律：禁跑卸载器，rmSync 目录直收。卸载器静默执行
+  // 属按名查杀残留面——修复前构建的卸载器 un.checkAppRunning 仍按
+  // 名/其自身 INSTDIR 查杀 dsh-forge.exe；复位纪律不得依赖任何卸载器二进制。
   const installDir = installState.installDir
-  const zTmp = installState.tmp
   if (installDir === undefined) return
-  const uninstaller = existsSync(installDir)
-    ? readdirSync(installDir).find((f) => f.startsWith('Uninstall') && f.endsWith('.exe'))
-    : undefined
-  if (uninstaller !== undefined) {
-    spawnSync(join(installDir, uninstaller), ['/S'], { timeout: 120_000, env: { ...process.env, TEMP: zTmp, TMP: zTmp } })
-    const deadline = Date.now() + 240_000
-    while (existsSync(installDir) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 3_000))
-  }
   rmSync(join(installDir, '..'), { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
 })
 
@@ -189,22 +186,22 @@ test('@web-e2e @p1mvp installer-smoke·冒烟前半：安装→启动零错→�
     expect(manifest.injections.length).toBeGreaterThan(0)
     await expect(page.locator(WORKBENCH).first()).toBeVisible({ timeout: 60_000 })
     // 首启落地 profile（安装形态真实落地链回归——fix-37 ④ 归并面：4.3 套件的插件行内容
-    // 断言随迁：patch 含 @dsh-forge/core 产品行；knowledge 行暂不含——产品裁决：知识库
-    // 功能不完整，打包形态不开放）
+    // 断言随迁：patch 含 @dsh-forge/core 产品行；knowledge 行携带——knowledge-stage1
+    // 1.9 A5 重开放：用户层全局行 + 随包（PRODUCT_PLUGINS userLayerRow: true））
     for (const f of PROFILE_FILES) {
       expect(existsSync(join(userData, 'profile', f)), `首启落地 profile/${f}`).toBe(true)
     }
     const patch = readFileSync(join(userData, 'profile', 'cordis.patch.yml'), 'utf8')
     expect(patch, 'profile patch 含 @dsh-forge/core 产品插件行（4.3 归并断言）').toContain("name: '@dsh-forge/core'")
-    expect(patch, 'profile patch 不含 @dsh-forge/knowledge 插件行（暂不开放）').not.toContain("name: '@dsh-forge/knowledge'")
+    expect(patch, 'profile patch 含 @dsh-forge/knowledge 插件行（1.9 A5 重开放——独立装底稿携带）').toContain("name: '@dsh-forge/knowledge'")
     expect(existsSync(join(userData, 'state.db')), 'state.db 落盘（SQLite 句柄已开）').toBe(true)
 
     // ── Step 3 success：主界面可达——三区工作台骨架（零项目 hero 确定相位） ──
     await expect(page.locator(NAV_SHELL).first(), '左栏导航 rail 入口在位').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(SIDEBAR_ANY).first(), '产品工作区面板').toBeVisible()
-    // bug 2ffb0a82：knowledge 插件不随包（staged:false）→ 宿主插件位 false → 左栏
-    // 「知识库」入口行零登记（打包形态知识面整组隐藏）
-    await expect(page.locator(KNOWLEDGE_ENTRY).first(), '知识库入口（打包形态插件缺席 = 隐藏）').toHaveCount(0)
+    // knowledge 1.9 A5 重开放：插件随包 + 用户层行装载 → 宿主插件位 true → 左栏
+    // 「知识库」入口行登记（原 bug 2ffb0a82 隐藏态翻转——探测已改双形态两探针）
+    await expect(page.locator(KNOWLEDGE_ENTRY).first(), '知识库入口（插件装载位 true = 在场）').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(PROJECT_ROW_ANY), '零项目态：项目树空').toHaveCount(0)
     // fix-7 定性收口（smoke-skeleton L44 同源矛盾）：view 镜像 = 官方面板态投影（hero 相位
     // 产品 'dswf-hero' 面板替换呈现 → 镜像恒 'hero'）；本组自带零项目 hero 确定相位（组题
@@ -270,7 +267,6 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
       workspaceDir: projDir,
       name: 'smoke-proj',
       forgeDir: join(projDir, '.forge'),
-      knowledgeDir: join(projDir, '.knowledge'),
     })
     expect(registered.projectId, '安装形态注册落库（IPC → core 双服务 → registry → SQLite 全链）').toBeTruthy()
     await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 60_000 })
@@ -279,8 +275,7 @@ test('@web-e2e @p1mvp installer-smoke·冒烟后半：会话面板可用（compo
     // 新会话入口：composer 工作区芯片流（首装真实路径——rail 钮锚跟随回跳归单测 pin）
     const composer = page.locator(COMPOSER_INPUT).last()
     await expect(composer).toBeVisible({ timeout: 30_000 })
-    // chip 锚 = HERO_WORKSPACE_CHIP_NAME 单源（可访问名形态——hasText 孪生已收口）
-    const chip = page.getByRole('button', { name: HERO_WORKSPACE_CHIP_NAME }).first()
+    const chip = page.locator('button', { hasText: /^默认工作区$|^选择工作区$/ }).first()
     await expect(chip).toBeVisible({ timeout: 30_000 })
     // 菜单 = 开启瞬间的账本快照——注册实体经官方订阅传播有滞后，重开轮询（≤45s）
     const menu = page.locator('[role="menu"]').first()

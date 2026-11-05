@@ -45,7 +45,7 @@ const registerResult = { projectId: 'p-1', workspaceId: 'w-1', attachedToExistin
 const summaries = [{ id: 'p-1', workspaceId: 'w-1', name: 'demo', wsPath: 'C:\\ws\\demo', archived: false }]
 const projectRow = {
   id: 'p-1', workspaceId: 'w-1', wsPath: 'C:\\ws\\demo', name: 'demo', forgeDir: 'C:\\ws\\demo\\.forge',
-  forgeDirExternal: false, knowledgeDir: 'C:\\ws\\demo\\.knowledge', archived: false,
+  forgeDirExternal: false, archived: false,
   createdAt: '2026-10-02T00:00:00.000Z', updatedAt: '2026-10-02T00:00:00.000Z',
 }
 const reconcileReport = { repaired: [{ projectId: 'p-1', workspaceId: 'w-2', action: 'relinked' as const }], orphans: [] }
@@ -67,8 +67,8 @@ let seq = 0
 const dbPath = () =>
   join((dir ??= mkdtempSync(join(tmpdir(), 'dsh-forge-rpc-'))), `state-${String(++seq).padStart(3, '0')}.db`)
 
-/** fix-39：注册链目录自愈（② 前 mkdir 三目录）落地后实层用例会真实建目录——ws 基座迁
- *  临时根（原 C: 常量路径会污染用户盘）；forgeDir/knowledgeDir 同用 ws（setupReal 口径） */
+/** fix-39：注册链目录自愈（② 前 mkdir 两目录）落地后实层用例会真实建目录——ws 基座迁
+ *  临时根（原 C: 常量路径会污染用户盘）；forgeDir 同用 ws（setupReal 口径） */
 const wsPath = (name: string): string =>
   join((dir ??= mkdtempSync(join(tmpdir(), 'dsh-forge-rpc-'))), name)
 
@@ -108,7 +108,7 @@ describe('2.4 AC1 五通道端到端（替身层：typed 结果 + 负载映射�
 
   it('register：RegisterProjectInput 透传 → RegisterResult typed 返回', async () => {
     const { service, call } = setup()
-    const input = { workspaceDir: 'C:\\ws\\demo', name: 'demo', forgeDir: 'C:\\ws\\demo\\.forge', knowledgeDir: 'C:\\ws\\demo\\.knowledge' }
+    const input = { workspaceDir: 'C:\\ws\\demo', name: 'demo', forgeDir: 'C:\\ws\\demo\\.forge' }
     await expect(call(PROJECTS_CHANNELS.register, input)).resolves.toEqual({ ok: true, data: registerResult })
     expect(service.registerProject).toHaveBeenCalledWith(input)
   })
@@ -177,7 +177,7 @@ function setupReal(ws: string, opts: { failInsert?: boolean; failCreate?: Error;
     )
   }
   const service = createProjectService({ db, registry, rename: { rename: async () => ({}) } }) // fix-33 ⑩ rename 桩（fix-24 后必填——本面无 rename 断言）
-  const input = { workspaceDir: ws, name: 'x', forgeDir: ws, knowledgeDir: ws }
+  const input = { workspaceDir: ws, name: 'x', forgeDir: ws }
   const handler = rpcEnvelope((payload: typeof input) => service.registerProject(payload))
   return { db, registry, service, input, handler }
 }

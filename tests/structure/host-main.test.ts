@@ -26,6 +26,13 @@ function importSpecifiersOf(src: string): string[] {
   return out
 }
 
+/** 纯类型 import 的说明符集（import type … from 'x'——零运行期产物，wiring 面合法） */
+function typeImportSpecifiersOf(src: string): string[] {
+  const out: string[] = []
+  for (const m of src.matchAll(/\bimport\s+type\s+[\s\S]{0,200}?\bfrom\s+(['"])([^'"]+)\1/g)) out.push(m[2]!)
+  return out
+}
+
 describe('AC1 main 装配纪律（~100 行 + 仅编排）', () => {
   it('总行数 ≤ 170（薄宿主编排纪律上限——1.2 telemetry 装配行并入后现状 164 行对齐：装配缝自然增长仍仅编排）', () => {
     expect(lines.length).toBeLessThanOrEqual(170)
@@ -75,12 +82,14 @@ describe('AC1 main 装配纪律（~100 行 + 仅编排）', () => {
     }
   })
 
-  it('host 子模块零业务漂移：不 import knowledge 产品域与 web 源码（1.9 现状对齐：worktree-branch-management 1.7 集成层装配缝——ipc/bindings.ts 与 ipc/worktree-identity.ts 消费 @dsh-forge/core createGitIdentityPort 作 git 探针缺省 = 装配胶水合法；fix-33 ③ 扫描面含双引号/模板串/动态 import/require）', () => {
+  it('host 子模块零业务漂移：不 import knowledge 产品域实现与 web 源码（1.9 现状对齐：worktree-branch-management 1.7 集成层装配缝——ipc/bindings.ts 与 ipc/worktree-identity.ts 消费 @dsh-forge/core createGitIdentityPort 作 git 探针缺省 = 装配胶水合法；knowledge-stage1 1.7 修订：Interface 2 服务类型随 A2 迁 @dsh-forge/knowledge，host 通道/桥 wiring 面 type-only import 合法——值导入（实现级）仍禁；fix-33 ③ 扫描面含双引号/模板串/动态 import/require）', () => {
     const hostSrc = join(ROOT, 'apps/host/src')
     const files = walk(hostSrc)
     for (const f of files) {
       const src = readFileSync(f, 'utf8')
+      const typeOnly = new Set(typeImportSpecifiersOf(src))
       for (const s of importSpecifiersOf(src)) {
+        if (typeOnly.has(s)) continue // 纯类型 import（零运行期依赖）——wiring 面合法
         expect(
           s.startsWith('@dsh-forge/knowledge') || s.startsWith('../web/') || s.includes('/apps/web/'),
           `${rel(f)} 引入了业务漂移面：${s}`,

@@ -24,7 +24,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['apps/web', '@dsh-forge/web'],
     ['packages/contracts', '@dsh-forge/contracts'],
     ['packages/core', '@dsh-forge/core'],
-    ['packages/knowledge', '@dsh-forge/knowledge'],
+    ['packages/plugins/knowledge', '@dsh-forge/knowledge'],
     ['packages/path-key', '@dsh-forge/path-key'],
     // M2 3.2：第六工件 plugin-forge（tool 半身 + forge:pipeline 系统提示段）
     ['packages/plugin-forge', '@dsh-forge/plugin-forge'],
@@ -56,7 +56,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'apps/web',
         'packages/contracts',
         'packages/core',
-        'packages/knowledge',
+        'packages/plugins/knowledge',
         'packages/path-key',
         'packages/plugin-forge',
         'packages/plugin-forge-spec',
@@ -73,15 +73,16 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
 
   it.each([
     ['packages/contracts', []],
+    // knowledge-stage1 1.8：core 知识域退役——过渡型 plugins/knowledge 引用随迁收口
     ['packages/core', ['packages/contracts', 'packages/path-key']],
     // fix-33 ⑯：knowledge ../core 引用删除——build 面零 core import（残留引用无消费）；
     // 测试面 core 源相对引入由 tsconfig.test.json 承载（不经 references）
-    ['packages/knowledge', ['packages/contracts', 'packages/path-key']],
+    ['packages/plugins/knowledge', ['packages/contracts', 'packages/path-key']],
     // M2 3.2：plugin-forge 同 knowledge 型（deps 仅 contracts + path-key——零 core 边）
     ['packages/plugin-forge', ['packages/contracts', 'packages/path-key']],
     // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
-    ['apps/host', ['packages/contracts', 'packages/core', 'packages/knowledge', 'packages/plugins/git-worktree']],
+    ['apps/host', ['packages/contracts', 'packages/core', 'packages/plugins/knowledge', 'packages/plugins/git-worktree']],
     ['apps/web', ['packages/contracts', 'packages/plugins/git-worktree', 'packages/plugins/md-mermaid']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
     const ts = readJson(join(dir, 'tsconfig.json')) as {
@@ -90,7 +91,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
       references?: { path: string }[]
     }
     expect(ts.compilerOptions?.composite).toBe(true)
-    expect(ts.extends).toBe('../../tsconfig.base.json')
+    expect(ts.extends).toBe(dir.startsWith('packages/plugins/') ? '../../../tsconfig.base.json' : '../../tsconfig.base.json')
     const refs = (ts.references ?? []).map((r) => rel(join(dir, r.path)))
     expect([...refs].sort()).toEqual([...expected].sort())
   })
@@ -114,9 +115,7 @@ describe('AC2–AC4 G0 规则面（oxlint 三铁律 + SC2 watch 禁令 + 令牌 
       'apps/web/src/rpc/**',
       'apps/web/src/styles/**',
       'packages/core/src/db/**',
-      // 铁律③ 同级业务互禁（core 双域 / web 双视图）
-      'packages/core/src/forge/**',
-      'packages/core/src/knowledge/**',
+      // 铁律③ 同级业务互禁（web 双视图）
       'apps/web/src/views/session/**',
       'apps/web/src/views/knowledge/**',
     ]) {
@@ -204,9 +203,8 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
     'apps/web/src/flows/add-project',
     'packages/core/src/db',
     'packages/core/src/forge',
-    'packages/core/src/knowledge',
-    'packages/knowledge/src/tools',
-    'packages/knowledge/src/prompt',
+    'packages/plugins/knowledge/src/tools',
+    'packages/plugins/knowledge/src/prompt',
     'packages/plugin-forge/src/tools',
     'packages/plugin-forge/src/prompt',
     'packages/plugin-forge-spec/src/tools',
@@ -226,7 +224,7 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
       'apps/web/vite.config.ts',
       'packages/contracts/src/index.ts',
       'packages/core/src/index.ts',
-      'packages/knowledge/src/index.ts',
+      'packages/plugins/knowledge/src/index.ts',
       'packages/plugin-forge/src/index.ts',
       'packages/plugin-forge-spec/src/index.ts',
     ]) {

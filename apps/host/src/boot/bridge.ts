@@ -17,7 +17,6 @@
 import {
   ERROR_CODES,
   FORGE_EVENT_CHANNELS,
-  type BrowseKnowledgeService,
   type BridgeEventMessage,
   type ForgeBugsService,
   type ForgeDocsService,
@@ -31,6 +30,7 @@ import {
   type RemoteApprovalForwardResult,
   type TasksChangedEvent,
 } from '@dsh-forge/contracts'
+import type { BrowseKnowledgeService } from '@dsh-forge/knowledge'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { TunnelProvider } from '../tunnel/index.js'
 import type { DiagContextStore } from '../telemetry/diag-context.js'
@@ -41,11 +41,13 @@ import type { BootDshOptions } from './run.js'
  * 桥接服务名（P1 双服务 + M2 四域 + M3 设置域——Interface 6 六名 → 3.8 七名；runProfile
  * ctx 面世，main 侧 forge:* 通道接线。四域 = tasksHome 注入时 core provide（缺席 = M2 面
  * 降级，ready 位 false）；forgeSettings = settingsFile 注入时 provide（独立缝——缺席仅
- * 设置域降级，六服务形制不动）
+ * 设置域降级，六服务形制不动）。
+ * knowledge-stage1 1.7（A2 服务切换）：'knowledge' = knowledge 插件 provide 自有服务
+ * （去 forge 前缀；forgeKnowledge 退役——五通道句柄来源 = 插件域供数）。
  */
 export type BridgeServiceName =
   | 'forgeProjects'
-  | 'forgeKnowledge'
+  | 'knowledge'
   | 'forgeTasks'
   | 'forgeFeatures'
   | 'forgeProposals'
@@ -60,7 +62,7 @@ export type BridgeServiceName =
 /** 服务名全集常量（ready 在场位逐名校验的迭代面；完备性经 ServiceNamesCoverage 收敛 never） */
 export const BRIDGE_SERVICE_NAMES = [
   'forgeProjects',
-  'forgeKnowledge',
+  'knowledge',
   'forgeTasks',
   'forgeFeatures',
   'forgeProposals',
@@ -282,8 +284,13 @@ export const PROJECT_SERVICE_METHODS = [
 export type ProjectWhitelistCoverage = AssertNever<Exclude<keyof ProjectService, (typeof PROJECT_SERVICE_METHODS)[number]>>
 
 /**
- * KnowledgeService + browse 方法白名单（Interface 2 七法 + 聚合第八法）。
- * fix-33 类型锚：锚到 contracts BrowseKnowledgeService（第八法命名类型单一来源）。
+ * KnowledgeService + browse + registerProject 方法白名单（Interface 2 七法 + 聚合第八法
+ * + 注册行写入第九法 + stage② 写门三法 write/read/confirm——1.4）。
+ * 类型锚：@dsh-forge/knowledge BrowseKnowledgeService（1.7 服务面归属随迁——单一来源）。
+ * registerProject 仅 host 注册链 wiring 消费（renderer ipc 面不注册）；write/read/
+ * confirm 与 1.6 scanKnowledge/registerKnowledge、distill 归并双法
+ * supersedeEntry/reinstateEntry 为服务方法非 web 通道（双门分工：agent/收编/distill 面 =
+ * 插件域，宿主只 wiring）。
  */
 export const KNOWLEDGE_SERVICE_METHODS = [
   'rebuildIndex',
@@ -294,6 +301,15 @@ export const KNOWLEDGE_SERVICE_METHODS = [
   'heatByEntry',
   'sessionRecall',
   'browse',
+  'registerProject',
+  'write',
+  'read',
+  'confirm',
+  'scanKnowledge',
+  'registerKnowledge',
+  'supersedeEntry',
+  'reinstateEntry',
+  'setDomainDescription',
 ] as const satisfies readonly (keyof BrowseKnowledgeService)[]
 
 /** 白名单覆盖完备性（= never：缺席的 BrowseKnowledgeService 方法在此编译期点名） */
@@ -495,6 +511,8 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
   const blitzSkillsDir = typeof o.blitzSkillsDir === 'string' && o.blitzSkillsDir !== '' ? o.blitzSkillsDir : undefined
   // squad skills 物化锚（预设 customSkillDirs[squad]——expert-squad 专家域技能；缺席 = squad 技能面降级）
   const squadSkillsDir = typeof o.squadSkillsDir === 'string' && o.squadSkillsDir !== '' ? o.squadSkillsDir : undefined
+  // knowledge skills 物化锚（knowledge-stage1 1.9 A5：预设 customSkillDirs[knowledge]；缺席 = knowledge 技能面降级）
+  const knowledgeSkillsDir = typeof o.knowledgeSkillsDir === 'string' && o.knowledgeSkillsDir !== '' ? o.knowledgeSkillsDir : undefined
   // M3 3.8：设置域存储路径（boot overlay 注 core 行 config.settingsFile——缺席 = forgeSettings 服务降级）
   const settingsFile = typeof o.settingsFile === 'string' && o.settingsFile !== '' ? o.settingsFile : undefined
   return {
@@ -509,6 +527,7 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
     specSkillsDir,
     blitzSkillsDir,
     squadSkillsDir,
+    knowledgeSkillsDir,
     settingsFile,
   }
 }

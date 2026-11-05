@@ -207,7 +207,6 @@ async function rpcRegisterWorkspace(page: Page, wsDir: string, name: string): Pr
     workspaceDir: wsDir,
     name,
     forgeDir: join(wsDir, '.forge'),
-    knowledgeDir: join(wsDir, '.knowledge'),
   })
   const { dir } = await rpcInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })
   return { dir, projectId: registered.projectId }

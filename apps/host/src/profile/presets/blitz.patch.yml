@@ -5,6 +5,8 @@
 # （presets.test.ts 机械 diff + config 全集断言）；平台门行由物化就地求值。
 # fix-1/drift #9：尾部 plugin-forge 增量行携带 bindingsFile 同 config（占位符物化——与全局行
 # 同值单源），预设会话行内实例自足 cwd 路由（config-less 行内实例遮蔽全局配置实例断链——3.9 实跑双证）。
+# knowledge-stage1 1.9 A5：customSkillDirs 增 knowledge 技能目录（skills/learn——
+# 知识沉淀技能；knowledge 插件本体走用户层全局行，非预设组合专行）。
 # 行所有权同远征：产品工件底稿，boot overlay 每启注行，不进 profile 用户层。
 - insert:
     - id: preset-blitz
@@ -52,6 +54,7 @@
                 - "{{plugin-forge-skills}}"
                 - "{{plugin-forge-blitz-skills}}"
                 - "{{expert-squad-skills}}"
+                - "{{knowledge-skills}}"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: command-goal

@@ -42,7 +42,9 @@ export const RUNTIME_PACKAGES: Readonly<Record<string, string>> = {
 
 /**
  * 产品插件闭包（3.4 M2 起步；M3 3.7 增 plugin-forge-spec——预设装配远征组合 in-preset 行
- * 的 loader 解析面；md-mermaid-plugin 增 @dsh-forge/md-mermaid——远征+突击双组合 in-preset 行）。
+ * 的 loader 解析面；md-mermaid-plugin 增 @dsh-forge/md-mermaid——远征+突击双组合 in-preset 行；
+ * knowledge-stage1 1.9 A5 增 @dsh-forge/knowledge——用户层全局行插件，dev 锚树供应面
+ * + skills/learn 技能目录解析源（paths.ts resolvePackageSkillsDir 同树））。
  *   · dev 锚树：apps/host/package.json dependencies workspace 链接（本清单同门供应面
  *     ——paths.ts resolvePackageSkillsDir 亦自此解析 skills 目录）；
  *   · dev profile 树：apps/host/profile.dev/package.json link 行（loader 行 import 锚）；
@@ -56,13 +58,15 @@ export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = [
   '@dsh-forge/plugin-forge',
   '@dsh-forge/plugin-forge-spec',
   '@dsh-forge/md-mermaid',
+  '@dsh-forge/knowledge',
 ]
 
-/** 仓库内源目录相对 packages/ 的子路径（默认平铺 packages/<short>；md-mermaid / git-worktree / expert-squad 居 packages/plugins/ 子居所）。 */
+/** 仓库内源目录相对 packages/ 的子路径（默认平铺 packages/<short>；md-mermaid / git-worktree / expert-squad / knowledge 居 packages/plugins/ 子居所）。 */
 export const PRODUCT_PLUGIN_PACKAGE_DIRS: Readonly<Record<string, string>> = {
   '@dsh-forge/md-mermaid': 'plugins',
   '@dsh-forge/git-worktree': 'plugins',
   '@dsh-forge/expert-squad': 'plugins',
+  '@dsh-forge/knowledge': 'plugins',
 }
 
 /** 包名 → profile.dev link 相对路径（runtime-packages.test / materialize.test 同源 pin）。 */

@@ -1,11 +1,18 @@
 ---
 title: gate 留痕附退出码终态行——审计面不靠推断
-summary: 质量门留痕统一附退出码终态行（如 `lint:types exit 0`），审计时可直接核验门终态，不靠输出内容推断成败。
-keywords: [gate, exit-code, 留痕, audit]
-status: draft
+summary: '质量门留痕统一附退出码终态行（如 `lint:types exit 0`），审计时可直接核验门终态，不靠输出内容推断成败。'
+keywords:
+  - gate
+  - exit-code
+  - 留痕
+  - audit
+status: unconfirmed
 source_container: e2e-known-reds-triage
 source_task: 1.11 评审 minor
 source_bug: —
+id: gate-log-exit-code-line
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # gate 留痕附退出码行

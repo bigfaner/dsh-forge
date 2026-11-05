@@ -1,11 +1,22 @@
 ---
 title: 环境级失败与断言失败分类隔离
-summary: 套件 teardown 的 EPERM Temp 清理失败、沙箱文件权限拒绝等环境级失败，会在全量 vitest 报 success:false——先分类（断言全过 + 仅清理失败 = 环境级），针对性复跑受影响测试面隔离验证，不误判为代码缺陷。
-keywords: [EPERM, teardown, 沙箱, 环境失败, 测试分类]
+summary: >-
+  套件 teardown 的 EPERM Temp 清理失败、沙箱文件权限拒绝等环境级失败，会在全量 vitest 报
+  success:false——先分类（断言全过 + 仅清理失败 = 环境级），针对性复跑受影响测试面隔离验证，不误判为代码缺陷。
+keywords:
+  - EPERM
+  - teardown
+  - 沙箱
+  - 环境失败
+  - 测试分类
 domainPath: docs/conventions/windows-commit-exhaustion.md
 来源容器: expert-squad
 来源任务: 1.5 D-2、1.15 D-6（phase-1/3-summary.md）
 bug id: 无
+id: classify-environment-failures-from-assertion-failures
+status: unconfirmed
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 环境级失败与断言失败分类隔离

@@ -13,7 +13,7 @@
     "@dsh-forge/contracts": "link:../../../packages/contracts",
     "@dsh-forge/core": "link:../../../packages/core",
     "@dsh-forge/git-worktree": "link:../../../packages/plugins/git-worktree",
-    "@dsh-forge/knowledge": "link:../../../packages/knowledge",
+    "@dsh-forge/knowledge": "link:../../../packages/plugins/knowledge",
     "@dsh-forge/md-mermaid": "link:../../../packages/plugins/md-mermaid",
     "@dsh-forge/plugin-forge": "link:../../../packages/plugin-forge",
     "@dsh-forge/expert-squad": "link:../../../packages/plugins/expert-squad",

@@ -8,8 +8,11 @@
 //      不删 props 的脆弱面（拉取缝零贡献 fail-soft）。
 // 探针形态来源：proposals/forge-dirs-query-tool/walkthrough/fix1-forgeDirs/cordis-repro2.mjs。
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { Context, type Context as CordisContext } from '@deepseek-ai/cordis'
+import { Context, type Context as CordisContext, type Plugin } from '@deepseek-ai/cordis'
 import { collectDeclaredDirKeys, DIR_KEY_REGISTRY, type DirKeyEntry, type ReflectDeclarePullFace } from './forge-paths.js'
+
+/** 内联插件函数的 config 面（cordis 4.0.4 plugin 泛型推断需显式 config 型——{name} 行否则 TS 拒） */
+type NamedPlugin = Plugin.Function<{ name?: string }>
 
 const entry: DirKeyEntry = {
   dirKey: 'knowledge.root',
@@ -35,15 +38,15 @@ afterAll(async () => {
 describe('a) 跨 scope 反向拉取可达性（拉取缝主缝钉）', () => {
   it('根 scope provide dirKeys.* 后，隔离 scope 内 props 含该名 + get 可取 + 拉取合并生效', async () => {
     let isolatedReflect: ReflectDeclarePullFace | undefined
-    await ctx.plugin((c) => {
+    await ctx.plugin(((c: CordisContext) => {
       disposeDeclarer = c.reflect.provide('dirKeys.contract-test', [entry]) as () => Promise<void>
-    }, { name: 'declarer-root' })
-    await ctx.plugin(async (c) => {
-      const scoped = c.isolate('forgeDirs', 'session-x')
-      await scoped.plugin((c2) => {
+    }) as NamedPlugin, { name: 'declarer-root' })
+    await ctx.plugin((async (c: CordisContext) => {
+      const scoped = c.isolate('forgeDirs') // 每调用独立隔离 scope（label 缺省 = 唯一 symbol）
+      await scoped.plugin(((c2: CordisContext) => {
         isolatedReflect = c2.reflect as ReflectDeclarePullFace
-      }, { name: 'plugin-forge-isolated' })
-    }, { name: 'session-runtime' })
+      }) as NamedPlugin, { name: 'plugin-forge-isolated' })
+    }) as unknown as NamedPlugin, { name: 'session-runtime' })
     expect(isolatedReflect).toBeDefined()
     expect(Object.keys(isolatedReflect!.props ?? {})).toContain('dirKeys.contract-test')
     expect(isolatedReflect!.get('dirKeys.contract-test')).toEqual([entry])
@@ -58,12 +61,12 @@ describe('b) 对照：推式缝跨 scope 不可达（bug 04d445f4 机制钉）',
     ctx.on('internal/service', (name: string) => {
       if (name === 'forgeDirs') fired.push(name)
     })
-    await ctx.plugin(async (c) => {
-      const scoped = c.isolate('forgeDirs', 'session-y')
-      await scoped.plugin((c2) => {
+    await ctx.plugin((async (c: CordisContext) => {
+      const scoped = c.isolate('forgeDirs')
+      await scoped.plugin(((c2: CordisContext) => {
         c2.reflect.provide('forgeDirs', { registerDirKeys: () => {} })
-      }, { name: 'plugin-forge-isolated-y' })
-    }, { name: 'session-runtime-y' })
+      }) as NamedPlugin, { name: 'plugin-forge-isolated-y' })
+    }) as unknown as NamedPlugin, { name: 'session-runtime-y' })
     expect(fired).toEqual([]) // 隔离 provide 被滤——推式注册/事件跨 scope 不可达
   })
 })
@@ -72,10 +75,10 @@ describe('c) provide 注销后残名脆弱面（拉取零贡献 fail-soft 钉）
   it('注销器只删 store 不删 props：残名在场 + get undefined → 拉取零贡献', async () => {
     let reflect: ReflectDeclarePullFace | undefined
     let disposeProvider: (() => Promise<void>) | undefined
-    await ctx.plugin((c) => {
+    await ctx.plugin(((c: CordisContext) => {
       disposeProvider = c.reflect.provide('dirKeys.contract-test-2', [entry]) as () => Promise<void>
       reflect = c.reflect as ReflectDeclarePullFace
-    }, { name: 'declarer-dispose' })
+    }) as NamedPlugin, { name: 'declarer-dispose' })
     expect(collectDeclaredDirKeys(reflect, BUILTIN_KEYS).map((e) => e.dirKey)).toContain('knowledge.root')
     await disposeDeclarer?.() // 清场：a) 的根 scope 声明先注销，本用例只留待测名
     await disposeProvider?.()

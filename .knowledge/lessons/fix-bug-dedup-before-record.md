@@ -1,11 +1,22 @@
 ---
 title: recordBug 前必须 listBugs 查重——同一缺陷多 ID 三处引用致可追溯性断裂
-summary: 同一缺陷重复落账三条记录（a944424f 正本 fixed / 1f8f58a5 重复 fixed / 8913a908 重复 open）→ commit、源码注释、对账表三处引用三个不同 ID，可追溯性断裂。教训：recordBug 前必查重（症状关键词 + 触发面）；正本选定后重复条目 resolveBug 清账并注记 dup-of；所有引用面统一用正本 ID。
-keywords: [recordBug, 查重, dup-of, 可追溯性, bug-id]
-status: draft
+summary: >-
+  同一缺陷重复落账三条记录（a944424f 正本 fixed / 1f8f58a5 重复 fixed / 8913a908 重复 open）→
+  commit、源码注释、对账表三处引用三个不同 ID，可追溯性断裂。教训：recordBug 前必查重（症状关键词 + 触发面）；正本选定后重复条目
+  resolveBug 清账并注记 dup-of；所有引用面统一用正本 ID。
+keywords:
+  - recordBug
+  - 查重
+  - dup-of
+  - 可追溯性
+  - bug-id
+status: unconfirmed
 source_container: e2e-upstream-drift-reds-triage
 source_task: 1.4 / 1.7
 source_bug: a944424f / 8913a908 / 1f8f58a5
+id: fix-bug-dedup-before-record
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # bug 落账查重纪律

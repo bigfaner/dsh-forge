@@ -1,11 +1,21 @@
 ---
 title: fail-soft 装配降级让档案缺席沉默四轮——排查成本远超 fail-loud
-summary: triage 处置子代理 persona 档案段缺席连续 4 轮复发才收口，因降级链 fail-soft 零痕迹；档案合成缺档应 fail-loud 含键名，降级必须留诊断日志。
-keywords: [triage, persona, 档案, fail-loud, 复发]
-status: draft
+summary: >-
+  triage 处置子代理 persona 档案段缺席连续 4 轮复发才收口，因降级链 fail-soft 零痕迹；档案合成缺档应 fail-loud
+  含键名，降级必须留诊断日志。
+keywords:
+  - triage
+  - persona
+  - 档案
+  - fail-loud
+  - 复发
+status: unconfirmed
 source_container: expert-squad-forge-2
 source_task: expert-squad-forge-2/1.21
 source_bug: ad32e240
+id: triage-persona-silent-absence-recurrence-chain
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # persona 沉默缺席：fail-soft 的排查税

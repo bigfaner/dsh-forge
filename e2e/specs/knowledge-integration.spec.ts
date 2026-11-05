@@ -10,9 +10,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
-import { bridgeDispatch, closeApp, launchHost, stablePhase } from '../support/launch.js'
+import { bridgeDispatch, closeApp, launchHost, stablePhase, type Launched } from '../support/launch.js'
 import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../support/navigation.js'
-import { registerProject, selectWorkspaceViaChip } from '../support/rpc.js'
+import { registerProject, selectWorkspaceViaChip, forgeInvoke } from '../support/rpc.js'
+import {
+  openKnowledgeDb,
+  seedKnowledgeRegistryRow,
+  writeKnowledgeBindingsOverlay,
+} from '../support/knowledge-db.js'
 import {
   KNOWLEDGE_ENTRY,
   KNOWLEDGE_VIEW,
@@ -23,7 +28,8 @@ import {
   workbenchOfView,
 } from '../support/anchors.js'
 
-/** 组二知识夹具：{root}/demo-proj/.knowledge/{前端,后端}/…（frontmatter 最小契约：summary+keywords） */
+/** 组二知识夹具：{root}/demo-proj/.knowledge/{前端,后端}/…（条目内容源——A2 后供数预置
+ *  走插件自持库（注册行 + 绑定叠层），此处文件仅剩 rebuild 扫描与详情按需读的内容身份） */
 function makeKnowledgeFixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-kn-'))
   const kn = join(root, 'demo-proj', '.knowledge')
@@ -31,12 +37,12 @@ function makeKnowledgeFixture(): string {
   mkdirSync(join(kn, '后端'), { recursive: true })
   writeFileSync(
     join(kn, '前端', 'deploy.md'),
-    '---\ntitle: 部署规范\nsummary: 项目部署流程与上线检查单\nkeywords:\n  - 部署\n  - 上线\n---\n\n# 部署规范\n\n部署前核对回滚预案。\n',
+    '---\nid: deploy-spec\ntitle: 部署规范\nsummary: 项目部署流程与上线检查单\nkeywords:\n  - 部署\n  - 上线\n---\n\n# 部署规范\n\n部署前核对回滚预案。\n',
     'utf8',
   )
   writeFileSync(
     join(kn, '后端', 'rollback.md'),
-    '---\ntitle: 回滚手册\nsummary: 服务回滚步骤与注意事项\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
+    '---\nid: rollback-manual\ntitle: 回滚手册\nsummary: 服务回滚步骤与注意事项\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
     'utf8',
   )
   return root
@@ -117,33 +123,67 @@ test('3.8·知识视图浏览面挂载 + 召回 tab 接线（无锚降级面）'
 // 会话锚定回归（第二项目 + 主视图会话 → 知识锚跟随）——host 数据通道装配后转正（§5；
 // 跳过门 = 两面通道探测拒绝）。三方一致（AC-2）与即时累积（AC-4）的
 // 事件数据面归 dogfood（4.2）——召回 tab 真数据行/热度/跳转断言随其转正入池。
+// 供数（fix-1 / 1.13 收口）：A2 后五通道供数 = knowledge 插件自持库 + 两级解析
+//（projectId→wsPath 纯 config 静态注入（Q19）→ 自持注册行（进表径现仅种子迁移））
+//——文件系统 .knowledge/ 夹具只余条目内容源身份（rebuild 扫描 + 详情按需读文件），
+// 供数预置已迁插件自持库：双 boot 形态（boot1 向导注册取 uuid → 落注册行（ws_path 键）
+// + 绑定叠层 → boot2 携叠层走查——projectId uuid 运行期产物，静态 config 须后置注入）。
 // ─────────────────────────────────────────────────────────────────────────────
 test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空态（前置 host 数据通道装配）', async () => {
-  test.setTimeout(180_000)
+  test.setTimeout(300_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-knix-'))
   const fixture = makeKnowledgeFixture()
-  const { app, page } = await launchHost({ userData })
+  const demoWsDir = join(fixture, 'demo-proj')
+  let overlayPath: string | undefined
+  let app: Launched['app'] | undefined
+  let demoProjectId: string | undefined
   try {
-    // 前置门：host forge:projects/* + forge:knowledge/* 通道装配（core 插件入 profile +
-    // main.ts 接线——独立 host 集成任务，SMOKE-LEDGER §5）。留痕跳过，不弱化断言。
-    test.skip(
-      !(await hostDataChannelsLive(page)),
-      '前置缺口：host 侧 forge:projects/* 与 forge:knowledge/* 通道未装配（SMOKE-LEDGER §5 转正条件——组二随 host 集成任务落位自动转正）',
-    )
-
-    // ── 注册知识夹具项目（向导两段：浏览器 → 表单默认值 → 确认——沿 smoke 组二/三走查径） ──
-    await page.locator('[data-dswf-nav="add-project"]').first().click()
-    await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
-    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
-      await enterDir(page, segment)
+    // ── boot 1：向导注册 demo-proj（向导两段走查径保留——浏览器 → 表单默认值 → 确认）──
+    const boot1 = await launchHost({ userData })
+    try {
+      // 前置门：host forge:projects/* + forge:knowledge/* 通道装配（core 插件入 profile +
+      // main.ts 接线——独立 host 集成任务，SMOKE-LEDGER §5）。留痕跳过，不弱化断言。
+      test.skip(
+        !(await hostDataChannelsLive(boot1.page)),
+        '前置缺口：host 侧 forge:projects/* 与 forge:knowledge/* 通道未装配（SMOKE-LEDGER §5 转正条件——组二随 host 集成任务落位自动转正）',
+      )
+      const page = boot1.page
+      await page.locator('[data-dswf-nav="add-project"]').first().click()
+      await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
+      for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
+        await enterDir(page, segment)
+      }
+      await dirRow(page, 'demo-proj').click()
+      await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
+      await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
+      await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
+      await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toBeVisible({ timeout: 30_000 })
+      await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 15_000 })
+      await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
+      // 取运行期 projectId（uuid——绑定叠层与注册行预置的数据源）
+      const projects = await forgeInvoke<readonly { id: string; name: string }[]>(page, 'forge:projects/list')
+      const demoRow = projects.find((p) => p.name === 'demo-proj')
+      expect(demoRow, 'demo-proj 注册行在列（向导注册收敛）').toBeDefined()
+      demoProjectId = demoRow!.id
+    } finally {
+      await closeApp(boot1.app)
     }
-    await dirRow(page, 'demo-proj').click()
-    await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
-    await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
-    await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
-    await expect(page.locator('.dswf-ap[data-dswf-ap="success"]')).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('.dswf-ap')).toHaveCount(0, { timeout: 15_000 })
-    await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
+
+    // ── 预置（app 停机窗）：插件自持库注册行（ws_path 键）+ config.projects 绑定叠层 ──
+    {
+      const db = openKnowledgeDb(userData)
+      try {
+        seedKnowledgeRegistryRow(db, demoWsDir, join(demoWsDir, '.knowledge'))
+      } finally {
+        db.close()
+      }
+    }
+    overlayPath = writeKnowledgeBindingsOverlay([{ wsPath: demoWsDir, projectId: demoProjectId! }])
+
+    // ── boot 2：知识面走查（供数 = 插件自持库 + 静态绑定；复启形态 = 60s 相位探针） ──
+    const launched = await launchHost({ userData, overlay: overlayPath, stablePhase: 'probe' })
+    app = launched.app
+    const page = launched.page
 
     // ── AC-1：知识视图 = 浏览面真数据（项目锚 = 唯一项目兜底；索引直读 → 卡片网格） ──
     await page.locator(KNOWLEDGE_ENTRY).first().click()
@@ -191,6 +231,7 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
 
     // ── fix-bug 范围切换控件（composer 同款）：范围 Pill 可点开项目菜单 → 拾取 proj-b
     // → 浏览锚切换（显式拾取优先；修复前 Pill = 纯文本不可点）──
+    //（proj-b 运行期注册无静态绑定——切换后数据面按未绑定降级，此处只断锚切换与浏览壳在场）
     const anchorBefore = await knowledgeView2.getAttribute('data-dswf-kn-anchor')
     await page.locator('[data-dswf-kn-scope-trigger]').first().click()
     await expect(page.locator('[role="menu"]').first()).toBeVisible()
@@ -205,7 +246,8 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     await expect(page.locator('[data-dswf-kn-browse]').first()).toBeVisible({ timeout: 30_000 })
     rmSync(secondRoot, { recursive: true, force: true })
   } finally {
-    await closeApp(app)
+    if (app !== undefined) await closeApp(app)
+    if (overlayPath !== undefined) rmSync(overlayPath, { force: true })
     rmSync(userData, { recursive: true, force: true })
     rmSync(fixture, { recursive: true, force: true })
   }

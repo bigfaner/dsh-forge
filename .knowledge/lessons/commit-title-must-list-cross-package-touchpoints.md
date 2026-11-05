@@ -1,11 +1,23 @@
 ---
 title: 提交标题须声明跨包触点——标题与实际 diff 范围不齐导致对账漏项
-summary: 跨包改动时提交标题须点名全部触达包，跨包随动改动在提交说明中逐一点名；标题只写主包会让范围对账（评审/复盘/合并清单）漏掉随动改动。判例：1.2 标题「feat(core)」实际触及 plugin-forge claim.ts；1.5 标题只提 plugin-forge 实际触及 core bugs.ts。
-keywords: [git, 提交纪律, 跨包, scope, 范围对账]
+summary: >-
+  跨包改动时提交标题须点名全部触达包，跨包随动改动在提交说明中逐一点名；标题只写主包会让范围对账（评审/复盘/合并清单）漏掉随动改动。判例：1.2
+  标题「feat(core)」实际触及 plugin-forge claim.ts；1.5 标题只提 plugin-forge 实际触及 core
+  bugs.ts。
+keywords:
+  - git
+  - 提交纪律
+  - 跨包
+  - scope
+  - 范围对账
 domainPath: .knowledge/lessons/
 来源容器: recurrence-signal-tiering
 来源任务: 1.2 / 1.5
 bug id: 无
+id: commit-title-must-list-cross-package-touchpoints
+status: unconfirmed
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 提交标题声明跨包触点

@@ -113,7 +113,7 @@ test('@web-e2e @probe super-composer 真机取证走查（AC1/2/6/7 可达面 + 
 
     // ── 会话装配：注册工作区 → chip 流开会话 → 发送首条消息（ChatView 消息区供划选）──
     await forgeInvoke(page, 'forge:projects/register', {
-      workspaceDir: wsDir, name: 'sc-wt-ws', forgeDir: wsDir, knowledgeDir: join(wsDir, '.knowledge'),
+      workspaceDir: wsDir, name: 'sc-wt-ws', forgeDir: wsDir,
     })
     for (let attempt = 0; ; attempt++) {
       try {

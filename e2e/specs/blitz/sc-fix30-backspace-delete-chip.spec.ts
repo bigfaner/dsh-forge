@@ -120,7 +120,7 @@ test('@web-e2e fix-30 Backspace 删引用 chip：替身/官方 occurrences 双�
   const { app, page, pageErrors } = launched
   try {
     await forgeInvoke(page, 'forge:projects/register', {
-      workspaceDir: wsDir, name: 'fix30-ws', forgeDir: join(wsDir, '.forge'), knowledgeDir: join(wsDir, '.knowledge'),
+      workspaceDir: wsDir, name: 'fix30-ws', forgeDir: join(wsDir, '.forge'),
     })
     await selectWorkspaceViaChip(page, 'fix30-ws')
     await ensureNoBlockingDialog(page)

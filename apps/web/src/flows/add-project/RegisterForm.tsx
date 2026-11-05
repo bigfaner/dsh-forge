@@ -46,7 +46,6 @@ export type { BrowseTarget }
 export const BROWSE_TITLES: Readonly<Record<BrowseTarget, string>> = {
   workspace: '选择工作区目录',
   forgeDir: '选择 forge 目录（文档位置）',
-  knowledgeDir: '选择知识库目录',
   worktreeDir: '选择 worktree 目录',
 }
 
@@ -54,7 +53,6 @@ export const BROWSE_TITLES: Readonly<Record<BrowseTarget, string>> = {
 const BROWSE_HINTS: Readonly<Record<BrowseTarget, string>> = {
   workspace: '单击选中，双击进入；选定后回填工作区目录，未手改字段随新工作区重构。',
   forgeDir: '单击选中，双击进入；选定后回填「文档位置 · forge 目录」（不再随工作区自动重构）。',
-  knowledgeDir: '单击选中，双击进入；选定后回填「知识库目录」（不再随工作区自动重构）。',
   worktreeDir: '单击选中，双击进入；选定后回填「worktree 目录」（不再随工作区自动重构）。',
 }
 
@@ -97,7 +95,7 @@ function FieldIssue({ issue }: { issue: FormIssue }): ReactNode {
  * 表单行件（fix-36 抽出——RegisterFormView 行骨架的单一来源）：labelRow 在场 = label
  * 包 `.dswf-rf-labelrow`（chip 挂行尾）；side 在场 = input + 钮包 `.dswf-rf-line`；
  * hint/issue 条件尾随。形态组合：工作区 = labelRow+side+hint / 项目名 = 裸行+issue /
- * forge = labelRow+side+hint+issue / 知识库 = 裸 label+side+hint+issue（任务清单行 =
+ * forge = labelRow+side+hint+issue（任务清单行 =
  * 3.11 DerivedTaskStoreRow 独立件，4.3 起不经 FormRow）。
  */
 export interface FormRowProps {
@@ -160,7 +158,6 @@ export function RegisterFormView({
   const issueOf = (field: FormField): FormIssue | undefined => issues.find((issue) => issue.field === field)
   const nameIssue = issueOf('name')
   const forgeIssue = issueOf('forgeDir')
-  const knowledgeIssue = issueOf('knowledgeDir')
   const worktreeIssue = issueOf('worktreeDir')
   const editHandler =
     onEdit === undefined
@@ -224,14 +221,6 @@ export function RegisterFormView({
         side={browseBtn('forgeDir')}
         hint={<p className="dswf-rf-hint">默认 = &lt;工作区&gt;/.forge；可直接输入或浏览改选（仓外需授权；应用侧只读引用）；目录不存在时将自动创建</p>}
         issue={forgeIssue ? <FieldIssue issue={forgeIssue} /> : undefined}
-      />
-      <FormRow
-        id="dswf-rf-kn"
-        label="知识库目录"
-        input={<input id="dswf-rf-kn" className="dswf-rf-input" data-dswf-rf-kn type="text" value={values.knowledgeDir} onChange={editHandler?.('knowledgeDir')} />}
-        side={browseBtn('knowledgeDir')}
-        hint={<p className="dswf-rf-hint">默认 = &lt;工作区&gt;/.knowledge；可直接输入或浏览改选仓外目录；目录不存在时将自动创建</p>}
-        issue={knowledgeIssue ? <FieldIssue issue={knowledgeIssue} /> : undefined}
       />
       <FormRow
         id="dswf-rf-wt"

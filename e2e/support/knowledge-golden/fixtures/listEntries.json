@@ -1,0 +1,43 @@
+{
+  "format": "dsh-forge/knowledge-golden",
+  "version": 1,
+  "channel": "forge:knowledge/listEntries",
+  "recordedAt": "2026-11-03T16:57:40.215Z",
+  "source": {
+    "provider": "core",
+    "detail": "packages/core createKnowledgeService（ctx.forgeKnowledge 现役供数——knowledge 迁移前形态，任务 1.3 录制；SC-8 契约与响应形状零变化的比对基线）",
+    "harness": "e2e/support/knowledge-golden/harness.ts"
+  },
+  "request": {
+    "projectId": "a92e6418-3e8d-4f41-a932-6d8c94fc5bbc",
+    "domainPrefix": "后端"
+  },
+  "response": [
+    {
+      "entryId": 3,
+      "title": "API 规范",
+      "summary": "接口设计规范",
+      "keywords": [
+        "api",
+        "backend"
+      ],
+      "status": "draft",
+      "domainPath": "后端",
+      "updated": "2026-02-01T00:00:00.000Z",
+      "heat": 1
+    },
+    {
+      "entryId": 4,
+      "title": "网关",
+      "summary": "API 网关路由规则",
+      "keywords": [
+        "api",
+        "backend"
+      ],
+      "status": "draft",
+      "domainPath": "后端",
+      "updated": "2026-02-05T00:00:00.000Z",
+      "heat": 1
+    }
+  ]
+}

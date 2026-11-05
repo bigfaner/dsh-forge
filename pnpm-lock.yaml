@@ -157,7 +157,7 @@ importers:
         version: link:../../packages/plugins/git-worktree
       '@dsh-forge/knowledge':
         specifier: workspace:*
-        version: link:../../packages/knowledge
+        version: link:../../packages/plugins/knowledge
       '@dsh-forge/md-mermaid':
         specifier: workspace:*
         version: link:../../packages/plugins/md-mermaid
@@ -364,26 +364,10 @@ importers:
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
-      gray-matter:
-        specifier: 4.0.3
-        version: 4.0.3
     devDependencies:
       '@types/better-sqlite3':
         specifier: 9.6.0
         version: 9.6.0
-
-  packages/knowledge:
-    dependencies:
-      '@dsh-forge/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@dsh-forge/path-key':
-        specifier: workspace:*
-        version: link:../path-key
-    devDependencies:
-      '@types/node':
-        specifier: 24.19.0
-        version: 24.19.0
 
   packages/path-key:
     devDependencies:
@@ -561,6 +545,28 @@ importers:
       react:
         specifier: 18.3.1
         version: 18.3.1
+
+  packages/plugins/knowledge:
+    dependencies:
+      '@dsh-forge/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@dsh-forge/path-key':
+        specifier: workspace:*
+        version: link:../../path-key
+      better-sqlite3:
+        specifier: 13.0.3
+        version: 13.0.3
+      gray-matter:
+        specifier: 4.0.3
+        version: 4.0.3
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: 9.6.0
+        version: 9.6.0
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
 
   packages/plugins/md-mermaid:
     dependencies:

@@ -338,7 +338,6 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     const ws = page.locator(rfField('ws'))
     const name = page.locator(rfField('name'))
     const forge = page.locator(rfField('forge'))
-    const kn = page.locator(rfField('kn'))
     const demoDir = join(fixture, 'dsh-demo')
     // L769 ② 工作区目录自动回填表单（只读）
     await expect(ws).toHaveValue(demoDir)
@@ -360,25 +359,15 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     expect(tasksLast, 'L773 任务清单行位于表单最下方').toBe(true)
     // L777 ② forge 目录（文档位置）按工作区构建预填
     await expect(forge).toHaveValue(`${join(demoDir, '.forge')}`)
-    // L778 ② 知识库目录按工作区构建预填且可改
-    await expect(kn).toHaveValue(`${join(demoDir, '.knowledge')}`)
-    expect(await kn.getAttribute('readonly'), 'L778 知识库目录可改').toBeNull()
-    // L779 ② forge 目录字段位于知识库目录之上
-    const forgeAboveKn = await page.evaluate(() => {
-      const f = document.querySelector('[data-dswf-rf-forge]')
-      const k = document.querySelector('[data-dswf-rf-kn]')
-      return !!(f && k && (f.compareDocumentPosition(k) & Node.DOCUMENT_POSITION_FOLLOWING))
-    })
-    expect(forgeAboveKn, 'L779 forge 目录字段在知识库目录之上').toBe(true)
     // L783 ② 目录字段均带「浏览…」（文件浏览器改选）
-    await expect(page.getByRole('button', { name: '浏览…' })).toHaveCount(3)
+    await expect(page.getByRole('button', { name: '浏览…' })).toHaveCount(2)
     // L784 ② 文档位置 = forge 目录输入（仓内/仓外 radio 已并入——chip 呈现）
     await expect(page.locator('.dswf-rf input[type="radio"]')).toHaveCount(0)
     await expect(page.locator('.dswf-rf-relation', { hasText: '仓内' }).first()).toBeVisible()
     // L785 ② 默认召回域字段已移除（载体适配，台账 #170：以字段全集盘点承载「无此字段」；
-    // fix-7 计数随 4.3 派生行零输入位化 5→4——ws/name/forge/kn；fix-26 随 1.6 AC3
-    // worktree 目录行 4→5——ws/name/forge/kn/worktree）
-    await expect(page.locator('.dswf-rf input')).toHaveCount(5)
+    // fix-7 计数随 4.3 派生行零输入位化 4→3——ws/name/forge；fix-26 随 1.6 AC3
+    // worktree 目录行 3→4——ws/name/forge/worktree；知识库目录字段随注册链退役移除）
+    await expect(page.locator('.dswf-rf input')).toHaveCount(4)
     // L786 ② 底部按钮 =「确认」
     await expect(page.locator('.dswf-rf-confirm')).toHaveText('确认')
 
@@ -386,19 +375,19 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     // （返回表单保留已填），原型 = 叠层两对话框——「表单保持」语义以状态保留承载）──
     await page
       .locator('.dswf-rf-row')
-      .filter({ has: page.locator(rfField('kn')) })
+      .filter({ has: page.locator(rfField('forge')) })
       .getByRole('button', { name: '浏览…' })
       .click()
-    await expect(page.locator('[data-dswf-rf="browsing"][data-dswf-rf-target="knowledgeDir"]')).toBeVisible()
-    await expect(page.getByText('选择知识库目录').first()).toBeVisible()
-    // 浏览起点 = 知识库目录值的父目录（dsh-demo——startDir 父目录口径，form-model
-    // browseStartDirOf）→ 直接选 .knowledge（旧「上一级」导航随口径随迁移除）
+    await expect(page.locator('[data-dswf-rf="browsing"][data-dswf-rf-target="forgeDir"]')).toBeVisible()
+    await expect(page.getByText('选择 forge 目录（文档位置）').first()).toBeVisible()
+    // 浏览起点 = forge 目录值的父目录（dsh-demo——startDir 父目录口径，form-model
+    // browseStartDirOf）→ 直接选 .forge（旧「上一级」导航随口径随迁移除）
     await expect(page.locator('.dswf-fb-crumb-current')).toHaveText('dsh-demo', { timeout: 15_000 })
-    await dirRow(page, '.knowledge').click()
+    await dirRow(page, '.forge').click()
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
-    // L798 ③ 浏览确认 → 回填知识库目录（浏览面板让位，表单仍在）
+    // L798 ③ 浏览确认 → 回填 forge 目录（浏览面板让位，表单仍在）
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
-    await expect(kn).toHaveValue(`${join(demoDir, '.knowledge')}`)
+    await expect(forge).toHaveValue(`${join(demoDir, '.forge')}`)
 
     // ── ④ 重新选择与联动（smoke ④ 组）──
     // L803 ④ 重新选择 → 回到文件浏览器（载体适配，台账 #175：M0 = 表单内「重新选择」→
@@ -424,8 +413,6 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     const rederivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(legacyDir))
     await expect(page.locator(dsrOf('ready')), 'L810 任务清单派生行 ready（换选复检收敛）').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(DSR_DIR), 'L810 任务清单随工作区重新派生（RPC 重派生在途——轮询至收敛）').toHaveText(rederivedExpected, { timeout: 30_000 })
-    // L811 ④ 浏览选定的知识库目录保留（不随工作区重构）
-    await expect(kn).toHaveValue(`${join(demoDir, '.knowledge')}`)
 
     // 取消干净退出（AC 取消点语义 + L824 元断言）
     await page.keyboard.press('Escape')

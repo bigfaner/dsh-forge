@@ -1,11 +1,22 @@
 ---
 title: 装配/provide 守卫必须原子幂等且失败留诊断痕迹
-summary: check-then-act 形状的装配守卫会被并发重入击穿（同缺陷二次复发）；双次装配撞车导致整体降级 fail-soft 也不留痕，排查只能靠真机 persona=no 逐轮逼近——守卫须原子幂等，任何降级必须 emitDiag。
-keywords: [装配, provide, 守卫, 幂等, fail-soft]
-status: draft
+summary: >-
+  check-then-act 形状的装配守卫会被并发重入击穿（同缺陷二次复发）；双次装配撞车导致整体降级 fail-soft 也不留痕，排查只能靠真机
+  persona=no 逐轮逼近——守卫须原子幂等，任何降级必须 emitDiag。
+keywords:
+  - 装配
+  - provide
+  - 守卫
+  - 幂等
+  - fail-soft
+status: unconfirmed
 source_container: expert-squad-forge-2
 source_task: expert-squad-forge-2/1.21
 source_bug: caaea320
+id: assembly-guards-atomic-idempotent-with-diag
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
+related_doc: docs/conventions/diagnostic-emit-discipline.md
 ---
 
 # 装配守卫：原子幂等 + 降级留痕

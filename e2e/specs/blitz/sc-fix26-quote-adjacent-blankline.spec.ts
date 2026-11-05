@@ -80,7 +80,7 @@ test('@web-e2e fix-26 三引用相邻单空行：sinkSerialized 落日志断言'
   const { app, page, pageErrors } = launched
   try {
     await forgeInvoke(page, 'forge:projects/register', {
-      workspaceDir: wsDir, name: 'fix26-ws', forgeDir: join(wsDir, '.forge'), knowledgeDir: join(wsDir, '.knowledge'),
+      workspaceDir: wsDir, name: 'fix26-ws', forgeDir: join(wsDir, '.forge'),
     })
     await selectWorkspaceViaChip(page, 'fix26-ws')
     await ensureNoBlockingDialog(page)

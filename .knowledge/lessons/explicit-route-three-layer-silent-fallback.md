@@ -1,11 +1,21 @@
 ---
 title: 显式配置被静默回落是三层同形缺陷——逐层剥离而非逐轮盲修
-summary: 通道二显式 provider/model 路由丢失由三层同形「静默回落 inherit」叠加：陈旧 dist 装配滞后、组装期成对字段被丢弃、settings.worker 前置拦截——每层单独看都「像环境问题」，四轮才收口。
-keywords: [路由, 回落, inherit, 显式配置, 分层]
-status: draft
+summary: >-
+  通道二显式 provider/model 路由丢失由三层同形「静默回落 inherit」叠加：陈旧 dist
+  装配滞后、组装期成对字段被丢弃、settings.worker 前置拦截——每层单独看都「像环境问题」，四轮才收口。
+keywords:
+  - 路由
+  - 回落
+  - inherit
+  - 显式配置
+  - 分层
+status: unconfirmed
 source_container: expert-squad-forge-2
 source_task: expert-squad-forge-2/1.21
 source_bug: 14984d4f
+id: explicit-route-three-layer-silent-fallback
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 显式配置静默回落的三层形状

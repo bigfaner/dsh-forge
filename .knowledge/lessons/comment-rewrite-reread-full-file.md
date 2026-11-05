@@ -1,11 +1,21 @@
 ---
 title: 注释多轮改写后重读全文——头注释残迹双评审重复报告
-summary: 多轮改写同一段注释后须重读整个文件头/注释块查残迹：recurrence-faces.ts 头注释残留重复短语「=目录可读缺席 =」，两位评审各报一次——改写只盯改动点、未通读，残迹即成重复评审噪音。来源任务 1.3/1.8。
-keywords: [注释残迹, 改写自查, 评审噪音, 通读]
+summary: >-
+  多轮改写同一段注释后须重读整个文件头/注释块查残迹：recurrence-faces.ts 头注释残留重复短语「=目录可读缺席
+  =」，两位评审各报一次——改写只盯改动点、未通读，残迹即成重复评审噪音。来源任务 1.3/1.8。
+keywords:
+  - 注释残迹
+  - 改写自查
+  - 评审噪音
+  - 通读
 domainPath: .knowledge/lessons/
 来源容器: recurrence-signal-tiering
 来源任务: 1.3 / 1.8
 bug id: 无
+id: comment-rewrite-reread-full-file
+status: unconfirmed
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 注释改写后重读全文

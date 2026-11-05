@@ -9,9 +9,14 @@
 //   ⑥-3 运行期 order 约定（真实装配：升序 + 同 order 码序 tiebreak + 重复名抛错 + disposer）
 //   ⑥-4 forge:knowledge 段形状（Interface 3 对上游约定；真实渲染无裸 {{ 插值炸点）
 import { describe, expect, it } from 'vitest'
-import type { KnowledgeService } from '../../packages/contracts/src/index.js'
-import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeSection } from '../../packages/knowledge/src/prompt/index.js'
-import { createKnowledgeTools, createProjectResolver } from '../../packages/knowledge/src/tools/index.js'
+import {
+  KNOWLEDGE_DOMAINS_SECTION_NAME,
+  KNOWLEDGE_DOMAINS_SECTION_ORDER,
+  KNOWLEDGE_SECTION_NAME,
+  KNOWLEDGE_SECTION_ORDER,
+  renderKnowledgeDomainsSection,
+  renderKnowledgeStaticSection,
+} from '../../packages/plugins/knowledge/src/prompt/index.js'
 import { expectPinnedVersion, importUpstream, interfaceMembers, norm, readUpstream } from './pins.js'
 
 /** cordis Context 结构化最小面（真实 Context 结构兼容——探针实测） */
@@ -44,13 +49,15 @@ async function bootSystemPrompt(): Promise<{ ctx: CordisCtxFace; sys: SystemProm
   return { ctx, sys, renderPrompt }
 }
 
-/** 构造空壳插件的段文本源（真实 tool 定义对象——渲染面不触服务方法） */
-function knowledgeSectionText(): string {
-  const tools = createKnowledgeTools({
-    knowledge: {} as KnowledgeService,
-    resolveProjectId: createProjectResolver([]),
-  })
-  return renderKnowledgeSection(tools)
+/** 构造两段文本源（stage③ C2：静态固定文本 + 动态域索引行集——零工具定义引用） */
+function knowledgeSectionTexts(): { staticText: string; domainsText: string } {
+  return {
+    staticText: renderKnowledgeStaticSection(),
+    domainsText: renderKnowledgeDomainsSection([
+      { domain: 'conventions', entryCount: 44, description: '声明性约束与惯例' },
+      { domain: 'pitfalls', entryCount: 1, description: null },
+    ]),
+  }
 }
 
 describe('pin ⑥-1 版本锚', () => {
@@ -154,35 +161,45 @@ describe('pin ⑥-3 运行期 order 约定（真实 SystemPrompt 装配自证）
   })
 })
 
-describe('pin ⑥-4 forge:knowledge 段形状（Interface 3 × 上游约定）', () => {
-  it('段名/段序 = Interface 3 定死值：forge:knowledge / 500', () => {
+describe('pin ⑥-4 forge:knowledge 两段形状（stage③ C2 重锚——提案 §7 审核稿）', () => {
+  it('段名/段序：forge:knowledge/910 + forge:knowledge-domains/911（原 500 与官方 FILE_REFERENCE 900 撞位上移队尾区）', () => {
     expect(KNOWLEDGE_SECTION_NAME).toBe('forge:knowledge')
-    expect(KNOWLEDGE_SECTION_ORDER).toBe(500)
+    expect(KNOWLEDGE_SECTION_ORDER).toBe(910)
+    expect(KNOWLEDGE_DOMAINS_SECTION_NAME).toBe('forge:knowledge-domains')
+    expect(KNOWLEDGE_DOMAINS_SECTION_ORDER).toBe(911)
   })
 
-  it('段序落位：persona-prefix(0) < 500 < team-policy(600)——官方中央分配位带内（getSectionOrder 官方面）', async () => {
+  it('段序落位：FILE_REFERENCE(900) < 910 < 911 < DELIVERABLE_FILE_REFERENCES(9000)——队尾区带内不撞官方中央分配位', async () => {
     const { ctx, sys } = await bootSystemPrompt()
     try {
-      expect(sys.getSectionOrder('DEPLOYMENT_PERSONA_PREFIX')).toBe(0)
-      expect(sys.getSectionOrder('TEAM_POLICY')).toBe(600)
+      expect(sys.getSectionOrder('FILE_REFERENCE')).toBe(900)
       expect(sys.getSectionOrder('DEPLOYMENT_PERSONA_PREFIX')).toBeLessThan(KNOWLEDGE_SECTION_ORDER)
-      expect(KNOWLEDGE_SECTION_ORDER).toBeLessThan(sys.getSectionOrder('TEAM_POLICY'))
+      expect(sys.getSectionOrder('FILE_REFERENCE')).toBeLessThan(KNOWLEDGE_SECTION_ORDER)
+      expect(KNOWLEDGE_SECTION_ORDER).toBeLessThan(KNOWLEDGE_DOMAINS_SECTION_ORDER)
+      expect(KNOWLEDGE_DOMAINS_SECTION_ORDER).toBeLessThan(sys.getSectionOrder('DELIVERABLE_FILE_REFERENCES'))
     } finally {
       await ctx.fiber.dispose()
     }
   })
 
-  it('真实段文本装配 + 渲染通过：无裸 {{ 插值炸点（renderPrompt 严格插值面的装配级自证）', async () => {
+  it('真实两段文本装配 + 渲染通过：无裸 {{ 插值炸点 + 零工具说明 + 行格式契约（renderPrompt 严格插值面的装配级自证）', async () => {
     const { ctx, sys, renderPrompt } = await bootSystemPrompt()
     try {
-      sys.section({ name: KNOWLEDGE_SECTION_NAME, order: KNOWLEDGE_SECTION_ORDER, text: knowledgeSectionText() })
+      const { staticText, domainsText } = knowledgeSectionTexts()
+      sys.section({ name: KNOWLEDGE_SECTION_NAME, order: KNOWLEDGE_SECTION_ORDER, text: staticText })
+      sys.section({ name: KNOWLEDGE_DOMAINS_SECTION_NAME, order: KNOWLEDGE_DOMAINS_SECTION_ORDER, text: domainsText })
       const assembly = await sys.assemble()
       const rendered = renderPrompt(assembly)
-      expect(rendered).toContain('## Project knowledge base')
-      expect(rendered).toContain('knowledge_search')
-      expect(rendered).toContain('knowledge_read_abstract')
-      // 段文本契约事实来自 contracts 常量（域层级上限）——机械入文
-      expect(rendered).toContain('at most 3 levels')
+      expect(rendered).toContain('<knowledge-base>')
+      expect(rendered).toContain('<knowledge-domains>')
+      // 零工具说明（renderToolUsage 退役——工具加载由 dsh 机械承载）
+      for (const toolName of ['knowledge_search', 'knowledge_read_abstract', 'knowledge_write']) {
+        expect(rendered).not.toContain(toolName)
+      }
+      // 行格式契约：`域名(N entries) — 简介` + 降级 <无简介>；契约事实（域层级上限）机械入文
+      expect(rendered).toContain('- conventions(44 entries) — 声明性约束与惯例')
+      expect(rendered).toContain('- pitfalls(1 entry) — <无简介>')
+      expect(rendered).toContain('up to 3 levels')
     } finally {
       await ctx.fiber.dispose()
     }

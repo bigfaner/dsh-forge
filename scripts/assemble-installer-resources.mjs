@@ -15,7 +15,7 @@
  *       node_modules/         完整 hoisted 真实文件运行时树（源 = apps/host/profile.install，
  *                             autoInstallPeers: true 补全 peer-only 包）+ @dsh-forge/* 产品插件
  *                             真实拷贝（成员 = contracts PRODUCT_PLUGINS staged 门配置派生——
- *                             knowledge 暂不含：知识库功能不完整，打包形态不开放）
+ *                             knowledge 1.9 A5 重开放随包）
  *       host-dist/            apps/host/dist 拷贝——boot child 真实文件入口（ELECTRON_RUN_AS_NODE
  *                             派生进程无法读 asar；且 ESM 解析沿目录上溯，host-dist 须与
  *                             node_modules 同容器相邻——run.ts resolveChildEntry 消费）
@@ -60,8 +60,8 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
  * 带技能面的插件另携 skills/——customSkillDirs 物理挂载源（boot overlay 注
  * skill-filesystem 行），缺席即技能面静默缺失，故必物化 fail-loud（STAGING_EXTRAS）。
  * README.md 全员可选（contracts 无 README——携带与否不影响运行）。
- * 现值注记：knowledge kill-switch——知识库功能不完整，打包形态暂不开放（dev 形态
- * profile.dev 仍含；重开放 = 改 contracts PRODUCT_PLUGINS）。
+ * knowledge-stage1 1.9 A5：knowledge 重开放——用户层行全局装载 + staging 种子随包
+ * （PRODUCT_PLUGINS userLayerRow: true），skills/learn 技能面由 STAGING_EXTRAS 承载。
  * 守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段。
  */
 /** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件；
@@ -77,6 +77,10 @@ const STAGING_EXTRAS = {
   // + 组合装配行本体 cordis.patch.yml（package.json dsh.bundle.patch 声明指向——loader
   // 按声明读包内该文件触发 apply 注册，缺席即 ENOENT，bug a1f13abf）
   'expert-squad': { files: ['experts', 'skills', 'cordis.patch.yml'], keyFiles: ['experts/code-reviewer.md', 'skills/roundtable/SKILL.md', 'cordis.patch.yml'] },
+  // knowledge 技能面（knowledge-stage1 1.9 A5 挂载源；stage② 1.5 增 skills/distill
+  // 整合技能——learn（写入径）+ distill（存量整合）双技能面；缺席即预设组合
+  // knowledge 技能面静默缺失）
+  knowledge: { files: ['skills'], keyFiles: ['skills/learn/SKILL.md', 'skills/distill/SKILL.md'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */

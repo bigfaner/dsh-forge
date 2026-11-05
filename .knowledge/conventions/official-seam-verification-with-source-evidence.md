@@ -1,11 +1,20 @@
 ---
 title: 官方缝核销须带源码行号证据
-summary: 技术设计引用官方机械时，每条核销决策附官方 checkout 内 file:line 证据；评审方对证据做抽验，行号全属实则结论可信，路径简写须补全前缀。
-keywords: [官方缝, 核销, 源码证据, review]
+summary: '技术设计引用官方机械时，每条核销决策附官方 checkout 内 file:line 证据；评审方对证据做抽验，行号全属实则结论可信，路径简写须补全前缀。'
+keywords:
+  - 官方缝
+  - 核销
+  - 源码证据
+  - review
 domainPath: docs/conventions/reuse-official-mechanisms.md
 来源容器: expert-squad
 来源任务: 评审环节（review-tech-report §3 抽验 6 处）
 bug id: 无
+id: official-seam-verification-with-source-evidence
+status: unconfirmed
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
+related_doc: docs/conventions/official-mechanics-interception.md
 ---
 
 # 官方缝核销须带源码行号证据

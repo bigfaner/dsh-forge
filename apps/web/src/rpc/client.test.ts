@@ -53,14 +53,14 @@ describe('AC1 五通道 renderer 侧 typed 结果', () => {
     const t = fakeTransport()
     t.respondWith(() => ({ ok: true, data: registerResult } as RpcResult<typeof registerResult>))
     const client = createForgeRpcClient(t.transport)
-    await expect(client.projects.register({ workspaceDir: '/ws/demo', name: 'demo', forgeDir: '/ws/demo/.forge', knowledgeDir: '/ws/demo/.knowledge' })).resolves.toEqual(registerResult)
+    await expect(client.projects.register({ workspaceDir: '/ws/demo', name: 'demo', forgeDir: '/ws/demo/.forge' })).resolves.toEqual(registerResult)
   })
 
   it('list / get / update / reconcile：typed 返回（null 过滤与 patch 面不丢失）', async () => {
     const t = fakeTransport()
     const project = {
       id: 'p-1', workspaceId: 'w-1', wsPath: '/ws/demo', name: 'demo', forgeDir: '/ws/demo/.forge',
-      forgeDirExternal: false, knowledgeDir: '/ws/demo/.knowledge', archived: true,
+      forgeDirExternal: false, archived: true,
       createdAt: '2026-10-02T00:00:00.000Z', updatedAt: '2026-10-02T00:00:00.000Z',
     }
     t.respondWith((channel) => {
@@ -81,7 +81,7 @@ describe('AC3 通道名仅出自 contracts 常量', () => {
   it('五方法发出的通道名 = PROJECTS_CHANNELS 常量值本尊（禁字面量漂移）', async () => {
     const t = fakeTransport()
     const client = createForgeRpcClient(t.transport)
-    await client.projects.register({ workspaceDir: '/w', name: 'n', forgeDir: '/f', knowledgeDir: '/k' })
+    await client.projects.register({ workspaceDir: '/w', name: 'n', forgeDir: '/f' })
     await client.projects.list()
     await client.projects.get('p-1')
     await client.projects.update('p-1', { name: 'x' })
@@ -437,7 +437,7 @@ describe('AC2 typed error 反序列化保真（renderer 侧半边）', () => {
       error: { code: 'ERR_WORKSPACE_CREATE', message: 'dsh 工作区创建失败', data: { wsPath: '/ws/demo' } },
     }))
     const client = createForgeRpcClient(t.transport)
-    await expect(client.projects.register({ workspaceDir: '/ws/demo', name: 'd', forgeDir: '/f', knowledgeDir: '/k' })).rejects.toMatchObject({
+    await expect(client.projects.register({ workspaceDir: '/ws/demo', name: 'd', forgeDir: '/f' })).rejects.toMatchObject({
       name: 'RpcClientError',
       code: 'ERR_WORKSPACE_CREATE',
       data: { wsPath: '/ws/demo' },

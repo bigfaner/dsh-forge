@@ -856,7 +856,7 @@ describe('aggregateByErrorType：errorType 分组全史计数', () => {
     const { execFile } = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
     const s = makeService(h, { execFile })
     const reg = (summary: string, errorType?: string) =>
-      s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary, ...(errorType !== undefined ? { errorType } : {}) })
+      s.registerBug({ projectId: h!.projectId, ...REGISTER_BASE, summary, ...(errorType !== undefined ? { errorType } : {}) })
     const api1 = (await reg('api-1', 'api')).card
     const paging1 = (await reg('pg-1', 'paging')).card
     const paging2 = (await reg('pg-2', 'paging')).card

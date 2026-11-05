@@ -18,8 +18,9 @@
 // fix-35 拆分：主链降纯编排（writeProjectRow / compensateFailedWrite / isRefHealthy /
 // reconcileRowDegrade 单项处理器），errMessage 收编 ../util.js 单源。
 // fix-39 目录自愈：② 前插「目录确保」步（ensureRegistrationDirs）——新建径 workspaceDir/
-// forgeDir/knowledgeDir 三目录缺则递归建（幂等），消除「目录不存在」面用户可避错误
-// （ERR_WORKSPACE_CREATE 的「选定后被删」竞态 + 知识面迟到的 ERR_INVALID_KNOWLEDGE_DIR）；
+// forgeDir 两目录缺则递归建（幂等），消除「目录不存在」面用户可避错误
+// （ERR_WORKSPACE_CREATE 的「选定后被删」竞态）；知识目录建面随 knowledge_dir 列退役
+// 迁 knowledge 插件注册径（1.15）；
 // 自愈径（attachExistingRow 命中）与挂接径（① 预检命中）零建目录——挂接语义零盘副作用不变。
 // M2（1.4，Interface 5——P1 五法不动）：deps 可选注入 tasksHome（派生根）+ onRegistered
 // （新建径注册协作者——3.4 装配建库 v1 + 发现面扫描闭包）；注册闭包碰撞复检（ERR_SUSPECTED_MOVE
@@ -271,14 +272,14 @@ async function canonicalizeDir(p: string, debug?: (message: string) => void): Pr
 }
 
 /**
- * fix-39 目录自愈（② 前置步，仅新建径调用）：三目录缺则递归 mkdir（幂等——在场 no-op）。
+ * fix-39 目录自愈（② 前置步，仅新建径调用）：两目录缺则递归 mkdir（幂等——在场 no-op）。
  * · workspaceDir：官方 create 的 canonicalize 门要求目录已存在且为目录（G1 pin ④）——
  *   「选定后被删」竞态在此自愈（原 ERR_WORKSPACE_CREATE 面中用户可避的部分）；
- * · forgeDir/knowledgeDir：迟到爆炸面前置消解——原注册成功后知识面才报
- *   ERR_INVALID_KNOWLEDGE_DIR（scan 前置门），现注册成功即两目录落盘。
+ * · forgeDir：迟到爆炸面前置消解——注册成功即目录落盘。知识目录建面随 knowledge_dir
+ *   列退役迁 knowledge 插件注册径（1.15——host wiring registerProject 落注册行时建）。
  * 建失败沿现行六码 typed 面上抛（裁决：不扩码——六码面稳定，扩码须 contracts/web/host
  * 三处一体）：workspaceDir → WorkspaceCreateError（create 前置失败同面：注册中止、无补偿
- * 需要——dsh 侧零副作用）；forge/knowledge → ProjectWriteError（注册输入无法落盘 = 写入
+ * 需要——dsh 侧零副作用）；forge → ProjectWriteError（注册输入无法落盘 = 写入
  * 面前置失败）。时序：全部在 ② 之前完成——任何建失败时 dsh 侧零变更，补偿链零涉入。
  * 创建后 canonicalizeDir 语义不变：归一在流程头部（目录未建 → fail-soft 回退原拼写），
  * 新建目录的 canonical 化仍归 ② 官方面——ws_path 落库口径零变化。
@@ -293,7 +294,6 @@ function ensureRegistrationDirs(input: RegisterProjectInput): void {
     // ensureDirReadable：显式 chmod 0o755——umask 0077 环境下裸 mkdir 落 700，事后非属主
     // 读取（validateMermaid 等）被拒（macOS 现场）。workspaceDir 不动（用户自有目录，非本产品落盘面）。
     ensureDirReadable(input.forgeDir)
-    ensureDirReadable(input.knowledgeDir)
   } catch (cause) {
     throw new ProjectWriteError({ wsPath: input.workspaceDir }, cause)
   }
@@ -308,8 +308,8 @@ function writeProjectRow(
 ): void {
   db.prepare(
     `INSERT INTO projects (
-       id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, worktree_dir, archived, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+       id, workspace_id, ws_path, name, forge_dir, forge_dir_external, worktree_dir, archived, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
   ).run(
     o.projectId,
     o.workspace.id,
@@ -317,7 +317,6 @@ function writeProjectRow(
     o.input.name,
     o.input.forgeDir,
     isForgeDirExternal(o.workspace.path, o.input.forgeDir) ? 1 : 0,
-    o.input.knowledgeDir,
     o.input.worktreeDir ?? defaultWorktreeDir(o.workspace.path),
     o.now,
     o.now,
@@ -382,7 +381,7 @@ async function compensateFailedWrite(
 async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectInput): Promise<RegisterResult> {
   const { db, registry } = deps
 
-  // fix-30 入口归一：注册输入（workspaceDir/forgeDir/knowledgeDir）可达则 realpath——拼写
+  // fix-30 入口归一：注册输入（workspaceDir/forgeDir）可达则 realpath——拼写
   // 变体在进 ① 预检/自愈查询前收敛到磁盘真值拼写；比对口径 = normalizeFsPath 同源键
   const canonicalize = (p: string): Promise<string> =>
     canonicalizeDir(p, (m) => debugDiagEmit(deps.onDiag, 'project-register', m))
@@ -390,7 +389,6 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
     ...input,
     workspaceDir: await canonicalize(input.workspaceDir),
     forgeDir: await canonicalize(input.forgeDir),
-    knowledgeDir: await canonicalize(input.knowledgeDir),
     // 1.6：worktree 目录配置透传（可达则 realpath 同归一口径）；未输入 = undefined——
     // 默认值落库归 ③（以 ② registry canonical ws_path 派生，杜绝默认值演进漂移）。
     worktreeDir: input.worktreeDir === undefined ? undefined : await canonicalize(input.worktreeDir),
@@ -427,7 +425,7 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
     workspace = existing
     createdNow = false
   } else {
-    // fix-39 目录自愈前置步（仅新建径）：三目录缺则建（幂等）——必须在 ② 前（官方 create 的
+    // fix-39 目录自愈前置步（仅新建径）：两目录缺则建（幂等）——必须在 ② 前（官方 create 的
     // realpath 门要求目录在场）；挂接径（existing 命中）/自愈径不经此步——零盘副作用（Hard Rule）
     ensureRegistrationDirs(canonicalInput)
     // ② registry.create（dsh 幂等：同 canonical path 返回既有实体）——失败即注册中止，无补偿需要。
@@ -711,7 +709,6 @@ interface ProjectRow {
   name: string
   forge_dir: string
   forge_dir_external: number
-  knowledge_dir: string
   worktree_dir: string | null
   archived: number
   sort_order: number | null
@@ -719,7 +716,7 @@ interface ProjectRow {
   updated_at: string
 }
 
-const SELECT_PROJECT = `SELECT id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, worktree_dir, archived, sort_order, created_at, updated_at FROM projects`
+const SELECT_PROJECT = `SELECT id, workspace_id, ws_path, name, forge_dir, forge_dir_external, worktree_dir, archived, sort_order, created_at, updated_at FROM projects`
 
 function toProject(row: ProjectRow): Project {
   return {
@@ -729,7 +726,6 @@ function toProject(row: ProjectRow): Project {
     name: row.name,
     forgeDir: row.forge_dir,
     forgeDirExternal: row.forge_dir_external === 1,
-    knowledgeDir: row.knowledge_dir,
     worktreeDir: row.worktree_dir ?? undefined,
     archived: row.archived === 1,
     createdAt: row.created_at,

@@ -1,7 +1,7 @@
 // @web-e2e @probe
-// 【临时禁用 2026-11-04】beforeAll NSIS 静默安装与 installer-smoke/host-boot 同属
-// CHECK_APP_RUNNING 按名全机查杀面（bug 167b5121）——3c1fe3e6 只禁两 spec 时本件漏网，
-// 14:11 再次强杀本 GUI。根治（customCheckAppRunning 按 INSTDIR 域杀）落地前留痕 skip。
+// 【临时禁用 2026-11-04】beforeAll NSIS 静默安装与 installer-smoke/host-boot（3c1fe3e6）
+// 同属 CHECK_APP_RUNNING 按名全机查杀面——禁用清单漏网件，14:11 再次强杀本 GUI。bug 167b5121
+// 根治（customCheckAppRunning 按 INSTDIR 域杀）落地前留痕 skip。
 // 过程件（不进 git——worker-lean-execution/fix-8 case4 取证）：installer composer 回显
 // 空定性探针——复刻冒烟后半链（NSIS 安装 → 启动 → 注册 → 芯片流 → 会话面），在键入前后
 // 采样 composer 状态（数量/可编辑/焦点/内容/元素身份存续），定位「insertText 零回显」归属
@@ -14,24 +14,19 @@ import { test, expect } from '@playwright/test'
 import { closeApp } from '../../support/launch.js'
 
 // 【临时禁用 2026-11-04】beforeAll NSIS 静默安装与 installer-smoke/host-boot（3c1fe3e6）
-// 同属 CHECK_APP_RUNNING 按名全机查杀面——禁用漏网件，14:11 再次强杀本 GUI。bug 167b5121
+// 同属 CHECK_APP_RUNNING 按名全机查杀面——禁用清单漏网件，14:11 再次强杀本 GUI。bug 167b5121
 // 根治（customCheckAppRunning 按 INSTDIR 域杀）落地前留痕 skip。
 test.skip(true, 'probe-installer-composer 暂时禁用：NSIS 静默安装按名查杀 dsh-forge.exe（bug 167b5121）')
 
 import { launchHost } from '../../support/launch.js'
 import { forgeInvoke } from '../../support/rpc.js'
-import { COMPOSER_INPUT, CONVERSATION_CONTENT, CONVERSATION_HEADER, HERO_WORKSPACE_CHIP_NAME, MAIN_CONVERSATION, WORKBENCH } from '../../support/anchors.js'
+import { COMPOSER_INPUT, CONVERSATION_CONTENT, CONVERSATION_HEADER, MAIN_CONVERSATION, WORKBENCH } from '../../support/anchors.js'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..', '..')
 const INSTALLER_DIR = join(ROOT, 'release', 'installer')
 const ASSEMBLE_SCRIPT = join(ROOT, 'scripts', 'assemble-installer-resources.mjs')
 const SMOKE_ROOT = join(`${ROOT.split('\\')[0]}\\`, 'dsh-forge-smoke')
 const WALKTHROUGH = join('.forge', 'docs', 'proposals', 'worker-lean-execution', 'walkthrough')
-
-// 【临时禁用 2026-11-04】本 spec beforeAll 走 NSIS 静默安装（/S）——与 installer-smoke 同
-// 击穿路径：CHECK_APP_RUNNING 按进程名全机 taskkill dsh-forge.exe（bug 167b5121，第五次
-// 实杀 14:11:15）。guard 补齐：根治落地前一律 skip，任何会话不得启用（用户指令）。
-test.skip(true, 'probe-installer-composer 暂时禁用：NSIS 静默安装链按进程名误杀安装版 GUI（bug 167b5121，同 installer-smoke）')
 
 const installState: { exe?: string; installDir?: string; tmp?: string } = {}
 
@@ -63,17 +58,10 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
+  // fix-4（bug 0ebcc9f8）机器复位纪律：禁跑卸载器，rmSync 目录直收（installer-smoke 同款
+  // 裁决——卸载器静默执行属按名查杀残留面，复位纪律不得依赖任何卸载器二进制）。
   const installDir = installState.installDir
-  const zTmp = installState.tmp
   if (installDir === undefined) return
-  const uninstaller = existsSync(installDir)
-    ? readdirSync(installDir).find((f) => f.startsWith('Uninstall') && f.endsWith('.exe'))
-    : undefined
-  if (uninstaller !== undefined) {
-    spawnSync(join(installDir, uninstaller), ['/S'], { timeout: 120_000, env: { ...process.env, TEMP: zTmp, TMP: zTmp } })
-    const deadline = Date.now() + 240_000
-    while (existsSync(installDir) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 3_000))
-  }
   rmSync(join(installDir, '..'), { recursive: true, force: true, maxRetries: 5, retryDelay: 500 })
 })
 
@@ -99,7 +87,7 @@ test('@web-e2e @probe installer composer 回显定性探针', async () => {
     const projDir = join(userData, '..', 'probe-composer-fixture')
     mkdirSync(projDir, { recursive: true })
     const registered = await forgeInvoke<{ projectId: string }>(page, 'forge:projects/register', {
-      workspaceDir: projDir, name: 'probe-composer', forgeDir: join(projDir, '.forge'), knowledgeDir: join(projDir, '.knowledge'),
+      workspaceDir: projDir, name: 'probe-composer', forgeDir: join(projDir, '.forge'),
     })
     expect(registered.projectId).toBeTruthy()
     await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 60_000 })
@@ -107,8 +95,7 @@ test('@web-e2e @probe installer composer 回显定性探针', async () => {
     await expect(page.locator(CONVERSATION_HEADER).first()).toBeAttached()
     const composer = page.locator(COMPOSER_INPUT).last()
     await expect(composer).toBeVisible({ timeout: 30_000 })
-    // chip 锚 = HERO_WORKSPACE_CHIP_NAME 单源（可访问名形态——hasText 孪生已收口）
-    const chip = page.getByRole('button', { name: HERO_WORKSPACE_CHIP_NAME }).first()
+    const chip = page.locator('button', { hasText: /^默认工作区$|^选择工作区$/ }).first()
     await expect(chip).toBeVisible({ timeout: 30_000 })
     const menu = page.locator('[role="menu"]').first()
     const wsItem = menu

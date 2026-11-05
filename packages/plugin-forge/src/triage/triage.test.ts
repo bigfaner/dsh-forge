@@ -4,7 +4,7 @@
 // （getBug/listBugs 放行、写面恒 deny）；终态 output 产出结构化四动作决策（含 escalate
 // 升级载荷）；无效/越权输出 → TriageDecisionInvalidError（计处置失败）。
 import { describe, expect, it } from 'vitest'
-import type { ForgeSettingsService, ForgeTasksService, QueryTaskResult, TaskRecordEntry, TaskSnapshot, TaskStats, TaskStatus } from '@dsh-forge/contracts'
+import type { BugRecurrenceCandidate, ForgeSettingsService, ForgeTasksService, QueryTaskResult, TaskRecordEntry, TaskSnapshot, TaskStats, TaskStatus } from '@dsh-forge/contracts'
 import { composeTriagePrompt } from './prompt.js'
 import { createTriageHook } from './triage.js'
 import type { TriageHookDeps } from './triage.js'
@@ -522,9 +522,9 @@ describe('两信号注入（blocked 归类 + recurrence 候选列表——<signa
   })
 
   it('候选 >5 条：top-5 限幅（lastSeenAt 降序）+ 其余按 errorType 计数（控呈现不控召回）', async () => {
-    const candidates = [8, 7, 6, 5, 4, 3, 2, 1, 0].map((i) => ({
+    const candidates: BugRecurrenceCandidate[] = [8, 7, 6, 5, 4, 3, 2, 1, 0].map((i) => ({
       bugId: `bug-${i}`, summary: `候选 ${i}`, chain: ['b-root', `bug-${i}`], fullEdgeCount: 1,
-      status: i % 2 === 0 ? 'open' : 'fixed', errorType: i % 3 === 0 ? 'type-a' : 'type-b',
+      status: i % 2 === 0 ? ('open' as const) : ('fixed' as const), errorType: i % 3 === 0 ? 'type-a' : 'type-b',
       containerSlug: 'feat-x', suspectedLocation: `src/f${i}.ts:${i}`,
       lastSeenAt: `2026-11-0${i + 1}T00:00:00.000Z`, recurrenceOf: 'b-root',
     }))

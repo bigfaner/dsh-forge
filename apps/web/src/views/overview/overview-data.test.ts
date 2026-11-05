@@ -35,7 +35,6 @@ const PROJECT: Project = {
   name: 'demo',
   forgeDir: 'Z:/ws/demo/.forge',
   forgeDirExternal: false,
-  knowledgeDir: 'Z:/ws/demo/.knowledge',
   archived: false,
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
@@ -143,7 +142,6 @@ describe('loadOverviewHead（头路五路并发——4.6 增 proposals 无参列
         projectName: 'demo',
         workspaceDir: 'Z:/ws/demo',
         forgeDir: 'Z:/ws/demo/.forge',
-        knowledgeDir: 'Z:/ws/demo/.knowledge',
         taskStoreDir: 'C:/forge-home/demo@a1b2c3d4',
         features: [featureCard('m2-pipeline')],
         proposals: [proposalCard('pr-1', 'prop-1')],
@@ -168,13 +166,13 @@ describe('loadOverviewHead（头路五路并发——4.6 增 proposals 无参列
     }
   })
 
-  it('AC1 ov-head 四行：工作区/文档位置/知识目录/任务清单@hash8', async () => {
+  it('AC1 ov-head 三行：工作区/文档位置/任务清单@hash8（知识目录行随 knowledge_dir 列退役移除）', async () => {
     const { client } = headOkClient()
     const out = await loadOverviewHead(client, 'p-1')
     expect(out.ok).toBe(true)
     if (out.ok) {
       const rows = overviewHeadRows(out.data)
-      expect(rows.map((r) => r.label)).toEqual(['工作区', '文档位置', '知识目录', '任务清单'])
+      expect(rows.map((r) => r.label)).toEqual(['工作区', '文档位置', '任务清单'])
       expect(rows.find((r) => r.label === '任务清单')?.value).toContain('@a1b2c3d4')
     }
   })

@@ -1,0 +1,44 @@
+{"knFile": "conventions/blocked-source-derivation-needs-block-source.md", "disposition": "knowledge-only", "docsFile": null, "reason": "addTask block_source/fix 链派生语义与 triage 判例，docs task-domain 仅覆盖状态机转移，无此派生规则正本。"}
+{"knFile": "conventions/blocked-verdict-dual-exit-with-mandatory-reason.md", "disposition": "knowledge-only", "docsFile": null, "reason": "blocked 双出口新原语（submitTask success/unblockTask）的实施链知识，docs 无对应正本。"}
+{"knFile": "conventions/cross-realm-service-via-inject-service-key.md", "disposition": "partial", "docsFile": "conventions/plugin-service-presence-detection.md", "reason": "现查/不 memoize 部分与在场性检测正本重复；isolate realm 不可见与 inject 服务键配方是独立知识，建议保留并注明正本引用。"}
+{"knFile": "conventions/declaration-derived-migration-equivalence-pin-fail-loud-regex.md", "disposition": "knowledge-only", "docsFile": null, "reason": "等价 pin + fail-loud 口径变更守卫判例，docs packaging.md 只覆盖 staging 闭包，无此正本。"}
+{"knFile": "conventions/design-level-boundary-counterexample-verification.md", "disposition": "knowledge-only", "docsFile": null, "reason": "设计级形式化验证方法论与实证判例，docs 无对应篇。"}
+{"knFile": "conventions/event-window-derived-state-unknown-fallback.md", "disposition": "knowledge-only", "docsFile": null, "reason": "事件窗口推导态退化为未知的兜底口径（特定提案落档），docs 无正本。"}
+{"knFile": "conventions/full-gate-inflight-pollution-narrowing.md", "disposition": "knowledge-only", "docsFile": null, "reason": "全量门在途污染判读与用户裁决收窄口径，quality-gates.md 是门定义非此情境知识。"}
+{"knFile": "conventions/live-face-soft-ledger-authoritative.md", "disposition": "partial", "docsFile": "conventions/event-logging.md", "reason": "唯一写者/append-only 与 event-logging TECH-event-001 部分重复；活面 fail-soft/账面双链、失败样本必记、outcome 语义是独立知识。"}
+{"knFile": "conventions/official-mechanism-citation-table.md", "disposition": "partial", "docsFile": "conventions/official-mechanics-interception.md", "reason": "核销证据要求与 interception 正本交付要求部分重复；提案自带核销表体例（pin+file:line+结论）是独立过程判例。"}
+{"knFile": "conventions/packaging-end-check-hook-sabotage-forensics.md", "disposition": "knowledge-only", "docsFile": null, "reason": "打包末端校验挂点 + 破坏注入三步取证配方，packaging.md 未含此内容。"}
+{"knFile": "conventions/plugin-config-page-no-auto-form.md", "disposition": "knowledge-only", "docsFile": null, "reason": "官方无 auto form 配置页的环境事实核销与三重反证法判例，reuse 正本只有通用纪律、无此事实。"}
+{"knFile": "conventions/probe-deliverable-state-chain-self-attestation.md", "disposition": "knowledge-only", "docsFile": null, "reason": "探针交付物附状态链自证段的提炼态候选，docs 无正本。"}
+{"knFile": "conventions/progress-event-value-domain-closed-tables.md", "disposition": "knowledge-only", "docsFile": null, "reason": "forge progress 事件值域封闭表四处同步清单，产品内部机制知识，docs 无对应。"}
+{"knFile": "conventions/real-machine-main-session-ac-executor-compatibility.md", "disposition": "knowledge-only", "docsFile": null, "reason": "AC 执行体兼容性前置判定与 evidence_debt 拆分判例，docs 无正本。"}
+{"knFile": "conventions/runtime-assembly-evidence-ac-in-proposal.md", "disposition": "partial", "docsFile": "conventions/external-dependency-verification.md", "reason": "与外部依赖真机取证正本同向重复（自查声明'参照 AGENTS 1.4'）；独立增量仅是把取证要求前移到提案 AC 编写期。"}
+{"knFile": "conventions/shared-launch-migration-compatibility-criteria.md", "disposition": "knowledge-only", "docsFile": null, "reason": "e2e 共享 launch 迁移两判据与不相容面清单，testing/core.md 无此内容。"}
+{"knFile": "conventions/shared-session-cross-test-pollution-guards.md", "disposition": "knowledge-only", "docsFile": null, "reason": "共享会话跨用例污染防护四式配方，testing 正本未覆盖。"}
+{"knFile": "conventions/soft-constraint-failure-surface-enumerate-from-mechanical-vocab.md", "disposition": "knowledge-only", "docsFile": null, "reason": "软约束失效面按机械词表全集枚举的验证方法论判例，docs 无正本。"}
+{"knFile": "conventions/zero-core-change-tool-layer-guard-recipe.md", "disposition": "knowledge-only", "docsFile": null, "reason": "零 core 改动下 tool 层守卫三件套配方（形式化验证产物），docs 无对应。"}
+{"knFile": "conventions/real-machine-evidence-ac-for-runtime-assembly.md", "disposition": "partial", "docsFile": "conventions/external-dependency-verification.md", "reason": "自查声明与 AGENTS 1.4 正本同向；独立价值在把纪律前移到提案验收条款编写期的判例与反例边界。"}
+{"knFile": "conventions/self-explanatory-gate-rejection-receipt.md", "disposition": "knowledge-only", "docsFile": null, "reason": "门禁拒绝回执三要素设计口径判例，docs 无正本。"}
+{"knFile": "conventions/repo-state-claims-need-machine-forensics.md", "disposition": "knowledge-only", "docsFile": null, "reason": "提案现状陈述须附机械取证命令输出的判例，docs 无对应。"}
+{"knFile": "conventions/program-gate-agent-semantics-split-zero-config.md", "disposition": "knowledge-only", "docsFile": null, "reason": "程序守门/agent 语义判断切分原则的落地形态（loop-recurrence-hardening 产物），docs 无正本。"}
+{"knFile": "conventions/builtin-plugin-config-face-plugins-item-slot.md", "disposition": "knowledge-only", "docsFile": null, "reason": "内置件配置面 plugins.item 注册缝配方 + 三条死路核销（提炼态，指向提案 recipe），docs 无对应。"}
+{"knFile": "conventions/structural-guarantee-uninstallable.md", "disposition": "knowledge-only", "docsFile": null, "reason": "结构性保证优先于运行时守卫的设计判据与走查实证，docs 无正本。"}
+{"knFile": "conventions/persistence-evidence-restart-refresh-survival.md", "disposition": "partial", "docsFile": "conventions/equivalent-evidence-over-visual-artifact.md", "reason": "自查声明为等效证据口径的延伸；双存活行为判据取证序列是独立增量，建议保留并注明正本引用。"}
+{"knFile": "conventions/gate-closure-sweeps-package-internal-contract-suites.md", "disposition": "knowledge-only", "docsFile": null, "reason": "pin 面收口须覆盖包内 contract 套件的判例（bug 39bc78c0），quality-gates.md 无此条。"}
+{"knFile": "conventions/negative-claims-exhaust-all-test-surfaces.md", "disposition": "knowledge-only", "docsFile": null, "reason": "否定式核销穷尽全部测试面的检索面义务判例，docs 无正本。"}
+{"knFile": "conventions/recurrence-family-modeling-before-blind-fix.md", "disposition": "knowledge-only", "docsFile": null, "reason": "同缝复发≥2 先建模再修的机制知识与落卷路径判例，docs 无对应。"}
+{"knFile": "conventions/assembly-guards-atomic-idempotent-with-diag.md", "disposition": "partial", "docsFile": "conventions/diagnostic-emit-discipline.md", "reason": "降级必 emitDiag 一点与诊断发射纪律正本重复；守卫原子幂等配方与复发链实证是独立知识。"}
+{"knFile": "conventions/bare-catch-exemption-five-families.md", "disposition": "partial", "docsFile": "conventions/diagnostic-emit-discipline.md", "reason": "豁免须注释化理由的总体原则在正本内；五族豁免分类法与计数对账陷阱是独立审计知识。"}
+{"knFile": "conventions/batch-closure-residual-red-handover.md", "disposition": "knowledge-only", "docsFile": null, "reason": "收口批残红按 known-reds 移交派生提案的范式，docs 无正本。"}
+{"knFile": "conventions/batch-state-transition-skips-terminal.md", "disposition": "knowledge-only", "docsFile": null, "reason": "批量状态转移须过滤 terminal 的 bug 判例，task-domain 正本的状态机条目未含此收口规则。"}
+{"knFile": "conventions/client-plugin-loading-contract-guards.md", "disposition": "partial", "docsFile": "conventions/monorepo-structure.md", "reason": "exports['./client']/classic script 装载形态与 TECH-monorepo-005 部分重复；apply 返回 undefined、slots.inject 挂载缝等四守卫配方是独立增量。"}
+{"knFile": "conventions/committed-json-artifacts-byte-verified-no-bom.md", "disposition": "knowledge-only", "docsFile": null, "reason": "提交产物字节级校验防 BOM 的复发判例（正道口径在 AGENTS 而非 docs/conventions），无 docs 正本。"}
+{"knFile": "conventions/diag-coverage-milestone-info-exemption-debug-emit.md", "disposition": "partial", "docsFile": "conventions/diagnostic-emit-discipline.md", "reason": "info 里程碑/event 前缀/payload 字段与诊断发射纪律正本重复；三段补齐配方、debug 级别扩展与真机回放验证口径是独立增量。"}
+{"knFile": "conventions/equivalent-evidence-over-visual-artifact.md", "disposition": "duplicate", "docsFile": "conventions/equivalent-evidence-over-visual-artifact.md", "reason": "与同名 docs 正本实质同一约定（证据分层/纪律/判据），两处维护，应出索引降指向正本。"}
+{"knFile": "conventions/explicit-route-verification-needs-header-level-forensics.md", "disposition": "knowledge-only", "docsFile": null, "reason": "provider/model 路由须 header 级取证且双通道各自取证的判例，docs 无正本。"}
+{"knFile": "conventions/official-seam-verification-with-source-evidence.md", "disposition": "partial", "docsFile": "conventions/official-mechanics-interception.md", "reason": "核销须源码行号证据与 interception 正本'核销承重假设（源码:行号）'重复；评审抽验体例与完整路径前缀要求是独立增量。"}
+{"knFile": "conventions/pin-load-bearing-mechanism-before-breakdown.md", "disposition": "knowledge-only", "docsFile": null, "reason": "承重机制未钉死不放行 breakdown 的评审判据与实证，docs 无对应正本。"}
+{"knFile": "conventions/recurrence-chain-discriminating-experiments-first.md", "disposition": "knowledge-only", "docsFile": null, "reason": "同族复发链判别实验先行范式与不变式锚定验收，docs 无正本。"}
+{"knFile": "conventions/review-note-deferred-fact-backfill-gate.md", "disposition": "duplicate", "docsFile": "conventions/review-note-deferred-fact-backfill-gate.md", "reason": "与同名 docs 正本实质同一约定（单源门槛兜底 Note 缺口），两处维护，应出索引降指向正本。"}
+{"knFile": "conventions/wakeup-notification-minimal-info-set.md", "disposition": "duplicate", "docsFile": "conventions/wakeup-notification-minimal-info-set.md", "reason": "自查声明已晋升 docs 正本、提炼态原件仅留档，信息集五/三要素与正本重复维护。"}
+{"knFile": "conventions/zod-subset-sanitize-for-tool-register.md", "disposition": "partial", "docsFile": "conventions/rpc-and-contracts.md", "reason": "与 TECH-rpc-010/011 同属官方 schema 子集门知识但互补不重复；建议保留并注明 rpc-and-contracts 正本引用。"}

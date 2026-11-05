@@ -57,7 +57,7 @@ describe('AC4 定位铁律：零逻辑零依赖', () => {
       const rel = file.slice(SRC_ROOT.length + 1)
       for (const match of content.matchAll(importRe)) {
         const specifier = match[1]
-        if (isLogicModule(rel) && specifier.startsWith('@deepseek-ai/')) continue
+        if (isLogicModule(rel) && specifier!.startsWith('@deepseek-ai/')) continue
         expect(specifier, `${rel} 导入非相对路径 ${specifier}`).toMatch(/^\./)
       }
     }

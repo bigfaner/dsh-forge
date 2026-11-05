@@ -17,7 +17,6 @@ function projectRow(wsPath: string): Project {
     wsPath,
     forgeDir: `${wsPath}/.forge`,
     forgeDirExternal: false,
-    knowledgeDir: `${wsPath}/.knowledge`,
     archived: false,
     createdAt: '2026-11-02T00:00:00.000Z',
     updatedAt: '2026-11-02T00:00:00.000Z',
@@ -310,7 +309,7 @@ describe('T4 锚有效性预检（旁挂侧文件 IO，失效退回拒绝路径�
     const card = { ...fixedCard(), bugStatus: 'open' as const, recurrenceOf: 'root-1' }
     const t = createResolveBugTool({
       tasks: {} as ForgeToolDeps['tasks'],
-      proposals: {} as ForgeToolDeps['proosals'],
+      proposals: {} as ForgeToolDeps['proposals'],
       bugs: captureBugsFace(captured, async () => fixedCard(), card),
       projects: {
         getProject: async () => projectRow(dir),

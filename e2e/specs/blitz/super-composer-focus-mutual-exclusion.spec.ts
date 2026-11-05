@@ -80,7 +80,7 @@ test('@web-e2e @blitz 互斥聚焦两态：全屏落 chip 聚焦替身输入 / �
   try {
     // ── 会话装配：注册工作区 → chip 流开会话 → 发送首条消息（composer 在场）──
     await forgeInvoke(page, 'forge:projects/register', {
-      workspaceDir: wsDir, name: 'sc-mutex-ws', forgeDir: wsDir, knowledgeDir: join(wsDir, '.knowledge'),
+      workspaceDir: wsDir, name: 'sc-mutex-ws', forgeDir: wsDir,
     })
     await selectWorkspaceViaChip(page, 'sc-mutex-ws')
     await ensureNoBlockingDialog(page)

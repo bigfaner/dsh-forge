@@ -39,8 +39,8 @@ importers:
         specifier: link:../../../packages/plugins/git-worktree
         version: link:../../../packages/plugins/git-worktree
       '@dsh-forge/knowledge':
-        specifier: link:../../../packages/knowledge
-        version: link:../../../packages/knowledge
+        specifier: link:../../../packages/plugins/knowledge
+        version: link:../../../packages/plugins/knowledge
       '@dsh-forge/md-mermaid':
         specifier: link:../../../packages/plugins/md-mermaid
         version: link:../../../packages/plugins/md-mermaid

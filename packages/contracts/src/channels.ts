@@ -35,7 +35,7 @@ export const PROJECTS_M2_CHANNELS = {
 
 export type ProjectsM2Channel = (typeof PROJECTS_M2_CHANNELS)[keyof typeof PROJECTS_M2_CHANNELS]
 
-/** forge:knowledge/*（KnowledgeService 浏览面；search / readAbstract 走 agent 面插件 tool，不经 web RPC——双门分工） */
+/** forge:knowledge/*（五通道信封——服务面归 knowledge 插件域 provide 'knowledge' 服务；search / readAbstract 走 agent 面插件 tool，不经 web RPC——双门分工） */
 export const KNOWLEDGE_CHANNELS = {
   browse: 'forge:knowledge/browse',
   listEntries: 'forge:knowledge/listEntries',

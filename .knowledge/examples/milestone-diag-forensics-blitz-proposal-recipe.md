@@ -1,11 +1,23 @@
 ---
 title: 里程碑诊断行真机取证配方：极小 blitz 提案全管线驱动
-summary: 验证成功里程碑埋点（settle/dispatch/setEnabled 等）的真机取证配方——dev 实例注册轻量项目，经 HTTP 路由真实调用目标面，再以极小提案走 blitz 全管线（4 次 settle）+ 新会话 /run-dag-tasks 指令径，从 app-*.jsonl 回放 info 行原文作主证据。
-keywords: [真机取证, 里程碑埋点, blitz 管线, JSONL 回放, 走查夹具]
+summary: >-
+  验证成功里程碑埋点（settle/dispatch/setEnabled 等）的真机取证配方——dev 实例注册轻量项目，经 HTTP
+  路由真实调用目标面，再以极小提案走 blitz 全管线（4 次 settle）+ 新会话 /run-dag-tasks 指令径，从 app-*.jsonl
+  回放 info 行原文作主证据。
+keywords:
+  - 真机取证
+  - 里程碑埋点
+  - blitz 管线
+  - JSONL 回放
+  - 走查夹具
 domainPath: .knowledge/examples/
 来源容器: diag-milestone-coverage
 来源任务: 1.9 test-run 真机走查 batch-1（三清单全通过）
 bug id: 无
+id: milestone-diag-forensics-blitz-proposal-recipe
+status: unconfirmed
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 里程碑诊断行真机取证配方：极小 blitz 提案全管线驱动

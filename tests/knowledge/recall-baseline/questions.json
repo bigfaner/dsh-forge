@@ -1,0 +1,1933 @@
+{
+  "version": 1,
+  "calibratedAt": "2026-11-05",
+  "calibration": "人工定标一次（knowledge-stage2-write-gateway/1.7）：每题锁定标准答案条目 id 集；命中 = Top-5 含任一标准 id。",
+  "sourcing": {
+    "session-log": "题干与查询词取自真实会话沉淀条目（1.6 存量收编：121 篇 .knowledge 语料即真实任务/bug 会话的知识沉淀，台账 .forge/docs/proposals/knowledge-stage2-write-gateway/ingest/slug-id-ledger）；sourceRef = 条目 frontmatter 的 source_task/source_bug，缺席记 ingest-ledger。",
+    "manual": "人工补题覆盖盲区：同义改写/自由文本/域路由题，非直接出自条目事件原文——预期部分未命中，作归因样本。"
+  },
+  "questions": [
+    {
+      "qid": "C01",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "expert-squad-forge-2/1.21 · caaea320",
+      "question": "装配守卫被并发重入击穿（同缺陷二次复发）怎么防？",
+      "query": {
+        "keywords": [
+          "装配",
+          "守卫"
+        ]
+      },
+      "answerIds": [
+        "assembly-guards-atomic-idempotent-with-diag"
+      ]
+    },
+    {
+      "qid": "C02",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "哪些裸 catch 可以豁免？豁免判据怎么分族？",
+      "query": {
+        "keywords": [
+          "豁免判据"
+        ]
+      },
+      "answerIds": [
+        "bare-catch-exemption-five-families"
+      ]
+    },
+    {
+      "qid": "C03",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "1.11",
+      "question": "收口批里稳定复现、归因上游漂移的残红怎么移交？",
+      "query": {
+        "keywords": [
+          "batch-closure"
+        ]
+      },
+      "answerIds": [
+        "batch-closure-residual-red-handover"
+      ]
+    },
+    {
+      "qid": "C04",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "expert-squad-forge-2/1.21 · 3ccb4e96",
+      "question": "批量状态转移为什么必须过滤 terminal 终态？",
+      "query": {
+        "keywords": [
+          "状态机",
+          "终态"
+        ]
+      },
+      "answerIds": [
+        "batch-state-transition-skips-terminal"
+      ]
+    },
+    {
+      "qid": "C05",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "blocked 卡派生出的修复任务建 fix 链时必须带什么？",
+      "query": {
+        "keywords": [
+          "block_source"
+        ]
+      },
+      "answerIds": [
+        "blocked-source-derivation-needs-block-source"
+      ]
+    },
+    {
+      "qid": "C06",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "blocked 卡的结算出口有哪两个？理由有什么要求？",
+      "query": {
+        "keywords": [
+          "双出口"
+        ]
+      },
+      "answerIds": [
+        "blocked-verdict-dual-exit-with-mandatory-reason"
+      ]
+    },
+    {
+      "qid": "C07",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "内置件的配置面应该挂在哪个注册缝上？",
+      "query": {
+        "keywords": [
+          "plugins.item"
+        ]
+      },
+      "answerIds": [
+        "builtin-plugin-config-face-plugins-item-slot",
+        "structural-guarantee-uninstallable"
+      ]
+    },
+    {
+      "qid": "C08",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "client 插件装载契约用什么测试形态守卫？",
+      "query": {
+        "keywords": [
+          "装载契约"
+        ]
+      },
+      "answerIds": [
+        "client-plugin-loading-contract-guards"
+      ]
+    },
+    {
+      "qid": "C09",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "expert-squad-forge-2/1.21 · 98e3e249",
+      "question": "提交的 JSON 产物为什么要字节级校验？防什么？",
+      "query": {
+        "keywords": [
+          "BOM"
+        ]
+      },
+      "answerIds": [
+        "committed-json-artifacts-byte-verified-no-bom"
+      ]
+    },
+    {
+      "qid": "C10",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "跨隔离 realm 消费插件服务为什么 reflect.get 拿不到？正道是什么？",
+      "query": {
+        "keywords": [
+          "cordis"
+        ]
+      },
+      "answerIds": [
+        "cross-realm-service-via-inject-service-key"
+      ]
+    },
+    {
+      "qid": "C11",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "packaging-guard-hardening/1.5",
+      "question": "声明推导迁移必须配什么守卫？扫描口径变更怎么办？",
+      "query": {
+        "keywords": [
+          "声明推导"
+        ]
+      },
+      "answerIds": [
+        "declaration-derived-migration-equivalence-pin-fail-loud-regex"
+      ]
+    },
+    {
+      "qid": "C12",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "设计级形式化验证应该聚焦什么而不是全量状态穷举？",
+      "query": {
+        "keywords": [
+          "反例构造"
+        ]
+      },
+      "answerIds": [
+        "design-level-boundary-counterexample-verification"
+      ]
+    },
+    {
+      "qid": "C13",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "可观测性覆盖补齐的配方是什么（里程碑/豁免点/裸 catch）？",
+      "query": {
+        "keywords": [
+          "成功里程碑"
+        ]
+      },
+      "answerIds": [
+        "diag-coverage-milestone-info-exemption-debug-emit"
+      ]
+    },
+    {
+      "qid": "C15",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "事件窗口推导态证据缺席时应该退化为「活跃」还是「未知」？",
+      "query": {
+        "keywords": [
+          "事件窗口"
+        ]
+      },
+      "answerIds": [
+        "event-window-derived-state-unknown-fallback"
+      ]
+    },
+    {
+      "qid": "C16",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "expert-squad-forge-2/1.21",
+      "question": "显式 provider/model 路由验证的取证层级要求是什么？",
+      "query": {
+        "keywords": [
+          "header"
+        ]
+      },
+      "answerIds": [
+        "explicit-route-verification-needs-header-level-forensics",
+        "explicit-route-real-machine-forensics-r8"
+      ]
+    },
+    {
+      "qid": "C17",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "全量质量门跑到一半进了别人的在途改动，怎么判读收窄？",
+      "query": {
+        "keywords": [
+          "在途污染"
+        ]
+      },
+      "answerIds": [
+        "full-gate-inflight-pollution-narrowing"
+      ]
+    },
+    {
+      "qid": "C18",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "质量门收口为什么必须扫包内 contract 套件？",
+      "query": {
+        "keywords": [
+          "收口清点"
+        ]
+      },
+      "answerIds": [
+        "gate-closure-sweeps-package-internal-contract-suites"
+      ]
+    },
+    {
+      "qid": "C19",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "活面 fail-soft 与账面不一致时以哪个为准？",
+      "query": {
+        "keywords": [
+          "唯一写者"
+        ]
+      },
+      "answerIds": [
+        "live-face-soft-ledger-authoritative"
+      ]
+    },
+    {
+      "qid": "C20",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "「无 X」类核销结论要穷尽什么才能下？",
+      "query": {
+        "keywords": [
+          "否定核销"
+        ]
+      },
+      "answerIds": [
+        "negative-claims-exhaust-all-test-surfaces"
+      ]
+    },
+    {
+      "qid": "C21",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "承重官方机械的引用要附什么？",
+      "query": {
+        "keywords": [
+          "源码核销"
+        ]
+      },
+      "answerIds": [
+        "official-mechanism-citation-table",
+        "official-restrict-allow-keep-only-misread"
+      ]
+    },
+    {
+      "qid": "C22",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "官方缝的核销结论必须带什么证据？",
+      "query": {
+        "keywords": [
+          "官方缝"
+        ]
+      },
+      "answerIds": [
+        "official-seam-verification-with-source-evidence",
+        "pin-load-bearing-mechanism-before-breakdown"
+      ]
+    },
+    {
+      "qid": "C23",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "packaging-guard-hardening/1.5",
+      "question": "打包链末端自动校验挂点怎么做破坏注入取证？",
+      "query": {
+        "keywords": [
+          "破坏注入"
+        ]
+      },
+      "answerIds": [
+        "packaging-end-check-hook-sabotage-forensics"
+      ]
+    },
+    {
+      "qid": "C24",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "配置持久化取证用什么行为判据（不只是刷新存活）？",
+      "query": {
+        "keywords": [
+          "双存活判据"
+        ]
+      },
+      "answerIds": [
+        "persistence-evidence-restart-refresh-survival"
+      ]
+    },
+    {
+      "qid": "C25",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "承重机制没钉死之前能不能放行 breakdown？",
+      "query": {
+        "keywords": [
+          "承重机制"
+        ]
+      },
+      "answerIds": [
+        "pin-load-bearing-mechanism-before-breakdown"
+      ]
+    },
+    {
+      "qid": "C26",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "插件配置页的正门是什么（官方有没有 auto form）？",
+      "query": {
+        "text": "auto form"
+      },
+      "answerIds": [
+        "plugin-config-page-no-auto-form"
+      ]
+    },
+    {
+      "qid": "C27",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "探针/doc 类任务的交付物要附什么自证段？",
+      "query": {
+        "keywords": [
+          "状态链"
+        ]
+      },
+      "answerIds": [
+        "probe-deliverable-state-chain-self-attestation"
+      ]
+    },
+    {
+      "qid": "C28",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "程序守门与 agent 判断怎么切分（配置面要求）？",
+      "query": {
+        "keywords": [
+          "职责切分"
+        ]
+      },
+      "answerIds": [
+        "program-gate-agent-semantics-split-zero-config"
+      ]
+    },
+    {
+      "qid": "C29",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "progress 事件新增 scenario/verb 要扩什么？",
+      "query": {
+        "keywords": [
+          "封闭表"
+        ]
+      },
+      "answerIds": [
+        "progress-event-value-domain-closed-tables"
+      ]
+    },
+    {
+      "qid": "C30",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "涉运行期装配面的交付，验收条款必须含什么？",
+      "query": {
+        "keywords": [
+          "验收条款"
+        ]
+      },
+      "answerIds": [
+        "real-machine-evidence-ac-for-runtime-assembly"
+      ]
+    },
+    {
+      "qid": "C31",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "真机主会话 AC 先判什么？不可兼容时怎么处理？",
+      "query": {
+        "keywords": [
+          "执行体兼容性"
+        ]
+      },
+      "answerIds": [
+        "real-machine-main-session-ac-executor-compatibility"
+      ]
+    },
+    {
+      "qid": "C32",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "fix-1 / fix-2 · ef8b3a45",
+      "question": "同族复发链的处置次序（判别实验 vs 盲试）？",
+      "query": {
+        "keywords": [
+          "discriminating-experiments"
+        ]
+      },
+      "answerIds": [
+        "recurrence-chain-discriminating-experiments-first"
+      ]
+    },
+    {
+      "qid": "C33",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "同缝复发几次以上禁盲试 fix？先做什么？",
+      "query": {
+        "keywords": [
+          "复发家族"
+        ]
+      },
+      "answerIds": [
+        "recurrence-family-modeling-before-blind-fix"
+      ]
+    },
+    {
+      "qid": "C34",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "提案里的现状证据必须附什么？",
+      "query": {
+        "keywords": [
+          "现状取证"
+        ]
+      },
+      "answerIds": [
+        "repo-state-claims-need-machine-forensics"
+      ]
+    },
+    {
+      "qid": "C36",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "运行期装配面的真机取证 AC 应该在哪个阶段入提案？",
+      "query": {
+        "keywords": [
+          "装配面"
+        ]
+      },
+      "answerIds": [
+        "runtime-assembly-evidence-ac-in-proposal"
+      ]
+    },
+    {
+      "qid": "C37",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "结算门拒绝回执的设计要求是什么？",
+      "query": {
+        "keywords": [
+          "拒绝回执"
+        ]
+      },
+      "answerIds": [
+        "self-explanatory-gate-rejection-receipt"
+      ]
+    },
+    {
+      "qid": "C38",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "e2e 共享 launch 迁移的判据是什么？",
+      "query": {
+        "keywords": [
+          "共享launch"
+        ]
+      },
+      "answerIds": [
+        "shared-launch-migration-compatibility-criteria",
+        "shared-session-cross-test-pollution-guards"
+      ]
+    },
+    {
+      "qid": "C39",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "共享会话的跨用例污染怎么防护？",
+      "query": {
+        "keywords": [
+          "跨用例污染"
+        ]
+      },
+      "answerIds": [
+        "shared-session-cross-test-pollution-guards"
+      ]
+    },
+    {
+      "qid": "C40",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "软约束的失效面按什么全集枚举？",
+      "query": {
+        "keywords": [
+          "失效面"
+        ]
+      },
+      "answerIds": [
+        "soft-constraint-failure-surface-enumerate-from-mechanical-vocab"
+      ]
+    },
+    {
+      "qid": "C41",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "内置件不可卸载靠结构性保证还是运行时守卫？",
+      "query": {
+        "keywords": [
+          "不可卸载"
+        ]
+      },
+      "answerIds": [
+        "structural-guarantee-uninstallable"
+      ]
+    },
+    {
+      "qid": "C43",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "零 core 改动下 tool 层守卫三件套是什么？",
+      "query": {
+        "keywords": [
+          "TOCTOU"
+        ]
+      },
+      "answerIds": [
+        "zero-core-change-tool-layer-guard-recipe"
+      ]
+    },
+    {
+      "qid": "C44",
+      "domain": "conventions",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "工具注册门的 schema 净化用什么方案？",
+      "query": {
+        "keywords": [
+          "dsh-tools"
+        ]
+      },
+      "answerIds": [
+        "zod-subset-sanitize-for-tool-register"
+      ]
+    },
+    {
+      "qid": "E01",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "用 blitz 探针验证管线闭环的最小形态长什么样？",
+      "query": {
+        "keywords": [
+          "管线闭环"
+        ]
+      },
+      "answerIds": [
+        "blitz-probe-closed-loop-recipe"
+      ]
+    },
+    {
+      "qid": "E02",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "bug→blocked→fix 链→复验清零的返工闭环范式？",
+      "query": {
+        "keywords": [
+          "返工闭环"
+        ]
+      },
+      "answerIds": [
+        "bug-blocked-fix-rerun-closed-loop"
+      ]
+    },
+    {
+      "qid": "E03",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "CDP 归因怎么做对照轮采样？",
+      "query": {
+        "keywords": [
+          "对照轮"
+        ]
+      },
+      "answerIds": [
+        "cdp-attribution-four-round-contrast"
+      ]
+    },
+    {
+      "qid": "E04",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "1.7",
+      "question": "跨 git/非 git 的证据引用怎么记双根？",
+      "query": {
+        "keywords": [
+          "双根"
+        ]
+      },
+      "answerIds": [
+        "dual-root-evidence-citation-ledger"
+      ]
+    },
+    {
+      "qid": "E05",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "expert-squad-forge-2/1.21",
+      "question": "provider/model 显式路由真机取证程序（正例）？",
+      "query": {
+        "keywords": [
+          "hostlog"
+        ]
+      },
+      "answerIds": [
+        "explicit-route-real-machine-forensics-r8"
+      ]
+    },
+    {
+      "qid": "E06",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "fail-soft 路径怎么用文件系统写 deny 做真机取证？",
+      "query": {
+        "keywords": [
+          "诊断事件"
+        ]
+      },
+      "answerIds": [
+        "fail-soft-forensics-write-deny-real-probe"
+      ]
+    },
+    {
+      "qid": "E07",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "四键字典序全序的 NULL 处理口径？",
+      "query": {
+        "keywords": [
+          "字典序"
+        ]
+      },
+      "answerIds": [
+        "four-key-total-order-null-last"
+      ]
+    },
+    {
+      "qid": "E08",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "排序写回全量重编号怎么保证幂等无碰撞？",
+      "query": {
+        "keywords": [
+          "全量重编号"
+        ]
+      },
+      "answerIds": [
+        "full-renumber-idempotent-sort-write"
+      ]
+    },
+    {
+      "qid": "E09",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "HR 角色 preset 的正确形态（镜像 + 增量行）？",
+      "query": {
+        "keywords": [
+          "denyTools"
+        ]
+      },
+      "answerIds": [
+        "hr-preset-mirror-plus-single-increment-line"
+      ]
+    },
+    {
+      "qid": "E10",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "Map 不可变快照怎么做？",
+      "query": {
+        "keywords": [
+          "Object.freeze"
+        ]
+      },
+      "answerIds": [
+        "immutable-map-snapshot-via-mutator-override-freeze"
+      ]
+    },
+    {
+      "qid": "E11",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "里程碑诊断行的真机取证配方（极小 blitz 提案）？",
+      "query": {
+        "keywords": [
+          "里程碑埋点"
+        ]
+      },
+      "answerIds": [
+        "milestone-diag-forensics-blitz-proposal-recipe"
+      ]
+    },
+    {
+      "qid": "E12",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "迁移类交付的来源分层留痕范式？",
+      "query": {
+        "keywords": [
+          "机器门"
+        ]
+      },
+      "answerIds": [
+        "persona-migration-audit-trace"
+      ]
+    },
+    {
+      "qid": "E13",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "单次真机取证摊销多条验收的三个技巧？",
+      "query": {
+        "keywords": [
+          "摊销"
+        ]
+      },
+      "answerIds": [
+        "real-machine-walkthrough-three-techniques"
+      ]
+    },
+    {
+      "qid": "E14",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "复验类任务的交付模板（证据锚点 + HEAD 锚定）？",
+      "query": {
+        "keywords": [
+          "证据锚点"
+        ]
+      },
+      "answerIds": [
+        "reverify-report-evidence-anchor-template"
+      ]
+    },
+    {
+      "qid": "E15",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "召唤 agent 的对话面应该复用什么官方预设？",
+      "query": {
+        "keywords": [
+          "chat-view"
+        ]
+      },
+      "answerIds": [
+        "summon-via-official-chat-view-preset"
+      ]
+    },
+    {
+      "qid": "E16",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "triage 走查怎么确定性触发（坏专家映射）？",
+      "query": {
+        "keywords": [
+          "确定性"
+        ]
+      },
+      "answerIds": [
+        "triage-blocked-deterministic-expert-mapping"
+      ]
+    },
+    {
+      "qid": "E17",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "无人值守探针走查的 RPC 驱动降级判例？",
+      "query": {
+        "keywords": [
+          "无人值守"
+        ]
+      },
+      "answerIds": [
+        "unattended-probe-rpc-driven-walkthrough"
+      ]
+    },
+    {
+      "qid": "E18",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "跨效度域证据为什么要全量重跑（效度戳）？",
+      "query": {
+        "keywords": [
+          "效度戳"
+        ]
+      },
+      "answerIds": [
+        "walkthrough-evidence-validity-stamp-rerun"
+      ]
+    },
+    {
+      "qid": "E19",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "worker 会话 dump 取证的目录命名与解码要点？",
+      "query": {
+        "keywords": [
+          "zstd"
+        ]
+      },
+      "answerIds": [
+        "worker-session-dump-forensics-recipe"
+      ]
+    },
+    {
+      "qid": "E20",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "工作区隔离的 key 前缀 + 双取值点怎么钉死？",
+      "query": {
+        "keywords": [
+          "工作区隔离"
+        ]
+      },
+      "answerIds": [
+        "workspace-isolation-key-prefix-dual-value-points"
+      ]
+    },
+    {
+      "qid": "E21",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "fix-1 (commit 532318d9) · 8c7e847f",
+      "question": "worktree 清单仲裁的不变式三件套（INV-L/U/B）？",
+      "query": {
+        "keywords": [
+          "INV-L"
+        ]
+      },
+      "answerIds": [
+        "worktree-manifest-invariants-lub"
+      ]
+    },
+    {
+      "qid": "E22",
+      "domain": "examples",
+      "source": "session-log",
+      "sourceRef": "1.14 fix-6 · 143328f1 / 0c677db2",
+      "question": "worktree 清单选主的「占位即冻结」范式？",
+      "query": {
+        "keywords": [
+          "占位即冻结"
+        ]
+      },
+      "answerIds": [
+        "worktree-master-row-freeze-arbitration"
+      ]
+    },
+    {
+      "qid": "L01",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "expert-squad-forge-2/1.21",
+      "question": "任务 AC 与后续用户裁决返工冲突时怎么结算？",
+      "query": {
+        "keywords": [
+          "用户裁决"
+        ]
+      },
+      "answerIds": [
+        "ac-conflicts-with-user-ruling-block-and-evidence"
+      ]
+    },
+    {
+      "qid": "L02",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "结算 ac_criteria 为什么必须逐字复制？",
+      "query": {
+        "keywords": [
+          "逐字比对"
+        ]
+      },
+      "answerIds": [
+        "ac-criteria-verbatim-echo-on-submit"
+      ]
+    },
+    {
+      "qid": "L03",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "1.1–1.6 / 1.8 triage · bf719481",
+      "question": "断言重锚是升级还是放松？禁什么样的锚？",
+      "query": {
+        "keywords": [
+          "reanchor"
+        ]
+      },
+      "answerIds": [
+        "assertion-reanchor-upgrade-not-loosen"
+      ]
+    },
+    {
+      "qid": "L04",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "actor 硬编码时审计溯源降级成什么约定？",
+      "query": {
+        "keywords": [
+          "单向可分"
+        ]
+      },
+      "answerIds": [
+        "audit-actor-hardcoded-provenance-degrades-to-one-way-prefix"
+      ]
+    },
+    {
+      "qid": "L05",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "宿主重启后基线采样为什么要先发回合？",
+      "query": {
+        "keywords": [
+          "基线采样"
+        ]
+      },
+      "answerIds": [
+        "baseline-dump-after-restart-needs-triggered-turn"
+      ]
+    },
+    {
+      "qid": "L06",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "1.1 / 1.2 / 1.3",
+      "question": "批级归因为什么只作排查起点？入账前要什么？",
+      "query": {
+        "keywords": [
+          "单跑取证"
+        ]
+      },
+      "answerIds": [
+        "batch-attribution-needs-isolated-reclassification"
+      ]
+    },
+    {
+      "qid": "L07",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "__DSH_BOOT__ 里有没有 workspace？从哪取？",
+      "query": {
+        "keywords": [
+          "__DSH_BOOT__"
+        ]
+      },
+      "answerIds": [
+        "boot-entry-has-no-workspace-field"
+      ]
+    },
+    {
+      "qid": "L08",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "EPERM/teardown 这类环境失败和断言失败怎么分？",
+      "query": {
+        "keywords": [
+          "环境失败"
+        ]
+      },
+      "answerIds": [
+        "classify-environment-failures-from-assertion-failures"
+      ]
+    },
+    {
+      "qid": "L09",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "注释多轮改写后为什么要重读全文？",
+      "query": {
+        "keywords": [
+          "注释残迹"
+        ]
+      },
+      "answerIds": [
+        "comment-rewrite-reread-full-file"
+      ]
+    },
+    {
+      "qid": "L10",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "提交标题为什么要声明跨包触点？",
+      "query": {
+        "keywords": [
+          "范围对账"
+        ]
+      },
+      "answerIds": [
+        "commit-title-must-list-cross-package-touchpoints"
+      ]
+    },
+    {
+      "qid": "L11",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "容器事件账面缺席时复盘只能怎么做？",
+      "query": {
+        "keywords": [
+          "复盘反推"
+        ]
+      },
+      "answerIds": [
+        "container-event-ledger-absent-reconstruction-cost"
+      ]
+    },
+    {
+      "qid": "L12",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "1.12 / 1.14 · 143328f1",
+      "question": "契约测试只钉单一序留什么盲区？要补什么用例？",
+      "query": {
+        "keywords": [
+          "反例序"
+        ]
+      },
+      "answerIds": [
+        "contract-test-single-order-blindspot"
+      ]
+    },
+    {
+      "qid": "L13",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "真机取证以渲染面还是数据面为准？",
+      "query": {
+        "keywords": [
+          "渲染滞后"
+        ]
+      },
+      "answerIds": [
+        "data-plane-over-render-plane-in-forensics"
+      ]
+    },
+    {
+      "qid": "L14",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "降级文案为什么要阶段化，不透原始异常？",
+      "query": {
+        "keywords": [
+          "错误文案"
+        ]
+      },
+      "answerIds": [
+        "degrade-messages-are-staged-not-raw"
+      ]
+    },
+    {
+      "qid": "L15",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "「恰一张」类计数断言怎么圈定循环实例边界？",
+      "query": {
+        "keywords": [
+          "恰一张"
+        ]
+      },
+      "answerIds": [
+        "derived-task-breaks-single-card-tally"
+      ]
+    },
+    {
+      "qid": "L16",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "收益不成比例的支撑面 fix 链怎么处置？",
+      "query": {
+        "keywords": [
+          "放弃裁决"
+        ]
+      },
+      "answerIds": [
+        "disproportionate-support-fix-abandon-and-hang"
+      ]
+    },
+    {
+      "qid": "L17",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "双宿主双库排查：怎么用写入热度判活跃库？",
+      "query": {
+        "keywords": [
+          "tasksHome"
+        ]
+      },
+      "answerIds": [
+        "dual-host-tasks-home-forge-db-write-heat"
+      ]
+    },
+    {
+      "qid": "L18",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "专家档案 frontmatter 的 tools 与什么必须一致？",
+      "query": {
+        "keywords": [
+          "名实一致"
+        ]
+      },
+      "answerIds": [
+        "expert-frontmatter-tools-must-match-registered-faces"
+      ]
+    },
+    {
+      "qid": "L19",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "expert-squad-forge-2/1.21 · 14984d4f",
+      "question": "显式配置被静默回落是什么形状的缺陷？怎么排查？",
+      "query": {
+        "keywords": [
+          "inherit"
+        ]
+      },
+      "answerIds": [
+        "explicit-route-three-layer-silent-fallback"
+      ]
+    },
+    {
+      "qid": "L20",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "非 git 项目根上 first-pass 循环为什么折不收敛？",
+      "query": {
+        "keywords": [
+          "循环不收敛"
+        ]
+      },
+      "answerIds": [
+        "first-pass-no-convergence-non-git-root"
+      ]
+    },
+    {
+      "qid": "L21",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "1.4 / 1.7 · a944424f",
+      "question": "recordBug 前必须做什么？重复条目怎么清账？",
+      "query": {
+        "keywords": [
+          "dup-of"
+        ]
+      },
+      "answerIds": [
+        "fix-bug-dedup-before-record"
+      ]
+    },
+    {
+      "qid": "L22",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "fix 密度高的两视角定性是什么？",
+      "query": {
+        "keywords": [
+          "修正波次"
+        ]
+      },
+      "answerIds": [
+        "fix-density-root-cause-design-blind-spots"
+      ]
+    },
+    {
+      "qid": "L23",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "packaging-guard-hardening/1.5",
+      "question": "真机取证任务简报要带什么环境前置清单？",
+      "query": {
+        "keywords": [
+          "环境前置"
+        ]
+      },
+      "answerIds": [
+        "fresh-checkout-env-prerequisite-in-brief"
+      ]
+    },
+    {
+      "qid": "L24",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "1.11 评审 minor",
+      "question": "gate 留痕为什么要附退出码终态行？",
+      "query": {
+        "keywords": [
+          "exit-code"
+        ]
+      },
+      "answerIds": [
+        "gate-log-exit-code-line"
+      ]
+    },
+    {
+      "qid": "L25",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "守卫判据域与设计本意不同域会发生什么？",
+      "query": {
+        "keywords": [
+          "守卫判据域"
+        ]
+      },
+      "answerIds": [
+        "guard-judgment-domain-must-match-intent"
+      ]
+    },
+    {
+      "qid": "L26",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "Electron HTML5 拖拽为什么 CDP Input 驱不动？取证怎么降级？",
+      "query": {
+        "keywords": [
+          "受信输入"
+        ]
+      },
+      "answerIds": [
+        "html5-drag-not-cdp-trusted-input"
+      ]
+    },
+    {
+      "qid": "L27",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "插件实例 ID 寻址：registerRoot 缺参会怎样？",
+      "query": {
+        "keywords": [
+          "前缀回落"
+        ]
+      },
+      "answerIds": [
+        "instance-id-prefix-contract-silent-miss"
+      ]
+    },
+    {
+      "qid": "L28",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "1.12 / 1.14 · 0c677db2",
+      "question": "台账/注释宣称与实现不一致前必须逐位核对什么？",
+      "query": {
+        "keywords": [
+          "指称断裂"
+        ]
+      },
+      "answerIds": [
+        "ledger-claims-must-match-test-reality"
+      ]
+    },
+    {
+      "qid": "L29",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "forge 账面双帧冗余按什么事件消费？",
+      "query": {
+        "keywords": [
+          "双帧"
+        ]
+      },
+      "answerIds": [
+        "ledger-double-frame-consume-by-task-submitted"
+      ]
+    },
+    {
+      "qid": "L30",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "迁移红例归因的三方对账怎么做？",
+      "query": {
+        "keywords": [
+          "基线对照"
+        ]
+      },
+      "answerIds": [
+        "migration-red-attribution-three-way-run"
+      ]
+    },
+    {
+      "qid": "L31",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "ToolRestriction 白名单语义凭印象写反的教训？",
+      "query": {
+        "keywords": [
+          "keep-only"
+        ]
+      },
+      "answerIds": [
+        "official-restrict-allow-keep-only-misread"
+      ]
+    },
+    {
+      "qid": "L32",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "范围外基线红怎么处置？",
+      "query": {
+        "keywords": [
+          "范围外"
+        ]
+      },
+      "answerIds": [
+        "out-of-scope-baseline-red-report-dont-fix"
+      ]
+    },
+    {
+      "qid": "L33",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "任务 id 结构化解析要覆盖什么词汇空间？",
+      "query": {
+        "keywords": [
+          "fail-open"
+        ]
+      },
+      "answerIds": [
+        "ownership-parser-must-cover-localid-vocabulary"
+      ]
+    },
+    {
+      "qid": "L34",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "packaging-guard-hardening/1.6",
+      "question": "方案评审放行后实质演进要触发什么？",
+      "query": {
+        "keywords": [
+          "增量复评"
+        ]
+      },
+      "answerIds": [
+        "post-review-evolution-needs-incremental-recheck"
+      ]
+    },
+    {
+      "qid": "L35",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "worker 长探针为什么禁后台等待？",
+      "query": {
+        "keywords": [
+          "终态误判"
+        ]
+      },
+      "answerIds": [
+        "probe-background-wait-misjudged-completed"
+      ]
+    },
+    {
+      "qid": "L36",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "探针断言关键词为什么要先与产品文案对齐？",
+      "query": {
+        "keywords": [
+          "假阴性"
+        ]
+      },
+      "answerIds": [
+        "probe-keywords-vs-product-copy-false-negative"
+      ]
+    },
+    {
+      "qid": "L37",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "回放环境失败先证什么再怪产品？",
+      "query": {
+        "keywords": [
+          "环境前提"
+        ]
+      },
+      "answerIds": [
+        "replay-env-failure-check-environment-precondition"
+      ]
+    },
+    {
+      "qid": "L38",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "重播种为什么删目录会杀 watch 通路？",
+      "query": {
+        "keywords": [
+          "inode"
+        ]
+      },
+      "answerIds": [
+        "reseed-rmdir-kills-watcher"
+      ]
+    },
+    {
+      "qid": "L39",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "缝注入时点必须早于什么？",
+      "query": {
+        "keywords": [
+          "注入时序"
+        ]
+      },
+      "answerIds": [
+        "seam-injection-timing-must-precede-earliest-failure"
+      ]
+    },
+    {
+      "qid": "L40",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "1.3",
+      "question": "worker 误落 main 检出由什么结算门兜底？",
+      "query": {
+        "keywords": [
+          "settle-cwd-pin"
+        ]
+      },
+      "answerIds": [
+        "settle-cwd-pin-wrong-checkout-commit"
+      ]
+    },
+    {
+      "qid": "L41",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "批内轮转单发红 + 隔离恒绿说明什么？",
+      "query": {
+        "keywords": [
+          "序列耦合"
+        ]
+      },
+      "answerIds": [
+        "shared-batch-rotating-red-is-sequence-coupling"
+      ]
+    },
+    {
+      "qid": "L42",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "入口静默缺席为什么也必须 emitDiag？",
+      "query": {
+        "keywords": [
+          "静默失败"
+        ]
+      },
+      "answerIds": [
+        "silent-entry-absence-no-diag"
+      ]
+    },
+    {
+      "qid": "L43",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "官方 smooth 追底动画在飞窗口的 settle 释放窗？",
+      "query": {
+        "keywords": [
+          "followingTail"
+        ]
+      },
+      "answerIds": [
+        "smooth-follow-inflight-window-release"
+      ]
+    },
+    {
+      "qid": "L44",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "运行时宿主滞后源码时语义侧处置为什么必然无效？",
+      "query": {
+        "keywords": [
+          "装载面核销"
+        ]
+      },
+      "answerIds": [
+        "stale-host-runtime-nullifies-semantic-remedies"
+      ]
+    },
+    {
+      "qid": "L45",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "startContinuable 的结算时点语义？",
+      "query": {
+        "keywords": [
+          "startContinuable"
+        ]
+      },
+      "answerIds": [
+        "startcontinuable-settles-at-acceptance"
+      ]
+    },
+    {
+      "qid": "L46",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "状态判据投影与入口通道迁移耦合的教训？",
+      "query": {
+        "keywords": [
+          "判据投影"
+        ]
+      },
+      "answerIds": [
+        "state-projection-breaks-on-entry-channel-migration"
+      ]
+    },
+    {
+      "qid": "L47",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "挂起循环 re-entry 为什么复用旧 claim 快照？",
+      "query": {
+        "keywords": [
+          "挂起循环"
+        ]
+      },
+      "answerIds": [
+        "suspended-loop-reentry-reuses-stale-claim-snapshot"
+      ]
+    },
+    {
+      "qid": "L48",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "fix-1 处置 · ef8b3a45",
+      "question": "T3 升级建模报告落卷路径是哪派生的？",
+      "query": {
+        "keywords": [
+          "volume-path"
+        ]
+      },
+      "answerIds": [
+        "t3-modeling-report-volume-path-contract"
+      ]
+    },
+    {
+      "qid": "L49",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "TDD 红相证据为什么要先落盘再实现？",
+      "query": {
+        "keywords": [
+          "红相"
+        ]
+      },
+      "answerIds": [
+        "tdd-red-phase-evidence-on-disk-first"
+      ]
+    },
+    {
+      "qid": "L50",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "expert-squad-forge-2/1.21 · ad32e240",
+      "question": "fail-soft 装配降级让 triage 档案沉默缺席的代价？",
+      "query": {
+        "keywords": [
+          "persona"
+        ]
+      },
+      "answerIds": [
+        "triage-persona-silent-absence-recurrence-chain"
+      ]
+    },
+    {
+      "qid": "L51",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "真机走查第一步核销什么？",
+      "query": {
+        "keywords": [
+          "junction"
+        ]
+      },
+      "answerIds": [
+        "verify-junction-loading-surface-first-in-walkthrough"
+      ]
+    },
+    {
+      "qid": "L52",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "批内版本 bump 的落笔时点？",
+      "query": {
+        "keywords": [
+          "semver"
+        ]
+      },
+      "answerIds": [
+        "version-bump-rides-first-feat-in-batch"
+      ]
+    },
+    {
+      "qid": "L53",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "隔离夹具内归属模型自主处置为什么不可约束？",
+      "query": {
+        "keywords": [
+          "自主处置"
+        ]
+      },
+      "answerIds": [
+        "walkthrough-fixture-model-self-disposition"
+      ]
+    },
+    {
+      "qid": "L54",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "走查夹具引用值写入前要做什么？",
+      "query": {
+        "keywords": [
+          "前置校验"
+        ]
+      },
+      "answerIds": [
+        "walkthrough-fixture-reference-values-prevalidate"
+      ]
+    },
+    {
+      "qid": "L55",
+      "domain": "lessons",
+      "source": "session-log",
+      "sourceRef": "ingest-ledger",
+      "question": "worker 子会话的三环境限制是什么？",
+      "query": {
+        "keywords": [
+          "maxDepth"
+        ]
+      },
+      "answerIds": [
+        "worker-session-environment-limits"
+      ]
+    },
+    {
+      "qid": "M01",
+      "domain": "conventions",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "守卫要做到什么并发性质才不被二次复发击穿（自由词）？",
+      "query": {
+        "text": "原子幂等"
+      },
+      "answerIds": [
+        "assembly-guards-atomic-idempotent-with-diag"
+      ]
+    },
+    {
+      "qid": "M02",
+      "domain": "conventions",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "提交的构建产物防什么编码坏档（自由词）？",
+      "query": {
+        "text": "字节级"
+      },
+      "answerIds": [
+        "committed-json-artifacts-byte-verified-no-bom"
+      ]
+    },
+    {
+      "qid": "M03",
+      "domain": "lessons",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "契约测试排完单一顺序后还缺什么用例（自由词）？",
+      "query": {
+        "text": "盲区"
+      },
+      "answerIds": [
+        "contract-test-single-order-blindspot"
+      ]
+    },
+    {
+      "qid": "M04",
+      "domain": "lessons",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "bug 台账落账前先做什么防重复（自由词）？",
+      "query": {
+        "text": "查重"
+      },
+      "answerIds": [
+        "fix-bug-dedup-before-record"
+      ]
+    },
+    {
+      "qid": "M05",
+      "domain": "conventions",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "多写者写同一账本时的裁决口径（自由词）？",
+      "query": {
+        "text": "唯一写者"
+      },
+      "answerIds": [
+        "live-face-soft-ledger-authoritative"
+      ]
+    },
+    {
+      "qid": "M06",
+      "domain": "lessons",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "测试之间互相污染数据怎么防（同义改写——归因样本）？",
+      "query": {
+        "text": "互相干扰"
+      },
+      "answerIds": [
+        "shared-session-cross-test-pollution-guards"
+      ]
+    },
+    {
+      "qid": "M07",
+      "domain": "examples",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "域路由面：examples 域内的取证程序正例？",
+      "query": {
+        "domain_prefix": "examples",
+        "keywords": [
+          "取证程序"
+        ]
+      },
+      "answerIds": [
+        "explicit-route-real-machine-forensics-r8"
+      ]
+    },
+    {
+      "qid": "M08",
+      "domain": "lessons",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "同一问题第三次复发还该直接修吗（同义改写——归因样本）？",
+      "query": {
+        "text": "第三次复发"
+      },
+      "answerIds": [
+        "recurrence-family-modeling-before-blind-fix",
+        "recurrence-chain-discriminating-experiments-first"
+      ]
+    },
+    {
+      "qid": "M09",
+      "domain": "lessons",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "工作区隔离键怎么派生（自由词）？",
+      "query": {
+        "text": "canonical"
+      },
+      "answerIds": [
+        "workspace-isolation-key-prefix-dual-value-points"
+      ]
+    },
+    {
+      "qid": "M10",
+      "domain": "examples",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "Map 快照怎么做到只读（自由词）？",
+      "query": {
+        "text": "不可变快照"
+      },
+      "answerIds": [
+        "immutable-map-snapshot-via-mutator-override-freeze"
+      ]
+    },
+    {
+      "qid": "M11",
+      "domain": "conventions",
+      "source": "manual",
+      "sourceRef": "baseline-authored",
+      "question": "正则或扫描的判定范围变更时要怎样对待（自由词）？",
+      "query": {
+        "text": "扫描口径"
+      },
+      "answerIds": [
+        "declaration-derived-migration-equivalence-pin-fail-loud-regex"
+      ]
+    }
+  ]
+}

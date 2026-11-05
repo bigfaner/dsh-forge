@@ -1,11 +1,23 @@
 ---
 title: __DSH_BOOT__ 不携带 workspace，取 WorkspaceView.path
-summary: 官方 boot 注入线 window.__DSH_BOOT__ / WebBootEntry 经全文 grep 无任何 workspace/cwd 字段；client 侧工作区路径正缝是 workspace-controller client store 的 WorkspaceView.path / WorkspaceSnapshot。
-keywords: [__DSH_BOOT__, workspace, WorkspaceView, client, 取值来源]
+summary: >-
+  官方 boot 注入线 window.__DSH_BOOT__ / WebBootEntry 经全文 grep 无任何 workspace/cwd
+  字段；client 侧工作区路径正缝是 workspace-controller client store 的 WorkspaceView.path /
+  WorkspaceSnapshot。
+keywords:
+  - __DSH_BOOT__
+  - workspace
+  - WorkspaceView
+  - client
+  - 取值来源
 domainPath: docs/conventions/reuse-official-mechanisms.md
 来源容器: expert-squad
 来源任务: 评审 Q3 → 1.10 实现（review-tech-report 复审）
 bug id: 无
+id: boot-entry-has-no-workspace-field
+status: unconfirmed
+type: facts
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # __DSH_BOOT__ 不携带 workspace

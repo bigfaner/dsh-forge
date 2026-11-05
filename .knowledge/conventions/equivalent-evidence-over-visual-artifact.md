@@ -1,11 +1,23 @@
 ---
 title: 等效证据口径：视觉件不可达时的替代取证
-summary: 真机取证中视觉件（元素截图/状态徽标）不可达时，以 DOM 锚 + aria 断言 + 持续采样读数为主证据、回放轨视觉件归档为等效证据，不以视觉件强求（零 spec 改动纪律）。
-keywords: [等效证据, DOM 锚, aria, 采样, 走查取证]
+summary: >-
+  真机取证中视觉件（元素截图/状态徽标）不可达时，以 DOM 锚 + aria 断言 + 持续采样读数为主证据、回放轨视觉件归档为等效证据，不以视觉件强求（零
+  spec 改动纪律）。
+keywords:
+  - 等效证据
+  - DOM 锚
+  - aria
+  - 采样
+  - 走查取证
 domainPath: .knowledge/conventions/
 来源容器: loop-consol-flywheel-improvement
 来源任务: first-pass 复盘（1.9）；口径产生于 1.5 真机走查
 bug id: 无
+id: equivalent-evidence-over-visual-artifact
+status: unconfirmed
+type: conventions
+version_ts: '2026-11-05T00:00:00.000Z'
+canonical: docs/conventions/equivalent-evidence-over-visual-artifact.md
 ---
 
 # 等效证据口径：视觉件不可达时的替代取证

@@ -11,7 +11,7 @@ import {
   parentWindowOf, refreshKnowledgeBindings, registerBootChannel, registerDirectoryPickerChannel,
   registerFsChannels, registerHarnessChannels, registerKnowledgeChannels, registerM2Channels,
   registerProjectsChannels, removeHarnessChannels, removeTunnelChannel, runStartupReconcile,
-  registerTunnelChannel, withKnowledgeBindingsRefresh,
+  registerTunnelChannel, withKnowledgeBindingsRefresh, withKnowledgeRegistryRow,
 } from './ipc/index.js'
 import { ensureProfileMaterialized, ensureSafeModeProfile, isDevForm, isPackagedForm, resolveHostPaths } from './profile/index.js'
 import { attachHostTelemetry } from './telemetry/index.js'
@@ -90,6 +90,7 @@ void (async () => {
       bindingsFile: paths.bindingsFile,
       tasksHome: paths.tasksHome, settingsFile: paths.settingsFile, // core 行 config 双注：3.4 派生根（四域装配门）+ 3.8 设置域（forgeSettings 装配门）
       skillsDir: paths.skillsDir, specSkillsDir: paths.specSkillsDir, blitzSkillsDir: paths.blitzSkillsDir, squadSkillsDir: paths.squadSkillsDir, // skills 物理挂载（M3 3.7：core/spec/blitz 三目录 + squad 专家域——预设 customSkillDirs 物化锚）
+      knowledgeSkillsDir: paths.knowledgeSkillsDir, // knowledge 技能目录（1.9 A5：customSkillDirs[knowledge]——skills/learn 物化锚）
       credentialsPath: paths.credentialsPath, resourcesDir: paths.resourcesDir, // fix-26 隔离态凭据桥真 home + 4.1 打包资源根（boot child runtime/host-dist 入口）
     }, {
       stdioSink: tele.childStdioSink, // 1.2：child stdio pipe 行 → 诊断事件（回显双写在管道消费侧）
@@ -107,15 +108,26 @@ void (async () => {
     registerFsChannels(forgeIpc) // 宿主文件系统能力面（2.8 文件浏览器数据源，无 core 依赖即可注册）
     registerM2Channels(forgeIpc, host, () => mainWindow?.webContents, shell.openPath) // M2 四族+derive 注册（缺席 fail-soft 记 warn）+ 写推送事件广播（交互二）
     // 产品双服务接线（4.2 转正）：core 经 profile 装配 provide，boot 面世后注册
-    // forge:projects/* + forge:knowledge/*；绑定表随 boot 全量刷新 + 增量刷新（fail-soft）。
+    // forge:projects/* + forge:knowledge/*；绑定表随 boot 全量刷新 + 增量刷新（fail-soft，
+    // 1.7 Q19 后消费面 = plugin-forge Interface 8 cwd 路由——knowledge 已改纯 config 静态注入）。
     if (host.services.forgeProjects !== undefined) {
-      registerProjectsChannels(forgeIpc, withKnowledgeBindingsRefresh(host.services.forgeProjects, paths.bindingsFile))
+      registerProjectsChannels(
+        forgeIpc,
+        // 1.15 进表径：注册成功后向 knowledge 自持注册表落注册行（fail-soft；插件缺席透传）
+        withKnowledgeRegistryRow(
+          withKnowledgeBindingsRefresh(host.services.forgeProjects, paths.bindingsFile),
+          host.services.knowledge,
+        ),
+      )
       void refreshKnowledgeBindings(host.services.forgeProjects, paths.bindingsFile)
       runStartupReconcile(host.services.forgeProjects) // fix-27：启动对账（§交互三）——悬空引用启动即修
     } else console.warn('[host] forgeProjects 服务缺席（core 插件行未装载）——forge:projects/* 通道未注册')
-    if (host.services.forgeKnowledge !== undefined) {
-      registerKnowledgeChannels(forgeIpc, host.services.forgeKnowledge)
-    } else console.warn('[host] forgeKnowledge 服务缺席（core 插件行未装载）——forge:knowledge/* 通道未注册')
+    // 1.7 A2 服务切换：在场判定键 knowledge（插件自有服务，去 forge 前缀）；插件缺席 =
+    // 五通道整体不挂（判例 2ffb0a82 反例核验——缺席态与 UI 门控同源）。host 只 wiring，
+    // 编排零下沉（供数/两级解析归插件域）。
+    if (host.services.knowledge !== undefined) {
+      registerKnowledgeChannels(forgeIpc, host.services.knowledge)
+    } else console.warn('[host] knowledge 服务缺席（knowledge 插件行未装载）——forge:knowledge/* 通道未注册')
     registerBootChannel(ipcMain, () => host.manifest) // {url,injections} 注入 renderer（壳消费）
     registerDirectoryPickerChannel(ipcMain, electronDirectoryDialog, parentWindowOf) // fix-14/fix-21/bug db7af09a：Electron 实装下沉 electron-bindings
     let harnessLogPath: string | undefined // 先声明后赋值：diag 订阅先挂（child 早到诊断行零丢失窗）

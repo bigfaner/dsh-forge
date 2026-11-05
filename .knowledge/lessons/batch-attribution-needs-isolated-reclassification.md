@@ -1,11 +1,21 @@
 ---
 title: 批级归因只作排查起点——入账前必须逐例单跑取证核实
-summary: 批级归因推断被逐例单跑重归类推翻两例：A10/A12 单跑体内零 blocked submit（「toolFilter deny 集漂移」归因不实）；C 组三 spec 单跑体内零 deny 断言（「概览头渲染变更」归因不实）。批归因不得直接入账，须单跑取证核实；归因修正在对账表显式注记。
-keywords: [batch-attribution, 单跑取证, 归因修正, known-reds, triage]
-status: draft
+summary: >-
+  批级归因推断被逐例单跑重归类推翻两例：A10/A12 单跑体内零 blocked submit（「toolFilter deny 集漂移」归因不实）；C
+  组三 spec 单跑体内零 deny 断言（「概览头渲染变更」归因不实）。批归因不得直接入账，须单跑取证核实；归因修正在对账表显式注记。
+keywords:
+  - batch-attribution
+  - 单跑取证
+  - 归因修正
+  - known-reds
+  - triage
+status: unconfirmed
 source_container: e2e-upstream-drift-reds-triage
 source_task: 1.1 / 1.2 / 1.3
 source_bug: —
+id: batch-attribution-needs-isolated-reclassification
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 批归因与单跑核实的分界

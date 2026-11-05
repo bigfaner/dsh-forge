@@ -1,6 +1,6 @@
 // 1.4 AC2 pin：profile 模板首启落地 {profile-dir} + 幂等不重写 + 模板内容形状
-//（官方行 + 产品 insert 行 = PRODUCT_PLUGINS 配置派生——knowledge 现值关：知识库
-// 功能不完整，打包形态不开放，dev 形态仍含）+ dev 形态文件同步。
+//（官方行 + 产品 insert 行 = PRODUCT_PLUGINS 配置派生——knowledge 1.9 A5 重开放：
+// 全局装载 + 随包，dev / 打包两形态同含行）+ dev 形态文件同步。
 // M3 3.7 增：ui-settings 开关行首启预置（模板补行 + 增量补行 id 键控——此后归用户运行时）。
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -58,7 +58,7 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
     expect(pkg.dependencies['@deepseek-ai/cordis-plugin-group']).toBe('~1.0.4')
   })
 
-  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + 产品 insert 行 = PRODUCT_PLUGINS 配置派生（单一配置源：userLayerRow 门——翻转布尔即行增减，不改模板代码；现值 core 开 / knowledge 关——知识库功能不完整暂不开放）', () => {
+  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + 产品 insert 行 = PRODUCT_PLUGINS 配置派生（单一配置源：userLayerRow 门——翻转布尔即行增减，不改模板代码；现值 core / expert-squad / knowledge 开——knowledge 1.9 A5 重开放）', () => {
     const patch = PROFILE_TEMPLATE_FILES['cordis.patch.yml']!
     expect(patch).toContain('- id: system-prompt')
     // client-hmr 置停（2.7）：全图 sync 对账掉掌舵产品行——S2 残留 #3 的 profile 面处置
@@ -74,9 +74,9 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
       })
     expect(expectedRows.length, '配置应至少含一个 userLayerRow 行（全关 = 打包形态零产品服务——疑配置误改）').toBeGreaterThan(0)
     expect(patch).toContain(['- insert:', ...expectedRows].join('\n'))
-    // 现值 pin：knowledge 关（重开放 = 改 contracts PRODUCT_PLUGINS + 本 pin 反转）
-    expect(PRODUCT_PLUGINS['knowledge']).toEqual({ userLayerRow: false, staged: false })
-    expect(patch).not.toContain("name: '@dsh-forge/knowledge'")
+    // 现值 pin：knowledge 开（1.9 A5 重开放——阶段①地基落位，全局装载 + 随包）
+    expect(PRODUCT_PLUGINS['knowledge']).toEqual({ userLayerRow: true })
+    expect(patch).toContain("name: '@dsh-forge/knowledge'")
     // 预设携带插件不入配置表（行在预设底稿内——产品裁决 2026-10-09 标准模式零 forge
     // 面；staging 由 assemble 从底稿扫描 + 依赖闭包自动推导）
     expect(PRODUCT_PLUGINS).not.toHaveProperty('plugin-forge')
@@ -134,7 +134,7 @@ describe('AC2 幂等：重复启动不重写', () => {
     const hasRowDir = join(dir, 'has-product-row')
     mkdirSync(hasRowDir, { recursive: true })
     const withRow =
-      '# user layer\n- id: ui-settings\n  config:\n    enabled: true\n- insert:\n    - id: dsh-forge-core\n      name: \'@dsh-forge/core\'\n    - id: dsh-forge-expert-squad\n      name: \'@dsh-forge/expert-squad\'\n'
+      '# user layer\n- id: ui-settings\n  config:\n    enabled: true\n- insert:\n    - id: dsh-forge-core\n      name: \'@dsh-forge/core\'\n    - id: dsh-forge-knowledge\n      name: \'@dsh-forge/knowledge\'\n    - id: dsh-forge-expert-squad\n      name: \'@dsh-forge/expert-squad\'\n'
     writeFileSync(join(hasRowDir, 'cordis.patch.yml'), withRow, 'utf8')
     const result = ensureProfileMaterialized(hasRowDir)
     expect(result.patched).toEqual([])
@@ -262,7 +262,7 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dsh.profile.bundles).toEqual([...packaged.dsh.profile.bundles, '@dsh-forge/expert-squad', '@dsh-forge/snapnote'])
     // dev 直链 workspace 构建产物（4.2：装载面 = loader 行 import 以 profileDir 为锚）
     expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')
-    expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/knowledge')
+    expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/plugins/knowledge')
     expect(dev.dependencies['@dsh-forge/contracts']).toBe('link:../../../packages/contracts')
     expect(dev.dependencies['@dsh-forge/plugin-forge']).toBe('link:../../../packages/plugin-forge')
     // M3 3.7：远征组合 in-preset plugin-forge-spec 行的 loader 解析锚（预设装配 dev 供应面）
@@ -273,15 +273,15 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dependencies['better-sqlite3']).toBe('13.0.3')
     expect(dev.dependencies['gray-matter']).toBe('4.0.3')
   })
-  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + core 产品行启用——4.2 转正；产品裁决 2026-10-09：plugin-forge 移出用户层，仅 core；产品裁决：knowledge 行 = dev 独有——打包模板暂不含，知识库功能不完整不开放）', () => {
+  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + core 产品行启用——4.2 转正；产品裁决 2026-10-09：plugin-forge 移出用户层；knowledge 1.9 A5 重开放——dev 与打包模板同含行）', () => {
     const dev = readFileSync(join(devDir, 'cordis.patch.yml'), 'utf8')
     const packagedPatch = PROFILE_TEMPLATE_FILES['cordis.patch.yml']!
     expect(dev).toContain('- id: system-prompt')
     expect(dev).toContain('- id: client-hmr')
     expect(dev).toContain("name: '@dsh-forge/core'")
-    // knowledge 行 = dev 独有（开发时可用；打包模板不含——上方模板测试已 pin 缺席）
+    // knowledge 行：dev 与打包模板同含（1.9 A5 重开放——上方模板测试已 pin 在场）
     expect(dev).toContain("name: '@dsh-forge/knowledge'")
-    expect(packagedPatch).not.toContain("name: '@dsh-forge/knowledge'")
+    expect(packagedPatch).toContain("name: '@dsh-forge/knowledge'")
     // plugin-forge 行移出（标准模式零 forge 面——forge 工具/技能仅预设组合携带）
     expect(dev).not.toContain("name: '@dsh-forge/plugin-forge'")
     expect(dev).not.toMatch(/dsh-forge-(core|knowledge)[\s\S]{0,80}disabled/)

@@ -99,7 +99,7 @@ it(
       }
       // M2 四域 + P1 双服务 + M3 设置域全在场（tasksHome/settingsFile 注入 → core provide 联证）
       for (const service of [
-        'forgeProjects', 'forgeKnowledge', 'forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings',
+        'forgeProjects', 'knowledge', 'forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings',
       ] as const) {
         expect(host.services[service], `${service} 服务缺席（装配链断裂）`).toBeDefined()
       }
@@ -119,7 +119,6 @@ it(
         workspaceDir: wsDir,
         name: 'demo-ws',
         forgeDir: join(wsDir, '.forge'),
-        knowledgeDir: join(wsDir, '.knowledge'),
       })
       const bindings = JSON.parse(readFileSync(paths.bindingsFile, 'utf8')) as {
         version: number

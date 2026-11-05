@@ -38,4 +38,4 @@ dev 形态不炸的原因：pnpm workspace 把 workspace 依赖链接进 `packag
 - scripts/assemble-installer-resources.mjs（PRODUCT_PACKAGES / REQUIRED_KEY_FILES / assertPreconditions）
 - tests/structure/installer-pipeline.test.ts（staging 闭包守护）
 - apps/host/src/main.ts（服务缺席 fail-soft 门控——症状显形位）
-- packages/core/package.json / packages/knowledge/package.json（path-key 运行时依赖声明）
+- packages/core/package.json / packages/plugins/knowledge/package.json（path-key 运行时依赖声明）

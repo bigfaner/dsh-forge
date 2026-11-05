@@ -1,5 +1,5 @@
 // db/ barrel（定位：基础）——SQLite 句柄唯一落点、schema 迁移、事务助手，零域语义。
-// 边界：禁 import ../forge/、../knowledge/（依赖铁律①，oxlint no-restricted-imports）。
+// 边界：禁 import ../forge/（依赖铁律①，oxlint no-restricted-imports；knowledge 域已退役）。
 export { MIGRATIONS, SCHEMA_VERSION, type Migration } from './schema.js'
 export { UnsupportedSchemaVersionError, isUnsupportedSchemaVersionError } from './errors.js'
 export { openDatabase, type OpenDatabaseOptions } from './open.js'

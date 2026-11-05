@@ -1,11 +1,22 @@
 ---
 title: 探针断言关键词须与产品文案先对齐再跑
-summary: 走查「启动里程碑在场」断言用关键词「启动/从头」命中失败，实为产品以「循环执行中 + 起止时间区间」承载启动语义——先对齐探针关键词与产品文案再断言，否则产出假阴性偏差记录污染验收结论。
-keywords: [探针, 关键词断言, 假阴性, 里程碑, 走查]
+summary: >-
+  走查「启动里程碑在场」断言用关键词「启动/从头」命中失败，实为产品以「循环执行中 +
+  起止时间区间」承载启动语义——先对齐探针关键词与产品文案再断言，否则产出假阴性偏差记录污染验收结论。
+keywords:
+  - 探针
+  - 关键词断言
+  - 假阴性
+  - 里程碑
+  - 走查
 domainPath: .knowledge/lessons/
 来源容器: loop-message-consolidation
 来源任务: first-pass 复盘（1.8）
 bug id: 无
+id: probe-keywords-vs-product-copy-false-negative
+status: unconfirmed
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 探针断言关键词须与产品文案先对齐再跑

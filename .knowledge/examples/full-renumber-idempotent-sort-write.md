@@ -1,11 +1,22 @@
 ---
 title: 排序写回全量重编号——单事务 1..n 覆盖写，幂等无碰撞
-summary: 拖拽排序不写局部 delta 也不做 midpoint 插值：取拖拽后完整显示序 σ（含归档行），单事务写 sort_order(pᵢ)=i 覆盖全部 n 行。写后全序恰为 σ（所见即所得），无碰撞、重复执行零网络效果差异（幂等），且永久免除 midpoint 精度耗尽再平衡问题。
-keywords: [全量重编号, 幂等, 单事务, 所见即所得, 排序]
+summary: >-
+  拖拽排序不写局部 delta 也不做 midpoint 插值：取拖拽后完整显示序 σ（含归档行），单事务写 sort_order(pᵢ)=i 覆盖全部 n
+  行。写后全序恰为 σ（所见即所得），无碰撞、重复执行零网络效果差异（幂等），且永久免除 midpoint 精度耗尽再平衡问题。
+keywords:
+  - 全量重编号
+  - 幂等
+  - 单事务
+  - 所见即所得
+  - 排序
 domainPath: .knowledge/examples/
 来源容器: project-manual-order
 来源任务: first-pass 复盘（1.4）
 bug id: 无
+id: full-renumber-idempotent-sort-write
+status: unconfirmed
+type: decisions
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 排序写回全量重编号（project-manual-order 判例）

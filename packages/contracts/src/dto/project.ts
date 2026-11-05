@@ -16,8 +16,6 @@ export interface Project {
   forgeDir: string
   /** 0 = 仓内 / 1 = 仓外（由路径关系自动推导） */
   forgeDirExternal: boolean
-  /** 知识库目录（绝对路径，默认 `<工作区>/.knowledge`） */
-  knowledgeDir: string
   /**
    * worktree 存放目录（绝对路径；NOT NULL——注册未输入即落默认 `<工作区>/.forge/worktrees/`，
    * 与 ws_path canonical 同口径；存量行迁移回填同口径。DTO 可选容忍旧读面——非空保证锚 DB 列）。
@@ -53,8 +51,6 @@ export interface RegisterProjectInput {
   name: string
   /** 文档位置（绝对路径；external 自动推导） */
   forgeDir: string
-  /** 知识库目录（绝对路径） */
-  knowledgeDir: string
   /** worktree 存放目录（绝对路径；缺省 = 注册链落默认 `<工作区>/.forge/worktrees/`） */
   worktreeDir?: string
 }

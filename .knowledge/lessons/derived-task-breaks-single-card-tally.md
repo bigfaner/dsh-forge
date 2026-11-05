@@ -1,11 +1,22 @@
 ---
 title: 「恰一张」类断言必须按循环实例边界圈定
-summary: loop-message-consolidation 首轮走查 AC3 FAIL 的根因之一：派生 fix 复盘任务也走异常唤醒径，使挂起消息 3→2 卡仍非「恰一张」——计数断言必须先以循环实例（startup ↔ 结算/停止配对）圈定范围，否则派生任务与重开循环都会造成假阴性/假阳性。
-keywords: [恰一张, 计数断言, 循环实例, 派生任务, 走查]
+summary: >-
+  loop-message-consolidation 首轮走查 AC3 FAIL 的根因之一：派生 fix 复盘任务也走异常唤醒径，使挂起消息 3→2
+  卡仍非「恰一张」——计数断言必须先以循环实例（startup ↔ 结算/停止配对）圈定范围，否则派生任务与重开循环都会造成假阴性/假阳性。
+keywords:
+  - 恰一张
+  - 计数断言
+  - 循环实例
+  - 派生任务
+  - 走查
 domainPath: .knowledge/lessons/
 来源容器: loop-message-consolidation
 来源任务: first-pass 复盘（1.8）
 bug id: 无
+id: derived-task-breaks-single-card-tally
+status: unconfirmed
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 「恰一张」类断言必须按循环实例边界圈定

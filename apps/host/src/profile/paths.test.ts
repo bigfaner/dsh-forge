@@ -82,6 +82,10 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     expect(paths.blitzSkillsDir).toBeDefined()
     expect(paths.blitzSkillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]plugin-forge[/\\]skills-blitz$/)
     expect(existsSync(join(paths.blitzSkillsDir!, 'grilling', 'SKILL.md'))).toBe(true)
+    // knowledge 技能面（1.9 A5：customSkillDirs[knowledge]——skills/learn 物化锚）
+    expect(paths.knowledgeSkillsDir).toBeDefined()
+    expect(paths.knowledgeSkillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]knowledge[/\\]skills$/)
+    expect(existsSync(join(paths.knowledgeSkillsDir!, 'learn', 'SKILL.md'))).toBe(true)
   })
 
   it('plugin-forge skills 挂载目录：树内缺席 → undefined（fail-soft 技能面降级，不抛）', () => {
@@ -89,6 +93,7 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     const isolated = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: 'X:\\nowhere\\anchor\\package.json' }, 'C:/ud')
     expect(isolated.skillsDir).toBeUndefined()
     expect(isolated.squadSkillsDir).toBeUndefined() // squad 技能面降级（同法 fail-soft）
+    expect(isolated.knowledgeSkillsDir).toBeUndefined() // knowledge 技能面降级（同法 fail-soft）
   })
 
   it('expert-squad skills 挂载目录（预设装配 customSkillDirs[squad]——专家域技能）：锚树在场 → 解析；缺席 → undefined fail-soft（同法 fixture 驱动——不依赖当期包内容）', () => {
@@ -101,6 +106,21 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
       mkdirSync(squadSkills, { recursive: true }) // squad 树落地 → 解析同法
       const present = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
       expect(present.squadSkillsDir).toBe(squadSkills)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('knowledge skills 挂载目录（knowledge-stage1 1.9 A5 预设装配 customSkillDirs[knowledge]）：锚树在场 → 解析；缺席 → undefined fail-soft（同法 fixture 驱动——不依赖当期包内容）', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-paths-knowledge-'))
+    try {
+      const anchor = join(root, 'anchor', 'package.json')
+      const knowledgeSkills = join(root, 'node_modules', '@dsh-forge', 'knowledge', 'skills')
+      const absent = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
+      expect(absent.knowledgeSkillsDir).toBeUndefined() // knowledge 技能面降级（fail-soft 不抛断启动）
+      mkdirSync(knowledgeSkills, { recursive: true }) // knowledge skills 树落地 → 解析同法
+      const present = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
+      expect(present.knowledgeSkillsDir).toBe(knowledgeSkills)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

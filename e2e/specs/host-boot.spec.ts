@@ -10,9 +10,10 @@ import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import { closeApp, launchElectron } from '../support/launch.js'
 
-// 【临时禁用 2026-11-04】packaged 形态直启安装版 dsh-forge.exe，与 installer-smoke 同属
-// 疑似误杀窗口（GUI 于 11:25:30 被外力强杀、重启进安全模式）。根因坐实前整套留痕 skip。
-test.skip(true, 'host-boot 暂时禁用：packaged 直启链疑似按进程名误杀安装版 GUI（排查中，bug 待立案）')
+// 【解禁 2026-11-04 15:35 用户裁决】本 spec 两例（dev 直启 + packaged exe 直启）不涉
+// NSIS 安装链（杀手径仅在安装器/卸载器执行路径——disc-1 坐实），可在本 GUI 运行期安全
+// 执行；历史四轮跑批 host-boot 均通过、死亡均发生于其后的 installer-smoke。
+// installer-smoke 仍整体禁用（取证归 CI/停机窗口）。
 
 const PROFILE_FILES = ['cordis.patch.yml', 'package.json', 'pnpm-workspace.yaml', 'cordis.yml'] as const
 
@@ -57,11 +58,11 @@ test('AC2 packaged 形态：首启落地模板且二次启动幂等不重写', a
       } finally {
         await closeApp(app)
       }
-      // 首启：模板三件（官方行 + @dsh-forge/core 行；knowledge 行暂不含——产品裁决：
-      // 知识库功能不完整，打包形态不开放）+ cordis.yml 空根
+      // 首启：模板三件（官方行 + @dsh-forge/core / knowledge 产品行——knowledge
+      // 1.9 A5 重开放：用户层全局行携带）+ cordis.yml 空根
       const patch = readFileSync(join(profileDir, 'cordis.patch.yml'), 'utf8')
       expect(patch, `round ${String(round)}`).toContain("name: '@dsh-forge/core'")
-      expect(patch, `round ${String(round)}`).not.toContain("name: '@dsh-forge/knowledge'")
+      expect(patch, `round ${String(round)}`).toContain("name: '@dsh-forge/knowledge'")
       const pkg = JSON.parse(readFileSync(join(profileDir, 'package.json'), 'utf8')) as {
         dsh: { profile: { bundles: string[] } }
       }

@@ -1,10 +1,21 @@
 ---
 title: provider/model 显式路由真机取证程序（r8 正例）
-summary: 项目层档案遮蔽（显式 provider/model，字节级核验无 BOM）+ hostlog 插桩 route 行 + request/header config 与 subagent descriptor 原文摘录三锚点取证，测毕整目录还原 worktree 干净——显式路由/档案合成类 AC 的可复用取证程序。
-keywords: [取证程序, 遮蔽档案, hostlog, header, 现场还原]
-status: draft
+summary: >-
+  项目层档案遮蔽（显式 provider/model，字节级核验无 BOM）+ hostlog 插桩 route 行 + request/header
+  config 与 subagent descriptor 原文摘录三锚点取证，测毕整目录还原 worktree 干净——显式路由/档案合成类 AC
+  的可复用取证程序。
+keywords:
+  - 取证程序
+  - 遮蔽档案
+  - hostlog
+  - header
+  - 现场还原
+status: unconfirmed
 source_container: expert-squad-forge-2
 source_task: expert-squad-forge-2/1.21
+id: explicit-route-real-machine-forensics-r8
+type: lessons
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 显式路由真机取证程序（r8 模板）

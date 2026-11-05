@@ -92,7 +92,6 @@ it(
         workspaceDir: wsDir,
         name: 'demo-repo',
         forgeDir: join(wsDir, '.forge'),
-        knowledgeDir: join(wsDir, '.knowledge'),
       })
       expect(registered.projectId).toBeTruthy()
 

@@ -1,11 +1,22 @@
 ---
 title: worker 误落 main 检出——提交落错分支由 settle-cwd-pin 结算门兜底，简报须锚定容器检出根
-summary: worker 在主检出（main）而非容器 worktree 跑任务 → 提交落 main 分支，settle-cwd-pin 结算门拒绝。处置 = cherry-pick 迁容器分支 + main reset 清退误提交（成孤儿）。教训：任务简报必须锚定容器检出根；结算门是误落 main 的兜底网，不是阻止首犯的闸。
-keywords: [worktree, settle-cwd-pin, cherry-pick, 误落 main, 简报]
-status: draft
+summary: >-
+  worker 在主检出（main）而非容器 worktree 跑任务 → 提交落 main 分支，settle-cwd-pin 结算门拒绝。处置 =
+  cherry-pick 迁容器分支 + main reset 清退误提交（成孤儿）。教训：任务简报必须锚定容器检出根；结算门是误落 main
+  的兜底网，不是阻止首犯的闸。
+keywords:
+  - worktree
+  - settle-cwd-pin
+  - cherry-pick
+  - 误落 main
+  - 简报
+status: unconfirmed
 source_container: e2e-upstream-drift-reds-triage
 source_task: 1.3
 source_bug: —
+id: settle-cwd-pin-wrong-checkout-commit
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
 ---
 
 # 误落 main 检出：结算门兜底与首犯预防

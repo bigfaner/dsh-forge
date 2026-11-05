@@ -10,7 +10,7 @@
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
 import type { BrowserSelection } from './browser-model.js'
 
-/** 表单字段值（采集面 = RegisterProjectInput 四字段；workspaceDir 只读回填） */
+/** 表单字段值（采集面 = RegisterProjectInput 三输入字段；workspaceDir 只读回填；知识目录随 knowledge_dir 列退役不采集——缺省 `<工作区>/.knowledge` 由 knowledge 注册径派生） */
 export interface FormValues {
   /** 工作区目录（浏览器选定 canonical path——对账 join key；表单内只读） */
   readonly workspaceDir: string
@@ -18,8 +18,6 @@ export interface FormValues {
   readonly name: string
   /** 文档位置 = forge 目录（默认 `<工作区>/.forge`，可直输/浏览改选；分隔符随平台风格） */
   readonly forgeDir: string
-  /** 知识库目录（默认 `<工作区>/.knowledge`，可直输/浏览改选；分隔符随平台风格） */
-  readonly knowledgeDir: string
   /**
    * worktree 存放目录（1.6 AC3：可空 = 缺省——占位提示默认 `.forge/worktrees/`，空值提交
    * 由 core 注册链落默认 `<工作区>/.forge/worktrees/` 绝对路径；非空须绝对路径）
@@ -28,16 +26,15 @@ export interface FormValues {
 }
 
 /** 可编辑字段（workspaceDir 只读不参与；联动判据维度） */
-export type EditableField = 'name' | 'forgeDir' | 'knowledgeDir' | 'worktreeDir'
+export type EditableField = 'name' | 'forgeDir' | 'worktreeDir'
 
-/** 浏览改选目标（「重新选择」= 工作区；「浏览…」= 三目录——DirectoryBrowser 参数化依据） */
-export type BrowseTarget = 'workspace' | 'forgeDir' | 'knowledgeDir' | 'worktreeDir'
+/** 浏览改选目标（「重新选择」= 工作区；「浏览…」= 两目录——DirectoryBrowser 参数化依据） */
+export type BrowseTarget = 'workspace' | 'forgeDir' | 'worktreeDir'
 
 /** 手改/浏览选定标记（AC4 联动规则判据：true = 换选工作区时保留） */
 export interface TouchedFields {
   readonly name: boolean
   readonly forgeDir: boolean
-  readonly knowledgeDir: boolean
   readonly worktreeDir: boolean
 }
 
@@ -105,7 +102,11 @@ export function deriveForgeDir(workspaceDir: string): string {
   return `${normalizeDirPath(workspaceDir)}${dirSeparatorOf(workspaceDir)}.forge`
 }
 
-/** 工作区目录 → 知识库目录默认值（`<工作区>/.knowledge`——分隔符随工作区风格） */
+/**
+ * 工作区目录 → 知识库目录缺省值（`<工作区>/.knowledge`——分隔符随工作区风格）。
+ * 知识目录随 knowledge_dir 列退役退出注册采集面（1.15）；本派生保留供知识视图空库
+ * 引导文案（目录位置说明）——产品口径恒缺省派生，无用户改选面。
+ */
 export function deriveKnowledgeDir(workspaceDir: string): string {
   return `${normalizeDirPath(workspaceDir)}${dirSeparatorOf(workspaceDir)}.knowledge`
 }
@@ -125,7 +126,7 @@ export function isForgeDirExternal(workspaceDir: string, forgeDir: string): bool
   return !forge.startsWith(`${ws}${sep}`)
 }
 
-/** 段一选定 → 表单初始态（AC1：回填工作区 + 文件夹名 + 两目录默认值，全字段未手改；worktree 目录留空 = 缺省） */
+/** 段一选定 → 表单初始态（AC1：回填工作区 + 文件夹名 + forge 目录默认值，全字段未手改；worktree 目录留空 = 缺省） */
 export function initialFormState(selection: BrowserSelection): FormState {
   const workspaceDir = selection.path
   return {
@@ -133,10 +134,9 @@ export function initialFormState(selection: BrowserSelection): FormState {
       workspaceDir,
       name: folderNameOf(workspaceDir),
       forgeDir: deriveForgeDir(workspaceDir),
-      knowledgeDir: deriveKnowledgeDir(workspaceDir),
       worktreeDir: '',
     },
-    touched: { name: false, forgeDir: false, knowledgeDir: false, worktreeDir: false },
+    touched: { name: false, forgeDir: false, worktreeDir: false },
   }
 }
 
@@ -160,7 +160,6 @@ export function relinkWorkspace(state: FormState, workspaceDir: string): FormSta
       workspaceDir,
       name: touched.name ? values.name : folderNameOf(workspaceDir),
       forgeDir: touched.forgeDir ? values.forgeDir : deriveForgeDir(workspaceDir),
-      knowledgeDir: touched.knowledgeDir ? values.knowledgeDir : deriveKnowledgeDir(workspaceDir),
       // worktree 目录缺省语义 = 空（不随工作区派生——默认绝对路径由 core 注册链落），手改/浏览选定保留
       worktreeDir: touched.worktreeDir ? values.worktreeDir : '',
     },
@@ -197,12 +196,6 @@ export function validateFormValues(values: FormValues): FormIssue[] {
   } else if (!isAbsolutePath(forgeDir)) {
     issues.push({ field: 'forgeDir', message: '文档位置（forge 目录）需为绝对路径' })
   }
-  const knowledgeDir = values.knowledgeDir.trim()
-  if (knowledgeDir === '') {
-    issues.push({ field: 'knowledgeDir', message: '知识库目录不能为空' })
-  } else if (!isAbsolutePath(knowledgeDir)) {
-    issues.push({ field: 'knowledgeDir', message: '知识库目录需为绝对路径' })
-  }
   // worktree 目录（1.6 AC3）：空 = 缺省（合法——默认绝对路径由 core 注册链落）；非空须绝对路径
   const worktreeDir = values.worktreeDir.trim()
   if (worktreeDir !== '' && !isAbsolutePath(worktreeDir)) {
@@ -217,7 +210,6 @@ export function toRegisterInput(values: FormValues): RegisterProjectInput {
     workspaceDir: values.workspaceDir.trim(),
     name: values.name.trim(),
     forgeDir: values.forgeDir.trim(),
-    knowledgeDir: values.knowledgeDir.trim(),
     // 空 = 缺省（字段省略——core 注册链落默认 `<工作区>/.forge/worktrees/` 绝对路径）
     worktreeDir: values.worktreeDir.trim() === '' ? undefined : values.worktreeDir.trim(),
   }
