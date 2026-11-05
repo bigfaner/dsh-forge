@@ -148,7 +148,8 @@ afterAll(() => {
 })
 
 const posOf = (hits: readonly SearchHit[], id: string): number => hits.findIndex((h) => h.frontmatterId === id)
-const idsOf = (hits: readonly SearchHit[]): readonly string[] => hits.map((h) => h.frontmatterId)
+const idsOf = (hits: readonly SearchHit[]): readonly string[] =>
+  hits.map((h) => h.frontmatterId).filter((id): id is string => id !== null)
 
 /** 堆热（recall_logs 直插——热度面同源单表计数，bm25-search 单测同构通道） */
 function heatUp(w: World, id: string, heat: number): void {

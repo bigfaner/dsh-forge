@@ -42,6 +42,7 @@ import {
   aggregateDomainTree,
   buildKeywordAdmissionMatch,
   buildSearchFtsMatch,
+  collectEntryIdsUnderDir,
   composeSearchScore,
   escapeLike,
   groupRecallRows,
@@ -208,14 +209,10 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
   // ── 项目域归属（v4：版本文件前缀——每调用期求值；JS 侧 startsWith 双分隔符匹配，
   //    免 LIKE ESCAPE 转义域） ──
 
-  /** knowledgeDir → 该项目域内的条目 id 集（任一版本文件落在 knowledge_dir 下） */
+  /** knowledgeDir → 该项目域内的条目 id 集（任一版本文件落在 knowledge_dir 下——
+   *  归属判定单一事实源 internal.collectEntryIdsUnderDir，与动态段顶域聚合同口径） */
   function projectEntryIds(knowledgeDir: string): Set<string> {
-    const ids = new Set<string>()
-    const dirPosix = knowledgeDir.replace(/[\\/]+$/, '')
-    for (const v of selectVersionPaths.all()) {
-      if (v.file_path.startsWith(`${dirPosix}/`) || v.file_path.startsWith(`${dirPosix}\\`)) ids.add(v.id)
-    }
-    return ids
+    return collectEntryIdsUnderDir(selectVersionPaths.all(), knowledgeDir)
   }
 
   const ENTRY_COLUMNS = `e.rowid AS rid, e.id, e.title, e.status, e.domain AS domain_path, e.effective_rank, e.confirmed_version_id, f.summary, f.keywords`
@@ -384,6 +381,21 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
         projectId: row.projectId ?? input.projectId,
       }),
     )
+    // F1（1.7 真机发现）：注册径触发入库 rebuild——绑定会话首 turn 动态段供数就位，
+    // 不依赖 listEntries 静默重建。失败 best-effort（注册行已落、留 error 埋点；
+    // 后续 listEntries 仍按既有 IndexStale 静默重建兜底）。
+    try {
+      runRebuild(input.wsPath, { emit, silent: true })
+    } catch (cause) {
+      emitStorageDiag(
+        emit,
+        storageDiag('error', KNOWLEDGE_REGISTER_EVENT, `注册后入库重建失败（首 turn 兜底转 listEntries 静默重建）：${row.wsPath}（${String(cause)}）`, {
+          cwd: row.wsPath,
+          projectId: input.projectId,
+          stack: cause instanceof Error ? cause.stack : undefined,
+        }),
+      )
+    }
   }
 
   // ── 回流滞回（§2.4：0.4/0.2 两档轻量召回出口——每对限次 + 冷却；diag 区分震荡/误判） ──

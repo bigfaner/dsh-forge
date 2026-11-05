@@ -210,6 +210,27 @@ export function validateDomainPath(domain: string): string | undefined {
   return undefined
 }
 
+// ── 项目域归属单一助手（评审中：topDomainIndexOf 与 service.projectEntryIds 双写收敛） ──
+
+/**
+ * 域归属单一事实源：knowledge_dir 前缀匹配（任一版本文件落在 knowledge_dir 下即属
+ * 该项目域——JS 侧 startsWith 双分隔符匹配，免 LIKE ESCAPE 转义域）。
+ * 规模上界：对传入的版本行集单次线性扫（O(V) 行级、无逐条 SQL）；动态段每 turn 恰
+ * 一次全表扫（topDomainIndexOf 供数径），无逐条查询放大——上界 = 库内全部版本行数
+ * （V）与全部条目行数（E），SQLite prepared 语句常驻。
+ */
+export function collectEntryIdsUnderDir(
+  versionRows: readonly { readonly id: string; readonly file_path: string }[],
+  knowledgeDir: string,
+): Set<string> {
+  const dirPosix = knowledgeDir.replace(/[\\/]+$/, '')
+  const ids = new Set<string>()
+  for (const v of versionRows) {
+    if (v.file_path.startsWith(`${dirPosix}/`) || v.file_path.startsWith(`${dirPosix}\\`)) ids.add(v.id)
+  }
+  return ids
+}
+
 // ── stage③ C2：动态段顶域计数（提案 §2.2 计数口径——每 turn 实时聚合，免缓存） ──
 
 /** 顶域计数行（动态域索引段 text 函数消费） */
@@ -236,13 +257,10 @@ export function topDomainIndexOf(db: Database.Database, wsPath: string): TopDoma
     .prepare<[string], { knowledge_dir: string }>(`SELECT knowledge_dir FROM knowledge_registry WHERE ws_path = ?`)
     .get(canonicalWsPath(wsPath))
   if (row === undefined) return []
-  const dirPosix = row.knowledge_dir.replace(/[\\/]+$/, '')
-  const ids = new Set<string>()
-  for (const v of db
-    .prepare<unknown[], { id: string; file_path: string }>(`SELECT id, file_path FROM knowledge_entry_versions`)
-    .all()) {
-    if (v.file_path.startsWith(`${dirPosix}/`) || v.file_path.startsWith(`${dirPosix}\\`)) ids.add(v.id)
-  }
+  const ids = collectEntryIdsUnderDir(
+    db.prepare<unknown[], { id: string; file_path: string }>(`SELECT id, file_path FROM knowledge_entry_versions`).all(),
+    row.knowledge_dir,
+  )
   const counts = new Map<string, number>()
   for (const e of db
     .prepare<unknown[], { id: string; status: string; merged_into: string | null; domain: string }>(

@@ -306,11 +306,15 @@ export type KnowledgeRevertOutcome =
       readonly detail: string
     }
 
-/** 回流配置面（§2.4：阈值归插件 config，非代码常量） */
+/** 回流配置面（§2.4：阈值归插件 config，非代码常量）。
+ *  分阈迁移提示（stage③ C1 跨内核校准）：两档阈值缺省已由旧词面核 1 校准为 0.25
+ *  （BM25 三因子分值域不同档位）——profile config 中已显式写入旧值 1 的存量配置
+ *  不自动迁移（config 显式值优先于缺省），需手工改 0.25，否则回流闸在 BM25 分值域
+ *  恒不命中（阈值形同关闭）。 */
 export interface BackflowConfig {
-  /** 冲突隔离档（0.4）回流的检索分阈值（score×rank 归一） */
+  /** 冲突隔离档（0.4）回流的检索分阈值（score×rank 归一；缺省 0.25——旧值 1 不随迁，见接口注释迁移提示） */
   readonly conflictThreshold?: number
-  /** superseded 档（0.2）回流的检索分阈值 */
+  /** superseded 档（0.2）回流的检索分阈值（缺省 0.25——同上迁移提示） */
   readonly supersededThreshold?: number
   /** 每对（新旧版）回流次数上限（滞回——默认 2） */
   readonly maxPerPair?: number

@@ -8,7 +8,7 @@
 // 不依赖模型凭据）；profile 物化机械（paths/presets/overlay）真机面 skip 留痕。
 // 面③不一致已消解：fix-2（659ab59a）落地 registerProject 第九法 + knowledge-register
 //   事件域（storage/diag.ts）——skip 解除，落真断言（成败两径）。
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -170,6 +170,81 @@ describe('CT-isolated-profile-2（J3-2：重复装配幂等）', () => {
 
     // 注册表行数不变（零重复注册行——幂等；常规路径零注册行，无迁移源）
     expect(registryRowCount(dbFile)).toBe(0)
+  })
+})
+
+// 评审 Major 补强：装配→订阅→注册全链断言——fakeCtx 派发 agent/created 后断言两段
+// 实际落位（非仅订阅计数）；兼作 F1（1.7 真机发现）回归锚：注册径触发 rebuild，
+// 绑定会话首 turn 动态段非空（不经 listEntries 静默重建）。
+describe('CT-isolated-profile-1 补强（agent/created 派发全链——两段实际落位）', () => {
+  it('success：注册库在场时派发 agent/created → 该会话 scope 两段 910/911 落位且 text 实值非空；首 turn 动态段含顶域行（F1 注册径 rebuild）', async () => {
+    const root = tmpRoot()
+    const dbFile = join(root, 'knowledge', 'knowledge.db')
+    const ws = join(root, 'ws')
+    mkdirSync(join(ws, '.knowledge', 'frontend'), { recursive: true })
+    writeFileSync(
+      join(ws, '.knowledge', 'frontend', 'ui-token-anchor.md'),
+      [
+        '---',
+        'title: UI 令牌取值锚',
+        'summary: 取色/字/距按 DESIGN.md 令牌表，不凭记忆猜值',
+        'keywords:',
+        '  - ui',
+        '  - token',
+        'status: unconfirmed',
+        'id: ui-token-anchor',
+        'version_ts: \'2026-11-05T00:00:00.000Z\'',
+        '---',
+        '',
+      ].join('\n'),
+      'utf8',
+    )
+    const { ctx, provides, agentCreated, sections } = fakeCtx()
+    const dispose = knowledgePlugin(ctx, {
+      dbFile,
+      projects: [{ wsPath: ws, projectId: 'p-iso-chain' }],
+    })
+    expect(agentCreated).toHaveLength(1)
+
+    // 注册径（F1：触发入库 rebuild——首 turn 动态段供数就位）
+    const service = provides.get(KNOWLEDGE_SERVICE_KEY) as KnowledgeService & {
+      registerProject: (input: { wsPath: string; projectId?: string }) => Promise<void>
+    }
+    await expect(service.registerProject({ wsPath: ws, projectId: 'p-iso-chain' })).resolves.toBeUndefined()
+
+    // 派发 agent/created（绑定 cwd + agent-scoped systemPrompt 捕获面）→ 两段落位
+    const scoped: KnowledgePromptSection[] = []
+    const agent = {
+      session: { id: 's-iso', header: { cwd: ws } },
+      ctx: { systemPrompt: { section: (s: KnowledgePromptSection) => (scoped.push(s), () => {}) } },
+    }
+    for (const h of agentCreated) h({ agent: agent as never })
+    expect(sections).toEqual([]) // 根级零全局段（scoped 接线锚）
+    expect(scoped.map((s) => s.name)).toEqual(['forge:knowledge', 'forge:knowledge-domains'])
+    expect(scoped[0]?.order).toBe(910)
+    expect(scoped[1]?.order).toBe(911)
+    expect((scoped[0]!.text as () => string)()).toContain('<knowledge-base>')
+    // 首 turn 动态段非空（F1：注册径 rebuild 已入库，零 listEntries 调用）
+    expect((scoped[1]!.text as () => string)()).toContain('- frontend(1 entry) — <无简介>')
+    dispose()
+  })
+
+  it('对照：未绑定 cwd 派发 agent/created → 该会话 scope 零段落位', () => {
+    const root = tmpRoot()
+    const ws = join(root, 'ws')
+    const { ctx, agentCreated } = fakeCtx()
+    const dispose = knowledgePlugin(ctx, {
+      dbFile: join(root, 'knowledge', 'knowledge.db'),
+      projects: [{ wsPath: ws, projectId: 'p-iso-unbound' }],
+    })
+    const scoped: KnowledgePromptSection[] = []
+    const agent = {
+      session: { id: 's-x', header: { cwd: join(root, 'elsewhere') } },
+      ctx: { systemPrompt: { section: (s: KnowledgePromptSection) => (scoped.push(s), () => {}) } },
+    }
+    for (const h of agentCreated) h({ agent: agent as never })
+    expect(scoped).toEqual([])
+    dispose()
   })
 })
 

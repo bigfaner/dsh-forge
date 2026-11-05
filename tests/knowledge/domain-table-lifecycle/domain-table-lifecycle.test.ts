@@ -106,7 +106,7 @@ function domainRows(db: Database.Database, wsPath?: string): DomainRow[] {
 }
 
 const rowKeys = (rows: readonly DomainRow[]): readonly (readonly string[])[] =>
-  rows.map((r) => [r.ws_path, r.domain, r.description, r.updated_at])
+  rows.map((r) => [r.ws_path, r.domain, r.description ?? '<NULL>', r.updated_at])
 
 // ── CT-domain-table-lifecycle-01 对账三径（DL-G1/G3/G4/G5/DL-E7） ──
 

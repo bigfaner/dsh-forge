@@ -8,7 +8,7 @@ import {
   KNOWLEDGE_SECTION_NAME,
   KNOWLEDGE_SECTION_ORDER,
 } from '../prompt/index.js'
-import { registerKnowledgeScopedPrompt } from './session-prompt.js'
+import { bindKnowledgePromptSections, registerKnowledgeScopedPrompt } from './session-prompt.js'
 import type { KnowledgePromptSection, ScopedAgentFace } from '../tools/faces.js'
 import type { TopDomainStat } from './internal.js'
 
@@ -121,6 +121,29 @@ describe('订阅生命周期', () => {
     const r = mount()
     r.dispose()
     expect(r.off()).toBe(1)
+  })
+})
+
+describe('bindKnowledgePromptSections disposer 锚（评审 Minor 补强）', () => {
+  it('返回的 disposer 注销两段：静态/动态各恰注册一次、注销一次', () => {
+    const ops: string[] = []
+    const systemPrompt = {
+      section: (s: KnowledgePromptSection) => {
+        ops.push(`reg:${s.name}`)
+        return () => {
+          ops.push(`off:${s.name}`)
+        }
+      },
+    }
+    const dispose = bindKnowledgePromptSections(systemPrompt, { isRegistered: () => true, topDomains: () => [] }, WS)
+    expect(ops).toEqual([`reg:${KNOWLEDGE_SECTION_NAME}`, `reg:${KNOWLEDGE_DOMAINS_SECTION_NAME}`])
+    dispose()
+    expect(ops).toEqual([
+      `reg:${KNOWLEDGE_SECTION_NAME}`,
+      `reg:${KNOWLEDGE_DOMAINS_SECTION_NAME}`,
+      `off:${KNOWLEDGE_SECTION_NAME}`,
+      `off:${KNOWLEDGE_DOMAINS_SECTION_NAME}`,
+    ])
   })
 })
 

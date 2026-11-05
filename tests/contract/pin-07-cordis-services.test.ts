@@ -174,7 +174,7 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
     }
   })
 
-  it('inject 消费全链路（1.7 A2 后形态：knowledge 零 core 依赖）：knowledge 插件注入两官方面 → 自有 knowledge 服务 provide + 六 tool 注册 + forge:knowledge 段入真实装配', async () => {
+  it('inject 消费全链路（1.7 A2 后形态：knowledge 零 core 依赖）：knowledge 插件注入两官方面 → 自有 knowledge 服务 provide + 六 tool 注册 + 提示词两段 scoped 接线（根级零全局段——stage③ 裁决 #9）', async () => {
     const { ctx, sys, tools } = await bootRuntime()
     try {
       ctx.reflect.provide('workspaceRegistry', registryStub())
@@ -194,7 +194,10 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
         'knowledge_reinstate',
       ])
       const assembly = await sys.assemble()
-      expect(assembly.sections.map((s) => s.name)).toContain('forge:knowledge')
+      // stage③ C2 裁决 #9：装配期零全局段——forge:knowledge 两段改走 agent/created
+      // scoped 注册（绑定会话才注入）；根级装配面不出现（scoped 全链断言由
+      // knowledge-isolated-profile-assembly 旅程承载）
+      expect(assembly.sections.map((s) => s.name)).not.toContain('forge:knowledge')
     } finally {
       await ctx.fiber.dispose()
     }
