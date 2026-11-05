@@ -12,7 +12,16 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { KNOWLEDGE_CHANNELS, type EntryDetail, type KnowledgeCard, type RecallGroup } from '@dsh-forge/contracts'
+import {
+  KNOWLEDGE_CHANNELS,
+  type EntryActionRequest,
+  type EntryDetail,
+  type EntryDetailQuery,
+  type KnowledgeCard,
+  type ListEntriesQuery,
+  type RecallGroup,
+  type SessionRecallQuery,
+} from '@dsh-forge/contracts'
 // 插件源码相对引入（测试面专用——见文件头注）
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../../packages/plugins/knowledge/src/storage/index.js'
 import { createKnowledgeService } from '../../../../packages/plugins/knowledge/src/service/index.js'
@@ -57,6 +66,8 @@ const groups: RecallGroup[] = [
   { callId: 'call-1', verb: 'search', query: { keywords: ['react'] }, hitCount: 1, durationMs: 5, createdAt: '2026-10-01T00:00:00.000Z', hits: [{ entryId: 1, frontmatterId: null, title: '框架选型', domainPath: '前端', heat: 2 }] },
 ]
 
+const receiptOk = (entryIds: number[]) => ({ results: entryIds.map((entryId) => ({ entryId, outcome: 'success' as const })) })
+
 function fakeKnowledgeService() {
   return {
     browse: vi.fn().mockResolvedValue(domainNodes),
@@ -64,6 +75,12 @@ function fakeKnowledgeService() {
     getEntryDetail: vi.fn().mockResolvedValue(detail),
     heatByEntry: vi.fn().mockResolvedValue(heatMap),
     sessionRecall: vi.fn().mockResolvedValue(groups),
+    // knowledge-review-ui 1.6：人工裁决写面五法（entryAction 通道分派目标）
+    confirmBatch: vi.fn().mockResolvedValue(receiptOk([]).results),
+    rejectBatch: vi.fn().mockResolvedValue(receiptOk([]).results),
+    moveEntry: vi.fn().mockResolvedValue({ entryId: 1, outcome: 'success' }),
+    updateEntry: vi.fn().mockResolvedValue({ entryId: 1, outcome: 'success' }),
+    createDomain: vi.fn().mockResolvedValue({ outcome: 'success' }),
   } satisfies KnowledgeChannelService
 }
 
@@ -176,6 +193,109 @@ describe('3.5 AC1 五通道端到端（替身层）', () => {
   })
 })
 
+// ── knowledge-review-ui 1.6：entryAction 第六通道（人工裁决写面——host 只 wiring）──
+
+describe('1.6 entryAction 通道：注册面 + 五分支纯透传分派（AC3 键键对应）', () => {
+  function setup() {
+    const { ipcMain, handlers } = fakeIpcMain()
+    const ipc = createForgeIpc(ipcMain)
+    const service = fakeKnowledgeService()
+    registerKnowledgeChannels(ipc, service)
+    return { service, call: (channel: string, payload?: unknown) => invoke(handlers, channel, payload) }
+  }
+
+  it('注册面 = contracts KNOWLEDGE_CHANNELS 全集六通道（无多无少——entryAction 在列）', () => {
+    const { ipcMain, handlers } = fakeIpcMain()
+    const ipc = createForgeIpc(ipcMain)
+    registerKnowledgeChannels(ipc, fakeKnowledgeService())
+    expect([...ipc.registered()].sort()).toEqual(Object.values(KNOWLEDGE_CHANNELS).slice().sort())
+    expect(handlers.has(KNOWLEDGE_CHANNELS.entryAction)).toBe(true)
+  })
+
+  it('confirm：批量透传 → confirmBatch({projectId, entryIds}) → EntryActionReceipt', async () => {
+    const { service, call } = setup()
+    service.confirmBatch.mockResolvedValue(receiptOk([1, 2, 3]).results)
+    const q: EntryActionRequest = { projectId: 'p-1', action: 'confirm', entryIds: [1, 2, 3] }
+    await expect(call(KNOWLEDGE_CHANNELS.entryAction, q)).resolves.toEqual({ ok: true, data: { results: receiptOk([1, 2, 3]).results } })
+    expect(service.confirmBatch).toHaveBeenCalledWith({ projectId: 'p-1', entryIds: [1, 2, 3] })
+    expect(service.rejectBatch).not.toHaveBeenCalled()
+  })
+
+  it('reject：批量透传 → rejectBatch({projectId, entryIds}) → EntryActionReceipt', async () => {
+    const { service, call } = setup()
+    service.rejectBatch.mockResolvedValue([
+      { entryId: 2, outcome: 'failure', code: 'rejected-confirmed', message: '已 confirmed' },
+    ])
+    const q: EntryActionRequest = { projectId: 'p-1', action: 'reject', entryIds: [2] }
+    await expect(call(KNOWLEDGE_CHANNELS.entryAction, q)).resolves.toEqual({
+      ok: true,
+      data: { results: [{ entryId: 2, outcome: 'failure', code: 'rejected-confirmed', message: '已 confirmed' }] },
+    })
+    expect(service.rejectBatch).toHaveBeenCalledWith({ projectId: 'p-1', entryIds: [2] })
+  })
+
+  it('move：单条解包 → moveEntry({projectId, entryId, targetDomain}) → 逐条回执', async () => {
+    const { service, call } = setup()
+    service.moveEntry.mockResolvedValue({ entryId: 7, outcome: 'success' })
+    const q: EntryActionRequest = { projectId: 'p-1', action: 'move', entryIds: [7], targetDomain: '编程/java' }
+    await expect(call(KNOWLEDGE_CHANNELS.entryAction, q)).resolves.toEqual({ ok: true, data: { results: [{ entryId: 7, outcome: 'success' }] } })
+    expect(service.moveEntry).toHaveBeenCalledWith({ projectId: 'p-1', entryId: 7, targetDomain: '编程/java' })
+  })
+
+  it('editMeta：单条解包 → updateEntry({projectId, entryId, title, keywords, summary, body}) → 逐条回执', async () => {
+    const { service, call } = setup()
+    service.updateEntry.mockResolvedValue({ entryId: 3, outcome: 'success' })
+    const q: EntryActionRequest = {
+      projectId: 'p-1', action: 'editMeta', entryIds: [3],
+      title: '新标题', keywords: ['a'], summary: '新摘要', body: '新正文',
+    }
+    await expect(call(KNOWLEDGE_CHANNELS.entryAction, q)).resolves.toEqual({ ok: true, data: { results: [{ entryId: 3, outcome: 'success' }] } })
+    expect(service.updateEntry).toHaveBeenCalledWith({ projectId: 'p-1', entryId: 3, title: '新标题', keywords: ['a'], summary: '新摘要', body: '新正文' })
+  })
+
+  it('createDomain：树级透传 → createDomain({projectId, domain}) → outcome 直返', async () => {
+    const { service, call } = setup()
+    const q: EntryActionRequest = { projectId: 'p-1', action: 'createDomain', domain: '编程/java' }
+    await expect(call(KNOWLEDGE_CHANNELS.entryAction, q)).resolves.toEqual({ ok: true, data: { outcome: 'success' } })
+    expect(service.createDomain).toHaveBeenCalledWith({ projectId: 'p-1', domain: '编程/java' })
+  })
+
+  it('请求级拒收：批量空数组 / move·editMeta 条数 ≠ 恰 1 → invalid-request 且服务法零调用', async () => {
+    const { service, call } = setup()
+    await expect(call(KNOWLEDGE_CHANNELS.entryAction, { projectId: 'p-1', action: 'confirm', entryIds: [] })).resolves.toEqual({
+      ok: true, data: { outcome: 'rejected-request', code: 'invalid-request', message: expect.any(String) },
+    })
+    await expect(call(KNOWLEDGE_CHANNELS.entryAction, { projectId: 'p-1', action: 'move', entryIds: [1, 2], targetDomain: 'x' })).resolves.toMatchObject({ data: { code: 'invalid-request' } })
+    await expect(call(KNOWLEDGE_CHANNELS.entryAction, { projectId: 'p-1', action: 'editMeta', entryIds: [], title: 't', keywords: [], summary: 's', body: 'b' })).resolves.toMatchObject({ data: { code: 'invalid-request' } })
+    expect(service.confirmBatch).not.toHaveBeenCalled()
+    expect(service.rejectBatch).not.toHaveBeenCalled()
+    expect(service.moveEntry).not.toHaveBeenCalled()
+    expect(service.updateEntry).not.toHaveBeenCalled()
+    expect(service.createDomain).not.toHaveBeenCalled()
+  })
+
+  it('缺席态同语义：服务缺席 = 六通道整体不挂（entryAction 与现役五通道同判定缝）', () => {
+    const absent = fakeIpcMain()
+    const absentIpc = createForgeIpc(absent.ipcMain)
+    const missing: KnowledgeChannelService | undefined = undefined
+    if (missing !== undefined) registerKnowledgeChannels(absentIpc, missing)
+    expect(absent.handlers.has(KNOWLEDGE_CHANNELS.entryAction)).toBe(false)
+  })
+
+  it('既有五通道负载映射零漂移（typed 参数锚——ListEntriesQuery/EntryDetailQuery/SessionRecallQuery 仍键键对应）', async () => {
+    const { service, call } = setup()
+    const lq: ListEntriesQuery = { projectId: 'p-1', domainPrefix: '前端', keyword: 'react' }
+    await call(KNOWLEDGE_CHANNELS.listEntries, lq)
+    expect(service.listEntries).toHaveBeenCalledWith(lq)
+    const dq: EntryDetailQuery = { projectId: 'p-1', entryId: 1 }
+    await call(KNOWLEDGE_CHANNELS.entryDetail, dq)
+    expect(service.getEntryDetail).toHaveBeenCalledWith(dq)
+    const sq: SessionRecallQuery = { projectId: 'p-1', sessionId: 'sess-1' }
+    await call(KNOWLEDGE_CHANNELS.sessionRecall, sq)
+    expect(service.sessionRecall).toHaveBeenCalledWith(sq)
+  })
+})
+
 // ── 实层：core 知识域真身 × 真实注册组合 ──
 
 const dirs: string[] = []
@@ -238,8 +358,8 @@ describe('3.5 AC1 实层：五通道真身实跑', () => {
     expect(browse).toEqual({
       ok: true,
       data: [
-        { domainPath: '前端', label: '前端', depth: 1, entryCount: 2 },
-        { domainPath: '后端', label: '后端', depth: 1, entryCount: 1 },
+        { domainPath: '前端', label: '前端', depth: 1, entryCount: 2, unconfirmedCount: 2 },
+        { domainPath: '后端', label: '后端', depth: 1, entryCount: 1, unconfirmedCount: 1 },
       ],
     })
 
@@ -266,6 +386,40 @@ describe('3.5 AC1 实层：五通道真身实跑', () => {
     expect(recallData).toHaveLength(1) // 单 call 分组
     expect(recallData[0]).toMatchObject({ verb: 'search', hitCount: 2 })
     expect(recallData[0]!.hits.every((h) => h.heat === 1)).toBe(true) // 分组行热度徽章 = heat 同源
+    f.db.close()
+  })
+})
+
+describe('1.6 entryAction 实层：真身实跑（confirm 升格端到端）', () => {
+  it('entryAction confirm：unconfirmed rowid → 单事务升格 → DB status=confirmed（web 径 = 插件域供数，host 零解析）', async () => {
+    const f = realFixture()
+    // 播种：listEntries 触发惰性建索引（entries 行在场）——再读 rowid 集
+    await f.call(KNOWLEDGE_CHANNELS.listEntries, { projectId: f.projectId })
+    const rows = f.db.prepare<unknown[], { rid: number; status: string }>(
+      'SELECT rowid AS rid, status FROM knowledge_entries ORDER BY rowid',
+    ).all()
+    expect(rows.length).toBeGreaterThan(0)
+    const envelope = await f.call(KNOWLEDGE_CHANNELS.entryAction, {
+      projectId: f.projectId, action: 'confirm', entryIds: rows.map((r) => r.rid),
+    })
+    expect(envelope).toEqual({
+      ok: true,
+      data: { results: rows.map((r) => ({ entryId: r.rid, outcome: 'success' })) },
+    })
+    const after = f.db.prepare<unknown[], { status: string }>(
+      'SELECT status FROM knowledge_entries',
+    ).all()
+    expect(after.every((r) => r.status === 'confirmed')).toBe(true)
+    f.db.close()
+  })
+
+  it('entryAction 请求级拒收实层：confirm 空数组 → invalid-request（库零变化）', async () => {
+    const f = realFixture()
+    await f.call(KNOWLEDGE_CHANNELS.listEntries, { projectId: f.projectId }) // 播种建索引
+    const envelope = await f.call(KNOWLEDGE_CHANNELS.entryAction, { projectId: f.projectId, action: 'confirm', entryIds: [] })
+    expect(envelope).toMatchObject({ data: { outcome: 'rejected-request', code: 'invalid-request' } })
+    const before = f.db.prepare<unknown[], { n: number }>('SELECT COUNT(*) AS n FROM knowledge_entries').get()
+    expect(before!.n).toBe(3)
     f.db.close()
   })
 })
