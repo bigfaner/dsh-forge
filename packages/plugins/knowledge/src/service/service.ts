@@ -31,6 +31,7 @@ import { rebuildKnowledgeIndex } from '../storage/rebuild.js'
 import { InvalidKnowledgeDirError as StorageInvalidKnowledgeDirError } from '../storage/scan.js'
 import {
   KNOWLEDGE_BACKFLOW_EVENT,
+  KNOWLEDGE_DOMAIN_UPDATE_EVENT,
   KNOWLEDGE_REGISTER_EVENT,
   emitStorageDiag,
   storageDiag,
@@ -39,12 +40,16 @@ import {
 import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from './errors.js'
 import {
   aggregateDomainTree,
+  buildKeywordAdmissionMatch,
+  buildSearchFtsMatch,
+  composeSearchScore,
   escapeLike,
   groupRecallRows,
   isNonEmptyString,
   normalizeUpdated,
   prepareHeatByEntry,
-  rankEntries,
+  textSubstringHit,
+  validateDomainPath,
   type RecallRow,
 } from './internal.js'
 import { createWriteGateway } from './write.js'
@@ -63,6 +68,7 @@ import type {
   ReadAbstractQuery,
   SearchHit,
   SearchQuery,
+  SetDomainDescriptionQuery,
 } from './types.js'
 
 /** 服务工厂入参 */
@@ -144,12 +150,17 @@ interface BackflowPairState {
   windowStart: number
 }
 
-/** 回流滞回缺省（每对 2 次 / 24h 冷却——§2.4 裁决 9；分阈缺省 = 检索分下限） */
+/**
+ * 回流滞回缺省（每对 2 次 / 24h 冷却——§2.4 裁决 9）。分阈跨内核校准（stage③ C1）：
+ * 旧词面核 score 为整权词面计分（词命中 ≥2），旧缺省 1 即「词面命中」档；BM25 三因子
+ * 核 score = norm(bm25)×rank 因子 + 热度加分（典型关键词命中行 norm≈0.3–0.7），0.25
+ * 对应「词面命中且 rank≥0.4」档回流——闸位语义（限次+冷却）原样，仅分阈随核校准。
+ */
 const DEFAULT_BACKFLOW = {
   maxPerPair: 2,
   cooldownMs: 24 * 60 * 60 * 1000,
-  conflictThreshold: 1,
-  supersededThreshold: 1,
+  conflictThreshold: 0.25,
+  supersededThreshold: 0.25,
 }
 
 /**
@@ -262,6 +273,16 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
   const selectSessionRows = db.prepare<[string, string], RecallRow>(
     `SELECT call_id, verb, entry_id, frontmatter_id, title_snap, domain_snap, query_json, hit_count, duration_ms, created_at
       FROM knowledge_recall_logs WHERE project_id = ? AND session_id = ? ORDER BY created_at, id`,
+  )
+  // stage③ C1：FTS5 BM25 检索面（仅元数据列——knowledge_fts 列面 = title/keywords/summary，
+  // 裁决 #8 声明边界：正文不进检索面，缺失由 knowledge_read/grep 兜底）
+  const selectFtsBm25 = db.prepare<[string], { id: string; bm25: number }>(
+    `SELECT id, bm25(knowledge_fts) AS bm25 FROM knowledge_fts WHERE knowledge_fts MATCH ?`,
+  )
+  // stage③ C2：域简介 upsert（KNOWLEDGE_DOMAINS——setDomainDescription 单写径）
+  const upsertDomainDescription = db.prepare<[string, string, string, string]>(
+    `INSERT INTO knowledge_domains (ws_path, domain, description, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(ws_path, domain) DO UPDATE SET description = excluded.description, updated_at = excluded.updated_at`,
   )
 
   /** 一次调用的事务原子写入：N 命中 N 行；零命中 = 单哨兵行（entry_id NULL / hit_count 0 / 快照 NULL） */
@@ -469,13 +490,50 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
             : selectRows(selectByDomain, knowledgeDir, prefix, prefix, `${escapeLike(prefix)}/%`)
       }
 
-      const rankable = rows.map((r) => ({ rid: r.rid, id: r.id, title: r.title, summary: r.summary, domain_path: r.domain_path, status: r.status, effective_rank: r.effective_rank, confirmed_version_id: r.confirmed_version_id, keywords: splitKeywords(r.keywords), entryId: r.rid }))
-      const ranked = rankEntries(rankable, q)
+      // ── stage③ C1：FTS5 BM25 三因子排序（裁决 #2/#10——内核切换，准入语义原样） ──
+      // 通道语义：keywords = keywords 列逐词 AND（FTS phrase，等价旧精确 AND）；
+      // text = FTS 词元 AND ∪ JS 子串补充通道（CJK run 单 token 边界——internal.ts 注释）。
+      const queryKeywords = (q.keywords ?? [])
+        .map((k) => k.trim().toLowerCase())
+        .filter((k) => k !== '')
+      const text = q.text?.trim() ?? ''
+      const ftsIdsOf = (match: string): ReadonlyMap<string, number> => {
+        try {
+          return new Map(selectFtsBm25.all(match).map((r) => [r.id, r.bm25] as const))
+        } catch {
+          return new Map() // MATCH 语法异常（空词面等）= 词面通道零候选，不硬拒
+        }
+      }
+      const combined = buildSearchFtsMatch({ keywords: q.keywords, text: q.text })
+      const combinedBm25 = combined === undefined ? new Map<string, number>() : ftsIdsOf(combined)
+      const keywordMatch = buildKeywordAdmissionMatch(q.keywords)
+      const keywordBm25 =
+        keywordMatch === undefined ? new Map<string, number>() : ftsIdsOf(keywordMatch)
+      const textMatch = text === '' ? undefined : buildSearchFtsMatch({ text: q.text })
+      const textBm25 = textMatch === undefined ? new Map<string, number>() : ftsIdsOf(textMatch)
+
+      const heatByEntry = new Map(selectHeatByEntry.all(q.projectId).map((r) => [r.entry_id, r.heat] as const))
+      const scored: { entry: EntryRow; score: number }[] = []
+      for (const r of rows) {
+        // 准入通道（缺省通道维度恒过）
+        if (queryKeywords.length > 0 && !keywordBm25.has(r.id)) continue
+        if (text !== '' && !textBm25.has(r.id) && !textSubstringHit(r.title, r.summary, text)) continue
+        // 三因子：bm25 取整查询（keywords∧text）命中面；仅子串通道命中行缺位 → 中性分
+        const bm25 = combinedBm25.get(r.id)
+        const score = composeSearchScore({
+          ...(bm25 !== undefined ? { bm25 } : {}),
+          effectiveRank: r.effective_rank,
+          heat: heatByEntry.get(r.rid) ?? 0,
+        })
+        scored.push({ entry: r, score })
+      }
+      scored.sort((a, b) => b.score - a.score || a.entry.rid - b.entry.rid)
+
       const admitted: { entry: HitSource; score: number }[] = []
-      for (const { entry, score } of ranked) {
+      for (const { entry, score } of scored) {
         // 条件式召回排除（裁决 #10）：同 id 有 confirmed 版时 unconfirmed 权威投影不进召回
         if (entry.status === 'unconfirmed' && entry.confirmed_version_id !== null) continue
-        // 0.4/0.2 两档 = 回流对象（滞回闸放行才进召回）
+        // 0.4/0.2 两档 = 回流对象（滞回闸放行才进召回；分阈跨内核校准见 DEFAULT_BACKFLOW 注）
         if (entry.effective_rank <= 0.4) {
           if (!backflowGate(entry.id, entry.effective_rank, score)) continue
         }
@@ -619,6 +677,33 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     },
 
     registerKnowledge: (q) => scanRegister.registerKnowledge(q),
+
+    // ── stage③ §2.2 C2：域简介写径（服务方法非 tool；校验与 write 严契约同源） ──
+    async setDomainDescription(q: SetDomainDescriptionQuery): Promise<void> {
+      const rejectMsg = (detail: string): never => {
+        emitStorageDiag(
+          emit,
+          storageDiag('warn', KNOWLEDGE_DOMAIN_UPDATE_EVENT, `域简介写入拒收：${detail}`, { cwd: q.wsPath }),
+        )
+        throw new Error(`setDomainDescription 拒收：${detail}`)
+      }
+      const invalid = validateDomainPath(q.domain)
+      if (invalid !== undefined) rejectMsg(invalid)
+      if (typeof q.description !== 'string' || q.description.trim() === '') {
+        rejectMsg('简介缺失（非空一句）')
+      }
+      const ws = canonicalWsPath(q.wsPath)
+      const row = selectRegistryRow.get(ws)
+      if (row === undefined) rejectMsg(`工作区未注册：${ws}`)
+      const updatedAt = new Date().toISOString()
+      withImmediateTransaction(db, () => {
+        upsertDomainDescription.run(ws, q.domain, q.description, updatedAt)
+      })
+      emitStorageDiag(
+        emit,
+        storageDiag('info', KNOWLEDGE_DOMAIN_UPDATE_EVENT, `域简介落表：${ws} / ${q.domain}`, { cwd: ws }),
+      )
+    },
 
     supersedeEntry: async (q) => {
       const { knowledgeDir } = requireProject(q.projectId, 'supersedeEntry')

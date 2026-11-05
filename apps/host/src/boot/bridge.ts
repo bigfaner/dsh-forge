@@ -309,6 +309,7 @@ export const KNOWLEDGE_SERVICE_METHODS = [
   'registerKnowledge',
   'supersedeEntry',
   'reinstateEntry',
+  'setDomainDescription',
 ] as const satisfies readonly (keyof BrowseKnowledgeService)[]
 
 /** 白名单覆盖完备性（= never：缺席的 BrowseKnowledgeService 方法在此编译期点名） */

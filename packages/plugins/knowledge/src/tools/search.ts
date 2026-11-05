@@ -49,12 +49,25 @@ function renderHit(hit: SearchHit): string {
   return `- [${hit.domainPath}] ${hit.title} (${id}, score ${hit.score.toFixed(2)}, rank ${hit.effectiveRank.toFixed(1)}) — ${hit.summary}`
 }
 
-/** SearchHit 数组 → 模型可见文本（零命中显式声明 + 收窄查询自纠提示，供 agent 决策回落检索原语） */
-function renderHits(_args: unknown, value: unknown): readonly { type: 'text'; text: string }[] {
+/** 查询回显行（诚实回执——回显查询词与过滤条件，零兜底：不注入建议，后续动作 agent 自行判断） */
+function searchEcho(args: unknown): string {
+  const parts: string[] = []
+  if (typeof args === 'object' && args !== null) {
+    const a = args as Record<string, unknown>
+    if (a.domain_prefix !== undefined) parts.push(`domain_prefix="${String(a.domain_prefix)}"`)
+    if (a.keywords !== undefined) parts.push(`keywords=${JSON.stringify(a.keywords)}`)
+    if (a.text !== undefined) parts.push(`text="${String(a.text)}"`)
+    if (a.limit !== undefined) parts.push(`limit=${String(a.limit)}`)
+  }
+  return parts.length > 0 ? parts.join(', ') : 'no filters (all domains)'
+}
+
+/** SearchHit 数组 → 模型可见文本（零命中诚实回执：空结果 + 查询回显 + 未命中明示，零兜底） */
+function renderHits(args: unknown, value: unknown): readonly { type: 'text'; text: string }[] {
   const hits = value as readonly SearchHit[]
   const body =
     hits.length === 0
-      ? '(no knowledge entries matched — try a shorter query first: a single keyword tag or one short text term; then fall back to regular retrieval such as grep/glob)'
+      ? `No knowledge entries matched (zero hits). Query: ${searchEcho(args)}. Zero hits means zero hits — no fallback was performed.`
       : hits.map(renderHit).join('\n')
   return [{ type: 'text', text: body }]
 }
@@ -83,7 +96,7 @@ export function createSearchTool(deps: KnowledgeToolDeps): KnowledgeToolDefiniti
   return {
     name: 'knowledge_search',
     description:
-      'Search the registered project knowledge base (summary-first). Omit domain_prefix to search all domains; combine with keywords or free text to narrow. Matching is strict — keyword tags must match an entry keyword exactly (AND) and text is a substring match — so keep queries short: start with one high-signal keyword or a short text term, then refine. Returns matching entries with title, summary, domain path, and score.',
+      'Search the registered project knowledge base (summary-first, ranked by BM25 relevance over title/keywords/summary metadata). Omit domain_prefix to search all domains; combine with keywords or free text to narrow. Matching is strict — keyword tags must match an entry keyword exactly (AND) and text terms must all appear — so keep queries short: start with one high-signal keyword or a short text term, then refine. Returns matching entries with title, summary, domain path, and score. Zero hits returns an honest empty receipt.',
     parameters: {
       type: 'object',
       properties: {

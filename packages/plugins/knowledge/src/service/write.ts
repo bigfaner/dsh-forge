@@ -12,7 +12,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import matter from 'gray-matter'
 import type Database from 'better-sqlite3'
 import { withImmediateTransaction } from '../storage/concurrency.js'
-import { parseKnowledgeFile, isSafeRelPath } from '../storage/index.js'
+import { parseKnowledgeFile } from '../storage/index.js'
 import { deriveEffectiveRank, normalizeTitleNorm } from '../storage/rebuild.js'
 import {
   KNOWLEDGE_CONFIRM_EVENT,
@@ -22,6 +22,7 @@ import {
   storageDiag,
   type DiagEmitter,
 } from '../storage/diag.js'
+import { validateDomainPath } from './internal.js'
 import type {
   KnowledgeConfirmOutcome,
   KnowledgeConfirmQuery,
@@ -234,11 +235,11 @@ function missingFieldOf(q: KnowledgeWriteQuery): string | undefined {
   return undefined
 }
 
-/** 域路径校验（缺省根域合法；非空域走 isSafeRelPath + dot 排除——CT-WG-03） */
+/** 域路径校验（缺省根域合法；非空域走 stage③ 共享校验 validateDomainPath——与
+ *  setDomainDescription 同一校验函数，≤3 层/≤500/字符集同口径） */
 function validDomain(domain: string | undefined): boolean {
   if (domain === undefined || domain === '') return true
-  if (domain.startsWith('.') || domain.split('/').some((s) => s.startsWith('.'))) return false
-  return isSafeRelPath(`${domain}/x.md`)
+  return validateDomainPath(domain) === undefined
 }
 
 /** version_ts → 文件名时间戳段（Windows 保留字符剥除，毫秒粒度保留） */

@@ -103,6 +103,9 @@ export interface KnowledgeService {
   /** 驳回逆向（actor=human）：loser 解除 redirect 恢复检索地位，winner 融合正文不回退；
     *  followups #1 重命名 2026-11-05：revertMerge → reinstateEntry */
   reinstateEntry(q: KnowledgeRevertQuery): Promise<KnowledgeRevertOutcome>
+  // ── stage③ §2.2 C2：域简介写径（服务方法非 tool——内部链/UI 提案消费） ──
+  /** 域简介 upsert（domain 校验与 write 严契约共用同一校验函数；成败两径 knowledge-domain-update 埋点） */
+  setDomainDescription(q: SetDomainDescriptionQuery): Promise<void>
 }
 
 /** Interface 2 + 第八法聚合面：KnowledgeService 七法 + browse 域树聚合（forge:knowledge/browse 通道 handler 本体）+ 注册行写入（第九法） */
@@ -313,6 +316,18 @@ export interface BackflowConfig {
   readonly maxPerPair?: number
   /** 回流冷却窗毫秒（默认 24h） */
   readonly cooldownMs?: number
+}
+
+// ── stage③ §2.2：域简介写径（KNOWLEDGE_DOMAINS upsert——服务方法非 tool） ──
+
+/** setDomainDescription 入参（域路径校验与 write 严契约同源：≤3 层/≤500/字符集） */
+export interface SetDomainDescriptionQuery {
+  /** 工作区路径（注册行 ws_path 键——canonical 化） */
+  readonly wsPath: string
+  /** 域相对路径（非根域；≤3 层） */
+  readonly domain: string
+  /** 域简介（一句；空白视为缺失拒收） */
+  readonly description: string
 }
 
 // ── stage② 1.6 存量收编：scan 体检 + register 注册（§2.5/§2.6——服务方法非 tool） ──

@@ -29,14 +29,25 @@ export type {
   RegisterProjectWrite,
   SearchHit,
   SearchQuery,
+  SetDomainDescriptionQuery,
 } from './types.js'
 export { KNOWLEDGE_TYPES } from './types.js'
 export { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError, type KnowledgeErrorData } from './errors.js'
 export {
   aggregateDomainTree,
+  bm25Norm,
+  buildKeywordAdmissionMatch,
+  buildSearchFtsMatch,
+  composeSearchScore,
   groupRecallRows,
+  heatBonusOf,
   rankEntries,
+  rankFactorOf,
+  textSubstringHit,
+  topDomainIndexOf,
+  validateDomainPath,
   type RecallRow,
+  type TopDomainStat,
 } from './internal.js'
 export {
   findMergeSuggestions,

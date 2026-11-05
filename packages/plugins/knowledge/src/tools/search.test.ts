@@ -97,7 +97,7 @@ describe('execute：会话上下文解析 → 服务调用 → DTO 透传', () =
 })
 
 describe('output.render（摘要先行投影）', () => {
-  it('命中行含域/标题/id/得分/摘要；零命中显式回落指引', () => {
+  it('命中行含域/标题/id/得分/摘要；零命中诚实回执（回显 + 未命中明示 + 零兜底）', () => {
     const { service } = stubService()
     const tool = createSearchTool(deps(service))
     const blocks = tool.output.render({}, [hit(), hit({ entryId: 8, frontmatterId: null, title: '网关', domainPath: '后端/api', score: 0.5, effectiveRank: 0.6 })])
@@ -105,8 +105,18 @@ describe('output.render（摘要先行投影）', () => {
     const text = blocks[0]?.text ?? ''
     expect(text).toContain('[后端] 安全编码规范 (kb-001, score 0.92, rank 1.0) — 输入校验基线')
     expect(text).toContain('[后端/api] 网关 (#8, score 0.50, rank 0.6)')
-    const empty = tool.output.render({}, [])
-    expect(empty[0]?.text).toContain('no knowledge entries matched')
-    expect(empty[0]?.text).toContain('grep')
+    // 诚实回执：查询词/过滤条件回显 + 未命中明示；零兜底（不注入建议词）
+    const empty = tool.output.render({ domain_prefix: '后端', keywords: ['认证'], text: '原子幂等', limit: 5 }, [])
+    const emptyText = empty[0]?.text ?? ''
+    expect(emptyText).toContain('No knowledge entries matched')
+    expect(emptyText).toContain('domain_prefix="后端"')
+    expect(emptyText).toContain('keywords=["认证"]')
+    expect(emptyText).toContain('text="原子幂等"')
+    expect(emptyText).toContain('limit=5')
+    expect(emptyText).toContain('zero hits')
+    expect(emptyText).not.toMatch(/try|suggest|such as grep/i)
+    // 无过滤维度回执：全域声明
+    const bare = tool.output.render({}, [])
+    expect(bare[0]?.text).toContain('no filters (all domains)')
   })
 })

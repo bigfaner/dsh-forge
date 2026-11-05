@@ -277,7 +277,7 @@ describe('写门三法（stage② §2.3/§2.4）', () => {
 
   it('回流：0.2/0.4 档命中经滞回闸（限次后拦截 + 震荡 warn 埋点区分误判/震荡）', async () => {
     const diag: DiagEventPayload[] = []
-    const svc = createKnowledgeService({ db, resolveWsPath: (id) => (id === projectId ? wsDir : undefined), emit: (p) => diag.push(p), backflow: { maxPerPair: 1, cooldownMs: 60_000, conflictThreshold: 1, supersededThreshold: 1 } })
+    const svc = createKnowledgeService({ db, resolveWsPath: (id) => (id === projectId ? wsDir : undefined), emit: (p) => diag.push(p), backflow: { maxPerPair: 1, cooldownMs: 60_000, conflictThreshold: 0.2, supersededThreshold: 0.2 } })
     // 构造 redirect 沉底档（merged_into → effective_rank 0.2——distill 归并 loser 形态）
     const w = await svc.write({
       projectId,
