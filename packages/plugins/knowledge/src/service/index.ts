@@ -44,10 +44,10 @@ export {
   rankEntries,
   rankFactorOf,
   textSubstringHit,
-  topDomainIndexOf,
+  domainTreeIndexOf,
   validateDomainPath,
+  type DomainIndexRow,
   type RecallRow,
-  type TopDomainStat,
 } from './internal.js'
 export {
   findMergeSuggestions,

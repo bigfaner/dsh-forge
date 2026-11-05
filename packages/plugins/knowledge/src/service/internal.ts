@@ -210,13 +210,13 @@ export function validateDomainPath(domain: string): string | undefined {
   return undefined
 }
 
-// ── 项目域归属单一助手（评审中：topDomainIndexOf 与 service.projectEntryIds 双写收敛） ──
+// ── 项目域归属单一助手（评审中：domainTreeIndexOf 与 service.projectEntryIds 双写收敛） ──
 
 /**
  * 域归属单一事实源：knowledge_dir 前缀匹配（任一版本文件落在 knowledge_dir 下即属
  * 该项目域——JS 侧 startsWith 双分隔符匹配，免 LIKE ESCAPE 转义域）。
  * 规模上界：对传入的版本行集单次线性扫（O(V) 行级、无逐条 SQL）；动态段每 turn 恰
- * 一次全表扫（topDomainIndexOf 供数径），无逐条查询放大——上界 = 库内全部版本行数
+ * 一次全表扫（domainTreeIndexOf 供数径），无逐条查询放大——上界 = 库内全部版本行数
  * （V）与全部条目行数（E），SQLite prepared 语句常驻。
  */
 export function collectEntryIdsUnderDir(
@@ -231,28 +231,31 @@ export function collectEntryIdsUnderDir(
   return ids
 }
 
-// ── stage③ C2：动态段顶域计数（提案 §2.2 计数口径——每 turn 实时聚合，免缓存） ──
+// ── stage③ C2：动态段域树计数（提案 §2.2 计数口径——每 turn 实时聚合，免缓存） ──
 
-/** 顶域计数行（动态域索引段 text 函数消费） */
-export interface TopDomainStat {
-  /** 顶域（domain 首段——JS 侧截取） */
-  readonly domain: string
-  /** 条目计数（confirmed + unconfirmed 计、superseded/redirect 不计） */
+/** 域树索引行（动态域索引段 text 函数消费——目录树渲染供数） */
+export interface DomainIndexRow {
+  /** 域全路径（如 `lessons/windows`——渲染取叶名，prefix = 父路径/叶名） */
+  readonly domainPath: string
+  /** 条目计数（confirmed + unconfirmed 计、superseded/redirect 不计；含子域） */
   readonly entryCount: number
-  /** 域简介（KNOWLEDGE_DOMAINS 联查；NULL = 无简介，动态段降级显示） */
+  /** 层级深度（顶域 = 1） */
+  readonly depth: number
+  /** 域简介（KNOWLEDGE_DOMAINS 全路径联查；NULL = 无简介，渲染省略该段） */
   readonly description: string | null
 }
 
 /**
- * 顶域索引（计数口径——提案 §2.2 评审补）：
+ * 域树索引（动态段供数单源——topDomainIndexOf 顶域截取退役）：
  * · 裁剪 = knowledge_entry_versions.file_path 落在该 ws_path 注册行知识目录前缀的
  *   条目 id 集（entries 全局表，registry 联裁至当前库）；
  * · status 过滤 = confirmed/unconfirmed 计入；superseded 不计；redirect
- *   （merged_into 非空）不计；
- * · 顶域 = domain 首段 JS 截取（根域文件 domain='' 不计）；简介联 knowledge_domains。
- * 输出序 = 计数降序、域名升序（确定性）。未注册 ws_path → 空数组。
+ *   （merged_into 非空）不计；根域文件（domain=''）不计；
+ * · 行集 = 每条目逐层前缀计数（aggregateDomainTree 同口径——节点计数含子域），
+ *   简介按 domain 全路径联 knowledge_domains；
+ * · 输出序 = 深度升序、域路径升序（父先于子，确定性）。未注册 ws_path → 空数组。
  */
-export function topDomainIndexOf(db: Database.Database, wsPath: string): TopDomainStat[] {
+export function domainTreeIndexOf(db: Database.Database, wsPath: string): DomainIndexRow[] {
   const row = db
     .prepare<[string], { knowledge_dir: string }>(`SELECT knowledge_dir FROM knowledge_registry WHERE ws_path = ?`)
     .get(canonicalWsPath(wsPath))
@@ -270,9 +273,11 @@ export function topDomainIndexOf(db: Database.Database, wsPath: string): TopDoma
     if (!ids.has(e.id)) continue
     if (e.status !== 'confirmed' && e.status !== 'unconfirmed') continue
     if (e.merged_into !== null && e.merged_into !== '') continue
-    const top = e.domain.split('/')[0] ?? ''
-    if (top === '') continue
-    counts.set(top, (counts.get(top) ?? 0) + 1)
+    const segments = e.domain.split('/').filter((s) => s !== '')
+    for (let depth = 1; depth <= segments.length; depth += 1) {
+      const path = segments.slice(0, depth).join('/')
+      counts.set(path, (counts.get(path) ?? 0) + 1)
+    }
   }
   const descriptions = new Map(
     db
@@ -283,8 +288,13 @@ export function topDomainIndexOf(db: Database.Database, wsPath: string): TopDoma
       .map((r) => [r.domain, r.description] as const),
   )
   return [...counts.entries()]
-    .map(([domain, entryCount]) => ({ domain, entryCount, description: descriptions.get(domain) ?? null }))
-    .sort((a, b) => b.entryCount - a.entryCount || (a.domain < b.domain ? -1 : 1))
+    .map(([domainPath, entryCount]) => ({
+      domainPath,
+      entryCount,
+      depth: domainPath.split('/').length,
+      description: descriptions.get(domainPath) ?? null,
+    }))
+    .sort((a, b) => a.depth - b.depth || (a.domainPath < b.domainPath ? -1 : 1))
 }
 
 // ── 域树聚合（forge:knowledge/browse 消费） ──

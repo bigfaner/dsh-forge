@@ -54,8 +54,8 @@ function knowledgeSectionTexts(): { staticText: string; domainsText: string } {
   return {
     staticText: renderKnowledgeStaticSection(),
     domainsText: renderKnowledgeDomainsSection([
-      { domain: 'conventions', entryCount: 44, description: '声明性约束与惯例' },
-      { domain: 'pitfalls', entryCount: 1, description: null },
+      { domainPath: 'conventions', entryCount: 44, depth: 1, description: '声明性约束与惯例' },
+      { domainPath: 'pitfalls', entryCount: 1, depth: 1, description: null },
     ]),
   }
 }
@@ -196,10 +196,10 @@ describe('pin ⑥-4 forge:knowledge 两段形状（stage③ C2 重锚——提�
       for (const toolName of ['knowledge_search', 'knowledge_read_abstract', 'knowledge_write']) {
         expect(rendered).not.toContain(toolName)
       }
-      // 行格式契约：`域名(N entries) — 简介` + 降级 <无简介>；契约事实（域层级上限）机械入文
-      expect(rendered).toContain('- conventions(44 entries) — 声明性约束与惯例')
-      expect(rendered).toContain('- pitfalls(1 entry) — <无简介>')
-      expect(rendered).toContain('up to 3 levels')
+      // 行格式契约：目录树 `路径(N 篇) — 简介` + 降级 <无简介>；契约事实（域层级上限）机械入文
+      expect(rendered).toContain('conventions(44 篇) — 声明性约束与惯例')
+      expect(rendered).toContain('pitfalls(1 篇) — <无简介>')
+      expect(rendered).toContain('最多 3 级')
     } finally {
       await ctx.fiber.dispose()
     }

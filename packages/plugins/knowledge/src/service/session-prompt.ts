@@ -16,14 +16,14 @@ import {
   renderKnowledgeStaticSection,
 } from '../prompt/index.js'
 import type { AgentCreatedSubscribeFace, SystemPromptSectionFace } from '../tools/faces.js'
-import type { TopDomainStat } from './internal.js'
+import type { DomainIndexRow } from './internal.js'
 
 /** scoped 段注册供数面（实时求值两函数——闭包捕获 ws_path 后每 turn 现取） */
 export interface KnowledgePromptBindDeps {
   /** 注册库在场判定（registry.findByWsPath ≠ undefined——静态/动态两段同生同退的门） */
   isRegistered(wsPath: string): boolean
-  /** 顶域实时聚合（topDomainIndexOf——计数/简介每 turn 现算，非注册时点冻结） */
-  topDomains(wsPath: string): readonly TopDomainStat[]
+  /** 域树实时聚合（domainTreeIndexOf——计数/简介每 turn 现算，非注册时点冻结） */
+  topDomains(wsPath: string): readonly DomainIndexRow[]
 }
 
 /** agent/created 订阅面（官方 cordis ctx.on 同型——返回注销器） */

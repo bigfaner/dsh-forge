@@ -450,6 +450,19 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
         db.prepare(`UPDATE knowledge_entries SET updated_at = ? WHERE id = ?`).run(finalVersionTs, id)
       }
     })
+    // 子域简介缺失提醒（域细分 2026-11-05）：非根域写入且 knowledge_domains 无该域
+    // 简介行 → 回执携带 domainUnbound（renderWrite 提醒 agent 补写——检索按语义路由）
+    let domainUnbound: string | undefined
+    if (domainDir !== '') {
+      const bound = db
+        .prepare<[string, string], { c: number }>(
+          `SELECT COUNT(*) AS c FROM knowledge_domains kd
+             JOIN knowledge_registry r ON kd.ws_path = r.ws_path
+            WHERE r.knowledge_dir = ? AND kd.domain = ?`,
+        )
+        .get(knowledgeDir, domainDir)
+      if ((bound?.c ?? 0) === 0) domainUnbound = domainDir
+    }
     emitStorageDiag(
       emit,
       storageDiag('info', KNOWLEDGE_WRITE_EVENT, `条目写入：${id}@${finalVersionTs}${supersedes !== undefined ? `（supersedes ${supersedes}）` : ''}${candidateOf !== undefined ? `（candidate_of ${candidateOf}）` : ''}`, { cwd: filePath }),
@@ -464,6 +477,7 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
       mergeSuggestions: suggestions,
       ...(candidateOf !== undefined ? { candidateOf } : {}),
       ...(supersedes !== undefined ? { supersedes } : {}),
+      ...(domainUnbound !== undefined ? { domainUnbound } : {}),
     }
   }
 

@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { canonicalWsPath, createKnowledgeRegistry, openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/index.js'
 import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/service.js'
-import { topDomainIndexOf } from '../../../packages/plugins/knowledge/src/service/internal.js'
+import { domainTreeIndexOf } from '../../../packages/plugins/knowledge/src/service/internal.js'
 import { registerKnowledgeScopedPrompt } from '../../../packages/plugins/knowledge/src/service/session-prompt.js'
 import {
   KNOWLEDGE_DOMAINS_SECTION_NAME,
@@ -126,7 +126,7 @@ function mountScoped() {
     resolveProjectId: (cwd) => createKnowledgeRegistry(W.db).findByWsPath(cwd)?.projectId ?? undefined,
     resolveWsPath: (projectId) => createKnowledgeRegistry(W.db).findByProjectId(projectId)?.wsPath,
     isRegistered: (wsPath) => createKnowledgeRegistry(W.db).findByWsPath(wsPath) !== undefined,
-    topDomains: (wsPath) => topDomainIndexOf(W.db, wsPath),
+    topDomains: (wsPath) => domainTreeIndexOf(W.db, wsPath),
   })
   const fire = (cwd: string | undefined): KnowledgePromptSection[] => {
     const sections: KnowledgePromptSection[] = []
@@ -159,7 +159,7 @@ describe('CT-domain-index-injection-01 绑定注入两态（DI-G2/G3/E5）', () 
     expect(staticOf(sections)).toContain('<knowledge-base>')
     const dynamic = dynamicOf(sections)
     expect(dynamic).toContain('<knowledge-domains>')
-    expect(dynamic).toContain('- alpha(4 entries) — 声明性约束与惯例') // alpha 顶域含 alpha/sub 子域计数
+    expect(dynamic).toContain('alpha(4 篇) — 声明性约束与惯例') // alpha 顶域含 alpha/sub 子域计数
   })
 
   it('O2 未绑定退场：无绑定 cwd 会话零注册（两标签字符串均不出现）', () => {
@@ -180,7 +180,7 @@ describe('CT-domain-index-injection-01 绑定注入两态（DI-G2/G3/E5）', () 
     // 绑定 X（注册库在场）→ 注入
     const sectionsBound = r.fire(wsX)
     expect(sectionsBound).toHaveLength(2)
-    expect(dynamicOf(sectionsBound)).toContain('- tmpzone(1 entry) — <无简介>')
+    expect(dynamicOf(sectionsBound)).toContain('tmpzone(1 篇) — <无简介>')
     // 注销（registry 行删除 + 级联域行）→ 同生同退：已捕获段下一 turn 求值空返
     registry.remove(wsX)
     expect(staticOf(sectionsBound)).toBe('')
@@ -190,7 +190,7 @@ describe('CT-domain-index-injection-01 绑定注入两态（DI-G2/G3/E5）', () 
   it('O4 空标签拒例：任何求值结果不产生空 <knowledge-domains></knowledge-domains> 标签', () => {
     // 空清单 → 空串（段整体退场）；零计数域被过滤——两路均无空标签形态
     expect(renderKnowledgeDomainsSection([])).toBe('')
-    expect(renderKnowledgeDomainsSection([{ domain: 'ghost', entryCount: 0, description: null }])).toBe('')
+    expect(renderKnowledgeDomainsSection([{ domainPath: 'ghost', entryCount: 0, depth: 1, description: null }])).toBe('')
   })
 
   // 真机限定面留痕（归 test-run）：真实 Electron 宿主 session-bind 事件 → systemPrompt
@@ -201,17 +201,17 @@ describe('CT-domain-index-injection-01 绑定注入两态（DI-G2/G3/E5）', () 
 // ── CT-domain-index-injection-02 顶域行格式与计数（DI-G2/DI-E6） ──
 
 describe('CT-domain-index-injection-02 顶域计数与行格式（DI-G2/E6）', () => {
-  it('O1 状态口径：混合状态域计数 = confirmed+unconfirmed（superseded/redirect 不计）；O2 纯净域口径；O3 行格式可判', () => {
+  it('O1 状态口径：混合状态域计数 = confirmed+unconfirmed（superseded/redirect 不计）；O2 纯净域口径；O3 行格式可判（目录树形态）', () => {
     const r = mountScoped()
     const dynamic = dynamicOf(r.fire(W.wsP))
-    // O1：alpha = a1+a2+a3（confirmed×2 + unconfirmed×1）+ a6（alpha/sub 顶域截取）= 4；
+    // O1：alpha = a1+a2+a3（confirmed×2 + unconfirmed×1）+ a6（alpha/sub 计入父域）= 4；
     // a4 superseded 不计、a5 redirect（merged_into）不计
-    expect(dynamic).toContain('- alpha(4 entries) — 声明性约束与惯例')
+    expect(dynamic).toContain('alpha(4 篇) — 声明性约束与惯例')
     // O2：beta = 全量 confirmed（2 条）
-    expect(dynamic).toContain('- beta(2 entries) — <无简介>')
-    // O3：每行匹配附录声明格式 `域名(N entries) — 简介`
-    for (const line of dynamic.split('\n').filter((l) => l.startsWith('- '))) {
-      expect(line).toMatch(/^- \S+\(\d+ entr(y|ies)\) — /)
+    expect(dynamic).toContain('beta(2 篇) — <无简介>')
+    // O3：顶域行顶格 `路径(N 篇)`、子域行缩进树形——计数行格式统一可判
+    for (const line of dynamic.split('\n').filter((l) => l.includes('(') && l.includes('篇)'))) {
+      expect(line.trim()).toMatch(/^(├─ |└─ )?\S+\(\d+ 篇\)( — .+)?$/)
     }
   })
 })
@@ -223,39 +223,38 @@ describe('CT-domain-index-injection-03 降级行（DI-E1）', () => {
     const r = mountScoped()
     const dynamic = dynamicOf(r.fire(W.wsP))
     // O1：delta 无简介 → 降级行（非空简介位、非缺席）
-    expect(dynamic).toContain('- delta(1 entry) — <无简介>')
+    expect(dynamic).toContain('delta(1 篇) — <无简介>')
     // O2：同段内简介行（alpha）与降级行（beta/delta）并存
-    expect(dynamic).toContain('- alpha(4 entries) — 声明性约束与惯例')
+    expect(dynamic).toContain('alpha(4 篇) — 声明性约束与惯例')
   })
 })
 
 // ── CT-domain-index-injection-04 截断 + 被截域名枚举（DI-E2） ──
 
 describe('CT-domain-index-injection-04 截断与枚举（DI-E2）', () => {
-  it('O3 负例先行：顶域 ≤10 时无截断行在场', () => {
-    const stats = topDomainIndexOf(W.db, W.wsP)
-    expect(stats.length).toBeLessThanOrEqual(10)
-    expect(renderKnowledgeDomainsSection(stats)).not.toContain('more domains')
+  it('O3 负例先行：内容行 ≤ 总量上限（28）时无截断行在场', () => {
+    const rows = domainTreeIndexOf(W.db, W.wsP)
+    expect(rows.length).toBeLessThanOrEqual(28)
+    expect(renderKnowledgeDomainsSection(rows)).not.toContain('还有')
   })
 
-  it('O1 恰 10 行截断；O2 N 字面与被截域名集合对账（= 顶域集 − 已列集）', async () => {
-    // 构造至 12 顶域（现有 alpha/beta/gamma/delta + 追加 8 个 t 域）
+  it('O1 超 28 行截断；O2 N 字面与被截域集合对账（= 全集 − 已列集）', async () => {
+    // 构造至 32 顶域（现有 4 顶域 + 追加 28 个 t 域）→ 内容行 32 > 28 → 截
     const dirP = join(W.wsP, '.knowledge')
-    for (let i = 1; i <= 8; i += 1) put(dirP, `tzone${i}`, `t${i}.md`, `di-t${i}`, { status: 'confirmed' })
+    for (let i = 1; i <= 28; i += 1) put(dirP, `tzone${String(i).padStart(2, '0')}`, `t${i}.md`, `di-t${i}`, { status: 'confirmed' })
     await W.service.rebuildIndex(W.projectIdP)
-    const stats = topDomainIndexOf(W.db, W.wsP)
-    expect(stats).toHaveLength(12)
-    const dynamic = renderKnowledgeDomainsSection(stats)
-    const lines = dynamic.split('\n').filter((l) => l.startsWith('- '))
-    // O1：11+ 顶域时恰 10 行
-    expect(lines).toHaveLength(10)
-    // O2：N 字面 = 12 − 10；被截域名集合 = 全集 − 已列集（消盲区对账）
-    expect(dynamic).toContain('… and 2 more domains (search with domain_prefix)')
-    const listed = new Set(lines.map((l) => /^- (\S+)\(/.exec(l)![1]))
-    const all = new Set(stats.map((s) => s.domain))
-    const truncated = [...all].filter((d) => !listed.has(d))
-    expect(truncated).toHaveLength(2)
-    for (const d of truncated) expect(d).toMatch(/^tzone\d+$/)
+    const rows = domainTreeIndexOf(W.db, W.wsP)
+    expect(rows).toHaveLength(33)
+    const dynamic = renderKnowledgeDomainsSection(rows)
+    // O1：顶域行恰 27（alpha 块含子域行占 2 行——内容行 28 封顶）+ 截断行
+    const listed = [...dynamic.matchAll(/^(\S+)\(\d+ 篇\)/gm)].map((m) => m[1]!)
+    expect(listed).toHaveLength(27)
+    expect(dynamic).toContain('… 还有 5 个域（用 domain_prefix 检索）')
+    // O2：被截顶域 = 5 个 tzone（alpha/sub 以子域行在场不算顶域被截，但不在顶域已列集内）
+    const all = new Set(rows.map((s) => s.domainPath))
+    const truncated = [...all].filter((d) => !listed.includes(d))
+    expect(truncated.filter((d) => d.startsWith('tzone'))).toHaveLength(5)
+    expect(truncated).toContain('alpha/sub')
   })
 })
 
@@ -275,13 +274,13 @@ describe('CT-domain-index-injection-05 域变化下一 turn 生效（DI-G4/E3）
     // 下一 turn：同一注册段 text 闭包实时求值（非注册时点冻结）
     const v2 = dynamicOf(sections).split('\n')
     // O1：新域降级行在场
-    expect(v2).toContain('- freshzone(1 entry) — <无简介>')
+    expect(v2).toContain('freshzone(1 篇) — <无简介>')
     // O2：rzone 计数 1 → 2（实时聚合）
-    expect(v2).toContain('- rzone(2 entries) — <无简介>')
-    expect(v1).toContain('- rzone(1 entry) — <无简介>')
+    expect(v2).toContain('rzone(2 篇) — <无简介>')
+    expect(v1).toContain('rzone(1 篇) — <无简介>')
     // O3：未涉域行零漂移（v2 去掉 freshzone 行与 rzone 行后 = v1 去掉 rzone 行后）
     const strip = (lines: readonly string[], drop: readonly string[]): string[] =>
-      lines.filter((l) => !drop.some((d) => l.startsWith(`- ${d}(`)))
+      lines.filter((l) => !drop.some((d) => l.startsWith(`${d}(`)))
     expect(strip(v2, ['freshzone', 'rzone'])).toEqual(strip(v1, ['rzone']))
   })
 })
@@ -303,9 +302,9 @@ describe('CT-domain-index-injection-06 重绑切换与域隔离（DI-G5/E4）', 
     expect(ghostRow?.description).toBe('有简介零条目域')
     // R 会话（重绑语义：新 agent 新 scope 捕获 R 的 ws_path 闭包）
     const rDynamic = dynamicOf(r.fire(W.wsR))
-    // O1：段内域集 = R 顶域集（集合相等判定）
-    const rListed = new Set([...rDynamic.matchAll(/^- (\S+)\(/gm)].map((m) => m[1]))
-    expect(rListed).toEqual(new Set(topDomainIndexOf(W.db, W.wsR).map((s) => s.domain)))
+    // O1：段内域集 = R 顶域集（集合相等判定——顶域行顶格无树形前缀）
+    const rListed = new Set([...rDynamic.matchAll(/^(\S+)\(\d+ 篇\)/gm)].map((m) => m[1]))
+    expect(rListed).toEqual(new Set(domainTreeIndexOf(W.db, W.wsR).filter((s) => s.depth === 1).map((s) => s.domainPath)))
     // O2：P 独有域名在 R 段出现即 FAIL（跨库零泄漏）
     expect(rDynamic).not.toContain('alpha')
     expect(rDynamic).not.toContain('beta')
@@ -327,7 +326,7 @@ describe('CT-domain-index-injection-07 位次与互指（DI-E7）', () => {
     expect(KNOWLEDGE_DOMAINS_SECTION_ORDER).toBe(911)
     expect(KNOWLEDGE_SECTION_ORDER).toBeLessThan(KNOWLEDGE_DOMAINS_SECTION_ORDER)
     // O2：静态段指认串 + 动态段同名标签（同一 turn 双段求值产物）
-    expect(staticOf(sections)).toContain('listed in the')
+    expect(staticOf(sections)).toContain('列于下文')
     expect(staticOf(sections)).toContain('<knowledge-domains>')
     expect(dynamicOf(sections)).toContain('<knowledge-domains>')
     // O3 互斥负例（同生同退判定）：注册库注销后两段同空——不存在单段在场组合

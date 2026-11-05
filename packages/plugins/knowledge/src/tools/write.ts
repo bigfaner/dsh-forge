@@ -107,6 +107,7 @@ const WRITE_OUTPUT_SCHEMA = {
     },
     candidateOf: { type: 'string' },
     supersedes: { type: 'string' },
+    domainUnbound: { type: 'string', description: 'written 子域无简介时携带该域路径——回执提醒补写域描述' },
     reason: { type: 'string' },
     field: { type: 'string' },
     detail: { type: 'string' },
@@ -124,6 +125,9 @@ function renderWrite(_args: unknown, value: unknown): readonly { type: 'text'; t
       `type=${String(v.typeJudged ?? '(none)')}${v.typePending ? ' (pending — low-confidence judgement, procedure default applied)' : ''}`,
       ...(v.supersedes !== undefined ? [`supersedes: ${v.supersedes} (same-id versioning)`] : []),
       ...(v.candidateOf !== undefined ? [`candidate_of: ${v.candidateOf} (suspected duplicate — merge suggestion)`] : []),
+      ...(v.domainUnbound !== undefined
+        ? [`提醒：子域 '${v.domainUnbound}' 尚无简介——请用域描述工具补写，便于检索按语义路由。`]
+        : []),
       ...(v.mergeSuggestions.length > 0
         ? [`merge suggestions:`, ...v.mergeSuggestions.map((s) => `  - ${s.id} (${s.basis}, ${String(s.similarity ?? '')}) — consider versioning (version_of=${s.id}) or merging instead`)]
         : []),
@@ -147,7 +151,7 @@ const WRITE_PARAMETERS: ToolParametersSchema = {
       description: 'Keyword tags (lowercase normalized controlled vocabulary).',
     },
     body: { type: 'string', description: 'Markdown body (the full document content).' },
-    domain: { type: 'string', description: 'Optional domain directory path within the knowledge dir (at most 3 levels); omit for the root domain.' },
+    domain: { type: 'string', description: '知识目录内相对路径，最多 3 级（如 lessons/windows）。优先归入与主题匹配的最深既有子域；子域名须自释义；仅当没有父域容纳时才新建。' },
     type: { type: 'string', description: 'One of conventions | pitfalls | decisions | lessons | facts (five-type machine pre-check applies).' },
     procedure: { type: 'boolean', description: 'Optional procedure form tag (independent dimension — never rewrites the type judgement).' },
     slug_hint: { type: 'string', description: 'English translation hint for a non-ASCII title (slug id generation chain fallback).' },

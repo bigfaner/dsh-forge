@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { DiagEventPayload } from '@dsh-forge/contracts'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../storage/index.js'
 import { createKnowledgeService } from './service.js'
-import { topDomainIndexOf, validateDomainPath } from './internal.js'
+import { domainTreeIndexOf, validateDomainPath } from './internal.js'
 import type { BrowseKnowledgeService } from './types.js'
 
 let home: string
@@ -110,20 +110,22 @@ describe('setDomainDescription（域简介写径——成败两径 knowledge-dom
   })
 })
 
-describe('topDomainIndexOf（动态段计数口径——每调用期实时聚合）', () => {
-  it('计数 = file_path 前缀裁剪 + confirmed/unconfirmed 计、superseded/redirect 不计 + 顶域截取 + 简介联查', async () => {
+describe('domainTreeIndexOf（动态段域树计数口径——每调用期实时聚合）', () => {
+  it('计数 = file_path 前缀裁剪 + confirmed/unconfirmed 计、superseded/redirect 不计 + 逐层前缀行 + 简介全路径联查', async () => {
     await service.setDomainDescription({ wsPath: wsDir, domain: 'alpha', description: '声明性约束与惯例' })
-    const stats = topDomainIndexOf(db, wsDir)
-    // alpha = a1(confirmed) + a2(unconfirmed) + a3(alpha/sub 顶域截取) 计 3；
-    // a4 superseded 不计；beta = b2 计 1（b1 redirect 不计）；root 不计；ws2 的 alpha 裁剪外不计
-    expect(stats).toEqual([
-      { domain: 'alpha', entryCount: 3, description: '声明性约束与惯例' },
-      { domain: 'beta', entryCount: 1, description: null },
+    const rows = domainTreeIndexOf(db, wsDir)
+    // alpha = a1(confirmed) + a2(unconfirmed) + a3(alpha/sub) 计 3；alpha/sub 计 1；
+    // a4 superseded 不计；beta = b2 计 1（b1 redirect 不计）；root 不计；ws2 的 alpha 裁剪外不计；
+    // 输出序 = 深度升序、域路径升序（父先于子）
+    expect(rows).toEqual([
+      { domainPath: 'alpha', entryCount: 3, depth: 1, description: '声明性约束与惯例' },
+      { domainPath: 'beta', entryCount: 1, depth: 1, description: null },
+      { domainPath: 'alpha/sub', entryCount: 1, depth: 2, description: null },
     ])
     // 另一项目库：独立裁剪
-    const other = topDomainIndexOf(db, join(home, 'ws2'))
-    expect(other).toEqual([{ domain: 'alpha', entryCount: 1, description: null }])
+    const other = domainTreeIndexOf(db, join(home, 'ws2'))
+    expect(other).toEqual([{ domainPath: 'alpha', entryCount: 1, depth: 1, description: null }])
     // 未注册 ws → 空数组（动态段自然退场）
-    expect(topDomainIndexOf(db, join(home, 'ws-none'))).toEqual([])
+    expect(domainTreeIndexOf(db, join(home, 'ws-none'))).toEqual([])
   })
 })

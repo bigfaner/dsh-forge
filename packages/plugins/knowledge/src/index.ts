@@ -13,7 +13,7 @@
 // projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
 // 数据源（bindingsFile 文件与刷新缝退役）；服务面两级解析 projectId→wsPath→注册行。
 import { createKnowledgeTools, createProjectResolver, createWsPathResolver } from './tools/index.js'
-import { topDomainIndexOf } from './service/internal.js'
+import { domainTreeIndexOf } from './service/internal.js'
 import { registerKnowledgeScopedPrompt } from './service/session-prompt.js'
 import { createKnowledgeService } from './service/index.js'
 import { startSelfHostedStorage } from './storage/index.js'
@@ -137,7 +137,7 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
     /** 注册库在场判定 + 顶域实时聚合（scoped 两段 text 闭包供数面——同生同退门） */
     const promptBindDeps = {
       isRegistered: (wsPath: string) => storage.registry.findByWsPath(wsPath) !== undefined,
-      topDomains: (wsPath: string) => topDomainIndexOf(storage.db, wsPath),
+      topDomains: (wsPath: string) => domainTreeIndexOf(storage.db, wsPath),
     }
     const tools = createKnowledgeTools({
       knowledge: service,
@@ -184,6 +184,7 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
 export default knowledgePlugin
 export {
   KNOWLEDGE_DOMAINS_MAX_ROWS,
+  KNOWLEDGE_DOMAINS_ROWS_PER_TOP,
   KNOWLEDGE_DOMAINS_SECTION_NAME,
   KNOWLEDGE_DOMAINS_SECTION_ORDER,
   KNOWLEDGE_SECTION_NAME,

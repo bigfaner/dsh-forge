@@ -197,6 +197,11 @@ export interface KnowledgeWritten {
   readonly candidateOf?: string
   /** 版本化路径（复用 id + supersedes 锚） */
   readonly supersedes?: string
+  /**
+   * 子域简介缺失提醒（本次写入落在了非根域、且 knowledge_domains 无该域简介行——
+   * 回执面提醒 agent 补写，使检索能按语义路由；圆桌裁决 2026-11-05）
+   */
+  readonly domainUnbound?: string
 }
 
 /** write 回执联合：written / not-written（三问不过）/ rejected（严契约三拒收） */

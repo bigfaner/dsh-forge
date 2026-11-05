@@ -126,4 +126,18 @@ describe('execute：会话上下文解析 → 服务调用 → snake→camel 映
       },
     ])
   })
+
+  it('domainUnbound 在场 → written 回执携带补简介提醒行；缺席零提醒（回执渲染面）', () => {
+    const tool = createWriteTool(deps(stubService().service))
+    const output = tool.output
+    expect(output).toBeDefined()
+    const render = output!.render as ((args: unknown, value: unknown) => readonly { type: string; text: string }[]) | undefined
+    expect(render).toBeDefined()
+    // 提醒行在场
+    const withReminder = render!(undefined, written({ domainUnbound: 'lessons/windows' }))[0]!.text
+    expect(withReminder).toContain("提醒：子域 'lessons/windows' 尚无简介——请用域描述工具补写")
+    // 缺席零提醒
+    const without = render!(undefined, written())[0]!.text
+    expect(without).not.toContain('尚无简介')
+  })
 })

@@ -10,7 +10,7 @@ import {
 } from '../prompt/index.js'
 import { bindKnowledgePromptSections, registerKnowledgeScopedPrompt } from './session-prompt.js'
 import type { KnowledgePromptSection, ScopedAgentFace } from '../tools/faces.js'
-import type { TopDomainStat } from './internal.js'
+import type { DomainIndexRow } from './internal.js'
 
 const WS = 'C:/ws/a'
 const OTHER = 'C:/ws/other'
@@ -19,7 +19,7 @@ const OTHER = 'C:/ws/other'
 function mount() {
   const handlers: Array<(payload: { agent: ScopedAgentFace }) => unknown> = []
   const registered = new Set<string>([WS])
-  const stats: TopDomainStat[] = [{ domain: 'conventions', entryCount: 3, description: '约束' }]
+  const stats: DomainIndexRow[] = [{ domainPath: 'conventions', entryCount: 3, depth: 1, description: '约束' }]
   const topCalls: string[] = []
   let offCalls = 0
   const dispose = registerKnowledgeScopedPrompt({
@@ -70,7 +70,7 @@ describe('绑定会话注入（session-bind 时刻 scoped 注册）', () => {
     expect(sections[1]?.order).toBe(911)
     expect((sections[0]!.text as () => string)()).toContain('<knowledge-base>')
     const dynamic = (sections[1]!.text as () => string)()
-    expect(dynamic).toContain('- conventions(3 entries) — 约束')
+    expect(dynamic).toContain('conventions(3 篇) — 约束')
     expect(r.topCalls).toEqual([WS]) // 闭包捕获 ws_path——每 turn 求值透传
   })
 
@@ -85,10 +85,10 @@ describe('绑定会话注入（session-bind 时刻 scoped 注册）', () => {
   it('实时性：动态段随顶域聚合变化（write 新域 → 下一 turn 求值得新清单，非注册时点冻结）', () => {
     const r = mount()
     const sections = r.fire(r.agent(WS))
-    r.stats.push({ domain: 'fresh', entryCount: 1, description: null })
+    r.stats.push({ domainPath: 'fresh', entryCount: 1, depth: 1, description: null })
     const dynamic = (sections[1]!.text as () => string)()
-    expect(dynamic).toContain('- conventions(3 entries) — 约束')
-    expect(dynamic).toContain('- fresh(1 entry) — <无简介>')
+    expect(dynamic).toContain('conventions(3 篇) — 约束')
+    expect(dynamic).toContain('fresh(1 篇) — <无简介>')
   })
 })
 
