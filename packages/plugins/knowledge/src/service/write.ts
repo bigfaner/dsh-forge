@@ -472,7 +472,9 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
       id,
       versionTs: finalVersionTs,
       filePath,
-      typeJudged: typeFinal,
+      // typeJudged 键缺席式（lossless JSON——bug 62211111 同族：显式 undefined 属性值
+      // 会被 harness 输出边界整值拒绝「value is not lossless JSON」）
+      ...(typeFinal !== undefined ? { typeJudged: typeFinal } : {}),
       typePending,
       mergeSuggestions: suggestions,
       ...(candidateOf !== undefined ? { candidateOf } : {}),

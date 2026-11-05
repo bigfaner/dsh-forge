@@ -187,8 +187,8 @@ export interface KnowledgeWritten {
   readonly id: string
   readonly versionTs: string
   readonly filePath: string
-  /** type 机器预判（低置信 → procedure 默认 + pending） */
-  readonly typeJudged: KnowledgeType | undefined
+  /** type 机器预判（低置信 → procedure 默认 + pending）；键缺席式——lossless JSON 输出边界（显式 undefined 整值拒绝，bug 62211111 同族） */
+  readonly typeJudged?: KnowledgeType
   /** 预判低置信标记（procedure 默认 + 待定——升格审核面消费） */
   readonly typePending: boolean
   /** 查重归并建议（不拒收） */

@@ -142,4 +142,26 @@ describe('tool 调用链穿透插件自有服务并落 recall_logs（集成自�
     const { service } = await mount(CORPUS)
     await expect(service.listEntries({ projectId: 'p-not-bound' })).rejects.toThrow(/项目不存在/)
   })
+
+  it('knowledge_write 未声明 type（typeFinal undefined）→ written 回执 lossless JSON 合规（typeJudged 键缺席——bug 62211111 同族：显式 undefined 整值拒绝）', async () => {
+    const { tools, exec } = await mount(CORPUS)
+    const write = tools.find((t) => t.name === 'knowledge_write')
+    if (write === undefined) throw new Error('knowledge_write 未注册')
+    const outcome = (await write.execute(
+      {
+        title: 'lossless json compliance probe',
+        summary: '绑定链修复真机取证的输出边界合规验证条目',
+        keywords: ['verification', 'lossless-json'],
+        body: 'typeFinal undefined 时回执不得携带显式 undefined 属性。',
+        'necessity.stable': true,
+        'necessity.non_trivial': true,
+        'necessity.value': true,
+        'necessity.reason': '1.1 取证验证条目——蒸馏阶段清理',
+      },
+      exec,
+    )) as Record<string, unknown>
+    expect(outcome.outcome).toBe('written')
+    // harness lossless JSON 同口径：Own 键值不得为 undefined
+    for (const [k, v] of Object.entries(outcome)) expect(v, `键 ${k}`).not.toBeUndefined()
+  })
 })
