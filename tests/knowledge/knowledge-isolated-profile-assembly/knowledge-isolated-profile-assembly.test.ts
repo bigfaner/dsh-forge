@@ -36,18 +36,26 @@ afterEach(() => {
 })
 
 /** 结构化 ctx 子面收集器（faces.ts 官方面结构兼容——记录注册/段/provide/诊断流） */
+type AgentCreatedHandler = (payload: { agent: unknown }) => unknown
+
 function fakeCtx(): {
   ctx: KnowledgeContextFace
   tools: KnowledgeToolDefinition[]
   sections: KnowledgePromptSection[]
   provides: Map<string, unknown>
   diag: DiagEventPayload[]
+  agentCreated: AgentCreatedHandler[]
 } {
   const tools: KnowledgeToolDefinition[] = []
   const sections: KnowledgePromptSection[] = []
   const provides = new Map<string, unknown>()
   const diag: DiagEventPayload[] = []
+  const agentCreated: AgentCreatedHandler[] = []
   const ctx: KnowledgeContextFace = {
+    on: ((event: string, handler: AgentCreatedHandler) => {
+      if (event === 'agent/created') agentCreated.push(handler)
+      return () => {}
+    }) as KnowledgeContextFace['on'],
     tools: { register: (definition) => (tools.push(definition), () => {}) },
     systemPrompt: { section: (s) => (sections.push(s), () => {}) },
     reflect: {
@@ -58,7 +66,7 @@ function fakeCtx(): {
       if (event === DIAG_EVENT) diag.push(payload)
     },
   }
-  return { ctx, tools, sections, provides, diag }
+  return { ctx, tools, sections, provides, diag, agentCreated }
 }
 
 function registryRowCount(dbFile: string): number {
@@ -73,7 +81,7 @@ describe('CT-isolated-profile-1（J3-1：仅 knowledge 行 → 装配面在场�
   it('success（面①②）：装配后 tool 面含 knowledge tool schema（结构可判定）+ 提示词段注册 + knowledge 服务 provide', () => {
     const root = tmpRoot()
     const dbFile = join(root, 'knowledge', 'knowledge.db')
-    const { ctx, tools, sections, provides } = fakeCtx()
+    const { ctx, tools, sections, provides, agentCreated } = fakeCtx()
     const dispose = knowledgePlugin(ctx, {
       dbFile,
       projects: [{ wsPath: join(root, 'ws'), projectId: 'p-iso' }],
@@ -88,10 +96,10 @@ describe('CT-isolated-profile-1（J3-1：仅 knowledge 行 → 装配面在场�
       expect(typeof tool.output.render).toBe('function')
       expect(typeof tool.execute).toBe('function')
     }
-    // 提示词段注册（forge:knowledge 段——装配后 agent 可见面）
-    expect(sections).toHaveLength(1)
-    expect(sections[0]!.name).toBe('forge:knowledge')
-    expect(sections[0]!.text.length).toBeGreaterThan(0)
+    // 提示词接线（stage③ C2 裁决 #9：装配期零全局段注册——forge:knowledge 两段改为
+    // agent/created 时刻 scoped 注册；装配面锚 = 订阅在场 + 根级段为零）
+    expect(sections).toEqual([])
+    expect(agentCreated).toHaveLength(1)
     // 'knowledge' 服务 provide（host 五通道句柄来源——在场判定键）
     expect(provides.has(KNOWLEDGE_SERVICE_KEY)).toBe(true)
     // knowledge.root 目录键声明（dirKeys.knowledge 反向拉取缝）
@@ -156,7 +164,8 @@ describe('CT-isolated-profile-2（J3-2：重复装配幂等）', () => {
     const second = fakeCtx()
     const d2 = knowledgePlugin(second.ctx, { dbFile })
     expect(second.tools.map((t) => t.name).sort()).toEqual(first.tools.map((t) => t.name).sort())
-    expect(second.sections).toHaveLength(1)
+    expect(second.sections).toEqual([]) // stage③ C2：装配期零全局段（scoped 注册退役锚）
+    expect(second.agentCreated).toHaveLength(1)
     d2()
 
     // 注册表行数不变（零重复注册行——幂等；常规路径零注册行，无迁移源）
