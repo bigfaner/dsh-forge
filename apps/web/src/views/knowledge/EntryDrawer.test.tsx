@@ -1,12 +1,29 @@
 // EntryDrawer 单测 —— UF-6 详情弹窗（自持可拖移 dialog：可移动 + 缘侧可拉伸 + 元数据
 // 首区四列同行 / AC2 正文区不含 frontmatter / 按需读取 Hard Rule）。渲染面 =
 // renderToStaticMarkup（真 dialog 自持皮——静态可渲，拖移行为归 e2e）。
+// knowledge-review-ui SC-G（1.8）：dialog 双模式（查看/编辑）+ 标题栏描边钮组 +
+// escNext 链 + chip 交互纯函数 + editMeta/裁决执行面 + 驳回 Modal 叠层。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { EntryDetail, EntryDetailQuery } from '@dsh-forge/contracts'
+import type { EntryActionReceipt, EntryDetail, EntryDetailQuery } from '@dsh-forge/contracts'
 import { RpcClientError } from '../../rpc/errors.js'
 import type { ForgeRpcClient } from '../../rpc/index.js'
-import { EntryDrawer, EntryDrawerBody, entryMetaRows, fetchEntryDetail } from './EntryDrawer.js'
+import {
+  EntryDrawer,
+  EntryDrawerBody,
+  EntryDrawerEditBody,
+  EntryDrawerHeadActions,
+  commitKnChip,
+  entryMetaRows,
+  escNextKn,
+  fetchEntryDetail,
+  initialKnEditDraft,
+  insertKnChip,
+  removeKnChip,
+  runEntryMetaEdit,
+  runEntryVerdict,
+  validateKnEditDraft,
+} from './EntryDrawer.js'
 
 /** 本地时刻期望值（测试侧独立现算——与实现同语义非同源引用） */
 function expectedLocalStamp(iso: string): string {
@@ -306,5 +323,166 @@ describe('EntryDrawer（装载壳）', () => {
     expect(markup).toContain('data-dswf-kn-drawer')
     expect(markup).toContain('data-dswf-kn-drawer-skeleton')
     expect(markup).toContain('style')
+  })
+})
+
+// ───────────────────────── SC-G：dialog 双模式（1.8 knowledge-review-ui） ─────────────────────────
+
+describe('escNextKn（Esc 链式退场——controller 同型纯决策）', () => {
+  it('编辑 → 回查看；查看 → 关闭（链式次序锚，不断实现路径）', () => {
+    expect(escNextKn('edit')).toBe('back-to-view')
+    expect(escNextKn('view')).toBe('close')
+  })
+})
+
+describe('编辑草稿（controller 同型 draft/errors 纯函数面）', () => {
+  it('initialKnEditDraft：四字段自现役 detail 初始化（keywords 拷贝——零共享引用漂移）', () => {
+    const draft = initialKnEditDraft(DETAIL)
+    expect(draft).toEqual({ title: '安全编码规范', keywords: ['security', 'backend'], summary: '输入校验与输出编码基线', body: DETAIL.body })
+    expect(draft.keywords).not.toBe(DETAIL.keywords) // 拷贝非共享引用
+  })
+
+  it('validateKnEditDraft：空标题/全空白标题拒收留 dialog；其余放行', () => {
+    expect(validateKnEditDraft({ title: '', keywords: [], summary: '', body: '' }).title).toBeDefined()
+    expect(validateKnEditDraft({ title: '   ', keywords: [], summary: '', body: '' }).title).toBeDefined()
+    expect(validateKnEditDraft({ title: '合规标题', keywords: [], summary: '', body: '' })).toEqual({})
+  })
+})
+
+describe('关键词 chip 纯函数（G5：双击编辑收口 / ＋ 新增 / ✕ 移除）', () => {
+  it('commitKnChip：回值收口 trim 写回；空值收口 = 删除该 chip（含 ＋ 新增空白 chip 取消径）', () => {
+    expect(commitKnChip(['a', 'b'], 1, '  新词  ')).toEqual(['a', '新词'])
+    expect(commitKnChip(['a', 'b'], 1, '   ')).toEqual(['a'])
+    expect(commitKnChip(['a'], 0, '')).toEqual([])
+  })
+
+  it('removeKnChip / insertKnChip：移除落位准确；新增 = 追加空白位（供放大态编辑收口）', () => {
+    expect(removeKnChip(['a', 'b', 'c'], 1)).toEqual(['a', 'c'])
+    expect(insertKnChip(['a'])).toEqual(['a', ''])
+    expect(insertKnChip([])).toEqual([''])
+  })
+})
+
+describe('EntryDrawerHeadActions（G1 标题栏描边钮组——纯渲染）', () => {
+  const base = { busy: false, stale: false, onStartEdit: NOOP, onSave: NOOP, onConfirm: NOOP, onReject: NOOP }
+
+  it('查看态 unconfirmed：通过（accent）/ 驳回（error）/ 编辑 + 同组锚；confirmed：仅编辑（驳回入口随态消失）', () => {
+    const unconfirmed = renderToStaticMarkup(<EntryDrawerHeadActions {...base} mode="view" status="unconfirmed" />)
+    expect(unconfirmed).toContain('data-dswf-kn-dialog-confirm')
+    expect(unconfirmed).toContain('data-dswf-kn-dialog-reject')
+    expect(unconfirmed).toContain('data-dswf-kn-dialog-edit')
+    expect(unconfirmed.indexOf('data-dswf-kn-dialog-confirm')).toBeLessThan(unconfirmed.indexOf('data-dswf-kn-dialog-reject'))
+    expect(unconfirmed).toContain('is-accent')
+    expect(unconfirmed).toContain('is-error')
+    const confirmed = renderToStaticMarkup(<EntryDrawerHeadActions {...base} mode="view" status="confirmed" />)
+    expect(confirmed).toContain('data-dswf-kn-dialog-edit')
+    expect(confirmed).not.toContain('data-dswf-kn-dialog-confirm')
+    expect(confirmed).not.toContain('data-dswf-kn-dialog-reject')
+  })
+
+  it('编辑态 = 保存 + 零查看态钮；stale/busy 禁用（防重复提交 + 失靶守卫）', () => {
+    const edit = renderToStaticMarkup(<EntryDrawerHeadActions {...base} mode="edit" status="unconfirmed" />)
+    expect(edit).toContain('data-dswf-kn-dialog-save')
+    expect(edit).not.toContain('data-dswf-kn-dialog-confirm')
+    expect(edit).not.toContain('data-dswf-kn-dialog-edit')
+    const stale = renderToStaticMarkup(<EntryDrawerHeadActions {...base} mode="view" status="unconfirmed" stale={true} />)
+    expect(stale).toContain('disabled')
+    const busy = renderToStaticMarkup(<EntryDrawerHeadActions {...base} mode="edit" status="unconfirmed" busy={true} />)
+    expect(busy).toContain('disabled')
+  })
+})
+
+describe('EntryDrawerEditBody（G3 编辑字段面——纯渲染）', () => {
+  const DRAFT = initialKnEditDraft(DETAIL)
+  const base = { detail: DETAIL, draft: DRAFT, errors: {} as ReturnType<typeof validateKnEditDraft>, busy: false, onChange: NOOP }
+
+  it('首行 = 域（只读）+ 标题（可编辑）同行；随后 关键词 chips（✕ 移除 + ＋ 新增）→ 摘要（3 行）→ 正文（随内容增长）', () => {
+    const html = renderToStaticMarkup(<EntryDrawerEditBody {...base} />)
+    // 首行：域只读 + 标题输入同行
+    expect(html).toContain('data-dswf-kn-edit-domtitle')
+    expect(html).toContain('data-dswf-kn-edit-dom')
+    expect(html).toContain('readonly')
+    expect(html).toContain('data-dswf-kn-edit-title')
+    expect(html).toContain('安全编码规范')
+    // 关键词 chips：既有 chip + ✕ 移除钮 + ＋ 新增钮
+    expect(html).toContain('data-dswf-kn-kwchip="security"')
+    expect(html).toContain('data-dswf-kn-kwchip="backend"')
+    expect(html).toContain('data-dswf-kn-kwx')
+    expect(html).toContain('data-dswf-kn-kwadd')
+    // 摘要 = 3 行文本域；正文 = 随内容增长文本域（AutoTextarea 同型——非固定行数）
+    expect(html).toContain('data-dswf-kn-edit-summary')
+    expect(html).toContain('rows="3"')
+    expect(html).toContain('data-dswf-kn-edit-body')
+    // 字段序锚：域行 → 关键词 → 摘要 → 正文
+    expect(html.indexOf('data-dswf-kn-edit-domtitle')).toBeLessThan(html.indexOf('data-dswf-kn-edit-chips'))
+    expect(html.indexOf('data-dswf-kn-edit-chips')).toBeLessThan(html.indexOf('data-dswf-kn-edit-summary'))
+    expect(html.indexOf('data-dswf-kn-edit-summary')).toBeLessThan(html.indexOf('data-dswf-kn-edit-body'))
+  })
+
+  it('校验错误留 dialog（dswf-dlg-err 同型错误行——dialog 不关、零跳转）', () => {
+    const html = renderToStaticMarkup(<EntryDrawerEditBody {...base} errors={{ title: '标题不能为空' }} />)
+    expect(html).toContain('data-dswf-kn-dlg-err')
+    expect(html).toContain('标题不能为空')
+    const clean = renderToStaticMarkup(<EntryDrawerEditBody {...base} />)
+    expect(clean).not.toContain('data-dswf-kn-dlg-err')
+  })
+})
+
+describe('runEntryMetaEdit / runEntryVerdict（entryAction 执行面——回执归一永不 reject）', () => {
+  it('editMeta：载荷 = 恰 1 条 + trim 后四字段；全成功 = ok', async () => {
+    const { client, calls } = recordingClient(async () => DETAIL)
+    let payload: unknown
+    client.knowledge.entryAction = async (req) => {
+      payload = req
+      return { results: [{ entryId: 7, outcome: 'success' }] } satisfies EntryActionReceipt
+    }
+    const out = await runEntryMetaEdit(client, 'p-1', 7, initialKnEditDraft(DETAIL))
+    expect(out).toEqual({ ok: true })
+    expect(calls).toEqual([])
+    expect(payload).toEqual({
+      projectId: 'p-1',
+      action: 'editMeta',
+      entryIds: [7],
+      title: '安全编码规范',
+      keywords: ['security', 'backend'],
+      summary: '输入校验与输出编码基线',
+      body: DETAIL.body,
+    })
+  })
+
+  it('editMeta：逐条失败（yaml-invalid）= ok:false + code 分派文案（错误留 dialog）', async () => {
+    const { client } = recordingClient(async () => DETAIL)
+    client.knowledge.entryAction = async () =>
+      ({ results: [{ entryId: 7, outcome: 'failure', code: 'yaml-invalid', message: 'YAML 拒收' }] }) satisfies EntryActionReceipt
+    const out = await runEntryMetaEdit(client, 'p-1', 7, initialKnEditDraft(DETAIL))
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.message).toContain('YAML')
+  })
+
+  it('editMeta：请求级拒收（typed error）= ok:false + message 原样', async () => {
+    const { client } = recordingClient(async () => DETAIL)
+    client.knowledge.entryAction = async () =>
+      Promise.reject(new RpcClientError({ code: 'ERR_ENTRY_NOT_FOUND', message: 'invalid-request' }))
+    const out = await runEntryMetaEdit(client, 'p-1', 7, initialKnEditDraft(DETAIL))
+    expect(out).toEqual({ ok: false, message: 'invalid-request' })
+  })
+
+  it('verdict：confirm/reject 走同通道单条数组；逐条失败 code 分派、成功 ok', async () => {
+    const { client } = recordingClient(async () => DETAIL)
+    const seen: unknown[] = []
+    client.knowledge.entryAction = async (req) => {
+      seen.push(req)
+      return { results: [{ entryId: 7, outcome: 'success' }] } satisfies EntryActionReceipt
+    }
+    expect(await runEntryVerdict(client, 'p-1', 'confirm', 7)).toEqual({ ok: true })
+    expect(await runEntryVerdict(client, 'p-1', 'reject', 7)).toEqual({ ok: true })
+    expect(seen).toEqual([
+      { projectId: 'p-1', action: 'confirm', entryIds: [7] },
+      { projectId: 'p-1', action: 'reject', entryIds: [7] },
+    ])
+    client.knowledge.entryAction = async () =>
+      ({ results: [{ entryId: 7, outcome: 'failure', code: 'cas-failed', message: '状态漂移' }] }) satisfies EntryActionReceipt
+    const out = await runEntryVerdict(client, 'p-1', 'reject', 7)
+    expect(out.ok).toBe(false)
   })
 })

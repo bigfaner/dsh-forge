@@ -268,7 +268,8 @@
  * 左右缘拖宽；视觉一律官方护仗——色/字/距/圆角零裸值）：
  *   宽 = inline style 注入（缺省 770——720 阅读刻度 +50 用户裁决；缘侧拉伸钳制归组件）；
  *   位 = 逐开本地态（关闭即弃——起始位缺省 CSS 居中兜底同任务弹窗）；
- *   纵向滚动上限 80vh（内容多不溢出）。
+ *   高度机制对齐专家 detail-dialog（G4——用户裁决）：height auto + min-height 320px +
+ *   max-height 92% + resize both——内容驱动零固定空白；纵向滚动归内容区。
  * 内容体三区：元数据表首区（四列同行 + 关键词整行，紧凑 4px 内衬——用户裁决）+ 摘要 + 正文。 */
 .dswf-kn-dialog {
   position: fixed;
@@ -280,8 +281,12 @@
   flex-direction: column;
   box-sizing: border-box;
   overflow: hidden;
+  height: auto;
+  min-height: 320px; /* dsw-raw 原型 .dlg 最小高刻度（mockup G4） */
+  max-height: 92vh; /* dsw-raw 原型 .dlg 92% 上限刻度（任务弹窗 92vw 同豁免口径） */
+  min-width: 280px; /* dsw-raw resize both 下限（低于缘侧拖宽 MIN 前 CSS 兜底） */
+  resize: both; /* 专家 detail-dialog 同机械——右下角手柄自由拉伸 */
   max-width: 92vw; /* 窄屏防越（任务弹窗同口径） */
-  max-height: 80vh; /* 纵向滚动上限——内容多不溢出视口 */
   pointer-events: auto;
   background: var(--dsw-alias-bg-base);
   border: 1px solid var(--dsw-alias-border-l2);
@@ -629,4 +634,193 @@
 .dswf-kn-card-chip.is-actionable:focus-visible {
   outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color);
   outline-offset: 1px;
+}
+
+/* ── dialog 双模式（knowledge-review-ui SC-G：标题栏描边钮组 + 编辑字段面 + toast）──
+ * 头钮 = 多选功能组同刻度胶囊实线描边（dswf-kn-act 复用，语义色同面）；
+ * 编辑字段 = 专家 dswf-dlg-field 同型行语言（label 弱化 + 控件满宽）；chip 交互 =
+ * mockup kwEdit 语义（双击编辑 / ＋ 新增放大态 / ✕ 移除，退出编辑包紧文字）。 */
+.dswf-kn-dialog-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+/* 编辑面容器（字段间距收紧——原型 editBody 逐位刻度） */
+.dswf-kn-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-s-14-line-height);
+}
+
+/* 首行：域（左半，只读）+ 标题（右半，可编辑）同行（用户裁决） */
+.dswf-kn-edit-domtitle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-edit-dom {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 32px; /* dsw-raw 原型 .dom/.tit 输入高刻度 */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-3);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: default;
+}
+
+.dswf-kn-edit-titlefield {
+  display: flex;
+  flex: 2;
+  flex-direction: column;
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度） */
+  min-width: 0;
+}
+
+.dswf-kn-edit-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px; /* dsw-raw 原型 .dom/.tit 输入高刻度 */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 编辑字段行（专家 dswf-dlg-field 同型：弱化 label + 控件区） */
+.dswf-kn-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度） */
+  min-width: 0;
+}
+
+.dswf-kn-edit-field > label {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 关键词 chips 行（退出编辑包紧文字——nowrap + fit-content，不换行零多余空白） */
+.dswf-kn-edit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-kwchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px; /* dsw-raw 原型 chip 行内刻度 */
+  box-sizing: border-box;
+  width: fit-content;
+  height: 26px; /* dsw-raw 原型 .tag chip 刻度（放大态编辑同值） */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-3);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.dswf-kn-kwchip:hover {
+  border-color: var(--dsw-alias-border-l4);
+}
+
+.dswf-kn-kwx {
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-kwx:hover {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 放大态编辑输入（双击/＋ 进入——原型 kw-edit accent 描边胶囊） */
+.dswf-kn-kwedit {
+  box-sizing: border-box;
+  width: 70px; /* dsw-raw 原型 kw-edit 编辑态宽刻度 */
+  height: 26px; /* dsw-raw 原型 .tag chip 刻度（放大态编辑同值） */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-link);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ＋ 新增钮（原型 addkw 虚线描边） */
+.dswf-kn-kwadd {
+  box-sizing: border-box;
+  height: 26px; /* dsw-raw 原型 .tag chip 刻度 */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 999px;
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-kwadd:hover {
+  border-color: var(--dsw-alias-border-l4);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 摘要/正文文本域（正文自适应高归 KnAutoTextarea inline——此处只管视觉） */
+.dswf-kn-edit-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+  resize: vertical;
+}
+
+.dswf-kn-edit-input:focus-visible,
+.dswf-kn-edit-textarea:focus-visible,
+.dswf-kn-kwedit:focus-visible,
+.dswf-kn-kwadd:focus-visible,
+.dswf-kn-kwx:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color);
+  outline-offset: 1px;
+}
+
+/* 校验/回执错误行（专家 dswf-dlg-err 同型——错误留 dialog） */
+.dswf-kn-dlg-err {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* toast 面（专家 dswf-toast 同型——一次性提示自灭） */
+.dswf-kn-toast {
+  position: absolute;
+  bottom: var(--dsw-font-s-14-line-height);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-elevation-prominent);
+  pointer-events: none;
 }
