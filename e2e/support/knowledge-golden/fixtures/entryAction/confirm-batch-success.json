@@ -1,0 +1,31 @@
+{
+  "format": "dsh-forge/knowledge-golden",
+  "version": 1,
+  "channel": "forge:knowledge/entryAction",
+  "recordedAt": "1970-01-01T00:00:00.000Z",
+  "source": {
+    "provider": "core",
+    "detail": "knowledge-review-ui 1.5 结构样例（golden 先行——形制/形状锁定非录制值；reason = success 含 already-confirmed 混入，CT-EA-1；录制回填归脚本任务）",
+    "harness": "e2e/support/knowledge-golden/harness.ts"
+  },
+  "request": {
+    "projectId": "p-golden-entryaction",
+    "action": "confirm",
+    "entryIds": [
+      1,
+      2
+    ]
+  },
+  "response": {
+    "results": [
+      {
+        "entryId": 1,
+        "outcome": "success"
+      },
+      {
+        "entryId": 2,
+        "outcome": "success"
+      }
+    ]
+  }
+}
