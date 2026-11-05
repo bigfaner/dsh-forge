@@ -48,17 +48,20 @@ function srcFiles(): string[] {
 }
 
 describe('AC1 插件依赖边界（构建图机械自证——3.4 修订：driver 白名单）', () => {
-  it('package.json dependencies = contracts + path-key + driver 白名单恰三项（Hard Rule：禁 core 实现 / cordis 运行时）', () => {
+  it('package.json dependencies = driver 白名单恰两项（Hard Rule：禁 core 实现 / cordis 运行时；contracts/path-key 为构建期 bundle 内联面——bug 9083f0f0 独立安装自含）', () => {
     const pkg = JSON.parse(readFileSync(join(PKG_DIR, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
       peerDependencies?: Record<string, string>
       optionalDependencies?: Record<string, string>
     }
-    expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual([
-      ...DSH_RUNTIME_ALLOWLIST,
-      '@dsh-forge/contracts',
-      '@dsh-forge/path-key',
-    ])
+    // 运行期面（独立安装 pnpm 消费）：只允许 registry 可解析的官方上游包——
+    // @dsh-forge/*（private workspace 包）经 scripts/bundle-host.mjs 构建期内联进
+    // dist/index.js，devDependencies 只承载仓内构建/类型链（tsconfig references 不变）。
+    expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual([...DSH_RUNTIME_ALLOWLIST])
+    expect(Object.keys(pkg.devDependencies ?? {})).toEqual(
+      expect.arrayContaining(['@dsh-forge/contracts', '@dsh-forge/path-key']),
+    )
     for (const face of ['peerDependencies', 'optionalDependencies']) {
       expect(Object.keys(pkg[face as keyof typeof pkg] ?? {}), face).toHaveLength(0)
     }

@@ -14,30 +14,34 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import { consoleDiagFallback } from './diag-fallback.js'
-import {
-  type WorktreeAheadBehindRequest,
-  type WorktreeAheadBehindResult,
-  type WorktreeBranchesRequest,
-  type WorktreeBranchesResult,
-  type WorktreeChecksRequest,
-  type WorktreeChecksResult,
-  type WorktreeCreateRequest,
-  type WorktreeCreateResult,
-  type ForgeBindingMismatchEvent,
-  type WorktreeDeleteRequest,
-  type WorktreeDeleteResult,
-  type WorktreeEnsureWorkspaceRequest,
-  type WorktreeEnsureWorkspaceResult,
-  type WorktreeEntryDto,
-  type WorktreeListRequest,
-  type WorktreeListResult,
-  type WorktreeSealRequest,
-  type WorktreeSealResult,
-  type WorktreeSelectRequest,
-  type WorktreeSelectResult,
-  type WorktreeResolveRequest,
-  type WorktreeResolveEntry,
-  type WorktreeResolveResult,
+// import type 整句形态（bug 9083f0f0）：inline `type` 修饰在 verbatimModuleSyntax 下
+// 保留 import 语句为空壳 `import {} from '@dsh-forge/contracts'`——ESM 空 import 仍做
+// 模块解析，外部宿主（无 workspace 邻接）装载即 ERR_MODULE_NOT_FOUND。整句 type
+// import 被 tsc 完全消隐，「零 dsh-forge 依赖」在产物面成立。
+import type {
+  WorktreeAheadBehindRequest,
+  WorktreeAheadBehindResult,
+  WorktreeBranchesRequest,
+  WorktreeBranchesResult,
+  WorktreeChecksRequest,
+  WorktreeChecksResult,
+  WorktreeCreateRequest,
+  WorktreeCreateResult,
+  ForgeBindingMismatchEvent,
+  WorktreeDeleteRequest,
+  WorktreeDeleteResult,
+  WorktreeEnsureWorkspaceRequest,
+  WorktreeEnsureWorkspaceResult,
+  WorktreeEntryDto,
+  WorktreeListRequest,
+  WorktreeListResult,
+  WorktreeSealRequest,
+  WorktreeSealResult,
+  WorktreeSelectRequest,
+  WorktreeSelectResult,
+  WorktreeResolveRequest,
+  WorktreeResolveEntry,
+  WorktreeResolveResult,
 } from '@dsh-forge/contracts'
 import {
   createWorktree,

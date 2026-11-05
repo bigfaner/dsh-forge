@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/plugin-forge",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "private": true,
   "type": "module",
   "description": "dsh 插件：forge 主线 tool 半身（动词透传 + forge:pipeline 系统提示段——运行期经 Cordis inject forgeTasks/forgeProposals；persona 合成单源 = @dsh-forge/core）。",
@@ -16,20 +16,21 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b && node scripts/bundle-host.mjs"
   },
   "dependencies": {
     "@deepseek-ai/dsh-session": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-subagent-in-process-driver": "0.2.0-rc.2",
-    "@dsh-forge/contracts": "workspace:*",
-    "@dsh-forge/path-key": "workspace:*"
+    "@deepseek-ai/dsh-subagent-in-process-driver": "0.2.0-rc.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
     "@deepseek-ai/dsh-session-projection": "0.2.0-rc.2",
+    "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/path-key": "workspace:*",
     "@types/node": "24.19.0",
     "ajv": "8.20.0",
-    "better-sqlite3": "13.0.3"
+    "better-sqlite3": "13.0.3",
+    "esbuild": "0.24.2"
   }
 }
