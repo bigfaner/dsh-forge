@@ -46,7 +46,7 @@ const FIXTURE_REASON_MATRIX: Readonly<Record<string, string | null>> = {
   'domain-depth.json': 'domain-depth',
   'yaml-invalid.json': 'yaml-invalid',
   'move-editmeta-success.json': null,
-  'stale.json': 'stale',
+  'stale.json': 'stale', // 死码记账：'stale' 当前服务面不产出（CAS 锚待通道层扩展），合成夹具预录承载码集封闭性
 }
 
 /** 从 TypeScript 类型别名声明块内提取带引号字面量成员（JSDoc 无引号文本天然排除） */
@@ -125,7 +125,7 @@ describe('SA-2 码集 ↔ 夹具一一对应（防删码不删夹具、加码不
   const rejectCodes = unionLiterals(dtoSrc, 'EntryActionRequestRejectCode')
   const allCodes = [...failureCodes, ...rejectCodes].sort()
 
-  it('DTO 码集封闭锚：failure 七成员 + invalid-request（契约 §2）', () => {
+  it('DTO 码集封闭锚：failure 七成员 + invalid-request（契约 §2）。注：\'stale\' 为死码——当前服务面不产出（CAS 锚待通道层扩展），夹具 stale.json 预录维持码集↔夹具封闭', () => {
     expect(failureCodes).toEqual([
       'cas-failed',
       'domain-depth',

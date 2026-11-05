@@ -181,6 +181,29 @@ describe('moveEntry / createDomain', () => {
     const deep = await service.moveEntry({ projectId: PROJECT, entryId: ub, targetDomain: 'a/b/c/d' })
     expect(deep).toMatchObject({ outcome: 'failure', code: 'domain-depth' })
   })
+
+  it('moveEntry 深度拒收专项（SC-D 三径对齐）：>3 层 targetDomain = domain-depth 拒收，行零变化零落盘（editMeta 径域不可变无此路径）', async () => {
+    const ub = await entryIdOf('kb-ub')
+    const before = db
+      .prepare<[string], { domain: string; status: string }>(
+        `SELECT domain, status FROM knowledge_entries WHERE id = ?`,
+      )
+      .get('kb-ub')!
+    const versionsBefore = db
+      .prepare<[string], { file_path: string }[]>(`SELECT file_path FROM knowledge_entry_versions WHERE id = ?`)
+      .all('kb-ub')
+    const deep = await service.moveEntry({ projectId: PROJECT, entryId: ub, targetDomain: 'x/y/z/w' })
+    expect(deep).toMatchObject({ outcome: 'failure', code: 'domain-depth' })
+    // 拒收即零副作用：主行域/status 与版本文件落点全不变，无目录落盘
+    const after = db
+      .prepare<[string], { domain: string; status: string }>(
+        `SELECT domain, status FROM knowledge_entries WHERE id = ?`,
+      )
+      .get('kb-ub')!
+    expect(after).toEqual(before)
+    expect(db.prepare<[string], { file_path: string }[]>(`SELECT file_path FROM knowledge_entry_versions WHERE id = ?`).all('kb-ub')).toEqual(versionsBefore)
+    expect(existsSync(join(knowledgeDir, 'x'))).toBe(false)
+  })
 })
 
 describe('updateEntry 元数据编辑', () => {

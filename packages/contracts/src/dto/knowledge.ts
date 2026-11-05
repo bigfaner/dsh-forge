@@ -108,7 +108,7 @@ export type EntryActionRequest =
 export type EntryActionFailureCode =
   /** reject 作用于 confirmed 条目（仅 unconfirmed 可驳回） */
   | 'rejected-confirmed'
-  /** editMeta 提交时条目已前进（并发编辑窗口，CAS） */
+  /** editMeta 提交时条目已前进（并发编辑窗口，CAS）。死码记账：当前服务面不产出此码（CAS 锚待通道层扩展），合成夹具 stale.json 预录承载——码集封闭性维持，扩展前不触发 */
   | 'stale'
   /** TOCTOU：勾选与执行间状态漂移（confirm 径 = 已归并 merged / reject 径 = 已升格） */
   | 'cas-failed'
