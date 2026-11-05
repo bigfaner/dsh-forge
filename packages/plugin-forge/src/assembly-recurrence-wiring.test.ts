@@ -53,7 +53,11 @@ describe('生产装配径接线（bug 0db72bcb——loopDriver deps 两 face 经
     const bugs = {
       findRecurrenceCandidates: () => {
         faceCalls += 1
-        return Promise.resolve([{ bugId: 'b-root', summary: '根', chain: ['b-root', 'b-r1', 'b-r2'] }])
+        // fullEdgeCount 单源计数（a126742a T3 触发公式——链长回退分支已删，缺席 = 0
+        // → 守卫恒放行、escalation 挂起径不可达；写法对照 driver.test.ts / claim.test.ts）
+        return Promise.resolve([
+          { bugId: 'b-root', summary: '根', chain: ['b-root', 'b-r1', 'b-r2'], fullEdgeCount: 3 },
+        ])
       },
     } as unknown as ForgeToolDeps['bugs']
     const registeredTools: ForgeToolDefinition[] = []
