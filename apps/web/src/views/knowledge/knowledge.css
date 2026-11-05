@@ -290,16 +290,14 @@
   box-shadow: var(--dsw-elevation-prominent);
 }
 
-/* 标题栏：全窗拖移手柄（cursor move；按钮命中不动持——组件面守卫）+ 行尾关闭位
- * （排版零覆盖——与 Bug 详情弹窗头行逐位同面：字/色继承基面默认） */
+/* 标题栏：白底（与专家详情 dialog 统一——无灰条/无分隔线），行尾关闭位；
+ * ⠿ 拖移手柄 + cursor move 保留（可拖移语义位） */
 .dswf-kn-dialog-head {
   display: flex;
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
   min-height: 30px; /* 任务弹窗标题栏收紧刻度（D43 同值） */
   padding-inline: var(--dsw-font-xs-13-line-height);
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-interactive-bg-hover);
   cursor: var(--dsh-cursor-move, move);
   user-select: none;
   touch-action: none;
