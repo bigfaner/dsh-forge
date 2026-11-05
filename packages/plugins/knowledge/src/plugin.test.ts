@@ -125,11 +125,11 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + forge:knowledge �
       expect(typeof (service as unknown as Record<string, unknown>)[method], `knowledge.${method}`).toBe('function')
     }
     expect(rt.registeredTools.map((t) => t.name).sort()).toEqual([
-      'knowledge_merge',
       'knowledge_read',
       'knowledge_read_abstract',
-      'knowledge_revert',
+      'knowledge_reinstate',
       'knowledge_search',
+      'knowledge_supersede',
       'knowledge_write',
     ])
     expect(rt.sections).toHaveLength(1)
@@ -142,8 +142,8 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + forge:knowledge �
     expect(section?.text).toContain('knowledge_read_abstract')
     expect(section?.text).toContain('knowledge_read')
     expect(section?.text).toContain('knowledge_write')
-    expect(section?.text).toContain('knowledge_merge')
-    expect(section?.text).toContain('knowledge_revert')
+    expect(section?.text).toContain('knowledge_supersede')
+    expect(section?.text).toContain('knowledge_reinstate')
     dispose()
   })
 

@@ -1,24 +1,26 @@
 // stage② distill 归并执行面（提案 §2.6 裁决 #8：自动执行 + 全程可回滚；
-// 裁决 #1 修订 2026-11-05：随开 agent tool——执行仍由本面单点承载）。
+// 裁决 #1 修订 2026-11-05：随开 agent tool——执行仍由本面单点承载；
+// followups #1 重命名 2026-11-05：merge/revert → supersedeEntry/reinstateEntry）。
 // 归并四件套经服务面单点承载（fix 6ca979cf：台账落账无通道、hash 中止/驳回逆向
 // 无实现——此前仅 SKILL 组装、测试手工合成台账行）：
-// ① loser 正本回写 merged_into（frontmatter 写径——文件为正本权威，rebuild 可再生）；
-// ② KNOWLEDGE_MERGE_LEDGER 落行 actor=agent（生产写径）；
-// ③ revertMerge 驳回逆向（actor=human）：loser 解除 redirect 恢复检索地位，
+// ① loser 正本回写 merged_into（frontmatter 写径——文件为正本权威，rebuild 可再生；
+//    merged_into 字段名保留不改名——与版本链 supersedes 异名消歧，用户裁决 2026-11-05）；
+// ② KNOWLEDGE_SUPERSEDE_LEDGER 落行 actor=agent（生产写径）；
+// ③ reinstateEntry 驳回逆向（actor=human）：loser 解除 redirect 恢复检索地位，
 //    winner 融合正文不回退；逆向不可凭空回滚（台账行缺失拒绝）；
 // ④ 写前 content_hash 校验中止（失配即中止该项，INV-F——绝不基于陈旧内容归并；
 //    逆向 hash 失配同口径 aborted/hash-mismatch——fix-评审2 Minor 对称）。
 // 跨项目校验（spec P3，fix-评审2）：v4 实体表全局无项目键——winner/loser 的版本
 // 文件须同落 q.projectId 的 knowledge_dir 下，否则 cas-failed/cross-project 拒。
-// CAS 与 confirm 交错防护：loser 已带 merged_into → merge 拒（cas-failed）；
-// merge 先到 → confirm 侧既有 merged CAS 拒（write.ts confirm 前置）。loser 权威版
+// CAS 与 confirm 交错防护：loser 已带 merged_into → supersede 拒（cas-failed）；
+// supersede 先到 → confirm 侧既有 merged CAS 拒（write.ts confirm 前置）。loser 权威版
 // 为 confirmed 时归并同笔降 superseded（保留 confirmed_at 曾审标记）——终态无
 // confirmed+redirect 并存（INV-D），且「已审面意外缺失」的 warn purge 口径成立（CT-DI-07）。
 // 两步写非原子（fix-评审2 Minor 点明）：正本文件写（writeFileSync）与 DB 投影/台账
 // 落行（withImmediateTransaction）是两个独立步——进程在两步之间崩溃时文件面已带
 // merged_into 而 entries 行/台账行滞后。失败窗口自愈路径：rebuild 以文件为正本权威
 // 再生 entries 投影（merged_into 随 frontmatter 再生）；台账行缺失侧的后果由
-// revertMerge 的 ledger-missing 拒收兜底（不可凭空回滚），不产生半成品检索态。
+// reinstateEntry 的 ledger-missing 拒收兜底（不可凭空回滚），不产生半成品检索态。
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import matter from 'gray-matter'
@@ -29,13 +31,13 @@ import { KNOWLEDGE_MERGE_EVENT, emitStorageDiag, storageDiag, type DiagEmitter }
 import type { KnowledgeMergeOutcome, KnowledgeMergeQuery, KnowledgeRevertOutcome, KnowledgeRevertQuery } from './types.js'
 
 /** 归并面依赖（service 工厂注入） */
-export interface MergeGatewayDeps {
+export interface SupersedeGatewayDeps {
   readonly db: Database.Database
   readonly emit?: DiagEmitter
 }
 
-/** entries 投影行（merge 面消费列） */
-interface MergeEntryRow {
+/** entries 投影行（supersede 面消费列） */
+interface SupersedeEntryRow {
   id: string
   status: string
   confirmed_version_id: string | null
@@ -57,19 +59,19 @@ function pickAuthority(versions: readonly VersionRow[], confirmedVersionId: stri
 }
 
 /** 归并/逆向面工厂（service.ts 注入 db/emit；条目解析每调用期现查——无缓存快照） */
-export function createMergeGateway(deps: MergeGatewayDeps) {
+export function createSupersedeGateway(deps: SupersedeGatewayDeps) {
   const { db, emit } = deps
-  const selectEntry = db.prepare<[string], MergeEntryRow>(
+  const selectEntry = db.prepare<[string], SupersedeEntryRow>(
     `SELECT id, status, confirmed_version_id, merged_into FROM knowledge_entries WHERE id = ?`,
   )
   const selectVersions = db.prepare<[string], VersionRow>(
     `SELECT version_ts, file_path FROM knowledge_entry_versions WHERE id = ?`,
   )
   const selectLatestAgentLedger = db.prepare<[string], { seq: number; winner_id: string }>(
-    `SELECT seq, winner_id FROM knowledge_merge_ledger WHERE loser_id = ? AND actor = 'agent' ORDER BY seq DESC LIMIT 1`,
+    `SELECT seq, winner_id FROM knowledge_supersede_ledger WHERE loser_id = ? AND actor = 'agent' ORDER BY seq DESC LIMIT 1`,
   )
   const insertLedger = db.prepare(
-    `INSERT INTO knowledge_merge_ledger (winner_id, loser_id, reason, actor, merged_at) VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO knowledge_supersede_ledger (winner_id, loser_id, reason, actor, merged_at) VALUES (?, ?, ?, ?, ?)`,
   )
 
   /** 正本文件读取（亡/不可读 = cas-failed 回执面，非裸错） */
@@ -90,7 +92,7 @@ export function createMergeGateway(deps: MergeGatewayDeps) {
     return createHash('sha256').update(raw, 'utf8').digest('hex') === expected
   }
 
-  async function merge(q: KnowledgeMergeQuery, knowledgeDir?: string): Promise<KnowledgeMergeOutcome> {
+  async function supersede(q: KnowledgeMergeQuery, knowledgeDir?: string): Promise<KnowledgeMergeOutcome> {
     const casFailed = (
       detail: string,
       reason: 'merged' | 'not-found' | 'cross-project' = 'merged',
@@ -156,7 +158,7 @@ export function createMergeGateway(deps: MergeGatewayDeps) {
     return { outcome: 'merged', winnerId: q.winnerId, loserId: q.loserId, demotedFromConfirmed: wasConfirmed }
   }
 
-  async function revertMerge(q: KnowledgeRevertQuery): Promise<KnowledgeRevertOutcome> {
+  async function reinstate(q: KnowledgeRevertQuery): Promise<KnowledgeRevertOutcome> {
     const rejected = (reason: 'not-merged' | 'ledger-missing', detail: string): KnowledgeRevertOutcome => {
       emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_MERGE_EVENT, `驳回逆向拒：${detail}`, { cwd: q.loserId }))
       return { outcome: 'rejected', loserId: q.loserId, reason, detail }
@@ -178,7 +180,7 @@ export function createMergeGateway(deps: MergeGatewayDeps) {
     if (!hashMatches(read.raw, q.expectedLoserHash)) {
       const detail = `content_hash 失配——中止逆向（文件已被外部改动）：${q.loserId}`
       emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_MERGE_EVENT, `逆向中止：${detail}`, { cwd: read.authority.file_path }))
-      // fix-评审2 Minor：与 merge 侧对称的 aborted/hash-mismatch 口径（原 rejected/not-merged）
+      // fix-评审2 Minor：与 supersede 侧对称的 aborted/hash-mismatch 口径（原 rejected/not-merged）
       return { outcome: 'aborted', loserId: q.loserId, reason: 'hash-mismatch', detail }
     }
     // ③ 驳回逆向：loser 解除 redirect 恢复检索地位；winner 融合正文不回退（零触碰）
@@ -207,5 +209,5 @@ export function createMergeGateway(deps: MergeGatewayDeps) {
     return { outcome: 'reverted', loserId: q.loserId, winnerId: loser.merged_into, restoredStatus }
   }
 
-  return { merge, revertMerge }
+  return { supersede, reinstate }
 }

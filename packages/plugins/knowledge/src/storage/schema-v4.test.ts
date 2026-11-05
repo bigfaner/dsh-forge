@@ -1,5 +1,6 @@
-// schema v4 迁移线单测（stage② A1）：v3 → v4 前向升级（注册行数据完整迁移 + 六表在场）
-// + 独立事务 downgrade（v4 → v3 形态恢复、注册行数据保全、缓存表空表重建）+ 再升级。
+// schema v4/v5 迁移线单测（stage② A1 + followups #1）：v3 → v4 前向升级（注册行数据完整
+// 迁移 + 六表在场）+ v5 台账表改名（存量行完整）+ 独立事务 downgrade（v5 → v3 形态恢复、
+// 注册行数据保全、缓存表空表重建）+ 再升级。
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -44,7 +45,7 @@ function tableNames(db: Database.Database): string[] {
 }
 
 describe('schema v4 迁移线（独立事务可 downgrade）', () => {
-  it('v3 存量库开库 → v4：六表在场（registry/entries 新形/versions/synonyms/merge_ledger/recall_logs）+ FTS5 虚表 + 注册行数据完整迁移', () => {
+  it('v3 存量库开库 → v5：六表在场（registry/entries 新形/versions/synonyms/supersede_ledger/recall_logs）+ FTS5 虚表 + 注册行数据完整迁移 + v5 台账表改名', () => {
     const root = tmpRoot()
     const file = join(root, 'knowledge.db')
     buildV3Db(file)
@@ -56,7 +57,8 @@ describe('schema v4 迁移线（独立事务可 downgrade）', () => {
       expect(tables).toContain('knowledge_entries') // 新形（slug id 主键）
       expect(tables).toContain('knowledge_entry_versions')
       expect(tables).toContain('knowledge_synonyms')
-      expect(tables).toContain('knowledge_merge_ledger')
+      expect(tables).toContain('knowledge_supersede_ledger') // v5 改名（followups #1 用户裁决 2026-11-05）
+      expect(tables).not.toContain('knowledge_merge_ledger') // 旧表名缺席（ALTER RENAME 零重建）
       expect(tables).toContain('knowledge_recall_logs')
       expect(tables).toContain('knowledge_fts') // FTS5 虚表
       // 新形列核销：slug 主键 + 三态 CHECK + 四档 rank CHECK + procedure_tag + merged_into + domain
@@ -78,13 +80,13 @@ describe('schema v4 迁移线（独立事务可 downgrade）', () => {
         .get()
       expect(row).toEqual({ ws_path: 'C:\\ws-a', knowledge_dir: 'C:\\ws-a\\.knowledge', project_id: 'pid-1' })
       const version = db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()
-      expect(version).toEqual({ v: 4 })
+      expect(version).toEqual({ v: 5 })
     } finally {
       db.close()
     }
   })
 
-  it('downgrade v4 → v3：新表全撤、旧 knowledge_entries 缓存空表重建、projects 改回且数据保全；再开库回 v4', () => {
+  it('downgrade v5 → v3：新表全撤、旧 knowledge_entries 缓存空表重建、projects 改回且数据保全；再开库回 v5', () => {
     const root = tmpRoot()
     const file = join(root, 'knowledge.db')
     const db = openKnowledgeDatabase(file)
@@ -94,7 +96,7 @@ describe('schema v4 迁移线（独立事务可 downgrade）', () => {
     ).run('C:\\ws-b', 'kd-b', 'pid-2', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')
     db.prepare(`INSERT INTO knowledge_synonyms (term_norm, canonical_term) VALUES ('k8s', 'kubernetes')`).run()
     db.prepare(
-      `INSERT INTO knowledge_merge_ledger (winner_id, loser_id, reason, actor, merged_at) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO knowledge_supersede_ledger (winner_id, loser_id, reason, actor, merged_at) VALUES (?, ?, ?, ?, ?)`,
     ).run('winner', 'loser', 'dup', 'agent', '2026-01-03T00:00:00Z')
     downgradeKnowledgeSchema(db, 3)
     try {
@@ -103,7 +105,7 @@ describe('schema v4 迁移线（独立事务可 downgrade）', () => {
       expect(tables).not.toContain('knowledge_registry')
       expect(tables).not.toContain('knowledge_entry_versions')
       expect(tables).not.toContain('knowledge_synonyms')
-      expect(tables).not.toContain('knowledge_merge_ledger')
+      expect(tables).not.toContain('knowledge_supersede_ledger')
       expect(tables).not.toContain('knowledge_fts')
       // 旧 knowledge_entries 缓存空表恢复（v2 形态列核销）
       const cols = db
@@ -122,10 +124,10 @@ describe('schema v4 迁移线（独立事务可 downgrade）', () => {
     } finally {
       db.close()
     }
-    // 再开库 → 回 v4（up/down 往返）
+    // 再开库 → 回 v5（up/down 往返）
     const again = openKnowledgeDatabase(file)
     try {
-      expect(again.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()).toEqual({ v: 4 })
+      expect(again.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()).toEqual({ v: 5 })
       expect(tableNames(again)).toContain('knowledge_fts')
       expect(
         again.prepare<unknown[], { ws_path: string }>(`SELECT ws_path FROM knowledge_registry`).get(),
@@ -139,7 +141,7 @@ describe('schema v4 迁移线（独立事务可 downgrade）', () => {
     const root = tmpRoot()
     const db = openKnowledgeDatabase(join(root, 'knowledge.db'))
     try {
-      expect(() => downgradeKnowledgeSchema(db, 4)).toThrow(/非降级路径/)
+      expect(() => downgradeKnowledgeSchema(db, 5)).toThrow(/非降级路径/)
       expect(() => downgradeKnowledgeSchema(db, 2)).toThrow(/无降级语句集/)
     } finally {
       db.close()

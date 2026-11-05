@@ -154,8 +154,8 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       ctx.tools.register(tools.readAbstract),
       ctx.tools.register(tools.write),
       ctx.tools.register(tools.read),
-      ctx.tools.register(tools.merge),
-      ctx.tools.register(tools.revert),
+      ctx.tools.register(tools.supersede),
+      ctx.tools.register(tools.reinstate),
       // 段文本 = 契约内容源渲染（工具定义 + contracts 常量），不在此复述
       ctx.systemPrompt.section({
         name: KNOWLEDGE_SECTION_NAME,

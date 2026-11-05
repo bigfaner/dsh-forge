@@ -99,9 +99,10 @@ export interface KnowledgeService {
   // ── stage② distill 归并执行面（§2.6 裁决 #8——裁决 #1 修订 2026-11-05：随开 agent tool） ──
   /** 归并执行四件套：loser 正本回写 merged_into + 台账 actor=agent + hash 校验中止 + CAS 前置
    *  + 跨项目校验（winner/loser 须同属 q.projectId——spec P3） */
-  mergeKnowledge(q: KnowledgeMergeQuery): Promise<KnowledgeMergeOutcome>
-  /** 驳回逆向（actor=human）：loser 解除 redirect 恢复检索地位，winner 融合正文不回退 */
-  revertMerge(q: KnowledgeRevertQuery): Promise<KnowledgeRevertOutcome>
+  supersedeEntry(q: KnowledgeMergeQuery): Promise<KnowledgeMergeOutcome>
+  /** 驳回逆向（actor=human）：loser 解除 redirect 恢复检索地位，winner 融合正文不回退；
+    *  followups #1 重命名 2026-11-05：revertMerge → reinstateEntry */
+  reinstateEntry(q: KnowledgeRevertQuery): Promise<KnowledgeRevertOutcome>
 }
 
 /** Interface 2 + 第八法聚合面：KnowledgeService 七法 + browse 域树聚合（forge:knowledge/browse 通道 handler 本体）+ 注册行写入（第九法） */

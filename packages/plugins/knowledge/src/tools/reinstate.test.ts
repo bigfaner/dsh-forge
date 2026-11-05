@@ -1,7 +1,8 @@
-// 单测 —— knowledge_revert tool（fix-评审2：裁决 #1 修订；同 merge.test.ts 口径）。
+// 单测 —— knowledge_reinstate tool（fix-评审2：裁决 #1 修订；followups #1 重命名
+// 2026-11-05：knowledge_revert → knowledge_reinstate；同 supersede.test.ts 口径）。
 import { describe, expect, it, vi } from 'vitest'
 import type { KnowledgeRevertOutcome, KnowledgeService } from '../service/types.js'
-import { createRevertTool, parseRevertArgs } from './revert.js'
+import { createReinstateTool, parseReinstateArgs } from './reinstate.js'
 import { createProjectResolver } from './session.js'
 
 function revertedOutcome(over: Record<string, unknown> = {}): KnowledgeRevertOutcome {
@@ -10,11 +11,11 @@ function revertedOutcome(over: Record<string, unknown> = {}): KnowledgeRevertOut
 
 function stubService(outcome: KnowledgeRevertOutcome = revertedOutcome()) {
   const calls: unknown[] = []
-  const revertMerge = vi.fn(async (q: unknown) => {
+  const reinstateEntry = vi.fn(async (q: unknown) => {
     calls.push(q)
     return outcome
   })
-  return { service: { revertMerge } as unknown as KnowledgeService, calls }
+  return { service: { reinstateEntry } as unknown as KnowledgeService, calls }
 }
 
 const deps = (service: KnowledgeService) => ({
@@ -28,10 +29,10 @@ const exec = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' }
 const validArgs = { loser_id: 'kb-l', winner_id: 'kb-w', reason: '人工复核：非重复对', expected_loser_hash: 'b'.repeat(64) }
 
 describe('描述面：tool 定义与参数 schema 契约锚', () => {
-  const tool = createRevertTool(deps(stubService().service))
+  const tool = createReinstateTool(deps(stubService().service))
 
-  it('tool 名 = knowledge_revert；必填 = loser_id', () => {
-    expect(tool.name).toBe('knowledge_revert')
+  it('tool 名 = knowledge_reinstate；必填 = loser_id', () => {
+    expect(tool.name).toBe('knowledge_reinstate')
     expect(tool.parameters.required).toEqual(['loser_id'])
   })
 
@@ -43,30 +44,30 @@ describe('描述面：tool 定义与参数 schema 契约锚', () => {
 
   it('描述面披露可逆语义/台账 actor=human/不可凭空回滚', () => {
     expect(tool.description).toContain('actor=human')
-    expect(tool.description).toContain('no reverting out of thin air')
+    expect(tool.description).toContain('no reinstating out of thin air')
     expect(tool.description).toContain('content_hash')
   })
 })
 
-describe('parseRevertArgs（执行点防御性收窄）', () => {
+describe('parseReinstateArgs（执行点防御性收窄）', () => {
   it('合法载荷通过；可选键缺省省略', () => {
-    expect(parseRevertArgs(validArgs)).toEqual(validArgs)
-    expect(parseRevertArgs({ loser_id: 'kb-l' })).toEqual({ loser_id: 'kb-l' })
+    expect(parseReinstateArgs(validArgs)).toEqual(validArgs)
+    expect(parseReinstateArgs({ loser_id: 'kb-l' })).toEqual({ loser_id: 'kb-l' })
   })
 
   it('类型违例逐一拒绝（非对象 / id 空 / 可选键类型不符）', () => {
-    expect(() => parseRevertArgs('x')).toThrow(/must be an object/)
-    expect(() => parseRevertArgs({ ...validArgs, loser_id: ' ' })).toThrow(/loser_id/)
-    expect(() => parseRevertArgs({ ...validArgs, winner_id: 3 })).toThrow(/winner_id/)
-    expect(() => parseRevertArgs({ ...validArgs, reason: 1 })).toThrow(/reason/)
-    expect(() => parseRevertArgs({ ...validArgs, expected_loser_hash: true })).toThrow(/expected_loser_hash/)
+    expect(() => parseReinstateArgs('x')).toThrow(/must be an object/)
+    expect(() => parseReinstateArgs({ ...validArgs, loser_id: ' ' })).toThrow(/loser_id/)
+    expect(() => parseReinstateArgs({ ...validArgs, winner_id: 3 })).toThrow(/winner_id/)
+    expect(() => parseReinstateArgs({ ...validArgs, reason: 1 })).toThrow(/reason/)
+    expect(() => parseReinstateArgs({ ...validArgs, expected_loser_hash: true })).toThrow(/expected_loser_hash/)
   })
 })
 
 describe('execute：会话上下文解析 → 服务调用 → snake→camel 映射', () => {
   it('projectId/sessionId 注入 + winner_id/expected_loser_hash camel 化透传', async () => {
     const { service, calls } = stubService()
-    const tool = createRevertTool(deps(service))
+    const tool = createReinstateTool(deps(service))
     const out = await tool.execute(validArgs, exec)
     expect(out).toEqual(revertedOutcome())
     expect(calls).toEqual([
@@ -83,7 +84,7 @@ describe('execute：会话上下文解析 → 服务调用 → snake→camel 映
 
 describe('render：回执 → 模型可见文本（三分支，含 aborted/hash-mismatch 对称口径）', () => {
   it('reverted / aborted / rejected 各自呈现 outcome 与拒因', async () => {
-    const tool = createRevertTool(deps(stubService().service))
+    const tool = createReinstateTool(deps(stubService().service))
     const r = tool.output
     const reverted = r.render({}, revertedOutcome())
     expect(reverted[0]?.text).toContain('reverted: kb-l redirect released')

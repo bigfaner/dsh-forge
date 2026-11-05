@@ -180,14 +180,14 @@ describe('CT-LR-09 rebuild 无损（LR-E4）', () => {
     await w.service.registerKnowledge({ wsPath: w.ws })
     // 业务账预置（收编终态联动面——归并台账在册 + 召回账消费）
     w.db.prepare(
-      `INSERT INTO knowledge_merge_ledger (winner_id, loser_id, reason, actor, merged_at) VALUES ('legacy-alpha', 'dup-one', 'dup', 'agent', '2026-01-05T00:00:00Z')`,
+      `INSERT INTO knowledge_supersede_ledger (winner_id, loser_id, reason, actor, merged_at) VALUES ('legacy-alpha', 'dup-one', 'dup', 'agent', '2026-01-05T00:00:00Z')`,
     ).run()
     w.db.prepare(
       `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, frontmatter_id, title_snap, domain_snap, query_json, hit_count, duration_ms, created_at)
        VALUES ('p-lr-e4', 'c1', 's1', 'search', NULL, NULL, NULL, NULL, '{}', 0, 1, '2026-01-06T00:00:00Z')`,
     ).run()
     const beforeEntries = w.db.prepare(`SELECT id, title, status, effective_rank FROM knowledge_entries ORDER BY id`).all()
-    const n1 = nRows(w, 'knowledge_merge_ledger')
+    const n1 = nRows(w, 'knowledge_supersede_ledger')
     const n2 = nRows(w, 'knowledge_recall_logs')
     // DELETE 缓存表（白名单作用域）+ rebuild
     w.db.prepare(`DELETE FROM knowledge_fts`).run()
@@ -195,7 +195,7 @@ describe('CT-LR-09 rebuild 无损（LR-E4）', () => {
     w.db.prepare(`DELETE FROM knowledge_entries`).run()
     rebuildKnowledgeIndex(w.db, {})
     expect(w.db.prepare(`SELECT id, title, status, effective_rank FROM knowledge_entries ORDER BY id`).all()).toEqual(beforeEntries) // CT-LR-09 O1：语义无损
-    expect(nRows(w, 'knowledge_merge_ledger')).toBe(n1) // INV-B
+    expect(nRows(w, 'knowledge_supersede_ledger')).toBe(n1) // INV-B
     expect(nRows(w, 'knowledge_recall_logs')).toBe(n2) // INV-B
     w.storage.close()
   })

@@ -188,9 +188,10 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
         // stage② 1.4 写门双 tool（§2.3 读 + 写）
         'knowledge_write',
         'knowledge_read',
-        // fix-评审2（裁决 #1 修订 2026-11-05）：merge/revert 开为 agent tool
-        'knowledge_merge',
-        'knowledge_revert',
+        // fix-评审2（裁决 #1 修订 2026-11-05）：merge/revert 开为 agent tool；
+        // followups #1 重命名：knowledge_supersede / knowledge_reinstate
+        'knowledge_supersede',
+        'knowledge_reinstate',
       ])
       const assembly = await sys.assemble()
       expect(assembly.sections.map((s) => s.name)).toContain('forge:knowledge')

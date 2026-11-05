@@ -48,7 +48,7 @@ import {
   type RecallRow,
 } from './internal.js'
 import { createWriteGateway } from './write.js'
-import { createMergeGateway } from './merge.js'
+import { createSupersedeGateway } from './supersede.js'
 import { createScanRegister } from './scan-register.js'
 import type {
   BackflowConfig,
@@ -403,7 +403,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
   const gateway = createWriteGateway({ db, emit })
 
   // ── distill 归并执行面（merge.ts——§2.6 裁决 #8 四件套） ──
-  const merges = createMergeGateway({ db, emit })
+  const supersedes = createSupersedeGateway({ db, emit })
 
   // ── 存量收编面（scan-register.ts——scan 只读体检 + register 幂等注册） ──
   const scanRegister = createScanRegister({ db, emit })
@@ -620,14 +620,14 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
 
     registerKnowledge: (q) => scanRegister.registerKnowledge(q),
 
-    mergeKnowledge: async (q) => {
-      const { knowledgeDir } = requireProject(q.projectId, 'mergeKnowledge')
-      return merges.merge(q, knowledgeDir)
+    supersedeEntry: async (q) => {
+      const { knowledgeDir } = requireProject(q.projectId, 'supersedeEntry')
+      return supersedes.supersede(q, knowledgeDir)
     },
 
-    revertMerge: async (q) => {
-      requireProject(q.projectId, 'revertMerge')
-      return merges.revertMerge(q)
+    reinstateEntry: async (q) => {
+      requireProject(q.projectId, 'reinstateEntry')
+      return supersedes.reinstate(q)
     },
   }
 }

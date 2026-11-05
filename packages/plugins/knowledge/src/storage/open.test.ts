@@ -33,7 +33,7 @@ describe('A2 open：单文件全表同库 + 并发 PRAGMA + 版本线', () => {
     try {
       expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
       expect(db.pragma('busy_timeout', { simple: true })).toBe(BUSY_TIMEOUT_MS)
-      expect(schemaMetaRows(db).map((r) => r.version)).toEqual([1, 2, 3, 4]) // v3：project_id 列（fix-2）；v4：实体六表 + FTS5 + registry 改名
+      expect(schemaMetaRows(db).map((r) => r.version)).toEqual([1, 2, 3, 4, 5]) // v3：project_id 列（fix-2）；v4：实体六表 + FTS5 + registry 改名；v5：归并台账表改名（followups #1）
       const tables = db
         .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
         .all()
@@ -42,7 +42,7 @@ describe('A2 open：单文件全表同库 + 并发 PRAGMA + 版本线', () => {
       expect(tables).toContain('knowledge_registry') // v4：projects 改名（数据完整迁移）
       expect(tables).toContain('knowledge_entry_versions') // v4：版本表
       expect(tables).toContain('knowledge_synonyms') // v4：词表
-      expect(tables).toContain('knowledge_merge_ledger') // v4：归并业务账
+      expect(tables).toContain('knowledge_supersede_ledger') // v4 归并业务账（v5 改名——原 knowledge_merge_ledger）
       expect(tables).toContain('knowledge_recall_logs') // v2 落地，v4 不动
       const fts = db
         .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name='knowledge_fts'`)
@@ -59,7 +59,7 @@ describe('A2 open：单文件全表同库 + 并发 PRAGMA + 版本线', () => {
     first.close()
     const second = openKnowledgeDatabase(file)
     try {
-      expect(schemaMetaRows(second)).toHaveLength(4)
+      expect(schemaMetaRows(second)).toHaveLength(5)
     } finally {
       second.close()
     }

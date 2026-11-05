@@ -1,7 +1,7 @@
 // rebuild 再生（stage② A1：文档权威对账——提案 §2.2/§2.4/§2.8）。DB 两缓存表 + FTS5
 // 纯派生：整库单事务 DELETE → 从各注册行知识目录 md frontmatter 逐行重建等价（含
 // merged_into/redirect 再生与四档 effective_rank 派生）。作用域白名单 = knowledge_entries
-// + knowledge_entry_versions + knowledge_fts——业务账（knowledge_merge_ledger /
+// + knowledge_entry_versions + knowledge_fts——业务账（knowledge_supersede_ledger /
 // knowledge_recall_logs）永不在 rebuild 波及面。文件亡 → 记录亡：库内版本行对账文件缺失
 // → 记录随整表重建同步消失，并按缺失前状态发 knowledge-entry-purge 埋点
 // （unconfirmed=info / confirmed 与 superseded=warn——已审知识意外丢失应被看见），

@@ -20,7 +20,7 @@ export interface StorageMigration {
 }
 
 /** 本插件支持的自持库 schema 版本上限（版本门：库内 version 超出即拒绝打开） */
-export const STORAGE_SCHEMA_VERSION = 4
+export const STORAGE_SCHEMA_VERSION = 5
 
 /**
  * v1：schema_meta（版本线本体）+ 自持注册表 projects。
@@ -179,6 +179,14 @@ export const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
       `CREATE INDEX idx_ke_frontmatter_id ON knowledge_entries(frontmatter_id)`,
       `ALTER TABLE knowledge_registry RENAME TO projects`,
     ],
+  },
+  {
+    // v5（knowledge-stage2-followups #1——用户裁决 2026-11-05）：归并台账表改名
+    // knowledge_merge_ledger → knowledge_supersede_ledger（ALTER RENAME——v4 存量库
+    // 行集零重建，台账数据完整迁移）。downgrade = 改回旧名（数据完整保留）。
+    version: 5,
+    statements: [`ALTER TABLE knowledge_merge_ledger RENAME TO knowledge_supersede_ledger`],
+    downgradeStatements: [`ALTER TABLE knowledge_supersede_ledger RENAME TO knowledge_merge_ledger`],
   },
 ]
 

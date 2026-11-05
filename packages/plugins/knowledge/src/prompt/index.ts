@@ -25,7 +25,7 @@ function parameterLines(parameters: { properties: Readonly<Record<string, { type
 
 /** 六 tool 用法说明（名称/描述/参数全部来自定义对象机械渲染） */
 function renderToolUsage(tools: KnowledgeTools): string {
-  return [tools.search, tools.readAbstract, tools.read, tools.write, tools.merge, tools.revert]
+  return [tools.search, tools.readAbstract, tools.read, tools.write, tools.supersede, tools.reinstate]
     .map((t) => `${t.name}: ${t.description}\n${parameterLines(t.parameters).join('\n')}`)
     .join('\n\n')
 }
@@ -51,7 +51,7 @@ export function renderKnowledgeSection(tools: KnowledgeTools): string {
     '4. Call knowledge_read_abstract with a hit\'s entry_id only when its summary is not enough; it never returns the full body.',
     '5. Call knowledge_read with a hit\'s id for the full markdown document — confirmed entries (and once-confirmed superseded versions) are readable; unconfirmed drafts are denied.',
     '6. To persist new knowledge, use knowledge_write — it enforces a mandatory self-judged necessity gate (long-term stable / non-commonsense / project value: all three or the write is skipped) and returns duplicate merge suggestions; pass version_of to version an existing entry instead of duplicating it.',
-    '7. When consolidating duplicates (e.g. after distill evaluation), use knowledge_merge to redirect a loser entry into a winner (automatic, reversible, hash-guarded); use knowledge_revert to undo a merge when a human rejects it.',
+    '7. When consolidating duplicates (e.g. after distill evaluation), use knowledge_supersede to redirect a loser entry into a winner (automatic, reversible, hash-guarded); use knowledge_reinstate to undo a supersede when a human rejects it.',
     '8. These knowledge tools sit alongside grep/glob as retrieval primitives — compose them freely, and fall back to regular file retrieval when the knowledge base has no relevant hits.',
     '',
     'Tools:',

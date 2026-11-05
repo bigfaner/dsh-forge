@@ -164,12 +164,12 @@ describe('rebuildKnowledgeIndex（stage② 文档权威对账）', () => {
     db.close()
   })
 
-  it('作用域白名单：业务账（merge_ledger / recall_logs）不受 rebuild 波及（测试钉死）', () => {
+  it('作用域白名单：业务账（supersede_ledger / recall_logs）不受 rebuild 波及（测试钉死）', () => {
     const root = tmpRoot()
     const { db, knowledgeDir } = setup(root)
     buildCorpus(knowledgeDir)
     db.prepare(
-      `INSERT INTO knowledge_merge_ledger (winner_id, loser_id, reason, actor, merged_at) VALUES ('auth-1', 'loser-1', 'dup', 'agent', '2026-01-05T00:00:00Z')`,
+      `INSERT INTO knowledge_supersede_ledger (winner_id, loser_id, reason, actor, merged_at) VALUES ('auth-1', 'loser-1', 'dup', 'agent', '2026-01-05T00:00:00Z')`,
     ).run()
     db.prepare(
       `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, hit_count, created_at)
@@ -178,7 +178,7 @@ describe('rebuildKnowledgeIndex（stage② 文档权威对账）', () => {
 
     rebuildKnowledgeIndex(db)
     rebuildKnowledgeIndex(db) // 二连 rebuild 也不波及
-    const ledger = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_merge_ledger`).get()
+    const ledger = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_supersede_ledger`).get()
     const recalls = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM knowledge_recall_logs`).get()
     expect(ledger).toEqual({ n: 1 })
     expect(recalls).toEqual({ n: 1 })

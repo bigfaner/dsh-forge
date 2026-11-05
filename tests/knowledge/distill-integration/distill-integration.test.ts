@@ -5,8 +5,8 @@
 //   （CT-DI-01..12 ← journey DI-G1..G7 / DI-E1..E8）。
 // 策略：distill 整合执行循环 = agent 技能面（packages/plugins/knowledge/skills/distill/SKILL.md，
 // 随包交付——提案 §2.6），循环消费的确定性基元承载于真实服务面（fix 6ca979cf——
-// 归并执行四件套经 service/merge.ts 落码：正本回写 merged_into / 台账 actor=agent /
-// 驳回逆向 revertMerge / 写前 content_hash 校验中止；CT-DI-02 证据 = 真实实现能力，
+// 归并执行四件套经 service/supersede.ts 落码：正本回写 merged_into / 台账 actor=agent /
+// 驳回逆向 reinstateEntry / 写前 content_hash 校验中止；CT-DI-02 证据 = 真实实现能力，
 // 非夹具直写合成）。候选发现 findMergeSuggestions、redirect rank 派生、confirm CAS、
 // rebuild 再生白名单同为本套断言锚。编排语义面（报告四计数、批量部分失败编排）
 // = 真机限定面，末尾 skip 留痕归 test-run。
@@ -92,8 +92,8 @@ async function applyMerge(
   loserId: string,
   reason: string,
   expectedHash?: string,
-): Promise<ReturnType<World['service']['mergeKnowledge']>> {
-  return w.service.mergeKnowledge({
+): Promise<ReturnType<World['service']['supersedeEntry']>> {
+  return w.service.supersedeEntry({
     projectId: w.projectId,
     winnerId,
     loserId,
@@ -125,7 +125,7 @@ describe('CT-DI-01 distill 候选发现：三类候选源（DI-G2）', () => {
   })
 })
 
-// ── CT-DI-02 归并执行形态（溯源 DI-G3，裁决 #8——真实服务面 mergeKnowledge） ──
+// ── CT-DI-02 归并执行形态（溯源 DI-G3，裁决 #8——真实服务面 supersedeEntry） ──
 
 describe('CT-DI-02 归并执行：winner 新版本 + loser redirect + 台账 actor=agent（DI-G3，裁决 #8）', () => {
   it('O1 成功：winner version_of 产融合新版本（真实 write 路径）+ loser 文件保留写 merged_into + rank 0.2 沉底 + 台账留行', async () => {
@@ -152,12 +152,12 @@ describe('CT-DI-02 归并执行：winner 新版本 + loser redirect + 台账 act
     expect(merged).toMatchObject({ outcome: 'merged', winnerId: winner.id, loserId: loser.id, demotedFromConfirmed: true }) // CT-DI-02 O1：服务回执
     // 四锚逐项成立（CT-DI-02 O1）
     expect(existsSync(loser.filePath)).toBe(true) // loser 文件保留（零删除可逆——INV-C）
-    expect(parseFm(readFileSync(loser.filePath, 'utf8')).data.merged_into).toBe(winner.id) // frontmatter redirect（生产写径）
+    expect(parseFm(readFileSync(loser.filePath, 'utf8')).data.merged_into).toBe(winner.id) // frontmatter redirect（生产写径；字段名 merged_into 钉死不改——followups #1 用户裁决 2026-11-05：与版本链 supersedes 异名消歧）
     const lRow = entryRow(w, loser.id)
     expect(lRow?.merged_into).toBe(winner.id) // DB 再生投影
     expect(lRow?.status).toBe('superseded') // 曾 confirmed 同笔降档——终态无 confirmed+redirect 并存（INV-D）
     expect(lRow?.effective_rank).toBe(0.2) // redirect 沉底最高优先档（merged_into 压过 confirmed）
-    expect(nRows(w, 'knowledge_merge_ledger', `WHERE winner_id = '${winner.id}' AND loser_id = '${loser.id}' AND actor = 'agent'`)).toBe(1) // 台账留行（生产写径）
+    expect(nRows(w, 'knowledge_supersede_ledger', `WHERE winner_id = '${winner.id}' AND loser_id = '${loser.id}' AND actor = 'agent'`)).toBe(1) // 台账留行（生产写径）
     expect(mergeEvents(w.events).some((e) => e.level === 'info' && e.message.includes(loser.id))).toBe(true) // 归并成功埋点
     w.storage.close()
   })
@@ -180,7 +180,7 @@ describe('CT-DI-02 归并执行：winner 新版本 + loser redirect + 台账 act
     const r = await applyMerge(w, winner2.id, loser.id, '跨项目归并')
     expect(r).toMatchObject({ outcome: 'cas-failed', loserId: loser.id, reason: 'cross-project' }) // CT-DI-02 O2
     expect(entryRow(w, loser.id)?.merged_into ?? null).toBeNull() // 零变更
-    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${loser.id}'`)).toBe(0) // 零台账行
+    expect(nRows(w, 'knowledge_supersede_ledger', `WHERE loser_id = '${loser.id}'`)).toBe(0) // 零台账行
     w.storage.close()
   })
 })
@@ -206,7 +206,7 @@ describe('CT-DI-03 归并：hash 失配中止（DI-E1，INV-F）', () => {
     expect(aborted).toMatchObject({ outcome: 'aborted', reason: 'hash-mismatch' }) // CT-DI-03 O1：中止回执
     expect(entryRow(w, stale.id)?.merged_into ?? null).toBeNull() // L 零变更（无 merged_into 写入）
     expect(parseFm(readFileSync(stale.filePath, 'utf8')).data.merged_into).toBeUndefined()
-    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${stale.id}'`)).toBe(0) // 无台账行
+    expect(nRows(w, 'knowledge_supersede_ledger', `WHERE loser_id = '${stale.id}'`)).toBe(0) // 无台账行
     expect(mergeEvents(w.events).some((e) => e.level === 'warn' && e.message.includes('中止'))).toBe(true) // 中止埋点
     // 同批其余项照常终态（不牵连）
     const ok = await applyMerge(w, winnerB.id, fresh.id, '同批健康项')
@@ -269,7 +269,7 @@ describe('CT-DI-05 search：redirect 沉底（DI-G4）', () => {
   })
 })
 
-// ── CT-DI-06 驳回回滚（溯源 DI-G5，裁决 #8——真实服务面 revertMerge） ──
+// ── CT-DI-06 驳回回滚（溯源 DI-G5，裁决 #8——真实服务面 reinstateEntry） ──
 
 describe('CT-DI-06 驳回回滚：解除 redirect 恢复检索地位（DI-G5，裁决 #8）', () => {
   it('O1 回滚成功：merged_into 清空 + rank 回自身 status 档 + winner 正文不回退 + 台账逆向行 actor=human', async () => {
@@ -286,7 +286,7 @@ describe('CT-DI-06 驳回回滚：解除 redirect 恢复检索地位（DI-G5，�
     expect(merged).toMatchObject({ outcome: 'merged', demotedFromConfirmed: true })
     const winnerBodyBefore = readFileSync(fused.filePath, 'utf8')
     // 人工经台账逆向（真实服务面）
-    const reverted = await w.service.revertMerge({ projectId: w.projectId, loserId: loser.id, reason: '人工复核：非重复对' })
+    const reverted = await w.service.reinstateEntry({ projectId: w.projectId, loserId: loser.id, reason: '人工复核：非重复对' })
     expect(reverted).toMatchObject({ outcome: 'reverted', loserId: loser.id, winnerId: winner.id, restoredStatus: 'confirmed' }) // CT-DI-06 O1
     const lRow = entryRow(w, loser.id)
     expect(lRow?.merged_into ?? null).toBeNull() // redirect 解除
@@ -294,11 +294,11 @@ describe('CT-DI-06 驳回回滚：解除 redirect 恢复检索地位（DI-G5，�
     expect(lRow?.effective_rank).toBe(1.0) // rank 按自身 status 重算（非 0.2 redirect 档）
     expect(parseFm(readFileSync(loser.filePath, 'utf8')).data.merged_into).toBeUndefined() // 正本同步解除
     expect(readFileSync(fused.filePath, 'utf8')).toBe(winnerBodyBefore) // W 融合正文 diff 为空（不回退）
-    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${loser.id}' AND actor = 'human'`)).toBe(1) // 逆向台账行
+    expect(nRows(w, 'knowledge_supersede_ledger', `WHERE loser_id = '${loser.id}' AND actor = 'human'`)).toBe(1) // 逆向台账行
     // O3 回滚后再判定：L 可再次入候选再归并（不产生永久免疫，往返逐行可审计）
     const remerged = await applyMerge(w, winner.id, loser.id, '复审后再归并')
     expect(remerged).toMatchObject({ outcome: 'merged' }) // CT-DI-06 O3
-    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${loser.id}' AND actor = 'agent'`)).toBe(2) // 逐行可审计
+    expect(nRows(w, 'knowledge_supersede_ledger', `WHERE loser_id = '${loser.id}' AND actor = 'agent'`)).toBe(2) // 逐行可审计
     w.storage.close()
   })
 
@@ -309,11 +309,11 @@ describe('CT-DI-06 驳回回滚：解除 redirect 恢复检索地位（DI-G5，�
     const loser = await w.service.write(writeQ({ projectId: w.projectId, title: 'No Ledger Loser', keywords: ['nll'] }))
     if (loser.outcome !== 'written') throw new Error('L 未写入')
     expect(await applyMerge(w, winner.id, loser.id, '将清账归并')).toMatchObject({ outcome: 'merged' })
-    w.db.prepare(`DELETE FROM knowledge_merge_ledger`).run() // 夹具侧清账（模拟台账行缺失）
-    const rejected = await w.service.revertMerge({ projectId: w.projectId, loserId: loser.id, reason: '无账可溯' })
+    w.db.prepare(`DELETE FROM knowledge_supersede_ledger`).run() // 夹具侧清账（模拟台账行缺失）
+    const rejected = await w.service.reinstateEntry({ projectId: w.projectId, loserId: loser.id, reason: '无账可溯' })
     expect(rejected).toMatchObject({ outcome: 'rejected', reason: 'ledger-missing' }) // CT-DI-06 O2
     expect(entryRow(w, loser.id)?.merged_into).toBe(winner.id) // 状态零变更
-    expect(nRows(w, 'knowledge_merge_ledger')).toBe(0) // 零新行
+    expect(nRows(w, 'knowledge_supersede_ledger')).toBe(0) // 零新行
     w.storage.close()
   })
 
@@ -328,10 +328,10 @@ describe('CT-DI-06 驳回回滚：解除 redirect 恢复检索地位（DI-G5，�
     const before = readFileSync(loser.filePath, 'utf8')
     const snapshot = sha256(before)
     writeFileSync(loser.filePath, `${before}\n<!-- 手改 -->`, 'utf8') // 评估后写前手改
-    const aborted = await w.service.revertMerge({ projectId: w.projectId, loserId: loser.id, expectedLoserHash: snapshot, reason: '陈旧逆向' })
+    const aborted = await w.service.reinstateEntry({ projectId: w.projectId, loserId: loser.id, expectedLoserHash: snapshot, reason: '陈旧逆向' })
     expect(aborted).toMatchObject({ outcome: 'aborted', reason: 'hash-mismatch' }) // CT-DI-06 O4：对称口径
     expect(entryRow(w, loser.id)?.merged_into).toBe(winner.id) // 状态零变更
-    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${loser.id}' AND actor = 'human'`)).toBe(0) // 零逆向行
+    expect(nRows(w, 'knowledge_supersede_ledger', `WHERE loser_id = '${loser.id}' AND actor = 'human'`)).toBe(0) // 零逆向行
     w.storage.close()
   })
 })
@@ -357,7 +357,7 @@ describe('CT-DI-07 loser 手删：文件亡记录亡 + 台账可溯（DI-E3，�
     // 断言②：warn 级 knowledge-entry-purge（loser 曾 confirmed——已审面意外缺失）
     expect(purgeEvents(w.events).some((e) => e.level === 'warn' && e.message.includes(loser.id))).toBe(true)
     // 断言③：MERGE_LEDGER 行保留（「为什么两个名字一个条目」仍可答）
-    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${loser.id}'`)).toBe(1)
+    expect(nRows(w, 'knowledge_supersede_ledger', `WHERE loser_id = '${loser.id}'`)).toBe(1)
     w.storage.close()
   })
 })
@@ -380,7 +380,7 @@ describe('CT-DI-08 rebuild：redirect 再生与业务账白名单（DI-E4）', (
       `SELECT id, status, effective_rank, merged_into FROM knowledge_entries ORDER BY id`,
     ).all()
     const beforeVersions = nRows(w, 'knowledge_entry_versions')
-    const n1 = nRows(w, 'knowledge_merge_ledger')
+    const n1 = nRows(w, 'knowledge_supersede_ledger')
     const n2 = nRows(w, 'knowledge_recall_logs')
     expect(n2).toBeGreaterThan(0)
     // DELETE 两缓存表 + FTS（白名单作用域）+ rebuild
@@ -394,7 +394,7 @@ describe('CT-DI-08 rebuild：redirect 再生与业务账白名单（DI-E4）', (
     ).all()
     expect(afterEntries).toEqual(beforeEntries) // 语义无损（含 L 的 merged_into/0.2 再生）
     expect(nRows(w, 'knowledge_entry_versions')).toBe(beforeVersions)
-    expect(nRows(w, 'knowledge_merge_ledger')).toBe(n1) // INV-E：业务账零波及
+    expect(nRows(w, 'knowledge_supersede_ledger')).toBe(n1) // INV-E：业务账零波及
     expect(nRows(w, 'knowledge_recall_logs')).toBe(n2) // INV-E
     w.storage.close()
   })
