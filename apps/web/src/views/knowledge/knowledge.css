@@ -290,7 +290,8 @@
   box-shadow: var(--dsw-elevation-prominent);
 }
 
-/* 标题栏：全窗拖移手柄（cursor move；按钮命中不动持——组件面守卫）+ 行尾关闭位 */
+/* 标题栏：全窗拖移手柄（cursor move；按钮命中不动持——组件面守卫）+ 行尾关闭位
+ * （排版零覆盖——与 Bug 详情弹窗头行逐位同面：字/色继承基面默认） */
 .dswf-kn-dialog-head {
   display: flex;
   align-items: center;
@@ -299,8 +300,6 @@
   padding-inline: var(--dsw-font-xs-13-line-height);
   border-bottom: 1px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-interactive-bg-hover);
-  font: var(--dsw-font-xs-strong-13);
-  color: var(--dsw-alias-label-secondary);
   cursor: var(--dsh-cursor-move, move);
   user-select: none;
   touch-action: none;
