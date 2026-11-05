@@ -125,3 +125,7 @@ apps/host/userdata.dev/
 .forge/acl-recovery/acl-report-ca6e26835aa44308a4c8f3bd21b5ae20.jsonl
 
 cdp/
+
+# Project-level expert profiles (local per-project, intentionally not in git —
+# hard guard replacing "never git-added" convention; see .dsh/experts/)
+.dsh/
