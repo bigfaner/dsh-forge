@@ -621,8 +621,8 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     registerKnowledge: (q) => scanRegister.registerKnowledge(q),
 
     mergeKnowledge: async (q) => {
-      requireProject(q.projectId, 'mergeKnowledge')
-      return merges.merge(q)
+      const { knowledgeDir } = requireProject(q.projectId, 'mergeKnowledge')
+      return merges.merge(q, knowledgeDir)
     },
 
     revertMerge: async (q) => {

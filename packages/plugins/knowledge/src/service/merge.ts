@@ -1,15 +1,24 @@
-// stage② distill 归并执行面（提案 §2.6 裁决 #8：自动执行 + 全程可回滚）。
+// stage② distill 归并执行面（提案 §2.6 裁决 #8：自动执行 + 全程可回滚；
+// 裁决 #1 修订 2026-11-05：随开 agent tool——执行仍由本面单点承载）。
 // 归并四件套经服务面单点承载（fix 6ca979cf：台账落账无通道、hash 中止/驳回逆向
 // 无实现——此前仅 SKILL 组装、测试手工合成台账行）：
 // ① loser 正本回写 merged_into（frontmatter 写径——文件为正本权威，rebuild 可再生）；
 // ② KNOWLEDGE_MERGE_LEDGER 落行 actor=agent（生产写径）；
 // ③ revertMerge 驳回逆向（actor=human）：loser 解除 redirect 恢复检索地位，
 //    winner 融合正文不回退；逆向不可凭空回滚（台账行缺失拒绝）；
-// ④ 写前 content_hash 校验中止（失配即中止该项，INV-F——绝不基于陈旧内容归并）。
+// ④ 写前 content_hash 校验中止（失配即中止该项，INV-F——绝不基于陈旧内容归并；
+//    逆向 hash 失配同口径 aborted/hash-mismatch——fix-评审2 Minor 对称）。
+// 跨项目校验（spec P3，fix-评审2）：v4 实体表全局无项目键——winner/loser 的版本
+// 文件须同落 q.projectId 的 knowledge_dir 下，否则 cas-failed/cross-project 拒。
 // CAS 与 confirm 交错防护：loser 已带 merged_into → merge 拒（cas-failed）；
 // merge 先到 → confirm 侧既有 merged CAS 拒（write.ts confirm 前置）。loser 权威版
 // 为 confirmed 时归并同笔降 superseded（保留 confirmed_at 曾审标记）——终态无
 // confirmed+redirect 并存（INV-D），且「已审面意外缺失」的 warn purge 口径成立（CT-DI-07）。
+// 两步写非原子（fix-评审2 Minor 点明）：正本文件写（writeFileSync）与 DB 投影/台账
+// 落行（withImmediateTransaction）是两个独立步——进程在两步之间崩溃时文件面已带
+// merged_into 而 entries 行/台账行滞后。失败窗口自愈路径：rebuild 以文件为正本权威
+// 再生 entries 投影（merged_into 随 frontmatter 再生）；台账行缺失侧的后果由
+// revertMerge 的 ledger-missing 拒收兜底（不可凭空回滚），不产生半成品检索态。
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import matter from 'gray-matter'
@@ -81,8 +90,11 @@ export function createMergeGateway(deps: MergeGatewayDeps) {
     return createHash('sha256').update(raw, 'utf8').digest('hex') === expected
   }
 
-  async function merge(q: KnowledgeMergeQuery): Promise<KnowledgeMergeOutcome> {
-    const casFailed = (detail: string, reason: 'merged' | 'not-found' = 'merged'): KnowledgeMergeOutcome => {
+  async function merge(q: KnowledgeMergeQuery, knowledgeDir?: string): Promise<KnowledgeMergeOutcome> {
+    const casFailed = (
+      detail: string,
+      reason: 'merged' | 'not-found' | 'cross-project' = 'merged',
+    ): KnowledgeMergeOutcome => {
       emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_MERGE_EVENT, `归并 CAS 拒：${detail}`, { cwd: q.loserId }))
       return { outcome: 'cas-failed', loserId: q.loserId, reason, detail }
     }
@@ -94,6 +106,19 @@ export function createMergeGateway(deps: MergeGatewayDeps) {
     }
     const winner = selectEntry.get(q.winnerId)
     if (winner === undefined) return casFailed(`winner 未命中：${q.winnerId}`, 'not-found')
+    // 跨项目校验（spec P3）：v4 实体表全局无项目键——以版本文件是否同落该项目
+    // knowledge_dir 判定域归属（service.ts projectEntryIds 同口径前缀匹配）
+    if (knowledgeDir !== undefined) {
+      const dir = knowledgeDir.replace(/[\\/]+$/, '')
+      const inDir = (id: string): boolean =>
+        selectVersions.all(id).some((v) => v.file_path.startsWith(`${dir}/`) || v.file_path.startsWith(`${dir}\\`))
+      if (!inDir(q.loserId) || !inDir(q.winnerId)) {
+        return casFailed(
+          `winner/loser 不同属项目域（${q.winnerId}/${q.loserId} 有版本文件落在 knowledge_dir 之外）——跨项目归并拒`,
+          'cross-project',
+        )
+      }
+    }
     const read = readAuthority(q.loserId, loser.confirmed_version_id)
     if (read === undefined) return casFailed(`loser 权威文件不可读/无版本行：${q.loserId}`)
     // ④ INV-F：写前 content_hash 校验——失配即中止该项（评估期间被手改）
@@ -153,7 +178,8 @@ export function createMergeGateway(deps: MergeGatewayDeps) {
     if (!hashMatches(read.raw, q.expectedLoserHash)) {
       const detail = `content_hash 失配——中止逆向（文件已被外部改动）：${q.loserId}`
       emitStorageDiag(emit, storageDiag('warn', KNOWLEDGE_MERGE_EVENT, `逆向中止：${detail}`, { cwd: read.authority.file_path }))
-      return { outcome: 'rejected', loserId: q.loserId, reason: 'not-merged', detail }
+      // fix-评审2 Minor：与 merge 侧对称的 aborted/hash-mismatch 口径（原 rejected/not-merged）
+      return { outcome: 'aborted', loserId: q.loserId, reason: 'hash-mismatch', detail }
     }
     // ③ 驳回逆向：loser 解除 redirect 恢复检索地位；winner 融合正文不回退（零触碰）
     const parsed = matter(read.raw)

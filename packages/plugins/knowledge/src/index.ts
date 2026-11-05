@@ -4,7 +4,8 @@
 //   'knowledge' 服务（reflect.provide；core 八法随迁 service/，自持库 storage/ 供数），
 //   tools / systemPrompt 为 dsh 官方面。
 // 装配：自持存储自启（失败/锚缺席 fail-soft 降级零注册）→ 'knowledge' 服务 provide →
-// 两 tool 注册（tools/register）+ forge:knowledge 段注册（systemPrompt.section，
+// 六 tool 注册（tools/register——search/readAbstract/write/read/merge/revert，
+// 裁决 #1 修订 2026-11-05：merge/revert 开为 agent tool）+ forge:knowledge 段注册（systemPrompt.section，
 // order 500）+ knowledge.root 目录键声明（根 scope provide('dirKeys.knowledge', entries)
 // 约定名——跨 scope 反向拉取终态缝，bug 04d445f4）；交出合并 disposer。
 // projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
@@ -153,6 +154,8 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       ctx.tools.register(tools.readAbstract),
       ctx.tools.register(tools.write),
       ctx.tools.register(tools.read),
+      ctx.tools.register(tools.merge),
+      ctx.tools.register(tools.revert),
       // 段文本 = 契约内容源渲染（工具定义 + contracts 常量），不在此复述
       ctx.systemPrompt.section({
         name: KNOWLEDGE_SECTION_NAME,

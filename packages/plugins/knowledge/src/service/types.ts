@@ -96,8 +96,9 @@ export interface KnowledgeService {
   scanKnowledge(q: { projectId: string }): Promise<KnowledgeScanReport>
   /** register 幂等注册：realpath canonical / deny 系统目录 / reparse 拒收 + 入库默认 unconfirmed */
   registerKnowledge(q: RegisterKnowledgeQuery): Promise<RegisterKnowledgeOutcome>
-  // ── stage② distill 归并执行面（§2.6 裁决 #8——服务方法非 tool，confirm 同口径） ──
-  /** 归并执行四件套：loser 正本回写 merged_into + 台账 actor=agent + hash 校验中止 + CAS 前置 */
+  // ── stage② distill 归并执行面（§2.6 裁决 #8——裁决 #1 修订 2026-11-05：随开 agent tool） ──
+  /** 归并执行四件套：loser 正本回写 merged_into + 台账 actor=agent + hash 校验中止 + CAS 前置
+   *  + 跨项目校验（winner/loser 须同属 q.projectId——spec P3） */
   mergeKnowledge(q: KnowledgeMergeQuery): Promise<KnowledgeMergeOutcome>
   /** 驳回逆向（actor=human）：loser 解除 redirect 恢复检索地位，winner 融合正文不回退 */
   revertMerge(q: KnowledgeRevertQuery): Promise<KnowledgeRevertOutcome>
@@ -267,8 +268,8 @@ export type KnowledgeMergeOutcome =
   | {
       readonly outcome: 'cas-failed'
       readonly loserId: string
-      /** merged（已处归并态/自归并）/ not-found（winner/loser 未命中或版本文件不可读） */
-      readonly reason: 'merged' | 'not-found'
+      /** merged（已处归并态/自归并）/ not-found（winner/loser 未命中或版本文件不可读）/ cross-project（winner/loser 不同属 projectId——spec P3） */
+      readonly reason: 'merged' | 'not-found' | 'cross-project'
       readonly detail: string
     }
 
@@ -283,7 +284,7 @@ export interface KnowledgeRevertQuery {
   readonly expectedLoserHash?: string
 }
 
-/** 逆向回执联合：reverted / rejected（未处归并态/台账行缺失——不可凭空回滚） */
+/** 逆向回执联合：reverted / aborted（hash 失配中止——与 merge 侧 aborted/hash-mismatch 对称，fix-评审2 Minor）/ rejected（未处归并态/台账行缺失——不可凭空回滚） */
 export type KnowledgeRevertOutcome =
   | {
       readonly outcome: 'reverted'
@@ -292,6 +293,7 @@ export type KnowledgeRevertOutcome =
       /** 恢复后的自身 status 档（rank 按此重算——confirmed 曾审标记在场则恢复 confirmed） */
       readonly restoredStatus: string
     }
+  | { readonly outcome: 'aborted'; readonly loserId: string; readonly reason: 'hash-mismatch'; readonly detail: string }
   | {
       readonly outcome: 'rejected'
       readonly loserId: string

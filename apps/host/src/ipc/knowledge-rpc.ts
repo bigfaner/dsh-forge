@@ -22,6 +22,9 @@ import { rpcEnvelope } from './rpc-envelope.js'
  * = @dsh-forge/knowledge BrowseKnowledgeService 命名类型的 Pick（第八法手工同步收口，
  * 类型随服务面归属迁 knowledge 包——1.7）。
  * search / readAbstract / rebuildIndex 不入面——经 web RPC 不可达（双门分工）。
+ * fix-评审2 裁定（2026-11-05）：merge/revert 随 agent tool 化（knowledge_merge/
+ * knowledge_revert）不扩员本 allowlist——归并/逆向为 agent 面/人工裁决动词，与
+ * write 同守双门分工，web renderer 不可达（落文见提案裁决 #1 修订）。
  */
 export type KnowledgeChannelService = Pick<
   BrowseKnowledgeService,

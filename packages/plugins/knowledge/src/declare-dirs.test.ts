@@ -168,7 +168,14 @@ describe('装配期声明（根 scope provide——bug 04d445f4 反向拉取缝�
         const dispose = knowledgePlugin(ctx as never, { dbFile: tempDbFile() })
         dispose()
       }).not.toThrow()
-      expect(registered.sort()).toEqual(['knowledge_read', 'knowledge_read_abstract', 'knowledge_search', 'knowledge_write'])
+      expect(registered.sort()).toEqual([
+        'knowledge_merge',
+        'knowledge_read',
+        'knowledge_read_abstract',
+        'knowledge_revert',
+        'knowledge_search',
+        'knowledge_write',
+      ])
     }
   })
 

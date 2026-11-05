@@ -161,6 +161,28 @@ describe('CT-DI-02 归并执行：winner 新版本 + loser redirect + 台账 act
     expect(mergeEvents(w.events).some((e) => e.level === 'info' && e.message.includes(loser.id))).toBe(true) // 归并成功埋点
     w.storage.close()
   })
+
+  // fix-评审2（spec P3）：跨项目归并校验——winner/loser 须同属 projectId
+  it('O2 跨项目拒：winner 版本文件落它项目 knowledge_dir → cas-failed/cross-project，零变更零台账', async () => {
+    const w = makeWorld('xp')
+    const loser = await w.service.write(writeQ({ projectId: w.projectId, title: 'Cross Project Loser', keywords: ['xpl'] }))
+    if (loser.outcome !== 'written') throw new Error('L 未写入')
+    // 同库第二项目（独立 knowledge_dir）：winner 落在另一项目域
+    const root = tmpRoot('xp2')
+    const ws2 = join(root, 'ws2')
+    const dir2 = join(ws2, '.knowledge')
+    mkdirSync(dir2, { recursive: true })
+    w.storage.registry.upsert(ws2, dir2)
+    const projectId2 = 'p-di-xp2'
+    const service2 = createKnowledgeService({ db: w.storage.db, resolveWsPath: createWsPathResolver([{ wsPath: ws2, projectId: projectId2 }]) })
+    const winner2 = await service2.write(writeQ({ projectId: projectId2, title: 'Cross Project Winner', keywords: ['xpw'] }))
+    if (winner2.outcome !== 'written') throw new Error('W2 未写入')
+    const r = await applyMerge(w, winner2.id, loser.id, '跨项目归并')
+    expect(r).toMatchObject({ outcome: 'cas-failed', loserId: loser.id, reason: 'cross-project' }) // CT-DI-02 O2
+    expect(entryRow(w, loser.id)?.merged_into ?? null).toBeNull() // 零变更
+    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${loser.id}'`)).toBe(0) // 零台账行
+    w.storage.close()
+  })
 })
 
 // ── CT-DI-03 归并：hash 失配中止（溯源 DI-E1——真实服务面） ──
@@ -292,6 +314,24 @@ describe('CT-DI-06 驳回回滚：解除 redirect 恢复检索地位（DI-G5，�
     expect(rejected).toMatchObject({ outcome: 'rejected', reason: 'ledger-missing' }) // CT-DI-06 O2
     expect(entryRow(w, loser.id)?.merged_into).toBe(winner.id) // 状态零变更
     expect(nRows(w, 'knowledge_merge_ledger')).toBe(0) // 零新行
+    w.storage.close()
+  })
+
+  // fix-评审2 Minor：逆向 hash 失配回执与 merge 侧对称（aborted/hash-mismatch）
+  it('O4 逆向 hash 失配：aborted/hash-mismatch 中止（与正向对称口径），状态零变更', async () => {
+    const w = makeWorld('g5c')
+    const winner = await w.service.write(writeQ({ projectId: w.projectId, title: 'Revert Hash Winner', keywords: ['rhw'] }))
+    if (winner.outcome !== 'written') throw new Error('W 未写入')
+    const loser = await w.service.write(writeQ({ projectId: w.projectId, title: 'Revert Hash Loser', keywords: ['rhl'] }))
+    if (loser.outcome !== 'written') throw new Error('L 未写入')
+    expect(await applyMerge(w, winner.id, loser.id, '待逆向')).toMatchObject({ outcome: 'merged' })
+    const before = readFileSync(loser.filePath, 'utf8')
+    const snapshot = sha256(before)
+    writeFileSync(loser.filePath, `${before}\n<!-- 手改 -->`, 'utf8') // 评估后写前手改
+    const aborted = await w.service.revertMerge({ projectId: w.projectId, loserId: loser.id, expectedLoserHash: snapshot, reason: '陈旧逆向' })
+    expect(aborted).toMatchObject({ outcome: 'aborted', reason: 'hash-mismatch' }) // CT-DI-06 O4：对称口径
+    expect(entryRow(w, loser.id)?.merged_into).toBe(winner.id) // 状态零变更
+    expect(nRows(w, 'knowledge_merge_ledger', `WHERE loser_id = '${loser.id}' AND actor = 'human'`)).toBe(0) // 零逆向行
     w.storage.close()
   })
 })

@@ -35,12 +35,12 @@ flowchart TD
 
 ### ② 归并（自动执行 + 全程可回滚）
 
-评估通过即直接执行，零等待、零删除。**归并执行经服务方法** `knowledge.mergeKnowledge` / `knowledge.revertMerge`（服务面非 tool——与 `confirm` 升格同口径，§2.3 裁决 #1：终态写动作不走 agent tool 面；agent 经宿主 wiring 的 knowledge 服务面调用）：
+评估通过即直接执行，零等待、零删除。**归并执行经 agent tool** `knowledge_merge` / `knowledge_revert`（裁决 #1 修订 2026-11-05：merge/revert 开为 agent tool——自动执行保真，agent 直调 tool；执行逻辑仍由服务面 mergeKnowledge/revertMerge 单点承载）：
 
 - **写前 content_hash 校验**：执行前比对条目当前文件 hash 与评估时快照（`expectedLoserHash` 入参）——失配（评估期间被手改）即中止该项（回执 `aborted/hash-mismatch`）、记原因，绝不基于陈旧内容归并；同批其余项不牵连。
 - **CAS 前置**：条目已带 `merged_into`（重复归并）或 winner/loser 未命中 → `cas-failed` 中止该项；归并先到时 `confirm` 侧被既有 merged CAS 拒（无 confirmed+redirect 并存态约束，INV-D——loser 权威版曾 confirmed 的，归并同笔降 superseded 保曾审标记）。
-- **执行形态**：正文融合 → winner 以 `version_of` 产新版本（同 id supersedes 链前进，经 `knowledge_write` tool）；loser **文件保留**、frontmatter 写 `merged_into: <winner id>`（redirect 沉底 effective_rank 0.2，可回看正文）；台账（KNOWLEDGE_MERGE_LEDGER）落行 `actor=agent` + 归并理由——①②两步由 `mergeKnowledge` 单笔承载（正本回写 + 台账同事务）。
-- **驳回逆向**（人工经台账，`revertMerge`，`actor=human`）：loser 解除 redirect 恢复独立检索地位（rank 按自身 status 重算——曾审标记在场恢复 confirmed 档）；**winner 已融合正文不回退**（融合内容无害保留）；台账行缺失拒绝逆向（不可凭空回滚）。loser 解除后可再次入候选再评估（不产生永久免疫，往返逐行可审计）。
+- **执行形态**：正文融合 → winner 以 `version_of` 产新版本（同 id supersedes 链前进，经 `knowledge_write` tool）；loser **文件保留**、frontmatter 写 `merged_into: <winner id>`（redirect 沉底 effective_rank 0.2，可回看正文）；台账（KNOWLEDGE_MERGE_LEDGER）落行 `actor=agent` + 归并理由——正本回写与台账落账由 `knowledge_merge` 单笔承载（评估期 hash 快照经 `expected_loser_hash` 入参传入）。
+- **驳回逆向**（人工裁决经 agent 执行，`knowledge_revert`，`actor=human`）：loser 解除 redirect 恢复独立检索地位（rank 按自身 status 重算——曾审标记在场恢复 confirmed 档）；**winner 已融合正文不回退**（融合内容无害保留）；台账行缺失拒绝逆向（不可凭空回滚）。loser 解除后可再次入候选再评估（不产生永久免疫，往返逐行可审计）。逆向 hash 失配（`expected_loser_hash`）与正向同口径 `aborted/hash-mismatch` 中止。
 
 ### ③ 过时与冲突收敛
 
