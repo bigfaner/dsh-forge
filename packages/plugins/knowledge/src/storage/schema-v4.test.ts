@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { afterEach, describe, expect, it } from 'vitest'
 import { openKnowledgeDatabase } from './open.js'
-import { STORAGE_MIGRATIONS, downgradeKnowledgeSchema } from './schema.js'
+import { STORAGE_MIGRATIONS, STORAGE_SCHEMA_VERSION, downgradeKnowledgeSchema } from './schema.js'
 
 const roots: string[] = []
 function tmpRoot(): string {
@@ -80,7 +80,7 @@ describe('schema v4 迁移线（独立事务可 downgrade）', () => {
         .get()
       expect(row).toEqual({ ws_path: 'C:\\ws-a', knowledge_dir: 'C:\\ws-a\\.knowledge', project_id: 'pid-1' })
       const version = db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()
-      expect(version).toEqual({ v: 5 })
+      expect(version).toEqual({ v: STORAGE_SCHEMA_VERSION })
     } finally {
       db.close()
     }
@@ -127,7 +127,7 @@ describe('schema v4 迁移线（独立事务可 downgrade）', () => {
     // 再开库 → 回 v5（up/down 往返）
     const again = openKnowledgeDatabase(file)
     try {
-      expect(again.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()).toEqual({ v: 5 })
+      expect(again.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()).toEqual({ v: STORAGE_SCHEMA_VERSION })
       expect(tableNames(again)).toContain('knowledge_fts')
       expect(
         again.prepare<unknown[], { ws_path: string }>(`SELECT ws_path FROM knowledge_registry`).get(),
@@ -141,7 +141,7 @@ describe('schema v4 迁移线（独立事务可 downgrade）', () => {
     const root = tmpRoot()
     const db = openKnowledgeDatabase(join(root, 'knowledge.db'))
     try {
-      expect(() => downgradeKnowledgeSchema(db, 5)).toThrow(/非降级路径/)
+      expect(() => downgradeKnowledgeSchema(db, STORAGE_SCHEMA_VERSION)).toThrow(/非降级路径/)
       expect(() => downgradeKnowledgeSchema(db, 2)).toThrow(/无降级语句集/)
     } finally {
       db.close()

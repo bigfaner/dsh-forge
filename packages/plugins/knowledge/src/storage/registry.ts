@@ -39,6 +39,11 @@ export interface KnowledgeRegistry {
   findByWsPath(wsPath: string): RegistryRow | undefined
   /** 按 API 级 projectId 查行（fix-2 一级解析动态化回查面；无值/未命中 → undefined） */
   findByProjectId(projectId: string): RegistryRow | undefined
+  /**
+   * 注销注册行（v6 应用层级联——全库零 FK 口径下手删，提案 §2.2）：单事务删
+   * knowledge_registry 行 + 该 ws_path 全部 knowledge_domains 域行；返回行是否曾存在。
+   */
+  remove(wsPath: string): boolean
   /** 全量注册行 */
   list(): readonly RegistryRow[]
 }
@@ -85,6 +90,13 @@ export function createKnowledgeRegistry(db: Database.Database): KnowledgeRegistr
     findByProjectId(projectId) {
       const row = selectByProjectId.get(projectId)
       return row === undefined ? undefined : toRow(row)
+    },
+    remove(wsPath) {
+      const key = canonicalWsPath(wsPath)
+      return withImmediateTransaction(db, () => {
+        db.prepare(`DELETE FROM knowledge_domains WHERE ws_path = ?`).run(key)
+        return db.prepare(`DELETE FROM knowledge_registry WHERE ws_path = ?`).run(key).changes > 0
+      })
     },
     list() {
       return listAll.all().map(toRow)

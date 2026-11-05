@@ -1,7 +1,8 @@
 // rebuild 再生（stage② A1：文档权威对账——提案 §2.2/§2.4/§2.8）。DB 两缓存表 + FTS5
 // 纯派生：整库单事务 DELETE → 从各注册行知识目录 md frontmatter 逐行重建等价（含
 // merged_into/redirect 再生与四档 effective_rank 派生）。作用域白名单 = knowledge_entries
-// + knowledge_entry_versions + knowledge_fts——业务账（knowledge_supersede_ledger /
+// + knowledge_entry_versions + knowledge_fts + knowledge_domains（v6 域对账：补行/保简介/
+// 超集清除——同事务）——业务账（knowledge_supersede_ledger /
 // knowledge_recall_logs）永不在 rebuild 波及面。文件亡 → 记录亡：库内版本行对账文件缺失
 // → 记录随整表重建同步消失，并按缺失前状态发 knowledge-entry-purge 埋点
 // （unconfirmed=info / confirmed 与 superseded=warn——已审知识意外丢失应被看见），
@@ -130,6 +131,9 @@ export function rebuildKnowledgeIndex(db: Database.Database, opts: RebuildOption
     const entries = new Map<string, RebuiltVersion[]>()
     const seenVersionKeys = new Set<string>()
     const liveFilePaths = new Set<string>()
+    // 域对账输入：ws_path → 在库条目（入实体表成功）的域集（v6 KNOWLEDGE_DOMAINS——
+    // 空域（根文件 domainPath ''）不入域表）
+    const liveDomains = new Map<string, Set<string>>()
     let skipped = 0
     for (const row of registryRows) {
       for (const f of scanKnowledgeDir(row.knowledge_dir)) {
@@ -170,6 +174,11 @@ export function rebuildKnowledgeIndex(db: Database.Database, opts: RebuildOption
           }
           seenVersionKeys.add(key)
           liveFilePaths.add(f.absPath)
+          if (f.domainPath !== '') {
+            const set = liveDomains.get(row.ws_path)
+            if (set === undefined) liveDomains.set(row.ws_path, new Set([f.domainPath]))
+            else set.add(f.domainPath)
+          }
           const version: RebuiltVersion = {
             id,
             versionTs,
@@ -303,6 +312,41 @@ export function rebuildKnowledgeIndex(db: Database.Database, opts: RebuildOption
       for (const e of entries.values()) {
         for (const v of e) {
           insertVersion.run(v.id, v.versionTs, v.filePath, v.contentHash, v.recordedAt)
+        }
+      }
+      // v6 域对账（与 entries 重建同事务——提案 §2.2 生命周期三径）：
+      // ① 新域补行（description NULL）；② 既有行一律不动（简介 upsert 保留——重建
+      // 不清人工简介，含「有简介无条目」行保留）；③ 超集清除（无条目且无简介的行删）。
+      // 对账面 = 注册行全集 ∪ 域表现存 ws_path（注册行已删的悬空 ws_path 同径清算：
+      // 无简介空行清除、有简介行保留为人工资产；正门注销径由 registry.remove 级联手删）。
+      const selectDomains = db.prepare<[string], { domain: string; description: string | null }>(
+        `SELECT domain, description FROM knowledge_domains WHERE ws_path = ?`,
+      )
+      const insertDomain = db.prepare<[string, string, string]>(
+        `INSERT INTO knowledge_domains (ws_path, domain, description, updated_at) VALUES (?, ?, NULL, ?)`,
+      )
+      const deleteDomain = db.prepare<[string, string]>(
+        `DELETE FROM knowledge_domains WHERE ws_path = ? AND domain = ?`,
+      )
+      const wsPaths = new Set<string>([
+        ...registryRows.map((r) => r.ws_path),
+        ...db
+          .prepare<unknown[], { ws_path: string }>(`SELECT DISTINCT ws_path FROM knowledge_domains`)
+          .all()
+          .map((r) => r.ws_path),
+      ])
+      for (const ws of wsPaths) {
+        const existing = selectDomains.all(ws)
+        const live = liveDomains.get(ws)
+        for (const row of existing) {
+          if (row.description === null && !(live?.has(row.domain) ?? false)) {
+            deleteDomain.run(ws, row.domain)
+          }
+        }
+        for (const domain of live ?? []) {
+          if (!existing.some((row) => row.domain === domain)) {
+            insertDomain.run(ws, domain, recordedAt)
+          }
         }
       }
     })

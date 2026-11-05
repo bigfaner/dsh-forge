@@ -20,7 +20,7 @@ export interface StorageMigration {
 }
 
 /** 本插件支持的自持库 schema 版本上限（版本门：库内 version 超出即拒绝打开） */
-export const STORAGE_SCHEMA_VERSION = 5
+export const STORAGE_SCHEMA_VERSION = 6
 
 /**
  * v1：schema_meta（版本线本体）+ 自持注册表 projects。
@@ -187,6 +187,28 @@ export const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
     version: 5,
     statements: [`ALTER TABLE knowledge_merge_ledger RENAME TO knowledge_supersede_ledger`],
     downgradeStatements: [`ALTER TABLE knowledge_supersede_ledger RENAME TO knowledge_merge_ledger`],
+  },
+  {
+    // v6（stage③ 1.3——提案 §2.2 KNOWLEDGE_DOMAINS 详设）：域简介表（目录元数据非条目，
+    // DB 权威——不适用「条目文件权威」铁律）。主键 = (ws_path, domain)：ws_path 关联
+    // knowledge_registry 主键（裁决 #7：project_id 可空无 UNIQUE、FK 不可建——ws_path
+    // 关联零迁移成本）；domain = 域相对路径（≤3 层，注册目录相对）；description NULL =
+    // 无简介（动态段降级显示）；updated_at = 简介最后写入时点。全库零 FK——注册行注销
+    // 时该 ws_path 域行由注销径应用层级联手删（registry.remove）。存量域初始化由
+    // rebuild/register 对账首跑补行（description NULL——rebuild.ts 同事务对账）。
+    // downgrade = DROP TABLE（域行纯目录元数据，简介可重录；schema_meta 行随
+    // downgradeKnowledgeSchema 删）。
+    version: 6,
+    statements: [
+      `CREATE TABLE knowledge_domains (
+    ws_path     TEXT    NOT NULL,
+    domain      TEXT    NOT NULL,
+    description TEXT,
+    updated_at  TEXT    NOT NULL,
+    PRIMARY KEY (ws_path, domain)
+)`,
+    ],
+    downgradeStatements: [`DROP TABLE knowledge_domains`],
   },
 ]
 
