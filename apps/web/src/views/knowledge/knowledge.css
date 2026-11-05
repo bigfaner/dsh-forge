@@ -359,7 +359,7 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--dsw-font-xs-13-line-height);
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度）——块间距归 content gap 不变 */
 }
 
 /* 三区纵排容器 */
@@ -380,7 +380,7 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: var(--dsw-font-xs-13-line-height);
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度）——块间距归 content gap 不变 */
 }
 
 .dswf-kn-drawer-meta {
@@ -451,7 +451,7 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: var(--dsw-font-xs-13-line-height);
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度）——块间距归 content gap 不变 */
 }
 
 .dswf-kn-drawer-title {
@@ -475,7 +475,7 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: var(--dsw-font-xs-13-line-height);
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度）——块间距归 content gap 不变 */
   padding-bottom: var(--dsw-font-l-20-line-height);
 }
 
