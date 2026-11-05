@@ -54,14 +54,8 @@ describe('KnowledgeView 知识视图装配壳（UF-5 知识视图槽 → UF-6 �
     expect(markup).toContain('data-dswf-kn-anchor="p-1"')
     expect(markup).toContain('data-dswf-kn-browse')
     expect(markup).toContain('data-dswf-kn-toolbar')
-    // 抽屉关闭态（openEntryId null）不渲染
+    // 详情关闭态（openEntryId null）不渲染；打开态承载归官方 Modal portal（node 无 DOM
+    // ——静态面零断言，开弹/骨架相位归 e2e）
     expect(markup).not.toContain('data-dswf-kn-drawer')
-  })
-  it('AC-3 抽屉打开态：openEntryId 在场 = 抽屉滑入层渲染（装载首帧 = 骨架）', () => {
-    const markup = renderToStaticMarkup(
-      <KnowledgeView projectId="p-1" openEntryId={7} onOpenEntryChange={() => {}} />,
-    )
-    expect(markup).toContain('data-dswf-kn-drawer')
-    expect(markup).toContain('data-dswf-kn-drawer-skeleton')
   })
 })

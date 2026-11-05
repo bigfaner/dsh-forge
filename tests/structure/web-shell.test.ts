@@ -257,13 +257,14 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
     expect(plugin).not.toContain('dswf-workbench-docktoggle') // 自管面板钮退役（官方 corner ExpandButton 接管）
   })
 
-  it('AC4 形态对齐官方 dockkit 抽屉形态：层级令牌 + 抬升面 + 滑入动画 + 右缘全高（不自发明平行模式）', () => {
+  it('AC4 形态对齐官方 Modal dialog：详情承载 = 官方 Modal（专家详情同面——零自绘浮层壳，宽度/滚动刻度产品侧只补刻度）', () => {
     const css = read('apps/web/src/views/knowledge/knowledge.css')
-    expect(css).toContain('.dswf-kn-drawer {')
-    expect(css).toContain('z-index: var(--dsh-dockkit-float-layer, 60)')
-    expect(css).toContain('box-shadow: var(--dsw-elevation-prominent)')
-    expect(css).toMatch(/@keyframes dswf-kn-drawer-in/)
-    expect(css.match(/\.dswf-kn-drawer \{[\s\S]*?position: fixed;/)).not.toBeNull()
+    expect(css).toContain('.dswf-kn-dialog {')
+    expect(css).toContain('max-height: 100%') // 官方 Modal 约定：卡片增长收口在根 padding box
+    expect(css).toContain('.dswf-kn-dialog-content {')
+    const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
+    expect(drawer).toContain('<Modal') // 官方 Modal 承载（Hard Rule——自绘 aside 浮层退役）
+    expect(drawer, '自绘浮层壳退役（层级/滑入动画/固定右缘随承载退役）').not.toContain('position: fixed')
   })
 })
 
@@ -449,21 +450,20 @@ describe('views/knowledge 详情抽屉 pin（3.7）', () => {
     )
   })
 
-  it('AC3 关闭路径：✕ 锚（顶栏行尾 aria-label）+ Esc 捕获接线（抽屉先于工具栏清空——浏览上下文保持）', () => {
+  it('AC3 关闭路径：关闭归官方 Modal（✕/Esc/遮罩——Esc 关对话框不触工具栏清空；自绘捕获接线退役）', () => {
     const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
-    expect(drawer).toContain('data-dswf-kn-drawer-close')
-    expect(drawer).toContain('aria-label="关闭抽屉"')
-    expect(drawer).toContain("addEventListener('keydown'")
-    expect(drawer).toContain('stopPropagation')
+    expect(drawer).toContain('closeLabel="关闭"')
+    expect(drawer, '自绘 Esc 捕获退役（官方 Modal 承载）').not.toContain("addEventListener('keydown'")
+    expect(drawer, '自绘关闭钮退役（官方 Modal 行尾 ✕）').not.toContain('data-dswf-kn-drawer-close')
   })
 
-  it('AC4 形态对齐官方 dockkit 抽屉形态：层级令牌 + 抬升面 + 滑入动画 + 右缘全高（不自发明平行模式）', () => {
+  it('AC4 形态对齐官方 Modal dialog：详情承载 = 官方 Modal（专家详情同面——零自绘浮层壳，宽度/滚动刻度产品侧只补刻度）', () => {
     const css = read('apps/web/src/views/knowledge/knowledge.css')
-    expect(css).toContain('.dswf-kn-drawer {')
-    expect(css).toContain('z-index: var(--dsh-dockkit-float-layer, 60)') // 层级 = dockkit 浮层同一级
-    expect(css).toContain('box-shadow: var(--dsw-elevation-prominent)') // 抬升面 = dockkit .float 同配方
-    expect(css).toMatch(/@keyframes dswf-kn-drawer-in/) // 滑入
-    expect(css.match(/\.dswf-kn-drawer \{[\s\S]*?position: fixed;/)).not.toBeNull() // 右缘全高滑入层
+    expect(css).toContain('.dswf-kn-dialog {')
+    expect(css).toContain('max-height: 100%') // 官方 Modal 约定：卡片增长收口在根 padding box
+    expect(css).toContain('.dswf-kn-dialog-content {')
+    const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
+    expect(drawer).toContain('<Modal') // 官方 Modal 承载（Hard Rule——自绘 aside 浮层退役）
   })
 })
 
@@ -575,10 +575,9 @@ describe('m3.1 D35 按钮风格对齐 pin（toolbar 深灰异类清零——官�
     expect(offenders, `toolbar 变体残留（对齐官方图标钮 ghost 形）: ${offenders.join(', ')}`).toEqual([])
   })
 
-  it('九位对齐 pin：折叠/关闭/搜索清除/展开/行操作图标钮 = 官方 ghost（透明底 + hover interactive-bg-hover——数据锚与 aria 原样）', () => {
+  it('八位对齐 pin：折叠/搜索清除/展开/行操作图标钮 = 官方 ghost（透明底 + hover interactive-bg-hover——数据锚与 aria 原样；知识详情关闭随 Modal 承载退役）', () => {
     const ghostSites: readonly (readonly [file: string, marker: string, note: string])[] = [
       ['apps/web/src/views/session/DispatchEventsPanel.tsx', 'data-dswf-dep-collapse', '悬浮进度流面板折叠钮（用户点名面继任——loop-event-delivery 1.8）'],
-      ['apps/web/src/views/knowledge/EntryDrawer.tsx', 'data-dswf-kn-drawer-close', '知识抽屉关闭'],
       ['apps/web/src/views/knowledge/KnowledgeToolbar.tsx', 'dswf-kn-searchclear', '知识搜索清除'],
       ['apps/web/src/views/overview/sticky-bar.tsx', 'data-dswf-ov-searchclear', '概览搜索清除'],
       ['apps/web/src/views/overview/drawer/index.tsx', 'data-dswf-td-expand', '任务详情展开'],

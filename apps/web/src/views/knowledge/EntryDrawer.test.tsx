@@ -1,6 +1,6 @@
-// EntryDrawer 单测 —— UF-6 详情抽屉（AC1 三区 / AC2 正文区不含 frontmatter / AC3 关闭锚 /
-// 按需读取 Hard Rule）。渲染面 = renderToStaticMarkup（仓库既有形态）；Esc 捕获序与
-// 浏览上下文保持（过滤态不被关闭复位）= 3.8 装配 + 4.2 飞轮 e2e 面（结构 pin 源面接线）。
+// EntryDrawer 单测 —— UF-6 详情对话框（官方 Modal 承载：AC1 三区 / AC2 正文区不含
+// frontmatter / 按需读取 Hard Rule）。渲染面 = renderToStaticMarkup 纯 Body（官方 Modal
+// portal——静态不渲，开弹/关闭行为归 e2e，沿 4.2 Modal 同裁）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { EntryDetail, EntryDetailQuery } from '@dsh-forge/contracts'
@@ -119,15 +119,12 @@ describe('entryMetaRows（两列元数据投影——纯函数）', () => {
 })
 
 describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
-  const markup = () => renderToStaticMarkup(<EntryDrawerBody state={READY} onClose={NOOP} retry={NOOP} now={NOW} />)
+  const markup = () => renderToStaticMarkup(<EntryDrawerBody state={READY} retry={NOOP} now={NOW} />)
 
   it('AC1 三区齐备：摘要块（summary 先行）+ 两列元数据五行 + 正文（MarkdownDoc variant=body）', () => {
     const html = markup()
-    // 抽屉壳 + 关闭位（AC3：顶栏行尾 ✕）
+    // 对话框内容体锚（承载壳归官方 Modal——头行/✕/遮罩不出本件）
     expect(html).toContain('data-dswf-kn-drawer')
-    expect(html).toContain('aria-label="知识详情抽屉"')
-    expect(html).toContain('data-dswf-kn-drawer-close')
-    expect(html).toContain('aria-label="关闭抽屉"')
     // 区一：摘要块（title + summary）
     expect(html).toContain('data-dswf-kn-summary')
     expect(html).toContain('安全编码规范')
@@ -167,7 +164,7 @@ describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
       body: ['# 架构', '', '```mermaid', 'erDiagram', '    PROPOSALS ||--o{ FEATURES : "proposal_id"', '```', '', '收尾段落。'].join('\n'),
     }
     const html = renderToStaticMarkup(
-      <EntryDrawerBody state={{ phase: 'ready', detail: mermaidDetail, error: undefined }} onClose={NOOP} retry={NOOP} now={NOW} />,
+      <EntryDrawerBody state={{ phase: 'ready', detail: mermaidDetail, error: undefined }} retry={NOOP} now={NOW} />,
     )
     expect(html).toContain('dswf-kn-md-body') // 官方同形容器（刻度组保留）
     expect(html).toContain('data-dswf-markdown="body"') // 正文经 MarkdownDoc 全量渲染
@@ -183,7 +180,7 @@ describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
   it('1.5 正文升级：代码块 CodeToolbar（labels 递达——块级 wrap/复制，与文档 tab 同面）', () => {
     const codeDetail: EntryDetail = { ...DETAIL, body: '# 正文\n\n```ts\nconst a = 1\n```' }
     const html = renderToStaticMarkup(
-      <EntryDrawerBody state={{ phase: 'ready', detail: codeDetail, error: undefined }} onClose={NOOP} retry={NOOP} now={NOW} />,
+      <EntryDrawerBody state={{ phase: 'ready', detail: codeDetail, error: undefined }} retry={NOOP} now={NOW} />,
     )
     expect(html).toContain('data-code-block-banner') // CodeToolbar 横幅锚（toolbarLabels 递达）
     expect(html).toContain('aria-label="换行"') // 块级 wrap 钮
@@ -193,7 +190,7 @@ describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
   it('1.8 非法 mermaid 源：源码原样进官方代码块（安全兜底形态——异常归 DOM 增强器面，尾段照常）', () => {
     const badDetail: EntryDetail = { ...DETAIL, body: '# 图\n\n```mermaid\nnot a valid diagram @@@\n```\n\n尾段。' }
     const html = renderToStaticMarkup(
-      <EntryDrawerBody state={{ phase: 'ready', detail: badDetail, error: undefined }} onClose={NOOP} retry={NOOP} now={NOW} />,
+      <EntryDrawerBody state={{ phase: 'ready', detail: badDetail, error: undefined }} retry={NOOP} now={NOW} />,
     )
     expect(html).toContain('md-code-block')
     expect(html).toContain('not a valid diagram @@@')
@@ -203,7 +200,7 @@ describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
 
 describe('EntryDrawerBody（纯渲染——loading / error 相位）', () => {
   it('装载中 → 抽屉骨架（无分区内容闪现）', () => {
-    const html = renderToStaticMarkup(<EntryDrawerBody state={LOADING} onClose={NOOP} retry={NOOP} />)
+    const html = renderToStaticMarkup(<EntryDrawerBody state={LOADING} retry={NOOP} />)
     expect(html).toContain('data-dswf-kn-drawer')
     expect(html).toContain('data-dswf-kn-drawer-skeleton')
     expect(html).not.toContain('data-dswf-kn-summary')
@@ -214,7 +211,6 @@ describe('EntryDrawerBody（纯渲染——loading / error 相位）', () => {
     const html = renderToStaticMarkup(
       <EntryDrawerBody
         state={{ phase: 'error', detail: undefined, error: { message: '条目不存在（可能已被移动或删除）', uiState: 'empty-state' } }}
-        onClose={NOOP}
         retry={NOOP}
       />,
     )
@@ -227,7 +223,6 @@ describe('EntryDrawerBody（纯渲染——loading / error 相位）', () => {
     const html = renderToStaticMarkup(
       <EntryDrawerBody
         state={{ phase: 'error', detail: undefined, error: { message: 'IPC 通道不可用', uiState: 'error-bar' } }}
-        onClose={NOOP}
         retry={NOOP}
       />,
     )
@@ -240,7 +235,6 @@ describe('EntryDrawerBody（纯渲染——loading / error 相位）', () => {
     const html = renderToStaticMarkup(
       <EntryDrawerBody
         state={{ phase: 'error', detail: undefined, error: { message: '补偿失败已记账', uiState: 'banner' } }}
-        onClose={NOOP}
         retry={NOOP}
       />,
     )
@@ -248,14 +242,13 @@ describe('EntryDrawerBody（纯渲染——loading / error 相位）', () => {
     expect(html).toContain('补偿失败已记账')
   })
 
-  it('状态不变量防御：error 相位无附载 / ready 相位无 detail → 顶栏壳仍在、内容区让空（不炸抽屉）', () => {
+  it('状态不变量防御：error 相位无附载 / ready 相位无 detail → 内容体壳仍在、内容区让空（不炸对话框）', () => {
     for (const state of [
       { phase: 'error' as const, detail: undefined, error: undefined },
       { phase: 'ready' as const, detail: undefined, error: undefined },
     ]) {
-      const html = renderToStaticMarkup(<EntryDrawerBody state={state} onClose={NOOP} retry={NOOP} />)
+      const html = renderToStaticMarkup(<EntryDrawerBody state={state} retry={NOOP} />)
       expect(html).toContain('data-dswf-kn-drawer')
-      expect(html).toContain('data-dswf-kn-drawer-close')
       expect(html).not.toContain('data-dswf-kn-summary')
       expect(html).not.toContain('role="alert"')
     }
@@ -283,18 +276,8 @@ describe('fetchEntryDetail（按需读取——Hard Rule）', () => {
 })
 
 describe('EntryDrawer（装载壳）', () => {
-  it('entryId = null（关闭）→ 不渲染任何抽屉节点', () => {
+  it('entryId = null（关闭）→ 不渲染任何节点（官方 Modal open=false → null；打开态经页内缝/e2e 面——沿 4.2 Modal 同裁）', () => {
     const markup = renderToStaticMarkup(<EntryDrawer projectId="p-1" entryId={null} onClose={NOOP} />)
     expect(markup).toBe('')
-  })
-
-  it('打开首帧（effect 未跑）= 抽屉壳 + 骨架相位——详情拉取不阻塞滑入呈现', () => {
-    const markup = renderToStaticMarkup(
-      <EntryDrawer projectId="p-1" entryId={7} onClose={NOOP} makeClient={() => {
-        throw new Error('静态渲染不应触达 RPC')
-      }} />,
-    )
-    expect(markup).toContain('data-dswf-kn-drawer')
-    expect(markup).toContain('data-dswf-kn-drawer-skeleton')
   })
 })

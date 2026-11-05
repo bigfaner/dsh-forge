@@ -1,5 +1,6 @@
-// 知识详情抽屉（定位：业务——UF-6 抽屉部分：摘要块 + 两列元数据 + Markdown 正文）。
-// 组装分工沿 3.6 形制：EntryDrawer（装载壳——hook + Esc 接线）持有 useEntryDetail
+// 知识详情对话框（定位：业务——UF-6 详情面：摘要块 + 两列元数据 + Markdown 正文）。
+// 承载 = 官方 Modal dialog（形制对齐专家详情同面——Esc/✕/遮罩关闭归 Modal，零自绘浮层壳）。
+// 组装分工沿 3.6 形制：EntryDrawer（装载壳——hook + Modal 承载）持有 useEntryDetail
 // （正文按需读取），EntryDrawerBody（纯渲染——全相位 renderToStaticMarkup 可测）呈现三区。
 // Hard Rules：
 //   - 正文渲染经 MarkdownDoc 全量渲染（1.8 渲染链退役：官方渲染唯一包装入口——mermaid
@@ -8,14 +9,13 @@
 //   - 正文按需读取（getEntryDetail 唯一通道），不预载全库（browse/listEntries/heat 零调用）。
 // 打开参数按 entryId 设计（Implementation Notes）——3.8 召回 tab 分组行跳转复用同门。
 // AC3 关闭回浏览上下文（过滤态保持）：本件不触碰浏览过滤态（旁挂层， onClose 上抛归装配方）；
-// Esc 捕获序 = 抽屉先于工具栏清空（原型同序：drawer → kb-clear），stopPropagation 防串关。
+// Esc/✕/遮罩关闭归官方 Modal（对话框内 Esc 不触工具栏输入——清空语义仅输入框自身 onKeyDown）。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Button, IconCloseFillRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Modal, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { EntryDetail } from '@dsh-forge/contracts'
 import { EmptyState, ErrorBar, MD_PREVIEW_MARKDOWN_LABELS, MarkdownDoc, StateChip } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { cardTimeLabel } from './browse-model.js'
-import { isEscapeKey } from './KnowledgeToolbar.js'
 import { mapBrowseError, type BrowseErrorInfo } from './use-knowledge-browse.js'
 import './knowledge.css'
 
@@ -133,30 +133,9 @@ export function initialDrawerState(): EntryDrawerState {
   return { phase: 'loading', detail: undefined, error: undefined }
 }
 
-/**
- * Esc 关闭接线（capture 阶段）：抽屉在场时 Esc 归抽屉（原型关闭序：菜单 → 对话框 → 抽屉），
- * stopPropagation 拦截冒泡至工具栏输入（防「关抽屉连带清空关键词」——AC3 浏览上下文保持）。
- */
-export function useEntryDrawerEscape(entryId: number | null, onClose: () => void): void {
-  useEffect(() => {
-    if (entryId === null) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!isEscapeKey(event.key)) return
-      event.stopPropagation()
-      onClose()
-    }
-    document.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => {
-      document.removeEventListener('keydown', onKeyDown, { capture: true })
-    }
-  }, [entryId, onClose])
-}
-
 export interface EntryDrawerBodyProps {
-  /** 抽屉状态（useEntryDetail 输出——全相位可构造，纯渲染面） */
+  /** 详情状态（useEntryDetail 输出——全相位可构造，纯渲染面） */
   readonly state: EntryDrawerState
-  /** 关闭（✕ / Esc——上抛装配方，浏览上下文归装配方持有） */
-  readonly onClose: () => void
   /** 重试（错误态） */
   readonly retry: () => void
   /** 元数据时间标签基准（缺省当次渲染时刻） */
@@ -269,28 +248,12 @@ function DrawerContent({ detail, now }: { readonly detail: EntryDetail; readonly
 }
 
 /**
- * 抽屉纯渲染（状态注入——静态可测全相位）：右侧滑入层（形态对齐官方 dockkit 浮层：
- * 层级令牌 + 抬升面 + 顶栏行尾关闭位，见 knowledge.css）；三区呈现归 DrawerContent。
+ * 详情纯渲染（状态注入——静态可测全相位）：对话框内容体（官方 Modal 承载头/✕/遮罩——
+ * 本件只呈现三区；data-dswf-kn-drawer 内容锚保留——e2e/召回跳转断言面零改动）。
  */
-export function EntryDrawerBody({ state, onClose, retry, now }: EntryDrawerBodyProps): ReactNode {
+export function EntryDrawerBody({ state, retry, now }: EntryDrawerBodyProps): ReactNode {
   return (
-    <aside className="dswf-kn-drawer" data-dswf-kn-drawer="" aria-label="知识详情抽屉">
-      <div className="dswf-kn-drawer-top">
-        <span className="dswf-kn-drawer-toptitle">知识详情</span>
-        {/* D30：原生 title 退役——官方 Tooltip（portal 逃逸 dockkit 浮层层叠上下文） */}
-        <Tooltip label="关闭（Esc）" portal>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="dswf-kn-drawer-close"
-            data-dswf-kn-drawer-close=""
-            aria-label="关闭抽屉"
-            onClick={onClose}
-          >
-            <IconCloseFillRegular size={14} />
-          </Button>
-        </Tooltip>
-      </div>
+    <div className="dswf-kn-drawer" data-dswf-kn-drawer="" aria-label="知识详情">
       {state.phase === 'loading' ? (
         <DrawerSkeleton />
       ) : state.phase === 'error' && state.error !== undefined ? (
@@ -298,7 +261,7 @@ export function EntryDrawerBody({ state, onClose, retry, now }: EntryDrawerBodyP
       ) : state.detail !== undefined ? (
         <DrawerContent detail={state.detail} now={now ?? Date.now()} />
       ) : null}
-    </aside>
+    </div>
   )
 }
 
@@ -316,12 +279,23 @@ export interface EntryDrawerProps {
 }
 
 /**
- * 详情抽屉装载壳（3.8 装配挂知识浏览视图；onEntryOpen(entryId) → entryId 态）。
- * 首帧 = 滑入壳 + 骨架（详情按需拉取不阻塞呈现）。
+ * 详情对话框装载壳（3.8 装配挂知识浏览视图；onEntryOpen(entryId) → entryId 态）。
+ * 官方 Modal 承载（形制对齐专家详情 dialog——Hard Rule）：首帧 = 对话框 + 骨架
+ * （详情按需拉取不阻塞呈现）；Esc/✕/遮罩关闭归 Modal。
  */
 export function EntryDrawer({ projectId, entryId, onClose, makeClient, now }: EntryDrawerProps): ReactNode {
-  useEntryDrawerEscape(entryId, onClose)
   const [state, { retry }] = useEntryDetail(projectId, entryId, makeClient)
   if (entryId === null) return null
-  return <EntryDrawerBody state={state} onClose={onClose} retry={retry} now={now} />
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="知识详情"
+      closeLabel="关闭"
+      className="dswf-kn-dialog"
+      contentClassName="dswf-kn-dialog-content"
+    >
+      <EntryDrawerBody state={state} retry={retry} now={now} />
+    </Modal>
+  )
 }

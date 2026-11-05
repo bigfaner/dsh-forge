@@ -263,67 +263,37 @@
   color: var(--dsw-alias-link);
 }
 
-/* ── 详情抽屉（3.7：右侧滑入层——摘要块 + 两列元数据 + Markdown 正文）──
- * 形态对齐官方 dockkit 浮层面语言（AC4，不自发明平行模式）：
- *   层级 = --dsh-dockkit-float-layer（dockkit 浮层同一级，回退 60）；
- *   抬升面 = --dsw-elevation-prominent + 描边回弹 border-l2（dockkit .float 同配方）；
- *   关闭位 = 粘顶栏行尾 ✕（dockkit 浮层头行语言）；滑入 = 右缘 translateX 动画（原型同型）。
- * 布局结构 = 原型 kn-drawer：右侧全高、min(520px, 52vw)、粘顶栏、内容区独占滚动。 */
-@keyframes dswf-kn-drawer-in {
-  from {
-    transform: translateX(24px); /* dsw-raw 原型滑入行程刻度 */
-    opacity: 0;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
+/* ── 详情对话框（3.7：官方 Modal 承载——摘要块 + 两列元数据 + Markdown 正文）──
+ * 形制 = 官方 Modal dialog（专家详情同面：头行标题 + 行尾 ✕ + 遮罩/Esc 关闭归官方机械，
+ * 零自绘浮层壳）；本文件只管宽度刻度与内容滚动所有权：
+ *   宽度 = min(720px, 100%)（阅读刻度——根 padding box 内按官方约定 max-height 收口）；
+ *   滚动 = contentClassName 面（头行恒在，内容区独占滚动）。
+ * 内容体沿原型 kn-drawer 内部行语言：三区纵排（dswf-kn-drawer-content）+ 分区小标。 */
+.dswf-kn-dialog {
+  width: min(720px, 100%); /* dsw-raw 原型抽屉宽刻度上探（详情阅读面） */
+  max-height: 100%; /* 官方 Modal 约定：卡片增长收口在根 padding box */
 }
 
-.dswf-kn-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: var(--dsh-dockkit-float-layer, 60); /* dsw-raw 官方 dockkit 浮层层级令牌（回退 = dockkit 缺省 60） */
-  display: flex;
-  flex-direction: column;
-  width: min(520px, 52vw); /* dsw-raw 原型抽屉宽刻度 */
-  box-sizing: border-box;
-  overflow: hidden;
-  background: var(--dsw-alias-bg-layer-2);
-  border-left: 1px solid var(--dsw-alias-border-l2);
-  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
-  box-shadow: var(--dsw-elevation-prominent);
-  animation: dswf-kn-drawer-in 0.22s ease-out; /* dsw-raw 原型抽屉滑入时长（全库唯一裸时长点，fix-36 补注） */
-}
-
-/* 粘顶栏：标题行 + 行尾关闭位（AC3 ✕；Esc 接线归组件——内容区滚动不带走顶栏） */
-.dswf-kn-drawer-top {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--dsw-font-xs-13-line-height);
-  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
-}
-
-.dswf-kn-drawer-toptitle {
-  flex: 1;
-  min-width: 0;
-  font: var(--dsw-font-xs-strong-13);
-  color: var(--dsw-alias-label-secondary);
-}
-
-/* 内容区（三区纵排，独占滚动） */
-.dswf-kn-drawer-content {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--dsw-font-s-14-line-height);
+/* 对话框内容区（头行 + 内容体；滚动归本层——官方 contentClassName 滚动面） */
+.dswf-kn-dialog-content {
   min-height: 0;
   overflow-y: auto;
-  padding: var(--dsw-font-s-14-line-height) var(--dsw-font-l-20-line-height) var(--dsw-font-l-20-line-height);
+  max-height: 100%;
+}
+
+/* 内容体（Modal .body 内满宽；滚动所有权归 .dswf-kn-dialog-content） */
+.dswf-kn-drawer {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--dsw-font-s-14-line-height);
+}
+
+/* 三区纵排容器（横向留白归官方 Modal .body 24px 刻度） */
+.dswf-kn-drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-s-14-line-height);
 }
 
 /* 分区小标（原型 kd-section-label 行语言） */
