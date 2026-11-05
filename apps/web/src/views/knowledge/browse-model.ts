@@ -207,23 +207,74 @@ export interface DomainRow {
   readonly depth: number
   /** 该域条目计数（含子域——与域前缀过滤同口径；根行 = 全量） */
   readonly entryCount: number
+  /** 该域待审核计数（含子域——未过滤口径独立查询面供数；根行 = 一级域求和派生） */
+  readonly unconfirmedCount: number
 }
 
 /**
- * 域树行投影（纯函数）：「全部域」根行（计数 = 全量卡片数，含根域文件——aggregateDomainTree
- * 不为根域文件生成节点，全量计数只能取自无过滤底表）+ 聚合节点原序（core 契约：depth 升序
- * 再路径升序，父先于子）。
+ * 域树行投影（纯函数）：「全部域」根行（entryCount = 全量卡片数，含根域文件——
+ * aggregateDomainTree 不为根域文件生成节点，全量计数只能取自无过滤底表；
+ * unconfirmedCount = 一级域求和——徽记口径「哪里有待审核」，与节点计数同底表聚合）
+ * + 聚合节点原序（core 契约：depth 升序再路径升序，父先于子）。
  */
 export function domainRows(nodes: readonly DomainNode[], total: number): readonly DomainRow[] {
+  const rootUnconfirmed = nodes
+    .filter((node) => node.depth === 1)
+    .reduce((sum, node) => sum + node.unconfirmedCount, 0)
   return [
-    { domainPath: '', label: '全部域', depth: 0, entryCount: total },
+    { domainPath: '', label: '全部域', depth: 0, entryCount: total, unconfirmedCount: rootUnconfirmed },
     ...nodes.map((node) => ({
       domainPath: node.domainPath,
       label: node.label,
       depth: node.depth,
       entryCount: node.entryCount,
+      unconfirmedCount: node.unconfirmedCount,
     })),
   ]
+}
+
+// ───────────────── 域树交互模型（knowledge-review-ui SC-H——纯派生层） ─────────────────
+
+/** 域层级上限（≤3 层硬门槛——与 createDomain/move 服务端同判据；客户端预检仅提示不替代） */
+export const DOMAIN_MAX_DEPTH = 3
+
+/** 域路径深度（段计数；'' = 根行 0 层） */
+export function domainDepthOf(domainPath: string): number {
+  return domainPath === '' ? 0 : domainPath.split('/').length
+}
+
+/** 拼接子域路径（parent 缺席/根 = 顶层新目录——单段路径） */
+export function joinDomainPath(parent: string | undefined, name: string): string {
+  return parent === undefined || parent === '' ? name : `${parent}/${name}`
+}
+
+/** 域深度合法判据（≤DOMAIN_MAX_DEPTH——树头「＋」超层拒收提示的预检同函数） */
+export function isDomainDepthLegal(domainPath: string): boolean {
+  return domainDepthOf(domainPath) <= DOMAIN_MAX_DEPTH
+}
+
+/** 收合态（collapsed = 已收合域路径集合——缺省空集即全展开，「缺省常展开 ≤3 层」口径） */
+export function toggleDomainCollapsed(collapsed: readonly string[], domainPath: string): readonly string[] {
+  return collapsed.includes(domainPath) ? collapsed.filter((path) => path !== domainPath) : [...collapsed, domainPath]
+}
+
+/**
+ * 收合可见行投影（纯函数）：某祖先域已收合 → 其子孙行隐去，收合行本身保留
+ * （collapsed 行仍在场——caret 反向即展开入口）。
+ */
+export function visibleDomainRows(rows: readonly DomainRow[], collapsed: readonly string[]): readonly DomainRow[] {
+  return rows.filter((row) => !collapsed.some((path) => row.domainPath.startsWith(`${path}/`)))
+}
+
+/** 有子域的域路径集合（纯函数——caret 渲染判据：仅父行出 caret，叶行空占位对齐） */
+export function parentDomainPaths(rows: readonly DomainRow[]): ReadonlySet<string> {
+  const parents = new Set<string>()
+  for (const row of rows) {
+    if (row.domainPath === '') continue
+    const cut = row.domainPath.lastIndexOf('/')
+    parents.add(cut === -1 ? '' : row.domainPath.slice(0, cut))
+  }
+  return parents
 }
 
 /**

@@ -11,12 +11,18 @@ import {
   browseFaceState,
   browseFilterReducer,
   cardTimeLabel,
+  domainDepthOf,
   domainRows,
   entriesQueryOf,
   entryActionFailureText,
   entryActionNotice,
   hasActiveFilter,
+  isDomainDepthLegal,
+  joinDomainPath,
   multiSelectReducer,
+  parentDomainPaths,
+  toggleDomainCollapsed,
+  visibleDomainRows,
 } from './browse-model.js'
 
 describe('browseFilterReducer（过滤态机）', () => {
@@ -101,23 +107,68 @@ describe('browseFaceState（网格相位推导——UF-6 States 表）', () => {
 
 describe('domainRows（域树行投影）', () => {
   const nodes: readonly DomainNode[] = [
-    { domainPath: '前端', label: '前端', depth: 1, entryCount: 3, unconfirmedCount: 0 },
-    { domainPath: '前端/组件', label: '组件', depth: 2, entryCount: 1, unconfirmedCount: 0 },
+    { domainPath: '前端', label: '前端', depth: 1, entryCount: 3, unconfirmedCount: 2 },
+    { domainPath: '前端/组件', label: '组件', depth: 2, entryCount: 1, unconfirmedCount: 2 },
     { domainPath: '后端', label: '后端', depth: 1, entryCount: 2, unconfirmedCount: 0 },
   ]
 
-  it('「全部域」根行居首（计数 = 全量，含根域文件），节点原序跟随（父先于子）', () => {
+  it('「全部域」根行居首（entryCount = 全量含根域文件），节点原序跟随（父先于子）', () => {
     const rows = domainRows(nodes, 5)
-    expect(rows[0]).toEqual({ domainPath: '', label: '全部域', depth: 0, entryCount: 5 })
+    expect(rows[0]).toEqual({ domainPath: '', label: '全部域', depth: 0, entryCount: 5, unconfirmedCount: 2 })
     expect(rows.slice(1)).toEqual([
-      { domainPath: '前端', label: '前端', depth: 1, entryCount: 3 },
-      { domainPath: '前端/组件', label: '组件', depth: 2, entryCount: 1 },
-      { domainPath: '后端', label: '后端', depth: 1, entryCount: 2 },
+      { domainPath: '前端', label: '前端', depth: 1, entryCount: 3, unconfirmedCount: 2 },
+      { domainPath: '前端/组件', label: '组件', depth: 2, entryCount: 1, unconfirmedCount: 2 },
+      { domainPath: '后端', label: '后端', depth: 1, entryCount: 2, unconfirmedCount: 0 },
     ])
   })
 
   it('空域树仅根行（空库引导期域轨不空轨——根行常在）', () => {
-    expect(domainRows([], 0)).toEqual([{ domainPath: '', label: '全部域', depth: 0, entryCount: 0 }])
+    expect(domainRows([], 0)).toEqual([{ domainPath: '', label: '全部域', depth: 0, entryCount: 0, unconfirmedCount: 0 }])
+  })
+
+  it('H4 徽记口径：unconfirmedCount 随行原样携带（未过滤独立查询面供数）；根行 = 一级域求和（树派生一致）', () => {
+    const rows = domainRows(nodes, 5)
+    expect(rows[0]?.unconfirmedCount).toBe(2 + 0) // 前端(2) + 后端(0)——一级域求和，不重复计子域
+    expect(rows.find((row) => row.domainPath === '前端')?.unconfirmedCount).toBe(2)
+  })
+})
+
+describe('域树交互模型（SC-H——收合/新建目录纯函数面）', () => {
+  const nodes: readonly DomainNode[] = [
+    { domainPath: '前端', label: '前端', depth: 1, entryCount: 3, unconfirmedCount: 1 },
+    { domainPath: '前端/组件', label: '组件', depth: 2, entryCount: 1, unconfirmedCount: 1 },
+    { domainPath: '后端', label: '后端', depth: 1, entryCount: 2, unconfirmedCount: 0 },
+  ]
+
+  it('H1 toggleDomainCollapsed：收合加入 / 再收起移除（集合语义）', () => {
+    expect(toggleDomainCollapsed([], '前端')).toEqual(['前端'])
+    expect(toggleDomainCollapsed(['前端'], '前端')).toEqual([])
+  })
+
+  it('H1 visibleDomainRows：收合行自身保留，子孙行隐去；无关行不受影响', () => {
+    const rows = domainRows(nodes, 5)
+    const collapsed = visibleDomainRows(rows, ['前端'])
+    expect(collapsed.map((row) => row.domainPath)).toEqual(['', '前端', '后端'])
+    expect(visibleDomainRows(rows, ['后端'])).toEqual(rows) // 无子孙 = 零变化
+    expect(visibleDomainRows(rows, [])).toEqual(rows)
+  })
+
+  it('H2 域深度：domainDepthOf 段计数（根行 0 层）；isDomainDepthLegal ≤3 层门槛', () => {
+    expect(domainDepthOf('')).toBe(0)
+    expect(domainDepthOf('前端')).toBe(1)
+    expect(domainDepthOf('前端/组件')).toBe(2)
+    expect(isDomainDepthLegal('前端/组件/单元')).toBe(true)
+    expect(isDomainDepthLegal('前端/组件/单元/子目录')).toBe(false)
+    expect(joinDomainPath('前端/组件', '单元')).toBe('前端/组件/单元')
+    expect(joinDomainPath(undefined, '新域')).toBe('新域')
+    expect(joinDomainPath('', '新域')).toBe('新域')
+  })
+
+  it('parentDomainPaths：有子域的域路径集合（caret 渲染判据——叶行不出 caret）', () => {
+    const parents = parentDomainPaths(domainRows(nodes, 5))
+    expect(parents.has('前端')).toBe(true)
+    expect(parents.has('后端')).toBe(false)
+    expect(parents.has('')).toBe(true) // 根行有一级子域
   })
 })
 

@@ -94,10 +94,106 @@
 
 .dswf-kn-dom-head {
   flex: none;
+  display: flex;
+  align-items: center;
   padding: 0 var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-label-tertiary);
   user-select: none;
+}
+
+/* 树头「＋」新建目录（knowledge-review-ui H2——accent 文字钮，原型刻度） */
+.dswf-kn-dom-add {
+  flex: none;
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-link);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-dom-add:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: var(--dsw-radius-sm);
+}
+
+/* 新建目录编辑行（树头「＋」展开——超层拒收提示留行内） */
+.dswf-kn-dom-new {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-dom-new-input {
+  height: 24px; /* 域行同刻度 */
+  box-sizing: border-box;
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  padding: 0 6px;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-kn-dom-new-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dswf-kn-dom-new-btn {
+  height: 20px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 999px;
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-dom-new-btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-kn-dom-new-hint {
+  margin-left: auto;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* caret 收合/展开开关（H1——旋转动画，叶行空占位对齐） */
+.dswf-kn-dom-caret {
+  flex: none;
+  width: 12px; /* dsw-raw 原型 caret 刻度 */
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 0.2s;
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-dom-caret[data-collapsed] {
+  transform: rotate(-90deg);
+}
+
+/* 待审核徽记（H4——官方 Tag warning 数字形态；margin-left:auto 由 label flex:1 推右） */
+.dswf-kn-dom-badge {
+  flex: none;
+}
+
+/* 拖拽落位 hover 反馈（H3——虚线描边 + hover 底；非域行无 data-dswf-kn-drop 即零反馈） */
+.dswf-kn-dom-row[data-drag-over] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: 1px dashed var(--dsw-alias-link);
+  outline-offset: -1px;
 }
 
 .dswf-kn-dom-row {
