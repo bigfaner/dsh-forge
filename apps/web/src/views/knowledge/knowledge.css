@@ -351,15 +351,15 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--dsw-font-s-14-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) var(--dsw-font-s-14-line-height); /* 顶部收紧——元数据贴标题栏（紧凑不浪费） */
 }
 
-/* 内容体（满宽；三区纵排） */
+/* 内容体（满宽；三区纵排——区间距收紧 xs 刻度） */
 .dswf-kn-drawer {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--dsw-font-s-14-line-height);
+  gap: var(--dsw-font-xs-13-line-height);
 }
 
 /* 三区纵排容器 */
