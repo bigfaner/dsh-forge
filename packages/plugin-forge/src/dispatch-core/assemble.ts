@@ -62,7 +62,23 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'pauseTask', // task-pause-primitive——单任务暂停入口仅主 agent 面（worker 拒）
   'unblockTask', // blocked-verdict-restore-primitive——blocked→pending 出口仅主 agent 面（worker 拒）
   'validateMermaid', // md-mermaid 插件工具（MERMAID_TOOL_NAME 单源锚，见上注）
+  // knowledge 归并双 tool（knowledge-stage2-followups #2——用户裁决 2026-11-05「入 deny +
+  // distill 专属专家放行」：归并是裁决动词，不随默认面放行——对一切 spawn worker 默认禁；
+  // 唯一放行径 = 专家档案 tools 白名单（见 WORKER_EXPERT_RELEASABLE_DENY）或主会话。
+  // 工具名单源锚 = packages/plugins/knowledge/src/tools/supersede.ts / reinstate.ts
+  //（followups #1 重命名后名——本包不反依赖插件包，字面量 + 锚注释对齐，同 validateMermaid 先例）。
+  'knowledge_supersede',
+  'knowledge_reinstate',
 ]
+
+/**
+ * 档案可放行 deny 名单（knowledge-stage2-followups #2 用户裁决 2026-11-05）：deny 默认
+ * 面中唯一可经专家档案 tools 白名单显式解锁的名——档案（如项目层 distill 专家）tools 含
+ * 该名时从 deny 剔除（keep-only allow 本就全量约束，deny 残留只会拆 spawn）。刻意收窄
+ * 名单而非通用「档案在即解锁」：addTask/validateMermaid 等其余 deny 名不随档案放行
+ * （结构测试钉死），防止任何档案白名单变相扩权。
+ */
+export const WORKER_EXPERT_RELEASABLE_DENY: readonly string[] = ['knowledge_supersede', 'knowledge_reinstate']
 
 /**
  * worker 会话 → 来源任务 id 注册表（fix-bug：recordBug 的 source_task_id 派发上下文注入径）。
@@ -158,6 +174,13 @@ export function deriveWorkerToolFilter(
     if (deniedFamilies.has(f)) deny.add(name)
   }
   for (const name of FORGE_DENY_IN_WORKER) deny.add(name)
+  // 档案可放行面（followups #2）：专家档案 tools 白名单显式携带 knowledge 双 tool 时从
+  // deny 剔除（allow = keep-only 已全量约束）——普通 worker（档案缺席/不含双 tool）默认 deny。
+  if (profileTools !== undefined) {
+    for (const name of WORKER_EXPERT_RELEASABLE_DENY) {
+      if (profileTools.includes(name)) deny.delete(name)
+    }
+  }
   const intersectedDeny = [...deny].filter(
     (name) => registeredTools === undefined || registeredTools.length === 0 || registeredTools.includes(name),
   )
