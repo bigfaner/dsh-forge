@@ -263,25 +263,100 @@
   color: var(--dsw-alias-link);
 }
 
-/* ── 详情对话框（3.7：官方 Modal 承载——摘要块 + 两列元数据 + Markdown 正文）──
- * 形制 = 官方 Modal dialog（专家详情同面：头行标题 + 行尾 ✕ + 遮罩/Esc 关闭归官方机械，
- * 零自绘浮层壳）；本文件只管宽度刻度与内容滚动所有权：
- *   宽度 = min(720px, 100%)（阅读刻度——根 padding box 内按官方约定 max-height 收口）；
- *   滚动 = contentClassName 面（头行恒在，内容区独占滚动）。
- * 内容体沿原型 kn-drawer 内部行语言：三区纵排（dswf-kn-drawer-content）+ 分区小标。 */
+/* ── 详情弹窗（3.7：自持可拖移 dialog——元数据表 + 摘要块 + Markdown 正文）──
+ * 形制 = bug-dialog 同先例（真 dialog 自持皮 + 拖动机械复用 drawer：标题栏拖移 +
+ * 左右缘拖宽；视觉一律官方护仗——色/字/距/圆角零裸值）：
+ *   宽 = inline style 注入（缺省 770——720 阅读刻度 +50 用户裁决；缘侧拉伸钳制归组件）；
+ *   位 = 逐开本地态（关闭即弃——起始位缺省 CSS 居中兜底同任务弹窗）；
+ *   纵向滚动上限 80vh（内容多不溢出）。
+ * 内容体三区：元数据表首区（四列同行 + 关键词整行，紧凑 4px 内衬——用户裁决）+ 摘要 + 正文。 */
 .dswf-kn-dialog {
-  width: min(720px, 100%); /* dsw-raw 原型抽屉宽刻度上探（详情阅读面） */
-  max-height: 100%; /* 官方 Modal 约定：卡片增长收口在根 padding box */
+  position: fixed;
+  left: 50%; /* 起始位缺省（效应注入 inline left/top 前的居中兜底——任务弹窗同刻度） */
+  top: 14vh;
+  transform: translateX(-50%);
+  z-index: var(--dsh-dockkit-float-layer, 60);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  max-width: 92vw; /* 窄屏防越（任务弹窗同口径） */
+  max-height: 80vh; /* 纵向滚动上限——内容多不溢出视口 */
+  pointer-events: auto;
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
+  box-shadow: var(--dsw-elevation-prominent);
 }
 
-/* 对话框内容区（头行 + 内容体；滚动归本层——官方 contentClassName 滚动面） */
-.dswf-kn-dialog-content {
+/* 标题栏：全窗拖移手柄（cursor move；按钮命中不动持——组件面守卫）+ 行尾关闭位 */
+.dswf-kn-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-height: 30px; /* 任务弹窗标题栏收紧刻度（D43 同值） */
+  padding-inline: var(--dsw-font-xs-13-line-height);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-move, move);
+  user-select: none;
+  touch-action: none;
+}
+
+.dswf-kn-dialog-spacer {
+  flex: 1;
+}
+
+/* 缘侧拖宽手柄（任务弹窗 dswf-td-resize 同刻度：9px 命中区 + 外扩 4px + ::after 竖线） */
+.dswf-kn-dialog-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  z-index: 3;
+  cursor: var(--dsh-cursor-col-resize, col-resize);
+  touch-action: none;
+}
+
+.dswf-kn-dialog-resize[data-dswf-kn-dialog-resize='left'] {
+  left: -4px;
+}
+
+.dswf-kn-dialog-resize[data-dswf-kn-dialog-resize='right'] {
+  right: -4px;
+}
+
+.dswf-kn-dialog-resize::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 24px;
+  transform: translateY(-50%);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-border-l3);
+}
+
+.dswf-kn-dialog-resize[data-dswf-kn-dialog-resize='left']::after {
+  left: 3px;
+}
+
+.dswf-kn-dialog-resize[data-dswf-kn-dialog-resize='right']::after {
+  right: 3px;
+}
+
+/* 表单体：纵向滚动主区（唯一滚动面——内容多不出壳） */
+.dswf-kn-dialog-body {
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
-  max-height: 100%;
+  padding: var(--dsw-font-s-14-line-height);
 }
 
-/* 内容体（Modal .body 内满宽；滚动所有权归 .dswf-kn-dialog-content） */
+/* 内容体（满宽；三区纵排） */
 .dswf-kn-drawer {
   display: flex;
   min-width: 0;
@@ -289,7 +364,7 @@
   gap: var(--dsw-font-s-14-line-height);
 }
 
-/* 三区纵排容器（横向留白归官方 Modal .body 24px 刻度） */
+/* 三区纵排容器 */
 .dswf-kn-drawer-content {
   display: flex;
   flex-direction: column;
@@ -302,7 +377,66 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* 区一·摘要块（summary 先行：条目标题 + 醒目摘要——原型 kd-head + kd-abs 同型） */
+/* 区一·元数据表（首区——用户裁决）：四列同行（域/状态/作者/更新时间）+ 关键词整行 */
+.dswf-kn-drawer-metas {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-drawer-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 四列同行刻度（fr 非令牌面——用户裁决） */
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-xs-13);
+}
+
+.dswf-kn-drawer-mrow {
+  display: flex;
+  min-width: 0;
+  border-right: 1px solid var(--dsw-alias-border-l1);
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.dswf-kn-drawer-mrow:nth-child(4n) {
+  border-right: none; /* 四列同行——每行第 4 格去右边线 */
+}
+
+.dswf-kn-drawer-mrow.is-span {
+  grid-column: 1 / -1;
+  border-right: none;
+}
+
+.dswf-kn-drawer-mrow:last-child {
+  border-bottom: none;
+}
+
+.dswf-kn-drawer-mk {
+  flex: none;
+  box-sizing: border-box;
+  width: 78px; /* dsw-raw 原型元数据标签列宽刻度 */
+  padding: 4px var(--dsw-font-xs-13-line-height); /* 紧凑行距（用户裁决——行高收紧） */
+  background: var(--dsw-alias-bg-layer-3); /* 弹窗面上抬一阶（原型暗色同型：表底 layer-1 · 标签 layer-2） */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.dswf-kn-drawer-mv {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+  padding: 4px var(--dsw-font-xs-13-line-height); /* 紧凑行距（用户裁决——行高收紧） */
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 区二·摘要块（元数据置顶后次区：条目标题 + 醒目摘要——原型 kd-head + kd-abs 同型） */
 .dswf-kn-drawer-summary {
   display: flex;
   flex: none;
@@ -323,65 +457,6 @@
   border-radius: 0 var(--dsw-radius-md) var(--dsw-radius-md) 0;
   background: var(--dsw-alias-interactive-bg-hover);
   font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-primary);
-}
-
-/* 区二·两列元数据（原型 kd-meta-table：1fr 1fr 网格，label|value 单元，长值 .is-span 整行） */
-.dswf-kn-drawer-metas {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  gap: var(--dsw-font-xs-13-line-height);
-}
-
-.dswf-kn-drawer-meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr; /* 原型两列刻度（fr 非令牌面） */
-  overflow: hidden;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-md);
-  font: var(--dsw-font-xs-13);
-}
-
-.dswf-kn-drawer-mrow {
-  display: flex;
-  min-width: 0;
-  border-right: 1px solid var(--dsw-alias-border-l1);
-  border-bottom: 1px solid var(--dsw-alias-border-l1);
-}
-
-.dswf-kn-drawer-mrow:nth-child(2n) {
-  border-right: none;
-}
-
-.dswf-kn-drawer-mrow.is-span {
-  grid-column: 1 / -1;
-  border-right: none;
-}
-
-.dswf-kn-drawer-mrow:last-child {
-  border-bottom: none;
-}
-
-.dswf-kn-drawer-mk {
-  flex: none;
-  box-sizing: border-box;
-  width: 78px; /* dsw-raw 原型元数据标签列宽刻度 */
-  padding: var(--dsw-font-xs-13-line-height);
-  background: var(--dsw-alias-bg-layer-3); /* 抽屉面上抬一阶（原型暗色同型：表底 layer-1 · 标签 layer-2） */
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-tertiary);
-  white-space: nowrap;
-}
-
-.dswf-kn-drawer-mv {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--dsw-font-xs-13-line-height);
-  min-width: 0;
-  padding: var(--dsw-font-xs-13-line-height);
   color: var(--dsw-alias-label-primary);
 }
 

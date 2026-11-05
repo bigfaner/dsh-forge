@@ -1,6 +1,6 @@
-// EntryDrawer 单测 —— UF-6 详情对话框（官方 Modal 承载：AC1 三区 / AC2 正文区不含
-// frontmatter / 按需读取 Hard Rule）。渲染面 = renderToStaticMarkup 纯 Body（官方 Modal
-// portal——静态不渲，开弹/关闭行为归 e2e，沿 4.2 Modal 同裁）。
+// EntryDrawer 单测 —— UF-6 详情弹窗（自持可拖移 dialog：可移动 + 缘侧可拉伸 + 元数据
+// 首区四列同行 / AC2 正文区不含 frontmatter / 按需读取 Hard Rule）。渲染面 =
+// renderToStaticMarkup（真 dialog 自持皮——静态可渲，拖移行为归 e2e）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { EntryDetail, EntryDetailQuery } from '@dsh-forge/contracts'
@@ -91,54 +91,58 @@ function recordingClient(
   return { client, calls }
 }
 
-describe('entryMetaRows（两列元数据投影——纯函数）', () => {
-  it('五行齐备（域/状态/关键词/作者/更新时间）；关键词独占整行，其余半行', () => {
+describe('entryMetaRows（元数据投影——纯函数）', () => {
+  it('五行齐备：四列同行（域/状态/作者/更新时间）+ 关键词整行（用户裁决——元数据表首区布局）', () => {
     const rows = entryMetaRows(DETAIL, NOW)
-    expect(rows.map((row) => row.label)).toEqual(['域', '状态', '关键词', '作者', '更新时间'])
+    expect(rows.map((row) => row.label)).toEqual(['域', '状态', '作者', '更新时间', '关键词'])
     expect(rows.map((row) => [row.key, row.span])).toEqual([
       ['domain', false],
       ['status', false],
-      ['keywords', true],
       ['authors', false],
       ['updated', false],
+      ['keywords', true],
     ])
   })
 
   it('值口径：域原样 / 空域回退「根」 / authors 缺省「—」 / 更新时间 = 相对时间标签（卡片同口径）', () => {
     const rows = entryMetaRows(DETAIL, NOW)
     expect(rows[0]?.value).toEqual({ kind: 'text', text: '编程/java' })
-    expect(rows[3]?.value).toEqual({ kind: 'text', text: 'alice' })
-    expect(rows[4]?.value).toEqual({ kind: 'text', text: '3 小时前' })
+    expect(rows[2]?.value).toEqual({ kind: 'text', text: 'alice' })
+    expect(rows[3]?.value).toEqual({ kind: 'text', text: '3 小时前' })
     expect(rows[1]?.value).toEqual({ kind: 'status', status: 'draft' })
-    expect(rows[2]?.value).toEqual({ kind: 'keywords', keywords: ['security', 'backend'] })
+    expect(rows[4]?.value).toEqual({ kind: 'keywords', keywords: ['security', 'backend'] })
 
     const rootRows = entryMetaRows({ ...DETAIL, domainPath: '', authors: null }, NOW)
     expect(rootRows[0]?.value).toEqual({ kind: 'text', text: '根' })
-    expect(rootRows[3]?.value).toEqual({ kind: 'text', text: '—' })
+    expect(rootRows[2]?.value).toEqual({ kind: 'text', text: '—' })
   })
 })
 
 describe('EntryDrawerBody（纯渲染——ready 相位）', () => {
   const markup = () => renderToStaticMarkup(<EntryDrawerBody state={READY} retry={NOOP} now={NOW} />)
 
-  it('AC1 三区齐备：摘要块（summary 先行）+ 两列元数据五行 + 正文（MarkdownDoc variant=body）', () => {
+  it('AC1 三区齐备：元数据表首区（四列同行 + 关键词整行）+ 摘要块（title 先于 summary）+ 正文（MarkdownDoc variant=body）', () => {
     const html = markup()
-    // 对话框内容体锚（承载壳归官方 Modal——头行/✕/遮罩不出本件）
-    expect(html).toContain('data-dswf-kn-drawer')
-    // 区一：摘要块（title + summary）
+    // 元数据表首区（用户裁决置顶）：四列同行（域/状态/作者/更新时间）+ 关键词整行；
+    // 关键词 Tag = info 浅蓝 tint（用户裁决——outline 白底退役）+ 无 # 前缀
+    expect(html.indexOf('data-dswf-kn-meta')).toBeGreaterThan(-1)
+    expect(html.indexOf('data-dswf-kn-meta')).toBeLessThan(html.indexOf('data-dswf-kn-summary'))
+    for (const key of ['domain', 'status', 'authors', 'updated', 'keywords']) {
+      expect(html).toContain(`data-dswf-kn-meta-row="${key}"`)
+    }
+    expect(html).toContain('data-tone="info"')
+    expect(html).not.toContain('#security')
+    expect(html).toContain('security')
+    // 摘要块（title + summary）
     expect(html).toContain('data-dswf-kn-summary')
     expect(html).toContain('安全编码规范')
     expect(html).toContain('输入校验与输出编码基线')
-    // 区二：两列元数据（五行锚）
-    expect(html).toContain('data-dswf-kn-meta')
-    for (const key of ['domain', 'status', 'keywords', 'authors', 'updated']) {
-      expect(html).toContain(`data-dswf-kn-meta-row="${key}"`)
-    }
-    expect(html).not.toContain('热度') // EntryDetail 无热度字段（抽屉不另调 heat 通道）
     expect(html).toContain('编程/java')
-    expect(html).toContain('#security')
+    expect(html).not.toContain('热度') // EntryDetail 无热度字段（抽屉不另调 heat 通道）
     expect(html).toContain('alice')
     expect(html).toContain('3 小时前')
+    // 内容体锚（弹窗壳/头行归装载壳）
+    expect(html).toContain('data-dswf-kn-drawer')
     // 区三：正文（MarkdownDoc 统一包装，variant=body）
     expect(html).toContain('data-dswf-kn-body')
     expect(html).toContain('data-dswf-markdown="body"')
@@ -276,8 +280,23 @@ describe('fetchEntryDetail（按需读取——Hard Rule）', () => {
 })
 
 describe('EntryDrawer（装载壳）', () => {
-  it('entryId = null（关闭）→ 不渲染任何节点（官方 Modal open=false → null；打开态经页内缝/e2e 面——沿 4.2 Modal 同裁）', () => {
+  it('entryId = null（关闭）→ 不渲染任何节点', () => {
     const markup = renderToStaticMarkup(<EntryDrawer projectId="p-1" entryId={null} onClose={NOOP} />)
     expect(markup).toBe('')
+  })
+
+  it('打开首帧（effect 未跑）= 可拖移弹窗壳（头行拖移手柄 + 关闭钮 + 骨架相位——真 dialog 自持皮静态可渲）', () => {
+    const markup = renderToStaticMarkup(
+      <EntryDrawer projectId="p-1" entryId={7} onClose={NOOP} makeClient={() => {
+        throw new Error('静态渲染不应触达 RPC')
+      }} />,
+    )
+    expect(markup).toContain('data-dswf-kn-dialog')
+    expect(markup).toContain('data-dswf-kn-dialog-head')
+    expect(markup).toContain('data-dswf-kn-dialog-close')
+    expect(markup).toContain('data-dswf-kn-dialog-resize')
+    expect(markup).toContain('data-dswf-kn-drawer')
+    expect(markup).toContain('data-dswf-kn-drawer-skeleton')
+    expect(markup).toContain('style')
   })
 })

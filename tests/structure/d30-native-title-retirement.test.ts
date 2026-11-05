@@ -120,13 +120,14 @@ for (const a of all) {
 
 /** D30 迁移面（真悬浮提示位——官方 Tooltip 逐文件采纳锚；全量 portal 逃逸）。
  * D37 更替后余额：概览 tab 零 Tooltip 整迁面 5 件 + 部分退役面 5 件（余额冻结 pin）；
- * 知识详情关闭钮 Tooltip 随 Modal 承载退役（关闭钮归官方 Modal 头行——29 walk 位恒数）。 */
+ * 知识详情缘侧拖宽手柄 Tooltip 在场（可拖移 dialog 用户裁决回迁——29 walk 位恒数）。 */
 const TOOLTIP_FILES = [
   'apps/web/src/components/ModeChip.tsx',
   'apps/web/src/flows/add-project/DirectoryBrowser.tsx',
   'apps/web/src/flows/add-project/RegisterForm.tsx',
   'apps/web/src/views/docs/index.tsx',
   'apps/web/src/views/knowledge/DomainTree.tsx',
+  'apps/web/src/views/knowledge/EntryDrawer.tsx',
   'apps/web/src/views/knowledge/KnowledgeToolbar.tsx',
   'apps/web/src/views/overview/feature-tab.tsx',
   'apps/web/src/views/overview/feature-tab/DocGroupList.tsx',
@@ -152,10 +153,11 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   // RecallTab/docs/drawer/KnowledgeCardGrid×3/dock-tabs×2/EntryDrawer/ForgeWorkspacePanel +
   // bug 域新面：bug-reference/BugPreview×2、overview/bug-tab/bug-list×1
   EmptyState: 18,
-  // 对话框标题（Modal 头部标题文本）×9：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
-  // + D45 停止并归档确认）/AddProjectFlow/ModeDialog/VerdictDialog/知识详情 EntryDrawer +
+  // 对话框标题（Modal 头部标题文本）×8：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
+  // + D45 停止并归档确认）/AddProjectFlow/ModeDialog/VerdictDialog +
   // remote/ForgeRemoteEntry×2（手机远程 dialog 头 + 1.107 PSK 轮换确认弹窗）
-  Modal: 9,
+  // （知识详情承载改自持可拖移 dialog——自绘头行非 Modal 标题 prop，不进本清单）
+  Modal: 8,
   // 自绘 dialog 头标题文本 prop ×1（remote/ForgeRemoteEntry RemoteDialogHead——fix-19 ⑥
   // 标题读数，标题文本非悬浮提示位）
   // 官方 Rows 行标题文本 prop ×2（ForgeWorkspacePanel 项目行名称；ForgeEventEntries
@@ -169,9 +171,8 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
 }
 
 /** D36 ⑤ + D37 Tooltip 退役锚（采纳锚位 1:1 对位迁移——零 Tooltip 在场；29 walk 位恒数：
- * TOOLTIP_FILES 22 + TOOLTIP_RETIRED_FILES 7） */
+ * TOOLTIP_FILES 23 + TOOLTIP_RETIRED_FILES 6） */
 const TOOLTIP_RETIRED_FILES = [
-  'apps/web/src/views/knowledge/EntryDrawer.tsx', // 详情承载改官方 Modal（关闭钮归 Modal 头行——关闭 Tooltip 随抽屉退役）
   'apps/web/src/views/overview/task-tab/ViewDropdown.tsx', // D36 ⑤：视图切换钮控件自释（1.23）
   'apps/web/src/views/overview/status-chips.tsx', // D37：七态筛选 chips（zh 标签在 chip 面；0 计数淡化自释）
   'apps/web/src/views/overview/proposal-tab/ProposalStatusChips.tsx', // D37：五态筛选 chips（同族）
