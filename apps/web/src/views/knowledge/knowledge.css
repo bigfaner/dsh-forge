@@ -1,4 +1,4 @@
-﻿/* 知识浏览样式（定位：业务——UF-6 浏览主体：工具栏 + 左轨域目录树 + 卡片网格 + 详情抽屉）。
+/* 知识浏览样式（定位：业务——UF-6 浏览主体：工具栏 + 左轨域目录树 + 卡片网格 + 详情抽屉）。
  * 结构基准 = 原型 knview（工具栏 / 左轨 224px / 主区 auto-fill 网格——布局结构以原型为准）；
  * 视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值，lint-tokens 机械执行）。
  * dsw-raw 豁免（执行记录同步）：左轨 224px / 域树行高 24px 与行内 2/5/6px / 层级缩进
@@ -904,11 +904,12 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-/* 放大态编辑输入（双击/＋ 进入——原型 kw-edit accent 描边胶囊；SC-J J5 终稿：
- * min-width 140px / width auto / overflow visible——长关键词编辑态不裁切） */
+/* 放大态编辑输入（双击/＋ 进入——原型 kw-edit accent 描边胶囊；SC-J J5 修订口径
+ * （bug 436cc88d）：Chromium UA 对 input 强制 overflow: clip，overflow visible
+ * 契约不可达——改型为宽随内容自适应（EntryDrawer.tsx 测量撑开），CSS 仅持
+ * min-width 140px 下限） */
 .dswf-kn-kwedit {
   box-sizing: border-box;
-  width: auto;
   min-width: 140px;
   height: 26px; /* dsw-raw 原型 .tag chip 刻度（放大态编辑同值） */
   padding: 0 var(--dsw-font-xs-13-line-height);
@@ -917,7 +918,6 @@
   background: var(--dsw-alias-bg-base);
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-primary);
-  overflow: visible;
 }
 
 /* ＋ 新增钮（原型 addkw 虚线描边） */

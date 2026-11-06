@@ -21,6 +21,8 @@ import {
   fetchEntryDetail,
   initialKnEditDraft,
   insertKnChip,
+  KnKwEditInput,
+  knKwEditWidth,
   removeKnChip,
   runEntryMetaEdit,
   runEntryVerdict,
@@ -429,13 +431,27 @@ describe('EntryDrawerEditBody（G3 编辑字段面——纯渲染）', () => {
     expect(clean).not.toContain('data-dswf-kn-dlg-err')
   })
 
-  it('SC-J J5 编辑态关键词 chip：min-width 140px / width auto / overflow visible（长关键词不裁切——CSS 契约）', () => {
+  it('SC-J J5 编辑态关键词 chip：min-width 140px + 宽随内容自适应（bug 436cc88d 修订口径——overflow visible 断言退役：Chromium UA 对 input 强制 overflow: clip）——CSS 契约', () => {
     const css = readFileSync(new URL('./knowledge.css', import.meta.url), 'utf8')
     const rule = css.match(/\.dswf-kn-kwedit\s*\{[^}]*\}/)
     expect(rule, '.dswf-kn-kwedit 规则应在场').toBeTruthy()
     expect(rule![0]).toContain('min-width: 140px')
-    expect(rule![0]).toContain('width: auto')
-    expect(rule![0]).toContain('overflow: visible')
+    expect(rule![0]).not.toContain('overflow') // platform 限制 bug 436cc88d——overflow 声明退役
+    expect(rule![0]).not.toContain('width: auto') // 自适应归组件层测量，CSS 不再持 width 口径
+  })
+
+  it('SC-J J5 自适应宽：knKwEditWidth 内容宽钳 min 140px（纯函数）', () => {
+    expect(knKwEditWidth(0)).toBe(140)
+    expect(knKwEditWidth(80.4)).toBe(140)
+    expect(knKwEditWidth(321.6)).toBe(322)
+  })
+
+  it('SC-J J5 自适应宽：放大态编辑输入持 min 140px 内联宽（自适应机制在场）', () => {
+    const html = renderToStaticMarkup(
+      <KnKwEditInput value="" busy={false} onChange={() => {}} onCommit={() => {}} />,
+    )
+    expect(html).toContain('data-dswf-kn-kwedit')
+    expect(html).toContain('width:140px')
   })
 })
 

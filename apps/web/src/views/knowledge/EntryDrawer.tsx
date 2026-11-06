@@ -467,6 +467,58 @@ function KnAutoTextarea(props: {
   )
 }
 
+/** 关键词编辑输入宽下限（px——SC-J J5 修订口径：自适应下的最小宽） */
+export const KN_KWEDIT_MIN_WIDTH_PX = 140
+
+/** 自适应宽计算（G5 纯函数）：内容宽（含 padding）上取整钳到 min 下限 */
+export function knKwEditWidth(contentWidth: number): number {
+  return Math.max(KN_KWEDIT_MIN_WIDTH_PX, Math.ceil(contentWidth))
+}
+
+/**
+ * 自适应关键词编辑输入（bug 436cc88d 修订口径）：Chromium UA 对 input 强制
+ * overflow: clip——overflow: visible 契约不可达，改型为宽随内容自适应：值变化
+ * 即先把 width 归零再测 scrollWidth（含 padding 的内容宽），撑开至
+ * max(140px, 内容宽)——机制上长词永不裁切。
+ */
+export function KnKwEditInput({
+  value,
+  busy,
+  onChange,
+  onCommit,
+}: {
+  readonly value: string
+  readonly busy: boolean
+  readonly onChange: (value: string) => void
+  readonly onCommit: () => void
+}): ReactNode {
+  const ref = useRef<HTMLInputElement | null>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (el === null) return
+    el.style.width = '0px'
+    el.style.width = `${knKwEditWidth(el.scrollWidth)}px`
+  }, [value])
+  return (
+    <input
+      ref={ref}
+      className="dswf-kn-kwedit"
+      data-dswf-kn-kwedit=""
+      type="text"
+      aria-label="编辑关键词"
+      autoFocus
+      disabled={busy}
+      style={{ width: KN_KWEDIT_MIN_WIDTH_PX }}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') onCommit()
+      }}
+      onBlur={onCommit}
+    />
+  )
+}
+
 export interface EntryDrawerEditBodyProps {
   /** 现役详情（域只读来源——改域唯一入口 = 域树拖拽） */
   readonly detail: EntryDetail
@@ -526,20 +578,12 @@ export function EntryDrawerEditBody({ detail, draft, errors, busy, onChange }: E
         <div className="dswf-kn-edit-chips" data-dswf-kn-edit-chips="">
           {draft.keywords.map((keyword, index) =>
             editingIndex === index ? (
-              <input
+              <KnKwEditInput
                 key={`edit-${String(index)}`}
-                className="dswf-kn-kwedit"
-                data-dswf-kn-kwedit=""
-                type="text"
-                aria-label="编辑关键词"
-                autoFocus
-                disabled={busy}
                 value={editingValue}
-                onChange={(event) => setEditingValue(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') finishChipEdit()
-                }}
-                onBlur={finishChipEdit}
+                busy={busy}
+                onChange={setEditingValue}
+                onCommit={finishChipEdit}
               />
             ) : (
               <span
