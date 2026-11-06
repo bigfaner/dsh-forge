@@ -49,6 +49,7 @@ export function renderKnowledgeStaticSection(): string {
     '',
     '已注册域及其简介列于下文 <knowledge-domains> 块；检索时作为 domain_prefix 传入',
     '以收窄范围。子域最多 ' + depth + ' 级，写入即存在。',
+    '域目录全量查询用 knowledge_browse 工具（depth 封顶层级 / keyword 过滤域路径与简介）。',
     '',
     '归档规则（每次写入均须遵循）：',
     '- 归入与主题匹配的最深既有子域；仅当无父域容纳时才新建子域。',

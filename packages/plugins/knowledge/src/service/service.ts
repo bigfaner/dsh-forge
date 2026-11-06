@@ -67,6 +67,7 @@ import { createReviewGateway } from './review.js'
 import type {
   BackflowConfig,
   BrowseKnowledgeService,
+  DomainBrowseRow,
   EntryAbstract,
   EntryActionResult,
   KnowledgeConfirmBatchQuery,
@@ -245,6 +246,10 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
   const browseByDomainStmt = db.prepare<[string, string], BrowseEntryRow>(
     `SELECT ${ENTRY_COLUMNS} FROM knowledge_entries e JOIN knowledge_fts f ON f.id = e.id
      WHERE (e.domain = ? OR e.domain LIKE ? ESCAPE '\\') ORDER BY e.domain, e.id`,
+  )
+  // 域简介联查（knowledge-browse-tool 1.1——KNOWLEDGE_DOMAINS 按域全路径，ws_path 键）
+  const domainDescStmt = db.prepare<[string], { domain: string; description: string | null }>(
+    `SELECT domain, description FROM knowledge_domains WHERE ws_path = ?`,
   )
 /** 目录即域（≤3 层）——knowledgeDir 现盘目录枚举（隐藏目录跳过；每调用期实时对账） */
 function listDomainDirs(knowledgeDir: string, maxDepth: number): string[] {
@@ -553,6 +558,33 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       }))
   }
 
+  /** browse 节点聚合（browse 通道与 browseDomains 同底表——徽记口径 1.4：恒走未过滤
+   *  listEntries 独立查询面 + 现盘目录并集；序 = depth 升序再路径升序） */
+  const browseNodes = async (projectId: string): Promise<DomainNode[]> => {
+    const { knowledgeDir } = requireProject(projectId, 'browse')
+    const nodes = aggregateDomainTree(await listEntries({ projectId }))
+    // 目录即域并集（H2 新目录即时在场）：knowledgeDir 现盘目录树（≤3 层，目录即域）
+    // 含零条目域/带外 mkdir 目录——条目聚合不含即补入（计数 0）
+    const byPath = new Map(nodes.map((node) => [node.domainPath, node]))
+    for (const domain of listDomainDirs(knowledgeDir, FRONTMATTER_DOMAIN_MAX_DEPTH)) {
+      const segments = domain.split('/')
+      for (let i = 1; i <= segments.length; i++) {
+        const path = segments.slice(0, i).join('/')
+        if (byPath.has(path)) continue
+        const node: DomainNode = {
+          domainPath: path,
+          label: segments[i - 1] ?? '',
+          depth: i,
+          entryCount: 0,
+          unconfirmedCount: 0,
+        }
+        byPath.set(path, node)
+        nodes.push(node)
+      }
+    }
+    return nodes.sort((a, b) => a.depth - b.depth || (a.domainPath < b.domainPath ? -1 : 1))
+  }
+
   return {
     async rebuildIndex(projectId: string) {
       const { wsPath } = requireProject(projectId, 'rebuildIndex')
@@ -737,30 +769,22 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     },
 
     async browse(q: { projectId: string }): Promise<DomainNode[]> {
-      // 徽记口径（1.4）：恒走未过滤 listEntries 独立查询面（不带 statusFilter）——
-      // unconfirmedCount 与 entryCount 同底表聚合，「哪里有待审核」不随状态过滤抖动
-      const { knowledgeDir } = requireProject(q.projectId, 'browse')
-      const nodes = aggregateDomainTree(await listEntries({ projectId: q.projectId }))
-      // 目录即域并集（H2 新目录即时在场）：knowledgeDir 现盘目录树（≤3 层，目录即域）
-      // 含零条目域/带外 mkdir 目录——条目聚合不含即补入（计数 0）；序 = depth 升序再路径升序
-      const byPath = new Map(nodes.map((node) => [node.domainPath, node]))
-      for (const domain of listDomainDirs(knowledgeDir, FRONTMATTER_DOMAIN_MAX_DEPTH)) {
-        const segments = domain.split('/')
-        for (let i = 1; i <= segments.length; i++) {
-          const path = segments.slice(0, i).join('/')
-          if (byPath.has(path)) continue
-          const node: DomainNode = {
-            domainPath: path,
-            label: segments[i - 1] ?? '',
-            depth: i,
-            entryCount: 0,
-            unconfirmedCount: 0,
-          }
-          byPath.set(path, node)
-          nodes.push(node)
-        }
-      }
-      return nodes.sort((a, b) => a.depth - b.depth || (a.domainPath < b.domainPath ? -1 : 1))
+      return browseNodes(q.projectId)
+    },
+
+    // knowledge-browse-tool 1.1：只读导航动词（零 recall_logs 写入）——browse 同底表
+    // 聚合 + KNOWLEDGE_DOMAINS 简介全路径联查；输出序 = 域路径字典序（tool 渲染同序）
+    async browseDomains(q: { projectId: string }): Promise<DomainBrowseRow[]> {
+      const { wsPath } = requireProject(q.projectId, 'browseDomains')
+      const descriptions = new Map(domainDescStmt.all(wsPath).map((r) => [r.domain, r.description] as const))
+      return (await browseNodes(q.projectId))
+        .map((node) => ({
+          domainPath: node.domainPath,
+          depth: node.depth,
+          entryCount: node.entryCount,
+          description: descriptions.get(node.domainPath) ?? null,
+        }))
+        .sort((a, b) => (a.domainPath < b.domainPath ? -1 : 1))
     },
 
     registerProject: registerProjectRow,

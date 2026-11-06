@@ -109,6 +109,27 @@ describe('读面行为等价（v4 实体表）', () => {
     expect(nodes.find((node) => node.domainPath === 'backend')).toMatchObject({ entryCount: 2, unconfirmedCount: 1 })
   })
 
+  it('browseDomains：browse 同底表同口径（计数一致）+ KNOWLEDGE_DOMAINS 简介联查 + 字典序', async () => {
+    await service.setDomainDescription({ wsPath: wsDir, domain: 'backend', description: '后端规范' })
+    const nodes = await service.browse({ projectId })
+    const rows = await service.browseDomains({ projectId })
+    // 计数口径与 web browse 通道一致：同底表同计数（含零条目域）
+    expect(rows.map((r) => [r.domainPath, r.entryCount])).toEqual(
+      [...nodes].sort((a, b) => (a.domainPath < b.domainPath ? -1 : 1)).map((n) => [n.domainPath, n.entryCount]),
+    )
+    // 简介全路径联查：有则携、无则 NULL；输出序 = 域路径字典序
+    expect(rows.map((r) => r.domainPath).toSorted()).toEqual(rows.map((r) => r.domainPath))
+    expect(rows.find((r) => r.domainPath === 'backend')).toMatchObject({ depth: 1, entryCount: 2, description: '后端规范' })
+    expect(rows.find((r) => r.domainPath === 'a/b')).toMatchObject({ entryCount: 0, description: null })
+  })
+
+  it('browseDomains 零召回写入（工作面动词：knowledge_recall_logs 零增量——本文件前序检索面测试已落召回行）', async () => {
+    const countOf = () => (db.prepare('SELECT COUNT(*) AS n FROM knowledge_recall_logs').get() as { n: number }).n
+    const before = countOf()
+    await service.browseDomains({ projectId })
+    expect(countOf()).toBe(before)
+  })
+
   it('两级解析 fail-loud：projectId 未命中静态绑定表/注册行 → 裸错（非六码）', async () => {
     await expect(service.listEntries({ projectId: 'p-other' })).rejects.toThrow(/项目不存在/)
   })

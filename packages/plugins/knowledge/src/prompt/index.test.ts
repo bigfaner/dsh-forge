@@ -45,7 +45,12 @@ describe('renderKnowledgeStaticSection（固定文本——中文 + 归档规则
     expect(text).toContain('补写简介')
   })
 
-  it('零工具说明（renderToolUsage 退役——工具加载由 dsh 机械承载）', () => {
+  it('knowledge_browse 一行指认（knowledge-browse-tool 1.1——静态段唯一 tool 指认行）', () => {
+    expect(text).toContain('knowledge_browse')
+    expect(text).toContain('域目录全量查询用 knowledge_browse 工具')
+  })
+
+  it('零工具说明（renderToolUsage 退役——工具加载由 dsh 机械承载；knowledge_browse 指认行除外）', () => {
     for (const name of ['knowledge_search', 'knowledge_read_abstract', 'knowledge_read', 'knowledge_write', 'knowledge_supersede', 'knowledge_reinstate', 'entry_id']) {
       expect(text).not.toContain(name)
     }

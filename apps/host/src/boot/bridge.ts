@@ -301,6 +301,7 @@ export const KNOWLEDGE_SERVICE_METHODS = [
   'heatByEntry',
   'sessionRecall',
   'browse',
+  'browseDomains',
   'registerProject',
   'write',
   'read',

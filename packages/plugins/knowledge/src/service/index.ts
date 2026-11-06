@@ -8,6 +8,7 @@ export {
 export type {
   BackflowConfig,
   BrowseKnowledgeService,
+  DomainBrowseRow,
   EntryAbstract,
   IndexReport,
   KnowledgeConfirmBatchQuery,

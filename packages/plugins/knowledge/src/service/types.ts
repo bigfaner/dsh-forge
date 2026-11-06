@@ -124,6 +124,22 @@ export interface KnowledgeService {
   updateEntry(q: KnowledgeUpdateEntryQuery): Promise<EntryActionResult>
   /** 新建域（树级）：mkdir + 域行 upsert（description NULL；≤3 层校验与 write 严契约同函数） */
   createDomain(q: KnowledgeCreateDomainQuery): Promise<KnowledgeCreateDomainOutcome>
+  // ── knowledge-browse-tool 1.1：域目录浏览读法（只读导航动词——零 recall_logs 写入） ──
+  /** 域目录浏览（knowledge_browse tool 供数）：browse 同底表聚合（aggregateDomainTree +
+   *  现盘目录并集，计数口径与 web browse 通道一致）+ KNOWLEDGE_DOMAINS 简介按域全路径联查 */
+  browseDomains(q: { projectId: string }): Promise<DomainBrowseRow[]>
+}
+
+/** browseDomains 返回行（browse 通道 DomainNode 的简介投影视——零 recall 写入读法） */
+export interface DomainBrowseRow {
+  /** 域全路径（如 `lessons/windows`） */
+  readonly domainPath: string
+  /** 层级深度（顶域 = 1） */
+  readonly depth: number
+  /** 条目计数（confirmed + unconfirmed 计、superseded/redirect 不计；含子域） */
+  readonly entryCount: number
+  /** 域简介（KNOWLEDGE_DOMAINS 全路径联查；NULL = 无简介） */
+  readonly description: string | null
 }
 
 /** Interface 2 + 第八法聚合面：KnowledgeService 七法 + browse 域树聚合（forge:knowledge/browse 通道 handler 本体）+ 注册行写入（第九法） */

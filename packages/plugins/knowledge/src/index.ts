@@ -171,6 +171,7 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       provideKnowledgeService(),
       declareKnowledgeRootDirKey(ctx),
       ctx.tools.register(tools.search),
+      ctx.tools.register(tools.browse),
       ctx.tools.register(tools.readAbstract),
       ctx.tools.register(tools.write),
       ctx.tools.register(tools.read),
