@@ -34,6 +34,7 @@ const ACTIONS: KnowledgeBrowseActions = {
   setKeyword: () => {},
   clearFilters: () => {},
   setStatusFilter: () => {},
+  dismissReceipt: () => {},
   retry: () => {},
 }
 
@@ -50,6 +51,7 @@ function stateOf(overrides: Partial<KnowledgeBrowseState>): KnowledgeBrowseState
     knowledgeDir: 'Z:/ws/demo/.knowledge',
     multiSelect: EMPTY_MULTI_SELECT,
     actionNotice: undefined,
+    receipt: undefined,
     ...overrides,
   }
 }

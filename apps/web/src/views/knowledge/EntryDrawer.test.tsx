@@ -4,6 +4,8 @@
 // knowledge-review-ui SC-G（1.8）：dialog 双模式（查看/编辑）+ 标题栏描边钮组 +
 // escNext 链 + chip 交互纯函数 + editMeta/裁决执行面 + 驳回 Modal 叠层。
 import { describe, expect, it } from 'vitest'
+// @ts-expect-error —— web tsconfig types 仅 vite/client；node:fs 仅测试内读取样式表源文
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { EntryActionReceipt, EntryDetail, EntryDetailQuery } from '@dsh-forge/contracts'
 import { RpcClientError } from '../../rpc/errors.js'
@@ -425,6 +427,15 @@ describe('EntryDrawerEditBody（G3 编辑字段面——纯渲染）', () => {
     expect(html).toContain('标题不能为空')
     const clean = renderToStaticMarkup(<EntryDrawerEditBody {...base} />)
     expect(clean).not.toContain('data-dswf-kn-dlg-err')
+  })
+
+  it('SC-J J5 编辑态关键词 chip：min-width 140px / width auto / overflow visible（长关键词不裁切——CSS 契约）', () => {
+    const css = readFileSync(new URL('./knowledge.css', import.meta.url), 'utf8')
+    const rule = css.match(/\.dswf-kn-kwedit\s*\{[^}]*\}/)
+    expect(rule, '.dswf-kn-kwedit 规则应在场').toBeTruthy()
+    expect(rule![0]).toContain('min-width: 140px')
+    expect(rule![0]).toContain('width: auto')
+    expect(rule![0]).toContain('overflow: visible')
   })
 })
 

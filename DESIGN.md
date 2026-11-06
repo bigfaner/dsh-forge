@@ -170,6 +170,7 @@ Markdown 内容阶梯（随用户字号设置 `--dsh-content-font-size` 14–22p
 | 导航/布局 | Chevron(Up/Down/Left/Right) / ChevronsUpDown / PanelLeft / Fullscreen / Ellipsis / CompareSplit / FlatList / WrapLines / Wrap(Fill) / Nowrap(Fill) / Compact |
 | 编辑/操作 | Edit / Plus / Trash ⭐ / Pin(/Fill) / Play / Pause / Archive / Unarchive / ArchiveCheck / ArchiveOff / ListPen / Checklist / SlidersTwo |
 | 产品域 | AgentPreset / Skill / Goal / Plan / WorkspaceTree / ProjectAdd / ContextInjection / CordisPlugin / PluginPinwheel / Sparkle / Shield / Api / Database / Data / Gauge / Inspect / Users / User / Personalization / Settings / Light / Dark / Followsystem / AlarmClock / Like(/Fill) / Dislike(/Fill) |
+| 自绘（官方缺件） | **Flame(Fill)**——`IconFlameFillRegular`（出口模块 `apps/web/src/components/icons.tsx`；官方库无 flame glyph，官方参照件刻度 16px viewBox / currentColor；消费位 = 知识卡片热度徽章） |
 
 （⭐ = worktree-branch-management 已裁决消费：`IconBranchOutlineRegular` 分支行/chip、`IconTrashOutlineRegular` 行内删除、`IconFolderCloseRegular` 项目行、`IconPlusOutlineRegular` 新建、`IconWarningTriangleOutlineRegular` 封存警示。）
 

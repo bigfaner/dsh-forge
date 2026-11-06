@@ -23,6 +23,10 @@ import {
   browseFilterReducer,
   entriesQueryOf,
   entryActionNotice,
+  findCard,
+  confirmReceiptText,
+  moveReceiptText,
+  domainLabelOf,
   hasActiveFilter,
   multiSelectReducer,
   type BrowseFilter,
@@ -79,6 +83,14 @@ export interface KnowledgeBrowseState {
   readonly multiSelect: MultiSelectState
   /** 最近一次裁决动作的回执提示（全成功 = undefined 静默；部分失败 = code 分派文案） */
   readonly actionNotice: string | undefined
+  /** 动作成功回执 toast（SC-J J3/J4——官方 Toast 承载；seq 键控重放，onDone 归 dismissReceipt） */
+  readonly receipt: KnowledgeReceiptToast | undefined
+}
+
+/** 动作成功回执 toast 载荷（text = 标题/域名实读模板；seq = 出场次序——Toast key 重放键） */
+export interface KnowledgeReceiptToast {
+  readonly text: string
+  readonly seq: number
 }
 
 /** 浏览动作（过滤态机事件 + 重试） */
@@ -91,6 +103,8 @@ export interface KnowledgeBrowseActions {
   clearFilters(): void
   /** 状态过滤片（工具栏 chips——undefined 入参归一 'all' 清片） */
   setStatusFilter(statusFilter: 'all' | 'unconfirmed' | 'confirmed'): void
+  /** 动作成功回执 toast 退场（官方 Toast onDone——fade 完成即卸载） */
+  dismissReceipt(): void
   /** 重试（错误态/不可用态——全量重装载） */
   retry(): void
 }
@@ -215,6 +229,7 @@ export function initialBrowseState(): KnowledgeBrowseState {
     knowledgeDir: null,
     multiSelect: EMPTY_MULTI_SELECT,
     actionNotice: undefined,
+    receipt: undefined,
   }
 }
 
@@ -314,6 +329,8 @@ export function browseActions(
     setStatusFilter: (statusFilter) => {
       dispatchFilter({ type: 'set-status-filter', statusFilter })
     },
+    // 回执退场归 hook 执行面（本纯函数面零 toast 态——装配处 spread 覆盖）
+    dismissReceipt: () => {},
     retry: () => {
       bumpNonce()
     },
@@ -415,6 +432,10 @@ export function useKnowledgeBrowse(
   const [notice, setNotice] = useState<string | undefined>(undefined)
   const [nonce, setNonce] = useState(0)
   const [activation, setActivation] = useState(0)
+  // 动作成功回执 toast（SC-J J3/J4）：官方 Toast 承载——text 模板含标题/域名实读；
+  // seq 单调递增 = 出场次序（同文本重放即新 key 新计时）
+  const [receipt, setReceipt] = useState<KnowledgeReceiptToast | undefined>(undefined)
+  const receiptSeqRef = useRef(0)
   const wasActiveRef = useRef(active)
   const fullKeyRef = useRef('')
   const projectRef = useRef(projectId)
@@ -472,6 +493,15 @@ export function useKnowledgeBrowse(
     setNonce((n) => n + 1)
   }, [])
 
+  // 回执 toast 出场/退场（SC-J J3/J4——官方 Toast onDone 归退场；卸载不触发布局副作用）
+  const showReceipt = useCallback((text: string): void => {
+    receiptSeqRef.current += 1
+    setReceipt({ text, seq: receiptSeqRef.current })
+  }, [])
+  const dismissReceipt = useCallback((): void => {
+    setReceipt(undefined)
+  }, [])
+
   // 裁决执行面：entryAction → 回执文案分派 → 成功后按当前过滤重拉（nonce 递增走既有 seq 守卫）
   const multiActions = useMemo(() => {
     const runAction = async (action: EntryActionVerb, entryIds: readonly number[]): Promise<boolean> => {
@@ -481,12 +511,17 @@ export function useKnowledgeBrowse(
         return false
       }
       setNotice(entryActionNotice(out.data))
+      // J3 单条通过成功回执（标题实读——全部成功才出场；部分失败走 actionNotice 错误面）
+      if (action === 'confirm' && entryIds.length === 1 && entryActionNotice(out.data) === undefined) {
+        const card = findCard(state.cards, entryIds[0] ?? -1)
+        showReceipt(confirmReceiptText(card?.title ?? `#${String(entryIds[0])}`))
+      }
       return true
     }
     return multiSelectActions(dispatchMulti, () => {
       setNonce((n) => n + 1)
     }, multiSelect.selected, state.cards.map((card) => card.entryId), runAction)
-  }, [makeClient, projectId, multiSelect.selected, state.cards])
+  }, [makeClient, projectId, multiSelect.selected, state.cards, showReceipt])
 
   // 域树动作（SC-H）：entryAction 树级径 move/createDomain——回执文案分派同 multiActions，
   // 成功后全量重拉（树/徽记/卡片即时刷新——nonce 递增走既有 seq 守卫）
@@ -498,6 +533,17 @@ export function useKnowledgeBrowse(
         return
       }
       setNotice(entryActionNotice(out.data))
+      // J4 拖拽落位成功回执（标题与来源/目标域实读；全部成功才出场）
+      if (request.action === 'move' && entryActionNotice(out.data) === undefined) {
+        const card = findCard(state.cards, request.entryIds[0] ?? -1)
+        showReceipt(
+          moveReceiptText(
+            card?.title ?? `#${String(request.entryIds[0])}`,
+            domainLabelOf(card?.domainPath ?? ''),
+            domainLabelOf(request.targetDomain),
+          ),
+        )
+      }
       setNonce((n) => n + 1)
     }
     return {
@@ -508,12 +554,12 @@ export function useKnowledgeBrowse(
         return runTree({ projectId, action: 'createDomain', domain: domainPath })
       },
     }
-  }, [makeClient, projectId])
+  }, [makeClient, projectId, state.cards, showReceipt])
 
   const actions = browseActions(dispatchFilter, retry)
   // 消费态合成（fix-5）：装载态字段 + 实时过滤态（reducer 单一来源）——防滞后快照弹回键入值；
-  // 多选态/裁决提示同面合并注入（态机单一来源 = reducer/执行面）
+  // 多选态/裁决提示/回执 toast 同面合并注入（态机单一来源 = reducer/执行面）
   const consumed = consumedBrowseState(state, filter)
-  const merged: KnowledgeBrowseState = { ...consumed, multiSelect, actionNotice: notice }
-  return [merged, actions, multiActions, treeActions] as const
+  const merged: KnowledgeBrowseState = { ...consumed, multiSelect, actionNotice: notice, receipt }
+  return [merged, { ...actions, dismissReceipt }, multiActions, treeActions] as const
 }

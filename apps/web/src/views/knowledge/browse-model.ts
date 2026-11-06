@@ -279,6 +279,73 @@ export function parentDomainPaths(rows: readonly DomainRow[]): ReadonlySet<strin
   return parents
 }
 
+// ───────────────── 卡片终稿布局（knowledge-review-ui SC-J——纯派生层） ─────────────────
+
+/**
+ * 卡片状态中文标签（J2 底行 chip——零英文）：confirmed → 已确认 / unconfirmed → 待审核；
+ * 未知状态原样回退（fail-soft 不炸卡片——状态集封闭性由 core 契约承载）。
+ */
+export function cardStatusLabel(status: string): string {
+  if (status === 'unconfirmed') return '待审核'
+  if (status === 'confirmed') return '已确认'
+  return status
+}
+
+/** 卡片状态点语义（官方 StateDot state：confirmed 绿点 / unconfirmed 琥珀点 / 未知 idle） */
+export function cardStatusDotState(status: string): 'done' | 'warning' | 'idle' {
+  if (status === 'unconfirmed') return 'warning'
+  if (status === 'confirmed') return 'done'
+  return 'idle'
+}
+
+/** 域显示标签（根域回退「根」——卡片底行/回执文案共用同一口径） */
+export function domainLabelOf(domainPath: string): string {
+  return domainPath === '' ? '根' : domainPath
+}
+
+/** 卡片创建时间标签（{时长}创建 + 悬浮完整时间点——SC-J J2） */
+export interface CardCreatedLabel {
+  /** 相对时长 +「创建」后缀（如「2 小时前创建」） */
+  readonly short: string
+  /** 完整时间点提示（「创建于 YYYY-MM-DD HH:mm」——Tooltip 悬浮口径） */
+  readonly full: string
+}
+
+/** 本地时刻 `YYYY-MM-DD HH:mm`（非法字面量原样回退——EntryDrawer localDateTimeOf 同刻度） */
+function localDateTimeStamp(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/**
+ * 卡片创建时间标签投影（纯函数）：时长短标签（官方 relativeTime 桶化 +「创建」后缀）+
+ * 悬浮完整时间点（创建于 YYYY-MM-DD HH:mm）。数据源 = card.updated（frontmatter.updated，
+ * 缺省文件 mtime——创建时点代理，卡片 DTO 无独立 created 字段的现状口径）。
+ */
+export function cardCreatedLabel(updated: string, now: number): CardCreatedLabel {
+  return { short: `${isoTimeLabelZh(updated, now)}创建`, full: `创建于 ${localDateTimeStamp(updated)}` }
+}
+
+/** 条目查找（回执文案的标题/域实读数据源——纯函数） */
+export function findCard(
+  cards: readonly { readonly entryId: number; readonly title: string; readonly domainPath: string }[],
+  entryId: number,
+): { readonly entryId: number; readonly title: string; readonly domainPath: string } | undefined {
+  return cards.find((card) => card.entryId === entryId)
+}
+
+/** J3 回执文案（标题实读——模板含文档标题，非静态提示） */
+export function confirmReceiptText(title: string): string {
+  return `${title} 已被审核通过`
+}
+
+/** J4 回执文案（标题与域名实读——`{标题} 从{来源域} 移动到 {目标域}`） */
+export function moveReceiptText(title: string, fromDomain: string, toDomain: string): string {
+  return `${title} 从${fromDomain} 移动到 ${toDomain}`
+}
+
 /**
  * 卡片时间标签（纯函数）：frontmatter.updated（缺省 mtime 的 ISO 串）→ 官方 relativeTime
  * 桶化中文文案（zh 切换 = components/time-label 共享源，fix-36 收敛——sidebar/recall 行语言

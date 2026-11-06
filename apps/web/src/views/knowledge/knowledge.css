@@ -108,7 +108,7 @@
   margin-left: auto;
   border: none;
   background: transparent;
-  padding: 0 2px;
+  padding: 0 2px; /* dsw-raw 原型结构刻度（无令牌档） */
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-link);
   cursor: var(--dsh-cursor-pointer, pointer);
@@ -124,7 +124,7 @@
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 2px; /* dsw-raw 原型结构刻度（无令牌档） */
   padding: 0 var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
 }
 
@@ -135,7 +135,7 @@
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-sm);
   background: transparent;
-  padding: 0 6px;
+  padding: 0 6px; /* dsw-raw 原型结构刻度（无令牌档） */
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-primary);
 }
@@ -143,14 +143,14 @@
 .dswf-kn-dom-new-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 4px; /* dsw-raw 原型结构刻度（无令牌档） */
 }
 
 .dswf-kn-dom-new-btn {
   height: 20px;
-  padding: 0 8px;
+  padding: 0 8px; /* dsw-raw 原型结构刻度（无令牌档） */
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 999px;
+  border-radius: 999px; /* dsw-raw 原型结构刻度（无令牌档） */
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
@@ -172,7 +172,7 @@
 .dswf-kn-dom-caret {
   flex: none;
   width: 12px; /* dsw-raw 原型 caret 刻度 */
-  font-size: 10px;
+  font-size: 10px; /* dsw-raw 原型结构刻度（无令牌档） */
   line-height: 1;
   text-align: center;
   color: var(--dsw-alias-label-tertiary);
@@ -307,15 +307,72 @@
 }
 
 .dswf-kn-card-dom {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12px; /* dsw-raw 原型 .dom 次要色 12px 刻度（无令牌档） */
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 弹性空隙（J2 左中右三段——域(左) · spacer · 状态 chip + 创建时间(右端锚定)） */
+.dswf-kn-card-spacer {
+  flex: 1;
+}
+
+/* J1 热度徽章（标题行右端——自绘火焰图标 + 数字；24px 高 / 13px 字 / 上移 5px——原型刻度） */
+.dswf-kn-card-heat {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px; /* dsw-raw 原型 heat 图标-数字间距 */
+  height: 24px;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px; /* dsw-raw 原型 heat 胶囊圆角（无令牌档） */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  transform: translateY(-5px); /* 原型：相邻文字基线上移 5px */
+}
+
+/* J2 底行中文状态 chip（已确认 = 中性填充 + 绿点 / 待审核 = warning 描边 + 琥珀点——零英文） */
+.dswf-kn-card-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px; /* dsw-raw 原型 statechip 点-文字间距 */
+  height: 20px;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid transparent;
+  border-radius: 999px; /* dsw-raw 原型 statechip 胶囊圆角（无令牌档） */
+  font-size: 12px; /* dsw-raw 原型 statechip 12px 刻度（无令牌档） */
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.dswf-kn-card-status.is-actionable {
+  color: var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warning-primary));
+  border-color: var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warning-primary));
+  background: transparent;
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-card-status.is-actionable:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-kn-card-status.is-actionable:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color);
+  outline-offset: 1px;
 }
 
 .dswf-kn-card-time {
   flex: none;
-  margin-left: auto;
+  font-size: 12px; /* dsw-raw 原型 .time caption 12px 刻度（无令牌档） */
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
 }
 
 /* ── 网格骨架（首装/索引重建中——UF-6 States「加载中」） ── */
@@ -822,7 +879,7 @@
   height: 26px; /* dsw-raw 原型 .tag chip 刻度（放大态编辑同值） */
   padding: 0 var(--dsw-font-xs-13-line-height);
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
+  border-radius: 999px; /* dsw-raw 原型结构刻度（无令牌档） */
   background: var(--dsw-alias-bg-layer-3);
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-primary);
@@ -847,17 +904,20 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-/* 放大态编辑输入（双击/＋ 进入——原型 kw-edit accent 描边胶囊） */
+/* 放大态编辑输入（双击/＋ 进入——原型 kw-edit accent 描边胶囊；SC-J J5 终稿：
+ * min-width 140px / width auto / overflow visible——长关键词编辑态不裁切） */
 .dswf-kn-kwedit {
   box-sizing: border-box;
-  width: 70px; /* dsw-raw 原型 kw-edit 编辑态宽刻度 */
+  width: auto;
+  min-width: 140px;
   height: 26px; /* dsw-raw 原型 .tag chip 刻度（放大态编辑同值） */
   padding: 0 var(--dsw-font-xs-13-line-height);
   border: 1px solid var(--dsw-alias-link);
-  border-radius: 999px;
+  border-radius: 999px; /* dsw-raw 原型 kw-edit 胶囊圆角（无令牌档） */
   background: var(--dsw-alias-bg-base);
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-primary);
+  overflow: visible;
 }
 
 /* ＋ 新增钮（原型 addkw 虚线描边） */
@@ -866,7 +926,7 @@
   height: 26px; /* dsw-raw 原型 .tag chip 刻度 */
   padding: 0 var(--dsw-font-xs-13-line-height);
   border: 1px dashed var(--dsw-alias-border-l3);
-  border-radius: 999px;
+  border-radius: 999px; /* dsw-raw 原型结构刻度（无令牌档） */
   background: transparent;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);

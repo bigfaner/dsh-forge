@@ -10,15 +10,22 @@ import {
   EMPTY_MULTI_SELECT,
   browseFaceState,
   browseFilterReducer,
+  cardCreatedLabel,
+  cardStatusDotState,
+  cardStatusLabel,
   cardTimeLabel,
+  confirmReceiptText,
   domainDepthOf,
+  domainLabelOf,
   domainRows,
   entriesQueryOf,
   entryActionFailureText,
   entryActionNotice,
+  findCard,
   hasActiveFilter,
   isDomainDepthLegal,
   joinDomainPath,
+  moveReceiptText,
   multiSelectReducer,
   parentDomainPaths,
   toggleDomainCollapsed,
@@ -291,5 +298,47 @@ describe('entryAction 回执 code→错误文案分派（封闭码集）', () =>
 
   it('entryActionNotice：树级 outcome（createDomain——results 缺席）= undefined 静默（不抛零长度炸点）', () => {
     expect(entryActionNotice({} as EntryActionReceipt)).toBeUndefined()
+  })
+})
+
+describe('SC-J 卡片终稿布局纯函数面', () => {
+  it('cardStatusLabel：confirmed→已确认 / unconfirmed→待审核（零英文）；未知状态原样回退 fail-soft', () => {
+    expect(cardStatusLabel('confirmed')).toBe('已确认')
+    expect(cardStatusLabel('unconfirmed')).toBe('待审核')
+    expect(cardStatusLabel('draft')).toBe('draft')
+  })
+
+  it('cardStatusDotState：confirmed 绿点 / unconfirmed 琥珀点 / 未知 idle', () => {
+    expect(cardStatusDotState('confirmed')).toBe('done')
+    expect(cardStatusDotState('unconfirmed')).toBe('warning')
+    expect(cardStatusDotState('draft')).toBe('idle')
+  })
+
+  it('cardCreatedLabel：{时长}创建短标签 + 创建于 YYYY-MM-DD HH:mm 悬浮完整时间点', () => {
+    const label = cardCreatedLabel('2026-10-02T09:00:00.000Z', Date.parse('2026-10-02T12:00:00.000Z'))
+    expect(label.short).toBe('3 小时前创建')
+    expect(label.full).toMatch(/^创建于 \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+    const bad = cardCreatedLabel('not-a-date', Date.parse('2026-10-02T12:00:00.000Z'))
+    expect(bad.full).toBe('创建于 not-a-date')
+    expect(bad.short).toBe('not-a-date创建')
+  })
+
+  it('domainLabelOf：根域回退「根」；非根原样', () => {
+    expect(domainLabelOf('')).toBe('根')
+    expect(domainLabelOf('lessons/windows')).toBe('lessons/windows')
+  })
+
+  it('findCard：entryId 命中返回卡片；未命中 undefined', () => {
+    const cards = [
+      { entryId: 1, title: 'A', domainPath: 'x' },
+      { entryId: 2, title: 'B', domainPath: '' },
+    ]
+    expect(findCard(cards, 2)?.title).toBe('B')
+    expect(findCard(cards, 9)).toBeUndefined()
+  })
+
+  it('回执文案模板（标题/域名实读——非静态提示）：J3 通过 / J4 移动', () => {
+    expect(confirmReceiptText('安全编码规范')).toBe('安全编码规范 已被审核通过')
+    expect(moveReceiptText('安全编码规范', 'lessons', 'conventions')).toBe('安全编码规范 从lessons 移动到 conventions')
   })
 })

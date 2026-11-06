@@ -160,6 +160,8 @@ export function KnowledgeBrowseBody({
                     void multiActions.confirmEntry(entryId)
                   }
             }
+            receipt={state.receipt}
+            onReceiptDone={actions.dismissReceipt}
           />
         </div>
       </div>

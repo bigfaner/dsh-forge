@@ -1,22 +1,36 @@
 // 知识卡片网格（定位：业务——UF-6 auto-fill 多列卡片网格 + 主体四态）。
 // 卡片字段 frontmatter 驱动（KnowledgeCard：标题/摘要/关键词/状态/时间）+ 热度徽章 =
 // card.heat 原样呈现（使用事件计数——listEntries 单表同源 join，AC3：UI 零再推导、
-// 不另调 heat 通道）。Hard Rule 官方件复用：StateChip（状态）/ HeatBadge（热度）/
-// Tag（关键词 chip）/ EmptyState（空态）/ Button（清除过滤/重试）/ Checkbox（多选勾选——
-// 官方 dsh-client-ui-primitives 在场件核销，零自绘）/ Tooltip（chip 快速通过提示）。
+// 不另调 heat 通道）。Hard Rule 官方件复用：Tag（关键词 chip）/ EmptyState（空态）/
+// Button（清除过滤/重试）/ Checkbox（多选勾选）/ StateDot（状态色点）/ Toast（动作回执
+// 顶部横幅）——官方 dsh-client-ui-primitives 在场件核销，零自绘（热度火焰图标除外，
+// 见 components/icons 自绘出口）。
 // 四态（browseFaceState 推导注入）：骨架（首装/索引重建中）/ 卡片 / 过滤无结果
 // （清除过滤入口）/ 空库引导（说明知识目录位置）；错误态 = 错误条或不可用空态
 // （rpcUiState 三态映射，typed error 文案透传）。
 // knowledge-review-ui（SC-F/SC-B 单卡入口）：多选模式 checkbox 卡片右端与标题同行
-// （仅多选模式在场、stopPropagation 不触发卡片开 dialog）；StateChip 仅 unconfirmed 态
+// （仅多选模式在场、stopPropagation 不触发卡片开 dialog）；状态 chip 仅 unconfirmed 态
 // 可点（Tooltip「点击通过」——可点性与状态显示同源），confirmed/superseded 严格只读。
 // SC-H 拖拽源：卡片 draggable + dragstart 携 entryId（'text/knowledge-entry' 键，text/plain 兜底）。
+// SC-J 卡片终稿布局：①标题行右端热度徽章（官方缺件自绘 IconFlameFillRegular + 数字——
+// 24px/13px/上移 5px，Tooltip「热度：召回/使用计数」零 emoji）；②底行重排 = 域（左，省略）
+// · 弹性空隙 · 中文状态 chip（已确认/待审核 + 官方 StateDot 色点——零英文）· 创建时间
+// （{时长}创建 + Tooltip 完整时间点）；③点击待审核 chip = entryAction confirm + 应用顶部
+// 居中回执 toast（官方 Toast 组件核销复用——不重造，文本「{标题} 已被审核通过」标题实读）；
+// ④拖拽落位 toast 在 hook 执行面出票（「{标题} 从{from} 移动到 {to}」域名实读，同官方 Toast）。
 import type { ReactNode } from 'react'
-import { Checkbox, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Checkbox, StateDot, Tag, Toast, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { KnowledgeCard } from '@dsh-forge/contracts'
 import type { RpcUiStateKind } from '../../rpc/ui-state.js'
-import { EmptyState, ErrorBar, HeatBadge, SkeletonRows, StateChip } from '../../components/index.js'
-import { cardTimeLabel, type BrowseFaceState } from './browse-model.js'
+import { EmptyState, ErrorBar, IconFlameFillRegular, SkeletonRows } from '../../components/index.js'
+import {
+  cardCreatedLabel,
+  cardStatusDotState,
+  cardStatusLabel,
+  domainLabelOf,
+  type BrowseFaceState,
+} from './browse-model.js'
+import type { KnowledgeReceiptToast } from './use-knowledge-browse.js'
 import './knowledge.css'
 
 /** 骨架占位卡片数（首装相位——auto-fill 网格同型占位） */
@@ -56,6 +70,10 @@ export interface KnowledgeCardGridProps {
   readonly onToggleSelect?: (entryId: number) => void
   /** 单条快速通过（unconfirmed chip 点击入口——SC-B 链；缺席 = chip 全体只读） */
   readonly onEntryConfirm?: (entryId: number) => void
+  /** 动作成功回执 toast（SC-J J3/J4——官方 Toast 承载；undefined = 不呈现） */
+  readonly receipt?: KnowledgeReceiptToast
+  /** 回执 toast 退场（官方 Toast fade 完成 onDone——卸载） */
+  readonly onReceiptDone?: () => void
 }
 
 /** 网格骨架（UF-6 States「加载中」——索引重建期/首装；共享件注入 kn 域锚） */
@@ -88,15 +106,26 @@ function KnowledgeCardView({
   readonly onToggleSelect?: (entryId: number) => void
   readonly onEntryConfirm?: (entryId: number) => void
 }): ReactNode {
-  // chip 可点态（SC）：unconfirmed + 回调在场 = 可点（Tooltip「点击通过」+ stopPropagation，
-  // 不触发卡片本体开 dialog）；其余态严格只读
+  // J2 创建时间标签（{时长}创建短标签 + 悬浮完整时间点——updated 为创建时点现状口径）
+  const created = cardCreatedLabel(card.updated, now)
+  // chip 可点态（SC + SC-J）：unconfirmed + 回调在场 = 可点（Tooltip「点击通过」+ stopPropagation，
+  // 不触发卡片本体开 dialog）；其余态严格只读。chip 本体 = 中文状态标签 + 官方 StateDot 色点
+  // （confirmed 绿点中性填充 / unconfirmed 琥珀点 warning 描边——零英文）
+  const statusLabel = cardStatusLabel(card.status)
+  const dotState = cardStatusDotState(card.status)
+  const chipCore = (
+    <>
+      <StateDot state={dotState} size={7} />
+      {statusLabel}
+    </>
+  )
   const chipFace =
     onEntryConfirm !== undefined && isEntryConfirmable(card.status) ? (
       <Tooltip label="点击通过" portal>
         <span
           role="button"
           tabIndex={0}
-          className="dswf-kn-card-chip is-actionable"
+          className="dswf-kn-card-status is-actionable"
           data-dswf-kn-chip-confirm={card.entryId}
           aria-label="点击通过"
           onClick={(event) => {
@@ -109,11 +138,11 @@ function KnowledgeCardView({
             onEntryConfirm(card.entryId)
           }}
         >
-          <StateChip status={card.status} />
+          {chipCore}
         </span>
       </Tooltip>
     ) : (
-      <StateChip status={card.status} className="dswf-kn-card-status" />
+      <span className="dswf-kn-card-status is-readonly">{chipCore}</span>
     )
   return (
     <button
@@ -133,8 +162,14 @@ function KnowledgeCardView({
     >
       <span className="dswf-kn-card-top">
         <span className="dswf-kn-card-title">{card.title}</span>
-        {chipFace}
-        <HeatBadge count={card.heat} />
+        {/* J1 热度徽章：标题行右端——官方缺件自绘火焰图标 + 数字（24px/13px/上移 5px，
+            Tooltip「热度：召回/使用计数」——悬浮口径，零 emoji/零原生 title） */}
+        <Tooltip label="热度：召回/使用计数" portal>
+          <span className="dswf-kn-card-heat" data-dswf-kn-card-heat="">
+            <IconFlameFillRegular size={13} />
+            {String(card.heat)}
+          </span>
+        </Tooltip>
         {/* 多选 checkbox（SC-F3）：官方 Checkbox——卡片右端与标题同行；事件隔离层
             stopPropagation（勾选不触发卡片开 dialog）；非多选模式 DOM 不在场。
             卡片本体开 dialog 不随多选模式停用（mockup ②：本体=开详情唯一主行为，
@@ -169,9 +204,16 @@ function KnowledgeCardView({
           </Tag>
         ))}
       </span>
+      {/* J2 底行（左中右三段）：域（左，省略）· 弹性空隙 · 中文状态 chip · 创建时间（右端锚定） */}
       <span className="dswf-kn-card-foot">
-        <span className="dswf-kn-card-dom">{card.domainPath === '' ? '根' : card.domainPath}</span>
-        <span className="dswf-kn-card-time">{cardTimeLabel(card.updated, now)}</span>
+        <span className="dswf-kn-card-dom">{domainLabelOf(card.domainPath)}</span>
+        <span className="dswf-kn-card-spacer" aria-hidden="true" />
+        {chipFace}
+        <Tooltip label={created.full} portal>
+          <span className="dswf-kn-card-time" data-dswf-kn-card-created="">
+            {created.short}
+          </span>
+        </Tooltip>
       </span>
     </button>
   )
@@ -229,6 +271,8 @@ export function KnowledgeCardGrid({
   selectedEntryIds,
   onToggleSelect,
   onEntryConfirm,
+  receipt,
+  onReceiptDone,
 }: KnowledgeCardGridProps): ReactNode {
   if (state === 'skeleton') return <GridSkeleton />
   if (state === 'error') {
@@ -275,6 +319,11 @@ export function KnowledgeCardGrid({
           onEntryConfirm={onEntryConfirm}
         />
       ))}
+      {/* J3/J4 动作成功回执 toast（官方 Toast——应用顶部居中 portal，fade 完成归退场；
+          seq = 出场键——同文本重放即新计时） */}
+      {receipt === undefined ? null : (
+        <Toast key={receipt.seq} text={receipt.text} tone="success" onDone={onReceiptDone ?? (() => {})} />
+      )}
     </div>
   )
 }

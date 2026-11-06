@@ -41,16 +41,53 @@ describe('KnowledgeCardGrid 卡片态', () => {
     expect(markup).toContain('#xss')
     expect(markup).toContain('draft')
     expect(markup).toContain('published')
-    // 热度徽章：HeatBadge 数值原样（= 使用事件计数——AC 断言口径：渲染值即 card.heat）
-    expect(markup).toContain('热度 7')
-    expect(markup).toContain('热度 0')
-    // 域足迹（根域显示「根」）+ 相对时间
+    // J1 热度徽章：火焰图标 + 数字（= 使用事件计数——AC 断言口径：渲染值即 card.heat，零 emoji）
+    expect(markup).toContain('data-dswf-kn-card-heat')
+    expect(markup.match(/data-dswf-kn-card-heat/g)?.length).toBe(2)
+    expect(markup).not.toContain('🔥')
+    // J2 域足迹（根域显示「根」）+ 创建时间短标签（{时长}创建）
     expect(markup).toContain('前端')
     expect(markup).toContain('根')
-    expect(markup).toContain('3 小时前')
+    expect(markup).toContain('3 小时前创建')
     // e2e/详情锚
     expect(markup).toContain('data-dswf-entry="1"')
     expect(markup).toContain('data-dswf-entry="2"')
+  })
+
+  it('SC-J J2 底行重排：域(左) · spacer · 中文状态 chip · 创建时间（右端锚定序）', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeCardGrid state="cards" cards={UNCONFIRMED} now={NOW} onEntryConfirm={() => {}} />,
+    )
+    // 中文状态 chip（零英文）：已确认 / 待审核
+    expect(markup).toContain('已确认')
+    expect(markup).toContain('待审核')
+    // 结构序：域 → spacer → chip → 创建时间
+    const footAt = markup.indexOf('dswf-kn-card-foot')
+    const domAt = markup.indexOf('dswf-kn-card-dom', footAt)
+    const spacerAt = markup.indexOf('dswf-kn-card-spacer', footAt)
+    const chipAt = markup.indexOf('dswf-kn-card-status', footAt)
+    const timeAt = markup.indexOf('data-dswf-kn-card-created', footAt)
+    expect(domAt).toBeGreaterThan(-1)
+    expect(spacerAt).toBeGreaterThan(domAt)
+    expect(chipAt).toBeGreaterThan(spacerAt)
+    expect(timeAt).toBeGreaterThan(chipAt)
+    // 热度徽章不再在底行（标题行右端——SC-J 终稿）
+    const heatAt = markup.indexOf('data-dswf-kn-card-heat')
+    expect(heatAt).toBeGreaterThan(-1)
+    expect(heatAt).toBeLessThan(footAt)
+  })
+
+  it('SC-J J1/J2 悬浮口径：热度与创建时间用官方 Tooltip（零原生 title）', () => {
+    const css = readFileSync(new URL('./knowledge.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.dswf-kn-card-heat\s*\{[^}]*height:\s*24px/)
+    expect(css).toMatch(/\.dswf-kn-card-heat\s*\{[^}]*translateY\(-5px\)/)
+  })
+
+  it('SC-J J3/J4 回执 toast：receipt 缺席零出场；在场 = 官方 Toast 挂载位（portal 面——renderToStaticMarkup 不展开，运行时归 e2e）', () => {
+    const without = renderToStaticMarkup(<KnowledgeCardGrid state="cards" cards={UNCONFIRMED} now={NOW} />)
+    // 官方 Toast = body portal（document 依赖）——node 静态渲染面仅断言缺席零出场
+    expect(without).not.toContain('dswf-kn-card-heat-check')
+    expect(without).not.toContain('role="status" data-dswf-kn-toast')
   })
 
   it('关键词 chip 上限 4（原型刻度——第五个不渲染）', () => {
