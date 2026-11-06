@@ -12,7 +12,7 @@
 // Fact Table 摘录（源码核实）：
 //   - 浏览主体：[data-dswf-knowledge-view]；工具栏 [data-dswf-kn-toolbar] +
 //     input.dswf-kn-search（aria 知识关键词搜索）；域树 [data-dswf-kn-tree][role=tree]
-//     行 [data-dswf-domain=<path>]；卡片 .dswf-kn-card[data-dswf-entry] + .dswf-heat-badge
+//     行 [data-dswf-domain=<path>]；卡片 .dswf-kn-card[data-dswf-entry] + [data-dswf-kn-card-heat]
 //   - 四态（browse-model.browseFaceState）：骨架 [data-dswf-kn-skeleton] / 卡片 [data-dswf-kn-cards] /
 //     过滤无结果（EmptyState + [data-dswf-clear-filters]）/ 空库引导（EmptyState 尚无知识）
 //   - 抽屉：[data-dswf-kn-drawer]（summary [data-dswf-kn-summary] / 元数据 [data-dswf-kn-meta-row]
@@ -152,7 +152,7 @@ test('@web-e2e @p1mvp knowledge-browsing·冒烟：浏览→过滤→细分→�
     }
     expect(cards.length, 'RPC 同源：四条目').toBe(4)
     // K1 徽章 = 3（与 Setup 使用事件计数一致——Story 3 AC3）
-    const heatText = await cardByTitle(page, '部署规范').locator('.dswf-heat-badge').textContent()
+    const heatText = await cardByTitle(page, '部署规范').locator('[data-dswf-kn-card-heat]').textContent()
     expect(heatText, '热度徽章 = 使用事件计数（3）').toContain('3')
     // 右栏隐藏且状态保留（知识模式；fix-23 官方右栏 frame 锚）
     await expect(page.locator('[data-rightbar-collapsed]').first()).toBeAttached()

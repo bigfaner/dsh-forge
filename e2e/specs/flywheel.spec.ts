@@ -207,7 +207,7 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     const cardHeatText = await page
       .locator('[data-dswf-entry]', { hasText: '部署规范' })
       .first()
-      .locator('.dswf-heat-badge')
+      .locator('[data-dswf-kn-card-heat]')
       .textContent()
 
     // 三方一致断言（场景⑥端到端）：事件表（sessionRecall 行）↔ 热度（heatByEntry）↔ UI（tab 徽章 + 卡片徽章）

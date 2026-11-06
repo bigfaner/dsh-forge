@@ -1,4 +1,4 @@
-﻿// 旅程③ knowledge-review-edit-save——dialog 编辑保存（版本链前进 + 指针前移）（journey.md J3-1~J3-3）。
+// 旅程③ knowledge-review-edit-save——dialog 编辑保存（版本链前进 + 指针前移）（journey.md J3-1~J3-3）。
 // 覆盖：编辑模式布局（域只读 + 标题可编辑同行；字段序 关键词 chips→摘要→正文；标题栏
 // [保存]+✕）、chip 双击改词/✕ 移除/＋ 新增交互收口（不触发卡片点击）、保存成功回查看 +
 // 卡片重拉、版本链前进语义（新版本行在场且为 confirmed_version_id 指针所指；旧权威降
@@ -366,7 +366,7 @@ test('J3·J3-3：unconfirmed 编辑——版本前进、status 不升格', async
     await expect(page.locator('[data-dswf-kn-toast]')).toContainText('已保存')
     await expect(card(page, '编辑链 待审核改题')).toBeVisible({ timeout: 30_000 })
     // status 保持 unconfirmed（不因人工编辑而升格）——chip 文案与 DB 双锚
-    await expect(card(page, '编辑链 待审核改题').locator('.dswf-state-chip')).toHaveText('unconfirmed')
+    await expect(card(page, '编辑链 待审核改题').locator('.dswf-kn-card-status')).toHaveText('待审核')
     await evidenceShot(page, 'j3-j33-unconfirmed-edit.png')
     {
       const db = openReviewDb(userData)

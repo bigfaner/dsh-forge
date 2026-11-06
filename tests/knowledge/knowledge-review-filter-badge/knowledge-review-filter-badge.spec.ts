@@ -65,7 +65,7 @@ test('J5·状态过滤三态 + 域树计数正交 + 过滤全选组合 + 裁决�
     await expectChipActive(page, 'all', false)
     await expect(page.locator('[data-dswf-entry]')).toHaveCount(3)
     for (const title of ['过滤前端待一', '过滤前端待二', '过滤后端待一']) {
-      await expect(card(page, title).locator('.dswf-state-chip')).toHaveText('unconfirmed')
+      await expect(card(page, title).locator('.dswf-kn-card-status')).toHaveText('待审核')
     }
     await expect(card(page, '过滤前端确认')).toHaveCount(0)
     await expect(card(page, '过滤后端确认')).toHaveCount(0)
@@ -78,7 +78,7 @@ test('J5·状态过滤三态 + 域树计数正交 + 过滤全选组合 + 裁决�
     await expectChipActive(page, 'confirmed', true)
     await expect(page.locator('[data-dswf-entry]')).toHaveCount(2)
     for (const title of ['过滤前端确认', '过滤后端确认']) {
-      await expect(card(page, title).locator('.dswf-state-chip')).toHaveText('confirmed')
+      await expect(card(page, title).locator('.dswf-kn-card-status')).toHaveText('已确认')
     }
     await expect(domainCount(page, '前端')).toHaveText(frontCountBefore)
     await expect(domainCount(page, '后端')).toHaveText(backCountBefore)
@@ -107,7 +107,7 @@ test('J5·状态过滤三态 + 域树计数正交 + 过滤全选组合 + 裁决�
     await statusChip(page, 'confirmed').click()
     await expect(page.locator('[data-dswf-entry]')).toHaveCount(5)
     for (const entry of J5_CORPUS) {
-      await expect(card(page, entry.title).locator('.dswf-state-chip')).toHaveText('confirmed')
+      await expect(card(page, entry.title).locator('.dswf-kn-card-status')).toHaveText('已确认')
     }
     await statusChip(page, 'unconfirmed').click()
     await expect(page.locator('[data-dswf-entry]')).toHaveCount(0)

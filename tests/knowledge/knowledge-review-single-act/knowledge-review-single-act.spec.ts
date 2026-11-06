@@ -83,7 +83,8 @@ async function openDialog(page: Page, title: string): Promise<void> {
 }
 
 async function expectStatus(page: Page, title: string, status: string): Promise<void> {
-  await expect(card(page, title).locator('.dswf-state-chip')).toHaveText(status)
+  // SC-J 改型：卡片状态 chip = 中文标签（confirmed→已确认 / unconfirmed→待审核）
+  await expect(card(page, title).locator('.dswf-kn-card-status')).toHaveText(status === 'confirmed' ? '已确认' : '待审核')
 }
 
 // ── corpus（旅程②口径：≥3 unconfirmed + ≥1 confirmed + 1 superseded 反向锚）──

@@ -298,7 +298,7 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     const k1Card = page.locator('.dswf-kn-card', { hasText: '部署规范' }).first()
     await expect(k1Card, 'K1 卡片在场（Step 1 索引代理断言）').toBeVisible({ timeout: 30_000 })
     expect
-      .soft(await k1Card.locator('.dswf-heat-badge').textContent(), 'K1 卡片热度徽章 = 按条目计数（卡片 ↔ heat 一致）')
+      .soft(await k1Card.locator('[data-dswf-kn-card-heat]').textContent(), 'K1 卡片热度徽章 = 按条目计数（卡片 ↔ heat 一致）')
       .toContain(String(k1HeatQ1))
 
     // ── Step 8b：Q2 触发新召回 → 即时累积（数据面口径——分组数增长 + 统计/徽章一致性；
