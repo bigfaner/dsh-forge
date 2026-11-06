@@ -488,7 +488,8 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
             WHERE r.knowledge_dir = ? AND kd.domain = ?`,
         )
         .get(knowledgeDir, domainDir)
-      if ((bound?.c ?? 0) === 0) domainUnbound = domainDir    }
+      if ((bound?.c ?? 0) === 0) domainUnbound = domainDir
+    }
     emitStorageDiag(
       emit,
       storageDiag('info', KNOWLEDGE_WRITE_EVENT, `条目写入：${id}@${finalVersionTs}${supersedes !== undefined ? `（supersedes ${supersedes}）` : ''}${candidateOf !== undefined ? `（candidate_of ${candidateOf}）` : ''}${domainDesc !== undefined ? `（domain_desc ${domainDesc}）` : ''}`, { cwd: filePath }),
