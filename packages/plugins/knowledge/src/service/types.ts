@@ -184,6 +184,13 @@ export interface KnowledgeWriteQuery {
   readonly slugHint?: string
   /** 同概念版本化：复用既有条目 id（supersedes 锚当前权威 version_ts；与 candidate_of 互斥） */
   readonly versionOf?: string
+  /**
+   * 域简介 upsert（可选，须与 domain 同现——写事务纪律内对 KNOWLEDGE_DOMAINS 按域路径
+   * 主键 upsert；校验与 setDomainDescription 同源 validateDomainPath：非空一句/≤3 层/
+   * ≤500 路径字符）。契约边界：必要性三问门只约束条目正文，domain_description 走描述
+   * 校验、不走条目门。
+   */
+  readonly domainDescription?: string
   /** 必要性三问结论（必答） */
   readonly necessity: NecessityAnswers
 }
@@ -216,8 +223,15 @@ export interface KnowledgeWritten {
   /** 版本化路径（复用 id + supersedes 锚） */
   readonly supersedes?: string
   /**
-   * 子域简介缺失提醒（本次写入落在了非根域、且 knowledge_domains 无该域简介行——
-   * 回执面提醒 agent 补写，使检索能按语义路由；圆桌裁决 2026-11-05）
+   * 域简介三态回执（携带 domainDescription 时在场——knowledge-domain-desc-write-param
+   * 提案 Q2：upsert 无「首次」概念，created = 该域原无简介行 / unchanged = 同值幂等 /
+   * updated = 异值覆写）
+   */
+  readonly domainDesc?: 'created' | 'unchanged' | 'updated'
+  /**
+   * 子域简介缺失提醒（本次写入未携带 domain_description、落在非根域、且
+   * knowledge_domains 无该域简介行——回执面 HINT 提示下次写入可携参补齐，
+   * 使检索能按语义路由；圆桌裁决 2026-11-05，扩参后提醒闭环闭合）
    */
   readonly domainUnbound?: string
 }
@@ -228,8 +242,8 @@ export type KnowledgeWriteOutcome =
   | { readonly outcome: 'not-written'; readonly reason: 'necessity-failed'; readonly detail: string }
   | {
       readonly outcome: 'rejected'
-      /** 三拒收：illegal-path / roundtrip / missing-field */
-      readonly reason: 'illegal-path' | 'roundtrip' | 'missing-field'
+      /** 四拒收：illegal-path / roundtrip / missing-field / illegal-description（域简介同现/非空校验） */
+      readonly reason: 'illegal-path' | 'roundtrip' | 'missing-field' | 'illegal-description'
       readonly field?: string
       readonly detail: string
     }

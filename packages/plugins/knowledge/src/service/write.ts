@@ -276,8 +276,17 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
     `SELECT version_ts, file_path FROM knowledge_entry_versions WHERE id = ? ORDER BY version_ts`,
   )
   const selectIdExists = db.prepare<[string], { c: number }>(`SELECT COUNT(*) AS c FROM knowledge_entries WHERE id = ?`)
+  // 域简介 upsert 面（knowledge-domain-desc-write-param：write 扩参 domain_description
+  // ——SQL 与 service.ts setDomainDescription 同源同形；状态判定先读旧行再落）
+  const selectDomainDesc = db.prepare<[string, string], { description: string | null }>(
+    `SELECT description FROM knowledge_domains WHERE ws_path = ? AND domain = ?`,
+  )
+  const upsertDomainDescription = db.prepare<[string, string, string, string]>(
+    `INSERT INTO knowledge_domains (ws_path, domain, description, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(ws_path, domain) DO UPDATE SET description = excluded.description, updated_at = excluded.updated_at`,
+  )
 
-  function reject(reason: 'illegal-path' | 'roundtrip' | 'missing-field', detail: string, field?: string): KnowledgeWriteOutcome {
+  function reject(reason: 'illegal-path' | 'roundtrip' | 'missing-field' | 'illegal-description', detail: string, field?: string): KnowledgeWriteOutcome {
     emitStorageDiag(emit, storageDiag('info', KNOWLEDGE_WRITE_REJECT_EVENT, `写入拒收（${reason}）：${detail}`, { }))
     return { outcome: 'rejected', reason, ...(field !== undefined ? { field } : {}), detail }
   }
@@ -292,12 +301,22 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
     return `${base}-${hashFallback(base)}`
   }
 
-  async function write(q: KnowledgeWriteQuery, knowledgeDir: string): Promise<KnowledgeWriteOutcome> {
+  async function write(q: KnowledgeWriteQuery, knowledgeDir: string, wsPath: string): Promise<KnowledgeWriteOutcome> {
     // ① 严契约：缺字段逐例拒收（零残留——CT-WG-05）
     const missing = missingFieldOf(q)
     if (missing !== undefined) return reject('missing-field', `必填缺失或类型不符：${missing}`, missing)
     // ② 严契约：路径非法（CT-WG-03）
     if (!validDomain(q.domain)) return reject('illegal-path', `域路径非法：${String(q.domain)}`)
+    // ②' 域简介校验（与 setDomainDescription 同源口径——validateDomainPath 管路径层级/长度，
+    //    简介本体只查非空一句；契约边界：三问门只约束条目，domain_description 走描述校验）
+    const descInput = q.domainDescription
+    const hasDesc = descInput !== undefined
+    if (hasDesc) {
+      if (q.domain === undefined || q.domain === '') {
+        return reject('illegal-description', 'domain_description 须与非根域 domain 同现（根域无简介行）', 'domain_description')
+      }
+      if (descInput.trim() === '') return reject('illegal-description', 'domain_description 简介缺失（非空一句）', 'domain_description')
+    }
     // ③ 必要性三问（agent 自判闸——不过不写，§2.3）
     const n = q.necessity
     if (!n.stable || !n.nonTrivial || !n.value) {
@@ -395,6 +414,8 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
     // unconfirmed 新稿不污染 entries 投影）；否则新版本即权威（unconfirmed 0.6）。
     const existing = selectEntry.get(id)
     const keepOldAuthority = existing !== undefined && existing.confirmed_version_id !== null
+    // 域简介三态（写事务纪律内 upsert——knowledge-domain-desc-write-param Q2）
+    let domainDesc: 'created' | 'unchanged' | 'updated' | undefined
     withImmediateTransaction(db, () => {
       db.prepare(
         `INSERT INTO knowledge_entry_versions (id, version_ts, file_path, content_hash, recorded_at) VALUES (?, ?, ?, ?, ?)`,
@@ -449,11 +470,17 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
       } else {
         db.prepare(`UPDATE knowledge_entries SET updated_at = ? WHERE id = ?`).run(finalVersionTs, id)
       }
+      if (hasDesc) {
+        const prev = selectDomainDesc.get(wsPath, domainDir)?.description ?? null
+        domainDesc = prev === null || prev.trim() === '' ? 'created' : prev.trim() === descInput.trim() ? 'unchanged' : 'updated'
+        upsertDomainDescription.run(wsPath, domainDir, descInput, new Date().toISOString())
+      }
     })
-    // 子域简介缺失提醒（域细分 2026-11-05）：非根域写入且 knowledge_domains 无该域
-    // 简介行 → 回执携带 domainUnbound（renderWrite 提醒 agent 补写——检索按语义路由）
+    // 子域简介缺失提醒（域细分 2026-11-05）：仅当本次未携带 domain_description 且非根域
+    // 写入、knowledge_domains 无该域简介行 → 回执携带 domainUnbound（renderWrite HINT
+    // 提示下次可携参补齐——检索按语义路由；扩参后提醒闭环闭合）
     let domainUnbound: string | undefined
-    if (domainDir !== '') {
+    if (domainDir !== '' && !hasDesc) {
       const bound = db
         .prepare<[string, string], { c: number }>(
           `SELECT COUNT(*) AS c FROM knowledge_domains kd
@@ -461,11 +488,10 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
             WHERE r.knowledge_dir = ? AND kd.domain = ?`,
         )
         .get(knowledgeDir, domainDir)
-      if ((bound?.c ?? 0) === 0) domainUnbound = domainDir
-    }
+      if ((bound?.c ?? 0) === 0) domainUnbound = domainDir    }
     emitStorageDiag(
       emit,
-      storageDiag('info', KNOWLEDGE_WRITE_EVENT, `条目写入：${id}@${finalVersionTs}${supersedes !== undefined ? `（supersedes ${supersedes}）` : ''}${candidateOf !== undefined ? `（candidate_of ${candidateOf}）` : ''}`, { cwd: filePath }),
+      storageDiag('info', KNOWLEDGE_WRITE_EVENT, `条目写入：${id}@${finalVersionTs}${supersedes !== undefined ? `（supersedes ${supersedes}）` : ''}${candidateOf !== undefined ? `（candidate_of ${candidateOf}）` : ''}${domainDesc !== undefined ? `（domain_desc ${domainDesc}）` : ''}`, { cwd: filePath }),
     )
     return {
       outcome: 'written',
@@ -479,6 +505,7 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
       mergeSuggestions: suggestions,
       ...(candidateOf !== undefined ? { candidateOf } : {}),
       ...(supersedes !== undefined ? { supersedes } : {}),
+      ...(domainDesc !== undefined ? { domainDesc } : {}),
       ...(domainUnbound !== undefined ? { domainUnbound } : {}),
     }
   }

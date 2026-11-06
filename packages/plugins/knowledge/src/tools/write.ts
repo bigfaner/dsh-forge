@@ -2,6 +2,8 @@
 // 惯例）；必要性三问为 agent 自判必答项（stable/non_trivial/value + reason——不过不写）；
 // 五类 type 预判 + 查重归并建议随回执返回（不拒收）；version_of 显式声明同概念版本化
 //（复用 id 走 supersedes 链，与 candidate_of 互斥）。
+// 契约边界（knowledge-domain-desc-write-param）：必要性三问门只约束条目正文——
+// domain_description 不走条目门，走 setDomainDescription 同源描述校验（同现/非空一句）。
 import type { KnowledgeWriteOutcome, KnowledgeWriteQuery, NecessityAnswers } from '../service/types.js'
 import type { KnowledgeToolDefinition, ToolExecFace, ToolParametersSchema } from './faces.js'
 import type { KnowledgeToolDeps } from './index.js'
@@ -14,6 +16,7 @@ export interface WriteToolArgs {
   readonly keywords: readonly string[]
   readonly body: string
   readonly domain?: string
+  readonly domain_description?: string
   readonly type?: string
   readonly procedure?: boolean
   readonly slug_hint?: string
@@ -55,6 +58,7 @@ export function parseWriteArgs(args: unknown): WriteToolArgs {
     keywords: string[]
     body: string
     domain?: string
+    domain_description?: string
     type?: string
     procedure?: boolean
     slug_hint?: string
@@ -67,12 +71,16 @@ export function parseWriteArgs(args: unknown): WriteToolArgs {
     body: asString(a, 'body'),
     necessity,
   }
-  for (const key of ['domain', 'type', 'slug_hint', 'version_of'] as const) {
+  for (const key of ['domain', 'domain_description', 'type', 'slug_hint', 'version_of'] as const) {
     const v = a[key]
     if (v !== undefined) {
       if (typeof v !== 'string') throw new Error(`knowledge_write: ${key} must be a string`)
       out[key] = v
     }
+  }
+  // 域简介同现约束（参数校验拒）：单独携带（无 domain）即拒——语义须落在具体域上
+  if (out.domain_description !== undefined && out.domain === undefined) {
+    throw new Error('knowledge_write: domain_description must be passed together with domain (co-occurrence constraint)')
   }
   if (a.procedure !== undefined && typeof a.procedure !== 'boolean') {
     throw new Error('knowledge_write: procedure must be a boolean')
@@ -107,7 +115,8 @@ const WRITE_OUTPUT_SCHEMA = {
     },
     candidateOf: { type: 'string' },
     supersedes: { type: 'string' },
-    domainUnbound: { type: 'string', description: 'written 子域无简介时携带该域路径——回执提醒补写域描述' },
+    domainUnbound: { type: 'string', description: 'written 子域无简介且本次未携 domain_description 时携带该域路径——回执 HINT 提示下次补齐' },
+    domainDesc: { type: 'string', description: 'domain_description upsert 三态：created | unchanged | updated' },
     reason: { type: 'string' },
     field: { type: 'string' },
     detail: { type: 'string' },
@@ -125,8 +134,9 @@ function renderWrite(_args: unknown, value: unknown): readonly { type: 'text'; t
       `type=${String(v.typeJudged ?? '(none)')}${v.typePending ? ' (pending — low-confidence judgement, procedure default applied)' : ''}`,
       ...(v.supersedes !== undefined ? [`supersedes: ${v.supersedes} (same-id versioning)`] : []),
       ...(v.candidateOf !== undefined ? [`candidate_of: ${v.candidateOf} (suspected duplicate — merge suggestion)`] : []),
+      ...(v.domainDesc !== undefined ? [`domain_desc: ${v.domainDesc}`] : []),
       ...(v.domainUnbound !== undefined
-        ? [`提醒：子域 '${v.domainUnbound}' 尚无简介——请用域描述工具补写，便于检索按语义路由。`]
+        ? [`HINT: 该域 '${v.domainUnbound}' 尚无简介——下次写入携带 domain_description 即可补齐（须与 domain 同现）`]
         : []),
       ...(v.mergeSuggestions.length > 0
         ? [`merge suggestions:`, ...v.mergeSuggestions.map((s) => `  - ${s.id} (${s.basis}, ${String(s.similarity ?? '')}) — consider versioning (version_of=${s.id}) or merging instead`)]
@@ -137,7 +147,12 @@ function renderWrite(_args: unknown, value: unknown): readonly { type: 'text'; t
   if (v.outcome === 'not-written') {
     return [{ type: 'text', text: `not-written: necessity gate failed — ${v.detail}` }]
   }
-  return [{ type: 'text', text: `rejected (${v.reason}${v.field !== undefined ? `: ${v.field}` : ''}): ${v.detail}` }]
+  const base = `rejected (${v.reason}${v.field !== undefined ? `: ${v.field}` : ''}): ${v.detail}`
+  // 失败回执 HINT（formatErr 形制追加修正动作——domain_description 拒例指明同现/非空约束）
+  if (v.reason === 'illegal-description') {
+    return [{ type: 'text', text: `${base}\nHINT: domain_description 须与非根域 domain 同现且为非空一句（域路径 ≤3 级/≤500 字符）——修正后重试` }]
+  }
+  return [{ type: 'text', text: base }]
 }
 
 const WRITE_PARAMETERS: ToolParametersSchema = {
@@ -152,6 +167,7 @@ const WRITE_PARAMETERS: ToolParametersSchema = {
     },
     body: { type: 'string', description: 'Markdown body (the full document content).' },
     domain: { type: 'string', description: '知识目录内相对路径，最多 3 级（如 lessons/windows）。优先归入与主题匹配的最深既有子域；子域名须自释义；仅当没有父域容纳时才新建。' },
+    domain_description: { type: 'string', description: '域简介 upsert（可选，须与 domain 同现生效——无则新增、同值幂等、异值更新；非空一句）。' },
     type: { type: 'string', description: 'One of conventions | pitfalls | decisions | lessons | facts (five-type machine pre-check applies).' },
     procedure: { type: 'boolean', description: 'Optional procedure form tag (independent dimension — never rewrites the type judgement).' },
     slug_hint: { type: 'string', description: 'English translation hint for a non-ASCII title (slug id generation chain fallback).' },
@@ -186,6 +202,7 @@ export function createWriteTool(deps: KnowledgeToolDeps): KnowledgeToolDefinitio
         keywords: [...parsed.keywords],
         body: parsed.body,
         ...(parsed.domain !== undefined ? { domain: parsed.domain } : {}),
+        ...(parsed.domain_description !== undefined ? { domainDescription: parsed.domain_description } : {}),
         ...(parsed.type !== undefined ? { type: parsed.type } : {}),
         ...(parsed.procedure !== undefined ? { procedure: parsed.procedure } : {}),
         ...(parsed.slug_hint !== undefined ? { slugHint: parsed.slug_hint } : {}),

@@ -110,16 +110,69 @@ describe('setDomainDescription（域简介写径——成败两径 knowledge-dom
   })
 })
 
+describe('write 扩参 domain_description（写事务内 upsert——三态回执 + 同现拒例）', () => {
+  function writeQ(domain: string | undefined, description?: string) {
+    return {
+      projectId,
+      title: `Domain Desc Probe ${Math.random().toString(36).slice(2, 8)}`,
+      summary: 's',
+      keywords: ['domain-desc-probe'],
+      body: 'b',
+      ...(domain !== undefined ? { domain } : {}),
+      ...(description !== undefined ? { domainDescription: description } : {}),
+      necessity: { stable: true, nonTrivial: true, value: true },
+    } as const
+  }
+  const descRow = (domain: string): { description: string } | undefined =>
+    db.prepare(`SELECT description FROM knowledge_domains WHERE ws_path = ? AND domain = ?`).get(wsDir, domain) as { description: string } | undefined
+
+  it('created → unchanged → updated 三态幂等（upsert 落表 + 回执三态正确）', async () => {
+    const r1 = await service.write(writeQ('other', '其他域：一次性验证素材'))
+    expect(r1).toMatchObject({ outcome: 'written', domainDesc: 'created' })
+    expect(descRow('other')?.description).toBe('其他域：一次性验证素材')
+    const r2 = await service.write(writeQ('other', '其他域：一次性验证素材'))
+    expect(r2).toMatchObject({ outcome: 'written', domainDesc: 'unchanged' })
+    const r3 = await service.write(writeQ('other', '其他域：覆写后的简介'))
+    expect(r3).toMatchObject({ outcome: 'written', domainDesc: 'updated' })
+    expect(descRow('other')?.description).toBe('其他域：覆写后的简介')
+  })
+
+  it('拒例：无 domain（根域）携带 → illegal-description；空白简介拒收；域超 3 层仍 illegal-path', async () => {
+    const noDomain = await service.write(writeQ(undefined, '根域简介'))
+    expect(noDomain).toMatchObject({ outcome: 'rejected', reason: 'illegal-description', field: 'domain_description' })
+    const blank = await service.write(writeQ('other', '   '))
+    expect(blank).toMatchObject({ outcome: 'rejected', reason: 'illegal-description' })
+    const deep = await service.write(writeQ('a/b/c/d', 'x'))
+    expect(deep).toMatchObject({ outcome: 'rejected', reason: 'illegal-path' })
+    // 拒收零落行：简介行仍为上一用例覆写值
+    expect(descRow('other')?.description).toBe('其他域：覆写后的简介')
+  })
+
+  it('不带参回归：write 零变化——回执无 domainDesc 键，简介行不动', async () => {
+    const before = (db.prepare(`SELECT COUNT(*) c FROM knowledge_domains`).get() as { c: number }).c
+    const r = await service.write(writeQ('beta'))
+    expect(r).toMatchObject({ outcome: 'written' })
+    expect((r as { domainDesc?: string }).domainDesc).toBeUndefined()
+    // 前序 rebuildIndex 已回填 beta NULL 简介行（row 在场 = bound 现口径）→ 无 HINT 行
+    expect((r as { domainUnbound?: string }).domainUnbound).toBeUndefined()
+    expect((db.prepare(`SELECT description FROM knowledge_domains WHERE ws_path = ? AND domain = 'beta'`).get(wsDir) as { description: string | null }).description).toBeNull()
+    const after = (db.prepare(`SELECT COUNT(*) c FROM knowledge_domains`).get() as { c: number }).c
+    expect(after).toBe(before)
+  })
+})
+
 describe('domainTreeIndexOf（动态段域树计数口径——每调用期实时聚合）', () => {
   it('计数 = file_path 前缀裁剪 + confirmed/unconfirmed 计、superseded/redirect 不计 + 逐层前缀行 + 简介全路径联查', async () => {
     await service.setDomainDescription({ wsPath: wsDir, domain: 'alpha', description: '声明性约束与惯例' })
     const rows = domainTreeIndexOf(db, wsDir)
     // alpha = a1(confirmed) + a2(unconfirmed) + a3(alpha/sub) 计 3；alpha/sub 计 1；
     // a4 superseded 不计；beta = b2 计 1（b1 redirect 不计）；root 不计；ws2 的 alpha 裁剪外不计；
+    // other = 扩参用例写入的 3 条 + 简介（写扩参 domain_description 落表联查可见）；
     // 输出序 = 深度升序、域路径升序（父先于子）
     expect(rows).toEqual([
       { domainPath: 'alpha', entryCount: 3, depth: 1, description: '声明性约束与惯例' },
-      { domainPath: 'beta', entryCount: 1, depth: 1, description: null },
+      { domainPath: 'beta', entryCount: 2, depth: 1, description: null },
+      { domainPath: 'other', entryCount: 3, depth: 1, description: '其他域：覆写后的简介' },
       { domainPath: 'alpha/sub', entryCount: 1, depth: 2, description: null },
     ])
     // 另一项目库：独立裁剪

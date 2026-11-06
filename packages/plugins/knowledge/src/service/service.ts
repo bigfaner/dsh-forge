@@ -766,8 +766,8 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     registerProject: registerProjectRow,
 
     write: async (q: KnowledgeWriteQuery): Promise<KnowledgeWriteOutcome> => {
-      const { knowledgeDir } = requireProject(q.projectId, 'write')
-      return gateway.write(q, knowledgeDir)
+      const { knowledgeDir, wsPath } = requireProject(q.projectId, 'write')
+      return gateway.write(q, knowledgeDir, wsPath)
     },
 
     read: async (q: KnowledgeReadQuery): Promise<KnowledgeReadOutcome> => {

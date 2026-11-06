@@ -56,9 +56,9 @@ describe('描述面：tool 定义与参数 schema 契约锚', () => {
     expect(tool.parameters.required).toEqual(['title', 'summary', 'keywords', 'body', 'necessity.stable', 'necessity.non_trivial', 'necessity.value'])
   })
 
-  it('参数键集 = 基本四键 + 可选六键（snake_case agent 面）', () => {
+  it('参数键集 = 基本四键 + 可选七键（snake_case agent 面）', () => {
     expect(Object.keys(tool.parameters.properties).sort()).toEqual(
-      ['body', 'domain', 'keywords', 'necessity.non_trivial', 'necessity.reason', 'necessity.stable', 'necessity.value', 'procedure', 'slug_hint', 'summary', 'title', 'type', 'version_of'].sort(),
+      ['body', 'domain', 'domain_description', 'keywords', 'necessity.non_trivial', 'necessity.reason', 'necessity.stable', 'necessity.value', 'procedure', 'slug_hint', 'summary', 'title', 'type', 'version_of'].sort(),
     )
     const p = tool.parameters.properties
     expect(p.title?.type).toBe('string')
@@ -67,6 +67,7 @@ describe('描述面：tool 定义与参数 schema 契约锚', () => {
     expect(p.procedure?.type).toBe('boolean')
     expect(p['necessity.stable']?.type).toBe('boolean')
     expect(p.version_of?.type).toBe('string')
+    expect(p.domain_description?.type).toBe('string')
   })
 
   it('描述面披露严契约语义（三问闸 / version_of 版本化 / 查重不拒收）', () => {
@@ -103,6 +104,14 @@ describe('parseWriteArgs（执行点防御性收窄）', () => {
     expect(() => parseWriteArgs({ ...validArgs, domain: 3 })).toThrow(/domain/)
     expect(() => parseWriteArgs({ ...validArgs, version_of: 7 })).toThrow(/version_of/)
     expect(() => parseWriteArgs({ ...validArgs, procedure: 'yes' })).toThrow(/procedure/)
+    expect(() => parseWriteArgs({ ...validArgs, domain_description: 5 })).toThrow(/domain_description/)
+  })
+
+  it('domain_description 同现约束：单独携带（无 domain）拒；与 domain 同现通过', () => {
+    expect(() => parseWriteArgs({ ...validArgs, domain_description: '声明性约束与惯例' })).toThrow(/domain_description.*with domain|with domain/)
+    const out = parseWriteArgs({ ...validArgs, domain: 'lessons/windows', domain_description: '声明性约束与惯例' })
+    expect(out.domain_description).toBe('声明性约束与惯例')
+    expect(out.domain).toBe('lessons/windows')
   })
 })
 
@@ -127,17 +136,49 @@ describe('execute：会话上下文解析 → 服务调用 → snake→camel 映
     ])
   })
 
-  it('domainUnbound 在场 → written 回执携带补简介提醒行；缺席零提醒（回执渲染面）', () => {
+  it('domain_description snake→camel 透传（domainDescription 进服务 query）', async () => {
+    const { service, calls } = stubService()
+    const tool = createWriteTool(deps(service))
+    await tool.execute({ ...validArgs, domain: 'lessons/windows', domain_description: 'Windows 域简介' }, exec)
+    expect((calls[0] as Record<string, unknown>).domainDescription).toBe('Windows 域简介')
+    expect((calls[0] as Record<string, unknown>).domain).toBe('lessons/windows')
+  })
+
+  it('domainDesc 三态行在场 → domain_desc 键值行；缺席零行（回执渲染面）', () => {
+    const tool = createWriteTool(deps(stubService().service))
+    const render = tool.output!.render as (args: unknown, value: unknown) => readonly { type: string; text: string }[]
+    expect(render(undefined, written({ domainDesc: 'created' }))[0]!.text).toContain('domain_desc: created')
+    expect(render(undefined, written({ domainDesc: 'updated' }))[0]!.text).toContain('domain_desc: updated')
+    expect(render(undefined, written())[0]!.text).not.toContain('domain_desc:')
+  })
+
+  it('domainUnbound 在场 → written 回执携带 HINT 行（下次可携 domain_description 补齐）；缺席零提醒（回执渲染面）', () => {
     const tool = createWriteTool(deps(stubService().service))
     const output = tool.output
     expect(output).toBeDefined()
     const render = output!.render as ((args: unknown, value: unknown) => readonly { type: string; text: string }[]) | undefined
     expect(render).toBeDefined()
-    // 提醒行在场
+    // HINT 行在场（指明下次可携 domain_description 补齐）
     const withReminder = render!(undefined, written({ domainUnbound: 'lessons/windows' }))[0]!.text
-    expect(withReminder).toContain("提醒：子域 'lessons/windows' 尚无简介——请用域描述工具补写")
+    expect(withReminder).toContain('HINT: 该域')
+    expect(withReminder).toContain('domain_description')
     // 缺席零提醒
     const without = render!(undefined, written())[0]!.text
-    expect(without).not.toContain('尚无简介')
+    expect(without).not.toContain('HINT')
+  })
+
+  it('illegal-description 拒收回执 → formatErr 形制 + HINT 修正动作行（回执渲染面）', () => {
+    const tool = createWriteTool(deps(stubService().service))
+    const render = tool.output!.render as (args: unknown, value: unknown) => readonly { type: string; text: string }[]
+    const rejected = {
+      outcome: 'rejected',
+      reason: 'illegal-description',
+      field: 'domain_description',
+      detail: 'domain_description 简介缺失（非空一句）',
+    } as KnowledgeWriteOutcome
+    const text = render(undefined, rejected)[0]!.text
+    expect(text).toContain('rejected (illegal-description')
+    expect(text).toContain('HINT:')
+    expect(text).toContain('同现')
   })
 })
