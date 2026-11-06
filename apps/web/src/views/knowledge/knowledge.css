@@ -1,4 +1,4 @@
-/* 知识浏览样式（定位：业务——UF-6 浏览主体：工具栏 + 左轨域目录树 + 卡片网格 + 详情抽屉）。
+﻿/* 知识浏览样式（定位：业务——UF-6 浏览主体：工具栏 + 左轨域目录树 + 卡片网格 + 详情抽屉）。
  * 结构基准 = 原型 knview（工具栏 / 左轨 224px / 主区 auto-fill 网格——布局结构以原型为准）；
  * 视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值，lint-tokens 机械执行）。
  * dsw-raw 豁免（执行记录同步）：左轨 224px / 域树行高 24px 与行内 2/5/6px / 层级缩进
@@ -364,7 +364,7 @@
 }
 
 .dswf-kn-card-status.is-actionable:focus-visible {
-  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color);
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -786,7 +786,7 @@
 }
 
 .dswf-kn-card-chip.is-actionable:focus-visible {
-  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color);
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
@@ -956,7 +956,7 @@
 .dswf-kn-kwedit:focus-visible,
 .dswf-kn-kwadd:focus-visible,
 .dswf-kn-kwx:focus-visible {
-  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color);
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 1px;
 }
 
