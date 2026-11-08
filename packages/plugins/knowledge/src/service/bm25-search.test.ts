@@ -81,7 +81,7 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
   })
 
   it('排序区分性：相关条目（高 bm25）居前，不相关条目（仅 keywords 命中）居后', async () => {
-    const hits = await service.search({ projectId, keywords: ['bm25test'], sessionId: 's' })
+    const hits = await service.search({ projectId, text: 'bm25test', sessionId: 's' })
     expect(hits.map((h) => h.frontmatterId)).toContain('bm25-a')
     expect(hits.map((h) => h.frontmatterId)).toContain('bm25-b')
     const posOf = (id: string): number => hits.findIndex((h) => h.frontmatterId === id)
@@ -93,7 +93,7 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
   })
 
   it('rank 因子微调：同文本同 bm25，confirmed（1.0）居 unconfirmed（0.92）前', async () => {
-    const hits = await service.search({ projectId, keywords: ['bm25test'], sessionId: 's' })
+    const hits = await service.search({ projectId, text: 'bm25test', sessionId: 's' })
     const posOf = (id: string): number => hits.findIndex((h) => h.frontmatterId === id)
     expect(posOf('bm25-a')).toBeLessThan(posOf('bm25-c'))
     const a = hits.find((h) => h.frontmatterId === 'bm25-a')!
@@ -110,7 +110,7 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
        VALUES (?, ?, ?, 'search', ?, 1, ?)`,
     )
     for (let i = 0; i < 50; i += 1) ins.run(projectId, `heat-${i}`, 'heat', hot.rowid, new Date().toISOString())
-    const hits = await service.search({ projectId, keywords: ['bm25test'], sessionId: 's' })
+    const hits = await service.search({ projectId, text: 'bm25test', sessionId: 's' })
     const posOf = (id: string): number => hits.findIndex((h) => h.frontmatterId === id)
     expect(posOf('bm25-a')).toBeLessThan(posOf('bm25-hot'))
   })
@@ -121,24 +121,26 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
   })
 
   it('域前缀过滤原样 + 零命中空回执（[]，无兜底注入）', async () => {
-    const gw = await service.search({ projectId, domainPrefix: 'gw', keywords: ['bm25test'], sessionId: 's' })
+    const gw = await service.search({ projectId, domainPrefix: 'gw', text: 'bm25test', sessionId: 's' })
     expect(gw.map((h) => h.frontmatterId).sort()).toEqual(['bm25-a', 'bm25-c'])
-    const zero = await service.search({ projectId, keywords: ['no-such-kw'], sessionId: 's' })
+    const zero = await service.search({ projectId, text: 'no-such-kw', sessionId: 's' })
     expect(zero).toEqual([])
     // 无过滤全域查询：全条目中性分返回（不炸、不缩水）
     const all = await service.search({ projectId, sessionId: 's' })
     expect(all).toHaveLength(21)
   })
 
-  it('判例 d24a4464 保持：解析每调用期求值（新注册目录次查询即见）', async () => {
+  it('判例 d24a4464 保持：解析每调用期求值（新注册目录次查询即见）；keywords 退役 pin——text-only 词面照常命中 keywords 列', async () => {
     const ws2 = join(home, 'ws2')
     const dir2 = join(ws2, '.knowledge', 'fresh')
     mkdirSync(dir2, { recursive: true })
+    // freshkw 仅存在于条目 keywords 资产（title/summary/正文均无）——text-only 词面
+    // 经 buildSearchFtsMatch 全列 MATCH 照常命中 keywords 列（SC-9 单测 pin）
     writeFileSync(join(dir2, 'n.md'), md('Fresh Entry', 'bm25-fresh', ['freshkw'], 'fresh words', 'confirmed'), 'utf8')
     createKnowledgeRegistry(db).upsert(ws2, join(ws2, '.knowledge'), 'p2')
     await service.rebuildIndex(projectId)
     const svc2 = createKnowledgeService({ db, resolveWsPath: (id) => (id === 'p2' ? ws2 : undefined) })
-    const hits = await svc2.search({ projectId: 'p2', keywords: ['freshkw'], sessionId: 's' })
+    const hits = await svc2.search({ projectId: 'p2', text: 'freshkw', sessionId: 's' })
     expect(hits.map((h) => h.frontmatterId)).toEqual(['bm25-fresh'])
     expect(existsSync(join(dir2, 'n.md'))).toBe(true)
   })

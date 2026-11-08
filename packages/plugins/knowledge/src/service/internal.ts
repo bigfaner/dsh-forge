@@ -169,20 +169,6 @@ export function tokenizeSearchText(text: string): string[] {
 }
 
 /**
- * keywords 列准入 MATCH（逐词 `keywords : "词"` AND——keywords 列空格连接受控词表，
- * 词即 token，等价旧精确 AND 语义）。全部词面缺席 → undefined。
- * 仅作准入通道——bm25 打分用 buildSearchFtsMatch（全列词面，命中行间有 tf/长度区分）。
- */
-export function buildKeywordAdmissionMatch(keywords: readonly string[] | undefined): string | undefined {
-  const parts: string[] = []
-  for (const k of keywords ?? []) {
-    const t = k.trim().toLowerCase()
-    if (t !== '') parts.push(`keywords : ${ftsQuote(t)}`)
-  }
-  return parts.length === 0 ? undefined : parts.join(' AND ')
-}
-
-/**
  * search 打分 MATCH（全元数据列词面）：keywords 逐词 phrase AND + text 分词 phrase AND
  * （词元须全命中；CJK 子串补充通道另行 JS 判定——见 textSubstringHit）。
  * 全部词面缺席 → undefined（无 MATCH 面，全域中性分排序）。
@@ -255,6 +241,22 @@ export function collectEntryIdsUnderDir(
   const ids = new Set<string>()
   for (const v of versionRows) {
     if (v.file_path.startsWith(`${dirPosix}/`) || v.file_path.startsWith(`${dirPosix}\\`)) ids.add(v.id)
+  }
+  return ids
+}
+
+/**
+ * 全注册域 id 集并集（stage④ 1.4 全域检索改判——SC-1 单一事实源，不内联 selectRows）：
+ * 版本行单次捞取（一次 O(V)）后逐注册行 knowledge_dir 前缀划分取并集——多注册行下
+ * 防 N 次全捞放大。归属判定与 collectEntryIdsUnderDir 同口径（startsWith 双分隔符）。
+ */
+export function unionEntryIds(
+  versionRows: readonly { readonly id: string; readonly file_path: string }[],
+  registryRows: readonly { readonly knowledge_dir: string }[],
+): Set<string> {
+  const ids = new Set<string>()
+  for (const row of registryRows) {
+    for (const id of collectEntryIdsUnderDir(versionRows, row.knowledge_dir)) ids.add(id)
   }
   return ids
 }

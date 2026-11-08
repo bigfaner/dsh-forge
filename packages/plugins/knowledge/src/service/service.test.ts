@@ -55,12 +55,12 @@ describe('读面行为等价（v4 实体表）', () => {
   })
 
   it('search：静默重建联动（索引缺失首查自动重建）+ 域前缀/关键词过滤 + 零命中哨兵行 + 四档 rank', async () => {
-    const hits = await service.search({ projectId, domainPrefix: 'backend', keywords: ['api'], sessionId: 's1' })
+    const hits = await service.search({ projectId, domainPrefix: 'backend', text: 'api', sessionId: 's1' })
     expect(hits.map((h) => h.title).sort()).toEqual(['API', 'AUTH'])
     // confirmed 1.0 / unconfirmed 0.6（纯新条目降权可见）
     expect(hits.find((h) => h.title === 'API')?.effectiveRank).toBe(1.0)
     expect(hits.find((h) => h.title === 'AUTH')?.effectiveRank).toBe(0.6)
-    const zero = await service.search({ projectId, keywords: ['nope'], sessionId: 's1' })
+    const zero = await service.search({ projectId, text: 'nope', sessionId: 's1' })
     expect(zero).toEqual([])
     const groups = await service.sessionRecall({ projectId, sessionId: 's1' })
     expect(groups).toHaveLength(2) // 零命中调用计次（哨兵行不展开命中）
@@ -80,7 +80,7 @@ describe('读面行为等价（v4 实体表）', () => {
 
   it('heatByEntry：过程动词（search + read-abstract）不计热（热度终式——read 才是采纳动作）', async () => {
     const heat = await service.heatByEntry(projectId)
-    const api = (await service.search({ projectId, keywords: ['api'], sessionId: 's2' })).find((h) => h.title === 'API')!
+    const api = (await service.search({ projectId, text: 'api', sessionId: 's2' })).find((h) => h.title === 'API')!
     await service.readAbstract({ projectId, id: api.frontmatterId, sessionId: 's2' })
     const heat2 = await service.heatByEntry(projectId)
     expect((heat2.get(api.entryId) ?? 0) - (heat.get(api.entryId) ?? 0)).toBe(0)
@@ -365,12 +365,12 @@ describe('写门三法（stage② §2.3/§2.4）', () => {
     if (w.outcome !== 'written') throw new Error('backflow write failed')
     db.prepare(`UPDATE knowledge_entries SET merged_into = 'deploy-baseline', effective_rank = 0.2 WHERE id = ?`).run(w.id)
     // 第一次命中：放行（info 误判回流观测点）
-    const h1 = await svc.search({ projectId, keywords: ['backflow-probe'], sessionId: 'bf' })
+    const h1 = await svc.search({ projectId, text: 'backflow-probe', sessionId: 'bf' })
     expect(h1.some((h) => h.frontmatterId === w.id)).toBe(true)
     expect(diag.some((d) => d.event === 'knowledge-backflow' && d.level === 'info')).toBe(true)
     // 第二次起：限次 1 → 拦截 + warn 震荡埋点（diag 区分震荡/误判）
     diag.length = 0
-    const h2 = await svc.search({ projectId, keywords: ['backflow-probe'], sessionId: 'bf' })
+    const h2 = await svc.search({ projectId, text: 'backflow-probe', sessionId: 'bf' })
     expect(h2.some((h) => h.frontmatterId === w.id)).toBe(false)
     expect(diag.some((d) => d.event === 'knowledge-backflow' && d.level === 'warn')).toBe(true)
   })
@@ -420,5 +420,61 @@ describe('registerProject（第九法——1.15 注册链进表径）', () => {
     await expect(svc.registerProject({ wsPath: ws, knowledgeDir: join(parentFile, 'sub', '.knowledge') })).rejects.toThrow()
     expect(createKnowledgeRegistry(db).findByWsPath(ws)).toBeUndefined()
     expect(diag.some((d) => d.level === 'error' && d.event === 'knowledge-register')).toBe(true)
+  })
+})
+
+describe('全域检索并集（stage④ 1.4 SC-1——search 覆盖全部注册域）', () => {
+  it('多注册行：另一注册库条目经 id 集并集可检得；域前缀过滤在并集行集上原样收窄', async () => {
+    const wsB = join(home, 'ws-b')
+    const dirB = join(wsB, '.knowledge')
+    mkdirSync(dirB, { recursive: true })
+    writeFileSync(
+      join(dirB, 'lib.md'),
+      '---\ntitle: Global Lib Entry\nid: kb-lib\nstatus: confirmed\nsummary: 全局库条目\nkeywords: [libword]\n---\n正文',
+      'utf8',
+    )
+    createKnowledgeRegistry(db).upsert(wsB, dirB, 'p-b')
+    await service.rebuildIndex(projectId) // 整库再生——含新注册行的版本行
+    const hits = await service.search({ projectId, text: 'libword', sessionId: 'union' })
+    expect(hits.map((h) => h.frontmatterId)).toContain('kb-lib')
+    // 域前缀过滤在并集行集上原样（ws-b 无 backend 域 → 零命中）
+    const scoped = await service.search({ projectId, text: 'libword', domainPrefix: 'backend', sessionId: 'union' })
+    expect(scoped).toEqual([])
+  })
+
+  it('零命中静默重建逐注册行判定（roundtable2 B1 pin）：全局库有条目不掩蔽项目库空索引信号', async () => {
+    const home2 = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-union-'))
+    const db2 = openKnowledgeDatabase(join(home2, 'knowledge.db'))
+    try {
+      const reg = createKnowledgeRegistry(db2)
+      // 全局行：目录含条目（并集 id 集非空）
+      const globalDir = join(home2, 'knowledge-global')
+      mkdirSync(globalDir, { recursive: true })
+      writeFileSync(
+        join(globalDir, 'g.md'),
+        '---\ntitle: G\nid: kb-g\nsummary: s\nkeywords: [kw-g]\n---\n正文',
+        'utf8',
+      )
+      expect(reg.registerGlobalIfAbsent(globalDir)).toBe('registered')
+      // 项目行：目录空（空索引信号）
+      const projDir = join(home2, 'ws', '.knowledge')
+      mkdirSync(projDir, { recursive: true })
+      reg.upsert(join(home2, 'ws'), projDir, 'p-empty')
+      let rebuilds = 0
+      const svc = createKnowledgeService({
+        db: db2,
+        resolveWsPath: (id) => (id === 'p-empty' ? join(home2, 'ws') : undefined),
+        rebuild: () => {
+          rebuilds += 1
+          return { indexed: 0, skipped: 0 }
+        },
+      })
+      expect(await svc.search({ projectId: 'p-empty', sessionId: 's' })).toEqual([])
+      // B1：项目行 countProjectEntries = 0 → 静默重建触发（未被子串并集掩蔽）
+      expect(rebuilds).toBe(1)
+    } finally {
+      db2.close()
+      rmSync(home2, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    }
   })
 })

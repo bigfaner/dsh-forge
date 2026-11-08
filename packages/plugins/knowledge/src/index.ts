@@ -17,7 +17,12 @@ import type { ProjectIdResolver, WsPathResolver } from './tools/index.js'
 import { domainTreeIndexOf } from './service/internal.js'
 import { registerKnowledgeScopedPrompt } from './service/session-prompt.js'
 import { createKnowledgeService } from './service/index.js'
-import { startSelfHostedStorage } from './storage/index.js'
+import {
+  startSelfHostedStorage,
+  resolveKnowledgeDbFile,
+  globalKnowledgeDir,
+} from './storage/index.js'
+import { dirname } from 'node:path'
 import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
 import { joinDirSegment } from '@dsh-forge/path-key'
 import type { BackflowConfig } from './service/types.js'
@@ -124,6 +129,26 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       { dbFile: config.dbFile, legacyStateDb: config.legacyStateDb, emit: diagEmit },
     )
     if (storage === undefined) return () => {}
+
+    // SC-1 全局库装配期自启注册（幂等——boot 时序先于服务消费：判例 5e5592dc 注册行
+    // 缺 boot 回填致存量项目报不存在，全局行必须在本工厂同步段内落行）。全局目录 =
+    // 库文件数据域根/knowledge-global/（与库文件同数据域派生——config.dbFile 显式时
+    // 测试/替代宿主不写宿主缺省数据域）。失败 fail-soft + error 埋点，不阻载插件。
+    try {
+      const dbFilePath = resolveKnowledgeDbFile({ dbFile: config.dbFile })
+      storage.registry.registerGlobalIfAbsent(
+        globalKnowledgeDir(dirname(dirname(dbFilePath))),
+        diagEmit,
+      )
+    } catch (cause) {
+      diagEmit?.({
+        event: 'knowledge-register',
+        level: 'error',
+        message: `全局库自启注册意外异常（fail-soft 不阻载）：${String(cause)}`,
+        process: 'main',
+        stack: cause instanceof Error ? cause.stack : undefined,
+      })
+    }
 
     // 两级解析器（config 静态绑定表 + 注册表行回退径——服务面第一级 + scoped 提示词接线共用）。
     // 回退径（bug：Q19 退役 host config.projects 注入后静态表恒空，工具面 cwd→projectId

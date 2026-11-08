@@ -1,7 +1,7 @@
 // A2 自持注册表单测：wsPath canonical（realpath 归一——判例 c773c09f 第四维）为键、
 // knowledge_dir 列；变体拼写收敛同一行（upsert 幂等不重复）；读写两径 + config 静态
 // 注入径并存（plugin 装配面已持 config.projects 静态表）。
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -104,6 +104,68 @@ describe('project_id 列（fix-2 一级解析动态化——API 级 projectId �
       reg.upsert(ws, join(ws, '.knowledge'), 'p-api-2')
       reg.upsert(ws, join(ws, '.knowledge2'))
       expect(reg.findByProjectId('p-api-2')?.knowledgeDir).toBe(join(ws, '.knowledge2'))
+    } finally {
+      db.close()
+    }
+  })
+})
+
+describe('registerGlobalIfAbsent（SC-1 全局库装配期自启注册——幂等 + fail-soft）', () => {
+  it('首注册落行（project_id 空）+ info 埋点；再注册 = exists 幂等零重复不覆盖', () => {
+    const root = tmpRoot()
+    const globalDir = join(root, 'knowledge-global')
+    const db = openKnowledgeDatabase(join(root, 'knowledge.db'))
+    const diag: unknown[] = []
+    try {
+      const reg = createKnowledgeRegistry(db)
+      expect(reg.registerGlobalIfAbsent(globalDir, (p) => diag.push(p))).toBe('registered')
+      const row = reg.findByWsPath(globalDir)
+      expect(row?.knowledgeDir).toBe(globalDir)
+      expect(row?.projectId).toBeNull()
+      expect(diag.some((d) => (d as { level: string }).level === 'info')).toBe(true)
+      // 幂等：注册行不重复；手动改写 knowledge_dir 后再注册不覆盖（DO NOTHING 语义）
+      reg.upsert(globalDir, join(root, 'manual-override'))
+      expect(reg.registerGlobalIfAbsent(globalDir)).toBe('exists')
+      expect(reg.findByWsPath(globalDir)?.knowledgeDir).toBe(join(root, 'manual-override'))
+      expect(reg.list()).toHaveLength(1)
+    } finally {
+      db.close()
+    }
+  })
+
+  it('互不嵌套校验：与既有项目行 knowledge_dir 任一方向嵌套 → nested-conflict + warn 跳过', () => {
+    const root = tmpRoot()
+    const db = openKnowledgeDatabase(join(root, 'knowledge.db'))
+    const diag: unknown[] = []
+    try {
+      const reg = createKnowledgeRegistry(db)
+      // 项目行 = 全局目录的父目录（全局嵌于项目库树下）
+      const wsDir = join(root, 'ws')
+      mkdirSync(join(wsDir, 'knowledge-global'), { recursive: true })
+      reg.upsert(wsDir, wsDir, 'p-nest')
+      expect(reg.registerGlobalIfAbsent(join(wsDir, 'knowledge-global'), (p) => diag.push(p))).toBe('nested-conflict')
+      expect(diag.some((d) => (d as { level: string }).level === 'warn')).toBe(true)
+      // 反向：全局目录为项目库父目录同样拒
+      const globalParent = join(root, 'data-root')
+      mkdirSync(join(globalParent, 'proj', '.knowledge'), { recursive: true })
+      reg.upsert(join(globalParent, 'proj'), join(globalParent, 'proj', '.knowledge'), 'p-nest2')
+      expect(reg.registerGlobalIfAbsent(globalParent)).toBe('nested-conflict')
+    } finally {
+      db.close()
+    }
+  })
+
+  it('目录不可写（父级为普通文件）→ unwritable fail-soft + warn 埋点，不抛不落行', () => {
+    const root = tmpRoot()
+    const parentFile = join(root, 'parent-file')
+    writeFileSync(parentFile, '占位', 'utf8')
+    const db = openKnowledgeDatabase(join(root, 'knowledge.db'))
+    const diag: unknown[] = []
+    try {
+      const reg = createKnowledgeRegistry(db)
+      expect(reg.registerGlobalIfAbsent(join(parentFile, 'knowledge-global'), (p) => diag.push(p))).toBe('unwritable')
+      expect(diag.some((d) => (d as { level: string }).level === 'warn')).toBe(true)
+      expect(reg.list()).toHaveLength(0)
     } finally {
       db.close()
     }

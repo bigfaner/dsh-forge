@@ -47,7 +47,6 @@ import { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError } from '.
 import {
   aggregateDomainTree,
   applyStatusFilter,
-  buildKeywordAdmissionMatch,
   buildSearchFtsMatch,
   collectEntryIdsUnderDir,
   composeSearchScore,
@@ -58,6 +57,7 @@ import {
   normalizeUpdated,
   prepareHeatByEntry,
   textSubstringHit,
+  unionEntryIds,
   validateDomainPath,
   type RecallRow,
 } from './internal.js'
@@ -213,6 +213,11 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
   )
   const selectWsPathByProjectId = db.prepare<[string], { ws_path: string }>(
     `SELECT ws_path FROM knowledge_registry WHERE project_id = ?`,
+  )
+  // SC-1 全域检索改判：registry 全行枚举语句（现役只有单行查询——search 覆盖全部
+  // 注册域的行集来源，每调用期现查禁缓存——判例 d24a4464 同口径）
+  const selectRegistryDirs = db.prepare<unknown[], { knowledge_dir: string }>(
+    `SELECT knowledge_dir FROM knowledge_registry`,
   )
 
   /** projectId → { wsPath, knowledgeDir }（两级任一未命中 fail-loud） */
@@ -605,24 +610,26 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       const { wsPath, knowledgeDir } = requireProject(q.projectId, 'search')
 
       const prefix = q.domainPrefix === undefined ? undefined : q.domainPrefix.replace(/\/+$/, '')
-      let rows: EntryRow[] =
-        prefix === undefined
-          ? selectRows(selectAll, knowledgeDir, prefix)
-          : selectRows(selectByDomain, knowledgeDir, prefix, prefix, `${escapeLike(prefix)}/%`)
+      // SC-1 全域检索改判（用户裁决 2026-11-20）：search 不按调用方库收窄——行集 =
+      // 全注册域 id 集并集（unionEntryIds 独立助手；版本行单次捞取逐行前缀划分，
+      // registry 全行枚举每调用期现查禁缓存——判例 d24a4464 同口径）。
+      // 零命中静默重建判定保持逐注册行计数（roundtable2 B1）：对调用方项目行单独
+      // countProjectEntries——全局库有条目不掩蔽项目库空索引信号。
+      const queryRows = (): EntryRow[] => {
+        const ids = unionEntryIds(selectVersionPaths.all(), selectRegistryDirs.all())
+        const base = prefix === undefined ? selectAll.all() : selectByDomain.all(prefix, `${escapeLike(prefix)}/%`)
+        return base.filter((r) => ids.has(r.id))
+      }
+      let rows: EntryRow[] = queryRows()
       if (rows.length === 0 && countProjectEntries(knowledgeDir) === 0) {
         await rebuildMissingIndex(q.projectId, wsPath)
-        rows =
-          prefix === undefined
-            ? selectRows(selectAll, knowledgeDir, prefix)
-            : selectRows(selectByDomain, knowledgeDir, prefix, prefix, `${escapeLike(prefix)}/%`)
+        rows = queryRows()
       }
 
       // ── stage③ C1：FTS5 BM25 三因子排序（裁决 #2/#10——内核切换，准入语义原样） ──
-      // 通道语义：keywords = keywords 列逐词 AND（FTS phrase，等价旧精确 AND）；
-      // text = FTS 词元 AND ∪ JS 子串补充通道（CJK run 单 token 边界——internal.ts 注释）。
-      const queryKeywords = (q.keywords ?? [])
-        .map((k) => k.trim().toLowerCase())
-        .filter((k) => k !== '')
+      // 通道语义（stage④ 1.4 keywords 退役）：keywords 调用参数退役——词面统一经
+      // buildSearchFtsMatch 全列 MATCH（keywords 列仍为 BM25 匹配面元数据，query 词元
+      // 照常命中）；text = FTS 词元 AND ∪ JS 子串补充通道（internal.ts 注释）。
       const text = q.text?.trim() ?? ''
       const ftsIdsOf = (match: string): ReadonlyMap<string, number> => {
         try {
@@ -633,17 +640,13 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       }
       const combined = buildSearchFtsMatch({ keywords: q.keywords, text: q.text })
       const combinedBm25 = combined === undefined ? new Map<string, number>() : ftsIdsOf(combined)
-      const keywordMatch = buildKeywordAdmissionMatch(q.keywords)
-      const keywordBm25 =
-        keywordMatch === undefined ? new Map<string, number>() : ftsIdsOf(keywordMatch)
       const textMatch = text === '' ? undefined : buildSearchFtsMatch({ text: q.text })
       const textBm25 = textMatch === undefined ? new Map<string, number>() : ftsIdsOf(textMatch)
 
       const heatByEntry = new Map(selectHeatByEntry.all().map((r) => [r.entry_id, r.heat] as const))
       const scored: { entry: EntryRow; score: number }[] = []
       for (const r of rows) {
-        // 准入通道（缺省通道维度恒过）
-        if (queryKeywords.length > 0 && !keywordBm25.has(r.id)) continue
+        // 准入通道（缺省通道维度恒过；keywords AND 准入分支随参数退役移除）
         if (text !== '' && !textBm25.has(r.id) && !textSubstringHit(r.title, r.summary, text)) continue
         // 三因子：bm25 取整查询（keywords∧text）命中面；仅子串通道命中行缺位 → 中性分
         const bm25 = combinedBm25.get(r.id)

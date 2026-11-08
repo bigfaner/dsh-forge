@@ -19,6 +19,9 @@ export { ensureKnowledgeDbDir, KNOWLEDGE_DB_DIR_MODE, openKnowledgeDatabase } fr
 export {
   canonicalWsPath,
   createKnowledgeRegistry,
+  globalKnowledgeDir,
+  KNOWLEDGE_GLOBAL_DIR_SEGMENT,
+  type GlobalRegisterOutcome,
   type KnowledgeRegistry,
   type RegistryRow,
 } from './registry.js'

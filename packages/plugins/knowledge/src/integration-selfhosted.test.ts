@@ -90,7 +90,7 @@ describe('tool 调用链穿透插件自有服务并落 recall_logs（集成自�
     const search = tools.find((t) => t.name === 'knowledge_search')
     if (search === undefined) throw new Error('knowledge_search 未注册')
 
-    const outcome = (await search.execute({ domain_prefix: 'backend', keywords: ['api'] }, exec)) as { hint: string | null; hits: SearchHit[] }
+    const outcome = (await search.execute({ domain_prefix: 'backend', text: 'api' }, exec)) as { hint: string | null; hits: SearchHit[] }
     const hits = outcome.hits
     expect(outcome.hint).toBeNull()
     expect(hits.length).toBe(2)
@@ -103,7 +103,8 @@ describe('tool 调用链穿透插件自有服务并落 recall_logs（集成自�
     expect(searchGroups.length).toBe(1)
     expect(searchGroups[0]?.hitCount).toBe(2)
     expect(searchGroups[0]?.hits.map((h) => h.title).sort()).toEqual(['API 规范', '认证基线'])
-    expect(searchGroups[0]?.query).toMatchObject({ domainPrefix: 'backend', keywords: ['api'] })
+    // keywords 退役：query_json 快照零 keywords 键（存量快照行保留 legacy 可选键——读面兼容）
+    expect(searchGroups[0]?.query).toEqual({ domainPrefix: 'backend', text: 'api' })
   })
 
   it('read-abstract → EntryAbstract（不含正文）→ 同会话追加 read-abstract 日志行', async () => {
