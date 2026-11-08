@@ -1,0 +1,16 @@
+{
+  "format": "dsh-forge/knowledge-golden",
+  "version": 1,
+  "channel": "forge:knowledge/listEntries",
+  "recordedAt": "2026-11-20T00:00:00.000Z",
+  "source": {
+    "provider": "core",
+    "detail": "knowledge-stage4-recall-scope 任务 1.2 契约先行固化：scope 无 global 注册行边界Outcome（scopeFilter='global' 而 registry 无 global 行 → 空数组回执，非错误）。契约正本 proposals/knowledge-stage4-recall-scope/testing/global-search-two-tier/contracts/scope-source.md J1-CT-04。",
+    "harness": "e2e/support/knowledge-golden/harness.ts"
+  },
+  "request": {
+    "projectId": "a92e6418-3e8d-4f41-a932-6d8c94fc5bbc",
+    "scopeFilter": "global"
+  },
+  "response": []
+}

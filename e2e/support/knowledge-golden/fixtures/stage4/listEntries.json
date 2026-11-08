@@ -1,0 +1,39 @@
+{
+  "format": "dsh-forge/knowledge-golden",
+  "version": 1,
+  "channel": "forge:knowledge/listEntries",
+  "recordedAt": "2026-11-20T00:00:00.000Z",
+  "source": {
+    "provider": "core",
+    "detail": "knowledge-stage4-recall-scope 任务 1.2 契约先行固化：ListEntriesQuery 扩 scopeFilter（审核入口承载，契约正本 proposals/knowledge-stage4-recall-scope/testing/global-search-two-tier/contracts/scope-source.md §1）；KnowledgeCard 扩 scope 来源标识。实现落地后由脚本任务真机录制复核对齐并盖 last_anchor_sync。",
+    "harness": "e2e/support/knowledge-golden/harness.ts"
+  },
+  "request": {
+    "projectId": "a92e6418-3e8d-4f41-a932-6d8c94fc5bbc",
+    "scopeFilter": "global"
+  },
+  "response": [
+    {
+      "entryId": 6,
+      "title": "新手指引",
+      "summary": "跨项目通用知识：新手指引",
+      "keywords": ["guide"],
+      "status": "confirmed",
+      "domainPath": "",
+      "updated": "2026-01-01T00:00:00.000Z",
+      "heat": 1,
+      "scope": "global"
+    },
+    {
+      "entryId": 5,
+      "title": "并发手册",
+      "summary": "Java 并发实践",
+      "keywords": ["java", "concurrency"],
+      "status": "unconfirmed",
+      "domainPath": "编程/java",
+      "updated": "2026-02-10T00:00:00.000Z",
+      "heat": 0,
+      "scope": "global"
+    }
+  ]
+}

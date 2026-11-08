@@ -1,0 +1,30 @@
+{
+  "format": "dsh-forge/knowledge-golden",
+  "version": 1,
+  "channel": "forge:knowledge/recallFeedback",
+  "recordedAt": "2026-11-20T00:00:00.000Z",
+  "source": {
+    "provider": "core",
+    "detail": "knowledge-stage4-recall-scope 任务 1.2 契约先行固化：事件级（同 call_id 批）👎 成功回执——批内两行全更。契约正本 proposals/knowledge-stage4-recall-scope/testing/recall-feedback-loop/contracts/feedback-channel.md J3-CT-04。",
+    "harness": "e2e/support/knowledge-golden/harness.ts"
+  },
+  "request": {
+    "projectId": "a92e6418-3e8d-4f41-a932-6d8c94fc5bbc",
+    "action": "batch",
+    "callId": "0a4c9f10-1111-4c01-8f10-stage4search1",
+    "feedback": -1,
+    "note": "误召回：与当前任务无关"
+  },
+  "response": {
+    "results": [
+      {
+        "rowId": 41,
+        "outcome": "success"
+      },
+      {
+        "rowId": 42,
+        "outcome": "success"
+      }
+    ]
+  }
+}

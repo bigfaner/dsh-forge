@@ -1,0 +1,27 @@
+{
+  "format": "dsh-forge/knowledge-golden",
+  "version": 1,
+  "channel": "forge:knowledge/recallFeedback",
+  "recordedAt": "2026-11-20T00:00:00.000Z",
+  "source": {
+    "provider": "core",
+    "detail": "knowledge-stage4-recall-scope 任务 1.2 契约先行固化：负反馈缺说明逐行失败码 note-required（应用层三值/说明校验——非请求级拒收）。契约正本 proposals/knowledge-stage4-recall-scope/testing/recall-feedback-loop/contracts/feedback-channel.md J3-CT-06。",
+    "harness": "e2e/support/knowledge-golden/harness.ts"
+  },
+  "request": {
+    "projectId": "a92e6418-3e8d-4f41-a932-6d8c94fc5bbc",
+    "action": "row",
+    "rowId": 41,
+    "feedback": -1
+  },
+  "response": {
+    "results": [
+      {
+        "rowId": 41,
+        "outcome": "failure",
+        "code": "note-required",
+        "message": "负反馈必须附说明"
+      }
+    ]
+  }
+}

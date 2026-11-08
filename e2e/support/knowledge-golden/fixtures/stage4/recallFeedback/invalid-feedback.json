@@ -1,0 +1,22 @@
+{
+  "format": "dsh-forge/knowledge-golden",
+  "version": 1,
+  "channel": "forge:knowledge/recallFeedback",
+  "recordedAt": "2026-11-20T00:00:00.000Z",
+  "source": {
+    "provider": "core",
+    "detail": "knowledge-stage4-recall-scope 任务 1.2 契约先行固化：feedback 越界值（三值 {1,-1,0} 之外）= 请求级拒收 invalid-request。契约正本 proposals/knowledge-stage4-recall-scope/testing/recall-feedback-loop/contracts/feedback-channel.md J3-CT-07。",
+    "harness": "e2e/support/knowledge-golden/harness.ts"
+  },
+  "request": {
+    "projectId": "a92e6418-3e8d-4f41-a932-6d8c94fc5bbc",
+    "action": "row",
+    "rowId": 41,
+    "feedback": 2
+  },
+  "response": {
+    "outcome": "rejected-request",
+    "code": "invalid-request",
+    "message": "feedback 仅接受 1 / -1 / 0"
+  }
+}
