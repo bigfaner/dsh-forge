@@ -137,15 +137,39 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
     expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
   })
 
-  it('CJK 词元 AND 语义：缺字 query 不误纳（「部署」命中、「部署执行审计」不命中「部署规范」行）', async () => {
+  it('OR 容错通路：部分词元命中即候选（「部署执行审计」的部署词元命中「部署规范」行——AND 零命中缺口收口）', async () => {
     const hits = await service.search({ projectId, text: '部署执行审计', sessionId: 's' })
-    expect(hits.map((h) => h.frontmatterId)).not.toContain('bm25-cjk2')
+    expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
+  })
+
+  // bug db58e1c4（家族 4cf01aa9）根因修复 pin：多词元判定 AND → OR 容错并集——
+  // 任一词元命中（FTS 全列 ∪ title/summary 子串）即候选，score 排序保相关性。
+  it('OR 容错：多词 query 含 title/summary 外词元——「部署 deploy」仍命中（AND 判定域缺口收口）', async () => {
+    const hits = await service.search({ projectId, text: '部署 deploy', sessionId: 's' })
+    expect(hits.length).toBeGreaterThanOrEqual(1)
+    expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
+  })
+
+  it('OR 容错：多词 query 词元仅存在于 keywords 列——「部署 上线 发布 检查清单」≥1 命中', async () => {
+    const hits = await service.search({ projectId, text: '部署 上线 发布 检查清单', sessionId: 's' })
+    expect(hits.length).toBeGreaterThanOrEqual(1)
+    expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
+  })
+
+  it('单 CJK token 子串通道维持：「部署」单 token 命中 title「部署规范」', async () => {
+    const hits = await service.search({ projectId, text: '部署', sessionId: 's' })
+    expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
+  })
+
+  it('零命中诚实回执维持：OR 容错下全词元不命中仍返回 []（无兜底注入）', async () => {
+    const zero = await service.search({ projectId, text: 'zzqx q7wv', sessionId: 's' })
+    expect(zero).toEqual([])
   })
 
   it('域前缀过滤原样 + 零命中空回执（[]，无兜底注入）', async () => {
     const gw = await service.search({ projectId, domainPrefix: 'gw', text: 'bm25test', sessionId: 's' })
     expect(gw.map((h) => h.frontmatterId).sort()).toEqual(['bm25-a', 'bm25-c'])
-    const zero = await service.search({ projectId, text: 'no-such-kw', sessionId: 's' })
+    const zero = await service.search({ projectId, text: 'nosuchkw', sessionId: 's' })
     expect(zero).toEqual([])
     // 无过滤全域查询：全条目中性分返回（不炸、不缩水）
     const all = await service.search({ projectId, sessionId: 's' })

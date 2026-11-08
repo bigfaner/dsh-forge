@@ -61,6 +61,12 @@ export interface ToolSessionFace {
    * + warn diag（web/RPC 径无 session 同走双 NULL，正常降级零 warn）。
    */
   readonly events?: ToolSessionEventsFace
+  /**
+   * 官方 Session 同步读位直挂形态（session.snapshotEvents 方法——真机 Session 形状，
+   * eventsSnapshot private 无 events 属性）。结构兼容消费位：events 子面缺席时回落，
+   * 两者皆缺席才降级双 NULL（sessionContextOf 唯一取数缝）。
+   */
+  readonly snapshotEvents?: ToolSessionEventsFace['snapshotEvents']
 }
 
 /** dsh agent（官方 Agent 子面：id === session id；session 为其驱动的活会话） */

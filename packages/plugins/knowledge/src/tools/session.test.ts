@@ -190,6 +190,25 @@ describe('sessionContextOf 归因派生集成（fail-soft 双 NULL + warn diag�
     expect(collect.length).toBe(before)
   })
 
+  it('真机 Session 形状（官方 snapshotEvents 直挂 session、无 events 属性）→ 派生取数缝命中（bug 派生缝缺失修复 pin）', () => {
+    const before = collect.length
+    const exec = {
+      agent: {
+        session: {
+          id: 's1b',
+          header: { cwd: '/ws' },
+          // 官方 dsh-session Session 形状：snapshotEvents 为 session 方法（eventsSnapshot private）
+          snapshotEvents: () => standardTurn,
+        },
+      },
+    }
+    const ctx = sessionContextOf(exec as unknown as ToolExecFace, emit)
+    expect(ctx.sessionId).toBe('s1b')
+    expect(ctx.turnSeq).toBe(7)
+    expect(ctx.triggerText).toContain('热读口径')
+    expect(collect.length).toBe(before)
+  })
+
   it('events 子面缺席（有 session）→ 双 NULL + warn diag（knowledge-recall-derive）', () => {
     const before = collect.length
     const exec = { agent: { session: { id: 's2', header: { cwd: '/ws' } } } }

@@ -169,8 +169,10 @@ export function tokenizeSearchText(text: string): string[] {
 }
 
 /**
- * search 打分 MATCH（全元数据列词面）：keywords 逐词 phrase AND + text 分词 phrase AND
- * （词元须全命中；CJK 子串补充通道另行 JS 判定——见 textSubstringHit）。
+ * search 打分 MATCH（全元数据列词面）：keywords 逐词 phrase AND + text 分词 phrase OR
+ * （多词元容错并集——任一词元命中即候选，score 排序保相关性；AND 全命中判定会把
+ * 词元仅存在于部分匹配面的 query 整体清零——bug db58e1c4 家族 4cf01aa9）。
+ * CJK 子串补充通道另行 JS 判定（见 textSubstringHit）。
  * 全部词面缺席 → undefined（无 MATCH 面，全域中性分排序）。
  */
 export function buildSearchFtsMatch(q: { keywords?: readonly string[]; text?: string }): string | undefined {
@@ -181,7 +183,7 @@ export function buildSearchFtsMatch(q: { keywords?: readonly string[]; text?: st
   }
   const terms = q.text !== undefined ? tokenizeSearchText(q.text) : []
   if (terms.length === 1) parts.push(ftsQuote(terms[0]!))
-  else if (terms.length > 1) parts.push(`(${terms.map(ftsQuote).join(' AND ')})`)
+  else if (terms.length > 1) parts.push(`(${terms.map(ftsQuote).join(' OR ')})`)
   return parts.length === 0 ? undefined : parts.join(' AND ')
 }
 
@@ -207,17 +209,19 @@ export function tokenizeSearchTerms(text: string): string[] {
 }
 
 /**
- * text 子串补充准入通道（词元 AND——每词元在 title 或 summary 至少一处子串命中；
- * 大小写不敏感；title/summary 仅元数据列）。CJK 单 token 语义与多词 query 双侧兜底：
- * unicode61 将 CJK 连续 run 归单 token，FTS 词元对嵌于更长 run 的子词不命中——本通道
- * 按 CJK 感知词元（短 run 整体 / 长 run bigram）逐词元子串判定（见 tokenizeSearchTerms）。
+ * text 子串补充准入通道（词元 OR 容错并集——任一词元在 title 或 summary 至少一处子串
+ * 命中即候选；AND 全词元判定会把词元散布在 keywords 列等其它匹配面的 query 整体清零——
+ * bug db58e1c4 家族 4cf01aa9；大小写不敏感；title/summary 仅元数据列）。CJK 单 token
+ * 语义与多词 query 双侧兜底：unicode61 将 CJK 连续 run 归单 token，FTS 词元对嵌于更长
+ * run 的子词不命中——本通道按 CJK 感知词元（短 run 整体 / 长 run bigram）逐词元子串判定
+ * （见 tokenizeSearchTerms）。
  */
 export function textSubstringHit(title: string, summary: string, text: string): boolean {
   const terms = tokenizeSearchTerms(text)
   if (terms.length === 0) return false
   const t = title.toLowerCase()
   const s = summary.toLowerCase()
-  return terms.every((term) => t.includes(term) || s.includes(term))
+  return terms.some((term) => t.includes(term) || s.includes(term))
 }
 
 // ── knowledge-review-ui 1.4：statusFilter 服务端执行（零客户端过滤语义铁律维持） ──

@@ -14,7 +14,7 @@
 // 第二级 = storage/registry.ts findByWsPath（canonical 键）。
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import { KNOWLEDGE_DERIVE_EVENT, emitStorageDiag, storageDiag, type DiagEmitter } from '../storage/diag.js'
-import type { SessionEventFace, ToolExecFace } from './faces.js'
+import type { SessionEventFace, ToolExecFace, ToolSessionEventsFace } from './faces.js'
 
 /** 会话上下文（tool 执行点可解析的全部会话身份） */
 export interface ToolSessionContext {
@@ -115,8 +115,15 @@ export function sessionContextOf(exec: ToolExecFace, emit?: DiagEmitter): ToolSe
   if (session === undefined) return { sessionId: '', cwd: undefined }
   // 官方读取位 header.cwd；顶层 cwd 为结构兼容位（真实现不携带）
   const cwd = session.header?.cwd ?? session.cwd
-  const events = session.events
-  if (events === undefined) {
+  // 事件日志取数缝（bug 派生缝缺失——真机双 NULL 根因）：官方 Session 的同步读位是
+  // session.snapshotEvents() 方法直挂（eventsSnapshot private，无 events 属性）——
+  // events 子面缺席时回落 session.snapshotEvents 结构兼容位；两者皆缺席才降级双 NULL。
+  const eventsFace =
+    session.events ??
+    (typeof (session as { snapshotEvents?: unknown }).snapshotEvents === 'function'
+      ? { snapshotEvents: (session as { snapshotEvents: ToolSessionEventsFace['snapshotEvents'] }).snapshotEvents.bind(session) }
+      : undefined)
+  if (eventsFace === undefined) {
     emitStorageDiag(
       emit,
       storageDiag('warn', KNOWLEDGE_DERIVE_EVENT, `会话归因派生降级（双 NULL）：events 子面缺席（session ${session.id}）`),
@@ -124,7 +131,7 @@ export function sessionContextOf(exec: ToolExecFace, emit?: DiagEmitter): ToolSe
     return { sessionId: session.id, cwd }
   }
   try {
-    return { sessionId: session.id, cwd, ...deriveTurnContext(events.snapshotEvents()) }
+    return { sessionId: session.id, cwd, ...deriveTurnContext(eventsFace.snapshotEvents()) }
   } catch (cause) {
     emitStorageDiag(
       emit,
