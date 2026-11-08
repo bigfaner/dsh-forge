@@ -89,7 +89,7 @@ describe('CT-isolated-profile-1（J3-1：仅 knowledge 行 → 装配面在场�
     expect(typeof dispose).toBe('function')
 
     // 面②：knowledge tool schema 在场（结构可判定——name/object 根 schema/描述/输出渲染）
-    expect(tools.map((t) => t.name).sort()).toEqual(['knowledge_read', 'knowledge_read_abstract', 'knowledge_reinstate', 'knowledge_search', 'knowledge_supersede', 'knowledge_write'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['knowledge_browse', 'knowledge_read', 'knowledge_read_abstract', 'knowledge_reinstate', 'knowledge_search', 'knowledge_supersede', 'knowledge_write'])
     for (const tool of tools) {
       expect(tool.parameters.type).toBe('object') // JSON Schema object 根（注册面消费形状）
       expect(tool.description.length).toBeGreaterThan(0)
@@ -120,10 +120,11 @@ describe('CT-isolated-profile-1（J3-1：仅 knowledge 行 → 装配面在场�
 
     const ws = join(root, 'ws-reg')
     await expect(service.registerProject({ wsPath: ws, projectId: 'p-reg' })).resolves.toBeUndefined()
-    // 注册行落表（自持注册表——常规路径唯一产品写径）
-    expect(registryRowCount(dbFile)).toBe(1)
+    // 注册行落表（stage④ 1.4 全局注册：装配期全局库自启注册行 + 本项目行——两行）
+    expect(registryRowCount(dbFile)).toBe(2)
     // info 级 knowledge-register 事件（SC-10 埋点，携 projectId）
-    const info = diag.find((d) => d.level === 'info' && d.event === 'knowledge-register')
+    // stage④ 1.4：装配期全局库自启注册也发 knowledge-register——本项目事件按 projectId 定位
+    const info = diag.find((d) => d.level === 'info' && d.event === 'knowledge-register' && d.projectId === 'p-reg')
     expect(info).toBeDefined()
     expect(info!.cwd).toBe(ws)
     expect(info!.projectId).toBe('p-reg')
@@ -146,7 +147,7 @@ describe('CT-isolated-profile-1（J3-1：仅 knowledge 行 → 装配面在场�
     await expect(
       service.registerProject({ wsPath: ws, knowledgeDir: join(parentFile, 'sub', '.knowledge') }),
     ).rejects.toThrow()
-    expect(registryRowCount(dbFile)).toBe(0)
+    expect(registryRowCount(dbFile)).toBe(1) // 仅装配期全局注册行（项目行零落——失败径）
     expect(diag.some((d) => d.level === 'error' && d.event === 'knowledge-register')).toBe(true)
     dispose()
   })
@@ -168,8 +169,8 @@ describe('CT-isolated-profile-2（J3-2：重复装配幂等）', () => {
     expect(second.agentCreated).toHaveLength(1)
     d2()
 
-    // 注册表行数不变（零重复注册行——幂等；常规路径零注册行，无迁移源）
-    expect(registryRowCount(dbFile)).toBe(0)
+    // 注册表行数不变（零重复注册行——幂等；仅装配期全局注册行一份，无迁移源）
+    expect(registryRowCount(dbFile)).toBe(1)
   })
 })
 
@@ -225,7 +226,7 @@ describe('CT-isolated-profile-1 补强（agent/created 派发全链——两段�
     expect(scoped[1]?.order).toBe(911)
     expect((scoped[0]!.text as () => string)()).toContain('<knowledge-base>')
     // 首 turn 动态段非空（F1：注册径 rebuild 已入库，零 listEntries 调用）
-    expect((scoped[1]!.text as () => string)()).toContain('- frontend(1 entry) — <无简介>')
+    expect((scoped[1]!.text as () => string)()).toContain('frontend(1 篇) — <无简介>')
     dispose()
   })
 
@@ -254,7 +255,7 @@ describe('CT-isolated-profile-3（J3-3：对照面隔离——config 未命中�
     const dbFile = join(root, 'knowledge', 'knowledge.db')
     const { ctx, tools } = fakeCtx()
     const dispose = knowledgePlugin(ctx, { dbFile }) // 无 projects 绑定（config 未注入映射）
-    expect(tools).toHaveLength(6) // 插件本体装配在（面①②在场），仅解析面未命中
+    expect(tools).toHaveLength(7) // 插件本体装配在（面①②在场——browse 入列七工具），仅解析面未命中
 
     // 未绑定会话 → 可判定缺席语义（unboundSessionError 同语义：不挂、非静默）
     const search = tools.find((t) => t.name === 'knowledge_search')!
@@ -263,8 +264,8 @@ describe('CT-isolated-profile-3（J3-3：对照面隔离——config 未命中�
     ).rejects.toThrow(/not bound to a registered project|no session workspace/)
     dispose()
 
-    // 无注册表副作用（不落行、不误写）
-    expect(registryRowCount(dbFile)).toBe(0)
+    // 无本项目注册表副作用（不落行、不误写——仅装配期全局行）
+    expect(registryRowCount(dbFile)).toBe(1)
   })
 
   // 对照组 A（patch 无 knowledge 行 → 零 knowledge 面）：profile 物化机械真机装配面——

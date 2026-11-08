@@ -2,10 +2,10 @@
   "format": "dsh-forge/knowledge-golden",
   "version": 1,
   "channel": "forge:knowledge/sessionRecall",
-  "recordedAt": "2026-11-20T00:00:00.000Z",
+  "recordedAt": "2026-11-21T00:00:00.000Z",
   "source": {
-    "provider": "core",
-    "detail": "knowledge-stage4-recall-scope 任务 1.2 契约先行固化（动工前意向锚基线，非真机录制）：响应形状 = 契约正本 proposals/knowledge-stage4-recall-scope/testing/recall-card-turn-summary/contracts/recall-record-channel.md §1（RecallGroup 扩 turnSeq/triggerSnap/contentSnap、RecallGroupHit 扩 rowId/score/scope、RecallQuerySnapshot 扩 hint + keywords 标 legacy、verb 四值）。实现落地后由脚本任务真机录制复核对齐并盖 last_anchor_sync。",
+    "provider": "knowledge",
+    "detail": "knowledge-stage4-recall-scope 任务 1.2 契约先行固化（响应形状 = 契约正本 proposals/knowledge-stage4-recall-scope/testing/recall-card-turn-summary/contracts/recall-record-channel.md §1：RecallGroup 扩 turnSeq/triggerSnap/contentSnap、RecallGroupHit 扩 rowId/score/scope、RecallQuerySnapshot 扩 hint + keywords 标 legacy、verb 四值）。脚本任务 1.9 实现落地后录制复核锚值回填：行序 = 会话内倒序（最新调用在前，召回卡片新在上）、read-abstract/read 落 query_json entryId 行键、 browse 落 domain/offset/limit/order 四键、read-abstract/read 落 query_json entryId 行键、 browse 落 domain/offset/limit/order 四键、行序末 = 域过滤零命中哨兵行（hint 键 = tool 编排层 annotateSearchHint 写时点回填——服务法直呼面零 hint，契约锚归 J2-CT-03 旅程 spec）；标量值不参与比对（last_anchor_sync = 2026-11-21/1.9）",
     "harness": "e2e/support/knowledge-golden/harness.ts"
   },
   "request": {
@@ -14,98 +14,21 @@
   },
   "response": [
     {
-      "callId": "0a4c9f10-1111-4c01-8f10-stage4search1",
-      "turnSeq": 3,
-      "verb": "search",
-      "query": {
-        "text": "worktree 分支命名规范",
-        "domainPrefix": "工程规范/",
-        "hint": "domain \"热度治理\" was dropped after zero hits; showing matches from remaining domains"
-      },
-      "hitCount": 2,
-      "durationMs": 4,
-      "createdAt": "2026-11-20T14:32:05.000Z",
-      "triggerSnap": "帮我把 worktree 合回 main 的约定整理成知识条目",
-      "contentSnap": null,
-      "hits": [
-        {
-          "rowId": 41,
-          "entryId": 1,
-          "frontmatterId": "kb-fe-001",
-          "title": "框架选型",
-          "domainPath": "前端",
-          "heat": 2,
-          "score": 0.91,
-          "scope": "project"
-        },
-        {
-          "rowId": 42,
-          "entryId": 6,
-          "frontmatterId": "kb-guide-001",
-          "title": "新手指引",
-          "domainPath": "",
-          "heat": 1,
-          "score": 0.72,
-          "scope": "global"
-        }
-      ]
-    },
-    {
-      "callId": "0a4c9f10-2222-4c02-8f10-stage4search0",
-      "turnSeq": 3,
-      "verb": "search",
-      "query": {
-        "text": "不存在的词",
-        "hint": "no entry matched; try a broader term or browse a domain"
-      },
-      "hitCount": 0,
-      "durationMs": 2,
-      "createdAt": "2026-11-20T14:32:06.000Z",
-      "triggerSnap": "帮我把 worktree 合回 main 的约定整理成知识条目",
-      "contentSnap": null,
-      "hits": []
-    },
-    {
-      "callId": "0a4c9f10-3333-4c03-8f10-stage4read1",
-      "turnSeq": 3,
+      "callId": "0a4c9f10-6666-4c06-8f10-stage4read1",
+      "turnSeq": null,
       "verb": "read",
       "query": {
-        "frontmatterId": "kb-be-001"
+        "entryId": 1
       },
       "hitCount": 1,
       "durationMs": 1,
-      "createdAt": "2026-11-20T14:32:07.000Z",
-      "triggerSnap": "帮我把 worktree 合回 main 的约定整理成知识条目",
-      "contentSnap": "# API 规范 (kb-be-001, draft, 2026-02-01T00:00:00.000Z)\n正文-接口细则",
+      "createdAt": "2026-11-21T00:00:06.000Z",
+      "triggerSnap": null,
+      "contentSnap": "# 框架选型 (kb-fe-001, confirmed, 2026-01-15T00:00:00.000Z)\n正文",
       "hits": [
         {
-          "rowId": 43,
-          "entryId": 3,
-          "frontmatterId": "kb-be-001",
-          "title": "API 规范",
-          "domainPath": "后端",
-          "heat": 1,
-          "score": null,
-          "scope": "project"
-        }
-      ]
-    },
-    {
-      "callId": "0a4c9f10-4444-4c04-8f10-stage4abs1",
-      "turnSeq": 3,
-      "verb": "read-abstract",
-      "query": {
-        "entryId": 2
-      },
-      "hitCount": 1,
-      "durationMs": 1,
-      "createdAt": "2026-11-20T14:32:08.000Z",
-      "triggerSnap": "帮我把 worktree 合回 main 的约定整理成知识条目",
-      "contentSnap": null,
-      "hits": [
-        {
-          "rowId": 44,
-          "entryId": 2,
+          "rowId": 46,
+          "entryId": 1,
           "frontmatterId": "kb-fe-001",
           "title": "框架选型",
           "domainPath": "前端",
@@ -117,20 +40,30 @@
     },
     {
       "callId": "0a4c9f10-5555-4c05-8f10-stage4browse1",
-      "turnSeq": 3,
+      "turnSeq": null,
       "verb": "browse",
       "query": {
-        "domain": "工程规范",
+        "domain": "后端",
         "offset": 0,
         "limit": 20,
         "order": "status"
       },
       "hitCount": 2,
-      "durationMs": 3,
-      "createdAt": "2026-11-20T14:32:09.000Z",
-      "triggerSnap": "帮我把 worktree 合回 main 的约定整理成知识条目",
+      "durationMs": 0,
+      "createdAt": "2026-11-21T00:00:05.000Z",
+      "triggerSnap": null,
       "contentSnap": null,
       "hits": [
+        {
+          "rowId": 44,
+          "entryId": 3,
+          "frontmatterId": "kb-be-001",
+          "title": "API 规范",
+          "domainPath": "后端",
+          "heat": 1,
+          "score": null,
+          "scope": "project"
+        },
         {
           "rowId": 45,
           "entryId": 4,
@@ -140,34 +73,98 @@
           "heat": 1,
           "score": null,
           "scope": "project"
-        },
-        {
-          "rowId": 46,
-          "entryId": 5,
-          "frontmatterId": "kb-java-001",
-          "title": "并发手册",
-          "domainPath": "编程/java",
-          "heat": 0,
-          "score": null,
-          "scope": "global"
         }
       ]
     },
     {
-      "callId": "0a4c9f10-6666-4c06-8f10-stage4legacy1",
+      "callId": "0a4c9f10-3333-4c03-8f10-stage4search2",
       "turnSeq": null,
       "verb": "search",
       "query": {
-        "keywords": [
-          "不存在的词"
-        ]
+        "text": "api"
+      },
+      "hitCount": 2,
+      "durationMs": 4,
+      "createdAt": "2026-11-21T00:00:04.000Z",
+      "triggerSnap": null,
+      "contentSnap": null,
+      "hits": [
+        {
+          "rowId": 42,
+          "entryId": 3,
+          "frontmatterId": "kb-be-001",
+          "title": "API 规范",
+          "domainPath": "后端",
+          "heat": 1,
+          "score": 0.91,
+          "scope": "project"
+        },
+        {
+          "rowId": 43,
+          "entryId": 4,
+          "frontmatterId": "kb-be-002",
+          "title": "网关",
+          "domainPath": "后端",
+          "heat": 1,
+          "score": 0.72,
+          "scope": "project"
+        }
+      ]
+    },
+    {
+      "callId": "0a4c9f10-2222-4c02-8f10-stage4search0",
+      "turnSeq": null,
+      "verb": "search",
+      "query": {
+        "text": "不存在的词"
       },
       "hitCount": 0,
-      "durationMs": 0,
-      "createdAt": "2026-11-19T09:00:00.000Z",
+      "durationMs": 2,
+      "createdAt": "2026-11-21T00:00:03.000Z",
       "triggerSnap": null,
       "contentSnap": null,
       "hits": []
+    },
+    {
+      "callId": "0a4c9f10-4444-4c04-8f10-stage4abs1",
+      "turnSeq": null,
+      "verb": "read-abstract",
+      "query": {
+        "entryId": 1
+      },
+      "hitCount": 1,
+      "durationMs": 1,
+      "createdAt": "2026-11-21T00:00:02.000Z",
+      "triggerSnap": null,
+      "contentSnap": null,
+      "hits": [
+        {
+          "rowId": 41,
+          "entryId": 1,
+          "frontmatterId": "kb-fe-001",
+          "title": "框架选型",
+          "domainPath": "前端",
+          "heat": 2,
+          "score": null,
+          "scope": "project"
+        }
+      ]
+    },
+    {
+      "callId": "0a4c9f10-1111-4c01-8f10-stage4search1",
+      "turnSeq": null,
+      "verb": "search",
+      "query": {
+        "text": "api",
+        "domainPrefix": "前端"
+      },
+      "hitCount": 0,
+      "durationMs": 4,
+      "createdAt": "2026-11-21T00:00:01.000Z",
+      "triggerSnap": null,
+      "contentSnap": null,
+      "hits": [
+      ]
     }
   ]
 }

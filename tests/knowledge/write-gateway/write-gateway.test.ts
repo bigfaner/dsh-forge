@@ -400,17 +400,17 @@ describe('CT-WG-13 search：条件式排除（WG-G5，裁决 #10）', () => {
       versionOf: v1.id,
     }))
     if (v2.outcome !== 'written') throw new Error('v2 未写入')
-    // O1：新词 search 不召回新版（结果集不含 U 的 version_ts/文件路径）；旧词正常命中 C
-    const hitNew = await w.service.search({ projectId: w.projectId, keywords: ['betakey'] })
+    // O1：新词 search 不召回新版（词面 = text——stage④ 1.4 keywords 退役）（结果集不含 U 的 version_ts/文件路径）；旧词正常命中 C
+    const hitNew = await w.service.search({ projectId: w.projectId, text: 'betakey' })
     expect(hitNew.map((h) => h.frontmatterId)).not.toContain(v1.id)
-    const hitOld = await w.service.search({ projectId: w.projectId, keywords: ['alphakey'] })
+    const hitOld = await w.service.search({ projectId: w.projectId, text: 'alphakey' })
     expect(hitOld.map((h) => h.frontmatterId)).toContain(v1.id) // C 正常命中
     // U 版本行仍在 KNOWLEDGE_ENTRY_VERSIONS（存在但不召回）
     expect(nRows(w, 'knowledge_entry_versions', `WHERE id = '${v1.id}' AND version_ts = '${v2.versionTs}'`)).toBe(1)
     // O2 对照：纯新条目（同 id 无 confirmed 版）unconfirmed 唯一版本仍 0.6 可见
     const y = await w.service.write(writeQ({ projectId: w.projectId, title: 'Pure New Draft', keywords: ['betakey'] }))
     if (y.outcome !== 'written') throw new Error('y 未写入')
-    const hitY = await w.service.search({ projectId: w.projectId, keywords: ['betakey'] })
+    const hitY = await w.service.search({ projectId: w.projectId, text: 'betakey' })
     const yHit = hitY.find((h) => h.frontmatterId === y.id)
     expect(yHit?.effectiveRank).toBe(0.6) // CT-WG-13 O2（= CT-WG-12 O2 复用口径）
     w.storage.close()

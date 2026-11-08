@@ -2,10 +2,16 @@
 // Journey: knowledge-five-channel-supply（五通道供数切换后浏览零变化）。
 // 溯源（断言-契约溯源，条目 id 注于每条断言）：
 //   .forge/docs/proposals/knowledge-stage1-foundation/testing/contracts/knowledge-five-channel-supply/contract.md
-//   （CT-five-channel-1..5 ← journey J2-1..J2-4；SC-8/SC-2）。
-// Golden 基准复用：1.3 迁移前录制 fixture（e2e/support/knowledge-golden/fixtures/<channel>.json
-// × 5——录制源 core 现役供数，本任务不重复录制）；通道分发/语料复用 harness.ts（镜像
-// knowledge-rpc.ts 注册行 1:1）。断言锚定行为语义（DTO 字段/键集/序/null 语义），不锁实现路径。
+//   （CT-five-channel-1..5 ← journey J2-1..J2-4；SC-8/SC-2）；
+//   stage④ golden overlay：.forge/docs/proposals/knowledge-stage4-recall-scope/testing/
+//   recall-card-turn-summary/contracts/recall-record-channel.md（§1 S1–S12）+
+//   recall-feedback-loop/contracts/feedback-channel.md（§1 S1–S5）。
+// Golden 基准：1.3 迁移前录制 fixture（e2e/support/knowledge-golden/fixtures/<channel>.json——
+// browse/entryDetail/heat 三通道形状 stage④ 零变化，沿 legacy 录制）+ stage④ overlay
+// （fixtures/stage4/listEntries.json + sessionRecall.json + recallFeedback.json——任务 1.2
+// 契约先行固化，脚本任务 1.9 实现落地后录制复核锚值回填）；通道分发/语料复用 harness.ts
+// （镜像 knowledge-rpc.ts 注册行 1:1）。断言锚定行为语义（DTO 字段/键集/序/null 语义），不锁实现路径。
+// stage④ 词面改写：召回场景落账查询词面统一 text（keywords 调用参数退役——tools/search.ts 键级契约）。
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,6 +26,7 @@ import type { GoldenChannelRequest } from '../../../e2e/support/knowledge-golden
 import { assertSameStructure, loadGoldenFixture } from '../../../e2e/support/knowledge-golden/compare.js'
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', '..', '..', 'e2e', 'support', 'knowledge-golden', 'fixtures')
+const STAGE4_FIXTURES_DIR = join(FIXTURES_DIR, 'stage4')
 
 /** 双项目装配（CT-five-channel-3 串库对照：A = golden 语料项目；B = 他项目独立语料——
  *  stage② v4 全局 slug id：B 语料用独立 id，不复用 A 的 golden 条目 id） */
@@ -67,9 +74,10 @@ beforeAll(() => {
   projectIdA = a.projectId
   projectIdB = b.projectId
   db = openKnowledgeDatabase(dbFile)
+  // B 项目注册移入 CT-five-channel-3（SC-1 全域检索并集 = registry 全行枚举——B 行在库会
+  // 使 CT-1 的 search 命中集翻倍，golden 对照面须单注册域供数）
   const registry = createKnowledgeRegistry(db)
   registry.upsert(a.wsDir, a.knowledgeDir)
-  registry.upsert(b.wsDir, b.knowledgeDir)
   service = createKnowledgeService({
     db,
     resolveWsPath: createWsPathResolver([
@@ -95,24 +103,72 @@ function entryIdOf(title: string): number {
   return row.rid
 }
 
-describe('CT-five-channel-1（J2-1：同一 fixture 五通道 golden 零变化）', () => {
-  it('success：五通道逐通道结构等价（类型/键集/数组序/null 语义零漂移）+ 确定性字段逐值等价', async () => {
-    // 召回场景落账（与 fixture 录制 harness 同序——heat/sessionRecall 数据面）
-    await service.rebuildIndex(projectIdA)
-    void service.search({ projectId: projectIdA, domainPrefix: '前端', sessionId: GOLDEN_SESSION_ID })
-    void service.readAbstract({ projectId: projectIdA, entryId: entryIdOf('框架选型'), sessionId: GOLDEN_SESSION_ID })
-    void service.search({ projectId: projectIdA, keywords: ['不存在的词'], sessionId: GOLDEN_SESSION_ID })
-    void service.search({ projectId: projectIdA, text: 'api', sessionId: GOLDEN_SESSION_ID })
+/** 召回场景落账（stage④ 词面/身份面：text 词面 + slug 键 read/readAbstract + browseEntries 页内锚） */
+async function seedRecallScenario(): Promise<void> {
+  await service.rebuildIndex(projectIdA)
+  // 弃域重试（domain_prefix 零命中 → 全域重试两命中）
+  void service.search({ projectId: projectIdA, domainPrefix: '前端', text: 'api', sessionId: GOLDEN_SESSION_ID })
+  void service.readAbstract({ projectId: projectIdA, id: 'kb-fe-001', sessionId: GOLDEN_SESSION_ID })
+  // 零命中哨兵（hit_count=0 诚实落账）
+  void service.search({ projectId: projectIdA, text: '不存在的词', sessionId: GOLDEN_SESSION_ID })
+  void service.search({ projectId: projectIdA, text: 'api', sessionId: GOLDEN_SESSION_ID })
+  // browse 入账不计热（domain/offset/limit/order 落 query_json 快照键）
+  void service.browseEntries({ projectId: projectIdA, domain: '后端', offset: 0, limit: 20, order: 'status', sessionId: GOLDEN_SESSION_ID })
+  // read 全文快照（content_snap 不截断；read=1.0 计热）
+  void service.read({ projectId: projectIdA, id: 'kb-fe-001', sessionId: GOLDEN_SESSION_ID })
+  // v7 热度终式对齐（判例 293aecba/44bd7579 夹具同步）：heat 通道形状由采纳事件
+  //（verb='read'，score 1.0）直插承载——与 golden-plugin 对照面同构（heat Map 仅载正热条目）。
+  const insertRead = db.prepare(
+    `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, title_snap, hit_count, score, created_at)
+     VALUES (?, ?, 'golden-heat-seed', 'read', ?, ?, 1, 1.0, '2026-01-01T00:00:00Z')`,
+  )
+  for (const [title, count] of [['框架选型', 1], ['样式令牌', 2], ['API 规范', 1], ['网关', 1]] as const) {
+    const rowid = entryIdOf(title)
+    for (let i = 0; i < count; i += 1) insertRead.run(projectIdA, `golden-read-${title}-${i}`, rowid, title)
+  }
+}
 
+/** read 调用行 rowid（confirmed 条目——recallFeedback 对照的合法作用行） */
+function feedbackTargetRowId(): number {
+  const row = db
+    .prepare(
+      `SELECT rowid AS rid FROM knowledge_recall_logs WHERE project_id = ? AND session_id = ? AND verb = 'read' ORDER BY rowid LIMIT 1`,
+    )
+    .get(projectIdA, GOLDEN_SESSION_ID) as { rid: number } | undefined
+  if (row === undefined) throw new Error('read 调用行未落账')
+  return row.rid
+}
+
+describe('CT-five-channel-1（J2-1：同一 fixture 通道 golden 零变化）', () => {
+  it('success：逐通道结构等价（类型/键集/数组序/null 语义零漂移）+ 确定性字段逐值等价', async () => {
+    await seedRecallScenario()
+
+    // 通道对照面：legacy fixture（browse/entryDetail/heat——stage④ 形状零变化）
+    // + stage④ overlay（listEntries/sessionRecall/recallFeedback——契约正本 J1/J2/J3 §1）。
+    // recallFeedback 对照请求 = read 调用行（confirmed 条目）行级 👍 成功回执（J3 §1 S3）。
     const requests: Record<string, GoldenChannelRequest> = {
       [KNOWLEDGE_CHANNELS.browse]: { projectId: projectIdA },
       [KNOWLEDGE_CHANNELS.listEntries]: { projectId: projectIdA, domainPrefix: '后端' },
       [KNOWLEDGE_CHANNELS.entryDetail]: { projectId: projectIdA, entryId: entryIdOf('框架选型') },
       [KNOWLEDGE_CHANNELS.heat]: { projectId: projectIdA },
       [KNOWLEDGE_CHANNELS.sessionRecall]: { projectId: projectIdA, sessionId: GOLDEN_SESSION_ID },
+      [KNOWLEDGE_CHANNELS.recallFeedback]: { projectId: projectIdA, action: 'row', rowId: feedbackTargetRowId(), feedback: 1 },
     }
-    for (const channel of Object.values(KNOWLEDGE_CHANNELS)) {
-      const fixture = loadGoldenFixture(FIXTURES_DIR, channel)
+    const fixtureOf = (channel: string): ReturnType<typeof loadGoldenFixture> =>
+      channel === KNOWLEDGE_CHANNELS.listEntries ||
+      channel === KNOWLEDGE_CHANNELS.sessionRecall ||
+      channel === KNOWLEDGE_CHANNELS.recallFeedback
+        ? loadGoldenFixture(STAGE4_FIXTURES_DIR, channel)
+        : loadGoldenFixture(FIXTURES_DIR, channel)
+    for (const channel of [
+      KNOWLEDGE_CHANNELS.browse,
+      KNOWLEDGE_CHANNELS.listEntries,
+      KNOWLEDGE_CHANNELS.entryDetail,
+      KNOWLEDGE_CHANNELS.heat,
+      KNOWLEDGE_CHANNELS.sessionRecall,
+      KNOWLEDGE_CHANNELS.recallFeedback,
+    ]) {
+      const fixture = fixtureOf(channel)
       const raw = await invokeGoldenChannel(channel, service, requests[channel]!)
       // heat 通道：Map → 排序键值对数组（IPC 结构化克隆保真面，与 fixture 录制形制对齐）
       const response = channel === KNOWLEDGE_CHANNELS.heat
@@ -137,26 +193,38 @@ describe('CT-five-channel-1（J2-1：同一 fixture 五通道 golden 零变化�
     expect(heat.size).toBeGreaterThan(0)
     for (const v of heat.values()) expect(Number.isInteger(v)).toBe(true) // IPC 结构化克隆保真（整数计数）
     const recall = await service.sessionRecall({ projectId: projectIdA, sessionId: GOLDEN_SESSION_ID })
-    expect(recall.map((g) => [g.verb, g.hitCount])).toContainEqual(['search', 2]) // 前端域检索两命中
+    expect(recall.map((g) => [g.verb, g.hitCount])).toContainEqual(['search', 2]) // api 词面两命中（弃域重试径同值）
     expect(recall.every((g) => g.createdAt === new Date(g.createdAt).toISOString())).toBe(true) // ISO-8601
   })
 })
 
 describe('CT-five-channel-2（J2-2：插件缺席 → 通道不挂、缺席语义可判定）', () => {
-  it('success-缺席：projectId 未命中绑定/注册行 → 五通道面 fail-loud 可判定错误（非裸 undefined/崩溃）', async () => {
+  it('success-缺席：projectId 未命中绑定/注册行 → 各通道 fail-loud 可判定错误（非裸 undefined/崩溃）', async () => {
     // 插件缺席时 host 侧通道整体不注册（main.ts 在场判定键 knowledge——缺席 = 通道不挂，
     // host 侧零崩溃面已由 apps/host knowledge-rpc 在场/缺席双态测试钉住）；vitest 旅程面
-    // 断言消费点语义：未注册项目 → 统一可判定错误（「项目不存在」——错误即缺席信号）
+    // 断言消费点语义：未注册项目 → 统一可判定错误（「项目不存在」——错误即缺席信号）。
+    // stage④ 第七通道（recallFeedback）缺席语义 = 请求级拒绝回执（rejected-request 信封——
+    // 沿 entryAction 先例：动作通道不抛，回执承载拒绝事实，J3 §1 S3）。
     for (const channel of Object.values(KNOWLEDGE_CHANNELS)) {
-      const req = { projectId: 'p-not-registered', entryId: 1, sessionId: 's' }
-      const call = invokeGoldenChannel(channel, service, req as GoldenChannelRequest)
-      await expect(call, channel).rejects.toThrow(/项目不存在/) // 每通道缺席语义一致可判定
+      const req = { projectId: 'p-not-registered', entryId: 1, rowId: 1, sessionId: 's' }
+      if (channel === KNOWLEDGE_CHANNELS.recallFeedback) {
+        await expect(invokeGoldenChannel(channel, service, req as GoldenChannelRequest), channel).resolves.toMatchObject({
+          outcome: 'rejected-request',
+        })
+        continue
+      }
+      await expect(invokeGoldenChannel(channel, service, req as GoldenChannelRequest), channel).rejects.toThrow(/项目不存在/)
     }
   })
 })
 
 describe('CT-five-channel-3（J2-3：两级解析命中/未命中——不串项目库）', () => {
   it('success-命中 + 不串库：A 项目命中结果全部属于 A 语料；B 项目独立（条目集互斥）', async () => {
+    createKnowledgeRegistry(db).upsert(
+      join(home, 'ws-b'),
+      join(home, 'ws-b', 'knowledge'),
+      projectIdB,
+    ) // B 注册行落库（本用例内——CT-1 golden 对照面单注册域）
     await service.rebuildIndex(projectIdB)
     const a = await service.listEntries({ projectId: projectIdA })
     const b = await service.listEntries({ projectId: projectIdB })

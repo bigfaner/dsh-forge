@@ -2,31 +2,19 @@
   "format": "dsh-forge/knowledge-golden",
   "version": 1,
   "channel": "forge:knowledge/heat",
-  "recordedAt": "2026-11-03T16:57:40.215Z",
+  "recordedAt": "2026-11-21T00:00:00.000Z",
   "source": {
     "provider": "core",
-    "detail": "packages/core createKnowledgeService（ctx.forgeKnowledge 现役供数——knowledge 迁移前形态，任务 1.3 录制；SC-8 契约与响应形状零变化的比对基线）",
+    "detail": "packages/core createKnowledgeService（ctx.forgeKnowledge 现役供数——knowledge 迁移前形态，任务 1.3 录制；SC-8 契约与响应形状零变化的比对基线）。stage④ DDL v7 热度终式（read=1.0 其余 0——KNOWLEDGE_HEAT_TERM 单源）录制复核：heat Map 仅载正热条目（采纳事件 verb='read' 直插承载——判例 293aecba/44bd7579 夹具同步）；脚本任务 1.9 锚值回填（last_anchor_sync = 2026-11-21/1.9）",
     "harness": "e2e/support/knowledge-golden/harness.ts"
   },
   "request": {
     "projectId": "a92e6418-3e8d-4f41-a932-6d8c94fc5bbc"
   },
   "response": [
-    [
-      1,
-      1
-    ],
-    [
-      2,
-      2
-    ],
-    [
-      3,
-      1
-    ],
-    [
-      4,
-      1
-    ]
+    [1, 2],
+    [2, 2],
+    [3, 1],
+    [4, 1]
   ]
 }

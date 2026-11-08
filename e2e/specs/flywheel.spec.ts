@@ -196,10 +196,12 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     await expect(recallTab.first()).toBeVisible({ timeout: 30_000 })
     const statsCalls = Number(await page.locator('[data-dswf-recall-stats]').getAttribute('data-calls'))
     expect(statsCalls, '统计头召回次数 = 事件组数（tab ↔ 事件表一致）').toBe(groups.length)
-    const recallRow = page.locator('[data-dswf-recall-row]', { hasText: '部署规范' }).first()
-    await expect(recallRow, '分组行：被召回知识条目在场（title 快照）').toBeVisible()
-    const rowVerbs = await recallRow.locator('[data-dswf-recall-verb]').allTextContents()
-    expect(rowVerbs.join(' '), '分组行动词明细含 search（verb 投影）').toContain('search')
+    // 卡片改型选择器（1.8 轮卡重写——判例 7d310eb0 漂移防护）：行锚 data-dswf-recall-row
+    // 已退役 → 命中行 data-dswf-recall-hit + verb 分节锚 data-dswf-recall-call[data-verb]
+    const recallHit = page.locator('[data-dswf-recall-hit]', { hasText: '部署规范' }).first()
+    await expect(recallHit, '命中行：被召回知识条目在场（title 快照）').toBeVisible()
+    const searchSection = page.locator('[data-dswf-recall-call][data-verb="search"]', { hasText: '部署规范' }).first()
+    await expect(searchSection, 'search 分节在场（verb 投影）').toBeVisible()
 
     // ── 步 6/6 卡片热度 +1（浏览面 HeatBadge ↔ heatByEntry ↔ 事件计数三方一致） ──
     await page.locator(KNOWLEDGE_ENTRY).first().click()

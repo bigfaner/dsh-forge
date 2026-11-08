@@ -1,12 +1,18 @@
 // @feature:knowledge
-// Journey: bm25-recall（proposal knowledge-stage3-retrieval §2.1 C1 / 裁决 #2/#8/#10 / §5）。
+// Journey: bm25-recall（proposal knowledge-stage3-retrieval §2.1 C1 / 裁决 #2/#8/#10 / §5）
+// + stage④ 词面改写（proposal knowledge-stage4-recall-scope——keywords 调用参数退役，
+//   词面统一 text；J1 scope-source.md S4 检索面键级表达）。
 // 溯源（断言-契约溯源，条目 id 注于每条断言）：
 //   .forge/docs/proposals/knowledge-stage3-retrieval/testing/journey-bm25-recall/contracts/contract.md
-//   （CT-bm25-recall-01..08 ← journey BR-G1..G5 / BR-E1..E8）。
+//   （CT-bm25-recall-01..08 ← journey BR-G1..G5 / BR-E1..E8）；
+//   .forge/docs/proposals/knowledge-stage4-recall-scope/testing/global-search-two-tier/contracts/scope-source.md
+//   （CT-stage4-search-schema ← §1 S4 + proposal §3 contracts 行）。
 // 策略与锚实锚说明：
 // · 排序断言锚 = 条目相对位次（非分值字面）；实现归一实锚 = internal.ts bm25Norm
 //   （方向修正同形映射 −bm25/(1−bm25)——提案原式 1/(1−bm25) 与「score 降序 = 相关居前」
 //   不变量相逆，偏差已随 coding 任务上报；契约只断位次行为，方向修正不触契约红线）。
+// · stage④ 词面改写（脚本任务 1.9）：keywords-only 查询准入分支随参数退役移除——
+//   查询词面统一 text（keywords 列仍为 BM25 匹配面元数据，query 词元照常命中）。
 // · CT-bm25-recall-05/E6 的「diag 零命中埋点」为待实现锚——实现以 recall_logs 哨兵行
 //   （hit_count=0）承载零命中采集，diag 事件未实现：不一致已上报 fix/disc（归 test-run
 //   复核），本 spec 以 it.skip 留痕，不就地调和。
@@ -23,7 +29,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import type { DiagEventPayload } from '../../../packages/contracts/src/index.js'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/index.js'
 import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/service.js'
-import { createSearchTool } from '../../../packages/plugins/knowledge/src/tools/search.js'
+import { createSearchTool, parseSearchArgs } from '../../../packages/plugins/knowledge/src/tools/search.js'
 import { createProjectResolver } from '../../../packages/plugins/knowledge/src/tools/session.js'
 import type { BrowseKnowledgeService, SearchHit } from '../../../packages/plugins/knowledge/src/service/types.js'
 import { disposeMounts, mountRealCorpus } from '../recall-baseline/harness.js'
@@ -162,21 +168,22 @@ function heatUp(w: World, id: string, heat: number): void {
   for (let i = 0; i < heat; i += 1) ins.run(w.projectId, `heat-${id}-${i}`, 'heat', row.rowid, new Date().toISOString())
 }
 
-// ── CT-bm25-recall-01 核心词命中位次按相关度降序（BR-G2） ──
+// ── CT-bm25-recall-01 核心词命中位次按相关度降序（BR-G2；词面 = text——stage④ 1.4） ──
 
 describe('CT-bm25-recall-01 核心词位次（BR-G1/G2）', () => {
   it('O1/O2 位次严格降序（高<中<弱）+ 无关条目不命中；O3 复跑位次幂等', async () => {
     const w = world('ct01')
     await w.service.rebuildIndex(w.projectId)
-    const hits = await w.service.search({ projectId: w.projectId, keywords: ['krecall'], sessionId: 's' })
+    const hits = await w.service.search({ projectId: w.projectId, text: 'krecall', sessionId: 's' })
     // CT-bm25-recall-01 O1：pos(高) < pos(中) < pos(弱)
     expect(posOf(hits, 'br-strong')).toBeGreaterThan(-1)
     expect(posOf(hits, 'br-strong')).toBeLessThan(posOf(hits, 'br-mid'))
     expect(posOf(hits, 'br-mid')).toBeLessThan(posOf(hits, 'br-weak'))
     // O2：无关条目（核心词不出现于 title/keywords/summary）不在命中集
+    //（stage④ 1.4：text 通道承担准入过滤——词面无关行零准入）
     expect(idsOf(hits)).not.toContain('br-none')
     // O3：再跑位次结论一致（确定性排序，非写入序偶然）
-    const again = await w.service.search({ projectId: w.projectId, keywords: ['krecall'], sessionId: 's' })
+    const again = await w.service.search({ projectId: w.projectId, text: 'krecall', sessionId: 's' })
     expect(idsOf(again)).toEqual(idsOf(hits))
   })
 })
@@ -189,8 +196,8 @@ describe('CT-bm25-recall-02 归一非平顶（BR-E2）', () => {
     const b = world('ct02b', true)
     await a.service.rebuildIndex(a.projectId)
     await b.service.rebuildIndex(b.projectId)
-    const ha = await a.service.search({ projectId: a.projectId, keywords: ['krecall'], sessionId: 's' })
-    const hb = await b.service.search({ projectId: b.projectId, keywords: ['krecall'], sessionId: 's' })
+    const ha = await a.service.search({ projectId: a.projectId, text: 'krecall', sessionId: 's' })
+    const hb = await b.service.search({ projectId: b.projectId, text: 'krecall', sessionId: 's' })
     expect(posOf(ha, 'br-strong')).toBeLessThan(posOf(ha, 'br-mid'))
     expect(posOf(ha, 'br-mid')).toBeLessThan(posOf(ha, 'br-weak'))
     // O1：逆写入序库同一位次结论（平顶退化 = 写入序决定位次 → 此断言红）
@@ -208,7 +215,7 @@ describe('CT-bm25-recall-03 rank 档位微调（BR-G3）', () => {
   it('O1 同相关度高档位在前；O2 微调不翻盘（强相关低档 < 弱相关高档）；O3 同档位次 = 纯 BM25 序', async () => {
     const w = world('ct03')
     await w.service.rebuildIndex(w.projectId)
-    const hits = await w.service.search({ projectId: w.projectId, keywords: ['krecall'], sessionId: 's' })
+    const hits = await w.service.search({ projectId: w.projectId, text: 'krecall', sessionId: 's' })
     // O1：同文本 confirmed(1.0) 前于 unconfirmed(0.6)
     const mid = hits.find((h) => h.frontmatterId === 'br-mid')!
     const twin = hits.find((h) => h.frontmatterId === 'br-mid-twin')!
@@ -232,7 +239,7 @@ describe('CT-bm25-recall-04 热度微权（BR-G4/BR-E1）', () => {
     heatUp(w, 'br-mid-hot', 60)
     heatUp(w, 'br-hot-old', 50)
     heatUp(w, 'br-hot-extreme', 100)
-    const hits = await w.service.search({ projectId: w.projectId, keywords: ['krecall'], sessionId: 's' })
+    const hits = await w.service.search({ projectId: w.projectId, text: 'krecall', sessionId: 's' })
     // O1：同文本（br-mid vs br-mid-hot）高热在前（同相关度内微调可见）
     expect(posOf(hits, 'br-mid-hot')).toBeLessThan(posOf(hits, 'br-mid'))
     // O2（核心）：低热更相关新条目（br-new-rel）位次恒在高热旧条目（br-hot-old）前
@@ -243,32 +250,41 @@ describe('CT-bm25-recall-04 热度微权（BR-G4/BR-E1）', () => {
   })
 })
 
-// ── CT-bm25-recall-05 零命中诚实回执（BR-G5/BR-E5） ──
+// ── CT-bm25-recall-05 零命中诚实回执（BR-G5/BR-E5；词面回显键 = text——stage④ 1.4） ──
 
 describe('CT-bm25-recall-05 零命中诚实回执（BR-G5/BR-E5）', () => {
   it('O1/O2/O3 三路零命中（裸词/带过滤/正文独有词）均空结果；O4 回执零兜底（无建议/改写字段）', async () => {
     const w = world('ct05')
     await w.service.rebuildIndex(w.projectId)
     // O1 裸零命中 / O2 带过滤 / O3 正文独有词（INV-4 列面边界的行为面证据）
-    expect(await w.service.search({ projectId: w.projectId, keywords: ['nosuchterm'], sessionId: 's' })).toEqual([])
+    expect(await w.service.search({ projectId: w.projectId, text: 'nosuchterm', sessionId: 's' })).toEqual([])
     expect(
-      await w.service.search({ projectId: w.projectId, domainPrefix: 'core', keywords: ['nosuchterm'], sessionId: 's' }),
+      await w.service.search({ projectId: w.projectId, domainPrefix: 'core', text: 'nosuchterm', sessionId: 's' }),
     ).toEqual([])
     expect(await w.service.search({ projectId: w.projectId, text: 'zorblatflax', sessionId: 's' })).toEqual([])
-    // 回执行为面：tool render 对真实空结果产出诚实回执（回显 + 未命中明示）
+    // 回执行为面（stage④ 1.4/1.6）：render 对零命中 SearchOutcome 产出诚实回执——
+    // 无 hint = 诚实空回执行（未命中明示 + 零兜底声明）+ 查询回显（词面回显键 = text）
     const tool = createSearchTool({
       knowledge: w.service as never,
       resolveProjectId: createProjectResolver([{ wsPath: w.ws, projectId: w.projectId }]),
     })
-    const blocks = tool.output.render({ domain_prefix: 'core', keywords: ['nosuchterm'], text: 'zorblatflax', limit: 5 }, [])
-    const text = blocks[0]?.text ?? ''
+    const plain = tool.output.render({ domain_prefix: 'core', text: 'nosuchterm', limit: 5 }, { hint: null, hits: [] })
+    const text = plain[0]?.text ?? ''
     expect(text).toContain('No knowledge entries matched')
     expect(text).toContain('domain_prefix="core"') // O2 过滤条件回显
-    expect(text).toContain('keywords=["nosuchterm"]') // O1 查询词回显
-    expect(text).toContain('text="zorblatflax"')
+    expect(text).toContain('text="nosuchterm"') // O1 词面回显（text 键——keywords 退役）
     expect(text).toContain('zero hits') // 未命中明示
+    expect(text).toContain('no fallback') // 零兜底声明
+    // hint 在场形态（execute 零命中径产物——search.ts zeroHitHint 同文）：hint 行置于查询回显前
+    const hinted = tool.output.render(
+      { text: 'nosuchterm' },
+      { hint: 'zero hits. You may reword once and retry with retry=true.', hits: [] },
+    )
+    const hintedText = hinted[0]?.text ?? ''
+    expect(hintedText.indexOf('hint:')).toBeLessThan(hintedText.indexOf('Query:'))
     // O4 零兜底拒例：不存在建议替换词/自动改写类内容
     expect(text).not.toMatch(/suggest|did you mean|instead/i)
+    expect(hintedText).not.toMatch(/suggest|did you mean|instead/i)
   })
 
   // 锚缺位留痕：契约 CT-bm25-recall-05 Side-effect「diag 零命中埋点发射」为待实现锚，
@@ -277,13 +293,35 @@ describe('CT-bm25-recall-05 零命中诚实回执（BR-G5/BR-E5）', () => {
   it.skip('CT-bm25-recall-05 Side-effect / BR-E6：diag 零命中埋点逐发（锚缺位——上报 fix/disc 后由 test-run 复核）', () => {})
 })
 
+// ── CT-stage4-search-schema 检索面键集与词面参数（stage④ §3 / J1 scope-source.md §1 S4） ──
+
+describe('CT-stage4-search-schema 键集闭集与参数收窄（stage4 §3 / J1-S4）', () => {
+  it('O1 tool parameters 键集 = domain_prefix/text/limit/retry（keywords 退役——键缺席断言 + J1-S4 零 scope 参数）；O2 parseSearchArgs 收窄透传与拒例', async () => {
+    const w = world('ct-schema')
+    await w.service.rebuildIndex(w.projectId)
+    const tool = createSearchTool({
+      knowledge: w.service as never,
+      resolveProjectId: createProjectResolver([{ wsPath: w.ws, projectId: w.projectId }]),
+    })
+    // O1 键集闭集（J1-S4 INV-1：检索面零按库收窄参数——scope 键缺席 + keywords 键退役）
+    expect(Object.keys(tool.parameters.properties ?? {}).sort()).toEqual(['domain_prefix', 'limit', 'retry', 'text'])
+    expect((tool.parameters.properties as Record<string, unknown>).keywords).toBeUndefined()
+    expect((tool.parameters.properties as Record<string, unknown>).scope).toBeUndefined()
+    // O2 参数防御收窄：text/limit/retry 透传；keywords 键被忽略（退役不透传）；拒例可判定
+    expect(parseSearchArgs({ text: 'krecall', limit: 5, retry: true })).toEqual({ text: 'krecall', limit: 5, retry: true })
+    expect(parseSearchArgs({ keywords: ['krecall'] })).toEqual({})
+    expect(() => parseSearchArgs({ limit: 0 })).toThrow(/limit/)
+    expect(() => parseSearchArgs({ text: 1 })).toThrow(/text/)
+  })
+})
+
 // ── CT-bm25-recall-06 准入语义跨内核不变（BR-E3/E4） ──
 
 describe('CT-bm25-recall-06 准入语义不变（BR-E3/E4）', () => {
   it('O1 条件排除：同 id 有 confirmed 版时 unconfirmed 权威投影不进召回（单命中非双投影）', async () => {
     const w = world('ct06')
     await w.service.rebuildIndex(w.projectId)
-    const hits = await w.service.search({ projectId: w.projectId, keywords: ['dualonly'], sessionId: 's' })
+    const hits = await w.service.search({ projectId: w.projectId, text: 'dualonly', sessionId: 's' })
     // 权威投影 = confirmed 版（单条目行）；unconfirmed 新版不作为第二命中出现
     expect(idsOf(hits)).toEqual(['br-dual'])
     expect(hits[0]?.effectiveRank).toBe(1.0)
@@ -305,10 +343,10 @@ describe('CT-bm25-recall-07 采集分列口径（BR-E6）', () => {
     // 日常口径：独立持久语义库（daily world）滚动 recall_logs
     const daily = world('ct07-daily')
     await daily.service.rebuildIndex(daily.projectId)
-    await daily.service.search({ projectId: daily.projectId, keywords: ['dailyzero1'], sessionId: 'daily' })
-    await daily.service.search({ projectId: daily.projectId, keywords: ['dailyzero2'], sessionId: 'daily' })
-    await daily.service.search({ projectId: daily.projectId, keywords: ['dailyzero3'], sessionId: 'daily' })
-    await daily.service.search({ projectId: daily.projectId, keywords: ['krecall'], sessionId: 'daily' })
+    await daily.service.search({ projectId: daily.projectId, text: 'dailyzero1', sessionId: 'daily' })
+    await daily.service.search({ projectId: daily.projectId, text: 'dailyzero2', sessionId: 'daily' })
+    await daily.service.search({ projectId: daily.projectId, text: 'dailyzero3', sessionId: 'daily' })
+    await daily.service.search({ projectId: daily.projectId, text: 'krecall', sessionId: 'daily' })
     const dailyStat = (w: World): { calls: number; zero: number } => {
       const calls = (w.db.prepare(`SELECT COUNT(DISTINCT call_id) AS n FROM knowledge_recall_logs`).get() as { n: number }).n
       const zero = (w.db.prepare(`SELECT COUNT(DISTINCT call_id) AS n FROM knowledge_recall_logs WHERE hit_count = 0`).get() as { n: number }).n

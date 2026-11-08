@@ -281,17 +281,17 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     expect
       .soft(await stats.getAttribute('data-covered'), '覆盖条数 = 去重命中条目（tab ↔ 单表一致）')
       .toBe(String(coveredQ1))
-    const k1Row = page.locator('[data-dswf-recall-row]', { hasText: '部署规范' }).first()
-    await expect(k1Row, 'K1 分组行在场（title 快照）').toBeVisible({ timeout: 30_000 })
-    const rowVerbs = await k1Row.locator('[data-dswf-recall-verb]').allTextContents()
-    expect(rowVerbs.join(' '), '分组行动词明细含 search（verb 投影）').toContain('search')
+    // 卡片改型选择器（1.8 轮卡重写——判例 7d310eb0 漂移防护）：行锚 data-dswf-recall-row
+    // 已退役 → 命中行 data-dswf-recall-hit + verb 分节锚 data-dswf-recall-call[data-verb]；
+    // 行热度徽（.dswf-heat-badge）随卡片收敛退役——热度一致性断言由 K1 卡片徽（下方）承载
+    const k1Hit = page.locator('[data-dswf-recall-hit]', { hasText: '部署规范' }).first()
+    await expect(k1Hit, 'K1 命中行在场（title 快照）').toBeVisible({ timeout: 30_000 })
+    const searchSection = page.locator('[data-dswf-recall-call][data-verb="search"]', { hasText: '部署规范' }).first()
+    await expect(searchSection, 'search 分节在场（verb 投影）').toBeVisible()
     // 热度 = knowledge_recall_logs 按条目 COUNT（search 命中与 read-abstract 各计一行）——
     // 期望值 = 分组命中按条目计数（与 heatByEntry 同一单表同源）
     const k1HeatQ1 = groupsQ1.flatMap((g) => g.hits).filter((h) => h.title === '部署规范').length
     expect(k1HeatQ1, 'K1 热度按条目计数（逐调用各计一次）').toBeGreaterThanOrEqual(2)
-    expect
-      .soft(await k1Row.locator('.dswf-heat-badge').textContent(), '行热度徽章 = 按条目计数（tab ↔ heat 一致）')
-      .toContain(String(k1HeatQ1))
 
     // ── Step 8：知识卡片热度闭环（K1 徽章 = 同一单表计数；与召回 tab 同源同数字） ──
     await page.locator(KNOWLEDGE_ENTRY).first().click()
@@ -342,12 +342,9 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     // 「前端/部署」零触 K2；r3 判例：Q1 链即触 K2）——触到即验 K2 行与徽章一致性，未触则留痕
     // （数据面在场性由分组非空 + 统计面一致性承载）。
     const k2Hits = groupsQ2.flatMap((g) => g.hits).filter((h) => h.title === '构建规范')
-    const k2Row = page.locator('[data-dswf-recall-row]', { hasText: '构建规范' }).first()
+    const k2Hit = page.locator('[data-dswf-recall-hit]', { hasText: '构建规范' }).first()
     if (k2Hits.length > 0) {
-      await expect(k2Row, 'K2 分组行出现（即时累积——链触 K2 时）').toBeVisible({ timeout: 30_000 })
-      expect
-        .soft(await k2Row.locator('.dswf-heat-badge').textContent(), 'K2 徽章 = 按条目计数（tab ↔ heat 一致）')
-        .toContain(String(k2Hits.length))
+      await expect(k2Hit, 'K2 命中行出现（即时累积——链触 K2 时）').toBeVisible({ timeout: 30_000 })
     } else {
       console.log('[fix-22 判例留痕] 链未触 K2（模型检索词自主）——K2 行断言按数据面口径豁免')
     }
@@ -362,16 +359,23 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     // K1 热度单调不减（fix-22）：Q2 链是否再触 K1 同为模型自主——只断热度不减，不断「保持」。
     expect(k1HeatTotal, 'K1 热度单调不减（逐调用只增不减）').toBeGreaterThanOrEqual(k1HeatQ1)
     expect
-      .soft(await k1Row.locator('.dswf-heat-badge').textContent(), 'K1 徽章 = 按条目计数（tab ↔ heat 一致）')
+      .soft(await k1Card.locator('[data-dswf-kn-card-heat]').textContent(), 'K1 卡片徽章 = 按条目计数（卡片 ↔ heat 一致）')
       .toContain(String(k1HeatTotal))
     void groupsQ1
     void groupsQ2
 
-    // ── Step 7c：召回条目跳转知识详情（正常路径） ──
-    await k1Row.click()
-    await expect(page.locator('[data-dswf-kn-drawer]'), '召回行跳转打开知识详情抽屉（UF-6）').toBeVisible({ timeout: 30_000 })
-    await page.keyboard.press('Escape')
-    await expect(page.locator('[data-dswf-kn-drawer]')).toHaveCount(0)
+    // ── Step 7c：召回 read 节 content_snap 快照 dialog（1.8 卡片改型——onOpenEntry 跨视图
+    // 桥缝退役：召回行不再跳转知识视图抽屉；快照就地 dialog 呈现）。read 调用归模型自主
+    //（fix-22 同口径）——条件承载，未触 read 时留痕（跳转面退役注记保留）。
+    const readSection = page.locator('[data-dswf-recall-read]').first()
+    if (await readSection.count() > 0) {
+      await readSection.click()
+      await expect(page.locator('[data-dswf-recall-snap]'), 'read 快照 dialog 就地呈现（INV-5 快照非实时读源）').toBeVisible({ timeout: 30_000 })
+      await page.keyboard.press('Escape')
+      await expect(page.locator('[data-dswf-recall-snap]')).toHaveCount(0)
+    } else {
+      console.log('[1.8 改型留痕] 本链未触 knowledge_read——read 快照 dialog 断言条件豁免（跨视图跳转面已退役）')
+    }
 
     // Invariant：只读纪律——知识目录全程零写入
     const knowledgeDirSnapshotAfter = readdirSync(knDir, { recursive: true }).sort().join('|')

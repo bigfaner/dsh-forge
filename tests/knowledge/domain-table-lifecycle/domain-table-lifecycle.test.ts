@@ -297,8 +297,8 @@ describe('CT-domain-table-lifecycle-05 注销级联（DL-E4）', () => {
 
 // ── CT-domain-table-lifecycle-06 DDL v6 迁移与存量初始化（DL-E6） ──
 
-describe('CT-domain-table-lifecycle-06 DDL v6 与存量初始化（DL-E6）', () => {
-  it('O1 升级补行（v6 后首跑存量全域 NULL 行）；O2 迁移幂等（重复打开不报错不重复迁移）；O3 可逆（downgrade 后表缺席 + 版本回退）', () => {
+describe('CT-domain-table-lifecycle-06 DDL v7 与存量初始化（DL-E6；stage④ 1.3 v7——registry.scope + recall_logs 七新列表重建）', () => {
+  it('O1 升级补行（v7 后首跑存量全域 NULL 行）；O2 迁移幂等（重复打开不报错不重复迁移）；O3 可逆（downgrade 后表缺席 + 版本回退）', () => {
     const w = makeWorld('ct06')
     const { db, ws } = w
     const versionOf = (d: Database.Database): number =>
@@ -306,15 +306,15 @@ describe('CT-domain-table-lifecycle-06 DDL v6 与存量初始化（DL-E6）', ()
     const hasTable = (d: Database.Database): boolean =>
       (d.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='knowledge_domains'`).get()?.n ?? 0) > 0
 
-    // 前置：v6 就位（空库直开即 v6）
-    expect(versionOf(db)).toBe(6)
+    // 前置：v7 就位（空库直开即 v7——stage④ 1.3 实锚）
+    expect(versionOf(db)).toBe(7)
     expect(hasTable(db)).toBe(true)
     // O1 存量初始化：v6 后首跑 rebuild，存量全域各得 NULL 行
     rebuildKnowledgeIndex(db)
     expect(domainRows(db, ws).map((r) => r.domain).sort()).toEqual(['dA', 'dB'])
     expect(domainRows(db, ws).every((r) => r.description === null)).toBe(true)
 
-    // O3 可逆：downgrade v5 → 表缺席 + 版本回退
+    // O3 可逆：downgrade v5 → 表缺席 + 版本回退（空库零业务行——downgradeGuard 放行）
     downgradeKnowledgeSchema(db, 5)
     expect(hasTable(db)).toBe(false)
     expect(versionOf(db)).toBe(5)
@@ -322,7 +322,7 @@ describe('CT-domain-table-lifecycle-06 DDL v6 与存量初始化（DL-E6）', ()
 
     // O2 迁移幂等：重开同库 = 前向补迁 v6，不报错、单表不重复
     const db2 = openKnowledgeDatabase(join(w.root, 'knowledge', 'knowledge.db'))
-    expect(versionOf(db2)).toBe(6)
+    expect(versionOf(db2)).toBe(7)
     expect(hasTable(db2)).toBe(true)
     db2.close()
   })
