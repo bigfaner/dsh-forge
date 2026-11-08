@@ -21,12 +21,12 @@ export class InvalidKnowledgeDirError extends Error {
   }
 }
 
-/** entryId 未命中（索引重建后 ID 漂移；readAbstract 查无此行） */
+/** entryId 未命中（索引重建后 ID 漂移；readAbstract/read 查无此行——标识可为 slug 或 rowid） */
 export class EntryNotFoundError extends Error {
   readonly code = 'ERR_ENTRY_NOT_FOUND' as const
   readonly data: KnowledgeErrorData
 
-  constructor(data: KnowledgeErrorData & { entryId?: number }, cause?: unknown) {
+  constructor(data: KnowledgeErrorData & { entryId?: number | string }, cause?: unknown) {
     super(`知识条目未命中：projectId=${String(data.projectId ?? '')} entryId=${String(data.entryId ?? '')}`, cause === undefined ? undefined : { cause })
     this.name = 'EntryNotFoundError'
     this.data = data

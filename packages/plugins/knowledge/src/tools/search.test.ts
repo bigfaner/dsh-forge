@@ -152,18 +152,19 @@ describe('execute：同义词并集 → rerank 精选（agentic 编排）', () =
 })
 
 describe('output.render（hint 行在前 + 摘要先行命中行）', () => {
-  it('hint 行在前（hint: 前缀），命中行含域/标题/id/得分/摘要', () => {
+  it('hint 行在前（hint: 前缀），命中行含域/标题/slug id/得分/摘要（slug 恒在场——无 #N 伪装形态）', () => {
     const { service } = stubService()
     const tool = createSearchTool(deps(service))
     const outcome = {
       hint: 'domain "后端" was dropped after zero hits; retried across all domains — 1 hit(s) found.',
-      hits: [hit(), hit({ entryId: 8, frontmatterId: null, title: '网关', domainPath: '后端/api', score: 0.5, effectiveRank: 0.6 })],
+      hits: [hit(), hit({ entryId: 8, frontmatterId: 'kb-002', title: '网关', domainPath: '后端/api', score: 0.5, effectiveRank: 0.6 })],
     }
     const blocks = tool.output.render({}, outcome)
     const text = blocks[0]?.text ?? ''
     expect(text.indexOf('hint: domain')).toBeLessThan(text.indexOf('[后端] 安全编码规范'))
     expect(text).toContain('[后端] 安全编码规范 (kb-001, score 0.92, rank 1.0) — 输入校验基线')
-    expect(text).toContain('[后端/api] 网关 (#8, score 0.50, rank 0.6)')
+    expect(text).toContain('[后端/api] 网关 (kb-002, score 0.50, rank 0.6)')
+    expect(text).not.toContain('#')
   })
 
   it('零命中且无 hint → 诚实空回执（回显 + zero hits + 零兜底）；有 hint → 回显跟在 hint 后', () => {

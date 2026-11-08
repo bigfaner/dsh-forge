@@ -57,10 +57,9 @@ export function parseSearchArgs(args: unknown): SearchToolArgs {
   return out
 }
 
-/** 单命中行（摘要先行：标题/域/摘要/得分/rank/id——knowledge_read 的钥匙） */
+/** 单命中行（摘要先行：标题/域/摘要/得分/rank——id 恒为 slug（frontmatterId），knowledge_read 的钥匙） */
 function renderHit(hit: SearchHit): string {
-  const id = hit.frontmatterId ?? `#${hit.entryId}`
-  return `- [${hit.domainPath}] ${hit.title} (${id}, score ${hit.score.toFixed(2)}, rank ${hit.effectiveRank.toFixed(1)}) — ${hit.summary}`
+  return `- [${hit.domainPath}] ${hit.title} (${hit.frontmatterId}, score ${hit.score.toFixed(2)}, rank ${hit.effectiveRank.toFixed(1)}) — ${hit.summary}`
 }
 
 /** 查询回显行（诚实回执——回显查询词与过滤条件，零兜底：不注入建议） */
@@ -105,7 +104,8 @@ async function searchAttempt(
   return batches.flat()
 }
 
-/** 并集去重（同条目取最高分）→ score 降序 rerank → 截前 limit 条 */
+/** 并集去重（同条目取最高分）→ score 降序 rerank → 截前 limit 条。
+ * frontmatterId 恒在场（rebuild 拒收无 id 文件——索引供数保证），全工具 slug 身份键。 */
 function unionRerank(all: readonly SearchHit[], limit: number): SearchHit[] {
   const best = new Map<number, SearchHit>()
   for (const h of all) {
@@ -170,8 +170,8 @@ export function createSearchTool(deps: KnowledgeToolDeps): KnowledgeToolDefiniti
               type: 'object',
               additionalProperties: false,
               properties: {
-                entryId: { type: 'integer', description: 'index-stable entry id (knowledge_read key)' },
-                frontmatterId: { oneOf: [{ type: 'string' }, { type: 'null' }], description: 'stable frontmatter id when present' },
+                entryId: { type: 'integer', description: 'index rowid (diagnostic only — not the knowledge_read key)' },
+                frontmatterId: { type: 'string', description: 'stable slug id — the unified identity key across knowledge tools (knowledge_read / knowledge_read_abstract)' },
                 title: { type: 'string' },
                 summary: { type: 'string' },
                 domainPath: { type: 'string' },

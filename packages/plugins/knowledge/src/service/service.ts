@@ -275,6 +275,9 @@ function listDomainDirs(knowledgeDir: string, maxDepth: number): string[] {
   const selectEntryByRowid = db.prepare<[number], BrowseEntryRow>(
     `SELECT ${ENTRY_COLUMNS} FROM knowledge_entries e JOIN knowledge_fts f ON f.id = e.id WHERE e.rowid = ?`,
   )
+  const selectEntryBySlug = db.prepare<[string], EntryRow>(
+    `SELECT ${ENTRY_COLUMNS} FROM knowledge_entries e JOIN knowledge_fts f ON f.id = e.id WHERE e.id = ?`,
+  )
   /** 项目条目数（域归属 id 集大小对账 entries 行——版本在而 entries 缺 = 0 面子） */
   const countProjectEntries = (knowledgeDir: string): number => projectEntryIds(knowledgeDir).size
 
@@ -679,13 +682,14 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       const startMs = Date.now()
       requireProject(q.projectId, 'readAbstract')
 
-      const row = selectEntryByRowid.get(q.entryId)
+      // slug 键（与 knowledge_read 同键——全工具身份面统一）
+      const row = selectEntryBySlug.get(q.id)
       if (row === undefined) {
-        throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.entryId })
+        throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.id })
       }
       // 准入（CT-WG-14 O2 同口径）：unconfirmed 拒摘要且不露存在性（EntryNotFound 语义面）
       if (row.status === 'unconfirmed') {
-        throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.entryId })
+        throw new EntryNotFoundError({ projectId: q.projectId, entryId: q.id })
       }
 
       writeRecallLog({
@@ -694,12 +698,13 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
         sessionId: q.sessionId ?? '',
         verb: 'read-abstract',
         hits: [{ entryId: row.rid, frontmatterId: row.id, titleSnap: row.title, domainSnap: row.domain_path }],
-        query: { entryId: q.entryId },
+        query: { entryId: row.rid },
         hitCount: 1,
         durationMs: Date.now() - startMs,
       })
       return {
         entryId: row.rid,
+        frontmatterId: row.id,
         title: row.title,
         summary: row.summary,
         keywords: splitKeywords(row.keywords),

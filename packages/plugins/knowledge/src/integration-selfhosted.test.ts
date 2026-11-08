@@ -116,7 +116,7 @@ describe('tool 调用链穿透插件自有服务并落 recall_logs（集成自�
     const target = hits.find((h) => h.frontmatterId === 'kb-api')
     if (target === undefined) throw new Error('语料命中缺失')
 
-    const abstract = (await readAbstract.execute({ entry_id: target.entryId }, exec)) as EntryAbstract
+    const abstract = (await readAbstract.execute({ id: target.frontmatterId }, exec)) as EntryAbstract
     expect(abstract.title).toBe('API 规范')
     expect(abstract).not.toHaveProperty('body') // 场景⑤：不含正文
 

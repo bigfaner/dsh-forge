@@ -42,11 +42,12 @@ export interface SearchQuery {
   limit?: number
 }
 
-/** search 返回体（摘要先行；frontmatterId 可空——P1 存而不强求） */
+/** search 返回体（摘要先行；frontmatterId 恒在场——rebuild 拒收无 id 文件，索引供数保证非空） */
 export interface SearchHit {
-  /** 索引内稳定（INTEGER PK） */
+  /** 索引内稳定（INTEGER PK，rowid——诊断用，非读取键） */
   entryId: number
-  frontmatterId: string | null
+  /** 正本 slug id——全工具统一身份键（knowledge_read/read_abstract 的钥匙） */
+  frontmatterId: string
   title: string
   summary: string
   domainPath: string
@@ -55,17 +56,19 @@ export interface SearchHit {
   effectiveRank: number
 }
 
-/** readAbstract 入参 */
+/** readAbstract 入参（slug 键——与 knowledge_read 同键，全工具身份面统一） */
 export interface ReadAbstractQuery {
   projectId: string
   /** dsh 会话 id（同 SearchQuery.sessionId——recall_logs tab 分组键） */
   sessionId?: string
-  entryId: number
+  /** 正本 slug id（search 命中行的 frontmatterId） */
+  id: string
 }
 
 /** readAbstract 返回体（不含正文） */
 export interface EntryAbstract {
   entryId: number
+  frontmatterId: string
   title: string
   summary: string
   keywords: string[]

@@ -1,10 +1,11 @@
 // 服务面单测（stage② 1.4 v4 形收口）：自持库供数读面 + 写门三法（write/read/confirm）
 // ——幂等/静默重建联动/零命中哨兵行/热度口径/EntryNotFound 六码/两级解析 fail-loud/
 // 准入（unconfirmed 拒且不露存在性）/CAS。
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import matter from 'gray-matter'
 import type { DiagEventPayload } from '@dsh-forge/contracts'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../storage/index.js'
 import { createKnowledgeService } from './service.js'
@@ -66,20 +67,21 @@ describe('读面行为等价（v4 实体表）', () => {
     expect(groups.find((g) => g.hitCount === 0)?.hits).toEqual([])
   })
 
-  it('readAbstract：confirmed 可读；unconfirmed 拒且不露存在性（EntryNotFound 语义面）', async () => {
+  it('readAbstract：slug 键（与 read 同键）confirmed 可读；unconfirmed 拒且不露存在性（EntryNotFound 语义面）', async () => {
     const confirmed = (await service.search({ projectId, sessionId: 's1' })).find((h) => h.title === 'API')!
-    const abs = await service.readAbstract({ projectId, entryId: confirmed.entryId, sessionId: 's1' })
+    const abs = await service.readAbstract({ projectId, id: confirmed.frontmatterId, sessionId: 's1' })
     expect(abs.title).toBe('API')
+    expect(abs.frontmatterId).toBe(confirmed.frontmatterId)
     expect(abs).not.toHaveProperty('body')
     const unconfirmed = (await service.search({ projectId, sessionId: 's1' })).find((h) => h.title === 'AUTH')!
-    await expect(service.readAbstract({ projectId, entryId: unconfirmed.entryId, sessionId: 's1' })).rejects.toBeInstanceOf(EntryNotFoundError)
-    await expect(service.readAbstract({ projectId, entryId: 999999, sessionId: 's1' })).rejects.toBeInstanceOf(EntryNotFoundError)
+    await expect(service.readAbstract({ projectId, id: unconfirmed.frontmatterId, sessionId: 's1' })).rejects.toBeInstanceOf(EntryNotFoundError)
+    await expect(service.readAbstract({ projectId, id: 'no-such-slug', sessionId: 's1' })).rejects.toBeInstanceOf(EntryNotFoundError)
   })
 
   it('heatByEntry：使用事件计数（search 命中 + read-abstract 各计一次；哨兵行不计）', async () => {
     const heat = await service.heatByEntry(projectId)
     const api = (await service.search({ projectId, keywords: ['api'], sessionId: 's2' })).find((h) => h.title === 'API')!
-    await service.readAbstract({ projectId, entryId: api.entryId, sessionId: 's2' })
+    await service.readAbstract({ projectId, id: api.frontmatterId, sessionId: 's2' })
     const heat2 = await service.heatByEntry(projectId)
     expect((heat2.get(api.entryId) ?? 0) - (heat.get(api.entryId) ?? 0)).toBeGreaterThanOrEqual(2)
   })
@@ -156,6 +158,27 @@ describe('写门三法（stage② §2.3/§2.4）', () => {
     expect(denied.outcome).toBe('denied')
     const unknown = await service.read({ projectId, id: 'no-such-id' })
     expect(unknown).toEqual(denied)
+  })
+
+  it('write：frontmatter 白名单闭集——关键字段（id 等）必写 + 零冗余字段（源头杜绝身份缺失/字段蔓延）', async () => {
+    const out = await service.write({
+      projectId,
+      sessionId: 's1',
+      title: 'FM Whitelist Pin',
+      summary: 'frontmatter 键集回归锚',
+      keywords: ['frontmatter'],
+      body: '正文',
+      necessity: { stable: true, nonTrivial: true, value: true },
+    })
+    if (out.outcome !== 'written') throw new Error(`unexpected outcome: ${out.outcome}`)
+    const fm = matter(readFileSync(out.filePath, 'utf8')).data as Record<string, unknown>
+    // 关键字段必写（身份键 id 恒在场——rebuild 拒收无 id 文件的源头保证）
+    for (const key of ['id', 'title', 'summary', 'keywords', 'status', 'version_ts', 'updated']) {
+      expect(fm[key], `missing key: ${key}`).toBeDefined()
+    }
+    // 白名单闭集：无额外/冗余字段（conventions 类 procedureDefault → procedure 条件键在场；
+    // type/supersedes/candidate_of/slug_hint 未触发即不写）
+    expect(Object.keys(fm).sort()).toEqual(['id', 'keywords', 'procedure', 'status', 'summary', 'title', 'updated', 'version_ts'])
   })
 
   it('write：三问不过 → not-written 零残留；缺字段/路径非法 → rejected 逐例埋点零残留', async () => {
