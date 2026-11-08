@@ -42,7 +42,7 @@ describe('renderKnowledgeStaticSection（固定文本——中文 + 归档规则
     expect(text).toContain('先读 hint 再看命中')
     expect(text).toContain('hint 明示不要再检索时立即停止')
     expect(text).toContain('第 3 步 精读')
-    expect(text).toContain('结合 score 与摘要选中条目')
+    expect(text).toContain('结合摘要与 score 挑选文档')
     expect(text).toContain('回答内容以正文为准')
     expect(text).not.toContain('hints')
     // 只指示 agent 要做什么——服务端/工具内部机制不进提示词（用户裁决 2026-11-11）
