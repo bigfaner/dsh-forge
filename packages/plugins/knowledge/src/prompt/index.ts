@@ -54,8 +54,10 @@ export function renderKnowledgeStaticSection(): string {
     '零命中时同样退回原始文件查找。',
     '',
     '检索方法（agentic search 三步，按序遵循）：',
-    '- 第 1 步 定域与拆词：先从 <knowledge-domains> 块确定最可能的域作 domain_prefix',
-    '  （不确定则省略走全域），再把问题拆解为同义词/近义词组作为检索 keywords。',
+    // 纪律 B 硬规则（roundtable2 M3）：优先传 domain_prefix，仅域不明才全域检索——
+    // 与 1.5 的 search schema 键集收敛（keywords 退役）同语义，不再教 agent 拆词产 keywords。
+    '- 第 1 步 定域：先从 <knowledge-domains> 块确定最匹配的域，优先传 domain_prefix',
+    '  （仅域不明确时才省略、走全域检索）。',
     '- 第 2 步 检索：调用 knowledge_search；先读 hint 再看命中——按 hint 反映的情况',
     '  决定后续动作；hint 明示不要再检索时立即停止。',
     '- 第 3 步 精读：结合摘要与 score 挑选文档，用 knowledge_read 读正文；回答内容以正文为准。',

@@ -42,10 +42,12 @@ describe('renderKnowledgeStaticSection（固定文本——中文 + 归档规则
     expect(text).toContain('零命中时同样退回原始文件查找')
   })
 
-  it('检索方法段齐备（agentic search 三步 SOP：定域拆词 / hint 反应 / 精读）', () => {
+  it('检索方法段齐备（agentic search 三步 SOP：domain_prefix 优先硬规则 / hint 反应 / 精读）', () => {
     expect(text).toContain('检索方法（agentic search 三步')
-    expect(text).toContain('第 1 步 定域与拆词')
-    expect(text).toContain('同义词/近义词组作为检索 keywords')
+    expect(text).toContain('第 1 步 定域')
+    // 纪律 B 硬规则：优先传 domain_prefix，仅域不明才全域检索
+    expect(text).toContain('优先传 domain_prefix')
+    expect(text).toContain('（仅域不明确时才省略、走全域检索）。')
     expect(text).toContain('第 2 步 检索')
     expect(text).toContain('先读 hint 再看命中')
     expect(text).toContain('hint 明示不要再检索时立即停止')
@@ -53,6 +55,10 @@ describe('renderKnowledgeStaticSection（固定文本——中文 + 归档规则
     expect(text).toContain('结合摘要与 score 挑选文档')
     expect(text).toContain('回答内容以正文为准')
     expect(text).not.toContain('hints')
+    // keywords 教学正文全量退役（stage④ 1.6——检索面不再教 agent 产 keywords）
+    expect(text).not.toContain('keywords')
+    expect(text).not.toContain('同义词/近义词')
+    expect(text).not.toContain('拆词')
     // 只指示 agent 要做什么——服务端/工具内部机制不进提示词（用户裁决 2026-11-11）
     expect(text).not.toContain('服务端')
     expect(text).not.toContain('rerank')
