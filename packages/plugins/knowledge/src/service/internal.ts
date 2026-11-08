@@ -185,11 +185,39 @@ export function buildSearchFtsMatch(q: { keywords?: readonly string[]; text?: st
   return parts.length === 0 ? undefined : parts.join(' AND ')
 }
 
-/** text 子串补充准入通道（大小写不敏感子串——title/summary 仅元数据列；CJK run 边界兜底） */
+/** text 子串补充准入通道词元化（CJK 感知）：ASCII 词元（≥2 字符，与 tokenizeSearchText
+ * 同口径）+ CJK 词元——run ≤2 字整体成词元、「部署」可子串命中「部署规范」；run ≥3 字
+ * 切重叠 bigram（连打自然语言 run 的子串可分性）；单字自成词元。去重保序。 */
+export function tokenizeSearchTerms(text: string): string[] {
+  const lowered = text.toLowerCase()
+  const terms: string[] = []
+  for (const m of lowered.matchAll(/[a-z0-9]+|[\u4e00-\u9fff]/g)) {
+    const seg = m[0]!
+    if (seg.codePointAt(0)! < 0x4e00) {
+      if (seg.length >= 2) terms.push(seg)
+      continue
+    }
+    if (seg.length <= 2) {
+      terms.push(seg)
+      continue
+    }
+    for (let i = 0; i + 1 < seg.length; i += 1) terms.push(seg.slice(i, i + 2))
+  }
+  return [...new Set(terms)]
+}
+
+/**
+ * text 子串补充准入通道（词元 AND——每词元在 title 或 summary 至少一处子串命中；
+ * 大小写不敏感；title/summary 仅元数据列）。CJK 单 token 语义与多词 query 双侧兜底：
+ * unicode61 将 CJK 连续 run 归单 token，FTS 词元对嵌于更长 run 的子词不命中——本通道
+ * 按 CJK 感知词元（短 run 整体 / 长 run bigram）逐词元子串判定（见 tokenizeSearchTerms）。
+ */
 export function textSubstringHit(title: string, summary: string, text: string): boolean {
-  const t = text.trim().toLowerCase()
-  if (t === '') return false
-  return title.toLowerCase().includes(t) || summary.toLowerCase().includes(t)
+  const terms = tokenizeSearchTerms(text)
+  if (terms.length === 0) return false
+  const t = title.toLowerCase()
+  const s = summary.toLowerCase()
+  return terms.every((term) => t.includes(term) || s.includes(term))
 }
 
 // ── knowledge-review-ui 1.4：statusFilter 服务端执行（零客户端过滤语义铁律维持） ──

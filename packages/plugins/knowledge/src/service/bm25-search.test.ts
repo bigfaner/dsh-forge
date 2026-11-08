@@ -36,6 +36,8 @@ beforeAll(() => {
   writeFileSync(join(knowledgeDir, 'misc', 'hot.md'), md('Hot Old Note', 'bm25-hot', ['bm25test'], 'legacy misc old words only filler filler filler padding padding unrelated legacy misc old words only filler filler filler padding padding unrelated', 'confirmed'), 'utf8')
   // CJK 子串通道行：summary 内「原子幂等」嵌于更长连续 run（unicode61 单 token，FTS 词元不命中）
   writeFileSync(join(knowledgeDir, 'gw', 'cjk.md'), md('装配守卫', 'bm25-cjk', ['guard'], '装配必须原子幂等性保证防复发', 'confirmed'), 'utf8')
+  // CJK 单 token 语义行：title「部署规范」为单个 unicode61 token——query「部署」FTS 词元不命中，须经 JS 词元通道准入
+  writeFileSync(join(knowledgeDir, 'gw', 'cjk2.md'), md('部署规范', 'bm25-cjk2', ['deploy'], '知识检索词面通道部署说明', 'confirmed'), 'utf8')
   // 背景填充行（不含 bm25test——FTS5 idf 对「词面命中过半文档」钳到 ε 使 bm25 平顶，须占少数）
   mkdirSync(join(knowledgeDir, 'filler'), { recursive: true })
   for (let i = 0; i < 16; i += 1) {
@@ -77,7 +79,7 @@ describe('归一与三因子纯函数（裁决 #10——不复用平顶 ftsRankO
 describe('search BM25 排序（断言锚位次行为，非分值字面）', () => {
   it('rebuild 后基线：词条命中集不缩水', async () => {
     const r = await service.rebuildIndex(projectId)
-    expect(r.indexed).toBe(21)
+    expect(r.indexed).toBe(22)
   })
 
   it('排序区分性：相关条目（高 bm25）居前，不相关条目（仅 keywords 命中）居后', async () => {
@@ -120,6 +122,26 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
     expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk')
   })
 
+  it('CJK 单 token 语义：「部署」命中 title「部署规范」（unicode61 单 token，FTS 词元不命中 → JS 词元通道）', async () => {
+    const hits = await service.search({ projectId, text: '部署', sessionId: 's' })
+    expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
+  })
+
+  it('CJK 多词 query：「部署 规范」空格分词 AND 命中「部署规范」行（整串子串兜底不覆盖的多词缺口）', async () => {
+    const hits = await service.search({ projectId, text: '部署 规范', sessionId: 's' })
+    expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
+  })
+
+  it('CJK 自然语言连打长 run query：「部署规范」（无空格 run）bigram 词元 AND 命中同行', async () => {
+    const hits = await service.search({ projectId, text: '部署规范', sessionId: 's' })
+    expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
+  })
+
+  it('CJK 词元 AND 语义：缺字 query 不误纳（「部署」命中、「部署执行审计」不命中「部署规范」行）', async () => {
+    const hits = await service.search({ projectId, text: '部署执行审计', sessionId: 's' })
+    expect(hits.map((h) => h.frontmatterId)).not.toContain('bm25-cjk2')
+  })
+
   it('域前缀过滤原样 + 零命中空回执（[]，无兜底注入）', async () => {
     const gw = await service.search({ projectId, domainPrefix: 'gw', text: 'bm25test', sessionId: 's' })
     expect(gw.map((h) => h.frontmatterId).sort()).toEqual(['bm25-a', 'bm25-c'])
@@ -127,7 +149,7 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
     expect(zero).toEqual([])
     // 无过滤全域查询：全条目中性分返回（不炸、不缩水）
     const all = await service.search({ projectId, sessionId: 's' })
-    expect(all).toHaveLength(21)
+    expect(all).toHaveLength(22)
   })
 
   it('判例 d24a4464 保持：解析每调用期求值（新注册目录次查询即见）；keywords 退役 pin——text-only 词面照常命中 keywords 列', async () => {

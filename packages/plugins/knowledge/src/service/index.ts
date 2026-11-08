@@ -56,6 +56,7 @@ export {
   rankEntries,
   rankFactorOf,
   textSubstringHit,
+  tokenizeSearchTerms,
   unionEntryIds,
   domainTreeIndexOf,
   validateDomainPath,
