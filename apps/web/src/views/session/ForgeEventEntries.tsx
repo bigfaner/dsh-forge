@@ -178,8 +178,12 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
   const rootRef = useRef<HTMLDivElement>(null)
   useEffect(() => forgeEventTailKeepEffect(rootRef.current), [])
   // 默认态 = 最新组展开；任务进度卡（progress 在场）打开会话即默认展开（用户裁决
-  // 2026-11-01——进度卡收起让用户错过任务轨，纯消息组维持前组收起）；用户切换后为本地微观态
-  const [open, setOpen] = useState(data.isLatest || (data.progress?.length ?? 0) > 0)
+  // 2026-11-01——进度卡收起让用户错过任务轨，纯消息组维持前组收起）；progress 后折入
+  // 同组（纯消息组起步→任务轨折入→结算）时自动态随组数据翻转保持展开（用户裁决——
+  // 结算 turn 卡汇总组内全部任务进度投影）；用户手动切换后手动值优先（微观态尊重用户）
+  const [manualOpen, setManualOpen] = useState<boolean | undefined>(undefined)
+  const autoOpen = data.isLatest || (data.progress?.length ?? 0) > 0
+  const open = manualOpen ?? autoOpen
   const rows = forgeProgressRowItems(data.progress ?? [])
   const loopRow = rows.find((row) => row.entry.taskKey === undefined)
   const taskRows = rows.filter((row) => row.entry.taskKey !== undefined)
@@ -211,7 +215,7 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
         title={title}
         open={open}
         expandable
-        onToggle={() => setOpen((v) => !v)}
+        onToggle={() => setManualOpen(!open)}
         expandOnRowClick
         rowClassName="dswf-event-entries-row"
         contentClassName="dswf-event-entries-content"
