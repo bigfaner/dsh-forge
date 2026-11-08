@@ -61,19 +61,19 @@ function makeFlywheelFixture(): string {
   mkdirSync(join(kn, '后端'), { recursive: true })
   writeFileSync(
     join(kn, '前端', 'deploy.md'),
-    '---\nid: deploy-spec\ntitle: 部署规范\nsummary: 部署前核对回滚预案与环境变量清单\nkeywords:\n  - 部署\n  - 上线\n---\n\n# 部署规范\n\n部署前核对回滚预案，按检查单逐项执行。\n',
+    '---\nid: deploy-spec\ntitle: 部署规范\nstatus: confirmed\nsummary: 部署前核对回滚预案与环境变量清单\nkeywords:\n  - 部署\n  - 上线\n---\n\n# 部署规范\n\n部署前核对回滚预案，按检查单逐项执行。\n',
     'utf8',
   )
   // K2 正文数量级超长（必超 token 预算极简值——4e 摘要先行场景）
   const longBody = Array.from({ length: 400 }, (_, i) => `构建流水线第 ${String(i + 1)} 步：依赖装配与制品归档的详细说明段落。`).join('\n\n')
   writeFileSync(
     join(kn, '前端', 'build.md'),
-    `---\nid: build-spec\ntitle: 构建规范\nsummary: 构建流水线约定与制品口径\nkeywords:\n  - 构建\n  - 流水线\n---\n\n# 构建规范\n\n${longBody}\n`,
+    `---\nid: build-spec\ntitle: 构建规范\nstatus: confirmed\nsummary: 构建流水线约定与制品口径\nkeywords:\n  - 构建\n  - 流水线\n---\n\n# 构建规范\n\n${longBody}\n`,
     'utf8',
   )
   writeFileSync(
     join(kn, '后端', 'rollback.md'),
-    '---\nid: rollback-manual\ntitle: 回滚手册\nsummary: 服务回滚步骤\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
+    '---\nid: rollback-manual\ntitle: 回滚手册\nstatus: confirmed\nsummary: 服务回滚步骤\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
     'utf8',
   )
   return root
@@ -86,7 +86,7 @@ function makeUnrelatedFixture(): string {
   mkdirSync(join(kn, '运维'), { recursive: true })
   writeFileSync(
     join(kn, '运维', 'runbook.md'),
-    '---\nid: ops-runbook\ntitle: 值班手册\nsummary: 值班响应流程\nkeywords:\n  - 值班\n  - 响应\n---\n\n# 值班手册\n\n按响应等级处置。\n',
+    '---\nid: ops-runbook\ntitle: 值班手册\nstatus: confirmed\nsummary: 值班响应流程\nkeywords:\n  - 值班\n  - 响应\n---\n\n# 值班手册\n\n按响应等级处置。\n',
     'utf8',
   )
   return root
@@ -145,23 +145,6 @@ async function awaitSessionChain(
   throw new Error(`观察窗内检索链未出现（重发后仍无）：session=${sessionId}`)
 }
 
-/** 轮询召回分组满足条件（agent 多步链完成时序——真实模型往返非瞬时） */
-async function pollSessionRecall(
-  page: Page,
-  q: { projectId: string; sessionId: string },
-  predicate: (groups: readonly RecallGroup[]) => boolean,
-  timeoutMs: number,
-): Promise<readonly RecallGroup[]> {
-  const deadline = Date.now() + timeoutMs
-  let last: readonly RecallGroup[] = []
-  for (;;) {
-    last = await forgeInvoke<RecallGroup[]>(page, 'forge:knowledge/sessionRecall', q)
-    if (predicate(last)) return last
-    if (Date.now() > deadline) throw new Error(`等待召回事件超时（${String(timeoutMs)}ms）：groups=${JSON.stringify(last)}`)
-    await new Promise((resolve) => setTimeout(resolve, 3_000))
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // 旅程冒烟（dogfood·Golden Path）：注册 → 会话 → Q1 召回链 → 回答 → 轨迹 →
 // 召回 tab（逐调用计组）→ 卡片热度（按条目计数）→ Q2 即时累积 → 跳转/失效标注
@@ -207,7 +190,7 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     const heatBaseline = await invokeHeat(page, projectId)
     expect([...heatBaseline.keys()], '使用事件基线 = 0（Setup 声明）').toHaveLength(0)
 
-    // ── Step 3/4：发送 Q1 → agent 自主多步检索链（search → read-abstract） ──
+    // ── Step 3/4：发送 Q1 → agent 自主多步检索链（search → read，提示词第 3 步 knowledge_read 口径） ──
     await sendQuestion(page, Q1)
     let sessionId = await waitForFixtureSession(dshHome, 'fw-demo', 120_000)
     const events = await awaitSessionChain(
@@ -218,22 +201,22 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
       Q1,
       (evs) =>
         evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_search') &&
-        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_read_abstract'),
+        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_read'),
       120_000,
     )
     const toolCalls = events.filter((e) => e.type === 'tool/call').map((e) => ({ name: e.data?.name ?? '', seq: e.seq ?? 0 }))
     const searchSeq = toolCalls.filter((c) => c.name === 'knowledge_search').map((c) => c.seq)
-    const readSeq = toolCalls.filter((c) => c.name === 'knowledge_read_abstract').map((c) => c.seq)
+    const readSeq = toolCalls.filter((c) => c.name === 'knowledge_read').map((c) => c.seq)
     expect(searchSeq.length, '检索链：knowledge_search 在场').toBeGreaterThan(0)
-    expect(readSeq.length, '检索链：knowledge_read_abstract 在场（摘要先行——SC10）').toBeGreaterThan(0)
-    expect(Math.min(...readSeq), '链次序：read-abstract 晚于 search（seq 升序）').toBeGreaterThan(Math.min(...searchSeq))
+    expect(readSeq.length, '检索链：knowledge_read 在场（精读第二跳——SC10）').toBeGreaterThan(0)
+    expect(Math.min(...readSeq), '链次序：read 晚于 search（seq 升序）').toBeGreaterThan(Math.min(...searchSeq))
     // Step 2 断言（能力面通道承载）：系统提示词含最简知识段（Story 4 AC1）
     const promptText = (events.find((e) => e.type === 'system/message')?.data?.message?.content ?? [])
       .map((block) => (block.type === 'text' ? block.text : ''))
       .join('\n')
     expect(promptText, '系统提示词在场（system/message 事件）').not.toBe('')
-    expect(promptText).toContain('## Project knowledge base')
-    expect(promptText, '知识段：召回流程指引在场（agentic search）').toContain('Retrieval flow (agentic search)')
+    expect(promptText).toContain('<knowledge-base>')
+    expect(promptText, '知识段：召回流程指引在场（agentic search）').toContain('检索方法（agentic search 三步')
 
     // ── Step 5：回答基于命中知识呈现 + 会话继续可用（Q2 追问在 8b 行使） ──
     const answerText = (await page.locator('[data-conversation-content]').first().textContent({ timeout: 30_000 })) ?? ''
@@ -251,47 +234,62 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
       .toBeGreaterThanOrEqual(2)
     const toolRowTexts = await page.locator(trajectoryRow('tool')).allTextContents()
     const searchRowIdx = toolRowTexts.findIndex((t) => t.includes('knowledge_search') || t.includes('search'))
-    const readRowIdx = toolRowTexts.findIndex((t) => t.includes('knowledge_read_abstract') || t.includes('read-abstract'))
+    const readRowIdx = toolRowTexts.findIndex((t) => t.includes('knowledge_read'))
     expect(searchRowIdx, '台账含 search 工具行').toBeGreaterThanOrEqual(0)
-    expect(readRowIdx, '台账含 read-abstract 工具行').toBeGreaterThanOrEqual(0)
-    expect(searchRowIdx, '台账时序：search 先于 read-abstract').toBeLessThan(readRowIdx)
+    expect(readRowIdx, '台账含 read 工具行').toBeGreaterThanOrEqual(0)
+    expect(searchRowIdx, '台账时序：search 先于 read').toBeLessThan(readRowIdx)
     // 切回对话 tab 不重置——回答仍在原位
     await page.locator(TAB_ITEM, { hasText: '对话' }).click()
     const transcriptKept = (await page.locator('[data-conversation-content]').first().textContent({ timeout: 10_000 })) ?? ''
     expect(transcriptKept, '切回对话 tab 回答仍在原位').toContain('部署')
 
     // ── Step 7：召回 tab（统计头 + K1 分组行——shipped 逐调用口径，期望值从 RPC 实测派生） ──
+    // poll 谓词早返回与 agent 收尾竞态——等持久化轨迹 turn/end（回合终结）再取终态分组。
     await page.locator(TAB_ITEM, { hasText: '知识召回' }).click()
-    const groupsQ1 = await pollSessionRecall(
-      page,
-      { projectId, sessionId },
-      (gs) => gs.some((g) => g.verb === 'search' && g.hitCount > 0 && g.hits.some((h) => h.title === '部署规范')),
-      120_000,
-    )
+    await expect
+      .poll(
+        async () => {
+          const log = sessionLogById(dshHome, sessionId)
+          if (log === undefined) return false
+          return decodeSessionFile(log).some((e) => e.type === 'turn/end')
+        },
+        { timeout: 180_000 },
+      )
+      .toBe(true)
+    const groupsQ1 = await forgeInvoke<RecallGroup[]>(page, 'forge:knowledge/sessionRecall', { projectId, sessionId })
+    expect(
+      groupsQ1.some((g) => g.verb === 'search' && g.hitCount > 0 && g.hits.some((h) => h.title === '部署规范')),
+      '检索链命中终态在场（Q1 search → 部署规范）',
+    ).toBe(true)
     const stats = page.locator('[data-dswf-recall-stats]')
     await expect(stats).toBeVisible({ timeout: 30_000 })
-    // shipped 口径（BIZ-knowledge-001）：次数 = 分组数（search + read-abstract 各一组）、
-    // 覆盖 = 去重命中条目——期望值从 sessionRecall 实测派生（agent 链组数可变，不硬编码）
+    // shipped 口径（BIZ-knowledge-001）：次数 = 分组数、覆盖 = 去重命中条目——期望值从
+    // sessionRecall 实测派生（agent 链组数可变，不硬编码）
     const callsQ1 = groupsQ1.length
     const coveredQ1 = new Set(groupsQ1.flatMap((g) => g.hits.map((h) => h.title))).size
-    expect(callsQ1, '检索链逐调用计组（search + read-abstract ≥ 2 组）').toBeGreaterThanOrEqual(2)
+    expect(callsQ1, '检索链逐调用计组（search + read ≥ 2 组）').toBeGreaterThanOrEqual(2)
     expect
       .soft(await stats.getAttribute('data-calls'), '召回次数 = sessionRecall 分组数（tab ↔ 单表一致）')
       .toBe(String(callsQ1))
     expect
       .soft(await stats.getAttribute('data-covered'), '覆盖条数 = 去重命中条目（tab ↔ 单表一致）')
       .toBe(String(coveredQ1))
-    // 卡片改型选择器（1.8 轮卡重写——判例 7d310eb0 漂移防护）：行锚 data-dswf-recall-row
-    // 已退役 → 命中行 data-dswf-recall-hit + verb 分节锚 data-dswf-recall-call[data-verb]；
-    // 行热度徽（.dswf-heat-badge）随卡片收敛退役——热度一致性断言由 K1 卡片徽（下方）承载
+    // 卡片改型选择器（1.8 轮卡重写——判例 7d310eb0 漂移防护）：命中行 data-dswf-recall-hit
+    // 在轮卡分节内——先展开全部轮卡（cardhead toggle，aria-expanded 断言），再取命中行
+    const cardHead = page.locator('[data-dswf-recall-card] .dswf-recall-cardhead').first()
+    await cardHead.click()
+    await expect(cardHead, '轮卡展开（命中行渲染前置）').toHaveAttribute('aria-expanded', 'true')
     const k1Hit = page.locator('[data-dswf-recall-hit]', { hasText: '部署规范' }).first()
     await expect(k1Hit, 'K1 命中行在场（title 快照）').toBeVisible({ timeout: 30_000 })
     const searchSection = page.locator('[data-dswf-recall-call][data-verb="search"]', { hasText: '部署规范' }).first()
     await expect(searchSection, 'search 分节在场（verb 投影）').toBeVisible()
-    // 热度 = knowledge_recall_logs 按条目 COUNT（search 命中与 read-abstract 各计一行）——
-    // 期望值 = 分组命中按条目计数（与 heatByEntry 同一单表同源）
-    const k1HeatQ1 = groupsQ1.flatMap((g) => g.hits).filter((h) => h.title === '部署规范').length
-    expect(k1HeatQ1, 'K1 热度按条目计数（逐调用各计一次）').toBeGreaterThanOrEqual(2)
+    // 热度终式（SC-5 pin）：仅 verb='read' 行计 1.0（search/browse 过程动词 = 0）——
+    // 期望值按 read 行计数（与 heatByEntry 同一单表同源）
+    const k1HeatQ1 = groupsQ1
+      .filter((g) => g.verb === 'read')
+      .flatMap((g) => g.hits)
+      .filter((h) => h.title === '部署规范').length
+    expect(k1HeatQ1, 'K1 热度按条目计数（read 行各计一次）').toBeGreaterThanOrEqual(1)
 
     // ── Step 8：知识卡片热度闭环（K1 徽章 = 同一单表计数；与召回 tab 同源同数字） ──
     await page.locator(KNOWLEDGE_ENTRY).first().click()
@@ -342,9 +340,20 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     // 「前端/部署」零触 K2；r3 判例：Q1 链即触 K2）——触到即验 K2 行与徽章一致性，未触则留痕
     // （数据面在场性由分组非空 + 统计面一致性承载）。
     const k2Hits = groupsQ2.flatMap((g) => g.hits).filter((h) => h.title === '构建规范')
-    const k2Hit = page.locator('[data-dswf-recall-hit]', { hasText: '构建规范' }).first()
+    // K2 命中行锚按 verb 分面（1.8 卡片改型）：search 行 = data-dswf-recall-hit /
+    // browse 行 = data-dswf-recall-browse-row / read 行 = data-dswf-recall-read（行内 title）
+    const k2Row = page
+      .locator('[data-dswf-recall-hit], [data-dswf-recall-browse-row], [data-dswf-recall-read]', { hasText: '构建规范' })
+      .first()
     if (k2Hits.length > 0) {
-      await expect(k2Hit, 'K2 命中行出现（即时累积——链触 K2 时）').toBeVisible({ timeout: 30_000 })
+      // Q2 命中行落在第 2 轮卡（keep-alive 不保展开态）——展开全部轮卡后再取行
+      const heads = page.locator('[data-dswf-recall-card] .dswf-recall-cardhead')
+      const headCount = await heads.count()
+      for (let i = 0; i < headCount; i++) {
+        const head = heads.nth(i)
+        if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+      }
+      await expect(k2Row, 'K2 命中行出现（即时累积——链触 K2 时）').toBeVisible({ timeout: 30_000 })
     } else {
       console.log('[fix-22 判例留痕] 链未触 K2（模型检索词自主）——K2 行断言按数据面口径豁免')
     }
@@ -355,11 +364,19 @@ test('@web-e2e @p1mvp flywheel·冒烟：注册→会话→检索链→回答→
     } else {
       console.log('[fix-22 判例留痕] Q2 链零新增召回分组（模型自主）——累积按单调不减承载')
     }
-    const k1HeatTotal = groupsQ2.flatMap((g) => g.hits).filter((h) => h.title === '部署规范').length
+    // K1 热度终式（SC-5 pin）：仅 verb='read' 行计数
+    const k1HeatTotal = groupsQ2
+      .filter((g) => g.verb === 'read')
+      .flatMap((g) => g.hits)
+      .filter((h) => h.title === '部署规范').length
     // K1 热度单调不减（fix-22）：Q2 链是否再触 K1 同为模型自主——只断热度不减，不断「保持」。
     expect(k1HeatTotal, 'K1 热度单调不减（逐调用只增不减）').toBeGreaterThanOrEqual(k1HeatQ1)
+    // 8b 前回知识视图（Step 8b 停留在会话视图召回 tab——卡片徽章复读需知识视图在场）
+    await page.locator(KNOWLEDGE_ENTRY).first().click()
+    const k1CardAfterQ2 = page.locator('.dswf-kn-card', { hasText: '部署规范' }).first()
+    await expect(k1CardAfterQ2, 'K1 卡片在场（8b 复读前置）').toBeVisible({ timeout: 30_000 })
     expect
-      .soft(await k1Card.locator('[data-dswf-kn-card-heat]').textContent(), 'K1 卡片徽章 = 按条目计数（卡片 ↔ heat 一致）')
+      .soft(await k1CardAfterQ2.locator('[data-dswf-kn-card-heat]').textContent(), 'K1 卡片徽章 = 按条目计数（卡片 ↔ heat 一致）')
       .toContain(String(k1HeatTotal))
     void groupsQ1
     void groupsQ2
@@ -450,7 +467,7 @@ test('@web-e2e @p1mvp flywheel·Step2b no-knowledge-dir-session：无知识段�
     expect(
       promptText,
       '未配置知识目录 → 知识段仍在场（能力性指引，随插件全局注入——fix-11 裁决 B 侧）',
-    ).toContain('## Project knowledge base')
+    ).toContain('<knowledge-base>')
     expect(launched.pageErrors, '会话正常可用（无页面错误）').toEqual([])
   } finally {
     if (launched !== undefined) await closeApp(launched.app)
@@ -504,7 +521,7 @@ test('@web-e2e @p1mvp flywheel·Step2c empty-knowledge-dir-session：空目录�
     // 口径注记（contract）：知识段注入口径已裁决（fix-11，B 侧）——知识段 = 能力性指引，
     // 随插件加载无条件注入（与 2b 同一裁决；两态可区分处 = 检索行为与召回事件，非段有无）。
     expect(promptText, '空知识目录 → 知识段仍在场（能力性指引，随插件全局注入——fix-11 裁决 B 侧）').toContain(
-      '## Project knowledge base',
+      '<knowledge-base>',
     )
     expect(launched.pageErrors).toEqual([])
   } finally {
