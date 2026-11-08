@@ -30,10 +30,18 @@ describe('renderKnowledgeStaticSection（固定文本——中文 + 归档规则
 
   it('XML 标签制 + 摘要先行 + 零命中诚实 + domain_prefix 指引 + 与 <knowledge-domains> 互指', () => {
     expect(text).toContain('<knowledge-base>')
-    expect(text).toContain('以摘要优先')
     expect(text).toContain('零命中即零命中')
     expect(text).toContain('作为 domain_prefix 传入')
     expect(text).toContain('<knowledge-domains> 块')
+  })
+
+  it('检索方法段齐备（search 严苛匹配口径 / domain_prefix 收窄 + browse 指认 / 摘要先行 + 零命中改写）', () => {
+    expect(text).toContain('检索方法')
+    expect(text).toContain('knowledge_search 摘要优先命中')
+    expect(text).toContain('精确 AND 标签')
+    expect(text).toContain('不用整句查询')
+    expect(text).toContain('先读摘要，必要时才读正文')
+    expect(text).toContain('断言「知识库无此内容」')
   })
 
   it('归档规则块五条齐备（最深既有子域 / 自释名 / 满额分裂 / 犹豫归父 / 补简介）', () => {
@@ -50,8 +58,8 @@ describe('renderKnowledgeStaticSection（固定文本——中文 + 归档规则
     expect(text).toContain('域目录全量查询用 knowledge_browse 工具')
   })
 
-  it('零工具说明（renderToolUsage 退役——工具加载由 dsh 机械承载；knowledge_browse 指认行除外）', () => {
-    for (const name of ['knowledge_search', 'knowledge_read_abstract', 'knowledge_read', 'knowledge_write', 'knowledge_supersede', 'knowledge_reinstate', 'entry_id']) {
+  it('写入面零工具说明（renderToolUsage 退役——工具加载由 dsh 机械承载；检索面 knowledge_search/read_abstract/read 与 knowledge_browse 为指针行除外）', () => {
+    for (const name of ['knowledge_write', 'knowledge_supersede', 'knowledge_reinstate', 'entry_id']) {
       expect(text).not.toContain(name)
     }
   })

@@ -192,8 +192,8 @@ describe('pin ⑥-4 forge:knowledge 两段形状（stage③ C2 重锚——提�
       const rendered = renderPrompt(assembly)
       expect(rendered).toContain('<knowledge-base>')
       expect(rendered).toContain('<knowledge-domains>')
-      // 零工具说明（renderToolUsage 退役——工具加载由 dsh 机械承载）
-      for (const toolName of ['knowledge_search', 'knowledge_read_abstract', 'knowledge_write']) {
+      // 写入面零工具说明（renderToolUsage 退役——检索面指针行 knowledge_search/read_abstract/read 除外）
+      for (const toolName of ['knowledge_write', 'knowledge_supersede', 'knowledge_reinstate']) {
         expect(rendered).not.toContain(toolName)
       }
       // 行格式契约：目录树 `路径(N 篇) — 简介` + 降级 <无简介>；契约事实（域层级上限）机械入文
