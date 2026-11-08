@@ -43,6 +43,9 @@ export function renderKnowledgeStaticSection(): string {
   const depth = String(FRONTMATTER_DOMAIN_MAX_DEPTH)
   return [
     '<knowledge-base>',
+    // 空行断 HTML block：轨迹面板系统提示词 tab 走 MarkdownText（CommonMark）——行首
+    // 独立开标签开启 HTML block 并吞行到空行为止，无空行则列表/换行全部糊团。
+    '',
     '本项目已注册知识库，收录项目的约定、决策、常见错误、事实与示例：先检索知识库，',
     '再退回原始文件查找。',
     '',
@@ -63,6 +66,7 @@ export function renderKnowledgeStaticSection(): string {
     '- 子域超过约 30 篇且出现明显子簇才分裂；禁止预建空架子；层级上限 ' + depth + ' 级。',
     '- 两个候选域间犹豫时归父域，靠关键词区分——缺口靠打磨判据，不靠加深层级。',
     '- 新建子域后立即用域描述工具补写简介。',
+    '',
     '</knowledge-base>',
   ].join('\n')
 }
@@ -125,7 +129,8 @@ export function renderKnowledgeDomainsSection(rows: readonly DomainIndexRow[]): 
   }
   if (skippedTops > 0) lines.push(`… 还有 ${skippedTops} 个域（用 domain_prefix 检索）`)
   lines.push('归档规则：见上文 knowledge-base 块。子域 domain_prefix = 父路径/名称。')
-  // 树体包 fenced code block：轨迹面板系统提示词 tab 走 MarkdownText 渲染（markdown 折叠
-  // 段内单换行），fence 保树形换行双面可见（模型侧块结构 + 人侧目录树形态）。
-  return ['<knowledge-domains>', '```text', ...lines, '```', '</knowledge-domains>'].join('\n')
+  // 树体包 fenced code block + 标签内侧空行：轨迹面板系统提示词 tab 走 MarkdownText
+  // （CommonMark）——行首独立开标签开启 HTML block 吞行到空行为止，无空行连 fence 都
+  // 被吞成一段；fence 内保树形换行双面可见（模型侧块结构 + 人侧目录树形态）。
+  return ['<knowledge-domains>', '', '```text', ...lines, '```', '', '</knowledge-domains>'].join('\n')
 }
