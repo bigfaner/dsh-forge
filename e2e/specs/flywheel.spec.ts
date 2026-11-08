@@ -213,6 +213,18 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     await expect(recallHit, '命中行：被召回知识条目在场（title 快照）').toBeVisible()
     const searchSection = page.locator('[data-dswf-recall-call][data-verb="search"]', { hasText: '部署规范' }).first()
     await expect(searchSection, 'search 分节在场（verb 投影）').toBeVisible()
+    // 双主题取证补齐（fix-2）：召回 tab 终态截图——路径/标记经 env 注入，缺省零副作用
+    const shotDir = process.env.DSH_FORGE_E2E_SHOT_DIR
+    if (shotDir !== undefined) {
+      mkdirSync(shotDir, { recursive: true })
+      // 证据补充路径（非致命）：本 Electron 装配下 page.screenshot 会挂起（trace/失败帧
+      // 承担双主题帧取证兜底）——截不到即留痕跳过，不阻断 6 步链判收
+      try {
+        await page.screenshot({ path: join(shotDir, `flywheel-recall-tab-${process.env.DSH_FORGE_E2E_SHOT_TAG ?? 'default'}.png`), animations: 'disabled', timeout: 20_000 })
+      } catch (cause) {
+        console.log(`[flywheel] 双主题截图挂起留痕（trace 帧兜底）：${String(cause).slice(0, 120)}`)
+      }
+    }
 
     // ── 步 6/6 卡片热度 +1（浏览面 HeatBadge ↔ heatByEntry ↔ 事件计数三方一致） ──
     await page.locator(KNOWLEDGE_ENTRY).first().click()

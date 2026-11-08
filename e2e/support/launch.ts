@@ -106,8 +106,12 @@ function sanitizedLaunchEnv(): Record<string, string> {
 export async function launchElectron(opts: RawLaunchOptions = {}): Promise<ElectronApplication> {
   const { _electron } = await import('@playwright/test')
   const installed = opts.executablePath !== undefined && opts.executablePath !== electronBinary
+  // 双主题取证（fix-2）：E2E_COLOR_SCHEME=dark|light → Playwright colorScheme（Electron
+  // nativeTheme 强制——dsh 主题面 prefers-color-scheme 跟随，client-ui-theme ui-theme service）
+  const colorScheme = process.env.E2E_COLOR_SCHEME
   return _electron.launch({
     executablePath: opts.executablePath ?? electronBinary,
+    ...(colorScheme === 'dark' || colorScheme === 'light' ? { colorScheme } : {}),
     ...(installed
       ? {}
       : {
