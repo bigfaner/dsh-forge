@@ -1,6 +1,6 @@
 // 4.2 MVP 门第一步：飞轮 6 步链端到端走查（dogfood 真实模型）——
 // 注册（两段式）→ 发起会话 → agent 召回（知识段指引）→ 事件落库 → 召回 tab 条目 → 卡片热度。
-// 断言源：任务 4.2 AC × Story 4（AC1 系统提示词知识段内容 / AC2 search→read-abstract
+// 断言源：任务 4.2 AC × Story 4（AC1 系统提示词知识段内容 / AC2 search→read
 // 多步链 SC10 / AC3 事件↔tab↔热度三方一致 = tech-design Key Test Scenarios ⑥）+
 // PRD Goals「6 步链 100% 不间断」；e2e 事件数据面 = SMOKE-LEDGER §5 缺口 2 的 dogfood 转正面。
 //
@@ -39,7 +39,8 @@ import { rmDirBestEffort, rmFileBestEffort } from '../support/cleanup.js'
 import { COMPOSER_INPUT, HERO_WORKSPACE_CHIP_NAME, KNOWLEDGE_ENTRY, WORKBENCH } from '../support/anchors.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 知识夹具：{root}/demo-proj/.knowledge/{前端,后端}（frontmatter 最小契约——沿 3.8 夹具口径）
+// 知识夹具：{root}/demo-proj/.knowledge/{前端,后端}（frontmatter 最小契约——沿 3.8 夹具口径；
+// id 必带——rebuild 拒收无 id 文件不入实体表，id 缺席 = 索引空 = 检索恒零命中）
 // ─────────────────────────────────────────────────────────────────────────────
 
 function makeKnowledgeFixture(): string {
@@ -49,12 +50,12 @@ function makeKnowledgeFixture(): string {
   mkdirSync(join(kn, '后端'), { recursive: true })
   writeFileSync(
     join(kn, '前端', 'deploy.md'),
-    '---\ntitle: 部署规范\nsummary: 项目部署流程与上线检查单\nkeywords:\n  - 部署\n  - 上线\n---\n\n# 部署规范\n\n部署前核对回滚预案和环境变量清单。\n',
+    '---\ntitle: 部署规范\nid: deploy\nstatus: confirmed\nsummary: 项目部署流程与上线检查单\nkeywords:\n  - 部署\n  - 上线\n---\n\n# 部署规范\n\n部署前核对回滚预案和环境变量清单。\n',
     'utf8',
   )
   writeFileSync(
     join(kn, '后端', 'rollback.md'),
-    '---\ntitle: 回滚手册\nsummary: 服务回滚步骤与注意事项\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
+    '---\ntitle: 回滚手册\nid: rollback\nstatus: confirmed\nsummary: 服务回滚步骤与注意事项\nkeywords:\n  - 回滚\n---\n\n# 回滚手册\n\n按版本逐级回滚。\n',
     'utf8',
   )
   return root
@@ -148,18 +149,18 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     // 行断言移步召回完成后）
     const sessionId = await waitForFixtureSession(dshHome, 'demo-proj', 120_000)
 
-    // ── 步 4/6 事件落库 + SC10 多步链（search → read-abstract，真实模型轨迹可查） ──
+    // ── 步 4/6 事件落库 + SC10 多步链（search → read，真实模型轨迹可查） ──
     const groups = await pollSessionRecall(page, projectId, sessionId, (gs) =>
-      gs.some((g) => g.verb === 'search' && g.hitCount > 0) && gs.some((g) => g.verb === 'read-abstract'),
+      gs.some((g) => g.verb === 'search' && g.hitCount > 0) && gs.some((g) => g.verb === 'read'),
     )
     const searchGroups = groups.filter((g) => g.verb === 'search' && g.hitCount > 0)
-    const readGroups = groups.filter((g) => g.verb === 'read-abstract')
+    const readGroups = groups.filter((g) => g.verb === 'read')
     expect(searchGroups.length, 'search 事件组在场（agent 自主发起检索）').toBeGreaterThan(0)
-    expect(readGroups.length, 'read-abstract 事件组在场（摘要先行多步链第二跳）').toBeGreaterThan(0)
-    // 多步链次序：read-abstract 不早于首个 search（agentic search 流程指引可循）
+    expect(readGroups.length, 'read 事件组在场（多步链第二跳——提示词第 3 步 knowledge_read 口径）').toBeGreaterThan(0)
+    // 多步链次序：read 不早于首个 search（agentic search 流程指引可循）
     const firstSearchAt = Math.min(...searchGroups.map((g) => Date.parse(g.createdAt)))
     const readAt = Math.min(...readGroups.map((g) => Date.parse(g.createdAt)))
-    expect(readAt, 'read-abstract 晚于 search（多步链次序）').toBeGreaterThanOrEqual(firstSearchAt)
+    expect(readAt, 'read 晚于 search（多步链次序）').toBeGreaterThanOrEqual(firstSearchAt)
     // 左栏会话行（官方口径：blank 期不显示，回合完成后入列——dsh 账本实时读）
     const sessionRow = page.locator(`[data-dswf-session="${sessionId}"]`).first()
     await expect(sessionRow, '会话行入列（非 blank——账本实时读）').toBeVisible({ timeout: 60_000 })
@@ -170,34 +171,44 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
       sessionId,
       (evs) =>
         evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_search') &&
-        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_read_abstract'),
+        evs.some((e) => e.type === 'tool/call' && e.data?.name === 'knowledge_read'),
       60_000,
     )
     const toolCalls = events.filter((e) => e.type === 'tool/call').map((e) => ({ name: e.data?.name ?? '', seq: e.seq ?? 0 }))
     const searchSeq = toolCalls.filter((c) => c.name === 'knowledge_search').map((c) => c.seq)
-    const readSeq = toolCalls.filter((c) => c.name === 'knowledge_read_abstract').map((c) => c.seq)
+    const readSeq = toolCalls.filter((c) => c.name === 'knowledge_read').map((c) => c.seq)
     expect(searchSeq.length, '轨迹可查：knowledge_search tool 调用在场').toBeGreaterThan(0)
-    expect(readSeq.length, '轨迹可查：knowledge_read_abstract tool 调用在场').toBeGreaterThan(0)
-    expect(Math.min(...readSeq), '轨迹次序：read-abstract 在 search 之后（seq 升序）').toBeGreaterThan(Math.min(...searchSeq))
+    expect(readSeq.length, '轨迹可查：knowledge_read tool 调用在场').toBeGreaterThan(0)
+    expect(Math.min(...readSeq), '轨迹次序：read 在 search 之后（seq 升序）').toBeGreaterThan(Math.min(...searchSeq))
 
     // AC1 内容断言：模型实收系统提示词含 forge:knowledge 段（知识库存在声明 + 流程指引 + 工具说明）
     const promptText = (events.find((e) => e.type === 'system/message')?.data?.message?.content ?? [])
       .map((block) => (block.type === 'text' ? block.text : ''))
       .join('\n')
     expect(promptText, '系统提示词在场（system/message 事件）').not.toBe('')
-    expect(promptText).toContain('## Project knowledge base')
-    expect(promptText, '知识段：agentic search 流程指引在场').toContain('Retrieval flow (agentic search)')
+    expect(promptText).toContain('<knowledge-base>')
+    expect(promptText, '知识段：agentic search 流程指引在场').toContain('检索方法（agentic search 三步')
     expect(promptText, '知识段：工具说明在场（search）').toContain('knowledge_search')
-    expect(promptText, '知识段：工具说明在场（read-abstract）').toContain('knowledge_read_abstract')
+    expect(promptText, '知识段：工具说明在场（read）').toContain('knowledge_read')
 
     // ── 步 5/6 召回 tab 条目（即时累积：tab 激活重拉——AC3 tab 面） ──
+    // poll 谓词早返回与 agent 收尾竞态（命中 + read 即返，回合收尾调用仍可能在途）——
+    // 等持久化轨迹出现 turn/end（回合终结）再取终态分组，统计/热度口径一律以终态为准。
+    await waitForSessionEvents(dshHome, sessionId, (evs) => evs.some((e) => e.type === 'turn/end'), 180_000)
+    const finalGroups: RecallGroups = await forgeInvoke<RecallGroup[]>(page, 'forge:knowledge/sessionRecall', {
+      projectId,
+      sessionId,
+    })
     await page.locator('[data-conversation-tabs] [role="tab"]', { hasText: '知识召回' }).click()
     const recallTab = page.locator('[data-dswf-pane="recall"] [data-dswf-recall-tab]')
     await expect(recallTab.first()).toBeVisible({ timeout: 30_000 })
     const statsCalls = Number(await page.locator('[data-dswf-recall-stats]').getAttribute('data-calls'))
-    expect(statsCalls, '统计头召回次数 = 事件组数（tab ↔ 事件表一致）').toBe(groups.length)
-    // 卡片改型选择器（1.8 轮卡重写——判例 7d310eb0 漂移防护）：行锚 data-dswf-recall-row
-    // 已退役 → 命中行 data-dswf-recall-hit + verb 分节锚 data-dswf-recall-call[data-verb]
+    expect(statsCalls, '统计头召回次数 = 事件组数（tab ↔ 事件表一致）').toBe(finalGroups.length)
+    // 卡片改型选择器（1.8 轮卡重写——判例 7d310eb0 漂移防护）：命中行 data-dswf-recall-hit
+    // 在轮卡分节内——先展开轮卡（cardhead toggle，aria-expanded 断言），再取命中行
+    const cardHead = page.locator('[data-dswf-recall-card] .dswf-recall-cardhead').first()
+    await cardHead.click()
+    await expect(cardHead, '轮卡展开（命中行渲染前置）').toHaveAttribute('aria-expanded', 'true')
     const recallHit = page.locator('[data-dswf-recall-hit]', { hasText: '部署规范' }).first()
     await expect(recallHit, '命中行：被召回知识条目在场（title 快照）').toBeVisible()
     const searchSection = page.locator('[data-dswf-recall-call][data-verb="search"]', { hasText: '部署规范' }).first()
@@ -214,20 +225,21 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
 
     // 三方一致断言（场景⑥端到端）：事件表（sessionRecall 行）↔ 热度（heatByEntry）↔ UI（tab 徽章 + 卡片徽章）
     const heatAfter = await invokeHeat(page, projectId)
-    const deployEntryId = groups
+    const deployEntryId = finalGroups
       .flatMap((g) => g.hits)
       .find((h) => h.title === '部署规范')?.entryId ?? null
     expect(deployEntryId, '部署规范条目 id 在场（事件快照）').not.toBeNull()
-    const expectedHeat = groups.reduce(
-      (sum, g) => sum + g.hits.filter((h) => h.entryId === deployEntryId).length,
-      0,
-    )
-    // 事件表行计数（search 命中 + read-abstract 各计一次；哨兵行不计）
+    // 热度终式（SC-5 pin，用户裁决 2026-11-20）：仅 verb='read' 行计 1.0（search/browse/
+    // read-abstract 过程动词 = 0；feedback -1 行剔除）——期望值按 read 行计数
+    const expectedHeat = finalGroups
+      .filter((g) => g.verb === 'read')
+      .reduce((sum, g) => sum + g.hits.filter((h) => h.entryId === deployEntryId).length, 0)
+    // 事件表行计数（read 行计 1——SC-5 热度终式口径；哨兵行不计）
     expect(heatAfter.get(deployEntryId as number), '热度 = 事件表按条目行计数（heat ↔ 事件一致）').toBe(expectedHeat)
     expect(expectedHeat, '热度增量 ≥ 1（基线 0 → 召回后正计）').toBeGreaterThanOrEqual(1)
     expect(cardHeatText, '卡片徽章 = 热度计数（UI ↔ heat 一致）').toContain(`${String(expectedHeat)}`)
     // 召回 tab 分组行徽章同源（同一次激活拉取的分组行 heat 快照）
-    const rowHeat = groups.flatMap((g) => g.hits).find((h) => h.title === '部署规范')?.heat
+    const rowHeat = finalGroups.flatMap((g) => g.hits).find((h) => h.title === '部署规范')?.heat
     expect(rowHeat, 'tab 行热度徽章 = 同源计数（tab ↔ heat 一致）').toBe(expectedHeat)
 
     expect(pageErrors, '无页面 JS 错误（pageerror 面——L824 元断言）').toEqual([])
