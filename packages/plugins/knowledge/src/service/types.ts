@@ -40,6 +40,12 @@ export interface SearchQuery {
   /** 检索词 */
   text?: string
   limit?: number
+  /** 调用锚（stage④ 1.5——tool 面传入；缺省 randomUUID。hint 回填按此定位同 call 行） */
+  callId?: string
+  /** 会话归因派生：最近 turn/start 的 turn 序（sessionContextOf 派生；失败键缺席 = NULL 落账） */
+  turnSeq?: number
+  /** 会话归因派生：本轮 queued message 原文（writeRecallLog 单点截断 2000 落 trigger_snap） */
+  triggerText?: string
 }
 
 /** search 返回体（摘要先行；frontmatterId 恒在场——rebuild 拒收无 id 文件，索引供数保证非空） */
@@ -63,6 +69,10 @@ export interface ReadAbstractQuery {
   sessionId?: string
   /** 正本 slug id（search 命中行的 frontmatterId） */
   id: string
+  /** 会话归因派生（同 SearchQuery.turnSeq——recall_logs turn_seq） */
+  turnSeq?: number
+  /** 会话归因派生（同 SearchQuery.triggerText——writeRecallLog 单点截断落 trigger_snap） */
+  triggerText?: string
 }
 
 /** readAbstract 返回体（不含正文） */
@@ -127,6 +137,11 @@ export interface KnowledgeService {
   updateEntry(q: KnowledgeUpdateEntryQuery): Promise<EntryActionResult>
   /** 新建域（树级）：mkdir + 域行 upsert（description NULL；≤3 层校验与 write 严契约同函数） */
   createDomain(q: KnowledgeCreateDomainQuery): Promise<KnowledgeCreateDomainOutcome>
+  // ── stage④ 1.5 召回反馈（recall_logs 行级落账——三值应用层校验入口 service/feedback.ts） ──
+  /** 召回反馈：行级 👍/👎/撤销 + 事件级批（同 call 全行批更不覆盖已👍行）；应用层三值校验 */
+  recallFeedback(q: RecallFeedbackRequest): Promise<RecallFeedbackOutcome>
+  /** search 出参 hint 回填（stage④ 1.5——写时点结果事实落同 call 行 query_json 快照键 hint，零新列） */
+  annotateSearchHint(q: { callId: string; hint: string | null }): void
   // ── knowledge-browse-tool 1.1：域目录浏览读法（只读导航动词——零 recall_logs 写入） ──
   /** 域目录浏览（knowledge_browse tool 供数）：browse 同底表聚合（aggregateDomainTree +
    *  现盘目录并集，计数口径与 web browse 通道一致）+ KNOWLEDGE_DOMAINS 简介按域全路径联查 */
@@ -139,6 +154,12 @@ export interface KnowledgeService {
 /** browseEntries 入参（域语义与 search.domainPrefix 同构——精确域或子树前缀） */
 export interface BrowseEntriesQuery {
   projectId: string
+  /** dsh 会话 id（stage④ 1.5——browse 召回行落账分组键；缺省空串） */
+  sessionId?: string
+  /** 会话归因派生（同 SearchQuery.turnSeq） */
+  turnSeq?: number
+  /** 会话归因派生（同 SearchQuery.triggerText） */
+  triggerText?: string
   /** 域路径（精确域或子树前缀，如 lessons 或 lessons/windows） */
   domain: string
   /** 分页偏移（默认 0） */
@@ -215,6 +236,11 @@ export interface NecessityAnswers {
 export interface KnowledgeWriteQuery {
   readonly projectId: string
   readonly sessionId?: string
+  /**
+   * 写入目标域（stage④ 1.5）：'project'（缺省——调用方项目库）/ 'global'（全局库——
+   * 经注册行 scope='global' 行 knowledgeDir 进 write 网关，签名零改）。
+   */
+  readonly scope?: 'project' | 'global'
   readonly title: string
   readonly summary: string
   readonly keywords: readonly string[]
@@ -298,6 +324,10 @@ export interface KnowledgeReadQuery {
   readonly projectId: string
   readonly sessionId?: string
   readonly id: string
+  /** 会话归因派生（同 SearchQuery.turnSeq——recall_logs turn_seq） */
+  readonly turnSeq?: number
+  /** 会话归因派生（同 SearchQuery.triggerText——writeRecallLog 单点截断落 trigger_snap） */
+  readonly triggerText?: string
 }
 
 /** read 回执联合：read（md 全文）/ denied（unconfirmed 拒正文且不露存在性） */
@@ -429,6 +459,30 @@ export interface KnowledgeCreateDomainQuery {
 export type KnowledgeCreateDomainOutcome =
   | { readonly outcome: 'success' }
   | { readonly outcome: 'failure'; readonly code: EntryActionFailureCode; readonly message: string }
+
+// ── stage④ 1.5 召回反馈（recall_logs 行级——契约正本 recall-feedback-loop/contracts/feedback-channel.md §1 S2/S3） ──
+
+/**
+ * 召回反馈请求（判别联合）：`feedback: 0` = toggle 撤销（置回未反馈态——feedback 列 0 +
+ * note/at 双 NULL）；事件级 👍 不存在（正反馈无批动作语义——仅 👎 批 / 批撤销）。
+ * 通道层只承担 IPC 载荷形状防线；越界/缺 note/unconfirmed 业务校验归本服务域。
+ */
+export type RecallFeedbackRequest =
+  | { readonly projectId: string; readonly action: 'row'; readonly rowId: number; readonly feedback: 1 | -1 | 0; readonly note?: string }
+  | { readonly projectId: string; readonly action: 'batch'; readonly callId: string; readonly feedback: -1 | 0; readonly note?: string }
+
+/** 逐行失败码（封闭联合——实现不得引入联合外成员） */
+export type RecallFeedbackFailureCode = 'not-found' | 'note-required' | 'unconfirmed'
+
+/** 逐行回执项（batch 展开为逐行；行级真相恒逐行回执） */
+export type RecallFeedbackResult =
+  | { readonly rowId: number; readonly outcome: 'success' }
+  | { readonly rowId: number; readonly outcome: 'failure'; readonly code: RecallFeedbackFailureCode; readonly message: string }
+
+/** 召回反馈回执联合（请求级拒收 = action 非法 / feedback 越界 / 载荷字段不符） */
+export type RecallFeedbackOutcome =
+  | { readonly results: readonly RecallFeedbackResult[] }
+  | { readonly outcome: 'rejected-request'; readonly code: 'invalid-request'; readonly message: string }
 
 /** 回流配置面（§2.4：阈值归插件 config，非代码常量）。
  *  分阈迁移提示（stage③ C1 跨内核校准）：两档阈值缺省已由旧词面核 1 校准为 0.25

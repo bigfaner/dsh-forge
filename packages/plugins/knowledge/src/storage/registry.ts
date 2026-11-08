@@ -91,7 +91,7 @@ export function createKnowledgeRegistry(db: Database.Database): KnowledgeRegistr
        updated_at = excluded.updated_at`,
   )
   const insertGlobalStmt = db.prepare(
-    `INSERT INTO knowledge_registry (ws_path, knowledge_dir, project_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO knowledge_registry (ws_path, knowledge_dir, project_id, scope, created_at, updated_at) VALUES (?, ?, ?, 'global', ?, ?)
      ON CONFLICT(ws_path) DO NOTHING`,
   )
 

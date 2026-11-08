@@ -65,6 +65,7 @@ import { createWriteGateway } from './write.js'
 import { createSupersedeGateway } from './supersede.js'
 import { createScanRegister } from './scan-register.js'
 import { createReviewGateway } from './review.js'
+import { createRecallFeedbackGateway } from './feedback.js'
 import type {
   BackflowConfig,
   BrowseEntryItem,
@@ -86,6 +87,8 @@ import type {
   KnowledgeWriteOutcome,
   KnowledgeWriteQuery,
   ReadAbstractQuery,
+  RecallFeedbackOutcome,
+  RecallFeedbackRequest,
   SearchHit,
   SearchQuery,
   SetDomainDescriptionQuery,
@@ -134,12 +137,12 @@ interface BrowseEntryRow {
   confirmed_version_id: string | null
 }
 
-/** recall_logs 单行插入参数（列序） */
+/** recall_logs 单行插入参数（列序——v7 八新列族：turn_seq/trigger_snap/score/content_snap） */
 type RecallLogParams = readonly [
   projectId: string,
   callId: string,
   sessionId: string,
-  verb: RecallVerb,
+  verb: RecallWriteVerb,
   entryId: number | null,
   frontmatterId: string | null,
   titleSnap: string | null,
@@ -148,7 +151,27 @@ type RecallLogParams = readonly [
   hitCount: number,
   durationMs: number,
   createdAt: string,
+  turnSeq: number | null,
+  triggerSnap: string | null,
+  score: number | null,
+  contentSnap: string | null,
 ]
+
+/**
+ * 召回写入动词集（写径四值——v7 ck_krl_verb 口径）。读面联合扩位随 tools/contracts 任务
+ * 收口（internal.ts RecallRow 注释），本文件仅写径局部扩型，不越任务改契约面。
+ */
+type RecallWriteVerb = RecallVerb | 'read' | 'browse'
+
+/** trigger_snap 单点截断上界（应用层——DB 无长度约束；超长尾部加截断标记，总长 ≤2000 含标记） */
+export const TRIGGER_SNAP_MAX_CHARS = 2000
+const TRIGGER_SNAP_MARKER = '…[trigger truncated]'
+
+/** trigger_snap 单点截断（writeRecallLog 内唯一施用点——调用方传派生原文） */
+export function truncateTriggerSnap(text: string): string {
+  if (text.length <= TRIGGER_SNAP_MAX_CHARS) return text
+  return text.slice(0, TRIGGER_SNAP_MAX_CHARS - TRIGGER_SNAP_MARKER.length) + TRIGGER_SNAP_MARKER
+}
 
 /** 调用参数快照（query_json 形状 = RecallQuerySnapshot；仅记在位的过滤维度） */
 function searchSnapshot(q: SearchQuery): RecallQuerySnapshot {
@@ -316,8 +339,8 @@ function listDomainDirs(knowledgeDir: string, maxDepth: number): string[] {
   const insertRecallLog = db.prepare(
     `INSERT INTO knowledge_recall_logs (
        project_id, call_id, session_id, verb, entry_id, frontmatter_id, title_snap, domain_snap,
-       query_json, hit_count, duration_ms, created_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       query_json, hit_count, duration_ms, created_at, turn_seq, trigger_snap, score, content_snap
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
   // project 过滤豁免声明（roundtable2 M2 防误改）：sessionRecall 行集恒按调用方 project_id
   // 收窄（会话 tab 归因面）——与热度全局聚合（KNOWLEDGE_HEAT_TERM 零 project 维度）语义
@@ -337,24 +360,41 @@ function listDomainDirs(knowledgeDir: string, maxDepth: number): string[] {
      ON CONFLICT(ws_path, domain) DO UPDATE SET description = excluded.description, updated_at = excluded.updated_at`,
   )
 
-  /** 一次调用的事务原子写入：N 命中 N 行；零命中 = 单哨兵行（entry_id NULL / hit_count 0 / 快照 NULL） */
+  /**
+   * 一次调用的事务原子写入：N 命中 N 行；零命中 = 单哨兵行（entry_id NULL / hit_count 0 /
+   * 快照 NULL）。stage④ 1.5 扩：turn_seq（会话归因派生）/ trigger_snap（单点截断 2000
+   * 含尾部标记）/ score（search 命中行检索分）/ content_snap（read 全文快照不截断）——
+   * 全列可空，派生失败/非命中行自然 NULL。
+   */
   function writeRecallLog(write: {
     projectId: string
     callId: string
     sessionId: string
-    verb: RecallVerb
-    hits: readonly { entryId: number | null; frontmatterId: string | null; titleSnap: string; domainSnap: string }[]
+    verb: RecallWriteVerb
+    hits: readonly {
+      entryId: number | null
+      frontmatterId: string | null
+      titleSnap: string
+      domainSnap: string
+      score?: number
+      contentSnap?: string
+    }[]
     query: RecallQuerySnapshot
     hitCount: number
     durationMs: number
+    turnSeq?: number
+    triggerText?: string
   }): void {
     const createdAt = new Date().toISOString()
     const queryJson = JSON.stringify(write.query)
+    const triggerSnap = write.triggerText !== undefined ? truncateTriggerSnap(write.triggerText) : null
+    const turnSeq = write.turnSeq ?? null
     withImmediateTransaction(db, () => {
       if (write.hits.length === 0) {
         const row: RecallLogParams = [
           write.projectId, write.callId, write.sessionId, write.verb,
           null, null, null, null, queryJson, 0, write.durationMs, createdAt,
+          turnSeq, triggerSnap, null, null,
         ]
         insertRecallLog.run(...row)
         return
@@ -364,6 +404,7 @@ function listDomainDirs(knowledgeDir: string, maxDepth: number): string[] {
           write.projectId, write.callId, write.sessionId, write.verb,
           hit.entryId, hit.frontmatterId, hit.titleSnap, hit.domainSnap,
           queryJson, write.hitCount, write.durationMs, createdAt,
+          turnSeq, triggerSnap, hit.score ?? null, hit.contentSnap ?? null,
         ]
         insertRecallLog.run(...row)
       }
@@ -499,6 +540,14 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
   // ── 人工裁决写面（review.ts——confirmBatch/rejectBatch/moveEntry/updateEntry/createDomain；
   //    entryId→slug 映射在本门面（selectEntryByRowid 惯例），通道层/host 零解析） ──
   const review = createReviewGateway({ db, emit })
+
+  // ── stage④ 1.5 召回反馈面（feedback.ts——三值应用层校验 + 行级落账/撤销/事件批更） ──
+  const feedback = createRecallFeedbackGateway({ db, emit })
+
+  /** 全局注册行（write scope='global' 目标解析——v7 registry.scope 应用层二值） */
+  const selectGlobalRow = db.prepare<unknown[], { ws_path: string; knowledge_dir: string }>(
+    `SELECT ws_path, knowledge_dir FROM knowledge_registry WHERE scope = 'global' ORDER BY ws_path LIMIT 1`,
+  )
 
   /** entryId 批量 → slug id 解析（selectEntryByRowid 惯例；未命中不入 gateway 批） */
   function resolveEntrySlugs(entryIds: readonly number[]): { slugs: string[]; slugByEntry: Map<number, string> } {
@@ -674,15 +723,18 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
 
       writeRecallLog({
         projectId: q.projectId,
-        callId: randomUUID(),
+        callId: q.callId ?? randomUUID(),
         sessionId: q.sessionId ?? '',
         verb: 'search',
         hits: hits.map((h) => ({
           entryId: h.entryId, frontmatterId: h.frontmatterId, titleSnap: h.title, domainSnap: h.domainPath,
+          score: h.score,
         })),
         query: searchSnapshot(q),
         hitCount: hits.length,
         durationMs: Date.now() - startMs,
+        ...(q.turnSeq !== undefined ? { turnSeq: q.turnSeq } : {}),
+        ...(q.triggerText !== undefined ? { triggerText: q.triggerText } : {}),
       })
       return hits
     },
@@ -710,6 +762,8 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
         query: { entryId: row.rid },
         hitCount: 1,
         durationMs: Date.now() - startMs,
+        ...(q.turnSeq !== undefined ? { turnSeq: q.turnSeq } : {}),
+        ...(q.triggerText !== undefined ? { triggerText: q.triggerText } : {}),
       })
       return {
         entryId: row.rid,
@@ -814,7 +868,30 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       )
       const offset = Math.max(0, q.offset ?? 0)
       const limit = Math.min(Math.max(1, q.limit ?? 5), 50)
-      return sorted.slice(offset, offset + limit).map((r) => ({
+      const page = sorted.slice(offset, offset + limit)
+      // stage④ 1.5 召回写入点（verb browse）：页内条目锚（rowid/slug/title/domain）落账；
+      // domain/offset/limit/order 落 query_json 快照键（零新列）——browse 入账不计热
+      //（热度终式 read=1.0 其余 0），标记只作正样本
+      writeRecallLog({
+        projectId: q.projectId,
+        callId: randomUUID(),
+        sessionId: q.sessionId ?? '',
+        verb: 'browse',
+        hits: page.map((r) => ({
+          entryId: r.rid, frontmatterId: r.id, titleSnap: r.title, domainSnap: r.domain_path,
+        })),
+        query: {
+          domain: q.domain,
+          offset,
+          ...(q.limit !== undefined ? { limit } : {}),
+          ...(q.order !== undefined ? { order: q.order } : {}),
+        },
+        hitCount: page.length,
+        durationMs: 0,
+        ...(q.turnSeq !== undefined ? { turnSeq: q.turnSeq } : {}),
+        ...(q.triggerText !== undefined ? { triggerText: q.triggerText } : {}),
+      })
+      return page.map((r) => ({
         frontmatterId: r.id,
         title: r.title,
         summary: r.summary,
@@ -827,13 +904,44 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     registerProject: registerProjectRow,
 
     write: async (q: KnowledgeWriteQuery): Promise<KnowledgeWriteOutcome> => {
+      // stage④ 1.5 scope 参数：global 经全局注册行（scope='global'）knowledgeDir 进
+      // write 网关——网关签名零改；未注册 = fail-loud 裸错（global 径先于调用方项目解析）
+      if (q.scope === 'global') {
+        const global = selectGlobalRow.get()
+        if (global === undefined) {
+          throw new Error(`write(global)：全局知识库未注册（scope='global' 注册行缺席）`)
+        }
+        return gateway.write(q, global.knowledge_dir, global.ws_path)
+      }
       const { knowledgeDir, wsPath } = requireProject(q.projectId, 'write')
       return gateway.write(q, knowledgeDir, wsPath)
     },
 
     read: async (q: KnowledgeReadQuery): Promise<KnowledgeReadOutcome> => {
+      const startMs = Date.now()
       const { knowledgeDir } = requireProject(q.projectId, 'read')
-      return gateway.read(q, knowledgeDir)
+      // stage④ 1.5 召回写入点（verb read）：仅 read 成功径落账（denied 不进召回/热度）；
+      // content_snap 落 tool result 全文快照不截断（SC-8——展示 = 快照非实时读源文档）
+      const entry = selectEntryBySlug.get(q.id)
+      const outcome = gateway.read(q, knowledgeDir)
+      if (outcome.outcome === 'read' && entry !== undefined) {
+        writeRecallLog({
+          projectId: q.projectId,
+          callId: randomUUID(),
+          sessionId: q.sessionId ?? '',
+          verb: 'read',
+          hits: [{
+            entryId: entry.rid, frontmatterId: entry.id, titleSnap: entry.title, domainSnap: entry.domain_path,
+            contentSnap: outcome.body,
+          }],
+          query: { entryId: entry.rid },
+          hitCount: 1,
+          durationMs: Date.now() - startMs,
+          ...(q.turnSeq !== undefined ? { turnSeq: q.turnSeq } : {}),
+          ...(q.triggerText !== undefined ? { triggerText: q.triggerText } : {}),
+        })
+      }
+      return outcome
     },
 
     confirm: async (q: KnowledgeConfirmQuery): Promise<KnowledgeConfirmOutcome> => {
@@ -895,6 +1003,35 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     rejectBatch: async (q: KnowledgeRejectBatchQuery): Promise<EntryActionResult[]> => {
       requireProject(q.projectId, 'rejectBatch')
       return runEntryBatch(q.entryIds, KNOWLEDGE_REJECT_EVENT, (ids) => review.rejectBatch(ids))
+    },
+
+    // ── stage④ 1.5 召回反馈 + search hint 回填 ──
+
+    recallFeedback: async (q: RecallFeedbackRequest): Promise<RecallFeedbackOutcome> => feedback.apply(q),
+
+    annotateSearchHint(q: { callId: string; hint: string | null }): void {
+      // 写时点结果事实（hint 为 tool 编排在检索收口后的产物——同 call 行 query_json
+      // 快照键回填，零新列；有值才落键）
+      withImmediateTransaction(db, () => {
+        const rows = db
+          .prepare<[string], { id: number; query_json: string | null }>(
+            `SELECT id, query_json FROM knowledge_recall_logs WHERE call_id = ?`,
+          )
+          .all(q.callId)
+        const update = db.prepare<[string, number]>(`UPDATE knowledge_recall_logs SET query_json = ? WHERE id = ?`)
+        for (const row of rows) {
+          if (row.query_json === null) continue
+          let obj: Record<string, unknown>
+          try {
+            obj = JSON.parse(row.query_json) as Record<string, unknown>
+          } catch {
+            continue
+          }
+          if (q.hint === null) delete obj.hint
+          else obj.hint = q.hint
+          update.run(JSON.stringify(obj), row.id)
+        }
+      })
     },
 
     moveEntry: async (q: KnowledgeMoveEntryQuery): Promise<EntryActionResult> => {

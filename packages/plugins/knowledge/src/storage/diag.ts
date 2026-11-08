@@ -43,6 +43,12 @@ export const KNOWLEDGE_META_EDIT_EVENT = 'knowledge-meta-edit'
 /** 域简介写径事件域（stage③ §2.2 setDomainDescription——info=写入成功 / warn=校验拒收） */
 export const KNOWLEDGE_DOMAIN_UPDATE_EVENT = 'knowledge-domain-update'
 
+/** 会话归因派生事件域（stage④ 1.5——派生 fail-soft 双 NULL 时 warn，禁静默；bug 0520cbaf） */
+export const KNOWLEDGE_DERIVE_EVENT = 'knowledge-recall-derive'
+
+/** 召回反馈事件域（stage④ 1.5——全动作含撤销记账，note 原文不入 diag） */
+export const KNOWLEDGE_FEEDBACK_EVENT = 'knowledge-recall-feedback'
+
 /** 装配期注入的诊断发射面（host 侧 = ctx.emit(DIAG_EVENT, payload)；storage 域零 cordis 依赖） */
 export type DiagEmitter = (payload: DiagEventPayload) => void
 

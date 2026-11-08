@@ -319,6 +319,10 @@ export const KNOWLEDGE_SERVICE_METHODS = [
   'moveEntry',
   'updateEntry',
   'createDomain',
+  // stage④ 1.5：召回反馈三值应用层入口 + search hint 写时点回填（recall_logs 行级；
+  // web 径接线归 recallFeedback 通道挂接任务——白名单锚服务面全集）
+  'recallFeedback',
+  'annotateSearchHint',
 ] as const satisfies readonly (keyof BrowseKnowledgeService)[]
 
 /** 白名单覆盖完备性（= never：缺席的 BrowseKnowledgeService 方法在此编译期点名） */

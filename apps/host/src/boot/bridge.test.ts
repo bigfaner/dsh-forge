@@ -737,6 +737,8 @@ describe('createBridgeProxy（主侧代理）', () => {
       'heatByEntry',
       'sessionRecall',
       'browse',
+      'browseDomains',
+      'browseEntries',
       // 1.15 进表径：注册行写入（host 注册链 wiring 消费——renderer ipc 面不注册）
       'registerProject',
       // stage② 1.4 写门三法（服务方法非 web 通道——双门分工：agent 面 = 插件 tool）
@@ -758,6 +760,9 @@ describe('createBridgeProxy（主侧代理）', () => {
       'moveEntry',
       'updateEntry',
       'createDomain',
+      // stage④ 1.5：召回反馈三值应用层入口 + search hint 写时点回填
+      'recallFeedback',
+      'annotateSearchHint',
     ])
     expect([...TASKS_SERVICE_METHODS]).toEqual([
       'addTask',
@@ -960,7 +965,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     assertType<never>(undefined as ApprovalWhitelistCoverage) // fix-2 审批桥白名单覆盖完备性
     assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
-    expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(22) // 1.15 +registerProject；stage② 1.4 +write/read/confirm；1.6 +scan/register；1.10 distill 双法；stage③ C2 +setDomainDescription；review-ui 1.4 +裁决五法
+    expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(26) // …review-ui 1.4 +裁决五法；stage④ 1.5 +recallFeedback/annotateSearchHint（browse 双法补锚）
     expect(TASKS_SERVICE_METHODS).toHaveLength(16) // S3 +reconcileInterrupted…；1.16 +taskSettlementserrupted；1.1 +updateTask；78b9227e +recordSpawn；blocked-verdict-restore-primitive +unblockTask
     expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(6) // +listDerivedProposals（承接链自联结读面）

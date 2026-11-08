@@ -34,6 +34,21 @@ export interface ToolSessionHeaderFace {
   readonly cwd?: string
 }
 
+/** dsh 会话事件日志单事件子面（官方 SessionEvent 消费字段子集：type + data 两字段） */
+export interface SessionEventFace {
+  readonly type: string
+  readonly data: unknown
+}
+
+/**
+ * dsh 会话事件日志子面（官方 Session.snapshotEvents 结构兼容——返回 frozen 事件快照数组）。
+ * 归因派生唯一取数缝（roundtable2 B2 终裁；官方核销卷：
+ * proposals/knowledge-stage4-recall-scope/review/session-events-verification.md）。
+ */
+export interface ToolSessionEventsFace {
+  snapshotEvents(fromSeq?: number, toSeqExclusive?: number): readonly SessionEventFace[]
+}
+
 /** dsh 会话（官方 Session 子面：id = recall_logs 分组键） */
 export interface ToolSessionFace {
   readonly id: string
@@ -41,6 +56,11 @@ export interface ToolSessionFace {
   readonly header?: ToolSessionHeaderFace
   /** 兼容位：Session 顶层 cwd（结构面允许双读，真实现只有 header.cwd） */
   readonly cwd?: string
+  /**
+   * 会话事件日志子面（可选——roundtable2 B2 归因派生缝）：缺席 = 派生降级双 NULL
+   * + warn diag（web/RPC 径无 session 同走双 NULL，正常降级零 warn）。
+   */
+  readonly events?: ToolSessionEventsFace
 }
 
 /** dsh agent（官方 Agent 子面：id === session id；session 为其驱动的活会话） */

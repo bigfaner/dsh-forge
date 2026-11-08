@@ -121,3 +121,128 @@ describe('unboundSessionError（未绑定失败口径——agent 回落检索原
     expect(unboundSessionError({ sessionId: 's', cwd: 'C:\\ws\\x' }).message).toContain('not bound')
   })
 })
+
+// ── stage④ 1.5 会话归因派生（roundtable2 B2——核销卷 review/session-events-verification.md） ──
+import type { DiagEventPayload } from '@dsh-forge/contracts'
+import type { SessionEventFace, ToolSessionEventsFace } from './faces.js'
+import { deriveTurnContext } from './session.js'
+
+/** 事件面构造（shape = faces SessionEventFace） */
+function ev(type: string, data: unknown): SessionEventFace {
+  return { type, data }
+}
+
+function eventsFaceOf(events: readonly SessionEventFace[]): ToolSessionEventsFace {
+  return { snapshotEvents: () => events }
+}
+
+/** 一轮标准事件流：turn/start(7) → queued 人话 → inject 合成上下文 → step 事件 → assistant */
+const standardTurn: SessionEventFace[] = [
+  ev('user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: '上一轮的话' }] }),
+  ev('turn/start', { turn: 7 }),
+  ev('user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: '查一下 knowledge 的热读口径' }] }),
+  ev('user/message', { source: { kind: 'system-prompt', form: 'notice', summary: 'AGENTS.md 变更' }, content: [{ type: 'text', text: '注入上下文——不得作触发输入' }] }),
+  ev('step/start', { turn: 7, step: 1 }),
+  ev('assistant/message', { turn: 7, step: 1, message: {} }),
+]
+
+describe('deriveTurnContext（session 事件日志归因派生——纯函数）', () => {
+  it('最近 turn/start 的 turn 序 + 该轮首个 queued（kind=user）message 原文', () => {
+    expect(deriveTurnContext(standardTurn)).toEqual({ turnSeq: 7, triggerText: '查一下 knowledge 的热读口径' })
+  })
+
+  it('多轮递进：锚定最近一轮（现派生零缓存——无 stale 锚）', () => {
+    const events = [...standardTurn, ev('turn/end', { turn: 7, reason: 'completed' }), ev('turn/start', { turn: 8 }), ev('user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: '第二轮' }] })]
+    expect(deriveTurnContext(events)).toEqual({ turnSeq: 8, triggerText: '第二轮' })
+  })
+
+  it('inject/goal 等合成上下文（非 kind=user）不作触发输入；仅 turn 序可得时单键产出', () => {
+    const events = [ev('turn/start', { turn: 3 }), ev('user/message', { source: { kind: 'system-prompt' }, content: [{ type: 'text', text: '注入' }] })]
+    expect(deriveTurnContext(events)).toEqual({ turnSeq: 3 })
+  })
+
+  it('无 turn/start → 空产物（键缺席式——禁显式 undefined）', () => {
+    const out = deriveTurnContext([ev('user/message', { source: { kind: 'user' }, content: [] })])
+    expect(out).toEqual({})
+    expect('turnSeq' in out).toBe(false)
+    expect('triggerText' in out).toBe(false)
+  })
+
+  it('turn/start 后无 queued 人话 → 仅 turnSeq；空文本块不产触发输入', () => {
+    expect(deriveTurnContext([ev('turn/start', { turn: 1 })])).toEqual({ turnSeq: 1 })
+    expect(deriveTurnContext([ev('turn/start', { turn: 1 }), ev('user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: '' }] })])).toEqual({ turnSeq: 1 })
+  })
+})
+
+describe('sessionContextOf 归因派生集成（fail-soft 双 NULL + warn diag——bug 0520cbaf 禁静默）', () => {
+  const collect: DiagEventPayload[] = []
+  const emit = (p: DiagEventPayload): void => {
+    collect.push(p)
+  }
+
+  it('events 子面在场 → 派生 turnSeq/triggerText；零 diag（正常派生路径）', () => {
+    const before = collect.length
+    const exec = { agent: { session: { id: 's1', header: { cwd: '/ws' }, events: eventsFaceOf(standardTurn) } } }
+    const ctx = sessionContextOf(exec as ToolExecFace, emit)
+    expect(ctx.sessionId).toBe('s1')
+    expect(ctx.turnSeq).toBe(7)
+    expect(ctx.triggerText).toContain('热读口径')
+    expect(collect.length).toBe(before)
+  })
+
+  it('events 子面缺席（有 session）→ 双 NULL + warn diag（knowledge-recall-derive）', () => {
+    const before = collect.length
+    const exec = { agent: { session: { id: 's2', header: { cwd: '/ws' } } } }
+    const ctx = sessionContextOf(exec as ToolExecFace, emit)
+    expect(ctx.turnSeq).toBeUndefined()
+    expect(ctx.triggerText).toBeUndefined()
+    expect(collect.length).toBe(before + 1)
+    expect(collect[collect.length - 1]).toMatchObject({ level: 'warn', event: 'knowledge-recall-derive' })
+  })
+
+  it('派生抛异常 → 双 NULL + warn diag（召回主链不受阻——sessionContextOf 不 throw）', () => {
+    const before = collect.length
+    const exec = {
+      agent: {
+        session: {
+          id: 's3',
+          header: { cwd: '/ws' },
+          events: { snapshotEvents: () => { throw new Error('log unavailable') } },
+        },
+      },
+    }
+    const ctx = sessionContextOf(exec as ToolExecFace, emit)
+    expect(ctx.sessionId).toBe('s3')
+    expect(ctx.turnSeq).toBeUndefined()
+    expect(collect.length).toBe(before + 1)
+    expect(collect[collect.length - 1]).toMatchObject({ level: 'warn', event: 'knowledge-recall-derive' })
+  })
+
+  it('无 session（web/RPC 径）→ 恒双 NULL、零 warn（正常降级词义）', () => {
+    const before = collect.length
+    const ctx = sessionContextOf({} as ToolExecFace, emit)
+    expect(ctx).toEqual({ sessionId: '', cwd: undefined })
+    expect(collect.length).toBe(before)
+  })
+
+  it('每调用期现派生零缓存：snapshotEvents 每次调用被重新求值（不供 stale turn）', () => {
+    let calls = 0
+    const live: SessionEventFace[] = [...standardTurn]
+    const exec = {
+      agent: {
+        session: {
+          id: 's4',
+          header: { cwd: '/ws' },
+          events: { snapshotEvents: () => { calls += 1; return [...live] } },
+        },
+      },
+    }
+    sessionContextOf(exec as ToolExecFace)
+    expect(calls).toBe(1)
+    live.push(ev('turn/end', { turn: 7, reason: 'completed' }), ev('turn/start', { turn: 9 }), ev('user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: '新一轮' }] }))
+    const ctx = sessionContextOf(exec as ToolExecFace)
+    expect(calls).toBe(2)
+    expect(ctx.turnSeq).toBe(9)
+    expect(ctx.triggerText).toBe('新一轮')
+  })
+})

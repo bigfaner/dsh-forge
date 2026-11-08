@@ -12,14 +12,15 @@ function hit(over: Partial<SearchHit> = {}): SearchHit {
   return { entryId: 7, frontmatterId: 'kb-001', title: '安全编码规范', summary: '输入校验基线', domainPath: '后端', score: 0.92, effectiveRank: 1.0, ...over }
 }
 
-/** 服务桩：按调用序回放预设命中批（脚本队列，越界回空） */
+/** 服务桩：按调用序回放预设命中批（脚本队列，越界回空）；hint 回填面记账 */
 function stubService(script: SearchHit[][] = [[hit()]]) {
   const calls: SearchQuery[] = []
   const search = vi.fn(async (q: SearchQuery) => {
     calls.push(q)
     return script[Math.min(calls.length - 1, script.length - 1)] ?? []
   })
-  return { service: { search } as unknown as KnowledgeService, calls }
+  const annotateSearchHint = vi.fn()
+  return { service: { search, annotateSearchHint } as unknown as KnowledgeService, calls, annotateSearchHint }
 }
 
 /** 绑定夹具：cwd C:\ws\demo → p-1 */
@@ -74,7 +75,7 @@ describe('execute：全域检索 → rerank 精选（agentic 编排）', () => {
     const tool = createSearchTool(deps(service))
     const out = await tool.execute({ domain_prefix: '后端', text: '网关' }, exec)
     expect(calls).toHaveLength(1)
-    expect(calls[0]).toEqual({ projectId: 'p-1', sessionId: 'sess-1', text: '网关', domainPrefix: '后端', limit: 20 })
+    expect(calls[0]).toEqual({ projectId: 'p-1', sessionId: 'sess-1', callId: expect.any(String), text: '网关', domainPrefix: '后端', limit: 20 })
     expect(out.hits).toEqual([hit({ entryId: 1, score: 0.5 })])
     expect(out.hint).toBeNull()
   })

@@ -148,13 +148,24 @@ export interface SessionRecallQuery {
   sessionId: string
 }
 
-/** 调用参数快照（query_json 的形状） */
+/** 调用参数快照（query_json 的形状；可选键仅记在位过滤维度——JSON.parse 直转保持存量行兼容） */
 export interface RecallQuerySnapshot {
   domainPrefix?: string
+  /**
+   * legacy 可选键（stage④ 1.4 keywords 调用参数退役）：存量快照行仍携带该键——
+   * 保留为可选以防 JSON.parse 直转静默丢存量过滤事实；清理留 stage④b。
+   */
   keywords?: string[]
   text?: string
   /** read-abstract 动词的调用参数（search 行不带） */
   entryId?: number
+  /** search 出参 hint 写时点快照（stage④ 1.5——落 query_json 零新列；有值才落键） */
+  hint?: string
+  /** browse 动词调用参数快照（stage④ 1.5） */
+  domain?: string
+  offset?: number
+  limit?: number
+  order?: 'status' | 'created'
 }
 
 /** 召回分组行内的单条命中展开（快照字段抗索引重建） */

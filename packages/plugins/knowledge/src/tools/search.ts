@@ -6,6 +6,7 @@
 // { hint, hits }（hint = 单条检索说明字符串，承载编排裁决与零命中动作指引，无则 null；
 // 命中行已带 summary——检索主流程不经 read_abstract）。retry 参数维持现役：标记换词
 // 重试调用，仍零命中时 hint 明示不要再检索。
+import { randomUUID } from 'node:crypto'
 import type { SearchHit, SearchQuery } from '../service/types.js'
 import type { KnowledgeToolDefinition, ToolExecFace } from './faces.js'
 import type { KnowledgeToolDeps } from './index.js'
@@ -166,14 +167,22 @@ export function createSearchTool(deps: KnowledgeToolDeps): KnowledgeToolDefiniti
     },
     async execute(args: unknown, exec: ToolExecFace): Promise<SearchOutcome> {
       const parsed = parseSearchArgs(args)
-      const session = sessionContextOf(exec)
+      // 会话归因派生（roundtable2 B2——sessionContextOf 唯一派生点，每调用期现派生零缓存；
+      // fail-soft 双 NULL + warn diag）
+      const session = sessionContextOf(exec, deps.emit)
       if (session.cwd === undefined) throw unboundSessionError(session)
       const projectId = deps.resolveProjectId(session.cwd)
       if (projectId === undefined) throw unboundSessionError(session)
+      // 调用锚：域弃重试与首发共用同 call（hint 为该逻辑调用的写时点结果事实——
+      // annotateSearchHint 按此回填同 call 行 query_json 快照键）
+      const callId = randomUUID()
       const base: Omit<SearchQuery, 'domainPrefix'> = {
         projectId,
         sessionId: session.sessionId,
+        callId,
         ...(parsed.text !== undefined ? { text: parsed.text } : {}),
+        ...(session.turnSeq !== undefined ? { turnSeq: session.turnSeq } : {}),
+        ...(session.triggerText !== undefined ? { triggerText: session.triggerText } : {}),
       }
       const limit = parsed.limit ?? 3
       const isRetry = parsed.retry === true
@@ -194,7 +203,10 @@ export function createSearchTool(deps: KnowledgeToolDeps): KnowledgeToolDefiniti
         }
       }
       if (merged.length === 0) parts.push(zeroHitHint(isRetry))
-      return { hint: parts.length > 0 ? parts.join(' ') : null, hits: merged }
+      const hint = parts.length > 0 ? parts.join(' ') : null
+      // hint 落 query_json 快照键（零新列——写时点结果事实，回填同 call 行）
+      if (hint !== null) deps.knowledge.annotateSearchHint({ callId, hint })
+      return { hint, hits: merged }
     },
   }
 }

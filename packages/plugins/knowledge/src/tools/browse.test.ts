@@ -79,12 +79,12 @@ describe('execute：会话解析 → browseEntries 透传（slug 身份键在场
     const { service, calls } = stubService()
     const tool = createBrowseTool(deps(service))
     const out = await tool.execute({ domain: 'lessons/windows', offset: 5, limit: 10, order: 'created' }, exec)
-    expect(calls).toEqual([{ projectId: 'p-1', domain: 'lessons/windows', offset: 5, limit: 10, order: 'created' }])
+    expect(calls).toEqual([{ projectId: 'p-1', sessionId: 'sess-1', domain: 'lessons/windows', offset: 5, limit: 10, order: 'created' }])
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({ frontmatterId: 'kb-001', title: '安全编码规范', status: 'confirmed' })
     const { service: s2, calls: c2 } = stubService()
     await createBrowseTool(deps(s2)).execute({ domain: 'lessons' }, exec)
-    expect(c2).toEqual([{ projectId: 'p-1', domain: 'lessons' }])
+    expect(c2).toEqual([{ projectId: 'p-1', sessionId: 'sess-1', domain: 'lessons' }])
   })
 
   it('未绑定会话拒绝（无 cwd / cwd 未绑定项目）', async () => {

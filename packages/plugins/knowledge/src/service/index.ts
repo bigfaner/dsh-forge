@@ -33,11 +33,16 @@ export type {
   MergeSuggestion,
   NecessityAnswers,
   ReadAbstractQuery,
+  RecallFeedbackFailureCode,
+  RecallFeedbackOutcome,
+  RecallFeedbackRequest,
+  RecallFeedbackResult,
   RegisterProjectWrite,
   SearchHit,
   SearchQuery,
   SetDomainDescriptionQuery,
 } from './types.js'
+export { createRecallFeedbackGateway, type RecallFeedbackDeps } from './feedback.js'
 export { KNOWLEDGE_TYPES } from './types.js'
 export { EntryNotFoundError, IndexStaleError, InvalidKnowledgeDirError, type KnowledgeErrorData } from './errors.js'
 export {

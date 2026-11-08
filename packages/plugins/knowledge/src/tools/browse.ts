@@ -122,16 +122,20 @@ export function createBrowseTool(deps: KnowledgeToolDeps): KnowledgeToolDefiniti
     output: { schema: ENTRIES_OUTPUT_SCHEMA, render: (args, value) => renderEntries(parseBrowseArgs(args), value as readonly BrowseEntryItem[]) },
     async execute(args: unknown, exec: ToolExecFace): Promise<readonly BrowseEntryItem[]> {
       const parsed = parseBrowseArgs(args)
-      const session = sessionContextOf(exec)
+      // 会话归因派生（stage④ 1.5——sessionContextOf 唯一派生点；browse 召回行落账归因）
+      const session = sessionContextOf(exec, deps.emit)
       if (session.cwd === undefined) throw unboundSessionError(session)
       const projectId = deps.resolveProjectId(session.cwd)
       if (projectId === undefined) throw unboundSessionError(session)
       return deps.knowledge.browseEntries({
         projectId,
+        sessionId: session.sessionId,
         domain: parsed.domain,
         ...(parsed.offset !== undefined ? { offset: parsed.offset } : {}),
         ...(parsed.limit !== undefined ? { limit: parsed.limit } : {}),
         ...(parsed.order !== undefined ? { order: parsed.order } : {}),
+        ...(session.turnSeq !== undefined ? { turnSeq: session.turnSeq } : {}),
+        ...(session.triggerText !== undefined ? { triggerText: session.triggerText } : {}),
       })
     },
   }

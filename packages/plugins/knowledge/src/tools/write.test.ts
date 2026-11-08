@@ -56,9 +56,9 @@ describe('描述面：tool 定义与参数 schema 契约锚', () => {
     expect(tool.parameters.required).toEqual(['title', 'summary', 'keywords', 'body', 'necessity.stable', 'necessity.non_trivial', 'necessity.value'])
   })
 
-  it('参数键集 = 基本四键 + 可选七键（snake_case agent 面）', () => {
+  it('参数键集 = 基本四键 + 可选八键（snake_case agent 面——stage④ 1.5 增 scope）', () => {
     expect(Object.keys(tool.parameters.properties).sort()).toEqual(
-      ['body', 'domain', 'domain_description', 'keywords', 'necessity.non_trivial', 'necessity.reason', 'necessity.stable', 'necessity.value', 'procedure', 'slug_hint', 'summary', 'title', 'type', 'version_of'].sort(),
+      ['body', 'domain', 'domain_description', 'keywords', 'necessity.non_trivial', 'necessity.reason', 'necessity.stable', 'necessity.value', 'procedure', 'scope', 'slug_hint', 'summary', 'title', 'type', 'version_of'].sort(),
     )
     const p = tool.parameters.properties
     expect(p.title?.type).toBe('string')
@@ -68,6 +68,7 @@ describe('描述面：tool 定义与参数 schema 契约锚', () => {
     expect(p['necessity.stable']?.type).toBe('boolean')
     expect(p.version_of?.type).toBe('string')
     expect(p.domain_description?.type).toBe('string')
+    expect(p.scope?.type).toBe('string')
   })
 
   it('描述面披露严契约语义（三问闸 / version_of 版本化 / 查重不拒收）', () => {

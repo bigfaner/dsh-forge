@@ -21,6 +21,8 @@ export interface WriteToolArgs {
   readonly procedure?: boolean
   readonly slug_hint?: string
   readonly version_of?: string
+  /** 写入目标域（stage④ 1.5）：project（缺省——调用方项目库）/ global（全局知识库） */
+  readonly scope?: 'project' | 'global'
   readonly necessity: NecessityAnswers
 }
 
@@ -63,6 +65,7 @@ export function parseWriteArgs(args: unknown): WriteToolArgs {
     procedure?: boolean
     slug_hint?: string
     version_of?: string
+    scope?: 'project' | 'global'
     necessity: NecessityAnswers
   } = {
     title: asString(a, 'title'),
@@ -86,6 +89,12 @@ export function parseWriteArgs(args: unknown): WriteToolArgs {
     throw new Error('knowledge_write: procedure must be a boolean')
   }
   if (a.procedure === true) out.procedure = true
+  if (a.scope !== undefined) {
+    if (a.scope !== 'project' && a.scope !== 'global') {
+      throw new Error('knowledge_write: scope must be "project" or "global"')
+    }
+    out.scope = a.scope
+  }
   return out as WriteToolArgs
 }
 
@@ -172,6 +181,7 @@ const WRITE_PARAMETERS: ToolParametersSchema = {
     procedure: { type: 'boolean', description: 'Optional procedure form tag (independent dimension — never rewrites the type judgement).' },
     slug_hint: { type: 'string', description: 'English translation hint for a non-ASCII title (slug id generation chain fallback).' },
     version_of: { type: 'string', description: 'Existing entry id when this write is a same-concept update (same-id versioning via supersedes; mutually exclusive with candidate_of).' },
+    scope: { type: 'string', description: 'Write target: "project" (default — the caller\'s project knowledge base) or "global" (the global cross-project knowledge base).' },
     'necessity.stable': { type: 'boolean', description: 'Mandatory three-question gate ①: long-term stable (not one-off session context).' },
     'necessity.non_trivial': { type: 'boolean', description: 'Mandatory three-question gate ②: non-commonsense (generic engineering common sense does not belong here).' },
     'necessity.value': { type: 'boolean', description: 'Mandatory three-question gate ③: estimated value for this project domain.' },
@@ -207,6 +217,7 @@ export function createWriteTool(deps: KnowledgeToolDeps): KnowledgeToolDefinitio
         ...(parsed.procedure !== undefined ? { procedure: parsed.procedure } : {}),
         ...(parsed.slug_hint !== undefined ? { slugHint: parsed.slug_hint } : {}),
         ...(parsed.version_of !== undefined ? { versionOf: parsed.version_of } : {}),
+        ...(parsed.scope !== undefined ? { scope: parsed.scope } : {}),
         necessity: parsed.necessity,
       }
       return deps.knowledge.write(q)

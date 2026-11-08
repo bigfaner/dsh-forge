@@ -176,6 +176,7 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
     const tools = createKnowledgeTools({
       knowledge: service,
       resolveProjectId,
+      emit: diagEmit,
     })
 
     /** 'knowledge' 服务 provide（host servicesFace.get 消费；缺席 reflect 面 = 零供数不阻载） */

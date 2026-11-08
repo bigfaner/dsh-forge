@@ -66,7 +66,8 @@ export function createReadTool(deps: KnowledgeToolDeps): KnowledgeToolDefinition
     output: { schema: READ_OUTPUT_SCHEMA, render: renderRead },
     async execute(args: unknown, exec: ToolExecFace): Promise<KnowledgeReadOutcome> {
       const parsed = parseReadArgs(args)
-      const session = sessionContextOf(exec)
+      // 会话归因派生（stage④ 1.5——sessionContextOf 唯一派生点）
+      const session = sessionContextOf(exec, deps.emit)
       if (session.cwd === undefined) throw unboundSessionError(session)
       const projectId = deps.resolveProjectId(session.cwd)
       if (projectId === undefined) throw unboundSessionError(session)
@@ -74,6 +75,8 @@ export function createReadTool(deps: KnowledgeToolDeps): KnowledgeToolDefinition
         projectId,
         sessionId: session.sessionId,
         id: parsed.id,
+        ...(session.turnSeq !== undefined ? { turnSeq: session.turnSeq } : {}),
+        ...(session.triggerText !== undefined ? { triggerText: session.triggerText } : {}),
       }
       return deps.knowledge.read(q)
     },
