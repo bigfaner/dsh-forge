@@ -113,9 +113,11 @@ describe('renderKnowledgeDomainsSection（目录树形态/简介省略/双限截
     expect(lines.every((l) => !l.includes(' — '))).toBe(true)
   })
 
-  it('段尾指认行固定：归档规则指认 + 子域 prefix 构成规则', () => {
+  it('段尾指认行固定：归档规则指认 + 子域 prefix 构成规则；树体包 fenced code block（MarkdownText 渲染面保换行）', () => {
     const text = renderKnowledgeDomainsSection([row('a', 1)])
     expect(text).toContain('归档规则：见上文 knowledge-base 块。子域 domain_prefix = 父路径/名称。')
+    expect(text).toContain('<knowledge-domains>\n```text\n')
+    expect(text.endsWith('```\n</knowledge-domains>')).toBe(true)
   })
 
   it('单顶域超配额：子域按计数降序截至 5 + `… 还有 N 个子域` 行', () => {
@@ -135,8 +137,8 @@ describe('renderKnowledgeDomainsSection（目录树形态/简介省略/双限截
       for (let c = 0; c < 5; c += 1) rows.push(row(`t${String(t)}/c${String(c)}`, 5 - c))
     }
     const text = renderKnowledgeDomainsSection(rows)
-    const bodyLines = text.split('\n').filter((l) => l !== '<knowledge-domains>' && l !== '</knowledge-domains>')
-    // 4 块 × 6 行 + 截断行 + 指认行 = 26
+    const bodyLines = text.split('\n').filter((l) => l !== '<knowledge-domains>' && l !== '</knowledge-domains>' && l !== '```text' && l !== '```')
+    // 4 块 × 6 行 + 截断行 + 指认行 = 26（另加 fence 首尾两行不计内容行）
     expect(bodyLines).toHaveLength(26)
     expect(text).toContain('… 还有 6 个域（用 domain_prefix 检索）')
     expect(text).not.toContain('t4(46 篇)')

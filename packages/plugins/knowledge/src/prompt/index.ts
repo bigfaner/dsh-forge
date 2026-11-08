@@ -125,5 +125,7 @@ export function renderKnowledgeDomainsSection(rows: readonly DomainIndexRow[]): 
   }
   if (skippedTops > 0) lines.push(`… 还有 ${skippedTops} 个域（用 domain_prefix 检索）`)
   lines.push('归档规则：见上文 knowledge-base 块。子域 domain_prefix = 父路径/名称。')
-  return ['<knowledge-domains>', ...lines, '</knowledge-domains>'].join('\n')
+  // 树体包 fenced code block：轨迹面板系统提示词 tab 走 MarkdownText 渲染（markdown 折叠
+  // 段内单换行），fence 保树形换行双面可见（模型侧块结构 + 人侧目录树形态）。
+  return ['<knowledge-domains>', '```text', ...lines, '```', '</knowledge-domains>'].join('\n')
 }
