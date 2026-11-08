@@ -1,4 +1,4 @@
-// tools/ barrel（定位：业务）。两 tool 的定义工厂与执行期依赖形状。
+﻿// tools/ barrel（定位：业务）。两 tool 的定义工厂与执行期依赖形状。
 // 调用链（交互二）：agent → tool.execute → 会话上下文解析（projectId/sessionId）
 // → knowledge 服务 search / readAbstract / write / read / supersedeEntry / reinstateEntry
 // → 各回执面（执行点落 recall_logs——服务面行为，插件不另记账）。
@@ -66,7 +66,7 @@ export type {
 } from './faces.js'
 export { parseSearchArgs } from './search.js'
 export type { SearchToolArgs } from './search.js'
-export { parseBrowseArgs, filterDomainRows } from './browse.js'
+export { parseBrowseArgs } from './browse.js'
 export type { BrowseToolArgs } from './browse.js'
 export { parseReadAbstractArgs } from './read-abstract.js'
 export type { ReadAbstractToolArgs } from './read-abstract.js'

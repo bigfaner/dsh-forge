@@ -131,6 +131,32 @@ export interface KnowledgeService {
   /** 域目录浏览（knowledge_browse tool 供数）：browse 同底表聚合（aggregateDomainTree +
    *  现盘目录并集，计数口径与 web browse 通道一致）+ KNOWLEDGE_DOMAINS 简介按域全路径联查 */
   browseDomains(q: { projectId: string }): Promise<DomainBrowseRow[]>
+  /** 域内条目清单（knowledge_browse tool 带 domain 参数的供数面）：confirmed 优先默认序
+   *  （同状态按创建序）/ 纯创建序可选；零 recall_logs 写入 */
+  browseEntries(q: BrowseEntriesQuery): Promise<BrowseEntryItem[]>
+}
+
+/** browseEntries 入参（域语义与 search.domainPrefix 同构——精确域或子树前缀） */
+export interface BrowseEntriesQuery {
+  projectId: string
+  /** 域路径（精确域或子树前缀，如 lessons 或 lessons/windows） */
+  domain: string
+  /** 分页偏移（默认 0） */
+  offset?: number
+  /** 单页条数（默认 5） */
+  limit?: number
+  /** 排序：status = confirmed 优先、同状态按创建序（默认）；created = 纯创建序 */
+  order?: 'status' | 'created'
+}
+
+/** browseEntries 单行（title/keywords/摘要/状态——身份键 = slug） */
+export interface BrowseEntryItem {
+  frontmatterId: string
+  title: string
+  summary: string
+  keywords: string[]
+  status: string
+  domainPath: string
 }
 
 /** browseDomains 返回行（browse 通道 DomainNode 的简介投影视——零 recall 写入读法） */

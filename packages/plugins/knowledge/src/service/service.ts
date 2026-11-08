@@ -66,6 +66,8 @@ import { createScanRegister } from './scan-register.js'
 import { createReviewGateway } from './review.js'
 import type {
   BackflowConfig,
+  BrowseEntryItem,
+  BrowseEntriesQuery,
   BrowseKnowledgeService,
   DomainBrowseRow,
   EntryAbstract,
@@ -790,6 +792,29 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
           description: descriptions.get(node.domainPath) ?? null,
         }))
         .sort((a, b) => (a.domainPath < b.domainPath ? -1 : 1))
+    },
+
+    async browseEntries(q: BrowseEntriesQuery): Promise<BrowseEntryItem[]> {
+      const { knowledgeDir } = requireProject(q.projectId, 'browseEntries')
+      // 域语义与 search.domainPrefix 同构：精确域或子树前缀；项目域归属过滤（id 集对账）
+      const prefix = q.domain.replace(/\/+$/, '')
+      const ids = projectEntryIds(knowledgeDir)
+      const rows = selectByDomain.all(prefix, `${escapeLike(prefix)}/%`).filter((r) => ids.has(r.id))
+      // 排序：status = confirmed 优先、同状态按创建序（rid 即插入序）；created = 纯创建序
+      const statusRank = (s: string): number => (s === 'confirmed' ? 0 : s === 'unconfirmed' ? 1 : 2)
+      const sorted = rows.toSorted((a, b) =>
+        q.order === 'created' ? a.rid - b.rid : statusRank(a.status) - statusRank(b.status) || a.rid - b.rid,
+      )
+      const offset = Math.max(0, q.offset ?? 0)
+      const limit = Math.min(Math.max(1, q.limit ?? 5), 50)
+      return sorted.slice(offset, offset + limit).map((r) => ({
+        frontmatterId: r.id,
+        title: r.title,
+        summary: r.summary,
+        keywords: splitKeywords(r.keywords),
+        status: r.status,
+        domainPath: r.domain_path,
+      }))
     },
 
     registerProject: registerProjectRow,

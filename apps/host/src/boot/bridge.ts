@@ -302,6 +302,7 @@ export const KNOWLEDGE_SERVICE_METHODS = [
   'sessionRecall',
   'browse',
   'browseDomains',
+  'browseEntries',
   'registerProject',
   'write',
   'read',

@@ -97,6 +97,23 @@ describe('读面行为等价（v4 实体表）', () => {
     expect(detail.title).toBe('AUTH')
   })
 
+  it('browseEntries：域内条目清单——confirmed 优先默认序 / offset+limit 分页 / created 纯创建序 / 零命中空回', async () => {
+    const all = await service.browseEntries({ projectId, domain: 'backend' })
+    // confirmed（kb-api）优先于 unconfirmed（kb-auth），同状态按创建序；身份键 = slug
+    expect(all.map((e) => e.frontmatterId)).toEqual(['kb-api', 'kb-auth'])
+    expect(all[0]).toMatchObject({ status: 'confirmed', title: 'API', domainPath: 'backend' })
+    expect(Array.isArray(all[0]?.keywords)).toBe(true)
+    expect(all[0]?.summary.length).toBeGreaterThan(0)
+    // 分页
+    const page = await service.browseEntries({ projectId, domain: 'backend', offset: 1, limit: 5 })
+    expect(page.map((e) => e.frontmatterId)).toEqual(['kb-auth'])
+    // 纯创建序
+    const created = await service.browseEntries({ projectId, domain: 'backend', order: 'created' })
+    expect(created.map((e) => e.frontmatterId)).toEqual(['kb-api', 'kb-auth'])
+    // 子树前缀语义（backend 下无子域此处仅语义面）+ 未命中域空回
+    expect(await service.browseEntries({ projectId, domain: 'no-such-domain' })).toEqual([])
+  })
+
   it('browse 域表并集：knowledge_domains 零条目域（createDomain 径）即时在场 + 祖先前缀占位', async () => {
     await service.createDomain({ projectId, domain: '新域' })
     await service.createDomain({ projectId, domain: 'a/b' })
