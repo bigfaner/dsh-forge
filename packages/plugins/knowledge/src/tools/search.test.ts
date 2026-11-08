@@ -1,5 +1,6 @@
-// 3.4 单测 —— knowledge_search tool（AC1：参数/返回与 KnowledgeService.search 同构，
-// DTO 复用 contracts 不自定形状；AC4 前置：执行链 = 会话解析 → 服务调用，透传不记账）。
+// 3.4 单测 —— knowledge_search tool（agentic search 编排层：同义词并集 → rerank 前
+// limit 条 → 零命中弃域重试一次 → hint 单条动作指引（retry 语义：首查可换词重试一次，
+// retry=true 仍零命中则明示不要再检索）；执行链 = 会话解析 → 编排调用）。
 import { describe, expect, it, vi } from 'vitest'
 import type { KnowledgeService, SearchHit, SearchQuery } from '../service/types.js'
 import { createSearchTool, parseSearchArgs } from './search.js'
@@ -10,12 +11,12 @@ function hit(over: Partial<SearchHit> = {}): SearchHit {
   return { entryId: 7, frontmatterId: 'kb-001', title: '安全编码规范', summary: '输入校验基线', domainPath: '后端', score: 0.92, effectiveRank: 1.0, ...over }
 }
 
-/** 服务桩：记录收到的 query，回预设 hits */
-function stubService(hits: SearchHit[] = [hit()]) {
+/** 服务桩：按调用序回放预设命中批（脚本队列，越界回空） */
+function stubService(script: SearchHit[][] = [[hit()]]) {
   const calls: SearchQuery[] = []
   const search = vi.fn(async (q: SearchQuery) => {
     calls.push(q)
-    return hits
+    return script[Math.min(calls.length - 1, script.length - 1)] ?? []
   })
   return { service: { search } as unknown as KnowledgeService, calls }
 }
@@ -29,58 +30,117 @@ const deps = (service: KnowledgeService) => ({
 /** exec 夹具：会话 sess-1 @ C:\ws\demo */
 const exec = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
-describe('AC1 参数 schema 与 SearchQuery 同构（去会话解析双键 projectId/sessionId）', () => {
+describe('AC1 参数 schema 键集（domain_prefix/keywords/text/limit/retry，全可选）', () => {
   const tool = createSearchTool(deps(stubService().service))
 
-  it('tool 名 = knowledge_search；参数键集 = domain_prefix/keywords/text/limit（全可选）', () => {
+  it('tool 名 = knowledge_search；参数键集与类型映射', () => {
     expect(tool.name).toBe('knowledge_search')
-    expect(Object.keys(tool.parameters.properties).sort()).toEqual(['domain_prefix', 'keywords', 'limit', 'text'])
+    expect(Object.keys(tool.parameters.properties).sort()).toEqual(['domain_prefix', 'keywords', 'limit', 'retry', 'text'])
     expect(tool.parameters.required).toBeUndefined()
-  })
-
-  it('参数类型映射：string / string[] / string / integer', () => {
     const p = tool.parameters.properties
     expect(p.domain_prefix?.type).toBe('string')
     expect(p.keywords?.type).toBe('array')
     expect(p.keywords?.items?.type).toBe('string')
     expect(p.text?.type).toBe('string')
     expect(p.limit?.type).toBe('integer')
+    expect(p.retry?.type).toBe('boolean')
   })
 })
 
 describe('parseSearchArgs（执行点防御性收窄）', () => {
-  it('合法全参/空对象均通过，键名映射 snake→DTO camel 由 execute 承担', () => {
+  it('合法全参/空对象均通过', () => {
     expect(parseSearchArgs({})).toEqual({})
     expect(
-      parseSearchArgs({ domain_prefix: '后端', keywords: ['api'], text: '网关', limit: 5 }),
-    ).toEqual({ domain_prefix: '后端', keywords: ['api'], text: '网关', limit: 5 })
+      parseSearchArgs({ domain_prefix: '后端', keywords: ['api'], text: '网关', limit: 5, retry: true }),
+    ).toEqual({ domain_prefix: '后端', keywords: ['api'], text: '网关', limit: 5, retry: true })
   })
 
-  it('类型违例逐一拒绝（非对象/keywords 非串数组/limit 非正整数）', () => {
+  it('类型违例逐一拒绝（非对象/keywords 非串数组/limit 非正整数/retry 非布尔）', () => {
     expect(() => parseSearchArgs('x')).toThrow(/must be an object/)
     expect(() => parseSearchArgs({ keywords: ['a', 1] })).toThrow(/keywords/)
     expect(() => parseSearchArgs({ limit: 0 })).toThrow(/limit/)
     expect(() => parseSearchArgs({ limit: 1.5 })).toThrow(/limit/)
     expect(() => parseSearchArgs({ text: 3 })).toThrow(/text/)
+    expect(() => parseSearchArgs({ retry: 'yes' })).toThrow(/retry/)
   })
 })
 
-describe('execute：会话上下文解析 → 服务调用 → DTO 透传', () => {
-  it('解析 projectId/sessionId 注入 query，其余参数原样映射（snake→camel）', async () => {
-    const { service, calls } = stubService()
-    const tool = createSearchTool(deps(service))
-    const out = await tool.execute({ domain_prefix: '后端', keywords: ['api'], limit: 3 }, exec)
-    expect(calls).toEqual([
-      { projectId: 'p-1', sessionId: 'sess-1', domainPrefix: '后端', keywords: ['api'], limit: 3 },
+describe('execute：同义词并集 → rerank 精选（agentic 编排）', () => {
+  it('同义词组逐词检索（每词独立 query，keywords=[kw] + 域前缀 + 候选池 20），并集去重取最高分', async () => {
+    const { service, calls } = stubService([
+      [hit({ entryId: 1, score: 0.5 })],
+      [hit({ entryId: 1, score: 0.9 }), hit({ entryId: 2, score: 0.7 })],
     ])
-    // 返回 = contracts SearchHit[]（同构透传，不自定形状）
-    expect(out).toEqual([hit()])
+    const tool = createSearchTool(deps(service))
+    const out = await tool.execute({ domain_prefix: '后端', keywords: ['api', '网关'] }, exec)
+    expect(calls).toHaveLength(2)
+    expect(calls[0]).toEqual({ projectId: 'p-1', sessionId: 'sess-1', keywords: ['api'], domainPrefix: '后端', limit: 20 })
+    expect(calls[1]).toEqual({ projectId: 'p-1', sessionId: 'sess-1', keywords: ['网关'], domainPrefix: '后端', limit: 20 })
+    // 并集去重：entryId 1 两批命中取最高分 0.9；score 降序
+    expect(out.hits.map((h) => [h.entryId, h.score])).toEqual([
+      [1, 0.9],
+      [2, 0.7],
+    ])
+    expect(out.hint).toBeNull()
   })
 
-  it('未传的可选参数不出现在 query（省略 = 全域）', async () => {
-    const { service, calls } = stubService([])
-    await createSearchTool(deps(service)).execute({}, exec)
-    expect(calls[0]).toEqual({ projectId: 'p-1', sessionId: 'sess-1' })
+  it('rerank 截前 limit 条（默认 3；limit 显式传参生效）', async () => {
+    const batch = [1, 2, 3, 4, 5].map((id) => hit({ entryId: id, score: id }))
+    const { service } = stubService([batch])
+    const out = await createSearchTool(deps(service)).execute({ keywords: ['api'] }, exec)
+    expect(out.hits).toHaveLength(3)
+    expect(out.hits.map((h) => h.score)).toEqual([5, 4, 3])
+    const { service: s2 } = stubService([batch])
+    const out2 = await createSearchTool(deps(s2)).execute({ keywords: ['api'], limit: 4 }, exec)
+    expect(out2.hits).toHaveLength(4)
+  })
+
+  it('零命中 + 指定了域 → 弃域重试一次（第二批 query 无 domainPrefix），命中后 hint 注明弃域', async () => {
+    const { service, calls } = stubService([[], [hit({ entryId: 9 })]])
+    const tool = createSearchTool(deps(service))
+    const out = await tool.execute({ domain_prefix: '后端', keywords: ['api'] }, exec)
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.domainPrefix).toBeUndefined()
+    expect(out.hits).toHaveLength(1)
+    expect(typeof out.hint).toBe('string')
+    expect(out.hint).toContain('was dropped after zero hits')
+    expect(out.hint).toContain('all domains')
+  })
+
+  it('首查零命中（含弃域后仍零）→ hint 提示可换词重试一次（retry=true）', async () => {
+    const { service } = stubService([[], []])
+    const out = await createSearchTool(deps(service)).execute({ domain_prefix: '后端', keywords: ['api'] }, exec)
+    // hint 单条承载弃域事实 + 动作指引
+    expect(out.hint).toContain('was dropped after zero hits')
+    expect(out.hint).toContain('You may reword once and retry with retry=true')
+    const { service: s2 } = stubService([[]])
+    const out2 = await createSearchTool(deps(s2)).execute({ keywords: ['api'] }, exec)
+    expect(out2.hint).toBe('zero hits. You may reword once and retry with retry=true.')
+  })
+
+  it('retry=true 仍零命中 → hint 明示不要再检索（断言无此内容、回退原始文件）', async () => {
+    const { service } = stubService([[]])
+    const out = await createSearchTool(deps(service)).execute({ keywords: ['api'], retry: true }, exec)
+    expect(out.hits).toEqual([])
+    expect(out.hint).toContain('do not search again')
+    expect(out.hint).toContain('no such content')
+  })
+
+  it('粗筛零命中但未指定域 → 不弃域重试（单批）', async () => {
+    const { service, calls } = stubService([[]])
+    const tool = createSearchTool(deps(service))
+    await tool.execute({ keywords: ['api'] }, exec)
+    expect(calls).toHaveLength(1)
+  })
+
+  it('无 keywords 时单 query 兜底（text/全域检索），同义词组去空白去重', async () => {
+    const { service, calls } = stubService([[hit()]])
+    const tool = createSearchTool(deps(service))
+    await tool.execute({ text: '网关' }, exec)
+    expect(calls[0]).toEqual({ projectId: 'p-1', sessionId: 'sess-1', text: '网关', limit: 20 })
+    const { service: s2, calls: c2 } = stubService([[hit()]])
+    await createSearchTool(deps(s2)).execute({ keywords: [' api ', 'api', '网关'] }, exec)
+    expect(c2.map((q) => q.keywords?.[0])).toEqual(['api', '网关'])
   })
 
   it('会话无 cwd / cwd 未绑定项目 → 抛可读错误（不静默空命中）', async () => {
@@ -89,34 +149,37 @@ describe('execute：会话上下文解析 → 服务调用 → DTO 透传', () =
     await expect(tool.execute({}, {})).rejects.toThrow(/no session workspace/)
     await expect(tool.execute({}, { agent: { session: { id: 's', header: { cwd: 'C:\\elsewhere' } } } })).rejects.toThrow(/not bound/)
   })
-
-  it('无 agent 上下文（sessionId 空串口径）在 cwd 缺席下同样拒绝——P1 不支持无会话调用', async () => {
-    const { service } = stubService()
-    await expect(createSearchTool(deps(service)).execute({}, {})).rejects.toBeInstanceOf(Error)
-  })
 })
 
-describe('output.render（摘要先行投影）', () => {
-  it('命中行含域/标题/id/得分/摘要；零命中诚实回执（回显 + 未命中明示 + 零兜底）', () => {
+describe('output.render（hint 行在前 + 摘要先行命中行）', () => {
+  it('hint 行在前（hint: 前缀），命中行含域/标题/id/得分/摘要', () => {
     const { service } = stubService()
     const tool = createSearchTool(deps(service))
-    const blocks = tool.output.render({}, [hit(), hit({ entryId: 8, frontmatterId: null, title: '网关', domainPath: '后端/api', score: 0.5, effectiveRank: 0.6 })])
-    expect(blocks).toHaveLength(1)
+    const outcome = {
+      hint: 'domain "后端" was dropped after zero hits; retried across all domains — 1 hit(s) found.',
+      hits: [hit(), hit({ entryId: 8, frontmatterId: null, title: '网关', domainPath: '后端/api', score: 0.5, effectiveRank: 0.6 })],
+    }
+    const blocks = tool.output.render({}, outcome)
     const text = blocks[0]?.text ?? ''
+    expect(text.indexOf('hint: domain')).toBeLessThan(text.indexOf('[后端] 安全编码规范'))
     expect(text).toContain('[后端] 安全编码规范 (kb-001, score 0.92, rank 1.0) — 输入校验基线')
     expect(text).toContain('[后端/api] 网关 (#8, score 0.50, rank 0.6)')
-    // 诚实回执：查询词/过滤条件回显 + 未命中明示；零兜底（不注入建议词）
-    const empty = tool.output.render({ domain_prefix: '后端', keywords: ['认证'], text: '原子幂等', limit: 5 }, [])
+  })
+
+  it('零命中且无 hint → 诚实空回执（回显 + zero hits + 零兜底）；有 hint → 回显跟在 hint 后', () => {
+    const { service } = stubService()
+    const tool = createSearchTool(deps(service))
+    const empty = tool.output.render({ domain_prefix: '后端', keywords: ['认证'], text: '原子幂等', limit: 5 }, { hint: null, hits: [] })
     const emptyText = empty[0]?.text ?? ''
     expect(emptyText).toContain('No knowledge entries matched')
     expect(emptyText).toContain('domain_prefix="后端"')
     expect(emptyText).toContain('keywords=["认证"]')
-    expect(emptyText).toContain('text="原子幂等"')
-    expect(emptyText).toContain('limit=5')
     expect(emptyText).toContain('zero hits')
     expect(emptyText).not.toMatch(/try|suggest|such as grep/i)
-    // 无过滤维度回执：全域声明
-    const bare = tool.output.render({}, [])
-    expect(bare[0]?.text).toContain('no filters (all domains)')
+    const guided = tool.output.render({ keywords: ['认证'] }, { hint: 'zero hits. You may reword once and retry with retry=true.', hits: [] })
+    const guidedText = guided[0]?.text ?? ''
+    expect(guidedText).toContain('hint: zero hits')
+    expect(guidedText).toContain('Query: keywords=["认证"]')
+    expect(guidedText).not.toContain('No knowledge entries matched')
   })
 })

@@ -28,20 +28,32 @@ describe('段常量（提案 §7 审核稿定死）', () => {
 describe('renderKnowledgeStaticSection（固定文本——中文 + 归档规则块）', () => {
   const text = renderKnowledgeStaticSection()
 
-  it('XML 标签制 + 摘要先行 + 零命中诚实 + domain_prefix 指引 + 与 <knowledge-domains> 互指', () => {
+  it('XML 标签制 + 摘要先行 + domain_prefix 指引 + 与 <knowledge-domains> 互指', () => {
     expect(text).toContain('<knowledge-base>')
-    expect(text).toContain('零命中即零命中')
     expect(text).toContain('作为 domain_prefix 传入')
     expect(text).toContain('<knowledge-domains> 块')
   })
 
-  it('检索方法段齐备（search 严苛匹配口径 / domain_prefix 收窄 + browse 指认 / 摘要先行 + 零命中改写）', () => {
-    expect(text).toContain('检索方法')
-    expect(text).toContain('knowledge_search 摘要优先命中')
-    expect(text).toContain('精确 AND 标签')
-    expect(text).toContain('不用整句查询')
-    expect(text).toContain('先读摘要，必要时才读正文')
-    expect(text).toContain('断言「知识库无此内容」')
+  it('检索方法段齐备（agentic search 三步 SOP：定域拆词 / hint 反应 / 精读）', () => {
+    expect(text).toContain('检索方法（agentic search 三步')
+    expect(text).toContain('第 1 步 定域与拆词')
+    expect(text).toContain('同义词/近义词组作为检索 keywords')
+    expect(text).toContain('第 2 步 检索')
+    expect(text).toContain('先读 hint 再看命中')
+    expect(text).toContain('hint 明示不要再检索时立即停止')
+    expect(text).toContain('第 3 步 精读')
+    expect(text).toContain('结合 score 与摘要选中条目')
+    expect(text).toContain('回答内容以正文为准')
+    expect(text).not.toContain('hints')
+    // 只指示 agent 要做什么——服务端/工具内部机制不进提示词（用户裁决 2026-11-11）
+    expect(text).not.toContain('服务端')
+    expect(text).not.toContain('rerank')
+    expect(text).not.toContain('并集')
+    expect(text).not.toContain('弃域')
+    // 检索主流程不经 read_abstract（命中行已带摘要——用户裁决 2026-11-11）
+    expect(text).not.toContain('knowledge_read_abstract')
+    // browse 指认行移除（域目录树由动态段承载——用户裁决 2026-11-11）
+    expect(text).not.toContain('knowledge_browse')
   })
 
   it('归档规则块五条齐备（最深既有子域 / 自释名 / 满额分裂 / 犹豫归父 / 补简介）', () => {
@@ -53,12 +65,7 @@ describe('renderKnowledgeStaticSection（固定文本——中文 + 归档规则
     expect(text).toContain('补写简介')
   })
 
-  it('knowledge_browse 一行指认（knowledge-browse-tool 1.1——静态段唯一 tool 指认行）', () => {
-    expect(text).toContain('knowledge_browse')
-    expect(text).toContain('域目录全量查询用 knowledge_browse 工具')
-  })
-
-  it('写入面零工具说明（renderToolUsage 退役——工具加载由 dsh 机械承载；检索面 knowledge_search/read_abstract/read 与 knowledge_browse 为指针行除外）', () => {
+  it('写入面零工具说明（renderToolUsage 退役——工具加载由 dsh 机械承载；检索面 knowledge_search/read 为指针行除外）', () => {
     for (const name of ['knowledge_write', 'knowledge_supersede', 'knowledge_reinstate', 'entry_id']) {
       expect(text).not.toContain(name)
     }

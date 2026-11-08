@@ -174,7 +174,8 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词�
       expect(bound[0]?.order).toBe(910)
       expect(bound[1]?.order).toBe(911)
       expect((bound[0]!.text as () => string)()).toContain('<knowledge-base>')
-      expect((bound[0]!.text as () => string)()).not.toContain('knowledge_search') // 零工具说明
+      expect((bound[0]!.text as () => string)()).not.toContain('knowledge_write') // 写入面零工具说明（检索面指针行豁免）
+      expect((bound[0]!.text as () => string)()).not.toContain('knowledge_supersede')
       // 未绑定 cwd → 零注册
       expect(fire(join(root, 'other'))).toEqual([])
       // 无 cwd → 零注册

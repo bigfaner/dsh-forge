@@ -90,7 +90,9 @@ describe('tool 调用链穿透插件自有服务并落 recall_logs（集成自�
     const search = tools.find((t) => t.name === 'knowledge_search')
     if (search === undefined) throw new Error('knowledge_search 未注册')
 
-    const hits = (await search.execute({ domain_prefix: 'backend', keywords: ['api'] }, exec)) as SearchHit[]
+    const outcome = (await search.execute({ domain_prefix: 'backend', keywords: ['api'] }, exec)) as { hint: string | null; hits: SearchHit[] }
+    const hits = outcome.hits
+    expect(outcome.hint).toBeNull()
     expect(hits.length).toBe(2)
     expect(hits.every((h) => h.domainPath.startsWith('backend'))).toBe(true) // 域前缀过滤（场景④）
     expect(hits.map((h) => h.title).sort()).toEqual(['API 规范', '认证基线'])
@@ -110,7 +112,7 @@ describe('tool 调用链穿透插件自有服务并落 recall_logs（集成自�
     const readAbstract = tools.find((t) => t.name === 'knowledge_read_abstract')
     if (search === undefined || readAbstract === undefined) throw new Error('双 tool 未注册')
 
-    const hits = (await search.execute({}, exec)) as SearchHit[]
+    const { hits } = (await search.execute({}, exec)) as { hint: string | null; hits: SearchHit[] }
     const target = hits.find((h) => h.frontmatterId === 'kb-api')
     if (target === undefined) throw new Error('语料命中缺失')
 
