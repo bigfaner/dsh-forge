@@ -361,11 +361,12 @@ describe('CT-bm25-recall-07 采集分列口径（BR-E6）', () => {
     const report = await runBaseline(mount, bank)
     expect(report.total).toBe(bank.questions.length)
 
-    // O2（判定性）：回归题集（含零命中题）全部落 mount 临时库——日常库滚动值不变
+    // O2（判定性）：回归题集全部落 mount 临时库——日常库滚动值不变；mount 零命中数与
+    // 报告 zero-hit 归因一致（OR 容错通路后固定题集可全命中——mountZero 允许为 0，
+    // bug db58e1c4 修复的预期结果；日常/回归两库分离不变量由 O2 首断言承载）
     expect(dailyStat(daily)).toEqual(before)
     const mountZero = (mount.db.prepare(`SELECT COUNT(DISTINCT call_id) AS n FROM knowledge_recall_logs WHERE hit_count = 0`).get() as { n: number }).n
     expect(mountZero).toBe(report.misses.filter((m) => m.attribution === 'zero-hit').length)
-    expect(mountZero).toBeGreaterThan(0)
 
     // O1：两个独立数值分列在场——日常零命中值（daily 库）与回归命中率（mount 报告）
     const dailyZeroRate = before.zero / before.calls

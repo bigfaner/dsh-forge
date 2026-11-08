@@ -169,9 +169,10 @@ export function tokenizeSearchText(text: string): string[] {
 }
 
 /**
- * search 打分 MATCH（全元数据列词面）：keywords 逐词 phrase AND + text 分词 phrase OR
- * （多词元容错并集——任一词元命中即候选，score 排序保相关性；AND 全命中判定会把
- * 词元仅存在于部分匹配面的 query 整体清零——bug db58e1c4 家族 4cf01aa9）。
+ * search 打分 MATCH（全元数据列词面）：keywords 逐词 phrase AND + text 分词 phrase AND
+ * （词元须全命中——强词面证据层；多词元容错准入由子串补充通道 OR 并集承担，
+ * 见 textSubstringHit——bug db58e1c4 家族 4cf01aa9：AND 仅 title/summary 判定域把
+ * 词元散布在 keywords 列的 query 整体清零）。
  * CJK 子串补充通道另行 JS 判定（见 textSubstringHit）。
  * 全部词面缺席 → undefined（无 MATCH 面，全域中性分排序）。
  */
@@ -183,7 +184,7 @@ export function buildSearchFtsMatch(q: { keywords?: readonly string[]; text?: st
   }
   const terms = q.text !== undefined ? tokenizeSearchText(q.text) : []
   if (terms.length === 1) parts.push(ftsQuote(terms[0]!))
-  else if (terms.length > 1) parts.push(`(${terms.map(ftsQuote).join(' OR ')})`)
+  else if (terms.length > 1) parts.push(`(${terms.map(ftsQuote).join(' AND ')})`)
   return parts.length === 0 ? undefined : parts.join(' AND ')
 }
 

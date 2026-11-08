@@ -58,6 +58,7 @@ import {
   normalizeUpdated,
   prepareHeatByEntry,
   textSubstringHit,
+  tokenizeSearchTerms,
   unionEntryIds,
   validateDomainPath,
   type RecallRow,
@@ -721,6 +722,16 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       const combinedBm25 = combined === undefined ? new Map<string, number>() : ftsIdsOf(combined)
       const textMatch = text === '' ? undefined : buildSearchFtsMatch({ text: q.text })
       const textBm25 = textMatch === undefined ? new Map<string, number>() : ftsIdsOf(textMatch)
+      // OR 容错准入后的中性层细分（bug db58e1c4 修复配对）：子串通道 OR 并集把单词元
+      // 弱命中行也放进无词面证据的中性分层——按词元覆盖度微升序（覆盖多者居前，1e-3
+      // 步进远小于 bm25Norm 区分度），免单 bigram 弱命中淹没整 run 强覆盖行。
+      const substringTerms = text === '' ? [] : tokenizeSearchTerms(text)
+      const coverageOf = (title: string, summary: string): number => {
+        if (substringTerms.length === 0) return 0
+        const t = title.toLowerCase()
+        const s = summary.toLowerCase()
+        return substringTerms.reduce((n, term) => (t.includes(term) || s.includes(term) ? n + 1 : n), 0)
+      }
 
       const heatByEntry = new Map(selectHeatByEntry.all().map((r) => [r.entry_id, r.heat] as const))
       const scored: { entry: EntryRow; score: number }[] = []
@@ -729,11 +740,12 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
         if (text !== '' && !textBm25.has(r.id) && !textSubstringHit(r.title, r.summary, text)) continue
         // 三因子：bm25 取整查询（keywords∧text）命中面；仅子串通道命中行缺位 → 中性分
         const bm25 = combinedBm25.get(r.id)
-        const score = composeSearchScore({
+        const base = composeSearchScore({
           ...(bm25 !== undefined ? { bm25 } : {}),
           effectiveRank: r.effective_rank,
           heat: heatByEntry.get(r.rid) ?? 0,
         })
+        const score = bm25 !== undefined ? base : base + coverageOf(r.title, r.summary) * 1e-3
         scored.push({ entry: r, score })
       }
       scored.sort((a, b) => b.score - a.score || a.entry.rid - b.entry.rid)

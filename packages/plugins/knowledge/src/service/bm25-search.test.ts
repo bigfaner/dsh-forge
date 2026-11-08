@@ -127,12 +127,12 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
     expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
   })
 
-  it('CJK 多词 query：「部署 规范」空格分词 AND 命中「部署规范」行（整串子串兜底不覆盖的多词缺口）', async () => {
+  it('CJK 多词 query：「部署 规范」空格分词命中「部署规范」行（整串子串兜底不覆盖的多词缺口）', async () => {
     const hits = await service.search({ projectId, text: '部署 规范', sessionId: 's' })
     expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
   })
 
-  it('CJK 自然语言连打长 run query：「部署规范」（无空格 run）bigram 词元 AND 命中同行', async () => {
+  it('CJK 自然语言连打长 run query：「部署规范」（无空格 run）bigram 词元命中同行', async () => {
     const hits = await service.search({ projectId, text: '部署规范', sessionId: 's' })
     expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
   })
@@ -142,8 +142,9 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
     expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
   })
 
-  // bug db58e1c4（家族 4cf01aa9）根因修复 pin：多词元判定 AND → OR 容错并集——
-  // 任一词元命中（FTS 全列 ∪ title/summary 子串）即候选，score 排序保相关性。
+  // bug db58e1c4（家族 4cf01aa9）根因修复 pin：子串准入通道词元 AND → OR 容错并集——
+  // 任一词元命中（FTS 全列强证据 ∪ title/summary 子串）即候选，中性层按词元覆盖度
+  // 细分排序保相关性；FTS AND 词面证据层维持（强证据不被弱候选挤出）。
   it('OR 容错：多词 query 含 title/summary 外词元——「部署 deploy」仍命中（AND 判定域缺口收口）', async () => {
     const hits = await service.search({ projectId, text: '部署 deploy', sessionId: 's' })
     expect(hits.length).toBeGreaterThanOrEqual(1)
