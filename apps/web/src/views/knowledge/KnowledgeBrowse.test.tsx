@@ -26,6 +26,7 @@ const CARDS: readonly KnowledgeCard[] = [
     domainPath: '前端',
     updated: '2026-10-02T09:00:00.000Z',
     heat: 3,
+    scope: 'project',
   },
 ]
 

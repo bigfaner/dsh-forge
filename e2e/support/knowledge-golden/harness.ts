@@ -51,7 +51,9 @@ export const GOLDEN_SESSION_ID = 'golden-sess-1'
 /** 通道典型请求载荷（entryId 经 title 确定性解析） */
 export type GoldenChannelRequest = Record<string, unknown> & { projectId: string }
 
-/** 通道分发（镜像 knowledge-rpc.ts 注册行 1:1——通道名 → 服务法调用同形） */
+/** 通道分发（镜像 knowledge-rpc.ts 注册行 1:1——通道名 → 服务法调用同形；stage④ 1.7
+ *  recallFeedback 第七通道镜像 = service.recallFeedback 透传，写面 dispatch 形状校验归
+ *  knowledge-rpc.ts 通道层，golden 对照面取服务法直呼同形） */
 export async function invokeGoldenChannel(
   channel: KnowledgeChannel,
   service: BrowseKnowledgeService,
@@ -64,6 +66,7 @@ export async function invokeGoldenChannel(
       return service.listEntries({
         projectId: request.projectId as string,
         ...(request.domainPrefix !== undefined ? { domainPrefix: request.domainPrefix as string } : {}),
+        ...(request.scopeFilter !== undefined ? { scopeFilter: request.scopeFilter as 'all' | 'project' | 'global' } : {}),
       })
     case KNOWLEDGE_CHANNELS.entryDetail:
       return service.getEntryDetail({ projectId: request.projectId as string, entryId: request.entryId as number })
@@ -71,5 +74,9 @@ export async function invokeGoldenChannel(
       return service.heatByEntry(request.projectId as string)
     case KNOWLEDGE_CHANNELS.sessionRecall:
       return service.sessionRecall({ projectId: request.projectId as string, sessionId: request.sessionId as string })
+    case KNOWLEDGE_CHANNELS.entryAction:
+      return service.confirmBatch({ projectId: request.projectId as string, entryIds: [] })
+    case KNOWLEDGE_CHANNELS.recallFeedback:
+      return service.recallFeedback(request as never)
   }
 }

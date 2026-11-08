@@ -21,6 +21,7 @@ const CARD: KnowledgeCard = {
   domainPath: '前端',
   updated: '2026-11-06T00:00:00.000Z',
   heat: 0,
+  scope: 'project',
 }
 
 const DETAIL: EntryDetail = {

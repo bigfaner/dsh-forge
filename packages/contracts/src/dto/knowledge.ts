@@ -7,20 +7,39 @@
 // EntryAction 入参/回执 DTO（forge:knowledge/entryAction 第六通道；形状/码集契约正本：
 // .forge/docs/proposals/knowledge-review-ui/testing/contracts/entry-action-channel.md §1/§2）、
 // DomainNode 扩 unconfirmedCount（待审核徽记，未过滤口径独立查询面供数）。
+// stage④ 1.7（recall-scope contracts 面）：RecallVerb 扩四值（read/browse——DB v7
+// ck_krl_verb 同步承载）；RecallGroup 扩 turnSeq/triggerSnap/contentSnap、RecallGroupHit
+// 扩 rowId/score/scope（契约正本：proposals/knowledge-stage4-recall-scope/testing/
+// recall-card-turn-summary/contracts/recall-record-channel.md §1 S1–S12）；ListEntriesQuery
+// 扩 scopeFilter + KnowledgeCard 扩 scope（scope-source.md §1 S1/S2）；RecallFeedbackRequest
+// /Outcome 第七通道信封迁入（feedback-channel.md §1 S2/S3——单一来源 contracts，插件域再导出）。
+// 可空字段铁律（判例 7db97a7c）：显式 undefined 炸 lossless JSON——可空字段一律 `| null`
+// 且生产面恒显式置 null（键恒在场），禁 undefined。
 // 定位铁律：纯类型，零逻辑零依赖。
 
-/** 召回动词（knowledge_recall_logs.verb CHECK 口径） */
-export type RecallVerb = 'search' | 'read-abstract'
+/** 召回动词（knowledge_recall_logs.verb CHECK 口径——v7 起四值：read/browse 为采纳/浏览动词） */
+export type RecallVerb = 'search' | 'read-abstract' | 'read' | 'browse'
+
+/** 条目来源标识（registry.scope 应用层二值——查询面派生产物，无 DDL 义务） */
+export type EntryScope = 'project' | 'global'
 
 /** 状态过滤片（UI chips 全部/待审核/已确认——服务端执行，零客户端过滤语义铁律维持） */
 export type EntryStatusFilter = 'all' | 'unconfirmed' | 'confirmed'
 
-/** listEntries 入参（组合过滤：目录路径前缀 + 关键词 + 状态片；statusFilter 缺省 = 全部） */
+/** 列表查询面 scope 过滤片（审核入口承载——服务端执行；缺省 'all' = 现役行为零变化） */
+export type EntryScopeFilter = 'all' | EntryScope
+
+/** listEntries 入参（组合过滤：目录路径前缀 + 关键词 + 状态片 + 来源片；缺省 = 现役行为） */
 export interface ListEntriesQuery {
   projectId: string
   domainPrefix?: string
   keyword?: string
   statusFilter?: EntryStatusFilter
+  /**
+   * 来源过滤（stage④ 1.7 审核入口承载）：'global' = 仅全局库条目（待审核视图经此可见
+   * unconfirmed 全局条目）；'all'/缺省 = 现役行为（调用方项目库）零变化。
+   */
+  scopeFilter?: EntryScopeFilter
 }
 
 /** 浏览卡片（UF-6：标题/摘要/关键词/状态/时间 + 热度徽章；兼作域树聚合数据源——domainPath 前缀派生） */
@@ -35,6 +54,8 @@ export interface KnowledgeCard {
   updated: string
   /** 热度 = 使用事件按条目计数（与 knowledge_recall_logs 断言一致，哨兵行不计） */
   heat: number
+  /** 条目来源标识（查询面派生——entry ↔ registry knowledge_dir 归属关联） */
+  scope: EntryScope
 }
 
 /** getEntryDetail 入参 */
@@ -159,6 +180,8 @@ export interface RecallQuerySnapshot {
   text?: string
   /** read-abstract 动词的调用参数（search 行不带） */
   entryId?: number
+  /** read 动词的条目锚（id/标题锚——stage④ 1.5 落 query_json 快照键；有值才落键） */
+  frontmatterId?: string
   /** search 出参 hint 写时点快照（stage④ 1.5——落 query_json 零新列；有值才落键） */
   hint?: string
   /** browse 动词调用参数快照（stage④ 1.5） */
@@ -170,6 +193,8 @@ export interface RecallQuerySnapshot {
 
 /** 召回分组行内的单条命中展开（快照字段抗索引重建） */
 export interface RecallGroupHit {
+  /** recall_logs 行级锚（rowid——行级反馈通道的目标键，stage④ 1.7） */
+  rowId: number
   /** null = 条目已重建清除（行保留；索引未命中行级失效标注） */
   entryId: number | null
   frontmatterId: string | null
@@ -177,8 +202,12 @@ export interface RecallGroupHit {
   title: string | null
   /** domain_snap */
   domainPath: string | null
-  /** 热度徽章 = 该条目使用事件计数 */
+  /** 热度徽章 = 该条目使用事件计数（数据面事实保留；召回卡片 UI 不渲染） */
   heat: number
+  /** 检索分（search 命中行有值；其余动词/哨兵行 null——DDL v7 score REAL NULL） */
+  score: number | null
+  /** 来源标识（查询面派生产物，无 DDL 义务） */
+  scope: EntryScope
 }
 
 /** 召回分组行（统计头 = call_id 聚合；零命中调用 hitCount = 0 且 hits 为空） */
@@ -190,6 +219,37 @@ export interface RecallGroup {
   durationMs: number | null
   /** 最近时间（ISO-8601） */
   createdAt: string
+  /** 轮次序（session 事件日志派生；null = 轮次未锚——legacy 行/降级链） */
+  turnSeq: number | null
+  /** 触发输入快照（写时点派生，≤2000 字符含尾部截断标记；null = legacy 双缺/降级） */
+  triggerSnap: string | null
+  /** read 动词的 tool result 全文快照（不截断，含 render 头行）；非 read 动词恒 null */
+  contentSnap: string | null
   hits: RecallGroupHit[]
 }
+
+// ───────────────────────── stage④ 1.5/1.7 召回反馈动作通道（第七通道信封） ─────────────────────────
+
+/**
+ * recallFeedback 入参（`forge:knowledge/recallFeedback`——判别联合）。
+ * `feedback: 0` = toggle 撤销（置回未反馈态——feedback 列 0 + note/at 双 NULL）；事件级 👍
+ * 不存在（正反馈无批动作语义——仅 👎 批 / 批撤销）。通道层只承担 IPC 载荷形状防线；
+ * 越界/缺 note/unconfirmed 业务校验归插件服务域（沿 entryAction 分工先例）。
+ */
+export type RecallFeedbackRequest =
+  | { projectId: string; action: 'row'; rowId: number; feedback: 1 | -1 | 0; note?: string }
+  | { projectId: string; action: 'batch'; callId: string; feedback: -1 | 0; note?: string }
+
+/** 逐行失败码（封闭联合——实现不得引入联合外成员；新增成员须经 fix/disc 链修订契约正本） */
+export type RecallFeedbackFailureCode = 'not-found' | 'note-required' | 'unconfirmed'
+
+/** 逐行回执项（batch 展开为逐行；行级真相恒逐行回执） */
+export type RecallFeedbackResult =
+  | { rowId: number; outcome: 'success' }
+  | { rowId: number; outcome: 'failure'; code: RecallFeedbackFailureCode; message: string }
+
+/** recallFeedback 回执联合（请求级拒收 = action 非法 / feedback 越界 / 载荷字段不符） */
+export type RecallFeedbackOutcome =
+  | { results: RecallFeedbackResult[] }
+  | { outcome: 'rejected-request'; code: 'invalid-request'; message: string }
 

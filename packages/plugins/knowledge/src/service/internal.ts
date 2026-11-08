@@ -4,7 +4,7 @@
 // 关键异常降级：core 走 app_key_logs；自持域经 storage/diag.ts 事件面（rebuild 事件
 // 已含成败路径——SC-10），本文件不再另设关键日志表。
 import type Database from 'better-sqlite3'
-import type { DomainNode, KnowledgeCard, RecallGroup, RecallQuerySnapshot } from '@dsh-forge/contracts'
+import type { DomainNode, KnowledgeCard, RecallGroup, RecallQuerySnapshot, RecallVerb } from '@dsh-forge/contracts'
 import { canonicalWsPath } from '../storage/registry.js'
 import { isSafeRelPath } from '../storage/index.js'
 
@@ -362,12 +362,13 @@ export function aggregateDomainTree(cards: readonly KnowledgeCard[]): DomainNode
 
 // ── sessionRecall 行分组聚合 ──
 
-/** sessionRecall 原始行（单表直读形状；verb 字面量面 = contracts RecallVerb——v7 起库内
- *  ck_krl_verb 扩四值（read/browse），contracts 联合扩位随 tools/contracts 任务收口，
- *  本文件不先行扩型（不越任务改契约面）。 */
+/** sessionRecall 原始行（单表直读形状；verb 字面量面 = contracts RecallVerb 四值——v7 起
+ *  ck_krl_verb 扩 read/browse；stage④ 1.7 扩 row_id/turn_seq/trigger_snap/score/content_snap
+ *  读面——recall-record-channel.md §1 S1–S6 契约供数）。 */
 export interface RecallRow {
+  row_id: number
   call_id: string
-  verb: 'search' | 'read-abstract'
+  verb: RecallVerb
   entry_id: number | null
   frontmatter_id: string | null
   title_snap: string | null
@@ -376,16 +377,22 @@ export interface RecallRow {
   hit_count: number
   duration_ms: number | null
   created_at: string
+  turn_seq: number | null
+  trigger_snap: string | null
+  score: number | null
+  content_snap: string | null
 }
 
 /**
  * call_id 分组聚合（纯函数）：同 call 各行共享调用级字段 → 单 RecallGroup；零命中哨兵行
- * 不展开为命中；热度徽章 = 项目级事件计数（entry_id → frontmatter_id 兜底）；输出最近调用在前。
+ * 不展开为命中；热度徽章 = 项目级事件计数（entry_id → frontmatter_id 兜底）；hit scope =
+ * registry 归属派生（scopeBySlug 缺席 = 'project' 兜底——stage④ 1.7）；输出最近调用在前。
  */
 export function groupRecallRows(
   rows: readonly RecallRow[],
   heatByEntry: ReadonlyMap<number, number>,
   heatByFrontmatterId: ReadonlyMap<string, number>,
+  scopeBySlug: ReadonlyMap<string, 'project' | 'global'> = new Map(),
 ): RecallGroup[] {
   const groups: RecallGroup[] = []
   let current: RecallGroup | null = null
@@ -406,12 +413,16 @@ export function groupRecallRows(
         hitCount: row.hit_count,
         durationMs: row.duration_ms,
         createdAt: row.created_at,
+        turnSeq: row.turn_seq,
+        triggerSnap: row.trigger_snap,
+        contentSnap: row.content_snap,
         hits: [],
       }
       groups.push(current)
     }
     if (row.entry_id === null && row.frontmatter_id === null && row.title_snap === null) continue
     current.hits.push({
+      rowId: row.row_id,
       entryId: row.entry_id,
       frontmatterId: row.frontmatter_id,
       title: row.title_snap,
@@ -421,6 +432,8 @@ export function groupRecallRows(
         : row.frontmatter_id !== null
           ? (heatByFrontmatterId.get(row.frontmatter_id) ?? 0)
           : 0,
+      score: row.score,
+      scope: row.frontmatter_id !== null ? (scopeBySlug.get(row.frontmatter_id) ?? 'project') : 'project',
     })
   }
   groups.reverse()

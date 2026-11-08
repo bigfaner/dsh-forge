@@ -478,3 +478,68 @@ describe('全域检索并集（stage④ 1.4 SC-1——search 覆盖全部注册�
     }
   })
 })
+
+// ── stage④ 1.7：供数面新字段（scopeFilter 审核入口 + RecallGroup/Hit 扩字段——
+//    契约正本 recall-record-channel.md §1 / scope-source.md §1 供数侧） ──
+
+describe('stage④ 1.7 供数面：listEntries scopeFilter + sessionRecall 扩字段', () => {
+  it('scopeFilter=global → 仅全局库条目卡（scope=global）；缺省 → 现役行为（项目库卡 scope=project）', async () => {
+    const home3 = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-scope-'))
+    const db3 = openKnowledgeDatabase(join(home3, 'knowledge.db'))
+    try {
+      const reg3 = createKnowledgeRegistry(db3)
+      const projDir = join(home3, 'ws', '.knowledge')
+      mkdirSync(projDir, { recursive: true })
+      writeFileSync(join(projDir, 'p.md'), '---\ntitle: P\nid: kb-p\nsummary: s\nkeywords: [kw]\n---\n正文', 'utf8')
+      const globalDir = join(home3, 'global')
+      mkdirSync(globalDir, { recursive: true })
+      writeFileSync(join(globalDir, 'g.md'), '---\ntitle: G\nid: kb-g\nstatus: unconfirmed\nsummary: s\nkeywords: [kw]\n---\n正文', 'utf8')
+      reg3.upsert(join(home3, 'ws'), projDir, 'p-scope')
+      db3.prepare(
+        `INSERT INTO knowledge_registry (ws_path, knowledge_dir, project_id, scope, created_at, updated_at)
+         VALUES (?, ?, NULL, 'global', '1', '1')`,
+      ).run(join(home3, 'gws'), globalDir)
+      const svc = createKnowledgeService({ db: db3, resolveWsPath: (id) => (id === 'p-scope' ? join(home3, 'ws') : undefined) })
+      await svc.rebuildIndex('p-scope')
+
+      // 缺省/'all'：现役行为零变化（调用方项目库）
+      const all = await svc.listEntries({ projectId: 'p-scope' })
+      expect(all.map((c) => c.title)).toEqual(['P'])
+      expect(all.every((c) => c.scope === 'project')).toBe(true)
+      // 'project' 显式 = 同缺省
+      expect((await svc.listEntries({ projectId: 'p-scope', scopeFilter: 'project' })).map((c) => c.title)).toEqual(['P'])
+      // 'global'：仅全局库条目（unconfirmed 全局条目经待审核视图可见——审核入口承载）
+      const globals = await svc.listEntries({ projectId: 'p-scope', scopeFilter: 'global' })
+      expect(globals.map((c) => c.title)).toEqual(['G'])
+      expect(globals.every((c) => c.scope === 'global')).toBe(true)
+      // 零 global 注册行 = 空集合法回执（J1-CT-04）
+      db3.prepare(`DELETE FROM knowledge_registry WHERE scope = 'global'`).run()
+      expect(await svc.listEntries({ projectId: 'p-scope', scopeFilter: 'global' })).toEqual([])
+    } finally {
+      db3.close()
+      rmSync(home3, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    }
+  })
+
+  it('sessionRecall 供数：分组行 turnSeq/triggerSnap/contentSnap 显式 null 在场 + 命中行 rowId/score/scope（可空一律 null 禁 undefined——判例 7db97a7c）', async () => {
+    await service.search({ projectId, text: 'api', sessionId: 's-stage4', turnSeq: 3, triggerText: '触发输入原文' })
+    const groups = await service.sessionRecall({ projectId, sessionId: 's-stage4' })
+    expect(groups).toHaveLength(1)
+    const g = groups[0]!
+    expect(g.turnSeq).toBe(3)
+    expect(g.triggerSnap).toBe('触发输入原文')
+    expect(g.contentSnap).toBeNull()
+    for (const key of ['turnSeq', 'triggerSnap', 'contentSnap'] as const) {
+      expect((g as unknown as Record<string, unknown>)[key], `${key} 恒在场`).not.toBeUndefined()
+    }
+    expect(g.hits.length).toBeGreaterThan(0)
+    for (const hit of g.hits) {
+      expect(typeof hit.rowId).toBe('number')
+      expect(typeof hit.score).toBe('number') // search 命中行有值
+      expect(['project', 'global']).toContain(hit.scope)
+      expect(hit.scope).toBe('project') // 单项目库语料——命中行 scope 恒 project
+    }
+    const serialized = JSON.parse(JSON.stringify(g)) as Record<string, unknown>
+    expect(serialized).toEqual(g as unknown as Record<string, unknown>) // lossless JSON 往返零 undefined
+  })
+})

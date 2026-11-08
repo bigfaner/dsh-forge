@@ -18,6 +18,7 @@ import { joinDirSegment } from '@dsh-forge/path-key'
 import type {
   DomainNode,
   EntryDetail,
+  EntryScope,
   HeatByEntry,
   KnowledgeCard,
   ListEntriesQuery,
@@ -158,10 +159,10 @@ type RecallLogParams = readonly [
 ]
 
 /**
- * 召回写入动词集（写径四值——v7 ck_krl_verb 口径）。读面联合扩位随 tools/contracts 任务
- * 收口（internal.ts RecallRow 注释），本文件仅写径局部扩型，不越任务改契约面。
+ * 召回写入动词集（写径四值——v7 ck_krl_verb 口径；stage④ 1.7 contracts RecallVerb
+ * 四值收口后与读面同一联合）。
  */
-type RecallWriteVerb = RecallVerb | 'read' | 'browse'
+type RecallWriteVerb = RecallVerb
 
 /** trigger_snap 单点截断上界（应用层——DB 无长度约束；超长尾部加截断标记，总长 ≤2000 含标记） */
 export const TRIGGER_SNAP_MAX_CHARS = 2000
@@ -238,10 +239,26 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     `SELECT ws_path FROM knowledge_registry WHERE project_id = ?`,
   )
   // SC-1 全域检索改判：registry 全行枚举语句（现役只有单行查询——search 覆盖全部
-  // 注册域的行集来源，每调用期现查禁缓存——判例 d24a4464 同口径）
-  const selectRegistryDirs = db.prepare<unknown[], { knowledge_dir: string }>(
-    `SELECT knowledge_dir FROM knowledge_registry`,
+  // 注册域的行集来源，每调用期现查禁缓存——判例 d24a4464 同口径）。
+  // stage④ 1.7：scope 列同捞（entryScopeIndex 来源归属派生——global 行识别）。
+  const selectRegistryDirs = db.prepare<unknown[], { knowledge_dir: string; scope: string }>(
+    `SELECT knowledge_dir, scope FROM knowledge_registry`,
   )
+
+  /**
+   * 条目 slug → scope 归属派生（stage④ 1.7——registry 全行枚举 + 版本文件前缀归属，
+   * 归属判定单一事实源 = collectEntryIdsUnderDir 与 projectEntryIds 同口径；global 行入表、
+   * 调用方项目行 'project' 覆盖优先；每调用期现查禁缓存——判例 d24a4464 同口径）。
+   */
+  function entryScopeIndex(callerKnowledgeDir: string): Map<string, EntryScope> {
+    const map = new Map<string, EntryScope>()
+    for (const row of selectRegistryDirs.all()) {
+      if (row.scope !== 'global') continue
+      for (const id of collectEntryIdsUnderDir(selectVersionPaths.all(), row.knowledge_dir)) map.set(id, 'global')
+    }
+    for (const id of collectEntryIdsUnderDir(selectVersionPaths.all(), callerKnowledgeDir)) map.set(id, 'project')
+    return map
+  }
 
   /** projectId → { wsPath, knowledgeDir }（两级任一未命中 fail-loud） */
   function requireProject(projectId: string, verb: string): { wsPath: string; knowledgeDir: string } {
@@ -346,7 +363,8 @@ function listDomainDirs(knowledgeDir: string, maxDepth: number): string[] {
   // 收窄（会话 tab 归因面）——与热度全局聚合（KNOWLEDGE_HEAT_TERM 零 project 维度）语义
   // 不同源，此 WHERE 不得随热度改判去除。
   const selectSessionRows = db.prepare<[string, string], RecallRow>(
-    `SELECT call_id, verb, entry_id, frontmatter_id, title_snap, domain_snap, query_json, hit_count, duration_ms, created_at
+    `SELECT id AS row_id, call_id, verb, entry_id, frontmatter_id, title_snap, domain_snap, query_json, hit_count, duration_ms, created_at,
+            turn_seq, trigger_snap, score, content_snap
       FROM knowledge_recall_logs WHERE project_id = ? AND session_id = ? ORDER BY created_at, id`,
   )
   // stage③ C1：FTS5 BM25 检索面（仅元数据列——knowledge_fts 列面 = title/keywords/summary，
@@ -597,6 +615,17 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
           ? selectRows(browseAllStmt, knowledgeDir, prefix)
           : selectRows(browseByDomainStmt, knowledgeDir, prefix, prefix, `${escapeLike(prefix)}/%`)
     }
+    // stage④ 1.7 scopeFilter（审核入口承载——服务端执行，零客户端过滤语义铁律维持）：
+    // 'global' = 仅全局库条目（registry scope='global' 行 id 集过滤；待审核视图经此可见
+    // unconfirmed 全局条目）；'all'/'project'/缺省 = 现役行为零变化（调用方项目库）。
+    let scopeBySlug: ReadonlyMap<string, EntryScope> = new Map()
+    if (q.scopeFilter === 'global') {
+      scopeBySlug = entryScopeIndex(knowledgeDir)
+      const globalIds = new Set([...scopeBySlug].filter(([, s]) => s === 'global').map(([id]) => id))
+      const base =
+        prefix === undefined ? browseAllStmt.all() : browseByDomainStmt.all(prefix, `${escapeLike(prefix)}/%`)
+      rows = base.filter((r) => globalIds.has(r.id))
+    }
     // statusFilter 服务端执行（1.4——零客户端过滤语义铁律维持）
     rows = applyStatusFilter(rows, q.statusFilter)
 
@@ -618,6 +647,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
         domainPath: row.domain_path,
         updated: readCardUpdated(row),
         heat: heatByEntry.get(row.rid) ?? 0,
+        scope: scopeBySlug.get(row.id) ?? 'project',
       }))
   }
 
@@ -824,7 +854,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     },
 
     async sessionRecall(q: SessionRecallQuery): Promise<RecallGroup[]> {
-      requireProject(q.projectId, 'sessionRecall')
+      const { knowledgeDir } = requireProject(q.projectId, 'sessionRecall')
 
       const rows = selectSessionRows.all(q.projectId, q.sessionId)
       if (rows.length === 0) return []
@@ -833,7 +863,8 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       const heatByFrontmatterId = new Map(
         selectHeatByFrontmatterId.all().map((r) => [r.frontmatter_id, r.heat] as const),
       )
-      return groupRecallRows(rows, heatByEntry, heatByFrontmatterId)
+      // stage④ 1.7：hit scope 派生（registry 归属——每调用期现查禁缓存）
+      return groupRecallRows(rows, heatByEntry, heatByFrontmatterId, entryScopeIndex(knowledgeDir))
     },
 
     async browse(q: { projectId: string }): Promise<DomainNode[]> {

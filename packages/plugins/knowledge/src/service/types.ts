@@ -12,6 +12,8 @@ import type {
   HeatByEntry,
   KnowledgeCard,
   ListEntriesQuery,
+  RecallFeedbackOutcome,
+  RecallFeedbackRequest,
   RecallGroup,
   SessionRecallQuery,
 } from '@dsh-forge/contracts'
@@ -463,26 +465,16 @@ export type KnowledgeCreateDomainOutcome =
 // ── stage④ 1.5 召回反馈（recall_logs 行级——契约正本 recall-feedback-loop/contracts/feedback-channel.md §1 S2/S3） ──
 
 /**
- * 召回反馈请求（判别联合）：`feedback: 0` = toggle 撤销（置回未反馈态——feedback 列 0 +
- * note/at 双 NULL）；事件级 👍 不存在（正反馈无批动作语义——仅 👎 批 / 批撤销）。
- * 通道层只承担 IPC 载荷形状防线；越界/缺 note/unconfirmed 业务校验归本服务域。
+ * 召回反馈通道信封（stage④ 1.7 迁 contracts 单一来源——web/host/插件三面共享；
+ * 本文件再导出维持服务面签名引用零漂移）。通道层只承担 IPC 载荷形状防线；
+ * 越界/缺 note/unconfirmed 业务校验归本服务域（service/feedback.ts）。
  */
-export type RecallFeedbackRequest =
-  | { readonly projectId: string; readonly action: 'row'; readonly rowId: number; readonly feedback: 1 | -1 | 0; readonly note?: string }
-  | { readonly projectId: string; readonly action: 'batch'; readonly callId: string; readonly feedback: -1 | 0; readonly note?: string }
-
-/** 逐行失败码（封闭联合——实现不得引入联合外成员） */
-export type RecallFeedbackFailureCode = 'not-found' | 'note-required' | 'unconfirmed'
-
-/** 逐行回执项（batch 展开为逐行；行级真相恒逐行回执） */
-export type RecallFeedbackResult =
-  | { readonly rowId: number; readonly outcome: 'success' }
-  | { readonly rowId: number; readonly outcome: 'failure'; readonly code: RecallFeedbackFailureCode; readonly message: string }
-
-/** 召回反馈回执联合（请求级拒收 = action 非法 / feedback 越界 / 载荷字段不符） */
-export type RecallFeedbackOutcome =
-  | { readonly results: readonly RecallFeedbackResult[] }
-  | { readonly outcome: 'rejected-request'; readonly code: 'invalid-request'; readonly message: string }
+export type {
+  RecallFeedbackFailureCode,
+  RecallFeedbackOutcome,
+  RecallFeedbackRequest,
+  RecallFeedbackResult,
+} from '@dsh-forge/contracts'
 
 /** 回流配置面（§2.4：阈值归插件 config，非代码常量）。
  *  分阈迁移提示（stage③ C1 跨内核校准）：两档阈值缺省已由旧词面核 1 校准为 0.25

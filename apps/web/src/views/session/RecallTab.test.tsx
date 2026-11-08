@@ -30,7 +30,10 @@ const groups: readonly RecallGroup[] = [
     hitCount: 1,
     durationMs: 4,
     createdAt: '2026-10-02T08:05:00.000Z',
-    hits: [{ entryId: 7, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 2 }],
+    turnSeq: null,
+    triggerSnap: null,
+    contentSnap: null,
+    hits: [{ entryId: 7, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 2, rowId: 1, score: null, scope: 'project' }],
   },
   {
     callId: 'c2',
@@ -39,7 +42,10 @@ const groups: readonly RecallGroup[] = [
     hitCount: 1,
     durationMs: 5,
     createdAt: '2026-10-02T08:20:00.000Z',
-    hits: [{ entryId: null, frontmatterId: 'fm-gone', title: '已删文档', domainPath: '后端', heat: 3 }],
+    turnSeq: null,
+    triggerSnap: null,
+    contentSnap: null,
+    hits: [{ entryId: null, frontmatterId: 'fm-gone', title: '已删文档', domainPath: '后端', heat: 3, rowId: 1, score: null, scope: 'project' }],
   },
 ]
 
@@ -103,7 +109,10 @@ describe('RecallTabBody 纯渲染（全相位）', () => {
         hitCount: 1,
         durationMs: 1,
         createdAt: '2026-10-02T08:19:00.000Z',
-        hits: [{ entryId: null, frontmatterId: null, title: null, domainPath: null, heat: 1 }],
+        turnSeq: null,
+        triggerSnap: null,
+        contentSnap: null,
+        hits: [{ entryId: null, frontmatterId: null, title: null, domainPath: null, heat: 1, rowId: 1, score: null, scope: 'project' }],
       },
     ]
     const markup = renderBody(stateOf({ phase: 'ready', groups: titleless }), () => {})

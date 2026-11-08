@@ -139,7 +139,7 @@ describe('3.5 knowledge 面（forge:knowledge/* 五通道——浏览数据面�
     { domainPath: '编程/java', label: 'java', depth: 2, entryCount: 1, unconfirmedCount: 0 },
   ]
   const cards: KnowledgeCard[] = [
-    { entryId: 1, title: '框架选型', summary: '前端框架选型基线', keywords: ['react', 'frontend'], status: 'draft', domainPath: '前端', updated: '2026-10-01T00:00:00.000Z', heat: 2 },
+    { entryId: 1, title: '框架选型', summary: '前端框架选型基线', keywords: ['react', 'frontend'], status: 'draft', domainPath: '前端', updated: '2026-10-01T00:00:00.000Z', heat: 2, scope: 'project' },
   ]
   const detail: EntryDetail = {
     entryId: 1, title: '框架选型', summary: '前端框架选型基线', keywords: ['react', 'frontend'], status: 'draft',
@@ -147,7 +147,7 @@ describe('3.5 knowledge 面（forge:knowledge/* 五通道——浏览数据面�
   }
   const heat = new Map([[1, 2]])
   const groups: RecallGroup[] = [
-    { callId: 'call-1', verb: 'search', query: null, hitCount: 0, durationMs: 3, createdAt: '2026-10-01T00:00:00.000Z', hits: [] },
+    { callId: 'call-1', verb: 'search', query: null, hitCount: 0, durationMs: 3, createdAt: '2026-10-01T00:00:00.000Z', turnSeq: null, triggerSnap: null, contentSnap: null, hits: [] },
   ]
 
   it('AC1 五方法 typed 结果（browse 聚合 / 过滤卡片 / 详情 / 热度 Map / 召回分组）', async () => {

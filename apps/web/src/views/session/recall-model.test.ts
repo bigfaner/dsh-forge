@@ -30,9 +30,12 @@ const groups: readonly RecallGroup[] = [
     hitCount: 2,
     durationMs: 4,
     createdAt: T1,
+    turnSeq: null,
+    triggerSnap: null,
+    contentSnap: null,
     hits: [
-      { entryId: 1, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 2 },
-      { entryId: 2, frontmatterId: 'k2', title: '回滚手册', domainPath: '后端', heat: 1 },
+      { entryId: 1, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 2, rowId: 1, score: null, scope: 'project' },
+      { entryId: 2, frontmatterId: 'k2', title: '回滚手册', domainPath: '后端', heat: 1, rowId: 1, score: null, scope: 'project' },
     ],
   },
   {
@@ -42,7 +45,10 @@ const groups: readonly RecallGroup[] = [
     hitCount: 1,
     durationMs: 2,
     createdAt: T2,
-    hits: [{ entryId: 1, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 2 }],
+    turnSeq: null,
+    triggerSnap: null,
+    contentSnap: null,
+    hits: [{ entryId: 1, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 2, rowId: 1, score: null, scope: 'project' }],
   },
   {
     callId: 'c3',
@@ -51,6 +57,9 @@ const groups: readonly RecallGroup[] = [
     hitCount: 0,
     durationMs: 3,
     createdAt: T3,
+    turnSeq: null,
+    triggerSnap: null,
+    contentSnap: null,
     hits: [],
   },
   {
@@ -60,7 +69,10 @@ const groups: readonly RecallGroup[] = [
     hitCount: 1,
     durationMs: 5,
     createdAt: T4,
-    hits: [{ entryId: null, frontmatterId: 'fm-gone', title: '已删文档', domainPath: '后端', heat: 3 }],
+    turnSeq: null,
+    triggerSnap: null,
+    contentSnap: null,
+    hits: [{ entryId: null, frontmatterId: 'fm-gone', title: '已删文档', domainPath: '后端', heat: 3, rowId: 1, score: null, scope: 'project' }],
   },
 ]
 
@@ -75,11 +87,11 @@ describe('recallStatsOf 统计头（AC-2：与事件表口径一致）', () => {
     const clearedTwice: readonly RecallGroup[] = [
       {
         ...groups[3]!,
-        hits: [{ entryId: null, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 3 }],
+        hits: [{ entryId: null, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 3, rowId: 1, score: null, scope: 'project' }],
       },
       {
         ...groups[3]!,
-        hits: [{ entryId: null, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 3 }],
+        hits: [{ entryId: null, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 3, rowId: 1, score: null, scope: 'project' }],
       },
     ]
     expect(recallStatsOf(clearedTwice)).toEqual({ calls: 2, covered: 1 })
@@ -87,7 +99,7 @@ describe('recallStatsOf 统计头（AC-2：与事件表口径一致）', () => {
       ...clearedTwice,
       {
         ...groups[0]!,
-        hits: [{ entryId: 9, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 3 }],
+        hits: [{ entryId: 9, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 3, rowId: 1, score: null, scope: 'project' }],
       },
     ]
     expect(recallStatsOf(mixed)).toEqual({ calls: 3, covered: 2 }) // e:9 与 f:k1 各一（entryId 优先键）
@@ -114,7 +126,7 @@ describe('recallRowsOf 分组行投影（按知识折叠）', () => {
   it('最近时间 = 该条目最近事件（e1 = T2 非最早）；行序 = 最近在前（fm-gone 行 T4 首位）', () => {
     const e1 = rows.find((r) => r.entryId === 1)
     expect(e1?.lastAt).toBe(T2)
-    expect(rows.map((r) => r.key)).toEqual([recallHitIdentity({ entryId: null, frontmatterId: 'fm-gone', title: '已删文档', domainPath: '后端', heat: 0 }), 'e:1', 'e:2'])
+    expect(rows.map((r) => r.key)).toEqual([recallHitIdentity({ entryId: null, frontmatterId: 'fm-gone', title: '已删文档', domainPath: '后端', heat: 0, rowId: 1, score: null, scope: 'project' }), 'e:1', 'e:2'])
   })
   it('AC-2 三方一致 pin：行事件折叠计数 = 热度徽章值（同源不漂移——e1 双事件热 2 / e2 单事件热 1）', () => {
     const e1 = rows.find((r) => r.entryId === 1)
@@ -143,20 +155,20 @@ describe('recallRowsOf 分组行投影（按知识折叠）', () => {
 
 describe('recallHitIdentity 身份键兜底链（entryId → frontmatterId → 标题快照）', () => {
   it('三级兜底全径：e:/f:/t: 前缀区分', () => {
-    expect(recallHitIdentity({ entryId: 7, frontmatterId: 'k1', title: 'A', domainPath: 'd', heat: 1 })).toBe('e:7')
-    expect(recallHitIdentity({ entryId: null, frontmatterId: 'k1', title: 'A', domainPath: 'd', heat: 1 })).toBe('f:k1')
-    expect(recallHitIdentity({ entryId: null, frontmatterId: null, title: 'A', domainPath: 'd', heat: 1 })).toBe('t:A')
-    expect(recallHitIdentity({ entryId: null, frontmatterId: null, title: null, domainPath: null, heat: 0 })).toBe('t:')
+    expect(recallHitIdentity({ entryId: 7, frontmatterId: 'k1', title: 'A', domainPath: 'd', heat: 1, rowId: 1, score: null, scope: 'project' })).toBe('e:7')
+    expect(recallHitIdentity({ entryId: null, frontmatterId: 'k1', title: 'A', domainPath: 'd', heat: 1, rowId: 1, score: null, scope: 'project' })).toBe('f:k1')
+    expect(recallHitIdentity({ entryId: null, frontmatterId: null, title: 'A', domainPath: 'd', heat: 1, rowId: 1, score: null, scope: 'project' })).toBe('t:A')
+    expect(recallHitIdentity({ entryId: null, frontmatterId: null, title: null, domainPath: null, heat: 0, rowId: 1, score: null, scope: 'project' })).toBe('t:')
   })
   it('标题快照兜底去重（双 null 同标题 = 同条目）', () => {
     const titleOnly: readonly RecallGroup[] = [
       {
         ...groups[3]!,
-        hits: [{ entryId: null, frontmatterId: null, title: '裸文档', domainPath: '', heat: 1 }],
+        hits: [{ entryId: null, frontmatterId: null, title: '裸文档', domainPath: '', heat: 1, rowId: 1, score: null, scope: 'project' }],
       },
       {
         ...groups[3]!,
-        hits: [{ entryId: null, frontmatterId: null, title: '裸文档', domainPath: '', heat: 1 }],
+        hits: [{ entryId: null, frontmatterId: null, title: '裸文档', domainPath: '', heat: 1, rowId: 1, score: null, scope: 'project' }],
       },
     ]
     expect(recallStatsOf(titleOnly)).toEqual({ calls: 2, covered: 1 })

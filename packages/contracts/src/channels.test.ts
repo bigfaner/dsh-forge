@@ -39,7 +39,7 @@ describe('AC3 通道名常量覆盖 Interface 4 两域全部通道（P1 面不�
     })
   })
 
-  it('forge:knowledge/* 六通道（browse/listEntries/entryDetail/heat/sessionRecall + knowledge-review-ui 1.3 entryAction 人工裁决写面）', () => {
+  it('forge:knowledge/* 七通道（browse/listEntries/entryDetail/heat/sessionRecall + 1.3 entryAction 人工裁决写面 + stage④ 1.7 recallFeedback 召回反馈动作写面）', () => {
     expect(KNOWLEDGE_CHANNELS).toEqual({
       browse: 'forge:knowledge/browse',
       listEntries: 'forge:knowledge/listEntries',
@@ -47,6 +47,7 @@ describe('AC3 通道名常量覆盖 Interface 4 两域全部通道（P1 面不�
       heat: 'forge:knowledge/heat',
       sessionRecall: 'forge:knowledge/sessionRecall',
       entryAction: 'forge:knowledge/entryAction',
+      recallFeedback: 'forge:knowledge/recallFeedback',
     })
   })
 
@@ -134,9 +135,9 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
 })
 
 describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
-  it('allowlist = 十二 invoke 族 51 通道全列、无重复（knowledge-review-ui 1.3 knowledge 六通道[+entryAction 人工裁决写面] + worktree 十一通道[1.30 增 select、bug 9eb9d6cb 增 selected 读镜像、bug 82e92933 退役 session-create、bug 9d2b7e6a 增 ensure-workspace 懒物化]；main 侧 allowlist 校验唯一源）', () => {
-    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(51)
-    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(51)
+  it('allowlist = 十二 invoke 族 52 通道全列、无重复（knowledge 六通道[+entryAction 人工裁决写面 + stage④ 1.7 recallFeedback 召回反馈动作写面] + worktree 十一通道[1.30 增 select、bug 9eb9d6cb 增 selected 读镜像、bug 82e92933 退役 session-create、bug 9d2b7e6a 增 ensure-workspace 懒物化]；main 侧 allowlist 校验唯一源）', () => {
+    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(52)
+    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(52)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(
       [
         ...Object.values(PROJECTS_CHANNELS),

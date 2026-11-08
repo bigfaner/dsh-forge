@@ -50,8 +50,8 @@ const invoke = (handlers: Map<string, (event: unknown, ...args: unknown[]) => un
 // ── 替身层：fake 浏览面服务（缺 search/readAbstract = AC4 注入面收窄的编译级自证）──
 
 const cards: KnowledgeCard[] = [
-  { entryId: 1, title: '框架选型', summary: '前端框架选型基线', keywords: ['react', 'frontend'], status: 'draft', domainPath: '前端', updated: '2026-10-01T00:00:00.000Z', heat: 2 },
-  { entryId: 2, title: 'API 规范', summary: '接口设计规范', keywords: ['api', 'backend'], status: 'draft', domainPath: '后端', updated: '2026-10-01T00:00:00.000Z', heat: 0 },
+  { entryId: 1, title: '框架选型', summary: '前端框架选型基线', keywords: ['react', 'frontend'], status: 'draft', domainPath: '前端', updated: '2026-10-01T00:00:00.000Z', heat: 2, scope: 'project' },
+  { entryId: 2, title: 'API 规范', summary: '接口设计规范', keywords: ['api', 'backend'], status: 'draft', domainPath: '后端', updated: '2026-10-01T00:00:00.000Z', heat: 0, scope: 'project' },
 ]
 const domainNodes = [
   { domainPath: '前端', label: '前端', depth: 1, entryCount: 1 },
@@ -63,8 +63,13 @@ const detail: EntryDetail = {
 }
 const heatMap = new Map([[1, 2]])
 const groups: RecallGroup[] = [
-  { callId: 'call-1', verb: 'search', query: { keywords: ['react'] }, hitCount: 1, durationMs: 5, createdAt: '2026-10-01T00:00:00.000Z', hits: [{ entryId: 1, frontmatterId: null, title: '框架选型', domainPath: '前端', heat: 2 }] },
+  {
+    callId: 'call-1', verb: 'search', query: { keywords: ['react'] }, hitCount: 1, durationMs: 5, createdAt: '2026-10-01T00:00:00.000Z',
+    turnSeq: null, triggerSnap: null, contentSnap: null,
+    hits: [{ rowId: 11, entryId: 1, frontmatterId: null, title: '框架选型', domainPath: '前端', heat: 2, score: 0.9, scope: 'project' }],
+  },
 ]
+const feedbackOk = { results: [{ rowId: 11, outcome: 'success' as const }] }
 
 const receiptOk = (entryIds: number[]) => ({ results: entryIds.map((entryId) => ({ entryId, outcome: 'success' as const })) })
 
@@ -81,6 +86,8 @@ function fakeKnowledgeService() {
     moveEntry: vi.fn().mockResolvedValue({ entryId: 1, outcome: 'success' }),
     updateEntry: vi.fn().mockResolvedValue({ entryId: 1, outcome: 'success' }),
     createDomain: vi.fn().mockResolvedValue({ outcome: 'success' }),
+    // stage④ 1.7：召回反馈法（recallFeedback 通道分派目标）
+    recallFeedback: vi.fn().mockResolvedValue(feedbackOk),
   } satisfies KnowledgeChannelService
 }
 
@@ -296,6 +303,71 @@ describe('1.6 entryAction 通道：注册面 + 五分支纯透传分派（AC3 �
   })
 })
 
+// ── stage④ 1.7：recallFeedback 第七通道（召回反馈动作写面——host 只 wiring）──
+
+describe('1.7 recallFeedback 通道：注册面 + 判别联合形状校验分派（AC3 键键对应）', () => {
+  function setup() {
+    const { ipcMain, handlers } = fakeIpcMain()
+    const ipc = createForgeIpc(ipcMain)
+    const service = fakeKnowledgeService()
+    registerKnowledgeChannels(ipc, service)
+    return { service, call: (channel: string, payload?: unknown) => invoke(handlers, channel, payload) }
+  }
+
+  it('注册面 = contracts KNOWLEDGE_CHANNELS 全集七通道（无多无少——recallFeedback 在列）', () => {
+    const { ipcMain, handlers } = fakeIpcMain()
+    const ipc = createForgeIpc(ipcMain)
+    registerKnowledgeChannels(ipc, fakeKnowledgeService())
+    expect([...ipc.registered()].sort()).toEqual(Object.values(KNOWLEDGE_CHANNELS).slice().sort())
+    expect(handlers.has(KNOWLEDGE_CHANNELS.recallFeedback)).toBe(true)
+  })
+
+  it('row 行级透传（feedback 三值 + note 条件携带）→ service.recallFeedback', async () => {
+    const { service, call } = setup()
+    await expect(call(KNOWLEDGE_CHANNELS.recallFeedback, { projectId: 'p-1', action: 'row', rowId: 11, feedback: -1, note: '误召回' })).resolves.toEqual({
+      ok: true, data: feedbackOk,
+    })
+    expect(service.recallFeedback).toHaveBeenCalledWith({ projectId: 'p-1', action: 'row', rowId: 11, feedback: -1, note: '误召回' })
+    await call(KNOWLEDGE_CHANNELS.recallFeedback, { projectId: 'p-1', action: 'row', rowId: 11, feedback: 1 })
+    expect(service.recallFeedback).toHaveBeenLastCalledWith({ projectId: 'p-1', action: 'row', rowId: 11, feedback: 1 })
+    await call(KNOWLEDGE_CHANNELS.recallFeedback, { projectId: 'p-1', action: 'row', rowId: 11, feedback: 0 })
+    expect(service.recallFeedback).toHaveBeenLastCalledWith({ projectId: 'p-1', action: 'row', rowId: 11, feedback: 0 })
+    // note 缺席 = 键不携带（显式 undefined 禁——判例 7db97a7c 同族）
+    expect(service.recallFeedback).toHaveBeenLastCalledWith(expect.not.objectContaining({ note: expect.anything() }))
+  })
+
+  it('batch 事件级透传（feedback 二值——事件级 👍 联合形状排除）→ service.recallFeedback', async () => {
+    const { service, call } = setup()
+    await expect(call(KNOWLEDGE_CHANNELS.recallFeedback, { projectId: 'p-1', action: 'batch', callId: 'call-1', feedback: -1, note: '整节误召回' })).resolves.toEqual({
+      ok: true, data: feedbackOk,
+    })
+    expect(service.recallFeedback).toHaveBeenCalledWith({ projectId: 'p-1', action: 'batch', callId: 'call-1', feedback: -1, note: '整节误召回' })
+  })
+
+  it('请求级拒收：action 非法 / feedback 越界 / rowId 非整数 / batch 携 feedback 1 → invalid-request 且服务法零调用', async () => {
+    const { service, call } = setup()
+    for (const bad of [
+      { projectId: 'p-1', action: 'row', rowId: 11, feedback: 2 },
+      { projectId: 'p-1', action: 'row', rowId: 1.5, feedback: 1 },
+      { projectId: 'p-1', action: 'batch', callId: 'call-1', feedback: 1 },
+      { projectId: 'p-1', action: 'toggle', rowId: 11 },
+    ]) {
+      await expect(call(KNOWLEDGE_CHANNELS.recallFeedback, bad)).resolves.toMatchObject({
+        data: { outcome: 'rejected-request', code: 'invalid-request' },
+      })
+    }
+    expect(service.recallFeedback).not.toHaveBeenCalled()
+  })
+
+  it('缺席态同语义：服务缺席 = 七通道整体不挂（recallFeedback 与现役通道同判定缝）', () => {
+    const absent = fakeIpcMain()
+    const absentIpc = createForgeIpc(absent.ipcMain)
+    const missing: KnowledgeChannelService | undefined = undefined
+    if (missing !== undefined) registerKnowledgeChannels(absentIpc, missing)
+    expect(absent.handlers.has(KNOWLEDGE_CHANNELS.recallFeedback)).toBe(false)
+  })
+})
+
 // ── 实层：core 知识域真身 × 真实注册组合 ──
 
 const dirs: string[] = []
@@ -378,14 +450,15 @@ describe('3.5 AC1 实层：五通道真身实跑', () => {
     expect(heat).toMatchObject({ ok: true })
     const heatData = (heat as { data: Map<number, number> }).data
     expect(heatData.size).toBe(2) // 前端两卡各召回一次（后端 0 计不入 Map）
-    expect([...heatData.values()].every((h) => h === 1)).toBe(true)
+    // v7 热度终式（stage④ 1.5 用户裁决）：search 为过程动词一律 0——播种径全 search ⇒ 全 0
+    expect([...heatData.values()].every((h) => h === 0)).toBe(true)
 
     const recall = await f.call(KNOWLEDGE_CHANNELS.sessionRecall, { projectId: f.projectId, sessionId: 'sess-1' })
     expect(recall).toMatchObject({ ok: true })
     const recallData = (recall as { data: RecallGroup[] }).data
     expect(recallData).toHaveLength(1) // 单 call 分组
     expect(recallData[0]).toMatchObject({ verb: 'search', hitCount: 2 })
-    expect(recallData[0]!.hits.every((h) => h.heat === 1)).toBe(true) // 分组行热度徽章 = heat 同源
+    expect(recallData[0]!.hits.every((h) => h.heat === 0)).toBe(true) // 分组行热度徽章 = heat 同源（终式口径）
     f.db.close()
   })
 })
@@ -420,6 +493,21 @@ describe('1.6 entryAction 实层：真身实跑（confirm 升格端到端）', (
     expect(envelope).toMatchObject({ data: { outcome: 'rejected-request', code: 'invalid-request' } })
     const before = f.db.prepare<unknown[], { n: number }>('SELECT COUNT(*) AS n FROM knowledge_entries').get()
     expect(before!.n).toBe(3)
+    f.db.close()
+  })
+})
+
+describe('1.7 recallFeedback 实层：真身实跑（行级反馈端到端）', () => {
+  it('unconfirmed 行 👍 → 逐行 failure unconfirmed（业务校验归插件域，通道纯透传）；请求级拒收 → 库零变化', async () => {
+    const f = realFixture()
+    await f.service.search({ projectId: f.projectId, sessionId: 'sess-fb' })
+    const recallRow = f.db.prepare<unknown[], { rid: number }>(
+      'SELECT id AS rid FROM knowledge_recall_logs ORDER BY id LIMIT 1',
+    ).get()!
+    const envelope = await f.call(KNOWLEDGE_CHANNELS.recallFeedback, { projectId: f.projectId, action: 'row', rowId: recallRow.rid, feedback: 1 })
+    expect(envelope).toMatchObject({ ok: true, data: { results: [{ rowId: recallRow.rid, outcome: 'failure', code: 'unconfirmed' }] } })
+    const rejected = await f.call(KNOWLEDGE_CHANNELS.recallFeedback, { projectId: f.projectId, action: 'row', rowId: recallRow.rid, feedback: 2 })
+    expect(rejected).toMatchObject({ data: { outcome: 'rejected-request', code: 'invalid-request' } })
     f.db.close()
   })
 })

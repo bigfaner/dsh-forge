@@ -35,9 +35,11 @@ export const PROJECTS_M2_CHANNELS = {
 
 export type ProjectsM2Channel = (typeof PROJECTS_M2_CHANNELS)[keyof typeof PROJECTS_M2_CHANNELS]
 
-/** forge:knowledge/*（六通道信封——服务面归 knowledge 插件域 provide 'knowledge' 服务；search / readAbstract 走 agent 面插件 tool，不经 web RPC——双门分工。
+/** forge:knowledge/*（七通道信封——服务面归 knowledge 插件域 provide 'knowledge' 服务；search / readAbstract 走 agent 面插件 tool，不经 web RPC——双门分工。
  *  knowledge-review-ui（1.3）增补 entryAction 第六通道：人工裁决写面（confirm/reject 批量 + move/editMeta/createDomain，
- *  action 判别联合单通道形态，先例 TASKS_CHANNELS.transition） */
+ *  action 判别联合单通道形态，先例 TASKS_CHANNELS.transition）。
+ *  stage④ 1.7 增补 recallFeedback 第七通道：召回反馈动作写面（行级 👍/👎/撤销 + 事件级 👎 批——
+ *  契约正本 proposals/knowledge-stage4-recall-scope/testing/recall-feedback-loop/contracts/feedback-channel.md §1 S1/S2） */
 export const KNOWLEDGE_CHANNELS = {
   browse: 'forge:knowledge/browse',
   listEntries: 'forge:knowledge/listEntries',
@@ -45,6 +47,7 @@ export const KNOWLEDGE_CHANNELS = {
   heat: 'forge:knowledge/heat',
   sessionRecall: 'forge:knowledge/sessionRecall',
   entryAction: 'forge:knowledge/entryAction',
+  recallFeedback: 'forge:knowledge/recallFeedback',
 } as const
 
 export type KnowledgeChannel = (typeof KNOWLEDGE_CHANNELS)[keyof typeof KNOWLEDGE_CHANNELS]

@@ -1,7 +1,7 @@
 // G1 pin ㉓（knowledge-review-ui 1.5——golden 先行，防契约漂移）。
 // 权威：proposal §2.2/§3 + .forge/docs/proposals/knowledge-review-ui/testing/contracts/
 // entry-action-channel.md（§3.3 SA-1 / SA-2——结构断言入契约，防形状不防行为；禁恒真）。
-// SA-1 六通道 ↔ 服务面方法一一对应：
+// SA-1 七通道 ↔ 服务面方法一一对应：
 //   ① KNOWLEDGE_CHANNELS 六键锚（值精确）；② 通道→门面方法映射表（entryAction ↔
 //   confirmBatch/rejectBatch/moveEntry/updateEntry/createDomain 五分支）——satisfies
 //   类型级锚 keyof KnowledgeService（方法缺席即编译红）+ types.ts 声明行机械审计；
@@ -32,6 +32,7 @@ const CHANNEL_FACADE_METHODS = {
   heat: ['heatByEntry'],
   sessionRecall: ['sessionRecall'],
   entryAction: ['confirmBatch', 'rejectBatch', 'moveEntry', 'updateEntry', 'createDomain'],
+  recallFeedback: ['recallFeedback'],
 } as const satisfies Record<keyof typeof KNOWLEDGE_CHANNELS, readonly (keyof KnowledgeService)[]>
 
 /** 回执码集样例矩阵（契约 §3.2——文件名 → 该夹具必须携带的 reason 标记；success = 无失败码） */
@@ -64,8 +65,8 @@ function collectStrings(value: unknown): string[] {
   return []
 }
 
-describe('SA-1 六通道 ↔ 服务面方法一一对应（防 Pick 漏扩致通道 404）', () => {
-  it('KNOWLEDGE_CHANNELS = 六通道（值精确——第五既有 + entryAction 人工裁决写面）', () => {
+describe('SA-1 七通道 ↔ 服务面方法一一对应（防 Pick 漏扩致通道 404）', () => {
+  it('KNOWLEDGE_CHANNELS = 七通道（值精确——第五既有 + entryAction 人工裁决写面 + stage④ 1.7 recallFeedback 召回反馈动作写面）', () => {
     expect({ ...KNOWLEDGE_CHANNELS }).toEqual({
       browse: 'forge:knowledge/browse',
       listEntries: 'forge:knowledge/listEntries',
@@ -73,10 +74,11 @@ describe('SA-1 六通道 ↔ 服务面方法一一对应（防 Pick 漏扩致通
       heat: 'forge:knowledge/heat',
       sessionRecall: 'forge:knowledge/sessionRecall',
       entryAction: 'forge:knowledge/entryAction',
+      recallFeedback: 'forge:knowledge/recallFeedback',
     })
   })
 
-  it('通道→门面方法映射表键面 = 六通道全集（satisfies 类型级锚：方法缺席/通道缺席均编译红）', () => {
+  it('通道→门面方法映射表键面 = 七通道全集（satisfies 类型级锚：方法缺席/通道缺席均编译红）', () => {
     expect(Object.keys(CHANNEL_FACADE_METHODS).sort()).toEqual(Object.keys(KNOWLEDGE_CHANNELS).sort())
     expect(CHANNEL_FACADE_METHODS.entryAction).toEqual([
       'confirmBatch',

@@ -10,6 +10,9 @@
 //（confirmBatch/rejectBatch/moveEntry/updateEntry/createDomain）；通道层 = 判别联合形状
 // 校验 + 五分支无状态纯透传分派（回执/码集语义归插件域，编排零下沉）；knowledge 插件
 // 缺席 = entryAction 与现役五通道同判定缝整体不挂（main.ts if 分支）。
+// stage④ 1.7：recallFeedback 第七通道挂接（召回反馈动作写面）——Pick 面扩 recallFeedback
+// 法；通道层 = 判别联合形状校验（action 判别键 + feedback 三值/二值 + 字段类型）+ 纯透传
+//（越界/缺 note/unconfirmed 业务校验归插件服务域）；缺席同判定缝整体不挂。
 import {
   KNOWLEDGE_CHANNELS,
   type EntryActionReceipt,
@@ -17,6 +20,8 @@ import {
   type EntryActionRequestReject,
   type EntryDetailQuery,
   type ListEntriesQuery,
+  type RecallFeedbackOutcome,
+  type RecallFeedbackRequest,
   type SessionRecallQuery,
 } from '@dsh-forge/contracts'
 import type { BrowseKnowledgeService } from '@dsh-forge/knowledge'
@@ -26,7 +31,8 @@ import { rpcEnvelope } from './rpc-envelope.js'
 /**
  * 注入服务面 = 浏览面四法 + browse 聚合法（browse = knowledge 服务域挂接面，3.5；
  * 入/出与 dto/rpc.ts KnowledgeChannelRequests/Responses 的 browse 行同构）+ 1.6 人工
- * 裁决写面五法（entryAction 通道分派目标）。
+ * 裁决写面五法（entryAction 通道分派目标）+ stage④ 1.7 召回反馈法（recallFeedback
+ * 通道分派目标）。
  * = @dsh-forge/knowledge BrowseKnowledgeService 命名类型的 Pick（手工同步收口，
  * 类型随服务面归属迁 knowledge 包——1.7）。
  * search / readAbstract / rebuildIndex 不入面——经 web RPC 不可达（双门分工）。
@@ -38,6 +44,7 @@ export type KnowledgeChannelService = Pick<
   BrowseKnowledgeService,
   | 'listEntries' | 'getEntryDetail' | 'heatByEntry' | 'sessionRecall' | 'browse'
   | 'confirmBatch' | 'rejectBatch' | 'moveEntry' | 'updateEntry' | 'createDomain'
+  | 'recallFeedback'
 >
 
 /** entryAction 回执全集：逐条回执 / 请求级拒收 / createDomain 树级 outcome（无 entryId 维度） */
@@ -107,7 +114,37 @@ async function dispatchEntryAction(service: KnowledgeChannelService, req: EntryA
   }
 }
 
-/** 六通道全集注册（负载映射 = dto/rpc.ts KnowledgeChannelRequests/Responses，键键对应） */
+/**
+ * recallFeedback 判别联合分派（无状态纯透传——形状校验 + 转发，编排零下沉）：
+ * 运行期校验仅承担 IPC 载荷形状防线（action 判别键 + feedback 三值/二值 + 字段类型）
+ * ——note-required/unconfirmed/not-found 业务校验归插件服务域（feedback-channel.md §1
+ * 校验分工先例）。未识别 action / feedback 越界 = 请求级拒收（invalid-request）。
+ */
+async function dispatchRecallFeedback(service: KnowledgeChannelService, req: RecallFeedbackRequest): Promise<RecallFeedbackOutcome> {
+  const feedbackOk = (v: unknown): v is 1 | -1 | 0 => v === 1 || v === -1 || v === 0
+  if (typeof req.projectId !== 'string') return invalidRequest('recallFeedback 需 projectId 载荷')
+  if (req.action === 'row') {
+    if (typeof req.rowId !== 'number' || !Number.isInteger(req.rowId) || !feedbackOk(req.feedback)) {
+      return invalidRequest('row 动作需整数 rowId 与 feedback ∈ {1,-1,0}')
+    }
+    if (req.note !== undefined && typeof req.note !== 'string') {
+      return invalidRequest('note 需 string 载荷')
+    }
+    return service.recallFeedback({ projectId: req.projectId, action: 'row', rowId: req.rowId, feedback: req.feedback, ...(req.note !== undefined ? { note: req.note } : {}) })
+  }
+  if (req.action === 'batch') {
+    if (typeof req.callId !== 'string' || req.callId === '' || (req.feedback !== -1 && req.feedback !== 0)) {
+      return invalidRequest('batch 动作需 callId 与 feedback ∈ {-1,0}（事件级 👍 不存在）')
+    }
+    if (req.note !== undefined && typeof req.note !== 'string') {
+      return invalidRequest('note 需 string 载荷')
+    }
+    return service.recallFeedback({ projectId: req.projectId, action: 'batch', callId: req.callId, feedback: req.feedback, ...(req.note !== undefined ? { note: req.note } : {}) })
+  }
+  return invalidRequest('recallFeedback action 需 row | batch')
+}
+
+/** 七通道全集注册（负载映射 = dto/rpc.ts KnowledgeChannelRequests/Responses，键键对应） */
 export function registerKnowledgeChannels(ipc: ForgeIpc, service: KnowledgeChannelService): void {
   ipc.register(
     KNOWLEDGE_CHANNELS.browse,
@@ -132,5 +169,9 @@ export function registerKnowledgeChannels(ipc: ForgeIpc, service: KnowledgeChann
   ipc.register(
     KNOWLEDGE_CHANNELS.entryAction,
     rpcEnvelope((req: EntryActionRequest) => dispatchEntryAction(service, req)),
+  )
+  ipc.register(
+    KNOWLEDGE_CHANNELS.recallFeedback,
+    rpcEnvelope((req: RecallFeedbackRequest) => dispatchRecallFeedback(service, req)),
   )
 }
