@@ -78,6 +78,8 @@ import {
   type QueryTaskInput,
   type QueryTaskResult,
   type ReadDocRequest,
+  type RecallFeedbackOutcome,
+  type RecallFeedbackRequest,
   type RecallGroup,
   type RegisterFeatureInput,
   type RegisterProjectInput,
@@ -157,6 +159,8 @@ export interface ForgeKnowledgeRpc {
   sessionRecall(q: SessionRecallQuery): Promise<RecallGroup[]>
   /** 人工裁决（判别联合动词；逐条回执 code 封闭码集——文案分派键） */
   entryAction(req: EntryActionRequest): Promise<EntryActionReceipt>
+  /** 召回反馈动作（判别联合——行级 👍/👎/撤销 + 事件级 👎 批/批撤销；stage④ 1.7 第七通道） */
+  recallFeedback(req: RecallFeedbackRequest): Promise<RecallFeedbackOutcome>
 }
 
 /**
@@ -296,6 +300,8 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       heat: (projectId) => invokeRpc<Map<number, number>>(transport, KNOWLEDGE_CHANNELS.heat, { projectId }),
       sessionRecall: (q) => invokeRpc<RecallGroup[]>(transport, KNOWLEDGE_CHANNELS.sessionRecall, q),
       entryAction: (req) => invokeRpc<EntryActionReceipt>(transport, KNOWLEDGE_CHANNELS.entryAction, req),
+      recallFeedback: (req) =>
+        invokeRpc<RecallFeedbackOutcome>(transport, KNOWLEDGE_CHANNELS.recallFeedback, req),
     },
     tasks: {
       transition: (input) => invokeRpc<TaskSnapshot>(transport, TASKS_CHANNELS.transition, input),

@@ -1,6 +1,7 @@
 // workbench-bridge 单测 —— 官方面板导航窄面桥 + 知识抽屉缝（fix-25 形态）。
 // createWorkbenchBridge：nav 闭包透传 + 抽屉目标 store（身份稳定快照 + 订阅通知）+ 页内
-// 全局发布；openKnowledgeEntry = 跳转复合动作（进知识面板 + 抽屉定位）。
+// 全局发布；stage④ 1.8：openKnowledgeEntry 召回跳转缝退役（召回 tab 就地详情）——
+// 抽屉写回唯一缝 = setDrawerEntry（知识面板卡片点击单向回流）。
 import { describe, expect, it, vi } from 'vitest'
 import {
   createWorkbenchBridge,
@@ -36,21 +37,6 @@ describe('createWorkbenchBridge（工厂 + 发布一体）', () => {
     expect(nav.showKnowledge).toHaveBeenCalledTimes(1)
     bridge!.showSession()
     expect(nav.showSession).toHaveBeenCalledTimes(1)
-    publishWorkbenchBridge(undefined)
-  })
-
-  it('openKnowledgeEntry = 跳转复合动作（进知识面板 + 抽屉定位 + 订阅通知）', () => {
-    const nav = navSpy()
-    const bridge = createWorkbenchBridge(nav)
-    const seen: ForgeWorkbenchSnapshot[] = []
-    const dispose = bridge.subscribe(() => {
-      seen.push(bridge.getSnapshot())
-    })
-    bridge.openKnowledgeEntry(42)
-    expect(nav.showKnowledge).toHaveBeenCalledTimes(1)
-    expect(bridge.getSnapshot()).toEqual({ ...INITIAL_SNAPSHOT, drawerEntryId: 42 })
-    expect(seen).toEqual([{ ...INITIAL_SNAPSHOT, drawerEntryId: 42 }])
-    dispose()
     publishWorkbenchBridge(undefined)
   })
 

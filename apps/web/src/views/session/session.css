@@ -2,7 +2,8 @@
  * 头部单元（标题行/页签行/收展钮）= 官方 ConversationRoot 原生渲染（官方头部链点亮后
  * 白拿——本文件零头部样式，fix-9/fix-13 的官方刻度复刻随 SessionPanel/SessionToolbar 退役）；
  * 产品面 = conversation.view 登记项（召回——轨迹 = 官方 'trajectory' 直用，fix-29 台账
- * 样式随产品复刻退役）的视图区样式。
+ * 样式随产品复刻退役）的视图区样式 + 知识召回轮卡（stage④ 1.8——ui/card-design.md 终稿：
+ * 折叠两行 L1/L2 + 展开按 call 分节四 verb 分型 + 反馈闭环 + 就地详情/快照 dialog）。
  * 视觉一律官方令牌（令牌唯一：色/字/距零裸值，lint-tokens 机械执行）。 */
 
 /* 视图 pane：占满官方 viewArea（flex 列向填充——官方 .viewArea 同刻度；对话视图 = 官方
@@ -19,7 +20,7 @@
   min-height: 0;
 }
 
-/* ── 知识召回 tab（3.8：统计头 + 按知识分组行——动词明细/最近时间/热度徽章）── */
+/* ── 知识召回 tab（stage④ 1.8 轮卡改型：统计头 + 一 turn 一卡）── */
 
 .dswf-recall-tab {
   display: flex;
@@ -29,7 +30,7 @@
   min-width: 0;
 }
 
-/* 统计头（召回次数/覆盖条数——recallStatsOf 纯投影） */
+/* 统计头（召回次数/覆盖条数——recallStatsOf 纯投影；口径零改动） */
 .dswf-recall-stats {
   display: flex;
   flex: none;
@@ -45,12 +46,12 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* 分组行列表（可滚动台账面） */
+/* 轮卡列表（可滚动台账面；卡间 gap 12px——card-design.md §5.1 终稿刻度） */
 .dswf-recall-list {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--dsw-font-xs-13-line-height);
+  gap: 12px; /* dsw-raw 终稿卡列表相邻节奏刻度（间距无标尺令牌，DESIGN.md） */
   min-height: 0;
   margin: 0;
   padding: var(--dsw-font-s-14-line-height);
@@ -58,81 +59,94 @@
   list-style: none;
 }
 
-.dswf-recall-row {
+/* 卡面（bg-base + 0.5px border-l2 + radius-md——现役 .dswf-recall-rowbtn 同词汇） */
+.dswf-recall-card {
   flex: none;
   min-width: 0;
-}
-
-/* 行本体（命中 = 按钮，可点跳详情抽屉；失效 = div 不可点） */
-.dswf-recall-rowbtn {
-  display: flex;
-  flex-direction: column;
-  gap: var(--dsw-font-xs-13-line-height);
-  width: 100%;
-  min-width: 0;
-  padding: var(--dsw-font-xs-13-line-height);
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-base);
+}
+
+/* 折叠头（整卡点击 = 展开/收起；L1 触发行 + L2 工具统计行——两行封顶） */
+.dswf-recall-cardhead {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  padding: 12px; /* dsw-raw 终稿卡内距刻度（间距无标尺令牌，DESIGN.md） */
+  border: none;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: inherit;
-}
-
-button.dswf-recall-rowbtn {
   cursor: var(--dsh-cursor-pointer, pointer);
+  border-radius: var(--dsw-radius-md);
 }
 
-button.dswf-recall-rowbtn:hover {
-  border-color: var(--dsw-alias-border-l1);
+.dswf-recall-cardhead:hover {
   background: var(--dsw-alias-bg-layer-2);
 }
 
-/* 行主区：标题 + 域 + 失效标注 */
-.dswf-recall-rowmain {
+/* L1/L2 左右分列行（行高固有刻度衔接——零额外行距） */
+.dswf-recall-l1,
+.dswf-recall-l2 {
   display: flex;
-  flex: none;
-  align-items: baseline;
+  align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
   min-width: 0;
 }
 
-.dswf-recall-rowtitle {
+.dswf-recall-spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* L1 轮次锚（领衔位——xs-strong + label-primary；未锚不做警示色） */
+.dswf-recall-turn {
+  flex: none;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* L1 触发输入摘要（单行省略；Tooltip portal 全文——悬浮展示不占版面） */
+.dswf-recall-trigger {
   min-width: 0;
   overflow: hidden;
-  font: var(--dsw-font-s-14-strong);
+  font: var(--dsw-font-s-14);
   color: var(--dsw-alias-label-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dswf-recall-rowdomain {
+/* L1 右固定列：命中总数（命中 N / 零命中） */
+.dswf-recall-hits {
   flex: none;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* 行级失效标注（AC3：entryId 未命中 = 索引重建后 ID 漂移——行保留不阻塞列表） */
-.dswf-recall-stale {
+/* scope 徽（官方 Tag neutral 小徽——单/双并列；反馈回显徽同语言） */
+.dswf-recall-scopechip {
+  flex: none;
+}
+
+.dswf-recall-echo {
   flex: none;
   padding: 0 var(--dsw-font-xs-13-line-height);
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-2);
-  font: var(--dsw-font-xs-strong-13);
+  font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
 }
 
-.dswf-recall-row.is-stale .dswf-recall-rowtitle {
-  color: var(--dsw-alias-label-secondary);
-}
-
-/* 行元区：动词明细 + 最近时间 + 热度徽章 */
-.dswf-recall-rowmeta {
+/* L2 工具统计 chips（现役 verb chip 样式原样——bg-layer-2 + radius-sm + xs-13） */
+.dswf-recall-verbchips {
   display: flex;
-  flex: none;
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
-  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .dswf-recall-verb {
@@ -144,13 +158,327 @@ button.dswf-recall-rowbtn:hover {
   color: var(--dsw-alias-label-secondary);
 }
 
-.dswf-recall-time {
+/* L2 top（首个被 read 条目名——采纳语义；单行省略） */
+.dswf-recall-top {
+  flex: none;
+  max-width: 50%;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 展开态：归因区 + 按 call 分节（四 verb 分型 · result 区缩进分界）── */
+
+.dswf-recall-detail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 12px 12px; /* dsw-raw 终稿展开区内距（与卡内距同刻度族） */
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+/* 归因区（caption 级单行——本轮末次调用时点 LocaleDatetime） */
+.dswf-recall-attrib {
+  flex: none;
+  padding: var(--dsw-font-xxs-12-line-height) 0;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 调用分节（相邻节 divider + 12px 间距——首节零 divider；节头 padding-right 8px =
+ * 命中行水平 padding——动作钮右缘同列对齐） */
+.dswf-recall-call {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 12px 8px 0 0; /* dsw-raw 终稿节间间距刻度 */
+}
+
+.dswf-recall-call + .dswf-recall-call {
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+.dswf-recall-callhead {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+/* 函数式工具 chip（全参实参一体；Tooltip 携 call_id 全值——代码字体 12px + label-primary） */
+.dswf-recall-toolchip {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; /* dsw-raw 官方主题无等宽族令牌（代码块族面，docs.css 同款） */
+  font-size: 12px; /* dsw-raw 代码族 12px 刻度（DESIGN.md Typography 代码族） */
+  line-height: 18px; /* dsw-raw 代码族 12/18 行高刻度 */
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* result 区（左缩进 24px 一档 + 左细边界 border-l2——输出从属输入） */
+.dswf-recall-secbody {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: 4px; /* dsw-raw 终稿节头→内容贴排刻度 */
+  margin-left: 24px; /* dsw-raw 终稿 result 区缩进档位 */
+  padding-left: 8px; /* dsw-raw 终稿分界材质与行距刻度 */
+  border-left: 1px solid var(--dsw-alias-border-l2);
+}
+
+/* hint note 行（出参检索说明——弱化底色 + hint: 代码字体前缀；命中清单之前） */
+.dswf-recall-hint {
+  padding: 4px 8px; /* dsw-raw 终稿 hint note 行刻度 */
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-recall-hintkey {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; /* dsw-raw 代码族前缀 */
+}
+
+/* search 命中行（≈30px 主行——对齐现役会话行量级；行尾行级反馈钮右缘对齐） */
+.dswf-recall-hitrow {
+  display: flex;
+  align-items: center;
+  gap: 4px; /* dsw-raw 终稿命中行内距/贴排刻度 */
+  min-width: 0;
+  padding: 4px 8px; /* dsw-raw 终稿命中行 padding（4px 8px） */
+}
+
+.dswf-recall-hitrow .dswf-recall-fbpair {
+  margin-left: auto;
+}
+
+/* 命中行主区（域前缀 + 标题文字链接——无框；stale 标注不可点） */
+.dswf-recall-hitmain {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px; /* dsw-raw 域/标题贴排刻度 */
+  min-width: 0;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.dswf-recall-hitmain.is-link {
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-recall-hittitle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px; /* dsw-raw 域/标题贴排刻度 */
+  min-width: 0;
+}
+
+.dswf-recall-hitdomain {
+  flex: none;
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
 }
 
-.dswf-recall-heat {
-  margin-left: auto;
+.dswf-recall-hittitletext {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-recall-hitmain.is-link:hover .dswf-recall-hittitletext {
+  color: var(--dsw-alias-link);
+}
+
+/* score 元组（两位小数——代码字体 xxs-12 + label-tertiary） */
+.dswf-recall-score {
+  flex: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; /* dsw-raw 代码族元组 */
+  font-size: 12px; /* dsw-raw 代码族 12px 刻度 */
+  line-height: 18px; /* dsw-raw 代码族 12/18 行高刻度 */
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+/* 行级失效标注（AC3：entryId 未命中——行保留不阻塞列表；现役词汇原样） */
+.dswf-recall-stale {
+  flex: none;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+/* 零命中哨兵条（诚实回执——verb chip 材质一档） */
+.dswf-recall-sentinel {
+  padding: 8px 12px; /* dsw-raw 终稿哨兵条刻度 */
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 反馈图标钮（行尾/节头统一 .ibtn 同款——18px 命中区 + hover 底 + Fill 态） */
+.dswf-recall-ibtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; /* dsw-raw 行内 fading 动作钮 18px 命中区刻度（DESIGN.md） */
+  height: 18px; /* dsw-raw 同上 */
+  border: none;
+  padding: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-recall-ibtn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-recall-ibtn[aria-pressed='true'] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-recall-fbpair {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px; /* dsw-raw 钮对贴排刻度 */
+}
+
+/* ── read 快照 / 就地详情 / 负反馈说明 三 dialog（官方 Modal 卡面——产品内容面）── */
+
+/* 快照全文块（render 头行 + 代码字体正文块 12px/1.6 + 快照语义注记） */
+.dswf-recall-snaphead {
+  padding: 4px 8px; /* dsw-raw 头行贴排刻度 */
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; /* dsw-raw 代码族 */
+  font-size: 12px; /* dsw-raw 代码族 12px 刻度 */
+  line-height: 18px; /* dsw-raw 代码族 12/18 行高刻度 */
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-recall-snapbody {
+  max-height: 60vh; /* dsw-raw 快照块滚动上界（视口比例刻度） */
+  margin: 8px 0 0; /* dsw-raw 头行/正文贴排刻度 */
+  padding: 12px; /* dsw-raw 正文块内距（代码块 12px 内距族） */
+  overflow-y: auto;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; /* dsw-raw 代码族 */
+  font-size: 12px; /* dsw-raw 代码族 12px 刻度 */
+  line-height: 1.6; /* dsw-raw 终稿快照正文行高 */
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dswf-recall-snapnote {
+  margin-top: 8px; /* dsw-raw 注记贴排刻度 */
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 就地详情（kv 元数据行 + 标题/摘要 + Markdown 正文——知识库条目详情只读裁剪） */
+.dswf-recall-entrymetas {
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* dsw-raw 元数据行紧凑刻度（4px 内衬） */
+}
+
+.dswf-recall-entrymrow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dsw-font-xs-13-line-height);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-recall-entrymk {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-recall-entrykws {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px; /* dsw-raw chips 贴排刻度 */
+}
+
+.dswf-recall-entrytitle {
+  margin: 8px 0 0; /* dsw-raw 标题贴排刻度 */
+  font: var(--dsw-font-s-14-strong);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-recall-entryabs {
+  margin: 4px 0 0; /* dsw-raw 摘要贴排刻度 */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-recall-entrybody {
+  margin-top: 8px; /* dsw-raw 正文分区贴排刻度 */
+}
+
+/* 负反馈说明 Modal 内容（被反馈对象 + 必填 Input） */
+.dswf-recall-rejectsubject {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-recall-rejectform {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* dsw-raw 表单行距刻度 */
+}
+
+/* 反馈失败错误条（乐观回显回滚后的留面——现役错误条同族形制） */
+.dswf-recall-error {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  margin: var(--dsw-font-s-14-line-height);
+  padding: var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-recall-retry {
+  flex: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary-bluish);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-recall-retry:hover {
+  color: var(--dsw-alias-link);
 }
 
 /* 装载骨架（行级——sidebar 骨架同形制） */
@@ -182,34 +510,6 @@ button.dswf-recall-rowbtn:hover {
 .dswf-recall-face[data-dswf-recall-face='empty'] .dswf-empty {
   justify-content: flex-start;
   padding-top: clamp(48px, 14vh, 132px); /* dsw-raw 上带刻度——恒落遮罩透明带内 */
-}
-
-/* 错误条（fail-soft：通道/typed error 统一错误条 + 重试——browse 面同族形制） */
-.dswf-recall-error {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--dsw-font-xs-13-line-height);
-  margin: var(--dsw-font-s-14-line-height);
-  padding: var(--dsw-font-xs-13-line-height);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-2);
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-secondary);
-}
-
-.dswf-recall-retry {
-  flex: none;
-  border: none;
-  padding: 0;
-  background: transparent;
-  font: var(--dsw-font-xs-strong-13);
-  color: var(--dsw-alias-label-primary-bluish);
-  cursor: var(--dsh-cursor-pointer, pointer);
-}
-
-.dswf-recall-retry:hover {
-  color: var(--dsw-alias-link);
 }
 
 /* ── 新建 worktree 弹窗（1.12）：卡面放宽一档容纳路径说明行；下拉浮层与输入框同宽 ── */

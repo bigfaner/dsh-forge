@@ -784,7 +784,6 @@ export interface ForgeViewsGlobal {
       showKnowledge(): void
       showSession(): void
     }) => {
-      openKnowledgeEntry(entryId: number): void
       subscribe(listener: () => void): () => void
       getSnapshot(): {
         drawerEntryId: number | null
@@ -1024,7 +1023,6 @@ function registerCenterPanels(
 function registerConversationViews(
   ctx: ForgeClientCtx,
   views: PublishedViews,
-  bridge: PublishedBridge,
   t: (key: string) => string,
   diagnostics: { registered?: string[] },
   knowledgeEnabled: boolean,
@@ -1038,11 +1036,6 @@ function registerConversationViews(
           order: 20,
           locale: FORGE_LOCALE_NS,
           label: (): string => t('view.recall'),
-          inject: () => ({
-            openKnowledgeEntry: (entryId: number): void => {
-              bridge.openKnowledgeEntry(entryId)
-            },
-          }),
         },
         views.ForgeRecallView,
       ),
@@ -2534,7 +2527,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
         registerRemoteEntry(clientCtx, views, t, sidebarDiagnostics)
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics, knowledgeEnabled)
-        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics, knowledgeEnabled)
+        registerConversationViews(clientCtx, views, t, viewsDiagnostics, knowledgeEnabled)
         registerWorktreeFaces(clientCtx, views, viewsDiagnostics)
         // Bug 引用 source 登记已前移至 dock 注册之前（bug 27ab222b 穿线——见上方 bugSource）
 

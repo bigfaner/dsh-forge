@@ -401,6 +401,7 @@ describe('fetchTaskDetail（数据面——rpc tasks.detail 唯一通道）', ()
           heat: mark('knowledge.heat', () => Promise.resolve(new Map())),
           sessionRecall: mark('knowledge.sessionRecall', () => Promise.resolve([])),
           entryAction: mark('knowledge.entryAction', () => Promise.resolve({ results: [] })),
+          recallFeedback: mark('knowledge.recallFeedback', () => Promise.resolve({ results: [] })),
         },
         tasks: {
           transition: mark('tasks.transition', () => Promise.resolve({})),

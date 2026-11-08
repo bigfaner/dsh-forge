@@ -23,14 +23,14 @@ export interface ForgeRecallViewProps {
   readonly sessionId?: string
   /** workspace 归属观察钩子（项目锚推导输入——会话归属 → 项目） */
   readonly useWorkspaces?: KitSelectorHook
-  /** 召回行跳转（插件 inject face——桥 openKnowledgeEntry：知识面板 + 抽屉定位） */
-  readonly openKnowledgeEntry?: (entryId: number) => void
 }
 
 /**
  * 召回视图（conversation.view 'dswf-recall' 占用者）。数据面 = RecallTab 原样
  * （官方 only:id 挂载即激活/切走即卸载——AC4 即时累积由挂载机制承载，fix-33 ⑦ 起
- * RecallTab 无 visible 维度）。data-dswf-pane="recall" 锚保持。
+ * RecallTab 无 visible 维度）。stage④ 1.8：onOpenEntry 跨视图桥缝退役——命中/条目
+ * 详情 = tab 内就地 dialog（entryDetail 通道自取），不再经 openKnowledgeEntry 跳知识
+ * 面板。data-dswf-pane="recall" 锚保持。
  */
 export function ForgeRecallView(props: ForgeRecallViewProps): ReactNode {
   // 项目锚推导输入：workspace 归属快照 + 项目台账（useAnchoredProjects 共享 hook——与
@@ -45,11 +45,7 @@ export function ForgeRecallView(props: ForgeRecallViewProps): ReactNode {
   })
   return (
     <div className="dswf-session-pane dswf-view-pane" data-dswf-pane="recall">
-      <RecallTab
-        projectId={projectId}
-        sessionId={props.sessionId ?? null}
-        onOpenEntry={props.openKnowledgeEntry}
-      />
+      <RecallTab projectId={projectId} sessionId={props.sessionId ?? null} />
       {workspacesAnchor}
     </div>
   )

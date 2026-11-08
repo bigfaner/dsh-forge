@@ -153,11 +153,17 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   // RecallTab/docs/drawer/KnowledgeCardGrid×3/dock-tabs×2/EntryDrawer/ForgeWorkspacePanel +
   // bug 域新面：bug-reference/BugPreview×2、overview/bug-tab/bug-list×1
   EmptyState: 18,
-  // 对话框标题（Modal 头部标题文本）×8：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
+  // 对话框标题（Modal 头部标题文本）×13：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
   // + D45 停止并归档确认）/AddProjectFlow/ModeDialog/VerdictDialog +
-  // remote/ForgeRemoteEntry×2（手机远程 dialog 头 + 1.107 PSK 轮换确认弹窗）
-  // （知识详情承载改自持可拖移 dialog——自绘头行非 Modal 标题 prop，不进本清单）
-  Modal: 8,
+  // remote/ForgeRemoteEntry×2（手机远程 dialog 头 + 1.107 PSK 轮换确认弹窗）+
+  // knowledge-review-ui 面×2（KnowledgeToolbar 批量裁决确认 + EntryDrawer SC-G 驳回确认
+  // ——知识详情承载改自持可拖移 dialog，自绘头行非 Modal 标题 prop）+
+  // stage④ 1.8 召回 tab×3（负反馈说明 + read 快照 + 就地详情——ui/card-design.md 官方
+  // Modal 形态；详情就地化后 onOpenEntry 桥缝退役）
+  Modal: 13,
+  // stage④ 1.8：read 快照 dialog 组件标题文本 prop（RecallTab 就地快照呈现——标题文本
+  // 非悬浮提示位；Modal 承载计入上行）
+  RecallSnapshotDialog: 1,
   // 自绘 dialog 头标题文本 prop ×1（remote/ForgeRemoteEntry RemoteDialogHead——fix-19 ⑥
   // 标题读数，标题文本非悬浮提示位）
   // 官方 Rows 行标题文本 prop ×2（ForgeWorkspacePanel 项目行名称；ForgeEventEntries

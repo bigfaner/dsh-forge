@@ -198,10 +198,27 @@ describe('3.5 knowledge 面（forge:knowledge/* 五通道——浏览数据面�
       'entryDetail',
       'heat',
       'listEntries',
+      'recallFeedback',
       'sessionRecall',
     ])
     expect('search' in client.knowledge).toBe(false)
     expect('readAbstract' in client.knowledge).toBe(false)
+  })
+
+  it('stage④ 1.7 recallFeedback 第七通道：负载原样透传 + 逐行回执 typed 结果', async () => {
+    const t = fakeTransport()
+    const outcome = { results: [{ rowId: 41, outcome: 'success' }] }
+    t.respondWith((channel) => {
+      expect(channel).toBe(KNOWLEDGE_CHANNELS.recallFeedback)
+      return { ok: true, data: outcome }
+    })
+    const client = createForgeRpcClient(t.transport)
+    await expect(
+      client.knowledge.recallFeedback({ projectId: 'p-1', action: 'row', rowId: 41, feedback: -1, note: '误召回' }),
+    ).resolves.toEqual(outcome)
+    expect(t.calls[0]?.payload).toEqual({ projectId: 'p-1', action: 'row', rowId: 41, feedback: -1, note: '误召回' })
+    await expect(client.knowledge.recallFeedback({ projectId: 'p-1', action: 'batch', callId: 'call-1', feedback: 0 })).resolves.toEqual(outcome)
+    expect(t.calls[1]?.payload).toEqual({ projectId: 'p-1', action: 'batch', callId: 'call-1', feedback: 0 })
   })
 
   it('AC2 三码反序列化保真：ERR_INDEX_STALE / ERR_ENTRY_NOT_FOUND / ERR_INVALID_KNOWLEDGE_DIR → RpcClientError 三元组', async () => {

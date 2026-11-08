@@ -1,192 +1,214 @@
-// recall-model 单测 —— UF-4 召回 tab 纯投影（3.8）。断言面：
-// AC-2（三方一致的 UI 侧 pin）：统计头（次数 = 分组数/覆盖 = 去重命中）+ 分组行（事件折叠
-// 计数 = 热度徽章值——事件表 ↔ tab 行 ↔ 卡片热度同源不漂移）；AC-3（索引未命中行级失效）；
-// 行序确定性（最近在前）；零命中调用计次不计覆盖；时间标签桶化。
+// recall-model 单测 —— UF-4 召回 tab 纯投影（stage④ 1.8 轮卡改型）。断言面：
+// 统计头（次数 = 分组数/覆盖 = 去重命中）；turn 分组投影（一 turn 一卡 / NULL 未锚兜底卡 /
+// 卡序 turn 降序未锚殿后 / 节序 = 调用时序）；L1 触发输入降级链；L2 verb 统计 + top（首个
+// read 条目名）；函数式调用头（全参实参 / text「|」拼接 / legacy keywords「｜」拼接 /
+// query 缺席裸动词）；归因区 LocaleDatetime；score 元组两位小数。
 import { describe, expect, it } from 'vitest'
-import type { RecallGroup } from '@dsh-forge/contracts'
+import type { RecallGroup, RecallGroupHit } from '@dsh-forge/contracts'
 import {
-  isRecallRowStale,
+  recallCallHead,
+  recallDatetimeLabel,
   recallHitIdentity,
-  recallRowsOf,
+  recallScoreLabel,
+  recallSearchTextJoin,
   recallStatsOf,
-  recallTimeLabel,
+  recallTopOf,
+  recallTriggerOf,
+  recallTurnsOf,
+  recallVerbCountsOf,
 } from './recall-model.js'
 
-/** 事件表镜像夹具（knowledge_recall_logs 行语义 → core sessionRecall 分组产物）：
- *  c1 search 命中 e1/e2（T1）→ c2 read-abstract 命中 e1（T2）→ c3 search 零命中哨兵（T3）
- *  → c4 search 命中已重建清除条目（entryId null，frontmatterId 兜底，T4）。
- *  热度口径 = 按条目使用事件计数（项目级单表）：e1 = 2（c1+c2，与行折叠数一致），
- *  e2 = 1，fm-gone = 3（frontmatter 兜底——含其它会话事件，≠ 本会话折叠数）。 */
-const T1 = '2026-10-02T08:00:00.000Z'
-const T2 = '2026-10-02T08:05:00.000Z'
-const T3 = '2026-10-02T08:10:00.000Z'
-const T4 = '2026-10-02T08:20:00.000Z'
-
-const groups: readonly RecallGroup[] = [
-  {
-    callId: 'c1',
-    verb: 'search',
-    query: { keywords: ['部署'] },
-    hitCount: 2,
-    durationMs: 4,
-    createdAt: T1,
-    turnSeq: null,
-    triggerSnap: null,
-    contentSnap: null,
-    hits: [
-      { entryId: 1, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 2, rowId: 1, score: null, scope: 'project' },
-      { entryId: 2, frontmatterId: 'k2', title: '回滚手册', domainPath: '后端', heat: 1, rowId: 1, score: null, scope: 'project' },
-    ],
-  },
-  {
-    callId: 'c2',
-    verb: 'read-abstract',
-    query: { entryId: 1 },
-    hitCount: 1,
-    durationMs: 2,
-    createdAt: T2,
-    turnSeq: null,
-    triggerSnap: null,
-    contentSnap: null,
-    hits: [{ entryId: 1, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 2, rowId: 1, score: null, scope: 'project' }],
-  },
-  {
-    callId: 'c3',
-    verb: 'search',
-    query: { text: '不存在的主题' },
-    hitCount: 0,
-    durationMs: 3,
-    createdAt: T3,
-    turnSeq: null,
-    triggerSnap: null,
-    contentSnap: null,
-    hits: [],
-  },
-  {
-    callId: 'c4',
-    verb: 'search',
-    query: { domainPrefix: '后端' },
-    hitCount: 1,
-    durationMs: 5,
-    createdAt: T4,
-    turnSeq: null,
-    triggerSnap: null,
-    contentSnap: null,
-    hits: [{ entryId: null, frontmatterId: 'fm-gone', title: '已删文档', domainPath: '后端', heat: 3, rowId: 1, score: null, scope: 'project' }],
-  },
-]
-
-describe('recallStatsOf 统计头（AC-2：与事件表口径一致）', () => {
-  it('次数 = 分组数（零命中调用计次）；覆盖 = 去重命中条目（身份键去重）', () => {
-    expect(recallStatsOf(groups)).toEqual({ calls: 4, covered: 3 })
-  })
-  it('空事件（无召回会话）= 正零', () => {
-    expect(recallStatsOf([])).toEqual({ calls: 0, covered: 0 })
-  })
-  it('重建清引用后清除行按 frontmatterId 归并（不重复计覆盖）；清除行与重建新 id 行各计（保守口径同 core hitIdentity）', () => {
-    const clearedTwice: readonly RecallGroup[] = [
-      {
-        ...groups[3]!,
-        hits: [{ entryId: null, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 3, rowId: 1, score: null, scope: 'project' }],
-      },
-      {
-        ...groups[3]!,
-        hits: [{ entryId: null, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 3, rowId: 1, score: null, scope: 'project' }],
-      },
-    ]
-    expect(recallStatsOf(clearedTwice)).toEqual({ calls: 2, covered: 1 })
-    const mixed: readonly RecallGroup[] = [
-      ...clearedTwice,
-      {
-        ...groups[0]!,
-        hits: [{ entryId: 9, frontmatterId: 'k1', title: '部署规范', domainPath: '前端', heat: 3, rowId: 1, score: null, scope: 'project' }],
-      },
-    ]
-    expect(recallStatsOf(mixed)).toEqual({ calls: 3, covered: 2 }) // e:9 与 f:k1 各一（entryId 优先键）
-  })
+const hit = (over: Partial<RecallGroupHit>): RecallGroupHit => ({
+  rowId: 1,
+  entryId: 1,
+  frontmatterId: 'k1',
+  title: '部署规范',
+  domainPath: '前端',
+  heat: 0,
+  score: null,
+  scope: 'project',
+  ...over,
 })
 
-describe('recallRowsOf 分组行投影（按知识折叠）', () => {
-  const rows = recallRowsOf(groups)
+const call = (over: Partial<RecallGroup>): RecallGroup => ({
+  callId: 'c',
+  verb: 'search',
+  query: null,
+  hitCount: 1,
+  durationMs: 1,
+  createdAt: '2026-10-02T08:00:00.000Z',
+  turnSeq: 1,
+  triggerSnap: null,
+  contentSnap: null,
+  hits: [hit({})],
+  ...over,
+})
 
-  it('行数 = 去重命中条目数；跨调用归并一行（e1 = c1+c2 两事件一行）', () => {
-    expect(rows).toHaveLength(3)
-    const e1 = rows.find((r) => r.entryId === 1)
-    expect(e1?.eventCount).toBe(2)
-    expect(e1?.title).toBe('部署规范')
-    expect(e1?.domainPath).toBe('前端')
+describe('recallStatsOf 统计头', () => {
+  it('次数 = 分组数（零命中调用计次）；覆盖 = 去重命中条目（身份键去重）', () => {
+    const groups = [
+      call({ callId: 'c1', hitCount: 2, hits: [hit({}), hit({ entryId: 2, frontmatterId: 'k2', title: '回滚手册', domainPath: '后端' })] }),
+      call({ callId: 'c2', verb: 'read-abstract', query: { entryId: 1 }, createdAt: '2026-10-02T08:05:00.000Z' }),
+      call({ callId: 'c3', hitCount: 0, hits: [] }),
+    ]
+    expect(recallStatsOf(groups)).toEqual({ calls: 3, covered: 2 })
   })
-  it('动词明细 = verb × 次数折叠且字典序（e1：read-abstract ×1 + search ×1）', () => {
-    const e1 = rows.find((r) => r.entryId === 1)
-    expect(e1?.verbs).toEqual([
-      { verb: 'read-abstract', count: 1 },
-      { verb: 'search', count: 1 },
-    ])
+  it('重建清引用后清除行按 frontmatterId 归并（不重复计覆盖）', () => {
+    const clearedTwice = [
+      call({ callId: 'a', hits: [hit({ entryId: null, frontmatterId: 'k1' })] }),
+      call({ callId: 'b', hits: [hit({ entryId: null, frontmatterId: 'k1' })] }),
+    ]
+    expect(recallStatsOf(clearedTwice)).toEqual({ calls: 2, covered: 1 })
   })
-  it('最近时间 = 该条目最近事件（e1 = T2 非最早）；行序 = 最近在前（fm-gone 行 T4 首位）', () => {
-    const e1 = rows.find((r) => r.entryId === 1)
-    expect(e1?.lastAt).toBe(T2)
-    expect(rows.map((r) => r.key)).toEqual([recallHitIdentity({ entryId: null, frontmatterId: 'fm-gone', title: '已删文档', domainPath: '后端', heat: 0, rowId: 1, score: null, scope: 'project' }), 'e:1', 'e:2'])
-  })
-  it('AC-2 三方一致 pin：行事件折叠计数 = 热度徽章值（同源不漂移——e1 双事件热 2 / e2 单事件热 1）', () => {
-    const e1 = rows.find((r) => r.entryId === 1)
-    expect(e1?.eventCount).toBe(2)
-    expect(e1?.heat).toBe(2)
-    const e2 = rows.find((r) => r.entryId === 2)
-    expect(e2?.eventCount).toBe(1)
-    expect(e2?.heat).toBe(1)
-    const gone = rows.find((r) => r.entryId === null)
-    expect(gone?.eventCount).toBe(1)
-    expect(gone?.heat).toBe(3) // frontmatter 兜底计数 ≠ 本会话折叠数——热度 = 项目级事件计数（口径注释）
-  })
-  it('AC-3 行级失效：entryId null 行保留在场（不阻塞列表）且 is-stale 判据成立', () => {
-    const gone = rows.find((r) => r.title === '已删文档')
-    expect(gone).toBeDefined()
-    expect(isRecallRowStale(gone!)).toBe(true)
-    expect(rows.filter((r) => r.entryId !== null).every((r) => !isRecallRowStale(r))).toBe(true)
-  })
-  it('零命中调用不入行（哨兵组 hits 空）', () => {
-    expect(rows.some((r) => r.lastAt === T3)).toBe(false)
-  })
-  it('空事件 → 空行集', () => {
-    expect(recallRowsOf([])).toEqual([])
+  it('空事件 = 正零', () => {
+    expect(recallStatsOf([])).toEqual({ calls: 0, covered: 0 })
   })
 })
 
 describe('recallHitIdentity 身份键兜底链（entryId → frontmatterId → 标题快照）', () => {
   it('三级兜底全径：e:/f:/t: 前缀区分', () => {
-    expect(recallHitIdentity({ entryId: 7, frontmatterId: 'k1', title: 'A', domainPath: 'd', heat: 1, rowId: 1, score: null, scope: 'project' })).toBe('e:7')
-    expect(recallHitIdentity({ entryId: null, frontmatterId: 'k1', title: 'A', domainPath: 'd', heat: 1, rowId: 1, score: null, scope: 'project' })).toBe('f:k1')
-    expect(recallHitIdentity({ entryId: null, frontmatterId: null, title: 'A', domainPath: 'd', heat: 1, rowId: 1, score: null, scope: 'project' })).toBe('t:A')
-    expect(recallHitIdentity({ entryId: null, frontmatterId: null, title: null, domainPath: null, heat: 0, rowId: 1, score: null, scope: 'project' })).toBe('t:')
-  })
-  it('标题快照兜底去重（双 null 同标题 = 同条目）', () => {
-    const titleOnly: readonly RecallGroup[] = [
-      {
-        ...groups[3]!,
-        hits: [{ entryId: null, frontmatterId: null, title: '裸文档', domainPath: '', heat: 1, rowId: 1, score: null, scope: 'project' }],
-      },
-      {
-        ...groups[3]!,
-        hits: [{ entryId: null, frontmatterId: null, title: '裸文档', domainPath: '', heat: 1, rowId: 1, score: null, scope: 'project' }],
-      },
-    ]
-    expect(recallStatsOf(titleOnly)).toEqual({ calls: 2, covered: 1 })
-    expect(recallRowsOf(titleOnly)).toHaveLength(1)
+    expect(recallHitIdentity(hit({ entryId: 7 }))).toBe('e:7')
+    expect(recallHitIdentity(hit({ entryId: null }))).toBe('f:k1')
+    expect(recallHitIdentity(hit({ entryId: null, frontmatterId: null, title: 'A' }))).toBe('t:A')
+    expect(recallHitIdentity(hit({ entryId: null, frontmatterId: null, title: null }))).toBe('t:')
   })
 })
 
-describe('recallTimeLabel 时间标签（相对时间桶化）', () => {
-  const now = Date.parse('2026-10-02T08:20:30.000Z')
-  it('当下桶 = 刚刚；不可解析原文返回', () => {
-    expect(recallTimeLabel('2026-10-02T08:20:20.000Z', now)).toBe('刚刚')
-    expect(recallTimeLabel('not-a-time', now)).toBe('not-a-time')
+describe('recallTurnsOf turn 分组投影（一 turn 一卡）', () => {
+  const groups: readonly RecallGroup[] = [
+    call({
+      callId: 'c1',
+      verb: 'search',
+      query: { text: 'worktree 分支命名规范', domainPrefix: '工程规范/' },
+      hitCount: 2,
+      createdAt: '2026-11-20T14:32:05.000Z',
+      turnSeq: 3,
+      triggerSnap: '帮我把 worktree 合回 main 的约定整理成知识条目',
+      hits: [
+        hit({ entryId: 1, score: 0.91 }),
+        hit({ entryId: 6, frontmatterId: 'k6', title: '新手指引', domainPath: '', score: 0.72, scope: 'global' }),
+      ],
+    }),
+    call({
+      callId: 'c2',
+      verb: 'read',
+      query: { frontmatterId: 'kb-be-001' },
+      createdAt: '2026-11-20T14:32:07.000Z',
+      turnSeq: 3,
+      triggerSnap: '帮我把 worktree 合回 main 的约定整理成知识条目',
+      contentSnap: '# API 规范 (kb-be-001, draft, …)',
+      hits: [hit({ entryId: 3, frontmatterId: 'kb-be-001', title: 'API 规范', domainPath: '后端' })],
+    }),
+    call({
+      callId: 'c3',
+      verb: 'browse',
+      query: { domain: '工程规范', offset: 0, limit: 20, order: 'status' },
+      hitCount: 2,
+      createdAt: '2026-11-20T14:32:09.000Z',
+      turnSeq: 3,
+      triggerSnap: '帮我把 worktree 合回 main 的约定整理成知识条目',
+      hits: [
+        hit({ entryId: 4, frontmatterId: 'kb-be-002', title: '网关', domainPath: '后端' }),
+        hit({ entryId: 5, frontmatterId: 'kb-java-001', title: '并发手册', domainPath: '编程/java', scope: 'global' }),
+      ],
+    }),
+    call({ callId: 'c4', verb: 'search', query: { text: '不存在的主题' }, hitCount: 0, hits: [], createdAt: '2026-11-20T15:00:00.000Z', turnSeq: 4, triggerSnap: '第二轮输入' }),
+    call({ callId: 'c9', verb: 'search', query: { keywords: ['不存在'] }, hitCount: 0, hits: [], createdAt: '2026-11-19T09:00:00.000Z', turnSeq: null, triggerSnap: null }),
+  ]
+
+  it('卡数 = 去重 turn_seq 数（NULL 归单张未锚卡）；卡序 = turn 降序、未锚殿后', () => {
+    const cards = recallTurnsOf(groups)
+    expect(cards.map((card) => card.key)).toEqual(['turn:4', 'turn:3', 'turn:null'])
+    expect(cards[1]!.turnSeq).toBe(3)
+    expect(cards[2]!.turnSeq).toBeNull()
   })
-  it('分钟/小时/天/月/年桶全径', () => {
-    expect(recallTimeLabel('2026-10-02T08:15:00.000Z', now)).toBe('5 分钟前')
-    expect(recallTimeLabel('2026-10-02T06:20:00.000Z', now)).toBe('2 小时前')
-    expect(recallTimeLabel('2026-09-28T08:20:00.000Z', now)).toBe('4 天前')
-    expect(recallTimeLabel('2026-06-02T08:20:00.000Z', now)).toBe('4 个月前')
-    expect(recallTimeLabel('2023-10-02T08:20:00.000Z', now)).toBe('3 年前')
+  it('轮内节序 = 调用时序升序；命中总数 = Σ hit_count；scope 徽 = 去重集', () => {
+    const card = recallTurnsOf(groups)[1]!
+    expect(card.calls.map((group) => group.callId)).toEqual(['c1', 'c2', 'c3'])
+    expect(card.hitTotal).toBe(5)
+    expect(card.scopes).toEqual(['project', 'global'])
+    expect(card.lastAt).toBe('2026-11-20T14:32:09.000Z')
+  })
+  it('L2 工具统计 = 四动词 canonical 序 ×N', () => {
+    expect(recallTurnsOf(groups)[1]!.verbs).toEqual([
+      { verb: 'search', count: 1 },
+      { verb: 'read', count: 1 },
+      { verb: 'browse', count: 1 },
+    ])
+    expect(recallVerbCountsOf([call({}), call({ callId: 'x', verb: 'read-abstract', query: { entryId: 1 } })])).toEqual([
+      { verb: 'search', count: 1 },
+      { verb: 'read-abstract', count: 1 },
+    ])
+  })
+  it('top = 轮内首个 verb=read 调用条目名；无 read 调用 = null（不退化 search 命中）', () => {
+    expect(recallTurnsOf(groups)[1]!.top).toBe('API 规范')
+    expect(recallTurnsOf(groups)[0]!.top).toBeNull()
+    expect(recallTopOf([call({ callId: 'a', verb: 'read', query: { frontmatterId: 'x' }, hits: [] })])).toBeNull()
+  })
+  it('L1 触发输入降级链：trigger_snap → 首个 query text（legacy）→ null', () => {
+    expect(recallTurnsOf(groups)[1]!.trigger).toBe('帮我把 worktree 合回 main 的约定整理成知识条目')
+    expect(recallTurnsOf(groups)[2]!.trigger).toBeNull()
+    const legacy = [call({ callId: 'l', turnSeq: null, query: { text: '旧文本' }, triggerSnap: null })]
+    expect(recallTriggerOf(legacy)).toBe('旧文本')
+    expect(recallTriggerOf([call({ callId: 'l', turnSeq: null, triggerSnap: null, query: null })])).toBeNull()
+  })
+  it('零命中轮卡：hitTotal 0、verbs/chips 照常、scopes 空', () => {
+    const zero = recallTurnsOf(groups)[0]!
+    expect(zero.hitTotal).toBe(0)
+    expect(zero.scopes).toEqual([])
+    expect(zero.verbs).toEqual([{ verb: 'search', count: 1 }])
+  })
+  it('空事件 → 空列表', () => {
+    expect(recallTurnsOf([])).toEqual([])
+  })
+})
+
+describe('recallCallHead 函数式调用头（全参实参 · 展示层拼接）', () => {
+  it('search：text 空格分词「|」拼接 + domain_prefix + limit（省略的参数不显示）', () => {
+    expect(recallCallHead(call({ query: { text: 'worktree 分支命名规范', domainPrefix: '工程规范/', limit: 3 } })))
+      .toBe('search("worktree|分支命名规范", domain_prefix="工程规范/", limit=3)')
+  })
+  it('search：legacy keywords「｜」拼接', () => {
+    expect(recallCallHead(call({ query: { keywords: ['部署', '回滚'] } })))
+      .toBe('search(keywords="部署｜回滚")')
+  })
+  it('search：hint 键不入函数头（出参事实归 hint note 行）', () => {
+    expect(recallCallHead(call({ query: { text: '词', hint: 'domain "x" was dropped' } })))
+      .toBe('search("词")')
+  })
+  it('read：frontmatterId 锚；缺席降级 entryId；双缺裸动词', () => {
+    expect(recallCallHead(call({ verb: 'read', query: { frontmatterId: 'kb-be-001' } }))).toBe('read("kb-be-001")')
+    expect(recallCallHead(call({ verb: 'read', query: { entryId: 7 } }))).toBe('read("7")')
+    expect(recallCallHead(call({ verb: 'read', query: null }))).toBe('read')
+  })
+  it('read-abstract：entryId 锚', () => {
+    expect(recallCallHead(call({ verb: 'read-abstract', query: { entryId: 2 } }))).toBe('read_abstract("2")')
+  })
+  it('browse：domain + offset/limit/order 全参（省略不显示）', () => {
+    expect(recallCallHead(call({ verb: 'browse', query: { domain: '工程规范', offset: 0, limit: 20, order: 'status' } })))
+      .toBe('browse("工程规范", offset=0, limit=20, order="status")')
+    expect(recallCallHead(call({ verb: 'browse', query: { domain: '工程规范' } }))).toBe('browse("工程规范")')
+  })
+  it('recallSearchTextJoin：多空白分词安全（空 token 滤除）', () => {
+    expect(recallSearchTextJoin('  a  b   c ')).toBe('a|b|c')
+  })
+})
+
+describe('recallDatetimeLabel 归因区 LocaleDatetime', () => {
+  it('ISO → 本地 YYYY/MM/DD HH:mm:ss；不可解析原文返回', () => {
+    const iso = '2026-11-20T14:32:05.000Z'
+    const date = new Date(iso)
+    const pad = (n: number): string => String(n).padStart(2, '0')
+    const expected = `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    expect(recallDatetimeLabel(iso)).toBe(expected)
+    expect(recallDatetimeLabel('not-a-time')).toBe('not-a-time')
+  })
+})
+
+describe('recallScoreLabel score 元组', () => {
+  it('两位小数；null = 无元组', () => {
+    expect(recallScoreLabel(0.91)).toBe('(score 0.91)')
+    expect(recallScoreLabel(1)).toBe('(score 1.00)')
+    expect(recallScoreLabel(null)).toBeNull()
   })
 })

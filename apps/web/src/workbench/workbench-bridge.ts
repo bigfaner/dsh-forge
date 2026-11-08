@@ -3,8 +3,10 @@
 // 分属两个求值单元，跨单元缝 = 页内全局——与 __DSH_FORGE_VIEWS__（组件源发布）/
 // __DSH_FORGE_ADD_PROJECT_FLOW__（流程打开缝）同族。
 // fix-25 形态：中区互换 = 官方 layout.selectPanel（视图态机退役）——桥 = 官方面板的
-// 导航窄面 + 知识抽屉目标缝（召回视图跳转 → 知识面板抽屉打开——两棵独立槽位树的
-// 唯一通道）+ e2e 载体（bridgeDispatch 面历史兼容：showSession/showKnowledge 直达）。
+// 导航窄面 + 知识抽屉目标缝（知识面板卡片点击 → 抽屉打开——setDrawerEntry 单向回流）
+// + e2e 载体（bridgeDispatch 面历史兼容：showSession/showKnowledge 直达）。
+// stage④ 1.8：召回视图 → 知识面板跳转缝（openKnowledgeEntry）随 onOpenEntry 桥缝一并
+// 退役——召回 tab 详情 = tab 内就地 dialog，跨树转移面不再经桥。
 // 4.1 扩概览上下文缝：ShellHost（shell.overlay 常驻树）锚定的项目上下文写回 → 右栏
 // 概览 tab body（rightbar 会话树）读取——同桥双缝（两棵独立槽位树的既有唯一通道复用）。
 // 4.2 扩任务聚焦缝（UF-3 流程 7）：会话头挂接 pill 点击（插件 inject face 闭包，dock 开
@@ -77,8 +79,6 @@ export function initialOverviewContext(): ForgeOverviewContext {
 
 /** 工作台桥（导航 + 抽屉缝 + 概览上下文缝 + 任务聚焦缝；快照源形状 = useSyncExternalStore 可直订） */
 export interface WorkbenchBridge extends ForgeCenterNav {
-  /** 召回行跳转：打开知识面板 + 抽屉定位条目（UF-4→UF-5 跨树转移面） */
-  openKnowledgeEntry(entryId: number): void
   /** 快照订阅（知识面板/概览 tab 消费——抽屉目标与概览上下文/任务聚焦变更驱动） */
   subscribe(listener: () => void): () => void
     /** 当前快照（身份稳定——未变更恒同引用） */
@@ -137,11 +137,6 @@ export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
   const bridge: WorkbenchBridge = {
     showKnowledge: nav.showKnowledge,
     showSession: nav.showSession,
-    openKnowledgeEntry: (entryId: number): void => {
-      snapshot = { ...snapshot, drawerEntryId: entryId }
-      nav.showKnowledge()
-      notify()
-    },
     subscribe: (listener: () => void): (() => void) => {
       listeners.add(listener)
       return () => {

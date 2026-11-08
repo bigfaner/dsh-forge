@@ -344,9 +344,6 @@ function publishFakeViews() {
       const bridgeObj = {
         showKnowledge: nav.showKnowledge,
         showSession: nav.showSession,
-        openKnowledgeEntry: () => {
-          nav.showKnowledge()
-        },
         subscribe: () => () => {},
         getSnapshot: () => ({ drawerEntryId: null, overview: { projectId: null }, taskFocus, drawerTaskId, transitionFocus }),
         setDrawerEntry: () => {},
@@ -671,7 +668,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     unpublishViews()
   })
 
-  it('页签 roster：知识召回单登记（fix-29：轨迹 = 官方 trajectory 直用——产品复刻退役零登记）+ 召回注入面 = 跳转缝', () => {
+  it('页签 roster：知识召回单登记（fix-29：轨迹 = 官方 trajectory 直用——产品复刻退役零登记）+ 零 inject（stage④ 1.8 桥缝退役）', () => {
     const views = publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
@@ -686,11 +683,8 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(recall.component).toBe(views.ForgeRecallView)
     // fix-29 退役 pin：产品 'dswf-trajectory' 复刻不再注册（官方 'trajectory' roster 行保持）
     expect(registers.find((r) => r.key === CONVERSATION_VIEW_SLOT && (r.options.id === 'dswf-trajectory' || r.options.id === 'trajectory'))).toBeUndefined()
-    // 召回注入面：openKnowledgeEntry → 桥跳转（进知识面板 + 抽屉定位——selectPanel 官方面）
-    const face = recall.options.inject!() as { openKnowledgeEntry: (id: number) => void }
-    const { selectPanel } = fakeClientCtx()
-    expect(typeof face.openKnowledgeEntry).toBe('function')
-    void selectPanel
+    // stage④ 1.8 桥缝退役 pin：召回登记零 inject（详情 = tab 内就地 dialog——openKnowledgeEntry 跳转缝不再存在）
+    expect(recall.options.inject).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_EVENT_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT]) // fix-24 ① hero 影子；1.9 事件折叠条目组；fix-2 封存提示；bug 4b34e5d8 chip 重建效应行；bug 267dcac1 切换闸虚线标记
     expect(marker?.views?.error).toBeUndefined()
