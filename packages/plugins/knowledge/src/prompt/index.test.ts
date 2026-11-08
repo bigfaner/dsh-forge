@@ -34,6 +34,14 @@ describe('renderKnowledgeStaticSection（固定文本——中文 + 归档规则
     expect(text).toContain('<knowledge-domains> 块')
   })
 
+  it('何时检索/何时回退双段齐备（检索触发场景 + 正本优先与零命中回退）', () => {
+    expect(text).toContain('何时检索知识库')
+    expect(text).toContain('避免凭记忆重推或复犯已知错误')
+    expect(text).toContain('何时退回原始文件')
+    expect(text).toContain('以仓库源码与文档正本为准')
+    expect(text).toContain('零命中时同样退回原始文件查找')
+  })
+
   it('检索方法段齐备（agentic search 三步 SOP：定域拆词 / hint 反应 / 精读）', () => {
     expect(text).toContain('检索方法（agentic search 三步')
     expect(text).toContain('第 1 步 定域与拆词')
