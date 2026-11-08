@@ -78,12 +78,12 @@ describe('读面行为等价（v4 实体表）', () => {
     await expect(service.readAbstract({ projectId, id: 'no-such-slug', sessionId: 's1' })).rejects.toBeInstanceOf(EntryNotFoundError)
   })
 
-  it('heatByEntry：使用事件计数（search 命中 + read-abstract 各计一次；哨兵行不计）', async () => {
+  it('heatByEntry：过程动词（search + read-abstract）不计热（热度终式——read 才是采纳动作）', async () => {
     const heat = await service.heatByEntry(projectId)
     const api = (await service.search({ projectId, keywords: ['api'], sessionId: 's2' })).find((h) => h.title === 'API')!
     await service.readAbstract({ projectId, id: api.frontmatterId, sessionId: 's2' })
     const heat2 = await service.heatByEntry(projectId)
-    expect((heat2.get(api.entryId) ?? 0) - (heat.get(api.entryId) ?? 0)).toBeGreaterThanOrEqual(2)
+    expect((heat2.get(api.entryId) ?? 0) - (heat.get(api.entryId) ?? 0)).toBe(0)
   })
 
   it('browse/listEntries/getEntryDetail：域树聚合 + 正文按需读取', async () => {

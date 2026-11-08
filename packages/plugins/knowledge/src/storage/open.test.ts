@@ -33,7 +33,7 @@ describe('A2 open：单文件全表同库 + 并发 PRAGMA + 版本线', () => {
     try {
       expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
       expect(db.pragma('busy_timeout', { simple: true })).toBe(BUSY_TIMEOUT_MS)
-      expect(schemaMetaRows(db).map((r) => r.version)).toEqual([1, 2, 3, 4, 5, 6]) // v3：project_id 列（fix-2）；v4：实体六表 + FTS5 + registry 改名；v5：归并台账表改名（followups #1）；v6：knowledge_domains 域表（stage③ 1.3）
+      expect(schemaMetaRows(db).map((r) => r.version)).toEqual([1, 2, 3, 4, 5, 6, 7]) // v3：project_id 列（fix-2）；v4：实体六表 + FTS5 + registry 改名；v5：归并台账表改名；v6：knowledge_domains 域表；v7：registry.scope + recall_logs 七新列 + ck_krl_verb 四值（stage④ 1.3）
       const tables = db
         .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
         .all()
@@ -59,7 +59,7 @@ describe('A2 open：单文件全表同库 + 并发 PRAGMA + 版本线', () => {
     first.close()
     const second = openKnowledgeDatabase(file)
     try {
-      expect(schemaMetaRows(second)).toHaveLength(6)
+      expect(schemaMetaRows(second)).toHaveLength(7)
     } finally {
       second.close()
     }

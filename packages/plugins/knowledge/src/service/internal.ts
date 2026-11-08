@@ -44,14 +44,26 @@ export function normalizeUpdated(value: unknown, fallbackMs: number): string {
   return new Date(fallbackMs).toISOString()
 }
 
-/** 事件热度语句（heatByEntry 同口径单表计数：search 命中与 read-abstract 各计一次、哨兵行
- *  entry_id NULL 天然排除——recall 热度面与 browse 热度徽章共享；ORDER BY entry_id 确定性）。 */
+/**
+ * 热度终式（SC-5 pin 基准，用户裁决 2026-11-20——单源 SQL 字面量常量，宿主文件 = 本文件，
+ * 防 prepareHeatByEntry / selectHeatByFrontmatterId 双语句漂移）：
+ * · read = 最终采纳动作记 1.0；search/read-abstract/browse 为过程动词一律 0；
+ * · feedback = -1（负反馈）行计 0——剔除该行计数贡献，条目热度只减不罚；
+ * · 零 project 过滤（跨项目同 entry 聚合一条 heat——全局热度归属裁决；两语句共享）。
+ */
+export const KNOWLEDGE_HEAT_TERM =
+  `SUM(CASE WHEN feedback = -1 THEN 0 WHEN verb = 'read' THEN 1.0 ELSE 0 END)`
+
+/**
+ * 事件热度语句（消费 KNOWLEDGE_HEAT_TERM 单源字面量；哨兵行 entry_id NULL 天然排除；
+ * ORDER BY entry_id 确定性）。零形参——热度为跨项目全局聚合，project 维度不进 SQL。
+ */
 export function prepareHeatByEntry(
   db: Database.Database,
 ): Database.Statement<unknown[], { entry_id: number; heat: number }> {
   return db.prepare<unknown[], { entry_id: number; heat: number }>(
-    `SELECT entry_id, COUNT(*) AS heat FROM knowledge_recall_logs
-     WHERE project_id = ? AND entry_id IS NOT NULL GROUP BY entry_id ORDER BY entry_id`,
+    `SELECT entry_id, ${KNOWLEDGE_HEAT_TERM} AS heat FROM knowledge_recall_logs
+     WHERE entry_id IS NOT NULL GROUP BY entry_id ORDER BY entry_id`,
   )
 }
 
@@ -348,7 +360,9 @@ export function aggregateDomainTree(cards: readonly KnowledgeCard[]): DomainNode
 
 // ── sessionRecall 行分组聚合 ──
 
-/** sessionRecall 原始行（单表直读形状） */
+/** sessionRecall 原始行（单表直读形状；verb 字面量面 = contracts RecallVerb——v7 起库内
+ *  ck_krl_verb 扩四值（read/browse），contracts 联合扩位随 tools/contracts 任务收口，
+ *  本文件不先行扩型（不越任务改契约面）。 */
 export interface RecallRow {
   call_id: string
   verb: 'search' | 'read-abstract'

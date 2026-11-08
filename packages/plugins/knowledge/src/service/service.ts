@@ -54,6 +54,7 @@ import {
   escapeLike,
   groupRecallRows,
   isNonEmptyString,
+  KNOWLEDGE_HEAT_TERM,
   normalizeUpdated,
   prepareHeatByEntry,
   textSubstringHit,
@@ -304,8 +305,8 @@ function listDomainDirs(knowledgeDir: string, maxDepth: number): string[] {
 
   const selectHeatByEntry = prepareHeatByEntry(db)
   const selectHeatByFrontmatterId = db.prepare<unknown[], { frontmatter_id: string; heat: number }>(
-    `SELECT frontmatter_id, COUNT(*) AS heat FROM knowledge_recall_logs
-     WHERE project_id = ? AND frontmatter_id IS NOT NULL GROUP BY frontmatter_id`,
+    `SELECT frontmatter_id, ${KNOWLEDGE_HEAT_TERM} AS heat FROM knowledge_recall_logs
+     WHERE frontmatter_id IS NOT NULL GROUP BY frontmatter_id`,
   )
   const insertRecallLog = db.prepare(
     `INSERT INTO knowledge_recall_logs (
@@ -313,6 +314,9 @@ function listDomainDirs(knowledgeDir: string, maxDepth: number): string[] {
        query_json, hit_count, duration_ms, created_at
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
+  // project 过滤豁免声明（roundtable2 M2 防误改）：sessionRecall 行集恒按调用方 project_id
+  // 收窄（会话 tab 归因面）——与热度全局聚合（KNOWLEDGE_HEAT_TERM 零 project 维度）语义
+  // 不同源，此 WHERE 不得随热度改判去除。
   const selectSessionRows = db.prepare<[string, string], RecallRow>(
     `SELECT call_id, verb, entry_id, frontmatter_id, title_snap, domain_snap, query_json, hit_count, duration_ms, created_at
       FROM knowledge_recall_logs WHERE project_id = ? AND session_id = ? ORDER BY created_at, id`,
@@ -543,7 +547,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     rows = applyStatusFilter(rows, q.statusFilter)
 
     const keyword = q.keyword?.trim().toLowerCase() ?? ''
-    const heatByEntry = new Map(selectHeatByEntry.all(q.projectId).map((r) => [r.entry_id, r.heat] as const))
+    const heatByEntry = new Map(selectHeatByEntry.all().map((r) => [r.entry_id, r.heat] as const))
 
     return rows
       .filter((row) => {
@@ -635,7 +639,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       const textMatch = text === '' ? undefined : buildSearchFtsMatch({ text: q.text })
       const textBm25 = textMatch === undefined ? new Map<string, number>() : ftsIdsOf(textMatch)
 
-      const heatByEntry = new Map(selectHeatByEntry.all(q.projectId).map((r) => [r.entry_id, r.heat] as const))
+      const heatByEntry = new Map(selectHeatByEntry.all().map((r) => [r.entry_id, r.heat] as const))
       const scored: { entry: EntryRow; score: number }[] = []
       for (const r of rows) {
         // 准入通道（缺省通道维度恒过）
@@ -759,7 +763,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
 
     async heatByEntry(projectId: string): Promise<HeatByEntry> {
       requireProject(projectId, 'heatByEntry')
-      return new Map(selectHeatByEntry.all(projectId).map((r) => [r.entry_id, r.heat]))
+      return new Map(selectHeatByEntry.all().map((r) => [r.entry_id, r.heat]))
     },
 
     async sessionRecall(q: SessionRecallQuery): Promise<RecallGroup[]> {
@@ -768,9 +772,9 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       const rows = selectSessionRows.all(q.projectId, q.sessionId)
       if (rows.length === 0) return []
 
-      const heatByEntry = new Map(selectHeatByEntry.all(q.projectId).map((r) => [r.entry_id, r.heat] as const))
+      const heatByEntry = new Map(selectHeatByEntry.all().map((r) => [r.entry_id, r.heat] as const))
       const heatByFrontmatterId = new Map(
-        selectHeatByFrontmatterId.all(q.projectId).map((r) => [r.frontmatter_id, r.heat] as const),
+        selectHeatByFrontmatterId.all().map((r) => [r.frontmatter_id, r.heat] as const),
       )
       return groupRecallRows(rows, heatByEntry, heatByFrontmatterId)
     },

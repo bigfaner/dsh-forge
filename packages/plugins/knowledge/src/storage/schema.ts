@@ -17,10 +17,19 @@ export interface StorageMigration {
   readonly version: number
   readonly statements: readonly string[]
   readonly downgradeStatements?: readonly string[]
+  /**
+   * 降级前置门（v7 起——同 downgradeStatements 先例的接口扩展）：逐版降级循环消费，
+   * 目标版本低于本版时先过 guard 再落 downgradeStatements。guard 体 fail-loud（抛错
+   * 即中止，schema_meta 不动——降级零半步）。v6 及以下无 guard——既有降级链零波及。
+   */
+  readonly downgradeGuard?: (db: Database.Database) => void
 }
 
-/** 本插件支持的自持库 schema 版本上限（版本门：库内 version 超出即拒绝打开） */
-export const STORAGE_SCHEMA_VERSION = 6
+/**
+ * 本插件支持的自持库 schema 版本上限（版本门：库内 version 超出即拒绝打开）。
+ * v7（stage④ 1.3——提案 §2.1/§2.2/§2.3 DDL 面）：minor +1 起算基线（后续 coding 任务 patch +1）。
+ */
+export const STORAGE_SCHEMA_VERSION = 7
 
 /**
  * v1：schema_meta（版本线本体）+ 自持注册表 projects。
@@ -210,6 +219,106 @@ export const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
     ],
     downgradeStatements: [`DROP TABLE knowledge_domains`],
   },
+  {
+    // v7（stage④ 1.3——提案 §2.1/§2.2/§2.3 DDL 八列 + verb 枚举扩）：
+    // · knowledge_registry 增 scope TEXT NOT NULL DEFAULT 'project'（ALTER——零重建，存量行
+    //   落默认值；无 DB CHECK，二值校验落应用层 + 迁移测试 pin）；
+    // · recall_logs 表重建（CHECK 不可 ALTER——v2 落地的 ck_krl_verb 两值扩四值
+    //   search/read-abstract/read/browse）：新形 CREATE 承载七新列（feedback INTEGER NOT NULL
+    //   DEFAULT 0 / feedback_note TEXT / feedback_at TEXT / turn_seq INTEGER / trigger_snap TEXT /
+    //   score REAL / content_snap TEXT，后六者可空零约束——三值校验/feedback=0 双 NULL 保证
+    //   /截断 2000 均落应用层，写入面 = feedback.ts 单入口）+ 业务行全量搬移（含 id 保序——
+    //   entry_id/热度归属零漂移）+ 三索引 idx_krl_* 复建；
+    // · feedback 不入 CHECK 的耦合警示：若加 CHECK（IN (0,1,-1)），降级语句重建旧形表时
+    //   搬移非三值行会被拒——CHECK 会使 downgrade 复杂化，故约束面恒留应用层；
+    // · downgradeGuard 拒降门：feedback <> 0 OR turn_seq IS NOT NULL 行在场即 fail-loud
+    //   （trigger_snap 不入门——纯展示快照，降级丢失零账本完整性影响；turn_seq 新写入恒
+    //   非 NULL ⇒ 实质永拒降为账本完整性优先的设计行为，legacy/派生失败 NULL 行除外）。
+    // · downgrade = 恢复 v6 形态：registry.scope 撤（DROP COLUMN——sqlite ≥3.35）+
+    //   recall_logs 回 v2 列集两值 CHECK（业务行全量搬回 + id 保序 + 索引复建）。
+    version: 7,
+    statements: [
+      `ALTER TABLE knowledge_registry ADD COLUMN scope TEXT NOT NULL DEFAULT 'project'`,
+      `CREATE TABLE knowledge_recall_logs_new (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id     TEXT    NOT NULL,
+    call_id        TEXT    NOT NULL,
+    session_id     TEXT    NOT NULL,
+    verb           TEXT    NOT NULL,
+    entry_id       INTEGER,
+    frontmatter_id TEXT,
+    title_snap     TEXT,
+    domain_snap    TEXT,
+    query_json     TEXT,
+    hit_count      INTEGER NOT NULL,
+    duration_ms    INTEGER,
+    created_at     TEXT    NOT NULL,
+    feedback       INTEGER NOT NULL DEFAULT 0,
+    feedback_note  TEXT,
+    feedback_at    TEXT,
+    turn_seq       INTEGER,
+    trigger_snap   TEXT,
+    score          REAL,
+    content_snap   TEXT,
+    CONSTRAINT ck_krl_verb CHECK (verb IN ('search', 'read-abstract', 'read', 'browse'))
+)`,
+      `INSERT INTO knowledge_recall_logs_new (
+    id, project_id, call_id, session_id, verb, entry_id, frontmatter_id, title_snap, domain_snap,
+    query_json, hit_count, duration_ms, created_at
+  ) SELECT
+    id, project_id, call_id, session_id, verb, entry_id, frontmatter_id, title_snap, domain_snap,
+    query_json, hit_count, duration_ms, created_at
+  FROM knowledge_recall_logs`,
+      `DROP TABLE knowledge_recall_logs`,
+      `ALTER TABLE knowledge_recall_logs_new RENAME TO knowledge_recall_logs`,
+      `CREATE INDEX idx_krl_project_session ON knowledge_recall_logs(project_id, session_id, created_at)`,
+      `CREATE INDEX idx_krl_call ON knowledge_recall_logs(call_id)`,
+      `CREATE INDEX idx_krl_entry ON knowledge_recall_logs(entry_id, frontmatter_id)`,
+    ],
+    downgradeStatements: [
+      `ALTER TABLE knowledge_registry DROP COLUMN scope`,
+      `CREATE TABLE knowledge_recall_logs_new (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id     TEXT    NOT NULL,
+    call_id        TEXT    NOT NULL,
+    session_id     TEXT    NOT NULL,
+    verb           TEXT    NOT NULL,
+    entry_id       INTEGER,
+    frontmatter_id TEXT,
+    title_snap     TEXT,
+    domain_snap    TEXT,
+    query_json     TEXT,
+    hit_count      INTEGER NOT NULL,
+    duration_ms    INTEGER,
+    created_at     TEXT    NOT NULL,
+    CONSTRAINT ck_krl_verb CHECK (verb IN ('search', 'read-abstract'))
+)`,
+      `INSERT INTO knowledge_recall_logs_new (
+    id, project_id, call_id, session_id, verb, entry_id, frontmatter_id, title_snap, domain_snap,
+    query_json, hit_count, duration_ms, created_at
+  ) SELECT
+    id, project_id, call_id, session_id, verb, entry_id, frontmatter_id, title_snap, domain_snap,
+    query_json, hit_count, duration_ms, created_at
+  FROM knowledge_recall_logs`,
+      `DROP TABLE knowledge_recall_logs`,
+      `ALTER TABLE knowledge_recall_logs_new RENAME TO knowledge_recall_logs`,
+      `CREATE INDEX idx_krl_project_session ON knowledge_recall_logs(project_id, session_id, created_at)`,
+      `CREATE INDEX idx_krl_call ON knowledge_recall_logs(call_id)`,
+      `CREATE INDEX idx_krl_entry ON knowledge_recall_logs(entry_id, frontmatter_id)`,
+    ],
+    downgradeGuard: (db) => {
+      const row = db
+        .prepare<unknown[], { n: number }>(
+          `SELECT COUNT(*) AS n FROM knowledge_recall_logs WHERE feedback <> 0 OR turn_seq IS NOT NULL`,
+        )
+        .get()
+      if (row !== undefined && row.n > 0) {
+        throw new Error(
+          `版本 7 拒降：recall_logs 反馈/轮次归因账本行在场（feedback <> 0 OR turn_seq IS NOT NULL 共 ${row.n} 行）——账本完整性优先，降级会丢弃该列族`,
+        )
+      }
+    },
+  },
 ]
 
 /**
@@ -231,6 +340,9 @@ export function downgradeKnowledgeSchema(db: Database.Database, targetVersion: n
     const stmts = migration.downgradeStatements
     if (stmts === undefined) {
       throw new Error(`版本 ${migration.version} 无降级语句集——不可降级`)
+    }
+    if (migration.downgradeGuard !== undefined) {
+      migration.downgradeGuard(db) // 拒降门先于语句集：fail-loud 即整段中止（schema_meta 零半步）
     }
     db.transaction(() => {
       for (const stmt of stmts) db.prepare(stmt).run()

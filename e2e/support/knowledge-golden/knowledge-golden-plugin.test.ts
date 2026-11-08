@@ -75,6 +75,16 @@ describe('SC-8 golden ↔ 插件服务面（A2 切换后）结构等价比对', 
     void service.readAbstract({ projectId, entryId: entryIdByTitle('框架选型'), sessionId: GOLDEN_SESSION_ID })
     void service.search({ projectId, keywords: ['不存在的词'], sessionId: GOLDEN_SESSION_ID })
     void service.search({ projectId, text: 'api', sessionId: GOLDEN_SESSION_ID })
+    // v7 热度终式对齐（stage④ 1.3——判例 293aecba/44bd7579 夹具同步）：过程动词零计热，
+    // heat 通道形状（4 组 [entryId, heat] 数值对）由采纳事件（verb='read'，score 1.0）直插承载。
+    const insertRead = db.prepare(
+      `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, title_snap, hit_count, score, created_at)
+       VALUES (?, ?, 'golden-heat-seed', 'read', ?, ?, 1, 1.0, '2026-01-01T00:00:00Z')`,
+    )
+    for (const [title, count] of [['框架选型', 1], ['样式令牌', 2], ['API 规范', 1], ['网关', 1]] as const) {
+      const rowid = entryIdByTitle(title)
+      for (let i = 0; i < count; i += 1) insertRead.run(projectId, `golden-read-${title}-${i}`, rowid, title)
+    }
 
     const requests: Record<string, GoldenChannelRequest> = {
       [KNOWLEDGE_CHANNELS.browse]: { projectId },

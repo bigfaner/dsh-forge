@@ -64,10 +64,10 @@ function writeEntry(knowledgeDir: string, domainDir: string, file: string, id: s
 }
 
 describe('DDL v6（KNOWLEDGE_DOMAINS 迁移线）', () => {
-  it('空库直开 = v6：knowledge_domains 建表在场 + schema_meta 行 6', () => {
+  it('空库直开 = v6 上限版本：knowledge_domains 建表在场 + schema_meta 行含 6', () => {
     const root = tmpRoot()
     const db = openKnowledgeDatabase(join(root, 'knowledge', 'knowledge.db'))
-    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()).toEqual({ v: 6 })
+    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()).toEqual({ v: 7 }) // v7 起 6 为历史版本行（stage④ 1.3）
     const cols = db
       .prepare<unknown[], { name: string; notnull: number; pk: number }>(`PRAGMA table_info(knowledge_domains)`)
       .all()
@@ -91,9 +91,9 @@ describe('DDL v6（KNOWLEDGE_DOMAINS 迁移线）', () => {
     expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()).toEqual({ v: 5 })
     db.close()
 
-    // 重开 = 前向补迁 v6（存量域行首跑由 rebuild 对账补——见下）
+    // 重开 = 前向补迁至上限版本（v6 为历史版本行——knowledge_domains 在场即可）
     const db2 = openKnowledgeDatabase(file)
-    expect(db2.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()).toEqual({ v: 6 })
+    expect(db2.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()).toEqual({ v: 7 })
     expect(domainRows(db2)).toEqual([])
     // 再降级 = DROP TABLE + schema_meta 行删
     downgradeKnowledgeSchema(db2, 5)

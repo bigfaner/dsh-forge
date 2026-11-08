@@ -6,6 +6,11 @@
 //（recall_logs.entry_id = 新表 rowid——service.ts ENTRY_COLUMNS 同口径），索引零行化
 // 按注册行 knowledge_dir 域清 entries/versions/fts（service.projectEntryIds 同口径 JS
 // 前缀匹配——两级解析第二级仍走自持注册表 canonical 键）。
+// v7 对齐（stage④ 1.3——判例 293aecba/44bd7579：夹具 schema 与实库版本同步升级）：
+// DDL v7 = registry.scope + recall_logs 七新列（feedback/feedback_note/feedback_at/
+// turn_seq/trigger_snap/score/content_snap）+ ck_krl_verb 四值（search/read-abstract/
+// read/browse）。热度终式（SC-5，用户裁决 2026-11-20）= read 1.0、其余动词 0、
+// feedback=-1 计 0——热度预置事件 verb 恒 'read'（采纳事件），score 落 1.0。
 import { realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
@@ -35,7 +40,11 @@ export function openKnowledgeDb(userData: string): SeedDb {
   return db
 }
 
-/** 预置使用事件 ×count（v4：条目全局 slug 键——按 title 查 rowid；热度 = recall_logs 按 project_id + entry_id 计数；条目不在索引 = fail-loud） */
+/**
+ * 预置采纳事件 ×count（v7 schema 对齐——条目全局 slug 键，按 title 查 rowid；热度终式
+ * read = 1.0 为唯一计热动词——search/read-abstract/browse 过程动词零贡献；条目不在索引 =
+ * fail-loud）。score 落 1.0（read 行写径口径）。
+ */
 export function seedUsageEventsByTitle(
   db: SeedDb,
   o: { readonly projectId: string; readonly entryTitle: string; readonly count: number; readonly domainSnap?: string },
@@ -45,8 +54,8 @@ export function seedUsageEventsByTitle(
     .get(o.entryTitle) as { id: number } | undefined
   if (entry === undefined) throw new Error(`seedUsageEventsByTitle：条目不在索引（${o.entryTitle}）`)
   const insert = db.prepare(
-    `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, title_snap, domain_snap, hit_count, created_at)
-     VALUES (?, ?, 'e2e-seed-session', 'search', ?, ?, ?, 1, ?)`,
+    `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, title_snap, domain_snap, hit_count, score, created_at)
+     VALUES (?, ?, 'e2e-seed-session', 'read', ?, ?, ?, 1, 1.0, ?)`,
   )
   for (let i = 0; i < o.count; i++) {
     insert.run(
