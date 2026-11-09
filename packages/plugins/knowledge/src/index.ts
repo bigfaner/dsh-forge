@@ -5,14 +5,17 @@
 //   tools / systemPrompt 为 dsh 官方面。
 // 装配：自持存储自启（失败/锚缺席 fail-soft 降级零注册）→ 'knowledge' 服务 provide →
 // 六 tool 注册（tools/register——search/readAbstract/write/read/supersede/reinstate，
-// 裁决 #1 修订 2026-11-05：supersede/reinstate 开为 agent tool）+ scoped 提示词接线
-// （stage③ C2：agent/created 时刻在该会话 scope 注册 forge:knowledge(910)/
-// forge:knowledge-domains(911) 两段——service/session-prompt.ts，全局段注册退役）+
+// 裁决 #1 修订 2026-11-05：supersede/reinstate 开为 agent tool）+ 提示词两段装配：
+// 静态段 forge:knowledge(910) 全局注册（fix-11 裁决 B 侧 Interface 3 静态注册——
+// plugin load 时点先于一切会话装配，首轮请求即在场；bug be4bac44 判例）+ 动态段
+// forge:knowledge-domains(911) scoped 接线（stage③ C2：agent/created 时刻在该会话
+// scope 注册——service/session-prompt.ts）+
 // knowledge.root 目录键声明（根 scope provide('dirKeys.knowledge', entries)
 // 约定名——跨 scope 反向拉取终态缝，bug 04d445f4）；交出合并 disposer。
 // projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
 // 数据源（bindingsFile 文件与刷新缝退役）；服务面两级解析 projectId→wsPath→注册行。
 import { createKnowledgeTools, createProjectResolver, createWsPathResolver } from './tools/index.js'
+import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeStaticSection } from './prompt/index.js'
 import type { ProjectIdResolver, WsPathResolver } from './tools/index.js'
 import { domainTreeIndexOf } from './service/internal.js'
 import { registerKnowledgeScopedPrompt } from './service/session-prompt.js'
@@ -168,7 +171,7 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       emit: diagEmit,
       ...(config.backflow !== undefined ? { backflow: config.backflow } : {}),
     })
-    /** 注册库在场判定 + 顶域实时聚合（scoped 两段 text 闭包供数面——同生同退门） */
+    /** 注册库在场判定 + 顶域实时聚合（动态段 turn 期门控 + 供数面——静态段无条件注入） */
     const promptBindDeps = {
       isRegistered: (wsPath: string) => storage.registry.findByWsPath(wsPath) !== undefined,
       topDomains: (wsPath: string) => domainTreeIndexOf(storage.db, wsPath),
@@ -196,6 +199,15 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       () => storage.close(),
       provideKnowledgeService(),
       declareKnowledgeRootDirKey(ctx),
+      // 静态段全局注册（fix-11 裁决 B 侧 Interface 3 静态注册——能力性指引固定文本零会话
+      // 信息，plugin load 时点注册先于一切会话装配，首轮请求即在场；scoped 注册晚于会话
+      // 首轮装配的判例 bug be4bac44——首个请求提示词不含后注册段）。动态域段走 scoped
+      // 缝（session-prompt 接线），两段不双注入。
+      ctx.systemPrompt.section({
+        name: KNOWLEDGE_SECTION_NAME,
+        order: KNOWLEDGE_SECTION_ORDER,
+        text: renderKnowledgeStaticSection(),
+      }),
       ctx.tools.register(tools.search),
       ctx.tools.register(tools.browse),
       ctx.tools.register(tools.readAbstract),

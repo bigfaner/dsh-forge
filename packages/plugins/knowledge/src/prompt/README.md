@@ -4,4 +4,4 @@
 
 - 静态瘦身段 `forge:knowledge`（order 910）：`renderKnowledgeStaticSection`——XML 标签制固定文本：检索方法段（search 严苛匹配口径 / domain_prefix 收窄 + knowledge_browse 指认 / 摘要先行 + 零命中改写）+ 中文归档规则块；写入面零工具说明（renderToolUsage 退役，工具加载由 dsh 机械承载）。
 - 动态域索引段 `forge:knowledge-domains`（order 911）：`renderKnowledgeDomainsSection`——目录树形态：顶域主行 `路径(N 篇) — 简介` + 子域缩进行（├─/└─），简介缺席降级 `<无简介>`；双限截断（单顶域 6 行 / 总量 28 行）+ 计数行。
-- 两段经 scoped 注册缝随会话绑定注入（`service/session-prompt.ts`——session-bind 时刻注册、闭包捕获 ws_path、未绑定不注册、同生同退空返 `''`）。
+- 两段经 scoped 注册缝随会话绑定注入（`service/session-prompt.ts`——session-bind 时刻注册、闭包捕获 ws_path、未绑定不注册；静态段无条件注入（fix-11 裁决 B 侧）、动态段无注册库/无域空返 `''`）。

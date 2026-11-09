@@ -1,12 +1,11 @@
 // stage③ C2 单测——session-bind scoped 注册接线（提案 §2.2 裁决 #9）：
-// 绑定会话在该会话 scope 注册两段（闭包捕获 ws_path）、未绑定不注册、
-// 注册库消失两段空返 ''（同生同退）、fail-soft。
+// 绑定会话在该会话 scope 注册动态段（闭包捕获 ws_path）、未绑定不注册、
+// 注册库消失动态段空返 ''、fail-soft。静态段归插件工厂全局注册
+//（fix-11 裁决 B 侧 Interface 3 静态注册——plugin.test.ts 钉），不经 scoped 缝。
 import { describe, expect, it } from 'vitest'
 import {
   KNOWLEDGE_DOMAINS_SECTION_NAME,
   KNOWLEDGE_DOMAINS_SECTION_ORDER,
-  KNOWLEDGE_SECTION_NAME,
-  KNOWLEDGE_SECTION_ORDER,
 } from '../prompt/index.js'
 import { bindKnowledgePromptSections, registerKnowledgeScopedPrompt } from './session-prompt.js'
 import type { KnowledgePromptSection, ScopedAgentFace } from '../tools/faces.js'
@@ -62,31 +61,28 @@ function mount() {
 }
 
 describe('绑定会话注入（session-bind 时刻 scoped 注册）', () => {
-  it('cwd 命中绑定行且注册库在场 → 该会话 scope 注册两段 910/911；text 闭包实时求值（顶域聚合经 ws_path）', () => {
+  it('cwd 命中绑定行且注册库在场 → 该会话 scope 注册动态段 911；text 闭包实时求值（顶域聚合经 ws_path）', () => {
     const r = mount()
     const sections = r.fire(r.agent(WS))
-    expect(sections.map((s) => s.name)).toEqual([KNOWLEDGE_SECTION_NAME, KNOWLEDGE_DOMAINS_SECTION_NAME])
-    expect(sections[0]?.order).toBe(910)
-    expect(sections[1]?.order).toBe(911)
-    expect((sections[0]!.text as () => string)()).toContain('<knowledge-base>')
-    const dynamic = (sections[1]!.text as () => string)()
+    expect(sections.map((s) => s.name)).toEqual([KNOWLEDGE_DOMAINS_SECTION_NAME])
+    expect(sections[0]?.order).toBe(911)
+    const dynamic = (sections[0]!.text as () => string)()
     expect(dynamic).toContain('conventions(3 篇) — 约束')
     expect(r.topCalls).toEqual([WS]) // 闭包捕获 ws_path——每 turn 求值透传
   })
 
-  it('同生同退：注册库消失（注销后）两段 text 均空返 \'\'（空段在官方装配期自然退场）', () => {
+  it('注册库消失（注销后）动态段空返 \'\'（空段在官方装配期自然退场）', () => {
     const r = mount()
     const sections = r.fire(r.agent(WS))
     r.registered.delete(WS)
     expect((sections[0]!.text as () => string)()).toBe('')
-    expect((sections[1]!.text as () => string)()).toBe('')
   })
 
   it('实时性：动态段随顶域聚合变化（write 新域 → 下一 turn 求值得新清单，非注册时点冻结）', () => {
     const r = mount()
     const sections = r.fire(r.agent(WS))
     r.stats.push({ domainPath: 'fresh', entryCount: 1, depth: 1, description: null })
-    const dynamic = (sections[1]!.text as () => string)()
+    const dynamic = (sections[0]!.text as () => string)()
     expect(dynamic).toContain('conventions(3 篇) — 约束')
     expect(dynamic).toContain('fresh(1 篇) — <无简介>')
   })
@@ -103,10 +99,12 @@ describe('未绑定不注册（自然退场）', () => {
     expect(r.fire(r.agent(undefined))).toEqual([])
   })
 
-  it('绑定行在但注册库缺席（无注册库）→ 两段整体不注入（同生同退）', () => {
+  it('绑定行在但注册库缺席（无注册库）→ 动态段仍注册但 text 空返 \'\'（空段退场）', () => {
     const r = mount()
     r.registered.clear()
-    expect(r.fire(r.agent(WS))).toEqual([])
+    const sections = r.fire(r.agent(WS))
+    expect(sections.map((s) => s.name)).toEqual([KNOWLEDGE_DOMAINS_SECTION_NAME])
+    expect((sections[0]!.text as () => string)()).toBe('')
   })
 
   it('agent.ctx / systemPrompt 结构面缺席 → fail-soft 零注册不抛', () => {
@@ -125,7 +123,7 @@ describe('订阅生命周期', () => {
 })
 
 describe('bindKnowledgePromptSections disposer 锚（评审 Minor 补强）', () => {
-  it('返回的 disposer 注销两段：静态/动态各恰注册一次、注销一次', () => {
+  it('返回的 disposer 注销动态段：注册一次、注销一次', () => {
     const ops: string[] = []
     const systemPrompt = {
       section: (s: KnowledgePromptSection) => {
@@ -136,19 +134,14 @@ describe('bindKnowledgePromptSections disposer 锚（评审 Minor 补强）', ()
       },
     }
     const dispose = bindKnowledgePromptSections(systemPrompt, { isRegistered: () => true, topDomains: () => [] }, WS)
-    expect(ops).toEqual([`reg:${KNOWLEDGE_SECTION_NAME}`, `reg:${KNOWLEDGE_DOMAINS_SECTION_NAME}`])
+    expect(ops).toEqual([`reg:${KNOWLEDGE_DOMAINS_SECTION_NAME}`])
     dispose()
-    expect(ops).toEqual([
-      `reg:${KNOWLEDGE_SECTION_NAME}`,
-      `reg:${KNOWLEDGE_DOMAINS_SECTION_NAME}`,
-      `off:${KNOWLEDGE_SECTION_NAME}`,
-      `off:${KNOWLEDGE_DOMAINS_SECTION_NAME}`,
-    ])
+    expect(ops).toEqual([`reg:${KNOWLEDGE_DOMAINS_SECTION_NAME}`, `off:${KNOWLEDGE_DOMAINS_SECTION_NAME}`])
   })
 })
 
-describe('段常量经两段注册面透出（order 位次互指锚）', () => {
-  it('静态段紧前于动态段（910 < 911——<knowledge-base> 声明与 <knowledge-domains> 块同 turn 相邻在场）', () => {
-    expect(KNOWLEDGE_SECTION_ORDER).toBeLessThan(KNOWLEDGE_DOMAINS_SECTION_ORDER)
+describe('段常量经注册面透出（order 位次互指锚）', () => {
+  it('静态段（全局）紧前于动态段（910 < 911——<knowledge-base> 声明与 <knowledge-domains> 块同 turn 相邻在场）', () => {
+    expect(910).toBeLessThan(KNOWLEDGE_DOMAINS_SECTION_ORDER)
   })
 })

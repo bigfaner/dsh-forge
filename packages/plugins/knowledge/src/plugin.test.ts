@@ -122,7 +122,7 @@ describe('AC3 inject 面（零 core 依赖——A2 服务切换后仅 dsh 官方
 })
 
 describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词接线（stage③ C2）', () => {
-  it('默认装配（自持库 dbFile）：provide knowledge 服务（八法 + 写门三法）+ 六 tool + agent/created 订阅；全局段注册退役（根 scope 零 section）', () => {
+  it('默认装配（自持库 dbFile）：provide knowledge 服务（八法 + 写门三法）+ 六 tool + 静态段全局注册 + agent/created 订阅', () => {
     const rt = freshRt()
     const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
     const service = rt.provided.get(KNOWLEDGE_SERVICE_NAME) as BrowseKnowledgeService
@@ -139,12 +139,20 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词�
       'knowledge_supersede',
       'knowledge_write',
     ])
-    expect(rt.sections).toHaveLength(0) // 全局段退役——两段改走会话 scope
-    expect(rt.agentHandlers).toHaveLength(1) // agent/created 订阅在场（scoped 接线）
+    // 静态段全局注册（fix-11 裁决 B 侧 Interface 3 静态回归——plugin load 时点先于一切
+    // 会话装配，首轮请求即在场；bug be4bac44 判例：scoped 注册晚于首轮装配）
+    expect(rt.sections).toHaveLength(1)
+    expect(rt.sections[0]?.name).toBe('forge:knowledge')
+    expect(rt.sections[0]?.order).toBe(910)
+    expect(typeof rt.sections[0]!.text).toBe('string')
+    expect(rt.sections[0]!.text as string).toContain('<knowledge-base>')
+    expect(rt.sections[0]!.text as string).not.toContain('knowledge_write') // 写入面零工具说明（检索面指针行豁免）
+    expect(rt.sections[0]!.text as string).not.toContain('knowledge_supersede')
+    expect(rt.agentHandlers).toHaveLength(1) // agent/created 订阅在场（scoped 接线——动态段）
     dispose()
   })
 
-  it('scoped 接线两态：绑定会话（cwd 命中绑定行 + 注册库在场）在该会话 scope 注册两段 910/911；未绑定会话零注册', async () => {
+  it('scoped 接线两态：绑定会话（cwd 命中绑定行 + 注册库在场）在该会话 scope 注册动态段 911；未绑定会话零注册', async () => {
     const rt = freshRt()
     const root = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-scoped-'))
     try {
@@ -168,14 +176,10 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词�
         for (const h of rt.agentHandlers) h({ agent })
         return sections
       }
-      // 绑定 + 注册库在场 → 两段
+      // 绑定 + 注册库在场 → 动态段（静态段已全局注册，scoped 不重复）
       const bound = fire(wsDir)
-      expect(bound.map((s) => s.name)).toEqual(['forge:knowledge', 'forge:knowledge-domains'])
-      expect(bound[0]?.order).toBe(910)
-      expect(bound[1]?.order).toBe(911)
-      expect((bound[0]!.text as () => string)()).toContain('<knowledge-base>')
-      expect((bound[0]!.text as () => string)()).not.toContain('knowledge_write') // 写入面零工具说明（检索面指针行豁免）
-      expect((bound[0]!.text as () => string)()).not.toContain('knowledge_supersede')
+      expect(bound.map((s) => s.name)).toEqual(['forge:knowledge-domains'])
+      expect(bound[0]?.order).toBe(911)
       // 未绑定 cwd → 零注册
       expect(fire(join(root, 'other'))).toEqual([])
       // 无 cwd → 零注册
@@ -186,12 +190,12 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词�
     }
   })
 
-  it('disposer 全注销（服务 provide + tool×7 + agent/created 订阅×1，各恰一次；自持库关闭）', () => {
+  it('disposer 全注销（服务 provide + tool×7 + 静态全局段 + agent/created 订阅×1，各恰一次；自持库关闭）', () => {
     const rt = freshRt()
     const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
     dispose()
     expect(rt.provided.size).toBe(0)
-    expect(rt.disposedCounts()).toEqual({ tools: 7, sections: 0, listeners: 1, services: [KNOWLEDGE_SERVICE_NAME, 'dirKeys.knowledge'] })
+    expect(rt.disposedCounts()).toEqual({ tools: 7, sections: 1, listeners: 1, services: [KNOWLEDGE_SERVICE_NAME, 'dirKeys.knowledge'] })
   })
 
   it('config.projects 绑定表进入解析链（装配缝消费验证——工具面 cwd→projectId）', async () => {
