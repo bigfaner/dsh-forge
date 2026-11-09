@@ -367,6 +367,13 @@
 
 /* ── read 快照 / 就地详情 / 负反馈说明 三 dialog（官方 Modal 卡面——产品内容面）── */
 
+/* 召回 tab 双知识 dialog 放宽（用户裁决：默认卡面 380px 过窄，×2.5 = 950px——
+ * read 快照全文与条目详情 Markdown 正文的长行可读性；先例同 dswt-create/risk-modal） */
+.dswf-recall-snapmodal,
+.dswf-recall-entrymodal {
+  width: min(950px, 100%);
+}
+
 /* 快照全文块（render 头行 + 代码字体正文块 12px/1.6 + 快照语义注记） */
 .dswf-recall-snaphead {
   padding: 4px 8px; /* dsw-raw 头行贴排刻度 */
