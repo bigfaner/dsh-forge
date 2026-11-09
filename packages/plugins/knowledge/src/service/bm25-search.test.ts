@@ -13,6 +13,8 @@ import type { BrowseKnowledgeService } from './types.js'
 let home: string
 let wsDir: string
 let knowledgeDir: string
+let ws3: string
+let dir3: string
 let service: BrowseKnowledgeService
 let db: import('better-sqlite3').Database
 const projectId = 'p-bm25'
@@ -43,6 +45,18 @@ beforeAll(() => {
   for (let i = 0; i < 16; i += 1) {
     writeFileSync(join(knowledgeDir, 'filler', `f${i}.md`), md(`Filler ${i}`, `bm25-f${i}`, [`filler${i}`], `filler corpus filler${i} unrelated words`, 'confirmed'), 'utf8')
   }
+  // 1.17 精度调优对照行（独立 ws3 库——不混入主 corpus，免扰动既有 OR 兜底 pin 判定域）：
+  // kwz 词元只在 keywords 列（title/summary 无关词面）；tz 词元只在 title 高词频；
+  // frag 多词元覆盖（title/keywords 双命中）vs fragw 单碎片仅 title 词面命中。
+  const ws3d = join(home, 'ws3')
+  const dir3d = join(ws3d, '.knowledge')
+  mkdirSync(dir3d, { recursive: true })
+  writeFileSync(join(dir3d, 'kwz.md'), md('Unrelated Zephyr KW', 'bm25-kwz', ['zephyrus'], 'totally unrelated filler text lorem ipsum', 'confirmed'), 'utf8')
+  writeFileSync(join(dir3d, 'tz.md'), md('zephyrus zephyrus zephyrus', 'bm25-tz', ['unrelatedtag'], 'alpha gateway routing token alpha alpha token', 'confirmed'), 'utf8')
+  writeFileSync(join(dir3d, 'frag.md'), md('部署执行手册', 'bm25-frag', ['部署', '上线'], '部署与上线完整流程', 'confirmed'), 'utf8')
+  writeFileSync(join(dir3d, 'fragw.md'), md('上线杂记', 'bm25-fragw', ['misc'], 'misc note lorem ipsum', 'confirmed'), 'utf8')
+  ws3 = ws3d
+  dir3 = dir3d
   db = openKnowledgeDatabase(join(home, 'knowledge.db'))
   createKnowledgeRegistry(db).upsert(wsDir, knowledgeDir, projectId)
   service = createKnowledgeService({ db, resolveWsPath: (id) => (id === projectId ? wsDir : undefined) })
@@ -190,5 +204,40 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
     const hits = await svc2.search({ projectId: 'p2', text: 'freshkw', sessionId: 's' })
     expect(hits.map((h) => h.frontmatterId)).toEqual(['bm25-fresh'])
     expect(existsSync(join(dir2, 'n.md'))).toBe(true)
+  })
+
+  // 1.17 精度调优 pin（独立 ws3 库 svc3）：query 词元对 keywords 列整词精确命中 = 强信号
+  // （排序加权位）——同 corpus 下仅 keywords 直查条目（title/summary 无关词面）位次第一，
+  // 压过仅 title/summary 高词频词面命中条目。
+  it('keywords 直查优先：keywords 整词命中条目位次第一（压过 title 高词频词面命中）', async () => {
+    createKnowledgeRegistry(db).upsert(ws3, dir3, 'p3')
+    await service.rebuildIndex(projectId)
+    const svc3 = createKnowledgeService({ db, resolveWsPath: (id) => (id === 'p3' ? ws3 : undefined) })
+    const hits = await svc3.search({ projectId: 'p3', text: 'zephyrus', sessionId: 's' })
+    const ids = hits.map((h) => h.frontmatterId)
+    expect(ids).toContain('bm25-kwz')
+    expect(ids).toContain('bm25-tz')
+    expect(ids.indexOf('bm25-kwz')).toBe(0)
+    expect(ids.indexOf('bm25-kwz')).toBeLessThan(ids.indexOf('bm25-tz'))
+  })
+
+  // 1.17 碎片收敛 pin：多词元 OR 并集候选按命中词元覆盖度收敛——单碎片（仅 1/n 词元
+  // 且非 keywords 命中）降权截断不进召回；覆盖度强者保留居前。
+  it('碎片收敛：多词元 query 单碎片非 keywords 命中截断，多词元覆盖条目居前', async () => {
+    const svc3 = createKnowledgeService({ db, resolveWsPath: (id) => (id === 'p3' ? ws3 : undefined) })
+    const hits = await svc3.search({ projectId: 'p3', text: '部署 上线 发布', sessionId: 's' })
+    const ids = hits.map((h) => h.frontmatterId)
+    expect(ids).toContain('bm25-frag')
+    expect(ids.indexOf('bm25-frag')).toBe(0)
+    expect(ids).not.toContain('bm25-fragw') // 单碎片（1/3 词元、非 keywords）截断
+    expect(hits.length).toBeGreaterThanOrEqual(1)
+  })
+
+  // 1.17 db58e1c4 家族回归钉（防零命中复发）：弱碎片截断仅在强候选在场时生效——
+  // 全体候选皆为弱碎片时 OR 兜底语义保留（降权不硬过滤），仍 ≥1 命中。
+  it('OR 兜底不退化：全候选皆单碎片弱命中时仍 ≥1 命中（截断仅在强候选在场时生效）', async () => {
+    const hits = await service.search({ projectId, text: '规范执行审计', sessionId: 's' })
+    expect(hits.length).toBeGreaterThanOrEqual(1)
+    expect(hits.map((h) => h.frontmatterId)).toContain('bm25-cjk2')
   })
 })

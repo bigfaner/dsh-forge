@@ -172,6 +172,35 @@ export function textSubstringHit(title: string, summary: string, text: string): 
   return terms.some((term) => t.includes(term) || s.includes(term))
 }
 
+// ── stage④ 1.17：检索精度调优（keywords 直查优先 + 词元碎片收敛——排序收敛非硬判定） ──
+
+/**
+ * keywords 列直查命中（1.17 强信号）：query 词元（tokenizeSearchTerms 口径）对条目
+ * keywords 词条整词全等或短语包含（大小写不敏感——CJK 词条内子串即短语命中；ASCII
+ * 词条含词元视同整词族命中，低风险放宽已随任务上报）。命中即排序加权位，不参与准入。
+ */
+export function keywordDirectHit(keywords: readonly string[], terms: readonly string[]): boolean {
+  if (keywords.length === 0 || terms.length === 0) return false
+  return terms.some((t) => keywords.some((k) => k.toLowerCase().includes(t)))
+}
+
+/**
+ * 词元覆盖度（1.17 弱信号收敛度量）：命中词元数 / 总词元数——词元在 title/summary
+ * 词面或 keywords 词条任一面命中即计 1（每词元最多计 1）；零词元 → 0。
+ */
+export function termCoverageOf(
+  terms: readonly string[],
+  title: string,
+  summary: string,
+  keywords: readonly string[],
+): number {
+  if (terms.length === 0) return 0
+  const t = title.toLowerCase()
+  const s = summary.toLowerCase()
+  const kws = keywords.map((k) => k.toLowerCase())
+  return terms.reduce((n, term) => (t.includes(term) || s.includes(term) || kws.some((k) => k.includes(term)) ? n + 1 : n), 0)
+}
+
 // ── knowledge-review-ui 1.4：statusFilter 服务端执行（零客户端过滤语义铁律维持） ──
 
 /**

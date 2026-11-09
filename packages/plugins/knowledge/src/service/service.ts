@@ -54,10 +54,12 @@ import {
   escapeLike,
   groupRecallRows,
   isNonEmptyString,
+  keywordDirectHit,
   KNOWLEDGE_HEAT_TERM,
   normalizeUpdated,
   prepareHeatByEntry,
   textSubstringHit,
+  termCoverageOf,
   tokenizeSearchTerms,
   unionEntryIds,
   validateDomainPath,
@@ -725,16 +727,23 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       // OR 容错准入后的中性层细分（bug db58e1c4 修复配对）：子串通道 OR 并集把单词元
       // 弱命中行也放进无词面证据的中性分层——按词元覆盖度微升序（覆盖多者居前，1e-3
       // 步进远小于 bm25Norm 区分度），免单 bigram 弱命中淹没整 run 强覆盖行。
+      // 1.17 精度调优（排序收敛非硬判定——db58e1c4/4cf01aa9 OR 兜底禁退化）：
+      // · keywords 列直查（整词/短语精确命中）= 强信号 +2.0 加权位（压过词面高词频）；
+      // · 词元碎片收敛：覆盖度以 title/summary/keywords 三元数据面计（1e-3 微升序不变）；
+      // · 单碎片弱命中（覆盖不足半数词元、非 keywords 直查、无 FTS 强证据）降权截断——
+      //   仅当强候选在场时生效；全候选皆弱时保留（OR 兜底 ≥1 命中不退化）。
       const substringTerms = text === '' ? [] : tokenizeSearchTerms(text)
-      const coverageOf = (title: string, summary: string): number => {
-        if (substringTerms.length === 0) return 0
-        const t = title.toLowerCase()
-        const s = summary.toLowerCase()
-        return substringTerms.reduce((n, term) => (t.includes(term) || s.includes(term) ? n + 1 : n), 0)
-      }
+      const keywordsOf = (r: EntryRow): string[] => splitKeywords(r.keywords)
+      const coverageOf = (r: EntryRow): number => termCoverageOf(substringTerms, r.title, r.summary, keywordsOf(r))
+      const KEYWORD_DIRECT_BONUS = 2
+      const weakFragmentOf = (r: EntryRow, bm25: number | undefined): boolean =>
+        substringTerms.length > 1
+        && !keywordDirectHit(keywordsOf(r), substringTerms)
+        && bm25 === undefined
+        && coverageOf(r) * 2 < substringTerms.length
 
       const heatByEntry = new Map(selectHeatByEntry.all().map((r) => [r.entry_id, r.heat] as const))
-      const scored: { entry: EntryRow; score: number }[] = []
+      const scored: { entry: EntryRow; score: number; weakFragment: boolean }[] = []
       for (const r of rows) {
         // 准入通道（缺省通道维度恒过；keywords AND 准入分支随参数退役移除）
         if (text !== '' && !textBm25.has(r.id) && !textSubstringHit(r.title, r.summary, text)) continue
@@ -745,13 +754,17 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
           effectiveRank: r.effective_rank,
           heat: heatByEntry.get(r.rid) ?? 0,
         })
-        const score = bm25 !== undefined ? base : base + coverageOf(r.title, r.summary) * 1e-3
-        scored.push({ entry: r, score })
+        const kwBonus = keywordDirectHit(keywordsOf(r), substringTerms) ? KEYWORD_DIRECT_BONUS : 0
+        const score = base + kwBonus + (bm25 === undefined ? coverageOf(r) * 1e-3 : 0)
+        scored.push({ entry: r, score, weakFragment: weakFragmentOf(r, bm25) })
       }
       scored.sort((a, b) => b.score - a.score || a.entry.rid - b.entry.rid)
+      const hasStrong = scored.some((s) => !s.weakFragment)
 
       const admitted: { entry: HitSource; score: number }[] = []
-      for (const { entry, score } of scored) {
+      for (const { entry, score, weakFragment } of scored) {
+        // 1.17 碎片收敛：强候选在场时单碎片弱命中不进召回（兜底语义 = 全弱则保留）
+        if (weakFragment && hasStrong) continue
         // 条件式召回排除（裁决 #10）：同 id 有 confirmed 版时 unconfirmed 权威投影不进召回
         if (entry.status === 'unconfirmed' && entry.confirmed_version_id !== null) continue
         // 0.4/0.2 两档 = 回流对象（滞回闸放行才进召回；分阈跨内核校准见 DEFAULT_BACKFLOW 注）
