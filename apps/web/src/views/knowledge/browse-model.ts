@@ -10,6 +10,7 @@ import type {
   DomainNode,
   EntryActionFailureCode,
   EntryActionReceipt,
+  EntryScopeFilter,
   EntryStatusFilter,
   ListEntriesQuery,
 } from '@dsh-forge/contracts'
@@ -72,12 +73,15 @@ export function hasActiveFilter(filter: BrowseFilter): boolean {
 /**
  * 过滤态 → listEntries 查询（域前缀 + 关键词 + 状态片原样透传——前缀/关键词细分/statusFilter
  * 语义在 core 执行；未激活的维度不出现在查询对象上，防服务端口径漂移）。
+ * 第三参 scopeFilter（stage④ G-1）：'global' 出键（全局源独立查询——web browse 双源分组合流）；
+ * 'all'/缺省不出键（现役项目库行为零变化）。
  */
-export function entriesQueryOf(projectId: string, filter: BrowseFilter): ListEntriesQuery {
+export function entriesQueryOf(projectId: string, filter: BrowseFilter, scopeFilter?: EntryScopeFilter): ListEntriesQuery {
   const query: ListEntriesQuery = { projectId }
   if (filter.domain !== undefined) query.domainPrefix = filter.domain
   if (filter.keyword.trim() !== '') query.keyword = filter.keyword
   if (filter.statusFilter !== undefined && filter.statusFilter !== 'all') query.statusFilter = filter.statusFilter
+  if (scopeFilter !== undefined && scopeFilter !== 'all') query.scopeFilter = scopeFilter
   return query
 }
 

@@ -90,6 +90,18 @@ describe('hasActiveFilter / entriesQueryOf（过滤判据与查询透传）', ()
     // 空白关键词不出键（未过滤判据一致）
     expect(entriesQueryOf('p-1', { keyword: '  ' })).toEqual({ projectId: 'p-1' })
   })
+
+  it('G-1 scope 传参：第三参 global 出键；all/缺省不出键（未过滤维度不出查询对象防口径漂移）', () => {
+    expect(entriesQueryOf('p-1', EMPTY_FILTER, 'global')).toEqual({ projectId: 'p-1', scopeFilter: 'global' })
+    expect(entriesQueryOf('p-1', { domain: '前端', keyword: 'css' }, 'global')).toEqual({
+      projectId: 'p-1',
+      domainPrefix: '前端',
+      keyword: 'css',
+      scopeFilter: 'global',
+    })
+    expect(entriesQueryOf('p-1', EMPTY_FILTER, 'all')).toEqual({ projectId: 'p-1' })
+    expect(entriesQueryOf('p-1', EMPTY_FILTER, undefined)).toEqual({ projectId: 'p-1' })
+  })
 })
 
 describe('browseFaceState（网格相位推导——UF-6 States 表）', () => {

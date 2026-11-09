@@ -30,6 +30,30 @@ const CARDS: readonly KnowledgeCard[] = [
   },
 ]
 
+const GLOBAL_CARD: KnowledgeCard = {
+  entryId: 9,
+  title: '全域检索口径',
+  summary: '检索恒全域并集与来源标识',
+  keywords: ['检索'],
+  status: 'confirmed',
+  domainPath: '检索',
+  updated: '2026-10-02T09:00:00.000Z',
+  heat: 1,
+  scope: 'global',
+}
+
+const GLOBAL_UNCONFIRMED: KnowledgeCard = {
+  entryId: 10,
+  title: '全局待审核条目',
+  summary: '待审核的全局库条目',
+  keywords: ['待审核'],
+  status: 'unconfirmed',
+  domainPath: '检索',
+  updated: '2026-10-02T09:00:00.000Z',
+  heat: 0,
+  scope: 'global',
+}
+
 const ACTIONS: KnowledgeBrowseActions = {
   selectDomain: () => {},
   setKeyword: () => {},
@@ -109,6 +133,28 @@ describe('KnowledgeBrowseBody（纯渲染装配）', () => {
     expect(markup).toContain('data-dswf-kn-drop="true"')
     expect(markup).toContain('draggable="true"')
     expect(markup).toContain('data-dswf-entry="1"')
+  })
+
+  it('G-1 分组呈现：全局库条目经 web browse 可见（scope=global 来源标注锚 + 全局组标签）', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeBrowseBody state={stateOf({ cards: [...CARDS, GLOBAL_CARD] })} actions={ACTIONS} now={NOW} />,
+    )
+    expect(markup).toContain('data-dswf-entry="9"')
+    expect(markup).toContain('data-dswf-kn-card-scope="global"')
+    expect(markup).toContain('全局')
+  })
+
+  it('G-1 待审核视图可见：unconfirmed 全局条目在待审核过滤下呈现（卡片锚 + 待审核 chip）', () => {
+    const markup = renderToStaticMarkup(
+      <KnowledgeBrowseBody
+        state={stateOf({ cards: [GLOBAL_UNCONFIRMED], filter: { keyword: '', statusFilter: 'unconfirmed' } })}
+        actions={ACTIONS}
+        now={NOW}
+      />,
+    )
+    expect(markup).toContain('data-dswf-entry="10"')
+    expect(markup).toContain('待审核')
+    expect(markup).toContain('data-dswf-kn-card-scope="global"')
   })
 
   it('装载中零数据 → 骨架态（无空库文案闪现）', () => {

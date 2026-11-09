@@ -207,6 +207,13 @@ function KnowledgeCardView({
       {/* J2 底行（左中右三段）：域（左，省略）· 弹性空隙 · 中文状态 chip · 创建时间（右端锚定） */}
       <span className="dswf-kn-card-foot">
         <span className="dswf-kn-card-dom">{domainLabelOf(card.domainPath)}</span>
+        {/* G-1 分组呈现来源标注：scope=global 卡片带「全局」组标签（官方 Tag——双源合流后
+            全局库条目可辨来源；项目库卡片零标签 = 默认组零噪音） */}
+        {card.scope === 'global' ? (
+          <span className="dswf-kn-card-scope" data-dswf-kn-card-scope="global">
+            <Tag tone="info">全局</Tag>
+          </span>
+        ) : null}
         <span className="dswf-kn-card-spacer" aria-hidden="true" />
         {chipFace}
         <Tooltip label={created.full} portal>

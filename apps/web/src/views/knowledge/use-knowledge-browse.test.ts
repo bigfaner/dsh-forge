@@ -60,6 +60,31 @@ const CARDS: readonly KnowledgeCard[] = [
   },
 ]
 
+const GLOBAL_CARDS: readonly KnowledgeCard[] = [
+  {
+    entryId: 9,
+    title: '全域检索口径',
+    summary: '检索恒全域并集与来源标识',
+    keywords: ['检索'],
+    status: 'confirmed',
+    domainPath: '检索',
+    updated: '2026-09-30T08:00:00.000Z',
+    heat: 1,
+    scope: 'global',
+  },
+  {
+    entryId: 10,
+    title: '全局待审核条目',
+    summary: '待审核的全局库条目',
+    keywords: ['待审核'],
+    status: 'unconfirmed',
+    domainPath: '检索',
+    updated: '2026-09-30T08:00:00.000Z',
+    heat: 0,
+    scope: 'global',
+  },
+]
+
 const NODES: readonly DomainNode[] = [
   { domainPath: '前端', label: '前端', depth: 1, entryCount: 1, unconfirmedCount: 0 },
   { domainPath: '后端', label: '后端', depth: 1, entryCount: 1, unconfirmedCount: 0 },
@@ -87,9 +112,14 @@ function clientResponding(
   })
 }
 
+/** scope 感知底表替身：scopeFilter='global' 请求回全局组，其余回项目组（G-1 双源） */
+function scopedCards(payload: unknown): readonly KnowledgeCard[] {
+  return (payload as { scopeFilter?: string }).scopeFilter === 'global' ? GLOBAL_CARDS : CARDS
+}
+
 function bundleClient(overrides: { listEntries?: (q: unknown) => unknown } = {}): ForgeRpcClient {
   return clientResponding((channel, payload) => {
-    if (channel === KNOWLEDGE_CHANNELS.listEntries) return overrides.listEntries?.(payload) ?? CARDS
+    if (channel === KNOWLEDGE_CHANNELS.listEntries) return overrides.listEntries?.(payload) ?? scopedCards(payload)
     if (channel === KNOWLEDGE_CHANNELS.browse) return NODES
     if (channel === PROJECTS_CHANNELS.get) return PROJECT
     throw new Error(`unexpected channel: ${channel}`)
@@ -97,28 +127,48 @@ function bundleClient(overrides: { listEntries?: (q: unknown) => unknown } = {})
 }
 
 describe('loadBrowseBundle（全量装载）', () => {
-  it('三路并发归一：cards/nodes/total（= 全量计数）/ 项目名 + 知识目录位置（wsPath 缺省派生——AC4 空库引导数据）', async () => {
+  it('G-1 双源合流：项目库 + 全局库（scopeFilter=global）分组合流——cards = 项目组在前全局组在后，total = 合流计数', async () => {
     const out = await loadBrowseBundle(bundleClient(), 'p-1')
     expect(out).toEqual({
       ok: true,
-      data: { cards: CARDS, nodes: NODES, total: 2, projectName: 'demo', knowledgeDir: 'Z:\\ws\\demo\\.knowledge' },
+      data: {
+        cards: [...CARDS, ...GLOBAL_CARDS],
+        nodes: NODES,
+        total: 4,
+        projectName: 'demo',
+        knowledgeDir: 'Z:\\ws\\demo\\.knowledge',
+      },
     })
   })
 
+  it('全局源失败 → fail-soft（全局组回空，项目主数据不受累）；no-global 空集 = 合法 Outcome 同形', async () => {
+    const globalBroken = bundleClient({
+      listEntries: (q) => {
+        if ((q as { scopeFilter?: string }).scopeFilter === 'global') {
+          throw new RpcClientError({ code: 'ERR_INDEX_STALE', message: '全局索引缺失' })
+        }
+        return CARDS
+      },
+    })
+    const out = await loadBrowseBundle(globalBroken, 'p-1')
+    expect(out.ok && out.data.cards).toEqual(CARDS)
+    expect(out.ok && out.data.total).toBe(2)
+  })
+
   it('projects.get null / 失败 → fail-soft（名称空 + 目录 null，浏览主数据不受累）', async () => {
-    const nullProject = clientResponding((channel) => {
-      if (channel === KNOWLEDGE_CHANNELS.listEntries) return CARDS
+    const nullProject = clientResponding((channel, payload) => {
+      if (channel === KNOWLEDGE_CHANNELS.listEntries) return scopedCards(payload)
       if (channel === KNOWLEDGE_CHANNELS.browse) return NODES
       if (channel === PROJECTS_CHANNELS.get) return null
       throw new Error('unexpected')
     })
     await expect(loadBrowseBundle(nullProject, 'p-1')).resolves.toEqual({
       ok: true,
-      data: { cards: CARDS, nodes: NODES, total: 2, projectName: '', knowledgeDir: null },
+      data: { cards: [...CARDS, ...GLOBAL_CARDS], nodes: NODES, total: 4, projectName: '', knowledgeDir: null },
     })
 
-    const failingProject = clientResponding((channel) => {
-      if (channel === KNOWLEDGE_CHANNELS.listEntries) return CARDS
+    const failingProject = clientResponding((channel, payload) => {
+      if (channel === KNOWLEDGE_CHANNELS.listEntries) return scopedCards(payload)
       if (channel === KNOWLEDGE_CHANNELS.browse) return NODES
       if (channel === PROJECTS_CHANNELS.get) throw new Error('projects 通道缺席')
       throw new Error('unexpected')
@@ -158,28 +208,41 @@ describe('fetchFilteredCards（过滤重拉）', () => {
     const client = bundleClient({
       listEntries: (q) => {
         seen.push(q)
-        return CARDS
+        return scopedCards(q)
       },
     })
     const out = await fetchFilteredCards(client, 'p-1', { domain: '前端', keyword: '' })
-    expect(seen).toEqual([{ projectId: 'p-1', domainPrefix: '前端' }])
-    expect(out.ok && out.data).toBe(CARDS)
+    expect(seen).toEqual([
+      { projectId: 'p-1', domainPrefix: '前端' },
+      { projectId: 'p-1', domainPrefix: '前端', scopeFilter: 'global' },
+    ])
+    expect(out.ok && out.data).toEqual([...CARDS, ...GLOBAL_CARDS])
   })
 
-  it('AC2 组合过滤查询（域 + 关键词）；未过滤 = 仅 projectId', async () => {
+  it('AC2 组合过滤查询（域 + 关键词）双源透传；未过滤 = projectId + global 双请求', async () => {
     const seen: unknown[] = []
     const client = bundleClient({
       listEntries: (q) => {
         seen.push(q)
-        return CARDS
+        return scopedCards(q)
       },
     })
     await fetchFilteredCards(client, 'p-1', { domain: '前端', keyword: '安全' })
     await fetchFilteredCards(client, 'p-1', EMPTY_FILTER)
     expect(seen).toEqual([
       { projectId: 'p-1', domainPrefix: '前端', keyword: '安全' },
+      { projectId: 'p-1', domainPrefix: '前端', keyword: '安全', scopeFilter: 'global' },
       { projectId: 'p-1' },
+      { projectId: 'p-1', scopeFilter: 'global' },
     ])
+  })
+
+  it('G-1 待审核视图可见：statusFilter=unconfirmed 过滤下全局 unconfirmed 条目双源合流可见', async () => {
+    const client = bundleClient({
+      listEntries: (q) => scopedCards(q),
+    })
+    const out = await fetchFilteredCards(client, 'p-1', { keyword: '', statusFilter: 'unconfirmed' })
+    expect(out.ok && out.data.some((card) => card.entryId === 10 && card.scope === 'global')).toBe(true)
   })
 
   it('ERR_INVALID_KNOWLEDGE_DIR（知识目录不可达）→ empty-state 面', async () => {
@@ -196,44 +259,56 @@ describe('fetchFilteredCards（过滤重拉）', () => {
 })
 
 describe('runFullLoad（全量装载 + 过滤补拉）', () => {
-  it('过滤在场 → bundle 后追过滤视图（cards 与过滤条件一致，total 仍取全量）', async () => {
+  it('过滤在场 → bundle 后追过滤视图（cards 与过滤条件一致双源合流，total 仍取合流全量）', async () => {
     const seen: unknown[] = []
     const client = bundleClient({
       listEntries: (q) => {
         seen.push(q)
-        // 未过滤（bundle 底表）= 全量；过滤视图 = 只回「前端」条目
-        return 'domainPrefix' in (q as object) ? CARDS.slice(0, 1) : CARDS
+        return scopedCards(q)
       },
     })
     const out = await runFullLoad(client, 'p-1', { domain: '前端', keyword: '' })
-    expect(seen).toEqual([{ projectId: 'p-1' }, { projectId: 'p-1', domainPrefix: '前端' }])
+    expect(seen).toEqual([
+      { projectId: 'p-1' },
+      { projectId: 'p-1', scopeFilter: 'global' },
+      { projectId: 'p-1', domainPrefix: '前端' },
+      { projectId: 'p-1', domainPrefix: '前端', scopeFilter: 'global' },
+    ])
     expect(out).toEqual({
       kind: 'bundle',
-      bundle: { cards: CARDS, nodes: NODES, total: 2, projectName: 'demo', knowledgeDir: 'Z:\\ws\\demo\\.knowledge' },
-      cards: CARDS.slice(0, 1),
+      bundle: {
+        cards: [...CARDS, ...GLOBAL_CARDS],
+        nodes: NODES,
+        total: 4,
+        projectName: 'demo',
+        knowledgeDir: 'Z:\\ws\\demo\\.knowledge',
+      },
+      cards: [...CARDS, ...GLOBAL_CARDS],
     })
   })
 
-  it('未过滤 → 单次全量（cards = 全量底表）', async () => {
+  it('未过滤 → 单轮双源全量（cards = 合流底表）', async () => {
     const seen: unknown[] = []
     const client = bundleClient({
       listEntries: (q) => {
         seen.push(q)
-        return CARDS
+        return scopedCards(q)
       },
     })
     const out = await runFullLoad(client, 'p-1', EMPTY_FILTER)
-    expect(seen).toEqual([{ projectId: 'p-1' }])
-    expect(out.kind === 'bundle' && out.cards).toBe(CARDS)
+    expect(seen).toEqual([{ projectId: 'p-1' }, { projectId: 'p-1', scopeFilter: 'global' }])
+    expect(out.kind === 'bundle' && out.cards).toEqual([...CARDS, ...GLOBAL_CARDS])
   })
 
-  it('补拉失败 → error 落点（不打散错误面）', async () => {
+  it('补拉失败 → error 落点（项目源 typed error 不被全局源 fail-soft 掩蔽）', async () => {
     let calls = 0
     const client = bundleClient({
-      listEntries: () => {
+      listEntries: (q) => {
         calls += 1
-        if (calls > 1) throw new RpcClientError({ code: 'ERR_INDEX_STALE', message: '重拉失败' })
-        return CARDS
+        if (calls > 2 && (q as { scopeFilter?: string }).scopeFilter !== 'global') {
+          throw new RpcClientError({ code: 'ERR_INDEX_STALE', message: '重拉失败' })
+        }
+        return scopedCards(q)
       },
     })
     const out = await runFullLoad(client, 'p-1', { keyword: '安全' })

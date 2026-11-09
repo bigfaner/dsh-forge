@@ -53,7 +53,6 @@ export {
   composeSearchScore,
   groupRecallRows,
   heatBonusOf,
-  rankEntries,
   rankFactorOf,
   textSubstringHit,
   tokenizeSearchTerms,

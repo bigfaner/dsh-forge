@@ -1,8 +1,10 @@
 // 知识浏览数据装载（定位：业务——UF-6 浏览主体的 forge:knowledge/* 消费面）。
 // 数据纪律（AC5 索引直读首显不阻塞）：
-//   - 全量装载 = listEntries（无过滤底表，兼 total 计数源）∥ browse（域树聚合）∥ projects.get
-//     （项目名 + 知识目录位置——空库引导文案数据）三路并发，索引缓存直读即瞬时呈现；
-//   - 过滤重拉 = listEntries(域前缀 + 关键词) ∥ browse 域树重建——旧卡片保持可见（busy 标注），
+//   - 全量装载 = listEntries（项目库无过滤底表）∥ listEntries(scopeFilter='global')（全局源）
+//     ∥ browse（域树聚合）∥ projects.get（项目名 + 知识目录位置——空库引导文案数据）四路并发，
+//     索引缓存直读即瞬时呈现；双源卡片分组合流（G-1——项目组在前全局组在后，mergeScopedCards）；
+//   - 过滤重拉 = 项目源 listEntries(域前缀 + 关键词 + 状态片) ∥ 全局源同过滤 + scopeFilter='global'
+//     双请求合流 ∥ browse 域树重建——旧卡片保持可见（busy 标注），
 //     树随重拉与现盘目录对账（目录即域——带外新建目录即时在场）；
 //     索引缺失静默重建期（core 侧）表现为本侧在途等待，首装零数据时呈现骨架；
 //   - 竞态守卫 = 序号递增，仅最新一次装载的落点生效（快速连续过滤不串台）。
@@ -162,32 +164,77 @@ async function fetchProjectMeta(client: ForgeRpcClient, projectId: string): Prom
 }
 
 /**
- * 全量装载（纯异步面）：listEntries（无过滤）∥ browse（域树）∥ 项目元数据 三路并发；
- * 任一主数据失败 = 整体 error（typed error 保 code 映射）。
+ * 全局库卡片拉取（stage④ G-1——web browse 分组呈现的全局源）：listEntries(scopeFilter='global')；
+ * fail-soft：no-global 空集是合法 Outcome（service 面 []），通道失败也回空——全局源缺席不拖垮
+ * 项目主数据。
+ */
+async function fetchGlobalCards(client: ForgeRpcClient, projectId: string): Promise<readonly KnowledgeCard[]> {
+  try {
+    return await client.knowledge.listEntries({ projectId, scopeFilter: 'global' })
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 双源卡片分组合流（stage④ G-1 分组呈现）：项目库组在前、全局库组在后（稳定不重排）；
+ * 卡片 scope 字段为网格来源标注（全局组「全局」标签）的数据源。
+ */
+export function mergeScopedCards(
+  project: readonly KnowledgeCard[],
+  global: readonly KnowledgeCard[],
+): readonly KnowledgeCard[] {
+  return [...project, ...global]
+}
+
+/**
+ * 全量装载（纯异步面）：项目库 listEntries ∥ 全局库 listEntries(scopeFilter='global')
+ * ∥ browse（域树）∥ 项目元数据 四路并发；任一项目主数据失败 = 整体 error（typed error
+ * 保 code 映射），全局源 fail-soft 回空。
  */
 export async function loadBrowseBundle(client: ForgeRpcClient, projectId: string): Promise<BrowseFetch<BrowseBundle>> {
   try {
-    const [cards, nodes, meta] = await Promise.all([
+    const [cards, globalCards, nodes, meta] = await Promise.all([
       client.knowledge.listEntries({ projectId }),
+      fetchGlobalCards(client, projectId),
       client.knowledge.browse(projectId),
       fetchProjectMeta(client, projectId),
     ])
-    return { ok: true, data: { cards, nodes, total: cards.length, ...meta } }
+    const merged = mergeScopedCards(cards, globalCards)
+    return { ok: true, data: { cards: merged, nodes, total: merged.length, ...meta } }
   } catch (error) {
     return { ok: false, error: mapBrowseError(error) }
   }
 }
 
-/** 过滤重拉（纯异步面）：listEntries(域前缀 + 关键词 + 状态片)——查询由 entriesQueryOf 透传构造 */
+/** 过滤重拉（纯异步面）：项目源 listEntries(过滤) ∥ 全局源 listEntries(过滤+scopeFilter='global')
+ *  双请求合流（同一过滤片 AND 交集语义在服务端各自执行——客户端零过滤语义铁律维持） */
 export async function fetchFilteredCards(
   client: ForgeRpcClient,
   projectId: string,
   filter: BrowseFilter,
 ): Promise<BrowseFetch<readonly KnowledgeCard[]>> {
   try {
-    return { ok: true, data: await client.knowledge.listEntries(entriesQueryOf(projectId, filter)) }
+    const [project, global] = await Promise.all([
+      client.knowledge.listEntries(entriesQueryOf(projectId, filter)),
+      fetchFilteredGlobalCards(client, projectId, filter),
+    ])
+    return { ok: true, data: mergeScopedCards(project, global) }
   } catch (error) {
     return { ok: false, error: mapBrowseError(error) }
+  }
+}
+
+/** 过滤重拉的全局源（entriesQueryOf 第三参出键 scopeFilter='global'；fail-soft 同 fetchGlobalCards） */
+async function fetchFilteredGlobalCards(
+  client: ForgeRpcClient,
+  projectId: string,
+  filter: BrowseFilter,
+): Promise<readonly KnowledgeCard[]> {
+  try {
+    return await client.knowledge.listEntries(entriesQueryOf(projectId, filter, 'global'))
+  } catch {
+    return []
   }
 }
 

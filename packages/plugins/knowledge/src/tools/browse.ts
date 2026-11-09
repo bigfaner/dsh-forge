@@ -3,7 +3,8 @@
 // = slug）。排序默认 confirmed 优先、同状态按创建序（order='created' 切纯创建序）；
 // offset（默认 0）/limit（默认 5）分页。域目录树不再入工具面——动态域索引段每 turn
 // 实时注入系统提示词（session-prompt 闭包求值），树查询是冗余形态。只读导航动词：
-// 零 recall_logs 写入（不进召回/热度口径）。
+// browse 调用落 recall_logs 账（verb='browse'，会话轮卡可归因）但入账不计热——热度终式
+// 仅 read 计分（KNOWLEDGE_HEAT_TERM），browse/search/read-abstract 均为零贡献。
 import type { KnowledgeToolDefinition, ToolExecFace } from './faces.js'
 import type { KnowledgeToolDeps } from './index.js'
 import type { BrowseEntryItem } from '../service/types.js'
@@ -96,7 +97,7 @@ export function createBrowseTool(deps: KnowledgeToolDeps): KnowledgeToolDefiniti
   return {
     name: 'knowledge_browse',
     description:
-      'Browse entries in one knowledge domain (read-only navigation — never recorded as recall/heat). Pass a domain path from the <knowledge-domains> block (exact domain or subtree prefix): returns entries with title, keywords, summary and status, confirmed entries first by default (same status by creation order; order="created" for pure creation order), paged by offset (default 0) and limit (default 5). Every row carries the slug id (frontmatterId) usable by knowledge_read. The domain tree itself is already injected into the system prompt every turn.',
+      'Browse entries in one knowledge domain (read-only navigation — calls are logged with verb="browse" for session attribution and contribute zero heat). Pass a domain path from the <knowledge-domains> block (exact domain or subtree prefix): returns entries with title, keywords, summary and status, confirmed entries first by default (same status by creation order; order="created" for pure creation order), paged by offset (default 0) and limit (default 5). Every row carries the slug id (frontmatterId) usable by knowledge_read. The domain tree itself is already injected into the system prompt every turn.',
     parameters: {
       type: 'object',
       properties: {

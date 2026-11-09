@@ -67,59 +67,6 @@ export function prepareHeatByEntry(
   )
 }
 
-// ── 占位打分（PRD「置信度占位排序」——P1 确定性启发式，M+ 置信度模型替换） ──
-
-const KEYWORD_WEIGHT = 2 // 每命中一个检索关键词
-const TITLE_WEIGHT = 2 // text 命中标题
-const SUMMARY_WEIGHT = 1 // text 命中摘要
-
-/** 打分输入（索引行的可打分子集；keywords 已解析） */
-interface RankableEntry {
-  entryId: number
-  title: string
-  summary: string
-  keywords: string[]
-}
-
-/** 打分产物（score = 占位置信度；同分按 entryId 升序保证确定性） */
-interface RankedEntry<T extends RankableEntry> {
-  entry: T
-  score: number
-}
-
-/**
- * 行内过滤与占位打分（core recall-service 同构移植）：
- * · keywords = AND 细分（每个检索关键词都须命中条目 keywords；大小写不敏感）
- * · text = 标题/摘要大小写不敏感子串（两者皆不中则排除）
- * · score = KEYWORD_WEIGHT×命中关键词数 + TITLE_WEIGHT/SUMMARY_WEIGHT×text 命中位
- * · 排序 score 降序，同分 entryId 升序
- */
-export function rankEntries<T extends RankableEntry>(
-  entries: readonly T[],
-  input: { keywords?: string[]; text?: string },
-): RankedEntry<T>[] {
-  const queryKeywords = (input.keywords ?? [])
-    .map((k) => k.trim().toLowerCase())
-    .filter((k) => k !== '')
-  const text = input.text?.trim().toLowerCase() ?? ''
-  const ranked: RankedEntry<T>[] = []
-  for (const entry of entries) {
-    const entryKeywords = new Set(entry.keywords.map((k) => k.trim().toLowerCase()))
-    const matched = queryKeywords.filter((k) => entryKeywords.has(k))
-    if (matched.length !== queryKeywords.length) continue // AND 细分：缺一即排除
-    let score = KEYWORD_WEIGHT * matched.length
-    if (text !== '') {
-      const inTitle = entry.title.toLowerCase().includes(text)
-      const inSummary = entry.summary.toLowerCase().includes(text)
-      if (!inTitle && !inSummary) continue
-      score += (inTitle ? TITLE_WEIGHT : 0) + (inSummary ? SUMMARY_WEIGHT : 0)
-    }
-    ranked.push({ entry, score })
-  }
-  ranked.sort((a, b) => b.score - a.score || a.entry.entryId - b.entry.entryId)
-  return ranked
-}
-
 // ── stage③ C1：FTS5 BM25 三因子检索（提案 §2.1，裁决 #10） ──
 //
 // 排序内核 = knowledge_fts（FTS5，仅元数据列 title/keywords/summary——裁决 #8 声明边界，
