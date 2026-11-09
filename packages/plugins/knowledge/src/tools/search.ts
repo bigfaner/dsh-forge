@@ -12,9 +12,6 @@ import type { KnowledgeToolDefinition, ToolExecFace } from './faces.js'
 import type { KnowledgeToolDeps } from './index.js'
 import { sessionContextOf, unboundSessionError } from './session.js'
 
-/** 单次检索的候选池上限（rerank 前的全量粗筛面） */
-const POOL_LIMIT = 20
-
 /** agent 面参数（snake_case = dsh tool 惯例；键集 = domain_prefix/text/limit/retry——keywords 退役） */
 export interface SearchToolArgs {
   readonly domain_prefix?: string
@@ -76,7 +73,8 @@ export interface SearchOutcome {
   readonly hits: readonly SearchHit[]
 }
 
-/** 单次检索尝试（text 词面 + 可选域前缀 + 候选池上限） */
+/** 单次检索尝试（text 词面 + 可选域前缀；limit 由 base 携带（缺省 3）——
+ * 服务面截断与召回落账同源，保证工具出参与 recall_logs 行数一致） */
 async function searchAttempt(
   search: (q: SearchQuery) => Promise<readonly SearchHit[]>,
   base: Omit<SearchQuery, 'domainPrefix'>,
@@ -85,7 +83,6 @@ async function searchAttempt(
   return search({
     ...base,
     ...(domainPrefix !== undefined ? { domainPrefix } : {}),
-    limit: POOL_LIMIT,
   })
 }
 
@@ -176,15 +173,16 @@ export function createSearchTool(deps: KnowledgeToolDeps): KnowledgeToolDefiniti
       // 调用锚：域弃重试与首发共用同 call（hint 为该逻辑调用的写时点结果事实——
       // annotateSearchHint 按此回填同 call 行 query_json 快照键）
       const callId = randomUUID()
+      const limit = parsed.limit ?? 3
       const base: Omit<SearchQuery, 'domainPrefix'> = {
         projectId,
         sessionId: session.sessionId,
         callId,
+        limit,
         ...(parsed.text !== undefined ? { text: parsed.text } : {}),
         ...(session.turnSeq !== undefined ? { turnSeq: session.turnSeq } : {}),
         ...(session.triggerText !== undefined ? { triggerText: session.triggerText } : {}),
       }
-      const limit = parsed.limit ?? 3
       const isRetry = parsed.retry === true
       const parts: string[] = []
 

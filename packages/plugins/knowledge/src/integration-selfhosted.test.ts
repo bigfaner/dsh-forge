@@ -107,6 +107,36 @@ describe('tool 调用链穿透插件自有服务并落 recall_logs（集成自�
     expect(searchGroups[0]?.query).toEqual({ domainPrefix: 'backend', text: 'api' })
   })
 
+  it('search limit 截断双层一致（1.18）：工具出参 hits = recall_logs 该 call 命中行数', async () => {
+    const corpus: Record<string, string> = {}
+    for (let i = 0; i < 6; i += 1) {
+      corpus[`pin/e${i}.md`] = `---\ntitle: limitpin guide ${i}\nid: kb-pin-${i}\nstatus: confirmed\nsummary: limitpin limitpin usage note ${i}\nkeywords: [limitpin, k${i}]\n---\n正文 ${i}`
+    }
+    for (let i = 0; i < 8; i += 1) {
+      corpus[`filler/f${i}.md`] = `---\ntitle: Filler ${i}\nid: kb-filler-${i}\nstatus: confirmed\nsummary: filler corpus filler${i} unrelated words\nkeywords: [filler${i}]\n---\n正文 ${i}`
+    }
+    const { tools, service, projectId, sessionId, exec } = await mount(corpus)
+    const search = tools.find((t) => t.name === 'knowledge_search')
+    if (search === undefined) throw new Error('knowledge_search 未注册')
+
+    // 显式 limit=2：出参 2 条，落账同 call 恰 2 行
+    const out2 = (await search.execute({ text: 'limitpin', limit: 2 }, exec)) as { hint: string | null; hits: SearchHit[] }
+    expect(out2.hits).toHaveLength(2)
+    const groups2 = (await service.sessionRecall({ projectId, sessionId })).filter((g) => g.verb === 'search')
+    expect(groups2).toHaveLength(1)
+    expect(groups2[0]?.hitCount).toBe(2)
+    expect(groups2[0]?.hits.map((h) => h.title).sort()).toEqual(out2.hits.map((h) => h.title).sort())
+
+    // 缺省 limit=3：出参 3 条，落账 3 行（第二次调用 → 第二组）
+    const out3 = (await search.execute({ text: 'limitpin' }, exec)) as { hint: string | null; hits: SearchHit[] }
+    expect(out3.hits).toHaveLength(3)
+    const groups3 = (await service.sessionRecall({ projectId, sessionId })).filter((g) => g.verb === 'search')
+    expect(groups3).toHaveLength(2)
+    // sessionRecall 组序 = 最近调用在前
+    expect(groups3[0]?.hitCount).toBe(3)
+    expect(groups3[0]?.hits.map((h) => h.title).sort()).toEqual(out3.hits.map((h) => h.title).sort())
+  })
+
   it('read-abstract → EntryAbstract（不含正文）→ 同会话追加 read-abstract 日志行', async () => {
     const { tools, service, projectId, sessionId, exec } = await mount(CORPUS)
     const search = tools.find((t) => t.name === 'knowledge_search')

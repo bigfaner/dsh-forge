@@ -70,14 +70,23 @@ describe('parseSearchArgs（执行点防御性收窄）', () => {
 })
 
 describe('execute：全域检索 → rerank 精选（agentic 编排）', () => {
-  it('单 query 直传（text 词面 + 域前缀 + 候选池 20）', async () => {
+  it('单 query 直传（text 词面 + 域前缀 + limit 恒携带缺省 3——服务面截断与落账同源）', async () => {
     const { service, calls } = stubService([[hit({ entryId: 1, score: 0.5 })]])
     const tool = createSearchTool(deps(service))
     const out = await tool.execute({ domain_prefix: '后端', text: '网关' }, exec)
     expect(calls).toHaveLength(1)
-    expect(calls[0]).toEqual({ projectId: 'p-1', sessionId: 'sess-1', callId: expect.any(String), text: '网关', domainPrefix: '后端', limit: 20 })
+    expect(calls[0]).toEqual({ projectId: 'p-1', sessionId: 'sess-1', callId: expect.any(String), text: '网关', domainPrefix: '后端', limit: 3 })
     expect(out.hits).toEqual([hit({ entryId: 1, score: 0.5 })])
     expect(out.hint).toBeNull()
+  })
+
+  it('limit 显式传参透传服务面 query（弃域重试同 call 同 limit）', async () => {
+    const { service, calls } = stubService([[], [hit({ entryId: 9 })]])
+    const tool = createSearchTool(deps(service))
+    await tool.execute({ domain_prefix: '后端', limit: 5 }, exec)
+    expect(calls[0]?.limit).toBe(5)
+    expect(calls[1]?.limit).toBe(5)
+    expect(calls[0]?.callId).toBe(calls[1]?.callId)
   })
 
   it('rerank 截前 limit 条（默认 3；limit 显式传参生效）', async () => {
