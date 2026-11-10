@@ -1,0 +1,257 @@
+// client/model 单测 —— 视图模型纯函数面：来源标记推断 / worktree 名派生 /
+// ahead-behind 徽标拆分 / 删除拦截判定 / ahead-behind 懒加载待拉清单。
+import { describe, expect, it } from 'vitest'
+import {
+  aheadBehindInline,
+  aheadBehindSegments,
+  collectSlugCandidates,
+  createConflicts,
+  deleteBlockers,
+  deriveWorktreeName,
+  filterSlugCandidates,
+  inferSource,
+  isCrossBranchRisk,
+  isDeleteBlocked,
+  joinWorktreePath,
+  pendingAheadBehindPaths,
+  sortBaseBranchOptions,
+  worktreeLabelSegments,
+  type SlugCandidate,
+  type WorktreeRow,
+} from './model.js'
+
+const row = (over: Partial<WorktreeRow> & Pick<WorktreeRow, 'path'>): WorktreeRow => ({
+  branch: 'feat/a',
+  worktreeName: 'wt-a',
+  isMain: false,
+  present: true,
+  ...over,
+})
+
+describe('inferSource（来源标记：所配目录内 = DSH，自定义路径无标记）', () => {
+  const dir = 'Z:/proj/.forge/worktrees'
+  it('所配 worktree 目录内的路径 → dsh', () => {
+    expect(inferSource('Z:/proj/.forge/worktrees/wt-a', dir)).toBe('dsh')
+  })
+  it('Windows 反斜杠与尾斜杠、大小写差异归一命中', () => {
+    expect(inferSource('Z:\\proj\\.forge\\worktrees\\wt-a', 'z:/PROJ/.forge/worktrees/')).toBe('dsh')
+  })
+  it('自定义路径（目录外）→ null；目录本身（非子路径）→ null；未配置目录 → null', () => {
+    expect(inferSource('D:/scratch/ui-lab', dir)).toBeNull()
+    expect(inferSource('Z:/proj/.forge/worktrees', dir)).toBeNull()
+    expect(inferSource('Z:/proj/.forge/worktrees/wt-a', undefined)).toBeNull()
+  })
+})
+
+describe('deriveWorktreeName（worktree 名派生：feat/ 前缀映射 wt-）', () => {
+  it('feat/remote-approval → wt-remote-approval；单段分支亦派生', () => {
+    expect(deriveWorktreeName('feat/remote-approval')).toBe('wt-remote-approval')
+    expect(deriveWorktreeName('main')).toBe('wt-main')
+  })
+  it('多段分支取尾段；空白 → 空串（不产 wt- 孤儿）', () => {
+    expect(deriveWorktreeName('experiment/ui/lab')).toBe('wt-lab')
+    expect(deriveWorktreeName('  ')).toBe('')
+  })
+})
+
+describe('aheadBehindSegments（徽标拆分：零值段省略）', () => {
+  it('↑2 ↓1 双段；仅 behind；零零 = 双空（无 upstream 同形）', () => {
+    expect(aheadBehindSegments({ ahead: 2, behind: 1 })).toEqual({ ahead: '↑2', behind: '↓1' })
+    expect(aheadBehindSegments({ ahead: 0, behind: 4 })).toEqual({ ahead: null, behind: '↓4' })
+    expect(aheadBehindSegments({ ahead: 0, behind: 0 })).toEqual({ ahead: null, behind: null })
+  })
+})
+
+describe('aheadBehindInline（chip §2.3.1 内联短串——落后在前，零值段省略）', () => {
+  it('2↓ 16↑ 形；仅 ahead；全零 = null 不占位', () => {
+    expect(aheadBehindInline({ ahead: 16, behind: 2 })).toBe('2↓ 16↑')
+    expect(aheadBehindInline({ ahead: 3, behind: 0 })).toBe('3↑')
+    expect(aheadBehindInline({ ahead: 0, behind: 1 })).toBe('1↓')
+    expect(aheadBehindInline({ ahead: 0, behind: 0 })).toBeNull()
+  })
+})
+
+describe('isCrossBranchRisk（1.19 跨分支风险判定——hero 改选与新建基准共用）', () => {
+  it('目标分支 ≠ 主树检出分支 → 需要确认；同分支（含大小写/空白差异）→ 不弹', () => {
+    expect(isCrossBranchRisk('feat/a', 'main')).toBe(true)
+    expect(isCrossBranchRisk('main', 'main')).toBe(false)
+    expect(isCrossBranchRisk(' Main ', 'main')).toBe(false)
+  })
+  it('任一侧未知（null/空）→ 保守判风险', () => {
+    expect(isCrossBranchRisk(null, 'main')).toBe(true)
+    expect(isCrossBranchRisk('feat/a', null)).toBe(true)
+    expect(isCrossBranchRisk(null, null)).toBe(true)
+    expect(isCrossBranchRisk('feat/a', '  ')).toBe(true)
+  })
+})
+
+describe('删除拦截判定（未提交变更/挂靠会话命中即拦；仅未 push 放行）', () => {
+  it('双清 = 无拦截、可确认', () => {
+    const checks = { dirtyCount: 0, aheadCount: 0, attachedSessions: 0 }
+    expect(deleteBlockers(checks)).toEqual([])
+    expect(isDeleteBlocked(checks)).toBe(false)
+  })
+  it('仅未 push 提交 = 警示展示但放行（本地 ref git 原生保留）', () => {
+    const checks = { dirtyCount: 0, aheadCount: 2, attachedSessions: 0 }
+    expect(deleteBlockers(checks)).toEqual([])
+    expect(isDeleteBlocked(checks)).toBe(false)
+  })
+  it('A11：checks 缺席（拉取失败/进行中）= checks-unavailable 拦截——破坏性操作 fail-closed', () => {
+    expect(deleteBlockers(null)).toEqual(['checks-unavailable'])
+    expect(isDeleteBlocked(null)).toBe(true)
+  })
+  it('未提交变更 / 挂靠会话各自命中即拦截；同命中去重', () => {
+    expect(isDeleteBlocked({ dirtyCount: 1, aheadCount: 0, attachedSessions: 0 })).toBe(true)
+    expect(isDeleteBlocked({ dirtyCount: 0, aheadCount: 0, attachedSessions: 1 })).toBe(true)
+    expect(isDeleteBlocked({ dirtyCount: 3, aheadCount: 2, attachedSessions: 4 })).toBe(true)
+  })
+})
+
+describe('pendingAheadBehindPaths（懒加载待拉清单：展开才拉、缓存免重拉）', () => {
+  const rows: WorktreeRow[] = [
+    row({ path: 'Z:/proj', branch: 'main', isMain: true }),
+    row({ path: 'Z:/proj/.forge/worktrees/wt-a', branch: 'feat/a' }),
+    row({ path: 'Z:/proj/.forge/worktrees/wt-old', branch: 'spike/old', present: false }),
+    row({ path: 'Z:/proj/.forge/worktrees/wt-detached', branch: null }),
+  ]
+  it('收起态恒空清单（收起不触发任何拉取）', () => {
+    expect(pendingAheadBehindPaths(false, rows, new Map())).toEqual([])
+  })
+  it('展开：在场且有分支、未缓存者入选；失配行与 detached 行不拉', () => {
+    expect(pendingAheadBehindPaths(true, rows, new Map())).toEqual([
+      'Z:/proj',
+      'Z:/proj/.forge/worktrees/wt-a',
+    ])
+  })
+  it('缓存命中不重拉（懒加载 + 缓存纪律）', () => {
+    const cache = new Map([['Z:/proj', { ahead: 0, behind: 0 }]])
+    expect(pendingAheadBehindPaths(true, rows, cache)).toEqual(['Z:/proj/.forge/worktrees/wt-a'])
+  })
+})
+
+describe('collectSlugCandidates（slug 候选：去重 + 未完成排前）', () => {
+  it('提案与 feature slug 合并；同 slug 去重（任一未完成即未完成）；未完成排前、组内保持输入序', () => {
+    const proposals: SlugCandidate[] = [
+      { slug: 'done-proposal', done: true },
+      { slug: 'open-proposal', done: false },
+      { slug: 'shared', done: true },
+    ]
+    const features: SlugCandidate[] = [
+      { slug: 'open-feature', done: false },
+      { slug: 'done-feature', done: true },
+      { slug: 'shared', done: false },
+    ]
+    expect(collectSlugCandidates(proposals, features)).toEqual([
+      { slug: 'open-feature', done: false },
+      { slug: 'shared', done: false },
+      { slug: 'open-proposal', done: false },
+      { slug: 'done-feature', done: true },
+      { slug: 'done-proposal', done: true },
+    ])
+  })
+  it('空输入 = 空候选', () => {
+    expect(collectSlugCandidates([], [])).toEqual([])
+  })
+})
+
+describe('filterSlugCandidates（输入过滤：大小写不敏感子串匹配；空输入 = 全量）', () => {
+  const cands: SlugCandidate[] = [
+    { slug: 'worktree-branch-management', done: false },
+    { slug: 'mobile-remote-approval', done: true },
+  ]
+  it('子串命中（大小写不敏感）', () => {
+    expect(filterSlugCandidates(cands, 'WORKTREE')).toEqual([{ slug: 'worktree-branch-management', done: false }])
+    expect(filterSlugCandidates(cands, 'remote')).toEqual([{ slug: 'mobile-remote-approval', done: true }])
+  })
+  it('空查询 = 全量；无命中 = 空', () => {
+    expect(filterSlugCandidates(cands, '  ')).toEqual(cands)
+    expect(filterSlugCandidates(cands, 'zzz')).toEqual([])
+  })
+})
+
+describe('createConflicts（同名冲突判定：分支 vs branches、worktree vs 既有名——进 git 前拦截）', () => {
+  it('分支同名命中 branch-exists；worktree 名同名命中 worktree-exists；双中皆报', () => {
+    expect(createConflicts('feat/a', 'wt-new', ['main', 'feat/a'], ['wt-b'])).toEqual(['branch-exists'])
+    expect(createConflicts('feat/c', 'wt-a', ['main'], ['wt-a', 'wt-b'])).toEqual(['worktree-exists'])
+    expect(createConflicts('feat/a', 'wt-a', ['feat/a'], ['wt-a'])).toEqual(['branch-exists', 'worktree-exists'])
+  })
+  it('无冲突 = 空；空白归一（trim + 大小写不敏感——Windows 路径保守口径）', () => {
+    expect(createConflicts('feat/new', 'wt-new', ['main'], ['wt-a'])).toEqual([])
+    expect(createConflicts('  feat/a ', ' WT-B ', ['main', 'feat/a'], ['wt-b'])).toEqual(['branch-exists', 'worktree-exists'])
+  })
+  it('空输入（未填）不判冲突', () => {
+    expect(createConflicts('', '', ['main'], ['wt-a'])).toEqual([])
+  })
+})
+
+describe('joinWorktreePath（1.21 分隔符归一单点——统一反斜杠系统口径，杜绝正反混拼）', () => {
+  it('反斜杠目录 + 尾段拼接 = 全串反斜杠（含目录尾斜杠归一）', () => {
+    expect(joinWorktreePath('Z:\\proj\\.forge\\worktrees', 'wt-a')).toBe('Z:\\proj\\.forge\\worktrees\\wt-a')
+    expect(joinWorktreePath('Z:\\proj\\.forge\\worktrees\\', 'wt-a')).toBe('Z:\\proj\\.forge\\worktrees\\wt-a')
+  })
+  it('正斜杠目录输入 → 输出仍全串反斜杠（不产混拼串）', () => {
+    expect(joinWorktreePath('Z:/proj/.forge/worktrees/', 'wt-a')).toBe('Z:\\proj\\.forge\\worktrees\\wt-a')
+  })
+  it('尾段含分支式斜杠（同名默认跟随分支名）→ 一并归一', () => {
+    expect(joinWorktreePath('Z:\\p\\wt', 'feat/my-branch')).toBe('Z:\\p\\wt\\feat\\my-branch')
+  })
+  it('尾段前置分隔符不双拼；空目录 = 纯尾段；空尾段 = 归一目录', () => {
+    expect(joinWorktreePath('Z:\\p\\wt\\', '/wt-a')).toBe('Z:\\p\\wt\\wt-a')
+    expect(joinWorktreePath('', 'wt-a')).toBe('wt-a')
+    expect(joinWorktreePath('Z:\\p\\wt\\', '')).toBe('Z:\\p\\wt')
+  })
+  it('bug b974357f: POSIX 绝对目录（/ 开头，macOS/Linux）→ 输出保持正斜杠，不产反斜杠非法路径', () => {
+    expect(joinWorktreePath('/Users/faner/proj/.forge/worktrees', 'wt-a')).toBe('/Users/faner/proj/.forge/worktrees/wt-a')
+    expect(joinWorktreePath('/Users/faner/proj/.forge/worktrees/', '/wt-a')).toBe('/Users/faner/proj/.forge/worktrees/wt-a')
+    expect(joinWorktreePath('/srv/wt', 'feat/my-branch')).toBe('/srv/wt/feat/my-branch')
+  })
+})
+
+describe('sortBaseBranchOptions（1.22 基准分支选项排序——main > master > default > current > 其余字母序）', () => {
+  it('身份位序全命中：main > master > defaultBranch > currentBranch > 其余', () => {
+    expect(sortBaseBranchOptions(['zeta', 'current-b', 'master', 'release', 'main', 'default-b'], 'default-b', 'current-b')).toEqual([
+      'main',
+      'master',
+      'default-b',
+      'current-b',
+      'release',
+      'zeta',
+    ])
+  })
+  it('一分支多身份命中只取最优先位（default = main、current = main 均不重复出现）', () => {
+    expect(sortBaseBranchOptions(['develop', 'main'], 'main', 'main')).toEqual(['main', 'develop'])
+    expect(sortBaseBranchOptions(['master', 'main'], 'main', 'master')).toEqual(['main', 'master'])
+  })
+  it('其余分支同级按字母序兜底（大小写不敏感）；缺省身份位不占位', () => {
+    expect(sortBaseBranchOptions(['b2', 'A1', 'c3'], null, null)).toEqual(['A1', 'b2', 'c3'])
+    expect(sortBaseBranchOptions(['b2', 'A1', 'c3'], undefined, undefined)).toEqual(['A1', 'b2', 'c3'])
+  })
+  it('default/current 与 main/master 同名时该分支归并到固定位（不产重复身份位）', () => {
+    expect(sortBaseBranchOptions(['x', 'master'], 'master', 'master')).toEqual(['master', 'x'])
+    expect(sortBaseBranchOptions(['x', 'main'], 'main', null)).toEqual(['main', 'x'])
+  })
+  it('空清单边界 → 空数组', () => {
+    expect(sortBaseBranchOptions([], 'main', 'main')).toEqual([])
+  })
+  it('defaultBranch 不在分支集内 → 不影响其余位次（1.13 校验链外分支无效）', () => {
+    expect(sortBaseBranchOptions(['b', 'a'], 'ghost', null)).toEqual(['a', 'b'])
+  })
+})
+
+describe('worktreeLabelSegments（1.24 同名去重——行标签段单源）', () => {
+  it('branch 与 worktreeName 同名 → 单段（worktreeName 段 null，不再「x · x」）', () => {
+    expect(worktreeLabelSegments('bug-recurrence-chain', 'bug-recurrence-chain')).toEqual({
+      branch: 'bug-recurrence-chain',
+      worktreeName: null,
+    })
+  })
+  it('trim 后同名 → 仍单段（大小写不敏感同 refs 保守口径）', () => {
+    expect(worktreeLabelSegments('Topic-A ', ' topic-a')).toEqual({ branch: 'Topic-A ', worktreeName: null })
+  })
+  it('异名 → 双段保持（branch 段 + worktreeName 段）', () => {
+    expect(worktreeLabelSegments('feat/a', 'wt-a')).toEqual({ branch: 'feat/a', worktreeName: 'wt-a' })
+  })
+  it('branch null（detached）→ 只剩 worktreeName 段（不做空串同名误并）', () => {
+    expect(worktreeLabelSegments(null, 'wt-a')).toEqual({ branch: '', worktreeName: 'wt-a' })
+  })
+})

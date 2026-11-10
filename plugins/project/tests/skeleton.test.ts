@@ -57,7 +57,9 @@ describe("包骨架结构（提案 §二「目录布局」三目录单包）", (
       include?: string[];
     };
     expect(host.include).toEqual(["host", "shared"]);
-    expect(client.include).toEqual(["ui", "shared"]);
+    // 1.8 起ui 面消费 host/worktrees 的纯类型（AheadBehind）——client 链补收
+    // host/worktrees（worktree 域平移的编译链必要修复）。
+    expect(client.include).toEqual(["ui", "shared", "host/worktrees"]);
     expect(host.references?.map((r) => r.path)).toContain("./tsconfig.client.json");
   });
 });

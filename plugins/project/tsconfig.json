@@ -8,5 +8,10 @@
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "include": ["host", "shared"],
-  "references": [{ "path": "./tsconfig.client.json" }]
+  "exclude": ["**/*.test.ts", "**/*.test.tsx"],
+  "references": [
+    { "path": "./tsconfig.client.json" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../lib/diag" }
+  ]
 }
