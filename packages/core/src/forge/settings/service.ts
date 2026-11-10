@@ -11,8 +11,7 @@
 // 缺席逐级上溯最近存在祖先 realpath + 余段拼接——两侧同口径，/tmp 型 userData 首启不误拒）；
 // 装配层守卫基准 = dirname(dbFile)（state.db 与设置文件同居
 // userData——host resolveHostPaths 单源，双注入缝交叉校验坏装配）。
-import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { basename, dirname, join, resolve as resolvePath, sep } from 'node:path'
 import {
   FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT,
@@ -27,6 +26,7 @@ import {
   type WorkerSettings,
 } from '@dsh-forge/contracts'
 import { errMessage } from '../../util.js'
+import { atomicWriteJson } from '@dsh-forge/lib-util'
 import { InvalidSettingsInputError, SettingsPathInvalidError } from './errors.js'
 
 export interface SettingsServiceDeps {
@@ -178,20 +178,8 @@ export function createSettingsService(deps: SettingsServiceDeps): ForgeSettingsS
         ...(input.flywheel !== undefined ? { flywheel: input.flywheel } : {}),
         ...(input.experts !== undefined ? { experts: input.experts } : {}),
       }
-      // 原子写：同目录 tmp + rename（Windows MoveFileEx REPLACE_EXISTING 语义——崩溃无半写）
-      const tmp = `${deps.settingsFile}.${randomUUID()}.tmp`
-      try {
-        mkdirSync(dirname(deps.settingsFile), { recursive: true })
-        writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`, 'utf8')
-        renameSync(tmp, deps.settingsFile)
-      } catch (cause) {
-        try {
-          unlinkSync(tmp)
-        } catch {
-          // 最佳努力清理失败不掩盖原始异常
-        }
-        throw cause
-      }
+      // 原子写单源：lib/util atomicWriteJson（同目录 tmp + rename——本文件原内联段提取下沉）
+      atomicWriteJson(deps.settingsFile, next)
     },
   }
 }

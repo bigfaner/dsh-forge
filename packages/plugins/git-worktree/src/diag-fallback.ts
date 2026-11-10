@@ -1,14 +1,5 @@
-// 诊断缝缺席的 console 兜底单出口（diag-face-consolidation 统一口径——bug 7ba48c55）：
-// 按级分流 error→console.error、其余→console.warn（expert-squad index.ts 配方），
-// 三站点（index.ts config.diag 兜底 / rpc-service.ts deps.warn 兜底 / session-send-wrap.ts
-// warn 参数兜底）共源，禁新增直落 console 诊断站点。
-// DiagLevel 单源在 @dsh-forge/contracts（diag-milestone-coverage——本地重复定义收编）。
-import type { DiagLevel } from '@dsh-forge/contracts'
-
-export type { DiagLevel }
-
-/** console 兜底（按级分流）：缝缺席时诊断不静默，error 级走 console.error、其余 console.warn */
-export function consoleDiagFallback(line: string, level: DiagLevel = 'warn'): void {
-  if (level === 'error') console.error(line)
-  else console.warn(line)
-}
+// 诊断缝缺席的 console 兜底单出口——lib 公共包归拢（plugin-project 1.2 双源归一）后的
+// 兼容面：本体（按级分流 error→console.error、其余→console.warn，与 core telemetry
+// diag-console 兜底同逻辑单源）已迁 lib/diag，本文件仅 re-export（三站点既有 import 面
+// 零改动）。禁新增直落 console 诊断站点——一律经 @dsh-forge/lib-diag 兜底面。
+export { consoleDiagFallback, type DiagLevel } from '@dsh-forge/lib-diag'

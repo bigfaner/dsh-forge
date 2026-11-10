@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/git-worktree",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "private": true,
   "type": "module",
   "description": "git-worktree cordis 插件（通用层）：worktree/branch 管理域骨架——git 在场性启动检查 + 扩展点契约（resolveProject / worktree 目录提供者，均有默认实现）。零 dsh-forge 依赖。",
@@ -41,5 +41,8 @@
     "@types/react-dom": "~18.3.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
+  },
+  "dependencies": {
+    "@dsh-forge/lib-diag": "workspace:*"
   }
 }
