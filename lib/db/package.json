@@ -1,0 +1,25 @@
+{
+  "name": "@dsh-forge/lib-db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "公共 db 子包（骨架位）：openDatabase/transaction/db errors 整套（WAL/指纹守卫/迁移备份，挂 better-sqlite3）——core src/db 归并落位在后续任务，本任务只建位。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "24.19.0"
+  }
+}

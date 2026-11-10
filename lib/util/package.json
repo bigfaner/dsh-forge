@@ -1,0 +1,24 @@
+{
+  "name": "@dsh-forge/lib-util",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "公共 util 子包：跨域零语义小件（errMessage / atomicWriteJson / ensureDirReadable）——公共代码归拢第一批自 core util.ts / fs-ensure.ts / settings 原子写迁入。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0"
+  }
+}

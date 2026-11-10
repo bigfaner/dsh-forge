@@ -1,6 +1,11 @@
 {
   "files": [],
   "references": [
+    { "path": "lib/api" },
+    { "path": "lib/db" },
+    { "path": "lib/diag" },
+    { "path": "lib/util" },
+    { "path": "lib/path" },
     { "path": "packages/contracts" },
     { "path": "packages/path-key" },
     { "path": "packages/core" },

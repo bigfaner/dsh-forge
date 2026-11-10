@@ -13,6 +13,9 @@ export default defineConfig({
     maxWorkers: 4,
     projects: [
       { test: { name: 'structure', include: ['tests/structure/**/*.test.ts'] } },
+      // lib 公共包群单测池（plugin-project 1.2 起步：util/diag；归并扩池随子包到达追加）
+      { test: { name: 'lib-util', include: ['lib/util/src/**/*.test.ts'] } },
+      { test: { name: 'lib-diag', include: ['lib/diag/src/**/*.test.ts'] } },
       // 契约面 pin 回归池（G1，2.13 起步）：pin 对象 = 上游 @deepseek-ai/* 精确 pin 版本
       // 0.2.0-rc.2 的公开面（npm 包导出与运行时契约），与 core/web 单测分池——
       // G1 单一入口 = pnpm test 固定子集（pnpm test:contract）。

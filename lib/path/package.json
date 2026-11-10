@@ -1,0 +1,24 @@
+{
+  "name": "@dsh-forge/lib-path",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "公共 path 子包（骨架位）：路径归一键（path-key 归并）+ derive-dir 下沉 + normalize 单源——归并在后续任务，本任务只建位。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0"
+  }
+}

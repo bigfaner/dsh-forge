@@ -1,0 +1,19 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`console 兜底（按级分流——core telemetry / git-worktree 双源归一单实现） > consoleDiagFallback：行形态，缺省 warn 级 1`] = `
+[
+  [],
+  [],
+]
+`;
+
+exports[`console 兜底（按级分流——core telemetry / git-worktree 双源归一单实现） > diagConsoleFallback：payload 形态，行格式 = [event] message 1`] = `
+[
+  [],
+  [],
+]
+`;
+
+exports[`emitDiagOrFallback（缝三态） > 缝发射失败 → console 兜底（诊断不静默） 1`] = `[]`;
+
+exports[`emitDiagOrFallback（缝三态） > 缝缺席 → console 兜底 1`] = `[]`;

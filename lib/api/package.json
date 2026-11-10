@@ -1,0 +1,24 @@
+{
+  "name": "@dsh-forge/lib-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "公共 api 子包（骨架位）：DTO、通道契约、schema 常量、错误码与服务缝契约（*Port，type-only）——@dsh-forge/contracts 归并落位在后续任务，本任务只建位。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0"
+  }
+}
