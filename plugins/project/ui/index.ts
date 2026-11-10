@@ -86,14 +86,35 @@ export * from './rpc.js'
 export * from './components.js'
 
 
+import { registerSettingsSection } from './settings-section/index.js'
+
+// ── keyed section 扩展点 + 配置节双缝（1.16：tab keyed 占用者模式泛化 + settings 节
+// bundle.config/detail.section 双缝——configForms revisioned 写径；详见各模块头注）──
+export * from './keyed-section.js'
+export * from './settings-section/index.js'
+export * from './settings-section/worktree-prefs.js'
+
 // 组合 cordis 插件面（包骨架 1.3 正门，无 src 层；worktree 域 UI 平移后仍承担装载契约）：
 // 无 apply → 真机 `invalid plugin` 判例（expert-squad annotator gotcha-web-boot 同径）；
 // apply 返回值铁律：必须返回 undefined（cordis 组合把返回值当 effect 消费）。
+// 零消费零 inject 边（settings-unification 圆桌处方）：dsh.client.inject 不声明 settings
+// 域激活边、cordis 注入边不声明 configForms——消费点现查（configFormsFaceOf 直取 + reflect
+// 兜底，面形状校验 fail-soft），缺席 = 配置节不注册（settings-section/index.ts
+// registerSettingsSection），不炸组合；slots 为槽注册唯一必需服务（声明边，官方同型先例）。
 export const projectClient = {
-  // 骨架期零服务消费；UI 面落位后按缝逐行声明（slots/configForms 等）。
-  inject: [] as string[],
-  apply(_ctx: unknown): void {
-    // 占位空实现——bundle 管线验证面（scripts/bundle-client.mjs 产物自注册形态）。
+  inject: ['slots'] as string[],
+  apply(ctx: unknown): void {
+    const rec = ctx as Record<string, unknown> | undefined
+    const slots = rec?.['slots'] as
+      | Parameters<typeof registerSettingsSection>[1]
+      | undefined
+    if (slots === undefined || typeof slots.inject !== 'function') {
+      // 官方 slots 面缺席（宿主形状漂移）——fail-soft：UI 静默缺失优于 boot 崩溃。
+      console.warn('[dsh-forge/project] ctx.slots.inject absent; settings section not mounted')
+      return
+    }
+    // 配置节双缝注册面异常只降本节（registerSettingsSection 内部逐缝降级），不炸装配。
+    registerSettingsSection(rec ?? {}, slots)
   },
 };
 

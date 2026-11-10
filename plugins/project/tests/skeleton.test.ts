@@ -79,8 +79,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(pkg.dsh?.client?.platform).toBe("web");
   });
 
-  it("dsh.client.inject 声明装配期注入边（settings 域 configForms 先载——apply 期在场）", () => {
-    expect(pkg.dsh?.client?.inject).toContain("@deepseek-ai/dsh-client-ui-settings");
+  it("dsh.client.inject 零消费零 inject 边：不声明 settings 域激活边（settings-unification 圆桌处方——configForms.get/whileServed 命名空间绑定不构成跨包消费；缺席降级由消费点现查承担）", () => {
+    expect(pkg.dsh?.client?.inject ?? []).not.toContain("@deepseek-ai/dsh-client-ui-settings");
   });
 
   it("cordis.patch.yml 单行插入 {id, name}——loader 组合行识别面", () => {
