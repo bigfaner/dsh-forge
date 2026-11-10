@@ -62,6 +62,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'lib/util',
         'packages/contracts',
         'packages/core',
+        // plugin-project：project 插件包（1.3 建位——tsc -b 全拓扑入口补记）
+        'plugins/project',
         'packages/plugins/knowledge',
         'packages/path-key',
         'packages/plugin-forge',
@@ -91,7 +93,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
     ['apps/host', ['packages/contracts', 'packages/core', 'packages/plugins/knowledge', 'packages/plugins/git-worktree']],
     // 1.6：web normalize/path-key 消费改指 @dsh-forge/lib-path/path-key——增 lib/path 引用
-    ['apps/web', ['lib/path', 'packages/contracts', 'packages/plugins/git-worktree', 'packages/plugins/md-mermaid']],
+    // 1.14 UI 迁入：add-project/bug-refs 组件本体消费 @dsh-forge/project client ui
+    ['apps/web', ['lib/path', 'packages/contracts', 'packages/plugins/git-worktree', 'packages/plugins/md-mermaid', 'plugins/project']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
     const ts = readJson(join(dir, 'tsconfig.json')) as {
       compilerOptions?: { composite?: boolean }
@@ -208,7 +211,7 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
     'apps/web/src/styles',
     'apps/web/src/views/session',
     'apps/web/src/views/knowledge',
-    'apps/web/src/flows/add-project',
+    'plugins/project/ui/add-project',
     'packages/core/src/db',
     'packages/core/src/forge',
     'packages/plugins/knowledge/src/tools',

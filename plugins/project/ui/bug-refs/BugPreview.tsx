@@ -9,9 +9,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { BUG_STATUS_LABELS, type BugCard } from '@dsh-forge/contracts'
 import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
-import { EmptyState } from '../../components/index.js'
-import { preloadRpcClientFactory, type RpcClientFactory } from '../../rpc/index.js'
-import { TabInfoReader, type UseDockTabInfoMirror } from '../../workbench/dock-tabs.js'
+import { EmptyState } from '../components.js'
+import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc.js'
+import { TabInfoReader, type UseDockTabInfoMirror } from './dock-tab-mirrors.js'
 import './bug-preview.css'
 
 /** Bug 台账 tab 类型 kind（= keyed body dispatch 键；plugin.ts BUG_TAB_KIND 字面量同源镜像） */

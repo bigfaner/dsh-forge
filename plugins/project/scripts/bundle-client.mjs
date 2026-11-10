@@ -7,11 +7,25 @@
 // 语法错误 → 「loaded without registering」。UI/shared 源码内联（无独立包）；
 // 平台基线模块外置保官方单例。Run once per build；run-once, no watch。
 import { build } from "esbuild";
-import { dirname, resolve } from "node:path";
+import { cpSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_ID = "@dsh-forge/project";
+
+// css 随迁副本（1.14 UI 迁入面）：add-project / bug-refs 组件体携带相对 css import，
+// tsc 编译产物（dist/client/ui/**）保留该 import 但不带 css 文件——esbuild 从 dist
+// 起解析会断链。装载语义：classic script 零 css 缝（官方 loader 无样式装载面），
+// css 副产物 = esbuild 独立产物（dist/client.css）+ 壳侧经 exports./bug-preview.css
+// 单源引装；此处副本仅为解析闭包完整。
+function copyUiCss() {
+  const walk = (srcDir, outDir) => {
+    cpSync(srcDir, outDir, { recursive: true, filter: (s) => statSync(s).isDirectory() || s.endsWith(".css") });
+  };
+  walk(join(pkgDir, "ui"), join(pkgDir, "dist/client/ui"));
+}
+copyUiCss();
 
 // 平台基线外置表（对齐官方冻结种子表口径；react 永不内联——内联第二副本会使
 // shell 渲染树 hooks 读到另一副本 dispatcher，Invalid hook call）。jsx-runtime 与

@@ -10,7 +10,7 @@
 //     （tech-design Propagation「未映射码 → 通用错误条」——message 归一，永无裸 code
 //     泄漏；非阻断确认位——注册闭包复检恒权威）。
 import type { DeriveTaskStoreDirResult, SuspectedMoveData } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory, RpcClientError } from '../../rpc/index.js'
+import { preloadRpcClientFactory, RpcClientError } from '../rpc.js'
 import type { DerivedTaskStorePhase } from './derived-store-row.js'
 
 /** 派生数据源（注入面：RPC 真身 rpcDeriveSource() / 测试桩） */

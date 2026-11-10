@@ -222,6 +222,9 @@ importers:
       '@dsh-forge/md-mermaid':
         specifier: workspace:*
         version: link:../../packages/plugins/md-mermaid
+      '@dsh-forge/project':
+        specifier: workspace:*
+        version: link:../../plugins/project
       '@dsh-forge/quote-reference':
         specifier: workspace:*
         version: link:../../packages/plugins/quote-reference

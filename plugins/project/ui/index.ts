@@ -61,6 +61,31 @@ export {
 } from './model.js'
 export * from './icons.js'
 
+// ── add-project 流程（1.14 UI 迁入第一批——inventory §2.4：两段式向导组件本体 + 纯函数
+// 模型 + css 整体平移；RPC 数据源 = 本插件内部面 ui/rpc.ts；宿主壳经 exports./client-ui
+// 消费 ShellHost 挂载，入口经 flow-open 页内缝跨单元直达）──
+export * from './add-project/index.js'
+
+// ── bug 三件（1.14——BugGlyph / BugPreview / bug-source+chip-restore+ChipRestoreOverlay）：
+// 注册路由挂载声明收编本出口——组件本体经 ./bug-refs/views.ts 递达 apps/web 发布面
+// （product-views 引用改指本包出口，壳内自有源收缩为零；React 单例 = 发布件随壳 bundle
+// 渲染）；纯模型面（bug-source / chip-restore——零 react）另经 ./client-ui/bug-model 与
+// ./client-ui/chip-restore 窄子路径出口直供 client 插件 bundle（自含 classic script 内联）。
+export { ForgeBugGlyph, type ForgeBugGlyphProps } from './bug-refs/BugGlyph.js'
+export * from './bug-refs/BugPreview.js'
+export * from './bug-refs/ChipRestoreOverlay.js'
+export * from './bug-refs/bug-source.js'
+export * from './bug-refs/chip-restore.js'
+export * from './bug-refs/reference-mirrors.js'
+export * from './bug-refs/dock-tab-mirrors.js'
+
+// ── 插件内部 RPC 窄面（forge:projects/fs/bugs 消费切片——壳侧 rpc 发布面零参与）──
+export * from './rpc.js'
+
+// ── 领域无关小件承载副本（apps/web src/components 同源镜像——迁移面渲染依赖）──
+export * from './components.js'
+
+
 // 组合 cordis 插件面（包骨架 1.3 正门，无 src 层；worktree 域 UI 平移后仍承担装载契约）：
 // 无 apply → 真机 `invalid plugin` 判例（expert-squad annotator gotcha-web-boot 同径）；
 // apply 返回值铁律：必须返回 undefined（cordis 组合把返回值当 effect 消费）。

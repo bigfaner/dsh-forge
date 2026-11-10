@@ -77,7 +77,7 @@ import {
   DSWF_BUG_ADDRESS_PREFIX as BUG_PREVIEW_BUG_ADDRESS_PREFIX,
   DSWF_BUG_TAB_KIND as BUG_PREVIEW_BUG_TAB_KIND,
   forgeBugAddress,
-} from '../views/bug-reference/BugPreview.js'
+} from '@dsh-forge/project/client-ui/bug-views'
 import type { ModuleLoaderFacade, ModuleLoaderRegistration } from '../shell/dsh-globals.js'
 
 /** 注册记录（fake slots 服务收集） */
@@ -1014,7 +1014,7 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
     const bugBody = bodies.find((r) => r.options.key === BUG_TAB_KIND)!
     expect(overview.component).toBe(views.ForgeOverviewTab)
     expect(doc.component).toBe(views.ForgeDocsTab)
-    expect(bugBody.component).toBe(views.ForgeBugPreview) // composer-bug-reference 1.3
+    expect(bugBody.component).toBe(views.ForgeBugPreview) // composer-bug-reference 1.3（1.14 本体迁 ui/bug-refs，发布机械不变）
     const face = overview.options.inject!() as {
       bridge: unknown
       onOpenSession: (sessionId: string) => void
@@ -1729,7 +1729,7 @@ describe('Bug 引用 source 注册（composer-bug-reference 1.2）', () => {
     noTransport.unstub()
   })
 
-  it('bug 图标件：发布面 ForgeBugGlyph 递达 → 候选行 icon = 发布件；发布面缺席 → 行零 icon 键（官方 icon set 无 bug 几何——自带 IconProps 组件居壳 bundle）', async () => {
+  it('bug 图标件：发布面 ForgeBugGlyph 递达 → 候选行 icon = 发布件（1.14 本体迁 ui/bug-refs，发布机械不变）；发布面缺席 → 行零 icon 键（官方 icon set 无 bug 几何——自带 IconProps 组件居壳 bundle）', async () => {
     const withGlyph = appliedBugSource({
       'forge:projects/list': () => ({ ok: true, data: [{ id: 'p1', workspaceId: 'w1' }] }),
       'forge:bugs/list': () => ({ ok: true, data: BUG_FIXTURE_BUGS }),

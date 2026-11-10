@@ -15,7 +15,7 @@
 // 本组件由产品视图发布面（product-views.ts）挂到 window.__DSH_FORGE_VIEWS__，插件
 // 槽位注册以该发布件为组件本体——壳 bundle 的 React 与渲染器单例同源（平台模块表）。
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
-import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
+import { openAddProjectFlow } from '@dsh-forge/project/client-ui/add-project'
 import { useWorkspaceProjectMap } from '../../workbench/anchored-projects.js'
 import { preloadRpcClientFactory } from '../../rpc/index.js'
 import { ForgeWorkspacePanel } from './ForgeWorkspacePanel.js'

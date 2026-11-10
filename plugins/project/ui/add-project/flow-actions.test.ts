@@ -8,7 +8,7 @@
 // setState 同形内存替身直落转移语义（form-actions.test 同形制）；register = 计数桩。
 import { describe, expect, it } from 'vitest'
 import type { DirListing, RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
-import { RpcClientError } from '../../rpc/index.js'
+import { RpcClientError } from '../rpc.js'
 import type { BrowserSelection } from './browser-model.js'
 import { flowActions, type FlowActions, type FlowActionsDeps, type RegisterSource } from './flow-actions.js'
 import type { DirSource } from './dir-source.js'

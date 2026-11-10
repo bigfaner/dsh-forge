@@ -1,12 +1,12 @@
-// Bug 台账右栏预览件单测（composer-bug-reference 1.3）：地址编解码 + 发布面形状 +
+// Bug 台账右栏预览件单测（composer-bug-reference 1.3）：地址编解码 + 组件形状 +
 // 全量投影三分支（fixed 证据区 / unresolved 原因 / open 零证据区）+ 现查在途/缺省态 +
 // 地址同源 pin（plugin.ts BUG_* 字面量镜像——bundle 自含不经 import，测试面跨树 pin）。
-// renderToStaticMarkup 零 effect 同全仓口径——现查链的异步落点归 e2e（组件体 loading
-// 初态静态可见；ready/缺省态经导出投影子件静态直测）。
+// 1.14 UI 迁入：组件本体居 @dsh-forge/project client ui（ui/bug-refs）——本测留驻壳侧
+// web 池承担跨 bundle 字面 pin（plugins/project 单测树不可反向 import 壳内 plugin.ts）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BugCard } from '@dsh-forge/contracts'
-import type { RpcClientFactory } from '../../rpc/index.js'
+import type { RpcClientFactory } from '@dsh-forge/project/client-ui'
 import {
   BugPreviewReady,
   BugPreviewUnavailable,
@@ -15,7 +15,7 @@ import {
   ForgeBugPreview,
   forgeBugAddress,
   parseForgeBugAddress,
-} from './BugPreview.js'
+} from '@dsh-forge/project/client-ui'
 import { BUG_ADDRESS_PREFIX as PLUGIN_BUG_ADDRESS_PREFIX, BUG_TAB_KIND as PLUGIN_BUG_TAB_KIND } from '../../client-plugin/plugin.js'
 
 const NOW = '2026-10-14T00:00:00.000Z'

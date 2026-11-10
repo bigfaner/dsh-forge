@@ -21,7 +21,9 @@ export default defineConfig({
       // 契约面 pin 回归池（G1，2.13 起步）：pin 对象 = 上游 @deepseek-ai/* 精确 pin 版本
       // 0.2.0-rc.2 的公开面（npm 包导出与运行时契约），与 core/web 单测分池——
       // G1 单一入口 = pnpm test 固定子集（pnpm test:contract）。
-      { test: { name: 'contract', include: ['tests/contract/**/*.test.ts'] } },
+      // 1.14 迁移面：部分 contract 套件消费壳装配面（ForgeSidebarSlot 族）→
+      // @dsh-forge/project client ui 追入官方 primitives——css 副产物走 vite 转换管道（同 web 池）。
+      { test: { name: 'contract', include: ['tests/contract/**/*.test.ts'], server: { deps: { inline: ['@deepseek-ai/dsh-client-ui-primitives'] } } } },
       // mobile 表面 Journey 回归池（gen-test-scripts——回放 fixtures 驱动的契约钉面测试）
       { test: { name: 'mobile-journeys', include: ['tests/mobile/**/*.test.ts'] } },
       // knowledge 表面 Journey 回归池（knowledge-stage1-foundation 1.10 脚本任务——

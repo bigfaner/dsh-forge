@@ -36,6 +36,9 @@
     },
     {
       "path": "../../packages/plugins/md-mermaid"
+    },
+    {
+      "path": "../../plugins/project"
     }
   ]
 }

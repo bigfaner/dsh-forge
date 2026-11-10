@@ -76,11 +76,13 @@ import {
   type ReferenceInsertMirror,
   type ReferenceInsertServices,
 } from './open-session.js'
-// composer-bug-reference 1.2 Bug 引用 source 纯模型（T1——bug-source.ts 零外部 import，
-// bundle 自含纪律不破；本文件做注册行 + 接线面；1.4 chip 构造单一事实源同径复用）
-import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCardSource, type BugReferenceSource } from './bug-source.js'
+// composer-bug-reference 1.2 Bug 引用 source 纯模型（T1——零外部 import 纯模型；
+// 本文件做注册行 + 接线面；1.4 chip 构造单一事实源同径复用）。
+// 1.14 UI 迁入：纯模型面居 @dsh-forge/project client ui（ui/bug-refs）——经窄子路径出口
+// 直供本 client bundle（自含 classic script 内联；组件本体不经此径——React 单例归壳发布面）。
+import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCardSource, type BugReferenceSource } from '@dsh-forge/project/client-ui/bug-model'
 // bug 4b34e5d8 chip 重建缝（纯文本草稿 → scoped 事件 span-CAS 还原）
-import { watchBugChipRestore } from './chip-restore.js'
+import { watchBugChipRestore } from '@dsh-forge/project/client-ui/chip-restore'
 import { selectedTreeDisplay } from './selected-tree-display.js'
 import { installOpenWorkspaceFace, resolveDraftShellFace, type DraftShellFace } from './open-workspace-face-install.js'
 import { installWorktreeSwitchGate } from './worktree-switch-gate-install.js'
@@ -146,7 +148,7 @@ export const DOC_TAB_KIND = 'dswf-doc'
 export const DOC_ADDRESS_PREFIX = 'dsh-resource://dswf-doc/'
 /**
  * Bug 台账 tab 类型 kind（composer-bug-reference 1.3——`sidebar.right.pane.tab` keyed
- * body dispatch 键；与 views/bug-reference/BugPreview.tsx DSWF_BUG_TAB_KIND 字面量同源 pin）
+ * body dispatch 键；与 ui/bug-refs/BugPreview.tsx（@dsh-forge/project client ui）DSWF_BUG_TAB_KIND 字面量同源 pin）
  */
 export const BUG_TAB_KIND = 'dswf-bug'
 /** Bug 台账资源地址前缀（openResource 去重键 = 地址本身；与 BugPreview.tsx DSWF_BUG_ADDRESS_PREFIX 字面量同源 pin） */
@@ -771,7 +773,7 @@ export interface ForgeViewsGlobal {
     ForgeSessionWorktreeChip: unknown
     /** fix-2：conversation.input.overlay 槽封存提示（notice 一次性 + composer 占位文案） */
     ForgeWorktreeSealOverlay: unknown
-    /** bug 4b34e5d8：conversation.input.overlay 槽 chip 重建（零视觉效应挂载点） */
+    /** bug 4b34e5d8：conversation.input.overlay 槽 chip 重建（零视觉效应挂载点——1.14 本体迁 ui/bug-refs，发布面机械不变） */
     ForgeBugChipRestoreOverlay: unknown
     /** bug 267dcac1：conversation.input.overlay 槽切换闸虚线标记（纯视觉命中锚） */
     ForgeWorktreeSwitchMarker: unknown
@@ -1442,7 +1444,7 @@ export interface BugSourceWiringDeps {
   readonly workspaces: ForgeWorkspacesService
   /** 页内 RPC 传输（缺省 forgeInvokeTransport()） */
   readonly invoke?: ForgeInvokeTransport
-  /** 候选行图标件（发布面 ForgeBugGlyph——IconProps 组件；缺席 = 行零 icon 键） */
+  /** 候选行图标件（1.14 迁移面：ui/bug-refs ForgeBugGlyph 本体（发布面递达）——IconProps 组件；缺席 = 行零 icon 键） */
   readonly bugIcon?: unknown
   /** 官方右栏服务（1.3 openReference 路由——openResource 开 Bug 台账 pane；缺席 = 引用点击返回 false 不拦截官方手势） */
   readonly sidebarRight?: ForgeSidebarRightService

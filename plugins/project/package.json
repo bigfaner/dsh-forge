@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -14,6 +14,26 @@
     "./client": {
       "types": "./dist/client/ui/index.d.ts",
       "default": "./dist/client.js"
+    },
+    "./client-ui": {
+      "types": "./dist/client/ui/index.d.ts",
+      "default": "./ui/index.ts"
+    },
+    "./client-ui/add-project": {
+      "types": "./dist/client/ui/add-project/index.d.ts",
+      "default": "./ui/add-project/index.ts"
+    },
+    "./client-ui/bug-views": {
+      "types": "./dist/client/ui/bug-refs/views.d.ts",
+      "default": "./ui/bug-refs/views.ts"
+    },
+    "./client-ui/bug-model": {
+      "types": "./dist/client/ui/bug-refs/bug-source.d.ts",
+      "default": "./ui/bug-refs/bug-source.ts"
+    },
+    "./client-ui/chip-restore": {
+      "types": "./dist/client/ui/bug-refs/chip-restore.d.ts",
+      "default": "./ui/bug-refs/chip-restore.ts"
     }
   },
   "dsh": {

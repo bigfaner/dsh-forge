@@ -15,7 +15,7 @@ import {
   IconFolderCloseRegular,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { ErrorBar, SkeletonRows, StateChip } from '../../components/index.js'
+import { ErrorBar, SkeletonRows, StateChip } from '../components.js'
 import { browserActions } from './browser-actions.js'
 import {
   canConfirm,

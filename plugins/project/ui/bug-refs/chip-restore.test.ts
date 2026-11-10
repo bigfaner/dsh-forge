@@ -1,7 +1,7 @@
 // chip-restore 测试（定位：单测——bug 4b34e5d8 重建缝：纯文本草稿 → 官方 scoped 事件
 // span-CAS 重建 chip；零 DOM / 零真实 RPC——bail/state 全注入替身）。
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { INPUT_INSERT_REFERENCE_EVENT, type ReferenceInsertServices } from './open-session.js'
+import { INPUT_INSERT_REFERENCE_EVENT, type ReferenceInsertServices } from './reference-mirrors.js'
 import { watchBugChipRestore } from './chip-restore.js'
 
 /** 可编程输入面（快照队列 + 订阅收集——重放循环逐帧取帧） */

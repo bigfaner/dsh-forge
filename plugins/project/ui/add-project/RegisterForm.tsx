@@ -16,7 +16,7 @@
 // 禁用（拒绝零副作用），重选目录复检通过即恢复；Hard Rules：仅采集与校验，零注册调用零补偿。
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import { StateChip } from '../../components/index.js'
+import { StateChip } from '../components.js'
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
 import type { BrowserSelection } from './browser-model.js'
 import { DerivedTaskStoreRow, type DerivedTaskStorePhase } from './derived-store-row.js'

@@ -55,15 +55,17 @@ import {
   ForgeRemoteEntry,
   type ForgeRemoteEntryProps,
 } from './views/remote/ForgeRemoteEntry.js'
-import { ForgeBugGlyph, type ForgeBugGlyphProps } from './views/session/BugGlyph.js'
-import {
-  ForgeBugPreview,
-  type ForgeBugPreviewProps,
-} from './views/bug-reference/BugPreview.js'
+import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from './workbench/workbench-bridge.js'
+// 1.14 迁移面：bug 三件组件本体迁 @dsh-forge/project client ui（ui/bug-refs）——本发布面
+// 引用改指包出口（apps/web 壳内自有源收缩为零），发布机械不变（组件随壳 bundle 渲染 =
+// React 单例同一性；client 插件 bundle 经页内全局消费）。
 import {
   ForgeBugChipRestoreOverlay,
-} from './views/bug-reference/ChipRestoreOverlay.js'
-import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from './workbench/workbench-bridge.js'
+  ForgeBugGlyph,
+  ForgeBugPreview,
+  type ForgeBugGlyphProps,
+  type ForgeBugPreviewProps,
+} from '@dsh-forge/project/client-ui/bug-views'
 
 /** 发布面形状（client-plugin/plugin.ts 结构同型镜像——bundle 自持纪律，禁跨 chunk import） */
 export interface ForgePublishedViews {
@@ -99,13 +101,13 @@ export interface ForgePublishedViews {
   readonly ForgeWorktreeSealOverlay: ComponentType<{ sessionId?: string | undefined }>
   /** conversation.input.overlay 槽切换闸虚线标记（bug 267dcac1——blocked 卡视觉命中锚，禁输归官方 composer block 缝） */
   readonly ForgeWorktreeSwitchMarker: ComponentType<{ sessionId?: string | undefined }>
-  /** conversation.input.overlay 槽 chip 重建（bug 4b34e5d8——零视觉效应挂载点，纯文本草稿 → chip 还原订阅） */
+  /** conversation.input.overlay 槽 chip 重建（bug 4b34e5d8——零视觉效应挂载点；1.14 本体迁 ui/bug-refs） */
   readonly ForgeBugChipRestoreOverlay: ComponentType<{ sessionId?: string | undefined }>
   /** sidebar.footer.action 'dswf-remote' 占用者（1.2 手机远程入口——三态图标 + 远程面板） */
   readonly ForgeRemoteEntry: ComponentType<ForgeRemoteEntryProps>
-  /** Bug 组行图标件（composer-bug-reference 1.2——@ 菜单 Bug 组候选行 icon；官方 icon set 无 bug 几何，自带 IconProps 组件） */
+  /** Bug 组行图标件（composer-bug-reference 1.2——@ 菜单 Bug 组候选行 icon；官方 icon set 无 bug 几何，自带 IconProps 组件；1.14 本体迁 ui/bug-refs） */
   readonly ForgeBugGlyph: ComponentType<ForgeBugGlyphProps>
-  /** sidebar.right.pane.tab keyed 'dswf-bug' 占用者（composer-bug-reference 1.3——Bug 台账 pane 预览件，multiple 按 address 去重） */
+  /** sidebar.right.pane.tab keyed 'dswf-bug' 占用者（composer-bug-reference 1.3——Bug 台账 pane 预览件，multiple 按 address 去重；1.14 本体迁 ui/bug-refs） */
   readonly ForgeBugPreview: ComponentType<ForgeBugPreviewProps>
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
   readonly createWorkbenchBridge: (nav: ForgeCenterNav) => WorkbenchBridge

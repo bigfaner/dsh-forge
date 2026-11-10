@@ -5,7 +5,7 @@
 // deriveTaskStoreDir 通道；非 Electron 载体收敛为 error 相位，不炸壳）。
 import { describe, expect, it, vi } from 'vitest'
 import type { DeriveTaskStoreDirResult, SuspectedMoveData } from '@dsh-forge/contracts'
-import { RpcClientError } from '../../rpc/index.js'
+import { RpcClientError } from '../rpc.js'
 import { fetchDerivePhase, rpcDeriveSource } from './derive-source.js'
 
 const DERIVED: DeriveTaskStoreDirResult = { dir: 'Z:\\forge-workspaces\\Z-project-dsh@a1b2c3d4' }

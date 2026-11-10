@@ -21,7 +21,7 @@
 // create 失败走官方 createFailed toast），本面只剩项目弹层 + hero worktree chip 挂载。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
-import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
+import { openAddProjectFlow } from '@dsh-forge/project/client-ui/add-project'
 import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 import {

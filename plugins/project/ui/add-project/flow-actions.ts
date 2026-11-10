@@ -8,7 +8,7 @@
 // fix-16：入口直达编排收口动作面 open()——桥在场冷启（项目树「＋」/ hero CTA 经
 // openAddProjectFlow 缝）直入 native-pick 在途（模态不出场），收场 reveal 通知开模态。
 import type { RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory } from '../../rpc/index.js'
+import { preloadRpcClientFactory } from '../rpc.js'
 import { selectionOf, type BrowserSelection } from './browser-model.js'
 import type { DirSource } from './dir-source.js'
 import { EMPTY_REGISTERED, type NativePickSource } from './dir-picker.js'

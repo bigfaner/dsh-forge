@@ -5,7 +5,7 @@
 // 官方会话面——官方 hero 工作区行/输入就地可用，selectWorkspaceViaChip 链路零变化）。
 // 内容本体 = HeroEmpty（纯渲染件——价值一句话 + 「添加项目」CTA，锚不动）。
 import type { ReactNode } from 'react'
-import { openAddProjectFlow } from '../flows/add-project/flow-open.js'
+import { openAddProjectFlow } from '@dsh-forge/project/client-ui/add-project'
 import { HeroEmpty } from './HeroEmpty.js'
 import './workbench.css'
 

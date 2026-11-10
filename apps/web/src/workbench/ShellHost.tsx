@@ -16,7 +16,7 @@
 // 官方缝：shell.overlay（ui-layout AppFrame root 五子槽之一，list/root——常驻不随 main
 // 面板互换卸载）；标准 props 面 = root 作用域观察钩子（useWorkspaces/usePanelInfo）。
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { AddProjectFlow } from '../flows/add-project/AddProjectFlow.js'
+import { AddProjectFlow } from '@dsh-forge/project/client-ui/add-project'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
 import { DispatchEventsPanel, type DispatchProgressLogSnapshot } from '../views/session/DispatchEventsPanel.js'
 import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'

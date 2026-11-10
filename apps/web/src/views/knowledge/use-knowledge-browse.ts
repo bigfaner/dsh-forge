@@ -18,7 +18,7 @@ import type { DomainNode, EntryActionReceipt, EntryActionRequest, KnowledgeCard 
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
-import { deriveKnowledgeDir } from '../../flows/add-project/form-model.js'
+import { deriveKnowledgeDir } from '@dsh-forge/project/client-ui/add-project'
 import {
   EMPTY_FILTER,
   EMPTY_MULTI_SELECT,

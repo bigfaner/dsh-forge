@@ -15,6 +15,7 @@
     "@dsh-forge/input-history": "workspace:*",
     "@dsh-forge/lib-path": "workspace:*",
     "@dsh-forge/md-mermaid": "workspace:*",
+    "@dsh-forge/project": "workspace:*",
     "@dsh-forge/quote-reference": "workspace:*",
     "@dsh-forge/super-composer": "workspace:*",
     "react-qr-code": "2.2.0"

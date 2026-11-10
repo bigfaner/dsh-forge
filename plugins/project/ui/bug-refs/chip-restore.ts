@@ -19,7 +19,7 @@ import {
   type ReferenceInsertMirror,
   type ReferenceInsertServices,
   type TokenSpanMirror,
-} from './open-session.js'
+} from './reference-mirrors.js'
 
 /** 重建用 source 名（= FORGE_BUG_SOURCE_NAME 字面；此处字面承载避免反向依赖 plugin.ts） */
 const RESTORE_SOURCE_NAME = 'dswf-bug'

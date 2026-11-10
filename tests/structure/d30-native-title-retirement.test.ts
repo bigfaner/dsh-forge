@@ -109,7 +109,12 @@ function titleAttrs(file: string): TitleAttr[] {
   return out
 }
 
-const all = tsxFiles(SRC).flatMap((f) => titleAttrs(f))
+// 1.14 UI 迁入：add-project + bug 三件迁 @dsh-forge/project client ui——扫描面随迁
+// （组件本体居 plugins/project/ui/{add-project,bug-refs}，title= 记账面不因迁移漏计；
+// ui/worktree-* 族 = 1.8 平移件，其 D30 记账随 WorktreeFaces 拆迁批收口，不入本扫描面）。
+const PROJECT_UI = [join(ROOT, 'plugins/project/ui/add-project'), join(ROOT, 'plugins/project/ui/bug-refs')]
+
+const all = [...tsxFiles(SRC), ...PROJECT_UI.flatMap((d) => tsxFiles(d))].flatMap((f) => titleAttrs(f))
 /** DOM 元素（小写标签）= 原生 tooltip 位；大写标签 = 组件标题 prop（排除清单） */
 const isComponent = (owner: string): boolean => owner[0] === owner[0]?.toUpperCase() && owner[0] !== owner[0]?.toLowerCase()
 const dom = all.filter((a) => !isComponent(a.owner))
@@ -123,8 +128,8 @@ for (const a of all) {
  * 知识详情缘侧拖宽手柄 Tooltip 在场（可拖移 dialog 用户裁决回迁——29 walk 位恒数）。 */
 const TOOLTIP_FILES = [
   'apps/web/src/components/ModeChip.tsx',
-  'apps/web/src/flows/add-project/DirectoryBrowser.tsx',
-  'apps/web/src/flows/add-project/RegisterForm.tsx',
+  'plugins/project/ui/add-project/DirectoryBrowser.tsx',
+  'plugins/project/ui/add-project/RegisterForm.tsx',
   'apps/web/src/views/docs/index.tsx',
   'apps/web/src/views/knowledge/DomainTree.tsx',
   'apps/web/src/views/knowledge/EntryDrawer.tsx',

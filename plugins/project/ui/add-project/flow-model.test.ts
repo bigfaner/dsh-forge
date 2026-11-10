@@ -9,7 +9,7 @@
 // fix-14 原生选取相位机（beginNativePick 在途防双开 + endNativePick 回落起源零副作用）。
 import { describe, expect, it } from 'vitest'
 import type { ErrorCode, RegisterResult } from '@dsh-forge/contracts'
-import { RpcClientError } from '../../rpc/index.js'
+import { RpcClientError } from '../rpc.js'
 import type { BrowserSelection } from './browser-model.js'
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
 import {
