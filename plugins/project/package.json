@@ -1,0 +1,55 @@
+{
+  "name": "@dsh-forge/project",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
+  "main": "./dist/host/index.js",
+  "types": "./dist/host/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/host/index.d.ts",
+      "import": "./dist/host/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/ui/index.d.ts",
+      "default": "./dist/client.js"
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.4"
+  },
+  "devDependencies": {
+    "@dsh-forge/lib-api": "workspace:*",
+    "@dsh-forge/lib-db": "workspace:*",
+    "@dsh-forge/lib-diag": "workspace:*",
+    "@dsh-forge/lib-path": "workspace:*",
+    "@dsh-forge/lib-util": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.0-rc.2",
+    "@types/node": "24.19.0",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.0",
+    "esbuild": "0.24.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

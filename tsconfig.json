@@ -6,6 +6,7 @@
     { "path": "lib/diag" },
     { "path": "lib/util" },
     { "path": "lib/path" },
+    { "path": "plugins/project" },
     { "path": "packages/contracts" },
     { "path": "packages/path-key" },
     { "path": "packages/core" },

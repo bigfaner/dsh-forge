@@ -5,6 +5,8 @@ packages:
   - packages/plugins/*
   # lib/* 公共包群（plugin-project 1.2 起步：api/db/diag/util/path 扁平子包，无 kit 壳）
   - lib/*
+  # plugins/* 插件统一目录（root 级，与 lib/ 同级；plugin-project 1.3 起步——首住户 project）
+  - plugins/*
 
 # Electron 精确 pin 44.0.0（S1 实测指纹门：node-addon-require-builtin 仅接受
 # 43.0.0 / 44.0.0 / 45.0.0-alpha.6——升级 Electron = 等上游扩展指纹清单）。

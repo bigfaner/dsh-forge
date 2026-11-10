@@ -70,6 +70,8 @@ export default defineConfig({
           },
         },
       },
+      // project 插件包（plugin-project 1.3 包骨架——结构镜像 + bundle self-containment 守卫）
+      { test: { name: 'project', include: ['plugins/project/tests/**/*.test.ts'] } },
       // quote-reference 插件包（纯 client 包——client bundle 装载契约守卫 + face 单测 +
       // selection-menu 缝合：primitives Menu 消费——css 副产物走 vite 转换管道（inline，
       // git-worktree 判例同构）；真实 DOM 链路测试以文件级 @vitest-environment 声明）

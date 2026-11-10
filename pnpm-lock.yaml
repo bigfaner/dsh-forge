@@ -747,6 +747,48 @@ importers:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
 
+  plugins/project:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.0.4
+        version: 4.0.4(@deepseek-ai/cordis-plugin-include@1.0.9)(@deepseek-ai/cordis-plugin-loader@1.0.5)
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: 0.2.0-rc.2
+        version: 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)
+      '@dsh-forge/lib-api':
+        specifier: workspace:*
+        version: link:../../lib/api
+      '@dsh-forge/lib-db':
+        specifier: workspace:*
+        version: link:../../lib/db
+      '@dsh-forge/lib-diag':
+        specifier: workspace:*
+        version: link:../../lib/diag
+      '@dsh-forge/lib-path':
+        specifier: workspace:*
+        version: link:../../lib/path
+      '@dsh-forge/lib-util':
+        specifier: workspace:*
+        version: link:../../lib/util
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
+      '@types/react':
+        specifier: 18.3.12
+        version: 18.3.12
+      '@types/react-dom':
+        specifier: 18.3.0
+        version: 18.3.0
+      esbuild:
+        specifier: 0.24.2
+        version: 0.24.2
+      react:
+        specifier: 18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: 18.3.1
+        version: 18.3.1(react@18.3.1)
+
 packages:
 
   '@agentclientprotocol/sdk@1.4.0':
