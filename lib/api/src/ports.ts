@@ -11,6 +11,46 @@ import type {
   ResolveBugInput,
 } from './dto/bugs.js'
 import type { BugErrorTypeAggregate } from './dto/forge.js'
+import type { ProjectService } from './dto/project.js'
+import type {
+  WorktreeEnsureWorkspaceRequest,
+  WorktreeEnsureWorkspaceResult,
+  WorktreeListRequest,
+  WorktreeListResult,
+  WorktreeResolveRequest,
+  WorktreeResolveResult,
+  WorktreeSealRequest,
+  WorktreeSealResult,
+  WorktreeSelectRequest,
+  WorktreeSelectResult,
+} from './dto/worktree.js'
+
+/**
+ * projects 域服务缝契约（plugin-project 1.17 五缝合拢——proposal seam 表 `forge.projects`，
+ * code-design §6）。常驻 provider = plugins/project host/projects ProjectsRegisterService +
+ * ProjectsQueryService + reconcile（project.db 三 repositories 承载）；兜底 provider =
+ * StubProjectsService（零库恒空清单——独立模式/隔离态降级）；覆写 provider = 宿主注入。
+ * 六动词形状 = dto/project ProjectService 单源别名（零字段镜像）。
+ */
+export type ProjectsServicePort = ProjectService
+
+/**
+ * worktrees 域服务缝契约（plugin-project 1.17 五缝合拢——proposal seam 表 `forge.worktrees`，
+ * code-design §6）。常驻 provider = plugins/project host/worktrees WorktreeRpcService 域本体；
+ * 兜底 provider = 独立模式面（list 恒空、resolve 恒空集、seal 恒未封存——rpc-service 独立模式
+ * 同语义）；覆写 provider = 宿主注入。消费面（task-loop/UI 通道）一律 ctx.inject 本契约。
+ */
+export interface WorktreeServicePort {
+  list(request: WorktreeListRequest): Promise<WorktreeListResult>
+  ensureWorkspace(request: WorktreeEnsureWorkspaceRequest): Promise<WorktreeEnsureWorkspaceResult>
+  select(request: WorktreeSelectRequest): Promise<WorktreeSelectResult>
+  seal(request: WorktreeSealRequest): Promise<WorktreeSealResult>
+  resolve(request: WorktreeResolveRequest): Promise<WorktreeResolveResult>
+  /** 项目 → worktree 存放目录（ProjectResolutionPort.getWorktreeDir 的快照投影） */
+  getWorktreeDir(projectRoot: string): string
+  /** 路径归属解析快照（ProjectResolutionPort.resolveProject 同语义） */
+  resolveProject(cwd: string): Promise<ProjectResolution | null>
+}
 
 /** 路径归属解析结果（isGit 能力位由解析器结果派生，UI 只消费） */
 export interface ProjectResolution {
