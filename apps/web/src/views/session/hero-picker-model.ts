@@ -6,9 +6,9 @@
 //   - 选中映射：owner selectedId（workspaceId）↔ 行 id（= project.workspaceId）恒等对照，
 //     未绑定/已归档工作区无命中行（零高亮）；
 //   - 空集 + 账面已定 → 「添加」为唯一入口（官方 addIsTheOnlyEntry 语义对齐，:1935-1943）。
-// W3 arm 退役（session-binding-guarantee）：会话创建唯一时机 = 官方 create 调用点（wrap
-// 改道预铸），点选 = 纯选中态 + 点选时点跨分支确认（1.19 语义回归）——编排闸/账本读面/
-// 草稿缝/1.25 失败文案族随 arm 效应链一并退役，本文件只剩映射面 + 确认闩锁。
+// 1.15 归位：worktree 域纯函数（跨分支确认闩锁/「不再提示」记忆/陈旧选中自愈）随
+// WorktreeFaces 拆迁迁 @dsh-forge/project ui/worktree-picker/model.ts——本文件只剩
+// hero 项目弹层映射面（消费面 = ForgeHeroWorkspacePicker）。
 import type { ProjectSummary } from '@dsh-forge/contracts'
 
 /** 弹层项目行（id = workspaceId——owner 契约 selectedId/onPick 零变化走官方链；wsPath = 树 ws 判据源） */
@@ -172,106 +172,4 @@ export function selectedProjectRootOf(
   }
   return projects.find((p) => p.archived !== true && p.wsPath !== undefined && p.wsPath !== '')?.wsPath
   ?? null
-}
-
-// ───────────── 1.34 跨分支确认闩锁（bug ccfcc103）─────────────
-// 确认框消费时点 = 点选（1.19 语义回归——W3 arm 退役后确认不再随首条消息编排后移）。
-// 闩锁 = per 选中行单值态：确认置位（同行重选零重弹）、换目标重选清退（重新判定）。
-// 「不再提示」为 settings 持久化的用户级一票，独立于闩锁。
-
-/** 确认闩锁态（选中行唯一 → 单值即 per 选中行）：path = 已确认 | null = 无闩锁 */
-export type RiskConfirmLatch = string | null
-
-/** 置位（确认回调消费——幂等；换确认目标覆盖） */
-export function riskLatchConfirm(prev: RiskConfirmLatch, path: string): RiskConfirmLatch {
-  return path
-}
-
-/** 换目标重选清退（点选回调消费——同行重选保留闩锁：确认后点 chip 不重弹） */
-export function riskLatchReselect(prev: RiskConfirmLatch, path: string): RiskConfirmLatch {
-  return prev !== null && prev !== path ? null : prev
-}
-
-/** 弹框判定消费闩锁（闩锁只旁路弹框分支——选中态回填照常）：true = 需弹框 */
-export function riskDialogNeeded(path: string, latch: RiskConfirmLatch): boolean {
-  return latch !== path
-}
-
-// bug a944424f：闩锁跨重挂记忆。确认 → applySelection 走官方 openWorkspace 切主视图
-// （选树即切该树 blank），ForgeHeroWorktreeMount 随主视图切换重挂——组件 useState 闩锁
-// 清零，同行重选重弹。闩锁落模块级记忆（单窗口单实例 = 「按窗口」语义，先例
-// state/selected-tree-window.ts），组件态只作记忆的镜像：初始化惰性读 + 每次变更写透。
-
-let riskLatchMemory: RiskConfirmLatch = null
-
-/** 跨重挂记忆读面（组件 useState 惰性初始化消费——重挂即水合） */
-export function riskLatchMemoryOf(): RiskConfirmLatch {
-  return riskLatchMemory
-}
-
-/** 跨重挂记忆写面（闩锁每次变更写透——置位/清退同一入口） */
-export function riskLatchMemorySync(next: RiskConfirmLatch): void {
-  riskLatchMemory = next
-}
-
-// bug e2a10cd4：「不再提示」跨重挂记忆（与上同族——确认框多弹面的第二状态）。riskDismissed
-// 挂组件 useState 会被 openWorkspace 切主视图的重挂清零，且 settings.set fire-and-forget
-// 写透未及回读（竞态窗内重挂读不到 true）→ 换跨分支目标重弹确认框，用户级一票失守。
-// 值域 = 布尔用户级一票（settings worktree.crossBranchRiskDismissed 持久化口径同域）——
-// 无路径成分，跨项目/跨会话路径失配面天然不存在（review-arch 确认闩锁单值泄漏面判定同构：
-// 值域不含路径 = 无失配抑制面）。落模块级记忆（单窗口单实例 = 「按窗口」语义），组件态只作
-// 记忆镜像：初始化惰性读（重挂即水合）+ 每次变更写透。
-
-let riskDismissedMemory: boolean = false
-
-/** 「不再提示」跨重挂记忆读面（组件 useState 惰性初始化消费——重挂即水合） */
-export function riskDismissedMemoryOf(): boolean {
-  return riskDismissedMemory
-}
-
-/** 「不再提示」跨重挂记忆写面（每次变更写透——装载回填/确认勾选同一入口） */
-export function riskDismissedMemorySync(next: boolean): void {
-  riskDismissedMemory = next
-}
-
-// ───────────── bug 4a30b193 陈旧选中自愈（纯判定单源）─────────────
-
-/** 自愈判定行（WorktreeEntryDto 行模型最小面——present = 盘上实存，host list 兑现） */
-export interface StaleSelectionRow {
-  readonly path: string
-  readonly worktreeName: string
-  readonly isMain: boolean
-  readonly present: boolean
-  /** 检出分支（bug fcc6f37b 同族：null = detached/bare——不可挂靠行应自愈切回主行） */
-  readonly branch?: string | null
-}
-
-/** 自愈计划（选中行盘上缺席时装配层消费：选中态切回主行 + notice 引述树名） */
-export interface StaleSelectionReset {
-  /** true = 选中行已失效，需切回主行并呈现 notice */
-  readonly stale: boolean
-  /** 失效树名（notice 引述；stale=false 缺席） */
-  readonly worktreeName?: string
-  /** 回落主行路径（主行缺席 = undefined——无主行可落，仅清选中态） */
-  readonly mainPath?: string
-}
-
-/**
- * 陈旧选中自愈判定（纯函数单源）：选中行在清单中缺席，或行在场但盘上实存为假
- * （git 清单 prune 前保留已删树陈旧行——present 以 existsSync 盘上事实为准）→ stale。
- * bug fcc6f37b 同族：行在场且实存但不可挂靠（branch null = detached/bare）同样 stale——
- * 存量选中态驱动 create-wrap 必被 typed 拒绝（fail-open 噪音），自愈切回主行。
- * 选中态缺席/命中健康行 = 不自愈（用户显式选中零覆盖）。
- */
-export function staleSelectionResetOf(
-  rows: readonly StaleSelectionRow[],
-  selectedPath: string | undefined,
-): StaleSelectionReset {
-  if (selectedPath === undefined) return { stale: false }
-  const row = rows.find((candidate) => candidate.path === selectedPath)
-  if (row !== undefined && row.present && row.branch !== null) return { stale: false }
-  const main = rows.find((candidate) => candidate.isMain)
-  // 行整段消失（清单无行）→ 树名取路径尾段（与 host worktreeNameOf 同判）
-  const name = row?.worktreeName ?? selectedPath.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? selectedPath
-  return { stale: true, worktreeName: name, mainPath: main?.path }
 }

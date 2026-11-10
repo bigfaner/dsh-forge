@@ -1,22 +1,22 @@
-// worktree 六卡挂载面单测（fix-2——SSR 渲染期纯判读：能力位条件渲染零注入路径；
+// worktree 挂载面单测（SSR 渲染期纯判读：能力位条件渲染零注入路径；
 // 数据面经 makeRpc 替身注入。RPC 相位驱动路径（chip 呈现/封存双通道/清单行）为效应回调
 // ——SSR 不可达，归集成模式实机走查（1.8 e2e 同口径惯例）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { createForgeRpcClient, type ForgeRpcClient } from '../../rpc/client.js'
+import type { WorktreeFacesRpc } from '../rpc.js'
 import {
   ForgeHeroWorktreeMount,
-  ForgeSessionWorktreeChip,
-  ForgeWorktreeSealOverlay,
   ForgeWorktreeSwitchMarker,
   anchorDefaultWorktreePath,
   createFollowup,
-} from './WorktreeFaces.js'
-import { beginWorktreeSwitch, isWorktreeSwitchPending } from '../../state/worktree-switch-gate.js'
+} from './picker.js'
+import { ForgeSessionWorktreeChip } from '../session-badge/chip.js'
+import { ForgeWorktreeSealOverlay } from '../session-badge/seal-notice.js'
+import { beginWorktreeSwitch, isWorktreeSwitchPending } from '../state/worktree-switch-gate.js'
 
 /** rpc 替身（worktree 面按用例给值；其余族不被触达） */
-function fakeRpc(worktree: Partial<ForgeRpcClient['worktree']>): () => ForgeRpcClient {
-  return () => ({ worktree }) as unknown as ForgeRpcClient
+function fakeRpc(worktree: Partial<WorktreeFacesRpc['worktree']>): () => WorktreeFacesRpc {
+  return () => ({ worktree }) as unknown as WorktreeFacesRpc
 }
 
 describe('零注入路径（SSR 同步判读——能力位条件渲染）', () => {
@@ -45,7 +45,7 @@ describe('零注入路径（SSR 同步判读——能力位条件渲染）', () 
     expect(markup).not.toContain('data-dswt-hero-trigger')
   })
   // 注：选中态回填（selectedPath → chip 一体两属性）的相位数据面 SSR 不可达（list 为效应
-  // 回调——本文件头注口径）；透传锚归 packages git-worktree hero-worktree-picker.test
+  // 回调——本文件头注口径）；透传锚归 ./hero-worktree-picker.test
   // （selectedPath 在册即回填 feat/api · wt-api），选中闭环交互归 e2e worktree-hero-chip。
 })
 
@@ -88,18 +88,8 @@ describe('创建跟进次序（bug 6593d708——清单刷新先于选中态落�
   })
 })
 
-// ───────────── bug 82e92933：点选即换绑编排退役（binding-derivation §2.3 口径——
-// 换绑由官方 blank 复用天然生效，点选回归纯选中态；通道 host 注册已删，web 残留消费
-// 必 not-found + rebindOnSelect fail-soft 静默失效 / maybeRebind unhandled rejection）─────────────
-
-describe('点选即换绑编排退役（bug 82e92933）', () => {
-  it('rpc client worktree 面零 sessionCreate 方法——点选路径零 forge 建会话 RPC', () => {
-    const client = createForgeRpcClient(async () => {
-      throw new Error('no-op')
-    })
-    expect('sessionCreate' in client.worktree).toBe(false)
-  })
-})
+// ───────────── bug 82e92933：点选即换绑编排退役（通道 host 注册已删——web 残留消费
+// 零 forge 建会话 RPC 的形状锚归 apps/web rpc/client.test.ts 全量 client 面）─────────────
 
 describe('1.17 hero 默认回填锚定链（纯函数——anchorDefaultWorktreePath）', () => {
   const row = (path: string, branch: string | null, isMain = false) => ({ path, branch, isMain })

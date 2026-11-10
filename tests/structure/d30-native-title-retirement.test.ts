@@ -110,8 +110,10 @@ function titleAttrs(file: string): TitleAttr[] {
 }
 
 // 1.14 UI 迁入：add-project + bug 三件迁 @dsh-forge/project client ui——扫描面随迁
-// （组件本体居 plugins/project/ui/{add-project,bug-refs}，title= 记账面不因迁移漏计；
-// ui/worktree-* 族 = 1.8 平移件，其 D30 记账随 WorktreeFaces 拆迁批收口，不入本扫描面）。
+// （组件本体居 plugins/project/ui/{add-project,bug-refs}，title= 记账面不因迁移漏计）。
+// 1.15 拆迁批收口：worktree-picker/session-badge（WorktreeFaces 拆解件）仍不入本扫描面
+// ——其 title= 位均官方 Modal/RiskConfirmation 标题 prop（EXEMPT_LEDGER 冻结账目边界）
+// 与 chip sealed 提示位，维持现状记账不扩。
 const PROJECT_UI = [join(ROOT, 'plugins/project/ui/add-project'), join(ROOT, 'plugins/project/ui/bug-refs')]
 
 const all = [...tsxFiles(SRC), ...PROJECT_UI.flatMap((d) => tsxFiles(d))].flatMap((f) => titleAttrs(f))

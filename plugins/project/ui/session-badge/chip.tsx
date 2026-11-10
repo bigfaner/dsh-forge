@@ -1,12 +1,15 @@
-// @dsh-forge/git-worktree client —— 会话头 actions 槽只读一体 chip（原型第二卡）：
+// session-badge —— 会话头 actions 槽只读一体 chip（绑定展示 + ahead/behind 次级小字 +
+// sealed 失效变体）与挂载面 ForgeSessionWorktreeChip（WorktreeFaces 尾段拆出）。
 // 样式对齐官方 AgentPresetLabel（模式标签）一体形态——radius-xs pill + fill-tsp-secondary
 // 底 + 14px 分支图标（opacity .7）+ 12px 文本。点击展示完整信息卡（分支/worktree 名/
 // 完整路径/项目根/ahead-behind/封存警示），失焦 1 秒后自动消失（焦点出入卡片内部不断开）。
 // 封存态 = 失效变体（警示色 + 删除线）；非 git 项目零注入。
-import { useRef, useState, type ReactNode } from 'react'
-import { aheadBehindInline, aheadBehindSegments } from './model.js'
-import type { AheadBehind } from '../host/worktrees/worktree-ops.js'
-import { IconBranchOutlineRegular } from './icons.js'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { aheadBehindInline, aheadBehindSegments } from '../worktree-picker/model.js'
+import type { AheadBehind } from '../../host/worktrees/worktree-ops.js'
+import { IconBranchOutlineRegular } from '../icons.js'
+import { useWorktreeSeal } from './seal-notice.js'
+import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'
 
 const mono = { fontFamily: 'var(--ds-font-family-code, monospace)' } satisfies React.CSSProperties
 
@@ -182,5 +185,50 @@ export function SessionWorktreeChip({
         />
       )}
     </span>
+  )
+}
+
+/**
+ * 会话头 actions 槽只读 chip 挂载面（WorktreeFaces 尾段拆出；绑定展示 `feat/a · wt-a`
+ * 一体形态；封存 = 失效变体；非 git / 无绑定（branch 缺席）= 零注入）。ahead/behind
+ * 次级小字：sealed 恒不展示（失配无意义），live 态低频拉取由 chip 挂载期一次消费
+ * （懒加载/缓存纪律）。
+ */
+export function ForgeSessionWorktreeChip({
+  sessionId,
+  makeRpc = preloadRpcClientFactory,
+}: {
+  readonly sessionId?: string | undefined
+  readonly makeRpc?: () => WorktreeFacesRpc
+}): ReactNode {
+  const phase = useWorktreeSeal(sessionId, makeRpc)
+  const [aheadBehind, setAheadBehind] = useState<AheadBehind | undefined>(undefined)
+  const [info, setInfo] = useState<{ readonly worktreePath: string; readonly projectRoot: string } | undefined>(undefined)
+  useEffect(() => {
+    if (sessionId === undefined || phase.branch === null || phase.sealed) return
+    makeRpc()
+      .worktree.seal({ sessionId })
+      .then((result) => {
+        if (result.projectRoot !== undefined && result.binding !== null) {
+          setInfo({ worktreePath: result.binding.worktreePath, projectRoot: result.projectRoot })
+        }
+        if (result.projectRoot === undefined || result.binding === null) return
+        return makeRpc()
+          .worktree.aheadBehind({ projectRoot: result.projectRoot, path: result.binding.worktreePath })
+          .then((counts) => setAheadBehind(counts.counts ?? undefined))
+      })
+      .catch(() => {})
+  }, [sessionId, phase.branch, phase.sealed, makeRpc])
+  if (sessionId === undefined || !phase.isGit || phase.branch === null || phase.worktreeName === null) return null
+  return (
+    <SessionWorktreeChip
+      isGit
+      branch={phase.branch}
+      worktreeName={phase.worktreeName}
+      worktreePath={info?.worktreePath}
+      projectRoot={info?.projectRoot}
+      aheadBehind={aheadBehind}
+      sealed={phase.sealed}
+    />
   )
 }

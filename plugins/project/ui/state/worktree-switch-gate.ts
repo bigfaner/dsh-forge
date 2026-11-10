@@ -3,9 +3,9 @@
 // ui-conversation client.js:3747「the one way another plugin stops a session's input」——
 // blocked 会话 composer 渲染为 inert textarea + reason 占位，与「会话无 workspace」同形）：
 // pending 窗口内 composer 整体禁输虚线框，窗口归零即 WYSIWYG 收口（显示 a = 发送落 a）。
-// 共享组件域模块（WorktreeFaces 共 import；client-plugin 入口禁 import——classic 形状
-// pin，判例 20be1ba7）：入口经 window 锚 `__dshForgeWorktreeSwitchGate` 消费（双注同
-// selected-tree-window 口径）。
+// 共享单源模块（归属 ui/state/，圆桌处方③——worktree-picker 点选链共 import；
+// client-plugin 入口禁 import——classic 形状 pin，判例 20be1ba7）：入口经 window 锚
+// `__dshForgeWorktreeSwitchGate` 消费（双注同 selected-tree-window 口径）。
 
 type Listener = () => void
 
@@ -50,7 +50,7 @@ export function beginWorktreeSwitch(): () => void {
   return settle
 }
 
-// 入口侧 window 锚（双注：读取器 = client-plugin/worktree-switch-gate-install.ts，
+// 入口侧 window 锚（双注：读取器 = apps/web client-plugin/worktree-switch-gate-install.ts，
 // KEY 契约随注释维护——入口与共享组件禁共 import 模块）
 ;(globalThis as unknown as Record<string, unknown>)['__dshForgeWorktreeSwitchGate'] = {
   isPending: isWorktreeSwitchPending,

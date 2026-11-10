@@ -6,8 +6,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
-import type { ForgeRpcClient } from '../../rpc/client.js'
-import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
+import type { WorktreeFacesRpc } from '../rpc.js'
+import { ForgeHeroWorktreeMount } from './picker.js'
 
 const OPEN_KEY = '__dshForgeOpenWorkspace'
 
@@ -33,7 +33,7 @@ function entriesWith(withNew: boolean): ListEntry[] {
     : base
 }
 
-function mountRpc(): () => ForgeRpcClient {
+function mountRpc(): () => WorktreeFacesRpc {
   return (() =>
     ({
       projects: {
@@ -55,7 +55,7 @@ function mountRpc(): () => ForgeRpcClient {
         ensureWorkspace: async () => ({ workspaceId: 'ws-new' }),
         aheadBehind: async () => ({}),
       },
-    }) as unknown as ForgeRpcClient)
+    }) as unknown as WorktreeFacesRpc)
 }
 
 let created = false
@@ -168,7 +168,7 @@ describe('bug 70188b91：projectRoot 变更清退本地选中投影', () => {
           branches: async () => ({ defaultBranch: 'main', branches: ['main'] }),
           aheadBehind: async () => ({}),
         },
-      }) as unknown as ForgeRpcClient)
+      }) as unknown as WorktreeFacesRpc)
     const opened: string[] = []
     ;(globalThis as unknown as Record<string, unknown>)[OPEN_KEY] = (workspaceId: string): void => {
       opened.push(workspaceId)

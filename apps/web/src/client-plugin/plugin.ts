@@ -2306,7 +2306,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         const uiWorkspace = clientCtx.get('uiWorkspace') as ForgeUiWorkspaceService
         // bug 05c712a4 composer 腿收口：worktree chip 点选 = 显式传参官方 openWorkspace
         // （官方唯一创建前决策缝——立即建/复用该树 blank，主视图随之切换）。face 挂 window
-        // 锚供 WorktreeFaces 点选链消费（安装器独立成文件——入口与共享组件禁共 import）。
+        // 锚供 worktree-picker 点选链消费（安装器独立成文件——入口与共享组件禁共 import）。
         // bug 267dcac1：面返回 promise（切换闸敛棋锚）+ beforeOpen 草稿迁移。
         // 切换闸消费端：pending 窗口 → 官方 composer block（conversation.blocks——
         // 「the one way another plugin stops a session's input」，blocked 即官方 inert

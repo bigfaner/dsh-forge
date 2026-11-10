@@ -12,9 +12,9 @@ import {
   deriveFormWorktreeName,
   initialCreateForm,
   type CreateWorktreeFormValue,
-} from './create-worktree-dialog.js'
-import { DeleteChecksList, DeleteWorktreeDialog } from './delete-worktree-dialog.js'
-import { WorktreeRiskConfirmationBody } from './risk-confirmation.js'
+} from './create-dialog.js'
+import { DeleteChecksList, DeleteWorktreeDialog } from './delete-dialog.js'
+import { WorktreeRiskConfirmationBody } from './risk-confirm.js'
 import { createConflicts, isCreateReady, isDeleteBlocked, isWorktreeNameFollowing, sortBaseBranchOptions } from './model.js'
 
 const FORM: CreateWorktreeFormValue = initialCreateForm('main', ['main', 'feat/a'])
@@ -89,7 +89,7 @@ describe('CreateWorktreeFields（原型「新建 worktree」卡三字段）', ()
   })
 
   it('说明行悬浮全文 = 官方 Tooltip（portal）+ PathLabel 退役（源面结构锚——读文件法，静态标记零气泡）', () => {
-    const src = readFileSync(new URL('./create-worktree-dialog.tsx', import.meta.url), 'utf8')
+    const src = readFileSync(new URL('./create-dialog.tsx', import.meta.url), 'utf8')
     expect(src).toContain('<Tooltip')
     expect(src).toContain('portal')
     expect(src).not.toContain('<PathLabel')

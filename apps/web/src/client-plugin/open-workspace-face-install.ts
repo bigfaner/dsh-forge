@@ -1,8 +1,8 @@
 // openWorkspace 官方面安装器（client-plugin 入口专用——plugin.ts uiWorkspace 到手处调用）。
 //
-// KEY 契约 `__dshForgeOpenWorkspace` 双注：读取器 = src/state/open-workspace-face.ts
-// （WorktreeFaces 点选链）。入口与共享组件禁共 import 模块（classic 形状 pin，判例
-// 20be1ba7），故安装器独立成文件、仅入口引用。
+// KEY 契约 `__dshForgeOpenWorkspace` 双注：读取器 = @dsh-forge/project
+// ui/state/open-workspace-face.ts（worktree-picker 点选链）。入口与共享组件禁共 import
+// 模块（classic 形状 pin，判例 20be1ba7），故安装器独立成文件、仅入口引用。
 //
 // 用途（bug 05c712a4 composer 腿收口 + bug 267dcac1 竞速收口）：
 // ① worktree chip 点选 = 显式传参官方 openWorkspace(workspaceId, beforeOpen)——官方唯一

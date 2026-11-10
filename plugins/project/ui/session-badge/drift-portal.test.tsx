@@ -6,11 +6,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
-import type { ForgeRpcClient } from '../../rpc/client.js'
-import { ForgeWorktreeSealOverlay } from './WorktreeFaces.js'
+import type { WorktreeFacesRpc } from '../rpc.js'
+import { ForgeWorktreeSealOverlay } from './seal-notice.js'
 
 /** rpc 替身：seal 相位直接给漂移判定（非封存 live 态） */
-function driftRpc(): () => ForgeRpcClient {
+function driftRpc(): () => WorktreeFacesRpc {
   return () =>
     ({
       worktree: {
@@ -22,7 +22,7 @@ function driftRpc(): () => ForgeRpcClient {
           branchDrift: { bindBranch: 'main', branch: 'feat-b' },
         }),
       },
-    }) as unknown as ForgeRpcClient
+    }) as unknown as WorktreeFacesRpc
 }
 
 async function renderOverlay(): Promise<HTMLElement> {

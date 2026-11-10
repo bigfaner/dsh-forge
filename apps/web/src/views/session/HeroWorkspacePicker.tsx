@@ -31,7 +31,9 @@ import {
   selectedProjectOf,
   selectedProjectRootOf,
 } from './hero-picker-model.js'
-import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
+// 1.15 迁移面：worktree 第二 chip 挂载面本体迁 @dsh-forge/project client ui
+// （ui/worktree-picker/picker.tsx——ForgeHeroWorktreeMount 经包出口消费）。
+import { ForgeHeroWorktreeMount } from '@dsh-forge/project/client-ui/worktree-faces'
 import type { KitSelectorHook } from './ConversationViews.js'
 
 /** 「添加项目…」行 id（菜单内保留字——项目行 id 恒为 dsh workspace uuid，无碰撞面） */

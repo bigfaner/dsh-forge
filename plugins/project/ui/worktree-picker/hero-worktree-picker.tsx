@@ -10,7 +10,7 @@
 // apps/web HeroWorkspacePicker.test 同口径惯例），开弹层交互归 e2e。
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
-import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconPlusOutlineRegular, IconTrashOutlineRegular } from './icons.js'
+import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconPlusOutlineRegular, IconTrashOutlineRegular } from '../icons.js'
 import {
   aheadBehindSegments,
   inferSource,
@@ -18,7 +18,7 @@ import {
   worktreeLabelSegments,
   type WorktreeRow,
 } from './model.js'
-import type { AheadBehind } from '../host/worktrees/worktree-ops.js'
+import type { AheadBehind } from '../../host/worktrees/worktree-ops.js'
 
 const CREATE_ITEM_ID = '__dswt-create__'
 

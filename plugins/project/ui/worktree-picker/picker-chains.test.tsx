@@ -9,16 +9,16 @@
 //     再 openWorkspace；
 //   ④ 陈旧自愈：选中行 present=false → 选中态清回主行（openWorkspace 主行 + select
 //     推送主行）+ StaleSelectionNotice 一次性呈现。
-// 测试落在 apps/web 现位（WorktreeFaces 拆迁前）；断言组件行为（face 调用/锚态/notice
-// 语义锚），不锁 DOM 层级细节。行分支与主行同支（branch=main）——零风险确认直通，
+// 测试随迁 worktree-picker（1.15 UI 迁入第二批——锚随迁）；断言组件行为（face 调用/锚态/
+// notice 语义锚），不锁 DOM 层级细节。行分支与主行同支（branch=main）——零风险确认直通，
 // 跨分支确认闩锁链归 risk-dismiss-remount/create-bind 既有单测。
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
-import { isWorktreeSwitchPending } from '../../state/worktree-switch-gate.js'
-import type { ForgeRpcClient } from '../../rpc/client.js'
-import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
+import { isWorktreeSwitchPending } from '../state/worktree-switch-gate.js'
+import type { WorktreeFacesRpc } from '../rpc.js'
+import { ForgeHeroWorktreeMount } from './picker.js'
 
 const OPEN_KEY = '__dshForgeOpenWorkspace'
 const ANCHOR_KEY = '__dshForgeSelectedTree'
@@ -65,7 +65,7 @@ interface Probe {
 function makeRpcFactory(
   listEntriesRef: { current: ListEntry[] },
   opts: { readonly ensureId?: string; readonly probe?: Probe } = {},
-): () => ForgeRpcClient {
+): () => WorktreeFacesRpc {
   return () =>
     ({
       projects: { list: async () => [] },
@@ -84,7 +84,7 @@ function makeRpcFactory(
         },
         aheadBehind: async () => ({}),
       },
-    }) as unknown as ForgeRpcClient
+    }) as unknown as WorktreeFacesRpc
 }
 
 function openFaceOf(): string[] {
@@ -106,10 +106,10 @@ interface Mount {
   readonly host: HTMLElement
   readonly root: Root
   /** 以新 factory 身份重挂（refresh dep 变更触发清单重拉） */
-  rerender(factory: () => ForgeRpcClient): Promise<void>
+  rerender(factory: () => WorktreeFacesRpc): Promise<void>
 }
 
-async function mount(factory: () => ForgeRpcClient): Promise<Mount> {
+async function mount(factory: () => WorktreeFacesRpc): Promise<Mount> {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
@@ -120,7 +120,7 @@ async function mount(factory: () => ForgeRpcClient): Promise<Mount> {
   return {
     host,
     root,
-    rerender: async (next: () => ForgeRpcClient): Promise<void> => {
+    rerender: async (next: () => WorktreeFacesRpc): Promise<void> => {
       await act(async () => {
         root.render(<ForgeHeroWorktreeMount projectRoot={ROOT} makeRpc={next} />)
       })

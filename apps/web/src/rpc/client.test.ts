@@ -479,3 +479,14 @@ describe('AC2 typed error 反序列化保真（renderer 侧半边）', () => {
     await expect(client2.projects.list()).rejects.toThrow(/信封形状非法/)
   })
 })
+
+// ───────────── bug 82e92933：点选即换绑编排退役（WorktreeFaces 挂载面 1.15 迁
+// @dsh-forge/project ui/worktree-picker 后形状锚归本文件——web 全量 client 面）─────────────
+describe('点选即换绑编排退役（bug 82e92933）', () => {
+  it('rpc client worktree 面零 sessionCreate 方法——点选路径零 forge 建会话 RPC', () => {
+    const client = createForgeRpcClient(async () => {
+      throw new Error('no-op')
+    })
+    expect('sessionCreate' in client.worktree).toBe(false)
+  })
+})

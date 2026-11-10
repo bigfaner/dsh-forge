@@ -46,11 +46,14 @@ import {
   ForgeHeroWorkspacePicker,
   type ForgeHeroWorkspacePickerProps,
 } from './views/session/HeroWorkspacePicker.js'
+// 1.15 迁移面：worktree 挂载面三件（chip / seal overlay / switch marker）迁
+// @dsh-forge/project client ui（ui/worktree-picker + ui/session-badge）——本发布面
+// 引用改指包出口（apps/web 壳内自有源收缩为零），发布机械不变。
 import {
   ForgeSessionWorktreeChip,
   ForgeWorktreeSealOverlay,
   ForgeWorktreeSwitchMarker,
-} from './views/session/WorktreeFaces.js'
+} from '@dsh-forge/project/client-ui/worktree-faces'
 import {
   ForgeRemoteEntry,
   type ForgeRemoteEntryProps,

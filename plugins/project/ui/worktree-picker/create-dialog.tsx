@@ -10,8 +10,8 @@
 // （官方 Modal 门户壳 SSR 不可达——apps/web AddProjectFlow.test 头注同口径）。
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, Input, Menu, Modal, StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular } from './icons.js'
-import { WorktreeRiskConfirmation } from './risk-confirmation.js'
+import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular } from '../icons.js'
+import { WorktreeRiskConfirmation } from './risk-confirm.js'
 import { createConflicts, filterSlugCandidates, isCreateReady, isCrossBranchRisk, isWorktreeNameFollowing, joinWorktreePath, sortBaseBranchOptions, type CreateConflict, type SlugCandidate } from './model.js'
 
 /** 创建请求（git 一体创建 = 新分支 + 新 worktree 一次落位） */

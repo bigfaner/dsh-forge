@@ -5,19 +5,47 @@
 // RpcErr → 抛 RpcClientError（typed error 反序列化），形状非法 fail-loud。
 import {
   BUGS_CHANNELS,
+  FEATURES_CHANNELS,
   FS_CHANNELS,
   PROJECTS_CHANNELS,
   PROJECTS_M2_CHANNELS,
+  PROPOSALS_CHANNELS,
+  SETTINGS_CHANNELS,
+  WORKTREE_CHANNELS,
   type BugCard,
   type DeriveTaskStoreDirRequest,
   type DeriveTaskStoreDirResult,
   type DirListing,
+  type FeatureCard,
+  type ForgeSettings,
   type ListBugsQuery,
+  type ListFeaturesQuery,
+  type ListProposalsQuery,
+  type ProposalCard,
   type ProjectSummary,
   type RegisterProjectInput,
   type RegisterResult,
   type RpcErrorPayload,
   type RpcResult,
+  type SetForgeSettingsInput,
+  type WorktreeAheadBehindRequest,
+  type WorktreeAheadBehindResult,
+  type WorktreeBranchesRequest,
+  type WorktreeBranchesResult,
+  type WorktreeChecksRequest,
+  type WorktreeChecksResult,
+  type WorktreeCreateRequest,
+  type WorktreeCreateResult,
+  type WorktreeDeleteRequest,
+  type WorktreeDeleteResult,
+  type WorktreeEnsureWorkspaceRequest,
+  type WorktreeEnsureWorkspaceResult,
+  type WorktreeListRequest,
+  type WorktreeListResult,
+  type WorktreeSelectRequest,
+  type WorktreeSelectResult,
+  type WorktreeSealRequest,
+  type WorktreeSealResult,
 } from '@dsh-forge/contracts'
 
 /** typed error 的客户端形态（code ∈ contracts 六码；data = 结构化附载原样保存） */
@@ -81,11 +109,50 @@ export interface ForgeBugsRpc {
   list(q: ListBugsQuery): Promise<BugCard[]>
 }
 
+/** forge:worktree/* 面方法集（worktree-picker/session-badge 消费切片——九通道，UI 直调） */
+export interface ForgeWorktreeRpc {
+  list(q: WorktreeListRequest): Promise<WorktreeListResult>
+  create(q: WorktreeCreateRequest): Promise<WorktreeCreateResult>
+  delete(q: WorktreeDeleteRequest): Promise<WorktreeDeleteResult>
+  aheadBehind(q: WorktreeAheadBehindRequest): Promise<WorktreeAheadBehindResult>
+  branches(q: WorktreeBranchesRequest): Promise<WorktreeBranchesResult>
+  checks(q: WorktreeChecksRequest): Promise<WorktreeChecksResult>
+  seal(q: WorktreeSealRequest): Promise<WorktreeSealResult>
+  select(q: WorktreeSelectRequest): Promise<WorktreeSelectResult>
+  selected(q: { readonly projectRoot: string }): Promise<{ readonly path?: string }>
+  ensureWorkspace(q: WorktreeEnsureWorkspaceRequest): Promise<WorktreeEnsureWorkspaceResult>
+}
+
+/** forge:settings/* 面方法集（跨分支「不再提示」一票读写——worktree-picker 消费切片） */
+export interface ForgeSettingsRpc {
+  get(): Promise<ForgeSettings>
+  set(input: SetForgeSettingsInput): Promise<void>
+}
+
+/** forge:{proposals,features}/* list 读面（新建弹窗 slug 候选数据源——worktree-picker 消费切片） */
+export interface ForgeProposalFeaturesListRpc {
+  list(q: ListProposalsQuery): Promise<ProposalCard[]>
+}
+
+export interface ForgeFeaturesListRpc {
+  list(q: ListFeaturesQuery): Promise<FeatureCard[]>
+}
+
+/**
+ * worktree UI 两目录（worktree-picker + session-badge）makeRpc 消费切片（窄面——挂载面
+ * props 类型；测试替身按本形状给值。ForgeRpcClient 结构满足本切片）。
+ */
+export type WorktreeFacesRpc = Pick<ForgeRpcClient, 'worktree' | 'settings' | 'projects' | 'proposals' | 'features'>
+
 /** forge RPC client（transport 注入：preloadTransport() 真身 / 测试替身） */
 export interface ForgeRpcClient {
   readonly projects: ForgeProjectsRpc
   readonly fs: ForgeFsRpc
   readonly bugs: ForgeBugsRpc
+  readonly worktree: ForgeWorktreeRpc
+  readonly settings: ForgeSettingsRpc
+  readonly proposals: ForgeProposalFeaturesListRpc
+  readonly features: ForgeFeaturesListRpc
 }
 
 export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient {
@@ -103,6 +170,29 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
     },
     bugs: {
       list: (q) => invokeRpc<BugCard[]>(transport, BUGS_CHANNELS.list, q),
+    },
+    worktree: {
+      list: (q) => invokeRpc<WorktreeListResult>(transport, WORKTREE_CHANNELS.list, q),
+      create: (q) => invokeRpc<WorktreeCreateResult>(transport, WORKTREE_CHANNELS.create, q),
+      delete: (q) => invokeRpc<WorktreeDeleteResult>(transport, WORKTREE_CHANNELS.delete, q),
+      aheadBehind: (q) => invokeRpc<WorktreeAheadBehindResult>(transport, WORKTREE_CHANNELS.aheadBehind, q),
+      branches: (q) => invokeRpc<WorktreeBranchesResult>(transport, WORKTREE_CHANNELS.branches, q),
+      checks: (q) => invokeRpc<WorktreeChecksResult>(transport, WORKTREE_CHANNELS.checks, q),
+      seal: (q) => invokeRpc<WorktreeSealResult>(transport, WORKTREE_CHANNELS.seal, q),
+      select: (q) => invokeRpc<WorktreeSelectResult>(transport, WORKTREE_CHANNELS.select, q),
+      selected: (q) => invokeRpc<{ readonly path?: string }>(transport, WORKTREE_CHANNELS.selected, q),
+      ensureWorkspace: (q) =>
+        invokeRpc<WorktreeEnsureWorkspaceResult>(transport, WORKTREE_CHANNELS.ensureWorkspace, q),
+    },
+    settings: {
+      get: () => invokeRpc<ForgeSettings>(transport, SETTINGS_CHANNELS.get),
+      set: (input) => invokeRpc<void>(transport, SETTINGS_CHANNELS.set, input),
+    },
+    proposals: {
+      list: (q) => invokeRpc<ProposalCard[]>(transport, PROPOSALS_CHANNELS.list, q),
+    },
+    features: {
+      list: (q) => invokeRpc<FeatureCard[]>(transport, FEATURES_CHANNELS.list, q),
     },
   }
 }

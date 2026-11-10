@@ -1,6 +1,6 @@
 // worktree 偏好配置节纯逻辑（零 react——fake configForms 两态与劣形退默认的判定/写径单源）。
 // 读：快照 value.worktree.crossBranchRiskDismissed 布尔窄读，劣形（快照缺/非对象/worktree 组
-// 非对象/位非布尔）= 默认 false（不抑制跨分支确认——fail-soft 与 WorktreeFaces 装载口径同源）。
+// 非对象/位非布尔）= 默认 false（不抑制跨分支确认——fail-soft 与 worktree-picker 装载口径同源）。
 // 写：官方 configForms revisioned 正门（form.set 整字段落 worktree 组——expert-squad
 // defaultAgentOptions 同型）；true = 位落位，false = 键归缺（回退默认不抑制——配置面无死位）；
 // 拒写背压重试（fresh revision 快照重合成——bug 908dc82e 同族刻度），全耗尽 = false 不静默丢写。

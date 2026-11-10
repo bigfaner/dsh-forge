@@ -1,44 +1,31 @@
-// worktree 六卡挂载面（worktree-branch-management fix-2——装配缺口承接②web 侧）。
-// 三组件（通用层组件本体 = @dsh-forge/project client ui——1.17 批二卸旧装新，旧
-// @dsh-forge/git-worktree/client 出口退役，本文件只做数据接线与挂载）：
+// worktree-picker —— hero 第二 chip 挂载面（WorktreeFaces 主体拆出，1.15 UI 迁入第二批）。
+// 通用层组件本体 = ./hero-worktree-picker.tsx + 三弹窗（create-dialog / delete-dialog /
+// risk-confirm）+ 纯模型 model.ts；本文件只做数据接线与挂载。
 //   · ForgeHeroWorktreeMount——hero 第二 chip（难点 A 落法③产品自增行：由 hero workspace
 //     影子占用者 ForgeHeroWorkspacePicker 在其渲染面就地并列，取证见 walkthrough/
 //     hero-second-chip-decision.md）——选择菜单 + 新建/删除两弹窗 + ahead/behind 懒加载；
-//   · ForgeSessionWorktreeChip——conversation.session.header.actions 槽只读 chip（绑定展示
-//     / 失效态）；非 git / 无绑定 = 零注入（能力位条件渲染）；
-//   · ForgeWorktreeSealOverlay——封存提示通道（SealNotice + SealedComposerPlaceholder；
-//     挂 conversation.input.overlay 槽——composer 区官方缝。「不可发送」硬保证在 host
-//     发送拦截面，UI 均提示性视觉）。
-// 数据面 = forge:worktree/* 九通道（contracts WORKTREE_CHANNELS 唯一源，rpc client 薄面）。
-// W3 arm 退役（session-binding-guarantee）：armDefault 效应链（首条消息时点编排 + 草稿搬运
-// + 失败/取消抑制集 + 账本/草稿订阅）退役——会话创建唯一时机 = 官方 create 调用点（wrap
-// 改道预铸，create 失败走官方 createFailed toast）；点选 = 纯选中态 + 点选时点跨分支确认
-// （1.19 语义回归），1.34 闩锁与「不再提示」语义平移。
+//   · ForgeWorktreeSwitchMarker——切换闸虚线标记（视觉命中锚）。
+// 数据面 = forge:worktree/* 九通道 + forge:settings/{get,set} + proposals/features list
+// （../rpc.ts 消费切片，通道常量 = @dsh-forge/contracts 唯一源）。
+// 点选 = 纯选中态 + 点选时点跨分支确认（1.19 语义回归）；会话创建唯一时机 = 官方 create
+// 调用点（wrap 改道预铸，create 失败走官方 createFailed toast）；1.34 闩锁与「不再提示」
+// 语义见 ./model.ts。
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
-import { setSelectedTreeDisplay } from '../../state/selected-tree-window.js'
-import { openWorkspaceFace } from '../../state/open-workspace-face.js'
-import { beginWorktreeSwitch, isWorktreeSwitchPending, subscribeWorktreeSwitch } from '../../state/worktree-switch-gate.js'
+import { setSelectedTreeDisplay } from '../state/selected-tree-window.js'
+import { openWorkspaceFace } from '../state/open-workspace-face.js'
+import { beginWorktreeSwitch, isWorktreeSwitchPending, subscribeWorktreeSwitch } from '../state/worktree-switch-gate.js'
 import {
-  BranchDriftNotice,
   CreateWorktreeDialog,
-  DeleteWorktreeDialog,
-  HeroWorktreePicker,
-  SealNotice,
-  SealedComposerPlaceholder,
-  SessionWorktreeChip,
-  StaleSelectionNotice,
-  WorktreeRiskConfirmation,
-  isCrossBranchRisk,
-  joinWorktreePath,
   type CreateWorktreeRequest,
-  type DeleteChecks,
-} from '@dsh-forge/project/client-ui/worktree-faces'
-import type { AheadBehind } from '@dsh-forge/project/client-ui/worktree-faces'
-import type { SlugCandidate } from '@dsh-forge/project/client-ui/worktree-faces'
-import { collectSlugCandidates } from '@dsh-forge/project/client-ui/worktree-faces'
-import { EditableCombobox } from '../../components/index.js'
-import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
+} from './create-dialog.js'
+import { DeleteWorktreeDialog } from './delete-dialog.js'
+import { HeroWorktreePicker } from './hero-worktree-picker.js'
+import { StaleSelectionNotice } from '../session-badge/seal-notice.js'
+import { WorktreeRiskConfirmation } from './risk-confirm.js'
+import { collectSlugCandidates, isCrossBranchRisk, joinWorktreePath, type DeleteChecks, type SlugCandidate } from './model.js'
+import type { AheadBehind } from '../../host/worktrees/worktree-ops.js'
+import { EditableCombobox } from './EditableCombobox.js'
+import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'
 import {
   riskDialogNeeded,
   riskDismissedMemoryOf,
@@ -49,9 +36,9 @@ import {
   riskLatchReselect,
   staleSelectionResetOf,
   type RiskConfirmLatch,
-} from './hero-picker-model.js'
-// 弹窗卡面/下拉浮层宽度规则（.dswt-create-modal / .dswt-*-menu——session.css 1.12 段）
-import './session.css'
+} from './model.js'
+// 弹窗卡面/下拉浮层宽度规则（.dswt-create-modal / .dswt-*-menu——域 CSS 随迁）
+import './picker.css'
 
 /**
  * 分支组合框输入面样式（字体令牌 + mono——盒模型不在此处：宽度/内距/边框由
@@ -63,7 +50,7 @@ const branchInputStyle: React.CSSProperties = {
 }
 
 /** list 结果 → 行渲染模型（WorktreeRow 同形——DTO 即行源，零二次派生） */
-const rowsOf = (result: Awaited<ReturnType<ForgeRpcClient['worktree']['list']>>) =>
+const rowsOf = (result: Awaited<ReturnType<WorktreeFacesRpc['worktree']['list']>>) =>
   result.entries.map((entry) => ({
     path: entry.path,
     branch: entry.branch,
@@ -125,8 +112,6 @@ export async function createFollowup(createdPath: string, deps: CreateFollowupDe
  * （1.19 语义回归——1.31 确认闩锁 + 「不再提示」语义平移，见下）；确认前选中态不变。
  * 会话创建唯一时机 = 官方 create 调用点（选树零 forge 建会话 RPC——官方 blank 复用
  * 天然生效，binding-derivation §2.3；缺席回落项目根由首条消息必绑重路由兜底）。
- * 点选即换绑编排已退役（bug 82e92933——消费已退役通道 forge:worktree/session-create，
- * host 注册已删命中必 not-found）。
  */
 export function ForgeHeroWorktreeMount({
   projectRoot,
@@ -134,7 +119,7 @@ export function ForgeHeroWorktreeMount({
 }: {
   /** 项目根（ws_path——list/ops 执行 cwd；null = 零注入） */
   readonly projectRoot: string | null
-  readonly makeRpc?: () => ForgeRpcClient
+  readonly makeRpc?: () => WorktreeFacesRpc
 }): ReactNode {
   const [phase, setPhase] = useState<WorktreeListPhase>(emptyPhase)
   const [aheadBehind, setAheadBehind] = useState<ReadonlyMap<string, AheadBehind>>(new Map())
@@ -144,11 +129,11 @@ export function ForgeHeroWorktreeMount({
   const [slugCandidates, setSlugCandidates] = useState<readonly SlugCandidate[]>([])
   const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
-  // 选中态本地投影（bug 9eb9d6cb 后续收敛：host lastSelection 唯一事实源——本地态只是
-  // host 态的 UI 镜像，挂载回填经 forge:worktree/selected 读 host，sessionStorage 记忆退役；
-  // bug 05c712a4 起本地投影升格为创建路由的显示真源镜像——host 记忆仅余显示恢复职责）
+  // 选中态本地投影（host lastSelection 唯一事实源——本地态只是 host 态的 UI 镜像，挂载
+  // 回填经 forge:worktree/selected 读 host；bug 05c712a4 起本地投影升格为创建路由的
+  // 显示真源镜像——host 记忆仅余显示恢复职责）
   const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(undefined)
-  // 显示真源镜像（window 全局锚，KEY 契约 = state/selected-tree-window.ts）：本地投影
+  // 显示真源镜像（window 全局锚，KEY 契约 = ui/state/selected-tree-window.ts）：本地投影
   // 每次变化即同步——创建路由（start-session-wrap 无参径）读此态而非 host 选中记忆
   // （内存态易分叉，bug 05c712a4）
   useEffect(() => {
@@ -207,11 +192,9 @@ export function ForgeHeroWorktreeMount({
     }
   }, [makeRpc])
   // 1.34 确认闩锁（bug ccfcc103）：确认后置位——同行重选零重弹；换目标重选清退
-  // （riskLatchReselect，重新判定）。取消 = 本次改选未发生（选中态保持原样），不写抑制集
-  // （抑制语义随 arm 效应链退役——再点选即重新判定）。
-  // bug a944424f：闩锁挂组件 useState 会被 openWorkspace 切主视图的重挂清零（确认 →
-  // applySelection → openWorkspace → ForgeHeroWorktreeMount 重挂 → 同行重选重弹）——
-  // 闩锁落 hero-picker-model 模块级跨重挂记忆（单窗口单实例 =「按窗口」语义），组件态
+  // （riskLatchReselect，重新判定）。取消 = 本次改选未发生（选中态保持原样）。
+  // bug a944424f：闩锁挂组件 useState 会被 openWorkspace 切主视图的重挂清零——
+  // 闩锁落 model.ts 模块级跨重挂记忆（单窗口单实例 =「按窗口」语义），组件态
   // 只作记忆镜像：初始化惰性读（重挂即水合）+ 每次变更写透（置位/清退同一入口）。
   const [riskConfirmedLatch, setLatchState] = useState<RiskConfirmLatch>(() => riskLatchMemoryOf())
   const setRiskConfirmedLatch = useCallback((resolve: (prev: RiskConfirmLatch) => RiskConfirmLatch): void => {
@@ -227,10 +210,10 @@ export function ForgeHeroWorktreeMount({
   // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + host 选中记忆推送。
   // workspaceId 在场（行集 DTO 携带）时显式传参官方 openWorkspace——官方语义「选工作区 =
   // 立即 connectWorkspace 建/复用该树 blank，主视图随之切换」（bug 05c712a4 composer 腿
-  // 收口：点选纯显示态会使主视图 retain 旧树 blank，composer 发送落旧树——显示 = 实际
-  // 生效状态，AGENTS 3.4）。face 缺席（旧 bundle/漂移）= 仅显示态（现状降级，warn 一行）。
+  // 收口：显示 = 实际生效状态，AGENTS 3.4）。face 缺席（旧 bundle/漂移）= 仅显示态
+  // （现状降级，warn 一行）。
   // bug 267dcac1 竞速收口：openWorkspace 异步敛棋前（~1s）composer 仍系旧树 blank，窗口内
-  // 发送即错绑——切换闸 pending 窗口 composer 禁输（ForgeWorktreeSwitchOverlay），敛棋
+  // 发送即错绑——切换闸 pending 窗口 composer 禁输（ForgeWorktreeSwitchMarker），敛棋
   // （promise settle）解除；官方 beforeOpen 同窗草稿迁移（face 安装器内建）。
   // bug 9d2b7e6a 懒物化：行 workspaceId 缺席（树无 workspace 记录——git 手建/流程 A 前
   // 老树，list resolveByPath 只读不物化）→ 点选时点 ensure-workspace 幂等 find-or-create
@@ -275,8 +258,7 @@ export function ForgeHeroWorktreeMount({
   )
 
   // 建树自动选中（createFollowup）与手动点选共用 applySelection 完整链路（bug 97d3cd9e
-  // 收口——纯显示态捷径退役，1.29「建树零新增会话」随之退役：主视图切新树 blank 为官方
-  // openWorkspace 复用语义，显示 = 实际生效状态）。
+  // 收口——主视图切新树 blank 为官方 openWorkspace 复用语义，显示 = 实际生效状态）。
 
   // 点选 = 纯选中态：跨分支风险（选中行 branch ≠ 主行 branch）在点选时点确认（1.19）；
   // 同分支零风险直通。判定源 = 清单行 branch；闩锁/「不再提示」旁路弹框分支。
@@ -302,7 +284,7 @@ export function ForgeHeroWorktreeMount({
   // 1.17 默认回填（展示层回填，零会话副作用）：清单就绪且无用户记忆/显式回填时按
   // 「host 选中记忆（forge:worktree/selected 读镜像）→ 锚定链」回填。记忆经 RPC 响应式
   // 读（会话面整域重挂后 projectRoot 到位即补读，跨重挂恢复用户选中意图——host 唯一
-  // 事实源，sessionStorage 记忆已退役）。回填零编排；会话创建在官方 create 调用点
+  // 事实源）。回填零编排；会话创建在官方 create 调用点
   // （host 建会话通道消费选中记忆——创建时点即绑选中树，缺席重路由兜底）。
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
@@ -441,14 +423,9 @@ export function ForgeHeroWorktreeMount({
           // 选中路径取 create 返回条目的清单正则（entry.path——与 list 行路径同源同格式，
           // 行匹配 path === selectedPath 用精确等值；本地拼串反斜杠 ≠ 清单正斜杠实证）
           const createdPath = result.entry?.path ?? path
-          // bug 6593d708 Root cause: 选中态先落、清单后刷——陈旧选中自愈效应以创建前旧行集
-          // 判定新树「盘上失配」，误弹失效 toast 并把三层选中态（含 host 选中记忆）清回主树，
-          // 首条消息必绑重路由随之回落项目根（会话落 main）。跟进次序收口：清单刷新先于
-          // 选中态落定（createFollowup 单源），自愈判定永远面对含新树的行集。
-          // bug 97d3cd9e Root cause: 建树自动选中曾走纯显示态（applySelectionDisplayOnly）
-          // ——主视图 retain 旧树 blank，直接发送消息会话绑到上一个 worktree（WYSIWYG 违例）。
-          // 收口 = 与手动点选同链路（applySelection：openWorkspace + 切换闸——composer 随
-          // 创建敛棋系新树）；1.29「建树零新增会话」随本裁决退役（用户裁决 2026-10-28）。
+          // bug 6593d708：清单刷新先于选中态落定（createFollowup 单源），自愈判定永远
+          // 面对含新树的行集；bug 97d3cd9e：与手动点选同链路（applySelection：openWorkspace
+          // + 切换闸——composer 随创建敛棋系新树，WYSIWYG）。
           await createFollowup(createdPath, { refresh, onSelectConfirmed: applySelection })
         })
         .catch((error: unknown) => {
@@ -583,177 +560,6 @@ export function ForgeHeroWorktreeMount({
         />
       )}
     </>
-  )
-}
-
-/** 封存判定快照拉取相位（chip / overlay 两通道共享单源形状） */
-export interface WorktreeSealPhase {
-  readonly state: 'loading' | 'ready' | 'error'
-  readonly isGit: boolean
-  readonly sealed: boolean
-  readonly branch: string | null
-  readonly worktreeName: string | null
-  /** branch 漂移（binding-derivation §2.2——实时 ≠ 留痕；null = 无漂移/不警示） */
-  readonly branchDrift: { readonly bindBranch: string; readonly branch: string } | null
-}
-
-const sealEmpty: WorktreeSealPhase = {
-  state: 'loading',
-  isGit: false,
-  sealed: false,
-  branch: null,
-  worktreeName: null,
-  branchDrift: null,
-}
-
-/** 封存快照拉取（seal 通道单源——chip 失效态与 notice/占位两提示通道共读） */
-function useWorktreeSeal(sessionId: string | undefined, makeRpc: () => ForgeRpcClient): WorktreeSealPhase {
-  const [phase, setPhase] = useState<WorktreeSealPhase>(sealEmpty)
-  useEffect(() => {
-    if (sessionId === undefined || sessionId === '') return
-    let alive = true
-    makeRpc()
-      .worktree.seal({ sessionId })
-      .then((result) => {
-        if (!alive) return
-        setPhase({
-          state: 'ready',
-          isGit: result.isGit,
-          sealed: result.sealed,
-          branch: result.binding?.branch ?? null,
-          worktreeName: result.worktreeName ?? null,
-          branchDrift: result.branchDrift ?? null,
-        })
-      })
-      .catch(() => {
-        if (alive) setPhase({ state: 'error', isGit: false, sealed: false, branch: null, worktreeName: null, branchDrift: null })
-      })
-    return () => {
-      alive = false
-    }
-  }, [sessionId, makeRpc])
-  return phase
-}
-
-/**
- * 会话头 actions 槽只读 chip（绑定展示 `feat/a · wt-a` 一体形态；封存 = 失效变体；
- * 非 git / 无绑定（branch 缺席）= 零注入）。ahead/behind 次级小字：sealed 恒不展示
- * （失配无意义），live 态低频拉取由 chip 挂载期一次消费（懒加载/缓存纪律）。
- */
-export function ForgeSessionWorktreeChip({
-  sessionId,
-  makeRpc = preloadRpcClientFactory,
-}: {
-  readonly sessionId?: string | undefined
-  readonly makeRpc?: () => ForgeRpcClient
-}): ReactNode {
-  const phase = useWorktreeSeal(sessionId, makeRpc)
-  const [aheadBehind, setAheadBehind] = useState<AheadBehind | undefined>(undefined)
-  const [info, setInfo] = useState<{ readonly worktreePath: string; readonly projectRoot: string } | undefined>(undefined)
-  useEffect(() => {
-    if (sessionId === undefined || phase.branch === null || phase.sealed) return
-    makeRpc()
-      .worktree.seal({ sessionId })
-      .then((result) => {
-        if (result.projectRoot !== undefined && result.binding !== null) {
-          setInfo({ worktreePath: result.binding.worktreePath, projectRoot: result.projectRoot })
-        }
-        if (result.projectRoot === undefined || result.binding === null) return
-        return makeRpc()
-          .worktree.aheadBehind({ projectRoot: result.projectRoot, path: result.binding.worktreePath })
-          .then((counts) => setAheadBehind(counts.counts ?? undefined))
-      })
-      .catch(() => {})
-  }, [sessionId, phase.branch, phase.sealed, makeRpc])
-  if (sessionId === undefined || !phase.isGit || phase.branch === null || phase.worktreeName === null) return null
-  return (
-    <SessionWorktreeChip
-      isGit
-      branch={phase.branch}
-      worktreeName={phase.worktreeName}
-      worktreePath={info?.worktreePath}
-      projectRoot={info?.projectRoot}
-      aheadBehind={aheadBehind}
-      sealed={phase.sealed}
-    />
-  )
-}
-
-/** 一次性关闭记忆（会话粒度模块级集合——刷新即重置，官方一次性 notice 同刻度） */
-const dismissedSealSessions = new Set<string>()
-
-/** 官方 chat 列顶部锚（dsh-client-ui-chat 消息列容器——banner 置顶判定锚） */
-const CHAT_FLOW_ANCHOR = '[data-chat-flow]'
-
-/**
- * chat 列顶部 portal（bug ed28400a——官方缝核销：conversation/chat 两官方包全 renderSlot
- * 面无「会话头之下、chat-view 之上」槽位，取官方列容器 `data-chat-flow`（flex column）
- * 锚 + order:-1 置顶）。锚在场 = portal 呈现于消息列表之上（worktree chip 之下）；
- * 锚缺席（官方改版/非 chat 相位）= 回落调用方原位渲染（fail-soft 不丢失）。
- */
-function ChatFlowTop({ children }: { readonly children: ReactNode }): ReactNode {
-  const [target, setTarget] = useState<HTMLElement | null>(null)
-  useEffect(() => {
-    const find = (): void => setTarget(document.querySelector<HTMLElement>(CHAT_FLOW_ANCHOR))
-    find()
-    const observer = new MutationObserver(find)
-    observer.observe(document.body, { childList: true, subtree: true })
-    return () => {
-      observer.disconnect()
-    }
-  }, [])
-  if (target === null) return <>{children}</>
-  return createPortal(
-    <div data-dswt-chat-flow-top="" style={{ order: -1, width: '100%' }}>
-      {children}
-    </div>,
-    target,
-    'dswf-chat-flow-top',
-  )
-}
-
-/**
- * 封存提示 overlay（conversation.input.overlay 槽——composer 区官方缝，双通道并列）：
- * ① SealNotice（一次性——关闭后本会话不再呈现）；② SealedComposerPlaceholder（占位文案）。
- * 均提示性视觉；「不可发送」硬保证 = host 发送拦截面（interceptSessionSends）。
- * branch 漂移 warning banner 语义属会话绑定态——经 ChatFlowTop 呈现在 chat-view 顶部
- * （bug ed28400a），不再落 composer 区。
- */
-export function ForgeWorktreeSealOverlay({
-  sessionId,
-  makeRpc = preloadRpcClientFactory,
-}: {
-  readonly sessionId?: string | undefined
-  readonly makeRpc?: () => ForgeRpcClient
-}): ReactNode {
-  const phase = useWorktreeSeal(sessionId, makeRpc)
-  const [dismissed, setDismissed] = useState(false)
-  if (sessionId === undefined || !phase.isGit) return null
-  const worktreeName = phase.worktreeName ?? ''
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', rowGap: 'var(--dsw-radius-sm)' }}>
-      {/* branch 漂移 warning banner（binding-derivation §2.2——非阻断，切回即消失：判定随
-          seal 渲染现算；与封存通道并列但语义独立；挂载位 = chat-view 顶部 portal） */}
-      {phase.branchDrift !== null && (
-        <ChatFlowTop>
-          <BranchDriftNotice bindBranch={phase.branchDrift.bindBranch} branch={phase.branchDrift.branch} />
-        </ChatFlowTop>
-      )}
-      {phase.sealed && (
-        <>
-          {!dismissed && !dismissedSealSessions.has(sessionId) && (
-            <SealNotice
-              worktreeName={worktreeName}
-              onClose={() => {
-                dismissedSealSessions.add(sessionId)
-                setDismissed(true)
-              }}
-            />
-          )}
-          <SealedComposerPlaceholder />
-        </>
-      )}
-    </div>
   )
 }
 

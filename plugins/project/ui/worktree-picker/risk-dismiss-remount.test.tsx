@@ -7,9 +7,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
-import type { ForgeRpcClient } from '../../rpc/client.js'
-import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
-import { riskDismissedMemoryOf, riskDismissedMemorySync } from './hero-picker-model.js'
+import type { WorktreeFacesRpc } from '../rpc.js'
+import { ForgeHeroWorktreeMount } from './picker.js'
+import { riskDismissedMemoryOf, riskDismissedMemorySync } from './model.js'
 
 const OPEN_KEY = '__dshForgeOpenWorkspace'
 const MAIN = 'C:/repo'
@@ -23,7 +23,7 @@ const ROWS = [
 ]
 
 /** rpc 替身：settings.get 恒缺席（模拟 set 写透未及回读的竞态窗——重挂读不到 true） */
-function dismissRpc(settingsSetCalls: unknown[]): () => ForgeRpcClient {
+function dismissRpc(settingsSetCalls: unknown[]): () => WorktreeFacesRpc {
   return () =>
     ({
       projects: { list: async () => [] },
@@ -41,10 +41,10 @@ function dismissRpc(settingsSetCalls: unknown[]): () => ForgeRpcClient {
         ensureWorkspace: async () => ({ workspaceId: 'ws-x' }),
         aheadBehind: async () => ({}),
       },
-    }) as unknown as ForgeRpcClient
+    }) as unknown as WorktreeFacesRpc
 }
 
-async function mountHero(rpc: () => ForgeRpcClient, opened: string[]): Promise<{ host: HTMLElement; root: ReturnType<typeof createRoot> }> {
+async function mountHero(rpc: () => WorktreeFacesRpc, opened: string[]): Promise<{ host: HTMLElement; root: ReturnType<typeof createRoot> }> {
   ;(globalThis as unknown as Record<string, unknown>)[OPEN_KEY] = (workspaceId: string): void => {
     opened.push(workspaceId)
   }

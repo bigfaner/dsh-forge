@@ -3,7 +3,7 @@
 // （交互态 SSR 不可达——卡片为导出呈现面单测直测）、封存三通道、非 git 零注入。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { SessionWorktreeChip, SessionWorktreeInfoCard } from './session-worktree-chip.js'
+import { SessionWorktreeChip, SessionWorktreeInfoCard } from './chip.js'
 import { SealNotice, SealedComposerPlaceholder, StaleSelectionNotice, BranchDriftNotice } from './seal-notice.js'
 
 const chip = (over: Partial<Parameters<typeof SessionWorktreeChip>[0]> = {}): string =>

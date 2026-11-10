@@ -26,7 +26,7 @@ worktree 点选后 `openWorkspace` 异步切换（~1s）期间 composer 仍系�
 
 ## Related Files
 
-- apps/web/src/state/worktree-switch-gate.ts（闸状态 + window 锚）
+- plugins/project/ui/state/worktree-switch-gate.ts（闸状态 + window 锚——1.15 随 WorktreeFaces 拆迁迁入）
 - apps/web/src/client-plugin/worktree-switch-gate-install.ts（pending → blocks.set 翻译面）
-- apps/web/src/views/session/WorktreeFaces.tsx（ForgeWorktreeSwitchMarker 视觉锚）
+- plugins/project/ui/worktree-picker/picker.tsx（ForgeWorktreeSwitchMarker 视觉锚——1.15 随迁）
 - node_modules/@deepseek-ai/dsh-client-ui-conversation/lib/client.js:3747-3782（ComposerBlockRegistry 正本）

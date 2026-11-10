@@ -1,6 +1,7 @@
 // hero-picker-model 单测（fix-24 ① AC5）——项目映射纯函数三口径：
 // workspaceId↔project 映射 / archived 排除 / 空集（添加唯一入口 + 直达判据）。
-// W3 arm 退役后本文件只剩映射面 + 1.34 确认闩锁（点选时点确认语义）。
+// worktree 域纯函数（确认闩锁/「不再提示」/陈旧自愈）随 1.15 拆迁迁
+// @dsh-forge/project ui/worktree-picker/model.test.ts。
 import { describe, expect, it } from 'vitest'
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import {
@@ -10,12 +11,6 @@ import {
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
-  riskDialogNeeded,
-  riskLatchConfirm,
-  riskLatchMemoryOf,
-  riskLatchMemorySync,
-  riskLatchReselect,
-  staleSelectionResetOf,
 } from './hero-picker-model.js'
 
 const project = (o: { id: string; workspaceId: string; name: string; archived?: boolean }): ProjectSummary => ({
@@ -202,88 +197,5 @@ describe('heroDefaultPickReady（bug d353536f 在场门——官方 workspaces �
 
   it('无默认拾取目标 → undefined（heroDefaultPickId 已判空的直通面）', () => {
     expect(heroDefaultPickReady(ITEMS, undefined)).toBeUndefined()
-  })
-})
-
-// ───────────── 1.34 跨分支确认闩锁（bug ccfcc103）——消费时点 = 点选（1.19 语义回归）──
-describe('riskLatch（bug ccfcc103 确认闩锁——置位/清退/弹框判定）', () => {
-  const WT_A = 'C:/repo/.forge/worktrees/wt-a'
-
-  it('置位：确认即置位（null→path），重复确认幂等（零重弹锚点）', () => {
-    expect(riskLatchConfirm(null, WT_A)).toBe(WT_A)
-    expect(riskLatchConfirm(WT_A, WT_A)).toBe(WT_A)
-    expect(riskLatchConfirm('C:/other', WT_A)).toBe(WT_A) // 换确认目标覆盖
-  })
-
-  it('清退：换目标重选即清（重新判定）；同行重选保留（确认后点 chip 不重弹）', () => {
-    expect(riskLatchReselect(WT_A, WT_A)).toBe(WT_A) // 同行重选不清
-    expect(riskLatchReselect(WT_A, 'C:/other')).toBeNull() // 换目标 → 清，重新判定
-    expect(riskLatchReselect(null, WT_A)).toBeNull()
-  })
-
-  it('弹框判定：未闩 → 需弹框；已闩 → 零重弹；闩锁他行 → 仍弹框（闩锁只旁路弹框分支）', () => {
-    expect(riskDialogNeeded(WT_A, null)).toBe(true) // 未确认 → 弹框
-    expect(riskDialogNeeded(WT_A, WT_A)).toBe(false) // 已确认闩锁 → 零重弹
-    expect(riskDialogNeeded(WT_A, 'C:/other')).toBe(true) // 闩锁他行 → 仍弹框
-  })
-})
-
-// ───────── bug a944424f：闩锁跨重挂记忆（openWorkspace 切主视图重挂 useState 清零）──
-describe('riskLatchMemory（bug a944424f——闩锁跨组件重挂存活）', () => {
-  const WT_A = 'C:/repo/.forge/worktrees/wt-a'
-
-  it('确认置位写透记忆；「重挂」后（fresh 组件初始化再读）闩锁仍在——同行重选零重弹', () => {
-    riskLatchMemorySync(null) // 基线
-    // 组件实例一：确认置位（useState 惰性初始化读记忆 + 写透）
-    riskLatchMemorySync(riskLatchConfirm(riskLatchMemoryOf(), WT_A))
-    // 组件实例二（openWorkspace 切主视图重挂）：useState 初始化再读——记忆不失
-    expect(riskLatchMemoryOf()).toBe(WT_A)
-  })
-
-  it('换目标清退写透记忆：重挂后读到 null（重新判定语义跨重挂一致）', () => {
-    riskLatchMemorySync(WT_A)
-    riskLatchMemorySync(riskLatchReselect(riskLatchMemoryOf(), 'C:/other'))
-    expect(riskLatchMemoryOf()).toBeNull()
-  })
-})
-
-// ───────────── bug 4a30b193 陈旧选中自愈判定（纯函数单源）─────────────
-describe('staleSelectionResetOf（bug 4a30b193 陈旧选中自愈判定）', () => {
-  const rows = [
-    { path: 'C:/repo', worktreeName: 'repo', isMain: true, present: true },
-    { path: 'C:/repo/.forge/worktrees/wt-a', worktreeName: 'wt-a', isMain: false, present: true },
-  ]
-
-  it('选中行盘上缺席（present=false，git 陈旧清单行）→ stale + 树名引述 + 主行回落', () => {
-    const goneRows = [rows[0]!, { ...rows[1]!, present: false }] // wt-a 行在（git 未 prune）但盘上已删
-    const plan = staleSelectionResetOf(goneRows, goneRows[1]!.path)
-    expect(plan).toEqual({ stale: true, worktreeName: 'wt-a', mainPath: 'C:/repo' })
-  })
-
-  it('选中行整段消失（清单无行——prune 后）→ stale + 树名取路径尾段', () => {
-    const plan = staleSelectionResetOf(rows, 'C:/repo/.forge/worktrees/gone')
-    expect(plan).toEqual({ stale: true, worktreeName: 'gone', mainPath: 'C:/repo' })
-  })
-
-  it('健康选中 / 无选中 → 不自愈（用户显式选中零覆盖）', () => {
-    expect(staleSelectionResetOf(rows, 'C:/repo/.forge/worktrees/wt-a')).toEqual({ stale: false })
-    expect(staleSelectionResetOf(rows, undefined)).toEqual({ stale: false })
-  })
-
-  it('清单无主行（退化清单）→ stale 但 mainPath 缺席（装配层仅清选中态）', () => {
-    const noMain = [{ path: 'C:/x', worktreeName: 'x', isMain: false, present: true }]
-    const plan = staleSelectionResetOf(noMain, 'C:/gone')
-    expect(plan).toEqual({ stale: true, worktreeName: 'gone', mainPath: undefined })
-  })
-
-  it('bug fcc6f37b 同族：选中行在场实存但不可挂靠（branch null = detached）→ stale 切回主行（存量选中驱动 create-wrap 必败）', () => {
-    const detachedRows = [
-      { path: 'C:/repo', worktreeName: 'repo', isMain: true, present: true, branch: 'main' as string | null },
-      { path: 'Z:\\tmp', worktreeName: 'tmp', isMain: false, present: true, branch: null },
-    ]
-    const plan = staleSelectionResetOf(detachedRows, 'Z:\\tmp')
-    expect(plan).toEqual({ stale: true, worktreeName: 'tmp', mainPath: 'C:/repo' })
-    // 健康行（branch 在场）不受新判定影响
-    expect(staleSelectionResetOf(detachedRows, 'C:/repo')).toEqual({ stale: false })
   })
 })

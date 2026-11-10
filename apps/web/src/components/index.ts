@@ -1,8 +1,8 @@
 // components/ barrel（定位：基础——领域无关组件：吃令牌、零业务逻辑、不发起 RPC）。
 // 边界：禁 import views/、flows/（依赖铁律① 基础↛业务）；Markdown 渲染唯一入口 = MarkdownDoc
 // （产品内禁直用 MarkdownText——tests/structure/web-shell.test.ts 机械 pin）。
-export * from './combobox-model.js'
-export * from './EditableCombobox.js'
+// 1.15 迁移面：EditableCombobox/combobox-model 迁 @dsh-forge/project
+// ui/worktree-picker/（唯一消费面 worktree-picker 随迁——壳内自有源收缩为零）。
 export * from './EmptyState.js'
 export * from './ErrorBar.js'
 export * from './HeatBadge.js'
