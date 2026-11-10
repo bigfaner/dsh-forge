@@ -12,6 +12,8 @@
   "references": [
     { "path": "./tsconfig.client.json" },
     { "path": "../../packages/contracts" },
-    { "path": "../../lib/diag" }
+    { "path": "../../lib/diag" },
+    { "path": "../../lib/db" },
+    { "path": "../../lib/path" }
   ]
 }
