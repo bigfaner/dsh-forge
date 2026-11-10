@@ -46,10 +46,10 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // userLayerRow: true = 全局装载（管理工具面非 forge 管线面，不违标准模式零 forge 裁决），
   // 同时作为 staging 种子随包；experts/ 内置层目录随包由 STAGING_EXTRAS 承担。
   'expert-squad': { userLayerRow: true },
-  // 打包形态发货覆写（2026-10-18 安装版启动崩 fix）：host dist ipc/worktree-rpc 静态
-  // import 本包——缺席即安装版主进程 ERR_MODULE_NOT_FOUND 启动即崩。三径种子
-  // （userLayerRow/预设/依赖闭包）均不可达（本包零 @dsh-forge 依赖），故 staged:true
-  // 显式入 staging。行装载不走用户层：boot overlay presence 门注行（dev 同径单源）。
-  'git-worktree': { userLayerRow: false, staged: true },
+  // 打包形态发货覆写（1.17 批二卸旧装新，自 git-worktree 行接替）：host dist boot 链
+  // （child/run/m2-wiring/bindings）静态 import 本包——缺席即安装版主进程
+  // ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层：boot overlay presence 门注行
+  // （dev 同径单源）。旧 @dsh-forge/git-worktree 域已归并本包，staged 种子随迁。
+  project: { userLayerRow: false, staged: true },
   knowledge: { userLayerRow: true },
 }

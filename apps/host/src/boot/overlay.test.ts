@@ -43,15 +43,16 @@ describe('renderBootOverlay（纯函数形状）', () => {
     expect(text).not.toContain('bindingsFile')
   })
 
-  it('git-worktree 插件行注行门（worktree-branch-management 1.7）：gitWorktreeRow: true → loader 行以 insert 形态注入（新 id 裸行被 loader 补丁按 unknown target 静默跳过——fix-4）；默认门关零注行（config-less——扩展点注入走 ctx 服务缝非 config）', () => {
+  it('worktree 域插件行注行门（1.17 批二卸旧装新：装载 @dsh-forge/project，旧 git-worktree 行退役）：gitWorktreeRow: true → loader 行以 insert 形态注入（新 id 裸行被 loader 补丁按 unknown target 静默跳过——fix-4）；默认门关零注行（config-less——扩展点注入走 ctx 服务缝非 config）', () => {
     const on = renderBootOverlay({
       stateDb: 'C:\\app-data\\dsh-forge\\state.db',
       gitWorktreeRow: true,
     })
-    expect(on).toContain(`- insert:\n    - id: dsh-forge-git-worktree\n      name: '@dsh-forge/git-worktree'`)
+    expect(on).toContain(`- insert:\n    - id: dsh-forge-project\n      name: '@dsh-forge/project'`)
     const off = renderBootOverlay({
       stateDb: 'C:\\app-data\\dsh-forge\\state.db',
     })
+    expect(off).not.toContain('dsh-forge-project')
     expect(off).not.toContain('git-worktree')
   })
 

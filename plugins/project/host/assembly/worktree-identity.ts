@@ -1,5 +1,7 @@
 // worktree-branch-management 1.7：扩展点注入装配（集成层实现——host 装配方，提案「架构
-// 分层」右块 → 左块连线）。两扩展点在此实现并注入通用层（@dsh-forge/git-worktree）：
+// 分层」右块 → 左块连线）。两扩展点在此实现并注入通用层（host/worktrees 域——
+// plugin-project 1.17 批二自 apps/host/src/ipc/worktree-identity.ts 运行时等价下沉，
+// 装配段消费面 = assembly/host-side.ts）：
 //   ① resolveProject(cwd)：归并实现——消费 core 身份归并结果（createGitIdentityPort 的
 //      common dir realpath 锚 = 归并键）+ forgeProjects 行集（ws_path 归一比对）；cwd 同锚
 //      的 projects 行即主项目归属（精确 ws_path 命中优先；存量双行仲裁归 core 注册链——
@@ -8,9 +10,11 @@
 //      （每项目可配）。同步契约（扩展点签名 string 返回），列值经 refresh() 快照缓存
 //      （装配期 + 每次 resolveProject 顺带刷新）；未命中退默认 `<root>/.forge/worktrees`。
 // 注入缝：函数值扩展点不可经 YAML config 承载——cordis ctx 服务面唯一跨插件缝。
-// 装配方 = boot/child.ts（runProfile 后 ctx.reflect.provide('forgeWorktreeIdentity', …)）；
+// 装配方 = assembly/host-side.ts（runProfile 后 ctx.reflect.provide('forgeWorktreeIdentity', …)）；
 // 插件侧惰性 reflect.get 消费（激活早于 provide 不受阻），缺席 = 插件退默认实现
-//（独立 worktree 模式）。结构化类型本地声明——host 不 import 通用层包（零反向依赖）。
+//（独立 worktree 模式）。结构化类型本地声明——零反向依赖。
+// identity 依赖 @dsh-forge/core（git 归并锚）+ @dsh-forge/path-key（路径归一）——项目包
+// devDependencies 承载（bundle-host.mjs 构建期内联进 dist——产物自含，EXTERNAL 仅 @deepseek-ai/*）。
 import { join } from 'node:path'
 import { createGitIdentityPort } from '@dsh-forge/core'
 import { normalizeFsPath } from '@dsh-forge/path-key'
@@ -23,10 +27,7 @@ interface GitAnchorFace {
   worktrees?(dir: string): Promise<readonly { readonly path: string }[] | null>
 }
 
-/** 注入缝服务名（boot/child.ts provide ↔ 插件惰性 get——双侧同锚常量，各自本地声明） */
-export const GIT_WORKTREE_IDENTITY_SERVICE = 'forgeWorktreeIdentity'
-
-/** 路径归属解析结果（= 通用层 ProjectResolution 同形 + 项目名——工作区命名继承源） */
+/** 路径归属解析结果（= ProjectResolution 同形 + 项目名——工作区命名继承源） */
 export interface WorktreeProjectResolution {
   readonly projectId: string
   readonly projectRoot: string
@@ -35,7 +36,7 @@ export interface WorktreeProjectResolution {
   readonly projectName?: string
 }
 
-/** 两扩展点覆写集（形状 = 通用层 GitWorktreeExtensionPointOverrides 同形） */
+/** 两扩展点覆写集（形状 = GitWorktreeExtensionPointOverrides 同形） */
 export interface WorktreeIdentityOverrides {
   resolveProject(cwd: string): Promise<WorktreeProjectResolution | null>
   getWorktreeDir(projectRoot: string): string

@@ -25,6 +25,22 @@ import {
 import { createProjectsServicePort, openProjectsDomainDb } from "./assembly/projects-port.js";
 import { createBugsService } from "./bugs/service.js";
 import { minimalDirFactsPort } from "./dirs/dir-facts.js";
+// 1.17 批二「卸旧装新」：本包单行装载 = 五缝注册 + worktree 域插件（gitWorktree 能力
+// 服务 provide）——旧 @dsh-forge/git-worktree 行退役后，overlay 注行门只挂本包，
+// 能力面在此组合保持外部行为不变（git 缺席 fail-soft 不生效语义归插件启动检测）。
+import worktreePlugin from "./worktrees/index.js";
+import {
+  assembleProjectHostSide,
+  type KnowledgeBindingsRefresher,
+  type ProjectHostSideAssembly,
+  type ProjectHostSideDeps,
+} from "./assembly/host-side.js";
+import {
+  registerWorktreeChannels,
+  type WorktreeChannelRegistrar,
+  type WorktreeRpcEnvelope,
+} from "./assembly/channels.js";
+import { WORKTREE_RPC_METHODS, invalidateResolveCaches, type WorktreeRpcService } from "./worktrees/rpc-service.js";
 
 /** cordis 插件装载形态（loader 只认 default 导出函数）。 */
 interface ProjectPlugin {
@@ -124,7 +140,10 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   diag(
     `[project-seams] 五缝注册完成：registered=[${registration.registered.join(", ")}] degraded=[${registration.degraded.join(", ")}]`,
   );
+  // worktree 域插件组合装载（诊断缝透传——装配失败/能力缺席语义归插件自身 fail-soft 面）
+  const disposeWorktrees = worktreePlugin(ctx, { diag: (line) => diag(line) });
   return () => {
+    disposeWorktrees();
     // provider 生命周期归 scope（cordis provide 注销面由宿主管辖——本插件零自持资源）
   };
 };
@@ -138,5 +157,22 @@ projectPlugin.inject = [];
 export function describeSetupFailure(error: unknown): string {
   return errMessage(error);
 }
+
+// ── host 侧装配面出口（1.17 批二卸旧装新：apps/host 只留注册行，域装配符号自本包导入）──
+export {
+  assembleProjectHostSide,
+  type KnowledgeBindingsRefresher,
+  type ProjectHostSideAssembly,
+  type ProjectHostSideDeps,
+};
+export {
+  createWorktreeIdentity,
+  type ForgeProjectsIdentityFace,
+  type WorktreeIdentityAssembly,
+  type WorktreeIdentityOverrides,
+  type WorktreeProjectResolution,
+} from "./assembly/worktree-identity.js";
+export { registerWorktreeChannels, type WorktreeChannelRegistrar, type WorktreeRpcEnvelope };
+export { WORKTREE_RPC_METHODS, invalidateResolveCaches, type WorktreeRpcService };
 
 export default projectPlugin;

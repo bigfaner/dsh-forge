@@ -1,6 +1,8 @@
 // worktree-branch-management 1.7 装配层集成测试：真机 git CLI + core GitIdentityPort +
-// 集成层扩展点实现（worktree-identity.ts）。真实仓库/worktree 落临时目录（外部依赖装配面
+// 集成层扩展点实现（assembly/worktree-identity.ts）。真实仓库/worktree 落临时目录（外部依赖装配面
 // ——真机取证口径：fake 全绿不算交付，此处 git 链全真）。
+// 1.17 批二：自 apps/host/src/ipc/worktree-identity.test.ts 随域下沉迁入；装配段
+//（host-side.ts）冒烟面补挂——扩展点 provide + 桥服务零装配 fail-soft 两形态。
 import { execFile } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,6 +11,7 @@ import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createGitIdentityPort } from '@dsh-forge/core'
 import { createWorktreeIdentity, type ForgeProjectsIdentityFace } from './worktree-identity.js'
+import { assembleProjectHostSide } from './host-side.js'
 
 const run = promisify(execFile)
 
@@ -186,5 +189,38 @@ describe('1.7 扩展点注入装配（集成层实现——真机 git 链）', (
     const identity = createWorktreeIdentity(broken, createGitIdentityPort(), () => {})
     expect(await identity.resolveProject(WTA)).toBeNull()
     await expect(identity.refresh()).resolves.toBe(false)
+  })
+})
+
+describe('1.17 批二 host-side 装配段（child.ts 513-670 平移面）', () => {
+  const noDeps = () => ({
+    bindingsFile: join(ROOT, 'bindings.json'),
+    diag: () => {},
+    bindWarnDiag: () => {},
+    failOpenWarn: () => {},
+    createDiag: () => {},
+    bindDiag: () => {},
+    bindDriftDiag: () => {},
+    refreshKnowledgeBindings: async () => {},
+  })
+
+  it('forgeProjects 缺席 → 扩展点零注入 + 能力未解析 = 拦截零装配（fail-soft 不抛；桥服务壳恒在场同 host-assembly 契约）', () => {
+    const diagLines: string[] = []
+    const assembled = assembleProjectHostSide({ get: () => undefined }, { ...noDeps(), diag: (l) => diagLines.push(l) })
+    expect(typeof assembled.service).toBe('object') // 服务壳恒装配（能力解析门内恒独立模式面）
+    expect(typeof assembled.revokeSendGuard).toBe('function') // 拦截未安装 = no-op 撤销缝
+    expect(diagLines.some((l) => l.includes('扩展点零注入'))).toBe(true)
+  })
+
+  it('扩展点 provide 装配：forgeProjects 在场 + reflect.provide 在场 → identity 服务入缝', () => {
+    const provided: Record<string, unknown> = {}
+    const ctx = {
+      get: (name: string) => (name === 'forgeProjects' ? stubProjects([{ id: 'p-main', wsPath: REPO }]) : undefined),
+      reflect: { provide: (name: string, value?: unknown) => { provided[name] = value } },
+      on: () => () => {},
+    }
+    const assembled = assembleProjectHostSide(ctx, noDeps())
+    expect(provided['forgeWorktreeIdentity']).toBeDefined()
+    expect(typeof assembled.service).toBe('object')
   })
 })

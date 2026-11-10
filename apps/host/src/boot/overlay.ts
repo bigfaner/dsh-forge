@@ -58,10 +58,12 @@ export interface BootOverlayInput {
   /** 真 home 凭据文档桥（fix-26：在场即给 credentials 行注 config.path——官方
    *  resolveSpec 显式 path 优先于 home 拼接；缺席 = e2e/测试隔离态不桥） */
   readonly credentialsPath?: string
-  /** worktree-branch-management 1.7：git-worktree 插件行注行门（在场判定 = 双形态两探针
-   *  productPackagePresent——dev 形态 profile 树 link 在场 / 打包形态 anchor 邻接树
-   *  runtime/node_modules，2026-10-18 启动崩 fix 起 staged 随包）；true = 注 loader
-   *  行（插件装载面；扩展点注入不经 config——函数值走 ctx 服务缝，见 ipc/worktree-identity.ts） */
+  /** worktree 域插件行注行门（1.17 批二卸旧装新：装载 @dsh-forge/project——旧
+   *  @dsh-forge/git-worktree 行退役；在场判定 = 双形态两探针 productPackagePresent——
+   *  dev 形态 profile 树 link 在场 / 打包形态 anchor 邻接树 runtime/node_modules，
+   *  2026-10-18 启动崩 fix 起 staged 随包）；true = 注 loader 行（插件装载面；
+   *  扩展点注入不经 config——函数值走 ctx 服务缝，见 @dsh-forge/project
+   *  host/assembly/host-side.ts） */
   readonly gitWorktreeRow?: boolean
   /** mobile ask 桥插件行（bug f73315a1——缺席不注行 = 零挂接语义）。 */
   readonly mobileBridgeRow?: boolean
@@ -242,12 +244,14 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     ...(input.presets?.squadSkillsDir !== undefined
       ? materializePresetPatch(STANDARD_SQUAD_SKILL_ROWS, input.presets).split('\n')
       : []),
-    // worktree-branch-management 1.7：git-worktree 插件行（门控注行——插件独立/集成双态，
-    // 扩展点注入走 ctx 服务缝非 config；git 缺席 fail-soft 不生效语义归插件启动检测）
+    // worktree 域插件行（1.17 批二卸旧装新：装载切换 @dsh-forge/project——五缝注册 +
+    // worktree 域插件（gitWorktree 能力服务）同包组合，旧 dsh-forge-git-worktree 行退役；
+    // 门控注行——插件独立/集成双态，扩展点注入走 ctx 服务缝非 config；git 缺席 fail-soft
+    // 不生效语义归插件启动检测）
     // fix-4（Root cause：新 id 裸行被 loader 补丁按 unknown target 静默跳过——插件从未装载，
     // RPC 恒独立模式）：须以 insert 形态注行（用户层 cordis.patch.yml 同款语义）。
     ...(input.gitWorktreeRow === true
-      ? ['- insert:', '    - id: dsh-forge-git-worktree', "      name: '@dsh-forge/git-worktree'"]
+      ? ['- insert:', '    - id: dsh-forge-project', "      name: '@dsh-forge/project'"]
       : []),
     // mobile-ui ask 桥（bug f73315a1）：mobile-bridge 插件行（组合期 answerer 注册——
     // 先于 api-remotes 捕获监听；桥本体经全局锚注入）。insert 形态（fix-4 同径）。

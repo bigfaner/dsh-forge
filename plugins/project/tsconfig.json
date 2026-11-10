@@ -12,6 +12,7 @@
   "references": [
     { "path": "./tsconfig.client.json" },
     { "path": "../../packages/contracts" },
+    { "path": "../../packages/core" },
     { "path": "../../packages/path-key" },
     { "path": "../../lib/api" },
     { "path": "../../lib/diag" },

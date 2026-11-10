@@ -237,7 +237,7 @@ describe('resolveHostPaths 凭据桥生效门（fix-26）', () => {
   })
 })
 
-// 产品包在场探测（打包形态启动崩 fix——git-worktree 行注行门消费）：在场 = dev profile 树
+// 产品包在场探测（打包形态启动崩 fix——worktree 域插件行注行门消费）：在场 = dev profile 树
 // ∪ installAnchor 邻接树两探针。打包形态 profile 目录无 node_modules（boot-chain adjacent
 // 拓扑），旧口径单探 profileDir 恒缺席 → 包已 staging 也不注行/不装配（能力恒 absent，
 // git 项目 sessionCreate/prompt 双入口 W2 fail-closed 拒绝）。
@@ -247,11 +247,11 @@ describe('productPackagePresent 产品包在场探测（dev profile 树 ∪ anch
     try {
       // 安装后布局镜像：{resources}/runtime/package.json + runtime/node_modules/@dsh-forge/*
       const runtime = join(root, 'resources', 'runtime')
-      const pkgManifest = join(runtime, 'node_modules', '@dsh-forge', 'git-worktree', 'package.json')
+      const pkgManifest = join(runtime, 'node_modules', '@dsh-forge', 'project', 'package.json')
       mkdirSync(dirname(pkgManifest), { recursive: true })
-      writeFileSync(pkgManifest, '{"name":"@dsh-forge/git-worktree"}', 'utf8')
+      writeFileSync(pkgManifest, '{"name":"@dsh-forge/project"}', 'utf8')
       const profileDir = join(root, 'profile') // 打包形态首启落地目录——无 node_modules
-      expect(productPackagePresent(profileDir, join(runtime, 'package.json'), '@dsh-forge/git-worktree')).toBe(true)
+      expect(productPackagePresent(profileDir, join(runtime, 'package.json'), '@dsh-forge/project')).toBe(true)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -259,14 +259,14 @@ describe('productPackagePresent 产品包在场探测（dev profile 树 ∪ anch
 
   it('dev 形态 profile 树 link 在场 → 真（现行为保持——junction 透传 workspace 链接树）', () => {
     const dev = resolveHostPaths({ DSH_FORGE_DEV_PROFILE: 'dev' }, 'C:/ud')
-    expect(productPackagePresent(dev.profileDir, dev.installAnchor, '@dsh-forge/git-worktree')).toBe(true)
+    expect(productPackagePresent(dev.profileDir, dev.installAnchor, '@dsh-forge/project')).toBe(true)
   })
 
   it('两探针树均缺席 → false（kill-switch/未安装形态——fail-soft 不注行）', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-forge-pkg-absent-'))
     try {
       const anchor = join(root, 'runtime', 'package.json') // 树空（包未物化）
-      expect(productPackagePresent(join(root, 'profile'), anchor, '@dsh-forge/git-worktree')).toBe(false)
+      expect(productPackagePresent(join(root, 'profile'), anchor, '@dsh-forge/project')).toBe(false)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

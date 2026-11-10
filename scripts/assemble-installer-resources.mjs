@@ -81,24 +81,32 @@ const STAGING_EXTRAS = {
   // 整合技能——learn（写入径）+ distill（存量整合）双技能面；缺席即预设组合
   // knowledge 技能面静默缺失）
   knowledge: { files: ['skills'], keyFiles: ['skills/learn/SKILL.md', 'skills/distill/SKILL.md'] },
+  // project（1.17 批二卸旧装新，自 git-worktree staged 种子接替）：组合装配行本体
+  // cordis.patch.yml（package.json dsh.bundle.patch 声明指向——loader 按声明读包内该文件
+  // 触发 apply 注册，缺席即 ENOENT，bug a1f13abf 同径）+ skills 约定目录占位（.gitkeep）
+  project: { files: ['skills', 'cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */
 const CONVENTION_DIRS = ['skills', 'skills-blitz', 'experts']
 
 /** 包短名 → workspace 子路径（平铺 packages/<short> 优先；plugins/ 子居所——md-mermaid 先例；
- *  lib/ 子居所——plugin-project 1.6 lib 公共包群（lib/path 闭包成员）探测；缺席 undefined） */
+ *  根级 plugins/ 树——plugin-project 1.3 project 包居 plugins/project；lib/ 子居所——
+ *  plugin-project 1.6 lib 公共包群（lib/path 闭包成员）探测；缺席 undefined） */
 function packageDirOf(root, short) {
   if (existsSync(join(root, 'packages', short, 'package.json'))) return short
   if (existsSync(join(root, 'packages', 'plugins', short, 'package.json'))) return `plugins/${short}`
+  if (existsSync(join(root, 'plugins', short, 'package.json'))) return `root:plugins/${short}`
   if (short.startsWith('lib-') && existsSync(join(root, 'lib', short.slice('lib-'.length), 'package.json'))) {
     return `lib/${short.slice('lib-'.length)}`
   }
   return undefined
 }
 
-/** workspace 子路径 → [根目录名, 子路径]（packages/ 平铺与 plugins/ 子居所在 packages/ 树；lib/ 子居所在 lib/ 树） */
+/** workspace 子路径 → [根目录名, 子路径]（packages/ 平铺与 plugins/ 子居所在 packages/ 树；
+ *  root:plugins/ 前缀 = 仓库根级 plugins/ 树；lib/ 子居所在 lib/ 树） */
 function pkgRootOf(dir) {
+  if (dir.startsWith('root:plugins/')) return ['.', dir.slice('root:'.length)]
   return dir.startsWith('lib/') ? ['lib', dir.slice('lib/'.length)] : ['packages', dir]
 }
 
@@ -221,7 +229,7 @@ function assertExtrasDrift(plugins) {
  * 复用）。插件条目 = stagedProductPackages 推导：package.json + dist 入口 +
  * STAGING_EXTRAS 附加关键文件（技能面）。
  */
-export function requiredKeyFiles(plugins) {
+export function requiredKeyFiles(plugins, root = ROOT) {
   const files = [
     'runtime/package.json',
     'web-dist/index.html',
@@ -239,9 +247,13 @@ export function requiredKeyFiles(plugins) {
   ]
   for (const [dir] of Object.entries(stagedProductPackages(plugins))) {
     const short = stagedPkgShort(dir)
+    // dist 入口自包 manifest main 派生（1.17 project 包入口 = dist/host/index.js——
+    // 硬编码 dist/index.js 对多入口包失真，--check 口径随 manifest 单源）
+    const manifest = JSON.parse(readFileSync(join(root, ...pkgRootOf(dir), 'package.json'), 'utf8'))
+    const entry = String(manifest.main ?? 'dist/index.js').replace(/^\.\//, '')
     files.push(
       `runtime/node_modules/@dsh-forge/${short}/package.json`,
-      `runtime/node_modules/@dsh-forge/${short}/dist/index.js`,
+      `runtime/node_modules/@dsh-forge/${short}/${entry}`,
       ...(STAGING_EXTRAS[short]?.keyFiles ?? []).map((f) => `runtime/node_modules/@dsh-forge/${short}/${f}`),
     )
   }

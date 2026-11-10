@@ -21,7 +21,8 @@ import { createGitIdentityPort } from '@dsh-forge/core'
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { ProjectService, ProjectSummary } from '@dsh-forge/contracts'
 import type { KnowledgeRegistryWriter } from '@dsh-forge/knowledge'
-import { invalidateResolveCaches } from './worktree-rpc.js'
+// 1.17 批二卸旧装新：resolve 缓存失效锚重挂 @dsh-forge/project
+import { invalidateResolveCaches } from '@dsh-forge/project'
 
 /** 绑定表文件形状（版本化——消费方 = knowledge 插件 tools/session.ts 惰性读取） */
 export interface KnowledgeBindingsFile {

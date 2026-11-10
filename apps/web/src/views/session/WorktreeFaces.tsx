@@ -1,5 +1,6 @@
 // worktree 六卡挂载面（worktree-branch-management fix-2——装配缺口承接②web 侧）。
-// 三组件（通用层组件本体 = @dsh-forge/git-worktree/client，本文件只做数据接线与挂载）：
+// 三组件（通用层组件本体 = @dsh-forge/project client ui——1.17 批二卸旧装新，旧
+// @dsh-forge/git-worktree/client 出口退役，本文件只做数据接线与挂载）：
 //   · ForgeHeroWorktreeMount——hero 第二 chip（难点 A 落法③产品自增行：由 hero workspace
 //     影子占用者 ForgeHeroWorkspacePicker 在其渲染面就地并列，取证见 walkthrough/
 //     hero-second-chip-decision.md）——选择菜单 + 新建/删除两弹窗 + ahead/behind 懒加载；
@@ -32,10 +33,10 @@ import {
   joinWorktreePath,
   type CreateWorktreeRequest,
   type DeleteChecks,
-} from '@dsh-forge/git-worktree/client'
-import type { AheadBehind } from '@dsh-forge/git-worktree'
-import type { SlugCandidate } from '@dsh-forge/git-worktree/client'
-import { collectSlugCandidates } from '@dsh-forge/git-worktree/client'
+} from '@dsh-forge/project/client-ui/worktree-faces'
+import type { AheadBehind } from '@dsh-forge/project/client-ui/worktree-faces'
+import type { SlugCandidate } from '@dsh-forge/project/client-ui/worktree-faces'
+import { collectSlugCandidates } from '@dsh-forge/project/client-ui/worktree-faces'
 import { EditableCombobox } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 import {

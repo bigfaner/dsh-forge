@@ -53,7 +53,8 @@ import {
   type BridgeServiceName,
   type MainToChildMessage,
 } from './bridge.js'
-import { WORKTREE_RPC_METHODS, type WorktreeRpcService } from '../ipc/worktree-rpc.js'
+// 1.17 批二卸旧装新：worktree 域符号重挂 @dsh-forge/project（旧 @dsh-forge/git-worktree 行退役）
+import { WORKTREE_RPC_METHODS, type WorktreeRpcService } from '@dsh-forge/project'
 import { buildBootManifest, tunnelStateOf, type BootManifest } from './manifest.js'
 
 export interface BootDshOptions {

@@ -99,7 +99,7 @@ describe('dev profile 装载行漂移守护（bug bc89637c 类别回归守卫）
 
     // overlay 在场门注行（源码字面量扫描——与 overlay.ts 同源，行改名即红）
     const overlayRows = new Set(pluginLoadRowShorts(read('apps/host/src/boot/overlay.ts')))
-    expect(overlayRows.has('git-worktree'), 'overlay 注行扫描应命中 git-worktree（扫描失效即假绿）').toBe(true)
+    expect(overlayRows.has('project'), 'overlay 注行扫描应命中 project（1.17 批二卸旧装新——装载切换 @dsh-forge/project；扫描失效即假绿）').toBe(true)
 
     const presetNames = new Set(presetCarriedPlugins())
     // 预设通道本体 = presets/*.patch.yml 携带行（overlay 每启消费同一底稿注行，dev 同径）

@@ -2,7 +2,7 @@
   "name": "dsh-forge-profile-dev",
   "private": true,
   "version": "0.0.0",
-  "description": "dsh-forge dev profile (dev 形态：链 workspace 构建产物——官方 web bundles 精确 pin + 产品插件 @dsh-forge/{contracts,core,git-worktree,knowledge,md-mermaid,plugin-forge,plugin-forge-spec} link 七件 + 原生依赖兜底；DSH_FORGE_DEV_PROFILE=dev 消费)。node_modules 由 pnpm 安装（cordis.yml 由每次启动重写）。",
+  "description": "dsh-forge dev profile (dev 形态：链 workspace 构建产物——官方 web bundles 精确 pin + 产品插件 @dsh-forge/{contracts,core,project,knowledge,md-mermaid,plugin-forge,plugin-forge-spec} link 七件 + 原生依赖兜底；DSH_FORGE_DEV_PROFILE=dev 消费)。node_modules 由 pnpm 安装（cordis.yml 由每次启动重写）。",
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "~1.0.4",
     "@deepseek-ai/dsh": "0.2.0-rc.2",
@@ -12,14 +12,14 @@
     "@deepseek-ai/dsh-api-workspace-controller": "0.2.0-rc.2",
     "@dsh-forge/contracts": "link:../../../packages/contracts",
     "@dsh-forge/core": "link:../../../packages/core",
-    "@dsh-forge/git-worktree": "link:../../../packages/plugins/git-worktree",
     "@dsh-forge/knowledge": "link:../../../packages/plugins/knowledge",
     "@dsh-forge/md-mermaid": "link:../../../packages/plugins/md-mermaid",
     "@dsh-forge/plugin-forge": "link:../../../packages/plugin-forge",
     "@dsh-forge/expert-squad": "link:../../../packages/plugins/expert-squad",
     "better-sqlite3": "13.0.3",
     "gray-matter": "4.0.3",
-    "@dsh-forge/plugin-forge-spec": "link:../../../packages/plugin-forge-spec"
+    "@dsh-forge/plugin-forge-spec": "link:../../../packages/plugin-forge-spec",
+    "@dsh-forge/project": "link:../../../plugins/project"
   },
   "dsh": {
     "profile": {

@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -14,6 +14,10 @@
     "./host-dirs": {
       "types": "./dist/host/dirs/index.d.ts",
       "import": "./dist/host/dirs/index.js"
+    },
+    "./host-worktrees": {
+      "types": "./dist/host/worktrees/index.d.ts",
+      "import": "./dist/host/worktrees/index.js"
     },
     "./client": {
       "types": "./dist/client/ui/index.d.ts",
@@ -38,6 +42,10 @@
     "./client-ui/chip-restore": {
       "types": "./dist/client/ui/bug-refs/chip-restore.d.ts",
       "default": "./ui/bug-refs/chip-restore.ts"
+    },
+    "./client-ui/worktree-faces": {
+      "types": "./dist/client/ui/index.d.ts",
+      "default": "./ui/index.ts"
     }
   },
   "dsh": {
@@ -60,6 +68,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
+    "@dsh-forge/core": "workspace:*",
     "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.2",
     "@deepseek-ai/dsh-client-ui-settings": "0.2.0-rc.2",
     "@deepseek-ai/dsh-session": "0.2.0-rc.2",

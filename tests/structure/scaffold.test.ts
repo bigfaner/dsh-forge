@@ -49,7 +49,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ).toBe(true)
   })
 
-  it('根 solution tsconfig references 十五工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；md-mermaid/git-worktree/input-history/expert-squad/quote-reference/super-composer/mobile-bridge 先后入 packages/plugins/ 子居所）', () => {
+  it('根 solution tsconfig references 十四工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；md-mermaid/input-history/expert-squad/quote-reference/super-composer/mobile-bridge 先后入 packages/plugins/ 子居所；1.17 批二 git-worktree 旧包退役）', () => {
     const refs = ((readJson('tsconfig.json').references ?? []) as { path: string }[]).map((r) => rel(r.path))
     expect([...refs].sort()).toEqual(
       [
@@ -70,7 +70,6 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'packages/plugin-forge',
         'packages/plugin-forge-spec',
         'packages/plugins/expert-squad',
-        'packages/plugins/git-worktree',
         'packages/plugins/input-history',
         'packages/plugins/md-mermaid',
         'packages/plugins/mobile-bridge',
@@ -91,13 +90,14 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['packages/plugins/knowledge', ['packages/contracts', 'packages/path-key']],
     // M2 3.2：plugin-forge 同 knowledge 型（deps 仅 contracts + path-key——零 core 边）
     // plugin-project 1.7：bug tool 壳消费 lib/api——增 lib/api 引用
-    ['packages/plugin-forge', ['lib/api', 'packages/contracts', 'packages/path-key']],
+    ['packages/plugin-forge', ['lib/api', 'packages/contracts', 'packages/path-key', 'plugins/project']],
     // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
-    ['apps/host', ['packages/contracts', 'packages/core', 'packages/plugins/knowledge', 'packages/plugins/git-worktree']],
+    ['apps/host', ['packages/contracts', 'packages/core', 'packages/plugins/knowledge', 'plugins/project']],
     // 1.6：web normalize/path-key 消费改指 @dsh-forge/lib-path/path-key——增 lib/path 引用
     // 1.14 UI 迁入：add-project/bug-refs 组件本体消费 @dsh-forge/project client ui
-    ['apps/web', ['lib/path', 'packages/contracts', 'packages/plugins/git-worktree', 'packages/plugins/md-mermaid', 'plugins/project']],
+    // 1.17 批二：git-worktree 旧包退役——web 引用面收 project 单源
+    ['apps/web', ['lib/path', 'packages/contracts', 'packages/plugins/md-mermaid', 'plugins/project']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
     const ts = readJson(join(dir, 'tsconfig.json')) as {
       compilerOptions?: { composite?: boolean }

@@ -83,17 +83,9 @@ import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from
 import { apiLoopbackGuardListener } from './api-loopback-guard.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import { refreshKnowledgeBindings } from '../ipc/bindings.js'
-import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
-import {
-  createHostWorktreeRpc,
-  type LiveSessionFace,
-  type SessionControllerFace,
-  type SessionPersistenceFace,
-  type WorktreeRpcService,
-} from '../ipc/worktree-rpc.js'
-// fix-4：ctx.gitWorktree 具名消费的类型面（@dsh-forge/git-worktree declare module 扩充
-// @deepseek-ai/cordis Context——本 import 拉入扩充；type-only 官方包裁决同径）
-import type {} from '@dsh-forge/git-worktree'
+// 1.17 批二卸旧装新：worktree 域 host 侧装配段已下沉 @dsh-forge/project
+// host/assembly/host-side.ts——apps/host 只留注册行（装配逻辑零内联，AGENTS 1.3）。
+import { assembleProjectHostSide } from '@dsh-forge/project'
 import { type ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveMobileDistDir } from '../window/web-document.js'
 import { isDevProfile } from '../profile/paths.js'
@@ -324,12 +316,13 @@ async function main(): Promise<void> {
   // 直读文件（core forgeSettings 服务尚未装配——本进程 runProfile 之前唯一读缝）；文件
   // 缺席/畸形 = 未开启（fail-soft 默认回环形制）。
   const remoteExpose = remoteApprovalEnabledOf(options.settingsFile)
-  // 1.7 git-worktree 插件行注行门（overlay 与装配段共用单源——插件在 profile 树才装载+注入）。
+  // 1.17 批二：@dsh-forge/project 插件行注行门（overlay 与装配段共用单源——插件在 profile
+  // 树才装载+注入；旧 @dsh-forge/git-worktree 包已退役，行装载切换至合并后的 project 包）。
   // 2026-10-18 打包启动崩 fix：探测改双形态（dev profile 树 ∪ installAnchor 邻接树——
   // productPackagePresent）。旧口径单探 profileDir/node_modules，而打包形态 profile 目录无
   // node_modules（anchor = {resources}/runtime/package.json 邻接拓扑）→ 包已 staging 也恒
   // false：不注行 + 装配段跳过 = 能力恒 absent，git 项目 W2 fail-closed 双入口拒绝。
-  const gitWorktreeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/git-worktree')
+  const gitWorktreeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/project')
   // mobile ask 桥插件行注行门（bug f73315a1——gitWorktreeRow 双形态探测同径）∪ dev 形态
   // 第三位：host 自身 node_modules（loader 进程解析根——dev workspace link 挂点）。
   let mobileBridgeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/mobile-bridge')
@@ -353,7 +346,7 @@ async function main(): Promise<void> {
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
     // 1.7 Q19：knowledge 行 config 注入退役（bindingsFile 缺席——纯 config 静态注入；
     // knowledgeRow 装载位另行上送 ready，不再注 overlay 行）
-    gitWorktreeRow, // 1.7 git-worktree 插件行注行门（dev 树 link 在场才注——打包形态暂不含该插件）
+    gitWorktreeRow, // 1.17 @dsh-forge/project 插件行注行门（dev 树 link 在场才注）
     mobileBridgeRow, // mobile ask 桥插件行注行门（组合期 answerer 注册）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     remoteExpose, // fix-3 装配期绑定暴露缝（true = webserver 行覆写全卡绑定——重启生效）
@@ -510,157 +503,24 @@ async function main(): Promise<void> {
   }
   // fix-25：cordis 服务解析窄面（/remote/__rpc 端点惰性取 forgeTasks/forgeProjects 只读切片）
   const servicesFace = ctx as unknown as ServiceGetFace
-  // fix-2：worktree RPC 域服务（gitWorktree 行在场时装配段构造——见下方装配块）
-  let worktreeRpcService: WorktreeRpcService | undefined
-  // worktree-branch-management 1.7 扩展点注入装配：插件行在 profile 树时，把归并实现 +
-  // worktree_dir 提供者注入插件缝服务（函数值扩展点不可经 YAML config 承载——cordis ctx
-  // 服务面唯一跨插件缝；插件惰性 reflect.get 消费，激活早于本 provide 不受阻）。
-  // forgeProjects 缺席 / provide 失败 = 零注入 fail-soft（插件退默认实现 = 独立 worktree 模式）。
-  // 1.7 扩展点注入装配（见上）+ fix-2 装配缺口承接（同门单源）：
-  //   ① forgeWorktree 桥服务——worktree RPC 通道域本体（ipc/worktree-rpc 透传插件域 ops
-  //      + 挂靠事件唯一写入口 + 建会话 meta.cwd 注入 + 封存判定快照）；gitWorktree 能力
-  //      服务惰性取法（在场性探测后台收口——provide 晚于本装配段可达）。
-  //   ② 发送拦截——assertSendable 接入 host 消息处理链（sessionController.prompt/
-  //      updateQueue 前置封存校验，封存会话 host 拒绝 + 明确错误提示——「不可发送」硬保证）。
-  //   缺席/失败 = 零装配 fail-soft（通道未注册、拦截不接线——宿主不受影响）。
+  // 1.17 批二装配缝下沉（卸旧装新）：worktree 域 host 侧装配段——①扩展点注入
+  // （forgeWorktreeIdentity provide）②forgeWorktree 桥服务装配（worktree RPC 通道域
+  // 本体 + 发送拦截装配门 + 建会话 meta.cwd 注入 + 封存判定快照）——已整体下沉
+  // @dsh-forge/project host/assembly/host-side.ts；apps/host 只留注册行（知识绑定表
+  // 全量刷新 host 域本体经依赖缝注入——零反向依赖）。缺席/失败 = 零装配 fail-soft
+  // （通道未注册、拦截不接线——宿主不受影响）。
+  let worktreeRpcService: ReturnType<typeof assembleProjectHostSide>['service']
   if (gitWorktreeRow) {
     try {
-      const forgeProjects = servicesFace.get('forgeProjects') as
-        | Pick<ProjectService, 'listProjects' | 'getProject'>
-        | undefined
-      const provide = (
-        ctx as unknown as { reflect?: { provide?: (name: string, value?: unknown) => unknown } }
-      ).reflect?.provide
-      if (forgeProjects !== undefined && typeof provide === 'function') {
-        provide.call(
-          (ctx as unknown as { reflect: object }).reflect,
-          GIT_WORKTREE_IDENTITY_SERVICE,
-          createWorktreeIdentity(forgeProjects, undefined, (line) => diag(line)),
-        )
-      } else {
-        diag('[git-worktree] forgeProjects 缺席或 reflect.provide 不可用——扩展点零注入（插件退独立模式）')
-      }
-    } catch (cause) {
-      diag(`[git-worktree] 扩展点注入失败（插件退独立模式，宿主不受影响）：${String(cause)}`)
-    }
-    try {
-      // fix-4 具名消费（AGENTS.md Cordis 具名服务取法裁决）：gitWorktree 能力服务经模块
-      // 扩充的具名属性取（类型面 = @dsh-forge/git-worktree declare module 扩充——type-only
-      // import 官方包裁决同径）；运行期存在性检查承担 fail-soft（provide 异步晚于本装配段
-      // 可达——惰性取法；具名访问在服务缺席时由 ctx proxy 抛错 → catch 降级独立模式）。
-      let capabilitySeen = false
-      const getGitWorktree = (): unknown => {
-        try {
-          const capability: unknown = ctx.gitWorktree
-          if (capability !== undefined && capability !== null && !capabilitySeen) {
-            capabilitySeen = true
-            diag('[git-worktree] gitWorktree 能力服务已解析（具名消费）')
-          }
-          return capability ?? undefined
-        } catch {
-          return undefined // 服务未 provide（探测未收口/插件未装载）——独立模式面
-        }
-      }
-      // fix-4 解析留痕：装配 8s 后仍缺席 → diag 留痕（harness.log 可见——插件行未装载/
-      // git 缺席/provide 失败三态共因收口，不再静默恒独立模式）
-      setTimeout(() => {
-        if (!capabilitySeen) {
-          diag('[git-worktree] gitWorktree 能力服务未解析（插件未装载/git 缺席/provide 失败）——worktree RPC 恒独立模式')
-        }
-      }, 8_000).unref?.()
-      // worktree-domain-migration 1.2 注入点重构：宿主只做官方服务对象取法（惰性取法闭包
-      // 在插件工厂调用前成立）+ 注入缝传参；deps 组装与发送拦截装配门已核迁插件导出工厂
-      // createHostWorktreeRpc（packages/plugins/git-worktree host-assembly.ts）。
-      const sessionController = servicesFace.get('sessionController') as SessionControllerFace | undefined
-      const sessionPersistence = servicesFace.get('sessionPersistence') as SessionPersistenceFace | undefined
-      // bug 925c96d5：官方 workspaceRegistry 惰性取法（具名 ctx 属性 + 运行期存在性检查
-      // ——AGENTS.md Cordis 可选具名服务取法裁决同径）；缺席 = 零归属面降级（宿主不受影响）。
-      const getWorkspaceRegistry = (): unknown => {
-        try {
-          const registry: unknown = (ctx as unknown as { workspaceRegistry?: unknown }).workspaceRegistry
-          return registry ?? undefined
-        } catch {
-          return undefined // 服务未装载（旧环境/插件行缺席）——零归属面
-        }
-      }
-      const assembled = createHostWorktreeRpc({
-        getGitWorktree: getGitWorktree as never,
-        sessionController,
-        sessionPersistence,
-        getWorkspaceRegistry: getWorkspaceRegistry as never,
-        // 绑定表失效锚（worktree 集合变化——建/删树）：
-        // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
-        // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。
-        // bug 9eb9d6cb 后续性能收口：带 worktreePath 的调用（预铸挂会话——每次新会话点击）
-        // 先查绑定行在册，在册即跳过（省 N×git worktree list + 文件重写，~百 ms/点击）；
-        // 缺席（新树首次使用/建删树无路径）才全量刷新。读失败 = 现状全量刷新（fail-soft）。
-        onWorktreeSetChanged: async (worktreePath?: string) => {
-          let projects: Pick<ProjectService, 'listProjects'> | undefined
-          try {
-            projects = servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects'> | undefined
-          } catch {
-            projects = undefined
-          }
-          if (projects === undefined) return
-          if (worktreePath !== undefined) {
-            try {
-              const { readFileSync } = await import('node:fs')
-              const raw = readFileSync(options.bindingsFile, 'utf8')
-              const parsed = JSON.parse(raw) as { projects?: readonly { wsPath?: unknown }[] }
-              const normalized = worktreePath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
-              const present = (parsed.projects ?? []).some(
-                (row) =>
-                  typeof row.wsPath === 'string' &&
-                  row.wsPath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase() === normalized,
-              )
-              if (present) return // 绑定行已在册——锚目的（首次入表）已达成，零刷新
-            } catch {
-              // 读失败（首建/损坏）→ 落全量刷新现状
-            }
-          }
-          await refreshKnowledgeBindings(projects, options.bindingsFile, (line) => diag(line))
-        },
-        // binding-derivation §2.2：留痕 append 失败诊断 emit 缝（warn 级）
+      const assembled = assembleProjectHostSide(ctx, {
+        bindingsFile: options.bindingsFile,
+        diag: (line) => diag(line),
         bindWarnDiag: sessionBindWarnDiag,
-        // binding-derivation §2.2：session/created 监听装配缝（提案裁决：ctx.on 监听装配留
-        // host——官方事件，fork 亦发布，同径覆盖；进程内 Session.append 直调 = ignorable
-        // 事件直写合法缝）。注册失败 fail-soft（留痕由 seal 漂移校验惰性补写兜底）。
-        onSessionCreated: (handler) => {
-          try {
-            return ctx.on('session/created', (session) => handler(session.id))
-          } catch {
-            return undefined
-          }
-        },
-        // binding-derivation §2.2：活会话解析缝（官方 sessions store——留痕 append 面解析）
-        liveSessions: () => {
-          try {
-            return servicesFace.get('sessions') as { get(id: string): LiveSessionFace | undefined } | undefined
-          } catch {
-            return undefined
-          }
-        },
-        warn: (line) => diag(line),
-        // G7① 拦截层 fail-open 降级诊断缝（方案 9）
         failOpenWarn: failOpenDiag,
-        // binding-derivation 流程 A：workspace 前移创建失败诊断 emit 缝（worktree-create 域）
         createDiag: worktreeCreateDiag,
-        // binding-derivation §2.6：session-bind 推导判定诊断 emit 缝（info 级）
         bindDiag: sessionBindDiag,
-        // binding-derivation §2.6：bind-drift 漂移埋点 emit 缝（info 级——触发与消除）
         bindDriftDiag: bindDriftDiag,
-        // binding-derivation M6：forge/binding-mismatch 漂移推送（ctx.emit → /remote/forge-stream
-        // 镜像目录逐帧推送——mobile banner 消费面）
-        bindingMismatchEmit: (payload) => {
-          try {
-            ;(ctx as unknown as { emit?: (event: string, payload: unknown) => void }).emit?.(
-              'forge/binding-mismatch',
-              payload,
-            )
-          } catch {
-            // 推送失败不反压 seal 判定链（fail-soft）
-          }
-        },
+        refreshKnowledgeBindings,
       })
       worktreeRpcService = assembled.service
       // G7① 发送拦截撤销缝（装配门在工厂内——能力解析后 install，关停链 revoke）

@@ -16,11 +16,19 @@ import { createElectronBuilderConfig } from '../../electron-builder.config.mjs'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
 const readJson = (p: string) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'))
-/** staged 键（workspace 子路径）→ 包清单相对路径（lib/ 子居所包名 lib-<目录名>——真名映射） */
-const pkgManifestRelPath = (name: string, dir?: string): string =>
-  name.startsWith('lib-')
-    ? `lib/${name.slice('lib-'.length)}/package.json`
-    : `packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`
+/** staged 键（workspace 子路径）→ 包清单相对路径（lib/ 子居所包名 lib-<目录名>——真名映射；
+ *  root:plugins/ 前缀 = 仓库根级 plugins/ 树——project 包居 plugins/project） */
+const pkgManifestRelPath = (name: string, dir?: string): string => {
+  if (name.startsWith('lib-')) return `lib/${name.slice('lib-'.length)}/package.json`
+  if (dir?.startsWith('root:plugins/')) return `${dir.slice('root:'.length)}/package.json`
+  if (dir?.startsWith('/')) return `${dir.slice(1)}/${name}/package.json` // 根级树（PRODUCT_PLUGIN_PACKAGE_DIRS '/plugins' 形态）
+  return `packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`
+}
+/** staged 键 → [根目录名, 子路径]（与 assemble 脚本 pkgRootOf 同源三树映射） */
+const treeOf = (dir: string): [string, string] => {
+  if (dir.startsWith('root:plugins/')) return ['.', dir.slice('root:'.length)]
+  return dir.startsWith('lib/') ? ['lib', dir.slice('lib/'.length)] : ['packages', dir]
+}
 /** 关键文件口径（配置派生——与 stage/--check 运行期同源 PRODUCT_PLUGINS） */
 const KEY_FILES = requiredKeyFiles(PRODUCT_PLUGINS)
 
@@ -216,10 +224,11 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       // M3 3.2 规格技能迁移落地：spec skills 入物化清单与关键文件口径（3.8 曾注记
       // 「随 3.2 落地后补列」——缺席即远征组合技能面静默缺失）
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/skills/write-prd/SKILL.md',
-      // 2026-10-18 安装版启动崩 fix：host dist ipc/worktree-rpc 静态 import——缺席即
-      // 打包主进程 ERR_MODULE_NOT_FOUND 启动即崩（staged:true 覆写物化）
-      'runtime/node_modules/@dsh-forge/git-worktree/package.json',
-      'runtime/node_modules/@dsh-forge/git-worktree/dist/index.js',
+      // 1.17 批二卸旧装新：host dist boot 链（child/run/m2-wiring/bindings）静态 import
+      // 本包——缺席即打包主进程 ERR_MODULE_NOT_FOUND 启动即崩（staged:true 覆写物化；
+      // 旧 @dsh-forge/git-worktree 包退役，staged 种子自 plugins/git-worktree 迁 plugins/project）
+      'runtime/node_modules/@dsh-forge/project/package.json',
+      'runtime/node_modules/@dsh-forge/project/dist/host/index.js',
       'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
       'web-dist/index.html',
       'icon.png',
@@ -259,12 +268,13 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // expert-squad 不在预设底稿——用户层全局行装载，见 PRODUCT_PLUGINS expert-squad 行）
     expect(presetCarriedPlugins()).toEqual(['md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
-    // git-worktree = staged:true 覆写种子（2026-10-18 安装版启动崩 fix：host dist 静态 import 面）
+    // project = staged:true 覆写种子（1.17 批二卸旧装新：host dist boot 链静态 import 面——
+    // 自 plugins/git-worktree 种子迁入；旧包退役）
     // knowledge = userLayerRow 种子（1.9 A5 重开放——用户层全局行 + skills/learn 技能面）
     // lib/* = 闭包成员（plugin-project 1.2/1.6/1.7：core 依赖 lib-util/lib-diag/lib-path/lib-db，
     // contracts 兼容面依赖 lib-api——lib/ 子居所自动入场）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/knowledge', 'plugins/md-mermaid'].sort(),
+      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/md-mermaid', 'root:plugins/project'].sort(),
     )
   })
 
@@ -291,8 +301,9 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     const staged = stagedProductPackages(PRODUCT_PLUGINS)
     // 声明面扫描：packages/*/package.json dsh.bundle.patch 指向的文件 ⊆ staging files
     for (const [dir, files] of Object.entries(staged)) {
+      const [rootName, sub] = treeOf(dir)
       const manifest = JSON.parse(
-        readFileSync(join(ROOT, dir.startsWith('lib/') ? 'lib' : 'packages', dir.startsWith('lib/') ? dir.slice(4) : dir, 'package.json'), 'utf8'),
+        readFileSync(join(ROOT, rootName, sub, 'package.json'), 'utf8'),
       ) as {
         dsh?: { bundle?: { patch?: string } }
       }
@@ -314,8 +325,9 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     const staged = stagedProductPackages(PRODUCT_PLUGINS)
     const problems: string[] = []
     for (const [dir, files] of Object.entries(staged)) {
+      const [rootName, sub] = treeOf(dir)
       for (const convention of CONVENTION_DIRS) {
-        const sourceDir = join(ROOT, dir.startsWith('lib/') ? 'lib' : 'packages', dir.startsWith('lib/') ? dir.slice(4) : dir, convention)
+        const sourceDir = join(ROOT, rootName, sub, convention)
         if (existsSync(sourceDir) && readdirSync(sourceDir).length > 0 && !files.includes(convention)) {
           problems.push(`packages/${dir}/${convention} 在场但未随包物化（STAGING_EXTRAS 漏列）`)
         }
@@ -381,13 +393,17 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     expect(missing, `staging 闭包缺口（staged:false kill-switch 误伤依赖成员？）：${missing.join('; ')}`).toEqual([])
   })
 
-  it('闭包成员物化口径完整：package.json + dist 双件随包（--check 断言可达）', () => {
+  it('闭包成员物化口径完整：package.json + dist 入口双件随包（--check 断言可达；入口路径自各包 manifest main 派生）', () => {
     for (const name of [...stagedPackages].sort()) {
       expect(KEY_FILES, `${name} package.json 口径缺席`).toContain(
         `runtime/node_modules/@dsh-forge/${name}/package.json`,
       )
+      // dist 入口 = manifest main 单源（project 包 = dist/host/index.js；其余 = dist/index.js）
+      const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
+      const manifest = readJson(pkgManifestRelPath(name, dir)) as { main?: string }
+      const entry = (manifest.main ?? 'dist/index.js').replace(/^\.\//, '')
       expect(KEY_FILES, `${name} dist 入口口径缺席`).toContain(
-        `runtime/node_modules/@dsh-forge/${name}/dist/index.js`,
+        `runtime/node_modules/@dsh-forge/${name}/${entry}`,
       )
     }
   })
