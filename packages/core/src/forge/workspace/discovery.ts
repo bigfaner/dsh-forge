@@ -30,7 +30,7 @@ import {
   type FeatureStatus,
   type ProposalStatus,
 } from '@dsh-forge/contracts'
-import { docsRootOfForgeDir } from './dir-segments.js'
+import { docsRootOfForgeDir } from '@dsh-forge/lib-path'
 import { withTransaction } from '../../db/transaction.js'
 import { emitDiagOrFallback, type DiagEventPayload } from '../../telemetry/diag-events.js'
 import { errMessage } from '../../util.js'

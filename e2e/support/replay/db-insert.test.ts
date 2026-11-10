@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
-import { deriveTaskStoreDir } from '../../../packages/core/src/forge/workspace/derive-dir.js'
+import { deriveTaskStoreDir } from '../../../lib/path/src/derive-dir.js'
 import { forgeDbPath, openForgeDb, seedProposalRow } from './db-insert.js'
 import { seedEdge, seedFeature, seedLink, seedRecord, seedTask } from './db-insert.js'
 

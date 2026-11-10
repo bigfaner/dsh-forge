@@ -2,7 +2,7 @@
 // 相位机/项目锚/右栏联动计划自 WorkbenchPanel 测试族迁入（语义不变）；centerViewOf =
 // 新面（官方面板态 → 产品视图镜像）。
 import { describe, expect, it } from 'vitest'
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
 import {
   HERO_PANEL_KEY,
   KNOWLEDGE_PANEL_KEY,

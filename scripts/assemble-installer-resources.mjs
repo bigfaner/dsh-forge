@@ -86,11 +86,20 @@ const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */
 const CONVENTION_DIRS = ['skills', 'skills-blitz', 'experts']
 
-/** 包短名 → packages/ 子路径（平铺优先；plugins/ 子居所探测——md-mermaid 先例；缺席 undefined） */
+/** 包短名 → workspace 子路径（平铺 packages/<short> 优先；plugins/ 子居所——md-mermaid 先例；
+ *  lib/ 子居所——plugin-project 1.6 lib 公共包群（lib/path 闭包成员）探测；缺席 undefined） */
 function packageDirOf(root, short) {
   if (existsSync(join(root, 'packages', short, 'package.json'))) return short
   if (existsSync(join(root, 'packages', 'plugins', short, 'package.json'))) return `plugins/${short}`
+  if (short.startsWith('lib-') && existsSync(join(root, 'lib', short.slice('lib-'.length), 'package.json'))) {
+    return `lib/${short.slice('lib-'.length)}`
+  }
   return undefined
+}
+
+/** workspace 子路径 → [根目录名, 子路径]（packages/ 平铺与 plugins/ 子居所在 packages/ 树；lib/ 子居所在 lib/ 树） */
+function pkgRootOf(dir) {
+  return dir.startsWith('lib/') ? ['lib', dir.slice('lib/'.length)] : ['packages', dir]
 }
 
 /** 预设底稿携带插件（apps/host/src/profile/presets/*.patch.yml `name: '@dsh-forge/<短名>'` 行扫描——预设组合装载面真源） */
@@ -133,7 +142,7 @@ export function stagedProductPackages(plugins, root = ROOT) {
       continue // 预设/依赖扫描到的非包名（如已被 kill-switch 的引用目标）静默跳过
     }
     stagedDirs.set(dir, short)
-    const manifest = JSON.parse(readFileSync(join(root, 'packages', dir, 'package.json'), 'utf8'))
+    const manifest = JSON.parse(readFileSync(join(root, ...pkgRootOf(dir), 'package.json'), 'utf8'))
     for (const dep of Object.keys(manifest.dependencies ?? {})) {
       if (dep.startsWith('@dsh-forge/')) queue.push(dep.slice('@dsh-forge/'.length))
     }
@@ -165,7 +174,7 @@ export function stagingExtrasDrift(plugins, root = ROOT, extras = STAGING_EXTRAS
   const problems = []
   for (const dir of Object.keys(stagedProductPackages(plugins, root))) {
     const short = dir.split('/').pop()
-    const pkgRoot = join(root, 'packages', dir)
+    const pkgRoot = join(root, ...pkgRootOf(dir))
     const entry = extras[short]
     const declared = new Set(entry?.files ?? [])
     const manifest = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
@@ -229,7 +238,7 @@ export function requiredKeyFiles(plugins) {
     'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
   ]
   for (const [dir] of Object.entries(stagedProductPackages(plugins))) {
-    const short = dir.split('/').pop()
+    const short = stagedPkgShort(dir)
     files.push(
       `runtime/node_modules/@dsh-forge/${short}/package.json`,
       `runtime/node_modules/@dsh-forge/${short}/dist/index.js`,
@@ -327,9 +336,9 @@ function assertPreconditions(plugins) {
     [join(ROOT, 'build', 'icon.png'), 'node tmp-ui-review/gen-whale-brand-v3.mjs --emit icon（fix-45 应用图标——窗口图标打包形态随包）'],
   ]
   for (const [key, files] of Object.entries(stagedProductPackages(plugins))) {
-    wants.push([join(ROOT, 'packages', key, 'dist', 'index.js'), `pnpm build（tsc -b 全拓扑——packages/${key} staged 插件产物）`])
+    wants.push([join(ROOT, ...pkgRootOf(key), 'dist', 'index.js'), `pnpm build（tsc -b 全拓扑——${key} staged 插件产物）`])
     for (const file of files.filter((f) => f !== 'dist' && f !== 'package.json')) {
-      wants.push([join(ROOT, 'packages', key, file), `packages/${key} 技能面（customSkillDirs 挂载源——缺席即技能面静默缺失）`])
+      wants.push([join(ROOT, ...pkgRootOf(key), file), `${key} 技能面（customSkillDirs 挂载源——缺席即技能面静默缺失）`])
     }
   }
   for (const [path, remedy] of wants) if (!existsSync(path)) fail(`${path} 未就位 —— 先执行：${remedy}`)
@@ -361,6 +370,13 @@ function measureTree(root) {
   return { files, bytes }
 }
 
+/** staged 键（workspace 子路径）→ runtime node_modules 包短名（@dsh-forge/<短名>——lib/ 子居所
+ *  包名为 lib-<目录名>（@dsh-forge/lib-path），boot ESM 解析按真名落位——basename 直用即断链） */
+export function stagedPkgShort(key) {
+  const base = key.split('/').pop()
+  return key.startsWith('lib/') ? `lib-${base}` : base
+}
+
 async function stage() {
   const plugins = await loadProductPlugins()
   assertPreconditions(plugins)
@@ -369,9 +385,9 @@ async function stage() {
   const installManifest = readJson(join(ROOT, 'apps/host/profile.install/package.json'), 'profile.install manifest')
   const productVersions = {}
   for (const name of Object.keys(productPackages)) {
-    // 键可含 packages/ 子路径（plugins/md-mermaid）——dest/版本键取 basename 短名
-    const short = name.split('/').pop()
-    const manifest = readJson(join(ROOT, 'packages', name, 'package.json'), `packages/${name} manifest`)
+    // 键可含 workspace 子路径（plugins/md-mermaid、lib/path）——版本键取包真名短名（stagedPkgShort）
+    const short = stagedPkgShort(name)
+    const manifest = readJson(join(ROOT, ...pkgRootOf(name), 'package.json'), `${name} manifest`)
     productVersions[`@dsh-forge/${short}`] = manifest.version ?? '0.0.0'
   }
 
@@ -390,11 +406,11 @@ async function stage() {
   copyTree(INSTALL_NM, join(RUNTIME, 'node_modules'))
   mkdirSync(join(RUNTIME, 'node_modules', '@dsh-forge'), { recursive: true })
   for (const [key, requiredFiles] of Object.entries(productPackages)) {
-    const short = key.split('/').pop()
+    const short = stagedPkgShort(key)
     const dest = join(RUNTIME, 'node_modules', '@dsh-forge', short)
     mkdirSync(dest, { recursive: true })
     for (const file of [...requiredFiles, ...PRODUCT_OPTIONAL_FILES]) {
-      const source = join(ROOT, 'packages', key, file)
+      const source = join(ROOT, ...pkgRootOf(key), file)
       if (!existsSync(source)) {
         if (requiredFiles.includes(file)) fail(`${source} 未就位 —— 先执行：pnpm build`)
         continue // 可选件（README.md 等）缺席静默跳过

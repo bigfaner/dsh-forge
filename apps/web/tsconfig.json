@@ -26,6 +26,9 @@
   ],
   "references": [
     {
+      "path": "../../lib/path"
+    },
+    {
       "path": "../../packages/contracts"
     },
     {

@@ -216,12 +216,12 @@ importers:
       '@dsh-forge/input-history':
         specifier: workspace:*
         version: link:../../packages/plugins/input-history
+      '@dsh-forge/lib-path':
+        specifier: workspace:*
+        version: link:../../lib/path
       '@dsh-forge/md-mermaid':
         specifier: workspace:*
         version: link:../../packages/plugins/md-mermaid
-      '@dsh-forge/path-key':
-        specifier: workspace:*
-        version: link:../../packages/path-key
       '@dsh-forge/quote-reference':
         specifier: workspace:*
         version: link:../../packages/plugins/quote-reference
@@ -370,6 +370,10 @@ importers:
         version: 24.19.0
 
   lib/path:
+    dependencies:
+      '@dsh-forge/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
     devDependencies:
       '@types/node':
         specifier: 24.19.0
@@ -398,12 +402,12 @@ importers:
       '@dsh-forge/lib-diag':
         specifier: workspace:*
         version: link:../../lib/diag
+      '@dsh-forge/lib-path':
+        specifier: workspace:*
+        version: link:../../lib/path
       '@dsh-forge/lib-util':
         specifier: workspace:*
         version: link:../../lib/util
-      '@dsh-forge/path-key':
-        specifier: workspace:*
-        version: link:../path-key
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
@@ -413,6 +417,10 @@ importers:
         version: 9.6.0
 
   packages/path-key:
+    dependencies:
+      '@dsh-forge/lib-path':
+        specifier: workspace:*
+        version: link:../../lib/path
     devDependencies:
       '@types/node':
         specifier: 24.19.0

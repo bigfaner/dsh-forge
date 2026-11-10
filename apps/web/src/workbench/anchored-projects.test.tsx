@@ -3,7 +3,7 @@
 // 快照上抛效应与重拉锚归 e2e；此处直测 = 纯判定 + SSR 渲染期读取 + 条件锚挂载。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
 import type { ReactNode } from 'react'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
 import {

@@ -1,37 +1,12 @@
-// @dsh-forge/path-key —— 工作区路径比对归一键（定位：基础·零依赖纯函数，contracts 零逻辑
-// 铁律与 knowledge「生产面禁 import core」边界之间的共享逻辑唯一去处）。
-// fix-30 口径单一来源：core 注册链（① 预检 / fix-27 自愈查询 / 真新建结构判据的比对键）
-// 与 knowledge 绑定表解析（cwd → projectId）同源消费——同一变体拼写（盘符大小写/正反斜杠/
-// 尾分隔符）在两侧判定一致，消「同源数据两种归一口径」分裂。
-// 语义边界：本键只做纯字符串比对口径，不是落库形态——projects.ws_path 恒以 dsh registry
-// 返回的 canonical（realpath 真值拼写）为准；可达 realpath 归一属 core 注册链入口职责
-//（project-service canonicalizeDir，fail-soft），不进本键（保持零依赖/浏览器安全）。
-// 规则（与 knowledge 原 session.ts normalizePath 逐字等价——本包即其同源收编）：
-//   反斜杠 → 正斜杠；去尾分隔符（含重复）；win32 折叠大小写（其余平台大小写敏感）。
-/** 平台探测：node 环境走 process.platform；浏览器捆包（process 缺席）退 navigator
- *  平台/UA 串的 Win 探测——web 面与 host 侧键必须同源（否则大小写折叠分裂）。 */
-function platformOf(): string | undefined {
-  const proc = (globalThis as { process?: { platform?: string } }).process
-  if (proc?.platform !== undefined) return proc.platform
-  const nav = (globalThis as { navigator?: { platform?: string; userAgent?: string } }).navigator
-  if (nav === undefined) return undefined
-  const ua = `${nav.platform ?? ''} ${nav.userAgent ?? ''}`
-  return /win/i.test(ua) ? 'win32' : undefined
-}
-
-export function normalizeFsPath(p: string): string {
-  const slashed = p.replace(/\\/g, '/').replace(/\/+$/, '')
-  return platformOf() === 'win32' ? slashed.toLowerCase() : slashed
-}
-
-/**
- * 平台独立单段连接（forge-dirs-query-tool §2.8 散点收编单源）：base 去尾分隔符后按既有
- * 风格判定分隔符（Windows 盘符/UNC → `\`，POSIX → `/`）——与 prompt 旧 docsRootOfForgeDir、
- * core derive-dir joinHome 同构口径。对平台原生拼写的 base，与 node:path
- * join(base, segment) 逐字节等价（等价断言钉于 core/plugin-forge 两侧单测）。
- */
-export function joinDirSegment(base: string, segment: string): string {
-  const dir = base.replace(/[\\/]+$/, '')
-  const sep = /^[A-Za-z]:[\\/]/.test(dir) || dir.startsWith('\\\\') ? '\\' : '/'
-  return `${dir}${sep}${segment}`
-}
+// @dsh-forge/path-key —— 【退役待删】（plugin-project 1.6 归并：单源已迁 @dsh-forge/lib-path，
+// 见 .forge/docs/proposals/plugin-project/lib-merge-plan.md path-key 映射清单）。
+// 本文件降为 re-export 兼容面：knowledge / plugin-forge / plugin-forge-spec / host 等未迁移
+// 消费方（import '@dsh-forge/path-key'）保持编译与运行等价；退役删除任务到达时随消费方
+// 改指 '@dsh-forge/lib-path/path-key' 一并收口。零本地实现残留。
+export {
+  isWindowsStylePath,
+  joinDirSegment,
+  normalizeDirPath,
+  normalizeDirSpelling,
+  normalizeFsPath,
+} from '@dsh-forge/lib-path/path-key'

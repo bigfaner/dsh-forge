@@ -9,7 +9,7 @@
 // symlink/8.3 短名）可穿透预检致 dsh 返回既有实体而误判「本次新建」，③ 撞 UNIQUE(ws_path)
 // 后 ④ 把流程前就存在的健康工作区补偿删除（身份 churn）。收口三件：
 //   · 入口归一（canonicalizeDir）：注册输入可达则 realpath（磁盘真值拼写），fail-soft
-//     回退原拼写；比对口径 = normalizeFsPath（@dsh-forge/path-key 单一来源，knowledge
+//     回退原拼写；比对口径 = normalizeFsPath（@dsh-forge/lib-path 单一来源，knowledge
 //     绑定表同源消费——消口径分裂）；
 //   · 「本次新建」改结构判据：create 前后 registry.list() id 快照差集（免疫拼写变体——
 //     dsh 按 canonical 返回既有实体时 id 已在快照中，attachedToExisting 恒真值）；
@@ -24,7 +24,7 @@
 // 自愈径（attachExistingRow 命中）与挂接径（① 预检命中）零建目录——挂接语义零盘副作用不变。
 // M2（1.4，Interface 5——P1 五法不动）：deps 可选注入 tasksHome（派生根）+ onRegistered
 // （新建径注册协作者——3.4 装配建库 v1 + 发现面扫描闭包）；注册闭包碰撞复检（ERR_SUSPECTED_MOVE
-// 于中央行落库之前，拒绝注册零副作用——分类器/派生单源在 ./workspace/derive-dir.ts）+
+// 于中央行落库之前，拒绝注册零副作用——分类器/派生单源在 @dsh-forge/lib-path derive-dir）+
 // deriveTaskStoreDir 第六动词（表单预检位，纯读）。两注入缺席 = P1 行为零变化。
 // 查询面 + 启动对账（2.3）：listProjects（archived 态随行=过滤口径）/ getProject / updateProject
 // （patch 仅 name/archived）/ reconcileAtStartup（失配找回、找不回幂等重建、孤儿只提示不删；
@@ -47,16 +47,14 @@ import type {
   RegisterProjectInput,
   RegisterResult,
 } from '@dsh-forge/contracts'
-import { joinDirSegment } from '@dsh-forge/path-key'
-import { forgeDirOfWorkspace } from './workspace/dir-segments.js'
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { forgeDirOfWorkspace, joinDirSegment, normalizeFsPath } from '@dsh-forge/lib-path'
 import { errMessage } from '../util.js'
 import { ensureDirReadable } from '../fs-ensure.js'
 import { emitDiagOrFallback, type DiagEventPayload } from '../telemetry/diag-events.js'
 import { CompensationError, ProjectSortOrderInvalidError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { recordKeyLog } from './key-logs.js'
 import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
-import { classifyRegistrationCollision, deriveTaskStoreDir as deriveStoreDir, type RegistrationCollision } from './workspace/derive-dir.js'
+import { classifyRegistrationCollision, deriveTaskStoreDir as deriveStoreDir, type RegistrationCollision } from '@dsh-forge/lib-path'
 import { selectMainWorktree, sameAnchor, type GitIdentityPort, type MainWorktreeCandidate } from './workspace/identity-anchor.js'
 import { SuspectedMoveError } from './workspace/errors.js'
 

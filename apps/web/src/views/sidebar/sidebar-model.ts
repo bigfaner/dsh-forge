@@ -8,7 +8,7 @@
 // 状态点四态 = 官方 StateDot 语义（warning 用户注意 / done 完成 / ongoing 进行 / idle 静默）。
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
 import { timeLabelZh } from '../../components/index.js'
 
 /** 快照源窄形状（dsh ObservableSnapshot 结构同型；React useSyncExternalStore 直连） */

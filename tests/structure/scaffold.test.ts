@@ -54,6 +54,12 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
       [
         'apps/host',
         'apps/web',
+        // lib 公共包群（plugin-project 1.2 建位 + 1.6 path 归并到位）
+        'lib/api',
+        'lib/db',
+        'lib/diag',
+        'lib/path',
+        'lib/util',
         'packages/contracts',
         'packages/core',
         'packages/plugins/knowledge',
@@ -74,7 +80,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
   it.each([
     ['packages/contracts', []],
     // knowledge-stage1 1.8：core 知识域退役——过渡型 plugins/knowledge 引用随迁收口
-    ['packages/core', ['packages/contracts', 'packages/path-key']],
+    // plugin-project 1.6：path-key 归并 lib/path——core refs 改指 lib/path（path-key 退役待删）
+    ['packages/core', ['lib/diag', 'lib/path', 'lib/util', 'packages/contracts']],
     // fix-33 ⑯：knowledge ../core 引用删除——build 面零 core import（残留引用无消费）；
     // 测试面 core 源相对引入由 tsconfig.test.json 承载（不经 references）
     ['packages/plugins/knowledge', ['packages/contracts', 'packages/path-key']],
@@ -83,7 +90,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
     ['apps/host', ['packages/contracts', 'packages/core', 'packages/plugins/knowledge', 'packages/plugins/git-worktree']],
-    ['apps/web', ['packages/contracts', 'packages/plugins/git-worktree', 'packages/plugins/md-mermaid']],
+    // 1.6：web normalize/path-key 消费改指 @dsh-forge/lib-path/path-key——增 lib/path 引用
+    ['apps/web', ['lib/path', 'packages/contracts', 'packages/plugins/git-worktree', 'packages/plugins/md-mermaid']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
     const ts = readJson(join(dir, 'tsconfig.json')) as {
       compilerOptions?: { composite?: boolean }

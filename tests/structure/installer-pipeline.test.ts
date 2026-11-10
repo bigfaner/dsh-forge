@@ -10,12 +10,17 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_PACKAGES, PRODUCT_PLUGIN_PACKAGE_DIRS } from '../../apps/host/src/profile/runtime-packages.js'
-import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedProductPackages, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
+import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedProductPackages, stagedPkgShort, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
 import { PRODUCT_PLUGINS } from '../../packages/contracts/src/product-plugins.js'
 import { createElectronBuilderConfig } from '../../electron-builder.config.mjs'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
-const readJson = (p: string) => JSON.parse(readFileSync(join(ROOT, p), 'utf8')) as Record<string, unknown>
+const readJson = (p: string) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'))
+/** staged 键（workspace 子路径）→ 包清单相对路径（lib/ 子居所包名 lib-<目录名>——真名映射） */
+const pkgManifestRelPath = (name: string, dir?: string): string =>
+  name.startsWith('lib-')
+    ? `lib/${name.slice('lib-'.length)}/package.json`
+    : `packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`
 /** 关键文件口径（配置派生——与 stage/--check 运行期同源 PRODUCT_PLUGINS） */
 const KEY_FILES = requiredKeyFiles(PRODUCT_PLUGINS)
 
@@ -228,12 +233,12 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
     expect(KEY_FILES, '关键文件口径缺席 mobile-dist/index.html（--check 不可达）').toContain('mobile-dist/index.html')
   })
 
-  it('插件条目配置派生：stagedProductPackages(PRODUCT_PLUGINS) 成员 = KEY_FILES 插件面全集（配置单一源——翻转布尔即两口径同步）', () => {
-    const stagedNames = new Set(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).map((k) => k.split('/').pop()))
+  it('插件条目配置派生：stagedProductPackages(PRODUCT_PLUGINS) 成员 = KEY_FILES 插件面全集（配置单一源——翻转布尔即两口径同步；lib/ 子居所经 stagedPkgShort 真名映射）', () => {
+    const stagedNames = new Set(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).map((k) => stagedPkgShort(k)))
     const keyFileNames = new Set(
       KEY_FILES.flatMap((rel) => {
         const hit = /^runtime\/node_modules\/@dsh-forge\/([^/]+)\//.exec(rel)
-        return hit === null ? [] : [hit[1]]
+        return hit === null ? [] : [hit[1]!]
       }),
     )
     expect([...stagedNames].sort()).toEqual([...keyFileNames].sort())
@@ -245,7 +250,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
   const stagedPackages = new Set(
     KEY_FILES.flatMap((rel) => {
       const hit = /^runtime\/node_modules\/@dsh-forge\/([^/]+)\//.exec(rel)
-      return hit === null ? [] : [hit[1]]
+      return hit === null ? [] : [hit[1]!]
     }),
   )
 
@@ -256,8 +261,9 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
     // git-worktree = staged:true 覆写种子（2026-10-18 安装版启动崩 fix：host dist 静态 import 面）
     // knowledge = userLayerRow 种子（1.9 A5 重开放——用户层全局行 + skills/learn 技能面）
+    // lib/* = 闭包成员（plugin-project 1.2/1.6：core 依赖 lib-util/lib-diag/lib-path——lib/ 子居所自动入场）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/knowledge', 'plugins/md-mermaid'].sort(),
+      ['contracts', 'core', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/knowledge', 'plugins/md-mermaid'].sort(),
     )
   })
 
@@ -284,7 +290,9 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     const staged = stagedProductPackages(PRODUCT_PLUGINS)
     // 声明面扫描：packages/*/package.json dsh.bundle.patch 指向的文件 ⊆ staging files
     for (const [dir, files] of Object.entries(staged)) {
-      const manifest = JSON.parse(readFileSync(join(ROOT, 'packages', dir, 'package.json'), 'utf8')) as {
+      const manifest = JSON.parse(
+        readFileSync(join(ROOT, dir.startsWith('lib/') ? 'lib' : 'packages', dir.startsWith('lib/') ? dir.slice(4) : dir, 'package.json'), 'utf8'),
+      ) as {
         dsh?: { bundle?: { patch?: string } }
       }
       const declared = manifest.dsh?.bundle?.patch
@@ -306,7 +314,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     const problems: string[] = []
     for (const [dir, files] of Object.entries(staged)) {
       for (const convention of CONVENTION_DIRS) {
-        const sourceDir = join(ROOT, 'packages', dir, convention)
+        const sourceDir = join(ROOT, dir.startsWith('lib/') ? 'lib' : 'packages', dir.startsWith('lib/') ? dir.slice(4) : dir, convention)
         if (existsSync(sourceDir) && readdirSync(sourceDir).length > 0 && !files.includes(convention)) {
           problems.push(`packages/${dir}/${convention} 在场但未随包物化（STAGING_EXTRAS 漏列）`)
         }
@@ -345,7 +353,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     const missing: string[] = []
     for (const name of [...stagedPackages].sort()) {
       const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
-      const manifest = readJson(`packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`) as { dependencies?: Record<string, string> }
+      const manifest = readJson(pkgManifestRelPath(name, dir)) as { dependencies?: Record<string, string> }
       for (const [dep, version] of Object.entries(manifest.dependencies ?? {})) {
         if (dep.startsWith('@dsh-forge/')) continue
         if (installDeps[dep] === undefined) missing.push(`${name} → ${dep}@${version}`)
@@ -360,9 +368,9 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // 历史病理 = staging 硬编码清单漏列闭包成员；推导制下本断言守 kill-switch 不误伤。
     const missing: string[] = []
     for (const name of [...stagedPackages].sort()) {
-      // 键可含 packages/ 子路径（md-mermaid 居 packages/plugins/——runtime-packages 同源映射）
+      // 键可含 workspace 子路径（md-mermaid 居 packages/plugins/、lib/* 居 lib/——子居所同源映射）
       const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
-      const manifest = readJson(`packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`) as { dependencies?: Record<string, string> }
+      const manifest = readJson(pkgManifestRelPath(name, dir)) as { dependencies?: Record<string, string> }
       for (const dep of Object.keys(manifest.dependencies ?? {})) {
         if (dep.startsWith('@dsh-forge/') && !stagedPackages.has(dep.slice('@dsh-forge/'.length))) {
           missing.push(`${name} → ${dep}`)

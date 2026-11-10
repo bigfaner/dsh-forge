@@ -4,7 +4,7 @@
 // 铁律口径：「视图同级互禁」只禁同级业务互引——本模块 = 公共下层（装配域共享面），
 // 数据源 useForgeProjects 仍唯一（views/sidebar）。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
 import type { LedgerWorkspacesSnapshot } from '../views/sidebar/sidebar-model.js'
 import { useForgeProjects, type ProjectsPhase } from '../views/sidebar/use-forge-projects.js'
 import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc/index.js'

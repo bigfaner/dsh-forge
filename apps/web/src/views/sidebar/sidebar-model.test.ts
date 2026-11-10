@@ -1,7 +1,7 @@
 // sidebar-model 单测 —— UF-1 项目树/会话列表派生（AC2：项目树读 forge:projects/list、
 // 会话列表实时读 dsh 账本；AC5：空态判据输入）。纯函数面：快照进、视图行出、零持有。
 import { describe, expect, it } from 'vitest'
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import {
   buildSidebarTree,

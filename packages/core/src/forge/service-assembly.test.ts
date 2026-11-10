@@ -16,7 +16,7 @@ import { seedProjectRow } from '../testutil/db-seeds.js'
 import { StubRegistry } from '../testutil/registry-stub.js'
 import { seedFeature, seedTask } from './tasks/harness.js'
 import corePlugin, { type CoreContextFace } from '../index.js'
-import { deriveTaskStoreDir } from './workspace/derive-dir.js'
+import { deriveTaskStoreDir } from '@dsh-forge/lib-path'
 import { FORGE_DB_SCHEMA_VERSION, WORKSPACE_MIGRATIONS } from './workspace/migrations.js'
 
 /** rename 结构化桩（fix-24 ②：workspaceController 窄面——注册链标题对齐消费） */

@@ -14,7 +14,7 @@ import { execFile } from 'node:child_process'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
 import { promisify } from 'node:util'
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { normalizeFsPath } from '@dsh-forge/lib-path'
 
 const execFileP = promisify(execFile)
 

@@ -6,7 +6,7 @@
 //   - 产品页签（轨迹/知识召回）= 官方 conversation.view roster（ui-trajectory 同型先例）；
 //   - UF-2 hero（零项目首用引导）= 产品全局 main 面板（boot 期零项目时由 ShellHost 驱动选中）。
 // 本模块 = 上述装配的纯推导面（相位/项目锚/右栏联动计划/面板→视图镜像——单测直测）。
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
 
 /** 产品知识面板的官方 main 面板 key（= sidebar.panellist 行 id；plugin.ts 字面量同源 pin） */
 export const KNOWLEDGE_PANEL_KEY = 'dswf-knowledge'

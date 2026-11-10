@@ -8,6 +8,7 @@
 // 派生行单源 = core deriveTaskStoreDir（RPC forge:projects/deriveTaskStoreDir 下发，
 // derive-source 装配；本模块零路径派生残留）。
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
+import { isWindowsStylePath, normalizeDirPath } from '@dsh-forge/lib-path/path-key'
 import type { BrowserSelection } from './browser-model.js'
 
 /** 表单字段值（采集面 = RegisterProjectInput 三输入字段；workspaceDir 只读回填；知识目录随 knowledge_dir 列退役不采集——缺省 `<工作区>/.knowledge` 由 knowledge 注册径派生） */
@@ -44,23 +45,12 @@ export interface FormState {
   readonly touched: TouchedFields
 }
 
-/** Windows 风格路径判定（盘符或 UNC 前缀；POSIX `/` 起首恒 false） */
-export function isWindowsStylePath(path: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
-}
-
 /**
- * 路径归一（内部口径，平台独立）：Windows 风格（盘符/UNC）→ `/` → `\` + 去尾分隔符
- * （盘符根 `Z:\` → `Z:`）；POSIX（`/` 起首）→ 保持 `/` 分隔仅去尾 `/`（POSIX 文件名可含
- * `\`，不重写）。工作区路径来自 host canonical 化，此处仅消解用户态输入的记法差异；
- * 后续拼接/比较的分隔符随路径自身风格（见 dirSeparatorOf）。
+ * 路径归一（normalize 单源，plugin-project 1.6 收敛）：实现迁 @dsh-forge/lib-path path-key
+ * 单源（与 core derive-dir normalizeDirSpelling 同则一份）——本位 re-export 保持既有消费面
+ * 与单测 import 路径不变。
  */
-export function normalizeDirPath(path: string): string {
-  if (isWindowsStylePath(path)) {
-    return path.replaceAll('/', '\\').replace(/\\+$/, '')
-  }
-  return path.replace(/\/+$/, '')
-}
+export { isWindowsStylePath, normalizeDirPath } from '@dsh-forge/lib-path/path-key'
 
 /** 目录分隔符（随路径风格：Windows `\` / POSIX `/`——拼接与段边界判定的统一基准；盘符根 `Z:`（归一去尾后）仍按 Windows） */
 export function dirSeparatorOf(path: string): '\\' | '/' {

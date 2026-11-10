@@ -10,7 +10,7 @@
   "exclude": ["src/**/*.test.ts"],
   "references": [
     { "path": "../contracts" },
-    { "path": "../path-key" },
+    { "path": "../../lib/path" },
     { "path": "../../lib/util" },
     { "path": "../../lib/diag" }
   ]

@@ -29,7 +29,7 @@
 import { readdirSync, type Dirent } from 'node:fs'
 import { join, sep } from 'node:path'
 import type { ContainerRef } from '@dsh-forge/contracts'
-import { docsRootOfForgeDir } from './dir-segments.js'
+import { docsRootOfForgeDir } from '@dsh-forge/lib-path'
 
 /** 目录树深度上限（相对锚点根；超过截断） */
 const TREE_DEPTH_LIMIT = 3

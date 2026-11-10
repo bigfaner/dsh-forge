@@ -12,7 +12,7 @@
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { openDatabase } from '../../../packages/core/src/db/index.js'
-import { deriveTaskStoreDir } from '../../../packages/core/src/forge/workspace/derive-dir.js'
+import { deriveTaskStoreDir } from '../../../lib/path/src/derive-dir.js'
 import { FORGE_DB_SCHEMA_VERSION, WORKSPACE_MIGRATIONS } from '../../../packages/core/src/forge/workspace/migrations.js'
 import { seedEdge, seedFeature, seedLink, seedRecord, seedTask } from '../../../packages/core/src/forge/tasks/harness.js'
 
