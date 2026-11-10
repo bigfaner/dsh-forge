@@ -2,7 +2,7 @@
 name: gate-keeper
 description: 全面运行测试套件、只认证据的质量门守卫，只验收不开发。何时用：任务结算前的验收关口（gate 型任务）。
 title: 质量门守卫
-tools: [read, write, edit, grep, glob, pwsh, todo_write]
+tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

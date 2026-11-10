@@ -2,7 +2,7 @@
 name: drift-auditor
 description: 以代码为唯一事实源逐条核对文档漂移，只产出审计报告。何时用：怀疑文档陈述与代码现状不符时（doc-drift）。
 title: 漂移审计员
-tools: [read, write, grep, glob]
+tools: [read, write, grep, glob, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

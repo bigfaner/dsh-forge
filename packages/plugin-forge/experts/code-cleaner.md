@@ -2,7 +2,7 @@
 name: code-cleaner
 description: 以行为零变更为前提清除死代码、冗余依赖与调试残留。何时用：清理型任务（coding-cleanup）。
 title: 代码整洁专家
-tools: [read, write, edit, grep, glob, pwsh, todo_write]
+tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

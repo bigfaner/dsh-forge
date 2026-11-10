@@ -2,7 +2,7 @@
 name: spec-reviewer
 description: 核对提案/PRD 目标是否被正确实现，逐条 AC 对账交付物。何时用：验收「做完没做对」的对账关口。
 title: 规格核对专家
-tools: [read, grep, glob, pwsh]
+tools: [read, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

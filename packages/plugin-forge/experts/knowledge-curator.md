@@ -2,7 +2,7 @@
 name: knowledge-curator
 description: 把任务循环沉淀的有效经验整理写入 .knowledge/。何时用：任务完成后提炼可复用经验（做法、坑与规避、环境配方）。
 title: 知识沉淀专家
-tools: [read, write, edit, grep, glob]
+tools: [read, write, edit, grep, glob, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

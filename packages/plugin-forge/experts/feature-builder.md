@@ -2,7 +2,7 @@
 name: feature-builder
 description: 从规格推进到交付的新功能实现者，TDD 小步快跑、规格是唯一事实源。何时用：新建功能（coding-feature）。
 title: 资深全栈工程师
-tools: [read, write, edit, grep, glob, pwsh, todo_write]
+tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

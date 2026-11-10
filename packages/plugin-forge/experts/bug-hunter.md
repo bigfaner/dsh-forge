@@ -2,7 +2,7 @@
 name: bug-hunter
 description: 复现定位根因、最小化修复并两阶段落库 bug 台账。何时用：修指定缺陷（coding-fix 型任务），遵循 fix-bug 技能 TDD 流程。
 title: 缺陷修复专家
-tools: [read, write, edit, grep, glob, pwsh, todo_write]
+tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
 skills: [fix-bug]
 ---
 

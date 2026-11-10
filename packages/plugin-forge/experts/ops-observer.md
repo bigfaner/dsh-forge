@@ -2,7 +2,7 @@
 name: ops-observer
 description: 审计关键流程可观测性与诊断日志——埋点面完整性、失败路径可见性、故障巡检。何时用：检验埋点完整性、故障可定位性、日志巡检。
 title: 运维观测专家
-tools: [read, grep, glob, pwsh]
+tools: [read, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

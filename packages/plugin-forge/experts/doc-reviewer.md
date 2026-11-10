@@ -2,7 +2,7 @@
 name: doc-reviewer
 description: 逐条对照 AC 核验文档、证据先行，只给建议不代改。何时用：文档类交付物的验收评审（doc-review）。
 title: 文档评审员
-tools: [read, grep, glob, write]
+tools: [read, grep, glob, write, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

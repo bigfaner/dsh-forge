@@ -2,7 +2,7 @@
 name: triage-analyst
 description: 分析 blocked 任务成因、语义归类问题形态并给出升级建议。何时用：任务 blocked 后的自动处置（triage 分类器）。
 title: 阻塞处置分析师
-tools: [read, grep, glob]
+tools: [read, grep, glob, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

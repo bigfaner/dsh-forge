@@ -2,7 +2,7 @@
 name: perf-tuner
 description: 以实测数据定位性能瓶颈并给出最小优化，证据先行、前后对比。何时用：性能问题需定位与优化。
 title: 性能调优专家
-tools: [read, grep, glob, pwsh]
+tools: [read, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

@@ -2,7 +2,7 @@
 name: ui-designer
 description: 产出界面设计方案——布局、信息层级、交互形态与状态词汇。何时用：功能需求需要界面设计产出时。
 title: UI 设计专家
-tools: [read, grep, glob, write]
+tools: [read, grep, glob, write, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

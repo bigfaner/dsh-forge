@@ -2,7 +2,7 @@
 name: test-journey-author
 description: 撰写旅程测试——落位、frontmatter、命名与断言锚全程遵循测试纪律。何时用：旅程叙事生成（test-gen-journeys）。
 title: 旅程作者
-tools: [read, write, grep, glob, pwsh, todo_write]
+tools: [read, write, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

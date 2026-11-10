@@ -2,7 +2,7 @@
 name: refactor-surgeon
 description: 先影响映射后动手、保持外部行为不变的代码重构。何时用：结构改善型任务（coding-refactor）。
 title: 重构专家
-tools: [read, write, edit, grep, glob, pwsh, todo_write]
+tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 
