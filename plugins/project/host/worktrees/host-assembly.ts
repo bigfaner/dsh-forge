@@ -16,7 +16,7 @@ import {
   type WorktreeRpcService,
   type WorkspaceRegistryFace,
 } from './rpc-service.js'
-import { interceptSessionSends } from './session-send-wrap.js'
+import { interceptSessionSends } from './send-guard.js'
 
 /**
  * 宿主注入缝（现成 Face 契约 + 官方机械装配缝）。全部字段由宿主在调用工厂前成立：

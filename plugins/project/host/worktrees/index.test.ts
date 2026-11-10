@@ -48,17 +48,17 @@ describe('resolveExtensionPoints（注入缝解析）', () => {
     expect(xp.getWorktreeDir('Z:/repo')).toBe(join('Z:/repo', '.forge', 'worktrees'))
   })
 
-  it('ctx 注入缝服务在场 → 集成层实现生效（归并 resolveProject + worktree_dir 列值）', () => {
+  it('ctx 注入缝服务在场 → 集成层实现生效（归并 resolveProject + worktree_dir 列值）', async () => {
     const { ctx } = ctxStub({ injected: { resolveProject: mergeImpl, getWorktreeDir: () => 'Z:/wt-custom' } })
     const xp = resolveExtensionPoints(ctx, {})
-    expect(xp.resolveProject).toBe(mergeImpl)
+    await expect(xp.resolveProject('Z:/repo')).resolves.toEqual({ projectId: 'p-main', projectRoot: 'Z:/repo', isGit: true })
     expect(xp.getWorktreeDir('Z:/repo')).toBe('Z:/wt-custom')
   })
 
-  it('config 覆写优先于注入缝服务（嵌入方直配面）', () => {
+  it('config 覆写优先于注入缝服务（嵌入方直配面）', async () => {
     const { ctx } = ctxStub({ injected: { resolveProject: mergeImpl } })
     const xp = resolveExtensionPoints(ctx, { getWorktreeDir: () => 'Z:/from-config' })
-    expect(xp.resolveProject).toBe(mergeImpl)
+    await expect(xp.resolveProject('Z:/any')).resolves.toEqual({ projectId: 'p-main', projectRoot: 'Z:/any', isGit: true })
     expect(xp.getWorktreeDir('Z:/repo')).toBe('Z:/from-config')
   })
 
@@ -87,9 +87,13 @@ describe('插件激活（git 在场性门 + 能力服务 provide）', () => {
     expect(provided[0]!.name).toBe(GIT_WORKTREE_SERVICE)
     // 激活时注入缝还空（host 装配方晚于 runProfile provide）——调用期先取先得
     const svc = provided[0]!.value as { getExtensionPoints: () => ReturnType<typeof createDefaultExtensionPoints> }
-    expect(svc.getExtensionPoints().resolveProject).toBe(defaultResolveProject)
+    await expect(svc.getExtensionPoints().resolveProject('Z:/any')).resolves.toBeNull()
     ;(ctx as { reflect: { get: (n: string) => unknown } }).reflect.get = () => ({ resolveProject: mergeImpl })
-    expect(svc.getExtensionPoints().resolveProject).toBe(mergeImpl)
+    await expect(svc.getExtensionPoints().resolveProject('Z:/repo')).resolves.toEqual({
+      projectId: 'p-main',
+      projectRoot: 'Z:/repo',
+      isGit: true,
+    })
     dispose() // 幂等注销
     dispose()
   })

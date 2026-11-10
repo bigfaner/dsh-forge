@@ -1,4 +1,4 @@
-// @dsh-forge/git-worktree —— worktree 管理域 + 身份锚单测。
+// @dsh-forge/project · host/worktrees —— worktree 管理域 + 身份锚单测。
 // 外部依赖取证门：全部用例跑真实 git 子进程 + 临时仓库 fixture（无 remote / 带 bare remote 两种形态）。
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'

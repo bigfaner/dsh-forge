@@ -1,4 +1,4 @@
-// @dsh-forge/git-worktree —— 插件入口（Node，cordis loader 装载面）。
+// @dsh-forge/project · host/worktrees —— 插件入口（Node，cordis loader 装载面）。
 // 形态：Cordis Plugin.Function（loader 只认 default 导出，md-mermaid/core 同型）。
 // 启动检测：插件激活时经 `git --version` 探测 git 在场性——
 //   未在场 → fail-soft 不生效：不抛断宿主、零注入（UI/RPC 面、扩展点消费方均不装配）；
@@ -14,6 +14,7 @@
 import { checkGitPresence } from './git-presence.js'
 import { consoleDiagFallback, type DiagLevel } from './diag-fallback.js'
 import {
+  adoptInjectedPort,
   createDefaultExtensionPoints,
   type GitWorktreeExtensionPointOverrides,
   type GitWorktreeExtensionPoints,
@@ -70,6 +71,7 @@ export {
   type SessionBinding,
 } from './seal-guard.js'
 export {
+  adoptInjectedPort,
   createDefaultExtensionPoints,
   defaultGetWorktreeDir,
   defaultResolveProject,
@@ -77,6 +79,7 @@ export {
   type GitWorktreeExtensionPointOverrides,
   type ProjectResolution,
 } from './extension-points.js'
+export type { ProjectResolutionPort } from '@dsh-forge/lib-api'
 // forge:worktree/* 域本体（worktree-domain-migration 1.1——自 host ipc/worktree-rpc 核迁）
 export {
   createWorktreeRpcService,
@@ -92,7 +95,7 @@ export {
   type WorkspaceRegistryFace,
   type WorktreeRpcService,
 } from './rpc-service.js'
-export { interceptSessionSends } from './session-send-wrap.js'
+export { interceptSessionSends } from './send-guard.js'
 // host 注入点装配工厂（worktree-domain-migration 1.2——自 boot/child.ts 注入点核迁的装配缝）
 export {
   createHostWorktreeRpc,
@@ -140,18 +143,12 @@ export interface GitWorktreePluginConfig extends GitWorktreeExtensionPointOverri
  * 注入服务形状残缺（缺法/非函数面）→ 该面退默认，另一面仍可注入（结构化逐面收窄）。
  */
 export function resolveExtensionPoints(ctx: PluginCtxFace, config: GitWorktreePluginConfig): GitWorktreeExtensionPoints {
-  let injected: Partial<GitWorktreeExtensionPointOverrides> | undefined
+  let injected: GitWorktreeExtensionPointOverrides | undefined
   try {
-    const raw = ctx.reflect?.get?.(GIT_WORKTREE_IDENTITY_SERVICE) as Partial<GitWorktreeExtensionPointOverrides> | undefined
-    if (
-      raw !== null &&
-      typeof raw === 'object' &&
-      (typeof raw.resolveProject === 'function' || typeof raw.getWorktreeDir === 'function')
-    ) {
-      injected = raw
-    }
+    // 注入 provider 形状校验 + 首调守卫（劣形①③ fail-soft——extension-points adoptInjectedPort）
+    injected = adoptInjectedPort(ctx.reflect?.get?.(GIT_WORKTREE_IDENTITY_SERVICE))
   } catch {
-    // 注入缝缺席/读取异常 → injected 保持 undefined（独立 worktree 模式）——不抛断宿主
+    // 注入缝缺席/读取异常（劣形②）→ injected 保持 undefined（独立 worktree 模式）——不抛断宿主
   }
   return createDefaultExtensionPoints({
     resolveProject: config.resolveProject ?? injected?.resolveProject,

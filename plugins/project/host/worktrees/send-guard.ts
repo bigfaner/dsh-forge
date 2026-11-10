@@ -1,10 +1,13 @@
-// 发送拦截编排（worktree-domain-migration 1.1——自 host ipc/worktree-rpc.ts 核迁）：
+// 发送拦截编排（plugin-project 1.13 单体拆解——自 session-send-wrap 迁入，R5 判据承载件）：
 // sessionController.prompt / updateQueue wrap——assertSendable 前置封存校验。
+// R5（拦截回调内现查）：sealOf 回调执行时点经 service.seal → listPresent() 实时在场清单
+// 判定——不消费切换时点快照；回调执行前删树（git worktree remove）发送仍被拒（TOCTOU
+// 窗口不存在的判据面，send-guard.test.ts 临时 git 仓 fixture 锚）。
 // 依赖方向红线：零 apps/host/* import，官方控制器一律经 SessionControllerFace 注入。
 import type { WorktreeSealResult } from '@dsh-forge/contracts'
 import { assertSendable } from './seal-guard.js'
 import { consoleDiagFallback } from './diag-fallback.js'
-import type { SessionControllerFace } from './rpc-service.js'
+import type { SessionControllerFace } from './service.js'
 
 /**
  * 发送拦截接线（child 侧——「不可发送」的硬保证）：sessionController.prompt / updateQueue
@@ -32,8 +35,6 @@ export function interceptSessionSends(
           assertSendable({ sealed: state.sealed })
         } catch (cause) {
           // SessionSealedError 原样上抛（明确错误提示）；其余判读链异常 fail-open 放行。
-          // 1.19 SessionCwdMismatch 读侧拒绝位随预铸绑定事件退役消失（binding-derivation
-          // §2.1——seal 判读改 header.cwd 推导即真，无漂移可判）。
           const name = (cause as Error)?.name
           if (name === 'SessionSealedError') {
             // bug bc81f4b8 可观测性：封存拒发是正确性拦截，必须留痕（不静默）——

@@ -1,11 +1,11 @@
 // bug 7ba48c55（diag-face-consolidation 统一口径）：诊断缝缺席的 console 兜底必须按级
 // 分流——error→console.error、其余→console.warn（expert-squad index.ts 配方），禁止直落
 // 单级 console.warn 兜底。三站点：index.ts config.diag 兜底 / rpc-service.ts deps.warn 兜底
-// / session-send-wrap.ts warn 参数兜底。
+// / send-guard.ts warn 参数兜底。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import gitWorktreePlugin from './index.js'
 import { createWorktreeRpcService } from './rpc-service.js'
-import { interceptSessionSends } from './session-send-wrap.js'
+import { interceptSessionSends } from './send-guard.js'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -46,7 +46,7 @@ describe('诊断缝缺席 console 兜底按级分流（bug 7ba48c55）', () => {
     expect(err).not.toHaveBeenCalled()
   })
 
-  it('session-send-wrap.ts：warn 缺席 + 判读链异常 fail-open（warn 级）→ console.warn', async () => {
+  it('send-guard.ts：warn 缺席 + 判读链异常 fail-open（warn 级）→ console.warn', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const controller = { prompt: async () => 'ok' } as never

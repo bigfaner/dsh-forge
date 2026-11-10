@@ -1,4 +1,4 @@
-// @dsh-forge/git-worktree —— 会话绑定留痕面：forge/worktree-bind ignorable 事件（append + 读尾部 + 词表注册）。
+// @dsh-forge/project · host/worktrees —— 会话绑定留痕面：forge/worktree-bind ignorable 事件（append + 读尾部 + 词表注册）。
 // 机制依据（binding-derivation §2.2——绑定推导制留痕）：绑定事实 = header.cwd（推导即真），
 // 留痕事件只携带 branch 漂移警示数据源（创建时刻快照），不承载归属。写入走官方
 // Session.append 公开追加（进程内直调——官方先例 model/selection；wire 面无 append，

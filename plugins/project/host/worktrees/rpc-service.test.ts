@@ -22,7 +22,7 @@ import {
   type SessionControllerFace,
   type SessionPersistenceFace,
 } from './rpc-service.js'
-import { interceptSessionSends } from './session-send-wrap.js'
+import { interceptSessionSends } from './send-guard.js'
 
 /** 插件域扩展点桩（resolveProject 恒命中 C:/repo 主项目；worktreeDir 默认式样） */
 const fakeExt = {

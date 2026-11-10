@@ -1,4 +1,4 @@
-// @dsh-forge/git-worktree —— 会话绑定留痕面单测（forge/worktree-bind ignorable 事件：
+// @dsh-forge/project · host/worktrees —— 会话绑定留痕面单测（forge/worktree-bind ignorable 事件：
 // Session.append 直写格式 + 读尾部反查 + 词表运行期注册）。
 // 外部依赖取证门（AGENTS.md）：写入/读回/恢复全部跑真实官方包——
 // @deepseek-ai/cordis + dsh-session-persistence-jsonl（真 JSONL 落盘）+ dsh-session

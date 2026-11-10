@@ -1,4 +1,4 @@
-// @dsh-forge/git-worktree —— git 在场性启动检测（提案「启动检测」节）。
+// @dsh-forge/project · host/worktrees —— git 在场性启动检测（提案「启动检测」节）。
 // 经 `git --version` 探测 PATH 中的 git；检测动作与判定解耦——命令执行器经工厂注入，
 // 单测以 fake runner 覆盖（真机取证见 git-presence.test.ts 真机探测用例）。
 import { execFile } from 'node:child_process'

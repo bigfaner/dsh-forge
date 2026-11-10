@@ -1,4 +1,4 @@
-// @dsh-forge/git-worktree —— git 在场性检测 + 扩展点默认实现单测。
+// @dsh-forge/project · host/worktrees —— git 在场性检测 + 扩展点默认实现单测。
 // 契约来源：提案 worktree-branch-management「扩展点契约」节——
 // ① `git --version` 探测；② resolveProject 默认 null；③ worktree 目录默认 ‹projectRoot›/.forge/worktrees/ 可覆写。
 import { describe, expect, it } from 'vitest'

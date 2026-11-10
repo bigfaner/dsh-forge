@@ -1,4 +1,4 @@
-// @dsh-forge/git-worktree —— worktree 管理域（提案「数据源与命令面」节全部命令封装）。
+// @dsh-forge/project · host/worktrees —— worktree 管理域（提案「数据源与命令面」节全部命令封装）。
 // 读：list --porcelain / rev-list --left-right --count / status --porcelain / for-each-ref / branch -r。
 // 写（封闭写集）：create = git fetch（前置刷新）→ worktree add -b 一体创建；delete = 确认回调通过后 worktree remove。
 // 删除拦截数据（未提交变更/挂靠会话）由本域 status/list 提供、调用方持拦截语义。

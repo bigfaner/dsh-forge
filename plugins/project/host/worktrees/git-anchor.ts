@@ -1,4 +1,4 @@
-// @dsh-forge/git-worktree —— 仓库身份锚（提案「流程一 · 要点」节）。
+// @dsh-forge/project · host/worktrees —— 仓库身份锚（提案「流程一 · 要点」节）。
 // `git rev-parse --git-common-dir` 回答共享仓库数据（对象库/引用/配置）所在目录：
 // 同一仓库任意 worktree 输出恒同，不同仓库/子模块输出不同——git 官方的「同仓判等」接口。
 // 锚 = realpath(输出按 cwd 解析)：消除 8.3 短名/符号链接/大小写差异，与 ws_path canonical 同口径。

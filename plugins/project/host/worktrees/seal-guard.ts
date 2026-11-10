@@ -1,4 +1,4 @@
-// @dsh-forge/git-worktree —— 封存判定 + 发送拦截 + 会话 cwd 守护面。
+// @dsh-forge/project · host/worktrees —— 封存判定 + 发送拦截 + 会话 cwd 守护面。
 // 提案流程二：worktree 被删（含经 git 命令）后挂靠会话进入封存态——可查看历史、不可发送。
 // 「不可发送」的硬保证 = host 发送拦截面拒绝 + 明确错误提示（UI 三通道仅提示性视觉）。
 // 检测时机 = 会话打开/切换时比对挂靠 worktree 在场性（`git worktree list` 与挂靠路径比对）。
