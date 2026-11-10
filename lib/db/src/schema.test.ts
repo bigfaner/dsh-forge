@@ -11,7 +11,7 @@ import Database from 'better-sqlite3'
 import { openDatabase } from './index.js'
 import { MIGRATIONS, SCHEMA_VERSION, WORKTREE_DIR_BACKFILL_SQL } from './schema.js'
 
-const ROOT = resolve(fileURLToPath(import.meta.url), '../../../../../')
+const ROOT = resolve(fileURLToPath(import.meta.url), '../../../../')
 const BLUEPRINT = '.forge/docs/legacy/features/dsh-forge-p1-mvp/design/schema.sql'
 
 /** 语句归一化（空白折叠）后比对——蓝本与代码的排版差异不应导致语义漂移。 */

@@ -36,9 +36,10 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     expect(readJson(join(dir, 'package.json')).name).toBe(name)
   })
 
-  it('contracts 零运行时依赖（fix-33 ⑩ + bug a5b12254 集中化：devDependencies 仅允许 @types/node 与官方包 type-only——dsh-agent-preset-registry，运行期零依赖）', () => {
+  it('contracts 兼容面依赖收敛（plugin-project 1.7：DTO/词汇/错误码/通道常量本体迁 @dsh-forge/lib-api，dependencies 仅允许该兼容面边；devDependencies 仅允许 @types/node 与官方包 type-only——dsh-agent-preset-registry）', () => {
     const pkg = readJson('packages/contracts/package.json')
-    for (const key of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
+    expect(Object.keys((pkg.dependencies as Record<string, unknown>) ?? {})).toEqual(['@dsh-forge/lib-api'])
+    for (const key of ['peerDependencies', 'optionalDependencies']) {
       expect(Object.keys((pkg[key] as Record<string, unknown>) ?? {})).toHaveLength(0)
     }
     expect(
@@ -80,15 +81,17 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
   })
 
   it.each([
-    ['packages/contracts', []],
+    // plugin-project 1.7：api/db 归并——contracts 兼容面引 lib/api；core 兼容面引 lib/db
+    ['packages/contracts', ['lib/api']],
     // knowledge-stage1 1.8：core 知识域退役——过渡型 plugins/knowledge 引用随迁收口
     // plugin-project 1.6：path-key 归并 lib/path——core refs 改指 lib/path（path-key 退役待删）
-    ['packages/core', ['lib/diag', 'lib/path', 'lib/util', 'packages/contracts']],
+    ['packages/core', ['lib/db', 'lib/diag', 'lib/path', 'lib/util', 'packages/contracts']],
     // fix-33 ⑯：knowledge ../core 引用删除——build 面零 core import（残留引用无消费）；
     // 测试面 core 源相对引入由 tsconfig.test.json 承载（不经 references）
     ['packages/plugins/knowledge', ['packages/contracts', 'packages/path-key']],
     // M2 3.2：plugin-forge 同 knowledge 型（deps 仅 contracts + path-key——零 core 边）
-    ['packages/plugin-forge', ['packages/contracts', 'packages/path-key']],
+    // plugin-project 1.7：bug tool 壳消费 lib/api——增 lib/api 引用
+    ['packages/plugin-forge', ['lib/api', 'packages/contracts', 'packages/path-key']],
     // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
     ['apps/host', ['packages/contracts', 'packages/core', 'packages/plugins/knowledge', 'packages/plugins/git-worktree']],

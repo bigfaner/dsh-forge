@@ -1,4 +1,13 @@
-// lib/db 骨架位（plugin-project 1.2 只建位）：openDatabase/transaction/db errors 整套
-// 归并自 core src/db 在后续任务——本文件零导出仅保证 composite 编译链可独立成立，
-// 归并任务到达时整文件替换。
-export {}
+// db/ barrel（定位：基础）——SQLite 句柄唯一落点、schema 迁移、事务助手，零域语义。
+// 归并锚（plugin-project 1.7）：整套装件自 packages/core/src/db git mv 迁入（零语义改动），
+// core 旧位留 re-export 兼容面（退役收口另有任务）。
+// 边界：禁 import 业务域（依赖铁律①；迁移纪律正本 docs/conventions/db-migrations.md）。
+export { MIGRATIONS, SCHEMA_VERSION, type Migration } from './schema.js'
+export {
+  ForeignKeysUnavailableError,
+  UnsupportedSchemaVersionError,
+  isForeignKeysUnavailableError,
+  isUnsupportedSchemaVersionError,
+} from './errors.js'
+export { openDatabase, type OpenDatabaseOptions } from './open.js'
+export { withTransaction } from './transaction.js'

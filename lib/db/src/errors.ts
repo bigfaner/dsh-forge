@@ -42,3 +42,21 @@ export function isMigrationTamperedError(e: unknown): e is MigrationTamperedErro
 export function isUnsupportedSchemaVersionError(e: unknown): e is UnsupportedSchemaVersionError {
   return e instanceof UnsupportedSchemaVersionError
 }
+
+/**
+ * 逐连接 foreign_keys PRAGMA 断言失败（openDatabase I4：`PRAGMA foreign_keys = ON` 写入后
+ * 回读非 1——SQLite 编译剔除 FK 等环境异常时约束会静默失效，明确拒开）。
+ */
+export class ForeignKeysUnavailableError extends Error {
+  constructor() {
+    super(
+      `PRAGMA foreign_keys 写入后回读非 1（本连接外键约束不可用——SQLite 编译可能未启用 FK）——已拒绝打开`,
+    )
+    this.name = 'ForeignKeysUnavailableError'
+  }
+}
+
+/** 运行期判别（跨 IPC / 日志附载后仍可识别）。 */
+export function isForeignKeysUnavailableError(e: unknown): e is ForeignKeysUnavailableError {
+  return e instanceof ForeignKeysUnavailableError
+}

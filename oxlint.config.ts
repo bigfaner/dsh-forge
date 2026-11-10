@@ -54,15 +54,18 @@ export default defineConfig({
         ],
       },
     },
-    // —— 铁律① 基础 ↛ 业务：core db/（基础）↛ forge/（业务；knowledge 域已随
-    //    knowledge-stage1 1.8 退役移除）——
+    // —— 铁律① 基础 ↛ 业务：core db/（基础；1.7 本体迁 lib/db/src，兼容面同规）↛
+    //    forge/（业务；knowledge 域已随 knowledge-stage1 1.8 退役移除）——
     {
-      files: ['packages/core/src/db/**'],
+      files: ['packages/core/src/db/**', 'lib/db/src/**'],
       rules: {
         'no-restricted-imports': [
           'error',
           {
-            patterns: [{ regex: '^\\.\\./forge/', message: MSG_BASE }],
+            patterns: [
+              { regex: '^\\.\\./forge/', message: MSG_BASE },
+              { regex: '^@dsh-forge/(core|plugin-forge)', message: MSG_BASE },
+            ],
           },
         ],
       },

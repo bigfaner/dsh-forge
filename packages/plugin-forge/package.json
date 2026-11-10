@@ -27,6 +27,7 @@
     "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
     "@deepseek-ai/dsh-session-projection": "0.2.0-rc.2",
     "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/lib-api": "workspace:*",
     "@dsh-forge/path-key": "workspace:*",
     "@types/node": "24.19.0",
     "ajv": "8.20.0",

@@ -8,7 +8,7 @@
 // tasks.slug 写入（recurrence-signal-tiering——工具面零参变更，本文件随动仅注释核销）。会话/工作区绑定同 addTask 径（requireProjectId + requireSessionId）。
 // 返回面双友好（裁决⑨）：成功 formatOk（✓ + bugId 键值行）；typed 服务错误 → 失败 DTO
 // formatErr（✗ code + 人话——format.ts 单源）。
-import type { BugCard } from '@dsh-forge/contracts'
+import type { BugCard } from '@dsh-forge/lib-api'
 import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'
 import { workerSourceTaskOf } from '../dispatch-core/index.js'
 import type { ForgeToolDeps } from './index.js'
@@ -68,40 +68,11 @@ export function parseRecordBugArgs(args: unknown): RecordBugToolArgs {
 }
 
 /**
- * BugCard 成功支 schema（recordBug/resolveBug 共用——全字段镜像 contracts BugCard，
- * 值 = core 返回的全卡；顶层 additionalProperties:false 白名单必须覆盖全部 20 键）。
+ * BugCard 成功支 schema——单源：@dsh-forge/lib-api dto/bugs（plugin-project 1.7 归并收口，
+ * 本文件原 20 键手写镜像退役；此处 re-export 保持既有 import 面零改动）。
  */
-export const BUG_CARD_SUCCESS_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    bugId: { type: 'string', description: 'uuid proxy key (resolveBug 回填引用锚).' },
-    summary: { type: 'string', description: 'One-line summary (max 50 chars).' },
-    bugDesc: { type: 'string', description: 'Bug: full description of the defect.' },
-    triggerDesc: { type: 'string', description: 'Trigger: reproduction steps / input.' },
-    expected: { type: 'string', description: 'Expected: correct behavior.' },
-    actual: { type: 'string', description: 'Actual: observed behavior.' },
-    suspected: { type: 'string', description: 'Suspected location (file:line) — repair lead for open records.' },
-    errorType: { type: 'string', description: 'Free-form error type label (stats dimension).' },
-    bugStatus: { type: 'string', description: "'open' (recordBug) | 'fixed' | 'unresolved' (resolveBug)." },
-    commitHash: { type: 'string', description: 'fixed evidence (atomic commit hash anchor).' },
-    worktree: { type: 'string', description: 'fixed evidence (hash-anchored reverse lookup).' },
-    branch: { type: 'string', description: 'fixed evidence (hash-anchored reverse lookup).' },
-    unresolvedReason: { type: 'string', description: 'unresolved backfill cause (HARD-GATE stop).' },
-    fixApproach: { type: 'string', description: 'Adopted fix approach summary (fixed backfill — ledger review surface).' },
-    sourceTaskId: { type: 'string', description: 'coding-fix delegating source task (absent on standalone paths).' },
-    reportSessionId: { type: 'string', description: 'Registering (executing) session.' },
-    fixSessionId: { type: 'string', description: 'Fixing session (written on fixed backfill).' },
-    reporter: { type: 'string', description: 'Server-resolved git identity (user.name, fallback user.email).' },
-    // Root cause: bug-recurrence-chain 给 BugCard 新增 recurrenceOf 后未回写本白名单（additionalProperties:false），
-    // 挂链登记的返回卡被 oneOf 输出校验整体拒绝。
-    recurrenceOf: { type: 'string', description: 'Recurrence-chain predecessor bug_id (absent on chain roots).' },
-    fixer: { type: 'string', description: 'Server-resolved fixer git identity (fixed backfill).' },
-    createdAt: { type: 'string', description: 'Registration time (ISO-8601).' },
-    updatedAt: { type: 'string', description: 'Backfill time (ISO-8601; equals createdAt until backfilled).' },
-  },
-  required: ['bugId', 'summary', 'bugDesc', 'triggerDesc', 'expected', 'actual', 'bugStatus', 'reporter', 'createdAt', 'updatedAt'],
-}
+export { BUG_CARD_SUCCESS_SCHEMA } from '@dsh-forge/lib-api'
+import { BUG_CARD_SUCCESS_SCHEMA } from '@dsh-forge/lib-api'
 
 /** registerBug 应答（工具面包装——card 全卡 + errorType 参考集合；BugCard 行 DTO 零改动） */
 export interface RegisterBugToolResult {

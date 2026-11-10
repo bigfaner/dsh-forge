@@ -5,7 +5,7 @@
 // 本壳零 core 改动。参照 resolve-bug.ts 薄壳模式：参数执行点防御收窄（空 bug_id 拒）/
 // callToolFace 路由 / formatOk 成功渲染（全卡键值 + 链时间线）。
 import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'
-import type { GetBugResponse } from '@dsh-forge/contracts'
+import type { GetBugResponse } from '@dsh-forge/lib-api'
 import type { ForgeToolDeps } from './index.js'
 import { requireArgsObject, requiredString } from './args.js'
 import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'

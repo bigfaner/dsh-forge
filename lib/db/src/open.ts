@@ -3,11 +3,13 @@
 // pragma 走 better-sqlite3 官方 pragma API，DDL/查询一律 db.prepare()。
 // 迁移纪律与机制规范（指纹守卫 / 迁移前备份 / defer_foreign_keys / 守卫语句 / 数据迁移配方）
 // 单一来源：docs/conventions/db-migrations.md——本文件只承载实现，不复述规范。
+// 归并锚（plugin-project 1.7）：自 packages/core/src/db/open.ts git mv 迁入（零语义改动，
+// 增 I4 逐连接 foreign_keys 断言——RED 锚①）。
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { dirname } from 'node:path'
 import Database from 'better-sqlite3'
-import { MigrationTamperedError, UnsupportedSchemaVersionError } from './errors.js'
+import { ForeignKeysUnavailableError, MigrationTamperedError, UnsupportedSchemaVersionError } from './errors.js'
 import { MIGRATIONS, SCHEMA_VERSION, type GuardedStatement, type Migration } from './schema.js'
 
 /**
@@ -131,6 +133,11 @@ export function openDatabase(file: string, options: OpenDatabaseOptions = {}): D
   try {
     db.pragma('journal_mode = WAL')
     db.pragma('foreign_keys = ON')
+    // I4 逐连接断言（RED 锚①）：foreign_keys 是 per-connection PRAGMA，写入不等于生效——
+    // 回读非 1 即 throw 拒开（SQLite 编译剔除 FK 等环境异常时约束静默失效，必须 fail-closed）。
+    if ((db.pragma('foreign_keys', { simple: true }) as number) !== 1) {
+      throw new ForeignKeysUnavailableError()
+    }
 
     const current = readCurrentVersion(db)
     if (current > schemaVersion) {

@@ -3,13 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "公共 db 子包（骨架位）：openDatabase/transaction/db errors 整套（WAL/指纹守卫/迁移备份，挂 better-sqlite3）——core src/db 归并落位在后续任务，本任务只建位。",
+  "description": "公共 db 子包：openDatabase / transaction / db errors / schema 迁移整套（WAL/指纹守卫/迁移前备份/逐连接 foreign_keys 断言，挂 better-sqlite3）——自 packages/core/src/db 归并迁入（plugin-project 1.7）。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
     }
   },
   "files": [
@@ -17,6 +21,10 @@
   ],
   "scripts": {
     "build": "tsc -b"
+  },
+  "dependencies": {
+    "@dsh-forge/contracts": "workspace:*",
+    "better-sqlite3": "13.0.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "9.6.0",

@@ -5,8 +5,8 @@
 // fix_session_id = 执行会话（ToolSessionContext）。会话/工作区绑定同 addTask 径。
 // 返回面双友好（裁决⑨）：成功 formatOk（✓ + 终态/证据键值行）；typed 服务错误 → 失败 DTO
 // formatErr（✗ code + 人话——format.ts 单源）。
-import { BUG_COVERAGE_ANCHOR_PREFIX } from '@dsh-forge/contracts'
-import type { BugCard } from '@dsh-forge/contracts'
+import { BUG_COVERAGE_ANCHOR_PREFIX } from '@dsh-forge/lib-api'
+import type { BugCard } from '@dsh-forge/lib-api'
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'

@@ -3,13 +3,53 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "公共 api 子包（骨架位）：DTO、通道契约、schema 常量、错误码与服务缝契约（*Port，type-only）——@dsh-forge/contracts 归并落位在后续任务，本任务只建位。",
+  "description": "公共 api 子包：contracts DTO（bugs/forge/fs/knowledge/project/rpc/worktree）+ 词汇/错误码/通道常量单源 + BUG_CARD_SUCCESS_SCHEMA 单源——自 @dsh-forge/contracts 归并迁入（plugin-project 1.7），contracts 旧位留 re-export 兼容面。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./labels": {
+      "types": "./dist/labels.d.ts",
+      "import": "./dist/labels.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    },
+    "./channels": {
+      "types": "./dist/channels.d.ts",
+      "import": "./dist/channels.js"
+    },
+    "./dto/bugs": {
+      "types": "./dist/dto/bugs.d.ts",
+      "import": "./dist/dto/bugs.js"
+    },
+    "./dto/forge": {
+      "types": "./dist/dto/forge.d.ts",
+      "import": "./dist/dto/forge.js"
+    },
+    "./dto/fs": {
+      "types": "./dist/dto/fs.d.ts",
+      "import": "./dist/dto/fs.js"
+    },
+    "./dto/knowledge": {
+      "types": "./dist/dto/knowledge.d.ts",
+      "import": "./dist/dto/knowledge.js"
+    },
+    "./dto/project": {
+      "types": "./dist/dto/project.d.ts",
+      "import": "./dist/dto/project.js"
+    },
+    "./dto/rpc": {
+      "types": "./dist/dto/rpc.d.ts",
+      "import": "./dist/dto/rpc.js"
+    },
+    "./dto/worktree": {
+      "types": "./dist/dto/worktree.d.ts",
+      "import": "./dist/dto/worktree.js"
     }
   },
   "files": [

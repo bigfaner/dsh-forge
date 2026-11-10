@@ -354,6 +354,13 @@ importers:
         version: 24.19.0
 
   lib/db:
+    dependencies:
+      '@dsh-forge/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      better-sqlite3:
+        specifier: 13.0.3
+        version: 13.0.3
     devDependencies:
       '@types/better-sqlite3':
         specifier: 9.6.0
@@ -389,6 +396,10 @@ importers:
         version: 24.19.0
 
   packages/contracts:
+    dependencies:
+      '@dsh-forge/lib-api':
+        specifier: workspace:*
+        version: link:../../lib/api
     devDependencies:
       '@deepseek-ai/dsh-agent-preset-registry':
         specifier: 0.2.0-rc.2
@@ -402,6 +413,9 @@ importers:
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@dsh-forge/lib-db':
+        specifier: workspace:*
+        version: link:../../lib/db
       '@dsh-forge/lib-diag':
         specifier: workspace:*
         version: link:../../lib/diag
@@ -450,6 +464,9 @@ importers:
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@dsh-forge/lib-api':
+        specifier: workspace:*
+        version: link:../../lib/api
       '@dsh-forge/path-key':
         specifier: workspace:*
         version: link:../path-key

@@ -3,7 +3,7 @@
 // 分组/计数/排序（total 降序、同频词面升序），本壳仅做可选 errorType 子串过滤（组级
 // case-insensitive——聚合表小，工具层过滤即够，core 读法零改动）。面分治：主 agent +
 // 处置代理（triage 量化判据 SOP 消费）；worker 面 deny（assemble.ts FORGE_DENY_IN_WORKER）。
-import type { BugErrorTypeAggregate } from '@dsh-forge/contracts'
+import type { BugErrorTypeAggregate } from '@dsh-forge/lib-api'
 import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
 import { optionalString, requireArgsObject } from './args.js'

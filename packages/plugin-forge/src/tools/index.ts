@@ -25,7 +25,7 @@ import type {
   FeatureRow,
   TransitionFeatureInput,
 } from '@dsh-forge/contracts'
-import type { BugCard, BugChainContext, BugErrorTypeAggregate, BugRecurrenceCandidate, GetBugResponse, ListBugsQuery } from '@dsh-forge/contracts'
+import type { BugCard, BugChainContext, BugErrorTypeAggregate, BugRecurrenceCandidate, GetBugResponse, ListBugsQuery } from '@dsh-forge/lib-api'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobsFace, ProjectDirServiceFace } from '../faces.js'
 import type { ProjectIdResolver } from './session.js'

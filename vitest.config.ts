@@ -18,6 +18,10 @@ export default defineConfig({
       { test: { name: 'lib-util', include: ['lib/util/src/**/*.test.ts'] } },
       { test: { name: 'lib-diag', include: ['lib/diag/src/**/*.test.ts'] } },
       { test: { name: 'lib-path', include: ['lib/path/src/**/*.test.ts'] } },
+      // 1.7 归并到位：api（contracts DTO/词汇/错误码/通道常量 + schema 单源）与 db
+      //（openDatabase 整套 + 逐连接 foreign_keys 断言）随本体 git mv 迁入扩池
+      { test: { name: 'lib-api', include: ['lib/api/src/**/*.test.ts'] } },
+      { test: { name: 'lib-db', include: ['lib/db/src/**/*.test.ts'] } },
       // 契约面 pin 回归池（G1，2.13 起步）：pin 对象 = 上游 @deepseek-ai/* 精确 pin 版本
       // 0.2.0-rc.2 的公开面（npm 包导出与运行时契约），与 core/web 单测分池——
       // G1 单一入口 = pnpm test 固定子集（pnpm test:contract）。

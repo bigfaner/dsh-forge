@@ -10,7 +10,7 @@ import { openDatabase } from './open.js'
 import { MIGRATIONS, SCHEMA_VERSION } from './schema.js'
 
 import { withTransaction } from './transaction.js'
-import { isParseableDateStyle } from '../testutil/date-assertions.js'
+import { isParseableDateStyle } from './testutil/date-assertions.js'
 
 let dir: string
 let seq = 0
@@ -28,6 +28,17 @@ function insertProject(db: Database.Database, id: string, wsPath: string) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(id, `ws-${id}`, wsPath, id, `C:\\ws\\${id}\\.forge`, `C:\\ws\\${id}\\.knowledge`, '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z')
 }
+
+describe('I4 foreign_keys 逐连接断言（生效路径——拒开路径在 foreign-keys.test.ts）', () => {
+  it('openDatabase 打开的连接：PRAGMA foreign_keys 回读 = 1', () => {
+    const db = openDatabase(dbPath())
+    try {
+      expect(db.pragma('foreign_keys', { simple: true })).toBe(1)
+    } finally {
+      db.close()
+    }
+  })
+})
 
 describe('AC1 全 DDL 在临时库执行零错（v4 后四表 + 索引 + FK pragma）', () => {
   it('打开全新库：四表全部存在（知识域两表已随 v4 退役）', () => {

@@ -261,9 +261,10 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
     // git-worktree = staged:true 覆写种子（2026-10-18 安装版启动崩 fix：host dist 静态 import 面）
     // knowledge = userLayerRow 种子（1.9 A5 重开放——用户层全局行 + skills/learn 技能面）
-    // lib/* = 闭包成员（plugin-project 1.2/1.6：core 依赖 lib-util/lib-diag/lib-path——lib/ 子居所自动入场）
+    // lib/* = 闭包成员（plugin-project 1.2/1.6/1.7：core 依赖 lib-util/lib-diag/lib-path/lib-db，
+    // contracts 兼容面依赖 lib-api——lib/ 子居所自动入场）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/knowledge', 'plugins/md-mermaid'].sort(),
+      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/knowledge', 'plugins/md-mermaid'].sort(),
     )
   })
 
