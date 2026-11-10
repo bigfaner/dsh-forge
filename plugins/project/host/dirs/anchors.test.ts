@@ -1,7 +1,8 @@
 // dirKey 数据源单测（forge-dirs-query-tool §2.1/§2.2 + 验收 AC1/AC1a）：
 // 锚键注册表 5 键（纯函数零 IO——ctx 构造即测）+ 目的地注册表 3 目的地（requires 校验 +
 // 锚绑定单点）+ declare merge 注册面四断言（第三方键合并可见 / forge.* 占用拒绝 / 同名
-// 互撞 fail-loud 点名两方 / forge 缺席环境零生效零抛）+ 锚解析缝与 projects 服务现值同源。
+// 互撞 fail-loud 点名两方 / forge 缺席环境零生效零抛）。（锚解析缝与 projects 服务现值
+// 同源断言留 plugin-forge faces 测试面——createForgePathsAnchors 属装配层。）
 import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import {
@@ -17,8 +18,7 @@ import {
   taskLogsDirOf,
   workspaceDocsRoot,
   type DirKeyEntry,
-} from './forge-paths.js'
-import { createForgePathsAnchors } from './faces.js'
+} from './anchors.js'
 
 const WS = 'Z:\\project\\dsh\\demo'
 const CTX = {
@@ -243,45 +243,6 @@ describe('反向拉取缝（bug 04d445f4——collectDeclaredDirKeys 消费点�
     expect(warns[1]).toMatch(/malformed/)
     // onDiag 缺席 = 零发射零抛（fail-soft 行为不变）
     expect(() => collectDeclaredDirKeys(bad, builtinKeys)).not.toThrow()
-  })
-})
-
-describe('锚解析缝（faces.createForgePathsAnchors——与 projects 服务现值同源断言）', () => {
-  const projects = {
-    getProject: async () => ({
-      id: 'p-1',
-      workspaceId: 'w-1',
-      wsPath: WS,
-      name: 'demo',
-      forgeDir: `${WS}\\.forge`,
-      forgeDirExternal: false,
-      archived: false,
-      createdAt: '',
-      updatedAt: '',
-    }),
-    deriveTaskStoreDir: async () => ({ dir: 'D:\\software\\dsh-forge\\data\\forge-workspaces\\Z-project-dsh-demo@deadbeef' }),
-  }
-
-  it('锚四键 = projects 服务现值同源（forgeDir ← getProject.forgeDir；taskHome ← deriveTaskStoreDir 单源）', async () => {
-    const anchors = createForgePathsAnchors(projects, {})
-    expect(await anchors.anchorsOf('p-1')).toEqual({
-      projectHome: 'D:\\software\\dsh-forge\\data\\forge-workspaces', // dirname(taskHome)——{tasksHome}/{flatten}@{hash8} 布局
-      taskHome: 'D:\\software\\dsh-forge\\data\\forge-workspaces\\Z-project-dsh-demo@deadbeef',
-      forgeDir: `${WS}\\.forge`,
-      docsRoot: undefined,
-    })
-  })
-
-  it('projectHome：env DSH_FORGE_TASKS_HOME 非空优先（宿主 paths.ts resolveTasksHome 同键）', async () => {
-    const anchors = createForgePathsAnchors(projects, { DSH_FORGE_TASKS_HOME: 'X:\\ws\\tasks-home' })
-    expect((await anchors.anchorsOf('p-1')).projectHome).toBe('X:\\ws\\tasks-home')
-  })
-
-  it('项目未注册 / 派生空 = fail-loud（装配缺口不静默）', async () => {
-    await expect(createForgePathsAnchors({ ...projects, getProject: async () => null }, {}).anchorsOf('p-x')).rejects.toThrow(/unavailable/)
-    await expect(
-      createForgePathsAnchors({ ...projects, deriveTaskStoreDir: async () => ({ dir: '' }) }, {}).anchorsOf('p-1'),
-    ).rejects.toThrow(/taskHome derivation empty/)
   })
 })
 

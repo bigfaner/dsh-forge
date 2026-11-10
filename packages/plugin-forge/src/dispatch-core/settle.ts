@@ -13,7 +13,7 @@ import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, Ta
 import { emitForgeDiag } from '../faces.js'
 import type { ForgeDiagEmitFace, ProjectDirServiceFace } from '../faces.js'
 import { forgetWorkerSourceTask } from './assemble.js'
-import { dossierIssuesDirOf, taskLogsDirOf } from '../forge-paths.js'
+import { dossierIssuesDirOf, taskLogsDirOf } from '@dsh-forge/project/host-dirs'
 import type { SpawnWorkerHandle } from './spawn.js'
 import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchSpawnedResult } from './result.js'

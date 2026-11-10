@@ -3,12 +3,19 @@
 // 与标准地图比对产差异载荷（缺失分区/越位目录/游离散件）；差异经 followup 同径提交会话
 // agent 一个分析回合（agent 只出建议清单——零文件系统变更、零清理执行、零派发面）。
 // 真实临时目录承载（node:fs IO 面——handler 即 IO 语义本体，纯桩无意义）。
+// 落位：plugin-project 1.12 目录事实面归拢——随本体迁 plugins/project host/dirs。
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { auditDirTree, createForgeDirAuditHandler, FORGE_DIR_AUDIT_NAME, scanDirTree, STORAGE_MAP_DIRS } from './forge-dir-audit.js'
-import type { ForgeCommandInvocation } from '../faces.js'
+import {
+  auditDirTree,
+  createForgeDirAuditHandler,
+  FORGE_DIR_AUDIT_NAME,
+  scanDirTree,
+  STORAGE_MAP_DIRS,
+  type DirCommandInvocation,
+} from './audit.js'
 
 const createdDirs: string[] = []
 
@@ -23,7 +30,7 @@ afterEach(() => {
 })
 
 /** 敲指令会话桩（header.cwd = 工作区根——forge-dir-init.test invocationOf 同形） */
-function invocationOf(root: string, followup?: (message: unknown) => void, agentOverride?: unknown): ForgeCommandInvocation {
+function invocationOf(root: string, followup?: (message: unknown) => void, agentOverride?: unknown): DirCommandInvocation {
   if (agentOverride !== undefined) {
     // 保留原型链（类方法 followup 在 prototype——脱原型展开即丢方法，非本测试靶）
     const agent: Record<string, unknown> = Object.assign(

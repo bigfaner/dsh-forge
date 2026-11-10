@@ -9,5 +9,10 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../contracts" }, { "path": "../../lib/api" }, { "path": "../path-key" }]
+  "references": [
+    { "path": "../contracts" },
+    { "path": "../../lib/api" },
+    { "path": "../path-key" },
+    { "path": "../../plugins/project" }
+  ]
 }

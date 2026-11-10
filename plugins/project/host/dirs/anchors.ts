@@ -1,4 +1,7 @@
 // dirKey 数据源（forge-dirs-query-tool §2.1/§2.2——目录口径代码化单一事实源）。
+// 落位：plugin-project 1.12 目录事实面归拢 host/dirs（提案 §一裁决 3——anchors.ts =
+// forgeDirs / forgeResolvePath + dirKeys 注册单源；自 plugin-forge src/forge-paths.ts
+// git mv 迁入，零语义改动）。
 // 定位：键注册表 + 同构解析器族——纯函数零 IO，运行时事实（projectHome/taskHome/forgeDir/
 // docsRoot/slug/localId）经 ForgePathsResolveContext 注入，解析器只消费上层产物、派生链
 // 单向无环（projectHome → taskHome；forgeDir → docsRoot/tmp/worktrees；锚 + slug/localId

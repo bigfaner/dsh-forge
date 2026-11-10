@@ -16,7 +16,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BugRecurrenceCandidate } from '@dsh-forge/contracts'
-import { dossierIssuesDirOf, workspaceDocsRoot } from '../forge-paths.js'
+import { dossierIssuesDirOf, workspaceDocsRoot } from '@dsh-forge/project/host-dirs'
 import type { ModelingReportPresentFace, SameSeamRecurrenceFace } from './claim.js'
 
 /** core bugs 域服务的插件侧结构化消费面收窄（本工厂消费位——tools ForgeBugsToolFace 结构兼容） */

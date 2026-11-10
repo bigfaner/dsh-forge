@@ -9,7 +9,7 @@
 // 探针形态来源：proposals/forge-dirs-query-tool/walkthrough/fix1-forgeDirs/cordis-repro2.mjs。
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Context, type Context as CordisContext, type Plugin } from '@deepseek-ai/cordis'
-import { collectDeclaredDirKeys, DIR_KEY_REGISTRY, type DirKeyEntry, type ReflectDeclarePullFace } from './forge-paths.js'
+import { collectDeclaredDirKeys, DIR_KEY_REGISTRY, type DirKeyEntry, type ReflectDeclarePullFace } from './anchors.js'
 
 /** 内联插件函数的 config 面（cordis 4.0.4 plugin 泛型推断需显式 config 型——{name} 行否则 TS 拒） */
 type NamedPlugin = Plugin.Function<{ name?: string }>

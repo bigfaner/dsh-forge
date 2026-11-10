@@ -10,7 +10,7 @@
 // fail-soft：容器目录缺席/文件面故障 = 返回 undefined 不抛（叙述照发、详情行省略）。
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { taskLogsDirOf } from '../forge-paths.js'
+import { taskLogsDirOf } from '@dsh-forge/project/host-dirs'
 
 /** 事件子文件夹内聚文件名（同一事件三件套） */
 export const INCIDENT_ERROR_FILE = 'error.log'

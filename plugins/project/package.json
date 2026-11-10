@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/host/index.d.ts",
       "import": "./dist/host/index.js"
+    },
+    "./host-dirs": {
+      "types": "./dist/host/dirs/index.d.ts",
+      "import": "./dist/host/dirs/index.js"
     },
     "./client": {
       "types": "./dist/client/ui/index.d.ts",
@@ -66,6 +70,7 @@
     "@dsh-forge/lib-diag": "workspace:*",
     "@dsh-forge/lib-path": "workspace:*",
     "@dsh-forge/lib-util": "workspace:*",
+    "@dsh-forge/path-key": "workspace:*",
     "@types/node": "24.19.0",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.0",

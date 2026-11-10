@@ -1,13 +1,37 @@
-// commands · /forge-dir-init 指令 handler（workspace-artifact-governance §2.5）：
+// host/dirs · /forge-dir-init 指令 handler（workspace-artifact-governance §2.5）：
 // 纯机械 command plane 直执行零模型消息（/stop-dag-tasks 先例形态）——按产物存储地图
 // （§2.1.1）在工作区初始化分区目录（已存在跳过，幂等）；git 仓库则按地图把缺的忽略条目
 // 去重追加到 .gitignore（已有条目零重复），执行回执列出新建目录与追加条目。
 // 零模型消息、零任务循环改动（§2.6——gitignore 环境边界兜底，任务流程零感知）。
+// 落位：plugin-project 1.12 目录事实面归拢 host/dirs（提案 §一裁决 3；自 plugin-forge
+// commands/forge-dir-init.ts git mv 迁入——指令面类型以本地窄面承载，零上游 import）。
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { FORGE_DIR_SEGMENT, FORGE_LOGS_DIR } from '@dsh-forge/contracts'
-import { forgeDirOfWorkspace } from '../forge-paths.js'
-import type { ForgeCommandInvocation, ForgeCommandResult } from '../faces.js'
+import { forgeDirOfWorkspace } from './anchors.js'
+
+/** 指令调用入参（官方 CommandInvocation 消费子面——结构窄面：敲指令会话身份 + 指令名后原文） */
+export interface DirCommandInvocation {
+  /** 敲指令会话（官方 Agent 结构子面：session.header.cwd = 工作区根正读位） */
+  readonly agent: {
+    readonly session: {
+      readonly id: string
+      readonly header?: { readonly cwd?: string }
+      /** 兼容位：Session 顶层 cwd（结构面允许双读） */
+      readonly cwd?: string
+    }
+  }
+  /** 指令名后原文 */
+  readonly rawInput: string
+  /** 派发 UI 请求的取消信号（缺席 = 无取消通道） */
+  readonly signal?: AbortSignal
+}
+
+/** 指令执行回执（官方 CommandResult 消费子面：success 的 text 可选、error 恒带 text） */
+export interface DirCommandResult {
+  readonly kind: 'success' | 'error'
+  readonly text?: string
+}
 
 /** 指令名（无 input 描述符——无参指令，composer 不展示占位） */
 export const FORGE_DIR_INIT_NAME = 'forge-dir-init'
@@ -60,9 +84,9 @@ export function missingGitignoreEntries(existingContent: string, entries: readon
   return entries.filter((entry) => !present.has(gitignoreKey(entry)))
 }
 
-/** handler（ForgeCommandDefinition.handler 形状——UI command plane 直执行，零模型消息） */
-export function createForgeDirInitHandler(): (invocation: ForgeCommandInvocation) => Promise<ForgeCommandResult> {
-  return async (invocation: ForgeCommandInvocation): Promise<ForgeCommandResult> => {
+/** handler（DirCommandDefinition.handler 形状——UI command plane 直执行，零模型消息） */
+export function createForgeDirInitHandler(): (invocation: DirCommandInvocation) => Promise<DirCommandResult> {
+  return async (invocation: DirCommandInvocation): Promise<DirCommandResult> => {
     // 工作区根 = 敲指令会话的工作目录（header.cwd 正读位；顶层 cwd 兼容位——faces 同径）
     const root = invocation.agent.session.header?.cwd ?? invocation.agent.session.cwd
     if (root === undefined || root.trim() === '') {

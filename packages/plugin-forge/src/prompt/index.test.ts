@@ -285,6 +285,12 @@ describe('renderDocStyleSection——独立段（dual-mode-overhaul 拆段）', 
     expect(docStyle).toContain('不留调整修复叙事')
   })
 
+  it('ADR 文件约定条目在场（plugin-project 1.12——纯文件约定 .forge/adr/ + 命名/结构约定入提示段）', () => {
+    expect(docStyle).toContain('.forge/adr/')
+    expect(docStyle).toContain('YYYY-MM-DD-{slug}.md')
+    expect(docStyle).toContain('背景 / 决策 / 理由 / 影响')
+  })
+
   it('内层无二级尖括号标签（mermaid 提法用代码栅栏措辞——非 XML 标签）', () => {
     const body = docStyle.slice(`<${XML_TAGS.docStyle}>`.length, -`</${XML_TAGS.docStyle}>`.length)
     expect(body).not.toMatch(/<\/?[a-z-]+>/)

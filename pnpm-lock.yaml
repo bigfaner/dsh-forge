@@ -470,6 +470,9 @@ importers:
       '@dsh-forge/path-key':
         specifier: workspace:*
         version: link:../path-key
+      '@dsh-forge/project':
+        specifier: workspace:*
+        version: link:../../plugins/project
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
@@ -802,6 +805,9 @@ importers:
       '@dsh-forge/lib-util':
         specifier: workspace:*
         version: link:../../lib/util
+      '@dsh-forge/path-key':
+        specifier: workspace:*
+        version: link:../../packages/path-key
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0

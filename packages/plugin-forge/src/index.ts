@@ -24,14 +24,15 @@ import { join, dirname } from 'node:path'
 import { existsSync } from 'node:fs'
 import type { AgentPresetsFace, DiagLevel, ForgeSettingsService, ProjectServiceM2, ToolsSchemasReader } from '@dsh-forge/contracts'
 import { createUnionToolNamesProbe } from '@dsh-forge/contracts'
-import { docsRootOfForgeDir, forgeDirOfWorkspace, workspaceDocsRoot } from './forge-paths.js'
+import { docsRootOfForgeDir, forgeDirOfWorkspace, workspaceDocsRoot } from '@dsh-forge/project/host-dirs'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, createProjectWorkspaceRoots, createForgePathsAnchors, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
-import { collectDeclaredDirKeys, createDirKeyRegistry } from './forge-paths.js'
-import type { DirKeyEntry } from './forge-paths.js'
+import { collectDeclaredDirKeys, createDirKeyRegistry } from '@dsh-forge/project/host-dirs'
+import type { DirKeyEntry } from '@dsh-forge/project/host-dirs'
+import { createDirFactsPort } from '@dsh-forge/project/host-dirs'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, ForgeToolDefinition, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
@@ -432,6 +433,20 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.reflect?.provide?.('forgeDirs', { registerDirKeys: (entries: readonly DirKeyEntry[]) => dirKeyRegistry.registerDirKeys(entries) })
     } catch {
       // 撞车/反射异常 = 本 scope 已有注册面（双次装配）——本地单例装配不受影响
+    }
+    // DirFactsPort seam 常驻 provider 注册（plugin-project 1.12——proposal seam 表 forge.dirFacts，
+    // code-design §6 一 service 多 provider：常驻 = 全量目录事实〔合并注册表 + 锚解析缝〕；
+    // 兜底 = plugins/project host/dirs minimalDirFactsPort 仅内置键集，消费方注入缺席时退兜底）。
+    // 反射面缺席/撞车 = fail-soft 不阻载（同 forgeDirs 服务键配方）。
+    try {
+      ctx.reflect?.provide?.('forge.dirFacts', () =>
+        createDirFactsPort({
+          anchorsOf: (projectId) => forgePathsAnchors.anchorsOf(projectId),
+          dirKeys: () => dirKeyRegistry.entries(),
+        }),
+      )
+    } catch {
+      // 撞车/反射异常 = 同上，fail-soft 不阻载
     }
     const recurrenceFaces = createRecurrenceFaces({
       bugs: ctx.forgeBugs,
@@ -1289,7 +1304,7 @@ export {
   DIR_DESTINATIONS,
   DIR_KEY_REGISTRY,
   resolveDestination,
-} from './forge-paths.js'
+} from '@dsh-forge/project/host-dirs'
 export type {
   DirDestinationEntry,
   DirDestRequire,
@@ -1297,7 +1312,7 @@ export type {
   DirKeyRegistry,
   ForgeDirsServiceFace,
   ForgePathsResolveContext,
-} from './forge-paths.js'
+} from '@dsh-forge/project/host-dirs'
 // 1.17 循环进度事件族（'forge/progress'——declare-module 合并 + append 适配面）。
 export { adaptSessionProgressAppend, FORGE_PROGRESS_EVENT_TYPE, isForgeProgressData } from './progress/index.js'
 export type { ForgeProgressCounts, ForgeProgressEventData, ProgressAppendFace } from './progress/index.js'

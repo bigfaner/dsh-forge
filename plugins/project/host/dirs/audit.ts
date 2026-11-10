@@ -1,18 +1,20 @@
-// commands · /forge-dir-audit 指令 handler（workspace-artifact-governance §2.5）：
+// host/dirs · /forge-dir-audit 指令 handler（workspace-artifact-governance §2.5）：
 // 主职责 = 目录结构审计——command plane 机械扫描现实目录树（深度上限 3 层禁无限递归；
 // 跳过 node_modules 等已知重目录；符号链接/junction 条目在场但不深入），与产物存储地图
-// （§2.1.1——STORAGE_MAP_DIRS 单源复用 forge-dir-init）逐分区比对产出差异载荷三类：
+// （§2.1.1——STORAGE_MAP_DIRS 单源复用 host/dirs/init）逐分区比对产出差异载荷三类：
 // 缺失分区 / 越位目录 / 游离散件。次职责 = 产物归位核对（过程文档是否落在地图分区、
 // 临时文件是否散落——散件/临时后缀文件归类即核对产物）。差异载荷经 followup 同径
 // （/run-dag-tasks commitDispatchLine 先例）提交敲指令会话 agent 恰一个分析回合，agent
 // 按公约只出建议清单（纯消息文本）呈报用户——audit 自身只读不写（零删除/零创建）、
 // 不建任何派发面；清理建议统一出口归 forge-artifact-lifecycle（提案 §2.4）。
+// 落位：plugin-project 1.12 目录事实面归拢 host/dirs（提案 §一裁决 3；自 plugin-forge
+// commands/forge-dir-audit.ts git mv 迁入）——诊断发射与指令行消息构造改装配期注入缝
+// （零上游 import；plugin-forge commands 装配方以 emitForgeDiag / forgeCommandLineMessage 接线）。
 import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
-import { forgeCommandLineMessage, emitForgeDiag } from '../faces.js'
-import type { ForgeCommandInvocation, ForgeCommandResult, ForgeDiagEmitFace } from '../faces.js'
-import { STORAGE_MAP_DIRS } from './forge-dir-init.js'
+import { STORAGE_MAP_DIRS } from './init.js'
+import type { DirCommandInvocation, DirCommandResult } from './init.js'
 
 /** 地图分区单源再导出（单测/消费面同一入口——避免 init/audit 双 import 键漂移） */
 export { STORAGE_MAP_DIRS }
@@ -158,15 +160,27 @@ export interface ForgeDirAuditDeps {
   readonly resolveAgent?: (ownerSessionId: string) => unknown
   /** 未进入会话激活面（host sessionController.resolveAgent——缺席 = 跳过激活步） */
   readonly enterAgent?: (ownerSessionId: string) => Promise<unknown>
-  /** 诊断发射缝（diag-face-consolidation——提交 fail-soft 告警；缺席 = console 兜底） */
-  readonly diag?: ForgeDiagEmitFace
+  /** 诊断发射缝（装配期注入闭包——提交 fail-soft 告警；缺席 = 零发射，不直落 console） */
+  readonly diag?: (payload: {
+    readonly level: 'warn'
+    readonly event: string
+    readonly message: string
+    readonly sessionId?: string
+  }) => void
+  /** 指令行消息构造缝（装配期注入——缺席 = 纯 user 消息兜底形态） */
+  readonly commandMessage?: (text: string) => unknown
 }
 
-/** handler（ForgeCommandDefinition.handler 形状——扫描只读 + followup 提交，零文件系统变更） */
+/** 指令行消息兜底形态（纯 user 消息——装配缝缺席时的最小承载） */
+function defaultCommandMessage(text: string): unknown {
+  return { role: 'user', content: [{ type: 'text', text }] }
+}
+
+/** handler（DirCommandDefinition.handler 形状——扫描只读 + followup 提交，零文件系统变更） */
 export function createForgeDirAuditHandler(
   deps: ForgeDirAuditDeps = {},
-): (invocation: ForgeCommandInvocation) => Promise<ForgeCommandResult> {
-  return async ({ agent }: ForgeCommandInvocation): Promise<ForgeCommandResult> => {
+): (invocation: DirCommandInvocation) => Promise<DirCommandResult> {
+  return async ({ agent }: DirCommandInvocation): Promise<DirCommandResult> => {
     const root = agent.session.header?.cwd ?? agent.session.cwd
     if (root === undefined || root.trim() === '') {
       return { kind: 'error', text: '无法解析会话工作区根（header.cwd 缺席），目录审计未执行' }
@@ -189,7 +203,7 @@ export function createForgeDirAuditHandler(
         if (registryAgent !== undefined) target = registryAgent
       }
     } catch (cause) {
-      emitForgeDiag(deps.diag, {
+      deps.diag?.({
         level: 'warn',
         event: 'forge-dir-audit',
         message: `audit 分析回合目标解析失败（${sessionId}）：${cause instanceof Error ? cause.message : String(cause)}`,
@@ -208,14 +222,11 @@ export function createForgeDirAuditHandler(
       // 方法从接收者上剥离，内件 `this` = undefined 即抛 `undefined.send`）——恒以
       // `target.followup(message)` 形态提交，与 commitDispatchLine 同形。
       ;(target as { followup: (message: unknown) => void }).followup(
-        forgeCommandLineMessage(formatAuditPayload(diff), {
-          task: '',
-          state: 'dir-audit',
-        }),
+        (deps.commandMessage ?? defaultCommandMessage)(formatAuditPayload(diff)),
       )
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause)
-      emitForgeDiag(deps.diag, {
+      deps.diag?.({
         level: 'warn',
         event: 'forge-dir-audit',
         message: `audit 分析回合提交失败（${sessionId}）：${message}`,

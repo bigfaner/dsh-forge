@@ -50,3 +50,41 @@ export interface BugsServicePort {
   getBug(q: GetBugQuery): Promise<GetBugResponse>
   aggregateByErrorType(projectId: string): Promise<readonly BugErrorTypeAggregate[]>
 }
+
+/** 目录锚事实（forgeDirs 全量/单键查询投影——dirKey + 绝对目录 + 一句话语义三件套） */
+export interface DirAnchorFact {
+  readonly dirKey: string
+  readonly dir: string
+  readonly description: string
+}
+
+/**
+ * 目录审计差异载荷（/forge-dir-audit 三类——地图比对产物，纯读派生零副作用；
+ * plugin-project 1.12 目录事实面归拢 plugins/project host/dirs，契约视图单源落本包）。
+ */
+export interface DirAuditDiff {
+  /** 缺失分区：地图分区目录不在场（.forge 相对路径） */
+  readonly missingPartitions: readonly string[]
+  /** 越位目录：.forge 域内不在地图允许集的目录（含 .forge/docs 下非地图子目录） */
+  readonly misplacedDirs: readonly string[]
+  /** 游离散件：.forge 直下散落文件 + 根目录临时后缀文件 */
+  readonly strayFiles: readonly string[]
+}
+
+/**
+ * 目录事实面服务缝契约（plugin-project 1.12 归拢——proposal seam 表 `forge.dirFacts`，
+ * code-design §6）。常驻 provider = plugins/project host/dirs DirFactsPort 实现
+ * （anchors 注册表 + declare merge 第三方键 + 机械审计 + doc-style 提示段）；
+ * 兜底 provider = 仅内置 dirKeys 的最小 provider（minimalDirFactsPort）；消费方 =
+ * dirKeys 查询 tool、各插件目录消费（注入在场即覆写、缺席退兜底）。
+ */
+export interface DirFactsPort {
+  /** 目录锚查询：dirKey 给定查单键（未知键 = typed 拒绝），缺席 = 全量锚清单（锚随 projectId 解析） */
+  listAnchors(projectId: string, dirKey?: string): Promise<readonly DirAnchorFact[]>
+  /** 目的地解析（受控枚举 dest + slug/localId 按 requires——注册表锚绑定单点） */
+  resolveDestination(projectId: string, dest: string, params: { readonly slug?: string; readonly localId?: string }): Promise<string>
+  /** 工作区目录结构审计（机械扫描 + 存储地图比对——只读零副作用） */
+  audit(root: string): DirAuditDiff
+  /** forge:doc-style 提示段全文（含 ADR 文件约定条目） */
+  docStyleSection(): string
+}
