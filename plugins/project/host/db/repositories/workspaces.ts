@@ -85,6 +85,13 @@ export class WorkspacesRepo {
     return r ? toRow(r) : undefined
   }
 
+  /** 对账修引用 DAO 单点（relink/recreate 单向修应用侧——workspace_id 弱引用重锚）。 */
+  updateWorkspaceRef(id: number, workspaceId: string): void {
+    this.#db
+      .prepare(`UPDATE ${this.#tables.workspaces} SET workspace_id = ? WHERE id = ?`)
+      .run(workspaceId, id)
+  }
+
   /** 归属键谓词 DAO 单点：ws_path → 关系行（anchor 链 / 防重挂判据消费）。 */
   findByWsPath(wsPath: string): WorkspaceRow | undefined {
     const r = this.#db
