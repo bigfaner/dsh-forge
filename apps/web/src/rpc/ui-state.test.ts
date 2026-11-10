@@ -48,8 +48,11 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_BUG_SUMMARY_TOO_LONG: 'error-bar',
   ERR_BUG_ALREADY_RESOLVED: 'error-bar',
   ERR_COMMIT_HASH_REQUIRED: 'error-bar',
-  // bug-recurrence-chain（复发链挂链写径）——悬空引用错误条
+  // bug-recurrence-chain（复发链挂链写径）——悬空引用/弱引用格式非法错误条
   ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
+  ERR_BUG_RECURRENCE_INVALID: 'error-bar',
+  // plugin-project 1.11 归拢（host/bugs 行级归属键闸门）——派生失败错误条
+  ERR_BUG_PROJECT_KEY_REQUIRED: 'error-bar',
   // dispatch-loop-hardening 改进 5（addTask caller 身份分流）——worker 拒收错误条
   ERR_WORKER_ADDTASK_DENIED: 'error-bar',
   // session-binding-guarantee W2 / bug 4a30b193——创建入口显式拒绝错误条

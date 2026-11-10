@@ -71,9 +71,12 @@ const COLUMNS = `id, project_key, summary, bug_desc, trigger_desc, expected, act
 export interface BugResolvePatch {
   bugStatus: BugStatus
   commitHash?: string
+  worktree?: string
+  branch?: string
   fixApproach?: string
   unresolvedReason?: string
   fixer?: string
+  fixSessionId?: string
   updatedAt: string
 }
 
@@ -148,6 +151,42 @@ export class BugsRepo {
         fixer: patch.fixer ?? null,
         updatedAt: patch.updatedAt,
       })
+  }
+
+  /**
+   * open 态守卫回填（plugin-project 1.11 归拢——并发窗口收口）：`WHERE id = ? AND bug_status = 'open'`
+   * 单语句守卫，零行更新（终态竞争）返回 false，域服务据此拒 ERR_BUG_ALREADY_RESOLVED——
+   * 证据/身份 await 窗口的并发防护由数据库层承担（core 同事务复检口径的 repo 等价面）。
+   */
+  resolveIfOpen(id: string, patch: BugResolvePatch): boolean {
+    return (
+      this.#db
+        .prepare(
+          `UPDATE ${this.#tables.bugs}
+           SET bug_status = @bugStatus,
+               commit_hash = COALESCE(@commitHash, commit_hash),
+               worktree = COALESCE(@worktree, worktree),
+               branch = COALESCE(@branch, branch),
+               fix_approach = COALESCE(@fixApproach, fix_approach),
+               unresolved_reason = COALESCE(@unresolvedReason, unresolved_reason),
+               fixer = COALESCE(@fixer, fixer),
+               fix_session_id = COALESCE(@fixSessionId, fix_session_id),
+               updated_at = @updatedAt
+           WHERE id = @id AND bug_status = 'open'`,
+        )
+        .run({
+          id,
+          bugStatus: patch.bugStatus,
+          commitHash: patch.commitHash ?? null,
+          worktree: patch.worktree ?? null,
+          branch: patch.branch ?? null,
+          fixApproach: patch.fixApproach ?? null,
+          unresolvedReason: patch.unresolvedReason ?? null,
+          fixer: patch.fixer ?? null,
+          fixSessionId: patch.fixSessionId ?? null,
+          updatedAt: patch.updatedAt,
+        }).changes > 0
+    )
   }
 
   /** 聚合：三态计数（project_key 可选圈定）。 */

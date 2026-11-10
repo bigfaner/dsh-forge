@@ -46,11 +46,15 @@ export const ERROR_CODES = [
   // ── main-agent-task-tools（updateTask 锁定面） ──
   'ERR_TASK_LOCKED', // → TaskLockedError：六锁定态任务改写被拒（in_progress/interrupted/completed/skipped/rejected——409）
   'ERR_TASK_EDGE_ORIGIN_LOCKED', // → EdgeOriginLockedError：fix-chain/autoconfig 派生边结构性不可改（409；仅 manual 边可改写）
-  // ── fix-bug（bug 域两写径——core small-domains/bugs.ts 字面锚定的 contracts 对账扩池） ──
+  // ── fix-bug（bug 域两写径——core small-domains/bugs.ts 字面锚定的 contracts 对账扩池；
+  //    plugin-project 1.11 归拢锚：bug 域服务归拢 plugins/project host/bugs） ──
   'ERR_BUG_NOT_FOUND', // → BugNotFoundError：bugId 未命中（404）
   'ERR_BUG_SUMMARY_TOO_LONG', // → BugSummaryTooLongError：registerBug summary 超 50 字拒写（400）
   'ERR_BUG_ALREADY_RESOLVED', // → BugAlreadyResolvedError：终态再迁移拒绝（open→fixed｜unresolved 单向——409）
   'ERR_COMMIT_HASH_REQUIRED', // → CommitHashRequiredError：resolveBug(fixed) 缺 agent 捕获的 commit_hash（400）
+  // ── plugin-project 1.11 归拢（host/bugs bugs 域弱引用 + 行级归属键闸门） ──
+  'ERR_BUG_RECURRENCE_INVALID', // → BugRecurrenceInvalidError：recordBug recurrenceOf 弱引用格式非法（非 bug_id 形制）拒写（400；data 带原值）
+  'ERR_BUG_PROJECT_KEY_REQUIRED', // → BugProjectKeyRequiredError：registerBug 行级归属键 project_key 派生失败拒写（I5——400；data 带 projectId）
   // ── bug-recurrence-chain（复发链挂链写径） ──
   'ERR_BUG_RECURRENCE_DANGLING', // → BugRecurrenceDanglingError：recordBug recurrenceOf 指向不存在的 bug_id 拒写（404；data 带 dangling bug_id）
   // ── dispatch-loop-hardening 改进 5（调度权收敛——addTask caller 身份分流） ──
@@ -149,6 +153,16 @@ export interface FilesUnionMismatchData {
   files: readonly string[]
   created: readonly string[]
   modified: readonly string[]
+}
+
+/** ERR_BUG_RECURRENCE_INVALID data 载荷：弱引用格式非法的 recurrenceOf 原值（trim 后） */
+export interface BugRecurrenceInvalidData {
+  recurrenceOf: string
+}
+
+/** ERR_BUG_PROJECT_KEY_REQUIRED data 载荷：归属键派生失败的项目 id（I5 拒写零副作用） */
+export interface BugProjectKeyRequiredData {
+  projectId: string
 }
 
 /** ERR_BUG_RECURRENCE_DANGLING data 载荷：悬空前驱引用（挂链拒写零副作用） */

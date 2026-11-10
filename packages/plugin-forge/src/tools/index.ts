@@ -25,7 +25,7 @@ import type {
   FeatureRow,
   TransitionFeatureInput,
 } from '@dsh-forge/contracts'
-import type { BugCard, BugChainContext, BugErrorTypeAggregate, BugRecurrenceCandidate, GetBugResponse, ListBugsQuery } from '@dsh-forge/lib-api'
+import type { BugCard, BugChainContext, BugErrorTypeAggregate, BugRecurrenceCandidate, GetBugResponse, ListBugsQuery, RegisterBugInput, RegisterBugResult, ResolveBugInput } from '@dsh-forge/lib-api'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobsFace, ProjectDirServiceFace } from '../faces.js'
 import type { ProjectIdResolver } from './session.js'
@@ -71,34 +71,14 @@ function createImplCheckpointTools(deps: DispatchForgeToolDeps): Pick<
 }
 
 /**
- * core bug 域服务的插件侧结构化消费面（fix-bug 两写径——core createBugsService 结构兼容，
- * 类型出自本面：插件禁 import core，跨面以结构判别；两写径语义 = core RegisterBugInput/
- * ResolveBugInput 同形）。
+ * bugs 域服务的插件侧结构化消费面（fix-bug 两写径——plugin-project 1.11 归拢：bug 域服务
+ * 归拢 plugins/project host/bugs，服务缝契约 = lib/api ports BugsServicePort，输入/应答
+ * 类型单源 lib/api dto/bugs（RegisterBugInput/ResolveBugInput/RegisterBugResult——本面与
+ * 域服务共用同形，禁手写镜像）；类型出自本面：插件禁 import 域实现，跨面以结构判别。
  */
 export interface ForgeBugsToolFace {
-  registerBug(input: {
-    readonly projectId: string
-    readonly summary: string
-    readonly bugDesc: string
-    readonly triggerDesc: string
-    readonly expected: string
-    readonly actual: string
-    readonly suspected?: string
-    readonly errorType?: string
-    /** 复发链前驱指针（bug-recurrence-chain——登记时一次写入；悬空引用拒写） */
-    readonly recurrenceOf?: string
-    readonly sourceTaskId?: string
-    readonly reportSessionId?: string
-  }): Promise<{ readonly card: BugCard; readonly errorTypeSuggestions: readonly string[] }>
-  resolveBug(input: {
-    readonly projectId: string
-    readonly bugId: string
-    readonly outcome: 'fixed' | 'unresolved'
-    readonly commitHash?: string
-    readonly unresolvedReason?: string
-    readonly fixApproach?: string
-    readonly fixSessionId?: string
-  }): Promise<BugCard>
+  registerBug(input: RegisterBugInput): Promise<RegisterBugResult>
+  resolveBug(input: ResolveBugInput): Promise<BugCard>
   /**
    * 台账查询面（bug-recurrence-chain：listBugs tool 六字段 search/状态 chips/sort/
    * offset+limit 分页——core listBugs 结构兼容；bug-mention-prestep 仅传 projectId 子集）。

@@ -155,6 +155,54 @@ export interface BugsChannelResponses {
   fileDiff: { diff: string }
 }
 
+// ── bugs 域服务缝输入/应答类型（plugin-project 1.11 归拢——host/bugs BugsServicePort 单源；
+// 形状与 core small-domains/bugs.ts 既有面逐字段同形，tool 薄封装与域服务共用）──
+
+/** registerBug 入参（agent/tool 提交语义字段；身份/会话/归属键由服务端解析注入） */
+export interface RegisterBugInput {
+  readonly projectId: string
+  readonly summary: string
+  readonly bugDesc: string
+  readonly triggerDesc: string
+  readonly expected: string
+  readonly actual: string
+  readonly suspected?: string
+  readonly errorType?: string
+  readonly sourceTaskId?: string
+  readonly reportSessionId?: string
+  /** 复发链前驱指针：本条登记时链上时间最近一条 bug_id（链根缺省；悬空引用拒写；登记时一次写入） */
+  readonly recurrenceOf?: string
+}
+
+/** resolveBug 入参（outcome 两终态择一；fixed 必带 commit_hash / unresolved 必带因） */
+export interface ResolveBugInput {
+  readonly projectId: string
+  readonly bugId: string
+  readonly outcome: 'fixed' | 'unresolved'
+  /** fixed：agent 原子提交后 `git rev-parse HEAD` 捕获（并发安全） */
+  readonly commitHash?: string
+  /** unresolved：HARD-GATE 停机原因 */
+  readonly unresolvedReason?: string
+  /** fixed：修复方案总结（采用了什么修法、为何此修法——一段话，台账审查面） */
+  readonly fixApproach?: string
+  readonly fixSessionId?: string
+}
+
+/** registerBug 应答（工具面包装）：card = 登记投影；errorTypeSuggestions = 台账 distinct
+ * errorType 集合（高频优先限量）——词表只作参考，归类始终是语义判断。 */
+export interface RegisterBugResult {
+  readonly card: BugCard
+  readonly errorTypeSuggestions: readonly string[]
+}
+
+/** 台账 recurrence 候选检索 scope（project.db 口径——两表制无 tasks 表，container_slug 列
+ * 直比承载归属，source_task_id 反查径随 1.11 归拢退役）。 */
+export interface BugRecurrenceScope {
+  readonly slug: string
+  readonly localId: string
+  readonly files: readonly string[]
+}
+
 /**
  * BugCard 成功支 schema（recordBug/resolveBug 共用——全字段镜像 BugCard 本体，单源常量随
  * Bug 域 DTO 落位；值 = core 返回的全卡；顶层 additionalProperties:false 白名单必须覆盖

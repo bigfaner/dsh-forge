@@ -32,7 +32,9 @@ export {
  * worker 面禁入的 forge 动词（矩阵 forge 族 = WORKER_FORGE_TOOLS 四动词——submitTask +
  * recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径（bug-recurrence-chain——fix-bug
  * coding-fix worker 放行）；addTask 不入 worker 面（任务派生权限归主会话与循环处置层——
- * execute 面 ERR_WORKER_ADDTASK_DENIED 双保险）。名单 = 本包
+ * execute 面 ERR_WORKER_ADDTASK_DENIED 双保险）。plugin-project 1.11 归拢锚：bug 域服务
+ * 归拢 plugins/project host/bugs（服务缝 = lib/api ports BugsServicePort）——本 deny 名单的
+ * bug 三动词面分治随迁保持。名单 = 本包
  * FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS（单测同步守护）——十六员全集中
  * worker 可见 = 四动词，其余九员 deny（updateTask/taskStats/listTasks/listBugs 等仅主
  * agent 面——listBugs 台账查询面分治主 agent；transitionFeature 相位转移入口

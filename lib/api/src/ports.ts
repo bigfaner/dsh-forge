@@ -1,5 +1,16 @@
 // 服务缝契约单源（lib/api 定位条目：服务缝契约 `*Port`，type-only 落 lib/api——
-// lib-merge-plan「子包分工」）。本文件只声明契约类型：零逻辑零依赖（定位铁律内）。
+// lib-merge-plan「子包分工」）。本文件只声明契约类型：零逻辑零运行期依赖（定位铁律内；
+// dto 类型经 type-only import 复用，不复制镜像）。
+import type {
+  BugCard,
+  GetBugQuery,
+  GetBugResponse,
+  ListBugsQuery,
+  RegisterBugInput,
+  RegisterBugResult,
+  ResolveBugInput,
+} from './dto/bugs.js'
+import type { BugErrorTypeAggregate } from './dto/forge.js'
 
 /** 路径归属解析结果（isGit 能力位由解析器结果派生，UI 只消费） */
 export interface ProjectResolution {
@@ -24,4 +35,18 @@ export interface ProjectResolutionPort {
   resolveProject(cwd: string): Promise<ProjectResolution | null>
   /** worktree 存放目录提供者：默认 ‹projectRoot›/.forge/worktrees，调用方可设定 */
   getWorktreeDir(projectRoot: string): string
+}
+
+/**
+ * bugs 域服务缝契约（plugin-project 1.11 归拢——code-design §5/§6）。常驻 provider =
+ * project host/bugs BugsService（project.db BugsRepo 承载）；兜底 provider = 空实现
+ * （register 拒 ErrUnavailable 语义）；消费方 = bug 五 tool（薄封装）/ bug UI 三件。
+ * recordBug/resolveBug 写动词不上 RPC（channels.ts 面分治纪律）。
+ */
+export interface BugsServicePort {
+  registerBug(input: RegisterBugInput): Promise<RegisterBugResult>
+  resolveBug(input: ResolveBugInput): Promise<BugCard>
+  listBugs(q: ListBugsQuery): Promise<BugCard[]>
+  getBug(q: GetBugQuery): Promise<GetBugResponse>
+  aggregateByErrorType(projectId: string): Promise<readonly BugErrorTypeAggregate[]>
 }

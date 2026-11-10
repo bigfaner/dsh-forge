@@ -82,8 +82,8 @@ describe('AC3 errors.ts 扩池 15 新码（M2 表逐条一致）', () => {
 })
 
 describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', () => {
-  it('ERROR_CODES = 47 码：… + before 后继守卫码 + 项目排序校验码续后（project-manual-order）+ blocked 源建链守卫码（bug 0a25720c）+ blocked 归类闸门码 + 同缝拦截码（loop-recurrence-hardening T2/T3）+ 覆盖声明闸门两码（T4）+ 目录受控面拒绝码（forge-dirs-query-tool）', () => {
-    expect([...ERROR_CODES]).toHaveLength(47)
+  it('ERROR_CODES = 49 码：… + before 后继守卫码 + 项目排序校验码续后（project-manual-order）+ blocked 源建链守卫码（bug 0a25720c）+ blocked 归类闸门码 + 同缝拦截码（loop-recurrence-hardening T2/T3）+ 覆盖声明闸门两码（T4）+ 目录受控面拒绝码（forge-dirs-query-tool）+ 1.11 归拢两码（弱引用格式/归属键闸门）', () => {
+    expect([...ERROR_CODES]).toHaveLength(49)
     expect([...ERROR_CODES].slice(21, 24)).toEqual(M3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(24, 27)).toEqual(S3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(27, 29)).toEqual(TASK_TOOLS_ERROR_TABLE.map(([code]) => code))
@@ -93,23 +93,27 @@ describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', ()
       'ERR_BUG_ALREADY_RESOLVED',
       'ERR_COMMIT_HASH_REQUIRED',
     ])
-    expect([...ERROR_CODES].slice(33, 34)).toEqual(['ERR_BUG_RECURRENCE_DANGLING'])
-    expect([...ERROR_CODES].slice(34, 37)).toEqual([
+    expect([...ERROR_CODES].slice(33, 36)).toEqual([
+      'ERR_BUG_RECURRENCE_INVALID', // plugin-project 1.11 归拢（host/bugs 弱引用格式校验）
+      'ERR_BUG_PROJECT_KEY_REQUIRED', // plugin-project 1.11 归拢（I5 行级归属键闸门）
+      'ERR_BUG_RECURRENCE_DANGLING',
+    ])
+    expect([...ERROR_CODES].slice(36, 39)).toEqual([
       'ERR_WORKER_ADDTASK_DENIED',
       'ERR_WORKTREE_CAPABILITY_ABSENT',
       'ERR_WORKTREE_TARGET_ABSENT',
     ])
-    expect([...ERROR_CODES].slice(37, 39)).toEqual(['ERR_RUNTIME_EVIDENCE_REQUIRED', 'ERR_RUNTIME_EVIDENCE_CONFLICT'])
-    expect([...ERROR_CODES].slice(39, 41)).toEqual(['ERR_BEFORE_SUCCESSOR_INVALID', 'ERR_PROJECT_SORT_INVALID'])
-    expect([...ERROR_CODES].slice(41, 46)).toEqual([
+    expect([...ERROR_CODES].slice(39, 41)).toEqual(['ERR_RUNTIME_EVIDENCE_REQUIRED', 'ERR_RUNTIME_EVIDENCE_CONFLICT'])
+    expect([...ERROR_CODES].slice(41, 43)).toEqual(['ERR_BEFORE_SUCCESSOR_INVALID', 'ERR_PROJECT_SORT_INVALID'])
+    expect([...ERROR_CODES].slice(43, 48)).toEqual([
       'ERR_BLOCK_SOURCE_REQUIRED',
       'ERR_BLOCK_CLASSIFICATION_REQUIRED',
       'ERR_RECURRENCE_ESCALATION_REQUIRED',
       'ERR_BUG_COVERAGE_DECLARATION_REQUIRED',
       'ERR_BUG_COVERAGE_ANCHOR_INVALID',
     ])
-    expect([...ERROR_CODES].slice(46)).toEqual(['ERR_DIR_PATH_INVALID'])
-    expect(new Set(ERROR_CODES).size).toBe(47)
+    expect([...ERROR_CODES].slice(48)).toEqual(['ERR_DIR_PATH_INVALID'])
+    expect(new Set(ERROR_CODES).size).toBe(49)
   })
 
   it('M3/S3/工具面/fix-bug/复发链新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {

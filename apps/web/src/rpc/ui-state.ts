@@ -65,8 +65,12 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_BUG_ALREADY_RESOLVED: 'error-bar',
   ERR_COMMIT_HASH_REQUIRED: 'error-bar',
   // ── bug-recurrence-chain（复发链挂链写径）──
-  // 挂链引用悬空 → 错误条（recordBug 语境原地反馈——前驱 bug_id 不存在改参重试）
+  // 挂链引用悬空/弱引用格式非法 → 错误条（recordBug 语境原地反馈——前驱 bug_id 不存在或形制非法改参重试）
   ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
+  ERR_BUG_RECURRENCE_INVALID: 'error-bar',
+  // ── plugin-project 1.11 归拢（host/bugs 行级归属键闸门）──
+  // project_key 派生失败 → 错误条（登记语境原地反馈——项目归属未解析，重试同因）
+  ERR_BUG_PROJECT_KEY_REQUIRED: 'error-bar',
   // ── dispatch-loop-hardening 改进 5（addTask caller 身份分流）──
   // worker 会话 addTask 拒收 → 错误条（自解释文案带正确动作——submitTask result=blocked 如实结算）
   ERR_WORKER_ADDTASK_DENIED: 'error-bar',

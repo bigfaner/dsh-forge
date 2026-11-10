@@ -7,6 +7,8 @@
 // 1.1（M3）增补：Interface 4 扩池——proposals 三新键（transition 双面/setMode/listDocs）+
 // forge:settings/{get,set} 新族；allowlist 28 → 33；transitionProposal 移出 RPC 拒绝集（drift 修订）。
 // fix-bug 增补：forge:bugs/list 新族（Bug 子 tab 列表读面）；recordBug/resolveBug 写动词恒不上 RPC（拒绝集 pin 扩充）。
+// plugin-project 1.11 归拢锚：bug 域服务归拢 plugins/project host/bugs（服务缝 = lib/api
+// ports BugsServicePort）——本 pin 的面分治断言（bug 两写径 tool 专属恒不上 RPC）随迁保持。
 // mobile-remote-approval（1.1）增补：forge:remote/* 新族两通道（progress 只读进度 / approval 审批转发）；
 // allowlist 36 → 38；远程受限面零写动词（审批走官方 user-approval 转发语义，不直改 forge 状态）。
 import { describe, expect, it } from 'vitest'
