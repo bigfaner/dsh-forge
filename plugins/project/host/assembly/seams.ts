@@ -97,11 +97,17 @@ export function stubProjectsService(onDiag?: SeamDiag): ProjectsServicePort {
   } as unknown as ProjectsServicePort
 }
 
-/** worktrees 兜底：独立模式（list 恒零 / resolve 恒空集 / seal 恒未封存——rpc-service 同语义） */
+/** worktrees 兜底：独立模式（list 恒零 / create/delete 拒不可用——封闭写集未装配 /
+ *  resolve 恒空集 / seal 恒未封存——rpc-service 独立模式同语义） */
 export function standaloneWorktreeService(onDiag?: SeamDiag): WorktreeServicePort {
+  const writeUnavailable = async (): Promise<never> => {
+    throw new Error('forge.worktrees create/delete unavailable（独立模式兜底——worktree 封闭写集未装配）')
+  }
   onDiag?.('[project-seams] forge.worktrees 兜底 provider 激活（独立 worktree 模式）')
   return {
     list: async () => ({ isGit: false, entries: [] }),
+    create: writeUnavailable,
+    delete: writeUnavailable,
     ensureWorkspace: async () => ({}),
     select: async () => ({ ok: true }),
     seal: async () =>

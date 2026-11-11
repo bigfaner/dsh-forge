@@ -334,7 +334,10 @@ export function createWorktreeRpcService(deps: WorktreeServiceDeps): WorktreeRpc
       if (cached !== undefined) return cached
       const resolution = await cachedResolve(request.projectRoot)
       if (resolution === null) {
-        noGitCache.set(cacheKey, noGit)
+        // 只在 gitWorktree 能力服务在场时缓存负结果（cachedResolve 同判据）：单装装配态
+        // 能力经异步探测 provide——探测窗口内的非 git 判定缓存会把「能力未到」冻结成
+        // 永久非 git（fix-8 真机 009 铁证径）。
+        if (resolveGitWorktree() !== undefined) noGitCache.set(cacheKey, noGit)
         return noGit
       }
       const [entries, dir] = await Promise.all([

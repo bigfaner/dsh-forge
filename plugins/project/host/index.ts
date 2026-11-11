@@ -23,12 +23,19 @@ import {
   type SeamDiag,
 } from "./assembly/seams.js";
 import { createProjectsServicePort, openProjectsDomainDb } from "./assembly/projects-port.js";
+import { createWorktreeIdentity } from "./assembly/worktree-identity.js";
 import { createBugsService } from "./bugs/service.js";
 import { minimalDirFactsPort } from "./dirs/dir-facts.js";
 // 1.17 批二「卸旧装新」：本包单行装载 = 五缝注册 + worktree 域插件（gitWorktree 能力
 // 服务 provide）——旧 @dsh-forge/git-worktree 行退役后，overlay 注行门只挂本包，
 // 能力面在此组合保持外部行为不变（git 缺席 fail-soft 不生效语义归插件启动检测）。
-import worktreePlugin from "./worktrees/index.js";
+import worktreePlugin, {
+  createWorktreeRpcService,
+  GIT_WORKTREE_IDENTITY_SERVICE,
+  GIT_WORKTREE_SERVICE,
+  type GitWorktreeServiceFace,
+  type WorkspaceRegistryFace,
+} from "./worktrees/index.js";
 import {
   assembleProjectHostSide,
   type KnowledgeBindingsRefresher,
@@ -46,6 +53,19 @@ import { WORKTREE_RPC_METHODS, invalidateResolveCaches, type WorktreeRpcService 
 interface ProjectPlugin {
   (ctx: unknown, config?: ProjectHostConfig): () => void;
   inject: readonly string[];
+}
+
+/** 插件 ctx 窄面：workspaceRegistry 具名服务（inject 声明后 cordis 门内可达——type-safe）。
+ * face = 官方 workspaceRegistry 的双投影交集（projects 域 OfficialRegistryFace +
+ * worktrees 域 WorkspaceRegistryFace——同一官方实体，结构化窄面各自成立）。 */
+type RegistryFace = OfficialRegistryFace & WorkspaceRegistryFace;
+type ProjectPluginCtx = SeamCtxFace & { readonly workspaceRegistry?: RegistryFace };
+
+declare module "@deepseek-ai/cordis" {
+  interface Context {
+    /** 官方 workspaceRegistry（dsh-workspace provide——本插件 inject 声明消费） */
+    workspaceRegistry: RegistryFace;
+  }
 }
 
 /** bugs 常驻 provider 依赖缝（归属键派生 + git cwd——装配期由宿主/组合器注入） */
@@ -79,7 +99,7 @@ export interface ProjectHostConfig {
 }
 
 const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = {}): (() => void) => {
-  const face = ctx as SeamCtxFace;
+  const face = ctx as ProjectPluginCtx;
   const diag: SeamDiag =
     config.diag ??
     ((line: string) => {
@@ -102,15 +122,85 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     }
   }
 
-  // fix-7 单装缺省装配：registry 缺省 = ctx.workspaceRegistry 具名服务惰性取法
-  //（官方机械复用——AGENTS 1.2；运行期存在性检查承担 fail-soft，服务缺席 = absentRegistry 拒）。
-  const defaultRegistry = (): OfficialRegistryFace | undefined => {
+  // fix-8 单装装配补全：registry 缺省 = ctx.workspaceRegistry 具名服务取法——具名服务
+  // 消费以 inject 声明承担（fix-7 残余：inject=[] 被 cordis inject 门守卫拒恒 undefined
+  // ——009 实证）；声明后门内可达，运行期存在性检查仍承担 fail-soft（服务缺席 = undefined
+  // → projects 退兜底拒）。
+  const defaultRegistry = (): RegistryFace | undefined => {
     try {
-      const raw: unknown = (face as { workspaceRegistry?: unknown }).workspaceRegistry;
-      return raw === undefined || raw === null ? undefined : (raw as OfficialRegistryFace);
+      return face.workspaceRegistry ?? undefined;
     } catch {
       return undefined;
     }
+  };
+
+  // fix-8 单装装配补全：gitWorktree 能力服务惰性取法（git 在场性异步探测后由
+  // worktreePlugin provide——注入缝 reflect 防御读取，worktrees/index.ts 同配方）。
+  const readGitWorktreeCapability = (): GitWorktreeServiceFace | undefined => {
+    try {
+      const raw: unknown = face.reflect?.get?.(GIT_WORKTREE_SERVICE);
+      return raw !== null &&
+        typeof raw === "object" &&
+        typeof (raw as GitWorktreeServiceFace).getExtensionPoints === "function"
+        ? (raw as GitWorktreeServiceFace)
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  // fix-8 单装装配补全：identity 扩展点自注入（proposal「单装形态」——「宿主注入 provider」
+  // 的注入者即包自身装配，读自身 project.db 关系表）。worktrees 域扩展点解析链
+  // （resolveExtensionPoints）消费 forgeWorktreeIdentity 服务缝——单装无 boot/child.ts 注入
+  // 装配时恒退默认 provider（resolveProject 恒 null → list isGit:false，009 铁证径）。
+  // forge 宿主侧（assembly/host-side.ts runProfile 后 provide 同键）后注入即覆写——两侧同源
+  // project.db 行集语义等价。db 缺席 = 零 provide（worktrees 退独立模式默认扩展点）。
+  if (domainDb !== undefined) {
+    try {
+      const provide = (face as { provide?: (name: string, value?: unknown) => unknown }).provide;
+      if (typeof provide === "function") {
+        const identityProjects = createProjectsServicePort({
+          domainDb: domainDb,
+          registry: config.registry ?? defaultRegistry(),
+          tasksHome: config.tasksHome,
+          onDiag: undefined,
+        });
+        provide.call(
+          face,
+          GIT_WORKTREE_IDENTITY_SERVICE,
+          createWorktreeIdentity(identityProjects, undefined, diag),
+        );
+      }
+    } catch (cause) {
+      diag(`[project-seams] forgeWorktreeIdentity 自注入失败（fail-soft 退独立模式）：${String(cause)}`);
+    }
+  }
+
+  // fix-8 单装装配补全：worktrees 常驻工厂（fix-7 残余——deps 无 worktrees 常驻工厂恒
+  // 独立兜底，真 git 仓 isGit:false 即铁证）。域本体 = createWorktreeRpcService（惰性取
+  // gitWorktree 能力 + registry），RPC 面 remove → 契约 delete 动词投影响合
+  // WorktreeServicePort 全量签名（getWorktreeDir/resolveProject 快照投影同缝语义）。
+  const worktreesResident = (): WorktreeServicePort => {
+    const svc = createWorktreeRpcService({
+      gitWorktree: readGitWorktreeCapability,
+      // config.registry = 宿主注入的官方 workspaceRegistry face（官方实体同满足 worktrees 域
+      // WorkspaceRegistryFace 投影——单点显式收窄，非盲转）。
+      workspaceRegistry: (config.registry as RegistryFace | undefined) ?? defaultRegistry(),
+      warn: diag,
+    });
+    const port: WorktreeServicePort = {
+      ...svc,
+      delete: (request) => svc.remove(request),
+      getWorktreeDir: (projectRoot: string) => `${projectRoot}/.forge/worktrees`,
+      resolveProject: async (cwd: string) => {
+        const { resolved } = await svc.resolve({ paths: [cwd] });
+        const entry = resolved[0];
+        return entry
+          ? { projectId: entry.projectId, projectRoot: entry.projectRoot, isGit: true }
+          : null;
+      },
+    };
+    return port;
   };
 
   // 五缝注册（常驻 + 兜底 + 覆写位择优——零域逻辑，全部委托域本体/组装面）
@@ -125,6 +215,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       ...(config.dirFacts !== undefined
         ? { dirFacts: config.dirFacts }
         : { dirFacts: () => minimalDirFactsPort({ anchorsOf: absentAnchorsOf }) }),
+      worktrees: worktreesResident,
       ...(config.overrides !== undefined ? { overrides: config.overrides } : {}),
       onDiag: diag,
     };
@@ -169,8 +260,9 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   };
 };
 
-// 骨架期遗留零服务依赖；五缝经 reflect 缝注册，零 inject 声明。
-projectPlugin.inject = [];
+// fix-8：workspaceRegistry 具名服务 inject 声明（cordis 门内取法前置——AGENTS 1.6
+// 具名服务裁决）；五缝仍经 reflect 缝注册，gitWorktree 能力缝走防御读取（异步 provide 面）。
+projectPlugin.inject = ["workspaceRegistry"] as const;
 
 /**
  * 装配失败诊断投影（bundle 管线验证锚——lib-util errMessage 消费点）。

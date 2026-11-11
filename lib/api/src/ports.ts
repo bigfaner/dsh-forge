@@ -13,6 +13,10 @@ import type {
 import type { BugErrorTypeAggregate } from './dto/forge.js'
 import type { ProjectService } from './dto/project.js'
 import type {
+  WorktreeCreateRequest,
+  WorktreeCreateResult,
+  WorktreeDeleteRequest,
+  WorktreeDeleteResult,
   WorktreeEnsureWorkspaceRequest,
   WorktreeEnsureWorkspaceResult,
   WorktreeListRequest,
@@ -42,6 +46,10 @@ export type ProjectsServicePort = ProjectService
  */
 export interface WorktreeServicePort {
   list(request: WorktreeListRequest): Promise<WorktreeListResult>
+  /** 封闭写集①：fetch 前置 + worktree add -b 一体创建（常驻 provider = rpc-service create） */
+  create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>
+  /** 封闭写集②：二次确认通过后 worktree remove（常驻 provider = rpc-service remove） */
+  delete(request: WorktreeDeleteRequest): Promise<WorktreeDeleteResult>
   ensureWorkspace(request: WorktreeEnsureWorkspaceRequest): Promise<WorktreeEnsureWorkspaceResult>
   select(request: WorktreeSelectRequest): Promise<WorktreeSelectResult>
   seal(request: WorktreeSealRequest): Promise<WorktreeSealResult>
