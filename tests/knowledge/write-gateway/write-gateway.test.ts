@@ -432,15 +432,15 @@ describe('CT-WG-14 knowledge_read：三分支（WG-G3/G7）', () => {
     expect(r.status).toBe('confirmed')
     w.storage.close()
   })
-  it('O2 unconfirmed：拒正文且不暴露存在性（回执无 id/标题泄露；read-abstract 同口径 EntryNotFound）', async () => {
+  it('O2 unconfirmed：全文可读（用户裁决改判——与 search 召回链路对齐；read-abstract 维持 EntryNotFound 口径）', async () => {
     const w = makeWorld('g3')
     const v = await w.service.write(writeQ({ projectId: w.projectId, title: 'Secret Draft Name' }))
     if (v.outcome !== 'written') throw new Error('v 未写入')
     const r = await w.service.read({ projectId: w.projectId, id: v.id })
-    expect(r.outcome).toBe('denied') // CT-WG-14 O2
-    if (r.outcome === 'denied') {
-      expect(r.message).not.toContain(v.id) // 不暴露存在性
-      expect(r.message).not.toContain('Secret Draft Name')
+    expect(r.outcome).toBe('read') // CT-WG-14 O2 改判
+    if (r.outcome === 'read') {
+      expect(r.status).toBe('unconfirmed')
+      expect(r.body).toBe(readFileSync(v.filePath, 'utf8'))
     }
     // read-abstract 同口径：EntryNotFound 语义面（不区分「不存在」与「无权限」）
     const card = (await w.service.listEntries({ projectId: w.projectId })).find((k) => k.title === 'Secret Draft Name')

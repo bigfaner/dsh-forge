@@ -7,8 +7,8 @@
 // knowledge_dir 下的 id 集（每调用期 SQL 子查询现算——判例 d24a4464：read/search 解析
 // 须每调用期求值，禁装配期静态快照）。
 // 召回准入（§2.4 裁决 #10）：同 id 有 confirmed 版时 unconfirmed 权威投影不进召回；
-// 0.4/0.2 两档经回流（滞回限次+冷却，阈值归 config）保留轻量召回出口；readAbstract/
-// read 对 unconfirmed 拒且不露存在性。
+// 0.4/0.2 两档经回流（滞回限次+冷却，阈值归 config）保留轻量召回出口；readAbstract 对
+// unconfirmed 拒且不露存在性；read 全文对 unconfirmed 放开（用户裁决改判，与 search 对齐）。
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
