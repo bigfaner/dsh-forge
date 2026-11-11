@@ -7,7 +7,7 @@
 // 语法错误 → 「loaded without registering」。UI/shared 源码内联（无独立包）；
 // 平台基线模块外置保官方单例。Run once per build；run-once, no watch。
 import { build } from "esbuild";
-import { cpSync, statSync } from "node:fs";
+import { cpSync, readdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -54,3 +54,19 @@ await build({
   legalComments: "none",
   logLevel: "warning",
 });
+
+// 中间产物裁剪（fix-5）：bundle 后 dist/client 仅保留 .d.ts 类型面与 css 副迁件——
+// tsc 中间 .js 全部删除（@dsh-forge/* 裸 import 在独立安装形态是断链面）。运行期
+// 装载面 = dist/client.js 单一 bundle（exports "./client"）。
+const pruneClient = (dir) => {
+  for (const name of readdirSync(dir, { withFileTypes: true })) {
+    const p = resolve(dir, name.name);
+    if (name.isDirectory()) pruneClient(p);
+    else if (name.name.endsWith(".js")) rmSync(p);
+  }
+};
+pruneClient(resolve(pkgDir, "dist/client"));
+
+// tsbuildinfo-client 与 prune 后的 dist 不再一致（增量会把被删中间产物判为最新而
+// 跳过 emit）——删除强制下次构建全量重出。
+rmSync(resolve(pkgDir, "dist/.tsbuildinfo-client"), { force: true });
