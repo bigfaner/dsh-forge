@@ -258,3 +258,32 @@ describe('兜底 provider 语义（独立模式面）', () => {
 function worktreeEntries(worktrees: WorktreeServicePort): Promise<readonly unknown[]> {
   return worktrees.list({ projectRoot: 'Z:/p' } as never).then((r) => r.entries)
 }
+
+// 真 cordis 契约测试（bug 55aa82c1——接收者绑定防漂移钉）：registerProjectSeams 对真
+// cordis Context 注册——cordis reflect.provide 内部读 this.ctx，接收者必须为 reflect
+// 实例（host-side.ts 同正形 `provide.call(ctx.reflect, …)`）；误绑 ctx 会全缝降级。
+import { Context, type Context as CordisContext } from '@deepseek-ai/cordis'
+
+describe('registerProjectSeams 真 cordis 契约（接收者绑定 = reflect 实例）', () => {
+  it('真 Context 上注册五缝：registered 非空、reflect.get 可取工厂、消费面取常驻实现', async () => {
+    const ctx = new Context() as unknown as CordisContext & SeamCtxFace
+    try {
+      const result = registerProjectSeams(ctx, {})
+      expect(result.registered).toEqual([
+        PROJECT_SEAM_KEYS.projects,
+        PROJECT_SEAM_KEYS.worktrees,
+        PROJECT_SEAM_KEYS.projectResolution,
+        PROJECT_SEAM_KEYS.bugs,
+        PROJECT_SEAM_KEYS.dirFacts,
+      ])
+      expect(result.degraded).toEqual([])
+      for (const key of result.registered) {
+        expect(typeof ctx.reflect?.get?.(key)).toBe('function')
+      }
+      const worktrees = injectProjectSeam(ctx, PROJECT_SEAM_KEYS.worktrees, worktreesFallback)
+      expect(worktrees.getWorktreeDir('Z:/p')).toBe('Z:/p/.forge/worktrees')
+    } finally {
+      await (ctx as unknown as { destroy?: () => void }).destroy?.()
+    }
+  })
+})

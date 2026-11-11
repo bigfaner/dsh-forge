@@ -254,7 +254,9 @@ export function registerProjectSeams(ctx: SeamCtxFace, deps: ProjectSeamDeps): P
       continue
     }
     try {
-      provide.call(ctx, key, factory)
+      // cordis reflect.provide 内部读 this.ctx——接收者必须为 reflect 实例（host-side.ts 同正形）；
+      // 误绑 ctx 时 Context 服务面 getter 抛 `cannot get property "ctx" without inject`，全缝降级。
+      provide.call(ctx.reflect, key, factory)
       registered.push(key)
     } catch (cause) {
       deps.onDiag?.(`[project-seams] ${key} provide 抛错——缝降级（fail-soft 不阻载）：${String(cause)}`)
