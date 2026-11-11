@@ -72,6 +72,41 @@ export interface ForgeRemoteFace {
 /** 降级诊断钩子（apply 期可选安装——缺席 console 兜底，client 束豁免面） */
 let dualTransportDiag: ((line: string) => void) | undefined
 
+// ── 页内跨 bundle 单例锚（bug 837a70fc——1.38 client 半换面回归收口）──
+// rpc.ts 的解析缝是模块级状态，页面同时存在两份本模块实例（plugins/project bundle +
+// 壳 bundle 经 client-ui/add-project 内联的副本）：壳侧副本从不调用 installForgeRemote-
+// Face → resolver 恒缺席反复诚实降级（真机 fb-console [forge-rpc-transport] 前缀实证）。
+// 收口 = 安装面同步发布页内全局锚（KEY 契约先例：__dshForgeOpenWorkspace/
+// __dshForgeWorktreeSwitchGate 双注同型），缺本地缝的副本回退读锚——页内单例状态。
+
+/** 页内锚键（写读双注：写入器 = @dsh-forge/project bundle apply；读取器 = 壳侧同源副本） */
+export const FORGE_REMOTE_FACE_ANCHOR_KEY = '__dshForgeRemoteFace'
+
+/** 页内锚形态（解析缝 + 诊断钩——与 installForgeRemoteFace 实参同型） */
+interface ForgeRemoteFaceAnchor {
+  readonly resolver: () => ForgeRemoteFace | undefined
+  readonly diag?: (line: string) => void
+}
+
+/** 宿主全局对象（browser 束 = window；vitest/node = globalThis——测试面同键直写） */
+function globalScopeOf(): Record<string, unknown> {
+  return globalThis as unknown as Record<string, unknown>
+}
+
+/** 锚读取（缺副本本地缝时回退；缺席 = undefined 继续本地诚实降级） */
+function faceAnchorOf(): ForgeRemoteFaceAnchor | undefined {
+  const anchor = globalScopeOf()[FORGE_REMOTE_FACE_ANCHOR_KEY] as ForgeRemoteFaceAnchor | undefined
+  if (anchor === undefined || anchor === null || typeof anchor !== 'object') return undefined
+  if (typeof anchor.resolver !== 'function') return undefined
+  return anchor
+}
+
+/** 生效缝（本地 install 优先——bundle 内行为不变；缺席回退页内锚） */
+function faceSeamOf(): ForgeRemoteFaceAnchor {
+  if (forgeRemoteResolver !== undefined) return { resolver: forgeRemoteResolver, diag: dualTransportDiag }
+  return faceAnchorOf() ?? { resolver: () => undefined }
+}
+
 /**
  * 安装官方 Typert remote 解析缝（projectClient.apply 装配期调用一次）：
  * resolver 逐调用现查 ctx.remote 六族面（reflect 防御读取，缺席宿主 = undefined 诚实降级）。
@@ -82,6 +117,8 @@ export function installForgeRemoteFace(
 ): void {
   forgeRemoteResolver = resolver
   if (onDiag !== undefined) dualTransportDiag = onDiag
+  // 页内锚同步发布（跨 bundle 副本单例——见 FORGE_REMOTE_FACE_ANCHOR_KEY 注）
+  globalScopeOf()[FORGE_REMOTE_FACE_ANCHOR_KEY] = { resolver, diag: onDiag }
 }
 
 /** face 解析缝（apply 期安装——每调用现查不缓存） */
@@ -125,12 +162,14 @@ async function invokeRemote<T>(
   method: string,
   args: readonly unknown[],
 ): Promise<T> {
-  const face = forgeRemoteResolver?.()
+  const seam = faceSeamOf()
+  const face = seam.resolver()
   const ns = face === undefined ? undefined : namespaceOf(face, namespace)
   const fn = methodOf(ns, method)
   if (fn === undefined) {
     const line = `dsh-forge project client: 官方 forge remote 面缺席（${String(namespace)}.${method}）——通道不可用（诚实降级）`
-    if (dualTransportDiag !== undefined) dualTransportDiag(line)
+    const diag = seam.diag ?? dualTransportDiag
+    if (diag !== undefined) diag(line)
     else console.warn(`[forge-rpc-transport] ${line}`)
     throw new Error(line)
   }
@@ -149,12 +188,14 @@ function streamRemote<T>(
   method: string,
   args: readonly unknown[],
 ): AsyncIterable<T> {
-  const face = forgeRemoteResolver?.()
+  const seam = faceSeamOf()
+  const face = seam.resolver()
   const ns = face === undefined ? undefined : namespaceOf(face, namespace)
   const fn = methodOf(ns, method)
   if (fn === undefined) {
     const line = `dsh-forge project client: 官方 forge remote 面缺席（${String(namespace)}.${method}）——通道不可用（诚实降级）`
-    if (dualTransportDiag !== undefined) dualTransportDiag(line)
+    const diag = seam.diag ?? dualTransportDiag
+    if (diag !== undefined) diag(line)
     else console.warn(`[forge-rpc-transport] ${line}`)
     throw new Error(line)
   }

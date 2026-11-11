@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createForgeRpcClient,
+  FORGE_REMOTE_FACE_ANCHOR_KEY,
   installForgeRemoteFace,
   RpcClientError,
   type ForgeRemoteFace,
@@ -30,6 +31,7 @@ function stubRemoteFace(table: Record<string, (args: unknown[]) => unknown>): Fo
 
 afterEach(() => {
   installForgeRemoteFace(() => undefined)
+  delete (globalThis as Record<string, unknown>)[FORGE_REMOTE_FACE_ANCHOR_KEY]
 })
 
 describe('forge remote 传输（Typert RemoteResult 信封投影）', () => {
