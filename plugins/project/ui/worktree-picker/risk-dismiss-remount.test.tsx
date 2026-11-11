@@ -1,13 +1,15 @@
 // bug e2a10cd4「不再提示」闩锁重挂击穿面（happy-dom 真实挂载——create-bind/drift-portal 同构）：
 // riskDismissed 挂组件 useState（范本反例）——确认「不再提示」后 openWorkspace 切主视图
-// 触发 ForgeHeroWorktreeMount 重挂，组件态清零且 settings 写透未及回读（fire-and-forget
+// 触发 ForgeHeroWorktreeMount 重挂，组件态清零且 configForms 写透未及回读（fire-and-forget
 // 竞态窗）→ 换一行跨分支目标重弹确认框（fail 向 = 用户级一票失守）。
 // 断言面 = 重挂后点选另一跨分支行零弹框（模块级跨重挂记忆，a944424f 同族形态）。
+// 1.38 AC③：持久化通道 = configForms（官方 ConfigFormMirror 同型替身——写透调用 pin）。
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import type { WorktreeFacesRpc } from '../rpc.js'
+import { installWorktreePrefsFace, type ConfigFormMirror } from '../settings-section/index.js'
 import { ForgeHeroWorktreeMount } from './picker.js'
 import { riskDismissedMemoryOf, riskDismissedMemorySync } from './model.js'
 
@@ -22,17 +24,33 @@ const ROWS = [
   { path: WT_B, branch: 'feat/b', worktreeName: 'wt-b', workspaceId: 'ws-b', isMain: false, present: true },
 ]
 
-/** rpc 替身：settings.get 恒缺席（模拟 set 写透未及回读的竞态窗——重挂读不到 true） */
-function dismissRpc(settingsSetCalls: unknown[]): () => WorktreeFacesRpc {
+/** configForms mirror 替身（官方 ConfigFormMirror 同型——worktree.crossBranchRiskDismissed 位） */
+function configFormsMirror(setCalls: unknown[], readValue: unknown): ConfigFormMirror {
+  let value = readValue
+  const listeners = new Set<() => void>()
+  return {
+    getSnapshot: () => ({ status: 'ready', value, revision: 1, writable: true }),
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    set: async (field: string, next: unknown) => {
+      setCalls.push({ field, next })
+      value = { ...(value as Record<string, unknown>), [field]: next }
+      for (const listener of listeners) listener()
+      return true
+    },
+    unset: async () => true,
+  }
+}
+
+/** rpc 替身：configForms face 恒 ready（写透 = mirror.set——竞态窗语义由重挂时点读承担） */
+function dismissRpc(setCalls: unknown[], readValue: unknown = {}): () => WorktreeFacesRpc {
+  const mirror = configFormsMirror(setCalls, readValue)
+  installWorktreePrefsFace(() => ({ get: (ns: string) => (ns === 'project' ? mirror : undefined) }))
   return () =>
     ({
       projects: { list: async () => [] },
-      settings: {
-        get: async () => ({}),
-        set: async (payload: unknown) => {
-          settingsSetCalls.push(payload)
-        },
-      },
       worktree: {
         list: async () => ({ isGit: true, worktreeDir: 'C:/repo/.forge/worktrees', entries: ROWS }),
         selected: async () => ({}),
@@ -107,9 +125,10 @@ describe('bug e2a10cd4：「不再提示」跨重挂保持（重挂后换跨分�
     document.body.replaceChildren()
     delete (globalThis as unknown as Record<string, unknown>)[OPEN_KEY]
     riskDismissedMemorySync(false) // 用例隔离：模块级记忆回基线
+    installWorktreePrefsFace(() => undefined)
   })
 
-  it('确认「不再提示」后重挂（settings 写透竞态窗）→ 点选另一跨分支行零弹框、直通选中', async () => {
+  it('确认「不再提示」后重挂（configForms 写透竞态窗）→ 点选另一跨分支行零弹框、直通选中', async () => {
     const setCalls: unknown[] = []
     const openedFirst: string[] = []
     const first = await mountHero(dismissRpc(setCalls), openedFirst)
@@ -117,11 +136,13 @@ describe('bug e2a10cd4：「不再提示」跨重挂保持（重挂后换跨分�
     await clickRow(first.host, 'wt-a')
     await checkDismissAndConfirm()
     expect(openedFirst, '确认后应直通 openWorkspace').toEqual(['ws-a'])
-    expect(setCalls, '「不再提示」应写透 settings').toEqual([{ worktree: { crossBranchRiskDismissed: true } }])
-    // ② 重挂（openWorkspace 切主视图同构）：settings.get 仍缺席——组件态应自模块级记忆水合
+    expect(setCalls, '「不再提示」应写透 configForms（worktree 组整字段）').toEqual([
+      { field: 'worktree', next: { crossBranchRiskDismissed: true } },
+    ])
+    // ② 重挂（openWorkspace 切主视图同构）：mirror 快照仍是写前值（竞态窗同构）——组件态应自模块级记忆水合
     first.root.unmount()
     const openedSecond: string[] = []
-    const second = await mountHero(dismissRpc(setCalls), openedSecond)
+    const second = await mountHero(dismissRpc(setCalls, {}), openedSecond)
     await clickRow(second.host, 'wt-b') // 换一行跨分支目标——riskDismissed 失守即重弹
     expect(riskDialog(), '用户级「不再提示」跨重挂保持——零重弹').toBeNull()
     expect(openedSecond, '直通选中（零确认框阻断）').toEqual(['ws-b'])

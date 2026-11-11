@@ -1,11 +1,11 @@
 // 4.3 派生数据源封装单测 —— Integration #1（RPC 单源下发 + 疑似移动拒绝路径）：
 // fetchDerivePhase 相位映射（成功 ready 逐字 / ERR_SUSPECTED_MOVE → suspected-move
 // （guidance 单源 core 载荷透传）/ 其余失败 → error 兜底——tech-design Propagation
-// 「未映射码 → 通用错误条」永不裸 code 泄漏）+ 缺省 RPC 真身（forge:projects/
-// deriveTaskStoreDir 通道；非 Electron 载体收敛为 error 相位，不炸壳）。
-import { describe, expect, it, vi } from 'vitest'
+// 「未映射码 → 通用错误条」永不裸 code 泄漏）+ 缺省 RPC 真身（1.38 正典化——官方
+// forgeProjects.deriveTaskStoreDir Typert remote 面；face 缺席收敛为 error 相位，不炸壳）。
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DeriveTaskStoreDirResult, SuspectedMoveData } from '@dsh-forge/contracts'
-import { RpcClientError } from '../rpc.js'
+import { installForgeRemoteFace, RpcClientError, type ForgeRemoteFace } from '../rpc.js'
 import { fetchDerivePhase, rpcDeriveSource } from './derive-source.js'
 
 const DERIVED: DeriveTaskStoreDirResult = { dir: 'Z:\\forge-workspaces\\Z-project-dsh@a1b2c3d4' }
@@ -70,34 +70,34 @@ describe('fetchDerivePhase 相位映射（纯异步面——永不 reject）', (
   })
 })
 
-describe('rpcDeriveSource 缺省真身（preload RPC 面）', () => {
-  it('经 window.dshForge.invoke 发 forge:projects/deriveTaskStoreDir（payload = { workspaceDir }）；typed 返回', async () => {
-    const invoke = vi.fn(() => Promise.resolve({ ok: true, data: DERIVED }))
-    const g = globalThis as { dshForge?: unknown }
-    const prev = g.dshForge
-    g.dshForge = { invoke }
-    try {
-      const result = await rpcDeriveSource()('Z:\\project\\dsh')
-      expect(result).toBe(DERIVED)
-      expect(invoke).toHaveBeenCalledExactlyOnceWith('forge:projects/deriveTaskStoreDir', {
-        workspaceDir: 'Z:\\project\\dsh',
-      })
-    } finally {
-      if (prev === undefined) delete g.dshForge
-      else g.dshForge = prev
-    }
+describe('rpcDeriveSource 缺省真身（官方 forgeProjects.deriveTaskStoreDir Typert remote 面——1.38）', () => {
+  afterEach(() => {
+    installForgeRemoteFace(() => undefined)
   })
 
-  it('preload 缺席（非 Electron 载体）→ error 相位收敛（不炸壳）', async () => {
-    const g = globalThis as { dshForge?: unknown }
-    const prev = g.dshForge
-    delete g.dshForge
-    try {
-      const phase = await fetchDerivePhase(rpcDeriveSource(), 'Z:\\project\\dsh')
-      expect(phase.state).toBe('error')
-      if (phase.state === 'error') expect(phase.message).toContain('window.dshForge.invoke 缺席')
-    } finally {
-      if (prev !== undefined) g.dshForge = prev
-    }
+  it('经 forgeProjects.deriveTaskStoreDir 发 workspaceDir 位置参；RemoteResult → typed 返回', async () => {
+    const derive = vi.fn(() => Promise.resolve({ ok: true, value: DERIVED }))
+    const ns = new Proxy({}, {
+      get(_t, method: string) {
+        if (method !== 'deriveTaskStoreDir') return undefined
+        return (...args: unknown[]) => derive(...(args as []))
+      },
+    })
+    installForgeRemoteFace(() =>
+      ({
+        forgeFs: {}, forgeBugs: {}, forgeWorktree: {}, forgeProposals: {}, forgeFeatures: {},
+        forgeProjects: ns,
+      }) as unknown as ForgeRemoteFace,
+    )
+    const result = await rpcDeriveSource()('Z:\\project\\dsh')
+    expect(result).toBe(DERIVED)
+    expect(derive).toHaveBeenCalledExactlyOnceWith('Z:\\project\\dsh')
+  })
+
+  it('face 缺席（宿主形状漂移）→ error 相位收敛（不炸壳）', async () => {
+    installForgeRemoteFace(() => undefined)
+    const phase = await fetchDerivePhase(rpcDeriveSource(), 'Z:\\project\\dsh')
+    expect(phase.state).toBe('error')
+    if (phase.state === 'error') expect(phase.message).toContain('官方 forge remote 面缺席')
   })
 })

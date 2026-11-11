@@ -138,7 +138,9 @@ export * from './components.js'
 
 
 import { registerOfficialSeamFaces, revokeOfficialSeamGlobals } from './official-seams.js'
-import { installOfficialRpcFace, type OfficialRpcCallFace } from './rpc.js'
+import { FORGE_REMOTE_CONTRIBUTION } from './remote.js'
+import { installForgeRemoteFace, type ForgeRemoteFace } from './rpc.js'
+import { installWorktreePrefsFace, type ConfigFormsFace } from './settings-section/index.js'
 import { registerSettingsSection } from './settings-section/index.js'
 import { registerWorktreeDetailSection } from './detail-section/index.js'
 
@@ -173,25 +175,51 @@ export const projectClient = {
   inject: ['slots', 'sidebarRightTabs', 'sidebarRight', 'workspaces', 'sessions'] as string[],
   apply(ctx: unknown): void {
     const rec = ctx as Record<string, unknown> | undefined
-    // 1.33 官方缝双宿主传输：解析缝安装（apply 期一次安装、逐调用现查——AGENTS 1.6 检测
-    // 永不缓存；reflect 防御读取不声明 inject 边——inject 缺席宿主会被 cordis 门阻载）。
-    // ctx.connection.rpc.call 在场 → RPC 数据走官方缝；缺席 → 自家 channels face 兜底。
+    // 1.38 正典化装配：①官方 Typert remote 贡献挂载（$mount——六族 forge:* descriptor
+    // 表进调用方 fiber，namespace 服务随 fiber 撤销级联拆卸）；②forge remote 六族面 +
+    // configForms 偏好面解析缝安装（逐调用现查不缓存——AGENTS 1.6 检测永不缓存）。
+    // ctx.remote 缺席宿主（宿主形状漂移）= 两面均 undefined——RPC 调用期诚实降级（diag
+    // 留痕 + typed Error），不炸组合。
+    let mounted = false
     try {
       const reflect = rec?.['reflect'] as { get?: (key: string) => unknown } | undefined
-      installOfficialRpcFace(() => {
-        let connection: unknown
+      const readReflect = (key: string): unknown => {
         try {
-          connection = typeof reflect?.get === 'function' ? reflect.get('connection') : undefined
+          return typeof reflect?.get === 'function' ? reflect.get(key) : undefined
         } catch {
-          connection = undefined
+          return undefined
         }
-        const rpc = (connection as { rpc?: unknown } | undefined)?.rpc as
-          | { call?: unknown }
-          | undefined
-        return typeof rpc?.call === 'function' ? (rpc as unknown as OfficialRpcCallFace) : undefined
-      })
+      }
+      const remote = readReflect('remote') as
+        | { $mount?: (contribution: unknown) => Promise<unknown> }
+        | undefined
+      if (remote !== undefined && typeof remote.$mount === 'function') {
+        void Promise.resolve(remote.$mount(FORGE_REMOTE_CONTRIBUTION))
+          .then(() => {
+            mounted = true
+            console.info('[dsh-forge/project] forge remote contribution mounted')
+          })
+          .catch((error: unknown) => {
+            console.warn('[dsh-forge/project] forge remote contribution mount failed——RPC 调用期诚实降级', error)
+          })
+      } else {
+        console.warn('[dsh-forge/project] ctx.remote.$mount absent——forge remote 面不挂载（诚实降级）')
+      }
+      installForgeRemoteFace(() => {
+        const current = readReflect('remote') as Record<string, unknown> | undefined
+        if (current === undefined || !mounted) return undefined
+        const face = current as unknown as ForgeRemoteFace
+        const namespaces = ['forgeProjects', 'forgeFs', 'forgeBugs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures'] as const
+        for (const ns of namespaces) {
+          const value = (face as unknown as Record<string, unknown>)[ns]
+          if (value === undefined || value === null || typeof value !== 'object') return undefined
+        }
+        return face
+      }, (line) => console.warn(line))
+      // 偏好面（AC③——crossBranchRiskDismissed 归 configForms 自有 namespace，弃 forge:settings）
+      installWorktreePrefsFace(() => readReflect('configForms') as ConfigFormsFace | undefined)
     } catch (error) {
-      console.warn('[dsh-forge/project] official rpc face install failed——退自家 channels face', error)
+      console.warn('[dsh-forge/project] forge remote/prefs face install failed——调用期诚实降级', error)
     }
     const slots = rec?.['slots'] as
       | Parameters<typeof registerSettingsSection>[1]

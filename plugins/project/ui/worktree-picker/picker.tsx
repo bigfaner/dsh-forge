@@ -5,8 +5,9 @@
 //     影子占用者 ForgeHeroWorkspacePicker 在其渲染面就地并列，取证见 walkthrough/
 //     hero-second-chip-decision.md）——选择菜单 + 新建/删除两弹窗 + ahead/behind 懒加载；
 //   · ForgeWorktreeSwitchMarker——切换闸虚线标记（视觉命中锚）。
-// 数据面 = forge:worktree/* 九通道 + forge:settings/{get,set} + proposals/features list
-// （../rpc.ts 消费切片，通道常量 = @dsh-forge/contracts 唯一源）。
+// 数据面 = 官方 forgeWorktree/forgeProposals/forgeFeatures remote + configForms 偏好
+// （1.38 正典化——../rpc.ts 消费切片 + ../settings-section 偏好面缝；namespace/方法单源 =
+// ../remote.ts descriptor 表）。
 // 点选 = 纯选中态 + 点选时点跨分支确认（1.19 语义回归）；会话创建唯一时机 = 官方 create
 // 调用点（wrap 改道预铸，create 失败走官方 createFailed toast）；1.34 闩锁与「不再提示」
 // 语义见 ./model.ts。
@@ -26,6 +27,7 @@ import { collectSlugCandidates, isCrossBranchRisk, joinWorktreePath, type Delete
 import type { AheadBehind } from '../../host/worktrees/worktree-ops.js'
 import { EditableCombobox } from './EditableCombobox.js'
 import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'
+import { dismissedOf, dismissedWriteOf, worktreePrefsFaceOf } from '../settings-section/index.js'
 import {
   riskDialogNeeded,
   riskDismissedMemoryOf,
@@ -163,10 +165,11 @@ export function ForgeHeroWorktreeMount({
     [projectRoot, makeRpc],
   )
 
-  // 跨分支确认「不再提示」（forge settings worktree.crossBranchRiskDismissed 持久化——
-  // 用户级一票：装载读 + 勾选确认写；装载缺席/通道失败 = false 不抑制，fail-soft）
-  // bug e2a10cd4：组件 useState 被 openWorkspace 重挂清零且 settings 写透未及回读（竞态窗）
-  // → 换跨分支目标重弹——落模块级跨重挂记忆（a944424f 同族形态）：初始化惰性读 + 每次变更
+  // 跨分支确认「不再提示」（1.38 AC③——configForms 自有 namespace `project` 持久化，
+  // 弃 forge:settings RPC）：用户级一票——装载读（快照回填只升不降）+ 勾选确认写
+  // （revisioned 正门）；configForms 缺席 = 记忆面兜底（false 不抑制，fail-soft）。
+  // bug e2a10cd4：组件 useState 被 openWorkspace 重挂清零且写透未及回读（竞态窗）→
+  // 换跨分支目标重弹——落模块级跨重挂记忆（a944424f 同族形态）：初始化惰性读 + 每次变更
   // 写透（装载回填/勾选置位同一入口），组件态只作记忆镜像。
   const [riskDismissed, setDismissedState] = useState<boolean>(() => riskDismissedMemoryOf())
   const setRiskDismissed = useCallback((next: boolean): void => {
@@ -176,21 +179,23 @@ export function ForgeHeroWorktreeMount({
   const [riskDismissChecked, setRiskDismissChecked] = useState(false)
   useEffect(() => {
     let alive = true
-    makeRpc()
-      .settings.get()
-      .then((settings) => {
-        // 装载回填只升不降（bug e2a10cd4）：记忆 true = 本窗口已有用户勾选——settings 读
-        // 到 false（写透竞态窗/通道缺字段）不得降级镜像，否则重挂竞态窗内一票失守重弹；
-        // 一票语义无合法「撤销」路径，false 分支零写入
-        if (alive && settings.worktree?.crossBranchRiskDismissed === true) setRiskDismissed(true)
-      })
-      .catch((cause: unknown) => {
-        console.warn(`[dswf-worktree] 跨分支确认记忆读失败（默认重问）：${String(cause)}`)
-      })
+    const form = worktreePrefsFaceOf()
+    if (form === undefined) return
+    const mirror = (): boolean => {
+      const snapshot = form.getSnapshot()
+      // 装载回填只升不降（bug e2a10cd4）：记忆 true = 本窗口已有用户勾选——快照 false
+      // （写透竞态窗）不得降级镜像；一票语义无合法「撤销」路径
+      return snapshot.status === 'ready' && dismissedOf(snapshot.value)
+    }
+    if (mirror()) setRiskDismissed(true)
+    const unsubscribe = form.subscribe(() => {
+      if (alive && mirror()) setRiskDismissed(true)
+    })
     return () => {
       alive = false
+      unsubscribe()
     }
-  }, [makeRpc])
+  }, [setRiskDismissed])
   // 1.34 确认闩锁（bug ccfcc103）：确认后置位——同行重选零重弹；换目标重选清退
   // （riskLatchReselect，重新判定）。取消 = 本次改选未发生（选中态保持原样）。
   // bug a944424f：闩锁挂组件 useState 会被 openWorkspace 切主视图的重挂清零——
@@ -542,13 +547,19 @@ export function ForgeHeroWorktreeMount({
           onConfirm={() => {
             const path = pendingRiskPath
             setPendingRiskPath(null)
-            // 勾选「不再提示」→ forge settings 持久化（fire-and-forget，失败不阻断——
-            // 本轮已直通；下轮装载失败 = false 重问，fail-soft）
+            // 勾选「不再提示」→ configForms revisioned 持久化（fire-and-forget，拒写
+            // 留痕不阻断——本轮已直通；下轮装载失败 = false 重问，fail-soft）
             if (riskDismissChecked) {
               setRiskDismissed(true)
-              void makeRpc()
-                .settings.set({ worktree: { crossBranchRiskDismissed: true } })
-                .catch(() => {})
+              const form = worktreePrefsFaceOf()
+              const write = form === undefined ? undefined : dismissedWriteOf(form)
+              void (write?.(true) ?? Promise.resolve(false))
+                .then((accepted) => {
+                  if (!accepted) console.warn('[dswf-worktree] 「不再提示」写未接受——等待下一次修订重写')
+                })
+                .catch((cause: unknown) => {
+                  console.warn(`[dswf-worktree] 「不再提示」写失败（默认重问）：${String(cause)}`)
+                })
             }
             setRiskDismissChecked(false)
             // 1.34 确认闩锁置位：同一次选中意图只弹一次——同行重选零重弹

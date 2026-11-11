@@ -49,12 +49,14 @@ import {
   type WorktreeRpcEnvelope,
 } from "./assembly/channels.js";
 import { WORKTREE_RPC_METHODS, invalidateResolveCaches, type WorktreeRpcService } from "./worktrees/rpc-service.js";
-// 1.33 官方缝双面注册：ctx.connection.rpc.handle 在场即注册 /forge-{projects,bugs,worktree}
-// 三官方通道（官方宿主第一等公民缝）；缺席诚实降级 emitDiag——自家 channels face 不受影响。
+// 1.38 UI 数据通路正典化：八族 forge:* 收编 Typert namespace（官方 UI 数据第一等通道）——
+// 控制器注册进根 ctx（gateway SRC 发现面 = 根 ctx reflect.props）；1.33 connection.rpc/
+// fetch 过渡缝（official-rpc.ts）随本批退役，forge:settings 族归 configForms 自有 namespace。
 import {
-  registerOfficialRpcChannels,
-  type OfficialRpcCtxFace,
-} from "./assembly/official-rpc.js";
+  registerForgeTypertRemotes,
+  type ForgeTypertDeps,
+  type TypertAssemblyCtxFace,
+} from "./assembly/typert-remotes.js";
 import { DIAG_EVENT, emitDiagOrFallback, type DiagEventPayload } from "@dsh-forge/lib-diag";
 
 /** cordis 插件装载形态（loader 只认 default 导出函数）。 */
@@ -67,7 +69,7 @@ interface ProjectPlugin {
  * face = 官方 workspaceRegistry 的双投影交集（projects 域 OfficialRegistryFace +
  * worktrees 域 WorkspaceRegistryFace——同一官方实体，结构化窄面各自成立）。 */
 type RegistryFace = OfficialRegistryFace & WorkspaceRegistryFace;
-type ProjectPluginCtx = SeamCtxFace & OfficialRpcCtxFace & { readonly workspaceRegistry?: RegistryFace };
+type ProjectPluginCtx = SeamCtxFace & TypertAssemblyCtxFace & { readonly workspaceRegistry?: RegistryFace };
 
 declare module "@deepseek-ai/cordis" {
   interface Context {
@@ -265,9 +267,9 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   diag(
     `[project-seams] 五缝注册完成：registered=[${registration.registered.join(", ")}] degraded=[${registration.degraded.join(", ")}]`,
   );
-  // 1.33 官方缝双面注册（feature-detect 择优——ctx.connection.rpc.handle 在场才注册；
-  // 诊断 emit 面装配桥接：ctx.emit 在场即 typed emit，缺席 emitDiagOrFallback console 兜底。
-  // 插件域进程位恒 main——errors.ts 既有先例同径）。
+  // 1.38 Typert 遥控器注册（官方 UI 数据第一等通道——控制器注册进根 ctx；诊断 emit 面
+  // 装配桥接：ctx.emit 在场即 typed emit，缺席 emitDiagOrFallback console 兜底。插件域
+  // 进程位恒 main——errors.ts 既有先例同径）。forge:settings 族退役归 configForms（AC③）。
   try {
     const faceEmit = (face as { emit?: unknown }).emit;
     const diagEmit =
@@ -275,15 +277,20 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
         ? (payload: Omit<DiagEventPayload, "process">): void =>
             emitDiagOrFallback((p) => (faceEmit as (e: string, p: unknown) => unknown).call(face, DIAG_EVENT, { ...p, process: "main" }), payload)
         : undefined;
-    registerOfficialRpcChannels(face, {
+    const typertDeps: ForgeTypertDeps = {
       projects: deps.projects,
       bugs: deps.bugs,
       worktrees: worktreeSvcOnce,
-      diag: diagEmit,
-      onDiag: diag,
-    });
+      proposals: () => face.reflect?.get?.("forgeProposals"),
+      features: () => face.reflect?.get?.("forgeFeatures"),
+      diag: (line) => {
+        diag(line);
+        diagEmit?.({ event: "typert-remote-register", level: "warn", message: line });
+      },
+    };
+    registerForgeTypertRemotes(face, typertDeps);
   } catch (cause) {
-    diag(`[project-official-rpc] 官方缝注册面异常（fail-soft 不阻载）：${String(cause)}`);
+    diag(`[project-typert] Typert 遥控器装配异常（fail-soft 不阻载）：${String(cause)}`);
   }
   // worktree 域插件组合装载（诊断缝透传——装配失败/能力缺席语义归插件自身 fail-soft 面）
   const disposeWorktrees = worktreePlugin(ctx, { diag: (line) => diag(line) });

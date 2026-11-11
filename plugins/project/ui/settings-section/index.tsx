@@ -33,6 +33,22 @@ export {
   type ConfigFormsFace,
 } from "./worktree-prefs.js";
 
+// ── 偏好面解析缝（1.38 AC③——worktree-picker「不再提示」改 configForms 消费的取法门）：
+// apply 期安装 ctx.configForms 解析缝（逐调用现查不缓存——AGENTS 1.6），picker 经
+// worktreePrefsFaceOf 现查本插件 ConfigForm（namespace 候选序同双缝读写源）。
+let prefsResolver: (() => ConfigFormsFace | undefined) | undefined;
+
+/** 安装 configForms 解析缝（apply 期一次——resolver 逐调用现查） */
+export function installWorktreePrefsFace(resolver: () => ConfigFormsFace | undefined): void {
+  prefsResolver = resolver;
+}
+
+/** 本插件 ConfigForm 现查（namespace 候选序 resolveForm 同源；缺席 = undefined 降级） */
+export function worktreePrefsFaceOf(): ConfigFormMirror | undefined {
+  const forms = prefsResolver?.();
+  return forms === undefined ? undefined : resolveForm(forms);
+}
+
 /** 本插件包名（bundle.config keyed 占用键 = detail.section subject 判等键——双缝同源）。 */
 export const PROJECT_PKG = "@dsh-forge/project";
 /** 官方插件页 bundle 配置区 keyed 槽（client.js:3733 声明 kind: keyed/scope: root）。 */

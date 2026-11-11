@@ -8,6 +8,7 @@
 // 封存 overlay 挂载面 ForgeWorktreeSealOverlay + branch 漂移 banner。
 import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import type { WorktreeSealResult } from '@dsh-forge/contracts'
 import { IconWarningTriangleOutlineRegular } from '../icons.js'
 import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'
 
@@ -206,6 +207,8 @@ export interface WorktreeSealPhase {
   readonly worktreeName: string | null
   /** branch 漂移（binding-derivation §2.2——实时 ≠ 留痕；null = 无漂移/不警示） */
   readonly branchDrift: { readonly bindBranch: string; readonly branch: string } | null
+  /** follow 流活性（1.38——false = 流中断保投影；首帧前 loading 不区分） */
+  readonly live: boolean
 }
 
 const sealEmpty: WorktreeSealPhase = {
@@ -215,40 +218,79 @@ const sealEmpty: WorktreeSealPhase = {
   branch: null,
   worktreeName: null,
   branchDrift: null,
+  live: true,
 }
 
-/** 封存快照拉取（seal 通道单源——chip 失效态与 notice/占位两提示通道共读） */
+const sealError: WorktreeSealPhase = {
+  state: 'error',
+  isGit: false,
+  sealed: false,
+  branch: null,
+  worktreeName: null,
+  branchDrift: null,
+  live: false,
+}
+
+/** seal 快照帧 → 相位投影（followSeal 流与 unary 首帧共用单源映射） */
+function phaseOf(result: WorktreeSealResult): WorktreeSealPhase {
+  return {
+    state: 'ready',
+    isGit: result.isGit,
+    sealed: result.sealed,
+    branch: result.binding?.branch ?? null,
+    worktreeName: result.worktreeName ?? null,
+    branchDrift: result.branchDrift ?? null,
+    live: true,
+  }
+}
+
+/**
+ * 封存快照 follow（1.38 AC②——mode:'stream' 推流化，替代一次性拉取）：首帧 = baseline，
+ * 后随 host 快照变化逐帧增量（快照钩）；流中断 = 保留最后完整投影（live:false，不回
+ * loading——官方 RemoteSnapshotStream 断线保投影同刻度）。chip 失效态与 notice/占位两
+ * 提示通道共读本单源。
+ */
 export function useWorktreeSeal(sessionId: string | undefined, makeRpc: () => WorktreeFacesRpc): WorktreeSealPhase {
   const [phase, setPhase] = useState<WorktreeSealPhase>(sealEmpty)
   useEffect(() => {
     if (sessionId === undefined || sessionId === '') return
     let alive = true
-    // 传输构造 throw-safe（fix-13——官方 web 无 preload 桥：makeRpc 构造即抛[fail-loud
-    // 设计]；effect 同步抛 = 渲染树崩溃。构造失败降 error 相位——chip/notice 呈现缺省态，
-    // 不炸宿主渲染树）。
+    let seen = false
+    // 传输构造 throw-safe（fix-13 同径——makeRpc 构造即抛[fail-loud 设计]；effect 同步抛
+    // = 渲染树崩溃。构造失败降 error 相位——chip/notice 呈现缺省态，不炸宿主渲染树）。
     let client: WorktreeFacesRpc
     try {
       client = makeRpc()
     } catch {
-      if (alive) setPhase({ state: 'error', isGit: false, sealed: false, branch: null, worktreeName: null, branchDrift: null })
+      if (alive) setPhase(sealError)
       return
     }
-    client
-      .worktree.seal({ sessionId })
-      .then((result) => {
-        if (!alive) return
-        setPhase({
-          state: 'ready',
-          isGit: result.isGit,
-          sealed: result.sealed,
-          branch: result.binding?.branch ?? null,
-          worktreeName: result.worktreeName ?? null,
-          branchDrift: result.branchDrift ?? null,
-        })
-      })
-      .catch(() => {
-        if (alive) setPhase({ state: 'error', isGit: false, sealed: false, branch: null, worktreeName: null, branchDrift: null })
-      })
+    void (async (): Promise<void> => {
+      const follow = client.worktree.followSeal
+      if (follow === undefined) {
+        // 壳侧 legacy transport 面（followSeal 缺席）——退 unary seal 快照单帧（现状语义）
+        try {
+          const frame = await client.worktree.seal({ sessionId })
+          if (alive) setPhase(phaseOf(frame))
+        } catch {
+          if (alive) setPhase(sealError)
+        }
+        return
+      }
+      try {
+        for await (const frame of follow.call(client.worktree, { sessionId })) {
+          if (!alive) return
+          seen = true
+          setPhase(phaseOf(frame))
+        }
+        // 流自然终止（host 侧撤销/停机）——保投影标 live:false，不静默
+        if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
+      } catch {
+        // 首帧前失败 = 通道不可用（error 相位）；已投影 = 保投影（fail-soft 不丢态）
+        if (alive && !seen) setPhase(sealError)
+        if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
+      }
+    })()
     return () => {
       alive = false
     }

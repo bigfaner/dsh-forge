@@ -1,8 +1,9 @@
 // 2.8 目录数据源封装单测 —— 相位映射（AC4：错误归一不出浏览器态）+ 缺省 RPC 真身
-// （forge:fs/listDir 通道；非 Electron 载体收敛为错误相位，不炸壳）。
-import { describe, expect, it, vi } from 'vitest'
+// （1.38 正典化——官方 forgeFs.listDir Typert remote 面；face 缺席收敛为错误相位，不炸壳）。
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DirListing } from '@dsh-forge/contracts'
 import { fetchDirListing, rpcDirSource } from './dir-source.js'
+import { installForgeRemoteFace, type ForgeRemoteFace } from '../rpc.js'
 
 const listing: DirListing = {
   path: 'Z:\\project',
@@ -37,35 +38,42 @@ describe('fetchDirListing 相位映射（纯异步面——永不 reject）', ()
   })
 })
 
-describe('rpcDirSource 缺省真身（preload RPC 面）', () => {
-  it('经 window.dshForge.invoke 发 forge:fs/listDir（payload = { dirPath }）；typed 返回', async () => {
-    const invoke = vi.fn(() => Promise.resolve({ ok: true, data: listing }))
-    const g = globalThis as { dshForge?: unknown }
-    const prev = g.dshForge
-    g.dshForge = { invoke }
-    try {
-      const result = await rpcDirSource()('Z:\\project')
-      expect(result).toBe(listing)
-      expect(invoke).toHaveBeenCalledExactlyOnceWith('forge:fs/listDir', { dirPath: 'Z:\\project' })
-      // 缺省主目录：dirPath undefined 透传（host 侧口径 = homedir）
-      await rpcDirSource()()
-      expect(invoke).toHaveBeenLastCalledWith('forge:fs/listDir', { dirPath: undefined })
-    } finally {
-      if (prev === undefined) delete g.dshForge
-      else g.dshForge = prev
-    }
+describe('rpcDirSource 缺省真身（官方 forgeFs.listDir Typert remote 面——1.38）', () => {
+  /** 六族面替身（只装 forgeFs.listDir 记录缝） */
+  function installFace(listDir: (args: unknown[]) => unknown): void {
+    const ns = new Proxy({}, {
+      get(_t, method: string) {
+        if (method !== 'listDir') return undefined
+        return (...args: unknown[]) => listDir(args)
+      },
+    })
+    installForgeRemoteFace(() =>
+      ({
+        forgeProjects: {}, forgeBugs: {}, forgeWorktree: {}, forgeProposals: {}, forgeFeatures: {},
+        forgeFs: ns,
+      }) as unknown as ForgeRemoteFace,
+    )
+  }
+
+  afterEach(() => {
+    installForgeRemoteFace(() => undefined)
   })
 
-  it('preload 缺席（非 Electron 载体）→ 调用即拒（由 fetchDirListing 收敛为错误相位，不炸壳）', async () => {
-    const g = globalThis as { dshForge?: unknown }
-    const prev = g.dshForge
-    delete g.dshForge
-    try {
-      const phase = await fetchDirListing(rpcDirSource())
-      expect(phase.phase).toBe('error')
-      if (phase.phase === 'error') expect(phase.message).toContain('window.dshForge.invoke 缺席')
-    } finally {
-      if (prev !== undefined) g.dshForge = prev
-    }
+  it('经 forgeFs.listDir 发 dirPath 位置参；RemoteResult → typed 返回', async () => {
+    const listDir = vi.fn(() => Promise.resolve({ ok: true, value: listing }))
+    installFace((args) => listDir(...(args as [])))
+    const result = await rpcDirSource()('Z:\\project')
+    expect(result).toBe(listing)
+    expect(listDir).toHaveBeenCalledExactlyOnceWith('Z:\\project')
+    // 缺省主目录：dirPath undefined 透传（host 侧口径 = homedir）
+    await rpcDirSource()()
+    expect(listDir).toHaveBeenLastCalledWith(undefined)
+  })
+
+  it('face 缺席（宿主形状漂移）→ 调用即拒（由 fetchDirListing 收敛为错误相位，不炸壳）', async () => {
+    installForgeRemoteFace(() => undefined)
+    const phase = await fetchDirListing(rpcDirSource())
+    expect(phase.phase).toBe('error')
+    if (phase.phase === 'error') expect(phase.message).toContain('官方 forge remote 面缺席')
   })
 })
