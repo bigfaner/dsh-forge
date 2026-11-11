@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
-import { deriveTaskStoreDir } from '../../packages/core/src/forge/workspace/derive-dir.js'
+import { deriveTaskStoreDir } from '../../lib/path/src/derive-dir.js'
 import { bridgeDispatch, closeApp, launchHost, stablePhase } from '../support/launch.js'
 import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../support/navigation.js'
 import {
