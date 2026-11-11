@@ -19,7 +19,7 @@ const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // 外置表：官方机械与 peer（内联第二副本会分裂官方单例语义）。node 内建经
 // platform:"node" 自动外置。@dsh-forge/* 一律不外置（含 lib 子包）——独立安装形态
 // 不存在其解析路径。
-const EXTERNAL = ["@deepseek-ai/*"];
+const EXTERNAL = ["@deepseek-ai/*", "better-sqlite3"];
 
 await build({
   entryPoints: [resolve(pkgDir, "dist/host/index.js")],
