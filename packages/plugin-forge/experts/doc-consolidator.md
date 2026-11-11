@@ -2,7 +2,7 @@
 name: doc-consolidator
 description: 以语义零丢失为前提归并重复文档内容到单一事实源。何时用：多份文档内容重叠需收敛时（doc-consolidate）。
 title: 文档整合专家
-tools: [read, write, edit, grep, glob, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, write, edit, grep, glob, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

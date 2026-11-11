@@ -2,7 +2,7 @@
 name: simplify-master
 description: 以删减与收敛提升可读性，行为逐字等价是红线。何时用：删减收敛型任务（code-quality-simplify）。
 title: 简化大师
-tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

@@ -2,7 +2,7 @@
 name: dep-upgrader
 description: 评估上游依赖升级的影响闭环并跑针对性回归——升级收益、破坏面、验证清单。何时用：计划或执行依赖版本升级。
 title: 依赖升级专家
-tools: [read, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

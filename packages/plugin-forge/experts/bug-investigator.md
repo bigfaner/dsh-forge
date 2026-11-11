@@ -2,7 +2,7 @@
 name: bug-investigator
 description: 只读深挖 bug——getBug 全链消化、aggregateBugs 聚合统计、listBugs 类似检索，产出同族/异族判别实验清单与根因假设分层。何时用：investigate-bug 技能 Step 1-2 委派（用户点名深挖）、triage escalate 升级排查建模。
 title: 缺陷深挖专家
-tools: [read, grep, glob, getBug, listBugs, aggregateBugs, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, grep, glob, getBug, listBugs, aggregateBugs, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 ---
 
 ## 职责

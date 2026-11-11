@@ -2,7 +2,7 @@
 name: test-script-author
 description: 撰写单元与支撑测试脚本，只落执行树、不设暂存区。何时用：测试脚本生成（test-gen-scripts）。
 title: 脚本作者
-tools: [read, write, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, write, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

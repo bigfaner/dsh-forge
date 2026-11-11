@@ -2,7 +2,7 @@
 name: retro-reviewer
 description: 挖掘任务循环与 worker 执行异常根因、执行路径反思、失败三归因。何时用：任务循环结束后的复盘。
 title: 复盘评审专家
-tools: [read, grep, glob, write, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, grep, glob, write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

@@ -2,7 +2,7 @@
 name: formal-verifier
 description: 对核心流程做不变量抽取、边界穷举与状态空间推演。何时用：核心逻辑需深度正确性论证、复现 bug 需验证修复在全部状态下成立。
 title: 形式化验证专家
-tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

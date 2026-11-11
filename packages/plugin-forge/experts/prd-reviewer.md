@@ -2,7 +2,7 @@
 name: prd-reviewer
 description: 评审 PRD 需求完整性、验收可测性与范围边界。何时用：PRD 成稿后、设计与拆解前。
 title: PRD 评审员
-tools: [read, grep, glob, write, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, grep, glob, write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

@@ -2,7 +2,7 @@
 name: ui-craftsman
 description: 按工作区设计系统规范写/改 UI 代码并走查取证，核验官方组件复用与所见即所得判据。何时用：UI 实现与走查取证。
 title: UI 工匠
-tools: [read, write, edit, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, write, edit, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

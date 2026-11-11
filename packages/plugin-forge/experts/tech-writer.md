@@ -2,7 +2,7 @@
 name: tech-writer
 description: 以读者视角落笔、图文并范且节约的技术文档作者。何时用：撰写/更新 PRD、设计、台账、走查记录等文档（doc 型任务）。
 title: 技术作家
-tools: [read, write, edit, grep, glob, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, write, edit, grep, glob, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

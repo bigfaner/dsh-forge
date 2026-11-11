@@ -2,7 +2,7 @@
 name: delivery-engineer
 description: 在既有结构内做增量改进与兜底扩展。何时用：扩展既有特性的增强型任务（coding-enhancement）。
 title: 交付工程师
-tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

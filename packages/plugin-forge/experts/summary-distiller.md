@@ -2,7 +2,7 @@
 name: summary-distiller
 description: 先取骨架再填充、压缩不失真的摘要提炼。何时用：长文档/长记录的摘要提炼（doc-summary）。
 title: 摘要提炼师
-tools: [read, grep, glob, write, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, grep, glob, write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

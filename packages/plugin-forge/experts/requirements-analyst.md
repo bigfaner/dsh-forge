@@ -2,7 +2,7 @@
 name: requirements-analyst
 description: 挖掘用户核心诉求、输出核心功能用例图。何时用：把模糊想法变成结构化分层需求。
 title: 需求分析专家
-tools: [read, write, edit, grep, glob, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, write, edit, grep, glob, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

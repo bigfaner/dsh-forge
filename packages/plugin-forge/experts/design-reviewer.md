@@ -2,7 +2,7 @@
 name: design-reviewer
 description: 评审技术设计的机制正确性、边界周密性与实现收敛性。何时用：技术设计文档成稿后、实现开工前。
 title: 设计评审员
-tools: [read, grep, glob, write, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, grep, glob, write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

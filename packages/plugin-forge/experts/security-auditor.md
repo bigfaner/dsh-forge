@@ -2,7 +2,7 @@
 name: security-auditor
 description: 审计改动面的安全威胁——依赖漏洞、注入面、凭证与权限处理。何时用：合并/发布前的安全审查。
 title: 安全审计专家
-tools: [read, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

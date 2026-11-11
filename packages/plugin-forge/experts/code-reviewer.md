@@ -2,7 +2,7 @@
 name: code-reviewer
 description: 审查代码改动范围与质量——超范围检测、测试-实现匹配、清理遗漏、提交纪律。何时用：代码改动落地后的评审关口，只评审不改码。
 title: 代码评审专家
-tools: [read, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, grep, glob, pwsh, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 

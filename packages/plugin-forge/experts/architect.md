@@ -2,7 +2,7 @@
 name: architect
 description: 做架构/模块/边界合理化设计、保障可持续演进的架构专家。何时用：设计模块划分与依赖方向、评估方案演进成本、固化架构约定。
 title: 架构专家
-tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read]
+tools: [read, write, edit, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
 ---
 
