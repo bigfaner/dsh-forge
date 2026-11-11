@@ -7,16 +7,19 @@
 // （@deepseek-ai/*）与真实外部依赖外置（registry 可装，留 dependencies 由 pnpm 解析
 // ——better-sqlite3 随 host/db 域落位时入 dependencies 并在此保持外置）。
 //
-// 入口直接取 TS 源（fix-5）：host/worktrees 由 tsconfig.client 工程经 project
-// references 承载，root 工程不 emit 其 .js——以 dist tsc 中间产物为 bundle 入口在
-// worktrees 面无解。esbuild 原生吃 TS，从源起 bundle 使三个入口全量闭包内联（含
-// 传递引用），与 tsc -b（类型链 / .d.ts emit）解耦。Run once per build；run-once, no watch。
+// 入口直接取 TS 源（fix-5；fix-6 起清单由 package.json exports 生成——单一事实源，
+// 手工清单退役）：exports 每个 dist/host 运行期入口镜像回 TS 源入口，esbuild 原生吃
+// TS 从源起 bundle，各入口全量闭包内联（含传递引用），与 tsc -b（类型链/.d.ts emit，
+// emitDeclarationOnly——tsc 永不覆写 bundle .js，fix-6 根治门禁序错位）解耦。
+// Run once per build；run-once, no watch。
 import { build } from "esbuild";
-import { readdirSync, rmSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readFileSync, readdirSync, rmSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { auditDist, exportsDistPaths } from "./self-containment.mjs";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 
 // 外置表：官方机械与 peer（内联第二副本会分裂官方单例语义）。node 内建经
 // platform:"node" 自动外置。@dsh-forge/* 一律不外置（含 lib 子包）——独立安装形态
@@ -24,14 +27,16 @@ const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // 残留裸 import 即 ERR_MODULE_NOT_FOUND）。
 const EXTERNAL = ["@deepseek-ai/*", "better-sqlite3"];
 
-// 内联入口 = package.json exports 全部运行期宿主入口（main + 次级 host-dirs /
-// host-worktrees）。任一 exports 可达的 dist 路径若停留在 tsc 中间产物形态，其 lib-*
-// 裸 import 在独立安装形态都是断链——全部经 esbuild 闭包内联。
-const ENTRY_POINTS = [
-  "host/index.ts",
-  "host/dirs/index.ts",
-  "host/worktrees/index.ts",
-].map((rel) => resolve(pkgDir, rel));
+// 内联入口 = package.json exports 全部 dist/host 运行期入口镜像回 TS 源（fix-6：
+// 单一事实源——dist/host/x.js ↔ host/x.ts 同形镜像，exports 改面入口自动随动）。
+const HOST_RUNTIME_ENTRIES = exportsDistPaths(pkg).filter(
+  (rel) => rel.startsWith("./dist/host/") && rel.endsWith(".js"),
+);
+if (HOST_RUNTIME_ENTRIES.length === 0) {
+  throw new Error("bundle-host: package.json exports 无 dist/host 运行期入口——exports 面漂移");
+}
+const distToSrc = (rel) => rel.replace(/^\.\//, "").replace(/^dist\//, "").replace(/\.js$/, ".ts");
+const ENTRY_POINTS = HOST_RUNTIME_ENTRIES.map((rel) => resolve(pkgDir, distToSrc(rel)));
 
 await build({
   entryPoints: ENTRY_POINTS,
@@ -48,23 +53,25 @@ await build({
   logLevel: "warning",
 });
 
-// 中间产物裁剪（fix-5）：bundle 后 dist/host 仅保留内联 bundle 入口——其余 tsc 中间
-// .js 全部删除（其 @dsh-forge/* 裸 import 经 exports 次级入口/装载探测可达即断链）。
+// 中间产物裁剪：KEEP = exports 运行期入口集（单一事实源）——其余 tsc 中间 .js/.js.map
+// 全部删除（emitDeclarationOnly 下 tsc 本就不再产 .js，此步只清历史残留）。
 // .d.ts 类型面保留（exports types 解析链，type-only import 不属运行期断链面）。
-const KEEP = new Set([
-  resolve(pkgDir, "dist/host/index.js"),
-  resolve(pkgDir, "dist/host/dirs/index.js"),
-  resolve(pkgDir, "dist/host/worktrees/index.js"),
-]);
+const KEEP = new Set(HOST_RUNTIME_ENTRIES.map((rel) => resolve(pkgDir, rel)));
 const prune = (dir) => {
   for (const name of readdirSync(dir, { withFileTypes: true })) {
     const p = resolve(dir, name.name);
     if (name.isDirectory()) prune(p);
-    else if (name.name.endsWith(".js") && !KEEP.has(p)) rmSync(p);
+    else if ((name.name.endsWith(".js") || name.name.endsWith(".js.map")) && !KEEP.has(p)) rmSync(p);
   }
 };
 prune(resolve(pkgDir, "dist/host"));
 
-// tsbuildinfo 与 prune 后的 dist 不再一致（增量会把被删中间产物判为最新而跳过
-// emit）——删除强制下次构建全量重出。
-rmSync(resolve(pkgDir, "dist/.tsbuildinfo"), { force: true });
+// 离手门（fix-6）：bundle 末尾自跑自含性断言 + exports 闭包完整性断言——非 0 即败，
+// 自含性是产物性质，不是构建时点性质（bug eed9583b 判例）。
+const violations = auditDist(pkgDir, { requireDist: true, exportsPrefixes: ["./dist/host"] });
+if (violations.length > 0) {
+  console.error(`[bundle-host] 离手门失败：dist 自含审计 ${violations.length} 处违规`);
+  for (const v of violations) console.error(`  - ${v}`);
+  process.exit(1);
+}
+console.log(`[bundle-host] 离手门通过（${HOST_RUNTIME_ENTRIES.length} 入口全内联 + dist 全量自含）`);

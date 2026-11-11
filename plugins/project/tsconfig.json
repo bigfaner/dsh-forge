@@ -5,6 +5,7 @@
     "types": ["node"],
     "outDir": "dist",
     "rootDir": ".",
+    "emitDeclarationOnly": true,
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "include": ["host", "shared"],

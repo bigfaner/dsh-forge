@@ -4,28 +4,27 @@
 // exports["./client"] 产物按 classic <script> 原样装载，产物必须自注册
 // window.__ModuleLoader__.load({ id, factory })（cjs 体 + 注册头/module-var intro +
 // return footer）。format:"esm" 产物带顶层 export/import.meta → classic script
-// 语法错误 → 「loaded without registering」。UI/shared 源码内联（无独立包）；
-// 平台基线模块外置保官方单例。Run once per build；run-once, no watch。
+// 语法错误 → 「loaded without registering」。
+//
+// fix-6：入口改取 TS 源（ui/index.ts，由 exports["./client"].types 镜像推导——单一
+// 事实源，dist 中间产物入口与 css 随迁副本补丁税一并退役）；css import 由 esbuild
+// 从源解析，独立副产物 dist/client.css 形态不变。Run once per build；run-once, no watch。
 import { build } from "esbuild";
-import { cpSync, readdirSync, rmSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { auditDist } from "./self-containment.mjs";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_ID = "@dsh-forge/project";
+const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 
-// css 随迁副本（1.14 UI 迁入面）：add-project / bug-refs 组件体携带相对 css import，
-// tsc 编译产物（dist/client/ui/**）保留该 import 但不带 css 文件——esbuild 从 dist
-// 起解析会断链。装载语义：classic script 零 css 缝（官方 loader 无样式装载面），
-// css 副产物 = esbuild 独立产物（dist/client.css）+ 壳侧经 exports./bug-preview.css
-// 单源引装；此处副本仅为解析闭包完整。
-function copyUiCss() {
-  const walk = (srcDir, outDir) => {
-    cpSync(srcDir, outDir, { recursive: true, filter: (s) => statSync(s).isDirectory() || s.endsWith(".css") });
-  };
-  walk(join(pkgDir, "ui"), join(pkgDir, "dist/client/ui"));
+// 入口 = exports["./client"].types 镜像回 TS 源（dist/client/ui/index.d.ts → ui/index.ts）。
+const clientExport = pkg.exports?.["./client"];
+if (typeof clientExport?.types !== "string" || !clientExport.types.startsWith("./dist/client/")) {
+  throw new Error("bundle-client: exports[\"./client\"].types 未指向 dist/client 类型面——exports 面漂移");
 }
-copyUiCss();
+const clientSrcEntry = resolve(pkgDir, clientExport.types.replace(/^\.\//, "").replace(/^dist\/client\//, "").replace(/\.d\.ts$/, ".ts"));
 
 // 平台基线外置表（对齐官方冻结种子表口径；react 永不内联——内联第二副本会使
 // shell 渲染树 hooks 读到另一副本 dispatcher，Invalid hook call）。jsx-runtime 与
@@ -38,7 +37,7 @@ const PLATFORM_MODULES = [
 ];
 
 await build({
-  entryPoints: [resolve(pkgDir, "dist/client/ui/index.js")],
+  entryPoints: [clientSrcEntry],
   outfile: resolve(pkgDir, "dist/client.js"),
   bundle: true,
   format: "cjs",
@@ -55,18 +54,23 @@ await build({
   logLevel: "warning",
 });
 
-// 中间产物裁剪（fix-5）：bundle 后 dist/client 仅保留 .d.ts 类型面与 css 副迁件——
-// tsc 中间 .js 全部删除（@dsh-forge/* 裸 import 在独立安装形态是断链面）。运行期
-// 装载面 = dist/client.js 单一 bundle（exports "./client"）。
+// 中间产物裁剪：dist/client 仅保留 .d.ts 类型面（emitDeclarationOnly 下 tsc 本就不再
+// 产 .js，此步只清历史残留 .js 与 css 随迁副本）。运行期装载面 = dist/client.js 单一
+// bundle（exports "./client"）。
 const pruneClient = (dir) => {
   for (const name of readdirSync(dir, { withFileTypes: true })) {
     const p = resolve(dir, name.name);
     if (name.isDirectory()) pruneClient(p);
-    else if (name.name.endsWith(".js")) rmSync(p);
+    else if (name.name.endsWith(".js") || name.name.endsWith(".css") || name.name.endsWith(".js.map")) rmSync(p);
   }
 };
 pruneClient(resolve(pkgDir, "dist/client"));
 
-// tsbuildinfo-client 与 prune 后的 dist 不再一致（增量会把被删中间产物判为最新而
-// 跳过 emit）——删除强制下次构建全量重出。
-rmSync(resolve(pkgDir, "dist/.tsbuildinfo-client"), { force: true });
+// 离手门（fix-6）：bundle 末尾自跑自含性断言 + exports 闭包完整性断言——非 0 即败。
+const violations = auditDist(pkgDir, { requireDist: true });
+if (violations.length > 0) {
+  console.error(`[bundle-client] 离手门失败：dist 自含审计 ${violations.length} 处违规`);
+  for (const v of violations) console.error(`  - ${v}`);
+  process.exit(1);
+}
+console.log("[bundle-client] 离手门通过（client bundle 自注册形状 + dist 全量自含）");

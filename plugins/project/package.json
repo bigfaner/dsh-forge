@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -16,7 +16,7 @@
       "import": "./dist/host/dirs/index.js"
     },
     "./host-worktrees": {
-      "types": "./dist/host/worktrees/index.d.ts",
+      "types": "./dist/client/host/worktrees/index.d.ts",
       "import": "./dist/host/worktrees/index.js"
     },
     "./client": {
@@ -61,7 +61,8 @@
     "cordis.patch.yml"
   ],
   "scripts": {
-    "build": "tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs"
+    "build": "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
+    "prepack": "node scripts/self-containment.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.4"
