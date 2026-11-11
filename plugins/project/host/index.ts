@@ -18,6 +18,7 @@ import type {
 import type { OfficialRegistryFace } from "./projects/registry-adapter.js";
 import {
   registerProjectSeams,
+  type ProjectSeamDeps,
   type ProjectSeamRegistration,
   type SeamCtxFace,
   type SeamDiag,
@@ -48,6 +49,13 @@ import {
   type WorktreeRpcEnvelope,
 } from "./assembly/channels.js";
 import { WORKTREE_RPC_METHODS, invalidateResolveCaches, type WorktreeRpcService } from "./worktrees/rpc-service.js";
+// 1.33 官方缝双面注册：ctx.connection.rpc.handle 在场即注册 /forge-{projects,bugs,worktree}
+// 三官方通道（官方宿主第一等公民缝）；缺席诚实降级 emitDiag——自家 channels face 不受影响。
+import {
+  registerOfficialRpcChannels,
+  type OfficialRpcCtxFace,
+} from "./assembly/official-rpc.js";
+import { DIAG_EVENT, emitDiagOrFallback, type DiagEventPayload } from "@dsh-forge/lib-diag";
 
 /** cordis 插件装载形态（loader 只认 default 导出函数）。 */
 interface ProjectPlugin {
@@ -59,7 +67,7 @@ interface ProjectPlugin {
  * face = 官方 workspaceRegistry 的双投影交集（projects 域 OfficialRegistryFace +
  * worktrees 域 WorkspaceRegistryFace——同一官方实体，结构化窄面各自成立）。 */
 type RegistryFace = OfficialRegistryFace & WorkspaceRegistryFace;
-type ProjectPluginCtx = SeamCtxFace & { readonly workspaceRegistry?: RegistryFace };
+type ProjectPluginCtx = SeamCtxFace & OfficialRpcCtxFace & { readonly workspaceRegistry?: RegistryFace };
 
 declare module "@deepseek-ai/cordis" {
   interface Context {
@@ -180,14 +188,19 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   // 独立兜底，真 git 仓 isGit:false 即铁证）。域本体 = createWorktreeRpcService（惰性取
   // gitWorktree 能力 + registry），RPC 面 remove → 契约 delete 动词投影响合
   // WorktreeServicePort 全量签名（getWorktreeDir/resolveProject 快照投影同缝语义）。
-  const worktreesResident = (): WorktreeServicePort => {
-    const svc = createWorktreeRpcService({
+  // 1.33：域本体实例惰性单例（官方缝注册与 channels face 缝共用同实例——resolve 缓存
+  // 失效单点语义不分裂）， narrowed port 仍按 WorktreeServicePort 投影。
+  let worktreeSvcSingleton: WorktreeRpcService | undefined;
+  const worktreeSvcOnce = (): WorktreeRpcService =>
+    (worktreeSvcSingleton ??= createWorktreeRpcService({
       gitWorktree: readGitWorktreeCapability,
       // config.registry = 宿主注入的官方 workspaceRegistry face（官方实体同满足 worktrees 域
       // WorkspaceRegistryFace 投影——单点显式收窄，非盲转）。
       workspaceRegistry: (config.registry as RegistryFace | undefined) ?? defaultRegistry(),
       warn: diag,
-    });
+    }));
+  const worktreesResident = (): WorktreeServicePort => {
+    const svc = worktreeSvcOnce();
     const port: WorktreeServicePort = {
       ...svc,
       delete: (request) => svc.remove(request),
@@ -204,7 +217,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   };
 
   // 五缝注册（常驻 + 兜底 + 覆写位择优——零域逻辑，全部委托域本体/组装面）
-  const deps = (() => {
+  const deps: ProjectSeamDeps = (() => {
     const db = domainDb;
     type DirFactsDeps = Parameters<typeof minimalDirFactsPort>[0];
     const absentAnchorsOf: DirFactsDeps["anchorsOf"] = async () =>
@@ -252,6 +265,26 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   diag(
     `[project-seams] 五缝注册完成：registered=[${registration.registered.join(", ")}] degraded=[${registration.degraded.join(", ")}]`,
   );
+  // 1.33 官方缝双面注册（feature-detect 择优——ctx.connection.rpc.handle 在场才注册；
+  // 诊断 emit 面装配桥接：ctx.emit 在场即 typed emit，缺席 emitDiagOrFallback console 兜底。
+  // 插件域进程位恒 main——errors.ts 既有先例同径）。
+  try {
+    const faceEmit = (face as { emit?: unknown }).emit;
+    const diagEmit =
+      typeof faceEmit === "function"
+        ? (payload: Omit<DiagEventPayload, "process">): void =>
+            emitDiagOrFallback((p) => (faceEmit as (e: string, p: unknown) => unknown).call(face, DIAG_EVENT, { ...p, process: "main" }), payload)
+        : undefined;
+    registerOfficialRpcChannels(face, {
+      projects: deps.projects,
+      bugs: deps.bugs,
+      worktrees: worktreeSvcOnce,
+      diag: diagEmit,
+      onDiag: diag,
+    });
+  } catch (cause) {
+    diag(`[project-official-rpc] 官方缝注册面异常（fail-soft 不阻载）：${String(cause)}`);
+  }
   // worktree 域插件组合装载（诊断缝透传——装配失败/能力缺席语义归插件自身 fail-soft 面）
   const disposeWorktrees = worktreePlugin(ctx, { diag: (line) => diag(line) });
   return () => {

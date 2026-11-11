@@ -138,6 +138,7 @@ export * from './components.js'
 
 
 import { registerOfficialSeamFaces, revokeOfficialSeamGlobals } from './official-seams.js'
+import { installOfficialRpcFace, type OfficialRpcCallFace } from './rpc.js'
 import { registerSettingsSection } from './settings-section/index.js'
 import { registerWorktreeDetailSection } from './detail-section/index.js'
 
@@ -172,6 +173,26 @@ export const projectClient = {
   inject: ['slots', 'sidebarRightTabs', 'sidebarRight', 'workspaces', 'sessions'] as string[],
   apply(ctx: unknown): void {
     const rec = ctx as Record<string, unknown> | undefined
+    // 1.33 官方缝双宿主传输：解析缝安装（apply 期一次安装、逐调用现查——AGENTS 1.6 检测
+    // 永不缓存；reflect 防御读取不声明 inject 边——inject 缺席宿主会被 cordis 门阻载）。
+    // ctx.connection.rpc.call 在场 → RPC 数据走官方缝；缺席 → 自家 channels face 兜底。
+    try {
+      const reflect = rec?.['reflect'] as { get?: (key: string) => unknown } | undefined
+      installOfficialRpcFace(() => {
+        let connection: unknown
+        try {
+          connection = typeof reflect?.get === 'function' ? reflect.get('connection') : undefined
+        } catch {
+          connection = undefined
+        }
+        const rpc = (connection as { rpc?: unknown } | undefined)?.rpc as
+          | { call?: unknown }
+          | undefined
+        return typeof rpc?.call === 'function' ? (rpc as unknown as OfficialRpcCallFace) : undefined
+      })
+    } catch (error) {
+      console.warn('[dsh-forge/project] official rpc face install failed——退自家 channels face', error)
+    }
     const slots = rec?.['slots'] as
       | Parameters<typeof registerSettingsSection>[1]
       | undefined

@@ -1,8 +1,11 @@
 // forge RPC client 窄面（定位：装配——插件 bundle 内部面，inventory §2.4「RPC 数据源改
 // 插件 bundle 内部面」）：add-project 流程与 Bug 台账 pane 的数据源单门。通道名仅出自
-// contracts 常量（禁字面量）；传输真身 = preload 桥 window.dshForge.invoke（apps/web
-// rpc/transport 同形镜像——web/host 零 import 彼此）；信封拆装：RpcOk → data 原样返回，
-// RpcErr → 抛 RpcClientError（typed error 反序列化），形状非法 fail-loud。
+// contracts 常量（禁字面量）；传输真身 = 双宿主化传输（plugin-project 1.33）：官方缝
+// connection.rpc.call 优先（official-rpc-audit sanctioned 缝——apply 期 installOfficialRpcFace
+// 安装解析缝，逐调用现查不缓存），自家 channels face（preload 桥 window.dshForge.invoke，
+// dsh-forge 宿主能力）兜底；两面皆缺席 = 通道不可用诚实降级（diag 留痕 + typed Error）。
+// 信封拆装：RpcOk → data 原样返回，RpcErr → 抛 RpcClientError（typed error 反序列化），
+// 形状非法 fail-loud。
 import {
   BUGS_CHANNELS,
   FEATURES_CHANNELS,
@@ -69,15 +72,96 @@ interface DshForgeInvokeGlobal {
   invoke(channel: string, payload?: unknown): Promise<unknown>
 }
 
-/** 仅 preload 传输真身；缺席即装配断裂（host 未接 preload / 非 Electron 载体），fail-loud */
-function preloadTransport(): ForgeTransport {
-  const bridge = (globalThis as { dshForge?: DshForgeInvokeGlobal }).dshForge
-  if (bridge === undefined || typeof bridge.invoke !== 'function') {
+/** 官方 client connection.rpc.call 窄面（ClientConnectionRpc 结构切片——信封 ConnectionRpcResult） */
+export interface OfficialRpcCallFace {
+  call(channel: string, endpoint: string, payload?: unknown, signal?: AbortSignal): Promise<unknown>
+}
+
+/** 官方通道名映射（forge:‹family› → /forge-‹family›——官方通道名 /^\/[A-Za-z0-9._~-]+$/ 禁冒号） */
+const OFFICIAL_RPC_CHANNELS = {
+  projects: '/forge-projects',
+  fs: '/forge-fs',
+  bugs: '/forge-bugs',
+  worktree: '/forge-worktree',
+  settings: '/forge-settings',
+  proposals: '/forge-proposals',
+  features: '/forge-features',
+} as const
+
+/** forge:‹family›/‹endpoint› → { channel, endpoint }（官方缝路由投影；非 forge 族 = undefined） */
+export function officialRouteOf(channel: string): { readonly channel: string; readonly endpoint: string } | undefined {
+  const slash = channel.indexOf('/')
+  if (slash <= 0) return undefined
+  const family = channel.slice(0, slash)
+  if (!family.startsWith('forge:')) return undefined
+  const name = OFFICIAL_RPC_CHANNELS[family.slice('forge:'.length) as keyof typeof OFFICIAL_RPC_CHANNELS]
+  return name === undefined ? undefined : { channel: name, endpoint: channel.slice(slash + 1) }
+}
+
+/** 官方 face 解析缝（apply 期安装——每调用现查不缓存，AGENTS 1.6 检测永不缓存同径） */
+let officialRpcResolver: (() => OfficialRpcCallFace | undefined) | undefined
+/** 降级诊断钩子（apply 期可选安装——缺席 console 兜底，client 束豁免面） */
+let dualTransportDiag: ((line: string) => void) | undefined
+
+/**
+ * 安装官方 connection.rpc 解析缝（projectClient.apply 装配期调用一次）：
+ * resolver 逐调用现查 ctx.connection（reflect 防御读取，缺席宿主 = undefined 退自家 channels face）。
+ */
+export function installOfficialRpcFace(
+  resolver: () => OfficialRpcCallFace | undefined,
+  onDiag?: (line: string) => void,
+): void {
+  officialRpcResolver = resolver
+  if (onDiag !== undefined) dualTransportDiag = onDiag
+}
+
+/** ConnectionRpcResult → forge RpcResult 信封投影（value → data；ConnectionRpcFailure → RpcErrorPayload 形） */
+function officialResultToEnvelope(raw: unknown): unknown {
+  if (raw === null || typeof raw !== 'object' || !('ok' in raw)) {
     throw new Error(
-      'dsh-forge project client: window.dshForge.invoke 缺席——宿主 preload 未接 RPC 面（forge:* 通道常量 = @dsh-forge/contracts）',
+      `dsh-forge project client: 官方缝响应形状非法——期望 ConnectionRpcResult 信封，实得 ${raw === null ? 'null' : typeof raw}`,
     )
   }
-  return (channel, payload) => bridge.invoke(channel, payload)
+  const result = raw as {
+    ok: boolean
+    value?: unknown
+    error?: { code?: unknown; message?: unknown; details?: unknown }
+  }
+  if (result.ok) return { ok: true, data: result.value }
+  return {
+    ok: false,
+    error: {
+      code: typeof result.error?.code === 'string' ? result.error.code : 'internal',
+      message: typeof result.error?.message === 'string' ? result.error.message : 'official rpc failure',
+      data: result.error?.details,
+    },
+  }
+}
+
+/**
+ * 双宿主化传输（1.33——connection.rpc.call 优先 + 自家 channels face 兜底）：
+ * 官方 face 逐调用现查（检测永不缓存）；官方路由缺席/非 forge 族通道 → 自家 preload 桥；
+ * 两面皆缺席 = 通道不可用诚实降级（diag 留痕 + typed Error，不静默不炸壳）。
+ */
+function dualHostTransport(): ForgeTransport {
+  return async (channel, payload) => {
+    const official = officialRpcResolver?.()
+    if (official !== undefined && typeof official.call === 'function') {
+      const route = officialRouteOf(channel)
+      if (route !== undefined) {
+        return officialResultToEnvelope(await official.call(route.channel, route.endpoint, payload))
+      }
+    }
+    const bridge = (globalThis as { dshForge?: DshForgeInvokeGlobal }).dshForge
+    if (bridge !== undefined && typeof bridge.invoke === 'function') {
+      return bridge.invoke(channel, payload)
+    }
+    const line =
+      'dsh-forge project client: 双宿主传输均缺席（官方 connection.rpc.call 与 window.dshForge.invoke 缺席）——forge:* 通道不可用（诚实降级）'
+    if (dualTransportDiag !== undefined) dualTransportDiag(line)
+    else console.warn(`[forge-rpc-transport] ${line}`)
+    throw new Error(line)
+  }
 }
 
 async function invokeRpc<T>(transport: ForgeTransport, channel: string, payload?: unknown): Promise<T> {
@@ -200,7 +284,7 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
 /** RPC client 构造器（缺省 = preload 真身；注入 = 测试面） */
 export type RpcClientFactory = () => ForgeRpcClient
 
-/** 缺省构造：preload 传输真身（缺席在构造期抛——由消费面错误归一收敛，不炸壳） */
+/** 缺省构造：双宿主化传输真身（官方缝优先 + preload 兜底；双缺席构造期不抛——调用期诚实降级） */
 export function preloadRpcClientFactory(): ForgeRpcClient {
-  return createForgeRpcClient(preloadTransport())
+  return createForgeRpcClient(dualHostTransport())
 }
