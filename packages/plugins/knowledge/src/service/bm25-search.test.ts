@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../storage/index.js'
 import { createKnowledgeService } from './service.js'
-import { bm25Norm, composeSearchScore, heatBonusOf, keywordDirectHit, keywordDirectHitCount, rankFactorOf } from './internal.js'
+import { bm25Norm, composeSearchScore, heatBonusOf, keywordDirectHit, keywordDirectHitCount, rankBonusOf } from './internal.js'
 import type { BrowseKnowledgeService } from './types.js'
 
 let home: string
@@ -75,18 +75,19 @@ describe('归一与三因子纯函数（裁决 #10——不复用平顶 ftsRankO
     expect(bm25Norm(-3)).toBeGreaterThan(bm25Norm(-1))
   })
 
-  it('rank 因子四档微调（1.0→1.0 / 0.6→0.92 / 0.4→0.88 / 0.2→0.84）+ 热度轻加分', () => {
-    expect(rankFactorOf(1.0)).toBeCloseTo(1.0)
-    expect(rankFactorOf(0.6)).toBeCloseTo(0.92)
-    expect(rankFactorOf(0.4)).toBeCloseTo(0.88)
-    expect(rankFactorOf(0.2)).toBeCloseTo(0.84)
+  it('confirmed 加法加分（1.0→+2 / 其余档 0）+ 热度轻加分', () => {
+    expect(rankBonusOf(1.0)).toBe(2)
+    expect(rankBonusOf(0.6)).toBe(0)
+    expect(rankBonusOf(0.4)).toBe(0)
+    expect(rankBonusOf(0.2)).toBe(0)
     expect(heatBonusOf(0)).toBe(0)
     expect(heatBonusOf(1000)).toBeLessThanOrEqual(0.35) // log 封顶——热度不翻盘
   })
 
-  it('composeSearchScore：bm25 缺位（子串通道/无过滤）→ norm 中性 0.5', () => {
-    expect(composeSearchScore({ effectiveRank: 1.0, heat: 0 })).toBe(0.5)
-    expect(composeSearchScore({ bm25: -1, effectiveRank: 1.0, heat: 0 })).toBeCloseTo(0.5)
+  it('composeSearchScore 统一加法：norm + confirmed 加分 + 热度（bm25 缺位 → 中性 0.5）', () => {
+    expect(composeSearchScore({ effectiveRank: 0.6, heat: 0 })).toBe(0.5)
+    expect(composeSearchScore({ effectiveRank: 1.0, heat: 0 })).toBe(2.5)
+    expect(composeSearchScore({ bm25: -1, effectiveRank: 0.6, heat: 0 })).toBeCloseTo(0.5)
   })
 })
 
@@ -108,7 +109,7 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
     expect(distinctScores.size).toBe(2)
   })
 
-  it('rank 因子微调：同文本同 bm25，confirmed（1.0）居 unconfirmed（0.92）前', async () => {
+  it('confirmed 加分：同文本同 bm25，confirmed（+2）居 unconfirmed（0 加分）前', async () => {
     const hits = await service.search({ projectId, text: 'bm25test', sessionId: 's' })
     const posOf = (id: string): number => hits.findIndex((h) => h.frontmatterId === id)
     expect(posOf('bm25-a')).toBeLessThan(posOf('bm25-c'))
