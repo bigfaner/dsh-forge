@@ -86,15 +86,32 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       console.warn(line);
     });
 
-  // project.db 打开（装配期一次；I4 拒开/文件异常 = fail-soft 退兜底——设计 §6 劣形②同径）
+  // project.db 打开（装配期一次；I4 拒开/文件异常 = fail-soft 退兜底——设计 §6 劣形②同径）。
+  // fix-7 单装缺省装配：显式 config > 缺省值两级解析——home 缺省 = env DSH_HOME
+  // （官方宿主注行无 config 时插件自装配，不再恒退 ErrUnavailable 兜底）。
+  const home = config.home ?? process.env.DSH_HOME;
   let domainDb: ReturnType<typeof openProjectsDomainDb> | undefined;
-  if (config.home !== undefined) {
+  if (home !== undefined) {
     try {
-      domainDb = openProjectsDomainDb(config.home);
+      domainDb = openProjectsDomainDb(home);
+      diag(
+        `[project-seams] project.db 已打开：${home === config.home ? "config.home" : "缺省 DSH_HOME"} → ${home}`,
+      );
     } catch (cause) {
       diag(`[project-seams] project.db 打开失败——projects/bugs 退兜底：${String(cause)}`);
     }
   }
+
+  // fix-7 单装缺省装配：registry 缺省 = ctx.workspaceRegistry 具名服务惰性取法
+  //（官方机械复用——AGENTS 1.2；运行期存在性检查承担 fail-soft，服务缺席 = absentRegistry 拒）。
+  const defaultRegistry = (): OfficialRegistryFace | undefined => {
+    try {
+      const raw: unknown = (face as { workspaceRegistry?: unknown }).workspaceRegistry;
+      return raw === undefined || raw === null ? undefined : (raw as OfficialRegistryFace);
+    } catch {
+      return undefined;
+    }
+  };
 
   // 五缝注册（常驻 + 兜底 + 覆写位择优——零域逻辑，全部委托域本体/组装面）
   const deps = (() => {
@@ -112,28 +129,32 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       onDiag: diag,
     };
     if (db === undefined) return base;
+    // fix-7 单装缺省装配：bugs 依赖兜底接真实现——config.bugsDeps 缺席时自 project.db 派生
+    //（归属键 = projects 行 project_key；主路径 = workspaces main 行 ws_path），不再退空实现。
+    const bugsDeps = config.bugsDeps ?? {
+      resolveProjectKey: (projectId: string): string | null =>
+        db.repos.projects.get(projectId)?.projectKey ?? null,
+      resolveMainPath: (projectId: string): string =>
+        db.repos.workspaces.getMain(projectId)?.wsPath ?? "",
+    };
     return {
       ...base,
       projects: () =>
         createProjectsServicePort({
           domainDb: db,
-          registry: config.registry,
+          registry: config.registry ?? defaultRegistry(),
           tasksHome: config.tasksHome,
           onDiag: undefined,
         }),
-      ...(config.bugsDeps !== undefined
-        ? {
-            bugs: (() => {
-              const bugsDeps = config.bugsDeps;
-              return () =>
-                createBugsService({
-                  bugs: db.repos.bugs,
-                  resolveProjectKey: bugsDeps.resolveProjectKey,
-                  resolveMainPath: bugsDeps.resolveMainPath,
-                }) as BugsServicePort;
-            })(),
-          }
-        : {}),
+      bugs: (() => {
+        const deps = bugsDeps;
+        return () =>
+          createBugsService({
+            bugs: db.repos.bugs,
+            resolveProjectKey: deps.resolveProjectKey,
+            resolveMainPath: deps.resolveMainPath,
+          }) as BugsServicePort;
+      })(),
     };
   })();
   const registration: ProjectSeamRegistration = registerProjectSeams(face, deps);

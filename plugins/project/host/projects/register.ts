@@ -106,7 +106,7 @@ export class ProjectsRegisterService {
 
     // 步 4：单事务双行写（R4——insertProjectWithMain DAO 单方法，禁拆两条语句）
     const now = this.#deps.now ?? (() => new Date().toISOString())
-    const id = (this.#deps.newId ?? crypto.randomUUID)()
+    const id = (this.#deps.newId ?? (() => crypto.randomUUID()))()
     const stamp = now()
     const projectRow = {
       id,
