@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.12.0",
+  "version": "0.12.2",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -70,10 +70,10 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
     "@dsh-forge/core": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-client-ui-settings": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.2-rc.1",
     "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/lib-api": "workspace:*",
     "@dsh-forge/lib-db": "workspace:*",

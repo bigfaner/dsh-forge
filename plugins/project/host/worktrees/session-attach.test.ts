@@ -9,7 +9,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as jsonlPersistenceModule from '@deepseek-ai/dsh-session-persistence-jsonl'
+// 0.2.2-rc.1 起该包不再提供 default 导出——插件本体改为具名导出（name + apply）。
+const JsonlSessionPersistence = {
+  name: jsonlPersistenceModule.name,
+  apply: jsonlPersistenceModule.apply,
+}
 import { KNOWN_SESSION_EVENT_TYPES, SessionStore } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import {
