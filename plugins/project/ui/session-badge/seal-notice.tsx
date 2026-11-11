@@ -223,7 +223,17 @@ export function useWorktreeSeal(sessionId: string | undefined, makeRpc: () => Wo
   useEffect(() => {
     if (sessionId === undefined || sessionId === '') return
     let alive = true
-    makeRpc()
+    // 传输构造 throw-safe（fix-13——官方 web 无 preload 桥：makeRpc 构造即抛[fail-loud
+    // 设计]；effect 同步抛 = 渲染树崩溃。构造失败降 error 相位——chip/notice 呈现缺省态，
+    // 不炸宿主渲染树）。
+    let client: WorktreeFacesRpc
+    try {
+      client = makeRpc()
+    } catch {
+      if (alive) setPhase({ state: 'error', isGit: false, sealed: false, branch: null, worktreeName: null, branchDrift: null })
+      return
+    }
+    client
       .worktree.seal({ sessionId })
       .then((result) => {
         if (!alive) return

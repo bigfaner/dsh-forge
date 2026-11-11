@@ -206,14 +206,22 @@ export function ForgeSessionWorktreeChip({
   const [info, setInfo] = useState<{ readonly worktreePath: string; readonly projectRoot: string } | undefined>(undefined)
   useEffect(() => {
     if (sessionId === undefined || phase.branch === null || phase.sealed) return
-    makeRpc()
+    // 传输构造 throw-safe（fix-13——官方 web 无 preload 桥：构造即抛，effect 同步抛 =
+    // 渲染树崩溃；降级 = 跳过 ahead/behind 拉取，chip 本体不受累）。
+    let rpc: WorktreeFacesRpc
+    try {
+      rpc = makeRpc()
+    } catch {
+      return
+    }
+    rpc
       .worktree.seal({ sessionId })
       .then((result) => {
         if (result.projectRoot !== undefined && result.binding !== null) {
           setInfo({ worktreePath: result.binding.worktreePath, projectRoot: result.projectRoot })
         }
         if (result.projectRoot === undefined || result.binding === null) return
-        return makeRpc()
+        return rpc
           .worktree.aheadBehind({ projectRoot: result.projectRoot, path: result.binding.worktreePath })
           .then((counts) => setAheadBehind(counts.counts ?? undefined))
       })

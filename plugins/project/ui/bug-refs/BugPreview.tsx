@@ -146,7 +146,16 @@ function BugPreviewBody({ contentId, makeClient }: { readonly contentId: string;
     const seq = ++seqRef.current
     setLoad({ phase: 'loading' })
     let alive = true
-    void clientFactory()
+    // 传输构造 throw-safe（fix-13——官方 web 无 preload 桥：构造即抛，effect 同步抛 =
+    // 渲染树崩溃；降 error 相位 = 台账暂不可用占位，不炸宿主渲染树）。
+    let client: ReturnType<RpcClientFactory>
+    try {
+      client = clientFactory()
+    } catch {
+      if (alive && seq === seqRef.current) setLoad({ phase: 'error' })
+      return
+    }
+    void client
       .bugs.list({ projectId: parsed.projectId })
       .then((bugs) => {
         if (!alive || seq !== seqRef.current) return

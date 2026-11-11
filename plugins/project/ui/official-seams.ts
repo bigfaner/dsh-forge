@@ -372,9 +372,11 @@ function referenceServicesOf(
   } as Parameters<typeof watchBugChipRestore>[0]
 }
 
-/** Bug source 页内缓存缝（壳侧 1.4 快速路径跨 bundle 消费 cacheBugSnapshot——发布面同族） */
+/** Bug source 页内缝（壳侧 1.4 快速路径跨 bundle 消费 cacheBugSnapshot；openReference
+ * 同面直达——官方 web 无 dshForge 桥时 @ 菜单零候选的 tab 开面路由，e2e/CDP 取证同径） */
 interface BugSourceCacheGlobal {
   cacheBugSnapshot(card: { readonly bugId: string; readonly summary: string }): void
+  openReference(session: { readonly sessionId: string }, ref: { readonly ref: string }): boolean
 }
 
 /** 缝键（BugChipRestorer 页内全局见 ChipRestoreOverlay.tsx；source 缓存缝同族） */
@@ -481,10 +483,12 @@ export function registerOfficialSeamFaces(
     const restorer: BugChipRestorer = (sessionId: string): (() => void) | void =>
       watchBugChipRestore(referenceServicesOf(ctx, sessions), sessionId)
     publishBugChipRestorer(restorer)
-    ;(globalThis as Record<string, unknown>)[BUG_SOURCE_CACHE_KEY] = {
-      cacheBugSnapshot: (card: { readonly bugId: string; readonly summary: string }): void =>
-        source?.cacheBugSnapshot(card),
-    } satisfies BugSourceCacheGlobal
+    // 页内缝 = registered source 本体（openReference 同面直达——官方 web 无 dshForge 桥时
+    // @ 菜单零候选，bug tab 开面走本缝路由；e2e/CDP 取证同径）。source 缺席（登记被拒）
+    // = 零发布（fail-soft：消费侧 bugSourceCacheOf undefined 不炸）。
+    if (source !== undefined) {
+      ;(globalThis as Record<string, unknown>)[BUG_SOURCE_CACHE_KEY] = source satisfies BugSourceCacheGlobal
+    }
   })
 
   return { registered }

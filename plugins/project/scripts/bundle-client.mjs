@@ -43,6 +43,11 @@ await build({
   format: "cjs",
   platform: "browser",
   target: "es2022",
+  // jsx automatic（react-jsx 正门——工程 tsconfig 名为 tsconfig.client.json，esbuild 只
+  // 向上搜 tsconfig.json 命中宿主面配置（无 jsx 键）→ 经典变换漏出 `React.createElement`
+  // 裸全局（真机「React is not defined」判例 fix-13）；显式 automatic + jsx-runtime 外置
+  // （PLATFORM_MODULES 种子表单例）。
+  jsx: "automatic",
   external: PLATFORM_MODULES,
   banner: {
     js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PLUGIN_ID)}, factory: (require) => {\nvar module = { exports: {} }; var exports = module.exports;`,
