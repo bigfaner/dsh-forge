@@ -139,12 +139,23 @@ export * from './components.js'
 
 import { registerOfficialSeamFaces, revokeOfficialSeamGlobals } from './official-seams.js'
 import { registerSettingsSection } from './settings-section/index.js'
+import { registerWorktreeDetailSection } from './detail-section/index.js'
 
 // ── keyed section 扩展点 + 配置节双缝（1.16：tab keyed 占用者模式泛化 + settings 节
 // bundle.config/detail.section 双缝——configForms revisioned 写径；详见各模块头注）──
 export * from './keyed-section.js'
 export * from './settings-section/index.js'
 export * from './settings-section/worktree-prefs.js'
+
+// ── worktree 管理面（1.32：plugins.detail.section list 缝——forge.worktrees 缝消费，
+// 不依赖 configForms；槽/缝缺席或劣形 fail-soft 退无面板；详见各模块头注）──
+export {
+  ProjectWorktreesSection,
+  WORKTREE_DETAIL_SECTION_ID,
+  WORKTREE_SEAM_KEY,
+  registerWorktreeDetailSection,
+} from './detail-section/index.js'
+export { worktreePortOf, type WorktreeSeamCtx } from './detail-section/seam-face.js'
 
 // 组合 cordis 插件面（包骨架 1.3 正门，无 src 层；worktree 域 UI 平移后仍承担装载契约）：
 // 无 apply → 真机 `invalid plugin` 判例（expert-squad annotator gotcha-web-boot 同径）；
@@ -171,6 +182,13 @@ export const projectClient = {
     }
     // 配置节双缝注册面异常只降本节（registerSettingsSection 内部逐缝降级），不炸装配。
     registerSettingsSection(rec ?? {}, slots)
+    // worktree 管理面（1.32）：forge.worktrees 缝劣形①②/slots 缺席 = 不注册 fail-soft
+    // （registerWorktreeDetailSection 内收口），注册面异常只降本面，不炸装配。
+    try {
+      registerWorktreeDetailSection(rec as never, slots)
+    } catch (error) {
+      console.warn('[dsh-forge/project] worktree detail section registration failed——降级不注册', error)
+    }
     // 官方缝五面自注册（逐面 fail-soft——单面异常只降本面；页内全局缝随摘除面收口）。
     try {
       const seams = registerOfficialSeamFaces(rec as never, slots)
