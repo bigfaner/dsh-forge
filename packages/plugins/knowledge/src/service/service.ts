@@ -54,7 +54,7 @@ import {
   escapeLike,
   groupRecallRows,
   isNonEmptyString,
-  keywordDirectHit,
+  keywordDirectHitCount,
   KNOWLEDGE_HEAT_TERM,
   normalizeUpdated,
   prepareHeatByEntry,
@@ -728,7 +728,8 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       // 弱命中行也放进无词面证据的中性分层——按词元覆盖度微升序（覆盖多者居前，1e-3
       // 步进远小于 bm25Norm 区分度），免单 bigram 弱命中淹没整 run 强覆盖行。
       // 1.17 精度调优（排序收敛非硬判定——db58e1c4/4cf01aa9 OR 兜底禁退化）：
-      // · keywords 列直查（整词/短语精确命中）= 强信号 +2.0 加权位（压过词面高词频）；
+      // · keywords 列直查（整词/短语精确命中）= 强信号、逐词元命中计数线性加权（每命中
+      //   词元 +2.0 加权位——keywords 精确匹配数量越多 score 越高，压过词面高词频）；
       // · 词元碎片收敛：覆盖度以 title/summary/keywords 三元数据面计（1e-3 微升序不变）；
       // · 单碎片弱命中（覆盖不足半数词元、非 keywords 直查、无 FTS 强证据）降权截断——
       //   仅当强候选在场时生效；全候选皆弱时保留（OR 兜底 ≥1 命中不退化）。
@@ -738,7 +739,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       const KEYWORD_DIRECT_BONUS = 2
       const weakFragmentOf = (r: EntryRow, bm25: number | undefined): boolean =>
         substringTerms.length > 1
-        && !keywordDirectHit(keywordsOf(r), substringTerms)
+        && keywordDirectHitCount(keywordsOf(r), substringTerms) === 0
         && bm25 === undefined
         && coverageOf(r) * 2 < substringTerms.length
 
@@ -754,7 +755,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
           effectiveRank: r.effective_rank,
           heat: heatByEntry.get(r.rid) ?? 0,
         })
-        const kwBonus = keywordDirectHit(keywordsOf(r), substringTerms) ? KEYWORD_DIRECT_BONUS : 0
+        const kwBonus = keywordDirectHitCount(keywordsOf(r), substringTerms) * KEYWORD_DIRECT_BONUS
         const score = base + kwBonus + (bm25 === undefined ? coverageOf(r) * 1e-3 : 0)
         scored.push({ entry: r, score, weakFragment: weakFragmentOf(r, bm25) })
       }

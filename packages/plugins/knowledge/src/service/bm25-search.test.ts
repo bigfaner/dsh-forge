@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../storage/index.js'
 import { createKnowledgeService } from './service.js'
-import { bm25Norm, composeSearchScore, heatBonusOf, rankFactorOf } from './internal.js'
+import { bm25Norm, composeSearchScore, heatBonusOf, keywordDirectHit, keywordDirectHitCount, rankFactorOf } from './internal.js'
 import type { BrowseKnowledgeService } from './types.js'
 
 let home: string
@@ -219,6 +219,35 @@ describe('search BM25 排序（断言锚位次行为，非分值字面）', () =
     expect(ids).toContain('bm25-tz')
     expect(ids.indexOf('bm25-kwz')).toBe(0)
     expect(ids.indexOf('bm25-kwz')).toBeLessThan(ids.indexOf('bm25-tz'))
+  })
+
+  // keywords 直查计数加权 pin：多词元 query 下 keywords 命中数量越多 score 越高——
+  // 双 keywords 命中条目压过单 keywords 命中条目（线性加权，非二值）。
+  it('keywords 匹配计数加权：命中词元越多居前（2 命中 > 1 命中）', async () => {
+    const svc3 = createKnowledgeService({ db, resolveWsPath: (id) => (id === 'p3' ? ws3 : undefined) })
+    // bm25-frag keywords = ['部署', '上线']（双命中）；单命中对照 = 新增单 keywords 条目
+    const hits = await svc3.search({ projectId: 'p3', text: '部署 上线', sessionId: 's' })
+    const scores = new Map(hits.map((h) => [h.frontmatterId, h.score] as const))
+    expect(scores.get('bm25-frag')).toBeDefined()
+    // 单命中对照 = keywords 仅 ['部署']（title 带「上线」过子串准入通道）
+    writeFileSync(join(dir3, 'frag1.md'), md('上线单命中杂记', 'bm25-frag1', ['部署'], 'misc note lorem ipsum'), 'utf8')
+    await service.rebuildIndex('p3')
+    const hits2 = await svc3.search({ projectId: 'p3', text: '部署 上线', sessionId: 's' })
+    const ids2 = hits2.map((h) => h.frontmatterId)
+    // 行为锚：两条都进召回（keywords 计数加权不影响准入），双命中（kwCount=2）压过单命中（kwCount=1）
+    expect(ids2).toContain('bm25-frag')
+    expect(ids2).toContain('bm25-frag1')
+    expect(ids2.indexOf('bm25-frag')).toBeLessThan(ids2.indexOf('bm25-frag1'))
+  })
+
+  // keywordDirectHitCount 纯函数锚：命中词元计数线性（0/1/2 递增），keywordDirectHit = 计数 > 0
+  it('keywordDirectHitCount：逐词元命中计数（匹配数量越多值越大）', () => {
+    expect(keywordDirectHitCount(['部署', '上线'], [])).toBe(0)
+    expect(keywordDirectHitCount([], ['部署', '上线'])).toBe(0)
+    expect(keywordDirectHitCount(['部署'], ['部署', '上线'])).toBe(1)
+    expect(keywordDirectHitCount(['部署', '上线', 'misc'], ['部署', '上线'])).toBe(2)
+    expect(keywordDirectHit(['部署'], ['部署', '上线'])).toBe(true)
+    expect(keywordDirectHit(['部署'], ['回归'])).toBe(false)
   })
 
   // 1.17 碎片收敛 pin：多词元 OR 并集候选按命中词元覆盖度收敛——单碎片（仅 1/n 词元

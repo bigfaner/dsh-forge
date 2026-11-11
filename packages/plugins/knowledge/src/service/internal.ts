@@ -177,11 +177,20 @@ export function textSubstringHit(title: string, summary: string, text: string): 
 /**
  * keywords 列直查命中（1.17 强信号）：query 词元（tokenizeSearchTerms 口径）对条目
  * keywords 词条整词全等或短语包含（大小写不敏感——CJK 词条内子串即短语命中；ASCII
- * 词条含词元视同整词族命中，低风险放宽已随任务上报）。命中即排序加权位，不参与准入。
+ * 词条含词元视同整词族命中，低风险放宽已随任务上报）。命中即排序加权位，不参与准入；
+ * 加权按逐词元命中计数计（keywordDirectHitCount——匹配词元越多精确信号越强，score 越高）。
  */
+export function keywordDirectHitCount(keywords: readonly string[], terms: readonly string[]): number {
+  if (keywords.length === 0 || terms.length === 0) return 0
+  let n = 0
+  for (const t of terms) {
+    if (keywords.some((k) => k.toLowerCase().includes(t))) n += 1
+  }
+  return n
+}
+
 export function keywordDirectHit(keywords: readonly string[], terms: readonly string[]): boolean {
-  if (keywords.length === 0 || terms.length === 0) return false
-  return terms.some((t) => keywords.some((k) => k.toLowerCase().includes(t)))
+  return keywordDirectHitCount(keywords, terms) > 0
 }
 
 /**
