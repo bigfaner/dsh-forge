@@ -46,29 +46,19 @@ import {
   ForgeHeroWorkspacePicker,
   type ForgeHeroWorkspacePickerProps,
 } from './views/session/HeroWorkspacePicker.js'
-// 1.15 迁移面：worktree 挂载面三件（chip / seal overlay / switch marker）迁
-// @dsh-forge/project client ui（ui/worktree-picker + ui/session-badge）——本发布面
-// 引用改指包出口（apps/web 壳内自有源收缩为零），发布机械不变。
-import {
-  ForgeSessionWorktreeChip,
-  ForgeWorktreeSealOverlay,
-  ForgeWorktreeSwitchMarker,
-} from '@dsh-forge/project/client-ui/worktree-faces'
+// 1.15 迁移面：worktree 挂载面（switch marker）居 @dsh-forge/project client ui
+// （ui/worktree-picker）——本发布面引用指包出口（apps/web 壳内自有源收缩为零）。
+// fix-13 注记：chip / seal overlay 两件发布退役——注册面迁 project bundle apply 期
+// 自注册（ui/official-seams.ts，组件随插件 bundle 渲染），发布面机械（页内全局
+// __DSH_FORGE_VIEWS__）仅余壳内登记的占用者。
+import { ForgeWorktreeSwitchMarker } from '@dsh-forge/project/client-ui/worktree-faces'
 import {
   ForgeRemoteEntry,
   type ForgeRemoteEntryProps,
 } from './views/remote/ForgeRemoteEntry.js'
 import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from './workbench/workbench-bridge.js'
-// 1.14 迁移面：bug 三件组件本体迁 @dsh-forge/project client ui（ui/bug-refs）——本发布面
-// 引用改指包出口（apps/web 壳内自有源收缩为零），发布机械不变（组件随壳 bundle 渲染 =
-// React 单例同一性；client 插件 bundle 经页内全局消费）。
-import {
-  ForgeBugChipRestoreOverlay,
-  ForgeBugGlyph,
-  ForgeBugPreview,
-  type ForgeBugGlyphProps,
-  type ForgeBugPreviewProps,
-} from '@dsh-forge/project/client-ui/bug-views'
+// fix-13 注记：bug 三件（BugGlyph/BugPreview/ChipRestoreOverlay）发布退役——注册面
+// 迁 project bundle apply 期自注册（ui/official-seams.ts），发布面零残留。
 
 /** 发布面形状（client-plugin/plugin.ts 结构同型镜像——bundle 自持纪律，禁跨 chunk import） */
 export interface ForgePublishedViews {
@@ -98,20 +88,10 @@ export interface ForgePublishedViews {
   readonly ForgeDocsTab: ComponentType<ForgeDocsTabProps>
   /** conversation.hero.workspace 影子占用者（fix-24 ①——新会话输入框上方控件改列项目） */
   readonly ForgeHeroWorkspacePicker: ComponentType<ForgeHeroWorkspacePickerProps>
-  /** conversation.session.header.actions 槽只读 chip（fix-2——worktree 绑定展示/封存失效态） */
-  readonly ForgeSessionWorktreeChip: ComponentType<{ sessionId?: string | undefined }>
-  /** conversation.input.overlay 槽封存提示（fix-2——SealNotice 一次性 + composer 占位文案） */
-  readonly ForgeWorktreeSealOverlay: ComponentType<{ sessionId?: string | undefined }>
   /** conversation.input.overlay 槽切换闸虚线标记（bug 267dcac1——blocked 卡视觉命中锚，禁输归官方 composer block 缝） */
   readonly ForgeWorktreeSwitchMarker: ComponentType<{ sessionId?: string | undefined }>
-  /** conversation.input.overlay 槽 chip 重建（bug 4b34e5d8——零视觉效应挂载点；1.14 本体迁 ui/bug-refs） */
-  readonly ForgeBugChipRestoreOverlay: ComponentType<{ sessionId?: string | undefined }>
   /** sidebar.footer.action 'dswf-remote' 占用者（1.2 手机远程入口——三态图标 + 远程面板） */
   readonly ForgeRemoteEntry: ComponentType<ForgeRemoteEntryProps>
-  /** Bug 组行图标件（composer-bug-reference 1.2——@ 菜单 Bug 组候选行 icon；官方 icon set 无 bug 几何，自带 IconProps 组件；1.14 本体迁 ui/bug-refs） */
-  readonly ForgeBugGlyph: ComponentType<ForgeBugGlyphProps>
-  /** sidebar.right.pane.tab keyed 'dswf-bug' 占用者（composer-bug-reference 1.3——Bug 台账 pane 预览件，multiple 按 address 去重；1.14 本体迁 ui/bug-refs） */
-  readonly ForgeBugPreview: ComponentType<ForgeBugPreviewProps>
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
   readonly createWorkbenchBridge: (nav: ForgeCenterNav) => WorkbenchBridge
   /** md-mermaid DOM 增强器工厂（1.9——@dsh-forge/md-mermaid ./web 出口；插件 apply 期 start/卸载 stop） */
@@ -137,13 +117,8 @@ declare global {
   ForgeOverviewTab,
   ForgeDocsTab,
   ForgeHeroWorkspacePicker,
-  ForgeSessionWorktreeChip,
-  ForgeWorktreeSealOverlay,
   ForgeWorktreeSwitchMarker,
-  ForgeBugChipRestoreOverlay,
   ForgeRemoteEntry,
-  ForgeBugGlyph,
-  ForgeBugPreview,
   createWorkbenchBridge,
   createMermaidEnhancer,
 }

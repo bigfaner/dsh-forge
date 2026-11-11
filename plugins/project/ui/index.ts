@@ -137,6 +137,7 @@ export * from './rpc.js'
 export * from './components.js'
 
 
+import { registerOfficialSeamFaces, revokeOfficialSeamGlobals } from './official-seams.js'
 import { registerSettingsSection } from './settings-section/index.js'
 
 // ── keyed section 扩展点 + 配置节双缝（1.16：tab keyed 占用者模式泛化 + settings 节
@@ -152,8 +153,12 @@ export * from './settings-section/worktree-prefs.js'
 // 域激活边、cordis 注入边不声明 configForms——消费点现查（configFormsFaceOf 直取 + reflect
 // 兜底，面形状校验 fail-soft），缺席 = 配置节不注册（settings-section/index.ts
 // registerSettingsSection），不炸组合；slots 为槽注册唯一必需服务（声明边，官方同型先例）。
+// fix-13 缝注册面迁移：官方缝五面（chip/overlay 双行/Bug tab 两段/@ source）随本 bundle
+// apply 期自注册（ui/official-seams.ts）——官方宿主不装载产品壳，注册面归属本插件域
+// （插件可移植性：装配缝归插件，宿主只做 wiring）；inject 声明五官方服务（apply 期等待
+// 合法——官方宿主五服务恒在场；缺一 = apply 不激活，即宿主形状漂移 fail-loud 形态）。
 export const projectClient = {
-  inject: ['slots'] as string[],
+  inject: ['slots', 'sidebarRightTabs', 'sidebarRight', 'workspaces', 'sessions'] as string[],
   apply(ctx: unknown): void {
     const rec = ctx as Record<string, unknown> | undefined
     const slots = rec?.['slots'] as
@@ -166,6 +171,14 @@ export const projectClient = {
     }
     // 配置节双缝注册面异常只降本节（registerSettingsSection 内部逐缝降级），不炸装配。
     registerSettingsSection(rec ?? {}, slots)
+    // 官方缝五面自注册（逐面 fail-soft——单面异常只降本面；页内全局缝随摘除面收口）。
+    try {
+      const seams = registerOfficialSeamFaces(rec as never, slots)
+      console.info(`[dsh-forge/project] official seam faces registered=[${seams.registered.join(', ')}]`)
+    } catch (error) {
+      revokeOfficialSeamGlobals()
+      console.warn('[dsh-forge/project] official seam faces registration interrupted', error)
+    }
   },
 };
 
