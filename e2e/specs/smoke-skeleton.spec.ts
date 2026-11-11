@@ -34,10 +34,11 @@ import {
   workbenchOfView,
 } from '../support/anchors.js'
 
-/** 向导固定目录夹具：{root}/dsh-demo/.knowledge + {root}/legacy-app（名称对齐原型走查目录语义） */
+/** 向导固定目录夹具：{root}/dsh-demo/.knowledge/.forge + {root}/legacy-app（名称对齐原型走查目录语义；.forge = 注册流程会创建的文档目录——1.15 浏览目标改 .forge 后夹具预建，与「默认 .forge 可自动创建」产品行为一致） */
 function makeWizardFixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-wiz-'))
   mkdirSync(join(root, 'dsh-demo', '.knowledge'), { recursive: true })
+  mkdirSync(join(root, 'dsh-demo', '.forge'), { recursive: true })
   mkdirSync(join(root, 'legacy-app'), { recursive: true })
   return root
 }
@@ -405,9 +406,10 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
     const legacyDir = join(fixture, 'legacy-app')
-    // L807 ④ 换选工作区：回填 + 未手改字段重构（forge/项目名）
+    // L807 ④ 换选工作区：回填 + 未手改字段重构（项目名；forge 已随 1.15 ③ 浏览手选
+    // 为已改字段——浏览选定值保留不随工作区重构，语义同 1.15 前知识库目录保留面）
     await expect(ws).toHaveValue(legacyDir)
-    await expect(forge).toHaveValue(`${join(legacyDir, '.forge')}`)
+    await expect(forge).toHaveValue(`${join(demoDir, '.forge')}`)
     await expect(name).toHaveValue('legacy-app')
     // L810 ④ 任务清单随工作区重新派生（fix-7 载体适配同 L771：派生行 core 单源同值断言）
     const rederivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(legacyDir))
