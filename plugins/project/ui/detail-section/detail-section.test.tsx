@@ -1,9 +1,9 @@
-// detail-section worktree 管理面单测（1.32——plugins.detail.section list 缝，官方已声明槽）：
-// fake WorktreeServicePort 注入四链——列表渲染（分支/状态/ahead-behind/封存态）、创建调用
-// （port.create 载荷 = joinWorktreePath 口径）、删除 fail-closed（checks 三清单，null = 拦）、
-// 劣形三形态退无面板（seam-face 镜像 host/assembly/seams.ts injectProjectSeam 语义——
-// ①注册值非函数（含缺席）②实例化抛错/非对象 ③首调抛错 → 恒无面板）。
-// 不依赖 configForms：apply 期直接注册 detail.section。
+// detail-section worktree 管理面单测（1.32 复测·Typert 正典化——数据通路自 forge.worktrees
+// host 缝迁 ui/rpc.ts Typert remote face，1.38 正典）：
+// fake WorktreeFacesRpc 注入四链——列表渲染（分支/状态/ahead-behind/封存态）、创建调用
+// （worktree.create 载荷 = joinWorktreePath 口径）、删除 fail-closed（checks 三清单，
+// null = 拦）、劣形退无面板（projects.list 失败 / 项目锚歧义 / worktree.list 首调抛错）。
+// projectRoot 来源 = Typert projects.list 行自带 wsPath（唯一非 archived 项目；0/多 = 无锚不猜）。
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRoot } from 'react-dom/client'
@@ -13,14 +13,12 @@ import {
   PROJECT_PKG,
   DETAIL_SECTION_SLOT,
 } from '../settings-section/index.js'
-import { PROJECT_SEAM_KEYS } from '../../host/assembly/seams.js'
 import {
   WORKTREE_DETAIL_SECTION_ID,
-  WORKTREE_SEAM_KEY,
   ProjectWorktreesSection,
   registerWorktreeDetailSection,
 } from './index.js'
-import type { WorktreeServicePort } from '@dsh-forge/lib-api'
+import type { ProjectSummary } from '@dsh-forge/contracts'
 import type { WorktreeEntryDto } from '@dsh-forge/contracts'
 import type { WorktreeFacesRpc } from '../rpc.js'
 
@@ -36,42 +34,51 @@ function entriesFixture(): WorktreeEntryDto[] {
   ]
 }
 
-interface PortCalls {
+interface RpcCalls {
   create: { branch: string; base: string; path: string }[]
   delete: { path: string }[]
+  list: unknown[]
 }
 
-function portFake(entries: WorktreeEntryDto[] = entriesFixture()): WorktreeServicePort {
-  const calls: PortCalls = { create: [], delete: [] }
-  const port = {
-    list: async () => ({ isGit: true, worktreeDir: 'C:/repo/.forge/worktrees', entries }),
-    create: async (q: { branch: string; base: string; path: string }) => {
-      calls.create.push({ branch: q.branch, base: q.base, path: q.path })
-      return { entry: entries[0]! }
-    },
-    delete: async (q: { path: string }) => {
-      calls.delete.push({ path: q.path })
-      return { removed: true }
-    },
-    ensureWorkspace: async () => ({}),
-    select: async () => ({ ok: true }),
-    seal: async () => ({ isGit: true, sealed: false, binding: null }),
-    resolve: async () => ({ resolved: [] }),
-    getWorktreeDir: () => 'C:/repo/.forge/worktrees',
-    resolveProject: async () => null,
-    __calls: calls,
-  } as unknown as WorktreeServicePort & { __calls: PortCalls }
-  return port
+function projectRows(count: number, archived = false): ProjectSummary[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `p${i + 1}`,
+    workspaceId: `ws${i + 1}`,
+    name: `proj-${i + 1}`,
+    wsPath: i === 0 ? ROOT : `C:/other-${i + 1}`,
+    archived,
+  }))
 }
 
-function callsOf(port: WorktreeServicePort): PortCalls {
-  return (port as unknown as { __calls: PortCalls }).__calls
+interface RpcFakeOpts {
+  projects?: ProjectSummary[]
+  projectsError?: Error
+  entries?: WorktreeEntryDto[]
+  listError?: Error
+  isGit?: boolean
+  checks?: unknown
 }
 
-function rpcFake(opts: { checks?: unknown } = {}): () => WorktreeFacesRpc {
-  return (() =>
+function rpcFake(opts: RpcFakeOpts = {}): { factory: () => WorktreeFacesRpc; calls: RpcCalls } {
+  const calls: RpcCalls = { create: [], delete: [], list: [] }
+  const factory = (() =>
     ({
+      projects: {
+        list: async () => {
+          if (opts.projectsError !== undefined) throw opts.projectsError
+          return opts.projects ?? projectRows(1)
+        },
+      },
       worktree: {
+        list: async (q: { projectRoot: string }) => {
+          calls.list.push(q)
+          if (opts.listError !== undefined) throw opts.listError
+          return {
+            isGit: opts.isGit ?? true,
+            worktreeDir: 'C:/repo/.forge/worktrees',
+            entries: opts.entries ?? entriesFixture(),
+          }
+        },
         branches: async () => ({ branches: ['main', 'feat/a'], defaultBranch: 'main' }),
         aheadBehind: async (q: { path: string }) => ({
           counts: q.path.endsWith('wt-a') ? { ahead: 2, behind: 1 } : null,
@@ -80,8 +87,17 @@ function rpcFake(opts: { checks?: unknown } = {}): () => WorktreeFacesRpc {
           if (opts.checks === undefined) throw new Error('checks unavailable')
           return opts.checks
         },
+        create: async (q: { branch: string; base: string; path: string }) => {
+          calls.create.push({ branch: q.branch, base: q.base, path: q.path })
+          return { entry: entriesFixture()[0]! }
+        },
+        delete: async (q: { path: string }) => {
+          calls.delete.push({ path: q.path })
+          return { removed: true }
+        },
       },
     }) as unknown as WorktreeFacesRpc)
+  return { factory, calls }
 }
 
 interface RegisteredEntry {
@@ -109,21 +125,19 @@ function slotsFake() {
 }
 
 async function mountSection(props: {
-  port: WorktreeServicePort
-  projectRoot?: string
-  makeRpc?: () => WorktreeFacesRpc
+  rpc?: { factory: () => WorktreeFacesRpc; calls: RpcCalls }
   subject?: { kind: string; pkg: { name: string } }
-}): Promise<{ host: HTMLElement; root: ReturnType<typeof createRoot> }> {
+}): Promise<{ host: HTMLElement; root: ReturnType<typeof createRoot>; calls: RpcCalls }> {
+  const cfg = props ?? {}
+  const rpc = cfg.rpc ?? rpcFake()
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
   await act(async () => {
     root.render(
       <ProjectWorktreesSection
-        subject={props.subject ?? { kind: 'bundle', pkg: { name: PROJECT_PKG } }}
-        port={props.port}
-        projectRoot={props.projectRoot ?? ROOT}
-        makeRpc={props.makeRpc ?? rpcFake()}
+        subject={cfg.subject ?? { kind: 'bundle', pkg: { name: PROJECT_PKG } }}
+        makeRpc={rpc.factory}
       />,
     )
   })
@@ -132,22 +146,15 @@ async function mountSection(props: {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await Promise.resolve()
   })
-  return { host, root }
+  return { host, root, calls: rpc.calls }
 }
 
-// ── seam-face（劣形三形态）+ 注册装配 ─────────────────────────────
+// ── 注册装配（plugins.detail.section list 缝） ─────────────────────
 
-describe('WORKTREE_SEAM_KEY / registerWorktreeDetailSection（plugins.detail.section）', () => {
-  it('seam 键 pin：client 镜像键 = host 装配单源 forge.worktrees', () => {
-    expect(WORKTREE_SEAM_KEY).toBe('forge.worktrees')
-    expect(WORKTREE_SEAM_KEY).toBe(PROJECT_SEAM_KEYS.worktrees)
-  })
-
-  it('seam 在场：detail.section list 缝注册——id/component/inject face 携 fake port', () => {
-    const port = portFake()
+describe('registerWorktreeDetailSection（plugins.detail.section）', () => {
+  it('注册：detail.section list 缝——id/component 锚定', () => {
     const fake = slotsFake()
-    const ctx = { reflect: { get: () => () => port } }
-    const disposer = registerWorktreeDetailSection(ctx as never, fake.slots as never)
+    const disposer = registerWorktreeDetailSection(fake.slots as never)
     expect(fake.injects).toEqual([DETAIL_SECTION_SLOT])
     expect(fake.registered).toHaveLength(1)
     const entry = fake.registered[0]!
@@ -155,34 +162,11 @@ describe('WORKTREE_SEAM_KEY / registerWorktreeDetailSection（plugins.detail.sec
     expect(entry.options.id).toBe(WORKTREE_DETAIL_SECTION_ID)
     expect(WORKTREE_DETAIL_SECTION_ID).toBe('project-worktree-management')
     expect(entry.component).toBe(ProjectWorktreesSection)
-    expect((entry.options.inject as () => { port: WorktreeServicePort })().port).toBe(port)
     expect(typeof disposer).toBe('function')
   })
 
-  it('劣形① 注册值非函数（含缺席）= 不注册 fail-soft（warn 留痕）', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const fake = slotsFake()
-    expect(registerWorktreeDetailSection({ reflect: { get: () => undefined } } as never, fake.slots as never)).toBeUndefined()
-    expect(registerWorktreeDetailSection({ reflect: { get: () => 42 } } as never, fake.slots as never)).toBeUndefined()
-    expect(fake.registered).toHaveLength(0)
-    expect(warn.mock.calls.length).toBeGreaterThanOrEqual(2)
-    warn.mockRestore()
-  })
-
-  it('劣形② 工厂实例化抛错 / 产出非对象 = 不注册 fail-soft', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const fake = slotsFake()
-    expect(
-      registerWorktreeDetailSection({ reflect: { get: () => () => { throw new Error('boom') } } } as never, fake.slots as never),
-    ).toBeUndefined()
-    expect(registerWorktreeDetailSection({ reflect: { get: () => () => 'not-an-object' } } as never, fake.slots as never)).toBeUndefined()
-    expect(fake.registered).toHaveLength(0)
-    warn.mockRestore()
-  })
-
   it('slots 劣形（inject 缺席）= 注册返回 undefined 不炸装配', () => {
-    const port = portFake()
-    expect(registerWorktreeDetailSection({ reflect: { get: () => () => port } } as never, {} as never)).toBeUndefined()
+    expect(registerWorktreeDetailSection({} as never)).toBeUndefined()
   })
 
   it('dsh.client.inject 不新增 configForms 消费边（detail.section 不依赖 configForms）', async () => {
@@ -191,16 +175,57 @@ describe('WORKTREE_SEAM_KEY / registerWorktreeDetailSection（plugins.detail.sec
   })
 })
 
-// ── 列表渲染 / 创建 / 删除 / 封存态（fake port 四链） ─────────────
+// ── 项目锚（Typert projects.list 行自带 wsPath） ──────────────────
 
-describe('ProjectWorktreesSection（fake WorktreeServicePort 注入）', () => {
+describe('项目锚解析（Typert projects.list）', () => {
+  afterEach(() => {
+    document.body.replaceChildren()
+    vi.restoreAllMocks()
+  })
+
+  it('唯一非 archived 项目 = projectRoot 取行自带 wsPath', async () => {
+    const { host, calls } = await mountSection()
+    expect(host.querySelector('[data-dswf-wt-panel]')).not.toBeNull()
+    expect(calls.list).toEqual([{ projectRoot: ROOT }])
+  })
+
+  it('零项目 / 多项目 = 无锚不猜首个（warn 留痕退无面板）', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const zero = await mountSection({ rpc: rpcFake({ projects: [] }) })
+    expect(zero.host.querySelector('[data-dswf-wt-panel]')).toBeNull()
+    const multi = await mountSection({ rpc: rpcFake({ projects: projectRows(2) }) })
+    expect(multi.host.querySelector('[data-dswf-wt-panel]')).toBeNull()
+    expect(warn.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(multi.calls.list).toEqual([])
+  })
+
+  it('archived 行不充锚：唯一行 archived = 无锚退无面板', async () => {
+    const { host } = await mountSection({ rpc: rpcFake({ projects: projectRows(1, true) }) })
+    expect(host.querySelector('[data-dswf-wt-panel]')).toBeNull()
+  })
+
+  it('projects.list 失败 = 退无面板（warn 留痕不静默）', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { host } = await mountSection({ rpc: rpcFake({ projectsError: new Error('remote absent') }) })
+    // 重试窗（250+500ms）耗尽后方落 warn 终态
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 900))
+    })
+    expect(host.querySelector('[data-dswf-wt-panel]')).toBeNull()
+    expect(warn.mock.calls.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// ── 列表渲染 / 创建 / 删除 / 封存态（fake rpc 四链） ───────────────
+
+describe('ProjectWorktreesSection（fake WorktreeFacesRpc 注入）', () => {
   afterEach(() => {
     document.body.replaceChildren()
     vi.restoreAllMocks()
   })
 
   it('列表渲染：分支/树名/主树标记/ahead-behind/封存态逐行呈现', async () => {
-    const { host } = await mountSection({ port: portFake() })
+    const { host } = await mountSection()
     const html = host.innerHTML
     expect(html).toContain('data-dswf-wt-panel')
     expect(html).toContain('feat/a')
@@ -212,9 +237,9 @@ describe('ProjectWorktreesSection（fake WorktreeServicePort 注入）', () => {
     expect(host.querySelector('[data-dswf-wt-sealed]'), 'present:false 行呈封存态').not.toBeNull()
   })
 
-  it('创建调用：弹窗填分支提交 → port.create 以 joinWorktreePath 口径路径调用并刷新清单', async () => {
-    const port = portFake()
-    const { host } = await mountSection({ port })
+  it('创建调用：弹窗填分支提交 → worktree.create 以 joinWorktreePath 口径路径调用并刷新清单', async () => {
+    const rpc = rpcFake()
+    const { host, calls } = await mountSection({ rpc })
     const open = host.querySelector('[data-dswf-wt-create]')
     expect(open, '新建入口应呈现').not.toBeNull()
     await act(async () => {
@@ -237,14 +262,13 @@ describe('ProjectWorktreesSection（fake WorktreeServicePort 注入）', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
       await Promise.resolve()
     })
-    expect(callsOf(port).create).toEqual([
+    expect(calls.create).toEqual([
       { branch: 'feat/new', base: 'main', path: 'C:\\repo\\.forge\\worktrees\\feat\\new' },
     ])
   })
 
   it('删除 fail-closed：checks 拉取失败 = 确认钮禁用（A11 保守拦截）', async () => {
-    const port = portFake()
-    const { host } = await mountSection({ port, makeRpc: rpcFake({}) })
+    const { host, calls } = await mountSection()
     const row = host.querySelector<HTMLElement>('[data-dswf-wt-row][data-path="C:/repo/.forge/worktrees/wt-a"]')
     expect(row, 'wt-a 行应呈现').not.toBeNull()
     await act(async () => {
@@ -255,12 +279,12 @@ describe('ProjectWorktreesSection（fake WorktreeServicePort 注入）', () => {
     const confirm = document.querySelector<HTMLButtonElement>('[data-dswt-delete-confirm]')
     expect(confirm, '删除确认钮应呈现').not.toBeNull()
     expect(confirm!.disabled, 'checks 缺席 = 保守拦截').toBe(true)
-    expect(callsOf(port).delete).toEqual([])
+    expect(calls.delete).toEqual([])
   })
 
-  it('删除放行：三清单全净 = 确认可用 → port.delete 调用并刷新', async () => {
-    const port = portFake()
-    const { host } = await mountSection({ port, makeRpc: rpcFake({ checks: { dirtyCount: 0, aheadCount: 0, attachedSessions: 0 } }) })
+  it('删除放行：三清单全净 = 确认可用 → worktree.delete 调用并刷新', async () => {
+    const rpc = rpcFake({ checks: { dirtyCount: 0, aheadCount: 0, attachedSessions: 0 } })
+    const { host, calls } = await mountSection({ rpc })
     const row = host.querySelector<HTMLElement>('[data-dswf-wt-row][data-path="C:/repo/.forge/worktrees/wt-a"]')
     await act(async () => {
       row!.querySelector<HTMLButtonElement>('[data-dswf-wt-delete]')!.click()
@@ -274,30 +298,26 @@ describe('ProjectWorktreesSection（fake WorktreeServicePort 注入）', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
       await Promise.resolve()
     })
-    expect(callsOf(port).delete).toEqual([{ path: 'C:/repo/.forge/worktrees/wt-a' }])
+    expect(calls.delete).toEqual([{ path: 'C:/repo/.forge/worktrees/wt-a' }])
   })
 
-  it('劣形③ 首调抛错 = 退无面板（恒不渲染，零悬空）', async () => {
+  it('劣形：worktree.list 首调抛错 = 退无面板（恒不渲染，零悬空）', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const broken = { ...portFake(), list: async () => { throw new Error('seam degraded') } } as unknown as WorktreeServicePort
-    const { host } = await mountSection({ port: broken })
-    expect(host.querySelector('[data-dswf-wt-panel]'), '劣形缝退无面板').toBeNull()
+    const { host } = await mountSection({ rpc: rpcFake({ listError: new Error('typert degraded') }) })
+    expect(host.querySelector('[data-dswf-wt-panel]'), '劣形退无面板').toBeNull()
     expect(warn.mock.calls.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('subject 门控：他包 / item / port 缺席 = render null（无面板 fail-soft）', async () => {
-    const port = portFake()
+  it('subject 门控：他包 / item / 缺席 = render null（无面板 fail-soft）', () => {
     expect(
-      renderToStaticMarkup(<ProjectWorktreesSection subject={{ kind: 'bundle', pkg: { name: '@dsh-forge/other' } }} port={port} projectRoot={ROOT} />),
+      renderToStaticMarkup(<ProjectWorktreesSection subject={{ kind: 'bundle', pkg: { name: '@dsh-forge/other' } }} />),
     ).toBe('')
-    expect(renderToStaticMarkup(<ProjectWorktreesSection port={port} projectRoot={ROOT} />)).toBe('')
-    expect(renderToStaticMarkup(<ProjectWorktreesSection subject={{ kind: 'bundle', pkg: { name: PROJECT_PKG } }} projectRoot={ROOT} />)).toBe('')
-    expect(renderToStaticMarkup(<ProjectWorktreesSection subject={{ kind: 'bundle', pkg: { name: PROJECT_PKG } }} port={port} />)).toBe('')
+    expect(renderToStaticMarkup(<ProjectWorktreesSection />)).toBe('')
+    expect(renderToStaticMarkup(<ProjectWorktreesSection subject={{ kind: 'item', pkg: { name: PROJECT_PKG } }} />)).toBe('')
   })
 
   it('非 git（isGit false）= 降级提示行，零行集零控件悬空', async () => {
-    const port = { ...portFake([]), list: async () => ({ isGit: false, entries: [] }) } as unknown as WorktreeServicePort
-    const { host } = await mountSection({ port })
+    const { host } = await mountSection({ rpc: rpcFake({ isGit: false, entries: [] }) })
     expect(host.querySelector('[data-dswf-wt-non-git]')).not.toBeNull()
     expect(host.querySelector('[data-dswf-wt-row]')).toBeNull()
   })

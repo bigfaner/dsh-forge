@@ -11,7 +11,6 @@
 // @dsh-forge/contracts（本 bundle esbuild 内联——自含审计口径：产物零裸 import）。
 // 注册条件门控：list 槽行（scope session）由槽 runtime 在会话视图内声明递达 sessionId——
 // 本面只做登记，门控语义归官方槽 runtime（与壳侧登记行同形）。
-import { BUGS_CHANNELS, PROJECTS_CHANNELS } from '@dsh-forge/contracts'
 import { ForgeBugPreview } from './bug-refs/BugPreview.js'
 import { ForgeBugGlyph } from './bug-refs/BugGlyph.js'
 import {
@@ -23,11 +22,11 @@ import { watchBugChipRestore } from './bug-refs/chip-restore.js'
 import {
   bugIdOfRef,
   createBugReferenceSource,
-  type BugCardSource,
   type BugReferenceSource,
 } from './bug-refs/bug-source.js'
 import { ForgeSessionWorktreeChip } from './session-badge/chip.js'
 import { ForgeWorktreeSealOverlay } from './session-badge/seal-notice.js'
+import { preloadRpcClientFactory, type ForgeRpcClient } from './rpc.js'
 import {
   registerKeyedSection,
   safeRegisterSection,
@@ -120,32 +119,6 @@ function reflectGet(ctx: OfficialSeamCtx, name: string, strict = true): unknown 
   }
 }
 
-/** forge RPC 传输窄缝（window.dshForge.invoke——缺席 = undefined：非 Electron 载体 fail-soft） */
-export type ForgeInvokeTransport = (channel: string, payload?: unknown) => Promise<unknown>
-
-/** 页内传输读取（缺席/非函数 = undefined——官方 web 预览载体零候选 fail-soft 口径） */
-function forgeInvokeTransport(): ForgeInvokeTransport | undefined {
-  const invoke = asRecord((globalThis as { dshForge?: unknown }).dshForge)?.['invoke']
-  return typeof invoke === 'function'
-    ? (channel, payload) => (invoke as ForgeInvokeTransport)(channel, payload)
-    : undefined
-}
-
-/** RPC 信封拆装（RpcOk → data；!ok/形状非法 = throw——调用面 catch 消费 fail-soft） */
-async function unwrapRpcEnvelope<T>(call: Promise<unknown>): Promise<T> {
-  const raw = await call
-  if (raw === null || typeof raw !== 'object' || !('ok' in raw)) {
-    throw new Error('dsh-forge project client: RPC 信封形状非法（期望 contracts RpcResult 信封）')
-  }
-  const result = raw as { ok: boolean; data?: T }
-  if (!result.ok) {
-    const err = asRecord((raw as { error?: unknown }).error)
-    const message = typeof err?.['message'] === 'string' && err['message'] !== '' ? err['message'] : 'RPC 信封 !ok'
-    throw new Error(message)
-  }
-  return result.data as T
-}
-
 /** 项目锚行窄形状（contracts ProjectSummary 消费切片：id + 必填 workspaceId） */
 interface ProjectRowMirror {
   readonly id: string
@@ -195,8 +168,9 @@ export function bugProjectIdOf(
 /** Bug source 接线依赖（注入面——测试替身/生产缺省两径） */
 export interface BugSourceWiringDeps {
   readonly workspaces: WorkspacesServiceMirror
-  /** 页内 RPC 传输（缺省 forgeInvokeTransport()） */
-  readonly invoke?: ForgeInvokeTransport
+  /** forge RPC 工厂（Typert face——1.32 复测正典化：弃 window.dshForge.invoke 页内传输
+   *  桥——官方 web 无此桥；缺省 preloadRpcClientFactory，缺席 = 各调用点 reject fail-soft） */
+  readonly makeRpc?: () => ForgeRpcClient | undefined
   /** 候选行图标件（ForgeBugGlyph 本体——IconProps 组件；缺席 = 行零 icon 键） */
   readonly bugIcon?: unknown
   /** 官方右栏服务（chip 点击 openReference 路由——缺席 = 引用点击返回 false 不拦截官方手势） */
@@ -220,7 +194,14 @@ export interface BugSourceWithOpenReference extends BugSourceWithWarm {
  * 传输缺席 = reject——factory catch 消费为空候选 fail-soft）；warm = scope 出生预热。
  */
 export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWithOpenReference {
-  const invoke = deps.invoke ?? forgeInvokeTransport()
+  const rpcOf = (): ForgeRpcClient | undefined => {
+    if (deps.makeRpc !== undefined) return deps.makeRpc()
+    try {
+      return preloadRpcClientFactory()
+    } catch {
+      return undefined
+    }
+  }
   let projects: readonly ProjectRowMirror[] = []
 
   const workspaceSnapshot = (): unknown => {
@@ -234,8 +215,10 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
   const projectIdOf = (sessionId?: string): string | undefined =>
     bugProjectIdOf(sessionId ?? '', workspaceSnapshot(), projects)
   const refreshProjects = (): Promise<void> => {
-    if (invoke === undefined) return Promise.resolve()
-    return unwrapRpcEnvelope<unknown>(invoke(PROJECTS_CHANNELS.list))
+    const rpc = rpcOf()
+    if (rpc === undefined) return Promise.resolve()
+    return rpc.projects
+      .list()
       .then((rows) => {
         projects = bugProjectsFromRows(rows)
       })
@@ -248,10 +231,11 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
     // 跨项目有界回退（serialize 锚定落空时逐项目现查）——refreshProjects 填充
     projectIds: () => projects.map((row) => row.id),
     listBugs: (query) => {
-      if (invoke === undefined) {
-        return Promise.reject(new Error('dsh-forge project client: dshForge.invoke 缺席（Bug 组 fail-soft 零候选）'))
+      const rpc = rpcOf()
+      if (rpc === undefined) {
+        return Promise.reject(new Error('dsh-forge project client: forge remote face 缺席（Bug 组 fail-soft 零候选）'))
       }
-      return unwrapRpcEnvelope(invoke(BUGS_CHANNELS.list, query))
+      return rpc.bugs.list(query)
     },
     // 慢取数诊断（bug 2a284e9d）走 factory 缺省 console.warn——client bundle 诊断豁免面
   })
@@ -280,10 +264,12 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
       void refreshProjects()
         .then(() => {
           const projectId = projectIdOf(session.sessionId)
-          if (projectId === undefined || invoke === undefined) return undefined
+          const rpc = rpcOf()
+          if (projectId === undefined || rpc === undefined) return undefined
           // bug 476b2d3d：预取不再丢弃——全量台账种进快照（持久化还原 chip 无插入事件，
           // serialize 依赖此种子命中全卡）；bug 2a284e9d：同一次预取种项目台账
-          return unwrapRpcEnvelope<readonly BugCardSource[]>(invoke(BUGS_CHANNELS.list, { projectId }))
+          return rpc.bugs
+            .list({ projectId })
             .then((rows) => {
               source.seedSnapshots(Array.isArray(rows) ? rows : [])
               if (Array.isArray(rows)) source.seedLedger(projectId, rows)

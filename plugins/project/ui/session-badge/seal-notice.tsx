@@ -285,8 +285,9 @@ export function useWorktreeSeal(sessionId: string | undefined, makeRpc: () => Wo
         }
         // 流自然终止（host 侧撤销/停机）——保投影标 live:false，不静默
         if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
-      } catch {
+      } catch (cause) {
         // 首帧前失败 = 通道不可用（error 相位）；已投影 = 保投影（fail-soft 不丢态）
+        console.warn('[dsh-forge/project] followSeal stream failed', cause)
         if (alive && !seen) setPhase(sealError)
         if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
       }

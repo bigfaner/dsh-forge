@@ -150,15 +150,14 @@ export * from './keyed-section.js'
 export * from './settings-section/index.js'
 export * from './settings-section/worktree-prefs.js'
 
-// ── worktree 管理面（1.32：plugins.detail.section list 缝——forge.worktrees 缝消费，
-// 不依赖 configForms；槽/缝缺席或劣形 fail-soft 退无面板；详见各模块头注）──
+// ── worktree 管理面（1.32 复测·Typert 正典化：plugins.detail.section list 缝——数据
+// 通路全量走 ui/rpc.ts Typert remote face（1.38 正典），projectRoot 来源 = projects.list
+// 行自带 wsPath；锚/list 缺席或劣形 fail-soft 退无面板；详见各模块头注）──
 export {
   ProjectWorktreesSection,
   WORKTREE_DETAIL_SECTION_ID,
-  WORKTREE_SEAM_KEY,
   registerWorktreeDetailSection,
 } from './detail-section/index.js'
-export { worktreePortOf, type WorktreeSeamCtx } from './detail-section/seam-face.js'
 
 // 组合 cordis 插件面（包骨架 1.3 正门，无 src 层；worktree 域 UI 平移后仍承担装载契约）：
 // 无 apply → 真机 `invalid plugin` 判例（expert-squad annotator gotcha-web-boot 同径）；
@@ -172,7 +171,18 @@ export { worktreePortOf, type WorktreeSeamCtx } from './detail-section/seam-face
 // （插件可移植性：装配缝归插件，宿主只做 wiring）；inject 声明五官方服务（apply 期等待
 // 合法——官方宿主五服务恒在场；缺一 = apply 不激活，即宿主形状漂移 fail-loud 形态）。
 export const projectClient = {
-  inject: ['slots', 'sidebarRightTabs', 'sidebarRight', 'workspaces', 'sessions'] as string[],
+  // 'remote' 边声明（官方 client-ui-forge 同型——mount.ts inject = ['remote', ...]；
+  // namespace 边不在主插件声明：namespace 由本插件 $mount 自供，主插件声明 =
+  // 「等待自身 apply 产物」自锁死锁（w33 真机实证 entry pending）。namespace 边
+  // 声明在 ctx.inject 子 fiber（见 apply 内——官方同型 client-ui-forge:339）。
+  inject: [
+    'slots',
+    'sidebarRightTabs',
+    'sidebarRight',
+    'workspaces',
+    'sessions',
+    'remote',
+  ] as string[],
   apply(ctx: unknown): void {
     const rec = ctx as Record<string, unknown> | undefined
     // 1.38 正典化装配：①官方 Typert remote 贡献挂载（$mount——六族 forge:* descriptor
@@ -180,7 +190,6 @@ export const projectClient = {
     // configForms 偏好面解析缝安装（逐调用现查不缓存——AGENTS 1.6 检测永不缓存）。
     // ctx.remote 缺席宿主（宿主形状漂移）= 两面均 undefined——RPC 调用期诚实降级（diag
     // 留痕 + typed Error），不炸组合。
-    let mounted = false
     try {
       const reflect = rec?.['reflect'] as { get?: (key: string) => unknown } | undefined
       const readReflect = (key: string): unknown => {
@@ -196,7 +205,6 @@ export const projectClient = {
       if (remote !== undefined && typeof remote.$mount === 'function') {
         void Promise.resolve(remote.$mount(FORGE_REMOTE_CONTRIBUTION))
           .then(() => {
-            mounted = true
             console.info('[dsh-forge/project] forge remote contribution mounted')
           })
           .catch((error: unknown) => {
@@ -205,17 +213,32 @@ export const projectClient = {
       } else {
         console.warn('[dsh-forge/project] ctx.remote.$mount absent——forge remote 面不挂载（诚实降级）')
       }
-      installForgeRemoteFace(() => {
-        const current = readReflect('remote') as Record<string, unknown> | undefined
-        if (current === undefined || !mounted) return undefined
-        const face = current as unknown as ForgeRemoteFace
-        const namespaces = ['forgeProjects', 'forgeFs', 'forgeBugs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures'] as const
-        for (const ns of namespaces) {
-          const value = (face as unknown as Record<string, unknown>)[ns]
-          if (value === undefined || value === null || typeof value !== 'object') return undefined
-        }
-        return face
-      }, (line) => console.warn(line))
+      // namespace 边子 fiber（官方 client-ui-forge mount.ts:339 同型）：主插件 apply 期
+      // 开 ctx.inject(['remote', 'remote.forgeX', ...]) 子 fiber——子 fiber 停驻至 $mount
+      // 提供 namespace 服务后激活，激活回调内安装解析缝（缝持子 fiber ctx 逐调用现查；
+      // fiber 随主插件卸载级联拆卸，此后缝读取 throw = 诚实降级 undefined）。
+      const injectFn = (rec as { inject?: (deps: readonly string[], mixin: (c: unknown) => unknown) => unknown } | undefined)?.['inject']
+      if (typeof injectFn === 'function') {
+        injectFn.call(rec, ['remote', 'remote.forgeProjects', 'remote.forgeFs', 'remote.forgeBugs', 'remote.forgeWorktree', 'remote.forgeProposals', 'remote.forgeFeatures'], (fiberCtx: unknown) => {
+          installForgeRemoteFace(() => {
+            try {
+              const face = (fiberCtx as { remote?: unknown })['remote']
+              if (face === undefined || face === null || typeof face !== 'object') return undefined
+              const namespaces = ['forgeProjects', 'forgeFs', 'forgeBugs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures'] as const
+              for (const ns of namespaces) {
+                const value = (face as unknown as Record<string, unknown>)[ns]
+                if (value === undefined || value === null || typeof value !== 'object') return undefined
+              }
+              return face as ForgeRemoteFace
+            } catch {
+              return undefined // 子 fiber 已拆卸（插件卸载）= 缝诚实降级
+            }
+          }, (line) => console.warn(line))
+          return undefined
+        })
+      } else {
+        console.warn('[dsh-forge/project] ctx.inject absent——forge remote face fiber 不开（诚实降级）')
+      }
       // 偏好面（AC③——crossBranchRiskDismissed 归 configForms 自有 namespace，弃 forge:settings）
       installWorktreePrefsFace(() => readReflect('configForms') as ConfigFormsFace | undefined)
     } catch (error) {
@@ -231,10 +254,11 @@ export const projectClient = {
     }
     // 配置节双缝注册面异常只降本节（registerSettingsSection 内部逐缝降级），不炸装配。
     registerSettingsSection(rec ?? {}, slots)
-    // worktree 管理面（1.32）：forge.worktrees 缝劣形①②/slots 缺席 = 不注册 fail-soft
-    // （registerWorktreeDetailSection 内收口），注册面异常只降本面，不炸装配。
+    // worktree 管理面（1.32 复测·Typert 正典化）：slots 缺席 = 不注册 fail-soft
+    // （registerKeyedSection 内收口），注册面异常只降本面，不炸装配；数据面劣形在组件
+    // 消费期 fail-soft 退无面板（ProjectWorktreesSection 内收口）。
     try {
-      registerWorktreeDetailSection(rec as never, slots)
+      registerWorktreeDetailSection(slots)
     } catch (error) {
       console.warn('[dsh-forge/project] worktree detail section registration failed——降级不注册', error)
     }

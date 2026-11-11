@@ -193,12 +193,37 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   // 1.33：域本体实例惰性单例（官方缝注册与 channels face 缝共用同实例——resolve 缓存
   // 失效单点语义不分裂）， narrowed port 仍按 WorktreeServicePort 投影。
   let worktreeSvcSingleton: WorktreeRpcService | undefined;
+  // sessionPersistence root 锚定惰性取法（1.32 复测·官方 web 宿主形态——seal 判定
+  // header.cwd 读取依赖官方 persistence；provide 于根 ctx，插件 ctx 属性访问可能拒绝/
+  // 缺席。逐调用现查 Proxy 转发——AGENTS 1.6 检测永不缓存；缺席 = open 抛错 → seal
+  // fail-soft 退独立模式，不炸判定链）。
+  const typertRootFace = ((face as { root?: unknown }).root ?? face) as { get?: (name: string) => unknown };
+  const rootServiceOf = (name: string): unknown => {
+    try {
+      const value = typertRootFace.get?.(name);
+      return value === undefined || value === null ? undefined : value;
+    } catch {
+      return undefined;
+    }
+  };
+  const lazySessionPersistence = new Proxy(
+    {},
+    {
+      get: (_target, prop) => {
+        const svc = rootServiceOf("sessionPersistence") as Record<string | symbol, unknown> | undefined;
+        if (svc === undefined) return undefined;
+        const value = svc[prop];
+        return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(svc) : value;
+      },
+    },
+  ) as Parameters<typeof createWorktreeRpcService>[0]["sessionPersistence"];
   const worktreeSvcOnce = (): WorktreeRpcService =>
     (worktreeSvcSingleton ??= createWorktreeRpcService({
       gitWorktree: readGitWorktreeCapability,
       // config.registry = 宿主注入的官方 workspaceRegistry face（官方实体同满足 worktrees 域
       // WorkspaceRegistryFace 投影——单点显式收窄，非盲转）。
       workspaceRegistry: (config.registry as RegistryFace | undefined) ?? defaultRegistry(),
+      sessionPersistence: lazySessionPersistence,
       warn: diag,
     }));
   const worktreesResident = (): WorktreeServicePort => {

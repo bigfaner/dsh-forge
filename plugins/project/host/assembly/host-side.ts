@@ -131,8 +131,22 @@ export function assembleProjectHostSide(
     // worktree-domain-migration 1.2 注入点重构：宿主只做官方服务对象取法（惰性取法闭包
     // 在插件工厂调用前成立）+ 注入缝传参；deps 组装与发送拦截装配门在插件导出工厂
     // createHostWorktreeRpc（host/worktrees/host-assembly.ts）。
-    const sessionController = servicesFace.get('sessionController') as SessionControllerFace | undefined
-    const sessionPersistence = servicesFace.get('sessionPersistence') as SessionPersistenceFace | undefined
+    // 官方服务取法 root 锚定优先（1.32 复测·官方 web 宿主形态——sessionPersistence/
+    // sessionController provide 于根 ctx；插件 ctx 属性访问在无 inject 声明宿主可能
+    // 拒绝/缺席——root ?? ctx 双探针惰性取法，AGENTS 1.6 检测永不缓存同径）。
+    const rootFace = (((rawCtx as { root?: unknown }).root ?? rawCtx) as unknown) as ServiceGetFace
+    const safeGet = (face: ServiceGetFace, name: string): unknown => {
+      try {
+        const value = face.get(name)
+        return value === undefined || value === null ? undefined : value
+      } catch {
+        return undefined
+      }
+    }
+    const sessionController = (safeGet(rootFace, 'sessionController') ?? safeGet(servicesFace, 'sessionController')) as SessionControllerFace | undefined
+    const sessionPersistence = (safeGet(rootFace, 'sessionPersistence') ?? safeGet(servicesFace, 'sessionPersistence')) as SessionPersistenceFace | undefined
+    if (sessionPersistence !== undefined) diag('[git-worktree] sessionPersistence 已解析（root 锚定取法）')
+    else diag('[git-worktree] sessionPersistence 缺席（root/插件 ctx 双探针落空）——seal 判定退独立模式')
     // bug 925c96d5：官方 workspaceRegistry 惰性取法（具名 ctx 属性 + 运行期存在性检查
     // ——AGENTS.md Cordis 可选具名服务取法裁决同径）；缺席 = 零归属面降级（宿主不受影响）。
     const getWorkspaceRegistry = (): unknown => {

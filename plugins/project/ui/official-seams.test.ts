@@ -30,6 +30,7 @@ import { ForgeBugGlyph } from './bug-refs/BugGlyph.js'
 import { ForgeSessionWorktreeChip } from './session-badge/chip.js'
 import { ForgeWorktreeSealOverlay } from './session-badge/seal-notice.js'
 import { ForgeBugChipRestoreOverlay } from './bug-refs/ChipRestoreOverlay.js'
+import type { ForgeRpcClient } from './rpc.js'
 
 // ── fake 官方面 ──
 
@@ -104,6 +105,22 @@ function stubTransport(routes: Record<string, (payload?: unknown) => unknown>): 
     },
   }
   return { calls, unstub: () => { delete (globalThis as { dshForge?: unknown }).dshForge } }
+}
+
+/** Typert face 替身（1.32 复测——makeRpc 接线；bugs.list 载荷捕获） */
+function rpcFactoryFake(routes: { projects?: unknown; bugs?: (q: unknown) => unknown }): { factory: () => ForgeRpcClient; calls: unknown[] } {
+  const calls: unknown[] = []
+  const factory = (() =>
+    ({
+      projects: { list: async () => routes.projects },
+      bugs: {
+        list: async (q: unknown) => {
+          calls.push(q)
+          return (routes.bugs ?? (() => []))(q)
+        },
+      },
+    }) as unknown as ForgeRpcClient)
+  return { factory, calls }
 }
 
 const FIXTURE_PROJECTS = [
@@ -230,38 +247,35 @@ describe('registerOfficialSeamFaces（fix-13 迁移面——五面注册行）',
 // ── 接线面 pin（buildBugReferenceSource——自壳侧 plugin.ts 逐字迁移） ──
 
 describe('buildBugReferenceSource 接线面（composer-bug-reference 1.2/1.3）', () => {
-  function wiringSource(routes: Record<string, (payload?: unknown) => unknown>, overrides?: { bugIcon?: unknown }) {
-    const transport = stubTransport(routes)
+  function wiringSource(routes: { projects?: unknown; bugs?: (q: unknown) => unknown }, overrides?: { bugIcon?: unknown }) {
+    const rpc = rpcFactoryFake(routes)
     const source = buildBugReferenceSource({
       workspaces: { list: { getSnapshot: () => ({ items: [{ workspaceId: 'w1', sessionIds: ['s1'] }] }) } },
       sidebarRight: { openResource: vi.fn() },
+      makeRpc: rpc.factory,
       ...overrides,
     })
     source.warm({ sessionId: '' }) // 登记期预热等价（projects 缓存就绪——锚定解析前提）
-    return { source, transport }
+    return { source, rpc }
   }
 
   it('candidates 递达 bugs.list：projectId 沿会话↔workspace 绑定锚解析，query 透传 search，open 优先排序', async () => {
-    const { source, transport } = wiringSource({
-      'forge:projects/list': () => ({ ok: true, data: FIXTURE_PROJECTS }),
-      'forge:bugs/list': (payload) => ({
-        ok: true,
-        data: FIXTURE_BUGS.filter((b) => b.summary.includes((payload as { search?: string }).search ?? '')),
-      }),
+    const { source, rpc } = wiringSource({
+      projects: FIXTURE_PROJECTS,
+      bugs: (q) => (FIXTURE_BUGS as { summary: string }[]).filter((b) => b.summary.includes((q as { search?: string }).search ?? '')),
     })
     await flush()
     const rows = await source.candidates({ sessionId: 's1' }, { query: '在修', position: 'inline', drilled: false, signal: SIGNAL })
     expect(rows.map((r) => r.name)).toEqual(['b-1'])
-    expect(transport.calls.some((c) => c.channel === 'forge:bugs/list' && JSON.stringify(c.payload) === JSON.stringify({ projectId: 'p1', search: '在修' }))).toBe(true)
-    transport.unstub()
+    expect(rpc.calls.some((c) => JSON.stringify(c) === JSON.stringify({ projectId: 'p1', search: '在修' }))).toBe(true)
   })
 
   it('状态面包屑：header 四 crumb；drill 切口径后 candidates 以 status 入参重拉', async () => {
-    const { source, transport } = wiringSource({
-      'forge:projects/list': () => ({ ok: true, data: FIXTURE_PROJECTS }),
-      'forge:bugs/list': (payload) => {
-        const status = (payload as { status?: string[] }).status
-        return { ok: true, data: status === undefined ? FIXTURE_BUGS : FIXTURE_BUGS.filter((b) => status.includes(b.bugStatus)) }
+    const { source } = wiringSource({
+      projects: FIXTURE_PROJECTS,
+      bugs: (q) => {
+        const status = (q as { status?: string[] }).status
+        return status === undefined ? FIXTURE_BUGS : (FIXTURE_BUGS as { bugStatus: string }[]).filter((b) => status.includes(b.bugStatus))
       },
     })
     await flush()
@@ -279,40 +293,32 @@ describe('buildBugReferenceSource 接线面（composer-bug-reference 1.2/1.3）'
     expect(source.bugStatusScope()).toBe('fixed')
     const rows = await source.candidates({ sessionId: 's1' }, { query: '', position: 'leading', drilled: true, signal: SIGNAL })
     expect(rows.map((r) => r.name)).toEqual(['b-2'])
-    transport.unstub()
   })
 
-  it('fail-soft：quoted=true 空候选；无 dshForge 传输 → 零候选不抛', async () => {
-    const withRoutes = wiringSource({
-      'forge:projects/list': () => ({ ok: true, data: FIXTURE_PROJECTS }),
-      'forge:bugs/list': () => ({ ok: true, data: FIXTURE_BUGS }),
-    })
+  it('fail-soft：quoted=true 空候选；forge remote face 缺席 → 零候选不抛', async () => {
+    const withRoutes = wiringSource({ projects: FIXTURE_PROJECTS, bugs: () => FIXTURE_BUGS })
     await flush()
     const quoted = await withRoutes.source.candidates({ sessionId: 's1' }, { query: '任意', quoted: true, position: 'inline', drilled: false, signal: SIGNAL })
     expect(quoted).toEqual([])
-    withRoutes.transport.unstub()
     const noTransport = buildBugReferenceSource({
       workspaces: { list: { getSnapshot: () => ({ items: [] }) } },
       sidebarRight: { openResource: vi.fn() },
-      invoke: undefined,
+      makeRpc: () => undefined,
     })
     const rows = await noTransport.candidates({ sessionId: 's1' }, { query: '', position: 'inline', drilled: false, signal: SIGNAL })
     expect(rows).toEqual([])
   })
 
   it('bug 图标件：deps.bugIcon 递达 → 候选行 icon；缺席 → 行零 icon 键', async () => {
-    const withGlyph = wiringSource({
-      'forge:projects/list': () => ({ ok: true, data: [{ id: 'p1', workspaceId: 'w1' }] }),
-      'forge:bugs/list': () => ({ ok: true, data: FIXTURE_BUGS }),
-    }, { bugIcon: ForgeBugGlyph })
+    const withGlyph = wiringSource({ projects: [{ id: 'p1', workspaceId: 'w1' }], bugs: () => FIXTURE_BUGS }, { bugIcon: ForgeBugGlyph })
     await flush()
     const rows = await withGlyph.source.candidates({ sessionId: 's1' }, { query: '', position: 'inline', drilled: false, signal: SIGNAL })
     expect(rows).toHaveLength(2)
     expect(rows.every((r) => (r as { icon?: unknown }).icon === ForgeBugGlyph)).toBe(true)
-    withGlyph.transport.unstub()
     const noGlyph = buildBugReferenceSource({
       workspaces: { list: { getSnapshot: () => ({ items: [{ workspaceId: 'w1', sessionIds: ['s1'] }] }) } },
       sidebarRight: { openResource: vi.fn() },
+      makeRpc: rpcFactoryFake({ projects: [], bugs: () => [] }).factory,
     })
     await flush()
     const bare = await noGlyph.candidates({ sessionId: 's1' }, { query: '', position: 'inline', drilled: false, signal: SIGNAL })
@@ -320,25 +326,19 @@ describe('buildBugReferenceSource 接线面（composer-bug-reference 1.2/1.3）'
   })
 
   it('warm：scope 出生预热——projects.list 先落缓存随后 bugs.list 预取（锚定项目口径）', async () => {
-    const { source, transport } = wiringSource({
-      'forge:projects/list': () => ({ ok: true, data: [{ id: 'p9', workspaceId: 'w9' }] }),
-      'forge:bugs/list': () => ({ ok: true, data: [] }),
-    })
+    const { source, rpc } = wiringSource({ projects: [{ id: 'p9', workspaceId: 'w9' }], bugs: () => [] })
     source.warm({ sessionId: 's9' })
     await flush()
-    expect(transport.calls.some((c) => c.channel === 'forge:bugs/list' && JSON.stringify(c.payload) === JSON.stringify({ projectId: 'p9' }))).toBe(true)
-    transport.unstub()
+    expect(rpc.calls.some((c) => JSON.stringify(c) === JSON.stringify({ projectId: 'p9' }))).toBe(true)
   })
 
   it('openReference（1.3）：bug ref → sidebarRight.openResource 开台账 pane → true；非 bug 引用 → false；官方面抛错 → false', async () => {
     const openResource = vi.fn()
-    const transport = stubTransport({
-      'forge:projects/list': () => ({ ok: true, data: [{ id: 'p1', workspaceId: 'w1' }] }),
-      'forge:bugs/list': () => ({ ok: true, data: FIXTURE_BUGS }),
-    })
+    const { factory } = rpcFactoryFake({ projects: [{ id: 'p1', workspaceId: 'w1' }], bugs: () => FIXTURE_BUGS })
     const source = buildBugReferenceSource({
       workspaces: { list: { getSnapshot: () => ({ items: [{ workspaceId: 'w1', sessionIds: ['s1'] }] }) } },
       sidebarRight: { openResource },
+      makeRpc: factory,
     })
     source.warm({ sessionId: '' }) // 登记期预热（openReference 会话锚解析前提）
     await flush()
@@ -349,7 +349,6 @@ describe('buildBugReferenceSource 接线面（composer-bug-reference 1.2/1.3）'
     expect(openResource).toHaveBeenCalledTimes(1)
     openResource.mockImplementationOnce(() => { throw new Error('no active pane') })
     expect(source.openReference({ sessionId: 's1' }, { ref: 'bug:b-42' })).toBe(false)
-    transport.unstub()
   })
 
   it('纯函数 pin：bugProjectsFromRows 行集正规化 + bugProjectIdOf 锚定/唯一兜底', () => {
