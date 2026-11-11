@@ -323,4 +323,6 @@ test('@project-e2e @add-project CT-J1-B6 repick：同位元素挂载保持、手
 })
 
 // ── 留痕 skip（通道缺失记账——非退役候选，见文件头注记） ──
-test.skip(true, 'CT-J1-G1 O-cancel/O-pick-invalid + CT-J1-B4 执行态三分守卫 + CT-J1-G2 注入类 Outcome：OS 原生对话框不可自动化 / executing 窗非确定无注入缝 / e2e 无 setFault 故障注入通道——补偿链与碰撞拒绝面由 core 集测 pin（project-service.test），留痕 skip')
+test('CT-J1 留痕 skip（占位）', () => {
+  test.skip(true, 'CT-J1-G1 O-cancel/O-pick-invalid + CT-J1-B4 执行态三分守卫 + CT-J1-G2 注入类 Outcome：OS 原生对话框不可自动化 / executing 窗非确定无注入缝 / e2e 无 setFault 故障注入通道——补偿链与碰撞拒绝面由 core 集测 pin（project-service.test），留痕 skip')
+})

@@ -199,4 +199,6 @@ test('@project-e2e @bug-register-backfill J3-B4 弱引用降级：行缺席投�
 })
 
 // ── 留痕 skip（通道缺失记账——见文件头注记） ──
-test.skip(true, 'J3-G1/G2/G4 tool 应答面（模型侧 tool 调用零真实模型不可驱）+ J3-B1/B2/B3/B5 工具面校验与状态机（bugs 域单测 pin）+ J3-B4 chip 序列化重启还原（需模型产生的消息内 bug 引用）——留痕 skip')
+test('J3 留痕 skip（占位）', () => {
+  test.skip(true, 'J3-G1/G2/G4 tool 应答面（模型侧 tool 调用零真实模型不可驱）+ J3-B1/B2/B3/B5 工具面校验与状态机（bugs 域单测 pin）+ J3-B4 chip 序列化重启还原（需模型产生的消息内 bug 引用）——留痕 skip')
+})

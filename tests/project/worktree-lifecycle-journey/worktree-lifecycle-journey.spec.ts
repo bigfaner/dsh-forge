@@ -304,4 +304,6 @@ test('@project-e2e @worktree-lifecycle CT-J2-B7 选中树外部删除后陈旧�
 })
 
 // ── 留痕 skip（通道缺失/环境门槛记账——见文件头注记） ──
-test.skip(true, 'CT-J2-B4 删除失败注入（e2e 无 git 故障注入缝）/ CT-J2-B5+R5 封存拒发（发送零写入断言需真实模型凭据）/ CT-J2-B8 project.db 降级态（库不可用注入无缝）/ CT-J2-G2 O-row-deferred-selfheal+O-git-fail（registry 失败注入无缝）——留痕 skip')
+test('CT-J2 留痕 skip（占位）', () => {
+  test.skip(true, 'CT-J2-B4 删除失败注入（e2e 无 git 故障注入缝）/ CT-J2-B5+R5 封存拒发（发送零写入断言需真实模型凭据）/ CT-J2-B8 project.db 降级态（库不可用注入无缝）/ CT-J2-G2 O-row-deferred-selfheal+O-git-fail（registry 失败注入无缝）——留痕 skip')
+})
