@@ -17,6 +17,8 @@ import type {
 } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   BugCard,
+  DirFactRow,
+  DirFactsQuery,
   DirListing,
   FeatureCard,
   ListBugsQuery,
@@ -117,6 +119,10 @@ export interface ForgeProposalsNamespace {
 export interface ForgeFeaturesNamespace {
   list(query: ListFeaturesQuery): Promise<RemoteResult<FeatureCard[]>>
 }
+/** forgeDirs namespace 消费面（基本信息区五行目录事实——host 侧锚注册表解析下发） */
+export interface ForgeDirsNamespace {
+  facts(query: DirFactsQuery): Promise<RemoteResult<DirFactRow[]>>
+}
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespaceMap {
@@ -126,6 +132,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     forgeWorktree: ForgeWorktreeNamespace
     forgeProposals: ForgeProposalsNamespace
     forgeFeatures: ForgeFeaturesNamespace
+    forgeDirs: ForgeDirsNamespace
   }
 }
 
@@ -238,6 +245,15 @@ export const FORGE_REMOTE_DESCRIPTORS: readonly InvocationDescriptor[] = [
   worktreeUnary('ensureWorkspace'),
   domainList('forgeProposals', 'forgeProposalsController'),
   domainList('forgeFeatures', 'forgeFeaturesController'),
+  remoteMethod({
+    id: '@dsh-forge/project#forgeDirs/facts',
+    service: 'forgeDirsController',
+    namespace: 'forgeDirs',
+    method: 'facts',
+    invocation: { kind: 'direct' },
+    parameters: [jsonParam('query', 'DirFactsQuery', isRecord)],
+    result: strictCodec('forgeDirs.FactsResult', isArray),
+  }),
 ]
 
 /** client 贡献本体（apply 期 ctx.remote.$mount 挂载——调用方 fiber 撤销级联） */

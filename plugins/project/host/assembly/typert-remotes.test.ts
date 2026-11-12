@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   ForgeBugsRemote,
+  ForgeDirsRemote,
   ForgeFeaturesRemote,
   ForgeFsRemote,
   ForgeProjectsRemote,
@@ -90,6 +91,54 @@ describe('marker 端点表 pin（gateway SRC 端点真源——ui/remote.ts desc
     expect(endpointsOf(new ForgeProposalsRemote(fakeCtx(), {}))).toEqual(['list'])
     expect(endpointsOf(new ForgeFeaturesRemote(fakeCtx(), {}))).toEqual(['list'])
   })
+
+  it('forgeDirs：facts 单端点（基本信息区五行——host 侧解析下发）', () => {
+    expect(endpointsOf(new ForgeDirsRemote(fakeCtx(), {}))).toEqual(['facts'])
+  })
+})
+
+describe('ForgeDirsRemote.facts（基本信息区 2026-11-13——五行目录事实）', () => {
+  const PROJECT = { wsPath: 'Z:\\ws\\demo', forgeDir: 'Z:\\ws\\demo\\.forge' }
+  const projectsOf = (project: unknown = PROJECT) => () => ({ getProject: async () => project }) as never
+
+  it('五行有序：项目行两键 + 注册表三键；tmp/project_home 永不下发', async () => {
+    const svc = new ForgeDirsRemote(fakeCtx(), {
+      dirsProjects: projectsOf(),
+      dirFacts: () =>
+        ({
+          listAnchors: async (_id: string, dirKey?: string) => [{ dirKey: dirKey ?? '', dir: `dir:${dirKey}`, description: 'd' }],
+        }) as never,
+    })
+    const rows = await svc.facts({ projectId: 'p-1' })
+    expect(rows.map((r) => r.dirKey)).toEqual(['workspaceRoot', 'forgeDir', 'forge.docs_root', 'forge.task_home', 'forge.worktrees'])
+    expect(rows[0]).toEqual({ dirKey: 'workspaceRoot', dir: 'Z:\\ws\\demo', description: '项目工作区根' })
+    expect(rows[1]).toEqual({ dirKey: 'forgeDir', dir: 'Z:\\ws\\demo\\.forge', description: '本工作区 .forge 目录' })
+    expect(rows[2]).toEqual({ dirKey: 'forge.docs_root', dir: 'dir:forge.docs_root', description: 'd' })
+  })
+
+  it('逐键 fail-soft：锚解析抛 / dirFacts 缺席 / 项目行缺席 = 该行 dir null，不阻断其余行', async () => {
+    const svc = new ForgeDirsRemote(fakeCtx(), {
+      dirsProjects: projectsOf(null),
+      dirFacts: () =>
+        ({
+          listAnchors: async () => {
+            throw new Error('anchors unavailable')
+          },
+        }) as never,
+    })
+    const rows = await svc.facts({ projectId: 'p-x' })
+    expect(rows.every((r) => r.dir === null)).toBe(true)
+    expect(rows.map((r) => r.dirKey)).toHaveLength(5)
+    const noFacts = new ForgeDirsRemote(fakeCtx(), { dirsProjects: projectsOf() })
+    const bare = await noFacts.facts({ projectId: 'p-1' })
+    expect(bare.slice(2).every((r) => r.dir === null)).toBe(true)
+    expect(bare[0]?.dir).toBe('Z:\\ws\\demo')
+  })
+
+  it('双面全缺 → typed unavailable（诚实拒绝）', async () => {
+    const svc = new ForgeDirsRemote(fakeCtx(), {})
+    await expect(svc.facts({ projectId: 'p-1' })).rejects.toThrow('forge.dirs facts unavailable')
+  })
 })
 
 describe('SRC 形参名单源 pin（wire 名 = JS 形参名——client descriptor 表 wire 成对锁定）', () => {
@@ -151,7 +200,7 @@ describe('followSeal 快照钩（baseline + 变化才 yield + abort 出循环）
 })
 
 describe('registerForgeTypertRemotes（根 ctx plugin 装配）', () => {
-  it('全族在场 → 六 plugin 挂根 ctx，各 scope 构造控制器（registered 清单）', () => {
+  it('全族在场 → 七 plugin 挂根 ctx，各 scope 构造控制器（registered 清单）', () => {
     const { face, mounted } = captureRoot()
     const deps: ForgeTypertDeps = {
       projects: () => ({}) as never,
@@ -159,9 +208,10 @@ describe('registerForgeTypertRemotes（根 ctx plugin 装配）', () => {
       worktrees: () => ({}) as never,
       proposals: () => ({}),
       features: () => ({}),
+      dirFacts: () => ({}) as never,
     }
     const result = registerForgeTypertRemotes(face, deps)
-    expect(result.registered).toEqual(['forgeProjects', 'forgeBugs', 'forgeFs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures'])
+    expect(result.registered).toEqual(['forgeProjects', 'forgeBugs', 'forgeFs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures', 'forgeDirs'])
     expect(result.degraded).toEqual([])
     expect(mounted.map((m) => m.name)).toEqual([
       'project-typert-forgeProjects',
@@ -170,18 +220,19 @@ describe('registerForgeTypertRemotes（根 ctx plugin 装配）', () => {
       'project-typert-forgeWorktree',
       'project-typert-forgeProposals',
       'project-typert-forgeFeatures',
+      'project-typert-forgeDirs',
     ])
     // 根 ctx 取法：face.root 在场 = 挂 root 而非插件子 ctx 自身
     const rootFace: TypertAssemblyCtxFace = { root: face, plugin: face.plugin }
     const nested = registerForgeTypertRemotes(rootFace, deps)
-    expect(nested.registered).toHaveLength(6)
+    expect(nested.registered).toHaveLength(7)
   })
 
-  it('缺族降级（projects/bugs/worktrees/proposals/features 缺席）→ 仅 forgeFs 注册 + degraded 清单', () => {
+  it('缺族降级（projects/bugs/worktrees/proposals/features/dirs 缺席）→ 仅 forgeFs 注册 + degraded 清单', () => {
     const { face, mounted } = captureRoot()
     const result = registerForgeTypertRemotes(face, {})
     expect(result.registered).toEqual(['forgeFs'])
-    expect(result.degraded).toEqual(['forgeProjects', 'forgeBugs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures'])
+    expect(result.degraded).toEqual(['forgeProjects', 'forgeBugs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures', 'forgeDirs'])
     expect(mounted.map((m) => m.name)).toEqual(['project-typert-forgeFs'])
   })
 

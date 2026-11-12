@@ -19,7 +19,6 @@ const HEAD: OverviewHeadBundle = {
   projectName: 'demo',
   workspaceDir: 'Z:/ws/demo',
   forgeDir: 'Z:/ws/demo/.forge',
-  taskStoreDir: 'C:/forge-home/demo@a1b2c3d4',
   features: [
     {
       featureId: 'fid-1',

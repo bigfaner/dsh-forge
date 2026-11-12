@@ -13,10 +13,11 @@
 // 竞态守卫 = 序号递增（快速连续键入不串台）；相位机 loading → ready | error（typed error
 // 经 rpcUiState 三态映射）。effect 仅编排胶水（Node 测面外，归 4.1 装配 + e2e）。
 import { useEffect, useRef, useState } from 'react'
-import type { BugCard, BugStatus, FeatureCard, FeatureDocumentRow, ProposalCard, ProposalDocRow, TaskStats } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, DirFactRow, FeatureCard, FeatureDocumentRow, ProposalCard, ProposalDocRow, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../rpc-channels.js'
 import { RpcClientError } from '../rpc-channels.js'
 import { rpcUiState, type RpcUiStateKind } from '../rpc-channels.js'
+import { DIR_FACTS_ROW_KEYS, dirFactRowLabel, type DirFactRowKey } from './dir-rows.js'
 import { bugStatusCounts, searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
 import { docsRootOf } from './message-format.js'
 
@@ -39,13 +40,13 @@ export function mapOverviewError(error: unknown): OverviewErrorInfo {
   return { message: error instanceof Error ? error.message : String(error), uiState: 'error-bar' }
 }
 
-/** ov-head 信息束（projects.get + 派生行 + 无参 feature 列表 + 七态计数） */
+/** ov-head 信息束（projects.get + 无参 feature 列表 + 七态计数 + 基本信息区五行目录事实） */
 export interface OverviewHeadBundle {
   readonly projectName: string
+  /** 项目工作区根（workspaceRoot 行回退源——host 下发 dirRows 缺席时兜底） */
   readonly workspaceDir: string
+  /** 本工作区 .forge 目录（forgeDir 行回退源——同上） */
   readonly forgeDir: string
-  /** {tasksHome}/{flatten}@{hash8} 单源（派生预检位 RPC；失败 fail-soft = null → 行回退「—」） */
-  readonly taskStoreDir: string | null
   /** 无搜索全量 feature 卡（ov-head 摘要活跃 feature + 提案子 tab 谱系查找源） */
   readonly features: readonly FeatureCard[]
   /** 无搜索全量提案卡（4.6：提案五态 chips 计数 + 任务子 tab 容器 pill 双轨突击源 + feature
@@ -55,25 +56,25 @@ export interface OverviewHeadBundle {
   readonly stats: TaskStats
 }
 
-/** 概览 ov-head 三行（AC1：工作区/文档位置/任务清单@hash8；知识目录行随 knowledge_dir 列退役移除——1.15） */
-export function overviewHeadRows(head: OverviewHeadBundle): readonly { readonly label: string; readonly value: string }[] {
-  return [
-    { label: '工作区', value: head.workspaceDir },
-    { label: '文档位置', value: head.forgeDir },
-    { label: '任务清单', value: head.taskStoreDir ?? '—' },
-  ]
+/**
+ * 概览 ov-head 基本信息区五行（用户裁定 2026-11-13：工作区根 / .forge 目录 / 文档位置 /
+ * 任务清单 / 派发工作树区——数据源 = host 侧锚注册表解析经 forgeDirs Typert 下发的
+ * dirRows，UI 只渲染零拼接）。dirRows 缺席行 = 「—」；workspaceRoot/forgeDir 两行以
+ * projects.get 项目行回退（同为 host 下发事实，非 UI 拼接）。
+ */
+export function overviewHeadRows(
+  head: OverviewHeadBundle,
+  dirRows?: readonly DirFactRow[],
+): readonly { readonly label: string; readonly value: string }[] {
+  return DIR_FACTS_ROW_KEYS.map((dirKey: DirFactRowKey) => {
+    const remote = dirRows?.find((row) => row.dirKey === dirKey)?.dir
+    const fallback =
+      dirKey === 'workspaceRoot' ? head.workspaceDir : dirKey === 'forgeDir' ? head.forgeDir : undefined
+    return { label: dirFactRowLabel(dirKey), value: remote ?? fallback ?? '—' }
+  })
 }
 
-/** 派生任务清单路径（fail-soft：缺席/失败 = null——不阻断头部装载） */
-async function fetchTaskStoreDir(client: ForgeRpcClient, workspaceDir: string): Promise<string | null> {
-  try {
-    return (await client.projects.deriveTaskStoreDir(workspaceDir)).dir
-  } catch {
-    return null
-  }
-}
-
-/** 头路装载（纯异步面）：get ∥ derive ∥ features.list(无参) ∥ proposals.list(无参) ∥ tasks.stats 五路并发 */
+/** 头路装载（纯异步面）：get ∥ features.list(无参) ∥ proposals.list(无参) ∥ tasks.stats 四路并发 */
 export async function loadOverviewHead(client: ForgeRpcClient, projectId: string): Promise<OverviewFetch<OverviewHeadBundle>> {
   try {
     const [project, features, proposals, stats] = await Promise.all([
@@ -83,14 +84,12 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
       client.tasks.stats({ projectId }),
     ])
     if (project === null) throw new Error('项目不存在或已移除')
-    const taskStoreDir = await fetchTaskStoreDir(client, project.wsPath)
     return {
       ok: true,
       data: {
         projectName: project.name,
         workspaceDir: project.wsPath,
         forgeDir: project.forgeDir,
-        taskStoreDir,
         features,
         proposals,
         stats,

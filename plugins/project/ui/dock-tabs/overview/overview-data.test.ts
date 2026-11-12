@@ -133,8 +133,8 @@ function featureDocRow(docKind: 'prd-spec' | 'tech-design' = 'tech-design'): Fea
   }
 }
 
-describe('loadOverviewHead（头路五路并发——4.6 增 proposals 无参列）', () => {
-  it('get ∥ derive ∥ features.list(无参) ∥ proposals.list(无参) ∥ stats 归一为 ov-head 信息束', async () => {
+describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列）', () => {
+  it('get ∥ features.list(无参) ∥ proposals.list(无参) ∥ stats 归一为 ov-head 信息束', async () => {
     const { client, calls } = headOkClient()
     const out = await loadOverviewHead(client, 'p-1')
     expect(out).toEqual({
@@ -143,7 +143,6 @@ describe('loadOverviewHead（头路五路并发——4.6 增 proposals 无参列
         projectName: 'demo',
         workspaceDir: 'Z:/ws/demo',
         forgeDir: 'Z:/ws/demo/.forge',
-        taskStoreDir: 'C:/forge-home/demo@a1b2c3d4',
         features: [featureCard('m2-pipeline')],
         proposals: [proposalCard('pr-1', 'prop-1')],
         stats: STATS,
@@ -157,24 +156,38 @@ describe('loadOverviewHead（头路五路并发——4.6 增 proposals 无参列
     expect(proposalsCall?.payload).toEqual({ projectId: 'p-1' })
   })
 
-  it('deriveTaskStoreDir 失败 = fail-soft（null → 任务清单行回退「—」，头部整体不受累）', async () => {
-    const { client } = headOkClient({ deriveTaskStoreDir: () => { throw new Error('派生缺席') } })
-    const out = await loadOverviewHead(client, 'p-1')
-    expect(out.ok).toBe(true)
-    if (out.ok) {
-      expect(out.data.taskStoreDir).toBeNull()
-      expect(overviewHeadRows(out.data).find((r) => r.label === '任务清单')).toEqual({ label: '任务清单', value: '—' })
-    }
-  })
-
-  it('AC1 ov-head 三行：工作区/文档位置/任务清单@hash8（知识目录行随 knowledge_dir 列退役移除）', async () => {
+  it('基本信息区五行：dirRows 键投影；workspaceRoot/forgeDir 项目行回退；其余缺席 = 「—」', async () => {
     const { client } = headOkClient()
     const out = await loadOverviewHead(client, 'p-1')
     expect(out.ok).toBe(true)
     if (out.ok) {
       const rows = overviewHeadRows(out.data)
-      expect(rows.map((r) => r.label)).toEqual(['工作区', '文档位置', '任务清单'])
-      expect(rows.find((r) => r.label === '任务清单')?.value).toContain('@a1b2c3d4')
+      expect(rows.map((r) => r.label)).toEqual(['工作区根', '.forge 目录', '文档位置', '任务清单', '派发工作树区'])
+      expect(rows.find((r) => r.label === '工作区根')?.value).toBe('Z:/ws/demo')
+      expect(rows.find((r) => r.label === '.forge 目录')?.value).toBe('Z:/ws/demo/.forge')
+      expect(rows.filter((r) => r.value === '—')).toHaveLength(3)
+    }
+  })
+
+  it('dirRows 在场 = host 下发原样值逐行投影（UI 零拼接）', async () => {
+    const { client } = headOkClient()
+    const out = await loadOverviewHead(client, 'p-1')
+    expect(out.ok).toBe(true)
+    if (out.ok) {
+      const rows = overviewHeadRows(out.data, [
+        { dirKey: 'workspaceRoot', dir: 'HOST/ws', description: '' },
+        { dirKey: 'forgeDir', dir: 'HOST/ws/.forge', description: '' },
+        { dirKey: 'forge.docs_root', dir: 'HOST/ws/.forge/docs', description: '' },
+        { dirKey: 'forge.task_home', dir: 'HOST/tasks@a1b2c3d4', description: '' },
+        { dirKey: 'forge.worktrees', dir: 'HOST/ws/.forge/worktrees', description: '' },
+      ])
+      expect(rows.map((r) => r.value)).toEqual([
+        'HOST/ws',
+        'HOST/ws/.forge',
+        'HOST/ws/.forge/docs',
+        'HOST/tasks@a1b2c3d4',
+        'HOST/ws/.forge/worktrees',
+      ])
     }
   })
 

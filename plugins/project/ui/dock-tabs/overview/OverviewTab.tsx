@@ -8,8 +8,9 @@
 // 排序/过滤为视图本地态（任务子 tab 三视图 = renderTasksTab 槽——3.6 注入；缺省呈现
 // chips 过滤接口）；文档行点击经 props 回调上抛（dock 开 tab——4.1 接线）。
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { BugCard, BugStatus, FeatureCard, ProposalStatus, FeatureStatus, ProposalCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, DirFactRow, FeatureCard, ProposalStatus, FeatureStatus, ProposalCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc-channels.js'
+import { useDirFactRows } from './dir-rows.js'
 import { ErrorBar, SkeletonRows } from '../../components.js'
 import {
   activeFeatureSlug,
@@ -88,6 +89,8 @@ export interface OverviewFrameProps {
   /** 列路在途（内容保持可见的不阻塞标注） */
   readonly busy: boolean
   readonly error: OverviewErrorInfo | undefined
+  /** 基本信息区五行目录事实（forgeDirs Typert 下发——独立路 fail-soft；缺席 = 行「—」） */
+  readonly dirRows?: readonly DirFactRow[]
   /** 视图本地态（受控注入——OverviewTab 单一来源） */
   readonly filter: OverviewFilterState
   /** ov-head 摘要会话计数（4.1 装配注入——sessions/workspaces 账本快照；缺席省略段） */
@@ -132,6 +135,7 @@ export function OverviewFrame({
   phase,
   busy,
   error,
+  dirRows,
   filter,
   sessionCount,
   onSubtabChange,
@@ -271,7 +275,7 @@ export function OverviewFrame({
               sessionCount,
               completedCount: head.stats.byStatus.completed ?? 0,
             })}
-            rows={overviewHeadRows(head)}
+            rows={overviewHeadRows(head, dirRows)}
             open={filter.headOpen}
             onToggle={onToggleHead}
           />
@@ -483,6 +487,8 @@ export function OverviewTab({
   // Bug chips 白名单参（受控集合引用稳定——仅 toggle 时换参；列表键含投影键 → 服务端重拉）
   const bugStatusParam = useMemo(() => bugStatusFilterParam(filter.activeBugStatuses), [filter.activeBugStatuses])
   const load = useOverviewLoad(projectId, filter.subtab, filter.search, filter.sort, nonce, makeClient, bugStatusParam)
+  // 基本信息区五行目录事实（独立路 forgeDirs Typert——失败 fail-soft 全「—」，不阻断头路）
+  const dirRows = useDirFactRows(projectId)
 
   // 任务聚焦子 tab 切换（4.2 pill 点击链尾）：nonce 变更（已开概览后的后续点击）→
   // switchSubtab('tasks')（清搜索/清 chips/收展开——子 tab 切换语义同源；同值原样返回零重渲）
@@ -543,6 +549,7 @@ export function OverviewTab({
         phase={load.phase}
         busy={load.busy}
         error={load.error}
+        dirRows={dirRows}
         filter={filter}
         sessionCount={sessionCount}
         onSubtabChange={handleSubtabChange}

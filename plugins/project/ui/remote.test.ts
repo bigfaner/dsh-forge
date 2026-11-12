@@ -19,6 +19,7 @@ describe('FORGE_REMOTE_DESCRIPTORS 表 pin（六族——与 host 半 typert-rem
     ])
     expect(byNamespace('forgeProposals')).toEqual(['list'])
     expect(byNamespace('forgeFeatures')).toEqual(['list'])
+    expect(byNamespace('forgeDirs')).toEqual(['facts'])
   })
 
   it('service 键 pin（gateway readBinding 一致性校验面——binding.serviceKey 匹配）', () => {
@@ -53,6 +54,7 @@ describe('FORGE_REMOTE_DESCRIPTORS 表 pin（六族——与 host 半 typert-rem
     }
     expect(wireOf('forgeProposals', 'list')).toEqual(['query'])
     expect(wireOf('forgeFeatures', 'list')).toEqual(['query'])
+    expect(wireOf('forgeDirs', 'facts')).toEqual(['query'])
   })
 })
 

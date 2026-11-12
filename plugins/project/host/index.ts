@@ -27,6 +27,7 @@ import { createProjectsServicePort, openProjectsDomainDb } from "./assembly/proj
 import { createWorktreeIdentity, type ForgeProjectsIdentityFace } from "./assembly/worktree-identity.js";
 import { createBugsService } from "./bugs/service.js";
 import { minimalDirFactsPort } from "./dirs/dir-facts.js";
+import { createCoreAnchorsOf, type CoreProjectPathsFace } from "./dirs/core-anchors.js";
 // 单行装载 = 五缝注册 + worktree 域插件（gitWorktree 能力服务 provide）——能力面在此
 // 组合保持外部行为不变（git 缺席 fail-soft 不生效语义归插件启动检测）。
 import worktreePlugin, {
@@ -186,6 +187,23 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     onDiag: diag,
   });
 
+  // 锚解析升级（基本信息区 2026-11-13——host 侧解析后 Typert 下发）：core forgeProjects
+  // 全量面在场（宿主集成态）= createCoreAnchorsOf 同链派生（镜像 plugin-forge
+  // faces.createForgePathsAnchors 语义——project 包不依赖 plugin-forge，AGENTS §1.3）；
+  // 缺席 = absentAnchorsOf（独立模式语义不变）。corePathsFaceOf 逐调用现查（AGENTS 1.6）。
+  const corePathsFaceOf = (): CoreProjectPathsFace | undefined => {
+    try {
+      const raw: unknown = face.reflect?.get?.("forgeProjects");
+      if (raw === null || typeof raw !== "object") return undefined;
+      const candidate = raw as CoreProjectPathsFace;
+      return typeof candidate.getProject === "function" && typeof candidate.deriveTaskStoreDir === "function"
+        ? candidate
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
   // 五缝注册（常驻 + 兜底 + 覆写位择优——零域逻辑，全部委托域本体/组装面）
   const deps: ProjectSeamDeps = (() => {
     const db = domainDb;
@@ -194,10 +212,13 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       ({ projectHome: "", taskHome: undefined, forgeDir: undefined, docsRoot: undefined }) as Awaited<
         ReturnType<DirFactsDeps["anchorsOf"]>
       >;
+    const corePathsFace = corePathsFaceOf();
+    const coreAnchorsOf = corePathsFace !== undefined ? createCoreAnchorsOf(corePathsFace) : undefined;
+    const anchorsOf: DirFactsDeps["anchorsOf"] = coreAnchorsOf ?? absentAnchorsOf;
     const base = {
       ...(config.dirFacts !== undefined
         ? { dirFacts: config.dirFacts }
-        : { dirFacts: () => minimalDirFactsPort({ anchorsOf: absentAnchorsOf }) }),
+        : { dirFacts: () => minimalDirFactsPort({ anchorsOf }) }),
       worktrees: worktreesResident,
       // projects 常驻真源现查（bug 33aec906）：core 服务在场（宿主集成态）即委托——
       // registration 运营真源单源；自建库投影退路（单装态 db 在场）；双缺 = undefined
@@ -258,6 +279,10 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       worktrees: worktreesSvcOnceOf(worktreesResident),
       proposals: () => face.reflect?.get?.("forgeProposals"),
       features: () => face.reflect?.get?.("forgeFeatures"),
+      // 基本信息区数据源（2026-11-13）：core 全量面（workspaceRoot/forgeDir 行）+ dirFacts
+      // 缝（注册表三键解析——overrides.dirFacts 在场即覆写，与 forge.dirFacts 缝同源）。
+      dirsProjects: () => corePathsFaceOf(),
+      dirFacts: () => config.overrides?.dirFacts ?? deps.dirFacts?.(),
       diag: (line) => {
         diag(line);
         diagEmit?.({ event: "typert-remote-register", level: "warn", message: line });

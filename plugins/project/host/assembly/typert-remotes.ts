@@ -25,6 +25,8 @@ import type {
 } from "@dsh-forge/lib-api";
 import type {
   BugCard,
+  DirFactRow,
+  DirFactsQuery,
   DirListing,
   ListBugsQuery,
   RegisterProjectInput,
@@ -33,6 +35,7 @@ import type {
   WorktreeSealRequest,
   WorktreeSealResult,
 } from "@dsh-forge/contracts";
+import type { DirFactsPort } from "@dsh-forge/lib-api";
 import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { homedir } from "node:os";
@@ -101,6 +104,10 @@ export interface ForgeTypertDeps {
   readonly proposals?: LazyDomainService;
   /** core forgeFeatures 服务（listFeatures 读面）——缺席宿主 typed unavailable */
   readonly features?: LazyDomainService;
+  /** core forgeProjects 全量面（getProject——基本信息区 workspaceRoot/forgeDir 行事实源），缺席 typed unavailable */
+  readonly dirsProjects?: LazyDomainService;
+  /** DirFactsPort 缝（锚注册表解析——forge.docs_root/task_home/worktrees 行事实源），缺席 typed unavailable */
+  readonly dirFacts?: () => DirFactsPort | undefined;
   /** followSeal 重估间隔 ms（缺省 SEAL_FOLLOW_INTERVAL_MS——单测注入收敛节拍） */
   readonly followIntervalMs?: number;
   /** 诊断缝（装配/降级留痕——缺席 console 兜底，client 束豁免面同插件先例） */
@@ -227,6 +234,76 @@ export class ForgeFsRemote extends TypertRemoteService {
   }
 }
 remoteMarks(ForgeFsRemote.prototype, [["listDir"]]);
+
+// ── forge:dirs 族（基本信息区 2026-11-13——forge 相关目录行 host 侧解析后 Typert 下发，
+//    UI 面只渲染零拼接；数据源 = host/dirs 锚注册表 DIR_KEY_REGISTRY 单源）──
+
+/** 基本信息区列示键（有序——workspaceRoot/forgeDir 项目行 + 注册表三键；forge.tmp 与
+ *  forge.project_home 不列示，永不越过本面下发） */
+const DIR_FACTS_PRESENTED_KEYS = ["forge.docs_root", "forge.task_home", "forge.worktrees"] as const;
+
+export class ForgeDirsRemote extends TypertRemoteService {
+  private readonly projects: LazyDomainService;
+  private readonly dirFacts: () => DirFactsPort | undefined;
+
+  constructor(ctx: Context, deps: ForgeTypertDeps) {
+    super(ctx, "forgeDirsController", { namespace: "forgeDirs" });
+    this.projects = deps.dirsProjects ?? (() => undefined);
+    this.dirFacts = deps.dirFacts ?? (() => undefined);
+  }
+
+  private projectFace(): { getProject(id: string): Promise<unknown> } | undefined {
+    const svc = this.projects() as { getProject?: unknown } | undefined;
+    return svc !== undefined && typeof svc.getProject === "function" ? (svc as never) : undefined;
+  }
+
+  /** 单键锚事实（fail-soft——缺席/解析失败 = null 行，UI 呈现「—」不阻断其余行） */
+  private async anchorRow(projectId: string, dirKey: string): Promise<DirFactRow> {
+    const port = this.dirFacts();
+    if (port === undefined) return { dirKey, dir: null, description: "" };
+    try {
+      const fact = (await port.listAnchors(projectId, dirKey))[0];
+      return fact === undefined
+        ? { dirKey, dir: null, description: "" }
+        : { dirKey, dir: fact.dir, description: fact.description };
+    } catch {
+      return { dirKey, dir: null, description: "" };
+    }
+  }
+
+  /**
+   * 基本信息区五行目录事实（workspaceRoot/forgeDir 项目行 + 注册表三键；
+   * 逐键 fail-soft，项目行缺席 = null）。
+   */
+  async facts(query: DirFactsQuery, signal?: AbortSignal): Promise<DirFactRow[]> {
+    signal?.throwIfAborted();
+    const projectFace = this.projectFace();
+    const dirFactsPort = this.dirFacts();
+    if (projectFace === undefined && dirFactsPort === undefined) {
+      throw unavailable("facts", "dirs");
+    }
+    type ProjectRecord = { wsPath?: unknown; forgeDir?: unknown } | null;
+    let project: ProjectRecord = null;
+    if (projectFace !== undefined) {
+      try {
+        project = (await projectFace.getProject(query.projectId)) as ProjectRecord;
+      } catch {
+        project = null;
+      }
+    }
+    const wsPath = typeof project?.wsPath === "string" && project.wsPath !== "" ? project.wsPath : null;
+    const forgeDir = typeof project?.forgeDir === "string" && project.forgeDir !== "" ? project.forgeDir : null;
+    const rows: DirFactRow[] = [
+      { dirKey: "workspaceRoot", dir: wsPath, description: "项目工作区根" },
+      { dirKey: "forgeDir", dir: forgeDir, description: "本工作区 .forge 目录" },
+    ];
+    for (const dirKey of DIR_FACTS_PRESENTED_KEYS) {
+      rows.push(await this.anchorRow(query.projectId, dirKey));
+    }
+    return rows;
+  }
+}
+remoteMarks(ForgeDirsRemote.prototype, [["facts"]]);
 
 // ── forge:worktree 族（WorktreeRpcService 全量委托 + 封存 follow 流）──
 
@@ -417,6 +494,7 @@ const CONTROLLERS: readonly {
   { namespace: "forgeWorktree", absentWhen: (d) => d.worktrees?.() === undefined, mount: (s, d) => new ForgeWorktreeRemote(s, d) },
   { namespace: "forgeProposals", absentWhen: (d) => d.proposals?.() === undefined, mount: (s, d) => new ForgeProposalsRemote(s, d) },
   { namespace: "forgeFeatures", absentWhen: (d) => d.features?.() === undefined, mount: (s, d) => new ForgeFeaturesRemote(s, d) },
+  { namespace: "forgeDirs", absentWhen: (d) => d.dirsProjects?.() === undefined && d.dirFacts?.() === undefined, mount: (s, d) => new ForgeDirsRemote(s, d) },
 ];
 
 /**

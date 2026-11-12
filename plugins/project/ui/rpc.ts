@@ -9,6 +9,7 @@
 import {
   type BugCard,
   type DeriveTaskStoreDirResult,
+  type DirFactRow,
   type DirListing,
   type FeatureCard,
   type ListBugsQuery,
@@ -58,7 +59,8 @@ export interface ForgeRemoteNamespaceFace {
   readonly [method: string]: ((...args: never[]) => unknown) | undefined
 }
 
-/** 官方 ctx.remote 六族消费切片（apply 期 installForgeRemoteFace 安装的解析目标） */
+/** 官方 ctx.remote 六族消费切片（apply 期 installForgeRemoteFace 安装的解析目标；
+ *  forgeDirs = 基本信息区族——可选边，缺席 = 事实行 fail-soft「—」，不影响其余六族） */
 export interface ForgeRemoteFace {
   readonly forgeProjects: ForgeRemoteNamespaceFace
   readonly forgeFs: ForgeRemoteNamespaceFace
@@ -66,6 +68,7 @@ export interface ForgeRemoteFace {
   readonly forgeWorktree: ForgeRemoteNamespaceFace
   readonly forgeProposals: ForgeRemoteNamespaceFace
   readonly forgeFeatures: ForgeRemoteNamespaceFace
+  readonly forgeDirs?: ForgeRemoteNamespaceFace
 }
 
 /** 降级诊断钩子（apply 期可选安装——缺席 console 兜底，client 束豁免面） */
@@ -259,6 +262,11 @@ export interface ForgeProposalFeaturesListRpc {
   list(q: ListProposalsQuery): Promise<ProposalCard[]>
 }
 
+/** forge:dirs/* 面方法集（基本信息区五行目录事实——host 侧锚注册表解析下发，UI 只渲染） */
+export interface ForgeDirsRpc {
+  facts(projectId: string): Promise<DirFactRow[]>
+}
+
 export interface ForgeFeaturesListRpc {
   list(q: ListFeaturesQuery): Promise<FeatureCard[]>
 }
@@ -285,6 +293,7 @@ export interface ForgeRpcClient {
   readonly worktree: ForgeWorktreeRpc
   readonly proposals: ForgeProposalFeaturesListRpc
   readonly features: ForgeFeaturesListRpc
+  readonly dirs: ForgeDirsRpc
 }
 
 export function createForgeRpcClient(): ForgeRpcClient {
@@ -319,6 +328,9 @@ export function createForgeRpcClient(): ForgeRpcClient {
     },
     features: {
       list: (q) => invokeRemote<FeatureCard[]>('forgeFeatures', 'list', [q]),
+    },
+    dirs: {
+      facts: (projectId) => invokeRemote<DirFactRow[]>('forgeDirs', 'facts', [{ projectId }]),
     },
   }
 }

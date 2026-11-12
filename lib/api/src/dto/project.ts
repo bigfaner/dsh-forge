@@ -117,6 +117,26 @@ export interface ReconcileReport {
   orphans: ReconcileOrphan[]
 }
 
+/**
+ * 基本信息区目录事实查询参（forgeDirs Typert facts——概览 ov-head 五行数据源入参）。
+ */
+export interface DirFactsQuery {
+  readonly projectId: string
+}
+
+/**
+ * 基本信息区目录事实行（forgeDirs Typert facts 下发形态）：
+ * host 侧锚注册表（DIR_KEY_REGISTRY）解析后下发，UI 面只渲染零拼接。
+ * 五行键 = workspaceRoot / forgeDir / forge.docs_root / forge.task_home / forge.worktrees
+ * （forge.tmp 与 forge.project_home 不列示——用户裁决 2026-11-13）；
+ * 单键解析失败 fail-soft = dir null（UI 呈现「—」，不阻断其余行）。
+ */
+export interface DirFactRow {
+  readonly dirKey: string
+  readonly dir: string | null
+  readonly description: string
+}
+
 /** Interface 1：core · forge 域服务面（ctx.forgeProjects） */
 export interface ProjectService {
   /**

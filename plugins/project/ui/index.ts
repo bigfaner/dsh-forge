@@ -272,7 +272,7 @@ export const projectClient = {
       // fiber 随主插件卸载级联拆卸，此后缝读取 throw = 诚实降级 undefined）。
       const injectFn = (rec as { inject?: (deps: readonly string[], mixin: (c: unknown) => unknown) => unknown } | undefined)?.['inject']
       if (typeof injectFn === 'function') {
-        injectFn.call(rec, ['remote', ...FORGE_REMOTE_NAMESPACES.map((ns) => `remote.${ns}`)], (fiberCtx: unknown) => {
+        injectFn.call(rec, ['remote', ...FORGE_REMOTE_NAMESPACES.map((ns) => `remote.${ns}`), 'remote.forgeDirs'], (fiberCtx: unknown) => {
           installForgeRemoteFace(() => forgeFaceOf(fiberCtx), (line) => console.warn(line))
           return undefined
         })
