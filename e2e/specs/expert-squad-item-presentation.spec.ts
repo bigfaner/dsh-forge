@@ -1,7 +1,7 @@
 // expert-squad plugins.item 呈现旅程 e2e（builtin-plugin-item-presentation 1.5 实现
 // 1c9e2daf 收口欠账）：官方插件管理页 plugins.item 缝注册的官方组条目 + item 详情页头部
 // 呈现品牌标识「专家团（dsh-forge）」——两处断言（条目名 + 详情页头部），文案单源 =
-// packages/plugins/expert-squad/src-client/settings/index.tsx 的 ITEM_LABEL / ITEM_DESCRIPTION
+// plugins/expert-squad/ui/settings/index.tsx 的 ITEM_LABEL / ITEM_DESCRIPTION
 // （注册字段实测形态：label「专家团（dsh-forge）」、view:"summary" 一行简介
 // 「dsh-forge 专家团配置与默认 Agent 路由」，id = expert-squad、order = 40）。
 // 导航径（走查批 1 cdp/bw14-open-plugins.js 同径）：官方导航「插件」钮（textContent 精确

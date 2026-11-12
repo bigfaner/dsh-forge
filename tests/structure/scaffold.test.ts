@@ -69,7 +69,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'packages/path-key',
         'packages/plugin-forge',
         'packages/plugin-forge-spec',
-        'packages/plugins/expert-squad',
+        'plugins/expert-squad',
         'packages/plugins/input-history',
         'packages/plugins/md-mermaid',
         'packages/plugins/mobile-bridge',

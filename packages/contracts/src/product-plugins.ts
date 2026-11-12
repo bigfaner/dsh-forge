@@ -28,6 +28,10 @@ export interface ProductPluginSwitch {
   readonly userLayerRow: boolean
   /** staging 覆写（缺席 = 自动推导：被行/预设/闭包引用即发货） */
   readonly staged?: boolean
+  /** 包居所显式声明（workspace 子路径，自仓库根起——expert-squad 载 'plugins/expert-squad'
+   *  root 级树形态；缺席 = assemble 脚本按既有树探测推导）。批1 包归位表驱动面：
+   *  packageDirOf 改读本字段（dir 字段包不再按 packages/plugins/<short> 推导）。 */
+  readonly dir?: string
 }
 
 /**
@@ -45,7 +49,9 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // @dsh-forge 依赖无闭包径）→ 安装版 runtime 缺包，/api/expert-squad/* 全 404。
   // userLayerRow: true = 全局装载（管理工具面非 forge 管线面，不违标准模式零 forge 裁决），
   // 同时作为 staging 种子随包；experts/ 内置层目录随包由 STAGING_EXTRAS 承担。
-  'expert-squad': { userLayerRow: true },
+  // dir（批1 包归位）：包自 packages/plugins/ 迁 root 级 plugins/ 树——assemble 侧
+  // packageDirOf 改读本字段直取居所（键 = 表值 'plugins/expert-squad'）。
+  'expert-squad': { userLayerRow: true, dir: 'plugins/expert-squad' },
   // 打包形态发货覆写（1.17 批二卸旧装新，自 git-worktree 行接替）：host dist boot 链
   // （child/run/m2-wiring/bindings）静态 import 本包——缺席即安装版主进程
   // ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层：boot overlay presence 门注行

@@ -47,7 +47,7 @@
       "path": "packages/plugins/input-history"
     },
     {
-      "path": "packages/plugins/expert-squad"
+      "path": "plugins/expert-squad"
     },
     {
       "path": "packages/plugins/quote-reference"

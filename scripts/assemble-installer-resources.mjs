@@ -90,10 +90,13 @@ const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */
 const CONVENTION_DIRS = ['skills', 'skills-blitz', 'experts']
 
-/** 包短名 → workspace 子路径（平铺 packages/<short> 优先；plugins/ 子居所——md-mermaid 先例；
- *  根级 plugins/ 树——plugin-project 1.3 project 包居 plugins/project；lib/ 子居所——
- *  plugin-project 1.6 lib 公共包群（lib/path 闭包成员）探测；缺席 undefined） */
-function packageDirOf(root, short) {
+/** 包短名 → workspace 子路径。批1 包归位表驱动面：PRODUCT_PLUGINS 声明 dir 字段的包
+ *  直取表值（expert-squad 载 'plugins/expert-squad' root 级树——不再按 packages/plugins/<short>
+ *  推导）；未声明 dir 的包维持既有树探测（packages/<short> 平铺优先；plugins/ 子居所——
+ *  md-mermaid 先例；root:plugins/ 前缀 = 仓库根级 plugins/ 树——project 包；lib/ 子居所——
+ *  lib 公共包群探测）。表外（无处可探测）返回 undefined——调用侧 fail-loud。 */
+function packageDirOf(root, short, dir) {
+  if (dir !== undefined) return dir
   if (existsSync(join(root, 'packages', short, 'package.json'))) return short
   if (existsSync(join(root, 'packages', 'plugins', short, 'package.json'))) return `plugins/${short}`
   if (existsSync(join(root, 'plugins', short, 'package.json'))) return `root:plugins/${short}`
@@ -103,10 +106,13 @@ function packageDirOf(root, short) {
   return undefined
 }
 
-/** workspace 子路径 → [根目录名, 子路径]（packages/ 平铺与 plugins/ 子居所在 packages/ 树；
- *  root:plugins/ 前缀 = 仓库根级 plugins/ 树；lib/ 子居所在 lib/ 树） */
-function pkgRootOf(dir) {
+/** workspace 子路径 → [根目录名, 子路径]（root:plugins/ 前缀 = 仓库根级 plugins/ 树；
+ *  无前缀 'plugins/<name>' 键二义（packages/plugins/<name> 探测键与 root 级树表值键同形）
+ *  ——以磁盘在场探测收口：root 级树有 package.json 即根级树，否则 packages/ 树；
+ *  lib/ 子居所在 lib/ 树；其余 packages/ 平铺） */
+function pkgRootOf(root, dir) {
   if (dir.startsWith('root:plugins/')) return ['.', dir.slice('root:'.length)]
+  if (dir.startsWith('plugins/') && existsSync(join(root, dir, 'package.json'))) return ['.', dir]
   return dir.startsWith('lib/') ? ['lib', dir.slice('lib/'.length)] : ['packages', dir]
 }
 
@@ -142,15 +148,16 @@ export function stagedProductPackages(plugins, root = ROOT) {
   while (queue.length > 0) {
     const short = queue.shift()
     if ([...stagedDirs.values()].includes(short)) continue
-    const dir = packageDirOf(root, short)
+    const dir = packageDirOf(root, short, plugins[short]?.dir)
     if (dir === undefined) {
-      if (Object.hasOwn(plugins, short) && plugins[short].staged === true) {
-        fail(`PRODUCT_PLUGINS staged:true 覆写指向缺席的包：packages/${short}（或 packages/plugins/${short}）不存在`)
-      }
-      continue // 预设/依赖扫描到的非包名（如已被 kill-switch 的引用目标）静默跳过
+      // fail-loud 兜底（批1 ⑦）：表外包名（配置误写/包未建/依赖指名漂移）即抛错，
+      // 不再静默 continue——静默路径会把 staging 集合缺包假绿带进安装包。
+      throw new Error(
+        `stagedProductPackages: 包名 '@dsh-forge/${short}' 无处解析（PRODUCT_PLUGINS 表外且 packages/plugins/lib 三树均无 package.json）`,
+      )
     }
     stagedDirs.set(dir, short)
-    const manifest = JSON.parse(readFileSync(join(root, ...pkgRootOf(dir), 'package.json'), 'utf8'))
+    const manifest = JSON.parse(readFileSync(join(root, ...pkgRootOf(root, dir), 'package.json'), 'utf8'))
     for (const dep of Object.keys(manifest.dependencies ?? {})) {
       if (dep.startsWith('@dsh-forge/')) queue.push(dep.slice('@dsh-forge/'.length))
     }
@@ -182,7 +189,7 @@ export function stagingExtrasDrift(plugins, root = ROOT, extras = STAGING_EXTRAS
   const problems = []
   for (const dir of Object.keys(stagedProductPackages(plugins, root))) {
     const short = dir.split('/').pop()
-    const pkgRoot = join(root, ...pkgRootOf(dir))
+    const pkgRoot = join(root, ...pkgRootOf(root, dir))
     const entry = extras[short]
     const declared = new Set(entry?.files ?? [])
     const manifest = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
@@ -249,7 +256,7 @@ export function requiredKeyFiles(plugins, root = ROOT) {
     const short = stagedPkgShort(dir)
     // dist 入口自包 manifest main 派生（1.17 project 包入口 = dist/host/index.js——
     // 硬编码 dist/index.js 对多入口包失真，--check 口径随 manifest 单源）
-    const manifest = JSON.parse(readFileSync(join(root, ...pkgRootOf(dir), 'package.json'), 'utf8'))
+    const manifest = JSON.parse(readFileSync(join(root, ...pkgRootOf(root, dir), 'package.json'), 'utf8'))
     const entry = String(manifest.main ?? 'dist/index.js').replace(/^\.\//, '')
     files.push(
       `runtime/node_modules/@dsh-forge/${short}/package.json`,
@@ -348,7 +355,11 @@ function assertPreconditions(plugins) {
     [join(ROOT, 'build', 'icon.png'), 'node tmp-ui-review/gen-whale-brand-v3.mjs --emit icon（fix-45 应用图标——窗口图标打包形态随包）'],
   ]
   for (const [key, files] of Object.entries(stagedProductPackages(plugins))) {
-    wants.push([join(ROOT, ...pkgRootOf(key), 'dist', 'index.js'), `pnpm build（tsc -b 全拓扑——${key} staged 插件产物）`])
+    // dist 入口自包 manifest main 派生（与 requiredKeyFiles 同基座——expert-squad 迁
+    // 三目录制后入口 = dist/host/index.js，硬编码 dist/index.js 对多入口包失真）
+    const entryManifest = JSON.parse(readFileSync(join(ROOT, ...pkgRootOf(ROOT, key), 'package.json'), 'utf8'))
+    const entryRel = String(entryManifest.main ?? 'dist/index.js').replace(/^\.\//, '')
+    wants.push([join(ROOT, ...pkgRootOf(ROOT, key), ...entryRel.split('/')), `pnpm build（tsc -b 全拓扑——${key} staged 插件产物）`])
     for (const file of files.filter((f) => f !== 'dist' && f !== 'package.json')) {
       wants.push([join(ROOT, ...pkgRootOf(key), file), `${key} 技能面（customSkillDirs 挂载源——缺席即技能面静默缺失）`])
     }
@@ -399,7 +410,7 @@ async function stage() {
   for (const name of Object.keys(productPackages)) {
     // 键可含 workspace 子路径（plugins/md-mermaid、lib/path）——版本键取包真名短名（stagedPkgShort）
     const short = stagedPkgShort(name)
-    const manifest = readJson(join(ROOT, ...pkgRootOf(name), 'package.json'), `${name} manifest`)
+    const manifest = readJson(join(ROOT, ...pkgRootOf(ROOT, name), 'package.json'), `${name} manifest`)
     productVersions[`@dsh-forge/${short}`] = manifest.version ?? '0.0.0'
   }
 
@@ -422,7 +433,7 @@ async function stage() {
     const dest = join(RUNTIME, 'node_modules', '@dsh-forge', short)
     mkdirSync(dest, { recursive: true })
     for (const file of [...requiredFiles, ...PRODUCT_OPTIONAL_FILES]) {
-      const source = join(ROOT, ...pkgRootOf(key), file)
+      const source = join(ROOT, ...pkgRootOf(ROOT, key), file)
       if (!existsSync(source)) {
         if (requiredFiles.includes(file)) fail(`${source} 未就位 —— 先执行：pnpm build`)
         continue // 可选件（README.md 等）缺席静默跳过

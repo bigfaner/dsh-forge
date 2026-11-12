@@ -54,7 +54,7 @@ export default defineConfig({
       {
         test: {
           name: 'expert-squad',
-          include: ['packages/plugins/expert-squad/tests/**/*.test.ts'],
+          include: ['plugins/expert-squad/tests/**/*.test.ts'],
           server: {
             deps: {
               inline: ['@deepseek-ai/dsh-client-ui-primitives'],

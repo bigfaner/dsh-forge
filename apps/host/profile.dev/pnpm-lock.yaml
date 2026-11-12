@@ -33,8 +33,8 @@ importers:
         specifier: link:../../../packages/core
         version: link:../../../packages/core
       '@dsh-forge/expert-squad':
-        specifier: link:../../../packages/plugins/expert-squad
-        version: link:../../../packages/plugins/expert-squad
+        specifier: link:../../../plugins/expert-squad
+        version: link:../../../plugins/expert-squad
       '@dsh-forge/knowledge':
         specifier: link:../../../packages/plugins/knowledge
         version: link:../../../packages/plugins/knowledge

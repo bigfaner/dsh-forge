@@ -6,7 +6,7 @@
 //   （召唤 this 脱绑召唤必败，commit aedd69cb 修）在 e2e 3/3 全绿下漏检——任何召唤失败
 //   弹出的降级条都被双分支判据当 fail-soft 通过形态吞掉，主路径用例对「召唤必败」零判别力。
 //   （附：前轮 5 红假象另含环境根因——插件 client bundle 陈旧未含 aedd69cb，重建后官方
-//   分支真通；bundle 重建已入 pnpm -C packages/plugins/expert-squad build 既有配方。）
+//   分支真通；bundle 重建已入 pnpm -C plugins/expert-squad build 既有配方。）
 // - 主路径（成功前置：dev profile 已装配猎头预设 preset-headhunter + 夹具工作区 + 面板数据态）
 //   必须断言官方分支。官方切换证据 = 猎头预设座位标签（官方 conversation.hero.agentPreset
 //   槽座位按钮显预设显示名「猎头模式」——m3 座位形制：healthy 显显示名/缺席回退 id；
