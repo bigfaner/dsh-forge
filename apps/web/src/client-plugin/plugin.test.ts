@@ -21,7 +21,6 @@ import {
   MAIN_SLOT,
   OVERVIEW_TAB_KIND,
   SESSION_HEADER_ACTIONS_SLOT,
-  CONVERSATION_INPUT_OVERLAY_SLOT,
   // fix-13 注记（1.40）：FORGE_REMOTE_ENTRY_ID/ORDER 随注册面迁 project bundle——壳零断言
   SIDEBAR_FOOTER_ACTION_SLOT,
   SHELL_OVERLAY_SLOT,
@@ -946,7 +945,7 @@ describe('会话头挂接槽 + 悬浮面板 ⟞ 开面（m3.1 D5/D6 + fix-13 迁
     publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    expect(registers.filter((r) => r.key === CONVERSATION_INPUT_OVERLAY_SLOT)).toHaveLength(0)
+    expect(registers.filter((r) => r.key === 'conversation.input.overlay')).toHaveLength(0)
     unpublishViews()
   })
 

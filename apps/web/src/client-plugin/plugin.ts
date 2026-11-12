@@ -103,10 +103,9 @@ export const CONVERSATION_VIEW_SLOT = 'conversation.view'
 export const HERO_WORKSPACE_SLOT = 'conversation.hero.workspace'
 /** 洞名：AppFrame root 五子槽——常驻覆盖层（壳宿主挂点，不随 main 面板互换卸载） */
 export const SHELL_OVERLAY_SLOT = 'shell.overlay'
-/** 洞名：官方 composer 区 overlay 缝（InputBar overlayAnchor——input 元素上方官方缝；
- * fix-13 注记：封存提示/chip 重建双行注册迁 @dsh-forge/project bundle（official-seams）；
- * 壳侧仅保留切换闸虚线标记行——禁输行为缝（installWorktreeSwitchGate）归壳） */
-export const CONVERSATION_INPUT_OVERLAY_SLOT = 'conversation.input.overlay'
+// fix-13 注记（1.4 收口）：conversation.input.overlay 缝三行注册（封存提示/chip 重建/
+// 切换闸标记）全迁 @dsh-forge/project bundle（ui/official-seams.ts + ui/conversation-views-face.ts）
+// ——壳侧槽名常量退役；禁输行为缝（installWorktreeSwitchGate）仍归壳，不经本常量。
 /**
  * 洞名：官方会话头标题邻位动作带（ConversationSessionHeader headerActions——list 槽，
  * scope session）。fix-13 注记：worktree chip 登记迁 @dsh-forge/project client bundle
