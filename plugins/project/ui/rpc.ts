@@ -124,9 +124,17 @@ export function installForgeRemoteFace(
 /** face 解析缝（apply 期安装——每调用现查不缓存） */
 let forgeRemoteResolver: (() => ForgeRemoteFace | undefined) | undefined
 
-/** namespace face 取法（解析缝缺席/面形状非法 = undefined——调用期诚实降级） */
+/** namespace face 取法（解析缝缺席/面形状非法 = undefined——调用期诚实降级）。
+ * 官方 face 双形态兼容（bug bead3e88）：官方 typert RemoteView 把命名空间挂在
+ * `face.namespaces` 子对象（w140 真机探针 faceKeys 实证），旧解析缝只认顶层命名空间
+ * → 解析缺席诚实降级。此处先探 namespaces 子对象、缺席回退顶层（双形态兼容）。 */
 function namespaceOf(face: ForgeRemoteFace, namespace: keyof ForgeRemoteFace): ForgeRemoteNamespaceFace | undefined {
-  const ns = face[namespace] as unknown
+  const rawNamespaces = (face as unknown as Record<string, unknown>)['namespaces']
+  const holder =
+    rawNamespaces !== undefined && rawNamespaces !== null && typeof rawNamespaces === 'object'
+      ? (rawNamespaces as Record<string, unknown>)
+      : (face as unknown as Record<string, unknown>)
+  const ns = holder[namespace] as unknown
   if (ns === undefined || ns === null || typeof ns !== 'object') return undefined
   return ns as ForgeRemoteNamespaceFace
 }

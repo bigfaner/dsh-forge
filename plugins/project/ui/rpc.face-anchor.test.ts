@@ -13,15 +13,19 @@ import {
 
 const NAMESPACES = ['forgeProjects', 'forgeFs', 'forgeBugs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures'] as const
 
+/** namespace 代理（方法 = `ns.method` 表驱动——getter 函数属性同型） */
+function makeNamespace(ns: string, table: Record<string, (args: unknown[]) => unknown>): Record<string, unknown> {
+  return new Proxy({}, {
+    get(_t, method: string) {
+      const key = `${ns}.${method}`
+      if (table[key] === undefined) return undefined
+      return (...args: unknown[]) => table[key](args)
+    },
+  })
+}
+
 function stubFace(table: Record<string, (args: unknown[]) => unknown>): ForgeRemoteFace {
-  const make = (ns: string): Record<string, unknown> =>
-    new Proxy({}, {
-      get(_t, method: string) {
-        const key = `${ns}.${method}`
-        if (table[key] === undefined) return undefined
-        return (...args: unknown[]) => table[key](args)
-      },
-    })
+  const make = (ns: string): Record<string, unknown> => makeNamespace(ns, table)
   return Object.fromEntries(NAMESPACES.map((ns) => [ns, make(ns)])) as unknown as ForgeRemoteFace
 }
 
@@ -34,6 +38,20 @@ describe('forge remote face 页内锚（跨 bundle 副本回退读锚）', () =>
     const list = vi.fn(async () => ({ ok: true, value: [{ id: 'p1' }] }))
     ;(globalThis as Record<string, unknown>)[FORGE_REMOTE_FACE_ANCHOR_KEY] = {
       resolver: () => stubFace({ 'forgeProjects.list': (args) => list(...args) }),
+      diag: () => {},
+    }
+    const rows = await createForgeRpcClient().projects.list()
+    expect(rows).toEqual([{ id: 'p1' }])
+    expect(list).toHaveBeenCalledWith()
+  })
+
+  it('官方 face 形状（namespaces 子对象）→ projects.list 走锚回数据（bug bead3e88 回归钉）', async () => {
+    const list = vi.fn(async () => ({ ok: true, value: [{ id: 'p1' }] }))
+    const namespaces = Object.fromEntries(
+      NAMESPACES.map((ns) => [ns, makeNamespace(ns, { 'forgeProjects.list': (args) => list(...args) })]),
+    )
+    ;(globalThis as Record<string, unknown>)[FORGE_REMOTE_FACE_ANCHOR_KEY] = {
+      resolver: () => ({ namespaces }) as unknown as ForgeRemoteFace,
       diag: () => {},
     }
     const rows = await createForgeRpcClient().projects.list()
