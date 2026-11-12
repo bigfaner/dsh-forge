@@ -49,8 +49,10 @@ export interface SeamCtxFace {
 
 export type SeamDiag = (line: string) => void
 
-/** 常驻 provider 惰性工厂（装配期闭包重依赖——实例化失败 = 劣形②退兜底） */
-export type ResidentFactory<T> = () => T
+/** 常驻 provider 惰性工厂（装配期闭包重依赖——实例化失败 = 劣形②退兜底）。
+ *  返回 undefined 允许（运行期真源现查缺席——如宿主 core 服务未装载且自建库未开）：
+ *  resolveProvider 对 undefined 显式退兜底（劣形②同径），不静默挂空 provider。 */
+export type ResidentFactory<T> = () => T | undefined
 
 /** 覆写 provider（宿主注入位——在场即覆写常驻） */
 export type OverrideProvider<T> = T

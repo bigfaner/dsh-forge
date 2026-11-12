@@ -24,7 +24,7 @@ import {
   type SeamDiag,
 } from "./assembly/seams.js";
 import { createProjectsServicePort, openProjectsDomainDb } from "./assembly/projects-port.js";
-import { createWorktreeIdentity } from "./assembly/worktree-identity.js";
+import { createWorktreeIdentity, type ForgeProjectsIdentityFace } from "./assembly/worktree-identity.js";
 import { createBugsService } from "./bugs/service.js";
 import { minimalDirFactsPort } from "./dirs/dir-facts.js";
 // 单行装载 = 五缝注册 + worktree 域插件（gitWorktree 能力服务 provide）——能力面在此
@@ -152,13 +152,31 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     }
   };
 
+  // 宿主集成态 core forgeProjects 服务惰性取法（bug 33aec906——host 半常驻 provider 的
+  // 运营真源单源化）：core 行（dsh-forge-core 单 SQLite 句柄）provide ctx.forgeProjects，
+  // 项目注册通道（forge:projects/register）落 core 库——host 半自建 {DSH_HOME} project.db
+  // 与之分裂时 identity/清单读空库恒兜底签名。形状校验防御读取（AGENTS 1.6 检测永不
+  // 缓存：逐调用现查；缺席/劣形 = undefined → 自建库投影退路）。
+  const coreProjectsOf = (): ProjectsServicePort | undefined => {
+    try {
+      const raw: unknown = face.reflect?.get?.("forgeProjects");
+      if (raw === null || typeof raw !== "object") return undefined;
+      const candidate = raw as ProjectsServicePort;
+      return typeof candidate.listProjects === "function" && typeof candidate.registerProject === "function"
+        ? candidate
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
   // identity 扩展点自注入（单装形态——「宿主注入 provider」的注入者即包自身装配，读
   // 自身 project.db 关系表）。worktrees 域扩展点解析链（resolveExtensionPoints）消费
   // forgeWorktreeIdentity 服务缝——单装无 boot/child.ts 注入装配时恒退默认 provider
   // （resolveProject 恒 null → list isGit:false）。forge 宿主侧（assembly/host-side.ts
   // runProfile 后 provide 同键）后注入即覆写——两侧同源 project.db 行集语义等价。
   // db 缺席 = 零 provide（worktrees 退独立模式默认扩展点）。
-  provideWorktreeIdentity(face, domainDb, config, defaultRegistry(), diag);
+  provideWorktreeIdentity(face, domainDb, config, defaultRegistry(), diag, coreProjectsOf);
 
   // worktrees 常驻工厂（组装面 = assembly/worktrees-port.ts——惰性单例与 Port 投影归位）
   const worktreesResident = createWorktreesResident({
@@ -181,6 +199,20 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
         ? { dirFacts: config.dirFacts }
         : { dirFacts: () => minimalDirFactsPort({ anchorsOf: absentAnchorsOf }) }),
       worktrees: worktreesResident,
+      // projects 常驻真源现查（bug 33aec906）：core 服务在场（宿主集成态）即委托——
+      // registration 运营真源单源；自建库投影退路（单装态 db 在场）；双缺 = undefined
+      // （resolveProvider 劣形②退兜底 stub——独立模式语义不变）。
+      projects: (): ProjectsServicePort | undefined => {
+        const core = coreProjectsOf();
+        if (core !== undefined) return core;
+        if (db === undefined) return undefined;
+        return createProjectsServicePort({
+          domainDb: db,
+          registry: config.registry ?? defaultRegistry(),
+          tasksHome: config.tasksHome,
+          onDiag: undefined,
+        });
+      },
       ...(config.overrides !== undefined ? { overrides: config.overrides } : {}),
       onDiag: diag,
     };
@@ -195,13 +227,6 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     };
     return {
       ...base,
-      projects: () =>
-        createProjectsServicePort({
-          domainDb: db,
-          registry: config.registry ?? defaultRegistry(),
-          tasksHome: config.tasksHome,
-          onDiag: undefined,
-        }),
       bugs: (() => {
         const deps = bugsDeps;
         return () =>
@@ -265,28 +290,47 @@ function rootServiceOf(face: ProjectPluginCtx): (name: string) => unknown {
   };
 }
 
-/** identity 扩展点自注入（db/provide 缺席 = 零 provide——fail-soft 退独立模式，不炸装配） */
+/** identity 扩展点自注入（bug 33aec906 双源现查：core 服务优先——宿主集成态真源；
+ *  自建库投影退路（单装态）；双缺 = 零 provide——fail-soft 退独立模式，不炸装配） */
 function provideWorktreeIdentity(
   face: ProjectPluginCtx,
   domainDb: ReturnType<typeof openProjectsDomainDb> | undefined,
   config: ProjectHostConfig,
   registry: RegistryFace | undefined,
   diag: SeamDiag,
+  coreProjectsOf: () => ProjectsServicePort | undefined,
 ): void {
-  if (domainDb === undefined) return;
+  const ownPort =
+    domainDb === undefined
+      ? undefined
+      : createProjectsServicePort({
+          domainDb,
+          registry: config.registry ?? registry,
+          tasksHome: config.tasksHome,
+          onDiag: undefined,
+        });
+  if (ownPort === undefined && coreProjectsOf() === undefined) return;
+  // 惰性双源 face（逐调用现查——core 服务装载晚于本装配段亦可达）：core 服务优先，
+  // 自建库投影退路；双缺 = 空读 face（fail-soft——identity 归并恒 null 同独立模式）。
+  const identityFace: ForgeProjectsIdentityFace = {
+    listProjects: async () => (coreProjectsOf() ?? ownPort ?? emptyProjectsFace()).listProjects(),
+    getProject: async (id: string) => (coreProjectsOf() ?? ownPort ?? emptyProjectsFace()).getProject(id),
+  };
   const provide = (face as { provide?: (name: string, value?: unknown) => unknown }).provide;
   if (typeof provide !== "function") return;
   try {
-    const identityProjects = createProjectsServicePort({
-      domainDb,
-      registry: config.registry ?? registry,
-      tasksHome: config.tasksHome,
-      onDiag: undefined,
-    });
-    provide.call(face, GIT_WORKTREE_IDENTITY_SERVICE, createWorktreeIdentity(identityProjects, undefined, diag));
+    provide.call(face, GIT_WORKTREE_IDENTITY_SERVICE, createWorktreeIdentity(identityFace, undefined, diag));
   } catch (cause) {
     diag(`[project-seams] forgeWorktreeIdentity 自注入失败（fail-soft 退独立模式）：${String(cause)}`);
   }
+}
+
+/** 空读 projects face（双源全缺的 fail-soft 形态——identity 归并恒 null 同独立模式语义） */
+function emptyProjectsFace(): ForgeProjectsIdentityFace {
+  return {
+    listProjects: async () => [],
+    getProject: async () => null,
+  };
 }
 
 /** Typert worktrees 遥控器数据源 = 常驻 Port 投影（与 forge.worktrees 缝同实例同语义） */
