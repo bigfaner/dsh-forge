@@ -55,7 +55,7 @@ function makeCtx(tools: unknown, subagents: unknown = undefined) {
   };
 }
 
-const SUBAGENTS = { startContinuable: async () => ({ childId: "c", messageId: "m" }) };
+const SUBAGENTS = { startActivation: async () => ({ childId: "c", messageId: "m" }) };
 
 // 热刷新接线后每次 boot 会注册真实 watcher（registryFor(process.cwd())）——afterEach
 // 统一 disposer 回收，避免遍历成本跨用例外溢。
@@ -320,7 +320,7 @@ describe("delegate 装配状态 run-state 读口暴露（观测面-only，不判
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const { face } = makeToolsFace();
-      expect(await bootDelegateState(face, { startContinuable: "not-a-function" })).toEqual({
+      expect(await bootDelegateState(face, { startActivation: "not-a-function" })).toEqual({
         status: "degraded",
         reason: "shape-mismatch",
       });

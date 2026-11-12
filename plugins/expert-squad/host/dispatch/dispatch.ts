@@ -1,26 +1,33 @@
-// dispatch/dispatch —— 通道一委派工具 delegate_expert（tech-design §5/§6 通道一时序
-// / B2 钉死）：组装内核（compose.ts）→ 官方 ctx.subagents.startContinuable 正门。
-// 接受点即结算：startContinuable 在子会话 inbox 接受首条 prompt 时即 resolve
-// （dsh-subagent types/index.d.ts——"Resolves when the child's inbox accepts that
-// prompt"），工具随即返回「已派发 + childId + 追问指引」，不等待子会话 turn——
-// 成果经官方子会话记录可见、追问经 dsh-tool-subagent-control send_message
-// （回复回会话流，continuation 同上下文）。白名单语义不在本层复刻：toolFilter
-// 经官方创建窗口 scoped tools.restrict fail-closed 落地（同 doc：「the named
-// tools vanish from the child's prompt AND refuse to execute」），本层只保证
-// 请求面逐字承载档案白名单、不二次过滤不旁路；persona 逐字承载合成全文，子
-// scope 注入唯一通道 = SubagentStartRequest.persona（官方注册为
-// deployment:persona-prefix 前缀段并 shadow 部署 persona），本层不再经任何
-// 其他缝注册人设段——无撞名（负向断言见 tests/dispatch.test.ts）。
+// dispatch/dispatch —— 通道一委派工具 delegate_expert（fix-1 agentPreset 通道重
+// 设计）：组装内核（compose.ts）→ 官方 ctx.subagents.startActivation 正门
+// （dsh-subagent 0.2.2-rc.1——startContinuable/ContinuableStartSpec 已移除，
+// SubagentStartRequest.persona/toolFilter 字段同步移除）。专家 persona 与工具
+// 白名单的注入通道 = request.agentPreset（官方正本核销：subagent README:63-65
+// Child presets 段——in-process spawn 接受独立 agentPreset，无选择继承父组合；
+// preset 承载 = tools + prompt sections 声明式组合，agent-preset-registry README；
+// preset 行由 host/preset-rows.ts 装载期批量预注册 + 增删同步）。
+//
+// 结算语义：startActivation 在 provider 发布子会话（child 存在）时即 resolve，
+// 工具随即返回「已派发 + childId + 追问指引」，不等待子会话 turn——成果经官方
+// 子会话记录可见（delivery: "parent" = 结算通知回父会话模型面）、追问经
+// dsh-tool-subagent-control send_message（回复回会话流）。白名单 fail-closed 语义
+// 不在本层复刻：由 preset 行内 expert-restrict 行经官方 ctx.tools.restrict 落地。
+//
+// 诚实降级：presetProbe 名册（可用 preset id 集）不含本专家 preset id = 该专家
+// preset 行缺席/装载失败——emitDiag warn + 请求面不携 agentPreset（回落父组合）
+// + 结果面 degradedNote 明示，不阻载派发、不阻载插件。
+//
 // subagent/end 监听仅驱动面板状态（ExpertRunPanelState，供 fetch 路由面取数），
 // 不写会话流：监听体内零 session emit、零 send、零 tool 调用。
 
 import { z } from "zod";
 import type {
-  ContinuableStartSpec,
+  SubagentActivationSpec,
   SubagentRunEndInfo,
   SubagentRuntime,
 } from "@deepseek-ai/dsh-subagent";
 import type { ExpertsService } from "../registry.js";
+import type { DiagEmit } from "../registry.js";
 import {
   ExpertToolError,
   zToJSONSchema,
@@ -30,20 +37,26 @@ import type {
   TextContentBlock,
   ToolRegisterFace,
 } from "../tools.js";
-import { createExpertComposer, type KnownToolsProbe } from "./compose.js";
+import { createExpertComposer } from "./compose.js";
 
 // ---------------------------------------------------------------------------
 // faces（官方 ctx.subagents 结构最小面——md-mermaid faces 同法）
 // ---------------------------------------------------------------------------
 
 /** 派发 parent（官方 SubagentStartRequest.parent——exec.agent 同型）。 */
-export type ParentAgent = ContinuableStartSpec["request"]["parent"];
+export type ParentAgent = SubagentActivationSpec["request"]["parent"];
 
 /** 停止原因子面（end 事件载荷内字段）。 */
 export type SubagentStopReason = SubagentRunEndInfo["stopReason"];
 
-/** 官方 subagent 服务派发面（startContinuable 正门——type-only Pick 自官方 SubagentRuntime 单源，不手抄签名）。 */
-export type SubagentsStartFace = Pick<SubagentRuntime, "startContinuable">;
+/** 官方 subagent 服务派发面（startActivation 正门——type-only Pick 自官方 SubagentRuntime 单源，不手抄签名）。 */
+export type SubagentsStartFace = Pick<SubagentRuntime, "startActivation">;
+
+/** preset 在场探针面：返回可用 preset id 集（broken 行剔除）；undefined = 探针缺席（agentPresets 面不可用），无校验直派。 */
+export type PresetProbe = () =>
+  | readonly string[]
+  | undefined
+  | Promise<readonly string[] | undefined>;
 
 /** 官方 subagent 生命周期事件缝（仅消费 subagent/end）。 */
 export interface SubagentEventsFace {
@@ -126,6 +139,7 @@ const delegateResult = z.object({
   expert: z.string(),
   childId: z.string(),
   messageId: z.string(),
+  degradedNote: z.string().optional(),
 });
 
 export type DelegateToolResult = z.output<typeof delegateResult>;
@@ -139,17 +153,17 @@ export const FOLLOW_UP_GUIDANCE =
 export interface DelegateToolDeps {
   /** 取用 API（服务键 experts——禁用/不存在在此 fail-loud，AD1）。 */
   readonly registry: ExpertsService;
-  /** 官方 subagent 服务（startContinuable 正门）。 */
+  /** 官方 subagent 服务（startActivation 正门）。 */
   readonly subagents: SubagentsStartFace;
   /** 面板运行状态（派发点写入 dispatched 行）。 */
   readonly panel: ExpertRunPanelState;
-  /** 派发 provider 名（in-process 才落地 toolFilter——派发面由装配钉死）。 */
+  /** 派发 provider 名（in-process 才支持 agentPreset——派发面由装配钉死）。 */
   readonly provider: string;
-  /** 注册名现查面（每派发现调，禁 memoize——装配接全模式并集探针 createKnownToolsProbe，
-   *  bug e3b045dc：global 层仅 expert 域工具，官方工具在 preset scope 层）；可同步可
-   *  异步（并集取 preset scope 租约）；返回 undefined/空/函数缺席均 fail-soft：白名单
-   *  不裁剪原样承载，见 compose.resolveToolAllow。 */
-  readonly knownTools?: KnownToolsProbe;
+  /** preset 在场探针（可用 preset id 名册，每派发现调禁 memoize——AGENTS 1.6）；
+   *  缺席 = 无校验直派（agentPreset 恒携带，官方启动时对未知 id fail-loud）。 */
+  readonly presetProbe?: PresetProbe;
+  /** 诊断发射面（preset 缺席降级 warn——AGENTS §7 不静默）；缺席 = 降级仅结果面明示。 */
+  readonly diag?: DiagEmit;
 }
 
 const text = (t: string): TextContentBlock => ({ type: "text", text: t });
@@ -162,22 +176,23 @@ export function delegateLabel(task: string): string {
 
 /**
  * 工厂：delegate_expert 工具定义（不注册——注册走 registerDelegateExpertTool）。
- * execute：组装内核取档案（禁用/不存在 fail-loud 原样上抛）→ startContinuable →
- * 接受点即结算返回 childId。
+ * execute：组装内核取档案（禁用/不存在 fail-loud 原样上抛）→ preset 在场探针 →
+ * startActivation → 接受点即结算返回 childId。
  */
 export function createDelegateExpertTool(deps: DelegateToolDeps): ExpertToolDefinition {
-  const compose = createExpertComposer(deps.registry, deps.knownTools);
+  const compose = createExpertComposer(deps.registry);
 
   const tool: ExpertToolDefinition = {
     name: DELEGATE_EXPERT_TOOL_NAME,
     description:
-      "Delegate a task to a registered expert: composes the expert's persona, tool whitelist and model preference and starts a durable continuable child subagent. Settles at acceptance (returns childId); the child's output streams into the session afterwards. Follow-ups go through subagent send_message.",
+      "Delegate a task to a registered expert: starts a child subagent bound to the expert's preset (persona + tool whitelist composed by the expert-squad plugin) with the task as its first message. Settles at acceptance (returns childId); the child's output streams into the session afterwards. Follow-ups go through subagent send_message.",
     parameters: zToJSONSchema(delegateParams, "input"),
     output: {
       schema: zToJSONSchema(delegateResult, "output"),
       render: (_args, value) => {
         const r = value as DelegateToolResult;
-        return [text(`已派发给 ${r.expert}（childId=${r.childId}）。${FOLLOW_UP_GUIDANCE}`)];
+        const note = r.degradedNote !== undefined ? `（降级：${r.degradedNote}）` : "";
+        return [text(`已派发给 ${r.expert}（childId=${r.childId}）。${note}${FOLLOW_UP_GUIDANCE}`)];
       },
     },
     async execute(args: unknown, exec?: DelegateRunContext) {
@@ -198,25 +213,40 @@ export function createDelegateExpertTool(deps: DelegateToolDeps): ExpertToolDefi
       const parent = exec.agent;
       const signal = exec.signal;
       const request = await compose(expert, task); // 不存在/禁用 → ExpertAccessError 原样上抛（AD1）
-      const spec: ContinuableStartSpec = {
+      // preset 在场探针（每派发现调，禁 memoize）：名册不含本专家 preset id =
+      // preset 行缺席/装载失败 → 诚实降级（warn + 不携 agentPreset + degradedNote）。
+      let presetApplied = true;
+      let degradedNote: string | undefined;
+      const roster = await deps.presetProbe?.();
+      if (roster !== undefined && !roster.includes(request.agentPreset)) {
+        presetApplied = false;
+        degradedNote = `专家 preset「${request.agentPreset}」缺席或装载失败——本次委派未携带该专家 persona 与工具白名单（回落父组合）`;
+        deps.diag?.(
+          "warn",
+          "expert-squad-preset-absent",
+          `delegate_expert 诚实降级：${degradedNote}（expert=${expert}）`,
+        );
+      }
+      const spec: SubagentActivationSpec = {
         provider: deps.provider,
         label: delegateLabel(task),
         request: {
           parent,
           prompt: request.prompt as [TextContentBlock],
-          persona: request.persona,
-          toolFilter: request.toolFilter,
+          ...(presetApplied ? { agentPreset: request.agentPreset } : {}),
           ...(request.agentOptions !== undefined ? { agentOptions: request.agentOptions } : {}),
         },
         signal,
+        delivery: "parent",
       };
-      const start = await deps.subagents.startContinuable(spec); // 接受点即结算（B2）
-      deps.panel.markDispatched(start.childId, expert, start.messageId);
+      const start = await deps.subagents.startActivation(spec); // 发布点即结算
+      deps.panel.markDispatched(start.childId, expert, start.messageId ?? "");
       const result = delegateResult.parse({
         dispatched: true,
         expert,
         childId: start.childId,
-        messageId: start.messageId,
+        messageId: start.messageId ?? "",
+        ...(degradedNote !== undefined ? { degradedNote } : {}),
       });
       return result;
     },

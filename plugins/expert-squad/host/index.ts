@@ -32,6 +32,7 @@ import {
 } from "./registry.js";
 import { registerExpertSquadRoutes, type ConnectionLike, type DelegateAssemblyState } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
+import { ExpertPresetSync, type PresetRegistryFace } from "./preset-rows.js";
 import { EXCLUDED_EXPERT_TOOL_NAMES, EXPERTS_SERVICE_KEY } from "../shared/constants.js";
 import {
   createKnownToolsProbe,
@@ -124,9 +125,11 @@ interface ExpertSquadToolsFace extends ToolRegisterFace {
 
 /** 官方 agentPresets 服务窄面（ctx.agentPresets——@deepseek-ai/dsh-agent-preset-registry
  *  AgentPresetRegistry type-only import Pick 派生（AGENTS 1.5，同 subagents/skills
- *  先例——官方签名漂移由 tsc 兜底）：list() 枚举全部 preset + acquireScope() 取每模式
- *  scope 租约（`{key: ScopeKey} & AsyncDisposable`，用后 dispose）；全模式并集枚举缝）。 */
-type ExpertSquadAgentPresetsFace = Pick<AgentPresetRegistry, "list" | "acquireScope">;
+ *  先例——官方签名漂移由 tsc 兜底）：list() 枚举全部 preset（委派 presetProbe 名册面，
+ *  broken 行剔除）+ acquireScope() 取每模式 scope 租约（`{key: ScopeKey} & AsyncDisposable`，
+ *  用后 dispose）+ register() 程序化预注册专家 preset 行（fix-1 agentPreset 注入通道，
+ *  官方 definition.d.ts：declaring plugin owns the disposer）；全模式并集枚举缝）。 */
+type ExpertSquadAgentPresetsFace = Pick<AgentPresetRegistry, "list" | "acquireScope" | "register">;
 
 /** 宿主 ctx 窄面（结构同型——本装配缝只消费 storage/connection/tools/subagents/effect/on）。
  *  subagents = 官方具名正门（bug 5a1e1132：@deepseek-ai/dsh-subagent 经 cordis Context
@@ -137,7 +140,7 @@ interface ExpertSquadCtx {
   readonly connection?: ConnectionLike;
   readonly tools?: ExpertSquadToolsFace;
   /** 官方 subagent 服务正门（inject: ["subagents"]——形状校验保留在取用点）。 */
-  readonly subagents?: Pick<SubagentRuntime, "startContinuable">;
+  readonly subagents?: Pick<SubagentRuntime, "startActivation">;
   /** 官方 skill 目录正门（inject: ["skills"]——dsh-skill 声明 `skills: SkillRegistry`
    *  非可选、宿主恒供；形状校验保留在取用点，同 subagents 先例）。 */
   readonly skills?: Pick<SkillRegistry, "list">;
@@ -270,6 +273,10 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
   };
   const watchManagers = new Map<string, ExpertWatchManager>();
   const refreshChains = new Map<string, Promise<void>>();
+  // 专家 preset 行同步钩子（fix-1 agentPreset 通道）：presetSync 建立后挂接——
+  // 每代 refresh 完成即调和（装载期批量预注册 + recruit/update/rename/启停增删
+  // 同步；watch 通道与显式 refresh 双径同敛于本钩子）。
+  let presetSyncHook: (() => void) | undefined;
   // bug a7bdf03f：workspace 锚 = 进程 cwd（兜底形态）时走 cwdExpertRoots 合理性
   // 校验；显式注册工作区锚照旧。registry 扫描与 watch manager 同源，roots 一致。
   const rootsFor = (workspace: string): ExpertRoot[] => {
@@ -289,6 +296,8 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       () => registry.refresh(), // 上代刷新失败不阻塞换代
     );
     refreshChains.set(workspace, next);
+    // 换代完成后调和 preset 行（专家集/内容变更增删同步——失败不阻塞刷新链）
+    void next.then(() => presetSyncHook?.(), () => presetSyncHook?.());
     next.catch(() => {}); // watch 链 fire-and-forget：刷新失败不落 unhandled rejection（registryFor 侧失败逐出重试）
   };
   const registryFor = (workspace: string): Promise<ExpertsRegistry> => {
@@ -390,6 +399,8 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
         if (error instanceof ExpertNotFoundError) throw error;
         diag("warn", "expert-squad-setenabled-persist-fail", `setEnabled(${key}, ${enabled}) 落盘失败（内存态生效）: ${String(error)}`);
       }
+      // 启停状态变更即调和 preset 行（禁用撤行/启用插行——refresh 链不覆盖 state 面）
+      presetSyncHook?.();
       const fresh = registry
         .list({ includeDisabled: true })
         .find((entry) => entry.name === key);
@@ -437,6 +448,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       await mkdir(expertsDir, { recursive: true });
       await writeFile(file, content, "utf8");
       await registry.refresh();
+      presetSyncHook?.(); // 档案内容变更即调和 preset 行（update 面板写径与 tool 径同敛）
       const fresh = registry
         .list({ includeDisabled: true })
         .find((entry) => entry.name === input.name);
@@ -557,8 +569,48 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
   // SubagentRuntime 非可选，宿主恒供 → inject 声明边即可守卫内直读）。此前
   // readOptionalService 的 reflect 字符串键取法与具名服务失配，真机 delegate_expert
   // 不注册。形状校验保留：startContinuable 非函数面同按缺席降级。
+  // 专家 preset 行同步器（fix-1 agentPreset 注入通道——官方正本核销：dsh-subagent
+  // rc.1 README Child presets + agent-preset-registry README/register 正门）：装载期
+  // 批量预注册（每位启用专家一行：dsh-persona persona 段 + expert-restrict 白名单段）
+  // + recruit/update/rename/启停增删同步（presetSyncHook 挂 refresh 完成回调与显式
+  // 同步点）。agentPresets.register 缺席 = warn 降级（委派侧 presetProbe 同缺席——
+  // 请求面恒携 agentPreset，官方启动时对未知 id fail-loud），不阻载插件。
+  const presetsFace = ctx.agentPresets;
+  let presetSync: ExpertPresetSync | undefined;
+  if (typeof presetsFace?.register === "function") {
+    presetSync = new ExpertPresetSync({
+      presets: presetsFace as PresetRegistryFace,
+      knownTools: createKnownToolsProbe(
+        (scope?: object) =>
+          scope === undefined ? toolsFace.schemas?.() : toolsFace.schemas?.(scope),
+        () => ctx.agentPresets,
+      ),
+      diag,
+    });
+    presetSyncHook = () => {
+      if (toolRegistry !== undefined) void presetSync!.syncFrom(toolRegistry);
+    };
+    ctx.effect(() => () => void presetSync!.disposeAll());
+    // 装载期批量预注册（首批启用专家全集；失败仅逐专家 warn，不阻载）
+    presetSyncHook();
+  } else {
+    diag("warn", "expert-squad-agentpresets-register-absent", "ctx.agentPresets.register absent——专家 preset 行未同步（专家委派将诚实降级）");
+  }
+  // 委派 preset 在场探针（可用 preset id 名册，每派发现调禁 memoize——AGENTS 1.6；
+  // broken 行剔除；list 失败 = undefined 无校验直派）。register 缺席 = 探针缺席同径。
+  const presetProbe =
+    presetsFace !== undefined && typeof presetsFace.list === "function"
+      ? async (): Promise<readonly string[] | undefined> => {
+          try {
+            const all = await presetsFace.list();
+            return all.filter((p) => !p.broken).map((p) => p.id);
+          } catch {
+            return undefined;
+          }
+        }
+      : undefined;
   const subagents = ctx.subagents;
-  if (typeof subagents?.startContinuable !== "function") {
+  if (typeof subagents?.startActivation !== "function") {
     delegateAssembly = {
       status: "degraded",
       reason: subagents === undefined ? "subagents-absent" : "shape-mismatch",
@@ -571,16 +623,8 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       subagents,
       panel,
       provider: "spawn",
-      // 白名单平台求交探针（bug 3cb118cf / e3b045dc）：无参 schemas() 是 global 单层
-      // 投影（官方工具在 preset scope 层，恰好只剩本插件 expert 域工具 → 求交空集炸
-      // 委派）——改接全模式并集面 createKnownToolsProbe（global ∪ 逐 preset scope 租约，
-      // bug 6337a936 同径）。每派发现调禁 memoize（AGENTS 1.6）；缺席面 fail-soft
-      // （空并集 = 不裁剪；金丝雀防护保留兜底）。
-      knownTools: createKnownToolsProbe(
-        (scope?: object) =>
-          scope === undefined ? toolsFace.schemas?.() : toolsFace.schemas?.(scope),
-        () => ctx.agentPresets,
-      ),
+      presetProbe,
+      diag,
     });
     delegateAssembly = { status: "registered" };
   }

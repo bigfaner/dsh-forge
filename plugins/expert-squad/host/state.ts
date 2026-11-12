@@ -5,7 +5,7 @@
 // canonical cwd 判据同源。取值点（D4 钉死）：tool 面传调用 agent scope 的 cwd，
 // fetch 路由传 client 显式 workspace 参数（workspaceParamSchema zod 门）。
 
-import type { Domain } from '@deepseek-ai/dsh-storage-domain'
+import type { Domain, DomainSpec, DomainTableSpec } from '@deepseek-ai/dsh-storage-domain'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import { realpathNormalize } from '@deepseek-ai/dsh-workspace'
 import { z } from 'zod'
@@ -23,11 +23,19 @@ export const disabledRecordSchema = z.object({
 })
 export type DisabledRecord = z.infer<typeof disabledRecordSchema>
 
+/** 自有 domain 声明类型（显式表型注解——storage 0.2.2-rc.1 类型深化下，字面量
+ *  推导式声明触发 TS2589 深实例化；显式 DomainTableSpec 注解短路推导链）。 */
+interface ExpertSquadStateDomainSpec extends DomainSpec {
+  readonly name: typeof EXPERT_STATE_DOMAIN
+  readonly version: 1
+  readonly tables: { readonly [EXPERT_STATE_TABLE]: DomainTableSpec<string, DisabledRecord> }
+}
+
 /** 自有 domain 声明：single 布局（key 含路径分隔符与盘符，保持 opaque）。 */
-export const expertSquadStateDomainSpec = defineDomain({
+export const expertSquadStateDomainSpec: ExpertSquadStateDomainSpec = defineDomain({
   name: EXPERT_STATE_DOMAIN,
   version: 1,
-  tables: { [EXPERT_STATE_TABLE]: domainTable(disabledRecordSchema) },
+  tables: { [EXPERT_STATE_TABLE]: domainTable<string, DisabledRecord>(disabledRecordSchema) },
 })
 
 /** fetch 路由 workspace 参数 zod 门（D4：client 显式携带，杜绝进程级 cwd 串域）。 */

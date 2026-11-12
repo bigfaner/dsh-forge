@@ -1,12 +1,12 @@
-// delegate_expert 通道一委派工具测试（tech-design §6 通道一时序 / B2 / §10.1）：
-// 结构镜像对照官方 dsh-tools register 门；行为面——组装内核 → startContinuable
-// 正门（请求面逐字承载 persona/toolFilter/model，parent/signal 透传）、接受点
-// 即结算返回 childId、禁用/不存在 fail-loud、subagent/end 监听仅驱动面板状态。
-// 负向用例：白名单外工具在子会话不可见且调用被拒（官方创建窗口语义镜像）、
-// persona 注入通道唯一（无撞名）。
+// delegate_expert 通道一委派工具测试（fix-1 agentPreset 通道重设计）：
+// 结构镜像对照官方 dsh-tools register 门；行为面——组装内核 → startActivation
+// 正门（request.agentPreset = expert-<key>，delivery = parent，parent/signal 透传，
+// 接受点即结算返回 childId）、禁用/不存在 fail-loud、subagent/end 监听仅驱动面板。
+// preset 行缺席/失败 = 该专家委派诚实降级（emitDiag warn + 请求面不携 agentPreset +
+// 结果面 degradedNote），不阻载插件。
 
-import { describe, expect, it } from "vitest";
-import type { ContinuableStartSpec } from "@deepseek-ai/dsh-subagent";
+import { describe, expect, it, vi } from "vitest";
+import type { SubagentActivationSpec } from "@deepseek-ai/dsh-subagent";
 import {
   DELEGATE_EXPERT_TOOL_NAME,
   ExpertRunPanelState,
@@ -65,15 +65,15 @@ function makeExec(overrides?: Partial<DelegateRunContext>): DelegateRunContext {
   return { agent: parentAgent, signal, ...overrides };
 }
 
-/** 捕获 startContinuable 请求的 fake 正门（接受点即 resolve）。 */
+/** 捕获 startActivation 请求的 fake 正门（发布点即 resolve）。 */
 function makeSubagents() {
-  const specs: ContinuableStartSpec[] = [];
+  const specs: SubagentActivationSpec[] = [];
   let rejectNext: Error | undefined;
   const face: SubagentsStartFace = {
-    async startContinuable(spec) {
+    async startActivation(spec) {
       if (rejectNext) throw rejectNext;
       specs.push(spec);
-      return { childId: "child-1", messageId: "msg-1" };
+      return { childId: "child-1", messageId: "msg-1" } as never;
     },
   };
   return {
@@ -85,7 +85,13 @@ function makeSubagents() {
   };
 }
 
-function makeTool(entries: ExpertEntry[] = [baseEntry]) {
+function makeTool(
+  entries: ExpertEntry[] = [baseEntry],
+  opts?: {
+    presetProbe?: () => Promise<readonly string[] | undefined>;
+    diag?: (level: string, event: string, message: string) => void;
+  },
+) {
   const subagents = makeSubagents();
   const panel = new ExpertRunPanelState();
   const tool = createDelegateExpertTool({
@@ -93,6 +99,8 @@ function makeTool(entries: ExpertEntry[] = [baseEntry]) {
     subagents: subagents.face,
     panel,
     provider: "spawn",
+    ...(opts?.presetProbe !== undefined ? { presetProbe: opts.presetProbe } : {}),
+    ...(opts?.diag !== undefined ? { diag: opts.diag as never } : {}),
   });
   return { tool, subagents, panel };
 }
@@ -135,11 +143,11 @@ describe("delegate_expert 结构镜像", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 派发行为（B2：接受点即结算）
+// 派发行为（agentPreset 注入通道）
 // ---------------------------------------------------------------------------
 
 describe("delegate_expert 派发", () => {
-  it("组装内核 → startContinuable：persona/toolFilter/model 逐字承载，parent/signal 透传，接受点结算返回 childId", async () => {
+  it("组装内核 → startActivation：request.agentPreset = expert-<key>、delivery = parent、model → agentOptions、parent/signal 透传", async () => {
     const entry: ExpertEntry = { ...baseEntry, provider: "anthropic", model: "sonnet" };
     const { tool, subagents, panel } = makeTool([entry]);
     const result = (await tool.execute(
@@ -158,12 +166,14 @@ describe("delegate_expert 派发", () => {
     expect(spec.provider).toBe("spawn"); // 派发面由装配钉死
     expect(spec.label).toBe("评审 dispatch.ts");
     expect(spec.signal).toBe(signal);
+    expect(spec.delivery).toBe("parent"); // 结算通知回父会话（模型可见）
     expect(spec.request.parent).toBe(parentAgent);
-    expect(spec.request.persona).toContain("code-reviewer");
-    expect(spec.request.persona).toContain("## 职责");
-    expect(spec.request.toolFilter).toEqual({ allow: ["read", "grep"] });
+    expect(spec.request.agentPreset).toBe("expert-code-reviewer");
     expect(spec.request.agentOptions).toEqual({ provider: "anthropic", model: "sonnet" });
     expect(spec.request.prompt).toEqual([{ type: "text", text: "评审 dispatch.ts" }]);
+    // 请求面零 persona/toolFilter 键（rc.1 字段集已移除——承载面唯一 = preset 行）
+    expect("persona" in spec.request).toBe(false);
+    expect("toolFilter" in spec.request).toBe(false);
     // 派发点写入面板 dispatched 行
     expect(panel.list()).toEqual([
       { childId: "child-1", expert: "code-reviewer", messageId: "msg-1" },
@@ -174,6 +184,14 @@ describe("delegate_expert 派发", () => {
     const { tool, subagents } = makeTool();
     await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
     expect("agentOptions" in subagents.specs[0]!.request).toBe(false);
+  });
+
+  it("preset 在场探针含本专家 preset id = 正常携带 agentPreset", async () => {
+    const { tool, subagents } = makeTool([baseEntry], {
+      presetProbe: async () => ["preset-headhunter", "expert-code-reviewer"],
+    });
+    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
+    expect(subagents.specs[0]!.request.agentPreset).toBe("expert-code-reviewer");
   });
 
   it("非法参数 fail-loud（ExpertToolError 语义——消息含原因）", async () => {
@@ -192,7 +210,47 @@ describe("delegate_expert 派发", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 负向：禁用 fail-loud / 白名单外不可见且拒执行 / persona 注入唯一
+// 诚实降级：preset 行缺席/失败 = emitDiag warn + 不携 agentPreset，不阻载
+// ---------------------------------------------------------------------------
+
+describe("delegate_expert preset 缺席诚实降级", () => {
+  it("探针返回的名册不含本专家 preset = warn + 请求面不携 agentPreset + 结果面 degradedNote", async () => {
+    const diag = vi.fn<(level: string, event: string, message: string) => void>();
+    const { tool, subagents } = makeTool([baseEntry], {
+      presetProbe: async () => ["preset-headhunter"], // 专家 preset 行缺席（装载失败/未同步）
+      diag: diag as never,
+    });
+    const result = (await tool.execute(
+      { expert: "code-reviewer", task: "t" },
+      makeExec(),
+    )) as { dispatched: boolean; degradedNote?: string };
+    expect(result.dispatched).toBe(true);
+    expect(result.degradedNote).toContain("expert-code-reviewer");
+    expect("agentPreset" in subagents.specs[0]!.request).toBe(false);
+    expect(diag).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("expert-squad-preset"),
+      expect.stringContaining("expert-code-reviewer"),
+    );
+  });
+
+  it("探针缺席（agentPresets 面不可用）= 无校验直派（携带 agentPreset，官方启动时 fail-loud）", async () => {
+    const { tool, subagents } = makeTool([baseEntry], {
+      presetProbe: async () => undefined,
+    });
+    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
+    expect(subagents.specs[0]!.request.agentPreset).toBe("expert-code-reviewer");
+  });
+
+  it("无探针（deps 未接）= 同直派（兼容非宿主调用方）", async () => {
+    const { tool, subagents } = makeTool();
+    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
+    expect(subagents.specs[0]!.request.agentPreset).toBe("expert-code-reviewer");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 负向：禁用 fail-loud / 不存在 fail-loud
 // ---------------------------------------------------------------------------
 
 describe("delegate_expert 负向用例", () => {
@@ -209,101 +267,6 @@ describe("delegate_expert 负向用例", () => {
     await expect(
       tool.execute({ expert: "no-such", task: "t" }, makeExec()),
     ).rejects.toThrow(new ExpertNotFoundError("no-such"));
-  });
-
-  it("白名单外工具：官方创建窗口语义镜像——子会话 prompt schema 不可见且调用被拒", async () => {
-    const { tool, subagents } = makeTool();
-    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
-    const spec = subagents.specs[0]!;
-    // 官方契约（dsh-subagent types.d.ts SubagentStartRequest.toolFilter）：
-    // in-process 后端以 scoped tools.restrict 落地——白名单外的工具从子会话
-    // prompt 消失且拒绝执行（one visibility）。镜像该语义做负向断言：
-    const allow = new Set(spec.request.toolFilter.allow);
-    const globalTools = ["read", "grep", "edit", "write"];
-    const visibleInChild = (name: string) => allow.has(name); // 创建窗口 restrict 后的可见面
-    const refuseExecution = (name: string) => !allow.has(name); // 同一集合的拒执行面
-    expect(visibleInChild("edit")).toBe(false); // 白名单外 → prompt 不可见
-    expect(visibleInChild("write")).toBe(false);
-    expect(refuseExecution("edit")).toBe(true); // 白名单外 → 调用被拒
-    expect(refuseExecution("read")).toBe(false); // 白名单内 → 正常
-    // 且白名单为档案字段原样（无二次过滤、无旁路追加）
-    expect([...allow].sort()).toEqual(["grep", "read"]);
-    expect(globalTools.filter(visibleInChild).sort()).toEqual(["grep", "read"]);
-  });
-
-  it("persona 注入通道唯一：请求面仅 SubagentStartRequest.persona 一处承载（无撞名负向断言）", async () => {
-    const { tool, subagents } = makeTool();
-    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
-    const spec = subagents.specs[0]!;
-    // persona 键在序列化请求面恰好出现一次——不存在经 systemPrompt.section 等
-    // 其他缝的第二次人设段注册（官方 deployment:persona-prefix 子 scope 唯一注入）
-    const serialized = JSON.stringify(spec.request);
-    const occurrences = serialized.match(/"persona"/g)?.length ?? 0;
-    expect(occurrences).toBe(1);
-    expect(spec.request.persona).toBeTypeOf("string");
-    expect(serialized).not.toContain("systemPrompt");
-    expect(serialized).not.toContain("persona-prefix"); // 前缀段注册归官方机械，本层零接触
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 白名单平台求交（bug 3cb118cf：档案 tools 硬编码 pwsh，Mac 无此工具拆委派）
-// ---------------------------------------------------------------------------
-
-describe("delegate_expert 白名单求交", () => {
-  const macTools = ["read", "grep", "edit", "bash"]; // Mac 真机注册面：无 pwsh，有 bash
-
-  function makeToolWithKnownTools(
-    entry: ExpertEntry,
-    knownTools?: () => readonly string[],
-  ) {
-    const subagents = makeSubagents();
-    const tool = createDelegateExpertTool({
-      registry: makeService([entry]),
-      subagents: subagents.face,
-      panel: new ExpertRunPanelState(),
-      provider: "spawn",
-      ...(knownTools !== undefined ? { knownTools } : {}),
-    });
-    return { tool, subagents };
-  }
-
-  it("bug: 档案白名单含 pwsh 且真机未注册 pwsh 时，解析为在场的同族 shell（bash）", async () => {
-    const { tool, subagents } = makeToolWithKnownTools(
-      { ...baseEntry, tools: ["read", "pwsh"] },
-      () => macTools,
-    );
-    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
-    expect(subagents.specs[0]!.request.toolFilter).toEqual({ allow: ["read", "bash"] });
-  });
-
-  it("bug: 白名单含真机不存在的非 shell 名时 fail-soft 剔除，不炸 restrict", async () => {
-    const { tool, subagents } = makeToolWithKnownTools(
-      { ...baseEntry, tools: ["read", "grep", "no-such-tool"] },
-      () => macTools,
-    );
-    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
-    expect(subagents.specs[0]!.request.toolFilter).toEqual({ allow: ["read", "grep"] });
-  });
-
-  it("bug: 白名单解析后为空集 fail-loud（全未知 = 档案配置错误，不派发空白名单）", async () => {
-    const { tool, subagents } = makeToolWithKnownTools(
-      { ...baseEntry, tools: ["no-such-tool", "another-missing"] },
-      () => macTools,
-    );
-    await expect(
-      tool.execute({ expert: "code-reviewer", task: "t" }, makeExec()),
-    ).rejects.toThrow(/empty tool allow-list/);
-    expect(subagents.specs).toHaveLength(0);
-  });
-
-  it("无 knownTools 面（探针缺席）不裁剪——白名单原样承载（兼容非宿主调用方）", async () => {
-    const { tool, subagents } = makeToolWithKnownTools({
-      ...baseEntry,
-      tools: ["read", "pwsh"],
-    });
-    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
-    expect(subagents.specs[0]!.request.toolFilter).toEqual({ allow: ["read", "pwsh"] });
   });
 });
 
@@ -338,6 +301,22 @@ describe("subagent/end 监听", () => {
 
     dispose();
     expect(listeners).toHaveLength(0); // disposer 退订
+  });
+
+  it("activation 无 inbox 消息 id（messageId 缺席）= 面板行空串兜底（dispatch 侧 `?? \"\"`）", async () => {
+    const subagents = makeSubagents();
+    subagents.face.startActivation = async () => ({ childId: "child-2" }) as never;
+    const panel = new ExpertRunPanelState();
+    const tool = createDelegateExpertTool({
+      registry: makeService([baseEntry]),
+      subagents: subagents.face,
+      panel,
+      provider: "spawn",
+    });
+    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
+    expect(panel.list()).toEqual([
+      { childId: "child-2", expert: "code-reviewer", messageId: "" },
+    ]);
   });
 });
 
