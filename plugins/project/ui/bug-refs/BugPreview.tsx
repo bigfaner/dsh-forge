@@ -1,7 +1,7 @@
 // Bug 台账右栏预览件（定位：业务视图——composer-bug-reference 1.3）：消息中 bug chip
 // 点击 → source.openReference 官方路由 → 本件作为 `sidebar.right.pane.tab` keyed
-// 'dswf-bug' 占用者呈现（multiple + 地址去重——同 dswf-doc 资源型先例，plugin.ts 同源
-// 登记面）。数据 = bugs.list 现查（openReference 时点非 pick 时点——预览恒见最新台账）；
+// 'dswf-bug' 占用者呈现（multiple + 地址去重——同 dswf-doc 资源型先例，ui/official-seams.ts
+// 同源登记面）。数据 = bugs.list 现查（openReference 时点非 pick 时点——预览恒见最新台账）；
 // 查询失败/未命中 = 缺省态不崩溃。投影 = BugCard 全量：摘要行 + 状态·错误类型徽标 +
 // 五字段 kv 区（Bug/Trigger/Expected/Actual/Suspected）+ 三分支——fixed 证据区
 // commit/worktree/branch、unresolved 未修原因、open 无证据区。样式沿 bug-dialog.css
@@ -14,9 +14,9 @@ import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc.js'
 import { TabInfoReader, type UseDockTabInfoMirror } from './dock-tab-mirrors.js'
 import './bug-preview.css'
 
-/** Bug 台账 tab 类型 kind（= keyed body dispatch 键；plugin.ts BUG_TAB_KIND 字面量同源镜像） */
+/** Bug 台账 tab 类型 kind（= keyed body dispatch 键；ui/official-seams.ts BUG_TAB_KIND 字面量同源 pin） */
 export const DSWF_BUG_TAB_KIND = 'dswf-bug'
-/** Bug 台账资源地址前缀（dsh-resource:// 资源面——plugin.ts BUG_ADDRESS_PREFIX 字面量同源镜像） */
+/** Bug 台账资源地址前缀（dsh-resource:// 资源面——ui/official-seams.ts BUG_ADDRESS_PREFIX 字面量同源 pin） */
 export const DSWF_BUG_ADDRESS_PREFIX = `dsh-resource://${DSWF_BUG_TAB_KIND}/`
 
 /** Bug tab 地址（= 去重键 contentId：同 projectId+bugId 同 tab、异地址新开） */

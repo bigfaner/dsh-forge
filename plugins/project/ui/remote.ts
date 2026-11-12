@@ -1,5 +1,4 @@
-// ui/remote.ts —— forge:* 八族 Typert client 贡献（plugin-project 1.38——UI 数据通路正典
-// 化：官方 ctx.remote.<ns> 第一等通道，弃 forge:* 自造通道主路径）。形态 = 官方 typert
+// ui/remote.ts —— forge:* 六族 Typert client 贡献（官方 ctx.remote.<ns> 第一等通道）。形态 = 官方 typert
 // generator 产物 rc.2 线手写同构（dsh-api-job-controller lib/typert.remote-client.js 实证：
 // 纯字面量 { package, descriptors }，无 createTypertRemoteInfo——rc.2 runtime 无 generator
 // 依赖，零 zod 工厂外露）。wire 名单源 = host 半方法签名（gateway SRC 发现路径按形参名

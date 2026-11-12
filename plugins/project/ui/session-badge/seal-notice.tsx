@@ -6,7 +6,7 @@
 // WorktreeFaces 尾段拆出件亦在本文件：seal 快照单源（WorktreeSealPhase + useWorktreeSeal
 // ——chip 失效态与 notice/占位两提示通道共读）+ chat 列顶部 portal（ChatFlowTop）+
 // 封存 overlay 挂载面 ForgeWorktreeSealOverlay + branch 漂移 banner。
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { WorktreeSealResult } from '@dsh-forge/contracts'
 import { IconWarningTriangleOutlineRegular } from '../icons.js'
@@ -19,6 +19,28 @@ export interface SealNoticeProps {
   readonly onClose: () => void
 }
 
+/** 警告 banner 共享样式（三通道同款形态——borderTop/radius 差异各件覆写） */
+const noticeBannerBase: CSSProperties = {
+  display: 'flex',
+  gap: 10,
+  alignItems: 'flex-start',
+  border: '0.5px solid var(--dsw-alias-state-warn-primary)',
+  padding: '10px 14px',
+  marginBottom: 12,
+  fontSize: 13,
+  lineHeight: '20px',
+  color: 'var(--dsw-alias-label-primary)',
+  background: 'color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent)',
+}
+const noticeIconStyle: CSSProperties = { display: 'inline-flex', color: 'var(--dsw-alias-state-warn-primary)' }
+const noticeCloseStyle: CSSProperties = {
+  marginLeft: 'auto',
+  color: 'var(--dsw-alias-label-tertiary)',
+  cursor: 'pointer',
+  fontSize: 12,
+  lineHeight: '20px',
+}
+
 /**
  * 封存 notice banner（警告色描边 + 8% 警告底 + 上边线免除——紧贴会话头分界线置顶）。
  * data 锚：data-dswt-seal-notice。
@@ -28,22 +50,9 @@ export function SealNotice({ worktreeName, onClose }: SealNoticeProps): ReactNod
     <div
       data-dswt-seal-notice=""
       role="status"
-      style={{
-        display: 'flex',
-        gap: 10,
-        alignItems: 'flex-start',
-        border: '0.5px solid var(--dsw-alias-state-warn-primary)',
-        borderTop: 'none',
-        borderRadius: '0 0 12px 12px',
-        padding: '10px 14px',
-        marginBottom: 12,
-        fontSize: 13,
-        lineHeight: '20px',
-        color: 'var(--dsw-alias-label-primary)',
-        background: 'color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent)',
-      }}
+      style={{ ...noticeBannerBase, borderTop: 'none', borderRadius: '0 0 12px 12px' }}
     >
-      <span style={{ display: 'inline-flex', color: 'var(--dsw-alias-state-warn-primary)' }} aria-hidden="true">
+      <span style={noticeIconStyle} aria-hidden="true">
         <IconWarningTriangleOutlineRegular size={15} />
       </span>
       <span>
@@ -56,13 +65,7 @@ export function SealNotice({ worktreeName, onClose }: SealNoticeProps): ReactNod
         aria-label="关闭提示"
         data-dswt-seal-notice-close=""
         onClick={onClose}
-        style={{
-          marginLeft: 'auto',
-          color: 'var(--dsw-alias-label-tertiary)',
-          cursor: 'pointer',
-          fontSize: 12,
-          lineHeight: '20px',
-        }}
+        style={noticeCloseStyle}
       >
         ✕
       </span>
@@ -110,21 +113,9 @@ export function BranchDriftNotice({ bindBranch, branch }: BranchDriftNoticeProps
     <div
       data-dswt-bind-drift-notice=""
       role="status"
-      style={{
-        display: 'flex',
-        gap: 10,
-        alignItems: 'flex-start',
-        border: '0.5px solid var(--dsw-alias-state-warn-primary)',
-        borderRadius: 12,
-        padding: '10px 14px',
-        marginBottom: 12,
-        fontSize: 13,
-        lineHeight: '20px',
-        color: 'var(--dsw-alias-label-primary)',
-        background: 'color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent)',
-      }}
+      style={{ ...noticeBannerBase, borderRadius: 12 }}
     >
-      <span style={{ display: 'inline-flex', color: 'var(--dsw-alias-state-warn-primary)' }} aria-hidden="true">
+      <span style={noticeIconStyle} aria-hidden="true">
         <IconWarningTriangleOutlineRegular size={15} />
       </span>
       <span>
@@ -155,21 +146,9 @@ export function StaleSelectionNotice({ worktreeName, onClose }: StaleSelectionNo
     <div
       data-dswt-stale-selection-notice=""
       role="status"
-      style={{
-        display: 'flex',
-        gap: 10,
-        alignItems: 'flex-start',
-        border: '0.5px solid var(--dsw-alias-state-warn-primary)',
-        borderRadius: 12,
-        padding: '10px 14px',
-        marginBottom: 12,
-        fontSize: 13,
-        lineHeight: '20px',
-        color: 'var(--dsw-alias-label-primary)',
-        background: 'color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent)',
-      }}
+      style={{ ...noticeBannerBase, borderRadius: 12 }}
     >
-      <span style={{ display: 'inline-flex', color: 'var(--dsw-alias-state-warn-primary)' }} aria-hidden="true">
+      <span style={noticeIconStyle} aria-hidden="true">
         <IconWarningTriangleOutlineRegular size={15} />
       </span>
       <span>
@@ -182,13 +161,7 @@ export function StaleSelectionNotice({ worktreeName, onClose }: StaleSelectionNo
         aria-label="关闭提示"
         data-dswt-stale-selection-notice-close=""
         onClick={onClose}
-        style={{
-          marginLeft: 'auto',
-          color: 'var(--dsw-alias-label-tertiary)',
-          cursor: 'pointer',
-          fontSize: 12,
-          lineHeight: '20px',
-        }}
+        style={noticeCloseStyle}
       >
         ✕
       </span>

@@ -27,11 +27,9 @@ import { createProjectsServicePort, openProjectsDomainDb } from "./assembly/proj
 import { createWorktreeIdentity } from "./assembly/worktree-identity.js";
 import { createBugsService } from "./bugs/service.js";
 import { minimalDirFactsPort } from "./dirs/dir-facts.js";
-// 1.17 批二「卸旧装新」：本包单行装载 = 五缝注册 + worktree 域插件（gitWorktree 能力
-// 服务 provide）——旧 @dsh-forge/git-worktree 行退役后，overlay 注行门只挂本包，
-// 能力面在此组合保持外部行为不变（git 缺席 fail-soft 不生效语义归插件启动检测）。
+// 单行装载 = 五缝注册 + worktree 域插件（gitWorktree 能力服务 provide）——能力面在此
+// 组合保持外部行为不变（git 缺席 fail-soft 不生效语义归插件启动检测）。
 import worktreePlugin, {
-  createWorktreeRpcService,
   GIT_WORKTREE_IDENTITY_SERVICE,
   GIT_WORKTREE_SERVICE,
   type GitWorktreeServiceFace,
@@ -49,14 +47,14 @@ import {
   type WorktreeRpcEnvelope,
 } from "./assembly/channels.js";
 import { WORKTREE_RPC_METHODS, invalidateResolveCaches, type WorktreeRpcService } from "./worktrees/rpc-service.js";
-// 1.38 UI 数据通路正典化：八族 forge:* 收编 Typert namespace（官方 UI 数据第一等通道）——
-// 控制器注册进根 ctx（gateway SRC 发现面 = 根 ctx reflect.props）；1.33 connection.rpc/
-// fetch 过渡缝（official-rpc.ts）随本批退役，forge:settings 族归 configForms 自有 namespace。
+// forge:* 六族收编 Typert namespace（官方 UI 数据第一等通道——控制器注册进根 ctx，
+// gateway SRC 发现面 = 根 ctx reflect.props）；forge:settings 族归 configForms 自有 namespace。
 import {
   registerForgeTypertRemotes,
   type ForgeTypertDeps,
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
+import { isGitWorktreeServiceFace, createWorktreesResident, type WorktreesRegistryFace } from "./assembly/worktrees-port.js";
 import { DIAG_EVENT, emitDiagOrFallback, type DiagEventPayload } from "@dsh-forge/lib-diag";
 
 /** cordis 插件装载形态（loader 只认 default 导出函数）。 */
@@ -117,8 +115,8 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     });
 
   // project.db 打开（装配期一次；I4 拒开/文件异常 = fail-soft 退兜底——设计 §6 劣形②同径）。
-  // fix-7 单装缺省装配：显式 config > 缺省值两级解析——home 缺省 = env DSH_HOME
-  // （官方宿主注行无 config 时插件自装配，不再恒退 ErrUnavailable 兜底）。
+  // 显式 config > 缺省值两级解析——home 缺省 = env DSH_HOME（官方宿主注行无 config 时
+  // 插件自装配，不再恒退 ErrUnavailable 兜底）。
   const home = config.home ?? process.env.DSH_HOME;
   let domainDb: ReturnType<typeof openProjectsDomainDb> | undefined;
   if (home !== undefined) {
@@ -132,10 +130,9 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     }
   }
 
-  // fix-8 单装装配补全：registry 缺省 = ctx.workspaceRegistry 具名服务取法——具名服务
-  // 消费以 inject 声明承担（fix-7 残余：inject=[] 被 cordis inject 门守卫拒恒 undefined
-  // ——009 实证）；声明后门内可达，运行期存在性检查仍承担 fail-soft（服务缺席 = undefined
-  // → projects 退兜底拒）。
+  // registry 缺省 = ctx.workspaceRegistry 具名服务取法——具名服务消费以 inject 声明承担
+  // （inject=[] 会被 cordis inject 门守卫拒恒 undefined）；声明后门内可达，运行期存在性
+  // 检查仍承担 fail-soft（服务缺席 = undefined → projects 退兜底拒）。
   const defaultRegistry = (): RegistryFace | undefined => {
     try {
       return face.workspaceRegistry ?? undefined;
@@ -144,104 +141,32 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     }
   };
 
-  // fix-8 单装装配补全：gitWorktree 能力服务惰性取法（git 在场性异步探测后由
-  // worktreePlugin provide——注入缝 reflect 防御读取，worktrees/index.ts 同配方）。
+  // gitWorktree 能力服务惰性取法（git 在场性异步探测后由 worktreePlugin provide——
+  // 注入缝 reflect 防御读取，worktrees/index.ts 同配方）。
   const readGitWorktreeCapability = (): GitWorktreeServiceFace | undefined => {
     try {
       const raw: unknown = face.reflect?.get?.(GIT_WORKTREE_SERVICE);
-      return raw !== null &&
-        typeof raw === "object" &&
-        typeof (raw as GitWorktreeServiceFace).getExtensionPoints === "function"
-        ? (raw as GitWorktreeServiceFace)
-        : undefined;
+      return isGitWorktreeServiceFace(raw) ? raw : undefined;
     } catch {
       return undefined;
     }
   };
 
-  // fix-8 单装装配补全：identity 扩展点自注入（proposal「单装形态」——「宿主注入 provider」
-  // 的注入者即包自身装配，读自身 project.db 关系表）。worktrees 域扩展点解析链
-  // （resolveExtensionPoints）消费 forgeWorktreeIdentity 服务缝——单装无 boot/child.ts 注入
-  // 装配时恒退默认 provider（resolveProject 恒 null → list isGit:false，009 铁证径）。
-  // forge 宿主侧（assembly/host-side.ts runProfile 后 provide 同键）后注入即覆写——两侧同源
-  // project.db 行集语义等价。db 缺席 = 零 provide（worktrees 退独立模式默认扩展点）。
-  if (domainDb !== undefined) {
-    try {
-      const provide = (face as { provide?: (name: string, value?: unknown) => unknown }).provide;
-      if (typeof provide === "function") {
-        const identityProjects = createProjectsServicePort({
-          domainDb: domainDb,
-          registry: config.registry ?? defaultRegistry(),
-          tasksHome: config.tasksHome,
-          onDiag: undefined,
-        });
-        provide.call(
-          face,
-          GIT_WORKTREE_IDENTITY_SERVICE,
-          createWorktreeIdentity(identityProjects, undefined, diag),
-        );
-      }
-    } catch (cause) {
-      diag(`[project-seams] forgeWorktreeIdentity 自注入失败（fail-soft 退独立模式）：${String(cause)}`);
-    }
-  }
+  // identity 扩展点自注入（单装形态——「宿主注入 provider」的注入者即包自身装配，读
+  // 自身 project.db 关系表）。worktrees 域扩展点解析链（resolveExtensionPoints）消费
+  // forgeWorktreeIdentity 服务缝——单装无 boot/child.ts 注入装配时恒退默认 provider
+  // （resolveProject 恒 null → list isGit:false）。forge 宿主侧（assembly/host-side.ts
+  // runProfile 后 provide 同键）后注入即覆写——两侧同源 project.db 行集语义等价。
+  // db 缺席 = 零 provide（worktrees 退独立模式默认扩展点）。
+  provideWorktreeIdentity(face, domainDb, config, defaultRegistry(), diag);
 
-  // fix-8 单装装配补全：worktrees 常驻工厂（fix-7 残余——deps 无 worktrees 常驻工厂恒
-  // 独立兜底，真 git 仓 isGit:false 即铁证）。域本体 = createWorktreeRpcService（惰性取
-  // gitWorktree 能力 + registry），RPC 面 remove → 契约 delete 动词投影响合
-  // WorktreeServicePort 全量签名（getWorktreeDir/resolveProject 快照投影同缝语义）。
-  // 1.33：域本体实例惰性单例（官方缝注册与 channels face 缝共用同实例——resolve 缓存
-  // 失效单点语义不分裂）， narrowed port 仍按 WorktreeServicePort 投影。
-  let worktreeSvcSingleton: WorktreeRpcService | undefined;
-  // sessionPersistence root 锚定惰性取法（1.32 复测·官方 web 宿主形态——seal 判定
-  // header.cwd 读取依赖官方 persistence；provide 于根 ctx，插件 ctx 属性访问可能拒绝/
-  // 缺席。逐调用现查 Proxy 转发——AGENTS 1.6 检测永不缓存；缺席 = open 抛错 → seal
-  // fail-soft 退独立模式，不炸判定链）。
-  const typertRootFace = ((face as { root?: unknown }).root ?? face) as { get?: (name: string) => unknown };
-  const rootServiceOf = (name: string): unknown => {
-    try {
-      const value = typertRootFace.get?.(name);
-      return value === undefined || value === null ? undefined : value;
-    } catch {
-      return undefined;
-    }
-  };
-  const lazySessionPersistence = new Proxy(
-    {},
-    {
-      get: (_target, prop) => {
-        const svc = rootServiceOf("sessionPersistence") as Record<string | symbol, unknown> | undefined;
-        if (svc === undefined) return undefined;
-        const value = svc[prop];
-        return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(svc) : value;
-      },
-    },
-  ) as Parameters<typeof createWorktreeRpcService>[0]["sessionPersistence"];
-  const worktreeSvcOnce = (): WorktreeRpcService =>
-    (worktreeSvcSingleton ??= createWorktreeRpcService({
-      gitWorktree: readGitWorktreeCapability,
-      // config.registry = 宿主注入的官方 workspaceRegistry face（官方实体同满足 worktrees 域
-      // WorkspaceRegistryFace 投影——单点显式收窄，非盲转）。
-      workspaceRegistry: (config.registry as RegistryFace | undefined) ?? defaultRegistry(),
-      sessionPersistence: lazySessionPersistence,
-      warn: diag,
-    }));
-  const worktreesResident = (): WorktreeServicePort => {
-    const svc = worktreeSvcOnce();
-    const port: WorktreeServicePort = {
-      ...svc,
-      delete: (request) => svc.remove(request),
-      getWorktreeDir: (projectRoot: string) => `${projectRoot}/.forge/worktrees`,
-      resolveProject: async (cwd: string) => {
-        const { resolved } = await svc.resolve({ paths: [cwd] });
-        const entry = resolved[0];
-        return entry
-          ? { projectId: entry.projectId, projectRoot: entry.projectRoot, isGit: true }
-          : null;
-      },
-    };
-    return port;
-  };
+  // worktrees 常驻工厂（组装面 = assembly/worktrees-port.ts——惰性单例与 Port 投影归位）
+  const worktreesResident = createWorktreesResident({
+    gitWorktree: readGitWorktreeCapability,
+    workspaceRegistry: (config.registry as WorktreesRegistryFace | undefined) ?? defaultRegistry(),
+    rootService: rootServiceOf(face),
+    onDiag: diag,
+  });
 
   // 五缝注册（常驻 + 兜底 + 覆写位择优——零域逻辑，全部委托域本体/组装面）
   const deps: ProjectSeamDeps = (() => {
@@ -260,8 +185,8 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       onDiag: diag,
     };
     if (db === undefined) return base;
-    // fix-7 单装缺省装配：bugs 依赖兜底接真实现——config.bugsDeps 缺席时自 project.db 派生
-    //（归属键 = projects 行 project_key；主路径 = workspaces main 行 ws_path），不再退空实现。
+    // bugs 依赖兜底接真实现——config.bugsDeps 缺席时自 project.db 派生（归属键 = projects
+    // 行 project_key；主路径 = workspaces main 行 ws_path），不退空实现。
     const bugsDeps = config.bugsDeps ?? {
       resolveProjectKey: (projectId: string): string | null =>
         db.repos.projects.get(projectId)?.projectKey ?? null,
@@ -292,9 +217,9 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   diag(
     `[project-seams] 五缝注册完成：registered=[${registration.registered.join(", ")}] degraded=[${registration.degraded.join(", ")}]`,
   );
-  // 1.38 Typert 遥控器注册（官方 UI 数据第一等通道——控制器注册进根 ctx；诊断 emit 面
+  // Typert 遥控器注册（官方 UI 数据第一等通道——控制器注册进根 ctx；诊断 emit 面
   // 装配桥接：ctx.emit 在场即 typed emit，缺席 emitDiagOrFallback console 兜底。插件域
-  // 进程位恒 main——errors.ts 既有先例同径）。forge:settings 族退役归 configForms（AC③）。
+  // 进程位恒 main——errors.ts 既有先例同径）。
   try {
     const faceEmit = (face as { emit?: unknown }).emit;
     const diagEmit =
@@ -305,7 +230,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     const typertDeps: ForgeTypertDeps = {
       projects: deps.projects,
       bugs: deps.bugs,
-      worktrees: worktreeSvcOnce,
+      worktrees: worktreesSvcOnceOf(worktreesResident),
       proposals: () => face.reflect?.get?.("forgeProposals"),
       features: () => face.reflect?.get?.("forgeFeatures"),
       diag: (line) => {
@@ -325,6 +250,56 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   };
 };
 
+// ── 装配段 helper（模块级纯函数——插件工厂内零内联） ──
+
+/** sessionPersistence root 锚定取法（root ?? face 双探针；缺席/异常 = undefined fail-soft） */
+function rootServiceOf(face: ProjectPluginCtx): (name: string) => unknown {
+  const typertRootFace = ((face as { root?: unknown }).root ?? face) as { get?: (name: string) => unknown };
+  return (name: string): unknown => {
+    try {
+      const value = typertRootFace.get?.(name);
+      return value === undefined || value === null ? undefined : value;
+    } catch {
+      return undefined;
+    }
+  };
+}
+
+/** identity 扩展点自注入（db/provide 缺席 = 零 provide——fail-soft 退独立模式，不炸装配） */
+function provideWorktreeIdentity(
+  face: ProjectPluginCtx,
+  domainDb: ReturnType<typeof openProjectsDomainDb> | undefined,
+  config: ProjectHostConfig,
+  registry: RegistryFace | undefined,
+  diag: SeamDiag,
+): void {
+  if (domainDb === undefined) return;
+  const provide = (face as { provide?: (name: string, value?: unknown) => unknown }).provide;
+  if (typeof provide !== "function") return;
+  try {
+    const identityProjects = createProjectsServicePort({
+      domainDb,
+      registry: config.registry ?? registry,
+      tasksHome: config.tasksHome,
+      onDiag: undefined,
+    });
+    provide.call(face, GIT_WORKTREE_IDENTITY_SERVICE, createWorktreeIdentity(identityProjects, undefined, diag));
+  } catch (cause) {
+    diag(`[project-seams] forgeWorktreeIdentity 自注入失败（fail-soft 退独立模式）：${String(cause)}`);
+  }
+}
+
+/** Typert worktrees 遥控器数据源 = 常驻 Port 投影（与 forge.worktrees 缝同实例同语义） */
+function worktreesSvcOnceOf(resident: () => WorktreeServicePort): () => WorktreeRpcService {
+  let cached: WorktreeRpcService | undefined;
+  return () => {
+    if (cached !== undefined) return cached;
+    const port = resident() as WorktreeRpcService & WorktreeServicePort;
+    cached = port;
+    return port;
+  };
+}
+
 // fix-8：workspaceRegistry 具名服务 inject 声明（cordis 门内取法前置——AGENTS 1.6
 // 具名服务裁决）；五缝仍经 reflect 缝注册，gitWorktree 能力缝走防御读取（异步 provide 面）。
 projectPlugin.inject = ["workspaceRegistry"] as const;
@@ -336,7 +311,7 @@ export function describeSetupFailure(error: unknown): string {
   return errMessage(error);
 }
 
-// ── host 侧装配面出口（1.17 批二卸旧装新：apps/host 只留注册行，域装配符号自本包导入）──
+// ── host 侧装配面出口（apps/host 只留注册行，域装配符号自本包导入）──
 export {
   assembleProjectHostSide,
   type KnowledgeBindingsRefresher,

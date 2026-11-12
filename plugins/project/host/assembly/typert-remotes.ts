@@ -1,5 +1,4 @@
-// host/assembly · typert-remotes.ts —— forge:* 八族 UI 数据通路正典化（plugin-project 1.38，
-// dsh-communication-patterns.md §1-A/§4 终版清单第一条：官方 Typert Remote namespace =
+// host/assembly · typert-remotes.ts —— forge:* 六族 UI 数据通路（官方 Typert Remote namespace =
 // 官方 UI 数据第一等通道；官方 ui-settings-* / ForgePanelController 动态插件先例同形态背书）。
 //
 // 形态（官方 ForgePanelController 先例，experimental/client-ui-forge/src/index.ts:60-160）：
@@ -17,8 +16,7 @@
 // 发现面铁律（侦察定谳）：gateway 只遍历根 ctx reflect.props——控制器经 rootCtx.plugin
 // 注册进根 ctx（插件子 ctx 注册不可见）；生命周期归插件 fiber（dispose 级联拆卸）。
 //
-// 退役对齐（本任务）：本面替代 host/assembly/official-rpc.ts（1.33 connection.rpc/fetch
-// 过渡缝，已删）与 forge:settings 族（偏好值归 configForms 自有 namespace——AC③）。
+// 范围边界：forge:settings 族归 configForms 自有 namespace（偏好值不经本面——AC③）。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
 import type {

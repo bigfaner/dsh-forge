@@ -166,10 +166,35 @@ export {
 // 域激活边、cordis 注入边不声明 configForms——消费点现查（configFormsFaceOf 直取 + reflect
 // 兜底，面形状校验 fail-soft），缺席 = 配置节不注册（settings-section/index.ts
 // registerSettingsSection），不炸组合；slots 为槽注册唯一必需服务（声明边，官方同型先例）。
-// fix-13 缝注册面迁移：官方缝五面（chip/overlay 双行/Bug tab 两段/@ source）随本 bundle
-// apply 期自注册（ui/official-seams.ts）——官方宿主不装载产品壳，注册面归属本插件域
-// （插件可移植性：装配缝归插件，宿主只做 wiring）；inject 声明五官方服务（apply 期等待
-// 合法——官方宿主五服务恒在场；缺一 = apply 不激活，即宿主形状漂移 fail-loud 形态）。
+// 官方缝五面（chip/overlay 双行/Bug tab 两段/@ source）随本 bundle apply 期自注册
+// （ui/official-seams.ts——装配缝归插件域，宿主只做 wiring）；inject 声明五官方服务
+// （apply 期等待合法——官方宿主五服务恒在场；缺一 = apply 不激活，即宿主形状漂移
+// fail-loud 形态）。
+// 六族 namespace 形状校验单源（apply 期子 fiber 解析缝消费）。
+const FORGE_REMOTE_NAMESPACES = [
+  'forgeProjects',
+  'forgeFs',
+  'forgeBugs',
+  'forgeWorktree',
+  'forgeProposals',
+  'forgeFeatures',
+] as const
+
+/** 六族 forge:* namespace 形状校验（全部对象在场 = face 合法；缺一/子 fiber 已拆卸 = undefined 诚实降级） */
+function forgeFaceOf(fiberCtx: unknown): ForgeRemoteFace | undefined {
+  try {
+    const face = (fiberCtx as { remote?: unknown })['remote']
+    if (face === undefined || face === null || typeof face !== 'object') return undefined
+    for (const ns of FORGE_REMOTE_NAMESPACES) {
+      const value = (face as unknown as Record<string, unknown>)[ns]
+      if (value === undefined || value === null || typeof value !== 'object') return undefined
+    }
+    return face as ForgeRemoteFace
+  } catch {
+    return undefined
+  }
+}
+
 export const projectClient = {
   // 'remote' 边声明（官方 client-ui-forge 同型——mount.ts inject = ['remote', ...]；
   // namespace 边不在主插件声明：namespace 由本插件 $mount 自供，主插件声明 =
@@ -219,21 +244,8 @@ export const projectClient = {
       // fiber 随主插件卸载级联拆卸，此后缝读取 throw = 诚实降级 undefined）。
       const injectFn = (rec as { inject?: (deps: readonly string[], mixin: (c: unknown) => unknown) => unknown } | undefined)?.['inject']
       if (typeof injectFn === 'function') {
-        injectFn.call(rec, ['remote', 'remote.forgeProjects', 'remote.forgeFs', 'remote.forgeBugs', 'remote.forgeWorktree', 'remote.forgeProposals', 'remote.forgeFeatures'], (fiberCtx: unknown) => {
-          installForgeRemoteFace(() => {
-            try {
-              const face = (fiberCtx as { remote?: unknown })['remote']
-              if (face === undefined || face === null || typeof face !== 'object') return undefined
-              const namespaces = ['forgeProjects', 'forgeFs', 'forgeBugs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures'] as const
-              for (const ns of namespaces) {
-                const value = (face as unknown as Record<string, unknown>)[ns]
-                if (value === undefined || value === null || typeof value !== 'object') return undefined
-              }
-              return face as ForgeRemoteFace
-            } catch {
-              return undefined // 子 fiber 已拆卸（插件卸载）= 缝诚实降级
-            }
-          }, (line) => console.warn(line))
+        injectFn.call(rec, ['remote', ...FORGE_REMOTE_NAMESPACES.map((ns) => `remote.${ns}`)], (fiberCtx: unknown) => {
+          installForgeRemoteFace(() => forgeFaceOf(fiberCtx), (line) => console.warn(line))
           return undefined
         })
       } else {

@@ -1,10 +1,8 @@
-// 官方缝注册面（定位：装配——fix-13 缝注册面迁移收编：会话头 chip / composer overlay
+// 官方缝注册面（定位：装配——会话头 chip / composer overlay
 // 双行（封存提示 + chip 重建）/ 右栏 Bug 台账 tab 两段（类型定义 + keyed body）/
-// @ 补全 Bug source / chip 重建缝页内全局——此前登记面居 apps/web 产品壳 client-plugin
-// （registerWorktreeFaces + registerBugReferenceSource + registerDockTabs bug 段），
-// 官方宿主不装载产品壳 → 官方缝无人注册（009/1.21-008 链定谳的真实现缺口）。
-// 迁移后：注册随本插件 client bundle apply 期自注册——产品壳（apps/host 集成形态，
-// 本 bundle 同样装载）与官方 dsh web 一致呈现；壳侧对应注册删除（零残留零重复）。
+// @ 补全 Bug source / chip 重建缝页内全局——注册归属本插件域（插件可移植性：装配缝
+// 归插件，宿主只做 wiring），随本插件 client bundle apply 期自注册——产品壳
+// （apps/host 集成形态，本 bundle 同样装载）与官方 dsh web 一致呈现。
 //
 // bundle 自含纪律：官方面（slots/sidebarRightTabs/sidebarRight/inputTriggers/workspaces/
 // sessions/conversation）以结构同型镜像承载（keyed-section 先例）；RPC 通道常量出自
@@ -29,7 +27,6 @@ import { ForgeWorktreeSealOverlay } from './session-badge/seal-notice.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from './rpc.js'
 import {
   registerKeyedSection,
-  safeRegisterSection,
   type SectionSlotsFace,
 } from './keyed-section.js'
 
@@ -168,8 +165,7 @@ export function bugProjectIdOf(
 /** Bug source 接线依赖（注入面——测试替身/生产缺省两径） */
 export interface BugSourceWiringDeps {
   readonly workspaces: WorkspacesServiceMirror
-  /** forge RPC 工厂（Typert face——1.32 复测正典化：弃 window.dshForge.invoke 页内传输
-   *  桥——官方 web 无此桥；缺省 preloadRpcClientFactory，缺席 = 各调用点 reject fail-soft） */
+  /** forge RPC 工厂（Typert face——缺省 preloadRpcClientFactory，缺席 = 各调用点 reject fail-soft） */
   readonly makeRpc?: () => ForgeRpcClient | undefined
   /** 候选行图标件（ForgeBugGlyph 本体——IconProps 组件；缺席 = 行零 icon 键） */
   readonly bugIcon?: unknown
@@ -237,7 +233,7 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
       }
       return rpc.bugs.list(query)
     },
-    // 慢取数诊断（bug 2a284e9d）走 factory 缺省 console.warn——client bundle 诊断豁免面
+    // 慢取数诊断走 factory 缺省 console.warn——client bundle 诊断豁免面
   })
 
   /** 1.3 chip 点击 → Bug 台账 pane（官方 openReference 路由缝） */
@@ -266,8 +262,8 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
           const projectId = projectIdOf(session.sessionId)
           const rpc = rpcOf()
           if (projectId === undefined || rpc === undefined) return undefined
-          // bug 476b2d3d：预取不再丢弃——全量台账种进快照（持久化还原 chip 无插入事件，
-          // serialize 依赖此种子命中全卡）；bug 2a284e9d：同一次预取种项目台账
+          // 预取不丢弃——全量台账种进快照（持久化还原 chip 无插入事件，
+          // serialize 依赖此种子命中全卡）；同一次预取种项目台账
           return rpc.bugs
             .list({ projectId })
             .then((rows) => {
@@ -494,5 +490,3 @@ export function revokeOfficialSeamGlobals(): void {
   delete (globalThis as Record<string, unknown>)[BUG_SOURCE_CACHE_KEY]
 }
 
-// safeRegisterSection 供未来非声明缝直挂复用（当前注册面全走声明缝——保留引形避免死码误删）
-export { safeRegisterSection }

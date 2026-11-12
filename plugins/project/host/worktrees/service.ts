@@ -57,6 +57,9 @@ import {
   worktreeNameOf,
 } from './git-client.js'
 import { createBindEvents, type BindEvents } from './bind-events.js'
+
+/** worktree 存放目录段（Port 投影/兜底扩展点/host 常驻装配三面单源——禁字面量散落） */
+export const WORKTREE_DIR_RELATIVE = '.forge/worktrees'
 import { createSealChannel, type SealChannel } from './seal.js'
 import { createHealing, type Healing } from './healing.js'
 
@@ -224,7 +227,7 @@ export function createWorktreeRpcService(deps: WorktreeServiceDeps): WorktreeRpc
   const ext = (): GitWorktreeExtensionPoints =>
     resolveGitWorktree()?.getExtensionPoints() ?? {
       resolveProject: async () => null,
-      getWorktreeDir: (root) => `${root}/.forge/worktrees`,
+      getWorktreeDir: (root) => `${root}/${WORKTREE_DIR_RELATIVE}`,
     }
   const resolveWorkspaceRegistry = (): WorkspaceRegistryFace | undefined =>
     typeof deps.workspaceRegistry === 'function' ? deps.workspaceRegistry() : deps.workspaceRegistry
@@ -327,6 +330,36 @@ export function createWorktreeRpcService(deps: WorktreeServiceDeps): WorktreeRpc
   const sealStateOf: SealChannel = createSealChannel(ctx, bind)
   const healing: Healing = createHealing(ctx)
 
+  // 树目录预铸——先建空目录并在此刻补可继承 ACE（空目录上 grant 毫秒级），git worktree add
+  // 检出的每个文件出生即继承；非空/已存在路径不授权（createWorktree 按 path-exists 拒）。
+  const precastDirAcl = async (path: string): Promise<void> => {
+    try {
+      if (!existsSync(path)) mkdirSync(path, { recursive: true })
+      if (readdirSync(path).length === 0) {
+        await (deps.ensureDirAcl ?? ((p: string) => defaultEnsureDirAcl(p, undefined, deps.debugDiag)))(path).catch((cause: unknown) => {
+          warn(`[git-worktree] 预铸目录 ACL 补权失败（fail-soft——沙箱拒绝时走 diagnose 技能）：${String(cause)}`)
+        })
+      }
+    } catch (cause) {
+      warn(`[git-worktree] 预铸目录创建失败（fail-soft——git 自建目录路径不受影响）：${String(cause)}`)
+    }
+  }
+
+  // 官方 workspace 前移创建——幂等 find-or-create（realpath 归一，title 仅新建时生效）。
+  // 失败 fail-soft 不回滚 git 树（官方 create 幂等，下次 list / find-or-create 自愈补齐）。
+  const ensureWorkspaceId = async (path: string): Promise<string | undefined> => {
+    const wsRegistry = resolveWorkspaceRegistry()
+    if (wsRegistry === undefined) return undefined
+    try {
+      return (await wsRegistry.create(path, worktreeNameOf(path))).id
+    } catch (cause) {
+      const message = `[git-worktree] 官方 workspace 前移创建失败（fail-soft——不回滚 git 树，下次 find-or-create 自愈）：${path}：${String(cause)}`
+      warn(message)
+      deps.createDiag?.(message)
+      return undefined
+    }
+  }
+
   const service: WorktreeRpcService = {
     async list(request) {
       const cacheKey = normalizePathForCompare(request.projectRoot)
@@ -336,7 +369,7 @@ export function createWorktreeRpcService(deps: WorktreeServiceDeps): WorktreeRpc
       if (resolution === null) {
         // 只在 gitWorktree 能力服务在场时缓存负结果（cachedResolve 同判据）：单装装配态
         // 能力经异步探测 provide——探测窗口内的非 git 判定缓存会把「能力未到」冻结成
-        // 永久非 git（fix-8 真机 009 铁证径）。
+        // 永久非 git。
         if (resolveGitWorktree() !== undefined) noGitCache.set(cacheKey, noGit)
         return noGit
       }
@@ -381,38 +414,13 @@ export function createWorktreeRpcService(deps: WorktreeServiceDeps): WorktreeRpc
     },
 
     async create(request) {
-      // A′（bug f9a23367）：树目录预铸——先建空目录并在此刻补可继承 ACE（空目录上 grant
-      // 毫秒级），git worktree add 检出的每个文件出生即继承。非空/已存在路径不授权
-      // （createWorktree 按 path-exists 拒）。
-      try {
-        if (!existsSync(request.path)) mkdirSync(request.path, { recursive: true })
-        if (readdirSync(request.path).length === 0) {
-          await (deps.ensureDirAcl ?? ((p: string) => defaultEnsureDirAcl(p, undefined, deps.debugDiag)))(request.path).catch((cause: unknown) => {
-            warn(`[git-worktree] 预铸目录 ACL 补权失败（fail-soft——沙箱拒绝时走 diagnose 技能）：${String(cause)}`)
-          })
-        }
-      } catch (cause) {
-        warn(`[git-worktree] 预铸目录创建失败（fail-soft——git 自建目录路径不受影响）：${String(cause)}`)
-      }
+      await precastDirAcl(request.path)
       const entry = await (deps.createWorktreeOp ?? createWorktree)(request.projectRoot, {
         branch: request.branch,
         path: request.path,
         base: request.base,
       })
-      // A4（binding-derivation 流程 A）：官方 workspace 前移创建——幂等 find-or-create
-      // （realpath 归一，title 仅新建时生效）。失败 fail-soft 不回滚 git 树（官方 create
-      // 幂等，下次 list / find-or-create 自愈补齐），emitDiag('worktree-create', warn)。
-      let workspaceId: string | undefined
-      const wsRegistry = resolveWorkspaceRegistry()
-      if (wsRegistry !== undefined) {
-        try {
-          workspaceId = (await wsRegistry.create(request.path, worktreeNameOf(request.path))).id
-        } catch (cause) {
-          const message = `[git-worktree] 官方 workspace 前移创建失败（fail-soft——不回滚 git 树，下次 find-or-create 自愈）：${request.path}：${String(cause)}`
-          warn(message)
-          deps.createDiag?.(message)
-        }
-      }
+      const workspaceId = await ensureWorkspaceId(request.path)
       await notifyWorktreeSetChanged(request.path) // 绑定表失效锚：新树路径即需路由行
       return { entry: { ...entryToDto(entry, request.projectRoot), workspaceId } }
     },

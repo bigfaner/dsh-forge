@@ -17,6 +17,7 @@ import type {
   WorktreeServicePort,
 } from '@dsh-forge/lib-api'
 import { createDefaultExtensionPoints } from '../worktrees/extension-points.js'
+import { WORKTREE_DIR_RELATIVE } from '../worktrees/service.js'
 
 /** 五缝服务键单源（装配侧 provide 与消费侧 inject 同锚常量——禁字面量散落） */
 export const PROJECT_SEAM_KEYS = {
@@ -117,7 +118,7 @@ export function standaloneWorktreeService(onDiag?: SeamDiag): WorktreeServicePor
         binding: null,
       }) as unknown as Awaited<ReturnType<WorktreeServicePort['seal']>>,
     resolve: async () => ({ resolved: [] }),
-    getWorktreeDir: (projectRoot: string) => `${projectRoot}/.forge/worktrees`,
+    getWorktreeDir: (projectRoot: string) => `${projectRoot}/${WORKTREE_DIR_RELATIVE}`,
     resolveProject: async () => null,
   }
 }

@@ -131,9 +131,9 @@ export function assembleProjectHostSide(
     // worktree-domain-migration 1.2 注入点重构：宿主只做官方服务对象取法（惰性取法闭包
     // 在插件工厂调用前成立）+ 注入缝传参；deps 组装与发送拦截装配门在插件导出工厂
     // createHostWorktreeRpc（host/worktrees/host-assembly.ts）。
-    // 官方服务取法 root 锚定优先（1.32 复测·官方 web 宿主形态——sessionPersistence/
-    // sessionController provide 于根 ctx；插件 ctx 属性访问在无 inject 声明宿主可能
-    // 拒绝/缺席——root ?? ctx 双探针惰性取法，AGENTS 1.6 检测永不缓存同径）。
+    // 官方服务取法 root 锚定优先（sessionPersistence/sessionController provide 于根 ctx；
+    // 插件 ctx 属性访问在无 inject 声明宿主可能拒绝/缺席——root ?? ctx 双探针惰性取法，
+    // AGENTS 1.6 检测永不缓存同径）。
     const rootFace = (((rawCtx as { root?: unknown }).root ?? rawCtx) as unknown) as ServiceGetFace
     const safeGet = (face: ServiceGetFace, name: string): unknown => {
       try {
