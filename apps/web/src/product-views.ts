@@ -9,8 +9,9 @@
 // fix-25 发布集（官方基座降位形态）：main.conversation 工作台面板退役——发布 =
 // sidebar 族（workspaces 替换 + 品牌行）+ main 面板族（hero/knowledge）+ 页签族
 // （召回单签——轨迹 = 官方 'trajectory' 直用，fix-29 退役产品复刻）+ 壳宿主
-// （shell.overlay 常驻件）+ 面板行字形 + 工作台桥工厂。4.1 扩右栏 dock tab 族：
-// ForgeOverviewTab/ForgeDocsTab（sidebar.right.pane.tab 两 keyed body——M2 UF-1/UF-2）。
+// （shell.overlay 常驻件）+ 面板行字形 + 工作台桥工厂。fix-13 注记（1.45）：右栏 dock
+// tab 族（ForgeOverviewTab/ForgeDocsTab 两 keyed body）发布退役——注册面与组件本体归
+// @dsh-forge/project bundle。
 // m3.1 D5：会话头挂接 pill 发布退役（conversation.session.header.actions 槽位卸载——
 // 派发任务监视面 = DispatchPanel，经 ShellHost 常驻树直挂不经槽位发布）。
 // 4.7 设置分区退役：分区不再发布（expert-squad-default-routing AC4——
@@ -29,33 +30,25 @@ import {
   type ForgeBrandNameProps,
   type ForgeSidebarSlotProps,
 } from './views/sidebar/index.js'
-import { ForgeKnowledgeGlyph, type ForgeKnowledgeGlyphProps } from './views/sidebar/KnowledgeGlyph.js'
 import { ForgeShellHost, type ForgeShellHostProps } from './workbench/ShellHost.js'
-import { ForgeHeroPanel } from './workbench/HeroPanel.js'
-import { ForgeKnowledgePanel, type ForgeKnowledgePanelProps } from './workbench/KnowledgePanel.js'
-import {
-  ForgeDocsTab,
-  type ForgeDocsTabProps,
-  ForgeOverviewTab,
-  type ForgeOverviewTabProps,
-} from './workbench/dock-tabs.js'
-import { ForgeRecallView, type ForgeRecallViewProps } from './views/session/ConversationViews.js'
-import { ForgeDispatchToolRow, type ForgeDispatchToolRowProps } from './views/session/DispatchToolRow.js'
-import { ForgeEventEntries, type ForgeEventEntriesProps } from './views/session/ForgeEventEntries.js'
+// fix-13 注记（1.42/1.44）：ForgeHeroPanel / ForgeKnowledgePanel / ForgeKnowledgeGlyph /
+// ForgeRecallView 发布退役——注册面迁 @dsh-forge/project bundle（ui/hero-panel-face.ts
+// + ui/knowledge-face.ts），组件本体随插件包，不经壳发布面递达。
+// fix-13 注记（1.45）：ForgeOverviewTab / ForgeDocsTab 发布退役——dock tab 族注册面与
+// 组件本体随 @dsh-forge/project bundle（ui/dock-tabs-face.ts + ui/dock-tabs/）。
+// fix-13 注记（1.41）：ForgeDispatchToolRow / ForgeEventEntries 发布退役——组件本体与注册面
+// 均在 @dsh-forge/project client bundle（ui/dispatch-tool-row/ + ui/event-node/）。
 import {
   ForgeHeroWorkspacePicker,
   type ForgeHeroWorkspacePickerProps,
 } from './views/session/HeroWorkspacePicker.js'
-// 1.15 迁移面：worktree 挂载面（switch marker）居 @dsh-forge/project client ui
-// （ui/worktree-picker）——本发布面引用指包出口（apps/web 壳内自有源收缩为零）。
+// fix-13 注记（1.43）：ForgeWorktreeSwitchMarker 发布退役——注册面迁 @dsh-forge/project
+// bundle（ui/conversation-views-face.ts ③），组件本体在插件包，不经壳发布面递达。
 // fix-13 注记：chip / seal overlay 两件发布退役——注册面迁 project bundle apply 期
 // 自注册（ui/official-seams.ts，组件随插件 bundle 渲染），发布面机械（页内全局
 // __DSH_FORGE_VIEWS__）仅余壳内登记的占用者。
-import { ForgeWorktreeSwitchMarker } from '@dsh-forge/project/client-ui/worktree-faces'
-import {
-  ForgeRemoteEntry,
-  type ForgeRemoteEntryProps,
-} from './views/remote/ForgeRemoteEntry.js'
+// fix-13 注记（1.40）：ForgeRemoteEntry 发布退役——组件本体与注册面均在 @dsh-forge/project
+// client bundle（ui/remote-entry/，apply 期自注册），不经壳发布面递达。
 import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from './workbench/workbench-bridge.js'
 // fix-13 注记：bug 三件（BugGlyph/BugPreview/ChipRestoreOverlay）发布退役——注册面
 // 迁 project bundle apply 期自注册（ui/official-seams.ts），发布面零残留。
@@ -70,28 +63,12 @@ export interface ForgePublishedViews {
   readonly ForgeBrandName: ComponentType<ForgeBrandNameProps>
   /** shell.overlay 常驻壳宿主（UF-3 流程宿主 + 相位/视图镜像锚 + hero 驱动 + 右栏联动面） */
   readonly ForgeShellHost: ComponentType<ForgeShellHostProps>
-  /** main keyed 'dswf-hero' 占用者（UF-2 零项目引导面板） */
-  readonly ForgeHeroPanel: ComponentType
-  /** main keyed 'dswf-knowledge' 占用者（UF-5 知识视图面板——UF-6 浏览面挂载） */
-  readonly ForgeKnowledgePanel: ComponentType<ForgeKnowledgePanelProps>
-  /** sidebar.panellist 'dswf-knowledge' 占用者（官方面板行字形） */
-  readonly ForgeKnowledgeGlyph: ComponentType<ForgeKnowledgeGlyphProps>
-  /** conversation.view 'dswf-recall' 占用者（UF-4 知识召回页签） */
-  readonly ForgeRecallView: ComponentType<ForgeRecallViewProps>
-  /** tool.call.toolview keyed 'dispatchTask' 占用者（对话工具行——摘要段 = 容器标识 source_slug） */
-  readonly ForgeDispatchToolRow: ComponentType<ForgeDispatchToolRowProps>
-  /** conversation.chat.node keyed 'forge-event-group' 占用者（1.9 消息面事件折叠条目组） */
-  readonly ForgeEventEntries: ComponentType<ForgeEventEntriesProps>
-  /** sidebar.right.pane.tab keyed 'dswf-overview' 占用者（M2 UF-1 概览 dock tab body——4.1） */
-  readonly ForgeOverviewTab: ComponentType<ForgeOverviewTabProps>
-  /** sidebar.right.pane.tab keyed 'dswf-doc' 占用者（M2 UF-2 文档 dock tab body——4.1，multiple 按 address 去重） */
-  readonly ForgeDocsTab: ComponentType<ForgeDocsTabProps>
+  // fix-13 注记（1.45）：ForgeOverviewTab / ForgeDocsTab 两发布键随 dock tab 族注册迁
+  // @dsh-forge/project bundle（ui/dock-tabs-face.ts + ui/dock-tabs/）退役。
   /** conversation.hero.workspace 影子占用者（fix-24 ①——新会话输入框上方控件改列项目） */
   readonly ForgeHeroWorkspacePicker: ComponentType<ForgeHeroWorkspacePickerProps>
-  /** conversation.input.overlay 槽切换闸虚线标记（bug 267dcac1——blocked 卡视觉命中锚，禁输归官方 composer block 缝） */
-  readonly ForgeWorktreeSwitchMarker: ComponentType<{ sessionId?: string | undefined }>
-  /** sidebar.footer.action 'dswf-remote' 占用者（1.2 手机远程入口——三态图标 + 远程面板） */
-  readonly ForgeRemoteEntry: ComponentType<ForgeRemoteEntryProps>
+  // fix-13 注记（1.43）：ForgeWorktreeSwitchMarker 发布键随切换闸标记行注册迁
+  // @dsh-forge/project bundle 退役——壳发布面零该键。
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
   readonly createWorkbenchBridge: (nav: ForgeCenterNav) => WorkbenchBridge
   /** md-mermaid DOM 增强器工厂（1.9——@dsh-forge/md-mermaid ./web 出口；插件 apply 期 start/卸载 stop） */
@@ -108,17 +85,7 @@ declare global {
   ForgeBrandMark,
   ForgeBrandName,
   ForgeShellHost,
-  ForgeHeroPanel,
-  ForgeKnowledgePanel,
-  ForgeKnowledgeGlyph,
-  ForgeRecallView,
-  ForgeDispatchToolRow,
-  ForgeEventEntries,
-  ForgeOverviewTab,
-  ForgeDocsTab,
   ForgeHeroWorkspacePicker,
-  ForgeWorktreeSwitchMarker,
-  ForgeRemoteEntry,
   createWorkbenchBridge,
   createMermaidEnhancer,
 }

@@ -9,10 +9,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CONVERSATION_VIEW_SLOT,
-  DISPATCH_TASK_TOOL_KEY,
+  // fix-13 注记（1.41）：DISPATCH_TASK_TOOL_KEY 断言随工具行注册面迁 project bundle
   DOC_ADDRESS_PREFIX,
   DOC_TAB_KIND,
-  FORGE_BUG_SOURCE_NAME,
   FORGE_CLIENT_INJECT,
   FORGE_CLIENT_PLUGIN_ID,
   FORGE_LOCALE_NS,
@@ -21,11 +20,9 @@ import {
   KNOWLEDGE_PANEL_KEY,
   MAIN_SLOT,
   OVERVIEW_TAB_KIND,
-  RECALL_VIEW_ID,
   SESSION_HEADER_ACTIONS_SLOT,
   CONVERSATION_INPUT_OVERLAY_SLOT,
-  FORGE_REMOTE_ENTRY_ID,
-  FORGE_REMOTE_ENTRY_ORDER,
+  // fix-13 注记（1.40）：FORGE_REMOTE_ENTRY_ID/ORDER 随注册面迁 project bundle——壳零断言
   SIDEBAR_FOOTER_ACTION_SLOT,
   SHELL_OVERLAY_SLOT,
   SIDEBAR_BRAND_MARK_SLOT,
@@ -34,16 +31,8 @@ import {
   SIDEBAR_RIGHT_PANE_TAB_SLOT,
   SIDEBAR_SHADOW_PRIORITY,
   SIDEBAR_WORKSPACES_SLOT,
-  TOOL_CALL_TOOLVIEW_SLOT,
-  makeSessionTitleResolver,
-  activeSessionIdOf,
-  buildBugQuickAdder,
-  resolveWorkerChildSession,
-  sessionParentIdOf,
-  sessionRowInLedger,
-  sessionTitleOf,
-  workerChildSessionOf,
-  workerOpenTarget,
+  // fix-13 注记（1.41）：TOOL_CALL_TOOLVIEW_SLOT 断言与事件折叠组断言随注册面迁
+  // @dsh-forge/project（plugin 侧 remote/conversation faces 测试）——壳测零该两族。
   forgeClientPlugin,
   unwrapRpcEnvelope,
   moduleLoaderFacade,
@@ -51,24 +40,39 @@ import {
   registerForgeClient,
   type ForgeClientCtx,
   type ForgeLocaleService,
-  type ForgeSidebarRightTabsService,
   type ForgeSlotsService,
 } from './plugin.js'
+// fix-13 注记（1.45）：会话判读/解析纯函数族 + Bug 快速路径随 dock tab 族注册面迁
+// @dsh-forge/project（ui/session-actions.ts）——改自包窄子路径 import，语义断言保持。
 import {
-  FORGE_EVENT_NODE_KIND,
-  FORGE_EVENT_NODE_SLOT,
-  forgeEventGroupDefinition,
-  forgeEventStreamDefinition,
-} from './forge-event-node.js'
-import { HERO_PANEL_KEY as SHELL_HERO_KEY, KNOWLEDGE_PANEL_KEY as SHELL_KNOWLEDGE_KEY } from '../workbench/panel-model.js'
+  activeSessionIdOf,
+  buildBugQuickAdder,
+  docTabTitle,
+  makeSessionTitleResolver,
+  resolveWorkerChildSession,
+  sessionParentIdOf,
+  sessionRowInLedger,
+  sessionTitleOf,
+  workerChildSessionOf,
+  workerOpenTarget,
+} from '@dsh-forge/project/client-ui/session-actions'
+// fix-13 注记（1.45）：DSWF_* 常量与地址编解码随 dock tab 族注册面迁
+// @dsh-forge/project（ui/dock-tabs/；壳侧 workbench/dock-tabs.tsx 已退役占位）——
+// 改自包窄子路径 import。
 import {
   DSWF_DOC_ADDRESS_PREFIX as DOCK_DOC_PREFIX,
   DSWF_DOC_TAB_KIND as DOCK_DOC_KIND,
   DSWF_OVERVIEW_TAB_KIND as DOCK_OVERVIEW_KIND,
   forgeDocAddress,
   parseForgeDocAddress,
-} from '../workbench/dock-tabs.js'
+} from '@dsh-forge/project/client-ui/dock-tabs'
 import type { ModuleLoaderFacade, ModuleLoaderRegistration } from '../shell/dsh-globals.js'
+// fix-13 注记（1.41）：forge-event-node 定义对 import 随事件折叠组注册面迁
+// @dsh-forge/project（plugin 侧 conversation-views-face 测试）——壳测零引用。
+import { HERO_PANEL_KEY as SHELL_HERO_KEY, KNOWLEDGE_PANEL_KEY as SHELL_KNOWLEDGE_KEY } from '../workbench/panel-model.js'
+// fix-13 注记（1.45）：Bug 快速路径迁 @dsh-forge/project（ui/official-seams.ts——无窄子路径
+// 出口）——FORGE_BUG_SOURCE_NAME 改持字面量镜像（正本 official-seams.ts 同源 pin）。
+const FORGE_BUG_SOURCE_NAME = 'dswf-bug'
 
 /** 注册记录（fake slots 服务收集） */
 interface RegisterCall {
@@ -114,7 +118,8 @@ function fakeLocale(): ForgeLocaleService & { disposed: boolean; registered: [st
   }
 }
 
-/** tab 类型注册记录（fake sidebarRightTabs 收集面——两段注册第一段断言） */
+/** tab 类型注册记录（fake sidebarRightTabs 收集面——fix-13 注记 1.45：注册面迁
+ * @dsh-forge/project 后本形状仅存零调用断言的记录位） */
 interface TabTypeCall {
   id: string
   kind: string
@@ -125,8 +130,15 @@ interface TabTypeCall {
   guide?: readonly { id: string; order: number; title: () => string; description?: () => string }[]
 }
 
-/** fake tab 类型注册表（4.1）：register 收定义 + 撤销记账（幂等标志） */
-function fakeSidebarRightTabs(): ForgeSidebarRightTabsService & {
+/** fake tab 类型注册表（4.1）：register 收定义 + 撤销记账（幂等标志）。
+ * fix-13 注记（1.45）：ForgeSidebarRightTabsService 类型随注册面迁 @dsh-forge/project 后
+ * 已无导出面（彼侧为未导出的 SidebarRightTabsMirror）——fake 自持结构镜像；fake 保留
+ * 仅为 fakeClientCtx.get('sidebarRightTabs') 分支的零调用断言面。 */
+interface SidebarRightTabsRegisterFace {
+  register(definition: TabTypeCall): () => void
+}
+
+function fakeSidebarRightTabs(): SidebarRightTabsRegisterFace & {
   calls: TabTypeCall[]
   disposedIds: string[]
 } {
@@ -151,8 +163,9 @@ function fakeSidebarRightTabs(): ForgeSidebarRightTabsService & {
   }
 }
 
-/** 假 ctx：slots 收集 inject/register，八服务经 get 递达（reflect 可注入——bug 组
- *  inputTriggers 惰性反射面测试）。D45 sessionFaces：uiWorkspace 会话行动作面 +
+/** 假 ctx：slots 收集 inject/register，七服务经 get 递达（fix-13 注记 1.45：
+ * sidebarRightTabs 注入边随 dock tab 族注册面迁 @dsh-forge/project——本 fake 分支仅存
+ * 零调用断言面）。D45 sessionFaces：uiWorkspace 会话行动作面 +
  * sessions.using 可注入（缺省缺席 = 注入面键缺席——面板对应项不呈现的测试面）。 */
 function fakeClientCtx(
   reflect?: { readonly get: (name: string) => unknown },
@@ -266,11 +279,13 @@ function fakeClientCtx(
   const ctx: ForgeClientCtx = {
     slots,
     get: (name) => {
+      // fix-13 注记（1.45）：'sidebarRightTabs' 已随注册面迁出 ForgeClientCtx.get 联合——
+      // fake 分支经 string 收窄保留（零调用断言面）
       if (name === 'sessions') return sessions
       if (name === 'uiWorkspace') return uiWorkspace
       if (name === 'workspaces') return workspaces
       if (name === 'sidebarRight') return sidebarRight
-      if (name === 'sidebarRightTabs') return tabTypes
+      if ((name as string) === 'sidebarRightTabs') return tabTypes
       if (name === 'layout') return layout
       if (name === 'locale') return locale
       if (name === 'uiConversation') return uiConversation
@@ -310,18 +325,15 @@ function publishFakeViews() {
     ForgeBrandMark: 'COMP:brand-mark',
     ForgeBrandName: 'COMP:brand-name',
     ForgeShellHost: 'COMP:shell-host',
-    ForgeHeroPanel: 'COMP:hero-panel',
-    ForgeKnowledgePanel: 'COMP:knowledge-panel',
-    ForgeKnowledgeGlyph: 'COMP:knowledge-glyph',
-    ForgeRecallView: 'COMP:recall-view',
-    ForgeDispatchToolRow: 'COMP:dispatch-tool-row',
-    ForgeEventEntries: 'COMP:event-entries',
-    ForgeOverviewTab: 'COMP:overview-tab',
-    ForgeDocsTab: 'COMP:docs-tab',
+    // fix-13 注记（1.42/1.44）：ForgeHeroPanel / ForgeKnowledgePanel / ForgeKnowledgeGlyph /
+    // ForgeRecallView 发布退役——注册面迁 project bundle（hero-panel-face / knowledge-face）
+    // fix-13 注记（1.41）：ForgeDispatchToolRow / ForgeEventEntries 发布退役——注册面迁 project bundle
+    // fix-13 注记（1.45）：ForgeOverviewTab / ForgeDocsTab 两键随 dock tab 族注册迁
+    // @dsh-forge/project bundle（ui/dock-tabs-face.ts + ui/dock-tabs/）——壳发布面零该两键。
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
     // fix-13 注记：chip/seal overlay/bug 三件发布退役——注册面迁 project bundle（official-seams）
-    ForgeWorktreeSwitchMarker: 'COMP:worktree-switch-marker',
-    ForgeRemoteEntry: 'COMP:remote-entry',
+    // fix-13 注记（1.43）：ForgeWorktreeSwitchMarker 发布退役——注册面迁 project bundle
+    // fix-13 注记（1.40）：ForgeRemoteEntry 发布退役——注册面迁 project bundle（remote-entry-face）
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
       let focusNonce = 0
@@ -373,7 +385,7 @@ function unpublishViews(): void {
 }
 
 describe('forgeClientPlugin 形状（cordis 插件面）', () => {
-  it('name = 注册键；inject = 八服务（fix-11 打开面改 uiWorkspace；fix-23 加 sidebarRight；4.1 加 sidebarRightTabs；fix-25 加 layout；fix-33 加 locale）；apply 幂等立激活标记', () => {
+  it('name = 注册键；inject = 六服务（fix-11 打开面改 uiWorkspace；fix-23 加 sidebarRight；fix-25 加 layout；fix-33 加 locale；fix-13 1.45 摘 sidebarRightTabs；1.41 摘 uiConversation）；apply 幂等立激活标记', () => {
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { plugin: string } }).__DSH_FORGE_CLIENT__
     delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     const views = publishFakeViews()
@@ -386,29 +398,34 @@ describe('forgeClientPlugin 形状（cordis 插件面）', () => {
       'uiWorkspace',
       'workspaces',
       'sidebarRight',
-      'sidebarRightTabs',
+      // fix-13 注记（1.45）：'sidebarRightTabs' 注入边随 dock tab 族注册面迁
+      // @dsh-forge/project bundle（ui/dock-tabs-face.ts）——壳注入清单摘除该行。
       'layout',
       'locale',
-      'uiConversation',
+      // fix-13 注记（1.41）：'uiConversation' 注入边随事件折叠组注册面迁
+      // @dsh-forge/project bundle（conversation-views-face）——壳注入清单摘除该行。
     ])
     const { ctx, locale } = fakeClientCtx()
     plugin.apply(ctx)
     const active = (globalThis as { __DSH_FORGE_CLIENT__?: { plugin: string; activatedAt: number } }).__DSH_FORGE_CLIENT__
     expect(active?.plugin).toBe(FORGE_CLIENT_PLUGIN_ID)
     expect(typeof active?.activatedAt).toBe('number')
-    // fix-33 ⑧：locale 词典登记（NS + zh/en 双语——官方 ui-trajectory 同径）
+    // fix-33 ⑧：locale 词典登记（NS + zh/en 双语——官方 ui-trajectory 同径）。
+    // fix-13 注记（1.41/1.42/1.45）：tool.dispatchTask.* / panel.knowledge / view.recall /
+    // tab.overview / tab.bug / guide.overview.desc 词条已分别随各注册面迁
+    // @dsh-forge/project 自有 NS——壳词典零产品行（空登记面 = 词典注册缝仍在的 pin）。
     expect(locale.registered).toHaveLength(1)
     expect(locale.registered[0]![0]).toBe(FORGE_LOCALE_NS)
-    expect(locale.registered[0]![1].zh).toMatchObject({ 'panel.knowledge': '知识库', 'view.recall': '知识召回' })
-    expect(locale.registered[0]![1].en).toMatchObject({ 'panel.knowledge': 'Knowledge', 'view.recall': 'Recall' })
-    // dispatchTask 工具行词典（toolview 行内 t 座——文案对齐官方通用行用词）
-    expect(locale.registered[0]![1].zh).toMatchObject({
-      'tool.dispatchTask.title': '工具调用',
-      'tool.dispatchTask.input': '输入',
-      'tool.dispatchTask.output': '输出',
-      'tool.dispatchTask.inspect': '查看',
-    })
-    expect(locale.registered[0]![1].en).toMatchObject({ 'tool.dispatchTask.title': 'Tool call' })
+    expect(locale.registered[0]![1].zh).toEqual({})
+    expect(locale.registered[0]![1].en).toEqual({})
+    // fix-13 断言（1.45）：tab.overview / tab.bug / guide.overview.desc 随 dock tab 族
+    // 注册面迁 @dsh-forge/project 自有 NS（dsh-forge.project）——壳词典不含三词条。
+    expect(locale.registered[0]![1].zh?.['tab.overview']).toBeUndefined()
+    expect(locale.registered[0]![1].en?.['tab.overview']).toBeUndefined()
+    expect(locale.registered[0]![1].zh?.['tab.bug']).toBeUndefined()
+    expect(locale.registered[0]![1].en?.['tab.bug']).toBeUndefined()
+    expect(locale.registered[0]![1].zh?.['guide.overview.desc']).toBeUndefined()
+    expect(locale.registered[0]![1].en?.['guide.overview.desc']).toBeUndefined()
     unpublishViews()
     if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
@@ -422,24 +439,22 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     const { ctx, registers, injectedKeys } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     expect(injectedKeys).toEqual([
-      SIDEBAR_RIGHT_PANE_TAB_SLOT,
-      SIDEBAR_RIGHT_PANE_TAB_SLOT,
+      // fix-13 注记（1.45）：SIDEBAR_RIGHT_PANE_TAB_SLOT×2 注入随 dock tab 族注册面迁
+      // @dsh-forge/project——壳注入清单摘除两行。
       // 1.8 渲染链退役：md mermaid 预览声明等待（DOCUMENT_PREVIEW_BODY_SLOT inject）已随
       // 注册链退役——注入清单零预览槽。fix-13 注记：Bug 台账 keyed body 注入迁 project bundle。
       SIDEBAR_WORKSPACES_SLOT,
       SIDEBAR_BRAND_MARK_SLOT,
       SIDEBAR_BRAND_NAME_SLOT,
-      SIDEBAR_FOOTER_ACTION_SLOT, // 1.2 手机远程入口（官方底行扩展槽——探针点①结论）
-      MAIN_SLOT,
-      MAIN_SLOT,
-      SIDEBAR_PANELLIST_SLOT,
-      CONVERSATION_VIEW_SLOT,
+      // fix-13 注记（1.40）：SIDEBAR_FOOTER_ACTION_SLOT（手机远程入口）注入迁 project
+      // bundle——壳注入清单摘除该行。
+      // fix-13 注记（1.42/1.44）：MAIN_SLOT×2 / SIDEBAR_PANELLIST_SLOT / CONVERSATION_VIEW_SLOT
+      // 注入随 center 族与召回页签注册迁 project bundle——壳注入清单摘除四行。
       HERO_WORKSPACE_SLOT,
-      TOOL_CALL_TOOLVIEW_SLOT,
-      FORGE_EVENT_NODE_SLOT, // 1.9 消息面事件折叠条目组 keyed node body（1.17 单行 progress 节点已退役——bug 60461fc5）
-      // fix-13 注记：会话头 chip 行 + overlay 封存提示/chip 重建两行注入迁 project bundle——
-      // 壳侧 overlay 仅余切换闸虚线标记一行。
-      CONVERSATION_INPUT_OVERLAY_SLOT, // bug 267dcac1 切换闸虚线标记（纯视觉命中锚）
+      // fix-13 注记（1.41）：TOOL_CALL_TOOLVIEW_SLOT 与 FORGE_EVENT_NODE_SLOT 注入随
+      // 注册面迁 project bundle——壳注入清单摘除两行。
+      // fix-13 注记（1.43）：CONVERSATION_INPUT_OVERLAY_SLOT 注入随切换闸标记行注册迁
+      // project bundle——壳注入清单零 overlay 行。
       SHELL_OVERLAY_SLOT,
     ])
     const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)
@@ -451,15 +466,13 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     const name = registers.find((r) => r.key === SIDEBAR_BRAND_NAME_SLOT)
     expect(mark!.component).toBe(views.ForgeBrandMark)
     expect(name!.component).toBe(views.ForgeBrandName)
-    // 诊断面：三洞位 + 手机远程入口落座 + 无错误（e2e 排障锚）
+    // 诊断面：三洞位落座 + 无错误（e2e 排障锚）。fix-13 注记（1.40）：手机远程行注册迁
+    // project bundle——壳诊断零该行。
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { sidebar?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.sidebar?.registered).toEqual([SIDEBAR_WORKSPACES_SLOT, SIDEBAR_BRAND_MARK_SLOT, SIDEBAR_BRAND_NAME_SLOT, SIDEBAR_FOOTER_ACTION_SLOT])
+    expect(marker?.sidebar?.registered).toEqual([SIDEBAR_WORKSPACES_SLOT, SIDEBAR_BRAND_MARK_SLOT, SIDEBAR_BRAND_NAME_SLOT])
     expect(marker?.sidebar?.error).toBeUndefined()
-    const remoteRow = registers.find((r) => r.key === SIDEBAR_FOOTER_ACTION_SLOT)
-    expect(remoteRow).toBeDefined()
-    expect(remoteRow!.options.id).toBe(FORGE_REMOTE_ENTRY_ID)
-    expect(remoteRow!.options.order).toBe(FORGE_REMOTE_ENTRY_ORDER)
-    expect(remoteRow!.component).toBe(views.ForgeRemoteEntry)
+    // fix-13 断言（1.40）：壳侧对 sidebar.footer.action 零登记（注册面归 project bundle）
+    expect(registers.find((r) => r.key === SIDEBAR_FOOTER_ACTION_SLOT)).toBeUndefined()
     unpublishViews()
   })
 
@@ -587,63 +600,31 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
 })
 
 describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 行 + 页签 roster + 壳宿主）', () => {
-  it('main 面板族：hero/knowledge 两 keyed 登记（官方全局面板径）+ 面板 key 字面量与壳侧 panel-model 同源', () => {
-    const views = publishFakeViews()
+  it('fix-13 断言（1.42/1.44）：center 族（hero/knowledge 面板 + panellist 行）注册迁 @dsh-forge/project——壳对 main/panellist 零登记', () => {
+    publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    const hero = registers.find((r) => r.key === MAIN_SLOT && r.options.key === HERO_PANEL_KEY)
-    const knowledge = registers.find((r) => r.key === MAIN_SLOT && r.options.key === KNOWLEDGE_PANEL_KEY)
-    expect(hero).toBeDefined()
-    expect(hero!.component).toBe(views.ForgeHeroPanel)
-    expect(knowledge).toBeDefined()
-    expect(knowledge!.component).toBe(views.ForgeKnowledgePanel)
-    // 字面量同源 pin（plugin 侧 ↔ 壳侧 panel-model——bundle 自含不经 import）
+    expect(registers.find((r) => r.key === MAIN_SLOT && r.options.key === HERO_PANEL_KEY)).toBeUndefined()
+    expect(registers.find((r) => r.key === MAIN_SLOT && r.options.key === KNOWLEDGE_PANEL_KEY)).toBeUndefined()
+    expect(registers.find((r) => r.key === SIDEBAR_PANELLIST_SLOT)).toBeUndefined()
+    // 字面量同源 pin 保持（plugin 侧常量 ↔ 壳侧 panel-model——bundle 自含不经 import）
     expect(HERO_PANEL_KEY).toBe(SHELL_HERO_KEY)
     expect(KNOWLEDGE_PANEL_KEY).toBe(SHELL_KNOWLEDGE_KEY)
-    // 知识面板注入面 = 工作台桥（知识抽屉缝——m3.1 D21/D23 快照扩任务弹窗/转移两缝）
-    const face = knowledge!.options.inject!() as { bridge: { getSnapshot(): { drawerEntryId: number | null; overview: { projectId: string | null }; taskFocus: unknown; drawerTaskId: string | null; transitionFocus: unknown } } }
-    expect(face.bridge.getSnapshot()).toEqual({ drawerEntryId: null, overview: { projectId: null }, taskFocus: null, drawerTaskId: null, transitionFocus: null })
-    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { center?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.center?.registered).toEqual([MAIN_SLOT, MAIN_SLOT, SIDEBAR_PANELLIST_SLOT])
-    expect(marker?.center?.error).toBeUndefined()
     unpublishViews()
   })
 
-  it('panellist 行：id = 知识面板 key（官方 PanelRow 行语言消费）+ label = locale NS thunk（fix-33 ⑧——zh 值等值原字面量）', () => {
-    const views = publishFakeViews()
-    const { ctx, registers } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const row = registers.find((r) => r.key === SIDEBAR_PANELLIST_SLOT)
-    expect(row).toBeDefined()
-    expect(row!.options.id).toBe(KNOWLEDGE_PANEL_KEY)
-    expect(row!.options.locale).toBe(FORGE_LOCALE_NS)
-    expect(typeof row!.options.label).toBe('function')
-    expect((row!.options.label as () => string)()).toBe('知识库')
-    expect(row!.options.order).toBe(20)
-    expect(row!.component).toBe(views.ForgeKnowledgeGlyph)
-    unpublishViews()
-  })
-
-  it('bug 2ffb0a82 知识门：宿主插件位 knowledge:false → 整组知识面零登记（panellist 行 / main 知识面板 / 召回页签缺席；hero 面板与其余登记不受累）', () => {
+  it('bug 2ffb0a82 知识门随迁注记：门读数（knowledgeEnabledOf）迁 @dsh-forge/project——壳侧零门零知识登记（回归锚）', () => {
     publishFakeViews()
     publishHostPlugins(false)
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    // 左栏「知识库」菜单行缺席（官方 PanelRow 行语言——不注册即不呈现）
     expect(registers.find((r) => r.key === SIDEBAR_PANELLIST_SLOT)).toBeUndefined()
-    // main 知识面板缺席；hero 面板保持（同族非知识面不受门控）
     expect(registers.find((r) => r.key === MAIN_SLOT && r.options.key === KNOWLEDGE_PANEL_KEY)).toBeUndefined()
-    expect(registers.find((r) => r.key === MAIN_SLOT && r.options.key === HERO_PANEL_KEY)).toBeDefined()
-    // 会话「知识召回」页签缺席（conversation.view roster 零产品登记）
     expect(registers.filter((r) => r.key === CONVERSATION_VIEW_SLOT)).toHaveLength(0)
-    // 诊断面：center 仅 hero 一登记；views 族不含召回登记
-    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { center?: { registered?: string[] }; views?: { registered?: string[] } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.center?.registered).toEqual([MAIN_SLOT])
-    expect(marker?.views?.registered).not.toContain(CONVERSATION_VIEW_SLOT)
     unpublishViews()
   })
 
-  it('bug 2ffb0a82 知识门 fail-closed：宿主插件位页内缝缺席（旧壳/发布断裂）→ 知识面零登记（不虚报在场）', () => {
+  it('bug 2ffb0a82 知识门 fail-closed（页内缝缺席）随迁注记：壳侧零知识登记（回归锚）', () => {
     publishFakeViews()
     delete (globalThis as { __DSH_FORGE_HOST_PLUGINS__?: unknown }).__DSH_FORGE_HOST_PLUGINS__
     const { ctx, registers } = fakeClientCtx()
@@ -654,25 +635,13 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     unpublishViews()
   })
 
-  it('页签 roster：知识召回单登记（fix-29：轨迹 = 官方 trajectory 直用——产品复刻退役零登记）+ 零 inject（stage④ 1.8 桥缝退役）', () => {
-    const views = publishFakeViews()
+  it('fix-13 断言（1.42）：召回页签注册随 knowledge 族迁 @dsh-forge/project——壳对 conversation.view 零登记（fix-29 轨迹直用语义不变）', () => {
+    publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    const viewRegisters = registers.filter((r) => r.key === CONVERSATION_VIEW_SLOT)
-    expect(viewRegisters, 'conversation.view 恰一登记（三签 = 官方 chat + 官方 trajectory + 产品召回）').toHaveLength(1)
-    const recall = viewRegisters[0]!
-    expect(recall.options.id).toBe(RECALL_VIEW_ID)
-    expect(recall.options.order).toBe(20)
-    expect(recall.options.locale).toBe(FORGE_LOCALE_NS)
-    expect(typeof recall.options.label).toBe('function') // fix-33 ⑧ locale thunk
-    expect((recall.options.label as () => string)()).toBe('知识召回')
-    expect(recall.component).toBe(views.ForgeRecallView)
-    // fix-29 退役 pin：产品 'dswf-trajectory' 复刻不再注册（官方 'trajectory' roster 行保持）
-    expect(registers.find((r) => r.key === CONVERSATION_VIEW_SLOT && (r.options.id === 'dswf-trajectory' || r.options.id === 'trajectory'))).toBeUndefined()
-    // stage④ 1.8 桥缝退役 pin：召回登记零 inject（详情 = tab 内就地 dialog——openKnowledgeEntry 跳转缝不再存在）
-    expect(recall.options.inject).toBeUndefined()
+    expect(registers.filter((r) => r.key === CONVERSATION_VIEW_SLOT)).toHaveLength(0)
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_EVENT_NODE_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT]) // fix-24 ① hero 影子；1.9 事件折叠条目组；fix-2 封存提示；bug 4b34e5d8 chip 重建效应行；bug 267dcac1 切换闸虚线标记
+    expect(marker?.views?.registered).toEqual([HERO_WORKSPACE_SLOT]) // fix-24 ① hero 影子；fix-13 注记 1.41-1.43：工具行/事件组/切换闸/召回注册迁 project bundle
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -695,63 +664,22 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_EVENT_NODE_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT]) // bug 4b34e5d8 起双 overlay + bug 267dcac1 切换闸虚线标记行（禁输行为归官方 composer block 缝）
+    expect(marker?.views?.registered).toEqual([HERO_WORKSPACE_SLOT]) // fix-13 注记 1.41-1.43：工具行/事件组/切换闸标记注册迁 project bundle
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
 
-  it('dispatchTask 对话工具行（2026-10-09 报障收口）：tool.call.toolview keyed 登记恰一——key = wire 工具名 + locale NS + 发布组件；keyed 最小面（零 label/id/order/priority/children/inject——行数据 = owner props 自足）', () => {
-    const views = publishFakeViews()
-    const { ctx, registers } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const toolviews = registers.filter((r) => r.key === TOOL_CALL_TOOLVIEW_SLOT)
-    expect(toolviews, 'tool.call.toolview 恰一登记（只接管 dispatchTask——其余工具名走官方通用行）').toHaveLength(1)
-    const row = toolviews[0]!
-    expect(row.options.name).toBe(TOOL_CALL_TOOLVIEW_SLOT)
-    expect(row.options.key).toBe(DISPATCH_TASK_TOOL_KEY)
-    expect(row.options.key).toBe('dispatchTask') // plugin-forge FORGE_TOOL_NAMES wire 名同源
-    expect(row.options.locale).toBe(FORGE_LOCALE_NS) // 行内 t 座绑定面
-    expect(row.component).toBe(views.ForgeDispatchToolRow)
-    // keyed 槽最小登记面：行语言字段全部缺席（list/single 槽语义字段不入 keyed 注册）
-    expect(row.options.label).toBeUndefined()
-    expect(row.options.id).toBeUndefined()
-    expect(row.options.order).toBeUndefined()
-    expect(row.options.priority).toBeUndefined()
-    expect(row.options.children).toBeUndefined()
-    expect(row.options.inject).toBeUndefined()
-    unpublishViews()
-  })
-
-  it("bug 60461fc5 双轨归一：1.17 单行 progress 节点注册面退役——events.register 定义恰二（stream + 组节点）且 conversation.chat.node 无 'forge-progress' keyed body（progress 事件仅经 1.9 组卡渲染）", () => {
+  it('fix-13 断言（1.41）：dispatchTask 工具行与事件折叠组注册迁 @dsh-forge/project——壳对 tool.call.toolview / conversation.chat.node 零登记、uiConversation 零消费', () => {
     publishFakeViews()
     const { ctx, registers, eventDefinitions } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    // 第一段：uiConversation.events.register 定义恰二（progress Definition 已随退役摘除）
-    expect(eventDefinitions).toHaveLength(2)
-    // 1.3 回放录取薄包装：stream 定义经 match 旁路包装注册（fold 语义零改动——kind/start/update 同源）
-    expect(eventDefinitions[0]).toMatchObject({ kind: forgeEventStreamDefinition.kind })
-    expect(eventDefinitions[1]).toBe(forgeEventGroupDefinition)
-    // 第二段：'forge-progress' keyed body 零登记（旧式单行节点不再物化）
-    const bodies = registers.filter((r) => r.key === 'conversation.chat.node' && r.options.key === 'forge-progress')
-    expect(bodies, '退役后不得再有 forge-progress keyed body').toHaveLength(0)
+    expect(registers.filter((r) => r.key === 'tool.call.toolview')).toHaveLength(0)
+    expect(registers.filter((r) => r.key === 'conversation.chat.node')).toHaveLength(0)
+    expect(eventDefinitions).toHaveLength(0) // 定义注册随三段注册面迁 project bundle
     unpublishViews()
   })
 
-  it("1.9 消息面事件折叠条目组（source.kind 铸造 send 落库消息）：events.register 定义对 + conversation.chat.node keyed 'forge-event-group' body（发布组件 + locale NS）——人类插话分组锚点面", () => {
-    const views = publishFakeViews()
-    const { ctx, registers } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    // keyed node body：key = 组块节点 kind（buildViewNode.kind 字面量同源）
-    const bodies = registers.filter((r) => r.key === FORGE_EVENT_NODE_SLOT)
-    expect(bodies.filter((body) => body.options.key === FORGE_EVENT_NODE_KIND), 'forge-event-group body 恰一').toHaveLength(1)
-    const body = bodies.find((candidate) => candidate.options.key === FORGE_EVENT_NODE_KIND)!
-    expect(body.options.key).toBe('forge-event-group')
-    expect(body.options.locale).toBe(FORGE_LOCALE_NS)
-    expect(body.component).toBe(views.ForgeEventEntries)
-    unpublishViews()
-  })
-
-  it('1.17 uiConversation 缺席 = 两段全跳 fail-soft（capability absence = 无节点——不炸不阻载其余登记）', () => {
+  it('1.17 uiConversation 缺席 = 不炸不阻载其余登记（fix-13 注记 1.41：壳侧已零消费——回归锚保持）', () => {
     publishFakeViews()
     const base = fakeClientCtx()
     const ctx = {
@@ -764,7 +692,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     forgeClientPlugin().apply(ctx)
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(marker?.views?.error).toBeUndefined()
-    expect(marker?.views?.registered).not.toContain(FORGE_EVENT_NODE_SLOT)
+    expect(marker?.views?.registered).not.toContain('conversation.chat.node')
     unpublishViews()
   })
 
@@ -954,103 +882,46 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
   })
 })
 
-describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
-  it('第一段 sidebarRightTabs.register 两类型：dswf-overview 页型 + guide 入口卡 order 0（官方 10/20/30 前——排最前）+ locale thunk 标题', () => {
+// fix-13 注记（1.45）：dock tab 族两段注册（概览/文档 tab 类型定义 + keyed body + 撤销面）
+// 整体迁 @dsh-forge/project bundle（ui/dock-tabs-face.ts + ui/dock-tabs/ 组件族——注册面
+// 测试在彼侧 dock-tabs-face/dock-tabs 测试）——壳侧本 describe 改为「壳零登记」负向断言。
+describe('dock tab 族两段注册（4.1）——fix-13 断言（1.45）：注册面迁 @dsh-forge/project，壳零登记', () => {
+  it('fix-13 断言（1.45）：apply 后零 dock 登记——sidebarRightTabs.register 零调用 + sidebar.right.pane.tab 零 body + dock 诊断空 + dispose 链零 tab 类型撤销', () => {
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     publishFakeViews()
-    const { ctx, tabTypes, locale } = fakeClientCtx()
+    const { ctx, registers, tabTypes, injectDisposers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    expect(tabTypes.calls).toHaveLength(2)
-    const overview = tabTypes.calls.find((c) => c.id === OVERVIEW_TAB_KIND)!
-    expect(overview.kind).toBe(OVERVIEW_TAB_KIND)
-    expect(overview.patterns).toBeUndefined() // 页型（按 kind 开——无地址识别）
-    expect(overview.guide).toHaveLength(1)
-    const entry = overview.guide![0]!
-    expect(entry.id).toBe('overview')
-    expect(entry.order).toBe(0) // 官方 files/terminal/browser = 10/20/30 → 升序最前（AC2）
-    expect(entry.title()).toBe('项目概览') // zh 词典（fix-33 ⑧ 同径）
-    expect(entry.description?.()).toBe('feature · 任务 · 提案与文档——管线接管工作台')
-    expect(overview.title('sidebar://dswf-overview')).toBe('项目概览') // chip 标题逐读
-    expect(locale.registered[0]![1].en).toMatchObject({ 'tab.overview': 'Overview' })
+    // 两段注册第一段（tab 类型定义——dswf-overview 页型 guide 入口卡 / dswf-doc 资源型
+    // multiple+patterns）已迁 @dsh-forge/project：壳侧 sidebarRightTabs.register 零调用。
+    expect(tabTypes.calls, 'tab 类型注册零调用（注册面迁 @dsh-forge/project）').toHaveLength(0)
+    // 两段注册第二段（keyed 两 body + 概览注入面）已迁 @dsh-forge/project：壳侧零登记。
+    expect(registers.filter((r) => r.key === SIDEBAR_RIGHT_PANE_TAB_SLOT), 'pane.tab keyed body 零登记（注册面迁 @dsh-forge/project）').toHaveLength(0)
+    // 诊断面：dock 族零登记（registered 空/undefined + 无错误）
+    const diag = (globalThis as { __DSH_FORGE_CLIENT__?: { dock?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
+    expect(diag?.dock?.registered ?? []).toEqual([])
+    expect(diag?.dock?.error).toBeUndefined()
+    // 撤销面翻转（原 fix-33 ⑥ 对称性断言随迁）：overlay 洞 dispose 后零 tab 类型撤销
+    // （撤销链归 @dsh-forge/project 自持）
+    injectDisposers.get(SHELL_OVERLAY_SLOT)!()
+    expect(tabTypes.disposedIds, 'dispose 链零 tab 类型撤销（撤销面随注册面迁 @dsh-forge/project）').toEqual([])
     unpublishViews()
+    if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
+    else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
   })
 
-  it('第一段 dswf-doc 资源型：multiple + patterns 整地址 glob + canOpen 前缀防御 + 标题 = 末段文件名（与 dock-tabs 地址编解码同源）', () => {
-    publishFakeViews()
-    const { ctx, tabTypes } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const doc = tabTypes.calls.find((c) => c.id === DOC_TAB_KIND)!
-    expect(doc.kind).toBe(DOC_TAB_KIND)
-    expect(doc.multiple).toBe(true) // 异地址各自成 tab（AC3）
-    expect(doc.patterns).toEqual([`${DOC_ADDRESS_PREFIX}**`])
-    expect(doc.guide).toBeUndefined() // 文档行开出——不上开始页
-    expect(doc.canOpen?.(`${DOC_ADDRESS_PREFIX}p1/docs/features/x/proposal.md`)).toBe(true)
-    expect(doc.canOpen?.('sidebar://guide')).toBe(false) // 前缀外防御拒绝
-    expect(doc.title(`${DOC_ADDRESS_PREFIX}p1/docs/features/x/proposal.md`)).toBe('proposal.md')
-    unpublishViews()
-  })
-
-  it('第二段 sidebar.right.pane.tab keyed 两 body：dispatch 键 = 定义 id + 发布组件；概览注入面 = 桥 + 跳会话（uiWorkspace.openSession）', () => {
-    const views = publishFakeViews()
-    const { ctx, registers, open } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const bodies = registers.filter((r) => r.key === SIDEBAR_RIGHT_PANE_TAB_SLOT)
-    expect(bodies).toHaveLength(2)
-    const overview = bodies.find((r) => r.options.key === OVERVIEW_TAB_KIND)!
-    const doc = bodies.find((r) => r.options.key === DOC_TAB_KIND)!
-    expect(overview.component).toBe(views.ForgeOverviewTab)
-    expect(doc.component).toBe(views.ForgeDocsTab)
-    const face = overview.options.inject!() as {
-      bridge: unknown
-      onOpenSession: (sessionId: string) => void
-      addBugToSession: (bug: { bugId: string; summary: string }, workspaceId: string | null) => Promise<void>
-    }
-    expect(face.bridge).toBe((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__)
-    face.onOpenSession('s-9')
-    expect(open).toHaveBeenCalledWith('s-9')
-    // composer-bug-reference 1.4：Bug 快速路径动作面在场（Bug 子 tab 行按钮消费）
-    expect(typeof face.addBugToSession).toBe('function')
-    expect(doc.options.inject).toBeUndefined() // 文档 body 自足（useTabInfo 由 seat 声明递达）
-    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { dock?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.dock?.registered).toEqual([
-      OVERVIEW_TAB_KIND,
-      DOC_TAB_KIND,
-      SIDEBAR_RIGHT_PANE_TAB_SLOT,
-      SIDEBAR_RIGHT_PANE_TAB_SLOT,
-    ])
-    // 1.8 渲染链退役：预览注册链零改动面——dock 诊断 error 恒缺席（零 absent 记账）
-    expect(marker?.dock?.error).toBeUndefined()
-    unpublishViews()
-  })
-
-  it('字面量同源 pin（bundle 自含不经 import）：两 kind 与地址前缀 = workbench/dock-tabs 常量；标题末段与 dock-tabs 编码同源', () => {
+  it('字面量同源 pin（fix-13 1.45 改跨包 import 比对）：两 kind 与地址前缀 = @dsh-forge/project DSWF_* 常量；标题末段与包内地址编码同源', () => {
     expect(OVERVIEW_TAB_KIND).toBe(DOCK_OVERVIEW_KIND)
     expect(DOC_TAB_KIND).toBe(DOCK_DOC_KIND)
     expect(DOC_ADDRESS_PREFIX).toBe(DOCK_DOC_PREFIX)
-    publishFakeViews()
-    const { ctx, tabTypes } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const doc = tabTypes.calls.find((c) => c.id === DOC_TAB_KIND)!
-    expect(doc.title(forgeDocAddress('p1', 'docs/proposals/m2/proposal.md'))).toBe('proposal.md')
+    // docTabTitle（随注册面迁 @dsh-forge/project——ui/session-actions.ts）与包内
+    // forgeDocAddress 编码同源：标题 = 地址末段文件名。
+    expect(docTabTitle(forgeDocAddress('p1', 'docs/proposals/m2/proposal.md'))).toBe('proposal.md')
     expect(parseForgeDocAddress(forgeDocAddress('p1', 'docs/a b/tech-design.md'))).toEqual({
       projectId: 'p1',
       docRel: 'docs/a b/tech-design.md',
     })
     // fix-13 注记：Bug 地址编解码同源 pin 迁 plugins/project ui/official-seams.test.ts
     // （注册面随迁——壳侧常量镜像已退役）
-    unpublishViews()
-  })
-
-  it('类型注册撤销面：overlay 洞 dispose 即撤销两类型（fix-33 ⑥ 对称性——官方注册表 kind 不残留）', () => {
-    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
-    publishFakeViews()
-    const { ctx, injectDisposers, tabTypes } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    expect(tabTypes.disposedIds).toEqual([])
-    injectDisposers.get(SHELL_OVERLAY_SLOT)!()
-    expect([...tabTypes.disposedIds].sort()).toEqual([DOC_TAB_KIND, OVERVIEW_TAB_KIND])
-    unpublishViews()
-    if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
-    else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
   })
 })
 
@@ -1071,13 +942,11 @@ describe('会话头挂接槽 + 悬浮面板 ⟞ 开面（m3.1 D5/D6 + fix-13 迁
     unpublishViews()
   })
 
-  it('bug 2026-10-16：list 槽 register 必带 id——壳侧 conversation.input.overlay 仅余 dswf-worktree-switch（切换闸虚线标记；封存提示/chip 重建行迁 project bundle——official-seams 同 id 行 pin 在彼侧）', () => {
+  it('fix-13 断言（1.43）：切换闸虚线标记行注册迁 @dsh-forge/project——壳对 conversation.input.overlay 零登记（bug 2026-10-16 id 纪律回归锚在彼侧 official-seams/conversation-views-face 测试）', () => {
     publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    const overlayRows = registers.filter((r) => r.key === CONVERSATION_INPUT_OVERLAY_SLOT)
-    expect(overlayRows, 'overlay 槽壳侧单登记（bug 267dcac1 切换闸虚线标记）').toHaveLength(1)
-    expect(overlayRows[0]!.options.id).toBe('dswf-worktree-switch')
+    expect(registers.filter((r) => r.key === CONVERSATION_INPUT_OVERLAY_SLOT)).toHaveLength(0)
     unpublishViews()
   })
 
@@ -1317,19 +1186,19 @@ describe('会话头挂接槽 + 悬浮面板 ⟞ 开面（m3.1 D5/D6 + fix-13 迁
     unpublishViews()
   })
 
-  it('诊断面：views 族登记数组 = 页签 + hero 影子 + worktree chip/三 overlay（fix-2 封存提示 + bug 4b34e5d8 chip 重建 + bug 267dcac1 切换闸虚线标记）', () => {
+  it('诊断面：views 族登记数组 = hero 影子单行（fix-13 注记 1.41-1.43：页签/工具行/事件组/切换闸标记注册迁 project bundle）', () => {
     publishFakeViews()
     const { ctx } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_EVENT_NODE_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT])
+    expect(marker?.views?.registered).toEqual([HERO_WORKSPACE_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
 })
 
 describe('fix-33 ⑥ 缝族对称性（桥/词典/标记的发布与撤销）', () => {
-  it('apply 中途抛错（首个洞位 inject 失败）→ catch 补撤销：桥全局清空 + locale 词典撤销（死闭包不残留）', () => {
+  it('apply 中途抛错（首个洞位 inject 失败——fix-13 注记 1.45：dock pane.tab inject 缝已迁 @dsh-forge/project，首缝 = sidebar.workspaces）→ catch 补撤销：桥全局清空 + locale 词典撤销（死闭包不残留）', () => {
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     publishFakeViews()
     const base = fakeClientCtx()
@@ -1402,24 +1271,23 @@ describe('DOM 增强器挂接（1.9：md-mermaid enhancer apply 期启动 + 卸�
     unpublishViews()
   })
 
-  it('apply 中途抛错（dock tab 首个 pane.tab inject 失败）= 增强器未及挂接（零 start 零 stop——半成型态零死观察器）', () => {
+  it('apply 中途抛错（早期注册缝 locale.register 失败——fix-13 注记 1.45：原 dock pane.tab inject 缝已随注册面迁 @dsh-forge/project；locale 登记仍是增强器挂接前的早期壳侧缝）= 增强器未及挂接（零 start 零 stop——半成型态零死观察器）', () => {
     publishFakeViews()
     const base = fakeClientCtx()
-    const origInject = base.ctx.slots.inject.bind(base.ctx.slots)
-    let first = true
     const ctx: ForgeClientCtx = {
-      ...base.ctx,
-      slots: {
-        ...base.ctx.slots,
-        inject: (key: string, callback: () => (() => void) | undefined) => {
-          if (first) {
-            first = false
-            throw new Error('inject down')
+      ...base.ctx, // slots 为 readonly——浅拷贝面置换 get（locale 分支抛错旁路同径）
+      get: (name: string) => {
+        if (name === 'locale') {
+          return {
+            register: (): never => {
+              throw new Error('locale down')
+            },
+            bind: () => (key: string) => key,
           }
-          return origInject(key, callback)
-        },
+        }
+        return (base.ctx as { get: (n: string) => unknown }).get(name)
       },
-    }
+    } as ForgeClientCtx
     expect(() => forgeClientPlugin().apply(ctx)).not.toThrow()
     expect(lastFakeEnhancer!.calls).toEqual([])
     unpublishViews()
@@ -1570,7 +1438,7 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
       Promise.resolve({ ok: true as const, sessionId: 's-new', presetApplied: false, sent: false }),
     )
     const orchestrator = { openSessionWithPreset, openExistingSession: vi.fn() }
-    return { addBugToSession: buildBugQuickAdder(clientCtx, sessions as never, orchestrator as never, options?.noteInserted as never), bail: actx.bail, face, openSessionWithPreset }
+    return { addBugToSession: buildBugQuickAdder(clientCtx as never, sessions as never, orchestrator as never, options?.noteInserted as never), bail: actx.bail, face, openSessionWithPreset }
   }
 
   it('有活跃会话 + bail true：scoped 事件收 T1 同构 reference + 末尾 span-CAS，聚焦 composer，不走编排器', async () => {
@@ -1682,7 +1550,8 @@ describe('W4 激活自证（RPC 轻探）+ 看门探测面', () => {
     const listeners: Array<(name: string, value: unknown) => void> = []
     const slotsEntries = new Map<string, readonly unknown[]>([
       [SHELL_OVERLAY_SLOT, ['entry-1']],
-      [MAIN_SLOT, ['entry-2', 'entry-3']],
+      // fix-13 注记（1.42/1.44）：MAIN_SLOT 壳看门清单摘除——求和面改 sidebar.workspaces 键承载
+      [SIDEBAR_WORKSPACES_SLOT, ['entry-2', 'entry-3']],
     ])
     ;(ctx as unknown as { on: unknown }).on = (name: string, cb: (n: string, v: unknown) => void) => {
       listeners.push(cb)

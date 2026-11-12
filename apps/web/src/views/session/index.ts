@@ -10,6 +10,7 @@
 // 跳转缝）。
 export * from './ConversationViews.js'
 export * from './DispatchEventsPanel.js'
-export * from './DispatchPanel.js'
+// fix-13 注记（1.45）：DispatchPanel 出口随 dock tab 族注册面迁 @dsh-forge/project
+// （plugins/project/ui/dock-tabs/worker-session.ts——概览任务 tab 消费面），壳零出口。
 export * from './DispatchToolRow.js'
 export * from './RecallTab.js'

@@ -19,13 +19,22 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import { AddProjectFlow } from '@dsh-forge/project/client-ui/add-project'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
 import { DispatchEventsPanel, type DispatchProgressLogSnapshot } from '../views/session/DispatchEventsPanel.js'
-import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'
-import { TransitionDialog } from '../views/overview/drawer/transition-dialog.js'
-import { forgeDocAddress, nextTaskFocusApply, type TransitionTarget } from './dock-tabs.js'
+// fix-13 注记（1.45）：任务弹窗/转移对话框/概览编排面（TaskDrawer / useTaskDetail /
+// TransitionDialog / forgeDocAddress / nextTaskFocusApply / TransitionTarget /
+// SessionOpenRequest / useProjectDocsRoot）随 dock tab 族注册面迁 @dsh-forge/project
+// （ui/dock-tabs/）——经包窄子路径出口值面直供（add-project 先例）。
+import {
+  TaskDrawer,
+  useTaskDetail,
+  TransitionDialog,
+  forgeDocAddress,
+  nextTaskFocusApply,
+  type TransitionTarget,
+  type SessionOpenRequest,
+  useProjectDocsRoot,
+} from '@dsh-forge/project/client-ui/dock-tabs'
+import type { OpenSessionOrchestrator } from '@dsh-forge/project/client-ui/open-session'
 import type { TaskStatus } from '@dsh-forge/contracts'
-import type { SessionOpenRequest } from '../views/overview/message-format.js'
-import { useProjectDocsRoot } from '../views/overview/overview-data.js'
-import type { OpenSessionOrchestrator } from '../client-plugin/open-session.js'
 import type { LedgerSessionsSnapshot, SnapshotSource } from '../views/sidebar/sidebar-model.js'
 import { MainSessionAnchor, useAnchoredProjects, useWorkspaceProjectMap } from './anchored-projects.js'
 import {

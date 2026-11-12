@@ -1,0 +1,996 @@
+/* 1.42 随 knowledge 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。 */
+/* 知识浏览样式（定位：业务——UF-6 浏览主体：工具栏 + 左轨域目录树 + 卡片网格 + 详情抽屉）。
+ * 结构基准 = 原型 knview（工具栏 / 左轨 224px / 主区 auto-fill 网格——布局结构以原型为准）；
+ * 视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值，lint-tokens 机械执行）。
+ * dsw-raw 豁免（执行记录同步）：左轨 224px / 域树行高 24px 与行内 2/5/6px / 层级缩进
+ * 13px 每层 + 基距 6px / 检索宽 460px / 骨架卡高 96px = 原型结构刻度——官方主题无间距
+ * 标尺令牌（2.7 sidebar.css 同款豁免先例，形态对齐原型优先）；块级留白取行高令牌刻度。 */
+
+/* ── 主体骨架：工具栏 +（左轨 | 主区） ── */
+.dswf-kn-browse {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* ── 工具栏（范围 Pill + 官方 Input 检索——UF-6 P1 项目级范围显示） ── */
+.dswf-kn-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dswf-kn-scope {
+  flex: none;
+}
+
+/* 范围切换触发器（fix-bug：行集在场 = Pill 升格 composer 同款切换控件） */
+.dswf-kn-scope-label {
+  flex: none;
+}
+
+.dswf-kn-scope-chevron {
+  flex: none;
+  margin-left: 4px; /* dsw-raw 原型触发器标签/指示间距刻度 */
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-kn-searchrow {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  max-width: 460px; /* dsw-raw 原型工具栏检索宽刻度 */
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-search {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── 主体行：左轨域树 + 网格主区 ── */
+.dswf-kn-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.dswf-kn-rail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 224px; /* dsw-raw 原型左轨宽刻度 */
+  min-height: 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: var(--dsw-font-xs-13-line-height);
+  border-right: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dswf-kn-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--dsw-font-s-14-line-height) var(--dsw-font-l-20-line-height) var(--dsw-font-l-20-line-height);
+}
+
+/* ── 域目录树（自绘领域组件——官方无域树行件；常展开 ≤3 层） ── */
+.dswf-kn-dom {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px; /* dsw-raw 原型域树行间刻度 */
+  min-height: 0;
+}
+
+.dswf-kn-dom-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+/* 树头「＋」新建目录（knowledge-review-ui H2——accent 文字钮，原型刻度） */
+.dswf-kn-dom-add {
+  flex: none;
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  padding: 0 2px; /* dsw-raw 原型结构刻度（无令牌档） */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-link);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-dom-add:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: var(--dsw-radius-sm);
+}
+
+/* 新建目录编辑行（树头「＋」展开——超层拒收提示留行内） */
+.dswf-kn-dom-new {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* dsw-raw 原型结构刻度（无令牌档） */
+  padding: 0 var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-dom-new-input {
+  height: 24px; /* 域行同刻度 */
+  box-sizing: border-box;
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  padding: 0 6px; /* dsw-raw 原型结构刻度（无令牌档） */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-kn-dom-new-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px; /* dsw-raw 原型结构刻度（无令牌档） */
+}
+
+.dswf-kn-dom-new-btn {
+  height: 20px;
+  padding: 0 8px; /* dsw-raw 原型结构刻度（无令牌档） */
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 999px; /* dsw-raw 原型结构刻度（无令牌档） */
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-dom-new-btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-kn-dom-new-hint {
+  margin-left: auto;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* caret 收合/展开开关（H1——旋转动画，叶行空占位对齐） */
+.dswf-kn-dom-caret {
+  flex: none;
+  width: 12px; /* dsw-raw 原型 caret 刻度 */
+  font-size: 10px; /* dsw-raw 原型结构刻度（无令牌档） */
+  line-height: 1;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 0.2s;
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-dom-caret[data-collapsed] {
+  transform: rotate(-90deg);
+}
+
+/* 待审核徽记（H4——官方 Tag warning 数字形态；margin-left:auto 由 label flex:1 推右） */
+.dswf-kn-dom-badge {
+  flex: none;
+}
+
+/* 拖拽落位 hover 反馈（H3——虚线描边 + hover 底；非域行无 data-dswf-kn-drop 即零反馈） */
+.dswf-kn-dom-row[data-drag-over] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: 1px dashed var(--dsw-alias-link);
+  outline-offset: -1px;
+}
+
+.dswf-kn-dom-row {
+  display: flex;
+  align-items: center;
+  gap: 5px; /* dsw-raw 原型域树行内刻度 */
+  height: 24px; /* dsw-raw 原型域树行刻度 */
+  box-sizing: border-box;
+  padding: 0 6px; /* dsw-raw 原型域树行内刻度 */
+  padding-inline-start: calc(6px + var(--dswf-depth, 0) * 13px); /* dsw-raw 原型层级缩进刻度（depth 变量由行注入） */
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+  text-align: start;
+  user-select: none;
+}
+
+.dswf-kn-dom-row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-kn-dom-row[data-active] {
+  background: var(--dsw-alias-interactive-bg-active);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-kn-dom-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-kn-dom-count {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 卡片网格（auto-fill 多列——原型 kb-cards 同型） ── */
+.dswf-kn-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* 原型网格列刻度（minmax 非令牌面） */
+  gap: var(--dsw-font-xs-13-line-height);
+  align-items: start;
+  align-content: start;
+}
+
+.dswf-kn-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-xs-13);
+  color: inherit;
+  cursor: var(--dsh-cursor-pointer, pointer);
+  text-align: start;
+}
+
+.dswf-kn-card:hover {
+  border-color: var(--dsw-alias-border-l4);
+}
+
+.dswf-kn-card-top {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-kn-card-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-kn-card-abs {
+  display: -webkit-box;
+  overflow: hidden;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dswf-kn-card-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-kn-card-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-kn-card-dom {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px; /* dsw-raw 原型 .dom 次要色 12px 刻度（无令牌档） */
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 弹性空隙（J2 左中右三段——域(左) · spacer · 状态 chip + 创建时间(右端锚定)） */
+.dswf-kn-card-spacer {
+  flex: 1;
+}
+
+/* J1 热度徽章（标题行右端——自绘火焰图标 + 数字；24px 高 / 13px 字 / 上移 5px——原型刻度） */
+.dswf-kn-card-heat {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px; /* dsw-raw 原型 heat 图标-数字间距 */
+  height: 24px;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px; /* dsw-raw 原型 heat 胶囊圆角（无令牌档） */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  transform: translateY(-5px); /* 原型：相邻文字基线上移 5px */
+}
+
+/* J2 底行中文状态 chip（已确认 = 中性填充 + 绿点 / 待审核 = warning 描边 + 琥珀点——零英文） */
+.dswf-kn-card-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px; /* dsw-raw 原型 statechip 点-文字间距 */
+  height: 20px;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid transparent;
+  border-radius: 999px; /* dsw-raw 原型 statechip 胶囊圆角（无令牌档） */
+  font-size: 12px; /* dsw-raw 原型 statechip 12px 刻度（无令牌档） */
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.dswf-kn-card-status.is-actionable {
+  color: var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warning-primary));
+  border-color: var(--dsw-alias-state-warn-label, var(--dsw-alias-state-warning-primary));
+  background: transparent;
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-card-status.is-actionable:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-kn-card-status.is-actionable:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.dswf-kn-card-time {
+  flex: none;
+  font-size: 12px; /* dsw-raw 原型 .time caption 12px 刻度（无令牌档） */
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+/* ── 网格骨架（首装/索引重建中——UF-6 States「加载中」） ── */
+.dswf-kn-skeleton {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* 原型网格列刻度（minmax 非令牌面） */
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-skeleton-card {
+  height: 96px; /* dsw-raw 原型卡片骨架刻度 */
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+/* ── 错误条 + 小文本动作钮（行内引导动作——sidebar-retry 同型行语言） ── */
+.dswf-kn-error {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  margin: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-kn-textaction {
+  flex: none;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary-bluish);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-textaction:hover {
+  color: var(--dsw-alias-link);
+}
+
+/* ── 详情弹窗（3.7：自持可拖移 dialog——元数据表 + 摘要块 + Markdown 正文）──
+ * 形制 = bug-dialog 同先例（真 dialog 自持皮 + 拖动机械复用 drawer：标题栏拖移 +
+ * 左右缘拖宽；视觉一律官方护仗——色/字/距/圆角零裸值）：
+ *   宽 = inline style 注入（缺省 770——720 阅读刻度 +50 用户裁决；缘侧拉伸钳制归组件）；
+ *   位 = 逐开本地态（关闭即弃——起始位缺省 CSS 居中兜底同任务弹窗）；
+ *   高度机制对齐专家 detail-dialog（G4——用户裁决）：height auto + min-height 320px +
+ *   max-height 92% + resize both——内容驱动零固定空白；纵向滚动归内容区。
+ * 内容体三区：元数据表首区（四列同行 + 关键词整行，紧凑 4px 内衬——用户裁决）+ 摘要 + 正文。 */
+.dswf-kn-dialog {
+  position: fixed;
+  left: 50%; /* 起始位缺省（效应注入 inline left/top 前的居中兜底——任务弹窗同刻度） */
+  top: 14vh;
+  transform: translateX(-50%);
+  z-index: var(--dsh-dockkit-float-layer, 60);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  height: auto;
+  min-height: 320px; /* dsw-raw 原型 .dlg 最小高刻度（mockup G4） */
+  max-height: 92vh; /* dsw-raw 原型 .dlg 92% 上限刻度（任务弹窗 92vw 同豁免口径） */
+  min-width: 280px; /* dsw-raw resize both 下限（低于缘侧拖宽 MIN 前 CSS 兜底） */
+  resize: both; /* 专家 detail-dialog 同机械——右下角手柄自由拉伸 */
+  max-width: 92vw; /* 窄屏防越（任务弹窗同口径） */
+  pointer-events: auto;
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+/* 标题栏：白底（与专家详情 dialog 统一——无灰条/无分隔线/无手柄图形），行尾关闭位；
+ * 整头拖移 + cursor move 保留（可拖移语义位） */
+.dswf-kn-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-height: 30px; /* 任务弹窗标题栏收紧刻度（D43 同值） */
+  padding-block: var(--dsw-font-xs-13-line-height); /* 头行下移留白（标题/关闭钮垂直呼吸——专家 dialog 同感） */
+  padding-inline: var(--dsw-font-s-14-line-height);
+  cursor: var(--dsh-cursor-move, move);
+  user-select: none;
+  touch-action: none;
+}
+
+.dswf-kn-dialog-spacer {
+  flex: 1;
+}
+
+/* 缘侧拖宽手柄（任务弹窗 dswf-td-resize 同刻度：9px 命中区 + 外扩 4px + ::after 竖线） */
+.dswf-kn-dialog-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  z-index: 3;
+  cursor: var(--dsh-cursor-col-resize, col-resize);
+  touch-action: none;
+}
+
+.dswf-kn-dialog-resize[data-dswf-kn-dialog-resize='left'] {
+  left: -4px;
+}
+
+.dswf-kn-dialog-resize[data-dswf-kn-dialog-resize='right'] {
+  right: -4px;
+}
+
+.dswf-kn-dialog-resize::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 24px;
+  transform: translateY(-50%);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-border-l3);
+}
+
+.dswf-kn-dialog-resize[data-dswf-kn-dialog-resize='left']::after {
+  left: 3px;
+}
+
+.dswf-kn-dialog-resize[data-dswf-kn-dialog-resize='right']::after {
+  right: 3px;
+}
+
+/* 表单体：纵向滚动主区（唯一滚动面——内容多不出壳） */
+.dswf-kn-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px var(--dsw-font-s-14-line-height) var(--dsw-font-s-14-line-height); /* 顶部贴标题栏（dsw-raw 结构刻度——紧凑不浪费） */
+}
+
+/* 内容体（满宽；三区纵排——区间距收紧 xs 刻度） */
+.dswf-kn-drawer {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度）——块间距归 content gap 不变 */
+}
+
+/* 三区纵排容器 */
+.dswf-kn-drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-s-14-line-height);
+}
+
+/* 分区小标（原型 kd-section-label 行语言） */
+.dswf-kn-drawer-seclabel {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 区一·元数据表（首区——用户裁决）：四列同行（域/状态/作者/更新时间）+ 关键词整行 */
+.dswf-kn-drawer-metas {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度）——块间距归 content gap 不变 */
+}
+
+.dswf-kn-drawer-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 四列同行刻度（fr 非令牌面——用户裁决） */
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-xs-13);
+}
+
+.dswf-kn-drawer-mrow {
+  display: flex;
+  min-width: 0;
+  border-right: 1px solid var(--dsw-alias-border-l1);
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.dswf-kn-drawer-mrow:nth-child(4n) {
+  border-right: none; /* 四列同行——每行第 4 格去右边线 */
+}
+
+.dswf-kn-drawer-mrow.is-span {
+  grid-column: 1 / -1;
+  border-right: none;
+}
+
+.dswf-kn-drawer-mrow:last-child {
+  border-bottom: none;
+}
+
+.dswf-kn-drawer-mk {
+  flex: none;
+  box-sizing: border-box;
+  width: 78px; /* dsw-raw 原型元数据标签列宽刻度 */
+  padding: 4px var(--dsw-font-xs-13-line-height); /* dsw-raw 紧凑行距（用户裁决——行高收紧） */
+  background: var(--dsw-alias-bg-layer-3); /* 弹窗面上抬一阶（原型暗色同型：表底 layer-1 · 标签 layer-2） */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.dswf-kn-drawer-mv {
+  display: flex;
+  flex: 1;
+  flex-wrap: nowrap; /* 单行不换行（用户裁决）——溢出省略号收口 */
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+  padding: 4px var(--dsw-font-xs-13-line-height); /* dsw-raw 紧凑行距（用户裁决——行高收紧） */
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left; /* 表格左对齐（用户裁决 2026-11-05——值居中退役） */
+}
+
+/* 关键词整行例外：chips 左对齐 + 可换行（多词流式排布） */
+.dswf-kn-drawer-mrow.is-span .dswf-kn-drawer-mv {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  white-space: normal;
+  overflow: visible;
+}
+
+/* 区二·摘要块（元数据置顶后次区：条目标题 + 醒目摘要——原型 kd-head + kd-abs 同型） */
+.dswf-kn-drawer-summary {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度）——块间距归 content gap 不变 */
+}
+
+.dswf-kn-drawer-title {
+  margin: 0;
+  font: var(--dsw-font-base-strong-16);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-kn-drawer-abs {
+  margin: 0;
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border-left: 2px solid var(--dsw-alias-link); /* dsw-raw 原型摘要块左标线宽 */
+  border-radius: 0 var(--dsw-radius-md) var(--dsw-radius-md) 0;
+  background: var(--dsw-alias-interactive-bg-hover);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 区三·正文（MarkdownDoc 官方排版自带；分区只管滚动容器内留白） */
+.dswf-kn-drawer-body {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度）——块间距归 content gap 不变 */
+  padding-bottom: var(--dsw-font-l-20-line-height);
+}
+
+/* 抽屉骨架（详情按需拉取在途） */
+.dswf-kn-drawer-skeleton {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-s-14-line-height) var(--dsw-font-l-20-line-height);
+}
+
+.dswf-kn-drawer-skline {
+  height: var(--dsw-font-base-16-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+.dswf-kn-drawer-skline.is-title {
+  width: 60%; /* dsw-raw 原型骨架行长刻度 */
+}
+
+.dswf-kn-drawer-skline.is-abs {
+  width: 100%;
+}
+
+.dswf-kn-drawer-skline.is-long {
+  width: 85%; /* dsw-raw 原型骨架行长刻度 */
+}
+
+/* 错误/空态面容器（EmptyState 居中占满抽屉内容区） */
+.dswf-kn-drawer-face {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--dsw-font-s-14-line-height);
+}
+
+/* ── 知识视图装配壳（3.8：浏览主体 + 详情抽屉挂载——官方 keyed 面板槽占满）── */
+.dswf-kn-view {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ── 工具栏扩展（knowledge-review-ui SC-E/SC-F：状态 chips + 多选功能组五钮）──
+ * 状态 chips = 官方 Pill 三片（服务端 statusFilter——零客户端过滤语义）；
+ * 多选功能组 = 同刻度胶囊实线描边（语义色：通过 accent / 驳回 error / 其余中性——
+ * 色一律官方令牌）；工具栏右端 = 尾部推齐位。 */
+.dswf-kn-statuschips {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-statuschip {
+  flex: none;
+}
+
+.dswf-kn-toolbar-tail {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: auto;
+}
+
+.dswf-kn-multiselect {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-selcount {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+/* 功能组胶囊实线描边钮（官方 Pill button 形态 + 语义色覆盖——同刻度） */
+.dswf-kn-act {
+  flex: none;
+  border: 1px solid var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+}
+
+.dswf-kn-act:hover {
+  border-color: var(--dsw-alias-border-l4);
+}
+
+.dswf-kn-act.is-accent {
+  border-color: var(--dsw-alias-link);
+  color: var(--dsw-alias-link);
+}
+
+.dswf-kn-act.is-accent:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-kn-act.is-error {
+  border-color: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-kn-act.is-error:hover {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+.dswf-kn-act:disabled {
+  border-color: var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+/* ── 卡片多选 checkbox（SC-F3：右端与标题同行——官方 Checkbox，非多选模式不在场） ── */
+.dswf-kn-card-check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+/* 官方 Checkbox 要求 caller-owned 可见 label——sr-only 只收口 label 文本 span；
+   勾选框本体（input 16×16）保持可见可点（bug cfad7c63：整件隐藏 → rect 0×0） */
+.dswf-kn-card-check .dswf-kn-check span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── 卡片 chip 快速通过可点态（SC：仅 unconfirmed 可点——hover 手型 + 焦点环官方令牌） ── */
+.dswf-kn-card-chip {
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--dsw-radius-sm);
+  cursor: default;
+}
+
+.dswf-kn-card-chip.is-actionable {
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-card-chip.is-actionable:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+/* ── dialog 双模式（knowledge-review-ui SC-G：标题栏描边钮组 + 编辑字段面 + toast）──
+ * 头钮 = 多选功能组同刻度胶囊实线描边（dswf-kn-act 复用，语义色同面）；
+ * 编辑字段 = 专家 dswf-dlg-field 同型行语言（label 弱化 + 控件满宽）；chip 交互 =
+ * mockup kwEdit 语义（双击编辑 / ＋ 新增放大态 / ✕ 移除，退出编辑包紧文字）。 */
+.dswf-kn-dialog-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+/* 编辑面容器（字段间距收紧——原型 editBody 逐位刻度） */
+.dswf-kn-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-s-14-line-height);
+}
+
+/* 首行：域（左半，只读）+ 标题（右半，可编辑）同行（用户裁决） */
+.dswf-kn-edit-domtitle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-edit-dom {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 32px; /* dsw-raw 原型 .dom/.tit 输入高刻度 */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-3);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: default;
+}
+
+.dswf-kn-edit-titlefield {
+  display: flex;
+  flex: 2;
+  flex-direction: column;
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度） */
+  min-width: 0;
+}
+
+.dswf-kn-edit-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px; /* dsw-raw 原型 .dom/.tit 输入高刻度 */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 编辑字段行（专家 dswf-dlg-field 同型：弱化 label + 控件区） */
+.dswf-kn-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* label 贴内容（dsw-raw 结构刻度） */
+  min-width: 0;
+}
+
+.dswf-kn-edit-field > label {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 关键词 chips 行（退出编辑包紧文字——nowrap + fit-content，不换行零多余空白） */
+.dswf-kn-edit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-kn-kwchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px; /* dsw-raw 原型 chip 行内刻度 */
+  box-sizing: border-box;
+  width: fit-content;
+  height: 26px; /* dsw-raw 原型 .tag chip 刻度（放大态编辑同值） */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px; /* dsw-raw 原型结构刻度（无令牌档） */
+  background: var(--dsw-alias-bg-layer-3);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.dswf-kn-kwchip:hover {
+  border-color: var(--dsw-alias-border-l4);
+}
+
+.dswf-kn-kwx {
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-kwx:hover {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 放大态编辑输入（双击/＋ 进入——原型 kw-edit accent 描边胶囊；SC-J J5 修订口径
+ * （bug 436cc88d）：Chromium UA 对 input 强制 overflow: clip，overflow visible
+ * 契约不可达——改型为宽随内容自适应（EntryDrawer.tsx 测量撑开），CSS 仅持
+ * min-width 140px 下限） */
+.dswf-kn-kwedit {
+  box-sizing: border-box;
+  min-width: 140px;
+  height: 26px; /* dsw-raw 原型 .tag chip 刻度（放大态编辑同值） */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-link);
+  border-radius: 999px; /* dsw-raw 原型 kw-edit 胶囊圆角（无令牌档） */
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ＋ 新增钮（原型 addkw 虚线描边） */
+.dswf-kn-kwadd {
+  box-sizing: border-box;
+  height: 26px; /* dsw-raw 原型 .tag chip 刻度 */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 999px; /* dsw-raw 原型结构刻度（无令牌档） */
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-kn-kwadd:hover {
+  border-color: var(--dsw-alias-border-l4);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 摘要/正文文本域（正文自适应高归 KnAutoTextarea inline——此处只管视觉） */
+.dswf-kn-edit-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+  resize: vertical;
+}
+
+.dswf-kn-edit-input:focus-visible,
+.dswf-kn-edit-textarea:focus-visible,
+.dswf-kn-kwedit:focus-visible,
+.dswf-kn-kwadd:focus-visible,
+.dswf-kn-kwx:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+/* 校验/回执错误行（专家 dswf-dlg-err 同型——错误留 dialog） */
+.dswf-kn-dlg-err {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* toast 面（专家 dswf-toast 同型——一次性提示自灭） */
+.dswf-kn-toast {
+  position: absolute;
+  bottom: var(--dsw-font-s-14-line-height);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-elevation-prominent);
+  pointer-events: none;
+}
+
+/* ── 知识面板舞台（自 workbench/workbench.css .dswf-knowledge-panel 段随迁——官方 main
+ * 面板 'dswf-knowledge' CenterColumn 全高；浏览面自排——KnowledgeView .dswf-kn-view
+ * flex 填充同刻度） ── */
+.dswf-knowledge-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--dsw-alias-bg-base);
+}

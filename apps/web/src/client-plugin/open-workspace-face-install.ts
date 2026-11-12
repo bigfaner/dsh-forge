@@ -13,7 +13,9 @@
 //    写入旧 blank 草稿、旧 blank 清空——beforeOpen 时点新旧两态皆在 retain（replaceMain
 //    client.js:971-992：新引用先 retain、旧 main 后 release），迁移窗成立。
 
-import { waitForWorkspacePresent, type OpenSessionWaitOptions } from './open-session.js'
+// fix-13 注记（1.45）：open-session 纯模块迁 @dsh-forge/project（ui/open-session.ts）——
+// waitForWorkspacePresent 改经包窄子路径出口值面直供（plugin.ts 同径）。
+import { waitForWorkspacePresent, type OpenSessionWaitOptions } from '@dsh-forge/project/client-ui/open-session'
 
 const KEY = '__dshForgeOpenWorkspace'
 

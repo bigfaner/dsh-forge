@@ -1,0 +1,480 @@
+// 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
+// 时间线（定位：业务——AC5 块二：现状条[当前关联一览，六型条件] + 事件流[垂直时间线，
+// 关联信息织入事件]）。verb 路由 = contracts TASK_RECORD_VERBS 六值穷尽（Implementation
+// Notes）；评估事件 = eval 族 submit 记录的呈现路由（verb 词汇封闭六值——M2 评估结果落
+// submit 记录，标签换「评估」+ 🔑 主会话织入）。节点分色：提交绿/领取蓝/阻塞琥珀/恢复绿/
+// 人工转移蓝环（类位吃状态令牌——drawer.css）。
+import { Fragment, type ReactNode } from 'react'
+import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { TASK_STATUS_LABELS, type SessionTaskLinkCard, type TaskDetail, type TaskRecordEntry, type TaskRecordVerb } from '@dsh-forge/contracts'
+import { isoTimeLabelZh } from '../../../components.js'
+import { evalScoreOf, gateSummary, latestSubmitGateOf, prereqFullName, sessionTitleOfOrId, taskKeyLabel, varsText } from './detail-model.js'
+import { CollapsibleText, Fold } from './collapsible-text.js'
+import { templateFamilyOf } from './type-templates/index.js'
+
+export { evalScoreOf } from './detail-model.js' // 现状条「得分+严重度」条件同源投影（消费面重导出）
+
+/** verb → 节点色类（v-submit 绿 / v-claim 蓝 / v-block 琥珀 / v-restore 绿 / v-human 蓝环） */
+export const TASK_VERB_KIND: Readonly<Record<TaskRecordVerb, string>> = {
+  add: 'v-add',
+  claim: 'v-claim',
+  spawn: 'v-claim',
+  submit: 'v-submit',
+  transition: 'v-human',
+  updateTask: 'v-add',
+  'auto-restore': 'v-restore',
+  'auto-block': 'v-block',
+}
+
+/** verb 标签（七值穷尽；eval 族 submit → 「评估」——呈现路由非词汇变更） */
+export function recordVerbLabel(verb: TaskRecordVerb, taskType: string): string {
+  if (verb === 'submit' && templateFamilyOf(taskType) === 'eval') return '评估'
+  switch (verb) {
+    case 'add':
+      return '创建'
+    case 'claim':
+      return '领取'
+    case 'spawn':
+      return '派发执行'
+    case 'submit':
+      return '提交'
+    case 'transition':
+      return '人工转移'
+    case 'updateTask':
+      return '修改'
+    case 'auto-restore':
+      return '自动恢复'
+    case 'auto-block':
+      return '自动阻塞'
+  }
+}
+
+/** 现状条条目（五型条件投影——渲染序 = 投影序） */
+export type NowBarItem =
+  | { readonly kind: 'blocked'; readonly reason: string }
+  | { readonly kind: 'prereqs'; readonly items: readonly { readonly key: string; readonly slug: string; readonly statusZh: string }[] }
+  | { readonly kind: 'sessions'; readonly items: readonly SessionTaskLinkCard[] }
+  | { readonly kind: 'gate'; readonly passed: number; readonly total: number }
+  | { readonly kind: 'score'; readonly score: string; readonly severity: string }
+
+/** 现状条条目投影（五型条件：blocked / 前置[键+状态] / 挂接 pill 分型 /
+ *  质量门 M/N[gate 族] / 得分+严重度[eval 族——vars.score 自由文本承载]） */
+export function nowBarItems(detail: TaskDetail): readonly NowBarItem[] {
+  const items: NowBarItem[] = []
+  if (detail.taskStatus === 'blocked' && detail.blockedReason !== undefined) {
+    items.push({ kind: 'blocked', reason: detail.blockedReason })
+  }
+  if (detail.prerequisites.length > 0) {
+    items.push({
+      kind: 'prereqs',
+      items: detail.prerequisites.map((p) => ({
+        key: p.localId,
+        slug: p.slug,
+        statusZh: TASK_STATUS_LABELS[p.taskStatus].zh,
+      })),
+    })
+  }
+  if (detail.sessions.length > 0) {
+    items.push({ kind: 'sessions', items: detail.sessions })
+  }
+  const family = templateFamilyOf(detail.taskType)
+  if (family === 'gate') {
+    const gate = latestSubmitGateOf(detail.records)
+    if (gate !== undefined) {
+      const summary = gateSummary(gate)
+      items.push({ kind: 'gate', passed: summary.passed, total: summary.total })
+    }
+  }
+  if (family === 'eval') {
+    const score = evalScoreOf(detail)
+    if (score !== undefined) {
+      items.push({ kind: 'score', ...score })
+    }
+  }
+  return items
+}
+
+/** 会话 pill（双源分型：link = 派发⟞ / record = 执行⟞；标签 = 会话名回退 id——S1/SC1；
+ *  可点跳会话——回调缺席 = 非交互呈现） */
+function SessionPill({
+  session,
+  onOpenSession,
+  sessionTitleOf,
+}: {
+  readonly session: SessionTaskLinkCard
+  readonly onOpenSession: ((sessionId: string) => void) | undefined
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
+}): ReactNode {
+  const label = `${session.source === 'link' ? '派发' : '执行'}⟞ ${sessionTitleOfOrId(sessionTitleOf, session.sessionId)}`
+  if (onOpenSession === undefined) return <span className="dswf-td-sess">{label}</span>
+  return (
+    // D30：原生 title 退役——官方 Tooltip（portal 逃逸弹窗滚动容器/层叠上下文）
+    <Tooltip label="跳转会话" portal>
+      <button
+        type="button"
+        className="dswf-td-sess is-link"
+        data-dswf-td-sess={session.sessionId}
+        onClick={() => {
+          onOpenSession(session.sessionId)
+        }}
+      >
+        {label}
+      </button>
+    </Tooltip>
+  )
+}
+
+/** 现状条（块首——条件全缺 → 不渲染） */
+export function TimelineNow({
+  detail,
+  onOpenSession,
+  sessionTitleOf,
+  taskTitleOf,
+}: {
+  readonly detail: TaskDetail
+  readonly onOpenSession?: (sessionId: string) => void
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
+  /** 前置全名解析器（S3 前置编号化悬停补全名；缺席/未命中 = fail-soft 回退编号） */
+  readonly taskTitleOf?: (slug: string, localId: string) => string | undefined
+}): ReactNode {
+  const items = nowBarItems(detail)
+  if (items.length === 0) return null
+  return (
+    <div className="dswf-td-now" data-dswf-td-now="">
+      <span className="dswf-td-now-k">现状</span>
+      {items.map((item, index) => {
+        switch (item.kind) {
+          case 'blocked':
+            return (
+              <span className="dswf-td-now-item is-warn" key={index}>
+                ⚠ {item.reason}
+              </span>
+            )
+          case 'prereqs':
+            return (
+              <span className="dswf-td-now-item" key={index}>
+                {/* S3 前置编号化：只显编号（状态括注），悬停 Tooltip 补 {编号} {title} 全名 */}
+                前置{' '}
+                {item.items.map((p) => (
+                  <Tooltip key={`${p.slug}/${p.key}`} label={prereqFullName(taskTitleOf, { slug: p.slug, localId: p.key })} portal>
+                    <span className="dswf-td-prereq" data-dswf-td-prereq={p.key}>
+                      {`${p.key}（${p.statusZh}）`}
+                    </span>
+                  </Tooltip>
+                ))}
+              </span>
+            )
+          case 'sessions':
+            return (
+              <span className="dswf-td-now-item" key={index}>
+                {item.items.map((session) => (
+                  <SessionPill key={session.sessionId} session={session} onOpenSession={onOpenSession} sessionTitleOf={sessionTitleOf} />
+                ))}
+              </span>
+            )
+          case 'gate':
+            return (
+              <span className="dswf-td-now-item" key={index}>
+                质量门 {item.passed}/{item.total}
+              </span>
+            )
+          case 'score':
+            return (
+              <span className="dswf-td-now-item" key={index}>
+                得分 {item.score}/100 · 严重度 {item.severity}
+              </span>
+            )
+        }
+      })}
+    </div>
+  )
+}
+
+/** 事件说明行（织入信息——垂直缩进对齐）。纯文本子串走收起/展开单源组件（S2：多行默认
+ *  收起显首行、点击展开全文、保留换行；结构化 ReactNode 子串直通不折叠） */
+function Note({ children }: { readonly children: ReactNode }): ReactNode {
+  return <div className="dswf-td-ev-note">{typeof children === 'string' ? <CollapsibleText text={children} /> : children}</div>
+}
+
+/** AC 徽标行（✓/✗ + 判据原文 + 一行证据——TaskAcResult 逐项镜像） */
+export function AcItem({ met, criterion, evidence }: { readonly met: boolean; readonly criterion: string; readonly evidence?: string }): ReactNode {
+  return (
+    <div className={`dswf-td-ac-item ${met ? 'is-met' : 'is-miss'}`} data-dswf-td-ac-item="">
+      <span className="dswf-td-ac-mark">{met ? '✓' : '✗'}</span>
+      <span className="dswf-td-ac-text">
+        {criterion}
+        {evidence !== undefined ? <span className="dswf-td-ac-ev"> · {evidence}</span> : null}
+      </span>
+    </div>
+  )
+}
+
+/** submit 结构化面（S2——task_records 结构化列消费）：ac_json 在场 = AC 折叠块（收起态
+ *  「AC N/M ✓」计数，展开逐项徽标）；record_fields 在场 = keyDecisions 分列 + 分类字段
+ *  行（测试通过/失败/覆盖率/notes 按在缺席渲染）。缺席字段 fail-soft 逐项省略，全缺 = 不渲染。 */
+function SubmitStructured({ record }: { readonly record: TaskRecordEntry }): ReactNode {
+  const ac = record.acceptanceCriteria
+  const fields = record
+  const metCount = ac?.filter((item) => item.met).length ?? 0
+  const fieldBits: string[] = []
+  if (fields.testsPassed !== undefined) fieldBits.push(`通过 ${fields.testsPassed}`)
+  if (fields.testsFailed !== undefined) fieldBits.push(`失败 ${fields.testsFailed}`)
+  if (fields.coverage !== undefined) fieldBits.push(`覆盖率 ${Math.round(fields.coverage * 100)}%`)
+  return (
+    <>
+      {ac !== undefined && ac.length > 0 ? (
+        <div className="dswf-td-ac" data-dswf-td-ac="">
+          <Fold
+            summary={
+              <span className="dswf-td-ac-count" data-dswf-td-ac-count="">
+                {`AC ${metCount}/${ac.length}${metCount === ac.length ? ' ✓' : ''}`}
+              </span>
+            }
+          >
+            {ac.map((item, index) => (
+              <AcItem key={index} met={item.met} criterion={item.criterion} {...(item.evidence !== undefined ? { evidence: item.evidence } : {})} />
+            ))}
+          </Fold>
+        </div>
+      ) : null}
+      {fields.keyDecisions !== undefined && fields.keyDecisions.length > 0 ? (
+        <div className="dswf-td-kd" data-dswf-td-kd="">
+          {fields.keyDecisions.map((decision, index) => (
+            <div className="dswf-td-kd-item" data-dswf-td-kd-item="" key={index}>
+              决策 · {decision}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {fieldBits.length > 0 || fields.notes !== undefined ? (
+        <div className="dswf-td-fields" data-dswf-td-fields="">
+          {fieldBits.length > 0 ? `测试 ${fieldBits.join(' · ')}` : ''}
+          {fieldBits.length > 0 && fields.notes !== undefined ? ' · ' : ''}
+          {fields.notes !== undefined ? fields.notes : ''}
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+/** 事件织入（创建：前置声明 + fix 链；领取：digest + 派发⟞；提交：gate + commit 徽标/
+ *  摘要/文件数 + 执行⟞；转移：from→to+reason；自动阻塞/恢复：语义行） */
+function eventWeaves(
+  record: TaskRecordEntry,
+  detail: TaskDetail,
+  onOpenSession: ((sessionId: string) => void) | undefined,
+  sessionTitleOf?: (sessionId: string) => string | undefined,
+  taskTitleOf?: (slug: string, localId: string) => string | undefined,
+): ReactNode {
+  const vars = detail.vars ?? {}
+  switch (record.verb) {
+    case 'add': {
+      // S3 前置编号化：只显编号，悬停 Tooltip 补 {编号} {title} 全名
+      const prereqs = detail.prerequisites.map((p) => (
+        <Tooltip key={`${p.slug}/${p.localId}`} label={prereqFullName(taskTitleOf, p)} portal>
+          <span className="dswf-td-prereq" data-dswf-td-prereq={p.localId}>
+            {p.localId}
+          </span>
+        </Tooltip>
+      ))
+      const fixSource = detail.sourceTask !== undefined ? taskKeyLabel(detail.sourceTask.slug, detail.sourceTask.localId) : undefined
+      const rootCause = varsText(vars, 'rootCause')
+      const sourceFiles = varsText(vars, 'sourceFiles')
+      const testScript = varsText(vars, 'testScript')
+      return (
+        <>
+          {prereqs.length > 0 ? (
+            <Note>
+              前置声明 ←{' '}
+              {prereqs.map((el, i) => (
+                <Fragment key={i}>
+                  {i > 0 ? ' · ' : ''}
+                  {el}
+                </Fragment>
+              ))}
+            </Note>
+          ) : null}
+          {fixSource !== undefined || rootCause !== undefined ? (
+            <Note>
+              {`fix 链${fixSource !== undefined ? `：来源 ${fixSource}` : ''}${rootCause !== undefined ? ` · 根因：${rootCause}` : ''}`}
+            </Note>
+          ) : null}
+          {sourceFiles !== undefined ? <Note>{sourceFiles}</Note> : null}
+          {testScript !== undefined ? <Note>{`$ ${testScript}`}</Note> : null}
+        </>
+      )
+    }
+    case 'claim': {
+      const dispatch = record.sessionId !== undefined ? { sessionId: record.sessionId } : undefined
+      return (
+        <>
+          {record.digest !== undefined ? <Note>{`digest ${record.digest}`}</Note> : null}
+          {dispatch !== undefined ? (
+            <Note>
+              <SessionPill
+                session={{
+                  taskId: detail.taskId,
+                  slug: detail.slug,
+                  localId: detail.localId,
+                  title: detail.title,
+                  taskStatus: detail.taskStatus,
+                  sessionId: dispatch.sessionId,
+                  source: 'link',
+                }}
+                onOpenSession={onOpenSession}
+                sessionTitleOf={sessionTitleOf}
+              />
+            </Note>
+          ) : null}
+        </>
+      )
+    }
+    case 'submit': {
+      const summary = gateSummary(
+        record.gate ?? { compile: false, fmt: false, lint: false, test: false },
+      )
+      return (
+        <>
+          {record.gate !== undefined ? (
+            <Note>
+              {`gate ${summary.passed}/${summary.total}`}
+              {record.gate.coverage !== undefined ? ` · 覆盖率 ${Math.round(record.gate.coverage * 100)}%` : ''}
+            </Note>
+          ) : null}
+          {/* S2 结构化列消费：ac_json/record_fields_json 在场 = 结构化渲染（AC 徽标折叠块
+              + keyDecisions 分列 + 分类字段行）；缺席 = 不渲染本块（fail-soft 纯文本行承载） */}
+          <SubmitStructured record={record} />
+          {record.commitHash !== undefined ? (
+            <Note>
+              <span className="dswf-td-commit" data-dswf-td-commit={record.commitHash}>
+                {record.commitHash}
+              </span>
+              {record.summary !== undefined ? (
+                <>
+                  {' '}
+                  <CollapsibleText text={record.summary} />
+                </>
+              ) : ''}
+              {record.files !== undefined ? `（${record.files.length} 文件）` : ''}
+            </Note>
+          ) : record.summary !== undefined ? (
+            <Note>{record.summary}</Note>
+          ) : null}
+          {record.sessionId !== undefined ? (
+            <Note>
+              <SessionPill
+                session={{
+                  taskId: detail.taskId,
+                  slug: detail.slug,
+                  localId: detail.localId,
+                  title: detail.title,
+                  taskStatus: detail.taskStatus,
+                  sessionId: record.sessionId,
+                  source: 'record',
+                }}
+                onOpenSession={onOpenSession}
+                sessionTitleOf={sessionTitleOf}
+              />
+            </Note>
+          ) : null}
+        </>
+      )
+    }
+    case 'transition':
+      return (
+        <>
+          <Note>{`${statusZh(record.fromStatus)} → ${statusZh(record.toStatus)}${record.reason !== undefined ? ` · reason: ${record.reason}` : ''}`}</Note>
+        </>
+      )
+    case 'auto-restore':
+      return (
+        <>
+          <Note>{`${statusZh(record.fromStatus)} → ${statusZh(record.toStatus)}（边保留）`}</Note>
+          {record.summary !== undefined || record.reason !== undefined ? (
+            <Note>{record.summary ?? record.reason}</Note>
+          ) : null}
+        </>
+      )
+    case 'auto-block':
+      return (
+        <>
+          {record.summary !== undefined || record.reason !== undefined ? (
+            <Note>{record.summary ?? record.reason}</Note>
+          ) : null}
+        </>
+      )
+    case 'spawn':
+      return (
+        <>
+          <Note>执行会话诞生（worker 子会话——进行中即可打开）</Note>
+          {record.sessionId !== undefined ? (
+            <Note>
+              <SessionPill
+                session={{
+                  taskId: detail.taskId,
+                  slug: detail.slug,
+                  localId: detail.localId,
+                  title: detail.title,
+                  taskStatus: detail.taskStatus,
+                  sessionId: record.sessionId,
+                  source: 'record',
+                }}
+                onOpenSession={onOpenSession}
+                sessionTitleOf={sessionTitleOf}
+              />
+            </Note>
+          ) : null}
+        </>
+      )
+  }
+}
+
+function statusZh(status: string | undefined): string {
+  if (status === undefined) return '—'
+  return TASK_STATUS_LABELS[status as keyof typeof TASK_STATUS_LABELS]?.zh ?? status
+}
+
+/** 事件流（垂直时间线——记录序 = append-only 自增序[旧 → 新]；verb 穷尽路由） */
+export function TimelineEvents({
+  detail,
+  onOpenSession,
+  now,
+  sessionTitleOf,
+  taskTitleOf,
+}: {
+  readonly detail: TaskDetail
+  readonly onOpenSession?: (sessionId: string) => void
+  readonly now: number
+  readonly sessionTitleOf?: (sessionId: string) => string | undefined
+  /** 前置全名解析器（S3 前置编号化悬停补全名；缺席/未命中 = fail-soft 回退编号） */
+  readonly taskTitleOf?: (slug: string, localId: string) => string | undefined
+}): ReactNode {
+  if (detail.records.length === 0) {
+    return (
+      <div className="dswf-td-line">
+        <div className="dswf-td-ev">
+          <div className="dswf-td-ev-note">暂无记录</div>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="dswf-td-line">
+      {detail.records.map((record, index) => (
+        <div
+          className={`dswf-td-ev ${TASK_VERB_KIND[record.verb]}`}
+          key={`${index}-${record.verb}`}
+          data-dswf-td-ev-verb={record.verb}
+        >
+          <div className="dswf-td-ev-head">
+            <span className="dswf-td-ev-verb">{recordVerbLabel(record.verb, detail.taskType)}</span>
+            <Tooltip label={record.createdAt} portal>
+              <span className="dswf-td-ev-at">{isoTimeLabelZh(record.createdAt, now)}</span>
+            </Tooltip>
+          </div>
+          {eventWeaves(record, detail, onOpenSession, sessionTitleOf, taskTitleOf)}
+        </div>
+      ))}
+    </div>
+  )
+}

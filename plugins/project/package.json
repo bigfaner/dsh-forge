@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.13.5",
+  "version": "0.14.0",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -42,6 +42,22 @@
     "./client-ui/chip-restore": {
       "types": "./dist/client/ui/bug-refs/chip-restore.d.ts",
       "default": "./ui/bug-refs/chip-restore.ts"
+    },
+    "./client-ui/event-tap": {
+      "types": "./dist/client/ui/event-node/progress-log-tap.d.ts",
+      "default": "./ui/event-node/progress-log-tap.ts"
+    },
+    "./client-ui/dock-tabs": {
+      "types": "./dist/client/ui/dock-tabs/index.d.ts",
+      "default": "./ui/dock-tabs/index.ts"
+    },
+    "./client-ui/session-actions": {
+      "types": "./dist/client/ui/session-actions.d.ts",
+      "default": "./ui/session-actions.ts"
+    },
+    "./client-ui/open-session": {
+      "types": "./dist/client/ui/open-session.d.ts",
+      "default": "./ui/open-session.ts"
     },
     "./client-ui/worktree-faces": {
       "types": "./dist/client/ui/index.d.ts",
@@ -86,7 +102,8 @@
     "@types/react-dom": "18.3.0",
     "esbuild": "0.24.2",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "react-qr-code": "2.2.0"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",

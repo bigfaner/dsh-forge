@@ -10,13 +10,13 @@ import { createElement } from 'react'
 import { ForgeShellHost, PanelInfoAnchor, heroPanelDrive, readActivePanelId } from './ShellHost.js'
 import { HERO_PANEL_KEY } from './panel-model.js'
 import { createWorkbenchBridge, type ForgeCenterNav } from './workbench-bridge.js'
-import type { TaskDrawerProps } from '../views/overview/drawer/index.js'
+import type { TaskDrawerProps } from '@dsh-forge/project/client-ui/dock-tabs'
 
 // S1 装配注入断言面（task-ui-info-density-blitz）：TaskDrawer 捕获包装——记录 ShellHost
 // 递达的 sessionTitleOf 注入后照常渲染真身（其余测试不受扰）。
 const drawerCapture = vi.hoisted(() => ({ sessionTitleOf: undefined as unknown }))
-vi.mock('../views/overview/drawer/index.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../views/overview/drawer/index.js')>()
+vi.mock('@dsh-forge/project/client-ui/dock-tabs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@dsh-forge/project/client-ui/dock-tabs')>()
   return {
     ...actual,
     TaskDrawer: (props: TaskDrawerProps) => {

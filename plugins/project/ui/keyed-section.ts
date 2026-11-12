@@ -24,6 +24,8 @@ export interface KeyedSectionRegistration {
   readonly order?: number;
   /** 行显示标签（字符串或 thunk——官方 SlotLabel 形状，thunk 随 active locale 逐读）。 */
   readonly label?: string | (() => string);
+  /** 行 label 所属命名空间（登记面声明，官方 roster 消费——locale.register 的 NS 同源）。 */
+  readonly locale?: string;
   /** cell 影子/链序（官方 priority——升序，同 cell 同值抛错）。 */
   readonly priority?: number;
   /** 节 inject face 工厂（登记面声明——槽 runtime 与 ownerProps 并合透传组件）。 */
@@ -71,12 +73,13 @@ export function registerKeyedSection(
     console.warn("[dsh-forge/project] ctx.slots.inject absent; keyed section not mounted");
     return undefined;
   }
-  const { slot, key, id, order, label, priority, inject: face, component } = registration;
+  const { slot, key, id, order, label, locale, priority, inject: face, component } = registration;
   const options: Record<string, unknown> = { name: slot };
   if (key !== undefined) options.key = key;
   if (id !== undefined) options.id = id;
   if (order !== undefined) options.order = order;
   if (label !== undefined) options.label = label;
+  if (locale !== undefined) options.locale = locale;
   if (priority !== undefined) options.priority = priority;
   if (face !== undefined) options.inject = face;
   return inject.call(slots, slot, () => safeRegisterSection(slots, options, component));

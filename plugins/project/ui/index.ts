@@ -133,8 +133,26 @@ export * from './bug-refs/dock-tab-mirrors.js'
 // 切片——壳侧 rpc 发布面零参与）──
 export * from './rpc.js'
 
+// ── 手机远程入口（1.40 注册面自壳侧迁入——状态模型/组件/注册面整族；详见 remote-entry-face.ts）──
+export * from './remote-entry-face.js'
+export * from './remote-entry/remote-status.js'
+
+// ── 对话面工具行 + 事件折叠组（1.41 注册面自壳侧迁入；详见 conversation-views-face.ts）──
+export * from './conversation-views-face.js'
+export * from './event-node/forge-event-node.js'
+export * from './event-node/progress-log-tap.js'
+
 // ── 领域无关小件承载副本（apps/web src/components 同源镜像——迁移面渲染依赖）──
 export * from './components.js'
+
+// ── dock tab 族（1.45 注册面自壳侧迁入——概览/文档两键两段注册；组件本体 =
+//    ./dock-tabs/（OverviewTab 抽屉族 + docs + 装配体），编排面 = ./session-actions.ts
+//    + ./open-session.ts；壳侧消费面经 client-ui/dock-tabs、client-ui/session-actions、
+//    client-ui/open-session 窄子路径出口。open-session 不经本出口 star-export——
+//    bug-refs/reference-mirrors 同名镜像面（ComposerInputFace/TokenSpanMirror 等）会
+//    造成 star-export 歧义，消费面一律走窄子路径）──
+export * from './dock-tabs-face.js'
+export * from './session-actions.js'
 
 
 import { registerOfficialSeamFaces, revokeOfficialSeamGlobals } from './official-seams.js'
@@ -143,6 +161,15 @@ import { installForgeRemoteFace, type ForgeRemoteFace } from './rpc.js'
 import { installWorktreePrefsFace, type ConfigFormsFace } from './settings-section/index.js'
 import { registerSettingsSection } from './settings-section/index.js'
 import { registerWorktreeDetailSection } from './detail-section/index.js'
+import {
+  registerProjectLocale,
+  registerRemoteEntryFace,
+} from './remote-entry-face.js'
+import { registerConversationToolFaces } from './conversation-views-face.js'
+import { registerHeroPanelFace } from './hero-panel-face.js'
+import { registerKnowledgeFaces } from './knowledge-face.js'
+import { registerDockTabsFace } from './dock-tabs-face.js'
+import type { LocaleServiceFace } from './locale.js'
 
 // ── keyed section 扩展点 + 配置节双缝（1.16：tab keyed 占用者模式泛化 + settings 节
 // bundle.config/detail.section 双缝——configForms revisioned 写径；详见各模块头注）──
@@ -207,6 +234,7 @@ export const projectClient = {
     'workspaces',
     'sessions',
     'remote',
+    'locale',
   ] as string[],
   apply(ctx: unknown): void {
     const rec = ctx as Record<string, unknown> | undefined
@@ -281,6 +309,63 @@ export const projectClient = {
     } catch (error) {
       revokeOfficialSeamGlobals()
       console.warn('[dsh-forge/project] official seam faces registration interrupted', error)
+    }
+    // 手机远程入口（1.40 迁入——官方 sidebar.footer.action list 行 'dswf-remote'）：词典
+    // 登记 + 行注册逐面 fail-soft（locale 服务缺席/词典被拒 = 行 label 回退 ns 键名呈现，
+    // 注册本身不阻断；slots 劣形 = registerKeyedSection 内收口不注册）。
+    try {
+      const locale = (rec?.['locale'] as LocaleServiceFace | undefined) ?? undefined
+      if (locale !== undefined && typeof locale.register === 'function' && typeof locale.bind === 'function') {
+        registerProjectLocale(locale)
+        const registered = registerRemoteEntryFace(slots, locale)
+        console.info(`[dsh-forge/project] remote entry face registered=${registered}`)
+      } else {
+        console.warn('[dsh-forge/project] ctx.locale absent; remote entry not mounted')
+      }
+    } catch (error) {
+      console.warn('[dsh-forge/project] remote entry registration failed——降级不注册', error)
+    }
+    // 对话面工具行 + 事件折叠组三段（1.41 迁入——dispatchTask keyed 行 + 组卡渲染链；
+    // uiConversation 缺席 = 事件组全跳 fail-soft，工具行不受影响）。
+    try {
+      const toolFaces = registerConversationToolFaces(rec as never, slots)
+      console.info(`[dsh-forge/project] conversation tool faces registered=[${toolFaces.registered.join(', ')}]`)
+    } catch (error) {
+      console.warn('[dsh-forge/project] conversation tool faces registration interrupted', error)
+    }
+    // hero 面板（1.44 迁入——main keyed 'dswf-hero'，零项目引导 + HeroEmpty CTA[D 类载体]）。
+    try {
+      const ok = registerHeroPanelFace(slots)
+      console.info(`[dsh-forge/project] hero panel face registered=${ok}`)
+    } catch (error) {
+      console.warn('[dsh-forge/project] hero panel registration failed——降级不注册', error)
+    }
+    // knowledge 族三面（1.42 迁入——main keyed 知识面板 + panellist 行 + 召回页签；
+    // 宿主插件位门 fail-closed 在前，桥经页内缝 inject 期现读）。
+    try {
+      const locale = (rec?.['locale'] as LocaleServiceFace | undefined) ?? undefined
+      if (locale !== undefined && typeof locale.bind === 'function') {
+        const kn = registerKnowledgeFaces(slots, locale)
+        console.info(`[dsh-forge/project] knowledge faces registered=[${kn.registered.join(', ')}] enabled=${kn.knowledgeEnabled}`)
+      } else {
+        console.warn('[dsh-forge/project] ctx.locale absent; knowledge faces not mounted')
+      }
+    } catch (error) {
+      console.warn('[dsh-forge/project] knowledge faces registration interrupted', error)
+    }
+    // dock tab 族（1.45 迁入——sidebarRightTabs 两类型 + sidebar.right.pane.tab 两 keyed
+    // body；sidebarRightTabs/sessions/uiWorkspace/workspaces 服务经 ctx.get 现查，桥经
+    // 页内缝 inject 期现读；逐面 try/catch fail-soft）。
+    try {
+      const locale = (rec?.['locale'] as LocaleServiceFace | undefined) ?? undefined
+      if (locale !== undefined && typeof locale.bind === 'function') {
+        const dock = registerDockTabsFace(rec as never, slots, locale)
+        console.info(`[dsh-forge/project] dock tab faces registered=[${dock.registered.join(', ')}]`)
+      } else {
+        console.warn('[dsh-forge/project] ctx.locale absent; dock tab faces not mounted')
+      }
+    } catch (error) {
+      console.warn('[dsh-forge/project] dock tab faces registration interrupted', error)
     }
   },
 };
