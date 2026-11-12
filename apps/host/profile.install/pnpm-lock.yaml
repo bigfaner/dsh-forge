@@ -110,6 +110,9 @@ importers:
       '@deepseek-ai/dsh-workspace':
         specifier: 0.2.0-rc.2
         version: 0.2.0-rc.2(0af55daf1da1f010142729c9967a6080)
+      '@deepseek-ai/schemastery':
+        specifier: 3.18.4
+        version: 3.18.4
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
