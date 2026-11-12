@@ -57,5 +57,10 @@ describe('产品插件闭包（3.4 M2）', () => {
     for (const name of PRODUCT_PLUGIN_PACKAGES) {
       expect(devPkg.dependencies[name], `profile.dev 缺链接行 ${name}`).toBe(`link:../../../${productPluginPackageLinkPath(name)}`)
     }
+    // expert-squad 批1 包归位（root 级 plugins/ 树）：表值载完整子路径，link 直拼表值
+    expect(productPluginPackageLinkPath('@dsh-forge/expert-squad')).toBe('plugins/expert-squad')
+    expect(devPkg.dependencies['@dsh-forge/expert-squad'], 'profile.dev 缺链接行 @dsh-forge/expert-squad').toBe(
+      'link:../../../plugins/expert-squad',
+    )
   })
 })
