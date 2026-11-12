@@ -9,6 +9,7 @@ import {
   filterExperts,
   footerText,
   groupExperts,
+  originBadgeLabel,
   originLabel,
   personaSummary,
   updatedLabel,
@@ -36,6 +37,30 @@ const fixtures: readonly ExpertView[] = [
   entry({ name: "arch-advisor", title: "方案设计", skills: ["design"], tools: ["read"] }),
   entry({ name: "test-gatekeeper", title: "质量门", skills: ["vitest"], enabled: false }),
 ];
+
+describe("originBadgeLabel（plugin 层具名「内置 · <插件名>」——sourcePath 反推）", () => {
+  it("root 级树形态（批1 包归位 plugins/expert-squad）→ 具名短名", () => {
+    expect(
+      originBadgeLabel({ origin: "plugin", sourcePath: "Z:/repo/plugins/expert-squad/experts/code-reviewer.md" }),
+    ).toBe("内置 · expert-squad");
+  });
+
+  it("packages 子居所 / packages 平铺 / 安装 node_modules 三形态保持既有解析", () => {
+    expect(
+      originBadgeLabel({ origin: "plugin", sourcePath: "Z:/repo/packages/plugins/md-mermaid/experts/a.md" }),
+    ).toBe("内置 · md-mermaid");
+    expect(
+      originBadgeLabel({ origin: "plugin", sourcePath: "Z:/repo/packages/plugin-forge/experts/a.md" }),
+    ).toBe("内置 · plugin-forge");
+    expect(
+      originBadgeLabel({ origin: "plugin", sourcePath: "Z:/res/node_modules/@dsh-forge/expert-squad/experts/a.md" }),
+    ).toBe("内置 · @dsh-forge/expert-squad");
+  });
+
+  it("不可解析回落「内置」", () => {
+    expect(originBadgeLabel({ origin: "plugin", sourcePath: "Z:/somewhere/experts/a.md" })).toBe("内置");
+  });
+});
 
 describe("filterExperts（搜索 × 状态）", () => {
   it("空查询 + 全部 = 原样返回（全部条目）", () => {

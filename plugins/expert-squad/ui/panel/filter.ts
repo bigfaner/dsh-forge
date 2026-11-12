@@ -36,25 +36,29 @@ export function entryIdOf(entry: ExpertView): string {
 }
 
 /**
- * 来源路径反推插件名（内置多来源区分用）：
+ * 来源路径反推插件名（内置多来源区分用）——通用锚 = 路径末段 experts/ 目录的
+ * 上一段（各形态同构：`<居所>/<pkg>/experts/<file>`）：
  * · 仓内形态 `…/packages/plugins/<pkg>/experts/…` → `<pkg>`；
  * · 仓内形态 `…/packages/<pkg>/experts/…`（plugin-forge 直挂）→ `<pkg>`；
+ * · 仓内形态 `…/plugins/<pkg>/experts/…`（root 级树——批1 包归位 expert-squad）→ `<pkg>`；
  * · 安装形态 `…/node_modules/@dsh-forge/<pkg>/experts/…` → `@dsh-forge/<pkg>`；
- * 不可解析（user 手放等）→ undefined。
+ * 无 experts/ 锚段（user 手放等）→ undefined。
  */
 export function pluginNameOfSource(sourcePath: string | undefined): string | undefined {
   if (sourcePath === undefined || sourcePath === "") return undefined;
   const segments = sourcePath.split(/[\\/]+/);
-  const packagesAt = segments.indexOf("packages");
-  if (packagesAt !== -1 && packagesAt + 1 < segments.length) {
-    const next = segments[packagesAt + 1]!;
-    return next === "plugins" ? segments[packagesAt + 2] : next;
-  }
+  const expertsAt = segments.lastIndexOf("experts");
+  if (expertsAt < 1) return undefined;
+  // 不可解析防线：experts/ 前须有可识别容器段（仓内 packages/plugins 两树或安装 node_modules）
+  const anchored = segments
+    .slice(0, expertsAt)
+    .some((s) => s === "packages" || s === "plugins" || s === "@dsh-forge" || s === "node_modules");
+  if (!anchored) return undefined;
+  const parent = segments[expertsAt - 1]!;
+  // 安装形态：scope 段在路径前部（node_modules/@dsh-forge/<pkg>/experts）→ 具名带 scope
   const scopeAt = segments.indexOf("@dsh-forge");
-  if (scopeAt !== -1 && scopeAt + 1 < segments.length) {
-    return `@dsh-forge/${segments[scopeAt + 1]!}`;
-  }
-  return undefined;
+  if (scopeAt !== -1 && scopeAt < expertsAt - 1) return `@dsh-forge/${parent}`;
+  return parent;
 }
 
 /** 来源角标文案：plugin 层可反推插件名时具名「内置 · <插件名>」（多内置来源区分面）。 */

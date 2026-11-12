@@ -361,7 +361,7 @@ function assertPreconditions(plugins) {
     const entryRel = String(entryManifest.main ?? 'dist/index.js').replace(/^\.\//, '')
     wants.push([join(ROOT, ...pkgRootOf(ROOT, key), ...entryRel.split('/')), `pnpm build（tsc -b 全拓扑——${key} staged 插件产物）`])
     for (const file of files.filter((f) => f !== 'dist' && f !== 'package.json')) {
-      wants.push([join(ROOT, ...pkgRootOf(key), file), `${key} 技能面（customSkillDirs 挂载源——缺席即技能面静默缺失）`])
+      wants.push([join(ROOT, ...pkgRootOf(ROOT, key), file), `${key} 技能面（customSkillDirs 挂载源——缺席即技能面静默缺失）`])
     }
   }
   for (const [path, remedy] of wants) if (!existsSync(path)) fail(`${path} 未就位 —— 先执行：${remedy}`)

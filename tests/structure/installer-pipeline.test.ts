@@ -16,17 +16,27 @@ import { createElectronBuilderConfig } from '../../electron-builder.config.mjs'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
 const readJson = (p: string) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'))
-/** staged 键（workspace 子路径）→ 包清单相对路径（lib/ 子居所包名 lib-<目录名>——真名映射；
- *  root:plugins/ 前缀 = 仓库根级 plugins/ 树——project 包居 plugins/project） */
+/** 包居所解析（批5 表驱动基座——与 assemble 脚本 packageDirOf 同源单点）：
+ *  contracts PRODUCT_PLUGINS dir 字段优先直取（expert-squad 载 'plugins/expert-squad'
+ *  root 级树）；未声明 dir 的包消费 host 装载表 PRODUCT_PLUGIN_PACKAGE_DIRS 既有形态。 */
+const pkgDirOf = (name: string): string | undefined =>
+  PRODUCT_PLUGINS[name]?.dir ?? PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
+/** staged 短名 + 居所 → 包清单相对路径（lib/ 子居所包名 lib-<目录名>——真名映射；
+ *  dir 含 '/' = 完整子路径（contracts dir 表值 / PRODUCT_PLUGIN_PACKAGE_DIRS 根级 '/plugins' 与
+ *  子居所形态统一——root:plugins/ 前缀键 = 仓库根级 plugins/ 树——project 包居 plugins/project）） */
 const pkgManifestRelPath = (name: string, dir?: string): string => {
   if (name.startsWith('lib-')) return `lib/${name.slice('lib-'.length)}/package.json`
   if (dir?.startsWith('root:plugins/')) return `${dir.slice('root:'.length)}/package.json`
-  if (dir?.startsWith('/')) return `${dir.slice(1)}/${name}/package.json` // 根级树（PRODUCT_PLUGIN_PACKAGE_DIRS '/plugins' 形态）
+  if (dir?.startsWith('/')) return `${dir.slice(1)}/${name}/package.json` // 根级树（'/plugins' 前缀形态——先于完整子路径判）
+  if (dir !== undefined && dir.includes('/')) return `${dir}/package.json` // contracts dir 表值完整子路径直取
   return `packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`
 }
-/** staged 键 → [根目录名, 子路径]（与 assemble 脚本 pkgRootOf 同源三树映射） */
+/** staged 键 → [根目录名, 子路径]（与 assemble 脚本 pkgRootOf 同源映射——
+ *  无前缀 'plugins/<name>' 键二义（packages/plugins/ 探测键与 root 级树表值键同形），
+ *  以磁盘在场探测收口，pkgRootOf 同语义） */
 const treeOf = (dir: string): [string, string] => {
   if (dir.startsWith('root:plugins/')) return ['.', dir.slice('root:'.length)]
+  if (dir.startsWith('plugins/') && existsSync(join(ROOT, dir, 'package.json'))) return ['.', dir]
   return dir.startsWith('lib/') ? ['lib', dir.slice('lib/'.length)] : ['packages', dir]
 }
 /** 关键文件口径（配置派生——与 stage/--check 运行期同源 PRODUCT_PLUGINS） */
@@ -365,7 +375,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     const installDeps = (readJson('apps/host/profile.install/package.json') as { dependencies: Record<string, string> }).dependencies
     const missing: string[] = []
     for (const name of [...stagedPackages].sort()) {
-      const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
+      const dir = pkgDirOf(name)
       const manifest = readJson(pkgManifestRelPath(name, dir)) as { dependencies?: Record<string, string> }
       for (const [dep, version] of Object.entries(manifest.dependencies ?? {})) {
         if (dep.startsWith('@dsh-forge/')) continue
@@ -382,7 +392,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     const missing: string[] = []
     for (const name of [...stagedPackages].sort()) {
       // 键可含 workspace 子路径（md-mermaid 居 packages/plugins/、lib/* 居 lib/——子居所同源映射）
-      const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
+      const dir = pkgDirOf(name)
       const manifest = readJson(pkgManifestRelPath(name, dir)) as { dependencies?: Record<string, string> }
       for (const dep of Object.keys(manifest.dependencies ?? {})) {
         if (dep.startsWith('@dsh-forge/') && !stagedPackages.has(dep.slice('@dsh-forge/'.length))) {
@@ -399,7 +409,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
         `runtime/node_modules/@dsh-forge/${name}/package.json`,
       )
       // dist 入口 = manifest main 单源（project 包 = dist/host/index.js；其余 = dist/index.js）
-      const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
+      const dir = pkgDirOf(name)
       const manifest = readJson(pkgManifestRelPath(name, dir)) as { main?: string }
       const entry = (manifest.main ?? 'dist/index.js').replace(/^\.\//, '')
       expect(KEY_FILES, `${name} dist 入口口径缺席`).toContain(
