@@ -204,21 +204,11 @@ export function createKnownToolsProbe(
 }
 
 /**
- * 候选/白名单排除集（bug c19eb719 最终口径）：本插件管理/取数 7 枚工具不进 Dialog
- * 候选面与专家白名单（管理面归属 HR 主会话；候选面已对齐 list_tools/list_skills 应答，
- * 专家再挂取数工具属自指冗余）。**list_experts 与 delegate_expert 保留**——专家互查/
- * 互派是合法用法。单点定义：candidates 读口（index.ts）与 compose 白名单
- * （resolveToolAllow）两消费面共用。
+ * 候选/白名单排除集（bug c19eb719 最终口径）——定义真源已迁 @dsh-forge/contracts
+ * expert-squad.ts（语义注释随迁），本包经 shared/constants.ts 转发，此处 re-export
+ * 保持既有 import ../tools.js 消费面零改动。
  */
-export const EXCLUDED_EXPERT_TOOL_NAMES = [
-  "list_tools",
-  "list_skills",
-  "recruit_expert",
-  "update_expert",
-  "rename_expert",
-  "enable_expert",
-  "disable_expert",
-] as const;
+export { EXCLUDED_EXPERT_TOOL_NAMES } from "../shared/constants.js";
 
 /** 工具目录全模式并集（bug c19eb719 共用取数面）：list_tools 工具与 candidates 读口
  *  同源同形；全局视图缺席（tools 面缺席）= undefined（调用方按目录缺席降级）。 */

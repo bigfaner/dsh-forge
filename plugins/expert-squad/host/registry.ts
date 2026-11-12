@@ -49,8 +49,10 @@ export interface ExpertsConfigFace {
  * 级别类型单源 @dsh-forge/contracts DiagLevel（diag-milestone-coverage——本地重复定义收编）。 */
 export type DiagEmit = (level: import("@dsh-forge/contracts").DiagLevel, event: string, message: string) => void;
 
-/** 服务键名（cordis 具名服务——ctx.experts 正门）。 */
-export const EXPERTS_SERVICE_KEY = "experts" as const;
+/** 服务键名（cordis 具名服务——ctx.experts 正门；定义真源在 @dsh-forge/contracts
+ *  expert-squad.ts，本包经 shared/constants.ts 转发，此处 re-export 保持既有
+ *  import ../registry.js 消费面零改动）。 */
+export { EXPERTS_SERVICE_KEY } from "../shared/constants.js";
 
 /** 取用 API 业务错基类：消息恒含专家键名（AD1 fail-loud）。 */
 export class ExpertAccessError extends Error {

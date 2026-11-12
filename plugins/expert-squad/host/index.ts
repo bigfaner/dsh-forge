@@ -24,7 +24,6 @@ import { parseExpertFile } from "./store/frontmatter.js";
 import {
   ExpertsRegistry,
   ExpertNotFoundError,
-  EXPERTS_SERVICE_KEY,
   type DiagEmit,
   type ExpertAgentOptionsConfig,
   type ExpertConfigEntry,
@@ -33,8 +32,8 @@ import {
 } from "./registry.js";
 import { registerExpertSquadRoutes, type ConnectionLike, type DelegateAssemblyState } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
+import { EXCLUDED_EXPERT_TOOL_NAMES, EXPERTS_SERVICE_KEY } from "../shared/constants.js";
 import {
-  EXCLUDED_EXPERT_TOOL_NAMES,
   createKnownToolsProbe,
   registerExpertTools,
   serializeExpertMd,

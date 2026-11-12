@@ -25,4 +25,5 @@ export * from './dto/knowledge.js'
 export * from './dto/project.js'
 export * from './dto/rpc.js'
 export * from './dto/worktree.js'
+export * from './expert-squad.js'
 

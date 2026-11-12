@@ -21,7 +21,8 @@
 
 import { intersectToolNames } from "@dsh-forge/contracts";
 import type { ExpertsService } from "../registry.js";
-import { EXCLUDED_EXPERT_TOOL_NAMES, ExpertToolError } from "../tools.js";
+import { ExpertToolError } from "../tools.js";
+import { EXCLUDED_EXPERT_TOOL_NAMES } from "../../shared/constants.js";
 
 // 求交族单源 re-export（bug a5b12254 集中化——contracts tool-projection.ts；本包
 // 薄壳化：排除集/ExpertToolError 包域差异经 intersectToolNames 参数注入，行为等价）。
