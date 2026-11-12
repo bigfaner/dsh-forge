@@ -5,6 +5,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  installWorktreePrefsFace,
+  localFormMirror,
+  worktreePrefsFaceOf,
   BUNDLE_CONFIG_KEY,
   BUNDLE_CONFIG_SLOT,
   DETAIL_SECTION_ID,
@@ -127,24 +130,55 @@ describe("registerSettingsSection（plugins.bundle.config / detail.section 双�
     expect(fake.registered).toHaveLength(0);
   });
 
-  it("configForms 缺席 = 不注册节 fail-soft（console.warn 留痕，不炸组合）", () => {
+  it("configForms 缺席 = 插件自有配置承载面降级挂载（双缝齐挂 + 读写读写读回两态成立）", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const fake = slotsFake();
     const disposer = registerSettingsSection(ctxFake({}) as never, fake.slots as never);
-    expect(fake.injects).toEqual([]);
-    expect(fake.registered).toHaveLength(0);
-    expect(disposer).toBeUndefined();
+    expect(fake.injects).toEqual([BUNDLE_CONFIG_SLOT, DETAIL_SECTION_SLOT]);
+    expect(fake.registered).toHaveLength(2);
+    expect(typeof disposer).toBe("function");
+    const form = (fake.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form;
+    expect(form).toBeDefined();
+    // 写径读回：插件域持久化承载面（注入记忆存储——降级面与 serve 在场形态行为对齐）
+    const backing = new Map<string, string>();
+    const local = localFormMirror({ getItem: (k) => backing.get(k) ?? null, setItem: (k, v) => backing.set(k, v), removeItem: (k) => backing.delete(k) });
+    expect(local.getSnapshot().status).toBe("ready");
+    expect(local.getSnapshot().writable).toBe(true);
+    const write = dismissedWriteOf(local, { attempts: 1, delayMs: 0 })!;
+    await expect(write(true)).resolves.toBe(true);
+    expect(dismissedOf(local.getSnapshot().value)).toBe(true);
+    const reread = localFormMirror({ getItem: (k) => backing.get(k) ?? null, setItem: (k, v) => backing.set(k, v), removeItem: (k) => backing.delete(k) });
+    expect(dismissedOf(reread.getSnapshot().value)).toBe(true);
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
 
-  it("劣形 configForms（get 非函数）= 视同缺席不注册", () => {
+  it("劣形 configForms（get 非函数）= 视同缺席走插件自有承载面降级挂载", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const fake = slotsFake();
     const disposer = registerSettingsSection(ctxFake({ configForms: { nope: 1 } }) as never, fake.slots as never);
-    expect(fake.registered).toHaveLength(0);
-    expect(disposer).toBeUndefined();
+    expect(fake.registered).toHaveLength(2);
+    expect(typeof disposer).toBe("function");
     warn.mockRestore();
+  });
+
+  it("worktreePrefsFaceOf：configForms 缺席 = 插件自有承载面兜底（取法门读路径两态对齐）", () => {
+    installWorktreePrefsFace(() => undefined);
+    const backing = new Map<string, string>();
+    const stub = {
+      getItem: (k: string) => backing.get(k) ?? null,
+      setItem: (k: string, v: string) => backing.set(k, v),
+      removeItem: (k: string) => backing.delete(k),
+    };
+    const prior = (globalThis as { localStorage?: unknown }).localStorage;
+    (globalThis as { localStorage?: unknown }).localStorage = stub;
+    try {
+      const face = worktreePrefsFaceOf();
+      expect(face).toBeDefined();
+      expect(face!.getSnapshot().status).toBe("ready");
+    } finally {
+      (globalThis as { localStorage?: unknown }).localStorage = prior;
+    }
   });
 
   it("dsh.client.inject 零消费零 inject 边：client 插件面不声明 configForms（settings-unification 圆桌处方）", async () => {

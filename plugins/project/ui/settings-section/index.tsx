@@ -19,6 +19,7 @@ import {
   DISMISSED_KEY,
   dismissedOf,
   dismissedWriteOf,
+  localFormMirror,
   type ConfigFormMirror,
   type ConfigFormsFace,
 } from "./worktree-prefs.js";
@@ -28,6 +29,7 @@ export {
   WORKTREE_FIELD,
   dismissedOf,
   dismissedWriteOf,
+  localFormMirror,
   worktreePatchOf,
   type ConfigFormMirror,
   type ConfigFormsFace,
@@ -43,10 +45,19 @@ export function installWorktreePrefsFace(resolver: () => ConfigFormsFace | undef
   prefsResolver = resolver;
 }
 
-/** 本插件 ConfigForm 现查（namespace 候选序 resolveForm 同源；缺席 = undefined 降级） */
+/**
+ * 插件自有降级 ConfigForm（configForms 缺席形态——每取新建、状态单源 = localStorage 落盘值，
+ * 多实例读写经持久化层天然同源；storage 在调用时点现取——renderer 与测试环境各自成立）。
+ */
+function localPrefsForm(): ConfigFormMirror {
+  return localFormMirror();
+}
+
+/** 本插件 ConfigForm 现查（namespace 候选序 resolveForm 同源；缺席 = 插件自有承载面兜底）。 */
 export function worktreePrefsFaceOf(): ConfigFormMirror | undefined {
   const forms = prefsResolver?.();
-  return forms === undefined ? undefined : resolveForm(forms);
+  const served = forms === undefined ? undefined : resolveForm(forms);
+  return served ?? localPrefsForm();
 }
 
 /** 本插件包名（bundle.config keyed 占用键 = detail.section subject 判等键——双缝同源）。 */
@@ -115,9 +126,10 @@ function resolveForm(forms: ConfigFormsFace): ConfigFormMirror | undefined {
 
 /**
  * 注册 project 配置节（双缝——bundle.config keyed + detail.section list，单渲染本体）。
- * configForms 缺席/劣形 = 不注册节 fail-soft（warn 留痕，返回 undefined）；
- * whileServed 在场 = 经官方在场门挂调用者 fiber（namespace 未被服务即拆卸，
- * 经 ctx.effect 级联），否则直挂 slots.inject 声明缝。
+ * configForms 在场 = 官方正门（whileServed 在场门挂调用者 fiber——namespace 未被服务即
+ * 拆卸，经 ctx.effect 级联；无 whileServed 直挂 slots.inject 声明缝）；
+ * configForms 缺席/劣形 = 插件自有配置承载面降级挂载（fix-1 用户裁定 2026-11-13④——
+ * 持久化读写在插件域完成，行为与在场形态对齐；warn 留痕不静默，AGENTS §7 可观测性）。
  */
 export function registerSettingsSection(
   ctx: {
@@ -128,41 +140,49 @@ export function registerSettingsSection(
 ): (() => void) | undefined {
   const forms = configFormsFaceOf(ctx);
   if (forms === undefined) {
-    console.warn("[dsh-forge/project] ctx.configForms absent; settings section not mounted");
-    return undefined;
+    // fix-1 降级形态：configForms serve 缺席 = 插件自有配置承载面挂载（行为与在场形态对齐）。
+    console.warn("[dsh-forge/project] ctx.configForms absent; settings section mounted on plugin-owned config face");
+    return mountSections(() => ({ form: localPrefsForm() }), slots);
   }
   const sectionFace = () => ({ form: resolveForm(forms) });
-  const mount = (): (() => void) | undefined => {
-    const keyed = registerKeyedSection(slots, {
-      slot: BUNDLE_CONFIG_SLOT,
-      key: BUNDLE_CONFIG_KEY,
-      inject: sectionFace,
-      component: ProjectBundleConfigSection,
-    });
-    const listed = registerKeyedSection(slots, {
-      slot: DETAIL_SECTION_SLOT,
-      id: DETAIL_SECTION_ID,
-      inject: sectionFace,
-      component: ProjectDetailSection,
-    });
-    if (keyed === undefined && listed === undefined) return undefined;
-    return () => {
-      keyed?.();
-      listed?.();
-    };
-  };
   if (typeof forms.whileServed === "function") {
     // 官方 settings-* 族同型：whileServed 经 ctx.effect 挂调用者 fiber（卸载级联）。
     const watch = (): (() => void) | undefined => {
       const disposer = forms.whileServed!(NAMESPACE_CANDIDATES, (served) => {
-        const registered = NAMESPACE_CANDIDATES.some((candidate) => served.has(candidate)) ? mount() : undefined;
+        const registered = NAMESPACE_CANDIDATES.some((candidate) => served.has(candidate))
+          ? mountSections(sectionFace, slots)
+          : undefined;
         return () => registered?.();
       });
       return () => disposer();
     };
     return typeof ctx.effect === "function" ? ctx.effect(watch, "project: settings section watch") : watch();
   }
-  return mount();
+  return mountSections(sectionFace, slots);
+}
+
+/** 双缝挂载单源（form 注入缝——在场/降级两形态共消费）。 */
+function mountSections(
+  sectionFace: () => { form?: ConfigFormMirror },
+  slots: SectionSlotsFace,
+): (() => void) | undefined {
+  const keyed = registerKeyedSection(slots, {
+    slot: BUNDLE_CONFIG_SLOT,
+    key: BUNDLE_CONFIG_KEY,
+    inject: sectionFace,
+    component: ProjectBundleConfigSection,
+  });
+  const listed = registerKeyedSection(slots, {
+    slot: DETAIL_SECTION_SLOT,
+    id: DETAIL_SECTION_ID,
+    inject: sectionFace,
+    component: ProjectDetailSection,
+  });
+  if (keyed === undefined && listed === undefined) return undefined;
+  return () => {
+    keyed?.();
+    listed?.();
+  };
 }
 
 /**

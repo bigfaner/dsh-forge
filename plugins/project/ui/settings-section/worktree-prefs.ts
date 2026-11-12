@@ -33,9 +33,88 @@ export const WORKTREE_FIELD = "worktree";
 /** 「不再提示」位键（settings-unification 归属表 project 行——跨分支风险确认用户级一票）。 */
 export const DISMISSED_KEY = "crossBranchRiskDismissed";
 
+// ── 插件自有配置承载面（fix-1 用户裁定 2026-11-13④——configForms serve 缺席降级形态）：
+// 持久化读写在插件域完成（renderer localStorage——官方 web/desktop 宿主同域），serve 在场
+// 形态维持官方正门；两形态行为对齐（快照 ready + writable、写径读回成立）。
+
+/** 插件域持久化存储切片（官方宿主 renderer localStorage 同形——注入面供单测收敛）。 */
+export interface PrefsStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+/** 本插件偏好落 localStorage 的键（插件域命名空间——零宿主键位侵占）。 */
+export const LOCAL_PREFS_STORAGE_KEY = "@dsh-forge/project:worktree-prefs";
+
+/** 缺省存储（renderer localStorage——Node/非浏览器环境 = undefined，快照退 unavailable）。 */
+function defaultStorage(): PrefsStorage | undefined {
+  try {
+    return typeof localStorage === "undefined" ? undefined : (localStorage as unknown as PrefsStorage);
+  } catch {
+    return undefined;
+  }
+}
+
 /** unknown → 对象窄化（缺席/非对象 = undefined）。 */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
+}
+
+/**
+ * 插件自有 ConfigForm 镜像（configForms serve 缺席降级形态）：快照 ready + writable、
+ * 写径即持久化即读回（set 整字段落 worktree 组、unset 键归缺）——与官方 serve 在场形态
+ * 行为对齐（WorktreePrefsSection/dismissedWriteOf 零改动直接可用）。
+ */
+export function localFormMirror(storage: PrefsStorage | undefined = defaultStorage()): ConfigFormMirror {
+  const listeners = new Set<() => void>();
+  const notify = (): void => {
+    for (const listener of Array.from(listeners)) listener();
+  };
+  const read = (): unknown => {
+    if (storage === undefined) return undefined;
+    try {
+      const raw = storage.getItem(LOCAL_PREFS_STORAGE_KEY);
+      return raw === null ? undefined : (JSON.parse(raw) as unknown);
+    } catch {
+      return undefined; // 劣形落盘值 = 视同空配置（fail-soft 不炸读径）
+    }
+  };
+  const write = (next: Record<string, unknown>): void => {
+    if (storage === undefined) return;
+    try {
+      storage.setItem(LOCAL_PREFS_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // 持久化失败 = 写径照常生效（内存态），不静默炸链路——读回缺失按默认值语义
+    }
+    notify();
+  };
+  return {
+    getSnapshot: () => ({
+      status: storage === undefined ? ("unavailable" as const) : ("ready" as const),
+      value: read(),
+      revision: undefined,
+      writable: storage !== undefined,
+    }),
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    set: async (field: string, value: unknown) => {
+      if (storage === undefined) return false;
+      const merged = { ...asRecord(read()) };
+      merged[field] = value;
+      write(merged);
+      return true;
+    },
+    unset: async (field: string) => {
+      if (storage === undefined) return false;
+      const merged = { ...asRecord(read()) };
+      delete merged[field];
+      write(merged);
+      return true;
+    },
+  };
 }
 
 /** 「不再提示」位读取（劣形退默认 false——非严格 true 一律不抑制）。 */

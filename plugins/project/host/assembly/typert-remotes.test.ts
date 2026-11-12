@@ -97,13 +97,13 @@ describe('marker 端点表 pin（gateway SRC 端点真源——ui/remote.ts desc
   })
 })
 
-describe('ForgeDirsRemote.facts（基本信息区 2026-11-13——五行目录事实）', () => {
-  const PROJECT = { wsPath: 'Z:\\ws\\demo', forgeDir: 'Z:\\ws\\demo\\.forge' }
-  const projectsOf = (project: unknown = PROJECT) => () => ({ getProject: async () => project }) as never
+describe('ForgeDirsRemote.facts（fix-1——core 缺席插件自装配：workspaceRoot 自官方工作区面、forgeDir 插件派生）', () => {
+  const WS = 'Z:\\ws\\demo'
+  const wsRootOf = (ws: string | null) => () => (async () => ws) as never
 
-  it('五行有序：项目行两键 + 注册表三键；tmp/project_home 永不下发', async () => {
+  it('core 缺席：workspaceRoot 经插件工作区面 + forgeDir = wsPath/.forge 插件内派生（零 core face）', async () => {
     const svc = new ForgeDirsRemote(fakeCtx(), {
-      dirsProjects: projectsOf(),
+      dirsWorkspaceRoot: wsRootOf(WS),
       dirFacts: () =>
         ({
           listAnchors: async (_id: string, dirKey?: string) => [{ dirKey: dirKey ?? '', dir: `dir:${dirKey}`, description: 'd' }],
@@ -111,14 +111,14 @@ describe('ForgeDirsRemote.facts（基本信息区 2026-11-13——五行目录�
     })
     const rows = await svc.facts({ projectId: 'p-1' })
     expect(rows.map((r) => r.dirKey)).toEqual(['workspaceRoot', 'forgeDir', 'forge.docs_root', 'forge.task_home', 'forge.worktrees'])
-    expect(rows[0]).toEqual({ dirKey: 'workspaceRoot', dir: 'Z:\\ws\\demo', description: '项目工作区根' })
-    expect(rows[1]).toEqual({ dirKey: 'forgeDir', dir: 'Z:\\ws\\demo\\.forge', description: '本工作区 .forge 目录' })
+    expect(rows[0]).toEqual({ dirKey: 'workspaceRoot', dir: WS, description: '项目工作区根' })
+    expect(rows[1]).toEqual({ dirKey: 'forgeDir', dir: `${WS}\\.forge`, description: '本工作区 .forge 目录' })
     expect(rows[2]).toEqual({ dirKey: 'forge.docs_root', dir: 'dir:forge.docs_root', description: 'd' })
   })
 
-  it('逐键 fail-soft：锚解析抛 / dirFacts 缺席 / 项目行缺席 = 该行 dir null，不阻断其余行', async () => {
+  it('逐键 fail-soft：锚解析抛 / dirFacts 缺席 / 工作区根缺席 = 该行 dir null，不阻断其余行不抛', async () => {
     const svc = new ForgeDirsRemote(fakeCtx(), {
-      dirsProjects: projectsOf(null),
+      dirsWorkspaceRoot: wsRootOf(null),
       dirFacts: () =>
         ({
           listAnchors: async () => {
@@ -129,10 +129,24 @@ describe('ForgeDirsRemote.facts（基本信息区 2026-11-13——五行目录�
     const rows = await svc.facts({ projectId: 'p-x' })
     expect(rows.every((r) => r.dir === null)).toBe(true)
     expect(rows.map((r) => r.dirKey)).toHaveLength(5)
-    const noFacts = new ForgeDirsRemote(fakeCtx(), { dirsProjects: projectsOf() })
+    const noFacts = new ForgeDirsRemote(fakeCtx(), { dirsWorkspaceRoot: wsRootOf(WS) })
     const bare = await noFacts.facts({ projectId: 'p-1' })
     expect(bare.slice(2).every((r) => r.dir === null)).toBe(true)
-    expect(bare[0]?.dir).toBe('Z:\\ws\\demo')
+    expect(bare[0]?.dir).toBe(WS)
+    const throws = new ForgeDirsRemote(fakeCtx(), {
+      dirsWorkspaceRoot: () =>
+        (async () => {
+          throw new Error('boom')
+        }) as never,
+      dirFacts: () =>
+        ({
+          listAnchors: async () => {
+            throw new Error('anchors unavailable')
+          },
+        }) as never,
+    })
+    const safe = await throws.facts({ projectId: 'p-1' })
+    expect(safe.slice(0, 2).every((r) => r.dir === null)).toBe(true)
   })
 
   it('双面全缺 → typed unavailable（诚实拒绝）', async () => {
