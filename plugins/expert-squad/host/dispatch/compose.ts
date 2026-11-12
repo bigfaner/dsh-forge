@@ -27,11 +27,9 @@ import { EXCLUDED_EXPERT_TOOL_NAMES } from "../../shared/constants.js";
 
 // 求交族单源 re-export（bug a5b12254 集中化——contracts tool-projection.ts；本包
 // 薄壳化：排除集/ExpertToolError 包域差异经 intersectToolNames 参数注入，行为等价）。
-export { PROBE_CANARY_TOOL, probeIsSubdomain, SHELL_TOOL_CANDIDATES } from "@dsh-forge/contracts";
 
-// 人设全文合成单源 re-export（架构裁决 verification-report §5.1 ⑤ 最小增量——contracts
-// subagent-assemble.ts；消费方 = host/preset-rows.ts preset 行 persona 段构造）。
-export { composePersonaText } from "@dsh-forge/contracts";
+// 人设全文合成单源（contracts subagent-assemble.ts）由消费方 preset-rows.ts
+// 直取 contracts——本模块不再转发。
 
 /** 官方 ContentBlock 的文本块子面（prompt 载荷）。 */
 export interface TextContentBlock {

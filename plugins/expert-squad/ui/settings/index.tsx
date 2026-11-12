@@ -39,7 +39,6 @@ export {
   REASONING_OPTIONS,
   defaultOptionsDraftOf,
   defaultOptionsPatchOf,
-  defaultOptionsDraftEquals,
   draftFoldOnRevision,
   type DefaultOptionsDraft,
 } from "./default-options-logic.js";

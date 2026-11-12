@@ -20,9 +20,8 @@ import {
 import type { ExpertsRegistry } from "./registry.js";
 import { parseExpertFile, validateExpertUpdate, type ExpertReasoning } from "./store/frontmatter.js";
 
-// 工具注册面投影/求交族单源 re-export（bug a5b12254 集中化——contracts
-// tool-projection.ts；窄面类型面经此再导出，既有消费面 import 路径零变化）。
-export type { AgentPresetsFace, CatalogEntry, PresetScopeLease, ToolsSchemasReader } from "@dsh-forge/contracts";
+// 工具注册面投影/求交族单源（bug a5b12254 集中化——contracts tool-projection.ts）。
+export type { AgentPresetsFace, CatalogEntry, ToolsSchemasReader } from "@dsh-forge/contracts";
 
 // ---------------------------------------------------------------------------
 // faces（官方 dsh-tools ToolDefinition 消费字段子面——md-mermaid faces.ts 同法）
@@ -185,9 +184,9 @@ export interface SkillsListFace {
   list(opts: { cwd: string; scope?: object }): Promise<readonly { name: string; description?: string }[]>;
 }
 
-// ToolsSchemasReader / PresetScopeLease / AgentPresetsFace / CatalogEntry /
-// unionAcrossPresets：工具注册面投影族单源（bug a5b12254 集中化——contracts
-// tool-projection.ts，文件头 import + re-export；此处仅保留包域富面消费壳）。
+// ToolsSchemasReader / AgentPresetsFace / CatalogEntry / unionAcrossPresets：
+// 工具注册面投影族单源（bug a5b12254 集中化——contracts tool-projection.ts；
+// 此处仅保留包域富面消费壳）。
 
 /** 白名单求交探针工厂（bug e3b045dc；薄壳——bug a5b12254 集中化）：无参 schemas()
  *  是 ScopedLayers global 单层投影——官方模型工具装在 preset scope 层，恰好只剩本插件
@@ -345,8 +344,6 @@ export const EXPERT_TOOLS = [
   "list_tools",
   "list_skills",
 ] as const;
-
-export type ExpertToolName = (typeof EXPERT_TOOLS)[number];
 
 export interface ExpertToolsDeps {
   /** 取用 API（服务键 experts 的 registry 实例）。 */

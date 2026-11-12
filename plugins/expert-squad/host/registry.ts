@@ -18,8 +18,6 @@ import {
 } from "./store/scan.js";
 import type { ExpertRecord, ExpertReasoning } from "./store/frontmatter.js";
 
-export type { ExpertReasoning } from "./store/frontmatter.js";
-
 /** 路由三元组配置形状（Config 与档案 overlay 共用；各字段可缺省）。 */
 export interface ExpertAgentOptionsConfig {
   provider?: string;
@@ -48,11 +46,6 @@ export interface ExpertsConfigFace {
 /** 诊断发射面（host 侧接线 = `diag/log` 事件域 emitDiag；缺席 = 装配层 console 兜底）。
  * 级别类型单源 @dsh-forge/contracts DiagLevel（diag-milestone-coverage——本地重复定义收编）。 */
 export type DiagEmit = (level: import("@dsh-forge/contracts").DiagLevel, event: string, message: string) => void;
-
-/** 服务键名（cordis 具名服务——ctx.experts 正门；定义真源在 @dsh-forge/contracts
- *  expert-squad.ts，本包经 shared/constants.ts 转发，此处 re-export 保持既有
- *  import ../registry.js 消费面零改动）。 */
-export { EXPERTS_SERVICE_KEY } from "../shared/constants.js";
 
 /** 取用 API 业务错基类：消息恒含专家键名（AD1 fail-loud）。 */
 export class ExpertAccessError extends Error {
@@ -147,7 +140,6 @@ export class ExpertsRegistry implements ExpertsService {
   private readonly disabledKeys = new Set<string>();
   /** 悬空键报告去重（每代快照每键至多一次；换代重置——恢复后再消失须重报）。 */
   private readonly danglingReported = new Set<string>();
-  private readonly refreshing: Promise<void>[] = [];
 
   constructor(private readonly options: ExpertsRegistryOptions) {}
 

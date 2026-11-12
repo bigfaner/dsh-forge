@@ -603,8 +603,6 @@ function originOptions(projectName: string | undefined): readonly { readonly val
   ]
 }
 
-/** 来源条目身份键（sourcePath——同键同 origin 可有多份内置注册，origin 不足以区分）。 */
-// （entryIdOf 移居 filter.ts——Dialog 对比态同用 sourcePath 身份）
 /**
  * 来源下拉菜单（chip 原地向下展开）：不做上下翻转——chip 靠近视口底部时菜单可能
  * 溢出视口下缘（判例 2026-10-31：不可见伪「无反应」），以 scrollIntoView nearest
@@ -671,6 +669,7 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
   readonly onSelectOrigin?: (origin: string | undefined) => void;
 }): ReactNode {
   const updated = updatedLabel(expert.updatedAt)
+  const route = routeChipOf(expert)
   return (
     <article
       className={`dswf-xcard${expert.enabled ? "" : " off"}`}
@@ -738,18 +737,13 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
           弱化 chip——不标来源与层级，D1 裁决） */}
       <div className="xc-title-row">
         <div className="xc-title">{expert.title}</div>
-        {(() => {
-          const route = routeChipOf(expert);
-          return (
-            <span
-              className={`chip${route.kind === "model" ? " tool dswf-tip" : " dswf-chip-muted dswf-tip"}`}
-              data-xc-route={route.kind}
-              data-tip={route.tip}
-            >
-              {route.kind === "model" ? route.model : "继承父Agent"}
-            </span>
-          );
-        })()}
+        <span
+          className={`chip${route.kind === "model" ? " tool dswf-tip" : " dswf-chip-muted dswf-tip"}`}
+          data-xc-route={route.kind}
+          data-tip={route.tip}
+        >
+          {route.kind === "model" ? route.model : "继承父Agent"}
+        </span>
       </div>
       <div className="xc-creed">{personaSummary(expert.personaMd)}</div>
       <div>

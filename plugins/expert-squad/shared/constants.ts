@@ -3,5 +3,4 @@
 export {
   EXCLUDED_EXPERT_TOOL_NAMES,
   EXPERTS_SERVICE_KEY,
-  type ExcludedExpertToolName,
 } from "@dsh-forge/contracts";

@@ -96,12 +96,6 @@ function existsAnyKind(p: string): boolean {
   }
 }
 
-/** project 层 experts 目录：`<projectRoot>/.dsh/experts/`；无 project root → null。 */
-export function resolveProjectExpertsRoot(cwd: string): string | null {
-  const root = findProjectRoot(cwd);
-  return root === null ? null : join(root, EXPERTS_DIR);
-}
-
 /**
  * worktree 感知项目根解析（本裁决：专家分层无 worktree 层——project 层锚项目根）：
  * · `<ws>/.git` 为目录 → ws 本身即项目根（主检出/普通目录）；

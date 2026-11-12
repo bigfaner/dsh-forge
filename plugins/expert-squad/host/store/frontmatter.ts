@@ -128,24 +128,6 @@ export function parseExpertFile(filePath: string, content: string): ExpertParseR
 }
 
 /**
- * 同层撞名检测（tech-design §8：同层同键拒绝写入；跨层同键 = 遮蔽，归 scan 层处理）。
- * 返回撞名描述（含键与冲突双方路径）；无撞名 → null。
- */
-export function detectSameLayerDuplicate(
-  entries: readonly { name: string; filePath: string }[],
-): string | null {
-  const seen = new Map<string, string>();
-  for (const { name, filePath } of entries) {
-    const first = seen.get(name);
-    if (first !== undefined) {
-      return `同层撞名：专家键 ${name} 同时由 ${first} 与 ${filePath} 提供——同层同键拒绝写入`;
-    }
-    seen.set(name, filePath);
-  }
-  return null;
-}
-
-/**
  * 注册期 update 校验：内容照常解析校验，外加 name 不可改约束——
  * 与建档键不一致 → 拒绝（错误含旧键/新键/路径）。
  */

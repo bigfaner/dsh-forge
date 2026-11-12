@@ -77,11 +77,9 @@ export const PANEL_CSS = `
 .xc-head-right > button.origin-badge { border: none; font: var(--dsw-font-xxs-12); line-height: var(--dsw-font-xxs-12-line-height, ${T.lh18}); padding: 2px 8px; white-space: nowrap; cursor: var(--dsh-cursor-pointer, pointer); }
 .xc-cmp-btn { flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
 .xc-origin-caret { font-size: 10px; margin-left: 3px; }
-/* 宽度动态收敛：min-width = max-content（包紧最长选项文字）；max-width = 卡片宽
-   （超长才省略折行，永不溢出卡片）。position:absolute 百分比相对最近 positioned
-   祖先（xc-head-right），min-width:240px 固定值退役 */
 /* 宽度动态收敛：width max-content 包紧最长选项文字（尽量不换行）；上限由组件侧按
-   卡片宽注入（超长省略，永不溢出卡片） */
+   卡片宽注入（超长省略，永不溢出卡片）。position:absolute 百分比相对最近 positioned
+   祖先（xc-head-right） */
 .xc-origin-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; width: max-content; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); display: flex; flex-direction: column; gap: 2px; }
 .xc-origin-opt { display: flex; align-items: center; gap: ${T.gap8}; padding: 4px ${T.gap8}; border: none; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; white-space: nowrap; }
 .xc-origin-opt:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -105,7 +103,8 @@ export const PANEL_CSS = `
 .dswf-empty b { display: block; color: var(--dsw-alias-label-primary); font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; margin-bottom: 6px; }
 .dswf-errorbar { grid-column: 1 / -1; display: flex; align-items: center; gap: ${T.pad20}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r8}; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-error-primary); font: var(--dsw-font-xs-13); }
 /* 详情 Dialog（ui-design F2：radius-lg 16 / lv3 阴影 / 宽 860 / max-height 92%）；
-   可拖动（头部 pointer 拖拽，位移落 transform）+ 可拉伸（CSS resize both——右下角手柄，
+   可拖动（头部 pointer 拖拽，位移落 absolute left/top——不用 transform：transformed
+   祖先会成为 fixed 菜单的包含块）+ 可拉伸（CSS resize both——右下角手柄，
    宽高上下限钳制；overflow 非 visible 为 resize 生效前提，内部滚动由 body 承担） */
 .dswf-dlg-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-mask, rgba(0,0,0,0.4)); z-index: 100; }
 .dswf-dlg { position: relative; display: flex; flex-direction: column; width: 860px; min-width: 480px; max-width: calc(100vw - 32px); height: auto; min-height: 320px; max-height: 92%; resize: both; overflow: auto; background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; box-shadow: var(--dsw-elevation-strong, var(--dsw-elevation-soft)); color: var(--dsw-alias-label-primary); }

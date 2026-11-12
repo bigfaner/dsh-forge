@@ -3,7 +3,6 @@
 // 解析层归一为真实换行（视图/编辑/persona 注入三面同源生效），编辑保存后即固化。
 import { describe, expect, it } from "vitest";
 import {
-  detectSameLayerDuplicate,
   parseExpertFile,
   validateExpertUpdate,
 } from "../host/store/frontmatter.js";
@@ -171,29 +170,6 @@ describe("负向：fail-loud，错误信息含文件路径与原因", () => {
     );
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toContain("provider");
-  });
-});
-
-describe("同层撞名拒绝", () => {
-  it("同层两个文件同名 → 报错含两个路径与撞名键", () => {
-    const dup = detectSameLayerDuplicate([
-      { name: "code-reviewer", filePath: "C:\\experts\\a.md" },
-      { name: "qa", filePath: "C:\\experts\\b.md" },
-      { name: "code-reviewer", filePath: "C:\\experts\\c.md" },
-    ]);
-    expect(dup).not.toBeNull();
-    expect(dup).toContain("code-reviewer");
-    expect(dup).toContain("a.md");
-    expect(dup).toContain("c.md");
-  });
-
-  it("无撞名 → null", () => {
-    expect(
-      detectSameLayerDuplicate([
-        { name: "a", filePath: "x.md" },
-        { name: "b", filePath: "y.md" },
-      ]),
-    ).toBeNull();
   });
 });
 

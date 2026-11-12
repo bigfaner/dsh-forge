@@ -57,8 +57,6 @@ import {
 } from "./store/scan.js";
 import { ExpertWatchManager, makeFsObservedInvalidator, type FsObservedTarget } from "./store/watch.js";
 
-export const EXPERT_SQUAD_PLUGIN_NAME = 'expert-squad' as const
-
 /** 包名（实例 ID 前缀——本包 experts/ 随包档案的实例 ID = `@dsh-forge/expert-squad#键`）。 */
 export const EXPERT_SQUAD_PACKAGE_NAME = '@dsh-forge/expert-squad' as const
 
@@ -429,7 +427,8 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       // 只读硬闸（AGENTS 1.2 语义收口）：目标目录解析后落进任一注册内置层（本包随包
       // experts/ 或第三方 registerRoot 目录）→ fail-loud 拒写。origin 判定即便漂移，
       // 内置层也不可被写——只读由结构保证而非约定。
-      assertNotBuiltinRoot(expertsDir);      const file = join(expertsDir, `${input.name}.md`);
+      assertNotBuiltinRoot(expertsDir);
+      const file = join(expertsDir, `${input.name}.md`);
       const content = serializeExpertMd(
         {
           name: input.name,

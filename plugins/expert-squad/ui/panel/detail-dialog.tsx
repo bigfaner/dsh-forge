@@ -911,7 +911,3 @@ export function ExpertDetailDialog(props: {
     </div>
   );
 }
-
-/** 控制器 hooks 绑定辅助（expert-panel 装配消费；类型回流用）。 */
-export type DetailControllerLike = ExpertDetailController;
-export type DetailStateView = DetailState;

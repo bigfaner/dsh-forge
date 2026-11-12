@@ -163,6 +163,17 @@ export interface ExpertRoutesDeps {
  * 抛错（键不存在/禁用/写失败）→ 400 文本（annotutor 先例同型）。
  */
 export function expertSquadRoutes(deps: ExpertRoutesDeps): FetchRouteLike[] {
+  /** 应答归一单点：handler 成功 → JSON；抛错（含 zod 门 400）→ 错误消息文本。 */
+  const respond = async (handle: () => Promise<unknown>): Promise<Response> => {
+    try {
+      return Response.json(await handle());
+    } catch (err) {
+      return new Response(err instanceof Error ? err.message : String(err), {
+        status: 400,
+      });
+    }
+  };
+
   const post = (
     endpoint: ExpertSquadEndpoint,
     handler: (payload: unknown) => Promise<unknown>,
@@ -171,53 +182,31 @@ export function expertSquadRoutes(deps: ExpertRoutesDeps): FetchRouteLike[] {
     methods: ["POST"],
     requestBody: "buffered",
     fetch: async (request) => {
-      try {
-        return Response.json(await handler(await request.json()));
-      } catch (err) {
-        return new Response(err instanceof Error ? err.message : String(err), {
-          status: 400,
-        });
-      }
+      const payload = await request.json();
+      return respond(() => handler(payload));
     },
   });
 
+  const get = (
+    endpoint: ExpertSquadEndpoint,
+    handler: (query: URLSearchParams) => Promise<unknown>,
+  ): FetchRouteLike => ({
+    path: expertSquadRoute(endpoint),
+    methods: ["GET"],
+    requestBody: "buffered",
+    fetch: (request) =>
+      respond(() => handler(new URL(request.url).searchParams)),
+  });
+
   return [
-    {
-      path: expertSquadRoute("list"),
-      methods: ["GET"],
-      requestBody: "buffered",
-      fetch: async (request) => {
-        try {
-          const query = expertListQuerySchema.parse(
-            Object.fromEntries(new URL(request.url).searchParams),
-          );
-          return Response.json(
-            await deps.list(query.workspace, query.includeDisabled),
-          );
-        } catch (err) {
-          return new Response(err instanceof Error ? err.message : String(err), {
-            status: 400,
-          });
-        }
-      },
-    },
-    {
-      path: expertSquadRoute("get"),
-      methods: ["GET"],
-      requestBody: "buffered",
-      fetch: async (request) => {
-        try {
-          const query = expertGetQuerySchema.parse(
-            Object.fromEntries(new URL(request.url).searchParams),
-          );
-          return Response.json(await deps.get(query.workspace, query.key));
-        } catch (err) {
-          return new Response(err instanceof Error ? err.message : String(err), {
-            status: 400,
-          });
-        }
-      },
-    },
+    get("list", async (params) => {
+      const query = expertListQuerySchema.parse(Object.fromEntries(params));
+      return deps.list(query.workspace, query.includeDisabled);
+    }),
+    get("get", async (params) => {
+      const query = expertGetQuerySchema.parse(Object.fromEntries(params));
+      return deps.get(query.workspace, query.key);
+    }),
     post("update", async (payload) =>
       deps.update(expertUpdateBodySchema.parse(payload)),
     ),
@@ -233,50 +222,20 @@ export function expertSquadRoutes(deps: ExpertRoutesDeps): FetchRouteLike[] {
       const body = expertEnableBodySchema.parse(payload);
       return deps.setEnabled(body.workspace, body.key, false);
     }),
-    {
-      path: expertSquadRoute("run-state"),
-      methods: ["GET"],
-      requestBody: "buffered",
-      fetch: async (request) => {
-        try {
-          runStateQuerySchema.parse(
-            Object.fromEntries(new URL(request.url).searchParams),
-          );
-          const delegate = deps.delegateState?.();
-          return Response.json({
-            entries: deps.runState(),
-            ...(delegate !== undefined ? { delegate } : {}),
-          });
-        } catch (err) {
-          return new Response(err instanceof Error ? err.message : String(err), {
-            status: 400,
-          });
-        }
-      },
-    },
-    {
-      path: expertSquadRoute("candidates"),
-      methods: ["GET"],
-      requestBody: "buffered",
-      fetch: async (request) => {
-        try {
-          candidatesQuerySchema.parse(
-            Object.fromEntries(new URL(request.url).searchParams),
-          );
-          // 异常分类观测注记：目录读口 handler 抛错（目录面异常/序列化失败）与 zod 门
-          // 400 同型归一为 400 文本应答——候选是建议面，无 5xx 分级（client 回退兜底）。
-          const catalog = (await deps.candidates?.()) ?? {};
-          return Response.json({
-            ...(catalog.tools !== undefined ? { tools: catalog.tools } : {}),
-            ...(catalog.skills !== undefined ? { skills: catalog.skills } : {}),
-          });
-        } catch (err) {
-          return new Response(err instanceof Error ? err.message : String(err), {
-            status: 400,
-          });
-        }
-      },
-    },
+    get("run-state", async (params) => {
+      runStateQuerySchema.parse(Object.fromEntries(params));
+      const delegate = deps.delegateState?.();
+      return {
+        entries: deps.runState(),
+        ...(delegate !== undefined ? { delegate } : {}),
+      };
+    }),
+    get("candidates", async (params) => {
+      candidatesQuerySchema.parse(Object.fromEntries(params));
+      // 异常分类观测注记：目录读口 handler 抛错（目录面异常/序列化失败）与 zod 门
+      // 400 同型归一为 400 文本应答——候选是建议面，无 5xx 分级（client 回退兜底）。
+      return (await deps.candidates?.()) ?? {};
+    }),
   ];
 }
 
