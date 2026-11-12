@@ -45,10 +45,10 @@ describe('forge remote face 页内锚（跨 bundle 副本回退读锚）', () =>
     expect(list).toHaveBeenCalledWith()
   })
 
-  it('官方 face 形状（namespaces 子对象）→ projects.list 走锚回数据（bug bead3e88 回归钉）', async () => {
+  it('官方 face 形状（namespaces Map<string,{service}>）→ projects.list 走锚回数据（bug bead3e88 回归钉）', async () => {
     const list = vi.fn(async () => ({ ok: true, value: [{ id: 'p1' }] }))
-    const namespaces = Object.fromEntries(
-      NAMESPACES.map((ns) => [ns, makeNamespace(ns, { 'forgeProjects.list': (args) => list(...args) })]),
+    const namespaces = new Map(
+      NAMESPACES.map((ns) => [ns, { service: makeNamespace(ns, { 'forgeProjects.list': (args) => list(...args) }) }]),
     )
     ;(globalThis as Record<string, unknown>)[FORGE_REMOTE_FACE_ANCHOR_KEY] = {
       resolver: () => ({ namespaces }) as unknown as ForgeRemoteFace,
@@ -57,6 +57,19 @@ describe('forge remote face 页内锚（跨 bundle 副本回退读锚）', () =>
     const rows = await createForgeRpcClient().projects.list()
     expect(rows).toEqual([{ id: 'p1' }])
     expect(list).toHaveBeenCalledWith()
+  })
+
+  it('namespaces 纯对象形状（Map 缺席回退）→ projects.list 走锚回数据', async () => {
+    const list = vi.fn(async () => ({ ok: true, value: [{ id: 'p2' }] }))
+    const namespaces = Object.fromEntries(
+      NAMESPACES.map((ns) => [ns, makeNamespace(ns, { 'forgeProjects.list': (args) => list(...args) })]),
+    )
+    ;(globalThis as Record<string, unknown>)[FORGE_REMOTE_FACE_ANCHOR_KEY] = {
+      resolver: () => ({ namespaces }) as unknown as ForgeRemoteFace,
+      diag: () => {},
+    }
+    const rows = await createForgeRpcClient().projects.list()
+    expect(rows).toEqual([{ id: 'p2' }])
   })
 
   it('锚缺席降级也走锚 diag（壳副本自身 console 无前缀污染——诊断单门）', async () => {

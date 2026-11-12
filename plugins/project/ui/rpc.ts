@@ -125,11 +125,20 @@ export function installForgeRemoteFace(
 let forgeRemoteResolver: (() => ForgeRemoteFace | undefined) | undefined
 
 /** namespace face 取法（解析缝缺席/面形状非法 = undefined——调用期诚实降级）。
- * 官方 face 双形态兼容（bug bead3e88）：官方 typert RemoteView 把命名空间挂在
- * `face.namespaces` 子对象（w140 真机探针 faceKeys 实证），旧解析缝只认顶层命名空间
- * → 解析缺席诚实降级。此处先探 namespaces 子对象、缺席回退顶层（双形态兼容）。 */
+ * 官方 face 形状适配（bug bead3e88——官方 dsh-api-gateway client.js 核销）：
+ * 官方 ClientRemoteService.namespaces = Map<string, { service }>（RemoteNamespaceService，
+ * 方法 = getter 函数属性）；此处按 Map → namespaces 对象 → 顶层命名空间三形态回退解析。 */
 function namespaceOf(face: ForgeRemoteFace, namespace: keyof ForgeRemoteFace): ForgeRemoteNamespaceFace | undefined {
   const rawNamespaces = (face as unknown as Record<string, unknown>)['namespaces']
+  if (
+    rawNamespaces !== undefined && rawNamespaces !== null && typeof rawNamespaces === 'object' &&
+    typeof (rawNamespaces as { get?: unknown })['get'] === 'function'
+  ) {
+    const entry = (rawNamespaces as Map<string, { service?: unknown }>).get(namespace as string) as { service?: unknown } | undefined
+    const service = entry?.service
+    if (service === undefined || service === null || typeof service !== 'object') return undefined
+    return service as ForgeRemoteNamespaceFace
+  }
   const holder =
     rawNamespaces !== undefined && rawNamespaces !== null && typeof rawNamespaces === 'object'
       ? (rawNamespaces as Record<string, unknown>)
