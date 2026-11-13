@@ -20,7 +20,10 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import type { TaskStatus } from '@dsh-forge/contracts'
 import { EmptyState } from '../components.js'
 import type { RpcClientFactory } from './rpc-channels.js'
-import { preloadRpcClientFactory } from './rpc-channels.js'
+import { anchorProjectResolver } from './anchor-resolver.js'
+
+// 概览锚归属解析缝（模块级单例——引用稳定，useSelfAnchor effect deps 不逐帧重挂）
+const SELF_ANCHOR_PROJECT_RESOLVER = anchorProjectResolver()
 import { OverviewTab, type OverviewTasksContext } from './overview/OverviewTab.js'
 import type { SessionOpenRequest } from './overview/message-format.js'
 import type { OpenSessionOrchestrator } from '../open-session.js'
@@ -380,9 +383,11 @@ function OverviewTabWithBridge(
   )
   const snapshot = useSyncExternalStore(subscribe, readSnapshot, readSnapshot)
   const bridgeOverview = snapshot?.overview ?? initialOverviewContext()
-  // 概览锚自解析补位（fix-11 缺陷 A）：桥锚 projectId 非空 = 桥裁决优先（集成态回归零变化）；
-  // null = 插件自解析退路（官方 workspace 上下文 → project.db 归属行匹配），解析失败维持无锚。
-  const self = useSelfAnchor(props.selfAnchor, props.makeClient ?? preloadRpcClientFactory)
+  // 概览锚自解析补位（fix-11 缺陷 A；bug 41a19182 斩传输）：桥锚 projectId 非空 = 桥裁决
+  // 优先（集成态回归零变化）；null = 插件自解析退路（官方 workspace 上下文 → 注入式归属
+  // 解析缝——宿主半 project.db 归属行 + workspaceRegistry 进程内直查），解析失败维持无锚。
+  // 解析缝模块级单例（引用稳定——hook effect deps 不逐帧重挂）。
+  const self = useSelfAnchor(props.selfAnchor, SELF_ANCHOR_PROJECT_RESOLVER)
   const overview: ForgeOverviewContext =
     bridgeOverview.projectId === null && self !== null
       ? { projectId: self.projectId, workspaceId: self.workspaceId, sessionCount: self.sessionCount }

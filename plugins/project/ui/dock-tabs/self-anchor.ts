@@ -1,18 +1,22 @@
-// 概览锚定链插件自解析缝（fix-11 缺陷 A——工作台桥缺席/桥锚 null 时的自给退路）：
+// 概览锚定链插件自解析缝（fix-11 缺陷 A 建立；bug 41a19182 斩传输收口——同族三犯断根）：
 // 官方 workspace 上下文（sessions 主视图会话 retainedBy.mainView → workspaces 归属快照
-// 行 path）→ forgeWorktree.resolve 批量通道（host 身份裁决单点 = project.db 归属行匹配）
-// → 项目锚定。forgeProjects.list 消费点归零——数据通路只消费 worktree.resolve 一法
-//（dsh-forge 集成态壳侧 knowledge-anchor 裁决仍为正门，本缝仅在桥锚缺席时补位，
-// 回归零变化）。形状漂移/通道故障 = null fail-soft 不炸壳（AGENTS 1.6 现查不缓存）。
+// 行 path）→ 注入式归属解析缝 resolveProjectId（宿主半 project.db 归属行 +
+// workspaceRegistry 进程内直查——fix-11 已建路径，缺省绑定归 anchor-resolver.ts 装配缝）
+// → 项目锚定。解析链本体零传输引用、零项目列表 face 消费——解析编排是纯异步函数，唯一
+// 数据源 = 注入缝（无传输环境解析成立由单测钉死：门①结构机检 + 门②解耦证明）。
+// 集成态壳侧 knowledge-anchor 裁决仍为正门，本缝仅在桥锚缺席时补位（回归零变化）。
+// 形状漂移/解析缝故障 = null fail-soft 不炸壳（AGENTS 1.6 现查不缓存）。
 import { useEffect, useState } from "react";
-import { normalizeFsPath } from "@dsh-forge/lib-path/path-key";
 import { activeSessionIdOf, type ForgeSessionsService, type ForgeWorkspacesService } from "../session-actions.js";
-import {
-  isWorkspacesSnapshot,
-  resolveWorkspaceProjectMap,
-  type WorktreeResolveClientFactory,
-} from "../knowledge/anchored-projects.js";
+import { isWorkspacesSnapshot } from "../knowledge/anchored-projects.js";
 import type { LedgerWorkspacesSnapshot } from "../knowledge/kit-types.js";
+
+/**
+ * 归属解析缝（纯本地单路径裁决——宿主半 project.db 归属行 + workspaceRegistry 进程内
+ * 直查的客户端投影）：工作区原路径（归一前直送，归一键归宿主半）→ 归属项目 id；
+ * 未注册/未解析 = undefined。
+ */
+export type AnchorProjectResolver = (path: string) => Promise<string | undefined>;
 
 /** 自解析服务缝（dock-tabs-face inject 递达——ctx.get 现查产物，缺席 = 缝不装） */
 export interface SelfAnchorServices {
@@ -44,11 +48,11 @@ function workspacesSnapshotOf(list: unknown): LedgerWorkspacesSnapshot | null {
 
 /**
  * 概览锚自解析（纯异步——hook 径与单测共面）：主视图会话 → 归属 workspace 行 path →
- * resolve 归属裁决 → 项目锚定。任一环缺席/漂移/抛错 = null（消费方维持桥锚现状语义）。
+ * 解析缝归属裁决 → 项目锚定。任一环缺席/漂移/抛错 = null（消费方维持桥锚现状语义）。
  */
 export async function resolveSelfAnchor(
   services: SelfAnchorServices | undefined,
-  makeClient: WorktreeResolveClientFactory,
+  resolveProjectId: AnchorProjectResolver,
 ): Promise<SelfAnchorContext | null> {
   if (services === undefined) return null;
   const sessionId = activeSessionIdOf(services.sessions.list);
@@ -60,8 +64,7 @@ export async function resolveSelfAnchor(
   if (typeof path !== "string" || path === "") return null;
   let projectId: string | undefined;
   try {
-    const map = await resolveWorkspaceProjectMap([path], () => makeClient());
-    projectId = map.get(normalizeFsPath(path));
+    projectId = await resolveProjectId(path);
   } catch {
     return null;
   }
@@ -91,14 +94,14 @@ function subscribeStore(store: unknown, listener: () => void): (() => void) | un
  */
 export function useSelfAnchor(
   services: SelfAnchorServices | undefined,
-  makeClient: WorktreeResolveClientFactory,
+  resolveProjectId: AnchorProjectResolver,
 ): SelfAnchorContext | null {
   const [anchor, setAnchor] = useState<SelfAnchorContext | null>(null);
   useEffect(() => {
     if (services === undefined) return;
     let alive = true;
     const compute = (): void => {
-      void resolveSelfAnchor(services, makeClient)
+      void resolveSelfAnchor(services, resolveProjectId)
         .then((next) => {
           if (alive) setAnchor(next);
         })
@@ -115,6 +118,6 @@ export function useSelfAnchor(
       alive = false;
       for (const unsubscribe of unsubscribes) unsubscribe?.();
     };
-  }, [services, makeClient]);
+  }, [services, resolveProjectId]);
   return anchor;
 }
