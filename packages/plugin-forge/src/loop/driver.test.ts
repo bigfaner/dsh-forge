@@ -376,6 +376,8 @@ function build(options: {
   modelingReportPresent?: (input: { readonly projectId: string; readonly slug: string; readonly localId: string; readonly bugIds: readonly string[] }) => boolean
   /** bug 台账桩（loop-phase-gate 提案⑤——done 径承接检查数据源；open 行清单直录） */
   bugs?: readonly { bugId: string; summary: string; sourceTaskId?: string }[]
+  /** P8 评审指示单选缝（bug cf6254ff）：deps.expertsPresent 桩——true = 三路措辞 / false|缺席 = subagent 回落 */
+  expertsPresent?: () => boolean
 } = {}): Built {
   const h = tasksHarness({ addTaskFailures: options.addTaskFailures })
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -472,6 +474,7 @@ function build(options: {
           },
         }
       : {}),
+    ...(options.expertsPresent !== undefined ? { expertsPresent: options.expertsPresent } : {}),
     escalation: {
       escalate: async (e) => {
         escalations.push(e)
@@ -1030,6 +1033,35 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
     expect(settle.text).toContain('< 6 → 未越阈')
     expect(settle.text).toContain('retro-done')
     expect(settle.text).toContain('recordImplCheckpoint')
+  })
+
+  it('P8 评审指示单选随 deps.expertsPresent 分流（bug cf6254ff 消费链回归）：true = 三路实名措辞 / false = subagent 回落', async () => {
+    const runOnce = async (expertsPresent: (() => boolean) | undefined) => {
+      const built = build({
+        claim: [claimed(), NO_TASK],
+        stats: [
+          statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }),
+          statsOf({ completed: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 }),
+          statsOf({ completed: 1 }), statsOf({ completed: 1 }),
+        ],
+        checkpointRows: [],
+        resolveProposalId: async () => 'prop-1',
+        ...(expertsPresent !== undefined ? { expertsPresent } : {}),
+      })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+      await untilSettled(built.driver)
+      const settle = built.calls.at(-1)!
+      expect(settle.method).toBe('settle')
+      return settle.text
+    }
+    const withExperts = await runOnce(() => true)
+    expect(withExperts).toContain('三路交叉评审：spec-reviewer')
+    expect(withExperts).toContain('architecture-reviewer')
+    expect(withExperts).toContain('code-reviewer')
+    expect(withExperts).not.toContain('subagent 分域交叉评审')
+    const fallback = await runOnce(() => false)
+    expect(fallback).toContain('subagent 分域交叉评审')
+    expect(fallback).not.toContain('spec-reviewer')
   })
 
   it('标记落库失败不收口：本轮 continue 留幂等窗口，次轮补落标记后才 settle（零任务派生）', async () => {

@@ -1948,7 +1948,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       ...(baseline !== undefined && baseline.redCases.length > 0
         ? { e2eBaselineRedCases: baseline.redCases }
         : {}),
-      ...(testBaseline !== undefined ? { testBaseline } : {}),
+      testBaseline, // TestBaselineBrief 非可选（testBaselineBriefOf 恒返回兜底形态——无 undefined 分支）
       // disc 效度戳：效度比对检出根 = 发起循环的检出（1.14 cwd 钉定同源锚——重领证据机械
       // 比对此效度域，漂移 = stale 强制重跑）
       ...(record.worktree !== undefined ? { checkoutRoot: record.worktree } : {}),

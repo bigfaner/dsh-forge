@@ -421,7 +421,7 @@ describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——c
     d2()
   })
 
-  it('三键在场核验（test-boundary-gates）：任一 LOOP_REVIEW_EXPERTS 键缺席（get 抛错）= 零注入，非仅服务在场', async () => {
+  it('commander 段门控 = 服务在场原语义（bug cf6254ff 回归）：三键任一缺席（get 抛错）不阻断注入', async () => {
     const { LOOP_REVIEW_EXPERT_KEYS } = await import('./loop/injection.js')
     const partialFace = (missing: string) => ({
       get: (key: string) => {
@@ -432,9 +432,25 @@ describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——c
     for (const key of LOOP_REVIEW_EXPERT_KEYS) {
       const rt = new TempRuntime()
       const dispose = forgePlugin(rt.withReflect({ experts: partialFace(key) }) as never)
-      expect(commanderTextOf(rt), `缺 ${key} 应回落空串`).toBe('')
+      expect(commanderTextOf(rt), `缺 ${key} 时服务仍在场 → 照常注入`).toContain('指挥者模式')
       dispose()
     }
+  })
+
+  it('双谓词拆分结构 pin（bug cf6254ff）：LOOP_REVIEW_EXPERT_KEYS 仅被 loopReviewExpertsPresent 消费——expertsServicePresent 保持服务在场原语义', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+    // commander 段消费面 = 服务在场谓词（不接三键核验）
+    expect(src).toContain('commanderSectionText(context, expertsServicePresent)')
+    // driver deps.expertsPresent = 三键谓词
+    expect(src).toContain('expertsPresent: loopReviewExpertsPresent')
+    // 同源常量只出现在 loopReviewExpertsPresent 函数体内（服务在场谓词零消费）
+    const serviceFnStart = src.indexOf('function expertsServicePresent')
+    const serviceFnEnd = src.indexOf('\n    }', serviceFnStart)
+    expect(src.slice(serviceFnStart, serviceFnEnd)).not.toContain('LOOP_REVIEW_EXPERT_KEYS')
+    const reviewFnStart = src.indexOf('function loopReviewExpertsPresent')
+    const reviewFnEnd = src.indexOf('\n    }', reviewFnStart)
+    expect(src.slice(reviewFnStart, reviewFnEnd)).toContain('LOOP_REVIEW_EXPERT_KEYS')
   })
 
   it('subagent 子会话装配：零注入（header.origin === subagent——指挥者话术只属于主会话，判例 2026-11）', () => {
