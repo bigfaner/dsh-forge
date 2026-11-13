@@ -43,7 +43,7 @@ function statsOf(byStatus: Partial<Record<TaskStatus, number>>): TaskStats {
   } as Record<TaskStatus, number>
   for (const status of ALL_STATUSES) full[status] = byStatus[status] ?? 0
   const total = ALL_STATUSES.reduce((sum, status) => sum + full[status], 0)
-  return { total, byStatus: full, unmetPending: 0 }
+  return { total, byStatus: full, unmetPending: 0, gatedPending: 0 }
 }
 
 describe('终态集口径（与相位推导机同源——core TERMINAL_TASK_STATUSES 镜像）', () => {

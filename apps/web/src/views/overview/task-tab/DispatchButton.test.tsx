@@ -28,7 +28,7 @@ function statsOf(byStatus: Partial<Record<TaskStatus, number>>): TaskStats {
   } as Record<TaskStatus, number>
   for (const status of Object.keys(full) as TaskStatus[]) full[status] = byStatus[status] ?? 0
   const total = (Object.values(full) as number[]).reduce((a, b) => a + b, 0)
-  return { total, byStatus: full, unmetPending: 0 }
+  return { total, byStatus: full, unmetPending: 0, gatedPending: 0 }
 }
 
 function link(taskId: string, sessionId: string, source: 'link' | 'record'): SessionTaskLinkCard {

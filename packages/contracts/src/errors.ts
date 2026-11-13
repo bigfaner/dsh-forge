@@ -77,6 +77,10 @@ export const ERROR_CODES = [
   'ERR_BUG_COVERAGE_ANCHOR_INVALID', // → plugin-forge resolveBug tool 锚有效性预检（旁挂侧文件 IO）：报告锚指向的卷宗正本不在场——失效经拒绝路径退回（400；data 带锚与解析路径）
   // ── forge-dirs-query-tool（目录口径代码化——双查询工具受控面拒绝） ──
   'ERR_DIR_PATH_INVALID', // → DirPathInvalidError：forgeDirs/forgeResolvePath 受控面拒绝——未知 dirKey/dest（拒绝并列举法集）或目的地 requires 缺参（400；data 带合法集）
+  // ── loop-phase-gate B1（阶段门 + block_source 状态守卫三码） ──
+  'ERR_PHASE_GATE_UNSETTLED', // → PhaseGateUnsettledError：claim fresh 径容器实现链阶段门未收口（409；data 带 unsettled 未终态 I 卡清单）
+  'ERR_BLOCK_SOURCE_IN_PROGRESS', // → BlockSourceInProgressError：addTask block_source 对 in_progress 源（409；指路 pauseTask → addTask(blockSource) → resume）
+  'ERR_BLOCK_SOURCE_TERMINAL', // → BlockSourceTerminalError：addTask block_source 对终态源（409；指路 disc 径或改选未终态源）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
@@ -193,4 +197,30 @@ export interface BeforeSuccessorInvalidData {
 export interface RuntimeEvidenceRequiredData {
   /** 提交面 runtimeSurface 声明（强制域判据输入——就高不就低判定后的面清单） */
   faces: readonly string[]
+}
+
+// ── loop-phase-gate B1：阶段门 + block_source 状态守卫 data 载荷 ──
+
+/** ERR_PHASE_GATE_UNSETTLED data 载荷：fresh-claim 容器阶段门未收口（链上未终态 I 卡清单——agent 可据以推进） */
+export interface PhaseGateUnsettledData {
+  readonly projectId: string
+  readonly taskRef: TaskRef
+  /** 被门任务的容器 slug（feature | proposal） */
+  readonly containerSlug: string
+  /** 链上未终态 I 卡清单（自然键 + 当前状态； unsettled = 链集合 I 且状态 ∉ {completed, skipped}） */
+  readonly unsettled: readonly UnmetDependency[]
+}
+
+/** ERR_BLOCK_SOURCE_IN_PROGRESS data 载荷：block_source 对在飞源（taskStatus 恒 'in_progress'） */
+export interface BlockSourceInProgressData {
+  readonly projectId: string
+  readonly taskRef: TaskRef
+  readonly taskStatus: 'in_progress'
+}
+
+/** ERR_BLOCK_SOURCE_TERMINAL data 载荷：block_source 对终态源（completed | skipped | rejected） */
+export interface BlockSourceTerminalData {
+  readonly projectId: string
+  readonly taskRef: TaskRef
+  readonly taskStatus: TaskStatus
 }

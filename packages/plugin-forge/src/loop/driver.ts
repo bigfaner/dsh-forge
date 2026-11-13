@@ -2949,4 +2949,5 @@ const ZERO_STATS: TaskStats = {
     rejected: 0,
   },
   unmetPending: 0,
+  gatedPending: 0,
 }

@@ -92,6 +92,7 @@ import type {
   ToolErrorPayload,
   TransitionProposalInput,
   TransitionProposalResult,
+  UpdateTaskInput,
   ValidateReport,
 } from './forge.js'
 
@@ -532,5 +533,37 @@ describe('task-pause-primitive contracts 单源面', () => {
 
   it('AddTaskInput.before 可选 string[]（后继 localId 数组——插入序单事务挂边入参）', () => {
     expectTypeOf<AddTaskInput['before']>().toEqualTypeOf<string[] | undefined>()
+  })
+})
+
+describe('loop-phase-gate B1 contracts DTO 扩列', () => {
+  it('UpdateTaskInput.dependsOnAppend 可选 string[]（manual 边增量白通道；与 dependsOn 互斥语义注释成文）', () => {
+    expectTypeOf<UpdateTaskInput['dependsOnAppend']>().toEqualTypeOf<string[] | undefined>()
+  })
+
+  it('AddTaskInput 不含 e2e_attribution 标记字段（E2E_ATTRIBUTION_COLUMN 标记不经 addTask 参数暴露——硬约束）', () => {
+    expectTypeOf<AddTaskInput>().not.toHaveProperty('e2e_attribution')
+    expectTypeOf<keyof AddTaskInput>().toEqualTypeOf<
+      | 'projectId'
+      | 'source'
+      | 'title'
+      | 'type'
+      | 'taskDesc'
+      | 'acceptanceCriteria'
+      | 'priority'
+      | 'estimatedTime'
+      | 'vars'
+      | 'dependsOn'
+      | 'before'
+      | 'sourceTask'
+      | 'blockSource'
+      | 'breaking'
+      | 'coverage'
+      | 'complexity'
+    >()
+  })
+
+  it('TaskStats.gatedPending: number（pending ∧ 被容器实现链阶段门持有——CE-1 挂起判据取数面）', () => {
+    expectTypeOf<TaskStats['gatedPending']>().toEqualTypeOf<number>()
   })
 })

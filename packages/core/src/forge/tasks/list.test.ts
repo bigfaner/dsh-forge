@@ -349,6 +349,7 @@ describe('AC2 taskStats（total + byStatus 八态分布）', () => {
         rejected: 0,
       },
       unmetPending: 0,
+      gatedPending: 0, // B1 基座期恒 0——B4 批接 GATE_SQL 同源计数
     })
   })
 
@@ -374,6 +375,7 @@ describe('AC2 taskStats（total + byStatus 八态分布）', () => {
         rejected: 0,
       },
       unmetPending: 1, // 1.1 pending ∧ 前置 1.2 blocked 未满足
+      gatedPending: 0,
     })
     const missed = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'nope' } })
     expect(missed).toEqual({
@@ -389,6 +391,7 @@ describe('AC2 taskStats（total + byStatus 八态分布）', () => {
         rejected: 0,
       },
       unmetPending: 0,
+      gatedPending: 0,
     })
   })
 })

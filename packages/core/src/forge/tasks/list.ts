@@ -278,7 +278,7 @@ export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise
   const byStatus = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>
   const scope = q.source === undefined ? undefined : resolveContainerScope(db, q.source)
   if (q.source !== undefined && scope === undefined) {
-    return { total: 0, byStatus, unmetPending: 0 }
+    return { total: 0, byStatus, unmetPending: 0, gatedPending: 0 }
   }
   const rows = db
     .prepare<unknown[], { task_status: TaskStatus; n: number }>(
@@ -295,7 +295,8 @@ export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise
   // M3 池快照派生（Interface 1：pending ∧ 前置未全 ∈ {completed, skipped} 计数——单查询派生；
   // dispatchTask 池快照数据源，与 byStatus 同 scope 口径）
   const unmetPending = countUnmetPending(db, scope)
-  return { total, byStatus, unmetPending }
+  // gatedPending = pending ∧ GATE_SQL 命中（loop-phase-gate §1.4）——B1 基座期先置 0，B4 批接 phase-gate 同源计数
+  return { total, byStatus, unmetPending, gatedPending: 0 }
 }
 
 /** unmetPending 计数（pending 且存在未终态前置——EXISTS 半连接单查询；scope 可选） */

@@ -19,7 +19,7 @@ function taskOf(partial: Partial<TaskCard> & Pick<TaskCard, 'taskId' | 'taskStat
 
 const SNAPSHOT = (tasks: TaskCard[]): RemoteProgressSnapshot => ({
   tasks,
-  stats: { total: tasks.length, byStatus: {} as never, unmetPending: 0 },
+  stats: { total: tasks.length, byStatus: {} as never, unmetPending: 0, gatedPending: 0 },
 })
 
 describe('remoteListRowsOf 排序', () => {
@@ -125,7 +125,7 @@ describe('mergeRemoteSnapshots 多项目合并', () => {
     const a = SNAPSHOT([taskOf({ taskId: 'a1', taskStatus: 'in_progress' })])
     const b: RemoteProgressSnapshot = {
       tasks: [taskOf({ taskId: 'b1', taskStatus: 'blocked', slug: 'prop-y', localId: '2' })],
-      stats: { total: 2, byStatus: { blocked: 1 } as never, unmetPending: 1 },
+      stats: { total: 2, byStatus: { blocked: 1 } as never, unmetPending: 1, gatedPending: 1 },
     }
     const merged = mergeRemoteSnapshots([a, b])
     expect(merged?.tasks.map((t) => t.taskId)).toEqual(['a1', 'b1'])

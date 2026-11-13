@@ -435,7 +435,10 @@ export interface ValidateReport {
  *  M3 容器化（Interface 1）：featureSlug → source: ContainerRef——容器必须在场（服务不变量·
  *  多态引用无 DB FK，写入校验 source_id 必命中 kind 对应表）；tasks.mode = 容器 mode 创建时
  *  快照（feature 容器恒 'expedition'；proposal 容器取 proposals.mode·可 NULL——键缺席）。
- *  main_session 砍除（M3 裁决⑦：老 forge 形态约束残留·新形态零消费者）。 */
+ *  main_session 砍除（M3 裁决⑦：老 forge 形态约束残留·新形态零消费者）。
+ *  loop-phase-gate 硬约束（设计 §1.1）：本 DTO 不含 e2e_attribution 标记字段（E2E_ATTRIBUTION_COLUMN
+ *  列常量在 contracts labels.ts）——归因卡生成侧标记是机械事实，不可经 addTask 参数暴露；
+ *  写入路径 = 归因卡生成点 addTask 返回后经任务存储句柄后置 UPDATE。 */
 export interface AddTaskInput {
   projectId: string
   /** 任务容器（feature = 远征链分解 / proposal = 突击直挂） */
@@ -495,6 +498,12 @@ export interface UpdateTaskInput {
   vars?: Record<string, string>
   /** 依赖改写（manual 边整体置换：删旧 manual 边 → 增量环校验 → 插新 manual 边） */
   dependsOn?: string[]
+  /**
+   * manual 边增量追加（loop-phase-gate B1 白通道）：既有 manual/fix-chain/autoconfig 边一律不动
+   * （零删除、锁边护栏不作用于此径）；元素 = 同容器前置 localId；重复追加幂等（INSERT OR IGNORE）。
+   * 与 dependsOn 互斥——并存即输入契约拒绝（一次调用一个意图：整体置换 vs 增量追加语义歧义）。
+   */
+  dependsOnAppend?: string[]
 }
 
 /** updateTask 返回体（更新后任务快照——同 transitionTask 返回口径） */
@@ -804,6 +813,8 @@ export interface TaskStats {
   byStatus: Record<TaskStatus, number>
   /** pending 且前置未全 ∈ {completed, skipped} 的任务数（池快照「等待」判据成分） */
   unmetPending: number
+  /** pending 且被容器实现链阶段门持有（GATE_SQL 命中——CE-1 挂起判据取数面；loop-phase-gate §1.4） */
+  gatedPending: number
 }
 
 /** taskSettlements 查询（容器作用域 completed 任务结算面批量读——wave 快照聚合单批数据源） */

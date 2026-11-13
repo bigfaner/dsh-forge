@@ -46,6 +46,35 @@ export const TASK_TYPES = [
 
 export type TaskType = (typeof TASK_TYPES)[number]
 
+/**
+ * 验证族 V（loop-phase-gate 设计 §3——形式化验证 §0 定义：实现收口后才可执行的验证动作）。
+ * test-gen-* 属实现族（测试代码生产，随相位推进）；gate 属 G 类单列（闸门动作，非验证语义）。
+ * 词表单点：任何消费方（phase-gate GATE_SQL / claim.ts 分支①排除 / 本 pin 测试）不手抄字面清单。
+ */
+export const VALIDATION_TASK_TYPES = [
+  'test-run',
+  'validation-code',
+  'validation-ux',
+  'eval-contract',
+  'eval-journey',
+] as const
+
+export type ValidationTaskType = (typeof VALIDATION_TASK_TYPES)[number]
+
+/**
+ * 实现链集合 I（loop-phase-gate 设计 §3）：TASK_TYPES 全集 − V − gate 的派生常量——
+ * 容器实现链终态合取的成员域；运行期再叠加 local_id NOT LIKE 'fix-%'/'disc-%' 前缀排除
+ * （SQL 内）与 BUSINESS_LOCAL_ID 数值语义（TS 守卫同判据）。类型侧 Exclude 同源派生。
+ */
+export type ImplementationTaskType = Exclude<TaskType, 'gate' | ValidationTaskType>
+export const IMPLEMENTATION_TASK_TYPES: readonly ImplementationTaskType[] = TASK_TYPES.filter(
+  (t): t is ImplementationTaskType => t !== 'gate' && !(VALIDATION_TASK_TYPES as readonly string[]).includes(t),
+)
+
+/** E2E 归因卡标记列名（loop-phase-gate 设计 §1.1 承载字段裁定：tasks.e2e_attribution 列——
+ *  生成侧机械事实，不经 addTask 参数暴露，白名单豁免 = 无入边 ∧ 标记 = 1）。 */
+export const E2E_ATTRIBUTION_COLUMN = 'e2e_attribution'
+
 /** TaskType 中英标签（exhaustive；按类型条件区/类别 chip 的搜索匹配面） */
 export const TASK_TYPE_LABELS: Readonly<Record<TaskType, BilingualLabel>> = {
   'coding-feature': { zh: '新功能', en: 'Feature' },

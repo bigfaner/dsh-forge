@@ -4,9 +4,12 @@
 // 1.1（M2）增补：扩池 15 新码（M2 Error Handling 表逐行）+ 三码 data 载荷形状 pin。
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
+  type BlockSourceInProgressData,
+  type BlockSourceTerminalData,
   type CycleDetectedData,
   type DependenciesUnmetData,
   ERROR_CODES,
+  type PhaseGateUnsettledData,
   type RpcErrorPayload,
   type SuspectedMoveData,
   type TestEvidenceRequiredData,
@@ -82,8 +85,8 @@ describe('AC3 errors.ts 扩池 15 新码（M2 表逐条一致）', () => {
 })
 
 describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', () => {
-  it('ERROR_CODES = 47 码：… + before 后继守卫码 + 项目排序校验码续后（project-manual-order）+ blocked 源建链守卫码（bug 0a25720c）+ blocked 归类闸门码 + 同缝拦截码（loop-recurrence-hardening T2/T3）+ 覆盖声明闸门两码（T4）+ 目录受控面拒绝码（forge-dirs-query-tool）', () => {
-    expect([...ERROR_CODES]).toHaveLength(47)
+  it('ERROR_CODES = 50 码：… + 目录受控面拒绝码（forge-dirs-query-tool）+ loop-phase-gate 三码（阶段门未收口 + block_source 在飞源/终态源）', () => {
+    expect([...ERROR_CODES]).toHaveLength(50)
     expect([...ERROR_CODES].slice(21, 24)).toEqual(M3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(24, 27)).toEqual(S3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(27, 29)).toEqual(TASK_TOOLS_ERROR_TABLE.map(([code]) => code))
@@ -108,8 +111,9 @@ describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', ()
       'ERR_BUG_COVERAGE_DECLARATION_REQUIRED',
       'ERR_BUG_COVERAGE_ANCHOR_INVALID',
     ])
-    expect([...ERROR_CODES].slice(46)).toEqual(['ERR_DIR_PATH_INVALID'])
-    expect(new Set(ERROR_CODES).size).toBe(47)
+    expect([...ERROR_CODES].slice(46, 47)).toEqual(['ERR_DIR_PATH_INVALID'])
+    expect([...ERROR_CODES].slice(47)).toEqual(['ERR_PHASE_GATE_UNSETTLED', 'ERR_BLOCK_SOURCE_IN_PROGRESS', 'ERR_BLOCK_SOURCE_TERMINAL'])
+    expect(new Set(ERROR_CODES).size).toBe(50)
   })
 
   it('M3/S3/工具面/fix-bug/复发链新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {
@@ -122,6 +126,38 @@ describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', ()
     const sample: TestEvidenceRequiredData = { acceptanceCriteria: ['[AC-1] 通道常量齐备', '[AC-2] allowlist 一致'] }
     expect(sample.acceptanceCriteria).toHaveLength(2)
     expectTypeOf<TestEvidenceRequiredData['acceptanceCriteria']>().toMatchTypeOf<readonly string[]>()
+  })
+})
+
+describe('loop-phase-gate B1 三码 data 载荷形状（T12——阶段门 + block_source 状态守卫）', () => {
+  it('ERR_PHASE_GATE_UNSETTLED data = taskRef + containerSlug + unsettled 未终态 I 卡清单', () => {
+    const sample: PhaseGateUnsettledData = {
+      projectId: 'p1',
+      taskRef: { slug: 'f1', localId: '1.10' },
+      containerSlug: 'f1',
+      unsettled: [{ slug: 'f1', localId: '1.3', taskStatus: 'in_progress' }],
+    }
+    expect(sample.unsettled).toHaveLength(1)
+    expectTypeOf<PhaseGateUnsettledData['unsettled']>().toMatchTypeOf<readonly UnmetDependency[]>()
+  })
+
+  it('ERR_BLOCK_SOURCE_IN_PROGRESS data = taskRef + taskStatus 恒 in_progress', () => {
+    const sample: BlockSourceInProgressData = {
+      projectId: 'p1',
+      taskRef: { slug: 'f1', localId: '1.2' },
+      taskStatus: 'in_progress',
+    }
+    expectTypeOf<BlockSourceInProgressData['taskStatus']>().toEqualTypeOf<'in_progress'>()
+    expect(sample.taskStatus).toBe('in_progress')
+  })
+
+  it('ERR_BLOCK_SOURCE_TERMINAL data = taskRef + 终态 taskStatus', () => {
+    const sample: BlockSourceTerminalData = {
+      projectId: 'p1',
+      taskRef: { slug: 'f1', localId: '1.2' },
+      taskStatus: 'completed',
+    }
+    expect(sample.taskStatus).toBe('completed')
   })
 })
 

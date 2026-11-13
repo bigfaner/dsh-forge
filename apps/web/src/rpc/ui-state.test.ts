@@ -69,6 +69,10 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_BUG_COVERAGE_DECLARATION_REQUIRED: 'error-bar',
   ERR_BUG_COVERAGE_ANCHOR_INVALID: 'error-bar',
   ERR_DIR_PATH_INVALID: 'error-bar',
+  // loop-phase-gate——阶段门未收口 + block_source 源状态守卫错误条（文案带未终态清单/处置指引）
+  ERR_PHASE_GATE_UNSETTLED: 'error-bar',
+  ERR_BLOCK_SOURCE_IN_PROGRESS: 'error-bar',
+  ERR_BLOCK_SOURCE_TERMINAL: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

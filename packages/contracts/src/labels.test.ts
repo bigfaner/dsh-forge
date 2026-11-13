@@ -16,6 +16,9 @@ import {
   TASK_STATUS_LABELS,
   TASK_TYPES,
   TASK_TYPE_LABELS,
+  E2E_ATTRIBUTION_COLUMN,
+  IMPLEMENTATION_TASK_TYPES,
+  VALIDATION_TASK_TYPES,
   type BilingualLabel,
 } from './labels.js'
 
@@ -55,6 +58,33 @@ describe('AC4 TaskType 20 值词汇（§7-6 映射定稿）', () => {
     for (const type of TASK_TYPES) {
       expect(type).toMatch(/^[a-z][a-z-]*$/)
     }
+  })
+})
+
+describe('loop-phase-gate T11 验证类词表 pin（设计 §3——词表单点）', () => {
+  it('VALIDATION_TASK_TYPES = 5 值齐备（实现收口后验证动作；test-gen-* 属实现族、gate 单列不入）', () => {
+    expect([...VALIDATION_TASK_TYPES]).toEqual([
+      'test-run',
+      'validation-code',
+      'validation-ux',
+      'eval-contract',
+      'eval-journey',
+    ])
+  })
+
+  it('IMPLEMENTATION_TASK_TYPES = TASK_TYPES − V − gate 派生完备（V ∪ I ∪ {gate} = TASK_TYPES）', () => {
+    const union = new Set([...VALIDATION_TASK_TYPES, ...IMPLEMENTATION_TASK_TYPES, 'gate'])
+    expect(union.size).toBe(TASK_TYPES.length)
+    for (const t of TASK_TYPES) expect(union.has(t)).toBe(true)
+  })
+
+  it('V 与 I 均 ⊆ TASK_TYPES（子集与派生同源——消费方不手抄字面清单）', () => {
+    for (const v of VALIDATION_TASK_TYPES) expect(TASK_TYPES).toContain(v)
+    for (const i of IMPLEMENTATION_TASK_TYPES) expect(TASK_TYPES).toContain(i)
+  })
+
+  it('E2E_ATTRIBUTION_COLUMN 标记列常量在场（tasks.e2e_attribution——生成侧机械事实）', () => {
+    expect(E2E_ATTRIBUTION_COLUMN).toBe('e2e_attribution')
   })
 })
 

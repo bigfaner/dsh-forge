@@ -58,21 +58,24 @@ export function mergeRemoteSnapshots(
         total: 0,
         byStatus: Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>,
         unmetPending: 0,
+        gatedPending: 0,
       },
     }
   }
   if (present.length === 0) return undefined
   const byStatus = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>
   let unmetPending = 0
+  let gatedPending = 0
   let total = 0
   for (const snapshot of present) {
     for (const status of TASK_STATUSES) {
       byStatus[status] += snapshot.stats?.byStatus?.[status] ?? 0
     }
     unmetPending += snapshot.stats?.unmetPending ?? 0
+    gatedPending += snapshot.stats?.gatedPending ?? 0
     total += snapshot.stats?.total ?? 0
   }
-  return { tasks: present.flatMap((snapshot) => snapshot.tasks ?? []), stats: { total, byStatus, unmetPending } }
+  return { tasks: present.flatMap((snapshot) => snapshot.tasks ?? []), stats: { total, byStatus, unmetPending, gatedPending } }
 }
 
 /**
