@@ -187,6 +187,19 @@ export {
   registerWorktreeDetailSection,
 } from './detail-section/index.js'
 
+// ── 项目树数据层（1.8 D 类产品化新增——projects→worktrees 层级投影：forge.projects/
+//    forge.worktrees 缝经 ui/rpc Typert 正典下发；投影纯函数 + 相位 hook，消费面
+//    = hero 双 select/树面板等后续接线）──
+export {
+  projectWorktreeTreeOf,
+  type ProjectWorktreeNode,
+} from './project-tree/projection.js'
+export {
+  fetchProjectTreePhase,
+  useProjectWorktreeTree,
+  type ProjectTreePhase,
+} from './project-tree/use-project-tree.js'
+
 // 组合 cordis 插件面（包骨架 1.3 正门，无 src 层；worktree 域 UI 平移后仍承担装载契约）：
 // 无 apply → 真机 `invalid plugin` 判例（expert-squad annotator gotcha-web-boot 同径）；
 // apply 返回值铁律：必须返回 undefined（cordis 组合把返回值当 effect 消费）。

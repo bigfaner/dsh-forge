@@ -27,6 +27,7 @@ import {
   type DeleteChecks,
 } from '../worktree-picker/model.js'
 import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'
+import { AddProjectFlow, openAddProjectFlow } from '../add-project/index.js'
 
 /** 本插件详情页 worktree 管理面 list 登记 id（list slot 判同键；e2e/排障锚）。 */
 export const WORKTREE_DETAIL_SECTION_ID = 'project-worktree-management'
@@ -34,9 +35,10 @@ export const WORKTREE_DETAIL_SECTION_ID = 'project-worktree-management'
 /** ahead-behind 行内联计数（dto aheadBehind counts 快照） */
 type AheadBehindCounts = { readonly ahead: number; readonly behind: number } | null
 
-/** 项目锚相位（Typert projects.list 行自带 wsPath——唯一非 archived 项目充锚） */
+/** 项目锚相位（Typert projects.list 行自带 wsPath——唯一非 archived 项目充锚；
+ *  1.8 D 类兜底：零项目 = empty 相位——空态 + 添加项目入口呈现，不再静默无面板） */
 interface RootPhase {
-  readonly state: 'loading' | 'ready' | 'error'
+  readonly state: 'loading' | 'ready' | 'empty' | 'error'
   readonly root?: string
 }
 
@@ -112,9 +114,12 @@ export function ProjectWorktreesSection(props: {
   const [branchState, setBranchState] = useState<{ branches: readonly string[]; defaultBranch?: string }>({ branches: [] });
   const [deleteRow, setDeleteRow] = useState<WorktreeEntryDto | undefined>(undefined);
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null);
+  // 1.8 D 类兜底：锚重试 nonce（空态添加项目注册成功 → 重跑项目锚解析，面板就位）
+  const [anchorNonce, setAnchorNonce] = useState(0);
 
   // 项目锚解析（Typert projects.list 行自带 wsPath）：唯一非 archived 项目充锚；
-  // 零/多项目 = 无锚不猜首个（warn 留痕退无面板）；remote face 装配在途 = 小步重试。
+  // 零项目 = empty 相位（首用空态——添加项目兜底入口呈现，1.8 D 类）；多项目 =
+  // 无锚不猜首个（warn 留痕退无面板）；remote face 装配在途 = 小步重试。
   useEffect(() => {
     if (!subjectOk) return;
     let cancelled = false;
@@ -133,6 +138,8 @@ export function ProjectWorktreesSection(props: {
           const live = rows.filter((row) => !row.archived);
           if (live.length === 1) {
             setRootPhase({ state: 'ready', root: live[0]!.wsPath });
+          } else if (live.length === 0) {
+            setRootPhase({ state: 'empty' });
           } else {
             console.warn(`[dsh-forge/project] project anchor ambiguous (count=${String(live.length)}); worktree detail section not mounted`);
             setRootPhase({ state: 'error' });
@@ -153,7 +160,7 @@ export function ProjectWorktreesSection(props: {
     return () => {
       cancelled = true;
     };
-  }, [subjectOk, rpcOf]);
+  }, [subjectOk, rpcOf, anchorNonce]);
 
   const projectRoot = rootPhase.state === 'ready' ? rootPhase.root : undefined;
 
@@ -196,7 +203,33 @@ export function ProjectWorktreesSection(props: {
     if (projectRoot !== undefined) void reload();
   }, [projectRoot, reload]);
 
-  if (!subjectOk || dead || projectRoot === undefined) return null;
+  // 卫语句切分（1.8 D 类兜底）：error 相位先归 null（fail-soft 不变），empty 相位 =
+  // 首用空态 + 添加项目入口（宿主 = 本面板内 AddProjectFlow 常驻挂载——页内缝由本面
+  // 发布，入口直达；注册成功 → anchorNonce 重跑锚解析，管理面就位）。
+  if (!subjectOk || dead || rootPhase.state === 'error') return null;
+  if (rootPhase.state === 'empty') {
+    return (
+      <div className="dswf-wt-panel" data-dswf-wt-panel="" data-wt-state="empty">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 500, color: 'var(--dsw-alias-label-primary)', margin: 0 }}>Worktrees</h2>
+        </div>
+        <p data-dswf-wt-empty style={{ fontSize: 12, color: 'var(--dsw-alias-label-secondary)', marginBottom: 10 }}>
+          尚无已注册项目——注册一个项目后即可管理其 worktree。
+        </p>
+        <Button
+          variant="outline"
+          data-dswf-wt-add-project=""
+          onClick={() => {
+            openAddProjectFlow();
+          }}
+        >
+          添加项目…
+        </Button>
+        <AddProjectFlow onRegistered={() => setAnchorNonce((n) => n + 1)} />
+      </div>
+    );
+  }
+  if (projectRoot === undefined) return null;
 
   const entries = phase.state === 'ready' && phase.root === projectRoot ? phase.result?.entries ?? [] : [];
   const worktreeDir = phase.result?.worktreeDir ?? fallbackWorktreeDir(projectRoot);

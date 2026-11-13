@@ -189,19 +189,42 @@ describe('项目锚解析（Typert projects.list）', () => {
     expect(calls.list).toEqual([{ projectRoot: ROOT }])
   })
 
-  it('零项目 / 多项目 = 无锚不猜首个（warn 留痕退无面板）', async () => {
+  it('多项目 = 无锚不猜首个（warn 留痕退无面板）', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const zero = await mountSection({ rpc: rpcFake({ projects: [] }) })
-    expect(zero.host.querySelector('[data-dswf-wt-panel]')).toBeNull()
     const multi = await mountSection({ rpc: rpcFake({ projects: projectRows(2) }) })
     expect(multi.host.querySelector('[data-dswf-wt-panel]')).toBeNull()
-    expect(warn.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(warn.mock.calls.length).toBeGreaterThanOrEqual(1)
     expect(multi.calls.list).toEqual([])
   })
 
-  it('archived 行不充锚：唯一行 archived = 无锚退无面板', async () => {
+  it('零项目 = 首用空态兜底（空态行 + 添加项目入口在场——1.8 D 类，不再静默无面板）', async () => {
+    const { host } = await mountSection({ rpc: rpcFake({ projects: [] }) })
+    expect(host.querySelector('[data-dswf-wt-panel]')).not.toBeNull()
+    expect(host.querySelector('[data-dswf-wt-empty]')).not.toBeNull()
+    expect(host.querySelector('[data-dswf-wt-add-project]')).not.toBeNull()
+  })
+
+  it('空态兜底入口接线：流程宿主随面板挂载——页内缝发布，点击直达流程模态（1.8 D 类）', async () => {
+    const { publishAddProjectFlow, openAddProjectFlow } = await import('../add-project/flow-open.js')
+    publishAddProjectFlow(undefined)
+    try {
+      const { host } = await mountSection({ rpc: rpcFake({ projects: [] }) })
+      expect(openAddProjectFlow(), '流程宿主缝在场').toBe(true)
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-dswf-wt-add-project]')!.click()
+        await Promise.resolve()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        await Promise.resolve()
+      })
+      expect(document.querySelector('[data-dswf-ap]'), '流程模态呈现（官方 Modal 门户壳——portal 出面板宿主）').not.toBeNull()
+    } finally {
+      publishAddProjectFlow(undefined)
+    }
+  })
+
+  it('archived 行不充锚：唯一行 archived = 首用空态兜底（同零项目口径）', async () => {
     const { host } = await mountSection({ rpc: rpcFake({ projects: projectRows(1, true) }) })
-    expect(host.querySelector('[data-dswf-wt-panel]')).toBeNull()
+    expect(host.querySelector('[data-dswf-wt-add-project]')).not.toBeNull()
   })
 
   it('projects.list 失败 = 退无面板（warn 留痕不静默）', async () => {

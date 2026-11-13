@@ -13,10 +13,11 @@
 // 改名/归档切换 = forge:projects/update RPC 面——name patch 的 workspace 标题对齐归
 // core 侧 fix-33 ⑪）。
 // 「＋」入口收口（用户裁决 2026-11-12）：「＋ 添加项目」入口不在项目列表内——列表头部/
-// rail 轨内零入口；唯一残存入口 = 无项目空态 CTA（onAddProject 经 phaseBody 空态消费），
-// 添加入口归宿登记待裁决清单。
+// rail 轨内零入口；唯一残存入口 = 无项目空态 CTA（onAddProject 经 phaseBody 空态消费）。
+// 1.8 D 类接线：流程宿主（AddProjectFlow）随本槽位件常驻挂载——官方宿主无壳装配期，
+// 页内缝 __DSH_FORGE_ADD_PROJECT_FLOW__ 由本面发布，空态 CTA 与 hero CTA 两入口直达。
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
-import { openAddProjectFlow } from '../add-project/index.js'
+import { AddProjectFlow, openAddProjectFlow } from '../add-project/index.js'
 import { useWorkspaceProjectMap } from '../knowledge/anchored-projects.js'
 import { preloadRpcClientFactory } from '../rpc.js'
 import { ForgeWorkspacePanel } from './ForgeWorkspacePanel.js'
@@ -118,7 +119,8 @@ export function ForgeSidebarSlot({
     forkSession,
     renameSession,
   })
-  // 空态「添加项目」CTA（用户裁决 2026-11-12——唯一残存添加入口；流程宿主缺席 fail-soft warn）
+  // 空态「添加项目」CTA（用户裁决 2026-11-12——唯一残存添加入口；流程宿主 = 本组件
+  // 常驻挂载的 AddProjectFlow 页内缝，直达不再缺席）
   const onAddProject = useCallback(() => {
     openAddProjectFlow()
   }, [])
@@ -129,7 +131,8 @@ export function ForgeSidebarSlot({
     workspaceProject,
   })
   return (
-    <ForgeWorkspacePanel
+    <>
+      <ForgeWorkspacePanel
       wide={wide}
       expandSidebar={expandSidebar}
       tree={tree}
@@ -151,6 +154,11 @@ export function ForgeSidebarSlot({
       onSessionFork={actions.onSessionFork}
       onProjectsReorder={actions.onProjectsReorder}
       now={Date.now()}
-    />
+      />
+      {/* 1.8 D 类接线：流程宿主随本槽位件常驻挂载（官方宿主无壳装配——mount 期发布
+          __DSH_FORGE_ADD_PROJECT_FLOW__ 页内缝，空态 CTA / hero CTA 经 openAddProjectFlow
+          直达；数据源 = AddProjectFlow 缺省 Typert 真身；注册成功 → 静默重拉对齐列表）。 */}
+      <AddProjectFlow onRegistered={silentRefreshProjects} />
+    </>
   )
 }
