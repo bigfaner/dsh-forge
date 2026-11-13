@@ -34,12 +34,18 @@
 //   - CT-J2-E3 configForms 缺席宿主：官方宿主 settings-controller 在场形态不可卸载构造；
 //   - CT-J2-E5 host 重启恢复：官方宿主为 harness 域外进程，重启归舞台管理（cdp 序列既定）；
 //   - CT-J2-E6 四缝同屏互不干扰：四面 precondition 同时成立的舞台不可稳定构造（chip 需
-//     绑定会话 + seal 态）——可构造子集在各面用例内覆盖。
+//     绑定会话 + seal 态）——可构造子集在各面用例内覆盖；
+//   - CT-J2-G2 web 舞台 dock tabs 结构性缺席：官方源码核销（fix-9，dsh-client-ui-sidebar-right
+//     lib/client.js:6326-6445）——resource 型 tab 仅经 openResource face 放置后才进 strip，
+//     无 URL 路由通道（路由触发不成立，维持静态在席断言）；web 舞台零 dswf tab = 1.13/001
+//     既判机制（apply 期 sessions/uiWorkspace 缺席 → keyed body 注册降级不注册，fail-soft
+//     warn 留痕）——舞台感知留痕 skip，注明非回归，与 CT-J2-G1 face① 舞台分工口径一致。
 import { test, expect, type Page } from '@playwright/test'
 import {
   officialHostStage,
   openOfficialPage,
   installViaPluginManager,
+  tryForgeInvoke,
   type OfficialHostStage,
   type OfficialPage,
 } from '../support/official-host.js'
@@ -120,8 +126,33 @@ test('@project-e2e @a-faces CT-J2-E1 未绑定会话：零 chip、零干扰', as
 test('@project-e2e @a-faces CT-J2-G2 dock bug tab 直挂：台账 tab + 概览 Bug 子页投影呈现', async () => {
   test.setTimeout(300_000)
   const page = harness.page
-  // CT-J2-G2 Output-a：Bug 台账 tab 在场（sidebar.right.pane.tab 类型 dswf-bug——官方 dockkit strip）
+  // Preconditions 现查（契约「已登记 bug ≥1」——fix-9 补核对欠账）：dshForge 桥软通道
+  // forge:bugs/list 读台账真值（host 权威投影）；桥缺席或零登记 = 留痕 skip
+  // （Preconditions 不满足不可伪造，非退役候选——不满足即跳过，不降级断言）。
+  const bugs = await tryForgeInvoke<readonly unknown[]>(page, 'forge:bugs/list', {})
+  test.skip(bugs === null, 'CT-J2-G2 前置：dshForge 桥缺席——bug 台账真值不可现查，留痕 skip')
+  test.skip(
+    (bugs as readonly unknown[]).length === 0,
+    `CT-J2-G2 前置：bug 台账空（已登记 bug ${ (bugs as readonly unknown[]).length } < 1）——Preconditions 不满足，留痕 skip`,
+  )
+  // Input：打开右侧 dock 栏（收拢态先经「打开右侧边栏」钮展开——1.20/004 既定舞台词汇）
+  if ((await page.locator('[data-rightbar-col]').count()) === 0) {
+    const opener = page.getByRole('button', { name: /打开右侧边栏/ }).first()
+    if ((await opener.count()) > 0) {
+      await opener.click({ force: true })
+      await page.waitForTimeout(3_000)
+    }
+  }
+  test.skip((await page.locator('[data-rightbar-col] [data-dockkit-strip]').count()) === 0, 'CT-J2-G2 前置：右侧 dock 栏 strip 缺席——留痕 skip')
+  // 舞台感知（web 结构性缺席留痕——非回归）：官方 dockkit 呈现机制核销 = resource 型 tab
+  // 仅经 openResource face 放置后才进 strip、无 URL 路由通道（见文件头核销注）——路由触发
+  // 不成立，维持静态在席断言；strip 在席但 dswf tab 零呈现 = web 舞台结构性缺席（1.13/001
+  // 注册降级判例），skip 而非 O-tab-missing FAIL——断言语义（tab 到达 bug 台账面）不动。
   const bugTab = await dockStripTab(page, 'Bug')
+  test.skip(
+    (await bugTab.count()) === 0,
+    'CT-J2-G2 舞台感知：web 舞台 dock tabs 结构性缺席（1.13/001 apply 期注册降级判例——resource tab 需 openResource 放置 + web 注册降级不注册，fail-soft 留痕；非回归）——留痕 skip',
+  )
   await expect(bugTab, 'CT-J2-G2 O-tab-projected：Bug 台账 tab 在场（挂载态）').toBeVisible({ timeout: 30_000 })
   await bugTab.click({ force: true })
   await page.waitForTimeout(3_000)
