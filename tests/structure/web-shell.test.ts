@@ -262,13 +262,13 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
     expect(css).toContain('.dswf-kn-dialog {')
     expect(css).toContain('z-index: var(--dsh-dockkit-float-layer, 60)') // 层级 = dockkit 浮层同一级
     expect(css).toContain('box-shadow: var(--dsw-elevation-prominent)') // 抬升面 = 任务/Bug 弹窗同配方
-    expect(css).toContain('max-height: 80vh') // 纵向滚动上限（内容多不溢出）
+    expect(css).toContain('max-height: 92vh') // 纵向滚动上限（e188ac6c dialog 高度对齐专家 detail-dialog：auto+320px+92%+resize both）
     expect(css).toContain('.dswf-kn-dialog-head {') // 拖移头行
     expect(css).toContain('.dswf-kn-dialog-resize {') // 缘侧拖宽手柄
     const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
     expect(drawer).toContain('taskDrawerHeadDragProps') // 拖移机械复用 drawer（bug-dialog 同先例——零平行机械）
     expect(drawer).toContain('drawerWidthFromEdgeDrag')
-    expect(drawer).toContain('useTaskDrawerEscape')
+    expect(drawer).toContain('drawerPositionFromDrag') // 拖移机械三件（useTaskDrawerEscape 已退役——Esc 链改 knowledge 自持 capture，e188ac6c）
   })
 })
 
@@ -307,9 +307,11 @@ describe('views/knowledge 知识浏览 pin（3.6）', () => {
     expect(toolbar).toContain('Input')
     expect(toolbar).toContain('Pill')
     const grid = read('apps/web/src/views/knowledge/KnowledgeCardGrid.tsx')
-    expect(grid).toContain('HeatBadge')
-    expect(grid).toContain('count={card.heat}')
-    expect(grid).toContain('StateChip')
+    // 热度徽章 = 官方缺件自绘（7f02800c SC-J 卡片终稿：IconFlameFillRegular + 事件计数原样）
+    expect(grid).toContain('IconFlameFillRegular')
+    expect(grid).toContain('String(card.heat)')
+    // 状态 chip 本体 = 中文标签 + 官方 StateDot 色点（StateChip 自绘件退役——7f02800c）
+    expect(grid).toContain('StateDot')
     // 自绘面仅限领域组件类（域树行/卡片），吃令牌（knowledge.css 零裸值由 token-lint 机械执行）
     expect(read('apps/web/src/views/knowledge/knowledge.css')).toContain('.dswf-kn-dom-row')
     expect(read('apps/web/src/views/knowledge/knowledge.css')).toContain('.dswf-kn-card')
@@ -454,13 +456,13 @@ describe('views/knowledge 详情抽屉 pin（3.7）', () => {
     )
   })
 
-  it('AC3 关闭路径：✕ 锚（头行行尾 aria-label）+ Esc 捕获接线（useTaskDrawerEscape capture——弹窗先于工具栏清空）', () => {
+  it('AC3 关闭路径：✕ 锚（头行行尾 aria-label）+ Esc capture 自持链（e188ac6c 双模式改版：Esc 机械归 knowledge 自持——编辑→查看→关闭 escNext 链，弹窗先于工具栏清空）', () => {
     const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
     expect(drawer).toContain('data-dswf-kn-dialog-close')
     expect(drawer).toContain('aria-label="关闭弹窗"')
-    expect(drawer).toContain('useTaskDrawerEscape')
-    const escape = read('apps/web/src/views/overview/drawer/index.tsx')
-    expect(escape, 'capture 阶段接线（stopPropagation 防串关——机械单源在 drawer）').toContain('stopPropagation')
+    expect(drawer).toContain('escNextKn')
+    expect(drawer).toContain("document.addEventListener('keydown', onKeyDown, { capture: true })")
+    expect(drawer, 'capture 阶段 stopPropagation（防串关——弹窗先于工具栏清空）').toContain('event.stopPropagation()')
   })
 
   it('AC4 形态对齐任务/Bug 弹窗 dialog：详情 = 自持可拖移 dialog（用户裁决可移动+可拉伸——拖动机械复用 drawer，视觉一律官方护仗）', () => {
@@ -468,7 +470,7 @@ describe('views/knowledge 详情抽屉 pin（3.7）', () => {
     expect(css).toContain('.dswf-kn-dialog {')
     expect(css).toContain('z-index: var(--dsh-dockkit-float-layer, 60)') // 层级 = dockkit 浮层同一级
     expect(css).toContain('box-shadow: var(--dsw-elevation-prominent)') // 抬升面 = 任务/Bug 弹窗同配方
-    expect(css).toContain('max-height: 80vh') // 纵向滚动上限（内容多不溢出）
+    expect(css).toContain('max-height: 92vh') // 纵向滚动上限（e188ac6c dialog 高度对齐专家 detail-dialog：auto+320px+92%+resize both）
     expect(css).toContain('.dswf-kn-dialog-head {') // 拖移头行
     expect(css).toContain('.dswf-kn-dialog-resize {') // 缘侧拖宽手柄
     const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')

@@ -174,7 +174,7 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
     }
   })
 
-  it('inject 消费全链路（1.7 A2 后形态：knowledge 零 core 依赖）：knowledge 插件注入两官方面 → 自有 knowledge 服务 provide + 六 tool 注册 + 提示词两段 scoped 接线（根级零全局段——stage③ 裁决 #9）', async () => {
+  it('inject 消费全链路（1.7 A2 后形态：knowledge 零 core 依赖）：knowledge 插件注入两官方面 → 自有 knowledge 服务 provide + 七 tool 注册 + 提示词两段 scoped 接线（根级零全局段——stage③ 裁决 #9）', async () => {
     const { ctx, sys, tools } = await bootRuntime()
     try {
       ctx.reflect.provide('workspaceRegistry', registryStub())
@@ -184,6 +184,8 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
       expect(ctx.get('knowledge'), 'knowledge 插件 provide 自有服务（去 forge 前缀）').toBeDefined()
       expect(tools.registered.map((t) => t.name)).toEqual([
         'knowledge_search',
+        // stage4 检索 SOP 第二步定域工具（3079a2dc——注册序居首）
+        'knowledge_browse',
         'knowledge_read_abstract',
         // stage② 1.4 写门双 tool（§2.3 读 + 写）
         'knowledge_write',
@@ -194,10 +196,10 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
         'knowledge_reinstate',
       ])
       const assembly = await sys.assemble()
-      // stage③ C2 裁决 #9：装配期零全局段——forge:knowledge 两段改走 agent/created
-      // scoped 注册（绑定会话才注入）；根级装配面不出现（scoped 全链断言由
-      // knowledge-isolated-profile-assembly 旅程承载）
-      expect(assembly.sections.map((s) => s.name)).not.toContain('forge:knowledge')
+      // stage④ 静态段回归全局注册（c5e72025，bug 90d9b515：能力性指引固定文本全局恒
+      // 在场——fix-11 裁决 B 侧 Interface 3）；动态域索引段仍 scoped 注册（绑定会话才
+      // 注入——scoped 全链断言由 knowledge-isolated-profile-assembly 旅程承载）
+      expect(assembly.sections.map((s) => s.name)).toContain('forge:knowledge')
     } finally {
       await ctx.fiber.dispose()
     }
@@ -219,11 +221,11 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
         'core 服务级联注销',
       ).toBe(true)
       expect(ctx.get('knowledge'), 'knowledge 独立于 core（SC-2）').toBeDefined()
-      expect(tools.registered).toHaveLength(6)
+      expect(tools.registered).toHaveLength(7)
       // knowledge 依赖面 = dsh 官方面（tools）——撤销 tools 即依赖失效自卸（官方 waking dependents 语义）
       disposeTools()
       expect(await waitFor(() => ctx.get('knowledge') === undefined), 'knowledge 服务随 fiber 卸载注销').toBe(true)
-      expect(await waitFor(() => tools.disposed.length === 6), 'tool 注册随 fiber 卸载全清').toBe(true)
+      expect(await waitFor(() => tools.disposed.length === 7), 'tool 注册随 fiber 卸载全清').toBe(true)
       expect(
         await waitFor(() => sys.assemble().then((a) => !a.sections.some((s) => s.name === 'forge:knowledge'))),
         'forge:knowledge 段随插件卸载移除',

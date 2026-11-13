@@ -258,8 +258,9 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     }
     // dev bundles = 模板官方两行 + expert-squad 行（bundle 形态恢复裁决：包重声明
     // dsh.bundle——dev 装载走 bundle 选择（plugins.bundle.config 单入口），插件页呈现
-    // 单源 = 已安装卡片（官方组 plugins.item 条目注册已退役））。
-    expect(dev.dsh.profile.bundles).toEqual([...packaged.dsh.profile.bundles, '@dsh-forge/expert-squad', '@dsh-forge/snapnote'])
+    // 单源 = 已安装卡片（官方组 plugins.item 条目注册已退役）。snapnote 分支未合入本
+    // 分支——dev bundles 三层为当前事实，判例 d59e9026 同径）。
+    expect(dev.dsh.profile.bundles).toEqual([...packaged.dsh.profile.bundles, '@dsh-forge/expert-squad'])
     // dev 直链 workspace 构建产物（4.2：装载面 = loader 行 import 以 profileDir 为锚）
     expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')
     expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/plugins/knowledge')
