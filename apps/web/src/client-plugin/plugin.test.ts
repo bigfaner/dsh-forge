@@ -33,7 +33,6 @@ import {
   // fix-13 注记（1.41）：TOOL_CALL_TOOLVIEW_SLOT 断言与事件折叠组断言随注册面迁
   // @dsh-forge/project（plugin 侧 remote/conversation faces 测试）——壳测零该两族。
   forgeClientPlugin,
-  unwrapRpcEnvelope,
   moduleLoaderFacade,
   publishedViews,
   registerForgeClient,
@@ -1359,53 +1358,28 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
   })
 })
 
-// ============================================================================
-describe('unwrapRpcEnvelope typed !ok 信封保真（RpcClientError 形态同型镜像——消费方判定点可达）', () => {
-  it('typed !ok 信封：code/message/data 原样透传；形状漂移/缺 error = 泛型降格照旧（fail-soft 不变）', async () => {
-    const fail = Promise.resolve({
-      ok: false,
-      error: { code: 'ERR_SPAWN_FAILED', message: 'driver spawn 失败', data: { k: 1 } },
-    })
-    const caught = await unwrapRpcEnvelope(fail).then(
-      () => null,
-      (e: unknown) => e,
-    )
-    expect(caught).toBeInstanceOf(Error)
-    const typed = caught as Error & { code?: unknown; data?: unknown }
-    expect(typed.name).toBe('RpcClientError')
-    expect(typed.code).toBe('ERR_SPAWN_FAILED')
-    expect(typed.message).toBe('driver spawn 失败')
-    expect(typed.data).toEqual({ k: 1 })
-  })
-})
-
 // ── W4 装载自证 + 行存续看门（session-binding-guarantee §W4）──────────────────────────
 describe('W4 激活自证（RPC 轻探）+ 看门探测面', () => {
   const g = () =>
     globalThis as {
-      dshForge?: unknown
       __DSH_FORGE_CLIENT__?: unknown
       __DSH_FORGE_HEALTH__?: { slotCount: () => number; check: () => void }
       __DSH_FORGE_PRUNE_CHECK__?: unknown
     }
-  const WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
+  /** Typert remote 信封（ui/rpc.ts RemoteResult 投影入参形态） */
+  type RemoteEnvelope = { ok: true; value: unknown } | { ok: false; error: { code: string; message: string } }
+  /** Typert face 页内锚（FORGE_REMOTE_FACE_ANCHOR_KEY 同键——resolver 逐调用现查） */
+  function installFace(list: () => Promise<RemoteEnvelope>): void {
+    ;(globalThis as Record<string, unknown>)['__dshForgeRemoteFace'] = {
+      resolver: () => ({ forgeProjects: { list } }),
+    }
+  }
 
   afterEach(() => {
-    delete g().dshForge
+    delete (globalThis as Record<string, unknown>).__dshForgeRemoteFace
     delete g().__DSH_FORGE_HEALTH__
     delete g().__DSH_FORGE_PRUNE_CHECK__
   })
-
-  function fakeInvoke(): ReturnType<typeof vi.fn> {
-    const invoke = vi.fn((channel: string) => {
-      if (channel === WORKTREE_LIST_CHANNEL) {
-        return Promise.resolve({ ok: true, data: { isGit: false, entries: [] } })
-      }
-      return Promise.resolve({ ok: true, data: [] }) // forge:projects/list 等读面
-    })
-    g().dshForge = { invoke }
-    return invoke
-  }
 
   function augmentCtx(ctx: ForgeClientCtx): {
     listeners: Array<(name: string, value: unknown) => void>
@@ -1426,15 +1400,15 @@ describe('W4 激活自证（RPC 轻探）+ 看门探测面', () => {
     return { listeners, slotsEntries }
   }
 
-  it('零传输（非 Electron 载体）：自证缺席面呈现（不 fail）+ 看门探测面发布 + overlay dispose 对称清收', () => {
+  it('Typert face 缺席：自证 fail-loud 呈现（诚实降级不静默）+ 看门探测面发布 + overlay dispose 对称清收', () => {
     const markerBefore = g().__DSH_FORGE_CLIENT__
     delete g().__DSH_FORGE_CLIENT__
     publishFakeViews()
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { ctx, injectDisposers } = fakeClientCtx()
     const { listeners } = augmentCtx(ctx)
     forgeClientPlugin().apply(ctx)
-    const marker = g().__DSH_FORGE_CLIENT__ as { selfCheck?: { rpcProbe?: string } }
-    expect(marker?.selfCheck?.rpcProbe).toBe('absent（非 Electron 载体）')
+    const probe = (g().__DSH_FORGE_CLIENT__ as { selfCheck?: { rpcProbe?: string } })?.selfCheck
     // 看门探测面：entries 求和（shell.overlay 1 + main 2 = 3）+ 事件转发钩接线
     const health = g().__DSH_FORGE_HEALTH__
     expect(health?.slotCount()).toBe(3)
@@ -1446,19 +1420,28 @@ describe('W4 激活自证（RPC 轻探）+ 看门探测面', () => {
     if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
     else g().__DSH_FORGE_CLIENT__ = markerBefore
     unpublishViews()
+    return new Promise<void>((resolve) =>
+      setTimeout(() => {
+        expect(probe?.rpcProbe).toContain('轻探不通')
+        expect(err.mock.calls.some((call) => String(call[0]).includes('轻探不通'))).toBe(true)
+        err.mockRestore()
+        resolve()
+      }, 0),
+    )
   })
 
-  it('传输在场：RPC 轻探 ok（forge:worktree/list 零副作用读面通 = IPC 装配链通）', async () => {
+  it('Typert face 在场：RPC 轻探 ok（forgeProjects.list 零副作用读面通 = 数据通路装配链通）', async () => {
     const markerBefore = g().__DSH_FORGE_CLIENT__
     delete g().__DSH_FORGE_CLIENT__
     publishFakeViews()
-    const invoke = fakeInvoke()
+    const list = vi.fn(() => Promise.resolve({ ok: true as const, value: [] }))
+    installFace(list)
     const { ctx } = fakeClientCtx()
     augmentCtx(ctx)
     forgeClientPlugin().apply(ctx)
-    const marker = g().__DSH_FORGE_CLIENT__ as { selfCheck?: { rpcProbe?: string } }
-    expect(invoke).toHaveBeenCalledWith(WORKTREE_LIST_CHANNEL, { projectRoot: '' })
     await new Promise((resolve) => setTimeout(resolve, 0))
+    const marker = g().__DSH_FORGE_CLIENT__ as { selfCheck?: { rpcProbe?: string } }
+    expect(list).toHaveBeenCalledTimes(1)
     expect(marker?.selfCheck?.rpcProbe).toBe('ok')
     if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
     else g().__DSH_FORGE_CLIENT__ = markerBefore
@@ -1471,12 +1454,9 @@ describe('W4 激活自证（RPC 轻探）+ 看门探测面', () => {
     publishFakeViews()
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      const invoke = vi.fn((channel: string) =>
-        channel === WORKTREE_LIST_CHANNEL
-          ? Promise.reject(new Error('IPC 链断裂'))
-          : Promise.resolve({ ok: true, data: [] }),
+      installFace(() =>
+        Promise.resolve({ ok: false as const, error: { code: 'internal', message: '数据通路断裂' } }),
       )
-      g().dshForge = { invoke }
       const { ctx } = fakeClientCtx()
       augmentCtx(ctx)
       forgeClientPlugin().apply(ctx)

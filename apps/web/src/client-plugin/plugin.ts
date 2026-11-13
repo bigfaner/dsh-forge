@@ -46,6 +46,9 @@ import type { LedgerSessionsSnapshot, SnapshotSource } from '@dsh-forge/project/
 // bundle（ui/conversation-views-face.ts + ui/event-node/progress-log-tap.ts）——壳消费
 // （ShellHost inject progressLog）改经包窄子路径出口值面直供（bug-model 先例）。
 import { forgeProgressLogSource } from '@dsh-forge/project/client-ui/event-tap'
+// 1.9 Typert 改接：start-session wrap 树归属门 + chip 双发数据源 + W4 自证轻探三处
+// 数据引用改经本窄面（官方 Typert remote face——页内锚单例现查）。
+import { createForgeRpcClient } from '@dsh-forge/project/client-ui/rpc'
 // fix-13 注记（1.45）：open-session 纯模块与会话动作纯函数族（编排器/Bug 快速路径/
 // 判读族/改名与行动作面）随 dock tab 族注册面迁 @dsh-forge/project（ui/open-session.ts
 // + ui/session-actions.ts）——壳侧消费面（shell.overlay inject 编排器与解析器）改经包窄
@@ -485,7 +488,7 @@ export interface ForgeClientActiveMarker {
 
 /** W4 激活自证诊断面（e2e/UI 态消费——值为 'ok' 或失败因一行） */
 export interface ClientSelfCheckDiagnostics {
-  /** forge:worktree/list RPC 试呼轻探：'ok' | 'absent（非 Electron 载体）' | 失败因 */
+  /** forgeProjects.list Typert 轻探：'ok' | 失败因一行（face 缺席/通路断裂 = fail-loud） */
   rpcProbe?: string
 }
 
@@ -603,12 +606,9 @@ function registerSidebarSlots(
 // 快照落缓存面一并退役，壳零残留。
 // ============================================================================
 
-/** forge:worktree/list 通道字面量（contracts WORKTREE_CHANNELS.list 同源镜像——W4 激活自证轻探） */
-export const WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
-/** forge:worktree/resolve 通道字面量（contracts WORKTREE_CHANNELS.resolve 同源镜像——wrap 树归属门） */
-export const WORKTREE_RESOLVE_CHANNEL = 'forge:worktree/resolve'
-/** forge:worktree/selected 通道字面量（contracts WORKTREE_CHANNELS.selected 同源镜像——start-session wrap 所见即所得读镜像） */
-export const WORKTREE_SELECTED_CHANNEL = 'forge:worktree/selected'
+// 1.9 壳侧退役收口：forge:* 数据引用全量改接 Typert 正典（@dsh-forge/project ui/rpc
+// face——forgeWorktree.resolve / forgeWorktree.list / forgeProjects.list 三处自造 channels
+// face 消费退役；自造通道字面量与页内传输窄缝随之删除）。
 
 /**
  * W4 看门计数探针的洞位清单（产品占用/声明的洞名——entries 求和面）。官方占用者计入基线、
@@ -640,37 +640,7 @@ export function forgeSlotCountOf(slots: ForgeSlotsService, keys: readonly string
   return count
 }
 
-/** forge RPC 传输窄缝（rpc/transport ForgeTransport 结构同型镜像） */
-export type ForgeInvokeTransport = (channel: string, payload?: unknown) => Promise<unknown>
-
-/** 页内传输读取（window.dshForge.invoke——缺席/非函数 = undefined：非 Electron 载体 fail-soft） */
-export function forgeInvokeTransport(): ForgeInvokeTransport | undefined {
-  const bridge = (globalThis as { dshForge?: { invoke?: ForgeInvokeTransport } }).dshForge
-  const invoke = bridge?.invoke
-  return typeof invoke === 'function' ? (channel, payload) => invoke(channel, payload) : undefined
-}
-
-/** RPC 信封拆装（rpc/client.invokeRpc 结构同型镜像：RpcOk → data；!ok/形状非法 = throw——调用面 catch 消费 fail-soft） */
-export async function unwrapRpcEnvelope<T>(call: Promise<unknown>): Promise<T> {
-  const raw = await call
-  if (raw === null || typeof raw !== 'object' || !('ok' in raw)) {
-    throw new Error('dsh-forge web-client: RPC 信封形状非法（期望 contracts RpcResult 信封）')
-  }
-  const result = raw as { ok: boolean; data?: T }
-  if (!result.ok) {
-    // typed !ok 信封保真（rpc/client.ts RpcClientError 反序列化结构同型镜像——bundle 自含零
-    // import）：code/message/data 原样透传，typed 拒绝码（如 ERR_SPAWN_FAILED）
-    // 才能到达消费方判定点；形状漂移/缺 error = 泛型降格照旧（fail-soft 不变）。
-    const err = (raw as { error?: { code?: unknown; message?: unknown; data?: unknown } }).error
-    const message = typeof err?.message === 'string' && err.message !== '' ? err.message : 'RPC 信封 !ok'
-    const typed = new Error(message)
-    typed.name = 'RpcClientError'
-    ;(typed as Error & { code?: unknown; data?: unknown }).code = err?.code
-    ;(typed as Error & { code?: unknown; data?: unknown }).data = err?.data
-    throw typed
-  }
-  return result.data as T
-}
+/** 路径归一比较键（跨源 path 匹配：反斜杠→斜杠 + 小写 + 去尾斜杠——worktree 行命中同判） */
 
 /** 路径归一比较键（跨源 path 匹配：反斜杠→斜杠 + 小写 + 去尾斜杠——worktree 行命中同判） */
 function normPathKey(value: string): string {
@@ -762,61 +732,56 @@ export function forgeClientPlugin(): ForgeClientPlugin {
 
         // 绑定推导制·入口锚定（binding-derivation §2.3）：官方壳「新建会话」无参
         // startSession 锚点 = currentWorkspaceId/recent，可落在树工作区而绕过 hero chip
-        // 显示。wrap 按显示选中（forge:worktree/selected，与 chip 回填同源）解析所选树的
-        // workspaceId（chip 双发数据源 WorktreeEntryDto.workspaceId，forge:worktree/list；
-        // 官方 workspaces.list path 匹配回退），直通官方 startSession(workspaceId)——官方
+        // 显示。wrap 按显示选中（chip 本地投影单源）解析所选树的 workspaceId（chip 双发
+        // 数据源 WorktreeEntryDto.workspaceId，forgeWorktree.list Typert 正典；官方
+        // workspaces.list path 匹配回退），直通官方 startSession(workspaceId)——官方
         // 内部 session.create({workspaceId}) 原生 blank 复用即路由，桌面创建零 forge 改道
-        // （预铸采纳单门已随 host 退役）。判定链异常 fail-open 官方原流。transport 缺席
-        // （非 Electron 载体）= 零安装；撤销随桥/词典 revoke 链与 overlay 洞 dispose 两径。
-        const forgeInvoke = forgeInvokeTransport()
-        const disposeStartSessionWrap =
-          forgeInvoke === undefined
-            ? undefined
-            : installStartSessionWrap({
-                uiWorkspace: uiWorkspace as unknown as StartSessionFace,
-                sessionsList: sessions.list as SessionsListSlice,
-                workspacesList: workspaces.list as WorkspacesListSlice,
-                resolveRoot: async (path) => {
-                  const data = await unwrapRpcEnvelope<{ resolved?: Array<{ path?: unknown; projectRoot?: unknown }> }>(
-                    forgeInvoke(WORKTREE_RESOLVE_CHANNEL, { paths: [path] }),
-                  )
-                  const hit = data.resolved?.find((entry) => entry.path === path)
-                  return typeof hit?.projectRoot === 'string' && hit.projectRoot !== '' ? hit.projectRoot : null
-                },
+        // （预铸采纳单门已随 host 退役）。判定链异常 fail-open 官方原流；
+        // 撤销随桥/词典 revoke 链与 overlay 洞 dispose 两径。
+        // 数据通路（1.9 Typert 正典改接）：forge RPC client（官方 Typert remote face——
+        // @dsh-forge/project bundle apply 期 installForgeRemoteFace 发布页内解析缝，本副本
+        // 经页内锚单例现查）。wrap 判定链异常 fail-open 官方原流；face 缺席 = 调用期诚实
+        // 降级（typed error → wrap catch / selfCheck 呈现，不静默）。
+        const forgeRpc = createForgeRpcClient()
+        const disposeStartSessionWrap = installStartSessionWrap({
+          uiWorkspace: uiWorkspace as unknown as StartSessionFace,
+          sessionsList: sessions.list as SessionsListSlice,
+          workspacesList: workspaces.list as WorkspacesListSlice,
+          // 树归属门（forgeWorktree.resolve Typert 正典——path → 注册项目根；null = 未注册）
+          resolveRoot: async (path) => {
+            const data = await forgeRpc.worktree.resolve({ paths: [path] })
+            const hit = data.resolved.find((entry) => entry.path === path)
+            return typeof hit?.projectRoot === 'string' && hit.projectRoot !== '' ? hit.projectRoot : null
+          },
                 // 显示真源（selected-tree-display 模块单例——与 chip 本地投影同源；
                 // bug 05c712a4 根治：创建路由不再读 host 选中记忆）
                 displayedTree: () => selectedTreeDisplay.get(),
-                // chip 双发数据源（WorktreeEntryDto.workspaceId——任务 1.1 DTO 携带）：
-                // list 行按 path 归一命中取 workspaceId；行缺席/形状漂移 = undefined（回退
-                // 官方 workspaces.list path 匹配，wrap ③）。
+                // chip 双发数据源（WorktreeEntryDto.workspaceId——forgeWorktree.list Typert
+                // 正典下发）：list 行按 path 归一命中取 workspaceId；行缺席/形状漂移 =
+                // undefined（回退官方 workspaces.list path 匹配，wrap ③）。
                 worktreeWorkspaceId: async (worktreePath, projectRoot) => {
-                  const data = await unwrapRpcEnvelope<{ entries?: Array<{ path?: unknown; workspaceId?: unknown }> }>(
-                    forgeInvoke(WORKTREE_LIST_CHANNEL, { projectRoot }),
-                  )
+                  const data = await forgeRpc.worktree.list({ projectRoot })
                   const key = normPathKey(worktreePath)
-                  const hit = (data.entries ?? []).find(
+                  const hit = data.entries.find(
                     (entry) => typeof entry?.path === 'string' && normPathKey(entry.path) === key,
                   )
                   return typeof hit?.workspaceId === 'string' && hit.workspaceId !== '' ? hit.workspaceId : undefined
                 },
               })
 
-        // W4 激活自证①（RPC 试呼轻探）：forge:worktree/list 空 projectRoot = 零副作用读面
-        // （host resolveProject('') → null → isGit:false 空清单）——信封往返通 = IPC 装配链通。
-        // 异步 fire-and-forget：失败 console.error + selfCheck 呈现（UI 态），不阻断激活主链。
-        if (forgeInvoke === undefined) {
-          selfCheck.rpcProbe = 'absent（非 Electron 载体）'
-        } else {
-          void unwrapRpcEnvelope<unknown>(forgeInvoke(WORKTREE_LIST_CHANNEL, { projectRoot: '' }))
-            .then(() => {
-              selfCheck.rpcProbe = 'ok'
-            })
-            .catch((cause: unknown) => {
-              const line = `dsh-forge web-client: 激活自证失败——forge:worktree/list 轻探不通（IPC 链断裂）：${String(cause)}`
-              console.error(line)
-              selfCheck.rpcProbe = line
-            })
-        }
+        // W4 激活自证①（RPC 试呼轻探）：forgeProjects.list Typert 正典零副作用读面——
+        // remote 往返通 = 数据通路装配链通。异步 fire-and-forget：失败 console.error +
+        // selfCheck 呈现（UI 态），不阻断激活主链。
+        void forgeRpc.projects
+          .list()
+          .then(() => {
+            selfCheck.rpcProbe = 'ok'
+          })
+          .catch((cause: unknown) => {
+            const line = `dsh-forge web-client: 激活自证失败——forgeProjects Typert 轻探不通（数据通路断裂）：${String(cause)}`
+            console.error(line)
+            selfCheck.rpcProbe = line
+          })
 
         // W4 行存续看门探测面发布（壳 bundle 全局看门轮询消费——插件 fiber 内看门随插件
         // 同殁，检不出 prune；closure 持官方 ctx，fiber 死后 slots 服务仍存活）。

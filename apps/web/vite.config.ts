@@ -35,9 +35,15 @@ function pinClientBundleShape(): Plugin {
   return {
     name: 'dsh-forge-pin-client-bundle-shape',
     generateBundle(_options, bundle) {
-      const chunk = Object.values(bundle).find((file) => file.type === 'chunk' && file.name === 'client-plugin')
+      const files = Object.values(bundle)
+      const chunk = files.find((file) => file.type === 'chunk' && file.name === 'client-plugin')
       if (chunk === undefined) throw new Error('vite: forge-client 入口产物缺席（rollup input client-plugin 未产出）')
-      assertClientBundleClassicScript(chunk.code)
+      assertClientBundleClassicScript({
+        chunkCount: files.filter((file) => file.type === 'chunk').length,
+        externalImports: chunk.imports,
+        exportNames: chunk.exports,
+        code: chunk.code,
+      })
     },
   }
 }
@@ -182,7 +188,7 @@ export default defineConfig({
         emptyOutDir: false,
         rollupOptions: {
           input: { 'client-plugin': src('./src/client-plugin/index.ts') },
-          output: { entryFileNames: () => 'forge-client.js' },
+          output: { entryFileNames: () => 'forge-client.js', codeSplitting: false },
         },
       },
     },
