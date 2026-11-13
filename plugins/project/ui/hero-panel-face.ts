@@ -12,8 +12,9 @@ export const HERO_PANEL_KEY = 'dswf-hero'
 
 /**
  * hero 面板注册（apply 编排）：main keyed 'dswf-hero'——零 inject（面板数据 =
-// Typert forgeProjects 自取，驱动面：壳在场时 ShellHost 选中/让位[C 类桥]；官方宿主
-// 上空态自判定）。fail-soft 单面 try/catch。
+ * Typert forgeProjects 自取）。选中驱动：壳在场时 ShellHost 选中/让位[C 类桥]；
+ * 无壳官方宿主 = 空态自判定（hero-panel-drive.ts——零项目 + 官方缺省面板 → 插件
+ * 自选一次）。fail-soft 单面 try/catch。
  */
 export function registerHeroPanelFace(slots: SectionSlotsFace): boolean {
   try {
