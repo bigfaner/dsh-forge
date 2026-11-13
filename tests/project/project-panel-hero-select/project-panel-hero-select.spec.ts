@@ -72,6 +72,7 @@ test('@project-e2e @project-panel CT-J1-G1 槽顶替注册生效：项目列表�
   await expect(page.locator('[data-dswf-project]').first(), 'CT-J1-G1 O-mounted：项目行呈现（data-dswf-project）').toBeVisible({ timeout: 60_000 })
   // CT-J1-G1 Invariants：官方 WorkspaceBrowser 词汇零呈现（顶替语义完整——插件行在场 + 官方
   // 单条目形态缺席。反向锚 = 顶替组件动作词汇在场即占位者为本件）
+  await page.locator('[data-dswf-project] .dswf-sidebar-project-row').first().hover() // 动作面 = 行尾 hover 槽（官方 rowActions 同型，默认隐藏）；hover 须落标题行本体
   await expect(page.locator('[data-dswf-project-action]').first(), 'CT-J1-G1：顶替组件动作面在场（官方占用者被取代）').toBeVisible()
   // CT-J1-G1 Outcome 边界：零报错（fail-soft 纪律——O-error-toast FAIL 分支反向锚）
   expect(consoleErrorsTail, 'CT-J1-G1：零渲染报错（O-error-toast 反向锚）').toEqual([])

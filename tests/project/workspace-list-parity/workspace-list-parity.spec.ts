@@ -69,6 +69,12 @@ async function openProjectMenu(page: Page): Promise<boolean> {
   if ((await row.count()) === 0) return false
   const menuButton = row.locator('[data-dswf-project-action="menu"]').first()
   if ((await menuButton.count()) === 0) return false
+  // 模态/菜单 mask 清场前导（fix-16）：前序改名流可能留开模态（空名被拒 = 模态留场 +
+  //   错误提示，官方 Modal 同型）——Escape 关闭在场 overlay，防 mask 拦截 hover 挂死
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(500)
+  // 动作面 = 行尾 hover 槽（官方 rowActions 同型，默认隐藏）——先 hover 标题行本体再点
+  await row.locator('.dswf-sidebar-project-row').first().hover()
   await menuButton.click({ force: true })
   await page.waitForTimeout(1_000)
   return true
@@ -124,8 +130,8 @@ test('@project-e2e @list-parity CT-J3-G3 rename：行内改名生效 + 非法输
   const renamed = original.endsWith('-j3') ? original.slice(0, -3) : `${original}-j3`
   await renameInput.fill(renamed)
   await renameInput.press('Enter')
-  // Output：行内改名生效（合法路径）
-  await expect(page.locator('[data-dswf-project]').first(), 'CT-J3-G3 O-renamed-synced：改名后面板行呈现新名').toContainText(renamed, { timeout: 15_000 })
+  // Output：行内改名生效（合法路径——精确标题比对，fix-16 修订：原 toContainText 存在子串歧义）
+  await expect(page.locator('[data-dswf-project] .dswf-sidebar-project-title').first(), 'CT-J3-G3 O-renamed-synced：改名后面板行标题=新名').toHaveText(renamed, { timeout: 15_000, useInnerText: true })
   // 边界分支：空串输入被拒（O-rename-rejected——非法输入零落盘、无空名行）
   const reopened = await openProjectMenu(page)
   if (reopened) {
@@ -136,7 +142,12 @@ test('@project-e2e @list-parity CT-J3-G3 rename：行内改名生效 + 非法输
       await input2.fill('')
       await input2.press('Enter')
       await page.waitForTimeout(1_000)
-      await expect(page.locator('[data-dswf-project]').first(), 'CT-J3-G3 O-rename-rejected：空名未落盘（零空名行）').not.toContainText('', { timeout: 10_000 })
+      // 空名被拒 = 模态留场 + 错误提示（官方 Modal 同型——确认阻断不关场）
+      await expect(page.locator('[role="alert"]').first(), 'CT-J3-G3：空名拒绝错误提示在场').toBeVisible({ timeout: 10_000 })
+      // fix-16 修订：原 not.toContainText('') 为恒假恒真式（空串是任意文本子串）——
+      // 改为行名非空断言（空名输入被拒 = 行名保持非空原值）
+      const rowTitle = (await page.locator('[data-dswf-project] .dswf-sidebar-project-title').first().innerText()).trim()
+      expect(rowTitle.length, 'CT-J3-G3 O-rename-rejected：空名未落盘（行名保持非空，输入被拒）').toBeGreaterThan(0)
     }
   }
   // 清理：改回原名（舞台交接）
