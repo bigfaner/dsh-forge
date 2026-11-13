@@ -13,10 +13,12 @@
 // rejected（已落结算——改写 = 历史失真）拒 → ERR_TASK_LOCKED。门校验与写入同事务
 // （单事务全成全败——与 claimTask 串行化，提案 Risk 1）。
 //
-// depends_on 改写护栏：仅作用于 manual 边——任务持 fix-chain/autoconfig 派生出边即拒
-// （ERR_TASK_EDGE_ORIGIN_LOCKED，链机械持有）；改写 = 删旧 manual 边 → 复用 addTask 增量
+// depends_on 改写护栏（仅整体改写径）：仅作用于 manual 边——任务持 fix-chain/autoconfig 派生出
+// 边即拒（ERR_TASK_EDGE_ORIGIN_LOCKED，链机械持有）；改写 = 删旧 manual 边 → 复用 addTask 增量
 // 环校验（findPathThroughOutEdges 单源——§6-14 可达性 DFS）→ 插新 manual 边，引环即拒
-// 整体回滚（删除随事务回滚零残留）。
+// 整体回滚（删除随事务回滚零残留）。depends_on_append 增量白通道（loop-phase-gate §2.6/提案④）：
+// 无锁边护栏、零删除、INSERT OR IGNORE 幂等插 manual 边、增量环校验与恢复钩子两径共用；
+// 与 dependsOn 互斥（并存 = 输入契约拒绝）。
 //
 // 审计：task_records append verb='updateTask' 行（actor='plugin-tool'——tool 专属动词，
 // 通道即 actor，同 addTask 口径）。blocked 卡 depends_on 改写后同事务补跑恢复判定
@@ -62,28 +64,44 @@ export async function updateTask(deps: TasksVerbDeps, input: UpdateTaskInput): P
       })
     }
 
-    // ③ dependsOn 改写（整体置换语义：删旧 manual 边 → 增量环校验 → 插新 manual 边）
-    if (input.dependsOn !== undefined) {
-      // ③-a 护栏：仅 manual 边可改写——fix-chain/autoconfig 派生出边在场即拒（链机械持有）
-      const outEdges = db
-        .prepare<unknown[], { origin: 'manual' | 'fix-chain' | 'autoconfig' }>(
-          `SELECT origin FROM task_edges WHERE task_id = ?`,
-        )
-        .all(row.id)
-      const lockedOrigins = outEdges
-        .map((e) => e.origin)
-        .filter((o): o is 'fix-chain' | 'autoconfig' => o !== 'manual')
-      if (lockedOrigins.length > 0) {
-        throw new EdgeOriginLockedError({
-          projectId: input.projectId,
-          taskRef: input.taskRef,
-          origins: lockedOrigins,
-        })
+    // ③ 依赖段（两径分派——loop-phase-gate §2.6 白通道）：
+    //    - dependsOn：整体置换语义（删旧 manual 边 → 增量环校验 → 插新 manual 边）——语义逐字节不变；
+    //    - dependsOnAppend：manual 边增量追加（提案④白通道）——无锁边护栏（派生边不动，锁的本意
+    //      「防改写破坏链机械」不受损）、零删除、INSERT OR IGNORE 幂等插边、增量环校验共用、
+    //      blocked 恢复钩子同跑；
+    //    - 两参并存 → 输入契约拒绝（语义歧义——一次调用一个意图）；两者皆缺席 → 依赖段整体跳过。
+    if (input.dependsOn !== undefined && input.dependsOnAppend !== undefined) {
+      throw new Error(
+        'dependsOn 与 dependsOnAppend 并存：一次调用一个意图（整体置换 vs 增量追加语义歧义——输入契约违例）',
+      )
+    }
+    const appendList = input.dependsOnAppend
+    if (input.dependsOn !== undefined || appendList !== undefined) {
+      const dependsOnList = input.dependsOn ?? (appendList as string[])
+      // ③-a 护栏（仅整体改写径）：仅 manual 边可改写——fix-chain/autoconfig 派生出边在场即拒
+      //      （链机械持有）；append 径跳过该护栏——既有派生边不动
+      if (appendList === undefined) {
+        const outEdges = db
+          .prepare<unknown[], { origin: 'manual' | 'fix-chain' | 'autoconfig' }>(
+            `SELECT origin FROM task_edges WHERE task_id = ?`,
+          )
+          .all(row.id)
+        const lockedOrigins = outEdges
+          .map((e) => e.origin)
+          .filter((o): o is 'fix-chain' | 'autoconfig' => o !== 'manual')
+        if (lockedOrigins.length > 0) {
+          throw new EdgeOriginLockedError({
+            projectId: input.projectId,
+            taskRef: input.taskRef,
+            origins: lockedOrigins,
+          })
+        }
       }
 
-      // ③-b 前置解析（同容器归属——task_edges 两端 source_id 相等服务不变量，撞键按未命中口径）
+      // ③-b 前置解析（同容器归属——task_edges 两端 source_id 相等服务不变量，撞键按未命中口径；
+      //      两径共用同段解析与 TaskNotFoundError 口径）
       const depends: DepKeyRow[] = []
-      for (const localId of input.dependsOn) {
+      for (const localId of dependsOnList) {
         const dep = db
           .prepare<unknown[], DepKeyRow>(
             `SELECT id, slug, local_id, source_kind, source_id FROM tasks WHERE slug = ? AND local_id = ?`,
@@ -100,11 +118,14 @@ export async function updateTask(deps: TasksVerbDeps, input: UpdateTaskInput): P
         depends.push(dep)
       }
 
-      // ③-c 删旧 manual 边（护栏已过——本任务全部出边均 manual）
-      db.prepare(`DELETE FROM task_edges WHERE task_id = ? AND origin = 'manual'`).run(row.id)
+      // ③-c 删旧 manual 边（仅整体改写径执行——护栏已过，本任务全部出边均 manual；append 径零删除）
+      if (appendList === undefined) {
+        db.prepare(`DELETE FROM task_edges WHERE task_id = ? AND origin = 'manual'`).run(row.id)
+      }
 
-      // ③-d 增量环校验（§6-14 复用 addTask 单源——自各 D 沿既有出边可达性 DFS 找本任务；
-      //      删除后校验 = 改写后拓扑的精确判定；命中即 ERR_CYCLE_DETECTED 回报完整环路径）
+      // ③-d 增量环校验（§6-14 复用 addTask 单源——自各 D 沿既有出边可达性 DFS 找本任务，两径共用：
+      //      改写径删除后校验 = 改写后拓扑精确判定；append 径对既有拓扑增量判定——新边 (T←D) 成环
+      //      ⟺ D 经既有出边可达 T；命中即 ERR_CYCLE_DETECTED 回报完整环路径）
       for (const d of depends) {
         const hopPath = d.id === row.id ? [d.id] : findPathThroughOutEdges(db, d.id, row.id)
         if (hopPath !== null) {
@@ -114,19 +135,24 @@ export async function updateTask(deps: TasksVerbDeps, input: UpdateTaskInput): P
         }
       }
 
-      // ③-e 插新 manual 边（PK 冲突 = 防御面——③-c 已删旧，正常改写零冲突）
+      // ③-e 插 manual 边：改写径 = 显式 INSERT（PK 冲突 = 防御面——③-c 已删旧，正常改写零冲突、
+      //      报错口径保持）；append 径 = INSERT OR IGNORE（同边重复追加 = 幂等成功，与 fix-chain
+      //      边幂等口径 addTask ⑩ 对齐）
       const insertEdge = db.prepare(
-        `INSERT INTO task_edges (task_id, prerequisite_id, origin, created_at, updated_at)
-         VALUES (?, ?, 'manual', ?, ?)`,
+        appendList === undefined
+          ? `INSERT INTO task_edges (task_id, prerequisite_id, origin, created_at, updated_at)
+             VALUES (?, ?, 'manual', ?, ?)`
+          : `INSERT OR IGNORE INTO task_edges (task_id, prerequisite_id, origin, created_at, updated_at)
+             VALUES (?, ?, 'manual', ?, ?)`,
       )
       for (const dep of depends) {
         insertEdge.run(row.id, dep.id, now, now)
       }
 
-      // ③-f 恢复钩子补跑（提案 task-pause-primitive §2.2-1）：改写 blocked 卡依赖后同事务
-      //      判定——前置全满足则立即恢复 pending（auto-restore 记录 actor='core' 落时间线）；
-      //      前置仍有未满足项则原样保持 blocked（restoreBlockedWaiter 单源，不报错）。
-      //      非 blocked 卡不动（pending 本就可领取、suspended 归 resume 序管辖）。
+      // ③-f 恢复钩子补跑（提案 task-pause-primitive §2.2-1；两径同跑——append 径 blocked 卡补边后
+      //      前置全满足即恢复，restoreBlockedWaiter 单源）：同事务判定——前置全满足则立即恢复
+      //      pending（auto-restore 记录 actor='core' 落时间线）；前置仍有未满足项则原样保持
+      //      blocked（不报错）。非 blocked 卡不动（pending 本就可领取、suspended 归 resume 序管辖）。
       if (row.task_status === 'blocked') {
         restoreBlockedWaiter(db, row.id, now)
       }

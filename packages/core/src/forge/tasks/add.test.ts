@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { addTask, isUniqueViolation } from './add.js'
 import {
   BeforeSuccessorInvalidError,
+  BlockSourceInProgressError,
   BlockSourceRequiredError,
+  BlockSourceTerminalError,
   ChainDepthExceededError,
   CycleDetectedError,
   TaskExistsError,
@@ -318,8 +320,8 @@ describe('AC2 增量环校验（B.5-1 锚：环构造双 flag）', () => {
 
   it('新节点无 dependsOn → 结构性无环 O(1)：blockSource 既有等待链照常建 fix', async () => {
     const add = svc()
-    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // in_progress 任务在场 → 相位一致（写前增量断言）
-    seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
+    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // blocked 任务在场 → 相位一致（写前增量断言）
+    seedTask(h!.db, 'fx', '2.2', { status: 'blocked' }) // loop-phase-gate：in_progress 源已被 block_source 守卫拒——夹具改 blocked（守卫放行态）
     seedTask(h!.db, 'fx', '2.4')
     seedEdge(h!.db, 't-fx-2.2', 't-fx-2.4') // 2.2 等待 2.4——fix 链常态零图遍历
     const r = await add({
@@ -355,8 +357,8 @@ describe('AC2 增量环校验（B.5-1 锚：环构造双 flag）', () => {
 describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', () => {
   it('任务级 fix 复用：同源同型未终态 → reused=true 复用既有行（零新建/零事件）', async () => {
     const add = svc()
-    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // in_progress 任务在场 → 相位一致（写前增量断言）
-    seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
+    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // blocked 任务在场 → 相位一致（写前增量断言）
+    seedTask(h!.db, 'fx', '2.2', { status: 'blocked' }) // loop-phase-gate：夹具改守卫放行态
     const first = await add({
       projectId: P(),
       source: { kind: 'feature', slug: 'fx' },
@@ -381,8 +383,8 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
 
   it('既有 fix 已终态 → 不复用新建 fix-2；边持久不删（B.5-6）：两条 fix-chain 边并存', async () => {
     const add = svc()
-    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // in_progress 任务在场 → 相位一致（写前增量断言）
-    seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
+    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // blocked 任务在场 → 相位一致（写前增量断言）
+    seedTask(h!.db, 'fx', '2.2', { status: 'blocked' }) // loop-phase-gate：夹具改守卫放行态
     const first = await add({
       projectId: P(),
       source: { kind: 'feature', slug: 'fx' },
@@ -413,8 +415,8 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
 
   it('同源异型未终态 → 不复用（同型判据）：新建 disc-1', async () => {
     const add = svc()
-    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // in_progress 任务在场 → 相位一致（写前增量断言）
-    seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
+    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // blocked 任务在场 → 相位一致（写前增量断言）
+    seedTask(h!.db, 'fx', '2.2', { status: 'blocked' }) // loop-phase-gate：夹具改守卫放行态
     seedTask(h!.db, 'fx', '2.3', { status: 'in_progress' })
     await add({
       projectId: P(),
@@ -479,8 +481,8 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
 describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
   it('blockSource 全家福：fix-N 分配 + 源置 blocked + auto-block record(actor=core) + fix-chain 边 + 相位重算', async () => {
     const add = svc()
-    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // in_progress 任务在场 → 相位一致（写前增量断言）
-    seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
+    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // blocked 任务在场 → 相位一致（写前增量断言）
+    seedTask(h!.db, 'fx', '2.2', { status: 'blocked' }) // loop-phase-gate：夹具改守卫放行态
     const r = await add({
       projectId: P(),
       source: { kind: 'feature', slug: 'fx' },
@@ -495,7 +497,7 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     ).toEqual({ task_status: 'blocked' })
     expect(
       rows(`SELECT verb, from_status, to_status, actor, task_id FROM task_records WHERE task_id = 't-fx-2.2'`),
-    ).toEqual([{ verb: 'auto-block', from_status: 'in_progress', to_status: 'blocked', actor: 'core', task_id: 't-fx-2.2' }])
+    ).toEqual([{ verb: 'auto-block', from_status: 'blocked', to_status: 'blocked', actor: 'core', task_id: 't-fx-2.2' }])
     expect(
       rows(`SELECT task_id, prerequisite_id, origin FROM task_edges WHERE task_id = 't-fx-2.2'`),
     ).toEqual([{ task_id: 't-fx-2.2', prerequisite_id: r.taskId, origin: 'fix-chain' }])
@@ -732,6 +734,117 @@ describe('AC（bug 0a25720c 方案 A）blocked 源建链守卫：block_source �
   })
 })
 
+describe('AC（loop-phase-gate B3/T6）block_source fail-loud 状态守卫：assertBlockSourceAllowed', () => {
+  it('in_progress 源 + block_source=true → ERR_BLOCK_SOURCE_IN_PROGRESS（指路 pauseTask）+ 状态/边/records 零残留', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'bi', status: 'in-progress' })
+    seedTask(h!.db, 'bi', '1.1', { status: 'in_progress' })
+    const before = {
+      tasks: h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get(),
+      edges: h!.db.prepare(`SELECT COUNT(*) AS n FROM task_edges`).get(),
+      records: h!.db.prepare(`SELECT COUNT(*) AS n FROM task_records`).get(),
+    }
+    const err = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'bi' },
+      title: 'fix on in-flight source',
+      type: 'coding-fix',
+      sourceTask: { slug: 'bi', localId: '1.1' },
+      blockSource: true,
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(BlockSourceInProgressError)
+    expect((err as BlockSourceInProgressError).code).toBe('ERR_BLOCK_SOURCE_IN_PROGRESS')
+    expect((err as Error).message).toContain('pauseTask')
+    expect((err as BlockSourceInProgressError).data).toEqual({
+      projectId: P(),
+      taskRef: { slug: 'bi', localId: '1.1' },
+      taskStatus: 'in_progress',
+    })
+    // 源状态不闪变（worker 不停根因 fail-loud 收口）+ 零残留
+    expect(
+      h!.db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = 't-bi-1.1'`).get(),
+    ).toEqual({ task_status: 'in_progress' })
+    expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get()).toEqual(before.tasks)
+    expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM task_edges`).get()).toEqual(before.edges)
+    expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM task_records`).get()).toEqual(before.records)
+  })
+
+  it.each(['completed', 'skipped', 'rejected'] as const)(
+    '终态源 %s + block_source=true → ERR_BLOCK_SOURCE_TERMINAL（指路 disc 径）+ 源状态不变 + 零残留',
+    async (status) => {
+      const add = svc()
+      seedFeature(h!.db, { slug: 'bt', status: 'in-progress' })
+      seedTask(h!.db, 'bt', '1.1', { status })
+      const before = {
+        tasks: h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get(),
+        edges: h!.db.prepare(`SELECT COUNT(*) AS n FROM task_edges`).get(),
+        records: h!.db.prepare(`SELECT COUNT(*) AS n FROM task_records`).get(),
+      }
+      const err = await add({
+        projectId: P(),
+        source: { kind: 'feature', slug: 'bt' },
+        title: 'fix on terminal source',
+        type: 'coding-fix',
+        sourceTask: { slug: 'bt', localId: '1.1' },
+        blockSource: true,
+      }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(BlockSourceTerminalError)
+      expect((err as BlockSourceTerminalError).code).toBe('ERR_BLOCK_SOURCE_TERMINAL')
+      expect((err as Error).message).toContain('disc')
+      expect((err as BlockSourceTerminalError).data).toMatchObject({
+        projectId: P(),
+        taskRef: { slug: 'bt', localId: '1.1' },
+        taskStatus: status,
+      })
+      // ⑫ 修正：不改任务状态（守卫前置后 completed 打回 blocked 缺口收口）+ 零残留
+      expect(
+        h!.db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = 't-bt-1.1'`).get(),
+      ).toEqual({ task_status: status })
+      expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get()).toEqual(before.tasks)
+      expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM task_edges`).get()).toEqual(before.edges)
+      expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM task_records`).get()).toEqual(before.records)
+    },
+  )
+
+  it('suspended 源 + block_source=true → 放行（pause→add→resume 序列的中段合法）+ fix-chain 边 + auto-block', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'sp', status: 'in-progress' })
+    seedTask(h!.db, 'sp', '1.1', { status: 'suspended' })
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'sp' },
+      title: '修复任务',
+      type: 'coding-fix',
+      sourceTask: { slug: 'sp', localId: '1.1' },
+      blockSource: true,
+    })
+    expect(r.localId).toBe('fix-1')
+    expect(
+      rows(`SELECT task_id, prerequisite_id, origin FROM task_edges WHERE task_id = 't-sp-1.1'`),
+    ).toEqual([{ task_id: 't-sp-1.1', prerequisite_id: r.taskId, origin: 'fix-chain' }])
+    expect(
+      h!.db.prepare<unknown[], { from_status: string; to_status: string }>(
+        `SELECT from_status, to_status FROM task_records WHERE task_id = 't-sp-1.1' AND verb = 'auto-block'`,
+      ).get(),
+    ).toEqual({ from_status: 'suspended', to_status: 'blocked' })
+  })
+
+  it('新增任务行 e2e_attribution 缺省 0（标记不经 addTask 参数暴露——addTask INSERT 恒写缺省）', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'ea', status: 'tasks' })
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'ea' },
+      title: '常规任务',
+      type: 'coding-feature',
+    })
+    const row = h!.db
+      .prepare<unknown[], { e2e_attribution: number }>(`SELECT e2e_attribution FROM tasks WHERE id = ?`)
+      .get(r.taskId)
+    expect(row).toEqual({ e2e_attribution: 0 })
+  })
+})
+
 describe('AC（2.4）同容器边约束：task_edges 两端 source_id 相等（不变量②）', () => {
   it('成链撞键（feature 与 proposal 同 slug）：dependsOn 命中他容器同键 → ERR_TASK_NOT_FOUND（同容器边不变量）', async () => {
     const add = svc()
@@ -792,7 +905,7 @@ describe('AC（2.4）同容器边约束：task_edges 两端 source_id 相等（�
   it('proposal 容器 blockSource 全家福：fix-N + 源置 blocked + auto-block record + fix-chain 边（相位域零参与）', async () => {
     const add = svc()
     seedProposal(h!.db, { slug: 'bp', mode: 'blitz' })
-    seedTask(h!.db, 'bp', '1.1', { kind: 'proposal', mode: 'blitz', status: 'in_progress' })
+    seedTask(h!.db, 'bp', '1.1', { kind: 'proposal', mode: 'blitz', status: 'blocked' }) // loop-phase-gate：夹具改守卫放行态
     const r = await add({
       projectId: P(),
       source: { kind: 'proposal', slug: 'bp' },
@@ -807,7 +920,7 @@ describe('AC（2.4）同容器边约束：task_edges 两端 source_id 相等（�
     ).toEqual({ task_status: 'blocked' })
     expect(
       rows(`SELECT verb, actor, from_status, to_status FROM task_records WHERE task_id = 't-bp-1.1'`),
-    ).toEqual([{ verb: 'auto-block', actor: 'core', from_status: 'in_progress', to_status: 'blocked' }])
+    ).toEqual([{ verb: 'auto-block', actor: 'core', from_status: 'blocked', to_status: 'blocked' }])
     expect(
       rows(`SELECT task_id, prerequisite_id, origin FROM task_edges WHERE origin = 'fix-chain'`),
     ).toEqual([{ task_id: 't-bp-1.1', prerequisite_id: r.taskId, origin: 'fix-chain' }])

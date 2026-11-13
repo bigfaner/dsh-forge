@@ -53,6 +53,8 @@ export interface UpdateTaskToolArgs {
   readonly vars?: readonly string[]
   /** 依赖改写（manual 边整体置换：删旧 → 增量环校验 → 插新；派生边拒） */
   readonly depends_on?: readonly string[]
+  /** 依赖增量追加（manual 边 INSERT OR IGNORE 幂等补边：派生边不动、零删除；与 depends_on 互斥） */
+  readonly depends_on_append?: readonly string[]
 }
 
 /** 参数防御性收窄（执行点自证，addTask 形制） */
@@ -70,6 +72,7 @@ export function parseUpdateTaskArgs(args: unknown): UpdateTaskToolArgs {
     acceptance_criteria?: string[]
     vars?: string[]
     depends_on?: string[]
+    depends_on_append?: string[]
   } = {
     slug: requiredString(a, 'slug', TOOL),
     local_id: requiredString(a, 'local_id', TOOL),
@@ -84,7 +87,7 @@ export function parseUpdateTaskArgs(args: unknown): UpdateTaskToolArgs {
   if (priority !== undefined) out.priority = priority
   const complexity = optionalEnum(a, 'complexity', COMPLEXITIES, TOOL)
   if (complexity !== undefined) out.complexity = complexity
-  for (const key of ['acceptance_criteria', 'vars', 'depends_on'] as const) {
+  for (const key of ['acceptance_criteria', 'vars', 'depends_on', 'depends_on_append'] as const) {
     const v = optionalStringArray(a, key, TOOL)
     if (v !== undefined) out[key] = v
   }
@@ -142,7 +145,7 @@ export function createUpdateTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'Update an existing task (located by its container slug + local_id): wide-field partial semantics — given fields are rewritten, absent fields stay untouched. Rewritable: title, type, priority, estimated_time, complexity, task_desc, acceptance_criteria (ac_json overwritten as a whole), vars (KEY=VALUE entries, vars_json overwritten as a whole), depends_on (manual edges replaced as a whole; cycle-checked incrementally; fix-chain/autoconfig derived edges are rejected). Blocked by status gates (locked statuses reject) — read the updated task snapshot back.',
+      'Update an existing task (located by its container slug + local_id): wide-field partial semantics — given fields are rewritten, absent fields stay untouched. Rewritable: title, type, priority, estimated_time, complexity, task_desc, acceptance_criteria (ac_json overwritten as a whole), vars (KEY=VALUE entries, vars_json overwritten as a whole), depends_on (manual edges replaced as a whole; cycle-checked incrementally; fix-chain/autoconfig derived edges are rejected), depends_on_append (incrementally append manual edges — derived edges untouched, idempotent; mutually exclusive with depends_on). Blocked by status gates (locked statuses reject) — read the updated task snapshot back.',
     parameters: {
       type: 'object',
       properties: {
@@ -169,6 +172,12 @@ export function createUpdateTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           items: { type: 'string' },
           description: 'Replacement depends_on as local ids of prerequisite tasks in the same container (manual edges only; cycles rejected).',
         },
+        depends_on_append: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Incrementally append manual dependency edges as local ids of prerequisite tasks in the same container — derived edges (fix-chain/autoconfig) stay untouched, nothing is deleted, duplicate edges are idempotent; mutually exclusive with depends_on.',
+        },
       },
       required: ['slug', 'local_id'],
     },
@@ -190,6 +199,7 @@ export function createUpdateTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ...(parsed.acceptance_criteria !== undefined ? { acceptanceCriteria: [...parsed.acceptance_criteria] } : {}),
           ...(parsed.vars !== undefined ? { vars: varsEntriesToRecord(parsed.vars) } : {}),
           ...(parsed.depends_on !== undefined ? { dependsOn: [...parsed.depends_on] } : {}),
+          ...(parsed.depends_on_append !== undefined ? { dependsOnAppend: [...parsed.depends_on_append] } : {}),
         }
         return deps.tasks.updateTask(input)
       }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), TOOL, failure))

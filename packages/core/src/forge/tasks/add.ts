@@ -31,6 +31,7 @@ import type {
 } from '@dsh-forge/contracts'
 import {
   BEFORE_SUCCESSOR_ALLOWED_STATUSES,
+  E2E_ATTRIBUTION_COLUMN,
   FIX_CHAIN_DEPTH_LIMIT,
 } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
@@ -38,7 +39,9 @@ import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import {
   BeforeSuccessorInvalidError,
+  BlockSourceInProgressError,
   BlockSourceRequiredError,
+  BlockSourceTerminalError,
   ChainDepthExceededError,
   CycleDetectedError,
   TaskExistsError,
@@ -324,6 +327,29 @@ function sourceAncestry(db: Database.Database, sourceId: string): TaskKeyRow[] {
   return ancestry
 }
 
+/** block_source 状态守卫（loop-phase-gate §2.5——与 ④ before ERR_BEFORE_SUCCESSOR_INVALID 对称）：
+ *  blockSource=true 对 in_progress 源（fix 链等待边不可挂在在飞任务上——worker 不停、状态闪变
+ *  的静默半生效根因，fail-loud 收口）→ ERR_BLOCK_SOURCE_IN_PROGRESS 指路 pauseTask → add →
+ *  resume；对终态源（completed/skipped/rejected——等待边无解锁语义）→ ERR_BLOCK_SOURCE_TERMINAL
+ *  指路 disc 径或改选未终态源。事务内先于一切写，零副作用。 */
+function assertBlockSourceAllowed(projectId: string, source: TaskKeyRow, blockSource: boolean | undefined): void {
+  if (blockSource !== true) return
+  if (source.task_status === 'in_progress') {
+    throw new BlockSourceInProgressError({
+      projectId,
+      taskRef: { slug: source.slug, localId: source.local_id },
+      taskStatus: 'in_progress',
+    })
+  }
+  if ((['completed', 'skipped', 'rejected'] as readonly string[]).includes(source.task_status)) {
+    throw new BlockSourceTerminalError({
+      projectId,
+      taskRef: { slug: source.slug, localId: source.local_id },
+      taskStatus: source.task_status as 'completed' | 'skipped' | 'rejected',
+    })
+  }
+}
+
 /** Interface 1 addTask：tasks 行 → edges 行 → records 行单事务全成全败（详见文件头） */
 export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise<AddTaskResult> {
   const db = deps.store.ensureOpen(input.projectId)
@@ -445,6 +471,13 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       })
     }
 
+    // ④d block_source 状态守卫（loop-phase-gate §2.5）：blockSource=true 对 in_progress /
+    //    终态源 fail-loud（④b before 守卫同位同形——单事务内先于一切写，零副作用）；
+    //    守卫前置后 ⑫ 只可能作用于 pending/blocked/suspended 源
+    if (source !== undefined) {
+      assertBlockSourceAllowed(input.projectId, source, input.blockSource)
+    }
+
     // ⑤ localId 分配（§6-35⑦：blockSource → fix-N / 携源未阻 → disc-N / 常规 → 数值顺延；
     //    计数作用域 = 容器 slug——UNIQUE(slug, local_id) 同 slug 键空间跨容器共享）
     const localId = allocateLocalId(
@@ -530,8 +563,8 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       db.prepare(
         `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, ac_json, priority,
            estimated_time, vars_json, source_task_id, blocked_reason, breaking,
-           coverage, complexity, source_kind, source_id, mode, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           coverage, complexity, source_kind, source_id, mode, ${E2E_ATTRIBUTION_COLUMN}, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       ).run(
         taskId,
         container.slug,
