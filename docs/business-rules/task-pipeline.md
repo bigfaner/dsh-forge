@@ -31,9 +31,9 @@ domains: [task, state-machine, dispatch, audit, fix-chain, worker, ac-gate]
 
 ### BIZ-task-004: 就绪选择与防双派发
 
-**Rule**: 就绪选择仅扫 pending 池，序 = block_source 挂接 fix 优先（仅同轮就绪集内比较——不跨轮饿死）→ 分支延续优先 → priority → 创建序；in_progress 幂等重入仅限显式 taskRef 或 links 已含本会话——无 taskRef 的盲选不领 in_progress（双 dispatcher 并发不双派发）。
-**Context**: 并发与重入域收敛：claim 语义在多会话并发下保持单执行者；fix 与旁支叶子同轮就绪时 fix 先领，防 fix 滞留堵塞下游整链（dispatch-loop-hardening 改进 2）。
-**Source**: feature/dsh-forge-m2-pipeline BIZ-004（tech-design §Interface 1 动词内聚不变量）+ dispatch-loop-hardening 改进 2（packages/core/src/forge/tasks/claim.ts 排序键）
+**Rule**: 就绪选择仅扫 pending 池，序 = block_source 挂接 fix 优先（仅同轮就绪集内比较——不跨轮饿死）→ 分支延续优先 → priority → 创建序；in_progress 幂等重入仅限显式 taskRef 或 links 已含本会话——无 taskRef 的盲选不领 in_progress（双 dispatcher 并发不双派发）；分支延续优先不越过容器实现链阶段门——实现链阶段门持有期间验证卡不入就绪集、validation 族不出局分支延续①落全局池重排（§6-35⑧ 修订）；「claim 就绪选择零改动」（decisions #12 状态真化裁决附带注记）收窄为 adopt 定向恢复径与重入径豁免容器阶段门——盲选就绪选择受门约束。
+**Context**: 并发与重入域收敛：claim 语义在多会话并发下保持单执行者；fix 与旁支叶子同轮就绪时 fix 先领，防 fix 滞留堵塞下游整链（dispatch-loop-hardening 改进 2）；容器实现链未收口前验证卡不抢跑（loop-phase-gate §1.1）。
+**Source**: feature/dsh-forge-m2-pipeline BIZ-004（tech-design §Interface 1 动词内聚不变量）+ dispatch-loop-hardening 改进 2（packages/core/src/forge/tasks/claim.ts 排序键）+ proposal loop-phase-gate §6-35⑧（decisions #12 收窄——原台账 `.forge/docs/proposals/run-tasks-host-command/decisions.md` 已随过程文档治理退役，历史锚 c7279135）
 
 ### BIZ-task-005: 中断恢复 = 幂等重入
 
