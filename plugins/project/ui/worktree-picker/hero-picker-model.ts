@@ -1,14 +1,11 @@
-// hero 工作区控件行映射纯函数（fix-24 ①；定位：业务——弹层列「项目」的映射面，官方
-// WorkspacePickFlow 行语言同型：items 全量账本无过滤缝 → 产品经影子占用改列 forge 项目）。
-// 口径（任务 fix-24 Description ①）：
-//   - items = forge 项目（forge:projects/list → name；archived 排除——与左栏过滤口径一致）；
-//   - 未绑定项目的工作区天然不出现（行源是项目不是账本——初版「选择器过滤」口径的子集覆盖）；
+// hero 项目弹层映射纯函数（B 类顶替②——1.7 自 apps/web 壳侧 views/session/
+// hero-picker-model.ts 平移本包，fix-13 模式：组件与映射面随注册面归插件域）。
+// 口径（fix-24 ① 沿革）：
+//   - items = forge 项目（forgeProjects/list → name；archived 排除——与左栏过滤口径一致）；
+//   - 未绑定项目的工作区天然不出现（行源是项目不是账本）；
 //   - 选中映射：owner selectedId（workspaceId）↔ 行 id（= project.workspaceId）恒等对照，
 //     未绑定/已归档工作区无命中行（零高亮）；
-//   - 空集 + 账面已定 → 「添加」为唯一入口（官方 addIsTheOnlyEntry 语义对齐，:1935-1943）。
-// 1.15 归位：worktree 域纯函数（跨分支确认闩锁/「不再提示」记忆/陈旧选中自愈）随
-// WorktreeFaces 拆迁迁 @dsh-forge/project ui/worktree-picker/model.ts——本文件只剩
-// hero 项目弹层映射面（消费面 = ForgeHeroWorkspacePicker）。
+//   - 空集 + 账面已定 → 「添加」为唯一入口（官方 addIsTheOnlyEntry 语义对齐）。
 import type { ProjectSummary } from '@dsh-forge/contracts'
 
 /** 弹层项目行（id = workspaceId——owner 契约 selectedId/onPick 零变化走官方链；wsPath = 树 ws 判据源） */
@@ -142,13 +139,9 @@ export function selectedProjectRootStrictOf(
  * selectedId 官方语义 = workspaceId（owner 契约）——经 workspaceId 回查项目行取 ws_path；
  * 未选中/未命中 → 活跃（非归档）首个有 ws_path 的行兜底（**仅渲染消费**——fallback 泄漏
  * 成绑定语义即跨项目错绑）；全无 → null。
- * bug 10833861 Root cause: 原推导以 project.id 比对 workspaceId 恒 miss，fallback 又取
- * 全量首行（created_at 最早的归档项目，如非 git 的 learn）→ isGit=false 全零注入。
- * bug 8a316608 Root cause: selectedId 可合法指向树 workspace（openWorkspace 切树后 owner
- * selectedId = 树 ws id，永不命中项目行），fallback 却取「首个活跃项目」——排序靠后项目
- * 的树选中态被锚到首个项目的清单，陈旧自愈随之跨项目错切。修复：官方快照在场时按树 ws
- * path 归属活跃项目根取所属项目（与 heroDefaultPickId bug 9eb9d6cb 同守卫同判）；
- * 快照缺席/不归属任何活跃项目 = 维持现状兜底。
+ * bug 8a316608：selectedId 可合法指向树 workspace，fallback 却取「首个活跃项目」——
+ * 修复：官方快照在场时按树 ws path 归属活跃项目根取所属项目（与 heroDefaultPickId
+ * bug 9eb9d6cb 同守卫同判）；快照缺席/不归属任何活跃项目 = 维持现状兜底。
  */
 export function selectedProjectRootOf(
   projects: readonly ProjectSummary[],

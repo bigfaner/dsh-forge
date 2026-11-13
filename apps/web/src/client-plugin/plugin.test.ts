@@ -330,7 +330,8 @@ function publishFakeViews() {
     // fix-13 注记（1.41）：ForgeDispatchToolRow / ForgeEventEntries 发布退役——注册面迁 project bundle
     // fix-13 注记（1.45）：ForgeOverviewTab / ForgeDocsTab 两键随 dock tab 族注册迁
     // @dsh-forge/project bundle（ui/dock-tabs-face.ts + ui/dock-tabs/）——壳发布面零该两键。
-    ForgeHeroWorkspacePicker: 'COMP:hero-picker',
+    // 1.7 注记：ForgeHeroWorkspacePicker 发布键随 B 类顶替②（hero 双 select 全量顶替）
+    // 迁 @dsh-forge/project bundle（ui/hero-picker-face.ts）——壳发布面零该键。
     // fix-13 注记：chip/seal overlay/bug 三件发布退役——注册面迁 project bundle（official-seams）
     // fix-13 注记（1.43）：ForgeWorktreeSwitchMarker 发布退役——注册面迁 project bundle
     // fix-13 注记（1.40）：ForgeRemoteEntry 发布退役——注册面迁 project bundle（remote-entry-face）
@@ -447,11 +448,8 @@ describe('槽位路线 A 注册（AC1：品牌行内容洞位；sidebar.workspac
       // bundle——壳注入清单摘除该行。
       // fix-13 注记（1.42/1.44）：MAIN_SLOT×2 / SIDEBAR_PANELLIST_SLOT / CONVERSATION_VIEW_SLOT
       // 注入随 center 族与召回页签注册迁 project bundle——壳注入清单摘除四行。
-      HERO_WORKSPACE_SLOT,
-      // fix-13 注记（1.41）：TOOL_CALL_TOOLVIEW_SLOT 与 FORGE_EVENT_NODE_SLOT 注入随
-      // 注册面迁 project bundle——壳注入清单摘除两行。
-      // fix-13 注记（1.43）：CONVERSATION_INPUT_OVERLAY_SLOT 注入随切换闸标记行注册迁
-      // project bundle——壳注入清单零 overlay 行。
+      // 1.7 注记：HERO_WORKSPACE_SLOT 注入随 B 类顶替②（hero 双 select 全量顶替）迁
+      // project bundle（ui/hero-picker-face.ts）——壳注入清单摘除该行。
       SHELL_OVERLAY_SLOT,
     ])
     // fix-13 断言（1.6）：sidebar.workspaces 顶替注册迁 @dsh-forge/project bundle
@@ -517,30 +515,20 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     forgeClientPlugin().apply(ctx)
     expect(registers.filter((r) => r.key === CONVERSATION_VIEW_SLOT)).toHaveLength(0)
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([HERO_WORKSPACE_SLOT]) // fix-24 ① hero 影子；fix-13 注记 1.41-1.43：工具行/事件组/切换闸/召回注册迁 project bundle
+    expect(marker?.views?.registered).toEqual([]) // 1.7 注记：hero 影子随 B 类顶替②迁 project bundle（ui/hero-picker-face.ts）——views 族壳登记归零
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
 
-  it('hero 工作区控件影子（fix-24 ①）：conversation.hero.workspace single 影子登记——发布组件 + -100 优先级 + 零 children + 零 inject（bug 82e92933 换绑编排退役）', () => {
-    const views = publishFakeViews()
+  it('1.7 断言（B 类顶替②）：hero 工作区控件注册迁 @dsh-forge/project——壳对 conversation.hero.workspace 零登记（ui/hero-picker-face.ts 双段式在插件侧）', () => {
+    publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    const heroRegisters = registers.filter((r) => r.key === HERO_WORKSPACE_SLOT)
-    expect(heroRegisters, 'conversation.hero.workspace 恰一登记（single 槽影子——官方 WorkspacePicker 保持在场）').toHaveLength(1)
-    const hero = heroRegisters[0]!
-    expect(hero.options.priority).toBe(SIDEBAR_SHADOW_PRIORITY)
-    expect(hero.options.priority).toBeLessThan(0) // lowest renders——影子官方占用者（priority 0）
-    expect(hero.component).toBe(views.ForgeHeroWorkspacePicker)
-    // 不声明 children：官方登记行的 children 声明持续供养 directoryFlow 子洞（重声明即 throw）
-    expect(hero.options.children).toBeUndefined()
-    // bug 82e92933（binding-derivation §2.3）：点选即换绑编排退役——零 inject（换绑由
-    // 官方 blank 复用天然生效，rebindFace 编排缝与 maybeRebind/unhandled rejection 源同撤）
-    expect(hero.options.inject).toBeUndefined()
-    expect(hero.options.id).toBeUndefined()
-    expect(hero.options.key).toBeUndefined()
+    expect(registers.filter((r) => r.key === HERO_WORKSPACE_SLOT), '壳零登记（官方 WorkspacePicker 弹层位替换归插件 bundle）').toHaveLength(0)
+    const views = (globalThis as { __DSH_FORGE_VIEWS__?: Record<string, unknown> }).__DSH_FORGE_VIEWS__
+    expect(views?.['ForgeHeroWorkspacePicker'], '发布面零 hero picker 组件（注册面迁插件 bundle）').toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([HERO_WORKSPACE_SLOT]) // fix-13 注记 1.41-1.43：工具行/事件组/切换闸标记注册迁 project bundle
+    expect(marker?.views?.registered).toEqual([])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -1062,12 +1050,12 @@ describe('会话头挂接槽 + 悬浮面板 ⟞ 开面（m3.1 D5/D6 + fix-13 迁
     unpublishViews()
   })
 
-  it('诊断面：views 族登记数组 = hero 影子单行（fix-13 注记 1.41-1.43：页签/工具行/事件组/切换闸标记注册迁 project bundle）', () => {
+  it('诊断面：views 族登记数组恒空（1.7 B 类顶替②：hero 影子注册迁 project bundle——fix-13 注记 1.41-1.43：页签/工具行/事件组/切换闸标记注册同彼侧）', () => {
     publishFakeViews()
     const { ctx } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([HERO_WORKSPACE_SLOT])
+    expect(marker?.views?.registered).toEqual([])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })

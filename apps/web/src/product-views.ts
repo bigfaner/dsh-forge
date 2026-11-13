@@ -35,12 +35,11 @@ import { ForgeShellHost, type ForgeShellHostProps } from './workbench/ShellHost.
 // + ui/knowledge-face.ts），组件本体随插件包，不经壳发布面递达。
 // fix-13 注记（1.45）：ForgeOverviewTab / ForgeDocsTab 发布退役——dock tab 族注册面与
 // 组件本体随 @dsh-forge/project bundle（ui/dock-tabs-face.ts + ui/dock-tabs/）。
+// 1.7 注记：ForgeHeroWorkspacePicker 发布退役——B 类顶替②（hero 项目+worktree 双 select
+// 全量顶替）注册面与组件本体随 @dsh-forge/project bundle（ui/hero-picker-face.ts +
+// ui/worktree-picker/hero-workspace-picker.tsx），不经壳发布面递达。
 // fix-13 注记（1.41）：ForgeDispatchToolRow / ForgeEventEntries 发布退役——组件本体与注册面
 // 均在 @dsh-forge/project client bundle（ui/dispatch-tool-row/ + ui/event-node/）。
-import {
-  ForgeHeroWorkspacePicker,
-  type ForgeHeroWorkspacePickerProps,
-} from './views/session/HeroWorkspacePicker.js'
 // fix-13 注记（1.43）：ForgeWorktreeSwitchMarker 发布退役——注册面迁 @dsh-forge/project
 // bundle（ui/conversation-views-face.ts ③），组件本体在插件包，不经壳发布面递达。
 // fix-13 注记：chip / seal overlay 两件发布退役——注册面迁 project bundle apply 期
@@ -64,8 +63,8 @@ export interface ForgePublishedViews {
   readonly ForgeShellHost: ComponentType<ForgeShellHostProps>
   // fix-13 注记（1.45）：ForgeOverviewTab / ForgeDocsTab 两发布键随 dock tab 族注册迁
   // @dsh-forge/project bundle（ui/dock-tabs-face.ts + ui/dock-tabs/）退役。
-  /** conversation.hero.workspace 影子占用者（fix-24 ①——新会话输入框上方控件改列项目） */
-  readonly ForgeHeroWorkspacePicker: ComponentType<ForgeHeroWorkspacePickerProps>
+  // 1.7 注记：ForgeHeroWorkspacePicker 发布键随 B 类顶替②迁 @dsh-forge/project bundle
+  // （ui/hero-picker-face.ts）退役——壳发布面零该键。
   // fix-13 注记（1.43）：ForgeWorktreeSwitchMarker 发布键随切换闸标记行注册迁
   // @dsh-forge/project bundle 退役——壳发布面零该键。
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
@@ -83,7 +82,6 @@ declare global {
   ForgeBrandMark,
   ForgeBrandName,
   ForgeShellHost,
-  ForgeHeroWorkspacePicker,
   createWorkbenchBridge,
   createMermaidEnhancer,
 }

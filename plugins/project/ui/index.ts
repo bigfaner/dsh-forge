@@ -38,6 +38,26 @@ export {
   type StaleSelectionNoticeProps,
 } from './session-badge/seal-notice.js'
 export { HeroWorktreePicker, heroWorktreeRows, pickerRowDisabled, type HeroWorktreePickerProps, type WorktreeMenuRow } from './worktree-picker/hero-worktree-picker.js'
+// ── hero 双 select（1.7 B 类顶替②——项目 select 弹层 + worktree select 挂载装配；
+//    注册面 = ./hero-picker-face.ts）──
+export { ForgeHeroWorkspacePicker, type ForgeHeroWorkspacePickerProps } from './worktree-picker/hero-workspace-picker.js'
+export {
+  heroDefaultPickId,
+  heroDefaultPickReady,
+  heroPickerPlan,
+  selectedProjectOf,
+  selectedProjectRootOf,
+  selectedProjectRootStrictOf,
+  type HeroPickerPlan,
+  type HeroPickerRow,
+} from './worktree-picker/hero-picker-model.js'
+export {
+  HERO_WORKSPACE_SLOT,
+  HERO_SHADOW_PRIORITY,
+  registerHeroPickerFace,
+  type HeroPickerFaceCtx,
+  type HeroPickerFaceDiagnostics,
+} from './hero-picker-face.js'
 export {
   aheadBehindInline,
   aheadBehindSegments,
@@ -167,6 +187,7 @@ import {
 } from './remote-entry-face.js'
 import { registerConversationToolFaces } from './conversation-views-face.js'
 import { registerSidebarFace } from './sidebar-face.js'
+import { registerHeroPickerFace } from './hero-picker-face.js'
 import { registerHeroPanelFace } from './hero-panel-face.js'
 import { startHeroEmptySelfDrive, type HeroLayoutFace } from './hero-panel-drive.js'
 import { registerKnowledgeFaces } from './knowledge-face.js'
@@ -421,6 +442,16 @@ export const projectClient = {
       console.info(`[dsh-forge/project] sidebar face registered=[${sidebar.registered.join(', ')}]`)
     } catch (error) {
       console.warn('[dsh-forge/project] sidebar face registration failed——降级不注册（官方 WorkspaceBrowser 保持）', error)
+    }
+    // conversation.hero.workspace 顶替（1.7 B 类顶替②——官方 WorkspacePicker 弹层位替换，
+    // 负优先级恒选胜语义 audit §5；hero 区项目 + worktree 双 select，数据源 = forgeProjects
+    // Typert + 官方 workspaces 快照；workspaces/uiWorkspace 服务经 ctx.get 现查，缺席 =
+    // 不注册官方保持）。
+    try {
+      const hero = registerHeroPickerFace(rec as never, slots)
+      console.info(`[dsh-forge/project] hero picker face registered=[${hero.registered.join(', ')}]`)
+    } catch (error) {
+      console.warn('[dsh-forge/project] hero picker face registration failed——降级不注册（官方 WorkspacePicker 保持）', error)
     }
   },
 };

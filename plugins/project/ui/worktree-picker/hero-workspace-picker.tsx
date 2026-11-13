@@ -1,29 +1,31 @@
-// hero 工作区选择/切换控件影子（fix-24 ①；定位：业务装配——官方 conversation.hero.workspace
-// 槽位 single 影子占用者，priority -100 lowest renders 取代官方 WorkspacePicker 弹层）。
-// 语义改列「项目」（初版「选择器过滤未绑定工作区」的超集——行源从 dsh 账本换 forge 项目）：
-//   - 弹层行 = forge 项目（forge:projects/list → name + 官方文件夹图标；archived 排除）——
-//     未绑定项目的工作区天然不出现；
-//   - 选中/切换零改契约：owner selectedId(workspaceId) → 高亮命中项目行；onPick(project.
+// hero 项目弹层组件（B 类顶替②——1.7 自 apps/web 壳侧 views/session/HeroWorkspacePicker.tsx
+// 平移本包，fix-13 模式：占用者本体与注册面归插件域，官方宿主不装载产品壳时随插件 bundle
+// apply 期自注册）。hero 区「项目 + worktree 双 select」的装配层：
+//   - 弹层行 = forge 项目（forgeProjects/list[Typert 正典] → name + 官方文件夹图标；
+//     archived 排除）——未绑定项目的工作区天然不出现；
+//   - 项目选中零改契约：owner selectedId(workspaceId) → 高亮命中项目行；onPick(project.
 //     workspaceId) → 官方 selectWorkspace 链原样（hero-picker-model 映射面）；
-//   - 「添加项目…」→ openAddProjectFlow()（UF-3 产品注册流：OS 选取 → 表单 → 注册 → 绑定，
-//     与 hero CTA/左栏「＋」同径）；空项目集 = 添加唯一入口，弹层直达产品注册流
-//     （官方 addIsTheOnlyEntry 自动开目录流语义对齐，client.js:1935-1943）；
-//   - 官方件复用零自绘：Menu（anchor/portal/footer/selectedId）primitive；项目行文件夹图标
-//     与添加行 ＋ 图标均官方件（官方 WorkspacePickFlow 行语言同型）；
-//   - chip（触发器）不在本面：官方 owner 侧渲染，文案经 workspace.title 对齐项目名达成
-//     （core 注册链 workspaces.rename——fix-24 ②），非影子替换。
+//   - worktree select = ForgeHeroWorktreeMount（点选链 ensureWorkspace → openWorkspace
+//     ——openWorkspace 官方面经注册面 inject 递达，窗口锚回退）；
+//   - 「添加项目…」→ openAddProjectFlow()（UF-3 产品注册流）；空项目集 = 添加唯一入口；
+//   - 官方件复用零自绘：Menu primitive；项目行文件夹图标与添加行 ＋ 图标均官方件。
+// chip 触发器不在本面：官方 owner 侧渲染（ui-conversation heroWorkspaceRow——WorkspaceChip
+// + renderSlot 本件），文案经 workspaces.rename 标题对齐项目名（fix-24 ②，host 侧链）。
 // 子洞链（fix-14/16 原生选取）不受影：官方 WorkspacePicker 登记行恒在（影子只取渲染位，
 // ui-slots single 槽 lowest-renders 语义），其 children 声明持续供养
-// conversation.hero.workspace.directoryFlow 子洞——本影子行不重声明 children（ui-slots
-// register 对已声明子槽重声明即 throw，fix-23 runtime 实证），产品添加径亦不经该子洞。
-// W3 arm 退役（session-binding-guarantee）：挂靠编排缝（createWorktreeOrchestrator）与
-// 1.25 失败 Toast 文案族退役——会话创建唯一时机 = 官方 create 调用点（wrap 改道预铸，
-// create 失败走官方 createFailed toast），本面只剩项目弹层 + hero worktree chip 挂载。
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+// conversation.hero.workspace.directoryFlow 子洞——本行不重声明 children（ui-slots
+// register 对已声明子槽重声明即 throw，fix-23 runtime 实证）。
+// 数据面注记：壳侧 useAnchoredProjects（KitSelectorHook 形制）随迁退役——快照源改经
+// 注册面 inject 递达（SnapshotSource 直读，ForgeSidebarSlot 同制），useSyncExternalStore
+// 闭包绑定（dsh 快照源 = 类方法——裸引用脱离 this 即崩）。
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
-import { openAddProjectFlow } from '@dsh-forge/project/client-ui/add-project'
-import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
-import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
+import { openAddProjectFlow } from '../add-project/flow-open.js'
+import { useForgeProjects } from '../sidebar/use-forge-projects.js'
+import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc.js'
+import type { LedgerWorkspacesSnapshot, SnapshotSource } from '../sidebar/sidebar-model.js'
+import { ForgeHeroWorktreeMount } from './picker.js'
+import { openWorkspaceFace, type OpenWorkspaceFace } from '../state/open-workspace-face.js'
 import {
   heroDefaultPickId,
   heroDefaultPickReady,
@@ -31,10 +33,6 @@ import {
   selectedProjectOf,
   selectedProjectRootOf,
 } from './hero-picker-model.js'
-// 1.15 迁移面：worktree 第二 chip 挂载面本体迁 @dsh-forge/project client ui
-// （ui/worktree-picker/picker.tsx——ForgeHeroWorktreeMount 经包出口消费）。
-import { ForgeHeroWorktreeMount } from '@dsh-forge/project/client-ui/worktree-faces'
-import type { KitSelectorHook } from './ConversationViews.js'
 
 /** 「添加项目…」行 id（菜单内保留字——项目行 id 恒为 dsh workspace uuid，无碰撞面） */
 const ADD_PROJECT = 'dswf-add-project'
@@ -42,7 +40,7 @@ const ADD_PROJECT = 'dswf-add-project'
 const ADD_LABEL = '添加项目…'
 
 /** owner share 契约（官方 ConversationContent renderSlot('conversation.hero.workspace', …)
- * 面包——ui-conversation client.js:16268-16281 结构同型镜像）+ root 作用域标准观察钩子 */
+ * 面——ui-conversation client.js:16268-16281 结构同型镜像）+ 注册面 inject 面 */
 export interface ForgeHeroWorkspacePickerProps {
   /** 弹层开合（owner 态——chip 点击翻转） */
   readonly open: boolean
@@ -54,16 +52,19 @@ export interface ForgeHeroWorkspacePickerProps {
   readonly onPick: (workspaceId: string) => void
   /** 弹层关闭（外点/Esc/拾取后——owner 态） */
   readonly onClose: () => void
-  /** workspace 归属观察钩子（root 作用域标准 prop——项目重拉锚，外部注册后快照身份变化） */
-  readonly useWorkspaces?: KitSelectorHook
-  /** RPC 构造器（测试替身注入；缺省 preload 真身） */
-  readonly makeRpc?: () => ForgeRpcClient
+  /** workspace 归属快照源（注册面 inject——默认拾取在场门 + worktree 数据根推导；
+   * 缺席 = 快照面 null 降级，默认拾取不发生[不盲拾]） */
+  readonly workspaces?: SnapshotSource<LedgerWorkspacesSnapshot>
+  /** 官方 openWorkspace 窄面（注册面 inject——worktree 点选链；缺席回退 window 锚） */
+  readonly openWorkspace?: OpenWorkspaceFace
+  /** RPC 构造器（测试替身注入；缺省 Typert 真身） */
+  readonly makeRpc?: RpcClientFactory
 }
 
 /**
- * conversation.hero.workspace 影子占用者：项目行弹层 + 「添加项目…」入口 + 空集直达。
- * data 锚：弹层卡 = .dswf-hero-picker-list（Menu listClassName——portal 面唯一可达样式钩，
- * e2e/走查锚）；数据面经 hero-picker-model 纯函数（单测覆盖行集/映射/空集口径）。
+ * conversation.hero.workspace 占用者：项目行弹层 + 「添加项目…」入口 + 空集直达 +
+ * worktree 第二 select。data 锚：弹层卡 = .dswf-hero-picker-list（Menu listClassName
+ * ——portal 面唯一可达样式钩，e2e/走查锚）；数据面经 hero-picker-model 纯函数。
  */
 export function ForgeHeroWorkspacePicker({
   open,
@@ -71,14 +72,23 @@ export function ForgeHeroWorkspacePicker({
   selectedId,
   onPick,
   onClose,
-  useWorkspaces,
+  workspaces,
+  openWorkspace: injectedOpenWorkspace,
   makeRpc = preloadRpcClientFactory,
 }: ForgeHeroWorkspacePickerProps): ReactNode {
-  // 项目源（RPC）+ 重拉锚（workspace 归属快照身份——注册/删除 workspace 即触发，与左栏
-  // 同锚口径；useAnchoredProjects 共享 hook，fix-36 收敛）。workspaces 快照同时是默认
-  // 拾取的官方基线在场门数据源（bug d353536f）。
-  const { projects: projectsState, workspaces: workspacesSnap, silentRefresh, anchor: workspacesAnchor } =
-    useAnchoredProjects(useWorkspaces)
+  // workspace 归属快照直读（闭包绑定——类方法裸引用脱离 this 即崩，ForgeSidebarSlot 同制）。
+  const subscribeWorkspaces = useCallback(
+    (onChange: () => void) => workspaces?.subscribe(onChange) ?? (() => {}),
+    [workspaces],
+  )
+  const readWorkspaces = useCallback(
+    () => workspaces?.getSnapshot() ?? null,
+    [workspaces],
+  )
+  const workspacesSnap = useSyncExternalStore(subscribeWorkspaces, readWorkspaces, readWorkspaces)
+
+  // 项目源（Typert RPC；刷新锚 = workspace 归属快照身份——注册/删除 workspace 即重拉）
+  const [projectsState, , silentRefresh] = useForgeProjects(workspacesSnap, makeRpc)
 
   const projects = projectsState.phase === 'ready' ? projectsState.projects : []
   const plan = heroPickerPlan(projects, projectsState.phase !== 'loading')
@@ -121,9 +131,8 @@ export function ForgeHeroWorkspacePicker({
     if (open) silentRefresh()
   }, [open, silentRefresh])
 
-  // worktree 第二 chip 数据锚：选中项目的 ws_path（纯函数 selectedProjectRootOf——bug 10833861
-  // 修正在 model 层：workspaceId 回查 + fallback 只取活跃行；bug 8a316608：树 ws 选中态
-  // 按官方快照 path 归属活跃项目根——不回落首个活跃项目）。
+  // worktree 第二 select 数据锚：选中项目的 ws_path（纯函数 selectedProjectRootOf——
+  // bug 10833861/8a316608 修正在 model 层）。
   const selectedProjectRoot = selectedProjectRootOf(projects, selectedId, workspacesSnap?.items as readonly unknown[] | undefined)
 
   // bug d353536f 同因面：官方基线未就位时点选同样盲打官方链（connectWorkspace 查空快照
@@ -185,12 +194,15 @@ export function ForgeHeroWorkspacePicker({
         footer={plan.pinAdd ? [addEntry] : undefined}
         listClassName="dswf-hero-picker-list"
       />
-      {workspacesAnchor}
-      {/* worktree 第二 chip（难点 A 落法③产品自增行——影子渲染面就地并列，原型「chip 行
-          两 chip」构图；非 git / 未选中项目零注入整体退回现状）。点选 = 纯选中态 +
-          点选时点跨分支确认（1.19）；点选即换绑编排已退役（bug 82e92933）——会话创建
-          = 官方 create 调用点，选树零 forge 建会话 RPC。 */}
-      <ForgeHeroWorktreeMount projectRoot={selectedProjectRoot} makeRpc={makeRpc} />
+      {/* worktree 第二 select（hero 双 select 右档——非 git / 未选中项目零注入整体退回
+          现状）。点选 = 纯选中态 + 点选时点跨分支确认（1.19）+ ensureWorkspace →
+          openWorkspace 显式传参官方链（WYSIWYG——显示 = 实际生效状态）；openWorkspace
+          官方面经注册面 inject 递达（官方宿主可达），窗口锚回退（壳宿主双保险）。 */}
+      <ForgeHeroWorktreeMount
+        projectRoot={selectedProjectRoot}
+        makeRpc={makeRpc}
+        openWorkspace={injectedOpenWorkspace ?? openWorkspaceFace()}
+      />
     </>
   )
 }

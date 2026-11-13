@@ -13,7 +13,7 @@
 // 语义见 ./model.ts。
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { setSelectedTreeDisplay } from '../state/selected-tree-window.js'
-import { openWorkspaceFace } from '../state/open-workspace-face.js'
+import { openWorkspaceFace, type OpenWorkspaceFace } from '../state/open-workspace-face.js'
 import { beginWorktreeSwitch, isWorktreeSwitchPending, subscribeWorktreeSwitch } from '../state/worktree-switch-gate.js'
 import {
   CreateWorktreeDialog,
@@ -118,10 +118,17 @@ export async function createFollowup(createdPath: string, deps: CreateFollowupDe
 export function ForgeHeroWorktreeMount({
   projectRoot,
   makeRpc = preloadRpcClientFactory,
+  openWorkspace: injectedOpenWorkspace,
 }: {
   /** 项目根（ws_path——list/ops 执行 cwd；null = 零注入） */
   readonly projectRoot: string | null
   readonly makeRpc?: () => WorktreeFacesRpc
+  /**
+   * 官方 openWorkspace 窄面（B 类顶替②——注册面 inject 递达，官方宿主可达；缺席回退
+   * window 锚 `__dshForgeOpenWorkspace`[壳宿主安装面]）。双源同一契约：显式传参官方
+   * openWorkspace(workspaceId)——官方唯一创建前决策缝。
+   */
+  readonly openWorkspace?: OpenWorkspaceFace
 }): ReactNode {
   const [phase, setPhase] = useState<WorktreeListPhase>(emptyPhase)
   const [aheadBehind, setAheadBehind] = useState<ReadonlyMap<string, AheadBehind>>(new Map())
@@ -230,7 +237,9 @@ export function ForgeHeroWorktreeMount({
       pushSelection(path)
       setLocalSelectedPath(path)
       const workspaceId = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path)?.workspaceId : undefined
-      const open = openWorkspaceFace()
+      // openWorkspace 官方面双源（B 类顶替②）：注册面 inject 面优先，window 锚回退
+      // （壳宿主安装面；两源契约同型——缺席 = 仅显示态现状降级）。
+      const open = injectedOpenWorkspace ?? openWorkspaceFace()
       if (open === undefined) {
         if (workspaceId !== undefined) {
           console.warn(`[dswf-worktree] openWorkspace 面缺席——点选仅显示态（旧 bundle/装配漂移）：${path}`)
@@ -259,7 +268,7 @@ export function ForgeHeroWorktreeMount({
         })
         .finally(settleSwitch)
     },
-    [phase, projectRoot, pushSelection, makeRpc],
+    [phase, projectRoot, pushSelection, makeRpc, injectedOpenWorkspace],
   )
 
   // 建树自动选中（createFollowup）与手动点选共用 applySelection 完整链路（bug 97d3cd9e

@@ -97,8 +97,11 @@ export const SIDEBAR_PANELLIST_SLOT = 'sidebar.panellist'
 export const CONVERSATION_VIEW_SLOT = 'conversation.view'
 /**
  * 洞名：官方新会话 hero 工作区选择/切换控件（ConversationContent heroWorkspaceRow 弹层——
- * single/root；fix-24 ① 影子占用改列项目。chip 触发器归官方 owner 渲染，文案经 core
- * 注册链 workspaces.rename 标题对齐项目名达成——非影子替换面）
+ * single/root）。1.7 注记：B 类顶替②收口——顶替注册随 hero 项目+worktree 双 select 全量
+ * 顶替迁 @dsh-forge/project bundle（ui/hero-picker-face.ts apply 期自注册：priority -100
+ * 影子 + inject 双面[workspaces 快照源 + openWorkspace 官方面]，组件本体 =
+ * ui/worktree-picker/hero-workspace-picker.tsx）——壳零登记；本常量保留 = 零登记断言锚 +
+ * e2e 选择器同源字面量（chip 触发器归官方 owner 渲染不变）。
  */
 export const HERO_WORKSPACE_SLOT = 'conversation.hero.workspace'
 /** 洞名：AppFrame root 五子槽——常驻覆盖层（壳宿主挂点，不随 main 面板互换卸载） */
@@ -402,7 +405,9 @@ export interface ForgeViewsGlobal {
     // fix-13 注记（1.45）：ForgeOverviewTab / ForgeDocsTab 两键随 dock tab 族注册迁
     // @dsh-forge/project bundle（ui/dock-tabs-face.ts + ui/dock-tabs/）退役——壳发布面
     // 零该两键。
-    ForgeHeroWorkspacePicker: unknown
+    // 1.7 注记：ForgeHeroWorkspacePicker 发布键随 B 类顶替②（hero 项目+worktree 双 select
+    // 全量顶替）迁 @dsh-forge/project bundle（ui/hero-picker-face.ts + ui/worktree-picker/
+    // hero-workspace-picker.tsx）退役——壳发布面零该键。
     // fix-13 注记（1.40）：ForgeRemoteEntry 发布项退役——组件本体与注册面均在
     // @dsh-forge/project client bundle（ui/remote-entry/），不经壳发布面递达。
     createWorkbenchBridge: (nav: {
@@ -557,33 +562,16 @@ function registerSidebarSlots(
 // 整体迁 @dsh-forge/project bundle apply 期自注册。壳零登记。
 // ============================================================================
 
-/**
- * views 族登记（fix-36 自 apply 拆出）：hero 工作区控件影子（fix-24 ①——不声明
- * children：官方登记行恒在场供养 conversation.hero.workspace.directoryFlow 子洞，
- * ui-slots register 对已声明子槽重声明即 throw——fix-23 runtime 实证；影子只取渲染位
- * 不撤官方登记，fix-14/16 原生选取链不断）。
- * fix-13 注记（1.41）：dispatchTask 工具行（tool.call.toolview）与事件折叠组三段注册迁
- * @dsh-forge/project bundle（ui/conversation-views-face.ts）——壳零登记。
- * fix-13 注记（1.42）：召回页签（conversation.view 'dswf-recall'）注册随 knowledge 族
- * 三面迁 @dsh-forge/project bundle（ui/knowledge-face.ts）——壳零登记。
- */
-function registerConversationViews(
-  ctx: ForgeClientCtx,
-  views: PublishedViews,
-  diagnostics: { registered?: string[] },
-): void {
-  registerSlotEntry(ctx, HERO_WORKSPACE_SLOT, diagnostics, () =>
-    ctx.slots.register(
-      {
-        name: HERO_WORKSPACE_SLOT,
-        priority: SIDEBAR_SHADOW_PRIORITY,
-        // bug 82e92933（binding-derivation §2.3）：点选即换绑编排退役——零 inject
-        // （换绑由官方 blank 复用天然生效，非改道官方面再包一层）。
-      },
-      views.ForgeHeroWorkspacePicker,
-    ),
-  )
-}
+// ============================================================================
+// views 族登记——1.7 迁移退役：hero 工作区控件影子（fix-24 ① 半顶替形态）随 B 类顶替②
+// 升级装配整体迁 @dsh-forge/project bundle（ui/hero-picker-face.ts——两段式声明缝 + inject
+// 双面[workspaces 快照源 + openWorkspace 官方面]，官方宿主不装载产品壳时 hero 双 select
+// 仍随插件 bundle 自注册）。壳零登记（views 族诊断组保留 = 断言锚，registered 恒空）。
+// fix-13 注记（1.41）：dispatchTask 工具行（tool.call.toolview）与事件折叠组三段注册迁
+// @dsh-forge/project bundle（ui/conversation-views-face.ts）——壳零登记。
+// fix-13 注记（1.42）：召回页签（conversation.view 'dswf-recall'）注册随 knowledge 族
+// 三面迁 @dsh-forge/project bundle（ui/knowledge-face.ts）——壳零登记。
+// ============================================================================
 
 /**
  * worktree 切换闸虚线标记登记（bug 267dcac1）——fix-13 迁移退役（1.43）：注册行迁
@@ -720,7 +708,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
       console.info(`[dswf-client] build ${FORGE_CLIENT_BUILD_TAG}`)
       const sidebarDiagnostics: { registered?: string[]; error?: string } = {}
       const centerDiagnostics: { registered?: string[]; error?: string } = {}
-      const viewsDiagnostics: { registered?: string[]; error?: string } = {}
+      // 1.7 注记：views 族壳登记归零（hero 影子随 B 类顶替②迁 @dsh-forge/project）——
+      // registered 预置空数组 = 断言锚（e2e/排障面零登记显形）。
+      const viewsDiagnostics: { registered?: string[]; error?: string } = { registered: [] }
       const shellDiagnostics: { registered?: string[]; error?: string } = {}
       const dockDiagnostics: { registered?: string[]; error?: string } = {}
       const selfCheck: ClientSelfCheckDiagnostics = {}
@@ -919,7 +909,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // m3.1 D5：会话头挂接 pill 登记退役（conversation.session.header.actions 零产品登记）。
         // fix-13 注记（1.40-1.44）：remote 入口/center 族（hero/knowledge/panellist）/
         // 召回页签/工具行/事件组/切换闸标记七组注册面均已迁 @dsh-forge/project bundle——
-        // 壳登记仅余 sidebar 品牌行/hero picker 影子/dock 族/shell.overlay。
+        // 壳登记仅余 sidebar 品牌行/dock 族/shell.overlay。1.7 注记：hero picker 影子随
+        // B 类顶替②同迁（ui/hero-picker-face.ts）——views 族壳登记归零。
         // 1.6 注记：sidebar.workspaces 顶替注册迁 @dsh-forge/project bundle（fix-13，
         // ui/sidebar-face.ts）——壳零登记；FORGE_HEALTH_SLOT_KEYS 的 workspaces 键保留 =
         // 看门对插件侧登记行的计数消费（官方行计入基线）。
@@ -928,7 +919,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerSidebarSlots(clientCtx, views, sidebarDiagnostics)
         // 手机远程入口注册已迁 @dsh-forge/project bundle（fix-13，1.40）——壳零登记
         // center 族（hero/knowledge/panellist）注册已迁 @dsh-forge/project bundle（fix-13，1.42/1.44）——壳零登记
-        registerConversationViews(clientCtx, views, viewsDiagnostics)
+        // hero 工作区控件（conversation.hero.workspace）注册已迁 @dsh-forge/project bundle
+        // （1.7 B 类顶替②——ui/hero-picker-face.ts）——壳零登记（views 诊断组恒空 = 断言锚）
         // 切换闸虚线标记行注册已迁 @dsh-forge/project bundle（fix-13，1.43）——壳零登记
         // Bug 引用 source / chip / overlay 双行注册已迁 @dsh-forge/project bundle（fix-13）
 
