@@ -44,10 +44,13 @@ export function officialHostStage(): OfficialHostStage | null {
 /** ① 打包最新版本：`pnpm pack`（run-once，禁 --watch 形态）→ tarball 绝对路径 */
 export function buildProjectTarball(log: string[]): { tarball: string; version: string } {
   const manifest = JSON.parse(readFileSync(join(PROJECT_PKG_DIR, 'package.json'), 'utf8')) as { version: string }
+  // shell:true——Windows 下 execFileSync('pnpm') 仅解析 .exe（pnpm 实体 = pnpm.cmd，无 shell
+  // 即 ENOENT，runner 侧六度踩坑）；包路径与目的地均无空白字符，shell 拼接安全。
   const out = execFileSync('pnpm', ['pack', '--pack-destination', PROJECT_PKG_DIR], {
     cwd: PROJECT_PKG_DIR,
     encoding: 'utf8',
     timeout: 300_000,
+    shell: true,
   })
   const filename = out.trim().split(/\r?\n/).at(-1) ?? ''
   const tarball = join(PROJECT_PKG_DIR, filename)
