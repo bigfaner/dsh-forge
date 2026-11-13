@@ -65,13 +65,29 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
  * 插件自有 ConfigForm 镜像（configForms serve 缺席降级形态）：快照 ready + writable、
  * 写径即持久化即读回（set 整字段落 worktree 组、unset 键归缺）——与官方 serve 在场形态
  * 行为对齐（WorktreePrefsSection/dismissedWriteOf 零改动直接可用）。
+ * 单源纪律（bug 2b2c0e1a）：无参取法（生产 inject 面）= 模块级单实例——inject 间复用
+ * 同一 store（快照身份稳定，subscribe 不随取法换实例）；显式注入存储（测试收敛面）=
+ * 独立实例。快照缓存：getSnapshot 返回缓存对象（同存储下多次取法同一引用——useSyncExternalStore
+ * 快照身份漂移 = React #185 无限更新的复现路径），写径换代或存储面更换时重建快照并 notify。
  */
-export function localFormMirror(storage: PrefsStorage | undefined = defaultStorage()): ConfigFormMirror {
+let sharedMirror: ConfigFormMirror | undefined;
+
+export function localFormMirror(storage?: PrefsStorage): ConfigFormMirror {
+  if (storage === undefined) {
+    if (sharedMirror === undefined) sharedMirror = buildMirror(defaultStorage);
+    return sharedMirror;
+  }
+  const resolved = storage;
+  return buildMirror(() => resolved);
+}
+
+function buildMirror(storageOf: () => PrefsStorage | undefined): ConfigFormMirror {
   const listeners = new Set<() => void>();
   const notify = (): void => {
     for (const listener of Array.from(listeners)) listener();
   };
   const read = (): unknown => {
+    const storage = storageOf();
     if (storage === undefined) return undefined;
     try {
       const raw = storage.getItem(LOCAL_PREFS_STORAGE_KEY);
@@ -80,35 +96,54 @@ export function localFormMirror(storage: PrefsStorage | undefined = defaultStora
       return undefined; // 劣形落盘值 = 视同空配置（fail-soft 不炸读径）
     }
   };
+  type MirrorSnapshot = ReturnType<ConfigFormMirror["getSnapshot"]>;
+  let cachedStorage: PrefsStorage | undefined;
+  let snapshot: MirrorSnapshot | undefined;
+  const ensure = (): MirrorSnapshot => {
+    const storage = storageOf();
+    if (snapshot === undefined || cachedStorage !== storage) {
+      cachedStorage = storage;
+      snapshot = {
+        status: storage === undefined ? ("unavailable" as const) : ("ready" as const),
+        value: read(),
+        revision: undefined,
+        writable: storage !== undefined,
+      };
+    }
+    return snapshot;
+  };
   const write = (next: Record<string, unknown>): void => {
+    const storage = storageOf();
     if (storage === undefined) return;
     try {
       storage.setItem(LOCAL_PREFS_STORAGE_KEY, JSON.stringify(next));
     } catch {
       // 持久化失败 = 写径照常生效（内存态），不静默炸链路——读回缺失按默认值语义
     }
+    cachedStorage = storage;
+    snapshot = {
+      status: "ready",
+      value: next,
+      revision: undefined,
+      writable: true,
+    };
     notify();
   };
   return {
-    getSnapshot: () => ({
-      status: storage === undefined ? ("unavailable" as const) : ("ready" as const),
-      value: read(),
-      revision: undefined,
-      writable: storage !== undefined,
-    }),
+    getSnapshot: () => ensure(),
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
     set: async (field: string, value: unknown) => {
-      if (storage === undefined) return false;
+      if (storageOf() === undefined) return false;
       const merged = { ...asRecord(read()) };
       merged[field] = value;
       write(merged);
       return true;
     },
     unset: async (field: string) => {
-      if (storage === undefined) return false;
+      if (storageOf() === undefined) return false;
       const merged = { ...asRecord(read()) };
       delete merged[field];
       write(merged);

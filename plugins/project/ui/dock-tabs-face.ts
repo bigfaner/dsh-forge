@@ -102,7 +102,9 @@ export function registerDockTabsFace(
   const tabs = ctx.get('sidebarRightTabs') as SidebarRightTabsMirror | undefined
   const sessions = ctx.get('sessions') as ForgeSessionsService | undefined
   const uiWorkspace = ctx.get('uiWorkspace') as ForgeUiWorkspaceService | undefined
-  const workspaces = ctx.get('workspaces') as ForgeWorkspacesService | undefined
+  // workspaces 不在 apply 期取（bug fba7913c——Desktop 官方服务惰性实例化，apply 点
+  // undefined 被闭包缓存 → 概览恒「未锚定项目」）；改 inject 期现查（AGENTS 1.6——检测
+  // 永不缓存），inject 时点服务已实例化。
 
   // 第一段①：概览页型 + guide 入口卡 order 0（官方入口卡 10/20/30——升序排最前）
   face(DSWF_OVERVIEW_TAB_KIND, () => {
@@ -150,11 +152,14 @@ export function registerDockTabsFace(
     if (registerKeyedSection(slots, {
       slot: SIDEBAR_RIGHT_PANE_TAB_SLOT,
       key: DSWF_OVERVIEW_TAB_KIND,
-      inject: () => ({
-        bridge: workbenchBridgeOf(),
-        // 概览锚自解析服务缝（fix-11 缺陷 A——桥缺席/桥锚 null 时插件自解析退路；
-        // sessions/workspaces 服务现查产物直递，缺席 = 无退路维持空态）
-        ...(sessions !== undefined && workspaces !== undefined ? { selfAnchor: { sessions, workspaces } } : {}),
+      inject: () => {
+        // workspaces 消费点现查（bug fba7913c——apply 期闭包缓存退役；selfAnchor 键入注入束）
+        const workspaces = ctx.get('workspaces') as ForgeWorkspacesService | undefined
+        return {
+          bridge: workbenchBridgeOf(),
+          // 概览锚自解析服务缝（fix-11 缺陷 A——桥缺席/桥锚 null 时插件自解析退路；
+          // sessions/workspaces 服务现查产物直递，缺席 = 无退路维持空态）
+          ...(sessions !== undefined && workspaces !== undefined ? { selfAnchor: { sessions, workspaces } } : {}),
         onOpenSession: (sessionId: string): void => {
           // 官方导航动作面（同 sidebar.workspaces openSession 注入——fix-11 口径）
           uiWorkspace.openSession(sessionId)
@@ -175,7 +180,8 @@ export function registerDockTabsFace(
             bugSourceCacheOf()?.cacheBugSnapshot(bug)
           },
         ),
-      }),
+        }
+      },
       component: ForgeOverviewTab,
     }) === undefined) throw new Error('slots face unavailable')
   })

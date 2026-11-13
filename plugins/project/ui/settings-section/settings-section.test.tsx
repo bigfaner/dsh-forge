@@ -342,6 +342,29 @@ describe("registerSettingsSection（plugins.bundle.config / detail.section 双�
   });
 });
 
+// ── localFormMirror 单源身份（bug 2b2c0e1a——React #185 复现路径锁定） ──
+
+describe("localFormMirror 单源身份（bug 2b2c0e1a）", () => {
+  it("无参取法 = 模块级单实例（inject 间复用同一 store，subscribe 不随取法换实例）", () => {
+    expect(localFormMirror()).toBe(localFormMirror());
+  });
+
+  it("快照身份稳定：同实例多次 getSnapshot 同一引用；写径换代重建引用并 notify（#185 不复发）", async () => {
+    const backing = new Map<string, string>();
+    const form = localFormMirror({ getItem: (k) => backing.get(k) ?? null, setItem: (k, v) => backing.set(k, v), removeItem: (k) => backing.delete(k) });
+    const s1 = form.getSnapshot();
+    expect(s1.status).toBe("ready");
+    expect(form.getSnapshot()).toBe(s1); // 逐渲染取法同一引用——useSyncExternalStore 不判换代
+    expect(form.getSnapshot()).toBe(s1);
+    const notified = vi.fn();
+    form.subscribe(notified);
+    await expect(dismissedWriteOf(form, { attempts: 1, delayMs: 0 })!(true)).resolves.toBe(true);
+    expect(form.getSnapshot()).not.toBe(s1); // 写径换代 = 新引用（消费者重渲染呈新值）
+    expect(dismissedOf(form.getSnapshot().value)).toBe(true);
+    expect(notified).toHaveBeenCalled();
+  });
+});
+
 // ── 双缝消费组件（subject/view 门控） ────────────────────────────
 
 describe("ProjectDetailSection / ProjectBundleConfigSection（缝消费组件）", () => {

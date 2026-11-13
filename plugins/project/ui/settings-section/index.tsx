@@ -46,8 +46,9 @@ export function installWorktreePrefsFace(resolver: () => ConfigFormsFace | undef
 }
 
 /**
- * 插件自有降级 ConfigForm（configForms 缺席形态——每取新建、状态单源 = localStorage 落盘值，
- * 多实例读写经持久化层天然同源；storage 在调用时点现取——renderer 与测试环境各自成立）。
+ * 插件自有降级 ConfigForm（configForms 缺席形态——模块级单源取法（bug 2b2c0e1a——inject
+ * 间复用同一 store，快照身份稳定），状态单源 = localStorage 落盘值；storage 在调用时点
+ * 现取——renderer 与测试环境各自成立）。
  */
 function localPrefsForm(): ConfigFormMirror {
   return localFormMirror();
