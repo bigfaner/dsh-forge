@@ -185,14 +185,18 @@ test('@project-e2e @bug-register-backfill J3-B4 弱引用降级：行缺席投�
     await expect(row).toBeVisible({ timeout: 30_000 })
     // 台账行删除（弱引用目标缺席——B4 前置）
     deleteBugRow(boot.dshHome, 'bug-j3-gone')
+    // bug 3d453e91 弱断言修复③：pageErrors 监听提前至删除动作之前（真实监听窗口覆盖
+    //   删除→重装载→详情降级全程），补「无 error 事件」断言语义——降级崩溃（pageerror）红
+    const pageErrors: string[] = []
+    boot.page.on('pageerror', (e) => pageErrors.push(String(e)))
     // 投影降级：重装载列表收敛（缺席行不呈现幽灵行）；详情重开降级呈现、宿主不崩
     await boot.page.locator('[data-dswf-ov-subtab="proposals"]').first().click()
     await boot.page.locator('[data-dswf-ov-subtab="bugs"]').first().click()
     await expect(row).toHaveCount(0, { timeout: 30_000 })
-    expect(boot.page.locator('[data-dswf-ov-bdialog]').count(), '无幽灵详情弹框残留').toBeTruthy()
-    const pageErrors: string[] = []
-    boot.page.on('pageerror', (e) => pageErrors.push(String(e)))
-    expect(pageErrors, '投影降级不崩（零未捕获异常）').toEqual([])
+    // bug 3d453e91 弱断言修复②：方向反转为零残留意图——正确清场绿、幽灵弹框残留（>0）红
+    //   （原 toBeTruthy 恒真式失效，且方向恰反：残留越多越「绿」）
+    await expect(boot.page.locator('[data-dswf-ov-bdialog]'), '无幽灵详情弹框残留（零残留意图）').toHaveCount(0)
+    expect(pageErrors, '投影降级不崩（删除→重装载全程零 pageerror 事件）').toEqual([])
   } finally {
     await closeApp(boot.app)
   }

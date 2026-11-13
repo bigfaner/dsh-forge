@@ -96,6 +96,14 @@ test('@project-e2e @list-parity CT-J3-G1 搜索过滤：投影层实时过滤、
   await expect(page.locator('[data-dswf-project]').first(), 'CT-J3-G1 O-filter-and-restore：过滤后行呈现匹配项').toBeVisible({ timeout: 10_000 })
   const filtered = await page.locator('[data-dswf-project]').count()
   expect(filtered, `CT-J3-G1：过滤行集收敛（${filtered} ≤ ${before}）`).toBeLessThanOrEqual(before)
+  // 过滤语义钉住（bug 3d453e91 弱断言修复）：未匹配项必须被排除——零失败过滤器
+  //   （行集原样透传）在此红。可见行标题全部含查询片段 = 排除语义成立。
+  const visibleTitles = (await page.locator('[data-dswf-project] .dswf-sidebar-project-title').allInnerTexts()).map((t) => t.trim())
+  expect(visibleTitles.length, 'CT-J3-G1：过滤后行集非空（过滤生效前置）').toBeGreaterThan(0)
+  expect(
+    visibleTitles.filter((t) => !t.includes(name)),
+    'CT-J3-G1 O-filter-and-restore：过滤语义钉住——未匹配项被排除（零失败过滤器红）',
+  ).toEqual([])
   // 清空 → 完整列表恢复
   await searchRow.locator('input').first().fill('')
   await expect(page.locator('[data-dswf-project]')).toHaveCount(before, { timeout: 10_000 })

@@ -131,10 +131,11 @@ test('@project-e2e @project-panel CT-J1-G4 hero 双 select：级联收敛 + WYSI
   const confirm = page.getByRole('button', { name: /确认|继续/ }).first()
   if ((await confirm.count()) > 0) await confirm.click({ force: true }).catch(() => {})
   // CT-J1-G4 Output：芯片回填所选值（显示 = 归属，O-wysiwyg-bound）
-  await expect(
-    page.getByRole('button', { name: new RegExp(`${projectName}|${wtName}`) }).first(),
-    'CT-J1-G4 O-wysiwyg-bound：芯片回填 = 双 select 确认值',
-  ).toBeVisible({ timeout: 30_000 })
+  // bug 3d453e91 弱断言修复④：拆 OR 断言——一级项目名与二级 worktree 归属分别独立断言
+  //   （原 `${projectName}|${wtName}` OR 式：二级归属缺失时仅凭项目名命中即绿，弱断言失效）
+  const boundChip = page.getByRole('button', { name: new RegExp(projectName) }).first()
+  await expect(boundChip, 'CT-J1-G4 O-wysiwyg-bound（一级）：芯片回填一级项目名').toBeVisible({ timeout: 30_000 })
+  await expect(boundChip, 'CT-J1-G4 O-wysiwyg-bound（二级）：芯片呈现二级 worktree 归属（WYSIWYG 归属缺失红）').toContainText(wtName)
 })
 
 test('@project-e2e @project-panel CT-J1-G5 follow 流推送：新项目零刷新出现', async () => {
