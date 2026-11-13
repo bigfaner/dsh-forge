@@ -98,12 +98,29 @@ function chainedEntry(f: FeatureRow): string {
   return `- chained feature: ${f.slug} [${f.featureStatus}] (${f.featureId}) — registered in the same transaction`
 }
 
-/** TransitionProposalResult → 模型可见文本（formatOk：✓ 转移行 + 行键值 + 成链行） */
+/**
+ * accepted 响应注入的评审指示行（方案 6——措辞正本：提案方案 6）。
+ * 按涉及面派发专家评审 proposal 本身（不含 chained feature 任务面）；
+ * 专家以 expert-squad 清单在场为准（fail-soft，缺席由主会话决断回落）。
+ */
+export const ACCEPTED_REVIEW_LINE =
+  '- 评审指示（主会话按涉及面派对应专家评审 proposal 本身，不含 chained feature 任务面）：' +
+  '涉及 UI 派 ui-designer / ui-craftsman；涉及 API 派 architect（或通用 subagent）输出 API 设计；' +
+  '派 architecture-reviewer 评审改动范围、模块与边界；派 code-master 设计代码实现方案' +
+  '（接口优先，fake 经测试侧组合根注入）。' +
+  '各专家以 expert-squad 清单在场为准，缺席由主会话决断回落。' +
+  '测试边界审查项：替身位置声明与未覆盖供应商/外部链路说明（缺失则补写或打回修订）、' +
+  '临时桩退出任务、模拟轨与黑盒轨分离、验收目标不以替身混入为通过条件、' +
+  '证据口径（回放不证明闭环，必要时取外部证据）。'
+
+/** TransitionProposalResult → 模型可见文本（formatOk：✓ 转移行 + 行键值 + 成链行 + accepted 评审指示行） */
 function renderTransitionResult(value: unknown): readonly { type: 'text'; text: string }[] {
   if (isForgeToolFailure(value)) return formatFailure(value)
   const v = value as TransitionProposalResult
   const entries = [...proposalRowEntries(v)]
   if (v.chained !== undefined) entries.push(chainedEntry(v.chained))
+  // 判定键绑迁移后状态（非输入 to_status）
+  if (v.proposalStatus === 'accepted') entries.push(ACCEPTED_REVIEW_LINE)
   return formatOk(`Proposal ${v.slug} → ${v.proposalStatus}`, entries)
 }
 

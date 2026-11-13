@@ -11,7 +11,7 @@ import type {
 } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import { createCreateProposalTool, parseCreateProposalArgs, presetModeOf } from './create-proposal.js'
-import { createTransitionProposalTool, parseTransitionProposalArgs } from './transition-proposal.js'
+import { ACCEPTED_REVIEW_LINE, createTransitionProposalTool, parseTransitionProposalArgs } from './transition-proposal.js'
 import type { ForgeToolDeps } from './index.js'
 
 const checkpoints: ForgeToolDeps['checkpoints'] = {
@@ -239,8 +239,43 @@ describe('transitionProposal', () => {
         '- title: 提案标题\n' +
         '- mode: expedition\n' +
         '- decided: 2026-01-02T00:00:00.000Z\n' +
-        '- chained feature: idea [tasks] (ft-1) — registered in the same transaction',
+        '- chained feature: idea [tasks] (ft-1) — registered in the same transaction\n' +
+        ACCEPTED_REVIEW_LINE,
     )
+  })
+
+  it('accepted 响应携带按涉及面派发专家的评审指示行（实名专家 + 在场 fail-soft + 测试边界审查项 + 评审对象限 proposal 本身）', () => {
+    const { deps } = depsWithCapture()
+    const tool = createTransitionProposalTool(deps)
+    const text = tool.output.render({}, { ...row, proposalStatus: 'accepted' })[0]?.text ?? ''
+    // 判定键 = 迁移后状态 accepted；实名专家 + 涉及面派发
+    expect(text).toContain('ui-designer')
+    expect(text).toContain('ui-craftsman')
+    expect(text).toContain('architect')
+    expect(text).toContain('architecture-reviewer')
+    expect(text).toContain('code-master')
+    // fail-soft：以 expert-squad 清单在场为准，缺席由主会话决断回落
+    expect(text).toContain('在场为准')
+    expect(text).toContain('回落')
+    // 测试边界审查项
+    expect(text).toContain('替身位置声明')
+    expect(text).toContain('补写或打回')
+    expect(text).toContain('临时桩退出')
+    expect(text).toContain('模拟轨')
+    expect(text).toContain('黑盒轨')
+    expect(text).toContain('证据口径')
+    // 评审对象限定 proposal 本身（不含 chained feature 任务面）
+    expect(text).toContain('proposal 本身')
+    expect(text).toContain('不含 chained feature')
+  })
+
+  it('非 accepted 状态迁移响应不携带评审指示行（draft/under-review/rejected/superseded）', () => {
+    const { deps } = depsWithCapture()
+    const tool = createTransitionProposalTool(deps)
+    for (const status of ['draft', 'under-review', 'rejected', 'superseded'] as const) {
+      const text = tool.output.render({}, { ...row, proposalStatus: status })[0]?.text ?? ''
+      expect(text).not.toContain('评审指示')
+    }
   })
 
   it('cwd 未命中 → 失败 DTO（写动词同口径拒——formatErr 面）', async () => {
