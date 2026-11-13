@@ -237,7 +237,7 @@ async function poolSnapshotOf(tasks: ForgeTasksService, projectId: string, sourc
   try {
     return poolOf(await tasks.taskStats({ projectId, source }))
   } catch {
-    return { pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, readFailed: true }
+    return { pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, gatedPending: 0, readFailed: true }
   }
 }
 

@@ -9,6 +9,8 @@ export interface PoolSnapshot {
   readonly blocked: number
   /** pending ∧ 前置未全满足计数（等待判据成分——2.5 单查询派生） */
   readonly unmetPending: number
+  /** pending ∧ 容器实现链阶段门持有计数（loop-phase-gate CE-1 观测面——GATE_SQL 同源派生） */
+  readonly gatedPending: number
 }
 
 /** taskStats → 池快照（byStatus 取四键） */
@@ -18,6 +20,7 @@ export function poolOf(stats: TaskStats): PoolSnapshot {
     inProgress: stats.byStatus.in_progress,
     blocked: stats.byStatus.blocked,
     unmetPending: stats.unmetPending,
+    gatedPending: stats.gatedPending,
   }
 }
 

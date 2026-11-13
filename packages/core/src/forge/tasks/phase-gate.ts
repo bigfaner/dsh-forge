@@ -86,3 +86,22 @@ export function assertContainerChainSettled(db: Database.Database, projectId: st
   }
   throw new PhaseGateUnsettledError(data)
 }
+
+/**
+ * gatedPending 计数（CE-1 暴露面派生——design §1.4/§2.7）：pending ∧ NOT GATE_SQL（被门持有）
+ * 单查询计数（与 list.countUnmetPending 同形）；scope 可选（undefined = 全库），同 taskStats 口径。
+ * 谓词本体复用 GATE_SQL 同一片段——零谓词复制（design §1 裁定）。
+ */
+export function countGatedPending(
+  db: Database.Database,
+  scope: { readonly kind: 'feature' | 'proposal'; readonly sourceId: string } | undefined,
+): number {
+  const scopeSql = scope === undefined ? '' : ` AND t.source_kind = ? AND t.source_id = ?`
+  const args = scope === undefined ? [] : [scope.kind, scope.sourceId]
+  const row = db
+    .prepare<unknown[], { n: number }>(
+      `SELECT COUNT(*) AS n FROM tasks t WHERE t.task_status = 'pending'${scopeSql} AND NOT ${GATE_SQL('t')}`,
+    )
+    .get(...args)
+  return row?.n ?? 0
+}

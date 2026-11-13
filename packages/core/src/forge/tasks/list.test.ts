@@ -349,7 +349,7 @@ describe('AC2 taskStats（total + byStatus 八态分布）', () => {
         rejected: 0,
       },
       unmetPending: 0,
-      gatedPending: 0, // B1 基座期恒 0——B4 批接 GATE_SQL 同源计数
+      gatedPending: 0, // 空库全零（GATE_SQL 同源计数——B4 起）
     })
   })
 
@@ -481,6 +481,61 @@ describe('AC1 taskStats.unmetPending（M3 2.5 池快照派生：pending ∧ 前�
     const p1 = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'p1' } })
     expect(p1.unmetPending).toBe(1)
     expect(p1.total).toBe(2)
+  })
+})
+
+// ── loop-phase-gate T9：taskStats.gatedPending（pending ∧ GATE_SQL 命中——phase-gate.countGatedPending 同源计数） ──
+
+describe('AC2 taskStats.gatedPending（loop-phase-gate T9：pending ∧ 门持有——复用 GATE_SQL 同判据）', () => {
+  /** gatedPending 判定矩阵夹具：f1 四类 pending + f2 链未终态 V（scope 隔离断言基准） */
+  function seedGatedMatrix(): { f2ChainI: string } {
+    const d = db()
+    seedFeature(d, { slug: 'f1' })
+    seedFeature(d, { slug: 'f2' })
+    // f1/1.1 验证卡 pending、无入边、无标记 → 被门持有（计入）
+    seedTask(d, 'f1', '1.1', { status: 'pending', type: 'test-run', createdAt: TS(1) })
+    // f1/1.2 实现 I 卡 in_progress → 链非终态的成因；自身非 pending 不计
+    const f2ChainI = seedTask(d, 'f2', '1.1', { status: 'in_progress', type: 'coding-feature', createdAt: TS(2) })
+    seedTask(d, 'f2', '1.2', { status: 'pending', type: 'validation-code', createdAt: TS(3) })
+    // 非计项：非 V pending / gate 卡 pending（类型天然豁免）/ proposal 容器 V pending（律四豁免）
+    seedTask(d, 'f1', '2.1', { status: 'pending', type: 'coding-feature', createdAt: TS(4) })
+    seedTask(d, 'f1', '2.2', { status: 'pending', type: 'gate', createdAt: TS(5) })
+    seedProposal(d, { slug: 'p1', mode: 'blitz' })
+    seedTask(d, 'p1', '1.1', { kind: 'proposal', status: 'pending', type: 'test-run', createdAt: TS(6) })
+    // E2E 归因豁免（无入边 ∧ 标记=1）→ 不计；有入边 ∧ 标记=1 → 双条件缺一 → 计
+    seedTask(d, 'f1', '3.1', { status: 'pending', type: 'test-run', createdAt: TS(7) })
+    d.prepare(`UPDATE tasks SET e2e_attribution = 1 WHERE slug = 'f1' AND local_id = '3.1'`).run()
+    const edgedAttribution = seedTask(d, 'f1', '3.2', { status: 'pending', type: 'eval-contract', createdAt: TS(8) })
+    d.prepare(`UPDATE tasks SET e2e_attribution = 1 WHERE slug = 'f1' AND local_id = '3.2'`).run()
+    const pre = seedTask(d, 'f1', '3.3', { status: 'pending', type: 'coding-feature', createdAt: TS(9) })
+    seedEdge(d, edgedAttribution, pre, 'manual')
+    return { f2ChainI }
+  }
+
+  it('T9 全库计数：被门 V pending 计入；非 V/gate/proposal/归因豁免不计；有入边带标记仍计', async () => {
+    seedGatedMatrix()
+    const all = await taskStats({ store: h!.store }, { projectId: P() })
+    // 计入：f1/1.1（裸 V）+ f2/1.2（链未终态 V）+ f1/3.2（带标记但有入边）；非计 5 项
+    expect(all.gatedPending).toBe(3)
+    expect(all.byStatus.pending).toBe(8) // 计数不改变 pending 分布口径
+  })
+
+  it('T9 scope 口径：feature 容器限定（f1 → 仅本容器门持有；f2 → 仅 f2 门持有）', async () => {
+    seedGatedMatrix()
+    const f1 = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'f1' } })
+    expect(f1.gatedPending).toBe(2) // 1.1 + 3.2（f2/1.2 不跨容器）
+    const f2 = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'f2' } })
+    expect(f2.gatedPending).toBe(1) // 1.2
+    const p1 = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'p1' } })
+    expect(p1.gatedPending).toBe(0) // proposal 容器律四豁免
+  })
+
+  it('T9 链终态后归零：I 卡 completed → 门透明，gatedPending 归 0', async () => {
+    const { f2ChainI } = seedGatedMatrix()
+    h!.db.prepare(`UPDATE tasks SET task_status = 'completed' WHERE id = ?`).run(f2ChainI)
+    const f2 = await taskStats({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'f2' } })
+    expect(f2.gatedPending).toBe(0)
+    expect(f2.byStatus.pending).toBe(1) // V 卡仍在 pending 分布中——只是不再被门持有
   })
 })
 

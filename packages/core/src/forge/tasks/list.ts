@@ -44,6 +44,7 @@ import {
 } from '@dsh-forge/contracts'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { TASK_COLUMNS, type TaskStorageRow } from './query.js'
+import { countGatedPending } from './phase-gate.js'
 
 /** 读面装配依赖（service.ts 装配面结构传入——与 query.ts TasksQueryDeps 同形） */
 export interface TasksListDeps {
@@ -295,8 +296,10 @@ export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise
   // M3 池快照派生（Interface 1：pending ∧ 前置未全 ∈ {completed, skipped} 计数——单查询派生；
   // dispatchTask 池快照数据源，与 byStatus 同 scope 口径）
   const unmetPending = countUnmetPending(db, scope)
-  // gatedPending = pending ∧ GATE_SQL 命中（loop-phase-gate §1.4）——B1 基座期先置 0，B4 批接 phase-gate 同源计数
-  return { total, byStatus, unmetPending, gatedPending: 0 }
+  // gatedPending = pending ∧ GATE_SQL 命中（loop-phase-gate §1.4）——phase-gate.countGatedPending
+  // 同源计数（谓词复用 GATE_SQL 零复制），与 byStatus/unmetPending 同 scope 口径
+  const gatedPending = countGatedPending(db, scope)
+  return { total, byStatus, unmetPending, gatedPending }
 }
 
 /** unmetPending 计数（pending 且存在未终态前置——EXISTS 半连接单查询；scope 可选） */

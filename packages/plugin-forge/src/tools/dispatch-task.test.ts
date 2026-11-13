@@ -636,7 +636,7 @@ describe('execute · 池快照读数失败标注（R2-minor⑤——零值为兜
     h.failStats('task_stats read failed')
     const out = (await h.tool.execute(ARGS, h.exec)) as { kind: string; pool: { pending: number; readFailed?: boolean } }
     expect(out.kind).toBe('started')
-    expect(out.pool).toEqual({ pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, readFailed: true })
+    expect(out.pool).toEqual({ pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, gatedPending: 0, readFailed: true })
     const text = h_render(h, out)
     expect(text).toContain('pool read FAILED')
     expect(text).toContain('not actual counts')
