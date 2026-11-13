@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const EXPERT_FILE = resolve(here, "../experts/code-reviewer.md");
+const CODE_MASTER_FILE = resolve(here, "../experts/code-master.md");
 
 /** 与 expert-squad parseExpertFile 同构的最小校验（单源锚见文件头）。 */
 function parseExpertFileLike(filePath: string, content: string): { ok: true } | { ok: false; reason: string } {
@@ -135,5 +136,42 @@ describe("experts/code-reviewer.md 档案解析断言（forge-test-boundary-gate
   it("既有职责边界声明保留（不越 architect 结构面、spec-reviewer 目标面）", () => {
     expect(content).toContain("architect");
     expect(content).toContain("spec-reviewer");
+  });
+});
+
+describe("experts/code-master.md 档案解析断言（forge-test-boundary-gates 1.10——随包副本补接口优先职责）", () => {
+  const content = readFileSync(CODE_MASTER_FILE, "utf-8");
+
+  it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
+    expect(parseExpertFileLike(CODE_MASTER_FILE, content)).toEqual({ ok: true });
+  });
+
+  it("无裸 {{ 字面量（全文任意位置）", () => {
+    expect(content.includes("{{")).toBe(false);
+  });
+
+  it("frontmatter 键与既有档案键集一致（不引入新键）", () => {
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)![1]!;
+    const keys = fm.split(/\r?\n/).filter((l) => /^[A-Za-z]/.test(l)).map((l) => l.split(":")[0]!);
+    expect(keys.sort()).toEqual(["description", "name", "skills", "title", "tools"].sort());
+  });
+
+  it("关键条目在场：接口优先设计职责节（测试侧组合根替换、正式组合根不接受测试切换）", () => {
+    expect(content).toContain("接口优先设计");
+    expect(content).toContain("识别被测面的可注入接口");
+    expect(content).toContain("定义依赖倒置边界");
+    expect(content).toContain("测试侧组合根");
+    expect(content).toContain("正式装配的组合根不接受任何测试配置切换");
+  });
+
+  it("既有核心逻辑工匠职责保留（SOLID、可读性、TDD、可测试性）", () => {
+    for (const fragment of ["核心逻辑工匠", "SOLID", "可读性是第一位", "TDD 小步推进", "可测试性强"]) {
+      expect(content).toContain(fragment);
+    }
+  });
+
+  it("与 code-reviewer 职责边界清晰（只做设计不做评审）", () => {
+    expect(content).toContain("只做设计，不做评审");
+    expect(content).toContain("code-reviewer");
   });
 });
