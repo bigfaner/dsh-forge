@@ -70,14 +70,32 @@ async function dockStripTab(page: Page, text: string) {
   return page.locator('[data-rightbar-col] [data-dockkit-strip] [role="tab"]').filter({ hasText: text }).first()
 }
 
+/**
+ * 按绑定态择行：迭代舞台会话行（上限 5 行防失控），逐行点击并短暂探测
+ * chip（实锚 data-dswt-session-chip——chip 只挂绑定面），命中绑定行即返回；
+ * 全部行未绑定 = 返回 null（舞台无绑定会话 precondition，由调用方留痕 skip）。
+ */
+async function findBoundSessionRow(page: Page, maxRows = 5): Promise<string | null> {
+  const rows = page.locator('[data-dswf-session]')
+  const total = Math.min(await rows.count(), maxRows)
+  for (let i = 0; i < total; i++) {
+    const row = rows.nth(i)
+    await row.click()
+    await page.waitForTimeout(3_000)
+    const chip = page.locator('[data-dswt-session-chip]')
+    if ((await chip.count()) > 0 && (await chip.first().isVisible())) return `nth(${i})`
+  }
+  return null
+}
+
 test('@project-e2e @a-faces CT-J2-G1 worktree chip 直挂：绑定会话呈现、归属一致', async () => {
   test.setTimeout(300_000)
   const page = harness.page
-  // Input：打开已绑定会话（侧栏会话行——舞台在册绑定会话 precondition）
-  const sessionRow = page.locator('[data-dswf-session]').first()
-  test.skip((await sessionRow.count()) === 0, 'CT-J2-G1 前置：舞台无在册会话行——留痕 skip')
-  await sessionRow.click()
-  await page.waitForTimeout(5_000)
+  // Input：打开已绑定会话——按绑定态择行（.first() 按位置盲选会命中未绑定行，
+  // 未绑定会话零 chip 属正确行为——CT-J2-E1 对照）；舞台在册绑定会话 precondition。
+  const rowCount = await page.locator('[data-dswf-session]').count()
+  test.skip(rowCount === 0, 'CT-J2-G1 前置：舞台无在册会话行——留痕 skip')
+  test.skip((await findBoundSessionRow(page)) === null, 'CT-J2-G1 前置：舞台无绑定会话（逐行探测零 chip）——留痕 skip')
   // Output：会话头 actions 区 chip 呈现（实锚 data-dswt-session-chip——live/sealed 变体）
   const chip = page.locator('[data-dswt-session-chip]').first()
   await expect(chip, 'CT-J2-G1 O-chip-consistent：绑定会话 chip 呈现').toBeVisible({ timeout: 30_000 })
