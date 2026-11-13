@@ -74,22 +74,51 @@ export function overviewHeadRows(
   })
 }
 
-/** 头路装载（纯异步面）：get ∥ features.list(无参) ∥ proposals.list(无参) ∥ tasks.stats 四路并发 */
+/** 任务七态零计数（官方宿主 degraded tasks 族回退值——plugin-forge loop driver ZERO_STATS 同形） */
+const ZERO_TASK_STATS = {
+  total: 0,
+  byStatus: {
+    pending: 0,
+    in_progress: 0,
+    completed: 0,
+    blocked: 0,
+    suspended: 0,
+    interrupted: 0,
+    skipped: 0,
+    rejected: 0,
+  },
+  unmetPending: 0,
+} as const
+
+/** 头路装载（纯异步面）：projects 单点权威（get 优先，typed 失败回退 list 现查——官方宿主
+ * 网关无 get 路由，fix-15）∥ features/proposals/stats 三路增强并发——增强路 typed 失败
+ * （官方宿主 degraded 族）= 空增强值落 head，ov-head/五行目录真值不被缺席族阻断；
+ * 集成态四路全通行为不变。 */
 export async function loadOverviewHead(client: ForgeRpcClient, projectId: string): Promise<OverviewFetch<OverviewHeadBundle>> {
   try {
-    const [project, features, proposals, stats] = await Promise.all([
-      client.projects.get(projectId),
-      client.features.list({ projectId }),
-      client.proposals.list({ projectId }),
-      client.tasks.stats({ projectId }),
+    const [project, enhancements] = await Promise.all([
+      client.projects
+        .get(projectId)
+        .catch(async () => {
+          const rows = await client.projects.list()
+          return rows.find((row) => row.id === projectId) ?? null
+        }),
+      Promise.all([
+        client.features.list({ projectId }).catch(() => [] as Awaited<ReturnType<typeof client.features.list>>),
+        client.proposals.list({ projectId }).catch(() => [] as Awaited<ReturnType<typeof client.proposals.list>>),
+        client.tasks.stats({ projectId }).catch(() => ZERO_TASK_STATS),
+      ]),
     ])
+    const [features, proposals, stats] = enhancements
     if (project === null) throw new Error('项目不存在或已移除')
     return {
       ok: true,
       data: {
         projectName: project.name,
         workspaceDir: project.wsPath,
-        forgeDir: project.forgeDir,
+        // list 回退行（ProjectSummary）无 forgeDir 字段（host get 路由缺席场景）——空串，
+        // 五行 forgeDir 行由 forgeDirs dirRows 真值补位（overviewHeadRows fallback 链）
+        forgeDir: 'forgeDir' in project ? project.forgeDir : '',
         features,
         proposals,
         stats,

@@ -130,11 +130,19 @@ export function installForgeRemoteFace(
 /** face 解析缝（apply 期安装——每调用现查不缓存） */
 let forgeRemoteResolver: (() => ForgeRemoteFace | undefined) | undefined
 
-/** namespace face 取法（解析缝缺席/面形状非法 = undefined——调用期诚实降级）。
- * 官方 face 形状适配（bug bead3e88——官方 dsh-api-gateway client.js 核销）：
- * 官方 ClientRemoteService.namespaces = Map<string, { service }>（RemoteNamespaceService，
- * 方法 = getter 函数属性）；此处按 Map → namespaces 对象 → 顶层命名空间三形态回退解析。 */
-function namespaceOf(face: ForgeRemoteFace, namespace: keyof ForgeRemoteFace): ForgeRemoteNamespaceFace | undefined {
+/**
+ * 现查 forge remote face（fix-15 传输适配消费面）：apply 装配的解析缝 + 页内锚回退
+ * （faceSeamOf 同口径）逐调用现查，缺席 = undefined（调用方 typed 降级）。
+ */
+export function forgeRemoteFaceOf(): ForgeRemoteFace | undefined {
+  return faceSeamOf().resolver()
+}
+
+/**
+ * namespace face 归一取法（导出面——fix-15 dock tab 族 Typert 传输适配同用此取法，
+ * 零形状漂移副本；归一规则与 namespaceOf 同：Map → namespaces 对象 → 顶层三形态回退）。
+ */
+export function namespaceFaceOf(face: ForgeRemoteFace, namespace: keyof ForgeRemoteFace): ForgeRemoteNamespaceFace | undefined {
   const rawNamespaces = (face as unknown as Record<string, unknown>)['namespaces']
   if (
     rawNamespaces !== undefined && rawNamespaces !== null && typeof rawNamespaces === 'object' &&
@@ -187,7 +195,7 @@ async function invokeRemote<T>(
 ): Promise<T> {
   const seam = faceSeamOf()
   const face = seam.resolver()
-  const ns = face === undefined ? undefined : namespaceOf(face, namespace)
+  const ns = face === undefined ? undefined : namespaceFaceOf(face, namespace)
   const fn = methodOf(ns, method)
   if (fn === undefined) {
     const line = `dsh-forge project client: 官方 forge remote 面缺席（${String(namespace)}.${method}）——通道不可用（诚实降级）`
@@ -213,7 +221,7 @@ function streamRemote<T>(
 ): AsyncIterable<T> {
   const seam = faceSeamOf()
   const face = seam.resolver()
-  const ns = face === undefined ? undefined : namespaceOf(face, namespace)
+  const ns = face === undefined ? undefined : namespaceFaceOf(face, namespace)
   const fn = methodOf(ns, method)
   if (fn === undefined) {
     const line = `dsh-forge project client: 官方 forge remote 面缺席（${String(namespace)}.${method}）——通道不可用（诚实降级）`

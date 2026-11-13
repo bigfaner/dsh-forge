@@ -18,6 +18,7 @@
 // 逐面 try/catch fail-soft（单面异常只降本面，console.warn 留痕不炸装配）；类型撤销器
 // 归 ctx.effect 级联（official-seams Bug tab 同径）。
 import { ForgeDocsTab, ForgeOverviewTab, DSWF_DOC_ADDRESS_PREFIX, DSWF_DOC_TAB_KIND, DSWF_OVERVIEW_TAB_KIND } from './dock-tabs/dock-tabs.js'
+import { typertRpcClientFactory } from './dock-tabs/typert-transport.js'
 import { SIDEBAR_RIGHT_PANE_TAB_SLOT, type OfficialSeamCtx } from './official-seams.js'
 import { bugSourceCacheOf } from './official-seams.js'
 import { registerKeyedSection, type SectionSlotsFace } from './keyed-section.js'
@@ -160,6 +161,11 @@ export function registerDockTabsFace(
           // 概览锚自解析服务缝（fix-11 缺陷 A——桥缺席/桥锚 null 时插件自解析退路；
           // sessions/workspaces 服务现查产物直递，缺席 = 无退路维持空态）
           ...(sessions !== undefined && workspaces !== undefined ? { selfAnchor: { sessions, workspaces } } : {}),
+          // 数据通道真身（fix-15——bug 9c5469c8）：官方宿主无 window.dshForge preload
+          // 传输，缺省工厂构造期即崩（slot entry crashed → 概览零渲染）。显式递 Typert
+          // 适配工厂——官方宿主七族通道在场照常送达，缺席族（tasks/docs/knowledge/
+          // settings）typed 拒绝 → 消费面错误相位 fail-soft。
+          makeClient: typertRpcClientFactory,
         onOpenSession: (sessionId: string): void => {
           // 官方导航动作面（同 sidebar.workspaces openSession 注入——fix-11 口径）
           uiWorkspace.openSession(sessionId)
@@ -186,11 +192,13 @@ export function registerDockTabsFace(
     }) === undefined) throw new Error('slots face unavailable')
   })
 
-  // 第二段②：文档 keyed body（useTabInfo 由 seat 声明 inject 恒递达）
+  // 第二段②：文档 keyed body（useTabInfo 由 seat 声明 inject 恒递达；makeClient = Typert
+  // 适配工厂——fix-15 同族批斩，docs.read 通道官方宿主缺席 = typed 错误相位不炸槽）
   face(`${SIDEBAR_RIGHT_PANE_TAB_SLOT}:${DSWF_DOC_TAB_KIND}`, () => {
     if (registerKeyedSection(slots, {
       slot: SIDEBAR_RIGHT_PANE_TAB_SLOT,
       key: DSWF_DOC_TAB_KIND,
+      inject: () => ({ makeClient: typertRpcClientFactory }),
       component: ForgeDocsTab,
     }) === undefined) throw new Error('slots face unavailable')
   })

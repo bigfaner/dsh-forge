@@ -169,6 +169,34 @@ describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列
     }
   })
 
+  it('fix-15 官方宿主降级：features/proposals/stats 通道 typed 失败 = 头路空增强值照常落 head（projects.get 单点权威）', async () => {
+    const client = createForgeRpcClient(async (channel) => {
+      if (channel === PROJECTS_CHANNELS.get) return { ok: true, data: PROJECT }
+      // 官方宿主 degraded 族（forgeFeatures/forgeProposals/forgeTasks namespace 未挂载）→
+      // typert 适配 typed 拒绝信封
+      return { ok: false, error: { code: 'internal', message: '通道在官方宿主不可达（Typert 未提供该 namespace 方法）——typed 降级' } }
+    })
+    const out = await loadOverviewHead(client, 'p-1')
+    expect(out.ok).toBe(true)
+    if (out.ok) {
+      expect(out.data.projectName).toBe('demo')
+      expect(out.data.workspaceDir).toBe('Z:/ws/demo')
+      expect(out.data.features).toEqual([])
+      expect(out.data.proposals).toEqual([])
+      expect(out.data.stats.total).toBe(0)
+    }
+  })
+
+  it('fix-15 get 路由缺席（官方宿主网关 404）→ list 现查回退归一项目行', async () => {
+    const client = createForgeRpcClient(async (channel) => {
+      if (channel === PROJECTS_CHANNELS.list) return { ok: true, data: [PROJECT] }
+      return { ok: false, error: { code: 'internal', message: '通道在官方宿主不可达（Typert 未提供该 namespace 方法）——typed 降级' } }
+    })
+    const out = await loadOverviewHead(client, 'p-1')
+    expect(out.ok).toBe(true)
+    if (out.ok) expect(out.data.projectName).toBe('demo')
+  })
+
   it('dirRows 在场 = host 下发原样值逐行投影（UI 零拼接）', async () => {
     const { client } = headOkClient()
     const out = await loadOverviewHead(client, 'p-1')
