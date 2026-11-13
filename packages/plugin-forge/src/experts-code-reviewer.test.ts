@@ -19,7 +19,8 @@ function parseExpertFileLike(filePath: string, content: string): { ok: true } | 
   }
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(content);
   if (!m) return { ok: false, reason: `${filePath}: frontmatter 块缺失` };
-  const [, fm, personaRaw] = m;
+  const fm = m[1];
+  if (fm === undefined) return { ok: false, reason: `${filePath}: frontmatter 块缺失` };
 
   const data: Record<string, string | string[]> = {};
   let currentKey: string | undefined;
@@ -37,6 +38,9 @@ function parseExpertFileLike(filePath: string, content: string): { ok: true } | 
     const kv = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(line);
     if (!kv) return { ok: false, reason: `${filePath}: frontmatter 行非法——${line}` };
     const [, key, value] = kv;
+    if (key === undefined || value === undefined) {
+      return { ok: false, reason: `${filePath}: frontmatter 行非法——${line}` };
+    }
     currentKey = key;
     if (value.startsWith("[") && value.endsWith("]")) {
       const items = value.slice(1, -1).split(",").map((s) => s.trim()).filter((s) => s !== "");
@@ -72,7 +76,8 @@ function parseExpertFileLike(filePath: string, content: string): { ok: true } | 
   if (data.reasoning !== undefined && !["low", "medium", "high"].includes(String(data.reasoning))) {
     return { ok: false, reason: `${filePath}: 字段 reasoning 非法（须为 low|medium|high）` };
   }
-  if (personaRaw.trim() === "") {
+  const personaRaw = m[2];
+  if (personaRaw === undefined || personaRaw.trim() === "") {
     return { ok: false, reason: `${filePath}: 正文人设 Markdown 缺失` };
   }
   return { ok: true };
