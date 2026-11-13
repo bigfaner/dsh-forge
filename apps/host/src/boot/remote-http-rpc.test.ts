@@ -59,7 +59,7 @@ function fakeRes(): FakeRes {
 
 const TASKS: Pick<ForgeTasksService, 'listTasks' | 'taskStats'> = {
   listTasks: async () => [{ taskId: 't-1', title: 'X', taskStatus: 'in_progress' } as TaskCard],
-  taskStats: async () => ({ total: 1, byStatus: { in_progress: 1 } as TaskStats['byStatus'], unmetPending: 0 }),
+  taskStats: async () => ({ total: 1, byStatus: { in_progress: 1 } as TaskStats['byStatus'], unmetPending: 0, gatedPending: 0 }),
 }
 const PROJECTS: Pick<ProjectService, 'listProjects' | 'getProject'> = {
   listProjects: async () => [{ id: 'p-1', name: 'demo' } as ProjectSummary],
@@ -240,7 +240,7 @@ describe('handleRemoteHttpRpc 边界', () => {
     await handleRemoteHttpRpc(
       fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-x' } }) as never,
       res,
-      deps({ tasks: { listTasks: async () => { throw new Error('store down') }, taskStats: async () => ({ total: 0, byStatus: {} as TaskStats['byStatus'], unmetPending: 0 }) } }),
+      deps({ tasks: { listTasks: async () => { throw new Error('store down') }, taskStats: async () => ({ total: 0, byStatus: {} as TaskStats['byStatus'], unmetPending: 0, gatedPending: 0 }) } }),
     )
     expect(res.status).toBe(200)
     const parsed = JSON.parse(res.body) as { ok: boolean; error: { message: string } }
@@ -271,7 +271,7 @@ describe('handleRemoteHttpRpc 边界', () => {
       res,
       deps({
         diag: (line) => lines.push(line),
-        tasks: { listTasks: async () => { throw new Error('store down') }, taskStats: async () => ({ total: 0, byStatus: {} as TaskStats['byStatus'], unmetPending: 0 }) },
+        tasks: { listTasks: async () => { throw new Error('store down') }, taskStats: async () => ({ total: 0, byStatus: {} as TaskStats['byStatus'], unmetPending: 0, gatedPending: 0 }) },
       }),
     )
     expect(lines[0]).toContain('status=error')

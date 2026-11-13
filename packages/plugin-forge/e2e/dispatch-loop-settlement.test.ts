@@ -64,7 +64,7 @@ function snapshot(over: Partial<TaskSnapshot> = {}): TaskSnapshot {
   }
 }
 
-function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number } = {}): TaskStats {
+function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number; gatedPending?: number } = {}): TaskStats {
   const byStatus: Record<TaskStatus, number> = {
     pending: 0,
     in_progress: 0,
@@ -76,11 +76,10 @@ function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: nu
     interrupted: 0,
     ...over,
   }
-  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0 }
+  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0, gatedPending: over.gatedPending ?? 0 }
 }
 
 const NO_TASK: ClaimTaskResult = { task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false }
-
 function claimed(localId = '2.5'): ClaimTaskResult {
   return { task: snapshot({ localId }), dispatchPrompt: 'PERSONA + <task-context>', persona: 'PERSONA-MATRIX', digest: 'digestabc123', reclaimed: false }
 }

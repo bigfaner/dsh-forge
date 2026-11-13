@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { hostOwnedPidsSnapshot } from '../spawn/job-tree.js'
 import { attributionTaskInput, baselineForHead, createE2eBaselineFace, issueAttributionCard, loadPersistedBaseline, parseE2eRedCases, runE2eBaseline } from './e2e-baseline.js'
+import type { ForgeTasksService } from '@dsh-forge/contracts'
 
 describe('parseE2eRedCases（套件输出 → 红灯用例清单）', () => {
   it('FAIL 行用例级提取（路径 + 用例链）+ 去重 + 字母序', () => {
@@ -285,7 +286,8 @@ describe('issueAttributionCard 生成侧标记（loop-phase-gate §2.9——CE-6
             },
           }),
     }
-    return { tasks, calls }
+    // 桩只持被测窄面（addTask/markE2eAttribution）——结构断言 cast 到服务全脸
+    return { tasks: tasks as unknown as ForgeTasksService, calls }
   }
 
   it('产卡后 tasks 行标记 = 1：addTask 返回体回填 localId 后置 UPDATE（生成侧单点写）', async () => {

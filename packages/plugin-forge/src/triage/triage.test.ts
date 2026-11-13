@@ -44,7 +44,7 @@ function statsOf(): TaskStats {
     suspended: 0,
     interrupted: 0,
   }
-  return { total: 6, byStatus, unmetPending: 1 }
+  return { total: 6, byStatus, unmetPending: 1, gatedPending: 0 }
 }
 
 const RECORDS: TaskRecordEntry[] = [
@@ -395,7 +395,7 @@ describe('决策 JSON 提取（围栏/裸对象/嵌套回溯，扫描窗口有�
 
 describe('提示词组装（纯函数——决策规则与输出契约自释）', () => {
   it('四件套 + 四动作规则 + 分界指引 + 单行 JSON 契约；无记录 = 占位行', () => {
-    const text = composeTriagePrompt({ task: snapshot({ taskDesc: undefined, acceptanceCriteria: undefined }), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] })
+    const text = composeTriagePrompt({ task: snapshot({ taskDesc: undefined, acceptanceCriteria: undefined }), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0, gatedPending: 0 }, records: [] })
     expect(text).toContain('"add-fix"')
     expect(text).toContain('"wait-external"')
     expect(text).toContain('"escalate"')
@@ -412,7 +412,7 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
   })
 
   it('改进 6① 重试回灌：lastFailure 在场 = 失败摘要 + 封闭枚举重申节；缺席 = 零节', () => {
-    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] }
+    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0, gatedPending: 0 }, records: [] }
     const withFailure = composeTriagePrompt({ ...base, lastFailure: '越权动作——dispatch（RAW-SNIPPET）' })
     expect(withFailure).toContain('<last-failure>')
     expect(withFailure).toContain('RAW-SNIPPET')
@@ -421,7 +421,7 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
   })
 
   it('改进 6④ 链深余量：fixChain 在场 = 链深/上限/余量节；余量不足追加禁用 add-fix 指引', () => {
-    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] }
+    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0, gatedPending: 0 }, records: [] }
     const withChain = composeTriagePrompt({ ...base, fixChain: { depth: 2, limit: 6, remaining: 4 } })
     expect(withChain).toContain('fix 链深: 2（上限 6，剩余余量 4）')
     expect(withChain).not.toContain('禁止选择 add-fix')
@@ -432,7 +432,7 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
   })
 
   it('FAIL-2 修正：noProgress 在场 = 无进展信号节（零提交零文件改动）；缺席 = 零节', () => {
-    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] }
+    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0, gatedPending: 0 }, records: [] }
     const withNoProgress = composeTriagePrompt({ ...base, noProgress: true })
     expect(withNoProgress).toContain('<no-progress>')
     expect(withNoProgress).toContain('没有任何进展信号')
@@ -576,7 +576,7 @@ describe('两信号注入（blocked 归类 + recurrence 候选列表——<signa
   })
 
   it('纯函数面：signals 列表渲染 + 聚合判据 SOP + 防盲试条款 + 台账查询指引恒在', () => {
-    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] }
+    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0, gatedPending: 0 }, records: [] }
     const withSignals = composeTriagePrompt({
       ...base,
       signals: {
@@ -613,7 +613,7 @@ describe('两信号注入（blocked 归类 + recurrence 候选列表——<signa
   })
 
   it('提示词升级载荷四节指引 + escalate 语义标注（上浮主会话非问用户）', () => {
-    const text = composeTriagePrompt({ task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] })
+    const text = composeTriagePrompt({ task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0, gatedPending: 0 }, records: [] })
     expect(text).toContain('"escalate" —— 上浮主会话处置')
     expect(text).toContain('不是问用户的工具')
     expect(text).toContain('classification')

@@ -49,7 +49,7 @@ function execOf(): ToolExecFace {
   return { agent: { session: { id: `dispatch-${sessionSeq}`, header: { cwd: 'C:\\ws\\demo' } } } }
 }
 
-function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number } = {}): TaskStats {
+function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number; gatedPending?: number } = {}): TaskStats {
   const byStatus: Record<TaskStatus, number> = {
     pending: 0,
     in_progress: 0,
@@ -61,7 +61,7 @@ function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: nu
     interrupted: 0,
     ...over,
   }
-  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0 }
+  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0, gatedPending: over.gatedPending ?? 0 }
 }
 
 /** 事件捕获 sink 桩（零 I/O；prepare no-op） */
@@ -136,7 +136,7 @@ function harness(): Harness {
   const { sink, events } = sinkStub()
   const calls = { stats: 0 }
   const statsInputs: unknown[] = []
-  let statsResult: TaskStats = statsOf({ pending: 1, blocked: 1, unmetPending: 2 })
+  let statsResult: TaskStats = statsOf({ pending: 1, blocked: 1, unmetPending: 2, gatedPending: 0 })
   let statsError: Error | undefined
   const tasks = {
     taskStats: async (input: unknown) => {
@@ -214,21 +214,22 @@ describe('parseDispatchTaskArgs（3b 契约：source 对成对必填，缺失即
 
 describe('poolOf + classifyPool（池态三分）', () => {
   it('poolOf：byStatus 四键 + unmetPending 投影', () => {
-    expect(poolOf(statsOf({ pending: 3, in_progress: 1, blocked: 2, unmetPending: 4 }))).toEqual({
+    expect(poolOf(statsOf({ pending: 3, in_progress: 1, blocked: 2, unmetPending: 4, gatedPending: 0 }))).toEqual({
       pending: 3,
       inProgress: 1,
       blocked: 2,
       unmetPending: 4,
+      gatedPending: 0,
     })
   })
 
   it('三分：全终态收工 / blocked 无通路疑似死锁 / 其余等待', () => {
-    expect(classifyPool({ pending: 0, inProgress: 0, blocked: 0, unmetPending: 0 })).toBe('done')
-    expect(classifyPool({ pending: 0, inProgress: 0, blocked: 2, unmetPending: 0 })).toBe('deadlock-suspected')
-    expect(classifyPool({ pending: 0, inProgress: 1, blocked: 0, unmetPending: 0 })).toBe('wait')
-    expect(classifyPool({ pending: 2, inProgress: 0, blocked: 0, unmetPending: 2 })).toBe('wait')
+    expect(classifyPool({ pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, gatedPending: 0 })).toBe('done')
+    expect(classifyPool({ pending: 0, inProgress: 0, blocked: 2, unmetPending: 0, gatedPending: 0 })).toBe('deadlock-suspected')
+    expect(classifyPool({ pending: 0, inProgress: 1, blocked: 0, unmetPending: 0, gatedPending: 0 })).toBe('wait')
+    expect(classifyPool({ pending: 2, inProgress: 0, blocked: 0, unmetPending: 2, gatedPending: 0 })).toBe('wait')
     // pending>0 且全满足（claim 空转竞态）→ 等待兜底
-    expect(classifyPool({ pending: 1, inProgress: 0, blocked: 0, unmetPending: 0 })).toBe('wait')
+    expect(classifyPool({ pending: 1, inProgress: 0, blocked: 0, unmetPending: 0, gatedPending: 0 })).toBe('wait')
   })
 })
 

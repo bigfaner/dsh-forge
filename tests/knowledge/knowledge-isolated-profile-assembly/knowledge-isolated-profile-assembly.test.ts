@@ -96,9 +96,15 @@ describe('CT-isolated-profile-1（J3-1：仅 knowledge 行 → 装配面在场�
       expect(typeof tool.output.render).toBe('function')
       expect(typeof tool.execute).toBe('function')
     }
-    // 提示词接线（stage③ C2 裁决 #9：装配期零全局段注册——forge:knowledge 两段改为
-    // agent/created 时刻 scoped 注册；装配面锚 = 订阅在场 + 根级段为零）
-    expect(sections).toEqual([])
+    // 提示词接线（fix-11 裁决 B 侧 Interface 3——bug 90d9b515 判例 c5e72025：静态段
+    // forge:knowledge(910) 全局注册（装配期恰一段，固定文本无条件在场）；动态段
+    // forge:knowledge-domains(911) 走 agent/created 时刻 scoped 注册。装配面锚 =
+    // 订阅在场 + 根级段恰静态段一段）
+    expect(sections).toHaveLength(1)
+    expect(sections[0]?.name).toBe('forge:knowledge')
+    expect(sections[0]?.order).toBe(910)
+    expect(typeof sections[0]!.text).toBe('string')
+    expect(sections[0]!.text as string).toContain('<knowledge-base>')
     expect(agentCreated).toHaveLength(1)
     // 'knowledge' 服务 provide（host 五通道句柄来源——在场判定键）
     expect(provides.has(KNOWLEDGE_SERVICE_KEY)).toBe(true)
@@ -165,7 +171,7 @@ describe('CT-isolated-profile-2（J3-2：重复装配幂等）', () => {
     const second = fakeCtx()
     const d2 = knowledgePlugin(second.ctx, { dbFile })
     expect(second.tools.map((t) => t.name).sort()).toEqual(first.tools.map((t) => t.name).sort())
-    expect(second.sections).toEqual([]) // stage③ C2：装配期零全局段（scoped 注册退役锚）
+    expect(second.sections.map((s) => s.name)).toEqual(['forge:knowledge']) // fix-11 裁决 B：装配期恰静态全局段一段（动态段走 scoped）
     expect(second.agentCreated).toHaveLength(1)
     d2()
 
@@ -177,8 +183,8 @@ describe('CT-isolated-profile-2（J3-2：重复装配幂等）', () => {
 // 评审 Major 补强：装配→订阅→注册全链断言——fakeCtx 派发 agent/created 后断言两段
 // 实际落位（非仅订阅计数）；兼作 F1（1.7 真机发现）回归锚：注册径触发 rebuild，
 // 绑定会话首 turn 动态段非空（不经 listEntries 静默重建）。
-describe('CT-isolated-profile-1 补强（agent/created 派发全链——两段实际落位）', () => {
-  it('success：注册库在场时派发 agent/created → 该会话 scope 两段 910/911 落位且 text 实值非空；首 turn 动态段含顶域行（F1 注册径 rebuild）', async () => {
+describe('CT-isolated-profile-1 补强（agent/created 派发全链——动态段落位 + 静态全局段锚）', () => {
+  it('success：注册库在场时派发 agent/created → 该会话 scope 动态段 911 落位且 text 实值非空、根级静态段 910 在场；首 turn 动态段含顶域行（F1 注册径 rebuild）', async () => {
     const root = tmpRoot()
     const dbFile = join(root, 'knowledge', 'knowledge.db')
     const ws = join(root, 'ws')
@@ -220,13 +226,13 @@ describe('CT-isolated-profile-1 补强（agent/created 派发全链——两段�
       ctx: { systemPrompt: { section: (s: KnowledgePromptSection) => (scoped.push(s), () => {}) } },
     }
     for (const h of agentCreated) h({ agent: agent as never })
-    expect(sections).toEqual([]) // 根级零全局段（scoped 接线锚）
-    expect(scoped.map((s) => s.name)).toEqual(['forge:knowledge', 'forge:knowledge-domains'])
-    expect(scoped[0]?.order).toBe(910)
-    expect(scoped[1]?.order).toBe(911)
-    expect((scoped[0]!.text as () => string)()).toContain('<knowledge-base>')
+    expect(sections.map((s) => s.name)).toEqual(['forge:knowledge']) // 根级恰静态全局段（fix-11 裁决 B 接线锚）
+    expect(scoped.map((s) => s.name)).toEqual(['forge:knowledge-domains'])
+    expect(scoped[0]?.order).toBe(911)
+    expect(sections[0]?.order).toBe(910)
+    expect(sections[0]!.text as string).toContain('<knowledge-base>')
     // 首 turn 动态段非空（F1：注册径 rebuild 已入库，零 listEntries 调用）
-    expect((scoped[1]!.text as () => string)()).toContain('frontend(1 篇) — <无简介>')
+    expect((scoped[0]!.text as () => string)()).toContain('frontend(1 篇) — <无简介>')
     dispose()
   })
 

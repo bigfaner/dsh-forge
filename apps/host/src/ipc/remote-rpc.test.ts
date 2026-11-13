@@ -31,6 +31,7 @@ function fakeService(): RemoteChannelService {
         rejected: 0,
       },
       unmetPending: 0,
+      gatedPending: 0,
     })),
   }
 }

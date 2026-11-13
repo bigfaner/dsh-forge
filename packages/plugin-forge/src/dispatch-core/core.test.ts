@@ -40,7 +40,7 @@ function snapshot(over: Partial<TaskSnapshot> = {}): TaskSnapshot {
   }
 }
 
-function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number } = {}): TaskStats {
+function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number; gatedPending?: number } = {}): TaskStats {
   const byStatus: Record<TaskStatus, number> = {
     pending: 0,
     in_progress: 0,
@@ -52,7 +52,7 @@ function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: nu
     interrupted: 0,
     ...over,
   }
-  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0 }
+  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0, gatedPending: over.gatedPending ?? 0 }
 }
 
 /** 事件捕获 sink 桩（零 I/O；prepare 不入核心面——核心面仅 emit） */
@@ -114,7 +114,7 @@ function harness(
       { verb: 'submit', toStatus: 'completed', summary: 'did the thing', commitHash: 'abc1234', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
     ],
   }
-  let statsResult: TaskStats = statsOf({ pending: 1, blocked: 1, unmetPending: 2 })
+  let statsResult: TaskStats = statsOf({ pending: 1, blocked: 1, unmetPending: 2, gatedPending: 0 })
   let cards: { slug: string; localId: string; sourceTask?: { slug: string; localId: string } }[] = []
   let spawnImpl: (req: SpawnWorkerRequest) => Promise<SpawnWorkerHandle> = async (req) => {
     spawnRequests.push(req)
@@ -305,7 +305,7 @@ describe('dispatchCore 主链（claim→组装→spawn→事件发射）', () =>
       outcome: 'success',
       taskRef: { slug: 'feat-x', localId: '2.5' },
       digest: 'digestabc123',
-      pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2 },
+      pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2, gatedPending: 0 },
     })
     expect(attribution.slug).toBe('feat-x')
   })
@@ -324,9 +324,9 @@ describe('dispatchCore 主链（claim→组装→spawn→事件发射）', () =>
     const h = harness()
     const { exec, attribution } = execOf()
     h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
-    h.setStats(statsOf({ pending: 3, blocked: 1, unmetPending: 2 }))
+    h.setStats(statsOf({ pending: 3, blocked: 1, unmetPending: 2, gatedPending: 0 }))
     const out = await dispatchCore(h.deps, exec, loopArgs({ source: { kind: 'proposal', slug: 'pa' } }))
-    expect(out).toEqual({ kind: 'no-task', pool: { pending: 3, inProgress: 0, blocked: 1, unmetPending: 2 } })
+    expect(out).toEqual({ kind: 'no-task', pool: { pending: 3, inProgress: 0, blocked: 1, unmetPending: 2, gatedPending: 0 } })
     expect(h.events).toHaveLength(1)
     expect(h.events[0]).toMatchObject({ type: 'no-ready-task', sessionId: 'loop-owner-1', slug: 'pa', payload: { contextSlug: 'pa' } })
     expect(attribution.slug).toBe('pa')
@@ -469,7 +469,7 @@ describe('dispatchCore 后台径（dispatched 回执 + job 内回灌进 guardKey
       type: 'coding-fix',
       workerSessionId: 'worker-bg',
       jobId: 'forge-dispatch-1',
-      pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2 },
+      pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2, gatedPending: 0 },
     })
     expect(h.calls.query).toBe(0) // 立即返回：结算读零触达
     latest.reject(new Error('bg boom'))

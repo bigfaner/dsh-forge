@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { DiagEventPayload } from '@dsh-forge/contracts'
+import type { DiagEventPayload, RecallFeedbackOutcome, RecallFeedbackResult } from '@dsh-forge/contracts'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../storage/index.js'
 import { createKnowledgeService, truncateTriggerSnap } from './service.js'
 import type { BrowseKnowledgeService } from './types.js'
@@ -20,6 +20,12 @@ let apiEntryId: number
 
 const rowsOf = (where = ''): Record<string, unknown>[] =>
   db.prepare(`SELECT * FROM knowledge_recall_logs ${where}`).all() as Record<string, unknown>[]
+
+/** RecallFeedbackOutcome 判别联合收窄（results 变体提取——rejected-request 变体即非预期） */
+const resultsOf = (o: RecallFeedbackOutcome): readonly RecallFeedbackResult[] => {
+  if (!('results' in o)) throw new Error(`请求级拒收（非预期）：${o.code} ${o.message}`)
+  return o.results
+}
 
 beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-recall-'))
@@ -162,7 +168,7 @@ describe('recallFeedback（feedback.ts 三值应用层）', () => {
     expect(bad).toEqual({ results: [{ rowId, outcome: 'failure', code: 'note-required', message: expect.any(String) }] })
     expect(rowsOf(`WHERE id = ${rowId}`)[0]).toMatchObject({ feedback: 0, feedback_note: null })
     const ok = await service.recallFeedback({ projectId, action: 'row', rowId: rowId!, feedback: -1, note: '检索词偏离主题' })
-    expect(ok.results[0]).toEqual({ rowId, outcome: 'success' })
+    expect(resultsOf(ok)[0]).toEqual({ rowId, outcome: 'success' })
     expect(rowsOf(`WHERE id = ${rowId}`)[0]).toMatchObject({ feedback: -1, feedback_note: '检索词偏离主题' })
     expect(rowsOf(`WHERE id = ${rowId}`)[0]!['feedback_at']).toBeTypeOf('string')
   })
@@ -170,32 +176,32 @@ describe('recallFeedback（feedback.ts 三值应用层）', () => {
   it('👍/撤销携 note = note-required（应用层保证 feedback∈{1,0} 零 note）', async () => {
     const [rowId] = seedCallRows('fb-call-3')
     const bad = await service.recallFeedback({ projectId, action: 'row', rowId: rowId!, feedback: 1, note: '不该有' })
-    expect(bad.results[0]).toMatchObject({ outcome: 'failure', code: 'note-required' })
+    expect(resultsOf(bad)[0]).toMatchObject({ outcome: 'failure', code: 'note-required' })
   })
 
   it('rowId 未命中 = not-found；unconfirmed 条目行 = unconfirmed（入口仅 confirmed）', async () => {
     const nf = await service.recallFeedback({ projectId, action: 'row', rowId: 999999, feedback: 1 })
-    expect(nf.results[0]).toMatchObject({ outcome: 'failure', code: 'not-found' })
+    expect(resultsOf(nf)[0]).toMatchObject({ outcome: 'failure', code: 'not-found' })
     const insert = db.prepare(
       `INSERT INTO knowledge_recall_logs (project_id, call_id, session_id, verb, entry_id, frontmatter_id, title_snap, domain_snap, query_json, hit_count, created_at)
        VALUES (?, 'fb-call-4', 'fb', 'search', NULL, NULL, NULL, NULL, '{}', 0, ?)`,
     )
     const sentinel = Number(insert.run(projectId, new Date().toISOString()).lastInsertRowid)
     const uc = await service.recallFeedback({ projectId, action: 'row', rowId: sentinel, feedback: 1 })
-    expect(uc.results[0]).toMatchObject({ outcome: 'failure', code: 'unconfirmed' })
+    expect(resultsOf(uc)[0]).toMatchObject({ outcome: 'failure', code: 'unconfirmed' })
   })
 
   it('事件级批 👎：同 call 全行批更；已显式 👍 的行不被覆盖；批撤销只清已👎行（行级 👍 不受牵连）', async () => {
     const ids = seedCallRows('fb-call-5')
     await service.recallFeedback({ projectId, action: 'row', rowId: ids[0]!, feedback: 1 }) // 首行显式 👍
     const batch = await service.recallFeedback({ projectId, action: 'batch', callId: 'fb-call-5', feedback: -1, note: '整批误召回' })
-    expect(batch.results.map((r) => r.outcome)).toEqual(['success', 'success', 'success'])
+    expect(resultsOf(batch).map((r) => r.outcome)).toEqual(['success', 'success', 'success'])
     expect(rowsOf(`WHERE id = ${ids[0]}`)[0]).toMatchObject({ feedback: 1, feedback_note: null }) // 👍 行不被覆盖
     expect(rowsOf(`WHERE id = ${ids[1]}`)[0]).toMatchObject({ feedback: -1, feedback_note: '整批误召回' })
     expect(rowsOf(`WHERE id = ${ids[2]}`)[0]).toMatchObject({ feedback: -1 })
     // 批撤销：行级 👍 不受牵连
     const revoke = await service.recallFeedback({ projectId, action: 'batch', callId: 'fb-call-5', feedback: 0 })
-    expect(revoke.results.every((r) => r.outcome === 'success')).toBe(true)
+    expect(resultsOf(revoke).every((r) => r.outcome === 'success')).toBe(true)
     expect(rowsOf(`WHERE id = ${ids[0]}`)[0]).toMatchObject({ feedback: 1 })
     expect(rowsOf(`WHERE id = ${ids[1]}`)[0]).toMatchObject({ feedback: 0, feedback_note: null, feedback_at: null })
   })

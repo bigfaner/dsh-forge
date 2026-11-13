@@ -67,9 +67,25 @@ export type ValidationTaskType = (typeof VALIDATION_TASK_TYPES)[number]
  * （SQL 内）与 BUSINESS_LOCAL_ID 数值语义（TS 守卫同判据）。类型侧 Exclude 同源派生。
  */
 export type ImplementationTaskType = Exclude<TaskType, 'gate' | ValidationTaskType>
-export const IMPLEMENTATION_TASK_TYPES: readonly ImplementationTaskType[] = TASK_TYPES.filter(
-  (t): t is ImplementationTaskType => t !== 'gate' && !(VALIDATION_TASK_TYPES as readonly string[]).includes(t),
-)
+/** 实现链 14 值字面常量（零逻辑铁律——src 禁函数体，filter 派生箭头退役；
+ *  成员合法性由 ImplementationTaskType 类型注解编译期收窄 + labels.test.ts 完备性 pin
+ *  「V ∪ I ∪ {gate} = TASK_TYPES」机械兜底，漂移即红） */
+export const IMPLEMENTATION_TASK_TYPES: readonly ImplementationTaskType[] = [
+  'coding-feature',
+  'coding-enhancement',
+  'coding-cleanup',
+  'coding-refactor',
+  'code-quality-simplify',
+  'coding-fix',
+  'doc',
+  'doc-consolidate',
+  'doc-drift',
+  'doc-review',
+  'doc-summary',
+  'test-gen-contracts',
+  'test-gen-journeys',
+  'test-gen-scripts',
+]
 
 /** E2E 归因卡标记列名（loop-phase-gate 设计 §1.1 承载字段裁定：tasks.e2e_attribution 列——
  *  生成侧机械事实，不经 addTask 参数暴露，白名单豁免 = 无入边 ∧ 标记 = 1）。 */

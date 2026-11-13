@@ -84,7 +84,7 @@ describe('DDL v7（八列 + verb 枚举扩 + recall_logs 表重建）', () => {
     try {
       const row = db.prepare<unknown[], { v: string }>('SELECT sqlite_version() AS v').get()
       const [major, minor] = (row?.v ?? '0.0.0').split('.').map((s) => Number(s))
-      expect(major * 1000 + minor, `sqlite 版本 ${row?.v} 须 ≥ 3.35（DROP COLUMN 承载面）`).toBeGreaterThanOrEqual(3035)
+      expect(major! * 1000 + minor!, `sqlite 版本 ${row?.v} 须 ≥ 3.35（DROP COLUMN 承载面）`).toBeGreaterThanOrEqual(3035)
     } finally {
       db.close()
     }

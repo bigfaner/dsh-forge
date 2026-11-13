@@ -41,7 +41,7 @@ function statsOf(over: Partial<Record<TaskStatus, number>> = {}): TaskStats {
     pending: 0, in_progress: 0, blocked: 0, completed: 0,
     skipped: 0, rejected: 0, suspended: 0, interrupted: 0, ...over,
   }
-  return { total: 1, byStatus, unmetPending: 0 }
+  return { total: 1, byStatus, unmetPending: 0, gatedPending: 0 }
 }
 
 function handle(): SpawnWorkerHandle {

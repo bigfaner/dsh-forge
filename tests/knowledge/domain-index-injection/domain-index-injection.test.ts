@@ -20,9 +20,9 @@ import { registerKnowledgeScopedPrompt } from '../../../packages/plugins/knowled
 import {
   KNOWLEDGE_DOMAINS_SECTION_NAME,
   KNOWLEDGE_DOMAINS_SECTION_ORDER,
-  KNOWLEDGE_SECTION_NAME,
   KNOWLEDGE_SECTION_ORDER,
   renderKnowledgeDomainsSection,
+  renderKnowledgeStaticSection,
 } from '../../../packages/plugins/knowledge/src/prompt/index.js'
 import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/service/types.js'
 import type { KnowledgePromptSection, ScopedAgentFace } from '../../../packages/plugins/knowledge/src/tools/faces.js'
@@ -140,8 +140,11 @@ function mountScoped() {
   return { dispose, fire }
 }
 
-const dynamicOf = (sections: readonly KnowledgePromptSection[]): string => (sections[1]!.text as () => string)()
-const staticOf = (sections: readonly KnowledgePromptSection[]): string => (sections[0]!.text as () => string)()
+// 锚形态说明（fix-11 裁决 B 侧 Interface 3 归因——bug 90d9b515 判例 c5e72025）：静态段
+// forge:knowledge(910) 为插件工厂全局注册（无条件在场、恒非空），scoped 缝只承担动态段
+// forge:knowledge-domains(911)——fire 返回该会话 scope 注册段集（绑定 = 仅动态段一段，
+// 未绑定 = 零段）；静态段不经本缝，断言锚 renderKnowledgeStaticSection()。
+const dynamicOf = (sections: readonly KnowledgePromptSection[]): string => (sections[0]!.text as () => string)()
 
 // ── CT-domain-index-injection-01 绑定注入两态（DI-G2/G3/DI-E5） ──
 
@@ -151,12 +154,13 @@ describe('CT-domain-index-injection-01 绑定注入两态（DI-G2/G3/E5）', () 
     await W.service.setDomainDescription({ wsPath: W.wsP, domain: 'alpha', description: '声明性约束与惯例' })
   })
 
-  it('O1 绑定注入：cwd 命中绑定行且注册库在场 → 两段注册且标签正确（实时计数行在场）', () => {
+  it('O1 绑定注入：cwd 命中绑定行且注册库在场 → 动态段 scoped 注册且标签正确（实时计数行在场）；静态段全局注册恒在场', () => {
     const r = mountScoped()
     const sections = r.fire(W.wsP)
-    // DI-G2：静态段 + 动态段双在场
-    expect(sections.map((s) => s.name)).toEqual([KNOWLEDGE_SECTION_NAME, KNOWLEDGE_DOMAINS_SECTION_NAME])
-    expect(staticOf(sections)).toContain('<knowledge-base>')
+    // DI-G2：动态段 scoped 在场；静态段全局注册（fix-11 裁决 B——恒在场恒非空）
+    expect(sections.map((s) => s.name)).toEqual([KNOWLEDGE_DOMAINS_SECTION_NAME])
+    expect(sections[0]?.order).toBe(KNOWLEDGE_DOMAINS_SECTION_ORDER)
+    expect(renderKnowledgeStaticSection()).toContain('<knowledge-base>')
     const dynamic = dynamicOf(sections)
     expect(dynamic).toContain('<knowledge-domains>')
     expect(dynamic).toContain('alpha(4 篇) — 声明性约束与惯例') // alpha 顶域含 alpha/sub 子域计数
@@ -168,7 +172,7 @@ describe('CT-domain-index-injection-01 绑定注入两态（DI-G2/G3/E5）', () 
     expect(r.fire(undefined)).toEqual([])
   })
 
-  it('O3 无库同生同退：注册库注销后（registry 行删除）两段 text 均空返（静态段以注册为前提）', async () => {
+  it('O3 无库同生同退：注册库注销后（registry 行删除）动态段 text 空返（动态段以注册为前提；静态段全局注册不随注销退场——fix-11 裁决 B）', async () => {
     const r = mountScoped()
     const wsX = join(W.root, 'wsX')
     const dirX = join(wsX, '.knowledge')
@@ -179,11 +183,10 @@ describe('CT-domain-index-injection-01 绑定注入两态（DI-G2/G3/E5）', () 
     await W.service.rebuildIndex(W.projectIdP)
     // 绑定 X（注册库在场）→ 注入
     const sectionsBound = r.fire(wsX)
-    expect(sectionsBound).toHaveLength(2)
+    expect(sectionsBound).toHaveLength(1)
     expect(dynamicOf(sectionsBound)).toContain('tmpzone(1 篇) — <无简介>')
     // 注销（registry 行删除 + 级联域行）→ 同生同退：已捕获段下一 turn 求值空返
     registry.remove(wsX)
-    expect(staticOf(sectionsBound)).toBe('')
     expect(dynamicOf(sectionsBound)).toBe('')
   })
 
@@ -315,30 +318,32 @@ describe('CT-domain-index-injection-06 重绑切换与域隔离（DI-G5/E4）', 
 // ── CT-domain-index-injection-07 装配位次与双段互指（DI-E7） ──
 
 describe('CT-domain-index-injection-07 位次与互指（DI-E7）', () => {
-  it('O2 互指成立：静态段指认串在场且动态段同名标签承接；两段 order 910/911 紧邻；O3 互斥负例（注销后双空）', () => {
+  it('O2 互指成立：静态段指认串在场且动态段同名标签承接；两段 order 910/911 紧邻；O3 互斥负例（注销后动态段空返、静态段全局恒在场）', () => {
     const r = mountScoped()
     const sections = r.fire(W.wsP)
-    expect(sections[0]?.name).toBe(KNOWLEDGE_SECTION_NAME)
-    expect(sections[1]?.name).toBe(KNOWLEDGE_DOMAINS_SECTION_NAME)
-    expect(sections[0]?.order).toBe(KNOWLEDGE_SECTION_ORDER)
-    expect(sections[1]?.order).toBe(KNOWLEDGE_DOMAINS_SECTION_ORDER)
+    // 位次锚：动态段 911 scoped；静态段 910 全局注册（常量级锚 + 渲染产物锚——本 spec
+    // 的事件桩不承载全局装配产物，位次真值归 test-run 真机面 O1）
+    expect(sections[0]?.name).toBe(KNOWLEDGE_DOMAINS_SECTION_NAME)
+    expect(sections[0]?.order).toBe(KNOWLEDGE_DOMAINS_SECTION_ORDER)
     expect(KNOWLEDGE_SECTION_ORDER).toBe(910)
     expect(KNOWLEDGE_DOMAINS_SECTION_ORDER).toBe(911)
     expect(KNOWLEDGE_SECTION_ORDER).toBeLessThan(KNOWLEDGE_DOMAINS_SECTION_ORDER)
-    // O2：静态段指认串 + 动态段同名标签（同一 turn 双段求值产物）
-    expect(staticOf(sections)).toContain('列于下文')
-    expect(staticOf(sections)).toContain('<knowledge-domains>')
+    // O2：静态段指认串 + 动态段同名标签（静态段 = 全局注册渲染产物）
+    const staticText = renderKnowledgeStaticSection()
+    expect(staticText).toContain('列于下文')
+    expect(staticText).toContain('<knowledge-domains>')
     expect(dynamicOf(sections)).toContain('<knowledge-domains>')
-    // O3 互斥负例（同生同退判定）：注册库注销后两段同空——不存在单段在场组合
+    // O3 互斥负例：注册库注销后动态段空返（同生同退）；静态段全局注册恒在场恒非空
+    //（fix-11 裁决 B 侧——能力性指引固定文本零会话信息，不随注册库生灭）
     const registry = createKnowledgeRegistry(W.db)
     const wsY = join(W.root, 'wsY')
     mkdirSync(join(wsY, '.knowledge'), { recursive: true })
     registry.upsert(wsY, join(wsY, '.knowledge'), 'p-di-Y')
     const sectionsY = r.fire(wsY)
-    expect(staticOf(sectionsY)).not.toBe('')
+    expect(sectionsY).toHaveLength(1)
     registry.remove(wsY)
-    expect(staticOf(sectionsY)).toBe('')
     expect(dynamicOf(sectionsY)).toBe('')
+    expect(renderKnowledgeStaticSection()).not.toBe('')
   })
 
   // 真机限定面留痕（归 test-run）：最终系统提示词内两段位于官方 FILE_REFERENCE 等既有段

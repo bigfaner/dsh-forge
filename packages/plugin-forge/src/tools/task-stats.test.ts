@@ -23,6 +23,7 @@ const STATS: TaskStats = {
   total: 5,
   byStatus: { pending: 2, in_progress: 1, completed: 1, blocked: 1, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 },
   unmetPending: 1,
+  gatedPending: 0,
 }
 
 function toolWithCapture(overrides?: Partial<Omit<Parameters<typeof createTaskStatsTool>[0], 'checkpoints'>>) {

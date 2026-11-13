@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/index.js'
 import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/service.js'
 import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/service/types.js'
+import type { RecallGroup } from '../../../packages/contracts/src/index.js'
 
 const root = mkdtempSync(join(tmpdir(), 'knowledge-j-j2-'))
 const ws = join(root, 'ws')
@@ -78,7 +79,7 @@ describe('J2-CT-01 一轮一卡聚合（O-成功/O-多轮递进）', () => {
 describe('J2-CT-02 四动词分型与行形状（O-search/O-read/O-read-abstract/O-browse）', () => {
   it('O-search 节：命中行携 score 数值 + scope/rowId；O-read 节：contentSnap 全文快照在场；O-read-abstract/browse 节：score null（S6 null 语义）', async () => {
     const groups = await service.sessionRecall({ projectId: PROJECT, sessionId: SESSION })
-    const byVerb = (verb: string): readonly unknown[] => groups.filter((g) => g.verb === verb)
+    const byVerb = (verb: string): readonly RecallGroup[] => groups.filter((g) => g.verb === verb)
     // S1：verb 四值封闭枚举在本会话全部在场
     expect(groups.map((g) => g.verb)).toEqual(expect.arrayContaining(['search', 'read', 'read-abstract', 'browse']))
     // S6：search 命中行 score 数值；其余动词 score null（DDL v7 score REAL NULL 语义）

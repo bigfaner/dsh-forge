@@ -5,6 +5,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { KnowledgeService, SearchHit, SearchQuery } from '../service/types.js'
 import { createSearchTool, parseSearchArgs } from './search.js'
+import type { SearchOutcome } from './search.js'
 import { createProjectResolver } from './session.js'
 
 /** 命中夹具（SearchHit 七字段——摘要先行 + 四档 rank） */
@@ -73,7 +74,7 @@ describe('execute：全域检索 → rerank 精选（agentic 编排）', () => {
   it('单 query 直传（text 词面 + 域前缀 + limit 恒携带缺省 3——服务面截断与落账同源）', async () => {
     const { service, calls } = stubService([[hit({ entryId: 1, score: 0.5 })]])
     const tool = createSearchTool(deps(service))
-    const out = await tool.execute({ domain_prefix: '后端', text: '网关' }, exec)
+    const out = (await tool.execute({ domain_prefix: '后端', text: '网关' }, exec)) as SearchOutcome
     expect(calls).toHaveLength(1)
     expect(calls[0]).toEqual({ projectId: 'p-1', sessionId: 'sess-1', callId: expect.any(String), text: '网关', domainPrefix: '后端', limit: 3 })
     expect(out.hits).toEqual([hit({ entryId: 1, score: 0.5 })])
@@ -92,18 +93,18 @@ describe('execute：全域检索 → rerank 精选（agentic 编排）', () => {
   it('rerank 截前 limit 条（默认 3；limit 显式传参生效）', async () => {
     const batch = [1, 2, 3, 4, 5].map((id) => hit({ entryId: id, score: id }))
     const { service } = stubService([batch])
-    const out = await createSearchTool(deps(service)).execute({}, exec)
+    const out = (await createSearchTool(deps(service)).execute({}, exec)) as SearchOutcome
     expect(out.hits).toHaveLength(3)
     expect(out.hits.map((h) => h.score)).toEqual([5, 4, 3])
     const { service: s2 } = stubService([batch])
-    const out2 = await createSearchTool(deps(s2)).execute({ limit: 4 }, exec)
+    const out2 = (await createSearchTool(deps(s2)).execute({ limit: 4 }, exec)) as SearchOutcome
     expect(out2.hits).toHaveLength(4)
   })
 
   it('零命中 + 指定了域 → 弃域重试一次（第二批 query 无 domainPrefix），命中后 hint 注明弃域', async () => {
     const { service, calls } = stubService([[], [hit({ entryId: 9 })]])
     const tool = createSearchTool(deps(service))
-    const out = await tool.execute({ domain_prefix: '后端' }, exec)
+    const out = (await tool.execute({ domain_prefix: '后端' }, exec)) as SearchOutcome
     expect(calls).toHaveLength(2)
     expect(calls[1]?.domainPrefix).toBeUndefined()
     expect(out.hits).toHaveLength(1)
@@ -114,18 +115,18 @@ describe('execute：全域检索 → rerank 精选（agentic 编排）', () => {
 
   it('首查零命中（含弃域后仍零）→ hint 提示可换词重试一次（retry=true）', async () => {
     const { service } = stubService([[], []])
-    const out = await createSearchTool(deps(service)).execute({ domain_prefix: '后端' }, exec)
+    const out = (await createSearchTool(deps(service)).execute({ domain_prefix: '后端' }, exec)) as SearchOutcome
     // hint 单条承载弃域事实 + 动作指引
     expect(out.hint).toContain('was dropped after zero hits')
     expect(out.hint).toContain('You may reword once and retry with retry=true')
     const { service: s2 } = stubService([[]])
-    const out2 = await createSearchTool(deps(s2)).execute({}, exec)
+    const out2 = (await createSearchTool(deps(s2)).execute({}, exec)) as SearchOutcome
     expect(out2.hint).toBe('zero hits. You may reword once and retry with retry=true.')
   })
 
   it('retry=true 仍零命中 → hint 明示不要再检索（断言无此内容、回退原始文件）', async () => {
     const { service } = stubService([[]])
-    const out = await createSearchTool(deps(service)).execute({ retry: true }, exec)
+    const out = (await createSearchTool(deps(service)).execute({ retry: true }, exec)) as SearchOutcome
     expect(out.hits).toEqual([])
     expect(out.hint).toContain('do not search again')
     expect(out.hint).toContain('no such content')

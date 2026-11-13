@@ -152,7 +152,7 @@ describe('moveEntry / createDomain', () => {
     const ok = await service.createDomain({ projectId: PROJECT, domain: 'sub2' })
     expect(ok).toEqual({ outcome: 'success' })
     expect(existsSync(join(knowledgeDir, 'sub2'))).toBe(true)
-    const row = db.prepare<[string, string], { description: string | null }>(
+    const row = db.prepare<[string], { description: string | null }>(
       `SELECT description FROM knowledge_domains WHERE ws_path = ? AND domain = 'sub2'`,
     ).get(wsDir)!
     expect(row.description).toBeNull()
@@ -167,7 +167,7 @@ describe('moveEntry / createDomain', () => {
     const result = await service.moveEntry({ projectId: PROJECT, entryId: ub, targetDomain: 'sub2' })
     expect(result).toMatchObject({ outcome: 'success', entryId: ub })
     // 文件在新目录
-    const versions = db.prepare<[string], { file_path: string }[]>(`SELECT file_path FROM knowledge_entry_versions WHERE id = ?`).all('kb-ub')
+    const versions = db.prepare<[string], { file_path: string }>(`SELECT file_path FROM knowledge_entry_versions WHERE id = ?`).all('kb-ub')
     expect(versions).toHaveLength(1)
     expect(versions[0]!.file_path.startsWith(knowledgeDir)).toBe(true)
     expect(versions[0]!.file_path.includes('sub2')).toBe(true)

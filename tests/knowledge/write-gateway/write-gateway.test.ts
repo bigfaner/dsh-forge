@@ -442,11 +442,9 @@ describe('CT-WG-14 knowledge_read：三分支（WG-G3/G7）', () => {
       expect(r.status).toBe('unconfirmed')
       expect(r.body).toBe(readFileSync(v.filePath, 'utf8'))
     }
-    // read-abstract 同口径：EntryNotFound 语义面（不区分「不存在」与「无权限」）
-    const card = (await w.service.listEntries({ projectId: w.projectId })).find((k) => k.title === 'Secret Draft Name')
-    if (card !== undefined) {
-      await expect(w.service.readAbstract({ projectId: w.projectId, entryId: card.entryId })).rejects.toThrow(/未命中|not found|不存在/i)
-    }
+    // read-abstract 同口径：EntryNotFound 语义面（不区分「不存在」与「无权限」——
+    // unconfirmed 拒摘要不露存在性；slug 键 = 写入回执 id）
+    await expect(w.service.readAbstract({ projectId: w.projectId, id: v.id })).rejects.toThrow(/未命中|not found|不存在/i)
     w.storage.close()
   })
   it('O3 superseded 曾审：全文可读（被顶替≠未审）', async () => {
