@@ -5,7 +5,7 @@
 // 退避 ×3 halted 粘性、worker 异常终止 bounded 重入超限升级、停止（in-flight 真化
 // interrupted + ⑰ 收口）、v1 单活守卫。spawn/tasks/narrator 通道全桩（真 narrator 渲染 +
 // 录制通道；incident 仓缺目录 = 零 I/O）。
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -31,7 +31,7 @@ import { createLoopDriver } from './driver.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageDecisionResult, LoopTriageHook, LoopTriageInput } from './driver.js'
 import type { LoopRecord } from './registry.js'
-import { backoffDelayMs, isRateLimitFailure, isTriageInvalidOutput, LOOP_RESUME_RESTORE_REASON, LOOP_TRIAGE_MAX_ATTEMPTS, TRIAGE_FIX_CHAIN_DEPTH_LIMIT, triageFailureSummary } from './driver.js'
+import { backoffDelayMs, isRateLimitFailure, isTriageInvalidOutput, LOOP_RESUME_RESTORE_REASON, LOOP_TRIAGE_MAX_ATTEMPTS, TRIAGE_FIX_CHAIN_DEPTH_LIMIT, testBaselineBriefOf, triageFailureSummary } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { IncidentStore, NarrationChannel, Narrator } from '../notify/index.js'
 import { FORGE_PROGRESS_SCENARIO as S } from '../progress/index.js'
@@ -530,8 +530,8 @@ describe('runRound 全链（领取→领取通知→spawn→结算→结果通�
     // claim：主会话真实 id + loopSourced 循环来源标记 + source 对（无 adopt——就绪盲选）；
     // 次轮 no-task 判词后收口——claim 恰两次（第二轮零 adopt 键）
     expect(built.h.claimInputs).toHaveLength(2)
-    expect(built.h.claimInputs[0]).toEqual({ projectId: PROJECT, sessionId: OWNER, source: SOURCE, loopSourced: true })
-    expect(built.h.claimInputs[1]).toEqual({ projectId: PROJECT, sessionId: OWNER, source: SOURCE, loopSourced: true })
+    expect(built.h.claimInputs[0]).toEqual({ projectId: PROJECT, sessionId: OWNER, source: SOURCE, loopSourced: true, testBaseline: { present: false } })
+    expect(built.h.claimInputs[1]).toEqual({ projectId: PROJECT, sessionId: OWNER, source: SOURCE, loopSourced: true, testBaseline: { present: false } })
     // spawn：全文 prompt + label（任务键 · 任务名）+ parent 透传
     expect(built.spawn.requests).toHaveLength(1)
     expect(built.spawn.requests[0]).toMatchObject({
@@ -854,6 +854,129 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
 // 于插件域复刻包装（ensure 经 LoopCheckpointsFace 直传域面——直传装配由 driver-assembly
 // 生产路径测试覆盖）。
 
+
+// ─────────────────────────── 测试基线文档简报递达（forge-test-boundary-gates 方案2） ───────────────────────────
+
+describe('测试基线文档简报递达（forge-test-boundary-gates 方案2）', () => {
+  const FULL_FLOW = () => ({
+    claim: [claimed(), NO_TASK],
+    stats: [
+      statsOf({ pending: 1 }),
+      statsOf({ in_progress: 1 }),
+      statsOf({ in_progress: 1 }),
+      statsOf({ completed: 1 }),
+      statsOf({ completed: 1 }),
+    ],
+  })
+
+  /** docsRoot 临时目录工厂（withBaseline = 落一份 features/feat-x/test-baseline.md） */
+  function makeDocsRoot(withBaseline: boolean): string {
+    const docsRoot = mkdtempSync(join(tmpdir(), 'forge-test-baseline-'))
+    if (withBaseline) {
+      const dir = join(docsRoot, 'features', 'feat-x')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'test-baseline.md'), '# test baseline\n')
+    }
+    return docsRoot
+  }
+
+  it('在场：claim 入参携文档根锚定绝对路径 + 基线时点（文件 mtime——零内容解析）', async () => {
+    const docsRoot = makeDocsRoot(true)
+    try {
+      const built = build({ ...FULL_FLOW() })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs[0]).toMatchObject({
+        testBaseline: { present: true, path: join(docsRoot, 'features', 'feat-x', 'test-baseline.md'), recordedAt: expect.any(String) },
+      })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('缺席：基线文档不在场 → present:false 兜底形态（循环照常领取零受阻）', async () => {
+    const docsRoot = makeDocsRoot(false)
+    try {
+      const built = build({ ...FULL_FLOW() })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: false } })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('检查故障与缺席同形：锚定路径 stat 异常（docsRoot 为文件——ENOTDIR）→ present:false 兜底、异常不上抛进 claim 链', async () => {
+    const docsRoot = mkdtempSync(join(tmpdir(), 'forge-test-baseline-'))
+    try {
+      const blocker = join(docsRoot, 'blocker.txt')
+      writeFileSync(blocker, 'x') // docsRoot 指向文件——其下 stat 必故障
+      const built = build({ ...FULL_FLOW() })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot: blocker })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs).toHaveLength(2) // claim 链零异常——两轮照常
+      expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: false } })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('每 claim 现查不缓存：文件中途删除 → 次轮 claim 转兜底形态', async () => {
+    const docsRoot = makeDocsRoot(true)
+    try {
+      const baselinePath = join(docsRoot, 'features', 'feat-x', 'test-baseline.md')
+      const built = build({
+        claim: [claimed(), claimed(), NO_TASK],
+        stats: [
+          statsOf({ pending: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ completed: 2 }),
+          statsOf({ completed: 2 }),
+        ],
+        // 首个 worker spawn 时点删除基线文档——次轮 claim 现查必见缺席
+        spawnBehavior: (s) => {
+          s.setBehavior(async (n) => {
+            if (n === 1) rmSync(baselinePath)
+            return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'completed', output: '' }), dispose: async () => {} }
+          })
+        },
+      })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs).toHaveLength(3)
+      expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: true } })
+      expect(built.h.claimInputs[1]).toMatchObject({ testBaseline: { present: false } })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('docsRoot 缺席（start 未携带）→ present:false 兜底形态（禁裸相对路径——无锚定根即兜底）', async () => {
+    const built = build({ ...FULL_FLOW() })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: false } })
+  })
+
+  it('helper 锚定矩阵：proposal 容器 → proposals/<slug>/；目录形态（非文件）→ 兜底', async () => {
+    const docsRoot = mkdtempSync(join(tmpdir(), 'forge-test-baseline-'))
+    try {
+      const pDir = join(docsRoot, 'proposals', 'prop-a')
+      mkdirSync(pDir, { recursive: true })
+      writeFileSync(join(pDir, 'test-baseline.md'), '# baseline\n')
+      mkdirSync(join(docsRoot, 'features', 'feat-dir', 'test-baseline.md'), { recursive: true }) // 目录非文件
+      const present = await testBaselineBriefOf(docsRoot, { kind: 'proposal', slug: 'prop-a' })
+      expect(present).toEqual({ present: true, path: join(pDir, 'test-baseline.md'), recordedAt: expect.any(String) })
+      const notFile = await testBaselineBriefOf(docsRoot, { kind: 'feature', slug: 'feat-dir' })
+      expect(notFile).toEqual({ present: false })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+})
 
 describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged lazy 补标记', () => {
   it('first-pass done：落标记一枚（HEAD 回落结算 commit）+ settle 文本含复盘/沉淀直接指示（指标/越阈/learn/retro-done）——零任务派生（bug 4186a70c）', async () => {

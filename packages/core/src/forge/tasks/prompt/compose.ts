@@ -14,6 +14,7 @@ import {
   type TaskPrerequisiteSummary,
   type TaskRef,
   type TaskType,
+  type TestBaselineBrief,
 } from '@dsh-forge/contracts'
 
 // ─────────────────────────── CATEGORY 映射（老 forge CategoryForType 平移） ───────────────────────────
@@ -131,6 +132,12 @@ export interface DispatchPromptInput {
    * 禁止顺手修复。缺席/空数组省行——digest 与基线关闭形态同值）。
    */
   e2eBaselineRedCases?: readonly string[]
+  /**
+   * 测试基线文档简报载荷（forge-test-boundary-gates 方案2——驱动器 claim 时现查合成的
+   * 两形态结果，纯渲染零 IO：在场 = `TEST_BASELINE:` 路径 + 基线时点行；缺席 = 兜底行
+   * 「无既有失败清单，遇失败默认按新回归上报」。缺席入参省行——digest 与机制关闭形态同值）。
+   */
+  testBaseline?: TestBaselineBrief
 }
 
 // ─────────────────────────── 续跑规则段（worker-exec-evidence-replay Solution①/③ 收敛形态） ───────────────────────────
@@ -197,6 +204,19 @@ function renderE2eBaselineRed(red: readonly string[] | undefined): string | unde
   return `${red.join('; ')}（基线红灯 = e2e 套件入场前既有失败，非本任务回归——比对归因，禁止顺手修复）`
 }
 
+/**
+ * TEST_BASELINE 行值（forge-test-boundary-gates 方案2）：驱动器注入的两形态载荷纯渲染——
+ * 在场 = 文档根锚定绝对路径 + 基线时点（既有失败清单正本指针——比对归因，不解析内容）；
+ * 缺席/检查故障 = 兜底行「无既有失败清单，遇失败默认按新回归上报」（宁误报不漏报）。
+ * 缺席入参省行（机制关闭）。
+ */
+export function renderTestBaseline(brief: TestBaselineBrief | undefined): string | undefined {
+  if (brief === undefined) return undefined
+  if (!brief.present) return '无既有失败清单，遇失败默认按新回归上报'
+  const when = brief.recordedAt !== undefined ? `（基线时点：${brief.recordedAt}）` : ''
+  return `${brief.path}${when}（既有失败清单正本——遇失败先比对区分既有失败与新回归）`
+}
+
 /** AC 条目单行化（S2b：换行折叠空格——机械提取无歧义，criterion 交叉校验同源） */
 function singleLine(criterion: string): string {
   return criterion.replace(/\s*\r?\n\s*/g, ' ')
@@ -214,6 +234,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
   const markers = renderMarkers(input)
   const vars = renderVars(input.vars)
   const e2eBaselineRedCases = renderE2eBaselineRed(input.e2eBaselineRedCases)
+  const testBaseline = renderTestBaseline(input.testBaseline)
   const lines: (string | undefined)[] = [
     input.title !== undefined ? input.title : undefined,
     `TASK_ID: ${input.slug}/${input.localId}`,
@@ -232,6 +253,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     markers !== undefined ? `MARKERS: ${markers}` : undefined,
     vars !== undefined ? `VARS: ${vars}` : undefined,
     e2eBaselineRedCases !== undefined ? `E2E_BASELINE_RED: ${e2eBaselineRedCases}` : undefined,
+    testBaseline !== undefined ? `TEST_BASELINE: ${testBaseline}` : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
   if (input.evidencePointer !== undefined) {

@@ -32,6 +32,7 @@ import type {
   TaskRef,
   TaskSnapshot,
   TaskType,
+  TestBaselineBrief,
   TriageDecidedPayload,
   TriageOutcomePayload,
 } from '@dsh-forge/contracts'
@@ -80,6 +81,13 @@ export interface DispatchCoreArgs {
    * E2E_BASELINE_RED 行递达 worker。缺席 = 机制关闭，行为零变化）。
    */
   readonly e2eBaselineRedCases?: readonly string[]
+  /**
+   * 测试基线文档简报载荷（forge-test-boundary-gates 方案2——循环驱动器 claim 时对容器
+   * 测试基线文档做存在性检查（docsRoot 锚定，stat/IO 故障与缺席同形 fail-soft）后的两形态
+   * 合成结果；透传 claimTask → dispatchPrompt TEST_BASELINE 行递达 worker。本面零 IO 只
+   * 透传（同 e2eBaselineRedCases 先例分工）。缺席 = 机制关闭，行为零变化。
+   */
+  readonly testBaseline?: TestBaselineBrief
   /**
    * 效度比对检出根（disc 效度戳——claim 透传 claimTask.checkoutRoot：worker/循环检出
    * worktree = 当前效度域取数锚。缺席 = 机制惰性不判，行为零变化）。
@@ -394,6 +402,7 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
     ...(args.adopt !== undefined ? { adopt: args.adopt } : {}),
     ...(args.identity.loopSourced ? { loopSourced: true } : {}),
     ...(args.e2eBaselineRedCases !== undefined ? { e2eBaselineRedCases: args.e2eBaselineRedCases } : {}),
+    ...(args.testBaseline !== undefined ? { testBaseline: args.testBaseline } : {}),
     ...(args.checkoutRoot !== undefined ? { checkoutRoot: args.checkoutRoot } : {}),
     ...(exclusivityGuard !== undefined ? { exclusivityGuard } : {}),
   })

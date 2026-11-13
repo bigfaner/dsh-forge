@@ -29,7 +29,9 @@
 //
 // 依赖方向：loop → dispatch-core / notify / contracts 单向；零工具壳 import（可拆卸壳纪律）。
 import { FIX_CHAIN_DEPTH_LIMIT, FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from '@dsh-forge/contracts'
-import type { BugCard, ContainerRef, DiagLevel, ForgePluginEvent, ForgeSettingsService, ForgeTasksService, ListBugsQuery, TaskRef, TaskSnapshot, TaskStats, TaskType, TriageDecidedPayload, TriageOutcomePayload } from '@dsh-forge/contracts'
+import type { BugCard, ContainerRef, DiagLevel, ForgePluginEvent, ForgeSettingsService, ForgeTasksService, ListBugsQuery, TaskRef, TaskSnapshot, TaskStats, TaskType, TriageDecidedPayload, TriageOutcomePayload, TestBaselineBrief } from '@dsh-forge/contracts'
+import { stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { HALT_THRESHOLD, HALTED_REASON } from '../dispatch-core/index.js'
 // S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
 import { claimForDispatch, classifyPool, computeWaveSnapshot, findLiveSuccessor, gitHeadCommit, poolOf, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
@@ -1878,6 +1880,30 @@ async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineC
   return entry
 }
 
+// ─────────────────────────── 测试基线文档存在性检查（forge-test-boundary-gates 方案2） ───────────────────────────
+
+/**
+ * 容器测试基线文档存在性检查（claim 时现查、结果不缓存）：projectId 文档根锚定解析
+ * （docsRoot 绝对路径 + 容器容器目录——proposals/<slug>/ 或 features/<slug>/，禁裸相对
+ * 路径）→ stat 存在性判定。三形态收敛两态载荷：
+ * - 在场 = { present: true, path（文档根锚定绝对路径）, recordedAt（文件 mtime ISO——基线
+ *   时点，不解析文档内容）}；
+ * - 缺席 / 检查故障（stat 异常与文件缺席同形回落）/ docsRoot 缺席（无锚定根）=
+ *   { present: false }——fail-soft，任何异常不上抛进 claim 链（零防线计数）。
+ */
+export async function testBaselineBriefOf(docsRoot: string | undefined, source: ContainerRef): Promise<TestBaselineBrief> {
+  if (docsRoot === undefined) return { present: false }
+  const dir = source.kind === 'proposal' ? 'proposals' : 'features'
+  const path = join(docsRoot, dir, source.slug, 'test-baseline.md')
+  try {
+    const s = await stat(path)
+    if (!s.isFile()) return { present: false }
+    return { present: true, path, recordedAt: s.mtime.toISOString() }
+  } catch {
+    return { present: false }
+  }
+}
+
 /**
  * 每轮（implementation-blueprint §3 runRound）：① 逐个恢复优先（任务源内最早 interrupted →
  * adopt 定向领取径）→ ② 领取（dispatch-core 阶段一）→ ③ 领取通知（S4 notice）→ ④ spawn
@@ -1908,6 +1934,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // R2-minor⑥：漂移重算的新增红灯同启动时点行为——补生成归因卡（已发不重发）。
   const baseline = await ensureE2eBaseline(loop)
   if (baseline !== undefined) await issueAttributionCards(loop, baseline.redCases)
+  // 测试基线文档简报载荷（forge-test-boundary-gates 方案2）：每 claim 现查（结果不缓存），
+  // stat/IO 故障与缺席同形 fail-soft——异常不上抛进 claim 链
+  const testBaseline = await testBaselineBriefOf(record.docsRoot, source)
   let claim: Awaited<ReturnType<typeof claimForDispatch>>
   try {
     claim = await claimForDispatch(loop.core, exec, {
@@ -1919,6 +1948,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       ...(baseline !== undefined && baseline.redCases.length > 0
         ? { e2eBaselineRedCases: baseline.redCases }
         : {}),
+      ...(testBaseline !== undefined ? { testBaseline } : {}),
       // disc 效度戳：效度比对检出根 = 发起循环的检出（1.14 cwd 钉定同源锚——重领证据机械
       // 比对此效度域，漂移 = stale 强制重跑）
       ...(record.worktree !== undefined ? { checkoutRoot: record.worktree } : {}),

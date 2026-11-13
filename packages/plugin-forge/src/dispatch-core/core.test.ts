@@ -374,6 +374,28 @@ describe('dispatchCore S3 接线（adopt + loopSourced → claimTask）', () => 
       { projectId: 'p-1', sessionId: 'loop-owner-1', loopSourced: true },
     ])
   })
+
+  it('testBaseline 载荷透传 claimTask（forge-test-boundary-gates 方案2——core 零 IO 只透传，两形态原样落面）', async () => {
+    const h = harness()
+    const { exec } = execOf()
+    await dispatchCore(
+      h.deps,
+      exec,
+      loopArgs({ testBaseline: { present: true, path: 'Z:\\proj\\.forge\\docs\\features\\feat-x\\test-baseline.md', recordedAt: '2026-02-24T08:00:00.000Z' } }),
+    )
+    expect(h.claimInputs[0]).toMatchObject({
+      testBaseline: { present: true, path: 'Z:\\proj\\.forge\\docs\\features\\feat-x\\test-baseline.md', recordedAt: '2026-02-24T08:00:00.000Z' },
+    })
+    const h2 = harness()
+    const { exec: exec2 } = execOf()
+    await dispatchCore(h2.deps, exec2, loopArgs({ testBaseline: { present: false } }))
+    expect(h2.claimInputs[0]).toMatchObject({ testBaseline: { present: false } })
+    // 载荷缺席 = 机制关闭：claimTask 零 testBaseline 键（工具壳行为零变化）
+    const h3 = harness()
+    const { exec: exec3 } = execOf()
+    await dispatchCore(h3.deps, exec3, loopArgs())
+    expect(h3.claimInputs[0]).not.toHaveProperty('testBaseline')
+  })
 })
 
 // ─────────────────────────── guard 机械（guardKey 参数化——decisions #18） ───────────────────────────

@@ -519,6 +519,17 @@ export interface ClaimExclusivityTarget {
   taskStatus: TaskStatus
 }
 
+/**
+ * 测试基线文档简报载荷（forge-test-boundary-gates 方案2——循环驱动器 claim 时对容器测试
+ * 基线文档（proposals/<slug>/test-baseline.md 或 features/<slug>/test-baseline.md）做存在性
+ * 检查后的两形态合成结果：在场 = 文档根锚定绝对路径 + 基线时点（文件 mtime——不解析文档
+ * 内容）；缺席 = 兜底形态（文件缺席与 stat/IO 故障同形回落——fail-soft，检查故障不上抛）。
+ * 缺席入参 = 机制关闭，简报零 TEST_BASELINE 行。
+ */
+export type TestBaselineBrief =
+  | { readonly present: true; readonly path: string; readonly recordedAt?: string }
+  | { readonly present: false }
+
 /** claimTask 入参（M3 容器化：featureSlug? → source?: ContainerRef——容器限定盲选，缺省 = 全库） */
 export interface ClaimTaskInput {
   projectId: string
@@ -546,6 +557,13 @@ export interface ClaimTaskInput {
    * 缺席/空 = 机制关闭或基线全绿，简报零此行）。
    */
   e2eBaselineRedCases?: readonly string[]
+  /**
+   * 测试基线文档简报载荷（forge-test-boundary-gates 方案2——可选；循环驱动器 claim 时
+   * 现查合成，随 dispatchPrompt TEST_BASELINE 行递达 worker：在场 = 路径 + 基线时点行，
+   * 缺席 = 兜底行「无既有失败清单，遇失败默认按新回归上报」。缺席入参 = 机制关闭，
+   * 简报零此行。IO 检查归驱动器侧——core 只收合成结果零 IO。）
+   */
+  testBaseline?: TestBaselineBrief
   /**
    * 效度比对检出根（disc 跟进——证据效度戳机械比对的当前效度域取数锚：worker/循环检出
    * worktree。缺席 = 当前效度域不可取 → 机制惰性不判（形态兼容））。
