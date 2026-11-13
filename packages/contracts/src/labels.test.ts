@@ -16,6 +16,7 @@ import {
   TASK_STATUS_LABELS,
   TASK_TYPES,
   TASK_TYPE_LABELS,
+  type TaskType,
   E2E_ATTRIBUTION_COLUMN,
   IMPLEMENTATION_TASK_TYPES,
   VALIDATION_TASK_TYPES,
@@ -84,7 +85,7 @@ describe('loop-phase-gate T11 验证类词表 pin（设计 §3——词表单点
   })
 
   it('I ∩ V = ∅ ∧ gate ∉ I（三集两两不交——GATE_SQL 换元洞闭合 pin：交集成员会在门判据换元下双向穿透）', () => {
-    const iSet = new Set(IMPLEMENTATION_TASK_TYPES)
+    const iSet = new Set<TaskType>(IMPLEMENTATION_TASK_TYPES)
     for (const v of VALIDATION_TASK_TYPES) expect(iSet.has(v)).toBe(false)
     expect(iSet.has('gate')).toBe(false)
   })
