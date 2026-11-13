@@ -5,7 +5,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { AddTaskInput, ContainerRef, TaskPriority } from '@dsh-forge/contracts'
+import type { AddTaskInput, ContainerRef, ForgeTasksService, TaskPriority } from '@dsh-forge/contracts'
 import { noteHostOwnedChild } from '../spawn/job-tree.js'
 import { emitForgeDiag, type ForgeDiagEmitFace } from '../faces.js'
 
@@ -183,6 +183,23 @@ export function attributionTaskInput(
     ].join('\n'),
     vars: { BASELINE_SPEC: spec },
   }
+}
+
+/**
+ * 归因卡生成单卡（loop-phase-gate §2.9——CE-6 方案 A 写入径）：addTask 落卡 → 后置
+ * markE2eAttribution 置 tasks.e2e_attribution = 1（生成侧单点写；标记不经 addTask 参数
+ * 暴露——contracts AddTaskInput 硬约束）。addTask 故障上抛由调用方裁定（循环径 fail-soft
+ * warn）；标记写入 fail-loud——UPDATE 未命中即抛（归因卡无标记等于无豁免，T16 生成侧
+ * 断言锚）；markE2eAttribution 面缺席 = 形态兼容跳过（core 服务恒提供）。
+ */
+export async function issueAttributionCard(
+  deps: { readonly tasks: ForgeTasksService },
+  source: ContainerRef,
+  projectId: string,
+  spec: string,
+): Promise<void> {
+  const added = await deps.tasks.addTask(attributionTaskInput(source, spec, { projectId }))
+  await deps.tasks.markE2eAttribution?.({ projectId, slug: added.slug, localId: added.localId })
 }
 
 // ─────────────────────────── 生产装配面（宿主 wiring——bug ca061ef6 接线收口） ───────────────────────────

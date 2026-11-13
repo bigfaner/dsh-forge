@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { hostOwnedPidsSnapshot } from '../spawn/job-tree.js'
-import { attributionTaskInput, baselineForHead, createE2eBaselineFace, loadPersistedBaseline, parseE2eRedCases, runE2eBaseline } from './e2e-baseline.js'
+import { attributionTaskInput, baselineForHead, createE2eBaselineFace, issueAttributionCard, loadPersistedBaseline, parseE2eRedCases, runE2eBaseline } from './e2e-baseline.js'
 
 describe('parseE2eRedCases（套件输出 → 红灯用例清单）', () => {
   it('FAIL 行用例级提取（路径 + 用例链）+ 去重 + 字母序', () => {
@@ -263,6 +263,48 @@ describe('attributionTaskInput（三分流归因卡载荷）', () => {
     expect(input.taskDesc).toContain('陈旧断言')
     expect(input.taskDesc).toContain('真回归')
     expect(input.taskDesc).toContain('recordBug')
+  })
+})
+
+describe('issueAttributionCard 生成侧标记（loop-phase-gate §2.9——CE-6 方案 A 写入径，T16）', () => {
+  const SOURCE = { kind: 'feature', slug: 'feat-x' } as const
+
+  function tasksStub(over: { markMiss?: boolean; markFace?: boolean } = {}) {
+    const calls: { addTask: number; marks: Array<{ projectId: string; slug: string; localId: string }> } = { addTask: 0, marks: [] }
+    const tasks = {
+      addTask: async () => {
+        calls.addTask += 1
+        return { taskId: 't-1', slug: 'feat-x', localId: 'attr-1', reused: false }
+      },
+      ...(over.markFace === false
+        ? {}
+        : {
+            markE2eAttribution: async (input: { projectId: string; slug: string; localId: string }) => {
+              if (over.markMiss === true) throw new Error('ERR_TASK_NOT_FOUND')
+              calls.marks.push(input)
+            },
+          }),
+    }
+    return { tasks, calls }
+  }
+
+  it('产卡后 tasks 行标记 = 1：addTask 返回体回填 localId 后置 UPDATE（生成侧单点写）', async () => {
+    const { tasks, calls } = tasksStub()
+    await issueAttributionCard({ tasks }, SOURCE, 'p-1', 'e2e/specs/a.spec.ts')
+    expect(calls.addTask).toBe(1)
+    expect(calls.marks).toEqual([{ projectId: 'p-1', slug: 'feat-x', localId: 'attr-1' }])
+  })
+
+  it('UPDATE 未命中 fail-loud：markE2eAttribution 抛错原样上抛（归因卡无标记等于无豁免）', async () => {
+    const { tasks } = tasksStub({ markMiss: true })
+    await expect(issueAttributionCard({ tasks }, SOURCE, 'p-1', 'e2e/specs/a.spec.ts')).rejects.toThrow('ERR_TASK_NOT_FOUND')
+  })
+
+  it('markE2eAttribution 面缺席 = 形态兼容跳过（core 服务恒提供——测试桩缺席径）', async () => {
+    const { tasks, calls } = tasksStub({ markFace: false })
+    await expect(issueAttributionCard({ tasks }, SOURCE, 'p-1', 'e2e/specs/a.spec.ts')).resolves.toBeUndefined()
+    expect(calls.addTask).toBe(1)
+    expect(calls.marks).toHaveLength(0)
   })
 })
 

@@ -76,6 +76,8 @@ export const FORGE_PROGRESS_SCENARIO = {
   loopFinishAll: 'loop/finish-all',
   loopStopped: 'loop/stopped',
   loopOrphanReconciled: 'loop/orphan-reconciled',
+  // 阶段门持有族（loop-phase-gate CE-1——验证卡被实现链阶段门持有的等待轮）
+  loopGateHeld: 'loop/gate-held',
   // 处置族（triage-progress-row——blocked 任务的处置分析：running/终态两用）
   loopTriage: 'loop/triage',
   // 静默挂起族（⑱-㉑ + T3 同缝拦截挂起）

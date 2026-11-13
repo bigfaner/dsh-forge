@@ -16,6 +16,7 @@ import type {
   ContainerRef,
   ForgeTasksService,
   ListTasksQuery,
+  MarkE2eAttributionInput,
   QueryTaskInput,
   QueryTaskResult,
   RecordSpawnInput,
@@ -50,6 +51,7 @@ import { claimTask } from './claim.js'
 import { taskDetail } from './detail.js'
 import type { GitExecFile } from './git-lookup.js'
 import { listTasks, taskGraph, taskSettlements, taskStats } from './list.js'
+import { markE2eAttribution } from './mark-e2e-attribution.js'
 import { queryTask } from './query.js'
 import type { ExpertPersonaProfile } from './prompt/persona.js'
 import { reconcileInterrupted } from './reconcile.js'
@@ -117,6 +119,9 @@ export function createTasksService(deps: TasksServiceDeps): ForgeTasksService {
     },
     async recordSpawn(input: RecordSpawnInput): Promise<void> {
       return recordSpawn(deps, input)
+    },
+    async markE2eAttribution(input: MarkE2eAttributionInput): Promise<void> {
+      return markE2eAttribution(deps, input)
     },
     async reconcileInterrupted(input: ReconcileInterruptedInput): Promise<ReconcileInterruptedResult> {
       return reconcileInterrupted(deps, input)

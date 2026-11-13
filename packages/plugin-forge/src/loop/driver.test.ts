@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AddTaskInput,
+  BugCard,
   ClaimTaskInput,
   ClaimTaskResult,
   ForgePluginEvent,
@@ -68,7 +69,7 @@ function snapshot(over: Partial<TaskSnapshot> = {}): TaskSnapshot {
   }
 }
 
-function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number } = {}): TaskStats {
+function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number; gatedPending?: number } = {}): TaskStats {
   const byStatus: Record<TaskStatus, number> = {
     pending: 0,
     in_progress: 0,
@@ -80,7 +81,7 @@ function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: nu
     interrupted: 0,
     ...over,
   }
-  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0 }
+  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0, gatedPending: over.gatedPending ?? 0 }
 }
 
 function card(slug: string, localId: string, over: Partial<TaskCard> = {}): TaskCard {
@@ -364,6 +365,8 @@ function build(options: {
   findRecurrenceCandidates?: (projectId: string, scope: { readonly slug: string; readonly localId: string; readonly sourceTaskId: string | undefined }) => Promise<unknown[]> | unknown[]
   /** T3「待建模」解除判据：卷宗建模报告在场桩 */
   modelingReportPresent?: (input: { readonly projectId: string; readonly slug: string; readonly localId: string; readonly bugIds: readonly string[] }) => boolean
+  /** bug 台账桩（loop-phase-gate 提案⑤——done 径承接检查数据源；open 行清单直录） */
+  bugs?: readonly { bugId: string; summary: string; sourceTaskId?: string }[]
 } = {}): Built {
   const h = tasksHarness({ addTaskFailures: options.addTaskFailures })
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -440,6 +443,26 @@ function build(options: {
     ...(options.diag !== undefined ? { diag: options.diag } : {}),
     ...(options.findRecurrenceCandidates !== undefined ? { findRecurrenceCandidates: options.findRecurrenceCandidates as LoopDriverDeps['findRecurrenceCandidates'] } : {}),
     ...(options.modelingReportPresent !== undefined ? { modelingReportPresent: options.modelingReportPresent as LoopDriverDeps['modelingReportPresent'] } : {}),
+    ...(options.bugs !== undefined
+      ? {
+          bugs: {
+            listBugs: async (): Promise<readonly BugCard[]> =>
+              options.bugs!.map((bug): BugCard => ({
+                bugId: bug.bugId,
+                summary: bug.summary,
+                bugDesc: '',
+                triggerDesc: '',
+                expected: '',
+                actual: '',
+                bugStatus: 'open',
+                reporter: '',
+                createdAt: '',
+                updatedAt: '',
+                ...(bug.sourceTaskId !== undefined ? { sourceTaskId: bug.sourceTaskId } : {}),
+              })),
+          },
+        }
+      : {}),
     escalation: {
       escalate: async (e) => {
         escalations.push(e)
@@ -2095,6 +2118,102 @@ describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
     expect(timeout?.wakeup).toBe(true) // ⑮ 结算单点唤醒（AC）
     expect(timeout?.text).toContain('完成 4 · 阻塞 0 · 待处理 2')
     expect(timeout?.text).toContain('提示用户"稍后重新执行 /run-dag-tasks feat-x"')
+  })
+})
+
+describe('CE-1 收工判据（loop-phase-gate）', () => {
+  it('T5 wait 径 gatedPending>0：不计 patience 连击、每轮进度 note；达上限 → phase-gate 挂起（载荷透传 unsettled）', async () => {
+    const gated = statsOf({ pending: 1, gatedPending: 1 })
+    const built = build({
+      claim: [NO_TASK],
+      stats: [gated, gated, gated, gated],
+    })
+    // 容器夹具：I 卡 1.13 已 completed（终态不计）；I 卡 2.1 in_progress（滞留——入 unsettled）；
+    // fix-1 前缀排除；3.1 test-run 是 V 卡本身（不进链集合）
+    built.h.lists.created = [
+      card('feat-x', '1.13', { taskStatus: 'completed' }),
+      card('feat-x', '2.1', { taskStatus: 'in_progress' }),
+      card('feat-x', 'fix-1', { taskStatus: 'pending' }),
+      card('feat-x', '3.1', { taskStatus: 'pending', taskType: 'test-run' }),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 三轮 gate 持有等待（不并入 patience），第三轮达上限 → phase-gate 挂起（非 ⑮ 超时收口）
+    expect(built.h.claimInputs).toHaveLength(3)
+    expect(built.calls.filter((c) => c.method === 'settle')).toEqual([])
+    expect(suspended.escalation).toMatchObject({
+      kind: 'phase-gate',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+    })
+    const phaseGate = suspended.escalation as Extract<LoopEscalation, { kind: 'phase-gate' }>
+    expect(phaseGate.unsettled).toEqual([{ slug: 'feat-x', localId: '2.1', taskStatus: 'in_progress' }])
+    // 每轮进度 note（loop/gate-held 场景）
+    const gateEvents = built.progressCalls.filter((e) => e.scenario === S.loopGateHeld)
+    expect(gateEvents.length).toBeGreaterThanOrEqual(3)
+    expect(gateEvents[0]?.note).toContain('1 张验证卡被实现链阶段门持有')
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('T5 反例：链终态后（gatedPending 归零）正常 done 径收口', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ pending: 1, gatedPending: 1 }), statsOf({ completed: 2 }), statsOf({ completed: 2 }), statsOf({ completed: 2 })],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
+    expect(built.calls.at(-1)?.text).toContain('全部任务已完成')
+  })
+})
+
+describe('done 径承接检查（loop-phase-gate 提案⑤——open bug 无承接修复链不收口）', () => {
+  const doneStats = statsOf({ completed: 1, interrupted: 1 })
+
+  it('T10：open bug ∧ 源任务非终态 ∧ 无活后继 → 不收口转 unclaimed-bugs 挂起（载荷带未承接清单）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [doneStats, doneStats, doneStats, doneStats],
+      bugs: [{ bugId: 'bug-1', summary: 'worker 登记的缺陷', sourceTaskId: 'card-feat-x-2.9' }],
+    })
+    built.h.lists.created = [card('feat-x', '2.9', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(built.calls.filter((c) => c.method === 'settle')).toEqual([])
+    expect(suspended.escalation).toMatchObject({
+      kind: 'unclaimed-bugs',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+    })
+    const unclaimed = suspended.escalation as Extract<LoopEscalation, { kind: 'unclaimed-bugs' }>
+    expect(unclaimed.bugs).toEqual([{ bugId: 'bug-1', summary: 'worker 登记的缺陷', taskKey: 'feat-x/2.9' }])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('T10 反例一：有活后继（interrupted fix 卡）→ 承接在途，正常收口', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [doneStats, doneStats, doneStats, doneStats],
+      bugs: [{ bugId: 'bug-1', summary: 'worker 登记的缺陷', sourceTaskId: 'card-feat-x-2.9' }],
+    })
+    built.h.lists.created = [
+      card('feat-x', '2.9', { taskStatus: 'completed' }),
+      card('feat-x', 'fix-1', { taskStatus: 'interrupted', sourceTask: { slug: 'feat-x', localId: '2.9' } }),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.calls.at(-1)?.text).toContain('全部任务已完成')
+  })
+
+  it('T10 反例二：无 open bug / bugs face 缺席 → 正常收口（机制惰性不判）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [doneStats, doneStats, doneStats, doneStats],
+    })
+    built.h.lists.created = [card('feat-x', '2.9', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.calls.at(-1)?.text).toContain('全部任务已完成')
   })
 })
 

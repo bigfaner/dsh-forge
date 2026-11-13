@@ -584,6 +584,8 @@ const forgePlugin: ForgePlugin = Object.assign(
       globalToolNames: createUnionToolNamesProbe(toolsSchemasReaderOf(ctx), agentPresetsOf),
       ...(e2eBaseline !== undefined ? { e2eBaseline } : {}),
       tasks: ctx.forgeTasks,
+      // bug 台账读面（loop-phase-gate 提案⑤——done 径承接检查数据源；缺席 = 机制惰性不判）
+      bugs: ctx.forgeBugs,
       spawn,
       narrator,
       events: sink,

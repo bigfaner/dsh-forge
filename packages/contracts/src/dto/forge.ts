@@ -876,6 +876,15 @@ export interface RecordSpawnInput {
   sessionId: string
 }
 
+/** markE2eAttribution 入参（loop-phase-gate §2.9——归因卡生成侧标记写面） */
+export interface MarkE2eAttributionInput {
+  projectId: string
+  /** 容器 slug（≡ 任务 slug 服务不变量） */
+  slug: string
+  /** addTask 返回的自然键 localId（生成点用返回体回填——不重解析） */
+  localId: string
+}
+
 /** Interface 1：core · forge 任务域服务面（ctx.forgeTasks） */
 export interface ForgeTasksService {
   /** tasks 行 + edges 行 + records 行单事务全成全败（增量环校验 + 两级去重 + 相位重算） */
@@ -889,6 +898,14 @@ export interface ForgeTasksService {
    * 未命中 ERR_TASK_NOT_FOUND。agent 面专用（dispatchTask 内部径），不入 RPC/tool 面。
    */
   recordSpawn(input: RecordSpawnInput): Promise<void>
+  /**
+   * E2E 归因卡生成侧标记（loop-phase-gate §2.9——CE-6 方案 A 写入径）：归因卡生成点
+   * （plugin-forge issueAttributionCard）addTask 返回后调用——后置 UPDATE tasks.e2e_attribution = 1
+   * （单点写；标记不经 addTask 参数暴露——硬约束见 AddTaskInput）。未命中 fail-loud
+   * （ERR_TASK_NOT_FOUND——归因卡无标记等于无豁免）；幂等重写无害。可选面 = 形态兼容
+   * （core 服务恒提供；测试桩缺席 = 跳过）。
+   */
+  markE2eAttribution?(input: MarkE2eAttributionInput): Promise<void>
   /** 转移 + record(files/gate/commit) + 恢复钩子反查 + 相位重算 */
   submitTask(input: SubmitTaskInput): Promise<SubmitTaskResult>
   /** blocked→pending 出口（blocked-verdict-restore-primitive：转移 + 'unblock' 审计行 + 相位重算；不挂恢复钩子） */

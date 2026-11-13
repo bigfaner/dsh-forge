@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/contracts",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "跨工件类型/常量（RPC DTO、frontmatter 契约常量、错误码、IPC 通道名）与工具注册面投影/求交纯逻辑（tool-projection——运行期零依赖，官方机械仅 type-only import）——依赖铁律：运行期不依赖任何包。",
