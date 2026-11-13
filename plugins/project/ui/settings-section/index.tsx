@@ -126,10 +126,11 @@ function resolveForm(forms: ConfigFormsFace): ConfigFormMirror | undefined {
 
 /**
  * 注册 project 配置节（双缝——bundle.config keyed + detail.section list，单渲染本体）。
- * configForms 在场 = 官方正门（whileServed 在场门挂调用者 fiber——namespace 未被服务即
- * 拆卸，经 ctx.effect 级联；无 whileServed 直挂 slots.inject 声明缝）；
- * configForms 缺席/劣形 = 插件自有配置承载面降级挂载（fix-1 用户裁定 2026-11-13④——
- * 持久化读写在插件域完成，行为与在场形态对齐；warn 留痕不静默，AGENTS §7 可观测性）。
+ * 三态门（bug 55c24319）：configForms 在场且 namespace 被 serve = 官方正门（whileServed
+ * 在场门挂调用者 fiber——namespace 撤 serve 即拆卸，经 ctx.effect 级联）；configForms
+ * 缺席/劣形，或 configForms 在场但 namespace 未被服务（中间态），= 插件自有配置承载面
+ * localFormMirror 降级挂载（fix-1 用户裁定 2026-11-13④——持久化读写在插件域完成，行为
+ * 与在场形态对齐；warn 留痕不静默，AGENTS §7 可观测性）。
  */
 export function registerSettingsSection(
   ctx: {
@@ -145,20 +146,44 @@ export function registerSettingsSection(
     return mountSections(() => ({ form: localPrefsForm() }), slots);
   }
   const sectionFace = () => ({ form: resolveForm(forms) });
+  const fallbackFace = () => ({ form: localPrefsForm() });
+  /** serve 未命中降级（warn 留痕不静默——AGENTS §7）：configForms 在场但 namespace unserved。 */
+  const mountFallback = (): (() => void) | undefined => {
+    console.warn("[dsh-forge/project] configForms namespace unserved; settings section mounted on plugin-owned config face");
+    return mountSections(fallbackFace, slots);
+  };
   if (typeof forms.whileServed === "function") {
     // 官方 settings-* 族同型：whileServed 经 ctx.effect 挂调用者 fiber（卸载级联）。
+    // 三态门（bug 55c24319）：serve 命中 = 官方正门；namespace unserved（含中间态）= 降级。
     const watch = (): (() => void) | undefined => {
+      let mounted: (() => void) | undefined;
+      let gated = false; // whileServed 回调已触发旗标（触发后挂载机会由回调独占）
       const disposer = forms.whileServed!(NAMESPACE_CANDIDATES, (served) => {
-        const registered = NAMESPACE_CANDIDATES.some((candidate) => served.has(candidate))
+        gated = true;
+        mounted?.();
+        mounted = undefined;
+        mounted = NAMESPACE_CANDIDATES.some((candidate) => served.has(candidate))
           ? mountSections(sectionFace, slots)
-          : undefined;
-        return () => registered?.();
+          : mountFallback();
+        return () => {
+          mounted?.();
+          mounted = undefined;
+        };
       });
-      return () => disposer();
+      // unserved 挂起态现查兜底（bug 55c24319 官方宿主实测形态）：whileServed 回调不即时
+      // 触发 = 挂载机会零——消费点现查（AGENTS 1.6）择门：get 命中 = 官方正门直挂；
+      // namespace 未被服务 = localFormMirror 降级挂载。serve 态变化时回调先撤现挂再换门
+      // （零双挂）。
+      if (!gated) mounted = resolveForm(forms) !== undefined ? mountSections(sectionFace, slots) : mountFallback();
+      return () => {
+        disposer();
+        mounted?.();
+        mounted = undefined;
+      };
     };
     return typeof ctx.effect === "function" ? ctx.effect(watch, "project: settings section watch") : watch();
   }
-  return mountSections(sectionFace, slots);
+  return resolveForm(forms) !== undefined ? mountSections(sectionFace, slots) : mountFallback();
 }
 
 /** 双缝挂载单源（form 注入缝——在场/降级两形态共消费）。 */

@@ -75,6 +75,11 @@ function configFormsFake(form: ConfigFormMirror | undefined, whileServed?: unkno
 }
 
 const SETTINGS_NS = "project";
+
+/** whileServed fake（register 同步回调 served 集——在场门三态矩阵驱动面）。 */
+function whileServedOf(served: ReadonlySet<string>) {
+  return vi.fn((_ns: readonly string[], register: (s: ReadonlySet<string>) => () => void) => register(served));
+}
 const ctxFake = (services: Record<string, unknown>) => ({ ...services });
 
 // ── 注册装配（双缝） ──────────────────────────────────────────────
@@ -120,17 +125,96 @@ describe("registerSettingsSection（plugins.bundle.config / detail.section 双�
     expect(getByNamespace).toHaveBeenCalledWith("dsh-forge-project");
   });
 
-  it("namespace 未被服务 = 不注册（whileServed 门不放行零落座）", () => {
+  it("三态·在场 unserved：configForms 在场但 namespace 未被服务 = localFormMirror 降级挂载（warn 留痕，锚断言不零挂载）", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const fake = slotsFake();
-    const whileServed = vi.fn((_ns: readonly string[], _register: (served: ReadonlySet<string>) => () => void) => () => undefined);
-    registerSettingsSection(
-      ctxFake({ configForms: { whileServed, get: () => undefined } }) as never,
+    const disposer = registerSettingsSection(
+      ctxFake({ configForms: configFormsFake(undefined, whileServedOf(new Set<string>())) }) as never,
       fake.slots as never,
     );
-    expect(fake.registered).toHaveLength(0);
+    // 中间态同样挂载（bug 55c24319——零挂载即缺陷）
+    expect(fake.injects).toEqual([BUNDLE_CONFIG_SLOT, DETAIL_SECTION_SLOT]);
+    expect(fake.registered).toHaveLength(2);
+    expect((fake.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form).toBeDefined();
+    expect(typeof disposer).toBe("function");
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toContain("namespace");
+    warn.mockRestore();
   });
 
-  it("configForms 缺席 = 插件自有配置承载面降级挂载（双缝齐挂 + 读写读写读回两态成立）", async () => {
+  it("三态·unserved 挂起：whileServed 回调不即时触发 = 现查降级挂载（官方宿主实测形态，不空等）", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = slotsFake();
+    // whileServed 在场但 register 回调永不触发（unserved 挂起——官方宿主 19777 实测）
+    const whileServed = vi.fn(() => () => undefined);
+    const disposer = registerSettingsSection(
+      ctxFake({ configForms: configFormsFake(undefined, whileServed) }) as never,
+      fake.slots as never,
+    );
+    expect(fake.registered).toHaveLength(2);
+    expect((fake.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form).toBeDefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(typeof disposer).toBe("function");
+    warn.mockRestore();
+  });
+
+  it("三态·unserved 挂起→后到 serve：回调后到时撤降级换正门（零双挂）", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = slotsFake();
+    const form = formMirrorOf(undefined);
+    let fire: ((served: ReadonlySet<string>) => () => void) | undefined;
+    let served: ConfigFormMirror | undefined; // 挂起态 get 未服务；serve 后到时置位
+    const getByNamespace = vi.fn((ns: string) => (ns === "project" ? served : undefined));
+    const whileServed = vi.fn((_ns: readonly string[], register: (s: ReadonlySet<string>) => () => void) => {
+      fire = register;
+      return () => undefined;
+    });
+    registerSettingsSection(
+      ctxFake({ configForms: { whileServed, get: getByNamespace } }) as never,
+      fake.slots as never,
+    );
+    // 挂起态先降级
+    expect(fake.registered).toHaveLength(2);
+    expect((fake.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form).not.toBe(form);
+    // serve 后到：换正门且双缝仍各一挂（零双挂）
+    served = form;
+    fire!(new Set(["project"]));
+    expect(fake.injects).toEqual([BUNDLE_CONFIG_SLOT, DETAIL_SECTION_SLOT, BUNDLE_CONFIG_SLOT, DETAIL_SECTION_SLOT]);
+    expect((fake.registered[2]!.options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    warn.mockRestore();
+  });
+
+  it("三态·挂起但 get 现查命中：whileServed 回调不触发 + get 服务在场 = 官方正门直挂（不空等）", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = slotsFake();
+    const form = formMirrorOf(undefined);
+    const whileServed = vi.fn(() => () => undefined); // 回调永不触发（官方宿主实测形态）
+    registerSettingsSection(
+      ctxFake({ configForms: { whileServed, get: (ns: string) => (ns === "dsh-forge-project" ? form : undefined) } }) as never,
+      fake.slots as never,
+    );
+    expect(fake.injects).toEqual([BUNDLE_CONFIG_SLOT, DETAIL_SECTION_SLOT]);
+    expect(fake.registered).toHaveLength(2);
+    expect((fake.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("三态·serve 命中：namespace 被 serve = 官方正门 revisioned 读写挂载（不走降级）", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = slotsFake();
+    const form = formMirrorOf(undefined);
+    registerSettingsSection(
+      ctxFake({ configForms: configFormsFake(form, whileServedOf(new Set(["project"]))) }) as never,
+      fake.slots as never,
+    );
+    expect(fake.registered).toHaveLength(2);
+    expect((fake.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("三态·绝对缺席：configForms 缺席 = localFormMirror 降级挂载（既有 fix-1 缝维持）", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const fake = slotsFake();
     const disposer = registerSettingsSection(ctxFake({}) as never, fake.slots as never);
