@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import type { TaskStatus } from '@dsh-forge/contracts'
 import { EmptyState } from '../components.js'
 import type { RpcClientFactory } from './rpc-channels.js'
+import { preloadRpcClientFactory } from './rpc-channels.js'
 import { OverviewTab, type OverviewTasksContext } from './overview/OverviewTab.js'
 import type { SessionOpenRequest } from './overview/message-format.js'
 import type { OpenSessionOrchestrator } from '../open-session.js'
@@ -33,6 +34,7 @@ import {
   type ForgeTaskFocus,
   type WorkbenchBridge,
 } from './bridge-mirror.js'
+import { useSelfAnchor, type SelfAnchorServices } from './self-anchor.js'
 
 /** 文档 tab 类型 kind（plugin.ts DOC_TAB_KIND 结构同型镜像——plugin.test 字面量同源 pin） */
 export const DSWF_DOC_TAB_KIND = 'dswf-doc'
@@ -348,6 +350,8 @@ export interface ForgeOverviewTabProps {
   readonly addBugToSession?: BugQuickAddFn
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
+  /** 概览锚自解析服务缝（fix-11 缺陷 A——桥缺席/桥锚 null 时插件自解析退路；缺席 = 无退路） */
+  readonly selfAnchor?: SelfAnchorServices
 }
 
 export function ForgeOverviewTab(props: ForgeOverviewTabProps): ReactNode {
@@ -375,7 +379,14 @@ function OverviewTabWithBridge(
     [bridge],
   )
   const snapshot = useSyncExternalStore(subscribe, readSnapshot, readSnapshot)
-  const overview = snapshot?.overview ?? initialOverviewContext()
+  const bridgeOverview = snapshot?.overview ?? initialOverviewContext()
+  // 概览锚自解析补位（fix-11 缺陷 A）：桥锚 projectId 非空 = 桥裁决优先（集成态回归零变化）；
+  // null = 插件自解析退路（官方 workspace 上下文 → project.db 归属行匹配），解析失败维持无锚。
+  const self = useSelfAnchor(props.selfAnchor, props.makeClient ?? preloadRpcClientFactory)
+  const overview: ForgeOverviewContext =
+    bridgeOverview.projectId === null && self !== null
+      ? { projectId: self.projectId, workspaceId: self.workspaceId, sessionCount: self.sessionCount }
+      : bridgeOverview
   // 任务行 → 弹窗 / ⋯ 转移 → 对话框（桥写面——弹窗与对话框挂 ShellHost[D23 挂载独立]）
   const openTask = useCallback(
     (taskId: string): void => {

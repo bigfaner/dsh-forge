@@ -84,6 +84,22 @@ const ctxFake = (services: Record<string, unknown>) => ({ ...services });
 
 // ── 注册装配（双缝） ──────────────────────────────────────────────
 
+/** localStorage 桩（node 环境降级面 ready/writable 前提——worktreePrefsFaceOf 同法） */
+function withLocalStorage(run: () => void): void {
+  const prior = (globalThis as { localStorage?: unknown }).localStorage;
+  const backing = new Map<string, string>();
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (k: string) => backing.get(k) ?? null,
+    setItem: (k: string, v: string) => void backing.set(k, v),
+    removeItem: (k: string) => void backing.delete(k),
+  };
+  try {
+    run();
+  } finally {
+    (globalThis as { localStorage?: unknown }).localStorage = prior;
+  }
+}
+
 describe("registerSettingsSection（plugins.bundle.config / detail.section 双缝）", () => {
   it("configForms 在场：双缝齐挂——bundle.config keyed 键 = 本包名 + detail.section list id", () => {
     const fake = slotsFake();
@@ -212,6 +228,61 @@ describe("registerSettingsSection（plugins.bundle.config / detail.section 双�
     expect((fake.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it("四态·unserved stub：get 可调返回 unavailable stub = localFormMirror 降级挂载（warn 留痕——fix-11 缺陷 B）", () => {
+    withLocalStorage(() => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fake = slotsFake();
+    const stub = {
+      getSnapshot: () => ({ status: "unavailable", value: undefined, revision: undefined, writable: false }),
+      subscribe: () => () => undefined,
+      set: () => Promise.resolve(false),
+      unset: () => Promise.resolve(false),
+    };
+    const disposer = registerSettingsSection(
+      ctxFake({ configForms: configFormsFake(stub as unknown as ConfigFormMirror, whileServedOf(new Set(["project"]))) }) as never,
+      fake.slots as never,
+    );
+    expect(fake.injects).toEqual([BUNDLE_CONFIG_SLOT, DETAIL_SECTION_SLOT]);
+    expect(fake.registered).toHaveLength(2);
+    const form = (fake.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form;
+    expect(form).toBeDefined();
+    expect(form!.getSnapshot().status).toBe("ready"); // 降级面 = 插件自有承载面（可写 ready）
+    expect(form!.getSnapshot().writable).toBe(true);
+    expect(typeof disposer).toBe("function");
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]![0]).toContain("namespace");
+    warn.mockRestore();
+    });
+  });
+
+  it("四态·stub 变体：get 返回 loading stub / get 抛错 / 劣形快照 = 同走 localFormMirror 降级", () => {
+    withLocalStorage(() => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const loadingStub = {
+      getSnapshot: () => ({ status: "loading", value: undefined, revision: undefined, writable: false }),
+      subscribe: () => () => undefined,
+      set: () => Promise.resolve(false),
+      unset: () => Promise.resolve(false),
+    };
+    const throwingGet = { get: () => { throw new Error("unserved stub"); } };
+    const malformedSnapshot = formMirrorOf(undefined, { getSnapshot: () => ({ nope: true }) as never });
+    for (const face of [
+      configFormsFake(loadingStub as unknown as ConfigFormMirror, whileServedOf(new Set(["project"]))),
+      throwingGet,
+      configFormsFake(malformedSnapshot),
+    ]) {
+      const fake = slotsFake();
+      registerSettingsSection(ctxFake({ configForms: face }) as never, fake.slots as never);
+      expect(fake.registered).toHaveLength(2);
+      const form = (fake.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form;
+      expect(form).toBeDefined();
+      expect(form!.getSnapshot().status).toBe("ready");
+    }
+    expect(warn).toHaveBeenCalledTimes(3);
+    warn.mockRestore();
+    });
   });
 
   it("三态·绝对缺席：configForms 缺席 = localFormMirror 降级挂载（既有 fix-1 缝维持）", async () => {

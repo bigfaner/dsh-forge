@@ -152,6 +152,9 @@ export function registerDockTabsFace(
       key: DSWF_OVERVIEW_TAB_KIND,
       inject: () => ({
         bridge: workbenchBridgeOf(),
+        // 概览锚自解析服务缝（fix-11 缺陷 A——桥缺席/桥锚 null 时插件自解析退路；
+        // sessions/workspaces 服务现查产物直递，缺席 = 无退路维持空态）
+        ...(sessions !== undefined && workspaces !== undefined ? { selfAnchor: { sessions, workspaces } } : {}),
         onOpenSession: (sessionId: string): void => {
           // 官方导航动作面（同 sidebar.workspaces openSession 注入——fix-11 口径）
           uiWorkspace.openSession(sessionId)

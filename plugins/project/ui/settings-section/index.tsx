@@ -115,20 +115,42 @@ function configFormsFaceOf(ctx: unknown): ConfigFormsFace | undefined {
   return face as unknown as ConfigFormsFace;
 }
 
-/** 候选序现查本插件 ConfigForm（namespace 未被服务 = undefined——节降级不悬空）。 */
+/**
+ * serve 表可用性现查（fix-11 缺陷 B——stub 态降级短路修面）：get(ns) 可调但返回
+ * unserved stub/不可用快照（官方宿主 configForms 在场而 namespace 未被服务形态）时，
+ * 形状在场 ≠ 读写可用——逐候选 get() 返回值 revisioned 形状校验（AGENTS 1.6 现查
+ * 不缓存）：快照 ready + writable 才判可用；stub/不可用（unavailable/loading）/抛错
+ * = undefined（降级判定归调用方，warn 留痕在 mountFallback 单点）。
+ */
+function usableSnapshotOf(form: ConfigFormMirror): boolean {
+  try {
+    const snapshot = asRecord(form.getSnapshot());
+    return snapshot !== undefined && snapshot["status"] === "ready" && snapshot["writable"] === true;
+  } catch {
+    return false;
+  }
+}
+
+/** 候选序现查首个可用 ConfigForm（namespace 未被服务/stub = undefined——节降级不悬空）。 */
 function resolveForm(forms: ConfigFormsFace): ConfigFormMirror | undefined {
   for (const ns of NAMESPACE_CANDIDATES) {
-    const form = forms.get(ns);
-    if (form !== undefined) return form;
+    let form: ConfigFormMirror | undefined;
+    try {
+      form = forms.get(ns);
+    } catch {
+      form = undefined;
+    }
+    if (form !== undefined && usableSnapshotOf(form)) return form;
   }
   return undefined;
 }
 
 /**
  * 注册 project 配置节（双缝——bundle.config keyed + detail.section list，单渲染本体）。
- * 三态门（bug 55c24319）：configForms 在场且 namespace 被 serve = 官方正门（whileServed
+ * 四态门（bug 55c24319 + fix-11 缺陷 B）：configForms 在场且 namespace 被服务且 serve 表
+ * 可用（get() 返回值 revisioned 形状校验 ready+writable 现查）= 官方正门（whileServed
  * 在场门挂调用者 fiber——namespace 撤 serve 即拆卸，经 ctx.effect 级联）；configForms
- * 缺席/劣形，或 configForms 在场但 namespace 未被服务（中间态），= 插件自有配置承载面
+ * 缺席/劣形、在场但 namespace 未被服务，或 serve 表为不可用 stub，= 插件自有配置承载面
  * localFormMirror 降级挂载（fix-1 用户裁定 2026-11-13④——持久化读写在插件域完成，行为
  * 与在场形态对齐；warn 留痕不静默，AGENTS §7 可观测性）。
  */
@@ -147,24 +169,24 @@ export function registerSettingsSection(
   }
   const sectionFace = () => ({ form: resolveForm(forms) });
   const fallbackFace = () => ({ form: localPrefsForm() });
-  /** serve 未命中降级（warn 留痕不静默——AGENTS §7）：configForms 在场但 namespace unserved。 */
+  /** serve 未命中/stub 降级（warn 留痕不静默——AGENTS §7）：configForms 在场但 namespace
+   *  unserved 或 serve 表为不可用 stub（fix-11 缺陷 B——可用性现查不过）。 */
   const mountFallback = (): (() => void) | undefined => {
-    console.warn("[dsh-forge/project] configForms namespace unserved; settings section mounted on plugin-owned config face");
+    console.warn("[dsh-forge/project] configForms namespace unserved/stub; settings section mounted on plugin-owned config face");
     return mountSections(fallbackFace, slots);
   };
   if (typeof forms.whileServed === "function") {
     // 官方 settings-* 族同型：whileServed 经 ctx.effect 挂调用者 fiber（卸载级联）。
-    // 三态门（bug 55c24319）：serve 命中 = 官方正门；namespace unserved（含中间态）= 降级。
+    // 四态门（bug 55c24319 + fix-11 缺陷 B）：serve 命中且可用 = 官方正门；unserved/
+    // stub（可用性现查不过，含中间态）= 降级。
     const watch = (): (() => void) | undefined => {
       let mounted: (() => void) | undefined;
       let gated = false; // whileServed 回调已触发旗标（触发后挂载机会由回调独占）
-      const disposer = forms.whileServed!(NAMESPACE_CANDIDATES, (served) => {
+      const disposer = forms.whileServed!(NAMESPACE_CANDIDATES, (_served) => {
         gated = true;
         mounted?.();
         mounted = undefined;
-        mounted = NAMESPACE_CANDIDATES.some((candidate) => served.has(candidate))
-          ? mountSections(sectionFace, slots)
-          : mountFallback();
+        mounted = resolveForm(forms) !== undefined ? mountSections(sectionFace, slots) : mountFallback();
         return () => {
           mounted?.();
           mounted = undefined;
