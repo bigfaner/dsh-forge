@@ -256,6 +256,26 @@ describe('submitTask execute（路由 + 映射）', () => {
     ).rejects.toThrow(/requires block_classification_kind/)
   })
 
+  it('空串/空数组可选字段视为缺省：成对校验两侧按归一化值判定（bug 36586a1d）', () => {
+    // 载荷形态 = agent 常见空值噪声（全套可选字段空串/空数组）——不应触发任何成对报错
+    const parsed = parseSubmitTaskArgs({
+      slug: 'f1',
+      local_id: '3.2',
+      result: 'success',
+      block_classification_kind: '',
+      block_classification_recurrence_of: '',
+      evidence_debt_suite: '',
+      evidence_debt_specs: [],
+      evidence_debt_note: '',
+      runtime_evidence_face: '',
+      runtime_evidence_artifacts: [],
+      runtime_evidence_note: '',
+    })
+    expect(parsed.block_classification_kind).toBeUndefined()
+    expect(parsed.evidence_debt_suite).toBeUndefined()
+    expect(parsed.runtime_evidence_face).toBeUndefined()
+  })
+
   it('空会话拒（untyped 防御收窄——原样抛，不走失败 DTO）', async () => {
     const { tool, captured } = toolWithCapture()
     await expect(
