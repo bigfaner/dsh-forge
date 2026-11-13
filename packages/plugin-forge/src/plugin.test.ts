@@ -388,7 +388,7 @@ describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——c
 
   it('experts 服务在场：注入指挥者段（委派边界话术在场）', () => {
     const rt = new TempRuntime()
-    const dispose = forgePlugin(rt.withReflect({ experts: { get: () => undefined } }) as never)
+    const dispose = forgePlugin(rt.withReflect({ experts: { get: (key: string) => ({ name: key, personaMd: '' }) } }) as never)
     const text = commanderTextOf(rt)
     expect(text).toContain('指挥者模式')
     expect(text).toContain('信息搜索与核实')
@@ -421,9 +421,25 @@ describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——c
     d2()
   })
 
+  it('三键在场核验（test-boundary-gates）：任一 LOOP_REVIEW_EXPERTS 键缺席（get 抛错）= 零注入，非仅服务在场', async () => {
+    const { LOOP_REVIEW_EXPERT_KEYS } = await import('./loop/injection.js')
+    const partialFace = (missing: string) => ({
+      get: (key: string) => {
+        if (key === missing) throw new Error(`expert not found: ${missing}`)
+        return { name: key, personaMd: '' }
+      },
+    })
+    for (const key of LOOP_REVIEW_EXPERT_KEYS) {
+      const rt = new TempRuntime()
+      const dispose = forgePlugin(rt.withReflect({ experts: partialFace(key) }) as never)
+      expect(commanderTextOf(rt), `缺 ${key} 应回落空串`).toBe('')
+      dispose()
+    }
+  })
+
   it('subagent 子会话装配：零注入（header.origin === subagent——指挥者话术只属于主会话，判例 2026-11）', () => {
     const rt = new TempRuntime()
-    const dispose = forgePlugin(rt.withReflect({ experts: { get: () => undefined } }) as never)
+    const dispose = forgePlugin(rt.withReflect({ experts: { get: (key: string) => ({ name: key, personaMd: '' }) } }) as never)
     // 主会话形态（agent.id 在场、无 origin 标记）：照常注入
     expect(commanderTextOf(rt, { agent: { id: 'main-s' } })).toContain('指挥者模式')
     // subagent 子会话（live Agent 附带 session.header.origin）：零注入

@@ -40,7 +40,7 @@ import { adaptSessionProgressAppend, createSubmitSettleDisplay, FORGE_PROGRESS_S
 import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
 import { createSettleReportRecovery, createRecurrenceFaces, gitHeadCommit } from './dispatch-core/index.js'
 import type { EscalationAskFace } from './loop/index.js'
-import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
+import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, LOOP_REVIEW_EXPERT_KEYS, renderInjection } from './loop/injection.js'
 import { createLoopRegistry } from './loop/registry.js'
 import { createForgeDispatchEventsProjection, createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
@@ -514,18 +514,30 @@ const forgePlugin: ForgePlugin = Object.assign(
         : undefined
     // 专家团服务在场探测（AGENTS 1.6——检测永不缓存，每次消费点调用期现查；bug 0b83e3aa
     // 同款双通道：ctx.experts 注入属性面（跨 realm 可达）+ reflect.get（同 scope 先例面）。
-    // 缺席/异常/非函数面 = false。双消费面：forge:commander 段条件注入 + P8 评审指示
-    // 组装期单选（专家双路/回落文案）。
+    // 三键在场核验（test-boundary-gates——检测名单与 P8 三路措辞同源 LOOP_REVIEW_EXPERT_KEYS，
+    // 非「仅服务在场」：get 对缺席/禁用键 fail-loud 抛错 = 该键缺席）。缺席/异常/任一键不在场
+    // = false（fail-soft 回落 P8 回落版）。双消费面：forge:commander 段条件注入 + P8 评审指示
+    // 组装期单选（专家三路/回落文案），driver 经 deps.expertsPresent 同源透传。
+    function expertsKeyPresent(experts: ExpertsServiceFace, key: string): boolean {
+      try {
+        return experts.get(key) !== undefined
+      } catch {
+        return false
+      }
+    }
     function expertsServicePresent(): boolean {
       try {
-        const viaInject = (ctx as ForgeContextFace & { readonly experts?: { get?: unknown } }).experts
-        if (viaInject !== undefined && typeof viaInject.get === 'function') return true
+        const viaInject = (ctx as ForgeContextFace & { readonly experts?: ExpertsServiceFace }).experts
+        if (viaInject !== undefined && typeof viaInject.get === 'function') {
+          return LOOP_REVIEW_EXPERT_KEYS.every((key) => expertsKeyPresent(viaInject, key))
+        }
       } catch {
         // 注入服务未就绪 = 降级到 reflect 通道
       }
       try {
-        const experts = ctx.reflect?.get('experts') as { get?: unknown } | undefined
+        const experts = ctx.reflect?.get('experts') as ExpertsServiceFace | undefined
         return experts !== undefined && typeof experts.get === 'function'
+          && LOOP_REVIEW_EXPERT_KEYS.every((key) => expertsKeyPresent(experts, key))
       } catch {
         return false
       }

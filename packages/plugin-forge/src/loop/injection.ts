@@ -33,11 +33,18 @@ export interface InjectionPayload {
   readonly completed: number
   readonly blocked: number
   /**
-   * 专家团服务在场性（P8 评审指示组装期单选——true = architect/code-reviewer 双路措辞，
-   * 缺席 = subagent 分域回落措辞；由循环装配面检测注入，模板内零双分支冗余文案）
+   * 专家团服务在场性（P8 评审指示组装期单选——true = spec-reviewer/code-reviewer/
+   * architecture-reviewer 三路措辞，缺席 = subagent 分域回落措辞；由循环装配面检测注入，
+   * 模板内零双分支冗余文案）。检测集 = LOOP_REVIEW_EXPERT_KEYS（检测名单与措辞名单同源）。
    */
   readonly expertsAvailable?: boolean
 }
+
+/**
+ * P8 三路交叉评审专家键集（措辞名单与装配面 expertsAvailable 检测集同源单点——
+ * 防「措辞点名、档案缺席」错位；index.ts 检测与 P8_EXPERTS_TEMPLATE 均消费此常量）。
+ */
+export const LOOP_REVIEW_EXPERT_KEYS = ['spec-reviewer', 'code-reviewer', 'architecture-reviewer'] as const
 
 /** 结束族分支（renderEndOfLoop kind——互斥单选，不做段内条件拼接） */
 export type EndOfLoopKind = 'finished-all' | 'blocked-residue' | 'spawn-failure' | 'wait-timeout'
@@ -92,8 +99,8 @@ function interpolate(template: string, values: Record<string, string>): string {
   return text
 }
 
-/** 残留占位符检测（`<...>` = 渲染失败——返回告警行；干净 = undefined） */
-function detectResidualPlaceholder(text: string): string | undefined {
+/** 残留占位符检测（`<...>` = 渲染失败——返回告警行；干净 = undefined。导出供模板编写期断言复用） */
+export function detectResidualPlaceholder(text: string): string | undefined {
   const residual = /<[^<>\n]+>/.exec(text)
   return residual !== null ? `残留占位符 ${residual[0]}` : undefined
 }
@@ -126,7 +133,15 @@ const P1_TEMPLATE = `【任务循环协作规则】
 - 做整体规划需要进度：用 taskStats / listTasks。
 **事件与停止**
 - 启动后可继续其它工作：结束、挂起、阻塞通知会发送到你的会话。
-- 停止循环：使用 stopTaskLoop 工具。`
+- 停止循环：使用 stopTaskLoop 工具。
+**测试边界纪律**
+- 测试替身（stub/mock/回放）只落测试进程与测试目录，正式代码路径不触达任何替身。
+- 临时桩须在提交说明中声明，并配套退出任务。
+- 正式装配不得以测试开关选择替身；默认关闭 ≠ 边界正确。
+**测试基线（主会话职责）**
+- 循环开跑后先执行全量单元/集成测试（命令按项目自决，不含 e2e——e2e 红灯基线机械另行在位）。
+- 红灯清单与时点（commit/时间）记入测试基线文档（proposals 或 features 容器文档目录下的 test-baseline.md），修复任务结算后刷新基线。
+- 基线缺席或时点早于近期 HEAD 前进时，worker 遇失败默认按新回归上报（宁误报不漏报）。`
 
 const P3_TEMPLATE = `【任务循环挂起】
 **挂起信息**
@@ -177,19 +192,26 @@ const P8_REVIEW_COMMON = `**评审重点**
 - 实际改动是否超出各任务声明的范围。
 - 各模块与包的职责边界是否清晰（core 保持纯状态层，plugin-forge 保持装配与编排）。
 - 业务逻辑是否混入公共或基础包。
+- 测试边界（五关口全量）：正式代码路径是否触达测试替身（注册表、工厂、配置透传、客户端调用；含以 e2e profile/回放配置替代真实实现的点名形态）。
+- 模拟轨与黑盒轨是否分别发现、执行和统计；断言是否可实际失败（反例下会红）。
+- 验收目标/验收标准是否以替身混入为通过条件；回放日志不证明真实供应商闭环。
+- 测试证据须标注替身来源；轨混合的证据不采信；观察证据不推断后端行为（浏览器观察 ≠ 后端零外呼）；结果经公开接口核对；必要时独立出口/外部访问证据。
+- 静态关键词命中只定位不定罪；不连带删除测试侧 fake。
+- 接口面是否支撑测试进程 fake 注入——替换发生在测试进程内的装配点（测试侧组合根），正式装配的组合根不接受任何测试配置切换。
 **结论处理**
 - 评审结论是输入，不是指令：由你复核、交叉比对、分析验证后决断处理方式。
 - 发现问题：用 recordBug 登记 bug，再用 addTask 添加修复任务——taskDesc 写明复核结论、复现步骤与验收标准；修复由循环 worker 执行，你不要自行修复。
 - 添加任务（修复任务或跟进任务）后，重新调用 dispatchTask(source_kind='<source_kind>', source_slug='<slug>') 启动新的循环，由循环执行新添加的任务。
 - 无问题：本次任务循环的代码工作全部完成——继续完成【复盘与知识沉淀指示】（如随本消息附带）。`
 
-/** P8 专家团在场版——三路交叉（spec-reviewer 目标面 / architect 结构面 / code-reviewer 范围面） */
+/** P8 专家团在场版——三路交叉（spec-reviewer 目标面 / architecture-reviewer 结构面 / code-reviewer 范围面）
+ *  （三路实名与 LOOP_REVIEW_EXPERT_KEYS 检测集同源——index.ts 在场核验同名单） */
 const P8_EXPERTS_TEMPLATE = `【代码评审指示】
 **评审对象**
 - <slug> 的全部任务已完成。
 - 评审范围：本次循环产生的代码变更（变更清单取各任务完成记录中的文件与提交）。
 **评审方式**
-- 三路交叉评审：spec-reviewer（目标面——核对源提案/PRD 目标是否正确实现、逐条 AC 对账交付物）、architect（结构面——分层/依赖方向/模块边界/业务混入）与 code-reviewer（范围面——超范围/测试匹配/清理遗漏）各派一实例独立评审，主会话交叉比对后决断。
+- 三路交叉评审：spec-reviewer（目标面——核对源提案/PRD 目标是否正确实现、逐条 AC 对账交付物）、architecture-reviewer（结构面——分层/依赖方向/模块边界）与 code-reviewer（范围面——超范围/测试匹配/清理遗漏 + 测试边界判定职责）各派一实例独立评审，主会话交叉比对后决断。
 ${P8_REVIEW_COMMON}`
 
 /** P8 回落版（experts 服务缺席——零专家环境） */

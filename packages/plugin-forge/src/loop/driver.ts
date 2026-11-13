@@ -2801,6 +2801,8 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
       history: '',
       completed: stats.byStatus.completed,
       blocked: stats.byStatus.blocked,
+      // expertsAvailable：deps.expertsPresent 消费点现查（AGENTS 1.6 永不缓存）——装配面
+      // 检测集与 P8 三路措辞同源（LOOP_REVIEW_EXPERT_KEYS 三键核验），异常 fail-soft false。
       expertsAvailable: loop.deps.expertsPresent?.() ?? false,
     }
     const retroSection = await retroSectionOf(loop)

@@ -8,6 +8,8 @@ import type { LoopEscalation } from './driver.js'
 import type { TaskSnapshot } from '@dsh-forge/contracts'
 import {
   FORGE_DISPATCH_LOOP_SECTION_NAME,
+  LOOP_REVIEW_EXPERT_KEYS,
+  detectResidualPlaceholder,
   renderEndOfLoop,
   renderInjection,
   renderP1,
@@ -165,16 +167,22 @@ describe('模板正本（P1–P9 + 结束族）', () => {
   it('P8 组装期单选（loop-review-experts）：expertsAvailable=true 三路措辞 / 缺席回落 subagent 分域，两态互斥零冗余', () => {
     const withExperts = renderEndOfLoop('finished-all', { ...payload, expertsAvailable: true })
     expect(withExperts).toContain('三路交叉评审：spec-reviewer（目标面')
-    expect(withExperts).toContain('architect（结构面')
+    expect(withExperts).toContain('architecture-reviewer（结构面')
     expect(withExperts).toContain('code-reviewer（范围面')
     expect(withExperts).toContain('主会话交叉比对后决断')
     expect(withExperts).not.toContain('subagent')
     const fallback = renderEndOfLoop('finished-all', { ...payload, expertsAvailable: false })
     expect(fallback).toContain('派多个 subagent 分域交叉评审，各 agent 独立评审后汇总结论')
-    expect(fallback).not.toContain('architect')
-    expect(fallback).not.toContain('code-reviewer')
+    // 回落版零三路实名（防「措辞点名、档案缺席」错位反向残留）
+    for (const key of LOOP_REVIEW_EXPERT_KEYS) expect(fallback).not.toContain(key)
     // 缺省（字段缺席）= 回落口径——装配面注入前保守
     expect(renderEndOfLoop('finished-all', payload)).toContain('subagent 分域交叉评审')
+  })
+
+  it('expertsAvailable 检测集与三路措辞同源（LOOP_REVIEW_EXPERT_KEYS 三键逐个出现在专家版渲染产物）', () => {
+    expect([...LOOP_REVIEW_EXPERT_KEYS]).toEqual(['spec-reviewer', 'code-reviewer', 'architecture-reviewer'])
+    const withExperts = renderEndOfLoop('finished-all', { ...payload, expertsAvailable: true })
+    for (const key of LOOP_REVIEW_EXPERT_KEYS) expect(withExperts).toContain(key)
   })
 
   it('结束族 blocked-residue：完成/阻塞计数已替换（counts 载荷驱动）', () => {
@@ -194,6 +202,68 @@ describe('模板正本（P1–P9 + 结束族）', () => {
       renderEndOfLoop('wait-timeout', payload),
     ]
     for (const text of texts) expect(text).not.toMatch(/<[^<>\n]+>/)
+  })
+
+  it('P1 渲染产物含测试边界纪律节与测试基线节（提案方案 1 措辞逐点在场）', () => {
+    const text = renderP1(payload)
+    // 测试边界纪律节
+    expect(text).toContain('**测试边界纪律**')
+    expect(text).toContain('正式代码路径不触达任何替身')
+    expect(text).toContain('配套退出任务')
+    expect(text).toContain('默认关闭 ≠ 边界正确')
+    // 测试基线节（主会话职责——基线时点记录 + 缺席/过时按新回归上报）
+    expect(text).toContain('**测试基线（主会话职责）**')
+    expect(text).toContain('全量单元/集成测试')
+    expect(text).toContain('记入测试基线文档')
+    expect(text).toContain('修复任务结算后刷新基线')
+    expect(text).toContain('默认按新回归上报')
+    expect(text).toContain('宁误报不漏报')
+  })
+
+  it('P1 新增两节每节非空行 ≤3（按 **节名** 头行切节的纯函数断言）', () => {
+    /** 按 **节名** 头行切节，取指定节内非空行数（编写期断言辅助——纯函数零状态） */
+    const sectionLines = (text: string, header: string): string[] => {
+      const lines = text.split('\n')
+      const start = lines.findIndex((line) => line.trim() === header)
+      expect(start).toBeGreaterThanOrEqual(0)
+      const body: string[] = []
+      for (let i = start + 1; i < lines.length; i += 1) {
+        if (/^\*\*.+\*\*$/.test(lines[i]!.trim())) break
+        if (lines[i]!.trim() !== '') body.push(lines[i]!.trim())
+      }
+      return body
+    }
+    const p1 = renderP1(payload)
+    expect(sectionLines(p1, '**测试边界纪律**').length).toBeLessThanOrEqual(3)
+    expect(sectionLines(p1, '**测试基线（主会话职责）**').length).toBeLessThanOrEqual(3)
+  })
+
+  it('P8_REVIEW_COMMON 含五关口全量测试边界评审条目（提案方案 3 逐点在场——两态共用）', () => {
+    for (const mode of [true, false] as const) {
+      const text = renderEndOfLoop('finished-all', { ...payload, expertsAvailable: mode })
+      expect(text).toContain('正式代码路径是否触达测试替身')
+      expect(text).toContain('e2e profile/回放配置替代真实实现的点名形态')
+      expect(text).toContain('模拟轨与黑盒轨是否分别发现、执行和统计')
+      expect(text).toContain('断言是否可实际失败')
+      expect(text).toContain('验收目标/验收标准是否以替身混入为通过条件')
+      expect(text).toContain('回放日志不证明真实供应商闭环')
+      expect(text).toContain('观察证据不推断后端行为')
+      expect(text).toContain('结果经公开接口核对')
+      expect(text).toContain('独立出口/外部访问证据')
+      expect(text).toContain('静态关键词命中只定位不定罪')
+      expect(text).toContain('不连带删除测试侧 fake')
+      expect(text).toContain('测试侧组合根')
+      expect(text).toContain('正式装配的组合根不接受任何测试配置切换')
+    }
+  })
+
+  it('detectResidualPlaceholder 对 P1/P8 全部新增行零残留（非占位符尖括号零豁免）', () => {
+    const lines = [
+      ...renderP1(payload).split('\n').filter((line) => line.startsWith('- ')),
+      ...renderEndOfLoop('finished-all', { ...payload, expertsAvailable: true }).split('\n').filter((line) => line.startsWith('- ')),
+    ]
+    expect(lines.length).toBeGreaterThan(0)
+    for (const line of lines) expect(detectResidualPlaceholder(line)).toBeUndefined()
   })
 })
 
