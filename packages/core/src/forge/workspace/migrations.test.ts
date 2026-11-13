@@ -133,6 +133,12 @@ const PARENT_V6_SQL = [
   `CREATE INDEX idx_proposals_parent ON proposals(parent_proposal_id)`,
 ]
 
+/**
+ * loop-phase-gate（1.2）v8：tasks.e2e_attribution 归因卡承载列 pin（守卫式 ALTER——guard
+ * 字段不在文本面）。
+ */
+const TASKS_V8_SQL = [`ALTER TABLE tasks ADD COLUMN e2e_attribution INTEGER NOT NULL DEFAULT 0`]
+
 /** 语句归一化（剔注释 + 空白折叠）后比对——蓝本与代码的排版差异不应导致语义漂移。 */
 const norm = (s: string) =>
   s
@@ -180,6 +186,7 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
       ...CHECKPOINTS_V5_SQL.map(norm),
       ...PARENT_V6_SQL.map(norm),
       ...BUGS_V7_SQL.map(norm),
+      ...TASKS_V8_SQL.map(norm),
     ]
     const actual = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements.map(stmtText))
     expect(actual).toEqual(expected)
@@ -247,7 +254,17 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(WORKSPACE_MIGRATIONS.map((m) => m.version)).toEqual(
       Array.from({ length: FORGE_DB_SCHEMA_VERSION }, (_, i) => i + 1),
     )
-    expect(FORGE_DB_SCHEMA_VERSION).toBe(7)
+    expect(FORGE_DB_SCHEMA_VERSION).toBe(8)
+  })
+
+  it('v8（loop-phase-gate）：守卫式 ALTER tasks ADD COLUMN e2e_attribution INTEGER NOT NULL DEFAULT 0（E2E 归因卡承载列——生成侧单点写，不经 addTask 参数）', () => {
+    const v8 = WORKSPACE_MIGRATIONS.find((m) => m.version === 8)
+    expect(v8?.statements).toEqual([
+      {
+        sql: `ALTER TABLE tasks ADD COLUMN e2e_attribution INTEGER NOT NULL DEFAULT 0`,
+        columnGuard: { table: 'tasks', column: 'e2e_attribution' },
+      },
+    ])
   })
 
   it('v7（归属机制）：守卫式 ALTER bugs ADD COLUMN container_slug + JOIN tasks 回填（孤链留空）', () => {

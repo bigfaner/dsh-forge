@@ -4,7 +4,7 @@
 // BLOCKERS/PHASE_SUMMARY 注入（领取瞬间取数）。
 import { afterEach, describe, expect, it } from 'vitest'
 import { claimTask } from './claim.js'
-import { DependenciesUnmetError, InvalidTransitionError, TaskNotFoundError } from './errors.js'
+import { DependenciesUnmetError, InvalidTransitionError, PhaseGateUnsettledError, TaskNotFoundError } from './errors.js'
 import { dispatchDigest } from './prompt/digest.js'
 import {
   createTasksHarness,
@@ -1216,5 +1216,204 @@ describe('gate 弹性领取（task-pause-primitive §2.2-2）：blocked gate 前
     const r = await claim({ projectId: P(), sessionId: 's' })
     expect(r.task).toMatchObject({ localId: '2.1' })
     expect(rows(`SELECT task_status FROM tasks WHERE id = 't-f-1.3'`)).toEqual([{ task_status: 'blocked' }])
+  })
+})
+
+// ─────────────────── loop-phase-gate：容器实现链阶段门（design §5 T1-T4/T13-T16） ───────────────────
+// 门谓词双落点（READY_PREDICATE + fresh-claim 守卫，phase-gate.ts GATE_SQL 单实现）：
+// 验证类卡（V ∧ feature 容器）可领 ⇔ 容器实现链（I 卡，排除 fix-/disc- 前缀）终态合取；
+// E2E 归因豁免 = 无入边 ∧ e2e_attribution=1 双条件缺一不豁免。夹具内 e2e_attribution=1
+// 直写（UPDATE tasks SET e2e_attribution = 1）= 生成路径产卡的 core 侧替身（生成侧单点写
+// 位于 plugin-forge issueAttributionCards 后置 UPDATE——B5 落地，生成侧断言挂 loop 侧测试）。
+
+/** E2E 归因标记直写（生成侧后置 UPDATE 的 core 测试替身——不经 addTask 参数的硬约束不变） */
+function markAttribution(featureSlug: string, localId: string): void {
+  h!.db.prepare(`UPDATE tasks SET e2e_attribution = 1 WHERE slug = ? AND local_id = ?`).run(featureSlug, localId)
+}
+
+describe('loop-phase-gate 容器实现链阶段门：门谓词双落点（design §5）', () => {
+  it('T1 门挡就绪集：链非终态时 debt 验证卡出局就绪池，命中实现卡 1.2（两卡 P0 同判交叉排除）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'g1', status: 'tasks' })
+    seedTask(h!.db, 'g1', '1.1', { status: 'completed', createdAt: '2026-01-01T00:00:00.000Z' })
+    seedTask(h!.db, 'g1', '1.2', { createdAt: '2026-01-02T00:00:00.000Z' }) // I 卡未终态——门持有
+    seedTask(h!.db, 'g1', 'debt-1', { type: 'test-run', createdAt: '2026-01-03T00:00:00.000Z' })
+    seedEdge(h!.db, 't-g1-debt-1', 't-g1-1.1')
+    h!.db.prepare(`UPDATE tasks SET priority = 'P0' WHERE slug = 'g1' AND local_id IN ('1.2', 'debt-1')`).run()
+    // 盲选：debt 卡依赖满足且 P0 同判，但门挡（E1 定谳）——命中 1.2 而非 debt 卡
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task).toMatchObject({ localId: '1.2', taskStatus: 'in_progress' })
+  })
+
+  it('T2 直取径：taskRef 指名领被门 V 卡 → ERR_PHASE_GATE_UNSETTLED（data.unsettled 含未终态 I 卡）；adopt interrupted 与 in_progress 重入豁免放行', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'g2', status: 'in-progress' })
+    seedTask(h!.db, 'g2', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'g2', '1.2') // I 卡 pending——链非终态
+    seedTask(h!.db, 'g2', 'debt-1', { type: 'test-run' })
+    seedEdge(h!.db, 't-g2-debt-1', 't-g2-1.1')
+    const err = await claim({ projectId: P(), taskRef: { slug: 'g2', localId: 'debt-1' }, sessionId: 's' }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(PhaseGateUnsettledError)
+    expect((err as PhaseGateUnsettledError).code).toBe('ERR_PHASE_GATE_UNSETTLED')
+    expect((err as PhaseGateUnsettledError).data).toEqual({
+      projectId: P(),
+      taskRef: { slug: 'g2', localId: 'debt-1' },
+      containerSlug: 'g2',
+      unsettled: [{ slug: 'g2', localId: '1.2', taskStatus: 'pending' }],
+    })
+    // 零写入（守卫抛错径——事务未开启，状态/记录/链接全零残留）
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = 'debt-1'`)).toEqual([{ task_status: 'pending' }])
+    expect(rows(`SELECT * FROM task_records`)).toEqual([])
+    expect(h!.events.emitted).toEqual([])
+    // adopt 定向恢复径豁免（目标态 interrupted ∈ {in_progress, interrupted}）
+    seedTask(h!.db, 'g2', 'debt-2', { type: 'test-run', status: 'interrupted' })
+    const adopted = await claim({ projectId: P(), adopt: { slug: 'g2', localId: 'debt-2' }, sessionId: 's-loop' })
+    expect(adopted.task).toMatchObject({ localId: 'debt-2', taskStatus: 'in_progress' })
+    expect(adopted.reclaimed).toBe(false)
+    // 幂等重入径豁免（in_progress 无状态转移）
+    seedTask(h!.db, 'g2', 'debt-3', { type: 'test-run', status: 'in_progress' })
+    const reentered = await claim({ projectId: P(), taskRef: { slug: 'g2', localId: 'debt-3' }, sessionId: 's1' })
+    expect(reentered.reclaimed).toBe(true)
+  })
+
+  it('T3 豁免面：归因卡（无入边∧标记=1）可领；gate 卡③兜底不受门挡；proposal 容器门关；fix-/disc- 不进链集合', async () => {
+    const claim = svc()
+    // 归因卡豁免：链非终态（1.1 pending）仍可领
+    seedFeature(h!.db, { slug: 'at', status: 'tasks' })
+    seedTask(h!.db, 'at', '1.1', { createdAt: '2026-01-02T00:00:00.000Z' })
+    seedTask(h!.db, 'at', 'attr', { type: 'test-run', createdAt: '2026-01-01T00:00:00.000Z' })
+    markAttribution('at', 'attr')
+    h!.db.prepare(`UPDATE tasks SET priority = 'P0' WHERE slug = 'at' AND local_id = 'attr'`).run()
+    const r1 = await claim({ projectId: P(), source: { kind: 'feature', slug: 'at' }, sessionId: 's1' })
+    expect(r1.task).toMatchObject({ localId: 'attr', taskStatus: 'in_progress' })
+
+    // gate 卡③兜底：链非终态（1.2 in_progress）不受门挡（gate 不属 V——类型判据天然豁免）
+    seedFeature(h!.db, { slug: 'gt', status: 'in-progress' })
+    seedTask(h!.db, 'gt', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'gt', '1.2', { status: 'in_progress' })
+    seedTask(h!.db, 'gt', '1.3', { type: 'gate', status: 'blocked' })
+    seedEdge(h!.db, 't-gt-1.3', 't-gt-1.1')
+    const r2 = await claim({ projectId: P(), source: { kind: 'feature', slug: 'gt' }, sessionId: 's2' })
+    expect(r2.task).toMatchObject({ localId: '1.3', taskStatus: 'in_progress' })
+
+    // proposal 容器：V 卡门关（source_kind <> 'feature' 豁免——律四同构）
+    seedProposal(h!.db, { slug: 'pv', mode: 'blitz' })
+    seedTask(h!.db, 'pv', '1.1', { kind: 'proposal', mode: 'blitz', status: 'in_progress' }) // 容器内 I 卡未终态
+    seedTask(h!.db, 'pv', 'v1', { type: 'test-run', kind: 'proposal', mode: 'blitz' })
+    const r3 = await claim({ projectId: P(), source: { kind: 'proposal', slug: 'pv' }, sessionId: 's3' })
+    expect(r3.task).toMatchObject({ slug: 'pv', localId: 'v1', taskStatus: 'in_progress' })
+
+    // fix-/disc- 前缀排除出链集合：容器仅 fix-/disc- 未终态 → 门仍开（V 卡可领）；fix 卡自身可领
+    seedFeature(h!.db, { slug: 'fx', status: 'tasks' })
+    seedTask(h!.db, 'fx', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'fx', 'fix-1', { type: 'coding-fix', sourceTaskId: 't-fx-1.1' })
+    seedEdge(h!.db, 't-fx-fix-1', 't-fx-1.1', 'fix-chain')
+    seedTask(h!.db, 'fx', 'v2', { type: 'test-run', createdAt: '2026-01-01T00:00:01.000Z' })
+    seedTask(h!.db, 'fx', 'disc-1', { type: 'doc', createdAt: '2026-01-01T00:00:02.000Z' })
+    const r4 = await claim({ projectId: P(), sessionId: 's4' })
+    expect(r4.task?.localId).toBe('fix-1') // fix 优先键（门透明——链集合不含 fix-）
+    const r5 = await claim({ projectId: P(), sessionId: 's5' })
+    expect(r5.task?.localId).toBe('v2') // 链仅数值 I 卡（此处为空）→ 门开
+  })
+
+  it('T4 链终态放行 + 无饿死：末张 I 卡 in_progress 门关但该卡可重入；链全终态后 debt/gate 正常领出', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'g4', status: 'in-progress' })
+    seedTask(h!.db, 'g4', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'g4', '1.2', { status: 'in_progress' }) // 末张 I 卡
+    seedTask(h!.db, 'g4', 'debt-1', { type: 'test-run' })
+    seedEdge(h!.db, 't-g4-debt-1', 't-g4-1.1')
+    seedTask(h!.db, 'g4', '1.3', { type: 'gate', status: 'blocked' })
+    seedEdge(h!.db, 't-g4-1.3', 't-g4-1.2') // 前置 = 末张 I 卡——链收口前前置未满足不进兜底池
+    // 门关：盲选 Z1（debt 被门持有、gate 前置未满足不进兜底池）——末张 I 卡本身可重入（活性保持）
+    expect(await claim({ projectId: P(), sessionId: 's-new' })).toEqual({
+      task: null, dispatchPrompt: '', persona: '', digest: '', reclaimed: false,
+    })
+    const reentry = await claim({ projectId: P(), taskRef: { slug: 'g4', localId: '1.2' }, sessionId: 's-owner' })
+    expect(reentry.reclaimed).toBe(true)
+    // 链终态：debt 卡正常领出（②池），随后 gate 卡③兜底
+    setStatus('g4', '1.2', 'completed', '2026-02-01T00:00:00.000Z')
+    const r1 = await claim({ projectId: P(), sessionId: 's-new2' })
+    expect(r1.task).toMatchObject({ localId: 'debt-1', taskStatus: 'in_progress' })
+    const r2 = await claim({ projectId: P(), sessionId: 's-new3' })
+    expect(r2.task).toMatchObject({ localId: '1.3', taskStatus: 'in_progress' })
+    expect(rows(`SELECT verb FROM task_records WHERE task_id = 't-g4-1.3' ORDER BY id`)).toEqual([
+      { verb: 'auto-restore' },
+      { verb: 'claim' },
+    ])
+  })
+
+  it('T13 V 卡恢复后门重判（红旗 R3）：blocked→pending 回池 ∧ 链非终态 → 门拦；链终态 → 放行', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'r3', status: 'tasks' })
+    seedTask(h!.db, 'r3', '1.1') // I 卡 pending——链非终态
+    seedTask(h!.db, 'r3', 'v1', { type: 'test-run', status: 'blocked' })
+    seedEdge(h!.db, 't-r3-v1', 't-r3-1.1')
+    // unblock 恢复机械把卡回 pending（直写受控初态——恢复机械不看门，回池后读时重判）
+    h!.db.prepare(`UPDATE tasks SET task_status = 'pending' WHERE id = 't-r3-v1'`).run()
+    const err = await claim({ projectId: P(), taskRef: { slug: 'r3', localId: 'v1' }, sessionId: 's' }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(PhaseGateUnsettledError)
+    // 链终态 → 门重判放行
+    setStatus('r3', '1.1', 'completed', '2026-02-01T00:00:00.000Z')
+    const r = await claim({ projectId: P(), taskRef: { slug: 'r3', localId: 'v1' }, sessionId: 's' })
+    expect(r.task).toMatchObject({ localId: 'v1', taskStatus: 'in_progress' })
+  })
+
+  it('T14 adopt 目标态断言（红旗 R1）：adopt 指向 pending V 卡不豁免仍走门；指向 in_progress/interrupted 豁免放行', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'r1', status: 'in-progress' })
+    seedTask(h!.db, 'r1', '1.1') // I 卡 pending——链非终态
+    seedTask(h!.db, 'r1', 'v1', { type: 'test-run' }) // pending
+    seedTask(h!.db, 'r1', 'v2', { type: 'test-run', status: 'in_progress' })
+    seedTask(h!.db, 'r1', 'v3', { type: 'test-run', status: 'interrupted' })
+    const err = await claim({ projectId: P(), adopt: { slug: 'r1', localId: 'v1' }, sessionId: 's' }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(PhaseGateUnsettledError) // pending 不在豁免集——换调用形态不击穿 CE-2
+    const r2 = await claim({ projectId: P(), adopt: { slug: 'r1', localId: 'v2' }, sessionId: 's' })
+    expect(r2.task).toMatchObject({ localId: 'v2', taskStatus: 'in_progress' })
+    expect(r2.reclaimed).toBe(true)
+    const r3 = await claim({ projectId: P(), adopt: { slug: 'r1', localId: 'v3' }, sessionId: 's' })
+    expect(r3.task).toMatchObject({ localId: 'v3', taskStatus: 'in_progress' })
+    expect(r3.reclaimed).toBe(false)
+  })
+
+  it('T15 CE-6 无标记裸 V 卡门拦（反例径闭合）：无入边 ∧ e2e_attribution=0 → 就绪集与 taskRef 直取均门拦', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'c6', status: 'tasks' })
+    seedTask(h!.db, 'c6', '1.1', { createdAt: '2026-01-02T00:00:00.000Z' }) // I 卡 pending——链非终态
+    seedTask(h!.db, 'c6', 'bare', { type: 'test-run', createdAt: '2026-01-01T00:00:00.000Z' }) // 裸 V：无入边无标记
+    // 就绪集排除：盲选命中 1.1 而非裸 V 卡（尽管后者创建更早）
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task).toMatchObject({ localId: '1.1' })
+    // taskRef 直取径门拦（CE-6 反例径——单独「无入边」不豁免）
+    const err = await claim({ projectId: P(), taskRef: { slug: 'c6', localId: 'bare' }, sessionId: 's2' }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(PhaseGateUnsettledError)
+  })
+
+  it('T16 CE-6 带标记放行 + 双条件缺一不豁免：无入边∧标记=1 豁免可领；有入边∧标记=1 仍门拦', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'c6b', status: 'tasks' })
+    seedTask(h!.db, 'c6b', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'c6b', '1.2') // I 卡 pending——链非终态
+    seedTask(h!.db, 'c6b', 'attr', { type: 'test-run' }) // 无入边
+    markAttribution('c6b', 'attr')
+    // 无入边 ∧ 标记=1 → 豁免可领（链非终态仍放行）
+    const r = await claim({ projectId: P(), taskRef: { slug: 'c6b', localId: 'attr' }, sessionId: 's' })
+    expect(r.task).toMatchObject({ localId: 'attr', taskStatus: 'in_progress' })
+    // 有入边 ∧ 标记=1 → 豁免失效仍门拦（双条件合取——缺一不豁免）
+    seedTask(h!.db, 'c6b', 'attr2', { type: 'test-run' })
+    seedEdge(h!.db, 't-c6b-attr2', 't-c6b-1.1')
+    markAttribution('c6b', 'attr2')
+    const err = await claim({ projectId: P(), taskRef: { slug: 'c6b', localId: 'attr2' }, sessionId: 's2' }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(PhaseGateUnsettledError)
   })
 })

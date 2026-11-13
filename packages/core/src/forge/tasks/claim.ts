@@ -27,6 +27,10 @@
 // 该 feature 已完成业务任务的最大相位 且 > 1）时注入上一相位摘要路径（仓规
 // docs/features/<slug>/tasks/records/{N-1}.summary.md，正斜杠）；文件在场性核验属 dsh 执行
 // 侧（core 无工作区根路径——模板已指示读取，缺席 = 执行器软失）。
+// 容器实现链阶段门（loop-phase-gate design §1.2/§1.3，§6-35⑧ 门语义修订）：就绪选择谓词
+// 与 fresh-claim 直取径守卫双落点接入 GATE_SQL——验证类卡（V ∧ feature 容器）就绪/可领
+// ⇔ 容器实现链终态合取；分支延续优先不越过门（validation 族出局①落②全局池）；
+// adopt 定向恢复径与幂等重入径豁免（adopt 豁免附带目标态断言 ∈ {in_progress, interrupted}）。
 import type Database from 'better-sqlite3'
 import type {
   ClaimTaskInput,
@@ -35,10 +39,12 @@ import type {
   TaskPriority,
   TaskPrerequisiteSummary,
 } from '@dsh-forge/contracts'
+import { VALIDATION_TASK_TYPES } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { DependenciesUnmetError, InvalidTransitionError, TaskNotFoundError } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
+import { GATE_SQL, assertContainerChainSettled } from './phase-gate.js'
 import { composeDispatchPrompt } from './prompt/compose.js'
 import { assertNoBareInterpolation, composePersona, composePersonaWithProfile } from './prompt/persona.js'
 import type { TaskType } from '@dsh-forge/contracts'
@@ -64,10 +70,17 @@ function taskById(db: Database.Database, taskId: string): TaskStorageRow | undef
   return db.prepare<unknown[], TaskStorageRow>(`SELECT ${TASK_COLUMNS} FROM tasks WHERE id = ?`).get(taskId)
 }
 
-/** 就绪判定谓词（SQL 片段——守卫与就绪集共用同判定；满足 = 读时 JOIN 终态派生，§6-5） */
+/** 分支①排除验证类（loop-phase-gate design §2.4）：validation 族出局延续优先，落②全局池竞争
+ *  （词表生成片段——不手抄字面清单） */
+const BRANCH1_EXCLUDE_VALIDATION = `t.task_type NOT IN (${VALIDATION_TASK_TYPES.map((t) => `'${t}'`).join(', ')})`
+
+/** 就绪判定谓词（SQL 片段——守卫与就绪集共用同判定；满足 = 读时 JOIN 终态派生，§6-5）。
+ *  loop-phase-gate（design §1.2）：追加容器实现链阶段门 GATE_SQL——①②③三查询共享单点，
+ *  验证类卡就绪 ⇔ 容器实现链终态合取（E2E 归因豁免等豁免面见 phase-gate.ts）。 */
 const READY_PREDICATE = `NOT EXISTS (
   SELECT 1 FROM task_edges e JOIN tasks p ON p.id = e.prerequisite_id
-  WHERE e.task_id = t.id AND p.task_status NOT IN ('completed', 'skipped'))`
+  WHERE e.task_id = t.id AND p.task_status NOT IN ('completed', 'skipped'))
+AND ${GATE_SQL('t')}`
 
 /** priority 线性序（P0 > P1 > P2 > 缺省——就绪选择第二键；NULL 排末位） */
 const PRIORITY_RANK = `CASE t.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END`
@@ -132,7 +145,8 @@ function selectReadyTask(db: Database.Database, source: ContainerRef | undefined
     const successor = db
       .prepare<unknown[], { id: string }>(
         `SELECT t.id FROM task_edges e JOIN tasks t ON t.id = e.task_id
-         WHERE e.prerequisite_id = ? AND t.task_status = 'pending' AND ${READY_PREDICATE}
+         WHERE e.prerequisite_id = ? AND t.task_status = 'pending'
+           AND ${BRANCH1_EXCLUDE_VALIDATION} AND ${READY_PREDICATE}
          ORDER BY ${FIX_FIRST}, ${PRIORITY_RANK}, t.created_at, t.id LIMIT 1`,
       )
       .get(anchor.id)
@@ -242,6 +256,15 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       gateElastic = row?.task_status === 'blocked'
     }
     if (row === undefined) return noReadyExit() // Z1 出口（纯读零变更，不发射事件）
+
+    // ①¼ fresh-claim 容器阶段门守卫（loop-phase-gate design §1.3——CE-2 直取径落点）：
+    //    门作用域 = pending→in_progress 转移时点。pending（含 taskRef 指名径——主拦截对象、
+    //    盲选兜底、adopt 指向 pending V 卡）受门判定；adopt 定向恢复径与幂等重入径豁免
+    //    （adopt 豁免附带目标态断言：目标 ∈ {in_progress, interrupted} 才豁免——pending 不在
+    //    集内即不豁免，关闭「换调用形态击穿」缺口）。事务外纯读段快照判定（红旗 R2）。
+    if (row.task_status === 'pending') {
+      assertContainerChainSettled(db, input.projectId, row)
+    }
 
     // ①½ 循环独占守卫（S1c——可选，外部 claim 传入；宿主循环自身的 loopSourced claim 不
     //    携带）：目标解析命中即判，位于一切写入之前。拒绝径 = 守卫抛错 → 单事务整体回滚

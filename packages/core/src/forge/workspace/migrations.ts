@@ -6,7 +6,7 @@
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
-export const FORGE_DB_SCHEMA_VERSION = 7
+export const FORGE_DB_SCHEMA_VERSION = 8
 
 /**
  * v1（M3 终态·直改）：八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器。
@@ -340,6 +340,22 @@ BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (de
       `UPDATE bugs SET container_slug =
          (SELECT slug FROM tasks WHERE tasks.id = bugs.source_task_id)
        WHERE container_slug IS NULL`,
+    ],
+  },
+  {
+    // v8（loop-phase-gate 1.2——E2E 归因卡承载列）：tasks.e2e_attribution INTEGER NOT NULL
+    // DEFAULT 0（design §1.1 承载字段裁定——不塞 vars_json：门谓词 SQL 需列判据，JSON 键
+    // 判据脆弱且无类型约束）。标记 = 生成侧机械事实（loop 归因卡生成点后置 UPDATE 单点写），
+    // 不经 addTask 参数暴露（AddTaskInput DTO 不含该字段——contracts 硬约束）。GATE_SQL 与
+    // fresh-claim 守卫消费（packages/core/src/forge/tasks/phase-gate.ts）。守卫式 ALTER
+    // （v3/v7 先例——列已在场谱系跳过）；存量行恒缺省 0（无标记 = 无豁免，行为保守）。
+    // 全新库：v1 建表 → 本版补列，终态一致。
+    version: 8,
+    statements: [
+      {
+        sql: `ALTER TABLE tasks ADD COLUMN e2e_attribution INTEGER NOT NULL DEFAULT 0`,
+        columnGuard: { table: 'tasks', column: 'e2e_attribution' },
+      },
     ],
   },
 ]
