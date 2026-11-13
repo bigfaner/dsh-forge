@@ -7,7 +7,8 @@
 // 求值序保证：main.ts 同步 import 本模块（页面模块求值期），插件 bundle 经 boot 注入
 // 在就绪门放行后才装载——发布恒先于消费（缺席 = 装配断裂，插件 apply fail-loud）。
 // fix-25 发布集（官方基座降位形态）：main.conversation 工作台面板退役——发布 =
-// sidebar 族（workspaces 替换 + 品牌行）+ main 面板族（hero/knowledge）+ 页签族
+// sidebar 族（品牌行；workspaces 替换发布键已随 1.6 B 类顶替①迁 @dsh-forge/project
+// bundle——ui/sidebar-face.ts）+ main 面板族（hero/knowledge）+ 页签族
 // （召回单签——轨迹 = 官方 'trajectory' 直用，fix-29 退役产品复刻）+ 壳宿主
 // （shell.overlay 常驻件）+ 面板行字形 + 工作台桥工厂。fix-13 注记（1.45）：右栏 dock
 // tab 族（ForgeOverviewTab/ForgeDocsTab 两 keyed body）发布退役——注册面与组件本体归
@@ -25,10 +26,8 @@ import { createMermaidEnhancer } from '@dsh-forge/md-mermaid/web'
 import {
   ForgeBrandMark,
   ForgeBrandName,
-  ForgeSidebarSlot,
   type ForgeBrandMarkProps,
   type ForgeBrandNameProps,
-  type ForgeSidebarSlotProps,
 } from './views/sidebar/index.js'
 import { ForgeShellHost, type ForgeShellHostProps } from './workbench/ShellHost.js'
 // fix-13 注记（1.42/1.44）：ForgeHeroPanel / ForgeKnowledgePanel / ForgeKnowledgeGlyph /
@@ -55,8 +54,8 @@ import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from
 
 /** 发布面形状（client-plugin/plugin.ts 结构同型镜像——bundle 自持纪律，禁跨 chunk import） */
 export interface ForgePublishedViews {
-  /** sidebar.workspaces 洞位占用者（接线层：快照直读 + 项目 RPC + 动作绑定） */
-  readonly ForgeSidebarSlot: ComponentType<ForgeSidebarSlotProps>
+  // 1.6 注记：sidebar.workspaces 洞位占用者发布键随 B 类顶替①迁 @dsh-forge/project
+  // bundle（ui/sidebar-face.ts + ui/sidebar/ 组件族）退役——壳发布面零该键。
   /** sidebar.brand.mark 洞位内容（「鲸游书海」标——fix-38 接入：官方 FISH_LOGO_PATH 鲸 + 书页浪 + 闪电喷泉） */
   readonly ForgeBrandMark: ComponentType<ForgeBrandMarkProps>
   /** sidebar.brand.name 洞位内容（dsh-forge 字标） */
@@ -81,7 +80,6 @@ declare global {
 }
 
 ;(globalThis as { __DSH_FORGE_VIEWS__?: ForgePublishedViews }).__DSH_FORGE_VIEWS__ = {
-  ForgeSidebarSlot,
   ForgeBrandMark,
   ForgeBrandName,
   ForgeShellHost,

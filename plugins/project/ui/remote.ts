@@ -25,6 +25,8 @@ import type {
   ListFeaturesQuery,
   ListProposalsQuery,
   ProposalCard,
+  Project,
+  ProjectPatch,
   ProjectSummary,
   RegisterProjectInput,
   RegisterResult,
@@ -42,6 +44,8 @@ import type {
   WorktreeEnsureWorkspaceResult,
   WorktreeListRequest,
   WorktreeListResult,
+  WorktreeResolveRequest,
+  WorktreeResolveResult,
   WorktreeSelectRequest,
   WorktreeSelectResult,
   WorktreeSealRequest,
@@ -88,6 +92,8 @@ export interface ForgeProjectsNamespace {
   list(): Promise<RemoteResult<ProjectSummary[]>>
   register(input: RegisterProjectInput): Promise<RemoteResult<RegisterResult>>
   deriveTaskStoreDir(workspaceDir: string): Promise<RemoteResult<never>>
+  /** 项目行变更（sidebar 五功能写面：rename/archived/sortOrders patch——1.6） */
+  update(id: string, patch: ProjectPatch): Promise<RemoteResult<Project>>
 }
 /** forgeFs namespace 消费面 */
 export interface ForgeFsNamespace {
@@ -110,6 +116,8 @@ export interface ForgeWorktreeNamespace {
   select(query: WorktreeSelectRequest): Promise<RemoteResult<WorktreeSelectResult>>
   selected(query: { readonly projectRoot: string }): Promise<RemoteResult<{ readonly path?: string }>>
   ensureWorkspace(query: WorktreeEnsureWorkspaceRequest): Promise<RemoteResult<WorktreeEnsureWorkspaceResult>>
+  /** 批量归属解析（sidebar 树分组/概览锚定——身份归并单点；1.6 Typert 正典通路） */
+  resolve(query: WorktreeResolveRequest): Promise<RemoteResult<WorktreeResolveResult>>
 }
 /** forgeProposals namespace 消费面 */
 export interface ForgeProposalsNamespace {
@@ -198,6 +206,15 @@ export const FORGE_REMOTE_DESCRIPTORS: readonly InvocationDescriptor[] = [
     result: strictCodec('forgeProjects.DeriveTaskStoreDirResult', isAnything),
   }),
   remoteMethod({
+    id: '@dsh-forge/project#forgeProjects/update',
+    service: 'forgeProjectsController',
+    namespace: 'forgeProjects',
+    method: 'update',
+    invocation: { kind: 'direct' },
+    parameters: [jsonParam('id', 'string', isString), jsonParam('patch', 'ProjectPatch', isRecord)],
+    result: strictCodec('forgeProjects.UpdateResult', isAnything),
+  }),
+  remoteMethod({
     id: '@dsh-forge/project#forgeFs/listDir',
     service: 'forgeFsController',
     namespace: 'forgeFs',
@@ -243,6 +260,7 @@ export const FORGE_REMOTE_DESCRIPTORS: readonly InvocationDescriptor[] = [
   worktreeUnary('select'),
   worktreeUnary('selected'),
   worktreeUnary('ensureWorkspace'),
+  worktreeUnary('resolve'),
   domainList('forgeProposals', 'forgeProposalsController'),
   domainList('forgeFeatures', 'forgeFeaturesController'),
   remoteMethod({

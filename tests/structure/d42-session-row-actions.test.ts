@@ -17,14 +17,15 @@
 //      （surface[--dsw-specific-sidebar-fill] + tint[interactive-bg-hover] 双层——遮文字
 //      穿透且与行面无缝）+ :has 聚焦行底同步。
 // 动作集逐位记账（⋯ 菜单/归档/置顶三钮 + 菜单四项）=
-// apps/web/src/views/sidebar/ForgeWorkspacePanel.test.tsx D42/D45 组 + SessionRow 文档块。
+// plugins/project/ui/sidebar/ForgeWorkspacePanel.test.tsx D42/D45 组 + SessionRow 文档块
+// （1.6：面板本体自 apps/web 迁 @dsh-forge/project——css 随迁，本 pin 改读插件包路径）。
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
-const css = readFileSync(join(ROOT, 'apps/web/src/views/sidebar/sidebar.css'), 'utf8')
+const css = readFileSync(join(ROOT, 'plugins/project/ui/sidebar/sidebar.css'), 'utf8')
 
 describe('D42 会话行 hover 动作组（官方 fading 模式 + ui-sidebar iconButton 刻度——CSS pin）', () => {
   it('fading 等价机制：动作组 opacity:0（隐形）+ pointer-events 隐形守卫 + 官方 .15s ease-in-out 过渡', () => {

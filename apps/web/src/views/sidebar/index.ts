@@ -1,9 +1,5 @@
-// views/sidebar/ barrel（定位：业务——UF-1 左栏工作区面板）。
-// 消费方：product-views.ts（产品视图发布面——client 插件槽位注册的组件源）与单测。
-export * from './ForgeWorkspacePanel.js'
-export * from './ForgeSidebarSlot.js'
+// views/sidebar/ barrel（定位：壳本体——品牌行两件 + 知识字形；UF-1 左栏工作区面板本体
+// 已随 1.6 B 类顶替①迁 @dsh-forge/project，ui/sidebar/ + ui/sidebar-face.ts）。
+// 消费方：product-views.ts（品牌行内容洞位发布面）与单测。
 export * from './ForgeBrand.js'
 export * from './KnowledgeGlyph.js'
-export * from './sidebar-model.js'
-export * from './sidebar-actions.js'
-export * from './use-forge-projects.js'

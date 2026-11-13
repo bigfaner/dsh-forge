@@ -35,7 +35,9 @@ import {
 } from '@dsh-forge/project/client-ui/dock-tabs'
 import type { OpenSessionOrchestrator } from '@dsh-forge/project/client-ui/open-session'
 import type { TaskStatus } from '@dsh-forge/contracts'
-import type { LedgerSessionsSnapshot, SnapshotSource } from '../views/sidebar/sidebar-model.js'
+// 1.6 注记：账本快照窄类型随 sidebar 族迁 @dsh-forge/project（ui/sidebar/）——壳消费经
+// 包窄子路径出口类型直供（event-tap/session-actions 先例；纯 type import 零运行时载荷）。
+import type { LedgerSessionsSnapshot, SnapshotSource } from '@dsh-forge/project/client-ui/sidebar'
 import { MainSessionAnchor, useAnchoredProjects, useWorkspaceProjectMap } from './anchored-projects.js'
 import {
   HERO_PANEL_KEY,
@@ -410,5 +412,5 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
   )
 }
 
-/** ProjectsPhase 再导出（ShellHost 消费面的类型同源——单测注入用） */
-export type { ProjectsPhase } from '../views/sidebar/use-forge-projects.js'
+/** ProjectsPhase 再导出（ShellHost 消费面的类型同源——单测注入用；1.6 迁 @dsh-forge/project ui/sidebar） */
+export type { ProjectsPhase } from '@dsh-forge/project/client-ui/sidebar'

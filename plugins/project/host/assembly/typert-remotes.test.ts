@@ -55,9 +55,9 @@ function fakeCtx(): Context {
 }
 
 describe('marker 端点表 pin（gateway SRC 端点真源——ui/remote.ts descriptor 表成对锁定）', () => {
-  it('forgeProjects：list/register/deriveTaskStoreDir 三端点（一元直通）', () => {
+  it('forgeProjects：list/register/deriveTaskStoreDir/update 四端点（一元直通；update = sidebar 五功能写面 1.6）', () => {
     const svc = new ForgeProjectsRemote(fakeCtx(), {})
-    expect(endpointsOf(svc)).toEqual(['list', 'register', 'deriveTaskStoreDir'])
+    expect(endpointsOf(svc)).toEqual(['list', 'register', 'deriveTaskStoreDir', 'update'])
   })
 
   it('forgeBugs：list/commitFiles/fileDiff 三端点', () => {
@@ -70,7 +70,7 @@ describe('marker 端点表 pin（gateway SRC 端点真源——ui/remote.ts desc
     expect(endpointsOf(svc)).toEqual(['listDir'])
   })
 
-  it('forgeWorktree：十一端点——remove 以 exportName delete 投影 + followSeal mode:stream', () => {
+  it('forgeWorktree：十二端点——remove 以 exportName delete 投影 + followSeal mode:stream + resolve（1.6 归属解析）', () => {
     const svc = new ForgeWorktreeRemote(fakeCtx(), { worktrees: () => ({}) as never })
     expect(endpointsOf(svc)).toEqual([
       'list',
@@ -84,6 +84,7 @@ describe('marker 端点表 pin（gateway SRC 端点真源——ui/remote.ts desc
       'select',
       'selected',
       'ensureWorkspace',
+      'resolve',
     ])
   })
 
@@ -158,17 +159,18 @@ describe('ForgeDirsRemote.facts（fix-1——core 缺席插件自装配：worksp
 describe('SRC 形参名单源 pin（wire 名 = JS 形参名——client descriptor 表 wire 成对锁定）', () => {
   it('worktree 各方法首形参名 = query；followSeal 尾参 = signal（cancellation 注入位）', () => {
     const svc = Object.create(ForgeWorktreeRemote.prototype) as Record<string, (...args: unknown[]) => unknown>
-    for (const method of ['list', 'create', 'aheadBehind', 'branches', 'checks', 'seal', 'followSeal', 'select', 'selected', 'ensureWorkspace']) {
+    for (const method of ['list', 'create', 'aheadBehind', 'branches', 'checks', 'seal', 'followSeal', 'select', 'selected', 'ensureWorkspace', 'resolve']) {
       expect(methodParameterNames(svc[method]), method).toEqual(['query', 'signal'])
     }
     expect(methodParameterNames(svc['remove'] as never), 'remove').toEqual(['query', 'signal'])
   })
 
-  it('forgeProjects 形参名：list(signal)/register(input)/deriveTaskStoreDir(workspaceDir)', () => {
+  it('forgeProjects 形参名：list(signal)/register(input)/deriveTaskStoreDir(workspaceDir)/update(id,patch)', () => {
     const svc = Object.create(ForgeProjectsRemote.prototype) as Record<string, (...args: unknown[]) => unknown>
     expect(methodParameterNames(svc['list'] as never)).toEqual(['signal'])
     expect(methodParameterNames(svc['register'] as never)).toEqual(['input', 'signal'])
     expect(methodParameterNames(svc['deriveTaskStoreDir'] as never)).toEqual(['workspaceDir', 'signal'])
+    expect(methodParameterNames(svc['update'] as never)).toEqual(['id', 'patch', 'signal'])
   })
 
   it('forgeFs.listDir 形参名 = (dirPath, signal)', () => {

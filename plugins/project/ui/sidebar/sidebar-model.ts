@@ -9,7 +9,7 @@
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
-import { timeLabelZh } from '../../components/index.js'
+import { timeLabelZh } from '../components.js'
 
 /** 快照源窄形状（dsh ObservableSnapshot 结构同型；React useSyncExternalStore 直连） */
 export interface SnapshotSource<T> {

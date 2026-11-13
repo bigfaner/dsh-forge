@@ -6,10 +6,20 @@
 // 数据源 useForgeProjects 仍唯一（本目录 use-forge-projects.ts）。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
+import type { WorktreeResolveRequest, WorktreeResolveResult } from '@dsh-forge/contracts'
 import type { LedgerWorkspacesSnapshot } from './kit-types.js'
 import { useForgeProjects, type ProjectsPhase } from './use-forge-projects.js'
-import { preloadRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
+import { preloadRpcClientFactory } from './rpc-channels.js'
 import type { KitSelectorHook } from './kit-types.js'
+
+/**
+ * worktree.resolve 消费切片工厂窄类型（1.6 收窄——归属归并只消费 resolve 一法）：
+ * knowledge/rpc-channels 真身与本包 ui/rpc Typert 真身（ForgeRpcClient.worktree.resolve）
+ * 同为结构满足——消费方按数据通路显式选厂（sidebar 选 Typert 正典，官方宿主可达）。
+ */
+export type WorktreeResolveClientFactory = () => {
+  readonly worktree: { resolve(q: WorktreeResolveRequest): Promise<WorktreeResolveResult> }
+}
 
 /**
  * workspace 归属快照窄判定（纯函数）：dsh 归属快照最小形状（items 数组）——非壳载体/
@@ -110,7 +120,7 @@ export function useAnchoredProjects(useWorkspaces?: KitSelectorHook): AnchoredPr
  */
 export async function resolveWorkspaceProjectMap(
   paths: readonly string[],
-  makeClient: RpcClientFactory,
+  makeClient: WorktreeResolveClientFactory,
 ): Promise<ReadonlyMap<string, string>> {
   if (paths.length === 0) return new Map()
   const result = await makeClient().worktree.resolve({ paths })
@@ -132,7 +142,7 @@ export async function resolveWorkspaceProjectMap(
 export function useWorkspaceProjectMap(
   wsItems: readonly { readonly path?: unknown }[],
   projectsState: ProjectsPhase,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: WorktreeResolveClientFactory = preloadRpcClientFactory,
 ): ReadonlyMap<string, string> {
   const [map, setMap] = useState<ReadonlyMap<string, string>>(() => new Map())
   useEffect(() => {

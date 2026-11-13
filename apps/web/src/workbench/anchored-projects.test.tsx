@@ -13,7 +13,8 @@ import {
   useAnchoredProjects,
   type AnchoredProjects,
 } from './anchored-projects.js'
-import type { RpcClientFactory } from '../rpc/index.js'
+// 1.6：归属解析工厂窄类型随 useWorkspaceProjectMap 收窄（worktree.resolve 消费切片）
+import type { WorktreeResolveClientFactory } from '@dsh-forge/project/client-ui/sidebar'
 
 describe('isWorkspacesSnapshot 快照窄判定', () => {
   it('最小形状（items 数组）通过；其余（null/非对象/缺 items/非数组）降级 false', () => {
@@ -74,7 +75,7 @@ describe('resolveWorkspaceProjectMap 纯解析面（bug 52fc94db 后续——管
   const entry = { path: WT, projectId: 'p-owner', projectRoot: 'Z:\\proj', projectName: 'proj' }
   const makeClientOf = (
     resolved: readonly { path: string; projectId: string; projectRoot: string; projectName: string }[],
-  ): RpcClientFactory => {
+  ): WorktreeResolveClientFactory => {
     let calls = 0
     const client = {
       calls: () => calls,
@@ -85,7 +86,7 @@ describe('resolveWorkspaceProjectMap 纯解析面（bug 52fc94db 后续——管
         },
       },
     }
-    return (() => client) as unknown as RpcClientFactory
+    return (() => client) as unknown as WorktreeResolveClientFactory
   }
 
   it('命中：条目按归一工作区路径键映射 projectId', async () => {
@@ -108,7 +109,7 @@ describe('resolveWorkspaceProjectMap 纯解析面（bug 52fc94db 后续——管
   it('通道故障上抛（hook 径 catch 降级空映射——本函数只做纯转换不吞错）', async () => {
     const client = (() => {
       throw new Error('rpc down')
-    }) as unknown as RpcClientFactory
+    }) as unknown as WorktreeResolveClientFactory
     await expect(resolveWorkspaceProjectMap([WT], client)).rejects.toThrow('rpc down')
   })
 

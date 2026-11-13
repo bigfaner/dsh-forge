@@ -15,6 +15,8 @@ import {
   type ListBugsQuery,
   type ListFeaturesQuery,
   type ListProposalsQuery,
+  type Project,
+  type ProjectPatch,
   type ProposalCard,
   type ProjectSummary,
   type RegisterProjectInput,
@@ -35,6 +37,8 @@ import {
   type WorktreeEnsureWorkspaceResult,
   type WorktreeListRequest,
   type WorktreeListResult,
+  type WorktreeResolveRequest,
+  type WorktreeResolveResult,
   type WorktreeSelectRequest,
   type WorktreeSelectResult,
   type WorktreeSealRequest,
@@ -224,11 +228,13 @@ function streamRemote<T>(
   })()
 }
 
-/** forge:projects/* 面方法集（本插件消费切片：list/register/deriveTaskStoreDir） */
+/** forge:projects/* 面方法集（本插件消费切片：list/register/deriveTaskStoreDir/update） */
 export interface ForgeProjectsRpc {
   list(): Promise<ProjectSummary[]>
   register(input: RegisterProjectInput): Promise<RegisterResult>
   deriveTaskStoreDir(workspaceDir: string): Promise<DeriveTaskStoreDirResult>
+  /** 项目行变更（sidebar 五功能写面：rename/archived/sortOrders patch——1.6） */
+  update(id: string, patch: ProjectPatch): Promise<Project>
 }
 
 /** forge:fs/* 面方法集（目录浏览器数据源——只读列举） */
@@ -255,6 +261,8 @@ export interface ForgeWorktreeRpc {
   select(q: WorktreeSelectRequest): Promise<WorktreeSelectResult>
   selected(q: { readonly projectRoot: string }): Promise<{ readonly path?: string }>
   ensureWorkspace(q: WorktreeEnsureWorkspaceRequest): Promise<WorktreeEnsureWorkspaceResult>
+  /** 批量归属解析（sidebar 树分组/概览锚定——身份归并单点；1.6 Typert 正典通路） */
+  resolve(q: WorktreeResolveRequest): Promise<WorktreeResolveResult>
 }
 
 /** forge:{proposals,features}/* list 读面（新建弹窗 slug 候选数据源——worktree-picker 消费切片） */
@@ -303,6 +311,7 @@ export function createForgeRpcClient(): ForgeRpcClient {
       register: (input) => invokeRemote<RegisterResult>('forgeProjects', 'register', [input]),
       deriveTaskStoreDir: (workspaceDir) =>
         invokeRemote<DeriveTaskStoreDirResult>('forgeProjects', 'deriveTaskStoreDir', [workspaceDir]),
+      update: (id, patch) => invokeRemote<Project>('forgeProjects', 'update', [id, patch]),
     },
     fs: {
       listDir: (dirPath) => invokeRemote<DirListing>('forgeFs', 'listDir', [dirPath]),
@@ -322,6 +331,7 @@ export function createForgeRpcClient(): ForgeRpcClient {
       select: (q) => invokeRemote<WorktreeSelectResult>('forgeWorktree', 'select', [q]),
       selected: (q) => invokeRemote<{ readonly path?: string }>('forgeWorktree', 'selected', [q]),
       ensureWorkspace: (q) => invokeRemote<WorktreeEnsureWorkspaceResult>('forgeWorktree', 'ensureWorkspace', [q]),
+      resolve: (q) => invokeRemote<WorktreeResolveResult>('forgeWorktree', 'resolve', [q]),
     },
     proposals: {
       list: (q) => invokeRemote<ProposalCard[]>('forgeProposals', 'list', [q]),

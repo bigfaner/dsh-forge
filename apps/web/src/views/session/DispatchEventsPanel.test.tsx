@@ -40,7 +40,7 @@ import {
   type DispatchEventEntry,
   type DispatchPanelGeometry,
 } from './DispatchEventsPanel.js'
-import type { LedgerSessionsSnapshot, SnapshotSource } from '../sidebar/sidebar-model.js'
+import type { LedgerSessionsSnapshot, SnapshotSource } from '@dsh-forge/project/client-ui/sidebar'
 
 // ─────────────────── 夹具 ───────────────────
 

@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.15.2",
+  "version": "0.16.1",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -50,6 +50,10 @@
     "./client-ui/dock-tabs": {
       "types": "./dist/client/ui/dock-tabs/index.d.ts",
       "default": "./ui/dock-tabs/index.ts"
+    },
+    "./client-ui/sidebar": {
+      "types": "./dist/client/ui/sidebar/index.d.ts",
+      "default": "./ui/sidebar/index.ts"
     },
     "./client-ui/session-actions": {
       "types": "./dist/client/ui/session-actions.d.ts",

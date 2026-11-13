@@ -166,6 +166,7 @@ import {
   registerRemoteEntryFace,
 } from './remote-entry-face.js'
 import { registerConversationToolFaces } from './conversation-views-face.js'
+import { registerSidebarFace } from './sidebar-face.js'
 import { registerHeroPanelFace } from './hero-panel-face.js'
 import { registerKnowledgeFaces } from './knowledge-face.js'
 import { registerDockTabsFace } from './dock-tabs-face.js'
@@ -366,6 +367,15 @@ export const projectClient = {
       }
     } catch (error) {
       console.warn('[dsh-forge/project] dock tab faces registration interrupted', error)
+    }
+    // sidebar.workspaces 顶替（1.6 迁入——B 类顶替①：官方 WorkspaceBrowser 整段替换，
+    // 负优先级恒选胜语义 audit §6；项目列表五功能复刻，数据源 = forge.projects Typert；
+    // sessions/workspaces/uiWorkspace 服务经 ctx.get 现查，缺席 = 不注册官方保持）。
+    try {
+      const sidebar = registerSidebarFace(rec as never, slots)
+      console.info(`[dsh-forge/project] sidebar face registered=[${sidebar.registered.join(', ')}]`)
+    } catch (error) {
+      console.warn('[dsh-forge/project] sidebar face registration failed——降级不注册（官方 WorkspaceBrowser 保持）', error)
     }
   },
 };

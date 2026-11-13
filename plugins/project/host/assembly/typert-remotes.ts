@@ -29,6 +29,8 @@ import type {
   DirFactsQuery,
   DirListing,
   ListBugsQuery,
+  Project,
+  ProjectPatch,
   RegisterProjectInput,
   RegisterResult,
   ProjectSummary,
@@ -164,8 +166,16 @@ export class ForgeProjectsRemote extends TypertRemoteService {
     void workspaceDir;
     throw unavailable("deriveTaskStoreDir", "projects");
   }
+
+  /** 项目行变更（sidebar 五功能写面：rename/archived/sortOrders patch——host 权威 registry 写入） */
+  async update(id: string, patch: ProjectPatch, signal?: AbortSignal): Promise<Project> {
+    signal?.throwIfAborted();
+    const port = this.port();
+    if (port === undefined) throw unavailable("update", "projects");
+    return await port.updateProject(id, patch);
+  }
 }
-remoteMarks(ForgeProjectsRemote.prototype, [["list"], ["register"], ["deriveTaskStoreDir"]]);
+remoteMarks(ForgeProjectsRemote.prototype, [["list"], ["register"], ["deriveTaskStoreDir"], ["update"]]);
 
 // ── forge:bugs 族（BugsServicePort list 读面；commitFiles/fileDiff 变更读面归宿主 git 面）──
 
@@ -398,6 +408,12 @@ export class ForgeWorktreeRemote extends TypertRemoteService {
     signal?.throwIfAborted();
     return await this.service().ensureWorkspace(query);
   }
+
+  /** 批量归属解析（sidebar 树分组/概览锚定——身份归并单点；1.6 Typert 正典通路） */
+  async resolve(query: Parameters<WorktreeRpcService["resolve"]>[0], signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    return await this.service().resolve(query);
+  }
 }
 remoteMarks(ForgeWorktreeRemote.prototype, [
   ["list"],
@@ -411,6 +427,7 @@ remoteMarks(ForgeWorktreeRemote.prototype, [
   ["select"],
   ["selected"],
   ["ensureWorkspace"],
+  ["resolve"],
 ]);
 
 /** follow 流节拍（abort 感知 sleep——取消即出循环，不悬空 fiber） */

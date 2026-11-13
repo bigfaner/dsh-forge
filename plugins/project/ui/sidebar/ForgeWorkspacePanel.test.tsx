@@ -2,10 +2,10 @@
 // renderToStaticMarkup 纯渲染面（同 2.6 组件测法）；交互接线（onSessionActivate →
 // 动作绑定）在 sidebar-actions.test。fix-25：知识入口迁官方 sidebar.panellist 行——
 // 本面板知识入口断言随迁（宽态无入口行）。
-// fix-6 增面：头部四件（搜索/视图选项补齐）+ SidebarProjectsZone 受控缝（过滤应用/
-// 行内空提示/相位正交——态机在面板层，同 WorkbenchZones→WorkbenchPanel 分层）。
-// fix-42 增面：rail 图标列（空轨道退役——项目 folder 图标列 2026-10-11 用户裁决退役，
-// 收起态仅搜索/＋）+ 视图菜单实装（groupBy/archivedFilter）+
+// fix-6 增面：段头动作（搜索/视图选项；「＋」随 2026-11-12 裁决退役）+ SidebarProjectsZone
+// 受控缝（过滤应用/行内空提示/相位正交——态机在面板层，同 WorkbenchZones→WorkbenchPanel 分层）。
+// fix-42 增面：rail 图标列（空轨道退役——项目 folder 图标列 2026-10-11 与「＋」2026-11-12
+// 用户裁决退役，收起态仅搜索）+ 视图菜单实装（groupBy/archivedFilter）+
 // 项目行语言（expandOnRowClick 整行翻转 + 行尾 hover 动作）+ 段头内嵌搜索槽。
 // D41 增面（2026-10-10 用户裁决）：①归档项目缺省隐藏（SIDEBAR_VIEW_DEFAULT hide——
 // 弱化标记断言迁显式 default 受控缝）；②会话 24h 窗口（窗口外折叠进「更早（N）」本地
@@ -20,9 +20,7 @@
 // 偏离官方 Rows meta 常驻次行（差异清单 D3/裁决 #20；记账注释在 ForgeWorkspacePanel.tsx）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { FISH_LOGO_PATH } from '@deepseek-ai/dsh-client-ui-primitives'
 import panelSource from './ForgeWorkspacePanel.tsx?raw'
-import { ForgeBrandMark, ForgeBrandName } from './ForgeBrand.js'
 import {
   ForgeWorkspacePanel,
   SIDEBAR_VIEW_MENU_ITEMS,
@@ -91,16 +89,8 @@ describe('宽态（AC1/AC2：项目树 + 会话列表行语言）', () => {
     expect(markup).not.toContain('data-dswf-nav="knowledge"')
   })
 
-  it('项目区「＋」添加入口在场（UF-3 入口接线点——回调出，触发归槽位接线层）', () => {
-    const withEntry = panel({ onAddProject: () => {} })
-    expect(withEntry).toContain('data-dswf-nav="add-project"')
-    expect(withEntry).toContain('aria-label="添加项目"')
-    // fix-17：＋钮图标 = 官方 IconProjectAddOutlineRegular（文件夹+加号——原生 dsh 同款；
-    // 官方件 artwork 路径前缀钉形，自绘纯加号退役）
-    expect(withEntry).toContain('M5.54492 2.06738')
-  })
-
-  it('「＋」入口缺席容忍（onAddProject 未注入 = 不呈现——纯展示件零缺省动作）', () => {
+  it('「＋ 添加项目」入口不在列表头部（用户裁决 2026-11-12——onAddProject 只归无项目空态 CTA，列表相位零入口）', () => {
+    expect(panel({ onAddProject: () => {} })).not.toContain('data-dswf-nav="add-project"')
     expect(panel({ onAddProject: undefined })).not.toContain('data-dswf-nav="add-project"')
   })
 
@@ -208,11 +198,18 @@ describe('项目行语言对齐原生（fix-42：整行翻转 + 行尾 hover 动
 })
 
 describe('相位（UF-1 States）', () => {
-  it('空项目（ready 且空）→ 首用引导指向 hero（AC5）', () => {
-    const markup = panel({ tree: [], hasProjects: false })
+  it('空项目（ready 且空）→ 空态引导 + 「添加项目」CTA（AC5；唯一残存添加入口——2026-11-12 裁决）', () => {
+    const markup = panel({ tree: [], hasProjects: false, onAddProject: () => {} })
     expect(markup).toContain('data-dswf-empty')
     expect(markup).toContain('尚未注册项目')
-    expect(markup).toContain('添加项目')
+    expect(markup).toContain('aria-label="添加项目"')
+    expect(markup).toContain('data-dswf-nav="add-project"')
+  })
+
+  it('空项目且 onAddProject 缺席 → 空态零添加入口（fail-soft——入口归宿待裁决）', () => {
+    const markup = panel({ tree: [], hasProjects: false })
+    expect(markup).toContain('data-dswf-empty')
+    expect(markup).not.toContain('data-dswf-nav="add-project"')
   })
 
   it('项目 RPC 在途 / 账本 pending → 行级骨架（防空态闪现）', () => {
@@ -232,7 +229,7 @@ describe('相位（UF-1 States）', () => {
   })
 })
 
-describe('收起态 rail（fix-42 空轨道退役：搜索/＋ 在轨——项目 folder 图标列 2026-10-11 用户裁决退役）', () => {
+describe('收起态 rail（fix-42 空轨道退役：搜索钮在轨——项目 folder 图标列 2026-10-11 与「＋」2026-11-12 用户裁决退役）', () => {
   const actions = {
     onAddProject: () => {},
     onSessionActivate: (_sessionId: string) => {},
@@ -241,17 +238,16 @@ describe('收起态 rail（fix-42 空轨道退役：搜索/＋ 在轨——项�
   function rail(overrides: Partial<Parameters<typeof SidebarRail>[0]> = {}): string {
     const props: Parameters<typeof SidebarRail>[0] = {
       onSearchOpen: () => {},
-      onAddProject: actions.onAddProject,
       ...overrides,
     }
     return renderToStaticMarkup(<SidebarRail {...props} />)
   }
 
-  it('面板 rail 分支 = 搜索钮 + 「＋」在轨（宽态内容缺席）', () => {
+  it('面板 rail 分支 = 搜索钮在轨、「＋」退役（宽态内容缺席）', () => {
     const markup = panel({ wide: false, ...actions })
     expect(markup).toContain('data-dswf-sidebar="rail"')
     expect(markup).toContain('data-dswf-search-toggle')
-    expect(markup).toContain('data-dswf-nav="add-project"')
+    expect(markup).not.toContain('data-dswf-nav="add-project"')
     // rail 态不渲染宽态内容（项目区文案/会话行缺席）
     expect(markup).not.toContain('dswf-sidebar-projects')
     expect(markup).not.toContain('data-dswf-session=')
@@ -262,55 +258,26 @@ describe('收起态 rail（fix-42 空轨道退役：搜索/＋ 在轨——项�
     expect(panel({ wide: false, ...actions })).not.toContain('data-dswf-rail-project')
   })
 
-  it('搜索钮/「＋」缺席容忍（回调缺席 = 钮不呈现）', () => {
-    const markup = rail({ onAddProject: undefined })
+  it('搜索钮恒在（expandSidebar 壳回调必在）；轨内零添加入口', () => {
+    const markup = rail()
     expect(markup).not.toContain('data-dswf-nav="add-project"')
     expect(markup).toContain('data-dswf-search-toggle') // 搜索钮恒在（expandSidebar 壳回调必在）
   })
 })
 
-describe('品牌行件（壳品牌行的内容洞位）', () => {
-  it('mark：「鲸游书海」内联 SVG（fix-38）——官方鲸几何零拷贝 + 尺寸随壳请求 + currentColor 单色 + aria-hidden', () => {
-    const markup = renderToStaticMarkup(<ForgeBrandMark size={24} />)
-    // 母版三层（docs/brand/whale-sea-mark.svg）：双层书页浪 + 鲸 + 闪电喷泉，viewBox 缩放
-    expect(markup).toContain('viewBox="0 0 24 24"')
-    expect(markup).toContain('width="24"')
-    expect(markup).toContain('height="24"')
-    expect(markup).toContain('aria-hidden="true"')
-    // 几何零拷贝（任务①红线）：鲸剪影 = 官方 FISH_LOGO_PATH 经导出面消费（非字面量拷贝）
-    expect(markup).toContain(`d="${FISH_LOGO_PATH}"`)
-    expect(markup).toContain('transform="translate(5.0 4.9) scale(0.62)"')
-    // 产品自有元素照母版内联：书页浪双路径（.88/.6 档）+ 闪电喷泉
-    expect(markup).toContain('opacity=".88"')
-    expect(markup).toContain('opacity=".6"')
-    expect(markup).toContain('M13.0 1.1 11.4 3.5 H12.4 L11.1 5.1 13.8 2.6 H12.8 Z')
-    // 单色纪律（docs/brand 禁用约定沿 fix-15）：四路径全 currentColor，零固定色值
-    expect(markup.match(/fill="currentColor"/g)).toHaveLength(4)
-    // 旧「知」字方块/fix-15「书 + 闪电」几何均已退役（历史档归 docs/brand）
-    expect(markup).not.toContain('知')
-    expect(markup).not.toContain('M13.6 1.5 9.1 9.7')
-    // 尺寸随壳请求缩放（品牌行/rail 24，其它请求同型缩放——16px 可辨锚 = 鲸尾卷 + 闪电）
-    expect(renderToStaticMarkup(<ForgeBrandMark size={16} />)).toContain('width="16"')
-  })
-  it('name：dsh-forge 字标（自持内容）', () => {
-    expect(renderToStaticMarkup(<ForgeBrandName />)).toContain('dsh-forge')
-  })
-})
-
-describe('头部四件 + 过滤（fix-6 + fix-42 段头内嵌搜索槽——官方 searchSlot 形态）', () => {
-  it('头部四件齐且顺序对齐原型：label + 搜索钮 → 视图选项钮 → ＋（既有 add-project 锚不动）', () => {
+describe('头部三件 + 过滤（fix-6 + fix-42 段头内嵌搜索槽——官方 searchSlot 形态）', () => {
+  it('头部三件齐且顺序对齐原型：label + 搜索钮 → 视图选项钮（「＋」随 2026-11-12 裁决退役）', () => {
     const markup = panel({ onAddProject: () => {} })
     expect(markup).toContain('dswf-sidebar-sectionlabel')
     expect(markup).toContain('>项目</div>') // 段头标签（tree 缺省）
     const searchBtn = markup.indexOf('data-dswf-search-toggle')
     const viewBtn = markup.indexOf('data-dswf-view-menu')
-    const addBtn = markup.indexOf('data-dswf-nav="add-project"')
     expect(searchBtn).toBeGreaterThanOrEqual(0)
     expect(viewBtn).toBeGreaterThanOrEqual(0)
-    expect(searchBtn).toBeLessThan(viewBtn) // 原型序：搜索 → 视图 → ＋
-    expect(viewBtn).toBeLessThan(addBtn)
+    expect(searchBtn).toBeLessThan(viewBtn) // 原型序：搜索 → 视图
     expect(markup).toContain('aria-label="搜索项目与会话"')
     expect(markup).toContain('aria-label="视图选项"')
+    expect(markup).not.toContain('data-dswf-nav="add-project"')
   })
 
   it('过滤行缺省收起（默认渲染不含 searchrow / 空提示）——收起态四件齐', () => {

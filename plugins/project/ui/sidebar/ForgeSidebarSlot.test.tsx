@@ -57,21 +57,19 @@ describe('ForgeSidebarSlot（槽位接线层）', () => {
     }
   })
 
-  it('项目区「＋」入口在场（UF-3 流程打开缝接线——槽位层绑定 openAddProjectFlow）', () => {
+  it('「＋ 添加项目」入口不在列表内（用户裁决 2026-11-12——宽态头部/rail 轨内零入口；唯一残存位 = 无项目空态 CTA，归 phaseBody/面板测试）', () => {
     Date.now = () => NOW
     try {
-      const markup = renderSlot(ledger([]), true)
-      expect(markup).toContain('data-dswf-nav="add-project"')
-      expect(markup).toContain('aria-label="添加项目"')
+      expect(renderSlot(ledger([]), true)).not.toContain('data-dswf-nav="add-project"')
+      expect(renderSlot(ledger([]), false)).not.toContain('data-dswf-nav="add-project"')
     } finally {
       Date.now = realDateNow
     }
   })
 
-  it('rail 态：owner share wide=false 透传 + 搜索钮在轨（fix-42 图标列非空——空轨道退役；项目 folder 图标列 2026-10-11 用户裁决退役）', () => {
+  it('rail 态：owner share wide=false 透传 + 搜索钮在轨（fix-42 图标列非空——空轨道退役；项目 folder 图标列 2026-10-11 用户裁决退役；「＋」2026-11-12 裁决退役）', () => {
     const markup = renderSlot(ledger([]), false)
     expect(markup).toContain('data-dswf-sidebar="rail"')
     expect(markup).toContain('data-dswf-search-toggle') // 搜索钮在轨（官方 rail 搜索径）
-    expect(markup).toContain('data-dswf-nav="add-project"') // 「＋」在轨（官方 rail 同排）
   })
 })

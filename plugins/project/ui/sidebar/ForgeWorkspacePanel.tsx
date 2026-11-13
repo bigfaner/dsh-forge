@@ -53,7 +53,6 @@ import {
   IconNewChatOutlineRegular,
   IconPinFillRegular,
   IconPinOutlineRegular,
-  IconProjectAddOutlineRegular,
   IconQueueOutlineRegular,
   IconSearchOutlineRegular,
   IconSlidersTwoOutlineRegular,
@@ -65,7 +64,7 @@ import {
   Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { EmptyState, ErrorBar, SkeletonRows } from '../../components/index.js'
+import { EmptyState, ErrorBar, SkeletonRows } from '../components.js'
 import {
   SIDEBAR_VIEW_DEFAULT,
   projectSortOrdersPatchOf,
@@ -892,6 +891,11 @@ export interface SidebarZonePhaseInput {
   readonly onSessionActivate?: (sessionId: string) => void
   /** 项目列表重试（错误条相位） */
   readonly onRetryProjects?: () => void
+  /**
+   * 「添加项目」空态入口（用户裁决 2026-11-12：「＋」入口不在项目列表内——列表头部/行内
+   * 零添加入口；唯一残存入口 = 无项目空态引导 CTA。缺席 = 空态零入口）。
+   */
+  readonly onAddProject?: () => void
   /** 项目块展开判据（折叠集合读） */
   readonly isExpanded: (projectId: string) => boolean
   /** 项目块折叠切换 */
@@ -931,7 +935,20 @@ export function phaseBody(input: SidebarZonePhaseInput): ReactNode {
     return (
       <EmptyState
         title="尚未注册项目"
-        description="在中间引导页点击「添加项目」，注册你的第一个项目"
+        description="注册你的第一个项目后，这里会呈现项目与会话列表"
+        action={
+          input.onAddProject === undefined ? null : (
+            <Button
+              variant="primary"
+              size="sm"
+              data-dswf-nav="add-project"
+              aria-label="添加项目"
+              onClick={input.onAddProject}
+            >
+              添加项目
+            </Button>
+          )
+        }
       />
     )
   }
@@ -975,7 +992,8 @@ export function phaseBody(input: SidebarZonePhaseInput): ReactNode {
 }
 
 /**
- * 项目区本体（受控展示件）：头部四件（label + 搜索钮 + 视图选项钮 + ＋；搜索展开 =
+ * 项目区本体（受控展示件）：头部三件（label + 搜索钮 + 视图选项钮；「＋」入口随
+ * 2026-11-12 用户裁决退役——搜索展开 =
  * 官方 searchSlot 形态——label/头部动作让位、过滤行占位）+ 相位主体（phaseBody 纯函数）。
  * 项目块展开态是本件内部纯视图微观态（缺省全展开——与过滤态互不触碰，清过滤即恢复可见）。
  */
@@ -1117,20 +1135,6 @@ export function SidebarProjectsZone({
                 </Tooltip>
               }
             />
-            {onAddProject === undefined ? null : (
-              <Tooltip label="添加项目" portal>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="dswf-sidebar-headbtn"
-                  data-dswf-nav="add-project"
-                  aria-label="添加项目"
-                  onClick={onAddProject}
-                >
-                  <IconProjectAddOutlineRegular size={16} />
-                </Button>
-              </Tooltip>
-            )}
           </>
         )}
       </div>
@@ -1147,6 +1151,7 @@ export function SidebarProjectsZone({
         now,
         onSessionActivate,
         onRetryProjects,
+        onAddProject,
         isExpanded,
         onToggleProject: toggleProject,
         onStartSession,
@@ -1174,25 +1179,20 @@ export function SidebarProjectsZone({
   )
 }
 
-/** rail 态受控展示缝（fix-42——收起态图标列：搜索钮 + 「＋」；
- * 官方 rail 刻度 36px 命中区 / 18px 图标） */
+/** rail 态受控展示缝（fix-42——收起态图标列：搜索钮；
+ * 官方 rail 刻度 36px 命中区 / 18px 图标。「＋」入口随 2026-11-12 用户裁决退役） */
 export interface SidebarRailProps {
   /** 搜索钮（展开侧栏 + 打开过滤行——官方 requestSearch 同径） */
   readonly onSearchOpen: () => void
-  /** 「＋」添加项目入口（缺席 = 不呈现） */
-  readonly onAddProject?: () => void
 }
 
 /**
- * rail 态本体（fix-42：空轨道退役——收起态可用性）：搜索钮 = expandSidebar + 开过滤行；
- * 「＋」保持 openAddProjectFlow（边界裁决：目录流不入产品「＋」）。
+ * rail 态本体（fix-42：空轨道退役——收起态可用性）：搜索钮 = expandSidebar + 开过滤行。
  * 项目 folder 图标列退役（2026-10-11 用户裁决「收起来的左侧栏多了一个 dsh-forge 图标按钮，
- * 功能跟第一个图标一样，移除」）：轨内项目图标点击 = expandSidebar + 选中项目首会话——
- * 收起态可见效果与轨首展开钮重复（单活跃项目时首会话即当前会话，纯重复）；项目导航
- * 归宽态项目区，收起态保留搜索/＋ 两枚功能钮。宽态行语言（含 active/archived 标记与
- * 归档过滤）不受本裁决波及。
+ * 功能跟第一个图标一样，移除」）；「＋」入口退役（2026-11-12 用户裁决：「＋ 添加项目」
+ * 入口不在项目列表内——添加入口唯一残存位 = 无项目空态 CTA，归宿待裁决清单）。
  */
-export function SidebarRail({ onSearchOpen, onAddProject }: SidebarRailProps): ReactNode {
+export function SidebarRail({ onSearchOpen }: SidebarRailProps): ReactNode {
   return (
     <div className="dswf-sidebar dswf-sidebar-rail" data-dswf-sidebar="rail">
       <Tooltip label="搜索（项目名 + 会话标题）" portal>
@@ -1207,20 +1207,6 @@ export function SidebarRail({ onSearchOpen, onAddProject }: SidebarRailProps): R
           <IconSearchOutlineRegular size={18} />
         </Button>
       </Tooltip>
-      {onAddProject === undefined ? null : (
-        <Tooltip label="添加项目" portal>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="dswf-sidebar-railbtn"
-            data-dswf-nav="add-project"
-            aria-label="添加项目"
-            onClick={onAddProject}
-          >
-            <IconProjectAddOutlineRegular size={18} />
-          </Button>
-        </Tooltip>
-      )}
     </div>
   )
 }
@@ -1402,11 +1388,10 @@ export function ForgeWorkspacePanel({
     }
   }
 
-  // rail 态：图标列（fix-42 空轨道退役——搜索/＋；项目 folder 图标列 2026-10-11 用户裁决退役；
-  // 知识入口 = 官方 panellist 行）
+  // rail 态：图标列（fix-42 空轨道退役——搜索；项目 folder 图标列与「＋」入口均已退役）
   if (!wide) {
     return (
-      <SidebarRail onSearchOpen={openSearch} onAddProject={onAddProject} />
+      <SidebarRail onSearchOpen={openSearch} />
     )
   }
 

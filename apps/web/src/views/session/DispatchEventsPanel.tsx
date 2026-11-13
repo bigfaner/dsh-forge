@@ -42,7 +42,8 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SESSION_PROJECTION_KEYS } from '@dsh-forge/contracts'
-import type { SnapshotSource, LedgerSessionRow, LedgerSessionsSnapshot } from '../sidebar/sidebar-model.js'
+// 1.6 注记：账本快照窄类型随 sidebar 族迁 @dsh-forge/project（ui/sidebar/）——纯 type import
+import type { SnapshotSource, LedgerSessionRow, LedgerSessionsSnapshot } from '@dsh-forge/project/client-ui/sidebar'
 import './dispatch-events-panel.css'
 
 // ─────────────────── 投影窄读（模型层） ───────────────────

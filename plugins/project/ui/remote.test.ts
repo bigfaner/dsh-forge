@@ -11,11 +11,11 @@ describe('FORGE_REMOTE_DESCRIPTORS 表 pin（六族——与 host 半 typert-rem
     FORGE_REMOTE_DESCRIPTORS.filter((d) => d.namespace === ns).map((d) => d.method)
 
   it('六族方法集与 host marker 表逐位一致', () => {
-    expect(byNamespace('forgeProjects')).toEqual(['list', 'register', 'deriveTaskStoreDir'])
+    expect(byNamespace('forgeProjects')).toEqual(['list', 'register', 'deriveTaskStoreDir', 'update'])
     expect(byNamespace('forgeFs')).toEqual(['listDir'])
     expect(byNamespace('forgeBugs')).toEqual(['list'])
     expect(byNamespace('forgeWorktree')).toEqual([
-      'list', 'create', 'delete', 'aheadBehind', 'branches', 'checks', 'seal', 'followSeal', 'select', 'selected', 'ensureWorkspace',
+      'list', 'create', 'delete', 'aheadBehind', 'branches', 'checks', 'seal', 'followSeal', 'select', 'selected', 'ensureWorkspace', 'resolve',
     ])
     expect(byNamespace('forgeProposals')).toEqual(['list'])
     expect(byNamespace('forgeFeatures')).toEqual(['list'])

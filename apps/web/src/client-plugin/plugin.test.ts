@@ -320,7 +320,8 @@ let lastFakeEnhancer: ReturnType<typeof fakeMermaidEnhancer> | undefined
 function publishFakeViews() {
   lastFakeEnhancer = fakeMermaidEnhancer()
   const views = {
-    ForgeSidebarSlot: 'COMP:sidebar-slot',
+    // 1.6 注记：ForgeSidebarSlot 发布键随 sidebar.workspaces 顶替注册迁 @dsh-forge/project
+    // bundle（ui/sidebar-face.ts）退役——壳发布面零该键。
     ForgeBrandMark: 'COMP:brand-mark',
     ForgeBrandName: 'COMP:brand-name',
     ForgeShellHost: 'COMP:shell-host',
@@ -432,17 +433,14 @@ describe('forgeClientPlugin 形状（cordis 插件面）', () => {
   })
 })
 
-describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内容洞位）', () => {
-  it('sidebar 三洞位经 slots.inject 声明依赖；workspaces 注册 = 发布组件 + 影子优先级；诊断回填落座', () => {
+describe('槽位路线 A 注册（AC1：品牌行内容洞位；sidebar.workspaces 顶替注册已迁 @dsh-forge/project——1.6）', () => {
+  it('品牌两洞位经 slots.inject 声明依赖；发布组件 + 影子优先级；诊断回填落座；sidebar.workspaces 壳零登记（fix-13 断言，1.6）', () => {
     const views = publishFakeViews()
     const { ctx, registers, injectedKeys } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     expect(injectedKeys).toEqual([
-      // fix-13 注记（1.45）：SIDEBAR_RIGHT_PANE_TAB_SLOT×2 注入随 dock tab 族注册面迁
-      // @dsh-forge/project——壳注入清单摘除两行。
-      // 1.8 渲染链退役：md mermaid 预览声明等待（DOCUMENT_PREVIEW_BODY_SLOT inject）已随
-      // 注册链退役——注入清单零预览槽。fix-13 注记：Bug 台账 keyed body 注入迁 project bundle。
-      SIDEBAR_WORKSPACES_SLOT,
+      // 1.6 注记：SIDEBAR_WORKSPACES_SLOT 注入随 sidebar.workspaces 顶替注册迁
+      // @dsh-forge/project（ui/sidebar-face.ts）——壳注入清单摘除该行。
       SIDEBAR_BRAND_MARK_SLOT,
       SIDEBAR_BRAND_NAME_SLOT,
       // fix-13 注记（1.40）：SIDEBAR_FOOTER_ACTION_SLOT（手机远程入口）注入迁 project
@@ -456,147 +454,26 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       // project bundle——壳注入清单零 overlay 行。
       SHELL_OVERLAY_SLOT,
     ])
-    const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)
-    expect(workspaces).toBeDefined()
-    expect(workspaces!.options.priority).toBe(SIDEBAR_SHADOW_PRIORITY)
-    expect(workspaces!.options.priority).toBeLessThan(0) // lowest renders——影子官方占用者（priority 0）
-    expect(workspaces!.component).toBe(views.ForgeSidebarSlot)
+    // fix-13 断言（1.6）：sidebar.workspaces 顶替注册迁 @dsh-forge/project bundle
+    // （ui/sidebar-face.ts——负优先级恒选胜语义 audit §6）——壳对 workspaces 洞位零登记
+    // （发布面零 ForgeSidebarSlot 键 + 零注册行）。
+    expect(registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)).toBeUndefined()
     const mark = registers.find((r) => r.key === SIDEBAR_BRAND_MARK_SLOT)
     const name = registers.find((r) => r.key === SIDEBAR_BRAND_NAME_SLOT)
     expect(mark!.component).toBe(views.ForgeBrandMark)
     expect(name!.component).toBe(views.ForgeBrandName)
-    // 诊断面：三洞位落座 + 无错误（e2e 排障锚）。fix-13 注记（1.40）：手机远程行注册迁
-    // project bundle——壳诊断零该行。
+    expect(mark!.options.priority).toBe(SIDEBAR_SHADOW_PRIORITY)
+    // 诊断面：品牌两洞位落座 + 无错误（e2e 排障锚）。fix-13 注记（1.40）：手机远程行注册迁
+    // project bundle——壳诊断零该行；1.6 注记：workspaces 行同迁——壳诊断零该行。
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { sidebar?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.sidebar?.registered).toEqual([SIDEBAR_WORKSPACES_SLOT, SIDEBAR_BRAND_MARK_SLOT, SIDEBAR_BRAND_NAME_SLOT])
+    expect(marker?.sidebar?.registered).toEqual([SIDEBAR_BRAND_MARK_SLOT, SIDEBAR_BRAND_NAME_SLOT])
     expect(marker?.sidebar?.error).toBeUndefined()
     // fix-13 断言（1.40）：壳侧对 sidebar.footer.action 零登记（注册面归 project bundle）
     expect(registers.find((r) => r.key === SIDEBAR_FOOTER_ACTION_SLOT)).toBeUndefined()
     unpublishViews()
   })
-
-  it('注入面 = dsh 账本/归属快照源 + openSession + startSession（面板数据与动作的唯一通道；fix-11 打开经 uiWorkspace.openSession；fix-42 新会话经 uiWorkspace.startSession）', async () => {
-    publishFakeViews()
-    const { ctx, registers, open, start } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)!
-    const face = workspaces.options.inject!()
-    expect(face).toEqual({
-      // m3.1 D6：账本快源含 getSnapshot（worker ⟞ parentId 判读面——面板数据直读）
-      // + subscribe（loop-event-delivery 1.8——进度流面板实时刷新缝）
-      sessions: { tag: 'sessions-list', getSnapshot: expect.any(Function), subscribe: expect.any(Function) },
-      workspaces: { tag: 'workspaces-list' },
-      openSession: expect.any(Function),
-      startSession: expect.any(Function),
-    })
-    ;(face as { openSession: (id: string) => void }).openSession('s-1')
-    expect(open).toHaveBeenCalledWith('s-1')
-    ;(face as { startSession: (id: string) => void }).startSession('w-1')
-    // bug d353536f 同因面：startSession 经在场门（快照面不可核验 = 放行）异步委派
-    await vi.waitFor(() => expect(start).toHaveBeenCalledWith('w-1'))
-    unpublishViews()
-  })
-
-  it('bug d353536f 同因面：startSession 官方基线未就位 → 等待在场后才委派官方（超时仍委派，错误面保真）', async () => {
-    publishFakeViews()
-    const { ctx, registers, start, workspacesList } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)!
-    const face = workspaces.options.inject!() as { startSession: (id: string) => void }
-    // 基线缺席起跑，30ms 后到达
-    workspacesList.current = { getSnapshot: () => ({ items: [] as { workspaceId: string }[] }) }
-    setTimeout(() => {
-      workspacesList.current = { getSnapshot: () => ({ items: [{ workspaceId: 'w-late' }] }) }
-    }, 30)
-    face.startSession('w-late')
-    expect(start).not.toHaveBeenCalled()
-    // 超时兜底也会委派（错误面保真）——断言只要求「最终到达」，余量盖过满载 worker 抖动
-    await vi.waitFor(() => expect(start).toHaveBeenCalledWith('w-late'), { timeout: 5000 })
-    unpublishViews()
-  })
-
-  it('D45 会话行动作面：官方面在场 = 注入面携带（⋯菜单/归档/置顶三钮数据源）——sessionActionFaceOf 逐位组装', async () => {
-    publishFakeViews()
-    const archive = vi.fn().mockResolvedValue(undefined)
-    const unarchive = vi.fn().mockResolvedValue(undefined)
-    const pin = vi.fn().mockResolvedValue(undefined)
-    const unpin = vi.fn().mockResolvedValue(undefined)
-    const fork = vi.fn().mockResolvedValue('child-1')
-    const using = vi.fn().mockImplementation(
-      (
-        _sessionId: string,
-        _options: { readonly source: string },
-        operation: (reference: unknown) => unknown,
-      ) =>
-        Promise.resolve(
-          operation({ binding: { session: { rename: (title: string) => Promise.resolve({ ok: true, value: { title } }) } } }),
-        ),
-    )
-    const { ctx, registers } = fakeClientCtx(undefined, {
-      uiWorkspaceExtra: { archiveSession: archive, unarchiveSession: unarchive, pinSession: pin, unpinSession: unpin, forkSession: fork },
-      sessionsUsing: using,
-    })
-    forgeClientPlugin().apply(ctx)
-    const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)!
-    const face = workspaces.options.inject!() as {
-      archiveSession: (id: string, options?: { readonly stopActivity?: boolean }) => Promise<void>
-      unarchiveSession: (id: string) => Promise<void>
-      pinSession: (id: string) => Promise<void>
-      unpinSession: (id: string) => Promise<void>
-      forkSession: (id: string) => Promise<unknown>
-      renameSession: (id: string, title: string) => Promise<void>
-    }
-    expect(typeof face.archiveSession).toBe('function')
-    expect(typeof face.unarchiveSession).toBe('function')
-    expect(typeof face.pinSession).toBe('function')
-    expect(typeof face.unpinSession).toBe('function')
-    expect(typeof face.forkSession).toBe('function')
-    expect(typeof face.renameSession).toBe('function')
-    // 直通官方面（options 透传——停止并归档确认流）
-    void face.archiveSession('s-1', { stopActivity: true })
-    expect(archive).toHaveBeenCalledWith('s-1', { stopActivity: true })
-    void face.forkSession('s-1')
-    expect(fork).toHaveBeenCalledWith('s-1')
-    // 改名正径：sessions.using(source='workspaceOperation') → binding.session.rename
-    // （RemoteResult 信封——!ok 抛 error.message，官方 renameSession 适配同判）
-    await expect(face.renameSession('s-1', '新标题')).resolves.toBeUndefined()
-    expect(using).toHaveBeenCalledWith(
-      's-1',
-      { source: 'workspaceOperation' },
-      expect.any(Function),
-    )
-    unpublishViews()
-  })
-
-  it('D45 官方面缺席 = 注入面键缺席（面板对应动作钮/菜单项不呈现——P1 口径）+ 改名拒绝上抛（RemoteResult !ok → error.message）', async () => {
-    publishFakeViews()
-    const usingReject = vi.fn().mockImplementation(
-      (
-        _sessionId: string,
-        _options: { readonly source: string },
-        operation: (reference: unknown) => unknown,
-      ) =>
-        Promise.resolve(
-          operation({ binding: { session: { rename: (_title: string) => Promise.resolve({ ok: false, error: { message: '标题冲突' } }) } } }),
-        ),
-    )
-    const { ctx, registers } = fakeClientCtx(undefined, { sessionsUsing: usingReject })
-    forgeClientPlugin().apply(ctx)
-    const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)!
-    const face = workspaces.options.inject!() as Record<string, unknown> & {
-      renameSession: (id: string, title: string) => Promise<void>
-    }
-    // uiWorkspace 会话行动作面缺席 = 对应键缺席（改名面在场——sessions.using 在场）
-    expect(face['archiveSession']).toBeUndefined()
-    expect(face['unarchiveSession']).toBeUndefined()
-    expect(face['pinSession']).toBeUndefined()
-    expect(face['unpinSession']).toBeUndefined()
-    expect(face['forkSession']).toBeUndefined()
-    // 改名拒绝 = error.message 上抛（面板改名模态呈现）
-    await expect(face.renameSession('s-1', 'x')).rejects.toThrow('标题冲突')
-    unpublishViews()
-  })
 })
+
 
 describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 行 + 页签 roster + 壳宿主）', () => {
   it('fix-13 断言（1.42/1.44）：center 族（hero/knowledge 面板 + panellist 行）注册迁 @dsh-forge/project——壳对 main/panellist 零登记', () => {

@@ -1,46 +1,47 @@
 // 左栏槽位注册件（定位：业务装配——sidebar.workspaces 洞位占用者的接线层）。
-// 组合缝（三面进、面板出）：
-//   1. 壳 owner share（wide / expandSidebar——上游 SidebarSectionOwnerProps 契约）；
-//   2. 插件 inject face（dsh 账本快照源 + workspace 归属快照源 + openSession +
-//      startSession（fix-42 新会话钮官方面）+ D45 会话行动作面（置顶/取消置顶/归档/
-//      取消归档/分叉/改名——sessionActionFaceOf 逐位组装）——client-plugin 经
-//      ctx.slots.register 注入面携带，本组件 useSyncExternalStore 直读——SC2 零缓存
+// 1.6 自 apps/web 壳侧 views/sidebar 平移本包（fix-13 模式——装配缝归插件域，官方宿主
+// 不装载产品壳时本面仍随插件 bundle 自注册；AGENTS §1.3）。组合缝（三面进、面板出）：
+//   1. 官方 owner share（wide / expandSidebar——ui-sidebar SidebarSectionOwnerProps 契约）；
+//   2. 注册 inject face（dsh 账本快照源 + workspace 归属快照源 + openSession +
+//      startSession（fix-42 新会话钮官方面，waitForWorkspacePresent 在场门单源）+ D45
+//      会话行动作面（置顶/取消置顶/归档/取消归档/分叉/改名——sessionActionFaceOf 逐位
+//      组装，本包 ui/session-actions.ts）——本组件 useSyncExternalStore 直读——SC2 零缓存
 //      零副本：无本地快照持有，每次渲染读快照源）；
-//   3. 项目 RPC（useForgeProjects——forge:projects/list；变更动作经 update patch 面 +
-//      静默重拉，fix-42）。
+//   3. 项目 RPC（useForgeProjects——forge:projects/list，Typert 正典 ui/rpc 面；
+//      变更动作经 update patch 面 + 静默重拉，fix-42）。
 // 导航/变更动作经 sidebarActions 绑定（openSession/startSession/会话行动作 = dsh 面；
 // 改名/归档切换 = forge:projects/update RPC 面——name patch 的 workspace 标题对齐归
-// core 侧 fix-33 ⑪；fix-25：知识入口迁官方 sidebar.panellist 行，产品桥视图事件退役
-// ——会话行打开即官方回会话面板）。
-// 本组件由产品视图发布面（product-views.ts）挂到 window.__DSH_FORGE_VIEWS__，插件
-// 槽位注册以该发布件为组件本体——壳 bundle 的 React 与渲染器单例同源（平台模块表）。
+// core 侧 fix-33 ⑪）。
+// 「＋」入口收口（用户裁决 2026-11-12）：「＋ 添加项目」入口不在项目列表内——列表头部/
+// rail 轨内零入口；唯一残存入口 = 无项目空态 CTA（onAddProject 经 phaseBody 空态消费），
+// 添加入口归宿登记待裁决清单。
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
-import { openAddProjectFlow } from '@dsh-forge/project/client-ui/add-project'
-import { useWorkspaceProjectMap } from '../../workbench/anchored-projects.js'
-import { preloadRpcClientFactory } from '../../rpc/index.js'
+import { openAddProjectFlow } from '../add-project/index.js'
+import { useWorkspaceProjectMap } from '../knowledge/anchored-projects.js'
+import { preloadRpcClientFactory } from '../rpc.js'
 import { ForgeWorkspacePanel } from './ForgeWorkspacePanel.js'
 import { sidebarActions } from './sidebar-actions.js'
+import { useForgeProjects } from './use-forge-projects.js'
 import {
   buildSidebarTree,
   type LedgerSessionsSnapshot,
   type LedgerWorkspacesSnapshot,
   type SnapshotSource,
 } from './sidebar-model.js'
-import { useForgeProjects } from './use-forge-projects.js'
 
-/** 槽位注入面（插件侧 register inject 携带——sidebar-actions 的官方面源） */
+/** 槽位注入面（注册面 register inject 携带——sidebar-actions 的官方面源） */
 export interface ForgeSidebarSlotProps {
-  /** 壳折叠态（true = 宽面板；false = 56px rail 图标列） */
+  /** 官方壳折叠态（true = 宽面板；false = 56px rail 图标列） */
   readonly wide: boolean
-  /** rail 图标请求展开（壳回调） */
+  /** rail 图标请求展开（官方壳回调） */
   readonly expandSidebar: () => void
   /** dsh 会话账本快照源（ctx.sessions.list——实时读） */
   readonly sessions: SnapshotSource<LedgerSessionsSnapshot>
   /** dsh workspace 归属快照源（ctx.workspaces.list） */
   readonly workspaces: SnapshotSource<LedgerWorkspacesSnapshot>
-  /** 打开 dsh 会话（官方 uiWorkspace.openSession 导航面——fix-11 修正接线，插件 inject face 注入） */
+  /** 打开 dsh 会话（官方 uiWorkspace.openSession 导航面——fix-11 修正接线） */
   readonly openSession: (sessionId: string) => void
-  /** 项目行尾「新会话」钮（官方 uiWorkspace.startSession(workspaceId) 新会话流——fix-42，插件 inject face 注入） */
+  /** 项目行尾「新会话」钮（官方 uiWorkspace.startSession(workspaceId) 新会话流——fix-42） */
   readonly startSession: (workspaceId: string) => void
   /**
    * 置顶会话（官方 uiWorkspace.pinSession——D45；缺席 = 置顶钮/菜单项不呈现）。
@@ -57,7 +58,7 @@ export interface ForgeSidebarSlotProps {
     sessionId: string,
     options?: { readonly stopActivity?: boolean },
   ) => Promise<void>
-  /** 取消归档（官方 uiWorkspace.unarchiveSession——D45；缺席 = 归档行对应面不呈现） */
+  /** 取消归档（官方 uiWorkspace.unarchiveSession——D45；缺席 = 对应面不呈现） */
   readonly unarchiveSession?: (sessionId: string) => Promise<void>
   /** 分叉会话（官方 uiWorkspace.forkSession——D45；缺席 = 分叉菜单项不呈现） */
   readonly forkSession?: (sessionId: string) => Promise<unknown>
@@ -70,8 +71,8 @@ export interface ForgeSidebarSlotProps {
  * useSyncExternalStore 订阅/读取一律经闭包绑定（dsh 快照源 = 类方法——裸引用脱离 this 即崩，
  * e2e 探针实证 refreshSnapshot undefined）；第三参 = SSR 快照（单测面同源直读）。
  * 变更动作（改名/归档切换）= forge:projects/update + 静默重拉（silentRefresh——应用侧行
- * 改写不触发 workspace 快照锚，fix-24 注记口径；RPC 缺席期（preload 面未就绪）失败归
- * 调用面：改名模态呈现/归档 fail-soft 告警）。
+ * 改写不触发 workspace 快照锚，fix-24 注记口径；RPC 缺席期失败归调用面：改名模态呈现/
+ * 归档 fail-soft 告警）。
  */
 export function ForgeSidebarSlot({
   wide,
@@ -98,16 +99,18 @@ export function ForgeSidebarSlot({
   // 的全部路径经 forge:worktree/resolve 批量通道交 host 身份归并单点裁决（与 hero 编排/
   // 必绑拦截同一 resolveProject 基础设施），结果映射直喂 buildSidebarTree；客户端零仲裁。
   // 快照/项目变化才重梳；失败 fail-soft（退主工作区分组现状，树会话不入组）。
-  // bug 52fc94db：effect 收敛至 workbench 共享 hook（useWorkspaceProjectMap——概览锚定
-  // 同源消费），行为零变化。
+  // bug 52fc94db：effect 收敛至共享 hook（useWorkspaceProjectMap——概览锚定同源消费），
+  // 行为零变化。
   const wsItems = workspacesSnap.items
-  const workspaceProject = useWorkspaceProjectMap(wsItems, projectsState)
+  // 归属归并数据源显式传 Typert 工厂（ui/rpc face——worktree.resolve 正典通道；
+  // knowledge/rpc-channels 缺省工厂 = 旧 channels face，官方宿主静默不可达不作数据源）
+  const workspaceProject = useWorkspaceProjectMap(wsItems, projectsState, preloadRpcClientFactory)
   const actions = sidebarActions({
     openSession,
     startSession,
     updateProject: (id, patch) => preloadRpcClientFactory().projects.update(id, patch),
     onProjectsMutated: silentRefreshProjects,
-    // D45 会话行动作官方面（…菜单/归档/置顶——plugin inject face 注入；逐位缺席 = 对应项不呈现）
+    // D45 会话行动作官方面（…菜单/归档/置顶——inject face 注入；逐位缺席 = 对应项不呈现）
     pinSession,
     unpinSession,
     archiveSession,
@@ -115,7 +118,7 @@ export function ForgeSidebarSlot({
     forkSession,
     renameSession,
   })
-  // 「＋」入口 → 添加项目流程打开缝（跨单元直达流程宿主；缺席 fail-soft warn——2.12 装配前 no-op）
+  // 空态「添加项目」CTA（用户裁决 2026-11-12——唯一残存添加入口；流程宿主缺席 fail-soft warn）
   const onAddProject = useCallback(() => {
     openAddProjectFlow()
   }, [])

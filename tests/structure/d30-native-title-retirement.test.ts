@@ -151,7 +151,8 @@ const TOOLTIP_FILES = [
   'apps/web/src/views/overview/task-tab/task-tab.tsx',
   'apps/web/src/views/session/DispatchEventsPanel.tsx',
   'apps/web/src/views/session/RecallTab.tsx',
-  'apps/web/src/views/sidebar/ForgeWorkspacePanel.tsx',
+  // 1.6：面板本体迁 @dsh-forge/project（ui/sidebar/）——扫描路径随迁
+  'plugins/project/ui/sidebar/ForgeWorkspacePanel.tsx',
 ] as const
 
 /** 组件标题 prop 排除清单（标题文本 prop 非悬浮提示位——D30 记账；计数冻结） */

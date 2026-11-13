@@ -1,14 +1,14 @@
 // use-forge-projects 单测 —— 项目拉取相位映射（AC2：forge:projects/list；fail-soft 错误归一）。
-// hook 的 effect 胶水不在 SSR 测面（renderToStaticMarkup 不跑 effect—— ForgeSidebarSlot.test
-// 已证骨架相位；fix-24 ① silentRefresh 的 open 边沿重拉同归 e2e hero-control spec）；本件测
-// 纯异步映射 fetchProjectsPhase（成功/typed error/preload 缺席归一）。
+// 1.6 随 sidebar 族注册面自 apps/web 平移本包，数据源改接 Typert（ui/rpc face）；本件测
+// 纯异步映射 fetchProjectsPhase（成功/typed error/face 缺席归一）。hook 的 effect 胶水不在
+// SSR 测面（renderToStaticMarkup 不跑 effect—— ForgeSidebarSlot.test 已证骨架相位）。
 import { describe, expect, it } from 'vitest'
-import { createForgeRpcClient, type ForgeRpcClient } from '../../rpc/index.js'
-import { RpcClientError } from '../../rpc/errors.js'
+import { createForgeRpcClient, RpcClientError, type ForgeRpcClient } from '../rpc.js'
 import { fetchProjectsPhase } from './use-forge-projects.js'
 
 function clientWith(list: () => Promise<unknown[]>): ForgeRpcClient {
-  return createForgeRpcClient(async (_channel, _payload) => ({ ok: true, data: await list() }))
+  const client = createForgeRpcClient()
+  return { ...client, projects: { ...client.projects, list } }
 }
 
 describe('fetchProjectsPhase（单次拉取相位映射）', () => {
@@ -24,19 +24,18 @@ describe('fetchProjectsPhase（单次拉取相位映射）', () => {
     })
   })
 
-  it('typed error / 通道缺席 → error 相位（fail-soft 不抛）', async () => {
+  it('typed error / face 缺席 → error 相位（fail-soft 不抛）', async () => {
     const failing = (): ForgeRpcClient =>
-      createForgeRpcClient(async () => {
+      clientWith(async () => {
         throw new RpcClientError({ code: 'ERR_PROJECT_WRITE', message: 'boom' })
       })
     const out = await fetchProjectsPhase(failing)
     expect(out.phase).toBe('error')
     expect((out as { message: string }).message).toBe('boom')
 
-    // preload 真身缺席（非 Electron 载体）同样归一 error，不炸壳
+    // face 缺席（官方 remote 面缺席宿主——诚实降级 typed Error）同样归一 error，不炸壳
     const absent = await fetchProjectsPhase(() => {
-      // transport 构造期抛（preloadTransport fail-loud 面）
-      throw new Error('window.dshForge.invoke 缺席')
+      throw new Error('官方 forge remote 面缺席（forgeProjects.list）')
     })
     expect(absent.phase).toBe('error')
     expect((absent as { message: string }).message).toContain('缺席')

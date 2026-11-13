@@ -1,8 +1,6 @@
 // 产品 client 插件本体（定位：装配——可测纯面；入口 index.ts 零导出保 classic script 形状）。
-// 2.7：槽位路线 A —— 替换官方 ui-sidebar 壳 sidebar.workspaces 洞位（tech-design
-// Integration）与品牌行内容洞位（sidebar.brand.mark/name）；壳级几何/收展/新会话/快捷键
-// 全部白拿（AC1）。组件本体不进本 bundle（classic script 自含纪律 + React 单例）——经壳
-// bundle 发布面 __DSH_FORGE_VIEWS__ 递达（缺席 = 装配断裂 fail-loud）。
+// 2.7：槽位路线 A —— 品牌行内容洞位（sidebar.brand.mark/name）壳侧承载；sidebar.workspaces
+// 顶替注册已于 1.6 随 B 类顶替①迁 @dsh-forge/project bundle（ui/sidebar-face.ts）——壳零登记。
 // fix-25 架构重排（官方头部链点亮）：main.conversation 影子退役——官方 ConversationRoot
 // 渲染中区，官方头部链（conversation.header → session.header → lineage/actions/
 // utilities「打开方式」+「⋯」/corner 官方 ExpandButton）与官方页签行/内容面全部白拿
@@ -39,7 +37,9 @@ import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
 // @dsh-forge/project client bundle（ui/remote-entry-face.ts）——壳零残留；组件/模型源
 // = plugins/project/ui/remote-entry/（apps/web/src/views/remote/ 下仅受限单页族留壳）。
 // 跨入口类型面豁免（web-shell pin——runtime import 互禁仅约束值面；ShellHost inject 契约类型）
-import type { LedgerSessionsSnapshot, SnapshotSource } from '../views/sidebar/sidebar-model.js'
+// 1.6 注记：LedgerSessionsSnapshot/SnapshotSource 类型随 sidebar 族迁 @dsh-forge/project
+// （ui/sidebar/）——壳消费（ShellHost/悬浮面板 inject 契约类型）改经包窄子路径出口直供。
+import type { LedgerSessionsSnapshot, SnapshotSource } from '@dsh-forge/project/client-ui/sidebar'
 // fix-13 注记（1.41）：DispatchEventEntry/DispatchProgressLogSnapshot 类型 import 与
 // ForgeUiConversationService 窄面已随事件折叠组注册面迁 @dsh-forge/project 退役——壳零消费。
 // fix-13 注记（1.41）：事件折叠组三段注册 + progress 回放录取面已迁 @dsh-forge/project
@@ -48,15 +48,15 @@ import type { LedgerSessionsSnapshot, SnapshotSource } from '../views/sidebar/si
 import { forgeProgressLogSource } from '@dsh-forge/project/client-ui/event-tap'
 // fix-13 注记（1.45）：open-session 纯模块与会话动作纯函数族（编排器/Bug 快速路径/
 // 判读族/改名与行动作面）随 dock tab 族注册面迁 @dsh-forge/project（ui/open-session.ts
-// + ui/session-actions.ts）——壳侧消费面（sidebar startSession 基线门 / shell.overlay
-// inject 编排器与解析器）改经包窄子路径出口值面直供（bug-model 先例）。
-import { waitForWorkspacePresent } from '@dsh-forge/project/client-ui/open-session'
+// + ui/session-actions.ts）——壳侧消费面（shell.overlay inject 编排器与解析器）改经包窄
+// 子路径出口值面直供（bug-model 先例）。1.6 注记：waitForWorkspacePresent（sidebar
+// startSession 基线门）与 sessionActionFaceOf（D45 注入面）消费随 sidebar.workspaces
+// 顶替注册迁 @dsh-forge/project（ui/sidebar-face.ts）——壳零消费。
 import {
   buildOpenSessionOrchestrator,
   makeSessionTitleResolver,
   openSessionWithLedgerAddress,
   resolveWorkerChildSession,
-  sessionActionFaceOf,
   type SessionActionsCtx,
 } from '@dsh-forge/project/client-ui/session-actions'
 import { selectedTreeDisplay } from './selected-tree-display.js'
@@ -387,7 +387,8 @@ export interface ForgeMermaidEnhancer {
 /** 产品视图发布面窄面（product-views.ts 结构同型镜像） */
 export interface ForgeViewsGlobal {
   __DSH_FORGE_VIEWS__?: {
-    ForgeSidebarSlot: unknown
+    // 1.6 注记：ForgeSidebarSlot 发布键随 sidebar.workspaces 顶替注册迁 @dsh-forge/project
+    // bundle（ui/sidebar-face.ts + ui/sidebar/）退役——壳发布面零该键。
     ForgeBrandMark: unknown
     ForgeBrandName: unknown
     ForgeShellHost: unknown
@@ -525,52 +526,16 @@ export function publishedViews(): NonNullable<ForgeViewsGlobal['__DSH_FORGE_VIEW
 type PublishedViews = ReturnType<typeof publishedViews>
 
 /**
- * sidebar 族登记（fix-36 自 apply 拆出——按域分注册子函数，apply 仅编排）：工作区洞位
- * 替换（AC1——注入面携带 dsh 账本数据源与动作，面板侧 useSyncExternalStore 直读）+
- * 品牌行两内容洞位（行本体与新会话快捷交互归壳——AC3 品牌行点击 = 官方 startSession）。
- * D45 会话行动作面（…菜单/归档/置顶）= sessionActionFaceOf 逐位探测组装（官方面缺席 =
- * 键缺席 → 面板对应项不呈现——P1 口径沿袭）。
+ * sidebar 族登记（1.6 收缩：sidebar.workspaces 顶替注册随 B 类顶替①迁 @dsh-forge/project
+ * bundle——ui/sidebar-face.ts apply 期自注册，壳零登记；本子函数仅余品牌行两内容洞位
+ * [行本体与新会话快捷交互归壳——AC3 品牌行点击 = 官方 startSession]。品牌件属壳本体，
+ * 不属迁移面——ui-migration-scope-matrix 行 10 留壳）。
  */
 function registerSidebarSlots(
   ctx: ForgeClientCtx,
   views: PublishedViews,
-  services: {
-    readonly sessions: ForgeSessionsService
-    readonly workspaces: ForgeWorkspacesService
-    readonly uiWorkspace: ForgeUiWorkspaceService
-  },
   diagnostics: { registered?: string[] },
 ): void {
-  registerSlotEntry(ctx, SIDEBAR_WORKSPACES_SLOT, diagnostics, () =>
-    ctx.slots.register(
-      {
-        name: SIDEBAR_WORKSPACES_SLOT,
-        priority: SIDEBAR_SHADOW_PRIORITY,
-        inject: () => ({
-          sessions: services.sessions.list,
-          workspaces: services.workspaces.list,
-          openSession: (sessionId: string): void => {
-            // 官方导航动作面（fix-11：uiWorkspace.openSession——会话选择+呈现一体，
-            // 内部 selectPanel(null) 回会话面板 = UF-5 切回主路径）
-            services.uiWorkspace.openSession(sessionId)
-          },
-          startSession: (workspaceId: string): void => {
-            // 官方新会话流（fix-42：项目行尾「新会话」钮——uiWorkspace.startSession
-            // reuse-or-create blank + 呈现一体，官方 WorkspaceBrowser 行动作同径）。
-            // bug d353536f 同因面：官方基线未就位时盲委派 = connectWorkspace 查空快照
-            // 抛 unknown workspace——有界等待在场后委派（waitForWorkspacePresent 单源；
-            // 超时仍委派，官方 createFailed 错误面保真）。
-            void waitForWorkspacePresent(services.workspaces.list, workspaceId).then(() => {
-              services.uiWorkspace.startSession(workspaceId)
-            })
-          },
-          // D45 会话行动作面（…菜单/归档/置顶钮——官方面缺席 = 键缺席 → 面板对应项不呈现）
-          ...sessionActionFaceOf(services),
-        }),
-      },
-      views.ForgeSidebarSlot,
-    ),
-  )
   registerSlotEntry(ctx, SIDEBAR_BRAND_MARK_SLOT, diagnostics, () =>
     ctx.slots.register(
       { name: SIDEBAR_BRAND_MARK_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
@@ -954,10 +919,13 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // m3.1 D5：会话头挂接 pill 登记退役（conversation.session.header.actions 零产品登记）。
         // fix-13 注记（1.40-1.44）：remote 入口/center 族（hero/knowledge/panellist）/
         // 召回页签/工具行/事件组/切换闸标记七组注册面均已迁 @dsh-forge/project bundle——
-        // 壳登记仅余 sidebar（workspaces 影子+品牌行）/hero picker 影子/dock 族/shell.overlay。
+        // 壳登记仅余 sidebar 品牌行/hero picker 影子/dock 族/shell.overlay。
+        // 1.6 注记：sidebar.workspaces 顶替注册迁 @dsh-forge/project bundle（fix-13，
+        // ui/sidebar-face.ts）——壳零登记；FORGE_HEALTH_SLOT_KEYS 的 workspaces 键保留 =
+        // 看门对插件侧登记行的计数消费（官方行计入基线）。
         // bug 2ffb0a82 门（knowledgeEnabled）随 knowledge 族迁 @dsh-forge/project
         // bundle（ui/knowledge-face.ts knowledgeEnabledOf——fail-closed 在彼侧读同一页内缝）。
-        registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
+        registerSidebarSlots(clientCtx, views, sidebarDiagnostics)
         // 手机远程入口注册已迁 @dsh-forge/project bundle（fix-13，1.40）——壳零登记
         // center 族（hero/knowledge/panellist）注册已迁 @dsh-forge/project bundle（fix-13，1.42/1.44）——壳零登记
         registerConversationViews(clientCtx, views, viewsDiagnostics)
