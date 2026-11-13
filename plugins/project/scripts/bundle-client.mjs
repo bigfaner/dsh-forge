@@ -7,8 +7,15 @@
 // 语法错误 → 「loaded without registering」。
 //
 // fix-6：入口改取 TS 源（ui/index.ts，由 exports["./client"].types 镜像推导——单一
-// 事实源，dist 中间产物入口与 css 随迁副本补丁税一并退役）；css import 由 esbuild
-// 从源解析，独立副产物 dist/client.css 形态不变。Run once per build；run-once, no watch。
+// 事实源，dist 中间产物入口与 css 随迁副本补丁税一并退役）。Run once per build；run-once, no watch。
+//
+// disc-1：css import 构建期内联为样式注入模块——esbuild 默认把 css 解析为独立副产物
+// dist/client.css，而运行期装载面只有 dist/client.js 单一入口 → 官方宿主插件 UI 全裸
+// 样式。官方缝核销（dsh-client-modules lib/client.js claimStyles/removeOwnedStyles）：
+// 插件 factory 闭包内注入 <style data-plugin> 标签 = 官方归属/卸载机械的正道形态
+// （「CSS injection lives inside the factory closure」——manifest.d.ts 契约原文）。
+// 本包 css 均为全局层样式（非 CSS Modules），逐件转 style 注入语义等价；同一 css 件
+// 可能被多个入口模块 import → 注入模块带同件幂等守卫（首注入为准）。
 import { build } from "esbuild";
 import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -36,6 +43,34 @@ const PLATFORM_MODULES = [
   "@deepseek-ai/dsh-client-ui-primitives",
 ];
 
+// css 内联注入插件（disc-1）：*.css import → JS 模块，模块体内注入
+// <style data-plugin="@dsh-forge/project" data-plugin-css="<basename>">（官方
+// claimStyles 预打标归属面——materialization 时官方机械清点、卸载时 removeOwnedStyles
+// 回收）。factory 闭包整段执行时点 = materialization，顶层注入即闭包内注入。
+const cssInjectPlugin = {
+  name: "css-inline-inject",
+  setup(build) {
+    build.onLoad({ filter: /\.css$/ }, (args) => {
+      const css = readFileSync(args.path, "utf8");
+      const key = args.path.replaceAll("\\", "/");
+      return {
+        contents: [
+          `const __cssKey__ = ${JSON.stringify(key)};`,
+          `if (typeof document !== "undefined" && !document.querySelector('style[data-plugin-css="' + __cssKey__ + '"]')) {`,
+          `  const __el__ = document.createElement("style");`,
+          `  __el__.setAttribute("data-plugin", ${JSON.stringify(PLUGIN_ID)});`,
+          `  __el__.setAttribute("data-plugin-css", __cssKey__);`,
+          `  __el__.textContent = ${JSON.stringify(css)};`,
+          `  document.head.appendChild(__el__);`,
+          `}`,
+          "module.exports = {};",
+        ].join("\n"),
+        loader: "js",
+      };
+    });
+  },
+};
+
 await build({
   entryPoints: [clientSrcEntry],
   outfile: resolve(pkgDir, "dist/client.js"),
@@ -49,6 +84,7 @@ await build({
   // （PLATFORM_MODULES 种子表单例）。
   jsx: "automatic",
   external: PLATFORM_MODULES,
+  plugins: [cssInjectPlugin],
   banner: {
     js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PLUGIN_ID)}, factory: (require) => {\nvar module = { exports: {} }; var exports = module.exports;`,
   },
@@ -72,6 +108,14 @@ const pruneClient = (dir) => {
 pruneClient(resolve(pkgDir, "dist/client"));
 
 // 离手门（fix-6）：bundle 末尾自跑自含性断言 + exports 闭包完整性断言——非 0 即败。
+// disc-1：css 内联断言——client.js 必含样式注入面、独立 css 副产物必须退役（含历史残留清除）。
+const clientJs = readFileSync(resolve(pkgDir, "dist/client.js"), "utf8");
+if (!clientJs.includes('createElement("style")') || !clientJs.includes("data-plugin")) {
+  console.error("[bundle-client] 离手门失败：client bundle 缺样式注入面（css 内联未生效）");
+  process.exit(1);
+}
+rmSync(resolve(pkgDir, "dist/client.css"), { force: true });
+
 const violations = auditDist(pkgDir, { requireDist: true });
 if (violations.length > 0) {
   console.error(`[bundle-client] 离手门失败：dist 自含审计 ${violations.length} 处违规`);
