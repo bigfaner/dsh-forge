@@ -11,7 +11,7 @@
 // ForgePluginEvent 事件两层联合（Interface 3）。
 // 定位铁律：纯类型与纯常量，零逻辑零依赖。
 import type { ForgeEventChannel } from '../channels.js'
-import type { ErrorCode } from '../errors.js'
+import type { ErrorCode, UnmetDependency } from '../errors.js'
 import type { FeatureStatus, ProposalStatus, TaskStatus, TaskType } from '../labels.js'
 import type { BugStatus } from './bugs.js'
 import type { BugCard, BugCommitFile, BugCommitFilesQuery, BugFileDiffQuery, ListBugsQuery } from './bugs.js'
@@ -885,6 +885,18 @@ export interface MarkE2eAttributionInput {
   localId: string
 }
 
+/** readUnsettledChain 入参（loop-phase-gate 评审收口——容器实现链未终态 I 卡清单读面；链集合判据单点在 core） */
+export interface ReadUnsettledChainInput {
+  projectId: string
+  /** 容器引用（feature/proposal 双轨同形） */
+  source: ContainerRef
+}
+
+/** readUnsettledChain 出参（载荷 = UnmetDependency 同形——PhaseGateUnsettledData.unsettled 一致口径） */
+export interface ReadUnsettledChainResult {
+  unsettled: readonly UnmetDependency[]
+}
+
 /** Interface 1：core · forge 任务域服务面（ctx.forgeTasks） */
 export interface ForgeTasksService {
   /** tasks 行 + edges 行 + records 行单事务全成全败（增量环校验 + 两级去重 + 相位重算） */
@@ -902,10 +914,16 @@ export interface ForgeTasksService {
    * E2E 归因卡生成侧标记（loop-phase-gate §2.9——CE-6 方案 A 写入径）：归因卡生成点
    * （plugin-forge issueAttributionCard）addTask 返回后调用——后置 UPDATE tasks.e2e_attribution = 1
    * （单点写；标记不经 addTask 参数暴露——硬约束见 AddTaskInput）。未命中 fail-loud
-   * （ERR_TASK_NOT_FOUND——归因卡无标记等于无豁免）；幂等重写无害。可选面 = 形态兼容
-   * （core 服务恒提供；测试桩缺席 = 跳过）。
+   * （ERR_TASK_NOT_FOUND——归因卡无标记等于无豁免）；幂等重写无害。必选面（bug 834d975d
+   * 收口）：生成侧调用零可选链——面缺席 fail-loud（TypeError），不做形态兼容跳过。
    */
-  markE2eAttribution?(input: MarkE2eAttributionInput): Promise<void>
+  markE2eAttribution(input: MarkE2eAttributionInput): Promise<void>
+  /**
+   * 容器实现链未终态 I 卡清单只读读面（bug a587123e 收口——链集合判据单点）：与 GATE_SQL
+   * 第④支同判据同执行体（type ∈ IMPLEMENTATION_TASK_TYPES ∧ local_id 非 fix-/disc- 前缀
+   * ∧ 状态非终态）。消费方（plugin-forge loop suspend 载荷）零第二实现、载荷零复制。
+   */
+  readUnsettledChain(input: ReadUnsettledChainInput): Promise<ReadUnsettledChainResult>
   /** 转移 + record(files/gate/commit) + 恢复钩子反查 + 相位重算 */
   submitTask(input: SubmitTaskInput): Promise<SubmitTaskResult>
   /** blocked→pending 出口（blocked-verdict-restore-primitive：转移 + 'unblock' 审计行 + 相位重算；不挂恢复钩子） */

@@ -46,10 +46,14 @@ export function GATE_SQL(t: string): string {
 }
 
 /**
- * 容器实现链未终态 I 卡清单（PhaseGateUnsettledData.unsettled——agent 可据以推进）。
- * 链集合定义与 GATE_SQL 第④支同判据：type ∈ I ∧ local_id 非 fix-/disc- 前缀 ∧ 状态非终态。
+ * 容器实现链未终态 I 卡清单（PhaseGateUnsettledData.unsettled——agent 可据以推进；bug a587123e
+ * 收口：本函数升服务面动词 readUnsettledChain 的执行体——链集合定义与 GATE_SQL 第④支同判据
+ * 单点，消费方 plugin-forge driver 零第二实现）。
  */
-function readUnsettledChain(db: Database.Database, row: TaskStorageRow): UnmetDependency[] {
+export function readUnsettledChain(
+  db: Database.Database,
+  scope: { readonly kind: 'feature' | 'proposal'; readonly sourceId: string },
+): UnmetDependency[] {
   return db
     .prepare<unknown[], UnmetDependency>(
       `SELECT slug AS slug, local_id AS localId, task_status AS taskStatus
@@ -60,7 +64,7 @@ function readUnsettledChain(db: Database.Database, row: TaskStorageRow): UnmetDe
          AND task_status NOT IN ('completed', 'skipped')
        ORDER BY slug, local_id`,
     )
-    .all(row.source_kind, row.source_id)
+    .all(scope.kind, scope.sourceId)
 }
 
 /**
@@ -82,7 +86,7 @@ export function assertContainerChainSettled(db: Database.Database, projectId: st
     projectId,
     taskRef: { slug: row.slug, localId: row.local_id },
     containerSlug: row.slug,
-    unsettled: readUnsettledChain(db, row),
+    unsettled: readUnsettledChain(db, { kind: row.source_kind, sourceId: row.source_id }),
   }
   throw new PhaseGateUnsettledError(data)
 }

@@ -190,7 +190,8 @@ export function attributionTaskInput(
  * markE2eAttribution 置 tasks.e2e_attribution = 1（生成侧单点写；标记不经 addTask 参数
  * 暴露——contracts AddTaskInput 硬约束）。addTask 故障上抛由调用方裁定（循环径 fail-soft
  * warn）；标记写入 fail-loud——UPDATE 未命中即抛（归因卡无标记等于无豁免，T16 生成侧
- * 断言锚）；markE2eAttribution 面缺席 = 形态兼容跳过（core 服务恒提供）。
+ * 断言锚）；markE2eAttribution 面必选（bug 834d975d 收口）——调用零可选链，面缺席
+ * fail-loud（TypeError 上抛，不做形态兼容跳过）。
  */
 export async function issueAttributionCard(
   deps: { readonly tasks: ForgeTasksService },
@@ -199,7 +200,7 @@ export async function issueAttributionCard(
   spec: string,
 ): Promise<void> {
   const added = await deps.tasks.addTask(attributionTaskInput(source, spec, { projectId }))
-  await deps.tasks.markE2eAttribution?.({ projectId, slug: added.slug, localId: added.localId })
+  await deps.tasks.markE2eAttribution({ projectId, slug: added.slug, localId: added.localId })
 }
 
 // ─────────────────────────── 生产装配面（宿主 wiring——bug ca061ef6 接线收口） ───────────────────────────

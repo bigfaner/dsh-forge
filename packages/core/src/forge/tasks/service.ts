@@ -19,6 +19,8 @@ import type {
   MarkE2eAttributionInput,
   QueryTaskInput,
   QueryTaskResult,
+  ReadUnsettledChainInput,
+  ReadUnsettledChainResult,
   RecordSpawnInput,
   ReconcileInterruptedInput,
   ReconcileInterruptedResult,
@@ -53,6 +55,7 @@ import type { GitExecFile } from './git-lookup.js'
 import { listTasks, taskGraph, taskSettlements, taskStats } from './list.js'
 import { markE2eAttribution } from './mark-e2e-attribution.js'
 import { queryTask } from './query.js'
+import { readUnsettledChain } from './read-unsettled-chain.js'
 import type { ExpertPersonaProfile } from './prompt/persona.js'
 import { reconcileInterrupted } from './reconcile.js'
 import { sessionLinks } from './session-links.js'
@@ -122,6 +125,9 @@ export function createTasksService(deps: TasksServiceDeps): ForgeTasksService {
     },
     async markE2eAttribution(input: MarkE2eAttributionInput): Promise<void> {
       return markE2eAttribution(deps, input)
+    },
+    async readUnsettledChain(input: ReadUnsettledChainInput): Promise<ReadUnsettledChainResult> {
+      return readUnsettledChain(deps, input)
     },
     async reconcileInterrupted(input: ReconcileInterruptedInput): Promise<ReconcileInterruptedResult> {
       return reconcileInterrupted(deps, input)

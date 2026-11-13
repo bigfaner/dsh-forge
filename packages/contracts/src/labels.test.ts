@@ -83,6 +83,12 @@ describe('loop-phase-gate T11 验证类词表 pin（设计 §3——词表单点
     for (const i of IMPLEMENTATION_TASK_TYPES) expect(TASK_TYPES).toContain(i)
   })
 
+  it('I ∩ V = ∅ ∧ gate ∉ I（三集两两不交——GATE_SQL 换元洞闭合 pin：交集成员会在门判据换元下双向穿透）', () => {
+    const iSet = new Set(IMPLEMENTATION_TASK_TYPES)
+    for (const v of VALIDATION_TASK_TYPES) expect(iSet.has(v)).toBe(false)
+    expect(iSet.has('gate')).toBe(false)
+  })
+
   it('E2E_ATTRIBUTION_COLUMN 标记列常量在场（tasks.e2e_attribution——生成侧机械事实）', () => {
     expect(E2E_ATTRIBUTION_COLUMN).toBe('e2e_attribution')
   })

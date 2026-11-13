@@ -1245,6 +1245,30 @@ describe('loop-phase-gate 容器实现链阶段门：门谓词双落点（design
     expect(r.task).toMatchObject({ localId: '1.2', taskStatus: 'in_progress' })
   })
 
+  it('T8 门全开 + 分支①排除验证类（G1 排序层直证）：anchor 后继含 V 卡时①只取非 V 后继、V 落②按 priority 竞争——与 T1 门挡机制区分', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'g8', status: 'tasks' })
+    // 链终态（仅 1.1 ∧ completed）→ 门全开：V 卡不被门持有，纯考就绪选择排序层
+    seedTask(h!.db, 'g8', '1.1', { status: 'completed', createdAt: '2026-01-01T00:00:00.000Z' })
+    seedTask(h!.db, 'g8', 'v1', { type: 'test-run', createdAt: '2026-01-03T00:00:00.000Z' })
+    seedTask(h!.db, 'g8', 'gate-1', { type: 'gate', createdAt: '2026-01-04T00:00:00.000Z' })
+    seedTask(h!.db, 'g8', 'gate-2', { type: 'gate', createdAt: '2026-01-02T00:00:00.000Z' })
+    seedEdge(h!.db, 't-g8-v1', 't-g8-1.1')
+    seedEdge(h!.db, 't-g8-gate-1', 't-g8-1.1')
+    h!.db.prepare(`UPDATE tasks SET priority = 'P0' WHERE slug = 'g8' AND local_id = 'v1'`).run()
+    h!.db.prepare(`UPDATE tasks SET priority = 'P1' WHERE slug = 'g8' AND local_id IN ('gate-1', 'gate-2')`).run()
+    // 第一领：anchor 1.1 的后继集 = {v1(V, P0), gate-1}——若①未排除 V，P0 的 v1 经①胜出；
+    // 直证①排除 V：命中 gate-1（①唯一非 V 后继；创建序晚于 gate-2 仍胜——①延续优先于②全局池）
+    const r1 = await claim({ projectId: P(), sessionId: 's8a' })
+    expect(r1.task).toMatchObject({ localId: 'gate-1', taskStatus: 'in_progress' })
+    // 第二领：① 后继集空（gate-1 已 in_progress、V 卡被排除）→ V 卡入②竞争：
+    // v1 P0 压过创建更早的 gate-2 P1（FIX_FIRST 同序）——②池 priority 竞争直证
+    // （夹具 competitor 取 gate 型：gate ∉ V ∧ ∉ I——门透明且不持链（I/V 词表成员在领出后
+    //   会持门/挡 V），链集合仅 1.1（终态）恒全开——纯排序层考题，与 T1 门挡机制区分）
+    const r2 = await claim({ projectId: P(), sessionId: 's8b' })
+    expect(r2.task).toMatchObject({ localId: 'v1', taskStatus: 'in_progress' })
+  })
+
   it('T2 直取径：taskRef 指名领被门 V 卡 → ERR_PHASE_GATE_UNSETTLED（data.unsettled 含未终态 I 卡）；adopt interrupted 与 in_progress 重入豁免放行', async () => {
     const claim = svc()
     seedFeature(h!.db, { slug: 'g2', status: 'in-progress' })

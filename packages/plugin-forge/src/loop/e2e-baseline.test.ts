@@ -302,9 +302,9 @@ describe('issueAttributionCard 生成侧标记（loop-phase-gate §2.9——CE-6
     await expect(issueAttributionCard({ tasks }, SOURCE, 'p-1', 'e2e/specs/a.spec.ts')).rejects.toThrow('ERR_TASK_NOT_FOUND')
   })
 
-  it('markE2eAttribution 面缺席 = 形态兼容跳过（core 服务恒提供——测试桩缺席径）', async () => {
+  it('markE2eAttribution 面缺席 fail-loud：直接调用抛 TypeError（contracts 服务面必选——零可选链软化，bug 834d975d）', async () => {
     const { tasks, calls } = tasksStub({ markFace: false })
-    await expect(issueAttributionCard({ tasks }, SOURCE, 'p-1', 'e2e/specs/a.spec.ts')).resolves.toBeUndefined()
+    await expect(issueAttributionCard({ tasks }, SOURCE, 'p-1', 'e2e/specs/a.spec.ts')).rejects.toThrow(TypeError)
     expect(calls.addTask).toBe(1)
     expect(calls.marks).toHaveLength(0)
   })

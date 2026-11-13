@@ -28,7 +28,7 @@
 //    收口 = merged 终态，不混用。
 //
 // 依赖方向：loop → dispatch-core / notify / contracts 单向；零工具壳 import（可拆卸壳纪律）。
-import { FIX_CHAIN_DEPTH_LIMIT, FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT, IMPLEMENTATION_TASK_TYPES } from '@dsh-forge/contracts'
+import { FIX_CHAIN_DEPTH_LIMIT, FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from '@dsh-forge/contracts'
 import type { BugCard, ContainerRef, DiagLevel, ForgePluginEvent, ForgeSettingsService, ForgeTasksService, ListBugsQuery, TaskRef, TaskSnapshot, TaskStats, TaskType, TriageDecidedPayload, TriageOutcomePayload } from '@dsh-forge/contracts'
 import { HALT_THRESHOLD, HALTED_REASON } from '../dispatch-core/index.js'
 // S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
@@ -2745,18 +2745,14 @@ async function unclaimedOpenBugs(loop: ActiveLoop): Promise<Array<{ bugId: strin
   return unclaimed
 }
 
-/** 链上滞留 I 卡清单（CE-1 suspend 载荷透传——design §7 F-1）：判据 = contracts
- *  IMPLEMENTATION_TASK_TYPES 词表 + fix-/disc- 前缀排除 + 非终态（completed/skipped 外）——
- *  与 GATE_SQL 链集合定义同源（词表单点），零 SQL 复制。 */
+/** 链上滞留 I 卡清单（CE-1 suspend 载荷透传——design §7 F-1）：链集合判据单点在 core 服务面
+ *  readUnsettledChain（与 GATE_SQL 第④支同源同执行体）——plugin-forge 侧零第二实现，载荷零复制
+ *  （bug a587123e 收口）。读径 fail-soft 空清单（与原 listTasks 挂起径同语义——挂起载荷尽力而为）。 */
 async function unsettledChainCards(loop: ActiveLoop): Promise<Array<{ slug: string; localId: string; taskStatus: string }>> {
-  const cards = await loop.deps.tasks
-    .listTasks({ projectId: loop.scope.projectId, source: { kind: loop.source.kind, slug: loop.source.slug } })
-    .catch(() => [])
-  return cards
-    .filter((card) => (IMPLEMENTATION_TASK_TYPES as readonly TaskType[]).includes(card.taskType))
-    .filter((card) => !card.localId.startsWith('fix-') && !card.localId.startsWith('disc-'))
-    .filter((card) => card.taskStatus !== 'completed' && card.taskStatus !== 'skipped')
-    .map((card) => ({ slug: card.slug, localId: card.localId, taskStatus: card.taskStatus }))
+  const { unsettled } = await loop.deps.tasks
+    .readUnsettledChain({ projectId: loop.scope.projectId, source: { kind: loop.source.kind, slug: loop.source.slug } })
+    .catch(() => ({ unsettled: [] }))
+  return unsettled.map((u) => ({ slug: u.slug, localId: u.localId, taskStatus: u.taskStatus }))
 }
 
 /** no-task 三态判词（AC：settled 收口 / 等待 in-flight / halted-受阻）：classifyPool 纯函数裁决 */

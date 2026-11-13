@@ -357,9 +357,10 @@ export const TASKS_SERVICE_METHODS = [
 /** 白名单覆盖完备性（= never：缺席的 ForgeTasksService 方法在此编译期点名；
  *  stampEvidenceValidity / markE2eAttribution 显式排除——disc 效度戳写侧与 E2E 归因卡生成侧
  *  标记（loop-phase-gate §2.9）均为装配面专属写动词，不入 renderer RPC 白名单（ipc 通道族
- *  不注册该写动词，SC7 断言面）） */
+ *  不注册该写动词，SC7 断言面）；readUnsettledChain 排除——loop 循环内部读面（suspend 载荷
+ *  数据源），renderer 无消费面，不扩 RPC 表面） */
 export type TasksWhitelistCoverage = AssertNever<
-  Exclude<keyof ForgeTasksService, (typeof TASKS_SERVICE_METHODS)[number] | 'stampEvidenceValidity' | 'markE2eAttribution'>
+  Exclude<keyof ForgeTasksService, (typeof TASKS_SERVICE_METHODS)[number] | 'stampEvidenceValidity' | 'markE2eAttribution' | 'readUnsettledChain'>
 >
 
 export const FEATURES_SERVICE_METHODS = [

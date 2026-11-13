@@ -88,8 +88,9 @@ interface ContainerScope {
 /** 容器引用 → 作用域双列（按 kind 解析对应表 id；未命中 = undefined → 读面空结果，零 404）。
  *  M3 2.5 读面泛化：feature/proposal 双轨同形——成链撞键（同 slug 的 feature 与 proposal
  *  并存）下 kind + source_id 双列判别（claim 盲选 = kind+slug 直筛同判别口径；读面走
- *  source_id 解析——EQP 索引前缀锚 idx_tasks_source_status）。 */
-function resolveContainerScope(db: Database.Database, source: ContainerRef): ContainerScope | undefined {
+ *  source_id 解析——EQP 索引前缀锚 idx_tasks_source_status）。
+ *  导出面（bug a587123e 收口）：readUnsettledChain 服务动词复用同一容器解析（零第二实现）。 */
+export function resolveContainerScope(db: Database.Database, source: ContainerRef): ContainerScope | undefined {
   const table = source.kind === 'feature' ? 'features' : 'proposals'
   const id = db.prepare<unknown[], { id: string }>(`SELECT id FROM ${table} WHERE slug = ?`).get(source.slug)?.id
   return id === undefined ? undefined : { kind: source.kind, sourceId: id }

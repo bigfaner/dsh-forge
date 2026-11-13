@@ -26,7 +26,7 @@ import type {
   TriageDecidedPayload,
   TriageOutcomePayload,
 } from '@dsh-forge/contracts'
-import { FIX_CHAIN_DEPTH_LIMIT } from '@dsh-forge/contracts'
+import { FIX_CHAIN_DEPTH_LIMIT, IMPLEMENTATION_TASK_TYPES } from '@dsh-forge/contracts'
 import { createLoopDriver } from './driver.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageDecisionResult, LoopTriageHook, LoopTriageInput } from './driver.js'
@@ -213,6 +213,15 @@ function tasksHarness(options?: { addTaskFailures?: number }) {
       if (bucket === 'suspended') return lists.suspended
       return lists.created
     },
+    // 链清单读面桩（bug a587123e 收口后 driver 消费 core readUnsettledChain 动词）：
+    // created 桶同判据投影（I 词表 + fix-/disc- 排除 + 非终态）——T5 夹具语义镜像
+    readUnsettledChain: async () => ({
+      unsettled: lists.created
+        .filter((c) => (IMPLEMENTATION_TASK_TYPES as readonly string[]).includes(c.taskType))
+        .filter((c) => !c.localId.startsWith('fix-') && !c.localId.startsWith('disc-'))
+        .filter((c) => c.taskStatus !== 'completed' && c.taskStatus !== 'skipped')
+        .map((c) => ({ slug: c.slug, localId: c.localId, taskStatus: c.taskStatus })),
+    }),
     queryTask: async () => shift(queryQueue),
     // 1.16 批量结算读面桩（wave 快照数据源——completed created 桶投影，commit/债计数零值）
     taskSettlements: async () =>
