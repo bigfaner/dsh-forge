@@ -280,6 +280,53 @@ describe("experts/test-runner.md 档案解析断言（forge-test-discipline-laye
     }
   });
 
+  it("执行约束节为执行纪律唯一正本：精确执行/全量仅回归三处/CI 门禁分层/迭代止损/并行资源唯一化/覆盖率口径（1.14）", () => {
+    const exec = content.slice(content.indexOf("## 执行约束"), content.indexOf("## HARD-GATE"));
+    expect(content.indexOf("## 执行约束"), "锚缺失：## 执行约束").toBeGreaterThan(-1);
+    // run-once（既有）保留
+    expect(exec).toContain("run-once");
+    // 精确执行：改动面 = 执行面 / 定向到用例级 / 已绿不复跑
+    expect(exec).toContain("改动面 = 执行面");
+    expect(exec).toContain("用例级");
+    expect(exec).toContain("已绿");
+    expect(exec).toContain("不复跑");
+    // 全量仅属回归三处
+    expect(exec).toContain("全量");
+    expect(exec).toContain("收口");
+    expect(exec).toContain("发布验收");
+    // CI 门禁分层：单元/集成进 PR 门禁、e2e 进收口/发布轮
+    expect(exec).toContain("CI 门禁分层");
+    expect(exec).toContain("PR 门禁");
+    expect(exec).toContain("e2e 进收口");
+    // 迭代止损 3 轮
+    expect(exec).toContain("迭代止损");
+    expect(exec).toContain("3 轮");
+    // 并行资源唯一化（端口/目录/环境变量）
+    expect(exec).toContain("并行");
+    expect(exec).toContain("端口");
+    expect(exec).toContain("目录");
+    expect(exec).toContain("环境变量");
+    // 覆盖率采集口径：按任务 AC，不虚报
+    expect(exec).toContain("覆盖率");
+    expect(exec).toContain("AC");
+    expect(exec).toContain("不虚报");
+    // 语言无关零硬编码（命令形态词禁入）
+    for (const token of ["vitest", "playwright", "npx", "pnpm"]) {
+      expect(exec, `执行约束节含命令硬编码：${token}`).not.toContain(token);
+    }
+  });
+
+  it("撰写/执行边界句在案：写进测试代码的归撰写者，怎么跑的归本档案（1.14）", () => {
+    const exec = content.slice(content.indexOf("## 执行约束"), content.indexOf("## HARD-GATE"));
+    expect(exec).toContain("撰写");
+    expect(exec).toContain("超时");
+    expect(exec).toContain("断言");
+    expect(exec).toContain("锚");
+    expect(exec).toContain("归撰写者");
+    expect(exec).toContain("怎么跑");
+    expect(exec).toContain("归本档案");
+  });
+
   it("档案正文零仓内路径引用（grep 机检；命令形态豁免）", () => {
     expect(content.indexOf("\n---", 4), "frontmatter 结束锚缺失").toBeGreaterThan(-1);
     const body = content.slice(content.indexOf("\n---", 4) + 4);
