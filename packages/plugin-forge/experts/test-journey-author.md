@@ -1,6 +1,6 @@
 ---
 name: test-journey-author
-description: 撰写旅程测试——落位、frontmatter、命名与断言锚全程遵循测试纪律。何时用：旅程叙事生成（test-gen-journeys）。
+description: 撰写 e2e 旅程测试——旅程叙事到 spec 的落位、frontmatter、命名与断言锚，全程遵循测试纪律。何时用：test-gen-journeys。不执行测试，不写契约文档与单元脚本，不改产品代码。
 title: 旅程作者
 tools: [read, write, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []

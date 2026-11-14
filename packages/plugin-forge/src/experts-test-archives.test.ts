@@ -479,3 +479,66 @@ describe("experts/test-journey-author.md 档案解析断言（forge-test-discipl
     }
   });
 });
+
+describe("test-* 四专家简介消歧断言（forge-test-discipline-layering 1.15）", () => {
+  function fmDescription(file: string): string {
+    const c = readFileSync(resolve(here, "../experts", file), "utf-8");
+    const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(c);
+    expect(m, `frontmatter 缺失：${file}`).not.toBeNull();
+    const line = m![1]!.split(/\r?\n/).find((l) => l.startsWith("description:"));
+    expect(line, `description 缺失：${file}`).toBeDefined();
+    return line!.slice("description:".length).trim();
+  }
+
+  it("四简介结构：做什么（动词 + 唯一产物）为主体，不做什么一句收尾", () => {
+    const expectations: Array<[string, string[], string[]]> = [
+      // [文件, 做什么锚（动词+产物）, 不做什么锚（划界词）]
+      ["test-contract-author.md", ["撰写 e2e 契约文档", "跨包契约", "test-gen-contracts"], ["不执行测试", "不写旅程叙事", "不改产品代码"]],
+      ["test-journey-author.md", ["撰写 e2e 旅程测试", "spec", "test-gen-journeys"], ["不执行测试", "不写契约文档", "不改产品代码"]],
+      ["test-script-author.md", ["撰写", "支撑测试脚本", "test-gen-scripts"], ["不执行测试编排", "不写 e2e 旅程与契约文档", "不改产品代码"]],
+      ["test-runner.md", ["编排执行测试", "报告", "test-run"], ["不撰写测试", "不修改测试脚本", "产品代码"]],
+    ];
+    for (const [file, does, doesNot] of expectations) {
+      const desc = fmDescription(file);
+      for (const anchor of does) {
+        expect(desc, `${file} 简介缺做什么锚：${anchor}`).toContain(anchor);
+      }
+      for (const anchor of doesNot) {
+        expect(desc, `${file} 简介缺不做什么锚：${anchor}`).toContain(anchor);
+      }
+    }
+  });
+
+  it("四简介两两无重叠词义：各占唯一领地（契约文档/旅程 spec/支撑脚本/执行报告）", () => {
+    // 领地唯一词：契约 = 契约文档产物；旅程 = 旅程 spec；脚本 = 支撑脚本；runner = 编排+报告
+    const contract = fmDescription("test-contract-author.md");
+    const journey = fmDescription("test-journey-author.md");
+    const script = fmDescription("test-script-author.md");
+    const runner = fmDescription("test-runner.md");
+    // 撰写动词的唯一产物各不相同
+    expect(contract).toContain("契约文档");
+    expect(contract).not.toContain("旅程测试");
+    expect(journey).toContain("旅程测试");
+    expect(journey).not.toContain("撰写契约文档");
+    expect(journey).toContain("不写契约文档");
+    expect(script).toContain("支撑测试脚本");
+    expect(script).not.toContain("e2e 契约文档");
+    expect(script).not.toContain("旅程测试");
+    // runner 是唯一执行编排者：其余三简介均含不执行划界
+    expect(runner).toContain("编排执行测试");
+    expect(contract).toContain("不执行测试");
+    expect(journey).toContain("不执行测试");
+    expect(script).toContain("不执行测试编排");
+    // runner 不撰写
+    expect(runner).toContain("不撰写测试");
+  });
+
+  it("四简介经 parseExpertFile 同构校验通过（frontmatter 合法）", () => {
+    for (const file of ["test-contract-author.md", "test-journey-author.md", "test-script-author.md", "test-runner.md"]) {
+      const c = readFileSync(resolve(here, "../experts", file), "utf-8");
+      expect(parseExpertFileLike(resolve(here, "../experts", file), c)).toEqual({ ok: true });
+      expect(c.includes("{{"), `${file} 含裸 {{`).toBe(false);
+    }
+  });
+});
+// forge-test-discipline-layering 1.15 简介消歧断言结束

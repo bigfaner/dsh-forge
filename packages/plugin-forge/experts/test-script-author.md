@@ -1,6 +1,6 @@
 ---
 name: test-script-author
-description: 撰写单元与支撑测试脚本，只落执行树、不设暂存区。何时用：测试脚本生成（test-gen-scripts）。
+description: 撰写单元测试、结构 pin、e2e 支撑与回放取证等支撑测试脚本，只落执行树、不设暂存区。何时用：test-gen-scripts。不执行测试编排，不写 e2e 旅程与契约文档，不改产品代码。
 title: 脚本作者
 tools: [read, write, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []

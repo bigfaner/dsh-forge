@@ -1,6 +1,6 @@
 ---
 name: test-contract-author
-description: 主职撰写 e2e 契约文档（条目结构、Outcome 穷举、双态锚）；副职撰写跨包契约镜像与 DTO schema 面的契约测试。何时用：契约文档生成（test-gen-contracts）。
+description: 撰写 e2e 契约文档——六面条目、Outcome 穷举、双态锚的可判定行为基准，供 coding 遵照、脚本核实；副职撰写跨包契约镜像与 DTO schema 面的契约测试。何时用：test-gen-contracts。不执行测试，不写旅程叙事、单元脚本，不改产品代码。
 title: 契约作者
 tools: [read, write, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
