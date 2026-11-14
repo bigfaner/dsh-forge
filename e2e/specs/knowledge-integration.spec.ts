@@ -105,7 +105,7 @@ test('3.8·知识视图浏览面挂载 + 召回 tab 接线（无锚降级面）'
 
     // 召回 tab 结构（fix-25 官方 roster）：本组无会话——官方页签行（conversation.session.header
     // 内）不渲染，召回视图不挂载（only:id 激活即挂载机制）；「无会话锚 = 静态空态」归
-    // plugins/project/ui/knowledge/RecallTab 单测 pin，真实会话召回链归 knowledge-recall-flywheel（dogfood）
+    // plugins/knowledge/ui/RecallTab 单测 pin，真实会话召回链归 knowledge-recall-flywheel（dogfood）
     if (phase === 'session') {
       await expect(page.locator(TABS_ROW)).toHaveCount(0)
       await expect(page.locator('[data-dswf-pane="recall"]')).toHaveCount(0)

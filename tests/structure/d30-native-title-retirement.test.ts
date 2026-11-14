@@ -150,8 +150,8 @@ const TOOLTIP_FILES = [
   'apps/web/src/views/overview/task-tab/swimlane-view.tsx',
   'apps/web/src/views/overview/task-tab/task-tab.tsx',
   'apps/web/src/views/session/DispatchEventsPanel.tsx',
-  // disc-2 壳侧死面退役：RecallTab 本体迁 @dsh-forge/project（ui/knowledge/RecallTab.tsx）——扫描路径随迁
-  'plugins/project/ui/knowledge/RecallTab.tsx',
+  // disc-2 壳侧死面退役：RecallTab 本体迁 @dsh-forge/knowledge（ui/RecallTab.tsx）——扫描路径随迁
+  'plugins/knowledge/ui/RecallTab.tsx',
   // 1.6：面板本体迁 @dsh-forge/project（ui/sidebar/）——扫描路径随迁
   'plugins/project/ui/sidebar/ForgeWorkspacePanel.tsx',
 ] as const

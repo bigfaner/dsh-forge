@@ -14,7 +14,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { KNOWLEDGE_CHANNELS } from '../../packages/contracts/src/channels.js'
-import type { KnowledgeService } from '../../plugins/knowledge/host/service/types.js'
+import type { BrowseKnowledgeService } from '../../plugins/knowledge/host/service/types.js'
 import { ROOT } from './pins.js'
 
 const FIXTURES_DIR = join(ROOT, 'e2e/support/knowledge-golden/fixtures')
@@ -33,7 +33,7 @@ const CHANNEL_FACADE_METHODS = {
   sessionRecall: ['sessionRecall'],
   entryAction: ['confirmBatch', 'rejectBatch', 'moveEntry', 'updateEntry', 'createDomain'],
   recallFeedback: ['recallFeedback'],
-} as const satisfies Record<keyof typeof KNOWLEDGE_CHANNELS, readonly (keyof KnowledgeService)[]>
+} as const satisfies Record<keyof typeof KNOWLEDGE_CHANNELS, readonly (keyof BrowseKnowledgeService)[]>
 
 /** 回执码集样例矩阵（契约 §3.2——文件名 → 该夹具必须携带的 reason 标记；success = 无失败码） */
 const FIXTURE_REASON_MATRIX: Readonly<Record<string, string | null>> = {
@@ -122,7 +122,7 @@ describe('SA-1 七通道 ↔ 服务面方法一一对应（防 Pick 漏扩致通
 })
 
 describe('SA-2 码集 ↔ 夹具一一对应（防删码不删夹具、加码不加样例）', () => {
-  const dtoSrc = readSrc('packages/contracts/src/dto/knowledge.ts')
+  const dtoSrc = readSrc('lib/api/src/dto/knowledge.ts')
   const failureCodes = unionLiterals(dtoSrc, 'EntryActionFailureCode')
   const rejectCodes = unionLiterals(dtoSrc, 'EntryActionRequestRejectCode')
   const allCodes = [...failureCodes, ...rejectCodes].sort()

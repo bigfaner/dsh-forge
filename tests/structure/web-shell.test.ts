@@ -231,8 +231,8 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
     expect(existsSync(join(ROOT, 'apps/web/src/views/session/SessionTaskPills.tsx'))).toBe(false)
   })
 
-  it('官方 roster 占用 pin：召回视图登记 id + pane 锚（本体归 @dsh-forge/project——壳侧死面退役）；fix-29 轨迹零登记（对话/轨迹 = 官方 chat/trajectory 直用）', () => {
-    const views = read('plugins/project/ui/knowledge/RecallTab.tsx')
+  it('官方 roster 占用 pin：召回视图登记 id + pane 锚（本体归 @dsh-forge/knowledge 插件——壳侧死面退役）；fix-29 轨迹零登记（对话/轨迹 = 官方 chat/trajectory 直用）', () => {
+    const views = read('plugins/knowledge/ui/RecallTab.tsx')
     expect(views).toContain('data-dswf-pane="recall"')
     const shellViews = read('apps/web/src/views/session/ConversationViews.tsx')
     expect(shellViews).not.toContain('data-dswf-pane') // 壳侧零召回 pane（本体随注册面迁插件域）
