@@ -101,10 +101,18 @@ describe("experts/code-reviewer.md 档案解析断言（forge-test-boundary-gate
     expect(keys.sort()).toEqual(["description", "name", "skills", "title", "tools"].sort());
   });
 
-  it("关键条目在场：五关口 16 条清单标题", () => {
+  it("关键条目在场：五关口 17 条清单标题", () => {
     const groups = ["设计关", "任务关", "评审关", "验收关", "证据关", "静态关"];
     for (const g of groups) expect(content).toContain(g);
-    for (let i = 1; i <= 16; i++) expect(content).toMatch(new RegExp(`^${i}\\. \\*\\*`, "m"));
+    for (let i = 1; i <= 17; i++) expect(content).toMatch(new RegExp(`^${i}\\. \\*\\*`, "m"));
+  });
+
+  it("关键条目在场：第 17 条断言可红性留痕在场检查（与 test-script-author 断言质量门同源同口径）", () => {
+    expect(content).toContain("断言可红性留痕在场检查");
+    expect(content).toContain("反例注入三段式留痕");
+    expect(content).toContain("弄坏点 + 红输出尾部 + 复原绿输出尾部");
+    expect(content).toContain("submitTask 结算 AC 证据在场");
+    expect(content).toContain("按断言簇抽样规则核对代表性守卫断言");
   });
 
   it("关键条目在场：点名形态与原则条目", () => {
