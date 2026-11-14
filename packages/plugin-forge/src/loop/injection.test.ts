@@ -211,6 +211,11 @@ describe('模板正本（P1–P9 + 结束族）', () => {
     expect(text).toContain('正式代码路径不触达任何替身')
     expect(text).toContain('配套退出任务')
     expect(text).toContain('默认关闭 ≠ 边界正确')
+    expect(text).toContain('不能为通过测试而随意更改正式代码')
+    expect(text).toContain('实现缺陷')
+    expect(text).toContain('断言过时')
+    expect(text).toContain('环境问题')
+    expect(text).toContain('经主会话裁决后再改')
     // 范围纪律节（独立短节——契约条款移出测试边界纪律）
     expect(text).toContain('**范围纪律**')
     expect(text).toContain('超出任务范围或提案契约的改动不上')
