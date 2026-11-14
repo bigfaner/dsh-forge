@@ -11,7 +11,7 @@
 // → 壳掌舵让位 + faces gate fail-closed（apps/web boot.ts / faces.ts 消费链）。
 // 官方形态（CT-KN-GATE，fix-3 修订：bundle 在场即挂载——apply 期无条件注册）在集成装配
 // 不可复现（bootShell 恒发布壳缝）——faces-gate.test.ts 单测覆盖门控三形态，此处注记留痕。
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
@@ -81,8 +81,14 @@ function stripKnowledgeLoaderRow(patch: string): string {
  * 卸载态 profile 制备（junction 农场——profile.dev 全量透传、唯一差异 = knowledge 缺席）：
  * - 顶层文件复制（cordis.patch.yml 摘 loader 行；package.json 摘依赖行；其余逐字复制）；
  * - 顶层目录/ node_modules 逐条目 junction（knowledge 段跳过——productPackagePresent
- *   profileDir 探针缺席；rmdirSync 摘链接本体不追目标，真实 profile.dev 零触碰）。
+ *   profileDir 探针缺席；rmdirSync 摘链接本体不追目标，真实 profile.dev 零触碰）；
+ * - 例外：boot 链两件（@deepseek-ai/dsh-app-boot + @deepseek-ai/dsh，与
+ *   apps/host/src/boot/boot-chain.ts TREE_CHAIN_PACKAGES 同源）物理复制——fix-20
+ *   BootChainSplitError 守卫按 realpath containment 判树内解析，junction 指向
+ *   profile.dev 真身即判逃逸 fatal；守卫语义不弱化，夹具改为在树内承载真身拷贝
+ *   （与真实 profile.dev 形态同构——真身本就在 profile.dev 树内）。
  */
+const BOOT_CHAIN_PACKAGES = ['@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh'] as const
 export function makeUninstalledProfile(root: string): string {
   const src = join(ROOT, 'apps', 'host', 'profile.dev')
   const dst = join(root, 'profile-uninstalled')
@@ -114,6 +120,18 @@ export function makeUninstalledProfile(root: string): string {
         if (g.name === 'knowledge') continue // 卸载位探针缺席（双探针之一——唯一差异点）
         symlinkSync(join(nmSrc, '@dsh-forge', g.name), join(nmDst, '@dsh-forge', g.name), 'junction')
       }
+    } else if (e.name === '@deepseek-ai') {
+      // boot 链两件物理复制（守卫树内判据），其余 deepseek 包照常 junction
+      mkdirSync(join(nmDst, '@deepseek-ai'), { recursive: true })
+      for (const g of readdirSync(join(nmSrc, '@deepseek-ai'), { withFileTypes: true })) {
+        const from = join(nmSrc, '@deepseek-ai', g.name)
+        const to = join(nmDst, '@deepseek-ai', g.name)
+        if (BOOT_CHAIN_PACKAGES.some((name) => name === `@deepseek-ai/${g.name}`)) {
+          cpSync(from, to, { recursive: true, verbatimSymlinks: false })
+        } else {
+          symlinkSync(from, to, 'junction')
+        }
+      }
     } else {
       symlinkSync(join(nmSrc, e.name), join(nmDst, e.name), 'junction')
     }
@@ -121,13 +139,24 @@ export function makeUninstalledProfile(root: string): string {
   return dst
 }
 
-/** 卸载态 profile 清理：junction 先逐条 rmdirSync 摘链接（绝不 rmSync 递归翻越 junction） */
+/** 卸载态 profile 清理：junction 先逐条 rmdirSync 摘链接（boot 链复制件走 rmSync；
+ *  绝不 rmSync 递归翻越 junction） */
 export function removeProfileFarm(dir: string): void {
   const nm = join(dir, 'node_modules')
   for (const e of readdirSync(nm, { withFileTypes: true })) {
     const p = join(nm, e.name)
     if (e.name === '@dsh-forge') {
       for (const g of readdirSync(p)) rmdirSync(join(p, g))
+      rmdirSync(p)
+    } else if (e.name === '@deepseek-ai') {
+      for (const g of readdirSync(p)) {
+        const gp = join(p, g)
+        if (BOOT_CHAIN_PACKAGES.some((name) => name === `@deepseek-ai/${g}`)) {
+          rmSync(gp, { recursive: true, force: true }) // 物理复制件（夹具自有）
+        } else {
+          rmdirSync(gp) // junction
+        }
+      }
       rmdirSync(p)
     } else {
       rmdirSync(p)
