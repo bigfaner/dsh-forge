@@ -1401,12 +1401,13 @@ describe('W4 激活自证（RPC 轻探）+ 看门探测面', () => {
     return { listeners, slotsEntries }
   }
 
-  it('Typert face 缺席：竞速窗口静默挂起（零 console）→ 兜底时延重试仍缺席才 fail-loud + 看门探测面发布 + overlay dispose 对称清收', async () => {
+  it('Typert face 缺席：竞速窗口静默挂起（零 console）→ 长诊断超时仅出诊断不 fail-loud + 看门探测面发布 + overlay dispose 对称清收', async () => {
     vi.useFakeTimers()
     const markerBefore = g().__DSH_FORGE_CLIENT__
     delete g().__DSH_FORGE_CLIENT__
     publishFakeViews()
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
     try {
       const { ctx, injectDisposers } = fakeClientCtx()
       const { listeners } = augmentCtx(ctx)
@@ -1423,12 +1424,17 @@ describe('W4 激活自证（RPC 轻探）+ 看门探测面', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(probe?.rpcProbe).toContain('竞速窗口')
       expect(err).not.toHaveBeenCalled()
-      // 兜底时延重试仍缺席 → 恰一次终态 fail-loud
+      // fix-2 mount 事件驱动：无固定短窗——2s 处仍挂起、零 fail-loud
       await vi.advanceTimersByTimeAsync(2_000)
-      expect(probe?.rpcProbe).toContain('轻探不通')
-      expect(err.mock.calls.filter((call) => String(call[0]).includes('轻探不通'))).toHaveLength(1)
+      expect(probe?.rpcProbe).toContain('竞速窗口')
+      expect(err).not.toHaveBeenCalled()
+      // 长诊断超时（有事件缝）：仅出一条诊断（console.info），不终态
+      await vi.advanceTimersByTimeAsync(13_000)
+      expect(err).not.toHaveBeenCalled()
+      expect(info.mock.calls.some((call) => String(call[0]).includes('竞速窗口超'))).toBe(true)
     } finally {
       err.mockRestore()
+      info.mockRestore()
       if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
       else g().__DSH_FORGE_CLIENT__ = markerBefore
       unpublishViews()

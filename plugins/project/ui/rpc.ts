@@ -2,7 +2,8 @@
 // 插件 bundle 内部面」）：add-project 流程与 Bug 台账 pane 的数据源单门。传输真身 =
 // 官方 Typert Remote namespace（六族 forge:* 收编 ctx.remote 第一等通道）。
 // face 安装：apply 期 installForgeRemoteFace 安装解析缝（逐调用现查不缓存——AGENTS 1.6），
-// 官方 remote 面缺席 = 通道不可用诚实降级（diag 留痕 + typed Error，不静默不炸壳）。
+// 官方 remote 面缺席 = 通道不可用诚实降级（diag 留痕 + typed Error，不静默不炸壳；
+// mount 终态前竞速窗口的诊断静默——FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY 注）。
 // 信封拆装：RemoteResult → data（value 原样），failure → 抛 RpcClientError（typed error
 // 反序列化），形状非法 fail-loud。通道名/方法名单源 = ui/remote.ts descriptor 表 +
 // host 半 typert-remotes.ts（两表测试 pin 锁定）。
@@ -87,6 +88,27 @@ let rpcDiag: ((line: string) => void) | undefined
 
 /** 页内锚键（写读双注：写入器 = @dsh-forge/project bundle apply；读取器 = 壳侧同源副本） */
 export const FORGE_REMOTE_FACE_ANCHOR_KEY = '__dshForgeRemoteFace'
+
+/**
+ * 页内 mount 终态锚键（fix-2 消费面 warn 门控——竞速分类钉）：写入器 = projectClient.apply
+ * 的 remote.$mount promise settle（成功/失败/缺席均视为 mount 终态——mount 后面缺席 =
+ * 真缺席，诚实 warn）；读取器 = 页内全部 rpc.ts 副本（壳侧同源副本含）。
+ * 竞速窗口（键缺席 = contribution mount 未落座）的面缺席/404 属装配时序竞速——降级
+ * 静默（typed Error 照抛，仅 console warn 门控）；mount 终态后的面缺席保持诚实 warn。
+ */
+export const FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY = '__dshForgeRemoteMountSettled'
+
+/** mount 终态发布（projectClient.apply 的 $mount settle 三分支各调用一次——页内全局单点） */
+export function markForgeRemoteMountSettled(): void {
+  globalScopeOf()[FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY] = true
+}
+
+/** mount 终态现查（纯锚读——零模块级缓存，页内全部副本同源判定；face 解析缝锚在场 =
+ * installForgeRemoteFace 已装配（mount 后 inject fiber 激活）→ 同视为 mount 终态） */
+function remoteMountSettled(): boolean {
+  if (globalScopeOf()[FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY] === true) return true
+  return faceAnchorOf() !== undefined
+}
 
 /** 页内锚形态（解析缝 + 诊断钩——与 installForgeRemoteFace 实参同型） */
 interface ForgeRemoteFaceAnchor {
@@ -234,9 +256,14 @@ async function invokeRemote<T>(
   const fn = methodOf(ns, method)
   if (fn === undefined) {
     const line = `dsh-forge project client: 官方 forge remote 面缺席（${String(namespace)}.${method}）——通道不可用（诚实降级）`
-    const diag = seam.diag ?? rpcDiag
-    if (diag !== undefined) diag(line)
-    else console.warn(`[forge-rpc-transport] ${line}`)
+    // 消费面 warn 门控（fix-2 竞速分类钉）：contribution mount 终态前的面缺席属装配时序
+    // 竞速窗口——typed Error 照抛（调用方降级语义不变），console 诊断静默（boot 窗口零
+    // 「面缺席」降级记录）；mount 终态后的真缺席保持诚实 warn/diag。
+    if (remoteMountSettled()) {
+      const diag = seam.diag ?? rpcDiag
+      if (diag !== undefined) diag(line)
+      else console.warn(`[forge-rpc-transport] ${line}`)
+    }
     throw new Error(line)
   }
   return invokeEnvelope(await (fn as (...args: unknown[]) => unknown)(...args), `${String(namespace)}/${method}`)
@@ -260,9 +287,14 @@ function streamRemote<T>(
   const fn = methodOf(ns, method)
   if (fn === undefined) {
     const line = `dsh-forge project client: 官方 forge remote 面缺席（${String(namespace)}.${method}）——通道不可用（诚实降级）`
-    const diag = seam.diag ?? rpcDiag
-    if (diag !== undefined) diag(line)
-    else console.warn(`[forge-rpc-transport] ${line}`)
+    // 消费面 warn 门控（fix-2 竞速分类钉）：contribution mount 终态前的面缺席属装配时序
+    // 竞速窗口——typed Error 照抛（调用方降级语义不变），console 诊断静默（boot 窗口零
+    // 「面缺席」降级记录）；mount 终态后的真缺席保持诚实 warn/diag。
+    if (remoteMountSettled()) {
+      const diag = seam.diag ?? rpcDiag
+      if (diag !== undefined) diag(line)
+      else console.warn(`[forge-rpc-transport] ${line}`)
+    }
     throw new Error(line)
   }
   const handle = (fn as (...args: unknown[]) => unknown)(...args) as AsyncIterable<T>

@@ -177,7 +177,7 @@ export * from './session-actions.js'
 
 import { registerOfficialSeamFaces, revokeOfficialSeamGlobals } from './official-seams.js'
 import { FORGE_REMOTE_CONTRIBUTION } from './remote.js'
-import { createForgeRpcClient, FORGE_REMOTE_NAMESPACES, forgeFaceOf, installForgeRemoteFace } from './rpc.js'
+import { createForgeRpcClient, FORGE_REMOTE_NAMESPACES, forgeFaceOf, installForgeRemoteFace, markForgeRemoteMountSettled } from './rpc.js'
 import { installWorktreePrefsFace, type ConfigFormsFace } from './settings-section/index.js'
 import { registerSettingsSection } from './settings-section/index.js'
 import { registerWorktreeDetailSection } from './detail-section/index.js'
@@ -289,6 +289,7 @@ export const projectClient = {
       if (remote !== undefined && typeof remote.$mount === 'function') {
         void Promise.resolve(remote.$mount(FORGE_REMOTE_CONTRIBUTION))
           .then(() => {
+            markForgeRemoteMountSettled()
             console.info('[dsh-forge/project] forge remote contribution mounted')
             // bug 295223da：hero 空态自判定（remote 面就绪后驱动——无壳官方宿主零项目
             // → 官方 layout.selectPanel('dswf-hero') 单发；壳宿主缝在场 = ShellHost 单驱动）。
@@ -302,9 +303,11 @@ export const projectClient = {
             }
           })
           .catch((error: unknown) => {
+            markForgeRemoteMountSettled()
             console.warn('[dsh-forge/project] forge remote contribution mount failed——RPC 调用期诚实降级', error)
           })
       } else {
+        markForgeRemoteMountSettled()
         console.warn('[dsh-forge/project] ctx.remote.$mount absent——forge remote 面不挂载（诚实降级）')
       }
       // namespace 边子 fiber（官方 client-ui-forge mount.ts:339 同型）：主插件 apply 期

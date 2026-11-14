@@ -773,21 +773,25 @@ export function forgeClientPlugin(): ForgeClientPlugin {
               })
 
         // W4 激活自证①（RPC 试呼轻探）：forgeProjects.list Typert 正典零副作用读面——
-        // remote 往返通 = 数据通路装配链通。编排 = runActivationSelfProbe 两段式（boot
-        // 竞速根治——1.2 复核欠账 R2-竞速支）：mount 完成前的 404/面缺席失败按竞速窗口
-        // 分类静默挂起，internal/service（remote contribution mount 落座）或兜底时延后
-        // 重试一次，重试仍失败才 console.error + selfCheck 呈现（不阻断激活主链）。
+        // remote 往返通 = 数据通路装配链通。编排 = runActivationSelfProbe（boot 竞速
+        // 根治——1.2 复核欠账 R2-竞速支；fix-2 mount 事件驱动）：mount 完成前的 404/
+        // 面缺席失败按竞速窗口分类静默挂起，internal/service（remote contribution mount
+        // 落座）事件驱动轻探，无固定短窗；长诊断超时仅出诊断（不 fail-loud），事件缝
+        // 缺席才兜底终态（不阻断激活主链）。
         runActivationSelfProbe({
           probe: () => forgeRpc.projects.list().then(() => undefined),
           onSuccess: () => {
             selfCheck.rpcProbe = 'ok'
           },
           onRacePending: () => {
-            selfCheck.rpcProbe = 'pending（boot 竞速窗口——remote contribution mount 后重试中）'
+            selfCheck.rpcProbe = 'pending（boot 竞速窗口——remote contribution mount 事件驱动重试中）'
           },
           onTerminalFailure: (line) => {
             console.error(line)
             selfCheck.rpcProbe = line
+          },
+          onDiag: (line) => {
+            console.info(line)
           },
           onServiceEvent:
             typeof clientCtx.on === 'function'
