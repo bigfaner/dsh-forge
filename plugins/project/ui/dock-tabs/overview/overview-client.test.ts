@@ -1,12 +1,17 @@
-// 概览行集读缝自洽化（bug 24311b78——fix-19）测试钉：
-//   ① 写缝→读缝闭环：journey 注入缝 = 插件 project.db（createBugsService→BugsRepo），
-//     概览 bugs 子 tab 行集/计数读缝 = 同一 db（forgeBugs Typert namespace）——注入的
-//     bug 在概览行集可见（RED→GREEN 锚）；
-//   ② 无 core 环境读缝解析成立：window.dshForge（core forge:bugs/* preload 通道）缺席
-//     时概览 bugs 读缝仍解析——core 读缝不作数据源；
-//   ③ 非 bugs 通道路由不变：projects.list 仍走 preload 通道（读缝斩除只限 bugs 面）。
+// 概览行集读缝自洽化测试钉：
+//   fix-19（bug 24311b78）：bugs 读缝自 core forge:bugs/* preload 退役；
+//   fix-20（bug 145b3d3b）：bugs 行集/计数 chips 数据源 = 插件本地 forgeBugs
+//   （plugins/project/host/bugs = project.db）经本地 preload 通道（window.dshForge.invoke）
+//   投影——宿主 forge:bugs/list 供数缝自本版起改接插件 forge.bugs 缝（child.ts wiring）；
+//   Typert/forge remote 消费在该行集路径归零为数据源（本地缝不可达时 fail-soft 加速回落，
+//   不作数据源）。测试钉：
+//   ① 无 forge remote 面环境行集投影成立：face 缺席 + 本地通道由插件本地服务供数——
+//     seed → 行集/计数可见（RED→GREEN 锚）；
+//   ② 本地通道在席时 Typert face 零消费（本地读缝单源——face 缺席仍解析）；
+//   ③ 本地通道失败 → Typert 回落解析（fail-soft 加速——本地缝正常时零回落）；
+//   ④ 非 bugs 通道路由不变：projects.list 仍走 preload 通道（window.dshForge.invoke）。
 import { afterEach, describe, expect, it } from 'vitest'
-import { BUGS_CHANNELS, PROJECTS_CHANNELS } from '@dsh-forge/contracts'
+import { BUGS_CHANNELS, PROJECTS_CHANNELS, type ListBugsQuery } from '@dsh-forge/contracts'
 import { openDomainDb, PROJECT_DB_PREFIX, type DomainDb } from '../../../host/db/connection.js'
 import { createBugsService } from '../../../host/bugs/service.js'
 import { installForgeRemoteFace } from '../../rpc.js'
@@ -41,52 +46,76 @@ function writeSeamOf() {
   return { domain, service }
 }
 
-/** 无传输环境（window.dshForge 缺席——core preload 读缝不可用形态） */
-function withoutPreloadTransport(): void {
+/** 无 forge remote 面环境（resolver 恒 undefined——Typert 通道不可达形态） */
+function withoutForgeRemoteFace(): void {
+  installForgeRemoteFace(() => undefined)
   delete (globalThis as { dshForge?: unknown }).dshForge
 }
 
-/** forgeBugs Typert face 替身（RemoteResult 信封——plugin forgeBugs 服务直挂） */
-function forgeBugsFaceOf(listBugs: (q: unknown) => Promise<unknown>) {
-  return {
-    forgeBugs: { list: async (q: unknown) => ({ ok: true, value: await listBugs(q) }) },
-  } as never
+/** 本地 preload 通道替身：forge:bugs/list 由插件本地 forgeBugs 服务供数（宿主 wiring 同径） */
+function withLocalBugsChannel(listBugs: (q: ListBugsQuery) => Promise<unknown>, channels?: string[]): void {
+  ;(globalThis as Record<string, unknown>).dshForge = {
+    invoke: async (channel: string, payload?: unknown) => {
+      channels?.push(channel)
+      if (channel === BUGS_CHANNELS.list) {
+        return { ok: true, data: await listBugs(payload as ListBugsQuery) }
+      }
+      return { ok: false, error: { code: 'internal', message: `unexpected channel: ${channel}` } }
+    },
+  }
 }
 
 afterEach(() => {
   delete (globalThis as { dshForge?: unknown }).dshForge
 })
 
-describe('概览行集读缝自洽化（bug 24311b78——写缝 project.db → 读缝同库闭环）', () => {
-  it('写缝 registerBug（project.db）→ 概览 bugs 行集/计数读缝（同库 forgeBugs）可见', async () => {
-    withoutPreloadTransport()
+describe('概览行集读缝自洽化（fix-20 bug 145b3d3b——本地 forgeBugs 投影）', () => {
+  it('① 无 forge remote 面环境行集投影成立：本地通道（插件本地 forgeBugs）seed → 行集/计数可见', async () => {
+    withoutForgeRemoteFace()
     const { service } = writeSeamOf()
     await service.registerBug({
       projectId: 'p-1',
-      summary: '概览行集读缝自洽化复现',
+      summary: '概览行集本地读缝投影复现',
       bugDesc: '注入 bug',
       triggerDesc: 'journey 注入',
       expected: '概览行集可见',
-      actual: 'core 读缝恒不可见',
+      actual: 'forge remote 面缺席恒空',
     })
-    installForgeRemoteFace(() => forgeBugsFaceOf((q) => service.listBugs(q as never)))
+    withLocalBugsChannel((q) => service.listBugs(q))
     const client = overviewRpcClientFactory()
     const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'bugs', search: '', sort: 'active' })
     expect(out?.ok).toBe(true)
     if (out?.ok && out.data.kind === 'bugs') {
-      expect(out.data.bugs.map((b) => b.summary)).toContain('概览行集读缝自洽化复现')
+      expect(out.data.bugs.map((b) => b.summary)).toContain('概览行集本地读缝投影复现')
       expect(out.data.counts.open).toBe(1)
     }
   })
 
-  it('无 core 环境（dshForge 缺席）概览 bugs 读缝解析成立——core 读缝不作数据源', async () => {
-    withoutPreloadTransport()
-    installForgeRemoteFace(() => forgeBugsFaceOf(async () => []))
+  it('② 本地通道在席时 Typert face 零消费（本地读缝单源）', async () => {
+    withoutForgeRemoteFace()
+    const { service } = writeSeamOf()
+    const channels: string[] = []
+    withLocalBugsChannel((q) => service.listBugs(q), channels)
+    const client = overviewRpcClientFactory()
+    await expect(client.bugs.list({ projectId: 'p-1' })).resolves.not.toThrow()
+    expect(channels).toEqual([BUGS_CHANNELS.list])
+  })
+
+  it('③ 本地通道失败 → Typert 回落解析（fail-soft 加速——不作数据源）', async () => {
+    withoutForgeRemoteFace()
+    ;(globalThis as Record<string, unknown>).dshForge = {
+      invoke: async () => {
+        throw new Error('forge:bugs/list 通道未注册（本地缝不可达）')
+      },
+    }
+    installForgeRemoteFace(() => ({
+      forgeBugs: { list: async () => ({ ok: true, value: [] }) },
+    }) as never)
     const client = overviewRpcClientFactory()
     await expect(client.bugs.list({ projectId: 'p-1' })).resolves.toEqual([])
   })
 
-  it('非 bugs 通道路由不变：projects.list 仍走 preload 通道（window.dshForge.invoke）', async () => {
+  it('④ 非 bugs 通道路由不变：projects.list 仍走 preload 通道（window.dshForge.invoke）', async () => {
     const channels: string[] = []
     ;(globalThis as Record<string, unknown>).dshForge = {
       invoke: async (channel: string) => {

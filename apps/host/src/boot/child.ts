@@ -132,6 +132,43 @@ function toolNamesOf(face: ServiceGetFace): readonly string[] | undefined {
   }
 }
 
+/**
+ * forge:bugs/* 通道供数缝（fix-20 bug 145b3d3b）：优先插件本地 forge.bugs 缝
+ * （@dsh-forge/project registerProjectSeams 常驻工厂——listBugs 读 project.db，与概览
+ * Bug 行集/写入缝同库）；插件缝缺席/劣形退 core forgeBugs（既有行为不变）。
+ * commitFiles/fileDiff 变更读面归宿主 git 面——插件缝不承载，typed 拒绝保通道注册完整。
+ */
+function forgeBugsServiceOf(face: ServiceGetFace): object | undefined {
+  try {
+    const seam = face.get('forge.bugs') as unknown
+    if (typeof seam === 'function') {
+      const service = (seam as () => unknown)() as
+        | { listBugs?: unknown; commitFiles?: unknown; fileDiff?: unknown }
+        | undefined
+      if (service !== undefined && typeof service.listBugs === 'function') {
+        if (typeof service.commitFiles === 'function' && typeof service.fileDiff === 'function') {
+          return service as object
+        }
+        const unavailable = (method: string) => async (): Promise<never> => {
+          throw new Error(`forge.bugs ${method} unavailable（变更读面归宿主 git 面——插件缝不承载）`)
+        }
+        return {
+          ...service,
+          ...(typeof service.commitFiles !== 'function' ? { commitFiles: unavailable('commitFiles') } : {}),
+          ...(typeof service.fileDiff !== 'function' ? { fileDiff: unavailable('fileDiff') } : {}),
+        }
+      }
+    }
+  } catch {
+    // 插件缝读取/实例化异常（插件行未装载/劣形）——退 core 供数缝
+  }
+  try {
+    return (face.get('forgeBugs') as object | undefined) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 // fix-33 ① send 防护：IPC 序列化抛错（BigInt/循环引用）不落 unhandled rejection——
 // rpc-result 面回填保 id 降级 error-result（主侧 pending 可结算）。见 bridge.sendGuarded。
 const send = (message: ChildToMainMessage): void => {
@@ -1079,8 +1116,11 @@ async function main(): Promise<void> {
     forgeDocs: (servicesFace.get('forgeDocs') as object | undefined) ?? undefined,
     // M3 3.8 设置域（settingsFile 缺席时 core 不 provide——独立缝降级，六服务形制不动）
     forgeSettings: (servicesFace.get('forgeSettings') as object | undefined) ?? undefined,
-    // fix-bug bug 域（tasksHome 注入时 core provide——缺席 = bugs 面降级）
-    forgeBugs: (servicesFace.get('forgeBugs') as object | undefined) ?? undefined,
+    // fix-20 bug 145b3d3b：forge:bugs/* 通道供数缝优先插件本地 forge.bugs 缝
+    //（plugins/project/host/bugs = project.db——概览 Bug 行集与写入/seed 缝同库闭合；
+    // commitFiles/fileDiff 变更读面归宿主 git 面，插件缝不承载——typed 拒绝保通道注册完整）；
+    // 插件缝缺席/劣形退 core forgeBugs（既有行为不变）。
+    forgeBugs: forgeBugsServiceOf(servicesFace),
     // fix-2 worktree RPC 域（gitWorktree 插件行在场时装配段 provide——缺席 = 通道未注册）
     forgeWorktree: worktreeRpcService ?? undefined,
     // fix-2 审批桥（官方 ctx.approval 在场时 provide 内存中继——缺席 = 审批转发面降级）
