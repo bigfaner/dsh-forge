@@ -9,7 +9,8 @@
 // chips 过滤接口）；文档行点击经 props 回调上抛（dock 开 tab——4.1 接线）。
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { BugCard, BugStatus, DirFactRow, FeatureCard, ProposalStatus, FeatureStatus, ProposalCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc-channels.js'
+import { type RpcClientFactory } from '../rpc-channels.js'
+import { overviewRpcClientFactory } from './overview-client.js'
 import { useDirFactRows } from './dir-rows.js'
 import { ErrorBar, SkeletonRows } from '../../components.js'
 import {
@@ -459,7 +460,7 @@ export interface OverviewTabProps {
 /** 概览 tab body（状态 + 装载胶水——filter 本地态单一来源；effect 编排归 useOverviewLoad） */
 export function OverviewTab({
   projectId,
-  makeClient = preloadRpcClientFactory,
+  makeClient = overviewRpcClientFactory,
   sessionCount,
   onOpenDoc,
   renderTasksTab,

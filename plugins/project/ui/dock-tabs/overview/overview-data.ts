@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BugCard, BugStatus, DirFactRow, FeatureCard, FeatureDocumentRow, ProposalCard, ProposalDocRow, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../rpc-channels.js'
+import { overviewRpcClientFactory } from './overview-client.js'
 import { RpcClientError } from '../rpc-channels.js'
 import { rpcUiState, type RpcUiStateKind } from '../rpc-channels.js'
 import { DIR_FACTS_ROW_KEYS, dirFactRowLabel, type DirFactRowKey } from './dir-rows.js'
@@ -369,7 +370,7 @@ export function useOverviewLoad(
   search: string,
   sort: OverviewSort,
   nonce: number,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = overviewRpcClientFactory,
   /** Bug chips 白名单参（Bug 子 tab 透传 fetchOverviewList；他子 tab 缺省 = 空） */
   status?: readonly BugStatus[],
 ): OverviewLoadState {
