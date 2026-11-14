@@ -801,27 +801,13 @@ describe("experts/proposal-reviewer.md 档案解析断言（forge-test-pipeline-
     expect(keys.filter((k) => !REQUIRED.includes(k) && !OPTIONAL.includes(k)), "引入了 parser 不认可的未知键").toEqual([]);
   });
 
-  it("专家体系影响面四维条件组已上移指挥者模式提示词（commander.ts 在案，档案不再承载）", () => {
-    // 2026-11-15 裁决：四维核对属主会话委派纪律，不属 proposal-reviewer——锚随迁 commander.ts
+  it("委派纪律二则在指挥者段在案（查找依据 + 近似职责择优）；四维核对不归 plugin-forge 承载", () => {
+    // 2026-11-15 裁决：委派纪律只管查找与委派；专家体系四维核对归 expert-squad 档案写径（工具 description）
     const commander = readFileSync(resolve(here, "prompt/commander.ts"), "utf-8");
-    // 条件启用语义：条件组措辞 + 无涉档案不核对
-    expect(commander).toContain("专家体系影响面核对");
-    expect(commander).toContain("改动专家档案（新增/修改）时启用");
-    expect(commander).toContain("无涉专家档案的改动不核对");
-    // 四维逐项锚
-    expect(commander).toContain("职责矩阵");
-    expect(commander).toContain("两两互斥");
-    expect(commander).toContain("简介路由");
-    expect(commander).toContain("唯一命中");
-    expect(commander).toContain("载体归属");
-    expect(commander).toContain("自洽自含");
-    expect(commander).toContain("口径闭环");
-    expect(commander).toContain("跨档案判据多方一致");
-    // 委派纪律三则（同轮裁决入指挥者段）
-    expect(commander).toContain("只按简介路由");
-    expect(commander).toContain("经 persona 自动生效");
-    expect(commander).toContain("零宿主感知");
-    // 档案侧不再承载四维条件组
+    expect(commander).toContain("查找专家");
+    expect(commander).toContain("职责近似时选更合适");
+    // 四维核对不在指挥者段、不在评审档案（归 expert-squad 产品面）
+    expect(commander).not.toContain("专家体系影响面核对");
     expect(content).not.toContain("专家体系影响面核对");
   });
 
