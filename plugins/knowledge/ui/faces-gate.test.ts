@@ -101,7 +101,7 @@ describe('registerKnowledgeFaces 编排（diag 读数 = A-KN-8 语义）', () =>
     expect(out.registered).toEqual(['dswf-knowledge', 'panellist:dswf-knowledge', 'dswf-recall'])
   })
 
-  it('apply 编排：词典登记 = knowledge 自有 NS（词条随迁锚）+ 三面 registered 读数', () => {
+  it('apply 编排：词典登记 = knowledge 自有 NS（词条随迁锚）+ 三面 registered 读数 + 项目台知识目录节（1.5）', () => {
     const slots = fakeSlots()
     const locale = fakeLocale()
     const ctx = { reflect: { get: () => ({}) }, slots, locale }
@@ -111,6 +111,7 @@ describe('registerKnowledgeFaces 编排（diag 读数 = A-KN-8 语义）', () =>
       'main:dswf-knowledge',
       'sidebar.panellist:dswf-knowledge',
       'conversation.view:dswf-recall',
+      'project.section.knowledge-dir:dswf-knowledge-dir',
     ])
   })
 })

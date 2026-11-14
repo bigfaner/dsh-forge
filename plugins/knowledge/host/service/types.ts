@@ -204,7 +204,7 @@ export interface BrowseKnowledgeService extends KnowledgeService, KnowledgeRegis
 export interface RegisterProjectWrite {
   /** 工作区 canonical 路径（注册行 ws_path 键——upsert 内 canonical 化） */
   readonly wsPath: string
-  /** 知识目录（缺省 = `<wsPath>/.knowledge`——列退役后产品面恒缺省派生） */
+  /** 知识目录（缺省 = config.knowledgeDir 解析（1.5——字面量/per-project map），再回退 `<wsPath>/.knowledge` 派生） */
   readonly knowledgeDir?: string
   /** API 级 projectId（fix-2 一级解析动态化：落注册行 project_id 列——config 静态表未命中时回查此列） */
   readonly projectId?: string

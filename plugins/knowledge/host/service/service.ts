@@ -112,6 +112,12 @@ export interface KnowledgeServiceDeps {
    * 索引重建缝（缺省 = storage rebuildKnowledgeIndex；注入缝供测试替身）。
    */
   readonly rebuild?: (wsPath: string, opts: { emit?: DiagEmitter; silent?: boolean }) => { indexed: number; skipped: number }
+  /**
+   * 项目知识目录缺省解析缝（1.5 提案项 4 config.knowledgeDir——host/index 装配注入，
+   * 非法值已在注入侧回退缺省 + warn 埋点；缺席 = 恒缺省 {wsPath}/.knowledge——
+   * config 引入前行为）。解析零 IO，物化在消费点（读时 mkdir recursive）。
+   */
+  readonly resolveDefaultKnowledgeDir?: (projectDir: string) => string
 }
 
 // ── 行形状（v4：entries 权威投影 + FTS 权威面 join） ──
@@ -476,7 +482,13 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
   /** 注册行写入（第九法）：目录缺则递归建 → upsert 注册行（幂等，projectId 落 project_id 列）；
    *  成败均发 knowledge-register 事件（SC-10）。建目录失败 = 抛（host wiring 侧 fail-soft 记账）。 */
   async function registerProjectRow(input: { wsPath: string; knowledgeDir?: string; projectId?: string }): Promise<void> {
-    const dir = input.knowledgeDir ?? joinDirSegment(input.wsPath, '.knowledge')
+    // 缺省派生单源（1.5 提案项 4）：config.knowledgeDir 解析缝（host/index 注入——显式
+    // 字面量 / per-project map / 缺省 {wsPath}/.knowledge）；物化在此消费点（读时 mkdir
+    // recursive——不在 apply 期预建）。
+    const dir =
+      input.knowledgeDir
+      ?? deps.resolveDefaultKnowledgeDir?.(input.wsPath)
+      ?? joinDirSegment(input.wsPath, '.knowledge')
     try {
       mkdirSync(dir, { recursive: true })
     } catch (cause) {
@@ -556,7 +568,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
   const supersedes = createSupersedeGateway({ db, emit })
 
   // ── 存量收编面（scan-register.ts——scan 只读体检 + register 幂等注册） ──
-  const scanRegister = createScanRegister({ db, emit })
+  const scanRegister = createScanRegister({ db, emit, resolveDefaultKnowledgeDir: deps.resolveDefaultKnowledgeDir })
 
   // ── 人工裁决写面（review.ts——confirmBatch/rejectBatch/moveEntry/updateEntry/createDomain；
   //    entryId→slug 映射在本门面（selectEntryByRowid 惯例），通道层/host 零解析） ──

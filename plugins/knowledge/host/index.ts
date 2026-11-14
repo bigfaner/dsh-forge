@@ -28,6 +28,7 @@ import {
 import { dirname } from 'node:path'
 import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
 import { joinDirSegment } from '@dsh-forge/path-key'
+import { defaultKnowledgeDirOf, resolveKnowledgeDir, type KnowledgeDirSetting } from './knowledge-dir.js'
 import type { BackflowConfig } from './service/types.js'
 import type { KnowledgeContextFace } from './tools/index.js'
 
@@ -54,6 +55,14 @@ export interface KnowledgePluginConfig {
    * 回流的检索分阈 + 滞回（每对限次 + 冷却窗））。
    */
   backflow?: BackflowConfig
+  /**
+   * 项目知识目录覆盖面（1.5 提案项 4）：字面量（全项目单目录）或 per-project map
+   * （键 = 项目工作区目录 projectDir/wsPath）。缺席 = 缺省 {projectDir}/.knowledge；
+   * 非法值 = 消费点 fail-soft 回退缺省 + warn 埋点（不静默）。物化在消费点（读时
+   * mkdir recursive——不在 apply 期预建，WYSIWYG + ACL 时序；解析纯函数见
+   * host/knowledge-dir.ts）。
+   */
+  knowledgeDir?: KnowledgeDirSetting
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -164,11 +173,27 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       staticResolveProjectId(cwd) ?? storage.registry.findByWsPath(cwd)?.projectId ?? undefined
     const resolveWsPath: WsPathResolver = (projectId) =>
       staticResolveWsPath(projectId) ?? storage.registry.findByProjectId(projectId)?.wsPath ?? undefined
+    // 项目知识目录解析缝（1.5 提案项 4）：注册/收编消费点的缺省派生改经 config 纯解析
+    // （host/knowledge-dir.ts resolveKnowledgeDir）；非法回退缺省 + warn 埋点（不静默）。
+    // 目录物化仍在消费点（读时 mkdir recursive——apply 期零预建）。
+    const resolveDefaultKnowledgeDir = (projectDir: string): string => {
+      const dir = resolveKnowledgeDir(config, projectDir)
+      if (dir !== undefined) return dir
+      diagEmit?.({
+        event: 'knowledge-dir',
+        level: 'warn',
+        message: `config.knowledgeDir 非法（回退缺省 {projectDir}/.knowledge）：projectDir=${projectDir}`,
+        process: 'main',
+      })
+      return defaultKnowledgeDirOf(projectDir)
+    }
+
     // A2 服务切换：八法服务面 + stage② 写门三法（自持库供数 + 两级解析第一级 config 静态绑定表）
     const service = createKnowledgeService({
       db: storage.db,
       resolveWsPath,
       emit: diagEmit,
+      resolveDefaultKnowledgeDir,
       ...(config.backflow !== undefined ? { backflow: config.backflow } : {}),
     })
     /** 注册库在场判定 + 顶域实时聚合（动态段 turn 期门控 + 供数面——静态段无条件注入） */
@@ -254,6 +279,12 @@ export type {
   WsPathResolver,
 } from './tools/index.js'
 export type { KnowledgeDirKeyDeclaration } from './tools/faces.js'
+export {
+  defaultKnowledgeDirOf,
+  KNOWLEDGE_DIR_DEFAULT_SEGMENT,
+  resolveKnowledgeDir,
+} from './knowledge-dir.js'
+export type { KnowledgeDirSetting } from './knowledge-dir.js'
 export {
   createKnowledgeService,
   EntryNotFoundError,

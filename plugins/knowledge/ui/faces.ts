@@ -1,8 +1,10 @@
-// knowledge 族三面注册面（knowledge-plugin-migration 1.4 子提交 b——自 project 包
+// knowledge 族面注册面（knowledge-plugin-migration 1.4 子提交 b——自 project 包
 // ui/knowledge-face.ts git mv 随迁本插件，注册归插件域 fix-13 模式；project 注册行同批退役
-// ——杜绝双写源）。三面：① main keyed 'dswf-knowledge'（知识视图面板——inject 携 workbench
+// ——杜绝双写源）。1.4 三面：① main keyed 'dswf-knowledge'（知识视图面板——inject 携 workbench
 // 桥）；② sidebar.panellist 行 'dswf-knowledge'（官方 PanelRow 行——label 经本插件 NS 词典
 // thunk）；③ conversation.view 'dswf-recall'（知识召回页签——ui-trajectory 同型先例）。
+// 1.5 增第四面：④ 项目台 keyed 'project.section.knowledge-dir'「知识库目录」只读节
+// （registerKnowledgeDirSection——gate 复用 + safeRegister 降级只降本节）。
 //
 // 门控语义（提案门控缝修正）：knowledgeGateOf 双门控取或——
 //   G-A dsh-forge 集成态：壳发布 __DSH_FORGE_HOST_PLUGINS__.knowledge（壳 bootShell 于就绪门
@@ -18,11 +20,12 @@
 // （缺席 = undefined 递达，面板联动面 fail-soft；桥本体 = 壳 C 类域不随迁；类型切片 =
 // shared/workbench-bridge.ts 下沉件）。bundle 自含纪律：keyed-section / locale / 小件均本包
 // 自含副本或镜像（mirrors-pin 对账）。
-import { registerKeyedSection, type SectionSlotsFace } from './keyed-section.js'
+import { registerKeyedSection, KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT, type SectionSlotsFace } from './keyed-section.js'
 import { FORGE_KNOWLEDGE_LOCALE_DICTS, FORGE_KNOWLEDGE_LOCALE_NS, type LocaleServiceFace } from './locale.js'
 import { ForgeKnowledgeGlyph } from './KnowledgeGlyph.js'
 import { ForgeKnowledgePanel } from './KnowledgePanel.js'
 import { ForgeRecallView } from './RecallTab.js'
+import { KnowledgeDirSection, KNOWLEDGE_DIR_SECTION_KEY, KNOWLEDGE_DIR_SECTION_LABEL } from './knowledge-dir-section.js'
 import type { WorkbenchBridgeMirror } from '../shared/workbench-bridge.js'
 
 /** 官方 main 面板 keyed 槽名（ui-layout AppFrame root——官方全局面板径） */
@@ -146,6 +149,36 @@ export function registerKnowledgeFaces(
   return { registered, knowledgeEnabled }
 }
 
+/**
+ * 项目台「知识库目录」只读节注册（knowledge-plugin-migration 1.5 提案项 4——单向零写面）：
+ * 官方缝 = project.section.knowledge-dir（槽名/行协议自 plugins/project/ui keyed-section.ts
+ * 正本读源核销后落座——只插孔纪律；bundle 自含副本逐字 pin = mirrors-pin）。门控复用
+ * knowledgeGateOf（1.4 双门控——G-A 壳缝 ∪ G-B whileServed 现查）；降级 = registerKeyedSection
+ * 内 safeRegisterSection 单行守卫——异常只降本节，不阻宿主不阻其余三面；缺席路径（gate
+ * false / slots 劣形 / 同 cell 占用）diag 留痕不静默（AGENTS §7）。
+ */
+export function registerKnowledgeDirSection(
+  slots: SectionSlotsFace,
+  ctx: unknown = undefined,
+): { registered: boolean; knowledgeEnabled: boolean } {
+  const knowledgeEnabled = knowledgeGateOf(ctx)
+  if (!knowledgeEnabled) {
+    console.info('[dsh-forge/knowledge] knowledge-dir section gate=false——零登记（缺席路径 diag 可观测）')
+    return { registered: false, knowledgeEnabled }
+  }
+  const dispose = registerKeyedSection(slots, {
+    slot: KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT,
+    key: KNOWLEDGE_DIR_SECTION_KEY,
+    label: KNOWLEDGE_DIR_SECTION_LABEL,
+    component: KnowledgeDirSection,
+  })
+  if (dispose === undefined) {
+    console.warn('[dsh-forge/knowledge] knowledge-dir section not mounted——slots face unavailable / register 降级（fail-soft 只降本节）')
+    return { registered: false, knowledgeEnabled }
+  }
+  return { registered: true, knowledgeEnabled }
+}
+
 /** knowledge 词典登记（门控在场才登记——一次登记面，重复登记抛错 fail-soft 降级） */
 function registerKnowledgeLocale(locale: LocaleServiceFace): void {
   if (typeof locale.register !== 'function') return
@@ -187,6 +220,14 @@ export const knowledgeClient = {
       console.info(`[dsh-forge/knowledge] knowledge faces registered=[${kn.registered.join(', ')}] enabled=${kn.knowledgeEnabled}`)
     } catch (error) {
       console.warn('[dsh-forge/knowledge] knowledge faces registration interrupted', error)
+    }
+    // ④ 项目台知识目录只读节（1.5 提案项 4——project.section.knowledge-dir 官方缝；
+    // 注册异常 = fail-soft 降级只降本节，缺席 diag 留痕不静默）
+    try {
+      const kd = registerKnowledgeDirSection(slots, ctx)
+      console.info(`[dsh-forge/knowledge] knowledge-dir section registered=${kd.registered} enabled=${kd.knowledgeEnabled}`)
+    } catch (error) {
+      console.warn('[dsh-forge/knowledge] knowledge-dir section registration interrupted', error)
     }
     return undefined
   },

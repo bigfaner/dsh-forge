@@ -53,8 +53,17 @@ export function isSystemDir(dir: string): boolean {
 }
 
 /** 系统盘外卷根（UNC 根/网络卷）与不可达路径的注册键不拒 unreachable——建面语义承载 */
-export function createScanRegister(deps: { db: Database.Database; emit?: DiagEmitter }) {
+export function createScanRegister(deps: {
+  db: Database.Database
+  emit?: DiagEmitter
+  /** 项目知识目录缺省解析缝（1.5 config.knowledgeDir——service 工厂透传；缺席 = 恒缺省 {wsPath}/.knowledge） */
+  resolveDefaultKnowledgeDir?: (projectDir: string) => string
+}) {
   const { db, emit } = deps
+  // 缺省派生单源（1.5 提案项 4）：config 解析缝在场走缝（显式字面量 / per-project map），
+  // 缺席 = 既有缺省 join（config 引入前行为零漂移）；物化在消费点（读时 mkdir recursive）。
+  const defaultDirOf = (projectDir: string): string =>
+    deps.resolveDefaultKnowledgeDir !== undefined ? deps.resolveDefaultKnowledgeDir(projectDir) : join(projectDir, '.knowledge')
   const registry = createKnowledgeRegistry(db)
 
   /**
@@ -138,11 +147,11 @@ export function createScanRegister(deps: { db: Database.Database; emit?: DiagEmi
     // reparse 检查在 canonical 化之前（realpath 会展开符号链接/junction——先验原拼写）
     const rawKnowledgeDir = q.knowledgeDir !== undefined && q.knowledgeDir !== ''
       ? q.knowledgeDir
-      : join(canonicalWsPath(q.wsPath), '.knowledge')
+      : defaultDirOf(q.wsPath)
     const wsPath = canonicalWsPath(q.wsPath)
     const knowledgeDir = q.knowledgeDir !== undefined && q.knowledgeDir !== ''
       ? canonicalWsPath(q.knowledgeDir)
-      : join(wsPath, '.knowledge')
+      : defaultDirOf(wsPath)
     const reject = (reason: 'system-dir' | 'reparse-point' | 'unreachable', detail: string): RegisterKnowledgeOutcome => {
       emitStorageDiag(
         emit,
