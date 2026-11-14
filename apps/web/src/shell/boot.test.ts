@@ -167,4 +167,32 @@ describe('bootShell 宿主插件位发布（bug 2ffb0a82：manifest.knowledgePlu
       spy.mockRestore()
     }
   })
+  it('knowledge 装载位掌舵门控（1.4 收口：位 true = 掌舵；缺席/false = 不掌舵——faces 另有 knowledgeGateOf 双门控裁决）', async () => {
+    const knowledge = (): ProductClientEntry => ({
+      id: '@dsh-forge/knowledge',
+      url: 'knowledge-client.js?rev=b1',
+      rev: 'b1',
+    })
+    const boot = (manifestOver: Partial<BootManifestPayload>) => {
+      ;(globalThis as { __DSH_BOOT__?: unknown }).__DSH_BOOT__ = { entries: [], batches: [] }
+      ;(globalThis as { dshForge?: unknown }).dshForge = {
+        getBootManifest: () => Promise.resolve(manifest(manifestOver)),
+      }
+      return bootShell([product(), knowledge()])
+    }
+    const ids = () =>
+      ((globalThis as { __DSH_BOOT__?: { entries: { id: string }[] } }).__DSH_BOOT__?.entries.map((r) => r.id) ?? [])
+    const warn: string[] = []
+    const spy = vi.spyOn(console, 'warn').mockImplementation((line) => void warn.push(String(line)))
+    try {
+      await boot({ knowledgePlugin: true })
+      expect(ids()).toEqual(['@dsh-forge/web-client', '@dsh-forge/knowledge'])
+      // 位缺席（旧宿主 / loader 行关）= 不掌舵——knowledge client 半真不装载（fail-closed）
+      await boot({})
+      expect(ids()).toEqual(['@dsh-forge/web-client'])
+      expect(warn.some((line) => line.includes('@dsh-forge/knowledge'))).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })

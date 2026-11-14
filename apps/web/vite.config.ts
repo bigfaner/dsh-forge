@@ -71,6 +71,8 @@ export const QUOTE_REFERENCE_BUNDLE_FILE = 'quote-reference-client.js'
 export const SUPER_COMPOSER_BUNDLE_FILE = 'super-composer-client.js'
 /** expert-squad 插件 bundle 在壳 dist 的落位名（掌舵 url 文档相对引用同名）。 */
 export const EXPERT_SQUAD_BUNDLE_FILE = 'expert-squad-client.js'
+/** knowledge 插件 bundle 在壳 dist 的落位名（knowledge-plugin-migration 1.4——掌舵 url 文档相对引用同名）。 */
+export const KNOWLEDGE_BUNDLE_FILE = 'knowledge-client.js'
 
 /**
  * 独立插件包 bundle 发射（构建期原样复制 <pkg> dist/client.js 入壳 dist 根——该产物已按
@@ -142,6 +144,7 @@ const STEERING_BLOCKS = {
   quoteReference: /const quoteReferenceClient: ProductClientEntry = \{([\s\S]*?)\n\}/,
   superComposer: /const superComposerClient: ProductClientEntry = \{([\s\S]*?)\n\}/,
   expertSquad: /const expertSquadClient: ProductClientEntry = \{([\s\S]*?)\n\}/,
+  knowledge: /const knowledgeClient: ProductClientEntry = \{([\s\S]*?)\n\}/,
 } as const
 
 /**
@@ -223,10 +226,12 @@ export default defineConfig({
             assertPluginManifest('@dsh-forge/quote-reference', STEERING_BLOCKS.quoteReference, QUOTE_REFERENCE_BUNDLE_FILE),
             assertPluginManifest('@dsh-forge/super-composer', STEERING_BLOCKS.superComposer, SUPER_COMPOSER_BUNDLE_FILE),
             assertPluginManifest('@dsh-forge/expert-squad', STEERING_BLOCKS.expertSquad, EXPERT_SQUAD_BUNDLE_FILE),
+assertPluginManifest('@dsh-forge/knowledge', STEERING_BLOCKS.knowledge, KNOWLEDGE_BUNDLE_FILE),
             emitPluginBundle('@dsh-forge/input-history', INPUT_HISTORY_BUNDLE_FILE),
             emitPluginBundle('@dsh-forge/quote-reference', QUOTE_REFERENCE_BUNDLE_FILE),
             emitPluginBundle('@dsh-forge/super-composer', SUPER_COMPOSER_BUNDLE_FILE),
             emitPluginBundle('@dsh-forge/expert-squad', EXPERT_SQUAD_BUNDLE_FILE),
+emitPluginBundle('@dsh-forge/knowledge', KNOWLEDGE_BUNDLE_FILE),
           ]
         : []),
     perEnvironmentPlugin('dsh-forge-classic-shape-guard', (env) =>

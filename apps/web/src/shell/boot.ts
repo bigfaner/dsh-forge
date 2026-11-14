@@ -118,9 +118,16 @@ export async function bootShell(products: readonly ProductClientEntry[]): Promis
     const wire = (globalThis as BootGlobals).__DSH_BOOT__
     // bug 4d55ba98：expert-squad 掌舵门控——host loader 行未装载（开关关）时 client 半不掌舵
     //（所见即所得：插件页显示的状态 = 实际生效的状态；其余产品行无开关面，照常掌舵）。
+    // knowledge-plugin-migration 1.4 门控收口：knowledge 独立 client bundle 同批入图——
+    // manifest.knowledgePlugin 缺席/false 时壳掌舵让位（expert-squad 同款先例；三面呈现
+    // 另有 faces.ts knowledgeGateOf 双门控裁决——壳缝 false = 零装载零登记，fail-closed）。
     const steerable = products.filter((productItem) => {
       if (productItem.id !== '@dsh-forge/expert-squad' || manifest.expertSquadPlugin === true) return true
       console.warn(`[dsh-forge web] expert-squad 装载位关（loader 行 disabled/缺席），壳掌舵让位：${productItem.id}`)
+      return false
+    }).filter((productItem) => {
+      if (productItem.id !== '@dsh-forge/knowledge' || manifest.knowledgePlugin === true) return true
+      console.warn(`[dsh-forge web] knowledge 装载位关（loader 行 disabled/缺席），壳掌舵让位：${productItem.id}`)
       return false
     })
     for (const product of steerable) {

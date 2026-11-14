@@ -55,6 +55,19 @@ const expertSquadClient: ProductClientEntry = {
   inject: ['@deepseek-ai/dsh-client-ui-settings'],
 }
 
+// knowledge 插件缺省装载行（knowledge-plugin-migration 1.4）：bundle = vite 构建期原样
+// 发射的 @dsh-forge/knowledge dist/client.js（官方 clientBundle 配方自注册 classic script，
+// vite.config emit 插件）；id 字面量与本包 bundle-client.mjs PLUGIN_ID 同源（自注册头）
+// ——不 import（资产零代码耦合）；rev 同用构建戳；零 boot 级 inject（slots/locale 等待
+// 边由插件对象 cordis inject 声明承担）。三面呈现 = bundle apply 期自注册（faces.ts），
+// 装载位门控归 bootShell（knowledgePlugin 缺席/false = 壳掌舵让位）+ knowledgeGateOf
+// 双门控兜底（expert-squad 同款先例）。
+const knowledgeClient: ProductClientEntry = {
+  id: '@dsh-forge/knowledge',
+  url: `knowledge-client.js?rev=${__DSH_FORGE_BUILD_REV__}`,
+  rev: __DSH_FORGE_BUILD_REV__,
+}
+
 // quote-reference 插件缺省装载行（super-composer/1.9，input-history 判例同构）：
 // bundle = vite 构建期原样发射的 @dsh-forge/quote-reference dist/client.js；
 // id/inject 与本包 package.json dsh.client 清单同源（vite.config 双真相源断言核销）。
@@ -105,7 +118,7 @@ if (decision.branch === 'restricted') {
   createRoot(el).render(createElement(ForgeRemoteView))
 } else {
   const entry = new AppWebEntry(el)
-  void bootShell([productClient, inputHistoryClient, expertSquadClient, quoteReferenceClient, superComposerClient])
+  void bootShell([productClient, inputHistoryClient, expertSquadClient, knowledgeClient, quoteReferenceClient, superComposerClient])
   // W4 行存续看门（session-binding-guarantee §W4）：活在壳 bundle 全局面——插件 fiber 内
   // 看门随插件同殁，检不出 prune。周期查 __DSH_FORGE_CLIENT__ 激活标记 + forge 洞位
   // ctx.slots.entries 计数（经插件发布的 __DSH_FORGE_HEALTH__ 探针）；插件侧 cordis

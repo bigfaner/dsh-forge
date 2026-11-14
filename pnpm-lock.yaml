@@ -213,6 +213,9 @@ importers:
       '@dsh-forge/input-history':
         specifier: workspace:*
         version: link:../../packages/plugins/input-history
+      '@dsh-forge/knowledge':
+        specifier: workspace:*
+        version: link:../../plugins/knowledge
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path
