@@ -40,4 +40,51 @@ export function assertClientBundleClassicScript(input: ClientBundleShapeInput): 
   if (!input.code.includes('__ModuleLoader__')) {
     throw new Error('vite: forge-client 产物未见 __ModuleLoader__ 注册面')
   }
+  // bug d84fd8e5（4a00a8d2 实锤）：import.meta 维度——classic script 求值即 SyntaxError
+  // （Cannot use 'import.meta' outside a module）→ 零注册。三结构 facet 均不覆盖该破坏
+  // （单 chunk + 全内联 + 零导出下 import.meta 照样在产物内）。经
+  // rewriteImportMetaForClassicScript 重写后此处应恒零残留；字面量噪声形态
+  // （字符串内 'import.meta' 词素）理论可误报——fail-loud 优于静默放行。
+  if (input.code.includes('import.meta')) {
+    throw new Error('vite: forge-client 产物含 import.meta——classic script 求值即 SyntaxError（d84fd8e5 形态，重写面失效或未知成员入图）')
+  }
+}
+
+/** import.meta.url 替换 token（与原词素等长——sourcemap 零漂移） */
+const IMPORT_META_URL_TOKEN = '__dshImportMeta'
+/** import.meta.resolve 替换 token（与原词素等长；垫片置 void 0 = 特征检测恒假，走 URL 回退） */
+const IMPORT_META_RESOLVE_TOKEN = '__dshHasMetaResolve'
+
+/**
+ * import.meta classic-safe 重写（bug d84fd8e5 修面）：
+ * - `import.meta.url` → `__dshImportMeta`、`import.meta.resolve` → `__dshHasMetaResolve`
+ *   （等长替换，既有 sourcemap mappings 逐字节有效）；
+ * - 垫片以 `var` 声明**追加**在产物尾部：classic 非 strict 下 var 声明提升至 script 顶，
+ *   赋值于求值尾完成——vite preload 助手与动态 import 装载箭头对 token 的全部解引用
+ *   均在惰性函数体内（用户动作期），求值期零解引用，基线 = 装载本 bundle 的
+ *   `<script src>`（document.currentScript.src）；
+ * - 未知 import.meta 成员（env/supports 等）fail-loud 拒绝——重写面只覆盖已实锤的
+ *   url/resolve 两形，新形态必须显式进契约，不许静默漏检。
+ */
+export function rewriteImportMetaForClassicScript(code: string): { code: string; replacedCount: number } {
+  const urlCount = code.split('import.meta.url').length - 1
+  const resolveCount = code.split('import.meta.resolve').length - 1
+  if (urlCount === 0 && resolveCount === 0) {
+    if (code.includes('import.meta')) {
+      throw new Error('vite: forge-client 产物含未知 import.meta 成员（仅 url/resolve 在重写契约内）——先扩契约再构建')
+    }
+    return { code, replacedCount: 0 }
+  }
+  const rewritten = code
+    .replaceAll('import.meta.resolve', IMPORT_META_RESOLVE_TOKEN)
+    .replaceAll('import.meta.url', IMPORT_META_URL_TOKEN)
+  if (rewritten.includes('import.meta')) {
+    throw new Error('vite: forge-client 产物含未知 import.meta 成员（仅 url/resolve 在重写契约内）——先扩契约再构建')
+  }
+  const shim = `;var ${IMPORT_META_URL_TOKEN}=(typeof document!=="undefined"&&document.currentScript&&document.currentScript.src)||(typeof location!=="undefined"?location.href:"");var ${IMPORT_META_RESOLVE_TOKEN}=void 0;`
+  // 尾部 sourcemap 注释保持在文件末行（垫片插于其前——注释后追加会被吞进注释行）
+  const mapMatch = /\/\/# sourceMappingURL=\S+\s*$/.exec(rewritten)
+  if (mapMatch === null) return { code: rewritten + shim, replacedCount: urlCount + resolveCount }
+  const body = rewritten.slice(0, mapMatch.index)
+  return { code: `${body}${shim}\n${mapMatch[0]}`, replacedCount: urlCount + resolveCount }
 }

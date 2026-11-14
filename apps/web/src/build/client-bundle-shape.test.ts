@@ -7,7 +7,7 @@
 // import/export 词素（TextMate 语法 JSON `import(?=\s*\(`、jsdoc 高亮正则 `exports?`
 // 实录）——检测面改 bundle 元数据结构三facet（chunk 数 / 外部 import / 导出名）。
 import { describe, expect, it } from 'vitest'
-import { assertClientBundleClassicScript } from './client-bundle-shape.js'
+import { assertClientBundleClassicScript, rewriteImportMetaForClassicScript } from './client-bundle-shape.js'
 
 /** 合法形状输入（自含注册体 + 单 chunk + 零外部 import + 零导出） */
 const ok = (overrides: Partial<Parameters<typeof assertClientBundleClassicScript>[0]> = {}): Parameters<typeof assertClientBundleClassicScript>[0] => ({
@@ -45,5 +45,50 @@ describe('assertClientBundleClassicScript（vite 形状 pin 纯函数面）', ()
       'var g={"match":"(?<![$_])import(?=\\\\s*\\\\(\\\\s*[\\"\'`])","name":"keyword.operator.expression.import.ts"};'
       + 'var hl=/((@)(?:alias|exports?|extends))\\\\s+/;'
     expect(() => assertClientBundleClassicScript(ok({ code: literalNoise + ok().code }))).not.toThrow()
+  })
+
+  it('bug d84fd8e5：产物含 import.meta（classic script 求值即 SyntaxError）拒绝', () => {
+    expect(() => assertClientBundleClassicScript(ok({ code: 'function s(e){return import.meta.resolve?new URL(import.meta.resolve(e)):new URL(e,import.meta.url)}' + ok().code })))
+      .toThrow(/import\.meta/)
+    expect(() => assertClientBundleClassicScript(ok({ code: 'Q(function(){},void 0,import.meta.url)' + ok().code })))
+      .toThrow(/import\.meta/)
+  })
+})
+
+describe('rewriteImportMetaForClassicScript（import.meta classic-safe 重写纯函数面）', () => {
+  /** vite preload 助手实录形态（worktree 4a00a8d2 dist 实锤——56 处 Q 调用 + 助手体 3 处） */
+  const viteHelperShape =
+    'function s(e){return import.meta.resolve?new URL(import.meta.resolve(e)):new URL(e,import.meta.url)}'
+    + 'Q(function(){},void 0,import.meta.url);'
+
+  it('RED 反例基线：vite preload 助手形态当前被 pin 放行（缺口钉住）', () => {
+    expect(() => assertClientBundleClassicScript(ok({ code: viteHelperShape + ok().code }))).toThrow(/import\.meta/)
+  })
+
+  it('url/resolve 全量替换：产物零 import.meta 残留，且重写后通过形状 pin', () => {
+    const { code, replacedCount } = rewriteImportMetaForClassicScript(viteHelperShape + ok().code)
+    expect(replacedCount).toBe(4)
+    expect(code.includes('import.meta')).toBe(false)
+    expect(() => assertClientBundleClassicScript(ok({ code }))).not.toThrow()
+  })
+
+  it('替换 token 等长（sourcemap 零漂移）+ 垫片追加（var 提升保惰性引用可解）', () => {
+    const { code } = rewriteImportMetaForClassicScript(viteHelperShape)
+    expect('__dshImportMeta'.length).toBe('import.meta.url'.length)
+    expect('__dshHasMetaResolve'.length).toBe('import.meta.resolve'.length)
+    expect(code.includes('__dshImportMeta=(typeof document!=="undefined"&&document.currentScript&&document.currentScript.src)')).toBe(true)
+    expect(code.includes('__dshHasMetaResolve=void 0')).toBe(true)
+    expect(code.startsWith('function s(e){return __dshHasMetaResolve?new URL(__dshHasMetaResolve(e)):new URL(e,__dshImportMeta)}')).toBe(true)
+  })
+
+  it('未知 import.meta 成员（如 import.meta.env）fail-loud 拒绝重写', () => {
+    expect(() => rewriteImportMetaForClassicScript('var x=import.meta.env;')).toThrow(/import\.meta/)
+  })
+
+  it('零 import.meta 输入原样返回（replacedCount = 0，不追加垫片）', () => {
+    const raw = ok().code
+    const { code, replacedCount } = rewriteImportMetaForClassicScript(raw)
+    expect(replacedCount).toBe(0)
+    expect(code).toBe(raw)
   })
 })

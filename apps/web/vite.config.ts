@@ -10,7 +10,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { defineConfig, perEnvironmentPlugin, type Plugin } from 'vite'
-import { assertClientBundleClassicScript } from './src/build/client-bundle-shape.js'
+import { assertClientBundleClassicScript, rewriteImportMetaForClassicScript } from './src/build/client-bundle-shape.js'
 import { assertPluginSteeringLine } from './src/build/plugin-manifest.js'
 
 const src = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url))
@@ -26,6 +26,22 @@ function rejectStandaloneServe(): Plugin {
     name: 'dsh-forge-reject-standalone-web-serve',
     config(_config, env) {
       if (env.command === 'serve') throw new Error(STANDALONE_ERROR)
+    },
+  }
+}
+
+/**
+ * import.meta classic-safe 重写（bug d84fd8e5——client-plugin 图内 MarkdownText → shiki
+ * 语言动态 import → vite preload 助手携带 import.meta，classic script 求值即 SyntaxError）。
+ * 先于形状 pin 运行（插件序），重写后 pin 的 import.meta 零残留断言收口。
+ */
+function rewriteClientBundleImportMeta(): Plugin {
+  return {
+    name: 'dsh-forge-rewrite-client-bundle-import-meta',
+    generateBundle(_options, bundle) {
+      const chunk = Object.values(bundle).find((file) => file.type === 'chunk' && file.name === 'client-plugin')
+      if (chunk === undefined) throw new Error('vite: forge-client 入口产物缺席（rollup input client-plugin 未产出）')
+      chunk.code = rewriteImportMetaForClassicScript(chunk.code).code
     },
   }
 }
@@ -77,6 +93,10 @@ function emitPluginBundle(pkgName: string, bundleFile: string): Plugin {
       }
       if (!source.includes('window.__ModuleLoader__.load') || !source.includes(`"${pkgName}"`)) {
         throw new Error(`vite: ${pkgName} client bundle 非官方自注册形状（${bundlePath}）`)
+      }
+      // classic 形态 import.meta 零容忍（bug d84fd8e5 同破坏面——官方 bundle 亦以 <script> 装载）
+      if (source.includes('import.meta')) {
+        throw new Error(`vite: ${pkgName} client bundle 含 import.meta——classic script 求值即 SyntaxError（d84fd8e5 形态）`)
       }
       this.emitFile({ type: 'asset', fileName: bundleFile, source })
     },
@@ -209,7 +229,7 @@ export default defineConfig({
             emitPluginBundle('@dsh-forge/expert-squad', EXPERT_SQUAD_BUNDLE_FILE),
           ]
         : []),
-    perEnvironmentPlugin('dsh-forge-pin-client-bundle-shape', (env) =>
-      env.name === 'forgeClient' ? [pinClientBundleShape()] : []),
+    perEnvironmentPlugin('dsh-forge-classic-shape-guard', (env) =>
+      env.name === 'forgeClient' ? [rewriteClientBundleImportMeta(), pinClientBundleShape()] : []),
   ],
 })
