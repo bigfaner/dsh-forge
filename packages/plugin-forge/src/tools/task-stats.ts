@@ -1,7 +1,7 @@
 // taskStats tool 定义（定位：业务——主 agent 任务域读面扩员，main-agent-task-tools ②）。
 // core 服务已有（forge/tasks list.ts taskStats——GUI chips 同源同口径），本壳零 core 改动，
 // 直透：source 可选作用域（source_kind/source_slug 成对——optionalPair 禁半对，同 addTask
-// 口径；缺省 = 全库）→ TaskStatsQuery。返回 = total + 八态分布 + unmetPending。
+// 口径；缺省 = 全库）→ TaskStatsQuery。返回 = total + 八态分布 + unmetPending + gatedPending。
 // 参照 query-task.ts 薄壳模式：参数执行点防御收窄 / callToolFace 路由（typed 错误 → 失败
 // DTO formatErr + tool-error 事件发射）/ formatOk 成功渲染。
 import { TASK_STATUSES } from '@dsh-forge/contracts'
@@ -47,8 +47,15 @@ export const TASK_STATS_OUTPUT_SCHEMA = withFailureVariant({
       type: 'number',
       description: 'Pending tasks whose prerequisites are not all completed/skipped.',
     },
+    // Root cause: core 自 loop-phase-gate B4 起返回 gatedPending（pending ∧ 被容器实现链阶段门
+    // 持有），本 schema 漏同步（additionalProperties:false 拒额外键）→ host oneOf 回执校验双支
+    // 皆不匹配（bug 22c09d93 同族——dispatchTask 侧已修，taskStats 侧漏网）。
+    gatedPending: {
+      type: 'number',
+      description: 'Pending tasks held by the container implementation-chain phase gate.',
+    },
   },
-  required: ['total', 'byStatus', 'unmetPending'],
+  required: ['total', 'byStatus', 'unmetPending', 'gatedPending'],
 })
 
 /** TaskStats → 模型可见文本（formatOk：✓ 首行 + total/八态/unmetPending 键值行） */

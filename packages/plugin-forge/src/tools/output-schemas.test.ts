@@ -181,7 +181,7 @@ describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执�
     expectValid('listTasks', schemaOf(createListTasksTool(DEPS)), projectCards([TASK_CARD]))
   })
 
-  it('taskStats：total + 八态闭集分布 + unmetPending', () => {
+  it('taskStats：total + 八态闭集分布 + unmetPending + gatedPending', () => {
     expectValid('taskStats', schemaOf(createTaskStatsTool(DEPS)), {
       total: 3,
       byStatus: {
@@ -195,6 +195,25 @@ describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执�
         rejected: 0,
       },
       unmetPending: 1,
+      gatedPending: 0,
+    })
+  })
+
+  it('taskStats：真实 TaskStats 含 gatedPending 过 schema（实现加字段 schema 漏同步防回退锚，bug 22c09d93 同族——dispatchTask 侧锚的 taskStats 镜像）', () => {
+    expectValid('taskStats', schemaOf(createTaskStatsTool(DEPS)), {
+      total: 2,
+      byStatus: {
+        pending: 1,
+        in_progress: 0,
+        completed: 1,
+        blocked: 0,
+        suspended: 0,
+        interrupted: 0,
+        skipped: 0,
+        rejected: 0,
+      },
+      unmetPending: 1,
+      gatedPending: 1,
     })
   })
 
