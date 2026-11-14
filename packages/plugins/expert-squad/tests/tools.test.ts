@@ -314,6 +314,27 @@ describe("recruit_expert — 工具级 description 双层口径", () => {
   });
 });
 
+describe("recruit_expert — 档案书写体系纪律（参数 description 承载：2026-11-15 裁决四维归档案写径）", () => {
+  it("description 参数要求双句口径（做什么 + 不做什么，场景唯一命中）", () => {
+    const params = makeTools().recruit_expert!.parameters as {
+      properties: Record<string, { description?: string }>;
+    };
+    const desc = params.properties.description?.description ?? "";
+    expect(desc).toContain("what it does NOT do");
+    expect(desc).toContain("exactly one expert");
+  });
+
+  it("personaMd 参数承载体系完整性纪律（职责互斥/档案自含/口径一致）", () => {
+    const params = makeTools().recruit_expert!.parameters as {
+      properties: Record<string, { description?: string }>;
+    };
+    const desc = params.properties.personaMd?.description ?? "";
+    expect(desc).toContain("mutually exclusive");
+    expect(desc).toContain("self-contained");
+    expect(desc).toContain("consistent");
+  });
+});
+
 describe("update_expert — name 建档后不可改 + 不存在键 fail-loud", () => {
   beforeEach(async () => {
     await refresh();

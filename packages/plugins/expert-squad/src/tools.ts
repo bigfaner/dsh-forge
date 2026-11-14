@@ -74,7 +74,12 @@ const EXPERT_KEY = z
 const recruitParams = z.object({
   name: EXPERT_KEY.describe("Expert key (lowercase english, unique, immutable after creation)"),
   title: z.string().min(1).describe("Short title shown in selection UI"),
-  description: z.string().min(1).describe("What this expert does (selection basis, <=120 chars advised)"),
+  description: z
+    .string()
+    .min(1)
+    .describe(
+      "What this expert does + what it does NOT do (two-sentence selection basis; each typical scenario routes to exactly one expert, <=120 chars advised)",
+    ),
   tools: z.array(z.string()).min(1).describe("Tool whitelist keys mapped to toolFilter at dispatch"),
   skills: z.array(z.string()).optional().describe("Optional skill tags"),
   model: z.string().optional().describe("Optional dispatch model preference"),
@@ -91,7 +96,12 @@ const recruitParams = z.object({
   personaMd: z
     .string()
     .min(1)
-    .describe("Persona markdown body (sections like 职责/边界/信条); bare {{ is not allowed"),
+    .describe(
+      "Persona markdown body (sections like 职责/边界/信条); bare {{ is not allowed. " +
+        "System integrity: duties must be mutually exclusive with other experts (no overlapping territory); " +
+        "the archive must be self-contained (no reliance on repo paths or other archives); " +
+        "criteria shared across archives must stay consistent",
+    ),
 });
 
 // update_expert 同形但无 target——编辑恒写回原层（来源保持），不换层
