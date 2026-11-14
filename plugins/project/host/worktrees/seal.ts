@@ -33,9 +33,22 @@ export function createSealChannel(ctx: WorktreeServiceContext, bind: BindEvents)
     const resolution = await ctx.cachedResolve(cwd)
     if (resolution === null) return { isGit: false, sealed: false, binding: null }
     const branch = await ctx.resolveBranch(cwd)
-    // R5：在场性拦截回调内现查（listPresent 实时 git worktree list——不消费切换时点快照）
-    const present = await ctx.listPresent(resolution.projectRoot).catch(() => [] as string[])
-    const decision = evaluateSeal({ worktreePath: cwd, branch }, present)
+    // R5：在场性拦截回调内现查（listPresent 实时 git worktree list——不消费切换时点快照）。
+    // P0-1：listPresent 失败 = 在场性不可判定 ≠ 树已删——禁止静默折叠空集（空集会被
+    // seal-guard 恒判 sealed → git 瞬时故障即误封存）。warn 留痕 + presentUnknown=true
+    // 显式降级（fail-open 于瞬时 IO，fail-loud 于诊断；seal 判定本次不封存）。
+    let presentUnknown = false
+    let present: readonly string[] = []
+    try {
+      present = await ctx.listPresent(resolution.projectRoot)
+    } catch (cause) {
+      presentUnknown = true
+      ctx.warn(
+        `[git-worktree] worktree-seal-degraded：在场清单现查失败（presentUnknown 显式降级——seal 判定本次不封存）：` +
+          `projectRoot=${resolution.projectRoot}：${String(cause)}`,
+      )
+    }
+    const decision = presentUnknown ? { sealed: false } : evaluateSeal({ worktreePath: cwd, branch }, present)
     // aheadBehind = 树级操作（cwd 纪律同 aheadBehind 通道）——host 解析面单点，随 seal 通道
     // 一次带回（chip §2.3.1 内联展示数据源）；branch 落空（detached/unborn）= null 零注入
     const counts = branch === '' ? null : await aheadBehind(cwd, branch).catch(() => null)
@@ -95,6 +108,7 @@ export function createSealChannel(ctx: WorktreeServiceContext, bind: BindEvents)
       worktreeName: worktreeNameOf(cwd),
       aheadBehind: counts,
       branchDrift,
+      ...(presentUnknown ? { presentUnknown: true } : {}),
     }
   }
 }

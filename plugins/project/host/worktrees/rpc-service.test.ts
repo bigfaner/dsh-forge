@@ -281,6 +281,24 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(await unboundSvc.seal({ sessionId: 's1' })).toEqual({ isGit: false, sealed: false, binding: null })
   })
 
+  it('P0-1 seal 误封存修复：listPresent 失败显式降级——sealed=false + presentUnknown + warn 留痕（fail-open 于瞬时 IO）', async () => {
+    const warns: string[] = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionPersistence: fakePersistence({}, { s1: { cwd: WT_A } }).persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      listPresent: async () => {
+        throw new Error('git worktree list 超时')
+      },
+      warn: (line) => warns.push(line),
+    })
+    const result = await service.seal({ sessionId: 's1' } satisfies WorktreeSealRequest)
+    expect(result.sealed, '在场性不可判定 ≠ 树已删——不得误封存').toBe(false)
+    expect(result.presentUnknown, 'presentUnknown 显式降级态可区分').toBe(true)
+    expect(warns.join('\n'), '失败路径 warn 诊断在案').toContain('worktree-seal-degraded')
+    expect(warns.join('\n')).toContain('C:/repo')
+  })
+
   it('seal 非零注入短路：request.cwd 命中非 git 能力缓存 → 零会话日志读（G7② 判序）+ bindDiag 零 emit', async () => {
     const opens = { value: 0 }
     const diagLines: string[] = []

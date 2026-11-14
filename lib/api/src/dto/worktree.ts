@@ -153,6 +153,12 @@ export interface WorktreeSealResult {
   /** 已退役（binding-derivation §2.1）：seal 改 header.cwd 推导后不再产出 blank 事件判读
    *  ——消费面回落账本 isBlank；字段保留 = 旧 web bundle 兼容读面 */
   readonly blank?: boolean
+  /**
+   * 在场性不可判定降级态（P0-1）：listPresent 现查失败 = 不可判定 ≠ 树已删——host 以
+   * sealed:false + presentUnknown:true 显式降级（seal 判定不封存），UI 可据此呈示降级面；
+   * 正常判定缺席该字段。
+   */
+  readonly presentUnknown?: boolean
 }
 
 /**
