@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/knowledge",
-  "version": "0.32.0",
+  "version": "0.32.1",
   "private": true,
   "type": "module",
   "description": "dsh 插件：knowledge_search / knowledge_read_abstract tool + forge:knowledge 系统提示词知识段 + 自持知识库存储与八法服务面（provide knowledge 服务——注册表/schema 版本线/并发纪律/两级解析）",
@@ -18,7 +18,8 @@
   },
   "files": [
     "dist",
-    "skills"
+    "skills",
+    "cordis.patch.yml"
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
@@ -43,5 +44,13 @@
     "esbuild": "0.24.2",
     "react": "18.3.1",
     "react-dom": "18.3.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
   }
 }
