@@ -59,12 +59,12 @@ export function buildProjectTarball(log: string[]): { tarball: string; version: 
   return { tarball, version: manifest.version }
 }
 
-/** 有界收模态（官方 UI 弹窗词汇——继续/知道了/开始使用/确定/完成/关闭，Escape 兜底） */
+/** 有界收模态（官方 UI 弹窗词汇——继续/知道了/开始使用/确定/完成/关闭/稍后配置，Escape 兜底） */
 async function clearDialogs(page: Page): Promise<void> {
   for (let i = 0; i < 6; i++) {
     if ((await page.locator('[role="dialog"]').count()) === 0) return
     let clicked = false
-    for (const name of ['继续', '知道了', '开始使用', '确定', '完成', '关闭']) {
+    for (const name of ['稍后配置', '继续', '知道了', '开始使用', '确定', '完成', '关闭']) {
       const button = page.getByRole('button', { name, exact: true }).first()
       if ((await button.count()) > 0) {
         await button.click({ force: true }).catch(() => {})

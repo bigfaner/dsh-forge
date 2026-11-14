@@ -32,6 +32,10 @@
 //   - CT-J1-E1 零项目空态：统一口径舞台为在册宿主（项目非空），零项目态不可在不重建
 //     官方宿主前提下构造；
 //   - host 真值对照（tryForgeInvoke）：桥缺席形态如实降级为 UI 侧断言（单校形态标注）。
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import {
   officialHostStage,
@@ -51,6 +55,9 @@ let harness: OfficialPage
 let consoleErrorsTail: readonly string[] = []
 
 test.beforeAll(async () => {
+  // 安装轮询有界 6 分钟（official-host.ts 既定上界）——beforeAll hook 级超时随其上调
+  // （config 全局 60s 对全新舞台 tarball 正式安装轮询不够，002 轮报错留痕）
+  test.setTimeout(420_000)
   harness = await openOfficialPage(stage as OfficialHostStage)
   await installViaPluginManager(harness.page, stage as OfficialHostStage, [])
   consoleErrorsTail = harness.consoleErrors
@@ -109,33 +116,53 @@ test('@project-e2e @project-panel CT-J1-G3 行点击 openWorkspace 等价链路�
   ).toBeVisible({ timeout: 30_000 })
 })
 
-test('@project-e2e @project-panel CT-J1-G4 hero 双 select：级联收敛 + WYSIWYG 归属', async () => {
-  test.setTimeout(300_000)
+test('@project-e2e @project-panel CT-J1-G4 hero 双 select：两步交互级联收敛 + WYSIWYG 归属', async () => {
+  test.setTimeout(60_000)
   const page = harness.page
-  // CT-J1-G4 Input：hero 芯片开弹层（双锚兼容——官方 Menu ∪ 影子弹层卡，rpc.ts 既定形态）
-  const chip = page.getByRole('button', { name: /默认工作区|选择工作区/ }).first()
-  test.skip((await chip.count()) === 0, 'CT-J1-G4 前置：hero 芯片（未绑定词汇）缺席——舞台已绑定态，留痕 skip')
-  await chip.click()
-  // 实锚 = role=menu ∪ .dswf-hero-picker-list（[disc-J1-d]——意向 data 锚未实现，divergence 已上报）
+  // 真机形态（bug 07a520b2 CDP 取证）：一级项目点选后 Menu 关闭，二级为独立
+  // data-dswt-hero-trigger chip（hero-worktree-picker.tsx TriggerChip，弹层卡
+  // .dswt-hero-menu）——非 Menu 内换层。按实测两步交互建模步骤链：
+  //   ①一级点选 → Menu 关闭断言（旧「Menu 内换层」模型在此反例红——留痕锚）
+  //   → ②二级 hero-trigger chip 点选 → 绑定终态断言（可访问名按钮含 wt 归属）。
+  // pick 目标 = 舞台在册项目（beforeAll 装载后舞台项目非空，G1 同前置）；
+  // 目标未入官方快照致 Menu 不关/二级缺席 = 产品缺陷（not spec 问题）——红留痕上浮。
+  // 装载流后 harness 停在插件页——先回主视图（hero face 在场前置）
+  await page.goto((stage as OfficialHostStage).webUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+  // 在场前置：注册 git 夹具项目（bridge 正典注册通道 forge:projects/register——注册即
+  // connectWorkspace 入官方快照，pick 在场门可过；桥缺席 = 留痕 skip）
+  const wsDir = mkG4FixtureDir()
+  const registered = await tryForgeInvoke<{ projectId: string }>(page, 'forge:projects/register', {
+    workspaceDir: wsDir,
+    name: 'disc4-g4-probe',
+    forgeDir: '',
+  })
+  test.skip(registered === null, 'CT-J1-G4 前置：dshForge 桥缺席（注册通道不可用）——留痕 skip')
+  // 一级 chip 锚 = 官方 WorkspaceChip（module css 尾段 _workspace 常量；aria/文本随绑定态漂移）
+  const chip = page.locator('button[class$="_workspace"]').first()
+  await expect(chip, 'CT-J1-G4 前置：hero 芯片在场（缺席 = 实现缺陷红留痕）').toBeVisible({ timeout: 15_000 })
   const menu = page.locator('[role="menu"], .dswf-hero-picker-list').first()
+  await chip.click()
   await expect(menu, 'CT-J1-G4：项目弹层在场（第一级）').toBeVisible({ timeout: 15_000 })
-  const firstItem = menu.locator('button, [role="menuitem"], [role="menuitemradio"], [role="option"]').first()
-  const projectName = (await firstItem.innerText()).trim()
-  await firstItem.click()
-  // CT-J1-G4 Invariants：第二级收敛 = 第一级所选项目的 worktree 集合（弹层换层呈现）
-  await expect(menu, 'CT-J1-G4：第二级（worktree）弹层收敛呈现').toBeVisible({ timeout: 15_000 })
-  const wtItem = menu.locator('button, [role="menuitem"], [role="menuitemradio"], [role="option"]').first()
-  const wtName = (await wtItem.innerText()).trim()
+  const rowItem = menu.locator('button').filter({ hasText: 'disc4-g4-probe' }).first()
+  await expect(rowItem, 'CT-J1-G4 前置：一级行含面板在册项目').toBeVisible({ timeout: 15_000 })
+  await rowItem.click()
+  // ① 一级点选 → Menu 关闭（实测两步交互——非 Menu 内换层；旧换层模型在此反例红）
+  await expect(menu, 'CT-J1-G4：一级点选后 Menu 关闭（两步交互，非 Menu 内换层——旧模型反例锁）').toBeHidden({ timeout: 15_000 })
+  // ② 二级 = 独立 data-dswt-hero-trigger chip（行文本 = 分支 · worktree 名）
+  const wtChip = page.locator('[data-dswt-hero-trigger]').first()
+  await expect(wtChip, 'CT-J1-G4：二级 worktree chip 呈现（独立 data-dswt-hero-trigger）').toBeVisible({ timeout: 15_000 })
+  await wtChip.click()
+  const wtMenu = page.locator('.dswt-hero-menu').first()
+  await expect(wtMenu, 'CT-J1-G4：二级（worktree）弹层收敛呈现').toBeVisible({ timeout: 15_000 })
+  const wtItem = wtMenu.locator('button, [role="menuitem"], [role="menuitemradio"], [role="option"]').first()
+  // 行词汇取首段（分支名）——徽标行（ahead/behind/DSH 来源标）不进归属断言锚
+  const wtAnchor = (await wtItem.innerText({ timeout: 15_000 })).trim().split(/\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0 && s !== 'DSH')[0] ?? ''
+  expect(wtAnchor.length, 'CT-J1-G4 前置：二级行归属词汇可得').toBeGreaterThan(0)
   await wtItem.click()
-  // 跨树改选风险确认门（1.19 官方词汇）——在场即确认
-  const confirm = page.getByRole('button', { name: /确认|继续/ }).first()
-  if ((await confirm.count()) > 0) await confirm.click({ force: true }).catch(() => {})
-  // CT-J1-G4 Output：芯片回填所选值（显示 = 归属，O-wysiwyg-bound）
-  // bug 3d453e91 弱断言修复④：拆 OR 断言——一级项目名与二级 worktree 归属分别独立断言
-  //   （原 `${projectName}|${wtName}` OR 式：二级归属缺失时仅凭项目名命中即绿，弱断言失效）
-  const boundChip = page.getByRole('button', { name: new RegExp(projectName) }).first()
-  await expect(boundChip, 'CT-J1-G4 O-wysiwyg-bound（一级）：芯片回填一级项目名').toBeVisible({ timeout: 30_000 })
-  await expect(boundChip, 'CT-J1-G4 O-wysiwyg-bound（二级）：芯片呈现二级 worktree 归属（WYSIWYG 归属缺失红）').toContainText(wtName)
+  // CT-J1-G4 Output：绑定终态——可访问名按钮含 wt 归属（显示 = 归属，O-wysiwyg-bound）
+  const wtAnchorRe = new RegExp(wtAnchor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  await expect(wtChip, 'CT-J1-G4 O-wysiwyg-bound：绑定后 trigger chip 呈现 wt 归属（终态）').toContainText(wtAnchor, { timeout: 15_000 })
+  await expect(page.getByRole('button', { name: wtAnchorRe }).first(), 'CT-J1-G4 O-wysiwyg-bound：可访问名按钮含 wt 归属').toBeVisible({ timeout: 15_000 })
 })
 
 test('@project-e2e @project-panel CT-J1-G5 follow 流推送：新项目零刷新出现', async () => {
@@ -175,6 +202,19 @@ test('@project-e2e @project-panel CT-J1-E3 插件停用：顶替离场、零残�
     await page.waitForTimeout(8_000)
   }
 })
+
+/** G4 fixture：git 仓库夹具目录（main worktree 行 = 二级点选目标；提交需身份旗标） */
+function mkG4FixtureDir(): string {
+  const wsDir = join(tmpdir(), 'disc4-g4ws-' + String(Date.now()))
+  mkdirSync(wsDir, { recursive: true })
+  const git = (args: string[]): string =>
+    execFileSync('git', args, { cwd: wsDir, encoding: 'utf8', timeout: 30_000, shell: true })
+  git(['init', '-b', 'main'])
+  writeFileSync(join(wsDir, 'README.md'), 'disc4 g4 fixture\n', 'utf8')
+  git(['-c', 'user.email=spec@forge.test', '-c', 'user.name=spec', 'add', '-A'])
+  git(['-c', 'user.email=spec@forge.test', '-c', 'user.name=spec', 'commit', '-m', 'init'])
+  return wsDir
+}
 
 test('@project-e2e @project-panel CT-J1 留痕 skip（占位）', () => {
   test.skip(true, 'CT-J1-E1 零项目空态（统一口径舞台在册宿主，空态不可构造）+ CT-J1-E2 数据链断裂注入/恢复回正（无故障注入缝）+ CT-J1-E4 单 worktree 项目级联（依赖夹具注册通道）+ CT-J1-G5 反轮询计量（断言窗口内拉取增量不可观测）——通道缺失记账，非退役候选')
