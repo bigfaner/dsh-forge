@@ -107,7 +107,8 @@ export const ACCEPTED_REVIEW_LINE =
   '- 评审指示（主会话按涉及面派对应专家评审 proposal 本身，不含 chained feature 任务面）：' +
   '涉及 UI 派 ui-designer / ui-craftsman；涉及 API 派 architect（或通用 subagent）输出 API 设计；' +
   '派 architecture-reviewer 评审改动范围、模块与边界；派 code-master 设计代码实现方案' +
-  '（接口优先，fake 经测试侧组合根注入）。' +
+  '（接口优先，fake 经测试侧组合根注入）；派 test-master 评审提案可测试性、设计测试方案' +
+  '（与 code-master 的代码实现方案成对照对）。' +
   '各专家以 expert-squad 清单在场为准，缺席由主会话决断回落。' +
   '测试边界审查项：替身位置声明与未覆盖供应商/外部链路说明（缺失则补写或打回修订）、' +
   '临时桩退出任务、模拟轨与黑盒轨分离、验收目标不以替身混入为通过条件、' +

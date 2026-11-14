@@ -254,6 +254,7 @@ describe('transitionProposal', () => {
     expect(text).toContain('architect')
     expect(text).toContain('architecture-reviewer')
     expect(text).toContain('code-master')
+    expect(text).toContain('test-master')
     // fail-soft：以 expert-squad 清单在场为准，缺席由主会话决断回落
     expect(text).toContain('在场为准')
     expect(text).toContain('回落')
