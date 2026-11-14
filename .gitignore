@@ -126,6 +126,12 @@ apps/host/userdata.dev/
 
 cdp/
 
+# pnpm pack tarballs (process artifacts, never committed)
+*.tgz
+
+# Forge local runtime db (per-workspace state, kept on disk only)
+.forge/forge.db
+
 # Project-level expert profiles (local per-project, intentionally not in git —
 # hard guard replacing "never git-added" convention; see .dsh/experts/)
 .dsh/
