@@ -190,19 +190,50 @@ function registerKnowledgeLocale(locale: LocaleServiceFace): void {
 }
 
 /**
- * knowledge client face 组合插件对象（client-modules 装载契约——expert-squad 同型判例）：
- * apply 期自注册三面（fix-13 模式）。返回值铁律：必须返回 undefined（cordis 组合把返回值
- * 当 effect 消费）。inject = ['slots', 'locale']（cordis 装载契：声明边等待官方服务就绪，
- * 缺声明 = apply 期 `cannot get property` fiber FAILED）。
+ * 迟到补偿订阅（fix-2——bug 1a3a8bd5：官方宿主 host 半 provide 晚于 client bundle apply，
+ * apply 一次性执行 → gate=false 永久零登记零重试）。裁决记录：
+ *   ①（首选）client inject 增声明边 'knowledge' 不可行——cordis 源码核验（fiber.ts/reflect.ts）：
+ *     声明边等待同 isolate 域服务在场；而 browser client ctx 无 'knowledge' provider（host
+ *     侧服务经 Node RPC 桥到达，apps/host/src/boot/bridge.ts），dsh-client-web bootClient
+ *     assertEntriesActive 对 pending entry 直接 reject（web boot 整体失败）——集成态 G-A
+ *     通道同被阻断，故弃。
+ *   ②（采纳）apply 期 gate=false → 订阅官方 cordis `internal/service` 事件域（reflect.notify
+ *     发射，语义 = 服务在场读数翻转），'knowledge' 到场一次性补注册后注销订阅；
+ *     补注册前 knowledgeGateOf 现查裁决（不盲信事件名，AGENTS §1.6 检测不缓存）；服务
+ *     永不到场 = 零登记零异常（CT-M1.O2 fail-closed 语义保留）。ctx.on 缺席（旧宿主/桩）
+ *     = 零订阅 fail-soft。
  */
-export const knowledgeClient = {
-  inject: ['slots', 'locale'] as string[],
-  apply(ctx: unknown): void {
-    // 门控 fail-closed 在前（CT-M1.O2：双门控均 false → 零登记零异常；diag info 留痕）
-    if (!knowledgeGateOf(ctx)) {
-      console.info('[dsh-forge/knowledge] gate=false（壳缝缺席 ∧ knowledge 服务不在场）——faces 零登记')
-      return
-    }
+function armKnowledgeLateArrival(ctx: unknown): void {
+  const on = (ctx as { on?: (event: string, listener: (name: string) => void) => unknown })?.on
+  if (typeof on !== 'function') return
+  let armed = true
+  try {
+    const dispose = on.call(ctx, 'internal/service', (name: string) => {
+      // 服务名过滤 + 现查双重裁决：事件名到但读数缺席（劣形值）不补注册
+      if (name !== KNOWLEDGE_SERVICE_REFLECT_KEY || !knowledgeGateOf(ctx)) return
+      armed = false
+      try {
+        if (typeof dispose === 'function') (dispose as () => void)()
+      } catch {
+        // 注销异常 = fail-soft（一次性语义由 armed 承担）
+      }
+      applyKnowledgeFaces(ctx)
+    })
+    // 立即注销形态（异常宿主返回 undefined）= 零订阅，armed 兜底保持一次性语义
+    if (typeof dispose !== 'function') armed = false
+  } catch {
+    // 订阅失败 = fail-soft 零补偿（不炸 apply，fail-closed 语义保留）
+    armed = false
+  }
+  if (!armed) return
+}
+
+/** knowledge 服务 reflect 键（与 host 半 KNOWLEDGE_SERVICE_NAME = 'knowledge' 源码级一致——
+ * 不 import host 入口：client bundle 自含纪律，Node 依赖零进束） */
+const KNOWLEDGE_SERVICE_REFLECT_KEY = 'knowledge'
+
+/** faces 注册本体（gate=true 路径：词典登记 + 三面 + 项目台知识目录节） */
+function applyKnowledgeFaces(ctx: unknown): void {
     const rec = ctx as Record<string, unknown> | undefined
     const slots = rec?.['slots'] as SectionSlotsFace | undefined
     const locale = rec?.['locale'] as LocaleServiceFace | undefined
@@ -229,6 +260,26 @@ export const knowledgeClient = {
     } catch (error) {
       console.warn('[dsh-forge/knowledge] knowledge-dir section registration interrupted', error)
     }
+}
+
+/**
+ * knowledge client face 组合插件对象（client-modules 装载契约——expert-squad 同型判例）：
+ * apply 期自注册三面（fix-13 模式）。返回值铁律：必须返回 undefined（cordis 组合把返回值
+ * 当 effect 消费）。inject = ['slots', 'locale']（cordis 装载契：声明边等待官方服务就绪，
+ * 缺声明 = apply 期 `cannot get property` fiber FAILED）。'knowledge' 服务边不走声明边
+ * （fix-2 裁决：browser ctx 无该 provider，声明边 = web boot 永久 pending 被
+ * assertEntriesActive reject）——迟到补偿走 apply 期 internal/service 订阅（见上）。
+ */
+export const knowledgeClient = {
+  inject: ['slots', 'locale'] as string[],
+  apply(ctx: unknown): void {
+    // 门控 fail-closed 在前（CT-M1.O2：双门控均 false → 零登记零异常 + 迟到补偿订阅；diag info 留痕）
+    if (!knowledgeGateOf(ctx)) {
+      console.info('[dsh-forge/knowledge] gate=false（壳缝缺席 ∧ knowledge 服务不在场）——faces 零登记（迟到补偿订阅已武装）')
+      armKnowledgeLateArrival(ctx)
+      return
+    }
+    applyKnowledgeFaces(ctx)
     return undefined
   },
 }

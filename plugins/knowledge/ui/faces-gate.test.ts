@@ -116,6 +116,105 @@ describe('registerKnowledgeFaces 编排（diag 读数 = A-KN-8 语义）', () =>
   })
 })
 
+/** fix-2 迟到补偿假 ctx：gate=false 起 apply，可手动派发 internal/service 事件 */
+function fakeLateCtx() {
+  const listeners: Array<(name: string) => void> = []
+  const slots = fakeSlots()
+  const locale = fakeLocale()
+  let present = false
+  const ctx = {
+    reflect: { get: () => (present ? { browse: () => {} } : undefined) },
+    slots,
+    locale,
+    on: (event: string, listener: (name: string) => void) => {
+      listeners.push(listener)
+      return () => {
+        const i = listeners.indexOf(listener)
+        if (i >= 0) listeners.splice(i, 1)
+      }
+    },
+  }
+  return {
+    ctx,
+    slots,
+    locale,
+    listeners,
+    arrive: () => {
+      present = true
+      for (const l of listeners.slice()) l('knowledge')
+    },
+    arriveOther: () => {
+      for (const l of listeners.slice()) l('other-service')
+    },
+    listenerCount: () => listeners.length,
+  }
+}
+
+describe('knowledgeClient 迟到补偿（fix-2：官方宿主 host 半 provide 晚于 client apply——服务到场一次性补注册）', () => {
+  it('gate=false apply → 零登记 + 迟到订阅已武装（ctx.on internal/service 被订阅）', () => {
+    const t = fakeLateCtx()
+    expect(knowledgeClient.apply(t.ctx)).toBeUndefined()
+    expect(t.slots.registered).toEqual([])
+    expect(t.listenerCount()).toBe(1)
+  })
+
+  it('无关服务事件不触发补注册（订阅保持武装）', () => {
+    const t = fakeLateCtx()
+    knowledgeClient.apply(t.ctx)
+    t.arriveOther()
+    expect(t.slots.registered).toEqual([])
+    expect(t.listenerCount()).toBe(1)
+  })
+
+  it('knowledge 迟到事件 → gate 现查 true → 四面一次性补注册 + 订阅注销（不双登记）', () => {
+    const t = fakeLateCtx()
+    knowledgeClient.apply(t.ctx)
+    t.arrive()
+    expect(t.locale.namespaces).toEqual(['dsh-forge.knowledge'])
+    expect(t.slots.registered).toEqual([
+      'main:dswf-knowledge',
+      'sidebar.panellist:dswf-knowledge',
+      'conversation.view:dswf-recall',
+      'project.section.knowledge-dir:dswf-knowledge-dir',
+    ])
+    expect(t.listenerCount()).toBe(0)
+    t.arrive() // 重复派发 = 订阅已注销，零补注册（一次性）
+    expect(t.slots.registered).toHaveLength(4)
+  })
+
+  it('迟到事件时 gate 仍 false（服务值劣形）→ 不补注册（现查裁决，不盲信事件名）', () => {
+    const t = fakeLateCtx()
+    knowledgeClient.apply(t.ctx)
+    // 不翻转 present——服务名到但现查缺席
+    for (const l of t.listeners.slice()) l('knowledge')
+    expect(t.slots.registered).toEqual([])
+  })
+})
+
+describe('knowledgeClient 迟到补偿·真 cordis（fix-2：provide 晚于装载 → fiber 补注册——声明缝语义源码核销）', () => {
+  it('reflect.provide("knowledge") 晚于 client 插件装载 → 四面落座（cordis notify → internal/service）', async () => {
+    const { Context } = await import('@deepseek-ai/cordis')
+    const ctx = new Context()
+    const slots = fakeSlots()
+    const locale = fakeLocale()
+    ctx.reflect.provide('slots', slots)
+    ctx.reflect.provide('locale', locale)
+    await ctx.plugin(knowledgeClient)
+    // 服务未提供：零登记（fail-closed），faces 不落座
+    expect(slots.registered).toEqual([])
+    // host 半迟到 provide → cordis notify → 补注册
+    ctx.reflect.provide('knowledge', { browse: () => {} })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(slots.registered).toEqual([
+      'main:dswf-knowledge',
+      'sidebar.panellist:dswf-knowledge',
+      'conversation.view:dswf-recall',
+      'project.section.knowledge-dir:dswf-knowledge-dir',
+    ])
+    await (ctx as { dispose?: () => Promise<void> }).dispose?.()
+  })
+})
+
 describe('knowledgeClient 组合插件对象（client-modules 装载契约）', () => {
   it('inject 声明边 = [slots, locale]（缺声明 = apply 期 cannot get property）', () => {
     expect(knowledgeClient.inject).toEqual(['slots', 'locale'])
