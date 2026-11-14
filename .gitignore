@@ -20,6 +20,8 @@ spikes/s1-thin-host/profile/cordis.yml
 **/dist/
 **/dist-types/
 **/*.tsbuildinfo
+# typert 生成步 staging（generate-typert.mjs 失败取证残留；成功路径零残留）
+**/.typert-ws/
 
 # Test / tooling artifacts
 coverage/

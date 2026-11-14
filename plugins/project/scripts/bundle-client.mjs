@@ -116,16 +116,10 @@ if (!clientJs.includes('createElement("style")') || !clientJs.includes("data-plu
 }
 rmSync(resolve(pkgDir, "dist/client.css"), { force: true });
 
-// typert 迁移 1.3：./typert + ./remote 导出为生成工件前置声明（generator 接线卡落位
-// dist/typert.*.{js,d.ts}）——工件生成前在离手门显式豁免；生成卡落地时同步移除本表。
-const PENDING_GENERATED_ARTIFACTS = [
-  "./dist/typert.host.js",
-  "./dist/typert.host.d.ts",
-  "./dist/typert.remote-client.js",
-  "./dist/typert.remote-client.d.ts",
-];
-
-const violations = auditDist(pkgDir, { requireDist: true, allowMissing: PENDING_GENERATED_ARTIFACTS });
+// typert 迁移 1.4：./typert + ./remote 工件已由 generate-typert.mjs 生成步入 dist
+// （build 链时序在 bundle-client 之前）——1.3 的 PENDING_GENERATED_ARTIFACTS 豁免表退役，
+// 审计全量闭包零豁免。
+const violations = auditDist(pkgDir, { requireDist: true });
 if (violations.length > 0) {
   console.error(`[bundle-client] 离手门失败：dist 自含审计 ${violations.length} 处违规`);
   for (const v of violations) console.error(`  - ${v}`);

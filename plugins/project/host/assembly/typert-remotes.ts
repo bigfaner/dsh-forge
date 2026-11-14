@@ -26,6 +26,8 @@ import type {
 } from "@dsh-forge/lib-api";
 import type {
   BugCard,
+  BugCommitFilesQuery,
+  BugFileDiffQuery,
   DirFactRow,
   DirFactsQuery,
   DirListing,
@@ -194,14 +196,14 @@ export class ForgeBugsRemote extends TypertRemoteService {
   }
 
   @Remote
-  async commitFiles(input: unknown, signal?: AbortSignal): Promise<never> {
+  async commitFiles(input: BugCommitFilesQuery, signal?: AbortSignal): Promise<never> {
     signal?.throwIfAborted();
     void input;
     throw unavailable("commitFiles", "bugs");
   }
 
   @Remote
-  async fileDiff(input: unknown, signal?: AbortSignal): Promise<never> {
+  async fileDiff(input: BugFileDiffQuery, signal?: AbortSignal): Promise<never> {
     signal?.throwIfAborted();
     void input;
     throw unavailable("fileDiff", "bugs");
