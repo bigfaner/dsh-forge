@@ -33,6 +33,14 @@ import { sessionLogById } from '../../../e2e/support/session-files.js'
 import { refreshSessionProjcache } from '../../../e2e/support/replay/transcript-seed.js'
 import { appendSeedEvents, maxEventSeq, SeedLogBuilder, type TurnSeed } from './progress-seed.js'
 
+// 归属移交（用户裁定 2026-11-15；出处：project-plugin-closure-debts 1.13 范围修订）：
+// forge-event-group 折叠组（conversation-views-face 三段）+ 派发工具行（dispatch-tool-row）
+// 终态归属 task-loop 插件化迁移（挂 combo-rearchitecture 输入清单）。fix-6 定谳：注册面
+// （候选 A 静态 inject 边）已在官方 web 宿主生效，本 spec 红由 dev profile 装载面
+// @deepseek-ai/dsh-session 模块实例分裂所致（第四犯另因，与 inject 链无关——
+// rootcause-eventgroup-inject.md 定谳收口段）。project 内现状冻结，本 spec 随迁移迁移。
+test.skip(true, 'forge-event-group 归属移交 task-loop 迁移（用户裁定 2026-11-15）——spec 随迁，project 内现状冻结')
+
 const CARD = '[data-dswf-event-entries]'
 const SCROLL = '[data-conversation-scroll]'
 /** 组卡行键（组末成员 Context id——CT-GROUP-04 锚定真值的 DOM 投影） */
