@@ -101,11 +101,9 @@ export function registerDockTabsFace(
   }
   const t = locale.bind(FORGE_PROJECT_LOCALE_NS)
   const tabs = ctx.get('sidebarRightTabs') as SidebarRightTabsMirror | undefined
-  const sessions = ctx.get('sessions') as ForgeSessionsService | undefined
-  const uiWorkspace = ctx.get('uiWorkspace') as ForgeUiWorkspaceService | undefined
-  // workspaces 不在 apply 期取（bug fba7913c——Desktop 官方服务惰性实例化，apply 点
-  // undefined 被闭包缓存 → 概览恒「未锚定项目」）；改 inject 期现查（AGENTS 1.6——检测
-  // 永不缓存），inject 时点服务已实例化。
+  // workspaces/sessions/uiWorkspace 不在 apply 期取（bug fba7913c / bug 757b0441——官方
+  // 服务惰性实例化，apply 点 undefined 被闭包缓存 → 概览 body 注册失败降级不注册）；改
+  // inject 期现查（AGENTS 1.6——检测永不缓存），inject 时点服务已实例化。
 
   // 第一段①：概览页型 + guide 入口卡 order 0（官方入口卡 10/20/30——升序排最前）
   face(DSWF_OVERVIEW_TAB_KIND, () => {
@@ -146,46 +144,55 @@ export function registerDockTabsFace(
   })
 
   // 第二段①：概览 keyed body（inject 面 = 桥[页内缝现读] + 跳会话 + 编排器 + Bug 快速路径）
+  // 注册/挂载拆分（bug 757b0441）：apply 期无条件注册（tab 骨架恒在，注册不绑数据服务）；
+  // sessions/uiWorkspace 改 inject 时点现查（AGENTS 1.6——检测永不缓存、每消费点现查），
+  // 到场即挂会话动作面真值内容、缺席 = 会话动作键整体缺省 → 组件空态呈现，不悬空炸面。
   face(`${SIDEBAR_RIGHT_PANE_TAB_SLOT}:${DSWF_OVERVIEW_TAB_KIND}`, () => {
-    if (sessions === undefined || uiWorkspace === undefined) {
-      throw new Error('sessions/uiWorkspace absent')
-    }
     if (registerKeyedSection(slots, {
       slot: SIDEBAR_RIGHT_PANE_TAB_SLOT,
       key: DSWF_OVERVIEW_TAB_KIND,
       inject: () => {
-        // workspaces 消费点现查（bug fba7913c——apply 期闭包缓存退役；selfAnchor 键入注入束）
+        // 消费点现查（apply 期闭包缓存退役——bug fba7913c 同径；electron dev 宿主服务
+        // 惰性实例化，apply 点 sessions/uiWorkspace 缺席 = 挂载点现查命中补挂）
+        const sessions = ctx.get('sessions') as ForgeSessionsService | undefined
+        const uiWorkspace = ctx.get('uiWorkspace') as ForgeUiWorkspaceService | undefined
         const workspaces = ctx.get('workspaces') as ForgeWorkspacesService | undefined
+        const servicesPresent = sessions !== undefined && uiWorkspace !== undefined
         return {
           bridge: workbenchBridgeOf(),
           // 概览锚自解析服务缝（fix-11 缺陷 A——桥缺席/桥锚 null 时插件自解析退路；
           // sessions/workspaces 服务现查产物直递，缺席 = 无退路维持空态）
-          ...(sessions !== undefined && workspaces !== undefined ? { selfAnchor: { sessions, workspaces } } : {}),
+          ...(servicesPresent && workspaces !== undefined ? { selfAnchor: { sessions, workspaces } } : {}),
           // 数据通道真身（fix-15——bug 9c5469c8）：官方宿主无 window.dshForge preload
           // 传输，缺省工厂构造期即崩（slot entry crashed → 概览零渲染）。显式递 Typert
           // 适配工厂——官方宿主七族通道在场照常送达，缺席族（tasks/docs/knowledge/
           // settings）typed 拒绝 → 消费面错误相位 fail-soft。
           makeClient: typertRpcClientFactory,
-        onOpenSession: (sessionId: string): void => {
-          // 官方导航动作面（同 sidebar.workspaces openSession 注入——fix-11 口径）
-          uiWorkspace.openSession(sessionId)
-        },
-        // S5 列表行 ⟞：worker 执行子会话打开径（账本判读 + refresh 兜底单源——ShellHost 同径）
-        onOpenWorkerSession: (childSessionId: string, parentSessionId?: string): void => {
-          openSessionWithLedgerAddress({ sessions, uiWorkspace }, childSessionId, parentSessionId)
-        },
-        // 打开新会话编排器（openSessionWithPreset + 跳转姊妹出口——概览三子 tab 共源）
-        openSession: buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions, workspaces),
-        // Bug 快速路径（有活跃会话 scoped 插入/无活跃会话开新会话预填；快照落缓存经本包
-        // bugSourceCacheOf——bug 27ab222b）
-        addBugToSession: buildBugQuickAdder(
-          ctx,
-          sessions,
-          buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions, workspaces),
-          (bug: BugQuickAddInput): void => {
-            bugSourceCacheOf()?.cacheBugSnapshot(bug)
-          },
-        ),
+          // 会话动作面（服务缺席 = 整体缺键——组件可选 props 空态呈现）
+          ...(servicesPresent
+            ? {
+                onOpenSession: (sessionId: string): void => {
+                  // 官方导航动作面（同 sidebar.workspaces openSession 注入——fix-11 口径）
+                  uiWorkspace.openSession(sessionId)
+                },
+                // S5 列表行 ⟞：worker 执行子会话打开径（账本判读 + refresh 兜底单源——ShellHost 同径）
+                onOpenWorkerSession: (childSessionId: string, parentSessionId?: string): void => {
+                  openSessionWithLedgerAddress({ sessions, uiWorkspace }, childSessionId, parentSessionId)
+                },
+                // 打开新会话编排器（openSessionWithPreset + 跳转姊妹出口——概览三子 tab 共源）
+                openSession: buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions, workspaces),
+                // Bug 快速路径（有活跃会话 scoped 插入/无活跃会话开新会话预填；快照落缓存经本包
+                // bugSourceCacheOf——bug 27ab222b）
+                addBugToSession: buildBugQuickAdder(
+                  ctx,
+                  sessions,
+                  buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions, workspaces),
+                  (bug: BugQuickAddInput): void => {
+                    bugSourceCacheOf()?.cacheBugSnapshot(bug)
+                  },
+                ),
+              }
+            : {}),
         }
       },
       component: ForgeOverviewTab,

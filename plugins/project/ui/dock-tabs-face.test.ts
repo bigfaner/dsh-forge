@@ -76,6 +76,54 @@ describe("registerDockTabsFace（apply 早于服务实例化——bug fba7913c R
   });
 });
 
+describe("概览 keyed body 注册/挂载拆分（bug 757b0441 RED→GREEN——apply 期 sessions/uiWorkspace 缺席不阻断注册）", () => {
+  it("apply 点 sessions/uiWorkspace 缺席 = 概览 keyed body 仍注册成立（tab 骨架恒在，注册不绑数据服务）", () => {
+    const backing: Record<string, unknown> = {
+      sidebarRightTabs: { register: () => () => undefined },
+      // sessions/uiWorkspace electron dev 宿主 apply 点缺席（bug 757b0441 实锤）
+    };
+    const fake = slotsFake();
+    const diag = registerDockTabsFace(ctxOf(backing) as never, fake.slots as never, localeFake as never);
+    const overview = fake.registered.find((e) => e.options.key === DSWF_OVERVIEW_TAB_KIND);
+    expect(diag.registered).toContain(`${"sidebar.right.pane.tab"}:${DSWF_OVERVIEW_TAB_KIND}`);
+    expect(overview).toBeDefined();
+  });
+
+  it("注册后服务到场：inject 时点现查命中 = 会话动作面在注入束（到场补挂真值内容）", () => {
+    const backing: Record<string, unknown> = {
+      sidebarRightTabs: { register: () => () => undefined },
+    };
+    const fake = slotsFake();
+    registerDockTabsFace(ctxOf(backing) as never, fake.slots as never, localeFake as never);
+    const overview = fake.registered.find((e) => e.options.key === DSWF_OVERVIEW_TAB_KIND)!;
+    // 挂载时点（槽 runtime 求值 inject 工厂）服务已实例化——现查必须命中
+    backing["sessions"] = sessionsFake;
+    backing["uiWorkspace"] = uiWorkspaceFake;
+    backing["workspaces"] = { list: { getSnapshot: () => ({ items: [] }) } };
+    const face = (overview.options.inject as () => Record<string, unknown>)();
+    expect(face["selfAnchor"]).toBeDefined();
+    expect(typeof face["onOpenSession"]).toBe("function");
+    expect(face["openSession"]).toBeDefined();
+    expect(typeof face["addBugToSession"]).toBe("function");
+  });
+
+  it("挂载时点服务仍缺席 = 会话动作面整体缺键（空态呈现，不悬空炸面）", () => {
+    const backing: Record<string, unknown> = {
+      sidebarRightTabs: { register: () => () => undefined },
+    };
+    const fake = slotsFake();
+    registerDockTabsFace(ctxOf(backing) as never, fake.slots as never, localeFake as never);
+    const overview = fake.registered.find((e) => e.options.key === DSWF_OVERVIEW_TAB_KIND)!;
+    const face = (overview.options.inject as () => Record<string, unknown>)();
+    expect(face["onOpenSession"]).toBeUndefined();
+    expect(face["onOpenWorkerSession"]).toBeUndefined();
+    expect(face["openSession"]).toBeUndefined();
+    expect(face["addBugToSession"]).toBeUndefined();
+    expect(face["selfAnchor"]).toBeUndefined();
+    expect(face["makeClient"]).toBeDefined();
+  });
+});
+
 describe("概览注入束 makeClient（fix-15——官方宿主无 window.dshForge RED→GREEN）", () => {
   /** Typert face 夹具（forgeProjects.list 命中 + forgeTasks namespace 缺席——官方宿主通道面） */
   function faceFake() {
