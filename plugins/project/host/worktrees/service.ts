@@ -188,6 +188,11 @@ export interface WorktreeServiceDeps {
   readonly symbolicRefOf?: ((worktreePath: string) => Promise<string | null>) | undefined
   readonly ensureDirAcl?: ((path: string) => Promise<void>) | undefined
   readonly createWorktreeOp?: typeof createWorktree | undefined
+  /** git 读面注入缝（P1-2 失败路径测试锚——生产缺省直用 worktree-ops 同名实现） */
+  readonly listBranchesOp?: typeof listBranches | undefined
+  readonly defaultBranchOp?: typeof defaultBranchOp | undefined
+  readonly worktreeStatusOp?: typeof worktreeStatus | undefined
+  readonly aheadBehindOp?: typeof aheadBehindOp | undefined
   readonly onWorktreeSetChanged?: ((worktreePath?: string) => Promise<void> | void) | undefined
   readonly warn?: (message: string) => void
   readonly createDiag?: (message: string) => void
@@ -210,6 +215,11 @@ export function createWorktreeRpcService(deps: WorktreeServiceDeps): WorktreeRpc
   // 兜底按级分流（bug 7ba48c55——diag-face-consolidation 统一口径）：本面 emit 恒 warn
   // 级（fail-soft 降级告警），缺省走 consoleDiagFallback 单出口。
   const warn = deps.warn ?? consoleDiagFallback
+  // git 读面实现解析（注入缝缺席 = worktree-ops 生产实现——P1-2 失败路径测试锚）
+  const listBranchesImpl = deps.listBranchesOp ?? listBranches
+  const defaultBranchImpl = deps.defaultBranchOp ?? defaultBranchOp
+  const worktreeStatusImpl = deps.worktreeStatusOp ?? worktreeStatus
+  const aheadBehindOpImpl = deps.aheadBehindOp ?? aheadBehindOp
   // 绑定表失效锚薄封装（恒不抛——刷新失败 = 表停在旧快照，下次 boot/注册自愈）。
   const notifyWorktreeSetChanged = async (worktreePath?: string): Promise<void> => {
     if (deps.onWorktreeSetChanged === undefined) return
@@ -243,7 +253,11 @@ export function createWorktreeRpcService(deps: WorktreeServiceDeps): WorktreeRpc
     const key = normalizePathForCompare(path)
     const cached = projectCache.get(key)
     if (cached !== undefined) return cached
-    const pending = ext().resolveProject(path).catch(() => null) as Promise<{ projectRoot: string; projectName?: string } | null>
+    const pending = ext().resolveProject(path).catch((cause: unknown) => {
+      // 补点（clean-code-review P1-2）：解析失败按非 git 降级 = 假非 git 判定——留痕不静默
+      warn(`[git-worktree] worktree-resolve-degraded：resolveProject 探测失败（fail-soft 按非 git 降级）：${path}：${String(cause)}`)
+      return null
+    }) as Promise<{ projectRoot: string; projectName?: string } | null>
     if (resolveGitWorktree() !== undefined) projectCache.set(key, pending)
     return pending
   }
@@ -432,37 +446,91 @@ export function createWorktreeRpcService(deps: WorktreeServiceDeps): WorktreeRpc
     },
 
     async aheadBehind(request) {
-      const entries = await listWorktrees(request.projectRoot)
+      const entries = await (deps.listWorktreeRows ?? listWorktrees)(request.projectRoot)
       const entry = entries.find((row) => normalizePathForCompare(row.path) === normalizePathForCompare(request.path))
       if (entry === undefined || entry.branch === null) return { counts: null }
       // cwd 纪律（1.19 审计）：ahead/behind = 树级操作——cwd = 目标 worktree 路径
-      const counts = await aheadBehindOp(request.path, entry.branch).catch(() => null)
-      return { counts }
+      let probeFailed = false
+      const counts = await aheadBehindOpImpl(request.path, entry.branch).catch((cause: unknown) => {
+        // 补点（clean-code-review P1-2）：探测失败归 null 与无 upstream 同形——warn + degraded 显式化
+        probeFailed = true
+        warn(`[git-worktree] worktree-ahead-behind-degraded：ahead/behind 探测失败（fail-soft 归 null）：${request.path}：${String(cause)}`)
+        return null
+      })
+      return probeFailed ? { counts: null, degraded: true } : { counts }
     },
 
     async branches(request) {
+      let branchesDegraded = false
+      let defaultDegraded = false
       const [branches, fallback] = await Promise.all([
-        listBranches(request.projectRoot).catch(() => [] as string[]),
-        defaultBranchOp(request.projectRoot).catch(() => 'main'),
+        listBranchesImpl(request.projectRoot).catch((cause: unknown) => {
+          // 补点（clean-code-review P1-2）：假空集显式化——warn + degraded 标记
+          branchesDegraded = true
+          warn(`[git-worktree] worktree-branches-degraded：分支清单读取失败（fail-soft 归空清单）：${request.projectRoot}：${String(cause)}`)
+          return [] as string[]
+        }),
+        defaultBranchImpl(request.projectRoot).catch((cause: unknown) => {
+          // 补点（clean-code-review P1-2）：假 main 显式化——warn + degraded 标记
+          defaultDegraded = true
+          warn(`[git-worktree] worktree-branches-degraded：默认分支解析失败（fail-soft 归 'main'）：${request.projectRoot}：${String(cause)}`)
+          return 'main'
+        }),
       ])
-      return { branches, defaultBranch: fallback }
+      return {
+        branches,
+        defaultBranch: fallback,
+        ...((branchesDegraded || defaultDegraded)
+          ? {
+              degraded: {
+                ...(branchesDegraded ? { branches: true } : {}),
+                ...(defaultDegraded ? { defaultBranch: true } : {}),
+              },
+            }
+          : {}),
+      }
     },
 
     async checks(request) {
+      let statusDegraded = false
+      let aheadDegraded = false
       const [status, entries, attachedSessions] = await Promise.all([
-        worktreeStatus(request.path).catch(() => ({ dirtyCount: 0 })),
-        listWorktrees(request.projectRoot).catch(() => []),
+        worktreeStatusImpl(request.path).catch((cause: unknown) => {
+          // 补点（clean-code-review P1-2）：假 0 显式化——warn + degraded 标记
+          statusDegraded = true
+          warn(`[git-worktree] worktree-checks-degraded：status 探测失败（fail-soft 归 dirtyCount 0）：${request.path}：${String(cause)}`)
+          return { dirtyCount: 0 }
+        }),
+        (deps.listWorktreeRows ?? listWorktrees)(request.projectRoot).catch((cause: unknown) => {
+          aheadDegraded = true
+          warn(`[git-worktree] worktree-checks-degraded：worktree 清单读取失败（fail-soft 归空集）：${request.projectRoot}：${String(cause)}`)
+          return [] as Awaited<ReturnType<typeof listWorktrees>>
+        }),
         healing.attachedSessionsOf(request.path),
       ])
       const entry = entries.find((row) => normalizePathForCompare(row.path) === normalizePathForCompare(request.path))
-      const ahead = entry?.branch !== undefined && entry?.branch !== null
+      let ahead: { ahead: number; behind: number } | null = null
+      if (entry?.branch !== undefined && entry?.branch !== null) {
         // cwd 纪律（1.19 审计）：ahead/behind = 树级操作——cwd = 目标 worktree 路径
-        ? await aheadBehindOp(request.path, entry.branch).catch(() => null)
-        : null
+        ahead = await aheadBehindOpImpl(request.path, entry.branch).catch((cause: unknown) => {
+          // 补点（clean-code-review P1-2）：ahead 探测失败假 0 显式化
+          aheadDegraded = true
+          warn(`[git-worktree] worktree-checks-degraded：ahead/behind 探测失败（fail-soft 归 aheadCount 0）：${request.path}：${String(cause)}`)
+          return null
+        })
+      }
       return {
         dirtyCount: status.dirtyCount,
         aheadCount: ahead?.ahead ?? 0,
         attachedSessions,
+        ...((statusDegraded || aheadDegraded)
+          ? {
+              degraded: {
+                ...(statusDegraded ? { dirtyCount: true } : {}),
+                ...(aheadDegraded ? { aheadCount: true } : {}),
+              },
+            }
+          : {}),
       }
     },
 

@@ -2,10 +2,10 @@
 // 插件以缺省值自装配——db 路径缺省 {DSH_HOME}/forge/db/project/project.db、registry 缺省
 // 取 ctx.workspaceRegistry 具名服务、bugs 依赖缺省自 db 派生——registerProject 成功且
 // project.db 落行，forge.bugs registerBug 可用（007 实证 register 拒不可用 → 必须成功）。
-import { mkdtempSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, existsSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { openDomainDb } from './db/connection.js'
 import { injectProjectSeam, PROJECT_SEAM_KEYS, type SeamCtxFace } from './assembly/seams.js'
 import { stubProjectsService } from './assembly/seams.js'
@@ -125,6 +125,29 @@ describe('单装缺省装配（fix-7——无组合器 config 独立装配态）
       }
     } finally {
       dispose()
+    }
+  })
+
+  it('P1-5 诊断兜底按级分流：config.diag 缺席 → consoleDiagFallback（error 级 → console.error 非 warn）', () => {
+    // DSH_HOME 指向文件路径 → project.db 打开失败（error 级诊断源）
+    const blockedHome = join(home, 'blocked-home-file')
+    writeFileSync(blockedHome, 'not-a-dir')
+    const previous = process.env.DSH_HOME
+    process.env.DSH_HOME = blockedHome
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      const dispose = projectPlugin(standaloneCtx(), {})
+      dispose()
+    } finally {
+      const errorHit = error.mock.calls.some((c) => String(c[0]).includes("project.db 打开失败"));
+      const warnHit = warn.mock.calls.some((c) => String(c[0]).includes("project.db 打开失败"));
+      if (previous === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previous
+      warn.mockRestore()
+      error.mockRestore()
+      expect(errorHit, 'error 级经 consoleDiagFallback 分流到 console.error').toBe(true)
+      expect(warnHit, 'error 级不再落 console.warn（按级分流）').toBe(false)
     }
   })
 })

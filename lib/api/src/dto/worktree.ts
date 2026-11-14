@@ -86,6 +86,11 @@ export interface WorktreeEnsureWorkspaceResult {
 }
 export interface WorktreeAheadBehindResult {
   readonly counts: { readonly ahead: number; readonly behind: number } | null
+  /**
+   * 降级显式化标记（clean-code-review P1-2）：true = ahead/behind 探测失败归 null——
+   * 与「无 upstream」的正常 null 同形，由本字段区分；正常判定缺席该字段。
+   */
+  readonly degraded?: boolean
 }
 
 /** forge:worktree/branches（新建弹窗基准分支下拉 + 默认分支缺省值） */
@@ -95,6 +100,15 @@ export interface WorktreeBranchesRequest {
 export interface WorktreeBranchesResult {
   readonly branches: readonly string[]
   readonly defaultBranch: string
+  /**
+   * 降级显式化标记（clean-code-review P1-2）：读取失败归兜底值的成员置 true
+   * （branches 失败 → []、defaultBranch 失败 → 'main'）——假空集/假 main 不被钉成合法形状；
+   * 正常读取缺席该字段。host 侧失败路径另有 warn 级诊断留痕。
+   */
+  readonly degraded?: {
+    readonly branches?: boolean
+    readonly defaultBranch?: boolean
+  }
 }
 
 /** forge:worktree/checks（删除二次确认状态清单三检查项数据源） */
@@ -109,6 +123,15 @@ export interface WorktreeChecksResult {
   readonly aheadCount: number
   /** 挂靠会话数（命中即拦截） */
   readonly attachedSessions: number
+  /**
+   * 降级显式化标记（clean-code-review P1-2）：读取失败归兜底值的成员置 true
+   * （status 失败 → dirtyCount 0、清单/ahead 探测失败 → aheadCount 0）——假 0 不被钉成
+   * 合法形状；正常读取缺席该字段。host 侧失败路径另有 warn 级诊断留痕。
+   */
+  readonly degraded?: {
+    readonly dirtyCount?: boolean
+    readonly aheadCount?: boolean
+  }
 }
 
 /**

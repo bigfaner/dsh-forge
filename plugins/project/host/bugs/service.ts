@@ -32,6 +32,7 @@ import type {
   ResolveBugInput,
 } from '@dsh-forge/contracts'
 import { BUG_STATUS_LABELS } from '@dsh-forge/contracts'
+import { emitDiagOrFallback, type DiagEventPayload } from '@dsh-forge/lib-diag'
 import type { BugsRepo, BugResolvePatch } from '../db/repositories/bugs.js'
 import type { BugRow } from '../db/row-types.js'
 import {
@@ -182,6 +183,9 @@ export interface BugsServiceDeps {
   readonly execFile?: GitExecFile
   /** 写动词闭包尾部通知缝（子 tab 刷新依赖——装配注入；缺席 = 零通知降级） */
   readonly notify?: (projectId: string) => void
+  /** 失败路径诊断缝（clean-code-review P1-3——bugs 域零诊断站点收口；缺席 = 零 emit 纯增量）。
+   *  装配注入 diag 单源（projects/errors.ts diag）；测试注入收集闭包。 */
+  readonly onDiag?: ((payload: Omit<DiagEventPayload, 'process'>) => void) | undefined
 }
 
 /** bug 卡 search 键集（七字段任一命中——summary/bugDesc/triggerDesc/expected/actual/
@@ -235,6 +239,12 @@ function sortByActiveThenCreated<T>(
 
 export function createBugsService(deps: BugsServiceDeps) {
   const execFile = deps.execFile ?? defaultExecFile
+  /** 失败路径 warn 留痕（P1-3——git 解析径 fail-soft 吞错面统一诊断出口；fire-and-forget）。
+   *  发射面 = lib-diag emitDiagOrFallback 单源（缝缺席 console 按级兜底——诊断不静默；
+   *  四域互禁边界约束下不经 projects/errors.ts 桥）。 */
+  const emit = (event: 'bug-git-identity' | 'bug-git-evidence', message: string): void => {
+    emitDiagOrFallback(deps.onDiag, { event, level: 'warn', message })
+  }
   /** 归属圈定（I5）：projectId → project_key；派生失败拒写/拒读（行级归属键 NOT NULL） */
   const keyOf = async (projectId: string): Promise<string> => {
     const k = await deps.resolveProjectKey(projectId)
@@ -274,6 +284,9 @@ export function createBugsService(deps: BugsServiceDeps) {
       const projectKey = await keyOf(input.projectId)
       const cwd = deps.resolveMainPath(input.projectId)
       const reporter = await resolveGitIdentity(execFile, cwd)
+      if (reporter === GIT_IDENTITY_FALLBACK) {
+        emit('bug-git-identity', `git 身份双缺席（config user.name/user.email 皆不可用）——reporter 落占位 ${GIT_IDENTITY_FALLBACK}：projectId=${input.projectId}`)
+      }
       const recurrenceOfRaw = input.recurrenceOf?.trim() || undefined
       if (recurrenceOfRaw !== undefined) {
         // 弱引用格式校验先于在场性预检（非法形制直接拒写——零 IO）；悬空引用事务外预检拒写
@@ -355,7 +368,13 @@ export function createBugsService(deps: BugsServiceDeps) {
       }
       // 证据反查在写前（git 解析径 async——零事务内 IO）
       const evidence = await resolveFixEvidence(execFile, { cwd: deps.resolveMainPath(input.projectId), commitHash })
+      if (Object.keys(evidence).length === 0) {
+        emit('bug-git-evidence', `fixed 证据反查双径全败（worktree porcelain + branch --contains）——fixed 行照落、证据双缺：bugId=${input.bugId} commitHash=${commitHash}`)
+      }
       const fixer = await resolveGitIdentity(execFile, deps.resolveMainPath(input.projectId))
+      if (fixer === GIT_IDENTITY_FALLBACK) {
+        emit('bug-git-identity', `git 身份双缺席（config user.name/user.email 皆不可用）——fixer 落占位 ${GIT_IDENTITY_FALLBACK}：bugId=${input.bugId}`)
+      }
       const patch: BugResolvePatch = {
         bugStatus: 'fixed',
         commitHash,
@@ -435,7 +454,10 @@ export function createBugsService(deps: BugsServiceDeps) {
     async commitFiles(q: BugCommitFilesQuery): Promise<BugCommitFile[]> {
       if (!COMMIT_HASH_RE.test(q.commitHash)) return []
       const out = await runGit(execFile, deps.resolveMainPath(q.projectId), ['show', '--name-status', '--format=', q.commitHash])
-      if (out === null) return []
+      if (out === null) {
+        emit('bug-git-evidence', `git show --name-status 失败——变更文件清单归空 fail-soft：projectId=${q.projectId} commitHash=${q.commitHash}`)
+        return []
+      }
       return out
         .split('\n')
         .filter((line) => line.trim() !== '')
@@ -458,7 +480,10 @@ export function createBugsService(deps: BugsServiceDeps) {
         '--',
         q.path,
       ])
-      if (out === null) return { diff: '' }
+      if (out === null) {
+        emit('bug-git-evidence', `git show（单文件 diff）失败——diff 归空 fail-soft：projectId=${q.projectId} commitHash=${q.commitHash} path=${q.path}`)
+        return { diff: '' }
+      }
       return { diff: out.length > BUG_DIFF_MAX_CHARS ? `${out.slice(0, BUG_DIFF_MAX_CHARS)}\n…（已截断）` : out }
     },
   }

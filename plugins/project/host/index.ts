@@ -57,7 +57,7 @@ import {
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
 import { isGitWorktreeServiceFace, createWorktreesResident, type WorktreesRegistryFace } from "./assembly/worktrees-port.js";
-import { DIAG_EVENT, emitDiagOrFallback, type DiagEventPayload } from "@dsh-forge/lib-diag";
+import { consoleDiagFallback, DIAG_EVENT, emitDiagOrFallback, type DiagEventPayload } from "@dsh-forge/lib-diag";
 
 /** cordis 插件装载形态（loader 只认 default 导出函数）。 */
 interface ProjectPlugin {
@@ -111,11 +111,9 @@ export interface ProjectHostConfig {
 
 const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = {}): (() => void) => {
   const face = ctx as ProjectPluginCtx;
-  const diag: SeamDiag =
-    config.diag ??
-    ((line: string) => {
-      console.warn(line);
-    });
+  // 诊断兜底按级分流（clean-code-review P1-5——对齐 worktrees/index.ts consoleDiagFallback 正典，
+  // bug 7ba48c55 判例：error → console.error、其余 → console.warn；禁直落 console 单行兜底）
+  const diag: SeamDiag = config.diag ?? consoleDiagFallback;
 
   // project.db 打开（装配期一次；I4 拒开/文件异常 = fail-soft 退兜底——设计 §6 劣形②同径）。
   // 显式 config > 缺省值两级解析——home 缺省 = env DSH_HOME（官方宿主注行无 config 时
@@ -129,7 +127,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
         `[project-seams] project.db 已打开：${home === config.home ? "config.home" : "缺省 DSH_HOME"} → ${home}`,
       );
     } catch (cause) {
-      diag(`[project-seams] project.db 打开失败——projects/bugs 退兜底：${String(cause)}`);
+      diag(`[project-seams] project.db 打开失败——projects/bugs 退兜底：${String(cause)}`, "error");
     }
   }
 
@@ -254,6 +252,8 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
             bugs: db.repos.bugs,
             resolveProjectKey: deps.resolveProjectKey,
             resolveMainPath: deps.resolveMainPath,
+            // P1-3：bugs 域失败路径诊断——diag 单源透传（level 随载荷分流）
+            onDiag: (payload) => diag(`[project-bugs] ${payload.message}`, payload.level),
           }) as BugsServicePort;
       })(),
     };

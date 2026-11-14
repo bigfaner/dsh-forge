@@ -244,12 +244,15 @@ function remoteResultOf(raw: unknown, channel: string): unknown {
   }
 }
 
-/** typert 调用（一元——位置参直透 + RemoteResult 信封投影 + typed error 抛出） */
-async function invokeRemote<T>(
+/**
+ * typert face 方法解析 + 缺席降级块单源（clean-code-review P1-7——invokeRemote/streamRemote
+ * 逐字双份收敛）：faceSeamOf → resolver → namespaceFaceOf → methodOf 取法 + 消费面 warn 门控
+ * 诊断 + typed Error 抛出。返回方法引用；面缺席抛 Error（调用方降级语义不变）。
+ */
+function remoteFaceMethodOf(
   namespace: keyof ForgeRemoteFace,
   method: string,
-  args: readonly unknown[],
-): Promise<T> {
+): (...args: unknown[]) => unknown {
   const seam = faceSeamOf()
   const face = seam.resolver()
   const ns = face === undefined ? undefined : namespaceFaceOf(face, namespace)
@@ -266,6 +269,16 @@ async function invokeRemote<T>(
     }
     throw new Error(line)
   }
+  return fn as (...args: unknown[]) => unknown
+}
+
+/** typert 调用（一元——位置参直透 + RemoteResult 信封投影 + typed error 抛出） */
+async function invokeRemote<T>(
+  namespace: keyof ForgeRemoteFace,
+  method: string,
+  args: readonly unknown[],
+): Promise<T> {
+  const fn = remoteFaceMethodOf(namespace, method)
   return invokeEnvelope(await (fn as (...args: unknown[]) => unknown)(...args), `${String(namespace)}/${method}`)
 }
 
@@ -275,28 +288,14 @@ async function invokeEnvelope<T>(raw: unknown, channel: string): Promise<T> {
   throw new RpcClientError(result.error)
 }
 
-/** typert 流调用（mode:'stream'——AsyncIterable 帧直透，缺席 face = 诚实降级 throw） */
+/** typert 流调用（mode:'stream'——AsyncIterable 帧直透，缺席 face = 诚实降级 throw；
+ *  缺席降级块与 invokeRemote 单源（remoteFaceMethodOf——P1-7 收敛） */
 function streamRemote<T>(
   namespace: keyof ForgeRemoteFace,
   method: string,
   args: readonly unknown[],
 ): AsyncIterable<T> {
-  const seam = faceSeamOf()
-  const face = seam.resolver()
-  const ns = face === undefined ? undefined : namespaceFaceOf(face, namespace)
-  const fn = methodOf(ns, method)
-  if (fn === undefined) {
-    const line = `dsh-forge project client: 官方 forge remote 面缺席（${String(namespace)}.${method}）——通道不可用（诚实降级）`
-    // 消费面 warn 门控（fix-2 竞速分类钉）：contribution mount 终态前的面缺席属装配时序
-    // 竞速窗口——typed Error 照抛（调用方降级语义不变），console 诊断静默（boot 窗口零
-    // 「面缺席」降级记录）；mount 终态后的真缺席保持诚实 warn/diag。
-    if (remoteMountSettled()) {
-      const diag = seam.diag ?? rpcDiag
-      if (diag !== undefined) diag(line)
-      else console.warn(`[forge-rpc-transport] ${line}`)
-    }
-    throw new Error(line)
-  }
+  const fn = remoteFaceMethodOf(namespace, method)
   const handle = (fn as (...args: unknown[]) => unknown)(...args) as AsyncIterable<T>
   return (async function* () {
     for await (const frame of handle) yield frame

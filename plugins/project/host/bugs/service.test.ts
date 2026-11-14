@@ -40,8 +40,12 @@ const PORCELAIN_HIT = [
   '',
 ].join('\n')
 
-/** 装配同构注入：project.db :memory: + 种两项目行 + resolveProjectKey 读行派生（I5 缝） */
-function makeFixture(git?: Record<string, string | null>) {
+/** 装配同构注入：project.db :memory: + 种两项目行 + resolveProjectKey 读行派生（I5 缝）；
+ *  onDiag 选填——P1-3 失败路径诊断用例注入收集闭包。 */
+function makeFixture(
+  git?: Record<string, string | null>,
+  onDiag?: (payload: { event: string; level: string; message: string }) => void,
+) {
   const domain: DomainDb = openDomainDb('.', { prefix: PROJECT_DB_PREFIX, file: ':memory:' })
   const seedProject = (id: string, projectKey: string): void => {
     domain.repos.projects.insert({
@@ -67,6 +71,7 @@ function makeFixture(git?: Record<string, string | null>) {
     resolveMainPath: () => 'Z:/repo/main',
     execFile: stub.execFile,
     notify: (projectId) => notify.push(projectId),
+    ...(onDiag !== undefined ? { onDiag: onDiag as (payload: never) => void } : {}),
   })
   const stampBug = (id: string, patch: { createdAt?: string; updatedAt?: string; suspected?: string | null }): void => {
     const sets: string[] = []
@@ -865,5 +870,68 @@ describe('parseTaskContainerSlug：段边界 + 派生词汇白名单', () => {
     expect(parseTaskContainerSlug('t-f-fix')).toBeNull()
     expect(parseTaskContainerSlug('task-uuid-1')).toBeNull() // 非 t- 前缀 = 非管线任务 id
     expect(parseTaskContainerSlug('t-fix-1')).toBe('fix') // 单段 slug 容器（歧义按白名单优先解释——文档声明取舍）
+  })
+})
+
+// ─────────────────────────── P1-3 失败路径诊断（onDiag 缝——bugs 域整域零诊断站点收口） ───────────────────────────
+describe('P1-3 bugs 域失败路径诊断（onDiag 缝）', () => {
+  type Diag = { event: string; level: string; message: string }
+  const collect = (): { diags: Diag[]; onDiag: (p: Diag) => void } => {
+    const diags: Diag[] = []
+    return { diags, onDiag: (p) => diags.push(p) }
+  }
+
+  it('git 身份双缺席 → reporter 落 (unknown) + bug-git-identity warn 留痕', async () => {
+    const d = collect()
+    const fx = makeFixture({ 'config user.name': null, 'config user.email': null }, d.onDiag)
+    const bug = await registerOpen(fx)
+    expect(bug.reporter).toBe('(unknown)')
+    const hits = d.diags.filter((x) => x.event === 'bug-git-identity')
+    expect(hits.length).toBeGreaterThanOrEqual(1)
+    expect(hits.every((x) => x.level === 'warn')).toBe(true)
+  })
+
+  it('fixed 证据反查双径全败（porcelain + branch --contains）→ bug-git-evidence warn，fixed 行照落', async () => {
+    const d = collect()
+    const fx = makeFixture(
+      {
+        'config user.name': 'faner',
+        'worktree list --porcelain': null,
+        'branch --contains aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa': null,
+      },
+      d.onDiag,
+    )
+    const bug = await registerOpen(fx)
+    const card = await fx.service.resolveBug({
+      projectId: fx.projectId,
+      bugId: bug.bugId,
+      outcome: 'fixed',
+      commitHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+    expect(card.worktree).toBeUndefined()
+    expect(card.branch).toBeUndefined()
+    expect(d.diags.filter((x) => x.event === 'bug-git-evidence').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('commitFiles/fileDiff git show 失败 → 空集 fail-soft + bug-git-evidence warn（各一条）', async () => {
+    const d = collect()
+    const hash = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    const fx = makeFixture(
+      {
+        'config user.name': 'faner',
+        [`show --name-status --format= ${hash}`]: null,
+        [`show --format= ${hash} -- Z:/repo/a.ts`]: null,
+      },
+      d.onDiag,
+    )
+    expect(await fx.service.commitFiles({ projectId: fx.projectId, commitHash: hash })).toEqual([])
+    expect((await fx.service.fileDiff({ projectId: fx.projectId, commitHash: hash, path: 'Z:/repo/a.ts' })).diff).toBe('')
+    expect(d.diags.filter((x) => x.event === 'bug-git-evidence')).toHaveLength(2)
+  })
+
+  it('onDiag 缺席 → 零 emit 零抛（行为不变——诊断缝纯增量）', async () => {
+    const fx = makeFixture({ 'config user.name': null, 'config user.email': null })
+    const bug = await registerOpen(fx)
+    expect(bug.reporter).toBe('(unknown)')
   })
 })

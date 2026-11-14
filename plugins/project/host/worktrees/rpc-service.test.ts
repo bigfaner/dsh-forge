@@ -914,3 +914,109 @@ describe('吞没点分级补点（diag-milestone-coverage）', () => {
     expect(warns.join('\n')).toContain('bind read boom')
   })
 })
+
+describe('P1-2 读面失败显式降级（warn 留痕 + degraded 标记——假 0/假 main/假 null 不再裸兜底）', () => {
+  it('branches：listBranches/defaultBranch 失败 → 兜底值 + degraded 双标记 + warn', async () => {
+    const warns: string[] = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      warn: (l) => warns.push(l),
+      listBranchesOp: async () => {
+        throw new Error('listBranches boom')
+      },
+      defaultBranchOp: async () => {
+        throw new Error('defaultBranch boom')
+      },
+    })
+    const result = await service.branches({ projectRoot: 'C:/repo' })
+    expect(result.branches).toEqual([])
+    expect(result.defaultBranch).toBe('main')
+    expect(result.degraded).toEqual({ branches: true, defaultBranch: true })
+    const joined = warns.join('\n')
+    expect(joined).toContain('worktree-branches-degraded')
+    expect(joined).toContain('listBranches boom')
+    expect(joined).toContain('defaultBranch boom')
+  })
+
+  it('checks：status/清单失败 → dirtyCount/aheadCount 兜底 + degraded + warn', async () => {
+    const warns: string[] = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      warn: (l) => warns.push(l),
+      worktreeStatusOp: async () => {
+        throw new Error('status boom')
+      },
+      listWorktreeRows: async () => {
+        throw new Error('rows boom')
+      },
+    })
+    const result = await service.checks({ projectRoot: 'C:/repo', path: WT_A })
+    expect(result.dirtyCount).toBe(0)
+    expect(result.aheadCount).toBe(0)
+    expect(result.degraded).toEqual({ dirtyCount: true, aheadCount: true })
+    expect(warns.join('\n')).toContain('worktree-checks-degraded')
+    expect(warns.join('\n')).toContain('status boom')
+    expect(warns.join('\n')).toContain('rows boom')
+  })
+
+  it('aheadBehind：探测抛错 → degraded true + warn；探测返回 null（无 upstream）不标降级', async () => {
+    const warns: string[] = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      warn: (l) => warns.push(l),
+      listWorktreeRows: async () => [{ path: WT_A, branch: 'feat/a', detached: false, bare: false }],
+      aheadBehindOp: async () => {
+        throw new Error('ahead boom')
+      },
+    })
+    const failed = await service.aheadBehind({ projectRoot: 'C:/repo', path: WT_A })
+    expect(failed.counts).toBeNull()
+    expect(failed.degraded).toBe(true)
+    expect(warns.join('\n')).toContain('worktree-ahead-behind-degraded')
+    expect(warns.join('\n')).toContain('ahead boom')
+    const noUpstream = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      listWorktreeRows: async () => [{ path: WT_A, branch: 'feat/a', detached: false, bare: false }],
+      aheadBehindOp: async () => null,
+    })
+    const ok = await noUpstream.aheadBehind({ projectRoot: 'C:/repo', path: WT_A })
+    expect(ok.counts).toBeNull()
+    expect('degraded' in ok).toBe(false)
+  })
+
+  it('正常路径形状不变：零 degraded 字段（DTO 兼容——正常读取缺席）', async () => {
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      listWorktreeRows: async () => [{ path: 'C:/repo', branch: 'main', detached: false, bare: false }],
+      listBranchesOp: async () => ['main', 'feat/a'],
+      defaultBranchOp: async () => 'main',
+      worktreeStatusOp: async () => ({ dirtyCount: 2 }),
+      aheadBehindOp: async () => ({ ahead: 1, behind: 2 }),
+    })
+    const b = await service.branches({ projectRoot: 'C:/repo' })
+    expect(b).toEqual({ branches: ['main', 'feat/a'], defaultBranch: 'main' })
+    const c = await service.checks({ projectRoot: 'C:/repo', path: 'C:/repo' })
+    expect(c.dirtyCount).toBe(2)
+    expect(c.aheadCount).toBe(1)
+    expect('degraded' in c).toBe(false)
+    const a = await service.aheadBehind({ projectRoot: 'C:/repo', path: 'C:/repo' })
+    expect(a).toEqual({ counts: { ahead: 1, behind: 2 } })
+  })
+
+  it('cachedResolve 探测失败 → warn 留痕（假非 git 判定不再静默）', async () => {
+    const warns: string[] = []
+    const boomExt = {
+      getExtensionPoints: () => ({
+        resolveProject: async () => {
+          throw new Error('probe boom')
+        },
+        getWorktreeDir: (r: string) => `${r}/.forge/worktrees`,
+      }),
+    }
+    const service = createWorktreeRpcService({ gitWorktree: boomExt, warn: (l) => warns.push(l) })
+    const result = await service.list({ projectRoot: 'C:/boom' })
+    expect(result.isGit).toBe(false)
+    expect(warns.join('\n')).toContain('worktree-resolve-degraded')
+    expect(warns.join('\n')).toContain('probe boom')
+  })
+})

@@ -259,6 +259,55 @@ function worktreeEntries(worktrees: WorktreeServicePort): Promise<readonly unkno
   return worktrees.list({ projectRoot: 'Z:/p' } as never).then((r) => r.entries)
 }
 
+describe('P1-1 消费面劣形降级诊断（injectProjectSeam onDiag 缝——同文件双标收口，clean-code-review P1-1）', () => {
+  it('劣形①：reflect.get 抛错 → onDiag warn 留痕（视同缺席退兜底）', () => {
+    const lines: string[] = []
+    const ctx: SeamCtxFace = {
+      reflect: {
+        provide: () => undefined,
+        get: () => {
+          throw new Error('scope boom')
+        },
+      },
+    }
+    const projects = injectProjectSeam(ctx, PROJECT_SEAM_KEYS.projects, projectsFallback, (l) => lines.push(l))
+    expect(projects.getProject).toBeTypeOf('function')
+    expect(lines.join('\n')).toContain('劣形①')
+    expect(lines.join('\n')).toContain('scope boom')
+  })
+
+  it('劣形②：工厂实例化抛错 → onDiag warn 含 cause', async () => {
+    const lines: string[] = []
+    const { ctx } = ctxStub({
+      [PROJECT_SEAM_KEYS.projects]: () => {
+        throw new Error('factory boom')
+      },
+    })
+    const projects = injectProjectSeam(ctx, PROJECT_SEAM_KEYS.projects, projectsFallback, (l) => lines.push(l))
+    await expect(projects.listProjects()).resolves.toEqual([])
+    expect(lines.join('\n')).toContain('劣形②')
+    expect(lines.join('\n')).toContain('factory boom')
+  })
+
+  it('劣形③：首调抛错 → onDiag warn 含 cause + 降级记忆恒兜底', async () => {
+    const lines: string[] = []
+    const { ctx } = ctxStub({
+      [PROJECT_SEAM_KEYS.worktrees]: () => ({
+        list: () => {
+          throw new Error('first-call boom')
+        },
+      }),
+    })
+    const worktrees = injectProjectSeam(ctx, PROJECT_SEAM_KEYS.worktrees, worktreesFallback, (l) => lines.push(l))
+    await expect(worktreeEntries(worktrees)).resolves.toEqual([])
+    const joined = lines.join('\n')
+    expect(joined).toContain('劣形③')
+    expect(joined).toContain('first-call boom')
+    // 降级记忆：第二次调用仍兜底且不再重复 emit 劣形③（降级态一次性留痕）
+    await expect(worktreeEntries(worktrees)).resolves.toEqual([])
+  })
+})
+
 // 真 cordis 契约测试（bug 55aa82c1——接收者绑定防漂移钉）：registerProjectSeams 对真
 // cordis Context 注册——cordis reflect.provide 内部读 this.ctx，接收者必须为 reflect
 // 实例（host-side.ts 同正形 `provide.call(ctx.reflect, …)`）；误绑 ctx 会全缝降级。

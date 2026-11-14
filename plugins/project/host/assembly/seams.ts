@@ -9,6 +9,7 @@
 //   · 择优在装配期一次完成（注册即终态），运行期不切换。
 // 消费面统一 injectProjectSeam（ctx.inject 路径）：注入缺席/劣形三形态（注册值非函数 /
 //   实例化抛错 / 首调抛错）fail-soft 退兜底——劣形清单程序化可识别（code-design §6 S1）。
+import type { DiagLevel } from '@dsh-forge/lib-diag'
 import type {
   BugsServicePort,
   DirFactsPort,
@@ -47,7 +48,8 @@ export interface SeamCtxFace {
   }
 }
 
-export type SeamDiag = (line: string) => void
+/** 诊断缝（行形态 + 可选级别——级别缺席 = warn；缺省出口 consoleDiagFallback 按级分流） */
+export type SeamDiag = (line: string, level?: DiagLevel) => void
 
 /** 常驻 provider 惰性工厂（装配期闭包重依赖——实例化失败 = 劣形②退兜底）。
  *  返回 undefined 允许（运行期真源现查缺席——如宿主 core 服务未装载且自建库未开）：
@@ -292,6 +294,7 @@ export function injectProjectSeam<K extends ProjectSeamKey>(
   ctx: SeamCtxFace,
   key: K,
   fallback: () => ProjectSeamPorts[K],
+  onDiag?: SeamDiag | undefined,
 ): ProjectSeamPorts[K] {
   let degraded = false
   const resolve = (): ProjectSeamPorts[K] => {
@@ -299,21 +302,28 @@ export function injectProjectSeam<K extends ProjectSeamKey>(
     let raw: unknown
     try {
       raw = ctx.reflect?.get?.(key)
-    } catch {
-      raw = undefined // 读取异常（scope 缺席）视同缺席——劣形①
+    } catch (cause) {
+      // 读取异常（scope 缺席）视同缺席——劣形①（P1-1 补点：warn 留痕不再静默）
+      onDiag?.(`[project-seams] ${key} reflect.get 抛错——视同缺席退兜底（劣形①）：${String(cause)}`)
+      raw = undefined
     }
-    if (typeof raw !== 'function') return fallback() // 劣形①（含缺席）
+    if (typeof raw !== 'function') {
+      onDiag?.(`[project-seams] ${key} 注入值非函数（含缺席）——退兜底（劣形①）`)
+      return fallback() // 劣形①（含缺席）
+    }
     try {
       const instance = (raw as () => unknown)()
       if (instance === undefined || instance === null || typeof instance !== 'object') {
         degraded = true
+        onDiag?.(`[project-seams] ${key} 工厂产出非对象——退兜底（劣形②）`)
         return fallback() // 劣形②产出非对象
       }
       return guardFirstCall(instance as ProjectSeamPorts[K], fallback, () => {
         degraded = true
-      })
-    } catch {
+      }, onDiag, key)
+    } catch (cause) {
       degraded = true
+      onDiag?.(`[project-seams] ${key} 工厂实例化抛错——退兜底（劣形②）：${String(cause)}`)
       return fallback() // 劣形②实例化抛错
     }
   }
@@ -322,8 +332,15 @@ export function injectProjectSeam<K extends ProjectSeamKey>(
   return resolve()
 }
 
-/** 首调守卫：函数面首个抛错（同步或 Promise rejection）→ 切兜底（劣形③）；此后恒兜底。 */
-function guardFirstCall<T extends object>(provider: T, fallback: () => T, degrade: () => void): T {
+/** 首调守卫：函数面首个抛错（同步或 Promise rejection）→ 切兜底（劣形③）；此后恒兜底。
+ *  P1-1 补点：降级时点 onDiag warn 留痕（含 seam key 与 cause——cause 不再丢弃）。 */
+function guardFirstCall<T extends object>(
+  provider: T,
+  fallback: () => T,
+  degrade: () => void,
+  onDiag?: SeamDiag | undefined,
+  seamKey?: string,
+): T {
   const guarded: Record<string, unknown> = {}
   for (const key of Object.keys(provider)) {
     const value = (provider as Record<string, unknown>)[key]
@@ -334,6 +351,7 @@ function guardFirstCall<T extends object>(provider: T, fallback: () => T, degrad
     guarded[key] = (...args: unknown[]) => {
       const degradeToFallback = (cause: unknown): unknown => {
         degrade()
+        onDiag?.(`[project-seams] ${seamKey ?? '?'} 首调抛错（劣形③）——本缝降级记忆恒兜底：${key}：${String(cause)}`)
         const fb = fallback() as Record<string, unknown>
         const fbFn = fb[key]
         if (typeof fbFn !== 'function') throw cause
