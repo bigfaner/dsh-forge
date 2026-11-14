@@ -215,6 +215,48 @@ describe('followSeal 快照钩（baseline + 变化才 yield + abort 出循环）
   })
 })
 
+// ── inject 生命周期缝替身（1.12 conversation-views-face 同径——服务在场同步激活、缺席挂起、provide 后补激活） ──
+
+function captureInjectLifecycle(initial?: { forgeProposals?: unknown; forgeFeatures?: unknown }): {
+  face: TypertAssemblyCtxFace
+  mounted: { name: string; scope: Context }[]
+  provide: (key: 'forgeProposals' | 'forgeFeatures', svc: unknown) => void
+  pendingCount: () => number
+} {
+  const mounted: { name: string; scope: Context }[] = []
+  const pending: Array<{ key: string; cb: (scope: Record<string, unknown>) => void }> = []
+  const services: Record<string, unknown> = { ...initial }
+  const face: TypertAssemblyCtxFace = {
+    plugin(options: { name: string; apply: (scope: Context) => void }) {
+      const scope = new Context()
+      mounted.push({ name: options.name, scope })
+      options.apply(scope)
+      return scope
+    },
+    inject(deps: readonly string[], cb: (scope: Record<string, unknown>) => void) {
+      const key = deps[0]
+      if (services[key] !== undefined) {
+        cb({ [key]: services[key] })
+      } else {
+        pending.push({ key, cb })
+      }
+      return () => {}
+    },
+  } as TypertAssemblyCtxFace
+  return {
+    face,
+    mounted,
+    pendingCount: () => pending.length,
+    provide: (key, svc) => {
+      services[key] = svc
+      for (const entry of pending.splice(0)) {
+        if (entry.key === key) entry.cb({ [key]: svc })
+        else pending.push(entry)
+      }
+    },
+  }
+}
+
 describe('registerForgeTypertRemotes（根 ctx plugin 装配）', () => {
   it('全族在场 → 七 plugin 挂根 ctx，各 scope 构造控制器（registered 清单）', () => {
     const { face, mounted } = captureRoot()
@@ -301,6 +343,85 @@ describe('registerForgeTypertRemotes（根 ctx plugin 装配）', () => {
     registerForgeTypertRemotes(captureRoot().face, { selfProbe })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(selfProbe).not.toHaveBeenCalled()
+  })
+})
+
+describe('forgeProposals/forgeFeatures inject 生命周期绑（迟到重绑——bug 253b8265）', () => {
+  const proposalSvc = { listProposals: async () => [{ id: 'p-1' }] }
+  const featureSvc = { listFeatures: async () => [] }
+
+  it('迟到场景钉：apply 时 core 服务未提供 = 挂起不注册（pending 记录）；provide 后补激活注册认领 + 迟到重绑诊断行', () => {
+    const diag = vi.fn()
+    const { face, mounted, provide, pendingCount } = captureInjectLifecycle()
+
+    const result = registerForgeTypertRemotes(face, { diag })
+
+    // apply 时点：注入族挂起（零 mount），degraded 如实记录、pending 面可观测
+    expect(result.registered).not.toContain('forgeProposals')
+    expect(result.registered).not.toContain('forgeFeatures')
+    expect(result.pending).toEqual(['forgeProposals', 'forgeFeatures'])
+    expect(result.degraded).toContain('forgeProposals')
+    expect(pendingCount()).toBe(2)
+
+    // 服务后到（cordis inject 补激活）→ 控制器注册进根 ctx、registered 补入、诊断留痕
+    provide('forgeProposals', proposalSvc)
+    provide('forgeFeatures', featureSvc)
+    expect(mounted.map((m) => m.name)).toContain('project-typert-forgeProposals')
+    expect(mounted.map((m) => m.name)).toContain('project-typert-forgeFeatures')
+    expect(result.registered).toContain('forgeProposals')
+    expect(result.registered).toContain('forgeFeatures')
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining('迟到重绑'))
+  })
+
+  it('服务在场：apply 即注册认领（cordis inject 同步激活——boot log registered 形态）', () => {
+    const { face, mounted } = captureInjectLifecycle({
+      forgeProposals: proposalSvc,
+      forgeFeatures: featureSvc,
+    })
+
+    const result = registerForgeTypertRemotes(face, {})
+
+    expect(result.registered).toContain('forgeProposals')
+    expect(result.registered).toContain('forgeFeatures')
+    expect(mounted.map((m) => m.name)).toContain('project-typert-forgeProposals')
+    expect(mounted.map((m) => m.name)).toContain('project-typert-forgeFeatures')
+  })
+
+  it('真缺席（官方 web 舞台回归语义）：inject 永不激活 → 注入族端点不认领（诚实降级不变）', () => {
+    const { face, mounted } = captureInjectLifecycle()
+
+    const result = registerForgeTypertRemotes(face, {})
+
+    expect(result.registered).not.toContain('forgeProposals')
+    expect(result.registered).not.toContain('forgeFeatures')
+    expect(mounted.map((m) => m.name)).not.toContain('project-typert-forgeProposals')
+    expect(mounted.map((m) => m.name)).not.toContain('project-typert-forgeFeatures')
+    expect(result.degraded).toEqual(expect.arrayContaining(['forgeProposals', 'forgeFeatures']))
+  })
+
+  it('激活时控制器构造抛错 → fail-soft 不炸 inject 缝（诊断留痕，他族不受影响）', () => {
+    const diag = vi.fn()
+    const { face, provide } = captureInjectLifecycle()
+    const originPlugin = face.plugin!.bind(face)
+    face.plugin = (options: { name: string; apply: (scope: Context) => void }) => {
+      if (options.name === 'project-typert-forgeFeatures') throw new Error('mount 炸')
+      return originPlugin(options)
+    }
+
+    const result = registerForgeTypertRemotes(face, { diag })
+    provide('forgeProposals', proposalSvc)
+    provide('forgeFeatures', featureSvc)
+
+    expect(result.registered).toContain('forgeProposals')
+    expect(result.registered).not.toContain('forgeFeatures')
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining('forgeFeatures 激活失败'))
+  })
+
+  it('inject 激活后控制器调用期现查 core 服务（list 走注入所得服务——惰性语义不回归）', async () => {
+    const { face } = captureInjectLifecycle({ forgeProposals: proposalSvc })
+    registerForgeTypertRemotes(face, {})
+    const row = await new ForgeProposalsRemote(new Context() as never, { proposals: () => proposalSvc }).list({})
+    expect(row).toEqual([{ id: 'p-1' }])
   })
 })
 

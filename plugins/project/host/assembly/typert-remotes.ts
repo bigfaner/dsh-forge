@@ -123,10 +123,12 @@ export interface ForgeTypertDeps {
   readonly selfProbe?: (namespace: string, method: string) => Promise<unknown>;
 }
 
-/** 注册结果（可观测面——registered = 根 ctx 装上的 namespace；degraded = 缺族未装清单） */
+/** 注册结果（可观测面——registered = 根 ctx 装上的 namespace；degraded = 缺族未装清单；
+ *  pending = inject 生命周期绑挂起中（服务后到经重绑补入 registered）） */
 export interface ForgeTypertRegistration {
   readonly registered: readonly string[];
   readonly degraded: readonly string[];
+  readonly pending: readonly string[];
 }
 
 /** typed unavailable（族服务缺席——调用期诚实拒绝，非注册期静默空挂） */
@@ -502,11 +504,17 @@ remoteMarks(ForgeFeaturesRemote.prototype, [["list"]]);
 export interface TypertAssemblyCtxFace {
   readonly root?: unknown;
   plugin?(options: { name: string; apply: (scope: Context) => void }): unknown;
+  /** cordis inject 生命周期缝（官方机械——deps 在场激活 cb、后到补激活、撤回随 fiber 退） */
+  inject?(deps: readonly string[], cb: (scope: Record<string, unknown>) => void): unknown;
 }
 
-/** 控制器注册表（namespace → 工厂——缺族不注册，不空挂） */
+/** 控制器注册表（namespace → 工厂——缺族不注册，不空挂；injectKey = cordis inject
+ *  生命周期绑族（core 域服务 provide 时点可晚于本装配——bug 253b8265：apply 时点
+ *  absentWhen 探针冻结 degraded，迟到服务恒 404；改官方 inject 缝——在场激活/后到
+ *  补激活/撤回随 fiber 退，1.12 conversation-views-face 同型）） */
 const CONTROLLERS: readonly {
   readonly namespace: string;
+  readonly injectKey?: string;
   readonly absentWhen?: (deps: ForgeTypertDeps) => boolean;
   readonly mount: (scope: Context, deps: ForgeTypertDeps) => unknown;
 }[] = [
@@ -514,8 +522,8 @@ const CONTROLLERS: readonly {
   { namespace: "forgeBugs", absentWhen: (d) => d.bugs?.() === undefined, mount: (s, d) => new ForgeBugsRemote(s, d) },
   { namespace: "forgeFs", mount: (s) => new ForgeFsRemote(s) },
   { namespace: "forgeWorktree", absentWhen: (d) => d.worktrees?.() === undefined, mount: (s, d) => new ForgeWorktreeRemote(s, d) },
-  { namespace: "forgeProposals", absentWhen: (d) => d.proposals?.() === undefined, mount: (s, d) => new ForgeProposalsRemote(s, d) },
-  { namespace: "forgeFeatures", absentWhen: (d) => d.features?.() === undefined, mount: (s, d) => new ForgeFeaturesRemote(s, d) },
+  { namespace: "forgeProposals", injectKey: "forgeProposals", absentWhen: (d) => d.proposals?.() === undefined, mount: (s, d) => new ForgeProposalsRemote(s, d) },
+  { namespace: "forgeFeatures", injectKey: "forgeFeatures", absentWhen: (d) => d.features?.() === undefined, mount: (s, d) => new ForgeFeaturesRemote(s, d) },
   { namespace: "forgeDirs", absentWhen: (d) => d.dirsWorkspaceRoot?.() === undefined && d.dirFacts?.() === undefined, mount: (s, d) => new ForgeDirsRemote(s, d) },
 ];
 
@@ -531,13 +539,38 @@ export function registerForgeTypertRemotes(
   const host = (ctx.root ?? ctx) as TypertAssemblyCtxFace;
   const registered: string[] = [];
   const degraded: string[] = [];
+  const pending: string[] = [];
   if (typeof host.plugin !== "function") {
     const line = "[project-typert] ctx.plugin 缺席——Typert 控制器不注册（非 cordis 宿主）";
     diag?.(line);
     degraded.push("assembly");
-    return { registered, degraded };
+    return { registered, degraded, pending };
   }
   for (const controller of CONTROLLERS) {
+    const inject = host.inject;
+    if (controller.injectKey !== undefined && typeof inject === "function") {
+      // 生命周期绑（官方 ctx.inject 缝——服务在场同步激活、后到补激活、撤回随 fiber 退；
+      // 挂起期 namespace 不认领 = 官方 web 舞台真缺席诚实降级 404 语义不变）。
+      pending.push(controller.namespace);
+      degraded.push(controller.namespace);
+      inject.call(host, [controller.injectKey], (scope) => {
+        try {
+          if (scope[controller.injectKey!] === undefined) return;
+          host.plugin!({
+            name: `project-typert-${controller.namespace}`,
+            apply: (pluginScope: Context) => {
+              controller.mount(pluginScope, deps);
+            },
+          });
+          registered.push(controller.namespace);
+          diag?.(`[project-typert] 迟到重绑：${controller.namespace} 服务在场认领（inject 生命周期缝）`);
+        } catch (cause) {
+          const line = `[project-typert] ${controller.namespace} 激活失败——本族降级（fail-soft 不阻载）：${messageOf(cause)}`;
+          diag?.(line);
+        }
+      });
+      continue;
+    }
     if (controller.absentWhen?.(deps) === true) {
       degraded.push(controller.namespace);
       continue;
@@ -557,7 +590,7 @@ export function registerForgeTypertRemotes(
     }
   }
   diag?.(
-    `[project-typert] Typert 遥控器注册完成：registered=[${registered.join(", ")}] degraded=[${degraded.join(", ")}]`,
+    `[project-typert] Typert 遥控器注册完成：registered=[${registered.join(", ")}] degraded=[${degraded.join(", ")}] pending-inject=[${pending.join(", ")}]`,
   );
   // 注册后自探针（boot 竞速根治）：完成行后立即经 gateway invoke 直探 forgeProjects/list
   // ——serve 层认领自证（零副作用读面）；装配序判据 = 本探针时点晚于注册、早于 client
@@ -571,5 +604,5 @@ export function registerForgeTypertRemotes(
           diag?.(`[project-typert] 注册后自探针失败：forgeProjects/list——${messageOf(cause)}`),
       );
   }
-  return { registered, degraded };
+  return { registered, degraded, pending };
 }
