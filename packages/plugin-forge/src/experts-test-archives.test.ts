@@ -164,23 +164,24 @@ describe("experts/test-script-author.md 档案解析断言（forge-test-discipli
     }
   });
 
-  it("执行约束节增补：CI 门禁分层 + 迭代止损 3 轮（语言无关通用面）", () => {
+  it("执行约束节瘦身：执行面条目移除（归 test-run），只留撰写面（快照重录）+ 归属句", () => {
     const exec = content.slice(content.indexOf("## 执行约束"), content.indexOf("## 断言质量门"));
     // 锚守卫
     for (const anchor of ["## 执行约束", "## 断言质量门"]) {
       expect(content.indexOf(anchor), `锚缺失：${anchor}`).toBeGreaterThan(-1);
     }
-    // CI 门禁分层：单元/集成快反馈进 PR 门禁，e2e 慢回归进收口/发布轮
-    expect(exec).toContain("CI 门禁分层");
-    expect(exec).toContain("单元与集成测试进 PR 门禁");
-    expect(exec).toContain("快反馈");
-    expect(exec).toContain("e2e 进收口/发布轮");
-    expect(exec).toContain("慢回归");
-    expect(exec).toContain("全量 e2e 不进 PR 门禁");
-    // 迭代止损 3 轮通用面
-    expect(exec).toContain("迭代止损");
-    expect(exec).toContain("上限 3 轮");
-    expect(exec).toContain("止损上抛");
+    // 执行纪律归属句（编写与执行分离：怎么跑归 test-run）
+    expect(exec).toContain("执行纪律");
+    expect(exec).toContain("归测试执行者");
+    expect(exec).toContain("test-run 职责面");
+    expect(exec).toContain("只管写什么、怎么写");
+    // 撰写面保留：快照重录须伴随行为断言更新
+    expect(exec).toContain("快照");
+    expect(exec).toContain("重录必须伴随对应行为断言更新");
+    // 执行类条目负断言（移除项不回流）
+    for (const removed of ["run-once", "针对性执行", "环境约束", "CI 门禁分层", "迭代止损", "覆盖率"]) {
+      expect(exec, `执行类条目应已移除：${removed}`).not.toContain(removed);
+    }
   });
 
   it("档案改动区块零目录/命名硬编码（词表机检，命令形态豁免）", () => {
@@ -378,7 +379,7 @@ describe("experts/test-journey-author.md 档案解析断言（forge-test-discipl
     expect(section).toContain("不自行撰写");
   });
 
-  it("八条撰写与执行纪律齐（表格行在案，语义措辞逐条核）", () => {
+  it("七条撰写纪律齐（定向跑批行已移除——执行面归 runner；超时行保留并标注撰写面语义）", () => {
     for (const row of [
       "| spec 校准轮 |",
       "| 环境自备 |",
@@ -386,7 +387,6 @@ describe("experts/test-journey-author.md 档案解析断言（forge-test-discipl
       "| 语义择行 |",
       "| 弱断言禁令 |",
       "| 超时与止损上界 |",
-      "| 定向跑批 |",
       "| 断言锚 |",
     ]) {
       expect(content.split(/\r?\n/).find((l) => l.startsWith(row)), `缺纪律行：${row}`).toBeDefined();
@@ -404,12 +404,16 @@ describe("experts/test-journey-author.md 档案解析断言（forge-test-discipl
     expect(table).toContain("不静默选第一个");
     // 弱断言
     expect(table).toContain("弱断言禁令");
-    // 超时止损上界含套件级
+    // 超时止损上界含套件级 + 撰写面语义（上界写进 spec，执行面归 runner）
     expect(table).toContain("止损上界");
     expect(table).toContain("套件级");
-    // 定向跑批 / 断言锚
-    expect(table).toContain("定向");
+    expect(table).toContain("上界写进 spec");
+    expect(table).toContain("归 test-runner");
+    // 断言锚
     expect(table).toContain("不断视觉坐标");
+    // 定向跑批行已移除（执行面归 runner），负断言
+    expect(content.split(/\r?\n/).find((l) => l.startsWith("| 定向跑批 |"))).toBeUndefined();
+    expect(table).not.toContain("全量套件只属收口轮");
   });
 
   it("迭代止损 3 轮 + spec/产品归因分离 + 文档锚同步句在案", () => {
