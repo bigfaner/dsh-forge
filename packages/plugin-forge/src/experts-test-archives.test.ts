@@ -172,6 +172,43 @@ describe("experts/test-script-author.md 档案解析断言（forge-test-discipli
   });
 });
 
+describe("experts/test-contract-author.md 档案解析断言（forge-test-discipline-layering 1.4）", () => {
+  const CONTRACT_FILE = resolve(here, "../experts/test-contract-author.md");
+  const content = readFileSync(CONTRACT_FILE, "utf-8");
+
+  it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
+    expect(parseExpertFileLike(CONTRACT_FILE, content)).toEqual({ ok: true });
+  });
+
+  it("契约层定位含分层锚两行：接口契约执行层归集成、旅程契约执行层归 e2e", () => {
+    const section = content.slice(content.indexOf("### 契约层定位"), content.indexOf("### 落位纪律")).replaceAll("*", "");
+    expect(section).toContain("接口契约的执行层归集成测试");
+    expect(section).toContain("旅程契约的执行层归 e2e");
+  });
+
+  it("契约形态选型：跨语言端际优先 CDC、同语言可共享类型包+镜像；不引替身不做进程内组装", () => {
+    const section = content.slice(content.indexOf("### 契约层定位"), content.indexOf("### 落位纪律")).replaceAll("*", "");
+    expect(section).toContain("跨语言端际优先消费者驱动契约（CDC）");
+    expect(section).toContain("语言中立契约文件");
+    expect(section).toContain("真实服务验证");
+    expect(section).toContain("共享类型包 + 镜像");
+    expect(section).toContain("不引替身");
+    expect(section).toContain("不做被测真实模块的进程内组装");
+    expect(section).toContain("组装协作面归集成/脚本层");
+  });
+
+  it("契约文档锚同步句在案；与 script-author 同口径且零仓内路径引用", () => {
+    expect(content).toContain("改锚同提交改文档");
+    // 不互相引用路径：本档案不出现对 script-author 档案的路径引用
+    expect(content).not.toContain("test-script-author.md");
+    const body = content.slice(content.indexOf("\n---", 4) + 4);
+    const BANNED = ["AGENTS", "docs/conventions", "docs/", "packages/", "判例 20", ".forge", "src/"];
+    for (const token of BANNED) {
+      expect(body, `档案正文含禁用引用词：${token}`).not.toContain(token);
+    }
+  });
+});
+
 describe("experts/test-journey-author.md 档案解析断言（forge-test-discipline-layering 1.3）", () => {
   const JOURNEY_FILE = resolve(here, "../experts/test-journey-author.md");
   const content = readFileSync(JOURNEY_FILE, "utf-8");
