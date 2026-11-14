@@ -381,6 +381,70 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
     expect(h!.events.emitted).toHaveLength(1) // 复用纯读零事件
   })
 
+  it('同源同型异 taskDesc → 不吞并（判例 fix-11）：第二单正常建行 fix-2', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' })
+    seedTask(h!.db, 'fx', '2.2', { status: 'blocked' })
+    await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'fx' },
+      title: 'fix one',
+      type: 'coding-fix',
+      taskDesc: 'repair the anchoring edge',
+      sourceTask: { slug: 'fx', localId: '2.2' },
+      blockSource: true,
+    })
+    const second = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'fx' },
+      title: 'fix two',
+      type: 'coding-fix',
+      taskDesc: 'repair the claim gate', // 异 desc——不同任务
+      sourceTask: { slug: 'fx', localId: '2.2' },
+      blockSource: true,
+    })
+    expect(second).toMatchObject({ localId: 'fix-2', reused: false })
+    expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get()).toEqual({ n: 3 }) // 2.2 + fix-1 + fix-2
+  })
+
+  it('同源同型同 desc 异 vars → 不吞并；同 desc 同 vars（键序无关）→ 仍复用', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'fx', status: 'in-progress' })
+    seedTask(h!.db, 'fx', '2.2', { status: 'blocked' })
+    const first = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'fx' },
+      title: 'fix',
+      type: 'coding-fix',
+      taskDesc: 'same brief',
+      vars: { A: '1', B: '2' },
+      sourceTask: { slug: 'fx', localId: '2.2' },
+      blockSource: true,
+    })
+    const diffVars = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'fx' },
+      title: 'fix',
+      type: 'coding-fix',
+      taskDesc: 'same brief',
+      vars: { A: '1', B: '3' }, // 异 vars——不同任务
+      sourceTask: { slug: 'fx', localId: '2.2' },
+      blockSource: true,
+    })
+    expect(diffVars).toMatchObject({ localId: 'fix-2', reused: false })
+    const sameVarsReordered = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'fx' },
+      title: 'fix',
+      type: 'coding-fix',
+      taskDesc: 'same brief',
+      vars: { B: '2', A: '1' }, // 键序不同、值等价——复用首单
+      sourceTask: { slug: 'fx', localId: '2.2' },
+      blockSource: true,
+    })
+    expect(sameVarsReordered).toEqual({ taskId: first.taskId, slug: 'fx', localId: 'fix-1', reused: true })
+  })
+
   it('既有 fix 已终态 → 不复用新建 fix-2；边持久不删（B.5-6）：两条 fix-chain 边并存', async () => {
     const add = svc()
     seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // blocked 任务在场 → 相位一致（写前增量断言）

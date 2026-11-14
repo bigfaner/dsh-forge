@@ -121,6 +121,28 @@ function sameContainer(row: TaskKeyRow, kind: 'feature' | 'proposal', sourceId: 
   return row.source_kind === kind && row.source_id === sourceId
 }
 
+/** vars_json 规范形（键序无关——存储串/输入串两侧统一按键序排序后比较；null/非法串 → 原样区分） */
+function canonicalVars(varsJson: string | null): string | null {
+  if (varsJson === null) return null
+  try {
+    return JSON.stringify(sortKeys(JSON.parse(varsJson) as unknown))
+  } catch {
+    return varsJson
+  }
+}
+
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeys)
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .sort()
+        .map((k) => [k, sortKeys((value as Record<string, unknown>)[k])]),
+    )
+  }
+  return value
+}
+
 /**
  * 容器解析与写入校验锚（1.2 AC5 / 不变量①：tasks.slug ≡ 容器 slug + source_id 必命中
  * source_kind 对应表——多态引用无 DB FK，写入时校验承载）。返回判别联合：
@@ -385,17 +407,19 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
     }
 
     // ③ 任务级去重（两级去重之一——纯读零变更，老 forge built-in dedup 平移）：同源同型且未终态
-    //    → 复用既有行（reused=true；不重复建链/不重复置 blocked——持久边已承载等待事实）
+    //    → 复用既有行（reused=true；不重复建链/不重复置 blocked——持久边已承载等待事实）。
+    //    判据扩含 task_desc + vars（判例 fix-11：异 desc 第二单被吞并——内容不同即不同任务，
+    //    正常建行）；vars 比较走键序无关的规范化 JSON（存储串键序不可依）。
     if (source !== undefined) {
       const active = db
-        .prepare<unknown[], { id: string; slug: string; local_id: string }>(
-          `SELECT id, slug, local_id FROM tasks
+        .prepare<unknown[], { id: string; slug: string; local_id: string; task_desc: string | null; vars_json: string | null }>(
+          `SELECT id, slug, local_id, task_desc, vars_json FROM tasks
            WHERE source_task_id = ? AND task_type = ?
              AND task_status NOT IN ('completed', 'skipped', 'rejected')
            ORDER BY created_at, id LIMIT 1`,
         )
         .get(source.id, input.type)
-      if (active !== undefined) {
+      if (active !== undefined && active.task_desc === (input.taskDesc ?? null) && canonicalVars(active.vars_json) === canonicalVars(input.vars === undefined ? null : JSON.stringify(input.vars))) {
         return { taskId: active.id, slug: active.slug, localId: active.local_id, reused: true }
       }
     }
