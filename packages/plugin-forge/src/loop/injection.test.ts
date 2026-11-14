@@ -263,7 +263,7 @@ describe('模板正本（P1–P9 + 结束族）', () => {
       expect(text).toContain('静态关键词命中只定位不定罪')
       expect(text).toContain('不连带删除测试侧 fake')
       expect(text).toContain('测试侧组合根')
-      expect(text).toContain('正式装配的组合根不接受任何测试配置切换')
+      expect(text).toContain('正式装配组合根恒不接受测试配置切换')
     }
   })
 

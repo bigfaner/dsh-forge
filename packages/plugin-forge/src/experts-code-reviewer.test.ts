@@ -132,7 +132,7 @@ describe("experts/code-reviewer.md 档案解析断言（forge-test-boundary-gate
 
   it("关键条目在场：接口优先核验（测试侧组合根替换、正式组合根不接受测试切换）", () => {
     expect(content).toContain("测试侧组合根");
-    expect(content).toContain("正式装配的组合根不接受任何测试配置切换");
+    expect(content).toContain("正式装配组合根恒不接受测试配置切换");
   });
 
   it("关键条目在场：代码可读性、可测试性、clean code 审查项", () => {
@@ -169,7 +169,7 @@ describe("experts/code-master.md 档案解析断言（forge-test-boundary-gates 
     expect(content).toContain("识别被测面的可注入接口");
     expect(content).toContain("定义依赖倒置边界");
     expect(content).toContain("测试侧组合根");
-    expect(content).toContain("正式装配的组合根不接受任何测试配置切换");
+    expect(content).toContain("正式装配组合根恒不接受测试配置切换");
   });
 
   it("既有核心逻辑工匠职责保留（SOLID、可读性、TDD、可测试性）", () => {

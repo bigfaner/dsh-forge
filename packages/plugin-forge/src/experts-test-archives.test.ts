@@ -835,6 +835,8 @@ describe("跨档案一致性 pin（forge-test-pipeline-hardening 1.4——弱断
   const journey = readFileSync(resolve(here, "../experts/test-journey-author.md"), "utf-8");
   const master = readFileSync(resolve(here, "../experts/test-master.md"), "utf-8");
   const code = readFileSync(resolve(here, "../experts/code-master.md"), "utf-8");
+  const reviewer = readFileSync(resolve(here, "../experts/code-reviewer.md"), "utf-8");
+  const injection = readFileSync(resolve(here, "loop/injection.ts"), "utf-8");
 
   const WEAK_ASSERTION_FORMS = [
     "禁裸真值断言（对可精确断言的值只验非空/存在）",
@@ -861,10 +863,22 @@ describe("跨档案一致性 pin（forge-test-pipeline-hardening 1.4——弱断
     // 锚守卫
     expect(master.indexOf("### 测试方案设计职责"), "锚缺失：### 测试方案设计职责").toBeGreaterThan(-1);
     expect(code.indexOf("接口优先设计"), "锚缺失：接口优先设计段").toBeGreaterThan(-1);
-    // 替身位置铁律句（正式装配组合根不接受测试配置切换）两档案逐字相同
+    // 替身位置铁律句（正式装配组合根恒不接受测试配置切换）四载体逐字一致：code-master / test-master / code-reviewer / injection P8
     const STUB_IRON_RULE = "正式装配组合根恒不接受测试配置切换";
     expect(master, "test-master 缺替身位置铁律句（逐字）").toContain(STUB_IRON_RULE);
     expect(code, "code-master 缺替身位置铁律句（逐字）——改一漏一即红").toContain(STUB_IRON_RULE);
+    expect(reviewer, "code-reviewer 缺替身位置铁律句（逐字）——改一漏一即红").toContain(STUB_IRON_RULE);
+    expect(injection, "injection P8 缺替身位置铁律句（逐字）——改一漏一即红").toContain(STUB_IRON_RULE);
+    // 旧措辞漂白变体不得回流四载体
+    const LEGACY_VARIANTS = [
+      "正式装配的组合根不接受任何测试配置切换",
+      "正式装配组合根不接受任何测试配置切换",
+    ];
+    for (const variant of LEGACY_VARIANTS) {
+      for (const [name, text] of [["master", master], ["code", code], ["reviewer", reviewer], ["injection", injection]] as const) {
+        expect(text, `${name} 出现替身铁律句旧措辞变体：${variant}`).not.toContain(variant);
+      }
+    }
     // 归因三分句：code-master fake 三分法点名 test-master 裁定，test-master 替身清单侧回指 code-master 接口清单——归因闭环两向锚在案
     expect(code).toContain("位置与层归属归 test-master（替身清单裁定）");
     expect(master).toContain("code-master 产出接口清单，你产出替身清单");
