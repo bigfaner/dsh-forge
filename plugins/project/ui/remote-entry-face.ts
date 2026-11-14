@@ -364,7 +364,34 @@ export function registerRemoteEntryFace(
   return dispose !== undefined
 }
 
-/** 插件侧词典登记（apply 期一次——同 ns 重复登记抛错由调用方 try/catch 降级） */
+/**
+ * 插件侧词典登记（bug 8b88f1e6：重入幂等——守门收进登记缝内部，调用面零改动）。
+ * 词典挂在官方 client LocaleRuntime，插件 fiber 撤销不级联撤销登记；bundle reload
+ * （官方 modules loader 重跑 apply）重入时对同 ns+locale 二次 register 会被官方抛
+ * `already has locale` → 整块降级。收口 = 模块级锚持有 disposer + 页内全局锚同步发布
+ * （FORGE_REMOTE_FACE_ANCHOR_KEY 锚契约先例同型，rpc.ts:89-128）：重入先撤销旧登记
+ * 再重登记；返回的 disposer 撤销登记并清锚（清后重入视为全新登记）。
+ */
+export const FORGE_PROJECT_LOCALE_ANCHOR_KEY = '__dshForgeProjectLocaleDisposer'
+
+/** 页内锚读取（跨 bundle 副本单例——另一副本模块级锚缺席时回退读页内锚） */
+function localeAnchorOf(): (() => void) | undefined {
+  const anchor = (globalThis as Record<string, unknown>)[FORGE_PROJECT_LOCALE_ANCHOR_KEY]
+  return typeof anchor === 'function' ? (anchor as () => void) : undefined
+}
+
+/** 锚生效登记撤销（模块级锚优先，缺席回退页内锚——官方 disposer 幂等，双撤安全） */
+function revokeAnchoredLocale(): void {
+  localeAnchorOf()?.()
+}
+
 export function registerProjectLocale(locale: LocaleServiceFace): () => void {
-  return locale.register(FORGE_PROJECT_LOCALE_NS, FORGE_PROJECT_LOCALE_DICTS)
+  revokeAnchoredLocale()
+  const disposer = locale.register(FORGE_PROJECT_LOCALE_NS, FORGE_PROJECT_LOCALE_DICTS)
+  ;(globalThis as Record<string, unknown>)[FORGE_PROJECT_LOCALE_ANCHOR_KEY] = disposer
+  return () => {
+    disposer()
+    const anchor = localeAnchorOf()
+    if (anchor === disposer) delete (globalThis as Record<string, unknown>)[FORGE_PROJECT_LOCALE_ANCHOR_KEY]
+  }
 }

@@ -3,8 +3,14 @@
 // × boot manifest（remoteHost 实际绑定）双源 → 相位快照（配置↔实况不一致 = pending 待重启
 // 生效）；桥缺席/失败 = fail-soft off；setEnabled = forge:settings/set remoteApproval
 // 分节覆写 + 即时 refresh。签名随迁调整：buildRemoteStatusSource 零参（preload 桥页内直读）。
-import { afterEach, describe, expect, it } from 'vitest'
-import { SIDEBAR_FOOTER_ACTION_SLOT, buildRemoteStatusSource } from './remote-entry-face.js'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import {
+  FORGE_PROJECT_LOCALE_ANCHOR_KEY,
+  SIDEBAR_FOOTER_ACTION_SLOT,
+  buildRemoteStatusSource,
+  registerProjectLocale,
+} from './remote-entry-face.js'
+import { FORGE_PROJECT_LOCALE_NS, type LocaleServiceFace } from './locale.js'
 
 /** dshForge 桥替身安装面（globalThis.dshForge——preloadBridgeOf 读取面；用后还原） */
 let installed: unknown
@@ -312,6 +318,64 @@ describe('buildRemoteStatusSource（fix-3 产品配置通道）', () => {
     await remote.refresh()
     expect(notified).toBeGreaterThan(0)
     dispose()
+  })
+})
+
+describe('registerProjectLocale（bug 8b88f1e6：reload 重入双注册幂等）', () => {
+  /** 官方 LocaleRuntime 同型替身：同 ns+locale 重复登记抛错（disposer 幂等撤销） */
+  function fakeLocale(): LocaleServiceFace & { readonly revokes: number[] } {
+    const revokes: number[] = []
+    let registered = false
+    return {
+      revokes,
+      register: (_ns, dicts) => {
+        if (registered) throw new Error(`locale namespace "${_ns}" already has locale "${Object.keys(dicts)[0]}"`)
+        registered = true
+        let revoked = false
+        return () => {
+          if (revoked) return
+          revoked = true
+          registered = false
+          revokes.push(revokes.length + 1)
+        }
+      },
+      bind: (_ns) => (key) => key,
+    }
+  }
+
+  beforeEach(() => {
+    delete (globalThis as Record<string, unknown>)[FORGE_PROJECT_LOCALE_ANCHOR_KEY]
+  })
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>)[FORGE_PROJECT_LOCALE_ANCHOR_KEY]
+  })
+
+  it('首次登记成功并发布页内锚（disposer 不再被调用方丢弃）', () => {
+    const locale = fakeLocale()
+    const disposer = registerProjectLocale(locale)
+    expect(typeof disposer).toBe('function')
+    const anchor = (globalThis as Record<string, unknown>)[FORGE_PROJECT_LOCALE_ANCHOR_KEY]
+    expect(typeof anchor).toBe('function')
+  })
+
+  it('重入（reload 重跑 apply）先撤销旧登记再重登记——不抛 already has locale', () => {
+    const locale = fakeLocale()
+    registerProjectLocale(locale)
+    expect(() => registerProjectLocale(locale)).not.toThrow()
+    expect(locale.revokes).toHaveLength(1) // 旧登记已被撤销
+  })
+
+  it('返回的 disposer 撤销登记并清锚——此后重入视为全新登记', () => {
+    const locale = fakeLocale()
+    const disposer = registerProjectLocale(locale)
+    disposer()
+    expect((globalThis as Record<string, unknown>)[FORGE_PROJECT_LOCALE_ANCHOR_KEY]).toBeUndefined()
+    expect(() => registerProjectLocale(locale)).not.toThrow()
+    expect(locale.revokes).toHaveLength(1) // 显式 disposer 撤销一次；重入不再补撤
+  })
+
+  it('NS 契约：插件侧词典登记键 = dsh-forge.project（与壳侧分立）', () => {
+    expect(FORGE_PROJECT_LOCALE_NS).toBe('dsh-forge.project')
   })
 })
 
