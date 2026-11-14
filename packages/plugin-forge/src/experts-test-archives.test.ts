@@ -480,6 +480,71 @@ describe("experts/test-journey-author.md 档案解析断言（forge-test-discipl
   });
 });
 
+describe("experts/test-master.md 档案解析断言（forge-test-discipline-layering 1.16）", () => {
+  const MASTER_FILE = resolve(here, "../experts/test-master.md");
+  const content = readFileSync(MASTER_FILE, "utf-8");
+
+  it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
+    expect(parseExpertFileLike(MASTER_FILE, content)).toEqual({ ok: true });
+  });
+
+  it("无裸 {{ 字面量（全文任意位置）", () => {
+    expect(content.includes("{{")).toBe(false);
+  });
+
+  it("frontmatter 键与既有档案键集一致（不引入新键）", () => {
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)![1]!;
+    const keys = fm.split(/\r?\n/).filter((l) => /^[A-Za-z]/.test(l)).map((l) => l.split(":")[0]!);
+    // 键集 pin 与内联 parser 可选键（model/provider/reasoning）对齐：必填 5 键在场，额外键只允许 parser 认可的可选键
+    const REQUIRED = ["description", "name", "skills", "title", "tools"];
+    const OPTIONAL = ["model", "provider", "reasoning"];
+    for (const key of REQUIRED) {
+      expect(keys, `必填键缺失：${key}`).toContain(key);
+    }
+    expect(keys.filter((k) => !REQUIRED.includes(k) && !OPTIONAL.includes(k)), "引入了 parser 不认可的未知键").toEqual([]);
+  });
+
+  it("简介结构：做什么（设计审核测试方案/评审提案可测试性）为主体，不做什么一句划界（不撰写产物/不执行）", () => {
+    const desc = content.match(/^description:\s*(.+)$/m)![1]!;
+    for (const anchor of ["设计与审核测试方案", "评审提案可测试性"]) {
+      expect(desc, `简介缺做什么锚：${anchor}`).toContain(anchor);
+    }
+    for (const anchor of ["不撰写", "不执行"]) {
+      expect(desc, `简介缺不做什么锚：${anchor}`).toContain(anchor);
+    }
+  });
+
+  it("三职责节齐：测试理论根基 / 测试方案设计职责 / 提案可测试性评审四项", () => {
+    expect(content).toContain("### 测试理论根基");
+    expect(content).toContain("### 测试方案设计职责");
+    expect(content).toContain("### 提案可测试性评审职责");
+    const design = content.slice(content.indexOf("### 测试方案设计职责"), content.indexOf("### 提案可测试性评审职责"));
+    for (const anchor of ["分层选型", "覆盖策略", "预算配比", "替身位置规划"]) {
+      expect(design, `方案设计职责缺锚：${anchor}`).toContain(anchor);
+    }
+    const review = content.slice(content.indexOf("### 提案可测试性评审职责"), content.indexOf("## 信条"));
+    for (const anchor of ["注入缝", "替身声明", "层间分配", "验收可测性"]) {
+      expect(review, `提案评审职责缺锚：${anchor}`).toContain(anchor);
+    }
+  });
+
+  it("与 code-master 互为对照位声明在案", () => {
+    expect(content).toContain("## 对照位声明");
+    expect(content).toContain("code-master");
+    expect(content).toContain("互为对照位");
+  });
+
+  it("档案正文零仓内路径引用、零目录/命名硬编码（grep 机检；层名词豁免）", () => {
+    expect(content.indexOf("\n---", 4), "frontmatter 结束锚缺失").toBeGreaterThan(-1);
+    const body = content.slice(content.indexOf("\n---", 4) + 4);
+    const BANNED = ["AGENTS", "docs/conventions", "docs/", "packages/", "判例 20", ".forge", "src/", "tests/", "*.test.ts", "e2e/specs", "vitest", "playwright", "npx", "pnpm"];
+    for (const token of BANNED) {
+      expect(body, `档案正文含禁用引用词：${token}`).not.toContain(token);
+    }
+  });
+});
+// forge-test-discipline-layering 1.16 简介消歧断言结束
+
 describe("test-* 四专家简介消歧断言（forge-test-discipline-layering 1.15）", () => {
   function fmDescription(file: string): string {
     const c = readFileSync(resolve(here, "../experts", file), "utf-8");
