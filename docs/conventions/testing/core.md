@@ -12,7 +12,7 @@ domains: [testing, conventions]
 | 层 | 工具 | vitest 项目 | 位置 | 职责与边界 |
 |---|---|---|---|---|
 | 单元测试 | vitest | `core` / `knowledge` / `plugin-forge` / `plugin-forge-spec` / `contracts` / `path-key` / `git-worktree` / `md-mermaid` / `host` / `web` | 各包源码树内 `*.test.ts(x)` | 模块契约面。web 面 SSR 直渲（`react-dom/server`）——交互回调体与 useEffect 不强行单测，归 e2e |
-| 集成测试 | vitest | 与单元同项目（include 命名命中） | 各包源码树内 `*.integration.test.ts` | 跨模块/跨包组装与接口契约：测试进程内组装真实模块（组合根在测试侧），仅进程外依赖可接口级 fake，正式装配组合根不触碰 |
+| 集成测试 | vitest | 与单元同项目（include 命名命中） | 各包源码树内 `*.integration.test.ts` | 跨模块/跨包组装与接口契约：测试进程内组装真实模块（组合根在测试侧），进程外依赖可接口级 fake 也可用真实实例（fake 为可选非必须），正式装配组合根不触碰 |
 | 结构 pin | vitest | `structure` | `tests/structure/` | 机械守卫（行数上限/import 白名单/目录布局/装配纪律/打包闭包 pin）——只断言结构，不测行为 |
 | 契约测试 | vitest | `contract`（跨包 RPC 面）/ `contracts`（DTO）/ `plugin-forge-contract` | `tests/contract/` 及包内 | 跨包契约与工具 schema 面；`pnpm test:contract` 为跨包门 |
 | e2e 支撑 | vitest | `e2e-support` | `e2e/support/**` | e2e 基建单测（审计锚/readiness/replay 夹具）——随 e2e 面演化，不在 `pnpm test:contract` 门内 |
