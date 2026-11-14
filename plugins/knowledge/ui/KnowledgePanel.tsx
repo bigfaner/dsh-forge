@@ -14,7 +14,7 @@
 //（composer 同款官方 Menu）拾取后不随会话/派生锚漂移；拾取行离场（删除/归档）回落派生。
 // workbench 桥类型：壳侧 workbench-bridge.ts 不迁——本件仅消费切片（Pick 三方法），
 // 类型切片 = ../shared/workbench-bridge.js 下沉件（1.4），桥本体 = 壳 C 类域。
-import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { KnowledgeView } from './KnowledgeView.js'
 import type { KitSelectorHook } from '../shared/kit-types.js'
 import { MainSessionAnchor, useAnchoredProjects } from './anchored-projects.js'
@@ -72,10 +72,14 @@ export function ForgeKnowledgePanel(props: ForgeKnowledgePanelProps): ReactNode 
     (onChange: () => void) => (bridge === undefined ? () => {} : bridge.subscribe(onChange)),
     [bridge],
   )
+  // bug 852c6ea7：降级路径快照必须引用稳定——getSnapshot 数据未变时返回同一对象
+  // （原字面量每调用新建 → React 每帧判变 → 无限重渲 #185）。useMemo 按 localDrawer
+  // 值键控，值不变即同一引用；桥在场走镜像面（引用稳定，本修复不触及）。
+  const fallbackDrawerSnapshot = useMemo(() => ({ drawerEntryId: localDrawer }), [localDrawer])
   const readDrawer = useCallback(
     // 桥快照窄读（镜像面 getSnapshot 为 Record<string,unknown>——抽屉目标字段窄取同壳侧口径）
-    () => (bridge === undefined ? { drawerEntryId: localDrawer } : bridge.getSnapshot() as { drawerEntryId: number | null }),
-    [bridge, localDrawer],
+    () => (bridge === undefined ? fallbackDrawerSnapshot : bridge.getSnapshot() as { drawerEntryId: number | null }),
+    [bridge, fallbackDrawerSnapshot],
   )
   const drawerEntryId = useSyncExternalStore(
     subscribeDrawer,
