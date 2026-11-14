@@ -3,6 +3,8 @@
 // 单源锚：校验语义与 expert-squad parseExpertFile 同构
 // （packages/plugins/expert-squad/src/store/frontmatter.ts）。本包不依赖
 // expert-squad，故在此内联最小校验逻辑；语义漂移以单源锚为准。
+// 漂移探测计划：expert-squad store/frontmatter.ts 解析语义或键集任一侧改动时，
+// 同提交核对本文件内联校验与单源锚一致，键集/校验规则漂移即在本文件对齐。
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -96,7 +98,13 @@ describe("experts/test-script-author.md 档案解析断言（forge-test-discipli
   it("frontmatter 键与既有档案键集一致（不引入新键）", () => {
     const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)![1]!;
     const keys = fm.split(/\r?\n/).filter((l) => /^[A-Za-z]/.test(l)).map((l) => l.split(":")[0]!);
-    expect(keys.sort()).toEqual(["description", "name", "skills", "title", "tools"].sort());
+    // 键集 pin 与内联 parser 可选键（model/provider/reasoning）对齐：必填 5 键在场，额外键只允许 parser 认可的可选键
+    const REQUIRED = ["description", "name", "skills", "title", "tools"];
+    const OPTIONAL = ["model", "provider", "reasoning"];
+    for (const key of REQUIRED) {
+      expect(keys, `必填键缺失：${key}`).toContain(key);
+    }
+    expect(keys.filter((k) => !REQUIRED.includes(k) && !OPTIONAL.includes(k)), "引入了 parser 不认可的未知键").toEqual([]);
   });
 
   it("执行树布局表含集成测试层行：单句目录约束 + 判据版职责边界", () => {
@@ -162,6 +170,11 @@ describe("experts/test-script-author.md 档案解析断言（forge-test-discipli
     const assertionGate = content.slice(content.indexOf("## 断言质量门"), content.indexOf("## 渲染面单测边界"));
     const boundary = content.slice(content.indexOf("## 边界"));
     const NEW_BLOCKS = [integrationRow, assertionGate, boundary];
+    // 锚守卫：被检节标题/行缺失时此测试必须红（防 indexOf -1 切到残段恒绿）
+    expect(content.split(/\r?\n/).some((l) => l.startsWith("| 集成测试 |")), "锚缺失：| 集成测试 | 行").toBe(true);
+    for (const anchor of ["## 断言质量门", "## 渲染面单测边界", "## 边界"]) {
+      expect(content.indexOf(anchor), `锚缺失：${anchor}`).toBeGreaterThan(-1);
+    }
     // 词表：具体路径与命名模式（存量布局表目录豁免不在机检域内）
     const BANNED = ["*.integration.test.ts", "tests/", "src/test", "e2e/specs"];
     for (const block of NEW_BLOCKS) {
@@ -187,7 +200,13 @@ describe("experts/test-runner.md 档案解析断言（forge-test-discipline-laye
   it("frontmatter 键与既有档案键集一致（不引入新键）", () => {
     const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)![1]!;
     const keys = fm.split(/\r?\n/).filter((l) => /^[A-Za-z]/.test(l)).map((l) => l.split(":")[0]!);
-    expect(keys.sort()).toEqual(["description", "name", "skills", "title", "tools"].sort());
+    // 键集 pin 与内联 parser 可选键（model/provider/reasoning）对齐：必填 5 键在场，额外键只允许 parser 认可的可选键
+    const REQUIRED = ["description", "name", "skills", "title", "tools"];
+    const OPTIONAL = ["model", "provider", "reasoning"];
+    for (const key of REQUIRED) {
+      expect(keys, `必填键缺失：${key}`).toContain(key);
+    }
+    expect(keys.filter((k) => !REQUIRED.includes(k) && !OPTIONAL.includes(k)), "引入了 parser 不认可的未知键").toEqual([]);
   });
 
   it("执行序列：环境自备为第一步（探测获取宿主形态 + blocked 上抛 + 认证凭据注入），probe 降级健康检查", () => {
@@ -195,7 +214,8 @@ describe("experts/test-runner.md 档案解析断言（forge-test-discipline-laye
     expect(seq).toContain("环境自备");
     // 第一步 = 环境自备，序号 1
     const firstStep = seq.split(/\r?\n/).find((l) => /^1[.、]/.test(l.trim()));
-    expect(firstStep).toContain("环境自备");
+    expect(firstStep, "执行序列第一步锚缺失").toBeDefined();
+    expect(firstStep!).toContain("环境自备");
     // 宿主形态经探测工作区测试策略或项目文档获取；无从探测 blocked 上抛
     expect(seq).toContain("探测");
     expect(seq).toContain("blocked 上抛");
@@ -240,6 +260,7 @@ describe("experts/test-runner.md 档案解析断言（forge-test-discipline-laye
   });
 
   it("档案正文零仓内路径引用（grep 机检；命令形态豁免）", () => {
+    expect(content.indexOf("\n---", 4), "frontmatter 结束锚缺失").toBeGreaterThan(-1);
     const body = content.slice(content.indexOf("\n---", 4) + 4);
     const BANNED = ["AGENTS", "docs/conventions", "docs/", "packages/", "判例 20", ".forge", "src/"];
     for (const token of BANNED) {
@@ -277,6 +298,7 @@ describe("experts/test-contract-author.md 档案解析断言（forge-test-discip
     expect(content).toContain("改锚同提交改文档");
     // 不互相引用路径：本档案不出现对 script-author 档案的路径引用
     expect(content).not.toContain("test-script-author.md");
+    expect(content.indexOf("\n---", 4), "frontmatter 结束锚缺失").toBeGreaterThan(-1);
     const body = content.slice(content.indexOf("\n---", 4) + 4);
     const BANNED = ["AGENTS", "docs/conventions", "docs/", "packages/", "判例 20", ".forge", "src/"];
     for (const token of BANNED) {
@@ -300,7 +322,13 @@ describe("experts/test-journey-author.md 档案解析断言（forge-test-discipl
   it("frontmatter 键与既有档案键集一致（不引入新键）", () => {
     const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)![1]!;
     const keys = fm.split(/\r?\n/).filter((l) => /^[A-Za-z]/.test(l)).map((l) => l.split(":")[0]!);
-    expect(keys.sort()).toEqual(["description", "name", "skills", "title", "tools"].sort());
+    // 键集 pin 与内联 parser 可选键（model/provider/reasoning）对齐：必填 5 键在场，额外键只允许 parser 认可的可选键
+    const REQUIRED = ["description", "name", "skills", "title", "tools"];
+    const OPTIONAL = ["model", "provider", "reasoning"];
+    for (const key of REQUIRED) {
+      expect(keys, `必填键缺失：${key}`).toContain(key);
+    }
+    expect(keys.filter((k) => !REQUIRED.includes(k) && !OPTIONAL.includes(k)), "引入了 parser 不认可的未知键").toEqual([]);
   });
 
   it("e2e 黑盒纪律节在案：三要素齐（公开接口驱动 / 不 import 内部不为可测性改正式 / 替身只走进程外协议级拦截）", () => {
@@ -372,6 +400,7 @@ describe("experts/test-journey-author.md 档案解析断言（forge-test-discipl
   });
 
   it("档案正文零 AGENTS/判例编号/仓内路径引用（grep 机检；命令形态豁免）", () => {
+    expect(content.indexOf("\n---", 4), "frontmatter 结束锚缺失").toBeGreaterThan(-1);
     const body = content.slice(content.indexOf("\n---", 4) + 4);
     const BANNED = ["AGENTS", "docs/conventions", "docs/", "packages/", "判例 20", ".forge", "src/"];
     for (const token of BANNED) {
