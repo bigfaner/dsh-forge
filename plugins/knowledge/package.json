@@ -32,7 +32,9 @@
     "@deepseek-ai/cordis": "4.0.4"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.2",
     "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/lib-path": "workspace:*",
     "@dsh-forge/path-key": "workspace:*",
     "@types/better-sqlite3": "9.6.0",
     "@types/node": "24.19.0",

@@ -61,7 +61,7 @@ import {
   recallStatsOf,
   recallTurnsOf,
 } from './recall-model.js'
-import { useAnchoredProjects } from './anchored-projects.js'
+import { useAnchoredProjects } from '../anchored-projects.js'
 import { projectAnchorOf } from './panel-anchor.js'
 import type { KitSelectorHook } from './kit-types.js'
 import './recall.css'

@@ -720,9 +720,15 @@ importers:
         specifier: 4.0.3
         version: 4.0.3
     devDependencies:
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: 0.2.0-rc.2
+        version: 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@dsh-forge/lib-path':
+        specifier: workspace:*
+        version: link:../../lib/path
       '@dsh-forge/path-key':
         specifier: workspace:*
         version: link:../../packages/path-key

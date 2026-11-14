@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { DocContent } from '@dsh-forge/contracts'
 import { EmptyState, ErrorBar, SkeletonRows, StateChip } from '../../components.js'
-import { MD_PREVIEW_MARKDOWN_LABELS, MarkdownDoc } from '../../knowledge/components-mirror.js'
+import { MD_PREVIEW_MARKDOWN_LABELS, MarkdownDoc } from '../../components-mirror.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../rpc-channels.js'
 import { RpcClientError } from '../rpc-channels.js'
 import { rpcUiState, type RpcUiStateKind } from '../rpc-channels.js'

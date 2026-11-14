@@ -3,14 +3,22 @@
 // ConversationViews / KnowledgePanel 四装配面同型 15 行「快照 useState + 窄化 +
 // useForgeProjects + 条件 WorkspacesAnchor」模式的单一来源）。
 // 铁律口径：「视图同级互禁」只禁同级业务互引——本模块 = 公共下层（装配域共享面），
-// 数据源 useForgeProjects 仍唯一（本目录 use-forge-projects.ts）。
+// 数据源 useForgeProjects 仍唯一（./sidebar/use-forge-projects.ts——Typert 正典）。
+// knowledge-plugin-migration 1.4 正本归位：anchored-projects 链（project.db +
+// workspaceRegistry 归属裁决）是 project 域职责，自 ui/knowledge/ 迁出正本归位本位；
+// knowledge 插件侧消费 = 镜像窄面（plugins/knowledge/ui/anchored-projects.tsx——
+// 镜像同步 pin：knowledge/ui/mirrors-pin.test.ts export 形状/内容 hash 对账）。
+// kit 窄类型本地化：LedgerWorkspacesSnapshot 引 ./sidebar/sidebar-model.js 既有副本；
+// KitSelectorHook 本地声明（knowledge shared/kit-types.ts 持下沉副本，pin 对账）。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
 import type { WorktreeResolveRequest, WorktreeResolveResult } from '@dsh-forge/contracts'
-import type { LedgerWorkspacesSnapshot } from './kit-types.js'
-import { useForgeProjects, type ProjectsPhase } from './use-forge-projects.js'
-import { preloadRpcClientFactory } from './rpc-channels.js'
-import type { KitSelectorHook } from './kit-types.js'
+import type { LedgerWorkspacesSnapshot } from './sidebar/sidebar-model.js'
+import { useForgeProjects, type ProjectsPhase } from './sidebar/use-forge-projects.js'
+import { preloadRpcClientFactory } from './rpc.js'
+
+/** kit 选择器钩子（官方 kit hook 形状——root 标准 props 递达面；可选 = 降级；knowledge shared/kit-types 镜像同型） */
+export type KitSelectorHook = (selector: (state: never) => unknown) => unknown
 
 /**
  * worktree.resolve 消费切片工厂窄类型（1.6 收窄——归属归并只消费 resolve 一法）：

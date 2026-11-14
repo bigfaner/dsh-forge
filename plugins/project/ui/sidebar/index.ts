@@ -22,5 +22,5 @@ export {
   useWorkspaceProjectMap,
   resolveWorkspaceProjectMap,
   type WorktreeResolveClientFactory,
-} from '../knowledge/anchored-projects.js'
+} from '../anchored-projects.js'
 export { preloadRpcClientFactory, type RpcClientFactory } from '../rpc.js'

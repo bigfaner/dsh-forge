@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { KnowledgeView } from './KnowledgeView.js'
 import type { KitSelectorHook } from './kit-types.js'
-import { MainSessionAnchor, useAnchoredProjects } from './anchored-projects.js'
+import { MainSessionAnchor, useAnchoredProjects } from '../anchored-projects.js'
 import { pickedProjectAnchor, projectAnchorOf } from './panel-anchor.js'
 import type { WorkbenchBridgeMirror } from '../knowledge-face.js'
 import './knowledge.css'
@@ -28,7 +28,7 @@ type WorkbenchBridge = Pick<WorkbenchBridgeMirror, 'subscribe' | 'getSnapshot' |
 // 4.1 锚定复用迁移注记：readMainSessionId/MainSessionAnchor 本体已迁 anchored-projects.tsx
 //（ShellHost 概览上下文锚定同源消费）；此处再导出保持既有消费面（KnowledgePanel.test）
 // 零漂移——装配域共享面单一来源。
-export { readMainSessionId, MainSessionAnchor } from './anchored-projects.js'
+export { readMainSessionId, MainSessionAnchor } from '../anchored-projects.js'
 
 /** main keyed 'dswf-knowledge' 占用者 kit 窄面（root 标准props + 插件 inject；可选 = 降级） */
 export interface ForgeKnowledgePanelProps {
