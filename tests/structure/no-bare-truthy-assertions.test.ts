@@ -123,7 +123,14 @@ const ALLOWLIST: Record<string, number> = {
 }
 
 const EXCLUDED_DIRS = new Set(['node_modules', 'dist', '.forge', '.git', 'coverage', 'fixtures', 'userdata.dev'])
-const BARE_WEAK = /\bexpect\s*\([^;]*?\)\s*\.\s*(?:toBeTruthy|toBeDefined)\s*\(\s*\)/g
+// 带消息参数形态已覆盖（expect 第二参 / matcher 实参两种消息位置）；
+// .resolves. 形态记录为 LOW 待定，不在本次扩展范围。
+const BARE_WEAK = /\bexpect\s*\([^;]*?\)\s*\.\s*(?:toBeTruthy|toBeDefined)\s*\(\s*(?:'[^']*'\s*)?\)/g
+
+/** 反例自验证辅助：对样本字符串跑同一条 scanner 正则，返回命中全文列表。 */
+function hitsOf(sample: string): string[] {
+  return [...sample.matchAll(BARE_WEAK)].map((m) => m[0]!)
+}
 
 function collectTestFiles(dir: string): string[] {
   const out: string[] = []
@@ -167,5 +174,33 @@ describe('裸真值断言机械锚（提案方案 5 —— 弱断言可静态机
       `新增裸真值断言（须精确断言或入 allowlist 评审）:\n${offenders.join('\n')}` +
         (unknown.length ? `\nallowlist 漂移（文件已无违例，须收缩 allowlist）: ${unknown.join(', ')}` : ''),
     ).toBe(true)
+  })
+
+  it('scanner 正则反例自验证：构造违例样本（含带消息参数形态）命中、合规形态不误伤', () => {
+    // 样本经片段拼接构造，避免本文件源码自身被 scanner 计为新增违例
+    const V = ['toBe', 'Truthy'].join('')
+    const D = ['toBe', 'Defined'].join('')
+    const msg = ['m', 's', 'g'].join('') // 'msg'
+    // 违例样本：命中数 === 1
+    const offenders: Array<[string, string]> = [
+      ['裸真值（无参）', `expect(a).${V}()`],
+      ['带消息参数（expect 第二参）', `expect(a.b, '${msg}').${V}()`],
+      ['带消息参数（matcher 实参）', `expect(a).${V}('${msg}')`],
+      ['toBeDefined 无参', `expect(x.y).${D}()`],
+      ['空白变体', `expect( a , '${msg}' )  .  ${V} ( )`],
+    ]
+    for (const [label, sample] of offenders) {
+      expect(hitsOf(sample), `违例样本未命中：${label}`).toHaveLength(1)
+    }
+    // 合规样本：命中数 === 0（不误伤精确断言与非 expect 标识）
+    const compliant: Array<[string, string]> = [
+      ['精确断言 toBe', `expect(a, '${msg}').toBe(true)`],
+      ['链式调用间隔非弱断言', `expect(a).toEqual({ b: 1 })`],
+      ['同为 toBe 前缀但非 Truthy/Defined', `expect(a).toBeInstanceOf(Error)`],
+      ['注释性提及不含完整调用形态', `// 禁 ${V} 弱断言`],
+    ]
+    for (const [label, sample] of compliant) {
+      expect(hitsOf(sample), `合规样本被误伤：${label}`).toHaveLength(0)
+    }
   })
 })

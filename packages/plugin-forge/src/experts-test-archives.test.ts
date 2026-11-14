@@ -869,5 +869,26 @@ describe("跨档案一致性 pin（forge-test-pipeline-hardening 1.4——弱断
     expect(code).toContain("位置与层归属归 test-master（替身清单裁定）");
     expect(master).toContain("code-master 产出接口清单，你产出替身清单");
   });
+
+  it("铁律句反措辞变体 not.toContain 在案（防措辞漂白：软化/翻面变体一律不得回流四档案）", () => {
+    // 锚守卫：四档案内容非空
+    for (const [name, text] of [["script", script], ["journey", journey], ["master", master], ["code", code]] as const) {
+      expect(text.length, `档案内容为空：${name}`).toBeGreaterThan(0);
+    }
+    // 漂白变体：软化措辞（把禁令降格为建议）与翻面措辞（把禁令翻成许可）
+    const DRIFT_VARIANTS = [
+      "尽量避免裸真值断言",
+      "可酌情使用裸真值断言",
+      "正式装配组合根可接受测试配置切换",
+      "必要时正式装配组合根可切换测试配置",
+      "尽量避免 OR 断言",
+      "避免过度断言",
+    ];
+    for (const variant of DRIFT_VARIANTS) {
+      for (const [name, text] of [["script", script], ["journey", journey], ["master", master], ["code", code]] as const) {
+        expect(text, `${name} 档案出现铁律句漂白变体：${variant}`).not.toContain(variant);
+      }
+    }
+  });
 });
 // forge-test-pipeline-hardening 1.4 跨档案一致性 pin 断言结束
