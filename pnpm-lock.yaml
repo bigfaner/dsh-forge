@@ -724,8 +724,8 @@ importers:
         version: 4.0.3
     devDependencies:
       '@deepseek-ai/dsh-client-ui-primitives':
-        specifier: 0.2.0-rc.2
-        version: 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)
+        specifier: 0.2.2-rc.1
+        version: 0.2.2-rc.1(@deepseek-ai/cordis@4.0.4)
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
