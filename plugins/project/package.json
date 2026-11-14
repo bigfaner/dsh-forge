@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.19.27",
+  "version": "0.19.28",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -126,7 +126,8 @@
     "esbuild": "0.24.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-qr-code": "2.2.0"
+    "react-qr-code": "2.2.0",
+    "typescript": "6.0.3"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",

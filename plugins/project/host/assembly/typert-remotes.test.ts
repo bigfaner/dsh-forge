@@ -6,6 +6,7 @@
 //   typed unavailable 诚实拒绝。
 import { describe, expect, it, vi } from 'vitest'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
+import { unavailableMessage } from './typert-remotes.js'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -152,7 +153,7 @@ describe('ForgeDirsRemote.facts（fix-1——core 缺席插件自装配：worksp
 
   it('双面全缺 → typed unavailable（诚实拒绝）', async () => {
     const svc = new ForgeDirsRemote(fakeCtx(), {})
-    await expect(svc.facts({ projectId: 'p-1' })).rejects.toThrow('forge.dirs facts unavailable')
+    await expect(svc.facts({ projectId: 'p-1' })).rejects.toThrow(unavailableMessage('facts', 'dirs'))
   })
 })
 
@@ -427,10 +428,10 @@ describe('forgeProposals/forgeFeatures inject 生命周期绑（迟到重绑—�
 
 describe('typed unavailable 与 fs listDir（诚实降级面）', () => {
   it('族服务缺席 → 调用期 typed unavailable（projects.list / worktree.* / proposals.list）', async () => {
-    await expect(new ForgeProjectsRemote(fakeCtx(), {}).list()).rejects.toThrow('forge.projects list unavailable')
-    await expect(new ForgeWorktreeRemote(fakeCtx(), {}).list({} as never)).rejects.toThrow('forge.worktree')
-    await expect(new ForgeProposalsRemote(fakeCtx(), {}).list({})).rejects.toThrow('forge.proposals list unavailable')
-    await expect(new ForgeFeaturesRemote(fakeCtx(), {}).list({})).rejects.toThrow('forge.features list unavailable')
+    await expect(new ForgeProjectsRemote(fakeCtx(), {}).list()).rejects.toThrow(unavailableMessage('list', 'projects'))
+    await expect(new ForgeWorktreeRemote(fakeCtx(), {}).list({} as never)).rejects.toThrow(unavailableMessage('*', 'worktree'))
+    await expect(new ForgeProposalsRemote(fakeCtx(), {}).list({})).rejects.toThrow(unavailableMessage('list', 'proposals'))
+    await expect(new ForgeFeaturesRemote(fakeCtx(), {}).list({})).rejects.toThrow(unavailableMessage('list', 'features'))
   })
 
   it('listDir：真实目录只读列举（子目录名序 + canonical path；文件不入列）', async () => {

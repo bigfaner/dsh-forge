@@ -13,10 +13,42 @@
 // emitDeclarationOnly——tsc 永不覆写 bundle .js，fix-6 根治门禁序错位）解耦。
 // Run once per build；run-once, no watch。
 import { build } from "esbuild";
+import { createRequire } from "node:module";
 import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { auditDist, exportsDistPaths } from "./self-containment.mjs";
+
+// typert strict 迁移 1.4：@Remote 装饰器源码形态需要构建期降级——esbuild 不支持标准
+// 装饰器，onLoad 预降级（generator ./tsdown decoratorPlugin 同径：ts.transpileModule，
+// 仅命中含装饰器语法的 TS 模块；vitest.config.ts dsh-decorators 插件同构测试面）。
+const DSH_DECORATOR_TS = /^[^?]*\.[cm]?tsx?$/;
+const DECORATOR_SYNTAX = /^\s*@[A-Za-z_$][\w$]*/m;
+
+// typescript@7（根 pin）无全量 API 形状——降级用 generator 自带 typescript（与生成取材同源）。
+const requirePkg = createRequire(new URL("../package.json", import.meta.url));
+const generatorEntry = requirePkg.resolve('typescript');
+const ts = createRequire(generatorEntry)("typescript");
+
+const dshDecoratorsPlugin = {
+  name: "dsh-decorators",
+  setup(build) {
+    build.onLoad({ filter: DSH_DECORATOR_TS }, (args) => {
+      const code = readFileSync(args.path, "utf8");
+      if (!DECORATOR_SYNTAX.test(code)) return undefined;
+      const result = ts.transpileModule(code, {
+        fileName: args.path,
+        compilerOptions: {
+          target: ts.ScriptTarget.ES2023,
+          module: ts.ModuleKind.ESNext,
+          ...(args.path.endsWith("x") ? { jsx: ts.JsxEmit.ReactJSX } : {}),
+          sourceMap: false,
+        },
+      });
+      return { contents: result.outputText, loader: "js", resolveDir: dirname(args.path) };
+    });
+  },
+};
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
@@ -46,6 +78,7 @@ await build({
   platform: "node",
   target: "node20",
   external: EXTERNAL,
+  plugins: [dshDecoratorsPlugin],
   allowOverwrite: true,
   minify: false,
   sourcemap: false,

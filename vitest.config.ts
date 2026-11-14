@@ -1,10 +1,47 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, type Plugin } from 'vitest/config'
+import { createRequire } from 'node:module'
+
+// decorator（仓库根 pin）不再暴露全量 API 形状——装饰器降级改用 generator 自带的
+// typescript 依赖（WorkspaceAnalyzer 编译面同源，降级语义与生成取材一致）。
+const requireProject = createRequire(new URL('./plugins/project/package.json', import.meta.url))
+const generatorEntry = requireProject.resolve('typescript')
+const ts = createRequire(generatorEntry)('typescript')
+
+// typert strict 迁移 1.4：vitest 5 转换管道（vite 8 oxc）不支持标准装饰器降级——
+// plugins/project 源码改 @Remote 装饰器形态后，测试面经本预转换插件降级（generator
+// ./tsdown decoratorPlugin 同径：ts.transpileModule，仅命中含装饰器语法的 TS 模块）。
+const DSH_DECORATOR_TS = /^[^?]*\.[cm]?tsx?(?:\?|$)/
+const DECORATOR_SYNTAX = /^\s*@[A-Za-z_$][\w$]*/m
+
+const dshDecoratorsPlugin = (): Plugin => ({
+  name: 'dsh-decorators',
+  enforce: 'pre',
+  transform(code, id) {
+    const file = id.split('?')[0]
+    if (!DSH_DECORATOR_TS.test(file) || !file.includes('plugins/project')) return
+    if (!DECORATOR_SYNTAX.test(code)) return
+    const result = ts.transpileModule(code, {
+      fileName: file,
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2023,
+        module: ts.ModuleKind.ESNext,
+        ...(file.endsWith('x') ? { jsx: ts.JsxEmit.ReactJSX } : {}),
+        sourceMap: true,
+      },
+    })
+    return {
+      code: result.outputText.replace(/\n?\/\/# sourceMappingURL=.*$/u, '\n'),
+      map: result.sourceMapText ?? undefined,
+    }
+  },
+})
 
 // G1 + 单测门基座（`pnpm test`）。
 // 项目划分按 Testing Strategy Per-Layer Test Plan：core/knowledge 单测 + 集成（vitest）、
 // 契约面 pin 回归（vitest）、结构化骨架 pin（1.2 起步）。web 的验证面是 e2e（G2），
 // web 项目仅预留纯逻辑单测位（视图态机等）。
 export default defineConfig({
+  plugins: [dshDecoratorsPlugin()],
   test: {
     passWithNoTests: true,
     // 并发上限（16C/32GB 实测 OOM 收口）：默认按核数（15 worker）起 fork，每 worker 独立

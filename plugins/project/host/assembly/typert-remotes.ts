@@ -1,17 +1,18 @@
 // host/assembly · typert-remotes.ts —— forge:* 六族 UI 数据通路（官方 Typert Remote namespace =
 // 官方 UI 数据第一等通道；官方 ui-settings-* / ForgePanelController 动态插件先例同形态背书）。
 //
-// 形态（官方 ForgePanelController 先例，experimental/client-ui-forge/src/index.ts:60-160）：
-//   TypertRemoteService 子类 + Remote 方法标记（namespace 覆写，serviceKey = 既有宿主服务
-//   键命名），纯 runtime 协议零 codegen——gateway SRC 发现路径（api/gateway/src/index.ts:
+// 形态（typert strict 迁移 1.4 落地——@Remote 装饰器源码形态，U1 消解）：
+//   TypertRemoteService 子类 + @Remote 方法装饰器（namespace 经 super 第三参覆写，
+//   serviceKey = 既有宿主服务键命名），gateway SRC 发现路径（api/gateway/src/index.ts:
 //   891-917）从函数签名解析参数面、codec 全 src-json（JSON 安全校验），端点 =
 //   `<namespace>/<method>`；`signal` 尾参 = cancellation（gateway:925-938）。
+//   装饰器即 @Remote 的源码形态本体（协议 addMarkerInitializer 消费 context 四面），
+//   生成器 WorkspaceAnalyzer.collectInvocations 以此为取材面——构建期 typert 工件
+//   （./typert + ./remote）与运行期 gateway SRC 发现共用同一取材真源。
 //
-// 方法标记落法说明：标记 = @Remote 装饰器的程序化等价调用（remoteMark——协议 addMarker-
-// Initializer 只消费 context.name/static/private/addInitializer 四面，构造 context 后即时
-// 执行 = 运行期 marker 逐位同型）。不用装饰器语法的原因：vitest 5 转换器（vite 8 oxc）
-// 不支持标准装饰器降级，测试面语法性 SyntaxError——程序化调用零转换依赖，官方 API 面
-// 零改制（AGENTS 1.1 只插孔）。
+// vitest 装饰器适配（1.4）：vitest 5 转换器（vite 8 oxc）不支持标准装饰器降级——
+// vitest.config.ts 挂 dsh-decorators 预转换插件（ts.transpileModule 同 generator
+// decoratorPlugin 形态）承担测试面装饰器降级；esbuild bundle 链同径插件见 bundle-host.mjs。
 //
 // 发现面铁律（侦察定谳）：gateway 只遍历根 ctx reflect.props——控制器经 rootCtx.plugin
 // 注册进根 ctx（插件子 ctx 注册不可见）；生命周期归插件 fiber（dispose 级联拆卸）。
@@ -34,8 +35,32 @@ import type {
   RegisterProjectInput,
   RegisterResult,
   ProjectSummary,
+  WorktreeAheadBehindRequest,
+  WorktreeAheadBehindResult,
+  WorktreeBranchesRequest,
+  WorktreeBranchesResult,
+  WorktreeChecksRequest,
+  WorktreeChecksResult,
+  WorktreeCreateRequest,
+  WorktreeCreateResult,
+  WorktreeDeleteRequest,
+  WorktreeDeleteResult,
+  WorktreeEnsureWorkspaceRequest,
+  WorktreeEnsureWorkspaceResult,
+  WorktreeListRequest,
+  WorktreeListResult,
+  WorktreeResolveRequest,
+  WorktreeResolveResult,
   WorktreeSealRequest,
   WorktreeSealResult,
+  WorktreeSelectRequest,
+  WorktreeSelectResult,
+} from "@dsh-forge/contracts";
+import type {
+  FeatureCard,
+  ListFeaturesQuery,
+  ListProposalsQuery,
+  ProposalCard,
 } from "@dsh-forge/contracts";
 import type { DirFactsPort } from "@dsh-forge/lib-api";
 import { forgeDirOfWorkspace } from "../dirs/anchors.js";
@@ -44,53 +69,6 @@ import type { Dirent } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import type { WorktreeRpcService } from "../worktrees/rpc-service.js";
-
-// ── Remote 方法标记（@Remote 装饰器程序化等价——见文件头「落法说明」）──
-
-/** 标准 method decorator context 结构切片（协议 addMarkerInitializer 消费面） */
-interface RemoteMarkContext {
-  readonly kind: "method";
-  readonly name: string;
-  readonly static: false;
-  readonly private: false;
-  readonly access: { get(): unknown };
-  readonly metadata: object;
-  addInitializer(initializer: (this: object) => void): void;
-}
-
-type RemoteOptionDecorator = (
-  option: string | { readonly mode: "stream" },
-) => (method: unknown, context: RemoteMarkContext) => void;
-type RemoteBareDecorator = (method: unknown, context: RemoteMarkContext) => void;
-
-/** 单方法标记（option 缺省 = @Remote 一元直通；'delete' = exportName 别名；stream = 推流） */
-function remoteMark(proto: object, method: string, option?: string | { readonly mode: "stream" }): void {
-  const members = proto as Record<string, unknown>;
-  const context: RemoteMarkContext = {
-    kind: "method",
-    name: method,
-    static: false,
-    private: false,
-    access: { get: () => members[method] },
-    metadata: {},
-    addInitializer: (initializer) => {
-      initializer.call(Object.create(proto));
-    },
-  };
-  if (option === undefined) {
-    (Remote as unknown as RemoteBareDecorator)(members[method], context);
-    return;
-  }
-  (Remote as unknown as RemoteOptionDecorator)(option)(members[method], context);
-}
-
-/** 类方法标记批（声明序 = marker 序——gateway remoteMethods 快照消费同序） */
-function remoteMarks(
-  proto: object,
-  marks: readonly (readonly [method: string, option?: string | { readonly mode: "stream" }])[],
-): void {
-  for (const [method, option] of marks) remoteMark(proto, method, option);
-}
 
 /** 封存 follow 流重估间隔 ms（外部事实源——git/盘面无事件源，轮询收敛为快照推送） */
 export const SEAL_FOLLOW_INTERVAL_MS = 3_000;
@@ -131,9 +109,17 @@ export interface ForgeTypertRegistration {
   readonly pending: readonly string[];
 }
 
+/**
+ * typed unavailable message 模板（前置修显式化——message 字面量钉单源：
+ * 实现与测试 pin 同引本函数，漂移在类型层可见）。
+ */
+export function unavailableMessage(method: string, family: string): string {
+  return `forge.${family} ${method} unavailable（本宿主缺 ${family} 域服务面）`;
+}
+
 /** typed unavailable（族服务缺席——调用期诚实拒绝，非注册期静默空挂） */
 function unavailable(method: string, family: string): Error {
-  return new Error(`forge.${family} ${method} unavailable（本宿主缺 ${family} 域服务面）`);
+  return new Error(unavailableMessage(method, family));
 }
 
 /** 未知抛错归一（gateway SRC 对任意抛错折叠 RemoteFailure——本面保 message 可读） */
@@ -153,6 +139,7 @@ export class ForgeProjectsRemote extends TypertRemoteService {
   }
 
   /** 项目清单（UI 台账/选择器数据源） */
+  @Remote
   async list(signal?: AbortSignal): Promise<ProjectSummary[]> {
     signal?.throwIfAborted();
     const port = this.port();
@@ -161,6 +148,7 @@ export class ForgeProjectsRemote extends TypertRemoteService {
   }
 
   /** 注册项目（add-project 流程写面） */
+  @Remote
   async register(input: RegisterProjectInput, signal?: AbortSignal): Promise<RegisterResult> {
     signal?.throwIfAborted();
     const port = this.port();
@@ -169,6 +157,7 @@ export class ForgeProjectsRemote extends TypertRemoteService {
   }
 
   /** 任务库派生行（core forgeProjects 服务专属——本插件 port 不承载，typed unavailable） */
+  @Remote
   async deriveTaskStoreDir(workspaceDir: string, signal?: AbortSignal): Promise<never> {
     signal?.throwIfAborted();
     void workspaceDir;
@@ -176,6 +165,7 @@ export class ForgeProjectsRemote extends TypertRemoteService {
   }
 
   /** 项目行变更（sidebar 五功能写面：rename/archived/sortOrders patch——host 权威 registry 写入） */
+  @Remote
   async update(id: string, patch: ProjectPatch, signal?: AbortSignal): Promise<Project> {
     signal?.throwIfAborted();
     const port = this.port();
@@ -183,7 +173,6 @@ export class ForgeProjectsRemote extends TypertRemoteService {
     return await port.updateProject(id, patch);
   }
 }
-remoteMarks(ForgeProjectsRemote.prototype, [["list"], ["register"], ["deriveTaskStoreDir"], ["update"]]);
 
 // ── forge:bugs 族（BugsServicePort list 读面；commitFiles/fileDiff 变更读面归宿主 git 面）──
 
@@ -196,6 +185,7 @@ export class ForgeBugsRemote extends TypertRemoteService {
   }
 
   /** Bug 台账清单（Bug 面板/tab 现查读面） */
+  @Remote
   async list(query: ListBugsQuery, signal?: AbortSignal): Promise<BugCard[]> {
     signal?.throwIfAborted();
     const port = this.port();
@@ -203,19 +193,20 @@ export class ForgeBugsRemote extends TypertRemoteService {
     return await port.listBugs(query);
   }
 
+  @Remote
   async commitFiles(input: unknown, signal?: AbortSignal): Promise<never> {
     signal?.throwIfAborted();
     void input;
     throw unavailable("commitFiles", "bugs");
   }
 
+  @Remote
   async fileDiff(input: unknown, signal?: AbortSignal): Promise<never> {
     signal?.throwIfAborted();
     void input;
     throw unavailable("fileDiff", "bugs");
   }
 }
-remoteMarks(ForgeBugsRemote.prototype, [["list"], ["commitFiles"], ["fileDiff"]]);
 
 // ── forge:fs 族（本机只读目录列举——node:fs 宿主自有能力，apps/host ipc/fs-rpc 同缝平移）──
 
@@ -248,11 +239,11 @@ export class ForgeFsRemote extends TypertRemoteService {
   }
 
   /** 目录列举（add-project 浏览器数据源——只读） */
+  @Remote
   async listDir(dirPath: string | undefined, signal?: AbortSignal): Promise<DirListing> {
     return await listDir(dirPath, signal);
   }
 }
-remoteMarks(ForgeFsRemote.prototype, [["listDir"]]);
 
 // ── forge:dirs 族（基本信息区 2026-11-13——forge 相关目录行 host 侧解析后 Typert 下发，
 //    UI 面只渲染零拼接；数据源 = host/dirs 锚注册表 DIR_KEY_REGISTRY 单源）──
@@ -302,6 +293,7 @@ export class ForgeDirsRemote extends TypertRemoteService {
    * forgeDir = workspaceRoot/.forge 插件内 joinDirSegment 派生，零 core face；
    * 逐键 fail-soft，项目行缺席 = null）。
    */
+  @Remote
   async facts(query: DirFactsQuery, signal?: AbortSignal): Promise<DirFactRow[]> {
     signal?.throwIfAborted();
     const dirFactsPort = this.dirFacts();
@@ -320,7 +312,6 @@ export class ForgeDirsRemote extends TypertRemoteService {
     return rows;
   }
 }
-remoteMarks(ForgeDirsRemote.prototype, [["facts"]]);
 
 // ── forge:worktree 族（WorktreeRpcService 全量委托 + 封存 follow 流）──
 
@@ -340,38 +331,45 @@ export class ForgeWorktreeRemote extends TypertRemoteService {
     return svc;
   }
 
-  async list(query: Parameters<WorktreeRpcService["list"]>[0], signal?: AbortSignal) {
+  @Remote
+  async list(query: WorktreeListRequest, signal?: AbortSignal): Promise<WorktreeListResult> {
     signal?.throwIfAborted();
     return await this.service().list(query);
   }
 
-  async create(query: Parameters<WorktreeRpcService["create"]>[0], signal?: AbortSignal) {
+  @Remote
+  async create(query: WorktreeCreateRequest, signal?: AbortSignal): Promise<WorktreeCreateResult> {
     signal?.throwIfAborted();
     return await this.service().create(query);
   }
 
   /** 删除（contracts delete 动词——域实现名 remove，exportName 别名投影） */
-  async remove(query: Parameters<WorktreeRpcService["remove"]>[0], signal?: AbortSignal) {
+  @Remote("delete")
+  async remove(query: WorktreeDeleteRequest, signal?: AbortSignal): Promise<WorktreeDeleteResult> {
     signal?.throwIfAborted();
     return await this.service().remove(query);
   }
 
-  async aheadBehind(query: Parameters<WorktreeRpcService["aheadBehind"]>[0], signal?: AbortSignal) {
+  @Remote
+  async aheadBehind(query: WorktreeAheadBehindRequest, signal?: AbortSignal): Promise<WorktreeAheadBehindResult> {
     signal?.throwIfAborted();
     return await this.service().aheadBehind(query);
   }
 
-  async branches(query: Parameters<WorktreeRpcService["branches"]>[0], signal?: AbortSignal) {
+  @Remote
+  async branches(query: WorktreeBranchesRequest, signal?: AbortSignal): Promise<WorktreeBranchesResult> {
     signal?.throwIfAborted();
     return await this.service().branches(query);
   }
 
-  async checks(query: Parameters<WorktreeRpcService["checks"]>[0], signal?: AbortSignal) {
+  @Remote
+  async checks(query: WorktreeChecksRequest, signal?: AbortSignal): Promise<WorktreeChecksResult> {
     signal?.throwIfAborted();
     return await this.service().checks(query);
   }
 
   /** 封存判定快照（单发读面——chip 重建等现查消费） */
+  @Remote
   async seal(query: WorktreeSealRequest, signal?: AbortSignal): Promise<WorktreeSealResult> {
     signal?.throwIfAborted();
     return await this.service().seal(query);
@@ -382,6 +380,7 @@ export class ForgeWorktreeRemote extends TypertRemoteService {
    * 后随快照变化逐帧增量（快照钩 = JSON 全量比对，变才 yield）。封存态事实源 = git/盘面
    * （无领域事件源），收敛为定时重估推送——重估间隔 SEAL_FOLLOW_INTERVAL_MS。
    */
+  @Remote({ mode: "stream" })
   async *followSeal(
     query: WorktreeSealRequest,
     signal?: AbortSignal,
@@ -402,41 +401,31 @@ export class ForgeWorktreeRemote extends TypertRemoteService {
     }
   }
 
-  async select(query: Parameters<WorktreeRpcService["select"]>[0], signal?: AbortSignal) {
+  @Remote
+  async select(query: WorktreeSelectRequest, signal?: AbortSignal): Promise<WorktreeSelectResult> {
     signal?.throwIfAborted();
     return await this.service().select(query);
   }
 
-  async selected(query: Parameters<WorktreeRpcService["selected"]>[0], signal?: AbortSignal) {
+  @Remote
+  async selected(query: { readonly projectRoot: string }, signal?: AbortSignal): Promise<{ readonly path?: string }> {
     signal?.throwIfAborted();
     return await this.service().selected(query);
   }
 
-  async ensureWorkspace(query: Parameters<WorktreeRpcService["ensureWorkspace"]>[0], signal?: AbortSignal) {
+  @Remote
+  async ensureWorkspace(query: WorktreeEnsureWorkspaceRequest, signal?: AbortSignal): Promise<WorktreeEnsureWorkspaceResult> {
     signal?.throwIfAborted();
     return await this.service().ensureWorkspace(query);
   }
 
   /** 批量归属解析（sidebar 树分组/概览锚定——身份归并单点；1.6 Typert 正典通路） */
-  async resolve(query: Parameters<WorktreeRpcService["resolve"]>[0], signal?: AbortSignal) {
+  @Remote
+  async resolve(query: WorktreeResolveRequest, signal?: AbortSignal): Promise<WorktreeResolveResult> {
     signal?.throwIfAborted();
     return await this.service().resolve(query);
   }
 }
-remoteMarks(ForgeWorktreeRemote.prototype, [
-  ["list"],
-  ["create"],
-  ["remove", "delete"],
-  ["aheadBehind"],
-  ["branches"],
-  ["checks"],
-  ["seal"],
-  ["followSeal", { mode: "stream" }],
-  ["select"],
-  ["selected"],
-  ["ensureWorkspace"],
-  ["resolve"],
-]);
 
 /** follow 流节拍（abort 感知 sleep——取消即出循环，不悬空 fiber） */
 function sealFollowDelay(signal: AbortSignal | undefined, intervalMs: number): Promise<void> {
@@ -467,16 +456,18 @@ export class ForgeProposalsRemote extends TypertRemoteService {
   }
 
   /** 提案清单（新建弹窗 slug 候选数据源） */
-  async list(query: unknown, signal?: AbortSignal): Promise<unknown> {
+  @Remote
+  async list(query: ListProposalsQuery, signal?: AbortSignal): Promise<ProposalCard[]> {
     signal?.throwIfAborted();
-    const svc = this.resolve() as { listProposals?: (q: unknown) => Promise<unknown> } | undefined;
+    const svc = this.resolve() as
+      | { listProposals?: (q: ListProposalsQuery) => Promise<ProposalCard[]> }
+      | undefined;
     if (svc === undefined || typeof svc.listProposals !== "function") {
       throw unavailable("list", "proposals");
     }
     return await svc.listProposals(query);
   }
 }
-remoteMarks(ForgeProposalsRemote.prototype, [["list"]]);
 
 export class ForgeFeaturesRemote extends TypertRemoteService {
   private readonly resolve: LazyDomainService;
@@ -487,16 +478,18 @@ export class ForgeFeaturesRemote extends TypertRemoteService {
   }
 
   /** feature 清单（新建弹窗 slug 候选数据源） */
-  async list(query: unknown, signal?: AbortSignal): Promise<unknown> {
+  @Remote
+  async list(query: ListFeaturesQuery, signal?: AbortSignal): Promise<FeatureCard[]> {
     signal?.throwIfAborted();
-    const svc = this.resolve() as { listFeatures?: (q: unknown) => Promise<unknown> } | undefined;
+    const svc = this.resolve() as
+      | { listFeatures?: (q: ListFeaturesQuery) => Promise<FeatureCard[]> }
+      | undefined;
     if (svc === undefined || typeof svc.listFeatures !== "function") {
       throw unavailable("list", "features");
     }
     return await svc.listFeatures(query);
   }
 }
-remoteMarks(ForgeFeaturesRemote.prototype, [["list"]]);
 
 // ── 装配（根 ctx plugin 注册——gateway SRC 发现面 = 根 ctx reflect.props）──
 
