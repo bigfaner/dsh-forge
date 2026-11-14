@@ -471,6 +471,8 @@ export function renderRetroInstruction(slug: string, rows: readonly LoopCheckpoi
       '（markdown 同构字段 title/summary/keywords/domainPath + 溯源字段：来源容器 slug / 来源任务 / bug id）；' +
       '交叉核验取到的共识为沉淀输入。',
     '- 提炼态 conventions 晋升 docs/conventions 正本仍走提案管线裁决，不直改技能检查项。',
+    '- 测试判例三类沉淀：flaky 史（用例 + 环境 + 复发轮次）、测试退役理由（被测物变更 → 用例去向）、' +
+      '覆盖真空（评审发现的缺席面）——评审发现的测试判例/翻车点按此三类归类沉淀，不漏判例。',
     '',
     '三、收口标记（知识沉淀完成后执行）：',
     `- 用 recordImplCheckpoint 为 ${slug} 落 retro-done 标记` +
