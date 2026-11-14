@@ -26,6 +26,7 @@ import {
 import { createProjectsServicePort, openProjectsDomainDb } from "./assembly/projects-port.js";
 import { createWorktreeIdentity, type ForgeProjectsIdentityFace } from "./assembly/worktree-identity.js";
 import { createBugsService } from "./bugs/service.js";
+import { createProjectKeyResolver } from "./assembly/project-key.js";
 import { minimalDirFactsPort } from "./dirs/dir-facts.js";
 import { createSelfAnchorsOf } from "./dirs/self-anchors.js";
 // 单行装载 = 五缝注册 + worktree 域插件（gitWorktree 能力服务 provide）——能力面在此
@@ -79,7 +80,8 @@ declare module "@deepseek-ai/cordis" {
 
 /** bugs 常驻 provider 依赖缝（归属键派生 + git cwd——装配期由宿主/组合器注入） */
 export interface BugsResidentDeps {
-  readonly resolveProjectKey: (projectId: string) => string | null;
+  /** b5707fe4：支持异步派生——core 代 projectId 经 registry 官方锚兜底链（project-key.ts） */
+  readonly resolveProjectKey: (projectId: string) => Promise<string | null> | string | null;
   readonly resolveMainPath: (projectId: string) => string;
 }
 
@@ -230,9 +232,15 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     if (db === undefined) return base;
     // bugs 依赖兜底接真实现——config.bugsDeps 缺席时自 project.db 派生（归属键 = projects
     // 行 project_key；主路径 = workspaces main 行 ws_path），不退空实现。
+    // b5707fe4：归属键真源解析链（bugs/project-key.ts）——本库行缺席（register 委托缝落
+    // core 库）时经 registry 官方锚 get(projectId).path 派生 project_key 并惰性回写归属行；
+    // registry try/catch fail-soft，派生失败 null（I5 拒写语义不变）。
     const bugsDeps = config.bugsDeps ?? {
-      resolveProjectKey: (projectId: string): string | null =>
-        db.repos.projects.get(projectId)?.projectKey ?? null,
+      resolveProjectKey: createProjectKeyResolver({
+        domainDb: db,
+        registry: (config.registry ?? defaultRegistry()) as OfficialRegistryFace | undefined,
+        onDiag: (payload) => diag(`[project-bugs] ${payload.level}: ${payload.message}`),
+      }),
       resolveMainPath: (projectId: string): string =>
         db.repos.workspaces.getMain(projectId)?.wsPath ?? "",
     };

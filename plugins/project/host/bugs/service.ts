@@ -173,8 +173,9 @@ export const ERROR_TYPE_SUGGESTIONS_LIMIT = 20
 export interface BugsServiceDeps {
   /** project.db bugs 行级读写门（域内唯一持 SQL——repositories 单点） */
   readonly bugs: BugsRepo
-  /** 行级归属键派生缝（I5）：projectId → project_key；null/空 = 派生失败拒写 */
-  readonly resolveProjectKey: (projectId: string) => string | null
+  /** 行级归属键派生缝（I5）：projectId → project_key；null/空 = 派生失败拒写。
+   * b5707fe4 起支持异步派生（core 代 projectId 走 registry 官方锚兜底链——project-key.ts） */
+  readonly resolveProjectKey: (projectId: string) => string | null | Promise<string | null>
   /** git 解析径 cwd（fixed 证据反查/身份解析——归属解析链供 main 行路径） */
   readonly resolveMainPath: (projectId: string) => string
   /** execFile 注入（测试桩受控成败——生产缺省 node:child_process） */
@@ -235,8 +236,8 @@ function sortByActiveThenCreated<T>(
 export function createBugsService(deps: BugsServiceDeps) {
   const execFile = deps.execFile ?? defaultExecFile
   /** 归属圈定（I5）：projectId → project_key；派生失败拒写/拒读（行级归属键 NOT NULL） */
-  const keyOf = (projectId: string): string => {
-    const k = deps.resolveProjectKey(projectId)
+  const keyOf = async (projectId: string): Promise<string> => {
+    const k = await deps.resolveProjectKey(projectId)
     if (k === null || k === '') throw new BugProjectKeyRequiredError({ projectId })
     return k
   }
@@ -256,8 +257,8 @@ export function createBugsService(deps: BugsServiceDeps) {
       .map(([t]) => t)
   }
   /** 定位本行（404 + 归属圈定守卫——单库多项目下他项目 bugId 不穿透） */
-  const locate = (projectId: string, bugId: string): { key: string; row: BugRow } => {
-    const key = keyOf(projectId)
+  const locate = async (projectId: string, bugId: string): Promise<{ key: string; row: BugRow }> => {
+    const key = await keyOf(projectId)
     const row = byId(deps.bugs.listByProject(key), bugId)
     if (row === undefined) throw new BugNotFoundError({ projectId, bugId })
     return { key, row }
@@ -270,7 +271,7 @@ export function createBugsService(deps: BugsServiceDeps) {
       if (Array.from(summary).length > BUG_SUMMARY_MAX_CHARS) {
         throw new BugSummaryTooLongError({ summary, max: BUG_SUMMARY_MAX_CHARS })
       }
-      const projectKey = keyOf(input.projectId)
+      const projectKey = await keyOf(input.projectId)
       const cwd = deps.resolveMainPath(input.projectId)
       const reporter = await resolveGitIdentity(execFile, cwd)
       const recurrenceOfRaw = input.recurrenceOf?.trim() || undefined
@@ -322,7 +323,7 @@ export function createBugsService(deps: BugsServiceDeps) {
       if (input.outcome === 'unresolved') {
         const reason = (input.unresolvedReason ?? '').trim()
         if (reason === '') throw new ReasonRequiredError({ verb: 'resolveBug' })
-        const { row } = locate(input.projectId, input.bugId)
+        const { row } = await locate(input.projectId, input.bugId)
         if (row.bugStatus !== 'open') {
           throw new BugAlreadyResolvedError({ projectId: input.projectId, bugId: input.bugId, current: row.bugStatus })
         }
@@ -336,7 +337,7 @@ export function createBugsService(deps: BugsServiceDeps) {
       }
       const commitHash = (input.commitHash ?? '').trim()
       if (commitHash === '') throw new CommitHashRequiredError({ bugId: input.bugId })
-      const { row } = locate(input.projectId, input.bugId)
+      const { row } = await locate(input.projectId, input.bugId)
       if (row.bugStatus !== 'open') {
         throw new BugAlreadyResolvedError({ projectId: input.projectId, bugId: input.bugId, current: row.bugStatus })
       }
@@ -375,7 +376,7 @@ export function createBugsService(deps: BugsServiceDeps) {
 
     /** 列表读面（服务端承载：search + status 过滤 + active|created 排序——三既有子 tab 同构） */
     async listBugs(q: ListBugsQuery): Promise<BugCard[]> {
-      const key = keyOf(q.projectId)
+      const key = await keyOf(q.projectId)
       const cards = deps.bugs.listByProject(key).map(projectBug)
       const filtered = cards.filter(
         (c) =>
@@ -393,7 +394,7 @@ export function createBugsService(deps: BugsServiceDeps) {
     /** 台账 recurrence 候选只读聚合（claim 同缝守卫 / T2 交叉校验 / triage 两信号 / add-fix
      * vars 共同消费 face——container_slug 列直比口径，纯算法归 recurrence.ts） */
     async findRecurrenceCandidates(projectId: string, scope: BugRecurrenceScope): Promise<readonly BugRecurrenceCandidate[]> {
-      const key = keyOf(projectId)
+      const key = await keyOf(projectId)
       return findRecurrenceCandidatesOf(deps.bugs.listByProject(key), scope)
     },
 
@@ -403,7 +404,7 @@ export function createBugsService(deps: BugsServiceDeps) {
      * 最新 updated_at。排序 = total 降序、同频词面升序。空/纯空白 errorType 不入组。
      */
     async aggregateByErrorType(projectId: string): Promise<readonly BugErrorTypeAggregate[]> {
-      const key = keyOf(projectId)
+      const key = await keyOf(projectId)
       const groups = new Map<string, { total: number; open: number; fixed: number; lastSeenAt: string }>()
       for (const r of deps.bugs.listByProject(key)) {
         const t = (r.errorType ?? '').trim()
@@ -425,7 +426,7 @@ export function createBugsService(deps: BugsServiceDeps) {
      * recurrence.ts buildBugChainContext）；孤条 chain 缺席（单条 bug 弹框语言不变）。
      */
     async getBug(q: GetBugQuery): Promise<GetBugResponse> {
-      const key = keyOf(q.projectId)
+      const key = await keyOf(q.projectId)
       return buildBugChainContext(deps.bugs.listByProject(key), q)
     },
 
