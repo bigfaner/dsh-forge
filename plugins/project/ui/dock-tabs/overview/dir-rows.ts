@@ -17,8 +17,8 @@ const DIR_FACTS_ROW_LABELS: Record<DirFactRowKey, string> = {
   workspaceRoot: '工作区根',
   forgeDir: '.forge 目录',
   'forge.docs_root': '文档位置',
-  'forge.task_home': '任务清单',
-  'forge.worktrees': '派发工作树区',
+  'forge.task_home': '项目运行产物',
+  'forge.worktrees': 'Worktree根目录',
 }
 
 /** 行标签取法（overview-data overviewHeadRows 消费——标签单源） */

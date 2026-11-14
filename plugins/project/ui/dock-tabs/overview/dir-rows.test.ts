@@ -27,8 +27,8 @@ describe('dirHeadRows（UI 只渲染零拼接——值恒为 host 下发原样�
       { label: '工作区根', value: 'Z:\\ws\\demo' },
       { label: '.forge 目录', value: 'Z:\\ws\\demo\\.forge' },
       { label: '文档位置', value: 'Z:\\ws\\demo\\.forge\\docs' },
-      { label: '任务清单', value: 'D:\\tasks\\demo@abcd1234' },
-      { label: '派发工作树区', value: 'Z:\\ws\\demo\\.forge\\worktrees' },
+      { label: '项目运行产物', value: 'D:\\tasks\\demo@abcd1234' },
+      { label: 'Worktree根目录', value: 'Z:\\ws\\demo\\.forge\\worktrees' },
     ])
   })
 
@@ -45,6 +45,7 @@ describe('dirHeadRows（UI 只渲染零拼接——值恒为 host 下发原样�
   })
 
   it('dirFactRowLabel 单源（overview-data overviewHeadRows 消费同表）', () => {
-    expect(dirFactRowLabel('forge.task_home')).toBe('任务清单')
+    expect(dirFactRowLabel('forge.task_home')).toBe('项目运行产物')
+    expect(dirFactRowLabel('forge.worktrees')).toBe('Worktree根目录')
   })
 })

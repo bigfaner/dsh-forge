@@ -11,7 +11,7 @@ const ROWS = [
   { label: '工作区', value: 'Z:/ws/demo' },
   { label: '文档位置', value: 'Z:/ws/demo/.forge' },
   { label: '知识目录', value: 'Z:/ws/demo/.knowledge' },
-  { label: '任务清单', value: 'C:/forge-home/demo@a1b2c3d4' },
+  { label: '项目运行产物', value: 'C:/forge-home/demo@a1b2c3d4' },
 ]
 
 const base = {
@@ -50,7 +50,7 @@ describe('OverviewHead（M3.1 D20 同位翻转钮）', () => {
     expect(markup).toContain('.forge')
     expect(markup).toContain('知识目录')
     expect(markup).toContain('.knowledge')
-    expect(markup).toContain('任务清单')
+    expect(markup).toContain('项目运行产物')
     expect(markup).toContain('demo@a1b2c3d4')
   })
 

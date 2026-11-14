@@ -162,7 +162,7 @@ describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列
     expect(out.ok).toBe(true)
     if (out.ok) {
       const rows = overviewHeadRows(out.data)
-      expect(rows.map((r) => r.label)).toEqual(['工作区根', '.forge 目录', '文档位置', '任务清单', '派发工作树区'])
+      expect(rows.map((r) => r.label)).toEqual(['工作区根', '.forge 目录', '文档位置', '项目运行产物', 'Worktree根目录'])
       expect(rows.find((r) => r.label === '工作区根')?.value).toBe('Z:/ws/demo')
       expect(rows.find((r) => r.label === '.forge 目录')?.value).toBe('Z:/ws/demo/.forge')
       expect(rows.filter((r) => r.value === '—')).toHaveLength(3)
