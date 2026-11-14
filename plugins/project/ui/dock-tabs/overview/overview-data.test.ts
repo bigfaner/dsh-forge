@@ -134,7 +134,7 @@ function featureDocRow(docKind: 'prd-spec' | 'tech-design' = 'tech-design'): Fea
 }
 
 describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列）', () => {
-  it('get ∥ features.list(无参) ∥ proposals.list(无参) ∥ stats 归一为 ov-head 信息束', async () => {
+  it('门关（用户裁定 2026-11-14）：features/proposals 通道零调用——head 空增强值照常落束', async () => {
     const { client, calls } = headOkClient()
     const out = await loadOverviewHead(client, 'p-1')
     expect(out).toEqual({
@@ -143,17 +143,13 @@ describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列
         projectName: 'demo',
         workspaceDir: 'Z:/ws/demo',
         forgeDir: 'Z:/ws/demo/.forge',
-        features: [featureCard('m2-pipeline')],
-        proposals: [proposalCard('pr-1', 'prop-1')],
+        features: [],
+        proposals: [],
         stats: STATS,
       },
     })
-    // 头路 features.list 无搜索参（摘要/谱系查找源不随搜索漂移）
-    const featuresCall = calls.find((c) => c.channel === FEATURES_CHANNELS.list)
-    expect(featuresCall?.payload).toEqual({ projectId: 'p-1' })
-    // 4.6：proposals.list 无参（五态 chips 计数 + 容器 pill 双轨源——不随搜索漂移）
-    const proposalsCall = calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)
-    expect(proposalsCall?.payload).toEqual({ projectId: 'p-1' })
+    expect(calls.find((c) => c.channel === FEATURES_CHANNELS.list)).toBeUndefined()
+    expect(calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)).toBeUndefined()
   })
 
   it('基本信息区五行：dirRows 键投影；workspaceRoot/forgeDir 项目行回退；其余缺席 = 「—」', async () => {
@@ -231,36 +227,20 @@ describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列
 })
 
 describe('fetchOverviewList（AC6 搜索传参——服务端过滤调用断言）', () => {
-  it('proposals 子 tab：search 关键词 + sort 原样入 proposals.list 查询参（前端零本地过滤）', async () => {
+  it('门关（用户裁定 2026-11-14）：proposals 子 tab 短路 null——proposals.list 零调用（降级 warn 噪音随之消失）', async () => {
     const { client, calls } = headOkClient()
     const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'proposals', search: ' 网关 ', sort: 'created' })
-    expect(out?.ok).toBe(true)
-    const call = calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)
-    expect(call?.payload).toEqual({ projectId: 'p-1', search: '网关', sort: 'created' })
+    expect(out).toBeNull()
+    expect(calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)).toBeUndefined()
   })
 
-  it('空搜索 = 不带 search 参（undefined 归一——空参即全量）', async () => {
-    const { client, calls } = headOkClient()
-    await fetchOverviewList(client, { projectId: 'p-1', subtab: 'proposals', search: '   ', sort: 'active' })
-    const call = calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)
-    expect(call?.payload).toEqual({ projectId: 'p-1', search: undefined, sort: 'active' })
-  })
-
-  it('features 子 tab：features.list 带 search/sort ∥ proposals.list 无参 ∥ features.listDocs（fix-2 文档行数据源）', async () => {
+  it('门关：features 子 tab 短路 null——features.list/listDocs/proposals.list 零调用', async () => {
     const { client, calls } = headOkClient()
     const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'features', search: 'pipeline', sort: 'active' })
-    expect(out?.ok).toBe(true)
-    if (out?.ok && out.data.kind === 'features') {
-      expect(out.data.features).toEqual([featureCard('m2-pipeline')])
-      expect(out.data.proposals).toEqual([proposalCard('pr-1', 'prop-1')])
-      expect(out.data.docs).toEqual([featureDocRow()])
-    }
-    const featuresCall = calls.find((c) => c.channel === FEATURES_CHANNELS.list)
-    expect(featuresCall?.payload).toEqual({ projectId: 'p-1', search: 'pipeline', sort: 'active' })
-    const proposalsCall = calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)
-    expect(proposalsCall?.payload).toEqual({ projectId: 'p-1' })
-    const docsCall = calls.find((c) => c.channel === FEATURES_CHANNELS.listDocs)
-    expect(docsCall?.payload).toEqual({ projectId: 'p-1' }) // 无 search 面（行归属过滤归 UI）
+    expect(out).toBeNull()
+    expect(calls.find((c) => c.channel === FEATURES_CHANNELS.list)).toBeUndefined()
+    expect(calls.find((c) => c.channel === FEATURES_CHANNELS.listDocs)).toBeUndefined()
+    expect(calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)).toBeUndefined()
   })
 
   it('tasks 子 tab = null（3.5 无列装载——三视图归 3.6，chips 消费头路 stats）', async () => {
@@ -271,14 +251,13 @@ describe('fetchOverviewList（AC6 搜索传参——服务端过滤调用断言�
   })
 
   it('列路失败 = typed error 归一（库不可用 → 域级横幅 uiState）', async () => {
-    const { client } = clientResponding((channel, payload) => {
-      if (channel === PROPOSALS_CHANNELS.list && (payload as { search?: string }).search !== undefined) {
+    const { client } = clientResponding((channel) => {
+      if (channel === BUGS_CHANNELS.list) {
         throw new RpcClientError({ code: 'ERR_WORKSPACE_DB_UNAVAILABLE' as const, message: '工作区库不可用' })
       }
-      if (channel === PROPOSALS_CHANNELS.list) return []
       throw new Error(`unexpected channel: ${channel}`)
     })
-    const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'proposals', search: 'q', sort: 'active' })
+    const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'bugs', search: 'q', sort: 'active' })
     expect(out?.ok).toBe(false)
     if (out && !out.ok) expect(out.error.uiState).toBe('banner')
   })

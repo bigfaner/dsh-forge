@@ -19,7 +19,7 @@ import { overviewRpcClientFactory } from './overview-client.js'
 import { RpcClientError } from '../rpc-channels.js'
 import { rpcUiState, type RpcUiStateKind } from '../rpc-channels.js'
 import { DIR_FACTS_ROW_KEYS, dirFactRowLabel, type DirFactRowKey } from './dir-rows.js'
-import { bugStatusCounts, searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
+import { bugStatusCounts, OVERVIEW_PROPOSAL_FEATURE_ENABLED, searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
 import { docsRootOf } from './message-format.js'
 
 /** 错误附载（message = 信封 message 原样；uiState = rpcUiState(code) 三态映射） */
@@ -105,8 +105,14 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
           return rows.find((row) => row.id === projectId) ?? null
         }),
       Promise.all([
-        client.features.list({ projectId }).catch(() => [] as Awaited<ReturnType<typeof client.features.list>>),
-        client.proposals.list({ projectId }).catch(() => [] as Awaited<ReturnType<typeof client.proposals.list>>),
+        // 提案/feature 行集消费门（用户裁定 2026-11-14）：门关 = 通道零调用（空增强值直落
+        // head——degraded warn 噪音随之消失；数据面 forgeFeatures/forgeProposals 不动）
+        OVERVIEW_PROPOSAL_FEATURE_ENABLED
+          ? client.features.list({ projectId }).catch(() => [] as Awaited<ReturnType<typeof client.features.list>>)
+          : Promise.resolve<FeatureCard[]>([]),
+        OVERVIEW_PROPOSAL_FEATURE_ENABLED
+          ? client.proposals.list({ projectId }).catch(() => [] as Awaited<ReturnType<typeof client.proposals.list>>)
+          : Promise.resolve<ProposalCard[]>([]),
         client.tasks.stats({ projectId }).catch(() => ZERO_TASK_STATS),
       ]),
     ])
@@ -167,6 +173,8 @@ export async function fetchOverviewList(
 ): Promise<OverviewFetch<OverviewListData> | null> {
   const search = searchQueryOf(q.search)
   if (q.subtab === 'tasks') return null
+  // 消费门（用户裁定 2026-11-14）：门关 = 提案/feature 子 tab 短路 null（零通道调用）
+  if (!OVERVIEW_PROPOSAL_FEATURE_ENABLED && (q.subtab === 'proposals' || q.subtab === 'features')) return null
   try {
     if (q.subtab === 'proposals') {
       return { ok: true, data: { kind: 'proposals', proposals: await client.proposals.list({ projectId: q.projectId, search, sort: q.sort }) } }

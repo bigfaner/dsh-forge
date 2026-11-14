@@ -9,7 +9,7 @@ import type { ReactNode } from 'react'
 import { Button, IconCloseFillRegular, IconSearchOutlineRegular, Input, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   OVERVIEW_SORT_LABELS,
-  OVERVIEW_SUBTABS,
+  visibleOverviewSubtabs,
   searchPlaceholderOf,
   type OverviewSort,
   type OverviewSubtab,
@@ -43,7 +43,7 @@ export function StickyBar({
   return (
     <div className="dswf-ov-sticky" data-dswf-ov-sticky="">
       <div className="dswf-ov-subtabs" role="tablist" aria-label="概览子视图">
-        {OVERVIEW_SUBTABS.map((tab) => (
+        {visibleOverviewSubtabs().map((tab) => (
           <button
             key={tab.value}
             type="button"

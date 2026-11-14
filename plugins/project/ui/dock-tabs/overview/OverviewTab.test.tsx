@@ -96,6 +96,10 @@ const handlers = {
   onRetry: () => {},
 }
 
+// 帧渲染分派路径测试缺省腿 = 提案子 tab（门关期仍保持可渲染——恢复接入判据位；
+// 用户裁定 2026-11-14 只退消费入口，渲染面不拆）
+const DEFAULT_FRAME_FILTER: OverviewFilterState = { ...initialOverviewFilter(), subtab: 'proposals' }
+
 const frame = (over: {
   filter?: OverviewFilterState
   head?: OverviewHeadBundle
@@ -114,7 +118,7 @@ const frame = (over: {
       phase={over.phase ?? 'ready'}
       busy={false}
       error={over.error}
-      filter={over.filter ?? initialOverviewFilter()}
+      filter={over.filter ?? DEFAULT_FRAME_FILTER}
       onOpenDoc={() => {}}
       now={NOW}
       {...handlers}
@@ -150,7 +154,7 @@ describe('OverviewFrame 面板骨架（AC1/AC2）', () => {
 
 describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 三子 tab 接线）', () => {
   it('proposals 子 tab（默认）：五态 chips（列表之上）+ 提案父行 + 展开元数据/文档区（useProposalDocs 按需装载位）', () => {
-    const filter = { ...initialOverviewFilter(), openRows: new Set(['prop:pr-1']) }
+    const filter = { ...DEFAULT_FRAME_FILTER, openRows: new Set(['prop:pr-1']) }
     const markup = frame({ list: PROPOSALS_LIST, filter })
     expect(markup).toContain('data-dswf-ov-proposals')
     // 五态 chips 插入点（AC6）：ov-sticky 之下、列表之上
@@ -174,7 +178,7 @@ describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 三子 tab 接线）', 
   })
 
   it('搜索在场 + 空结果 = 无匹配空态（服务端过滤——空标题由帧侧注入）', () => {
-    const filter = { ...initialOverviewFilter(), search: '不存在' }
+    const filter = { ...DEFAULT_FRAME_FILTER, search: '不存在' }
     const empty: OverviewListData = { kind: 'proposals', proposals: [] }
     const markup = frame({ filter, list: empty })
     expect(markup).toContain('无匹配「不存在」的提案')
@@ -189,7 +193,7 @@ describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 三子 tab 接线）', 
         phase="ready"
         busy={true}
         error={undefined}
-        filter={initialOverviewFilter()}
+        filter={DEFAULT_FRAME_FILTER}
         onOpenDoc={() => {}}
         now={NOW}
         {...handlers}
@@ -347,13 +351,14 @@ describe('OverviewFrame 错误三态', () => {
 })
 
 describe('OverviewTab（状态 + 装载胶水——静态首装面）', () => {
-  it('首装 = 面板骨架 + 骨架屏（effect 不跑——数据装载归 overview-data 单测与 e2e）', () => {
+  it('首装 = 面板骨架 + 任务子 tab（门关期默认——effect 不跑；数据装载归 overview-data 单测与 e2e）', () => {
     const markup = renderToStaticMarkup(
-      <OverviewTab projectId="p-1" makeClient={(() => ({}) as never)} now={NOW} />,
+      <OverviewTab projectId="p-1" makeClient={(() => ({})) as never} now={NOW} />,
     )
     expect(markup).toContain('data-dswf-ov-panel')
     expect(markup).toContain('data-dswf-ov-sticky')
-    expect(markup).toContain('data-dswf-ov-skeleton')
+    expect(markup).toContain('data-dswf-ov-subtab="tasks"')
+    expect(markup).not.toContain('data-dswf-ov-subtab="proposals"')
     expect(markup).not.toContain('data-dswf-ov-head')
     // fix-bug 收尾：BugDialog 挂载位在场但首装无选中 = 不渲染（零弹框锚）
     expect(markup).not.toContain('data-dswf-ov-bdialog')

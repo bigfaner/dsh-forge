@@ -28,6 +28,21 @@ export const OVERVIEW_SUBTABS = [
 
 export type OverviewSubtab = (typeof OVERVIEW_SUBTABS)[number]['value']
 
+/**
+ * 提案/feature 行集消费门（用户裁定 2026-11-14：项目概览暂时不要接入 feature 与提案）。
+ * 数据面 forgeFeatures/forgeProposals 不动（保持诚实 degraded 语义——与官方 web 舞台同口径）；
+ * 本门只把消费面默认关掉：子 tab 栏隐藏提案/feature、默认子 tab = 任务、头路/列路对
+ * features/proposals 通道零调用（降级 warn 噪音随之消失）。将来恢复接入置 true 即回全量行集。
+ */
+export const OVERVIEW_PROPOSAL_FEATURE_ENABLED = false
+
+/** 当前可见子 tab 谱（门关 = 任务 | Bug；门开 = 全量注册序） */
+export function visibleOverviewSubtabs(): readonly { readonly value: OverviewSubtab; readonly label: string }[] {
+  return OVERVIEW_PROPOSAL_FEATURE_ENABLED
+    ? OVERVIEW_SUBTABS
+    : OVERVIEW_SUBTABS.filter((tab) => tab.value !== 'proposals' && tab.value !== 'features')
+}
+
 /** 排序模式（contracts ListTasksQuery/ListFeaturesQuery/ListProposalsQuery 同构参） */
 export type OverviewSort = 'active' | 'created'
 
@@ -57,10 +72,10 @@ export interface OverviewFilterState {
   readonly headOpen: boolean
 }
 
-/** 初始态（默认子 tab = 提案——用户定向顺序首位；排序默认活跃优先；ov-head 默认折叠） */
+/** 初始态（默认子 tab = 门开提案 / 门关任务——用户裁定 2026-11-14 消费面退场；排序默认活跃优先；ov-head 默认折叠） */
 export function initialOverviewFilter(): OverviewFilterState {
   return {
-    subtab: 'proposals',
+    subtab: OVERVIEW_PROPOSAL_FEATURE_ENABLED ? 'proposals' : 'tasks',
     search: '',
     sort: 'active',
     activeStatuses: new Set<TaskStatus>(),

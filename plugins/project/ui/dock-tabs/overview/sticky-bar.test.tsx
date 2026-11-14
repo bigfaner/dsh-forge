@@ -26,23 +26,24 @@ function assertAscending(haystack: string, needles: readonly string[]): void {
   expect([...positions].sort((a, b) => a - b)).toEqual(positions)
 }
 
-describe('StickyBar 子 tab 行（AC2 三子 tab 用户定向顺序）', () => {
-  it('顺序 = 提案 → feature → 任务；aria-selected 标注当前态', () => {
-    const markup = renderToStaticMarkup(<StickyBar {...base} subtab="proposals" search="" sort="active" />)
+describe('StickyBar 子 tab 行（消费门关——任务 | Bug 两 tab）', () => {
+  it('门关（用户裁定 2026-11-14）：子 tab = 任务 → Bug；aria-selected 标注当前态；提案/feature 退场', () => {
+    const markup = renderToStaticMarkup(<StickyBar {...base} subtab="tasks" search="" sort="active" />)
     expect(markup).toContain('role="tablist"')
     assertAscending(
       markup,
-      ['proposals', 'features', 'tasks'].map((v) => `data-dswf-ov-subtab="${v}"`),
+      ['tasks', 'bugs'].map((v) => `data-dswf-ov-subtab="${v}"`),
     )
     expect(markup).toContain('aria-selected="true"')
     expect(markup).toContain('aria-selected="false"')
+    expect(markup).not.toContain('data-dswf-ov-subtab="proposals"')
+    expect(markup).not.toContain('data-dswf-ov-subtab="features"')
   })
 
-  it('子 tab 按钮标签中文口径（提案/feature/任务）', () => {
+  it('子 tab 按钮标签中文口径（任务/Bug）', () => {
     const markup = renderToStaticMarkup(<StickyBar {...base} subtab="tasks" search="" sort="active" />)
-    expect(markup).toContain('>提案</button>')
-    expect(markup).toContain('>feature</button>')
     expect(markup).toContain('>任务</button>')
+    expect(markup).toContain('>Bug</button>')
   })
 })
 

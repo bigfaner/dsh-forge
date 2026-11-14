@@ -11,6 +11,8 @@ import {
   clearPhaseFilter,
   clearProposalStatusFilter,
   OVERVIEW_SUBTABS,
+  OVERVIEW_PROPOSAL_FEATURE_ENABLED,
+  visibleOverviewSubtabs,
   clearStatusFilter,
   featureRowKey,
   hasActiveStatusFilter,
@@ -41,10 +43,18 @@ describe('OVERVIEW_SUBTABS（用户定向顺序）', () => {
   })
 })
 
+describe('提案/feature 行集消费门（用户裁定 2026-11-14：概览暂不接入 feature 与提案）', () => {
+  it('门默认关闭：可见子 tab = 任务 | Bug；门控常量 false', () => {
+    expect(OVERVIEW_PROPOSAL_FEATURE_ENABLED).toBe(false)
+    expect(visibleOverviewSubtabs().map((t) => t.value)).toEqual(['tasks', 'bugs'])
+    expect(visibleOverviewSubtabs().map((t) => t.label)).toEqual(['任务', 'Bug'])
+  })
+})
+
 describe('initialOverviewFilter（AC1 默认态）', () => {
-  it('默认子 tab = 提案（定向顺序首位）；排序 = 活跃优先；搜索空；chips/展开态空；ov-head 折叠', () => {
+  it('默认子 tab = 任务（门关期提案/feature 子 tab 退场——用户裁定 2026-11-14）；排序 = 活跃优先；搜索空；chips/展开态空；ov-head 折叠', () => {
     const state = initialOverviewFilter()
-    expect(state.subtab).toBe('proposals')
+    expect(state.subtab).toBe('tasks') // 消费门关（用户裁定 2026-11-14）——提案/feature 子 tab 退场
     expect(state.sort).toBe('active')
     expect(state.search).toBe('')
     expect(state.activeStatuses.size).toBe(0)
@@ -58,8 +68,8 @@ describe('switchSubtab（AC3 切换清空）', () => {
     let state = initialOverviewFilter()
     state = { ...state, search: '网关', openRows: new Set([proposalRowKey('p-1'), featureRowKey('f-1')]) }
     state = toggleStatusFilter(state, 'blocked')
-    const next = switchSubtab(state, 'tasks')
-    expect(next.subtab).toBe('tasks')
+    const next = switchSubtab(state, 'bugs') // 门关期默认子 tab = tasks——切换靶改 bugs 验证清空语义
+    expect(next.subtab).toBe('bugs')
     expect(next.search).toBe('')
     expect(next.activeStatuses.size).toBe(0)
     expect(next.openRows.size).toBe(0)
@@ -228,7 +238,7 @@ describe('Bug 三态 chips（fix-bug——toggle/清空/白名单参/计数）',
   it('子 tab 切换清空 Bug chips（切换语义沿袭——四族全清）', () => {
     let state = initialOverviewFilter()
     state = toggleBugStatusFilter(state, 'open')
-    const next = switchSubtab(state, 'tasks')
+    const next = switchSubtab(state, 'bugs') // 门关期默认子 tab = tasks——切换靶改 bugs
     expect(next.activeBugStatuses.size).toBe(0)
   })
 })
@@ -270,7 +280,7 @@ describe('提案五态 / feature 阶段 chips（4.6——toggle 与清空语义�
     state = toggleProposalStatusFilter(state, 'accepted')
     state = togglePhaseFilter(state, 'completed')
     state = { ...state, search: '关键词', openRows: new Set(['prop:p-1']) }
-    const next = switchSubtab(state, 'tasks')
+    const next = switchSubtab(state, 'bugs') // 门关期默认子 tab = tasks——切换靶改 bugs
     expect(next.search).toBe('')
     expect(next.activeStatuses.size).toBe(0)
     expect(next.activeProposalStatuses.size).toBe(0)

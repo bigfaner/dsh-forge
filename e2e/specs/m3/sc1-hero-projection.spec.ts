@@ -118,7 +118,14 @@ test('@web-e2e @m3 SC1·hero 投影四断言：座位在场/中文直出 order 1
   }
 })
 
-test('@web-e2e @m3 SC1·自动对齐：提案绑定入口新会话自动对齐提案 mode（座位标签 + 预填不发送）', async () => {
+// SC1·自动对齐——显式 skip（用户裁定 2026-11-14：「项目概览暂时不要接入 feature 与提案」）：
+// 概览提案/feature 行集消费面已按 OVERVIEW_PROPOSAL_FEATURE_ENABLED 门控默认关闭
+// （plugins/project/ui/dock-tabs/overview/overview-model.ts），提案绑定入口不复存在，
+// 本断言随之退场。数据面 forgeProposals 遥控器保持诚实 degraded 语义（与官方 web 舞台
+// 同口径，1.2 判 PASS 语义）不做迟到重绑；SC1 红根因（degraded 冻结）留档不修——
+// 将来恢复接入时按原判别序处理（时序 vs 键名，srcClaims 记忆化叠加面，
+// 判据存 1.8/005-e2e-reverify）。
+test.skip('@web-e2e @m3 SC1·自动对齐：提案绑定入口新会话自动对齐提案 mode（座位标签 + 预填不发送）——提案行集消费面退场', async () => {
   test.setTimeout(480_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc1b-'))
   const wsDir = join(fixtureRoot, WS_NAME)
