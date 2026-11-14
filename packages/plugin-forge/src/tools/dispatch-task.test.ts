@@ -5,6 +5,7 @@
 // 循环核心全桩（LoopDriver/LoopRegistry 缝——真 registry + 驱动器录制桩）；纯函数面
 // （池三分/收窄矩阵/agentOptions）单测保留（dispatch-core 单源再导出）。
 import { describe, expect, it, vi } from 'vitest'
+import AjvModule from 'ajv'
 import type { ForgePluginEvent, ForgeTasksService, TaskStats, TaskStatus } from '@dsh-forge/contracts'
 import { TASK_TYPES, WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
 import { createUnionToolNamesProbe, platformShellToolName, probeIsSubdomain } from '@dsh-forge/contracts'
@@ -41,6 +42,18 @@ import {
 } from './dispatch-task.js'
 
 // ─────────────────────────── 夹具 ───────────────────────────
+
+/** ajv CJS 默认导出在 NodeNext+verbatimModuleSyntax 下的类型面窄化（同 output-schemas.test.ts 先例） */
+interface AjvErrorLike {
+  instancePath: string
+  message?: string
+}
+type ValidateFn = ((data: unknown) => boolean) & { errors?: AjvErrorLike[] | null }
+const Ajv = AjvModule as unknown as new (options?: { allErrors?: boolean }) => {
+  compile(schema: object): ValidateFn
+}
+const ajv = new Ajv({ allErrors: true })
+
 
 /** 会话唯一后缀（跨用例零污染） */
 let sessionSeq = 0
@@ -678,6 +691,22 @@ describe('协议 pin（description 完整承载调用协议 ↔ 注入模板同�
     // parameters 面成对必填（schema 强制——缺失即拒绝的数据面）
     const params = h.tool.parameters as { required?: string[] }
     expect(params.required).toEqual(['source_kind', 'source_slug'])
+  })
+
+  it('三态载荷过 output schema oneOf 校验（真实 PoolSnapshot 含 gatedPending——实现加字段 schema 漏同步防回退锚，bug 22c09d93）', () => {
+    const h = harness()
+    const validate = ajv.compile(h.tool.output.schema as object)
+    const pool = poolOf(statsOf({ pending: 1, in_progress: 1, blocked: 1, unmetPending: 2, gatedPending: 3 }))
+    expect(pool).toHaveProperty('gatedPending', 3)
+    const source = { kind: 'feature' as const, slug: 'demo' }
+    const payloads = [
+      { kind: 'started', loopId: 'loop-1', source, pool },
+      { kind: 'running', source, ownerSessionId: 's-1', pool },
+      { kind: 'suspended', loopId: 'loop-1', source, summary: 's', resumed: false, takenOver: false, pool },
+    ]
+    for (const payload of payloads) {
+      expect(validate(payload), JSON.stringify(validate.errors)).toBe(true)
+    }
   })
 })
 

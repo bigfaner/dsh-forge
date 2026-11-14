@@ -123,9 +123,10 @@ const POOL_SCHEMA = {
     inProgress: { type: 'integer' },
     blocked: { type: 'integer' },
     unmetPending: { type: 'integer' },
+    gatedPending: { type: 'integer' },
     readFailed: { type: 'boolean', description: 'true = pool stats read failed; the zero values are a fallback, not actual counts' },
   },
-  required: ['pending', 'inProgress', 'blocked', 'unmetPending'],
+  required: ['pending', 'inProgress', 'blocked', 'unmetPending', 'gatedPending'],
 } as const
 
 const SOURCE_SCHEMA = {

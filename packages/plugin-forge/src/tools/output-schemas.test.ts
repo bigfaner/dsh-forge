@@ -139,7 +139,7 @@ const PROPOSAL_ROW: ProposalRow = {
   updatedAt: '2026-10-13T12:00:00.000Z',
 }
 
-const POOL = { pending: 1, inProgress: 0, blocked: 0, unmetPending: 1 }
+const POOL = { pending: 1, inProgress: 0, blocked: 0, unmetPending: 1, gatedPending: 0 }
 
 describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执校验镜像）', () => {
   it('addTask：AddTaskResult 四键', () => {
