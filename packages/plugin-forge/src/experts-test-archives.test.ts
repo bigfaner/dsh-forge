@@ -151,6 +151,24 @@ describe("experts/test-script-author.md 档案解析断言（forge-test-discipli
     expect(boundary).toContain("判别锚恒为装配位置");
   });
 
+  it("时间依赖测试配方句在案（forge-test-pipeline-hardening 1.8——虚假时钟模拟，禁真实等待 e2e）", () => {
+    const boundary = content.slice(content.indexOf("## 边界"));
+    expect(content.indexOf("## 边界"), "锚缺失：## 边界").toBeGreaterThan(-1);
+    // 配方主体：定时任务/TTL/过期/退避类以注入虚假时钟在单元/集成层模拟时间流逝
+    expect(boundary).toContain("定时任务/TTL/过期/退避类时间依赖逻辑以注入虚假时钟（fake clock/timers）在单元/集成层模拟时间流逝验证");
+    // 禁真实等待 e2e
+    expect(boundary).toContain("禁 e2e 真实等待时间行为");
+    // 与既有「时钟/随机源属测试侧替身注入」口径衔接
+    expect(boundary).toContain("时钟/随机源");
+    // 无注入缝按「不为测试强行改造」纪律上抛
+    expect(boundary).toContain("不为测试强行改造");
+    expect(boundary).toContain("上抛");
+    // 语言无关：零硬编码测试框架名（全文任意位置）
+    for (const token of ["vitest", "jest", "playwright", "npx", "pnpm"]) {
+      expect(content, `档案含测试框架硬编码：${token}`).not.toContain(token);
+    }
+  });
+
   it("既有内容保留（单元层/结构 pin/落位纪律/渲染面边界/断言锚）", () => {
     for (const fragment of [
       "## 执行树布局（分层模型）",
