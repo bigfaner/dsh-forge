@@ -7,28 +7,104 @@
 // （preloadTransport）+ client.ts 的 knowledge/projects 消费切片（get/list——知识族
 // 装载链唯一消费的 projects 两法）。
 import {
+  BUGS_CHANNELS,
+  DOCS_CHANNELS,
+  FEATURES_CHANNELS,
+  FS_CHANNELS,
   KNOWLEDGE_CHANNELS,
   PROJECTS_CHANNELS,
+  PROJECTS_M2_CHANNELS,
+  PROPOSALS_CHANNELS,
+  SETTINGS_CHANNELS,
+  TASKS_CHANNELS,
+  WORKTREE_CHANNELS,
+  type DeriveTaskStoreDirRequest,
+  type DeriveTaskStoreDirResult,
+  type DirListing,
+  type DocContent,
   type DomainNode,
   type EntryActionReceipt,
   type EntryActionRequest,
   type EntryDetail,
   type EntryDetailQuery,
   type ErrorCode,
+  type FeatureCard,
+  type FeatureDocumentRow,
+  type FeatureRow,
+  type ForgeSettings,
+  type BugCard,
+  type BugCommitFile,
+  type BugCommitFilesQuery,
+  type BugFileDiffQuery,
   type GetProjectRequest,
   type KnowledgeCard,
+  type ListDirRequest,
+  type ListBugsQuery,
   type ListEntriesQuery,
+  type ListFeatureDocsQuery,
+  type ListFeaturesQuery,
+  type ListProposalDocsQuery,
+  type ListProposalsQuery,
+  type ListTasksQuery,
   type Project,
+  type ProjectPatch,
   type ProjectSummary,
+  type ProposalCard,
+  type ProposalDocRow,
+  type ProposalRow,
+  type QueryTaskInput,
+  type QueryTaskResult,
+  type ReadDocRequest,
   type RecallFeedbackOutcome,
   type RecallFeedbackRequest,
   type RecallGroup,
+  type RegisterFeatureInput,
+  type RegisterProjectInput,
+  type RegisterResult,
+  type ReconcileReport,
   type RpcErrorPayload,
   type RpcResult,
+  type SessionLinksQuery,
   type SessionRecallQuery,
-  WORKTREE_CHANNELS,
+  type SessionTaskLinkCard,
+  type SetForgeSettingsInput,
+  type SetProposalModeInput,
+  type TaskCard,
+  type TaskDetail,
+  type TaskDetailQuery,
+  type TaskGraph,
+  type TaskGraphQuery,
+  type TaskSnapshot,
+  type TaskStats,
+  type TaskStatsQuery,
+  type TransitionFeatureInput,
+  type TransitionProposalInput,
+  type TransitionProposalResult,
+  type TransitionTaskInput,
+  type UpdateProjectRequest,
+  type UpsertFeatureDocInput,
+  type ValidateFeatureTasksInput,
+  type ValidateReport,
+  type WorktreeAheadBehindRequest,
+  type WorktreeAheadBehindResult,
+  type WorktreeBranchesRequest,
+  type WorktreeBranchesResult,
+  type WorktreeChecksRequest,
+  type WorktreeChecksResult,
+  type WorktreeCreateRequest,
+  type WorktreeCreateResult,
+  type WorktreeDeleteRequest,
+  type WorktreeDeleteResult,
+  type WorktreeEnsureWorkspaceRequest,
+  type WorktreeEnsureWorkspaceResult,
+  type WorktreeListRequest,
+  type WorktreeListResult,
   type WorktreeResolveRequest,
   type WorktreeResolveResult,
+  type WorktreeSealRequest,
+  type WorktreeSealResult,
+  type WorktreeSelectRequest,
+  type WorktreeSelectResult,
 } from '@dsh-forge/contracts'
 
 // ───────────────── errors.ts 镜像 ─────────────────
@@ -176,7 +252,13 @@ export function preloadTransport(): ForgeTransport {
   return (channel, payload) => bridge.invoke(channel, payload)
 }
 
-// ───────────────── client.ts 镜像（knowledge + projects 消费切片） ─────────────────
+// ───────────────── client.ts 镜像（channels face 单源——typert strict 迁移 1.5 三重镜像族收敛） ─────────────────
+// 本件 = forge:* channels 传输 client 的唯一正本（RpcClientError / createForgeRpcClient /
+// preloadRpcClientFactory 单源）；dock-tabs/rpc-channels.ts 与 knowledge 消费面一律经本件
+// 再导出消费，零逐字副本。preload 桥保留为 dsh-forge 集成态加速位（语义不变）。
+// forge RPC client（定位：基础——通道契约消费方）。通道名仅出自 contracts 常量（禁字面量）；
+// 信封拆装：RpcOk → data 原样返回；RpcErr → 抛 RpcClientError（typed error 反序列化）；
+// 形状非法 fail-loud（不静默捏造结果）。
 
 async function invokeRpc<T>(transport: ForgeTransport, channel: string, payload?: unknown): Promise<T> {
   const raw = await transport(channel, payload)
@@ -190,10 +272,21 @@ async function invokeRpc<T>(transport: ForgeTransport, channel: string, payload?
   throw new RpcClientError(result.error)
 }
 
-/** forge:projects/* 面方法集（knowledge 族消费切片：get 项目元数据 / list 项目台账） */
+/** forge:projects/* 面方法集（Interface 1 服务面 + Interface 5 M2 派生行扩族 + knowledge 消费切片） */
 export interface ForgeProjectsRpc {
+  register(input: RegisterProjectInput): Promise<RegisterResult>
   list(): Promise<ProjectSummary[]>
   get(id: string): Promise<Project | null>
+  update(id: string, patch: ProjectPatch): Promise<Project>
+  reconcile(): Promise<ReconcileReport>
+  /** M2 派生行（{tasksHome}/{flatten}@{hash8} 单源——注册表单预检位，纯读） */
+  deriveTaskStoreDir(workspaceDir: string): Promise<DeriveTaskStoreDirResult>
+}
+
+/** forge:fs/* 面方法集（宿主文件系统浏览面——只读目录列举，renderer 不开 Node fs 通道） */
+export interface ForgeFsRpc {
+  /** dirPath 缺省 = 用户主目录（浏览器起始态） */
+  listDir(dirPath?: string): Promise<DirListing>
 }
 
 /**
@@ -219,26 +312,132 @@ export interface ForgeKnowledgeRpc {
 }
 
 /**
- * forge:worktree/resolve 消费切片（锚定链——useWorkspaceProjectMap 归属归并唯一消费法；
- * dock-tabs/rpc-channels ForgeWorktreeRpc 十法全量的切片镜像，通道常量同源 contracts）。
+ * forge:tasks/* 面方法集（Interface 7 八通道——RPC 人类面 + 读面；键 = TASKS_CHANNELS 键）。
+ * addTask/claimTask/submitTask 不在面——agent 面唯一门 = plugin-forge tool（SC7 断言面）。
+ */
+export interface ForgeTasksRpc {
+  /** 人类纠偏转移（reason 必带；选项集与服务端 transitionTargets 同源零漂移） */
+  transition(input: TransitionTaskInput): Promise<TaskSnapshot>
+  /** 查询（四节按 include 门控；agent 面同法的 RPC 读面复用） */
+  query(input: QueryTaskInput): Promise<QueryTaskResult>
+  /** 只读校验（单 feature 子图五类检查） */
+  validateFeatureTasks(input: ValidateFeatureTasksInput): Promise<ValidateReport>
+  /** 列表（search 中英双语标签匹配；副行承重字段水化） */
+  list(q: ListTasksQuery): Promise<TaskCard[]>
+  /** 七态计数 */
+  stats(q: TaskStatsQuery): Promise<TaskStats>
+  /** feature 任务图（DAG/泳道渲染源） */
+  graph(q: TaskGraphQuery): Promise<TaskGraph>
+  /** 任务详情（allowedTransitions/actualFiles/refs 水化） */
+  detail(q: TaskDetailQuery): Promise<TaskDetail>
+  /** 挂接双源分型卡（会话头 pill 数据源） */
+  sessionLinks(q: SessionLinksQuery): Promise<SessionTaskLinkCard[]>
+}
+
+/** forge:features/* 面方法集（Interface 7 五通道——UI 直调；键 = FEATURES_CHANNELS 键） */
+export interface ForgeFeaturesRpc {
+  register(input: RegisterFeatureInput): Promise<FeatureRow>
+  transition(input: TransitionFeatureInput): Promise<FeatureRow>
+  upsertDoc(input: UpsertFeatureDocInput): Promise<FeatureDocumentRow>
+  list(q: ListFeaturesQuery): Promise<FeatureCard[]>
+  /** feature_documents 列举读面（fix-2：概览 feature 子 tab 文档行数据源） */
+  listDocs(q: ListFeatureDocsQuery): Promise<FeatureDocumentRow[]>
+}
+
+/**
+ * forge:proposals/* 面方法集（M3 Interface 4 扩池四通道；createProposal 恒 tool 专属不上 RPC）。
+ * transition = 人工裁决（M3 双面 drift 修订——agent 面保留）；setMode = 律三唯一正门
+ * （agent tool 面无模式改写动词——SC6 断言面）；listDocs = 提案文档区只读扫描。
+ */
+export interface ForgeProposalsRpc {
+  list(q: ListProposalsQuery): Promise<ProposalCard[]>
+  /** 裁决转移（toStatus=accepted ∧ 远征 → 成链分叉内聚——返回 chained 水化） */
+  transition(input: TransitionProposalInput): Promise<TransitionProposalResult>
+  /** 模式改写唯一正门（单事务只写 proposals.mode——tasks.mode 快照永不触碰） */
+  setMode(input: SetProposalModeInput): Promise<ProposalRow>
+  /** 提案文档区读（docs/proposals/<slug>/ 全部 .md 目录扫描——零状态零写径） */
+  listDocs(q: ListProposalDocsQuery): Promise<ProposalDocRow[]>
+}
+
+/**
+ * forge:bugs/* 面方法集（fix-bug：list 列表读面 + commitFiles/fileDiff 变更内容读面——
+ * fixed 证据的文件清单与单文件 diff；recordBug/resolveBug 写动词 = agent tool 专属，恒不上 RPC）。
+ */
+export interface ForgeBugsRpc {
+  list(q: ListBugsQuery): Promise<BugCard[]>
+  commitFiles(q: BugCommitFilesQuery): Promise<BugCommitFile[]>
+  fileDiff(q: BugFileDiffQuery): Promise<{ diff: string }>
+}
+
+/** forge:docs/* 面方法集（Interface 7 两通道——read 工作区文档读 / openExternal main 侧执行） */
+export interface ForgeDocsRpc {
+  read(q: ReadDocRequest): Promise<DocContent>
+  /** 外部打开（📁 编辑器入口；触发即忘——失败经 RpcErr 信封抛 RpcClientError） */
+  openExternal(q: ReadDocRequest): Promise<void>
+}
+
+/** forge:settings/* 面方法集（M3 Interface 4 扩池——Forge设置 分区读写；forgeSettings 服务单门） */
+export interface ForgeSettingsRpc {
+  /** 读（worker 未配置 = 键缺席——dispatchTask 回退父会话继承） */
+  get(): Promise<ForgeSettings>
+  /** 整体覆写 worker 段（保存脏态——改完即生效无重启；失败经 RpcErr 信封） */
+  set(input: SetForgeSettingsInput): Promise<void>
+}
+
+/**
+ * forge:worktree/* 面方法集（10 方法 + resolve；域实现 = packages/plugins/git-worktree，
+ * host ipc/worktree-rpc 装配透传。seal = 封存判定快照；select = hero 选中树推送；
+ * resolve = 批量归属解析。session-create 通道已退役——bug 82e92933）。
  */
 export interface ForgeWorktreeRpc {
+  list(q: WorktreeListRequest): Promise<WorktreeListResult>
+  create(q: WorktreeCreateRequest): Promise<WorktreeCreateResult>
+  delete(q: WorktreeDeleteRequest): Promise<WorktreeDeleteResult>
+  aheadBehind(q: WorktreeAheadBehindRequest): Promise<WorktreeAheadBehindResult>
+  branches(q: WorktreeBranchesRequest): Promise<WorktreeBranchesResult>
+  checks(q: WorktreeChecksRequest): Promise<WorktreeChecksResult>
+  seal(q: WorktreeSealRequest): Promise<WorktreeSealResult>
+  select(q: WorktreeSelectRequest): Promise<WorktreeSelectResult>
+  selected(q: { readonly projectRoot: string }): Promise<{ readonly path?: string }>
   resolve(q: WorktreeResolveRequest): Promise<WorktreeResolveResult>
+  ensureWorkspace(q: WorktreeEnsureWorkspaceRequest): Promise<WorktreeEnsureWorkspaceResult>
 }
 
 /** forge RPC client（transport 注入：preloadTransport() 真身 / 测试替身） */
 export interface ForgeRpcClient {
   readonly projects: ForgeProjectsRpc
+  readonly fs: ForgeFsRpc
   readonly knowledge: ForgeKnowledgeRpc
+  readonly tasks: ForgeTasksRpc
+  readonly features: ForgeFeaturesRpc
+  readonly proposals: ForgeProposalsRpc
+  readonly bugs: ForgeBugsRpc
+  readonly docs: ForgeDocsRpc
+  readonly settings: ForgeSettingsRpc
   readonly worktree: ForgeWorktreeRpc
 }
 
 export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient {
   return {
     projects: {
+      register: (input) => invokeRpc(transport, PROJECTS_CHANNELS.register, input),
       list: () => invokeRpc<ProjectSummary[]>(transport, PROJECTS_CHANNELS.list),
       get: (id) =>
         invokeRpc<Project | null>(transport, PROJECTS_CHANNELS.get, { id } satisfies GetProjectRequest),
+      update: (id, patch) =>
+        invokeRpc<Project>(transport, PROJECTS_CHANNELS.update, {
+          id,
+          patch,
+        } satisfies UpdateProjectRequest),
+      reconcile: () => invokeRpc<ReconcileReport>(transport, PROJECTS_CHANNELS.reconcile),
+      deriveTaskStoreDir: (workspaceDir) =>
+        invokeRpc<DeriveTaskStoreDirResult>(transport, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, {
+          workspaceDir,
+        } satisfies DeriveTaskStoreDirRequest),
+    },
+    fs: {
+      listDir: (dirPath) =>
+        invokeRpc<DirListing>(transport, FS_CHANNELS.listDir, { dirPath } satisfies ListDirRequest),
     },
     knowledge: {
       browse: (projectId) =>
@@ -251,19 +450,66 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       recallFeedback: (req) =>
         invokeRpc<RecallFeedbackOutcome>(transport, KNOWLEDGE_CHANNELS.recallFeedback, req),
     },
+    tasks: {
+      transition: (input) => invokeRpc<TaskSnapshot>(transport, TASKS_CHANNELS.transition, input),
+      query: (input) => invokeRpc<QueryTaskResult>(transport, TASKS_CHANNELS.query, input),
+      validateFeatureTasks: (input) =>
+        invokeRpc<ValidateReport>(transport, TASKS_CHANNELS.validateFeatureTasks, input),
+      list: (q) => invokeRpc<TaskCard[]>(transport, TASKS_CHANNELS.list, q),
+      stats: (q) => invokeRpc<TaskStats>(transport, TASKS_CHANNELS.stats, q),
+      graph: (q) => invokeRpc<TaskGraph>(transport, TASKS_CHANNELS.graph, q),
+      detail: (q) => invokeRpc<TaskDetail>(transport, TASKS_CHANNELS.detail, q),
+      sessionLinks: (q) => invokeRpc<SessionTaskLinkCard[]>(transport, TASKS_CHANNELS.sessionLinks, q),
+    },
+    features: {
+      register: (input) => invokeRpc<FeatureRow>(transport, FEATURES_CHANNELS.register, input),
+      transition: (input) => invokeRpc<FeatureRow>(transport, FEATURES_CHANNELS.transition, input),
+      upsertDoc: (input) => invokeRpc<FeatureDocumentRow>(transport, FEATURES_CHANNELS.upsertDoc, input),
+      list: (q) => invokeRpc<FeatureCard[]>(transport, FEATURES_CHANNELS.list, q),
+      listDocs: (q) => invokeRpc<FeatureDocumentRow[]>(transport, FEATURES_CHANNELS.listDocs, q),
+    },
+    proposals: {
+      list: (q) => invokeRpc<ProposalCard[]>(transport, PROPOSALS_CHANNELS.list, q),
+      transition: (input) => invokeRpc<TransitionProposalResult>(transport, PROPOSALS_CHANNELS.transition, input),
+      setMode: (input) => invokeRpc<ProposalRow>(transport, PROPOSALS_CHANNELS.setMode, input),
+      listDocs: (q) => invokeRpc<ProposalDocRow[]>(transport, PROPOSALS_CHANNELS.listDocs, q),
+    },
+    bugs: {
+      list: (q) => invokeRpc<BugCard[]>(transport, BUGS_CHANNELS.list, q),
+      commitFiles: (q) => invokeRpc<BugCommitFile[]>(transport, BUGS_CHANNELS.commitFiles, q),
+      fileDiff: (q) => invokeRpc<{ diff: string }>(transport, BUGS_CHANNELS.fileDiff, q),
+    },
+    docs: {
+      read: (q) => invokeRpc<DocContent>(transport, DOCS_CHANNELS.read, q),
+      openExternal: (q) => invokeRpc<void>(transport, DOCS_CHANNELS.openExternal, q),
+    },
+    settings: {
+      get: () => invokeRpc<ForgeSettings>(transport, SETTINGS_CHANNELS.get),
+      set: (input) => invokeRpc<void>(transport, SETTINGS_CHANNELS.set, input),
+    },
     worktree: {
+      list: (q) => invokeRpc<WorktreeListResult>(transport, WORKTREE_CHANNELS.list, q),
+      create: (q) => invokeRpc<WorktreeCreateResult>(transport, WORKTREE_CHANNELS.create, q),
+      delete: (q) => invokeRpc<WorktreeDeleteResult>(transport, WORKTREE_CHANNELS.delete, q),
+      aheadBehind: (q) => invokeRpc<WorktreeAheadBehindResult>(transport, WORKTREE_CHANNELS.aheadBehind, q),
+      branches: (q) => invokeRpc<WorktreeBranchesResult>(transport, WORKTREE_CHANNELS.branches, q),
+      checks: (q) => invokeRpc<WorktreeChecksResult>(transport, WORKTREE_CHANNELS.checks, q),
+      seal: (q) => invokeRpc<WorktreeSealResult>(transport, WORKTREE_CHANNELS.seal, q),
+      select: (q) => invokeRpc<WorktreeSelectResult>(transport, WORKTREE_CHANNELS.select, q),
+      selected: (q) => invokeRpc<{ readonly path?: string }>(transport, WORKTREE_CHANNELS.selected, q),
       resolve: (q) => invokeRpc<WorktreeResolveResult>(transport, WORKTREE_CHANNELS.resolve, q),
+      ensureWorkspace: (q) =>
+        invokeRpc<WorktreeEnsureWorkspaceResult>(transport, WORKTREE_CHANNELS.ensureWorkspace, q),
     },
   }
 }
 
-/** RPC client 构造器（缺省 = preload 真身；注入 = 测试面——各装载 hook 同型口径） */
+/** RPC client 构造器（fix-36 单一来源：缺省 = preload 真身；注入 = 测试面） */
 export type RpcClientFactory = () => ForgeRpcClient
 
 /**
  * 缺省构造：preload 传输真身。缺席（非 Electron 载体/preload 未接）在构造期抛——由各
- * 消费面错误归一收敛为错误相位/错误条，不炸壳（fetchProjectsPhase / mapBrowseError /
- * mapRecallError 同口径）。
+ * 消费面错误归一收敛为错误相位/错误条，不炸壳。
  */
 export function preloadRpcClientFactory(): ForgeRpcClient {
   return createForgeRpcClient(preloadTransport())

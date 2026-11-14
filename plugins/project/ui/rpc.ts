@@ -5,8 +5,8 @@
 // 官方 remote 面缺席 = 通道不可用诚实降级（diag 留痕 + typed Error，不静默不炸壳；
 // mount 终态前竞速窗口的诊断静默——FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY 注）。
 // 信封拆装：RemoteResult → data（value 原样），failure → 抛 RpcClientError（typed error
-// 反序列化），形状非法 fail-loud。通道名/方法名单源 = ui/remote.ts descriptor 表 +
-// host 半 typert-remotes.ts（两表测试 pin 锁定）。
+// 反序列化），形状非法 fail-loud。descriptor/codec 由构建期生成物锁定（1.5——client 半
+// 生成化：$mount 贡献 = generator 产出 ./remote TYPERT_REMOTE，手写表退役）。
 import {
   type BugCard,
   type DeriveTaskStoreDirResult,

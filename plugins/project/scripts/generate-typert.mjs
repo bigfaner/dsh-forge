@@ -59,25 +59,41 @@ copyHostTree(HOST_SRC, join(stagingPkg, "src"));
 if (!existsSync(join(stagingPkg, "src", "assembly", "typert-remotes.ts"))) {
   fail("host 源复制后缺 assembly/typert-remotes.ts——源树漂移");
 }
+// client face 聚合（1.5——D3 client 半生成化）：ui 树物理复制（剔测试面），client face
+// 取材入口 = ui/index.ts（exports["./client"] 镜像）。client face invocations 在 rc.2
+// analyzer 中恒为 host-only（analyzer.ts:800），client 工件内容 = client face @typert
+// schema/object surface——ui 半零 @typert surface 时 generator 不产 client 工件（下方
+// 检测后降级记录，不虚发空工件）。
+copyHostTree(join(pkgDir, "ui"), join(stagingPkg, "ui"));
+if (!existsSync(join(stagingPkg, "ui", "index.ts"))) {
+  fail("ui 源复制后缺 ui/index.ts——源树漂移");
+}
 
-// 临时 manifest（exports 重写指向 src——generator validateExport 契约：./typert、./remote
-// 指 lib 工件、files 含五工件；生成真包 exports/files 由真 package.json 承担）
+// 临时 manifest（exports 重写指向 src/ui——generator validateExport 契约：./typert、
+// ./remote、./client/typert 指精确 lib 工件形（官方契约命名，勿自造）、files 含工件；
+// 生成真包 exports/files 由真 package.json 承担）。dsh.client 在场 + ./client 导出 =
+// 官方 dual-face 判定形（analyzer isDualFacePackage）。
 writeFileSyncStaged(join("packages", "project", "package.json"), JSON.stringify({
   name: PKG_NAME,
   private: true,
   type: "module",
   exports: {
     ".": "./src/index.ts",
+    "./client": { types: "./ui/index.ts", default: "./ui/index.ts" },
     "./typert": { types: "./lib/typert.host.d.ts", default: "./lib/typert.host.js" },
+    "./client/typert": { types: "./lib/typert.client.d.ts", default: "./lib/typert.client.js" },
     "./remote": { types: "./lib/typert.remote-client.d.ts", default: "./lib/typert.remote-client.js" },
   },
   files: [
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
+    "lib/typert.client.js",
+    "lib/typert.client.d.ts",
     "lib/typert.remote-client.js",
     "lib/typert.remote-client.d.ts",
     "lib/typert.remote-client.d.ts.map",
   ],
+  dsh: { client: { platform: "web" } },
 }));
 
 // 微工作区配置（probe micro-ws-e-path 验证配方同款）。paths 双映射：
@@ -116,10 +132,15 @@ writeFileSyncStaged("tsconfig.host.json", JSON.stringify({
   files: [],
   references: [{ path: "./packages/project" }],
 }));
+writeFileSyncStaged("tsconfig.client.json", JSON.stringify({
+  extends: "./tsconfig.base.json",
+  files: [],
+  references: [{ path: "./packages/project" }],
+}));
 writeFileSyncStaged(join("packages", "project", "tsconfig.json"), JSON.stringify({
   extends: "../../tsconfig.base.json",
-  compilerOptions: { rootDir: "src" },
-  include: ["src"],
+  compilerOptions: { jsx: "react-jsx", types: [] },
+  include: ["src", "ui"],
 }));
 
 function writeFileSyncStaged(rel, content) {
@@ -150,6 +171,14 @@ if (hostArtifact.remote === undefined) {
 }
 writePackageArtifacts(join(stagingRoot, hostArtifact.packageRoot), [hostArtifact]);
 
+// client face 工件（1.5）：generator 产出 = client face @typert surface 存在时；
+// 本包 ui 半为零 @typert surface 的纯消费半（client face invocations 在 rc.2 analyzer
+// 恒 host-only）——工件缺席 = 记录降级，不虚发空工件、不挂悬空导出。
+const clientArtifact = artifacts.find((a) => a.package === PKG_NAME && a.face === "client");
+if (clientArtifact !== undefined) {
+  writePackageArtifacts(join(stagingRoot, clientArtifact.packageRoot), [clientArtifact]);
+}
+
 // ── 工件复制回真包 dist ──
 const generatedLib = join(stagingRoot, hostArtifact.packageRoot, "lib");
 const ARTIFACTS = [
@@ -159,6 +188,7 @@ const ARTIFACTS = [
   "typert.remote-client.d.ts",
   "typert.remote-client.d.ts.map",
 ];
+if (clientArtifact !== undefined) ARTIFACTS.push("typert.client.js", "typert.client.d.ts");
 mkdirSync(join(pkgDir, "dist"), { recursive: true });
 for (const name of ARTIFACTS) {
   const from = join(generatedLib, name);
@@ -171,4 +201,4 @@ for (const name of ARTIFACTS) {
 rmSync(stagingRoot, { recursive: true, force: true });
 
 const methodIds = [...readFileSync(join(pkgDir, "dist", "typert.host.js"), "utf8").matchAll(/'([a-zA-Z]+\/[a-zA-Z]+)':\s*\{/g)].map((m) => m[1]);
-console.log(`[generate-typert] 生成完成：host + remote-client 五工件入 dist；端点 [${[...new Set(methodIds)].join(", ")}]`);
+console.log(`[generate-typert] 生成完成：host + remote-client 五工件入 dist${clientArtifact !== undefined ? " + client face 二工件" : "（client face 零 @typert surface——不产 client 工件）"}；端点 [${[...new Set(methodIds)].join(", ")}]`);
