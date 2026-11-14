@@ -178,7 +178,7 @@ describe('改进7 E2E_BASELINE_RED 行（e2e 取证债红灯基线门）', () =>
       e2eBaselineRedCases: ['e2e/specs/a.spec.ts', 'e2e/specs/b.spec.ts'],
     })
     expect(prompt).toContain(
-      'E2E_BASELINE_RED: e2e/specs/a.spec.ts; e2e/specs/b.spec.ts（基线红灯 = e2e 套件入场前既有失败，非本任务回归——比对归因，禁止顺手修复）',
+      'E2E_BASELINE_RED: e2e/specs/a.spec.ts; e2e/specs/b.spec.ts（基线红灯 = e2e 套件入场前既有失败，非本任务回归——比对归因，禁止顺手修复；双轨基线并存时以 E2E_BASELINE_RED 用例级清单优先，TEST_BASELINE 文档基线作补充归因参考）',
     )
   })
 
@@ -206,7 +206,7 @@ describe('TEST_BASELINE 行（forge-test-boundary-gates 方案2）', () => {
       testBaseline: { present: true, path: 'Z:\\proj\\.forge\\docs\\features\\feat-x\\test-baseline.md', recordedAt: '2026-02-24T08:00:00.000Z' },
     })
     expect(prompt).toContain(
-      'TEST_BASELINE: Z:\\proj\\.forge\\docs\\features\\feat-x\\test-baseline.md（基线时点：2026-02-24T08:00:00.000Z）（既有失败清单正本——遇失败先比对区分既有失败与新回归）',
+      'TEST_BASELINE: Z:\\proj\\.forge\\docs\\features\\feat-x\\test-baseline.md（基线时点：2026-02-24T08:00:00.000Z）（既有失败清单正本——遇失败先比对区分既有失败与新回归；双轨基线并存时以 E2E_BASELINE_RED 用例级清单优先，TEST_BASELINE 文档基线作补充归因参考）',
     )
   })
 

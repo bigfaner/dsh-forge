@@ -201,7 +201,7 @@ function renderVars(vars: Readonly<Record<string, string>> | undefined): string 
  */
 function renderE2eBaselineRed(red: readonly string[] | undefined): string | undefined {
   if (red === undefined || red.length === 0) return undefined
-  return `${red.join('; ')}（基线红灯 = e2e 套件入场前既有失败，非本任务回归——比对归因，禁止顺手修复）`
+  return `${red.join('; ')}（基线红灯 = e2e 套件入场前既有失败，非本任务回归——比对归因，禁止顺手修复；双轨基线并存时以 E2E_BASELINE_RED 用例级清单优先，TEST_BASELINE 文档基线作补充归因参考）`
 }
 
 /**
@@ -214,7 +214,7 @@ export function renderTestBaseline(brief: TestBaselineBrief | undefined): string
   if (brief === undefined) return undefined
   if (!brief.present) return '无既有失败清单，遇失败默认按新回归上报'
   const when = brief.recordedAt !== undefined ? `（基线时点：${brief.recordedAt}）` : ''
-  return `${brief.path}${when}（既有失败清单正本——遇失败先比对区分既有失败与新回归）`
+  return `${brief.path}${when}（既有失败清单正本——遇失败先比对区分既有失败与新回归；双轨基线并存时以 E2E_BASELINE_RED 用例级清单优先，TEST_BASELINE 文档基线作补充归因参考）`
 }
 
 /** AC 条目单行化（S2b：换行折叠空格——机械提取无歧义，criterion 交叉校验同源） */

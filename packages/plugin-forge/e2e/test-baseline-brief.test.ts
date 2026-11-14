@@ -123,7 +123,7 @@ describe('e2e dogfood · loop 径 TEST_BASELINE 简报行（forge-test-boundary-
       expect(prompt, 'TEST_BASELINE 行在场（loop 径注入——桥直调径触达不到的载荷）').toContain('TEST_BASELINE: ')
       expect(prompt, '在场形态 = 文档根锚定绝对路径').toContain(`TEST_BASELINE: ${baselinePath}（基线时点：`)
       expect(prompt, '在场形态 = 基线时点 ISO + 既有失败清单正本措辞').toMatch(
-        /TEST_BASELINE: .+（基线时点：\d{4}-\d{2}-\d{2}T.+）（既有失败清单正本——遇失败先比对区分既有失败与新回归）/,
+        /TEST_BASELINE: .+（基线时点：\d{4}-\d{2}-\d{2}T.+）（既有失败清单正本——遇失败先比对区分既有失败与新回归；双轨基线并存时以 E2E_BASELINE_RED 用例级清单优先，TEST_BASELINE 文档基线作补充归因参考）/,
       )
 
       await built.driver.stop({ ownerSessionId: OWNER })

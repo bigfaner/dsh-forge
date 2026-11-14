@@ -163,11 +163,18 @@ describe('改进7 · e2e 取证债（settleWorkerRun 欠账任务生成）', () 
     const withRed = harness(completedQuery(true))
     await settleWorkerRun({ tasks: withRed.tasks }, { ...ctxOf(), e2eBaselineRedCases: ['e2e/specs/a.spec.ts'] })
     expect(withRed.addTaskInputs[0]!.taskDesc).toContain('先比对任务说明中的 E2E_BASELINE_RED 行')
+    // 双轨基线优先级裁决句（提案 forge-test-pipeline-hardening 7）：两行并存以用例级清单优先
+    expect(withRed.addTaskInputs[0]!.taskDesc).toContain(
+      '双轨基线并存时以 E2E_BASELINE_RED 用例级清单优先，TEST_BASELINE 文档基线作补充归因参考',
+    )
 
     const withoutRed = harness(completedQuery(true))
     await settleWorkerRun({ tasks: withoutRed.tasks }, ctxOf())
     expect(withoutRed.addTaskInputs[0]!.taskDesc).toContain('说明中没有 E2E_BASELINE_RED 行')
     expect(withoutRed.addTaskInputs[0]!.taskDesc).not.toContain('先比对任务说明中的 E2E_BASELINE_RED 行')
+    expect(withoutRed.addTaskInputs[0]!.taskDesc).toContain(
+      '双轨基线并存时以 E2E_BASELINE_RED 用例级清单优先，TEST_BASELINE 文档基线作补充归因参考',
+    )
 
     const emptyRed = harness(completedQuery(true))
     await settleWorkerRun({ tasks: emptyRed.tasks }, { ...ctxOf(), e2eBaselineRedCases: [] })
