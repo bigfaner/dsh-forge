@@ -141,6 +141,41 @@ describe('composePersona 程序段（×20 类型 ×3 复杂度）', () => {
   })
 })
 
+describe('测试纪律分层（提案 forge-test-discipline-layering 1.1）', () => {
+  it('Coding Strategy：归因三分行在场（worker 口径 = blocked 上抛，无改断言暗示）+ 测试执行范围消歧', () => {
+    expect(CODING_STRATEGY_SECTION).toContain('归因三分')
+    expect(CODING_STRATEGY_SECTION).toContain('断言过时/环境问题→以 result=blocked 上抛')
+    expect(CODING_STRATEGY_SECTION).not.toContain('改断言')
+    expect(CODING_STRATEGY_SECTION).toContain('测试执行范围：')
+    expect(CODING_STRATEGY_SECTION).not.toContain('测试分层：')
+    expect(composePersona('coding-feature', 'high')).toContain('归因三分')
+    expect(composePersona('coding-fix', 'low')).toContain('测试执行范围：')
+  })
+
+  it('Testing Strategy：测试层级模型节在场且按换行符计数 ≤4 行（三句层定义+判别锚+不降级+可红性门）', () => {
+    const idx = TESTING_STRATEGY_SECTION.indexOf('测试层级模型')
+    expect(idx).toBeGreaterThan(-1)
+    const block = TESTING_STRATEGY_SECTION.slice(idx)
+    expect(block.split('\n').length, JSON.stringify(block)).toBeLessThanOrEqual(4)
+    expect(block).toContain('单元（')
+    expect(block).toContain('集成（')
+    expect(block).toContain('e2e（')
+    expect(block).toContain('判别锚恒为装配位置')
+    expect(block).toContain('层间不降级不越级')
+    expect(block).toContain('断言可红性门')
+    expect(composePersona('test-gen-scripts', 'medium')).toContain('判别锚恒为装配位置')
+  })
+
+  it('细节零复制：三分法全表与八条撰写纪律在 persona 渲染产物零出现（词锚避开层级模型节共用词）', () => {
+    for (const taskType of TASK_TYPES) {
+      const persona = composePersona(taskType, 'high')
+      for (const anchor of ['校准轮', '锚不唯一', '弱断言', '环境自备', '定向跑批', 'toBeTruthy', '触达面']) {
+        expect(persona, `${taskType} 泄漏词锚：${anchor}`).not.toContain(anchor)
+      }
+    }
+  })
+})
+
 describe('renderExpertProfileSection 档案人格段', () => {
   it('身份头 + personaMd 正文（title 逐字渲染；ASCII 首字母补空格）', () => {
     const section = renderExpertProfileSection(PROFILE)

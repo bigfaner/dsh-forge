@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/core",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "description": "数据内核（唯一 SQLite 句柄）：forge 域（projects/补偿链/对账 + M2 四域 tasks/features/proposals/docs + settings/bugs/checkpoints），对外 ctx.forgeProjects 等服务（知识域已迁 knowledge 插件）。",
