@@ -171,3 +171,98 @@ describe("experts/test-script-author.md 档案解析断言（forge-test-discipli
     }
   });
 });
+
+describe("experts/test-journey-author.md 档案解析断言（forge-test-discipline-layering 1.3）", () => {
+  const JOURNEY_FILE = resolve(here, "../experts/test-journey-author.md");
+  const content = readFileSync(JOURNEY_FILE, "utf-8");
+
+  it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
+    expect(parseExpertFileLike(JOURNEY_FILE, content)).toEqual({ ok: true });
+  });
+
+  it("无裸 {{ 字面量（全文任意位置）", () => {
+    expect(content.includes("{{")).toBe(false);
+  });
+
+  it("frontmatter 键与既有档案键集一致（不引入新键）", () => {
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)![1]!;
+    const keys = fm.split(/\r?\n/).filter((l) => /^[A-Za-z]/.test(l)).map((l) => l.split(":")[0]!);
+    expect(keys.sort()).toEqual(["description", "name", "skills", "title", "tools"].sort());
+  });
+
+  it("e2e 黑盒纪律节在案：三要素齐（公开接口驱动 / 不 import 内部不为可测性改正式 / 替身只走进程外协议级拦截）", () => {
+    const section = content.slice(content.indexOf("## e2e 黑盒纪律"));
+    expect(section).toContain("## e2e 黑盒纪律");
+    // 要素一：只经公开接口/调用方可观察面驱动断言；跨端形态同为公开接口面
+    expect(section).toContain("公开接口");
+    expect(section).toContain("调用方可观察面");
+    expect(section).toContain("移动端经宿主 RPC/代理通道");
+    // 要素二：不 import 内部、不为可测性改正式
+    expect(section).toContain("不 import 正式模块内部");
+    expect(section).toContain("不为可测性修改正式代码");
+    // 要素三：替身/故障注入只走进程外协议级拦截，进程内夹具禁用，无通道映射并注记
+    expect(section).toContain("协议级拦截");
+    expect(section).toContain("应用进程内夹具通道禁用");
+    expect(section).toContain("映射集成/单元层");
+    // TDD 白盒不进 e2e
+    expect(section).toContain("TDD 白盒属单元/集成层，不进 e2e");
+  });
+
+  it("故障注入句已修正：既有夹具通道口径移除，进程外限定在黑盒纪律节", () => {
+    expect(content).not.toContain("优先走既有夹具通道");
+    const section = content.slice(content.indexOf("## e2e 黑盒纪律"), content.indexOf("## e2e 旅程写作纪律"));
+    expect(section).toContain("进程外协议级拦截");
+    expect(section).toContain("应用进程内夹具通道禁用");
+    expect(section).toContain("映射集成/单元层");
+    expect(section).toContain("不自行撰写");
+  });
+
+  it("八条撰写与执行纪律齐（表格行在案，语义措辞逐条核）", () => {
+    for (const row of [
+      "| spec 校准轮 |",
+      "| 环境自备 |",
+      "| 环境形态感知 |",
+      "| 语义择行 |",
+      "| 弱断言禁令 |",
+      "| 超时与止损上界 |",
+      "| 定向跑批 |",
+      "| 断言锚 |",
+    ]) {
+      expect(content.split(/\r?\n/).find((l) => l.startsWith(row)), `缺纪律行：${row}`).toBeDefined();
+    }
+    const table = content.slice(content.indexOf("| 纪律 |"));
+    // 校准轮：建模冲突停笔下抛；环境自备：探测与 blocked 降级；形态感知
+    expect(table).toContain("交互建模假设");
+    expect(table).toContain("停笔下抛");
+    expect(table).toContain("探测");
+    expect(table).toContain("无从探测则 blocked 上抛");
+    expect(table).toContain("探活仅作自备后的健康检查");
+    expect(table).toContain("环境形态分支断言");
+    // 语义择行 + 锚不唯一即停
+    expect(table).toContain("锚不唯一即停");
+    expect(table).toContain("不静默选第一个");
+    // 弱断言
+    expect(table).toContain("弱断言禁令");
+    // 超时止损上界含套件级
+    expect(table).toContain("止损上界");
+    expect(table).toContain("套件级");
+    // 定向跑批 / 断言锚
+    expect(table).toContain("定向");
+    expect(table).toContain("不断视觉坐标");
+  });
+
+  it("迭代止损 3 轮 + spec/产品归因分离 + 文档锚同步句在案", () => {
+    expect(content).toContain("迭代止损");
+    expect(content).toContain("3 轮");
+    expect(content).toContain("归因分离");
+    expect(content).toContain("改锚同提交改文档");
+  });
+
+  it("档案正文零 AGENTS/判例编号/仓内路径引用（grep 机检；命令形态豁免）", () => {
+    const body = content.slice(content.indexOf("\n---", 4) + 4);
+    const BANNED = ["AGENTS", "docs/conventions", "docs/", "packages/", "判例 20", ".forge", "src/"];
+    for (const token of BANNED) {
+      expect(body, `档案正文含禁用引用词：${token}`).not.toContain(token);
+    }
+  });
+});
