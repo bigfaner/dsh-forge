@@ -172,6 +172,82 @@ describe("experts/test-script-author.md 档案解析断言（forge-test-discipli
   });
 });
 
+describe("experts/test-runner.md 档案解析断言（forge-test-discipline-layering 1.6）", () => {
+  const RUNNER_FILE = resolve(here, "../experts/test-runner.md");
+  const content = readFileSync(RUNNER_FILE, "utf-8");
+
+  it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
+    expect(parseExpertFileLike(RUNNER_FILE, content)).toEqual({ ok: true });
+  });
+
+  it("无裸 {{ 字面量（全文任意位置）", () => {
+    expect(content.includes("{{")).toBe(false);
+  });
+
+  it("frontmatter 键与既有档案键集一致（不引入新键）", () => {
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)![1]!;
+    const keys = fm.split(/\r?\n/).filter((l) => /^[A-Za-z]/.test(l)).map((l) => l.split(":")[0]!);
+    expect(keys.sort()).toEqual(["description", "name", "skills", "title", "tools"].sort());
+  });
+
+  it("执行序列：环境自备为第一步（探测获取宿主形态 + blocked 上抛 + 认证凭据注入），probe 降级健康检查", () => {
+    const seq = content.slice(content.indexOf("## 执行序列"));
+    expect(seq).toContain("环境自备");
+    // 第一步 = 环境自备，序号 1
+    const firstStep = seq.split(/\r?\n/).find((l) => /^1[.、]/.test(l.trim()));
+    expect(firstStep).toContain("环境自备");
+    // 宿主形态经探测工作区测试策略或项目文档获取；无从探测 blocked 上抛
+    expect(seq).toContain("探测");
+    expect(seq).toContain("blocked 上抛");
+    // 含认证凭据注入
+    expect(seq).toContain("认证凭据");
+    // probe 降级为健康检查：正向句在案，不承担缺席分支、不承担工作区自带 dev 生命周期前提
+    expect(seq).toContain("健康检查");
+    expect(seq).toContain("不承担");
+  });
+
+  it("崩溃残留回收句 + 分层最小取证集句 + 可红性门承接句在案", () => {
+    expect(content).toContain("进程/端口回收确认");
+    // 分层最小取证集
+    expect(content).toContain("失败输出尾部");
+    expect(content).toContain("trace");
+    expect(content).toContain("截图");
+    expect(content).toContain("宿主日志锚");
+    // 可红性门承接句
+    expect(content).toContain("runner 不重跑反例");
+  });
+
+  it("HARD-GATE 五条与上报节零改动（基线逐句 pin）", () => {
+    const gate = content.slice(content.indexOf("## HARD-GATE"), content.indexOf("## 上报"));
+    for (const line of [
+      "- 不修改测试脚本内容。",
+      "- 不跳过失败的测试，也不把失败报成通过——跑了什么就报什么。",
+      "- 不在执行过程中\"修好\"测试让它通过；测试脚本 bug 可以上报，为强行通过而改断言或逻辑即属伪造。",
+      "- 同一编排周期内，probe 失败后不重试 probe、不重启 dev（任务层做出修复决定后的新一次调用属于新周期）。",
+      "- 以任务身份运行（`type: test-run`）：任何失败都以 `submitTask result=blocked` 结算，reason 写明失败的旅程与用例——绝不带着已知失败提交 `success`。",
+    ]) {
+      expect(gate).toContain(line);
+    }
+    expect(gate.split(/\r?\n/).filter((l) => l.startsWith("- ")).length).toBe(5);
+    const report = content.slice(content.indexOf("## 上报"));
+    for (const line of [
+      "- 每个旅程的合计（passed/failed/skipped）、每条失败附错误摘录作为证据、以及实际执行的序列。",
+      "- 结果输出缺失或为空 → 如实说明并附运行器控制台输出，不得编造报告。",
+      "- 证据（trace、失败摘录、截图）先落盘再继续。",
+    ]) {
+      expect(report).toContain(line);
+    }
+  });
+
+  it("档案正文零仓内路径引用（grep 机检；命令形态豁免）", () => {
+    const body = content.slice(content.indexOf("\n---", 4) + 4);
+    const BANNED = ["AGENTS", "docs/conventions", "docs/", "packages/", "判例 20", ".forge", "src/"];
+    for (const token of BANNED) {
+      expect(body, `档案正文含禁用引用词：${token}`).not.toContain(token);
+    }
+  });
+});
+
 describe("experts/test-contract-author.md 档案解析断言（forge-test-discipline-layering 1.4）", () => {
   const CONTRACT_FILE = resolve(here, "../experts/test-contract-author.md");
   const content = readFileSync(CONTRACT_FILE, "utf-8");
