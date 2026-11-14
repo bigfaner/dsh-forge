@@ -211,6 +211,8 @@ describe('模板正本（P1–P9 + 结束族）', () => {
     expect(text).toContain('正式代码路径不触达任何替身')
     expect(text).toContain('配套退出任务')
     expect(text).toContain('默认关闭 ≠ 边界正确')
+    // 范围纪律节（独立短节——契约条款移出测试边界纪律）
+    expect(text).toContain('**范围纪律**')
     expect(text).toContain('超出任务范围或提案契约的改动不上')
     expect(text).toContain('偏差上抛主会话裁决，不就地改提案或交付')
     // 测试基线节（主会话职责——基线时点记录 + 缺席/过时按新回归上报）
@@ -222,7 +224,7 @@ describe('模板正本（P1–P9 + 结束族）', () => {
     expect(text).toContain('宁误报不漏报')
   })
 
-  it('P1 新增两节每节非空行 ≤3（按 **节名** 头行切节的纯函数断言）', () => {
+  it('P1 三节每节非空行 ≤3（按 **节名** 头行切节的纯函数断言）', () => {
     /** 按 **节名** 头行切节，取指定节内非空行数（编写期断言辅助——纯函数零状态） */
     const sectionLines = (text: string, header: string): string[] => {
       const lines = text.split('\n')
@@ -236,6 +238,7 @@ describe('模板正本（P1–P9 + 结束族）', () => {
       return body
     }
     const p1 = renderP1(payload)
+    expect(sectionLines(p1, '**范围纪律**').length).toBeLessThanOrEqual(3)
     expect(sectionLines(p1, '**测试边界纪律**').length).toBeLessThanOrEqual(3)
     expect(sectionLines(p1, '**测试基线（主会话职责）**').length).toBeLessThanOrEqual(3)
   })
