@@ -45,15 +45,15 @@ describe('renderWorkerContext（worker 任务目录锚点节）', () => {
       [
         HEADER,
         'proposal_dir——提案文档目录：本任务的提案出处（proposal.md 及配套）。',
-        `  ${join(FORGE, 'docs', 'proposals', 'prop-a')}${sep}`,
+        `  \`${join(FORGE, 'docs', 'proposals', 'prop-a')}${sep}\``,
         '  ├─ persona-examples.md',
         '  └─ proposal.md',
         '',
         'forge.project_logs_dir——forge 运行日志目录：任务日志存放的根目录（位于工作区仓库之外，属 dsh-forge 运行数据——不进 git）。',
-        `  ${LOGS_ROOT}${sep}`,
+        `  \`${LOGS_ROOT}${sep}\``,
         '',
         'forge.task_logs_dir——任务日志目录：{forge.task_logs_dir} = {forge.project_logs_dir}/{slug}/{local_id}；本轮任务的证据子文件夹与 resume.md 进度文件（随附 resume.validity.json 效度戳——跨 HEAD/基线漂移的证据强制重跑）存储在此。',
-        `  ${join(LOGS_ROOT, 'prop-a', 'fix-1')}${sep}`,
+        `  \`${join(LOGS_ROOT, 'prop-a', 'fix-1')}${sep}\``,
       ].join('\n'),
     )
     expect(block).not.toContain('feature_dir')
@@ -115,7 +115,7 @@ describe('renderWorkerContext（worker 任务目录锚点节）', () => {
       source: { kind: 'proposal', slug: 'ghost' },
     })
     expect(block).toContain('forge.task_logs_dir——任务日志目录：')
-    expect(block).toContain(`  ${join(LOGS_ROOT, 'ghost', '1.1')}${sep}`)
+    expect(block).toContain(`  \`${join(LOGS_ROOT, 'ghost', '1.1')}${sep}\``)
     // 任务日志目录未建 → 介绍行 + 路径行后无树行（该段两行收束）
     const taskLogsSection = block.slice(block.indexOf('forge.task_logs_dir——'))
     expect(taskLogsSection.split('\n')).toHaveLength(2)
