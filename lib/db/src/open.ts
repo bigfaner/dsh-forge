@@ -12,6 +12,9 @@ import Database from 'better-sqlite3'
 import { ForeignKeysUnavailableError, MigrationTamperedError, UnsupportedSchemaVersionError } from './errors.js'
 import { MIGRATIONS, SCHEMA_VERSION, type GuardedStatement, type Migration } from './schema.js'
 
+/** busy_timeout 毫秒：锁竞争等持有者落盘的上界（外部写锁在场时写者排队而非即时 SQLITE_BUSY） */
+export const BUSY_TIMEOUT_MS = 5_000
+
 /**
  * 开库参数（M2 1.2 参数化缝——Hard Rule：工作区迁移序列经参数传入，禁硬编码 import 中央序列）。
  * 缺省 = 中央 state.db 序列与版本上限：既有调用面（core index.ts 单句柄）零变化。
@@ -132,6 +135,9 @@ export function openDatabase(file: string, options: OpenDatabaseOptions = {}): D
   const db = new Database(file)
   try {
     db.pragma('journal_mode = WAL')
+    // busy_timeout（65e7a104 H-B）：外部连接持写锁（BEGIN IMMEDIATE）期间写语句即时 SQLITE_BUSY
+    // 失败——锁竞争等持有者落盘（5s 上界），补偿链不再被瞬时外部写锁误触发。
+    db.pragma(`busy_timeout = ${BUSY_TIMEOUT_MS}`)
     db.pragma('foreign_keys = ON')
     // I4 逐连接断言（RED 锚①）：foreign_keys 是 per-connection PRAGMA，写入不等于生效——
     // 回读非 1 即 throw 拒开（SQLite 编译剔除 FK 等环境异常时约束静默失效，必须 fail-closed）。
