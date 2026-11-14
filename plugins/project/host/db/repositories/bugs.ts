@@ -100,7 +100,7 @@ export class BugsRepo {
 
   get(id: string): BugRow | undefined {
     const r = this.#db
-      .prepare<unknown[], BugDbRow>(`SELECT ${COLUMNS} FROM ${this.#tables.bugs} WHERE id = ?`)
+      .prepare<[string], BugDbRow>(`SELECT ${COLUMNS} FROM ${this.#tables.bugs} WHERE id = ?`)
       .get(id)
     return r ? toRow(r) : undefined
   }
@@ -113,7 +113,7 @@ export class BugsRepo {
   listByStatus(status: BugStatus): BugRow[] {
     return (
       this.#db
-        .prepare<unknown[], BugDbRow>(
+        .prepare<[string], BugDbRow>(
           `SELECT ${COLUMNS} FROM ${this.#tables.bugs} WHERE bug_status = ? ORDER BY created_at ASC, id ASC`,
         )
         .all(status) ?? []
@@ -123,7 +123,7 @@ export class BugsRepo {
   listByProject(projectKey: string): BugRow[] {
     return (
       this.#db
-        .prepare<unknown[], BugDbRow>(
+        .prepare<[string], BugDbRow>(
           `SELECT ${COLUMNS} FROM ${this.#tables.bugs} WHERE project_key = ? ORDER BY created_at ASC, id ASC`,
         )
         .all(projectKey) ?? []
@@ -194,12 +194,12 @@ export class BugsRepo {
     const rows = (
       projectKey
         ? this.#db
-            .prepare<unknown[], { s: string; n: number }>(
+            .prepare<[string], { s: string; n: number }>(
               `SELECT bug_status AS s, COUNT(*) AS n FROM ${this.#tables.bugs} WHERE project_key = ? GROUP BY bug_status`,
             )
             .all(projectKey)
         : this.#db
-            .prepare<unknown[], { s: string; n: number }>(
+            .prepare<[], { s: string; n: number }>(
               `SELECT bug_status AS s, COUNT(*) AS n FROM ${this.#tables.bugs} GROUP BY bug_status`,
             )
             .all()

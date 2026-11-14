@@ -80,7 +80,7 @@ export class WorkspacesRepo {
 
   get(id: number): WorkspaceRow | undefined {
     const r = this.#db
-      .prepare<unknown[], WorkspaceDbRow>(`SELECT ${COLUMNS} FROM ${this.#tables.workspaces} WHERE id = ?`)
+      .prepare<[number], WorkspaceDbRow>(`SELECT ${COLUMNS} FROM ${this.#tables.workspaces} WHERE id = ?`)
       .get(id)
     return r ? toRow(r) : undefined
   }
@@ -95,7 +95,7 @@ export class WorkspacesRepo {
   /** 归属键谓词 DAO 单点：ws_path → 关系行（anchor 链 / 防重挂判据消费）。 */
   findByWsPath(wsPath: string): WorkspaceRow | undefined {
     const r = this.#db
-      .prepare<unknown[], WorkspaceDbRow>(`SELECT ${COLUMNS} FROM ${this.#tables.workspaces} WHERE ws_path = ?`)
+      .prepare<[string], WorkspaceDbRow>(`SELECT ${COLUMNS} FROM ${this.#tables.workspaces} WHERE ws_path = ?`)
       .get(wsPath)
     return r ? toRow(r) : undefined
   }
@@ -103,7 +103,7 @@ export class WorkspacesRepo {
   /** 归属键谓词 DAO 单点：main 行 ws_path（git 主树锚）→ project_key；非 main 行不作归属锚。 */
   getKeyByMainPath(mainWsPath: string): string | undefined {
     const r = this.#db
-      .prepare<unknown[], { project_key: string }>(
+      .prepare<[string], { project_key: string }>(
         `SELECT p.project_key AS project_key
          FROM ${this.#tables.projects} p
          JOIN ${this.#tables.workspaces} w ON w.project_id = p.id
@@ -115,7 +115,7 @@ export class WorkspacesRepo {
 
   getMain(projectId: string): WorkspaceRow | undefined {
     const r = this.#db
-      .prepare<unknown[], WorkspaceDbRow>(
+      .prepare<[string], WorkspaceDbRow>(
         `SELECT ${COLUMNS} FROM ${this.#tables.workspaces} WHERE project_id = ? AND member_role = 'main'`,
       )
       .get(projectId)
@@ -125,7 +125,7 @@ export class WorkspacesRepo {
   listByProject(projectId: string): WorkspaceRow[] {
     return (
       this.#db
-        .prepare<unknown[], WorkspaceDbRow>(
+        .prepare<[string], WorkspaceDbRow>(
           `SELECT ${COLUMNS} FROM ${this.#tables.workspaces}
            WHERE project_id = ? ORDER BY created_at ASC, id ASC`,
         )

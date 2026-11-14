@@ -22,10 +22,11 @@ const pkg = JSON.parse(readFileSync(resolve(pkgDir, "package.json"), "utf8")) as
 };
 
 describe("包骨架结构（提案 §二「目录布局」三目录单包）", () => {
-  it("三目录 host/ui/shared 在位、无 src 层", () => {
-    for (const dir of ["host", "ui", "shared"]) {
+  it("双目录 host/ui 在位、无 src 层（shared 死骨架已退役）", () => {
+    for (const dir of ["host", "ui"]) {
       expect(existsSync(resolve(pkgDir, dir)), `${dir}/ 缺席`).toBe(true);
     }
+    expect(existsSync(resolve(pkgDir, "shared")), "shared 死骨架应缺席").toBe(false);
     expect(existsSync(resolve(pkgDir, "src")), "禁止 src 中间层").toBe(false);
   });
 
@@ -48,7 +49,7 @@ describe("包骨架结构（提案 §二「目录布局」三目录单包）", (
     }
   });
 
-  it("host 编译链 = host+shared、client 编译链 = ui+shared（双链无 src 层）", () => {
+  it("host 编译链 = host、client 编译链 = ui（face 纯度：client 链零 host 收编，双链无 src 层）", () => {
     const host = JSON.parse(readFileSync(resolve(pkgDir, "tsconfig.json"), "utf8")) as {
       include?: string[];
       references?: { path: string }[];
@@ -56,10 +57,10 @@ describe("包骨架结构（提案 §二「目录布局」三目录单包）", (
     const client = JSON.parse(readFileSync(resolve(pkgDir, "tsconfig.client.json"), "utf8")) as {
       include?: string[];
     };
-    expect(host.include).toEqual(["host", "shared"]);
-    // 1.8 起ui 面消费 host/worktrees 的纯类型（AheadBehind）——client 链补收
-    // host/worktrees（worktree 域平移的编译链必要修复）。
-    expect(client.include).toEqual(["ui", "shared", "host/worktrees"]);
+    expect(host.include).toEqual(["host"]);
+    // AheadBehind 已落 @dsh-forge/contracts dto——ui 面经 contracts 消费纯类型，
+    // client 链不再收编 host/worktrees（face 纯度恢复）。
+    expect(client.include).toEqual(["ui"]);
     expect(host.references?.map((r) => r.path)).toContain("./tsconfig.client.json");
   });
 });
@@ -141,7 +142,7 @@ describe("bundle 管线产物 self-containment", () => {
     expect(bundled).toContain("errMessage"); // lib-util 内联锚（host/index.ts 消费点）
   });
 
-  it("client bundle 产物自含：shared/ui 内联、零 @dsh-forge/* import、自注册装载头在位", () => {
+  it("client bundle 产物自含：ui 内联、零 @dsh-forge/* import、自注册装载头在位", () => {
     const distClient = resolve(pkgDir, "dist", "client.js");
     if (!existsSync(distClient)) return;
     const bundled = readFileSync(distClient, "utf8");

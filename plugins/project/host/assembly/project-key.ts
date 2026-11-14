@@ -50,8 +50,14 @@ async function resolveWsPath(
         return { wsPath: project.wsPath, title: project.name || undefined, workspaceId: project.workspaceId || undefined }
       }
     }
-  } catch {
-    // fail-soft——core 缺席/劣形/调用失败同路次级锚
+  } catch (cause) {
+    // fail-soft——core 缺席/劣形/调用失败同路次级锚（warn 留痕，不静默吞错）
+    deps.onDiag?.({
+      level: 'warn',
+      event: 'project-key-anchor',
+      message: `core 行真值锚解析失败（fail-soft 退次级锚）：project=${projectId}：${String(cause)}`,
+      projectId,
+    })
   }
   // ③ registry 官方锚（projectId 即 workspaceId 形态）
   try {
@@ -59,8 +65,14 @@ async function resolveWsPath(
     if (entry !== undefined && typeof entry.path === 'string' && entry.path !== '') {
       return { wsPath: entry.path, title: entry.title || undefined, workspaceId: entry.id }
     }
-  } catch {
-    // fail-soft——registry 缺席/抛错同路 null
+  } catch (cause) {
+    // fail-soft——registry 缺席/抛错同路 null（warn 留痕，不静默吞错）
+    deps.onDiag?.({
+      level: 'warn',
+      event: 'project-key-anchor',
+      message: `registry 官方锚解析失败（fail-soft 归 null）：project=${projectId}：${String(cause)}`,
+      projectId,
+    })
   }
   return null
 }

@@ -80,12 +80,21 @@ export interface WorktreeEnsureWorkspaceResult {
   readonly workspaceId?: string
 }
 
-/** forge:worktree/ahead-behind（懒加载读面；无 upstream = counts null） */export interface WorktreeAheadBehindRequest {
+/** ahead/behind 计数（无 upstream 的 null 由载体区分—— AheadBehind 落位 contracts dto） */
+export interface AheadBehind {
+  /** 本地领先 upstream 的提交数 */
+  readonly ahead: number
+  /** 本地落后 upstream 的提交数 */
+  readonly behind: number
+}
+
+/** forge:worktree/ahead-behind（懒加载读面；无 upstream = counts null） */
+export interface WorktreeAheadBehindRequest {
   readonly projectRoot: string
   readonly path: string
 }
 export interface WorktreeAheadBehindResult {
-  readonly counts: { readonly ahead: number; readonly behind: number } | null
+  readonly counts: AheadBehind | null
   /**
    * 降级显式化标记（clean-code-review P1-2）：true = ahead/behind 探测失败归 null——
    * 与「无 upstream」的正常 null 同形，由本字段区分；正常判定缺席该字段。
@@ -167,7 +176,7 @@ export interface WorktreeSealResult {
   readonly worktreeName?: string
   /** ahead/behind 实时解析（host 解析面单点——worktree-ops aheadBehind；branch 落空 /
    *  无 upstream = null 零注入）。chip §2.3.1 内联展示数据源（随 seal 通道一次带回） */
-  readonly aheadBehind?: { readonly ahead: number; readonly behind: number } | null
+  readonly aheadBehind?: AheadBehind | null
   /**
    * branch 漂移（binding-derivation §2.2——实时 branch ≠ forge/worktree-bind 留痕 branch）：
    * chat-view warning banner 数据源（判定随渲染现算；留痕缺席/惰性补写刚落 = null 不警示）。

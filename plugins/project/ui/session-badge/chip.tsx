@@ -6,7 +6,7 @@
 // 封存态 = 失效变体（警示色 + 删除线）；非 git 项目零注入。
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { aheadBehindInline, aheadBehindSegments } from '../worktree-picker/model.js'
-import type { AheadBehind } from '../../host/worktrees/worktree-ops.js'
+import type { AheadBehind } from '@dsh-forge/contracts'
 import { IconBranchOutlineRegular } from '../icons.js'
 import { useWorktreeSeal } from './seal-notice.js'
 import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'

@@ -15,6 +15,7 @@ import type {
   DirFactsPort,
   ProjectResolutionPort,
   ProjectsServicePort,
+  WorktreeSealResult,
   WorktreeServicePort,
 } from '@dsh-forge/lib-api'
 import { createDefaultExtensionPoints } from '../worktrees/extension-points.js'
@@ -93,13 +94,14 @@ export function stubProjectsService(onDiag?: SeamDiag): ProjectsServicePort {
     throw new Error('forge.projects seam unavailable（独立模式兜底——project.db 未装配）')
   }
   onDiag?.('[project-seams] forge.projects 兜底 provider 激活（零库恒空清单）')
-  return {
+  const stub: ProjectsServicePort = {
     registerProject: unavailable,
     listProjects: async () => [],
     getProject: async () => null,
     updateProject: unavailable,
     reconcileAtStartup: async () => ({ repaired: [], orphans: [] }),
-  } as unknown as ProjectsServicePort
+  }
+  return stub
 }
 
 /** worktrees 兜底：独立模式（list 恒零 / create/delete 拒不可用——封闭写集未装配 /
@@ -115,12 +117,14 @@ export function standaloneWorktreeService(onDiag?: SeamDiag): WorktreeServicePor
     delete: writeUnavailable,
     ensureWorkspace: async () => ({}),
     select: async () => ({ ok: true }),
-    seal: async () =>
-      ({
+    seal: async () => {
+      const sealed: WorktreeSealResult = {
         isGit: false,
         sealed: false,
         binding: null,
-      }) as unknown as Awaited<ReturnType<WorktreeServicePort['seal']>>,
+      }
+      return sealed
+    },
     resolve: async () => ({ resolved: [] }),
     getWorktreeDir: (projectRoot: string) => `${projectRoot}/${WORKTREE_DIR_RELATIVE}`,
     resolveProject: async () => null,
@@ -138,13 +142,14 @@ export function stubBugsService(onDiag?: SeamDiag): BugsServicePort {
     throw new Error('forge.bugs seam unavailable（独立模式兜底——project.db 未装配）')
   }
   onDiag?.('[project-seams] forge.bugs 兜底 provider 激活（register 拒不可用）')
-  return {
+  const stub: BugsServicePort = {
     registerBug: unavailable,
     resolveBug: unavailable,
     listBugs: async () => [],
     getBug: unavailable,
     aggregateByErrorType: async () => [],
-  } as unknown as BugsServicePort
+  }
+  return stub
 }
 
 /** dirFacts 兜底位说明：契约 = host/dirs minimalDirFactsPort（仅内置键集）——

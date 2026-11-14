@@ -128,8 +128,8 @@ export {
 } from './worktree-picker/model.js'
 
 export * from './icons.js'
-// AheadBehind 域类型（worktree-ops 单源——type-only re-export，client bundle 零运行时载荷）
-export type { AheadBehind } from '../host/worktrees/worktree-ops.js'
+// AheadBehind 域类型（contracts dto 单源——type-only re-export，client bundle 零运行时载荷）
+export type { AheadBehind } from '@dsh-forge/contracts'
 
 // ── add-project 流程（1.14 UI 迁入第一批——inventory §2.4：两段式向导组件本体 + 纯函数
 // 模型 + css 整体平移；RPC 数据源 = 本插件内部面 ui/rpc.ts；宿主壳经 exports./client-ui

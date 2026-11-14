@@ -3,7 +3,10 @@
 // 写（封闭写集）：create = git fetch（前置刷新）→ worktree add -b 一体创建；delete = 确认回调通过后 worktree remove。
 // 删除拦截数据（未提交变更/挂靠会话）由本域 status/list 提供、调用方持拦截语义。
 import { existsSync, readdirSync } from 'node:fs'
+import type { AheadBehind } from '@dsh-forge/contracts'
 import { GitCommandError, runGit, type GitRunner } from './git-anchor.js'
+
+export type { AheadBehind }
 
 /** worktree 清单条目（porcelain 解析面） */
 export interface WorktreeEntry {
@@ -19,14 +22,6 @@ export interface WorktreeEntry {
 
 /** Windows 反斜杠路径 → git 输出正斜杠口径（条目比对用） */
 const toGitPath = (path: string): string => path.replaceAll('\\', '/')
-
-/** ahead/behind 计数（无 upstream 返回 null） */
-export interface AheadBehind {
-  /** 本地领先 upstream 的提交数 */
-  readonly ahead: number
-  /** 本地落后 upstream 的提交数 */
-  readonly behind: number
-}
 
 /** 未提交变更计数（删除确认框检查项） */
 export interface WorktreeStatus {

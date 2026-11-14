@@ -64,7 +64,7 @@ export class ProjectsRepo {
 
   get(id: string): ProjectRow | undefined {
     const r = this.#db
-      .prepare<unknown[], ProjectDbRow>(`SELECT ${COLUMNS} FROM ${this.#tables.projects} WHERE id = ?`)
+      .prepare<[string], ProjectDbRow>(`SELECT ${COLUMNS} FROM ${this.#tables.projects} WHERE id = ?`)
       .get(id)
     return r ? toRow(r) : undefined
   }
@@ -72,7 +72,7 @@ export class ProjectsRepo {
   /** 归属键谓词 DAO 单点：project_key → 行（查归属行 / suspected-move 自证）。 */
   getByKey(projectKey: string): ProjectRow | undefined {
     const r = this.#db
-      .prepare<unknown[], ProjectDbRow>(`SELECT ${COLUMNS} FROM ${this.#tables.projects} WHERE project_key = ?`)
+      .prepare<[string], ProjectDbRow>(`SELECT ${COLUMNS} FROM ${this.#tables.projects} WHERE project_key = ?`)
       .get(projectKey)
     return r ? toRow(r) : undefined
   }
@@ -81,7 +81,7 @@ export class ProjectsRepo {
   list(opts: { includeArchived?: boolean } = {}): ProjectRow[] {
     const filter = opts.includeArchived ? '' : `WHERE archived = 0`
     const rows = this.#db
-      .prepare<unknown[], ProjectDbRow>(
+      .prepare<[], ProjectDbRow>(
         `SELECT ${COLUMNS} FROM ${this.#tables.projects} ${filter}
          ORDER BY (sort_order IS NULL) ASC, sort_order ASC, created_at ASC, id ASC`,
       )

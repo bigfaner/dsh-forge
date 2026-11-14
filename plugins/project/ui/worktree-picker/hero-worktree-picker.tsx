@@ -18,7 +18,7 @@ import {
   worktreeLabelSegments,
   type WorktreeRow,
 } from './model.js'
-import type { AheadBehind } from '../../host/worktrees/worktree-ops.js'
+import type { AheadBehind } from '@dsh-forge/contracts'
 
 const CREATE_ITEM_ID = '__dswt-create__'
 
