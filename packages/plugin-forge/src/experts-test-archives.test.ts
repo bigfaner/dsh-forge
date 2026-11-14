@@ -463,9 +463,12 @@ describe("experts/test-journey-author.md 档案解析断言（forge-test-discipl
     expect(table).not.toContain("全量套件只属收口轮");
   });
 
-  it("迭代止损 3 轮 + spec/产品归因分离 + 文档锚同步句在案", () => {
-    expect(content).toContain("迭代止损");
-    expect(content).toContain("3 轮");
+  it("迭代止损行已移除（执行面唯一正本归 test-runner）——归因分离 + 文档锚同步句在案", () => {
+    // 迭代止损为执行面纪律，不在作者档案（负断言）
+    expect(content.split(/\r?\n/).find((l) => l.startsWith("- **迭代止损**"))).toBeUndefined();
+    // 每例自持保留（撰写面语义，执行面归 runner）
+    expect(content).toContain("每例自持");
+    expect(content).toContain("执行面归 test-runner");
     expect(content).toContain("归因分离");
     expect(content).toContain("改锚同提交改文档");
   });
