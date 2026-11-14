@@ -145,7 +145,13 @@ export async function installViaPluginManager(page: Page, stage: OfficialHostSta
   //  web profile 优先，陈旧遗留实体不采纳）
   let entityVerified = false
   if (stage.dshHome !== undefined) {
-    const entities = findInstalledPackageJsons(stage.dshHome, 0)
+    // 实体包定位有界重试（1.26 支撑面收口——安装/启用收尾与 profile 实体物化存在竞态窗口，
+    // 单次深搜偶发 0 候选；3s×4 有界重试收敛，超界如实失败）
+    let entities = findInstalledPackageJsons(stage.dshHome, 0)
+    for (let i = 0; entities.length === 0 && i < 3; i++) {
+      await page.waitForTimeout(3_000)
+      entities = findInstalledPackageJsons(stage.dshHome, 0)
+    }
     const webProfileEntity = entities.find((p) => p.replace(/\\/g, '/').includes('/profiles/web/'))
     const entityPkg = webProfileEntity ?? entities.find((p) => (JSON.parse(readFileSync(p, 'utf8')) as { version: string }).version === version) ?? null
     expect(entityPkg, `③-b profile 实体包 @dsh-forge/project/package.json 在盘（候选 ${entities.length} 份：${entities.map((p) => p.replace(/\\/g, '/')).join(' , ') || 'none'}）`).toBeTruthy()
@@ -164,7 +170,40 @@ export async function installViaPluginManager(page: Page, stage: OfficialHostSta
     await page.waitForTimeout(3_000)
     log.push('enable clicked')
   }
+  await returnToMainView(page, log)
   return { version, entityVerified }
+}
+
+/**
+ * 装载后回主视图（1.26 支撑面收口——非断言改动）：安装序列把主视图切到插件页/插件详情面，
+ * hero 区（conversation.hero.workspace chip）随主视图离场不在 DOM——G4 前置「hero 芯片
+ * （未绑定词汇）」结构性缺席 = 舞台装载形态缺席 skip 的成因。回主视图 = 「新会话」官方钮
+ * （新建未绑定会话为活跃上下文——hero chip 回到「选择工作区」未绑定词汇态，与 WYSIWYG
+ * 创建语义一致）；按钮缺席时 Escape 兜底（可能停留在可用视图）。失败 fail-soft（log 记账），
+ * 不阻断装载前置成立。
+ */
+async function returnToMainView(page: Page, log: string[]): Promise<void> {
+  const back = async (): Promise<boolean> =>
+    (await page.locator('button').evaluateAll((els) =>
+      els.some((b) => /默认工作区|选择工作区/.test((b.getAttribute('aria-label') || b.textContent || '').trim())),
+    )) || (await page.locator('[data-dswf-hero]').count()) > 0
+  // 插件重装载收敛等待（新版本实装后顶替面板重挂载窗口——行集稳定后再交还 spec）
+  await page.waitForFunction(
+    (min) => document.querySelectorAll("[data-dswf-project]").length >= min,
+    1,
+    { timeout: 30_000 },
+  ).catch(() => {})
+  for (let i = 0; i < 3 && !(await back()); i++) {
+    const newSession = page.getByRole('button', { name: /新会话/ }).first()
+    if ((await newSession.count()) > 0) {
+      await newSession.click({ force: true }).catch(() => {})
+      log.push(`return-to-main: 新会话 clicked (round ${String(i + 1)})`)
+    } else {
+      await page.keyboard.press('Escape')
+      log.push(`return-to-main: 新会话钮缺席——Escape 兜底 (round ${String(i + 1)})`)
+    }
+    await page.waitForTimeout(3_000)
+  }
 }
 
 /** 有界深搜实体包 package.json 全候选（深度 6 封顶——定位 node_modules/@dsh-forge/project/package.json） */
@@ -176,6 +215,7 @@ function findInstalledPackageJsons(root: string, depth: number, acc: string[] = 
   } catch {
     return acc
   }
+
   if (names.includes('@dsh-forge')) {
     const candidate = join(root, '@dsh-forge', 'project', 'package.json')
     if (existsSync(candidate)) acc.push(candidate)
