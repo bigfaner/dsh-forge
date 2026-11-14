@@ -811,3 +811,45 @@ describe("experts/proposal-reviewer.md 档案解析断言（forge-test-pipeline-
   });
 });
 // forge-test-pipeline-hardening 1.1 proposal-reviewer 四维条件组断言结束
+
+describe("跨档案一致性 pin（forge-test-pipeline-hardening 1.4——弱断言四形态逐字 + 替身口径高漂移对）", () => {
+  const script = readFileSync(resolve(here, "../experts/test-script-author.md"), "utf-8");
+  const journey = readFileSync(resolve(here, "../experts/test-journey-author.md"), "utf-8");
+  const master = readFileSync(resolve(here, "../experts/test-master.md"), "utf-8");
+  const code = readFileSync(resolve(here, "../experts/code-master.md"), "utf-8");
+
+  const WEAK_ASSERTION_FORMS = [
+    "禁裸真值断言（对可精确断言的值只验非空/存在）",
+    "禁 OR 断言稀释（多候选取其一即过）",
+    "禁监听晚注册近恒真（断言注册先于被监听动作触发）",
+    "禁断言倒置（断言与被验证语义方向相反）",
+  ];
+
+  it("弱断言四形态在 script/journey 两档案逐字相同（锚守卫 + 逐形态 pin，改一漏一即红）", () => {
+    // 锚守卫：切区锚缺失即红（既有判例防线——防 indexOf -1 切到残段恒绿）
+    expect(journey.split(/\r?\n/).some((l) => l.startsWith("| 弱断言禁令 |")), "锚缺失：| 弱断言禁令 | 行").toBe(true);
+    expect(script.indexOf("## 断言质量门"), "锚缺失：## 断言质量门").toBeGreaterThan(-1);
+    const journeyRow = journey.split(/\r?\n/).find((l) => l.startsWith("| 弱断言禁令 |"))!;
+    const scriptSection = script.slice(script.indexOf("## 断言质量门"));
+    for (const form of WEAK_ASSERTION_FORMS) {
+      expect(journeyRow, `journey 弱断言禁令行缺逐字形态：${form}`).toContain(form);
+      expect(scriptSection, `script 断言质量门节缺逐字形态：${form}`).toContain(form);
+    }
+    // 口径闭环句逐字 pin（同句同锚）
+    expect(journeyRow).toContain("四形态与脚本作者断言质量门同口径");
+  });
+
+  it("替身口径高漂移对逐对 pin：code-master ↔ test-master 替身位置关键句逐字一致", () => {
+    // 锚守卫
+    expect(master.indexOf("### 测试方案设计职责"), "锚缺失：### 测试方案设计职责").toBeGreaterThan(-1);
+    expect(code.indexOf("接口优先设计"), "锚缺失：接口优先设计段").toBeGreaterThan(-1);
+    // 替身位置铁律句（正式装配组合根不接受测试配置切换）两档案逐字相同
+    const STUB_IRON_RULE = "正式装配组合根恒不接受测试配置切换";
+    expect(master, "test-master 缺替身位置铁律句（逐字）").toContain(STUB_IRON_RULE);
+    expect(code, "code-master 缺替身位置铁律句（逐字）——改一漏一即红").toContain(STUB_IRON_RULE);
+    // 归因三分句：code-master fake 三分法点名 test-master 裁定，test-master 替身清单侧回指 code-master 接口清单——归因闭环两向锚在案
+    expect(code).toContain("位置与层归属归 test-master（替身清单裁定）");
+    expect(master).toContain("code-master 产出接口清单，你产出替身清单");
+  });
+});
+// forge-test-pipeline-hardening 1.4 跨档案一致性 pin 断言结束
