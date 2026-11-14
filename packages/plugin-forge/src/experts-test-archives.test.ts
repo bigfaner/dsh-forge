@@ -722,3 +722,40 @@ describe("test-* 三 author 档案收口断言（forge-test-discipline-layering 
   });
 });
 // forge-test-discipline-layering 1.20 三 author 档案收口断言结束
+
+describe("experts/code-master.md 档案解析断言（forge-test-discipline-layering 1.21——对称上抛 + 自写测试同标 + 范围声明）", () => {
+  const FILE = resolve(here, "../experts/code-master.md");
+  const content = readFileSync(FILE, "utf-8");
+
+  it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
+    expect(parseExpertFileLike(FILE, content)).toEqual({ ok: true });
+  });
+
+  it("无裸 {{ 字面量（全文任意位置）", () => {
+    expect(content.includes("{{")).toBe(false);
+  });
+
+  it("边界节对称上抛条款在案（与 test-master/script-author 同口径：裁决出口=架构提案或降级黑盒）", () => {
+    const boundary = content.slice(content.indexOf("## 边界"));
+    expect(boundary).toContain("为既有无缝正式代码新增注入缝属架构决策");
+    expect(boundary).toContain("非新设计面不顺手实施");
+    expect(boundary).toContain("上抛主会话裁决");
+    expect(boundary).toContain("架构提案或降级黑盒");
+  });
+
+  it("工作方式自写测试同标句在案（执行树落位 + 断言可红性门 + 探测式遵从）", () => {
+    expect(content).toContain("交付期自写测试遵循执行树落位与断言可红性门");
+    expect(content).toContain("探测式遵从");
+    expect(content).toContain("与脚本作者同标");
+  });
+
+  it("接口优先段范围声明 + fake 三分法在案", () => {
+    expect(content).toContain("接口清单只覆盖进程内替身（单元/集成）");
+    expect(content).toContain("e2e 协议级拦截不进入接口清单");
+    expect(content).toContain("不为 e2e 需求在生产代码开缝");
+    expect(content).toContain("fake 的契约面归本档案");
+    expect(content).toContain("位置与层归属归 test-master");
+    expect(content).toContain("代码落笔归对应作者");
+  });
+});
+// forge-test-discipline-layering 1.21 code-master 收口断言结束
