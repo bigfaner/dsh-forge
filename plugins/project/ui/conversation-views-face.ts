@@ -30,14 +30,6 @@ export const CONVERSATION_INPUT_OVERLAY_SLOT = 'conversation.input.overlay'
 /** worktree 切换闸虚线标记 overlay 登记 id（bug 267dcac1——纯视觉命中锚，禁输行为归官方 conversation.blocks 缝） */
 export const WORKTREE_SWITCH_ENTRY_ID = 'dswf-worktree-switch'
 
-/** 官方 uiConversation 服务窄面（registerEventEntriesNode 消费切片——结构同型镜像） */
-interface ForgeUiConversationService {
-  readonly events: {
-    /** 注册一个节点 Definition；重复 kind 抛错（官方注册表语义——单次注册不触） */
-    register(definition: unknown): void
-  }
-}
-
 /** unknown → 对象窄化（缺席/非对象 = undefined） */
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
@@ -86,17 +78,21 @@ export function registerConversationToolFaces(
     }) === undefined) throw new Error('slots face unavailable')
   })
 
-  // ② 事件折叠组三段（D2 fail-visible 诊断注入面——client 束豁免面 console.warn）
-  face(FORGE_EVENT_NODE_KIND, () => {
+  // ② 事件折叠组三段（D2 fail-visible 诊断注入面——client 束豁免面 console.warn）。
+  // 服务缝 = ctx.inject(['uiConversation'], cb) 生命周期订阅（官方 ui-plan/ui-conversation
+  // 同径核销——服务在场激活注册、撤回随 cordis fiber 自动退；apply 时点服务后到 =
+  // 挂起补激活，不再一次性 reflectGet 错过注册窗口）；keyed body = slots 缝，与
+  // uiConversation 服务无依赖，apply 期一次登记不随服务生命周期重挂。
+  // registered 诊断 = 定义注册落座事实（服务缺席挂起期不记——e2e「registered 列表含
+  // forge-event-group」即定义注册完成的判定锚）。
+  const registerEventGroupFace = (): void => {
     setForgeEventNodeDiag((message) => console.warn(message))
-    const uiConversation = asRecord(reflectGet(ctx, 'uiConversation')) as
-      | ForgeUiConversationService
-      | undefined
-    const events = asRecord(uiConversation?.['events'])
-    const registerEvents = events?.['register']
-    if (typeof registerEvents !== 'function') {
-      throw new Error('ctx.uiConversation.events.register absent（capability absence = 无节点）')
-    }
+    if (registerKeyedSection(slots, {
+      slot: FORGE_EVENT_NODE_SLOT,
+      key: FORGE_EVENT_NODE_KIND,
+      locale: FORGE_PROJECT_LOCALE_NS,
+      component: ForgeEventEntries,
+    }) === undefined) throw new Error('slots face unavailable')
     // stream 状态机注册经回放录取薄包装（match 纯观察旁路——fold 语义零改动）
     const streamWithTap = {
       ...forgeEventStreamDefinition,
@@ -105,15 +101,37 @@ export function registerConversationToolFaces(
         return forgeEventStreamDefinition.match(event as never)
       },
     }
-    registerEvents.call(events, streamWithTap)
-    registerEvents.call(events, forgeEventGroupDefinition)
-    if (registerKeyedSection(slots, {
-      slot: FORGE_EVENT_NODE_SLOT,
-      key: FORGE_EVENT_NODE_KIND,
-      locale: FORGE_PROJECT_LOCALE_NS,
-      component: ForgeEventEntries,
-    }) === undefined) throw new Error('slots face unavailable')
-  })
+    const registerEventDefinitions = (uiConversationRecord: Record<string, unknown> | undefined): void => {
+      const events = asRecord(uiConversationRecord?.['events'])
+      const registerEvents = events?.['register']
+      if (typeof registerEvents !== 'function') {
+        throw new Error('ctx.uiConversation.events.register absent（capability absence = 无节点）')
+      }
+      registerEvents.call(events, streamWithTap)
+      registerEvents.call(events, forgeEventGroupDefinition)
+      if (!registered.includes(FORGE_EVENT_NODE_KIND)) registered.push(FORGE_EVENT_NODE_KIND)
+    }
+    const inject = (ctx as OfficialSeamCtx & {
+      inject?: (deps: readonly string[], cb: (scope: Record<string, unknown>) => void) => unknown
+    }).inject
+    if (typeof inject === 'function') {
+      inject.call(ctx, ['uiConversation'], (scope) => {
+        try {
+          registerEventDefinitions(asRecord(scope['uiConversation']))
+        } catch (error) {
+          console.warn(`[dsh-forge/project] conversation tool face '${FORGE_EVENT_NODE_KIND}' activation failed——降级不注册`, error)
+        }
+      })
+      return
+    }
+    // 结构劣形宿主（inject 缝缺席）：reflect 现查一次性注册路径保持（在场即注册，缺席 warn）
+    registerEventDefinitions(asRecord(reflectGet(ctx, 'uiConversation')))
+  }
+  try {
+    registerEventGroupFace()
+  } catch (error) {
+    console.warn(`[dsh-forge/project] conversation tool face '${FORGE_EVENT_NODE_KIND}' registration failed——降级不注册`, error)
+  }
 
   // ③ worktree 切换闸虚线标记行（1.43 自壳侧迁入——bug 267dcac1：官方 cardWorkspaceTrigger
   // 同配方 dashed 规则 :has 命中宿主卡；禁输行为全归官方 conversation.blocks 缝，本行纯视觉）
