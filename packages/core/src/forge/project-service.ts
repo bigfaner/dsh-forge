@@ -288,12 +288,18 @@ function ensureRegistrationDirs(input: RegisterProjectInput): void {
   } catch (cause) {
     throw new WorkspaceCreateError(input.workspaceDir, cause)
   }
+  // forgeDir 空串/缺省 = 注册方未指定 forge 目录（DTO 契约，G4/spec 注册通道 forgeDir:''）——
+  // 零目录确保直接通过（插件自建径同语义照存；65e7a104 真因：空串进 mkdirSync 即 ENOENT，
+  // 曾被误标「应用库 projects 行写入失败」）。
+  if (!input.forgeDir) return
   try {
     // ensureDirReadable：显式 chmod 0o755——umask 0077 环境下裸 mkdir 落 700，事后非属主
     // 读取（validateMermaid 等）被拒（macOS 现场）。workspaceDir 不动（用户自有目录，非本产品落盘面）。
     ensureDirReadable(input.forgeDir)
   } catch (cause) {
-    throw new ProjectWriteError({ wsPath: input.workspaceDir }, cause)
+    // H-A 判别标记（65e7a104）：目录确保失败 ≠ 应用库写入失败——stage 标记使错误面独立化（不扩码），
+    // ProjectWriteError 构造器按 stage 分支文案 + writeError 进 data 过桥保真。
+    throw new ProjectWriteError({ wsPath: input.workspaceDir, stage: 'dirs-ensure' }, cause)
   }
 }
 

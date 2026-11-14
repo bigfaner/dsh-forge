@@ -11,6 +11,8 @@ export interface ForgeErrorData {
   wsPath?: string
   /** ④ 补偿已执行信息（存在即「补偿已执行」——UI 失败反馈口径；挂接/中止路径无此字段） */
   compensated?: CompensatedInfo
+  /** 抛点阶段标记（H-A 判别：'dirs-ensure' = 注册目录确保前置失败——未到应用库写入步） */
+  stage?: 'dirs-ensure'
   [key: string]: unknown
 }
 
@@ -33,13 +35,18 @@ export class ProjectWriteError extends Error {
 
   constructor(data: ForgeErrorData, cause: unknown) {
     super(
-      data.compensated
-        ? `应用库 projects 行写入失败（registry.delete 补偿已执行，dsh 侧零孤儿）：${String(data.wsPath ?? '')}`
-        : `应用库 projects 行写入失败（未补偿：挂接既有受 ownership 保护，或补偿不适用）：${String(data.wsPath ?? '')}`,
+      data.stage === 'dirs-ensure'
+        ? `注册目录落盘失败（forgeDir 目录确保——未到应用库写入步，dsh 侧零副作用）：${String(data.wsPath ?? '')}`
+        : data.compensated
+          ? `应用库 projects 行写入失败（registry.delete 补偿已执行，dsh 侧零孤儿）：${String(data.wsPath ?? '')}`
+          : `应用库 projects 行写入失败（未补偿：挂接既有受 ownership 保护，或补偿不适用）：${String(data.wsPath ?? '')}`,
       { cause },
     )
     this.name = 'ProjectWriteError'
-    this.data = data
+    // writeCause 可见性（镜像 CompensationError:56 writeError 形态）：cause 链在桥序列化
+    // 与重建两处被剥离（bridge serializeBridgeError/rebuildBridgeError 只带 code/message/data），
+    // 具体失败码（ENOTDIR / SQLITE_BUSY 等）须经 data 过桥保真——现场直接可诊断。
+    this.data = { ...data, writeError: errMessage(cause) }
   }
 }
 
