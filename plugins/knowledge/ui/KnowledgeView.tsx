@@ -9,7 +9,7 @@
 // 工具栏「范围显示 P1 项目级」）；面板互换/右栏联动机制归官方面板径
 // （layout.selectPanel + ShellHost 右栏联动，fix-25）。
 import { useCallback, useRef, type ReactNode } from 'react'
-import { EmptyState } from '../components.js'
+import { EmptyState } from './components.js'
 import type { RpcClientFactory } from './rpc-channels.js'
 import { EntryDrawer } from './EntryDrawer.js'
 import { KnowledgeBrowse } from './KnowledgeBrowse.js'

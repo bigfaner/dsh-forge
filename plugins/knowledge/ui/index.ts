@@ -1,4 +1,6 @@
-// knowledge 插件 client bundle 占位入口（步③ UI 三面归位前——1.4 填充真实 ui/）。
-// 占位 = 零导出零注册：bundle-client 门（exports["./client"] 双键 + 自注册形状 + 自含
-// 审计）随结构步先立起来，UI 归位批次只需替换本文件内容，构建链零改。
-export {}
+// @dsh-forge/knowledge client bundle 入口（knowledge-plugin-migration 1.4 子提交 b——
+// UI 三面归位落座：本入口 = faces 组合插件对象正门，scripts/bundle-client.mjs 按
+// exports["./client"].types 镜像推导取本件为 esbuild 入口，产出 dist/client.js classic
+// 自注册形状；掌舵行 = apps/web main.ts knowledgeClient 块 + vite emit 断言同源）。
+export * from './faces.js'
+export { default } from './faces.js'

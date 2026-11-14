@@ -23,7 +23,7 @@ import type { ReactNode } from 'react'
 import { Checkbox, StateDot, Tag, Toast, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { KnowledgeCard } from '@dsh-forge/contracts'
 import type { RpcUiStateKind } from './rpc-channels.js'
-import { EmptyState, ErrorBar, SkeletonRows } from '../components.js'
+import { EmptyState, ErrorBar, SkeletonRows } from './components.js'
 import { IconFlameFillRegular } from './components-mirror.js'
 import {
   cardCreatedLabel,

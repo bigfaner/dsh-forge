@@ -36,7 +36,19 @@ export default defineConfig({
       { test: { name: 'knowledge-journeys', include: ['tests/knowledge/**/*.test.ts'] } },
       { test: { name: 'contracts', include: ['packages/contracts/src/**/*.test.ts'] } },
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
-      { test: { name: 'knowledge', include: ['plugins/knowledge/tests/**/*.test.ts'] } },
+      // knowledge 插件包（UI 三面归位 1.4：ui 面 .test 随迁本池——组件消费官方 primitives，
+      // css 副产物走 vite 转换管道 inline，git-worktree 判例同构）
+      {
+        test: {
+          name: 'knowledge',
+          include: ['plugins/knowledge/tests/**/*.test.ts', 'plugins/knowledge/ui/**/*.test.{ts,tsx}'],
+          server: {
+            deps: {
+              inline: ['@deepseek-ai/dsh-client-ui-primitives'],
+            },
+          },
+        },
+      },
       { test: { name: 'plugin-forge', include: ['packages/plugin-forge/src/**/*.test.ts'] } },
       // 3b④ 契约 pin 扩池：pin-dispatch-injection（dispatchTask description ↔ 注入模板同源断言）
       { test: { name: 'plugin-forge-contract', include: ['packages/plugin-forge/tests/contract/**/*.test.ts'] } },

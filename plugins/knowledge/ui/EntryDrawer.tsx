@@ -25,7 +25,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { Button, IconCloseFillRegular, Modal, Pill, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { EntryDetail } from '@dsh-forge/contracts'
-import { EmptyState, ErrorBar, StateChip } from '../components.js'
+import { EmptyState, ErrorBar, StateChip } from './components.js'
 import { MD_PREVIEW_MARKDOWN_LABELS, MarkdownDoc } from './components-mirror.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from './rpc-channels.js'
 import { mapBrowseError, type BrowseErrorInfo } from './use-knowledge-browse.js'

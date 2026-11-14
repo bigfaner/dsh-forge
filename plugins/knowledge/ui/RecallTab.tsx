@@ -44,7 +44,7 @@ import {
   Tag,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { EmptyState, ErrorBar, SkeletonRows, StateChip } from '../components.js'
+import { EmptyState, ErrorBar, SkeletonRows, StateChip } from './components.js'
 import { MarkdownDoc, MD_PREVIEW_MARKDOWN_LABELS } from './components-mirror.js'
 import {
   preloadRpcClientFactory,
@@ -61,9 +61,9 @@ import {
   recallStatsOf,
   recallTurnsOf,
 } from './recall-model.js'
-import { useAnchoredProjects } from '../anchored-projects.js'
+import { useAnchoredProjects } from './anchored-projects.js'
 import { projectAnchorOf } from './panel-anchor.js'
-import type { KitSelectorHook } from './kit-types.js'
+import type { KitSelectorHook } from '../shared/kit-types.js'
 import './recall.css'
 
 /** 错误附载（message = 信封 message 原样；uiState = rpcUiState(code) 三态映射） */

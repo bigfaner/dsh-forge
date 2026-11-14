@@ -8,7 +8,7 @@
 // 派生行单源 = core deriveTaskStoreDir（RPC forge:projects/deriveTaskStoreDir 下发，
 // derive-source 装配；本模块零路径派生残留）。
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
-import { dirSeparatorOf, isWindowsStylePath, normalizeDirPath } from '@dsh-forge/lib-path/path-key'
+import { dirSeparatorOf, normalizeDirPath } from '@dsh-forge/lib-path/path-key'
 import type { BrowserSelection } from './browser-model.js'
 
 /** 表单字段值（采集面 = RegisterProjectInput 三输入字段；workspaceDir 只读回填；知识目录随 knowledge_dir 列退役不采集——缺省 `<工作区>/.knowledge` 由 knowledge 注册径派生） */

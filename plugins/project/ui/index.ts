@@ -190,7 +190,6 @@ import { registerSidebarFace } from './sidebar-face.js'
 import { registerHeroPickerFace } from './hero-picker-face.js'
 import { registerHeroPanelFace } from './hero-panel-face.js'
 import { startHeroEmptySelfDrive, type HeroLayoutFace } from './hero-panel-drive.js'
-import { registerKnowledgeFaces } from './knowledge-face.js'
 import { registerDockTabsFace } from './dock-tabs-face.js'
 import type { LocaleServiceFace } from './locale.js'
 
@@ -390,19 +389,8 @@ export const projectClient = {
     } catch (error) {
       console.warn('[dsh-forge/project] hero panel registration failed——降级不注册', error)
     }
-    // knowledge 族三面（1.42 迁入——main keyed 知识面板 + panellist 行 + 召回页签；
-    // 宿主插件位门 fail-closed 在前，桥经页内缝 inject 期现读）。
-    try {
-      const locale = (rec?.['locale'] as LocaleServiceFace | undefined) ?? undefined
-      if (locale !== undefined && typeof locale.bind === 'function') {
-        const kn = registerKnowledgeFaces(slots, locale)
-        console.info(`[dsh-forge/project] knowledge faces registered=[${kn.registered.join(', ')}] enabled=${kn.knowledgeEnabled}`)
-      } else {
-        console.warn('[dsh-forge/project] ctx.locale absent; knowledge faces not mounted')
-      }
-    } catch (error) {
-      console.warn('[dsh-forge/project] knowledge faces registration interrupted', error)
-    }
+    // knowledge 族三面已随迁 knowledge 插件 bundle 自注册（knowledge-plugin-migration
+    // 1.4——faces.ts apply 期自注册 + knowledgeGateOf 双门控；本包注册行退役，杜绝双写源）。
     // dock tab 族（1.45 迁入——sidebarRightTabs 两类型 + sidebar.right.pane.tab 两 keyed
     // body；sidebarRightTabs/sessions/uiWorkspace/workspaces 服务经 ctx.get 现查，桥经
     // 页内缝 inject 期现读；逐面 try/catch fail-soft）。

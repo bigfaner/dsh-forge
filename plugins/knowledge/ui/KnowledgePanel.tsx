@@ -13,13 +13,13 @@
 // fix-bug 范围切换：显式拾取（pickedProjectAnchor）粘性优先——工具栏项目切换控件
 //（composer 同款官方 Menu）拾取后不随会话/派生锚漂移；拾取行离场（删除/归档）回落派生。
 // workbench 桥类型：壳侧 workbench-bridge.ts 不迁——本件仅消费切片（Pick 三方法），
-// 类型本地最小抽出（WorkbenchBridgeMirror 单源在 ../knowledge-face.js，桥本体 = 壳 C 类域）。
+// 类型切片 = ../shared/workbench-bridge.js 下沉件（1.4），桥本体 = 壳 C 类域。
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { KnowledgeView } from './KnowledgeView.js'
-import type { KitSelectorHook } from './kit-types.js'
-import { MainSessionAnchor, useAnchoredProjects } from '../anchored-projects.js'
+import type { KitSelectorHook } from '../shared/kit-types.js'
+import { MainSessionAnchor, useAnchoredProjects } from './anchored-projects.js'
 import { pickedProjectAnchor, projectAnchorOf } from './panel-anchor.js'
-import type { WorkbenchBridgeMirror } from '../knowledge-face.js'
+import type { WorkbenchBridgeMirror } from '../shared/workbench-bridge.js'
 import './knowledge.css'
 
 /** 工作台桥消费切片（壳 createWorkbenchBridge 产物结构同型镜像的窄 Pick——抽屉目标缝） */
@@ -28,7 +28,7 @@ type WorkbenchBridge = Pick<WorkbenchBridgeMirror, 'subscribe' | 'getSnapshot' |
 // 4.1 锚定复用迁移注记：readMainSessionId/MainSessionAnchor 本体已迁 anchored-projects.tsx
 //（ShellHost 概览上下文锚定同源消费）；此处再导出保持既有消费面（KnowledgePanel.test）
 // 零漂移——装配域共享面单一来源。
-export { readMainSessionId, MainSessionAnchor } from '../anchored-projects.js'
+export { readMainSessionId, MainSessionAnchor } from './anchored-projects.js'
 
 /** main keyed 'dswf-knowledge' 占用者 kit 窄面（root 标准props + 插件 inject；可选 = 降级） */
 export interface ForgeKnowledgePanelProps {

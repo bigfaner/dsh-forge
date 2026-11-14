@@ -9,6 +9,6 @@
     "incremental": false,
     "rootDir": "../../"
   },
-  "include": ["host", "tests"],
+  "include": ["host", "tests", "ui"],
   "exclude": []
 }
