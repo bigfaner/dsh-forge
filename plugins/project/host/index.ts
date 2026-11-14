@@ -278,6 +278,24 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
         diag(line);
         diagEmit?.({ event: "typert-remote-register", level: "warn", message: line });
       },
+      // 注册后自探针缝（boot 竞速根治——1.2 复核欠账 R2-竞速支 host 半）：typertGateway
+      // invoke 直探 = serve 层认领自证（注册完成行后时点即装配序判据——先于 client mount
+      // 首探；gateway 缺席/调用失败 = 自探针失败诊断行，fail-soft 不阻载）。
+      selfProbe: async (namespace, method) => {
+        const gateway = rootServiceOf(face)("typertGateway") as
+          | {
+              invoke?: (request: {
+                namespace: string;
+                method: string;
+                args: Record<string, never>;
+              }) => Promise<unknown>;
+            }
+          | undefined;
+        if (gateway?.invoke === undefined) {
+          throw new Error("typertGateway 服务缺席——serve 层认领不可达");
+        }
+        return await gateway.invoke({ namespace, method, args: {} });
+      },
     };
     registerForgeTypertRemotes(face, typertDeps);
   } catch (cause) {

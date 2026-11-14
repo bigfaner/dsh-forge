@@ -115,6 +115,12 @@ export interface ForgeTypertDeps {
   readonly followIntervalMs?: number;
   /** 诊断缝（装配/降级留痕——缺席 console 兜底，client 束豁免面同插件先例） */
   readonly diag?: (line: string) => void;
+  /**
+   * 注册后自探针缝（boot 竞速根治——1.2 复核欠账 R2-竞速支 host 半）：typertGateway
+   * invoke 直探（serve 层认领自证——装配序要求注册先于 gateway 首个 /api 探测，F3
+   * srcClaims 记忆化规避锚）。缺席 = 跳过（非 cordis gateway 宿主/测试面）。
+   */
+  readonly selfProbe?: (namespace: string, method: string) => Promise<unknown>;
 }
 
 /** 注册结果（可观测面——registered = 根 ctx 装上的 namespace；degraded = 缺族未装清单） */
@@ -553,5 +559,17 @@ export function registerForgeTypertRemotes(
   diag?.(
     `[project-typert] Typert 遥控器注册完成：registered=[${registered.join(", ")}] degraded=[${degraded.join(", ")}]`,
   );
+  // 注册后自探针（boot 竞速根治）：完成行后立即经 gateway invoke 直探 forgeProjects/list
+  // ——serve 层认领自证（零副作用读面）；装配序判据 = 本探针时点晚于注册、早于 client
+  // mount 首探。fail-soft：结果只落诊断（ok=info 形完成行、失败=失败因），不阻载。
+  if (typeof deps.selfProbe === "function" && registered.includes("forgeProjects")) {
+    void Promise.resolve()
+      .then(() => deps.selfProbe!("forgeProjects", "list"))
+      .then(
+        () => diag?.("[project-typert] 注册后自探针 ok：forgeProjects/list（serve 层认领在场）"),
+        (cause: unknown) =>
+          diag?.(`[project-typert] 注册后自探针失败：forgeProjects/list——${messageOf(cause)}`),
+      );
+  }
   return { registered, degraded };
 }

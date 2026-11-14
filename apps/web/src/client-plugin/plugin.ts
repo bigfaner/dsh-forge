@@ -74,6 +74,7 @@ import {
   type WorkspacesListSlice,
 } from './start-session-wrap.js'
 import { installConnectionLostBanner } from './connection-lost-banner.js'
+import { runActivationSelfProbe } from './self-check-probe.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
 export const FORGE_CLIENT_PLUGIN_ID = '@dsh-forge/web-client'
@@ -772,18 +773,27 @@ export function forgeClientPlugin(): ForgeClientPlugin {
               })
 
         // W4 激活自证①（RPC 试呼轻探）：forgeProjects.list Typert 正典零副作用读面——
-        // remote 往返通 = 数据通路装配链通。异步 fire-and-forget：失败 console.error +
-        // selfCheck 呈现（UI 态），不阻断激活主链。
-        void forgeRpc.projects
-          .list()
-          .then(() => {
+        // remote 往返通 = 数据通路装配链通。编排 = runActivationSelfProbe 两段式（boot
+        // 竞速根治——1.2 复核欠账 R2-竞速支）：mount 完成前的 404/面缺席失败按竞速窗口
+        // 分类静默挂起，internal/service（remote contribution mount 落座）或兜底时延后
+        // 重试一次，重试仍失败才 console.error + selfCheck 呈现（不阻断激活主链）。
+        runActivationSelfProbe({
+          probe: () => forgeRpc.projects.list().then(() => undefined),
+          onSuccess: () => {
             selfCheck.rpcProbe = 'ok'
-          })
-          .catch((cause: unknown) => {
-            const line = `dsh-forge web-client: 激活自证失败——forgeProjects Typert 轻探不通（数据通路断裂）：${String(cause)}`
+          },
+          onRacePending: () => {
+            selfCheck.rpcProbe = 'pending（boot 竞速窗口——remote contribution mount 后重试中）'
+          },
+          onTerminalFailure: (line) => {
             console.error(line)
             selfCheck.rpcProbe = line
-          })
+          },
+          onServiceEvent:
+            typeof clientCtx.on === 'function'
+              ? (fn) => clientCtx.on!('internal/service', () => fn())
+              : undefined,
+        })
 
         // W4 行存续看门探测面发布（壳 bundle 全局看门轮询消费——插件 fiber 内看门随插件
         // 同殁，检不出 prune；closure 持官方 ctx，fiber 死后 slots 服务仍存活）。

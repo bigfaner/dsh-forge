@@ -204,6 +204,19 @@ const sealError: WorktreeSealPhase = {
   live: false,
 }
 
+/**
+ * 贡献卸载 abort 分类（bug 99951e7b R3 定谳——rootcause-typert-cluster §三）：官方
+ * mountContribution/installNamespace 撤销链对在途流逐方法 `token.abort.abort()`
+ * （无 reason）→ 在途消费面收 `AbortError` / `signal is aborted without reason`。
+ * 该族失败 = 贡献卸载静默终态（非通道故障），不进失败路径告警。
+ */
+export function isContributionUnloadAbort(cause: unknown): boolean {
+  const name = (cause as { name?: unknown } | null | undefined)?.name
+  if (name === 'AbortError') return true
+  const message = cause instanceof Error ? cause.message : String(cause)
+  return message.includes('signal is aborted without reason')
+}
+
 /** seal 快照帧 → 相位投影（followSeal 流与 unary 首帧共用单源映射） */
 function phaseOf(result: WorktreeSealResult): WorktreeSealPhase {
   return {
@@ -259,6 +272,13 @@ export function useWorktreeSeal(sessionId: string | undefined, makeRpc: () => Wo
         // 流自然终止（host 侧撤销/停机）——保投影标 live:false，不静默
         if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
       } catch (cause) {
+        // 贡献卸载 abort 分类（isContributionUnloadAbort——非通道故障）：静默终态不告警。
+        // 已投影 = 保投影标 live:false（同流自然终止刻度）；首帧前 = 挂起不消（卸载竞速
+        // 不落 error 相位不落 warn/error）。
+        if (isContributionUnloadAbort(cause)) {
+          if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
+          return
+        }
         // 首帧前失败 = 通道不可用（error 相位）；已投影 = 保投影（fail-soft 不丢态）
         console.warn('[dsh-forge/project] followSeal stream failed', cause)
         if (alive && !seen) setPhase(sealError)

@@ -1376,6 +1376,7 @@ describe('W4 激活自证（RPC 轻探）+ 看门探测面', () => {
   }
 
   afterEach(() => {
+    vi.useRealTimers()
     delete (globalThis as Record<string, unknown>).__dshForgeRemoteFace
     delete g().__DSH_FORGE_HEALTH__
     delete g().__DSH_FORGE_PRUNE_CHECK__
@@ -1400,34 +1401,81 @@ describe('W4 激活自证（RPC 轻探）+ 看门探测面', () => {
     return { listeners, slotsEntries }
   }
 
-  it('Typert face 缺席：自证 fail-loud 呈现（诚实降级不静默）+ 看门探测面发布 + overlay dispose 对称清收', () => {
+  it('Typert face 缺席：竞速窗口静默挂起（零 console）→ 兜底时延重试仍缺席才 fail-loud + 看门探测面发布 + overlay dispose 对称清收', async () => {
+    vi.useFakeTimers()
     const markerBefore = g().__DSH_FORGE_CLIENT__
     delete g().__DSH_FORGE_CLIENT__
     publishFakeViews()
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const { ctx, injectDisposers } = fakeClientCtx()
-    const { listeners } = augmentCtx(ctx)
-    forgeClientPlugin().apply(ctx)
-    const probe = (g().__DSH_FORGE_CLIENT__ as { selfCheck?: { rpcProbe?: string } })?.selfCheck
-    // 看门探测面：entries 求和（shell.overlay 1 + main 2 = 3）+ 事件转发钩接线
-    const health = g().__DSH_FORGE_HEALTH__
-    expect(health?.slotCount()).toBe(3)
-    expect(listeners).toHaveLength(1)
-    // overlay dispose = 卸载级联回收面：探测面对称清收
-    injectDisposers.get(SHELL_OVERLAY_SLOT)?.()
-    expect(g().__DSH_FORGE_HEALTH__).toBeUndefined()
-    // 恢复外层标记
-    if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
-    else g().__DSH_FORGE_CLIENT__ = markerBefore
-    unpublishViews()
-    return new Promise<void>((resolve) =>
-      setTimeout(() => {
-        expect(probe?.rpcProbe).toContain('轻探不通')
-        expect(err.mock.calls.some((call) => String(call[0]).includes('轻探不通'))).toBe(true)
-        err.mockRestore()
-        resolve()
-      }, 0),
-    )
+    try {
+      const { ctx, injectDisposers } = fakeClientCtx()
+      const { listeners } = augmentCtx(ctx)
+      forgeClientPlugin().apply(ctx)
+      const probe = (g().__DSH_FORGE_CLIENT__ as { selfCheck?: { rpcProbe?: string } })?.selfCheck
+      // 看门探测面：entries 求和（shell.overlay 1 + main 2 = 3）+ 事件转发钩接线
+      const health = g().__DSH_FORGE_HEALTH__
+      expect(health?.slotCount()).toBe(3)
+      expect(listeners).toHaveLength(1)
+      // overlay dispose = 卸载级联回收面：探测面对称清收
+      injectDisposers.get(SHELL_OVERLAY_SLOT)?.()
+      expect(g().__DSH_FORGE_HEALTH__).toBeUndefined()
+      // 竞速窗口分类：首败静默挂起（零 console.error）
+      await vi.advanceTimersByTimeAsync(0)
+      expect(probe?.rpcProbe).toContain('竞速窗口')
+      expect(err).not.toHaveBeenCalled()
+      // 兜底时延重试仍缺席 → 恰一次终态 fail-loud
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(probe?.rpcProbe).toContain('轻探不通')
+      expect(err.mock.calls.filter((call) => String(call[0]).includes('轻探不通'))).toHaveLength(1)
+    } finally {
+      err.mockRestore()
+      if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+      else g().__DSH_FORGE_CLIENT__ = markerBefore
+      unpublishViews()
+    }
+  })
+
+  it('竞速窗口首败 + internal/service mount 事件先到：事件触发即时静默重试成功（rpcProbe=ok，全程零 console.error）', async () => {
+    vi.useFakeTimers()
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      let failing = true
+      ;(globalThis as Record<string, unknown>)['__dshForgeRemoteFace'] = {
+        resolver: () => ({
+          forgeProjects: {
+            list: () =>
+              failing
+                ? Promise.resolve({
+                    ok: false as const,
+                    error: { code: 'transport', message: 'transport failure for forgeProjects/list: HTTP 404' },
+                  })
+                : Promise.resolve({ ok: true as const, value: [] }),
+          },
+        }),
+      }
+      const { ctx } = fakeClientCtx()
+      const { listeners } = augmentCtx(ctx)
+      forgeClientPlugin().apply(ctx)
+      const marker = () => (g().__DSH_FORGE_CLIENT__ as { selfCheck?: { rpcProbe?: string } })?.selfCheck
+      await vi.advanceTimersByTimeAsync(0)
+      expect(marker()?.rpcProbe).toContain('竞速窗口')
+      expect(err).not.toHaveBeenCalled()
+      // remote contribution mount 落座（internal/service 事件）→ 即时静默重试
+      // （探针重试监听在 apply 的 health 监听之后注册——取最后一个）
+      failing = false
+      listeners[listeners.length - 1]!('internal/service', undefined)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(marker()?.rpcProbe).toBe('ok')
+      expect(err).not.toHaveBeenCalled()
+    } finally {
+      err.mockRestore()
+      if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+      else g().__DSH_FORGE_CLIENT__ = markerBefore
+      unpublishViews()
+    }
   })
 
   it('Typert face 在场：RPC 轻探 ok（forgeProjects.list 零副作用读面通 = 数据通路装配链通）', async () => {

@@ -259,6 +259,49 @@ describe('registerForgeTypertRemotes（根 ctx plugin 装配）', () => {
     expect(result.degraded).toEqual(['assembly'])
     expect(diag).toHaveBeenCalledWith(expect.stringContaining('ctx.plugin 缺席'))
   })
+
+  it('注册后自探针（boot 竞速根治 R2 host 半）：forgeProjects 注册在场 → selfProbe(forgeProjects, list) 直探一次，ok/失败各落诊断', async () => {
+    const diag = vi.fn()
+    const selfProbe = vi.fn<(ns: string, method: string) => Promise<unknown>>()
+    const fullDeps: ForgeTypertDeps = {
+      projects: () => ({}) as never,
+      selfProbe,
+      diag,
+    }
+    // ok 腿：完成行先落、自探针随后 ok 行
+    selfProbe.mockResolvedValueOnce(undefined)
+    const { face } = captureRoot()
+    registerForgeTypertRemotes(face, fullDeps)
+    await vi.waitFor(() => {
+      expect(selfProbe).toHaveBeenCalledWith('forgeProjects', 'list')
+      expect(diag).toHaveBeenCalledWith(expect.stringContaining('注册后自探针 ok'))
+    })
+    const lines = diag.mock.calls.map((call) => String(call[0]))
+    expect(lines.findIndex((l) => l.includes('注册完成'))).toBeLessThan(
+      lines.findIndex((l) => l.includes('注册后自探针 ok')),
+    )
+    // 失败腿：探针抛错 → 失败因诊断行（fail-soft 不阻载）
+    const diag2 = vi.fn()
+    registerForgeTypertRemotes(captureRoot().face, {
+      projects: () => ({}) as never,
+      selfProbe: () => Promise.reject(new Error('typertGateway 服务缺席')),
+      diag: diag2,
+    })
+    await vi.waitFor(() => {
+      expect(diag2).toHaveBeenCalledWith(expect.stringContaining('注册后自探针失败'))
+      expect(diag2).toHaveBeenCalledWith(expect.stringContaining('typertGateway 服务缺席'))
+    })
+  })
+
+  it('自探针缺席缝 / forgeProjects 降级 → 不触发直探（零调用）', async () => {
+    const selfProbe = vi.fn<(ns: string, method: string) => Promise<unknown>>()
+    // 缝缺席（deps 无 selfProbe）→ 无从调用
+    registerForgeTypertRemotes(captureRoot().face, { projects: () => ({}) as never })
+    // forgeProjects 降级（projects 缺）→ 不探
+    registerForgeTypertRemotes(captureRoot().face, { selfProbe })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(selfProbe).not.toHaveBeenCalled()
+  })
 })
 
 describe('typed unavailable 与 fs listDir（诚实降级面）', () => {
