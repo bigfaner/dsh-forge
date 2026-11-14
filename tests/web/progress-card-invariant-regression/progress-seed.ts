@@ -3,7 +3,7 @@
 //  - e2e/support/replay/transcript-seed.ts —— v4 会话日志帧纪律（zstd 新帧追加、seq 连续
 //    续编、首帧 header 唯一消费）与 assistant settlement 形状（replayState/usage/stream——
 //    真实 v4 转录逐同构采样，跨 specs 实跑验证）。
-//  - apps/web/src/client-plugin/forge-event-node.fixture.ts —— 'forge/progress' 事件载荷
+//  - plugins/project/ui/event-node/forge-event-node.fixture.ts —— 'forge/progress' 事件载荷
 //    形状（案发样本 session-637fab65 实录）。
 // 播种面只代位「事件生产者」（真实链路 = host forge 插件 emit）；事件消费链（官方
 // dsh-client-store 依 seq 重灌 → 官方 chat 视图 fold → forge 组节点物化 → DOM 渲染）

@@ -205,8 +205,8 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
   it('模块面就位：视图占用者族 + 召回数据面 + 派发悬浮面板 + 样式 + barrel；fix-29/m3.1 退役面缺席', () => {
     for (const f of [
       'apps/web/src/views/session/ConversationViews.tsx',
-      'apps/web/src/views/session/RecallTab.tsx',
-      'apps/web/src/views/session/recall-model.ts',
+      // disc-2 壳侧死面退役：RecallTab/recall-model 本体迁 @dsh-forge/project——壳零残留
+
       // loop-event-delivery 1.8：悬浮进度流面板（派发任务悬浮面板 UI 继任——残面 = worker 解析辅助）
       'apps/web/src/views/session/DispatchEventsPanel.tsx',
       'apps/web/src/views/session/dispatch-events-panel.css',
@@ -217,7 +217,7 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/views/session/index.ts')
-    for (const name of ['ConversationViews', 'RecallTab', 'DispatchEventsPanel', 'DispatchPanel']) {
+    for (const name of ['ConversationViews', 'DispatchEventsPanel', 'DispatchPanel']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
     // loop-event-delivery 1.8 替代 pin：旧任务面板样式/角标 UI 死代码缺席（替代不并存——
@@ -231,10 +231,12 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
     expect(existsSync(join(ROOT, 'apps/web/src/views/session/SessionTaskPills.tsx'))).toBe(false)
   })
 
-  it('官方 roster 占用 pin：召回视图登记 id + pane 锚保持；fix-29 轨迹零登记（对话/轨迹 = 官方 chat/trajectory 直用）', () => {
-    const views = read('apps/web/src/views/session/ConversationViews.tsx')
+  it('官方 roster 占用 pin：召回视图登记 id + pane 锚（本体归 @dsh-forge/project——壳侧死面退役）；fix-29 轨迹零登记（对话/轨迹 = 官方 chat/trajectory 直用）', () => {
+    const views = read('plugins/project/ui/knowledge/RecallTab.tsx')
     expect(views).toContain('data-dswf-pane="recall"')
-    expect(views).not.toContain('data-dswf-pane="trajectory"')
+    const shellViews = read('apps/web/src/views/session/ConversationViews.tsx')
+    expect(shellViews).not.toContain('data-dswf-pane') // 壳侧零召回 pane（本体随注册面迁插件域）
+    expect(shellViews).not.toContain('data-dswf-pane="trajectory"')
     const plugin = read('apps/web/src/client-plugin/plugin.ts')
     expect(plugin).not.toContain('TRAJECTORY_VIEW_ID') // fix-29：产品轨迹登记 id 常量退役
     expect(plugin).not.toContain("label: '轨迹'") // 官方 ui-trajectory 行保持——产品零复刻
@@ -524,8 +526,12 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
     }
     // 3.8：知识视图装配壳 + 召回 tab 数据面（跨视图互禁——跳转经桥）
     expect(existsSync(join(ROOT, 'apps/web/src/views/knowledge/KnowledgeView.tsx')), 'KnowledgeView 缺席').toBe(true)
-    expect(existsSync(join(ROOT, 'apps/web/src/views/session/RecallTab.tsx')), 'RecallTab 缺席').toBe(true)
-    expect(existsSync(join(ROOT, 'apps/web/src/views/session/recall-model.ts')), 'recall-model 缺席').toBe(true)
+    // disc-2 壳侧死面退役：RecallTab/recall-model 本体迁 @dsh-forge/project——壳零残留
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/RecallTab.tsx'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/recall-model.ts'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/ForgeEventEntries.tsx'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/DispatchToolRow.tsx'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/client-plugin/forge-event-node.ts'))).toBe(false)
   })
 
   it('Hard Rule hero 单一条件：呈现判据唯一落点 sessionZonePhase（正零才 hero），HeroEmpty 零判据零数据源', () => {

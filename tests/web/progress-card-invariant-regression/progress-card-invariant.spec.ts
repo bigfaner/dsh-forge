@@ -11,7 +11,7 @@
 // 断言-契约溯源：每条断言注 CT-GROUP-xx / INV-x（契约 =
 // .forge/docs/proposals/forge-progress-card-invariant-hardening/testing/
 // progress-card-invariant-regression/contracts/contracts.md，锚已回填实锚）。
-// 断言锚（实锚）：组卡 = [data-dswf-event-entries]（组卡根元素——ForgeEventEntries.tsx）；
+// 断言锚（实锚）：组卡 = [data-dswf-event-entries]（组卡根元素——plugins/project/ui/event-node/ForgeEventEntries.tsx）；
 // 行键 = [data-chat-node-key]（官方 chat 行节点键；组卡行键 = `forge-event-progress-<组末
 // progress seq>`——anchorSeq 物化的 DOM 投影）；人类消息行键 = 播种消息 id；
 // 滚动容器 = [data-conversation-scroll]。不锁文案、不锁 DOM 层级。

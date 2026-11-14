@@ -35,7 +35,9 @@
 import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
 // fix-13 注记（1.40）：手机远程入口注册面 + 状态注入面（buildRemoteStatusSource 族）已迁
 // @dsh-forge/project client bundle（ui/remote-entry-face.ts）——壳零残留；组件/模型源
-// = plugins/project/ui/remote-entry/（apps/web/src/views/remote/ 下仅受限单页族留壳）。
+// = plugins/project/ui/remote-entry/；壳侧 apps/web/src/views/remote/ 仅余受限单页族
+// （?forgeRemote=1 独立单页直挂——main.ts 受限入口分支为 live importer 在案，disc-2
+// 死面退役申请对该目录暂缓）。
 // 跨入口类型面豁免（web-shell pin——runtime import 互禁仅约束值面；ShellHost inject 契约类型）
 // 1.6 注记：LedgerSessionsSnapshot/SnapshotSource 类型随 sidebar 族迁 @dsh-forge/project
 // （ui/sidebar/）——壳消费（ShellHost/悬浮面板 inject 契约类型）改经包窄子路径出口直供。
