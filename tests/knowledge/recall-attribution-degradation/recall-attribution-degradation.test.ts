@@ -11,10 +11,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { TRIGGER_SNAP_MAX_CHARS } from '../../../packages/plugins/knowledge/src/service/service.js'
-import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/index.js'
-import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/service.js'
-import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/service/types.js'
+import { TRIGGER_SNAP_MAX_CHARS } from '../../../plugins/knowledge/host/service/service.js'
+import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../plugins/knowledge/host/storage/index.js'
+import { createKnowledgeService } from '../../../plugins/knowledge/host/service/service.js'
+import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/types.js'
 
 const root = mkdtempSync(join(tmpdir(), 'knowledge-j-j4-'))
 const ws = join(root, 'ws')
@@ -59,7 +59,7 @@ describe('J4-CT-03 归因落账与现派生（O-fail-soft 落账判定式/O-现�
     expect(t5[0]!.triggerSnap).toBe('第五轮的触发输入原文')
   })
   it('O-fail-soft 落账：sessionContextOf 现派生零缓存/fail-soft 双 NULL warn——由包内 recall-attribution.test.ts 承载（判定式锚：同项目跑批全绿为证据）', () => {
-    // 证据位 = packages/plugins/knowledge/src/service/recall-attribution.test.ts
+    // 证据位 = plugins/knowledge/tests/service/recall-attribution.test.ts
     //（派生失败双 NULL + warn diag 不阻断召回主链——INV-2）
     expect(true).toBe(true)
   })

@@ -9,7 +9,7 @@
 // 返回体（RpcResult 信封为全通道统一外层，不属域载荷，不录入）。
 import { KNOWLEDGE_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import type { KnowledgeChannel } from '../../../packages/contracts/src/channels.js'
-import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/index.js'
+import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/index.js'
 
 /** golden 语料（六条目 / 三域 + 根域；全部显式 updated——录制/比对确定性口径） */
 export interface GoldenCorpusEntry {

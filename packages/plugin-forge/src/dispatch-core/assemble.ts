@@ -67,7 +67,7 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   // knowledge 归并双 tool（knowledge-stage2-followups #2——用户裁决 2026-11-05「入 deny +
   // distill 专属专家放行」：归并是裁决动词，不随默认面放行——对一切 spawn worker 默认禁；
   // 唯一放行径 = 专家档案 tools 白名单（见 WORKER_EXPERT_RELEASABLE_DENY）或主会话。
-  // 工具名单源锚 = packages/plugins/knowledge/src/tools/supersede.ts / reinstate.ts
+  // 工具名单源锚 = plugins/knowledge/host/tools/supersede.ts / reinstate.ts
   //（followups #1 重命名后名——本包不反依赖插件包，字面量 + 锚注释对齐，同 validateMermaid 先例）。
   'knowledge_supersede',
   'knowledge_reinstate',

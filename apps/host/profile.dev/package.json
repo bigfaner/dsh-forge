@@ -12,7 +12,7 @@
     "@deepseek-ai/dsh-api-workspace-controller": "0.2.0-rc.2",
     "@dsh-forge/contracts": "link:../../../packages/contracts",
     "@dsh-forge/core": "link:../../../packages/core",
-    "@dsh-forge/knowledge": "link:../../../packages/plugins/knowledge",
+    "@dsh-forge/knowledge": "link:../../../plugins/knowledge",
     "@dsh-forge/md-mermaid": "link:../../../packages/plugins/md-mermaid",
     "@dsh-forge/plugin-forge": "link:../../../packages/plugin-forge",
     "@dsh-forge/expert-squad": "link:../../../plugins/expert-squad",

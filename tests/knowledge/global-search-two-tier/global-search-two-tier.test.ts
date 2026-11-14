@@ -12,10 +12,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { DiagEventPayload } from '../../../packages/contracts/src/index.js'
-import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/index.js'
-import type { KnowledgeRegistry } from '../../../packages/plugins/knowledge/src/storage/index.js'
-import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/service.js'
-import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/service/types.js'
+import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../plugins/knowledge/host/storage/index.js'
+import type { KnowledgeRegistry } from '../../../plugins/knowledge/host/storage/index.js'
+import { createKnowledgeService } from '../../../plugins/knowledge/host/service/service.js'
+import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/types.js'
 
 const roots: string[] = []
 function tmpRoot(tag: string): string {

@@ -62,13 +62,13 @@ export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = [
   '@dsh-forge/project', // 1.17 批二卸旧装新：boot 链静态 import + overlay 注行（接替 git-worktree）
 ]
 
-/** 仓库内源目录（默认平铺 packages/<short>；值 = packages/ 子居所，md-mermaid / knowledge 居 packages/plugins/；
+/** 仓库内源目录（默认平铺 packages/<short>；值 = packages/ 子居所，md-mermaid 居 packages/plugins/；
  *  值前导 '/' = 仓库根级树——project 居 plugins/project（plugin-project 1.3 起 plugins/* 根级）；
- *  expert-squad 批3：表值改载完整子路径 'plugins/expert-squad'（root 级树，link 直拼表值）。 */
+ *  expert-squad 批3 / knowledge 迁移批1.3：表值载完整子路径（root 级树，link 直拼表值）。 */
 export const PRODUCT_PLUGIN_PACKAGE_DIRS: Readonly<Record<string, string>> = {
   '@dsh-forge/md-mermaid': 'plugins',
   '@dsh-forge/expert-squad': 'plugins/expert-squad',
-  '@dsh-forge/knowledge': 'plugins',
+  '@dsh-forge/knowledge': 'plugins/knowledge',
   '@dsh-forge/project': '/plugins',
 }
 

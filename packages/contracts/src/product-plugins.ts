@@ -57,5 +57,5 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层：boot overlay presence 门注行
   // （dev 同径单源）。旧 @dsh-forge/git-worktree 域已归并本包，staged 种子随迁。
   project: { userLayerRow: false, staged: true },
-  knowledge: { userLayerRow: true },
+  knowledge: { userLayerRow: true, dir: 'plugins/knowledge' },
 }

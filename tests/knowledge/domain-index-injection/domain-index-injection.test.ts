@@ -13,19 +13,19 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { canonicalWsPath, createKnowledgeRegistry, openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/index.js'
-import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/service.js'
-import { domainTreeIndexOf } from '../../../packages/plugins/knowledge/src/service/internal.js'
-import { registerKnowledgeScopedPrompt } from '../../../packages/plugins/knowledge/src/service/session-prompt.js'
+import { canonicalWsPath, createKnowledgeRegistry, openKnowledgeDatabase } from '../../../plugins/knowledge/host/storage/index.js'
+import { createKnowledgeService } from '../../../plugins/knowledge/host/service/service.js'
+import { domainTreeIndexOf } from '../../../plugins/knowledge/host/service/internal.js'
+import { registerKnowledgeScopedPrompt } from '../../../plugins/knowledge/host/service/session-prompt.js'
 import {
   KNOWLEDGE_DOMAINS_SECTION_NAME,
   KNOWLEDGE_DOMAINS_SECTION_ORDER,
   KNOWLEDGE_SECTION_NAME,
   KNOWLEDGE_SECTION_ORDER,
   renderKnowledgeDomainsSection,
-} from '../../../packages/plugins/knowledge/src/prompt/index.js'
-import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/service/types.js'
-import type { KnowledgePromptSection, ScopedAgentFace } from '../../../packages/plugins/knowledge/src/tools/faces.js'
+} from '../../../plugins/knowledge/host/prompt/index.js'
+import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/types.js'
+import type { KnowledgePromptSection, ScopedAgentFace } from '../../../plugins/knowledge/host/tools/faces.js'
 
 // ── 夹具：双注册库真实世界（P 多顶域混合状态 / R 独立顶域集） ──
 

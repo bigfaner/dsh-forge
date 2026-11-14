@@ -24,7 +24,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['apps/web', '@dsh-forge/web'],
     ['packages/contracts', '@dsh-forge/contracts'],
     ['packages/core', '@dsh-forge/core'],
-    ['packages/plugins/knowledge', '@dsh-forge/knowledge'],
+    ['plugins/knowledge', '@dsh-forge/knowledge'],
     ['packages/path-key', '@dsh-forge/path-key'],
     // M2 3.2：第六工件 plugin-forge（tool 半身 + forge:pipeline 系统提示段）
     ['packages/plugin-forge', '@dsh-forge/plugin-forge'],
@@ -65,7 +65,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'packages/core',
         // plugin-project：project 插件包（1.3 建位——tsc -b 全拓扑入口补记）
         'plugins/project',
-        'packages/plugins/knowledge',
+        'plugins/knowledge',
         'packages/path-key',
         'packages/plugin-forge',
         'packages/plugin-forge-spec',
@@ -87,13 +87,15 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['packages/core', ['lib/db', 'lib/diag', 'lib/path', 'lib/util', 'packages/contracts']],
     // fix-33 ⑯：knowledge ../core 引用删除——build 面零 core import（残留引用无消费）；
     // 测试面 core 源相对引入由 tsconfig.test.json 承载（不经 references）
-    ['packages/plugins/knowledge', ['packages/contracts', 'packages/path-key']],
+    // knowledge 迁移批1.3：root 级 plugins/knowledge 三目录制——references 增 client 面
+    // （tsconfig.client.json，exports["./client"] 类型链）
+    ['plugins/knowledge', ['plugins/knowledge/tsconfig.client.json', 'packages/contracts', 'packages/path-key']],
     // M2 3.2：plugin-forge 同 knowledge 型（deps 仅 contracts + path-key——零 core 边）
     // plugin-project 1.7：bug tool 壳消费 lib/api——增 lib/api 引用
     ['packages/plugin-forge', ['lib/api', 'packages/contracts', 'packages/path-key', 'plugins/project']],
     // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
-    ['apps/host', ['packages/contracts', 'packages/core', 'packages/plugins/knowledge', 'plugins/project']],
+    ['apps/host', ['packages/contracts', 'packages/core', 'plugins/knowledge', 'plugins/project']],
     // 1.6：web normalize/path-key 消费改指 @dsh-forge/lib-path/path-key——增 lib/path 引用
     // 1.14 UI 迁入：add-project/bug-refs 组件本体消费 @dsh-forge/project client ui
     // 1.17 批二：git-worktree 旧包退役——web 引用面收 project 单源
@@ -217,8 +219,8 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
     'plugins/project/ui/add-project',
     'packages/core/src/db',
     'packages/core/src/forge',
-    'packages/plugins/knowledge/src/tools',
-    'packages/plugins/knowledge/src/prompt',
+    'plugins/knowledge/host/tools',
+    'plugins/knowledge/host/prompt',
     'packages/plugin-forge/src/tools',
     'packages/plugin-forge/src/prompt',
     'packages/plugin-forge-spec/src/tools',
@@ -238,7 +240,7 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
       'apps/web/vite.config.ts',
       'packages/contracts/src/index.ts',
       'packages/core/src/index.ts',
-      'packages/plugins/knowledge/src/index.ts',
+      'plugins/knowledge/host/index.ts',
       'packages/plugin-forge/src/index.ts',
       'packages/plugin-forge-spec/src/index.ts',
     ]) {

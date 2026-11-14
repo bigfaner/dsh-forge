@@ -36,8 +36,8 @@ importers:
         specifier: link:../../../plugins/expert-squad
         version: link:../../../plugins/expert-squad
       '@dsh-forge/knowledge':
-        specifier: link:../../../packages/plugins/knowledge
-        version: link:../../../packages/plugins/knowledge
+        specifier: link:../../../plugins/knowledge
+        version: link:../../../plugins/knowledge
       '@dsh-forge/md-mermaid':
         specifier: link:../../../packages/plugins/md-mermaid
         version: link:../../../packages/plugins/md-mermaid

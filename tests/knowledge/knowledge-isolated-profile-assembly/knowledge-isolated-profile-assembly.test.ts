@@ -13,14 +13,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DIAG_EVENT, type DiagEventPayload } from '../../../packages/contracts/src/index.js'
-import knowledgePlugin from '../../../packages/plugins/knowledge/src/index.js'
+import knowledgePlugin from '../../../plugins/knowledge/host/index.js'
 import type {
   KnowledgeContextFace,
   KnowledgePromptSection,
   KnowledgeToolDefinition,
-} from '../../../packages/plugins/knowledge/src/tools/index.js'
-import type { KnowledgeService } from '../../../packages/plugins/knowledge/src/service/types.js'
-import { openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/index.js'
+} from '../../../plugins/knowledge/host/tools/index.js'
+import type { KnowledgeService } from '../../../plugins/knowledge/host/service/types.js'
+import { openKnowledgeDatabase } from '../../../plugins/knowledge/host/storage/index.js'
 
 /** 'knowledge' 服务 provide 名（A2 去前缀键——index.ts KNOWLEDGE_SERVICE_NAME 同值，host 在场判定键） */
 const KNOWLEDGE_SERVICE_KEY = 'knowledge'

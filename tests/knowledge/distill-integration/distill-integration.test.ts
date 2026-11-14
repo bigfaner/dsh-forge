@@ -3,7 +3,7 @@
 // 溯源（断言-契约溯源，条目 id 注于每条断言）：
 //   .forge/docs/proposals/knowledge-stage2-write-gateway/testing/contracts/contract-distill-integration.md
 //   （CT-DI-01..12 ← journey DI-G1..G7 / DI-E1..E8）。
-// 策略：distill 整合执行循环 = agent 技能面（packages/plugins/knowledge/skills/distill/SKILL.md，
+// 策略：distill 整合执行循环 = agent 技能面（plugins/knowledge/skills/distill/SKILL.md，
 // 随包交付——提案 §2.6），循环消费的确定性基元承载于真实服务面（fix 6ca979cf——
 // 归并执行四件套经 service/supersede.ts 落码：正本回写 merged_into / 台账 actor=agent /
 // 驳回逆向 reinstateEntry / 写前 content_hash 校验中止；CT-DI-02 证据 = 真实实现能力，
@@ -17,11 +17,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseFm } from '../journey-fm.js'
 import type { DiagEventPayload } from '../../../packages/contracts/src/index.js'
-import { startSelfHostedStorage } from '../../../packages/plugins/knowledge/src/storage/start.js'
-import { rebuildKnowledgeIndex } from '../../../packages/plugins/knowledge/src/storage/rebuild.js'
-import { createKnowledgeService, findMergeSuggestions } from '../../../packages/plugins/knowledge/src/service/index.js'
-import { createWsPathResolver } from '../../../packages/plugins/knowledge/src/tools/session.js'
-import type { KnowledgeWriteQuery } from '../../../packages/plugins/knowledge/src/service/index.js'
+import { startSelfHostedStorage } from '../../../plugins/knowledge/host/storage/start.js'
+import { rebuildKnowledgeIndex } from '../../../plugins/knowledge/host/storage/rebuild.js'
+import { createKnowledgeService, findMergeSuggestions } from '../../../plugins/knowledge/host/service/index.js'
+import { createWsPathResolver } from '../../../plugins/knowledge/host/tools/session.js'
+import type { KnowledgeWriteQuery } from '../../../plugins/knowledge/host/service/index.js'
 
 // ── 夹具 ──
 

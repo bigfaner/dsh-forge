@@ -5,7 +5,7 @@
 // （host 锚；dsh 0.2.0-rc.2 栈闭包解析版本 = 4.0.4，独立版本线精确 pin——漂移即红）。
 // 我方镜像：packages/core/src/index.ts（forgeProjects provide——knowledge 域已随
 // knowledge-stage1-foundation 1.8 退役，forgeKnowledge 面移除）+
-// packages/plugins/knowledge/src/index.ts（自有 knowledge 服务 provide）。
+// plugins/knowledge/host/index.ts（自有 knowledge 服务 provide）。
 // 同型先例 WorkspaceRegistry 的 Service 基类面已由 pin-04 锚定。
 // Hard Rule：只 pin 上游公开面（cordis 导出 + 服务生命周期契约）+ 我方服务对官方面的
 // 符合性（真实 runtime 装配，非结构化桩模拟——与 2.2/3.4 产品单测的桩面互补）。
@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import corePlugin from '../../packages/core/src/index.js'
-import knowledgePlugin from '../../packages/plugins/knowledge/src/index.js'
+import knowledgePlugin from '../../plugins/knowledge/host/index.js'
 import { importUpstream, norm, readTypes, upstreamPkg } from './pins.js'
 
 /** cordis 版本线（dsh 0.2.0-rc.2 栈闭包解析版本——与 dsh 包版本线分立 pin） */

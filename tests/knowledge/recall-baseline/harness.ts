@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type Database from 'better-sqlite3'
-import { openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/open.js'
-import { createKnowledgeRegistry } from '../../../packages/plugins/knowledge/src/storage/registry.js'
-import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/service.js'
-import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/service/types.js'
+import { openKnowledgeDatabase } from '../../../plugins/knowledge/host/storage/open.js'
+import { createKnowledgeRegistry } from '../../../plugins/knowledge/host/storage/registry.js'
+import { createKnowledgeService } from '../../../plugins/knowledge/host/service/service.js'
+import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/types.js'
 
 /** 本文件所在目录（tests/knowledge/recall-baseline） */
 export const baselineDir = dirname(fileURLToPath(import.meta.url))

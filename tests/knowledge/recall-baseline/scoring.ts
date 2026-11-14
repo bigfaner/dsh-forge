@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
-import type { SearchHit } from '../../../packages/plugins/knowledge/src/service/types.js'
+import type { SearchHit } from '../../../plugins/knowledge/host/service/types.js'
 import type { BaselineMount } from './harness.js'
 
 export interface BankQuestion {
