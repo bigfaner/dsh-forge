@@ -267,6 +267,16 @@ describe('模板正本（P1–P9 + 结束族）', () => {
     }
   })
 
+  it('P8_REVIEW_COMMON 含零测试链复核条目（提案方案 3——两态共用：零测试任务时复核关键改动的测试必要性）', () => {
+    for (const mode of [true, false] as const) {
+      const text = renderEndOfLoop('finished-all', { ...payload, expertsAvailable: mode })
+      expect(text).toContain('零测试链复核')
+      expect(text).toContain('本次循环零测试任务时')
+      expect(text).toContain('复核关键改动的测试必要性')
+      expect(text).toContain('最小单元/契约覆盖而缺席')
+    }
+  })
+
   it('detectResidualPlaceholder 对 P1/P8 全部新增行零残留（非占位符尖括号零豁免）', () => {
     const lines = [
       ...renderP1(payload).split('\n').filter((line) => line.startsWith('- ')),
