@@ -327,6 +327,55 @@ describe("experts/test-runner.md 档案解析断言（forge-test-discipline-laye
     expect(exec).toContain("归本档案");
   });
 
+  it("终版收口：P0 降级分支 + 自含四缺省 + 依赖中止分支 + 收口判别式（1.19）", () => {
+    // P0：纯单元/集成项目降级分支——跳过自备与探活，直接逐套件执行
+    expect(content).toContain("降级分支（纯单元/集成项目）");
+    expect(content).toContain("跳过环境自备与探活");
+    expect(content).toContain("直接进入逐套件执行");
+    // 依赖不可运行 = 可重试中止分支：只上报诊断与建议，不装依赖不改环境
+    expect(content).toContain("依赖不可运行分支");
+    expect(content).toContain("可重试中止");
+    expect(content).toContain("只上报诊断信息与修复建议");
+    expect(content).toContain("不安装依赖、不改环境");
+    // 自含四缺省（无策略文档时按缺省执行）
+    const defaults = content.slice(content.indexOf("运行约束自含缺省"));
+    expect(defaults).toContain("缺省显式串行");
+    expect(defaults).toContain("单套件 wall-clock 上界");
+    expect(defaults).toContain("临时目录");
+    expect(defaults).toContain("在报告中声明");
+    expect(defaults).toContain("跳过台账");
+    // 三句互搏收口：收口任务判别式
+    expect(content).toContain("收口任务判别式");
+    expect(content).toContain("任务未限定范围且属回归三处之一");
+    expect(content).toContain("点名缺省 = 定向受影响面");
+  });
+
+  it("终版收口：崩溃回收 PID 边界 + flaky 处置 + 探测次序 + probe 措辞 + 简介修红路由（1.19）", () => {
+    // 崩溃回收动作边界：自拉起 PID 定点回收，禁通配杀，先回显身份，harness 宿主禁杀
+    expect(content).toContain("PID 定点回收");
+    expect(content).toContain("禁按名称/路径通配杀进程");
+    expect(content).toContain("回显目标进程身份");
+    expect(content).toContain("harness 宿主进程族一律禁杀");
+    // flaky 处置：复跑一次取证为显式例外，仍不稳定 blocked 上抛附两轮输出
+    expect(content).toContain("flaky 处置");
+    expect(content).toContain("显式例外");
+    expect(content).toContain("复跑一次取证");
+    expect(content).toContain("附两轮输出");
+    // 旅程探测次序：两处都探完再判阻断
+    expect(content).toContain("探测次序");
+    expect(content).toContain("两处都探完再判阻断");
+    // probe 措辞调和：3 次有界探测全失败即不就绪，不再追加不重启；dev 旧词统一为环境自备口径（执行序列内）
+    const seq = content.slice(content.indexOf("## 执行序列"), content.indexOf("## 执行约束"));
+    expect(seq).toContain("3 次有界探测全失败即判环境不就绪");
+    expect(seq).toContain("不再追加探测、不重启环境");
+    expect(seq).not.toContain("dev");
+    // 简介修红路由句
+    const desc = content.match(/^description:\s*(.+)$/m)![1]!;
+    expect(desc).toContain("修红不归本位");
+    expect(desc).toContain("产品侧归实现/缺陷专家");
+    expect(desc).toContain("测试侧归对应作者");
+  });
+
   it("档案正文零仓内路径引用（grep 机检；命令形态豁免）", () => {
     expect(content.indexOf("\n---", 4), "frontmatter 结束锚缺失").toBeGreaterThan(-1);
     const body = content.slice(content.indexOf("\n---", 4) + 4);
