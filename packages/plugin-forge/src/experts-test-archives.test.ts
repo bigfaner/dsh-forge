@@ -164,15 +164,35 @@ describe("experts/test-script-author.md 档案解析断言（forge-test-discipli
     }
   });
 
+  it("执行约束节增补：CI 门禁分层 + 迭代止损 3 轮（语言无关通用面）", () => {
+    const exec = content.slice(content.indexOf("## 执行约束"), content.indexOf("## 断言质量门"));
+    // 锚守卫
+    for (const anchor of ["## 执行约束", "## 断言质量门"]) {
+      expect(content.indexOf(anchor), `锚缺失：${anchor}`).toBeGreaterThan(-1);
+    }
+    // CI 门禁分层：单元/集成快反馈进 PR 门禁，e2e 慢回归进收口/发布轮
+    expect(exec).toContain("CI 门禁分层");
+    expect(exec).toContain("单元与集成测试进 PR 门禁");
+    expect(exec).toContain("快反馈");
+    expect(exec).toContain("e2e 进收口/发布轮");
+    expect(exec).toContain("慢回归");
+    expect(exec).toContain("全量 e2e 不进 PR 门禁");
+    // 迭代止损 3 轮通用面
+    expect(exec).toContain("迭代止损");
+    expect(exec).toContain("上限 3 轮");
+    expect(exec).toContain("止损上抛");
+  });
+
   it("档案改动区块零目录/命名硬编码（词表机检，命令形态豁免）", () => {
-    // 机检域 = 本次新增文本块：集成测试层行 + 断言质量门节 + 边界节新增条目
+    // 机检域 = 本次新增文本块：集成测试层行 + 执行约束节 + 断言质量门节 + 边界节新增条目
     const integrationRow = content.split(/\r?\n/).find((l) => l.startsWith("| 集成测试 |")) ?? "";
+    const execution = content.slice(content.indexOf("## 执行约束"), content.indexOf("## 断言质量门"));
     const assertionGate = content.slice(content.indexOf("## 断言质量门"), content.indexOf("## 渲染面单测边界"));
     const boundary = content.slice(content.indexOf("## 边界"));
-    const NEW_BLOCKS = [integrationRow, assertionGate, boundary];
+    const NEW_BLOCKS = [integrationRow, execution, assertionGate, boundary];
     // 锚守卫：被检节标题/行缺失时此测试必须红（防 indexOf -1 切到残段恒绿）
     expect(content.split(/\r?\n/).some((l) => l.startsWith("| 集成测试 |")), "锚缺失：| 集成测试 | 行").toBe(true);
-    for (const anchor of ["## 断言质量门", "## 渲染面单测边界", "## 边界"]) {
+    for (const anchor of ["## 执行约束", "## 断言质量门", "## 渲染面单测边界", "## 边界"]) {
       expect(content.indexOf(anchor), `锚缺失：${anchor}`).toBeGreaterThan(-1);
     }
     // 词表：具体路径与命名模式（存量布局表目录豁免不在机检域内）
