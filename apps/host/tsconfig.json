@@ -23,7 +23,7 @@
       "path": "../../packages/plugins/knowledge"
     },
     {
-      "path": "../../plugins/project"
+      "path": "../../plugins/project/tsconfig.host.json"
     }
   ]
 }

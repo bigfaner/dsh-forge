@@ -13,6 +13,6 @@
     { "path": "../contracts" },
     { "path": "../../lib/api" },
     { "path": "../path-key" },
-    { "path": "../../plugins/project" }
+    { "path": "../../plugins/project/tsconfig.host.json" }
   ]
 }

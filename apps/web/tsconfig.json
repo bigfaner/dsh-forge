@@ -35,7 +35,7 @@
       "path": "../../packages/plugins/md-mermaid"
     },
     {
-      "path": "../../plugins/project"
+      "path": "../../plugins/project/tsconfig.host.json"
     }
   ]
 }

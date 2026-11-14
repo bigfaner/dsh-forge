@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "types": ["node"],
+    "outDir": "dist",
+    "rootDir": ".",
+    "emitDeclarationOnly": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["host"],
+  "exclude": ["**/*.test.ts", "**/*.test.tsx"],
+  "references": [
+    { "path": "./tsconfig.client.json" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/core" },
+    { "path": "../../packages/path-key" },
+    { "path": "../../lib/api" },
+    { "path": "../../lib/diag" },
+    { "path": "../../lib/db" },
+    { "path": "../../lib/path" }
+  ]
+}

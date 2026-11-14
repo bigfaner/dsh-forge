@@ -90,14 +90,15 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['packages/plugins/knowledge', ['packages/contracts', 'packages/path-key']],
     // M2 3.2：plugin-forge 同 knowledge 型（deps 仅 contracts + path-key——零 core 边）
     // plugin-project 1.7：bug tool 壳消费 lib/api——增 lib/api 引用
-    ['packages/plugin-forge', ['lib/api', 'packages/contracts', 'packages/path-key', 'plugins/project']],
+    // typert 迁移 1.3：project tsconfig.json 改双 face solution 壳——composite 消费面直指 host 叶
+    ['packages/plugin-forge', ['lib/api', 'packages/contracts', 'packages/path-key', 'plugins/project/tsconfig.host.json']],
     // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
-    ['apps/host', ['packages/contracts', 'packages/core', 'packages/plugins/knowledge', 'plugins/project']],
+    ['apps/host', ['packages/contracts', 'packages/core', 'packages/plugins/knowledge', 'plugins/project/tsconfig.host.json']],
     // 1.6：web normalize/path-key 消费改指 @dsh-forge/lib-path/path-key——增 lib/path 引用
     // 1.14 UI 迁入：add-project/bug-refs 组件本体消费 @dsh-forge/project client ui
     // 1.17 批二：git-worktree 旧包退役——web 引用面收 project 单源
-    ['apps/web', ['lib/path', 'packages/contracts', 'packages/plugins/md-mermaid', 'plugins/project']],
+    ['apps/web', ['lib/path', 'packages/contracts', 'packages/plugins/md-mermaid', 'plugins/project/tsconfig.host.json']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
     const ts = readJson(join(dir, 'tsconfig.json')) as {
       compilerOptions?: { composite?: boolean }

@@ -55,7 +55,7 @@ export function exportsDistPaths(pkg) {
  * 全量审计 dist（相对 pkgDir）。requireDist=false 时 dist 缺席返回空（纯 src 测试树
  * 跳过语义）；离手门调用恒传 true——产物缺席即违规。
  */
-export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./dist"] } = {}) {
+export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./dist"], allowMissing = [] } = {}) {
   const distDir = join(pkgDir, "dist");
   const violations = [];
   if (!existsSync(distDir)) {
@@ -103,7 +103,7 @@ export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./d
   // （build 链时序），host 步只审 dist/host 面；终态全量闭包由 bundle-client 离手门 +
   // prepack + vitest 守卫兜底。
   for (const rel of exportsDistPaths(pkg)) {
-    if (exportsPrefixes.some((prefix) => rel.startsWith(prefix)) && !existsSync(join(pkgDir, rel))) {
+    if (exportsPrefixes.some((prefix) => rel.startsWith(prefix)) && !existsSync(join(pkgDir, rel)) && !allowMissing.includes(rel)) {
       violations.push(`exports 路径悬空：${rel}（package.json exports 声明的 dist 产物缺席）`);
     }
   }

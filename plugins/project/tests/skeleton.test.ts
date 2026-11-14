@@ -40,6 +40,7 @@ describe("包骨架结构（提案 §二「目录布局」三目录单包）", (
     for (const file of [
       "package.json",
       "tsconfig.json",
+      "tsconfig.host.json",
       "tsconfig.client.json",
       "scripts/bundle-host.mjs",
       "scripts/bundle-client.mjs",
@@ -50,7 +51,9 @@ describe("包骨架结构（提案 §二「目录布局」三目录单包）", (
   });
 
   it("host 编译链 = host、client 编译链 = ui（face 纯度：client 链零 host 收编，双链无 src 层）", () => {
-    const host = JSON.parse(readFileSync(resolve(pkgDir, "tsconfig.json"), "utf8")) as {
+    // host face 叶 = tsconfig.host.json（generator 工作区根规则的双 face 命名约定）；
+    // tsconfig.json 为 solution 壳（references 汇总双 face 叶）。
+    const host = JSON.parse(readFileSync(resolve(pkgDir, "tsconfig.host.json"), "utf8")) as {
       include?: string[];
       references?: { path: string }[];
     };

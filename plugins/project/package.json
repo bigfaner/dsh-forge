@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.19.26",
+  "version": "0.19.27",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -22,6 +22,14 @@
     "./client": {
       "types": "./dist/client/ui/index.d.ts",
       "default": "./dist/client.js"
+    },
+    "./typert": {
+      "types": "./dist/typert.host.d.ts",
+      "default": "./dist/typert.host.js"
+    },
+    "./remote": {
+      "types": "./dist/typert.remote-client.d.ts",
+      "default": "./dist/typert.remote-client.js"
     },
     "./client-ui": {
       "types": "./dist/client/ui/index.d.ts",
@@ -77,12 +85,19 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "platform": "web"
+      "platform": "web",
+      "external": [
+        "@deepseek-ai/dsh-api-gateway/client"
+      ]
     }
   },
   "files": [
     "dist",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "dist/typert.host.js",
+    "dist/typert.host.d.ts",
+    "dist/typert.remote-client.js",
+    "dist/typert.remote-client.d.ts"
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
