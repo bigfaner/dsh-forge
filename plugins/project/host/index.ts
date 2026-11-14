@@ -238,6 +238,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     const bugsDeps = config.bugsDeps ?? {
       resolveProjectKey: createProjectKeyResolver({
         domainDb: db,
+        coreProjects: coreProjectsOf,
         registry: (config.registry ?? defaultRegistry()) as OfficialRegistryFace | undefined,
         onDiag: (payload) => diag(`[project-bugs] ${payload.level}: ${payload.message}`),
       }),

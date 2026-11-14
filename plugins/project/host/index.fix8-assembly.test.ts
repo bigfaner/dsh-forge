@@ -8,7 +8,7 @@
 //     list={isGit:false,entries:[]} 即铁证）。真 git 仓下 list 非 empty（isGit=true）、
 //     create/delete 动词可用（WorktreeServicePort 契约补列）。
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -200,6 +200,79 @@ describe('fix-8 ② worktrees 常驻工厂进独立装配 + Port 补 create/dele
         delete(request: { projectRoot: string; path: string }): Promise<{ removed: boolean }>
       }).delete({ projectRoot: repo, path: wtPath })
       expect(removed.removed).toBe(true)
+    } finally {
+      dispose()
+    }
+  })
+})
+
+describe('b5707fe4 集成钉：core 代 projectId 经归属键解析链 bugs 读缝全链', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fix8-bugkey-'))
+
+  afterAll(() => {
+    try {
+      rmSync(home, { recursive: true, force: true })
+    } catch {
+      // db 句柄 Windows 锁文件——临时目录留盘不判失败
+    }
+  })
+
+  it('register 委托缝落 core（本库零行）→ forge.bugs registerBug/listBugs 归属键派生成功（回写归属行）', async () => {
+    process.env.DSH_HOME = home
+    const ws = join(home, 'ws')
+    mkdirSync(ws)
+    const coreId = 'core-uuid-fix8-1'
+    const ctx = gateCtx({ workspaceRegistry: fakeRegistry() })
+    const dispose = projectPlugin(ctx, {})
+    try {
+      // core 服务在場（宿主集成态模拟）：register 委托 core、core projectId = randomUUID
+      //（≠ workspace id——project-service.ts:442 实证）
+      const coreStub = {
+        registerProject: async () => ({ projectId: coreId, workspaceId: 'ws-reg-1', attachedToExisting: false }),
+        listProjects: async () => [],
+        getProject: async (id: string) =>
+          id === coreId
+            ? { id, workspaceId: 'ws-reg-1', wsPath: ws, name: 'ws', forgeDir: '', forgeDirExternal: false, worktreeDir: '', archived: false, createdAt: '', updatedAt: '' }
+            : null,
+        updateProject: async () => {
+          throw new Error('not used')
+        },
+        reconcileAtStartup: async () => ({ repaired: [], orphans: [] }),
+      }
+      ctx.reflect?.provide?.('forgeProjects', coreStub)
+      const projects = injectProjectSeam(ctx, PROJECT_SEAM_KEYS.projects, () => {
+        throw new Error('forge.projects seam missing')
+      })
+      const reg = await projects.registerProject({ workspaceDir: ws, name: 'ws', forgeDir: join(ws, '.forge') })
+      expect(reg.projectId).toBe(coreId)
+      // 本库零行实证（core 委托缝——两库零交汇前置形态）
+      const dbFile = join(home, 'forge', 'db', 'project', 'project.db')
+      const db = openDomainDb(home, { prefix: 'project', file: dbFile })
+      expect(db.repos.projects.get(coreId)).toBeUndefined()
+      db.db.close()
+      // forge.bugs 读缝：派生失败修复前 ERR_BUG_PROJECT_KEY_REQUIRED 恒红——修复后派生成功
+      const bugs = injectProjectSeam(ctx, PROJECT_SEAM_KEYS.bugs, () => {
+        throw new Error('forge.bugs seam missing')
+      })
+      const { card } = await (bugs as {
+        registerBug(input: Record<string, string>): Promise<{ card: { bugId: string; bugStatus: string } }>
+      }).registerBug({
+        projectId: coreId,
+        summary: 'core 代 projectId 可登记',
+        bugDesc: 'b5707fe4 装配集成钉',
+        triggerDesc: 'core 委托缝注册后登记',
+        expected: '登记成功',
+        actual: '修复前 ERR_BUG_PROJECT_KEY_REQUIRED',
+      })
+      expect(card.bugStatus).toBe('open')
+      // 回写归属行在库（惰性补建——后续链全绿）
+      const db2 = openDomainDb(home, { prefix: 'project', file: dbFile })
+      expect(db2.repos.projects.get(coreId)?.projectKey).toBeTruthy()
+      expect(db2.repos.workspaces.getMain(coreId)?.wsPath).toBe(ws)
+      db2.db.close()
+      // 行集读面命中登记行（修复前恒空）
+      const rows = await bugs.listBugs({ projectId: coreId })
+      expect(rows.map((r) => r.bugId)).toContain(card.bugId)
     } finally {
       dispose()
     }

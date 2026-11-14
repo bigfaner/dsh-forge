@@ -24,13 +24,19 @@
 //     降级态 ErrUnavailable）：工具面校验与状态机由 bugs 域单测 pin（service.test）——留痕 skip；
 //   - J3-B4 chip 序列化重启还原：需会话消息内 bug 引用（模型产生）——留痕 skip。
 import { createRequire } from 'node:module'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import { ROOT, closeApp, launchHost } from '../../../e2e/support/launch.js'
 import { forgeInvoke } from '../../../e2e/support/rpc.js'
 import { openOverviewDock } from '../../../e2e/support/navigation.js'
+
+// 归属键派生单源复用（lib-path deriveDirName——tests 树无 workspace dep 解析径，经插件侧
+// node_modules 显式文件路径 ESM 动态 import；与 register/解析链同函数同值）
+const { deriveDirName } = (await import(
+  join(ROOT, 'plugins', 'project', 'node_modules', '@dsh-forge', 'lib-path', 'dist', 'index.js')
+)) as { deriveDirName(workspaceDir: string): string }
 
 // ── project.db 直查面（{dshHome}/forge/db/project/project.db——台账事实注入/终态直改） ──
 const requireFromCore = createRequire(join(ROOT, 'packages', 'core', 'package.json'))
@@ -98,10 +104,13 @@ interface Boot {
   readonly projectKey: string
 }
 
-/** 冷启 + RPC 注册（项目上下文 = bugs 列表归属键；project_key = main 行 ws_path 投影现算） */
+/** 冷启 + RPC 注册（项目上下文 = bugs 列表归属键；project_key = f(ws_path) 派生真值——
+ *  归属键单源 lib-path deriveDirName，register/解析链同函数；seed 键必须同源才可投影） */
 async function bootWithProject(tag: string): Promise<Boot> {
   const root = mkdtempSync(join(tmpdir(), `dsh-j3-${tag}-fx-`))
-  const ws = join(root, 'ws')
+  // realpath 规范化（官方 registry create 经 fs.realpath canonical 化——seed 派生键与
+  // 注册产物同锚，短名/大小写漂移即键失配行集恒空）
+  const ws = realpathSync(mkdtempSync(join(root, 'ws')))
   mkdtempSync(ws)
   const userData = mkdtempSync(join(tmpdir(), `dsh-j3-${tag}-ud-`))
   const dshHome = join(userData, 'dsh-home')
@@ -112,7 +121,8 @@ async function bootWithProject(tag: string): Promise<Boot> {
     name: 'ws',
     forgeDir: join(ws, '.forge'),
   })
-  return { app: launched.app, page, dshHome, projectId: registered.projectId, projectKey: ws }
+  const projectKey = deriveDirName(ws)
+  return { app: launched.app, page, dshHome, projectId: registered.projectId, projectKey }
 }
 
 /** 打开概览 Bug 子 tab（右栏 dock → bugs 子视图） */

@@ -64,9 +64,66 @@ describe('createProjectKeyResolver：归属键真源解析链（b5707fe4）', ()
     // 惰性回写：本库行 + main 关系行在库（attachExisting 同语义——后续链全绿）
     expect(db.repos.projects.get('ws-core-1')?.projectKey).toBe(expected)
     expect(db.repos.workspaces.getMain('ws-core-1')?.wsPath).toBe('Z:\\ws\\alpha')
-    // 二次调用直读（回写生效，不重复触 registry 补建径——幂等）
+    // 二次调用直读（回写生效，不重复触锚补建径——幂等）
     await expect(resolve('ws-core-1')).resolves.toBe(expected)
     expect(db.repos.projects.list({ includeArchived: true }).filter((r) => r.id === 'ws-core-1')).toHaveLength(1)
+    db.db.close()
+  })
+
+  it('core 行真值锚：projectId = core randomUUID（≠ workspace id）经 getProject().wsPath 派生成功', async () => {
+    const db = makeDb()
+    // registry 只认 workspace id——core projectId（randomUUID）在 registry 必 MISS
+    const registry = fakeRegistry({ 'reg-ws-1': { path: 'Z:\\other', title: 'other' } })
+    const coreProjects = (): unknown => ({
+      getProject: async (id: string) =>
+        id === 'core-uuid-1'
+          ? { id, workspaceId: 'reg-ws-1', wsPath: 'Z:\\ws\\core-ws', name: 'core-ws' }
+          : null,
+    })
+    const resolve = createProjectKeyResolver({
+      domainDb: db,
+      coreProjects: coreProjects as () => undefined,
+      registry,
+    })
+    const expected = db.repos.projects.projectKeyOf('Z:\\ws\\core-ws')
+    await expect(resolve('core-uuid-1')).resolves.toBe(expected)
+    // 回写 main 关系行 workspaceId = core 行 workspaceId（关系真值保留）
+    expect(db.repos.workspaces.getMain('core-uuid-1')?.workspaceId).toBe('reg-ws-1')
+    db.db.close()
+  })
+
+  it('core 优先序：core 行命中时不触 registry（锚序 ②→③）', async () => {
+    const db = makeDb()
+    const registry = fakeRegistry({ 'core-uuid-2': { path: 'Z:\\ws\\registry-path', title: 'r' } })
+    const coreProjects = (): unknown => ({
+      getProject: async () => ({ id: 'core-uuid-2', workspaceId: 'reg-x', wsPath: 'Z:\\ws\\core-path', name: 'c' }),
+    })
+    const resolve = createProjectKeyResolver({
+      domainDb: db,
+      coreProjects: coreProjects as () => undefined,
+      registry,
+    })
+    await expect(resolve('core-uuid-2')).resolves.toBe(db.repos.projects.projectKeyOf('Z:\\ws\\core-path'))
+    expect(registry.getCalls).toEqual([])
+    db.db.close()
+  })
+
+  it('core 抛错 fail-soft → registry 锚接力；双缺 → null', async () => {
+    const db = makeDb()
+    const throwingCore = (): unknown => ({
+      getProject: async () => {
+        throw new Error('core unavailable')
+      },
+    })
+    const registry = fakeRegistry({ 'core-uuid-3': { path: 'Z:\\ws\\fallback', title: '' } })
+    const resolve = createProjectKeyResolver({
+      domainDb: db,
+      coreProjects: throwingCore as () => undefined,
+      registry,
+    })
+    await expect(resolve('core-uuid-3')).resolves.toBe(db.repos.projects.projectKeyOf('Z:\\ws\\fallback'))
+    const bothAbsent = createProjectKeyResolver({ domainDb: db, coreProjects: () => undefined, registry: fakeRegistry({}) })
+    await expect(bothAbsent('core-uuid-4')).resolves.toBeNull()
     db.db.close()
   })
 
