@@ -211,6 +211,8 @@ describe('模板正本（P1–P9 + 结束族）', () => {
     expect(text).toContain('正式代码路径不触达任何替身')
     expect(text).toContain('配套退出任务')
     expect(text).toContain('默认关闭 ≠ 边界正确')
+    expect(text).toContain('超出任务范围或提案契约的改动不上')
+    expect(text).toContain('偏差上抛主会话裁决，不就地改提案或交付')
     // 测试基线节（主会话职责——基线时点记录 + 缺席/过时按新回归上报）
     expect(text).toContain('**测试基线（主会话职责）**')
     expect(text).toContain('全量单元/集成测试')
