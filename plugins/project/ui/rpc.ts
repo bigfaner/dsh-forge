@@ -162,6 +162,41 @@ export function namespaceFaceOf(face: ForgeRemoteFace, namespace: keyof ForgeRem
   return ns as ForgeRemoteNamespaceFace
 }
 
+/** 六族 forge:* namespace 键单源（forgeFaceOf 形状校验 + apply 期 inject 边声明共用） */
+export const FORGE_REMOTE_NAMESPACES = [
+  'forgeProjects',
+  'forgeFs',
+  'forgeBugs',
+  'forgeWorktree',
+  'forgeProposals',
+  'forgeFeatures',
+] as const
+
+/**
+ * 六族 forge remote face 归一解析（apply 期 inject 子 fiber 解析缝消费——bug 145b3d3b
+ * 真根因修口）：官方 gateway client 半 rc.2 形态 = ClientRemoteService，namespace 面
+ * 物化为 remote.namespaces Map（entry {service}）+ remote.<ns> 平铺 cordis 服务，
+ * ctx.remote 顶层无六族属性——旧顶层六属性校验恒 false → face 恒 undefined（fiber
+ * 已激活、锚已发布、resolver 恒 undefined）。归一取法复用 namespaceFaceOf 三形态
+ * 回退（Map → namespaces 对象 → 顶层属性），官方 web 舞台顶层形态与 electron dev
+ * Map 形态两界同源解析；缺一族 = undefined 诚实降级。
+ */
+export function forgeFaceOf(fiberCtx: unknown): ForgeRemoteFace | undefined {
+  try {
+    const face = (fiberCtx as { remote?: unknown })['remote']
+    if (face === undefined || face === null || typeof face !== 'object') return undefined
+    const normalized: Record<string, unknown> = {}
+    for (const ns of FORGE_REMOTE_NAMESPACES) {
+      const nsFace = namespaceFaceOf(face as ForgeRemoteFace, ns)
+      if (nsFace === undefined) return undefined
+      normalized[ns] = nsFace
+    }
+    return normalized as unknown as ForgeRemoteFace
+  } catch {
+    return undefined
+  }
+}
+
 /** 方法取法（缺席/非函数 = undefined——typed unavailable 信封投影） */
 function methodOf(ns: ForgeRemoteNamespaceFace | undefined, method: string): ((...args: never[]) => unknown) | undefined {
   const fn = ns?.[method] as unknown

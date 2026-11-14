@@ -177,7 +177,7 @@ export * from './session-actions.js'
 
 import { registerOfficialSeamFaces, revokeOfficialSeamGlobals } from './official-seams.js'
 import { FORGE_REMOTE_CONTRIBUTION } from './remote.js'
-import { installForgeRemoteFace, createForgeRpcClient, type ForgeRemoteFace } from './rpc.js'
+import { createForgeRpcClient, FORGE_REMOTE_NAMESPACES, forgeFaceOf, installForgeRemoteFace } from './rpc.js'
 import { installWorktreePrefsFace, type ConfigFormsFace } from './settings-section/index.js'
 import { registerSettingsSection } from './settings-section/index.js'
 import { registerWorktreeDetailSection } from './detail-section/index.js'
@@ -232,31 +232,8 @@ export {
 // 官方缝五面（chip/overlay 双行/Bug tab 两段/@ source）随本 bundle apply 期自注册
 // （ui/official-seams.ts——装配缝归插件域，宿主只做 wiring）；inject 声明五官方服务
 // （apply 期等待合法——官方宿主五服务恒在场；缺一 = apply 不激活，即宿主形状漂移
-// fail-loud 形态）。
-// 六族 namespace 形状校验单源（apply 期子 fiber 解析缝消费）。
-const FORGE_REMOTE_NAMESPACES = [
-  'forgeProjects',
-  'forgeFs',
-  'forgeBugs',
-  'forgeWorktree',
-  'forgeProposals',
-  'forgeFeatures',
-] as const
-
-/** 六族 forge:* namespace 形状校验（全部对象在场 = face 合法；缺一/子 fiber 已拆卸 = undefined 诚实降级） */
-function forgeFaceOf(fiberCtx: unknown): ForgeRemoteFace | undefined {
-  try {
-    const face = (fiberCtx as { remote?: unknown })['remote']
-    if (face === undefined || face === null || typeof face !== 'object') return undefined
-    for (const ns of FORGE_REMOTE_NAMESPACES) {
-      const value = (face as unknown as Record<string, unknown>)[ns]
-      if (value === undefined || value === null || typeof value !== 'object') return undefined
-    }
-    return face as ForgeRemoteFace
-  } catch {
-    return undefined
-  }
-}
+// fail-loud 形态）。六族 namespace 键与形状校验单源 = ui/rpc.ts（FORGE_REMOTE_
+// NAMESPACES + forgeFaceOf——bug 145b3d3b 归一修口所在，本文件零副本）。
 
 /** 官方 layout 服务窄读（ctx.get/reflect 逐调用现查不缓存——缺席/劣形 = undefined 诚实降级） */
 function layoutFaceOf(rec: unknown): HeroLayoutFace | undefined {
