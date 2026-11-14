@@ -759,3 +759,55 @@ describe("experts/code-master.md 档案解析断言（forge-test-discipline-laye
   });
 });
 // forge-test-discipline-layering 1.21 code-master 收口断言结束
+
+describe("experts/proposal-reviewer.md 档案解析断言（forge-test-pipeline-hardening 1.1——专家体系影响面四维条件组）", () => {
+  const FILE = resolve(here, "../experts/proposal-reviewer.md");
+  const content = readFileSync(FILE, "utf-8");
+
+  it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
+    expect(parseExpertFileLike(FILE, content)).toEqual({ ok: true });
+  });
+
+  it("无裸 {{ 字面量（全文任意位置）", () => {
+    expect(content.includes("{{")).toBe(false);
+  });
+
+  it("frontmatter 键与既有档案键集一致（不引入新键）", () => {
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)![1]!;
+    const keys = fm.split(/\r?\n/).filter((l) => /^[A-Za-z]/.test(l)).map((l) => l.split(":")[0]!);
+    const REQUIRED = ["description", "name", "skills", "title", "tools"];
+    const OPTIONAL = ["model", "provider", "reasoning"];
+    for (const key of REQUIRED) {
+      expect(keys, `必填键缺失：${key}`).toContain(key);
+    }
+    expect(keys.filter((k) => !REQUIRED.includes(k) && !OPTIONAL.includes(k)), "引入了 parser 不认可的未知键").toEqual([]);
+  });
+
+  it("专家体系影响面四维条件组在案（职责矩阵互斥/简介路由/载体归属/口径闭环）", () => {
+    // 条件启用语义：条件组措辞 + 无涉档案不核对
+    expect(content).toContain("专家体系影响面核对");
+    expect(content).toContain("提案触及专家档案新增/修改时启用");
+    expect(content).toContain("无涉专家档案的提案不核对");
+    // 四维逐项锚
+    expect(content).toContain("职责矩阵");
+    expect(content).toContain("两两互斥");
+    expect(content).toContain("简介路由");
+    expect(content).toContain("做什么");
+    expect(content).toContain("不做什么");
+    expect(content).toContain("唯一命中");
+    expect(content).toContain("载体归属");
+    expect(content).toContain("自洽自含");
+    expect(content).toContain("口径闭环");
+    expect(content).toContain("跨档案判据多方一致");
+  });
+
+  it("档案正文零仓内路径引用（grep 机检）", () => {
+    expect(content.indexOf("\n---", 4), "frontmatter 结束锚缺失").toBeGreaterThan(-1);
+    const body = content.slice(content.indexOf("\n---", 4) + 4);
+    const BANNED = ["AGENTS", "docs/conventions", "docs/", "packages/", "判例 20", ".forge", "src/"];
+    for (const token of BANNED) {
+      expect(body, `档案正文含禁用引用词：${token}`).not.toContain(token);
+    }
+  });
+});
+// forge-test-pipeline-hardening 1.1 proposal-reviewer 四维条件组断言结束
