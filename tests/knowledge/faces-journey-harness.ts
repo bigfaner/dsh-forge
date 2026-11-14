@@ -9,8 +9,8 @@
 // link 缺席 + loader 行/依赖行剔除），经 DSH_FORGE_PROFILE_DIR 显式覆盖启动（paths.ts
 // 注记的 e2e/调试口）→ productPackagePresent 双探针一缺席 → knowledgePlugin 位 false
 // → 壳掌舵让位 + faces gate fail-closed（apps/web boot.ts / faces.ts 消费链）。
-// G-B 官方宿主 whileServed 形态（CT-KN-GATE / CT-U2 对称半边）在集成装配不可复现
-// （bootShell 恒发布壳缝）——faces-gate.test.ts 单测覆盖两形态纯函数，此处注记留痕。
+// 官方形态（CT-KN-GATE，fix-3 修订：bundle 在场即挂载——apply 期无条件注册）在集成装配
+// 不可复现（bootShell 恒发布壳缝）——faces-gate.test.ts 单测覆盖门控三形态，此处注记留痕。
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

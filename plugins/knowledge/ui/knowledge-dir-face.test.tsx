@@ -80,32 +80,32 @@ describe('registerKnowledgeDirSection 注册面（gate 复用 + 官方缝 + diag
       },
     }
   }
-  /** G-B 在场态 ctx（壳缝缺席 + reflect.get('knowledge') 在场——faces-gate 同款 fake） */
-  const gateOnCtx = { reflect: { get: (key: string) => (key === 'knowledge' ? {} : undefined) } }
+  /** 集成态显式关闭缝（壳缝 knowledge:false——fix-3 门控唯一 fail-closed 分支） */
+  const gateOffGlobal = { __DSH_FORGE_HOST_PLUGINS__: { knowledge: false } }
 
   it('槽键核销（AC4 只插孔纪律）：slot = project.section.knowledge-dir 逐字 + key = dswf-knowledge-dir + label/组件在行协议形状内', () => {
     const slots = fakeSlots()
-    const out = registerKnowledgeDirSection(slots, gateOnCtx)
+    const out = registerKnowledgeDirSection(slots, {})
     expect(out).toEqual({ registered: true, knowledgeEnabled: true })
     expect(slots.registered).toEqual([`project.section.knowledge-dir:${KNOWLEDGE_DIR_SECTION_KEY}`])
     expect(KNOWLEDGE_DIR_SECTION_KEY).toBe('dswf-knowledge-dir')
   })
 
-  it('gate false（双门控均缺）→ 零登记零异常（缺席路径 diag info 留痕——AC5 不静默）', () => {
+  it('gate false（集成态壳缝显式 false）→ 零登记零异常（缺席路径 diag info 留痕——AC5 不静默）', () => {
     const slots = fakeSlots()
-    const out = registerKnowledgeDirSection(slots, {})
+    const out = registerKnowledgeDirSection(slots, gateOffGlobal)
     expect(out).toEqual({ registered: false, knowledgeEnabled: false })
     expect(slots.registered).toEqual([])
   })
 
   it('slots 劣形（inject/register 缺席）→ fail-soft 不注册 + warn 留痕（缺席可观测）', () => {
-    const out = registerKnowledgeDirSection({}, gateOnCtx)
+    const out = registerKnowledgeDirSection({}, {})
     expect(out).toEqual({ registered: false, knowledgeEnabled: true })
   })
 
   it('safeRegister 降级只降本节：register 抛（同 cell 占用等）→ 不外溢炸 apply，registered=false + error 留痕', () => {
     const slots = fakeSlots(true)
-    expect(() => registerKnowledgeDirSection(slots, gateOnCtx)).not.toThrow()
+    expect(() => registerKnowledgeDirSection(slots, {})).not.toThrow()
     expect(slots.registered).toEqual([])
   })
 })

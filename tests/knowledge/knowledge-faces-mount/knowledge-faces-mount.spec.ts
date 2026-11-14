@@ -2,10 +2,11 @@
 // 契约正本：.forge/docs/proposals/knowledge-plugin-migration/testing/contracts/
 //   knowledge-faces-mount.md（CT-M1/CT-M2/CT-M3）+ shared-anchors-channels.md（A-KN-*）。
 // 断言-契约溯源逐条标注（[A-KN-n] / [CT-*]）。
-// 形态注记：本套件在 dsh-forge 集成态取证（G-A 壳缝）；G-B 官方宿主 whileServed 分支
-//（CT-M1.O4/CT-KN-GATE）集成装配不可复现（bootShell 恒发布壳缝）——纯函数两形态由
-// plugins/knowledge/ui/faces-gate.test.ts 单测覆盖；O3 单面注册降级无故障注入夹具通道，
-// 由 faces-gate.test.ts（safeRegister 降级组）单测覆盖——此处注记留痕，不伪造真机证据。
+// 形态注记：本套件在 dsh-forge 集成态取证（G-A 壳缝）；官方形态（CT-M1.O4/CT-KN-GATE，
+// fix-3 修订：bundle 在场即挂载——apply 期无条件注册）在集成装配不可复现（bootShell 恒发布
+// 壳缝）——门控三形态由 plugins/knowledge/ui/faces-gate.test.ts 单测覆盖；O3 单面注册降级
+// 无故障注入夹具通道，由 faces-gate.test.ts（safeRegister 降级组）单测覆盖——此处注记留痕，
+// 不伪造真机证据。
 import { expect, test } from '@playwright/test'
 import { join } from 'node:path'
 import { closeApp, bootWithProject, makeFacesFixture, openKnowledgePanel, errorConsoleEntries, teardownFaces, type FacesLaunch } from '../faces-journey-harness.js'

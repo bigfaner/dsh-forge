@@ -6,14 +6,19 @@
 // 1.5 增第四面：④ 项目台 keyed 'project.section.knowledge-dir'「知识库目录」只读节
 // （registerKnowledgeDirSection——gate 复用 + safeRegister 降级只降本节）。
 //
-// 门控语义（提案门控缝修正）：knowledgeGateOf 双门控取或——
-//   G-A dsh-forge 集成态：壳发布 __DSH_FORGE_HOST_PLUGINS__.knowledge（壳 bootShell 于就绪门
-//       放行前发布，apply 期同步可读）——壳缝优先读（行为等价）；
-//   G-B 官方宿主态：壳缝缺席 → whileServed 现查 ctx.reflect.get('knowledge')（AGENTS §1.6
-//       消费点现查禁 memoize——装卸序列下读数即刻翻转；键与 host KNOWLEDGE_SERVICE_NAME
-//       = 'knowledge' 源码级一致）。门控失效两故障形态均可红：fail-open（服务缺席面虚挂）、
-//       fail-closed（服务在场门恒 false）。
-// knowledge 缺席/false = 整组知识面零登记零异常；单面注册异常 = fail-soft 降级不阻宿主。
+// 门控语义（fix-3 修订——bug ad88e0f5）：knowledgeGateOf 官方形态 bundle 在场即挂载——
+//   官方形态：client bundle 在场 = 挂载态本体（官方装载协议 apply 期无条件注册，inject =
+//       ['slots','locale']；上游 fixture-live-client 正本核销；plugin remove 即移除 bundle，
+//       卸载态无需门控感知）——壳缝缺席 → 无条件 true；
+//   G-A dsh-forge 集成态：壳 bootShell 发布 __DSH_FORGE_HOST_PLUGINS__.knowledge——true
+//       → true（恒 true 路径不变）；false → false（集成态显式关闭 = 唯一 fail-closed
+//       分支——壳掌舵让位 + 零登记零异常）。
+//   G-B reflect 现查分支已删除（fix-3 裁决）：官方宿主 client isolate 里 Node 侧服务经桥
+//       到达、不经 cordis reflect——ctx.reflect.get('knowledge') 结构性恒 false（run3 真机
+//       事实），缝选错非迟到问题；fix-2 迟到补偿订阅（internal/service 事件）随之裁撤——
+//       该事件在官方宿主永不携带 Node 服务，订阅即死代码。
+// 集成态显式 false = 整组知识面零登记零异常；单面注册异常 = fail-soft 降级不阻宿主
+// （CT-M1 修订：官方形态无「服务缺席」分支，fail-soft 只保留 slots/locale 劣形降级）。
 //
 // 桥消费（fix-25 知识抽屉缝随迁）：知识面板 inject 面消费 workbench 桥（壳 apply 期经
 // createWorkbenchBridge 创建并发布页内全局 __DSH_FORGE_WORKBENCH__）——inject 期现读页内缝
@@ -43,33 +48,21 @@ export const RECALL_VIEW_ORDER = 20
 /** panellist 行登记序 */
 export const KNOWLEDGE_PANEL_ROW_ORDER = 20
 
-/** 宿主插件位门页内缝（壳 bootShell 发布；缺席 = 走 whileServed 分支） */
+/** 宿主插件位门页内缝（壳 bootShell 发布；官方宿主整体缺席） */
 interface HostPluginsSeam {
   readonly knowledge?: boolean
 }
 
-/** knowledge 服务 whileServed 现查消费切片（ctx.reflect.get('knowledge')） */
-interface KnowledgeReflectSeam {
-  readonly reflect?: { readonly get?: (key: string) => unknown }
-}
-
 /**
- * 双门控纯函数（G-A 壳缝优先读 ∪ G-B whileServed 现查）：壳缝 true = true（集成态行为
- * 等价）；壳缝缺席/false = 服务现查裁决（非 undefined 且对象形状 = 在场）。检测每调用
- * 现查禁 memoize（AGENTS §1.6——装卸序列下读数即刻翻转）；reflect 异常 = fail-closed false。
+ * 门控纯函数（fix-3 官方形态 bundle 在场即挂载）：壳缝整体缺席（官方宿主）→ true——
+ * client bundle 在场即挂载态本体，apply 期无条件注册；壳缝 knowledge:false（集成态显式
+ * 关闭）→ false——唯一 fail-closed 分支；壳缝 knowledge:true → true（恒 true 路径不变）。
+ * 纯读页内缝、无缓存、无 ctx 依赖。
  */
 export function knowledgeGateOf(
-  ctx: unknown,
   globalObject: { __DSH_FORGE_HOST_PLUGINS__?: HostPluginsSeam } = globalThis as never,
 ): boolean {
-  if (globalObject.__DSH_FORGE_HOST_PLUGINS__?.knowledge === true) return true
-  try {
-    const reflect = (ctx as KnowledgeReflectSeam | undefined)?.reflect
-    const service = typeof reflect?.get === 'function' ? reflect.get('knowledge') : undefined
-    return typeof service === 'object' && service !== null
-  } catch {
-    return false
-  }
+  return globalObject.__DSH_FORGE_HOST_PLUGINS__?.knowledge !== false
 }
 
 /** 页内桥缝读取（inject 期现查不缓存——缺席/劣形 = undefined fail-soft） */
@@ -90,17 +83,17 @@ export interface KnowledgeFacesDiagnostics {
 }
 
 /**
- * knowledge 族三面注册（apply 编排）：门控 fail-closed 在前（false = 零登记零异常）；
- * 逐面 try/catch fail-soft。桥经页内缝 inject 期现读（壳在场时联动面可用；官方宿主
- * 无壳 = 桥缺席，面板本体不依赖桥渲染）。
+ * knowledge 族三面注册（apply 编排）：门控 fail-closed 在前（集成态显式 false = 零登记
+ * 零异常）；逐面 try/catch fail-soft。桥经页内缝 inject 期现读（壳在场时联动面可用；官方
+ * 宿主无壳 = 桥缺席，面板本体不依赖桥渲染）。
  */
 export function registerKnowledgeFaces(
   slots: SectionSlotsFace,
   locale: LocaleServiceFace,
-  ctx: unknown = undefined,
+  globalObject: { __DSH_FORGE_HOST_PLUGINS__?: HostPluginsSeam } = globalThis as never,
 ): KnowledgeFacesDiagnostics {
   const registered: string[] = []
-  const knowledgeEnabled = knowledgeGateOf(ctx)
+  const knowledgeEnabled = knowledgeGateOf(globalObject)
   if (!knowledgeEnabled) return { registered, knowledgeEnabled }
   const t = locale.bind(FORGE_KNOWLEDGE_LOCALE_NS)
   const face = (name: string, registerFace: () => void): void => {
@@ -153,15 +146,15 @@ export function registerKnowledgeFaces(
  * 项目台「知识库目录」只读节注册（knowledge-plugin-migration 1.5 提案项 4——单向零写面）：
  * 官方缝 = project.section.knowledge-dir（槽名/行协议自 plugins/project/ui keyed-section.ts
  * 正本读源核销后落座——只插孔纪律；bundle 自含副本逐字 pin = mirrors-pin）。门控复用
- * knowledgeGateOf（1.4 双门控——G-A 壳缝 ∪ G-B whileServed 现查）；降级 = registerKeyedSection
- * 内 safeRegisterSection 单行守卫——异常只降本节，不阻宿主不阻其余三面；缺席路径（gate
- * false / slots 劣形 / 同 cell 占用）diag 留痕不静默（AGENTS §7）。
+ * knowledgeGateOf（fix-3 官方形态 bundle 在场即挂载——集成态显式 false 为唯一关断分支）；
+ * 降级 = registerKeyedSection 内 safeRegisterSection 单行守卫——异常只降本节，不阻宿主不阻
+ * 其余三面；缺席路径（gate false / slots 劣形 / 同 cell 占用）diag 留痕不静默（AGENTS §7）。
  */
 export function registerKnowledgeDirSection(
   slots: SectionSlotsFace,
-  ctx: unknown = undefined,
+  globalObject: { __DSH_FORGE_HOST_PLUGINS__?: HostPluginsSeam } = globalThis as never,
 ): { registered: boolean; knowledgeEnabled: boolean } {
-  const knowledgeEnabled = knowledgeGateOf(ctx)
+  const knowledgeEnabled = knowledgeGateOf(globalObject)
   if (!knowledgeEnabled) {
     console.info('[dsh-forge/knowledge] knowledge-dir section gate=false——零登记（缺席路径 diag 可观测）')
     return { registered: false, knowledgeEnabled }
@@ -189,49 +182,6 @@ function registerKnowledgeLocale(locale: LocaleServiceFace): void {
   }
 }
 
-/**
- * 迟到补偿订阅（fix-2——bug 1a3a8bd5：官方宿主 host 半 provide 晚于 client bundle apply，
- * apply 一次性执行 → gate=false 永久零登记零重试）。裁决记录：
- *   ①（首选）client inject 增声明边 'knowledge' 不可行——cordis 源码核验（fiber.ts/reflect.ts）：
- *     声明边等待同 isolate 域服务在场；而 browser client ctx 无 'knowledge' provider（host
- *     侧服务经 Node RPC 桥到达，apps/host/src/boot/bridge.ts），dsh-client-web bootClient
- *     assertEntriesActive 对 pending entry 直接 reject（web boot 整体失败）——集成态 G-A
- *     通道同被阻断，故弃。
- *   ②（采纳）apply 期 gate=false → 订阅官方 cordis `internal/service` 事件域（reflect.notify
- *     发射，语义 = 服务在场读数翻转），'knowledge' 到场一次性补注册后注销订阅；
- *     补注册前 knowledgeGateOf 现查裁决（不盲信事件名，AGENTS §1.6 检测不缓存）；服务
- *     永不到场 = 零登记零异常（CT-M1.O2 fail-closed 语义保留）。ctx.on 缺席（旧宿主/桩）
- *     = 零订阅 fail-soft。
- */
-function armKnowledgeLateArrival(ctx: unknown): void {
-  const on = (ctx as { on?: (event: string, listener: (name: string) => void) => unknown })?.on
-  if (typeof on !== 'function') return
-  let armed = true
-  try {
-    const dispose = on.call(ctx, 'internal/service', (name: string) => {
-      // 服务名过滤 + 现查双重裁决：事件名到但读数缺席（劣形值）不补注册
-      if (name !== KNOWLEDGE_SERVICE_REFLECT_KEY || !knowledgeGateOf(ctx)) return
-      armed = false
-      try {
-        if (typeof dispose === 'function') (dispose as () => void)()
-      } catch {
-        // 注销异常 = fail-soft（一次性语义由 armed 承担）
-      }
-      applyKnowledgeFaces(ctx)
-    })
-    // 立即注销形态（异常宿主返回 undefined）= 零订阅，armed 兜底保持一次性语义
-    if (typeof dispose !== 'function') armed = false
-  } catch {
-    // 订阅失败 = fail-soft 零补偿（不炸 apply，fail-closed 语义保留）
-    armed = false
-  }
-  if (!armed) return
-}
-
-/** knowledge 服务 reflect 键（与 host 半 KNOWLEDGE_SERVICE_NAME = 'knowledge' 源码级一致——
- * 不 import host 入口：client bundle 自含纪律，Node 依赖零进束） */
-const KNOWLEDGE_SERVICE_REFLECT_KEY = 'knowledge'
-
 /** faces 注册本体（gate=true 路径：词典登记 + 三面 + 项目台知识目录节） */
 function applyKnowledgeFaces(ctx: unknown): void {
     const rec = ctx as Record<string, unknown> | undefined
@@ -247,7 +197,7 @@ function applyKnowledgeFaces(ctx: unknown): void {
     }
     registerKnowledgeLocale(locale)
     try {
-      const kn = registerKnowledgeFaces(slots, locale, ctx)
+      const kn = registerKnowledgeFaces(slots, locale)
       console.info(`[dsh-forge/knowledge] knowledge faces registered=[${kn.registered.join(', ')}] enabled=${kn.knowledgeEnabled}`)
     } catch (error) {
       console.warn('[dsh-forge/knowledge] knowledge faces registration interrupted', error)
@@ -255,7 +205,7 @@ function applyKnowledgeFaces(ctx: unknown): void {
     // ④ 项目台知识目录只读节（1.5 提案项 4——project.section.knowledge-dir 官方缝；
     // 注册异常 = fail-soft 降级只降本节，缺席 diag 留痕不静默）
     try {
-      const kd = registerKnowledgeDirSection(slots, ctx)
+      const kd = registerKnowledgeDirSection(slots)
       console.info(`[dsh-forge/knowledge] knowledge-dir section registered=${kd.registered} enabled=${kd.knowledgeEnabled}`)
     } catch (error) {
       console.warn('[dsh-forge/knowledge] knowledge-dir section registration interrupted', error)
@@ -266,17 +216,17 @@ function applyKnowledgeFaces(ctx: unknown): void {
  * knowledge client face 组合插件对象（client-modules 装载契约——expert-squad 同型判例）：
  * apply 期自注册三面（fix-13 模式）。返回值铁律：必须返回 undefined（cordis 组合把返回值
  * 当 effect 消费）。inject = ['slots', 'locale']（cordis 装载契：声明边等待官方服务就绪，
- * 缺声明 = apply 期 `cannot get property` fiber FAILED）。'knowledge' 服务边不走声明边
- * （fix-2 裁决：browser ctx 无该 provider，声明边 = web boot 永久 pending 被
- * assertEntriesActive reject）——迟到补偿走 apply 期 internal/service 订阅（见上）。
+ * 缺声明 = apply 期 `cannot get property` fiber FAILED）。门控（fix-3）：官方形态 bundle
+ * 在场即挂载——壳缝缺席 = 无条件注册；集成态壳缝显式 false = 零登记零异常（唯一
+ * fail-closed 分支，无迟到补偿——fix-2 internal/service 订阅随 G-B reflect 分支一并裁撤）。
  */
 export const knowledgeClient = {
   inject: ['slots', 'locale'] as string[],
   apply(ctx: unknown): void {
-    // 门控 fail-closed 在前（CT-M1.O2：双门控均 false → 零登记零异常 + 迟到补偿订阅；diag info 留痕）
-    if (!knowledgeGateOf(ctx)) {
-      console.info('[dsh-forge/knowledge] gate=false（壳缝缺席 ∧ knowledge 服务不在场）——faces 零登记（迟到补偿订阅已武装）')
-      armKnowledgeLateArrival(ctx)
+    // 门控 fail-closed 在前（集成态壳缝 false → 零登记零异常，diag info 留痕；
+    // 官方形态壳缝缺席 → 无条件注册——bundle 在场即挂载态本体）
+    if (!knowledgeGateOf()) {
+      console.info('[dsh-forge/knowledge] gate=false（集成态壳缝 knowledge:false）——faces 零登记（壳掌舵让位同源 fail-closed）')
       return
     }
     applyKnowledgeFaces(ctx)
