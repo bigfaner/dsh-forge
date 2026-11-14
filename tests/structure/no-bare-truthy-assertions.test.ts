@@ -146,7 +146,7 @@ function scanBareWeakAssertions(): Map<string, { count: number; hits: string[] }
     const hits: string[] = []
     for (const m of src.matchAll(BARE_WEAK)) {
       const lineNo = src.slice(0, m.index).split('\n').length
-      hits.push(`  ${relative(ROOT, f).split('\\').join('/')}:${lineNo}: ${m.value}`)
+      hits.push(`  ${relative(ROOT, f).split('\\').join('/')}:${lineNo}: ${m[0]}`)
     }
     if (hits.length > 0) result.set(relative(ROOT, f).split('\\').join('/'), { count: hits.length, hits })
   }
