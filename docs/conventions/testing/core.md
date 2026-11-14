@@ -12,6 +12,7 @@ domains: [testing, conventions]
 | 层 | 工具 | vitest 项目 | 位置 | 职责与边界 |
 |---|---|---|---|---|
 | 单元测试 | vitest | `core` / `knowledge` / `plugin-forge` / `plugin-forge-spec` / `contracts` / `path-key` / `git-worktree` / `md-mermaid` / `host` / `web` | 各包源码树内 `*.test.ts(x)` | 模块契约面。web 面 SSR 直渲（`react-dom/server`）——交互回调体与 useEffect 不强行单测，归 e2e |
+| 集成测试 | vitest | 与单元同项目（include 命名命中） | 各包源码树内 `*.integration.test.ts` | 跨模块/跨包组装与接口契约：测试进程内组装真实模块（组合根在测试侧），仅进程外依赖可接口级 fake，正式装配组合根不触碰 |
 | 结构 pin | vitest | `structure` | `tests/structure/` | 机械守卫（行数上限/import 白名单/目录布局/装配纪律/打包闭包 pin）——只断言结构，不测行为 |
 | 契约测试 | vitest | `contract`（跨包 RPC 面）/ `contracts`（DTO）/ `plugin-forge-contract` | `tests/contract/` 及包内 | 跨包契约与工具 schema 面；`pnpm test:contract` 为跨包门 |
 | e2e 支撑 | vitest | `e2e-support` | `e2e/support/**` | e2e 基建单测（审计锚/readiness/replay 夹具）——随 e2e 面演化，不在 `pnpm test:contract` 门内 |
@@ -20,6 +21,13 @@ domains: [testing, conventions]
 
 - Journey 叙事与 Contract 文档落所属容器目录的 `testing/`（远征 feature 树 / 突击 `proposals/<slug>/testing/`）；测试脚本只落上表执行树，不设暂存区。
 - 新增测试一律进既有项目（vitest 项目清单 = `vitest.config.ts` projects——新增包须同步注册项目）。
+
+### 本仓 JS/TS 落位约定（具体值唯一正本）
+
+- **命名**：集成测试落模块源码树内，命名 `*.integration.test.ts`——vitest 既有项目 include 直接命中，零新增项目。
+- **独立子树升级条件（三缺一不可，同提交）**：确需独立集成子树时——①已有首用例；②本策略文档明示该子树；③vitest project 注册完成。三者齐备前一律以命名区分落源码树内。
+- **目录判读规则**：`packages/<pkg>/src/**`、`apps/*/src/**` 内的测试 = 单元或集成（按命名判层）；根级执行树（`tests/<moduleName>/<journey>/`、`e2e/specs/`）= e2e。`tests/contract/`、`tests/structure/`、`e2e/support/`、`packages/plugin-forge/e2e/` 为既有专项执行树，判层见分层模型表。
+- 本节为本仓约定，不通用——他项目以各自测试策略正本与生态规范为准（通用判据见 forge 测试链插件档案，不在本文重复）。
 
 ## 契约先行任务化流程
 
@@ -116,6 +124,8 @@ flowchart LR
 ## 执行约束
 
 - **一律 run-once，禁 `--watch`**（孤儿进程耗尽 commit 判例见 AGENTS.md §2）。
+- **精确执行（coding 期）**：改动面 = 执行面——改动哪些用例跑哪些（单元/集成定向文件或 `--project`；e2e 定位 spec 文件 + `--grep`），已绿/已 skip 用例不复跑；全量执行仅属回归面三处——test-run 收口任务、跨包重构收口、发布验收，三处之外禁全量。
+- **CI 门禁分层**：单元/集成进 PR 门禁（快反馈）；e2e 进收口/发布轮（慢回归），全量 e2e 不进 PR 门禁。
 - **单测针对性执行**：按改动定位受影响项目/文件（`npx vitest run <路径>` 或 `--project <名>`）；全局跑仅跨包重构或收口验收。
 - **快照**：行为变更随改动 `-u` 重录（如简报 compose 快照）；重录必须伴随对应行为断言更新，禁单独重录「凑绿」。
 - **环境约束**：全量套件 `VITEST_MAX_WORKERS=4`；TEMP 紧张时重定向；任何原生内存崩溃先查 commit charge 再归因（AGENTS.md §2）。
@@ -145,6 +155,7 @@ flowchart LR
 │   ├── playwright.config.ts        # testDir ./specs、并发 ≤2、globalSetup
 │   └── SMOKE-LEDGER.md             # 冒烟台账（条件跳过项唯一留痕处）
 ├── packages/<pkg>/src/**/*.test.ts         # 单元测试（vitest 项目按包名：core/knowledge/plugin-forge/…）
+│   └── 同树 `*.integration.test.ts`        # 集成测试（同项目 include 命名命中）
 ├── packages/plugin-forge/tests/contract/   # 插件工具 schema 契约（项目 plugin-forge-contract）
 ├── packages/plugin-forge/e2e/              # 派发循环回放取证（项目 plugin-forge-e2e——vitest 回放层，非 Playwright）
 ├── apps/host/src/**/*.test.ts              # host 单元（项目 host）
