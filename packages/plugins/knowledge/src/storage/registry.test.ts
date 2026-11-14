@@ -110,6 +110,45 @@ describe('project_id 列（fix-2 一级解析动态化——API 级 projectId �
   })
 })
 
+describe('findByWorktreePath（bug b979ec34：worktree 会话 cwd 路由——包含层）', () => {
+  it('cwd 在 <wsPath>/.forge/worktrees 子树 → 命中该行（projectId 承载）；任意子目录不命中', () => {
+    const ws = join(tmpRoot(), 'wt-ws')
+    const wt = join(ws, '.forge', 'worktrees', 'plugins')
+    mkdirSync(wt, { recursive: true })
+    const db = openKnowledgeDatabase(join(tmpRoot(), 'knowledge.db'))
+    try {
+      const reg = createKnowledgeRegistry(db)
+      reg.upsert(ws, join(ws, '.knowledge'), 'p-wt')
+      expect(reg.findByWorktreePath(wt)?.projectId).toBe('p-wt')
+      // 变体拼写（尾分隔符 + 更深实存子目录——realpath 归一同口径）同样命中
+      mkdirSync(join(wt, 'sub'))
+      expect(reg.findByWorktreePath(join(wt, 'sub') + '\\')?.projectId).toBe('p-wt')
+      // 保留段本身（.forge/worktrees 根）也命中
+      expect(reg.findByWorktreePath(join(ws, '.forge', 'worktrees'))?.projectId).toBe('p-wt')
+      // 非保留段子树（任意项目子目录）不命中——前缀匹配不放开
+      expect(reg.findByWorktreePath(join(ws, 'src'))).toBeUndefined()
+      // 注册行 wsPath 之外的兄弟路径不命中
+      expect(reg.findByWorktreePath(join(tmpRoot(), 'other-ws', '.forge', 'worktrees', 'x'))).toBeUndefined()
+    } finally {
+      db.close()
+    }
+  })
+
+  it('projectId 缺席的行不参与 worktree 路由（无 project_id 的种子行/全局行不误绑）', () => {
+    const ws = join(tmpRoot(), 'wt-nopid')
+    const wt = join(ws, '.forge', 'worktrees', 'feat-x')
+    mkdirSync(wt, { recursive: true })
+    const db = openKnowledgeDatabase(join(tmpRoot(), 'knowledge.db'))
+    try {
+      const reg = createKnowledgeRegistry(db)
+      reg.upsert(ws, join(ws, '.knowledge')) // 无 projectId
+      expect(reg.findByWorktreePath(wt)).toBeUndefined()
+    } finally {
+      db.close()
+    }
+  })
+})
+
 describe('registerGlobalIfAbsent（SC-1 全局库装配期自启注册——幂等 + fail-soft）', () => {
   it('首注册落行（project_id 空）+ info 埋点；再注册 = exists 幂等零重复不覆盖', () => {
     const root = tmpRoot()
