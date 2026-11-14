@@ -230,9 +230,10 @@ export {
 // 兜底，面形状校验 fail-soft），缺席 = 配置节不注册（settings-section/index.ts
 // registerSettingsSection），不炸组合；slots 为槽注册唯一必需服务（声明边，官方同型先例）。
 // 官方缝五面（chip/overlay 双行/Bug tab 两段/@ source）随本 bundle apply 期自注册
-// （ui/official-seams.ts——装配缝归插件域，宿主只做 wiring）；inject 声明五官方服务
-// （apply 期等待合法——官方宿主五服务恒在场；缺一 = apply 不激活，即宿主形状漂移
-// fail-loud 形态）。六族 namespace 键与形状校验单源 = ui/rpc.ts（FORGE_REMOTE_
+// （ui/official-seams.ts——装配缝归插件域，宿主只做 wiring）；inject 声明官方服务含
+// uiConversation（bug 2dde7c9e 候选 A——entry fiber 依赖表 Loader 级等待 + 后到补激活，
+// 官方 ui-secret-mask/ui-workflow-run 同配方先例；缺席宿主 entry 挂起 = fail-loud 形态，
+// reconcile failures 可见诊断）。六族 namespace 键与形状校验单源 = ui/rpc.ts（FORGE_REMOTE_
 // NAMESPACES + forgeFaceOf——bug 145b3d3b 归一修口所在，本文件零副本）。
 
 /** 官方 layout 服务窄读（ctx.get/reflect 逐调用现查不缓存——缺席/劣形 = undefined 诚实降级） */
@@ -264,6 +265,7 @@ export const projectClient = {
     'sessions',
     'remote',
     'locale',
+    'uiConversation',
   ] as string[],
   apply(ctx: unknown): void {
     const rec = ctx as Record<string, unknown> | undefined
@@ -370,7 +372,8 @@ export const projectClient = {
       console.warn('[dsh-forge/project] remote entry registration failed——降级不注册', error)
     }
     // 对话面工具行 + 事件折叠组三段（1.41 迁入——dispatchTask keyed 行 + 组卡渲染链；
-    // uiConversation 缺席 = 事件组全跳 fail-soft，工具行不受影响）。
+    // uiConversation = 静态 inject 边保证（bug 2dde7c9e 候选 A），缺席宿主 entry 级挂起
+    // fail-loud（reconcile failures 可见）；属性劣形 = 事件组 fail-soft 跳过，工具行不受影响）。
     try {
       const toolFaces = registerConversationToolFaces(rec as never, slots)
       console.info(`[dsh-forge/project] conversation tool faces registered=[${toolFaces.registered.join(', ')}]`)

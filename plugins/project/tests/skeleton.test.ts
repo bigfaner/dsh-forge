@@ -124,6 +124,10 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(projectClient.apply).toBeTypeOf("function");
     expect(clientApply).toBeTypeOf("function");
   });
+
+  it("client 静态 inject 边含 uiConversation（bug 2dde7c9e 候选 A——entry fiber 依赖表 Loader 级等待，官方 ui-secret-mask 同配方先例）", () => {
+    expect(projectClient.inject).toContain("uiConversation");
+  });
 });
 
 // 产物面断言（dist 构建后在场才跑——CI/本地 build 后恒在场）。

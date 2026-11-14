@@ -34,15 +34,6 @@ export const WORKTREE_SWITCH_ENTRY_ID = 'dswf-worktree-switch'
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 
-/** reflect 只读反射（缺席/异常 = undefined——fail-soft；official-seams 同配方） */
-function reflectGet(ctx: OfficialSeamCtx, name: string, strict = true): unknown {
-  try {
-    return ctx.reflect?.get(name, strict)
-  } catch {
-    return undefined
-  }
-}
-
 /** 注册面诊断（registered = 实际落座面；e2e/排障锚） */
 export interface ConversationToolFacesDiagnostics {
   readonly registered: string[]
@@ -79,12 +70,13 @@ export function registerConversationToolFaces(
   })
 
   // ② 事件折叠组三段（D2 fail-visible 诊断注入面——client 束豁免面 console.warn）。
-  // 服务缝 = ctx.inject(['uiConversation'], cb) 生命周期订阅（官方 ui-plan/ui-conversation
-  // 同径核销——服务在场激活注册、撤回随 cordis fiber 自动退；apply 时点服务后到 =
-  // 挂起补激活，不再一次性 reflectGet 错过注册窗口）；keyed body = slots 缝，与
-  // uiConversation 服务无依赖，apply 期一次登记不随服务生命周期重挂。
-  // registered 诊断 = 定义注册落座事实（服务缺席挂起期不记——e2e「registered 列表含
-  // forge-event-group」即定义注册完成的判定锚）。
+  // 服务缝 = projectClient 静态 inject 边 'uiConversation'（bug 2dde7c9e 候选 A——entry
+  // fiber 依赖表 Loader 级等待 + 后到补激活，官方 ui-secret-mask/ui-workflow-run 同配方
+  // 先例；apply 收到的 ctx 保证 uiConversation 在场）；本 face 内 ctx.inject 生命周期缝与
+  // reflect 现查兜底已退役——apply 期子 fiber 等待零诊断静默 = 官方宿主恒不注册判例。
+  // keyed body = slots 缝，与 uiConversation 服务无依赖，apply 期一次登记。
+  // registered 诊断 = 定义注册落座事实（e2e「registered 列表含 forge-event-group」即定义
+  // 注册完成的判定锚）；uiConversation 属性缺席 = 劣形宿主 fail-soft（warn 不炸装配）。
   const registerEventGroupFace = (): void => {
     setForgeEventNodeDiag((message) => console.warn(message))
     if (registerKeyedSection(slots, {
@@ -101,31 +93,14 @@ export function registerConversationToolFaces(
         return forgeEventStreamDefinition.match(event as never)
       },
     }
-    const registerEventDefinitions = (uiConversationRecord: Record<string, unknown> | undefined): void => {
-      const events = asRecord(uiConversationRecord?.['events'])
-      const registerEvents = events?.['register']
-      if (typeof registerEvents !== 'function') {
-        throw new Error('ctx.uiConversation.events.register absent（capability absence = 无节点）')
-      }
-      registerEvents.call(events, streamWithTap)
-      registerEvents.call(events, forgeEventGroupDefinition)
-      if (!registered.includes(FORGE_EVENT_NODE_KIND)) registered.push(FORGE_EVENT_NODE_KIND)
+    const events = asRecord(asRecord((ctx as OfficialSeamCtx & { uiConversation?: unknown }).uiConversation)?.['events'])
+    const registerEvents = events?.['register']
+    if (typeof registerEvents !== 'function') {
+      throw new Error('ctx.uiConversation.events.register absent（静态边缺席 = 劣形宿主 fail-soft）')
     }
-    const inject = (ctx as OfficialSeamCtx & {
-      inject?: (deps: readonly string[], cb: (scope: Record<string, unknown>) => void) => unknown
-    }).inject
-    if (typeof inject === 'function') {
-      inject.call(ctx, ['uiConversation'], (scope) => {
-        try {
-          registerEventDefinitions(asRecord(scope['uiConversation']))
-        } catch (error) {
-          console.warn(`[dsh-forge/project] conversation tool face '${FORGE_EVENT_NODE_KIND}' activation failed——降级不注册`, error)
-        }
-      })
-      return
-    }
-    // 结构劣形宿主（inject 缝缺席）：reflect 现查一次性注册路径保持（在场即注册，缺席 warn）
-    registerEventDefinitions(asRecord(reflectGet(ctx, 'uiConversation')))
+    registerEvents.call(events, streamWithTap)
+    registerEvents.call(events, forgeEventGroupDefinition)
+    registered.push(FORGE_EVENT_NODE_KIND)
   }
   try {
     registerEventGroupFace()
