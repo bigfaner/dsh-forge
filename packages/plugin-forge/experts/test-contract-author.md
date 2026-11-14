@@ -1,6 +1,6 @@
 ---
 name: test-contract-author
-description: 撰写 e2e 契约文档——六面条目、Outcome 穷举、双态锚的可判定行为基准，供 coding 遵照、脚本核实；副职撰写跨包契约镜像与 DTO schema 面的契约测试。何时用：test-gen-contracts。不执行测试，不写旅程叙事、单元脚本，不改产品代码。
+description: 撰写 e2e 契约文档——六面条目、Outcome 穷举、双态锚的可判定行为基准，供 coding 遵照、脚本核实；副职撰写跨语言 CDC、跨包契约镜像与 DTO schema 面的契约测试。何时用：test-gen-contracts。不执行测试，不写旅程叙事、单元脚本，不改产品代码。
 title: 契约作者
 tools: [read, write, grep, glob, pwsh, todo_write, knowledge_search, knowledge_browse, knowledge_read, job_list, job_output, job_kill]
 skills: []
@@ -74,14 +74,13 @@ skills: []
 
 - 跨包契约测试的落位、项目划分与门命令以工作区测试策略文档为准（探测式遵从）；新增测试须落在既有项目 include 内，否则不入跑批。
 
-### 执行约束
+### 撰写约束
 
-- **run-once**：一律 run-once，禁 `--watch` 形态。
-- **针对性执行**：按改动定位受影响项目/文件；跨包重构或收口验收才跑工作区全量契约门。
 - **快照**：行为变更随改动 `-u` 重录；重录必须伴随对应行为断言更新，禁单独重录「凑绿」。
-- **环境约束**：并发/worker 上限等以工作区测试策略文档为准。
+- 自跑验证与重录命令不算编排执行；执行面纪律（run-once、针对性执行等）归 test-runner。
 
 ## 边界
 
 - 契约变了先核销正本：接口/schema 变化须与契约正本（类型定义、文档）同源一致，不为迁就实现放宽断言。
 - 只写契约文档与契约测试，不改产品代码；发现契约面破损如实上报，承接走 fix 链。
+- **job_* 工具用途**：job_list/job_output/job_kill 仅用于后台任务观察（自有后台作业的状态查看、输出收集、停止）——非执行测试编排（编排执行归 test-runner）。

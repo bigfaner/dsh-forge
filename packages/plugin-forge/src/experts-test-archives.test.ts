@@ -488,12 +488,14 @@ describe("experts/test-journey-author.md 档案解析断言（forge-test-discipl
       expect(content.split(/\r?\n/).find((l) => l.startsWith(row)), `缺纪律行：${row}`).toBeDefined();
     }
     const table = content.slice(content.indexOf("| 纪律 |"));
-    // 校准轮：建模冲突停笔下抛；环境自备：探测与 blocked 降级；形态感知
+    // 校准轮：建模冲突停笔下抛；环境自备改撰写面：自跑验证不算编排执行 + 归 runner + 注记进 spec；形态感知
     expect(table).toContain("交互建模假设");
     expect(table).toContain("停笔下抛");
-    expect(table).toContain("探测");
-    expect(table).toContain("无从探测则 blocked 上抛");
-    expect(table).toContain("探活仅作自备后的健康检查");
+    expect(table).toContain("撰写期动作");
+    expect(table).toContain("不算编排执行");
+    expect(table).toContain("快照重录同口径");
+    expect(table).toContain("注记进 spec");
+    expect(table).toContain("归 runner");
     expect(table).toContain("环境形态分支断言");
     // 语义择行 + 锚不唯一即停
     expect(table).toContain("锚不唯一即停");
@@ -659,3 +661,64 @@ describe("test-* 四专家简介消歧断言（forge-test-discipline-layering 1.
   });
 });
 // forge-test-discipline-layering 1.15 简介消歧断言结束
+
+describe("test-* 三 author 档案收口断言（forge-test-discipline-layering 1.20）", () => {
+  const EXPERTS = resolve(here, "../experts");
+  const read = (file: string) => readFileSync(resolve(EXPERTS, file), "utf-8");
+  const descOf = (file: string) => read(file).match(/^description:\s*(.+)$/m)![1]!;
+
+  it("journey 弱断言禁令与 script 四形态措辞全集一致（同句 + 同口径锚）", () => {
+    const journey = read("test-journey-author.md");
+    const script = read("test-script-author.md");
+    const fourForms = "禁裸真值断言（对可精确断言的值只验非空/存在）；禁 OR 断言稀释（多候选取其一即过）；禁监听晚注册近恒真（断言注册先于被监听动作触发）；禁断言倒置（断言与被验证语义方向相反）";
+    expect(journey).toContain(fourForms);
+    expect(script).toContain(fourForms);
+    expect(journey).toContain("四形态与脚本作者断言质量门同口径");
+  });
+
+  it("journey 环境自备为撰写面：自跑验证不算编排执行 + 注记进 spec + 跑批面归 runner", () => {
+    const row = read("test-journey-author.md").split(/\r?\n/).find((l) => l.startsWith("| 环境自备 |"));
+    expect(row).toBeDefined();
+    for (const anchor of ["撰写期动作", "校准轮", "自跑验证不算编排执行", "快照重录同口径", "注记进 spec", "归 runner"]) {
+      expect(row!, `环境自备行缺锚：${anchor}`).toContain(anchor);
+    }
+    expect(row!, "环境自备行残留执行面措辞").not.toContain("跑批第一步");
+  });
+
+  it("contract 副职执行约束节出栏：撰写约束节保留纯撰写面，执行面归 runner；简介补跨语言/CDC 关键词", () => {
+    const content = read("test-contract-author.md");
+    expect(content).not.toContain("### 执行约束");
+    expect(content).toContain("### 撰写约束");
+    const section = content.slice(content.indexOf("### 撰写约束"), content.indexOf("## 边界"));
+    expect(section).toContain("重录必须伴随对应行为断言更新");
+    expect(section).toContain("不算编排执行");
+    expect(section).toContain("归 test-runner");
+    // 执行面条目负断言（出栏不回流）
+    expect(section).not.toContain("禁 `--watch`");
+    expect(section).not.toContain("环境约束");
+    expect(descOf("test-contract-author.md")).toContain("跨语言 CDC");
+  });
+
+  it("script 简介补集成测试关键词；边界补自跑验证/重录归属句", () => {
+    expect(descOf("test-script-author.md")).toContain("集成测试");
+    const c = read("test-script-author.md");
+    const boundary = c.slice(c.indexOf("## 边界"));
+    expect(boundary).toContain("不算编排执行");
+    expect(boundary).toContain("编排执行归 test-runner");
+  });
+
+  it("四 author 档案 job_* 工具用途注明（后台任务观察，非执行测试编排）", () => {
+    for (const file of ["test-journey-author.md", "test-contract-author.md", "test-script-author.md", "test-runner.md"]) {
+      const content = read(file);
+      const note = content.split(/\r?\n/).find((l) => l.includes("job_list/job_output/job_kill 仅用于后台任务观察"));
+      expect(note, `${file} 缺 job_* 用途注明`).toBeDefined();
+      expect(note!).toContain("后台任务观察");
+      expect(note!).toContain("job_kill");
+    }
+    for (const file of ["test-journey-author.md", "test-contract-author.md", "test-script-author.md"]) {
+      const note = read(file).split(/\r?\n/).find((l) => l.includes("job_list/job_output/job_kill 仅用于后台任务观察"))!;
+      expect(note, `${file} job_* 注明缺非编排划界`).toContain("非执行测试编排");
+    }
+  });
+});
+// forge-test-discipline-layering 1.20 三 author 档案收口断言结束
