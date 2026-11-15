@@ -33,18 +33,37 @@ import {
   useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
-} from 'react'
+} from "react";
 import {
   Button,
   IconChevronUpOutlineRegular,
   IconRightUpOutlineRegular,
   IconSparkleRegular,
   Tooltip,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import { SESSION_PROJECTION_KEYS } from '@dsh-forge/contracts'
-// 1.6 注记：账本快照窄类型随 sidebar 族迁 @dsh-forge/project（ui/sidebar/）——纯 type import
-import type { SnapshotSource, LedgerSessionRow, LedgerSessionsSnapshot } from '@dsh-forge/project/client-ui/sidebar'
-import './dispatch-events-panel.css'
+} from "@deepseek-ai/dsh-client-ui-primitives";
+// 1.13 迁包注记（self-containment 纪律——dist/client 零 @dsh-forge/* 运行期引用 + 零
+// window.dshForge）：投影键字面量镜像（原 = @dsh-forge/contracts SESSION_PROJECTION_KEYS
+// 单源；字面量漂移由 tests/ui 机检 pin 两侧同值）；账本快照窄类型改本地结构镜像
+// （原 = @dsh-forge/project client-ui/sidebar 纯 type import——迁包后零跨包依赖）。
+/** 账本快照窄类型（IWorkspaces/SessionsLedger 消费切片——结构同型镜像） */
+export interface LedgerSessionRow {
+  readonly id: string
+  readonly projectionValues?: Record<string, unknown>
+  readonly [key: string]: unknown
+}
+export interface LedgerSessionsSnapshot {
+  readonly ids: readonly string[]
+  readonly byId: Readonly<Record<string, LedgerSessionRow>>
+  readonly phase: string
+  readonly [key: string]: unknown
+}
+export interface SnapshotSource<S> {
+  getSnapshot(): S
+  subscribe(listener: () => void): () => void
+}
+/** 投影键字面量（contracts SESSION_PROJECTION_KEYS.dispatchEvents 同值镜像） */
+const SESSION_PROJECTION_KEYS_DISPATCH_EVENTS = "forge-dispatch-events";
+import "./dispatch-events-panel.css";
 
 // ─────────────────── 投影窄读（模型层） ───────────────────
 
@@ -52,7 +71,7 @@ import './dispatch-events-panel.css'
 export interface DispatchEventEntry {
   readonly sourceSlug: string
   readonly verb: string
-  readonly status: 'running' | 'completed' | 'blocked' | 'interrupted'
+  readonly status: "running" | "completed" | "blocked" | "interrupted"
   readonly taskKey?: string
   readonly taskTitle?: string
   /** 执行专家键（loop-card-task-context 字段口径——triage 处置事件携 triage-analyst；缺席 = 未用类型） */
@@ -75,55 +94,55 @@ export interface DispatchEventsView {
 
 /** 条目守卫（渲染面防御——必填面收紧校验，可选面类型错即弃行；不猜不炸） */
 export function isDispatchEventEntry(value: unknown): value is DispatchEventEntry {
-  if (typeof value !== 'object' || value === null) return false
+  if (typeof value !== "object" || value === null) return false
   const raw = value as Record<string, unknown>
-  if (typeof raw['sourceSlug'] !== 'string' || raw['sourceSlug'] === '') return false
-  if (typeof raw['verb'] !== 'string' || raw['verb'] === '') return false
-  if (raw['status'] !== 'running' && raw['status'] !== 'completed' && raw['status'] !== 'blocked' && raw['status'] !== 'interrupted') {
+  if (typeof raw["sourceSlug"] !== "string" || raw["sourceSlug"] === "") return false
+  if (typeof raw["verb"] !== "string" || raw["verb"] === "") return false
+  if (raw["status"] !== "running" && raw["status"] !== "completed" && raw["status"] !== "blocked" && raw["status"] !== "interrupted") {
     return false
   }
-  if (typeof raw['at'] !== 'number' || !Number.isFinite(raw['at'])) return false
-  if (raw['attempt'] !== undefined && (typeof raw['attempt'] !== 'number' || !Number.isInteger(raw['attempt']) || raw['attempt'] < 1)) return false
-  for (const key of ['taskKey', 'taskTitle', 'expertKey', 'workerSessionId', 'scenario', 'note'] as const) {
-    if (raw[key] !== undefined && typeof raw[key] !== 'string') return false
+  if (typeof raw["at"] !== "number" || !Number.isFinite(raw["at"])) return false
+  if (raw["attempt"] !== undefined && (typeof raw["attempt"] !== "number" || !Number.isInteger(raw["attempt"]) || raw["attempt"] < 1)) return false
+  for (const key of ["taskKey", "taskTitle", "expertKey", "workerSessionId", "scenario", "note"] as const) {
+    if (raw[key] !== undefined && typeof raw[key] !== "string") return false
   }
   return true
 }
 
 /** 投影键（contracts SESSION_PROJECTION_KEYS 单源——mobile progress.ts 同源消费） */
-export const DISPATCH_EVENTS_PROJECTION_KEY = SESSION_PROJECTION_KEYS.dispatchEvents
+export const DISPATCH_EVENTS_PROJECTION_KEY = SESSION_PROJECTION_KEYS_DISPATCH_EVENTS;
 
 /** 账本行 projectionValues 按键窄读 forge-dispatch-events 视图（键缺席/形状漂移 = undefined；bug e56d8351——调用点传映射本体，函数内按键取值） */
 export function dispatchEventsOf(values: unknown): DispatchEventsView | undefined {
-  if (typeof values !== 'object' || values === null) return undefined
+  if (typeof values !== "object" || values === null) return undefined
   const raw = values as Record<string, unknown>
   const view = raw[DISPATCH_EVENTS_PROJECTION_KEY]
-  if (typeof view !== 'object' || view === null) return undefined
+  if (typeof view !== "object" || view === null) return undefined
   const shape = view as Record<string, unknown>
-  if (!Array.isArray(shape['entries']) || typeof shape['total'] !== 'number') return undefined
-  if (shape['pending'] !== undefined && (typeof shape['pending'] !== 'number' || !Number.isFinite(shape['pending']))) return undefined
-  const entries = shape['entries'].filter(isDispatchEventEntry)
+  if (!Array.isArray(shape["entries"]) || typeof shape["total"] !== "number") return undefined
+  if (shape["pending"] !== undefined && (typeof shape["pending"] !== "number" || !Number.isFinite(shape["pending"]))) return undefined
+  const entries = shape["entries"].filter(isDispatchEventEntry)
   return {
     entries,
-    total: shape['total'],
-    ...(shape['pending'] !== undefined ? { pending: shape['pending'] as number } : {}),
+    total: shape["total"],
+    ...(shape["pending"] !== undefined ? { pending: shape["pending"] as number } : {}),
   }
 }
 
 /** 池级快照场景码（pool/pending 事件只承载统计条 pending 计数——不进任务时间线） */
-export const DISPATCH_POOL_PENDING_SCENARIO = 'pool/pending'
+export const DISPATCH_POOL_PENDING_SCENARIO = "pool/pending";
 
 /** 处置分析场景码（triage-progress-row §2.1——两发事件在列；独立聚合键空间的前缀） */
-export const DISPATCH_TRIAGE_SCENARIO = 'loop/triage'
+export const DISPATCH_TRIAGE_SCENARIO = "loop/triage";
 
 /** triage 条目判读（verb 单源——'triage' 词仅处置族事件使用；scenario 缺席旧载荷同判） */
 export function isDispatchTriageEntry(entry: DispatchEventEntry): boolean {
-  return entry.verb === 'triage'
+  return entry.verb === "triage"
 }
 
 /** triage 行 tooltip 两态文案（可跳/失败——spawn 失败行照渲去交互，提案 §2.2） */
 export function dispatchTriageTooltipOf(hasSession: boolean): string {
-  return hasSession ? '打开处置子会话' : '处置会话启动失败'
+  return hasSession ? "打开处置子会话" : "处置会话启动失败"
 }
 
 /** triage attempt 取值（bug df44fcfa：结构化载荷字段单源——禁从 note 人类文案反解；缺席/畸形 = undefined 聚合面兜底 1） */
@@ -133,31 +152,31 @@ export function dispatchTriageAttemptOf(entry: DispatchEventEntry): number | und
 
 /** 场景 minor 中文章（分组/章语义并入备注行文案——1.16 行聚合口径；键 = minor 段） */
 export const DISPATCH_EVENT_MINOR_LABELS: Readonly<Record<string, string>> = {
-  'from-scratch': '从头执行',
-  'resume-stopped': '接续执行',
-  'resume-inflight': '接续在飞',
-  new: '领取',
-  spawned: '已启动执行',
-  interrupted: '恢复中断',
-  complete: '完成',
-  'out-of-band': '直接结算',
-  'with-fix': '已带修复',
-  'auto-fixed': '已自动处理',
-  split: '已分割',
-  'wait-external': '等待外部',
-  'ask-user': '待你裁决',
-  'spawn-failed': '启动失败',
-  'worker-aborted': '执行中断',
-  halt: '连续失败',
-  'blocked-pool': '循环受阻',
-  timeout: '超时',
-  'finish-all': '全部完成',
-  stopped: '循环已停止',
-  'spawn-rate-limited': '启动限流',
-  'worker-rate-limited': '执行限流',
-  'abort-over-limit': '中止超限',
-  'landing-rejected': '结算被拒',
-}
+  "from-scratch": "从头执行",
+  "resume-stopped": "接续执行",
+  "resume-inflight": "接续在飞",
+  new: "领取",
+  spawned: "已启动执行",
+  interrupted: "恢复中断",
+  complete: "完成",
+  "out-of-band": "直接结算",
+  "with-fix": "已带修复",
+  "auto-fixed": "已自动处理",
+  split: "已分割",
+  "wait-external": "等待外部",
+  "ask-user": "待你裁决",
+  "spawn-failed": "启动失败",
+  "worker-aborted": "执行中断",
+  halt: "连续失败",
+  "blocked-pool": "循环受阻",
+  timeout: "超时",
+  "finish-all": "全部完成",
+  stopped: "循环已停止",
+  "spawn-rate-limited": "启动限流",
+  "worker-rate-limited": "执行限流",
+  "abort-over-limit": "中止超限",
+  "landing-rejected": "结算被拒",
+};
 
 /** 行标题（taskTitle 优先 → taskKey → sourceSlug 三级兜底） */
 export function dispatchEventTitleOf(entry: DispatchEventEntry): string {
@@ -167,13 +186,13 @@ export function dispatchEventTitleOf(entry: DispatchEventEntry): string {
 /** 备注行文案（「状态 · 摘要」——状态词（循环级行带「循环」标记）+ 场景章语义 + 叙述注记；全缺 = undefined 不渲染） */
 export function dispatchEventNoteOf(entry: DispatchEventEntry): string | undefined {
   const parts: string[] = [dispatchEventStatusWordOf(entry)]
-  if (entry.scenario !== undefined && entry.scenario.includes('/')) {
-    const minor = entry.scenario.slice(entry.scenario.indexOf('/') + 1)
+  if (entry.scenario !== undefined && entry.scenario.includes("/")) {
+    const minor = entry.scenario.slice(entry.scenario.indexOf("/") + 1)
     const label = DISPATCH_EVENT_MINOR_LABELS[minor]
     if (label !== undefined && label !== parts[0]) parts.push(label)
   }
   if (entry.note !== undefined) parts.push(entry.note)
-  return parts.length > 1 ? parts.join(' · ') : undefined
+  return parts.length > 1 ? parts.join(" · ") : undefined
 }
 
 /**
@@ -182,19 +201,19 @@ export function dispatchEventNoteOf(entry: DispatchEventEntry): string | undefin
  */
 export function dispatchEventDetailOf(entry: DispatchEventEntry): string | undefined {
   const parts: string[] = []
-  if (entry.scenario !== undefined && entry.scenario.includes('/')) {
-    const minor = entry.scenario.slice(entry.scenario.indexOf('/') + 1)
+  if (entry.scenario !== undefined && entry.scenario.includes("/")) {
+    const minor = entry.scenario.slice(entry.scenario.indexOf("/") + 1)
     const label = DISPATCH_EVENT_MINOR_LABELS[minor]
     if (label !== undefined) parts.push(label)
   }
   if (entry.note !== undefined) parts.push(entry.note)
-  return parts.length > 0 ? parts.join(' · ') : undefined
+  return parts.length > 0 ? parts.join(" · ") : undefined
 }
 
 /** 绝对启动时间标签（LocalDatetime——本地时区 YYYY-MM-DD HH:mm；tabular 对齐由 CSS 承担） */
 export function dispatchEventClockLabel(ts: number): string {
   const d = new Date(ts)
-  const p = (n: number): string => String(n).padStart(2, '0')
+  const p = (n: number): string => String(n).padStart(2, "0")
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
@@ -259,7 +278,7 @@ export function aggregateDispatchRowItems(entries: readonly DispatchEventEntry[]
   const triageRows: DispatchAggregatedRow[] = [...triage.values()].map((held) => ({
     entry: {
       ...held.entry,
-      status: 'running',
+      status: "running",
       taskTitle: undefined,
       ...(held.workerSessionId !== undefined ? { workerSessionId: held.workerSessionId } : { workerSessionId: undefined }),
     },
@@ -275,20 +294,20 @@ export function aggregateDispatchRows(entries: readonly DispatchEventEntry[]): r
 }
 
 /** 状态词（备注行首段 + 统计条口径——prototype「状态 · 摘要」同语；仅任务级行消费） */
-export const DISPATCH_EVENT_STATUS_WORD: Readonly<Record<DispatchEventEntry['status'], string>> = {
-  running: '执行中',
-  completed: '完成',
-  blocked: '阻塞',
-  interrupted: '已中断',
-}
+export const DISPATCH_EVENT_STATUS_WORD: Readonly<Record<DispatchEventEntry["status"], string>> = {
+  running: "执行中",
+  completed: "完成",
+  blocked: "阻塞",
+  interrupted: "已中断",
+};
 
 /** 循环级状态词（taskKey 缺席的循环级行——与任务级词表分层，一律带「循环」标记） */
-export const DISPATCH_LOOP_STATUS_WORD: Readonly<Record<DispatchEventEntry['status'], string>> = {
-  running: '循环进行中',
-  completed: '循环已结束',
-  blocked: '循环受阻',
-  interrupted: '循环已结束',
-}
+export const DISPATCH_LOOP_STATUS_WORD: Readonly<Record<DispatchEventEntry["status"], string>> = {
+  running: "循环进行中",
+  completed: "循环已结束",
+  blocked: "循环受阻",
+  interrupted: "循环已结束",
+};
 
 /** 行状态词（任务级 = 裸状态词；循环级（taskKey 缺席）= 带「循环」标记词） */
 export function dispatchEventStatusWordOf(entry: DispatchEventEntry): string {
@@ -298,18 +317,18 @@ export function dispatchEventStatusWordOf(entry: DispatchEventEntry): string {
 }
 
 /** 轨状态点色档（prototype .frow 同款：执行中 accent 带光晕 / 完成 success / 阻塞 warn / 中断与待定 caption） */
-export type DispatchEventDotTone = 'run' | 'done' | 'blk' | 'stop'
+export type DispatchEventDotTone = "run" | "done" | "blk" | "stop";
 
-export function dispatchEventDotToneOf(status: DispatchEventEntry['status']): DispatchEventDotTone {
+export function dispatchEventDotToneOf(status: DispatchEventEntry["status"]): DispatchEventDotTone {
   switch (status) {
-    case 'running':
-      return 'run'
-    case 'completed':
-      return 'done'
-    case 'blocked':
-      return 'blk'
-    case 'interrupted':
-      return 'stop'
+    case "running":
+      return "run"
+    case "completed":
+      return "done"
+    case "blocked":
+      return "blk"
+    case "interrupted":
+      return "stop"
   }
 }
 
@@ -322,7 +341,7 @@ export interface DispatchEventStats {
 }
 
 export function dispatchEventStats(entries: readonly DispatchEventEntry[]): DispatchEventStats {
-  const latest = new Map<string, DispatchEventEntry['status']>()
+  const latest = new Map<string, DispatchEventEntry["status"]>()
   for (const entry of entries) {
     if (entry.taskKey === undefined) continue
     if (isDispatchTriageEntry(entry)) continue // triage 条目不入统计（triage-progress-row §2.2）
@@ -337,14 +356,14 @@ export function dispatchEventStats(entries: readonly DispatchEventEntry[]): Disp
 
 /** 循环实例启动标记（循环级 startup 事件——回放配对圈定起点；用户裁决 2026-10-28） */
 export function isLoopInstanceStartEntry(entry: DispatchEventEntry): boolean {
-  return entry.taskKey === undefined && entry.verb === 'startup'
+  return entry.taskKey === undefined && entry.verb === "startup"
 }
 
 /** 循环实例终局标记（循环级结算/停止事件——settle/stop/halt/timeout 动词族） */
 export function isLoopInstanceEndEntry(entry: DispatchEventEntry): boolean {
   return (
     entry.taskKey === undefined &&
-    (entry.verb === 'settle' || entry.verb === 'stop' || entry.verb === 'halt' || entry.verb === 'timeout')
+    (entry.verb === "settle" || entry.verb === "stop" || entry.verb === "halt" || entry.verb === "timeout")
   )
 }
 
@@ -406,7 +425,7 @@ export interface DispatchProgressLogSnapshot {
 }
 
 /** 空回放快照（progressLog 缺席的稳定参照——useSyncExternalStore 快照稳定性纪律） */
-export const EMPTY_PROGRESS_LOG: DispatchProgressLogSnapshot = { entries: [] }
+export const EMPTY_PROGRESS_LOG: DispatchProgressLogSnapshot = { entries: [] };
 
 /**
  * 面板小球口径（R-Q3 投影汇总——与展开面板统计同源）：任务行聚合数（每任务键最新态）
@@ -420,21 +439,21 @@ export function dispatchPanelTaskCountOf(entries: readonly DispatchEventEntry[],
 // ─────────────────── 几何（锚定/拖移/两态——DispatchPanel 判例同径） ───────────────────
 
 /** 面板宽（fix bug 570fa4e2 刻度 480 承袭——长 title/摘要不换行挤压的宽度保障） */
-export const DEP_WIDTH = 480
+export const DEP_WIDTH = 480;
 /** 折叠悬浮球定宽（CSS 同值单源——{completed}/{total} 双数字加宽刻度；右上锚右对齐不随计数漂移） */
-export const DEP_BADGE_WIDTH = 68
+export const DEP_BADGE_WIDTH = 68;
 /** 默认折叠（悬浮球态不遮挡对话内容——fix bug 570fa4e2 判例承袭） */
-export const DEP_DEFAULT_COLLAPSED = true
+export const DEP_DEFAULT_COLLAPSED = true;
 /** 对话列右缘间距 */
-export const DEP_RIGHT_GAP = 16
+export const DEP_RIGHT_GAP = 16;
 /** 页签行下间距 */
-export const DEP_TOP_GAP = 8
+export const DEP_TOP_GAP = 8;
 /** 拖移视口边距 */
-export const DEP_DRAG_MARGIN = 4
+export const DEP_DRAG_MARGIN = 4;
 /** 拖移纵向钳制预留高（顶出视口后头仍可再拖回） */
-export const DEP_DRAG_KEEP_HEIGHT = 34
+export const DEP_DRAG_KEEP_HEIGHT = 34;
 /** 悬浮球点击斜差（按下→抬起位移 ≤ 3px 判点击，超出判拖移） */
-export const DEP_BADGE_CLICK_SLOP = 3
+export const DEP_BADGE_CLICK_SLOP = 3;
 
 /** 面板几何（fixed 定位 left/top——锚定与拖移同一坐标系） */
 export interface DispatchPanelGeometry {
@@ -451,9 +470,9 @@ export interface DispatchAnchorRects {
 }
 
 /** 对话区真盒锚（官方 chat 台账滚动面——DispatchPanel 同锚） */
-export const DEP_CONV_SELECTOR = '[data-conversation-scroll]'
+export const DEP_CONV_SELECTOR = "[data-conversation-scroll]";
 /** 官方页签行选择器（blank 会话不渲染） */
-export const DEP_TABS_SELECTOR = '[data-conversation-tabs]'
+export const DEP_TABS_SELECTOR = "[data-conversation-tabs]";
 
 /** 锚定 DOM 窄面（生产 = document + window 适配；测试 = 假 dom 直喂） */
 export interface DispatchAnchorDom {
@@ -569,7 +588,7 @@ export function dispatchRowSessionOf(
   if (entry.workerSessionId !== undefined) return entry.workerSessionId
   if (entry.taskKey === undefined) return undefined
   const resolved = resolvedWorker?.get(entry.taskKey)
-  return resolved === '' || resolved === undefined ? undefined : resolved
+  return resolved === "" || resolved === undefined ? undefined : resolved
 }
 
 /**
@@ -600,7 +619,7 @@ function DispatchEventRowView({
   const duration =
     entry.taskKey === undefined
       ? undefined
-      : entry.status === 'running'
+      : entry.status === "running"
         ? dispatchEventDurationLabel(row.startAt, now)
         : entry.at - row.startAt >= 1000
           ? dispatchEventDurationLabel(row.startAt, entry.at)
@@ -627,13 +646,13 @@ function DispatchEventRowView({
         className={`dswf-dep-row dswf-dep-${tone}`}
         data-dswf-dep-row={session}
         data-dswf-dep-status={entry.status}
-        {...(entry.status === 'running' ? { 'data-dswf-dep-running': '' } : {})}
-        {...(open !== undefined ? { role: 'button', tabIndex: 0, onClick: open } : {})}
+        {...(entry.status === "running" ? { "data-dswf-dep-running": "" } : {})}
+        {...(open !== undefined ? { role: "button", tabIndex: 0, onClick: open } : {})}
         onKeyDown={
           open === undefined
             ? undefined
             : (event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
+                if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault()
                   open()
                 }
@@ -681,7 +700,7 @@ function DispatchEventRowView({
 
 /** 跟随键（纯函数——当前执行中任务身份；无执行中行 = undefined 不触发滚动跟随） */
 export function dispatchFollowKeyOf(rows: readonly DispatchAggregatedRow[]): string | undefined {
-  const running = rows.find((row) => row.entry.status === 'running')
+  const running = rows.find((row) => row.entry.status === "running")
   return running === undefined ? undefined : (running.entry.taskKey ?? running.entry.verb)
 }
 
@@ -706,7 +725,7 @@ function DispatchEventList({
   useEffect(() => {
     const list = listRef.current
     if (list === null) return
-    const target = list.querySelector<HTMLElement>('[data-dswf-dep-running]')
+    const target = list.querySelector<HTMLElement>("[data-dswf-dep-running]")
     if (target === null) return // 无执行中行 = 不滚动
     // 执行中行滚入视口中部（getBoundingClientRect 差值换算列表内坐标——不依赖 offsetParent）
     const listRect = list.getBoundingClientRect()
@@ -769,7 +788,7 @@ export function DispatchEventsPanelBody({
     <div
       className="dswf-dep"
       data-dswf-dep=""
-      {...(dragged ? { 'data-dswf-dep-dragged': '' } : {})}
+      {...(dragged ? { "data-dswf-dep-dragged": "" } : {})}
       style={{ left: geometry.left, top: geometry.top }}
       role="complementary"
       aria-label="任务进度"
@@ -829,14 +848,14 @@ export interface DispatchEventsPanelProps {
 }
 
 /** 账本缺席快照（undefined 源的稳定 SSR 参照——useSyncExternalStore 快照稳定性纪律） */
-const EMPTY_SNAPSHOT: LedgerSessionsSnapshot = { ids: [], byId: {}, phase: 'pending' }
+const EMPTY_SNAPSHOT: LedgerSessionsSnapshot = { ids: [], byId: {}, phase: "pending" };
 
 /** 拖移会话快照（起点指针 + 起点几何 + 拖移对象） */
 interface DragSession {
   readonly x: number
   readonly y: number
   readonly start: DispatchPanelGeometry
-  readonly kind: 'head' | 'badge'
+  readonly kind: "head" | "badge"
 }
 
 /**
@@ -888,11 +907,11 @@ function useDepAnchor(active: boolean): DispatchPanelGeometry | null {
       }
     }
     retry()
-    window.addEventListener('resize', recompute)
+    window.addEventListener("resize", recompute)
     return () => {
       disposed = true
       window.cancelAnimationFrame(raf)
-      window.removeEventListener('resize', recompute)
+      window.removeEventListener("resize", recompute)
       mo?.disconnect()
       observer?.disconnect()
     }
@@ -957,11 +976,11 @@ export function DispatchEventsPanel(props: DispatchEventsPanelProps): ReactNode 
       void resolver(props.sessionId, entry.taskKey)
         .then((childId) => {
           if (cancelled) return
-          setResolvedWorker((prev) => (prev.has(entry.taskKey as string) ? prev : new Map(prev).set(entry.taskKey as string, childId ?? '')))
+          setResolvedWorker((prev) => (prev.has(entry.taskKey as string) ? prev : new Map(prev).set(entry.taskKey as string, childId ?? "")))
         })
         .catch(() => {
           if (cancelled) return
-          setResolvedWorker((prev) => (prev.has(entry.taskKey as string) ? prev : new Map(prev).set(entry.taskKey as string, '')))
+          setResolvedWorker((prev) => (prev.has(entry.taskKey as string) ? prev : new Map(prev).set(entry.taskKey as string, "")))
         })
     }
     return () => {
@@ -982,7 +1001,7 @@ export function DispatchEventsPanel(props: DispatchEventsPanelProps): ReactNode 
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>): void => {
     const target = event.target as HTMLElement
-    const badgeHit = target.closest('[data-dswf-dep-badge]')
+    const badgeHit = target.closest("[data-dswf-dep-badge]")
     if (badgeHit !== null) {
       ;(badgeHit as HTMLElement).setPointerCapture(event.pointerId)
       badgeMovedRef.current = false
@@ -990,21 +1009,21 @@ export function DispatchEventsPanel(props: DispatchEventsPanelProps): ReactNode 
         x: event.clientX,
         y: event.clientY,
         start: dispatchPanelBadgeGeometry(badgePos, dispatchPanelBadgeAnchor(anchor)),
-        kind: 'badge',
+        kind: "badge",
       }
       return
     }
-    if (target.closest('button') !== null) return // 折叠钮命中不劫持
-    if (target.closest('[data-dswf-dep-head]') === null) return // 仅头可拖（行点击归行）
+    if (target.closest("button") !== null) return // 折叠钮命中不劫持
+    if (target.closest("[data-dswf-dep-head]") === null) return // 仅头可拖（行点击归行）
     event.currentTarget.setPointerCapture(event.pointerId)
-    dragRef.current = { x: event.clientX, y: event.clientY, start: geometry, kind: 'head' }
+    dragRef.current = { x: event.clientX, y: event.clientY, start: geometry, kind: "head" }
   }
   const handlePointerMove = (event: ReactPointerEvent<HTMLElement>): void => {
     const drag = dragRef.current
     if (drag === null || (event.buttons & 1) === 0) return
     const point = { x: event.clientX, y: event.clientY }
     const next = dispatchEventsDragPosition(drag.start, drag, point, { width: window.innerWidth, height: window.innerHeight })
-    if (drag.kind === 'badge') {
+    if (drag.kind === "badge") {
       if (!dispatchBadgePointerIsClick(drag, point)) {
         badgeMovedRef.current = true
         setBadgePos(next)

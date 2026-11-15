@@ -12,11 +12,11 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
-const src = readFileSync(join(ROOT, 'apps/web/src/views/session/DispatchEventsPanel.tsx'), 'utf8')
+const src = readFileSync(join(ROOT, 'plugins/task-loop/ui/dispatch-events-panel/DispatchEventsPanel.tsx'), 'utf8')
 
 describe('D33 残差①：锚源 = 真盒官方锚（槽宿主零盒退役）', () => {
   it('DEP_CONV_SELECTOR = [data-conversation-scroll]（官方 chat 台账真盒锚——brand.css/fix-38 台账先例）', () => {
-    expect(src).toContain("export const DEP_CONV_SELECTOR = '[data-conversation-scroll]'")
+    expect(src).toContain('export const DEP_CONV_SELECTOR = "[data-conversation-scroll]"')
   })
   it('display:contents 零盒槽宿主不再作锚源（renderer ANCHOR_STYLE → rect 恒零——pin ⑮-4）', () => {
     expect(src).not.toContain(`'[data-slot="main.conversation"]'`)

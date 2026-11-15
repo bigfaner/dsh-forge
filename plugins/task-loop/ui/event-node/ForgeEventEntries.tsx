@@ -8,8 +8,8 @@
 // 组头（场景徽记 + 条数 + 时间范围 + 展开/收起）。默认展开 = 最新组；任务进度卡
 // （progress 在场）默认展开——打开会话即见任务轨；纯消息组前组默认收起（人类插话 =
 // 分组锚点——发射判定在节点定义面，组件纯呈现零 RPC）。
-import { useEffect, useRef, useState } from 'react'
-import { DisclosureRow } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useEffect, useRef, useState } from "react";
+import { DisclosureRow } from "@deepseek-ai/dsh-client-ui-primitives";
 import {
   forgeEventBadgeTone,
   forgeEventClock,
@@ -23,9 +23,9 @@ import {
   isForgeEventGroupData,
   type ForgeEventGroupData,
   type ForgeProgressRowData,
-} from './forge-event-data.js'
-import { dispatchEventDurationLabel } from './dispatch-duration.js'
-import './forge-event-entries.css'
+} from "./forge-event-data.js";
+import { dispatchEventDurationLabel } from "./dispatch-duration.js";
+import "./forge-event-entries.css";
 
 /** 官方节点座 props 消费切片（ForgeProgressNode 同型——node.kind/data 窄读） */
 export interface ForgeEventEntriesProps {
@@ -46,13 +46,13 @@ export function forgeEventGroupSummary(data: ForgeEventGroupData): string {
       ? `· ${forgeEventClock(first.time)}–${forgeEventClock(last.time)}`
       : first !== undefined
         ? `· ${forgeEventClock(first.time)}`
-        : ''
+        : ""
   return `forge · 任务循环事件（${count}）${range}`
 }
 
 /** 进度行耗时标签（终态 = 结束−开始；执行中 = 过程未定不呈现——实时计时器面接管，面板同口径） */
 export function forgeProgressDurationLabel(row: ForgeProgressRowData): string | undefined {
-  if (row.entry.status === 'running') return undefined
+  if (row.entry.status === "running") return undefined
   return row.endAt - row.startAt >= 1000 ? dispatchEventDurationLabel(row.startAt, row.endAt) : undefined
 }
 
@@ -71,7 +71,7 @@ function ForgeRunningDuration({ startAt }: { startAt: number }) {
 
 /** 'forge-event-group' 折叠条目组节点（形状漂移/他形 = null——官方流零残留） */
 export function ForgeEventEntries({ node }: ForgeEventEntriesProps) {
-  if (node?.kind !== 'forge-event-group' || !isForgeEventGroupData(node.data)) return null
+  if (node?.kind !== "forge-event-group" || !isForgeEventGroupData(node.data)) return null
   return <ForgeEventGroupBlock data={node.data} />
 }
 
@@ -80,21 +80,21 @@ function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
   const statusWord = forgeProgressStatusWord(row.entry)
   const duration = forgeProgressDurationLabel(row)
   // loop-card-task-context：任务行 #N 弱化前缀（N = taskKey 尾段）；循环级行（taskKey 缺席）不渲染
-  const localId = row.entry.taskKey !== undefined ? (row.entry.taskKey.split('/').at(-1) ?? '') : undefined
+  const localId = row.entry.taskKey !== undefined ? (row.entry.taskKey.split("/").at(-1) ?? "") : undefined
   // triage 处置行（triage-progress-row §2.2——verb 限定，同 taskKey 与任务行不撞）：`#N [处置]`
   // 紧凑徽标区分处置轨（语义归徽记不进文本流——bug 35571877 行语言同裁决）
-  const isTriage = row.entry.verb === 'triage'
+  const isTriage = row.entry.verb === "triage"
   return (
     <li className="dswf-event-entries-item dswf-event-entries-progress" data-dswf-progress-status={row.entry.status}>
       <span className="dswf-event-entries-text">
-        {localId !== undefined && localId !== '' ? <span className="dswf-event-entries-num">#{localId}</span> : null}
+        {localId !== undefined && localId !== "" ? <span className="dswf-event-entries-num">#{localId}</span> : null}
         {isTriage ? <span className="dswf-event-entries-triage-flag">处置</span> : null}
         <b>{row.entry.taskTitle ?? row.entry.taskKey}</b>
         {/* 重试计数等 note 随进度事件持久（bug 33728995③——组卡从投影/会话日志重建后仍可见） */}
-        {row.entry.note !== undefined ? ` · ${row.entry.note}` : ''}
+        {row.entry.note !== undefined ? ` · ${row.entry.note}` : ""}
       </span>
       {/* 执行专家键（标题与状态徽标之间；旧事件无字段 = 不显示） */}
-      {row.entry.expertKey !== undefined && row.entry.expertKey !== '' ? (
+      {row.entry.expertKey !== undefined && row.entry.expertKey !== "" ? (
         <span className="dswf-event-entries-time">{row.entry.expertKey}</span>
       ) : null}
       <span className="dswf-event-entries-badge" data-tone={forgeProgressStatusTone(row.entry.status)}>
@@ -103,9 +103,9 @@ function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
       <span className="dswf-event-entries-side">
         <span className="dswf-event-entries-time">{forgeEventClockSeconds(row.startAt)}</span>
         <span className="dswf-event-entries-time">
-          {row.entry.status === 'running' ? '—' : forgeEventClockSeconds(row.endAt)}
+          {row.entry.status === "running" ? "—" : forgeEventClockSeconds(row.endAt)}
         </span>
-        {row.entry.status === 'running' ? (
+        {row.entry.status === "running" ? (
           <ForgeRunningDuration startAt={row.startAt} />
         ) : duration !== undefined ? (
           <span className="dswf-event-entries-duration">{duration}</span>
@@ -117,11 +117,11 @@ function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
 
 /** 条目行 detail（§2.5 渲染层去重——summary 段命中 title 字面时剥掉该段，数据面不动） */
 export function forgeEventEntryDetail(entry: { readonly title: string; readonly summary: string }): string {
-  if (entry.title === '' || entry.summary === '') return entry.summary
+  if (entry.title === "" || entry.summary === "") return entry.summary
   return entry.summary
-    .split(' · ')
+    .split(" · ")
     .filter((seg) => seg !== entry.title)
-    .join(' · ')
+    .join(" · ")
 }
 
 /** 循环级单行（无 taskKey 事件收敛最新态——循环级状态词 + 备注，零耗时） */
@@ -132,7 +132,7 @@ function ForgeLoopRowView({ row }: { row: ForgeProgressRowData }) {
       <span className="dswf-event-entries-badge dswf-event-entries-loop-badge">循环</span>
       <span className="dswf-event-entries-text">
         {statusWord}
-        {row.entry.note !== undefined ? ` · ${row.entry.note}` : ''}
+        {row.entry.note !== undefined ? ` · ${row.entry.note}` : ""}
       </span>
       <span className="dswf-event-entries-side">
         <span className="dswf-event-entries-time">{forgeEventClockSeconds(row.entry.at)}</span>
@@ -142,7 +142,7 @@ function ForgeLoopRowView({ row }: { row: ForgeProgressRowData }) {
 }
 
 /** 官方贴底容差（dsh-client-ui-chat useScrollFollow(state.followingTail, 25)——nearBottom 同源判据） */
-export const FORGE_TAIL_TOLERANCE_PX = 25
+export const FORGE_TAIL_TOLERANCE_PX = 25;
 
 /**
  * 贴底跟随保持缝（§2.6 D3 单轨——组卡增高后补一发落底）。
@@ -157,14 +157,14 @@ export const FORGE_TAIL_TOLERANCE_PX = 25
  * @returns 解绑器（组件卸载断开观察）
  */
 export function forgeEventTailKeepEffect(root: Element | null): () => void {
-  if (root === null || typeof ResizeObserver === 'undefined') return () => {}
+  if (root === null || typeof ResizeObserver === "undefined") return () => {}
   let lastHeight = root.getBoundingClientRect().height
   const observer = new ResizeObserver(() => {
     const height = root.getBoundingClientRect().height
     const grew = height - lastHeight
     lastHeight = height
     if (grew <= 0) return
-    const scrollport = root.closest('[data-conversation-scroll]')
+    const scrollport = root.closest("[data-conversation-scroll]")
     if (scrollport === null) return
     const preGrowDistance = scrollport.scrollHeight - scrollport.scrollTop - scrollport.clientHeight - grew
     if (preGrowDistance > FORGE_TAIL_TOLERANCE_PX) return
@@ -190,13 +190,13 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
   const taskRows = rows.filter((row) => row.entry.taskKey !== undefined)
   // 循环重开防误导：循环级最新态 running 时，上一轮终态/受阻消息条目不呈现（含组头来源
   // 提取——居首的上一轮「循环结束」任务源行不再把终态尾饰带进组头）
-  const loopRunning = loopRow !== undefined && loopRow.entry.status === 'running'
+  const loopRunning = loopRow !== undefined && loopRow.entry.status === "running"
   const visibleEntries = forgeEventVisibleEntries(data.entries, loopRunning)
   // 组头信息结构（prototype evt-head 同位）：`[forge·调度] {source}` + 右贴计数
   // `N 条 · 今日 HH:mm–HH:mm`（计数经自包裹层绝对定位——官方 DisclosureRow 无尾部
   // 插槽，零 fork）；来源缺席回落旧摘要串（计数并入标题，不叠贴）
   const source = forgeEventGroupSource(visibleEntries, data.progress)
-  const title = source !== '' ? `[forge·调度] ${source}` : forgeEventGroupSummary(data)
+  const title = source !== "" ? `[forge·调度] ${source}` : forgeEventGroupSummary(data)
   // 头计数（进度卡口径）：任务行数 + 进度起止范围（首 startAt–末 endAt）；无 progress 回落条目窗口
   const count =
     taskRows.length > 0
@@ -204,7 +204,7 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
       : `${visibleEntries.length} 条 · ${forgeEventGroupCount(visibleEntries)}`
   return (
     <div ref={rootRef} className="dswf-event-entries" data-dswf-event-entries="" data-latest={data.isLatest || undefined}>
-      {source !== '' ? (
+      {source !== "" ? (
         <span className="dswf-event-entries-head-meta" aria-hidden="true">
           {/* 折叠态运行提示：循环进行中且组收起时，计数左侧补运行胶囊（展开态循环行已示，不重复） */}
           {loopRunning && !open ? <span className="dswf-event-entries-running-flag">循环进行中</span> : null}
@@ -236,10 +236,10 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
             return (
               <li className="dswf-event-entries-item dswf-event-entries-entry" key={entry.id}>
                 <span className="dswf-event-entries-text dswf-event-entries-msg-text">
-                  {entry.title !== '' ? <b>{entry.title}</b> : null}
-                  {detail !== '' ? <span className="dswf-event-entries-msg-detail">{detail}</span> : null}
+                  {entry.title !== "" ? <b>{entry.title}</b> : null}
+                  {detail !== "" ? <span className="dswf-event-entries-msg-detail">{detail}</span> : null}
                 </span>
-                {entry.badge !== '' ? (
+                {entry.badge !== "" ? (
                   <span className="dswf-event-entries-badge" data-tone={forgeEventBadgeTone(entry.badge)}>
                     {entry.badge}
                   </span>

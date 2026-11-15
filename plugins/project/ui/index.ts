@@ -157,21 +157,22 @@ export * from './rpc.js'
 export * from './remote-entry-face.js'
 export * from './remote-entry/remote-status.js'
 
-// ── 对话面工具行 + 事件折叠组（1.41 注册面自壳侧迁入；详见 conversation-views-face.ts）──
+// ── 对话面注册面（1.13 迁移退役：dispatchTask 工具行 + 事件折叠组三段迁 @dsh-forge/task-loop
+//    （ui/conversation-views-face.ts + ui/event-node/ + ui/dispatch-tool-row/）；本包只余
+//    worktree 切换闸标记行 ③；progress 回放录取面留本包（client-ui/event-tap 窄子路径出口）──
 export * from './conversation-views-face.js'
-export * from './event-node/forge-event-node.js'
 export * from './event-node/progress-log-tap.js'
 
 // ── 领域无关小件承载副本（apps/web src/components 同源镜像——迁移面渲染依赖）──
 export * from './components.js'
 
-// ── dock tab 族（1.45 注册面自壳侧迁入——概览/文档两键两段注册；组件本体 =
-//    ./dock-tabs/（OverviewTab 抽屉族 + docs + 装配体），编排面 = ./session-actions.ts
-//    + ./open-session.ts；壳侧消费面经 client-ui/dock-tabs、client-ui/session-actions、
+// ── dock tab 族（1.13 迁移退役：overview/doc 两键注册面随六组件迁批迁 @dsh-forge/task-loop
+//    （ui/dock-tabs-face.ts——组件族本体留本包：TaskDrawer/文档数据面壳侧仍消费；
+//    bug-tab + proposal-tab/feature-tab 归 project 域）。编排面 = ./session-actions.ts +
+//    ./open-session.ts；壳侧消费面经 client-ui/dock-tabs、client-ui/session-actions、
 //    client-ui/open-session 窄子路径出口。open-session 不经本出口 star-export——
 //    bug-refs/reference-mirrors 同名镜像面（ComposerInputFace/TokenSpanMirror 等）会
 //    造成 star-export 歧义，消费面一律走窄子路径）──
-export * from './dock-tabs-face.js'
 export * from './session-actions.js'
 
 
@@ -190,7 +191,6 @@ import { registerSidebarFace } from './sidebar-face.js'
 import { registerHeroPickerFace } from './hero-picker-face.js'
 import { registerHeroPanelFace } from './hero-panel-face.js'
 import { startHeroEmptySelfDrive, type HeroLayoutFace } from './hero-panel-drive.js'
-import { registerDockTabsFace } from './dock-tabs-face.js'
 import type { LocaleServiceFace } from './locale.js'
 
 // ── keyed section 扩展点 + 配置节双缝（1.16：tab keyed 占用者模式泛化 + settings 节
@@ -391,20 +391,9 @@ export const projectClient = {
     }
     // knowledge 族三面已随迁 knowledge 插件 bundle 自注册（knowledge-plugin-migration
     // 1.4——faces.ts apply 期自注册 + knowledgeGateOf 双门控；本包注册行退役，杜绝双写源）。
-    // dock tab 族（1.45 迁入——sidebarRightTabs 两类型 + sidebar.right.pane.tab 两 keyed
-    // body；sidebarRightTabs/sessions/uiWorkspace/workspaces 服务经 ctx.get 现查，桥经
-    // 页内缝 inject 期现读；逐面 try/catch fail-soft）。
-    try {
-      const locale = (rec?.['locale'] as LocaleServiceFace | undefined) ?? undefined
-      if (locale !== undefined && typeof locale.bind === 'function') {
-        const dock = registerDockTabsFace(rec as never, slots, locale)
-        console.info(`[dsh-forge/project] dock tab faces registered=[${dock.registered.join(', ')}]`)
-      } else {
-        console.warn('[dsh-forge/project] ctx.locale absent; dock tab faces not mounted')
-      }
-    } catch (error) {
-      console.warn('[dsh-forge/project] dock tab faces registration interrupted', error)
-    }
+    // dock tab 族（1.13 迁移退役：overview/doc 两键注册面迁 @dsh-forge/task-loop
+    // bundle（ui/dock-tabs-face.ts）——本包 apply 零 dock 登记（bug tab 两段仍归
+    // official-seams.ts ④，注册归属不变）。
     // sidebar.workspaces 顶替（1.6 迁入——B 类顶替①：官方 WorkspaceBrowser 整段替换，
     // 负优先级恒选胜语义 audit §6；项目列表五功能复刻，数据源 = forge.projects Typert；
     // sessions/workspaces/uiWorkspace 服务经 ctx.get 现查，缺席 = 不注册官方保持）。

@@ -65,6 +65,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'packages/core',
         // plugin-project：project 插件包（1.3 建位——tsc -b 全拓扑入口补记）
         'plugins/project',
+        // plugin-task-loop 1.5 包骨架入拓扑（引用面随包建位补记——1.13 欠账校正）
+        'plugins/task-loop',
         'plugins/knowledge',
         'packages/path-key',
         'packages/plugin-forge',

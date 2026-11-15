@@ -159,7 +159,8 @@ const TOOLTIP_FILES = [
   'plugins/project/ui/dock-tabs/overview/task-tab/list-view.tsx',
   'plugins/project/ui/dock-tabs/overview/task-tab/swimlane-view.tsx',
   'plugins/project/ui/dock-tabs/overview/task-tab/task-tab.tsx',
-  'apps/web/src/views/session/DispatchEventsPanel.tsx',
+  // 1.13 迁移退役：面板正本迁 @dsh-forge/task-loop（ui/dispatch-events-panel/）——Tooltip 采纳锚改指迁地面
+  'plugins/task-loop/ui/dispatch-events-panel/DispatchEventsPanel.tsx',
   // disc-2 壳侧死面退役：RecallTab 本体迁 @dsh-forge/knowledge（ui/RecallTab.tsx）——扫描路径随迁
   'plugins/knowledge/ui/RecallTab.tsx',
   // 1.6：面板本体迁 @dsh-forge/project（ui/sidebar/）——扫描路径随迁
@@ -188,7 +189,8 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   // 官方 Rows 行标题文本 prop ×2（ForgeWorkspacePanel 项目行名称；ForgeEventEntries
   // 'forge/progress' 折叠行单行摘要 title——标题文本非悬浮提示位；
   // DispatchEventsPanel 任务轨行面已由 ForgeEventEntries 折叠组替代——计数随现状收敛）
-  DisclosureRow: 2,
+  // 1.13 迁移退役：ForgeEventEntries 折叠组随迁 task-loop——DisclosureRow title 位余 ForgeWorkspacePanel 项目行 1 位
+  DisclosureRow: 1,
   // 抽屉分块折叠头标题 ×2（任务内容/时间线——drawer/index）
   DrawerSection: 2,
   // 自绘 dialog 头标题 prop（fix-19 ⑥——标题文本非悬浮提示位）
@@ -231,7 +233,7 @@ describe('D30 自绘面原生 title= 清零（官方 Tooltip 件对齐——结�
 
   it.each(TOOLTIP_FILES)('官方 Tooltip 采纳锚：%s（import + portal 逃逸在场）', (rel) => {
     const src = readFileSync(join(ROOT, rel), 'utf8')
-    expect(src, `${rel} 缺 Tooltip import`).toContain(`from '@deepseek-ai/dsh-client-ui-primitives'`)
+    expect(src, `${rel} 缺 Tooltip import`).toMatch(/from ["']@deepseek-ai\/dsh-client-ui-primitives["']/)
     expect(src, `${rel} 缺 Tooltip 采纳`).toContain('Tooltip')
     expect(src, `${rel} 气泡未 portal 逃逸（滚动裁剪/transform/层叠容器统一 portal）`).toContain('portal')
   })

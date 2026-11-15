@@ -114,7 +114,7 @@ describe('派发任务悬浮面板宿主（m3.1 D5/D6：会话视图 + 双锚齐
   it('⟞ 开面 props 在场不炸渲染（装载/几何/DOM 锚定归 e2e——useSessionTaskPills 数据链自持）', () => {
     const bridge = createWorkbenchBridge(noopNav)
     const markup = renderToStaticMarkup(
-      createElement(ForgeShellHost, { bridge, onOpenWorkerSession: () => {} }),
+      createElement(ForgeShellHost, { bridge }),
     )
     expect(markup).toContain('data-dswf-workbench') // 装配面不炸（数据经 hook 效应装载）
   })

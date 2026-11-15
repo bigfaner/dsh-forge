@@ -38,19 +38,19 @@
 // runtime 消费者）。
 
 /** forge 事件径消息的 source kind 集合（faces.ts 铸造三值——GUI 折叠判别单源） */
-export const FORGE_EVENT_SOURCE_KINDS: readonly string[] = ['forge-dispatch', 'forge-loop', 'dispatch-loop-settled']
+export const FORGE_EVENT_SOURCE_KINDS: readonly string[] = ["forge-dispatch", "forge-loop", "dispatch-loop-settled"];
 
 /** 组块 Chat 节点 kind（= conversation.chat.node keyed 槽 dispatch 键） */
-export const FORGE_EVENT_NODE_KIND = 'forge-event-group'
+export const FORGE_EVENT_NODE_KIND = "forge-event-group";
 /** 状态机 Context kind（reader.previous 查找键——两定义同源字符串） */
-export const FORGE_EVENT_STREAM_KIND = 'forge-event-stream'
+export const FORGE_EVENT_STREAM_KIND = "forge-event-stream";
 /** 官方 Chat 节点 keyed 槽（progress-node 同名洞） */
-export const FORGE_EVENT_NODE_SLOT = 'conversation.chat.node'
+export const FORGE_EVENT_NODE_SLOT = "conversation.chat.node";
 /** 官方 Chat 目标键（forgeEventGroupDefinition.target 与 previousStateOf 窄读同源） */
-const CHAT_TARGET = 'chat'
+const CHAT_TARGET = "chat";
 
 /** 'forge/progress' 会话事件类型键（plugin-forge FORGE_PROGRESS_EVENT_TYPE 字面量镜像——零跨包 import） */
-export const FORGE_PROGRESS_EVENT_TYPE = 'forge/progress'
+export const FORGE_PROGRESS_EVENT_TYPE = "forge/progress";
 
 /**
  * 诊断发射注入面（D2 fail-visible——AGENTS §7 可观测性纪律）：本模块纯模块零 import
@@ -58,7 +58,7 @@ export const FORGE_PROGRESS_EVENT_TYPE = 'forge/progress'
  * deps.warn——client 束属 diagnostic-emit-discipline 豁免面，注入的 warn 即合规诊断
  * 通道）；缺席 = fail-soft 静默（调用点现查在场性，不缓存判定）。
  */
-let forgeEventNodeWarn: ((message: string) => void) | undefined
+let forgeEventNodeWarn: ((message: string) => void) | undefined;
 
 /** 装配缝注入诊断通道（plugin.ts registerEventEntriesNode 调用；传 undefined 摘除） */
 export function setForgeEventNodeDiag(warn: ((message: string) => void) | undefined): void {
@@ -70,7 +70,7 @@ function forgeEventNodeDiag(message: string): void {
   forgeEventNodeWarn?.(message)
 }
 /** progress 组块节点 Context id 前缀（与消息 id 命名空间隔离——1.17 'forge-progress-<seq>' 避撞） */
-export const FORGE_EVENT_PROGRESS_ID_PREFIX = 'forge-event-progress-'
+export const FORGE_EVENT_PROGRESS_ID_PREFIX = "forge-event-progress-";
 
 /** 组内单条事件条目（消息文本解析产物——徽记/任务/摘要 + 原文整段） */
 export interface ForgeEventEntry {
@@ -130,7 +130,7 @@ export interface ForgeEventStreamState {
 }
 
 /** 空模型（fold 单元恒等值） */
-export const EMPTY_FORGE_EVENT_STREAM: ForgeEventStreamState = { groups: [], closed: true }
+export const EMPTY_FORGE_EVENT_STREAM: ForgeEventStreamState = { groups: [], closed: true };
 
 /** 事件消费切片（官方 SessionEvent 结构镜像：type/seq/time/data） */
 export interface ForgeMessageEventLike {
@@ -166,52 +166,52 @@ interface ForgeMessageDataLike {
 }
 
 function isForgeSource(source: unknown): boolean {
-  if (typeof source !== 'object' || source === null) return false
+  if (typeof source !== "object" || source === null) return false
   return FORGE_EVENT_SOURCE_KINDS.includes((source as { kind?: unknown }).kind as string)
 }
 
 /** 消息文本（content 首个 text block——官方 ContentBlock 窄读） */
 function messageText(data: ForgeMessageDataLike): string {
   const content = data.content
-  if (!Array.isArray(content)) return ''
+  if (!Array.isArray(content)) return ""
   for (const block of content) {
-    if (typeof block === 'object' && block !== null && (block as { type?: unknown }).type === 'text') {
+    if (typeof block === "object" && block !== null && (block as { type?: unknown }).type === "text") {
       const text = (block as { text?: unknown }).text
-      if (typeof text === 'string') return text
+      if (typeof text === "string") return text
     }
   }
-  return ''
+  return ""
 }
 
 /** 场景章（首行 `[forge·X]` 徽记词；缺省空串） */
 export function forgeEventBadge(text: string): string {
-  return /^\[forge·([^\]]+)\]/.exec(text)?.[1] ?? ''
+  return /^\[forge·([^\]]+)\]/.exec(text)?.[1] ?? ""
 }
 
 /** 任务标题（`任务: `/`任务源: ` 行值——首个命中；缺省空串） */
 export function forgeEventTitle(text: string): string {
   for (const rawLine of text.split('\n')) {
     const line = rawLine.trim()
-    for (const key of ['任务: ', '任务源: ']) {
+    for (const key of ["任务: ", "任务源: "]) {
       if (line.startsWith(key)) return line.slice(key.length).trim()
     }
   }
-  return ''
+  return ""
 }
 
 /** 单条消息 → 条目（文本解析 + summary headline 回退首行剥徽记；畸形消息保底原样） */
 function entryOf(event: ForgeMessageEventLike, data: ForgeMessageDataLike): ForgeEventEntry {
   const text = messageText(data)
-  const firstLine = text.split('\n')[0] ?? ''
+  const firstLine = text.split('\n')[0] ?? ""
   const summaryRaw = (data.source as { summary?: unknown } | undefined)?.summary
   const summary =
-    typeof summaryRaw === 'string' && summaryRaw !== ''
+    typeof summaryRaw === "string" && summaryRaw !== ""
       ? summaryRaw
-      : firstLine.replace(/^\[forge·[^\]]+\]\s*/, '')
+      : firstLine.replace(/^\[forge·[^\]]+\]\s*/, "")
   return {
     id: String(data.id),
     seq: event.seq,
-    time: typeof event.time === 'number' ? event.time : 0,
+    time: typeof event.time === "number" ? event.time : 0,
     badge: forgeEventBadge(text),
     title: forgeEventTitle(text),
     summary,
@@ -221,32 +221,32 @@ function entryOf(event: ForgeMessageEventLike, data: ForgeMessageDataLike): Forg
 
 /** 可选字符串位窄收（非空串才收——载荷缺位/畸形 = undefined 不猜） */
 function optionalString(value: unknown): string | undefined {
-  return typeof value === 'string' && value !== '' ? value : undefined
+  return typeof value === "string" && value !== "" ? value : undefined
 }
 
 /** 可选正整数位窄收（attempt 处置序号——载荷缺位/畸形 = undefined 不猜） */
 function optionalAttempt(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : undefined
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 ? value : undefined
 }
 
 /** 'forge/progress' 载荷 → 组内条目（窄收守卫——必填位缺失/畸形 = undefined 弃事件，fold 原态返回） */
 function progressEntryOf(event: ForgeMessageEventLike, data: unknown): ForgeProgressEntry | undefined {
-  if (typeof data !== 'object' || data === null) return undefined
+  if (typeof data !== "object" || data === null) return undefined
   const raw = data as Record<string, unknown>
-  if (typeof raw['sourceSlug'] !== 'string' || raw['sourceSlug'] === '') return undefined
-  if (typeof raw['at'] !== 'number' || !Number.isFinite(raw['at'])) return undefined
+  if (typeof raw["sourceSlug"] !== "string" || raw["sourceSlug"] === "") return undefined
+  if (typeof raw["at"] !== "number" || !Number.isFinite(raw["at"])) return undefined
   return {
     seq: event.seq,
-    sourceSlug: raw['sourceSlug'],
-    status: optionalString(raw['status']) ?? '',
-    verb: optionalString(raw['verb']) ?? '',
-    taskKey: optionalString(raw['taskKey']),
-    taskTitle: optionalString(raw['taskTitle']),
-    expertKey: optionalString(raw['expertKey']),
-    scenario: optionalString(raw['scenario']),
-    note: optionalString(raw['note']),
-    ...(optionalAttempt(raw['attempt']) !== undefined ? { attempt: optionalAttempt(raw['attempt']) } : {}),
-    at: raw['at'],
+    sourceSlug: raw["sourceSlug"],
+    status: optionalString(raw["status"]) ?? "",
+    verb: optionalString(raw["verb"]) ?? "",
+    taskKey: optionalString(raw["taskKey"]),
+    taskTitle: optionalString(raw["taskTitle"]),
+    expertKey: optionalString(raw["expertKey"]),
+    scenario: optionalString(raw["scenario"]),
+    note: optionalString(raw["note"]),
+    ...(optionalAttempt(raw["attempt"]) !== undefined ? { attempt: optionalAttempt(raw["attempt"]) } : {}),
+    at: raw["at"],
   }
 }
 
@@ -285,9 +285,9 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
       ],
     }
   }
-  if (event?.type !== 'user/message') return state
+  if (event?.type !== "user/message") return state
   const data = event.data as ForgeMessageDataLike | undefined
-  const id = data !== undefined && typeof data.id === 'string' && data.id !== '' ? data.id : undefined
+  const id = data !== undefined && typeof data.id === "string" && data.id !== "" ? data.id : undefined
   if (data === undefined || id === undefined) return state
   const source = data.source
   if (isForgeSource(source)) {
@@ -310,7 +310,7 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
       groups: [...state.groups, { key: id, firstSeq: entry.seq, lastSeq: entry.seq, entries: [entry] }],
     }
   }
-  if ((source as { kind?: unknown } | undefined)?.kind === 'user') {
+  if ((source as { kind?: unknown } | undefined)?.kind === "user") {
     // 人类插话 = 分组锚点：下一枚 forge 事件开新组（前组保留——条目不删）
     return { ...state, closed: true }
   }
@@ -326,18 +326,18 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
  */
 export const forgeEventStreamDefinition = {
   kind: FORGE_EVENT_STREAM_KIND,
-  match: (event: ForgeMessageEventLike): { id: string; role: 'start' } | null =>
-    event !== undefined && (event.type === 'user/message' || event.type === FORGE_PROGRESS_EVENT_TYPE)
-      ? { id: 'stream', role: 'start' }
+  match: (event: ForgeMessageEventLike): { id: string; role: "start" } | null =>
+    event !== undefined && (event.type === "user/message" || event.type === FORGE_PROGRESS_EVENT_TYPE)
+      ? { id: "stream", role: "start" }
       : null,
   start: (_context: unknown, match: { event: ForgeMessageEventLike }, reader: ForgeStreamReader): ForgeEventStreamState => {
     const base = reader?.previous?.(FORGE_EVENT_STREAM_KIND)?.state
-    return foldForgeEventMessage(typeof base === 'object' && base !== null ? (base as ForgeEventStreamState) : EMPTY_FORGE_EVENT_STREAM, match.event)
+    return foldForgeEventMessage(typeof base === "object" && base !== null ? (base as ForgeEventStreamState) : EMPTY_FORGE_EVENT_STREAM, match.event)
   },
   update: (context: { state: ForgeEventStreamState }, match: { event: ForgeMessageEventLike }): ForgeEventStreamState =>
     foldForgeEventMessage(context.state, match.event),
-  publication: (): 'none' => 'none',
-}
+  publication: (): "none" => "none",
+};
 
 /** 组块节点定义状态（发射判定 + 组模型快照——start 时点经 reader 窄读 stream 即时求值） */
 export interface ForgeEventGroupNodeState {
@@ -353,9 +353,9 @@ export interface ForgeEventGroupNodeState {
 
 /** stream 状态消费窄读（形状防御——他形不猜） */
 function streamStateOf(value: unknown): ForgeEventStreamState | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
+  if (typeof value !== "object" || value === null) return undefined
   const raw = value as { groups?: unknown; closed?: unknown }
-  if (!Array.isArray(raw.groups) || typeof raw.closed !== 'boolean') return undefined
+  if (!Array.isArray(raw.groups) || typeof raw.closed !== "boolean") return undefined
   return value as ForgeEventStreamState
 }
 
@@ -395,17 +395,17 @@ export function forgeEventGroupAnchorSeq(group: ForgeEventGroup): number {
  * 一块、位置恒锚组尾（anchorSeq = 组末成员真实 seq，每帧重导出——D3）。
  */
 export const forgeEventGroupDefinition = {
-  kind: 'forge-event-group-view',
-  target: 'chat',
-  match: (event: ForgeMessageEventLike): { id: string; role: 'start' } | null => {
+  kind: "forge-event-group-view",
+  target: "chat",
+  match: (event: ForgeMessageEventLike): { id: string; role: "start" } | null => {
     if (event === undefined || event.type === undefined) return null
     if (event.type === FORGE_PROGRESS_EVENT_TYPE) {
-      return { id: `${FORGE_EVENT_PROGRESS_ID_PREFIX}${String(event.seq)}`, role: 'start' }
+      return { id: `${FORGE_EVENT_PROGRESS_ID_PREFIX}${String(event.seq)}`, role: "start" }
     }
-    if (event.type !== 'user/message') return null
+    if (event.type !== "user/message") return null
     const data = event.data as ForgeMessageDataLike | undefined
-    if (data === undefined || typeof data.id !== 'string' || data.id === '') return null
-    return isForgeSource(data.source) ? { id: data.id, role: 'start' } : null
+    if (data === undefined || typeof data.id !== "string" || data.id === "") return null
+    return isForgeSource(data.source) ? { id: data.id, role: "start" } : null
   },
   start: (_context: unknown, match: { event: ForgeMessageEventLike }, reader: ForgeStreamReader): ForgeEventGroupNodeState => {
     const seq = match.event.seq
@@ -428,7 +428,7 @@ export const forgeEventGroupDefinition = {
     }
   },
   update: (context: { state: ForgeEventGroupNodeState }): ForgeEventGroupNodeState => context.state,
-  publication: (): 'none' => 'none',
+  publication: (): "none" => "none",
   buildViewNode: (context: ForgeEventNodeContext & { state?: ForgeEventGroupNodeState }): unknown => {
     // withdrew 红线：已物化 target 永不回 null（官方钦定，dsh-client-ui-conversation
     // client.js:2505 buildTargetUpserts 对「已物化」target 回 null 即抛 withdrew
@@ -457,7 +457,7 @@ export const forgeEventGroupDefinition = {
     }
     // location 契约必填（ChatConversationViewNode.location——官方 store updateTurnKind
     // 直读 location.kind）：start/matches 携带 location 则透传，否则 unresolved。
-    const location = context.start?.location ?? context.matches?.[0]?.location ?? { kind: 'unresolved' }
+    const location = context.start?.location ?? context.matches?.[0]?.location ?? { kind: "unresolved" }
     const visible = group === stateGroup && state !== undefined && state.emit
     return {
       key: context.key,
@@ -467,7 +467,7 @@ export const forgeEventGroupDefinition = {
       // D2/D3 真锚：从组模型数据（当帧或交棒）重导出组末成员真实 seq——不从恢复帧快照
       anchorSeq: forgeEventGroupAnchorSeq(group),
       location,
-      visibility: visible ? 'visible' : 'hidden',
+      visibility: visible ? "visible" : "hidden",
       data: {
         key: group.key,
         firstSeq: group.firstSeq,
@@ -478,12 +478,12 @@ export const forgeEventGroupDefinition = {
       },
     }
   },
-}
+};
 
 /** 组节点状态形状守卫（官方快照透传面畸形不猜——回退 undefined 走保底现算） */
 function streamStateOk(value: unknown): value is ForgeEventGroupNodeState {
-  if (typeof value !== 'object' || value === null) return false
-  return typeof (value as { emit?: unknown }).emit === 'boolean' && typeof (value as { group?: unknown }).group === 'object'
+  if (typeof value !== "object" || value === null) return false
+  return typeof (value as { emit?: unknown }).emit === "boolean" && typeof (value as { group?: unknown }).group === "object"
 }
 
 /**
@@ -495,11 +495,11 @@ function streamStateOk(value: unknown): value is ForgeEventGroupNodeState {
  * 空内容/畸形 = undefined（镜像击穿诊断留痕后弃置——fail-visible）。
  */
 function previousStateOf(current: unknown, id: string): ForgeEventGroup | undefined {
-  if (typeof current !== 'object' || current === null) return undefined
+  if (typeof current !== "object" || current === null) return undefined
   const get = (current as { get?: unknown }).get
-  if (typeof get !== 'function') return undefined
+  if (typeof get !== "function") return undefined
   const node = (get as (target: string) => unknown).call(current, CHAT_TARGET)
-  if (typeof node !== 'object' || node === null) return undefined
+  if (typeof node !== "object" || node === null) return undefined
   const raw = node as { data?: unknown }
   const data = raw.data as { key?: unknown; firstSeq?: unknown; lastSeq?: unknown; entries?: unknown; progress?: unknown } | undefined
   // 镜像击穿 fail-visible：上次物化节点在场但数据形状不可读（entries 非数组/全空）——
@@ -514,11 +514,11 @@ function previousStateOf(current: unknown, id: string): ForgeEventGroup | undefi
     forgeEventNodeDiag(`[dswf-client] forge-event-node 镜像击穿：id=${id} 上次物化节点为空组数据（entries/progress 全空）——交棒数据弃置`)
     return undefined
   }
-  const lastSeq = typeof data.lastSeq === 'number' && Number.isFinite(data.lastSeq) ? data.lastSeq : 0
-  const key = typeof data.key === 'string' && data.key !== '' ? data.key : id
+  const lastSeq = typeof data.lastSeq === "number" && Number.isFinite(data.lastSeq) ? data.lastSeq : 0
+  const key = typeof data.key === "string" && data.key !== "" ? data.key : id
   return {
     key,
-    firstSeq: typeof data.firstSeq === 'number' && Number.isFinite(data.firstSeq) ? data.firstSeq : lastSeq,
+    firstSeq: typeof data.firstSeq === "number" && Number.isFinite(data.firstSeq) ? data.firstSeq : lastSeq,
     lastSeq,
     entries,
     ...(progress.length > 0 ? { progress } : {}),

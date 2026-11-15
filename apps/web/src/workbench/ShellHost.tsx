@@ -18,7 +18,9 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AddProjectFlow } from '@dsh-forge/project/client-ui/add-project'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
-import { DispatchEventsPanel, type DispatchProgressLogSnapshot } from '../views/session/DispatchEventsPanel.js'
+// 1.13 迁移退役（plugin-task-loop 1.13）：DispatchEventsPanel import 与直挂段随六组件迁批
+// 退役——面板正本迁 plugins/task-loop/ui/（改缝注册 conversation.session.header.utilities），
+// 壳 overlay 树零 forge 派发残留（机检 = tests/ui/ui-machine-checks）。
 // fix-13 注记（1.45）：任务弹窗/转移对话框/概览编排面（TaskDrawer / useTaskDetail /
 // TransitionDialog / forgeDocAddress / nextTaskFocusApply / TransitionTarget /
 // SessionOpenRequest / useProjectDocsRoot）随 dock tab 族注册面迁 @dsh-forge/project
@@ -37,7 +39,6 @@ import type { OpenSessionOrchestrator } from '@dsh-forge/project/client-ui/open-
 import type { TaskStatus } from '@dsh-forge/contracts'
 // 1.6 注记：账本快照窄类型随 sidebar 族迁 @dsh-forge/project（ui/sidebar/）——壳消费经
 // 包窄子路径出口类型直供（event-tap/session-actions 先例；纯 type import 零运行时载荷）。
-import type { LedgerSessionsSnapshot, SnapshotSource } from '@dsh-forge/project/client-ui/sidebar'
 import { MainSessionAnchor, useAnchoredProjects, useWorkspaceProjectMap } from './anchored-projects.js'
 import {
   HERO_PANEL_KEY,
@@ -45,7 +46,6 @@ import {
   centerViewOf,
   nextLastReadyCount,
   rightbarViewPlan,
-  sessionPanelActive,
   sessionZonePhase,
 } from './panel-model.js'
 import type { ForgeOverviewContext, WorkbenchBridge } from './workbench-bridge.js'
@@ -90,27 +90,8 @@ export interface ForgeShellHostProps {
   /** 挂接会话 pill 跳会话（插件 inject face——判读式打开；可选父参 = worker 显式地址径；
    * 缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string, parentSessionId?: string) => void
-  /**
-   * 悬浮进度流面板行点击 = 打开 worker 执行子会话（loop-event-delivery 1.8 插件 inject
-   * face——载荷 workerSessionId + 显式父（面板会话）地址形态；缺席 = 行非交互呈现）。
-   */
-  readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
-  /**
-   * worker 父反查兜底（loop-event-delivery 1.16 插件 inject face——载荷 workerSessionId
-   * 缺席行：账本子行 parentId + taskKey 反查定位子会话，落空 = 行保持非交互不空跳）。
-   */
-  readonly resolveWorkerSession?: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
-  /**
-   * dsh 会话账本快照源（插件 inject face——ctx.sessions.list；悬浮进度流面板的数据源 =
-   * 账本行 projectionValues['forge-dispatch-events'] 窄读 + subscribe 实时刷新；缺席 =
-   * 面板不出场）。
-   */
-  readonly sessions?: SnapshotSource<LedgerSessionsSnapshot>
-  /**
-   * 会话日志进度回放源（loop-message-consolidation 1.3 插件 inject face——投影窗口截断时
-   * 面板按本循环实例配对回放重建；快照条目已由录取面逐条守卫；缺席 = 窗口原样降级）。
-   */
-  readonly progressLog?: SnapshotSource<DispatchProgressLogSnapshot>
+  // 1.13 迁移退役：onOpenWorkerSession / resolveWorkerSession / sessions / progressLog 四
+  // inject 面随面板直挂退役摘除——消费面归 task-loop 挂载面自持（ui/dispatch-events-face.ts）。
   /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 诊断发送入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
   /**
@@ -359,24 +340,11 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
       {props.usePanelInfo !== undefined ? (
         <PanelInfoAnchor hook={props.usePanelInfo} onChange={setActivePanelId} />
       ) : null}
-      {/* 悬浮进度流面板（loop-event-delivery 1.8——派发任务悬浮面板的继任面，替代不并存）：
-          会话面板在位（activePanelId null——插件页等全局面板即离位隐藏）+ 主视图会话锚 +
-          账本源齐备时挂载；数据 = 账本行
-          projectionValues['forge-dispatch-events'] 窄读 + store subscribe 实时刷新（零新增
-          读取 API）；行 = 任务轨形态（1.16——任务键时间线每任务最新态一行）；行点击 = 载荷
-          workerSessionId 开 worker 子会话（缺席行 resolveWorkerSession 父反查兜底，落空
-          非交互；树零联动）；可见性随所属会话（非循环会话/切走 = 投影判读隐藏）；key =
-          主视图会话（切会话整体重置折叠与拖移本地态） */}
-      {sessionPanelActive(activePanelId) && mainSessionId !== null && props.sessions !== undefined ? (
-        <DispatchEventsPanel
-          key={mainSessionId}
-          sessionId={mainSessionId}
-          sessions={props.sessions}
-          {...(props.progressLog !== undefined ? { progressLog: props.progressLog } : {})}
-          {...(props.onOpenWorkerSession !== undefined ? { onOpenWorkerSession: props.onOpenWorkerSession } : {})}
-          {...(props.resolveWorkerSession !== undefined ? { resolveWorkerSession: props.resolveWorkerSession } : {})}
-        />
-      ) : null}
+      {/* 悬浮进度流面板宿主面（loop-event-delivery 1.8）——1.13 迁移退役（plugin-task-loop
+          1.13）：面板随六组件迁批改缝注册（conversation.session.header.utilities list 行——
+          正本 plugins/task-loop/ui/dispatch-events-face.ts），壳 overlay 常驻树直挂退役
+          [机检 = 本文件零 forge 派发残留——tests/ui/ui-machine-checks]；行点击 =
+          props.onOpenWorkerSession 注入面归 task-loop 挂载面自持 */}
       {/* 任务详情弹窗（D23：挂载独立于 dock——对话中经桥直接打开，不依赖 dock 展开/
           概览选中；条件挂载承载「关闭后不记忆位置/尺寸」——几何随卸载弃置） */}
       {drawerTaskId !== null && projectId !== null ? (

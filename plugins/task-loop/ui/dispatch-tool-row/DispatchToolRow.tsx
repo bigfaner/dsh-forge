@@ -16,14 +16,14 @@
 // 数据纪律：三相块（preparing/start/result）= 官方 ToolCallOwnerProps 结构同型镜像
 //（bundle 自含纪律禁 import 上游运行期包）；行身份/展开钩子/inspect 回调经 slot
 // runtime 递达；本组件零 RPC 零状态落盘——纯呈现面。
-import { type ReactNode } from 'react'
+import { type ReactNode } from "react";
 import {
   IconChevronDownOutlineRegular,
   IconInspectOutlineRegular,
   IconSparkleRegular,
   TextShimmer,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import './dispatch-tool-row.css'
+} from "@deepseek-ai/dsh-client-ui-primitives";
+import "./dispatch-tool-row.css";
 
 // ─────────────────── 官方块结构同型镜像（消费切片——禁 import 上游运行期包） ───────────────────
 
@@ -35,16 +35,16 @@ interface MirroredContentBlock {
 
 /** 官方 Tool 调用块消费切片（PreparingToolCall / StartedToolCall / ToolResultNode） */
 export type DispatchToolBlock =
-  | { readonly phase: 'preparing'; readonly kind?: undefined }
-  | { readonly phase: 'start'; readonly argsRaw: string; readonly kind?: undefined }
+  | { readonly phase: "preparing"; readonly kind?: undefined }
+  | { readonly phase: "start"; readonly argsRaw: string; readonly kind?: undefined }
   | {
-      readonly kind: 'tool-result'
+      readonly kind: "tool-result"
       readonly phase?: undefined
       readonly call: { readonly name: string; readonly argsRaw: string } | null
       readonly content: readonly MirroredContentBlock[]
       readonly isError: boolean
       readonly error?: { readonly name?: string; readonly code?: string }
-    }
+    };
 
 // ─────────────────── 纯模型面（静态可测） ───────────────────
 
@@ -60,9 +60,9 @@ export function dispatchSourceSlugOf(argsRaw: string): string | undefined {
   } catch {
     return undefined
   }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined
-  const slug = (parsed as Record<string, unknown>)['source_slug']
-  return typeof slug === 'string' && slug !== '' ? slug : undefined
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined
+  const slug = (parsed as Record<string, unknown>)["source_slug"]
+  return typeof slug === "string" && slug !== "" ? slug : undefined
 }
 
 /** 行摘要（用户裁决 2026-10-09：`工具调用 · dispatchTask · {slug}`——末段 = 容器标识非种类词） */
@@ -94,24 +94,24 @@ export function dispatchTaskKeyOf(output: string | null): string | undefined {
   const settled = /^[✓⚑]\s+(\S+)\s+(?:completed|blocked)\b/.exec(head)
   const spawnFailed = settled === null ? /worker spawn failed for ([^\s:]+):/.exec(head) : null
   const token = taskKeyTokenOf(settled !== null ? settled[1] : spawnFailed !== null ? spawnFailed[1] : undefined)
-  return token === undefined ? undefined : token.split('/')[1]
+  return token === undefined ? undefined : token.split("/")[1]
 }
 
 /** 结算结果文本（content 块拼接；空且带 error 对象时回退 `name: code`——SkillRow 同径） */
-export function dispatchResultTextOf(block: Extract<DispatchToolBlock, { kind: 'tool-result' }>): string | null {
+export function dispatchResultTextOf(block: Extract<DispatchToolBlock, { kind: "tool-result" }>): string | null {
   const parts: string[] = []
   for (const item of block.content) {
-    parts.push(item.type === 'text' && typeof item.text === 'string' ? item.text : JSON.stringify(item, null, 2))
+    parts.push(item.type === "text" && typeof item.text === "string" ? item.text : JSON.stringify(item, null, 2))
   }
   if (parts.length === 0 && block.error !== undefined) {
-    parts.push(`${block.error.name ?? 'Error'}: ${block.error.code ?? ''}`)
+    parts.push(`${block.error.name ?? "Error"}: ${block.error.code ?? ""}`)
   }
   return parts.join('\n') || null
 }
 
 /** 参数原文 → 展开卡输入段（pretty JSON；解析失败回退原文；空参 = null 不渲染段） */
 function formatDispatchArgsBody(argsRaw: string): string | null {
-  if (argsRaw === '') return null
+  if (argsRaw === "") return null
   try {
     return JSON.stringify(JSON.parse(argsRaw), null, 2)
   } catch {
@@ -121,7 +121,7 @@ function formatDispatchArgsBody(argsRaw: string): string | null {
 
 /** 行模型（三相统一投影——纯函数） */
 export interface DispatchToolRowModel {
-  readonly state: 'preparing' | 'running' | 'ok' | 'error' | 'stopped'
+  readonly state: "preparing" | "running" | "ok" | "error" | "stopped"
   /** 折叠行摘要段（`dispatchTask` | `dispatchTask · {slug}`） */
   readonly summary: string
   /** 结算领取任务编号（localId——结算文本首行解析去 slug；在途/未领取 = null） */
@@ -136,12 +136,12 @@ export interface DispatchToolRowModel {
 
 /** 相块 → 行模型（preparing 单段不可展开；start/result 同段位——上游 ToolRow 状态口径） */
 export function dispatchToolRowModel(toolName: string, block: DispatchToolBlock): DispatchToolRowModel {
-  if (block.phase === 'preparing') {
-    return { state: 'preparing', summary: toolName, taskKey: null, body: null, output: null, errorSummary: null }
+  if (block.phase === "preparing") {
+    return { state: "preparing", summary: toolName, taskKey: null, body: null, output: null, errorSummary: null }
   }
-  if (block.phase === 'start') {
+  if (block.phase === "start") {
     return {
-      state: 'running',
+      state: "running",
       summary: dispatchRowSummary(toolName, dispatchSourceSlugOf(block.argsRaw)),
       taskKey: null,
       body: formatDispatchArgsBody(block.argsRaw),
@@ -150,7 +150,7 @@ export function dispatchToolRowModel(toolName: string, block: DispatchToolBlock)
     }
   }
   const output = dispatchResultTextOf(block)
-  const state = block.error?.code === 'interrupted' ? 'stopped' : block.isError ? 'error' : 'ok'
+  const state = block.error?.code === "interrupted" ? "stopped" : block.isError ? "error" : "ok"
   const argsRaw = block.call?.argsRaw
   return {
     state,
@@ -159,7 +159,7 @@ export function dispatchToolRowModel(toolName: string, block: DispatchToolBlock)
     body: argsRaw === undefined ? null : formatDispatchArgsBody(argsRaw),
     taskKey: dispatchTaskKeyOf(output) ?? null,
     output,
-    errorSummary: state === 'error' && output !== null ? firstLine(output) : null,
+    errorSummary: state === "error" && output !== null ? firstLine(output) : null,
   }
 }
 
@@ -172,7 +172,7 @@ export interface ForgeDispatchToolRowProps {
   /** wire 工具名（keyed 分发值 = 'dispatchTask'） */
   readonly toolName: string
   /** 当前阶段判别（owner 相位 props——block 同步判别，双轨一致） */
-  readonly phase: 'preparing' | 'start' | 'result'
+  readonly phase: "preparing" | "start" | "result"
   /** 冻结相块（preparing/start/result 三相——结构同型镜像） */
   readonly block: DispatchToolBlock
   /** 稳定展开钩子（外层轮次收起即复位——上游 ToolRow 同消费） */
@@ -184,14 +184,14 @@ export interface ForgeDispatchToolRowProps {
 }
 
 /** 状态无障碍文案（仅色示意的运行扫光/错误色补语——上游 stateStatus 同径） */
-function stateStatusOf(state: DispatchToolRowModel['state'], t: (key: string) => string): string | null {
+function stateStatusOf(state: DispatchToolRowModel["state"], t: (key: string) => string): string | null {
   switch (state) {
-    case 'preparing':
-      return t('tool.dispatchTask.preparing')
-    case 'running':
-      return t('tool.dispatchTask.running')
-    case 'error':
-      return t('tool.dispatchTask.failed')
+    case "preparing":
+      return t("tool.dispatchTask.preparing")
+    case "running":
+      return t("tool.dispatchTask.running")
+    case "error":
+      return t("tool.dispatchTask.failed")
     default:
       return null
   }
@@ -215,12 +215,12 @@ export function ForgeDispatchToolRow(props: ForgeDispatchToolRowProps): ReactNod
   const { expanded, toggle } = props.useDisclosure()
   const model = dispatchToolRowModel(props.toolName, props.block)
   const status = stateStatusOf(model.state, props.t)
-  const expandable = model.state !== 'preparing' && (model.body !== null || model.output !== null)
+  const expandable = model.state !== "preparing" && (model.body !== null || model.output !== null)
   const open = expanded && expandable
-  const running = model.state === 'running' || model.state === 'preparing'
-  const summaryText = model.state === 'error' ? model.errorSummary ?? model.summary : model.summary
+  const running = model.state === "running" || model.state === "preparing"
+  const summaryText = model.state === "error" ? model.errorSummary ?? model.summary : model.summary
   const toggleFromKeyboard = (event: { readonly key: string; preventDefault(): void }): void => {
-    if (!expandable || (event.key !== 'Enter' && event.key !== ' ')) return
+    if (!expandable || (event.key !== "Enter" && event.key !== " ")) return
     event.preventDefault()
     toggle()
   }
@@ -228,18 +228,18 @@ export function ForgeDispatchToolRow(props: ForgeDispatchToolRowProps): ReactNod
     <div className="dswf-dtr" data-dswf-dtr="" data-state={model.state}>
       <div
         className="dswf-dtr-row"
-        {...(expandable ? { role: 'button', tabIndex: 0, 'aria-expanded': open, onClick: toggle, onKeyDown: toggleFromKeyboard } : {})}
-        {...(expandable ? { 'data-expandable': '' } : {})}
+        {...(expandable ? { role: "button", tabIndex: 0, "aria-expanded": open, onClick: toggle, onKeyDown: toggleFromKeyboard } : {})}
+        {...(expandable ? { "data-expandable": "" } : {})}
       >
         <span className="dswf-dtr-leading">{leadingOf(open, expandable)}</span>
         {status !== null ? <span className="dswf-dtr-vh">{status}</span> : null}
         <TextShimmer active={running}>
-          <span className="dswf-dtr-title">{props.t('tool.dispatchTask.title')}</span>
-          {summaryText !== '' ? (
+          <span className="dswf-dtr-title">{props.t("tool.dispatchTask.title")}</span>
+          {summaryText !== "" ? (
             <>
               <span className="dswf-dtr-sep" data-shimmer-decoration="" aria-hidden="true" />
               <span
-                className={`dswf-dtr-summary${model.state === 'error' ? ' is-error' : ''}${model.state === 'stopped' ? ' is-stopped' : ''}`}
+                className={`dswf-dtr-summary${model.state === "error" ? " is-error" : ""}${model.state === "stopped" ? " is-stopped" : ""}`}
               >
                 <TextShimmer>{summaryText}</TextShimmer>
               </span>
@@ -258,15 +258,15 @@ export function ForgeDispatchToolRow(props: ForgeDispatchToolRowProps): ReactNod
             <div className="dswf-dtr-io">
               {model.body !== null ? (
                 <div className="dswf-dtr-iosection">
-                  <span className="dswf-dtr-iolabel">{props.t('tool.dispatchTask.input')}</span>
+                  <span className="dswf-dtr-iolabel">{props.t("tool.dispatchTask.input")}</span>
                   <pre className="dswf-dtr-iotext">{model.body}</pre>
                 </div>
               ) : null}
               {model.body !== null && model.output !== null ? <div className="dswf-dtr-iodivider" /> : null}
               {model.output !== null ? (
                 <div className="dswf-dtr-iosection">
-                  <span className="dswf-dtr-iolabel">{props.t('tool.dispatchTask.output')}</span>
-                  <pre className="dswf-dtr-iotext" {...(model.state === 'error' ? { 'data-error': '' } : {})}>
+                  <span className="dswf-dtr-iolabel">{props.t("tool.dispatchTask.output")}</span>
+                  <pre className="dswf-dtr-iotext" {...(model.state === "error" ? { "data-error": "" } : {})}>
                     {model.output}
                   </pre>
                 </div>
@@ -276,7 +276,7 @@ export function ForgeDispatchToolRow(props: ForgeDispatchToolRowProps): ReactNod
           {props.inspect !== undefined ? (
             <button type="button" className="dswf-dtr-inspect" onClick={props.inspect}>
               <IconInspectOutlineRegular />
-              {props.t('tool.dispatchTask.inspect')}
+              {props.t("tool.dispatchTask.inspect")}
             </button>
           ) : null}
         </div>

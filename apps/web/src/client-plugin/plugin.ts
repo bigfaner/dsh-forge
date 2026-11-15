@@ -40,14 +40,17 @@ import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
 // 死面退役申请对该目录暂缓）。
 // 跨入口类型面豁免（web-shell pin——runtime import 互禁仅约束值面；ShellHost inject 契约类型）
 // 1.6 注记：LedgerSessionsSnapshot/SnapshotSource 类型随 sidebar 族迁 @dsh-forge/project
-// （ui/sidebar/）——壳消费（ShellHost/悬浮面板 inject 契约类型）改经包窄子路径出口直供。
-import type { LedgerSessionsSnapshot, SnapshotSource } from '@dsh-forge/project/client-ui/sidebar'
+// （ui/sidebar/）——壳消费面随 1.13 悬浮面板直挂退役摘除，壳零消费（纯类型面注释留存）。
+// 1.13 迁移退役（plugin-task-loop 1.13）：forgeProgressLogSource import 随悬浮面板直挂
+// 退役摘除——录取面/回放源消费归 task-loop 挂载面（ui/dispatch-events-face.ts）。
 // fix-13 注记（1.41）：DispatchEventEntry/DispatchProgressLogSnapshot 类型 import 与
 // ForgeUiConversationService 窄面已随事件折叠组注册面迁 @dsh-forge/project 退役——壳零消费。
 // fix-13 注记（1.41）：事件折叠组三段注册 + progress 回放录取面已迁 @dsh-forge/project
 // bundle（ui/conversation-views-face.ts + ui/event-node/progress-log-tap.ts）——壳消费
 // （ShellHost inject progressLog）改经包窄子路径出口值面直供（bug-model 先例）。
-import { forgeProgressLogSource } from '@dsh-forge/project/client-ui/event-tap'
+// fix-13 注记（1.41）：事件折叠组三段注册 + progress 回放录取面已迁 @dsh-forge/project
+// bundle（ui/conversation-views-face.ts + ui/event-node/progress-log-tap.ts）。1.13 注记：
+// 壳侧 forgeProgressLogSource 回放源消费随悬浮面板直挂退役摘除（面板正本迁 task-loop）。
 // 1.9 Typert 改接：start-session wrap 树归属门 + chip 双发数据源 + W4 自证轻探三处
 // 数据引用改经本窄面（官方 Typert remote face——页内锚单例现查）。
 import { createForgeRpcClient } from '@dsh-forge/project/client-ui/rpc'
@@ -61,7 +64,6 @@ import {
   buildOpenSessionOrchestrator,
   makeSessionTitleResolver,
   openSessionWithLedgerAddress,
-  resolveWorkerChildSession,
   type SessionActionsCtx,
 } from '@dsh-forge/project/client-ui/session-actions'
 import { selectedTreeDisplay } from './selected-tree-display.js'
@@ -125,16 +127,18 @@ export const SESSION_HEADER_ACTIONS_SLOT = 'conversation.session.header.actions'
 /**
  * 洞名：官方右栏 tab 体 keyed 槽（ui-sidebar-right seat——dispatch 键 = tab 类型定义
  * id）。fix-13 注记（1.45）：产品占用两键 'dswf-overview' / 'dswf-doc' 两段注册随 dock
- * tab 族迁 @dsh-forge/project bundle（ui/dock-tabs-face.ts）——壳零登记；常量保留 =
+ * tab 族迁插件 bundle——1.13 注记：注册面归 @dsh-forge/task-loop bundle
+ * （ui/dock-tabs-face.ts——概览改缝 AC 核销版 + 文档 tab）——壳零登记；本槽名常量保留 =
  * 零登记断言锚 + e2e 选择器同源字面量。
  */
 export const SIDEBAR_RIGHT_PANE_TAB_SLOT = 'sidebar.right.pane.tab'
-/** 概览 tab 类型 kind（fix-13 1.45 注册面迁 @dsh-forge/project——壳保留 = 字面量同源 pin 断言锚） */
-export const OVERVIEW_TAB_KIND = 'dswf-overview'
-/** 文档 tab 类型 kind（multiple + address 去重；注册面迁 @dsh-forge/project——shell.overlay openDocResource 仍消费本常量） */
+/** 文档 tab 类型 kind（1.13 注册面迁 @dsh-forge/task-loop ui/dock-tabs-face——壳零登记；常量保留 = shell.overlay openDocResource 运行期消费） */
 export const DOC_TAB_KIND = 'dswf-doc'
-/** 文档 tab 资源地址前缀（注册面迁 @dsh-forge/project；壳保留 = shell.overlay openDocResource 同源 pin） */
+/** 文档 tab 资源地址前缀（注册面迁 @dsh-forge/task-loop；壳保留 = shell.overlay openDocResource 同源 pin） */
 export const DOC_ADDRESS_PREFIX = 'dsh-resource://dswf-doc/'
+// 1.13 注记：概览 tab kind（'dswf-overview'）/ tool.call.toolview / dispatchTask 工具行
+// 键常量随注册面迁 @dsh-forge/task-loop bundle 摘除——壳侧零登记零常量残留（机检 =
+// plugins/task-loop/tests/ui/ui-machine-checks）。
 // fix-13 注记：Bug 台账 tab kind/地址前缀/地址编解码（BUG_TAB_KIND/BUG_ADDRESS_PREFIX/
 // bugAddressOf/bugIdOfAddress）随注册面迁 @dsh-forge/project（ui/official-seams.ts）；
 // BugPreview.tsx DSWF_BUG_* 字面量镜像为同源 pin 正本。
@@ -147,14 +151,10 @@ export const SIDEBAR_SHADOW_PRIORITY = -100
 export const RECALL_VIEW_ID = 'dswf-recall'
 /**
  * 洞名：官方 ui-tool 原子工具行 keyed 槽（`tool.call.toolview`——按 wire 工具名分发；
- * 未注册名走官方通用行 fallback）。产品占用一键：'dispatchTask'（2026-10-09 用户实机
- * 报障收口——官方通用行参数摘要取「首个字符串值」= source_kind 种类词，对话行恒显
- * `dispatchTask · proposal/feature` 不可分辨；业务视图接管后摘要段 = source_slug
- * 容器标识——上游 README「注册业务工具视图」正径，ui-skill 同型先例）。
+ * 未注册名走官方通用行 fallback）。1.13 注记：产品占用键 'dispatchTask'（dispatchTask
+ * 工具行业务视图——source_slug 容器标识摘要）注册面随六组件迁批迁 @dsh-forge/task-loop
+ * bundle（ui/conversation-views-face.ts）——壳侧槽名常量与 keyed 键常量摘除（零残留）。
  */
-export const TOOL_CALL_TOOLVIEW_SLOT = 'tool.call.toolview'
-/** dispatchTask 工具行 keyed 键（= plugin-forge wire 工具名——FORGE_TOOL_NAMES 单源字面量镜像） */
-export const DISPATCH_TASK_TOOL_KEY = 'dispatchTask'
 /**
  * 洞名：官方设置对话框分区 roster（ui-settings SettingsRoot nav 列 + 内容列 only 消费
  * ——list 槽 scope root；4.7 Integration #4）。产品占用 Forge设置 分区（worker 小节）已随
@@ -945,15 +945,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 onOpenSession: (sessionId: string, parentSessionId?: string): void => {
                   openSessionWithLedgerAddress({ sessions, uiWorkspace }, sessionId, parentSessionId)
                 },
-                // 悬浮面板 ⟞ 打开 worker 执行子会话（m3.1 D6）：账本 parentId 判读 →
-                // 子会话 = 官方 SubagentAddress 形态（openChild 同径——树零联动：worker
-                // 不进左栏两级树，父会话行保持）；顶层会话平开。账本缺行（worker added
-                // 广播未达/丢失）= refresh 兜底后重判读；官方面异常 fail-soft。
-                // 键名 = onOpenWorkerSession（ShellHost props 契约——D6 原始实现的
-                // openWorkerSession 键名错配 = ⟞ 恒 disabled 的根因，2026-10-10 报障收口）。
-                onOpenWorkerSession: (childSessionId: string, parentSessionId?: string): void => {
-                  openSessionWithLedgerAddress({ sessions, uiWorkspace }, childSessionId, parentSessionId)
-                },
+                // 1.13 迁移退役：onOpenWorkerSession 注入面随悬浮面板 ShellHost 直挂退役
+                // 摘除（⟞ 行点击消费面归 task-loop 挂载面自持——ui/dispatch-events-face.ts）。
                 // 打开新会话编排器（弹窗诊断「发送给 agent」——openSessionWithPreset 组合子）
                 openSession: buildOpenSessionOrchestrator(
                   clientCtx as unknown as SessionActionsCtx,
@@ -973,18 +966,11 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // 会话名解析器（task-ui-info-density-blitz S1 通道——账本快照 displayTitle
                 // 窄读；账本未命中 = undefined，调用方回退显示 sessionId fail-soft）
                 sessionTitleOf: makeSessionTitleResolver(sessions),
-                // 悬浮进度流面板数据源（loop-event-delivery 1.8——ctx.sessions.list 快照源
-                // 直递：面板经账本行 projectionValues['forge-dispatch-events'] 窄读 + store
-                // subscribe 实时刷新，零新增读取 API）
-                sessions: sessions.list as SnapshotSource<LedgerSessionsSnapshot>,
-                // 会话日志进度回放源（loop-message-consolidation 1.3——投影窗口截断时面板
-                // 按本循环实例配对回放重建；R-Q1/R-Q2 消费侧兜底）
-                progressLog: forgeProgressLogSource,
-                // ⟞ worker 父反查兜底（fix：进行中任务无 record 审计行 → workerSessionOf
-                // 恒空）：账本子行 parentId 扫描 + refresh 一次兜底（resolveWorkerChildSession
-                // 单源）——旧载荷（无 workerSessionId）消费面。
-                resolveWorkerSession: (parentSessionId: string, taskKey?: string): Promise<string | undefined> =>
-                  resolveWorkerChildSession(sessions, parentSessionId, taskKey),
+                // 1.13 迁移退役（plugin-task-loop 1.13）：sessions / progressLog /
+                // onOpenWorkerSession / resolveWorkerSession 四 inject 面随悬浮面板
+                // ShellHost 直挂退役摘除——面板正本迁 @dsh-forge/task-loop（改缝注册
+                // conversation.session.header.utilities），消费面归其挂载面自持；壳 overlay
+                // 树零 forge 派发残留（机检 = plugins/task-loop/tests/ui/ui-machine-checks）。
               }),
             },
             views.ForgeShellHost,

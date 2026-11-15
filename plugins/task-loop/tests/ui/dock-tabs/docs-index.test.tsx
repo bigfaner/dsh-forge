@@ -1,0 +1,258 @@
+// 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
+// 文档 tab 单测 —— AC1/AC4/AC5：tab 内容结构（单行头[官方 PathLabel 路径 + 悬空 warn chip
+// + 官方图标钮 ↻ 重读/编辑器打开——1.6 收敛：标题行/只读 chip/摘要卡退役] + 正文 MarkdownDoc
+// 全量渲染——1.8 渲染链退役：mermaid fence 保持官方代码块形态、出图归 DOM 增强器[挂接归
+// client 插件 1.7]）、悬空只读占位面（单行头保留不崩溃）、装载/落点纯函数 + docs.read 通道
+// 面 + openExternal 触发即忘。
+// 口径沿 overview 先例：effect 胶水不在 Node 测面（renderToStaticMarkup 不跑 effect）；
+// 纯异步面与纯函数全量单测；DocsTab 静态首装面断言骨架形态。
+import { describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
+import type { DocContent } from "@dsh-forge/contracts";
+import { DOCS_CHANNELS } from "@dsh-forge/contracts";
+import { createForgeRpcClient, type ForgeRpcClient } from "../../../ui/dock-tabs/rpc-channels.js";
+import { RpcClientError } from "../../../ui/dock-tabs/rpc-channels.js";
+import {
+  applyDocFetch,
+  DocBody,
+  DocsFrame,
+  DocsTab,
+  fetchDocContent,
+  initialDocViewState,
+  mapDocsError,
+  openDocExternal,
+  pendingDocView,
+} from "../../../ui/dock-tabs/docs/index.js";
+
+const READY_DOC: DocContent = {
+  title: "M2 技术设计",
+  summary: "每工作区库 + 概览/文档 tab",
+  content: ["# Tech Design", "", "前置段落。", "", "```mermaid", "erDiagram", '    PROPOSALS ||--o{ FEATURES : "proposal_id"', "```", "", "收尾段落。"].join('\n'),
+  canonicalPath: "Z:/ws/demo/docs/features/m2/design/tech-design.md",
+  dangling: false,
+};
+
+const PLAIN_DOC: DocContent = {
+  content: '# 纯文\n\n零 mermaid 块。',
+  canonicalPath: "Z:/ws/demo/docs/plain.md",
+  dangling: false,
+};
+
+const DANGLING_DOC: DocContent = {
+  content: "",
+  canonicalPath: "docs/features/gone/proposal.md",
+  dangling: true,
+};
+
+function render(node: ReactNode): string {
+  return renderToStaticMarkup(node) as unknown as string
+}
+
+/** 通道 responder 替身（捕获通道 + 请求负载——docs.read/openExternal 调用断言面） */
+function clientResponding(
+  respond: (channel: string, payload: unknown) => unknown | Promise<unknown>,
+): { readonly client: ForgeRpcClient; readonly calls: readonly { readonly channel: string; readonly payload: unknown }[] } {
+  const calls: { channel: string; payload: unknown }[] = []
+  const client = createForgeRpcClient(async (channel, payload) => {
+    calls.push({ channel, payload })
+    const data = await respond(channel, payload)
+    return { ok: true, data }
+  })
+  return { client, calls }
+}
+
+const baseFrame = {
+  projectId: "p-1",
+  docRel: "docs/features/m2/design/tech-design.md",
+  error: undefined,
+  onReread: () => {},
+  onOpenExternal: () => {},
+};
+
+describe("mapDocsError（纯函数）", () => {
+  it("错误归一：RpcClientError → code 三态映射；其余 → 错误条", () => {
+    expect(mapDocsError(new RpcClientError({ code: "ERR_DOC_PATH_INVALID", message: "路径越界" }))).toEqual({
+      message: "路径越界",
+      uiState: "error-bar",
+    })
+    expect(mapDocsError(new Error("传输失败"))).toEqual({ message: "传输失败", uiState: "error-bar" })
+    expect(mapDocsError("字符串错误")).toEqual({ message: "字符串错误", uiState: "error-bar" })
+  })
+});
+
+describe("fetchDocContent / openDocExternal（docs.read 唯一消费径 + 触发即忘）", () => {
+  it("read：{projectId, docRel} 原样入通道，DocContent 原样返回（悬空 = ok 态数据非错误）", async () => {
+    const { client, calls } = clientResponding((channel) => {
+      if (channel === DOCS_CHANNELS.read) return READY_DOC
+      throw new Error(`unexpected channel ${channel}`)
+    })
+    await expect(fetchDocContent(client, { projectId: "p-1", docRel: "docs/x.md" })).resolves.toEqual({ ok: true, data: READY_DOC })
+    expect(calls[0]).toEqual({ channel: DOCS_CHANNELS.read, payload: { projectId: "p-1", docRel: "docs/x.md" } })
+  })
+
+  it("read 失败 → 归一 error（永不 reject）", async () => {
+    const client = createForgeRpcClient(async () => ({
+      ok: false,
+      error: { code: "ERR_DOC_PATH_INVALID", message: "路径越界" },
+    }))
+    await expect(fetchDocContent(client, { projectId: "p-1", docRel: "../escape.md" })).resolves.toEqual({
+      ok: false,
+      error: { message: "路径越界", uiState: "error-bar" },
+    })
+  })
+
+  it("openExternal：触发即忘——成功静默；通道失败吞错不外溢（悬空/路径失效同路）", async () => {
+    const ok = clientResponding(() => undefined)
+    await expect(openDocExternal(ok.client, { projectId: "p-1", docRel: "docs/x.md" })).resolves.toBeUndefined()
+    expect(ok.calls[0]?.channel).toBe(DOCS_CHANNELS.openExternal)
+    const failing = createForgeRpcClient(async () => ({
+      ok: false,
+      error: { code: "ERR_DOC_PATH_INVALID", message: "路径不在册" },
+    }))
+    await expect(openDocExternal(failing, { projectId: "p-1", docRel: "gone.md" })).resolves.toBeUndefined()
+  })
+});
+
+describe("装载落点纯函数（pendingDocView / applyDocFetch）", () => {
+  it("初始态 = loading + busy 骨架相位", () => {
+    expect(initialDocViewState()).toEqual({ phase: "loading", doc: undefined, busy: true, error: undefined })
+  })
+
+  it("在途：切换（清场）= 回骨架；重读 = 旧内容保持 + busy", () => {
+    const prev = { ...initialDocViewState(), phase: "ready" as const, doc: READY_DOC, busy: false }
+    expect(pendingDocView(prev, true)).toEqual(initialDocViewState())
+    expect(pendingDocView(prev, false)).toEqual({ ...prev, busy: true })
+  })
+
+  it("落点：成功 = ready 覆盖；失败有旧内容 = 旧内容 + 错误共现；失败无旧内容 = 错误相位", () => {
+    const withOld = { ...initialDocViewState(), phase: "ready" as const, doc: READY_DOC, busy: true }
+    expect(applyDocFetch(withOld, { ok: true, data: PLAIN_DOC })).toEqual({
+      phase: "ready",
+      doc: PLAIN_DOC,
+      busy: false,
+      error: undefined,
+    })
+    const failed: ReturnType<typeof mapDocsError> = { message: "网络断", uiState: "error-bar" }
+    expect(applyDocFetch(withOld, { ok: false, error: failed })).toEqual({
+      phase: "ready",
+      doc: READY_DOC,
+      busy: false,
+      error: failed,
+    })
+    expect(applyDocFetch(initialDocViewState(), { ok: false, error: failed })).toEqual({
+      ...initialDocViewState(),
+      busy: false,
+      error: failed,
+      phase: "error",
+    })
+  })
+});
+
+describe("DocsFrame（AC4 tab 内容结构——1.6 单行头收敛）", () => {
+  it("单行头：PathLabel 路径 + 官方图标钮（编辑器打开/重读）+ 正文 MarkdownDoc 全量渲染；标题行/只读 chip/摘要卡全数退役", () => {
+    const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={READY_DOC} busy={false} />)
+    expect(markup).toContain("data-dswf-doc-pathbar") // 单行头（对齐官方预览头——路径左 + 控件簇右）
+    expect(markup).not.toContain("data-dswf-doc-head") // 标题行退役（标题归 tab 页签）
+    expect(markup).not.toContain("M2 技术设计") // doc.title 零渲染（头部标题段退役）
+    expect(markup).not.toContain("只读") // 只读 chip 退役（面板恒只读——零冗余标注）
+    expect(markup).not.toContain("data-dswf-doc-summary") // 摘要卡退役（摘要供给改经概览文档行悬浮）
+    expect(markup).not.toContain("每工作区库") // doc.summary 零渲染
+    expect(markup).toContain("data-path-label") // 官方 PathLabel（目录段弱化/左缘渐隐裁剪/悬浮全值——官方自带）
+    expect(markup).toContain("Z:/ws/demo/docs/features/m2/design/tech-design.md") // canonical 全路径文本（目录段+文件名分段拼接）
+    expect(markup).toContain('aria-label="在编辑器中打开"')
+    expect(markup).toContain('aria-label="重新读取"')
+    expect(markup).not.toContain("📁") // emoji 零残留——官方导出图标件
+    expect(markup).not.toContain("↻")
+    expect(markup).toContain("<svg") // 控件簇 = 官方图标件（svg 在场）
+    expect(markup).not.toContain("dswf-doc-chip") // 非 dangling = 零冗余 chip
+    expect(markup).toContain("data-dswf-markdown") // 正文经 MarkdownDoc 全量渲染
+    expect(markup).toContain("前置段落。")
+    expect(markup).toContain("收尾段落。") // 全量渲染——mermaid fence 后的尾段同体在场
+  })
+
+  it("1.8 渲染链退役：mermaid fence 保持官方代码块形态（md-code-block DOM——出图归 DOM 增强器，产品零渲染件挂载）", () => {
+    const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={READY_DOC} busy={false} />)
+    expect(markup).toContain("data-dswf-markdown")
+    expect(markup).toContain("md-code-block") // mermaid fence = 官方代码块（增强器扫描判据）
+    expect(markup).not.toContain("dswf-doc-mermaid") // 零产品 mermaid 渲染件（分段链退役）
+    expect(markup).toContain("erDiagram") // 源码保持可见（安全兜底形态）
+  })
+
+  it("标题缺席 = 单行头零标题段（退役恒态）；摘要缺席 = 无摘要块（零冗余面）", () => {
+    const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={PLAIN_DOC} busy={false} />)
+    expect(markup).toContain("data-path-label")
+    expect(markup).toContain("Z:/ws/demo/docs/plain.md") // canonical 路径（PLAIN_DOC）
+    expect(markup).not.toContain("data-dswf-doc-summary")
+  })
+
+  it("首读在途 = 骨架；首读失败 = 错误条 + 重试（↻ 同径）", () => {
+    const loading = render(<DocsFrame {...baseFrame} phase="loading" doc={undefined} busy />)
+    expect(loading).toContain("data-dswf-doc-skeleton")
+    const failed = render(
+      <DocsFrame {...baseFrame} phase="error" doc={undefined} busy={false} error={{ message: "项目不存在", uiState: "error-bar" }} />,
+    )
+    expect(failed).toContain("data-dswf-doc-error")
+    expect(failed).toContain("文档装载失败：项目不存在")
+    expect(failed).toContain("data-dswf-doc-retry")
+  })
+
+  it("重读失败有旧内容 = 错误条 + 旧正文共现（不掏空）", () => {
+    const markup = render(
+      <DocsFrame {...baseFrame} phase="ready" doc={READY_DOC} busy={false} error={{ message: "网络断", uiState: "error-bar" }} />,
+    )
+    expect(markup).toContain("data-dswf-doc-error")
+    expect(markup).toContain("重读失败：网络断")
+    expect(markup).toContain("前置段落。") // 旧内容保持
+  })
+});
+
+describe("DocsFrame（AC5 悬空只读占位面）", () => {
+  it("悬空 = 单行头保留（路径 + 悬空 warn chip）+ 占位面；不渲染正文不崩溃", () => {
+    const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={DANGLING_DOC} busy={false} />)
+    expect(markup).toContain("data-dswf-doc-dangling")
+    expect(markup).toContain("悬空") // 悬空 warn chip（单行内——可见性不丢）
+    expect(markup).toContain("dswf-doc-chip-dangling") // warn 配色 chip 类在场
+    expect(markup).toContain("data-dswf-doc-pathbar")
+    expect(markup).toContain("data-path-label")
+    expect(markup).toContain("docs/features/gone/proposal.md") // canonicalPath = 库内 rel_path 原值
+    expect(markup).toContain('aria-label="重新读取"') // 重读保留
+    expect(markup).toContain("不崩溃、不写入、不删行") // 占位面文案
+    expect(markup).not.toContain("data-dswf-doc-body")
+    expect(markup).not.toContain("data-dswf-markdown")
+  })
+});
+
+describe("DocBody（MarkdownDoc 全量渲染——1.8 渲染链退役）", () => {
+  it("全量渲染单体：正文整体一次入 MarkdownDoc（含 mermaid fence 原文——不分段零交替）", () => {
+    const markup = render(<DocBody content={READY_DOC.content} />)
+    expect(markup).toContain('data-dswf-markdown="body"')
+    expect(markup).toContain("前置段落。")
+    expect(markup).toContain("erDiagram")
+    expect(markup).toContain("收尾段落。")
+    expect(markup, "渲染链退役——零分段渲染件挂载").not.toContain("dswf-doc-mermaid")
+    const mdAt = markup.indexOf("data-dswf-markdown")
+    const headAt = markup.indexOf("前置段落。")
+    const tailAt = markup.indexOf("收尾段落。")
+    expect(mdAt).toBeGreaterThan(-1)
+    expect(headAt).toBeGreaterThan(mdAt)
+    expect(tailAt).toBeGreaterThan(headAt)
+  })
+
+  it("1.4 CodeToolbar labels 递达：代码块升级官方 CodeToolbar（块级 wrap/复制/语言名——1.3 冻结常量复用）", () => {
+    const markup = render(<DocBody content={'# 正文\n\n```\nconst a = 1\n```'} />)
+    expect(markup, "块级 wrap 钮在场（toolbarLabels 递达 = CodeToolbar 臂）").toContain('aria-label="换行"')
+    expect(markup).toContain('aria-label="复制"')
+    expect(markup, "未知语言回退 codeLabel 文案（官方语言名槽位）").toContain("代码")
+  })
+});
+
+describe("DocsTab（状态 + 装载胶水——静态首装面）", () => {
+  it("首装 = 骨架（effect 不跑——数据装载归纯函数单测与 e2e）", () => {
+    const makeClient = vi.fn()
+    const markup = render(<DocsTab projectId="p-1" docRel="docs/x.md" makeClient={makeClient as never} />)
+    expect(markup).toContain("data-dswf-doc-panel")
+    expect(markup).toContain("data-dswf-doc-skeleton")
+    expect(makeClient).not.toHaveBeenCalled() // renderToStaticMarkup 不触发 effect——零 RPC 调用
+  })
+})

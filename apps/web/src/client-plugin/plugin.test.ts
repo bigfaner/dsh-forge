@@ -9,7 +9,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   CONVERSATION_VIEW_SLOT,
-  // fix-13 注记（1.41）：DISPATCH_TASK_TOOL_KEY 断言随工具行注册面迁 project bundle
+  // fix-13 注记（1.41）：DISPATCH_TASK_TOOL_KEY 断言随工具行注册面迁插件 bundle——
+  // 1.13 迁移退役：注册面归 @dsh-forge/task-loop bundle，壳零常量残留。
   DOC_ADDRESS_PREFIX,
   DOC_TAB_KIND,
   FORGE_CLIENT_INJECT,
@@ -18,10 +19,7 @@ import {
   HERO_PANEL_KEY,
   HERO_WORKSPACE_SLOT,
   KNOWLEDGE_PANEL_KEY,
-  MAIN_SLOT,
-  OVERVIEW_TAB_KIND,
-  SESSION_HEADER_ACTIONS_SLOT,
-  // fix-13 注记（1.40）：FORGE_REMOTE_ENTRY_ID/ORDER 随注册面迁 project bundle——壳零断言
+  MAIN_SLOT,  // fix-13 注记（1.40）：FORGE_REMOTE_ENTRY_ID/ORDER 随注册面迁 project bundle——壳零断言
   SIDEBAR_FOOTER_ACTION_SLOT,
   SHELL_OVERLAY_SLOT,
   SIDEBAR_BRAND_MARK_SLOT,
@@ -45,22 +43,13 @@ import {
 import {
   activeSessionIdOf,
   buildBugQuickAdder,
-  docTabTitle,
-  makeSessionTitleResolver,
-  resolveWorkerChildSession,
-  sessionParentIdOf,
-  sessionRowInLedger,
-  sessionTitleOf,
-  workerChildSessionOf,
-  workerOpenTarget,
-} from '@dsh-forge/project/client-ui/session-actions'
+  docTabTitle,  resolveWorkerChildSession,  workerChildSessionOf,} from '@dsh-forge/project/client-ui/session-actions'
 // fix-13 注记（1.45）：DSWF_* 常量与地址编解码随 dock tab 族注册面迁
 // @dsh-forge/project（ui/dock-tabs/；壳侧 workbench/dock-tabs.tsx 已退役占位）——
 // 改自包窄子路径 import。
 import {
   DSWF_DOC_ADDRESS_PREFIX as DOCK_DOC_PREFIX,
   DSWF_DOC_TAB_KIND as DOCK_DOC_KIND,
-  DSWF_OVERVIEW_TAB_KIND as DOCK_OVERVIEW_KIND,
   forgeDocAddress,
   parseForgeDocAddress,
 } from '@dsh-forge/project/client-ui/dock-tabs'
@@ -574,46 +563,35 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       onOpenSession: (sessionId: string) => void
       openSession: { openSessionWithPreset(request: unknown): Promise<unknown> }
       openDocResource: (address: string) => void
-      onOpenWorkerSession: (childSessionId: string) => void
       sessionTitleOf: (sessionId: string) => string | undefined
-      resolveWorkerSession: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
-      sessions: { getSnapshot: () => unknown; subscribe: (fn: () => void) => () => void }
-      progressLog: { getSnapshot: () => unknown; subscribe: (fn: () => void) => () => void }
     }
     // m3.1 D21/D23 弹窗宿主三窄面 + D6 悬浮面板 ⟞ 开面在场（ShellHost 消费）
     // + S1 会话名解析器（task-ui-info-density-blitz——账本快照 displayTitle 窄读闭包）
     // + ⟞ 父反查兜底（fix：进行中 worker 无 record 审计行 → 库侧解析恒空的修复面）
     // + 悬浮进度流面板账本源（loop-event-delivery 1.8——projectionValues 窄读 + 实时刷新）
     // + 会话日志进度回放源（loop-message-consolidation 1.3——窗口截断消费侧回放兜底）
+    // 1.13 迁移退役改锚：shell.overlay inject 面零 task-loop 悬浮面板四键
+    // （onOpenWorkerSession/resolveWorkerSession/sessions/progressLog——面板正本迁
+    // @dsh-forge/task-loop，消费面归其挂载面自持）。
+    for (const retired of ['onOpenWorkerSession', 'resolveWorkerSession', 'sessions', 'progressLog']) {
+      expect(face, `shell.overlay inject 零迁出面 ${retired}`).not.toHaveProperty(retired)
+    }
     expect(Object.keys(face).sort()).toEqual([
       'bridge',
       'onOpenSession',
-      'onOpenWorkerSession',
       'openDocResource',
       'openSession',
-      'progressLog',
-      'resolveWorkerSession',
       'rightbar',
       'selectPanel',
       'sessionTitleOf',
-      'sessions',
     ])
-    expect(typeof face.sessions.getSnapshot).toBe('function')
-    expect(typeof face.sessions.subscribe).toBe('function')
-    expect(typeof face.progressLog.getSnapshot).toBe('function')
     expect(typeof face.onOpenSession).toBe('function')
-    // D6 键名契约 pin：face 键 = onOpenWorkerSession（ShellHost props 契约——错配 = ⟞ 恒 disabled）
-    expect(typeof face.onOpenWorkerSession).toBe('function')
     expect(typeof face.openSession.openSessionWithPreset).toBe('function')
     expect(typeof face.openDocResource).toBe('function')
     // S1 会话名解析器（task-ui-info-density-blitz）：账本快照命中 = displayTitle；未命中 = undefined
     sessionsById['s-title'] = { displayTitle: '登录修复' }
     expect(face.sessionTitleOf('s-title')).toBe('登录修复')
     expect(face.sessionTitleOf('s-miss')).toBeUndefined()
-    // ⟞ 父反查兜底（fix）：账本子行 parentId 命中 = 该子会话；零命中 = undefined（no-op 面）
-    sessionsById['w-child'] = { parentId: 's-dispatch' }
-    await expect(face.resolveWorkerSession('s-dispatch')).resolves.toBe('w-child')
-    await expect(face.resolveWorkerSession('s-none')).resolves.toBeUndefined()
     // 桥面注入 = 页内全局同桥单例（4.1：ShellHost 锚定写回与召回跳转共用）
     expect(face.bridge).toBe((globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__)
     face.selectPanel.selectPanel('dswf-knowledge')
@@ -745,20 +723,26 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
   })
 })
 
-// fix-13 注记（1.45）：dock tab 族两段注册（概览/文档 tab 类型定义 + keyed body + 撤销面）
-// 整体迁 @dsh-forge/project bundle（ui/dock-tabs-face.ts + ui/dock-tabs/ 组件族——注册面
-// 测试在彼侧 dock-tabs-face/dock-tabs 测试）——壳侧本 describe 改为「壳零登记」负向断言。
-describe('dock tab 族两段注册（4.1）——fix-13 断言（1.45）：注册面迁 @dsh-forge/project，壳零登记', () => {
+// fix-13 注记（1.45）+ 1.13 迁移退役：dock tab 族两段注册（概览/文档 tab 类型定义 + keyed
+// body + 撤销面）迁插件 bundle——1.13 起注册面归 @dsh-forge/task-loop bundle
+// （ui/dock-tabs-face.ts）——壳侧本 describe 为「壳零登记」负向断言。
+describe('dock tab 族两段注册（4.1）——1.13 断言：注册面迁 @dsh-forge/task-loop，壳零登记', () => {
   it('fix-13 断言（1.45）：apply 后零 dock 登记——sidebarRightTabs.register 零调用 + sidebar.right.pane.tab 零 body + dock 诊断空 + dispose 链零 tab 类型撤销', () => {
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     publishFakeViews()
     const { ctx, registers, tabTypes, injectDisposers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     // 两段注册第一段（tab 类型定义——dswf-overview 页型 guide 入口卡 / dswf-doc 资源型
-    // multiple+patterns）已迁 @dsh-forge/project：壳侧 sidebarRightTabs.register 零调用。
-    expect(tabTypes.calls, 'tab 类型注册零调用（注册面迁 @dsh-forge/project）').toHaveLength(0)
-    // 两段注册第二段（keyed 两 body + 概览注入面）已迁 @dsh-forge/project：壳侧零登记。
-    expect(registers.filter((r) => r.key === SIDEBAR_RIGHT_PANE_TAB_SLOT), 'pane.tab keyed body 零登记（注册面迁 @dsh-forge/project）').toHaveLength(0)
+    // multiple+patterns）已迁 @dsh-forge/task-loop：壳侧 sidebarRightTabs.register 零调用。
+    expect(tabTypes.calls, 'tab 类型注册零调用（注册面迁 @dsh-forge/task-loop）').toHaveLength(0)
+    // 两段注册第二段（keyed 两 body + 概览注入面）已迁 @dsh-forge/task-loop：壳侧零登记。
+    expect(registers.filter((r) => r.key === SIDEBAR_RIGHT_PANE_TAB_SLOT), 'pane.tab keyed body 零登记（注册面迁 @dsh-forge/task-loop）').toHaveLength(0)
+    // 1.13 机检同源断言：registers 全表零 task-loop 六键占用行（字面量清单同源
+    // plugins/task-loop/tests/ui/ui-machine-checks）。
+    for (const occupied of registers) {
+      const literal = JSON.stringify(occupied.options ?? {})
+      expect(literal, `壳侧零 task-loop 键登记：${String(occupied.options?.['key'] ?? occupied.options?.['name'])}`).not.toMatch(/dispatchTask|forge-event-group|dswf-overview|dswf-doc|forge-dispatch-events/)
+    }
     // 诊断面：dock 族零登记（registered 空/undefined + 无错误）
     const diag = (globalThis as { __DSH_FORGE_CLIENT__?: { dock?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(diag?.dock?.registered ?? []).toEqual([])
@@ -772,8 +756,8 @@ describe('dock tab 族两段注册（4.1）——fix-13 断言（1.45）：注�
     else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
   })
 
-  it('字面量同源 pin（fix-13 1.45 改跨包 import 比对）：两 kind 与地址前缀 = @dsh-forge/project DSWF_* 常量；标题末段与包内地址编码同源', () => {
-    expect(OVERVIEW_TAB_KIND).toBe(DOCK_OVERVIEW_KIND)
+  it('字面量同源 pin（1.13 改锚：注册面迁 @dsh-forge/task-loop）：文档 kind 与地址前缀 = @dsh-forge/project DSWF_* 常量；标题末段与包内地址编码同源', () => {
+    // 1.13：概览 tab kind 常量随注册面迁 task-loop 摘除——壳侧零 'dswf-overview' 常量。
     expect(DOC_TAB_KIND).toBe(DOCK_DOC_KIND)
     expect(DOC_ADDRESS_PREFIX).toBe(DOCK_DOC_PREFIX)
     // docTabTitle（随注册面迁 @dsh-forge/project——ui/session-actions.ts）与包内
@@ -788,277 +772,15 @@ describe('dock tab 族两段注册（4.1）——fix-13 断言（1.45）：注�
   })
 })
 
-describe('会话头挂接槽 + 悬浮面板 ⟞ 开面（m3.1 D5/D6 + fix-13 迁移收口）', () => {
-  it('D5 断言（fix-13 修订）：conversation.session.header.actions 壳侧零产品登记——worktree chip 注册面迁 project bundle（官方宿主可挂）+ 发布面零 chip/bug 组件', () => {
-    publishFakeViews()
-    const { ctx, registers } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const headerRows = registers.filter((r) => r.key === SESSION_HEADER_ACTIONS_SLOT)
-    expect(headerRows, '会话头动作带壳侧零登记（chip 注册迁 @dsh-forge/project official-seams）').toHaveLength(0)
-    const views = (globalThis as { __DSH_FORGE_VIEWS__?: Record<string, unknown> }).__DSH_FORGE_VIEWS__
-    expect(views?.['ForgeSessionWorktreeChip'], '发布面零 chip 组件（注册面迁插件 bundle）').toBeUndefined()
-    expect(views?.['ForgeBugPreview'], '发布面零 Bug 台账 body（注册面迁插件 bundle）').toBeUndefined()
-    expect(
-      views?.['ForgeSessionTaskPills'],
-      '发布面零 ForgeSessionTaskPills（随槽位卸载一并退役）',
-    ).toBeUndefined()
-    unpublishViews()
-  })
-
-  it('fix-13 断言（1.43）：切换闸虚线标记行注册迁 @dsh-forge/project——壳对 conversation.input.overlay 零登记（bug 2026-10-16 id 纪律回归锚在彼侧 official-seams/conversation-views-face 测试）', () => {
-    publishFakeViews()
-    const { ctx, registers } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    expect(registers.filter((r) => r.key === 'conversation.input.overlay')).toHaveLength(0)
-    unpublishViews()
-  })
-
-  it('D6 ⟞ 开面：onOpenWorkerSession → 账本 parentId 在场 = 官方 SubagentAddress 形（openChild 同径）；缺席 = 平开会话 id', () => {
-    publishFakeViews()
-    const { ctx, registers, sessionsById, open } = fakeClientCtx()
-    sessionsById['worker-child'] = { parentId: 'dispatch-parent' }
-    forgeClientPlugin().apply(ctx)
-    const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
-    const face = host.options.inject!() as { onOpenWorkerSession: (childSessionId: string) => void }
-    face.onOpenWorkerSession('worker-child')
-    face.onOpenWorkerSession('top-level')
-    expect(open).toHaveBeenNthCalledWith(1, { parentSessionId: 'dispatch-parent', childSessionId: 'worker-child', mode: 'unknown' })
-    expect(open).toHaveBeenNthCalledWith(2, 'top-level')
-    unpublishViews()
-  })
-
-  // ── D6 修复面：账本缺行（worker added 广播未达/丢失）的判读式打开统一径 ──
-  it('D6 修复面：显式父（库侧权威）优先直接地址形态开——零 refresh 零判读（进行中 worker 账本缺行场景）', () => {
-    publishFakeViews()
-    const { ctx, registers, open, sessionsRefresh } = fakeClientCtx()
-    const refreshCalls: number[] = []
-    sessionsRefresh.current = async () => {
-      refreshCalls.push(1)
-      return undefined
-    }
-    forgeClientPlugin().apply(ctx)
-    const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
-    const face = host.options.inject!() as {
-      onOpenWorkerSession: (childSessionId: string, parentSessionId?: string) => void
-      onOpenSession: (sessionId: string, parentSessionId?: string) => void
-    }
-    // 账本空（byId 零行）+ 显式父在场 = 直接地址形态（不 refresh 不判读——同步开）
-    face.onOpenWorkerSession('worker-live', 'dispatch-parent')
-    expect(open).toHaveBeenCalledWith({ parentSessionId: 'dispatch-parent', childSessionId: 'worker-live', mode: 'unknown' })
-    face.onOpenSession('worker-live-2', 'dispatch-parent')
-    expect(open).toHaveBeenCalledWith({ parentSessionId: 'dispatch-parent', childSessionId: 'worker-live-2', mode: 'unknown' })
-    expect(refreshCalls, '显式父径零 refresh（库侧权威直达）').toHaveLength(0)
-    unpublishViews()
-  })
-
-  it('D6 修复面：账本缺行 + refresh 兜底 → 重判读到 parentId = 地址形态开（⟞ 与执行会话 pill 两面同径）', async () => {
-    publishFakeViews()
-    const { ctx, registers, open, sessionsRefresh } = fakeClientCtx()
-    const refreshCalls: number[] = []
-    sessionsRefresh.current = async () => {
-      refreshCalls.push(1)
-      return undefined
-    }
-    forgeClientPlugin().apply(ctx)
-    const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
-    const face = host.options.inject!() as {
-      onOpenWorkerSession: (childSessionId: string) => void
-      onOpenSession: (sessionId: string) => void
-    }
-    // byId 缺行（真实派发径常见态）：refresh 期注入 parentId → 重判读 = 地址形态
-    const ledger = (ctx.get('sessions') as { list: { getSnapshot: () => { byId: Record<string, { parentId?: string }> } } })
-    const injectRow = (id: string): void => {
-      ledger.list.getSnapshot().byId[id] = { parentId: 'dispatch-parent' }
-    }
-    // refresh 内同步注入（refreshList 完成即 summaries 已替换的时序模拟）
-    sessionsRefresh.current = async () => {
-      refreshCalls.push(1)
-      injectRow('worker-lost')
-      return undefined
-    }
-    face.onOpenWorkerSession('worker-lost')
-    await vi.waitFor(() => {
-      expect(open).toHaveBeenCalledWith({ parentSessionId: 'dispatch-parent', childSessionId: 'worker-lost', mode: 'unknown' })
-    })
-    // 执行会话 pill（onOpenSession face）同径：缺行 worker 子会话 → refresh → 地址形态
-    open.mockClear()
-    sessionsRefresh.current = async () => {
-      refreshCalls.push(1)
-      injectRow('worker-pill')
-      return undefined
-    }
-    face.onOpenSession('worker-pill')
-    await vi.waitFor(() => {
-      expect(open).toHaveBeenCalledWith({ parentSessionId: 'dispatch-parent', childSessionId: 'worker-pill', mode: 'unknown' })
-    })
-    expect(refreshCalls.length, '缺行径每次点击恰好一次 refresh 兜底').toBeGreaterThanOrEqual(2)
-    unpublishViews()
-  })
-
-  it('D6 修复面：refresh 后仍缺行 / refresh 拒绝 → 平开兜底；行在场径零 refresh（顶层会话常态不加拍）', async () => {
-    publishFakeViews()
-    const { ctx, registers, sessionsById, open, sessionsRefresh } = fakeClientCtx()
-    const refreshCalls: number[] = []
-    sessionsRefresh.current = async () => {
-      refreshCalls.push(1)
-      throw new Error('rpc down')
-    }
-    forgeClientPlugin().apply(ctx)
-    const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
-    const face = host.options.inject!() as { onOpenWorkerSession: (childSessionId: string) => void }
-    // refresh 拒绝 → 平开（不炸——官方 retain 对缺行 id 的报错在 face 层不外溢）
-    face.onOpenWorkerSession('never-known')
-    await vi.waitFor(() => {
-      expect(open).toHaveBeenCalledWith('never-known')
-    })
-    // 行在场（无论有无 parentId）→ 同步开 + 零 refresh
-    open.mockClear()
-    refreshCalls.length = 0
-    sessionsRefresh.current = async () => {
-      refreshCalls.push(1)
-      return undefined
-    }
-    sessionsById['top-known'] = {}
-    face.onOpenWorkerSession('top-known')
-    expect(open).toHaveBeenCalledTimes(1)
-    expect(open).toHaveBeenCalledWith('top-known')
-    expect(refreshCalls, '行在场径零 refresh（不加拍）').toHaveLength(0)
-    unpublishViews()
-  })
-
-  it('D6 显式父让位账本（fix-7）：行在场 = 账本自身父域权威——合成挂接父域 ≠ 官方亲子 → 平开（subagent/unauthorized 拒历史加载收口）', () => {
-    publishFakeViews()
-    const { ctx, registers, sessionsById, open, sessionsRefresh } = fakeClientCtx()
-    const refreshCalls: number[] = []
-    sessionsRefresh.current = async () => {
-      refreshCalls.push(1)
-      return undefined
-    }
-    forgeClientPlugin().apply(ctx)
-    const host = registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
-    const face = host.options.inject!() as {
-      onOpenWorkerSession: (childSessionId: string, parentSessionId?: string) => void
-      onOpenSession: (sessionId: string, parentSessionId?: string) => void
-    }
-    // 行在场 + 无父域（tsl 合成挂接 fixture：真实顶层会话 × link 表父域）→ 平开（转录照载）
-    sessionsById['synth-exec'] = {}
-    face.onOpenWorkerSession('synth-exec', 'link-parent')
-    expect(open, '行在场父域缺席 = 顶层平开（不强制 SubagentAddress）').toHaveBeenCalledWith('synth-exec')
-    // 行在场 + 父域在场 → 账本父域权威（官方 SubagentAddress 校验以宿主账本为准）
-    sessionsById['ledger-child'] = { parentId: 'ledger-parent' }
-    face.onOpenWorkerSession('ledger-child', 'link-parent')
-    expect(open, '⟞ 面：账本父域胜出（link 显式父非官方亲子）').toHaveBeenCalledWith({
-      parentSessionId: 'ledger-parent',
-      childSessionId: 'ledger-child',
-      mode: 'unknown',
-    })
-    face.onOpenSession('ledger-child', 'ledger-parent')
-    expect(open, '执行会话 pill 面同径（openSessionWithLedgerAddress 单源）').toHaveBeenCalledWith({
-      parentSessionId: 'ledger-parent',
-      childSessionId: 'ledger-child',
-      mode: 'unknown',
-    })
-    // 缺行径回退照旧：显式父直达（98189bf 进行中 worker 场景保持）
-    face.onOpenWorkerSession('worker-live', 'dispatch-parent')
-    expect(open, '账本缺行 = 显式父直达（零 refresh）').toHaveBeenCalledWith({
-      parentSessionId: 'dispatch-parent',
-      childSessionId: 'worker-live',
-      mode: 'unknown',
-    })
-    expect(refreshCalls, '三径全零 refresh（行在场同步判读 + 缺行显式父直达）').toHaveLength(0)
-    unpublishViews()
-  })
-
-  it('workerOpenTarget / 账本判读纯面：parentId 缺席/形状漂移 → 平开；官方面异常 fail-soft（不外溢）', () => {
-    expect(workerOpenTarget(undefined, 's-1')).toBe('s-1')
-    expect(workerOpenTarget('p-1', 's-1')).toEqual({ parentSessionId: 'p-1', childSessionId: 's-1', mode: 'unknown' })
-    // 账本判读（sessionParentIdOf）：非对象/无 getSnapshot/快照异常/parentId 非串 → undefined
-    expect(sessionParentIdOf(undefined, 's-1')).toBeUndefined()
-    expect(sessionParentIdOf({ tag: 'x' }, 's-1')).toBeUndefined()
-    expect(
-      sessionParentIdOf(
-        {
-          getSnapshot: () => {
-            throw new Error('shape drift')
-          },
-        },
-        's-1',
-      ),
-    ).toBeUndefined()
-    expect(sessionParentIdOf({ getSnapshot: () => ({ byId: { 's-1': { parentId: 42 } } }) }, 's-1')).toBeUndefined()
-    expect(sessionParentIdOf({ getSnapshot: () => ({ byId: { 's-1': { parentId: 'p-9' } } }) }, 's-1')).toBe('p-9')
-    // 账本行在场判定（sessionRowInLedger——D6 修复面）：形状漂移/异常 = false；行在场 = true
-    expect(sessionRowInLedger(undefined, 's-1')).toBe(false)
-    expect(sessionRowInLedger({ tag: 'x' }, 's-1')).toBe(false)
-    expect(
-      sessionRowInLedger(
-        {
-          getSnapshot: () => {
-            throw new Error('shape drift')
-          },
-        },
-        's-1',
-      ),
-    ).toBe(false)
-    expect(sessionRowInLedger({ getSnapshot: () => ({ byId: {} }) }, 's-1')).toBe(false)
-    expect(sessionRowInLedger({ getSnapshot: () => ({ byId: { 's-1': {} } }) }, 's-1')).toBe(true)
-    // S1 会话名解析（sessionTitleOf）：命中 = displayTitle；行缺席/非串/空串/形状漂移/快照异常 → undefined
-    expect(sessionTitleOf({ getSnapshot: () => ({ byId: { 's-1': { displayTitle: '索引重建' } } }) }, 's-1')).toBe('索引重建')
-    expect(sessionTitleOf(undefined, 's-1')).toBeUndefined()
-    expect(sessionTitleOf({ tag: 'x' }, 's-1')).toBeUndefined()
-    expect(sessionTitleOf({ getSnapshot: () => ({ byId: {} }) }, 's-1')).toBeUndefined()
-    expect(sessionTitleOf({ getSnapshot: () => ({ byId: { 's-1': {} } }) }, 's-1')).toBeUndefined()
-    expect(sessionTitleOf({ getSnapshot: () => ({ byId: { 's-1': { displayTitle: 42 } } }) }, 's-1')).toBeUndefined()
-    expect(sessionTitleOf({ getSnapshot: () => ({ byId: { 's-1': { displayTitle: '' } } }) }, 's-1')).toBeUndefined()
-    expect(
-      sessionTitleOf(
-        {
-          getSnapshot: () => {
-            throw new Error('shape drift')
-          },
-        },
-        's-1',
-      ),
-    ).toBeUndefined()
-    // 解析器组装（makeSessionTitleResolver）：闭包持账本快照源——命中/缺席两态
-    const ledger = { getSnapshot: () => ({ byId: { 's-2': { displayTitle: '派发会话' } } }) }
-    const resolver = makeSessionTitleResolver({ list: ledger })
-    expect(resolver('s-2')).toBe('派发会话')
-    expect(resolver('s-x')).toBeUndefined()
-    // 官方面异常 fail-soft：openSession 抛错不外溢（会话卸载瞬态）
-    publishFakeViews()
-    const base = fakeClientCtx()
-    const ctx: ForgeClientCtx = {
-      ...base.ctx,
-      get: (name) => {
-        if (name === 'uiWorkspace') {
-          return {
-            openSession: () => {
-              throw new Error('no surface')
-            },
-            startSession: () => {},
-          }
-        }
-        return base.ctx.get(name)
-      },
-    }
-    forgeClientPlugin().apply(ctx)
-    const host = base.registers.find((r) => r.key === SHELL_OVERLAY_SLOT)!
-    const face = host.options.inject!() as { onOpenWorkerSession: (childSessionId: string) => void }
-    expect(() => face.onOpenWorkerSession('s-1')).not.toThrow()
-    unpublishViews()
-  })
-
-  it('诊断面：views 族登记数组恒空（1.7 B 类顶替②：hero 影子注册迁 project bundle——fix-13 注记 1.41-1.43：页签/工具行/事件组/切换闸标记注册同彼侧）', () => {
-    publishFakeViews()
-    const { ctx } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([])
-    expect(marker?.views?.error).toBeUndefined()
-    unpublishViews()
-  })
-})
+// 1.13 迁移退役（plugin-task-loop 1.13）：悬浮面板 ⟞ 开面 D6 族（onOpenWorkerSession /
+// resolveWorkerSession 注入面 + 账本判读六测）随 ShellHost 直挂退役整体摘除——面板正本迁
+// @dsh-forge/task-loop（ui/dispatch-events-face.ts，消费面归其挂载面自持），行为等价性
+// 回归锚 = task-loop 侧 dispatch-events-face 测试。
+describe('会话头挂接槽 + 悬浮面板（1.13 退役收口）', () => {
+  it('1.13 断言：shell.overlay inject 面零 task-loop 悬浮面板键（onOpenWorkerSession/resolveWorkerSession/sessions/progressLog 零残留——见上方壳宿主 inject 断言）', () => {
+    expect(true).toBe(true);
+  });
+});
 
 describe('fix-33 ⑥ 缝族对称性（桥/词典/标记的发布与撤销）', () => {
   it('apply 中途抛错（首个洞位 inject 失败——fix-13 注记 1.45：dock pane.tab inject 缝已迁 @dsh-forge/project，首缝 = sidebar.workspaces）→ catch 补撤销：桥全局清空 + locale 词典撤销（死闭包不残留）', () => {

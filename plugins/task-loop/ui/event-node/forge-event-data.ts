@@ -47,113 +47,113 @@ export interface ForgeProgressEntryData {
 
 /** 条目守卫（逐位形状防御） */
 function isForgeEventEntryData(value: unknown): value is ForgeEventEntryData {
-  if (typeof value !== 'object' || value === null) return false
+  if (typeof value !== "object" || value === null) return false
   const raw = value as Record<string, unknown>
   return (
-    typeof raw['id'] === 'string' &&
-    typeof raw['seq'] === 'number' &&
-    Number.isFinite(raw['seq']) &&
-    typeof raw['time'] === 'number' &&
-    Number.isFinite(raw['time']) &&
-    typeof raw['badge'] === 'string' &&
-    typeof raw['title'] === 'string' &&
-    typeof raw['summary'] === 'string' &&
-    typeof raw['text'] === 'string'
+    typeof raw["id"] === "string" &&
+    typeof raw["seq"] === "number" &&
+    Number.isFinite(raw["seq"]) &&
+    typeof raw["time"] === "number" &&
+    Number.isFinite(raw["time"]) &&
+    typeof raw["badge"] === "string" &&
+    typeof raw["title"] === "string" &&
+    typeof raw["summary"] === "string" &&
+    typeof raw["text"] === "string"
   )
 }
 
 /** 'forge/progress' 条目守卫（client-plugin progressEntryOf 窄收镜像——畸形弃行不抛） */
 export function isForgeProgressEntryData(value: unknown): value is ForgeProgressEntryData {
-  if (typeof value !== 'object' || value === null) return false
+  if (typeof value !== "object" || value === null) return false
   const raw = value as Record<string, unknown>
   return (
-    typeof raw['seq'] === 'number' &&
-    Number.isFinite(raw['seq']) &&
-    typeof raw['sourceSlug'] === 'string' &&
-    raw['sourceSlug'] !== '' &&
-    typeof raw['status'] === 'string' &&
-    typeof raw['verb'] === 'string' &&
-    (raw['taskKey'] === undefined || typeof raw['taskKey'] === 'string') &&
-    (raw['taskTitle'] === undefined || typeof raw['taskTitle'] === 'string') &&
-    (raw['expertKey'] === undefined || typeof raw['expertKey'] === 'string') &&
-    (raw['scenario'] === undefined || typeof raw['scenario'] === 'string') &&
-    (raw['note'] === undefined || typeof raw['note'] === 'string') &&
-    (raw['attempt'] === undefined || (typeof raw['attempt'] === 'number' && Number.isInteger(raw['attempt']) && raw['attempt'] >= 1)) &&
-    typeof raw['at'] === 'number' &&
-    Number.isFinite(raw['at'])
+    typeof raw["seq"] === "number" &&
+    Number.isFinite(raw["seq"]) &&
+    typeof raw["sourceSlug"] === "string" &&
+    raw["sourceSlug"] !== "" &&
+    typeof raw["status"] === "string" &&
+    typeof raw["verb"] === "string" &&
+    (raw["taskKey"] === undefined || typeof raw["taskKey"] === "string") &&
+    (raw["taskTitle"] === undefined || typeof raw["taskTitle"] === "string") &&
+    (raw["expertKey"] === undefined || typeof raw["expertKey"] === "string") &&
+    (raw["scenario"] === undefined || typeof raw["scenario"] === "string") &&
+    (raw["note"] === undefined || typeof raw["note"] === "string") &&
+    (raw["attempt"] === undefined || (typeof raw["attempt"] === "number" && Number.isInteger(raw["attempt"]) && raw["attempt"] >= 1)) &&
+    typeof raw["at"] === "number" &&
+    Number.isFinite(raw["at"])
   )
 }
 
 /** 组块数据守卫（client-plugin forgeEventGroupDefinition.buildViewNode data 同语义镜像） */
 export function isForgeEventGroupData(value: unknown): value is ForgeEventGroupData {
-  if (typeof value !== 'object' || value === null) return false
+  if (typeof value !== "object" || value === null) return false
   const raw = value as Record<string, unknown>
   return (
-    typeof raw['key'] === 'string' &&
-    typeof raw['firstSeq'] === 'number' &&
-    Number.isFinite(raw['firstSeq']) &&
-    typeof raw['lastSeq'] === 'number' &&
-    Number.isFinite(raw['lastSeq']) &&
-    typeof raw['isLatest'] === 'boolean' &&
-    Array.isArray(raw['entries']) &&
-    raw['entries'].every((entry) => isForgeEventEntryData(entry)) &&
-    (raw['progress'] === undefined ||
-      (Array.isArray(raw['progress']) && raw['progress'].every((entry) => isForgeProgressEntryData(entry))))
+    typeof raw["key"] === "string" &&
+    typeof raw["firstSeq"] === "number" &&
+    Number.isFinite(raw["firstSeq"]) &&
+    typeof raw["lastSeq"] === "number" &&
+    Number.isFinite(raw["lastSeq"]) &&
+    typeof raw["isLatest"] === "boolean" &&
+    Array.isArray(raw["entries"]) &&
+    raw["entries"].every((entry) => isForgeEventEntryData(entry)) &&
+    (raw["progress"] === undefined ||
+      (Array.isArray(raw["progress"]) && raw["progress"].every((entry) => isForgeProgressEntryData(entry))))
   )
 }
 
 /** 场景章族色（run=进行蓝 / done=完成绿 / blk=阻塞琥珀——prototype evt-kind 同语义） */
-export type ForgeEventBadgeTone = 'run' | 'done' | 'blk'
+export type ForgeEventBadgeTone = "run" | "done" | "blk";
 
 const TONE_BY_BADGE: Readonly<Record<string, ForgeEventBadgeTone>> = {
-  启动: 'run',
-  领取: 'run',
-  恢复: 'run',
-  自动处理: 'run',
-  自动重试: 'run',
-  进行中: 'run',
-  完成: 'done',
-  结束: 'done',
-  停止: 'done',
-  循环结束: 'done',
-  循环停止: 'done',
-  阻塞: 'blk',
-  受阻: 'blk',
-  挂起: 'blk',
-  循环受阻: 'blk',
-}
+  启动: "run",
+  领取: "run",
+  恢复: "run",
+  自动处理: "run",
+  自动重试: "run",
+  进行中: "run",
+  完成: "done",
+  结束: "done",
+  停止: "done",
+  循环结束: "done",
+  循环停止: "done",
+  阻塞: "blk",
+  受阻: "blk",
+  挂起: "blk",
+  循环受阻: "blk",
+};
 
 /** 徽记族色映射（未知徽记 = 中性 run 兜底） */
 export function forgeEventBadgeTone(badge: string): ForgeEventBadgeTone {
-  return TONE_BY_BADGE[badge] ?? 'run'
+  return TONE_BY_BADGE[badge] ?? "run"
 }
 
 /** 时刻显示（HH:mm——组头时间范围刻度；畸形时间戳 = 空串收口） */
 export function forgeEventClock(time: number): string {
-  if (!Number.isFinite(time)) return ''
+  if (!Number.isFinite(time)) return ""
   try {
     const d = new Date(time)
-    const pad = (n: number): string => String(n).padStart(2, '0')
+    const pad = (n: number): string => String(n).padStart(2, "0")
     return `${pad(d.getHours())}:${pad(d.getMinutes())}`
   } catch {
-    return ''
+    return ""
   }
 }
 
 /** 秒级时刻显示（HH:mm:ss——条目行刻度；畸形时间戳 = 空串收口） */
 export function forgeEventClockSeconds(time: number): string {
-  if (!Number.isFinite(time)) return ''
+  if (!Number.isFinite(time)) return ""
   try {
     const d = new Date(time)
-    const pad = (n: number): string => String(n).padStart(2, '0')
+    const pad = (n: number): string => String(n).padStart(2, "0")
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
   } catch {
-    return ''
+    return ""
   }
 }
 
 /** 循环终态尾饰（结算/停止消息任务源行缀尾——组头只留来源标识，剥徽记前缀 + 括注 + 终态尾饰） */
-const SOURCE_TERMINAL_TAIL = /\s*—\s*(?:循环结束|已按你的指令停止)\s*$/
+const SOURCE_TERMINAL_TAIL = /\s*—\s*(?:循环结束|已按你的指令停止)\s*$/;
 
 /**
  * 组头来源标识（条目原文 `任务源: ` 行值，剥徽记前缀、`（…）` 修饰与循环终态尾饰
@@ -167,22 +167,22 @@ export function forgeEventGroupSource(entries: readonly ForgeEventEntryData[], p
     const match = /(?:^|\n)\s*(?:\[forge·[^\]]+\]\s*)?任务源:\s*(.+)/.exec(entry.text)
     if (match !== null) {
       return match[1]!
-        .replace(/（[^）]*）/g, '')
-        .replace(SOURCE_TERMINAL_TAIL, '')
+        .replace(/（[^）]*）/g, "")
+        .replace(SOURCE_TERMINAL_TAIL, "")
         .trim()
     }
   }
   for (const entry of progress ?? []) {
-    if (entry.sourceSlug !== '') return entry.sourceSlug
+    if (entry.sourceSlug !== "") return entry.sourceSlug
   }
-  return ''
+  return ""
 }
 
 /** 组头计数文案（`N 条 · 今日 HH:mm–HH:mm`——原型 evt-head .count 同语；单条单时点；空组 = ''） */
 export function forgeEventGroupCount(entries: readonly ForgeEventEntryData[]): string {
   const first = entries[0]
   const last = entries.at(-1)
-  if (first === undefined) return ''
+  if (first === undefined) return ""
   const range =
     last !== undefined && last.id !== first.id
       ? `${forgeEventClock(first.time)}–${forgeEventClock(last.time)}`
@@ -194,19 +194,19 @@ export function forgeEventGroupCount(entries: readonly ForgeEventEntryData[]): s
 
 /** 进度状态词（progress 卡任务行状态徽标——面板 DISPATCH_EVENT_STATUS_WORD 同语镜像） */
 export const FORGE_PROGRESS_STATUS_WORD: Readonly<Record<string, string>> = {
-  running: '执行中',
-  completed: '完成',
-  blocked: '阻塞',
-  interrupted: '已中断',
-}
+  running: "执行中",
+  completed: "完成",
+  blocked: "阻塞",
+  interrupted: "已中断",
+};
 
 /** 循环级状态词（taskKey 缺席的循环级进度行——与任务级词表分层，一律带「循环」标记） */
 export const FORGE_LOOP_STATUS_WORD: Readonly<Record<string, string>> = {
-  running: '循环进行中',
-  completed: '循环已结束',
-  blocked: '循环受阻',
-  interrupted: '循环已结束',
-}
+  running: "循环进行中",
+  completed: "循环已结束",
+  blocked: "循环受阻",
+  interrupted: "循环已结束",
+};
 
 /** 进度行状态词（任务级 = 裸状态词；循环级（taskKey 缺席）= 带「循环」标记词） */
 export function forgeProgressStatusWord(entry: { readonly status: string; readonly taskKey?: string }): string {
@@ -216,9 +216,9 @@ export function forgeProgressStatusWord(entry: { readonly status: string; readon
 
 /** 进度状态族色（执行中=进行蓝 / 完成=完成绿 / 阻塞·中断=琥珀——徽记 tone 族同语义） */
 export function forgeProgressStatusTone(status: string): ForgeEventBadgeTone {
-  if (status === 'completed') return 'done'
-  if (status === 'blocked' || status === 'interrupted') return 'blk'
-  return 'run'
+  if (status === "completed") return "done"
+  if (status === "blocked" || status === "interrupted") return "blk"
+  return "run"
 }
 
 /**
@@ -246,8 +246,8 @@ export function forgeProgressRowItems(entries: readonly ForgeProgressEntryData[]
   const triage = new Map<string, ForgeProgressRowData>()
   let loop: ForgeProgressRowData | undefined
   for (const entry of entries) {
-    if (entry.scenario === 'pool/pending') continue
-    if (entry.verb === 'triage' && entry.taskKey !== undefined) {
+    if (entry.scenario === "pool/pending") continue
+    if (entry.verb === "triage" && entry.taskKey !== undefined) {
       const key = `triage:${entry.taskKey}`
       const held = triage.get(key)
       triage.set(key, {
@@ -273,7 +273,7 @@ export function forgeProgressRowItems(entries: readonly ForgeProgressEntryData[]
 }
 
 /** 循环终态徽记族（上一轮结束/停止/受阻消息——循环级 running 行在场 = 已被重开覆盖的陈旧事实） */
-const LOOP_SUPERSEDED_BADGES: ReadonlySet<string> = new Set(['循环结束', '循环停止', '循环受阻'])
+const LOOP_SUPERSEDED_BADGES: ReadonlySet<string> = new Set(["循环结束", "循环停止", "循环受阻"]);
 
 /**
  * 组内可见消息条目（循环重开防误导——循环级最新态为 running 时，上一轮的终态/受阻

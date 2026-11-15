@@ -234,18 +234,21 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
     for (const f of [
       'apps/web/src/views/session/ConversationViews.tsx',
       // loop-event-delivery 1.8：悬浮进度流面板（派发任务悬浮面板 UI 继任）
-      'apps/web/src/views/session/DispatchEventsPanel.tsx',
-      'apps/web/src/views/session/dispatch-events-panel.css',
+      // 1.13 迁移退役：DispatchEventsPanel.tsx/.css 本体迁 @dsh-forge/task-loop（ui/dispatch-events-panel/）——壳侧存在性 pin 改指迁地面
+      'plugins/task-loop/ui/dispatch-events-panel/DispatchEventsPanel.tsx',
+      'plugins/task-loop/ui/dispatch-events-panel/dispatch-events-panel.css',
       // fix-13 注记（1.45）：DispatchPanel 出口随 dock tab 族迁 @dsh-forge/project
       // （plugins/project/ui/dock-tabs/worker-session.ts——概览任务 tab 消费面）
       'plugins/project/ui/dock-tabs/worker-session.ts',
       'apps/web/src/views/session/session.css',
       'apps/web/src/views/session/index.ts',
+      // 1.13 迁移退役：DispatchEventsPanel.tsx 本体迁 @dsh-forge/task-loop（ui/dispatch-events-panel/）——壳侧存在性 pin 改指迁地面
+      'plugins/task-loop/ui/dispatch-events-panel/DispatchEventsPanel.tsx',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/views/session/index.ts')
-    for (const name of ['ConversationViews', 'DispatchEventsPanel']) {
+    for (const name of ['ConversationViews']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
     // loop-event-delivery 1.8 替代 pin：旧任务面板样式/角标 UI 死代码缺席（替代不并存——
@@ -625,7 +628,8 @@ describe('m3.1 D35 按钮风格对齐 pin（toolbar 深灰异类清零——官�
 
   it('九位对齐 pin：折叠/关闭/搜索清除/展开/行操作图标钮 = 官方 ghost（透明底 + hover interactive-bg-hover——数据锚与 aria 原样）', () => {
     const ghostSites: readonly (readonly [file: string, marker: string, note: string])[] = [
-      ['apps/web/src/views/session/DispatchEventsPanel.tsx', 'data-dswf-dep-collapse', '悬浮进度流面板折叠钮（用户点名面继任——loop-event-delivery 1.8）'],
+      // 1.13 迁移退役：面板正本迁 @dsh-forge/task-loop（ui/dispatch-events-panel/）——ghost 钮 pin 改指迁地面
+      ['plugins/task-loop/ui/dispatch-events-panel/DispatchEventsPanel.tsx', 'data-dswf-dep-collapse', '悬浮进度流面板折叠钮（用户点名面继任——loop-event-delivery 1.8）'],
       ['plugins/knowledge/ui/EntryDrawer.tsx', 'data-dswf-kn-dialog-close', '知识详情弹窗关闭'],
       ['plugins/knowledge/ui/KnowledgeToolbar.tsx', 'dswf-kn-searchclear', '知识搜索清除'],
       ['plugins/project/ui/dock-tabs/overview/sticky-bar.tsx', 'data-dswf-ov-searchclear', '概览搜索清除'],
