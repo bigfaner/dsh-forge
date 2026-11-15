@@ -110,6 +110,12 @@ export interface ForgeTasksRemoteDeps {
   readonly followIntervalMs?: number;
   /** 诊断缝（装配/降级留痕——禁直落 console 新增站点，走 config.diag 注入面） */
   readonly diag?: (line: string) => void;
+  /**
+   * 注册后自探针缝（boot 竞速根治——project 实况同径）：typertGateway invoke 直探 =
+   * serve 层认领自证（零副作用读面；注册完成行后时点即装配序判据——先于 client mount
+   * 首探）。gateway 缺席/调用失败 = 自探针失败诊断行，fail-soft 不阻载。
+   */
+  readonly selfProbe?: (namespace: string, method: string, args?: Record<string, unknown>) => Promise<unknown>;
 }
 
 /** 注册结果（可观测面——registered = 根 ctx 装上的 namespace；degraded = 降级清单；
@@ -320,10 +326,29 @@ function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+/** 控制器注册表（namespace → 工厂——project 实况形态；缺族不注册不空挂。injectKey =
+ *  cordis inject 生命周期绑族（域服务 provide 时点可晚于本装配——bug 253b8265：apply
+ *  时点探针冻结 degraded，迟到服务恒 404；官方 inject 缝——在场激活/后到补激活/撤回随
+ *  fiber 退）。absentWhen 探针调用期求值（惰性现查永不缓存，AGENTS 1.6）。 */
+const CONTROLLERS: readonly {
+  readonly namespace: string;
+  readonly injectKey?: string;
+  readonly absentWhen?: (deps: ForgeTasksRemoteDeps) => boolean;
+  readonly mount: (scope: Context, deps: ForgeTasksRemoteDeps) => unknown;
+}[] = [
+  {
+    namespace: "forgeTasks",
+    injectKey: FORGE_TASKS_SERVICE_KEY,
+    absentWhen: (d) => d.tasks?.() === undefined,
+    mount: (scope, deps) => new ForgeTasksRemote(scope, deps),
+  },
+];
+
 /**
- * forgeTasks Typert Remote 控制器注册（根 ctx plugin——fiber 生命周期归宿主管辖；inject
- * 生命周期绑 forgeTasks 服务键：在场同步激活、后到补激活（bug 253b8265 同径）、撤回随
- * fiber 退；域服务缺席 = namespace 诚实降级 404 语义，单族注册抛错 fail-soft 不阻载）。
+ * forgeTasks Typert Remote 控制器注册（根 ctx plugin——fiber 生命周期归宿主管辖；CONTROLLERS
+ * 注册表逐行挂载，注册三态可观测 registered/degraded/pending + 完成行诊断留痕；单族注册
+ * 抛错 fail-soft 不阻载。注册后自探针：registered 族经 gateway invoke 直探零副作用读面 =
+ * serve 层认领自证（boot 竞速根治——project 实况同径；失败只落诊断不阻载）。
  */
 export function registerForgeTasksRemote(
   ctx: TypertAssemblyCtxFace,
@@ -331,56 +356,72 @@ export function registerForgeTasksRemote(
 ): ForgeTasksRegistration {
   const diag = deps.diag;
   const host = (ctx.root ?? ctx) as TypertAssemblyCtxFace;
-  const namespace = "forgeTasks";
   const registered: string[] = [];
   const degraded: string[] = [];
   const pending: string[] = [];
   if (typeof host.plugin !== "function") {
-    const line = "[task-loop-typert] ctx.plugin 缺席——forgeTasks 控制器不注册（非 cordis 宿主）";
+    const line = "[task-loop-typert] ctx.plugin 缺席——Typert 控制器不注册（非 cordis 宿主）";
     diag?.(line);
     degraded.push("assembly");
     return { registered, degraded, pending };
   }
-  const inject = host.inject;
-  if (typeof inject === "function") {
-    // 生命周期绑（官方 ctx.inject 缝——挂起期 namespace 不认领 = 诚实降级 404 语义不变）
-    pending.push(namespace);
-    degraded.push(namespace);
-    inject.call(host, [FORGE_TASKS_SERVICE_KEY], (scope) => {
-      try {
-        if (scope[FORGE_TASKS_SERVICE_KEY] === undefined) return;
-        host.plugin!({
-          name: `task-loop-typert-${namespace}`,
-          apply: (pluginScope: unknown) => {
-            new ForgeTasksRemote(pluginScope as Context, deps);
-          },
-        });
-        registered.push(namespace);
-        diag?.(`[task-loop-typert] 迟到重绑：${namespace} 服务在场认领（inject 生命周期缝）`);
-      } catch (cause) {
-        const line = `[task-loop-typert] ${namespace} 激活失败——本族降级（fail-soft 不阻载）：${messageOf(cause)}`;
-        diag?.(line);
-      }
-    });
-  } else if (deps.tasks?.() === undefined) {
-    degraded.push(namespace);
-  } else {
+  for (const controller of CONTROLLERS) {
+    const inject = host.inject;
+    if (controller.injectKey !== undefined && typeof inject === "function") {
+      // 生命周期绑（官方 ctx.inject 缝——挂起期 namespace 不认领 = 诚实降级 404 语义不变）
+      pending.push(controller.namespace);
+      degraded.push(controller.namespace);
+      // 方法调用形态（receiver 保持 host 官方面——cordis 4 Proxy 方法解绑即崩，provide 同判例）
+      host.inject!([controller.injectKey], (scope) => {
+        try {
+          if (scope[controller.injectKey!] === undefined) return;
+          host.plugin!({
+            name: `task-loop-typert-${controller.namespace}`,
+            apply: (pluginScope: unknown) => {
+              controller.mount(pluginScope as Context, deps);
+            },
+          });
+          registered.push(controller.namespace);
+          diag?.(`[task-loop-typert] 迟到重绑：${controller.namespace} 服务在场认领（inject 生命周期缝）`);
+        } catch (cause) {
+          const line = `[task-loop-typert] ${controller.namespace} 激活失败——本族降级（fail-soft 不阻载）：${messageOf(cause)}`;
+          diag?.(line);
+        }
+      });
+      continue;
+    }
+    if (controller.absentWhen?.(deps) === true) {
+      degraded.push(controller.namespace);
+      continue;
+    }
     try {
       host.plugin({
-        name: `task-loop-typert-${namespace}`,
+        name: `task-loop-typert-${controller.namespace}`,
         apply: (pluginScope: unknown) => {
-          new ForgeTasksRemote(pluginScope as Context, deps);
+          controller.mount(pluginScope as Context, deps);
         },
       });
-      registered.push(namespace);
+      registered.push(controller.namespace);
     } catch (cause) {
-      const line = `[task-loop-typert] ${namespace} 注册抛错——本族降级（fail-soft 不阻载）：${messageOf(cause)}`;
+      const line = `[task-loop-typert] ${controller.namespace} 注册抛错——本族降级（fail-soft 不阻载）：${messageOf(cause)}`;
       diag?.(line);
-      degraded.push(namespace);
+      degraded.push(controller.namespace);
     }
   }
   diag?.(
-    `[task-loop-typert] forgeTasks 控制器注册完成：registered=[${registered.join(", ")}] degraded=[${degraded.join(", ")}] pending-inject=[${pending.join(", ")}]`,
+    `[task-loop-typert] Typert 遥控器注册完成：registered=[${registered.join(", ")}] degraded=[${degraded.join(", ")}] pending-inject=[${pending.join(", ")}]`,
   );
+  // 注册后自探针（boot 竞速根治）：registered 族立即经 gateway invoke 直探零副作用读面
+  // ——serve 层认领自证（装配序判据 = 本探针时点晚于注册、早于 client mount 首探）。
+  // fail-soft：结果只落诊断（ok=info 形完成行、失败=失败因），不阻载。
+  if (typeof deps.selfProbe === "function" && registered.includes("forgeTasks")) {
+    void Promise.resolve()
+      .then(() => deps.selfProbe!("forgeTasks", "list", { projectKey: "" }))
+      .then(
+        () => diag?.("[task-loop-typert] 注册后自探针 ok：forgeTasks/list（serve 层认领在场）"),
+        (cause: unknown) =>
+          diag?.(`[task-loop-typert] 注册后自探针失败：forgeTasks/list——${messageOf(cause)}`),
+      );
+  }
   return { registered, degraded, pending };
 }

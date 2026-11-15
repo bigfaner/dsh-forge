@@ -130,8 +130,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
   });
 
-  it("版本 bump 0.10.0（1.13 六组件 UI 迁批——minor 位 +1；1.12 bump 至 0.9.0 时 pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.10.0");
+  it("版本 bump 0.11.0（fix-1 域装配本体落位——minor 位 +1；1.13 bump 至 0.10.0 时 pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.11.0");
   });
 });
 

@@ -215,6 +215,14 @@ export function isFixTask(row: Pick<TaskStorageRow, "fix_of_task_id">): boolean 
   return row.fix_of_task_id !== null;
 }
 
+/** 启动对账全域键枚举（task_tasks 去重 project_key，升序稳定——读面 DAO 单点，调用方零裸 SQL） */
+export function listDistinctProjectKeys(db: Database.Database): string[] {
+  return db
+    .prepare<unknown[], { k: string }>(`SELECT DISTINCT project_key AS k FROM task_tasks ORDER BY project_key`)
+    .all()
+    .map((row) => row.k);
+}
+
 /** Interface 1 queryTask 出参（include 四节门控——缺席键缺席） */
 export interface QueryTaskResult {
   task: TaskSnapshot;

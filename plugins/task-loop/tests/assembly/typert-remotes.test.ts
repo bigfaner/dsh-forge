@@ -332,3 +332,35 @@ describe("registerForgeTasksRemote（根 ctx plugin 装配）", () => {
     expect(result.ok).toBe(true);
   });
 });
+
+describe("注册后自探针（boot 竞速根治——serve 层认领自证）", () => {
+  it("registered 族 → gateway invoke 直探 forgeTasks/list（零副作用空 projectKey 读面）+ ok 完成行诊断", async () => {
+    const { face } = captureRoot();
+    const probe = vi.fn().mockResolvedValue({ ok: true });
+    const diag = vi.fn();
+    const result = registerForgeTasksRemote(face, { diag, tasks: () => ({}) as TasksServiceFace, selfProbe: probe });
+    expect(result.registered).toContain("forgeTasks");
+    await vi.waitFor(() => {
+      expect(probe).toHaveBeenCalledWith("forgeTasks", "list", { projectKey: "" });
+      expect(diag).toHaveBeenCalledWith(expect.stringContaining("自探针 ok"));
+    });
+  });
+
+  it("探针失败（gateway 缺席/调用抛错）→ 失败因诊断留痕，fail-soft 不阻载", async () => {
+    const { face } = captureRoot();
+    const probe = vi.fn().mockRejectedValue(new Error("typertGateway 服务缺席"));
+    const diag = vi.fn();
+    registerForgeTasksRemote(face, { diag, tasks: () => ({}) as TasksServiceFace, selfProbe: probe });
+    await vi.waitFor(() => {
+      expect(diag).toHaveBeenCalledWith(expect.stringContaining("自探针失败"));
+    });
+  });
+
+  it("自探针缝缺席（缺省）→ 零探针零额外诊断（注册完成行语义不变）", () => {
+    const { face } = captureRoot();
+    const diag = vi.fn();
+    const result = registerForgeTasksRemote(face, { diag, tasks: () => ({}) as TasksServiceFace });
+    expect(result.registered).toEqual(["forgeTasks"]);
+    expect(diag).toHaveBeenCalledTimes(1); // 仅完成行
+  });
+});

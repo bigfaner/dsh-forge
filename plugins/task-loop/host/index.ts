@@ -1,24 +1,34 @@
-// @dsh-forge/task-loop —— host 装配入口（包骨架阶段——域代码随迁移任务逐批落位）。
-// 定位（骨架期）：本文件只做装载面与 bundle 管线验证锚——
+// @dsh-forge/task-loop —— host 装配入口（fix-1 域装配本体落位）。
+// 定位（AC「host/index.ts 只装配零域逻辑」）：本文件只做装配缝合——
+//   ① 单装缺省装配：assembleTaskLoopServices（db 缺省路径/服务常驻 provider/任务目录
+//      缺省约定三件单源，assembly/default-assembly.ts）；
+//   ② 具名服务 provide：forgeTasks/forgeCheckpoints（cordis reflect.provide 官方面）；
+//   ③ Typert 通道挂载：CONTROLLERS 注册表 → 根 ctx plugin() 注册（注册三态可观测 +
+//      注册后自探针，assembly/typert-remotes.ts）；
+//   ④ 启动对账：reconcileInterrupted 全域接线（fail-soft 降级不阻载，诊断留痕）。
+// 域逻辑零内联——全部归属 host/{domain,db,tools,loop} 域本体与 assembly/ 组装面。
 //   ① loader 装载面：default 导出 Plugin.Function（cordis loader 只认 default 导出函数，
 //     组合层 cordis.patch.yml 单行 insert 挂载）；
 //   ② bundle 管线验证锚：消费 @dsh-forge/lib-* devDependencies（scripts/bundle-host.mjs
-//     构建期内联进 dist——产物自含，dist 零 @dsh-forge/lib-* 裸 import），
-//     self-containment 断言据此外置/内联两侧验证。
-//   域装配（forgeTasks/forgeCheckpoints provider、工具族/skill/loop 调度注册）随迁移批
-//   落位——骨架期零服务属性消费，inject 名单先行落位 webServer（proposal 硬判据）。
+//     构建期内联进 dist——产物自含，dist 零 @dsh-forge/lib-* 裸 import）。
 import { errMessage } from "@dsh-forge/lib-util";
 import { consoleDiagFallback, type DiagLevel } from "@dsh-forge/lib-diag";
 import { FORGE_CHECKPOINTS_SERVICE_KEY, FORGE_TASKS_SERVICE_KEY } from "../shared/contract-constants.js";
+import {
+  assembleTaskLoopServices,
+  type TaskLoopAssembly,
+  type TaskLoopAssemblyConfig,
+} from "./assembly/default-assembly.js";
 import {
   registerForgeTasksRemote,
   type ForgeTasksRemoteDeps,
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
+import { createDiagEmitter, emitForgeDiag } from "./faces.js";
 import type { TasksService } from "./domain/tasks/service.js";
 
-/** host 装配 config（全部可选——域面随迁移批逐批扩）。 */
-export interface TaskLoopHostConfig {
+/** host 装配 config（全部可选——缺省面 = DSH_HOME + 缺省 db 落点 + git 查找降级）。 */
+export interface TaskLoopHostConfig extends TaskLoopAssemblyConfig {
   /** 诊断缝（缺省 console 按级分流兜底——diag-emit 纪律 console 豁免面同插件先例）。 */
   readonly diag?: (line: string, level?: DiagLevel) => void;
 }
@@ -29,15 +39,26 @@ interface TaskLoopPlugin {
   inject: readonly string[];
 }
 
+/** 插件 ctx 结构化消费面（真 Context 结构兼容——provide 具名服务 + 可选 emit/防御 get）。 */
+interface TaskLoopPluginCtx {
+  /** 服务注册官方面（cordis reflect.provide——Service 基类同径） */
+  readonly reflect?: {
+    provide?(name: string, value?: unknown): unknown;
+    get?(name: string): unknown;
+  };
+  /** cordis 事件混入（diag/log 事件域诊断埋点；缺席 = console 兜底） */
+  readonly emit?: (event: string, payload: Record<string, unknown>) => void;
+}
+
 /**
  * forgeTasks 域服务惰性现查缝（AGENTS 1.6——检测永不缓存，每个消费点调用期求值）：
- * reflect.get 具名服务防退役读取；缺席/抛错 = undefined（namespace 诚实降级 404 语义）。
+ * reflect.get 具名服务防御读取；缺席/抛错 = undefined（namespace 诚实降级 404 语义）。
  */
 function lazyTasksFace(ctx: unknown): () => TasksService | undefined {
   return () => {
     try {
-      const face = ctx as { reflect?: { get(name: string): unknown } };
-      const svc = face.reflect?.get(FORGE_TASKS_SERVICE_KEY);
+      const face = ctx as { reflect?: { get?(name: string): unknown } };
+      const svc = face.reflect?.get?.(FORGE_TASKS_SERVICE_KEY);
       return (svc ?? undefined) as TasksService | undefined;
     } catch {
       return undefined;
@@ -45,21 +66,77 @@ function lazyTasksFace(ctx: unknown): () => TasksService | undefined {
   };
 }
 
+/** Typert 注册后自探针缝（gateway invoke 直探——serve 层认领自证；缺席/失败由注册面诊断）。 */
+function selfProbeOf(ctx: unknown): ForgeTasksRemoteDeps["selfProbe"] {
+  const root = ((ctx as { root?: unknown }).root ?? ctx) as {
+    get?: (name: string) => unknown;
+  };
+  return async (namespace, method, args) => {
+    let gateway: unknown;
+    try {
+      gateway = root.get?.("typertGateway");
+    } catch {
+      gateway = undefined;
+    }
+    const invoke = (gateway as { invoke?: (request: unknown) => Promise<unknown> } | undefined)?.invoke;
+    if (invoke === undefined) {
+      throw new Error("typertGateway 服务缺席——serve 层认领不可达");
+    }
+    return await invoke({ namespace, method, args: args ?? {} });
+  };
+}
+
+/** 具名服务 provide（常驻 provider——装配期一次，零 provide 降级径由装配面承担）。 */
+function provideResidentServices(ctx: unknown, services: TaskLoopAssembly, diag: (line: string, level?: DiagLevel) => void): void {
+  const reflect = (ctx as TaskLoopPluginCtx).reflect;
+  if (typeof reflect?.provide !== "function") {
+    diag("[task-loop] ctx.reflect.provide 缺席（非 cordis 宿主）——forgeTasks/forgeCheckpoints 零 provide（降级不阻载）", "warn");
+    return;
+  }
+  try {
+    // 方法调用形态（receiver = reflect 官方面——cordis 4 Proxy 方法解绑 this.call 即崩，
+    // 'fiber' undefined 判例）
+    reflect.provide(FORGE_TASKS_SERVICE_KEY, services.tasks);
+    reflect.provide(FORGE_CHECKPOINTS_SERVICE_KEY, services.checkpoints);
+    diag("[task-loop] 域服务 provide 完成：forgeTasks/forgeCheckpoints（常驻 provider）", "info");
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    diag(`[task-loop] 域服务 provide 失败——降级不阻载：${message}`, "error");
+  }
+}
+
 const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig = {}): (() => void) => {
   const diag = config.diag ?? consoleDiagFallback;
-  diag(
-    `[task-loop] host 装配（骨架）：服务键 pin [${FORGE_TASKS_SERVICE_KEY}, ${FORGE_CHECKPOINTS_SERVICE_KEY}]——域 provider 随迁移批落位`,
-    "info",
-  );
-  // forgeTasks Typert Remote 正典通路（官方 Typert Remote namespace——根 ctx plugin 注册，
-  // gateway SRC 发现面；装配/降级留痕走 config.diag 注入面，禁直落 console 新增站点）。
+  // 单装缺省装配（三件单源——home 缺席/db 打开失败 = 整体降级零 provide）
+  const services = assembleTaskLoopServices(config, diag);
+  if (services !== undefined) {
+    provideResidentServices(ctx, services, diag);
+    // 启动对账接线（reconcile 降级——fire-and-forget，失败 warn 留痕不阻载）
+    void services.reconcile().catch((cause: unknown) => {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      emitForgeDiag(createDiagEmitter((ctx as TaskLoopPluginCtx).emit), {
+        level: "warn",
+        event: "task-loop-reconcile",
+        message: `启动对账降级（fail-soft 不阻载）：${message}`,
+      });
+    });
+  }
+  // forgeTasks Typert 通道挂载（CONTROLLERS 注册表 → 根 ctx plugin 注册——注册三态可观测
+  // + 自探针；诊断 emit 桥接：ctx.emit 在场即 typed emit，缺席 console 兜底）。
+  const diagEmit = createDiagEmitter((ctx as TaskLoopPluginCtx).emit);
   const remoteDeps: ForgeTasksRemoteDeps = {
     tasks: lazyTasksFace(ctx),
-    diag: (line) => diag(line, "info"),
+    diag: (line) => {
+      diag(line, "info");
+      emitForgeDiag(diagEmit, { event: "task-loop-typert", level: "info", message: line });
+    },
+    selfProbe: selfProbeOf(ctx),
   };
   registerForgeTasksRemote(ctx as TypertAssemblyCtxFace, remoteDeps);
-  // 骨架期零自持资源——dispose 面空实现（域面落位后随批扩）。
-  return () => {};
+  return () => {
+    // 库句柄关闭（cordis provide 注销面由宿主管辖——本插件自持资源仅 db 句柄）
+    services?.dispose();
+  };
 };
 
 /** 装配失败诊断投影（bundle 管线验证锚——lib-util errMessage 消费点）。 */
@@ -68,8 +145,9 @@ export function describeSetupFailure(error: unknown): string {
 }
 
 // inject 名单（proposal 硬判据：装配行 inject 名单显式含 webServer——目标宿主必带；
-// 名单缺席 = ctx 属性访问被 cordis inject 门拒恒 undefined，fix-8 判例。骨架期零属性
-// 消费，名单先行落位——域装配随迁移批消费该 face）。
+// 名单缺席 = ctx 属性访问被 cordis inject 门拒恒 undefined，fix-8 判例。experts = 可选
+// 服务——不入 inject 名单（可选消费不阻载），派发消费点现查（faces.resolveWorkerProfile
+// ——AGENTS 1.6 检测永不缓存）。
 taskLoopPlugin.inject = ["webServer"] as const;
 
 export default taskLoopPlugin;
