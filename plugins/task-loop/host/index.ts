@@ -10,6 +10,12 @@
 import { errMessage } from "@dsh-forge/lib-util";
 import { consoleDiagFallback, type DiagLevel } from "@dsh-forge/lib-diag";
 import { FORGE_CHECKPOINTS_SERVICE_KEY, FORGE_TASKS_SERVICE_KEY } from "../shared/contract-constants.js";
+import {
+  registerForgeTasksRemote,
+  type ForgeTasksRemoteDeps,
+  type TypertAssemblyCtxFace,
+} from "./assembly/typert-remotes.js";
+import type { TasksService } from "./domain/tasks/service.js";
 
 /** host 装配 config（全部可选——域面随迁移批逐批扩）。 */
 export interface TaskLoopHostConfig {
@@ -23,13 +29,35 @@ interface TaskLoopPlugin {
   inject: readonly string[];
 }
 
+/**
+ * forgeTasks 域服务惰性现查缝（AGENTS 1.6——检测永不缓存，每个消费点调用期求值）：
+ * reflect.get 具名服务防退役读取；缺席/抛错 = undefined（namespace 诚实降级 404 语义）。
+ */
+function lazyTasksFace(ctx: unknown): () => TasksService | undefined {
+  return () => {
+    try {
+      const face = ctx as { reflect?: { get(name: string): unknown } };
+      const svc = face.reflect?.get(FORGE_TASKS_SERVICE_KEY);
+      return (svc ?? undefined) as TasksService | undefined;
+    } catch {
+      return undefined;
+    }
+  };
+}
+
 const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig = {}): (() => void) => {
-  void ctx;
   const diag = config.diag ?? consoleDiagFallback;
   diag(
     `[task-loop] host 装配（骨架）：服务键 pin [${FORGE_TASKS_SERVICE_KEY}, ${FORGE_CHECKPOINTS_SERVICE_KEY}]——域 provider 随迁移批落位`,
     "info",
   );
+  // forgeTasks Typert Remote 正典通路（官方 Typert Remote namespace——根 ctx plugin 注册，
+  // gateway SRC 发现面；装配/降级留痕走 config.diag 注入面，禁直落 console 新增站点）。
+  const remoteDeps: ForgeTasksRemoteDeps = {
+    tasks: lazyTasksFace(ctx),
+    diag: (line) => diag(line, "info"),
+  };
+  registerForgeTasksRemote(ctx as TypertAssemblyCtxFace, remoteDeps);
   // 骨架期零自持资源——dispose 面空实现（域面落位后随批扩）。
   return () => {};
 };

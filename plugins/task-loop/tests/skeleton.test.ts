@@ -73,8 +73,12 @@ describe("包骨架结构（提案 §二「目录布局」三目录单包样板�
 });
 
 describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面）", () => {
-  it("exports 基线双键：\".\"（host）+ \"./client\"（ui）——typert/remote 工件键后置 Typert namespace 任务", () => {
-    expect(Object.keys(pkg.exports ?? {}).sort()).toEqual([".", "./client"]);
+  it("exports 基线双键 + typert 工件键（1.13：typert worker 落 ./typert + ./remote 两键——基线双键不排斥工件键扩展，project f4ccd57d 先例）", () => {
+    const keys = Object.keys(pkg.exports ?? {}).sort();
+    expect(keys).toContain(".");
+    expect(keys).toContain("./client");
+    expect(keys).toContain("./typert");
+    expect(keys).toContain("./remote");
     expect(pkg.exports?.["."]).toBeTypeOf("object");
     expect(pkg.exports?.["./client"]).toBeTypeOf("object");
   });
@@ -126,8 +130,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
   });
 
-  it("版本 bump 0.9.0（1.12 派发内核/循环驱动器/兜底档随迁——minor 位 +1；1.11 bump 至 0.8.0 时本 pin 漏改已随本批校正）", () => {
-    expect(pkg.version).toBe("0.9.0");
+  it("版本 bump 0.10.0（1.13 六组件 UI 迁批——minor 位 +1；1.12 bump 至 0.9.0 时 pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.10.0");
   });
 });
 

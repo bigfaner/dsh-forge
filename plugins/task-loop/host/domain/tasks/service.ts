@@ -36,6 +36,7 @@ import {
   type TaskStats,
   type TaskStatsQuery,
 } from "./list.js";
+import { createSettlementRepo, parseAcResults, type LatestSettlementRow } from "../../db/repositories/settlement-repo.js";
 import { markE2eAttribution, type MarkE2eAttributionInput } from "./mark-e2e-attribution.js";
 import { queryTask } from "./query.js";
 import { readUnsettledChain, type ReadUnsettledChainInput, type ReadUnsettledChainResult } from "./read-unsettled-chain.js";
@@ -89,6 +90,8 @@ export function createTasksService(deps: TasksServiceDeps) {
     ...(deps.gitExec !== undefined ? { git: { execFile: deps.gitExec } } : {}),
   };
   const linksDeps: SessionLinksDeps = { db: deps.db };
+  // 结算仓装配单例（无状态闭包——批量最新结算读面与动词面共用单库连接）
+  const settlements = createSettlementRepo(deps.db);
   return {
     async addTask(input: AddTaskInput): Promise<AddTaskResult> {
       return addTask(verbDeps, input);
@@ -153,6 +156,15 @@ export function createTasksService(deps: TasksServiceDeps) {
     },
     async sessionLinks(q: SessionLinksQuery): Promise<SessionTaskLinkCard[]> {
       return sessionLinks(linksDeps, q);
+    },
+    /** 批量最新结算行读（typert forgeTasks DTO 聚合 AC 进度数据源——settlement-repo 单条 SQL 透传） */
+    async latestSettlementsByTask(projectKey: string, slugs: readonly string[]): Promise<LatestSettlementRow[]> {
+      return settlements.latestSettlementsByTask(projectKey, slugs).map((row) => ({
+        taskId: row.task_id,
+        result: row.result,
+        acResults: parseAcResults(row.ac_results_json),
+        commitHash: row.commit_hash,
+      }));
     },
   };
 }

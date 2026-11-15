@@ -103,6 +103,24 @@ function assertEvidenceShape(result: "success" | "blocked", evidence: Settlement
 
 const SETTLEMENT_COLUMNS = `id, task_id, seq, fix_root_id, result, ac_results_json, commit_hash, evidence_json, created_at`;
 
+/** ac_results_json 解码（畸形负载 → 空数组降级不炸读面——read 面单点）。 */
+export function parseAcResults(raw: string): TaskAcResult[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as TaskAcResult[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 批量最新结算行投影（服务面透传形——taskId 键 + AC 判据解码载荷；typert DTO 聚合消费）。 */
+export interface LatestSettlementRow {
+  readonly taskId: string;
+  readonly result: "success" | "blocked";
+  readonly acResults: readonly TaskAcResult[];
+  readonly commitHash: string | null;
+}
+
 /** 排序锚钉死（entities.md §3.2 pin）：created_at, seq, id——禁 ORDER BY id（UUID 无序）。 */
 const ORDER_ANCHOR = ` ORDER BY created_at, seq, id`;
 
@@ -119,6 +137,11 @@ export interface SettlementRepo {
   findByTaskAndSeq(taskId: string, seq: number): SettlementRow | undefined;
   /** (task_id, created_at, result) 定位（无 seq 暂存载荷的幂等判据）。 */
   findByTaskCreatedAt(taskId: string, createdAt: string, result: "success" | "blocked"): SettlementRow | undefined;
+  /**
+   * 批量最新结算行读（typert forgeTasks DTO 聚合 AC 进度的数据源）：project_key + slug IN
+   * 任务集每 task 取最新一行（关联子查询按排序锚逆序 LIMIT 1）——一条 SQL 零 N+1。
+   */
+  latestSettlementsByTask(projectKey: string, slugs: readonly string[]): SettlementRow[];
 }
 
 export function createSettlementRepo(db: Database.Database): SettlementRepo {
@@ -199,6 +222,25 @@ export function createSettlementRepo(db: Database.Database): SettlementRepo {
           `SELECT ${SETTLEMENT_COLUMNS} FROM task_settlements WHERE task_id = ? AND created_at = ? AND result = ?${ORDER_ANCHOR}`,
         )
         .get(taskId, createdAt, result);
+    },
+
+    latestSettlementsByTask(projectKey, slugs) {
+      if (slugs.length === 0) return [];
+      const placeholders = slugs.map(() => "?").join(", ");
+      // 每 task 最新一行 = 关联子查询按排序锚逆序取首（created_at DESC, seq DESC, id DESC
+      // ——ORDER_ANCHOR 逆序同语义；禁 ORDER BY id 单锚，entities.md §3.2 pin）。
+      return db
+        .prepare<unknown[], SettlementRow>(
+          `SELECT s.id, s.task_id, s.seq, s.fix_root_id, s.result, s.ac_results_json, s.commit_hash, s.evidence_json, s.created_at
+           FROM task_settlements s
+           JOIN task_tasks t ON t.id = s.task_id
+           WHERE t.project_key = ? AND t.slug IN (${placeholders})
+             AND s.id = (
+               SELECT s2.id FROM task_settlements s2 WHERE s2.task_id = s.task_id
+               ORDER BY s2.created_at DESC, s2.seq DESC, s2.id DESC LIMIT 1
+             )`,
+        )
+        .all(projectKey, ...slugs);
     },
   };
 }

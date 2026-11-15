@@ -17,9 +17,9 @@
 // 记录同 project 口径）。checkDiagnostics:false 与既有 tsc -b 门解耦（generator 文档
 // 口径：同编排已有 tsc 验证时传 false）。
 // Run once per build；run-once, no watch。
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -79,6 +79,9 @@ copyTree(HOST_SRC, join(stagingPkg, "src"));
 if (!existsSync(join(stagingPkg, "src", "index.ts"))) {
   fail("host 源复制后缺 src/index.ts——源树漂移");
 }
+// shared/ 物理复制（host 半引用 shared/result.ts 基型——staging 内 host 树平铺为 src/，
+// "../shared" 相对深度在 src 与 src/assembly 两层均收敛 packages/task-loop/shared）。
+if (existsSync(join(pkgDir, "shared"))) copyTree(join(pkgDir, "shared"), join(stagingPkg, "shared"));
 copyTree(UI_SRC, join(stagingPkg, "ui"));
 if (!existsSync(join(stagingPkg, "ui", "index.ts"))) {
   fail("ui 源复制后缺 ui/index.ts——源树漂移");
@@ -94,6 +97,7 @@ writeFileSyncStaged(join("packages", "task-loop", "package.json"), JSON.stringif
   type: "module",
   exports: {
     ".": "./src/index.ts",
+    "./types": "./src/types.ts",
     "./client": { types: "./ui/index.ts", default: "./ui/index.ts" },
     "./typert": { types: "./lib/typert.host.d.ts", default: "./lib/typert.host.js" },
     "./client/typert": { types: "./lib/typert.client.d.ts", default: "./lib/typert.client.js" },
@@ -122,6 +126,47 @@ const officialPrefix = relative(stagingRoot, officialLinks).replaceAll("\\", "/"
 for (const name of readdirSync(officialLinks)) {
   if (name === "dsh-typert-protocol") continue; // 协议包改指本地壳（下一映射，后写胜出）
   officialPaths[`@deepseek-ai/${name}`] = [`${officialPrefix}/${name}`];
+}
+// 传递闭包 @deepseek-ai/* 收敛（脚本头注释同判例——pnpm 多物理副本双载同一 augment
+// d.ts → analyzer TypertLookupMap key duplicate，实判例：task-loop 取材图内 dsh-agent
+// 经 dsh-session / dsh-subagent-in-process-driver 两径解析出两个物理副本）：逐直连依赖
+// 声明取 @deepseek-ai/* 名单，经该依赖 require 解析物理副本，paths 统一指首份 canonical
+// （含 /* 通配——子路径 import 同样收敛单一物理载入）；不可解析 = 跳过交默认解析。
+for (const dep of readdirSync(officialLinks)) {
+  if (dep === "dsh-typert-protocol") continue;
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(join(officialLinks, dep, "package.json"), "utf8"));
+  } catch {
+    continue;
+  }
+  const declared = Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies }).filter((n) => n.startsWith("@deepseek-ai/"));
+  for (const full of declared) {
+    if (full === "@deepseek-ai/dsh-typert-protocol") continue; // 协议包恒指本地壳（双声明合并会污染装饰器签名）
+    if (officialPaths[full] !== undefined || officialPaths[`${full}/*`] !== undefined) continue;
+    try {
+      // 物理副本定位（junction/ESM-only 双坑——createRequire 从 junction 路径解析传递依赖
+      // 失败：判例 dsh-agent）：经直连依赖 realpath 上行至 @deepseek-ai 域的宿主 node_modules，
+      // 依兄弟链接取物理副本 realpath（pnpm 单 .pnpm 实例单一物理副本）。
+      const name = full.slice("@deepseek-ai/".length);
+      const linkReal = realpathSync(join(officialLinks, dep));
+      let host = dirname(linkReal);
+      for (let hop = 0; hop < 4; hop += 1) {
+        if (basename(host) === "@deepseek-ai") break;
+        const parent = dirname(host);
+        if (parent === host) break;
+        host = parent;
+      }
+      const sibling = join(host, name);
+      if (!existsSync(sibling)) continue;
+      const physical = realpathSync(sibling);
+      const prefix = relative(stagingRoot, physical).replaceAll("\\", "/");
+      officialPaths[full] = [prefix];
+      officialPaths[`${full}/*`] = [`${prefix}/*`];
+    } catch {
+      // 可选/缺席依赖 = 交默认解析
+    }
+  }
 }
 writeFileSyncStaged("tsconfig.base.json", JSON.stringify({
   compilerOptions: {
@@ -155,7 +200,7 @@ writeFileSyncStaged("tsconfig.client.json", JSON.stringify({
 writeFileSyncStaged(join("packages", "task-loop", "tsconfig.json"), JSON.stringify({
   extends: "../../tsconfig.base.json",
   compilerOptions: { jsx: "react-jsx", types: [] },
-  include: ["src", "ui"],
+  include: ["src", "ui", ...(existsSync(join(pkgDir, "shared")) ? ["shared"] : [])],
 }));
 
 function writeFileSyncStaged(rel, content) {

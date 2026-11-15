@@ -18,7 +18,10 @@ const dshDecoratorsPlugin = (): Plugin => ({
   enforce: 'pre',
   transform(code, id) {
     const file = id.split('?')[0]
-    if (!DSH_DECORATOR_TS.test(file) || !file.includes('plugins/project')) return
+    if (!DSH_DECORATOR_TS.test(file)) return
+    // 装饰器源码域：project + task-loop（plugin-task-loop 1.13——forgeTasks @Remote 控制器
+    // 落位 task-loop host 半，测试面降级同链同径）。
+    if (!file.includes('plugins/project') && !file.includes('plugins/task-loop')) return
     if (!DECORATOR_SYNTAX.test(code)) return
     const result = ts.transpileModule(code, {
       fileName: file,
@@ -125,11 +128,17 @@ export default defineConfig({
         },
       },
       // task-loop 插件包（plugin-task-loop 1.5 包骨架——结构镜像 + 门禁序铁律脚本面 pin +
-      // bundle self-containment 守卫；域单测池随迁移批扩）
+      // bundle self-containment 守卫；域单测池随迁移批扩。1.13 六组件迁批：skeleton 消费
+      // ui/index → 官方 primitives css 走 vite inline 管道——project 池同构）
       {
         test: {
           name: 'task-loop',
           include: ['plugins/task-loop/tests/**/*.test.ts'],
+          server: {
+            deps: {
+              inline: ['@deepseek-ai/dsh-client-ui-primitives'],
+            },
+          },
         },
       },
       // project 域代码池（plugin-project 1.8：git-worktree 域平移——host/worktrees + ui 随迁单测；

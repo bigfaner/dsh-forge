@@ -86,8 +86,9 @@ export interface TaskRecordEntry {
   readonly toStatus?: TaskStatus;
   /** 非 submit 动词语境载荷（reason+summary 融合；submit 行列面对 submit 载荷封闭） */
   readonly note?: string;
-  /** 非 submit 动词的结构化载荷位（update-ac 携新版判据全文等；JSON 解码形） */
-  readonly payload?: unknown;
+  /** 非 submit 动词的结构化载荷位（update-ac 携新版判据全文等；JSON 对象解码形——
+   *  typert 边界门禁 unconstrained unknown，收敛 TaskRecordJsonValue 封闭值域） */
+  readonly payload?: Record<string, TaskRecordJsonValue>;
   readonly loopSourced: boolean;
   readonly digest?: string;
   readonly actor: TaskActor;
@@ -119,6 +120,9 @@ export interface DiagEventPayload {
 export interface TaskEvents {
   emitTasksChanged(projectKey: string): void;
 }
+
+/** 任务记录载荷 JSON 值域（递归封闭 JSON 值——typert 边界门禁 unconstrained unknown） */
+export type TaskRecordJsonValue = string | number | boolean | null | readonly TaskRecordJsonValue[] | { readonly [key: string]: TaskRecordJsonValue };
 
 /**
  * 动词装配依赖（旧 ForgeWorkspaceStore.ensureOpen(projectId) 单库句柄 → 新线共享单库

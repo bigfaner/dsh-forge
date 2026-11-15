@@ -116,12 +116,13 @@ export function taskContainerSummary(row: TaskStorageRow): { slug: string } {
  * toTaskSnapshot 口径）。append-only 读面排序锚 = created_at（id 仅 tiebreaker——机检门）。
  */
 export function toTaskRecordEntry(row: TaskRecordStorageRow): TaskRecordEntry {
+  const payload = row.payload_json !== null ? safeJsonObject(row.payload_json) : undefined;
   return {
     verb: row.verb,
     ...(row.from_status !== null ? { fromStatus: row.from_status } : {}),
     ...(row.to_status !== null ? { toStatus: row.to_status } : {}),
     ...(row.note !== null ? { note: row.note } : {}),
-    ...(row.payload_json !== null ? { payload: safeJsonParse(row.payload_json) } : {}),
+    ...(payload !== undefined ? { payload } : {}),
     loopSourced: row.loop_sourced === 1,
     ...(row.dispatch_digest !== null ? { digest: row.dispatch_digest } : {}),
     actor: row.actor,
@@ -136,6 +137,15 @@ function safeJsonParse(raw: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/** payload_json → 对象形解码（畸形/非对象负载 = undefined——键缺席，lossless 口径同上）；
+ *  JSON.parse 产物按构造即 JSON 值域（TaskRecordJsonValue 封闭——cast 为诚实断言非越界） */
+function safeJsonObject(raw: string): Record<string, import("./types.js").TaskRecordJsonValue> | undefined {
+  const parsed = safeJsonParse(raw);
+  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+    ? (parsed as Record<string, import("./types.js").TaskRecordJsonValue>)
+    : undefined;
 }
 
 /**

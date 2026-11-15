@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/task-loop",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "description": "任务环（task-loop）插件：任务域（addTask/拆解/循环调度/结算）+ AC 结算单源 + checkpoints 域内现算（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -14,6 +14,17 @@
     "./client": {
       "types": "./dist/client/ui/index.d.ts",
       "default": "./dist/client.js"
+    },
+    "./typert": {
+      "types": "./dist/typert.host.d.ts",
+      "default": "./dist/typert.host.js"
+    },
+    "./remote": {
+      "types": "./dist/typert.remote-client.d.ts",
+      "default": "./dist/typert.remote-client.js"
+    },
+    "./types": {
+      "types": "./dist/host/types.d.ts"
     }
   },
   "dsh": {
@@ -30,7 +41,12 @@
   "files": [
     "dist",
     "skills",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "dist/typert.host.js",
+    "dist/typert.host.d.ts",
+    "dist/typert.remote-client.js",
+    "dist/typert.remote-client.d.ts",
+    "dist/typert.remote-client.d.ts.map"
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && node scripts/generate-typert.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
@@ -59,5 +75,9 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.2",
+    "zod": "4.6.6"
   }
 }
