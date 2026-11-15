@@ -4,10 +4,12 @@
 import {
   addTask,
   batchAddTasks,
+  validateBatchAddTasks,
   type AddTaskInput,
   type AddTaskResult,
   type BatchAddTasksInput,
   type BatchAddTasksResult,
+  type BatchItemError,
 } from "./add.js";
 import type {
   BugRecurrenceCandidate,
@@ -93,6 +95,9 @@ export function createTasksService(deps: TasksServiceDeps) {
     },
     async batchAddTasks(input: BatchAddTasksInput): Promise<BatchAddTasksResult> {
       return batchAddTasks(verbDeps, input);
+    },
+    async validateBatchAddTasks(input: Pick<BatchAddTasksInput, "projectKey" | "slug" | "tasks">): Promise<BatchItemError[]> {
+      return validateBatchAddTasks(verbDeps, input);
     },
     async claimTask(input: ClaimTaskInput): Promise<ClaimTaskResult> {
       return claimTask(verbDeps, input);

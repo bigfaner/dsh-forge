@@ -36,6 +36,7 @@ import {
   isUniqueViolation,
   type BatchItemError,
 } from "./errors.js";
+export type { BatchItemError, BatchInvalidData } from "./errors.js";
 import type { TaskScope, TaskType, TasksVerbDeps } from "./types.js";
 
 export { isUniqueViolation };
@@ -652,7 +653,7 @@ function collectItemErrors(db: Database.Database, projectKey: string, slug: stri
             continue;
           }
           if (/^([A-Za-z]:)?[\\/]/.test(p) || p.includes("..")) {
-            fail("scope", "ERR_SCOPE_INVALID", `scope.${key} 路径非相对项目根：'${p}'`, "scope 元素 = 相对项目根路径，禁绝对路径与 .. 上跳");
+            fail("scope", "ERR_SCOPE_ABSOLUTE_PATH", `scope.${key} 路径非相对项目根：'${p}'`, "scope 元素 = 相对项目根路径，禁绝对路径与 .. 上跳");
             continue;
           }
           if (!RELATIVE_PATH_RE.test(p)) {
@@ -660,7 +661,7 @@ function collectItemErrors(db: Database.Database, projectKey: string, slug: stri
           }
           const owner = seen.get(p);
           if (owner !== undefined) {
-            fail("scope", "ERR_SCOPE_INVALID", `路径 '${p}' 跨数组重复（已见 scope.${owner}）`, "同一路径只能出现在一个数组中");
+            fail("scope", "ERR_SCOPE_CROSS_ARRAY_DUP", `路径 '${p}' 跨数组重复（已见 scope.${owner}）`, "同一路径只能出现在一个数组中");
           } else {
             seen.set(p, key);
           }
@@ -668,7 +669,7 @@ function collectItemErrors(db: Database.Database, projectKey: string, slug: stri
       }
       for (const key of Object.keys(item.scope)) {
         if (!(SCOPE_KEYS as readonly string[]).includes(key)) {
-          fail("scope", "ERR_SCOPE_INVALID", `未知 scope 键 '${key}'`, "scope 键 ∈ 封闭枚举 {created, modified, removed}");
+          fail("scope", "ERR_SCOPE_UNKNOWN_KEY", `未知 scope 键 '${key}'`, "scope 键 ∈ 封闭枚举 {created, modified, removed}");
         }
       }
     }
@@ -780,13 +781,20 @@ function findBatchCycle(tasks: readonly BatchAddTaskItem[]): BatchItemError | un
   };
 }
 
+/** dry-run 校验器单点导出（tool 层收集制合并面——解析层错与域层错一次报全且保证零写点） */
+export function validateBatchAddTasks(
+  deps: Pick<TasksVerbDeps, "db">,
+  input: Pick<BatchAddTasksInput, "projectKey" | "slug" | "tasks">,
+): BatchItemError[] {
+  return collectItemErrors(deps.db, input.projectKey, input.slug, input.tasks);
+}
+
 /**
  * Interface 1 batchAddTasks：dry-run 收集制全量校验（零 db 写点）→ 全过后整批单事务两遍式
  * 落库（①全量 INSERT task_tasks → ②同事务连 task_edges（批内互引解析为批内 localId）+
  * fix 链派生（blockSource 逐条锁源置 blocked））。校验失败零落库；落库中途失败全批回滚零残留。
  */
-export async function batchAddTasks(deps: TasksVerbDeps, input: BatchAddTasksInput): Promise<BatchAddTasksResult> {
-  assertContainerSlugAllowed(input.slug);
+export async function batchAddTasks(deps: TasksVerbDeps, input: BatchAddTasksInput): Promise<BatchAddTasksResult> {  assertContainerSlugAllowed(input.slug);
   const db = deps.db;
   const now = new Date().toISOString();
 
