@@ -31,8 +31,9 @@ import { registerDockTabsFace } from "./dock-tabs-face.js";
 import { registerDispatchEventsFace } from "./dispatch-events-face.js";
 import { FORGE_TASK_LOOP_LOCALE_DICTS, FORGE_TASK_LOOP_LOCALE_NS, type LocaleServiceFace } from "./locale.js";
 import { asRecord, type OfficialSeamCtx } from "./official-seams.js";
+import { FORGE_TASKS_REMOTE_CONTRIBUTION } from "./remote.js";
 import { installForgeTasksFace, type ForgeTasksNamespaceFace } from "./tasks-rpc.js";
-import { forgeFaceOf, installForgeRemoteFace } from "./rpc.js";
+import { forgeFaceOf, installForgeRemoteFace, markForgeRemoteMountSettled } from "./rpc.js";
 import type { SectionSlotsFace } from "./keyed-section.js";
 
 /** client 组合插件面（官方宿主 apply 消费形态） */
@@ -70,6 +71,42 @@ export const taskLoopClient: TaskLoopClientPlugin = {
     // forgeTasks Typert namespace 解析缝（apply 期 ctx.inject 子 fiber——官方 client-ui-forge
     // mount.ts:339 同型：子 fiber 停驻至 host 半 namespace 服务在场后激活；remote 缺席宿主
     // = 缝不安装，调用期诚实降级[投影快照单源 + 静默重取]）。
+    // fix-6（bug b0569de6）：$mount 前置挂载段——project 正典配方承袭（project/ui/remote.ts
+    // + project ui/index.ts:288-315）：generator 产 forgeTasks 贡献（./remote 投影）经
+    // remote.$mount 进调用方 fiber，gateway client 半 namespace 才物化，下方子 fiber 停驻
+    // 至 namespace 在场后激活——注册先于首个探测（bug 253b8265 同族判据），unmount 撤回随
+    // 包 fiber 生命周期级联，mount 重试 = promise settle 事件驱动（零固定短窗）。mount
+    // settle 三分支各发布一次页内终态锚（fix-2 竞速分类钉——rpc.ts 键注）。
+    try {
+      const reflect = asRecord(rec)?.["reflect"] as { get?: (key: string) => unknown } | undefined;
+      const readReflect = (key: string): unknown => {
+        try {
+          return typeof reflect?.get === "function" ? reflect.get(key) : undefined;
+        } catch {
+          return undefined;
+        }
+      };
+      const remote = (readReflect("remote") ?? asRecord(rec)?.["remote"]) as
+        | { $mount?: (contribution: unknown) => Promise<unknown> }
+        | undefined;
+      if (remote !== undefined && typeof remote.$mount === "function") {
+        void Promise.resolve(remote.$mount(FORGE_TASKS_REMOTE_CONTRIBUTION))
+          .then(() => {
+            markForgeRemoteMountSettled();
+            console.info("[dsh-forge/task-loop] forgeTasks remote contribution mounted");
+          })
+          .catch((error: unknown) => {
+            markForgeRemoteMountSettled();
+            console.warn("[dsh-forge/task-loop] forgeTasks remote contribution mount failed——调用期诚实降级", error);
+          });
+      } else {
+        markForgeRemoteMountSettled();
+        console.warn("[dsh-forge/task-loop] ctx.remote.$mount absent——forgeTasks 贡献不挂载（诚实降级）");
+      }
+    } catch (error) {
+      markForgeRemoteMountSettled();
+      console.warn("[dsh-forge/task-loop] forgeTasks remote mount seam failed——调用期诚实降级", error);
+    }
     try {
       const injectFn = asRecord(rec)?.["inject"] as ((deps: readonly string[], mixin: (c: unknown) => unknown) => unknown) | undefined;
       if (typeof injectFn === "function") {
