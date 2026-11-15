@@ -146,6 +146,21 @@ describe('scheme 注册与处理器路由', () => {
     }])
     expect(SHELL_ENTRY_URL).toBe('dsh-forge://app/')
   })
+  it('__rvdiag 诊断探测由壳侧应答（204）——不转发 Host（转发面无此路由 → 404 console error 挂 e2e diag 不变式）', async () => {
+    const root = distOf({ 'index.html': '<html><head></head><body></body></html>' })
+    const calls: string[] = []
+    const handler = createShellProtocolHandler({
+      distRoot: root,
+      host: () => ({ url: 'http://127.0.0.1:19500/', cookie: 'k=v' }),
+      fetchImpl: async (input) => {
+        calls.push(String(input))
+        return new Response('{}')
+      },
+    })
+    const probe = await handler(new Request('dsh-forge://app/__rvdiag?line=branch%3Dshell%20viaLocation%3Dfalse'))
+    expect(probe.status).toBe(204)
+    expect(calls).toHaveLength(0)
+  })
   it('资产路径服务 dist；其余转发；Host 未就绪 503', async () => {
     const root = distOf({
       'index.html': '<html><head></head><body></body></html>',
