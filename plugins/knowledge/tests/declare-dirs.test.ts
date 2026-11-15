@@ -181,6 +181,6 @@ describe('装配期声明（根 scope provide——bug 04d445f4 反向拉取缝�
   })
 
   it('声明为一次性装配动作，不进 inject 数组（cordis 无可选 inject——缺席不阻载）', () => {
-    expect(knowledgePlugin.inject).toEqual(['tools', 'systemPrompt'])
+    expect(knowledgePlugin.inject).toEqual(['tools', 'systemPrompt', 'connection', 'workspaceRegistry'])
   })
 })

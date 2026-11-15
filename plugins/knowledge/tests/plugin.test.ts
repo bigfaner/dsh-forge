@@ -76,7 +76,38 @@ class TempRuntime {
           }
         },
       },
+      // fix-9：连接 RPC 面（/api 精确路由注册缝——path 捕获供通道断言）
+      connection: this.connection,
+      // fix-9：官方 workspaceRegistry 具名服务替身（inject 声明边；官方宿主 projects 投影源）
+      workspaceRegistry: this.workspaceRegistry,
     }
+  }
+
+  /** 连接 RPC 面捕获（fix-9——fetch.register(route) 注册行 + route 表记账） */
+  readonly connectionRpc = {
+    paths: new Set<string>(),
+    routes: new Map<string, (request: { json(): Promise<unknown>; signal: AbortSignal }) => Promise<Response>>(),
+    disposed: 0,
+  }
+
+  private readonly connection = {
+    fetch: {
+      register: (route: { path: string; fetch: (request: { json(): Promise<unknown>; signal: AbortSignal }) => Promise<Response> }) => {
+        this.connectionRpc.paths.add(route.path)
+        this.connectionRpc.routes.set(route.path, route.fetch)
+        return () => {
+          this.connectionRpc.disposed += 1
+          this.connectionRpc.paths.delete(route.path)
+          this.connectionRpc.routes.delete(route.path)
+        }
+      },
+    },
+  }
+
+  /** 官方 workspaceRegistry 替身（list/get 窄面——空集；投影源形状校验消费） */
+  private readonly workspaceRegistry = {
+    list: async (): Promise<readonly never[]> => [],
+    get: async (): Promise<undefined> => undefined,
   }
 
   disposedCounts() {
@@ -105,8 +136,8 @@ function injectSatisfied(plugin: { inject: readonly string[] }, ctx: object): bo
 }
 
 describe('AC3 inject 面（零 core 依赖——A2 服务切换后仅 dsh 官方面）', () => {
-  it("inject 声明 = ['tools', 'systemPrompt']——core 面（forgeKnowledge）已退役", () => {
-    expect([...knowledgePlugin.inject].sort()).toEqual(['systemPrompt', 'tools'])
+  it("inject 声明 = ['tools', 'systemPrompt', 'connection', 'workspaceRegistry']——core 面已退役；connection/workspaceRegistry = fix-9 边", () => {
+    expect([...knowledgePlugin.inject].sort()).toEqual(['connection', 'systemPrompt', 'tools', 'workspaceRegistry'])
   })
 
   it('缺任一声明服务即不加载（Cordis service-availability 语义）；两服务齐备才装配', () => {
@@ -118,6 +149,45 @@ describe('AC3 inject 面（零 core 依赖——A2 服务切换后仅 dsh 官方
       delete hole[name]
       expect(injectSatisfied(knowledgePlugin, hole)).toBe(false)
     }
+  })
+
+  it('fix-9 连接 RPC：/api 精确路由族注册 + route fetch 分发（registry 投影源 = 空集合法应答；registry 缺席 = typed 拒绝）+ 注销器并组', async () => {
+    const rt = freshRt()
+    const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
+    expect(rt.connectionRpc.paths.size).toBe(9)
+    expect(rt.connectionRpc.paths.has('/api/projects.list')).toBe(true)
+    const call = async (endpoint: string, payload: unknown): Promise<Record<string, unknown>> => {
+      const route = rt.connectionRpc.routes.get(`/api/${endpoint}`)
+      expect(route, endpoint).toBeDefined()
+      const response = await route!({ json: async () => ({ type: 'client-request', rpcId: 't1', method: endpoint, payload }), signal: AbortSignal.abort() })
+      return await response.json() as Record<string, unknown>
+    }
+    // projects 数据源 = workspaceRegistry 替身（core forgeProjects 缺席回落投影）→ 空集合法应答
+    const listed = await call('projects.list', {})
+    expect(listed).toMatchObject({ type: 'server-response', rpcId: 't1', result: { ok: true, value: [] } })
+    // registry 缺席宿主（hole ctx）：projects 数据源双缺 → typed 拒绝信封
+    const bareRt = freshRt()
+    const bareCtx = bareRt.ctx() as Record<string, unknown>
+    delete bareCtx['workspaceRegistry']
+    const bareDispose = knowledgePlugin(bareCtx, { dbFile: bareRt.dbFile() })
+    const bareCall = async (endpoint: string): Promise<Record<string, unknown>> => {
+      const route = bareRt.connectionRpc.routes.get(`/api/${endpoint}`)!
+      return await (await route({ json: async () => ({ type: 'client-request', rpcId: 't2', method: endpoint, payload: {} }), signal: AbortSignal.abort() })).json() as Record<string, unknown>
+    }
+    const rejected = await bareCall('projects.list')
+    expect(rejected.result).toMatchObject({ ok: false, error: { code: 'ERR_WORKSPACE_NOT_REGISTERED' } })
+    bareDispose()
+    expect(bareRt.connectionRpc.paths.has('/api/projects.list')).toBe(false)
+    // knowledge 端点不在场拒绝（未注册项目 → typed 码带内返回）
+    const browse = await call('knowledge.browse', { projectId: 'p-none' })
+    expect(browse.result).toMatchObject({ ok: false })
+    // method↔endpoint 失配 = gateway/bad-request 信封
+    const route = rt.connectionRpc.routes.get('/api/projects.list')!
+    const mismatch = await (await route({ json: async () => ({ type: 'client-request', rpcId: 't3', method: 'other', payload: {} }), signal: AbortSignal.abort() })).json() as { result?: { error?: { code?: string } } }
+    expect(mismatch.result?.error?.code).toBe('gateway/bad-request')
+    // 注销器并组：路由表撤销
+    dispose()
+    expect(rt.connectionRpc.paths.has('/api/projects.list')).toBe(false)
   })
 })
 

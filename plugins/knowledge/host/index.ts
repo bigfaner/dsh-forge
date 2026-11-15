@@ -1,8 +1,11 @@
 // @dsh-forge/knowledge 插件定义（定位：装配——3.4；1.7 A2 服务切换：自有服务面）。
 // 形态：Cordis Plugin.Function（loader 取 default 导出）：
-//   inject = ['tools', 'systemPrompt'] —— 零 core 依赖（SC-2）：五通道供数 = 自有
+//   inject = ['tools', 'systemPrompt', 'connection', 'workspaceRegistry'] —— 零 core 依赖（SC-2）：五通道供数 = 自有
 //   'knowledge' 服务（reflect.provide；core 八法随迁 service/，自持库 storage/ 供数），
-//   tools / systemPrompt 为 dsh 官方面。
+//   tools / systemPrompt 为 dsh 官方面；connection = fix-9 /api 共享通道 interceptor 注册边
+//   （knowledge.*/projects.* 端点——UI 数据层官方宿主正缝，host/connection-rpc.ts）；
+//   workspaceRegistry = fix-9 projects 端点官方宿主数据源边（具名服务消费以 inject 声明
+//   承担——project host 同款先例；运行期存在性检查仍承担 fail-soft）。
 // 装配：自持存储自启（失败/锚缺席 fail-soft 降级零注册）→ 'knowledge' 服务 provide →
 // 六 tool 注册（tools/register——search/readAbstract/write/read/supersede/reinstate，
 // 裁决 #1 修订 2026-11-05：supersede/reinstate 开为 agent tool）+ 提示词两段装配：
@@ -29,6 +32,14 @@ import { dirname } from 'node:path'
 import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
 import { joinDirSegment } from '@dsh-forge/path-key'
 import { defaultKnowledgeDirOf, resolveKnowledgeDir, type KnowledgeDirSetting } from './knowledge-dir.js'
+import {
+  isForgeProjectsSource,
+  isWorkspaceRegistryFace,
+  registryProjectsSource,
+  registerKnowledgeConnectionRpc,
+  type ForgeProjectsSource,
+  type HostConnectionFace,
+} from './connection-rpc.js'
 import type { BackflowConfig } from './service/types.js'
 import type { KnowledgeContextFace } from './tools/index.js'
 
@@ -201,6 +212,57 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       isRegistered: (wsPath: string) => storage.registry.findByWsPath(wsPath) !== undefined,
       topDomains: (wsPath: string) => domainTreeIndexOf(storage.db, wsPath),
     }
+    // fix-9 连接 RPC 数据源现查（逐调用现查不缓存——AGENTS 1.6）：① core forgeProjects
+    // 具名服务（dsh-forge 集成态——core 行 provide，运营真源单源，与 preload 面同源）；
+    // ② 官方 workspaceRegistry 投影（官方宿主——添加项目向导注册行；archived 概念缺席
+    // 恒 false）。双缺 = undefined（projects 端点 typed 拒绝，knowledge 端点不受阻）。
+    const projectsSourceOf = (): ForgeProjectsSource | undefined => {
+      try {
+        const raw: unknown = ctx.reflect?.get?.('forgeProjects')
+        if (isForgeProjectsSource(raw)) return raw
+      } catch {
+        // 服务未 provide（官方宿主 core 行缺席）——回落 registry 投影
+      }
+      try {
+        const registry: unknown = (ctx as unknown as { workspaceRegistry?: unknown }).workspaceRegistry
+        if (isWorkspaceRegistryFace(registry)) return registryProjectsSource(registry)
+      } catch {
+        // 服务缺席/劣形（inject 未声明宿主）——projects 端点 typed 拒绝
+      }
+      return undefined
+    }
+    // fix-9 连接 RPC 注册（官方 exact Fetch-route 缝——/api/knowledge.*|/api/projects.*
+    // 逐 endpoint 一条 POST 精确路由，落座 = connection 服务内建表 + 既有 /api 共享路由
+    // 分发，零 webServer 依赖；session-log-export 先例）。注册失败/连接面缺席 = 零注册
+    // 零抛 fail-soft 不阻载，diag 留痕不静默——AGENTS §7。
+    const connectionFace = (ctx as unknown as { connection?: HostConnectionFace }).connection
+    const connectionDisposers: (() => void)[] = []
+    if (connectionFace !== undefined && typeof connectionFace.fetch?.register === 'function') {
+      try {
+        const d = registerKnowledgeConnectionRpc(connectionFace, { service, projects: projectsSourceOf })
+        connectionDisposers.push(d)
+        diagEmit?.({
+          event: 'knowledge-connection-rpc',
+          level: 'info',
+          message: '/api knowledge fetch routes registered（9 端点——connection.fetch.register 官方缝）',
+          process: 'main',
+        })
+      } catch (cause) {
+        diagEmit?.({
+          event: 'knowledge-connection-rpc',
+          level: 'warn',
+          message: `/api 知识端点注册失败（fail-soft 零注册不阻载）：${String(cause)}`,
+          process: 'main',
+        })
+      }
+    } else {
+      diagEmit?.({
+        event: 'knowledge-connection-rpc',
+        level: 'warn',
+        message: 'ctx.connection.fetch.register 缺席——/api 知识端点零注册（UI 数据层回落宿主既有运输面）',
+        process: 'main',
+      })
+    }
     const tools = createKnowledgeTools({
       knowledge: service,
       resolveProjectId,
@@ -248,10 +310,10 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
         : []),
     ]
     return () => {
-      for (const dispose of disposers) dispose()
+      for (const dispose of [...disposers, ...connectionDisposers]) dispose()
     }
   },
-  { inject: ['tools', 'systemPrompt'] as const },
+  { inject: ['tools', 'systemPrompt', 'connection', 'workspaceRegistry'] as const },
 )
 
 export default knowledgePlugin

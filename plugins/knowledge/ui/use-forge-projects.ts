@@ -6,7 +6,7 @@
 // 后自动对齐，无需 2.10 额外接线；projects 为应用侧数据（SC2 零副本纪律只约 dsh 账本面）。
 import { useCallback, useEffect, useState } from 'react'
 import type { ProjectSummary } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
+import { currentDefaultRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
 
 /** 项目列表相位 */
 export type ProjectsPhase =
@@ -34,7 +34,9 @@ export async function fetchProjectsPhase(makeClient: RpcClientFactory): Promise<
  */
 export function useForgeProjects(
   refreshKey: unknown,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  // 缺省 factory = 页内缝现读（fix-9——faces apply 期安装装配期分流选定面；调用期求值
+  // 非装载期冻结，缺省参表达式每次调用重读）。签名不动：显式注入仍覆写。
+  makeClient: RpcClientFactory = currentDefaultRpcClientFactory(),
 ): readonly [ProjectsPhase, () => void, () => void] {
   const [state, setState] = useState<ProjectsPhase>({ phase: 'loading' })
   const [nonce, setNonce] = useState(0)

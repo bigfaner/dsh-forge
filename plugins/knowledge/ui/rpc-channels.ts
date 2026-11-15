@@ -30,6 +30,9 @@ import {
   type WorktreeResolveRequest,
   type WorktreeResolveResult,
 } from '@dsh-forge/contracts'
+import { CONNECTION_ENDPOINT_BY_CHANNEL, KNOWLEDGE_RPC_CHANNEL } from '../shared/connection-rpc.js'
+
+export { CONNECTION_ENDPOINT_BY_CHANNEL, KNOWLEDGE_RPC_CHANNEL }
 
 // ───────────────── errors.ts 镜像 ─────────────────
 
@@ -267,4 +270,108 @@ export type RpcClientFactory = () => ForgeRpcClient
  */
 export function preloadRpcClientFactory(): ForgeRpcClient {
   return createForgeRpcClient(preloadTransport())
+}
+
+// ───────────────── connection.rpc 双运输面（fix-9——bug 1c2a603e）─────────────────
+// 官方 dsh web 宿主无 preload 面 → 缺省 preloadRpcClientFactory 构造期抛 → 插槽节 fail-soft
+// 退 null。官方正缝（上游 dsh-client-connection 源码核销）：client ctx.connection.rpc.call
+// (channel, endpoint, payload) → ConnectionRpcResult {ok,value}|{ok,error:{code,message,details}}
+// （rpc.d.ts:209-230）；host 侧 ctx.connection.rpc.handle(channel, handler) 逻辑通道注册
+// （rpc-host.d.ts:27-31，channel 形态 ^\/[A-Za-z0-9._~-]+$，endpoint 段 ^[A-Za-z0-9_$.-]+$）。
+// 装配期分流：ctx.connection 在场走 connection 面（官方宿主 + dsh-forge 官方 client 内核
+// 两宿主同源——dsh-client-connection client.js ctx.provide('connection')，裁决记 faces.ts）；
+// 缺席回落 preload 面（dsh-forge Electron preload）；两缺 = 现行 fail-loud（构造期抛）。
+
+/** knowledge 域连接 RPC 逻辑通道（host 半 ctx.connection.rpc.handle('/knowledge') 同源常量）——常量本体 = shared/connection-rpc.ts（上方 import + re-export） */
+
+/** ctx.connection.rpc.call 消费切片（ClientConnectionRpc 结构同型——测试替身同型） */
+export interface ConnectionRpcCallFace {
+  call(channel: string, endpoint: string, payload?: unknown, signal?: AbortSignal): Promise<unknown>
+}
+
+/**
+ * 通道常量 → (逻辑通道, endpoint) 映射表（endpoint 段官方校验 ^[A-Za-z0-9_$.-]+$——
+ * 点分族前缀防 knowledge/projects 方法键互撞；host 半 connection-rpc.ts 分发同表语义）。
+ * worktree.resolve 不入表——knowledge UI 零消费（anchored-projects 镜像窄面注记），
+ * 未映射通道走 typed 拒绝信封（消费面错误相位收敛）。常量本体 = shared/connection-rpc.ts。
+ */
+
+/**
+ * connection 面传输适配（ForgeTransport 同形）：通道常量 → endpoint，经
+ * ctx.connection.rpc.call('/knowledge', endpoint, payload) 送达；ConnectionRpcResult
+ * 信封投影为 contracts RpcResult（{ok,data|error{code,message,data:details}}）——
+ * invokeRpc 拆装面零改动（消费面签名不动）。未映射通道 / 信封形状非法 = typed 拒绝
+ * 信封（不抛构造错——消费面错误相位 fail-soft，typert-transport 同型口径）。
+ */
+export function connectionRpcTransport(connection: ConnectionRpcCallFace): ForgeTransport {
+  return async (channel, payload) => {
+    const endpoint = CONNECTION_ENDPOINT_BY_CHANNEL[channel]
+    if (endpoint === undefined) {
+      return {
+        ok: false,
+        error: {
+          code: 'internal',
+          message: `dsh-forge knowledge: ${channel} 通道不在 connection 面映射表（'/knowledge' 逻辑通道未承载）——typed 降级`,
+        },
+      }
+    }
+    const raw = await connection.call(KNOWLEDGE_RPC_CHANNEL, endpoint, payload ?? {})
+    if (raw === null || typeof raw !== 'object' || !('ok' in raw)) {
+      return {
+        ok: false,
+        error: {
+          code: 'internal',
+          message: `dsh-forge knowledge: connection RPC 响应形状非法（${KNOWLEDGE_RPC_CHANNEL}/${endpoint}）——期望 ConnectionRpcResult 信封`,
+        },
+      }
+    }
+    const result = raw as { ok: boolean; value?: unknown; error?: { code?: unknown; message?: unknown; details?: unknown } }
+    if (result.ok) return { ok: true, data: result.value }
+    return {
+      ok: false,
+      error: {
+        code: typeof result.error?.code === 'string' ? result.error.code : 'internal',
+        message: typeof result.error?.message === 'string' ? result.error.message : 'connection rpc failure',
+        data: result.error?.details,
+      },
+    }
+  }
+}
+
+/** connection 面 makeClient 构造器（真身 = ctx.connection.rpc 切片；注入 = 测试替身同型） */
+export function connectionRpcClientFactory(connection: ConnectionRpcCallFace): ForgeRpcClient {
+  return createForgeRpcClient(connectionRpcTransport(connection))
+}
+
+/**
+ * 装配期运输面分流（apply 期一次求值——faces 注册 inject 递达各数据消费面）：
+ * ctx.connection.rpc.call 函数面在场 → connection 面工厂（官方宿主正缝）；缺席 → 现行
+ * preload 面工厂（dsh-forge Electron preload；缺席构造期 fail-loud 语义不变）。
+ * 检测永不缓存语义边界：此处缓存的是装配期选定的运输面（宿主载体装配期恒定，非跨插件
+ * 服务在场性检测面——connection 服务随 client 内核装配期 provide，非中途装卸面）。
+ */
+export function resolveRpcClientFactory(ctx: unknown): RpcClientFactory {
+  const call = (ctx as { connection?: { rpc?: { call?: unknown } } | undefined } | undefined)?.connection?.rpc?.call
+  if (typeof call === 'function') {
+    const connection: ConnectionRpcCallFace = { call: call as ConnectionRpcCallFace['call'] }
+    return () => connectionRpcClientFactory(connection)
+  }
+  return preloadRpcClientFactory
+}
+
+// ── 缺省 factory 页内缝（apply 期安装——useForgeProjects 缺省参消费面）──
+// faces 注册 inject 递达显式 props 链（面板/召回/目录节）；anchored-projects 链
+// （useAnchoredProjects → useForgeProjects）为镜像 pin 逐字面（签名不动）——其缺省
+// factory 经本页内缝安装换面（apply 期一次安装；本包 bundle 单副本页内单例，
+// installForgeRemoteFace 页内锚同型先例）。
+let installedDefaultFactory: RpcClientFactory = preloadRpcClientFactory
+
+/** apply 期安装装配期分流选定的缺省 factory（faces.ts 消费——页内单点） */
+export function installDefaultRpcClientFactory(factory: RpcClientFactory): void {
+  installedDefaultFactory = factory
+}
+
+/** 缺省 factory 现读（useForgeProjects 缺省参消费——调用期求值非装载期冻结） */
+export function currentDefaultRpcClientFactory(): RpcClientFactory {
+  return installedDefaultFactory
 }

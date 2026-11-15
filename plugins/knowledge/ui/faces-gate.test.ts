@@ -114,8 +114,8 @@ describe('registerKnowledgeFaces 编排（diag 读数 = A-KN-8 语义）', () =>
 })
 
 describe('knowledgeClient 组合插件对象（client-modules 装载契约）', () => {
-  it('inject 声明边 = [slots, locale]（缺声明 = apply 期 cannot get property）', () => {
-    expect(knowledgeClient.inject).toEqual(['slots', 'locale'])
+  it("inject 声明边 = [slots, locale, connection]（fix-9 增 connection 边——缺声明 = apply 期 cannot get property）", () => {
+    expect(knowledgeClient.inject).toEqual(['slots', 'locale', 'connection'])
   })
 
   it('apply 返回值铁律：恒 undefined（cordis 组合把返回值当 effect 消费）', () => {

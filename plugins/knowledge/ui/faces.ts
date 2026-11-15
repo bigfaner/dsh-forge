@@ -32,6 +32,7 @@ import { ForgeKnowledgePanel } from './KnowledgePanel.js'
 import { ForgeRecallView } from './RecallTab.js'
 import { KnowledgeDirSection, KNOWLEDGE_DIR_SECTION_KEY, KNOWLEDGE_DIR_SECTION_LABEL } from './knowledge-dir-section.js'
 import type { WorkbenchBridgeMirror } from '../shared/workbench-bridge.js'
+import { installDefaultRpcClientFactory, preloadRpcClientFactory, resolveRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
 
 /** 官方 main 面板 keyed 槽名（ui-layout AppFrame root——官方全局面板径） */
 export const MAIN_SLOT = 'main'
@@ -91,6 +92,7 @@ export function registerKnowledgeFaces(
   slots: SectionSlotsFace,
   locale: LocaleServiceFace,
   globalObject: { __DSH_FORGE_HOST_PLUGINS__?: HostPluginsSeam } = globalThis as never,
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
 ): KnowledgeFacesDiagnostics {
   const registered: string[] = []
   const knowledgeEnabled = knowledgeGateOf(globalObject)
@@ -105,12 +107,14 @@ export function registerKnowledgeFaces(
     }
   }
 
-  // ① 知识视图面板（main keyed——inject 携桥：抽屉缝联动面，缺席 fail-soft）
+  // ① 知识视图面板（main keyed——inject 携桥 + 运输面 factory：抽屉缝联动面缺席 fail-soft；
+  // makeClient = fix-9 装配期分流选定面——connection 在场走官方 connection.rpc，缺席回落
+  // preload，消费面签名不动）
   face(KNOWLEDGE_PANEL_KEY, () => {
     if (registerKeyedSection(slots, {
       slot: MAIN_SLOT,
       key: KNOWLEDGE_PANEL_KEY,
-      inject: () => ({ bridge: workbenchBridgeOf() }),
+      inject: () => ({ bridge: workbenchBridgeOf(), makeClient }),
       component: ForgeKnowledgePanel,
     }) === undefined) throw new Error('slots face unavailable')
   })
@@ -127,7 +131,7 @@ export function registerKnowledgeFaces(
     }) === undefined) throw new Error('slots face unavailable')
   })
 
-  // ③ 知识召回页签（conversation.view list 行——ui-trajectory 同型先例）
+  // ③ 知识召回页签（conversation.view list 行——ui-trajectory 同型先例；inject 携运输面 factory）
   face(RECALL_VIEW_ID, () => {
     if (registerKeyedSection(slots, {
       slot: CONVERSATION_VIEW_SLOT,
@@ -135,6 +139,7 @@ export function registerKnowledgeFaces(
       order: RECALL_VIEW_ORDER,
       locale: FORGE_KNOWLEDGE_LOCALE_NS,
       label: (): string => t('view.recall'),
+      inject: () => ({ makeClient }),
       component: ForgeRecallView,
     }) === undefined) throw new Error('slots face unavailable')
   })
@@ -153,6 +158,7 @@ export function registerKnowledgeFaces(
 export function registerKnowledgeDirSection(
   slots: SectionSlotsFace,
   globalObject: { __DSH_FORGE_HOST_PLUGINS__?: HostPluginsSeam } = globalThis as never,
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
 ): { registered: boolean; knowledgeEnabled: boolean } {
   const knowledgeEnabled = knowledgeGateOf(globalObject)
   if (!knowledgeEnabled) {
@@ -163,6 +169,8 @@ export function registerKnowledgeDirSection(
     slot: KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT,
     key: KNOWLEDGE_DIR_SECTION_KEY,
     label: KNOWLEDGE_DIR_SECTION_LABEL,
+    // fix-9：inject 携运输面 factory——projects.list 经装配期分流选定面送达（消费面签名不动）
+    inject: () => ({ makeClient }),
     component: KnowledgeDirSection,
   })
   if (dispose === undefined) {
@@ -196,8 +204,14 @@ function applyKnowledgeFaces(ctx: unknown): void {
       return
     }
     registerKnowledgeLocale(locale)
+    // fix-9 装配期运输面分流（一次求值——ctx.connection.rpc 在场走 connection 面，
+    // 缺席回落 preload 面）：选定 factory ① 安装页内缺省缝（anchored-projects 镜像
+    // pin 逐字面签名不动——useForgeProjects 缺省参经缝换面）；② inject 递达各数据
+    // 消费面（面板/召回/目录节——bridge 注入同型先例，消费面签名不动）。
+    const makeClient = resolveRpcClientFactory(ctx)
+    installDefaultRpcClientFactory(makeClient)
     try {
-      const kn = registerKnowledgeFaces(slots, locale)
+      const kn = registerKnowledgeFaces(slots, locale, undefined, makeClient)
       console.info(`[dsh-forge/knowledge] knowledge faces registered=[${kn.registered.join(', ')}] enabled=${kn.knowledgeEnabled}`)
     } catch (error) {
       console.warn('[dsh-forge/knowledge] knowledge faces registration interrupted', error)
@@ -205,7 +219,7 @@ function applyKnowledgeFaces(ctx: unknown): void {
     // ④ 项目台知识目录只读节（1.5 提案项 4——project.section.knowledge-dir 官方缝；
     // 注册异常 = fail-soft 降级只降本节，缺席 diag 留痕不静默）
     try {
-      const kd = registerKnowledgeDirSection(slots)
+      const kd = registerKnowledgeDirSection(slots, undefined, makeClient)
       console.info(`[dsh-forge/knowledge] knowledge-dir section registered=${kd.registered} enabled=${kd.knowledgeEnabled}`)
     } catch (error) {
       console.warn('[dsh-forge/knowledge] knowledge-dir section registration interrupted', error)
@@ -221,7 +235,11 @@ function applyKnowledgeFaces(ctx: unknown): void {
  * fail-closed 分支，无迟到补偿——fix-2 internal/service 订阅随 G-B reflect 分支一并裁撤）。
  */
 export const knowledgeClient = {
-  inject: ['slots', 'locale'] as string[],
+  // fix-9 增 'connection' 声明边（官方 dsh-client-connection client 插件 ctx.provide
+  // ('connection')——上游正本核销；dsh-forge 官方 client 内核同源两宿主恒在场，裁决记
+  // rpc-channels.ts 双运输面段）。声明边等待服务就绪（cordis 装载契），apply 期仍做
+  // 面形状现查分流——缺席宿主回落 preload 面（劣形 fail-soft 不炸 apply）。
+  inject: ['slots', 'locale', 'connection'] as string[],
   apply(ctx: unknown): void {
     // 门控 fail-closed 在前（集成态壳缝 false → 零登记零异常，diag info 留痕；
     // 官方形态壳缝缺席 → 无条件注册——bundle 在场即挂载态本体）

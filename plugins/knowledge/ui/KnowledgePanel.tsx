@@ -20,6 +20,7 @@ import type { KitSelectorHook } from '../shared/kit-types.js'
 import { MainSessionAnchor, useAnchoredProjects } from './anchored-projects.js'
 import { pickedProjectAnchor, projectAnchorOf } from './panel-anchor.js'
 import type { WorkbenchBridgeMirror } from '../shared/workbench-bridge.js'
+import type { RpcClientFactory } from './rpc-channels.js'
 import './knowledge.css'
 
 /** 工作台桥消费切片（壳 createWorkbenchBridge 产物结构同型镜像的窄 Pick——抽屉目标缝） */
@@ -38,6 +39,8 @@ export interface ForgeKnowledgePanelProps {
   readonly useSessions?: KitSelectorHook
   /** 工作台桥（插件 inject face 注入——抽屉目标缝；缺席 = 抽屉态本地自持降级） */
   readonly bridge?: Pick<WorkbenchBridge, 'subscribe' | 'getSnapshot' | 'setDrawerEntry'>
+  /** RPC client 构造器（fix-9 faces inject 注入——装配期分流选定面；缺席 = 页内缺省缝现读） */
+  readonly makeClient?: RpcClientFactory
 }
 
 /**
@@ -108,6 +111,7 @@ export function ForgeKnowledgePanel(props: ForgeKnowledgePanelProps): ReactNode 
         onScopePick={setPickedProjectId}
         openEntryId={drawerEntryId}
         onOpenEntryChange={setDrawerEntry}
+        makeClient={props.makeClient}
       />
       {workspacesAnchor}
       {props.useSessions === undefined ? null : (
