@@ -18,9 +18,10 @@ import type { ForgeToolDeps } from './index.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
-function row(overrides: Partial<CheckpointRow> & { id: number }): CheckpointRow {
+function row(overrides: Partial<CheckpointRow> & { id: string }): CheckpointRow {
   return {
-    proposalId: 'p-1',
+    projectKey: 'proj-1',
+    slug: 'forge-x',
     mark: 'first-pass-complete',
     createdAt: '2026-10-24T00:00:00.000Z',
     baseCommitHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -34,17 +35,16 @@ function row(overrides: Partial<CheckpointRow> & { id: number }): CheckpointRow 
 
 function depsWithFace(
   face: Omit<ForgeCheckpointsToolFace, 'ensureCheckpoint'> & Partial<Pick<ForgeCheckpointsToolFace, 'ensureCheckpoint'>>,
-  proposals?: ForgeToolDeps['proposals'],
+  tasks?: ForgeToolDeps['tasks'],
 ): ForgeToolDeps {
   return {
-    tasks: {} as ForgeToolDeps['tasks'],
-    proposals:
-      proposals ??
+    tasks:
+      tasks ??
       ({
-        listProposals: async () => {
+        listTasks: async () => {
           throw new Error('not used')
         },
-      } as unknown as ForgeToolDeps['proposals']),
+      } as unknown as ForgeToolDeps['tasks']),
     bugs: {} as ForgeToolDeps['bugs'],
     checkpoints: {
       ...face,
@@ -62,41 +62,41 @@ describe('参数防御收窄', () => {
   it('record：四参 AC 形状齐备；wave_seq/快照可选；词表外 mark 拒；必填缺席拒', () => {
     expect(
       parseRecordImplCheckpointArgs({
-        proposal_id: 'forge-x',
+        slug: 'forge-x',
         mark: 'review-wave-N',
         wave_seq: 2,
         base_commit_hash: 'abc',
         snapshots: { tasksTotal: 3, commitsTotal: 5, fixesTotal: 1, evidenceDebtsTotal: 1 },
       }),
     ).toEqual({
-      proposal_id: 'forge-x',
+      slug: 'forge-x',
       mark: 'review-wave-N',
       wave_seq: 2,
       base_commit_hash: 'abc',
       snapshots: { tasksTotal: 3, commitsTotal: 5, fixesTotal: 1, evidenceDebtsTotal: 1 },
     })
-    expect(parseRecordImplCheckpointArgs({ proposal_id: 'p', mark: 'merged', base_commit_hash: 'h' })).toEqual({
-      proposal_id: 'p',
+    expect(parseRecordImplCheckpointArgs({ slug: 'p', mark: 'merged', base_commit_hash: 'h' })).toEqual({
+      slug: 'p',
       mark: 'merged',
       base_commit_hash: 'h',
     })
-    expect(() => parseRecordImplCheckpointArgs({ proposal_id: 'p', mark: 'nope', base_commit_hash: 'h' })).toThrow(
+    expect(() => parseRecordImplCheckpointArgs({ slug: 'p', mark: 'nope', base_commit_hash: 'h' })).toThrow(
       /mark must be one of/,
     )
-    expect(() => parseRecordImplCheckpointArgs({ mark: 'merged', base_commit_hash: 'h' })).toThrow(/proposal_id/)
-    expect(() => parseRecordImplCheckpointArgs({ proposal_id: 'p', mark: 'merged', wave_seq: 0, base_commit_hash: 'h' })).toThrow(
+    expect(() => parseRecordImplCheckpointArgs({ mark: 'merged', base_commit_hash: 'h' })).toThrow(/slug/)
+    expect(() => parseRecordImplCheckpointArgs({ slug: 'p', mark: 'merged', wave_seq: 0, base_commit_hash: 'h' })).toThrow(
       /wave_seq must be a positive integer/,
     )
   })
 
-  it('query：proposal_id 必带；marks 词表过滤；词表外元素拒', () => {
-    expect(parseQueryImplCheckpointArgs({ proposal_id: 'p', marks: ['merged', 'stabilized'] })).toEqual({
-      proposal_id: 'p',
+  it('query：slug 必带；marks 词表过滤；词表外元素拒', () => {
+    expect(parseQueryImplCheckpointArgs({ slug: 'p', marks: ['merged', 'stabilized'] })).toEqual({
+      slug: 'p',
       marks: ['merged', 'stabilized'],
     })
-    expect(parseQueryImplCheckpointArgs({ proposal_id: 'p' })).toEqual({ proposal_id: 'p' })
-    expect(() => parseQueryImplCheckpointArgs({ proposal_id: 'p', marks: ['done'] })).toThrow(/marks must only contain/)
-    expect(() => parseQueryImplCheckpointArgs({})).toThrow(/proposal_id/)
+    expect(parseQueryImplCheckpointArgs({ slug: 'p' })).toEqual({ slug: 'p' })
+    expect(() => parseQueryImplCheckpointArgs({ slug: 'p', marks: ['done'] })).toThrow(/marks must only contain/)
+    expect(() => parseQueryImplCheckpointArgs({})).toThrow(/slug/)
   })
 
   it('list：mark 过滤可选——词表外元素拒；非对象根拒', () => {
@@ -108,27 +108,27 @@ describe('参数防御收窄', () => {
 })
 
 describe('recordImplCheckpoint execute（落标记行——路由映射）', () => {
-  it('cwd → projectId；四参直透域入参（快照缺省零；键缺席式）', async () => {
+  it('cwd → projectKey；四参直透域入参（快照缺省零；键缺席式）', async () => {
     const captured: Array<Record<string, unknown>> = []
     const deps = depsWithFace({
       appendCheckpoint: async (input) => {
         captured.push(input as Record<string, unknown>)
-        return row({ id: 7, mark: 'merged', tasksTotal: 6, commitsTotal: 9, fixesTotal: 2, evidenceDebtsTotal: 1 })
+        return row({ id: 'cp-7', mark: 'merged', tasksTotal: 6, commitsTotal: 9, fixesTotal: 2, evidenceDebtsTotal: 1 })
       },
       listCheckpoints: async () => {
         throw new Error('not used')
       },
     })
     const tool = createRecordImplCheckpointTool(deps)
-    const result = await tool.execute({ proposal_id: 'forge-x', mark: 'merged', base_commit_hash: 'deadbeef' }, EXEC)
+    const result = await tool.execute({ slug: 'forge-x', mark: 'merged', base_commit_hash: 'deadbeef' }, EXEC)
     expect(captured[0]).toEqual({
-      projectId: 'proj-1',
-      proposalId: 'forge-x',
+      projectKey: 'proj-1',
+      containerSlug: 'forge-x',
       mark: 'merged',
       baseCommitHash: 'deadbeef',
       snapshots: { tasksTotal: 0, commitsTotal: 0, fixesTotal: 0, evidenceDebtsTotal: 0 },
     })
-    expect(result).toMatchObject({ checkpoint: { id: 7, mark: 'merged' } })
+    expect(result).toMatchObject({ checkpoint: { id: 'cp-7', mark: 'merged' } })
     const rendered = tool.output?.render?.({}, result)
     expect((rendered as { type: string; text: string }[])[0]!.text).toContain('✓ checkpoint recorded')
   })
@@ -141,13 +141,13 @@ describe('recordImplCheckpoint execute（落标记行——路由映射）', () 
       listCheckpoints: async () => [],
     })
     const tool = createRecordImplCheckpointTool(deps)
-    const result = await tool.execute({ proposal_id: 'p', mark: 'review-wave-N', wave_seq: 3, base_commit_hash: 'h' }, EXEC)
+    const result = await tool.execute({ slug: 'p', mark: 'review-wave-N', wave_seq: 3, base_commit_hash: 'h' }, EXEC)
     expect(result).toMatchObject({ ok: false, code: 'ERR_CHECKPOINT_ALREADY_EXISTS' })
   })
 })
 
 describe('queryImplCheckpoint execute（时序查 + 过滤 + 四项硬指标）', () => {
-  it('proposal_id/marks 直透查询；返回时序流水 + metrics 投影', async () => {
+  it('slug/marks 直透查询；返回时序流水 + metrics 投影', async () => {
     const captured: Array<Record<string, unknown>> = []
     const deps = depsWithFace({
       appendCheckpoint: async () => {
@@ -156,18 +156,18 @@ describe('queryImplCheckpoint execute（时序查 + 过滤 + 四项硬指标）'
       listCheckpoints: async (q) => {
         captured.push(q as Record<string, unknown>)
         return [
-          row({ id: 1, tasksTotal: 4, commitsTotal: 4, fixesTotal: 0 }),
-          row({ id: 2, mark: 'review-wave-N', waveSeq: 1, createdAt: '2026-10-25T00:00:00.000Z', tasksTotal: 6, commitsTotal: 7, fixesTotal: 2 }),
-          row({ id: 3, mark: 'merged', createdAt: '2026-10-26T00:00:00.000Z', tasksTotal: 8, commitsTotal: 12, fixesTotal: 3, evidenceDebtsTotal: 1 }),
+          row({ id: 'cp-1', tasksTotal: 4, commitsTotal: 4, fixesTotal: 0 }),
+          row({ id: 'cp-2', mark: 'review-wave-N', waveSeq: 1, createdAt: '2026-10-25T00:00:00.000Z', tasksTotal: 6, commitsTotal: 7, fixesTotal: 2 }),
+          row({ id: 'cp-3', mark: 'merged', createdAt: '2026-10-26T00:00:00.000Z', tasksTotal: 8, commitsTotal: 12, fixesTotal: 3, evidenceDebtsTotal: 1 }),
         ]
       },
     })
     const tool = createQueryImplCheckpointTool(deps)
-    const result = (await tool.execute({ proposal_id: 'forge-x', marks: ['merged'] }, EXEC)) as {
+    const result = (await tool.execute({ slug: 'forge-x', marks: ['merged'] }, EXEC)) as {
       checkpoints: CheckpointRow[]
       metrics: ReturnType<typeof computeCheckpointMetrics>
     }
-    expect(captured[0]).toEqual({ projectId: 'proj-1', proposalId: 'forge-x', marks: ['merged'] })
+    expect(captured[0]).toEqual({ projectKey: 'proj-1', slug: 'forge-x', marks: ['merged'] })
     expect(result.checkpoints).toHaveLength(3)
     // 四项硬指标：firstPassRate=4/8；reworkCommitRatio=(12−4)/12；reviewWaveCount=1；fixDensity=3/8
     expect(result.metrics).toEqual({
@@ -186,7 +186,7 @@ describe('queryImplCheckpoint execute（时序查 + 过滤 + 四项硬指标）'
       listCheckpoints: async () => [],
     })
     const tool = createQueryImplCheckpointTool(deps)
-    const result = (await tool.execute({ proposal_id: 'p' }, EXEC)) as { metrics: Record<string, unknown> }
+    const result = (await tool.execute({ slug: 'p' }, EXEC)) as { metrics: Record<string, unknown> }
     expect(result.metrics).toEqual({ reviewWaveCount: 0 })
     const rendered = tool.output?.render?.({}, result)
     expect((rendered as { type: string; text: string }[])[0]!.text).toContain('✓ 0 checkpoint(s)')
@@ -194,13 +194,14 @@ describe('queryImplCheckpoint execute（时序查 + 过滤 + 四项硬指标）'
 })
 
 describe('listImplCheckpoints execute（跨容器清单）', () => {
-  it('提案域枚举容器 × 逐容器流水组合——行带 slug/title 注记', async () => {
-    const proposals = {
-      listProposals: async () => [
-        { proposalId: 'p-1', slug: 'alpha', title: 'Alpha' },
-        { proposalId: 'p-2', slug: 'beta', title: 'Beta' },
+  it('任务域枚举容器 × 逐容器流水组合——行自带容器 slug 注记', async () => {
+    const tasks = {
+      listTasks: async () => [
+        { slug: 'alpha' },
+        { slug: 'alpha' },
+        { slug: 'beta' },
       ],
-    } as unknown as ForgeToolDeps['proposals']
+    } as unknown as ForgeToolDeps['tasks']
     const queried: string[] = []
     const deps = depsWithFace(
       {
@@ -208,18 +209,18 @@ describe('listImplCheckpoints execute（跨容器清单）', () => {
           throw new Error('not used')
         },
         listCheckpoints: async (q) => {
-          queried.push(q.proposalId)
-          return q.proposalId === 'p-1' ? [row({ id: 1 }), row({ id: 2, mark: 'merged' })] : []
+          queried.push(q.slug)
+          return q.slug === 'alpha' ? [row({ id: 'cp-1', slug: 'alpha' }), row({ id: 'cp-2', mark: 'merged', slug: 'alpha' })] : []
         },
       },
-      proposals,
+      tasks,
     )
     const tool = createListImplCheckpointsTool(deps)
     const result = (await tool.execute({}, EXEC)) as { checkpoints: Array<{ slug: string; mark: string }> }
-    expect(queried).toEqual(['p-1', 'p-2'])
+    expect(queried).toEqual(['alpha', 'beta'])
     expect(result.checkpoints).toEqual([
-      expect.objectContaining({ id: 1, slug: 'alpha', title: 'Alpha', mark: 'first-pass-complete' }),
-      expect.objectContaining({ id: 2, slug: 'alpha', title: 'Alpha', mark: 'merged' }),
+      expect.objectContaining({ id: 'cp-1', slug: 'alpha', mark: 'first-pass-complete' }),
+      expect.objectContaining({ id: 'cp-2', slug: 'alpha', mark: 'merged' }),
     ])
     const rendered = tool.output?.render?.({}, result)
     expect((rendered as { type: string; text: string }[])[0]!.text).toContain('✓ 2 checkpoint(s) across containers')
@@ -228,9 +229,9 @@ describe('listImplCheckpoints execute（跨容器清单）', () => {
 
 describe('computeCheckpointMetrics（四项硬指标纯投影）', () => {
   it('缺 first-pass 帧 → 相关比率项键缺席；分母零 → 键缺席', () => {
-    expect(computeCheckpointMetrics([row({ id: 1, mark: 'retro-done' })])).toEqual({ reviewWaveCount: 0, fixDensity: 0 })
+    expect(computeCheckpointMetrics([row({ id: 'cp-1', mark: 'retro-done' })])).toEqual({ reviewWaveCount: 0, fixDensity: 0 })
     expect(
-      computeCheckpointMetrics([row({ id: 1 }), row({ id: 2, mark: 'merged', tasksTotal: 0, commitsTotal: 0 })]),
+      computeCheckpointMetrics([row({ id: 'cp-1' }), row({ id: 'cp-2', mark: 'merged', tasksTotal: 0, commitsTotal: 0 })]),
     ).toEqual({ reviewWaveCount: 0 })
   })
 })

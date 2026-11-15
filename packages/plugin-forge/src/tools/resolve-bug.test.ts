@@ -91,7 +91,6 @@ function toolWithCapture(resolve: (input: CapturedInput) => Promise<BugCard>): {
   }
   const deps: ForgeToolDeps = {
     tasks: {} as ForgeToolDeps['tasks'],
-    proposals: {} as ForgeToolDeps['proposals'],
     bugs,
     checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
@@ -176,7 +175,6 @@ describe('resolveBug execute（路由 + 服务端解析径）', () => {
 
     const failing: ForgeToolDeps = {
       tasks: {} as ForgeToolDeps['tasks'],
-      proposals: {} as ForgeToolDeps['proposals'],
       bugs: {
         registerBug: async () => {
           throw new Error('not used')
@@ -248,7 +246,6 @@ describe('T4 锚有效性预检（旁挂侧文件 IO，失效退回拒绝路径�
     const card = { ...fixedCard(), bugStatus: 'open' as const, recurrenceOf: 'root-1' }
     const t = createResolveBugTool({
       tasks: {} as ForgeToolDeps['tasks'],
-      proposals: {} as ForgeToolDeps['proposals'],
       bugs: captureBugsFace(captured, async () => fixedCard(), card),
       projects: {
         getProject: async () => projectRow('Z:/ws/demo'),
@@ -281,7 +278,6 @@ describe('T4 锚有效性预检（旁挂侧文件 IO，失效退回拒绝路径�
     const card = { ...fixedCard(), bugStatus: 'open' as const, recurrenceOf: 'root-1' }
     const t = createResolveBugTool({
       tasks: {} as ForgeToolDeps['tasks'],
-      proposals: {} as ForgeToolDeps['proposals'],
       bugs: captureBugsFace(captured, async () => fixedCard(), card),
       projects: {
         getProject: async () => projectRow(dir),
@@ -309,7 +305,6 @@ describe('T4 锚有效性预检（旁挂侧文件 IO，失效退回拒绝路径�
     const card = { ...fixedCard(), bugStatus: 'open' as const, recurrenceOf: 'root-1' }
     const t = createResolveBugTool({
       tasks: {} as ForgeToolDeps['tasks'],
-      proposals: {} as ForgeToolDeps['proposals'],
       bugs: captureBugsFace(captured, async () => fixedCard(), card),
       projects: {
         getProject: async () => projectRow(dir),
@@ -328,7 +323,6 @@ describe('T4 锚有效性预检（旁挂侧文件 IO，失效退回拒绝路径�
     const captured: CapturedInput[] = []
     const t = createResolveBugTool({
       tasks: {} as ForgeToolDeps['tasks'],
-      proposals: {} as ForgeToolDeps['proposals'],
       bugs: captureBugsFace(captured, async () => fixedCard(), fixedCard()), // 无 recurrenceOf
       projects: {
         getProject: async () => {

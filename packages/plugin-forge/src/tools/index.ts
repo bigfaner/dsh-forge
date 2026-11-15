@@ -1,36 +1,19 @@
-// tools/ barrel（定位：业务；knowledge tools/index.ts 同型）。tool 的定义工厂与
-// 执行期依赖形状（M3 终态六 tool = addTask / submitTask / queryTask / createProposal /
-// transitionProposal / dispatchTask——tech-design Interface 4；claimTask tool 已退役
-// （3.5·drift #1：并入 dispatchTask 复合动词，core 服务 API 保留供 dispatchTask/桥/回放
-// 消费）；transitionTask/setProposalMode 不注册（人类通道专属/模式改写
-// 唯一正门——SC6/SC7 断言面；新面 pin = 5.1 #17/#18）。transitionFeature 已入面
-// （implicit-stage-approval §2.3——裁决②局部修订：reason 双前缀 parse 强制 + tool 层
-// 相位守卫两支承担溯源与防漂移；transitionFeature 仅主 agent 面——worker deny）。dispatchTask 注册面收口 = 3.4
-// （本集合终态六员）。
 // 调用链（交互四）：agent → tool.execute → 会话上下文解析（cwd→projectId /
-// sessionId）→ ctx.forgeTasks / ctx.forgeProposals 动词（单一写入门，actor 由通道
+// sessionId）→ ctx.forgeTasks 动词（单一写入门，actor 由通道
 // 推断恒 'plugin-tool'——core 侧落账）。返回面 = formatOk/formatErr 双友好模板
 // （裁决⑨——format.ts 单源；RPC/桥 typed error 信封照旧，双面分治不破）。
 // 3.4 事件缝：deps.events（可选——缺席 = 零事件降级；单测桩免配）承载 emit 与
 // 会话目录记忆（→ 3.3 总线/监听器）；deps.settings = forgeSettings 服务面（可选——
 // 缺席 = dispatchTask 不携带 agentOptions 回退父会话继承）。
 import type {
-  FeatureCard,
-  FeatureDocumentRow,
-  ForgeProposalsService,
   ForgeSettingsService,
   ForgeTasksService,
-  ListFeatureDocsQuery,
-  ListFeaturesQuery,
-  FeatureRow,
-  TransitionFeatureInput,
 } from '@dsh-forge/contracts'
 import type { BugCard, BugChainContext, BugErrorTypeAggregate, BugRecurrenceCandidate, GetBugResponse, ListBugsQuery, RegisterBugInput, RegisterBugResult, ResolveBugInput } from '@dsh-forge/lib-api'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobsFace, ProjectDirServiceFace } from '../faces.js'
 import type { ProjectIdResolver } from './session.js'
 import { createAddTaskTool } from './add-task.js'
-import { createCreateProposalTool } from './create-proposal.js'
 import { createDispatchTaskTool } from './dispatch-task.js'
 import type {
   ForgeCheckpointsToolFace,
@@ -48,8 +31,6 @@ import { createStopTaskLoopTool } from './stop-task-loop.js'
 import { createTaskStatsTool } from './task-stats.js'
 import type { LoopToolDeps } from './dispatch-task.js'
 import { createAggregateBugsTool } from './aggregate-bugs.js'
-import { createTransitionProposalTool } from './transition-proposal.js'
-import { createTransitionFeatureTool } from './transition-feature.js'
 import { createUnblockTaskTool } from './unblock-task.js'
 import { createUpdateTaskTool } from './update-task.js'
 import {
@@ -118,34 +99,14 @@ export type { CheckpointListEntry, CheckpointMark, CheckpointMetrics, Checkpoint
 /** 链上下文投影重导出（getBug 响应载荷形状——工具面注释引用） */
 export type { BugChainContext }
 
-/**
- * core feature 域服务的插件侧结构化消费面（implicit-stage-approval §2.3——core
- * createFeaturesService 结构兼容，类型出自本面：插件禁 import core，跨面以结构判别）。
- * transitionFeature tool 三消费面：listFeatures/listFeatureDocs 快照读（守卫输入）+
- * transitionFeature 写（同步 span 尾）。
- */
-export interface ForgeFeaturesToolFace {
-  transitionFeature(input: TransitionFeatureInput): Promise<FeatureRow>
-  listFeatures(q: ListFeaturesQuery): Promise<readonly FeatureCard[]>
-  listFeatureDocs(q: ListFeatureDocsQuery): Promise<readonly FeatureDocumentRow[]>
-}
-
 /** tool 共享的执行期依赖（index.ts 装配注入） */
 export interface ForgeToolDeps {
   /** core 任务域服务（运行期 Cordis inject 解析的 core 依赖之一，类型出自 contracts） */
   tasks: ForgeTasksService
-  /** core 提案域服务（写动词 = tool 专属面） */
-  proposals: ForgeProposalsService
   /** core bug 域服务（fix-bug 两写径 recordBug/resolveBug 的服务面——装配注入） */
   bugs: ForgeBugsToolFace
   /** core checkpoints 域服务（机械⑥实现检查点三工具的服务面——装配注入） */
   checkpoints: ForgeCheckpointsToolFace
-  /**
-   * core feature 域服务（可选——implicit-stage-approval §2.3 transitionFeature tool 消费面；
-   * 缺席 = 该 tool 执行期 fail-loud 拒绝（同 jobs 可选降级模式），其余 tool 零影响。
-   * 装配径 = ctx.reflect 防御读取 forgeFeatures，见 src/index.ts）。
-   */
-  features?: ForgeFeaturesToolFace
   /** 会话 cwd → projectId 解析器（session.ts 绑定表/bindingsFile 产物） */
   resolveProjectId: ProjectIdResolver
   /** 事件发射面（3.4——可选：缺席 = 零事件降级；task-submitted/task-error 等发射点共消费） */
@@ -184,14 +145,11 @@ export interface ForgeToolDeps {
   submitSettleDisplay?: (input: { projectId: string; slug: string; localId: string; result: 'completed' | 'blocked' }) => Promise<void>
 }
 
-/** tool 定义组（顺序 = Interface 4 列序扩展——二十三员；注册面与断言面共消费） */
+/** tool 定义组（顺序 = Interface 4 列序扩展——二十员；注册面与断言面共消费） */
 export interface ForgeTools {
   readonly addTask: ReturnType<typeof createAddTaskTool>
   readonly submitTask: ReturnType<typeof createSubmitTaskTool>
   readonly queryTask: ReturnType<typeof createQueryTaskTool>
-  readonly createProposal: ReturnType<typeof createCreateProposalTool>
-  readonly transitionProposal: ReturnType<typeof createTransitionProposalTool>
-  readonly transitionFeature: ReturnType<typeof createTransitionFeatureTool>
   readonly dispatchTask: ReturnType<typeof createDispatchTaskTool>
   readonly stopTaskLoop: ReturnType<typeof createStopTaskLoopTool>
   readonly updateTask: ReturnType<typeof createUpdateTaskTool>
@@ -211,13 +169,12 @@ export interface ForgeTools {
   readonly forgeResolvePath: ReturnType<typeof createForgeResolvePathTool>
 }
 
-/** 注册面全集（二十三 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
+/** 注册面全集（二十 tool——M3 六员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
  *  两 bug 读径 + aggregateBugs 聚合读径（recurrence-signal-tiering）+ stopTaskLoop 停止入口
  *  （3b——dispatch-loop-hardening 改进 3b③）+ pauseTask
- *  单任务暂停入口（task-pause-primitive）+ transitionFeature 相位转移入口
- *  （implicit-stage-approval §2.3——裁决②局部修订）+ unblockTask blocked→pending 出口
+ *  单任务暂停入口（task-pause-primitive）+ unblockTask blocked→pending 出口
  *  （blocked-verdict-restore-primitive）+ forgeDirs/forgeResolvePath 目录查询双只读径
- *  （forge-dirs-query-tool §2.3——主 + worker 双面）；面分治：listBugs/transitionFeature
+ *  （forge-dirs-query-tool §2.3——主 + worker 双面）；面分治：listBugs
  *  仅主 agent，getBug 主 + worker，aggregateBugs 主 + triage（聚合只读，worker 面 deny
  *  ——assemble.ts FORGE_DENY_IN_WORKER），addTask 仅主 agent（worker 面不注入——
  *  execute 面 ERR_WORKER_ADDTASK_DENIED 双保险），pauseTask/unblockTask 仅主 agent——WORKER_FORGE_TOOLS
@@ -226,9 +183,6 @@ export const FORGE_TOOL_NAMES = [
   'addTask',
   'submitTask',
   'queryTask',
-  'createProposal',
-  'transitionProposal',
-  'transitionFeature',
   'dispatchTask',
   'stopTaskLoop',
   'updateTask',
@@ -257,9 +211,6 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     addTask: createAddTaskTool(deps),
     submitTask: createSubmitTaskTool(deps),
     queryTask: createQueryTaskTool(deps),
-    createProposal: createCreateProposalTool(deps),
-    transitionProposal: createTransitionProposalTool(deps),
-    transitionFeature: createTransitionFeatureTool(deps),
     dispatchTask: createDispatchTaskTool(deps),
     stopTaskLoop: createStopTaskLoopTool(deps),
     updateTask: createUpdateTaskTool(deps),
@@ -315,12 +266,6 @@ export { gateOf, parseSubmitTaskArgs } from './submit-task.js'
 export type { SubmitTaskToolArgs } from './submit-task.js'
 export { parseQueryTaskArgs } from './query-task.js'
 export type { QueryTaskToolArgs } from './query-task.js'
-export { parseCreateProposalArgs } from './create-proposal.js'
-export type { CreateProposalToolArgs } from './create-proposal.js'
-export { parseTransitionProposalArgs } from './transition-proposal.js'
-export type { TransitionProposalToolArgs } from './transition-proposal.js'
-export { createTransitionFeatureTool, deriveGuardVerdict, parseTransitionFeatureArgs } from './transition-feature.js'
-export type { FeaturePhaseSnapshot, GuardVerdict, TransitionFeatureToolArgs } from './transition-feature.js'
 export { parseUpdateTaskArgs } from './update-task.js'
 export type { UpdateTaskToolArgs } from './update-task.js'
 export { parseTaskStatsArgs } from './task-stats.js'

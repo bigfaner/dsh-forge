@@ -1,7 +1,7 @@
 // @dsh-forge/plugin-forge 插件定义（定位：装配；knowledge index.ts 同型——3.4 物理挂载）。
 // 形态：Cordis Plugin.Function（loader 取 default 导出，与 core/index.ts 同型）：
-//   inject = ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt', 'experts']
-//   —— 对 core 的依赖 = 任务/提案/bug/项目四域服务（Interface 1/3 类型 +
+//   inject = ['forgeTasks', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt', 'experts']
+//   —— 对 core 的依赖 = 任务/bug/项目三域服务（Interface 1 类型 +
 //   ProjectServiceM2.deriveTaskStoreDir——事件日志落位目录单源派生，插件不复制；
 //   forgeBugs = fix-bug bug 域服务——recordBug/resolveBug 两写径）；
 //   experts = expert-squad 顶层服务（bug 0b83e3aa——preset 组内实例跨隔离 realm 消费
@@ -52,7 +52,6 @@ import { defaultWorkerTreeGuard, setJobTreeDiagSink } from './spawn/job-tree.js'
 import type { SpawnWorker } from './dispatch-core/index.js'
 import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
 import type { ForgeContextFace } from './tools/index.js'
-import type { ForgeFeaturesToolFace } from './tools/index.js'
 import type { ProjectBinding } from './tools/index.js'
 
 /** 模块级本地 expertResolver 单例（bug dfa41a72/ad32e240——弃跨 scope 反射取回）：
@@ -96,8 +95,8 @@ function warnReconcileDegraded(diag: ForgeDiagEmitFace | undefined, projectId: s
 /** 函数插件形状（Plugin.Function + inject 元数据） */
 export interface ForgePlugin {
   (ctx: ForgeContextFace, config?: ForgePluginConfig): () => void
-  /** 依赖声明：声明服务齐备才加载（core 面 = forgeTasks + forgeProposals + forgeBugs +
-   *  forgeProjects 四服务 + experts（bug 0b83e3aa——expert-squad 顶层服务跨 realm 正门，
+  /** 依赖声明：声明服务齐备才加载（core 面 = forgeTasks + forgeBugs +
+   *  forgeProjects 服务 + experts（bug 0b83e3aa——expert-squad 顶层服务跨 realm 正门，
    *  cordis inject 服务键；缺席 = 插件不装载——产品组合两者恒同装，无 experts 即无路由
    *  消费面）；forgeSettings 等可选消费不走 inject 声明——缺席不阻载） */
   readonly inject: readonly string[]
@@ -468,44 +467,11 @@ const forgePlugin: ForgePlugin = Object.assign(
     // ——启动包装在循环启动时点以 projectId 反解容器库目录直记 sink，logs/<slug>.jsonl
     // 里程碑（task-claimed/tool-error 族）不再整流丢弃。解析未命中 = 不记忆（sink fail-soft
     // 丢行原语义不变）。stop/activeOf 直通原驱动器——落位记忆只属启动径。
-    // 改进 6⑤ 已知容器集读面（wait-external.externalSlug 存在性校验数据源）：feature +
-    // proposal 双轨 slug 并集，逐调用现读（fail-soft：任一读面故障 = 空并集——校验按缺席
-    // 处理见 driver）；forgeFeatures 服务经 reflect 防御读取（同 forgeSettings 配方——
-    // core 装配同块恒提供，缺席形态仅剩降级容错）
-    let knownContainers: ((projectId: string) => Promise<readonly string[]>) | undefined
-    try {
-      const features = ctx.reflect?.get('forgeFeatures') as
-        | { listFeatures?(q: { projectId: string }): Promise<readonly { slug: string }[]> }
-        | undefined
-      if (typeof features?.listFeatures === 'function') {
-        knownContainers = async (projectId) => {
-          const [featureRows, proposalRows] = await Promise.all([
-            features.listFeatures!({ projectId }).catch(() => []),
-            ctx.forgeProposals.listProposals({ projectId }).catch(() => []),
-          ])
-          return [...featureRows.map((r) => r.slug), ...proposalRows.map((r) => r.slug)]
-        }
-      }
-    } catch {
-      knownContainers = undefined
-    }
-    // transitionFeature tool 服务面（implicit-stage-approval §2.3）：forgeFeatures 经 reflect
-    // 防御读取（同 forgeSettings/knownContainers 配方——core 装配同块恒提供）；三方法面齐备
-    // 才注入，缺席 = tool 执行期 fail-loud 拒绝（可选降级模式——其余 tool 零影响）。
-    let featuresFace: ForgeFeaturesToolFace | undefined
-    try {
-      const raw = ctx.reflect?.get('forgeFeatures') as Partial<ForgeFeaturesToolFace> | undefined
-      if (
-        raw !== undefined &&
-        typeof raw.transitionFeature === 'function' &&
-        typeof raw.listFeatures === 'function' &&
-        typeof raw.listFeatureDocs === 'function'
-      ) {
-        featuresFace = raw as ForgeFeaturesToolFace
-      }
-    } catch {
-      featuresFace = undefined
-    }
+    // 改进 6⑤ 已知容器集读面（wait-external.externalSlug 存在性校验数据源）：已知容器集
+    // 数据源 = features/proposals 双域服务（core 装配同块）——两域随远征退役
+    // （plugin-task-loop 1.15），本装配不再消费 forgeFeatures：knownContainers 恒缺席 =
+    // wait-external 存在性校验降级缺席形态（driver 侧 fail-soft——校验按缺席处理，原语义）。
+    const knownContainers: ((projectId: string) => Promise<readonly string[]>) | undefined = undefined
     // 3b 注入面 registry 单例（装配方持有——驱动器 deps 注入共享同一登记表；section 回调
     // 闭包直读同一单例。注入为 registry 纯投影、零影子状态：登记状态变即输出变、登记删除
     // 即零注入——官方 dsh-system-prompt 对空串 section 整体过滤，与「从未注册」逐字节一致）。
@@ -636,9 +602,8 @@ const forgePlugin: ForgePlugin = Object.assign(
       // 面缺席/发射故障 = emitForgeDiag 按级 console 兜底——process 标签由 diag 缝闭包补齐）
       ...(diag !== undefined ? { diag } : {}),
       // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints 消费面 = ctx.forgeCheckpoints 直传
-      // 域侧（ensureCheckpoint 幂等语义单点落域——事务内唯一索引背书，不经包装）；proposalId
-      // 归属锚 = 提案域按容器 slug 现查；HEAD 解析 = git 真解析。三者缺席时四类标记机制为
-      // 死代码——此注入是生产路径落标记的装配前提。
+      // 域侧（ensureCheckpoint 幂等语义单点落域——唯一约束背书，不经包装）；检查点归属锚 =
+      // 容器 slug 弱引用；HEAD 解析 = git 真解析。
       checkpoints: ctx.forgeCheckpoints,
       // AC7 结算旁挂回收缝（loop-recurrence-hardening §2.4——resolveDir 闭包注入派生：
       // 运行时目录 = deriveTaskStoreDir 单源 + logs/<slug>/<localId>；卷宗根 = wsPath +
@@ -648,14 +613,6 @@ const forgePlugin: ForgePlugin = Object.assign(
       // 缺席即四处机制生产静默关停，本注入是生产路径的装配前提；降级径 diag 留痕见消费点）
       findRecurrenceCandidates: recurrenceFaces.findRecurrenceCandidates,
       modelingReportPresent: recurrenceFaces.modelingReportPresent,
-      resolveProposalId: async (projectId, source) => {
-        try {
-          const rows = await ctx.forgeProposals.listProposals({ projectId })
-          return rows.find((p) => p.slug === source.slug)?.proposalId
-        } catch {
-          return undefined // fail-soft——机制惰性不判
-        }
-      },
       resolveHeadCommit: gitHeadCommit,
       ...(progressAppend !== undefined ? { progress: progressAppend } : {}),
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
@@ -744,10 +701,8 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 机械因 store 零供数恒 no-op，已按 proposal 台账改判移除（bug 99ce9088）。
     const tools = createForgeTools({
       tasks: ctx.forgeTasks,
-      proposals: ctx.forgeProposals,
       bugs: ctx.forgeBugs,
       checkpoints: ctx.forgeCheckpoints,
-      ...(featuresFace !== undefined ? { features: featuresFace } : {}),
       resolveProjectId,
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
@@ -1033,9 +988,6 @@ const forgePlugin: ForgePlugin = Object.assign(
       registerToolLoud(tools.addTask),
       registerToolLoud(tools.submitTask),
       registerToolLoud(tools.queryTask),
-      registerToolLoud(tools.createProposal),
-      registerToolLoud(tools.transitionProposal),
-      registerToolLoud(tools.transitionFeature),
       registerToolLoud(tools.dispatchTask),
       registerToolLoud(tools.stopTaskLoop),
       registerToolLoud(tools.updateTask),
@@ -1073,7 +1025,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
   },
   {
-    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'tools', 'systemPrompt', 'experts'] as const,
+    inject: ['forgeTasks', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'tools', 'systemPrompt', 'experts'] as const,
   },
 )
 

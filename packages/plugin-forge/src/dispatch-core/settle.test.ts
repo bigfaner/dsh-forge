@@ -167,7 +167,7 @@ describe('settleWorkerRun 失败判词（bug 63112ab2）', () => {
 })
 
 describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () => {
-  it('fix 链收口：coding-fix success 结算落 review-wave-N 标记——proposalId/baseCommitHash/快照齐备', async () => {
+  it('fix 链收口：coding-fix success 结算落 review-wave-N 标记——containerSlug/baseCommitHash/快照齐备', async () => {
     const { face, calls } = recordingCheckpoints()
     const tasks = waveHarness({
       settledStatus: 'completed',
@@ -182,13 +182,13 @@ describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () =
     })
     const settlement = await settleWorkerRun(
       { tasks, checkpoints: face, resolveHeadCommit: async () => 'head-abc' },
-      { ...RUN, worktreeCwd: 'C:\\wt', proposalId: 'prop-1' },
+      { ...RUN, worktreeCwd: 'C:\\wt' },
     )
     expect(settlement.case).toBe('settled')
     expect(calls).toHaveLength(1)
     expect(calls[0]).toEqual({
-      projectId: 'p-1',
-      proposalId: 'prop-1',
+      projectKey: 'p-1',
+      containerSlug: 'feat-x', // 容器 slug 弱引用锚（proposalId 归属锚随远征退役）
       mark: 'review-wave-N',
       baseCommitHash: 'head-abc',
       // 快照口径：tasks_total=2（completed 数）；commits_total=3（c1/c2/c3 去重——c1 双记去重）；
@@ -201,7 +201,7 @@ describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () =
     const { face, calls } = recordingCheckpoints()
     const tasks = waveHarness({ settledStatus: 'completed', cards: [{ localId: '0', taskType: 'coding-fix' }] })
     const deps = { tasks, checkpoints: face, resolveHeadCommit: async () => 'head-1' }
-    const ctx = { ...RUN, worktreeCwd: 'C:\\wt', proposalId: 'prop-1' }
+    const ctx = { ...RUN, worktreeCwd: 'C:\\wt' }
     await settleWorkerRun(deps, ctx)
     await settleWorkerRun(deps, ctx)
     expect(calls).toHaveLength(2)
@@ -216,7 +216,7 @@ describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () =
     const tasks = waveHarness({ settledStatus: 'blocked', cards: [{ localId: '0', taskType: 'coding-fix' }] })
     const settlement = await settleWorkerRun(
       { tasks, checkpoints: face, resolveHeadCommit: async () => 'head-2' },
-      { ...RUN, worktreeCwd: 'C:\\wt', proposalId: 'prop-1' },
+      { ...RUN, worktreeCwd: 'C:\\wt' },
     )
     expect(settlement.case).toBe('settled')
     expect(calls).toHaveLength(1)
@@ -230,17 +230,17 @@ describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () =
     const task: TaskSnapshot = { ...RUN.task, taskType: 'coding-feature', sourceTaskId: undefined }
     await settleWorkerRun(
       { tasks, checkpoints: face, resolveHeadCommit: async () => 'head-3' },
-      { ...RUN, task, proposalId: 'prop-1' },
+      { ...RUN, task, },
     )
     expect(calls).toHaveLength(0)
   })
 
-  it('依赖缺席零变化：无 checkpoints 面或无 proposalId 映射 = 不落标记且零异常', async () => {
+  it('依赖缺席零变化：无 checkpoints 面 = 不落标记且零异常', async () => {
     const { face, calls } = recordingCheckpoints()
     const tasks = waveHarness({ settledStatus: 'completed', cards: [{ localId: '0', taskType: 'coding-fix' }] })
     const deps = { tasks, checkpoints: face, resolveHeadCommit: async () => 'head-4' }
-    await settleWorkerRun(deps, RUN) // 无 proposalId
-    await settleWorkerRun({ tasks, resolveHeadCommit: async () => 'head-4' }, { ...RUN, proposalId: 'prop-1' }) // 无 checkpoints 面
+    await settleWorkerRun(deps, RUN) // 无 worktreeCwd/submit commit → base commit 双缺跳过
+    await settleWorkerRun({ tasks, resolveHeadCommit: async () => 'head-4' }, RUN) // 无 checkpoints 面
     expect(calls).toHaveLength(0)
   })
 
@@ -253,7 +253,7 @@ describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () =
     const tasks = waveHarness({ settledStatus: 'completed', cards: [{ localId: '0', taskType: 'coding-fix' }] })
     const settlement = await settleWorkerRun(
       { tasks, checkpoints: face, resolveHeadCommit: async () => 'head-5' },
-      { ...RUN, proposalId: 'prop-1' },
+      RUN,
     )
     expect(settlement.case).toBe('settled')
     if (settlement.case !== 'settled') return
@@ -272,7 +272,7 @@ describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () =
         records: [submit],
       }),
     } as unknown as ForgeTasksService
-    await settleWorkerRun({ tasks: tasksWithSubmit, checkpoints: face }, { ...RUN, proposalId: 'prop-1' })
+    await settleWorkerRun({ tasks: tasksWithSubmit, checkpoints: face }, RUN)
     expect(calls).toHaveLength(1)
     expect(calls[0]?.['baseCommitHash']).toBe('submit-abc')
   })
@@ -290,7 +290,7 @@ describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () =
     })
     await settleWorkerRun(
       { tasks, checkpoints: face, resolveHeadCommit: async () => 'head-6' },
-      { ...RUN, worktreeCwd: 'C:\\wt', proposalId: 'prop-1' },
+      { ...RUN, worktreeCwd: 'C:\\wt' },
     )
     expect(calls[0]?.['snapshots']).toEqual({ tasksTotal: 2, commitsTotal: 1, fixesTotal: 1, evidenceDebtsTotal: 0 })
     expect(ZERO_SNAPSHOT.tasksTotal).toBe(0)
@@ -364,7 +364,7 @@ describe('AC7 · 结算旁挂回收钩子（settleWorkerRun）', () => {
     const recovery = recordingRecovery(runtimeDir, issuesDir)
     const settlement = await settleWorkerRun(
       { tasks: completedHarness(), reportRecovery: recovery.deps },
-      { ...RUN, task: proposalSnapshot(), proposalId: 'prop-1' },
+      { ...RUN, task: proposalSnapshot() },
     )
     expect(settlement.case).toBe('settled')
     if (settlement.case !== 'settled') return
@@ -387,7 +387,7 @@ describe('AC7 · 结算旁挂回收钩子（settleWorkerRun）', () => {
     writeFileSync(join(runtimeA, 'report.md'), 'landing proof', 'utf8')
     const a = recordingRecovery(runtimeA, issuesA)
     const b = recordingRecovery(runtimeA, issuesB)
-    const ctx = { ...RUN, task: proposalSnapshot(), proposalId: 'prop-1' }
+    const ctx = { ...RUN, task: proposalSnapshot() }
     await settleWorkerRun({ tasks: completedHarness(), reportRecovery: a.deps }, ctx)
     await settleWorkerRun({ tasks: completedHarness(), reportRecovery: b.deps }, ctx)
     expect(existsSync(join(issuesA, 'report.md'))).toBe(true)
@@ -405,7 +405,7 @@ describe('AC7 · 结算旁挂回收钩子（settleWorkerRun）', () => {
     const { diag, entries } = captureDiags()
     const settlement = await settleWorkerRun(
       { tasks: completedHarness(), reportRecovery: deps, diag },
-      { ...RUN, task: proposalSnapshot(), proposalId: 'prop-1' },
+      { ...RUN, task: proposalSnapshot() },
     )
     expect(settlement.case).toBe('settled')
     if (settlement.case !== 'settled') return
@@ -424,7 +424,7 @@ describe('AC7 · 结算旁挂回收钩子（settleWorkerRun）', () => {
     const { diag, entries } = captureDiags()
     const settlement = await settleWorkerRun(
       { tasks: completedHarness(), reportRecovery: deps, diag },
-      { ...RUN, task: proposalSnapshot(), proposalId: 'prop-1' },
+      { ...RUN, task: proposalSnapshot() },
     )
     expect(settlement.case).toBe('settled')
     if (settlement.case !== 'settled') return
@@ -433,16 +433,12 @@ describe('AC7 · 结算旁挂回收钩子（settleWorkerRun）', () => {
     expect(readFileSync(issuesDir, 'utf8')).toBe('occupied') // 原占位未被破坏
   })
 
-  it('旁挂惰性：非 proposal 容器 / 无 proposalId / 钩子缺席 = 零探测零副作用', async () => {
+  it('旁挂惰性：非 proposal 容器 / 钩子缺席 = 零探测零副作用', async () => {
     const home = mkdtempSync(join(tmpdir(), 'forge-inert-'))
     const recovery = recordingRecovery(join(home, 'logs'), join(home, 'issues'))
-    const featureCtx = { ...RUN, proposalId: 'prop-1' } // feature 容器
-    await settleWorkerRun({ tasks: completedHarness(snapshot()), reportRecovery: recovery.deps }, featureCtx)
-    await settleWorkerRun(
-      { tasks: completedHarness(), reportRecovery: recovery.deps },
-      { ...RUN, task: proposalSnapshot() }, // 无 proposalId
-    )
-    await settleWorkerRun({ tasks: completedHarness() }, { ...RUN, task: proposalSnapshot(), proposalId: 'prop-1' }) // 钩子缺席
+    const featureCtx = { ...RUN, task: snapshot() } // feature 容器
+    await settleWorkerRun({ tasks: completedHarness(featureCtx.task), reportRecovery: recovery.deps }, featureCtx)
+    await settleWorkerRun({ tasks: completedHarness() }, { ...RUN, task: proposalSnapshot() }) // 钩子缺席
     expect(recovery.runtimeCalls).toHaveLength(0)
     expect(recovery.issuesCalls).toHaveLength(0)
   })

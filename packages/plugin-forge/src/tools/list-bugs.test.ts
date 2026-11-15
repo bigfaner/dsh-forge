@@ -58,7 +58,6 @@ function toolWithCapture(): {
   }
   const deps: ForgeToolDeps = {
     tasks: {} as ForgeToolDeps['tasks'],
-    proposals: {} as ForgeToolDeps['proposals'],
     bugs,
     checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),

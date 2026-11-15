@@ -24,7 +24,6 @@ function depsOf(paths?: Partial<ForgePathsToolFace> & { extraKeys?: readonly Dir
   registry.registerDirKeys(paths?.extraKeys ?? [])
   return {
     tasks: {} as ForgeToolDeps['tasks'],
-    proposals: {} as ForgeToolDeps['proposals'],
     bugs: {} as ForgeToolDeps['bugs'],
     checkpoints: {} as ForgeToolDeps['checkpoints'],
     resolveProjectId: () => 'p-1',

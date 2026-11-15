@@ -7,7 +7,7 @@
 // ProposalRow/AddTaskResult/SubmitTaskResult/TaskStats/DispatchTaskResult）。
 import { expect, describe, it } from 'vitest'
 import AjvModule from 'ajv'
-import type { BugCard, ProposalRow, TaskCard, TaskSnapshot } from '@dsh-forge/contracts'
+import type { BugCard, TaskCard, TaskSnapshot } from '@dsh-forge/contracts'
 import type { ForgeToolDeps } from './index.js'
 import { createAddTaskTool } from './add-task.js'
 import { createQueryTaskTool } from './query-task.js'
@@ -20,8 +20,6 @@ import { createResolveBugTool } from './resolve-bug.js'
 import { createListBugsTool } from './list-bugs.js'
 import { createGetBugTool } from './get-bug.js'
 import { createAggregateBugsTool } from './aggregate-bugs.js'
-import { createCreateProposalTool } from './create-proposal.js'
-import { createTransitionProposalTool } from './transition-proposal.js'
 import { createDispatchTaskTool } from './dispatch-task.js'
 
 /** 工厂仅闭包 deps（执行期才用）——空壳即可读 output.schema */
@@ -122,21 +120,6 @@ const BUG_CARD_FIXED: BugCard = {
   branch: 'main',
   fixer: 'faner',
   fixSessionId: 'session-2',
-}
-
-/** ProposalRow 代表值（全可选键在场——含 author 白名单位） */
-const PROPOSAL_ROW: ProposalRow = {
-  proposalId: 'p-1',
-  slug: 'md-mermaid-plugin',
-  title: 'md-mermaid cordis 插件',
-  proposalStatus: 'accepted',
-  relPath: 'proposals/md-mermaid-plugin/proposal.md',
-  author: 'faner',
-  decidedAt: '2026-10-13T12:00:00.000Z',
-  mode: 'blitz',
-  supersededBy: 'p-2',
-  createdAt: '2026-10-13T10:00:00.000Z',
-  updatedAt: '2026-10-13T12:00:00.000Z',
 }
 
 const POOL = { pending: 1, inProgress: 0, blocked: 0, unmetPending: 1, gatedPending: 0 }
@@ -269,26 +252,6 @@ describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执�
   it('aggregateBugs：{groups: BugErrorTypeAggregate[]} 计数表（recurrence-signal-tiering）', () => {
     expectValid('aggregateBugs', schemaOf(createAggregateBugsTool(DEPS)), {
       groups: [{ errorType: 'stale-anchor', total: 3, open: 1, fixed: 2, lastSeenAt: '2026-11-03T00:00:00.000Z' }],
-    })
-  })
-
-  it('createProposal：ProposalRow 全形（含 author）', () => {
-    expectValid('createProposal', schemaOf(createCreateProposalTool(DEPS)), PROPOSAL_ROW)
-  })
-
-  it('transitionProposal：ProposalRow + chained feature 行', () => {
-    expectValid('transitionProposal', schemaOf(createTransitionProposalTool(DEPS)), {
-      ...PROPOSAL_ROW,
-      chained: {
-        featureId: 'f-1',
-        slug: 'md-mermaid-plugin',
-        title: 'md-mermaid cordis 插件',
-        featureStatus: 'active',
-        summary: 's',
-        proposalId: 'p-1',
-        createdAt: PROPOSAL_ROW.createdAt,
-        updatedAt: PROPOSAL_ROW.updatedAt,
-      },
     })
   })
 

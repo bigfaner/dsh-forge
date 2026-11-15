@@ -67,7 +67,7 @@ describe("单装缺省装配三件", () => {
     // 落点组合单源 pin：domainDbFileName == constants 拼装（漂移即 RED）
     expect(domainDbFileName(home)).toBe(join(home, TASK_LOOP_DB_DEFAULT_DIR, TASK_LOOP_DB_FILENAME));
     const services = assembleTaskLoopServices({ home });
-    expect(services).toBeDefined();
+    expect(services !== null, "缺省装配返回面在场").toBe(true);
     services!.dispose();
     expect(existsSync(join(home, TASK_LOOP_DB_DEFAULT_DIR, TASK_LOOP_DB_FILENAME))).toBe(true);
   });
@@ -78,8 +78,8 @@ describe("单装缺省装配三件", () => {
     const dispose = taskLoopPlugin(ctx, { home, dbFile: ":memory:" });
     const tasks = services.forgeTasks as Record<string, unknown> | undefined;
     const checkpoints = services.forgeCheckpoints as Record<string, unknown> | undefined;
-    expect(tasks).toBeDefined();
-    expect(checkpoints).toBeDefined();
+    expect(tasks !== undefined, "forgeTasks 具名服务 provide").toBe(true);
+    expect(checkpoints !== undefined, "forgeCheckpoints 具名服务 provide").toBe(true);
     for (const method of ["addTask", "claimTask", "submitTask", "listTasks", "taskStats", "reconcileInterrupted"]) {
       expect(typeof tasks?.[method], method).toBe("function");
     }
@@ -100,8 +100,8 @@ describe("单装缺省装配三件", () => {
       expect(resolveTaskLoopHome({})).toBe(home);
       const { ctx, services } = stubCtx();
       const dispose = taskLoopPlugin(ctx, { dbFile: ":memory:" });
-      expect(services.forgeTasks).toBeDefined();
-      expect(services.forgeCheckpoints).toBeDefined();
+      expect(services.forgeTasks !== undefined, "forgeTasks provide（env 兜底腿）").toBe(true);
+      expect(services.forgeCheckpoints !== undefined, "forgeCheckpoints provide（env 兜底腿）").toBe(true);
       dispose();
 
       // 双缺腿：DSH_HOME 清空 → 降级零 provide（fail-soft 不阻载）

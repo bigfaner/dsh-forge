@@ -98,7 +98,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['packages/plugin-forge', ['lib/api', 'packages/contracts', 'packages/path-key', 'plugins/project/tsconfig.host.json']],
     // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
-    ['apps/host', ['packages/contracts', 'packages/core', 'plugins/knowledge', 'plugins/project/tsconfig.host.json']],
+    // plugin-task-loop 1.14：host tasks 域改指 @dsh-forge/task-loop——plugins/task-loop host 叶入 references
+    ['apps/host', ['packages/contracts', 'packages/core', 'plugins/knowledge', 'plugins/project/tsconfig.host.json', 'plugins/task-loop/tsconfig.host.json']],
     // 1.6：web normalize/path-key 消费改指 @dsh-forge/lib-path/path-key——增 lib/path 引用
     // 1.14 UI 迁入：add-project/bug-refs 组件本体消费 @dsh-forge/project client ui
     // 1.17 批二：git-worktree 旧包退役——web 引用面收 project 单源

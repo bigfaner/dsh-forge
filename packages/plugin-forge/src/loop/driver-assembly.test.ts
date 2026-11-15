@@ -1,15 +1,15 @@
 // 装配层测试（bug 548ea94b——机械③/④生产装配断链复核）：与既有 driver.test.ts 直调带桩
 // 单测不同，本文件验证 createLoopDriver 依赖注入齐备后，**生产运行路径**会真实落检查点标记：
-// checkpoints 面为**落库级测试装配缝**——插件禁 import core 是 src 面边界（boundaries.test
-// AC1），测试文件取 core 域服务与 tsconfig rootDir/项目引用冲突（tsconfig.test rootDir 钉
+// checkpoints 面为**落库级测试装配缝**——插件禁 import 域实现是 src 面边界（boundaries.test
+// AC1），测试文件取 task-loop 域服务与 tsconfig rootDir/项目引用冲突（tsconfig.test rootDir 钉
 // packages/plugin-forge，跨包相对 import 出界），故按宿主注入形态构造结构兼容域服务：in-memory
-// sqlite 承载 + 真实迁移 DDL（core src/forge/workspace/migrations.ts v1 proposals / v5
-// implementation_checkpoints 逐字摘录——partial unique index + append-only 双触发器在场）+
-// createCheckpointsService 同语义实现（mark 词汇 / wave_seq max+1 自动递增 / 唯一预检 /
-// proposals FK 真值预检），经 LoopDriverDeps.checkpoints 结构兼容注入——断言真实落行与唯一
-// 约束兜底（重复 append 抛错被 fail-soft 吞、下轮自愈）。DDL 摘录漂移面 = core 迁移单源。
-// resolveProposalId/resolveHeadCommit 同 index.ts 装配形态注入——first-pass-complete 与
-// review-wave-N 各至少一例真实落行。
+// sqlite 承载 + 真实迁移 DDL（task-loop host/db/migrations/version-1.ts §3.3 task_checkpoints
+// 逐字摘录——容器 slug 弱引用锚（proposal_id 归属锚随远征退役）+ partial unique index +
+// append-only 双触发器在场）+ createCheckpointsService 同语义实现（mark 词汇 / wave_seq max+1
+// 自动递增 / 唯一预检），经 LoopDriverDeps.checkpoints 结构兼容注入——断言真实落行与唯一
+// 约束兜底（重复 append 抛错被 fail-soft 吞、下轮自愈）。DDL 摘录漂移面 = task-loop 迁移单源。
+// resolveHeadCommit 同 index.ts 装配形态注入——first-pass-complete 与 review-wave-N 各至少
+// 一例真实落行。
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -106,33 +106,18 @@ function cardOf(localId: string, over: Partial<TaskCard> = {}): TaskCard {
   }
 }
 
-// ─────────────────────────── 落库级测试装配缝（结构兼容 core createCheckpointsService） ───────────────────────────
+// ─────────────────────────── 落库级测试装配缝（结构兼容 task-loop createCheckpointsService） ───────────────────────────
 
-/** DDL 逐字摘录（单源 = core src/forge/workspace/migrations.ts：v1 proposals + v5
- *  implementation_checkpoints 含 partial unique index 与 append-only 双触发器——测试缝内
- *  重放真实迁移约束，漂移面在摘录注释锚定单源） */
+/** DDL 逐字摘录（单源 = task-loop host/db/migrations/version-1.ts §3.3 task_checkpoints：
+ *  容器 slug 弱引用锚（零 FK——proposal_id 归属锚随远征退役）+ partial unique index +
+ *  append-only 双触发器——测试缝内重放真实迁移约束，漂移面在摘录注释锚定单源） */
 const SEAM_DDL = [
-  `CREATE TABLE proposals (
-    id              TEXT PRIMARY KEY,
-    slug            TEXT NOT NULL UNIQUE,
-    title           TEXT NOT NULL,
-    proposal_status TEXT NOT NULL DEFAULT 'draft'
-                    CONSTRAINT ck_proposals_status CHECK (proposal_status IN
-                      ('draft', 'under-review', 'accepted', 'rejected', 'superseded')),
-    rel_path        TEXT,
-    author          TEXT,
-    mode            TEXT CONSTRAINT ck_proposals_mode
-                    CHECK (mode IN ('expedition', 'blitz') OR mode IS NULL),
-    superseded_by   TEXT REFERENCES proposals(id),
-    decided_at      TEXT,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
-)`,
-  `CREATE TABLE implementation_checkpoints (
-    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-    proposal_id           TEXT NOT NULL REFERENCES proposals(id),
+  `CREATE TABLE task_checkpoints (
+    id                    TEXT PRIMARY KEY,                -- 纯 UUID（定位键）
+    project_key             TEXT NOT NULL,
+    slug        TEXT NOT NULL,                             -- 弱引用锚，零 FK
     mark                  TEXT NOT NULL
-                          CONSTRAINT ck_impl_cp_mark CHECK (mark IN
+                          CONSTRAINT ck_task_cp_mark CHECK (mark IN
                             ('first-pass-complete', 'retro-done', 'review-wave-N',
                              'stabilized', 'merged', 'derived-to-child')),
     wave_seq              INTEGER,
@@ -143,30 +128,31 @@ const SEAM_DDL = [
     fixes_total           INTEGER NOT NULL,
     evidence_debts_total  INTEGER NOT NULL
 )`,
-  `CREATE UNIQUE INDEX uq_impl_cp_milestone ON implementation_checkpoints(proposal_id, mark, wave_seq)
-     WHERE mark IN ('first-pass-complete', 'retro-done', 'review-wave-N', 'stabilized', 'merged')`,
-  `CREATE INDEX idx_impl_cp_proposal ON implementation_checkpoints(proposal_id, created_at)`,
-  `CREATE TRIGGER trg_impl_cp_no_update BEFORE UPDATE ON implementation_checkpoints
-BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (update)'); END`,
-  `CREATE TRIGGER trg_impl_cp_no_delete BEFORE DELETE ON implementation_checkpoints
-BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (delete)'); END`,
+  `CREATE UNIQUE INDEX uq_task_cp_milestone ON task_checkpoints(project_key, slug, mark, wave_seq)
+  WHERE mark IN ('first-pass-complete', 'retro-done', 'review-wave-N', 'stabilized', 'merged')`,
+  `CREATE INDEX idx_task_cp_container ON task_checkpoints(project_key, slug, created_at)`,
+  `CREATE TRIGGER trg_task_checkpoints_no_update BEFORE UPDATE ON task_checkpoints
+BEGIN SELECT RAISE(ABORT, 'task_checkpoints: append-only violation (update)'); END`,
+  `CREATE TRIGGER trg_task_checkpoints_no_delete BEFORE DELETE ON task_checkpoints
+BEGIN SELECT RAISE(ABORT, 'task_checkpoints: append-only violation (delete)'); END`,
 ] as const
 
-// DDL 漂移守卫：SEAM_DDL 逐字摘录自 core src/forge/workspace/migrations.ts（v1/v5）——测试内
-// node:fs 直读 core 源文件做 substring 断言（零 import 不破包边界），core DDL 变更时本测试
+// DDL 漂移守卫：SEAM_DDL 逐字摘录自 task-loop host/db/migrations/version-1.ts（§3.3）——测试内
+// node:fs 直读 task-loop 源文件做 substring 断言（零 import 不破包边界），域 DDL 变更时本测试
 // fail-loud，防摘录单边漂移使缝约束失真。
-const CORE_MIGRATIONS_SOURCE = readFileSync(
-  fileURLToPath(new URL('../../../core/src/forge/workspace/migrations.ts', import.meta.url)),
+const DOMAIN_MIGRATIONS_SOURCE = readFileSync(
+  fileURLToPath(new URL('../../../../plugins/task-loop/host/db/migrations/version-1.ts', import.meta.url)),
   'utf8',
 )
 for (const stmt of SEAM_DDL) {
-  expect(CORE_MIGRATIONS_SOURCE, `SEAM_DDL 摘录与 core migrations.ts 漂移：${stmt.slice(0, 60)}…`).toContain(stmt)
+  expect(DOMAIN_MIGRATIONS_SOURCE, `SEAM_DDL 摘录与 task-loop version-1.ts 漂移：${stmt.slice(0, 60)}…`).toContain(stmt)
 }
 
-/** implementation_checkpoints 存储行读形（snake_case——断言面直读落库行） */
+/** task_checkpoints 存储行读形（snake_case——断言面直读落库行） */
 interface SeamStorageRow {
-  readonly id: number
-  readonly proposal_id: string
+  readonly id: string
+  readonly project_key: string
+  readonly slug: string
   readonly mark: string
   readonly wave_seq: number | null
   readonly created_at: string
@@ -177,40 +163,37 @@ interface SeamStorageRow {
   readonly evidence_debts_total: number
 }
 
-const SELECT_ROWS = `SELECT id, proposal_id, mark, wave_seq, created_at, base_commit_hash,
+const SELECT_ROWS = `SELECT id, project_key, slug, mark, wave_seq, created_at, base_commit_hash,
        tasks_total, commits_total, fixes_total, evidence_debts_total
-FROM implementation_checkpoints`
+FROM task_checkpoints`
 
 /** 落库级 checkpoints 域服务缝（createCheckpointsService 同语义：mark 词汇 CHECK + 服务端
  *  预检、review-wave-N wave_seq 缺省 max+1 自动递增、里程碑唯一预检 + partial unique index
- *  兜底、proposals FK 真值预检、append-only 由触发器承载）。返回面 + 落库直读句柄。 */
+ *  兜底、容器 slug 弱引用零 FK、append-only 由触发器承载）。返回面 + 落库直读句柄。 */
 function coreCheckpointsDbSeam() {
   const db = new Database(':memory:')
-  db.pragma('foreign_keys = ON')
   for (const stmt of SEAM_DDL) db.exec(stmt)
-  db.prepare(
-    `INSERT INTO proposals (id, slug, title, proposal_status, created_at, updated_at)
-     VALUES ('prop-1', 'feat-x', 'feat-x', 'accepted', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
-  ).run()
 
   const MILESTONE_MARKS = new Set(['first-pass-complete', 'retro-done', 'review-wave-N', 'stabilized', 'merged'])
   const MARKS = new Set([...MILESTONE_MARKS, 'derived-to-child'])
+  let seq = 0
 
-  const selectRowById = db.prepare<unknown[], SeamStorageRow>(`${SELECT_ROWS} WHERE id = last_insert_rowid()`)
-  const selectByUnique = db.prepare<unknown[], { id: number }>(
-    `SELECT id FROM implementation_checkpoints WHERE proposal_id = ? AND mark = ? AND wave_seq IS ?`,
+  const selectByUnique = db.prepare<unknown[], { id: string }>(
+    `SELECT id FROM task_checkpoints WHERE project_key = ? AND slug = ? AND mark = ? AND wave_seq IS ?`,
   )
   const insertRow = db.prepare(
-    `INSERT INTO implementation_checkpoints
-       (proposal_id, mark, wave_seq, created_at, base_commit_hash,
+    `INSERT INTO task_checkpoints
+       (id, project_key, slug, mark, wave_seq, created_at, base_commit_hash,
         tasks_total, commits_total, fixes_total, evidence_debts_total)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-  const selectAll = db.prepare<unknown[], SeamStorageRow>(`${SELECT_ROWS} WHERE proposal_id = ? ORDER BY created_at, id`)
+  const selectAll = db.prepare<unknown[], SeamStorageRow>(
+    `${SELECT_ROWS} WHERE project_key = ? AND slug = ? ORDER BY created_at, rowid`,
+  )
 
   const appendCheckpoint = async (input: {
-    readonly projectId: string
-    readonly proposalId: string
+    readonly projectKey: string
+    readonly containerSlug: string
     readonly mark: string
     readonly baseCommitHash: string
     readonly snapshots: LoopCheckpointSnapshot
@@ -221,25 +204,25 @@ function coreCheckpointsDbSeam() {
     if (input.mark === 'review-wave-N') {
       const current = db
         .prepare<unknown[], { max_seq: number | null }>(
-          `SELECT MAX(wave_seq) AS max_seq FROM implementation_checkpoints WHERE proposal_id = ? AND mark = 'review-wave-N'`,
+          `SELECT MAX(wave_seq) AS max_seq FROM task_checkpoints WHERE project_key = ? AND slug = ? AND mark = 'review-wave-N'`,
         )
-        .get(input.proposalId)
+        .get(input.projectKey, input.containerSlug)
       waveSeq = (current?.max_seq ?? 0) + 1
     }
-    // proposals FK 真值预检（悬空引用拒绝——零副作用）
-    const proposal = db.prepare<unknown[], { id: string }>('SELECT id FROM proposals WHERE id = ?').get(input.proposalId)
-    if (proposal === undefined) throw new Error(`proposal 悬空引用拒绝：${input.proposalId} 不存在（检查点零副作用）`)
     // 唯一约束预检（里程碑标记：DDL partial unique index 行为面同源；插件消费面 mark 词汇恒 NULL wave_seq）
     if (MILESTONE_MARKS.has(input.mark)) {
-      const existing = selectByUnique.get(input.proposalId, input.mark, waveSeq ?? null)
+      const existing = selectByUnique.get(input.projectKey, input.containerSlug, input.mark, waveSeq ?? null)
       if (existing !== undefined) {
         throw new Error(
-          `检查点已存在：${input.mark}${waveSeq !== undefined ? `#${String(waveSeq)}` : ''}（proposal ${input.proposalId}）——里程碑标记唯一约束命中`,
+          `检查点已存在：${input.mark}${waveSeq !== undefined ? `#${String(waveSeq)}` : ''}（${input.projectKey}/${input.containerSlug}）——里程碑标记唯一约束命中`,
         )
       }
     }
+    const id = `cp-${String(++seq).padStart(3, '0')}`
     insertRow.run(
-      input.proposalId,
+      id,
+      input.projectKey,
+      input.containerSlug, // 容器 slug 弱引用锚（proposalId 归属锚退役）
       input.mark,
       waveSeq ?? null,
       new Date().toISOString(),
@@ -249,13 +232,13 @@ function coreCheckpointsDbSeam() {
       input.snapshots.fixesTotal,
       input.snapshots.evidenceDebtsTotal,
     )
-    return selectRowById.get() as SeamStorageRow
+    return db.prepare<unknown[], SeamStorageRow>(`${SELECT_ROWS} WHERE id = ?`).get(id) as SeamStorageRow
   }
 
   const face: LoopCheckpointsFace = {
     ensureCheckpoint: async (input) => {
       if (MILESTONE_MARKS.has(input.mark)) {
-        const existing = selectByUnique.get(input.proposalId, input.mark, null)
+        const existing = selectByUnique.get(input.projectKey, input.containerSlug, input.mark, null)
         if (existing !== undefined) return { appended: false }
       }
       await appendCheckpoint(input)
@@ -263,7 +246,7 @@ function coreCheckpointsDbSeam() {
     },
     appendCheckpoint,
     listCheckpoints: async (q) => {
-      const rows = selectAll.all(q.proposalId)
+      const rows = selectAll.all(q.projectKey, q.slug)
       return rows
         .map((r): LoopCheckpointRowLite => ({ mark: r.mark, tasksTotal: r.tasks_total, commitsTotal: r.commits_total, fixesTotal: r.fixes_total, evidenceDebtsTotal: r.evidence_debts_total }))
         .filter((r) => q.marks === undefined || q.marks.length === 0 || q.marks.includes(r.mark))
@@ -348,7 +331,6 @@ function build(options: { claim: ClaimTaskResult[]; stats?: TaskStats[]; lists?:
     narrator,
     events: sink,
     checkpoints: options.face ?? seam.face,
-    resolveProposalId: async () => 'prop-1',
     resolveHeadCommit: async () => 'head-9',
     commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
     delays: { backoffBaseMs: 1, patiencePauseMs: 1, quiescenceWindowMs: 1, quiescencePollMs: 1 },
@@ -376,12 +358,12 @@ describe('机械③/④ · createLoopDriver 生产装配落库级落标记（bug
     // 真实落行：唯一约束索引下恰一行 + proposal/mark/HEAD 锚/wave_seq NULL/ISO 时钟全在库
     const all = built.seam.rows()
     expect(all).toHaveLength(1)
-    expect(all[0]).toMatchObject({ proposal_id: 'prop-1', mark: 'first-pass-complete', base_commit_hash: 'head-9', wave_seq: null })
+    expect(all[0]).toMatchObject({ project_key: 'p-1', slug: 'feat-x', mark: 'first-pass-complete', base_commit_hash: 'head-9', wave_seq: null })
     expect(all[0]?.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     // 域服务 list 读面（真实 SQL 时序查询 + 标记过滤）读得同行
     const listed = await (built.seam.face as LoopCheckpointsFace).listCheckpoints({
-      projectId: PROJECT,
-      proposalId: 'prop-1',
+      projectKey: PROJECT,
+      slug: 'feat-x',
       marks: ['first-pass-complete'],
     })
     expect(listed.map((r) => r.mark)).toEqual(['first-pass-complete'])
@@ -408,18 +390,18 @@ describe('机械③/④ · createLoopDriver 生产装配落库级落标记（bug
     // review-wave-N 真实落行：wave_seq 缺省域侧自动递增（max+1，首波 = 1）
     const wave = built.seam.rows().filter((r) => r.mark === 'review-wave-N')
     expect(wave).toHaveLength(1)
-    expect(wave[0]).toMatchObject({ proposal_id: 'prop-1', base_commit_hash: 'head-9', wave_seq: 1 })
+    expect(wave[0]).toMatchObject({ project_key: 'p-1', slug: 'feat-x', base_commit_hash: 'head-9', wave_seq: 1 })
     // 同轮 first-pass 也由生产路径落行（机械③装配同链验证）
     const firstPass = built.seam.rows().filter((r) => r.mark === 'first-pass-complete')
     expect(firstPass).toHaveLength(1)
-    expect(firstPass[0]).toMatchObject({ proposal_id: 'prop-1', base_commit_hash: 'head-9', wave_seq: null })
+    expect(firstPass[0]).toMatchObject({ project_key: 'p-1', slug: 'feat-x', base_commit_hash: 'head-9', wave_seq: null })
   })
 })
 
 describe('落库级唯一约束兜底（DDL partial unique index + append-only 触发器 + fail-soft 自愈）', () => {
   it('重复里程碑 append 被拒：域预检拒绝 + 裸 SQL 命中 partial unique index；append-only UPDATE/DELETE 触发器 ABORT', async () => {
     const seam = coreCheckpointsDbSeam()
-    const input = { projectId: PROJECT, proposalId: 'prop-1', mark: 'merged' as const, baseCommitHash: 'head-9', snapshots: { tasksTotal: 1, commitsTotal: 1, fixesTotal: 0, evidenceDebtsTotal: 0 } }
+    const input = { projectKey: PROJECT, containerSlug: 'feat-x', mark: 'merged' as const, baseCommitHash: 'head-9', snapshots: { tasksTotal: 1, commitsTotal: 1, fixesTotal: 0, evidenceDebtsTotal: 0 } }
     await seam.face.appendCheckpoint({ ...input, mark: 'review-wave-N' })
     await seam.face.ensureCheckpoint(input)
     // 域侧重复 append（ensure 语义外的裸 append）→ 唯一约束预检拒写零副作用
@@ -432,15 +414,15 @@ describe('落库级唯一约束兜底（DDL partial unique index + append-only �
     expect(() =>
       seam.db
         .prepare(
-          `INSERT INTO implementation_checkpoints
-             (proposal_id, mark, wave_seq, created_at, base_commit_hash, tasks_total, commits_total, fixes_total, evidence_debts_total)
-           VALUES ('prop-1', 'review-wave-N', 1, '2026-01-01T00:00:00.000Z', 'head-9', 1, 1, 0, 0)`,
+          `INSERT INTO task_checkpoints
+             (id, project_key, slug, mark, wave_seq, created_at, base_commit_hash, tasks_total, commits_total, fixes_total, evidence_debts_total)
+           VALUES ('raw-1', 'p-1', 'feat-x', 'review-wave-N', 1, '2026-01-01T00:00:00.000Z', 'head-9', 1, 1, 0, 0)`,
         )
         .run(),
     ).toThrow(/UNIQUE/)
     // append-only 纪律：UPDATE/DELETE 直写 → 触发器 ABORT（流水只追加不可改写）
-    expect(() => seam.db.prepare(`UPDATE implementation_checkpoints SET tasks_total = 9`).run()).toThrow(/append-only violation/)
-    expect(() => seam.db.prepare(`DELETE FROM implementation_checkpoints`).run()).toThrow(/append-only violation/)
+    expect(() => seam.db.prepare(`UPDATE task_checkpoints SET tasks_total = 9`).run()).toThrow(/append-only violation/)
+    expect(() => seam.db.prepare(`DELETE FROM task_checkpoints`).run()).toThrow(/append-only violation/)
     // 零副作用（约束面内）：库内恰三行——merged 一行 + review-wave-N 两波（wave_seq 1/2）
     const marks = seam.rows().map((r) => r.mark).sort()
     expect(marks).toEqual(['merged', 'review-wave-N', 'review-wave-N'])
@@ -457,11 +439,11 @@ describe('落库级唯一约束兜底（DDL partial unique index + append-only �
       ensureCheckpoint: async (input) => {
         seam.db
           .prepare(
-            `INSERT INTO implementation_checkpoints
-               (proposal_id, mark, wave_seq, created_at, base_commit_hash, tasks_total, commits_total, fixes_total, evidence_debts_total)
-             VALUES (?, ?, NULL, ?, ?, 1, 1, 0, 0)`,
+            `INSERT INTO task_checkpoints
+               (id, project_key, slug, mark, wave_seq, created_at, base_commit_hash, tasks_total, commits_total, fixes_total, evidence_debts_total)
+             VALUES ('race-1', ?, ?, ?, NULL, ?, ?, 1, 1, 0, 0)`,
           )
-          .run(input.proposalId, input.mark, new Date().toISOString(), input.baseCommitHash)
+          .run(input.projectKey, input.containerSlug, input.mark, new Date().toISOString(), input.baseCommitHash)
         await seam.appendRaw(input)
         return { appended: true }
       },

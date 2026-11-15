@@ -21,7 +21,6 @@ function toolWithCapture() {
   } as unknown as ForgeTasksService
   const deps: ForgeToolDeps = {
     tasks,
-    proposals: {} as ForgeToolDeps['proposals'],
     bugs: {} as ForgeToolDeps['bugs'],
     checkpoints: {
       appendCheckpoint: async () => {

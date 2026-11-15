@@ -27,7 +27,6 @@ const checkpoints: ForgeToolDeps['checkpoints'] = {
 function baseDeps(): ForgeToolDeps {
   return {
     tasks: {} as ForgeTasksService,
-    proposals: {} as ForgeToolDeps['proposals'],
     bugs: {} as ForgeToolDeps['bugs'],
     checkpoints,
     resolveProjectId: () => 'p-1',

@@ -45,7 +45,6 @@ function toolWithCapture() {
   } as unknown as ForgeTasksService
   const deps: ForgeToolDeps = {
     tasks,
-    proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
@@ -98,7 +97,6 @@ describe('queryTask execute（include 门控映射）', () => {
     } as unknown as ForgeTasksService
     const deps: ForgeToolDeps = {
       tasks,
-      proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
       resolveProjectId: () => 'p-1',
@@ -225,7 +223,6 @@ describe('queryTask 事件发射（typed 错误 → tool-error；verb=queryTask�
     } as unknown as ForgeTasksService
     const tool = createQueryTaskTool({
       tasks,
-      proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
       resolveProjectId: () => 'p-1',

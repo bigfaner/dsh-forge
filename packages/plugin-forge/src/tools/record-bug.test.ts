@@ -77,7 +77,6 @@ function toolWithCapture(): { tool: ReturnType<typeof createRecordBugTool>; capt
   })
   const deps: ForgeToolDeps = {
     tasks: {} as ForgeToolDeps['tasks'],
-    proposals: {} as ForgeToolDeps['proposals'],
     bugs,
     checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
@@ -163,7 +162,6 @@ describe('recordBug execute（路由 + 服务端注入径）', () => {
   it('工具面包装应答透传：{ card, errorTypeSuggestions }（服务端词表参考集合零改写）', async () => {
     const deps: ForgeToolDeps = {
       tasks: {} as ForgeToolDeps['tasks'],
-      proposals: {} as ForgeToolDeps['proposals'],
       bugs: stubBugsFace(async () => ({
         card: openCard('登录接口 500'),
         errorTypeSuggestions: ['api', 'paging'],
@@ -204,7 +202,6 @@ describe('recordBug execute（路由 + 服务端注入径）', () => {
   it('超长摘要拒写（服务端 ERR_BUG_SUMMARY_TOO_LONG）→ 失败 DTO（✗ code 人话面）', async () => {
     const deps: ForgeToolDeps = {
       tasks: {} as ForgeToolDeps['tasks'],
-      proposals: {} as ForgeToolDeps['proposals'],
       bugs: stubBugsFace(async () => {
         throw Object.assign(new Error('summary 超长拒绝：50 字上限，实际 51 字'), {
           code: 'ERR_BUG_SUMMARY_TOO_LONG',
