@@ -23,6 +23,9 @@
 // 主面不消费——namespace 边由 apply 期 ctx.inject 子 fiber 声明，主插件声明 = 等待自身
 // apply 产物自锁死锁，project w33 真机实证；sessions/uiWorkspace/sidebarRightTabs 消费
 // 点现查不经静态边——官方服务惰性实例化，apply 点 undefined 闭包缓存判例 fba7913c）。
+// fix-5（bug d731b785）：locale 入 inject 名单——官方缝声明边（knowledge fix-9 同型判例：
+// 缺声明 = apply 期 cannot get property "locale" without inject → 注册链中断）；缺席
+// fail-soft 不阻断（label 回退 NS 键名）。
 import { registerConversationToolFaces } from "./conversation-views-face.js";
 import { registerDockTabsFace } from "./dock-tabs-face.js";
 import { registerDispatchEventsFace } from "./dispatch-events-face.js";
@@ -55,7 +58,7 @@ function forgeTasksFaceFromFiber(fiberCtx: unknown): ForgeTasksNamespaceFace | u
 }
 
 export const taskLoopClient: TaskLoopClientPlugin = {
-  inject: ["slots", "remote", "uiConversation"],
+  inject: ["slots", "remote", "uiConversation", "locale"],
   apply(ctx: unknown): void {
     const rec = ctx as OfficialSeamCtx | undefined;
     const slots = asRecord(rec)?.["slots"] as SectionSlotsFace | undefined;
