@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/task-loop",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "private": true,
   "type": "module",
   "description": "任务环（task-loop）插件：任务域（addTask/拆解/循环调度/结算）+ AC 结算单源 + checkpoints 域内现算（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -78,6 +78,7 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.2",
-    "zod": "4.6.6"
+    "zod": "4.6.6",
+    "better-sqlite3": "13.0.3"
   }
 }

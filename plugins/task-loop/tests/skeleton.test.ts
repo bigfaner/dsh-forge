@@ -130,8 +130,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
   });
 
-  it("版本 bump 0.11.0（fix-1 域装配本体落位——minor 位 +1；1.13 bump 至 0.10.0 时 pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.11.0");
+  it("版本 bump 0.11.1（1.14 host 改指批——打包形态修复 better-sqlite3 外置 + dependencies 声明，patch 位 +1；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.11.1");
   });
 });
 
