@@ -126,8 +126,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
   });
 
-  it("版本 bump 0.7.0（1.10 batchAddTasks 批量工具——dry-run 校验 + Hint，功能升级 minor 位 +1）", () => {
-    expect(pkg.version).toBe("0.7.0");
+  it("版本 bump 0.9.0（1.12 派发内核/循环驱动器/兜底档随迁——minor 位 +1；1.11 bump 至 0.8.0 时本 pin 漏改已随本批校正）", () => {
+    expect(pkg.version).toBe("0.9.0");
   });
 });
 

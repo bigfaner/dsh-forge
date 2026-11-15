@@ -290,3 +290,5 @@ export function createCheckpointsService(deps: CheckpointsServiceDeps) {
     },
   };
 }
+
+export type CheckpointsService = ReturnType<typeof createCheckpointsService>;

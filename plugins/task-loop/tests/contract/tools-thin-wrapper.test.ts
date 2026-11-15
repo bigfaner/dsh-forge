@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 
 const TOOLS_DIR = fileURLToPath(new URL("../../host/tools", import.meta.url));
 
-const toolFiles = readdirSync(TOOLS_DIR).filter((f) => f.endsWith(".ts") && f !== "faces.ts" && f !== "args.ts");
+// format.ts / session.ts = tool 返回面友好模板与 session cwd→project 归一缝（共享 helper
+// ——零委派语义，随 events/sink 闭包直迁；不参与薄封装机检）
+const toolFiles = readdirSync(TOOLS_DIR).filter((f) => f.endsWith(".ts") && !["faces.ts", "args.ts", "format.ts", "session.ts"].includes(f));
 
 describe("tool = 薄封装机检（host/tools/）", () => {
   it("工具目录非空（迁移面在位）", () => {

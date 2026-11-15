@@ -180,6 +180,17 @@ export interface BugRecurrenceCandidate {
   readonly recurrenceOf?: string;
 }
 
+/**
+ * blocked 根因归类（T2 归类闸门——contracts TaskBlockClassification 直迁：worker 自报
+ * 语义字段，程序只做 presence 校验与落库，永不判断归类真伪；records 载荷结构化键投影）。
+ */
+export interface TaskBlockClassification {
+  /** 归类：new-problem = 新问题｜same-family-recurrence = 同族复发 */
+  readonly kind: "new-problem" | "same-family-recurrence";
+  /** 同族复发时建议携带：台账 recurrence 链前驱 bug_id（自报初判——链归属评审轮可纠） */
+  readonly recurrenceOf?: string;
+}
+
 export interface TaskRecurrenceAdvisory {
   readonly kind: "upgrade-hint" | "suspected-family";
   readonly message: string;

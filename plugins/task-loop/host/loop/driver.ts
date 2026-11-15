@@ -1,0 +1,2841 @@
+// loop · 宿主派发循环驱动器（S1b——run-tasks-host-command proposal S1 + SC2 +
+// implementation-blueprint §3 runRound 状态机，v1 严格串行；plugin-forge src/loop/driver.ts
+// 直迁——proposal plugin-task-loop 1.12；容器语义 slug 化：source = { slug }、bySource →
+// bySlug、source_kind 判别分支退役；任务域消费面合流本插件 host/domain/tasks——TasksService
+// （projectKey + slug 查询形）、checkpoints 域 createCheckpointsService（containerSlug 锚））。
+//
+// 全链宿主代码驱动、零模型参与：每轮 = 领取（dispatch-core 阶段一，identity.loopSourced=true、
+// guardKey = LoopInstanceId）→ 领取通知（notify·send(nextStep, false) 写入不唤醒）→ in-process
+// spawn（dispatch-core 阶段二——SpawnWorkerHandle 直持不经 jobs）→ 结算（阶段三，
+// killSignal = 循环控制器）→ 结果通知 → 判定 → 下一轮，直到任务源 settled 收口（结算单点
+// send(nextStep, true) 一次唤醒）。
+//
+// 状态机要点（任务 1.4 验收面）：
+// ① in-flight 集合建模（LoopRecord.inFlight——v1 恒 ≤1，串行结构保证：结算返回后才续领）；
+// ② 会话级单活 + 同源单活循环（registry byOwner/bySlug——活跃实例再 start 拒绝）；
+// ③ no-task 三态判词（classifyPool）：done → 收口叙述+循环终态 / wait → bounded patience
+//    （连续 wait 轮封顶 → 结束建议重派）/ deadlock-suspected → 受阻叙述+裁决钩子+终局；
+// ④ fix 链：blocked 且结算携带 followUp → 机械续领不升级；blocked 无 follow-up → 处置钩子
+//    接口（LoopTriageHook，桩可注入）；
+// ⑤ bounded patience（LOOP_PATIENCE_MAX_WAIT_ROUNDS——耗尽收口建议重派）；
+// ⑥ halted guard 循环实例粘性（spawn 连败 ×3 由 dispatch-core guard 按 LoopInstanceId 粘住
+//    → 终局；同实例不自动复活——登记表终态即删，复活 = 新实例新计数）；
+// ⑦ 运行时登记表（registry.ts——进程内、重启即空 = 对账判据）；
+// ⑧ 循环生命周期入口（start/stop/pause/resume）：停止 = 取消 in-flight（控制器 abort →
+//    驱动器取消 worker 剩余回合）+ in-flight 真化 interrupted + 收口叙述 + 循环终态注销；
+// ⑨ 机械③（forge-verification-hardening）：no-task done 分流处 first-pass-complete 标记
+//    （首次无可派任务，幂等）+ 代码 review 收口后 doc 复盘指示 + merged 漏标记
+//    lazy 兜底（下个容器循环启动时校验补标记）。
+//
+// 依赖方向：loop → dispatch-core / notify / progress / domain 单向；零工具壳 import（可拆卸壳纪律）。
+import { FIX_CHAIN_DEPTH_LIMIT, FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from "@dsh-forge/contracts";
+import type { BugCard, DiagLevel, ForgePluginEvent, ForgeSettingsService, ListBugsQuery, TaskType, TriageDecidedPayload, TriageOutcomePayload } from "@dsh-forge/contracts";
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
+import { HALT_THRESHOLD, HALTED_REASON } from "../dispatch-core/index.js";
+// S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
+import { claimForDispatch, classifyPool, computeWaveSnapshot, findLiveSuccessor, gitHeadCommit, poolOf, settleClaimed, spawnClaimed } from "../dispatch-core/index.js";
+import type {
+  ClaimedDispatch,
+  DispatchChainScope,
+  DispatchCoreDeps,
+  DispatchCoreExec,
+  DispatchSpawnedResult,
+  PoolSnapshot,
+  SpawnWorker,
+} from "../dispatch-core/index.js";
+import { clearExclusiveLoopSource, ownerSingleActiveRejection, recurrenceCountOf, setExclusiveLoopSource } from "../dispatch-core/index.js";
+import { emitForgeDiag, type ForgeDiagEmitFace } from "../faces.js";
+import type { Narrator } from "../notify/index.js";
+import { renderNarrative, summarizeReason } from "../notify/index.js";
+import { renderEndOfLoop, type InjectionPayload } from "./injection.js";
+import type { ForgeProgressCounts, ForgeProgressEventData, ForgeProgressScenario, ProgressAppendFace } from "../progress/index.js";
+import { FORGE_PROGRESS_SCENARIO, FORGE_PROGRESS_SCENARIOS } from "../progress/index.js";
+import { createLoopRegistry, type LoopInFlight, type LoopInstanceId, type LoopRecord, type LoopRegistry, type LoopSourceRef, type SuspendedPayload } from "./registry.js";
+import type { TaskStats } from "../domain/tasks/list.js";
+import type { CheckpointsService } from "../domain/checkpoints/service.js";
+import type { TasksService } from "../domain/tasks/service.js";
+import type { ContainerRef, TaskRef, TaskSnapshot, TestBaselineBrief } from "../domain/tasks/types.js";
+import { baselineForHead, issueAttributionCard, loadPersistedBaseline, persistBaseline, type E2eBaselineCache } from "./e2e-baseline.js";
+import type {
+  LoopDriver,
+  LoopEscalation,
+  LoopEscalationHook,
+  LoopPauseResult,
+  LoopResumeResult,
+  LoopStartInput,
+  LoopStartResult,
+  LoopStopLoopResult,
+  LoopStopResult,
+  TriageEscalationPayload,
+} from "./driver-face.js";
+
+// ─────────────────────────── 机械常量（第一层守卫/耐心参数） ───────────────────────────
+
+/** spawn 失败退避基长（毫秒——第 N 次失败后退避 base×N 再幂等重入；间隔递增） */
+export const LOOP_BACKOFF_BASE_MS = 10_000;
+
+/**
+ * 退避间隔（纯函数——单测锚「间隔递增可测」）：第 N 次失败后退避 base×N
+ * （1×base → 2×base → 3×base——序列递增，不立即重试）。
+ */
+export function backoffDelayMs(baseMs: number, attempt: number): number {
+  return baseMs * attempt;
+}
+
+/** no-task 等待判词的轮间停顿（毫秒——bounded patience 的 patience） */
+export const LOOP_PATIENCE_PAUSE_MS = 30_000;
+
+/**
+ * 续派静默窗基长（毫秒——done 判词收口前的 wait-for-quiescence 宽限窗：窗内编排层
+ * 新派任务（pending 出现）即自动续派，窗满静默才收口；与 bounded patience 是两个
+ * 机制——前者 = 结束前等新任务的静默宽限，后者 = 池无任务可领的重试上限）。
+ */
+export const LOOP_QUIESCENCE_WINDOW_MS = 30_000;
+
+/** 宽限窗内池态轮询间隔（毫秒——窗内分段睡眠逐次现读池快照，新任务即到即续） */
+export const LOOP_QUIESCENCE_POLL_MS = 5_000;
+
+/**
+ * 最大轮次封顶（runRound 连续轮数上限——超限按结束叙述收口，防异常驱动下无限
+ * 空转；结算成功复位不适用——轮数是生命周期总量而非连击）。
+ */
+export const LOOP_MAX_ROUNDS = 200
+
+/** bounded patience 封顶（连续 wait 判词轮数——耗尽收口建议重派，不无限空转） */
+export const LOOP_PATIENCE_MAX_WAIT_ROUNDS = 3
+
+/** worker 异常终止的 bounded 重入上限（「第 N/3 次」；超限 → 第三层裁决钩子） */
+export const LOOP_WORKER_ABORT_MAX_RETRIES = 3
+
+/**
+ * 同任务处置计数封顶（第二层——处置代理对同一任务的运行次数上限，成功失败均计数）。
+ * 到顶强制升级第三层（模型失误爆炸半径 = 有界处置轮次——不再给模型下一次机会）。
+ */
+export const LOOP_TRIAGE_MAX_ATTEMPTS = 3
+
+/** 处置专家键（triage 预设单源——triage.ts 与本面 import 消费，settings experts.mapping.triage 可覆盖） */
+export const TRIAGE_EXPERT_KEY = "triage-analyst";
+
+/** 停止/启动竞态收口的 in-flight 真化 reason（transitionTask 面审计列） */
+export const LOOP_STOP_TRANSITION_REASON = "派发循环停止";
+
+/** 结束（全部完成）的「下一步动作」指示（notification-samples 逐字口径——无 slug 参数位） */
+export const LOOP_INSTRUCTION_ALL_DONE = "若想派发其它容器（proposal/feature）的任务，执行 /run-dag-tasks";
+
+/** 终局叙述的「下一步动作」指示文本（notification-samples 逐字口径的 slug 参数化） */
+export function loopInstructionOf(kind: "halted" | "timeout", slug: string): string {
+  if (kind === "halted") return `环境排查后重新开始 /run-dag-tasks ${slug}`;
+  return `稍后重新执行 /run-dag-tasks ${slug}`;
+}
+
+// ─────────────────────────── 处置钩子接口（第二层阶梯——triage 实装注入） ───────────────────────────
+
+/**
+ * 第二层处置代理的输入（任务简报行/reason 全文/结算载荷——reason 全文只进钩子与落盘）。
+ * 每循环身份载体（装配接线收口）：钩子为装配单例，循环身份
+ * （主会话/parent/信号）只在 start 时点存在——经输入面逐调用绑定，装配期烘焙无效。
+ */
+export interface LoopTriageInput {
+  readonly projectId: string;
+  readonly source: LoopSourceRef;
+  /** 主会话真实 id（处置径归属锚） */
+  readonly ownerSessionId: string;
+  /** 主会话 Agent（处置代理 spawn parent——与 worker 同 parent，lineage/工作目录同源） */
+  readonly parent: unknown;
+  /** 取消信号（循环控制器——stop 即取消在途处置） */
+  readonly signal: AbortSignal;
+  readonly task: TaskSnapshot;
+  /** blocked 原因全文 */
+  readonly reason: string;
+  /** 结算载荷（落盘 settlement.json 同源） */
+  readonly settlement: unknown;
+  /** 重试回灌——上次处置失败的输出/错误摘要（首次处置缺席） */
+  readonly lastFailure?: string;
+  /** fix 链深余量（driver 沿 sourceTask 链现算；缺席 = 链数据不可得） */
+  readonly fixChain?: LoopTriageFixChain;
+  /**
+   * 无进展信号（FAIL-2 修正）：blocked 结算零 commit 且零 files
+   * 时置 true 随输入递达处置代理；不再跳过阶梯（旧「无进展硬停门」语义废止——blocked 恒进
+   * triage，无进展形态由提示词 no-progress 节与处置历史行承载）。
+   */
+  readonly noProgress?: boolean;
+}
+
+/** fix 链深余量（remaining = limit - depth；remaining < 1 = add-fix 结构性被拒） */
+export interface LoopTriageFixChain {
+  readonly depth: number;
+  readonly limit: number;
+  readonly remaining: number;
+}
+
+/**
+ * 处置决策四动作枚举（三动作 + split-remainder 第四态；宿主忠实执行）：
+ * add-fix = 宿主经 addTask 建 fix 链（blockSource 置源 blocked，fix 完成自动恢复）；
+ * wait-external = 原因在其它任务源（记录等待 → 续领其它）；escalate = 上浮主会话处置
+ * （决策动作非工具、不预设问用户，主会话收建议后按 SOP 自行处置）；
+ * split-remainder = 宿主经 addTask(blockSource:false) 建继任任务承接剩余范围——源任务保持
+ * blocked 不恢复（不重头开始的结构保证；pending 继任路径在场，deadlock 判词不误报）。
+ */
+export type LoopTriageDecision =
+  | {
+      readonly action: "add-fix";
+      /** fix 任务标题（缺省 = `Fix: <任务名>`） */
+      readonly title?: string;
+      /** fix 任务类型（缺省 = coding-fix——fix 链协议缺省族） */
+      readonly type?: TaskType;
+      readonly taskDesc?: string;
+      /** 叙述的修复内容摘要（系统动作行括注） */
+      readonly note?: string;
+    }
+  | { readonly action: "wait-external"; readonly externalSlug: string }
+  | { readonly action: "escalate"; readonly payload?: TriageEscalationPayload }
+  | {
+      readonly action: "split-remainder";
+      /** 继任任务标题（缺省 = `Split: <任务名>`） */
+      readonly title?: string;
+      /** 继任任务类型（缺省 = 源任务同型——剩余范围是源任务的结构性子集） */
+      readonly type?: TaskType;
+      readonly taskDesc?: string;
+      /** 分割内容摘要（叙述系统行动作行括注） */
+      readonly note?: string;
+    }
+
+/**
+ * 处置钩子返回形状（triage-progress-row 一次定形）：决策 + 处置子会话 id——spawn 产物
+ * handle 直取上浮（台账 decided 行与进度终态事件回溯直达处置会话的锚）；缺席 = spawn
+ * 失败径（决策不可得同径上抛），终态事件与 outcome 行照发不带 workerSessionId。
+ */
+export interface LoopTriageDecisionResult {
+  readonly decision: LoopTriageDecision;
+  readonly workerSessionId?: string;
+}
+
+/** 第二层处置钩子（blocked 且结算无 followUp 时触发；缺省缺席 = 仅落盘续领） */
+export interface LoopTriageHook {
+  run(input: LoopTriageInput): Promise<LoopTriageDecisionResult>;
+}
+
+// ─────────────────────────── 机械③ · first-pass 标记 / 复盘派生 / merged lazy 兜底 ───────────────────────────
+
+/** 计数快照（标记时刻累计值——机械①检查点四列，口径 = settle.computeWaveSnapshot） */
+export interface LoopCheckpointSnapshot {
+  readonly tasksTotal: number;
+  readonly commitsTotal: number;
+  readonly fixesTotal: number;
+  readonly evidenceDebtsTotal: number;
+}
+
+/** 检查点行读影（飞轮指标计算面——mark 词汇宽松读，字段=机械①快照四列） */
+export interface LoopCheckpointRowLite {
+  readonly mark: string;
+  readonly tasksTotal: number;
+  readonly commitsTotal: number;
+  readonly fixesTotal: number;
+  readonly evidenceDebtsTotal: number;
+}
+
+/**
+ * checkpoints 域服务的循环侧消费面（本插件 domain/checkpoints createCheckpointsService 产物
+ * 的方法面收窄——slug 化：proposal_id 归属锚退役，检查点 = projectKey + containerSlug 锚）。
+ * ensureCheckpoint 幂等语义 = 域侧既有（标记在场 no-op appended=false）。
+ */
+export type LoopCheckpointsFace = Pick<CheckpointsService, "ensureCheckpoint" | "appendCheckpoint" | "listCheckpoints">;
+
+/** 越阈硬门（收口复盘指示文本——修正波次 ≥ 阈值时须注册改进提案方可视为收口） */
+const RETRO_PROPOSAL_GATE = "已注册改进提案（parent_proposal_id 指向本提案）并在记录中登记派生提案 id 清单，未注册不得视为收口";
+
+/** 任务终态集（state-machine TERMINAL 口径镜像——completed/skipped/rejected；
+ *  消费面：停止径 transition 扫描的终态过滤） */
+const TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(["completed", "skipped", "rejected"]);
+
+/** 飞轮硬指标（标记快照直算——「派生硬指标」节口径） */
+export interface FlywheelMetrics {
+  /** 一次通过率 = first-pass 时任务数 / merged（缺席 = 当前帧）时任务数 */
+  readonly passRate: number;
+  /** 返工增量比 = first-pass 后 commit 增量 / 全量 commit（无 merged 帧 = 0） */
+  readonly reworkRatio: number;
+  /** 修正波次 = review-wave-N 标记计数 */
+  readonly waveCount: number;
+  /** fix 密度 = fix 任务数 / 任务总数（当前帧） */
+  readonly fixDensity: number;
+  /** 越阈判定：修正波次 ≥ 阈值（settings flywheel.reviewWaveThreshold，缺席默认 6） */
+  readonly overThreshold: boolean;
+}
+
+/** 飞轮硬指标计算（纯函数——快照直算，单测锚） */
+export function flywheelMetricsOf(rows: readonly LoopCheckpointRowLite[], threshold: number): FlywheelMetrics {
+  const first = rows.find((r) => r.mark === "first-pass-complete");
+  const merged = rows.find((r) => r.mark === "merged");
+  const current = merged ?? first;
+  const firstPassTasks = first?.tasksTotal ?? 0;
+  const currentTasks = current?.tasksTotal ?? firstPassTasks;
+  const commitsTotal = current?.commitsTotal ?? 0;
+  const baselineCommits = first?.commitsTotal ?? commitsTotal;
+  return {
+    passRate: currentTasks > 0 ? firstPassTasks / currentTasks : 1,
+    reworkRatio: commitsTotal > 0 ? (commitsTotal - baselineCommits) / commitsTotal : 0,
+    waveCount: rows.filter((r) => r.mark === "review-wave-N").length,
+    fixDensity: currentTasks > 0 ? (current?.fixesTotal ?? 0) / currentTasks : 0,
+    overThreshold: rows.filter((r) => r.mark === "review-wave-N").length >= threshold,
+  };
+}
+
+/**
+ * 收口复盘与知识沉淀指示（机械③指示面：no-task done settle 文本追加段）：
+ * 不派生任务卡，由主 agent 在交叉评审与结论处理完成后
+ * 直接执行——顺序：评审 → 复盘 → 沉淀，且段内带顺序硬门（复盘三项全部完成后才进入知识沉淀，
+ * 知识沉淀完成后才落收口标记）。注入飞轮硬指标计算值与越阈判定规则（阈值取
+ * settings 键）、多 agent 交叉核验要求、learn 技能调用要求与 retro-done 收口标记要求；
+ * 越阈时硬门要求已注册改进提案。纯函数（指标由 rows 直算），零状态。
+ */
+export function renderRetroInstruction(slug: string, rows: readonly LoopCheckpointRowLite[], threshold: number): string {
+  const m = flywheelMetricsOf(rows, threshold);
+  const pct = (x: number): string => `${(x * 100).toFixed(1)}%`;
+  return [
+    "【复盘与知识沉淀指示】（交叉评审与结论处理完成后执行——不派生任务卡，由你直接完成；评审发现的判例/翻车点须进入本次沉淀）",
+    "执行顺序硬门：「一、复盘」三项全部完成后，方可进行「二、知识沉淀」；知识沉淀完成后，方可落「三、收口标记」——不得跳步、不得并行。",
+    "",
+    "一、复盘（三项依次完成，全部完成后才进入下一步）：",
+    `1. 飞轮硬指标解读（检查点标记快照直算）：一次通过率 ${m.passRate === 1 ? "1（尚无 merged 帧，基线即当前）" : pct(m.passRate)}；` +
+      `返工增量比 ${pct(m.reworkRatio)}；修正波次 ${String(m.waveCount)}；fix 密度 ${pct(m.fixDensity)}。`,
+    `2. 越阈判定与处置（阈值 = settings flywheel.reviewWaveThreshold，缺席默认值 ${String(FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT)}）：` +
+      (m.overThreshold
+        ? `当前修正波次 ${String(m.waveCount)} ≥ ${String(threshold)} → 已越阈——硬门：${RETRO_PROPOSAL_GATE}。`
+        : `当前修正波次 ${String(m.waveCount)} < ${String(threshold)} → 未越阈——无注册硬门，仍须完成复盘。`),
+    "3. 多 agent 交叉核验：各 agent 独立提取本容器验收经验/判例/翻车点，交叉比对后取共识入沉淀，" +
+      "分歧记录待裁决——单视角结论不直接入库。",
+    "",
+    "二、知识沉淀（复盘三项全部完成后执行）：",
+    "- 三类沉淀（conventions/lessons/examples）全量经 learn 技能提取，落 .knowledge/ 对应目录" +
+      "（markdown 同构字段 title/summary/keywords/domainPath + 溯源字段：来源容器 slug / 来源任务 / bug id）；" +
+      "交叉核验取到的共识为沉淀输入。",
+    "- 提炼态 conventions 晋升 docs/conventions 正本仍走提案管线裁决，不直改技能检查项。",
+    "- 测试判例三类沉淀：flaky 史（用例 + 环境 + 复发轮次）、测试退役理由（被测物变更 → 用例去向）、" +
+      "覆盖真空（评审发现的缺席面）——评审发现的测试判例/翻车点按此三类归类沉淀，不漏判例。",
+    "",
+    "三、收口标记（知识沉淀完成后执行）：",
+    `- 用 recordImplCheckpoint 为 ${slug} 落 retro-done 标记` +
+      "（base_commit_hash = 容器分支 HEAD；merged lazy 兜底判据依赖该标记）。",
+  ].join("\n");
+}
+
+/** 越阈判定阈值（settings flywheel.reviewWaveThreshold，键缺席/读故障 = 默认值生效） */
+async function reviewWaveThresholdOf(loop: ActiveLoop): Promise<number> {
+  try {
+    const settings = await loop.deps.settings?.get();
+    return settings?.flywheel?.reviewWaveThreshold ?? FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT;
+  } catch {
+    return FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT;
+  }
+}
+
+/** 标记时点容器分支 HEAD（git rev-parse 优先，回落最近一次结算 commit hash——标记锚不可得 = undefined） */
+async function headHashOf(loop: ActiveLoop): Promise<string | undefined> {
+  if (loop.record.worktree !== undefined) {
+    const head = await (loop.deps.resolveHeadCommit ?? gitHeadCommit)(loop.record.worktree);
+    if (head !== undefined) return head;
+  }
+  return loop.lastCommitHash;
+}
+
+/**
+ * first-pass-complete 标记（机械③——no-task done 分流处调用）：标记缺席时经检查点域落标记
+ * （list 前置判读——已锚定零重落零 ensure 调用）；标记锚（HEAD/快照）不可得 = skipped（照旧
+ * 收口零受阻）；落库异常 = failed（调用方本轮不收口，幂等窗口留给下一轮 no-task done 重试）。
+ * slug 化：检查点锚 = projectKey + 容器 slug（proposal_id 归属锚退役）。
+ */
+async function ensureFirstPassMark(loop: ActiveLoop): Promise<"appended" | "present" | "skipped" | "failed"> {
+  const checkpoints = loop.deps.checkpoints;
+  if (checkpoints === undefined) return "skipped";
+  try {
+    const rows = await checkpoints.listCheckpoints({
+      projectKey: loop.scope.projectId,
+      slug: loop.record.source.slug,
+      marks: ["first-pass-complete"],
+    });
+    if (rows.some((r) => r.mark === "first-pass-complete")) return "present";
+    const head = await headHashOf(loop);
+    if (head === undefined) {
+      emitLoopDiag(loop, "warn", "loop-mark", `forge loop first-pass mark skipped (no base commit) for ${loop.record.source.slug}`);
+      return "skipped";
+    }
+    const snapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source);
+    const result = await checkpoints.ensureCheckpoint({
+      projectKey: loop.scope.projectId,
+      containerSlug: loop.record.source.slug,
+      mark: "first-pass-complete",
+      baseCommitHash: head,
+      snapshots,
+    });
+    return result.appended ? "appended" : "present";
+  } catch (cause) {
+    emitLoopDiag(
+      loop,
+      "warn",
+      "loop-mark",
+      `forge loop first-pass mark failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    return "failed";
+  }
+}
+
+/**
+ * 收口复盘/沉淀指示段（settle 文本追加面）：检查点域全量行直算飞轮指标 +
+ * 阈值取 settings 键，渲染主 agent 直接执行指示。依赖缺席/读面故障 = fail-soft 空串
+ * （收口零受阻，指示段缺席）。
+ */
+async function retroSectionOf(loop: ActiveLoop): Promise<string> {
+  const checkpoints = loop.deps.checkpoints;
+  if (checkpoints === undefined) return "";
+  try {
+    const rows = await checkpoints.listCheckpoints({ projectKey: loop.scope.projectId, slug: loop.record.source.slug });
+    const threshold = await reviewWaveThresholdOf(loop);
+    return renderRetroInstruction(loop.record.source.slug, rows, threshold);
+  } catch (cause) {
+    emitLoopDiag(
+      loop,
+      "warn",
+      "loop-retro",
+      `forge loop retro instruction render failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    return "";
+  }
+}
+
+/**
+ * merged 漏标记 lazy 兜底（机械③——下个容器循环启动时校验补标记）：收口判据 = first-pass-complete
+ * 与 retro-done 标记在场、merged 缺席（收口前置 = 复盘已结算）且容器池全终态（done 快照）——
+ * 条件齐才 ensureCheckpoint 补 merged（域侧幂等）。fail-soft：任何失败 warn 留痕，循环启动零受阻。
+ */
+async function ensureMergedBackfill(loop: ActiveLoop): Promise<void> {
+  const checkpoints = loop.deps.checkpoints;
+  if (checkpoints === undefined) return;
+  try {
+    const rows = await checkpoints.listCheckpoints({
+      projectKey: loop.scope.projectId,
+      slug: loop.record.source.slug,
+      marks: ["first-pass-complete", "retro-done", "merged"],
+    });
+    const has = (mark: string): boolean => rows.some((r) => r.mark === mark);
+    if (!has("first-pass-complete") || !has("retro-done") || has("merged")) return;
+    // suspended/interrupted 同为非终态——挂起/中断容器
+    // 不得被 lazy 兜底提前补 merged（挂起容器可被提前收口标记）
+    const by = (await statsFailSoft(loop)).byStatus;
+    if (by.pending !== 0 || by.in_progress !== 0 || by.blocked !== 0 || by.suspended !== 0 || by.interrupted !== 0)
+      return; // 容器未收口——不补
+    const head = await headHashOf(loop);
+    if (head === undefined) {
+      emitLoopDiag(loop, "warn", "loop-merged", `forge loop merged backfill skipped (no base commit) for ${loop.record.source.slug}`);
+      return;
+    }
+    const snapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source);
+    await checkpoints.ensureCheckpoint({
+      projectKey: loop.scope.projectId,
+      containerSlug: loop.record.source.slug,
+      mark: "merged",
+      baseCommitHash: head,
+      snapshots,
+    });
+  } catch (cause) {
+    emitLoopDiag(
+      loop,
+      "warn",
+      "loop-merged",
+      `forge loop merged backfill failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  }
+}
+
+// ─────────────────────────── 驱动器依赖（装配方注入） ───────────────────────────
+
+/**
+ * 驱动器依赖（装配方注入——registry 缺省自建，多驱动器共享时由装配传入单例）。
+ * slug 化：tasks = 本插件 TasksService（projectKey + slug 查询形）；容器 = slug 本身。
+ */
+export interface LoopDriverDeps {
+  /**
+   * 项目缺省（可选——指令面按敲指令会话 cwd 逐会话解析并经 LoopStartInput.projectId
+   * 覆盖；装配面无固定项目时缺席，双缺席 = start 拒绝 fail-loud）
+   */
+  readonly projectId?: string;
+  /** 任务域服务（本插件 domain/tasks createTasksService 产物——动词/读面全接线） */
+  readonly tasks: TasksService;
+  /**
+   * bug 台账读面（可选——done 径承接检查的数据源；缺席 = 机制惰性不判，行为零变化。
+   * 结构兼容 ForgeBugsService.listBugs——装配面直传，缺席即机制生产静默关停，
+   * 本注入是生产路径的装配前提）
+   */
+  readonly bugs?: { listBugs(q: ListBugsQuery): Promise<readonly BugCard[]> };
+  readonly spawn: SpawnWorker;
+  /** 提交落点核验器（可选——透传 dispatch-core 结算核；缺席回落 gitCommitLanding 真核验） */
+  readonly commitLanding?: DispatchCoreDeps["commitLanding"];
+  /** 叙述面（notify createNarrator 产物——notice/followup/blocked 三出口 + 落盘委派） */
+  readonly narrator: Narrator;
+  /** 事件发射面（可选——透传 dispatch-core 事件闭包，logs/<slug>.jsonl 里程碑不断流） */
+  readonly events?: DispatchCoreDeps["events"];
+  /**
+   * 循环进度 append 面（可选——'forge/progress' 会话事件流内交错；缺席/链断 =
+   * 零发射 fail-soft，循环正确性零依赖。非模型面：不进模型上下文、零回合唤醒。）
+   */
+  readonly progress?: ProgressAppendFace;
+  /** settings 服务面（可选——worker agentOptions 组装同工具壳） */
+  readonly settings?: Pick<ForgeSettingsService, "get">;
+  readonly resolveModelReasoning?: DispatchCoreDeps["resolveModelReasoning"];
+  /** 专家档案工具/模型取用面——透传 dispatch-core spawn 组装；缺席 = 形态兼容 */
+  readonly resolveWorkerProfile?: DispatchCoreDeps["resolveWorkerProfile"];
+  /**
+   * 全局工具注册名读取面（透传 dispatch-core spawn 组装求交基准；
+   * 缺席 = 回落 parent 探针 + 金丝雀子域判定，行为零变化）
+   */
+  readonly globalToolNames?: DispatchCoreDeps["globalToolNames"];
+  /**
+   * 专家团服务在场探测（P8 评审指示组装期单选——true = 三路措辞；
+   * 缺席 = subagent 分域回落。装配面注入惰性探测，循环收口时求值）
+   */
+  readonly expertsPresent?: () => boolean;
+  readonly registry?: LoopRegistry;
+  readonly triage?: LoopTriageHook;
+  readonly escalation?: LoopEscalationHook;
+  /**
+   * checkpoints 域服务消费面（机械③——first-pass-complete 标记 / merged 漏标记 lazy 补；
+   * 本插件 domain/checkpoints 服务方法面。缺席 = 机制惰性不判，行为零变化）
+   */
+  readonly checkpoints?: LoopCheckpointsFace;
+  /**
+   * 容器 → 提案 id 解析（结算核 review-wave 标记的 proposalId 归属透传——装配面经提案谱系
+   * 注入；缺席/未命中 = 机制惰性不判，行为零变化。slug 化：checkpoints 域锚已改 containerSlug，
+   * 本面仅服务 dispatch-core 结算核入参透传，主会话统一收口）
+   */
+  readonly resolveProposalId?: (projectId: string, source: ContainerRef) => Promise<string | undefined>;
+  /**
+   * 容器分支 HEAD 解析器（标记时点 base_commit_hash——缺省回落 gitHeadCommit 真解析；
+   * 单测注入桩。worktree 缺席或解析故障 = 回落最近一次结算 commit hash，双缺席 = 标记跳过）
+   */
+  readonly resolveHeadCommit?: (worktree: string) => Promise<string | undefined>;
+  /**
+   * 已知容器集读面（wait-external.externalSlug 存在性校验的宿主数据源；
+   * 返回该 projectId 下全部已知容器 slug。缺席 = 校验缺席退化现状（fail-soft）。
+   */
+  readonly knownContainers?: (projectId: string) => Promise<readonly string[]>;
+  /**
+   * e2e 红灯基线门（改进7——可选；缺席 = 机制关闭，简报零 E2E_BASELINE_RED 行）。
+   * runSuite = e2e 套件全量执行命令（返回 reporter 输出——`FAIL <spec>` 行被解析为红灯
+   * 清单；worktree 入参与 readHead 同源锚定——多 worktree 并行循环基线取数点与缓存键
+   * 不错位）。基线按 HEAD 键控缓存——readHead 读循环 worktree 当前 HEAD，claim 时
+   * 比对：一致复用缓存、漂移重算（简报不烤死于循环启动时点）；readHead/HEAD 缺席 = 无漂移
+   * 可判，回落启动时一次性基线。启动跑一次 + 逐一生成归因卡（三分流）；套件执行故障
+   * fail-soft（空清单 + warn），循环不阻。
+   */
+  readonly e2eBaseline?: {
+    readonly runSuite: (worktree?: string) => Promise<string>;
+    /** worktree → 当前 HEAD（装配面注入 git rev-parse 缝；缺席/返回 undefined = 键不可得） */
+    readonly readHead?: (worktree: string) => Promise<string | undefined>;
+    /**
+     * 基线缓存文件路径提供器（HEAD 键控持久化，跨实例/重启复用，
+     * 同 HEAD 套件零重跑）。落 `{worktree}/.forge/caches/{slug}/e2e-baseline/`
+     * （随检出走、容器隔离）。缺席 = 无持久化（实例域缓存现状）。
+     * error 形态（基线不可得）不落缓存。
+     */
+    readonly cacheFile?: (input: {
+      readonly slug: string;
+      readonly worktree?: string;
+    }) => string | undefined;
+  };
+  /** 机械时延注入（测试缝——缺省生产值；quiescence = 宽限窗基长/轮询间隔） */
+  readonly delays?: {
+    readonly backoffBaseMs?: number;
+    readonly patiencePauseMs?: number;
+    readonly quiescenceWindowMs?: number;
+    readonly quiescencePollMs?: number;
+  };
+  /** 机械上限注入（测试缝——缺省生产值；maxRounds = 最大轮次封顶） */
+  readonly limits?: { readonly maxRounds?: number };
+  /**
+   * 诊断埋点面（AGENTS §7——循环里程碑与失败散点经 diag/log 事件域落盘；装配面注入诊断缝
+   * （faces.createDiagEmitter 产物），缺席/发射故障 = emitForgeDiag 按级 console 兜底。
+   * fire-and-forget：诊断零循环正确性依赖）
+   */
+  readonly diag?: LoopDiagSink;
+  /**
+   * 台账 recurrence 候选只读检索面（两消费点：① dispatch-core
+   * claim 守卫 T3 同缝拦截（随 loop.core 透传）；② add-fix 派生时现查 recurrence 链写入任务
+   * context。链事实结构化携带零语义，不落简报。
+   * 缺席/异常 = 两机制降级关闭，行为零变化）
+   */
+  readonly findRecurrenceCandidates?: DispatchCoreDeps["findRecurrenceCandidates"];
+  /** 卷宗建模报告在场探测面（T3「待建模」解除判据——透传 loop.core 守卫；缺席 = 报告不在场） */
+  readonly modelingReportPresent?: DispatchCoreDeps["modelingReportPresent"];
+  /**
+   * 结算旁挂回收缝（success 结算后置：运行时任务目录
+   * 顶层 .md 报告复制进容器卷宗 issues/<localId>/；resolveDir 闭包注入，fail-soft。
+   * 透传 loop.core 结算核；缺席 = 机制惰性不判，行为零变化）
+   */
+  readonly reportRecovery?: DispatchCoreDeps["reportRecovery"];
+  /**
+   * 结算行读缝（v1 列面适配——task_settlements 末条投影：settle submit 载荷源
+   * blocked reason/commitHash/files/evidenceDebt 全部出自此缝；机械③标记 HEAD 回落锚
+   * lastCommitHash 同源。装配面经 settlement-repo lastByTask 派生；缺席 = 载荷面降级
+   * （终态判定不受影响），行为零变化）
+   */
+  readonly settlements?: DispatchCoreDeps["settlements"];
+}
+
+/** 诊断埋点载荷（diag-events DiagEventPayload 的驱动器窄投影——process/trace 由装配面补齐） */
+export interface LoopDiagPayload {
+  readonly level: DiagLevel;
+  readonly event: string;
+  readonly message: string;
+  readonly projectId?: string;
+  readonly sessionId?: string;
+}
+/** 诊断埋点缝（faces ForgeDiagEmitFace 同一类型化发射面——驱动器别名沿用） */
+export type LoopDiagSink = ForgeDiagEmitFace;
+
+// ─────────────────────────── 活循环内部状态（登记表行 + 运行时计数） ───────────────────────────
+
+interface ActiveLoop {
+  readonly deps: LoopDriverDeps;
+  readonly record: LoopRecord;
+  readonly registry: LoopRegistry;
+  readonly live: Map<LoopInstanceId, ActiveLoop>;
+  readonly controller: AbortController;
+  /**
+   * pause 控制器（单任务暂停的独立 kill 信号：abort 只中断在飞
+   * worker、不杀循环本体；runRound 经 killSignalOf 合成 stop ∪ pause 作结算 killSignal。
+   * resume 时换新——上轮暂停信号不再影响续跑轮）
+   */
+  pause: AbortController;
+  /** 任务源（必形——DispatchChainScope.source 为壳侧可选形，循环侧恒在场） */
+  readonly source: LoopSourceRef;
+  /** dispatch-core 三段阶段面的共享 deps 投影（identity/guardKey/source 每轮组装） */
+  readonly core: DispatchCoreDeps;
+  readonly exec: DispatchCoreExec;
+  readonly scope: DispatchChainScope;
+  readonly delays: { readonly backoffBaseMs: number; readonly patiencePauseMs: number; readonly quiescenceWindowMs: number; readonly quiescencePollMs: number };
+  /** 最大轮次封顶（runRound 轮数上限——limits.maxRounds ?? LOOP_MAX_ROUNDS） */
+  readonly maxRounds: number;
+  /** spawn 失败连败计数（×3 粘住由 dispatch-core guard 按 LoopInstanceId 兑现） */
+  spawnFailures: number;
+  /** worker 异常终止连败计数（bounded 重入，超限第三层；结算成功复位） */
+  workerAborts: number;
+  /** no-task 等待判词连击（bounded patience——claim 成功即复位） */
+  waitRounds: number;
+  /** no-task 阶段门持有连击（被门持有不计 patience；claim 成功即复位） */
+  gateWaitRounds: number;
+  /** 同任务处置簿（第二层——taskKey → { 处置次数, 处置历史 }；封顶强制升级，结算成功清账） */
+  readonly dispositions: Map<string, DispositionBook>;
+  /** 基线在飞去重（后台化——start fire-and-forget 与 runRound 首 claim 并发同跑套件的 dedup 缝） */
+  e2eBaselineInflight?: Promise<E2eBaselineCache | undefined>;
+  /** 基线链（基线跑批 + 归因卡生成——后台化后的有序收口锚：终局径 await 防归因卡晚于终局） */
+  baselineChain?: Promise<void>;
+  /** e2e 归因卡已发集（spec 键——HEAD 漂移重算径对新增红灯补发，已发不重发；启动时点同源） */
+  readonly e2eAttributed: Set<string>;
+  /** 轮数总量计数（生命周期总量——resume 续用不清零；达 maxRounds 即终局） */
+  rounds: number;
+  /** 机械③：提案 id（start 时解析一次的结算核 review-wave 归属透传锚；缺席 = 机制惰性不判） */
+  proposalId?: string;
+  /** 机械③：最近一次 success 结算 commit hash（标记时点 HEAD 的回落锚——worktree 缺席径） */
+  lastCommitHash?: string;
+  /**
+   * 任务起止记录（与 forge/progress 事件同源：领取记
+   * 开始、结算记结束，耗时 = 结算 − 领取；内存态，跨重启缺失 = 概要行降级省略耗时）。
+   * 幂等重入重领不覆盖首次起点。
+   */
+  readonly taskSpans: Map<string, { readonly title: string; readonly startedAt: number }>;
+  /**
+   * 任务 → 执行专家键（claim 结果带回的 expertKey 随携带任务键的
+   * forge/progress 发射点填充；循环级事件无任务键不填充。实例域生命周期，终局随实例消亡）
+   */
+  readonly expertByTaskKey: Map<string, string>;
+  /**
+   * 结算概要有序集（终局 settle 消息「任务概要」段数据源——按 slug 分组呈现，不跨 slug
+   * 混合汇总/结算：用户裁决 2026-10-28。每任务 taskKey = slug/localId，耗时在讫记时点
+   * 定型（结算 − 领取），跨重启缺失 = 省略耗时）
+   */
+  readonly taskSummaries: {
+    readonly slug: string;
+    readonly taskKey: string;
+    readonly title: string;
+    readonly status: string;
+    readonly duration?: string;
+    readonly note?: string;
+  }[];
+  /** 最近一次启动子代理失败错误原文（终局 halt 消息「错误」行数据源——终局即弃） */
+  lastSpawnError?: string;
+  /**
+   * 唤醒去重已发集（`minor:taskKey` 键：同 loop 实例同一异常事件挂起
+   * 续跑再挂起不重复发唤醒卡；实例域生命周期，投影/落盘不去重）
+   */
+  readonly wakeupKeys: Set<string>;
+}
+
+/** 同任务处置簿（第二层——attempts 计数封顶 LOOP_TRIAGE_MAX_ATTEMPTS；history 行进裁决问询） */
+interface DispositionBook {
+  attempts: number;
+  history: string[];
+  /** 上次处置失败摘要（回灌——下一轮 triage 输入 lastFailure） */
+  lastFailure?: string;
+  /**
+   * 决策缓存（决策与执行分离）：通过解析与宿主校验的决策在此缓存——落库失败后
+   * 再遇同任务 blocked 时重放执行不重跑分析；执行成功/重放再败即清账。
+   */
+  decision?: LoopTriageDecisionResult;
+}
+
+/** 处置簿取账（get-or-create——per-task 生命周期 = 循环实例存活期，结算成功清账） */
+function dispositionBookOf(loop: ActiveLoop, taskKey: string): DispositionBook {
+  let book = loop.dispositions.get(taskKey);
+  if (book === undefined) {
+    book = { attempts: 0, history: [] };
+    loop.dispositions.set(taskKey, book);
+  }
+  return book;
+}
+
+/** 处置决策的历史行注记（问询处置历史用——用户视角动词） */
+function triageDecisionNote(decision: LoopTriageDecision): string {
+  if (decision.action === "add-fix") return `决定创建修复任务${decision.note !== undefined ? `（${decision.note}）` : ""}`;
+  if (decision.action === "wait-external") return `决定等待 ${decision.externalSlug} 先完成`;
+  if (decision.action === "split-remainder") return `决定分割剩余范围为继任任务${decision.note !== undefined ? `（${decision.note}）` : ""}`;
+  return "决定上浮主会话处置"; // escalate（含/不含 payload 同一历史行——载荷随问询 detail 全文上浮）
+}
+
+// ─────────────────────────── triage 错误处理信息闭环 ───────────────────────────
+
+/**
+ * fix 链深上限（常量单源消费别名：contracts `FIX_CHAIN_DEPTH_LIMIT` 是域 addTask C6 与宿主
+ * triage 的唯一事实源，消除双常量漂移面）：
+ * 余量 = 上限 − 当前任务链深；余量 < 1 时 add-fix 结构性被拒（创建必 ERR_CHAIN_DEPTH_EXCEEDED）。
+ */
+export const TRIAGE_FIX_CHAIN_DEPTH_LIMIT = FIX_CHAIN_DEPTH_LIMIT;
+
+/** 处置失败摘要（回灌/历史行用）：TriageDecisionInvalidError 携 rawSummary（模型原始输出摘要），
+ *  其余取 error message——结构化识别不 import triage 面（依赖方向：triage → loop 单向） */
+export function triageFailureSummary(cause: unknown): string {
+  const raw = (cause as { rawSummary?: unknown } | null)?.rawSummary;
+  if (typeof raw === "string" && raw.length > 0) return raw;
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+/** 模型输出无效判别（分流键——结构性识别 TriageDecisionInvalidError，不 import triage 面） */
+export function isTriageInvalidOutput(cause: unknown): boolean {
+  return (cause as { name?: unknown } | null)?.name === "TriageDecisionInvalidError";
+}
+
+/**
+ * 流控类失败判别（bug 63112ab2 分流键）：限流窗口内立即重试必再撞限流——三次拉起全败
+ * 只加剧限流。识别后零重试，循环挂起返回主会话（附流控原因），择时重派由主会话决定。
+ */
+const RATE_LIMIT_PATTERN = /\b429\b|rate[ -]?limit|throttl|too many requests|流控|限流/i;
+export function isRateLimitFailure(text: string): boolean {
+  return RATE_LIMIT_PATTERN.test(text);
+}
+
+/** 宿主执行前置校验拒绝（结构同 TriageDecisionInvalidError：立即重试 + 回灌摘要） */
+function hostRejection(message: string, rawSummary: string): Error {
+  return Object.assign(new Error(`处置决策无效——${message}`), {
+    name: "TriageDecisionInvalidError",
+    rawSummary: `${message}；原始决策: ${rawSummary}`,
+  });
+}
+
+/**
+ * fix 链深余量现算（沿 sourceTask 自然键链上溯计数；fail-soft：读面故障/任务
+ * 不在列表 = undefined，提示词省略该节、宿主余量守卫缺席，退化为现状）。
+ */
+async function fixChainOf(
+  tasks: TasksService,
+  projectId: string,
+  source: LoopSourceRef,
+  task: TaskSnapshot,
+): Promise<LoopTriageFixChain | undefined> {
+  try {
+    const cards = await tasks.listTasks({ projectKey: projectId, slug: source.slug });
+    const byKey = new Map(cards.map((c) => [`${c.slug}/${c.localId}`, c] as const));
+    let depth = 0;
+    let ref: { slug: string; localId: string } = { slug: task.slug, localId: task.localId };
+    for (;;) {
+      const card = byKey.get(`${ref.slug}/${ref.localId}`);
+      if (card === undefined) break;
+      depth += 1;
+      if (card.sourceTask === undefined) break;
+      ref = { slug: card.sourceTask.slug, localId: card.sourceTask.localId };
+    }
+    if (depth === 0) return undefined;
+    return { depth, limit: TRIAGE_FIX_CHAIN_DEPTH_LIMIT, remaining: TRIAGE_FIX_CHAIN_DEPTH_LIMIT - depth };
+  } catch {
+    return undefined;
+  }
+}
+
+/** 每轮判定返回（continue = 续派下一轮；suspend = 升级点挂起待裁决；terminal = 终局收口出循环） */
+type RoundOutcome = "continue" | "suspend" | "terminal";
+
+/**
+ * 宽限窗判词（done 收口前的 wait-for-quiescence）：continue = 窗内编排层新派任务
+ * （池 pending/in_progress 出现——自动续派）；settle = 窗满静默（照常收口）；
+ * terminal = 窗内循环被叫停（用户终止——收口归停止径，零结束叙述）。
+ */
+type QuiescenceOutcome = "continue" | "settle" | "terminal";
+
+/** 续派静默窗（分段睡眠 + 池快照现读——新任务窗内即到即续；窗内叫停立即让渡终止收口） */
+async function waitForQuiescence(loop: ActiveLoop): Promise<QuiescenceOutcome> {
+  const signal = loop.controller.signal;
+  const windowMs = loop.delays.quiescenceWindowMs;
+  const pollMs = loop.delays.quiescencePollMs;
+  let waited = 0;
+  for (;;) {
+    const pool = poolOf(await statsFailSoft(loop));
+    if (pool.pending > 0 || pool.inProgress > 0) return "continue";
+    if (waited >= windowMs) return "settle";
+    const slice = Math.min(pollMs, windowMs - waited);
+    if (!(await sleepOrAbort(signal, slice))) return "terminal";
+    waited += slice;
+  }
+}
+
+/**
+ * 升级点挂起（原 escalate→terminal 的语义反转处）：写 `record.suspended`（在场即挂起
+ * 投影）并返回 suspend 判词——runLoop 保留登记与运行时状态退出，等待处置回流 re-entry
+ * （driver.resume 清 suspended 从留存点续跑）。升级事件全文承载在挂起载荷内，裁决改经
+ * owner 对话面（P3），不再走 userQuestions 问询径（halted 除外——保持结束 + P6 问询）。
+ */
+function suspendForVerdict(loop: ActiveLoop, escalation: LoopEscalation): RoundOutcome {
+  const payload: SuspendedPayload = { escalation, since: Date.now() };
+  loop.record.suspended = payload; // 写点①：挂起即投影挂起
+  return "suspend";
+}
+
+/** 静默挂起径 minor（四径各自独立不合并；场景码经 progress 单源表取值） */
+const SUSPEND_MINORS = ["spawn-rate-limited", "worker-rate-limited", "abort-over-limit", "landing-rejected", "recurrence-escalation"] as const;
+type SuspendMinor = (typeof SUSPEND_MINORS)[number];
+const suspendScenarioOf = (minor: SuspendMinor): ForgeProgressScenario =>
+  FORGE_PROGRESS_SCENARIOS.find((code): code is `suspend/${SuspendMinor}` => code === `suspend/${minor}`)!;
+
+/**
+ * 静默挂起径补录收口（loop-event-delivery——⑱-㉑）：现状挂起时人类与模型均无感知，
+ * 三面一次补齐——① event 子文件夹落盘（原因全文，行为与既有 recordIncident 同径）；
+ * ② forge/progress suspend 事件（scenario 场景码 + note 原因全文，fail-soft）；
+ * ③ send(nextStep, true) 唤醒一条（原因摘要 + 子文件夹路径进消息，即时唤醒主会话）。
+ * 收尾仍走 suspendForVerdict（挂起投影语义零变更）。
+ */
+async function suspendWithWakeup(
+  loop: ActiveLoop,
+  escalation: LoopEscalation,
+  input: {
+    readonly minor: SuspendMinor;
+    readonly eventType: string;
+    /** 原因全文（落盘 + note 原样；叙述只带摘要 + 事件子文件夹绝对路径） */
+    readonly reason: string;
+    /** incident 落盘任务键（localId 口径——既有 incident-log 行为不回归） */
+    readonly incidentTaskKey: string;
+    /** 进度事件任务键（`slug/localId` 口径——既有 forge/progress 行为同源） */
+    readonly progressTaskKey: string;
+    /** 任务标题（progress 事件 taskTitle 段） */
+    readonly taskTitle?: string;
+    /** worker 子会话 id（progress 事件 workerSessionId 段——spawn 成功径在列） */
+    readonly workerSessionId?: string;
+    /** 唤醒消息单行摘要（用户视角原因——无机制词） */
+    readonly headline: string;
+  },
+): Promise<RoundOutcome> {
+  const incidentPath = loop.deps.narrator.recordIncident({
+    projectId: loop.record.projectId,
+    sourceSlug: loop.record.source.slug,
+    taskKey: input.incidentTaskKey,
+    eventType: input.eventType,
+    error: input.reason,
+  });
+  emitProgress(loop, {
+    verb: "suspend",
+    status: "blocked",
+    scenario: suspendScenarioOf(input.minor),
+    note: input.reason,
+    taskKey: input.progressTaskKey,
+    ...(input.taskTitle !== undefined ? { taskTitle: input.taskTitle } : {}),
+    ...(input.workerSessionId !== undefined ? { workerSessionId: input.workerSessionId } : {}),
+  });
+  // 原因全文行 = 事件子文件夹绝对路径（incident-log 数据源拼接产物同源消费——无裸 logs/ 相对形态）
+  const detail = incidentPath !== undefined ? `原因全文：${incidentPath}` : "原因全文落盘降级（事件子文件夹不可用）";
+  // 唤醒去重（同实例同事件恰一张卡：挂起回流续跑再挂起同一事件不再重复
+  // send；投影事件与 incident 落盘不去重——留痕单源仍每挂起一条）。键含成因全文
+  // （同因复发（reason 全文一致）仍去重，异因新发必出新卡）
+  const wakeupKey = `${input.minor}:${input.progressTaskKey}:${input.reason}`;
+  const firstWakeup = !loop.wakeupKeys.has(wakeupKey);
+  loop.wakeupKeys.add(wakeupKey);
+  if (firstWakeup) {
+    // 折叠摘要（组卡条目只渲染 source.summary，缺省整段 120 字截断会吞掉
+    // 尾部处置入口/原因全文行）：预构建摘要前置三要素（重试短语/原因全文/处置入口），
+    // 与唤醒全文同一信息集。
+    const foldSummary = `${input.headline}；原因全文：${incidentPath !== undefined ? incidentPath : "落盘降级（事件子文件夹不可用）"}；处置入口: 任意会话凭容器 ${loop.record.source.slug} dispatchTask 认领挂起循环继续处置`;
+    await loop.deps.narrator.followup(
+      loop.record.ownerSessionId,
+      // 处置入口行（挂起径恢复语义：任意会话凭容器 slug dispatchTask 认领）
+      `${input.headline}。\n原因摘要：${summarizeReason(input.reason)}\n${detail}\n处置入口: 任意会话凭容器 ${loop.record.source.slug} dispatchTask 认领挂起循环继续处置`,
+      undefined,
+      foldSummary,
+    );
+  }
+  emitLoopDiag(loop, "warn", "loop-suspend", `${input.minor} — ${input.progressTaskKey}: ${summarizeReason(input.reason)}`);
+  return suspendForVerdict(loop, escalation);
+}
+
+/** 耗时呈现（<1m 秒粒度，其余分钟粒度——概要行紧凑口径） */
+function durationTextOf(ms: number): string {
+  return ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60_000)}m`;
+}
+
+/** 任务领取起记（幂等重入重领同一任务不覆盖首次起点——耗时从首次领取起算） */
+function recordTaskStart(loop: ActiveLoop, taskKey: string, title: string): void {
+  if (!loop.taskSpans.has(taskKey)) loop.taskSpans.set(taskKey, { title, startedAt: Date.now() });
+}
+
+/** 任务结算讫记（终态 + 耗时定型入结算概要——按 slug 分组；跨重启缺失 = 耗时段降级省略） */
+function recordTaskEnd(loop: ActiveLoop, taskKey: string, status: string, note?: string): void {
+  const span = loop.taskSpans.get(taskKey);
+  loop.taskSpans.delete(taskKey);
+  const slug = taskKey.slice(0, taskKey.indexOf("/"));
+  loop.taskSummaries.push({
+    slug,
+    taskKey,
+    title: span?.title ?? taskKey,
+    status,
+    ...(span !== undefined ? { duration: durationTextOf(Date.now() - span.startedAt) } : {}),
+    ...(note !== undefined && note !== "" ? { note } : {}),
+  });
+}
+
+/**
+ * 结算概要行集（模板 taskSummaries 段——按 slug 分组，不跨 slug 混合汇总/结算：用户裁决
+ * 2026-10-28）。组首行 = `slug（完成 n · 阻塞 m）` 状态计数；任务行 = `slug/local-id 标题 —
+ * 终态[ · 耗时][ · 注记]`；分组保持首次出现序。
+ */
+function taskSummaryLines(loop: ActiveLoop | undefined): readonly string[] {
+  if (loop === undefined) return [];
+  const groups = new Map<string, typeof loop.taskSummaries>();
+  for (const s of loop.taskSummaries) {
+    const group = groups.get(s.slug);
+    if (group !== undefined) group.push(s);
+    else groups.set(s.slug, [s]);
+  }
+  const lines: string[] = [];
+  for (const [slug, items] of groups) {
+    const completed = items.filter((item) => item.status === "完成").length;
+    lines.push(`${slug}（完成 ${String(completed)} · 阻塞 ${String(items.length - completed)}）`);
+    for (const s of items) {
+      const duration = s.duration !== undefined ? ` · ${s.duration}` : "";
+      const note = s.note !== undefined ? ` · ${s.note}` : "";
+      lines.push(`${s.taskKey} ${s.title} — ${s.status}${duration}${note}`);
+    }
+  }
+  return lines;
+}
+
+/**
+ * 循环进度事件发射（1.17——'forge/progress' 会话事件流内交错）：领取/结算/状态迁移点
+ * 各一枚，append 进 owner 会话日志（客户端 DisclosureRow 同族折叠行渲染，seq 时序天然
+ * 交错）。fail-soft：面缺席/append 链断 = 零发射不外溢（进度非循环正确性依赖）；既有
+ * notice 双通道零回归（本发射与叙述面完全并行，不改 notice/followup 分流）。
+ */
+function emitProgress(
+  loop: ActiveLoop,
+  event: {
+    readonly verb: ForgeProgressEventData["verb"];
+    readonly status: ForgeProgressEventData["status"];
+    readonly taskKey?: string;
+    readonly taskTitle?: string;
+    /** 显式专家键（triage-progress-row——处置事件直携 'triage-analyst'，优先于登记表回填） */
+    readonly expertKey?: string;
+    readonly workerSessionId?: string;
+    /** 处置 attempt 序号（triage 处置族——结构化载荷透传，权威源 = book.attempts） */
+    readonly attempt?: number;
+    readonly scenario?: ForgeProgressScenario;
+    readonly note?: string;
+    readonly counts?: ForgeProgressCounts;
+  },
+): void {
+  try {
+    // 专家键填充：携带任务键的事件按登记表回填 expertKey；
+    // 显式传参优先（triage 处置事件），循环级事件（无任务键）与未登记任务不填充——字段缺省零发射
+    const expertKey = event.expertKey ?? (event.taskKey !== undefined ? loop.expertByTaskKey.get(event.taskKey) : undefined);
+    loop.deps.progress?.append(loop.record.ownerSessionId, {
+      sourceSlug: loop.record.source.slug,
+      verb: event.verb,
+      status: event.status,
+      ...(event.taskKey !== undefined ? { taskKey: event.taskKey } : {}),
+      ...(expertKey !== undefined ? { expertKey } : {}),
+      ...(event.taskTitle !== undefined ? { taskTitle: event.taskTitle } : {}),
+      ...(event.workerSessionId !== undefined ? { workerSessionId: event.workerSessionId } : {}),
+      ...(event.attempt !== undefined ? { attempt: event.attempt } : {}),
+      ...(event.scenario !== undefined ? { scenario: event.scenario } : {}),
+      ...(event.note !== undefined ? { note: event.note } : {}),
+      ...(event.counts !== undefined ? { counts: event.counts } : {}),
+      at: Date.now(),
+    });
+  } catch {
+    // 进度发射零循环正确性依赖——异常吞并（append 面内部已另有告警）
+  }
+}
+
+/** 池计数快照（claim 时点——'forge/progress' counts 段单源） */
+function progressCountsOf(stats: TaskStats): ForgeProgressCounts {
+  return { pending: stats.byStatus.pending, running: stats.byStatus.in_progress, done: stats.byStatus.completed };
+}
+
+/**
+ * 循环里程碑诊断埋点（AGENTS §7：启动/重试/挂起/结算经 diag 面 emit，
+ * diag/log 落盘可查 loop 行；面缺席/发射故障 = emitForgeDiag 按级 console 兜底，
+ * 零循环正确性依赖）
+ */
+function emitLoopDiag(loop: ActiveLoop, level: LoopDiagPayload["level"], event: string, message: string): void {
+  emitForgeDiag(loop.deps.diag, {
+    level,
+    event,
+    message,
+    projectId: loop.record.projectId,
+    sessionId: loop.record.ownerSessionId,
+  });
+}
+
+/**
+ * 处置台账总线发射（logs/{slug}.jsonl 唯一写者同流追加：
+ * triage-decided 挂新决策产出点（执行前）、triage-outcome 挂每次执行尝试点（执行后）。
+ * fail-soft：面缺席/emit 链断 = 零发射不外溢（台账非循环正确性依赖；账面 jsonl 与活面
+ * forge/progress 两链零耦合，消费以账面为准）。
+ */
+function emitTriageEvent(
+  loop: ActiveLoop,
+  type: "triage-decided" | "triage-outcome",
+  payload: TriageDecidedPayload | TriageOutcomePayload,
+): void {
+  try {
+    loop.deps.events?.emit({
+      ts: Date.now(),
+      sessionId: loop.record.ownerSessionId,
+      slug: loop.record.source.slug,
+      type,
+      payload,
+    } as ForgePluginEvent);
+  } catch {
+    // 台账发射零循环正确性依赖——异常吞并
+  }
+}
+
+/** 可中断停顿（true = 时延到点 / false = 循环已叫停——停止立即打断退避与耐心等待） */
+function sleepOrAbort(signal: AbortSignal, ms: number): Promise<boolean> {
+  if (signal.aborted) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve(true);
+    }, ms);
+    const onAbort = (): void => {
+      cleanup();
+      resolve(false);
+    };
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/** 建宿主派发循环驱动器（装配单例——指令层 start/stop 的唯一入口；driver-face seam 实装落位） */
+export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
+  const registry = deps.registry ?? createLoopRegistry();
+  const live = new Map<LoopInstanceId, ActiveLoop>();
+
+  /** 统一结束处理（stop/stopLoop 双入口同径单源）：在途取消 + 孤儿真化 + 收口叙述 + 终态注销 */
+  async function terminateRecord(record: LoopRecord): Promise<boolean> {
+    const loop = live.get(record.id);
+    // 先摘牌再 abort——停止竞态收口：runRound 各 await 恢复点见 inFlight 已清即让渡接管权
+    const captured: LoopInFlight | undefined = record.inFlight;
+    record.inFlight = undefined;
+    loop?.controller.abort("loop stopped by command");
+    if (captured !== undefined) {
+      // 停止扫描终态过滤：terminal 任务零转移——completed 不被扫成 interrupted
+      const transitioned = await interruptedize(loop, captured.taskId, captured.taskRef);
+      // 进度事件（状态迁移点：停止真化 in-flight → interrupted）
+      if (loop !== undefined && transitioned)
+        emitProgress(loop, { verb: "stop", status: "interrupted", scenario: "loop/stopped", taskKey: captured.taskKey, taskTitle: captured.title });
+    }
+    const stats = await statsFailSoft(loop);
+    // 停止收口 = settlement 形态（结算单点 send(nextStep, true) 唤醒；与 in-flight
+    // 真化的 forge/progress stopped 事件双面落会话日志）
+    await deps.narrator.settle(
+      record.ownerSessionId,
+      renderNarrative("stopped-by-command", {
+        sourceSlug: record.source.slug,
+        completed: stats.byStatus.completed,
+        inFlightTaskKey: captured?.taskKey ?? "无",
+        taskSummaries: taskSummaryLines(loop),
+      }),
+    );
+    registry.remove(record.id); // 终态即登记表删除（新实例 = guard 计数复位）
+    clearExclusiveLoopSource(record.source, record.id); // 独占注销（归属校验——幂等）
+    live.delete(record.id);
+    return captured !== undefined;
+  }
+
+  return {
+    async start(input: LoopStartInput): Promise<LoopStartResult> {
+      // projectId 解析（会话工作区覆盖 > 装配缺省；双缺席 fail-loud——不落不可归属的循环）
+      const projectId = input.projectId ?? deps.projectId;
+      if (projectId === undefined) throw new Error("派发循环启动缺少 projectId（input.projectId 与 deps.projectId 双缺席）");
+      // 会话级单活门控（用户裁决 2026-10-17：一个会话同一时间段只允许一个任务循环，
+      // 循环间串行）：start 前查 byOwner(caller)——已有活循环（含挂起中）即拒绝并自解释指引
+      // （exclusivity 身份缝合单点；指令与工具双入口同源兑现）。
+      const ownerRejection = ownerSingleActiveRejection((id) => registry.byOwner(id), input.ownerSessionId);
+      if (ownerRejection !== undefined) {
+        return {
+          ok: false,
+          code: "owner-active",
+          activeSource: { slug: ownerRejection.data.slug },
+          activeOwnerSessionId: ownerRejection.data.ownerSessionId,
+          suspended: ownerRejection.data.suspended,
+          message: ownerRejection.message,
+          guidance: ownerRejection.data.guidance,
+        };
+      }
+      // 同源独占（2026-10-12 多会话并行裁决）：同一容器进程内至多
+      // 一个活循环（他源他会话并行不受限）；同源再 start → loop-active 拒绝
+      const active = registry.bySlug(input.source.slug);
+      if (active !== undefined) {
+        return {
+          ok: false,
+          code: "loop-active",
+          activeSource: active.source,
+          activeOwnerSessionId: active.ownerSessionId,
+          suspended: active.suspended !== undefined,
+          message: `start rejected: container ${active.source.slug} already has an active dispatch loop (owner session ${active.ownerSessionId})`,
+          guidance: [],
+        };
+      }
+      // LoopInstanceId：crypto.randomUUID()——登记表键 + guard 粘性载体
+      // L2 防御性现读（bug 6d98a275 验证）：同源独占判据复用上方 bySlug 判读——若独占
+      // 拒绝被移除/漂移，对账仍以登记表现值短路（不误真化他循环在飞任务）；可达路径恒 true
+      const sourceFreeAtStart = active === undefined;
+      const id = crypto.randomUUID();
+      const source: LoopSourceRef = input.source;
+      const record: LoopRecord = {
+        id,
+        source,
+        ownerSessionId: input.ownerSessionId,
+        projectId,
+        ...(input.worktree !== undefined ? { worktree: input.worktree } : {}),
+        ...(input.docsRoot !== undefined ? { docsRoot: input.docsRoot } : {}),
+        takeoverSessions: new Set<string>(), // 接管集（登记绑定——remove 随之蒸发）
+      };
+      const controller = new AbortController();
+      const loop: ActiveLoop = {
+        deps,
+        record,
+        registry,
+        live,
+        controller,
+        pause: new AbortController(), // 单任务暂停独立 kill 信号
+        source,
+        core: {
+          tasks: deps.tasks,
+          spawn: deps.spawn,
+          ...(deps.commitLanding !== undefined ? { commitLanding: deps.commitLanding } : {}),
+          ...(deps.events !== undefined ? { events: deps.events } : {}),
+          ...(deps.settings !== undefined ? { settings: deps.settings } : {}),
+          ...(deps.resolveModelReasoning !== undefined ? { resolveModelReasoning: deps.resolveModelReasoning } : {}),
+          ...(deps.resolveWorkerProfile !== undefined ? { resolveWorkerProfile: deps.resolveWorkerProfile } : {}),
+          // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints/HEAD 解析器随 loop.core 透传
+          // 结算核——settleClaimed → settleWorkerRun → recordWaveCheckpoint 的 review-wave-N
+          // 落行依赖此二依赖（缺席 = 机制惰性不判，行为零变化）
+          ...(deps.checkpoints !== undefined ? { checkpoints: deps.checkpoints } : {}),
+          ...(deps.resolveHeadCommit !== undefined ? { resolveHeadCommit: deps.resolveHeadCommit } : {}),
+          // 诊断缝透传结算核（review-wave/e2e 欠账 fail-soft 告警走 diag 面；缺席 = console 兜底）
+          ...(deps.diag !== undefined ? { diag: deps.diag } : {}),
+          // T3 同缝拦截守卫两依赖透传（claim 面软拒绝 + 卷宗报告解除判据；缺席 = 守卫降级放行）
+          ...(deps.findRecurrenceCandidates !== undefined ? { findRecurrenceCandidates: deps.findRecurrenceCandidates } : {}),
+          ...(deps.modelingReportPresent !== undefined ? { modelingReportPresent: deps.modelingReportPresent } : {}),
+          // 结算旁挂回收缝透传结算核（fail-soft 后置钩子）
+          ...(deps.reportRecovery !== undefined ? { reportRecovery: deps.reportRecovery } : {}),
+          // 结算行读缝透传结算核（v1 列面适配——settle submit 载荷源 + 机械③ HEAD 回落锚）
+          ...(deps.settlements !== undefined ? { settlements: deps.settlements } : {}),
+          // 全局工具注册名读取面透传（bug 92d642c2 根因层——worker toolFilter 求交基准优先全局视图）
+          ...(deps.globalToolNames !== undefined ? { globalToolNames: deps.globalToolNames } : {}),
+        },
+        exec: {
+          attribution: {},
+          parent: input.parent,
+          signal: controller.signal, // spawn 信号 = 循环控制器——stop 取消 in-flight 的机械通道
+          verb: "run-dag-tasks",
+        },
+        scope: { sessionId: input.ownerSessionId, projectId, guardKey: id, source },
+        delays: {
+          backoffBaseMs: deps.delays?.backoffBaseMs ?? LOOP_BACKOFF_BASE_MS,
+          patiencePauseMs: deps.delays?.patiencePauseMs ?? LOOP_PATIENCE_PAUSE_MS,
+          quiescenceWindowMs: deps.delays?.quiescenceWindowMs ?? LOOP_QUIESCENCE_WINDOW_MS,
+          quiescencePollMs: deps.delays?.quiescencePollMs ?? LOOP_QUIESCENCE_POLL_MS,
+        },
+        maxRounds: deps.limits?.maxRounds ?? LOOP_MAX_ROUNDS,
+        rounds: 0, // 轮数总量计数（生命周期总量——resume 续用不清零）
+        e2eAttributed: new Set<string>(),
+        spawnFailures: 0,
+        workerAborts: 0,
+        waitRounds: 0,
+        gateWaitRounds: 0,
+        dispositions: new Map<string, DispositionBook>(),
+        taskSpans: new Map<string, { title: string; startedAt: number }>(),
+        expertByTaskKey: new Map<string, string>(),
+        taskSummaries: [],
+        wakeupKeys: new Set<string>(),
+      };
+      registry.register(record); // 登记表注册（活循环 → 任务源/主会话/in-flight/worker 子会话）
+      // 循环独占守卫：登记即独占（活循环容器拒绝外部 dispatchTask——显式 slug 与盲选
+      // 两径由 claim 面消费独占表；终态/停止注销见 runLoop finally 与 stop 面）
+      setExclusiveLoopSource(source, id);
+      live.set(id, loop);
+      try {
+        // 启动对账（bug 6d98a275）：装配期对账只在进程重启后跑一次——claim↔spawn
+        // 窗口死亡 / spawn 未成幂等重入径遗留的 loop-sourced in_progress 此后无人回收（恢复
+        // 扫描只认 interrupted）。同源独占 + 本实例尚未领取 ⇒ 登记时点本源 in_progress
+        // loop-sourced 任务恒为孤儿（registryEmpty = sourceFreeAtStart 现读——对本源结构恒
+        // 真）；scoped 真化 interrupted 后交 runRound adopt 径重派。每枚回收任务追加 stop
+        // 进度事件进 owner 会话（面板/进度卡同源投影渲染）。fail-soft：对账故障不阻启动
+        // （warn 留痕，孤儿留原态下次启动重试）。
+        try {
+          const orphans = await deps.tasks.reconcileInterrupted({ projectKey: projectId, registryEmpty: sourceFreeAtStart, source });
+          for (const ref of orphans.reconciled) {
+            emitProgress(loop, {
+              verb: "stop",
+              status: "interrupted",
+              scenario: FORGE_PROGRESS_SCENARIO.loopOrphanReconciled,
+              taskKey: `${ref.slug}/${ref.localId}`,
+              note: "检测到任务中断：宿主重启遗留执行态孤儿——已回收待重派",
+            });
+          }
+        } catch (cause) {
+          emitLoopDiag(
+            loop,
+            "warn",
+            "loop-start-reconcile",
+            `forge loop start orphan reconcile failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+          );
+        }
+        await announceStartup(loop); // 启动模板叙述（①从头/②接续未完成/③接续在飞）
+      } catch (cause) {
+        clearExclusiveLoopSource(source, id);
+        live.delete(id);
+        registry.remove(id);
+        throw cause;
+      }
+      if (loop.controller.signal.aborted) {
+        // 启动与停止竞态（announce 期间被叫停）——循环不启动，登记即注销
+        clearExclusiveLoopSource(source, id);
+        live.delete(id);
+        registry.remove(id);
+        return { ok: true, loopId: id };
+      }
+      emitLoopDiag(loop, "info", "loop-start", `容器 ${source.slug} 派发循环启动`); // 启动里程碑
+      // 机械③：提案 id 解析（结算核 review-wave 归属透传锚——fail-soft，缺席 = 机制惰性不判）
+      if (deps.resolveProposalId !== undefined) {
+        try {
+          loop.proposalId = await deps.resolveProposalId(projectId, source);
+        } catch (cause) {
+          emitLoopDiag(
+            loop,
+            "warn",
+            "loop-proposal-id",
+            `forge loop proposal id resolve failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+          );
+        }
+      }
+      // e2e 红灯基线门（改进7/bug 006d8bfe 后台化）：基线跑批移入循环 fiber——
+      // start 立即返回启动回执（工具调用面零阻塞——长跑/挂死套件曾把 start 卡满全量窗）。
+      // runRound 首领任务前 await ensureE2eBaseline（in-flight 去重 + 实例缓存同源——挂起/
+      // claim 漂移重算语义不变），简报红灯行语义不破；归因卡随基线结果在 fiber 内生成。
+      loop.baselineChain = ensureE2eBaseline(loop)
+        .then(async (baseline) => {
+          if (baseline !== undefined) await issueAttributionCards(loop, baseline.redCases);
+        })
+        .catch((cause) => {
+          // 归因卡/标记故障不静默（AGENTS §7）：fiber 径 warn 留痕，循环照常入场
+          emitLoopDiag(
+            loop,
+            "warn",
+            "loop-e2e-baseline",
+            `forge loop e2e baseline attribution chain failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+          );
+        });
+      void runLoop(loop); // 循环自身 async 挂起（零线程占用——await handle.result 即事件循环挂起）
+      return { ok: true, loopId: id };
+    },
+
+    async stop(input: { readonly ownerSessionId: string }): Promise<LoopStopResult> {
+      // stop 作用域：仅停同一会话启动的活循环；无 = no-op 拒绝
+      const record = registry.byOwner(input.ownerSessionId);
+      if (record === undefined) {
+        return { ok: false, code: "no-active-loop" };
+      }
+      const hadInFlight = await terminateRecord(record);
+      return { ok: true, stopped: true, hadInFlight };
+    },
+
+    async stopLoop(input: { readonly loopId: LoopInstanceId; readonly requesterSessionId: string }): Promise<LoopStopLoopResult> {
+      // 定向停止（stopTaskLoop——双入口同 registry 判活；统一结束处理与 stop() 同径单源）。
+      // 作用域裁决（2026-10-17）：运行中仅 owner 可停；挂起态任意会话可停（其它会话接管支撑）。
+      const record = registry.get(input.loopId);
+      if (record === undefined) {
+        return { ok: false, code: "no-active-loop", suspended: false, ownerSessionId: "" };
+      }
+      const suspended = record.suspended !== undefined;
+      if (!suspended && record.ownerSessionId !== input.requesterSessionId) {
+        return { ok: false, code: "forbidden", suspended, ownerSessionId: record.ownerSessionId };
+      }
+      const hadInFlight = await terminateRecord(record);
+      return { ok: true, stopped: true, hadInFlight };
+    },
+
+    async pause(input: { readonly loopId: LoopInstanceId; readonly requesterSessionId: string; readonly reason: string }): Promise<LoopPauseResult> {
+      // 单任务暂停：归属守卫与 stopLoop 同权限面——运行中仅 owner
+      // 可 pause；挂起态任意会话可接管；无活循环/空 reason/无 in_progress 任务均 typed 拒绝。
+      const loop = live.get(input.loopId);
+      if (loop === undefined) {
+        return { ok: false, code: "no-active-loop", suspended: false, ownerSessionId: "" };
+      }
+      const record = loop.record;
+      const suspended = record.suspended !== undefined;
+      if (!suspended && record.ownerSessionId !== input.requesterSessionId) {
+        return { ok: false, code: "forbidden", suspended, ownerSessionId: record.ownerSessionId };
+      }
+      const reason = input.reason.trim();
+      if (reason === "") {
+        return { ok: false, code: "reason-required", suspended, ownerSessionId: record.ownerSessionId };
+      }
+      const captured = record.inFlight;
+      if (captured === undefined) {
+        return { ok: false, code: "no-in-progress-task", suspended, ownerSessionId: record.ownerSessionId };
+      }
+      // 竞态收口序（stop 面 terminateRecord 同款实证序）：先摘 inFlight 再 abort——runRound
+      // 各 await 恢复点见 kill 信号 aborted 即按 unwindOutcome 让渡（pause 径返回 suspend
+      // 保留登记，不触终局注销）。挂起投影先行（写点①同源：suspendForVerdict「挂起即投影」
+      // ——unwind 判定据此分流，与 abort 效果落地时序解耦）。
+      record.inFlight = undefined;
+      record.suspended = {
+        escalation: {
+          kind: "task-paused",
+          ownerSessionId: record.ownerSessionId,
+          source: record.source,
+          taskKey: captured.taskKey,
+          reason,
+        },
+        since: Date.now(),
+      };
+      loop.pause.abort(`task paused by command: ${reason}`); // worker 硬中断（kill 信号合成——结算按 killed 分类零 bump）
+      // 任务真化 suspended（转移服务事务闭包——reason 必带落执行时间线；in_progress→suspended
+      // human 面闭包 + actor='core' 自动化归因，先例 = interruptedize）。fail-soft：转移故障
+      // 只告警（挂起投影已落，re-entry 恢复序会按容器实际状态收口）。
+      try {
+        await loop.deps.tasks.transitionTask({
+          projectKey: record.projectId,
+          taskId: captured.taskId,
+          toStatus: "suspended",
+          reason,
+          actor: "core",
+        });
+      } catch (cause) {
+        emitLoopDiag(
+          loop,
+          "warn",
+          "loop-pause",
+          `forge loop pause transition failed (${captured.taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+        );
+      }
+      // 进度事件（状态迁移点：暂停真化 in-flight → suspended）
+      emitProgress(loop, {
+        verb: "suspend",
+        status: "blocked",
+        taskKey: captured.taskKey,
+        taskTitle: captured.title,
+        note: reason,
+      });
+      // 唤醒去重（bug 5a245dd1——pause 径同键判重接入 wakeupKeys，与 suspendWithWakeup 径同一
+      // 机械：键形态 minor/taskKey/reason 成因三元组；键入 loop.wakeupKeys 实例域，生命周期与 loop 实例一致）
+      const wakeupKey = `task-paused:${captured.taskKey}:${reason}`;
+      if (!loop.wakeupKeys.has(wakeupKey)) {
+        loop.wakeupKeys.add(wakeupKey);
+        try {
+          // 挂起径唤醒（挂起保留 wakeup，恢复 = 改写简报后 re-entry）
+          await deps.narrator.followup(
+            record.ownerSessionId,
+            `[forge·暂停] 任务源: ${record.source.slug} — 任务 ${captured.taskKey} ${captured.title} 已挂起\n原因: ${summarizeReason(reason)}\n改写简报后执行 dispatchTask re-entry 恢复循环`,
+          );
+        } catch {
+          // 叙述故障 fail-soft（挂起事实已落登记与任务时间线）
+        }
+      }
+      return { ok: true, paused: true, taskKey: captured.taskKey };
+    },
+
+    activeOf(ownerSessionId: string): LoopRecord | undefined {
+      return registry.byOwner(ownerSessionId);
+    },
+
+    activeAll(): readonly LoopRecord[] {
+      return registry.all();
+    },
+
+    resume(input: { readonly loopId: LoopInstanceId }): LoopResumeResult {
+      const loop = live.get(input.loopId);
+      if (loop === undefined) return { ok: false, code: "no-active-loop" };
+      if (loop.record.suspended === undefined) return { ok: false, code: "not-suspended" };
+      // terminateRecord 异步窗口拒绝（竞态收口）：控制器已 abort = 循环在途终态注销——
+      // 此时清挂起续跑会与终局清理双写竞态且响应误导（ok:true 实际未续跑）
+      if (loop.controller.signal.aborted) return { ok: false, code: "aborted" };
+      loop.record.suspended = undefined; // 写点②：处置回流——清挂起回落 active
+      loop.pause = new AbortController(); // pause 信号换新（上轮单任务暂停不再影响续跑轮）
+      // resume 序批量恢复（唯一装配位——runRound 前）：容器内 suspended
+      // paused 卡以 'core' actor 批量恢复 pending（AGENT 矩阵新边 suspended→pending），随后
+      // 正常 claim。fail-soft：恢复面故障零阻塞续跑（卡留 suspended——claim 不领取，下轮
+      // re-entry 可再恢复）。
+      void restorePausedCards(loop).then(
+        () => {
+          void runLoop(loop); // 从留存点续跑（ActiveLoop 运行时状态挂起期保留）
+        },
+        () => {},
+      );
+      return { ok: true, loopId: loop.record.id };
+    },
+
+    dispose(): void {
+      // 循环生命周期此前长于 fiber/DB 句柄生命周期——fiber 卸载后下一轮 DB 访问
+      // 撞已关句柄异常终态；卸载即同步终态收口（静默——对账归 reconcileInterrupted）。
+      for (const [id, loop] of live) {
+        // Map 迭代中删当前条目安全——无需快照
+        loop.controller.abort("loop disposed with fiber");
+        registry.remove(id);
+        clearExclusiveLoopSource(loop.source, id);
+        live.delete(id);
+      }
+    },
+  };
+}
+
+// ─────────────────────────── 循环体（runRound 状态机） ───────────────────────────
+
+/**
+ * 启动分类与启动模板叙述（① 从头执行 / ② 接续执行（上次未完成 = interrupted
+ * 在场，本轮 adopt 径将定向领最早中断的一个） / ③ 接续执行（有任务正在执行 = in_progress
+ * 在场——本轮 claim 无可领则走 wait 判词等待其结算/耐心收口））。
+ */
+async function announceStartup(loop: ActiveLoop): Promise<void> {
+  const { deps, scope, source } = loop;
+  const [stale, stats] = await Promise.all([
+    deps.tasks.listTasks({ projectKey: scope.projectId, slug: source.slug, statusFilter: ["interrupted"], sort: "interrupted" }),
+    deps.tasks.taskStats({ projectKey: scope.projectId, slug: source.slug }),
+  ]);
+  if (loop.controller.signal.aborted) return;
+  const first = stale[0];
+  if (first !== undefined) {
+    // ② 启动·接续（上次未完成）——零消息（进度事件单源投影）
+    emitProgress(loop, {
+      verb: "startup",
+      status: "running",
+      scenario: "startup/resume-stopped",
+      taskKey: `${first.slug}/${first.localId}`,
+      taskTitle: first.title,
+    });
+    return;
+  }
+  if (stats.byStatus.in_progress > 0) {
+    const cards = await deps.tasks.listTasks({ projectKey: scope.projectId, slug: source.slug, statusFilter: ["in_progress"] });
+    const inFlightCard = cards[0];
+    if (inFlightCard !== undefined) {
+      // ③ 启动·接续（在飞任务）——零消息（进度事件单源投影）
+      emitProgress(loop, {
+        verb: "startup",
+        status: "running",
+        scenario: "startup/resume-inflight",
+        taskKey: `${inFlightCard.slug}/${inFlightCard.localId}`,
+        taskTitle: inFlightCard.title,
+      });
+      return;
+    }
+  }
+  // ① 启动·从头执行——零消息（进度事件单源投影）
+  emitProgress(loop, { verb: "startup", status: "running", scenario: "startup/from-scratch" });
+}
+
+/** 循环体（启动后 fire-and-forget——异常兜底告警 + 终局登记注销双保证；挂起退出 =
+ *  保留登记与运行时状态，终局收口（登记注销）仅在非挂起退出时执行） */
+async function runLoop(loop: ActiveLoop): Promise<void> {
+  const { record } = loop;
+  let suspended = false;
+  try {
+    // 机械③：merged 漏标记 lazy 兜底——下个容器循环启动时校验补标记
+    // （机制未装配时零 await 零行为变化——不扰动循环启动时序）
+    if (loop.deps.checkpoints !== undefined) await ensureMergedBackfill(loop);
+    while (!loop.controller.signal.aborted) {
+      // 最大轮次封顶（终止条件全集之一）：达上限按结束叙述收口（建议重派），不再续领。
+      // 计数在 ActiveLoop（生命周期总量——resume 续用不清零，反复挂起/回流不绕过封顶）
+      if (loop.rounds >= loop.maxRounds) {
+        const stats = await statsFailSoft(loop);
+        await loop.deps.narrator.settle(
+          record.ownerSessionId,
+          renderNarrative("finished-timeout", {
+            sourceSlug: record.source.slug,
+            reason: "达到最大轮次上限",
+            completed: stats.byStatus.completed,
+            blocked: stats.byStatus.blocked,
+            pending: stats.byStatus.pending,
+            instruction: loopInstructionOf("timeout", record.source.slug),
+            taskSummaries: taskSummaryLines(loop),
+          }),
+        );
+        // 结束（等待超时）——循环级进度事件（轮次封顶径与耐心耗尽径同码）
+        emitProgress(loop, { verb: "timeout", status: "blocked", scenario: "loop/timeout", note: "达到最大轮次上限" });
+        break;
+      }
+      loop.rounds += 1;
+      const outcome = await runRound(loop);
+      if (outcome === "suspend") {
+        suspended = true; // 挂起待裁决——登记在场、投影挂起、等 re-entry
+        break;
+      }
+      if (outcome !== "continue") break;
+    }
+  } catch (cause) {
+    emitLoopDiag(
+      loop,
+      "warn",
+      "loop-run",
+      `forge dispatch loop terminated abnormally (${record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  } finally {
+    if (!suspended) {
+      // 基线链收口（bug 006d8bfe 后台化——归因卡链随基线在 fiber 内异步）：终局前等待，
+      // 归因卡落库不得晚于登记注销（否则终局后宿主重启丢卡；测试面 untilSettled 同序）
+      if (loop.baselineChain !== undefined) await loop.baselineChain;
+      loop.registry.remove(record.id); // 终态即登记表删除（settled/halted/stopped/异常同径）
+      clearExclusiveLoopSource(record.source, record.id); // 独占注销（终态同径——幂等）
+      loop.live.delete(record.id);
+    }
+  }
+}
+
+/**
+ * e2e 归因卡补发（改进7）：红灯 spec 逐一生成归因卡——启动时点与 HEAD 漂移
+ * 重算径同源消费；e2eAttributed 已发不重发（漂移后仍在场的旧红灯零重复卡）。落卡与标记
+ * 故障 warn 留痕（AGENTS §7——不静默；标记 verb 本体 fail-loud——UPDATE 未命中即抛，归因卡
+ * 无标记等于无豁免：无标记卡被阶段门持有，gated 持续等待由 phase-gate 问询兜底收口）。
+ */
+async function issueAttributionCards(loop: ActiveLoop, specs: readonly string[]): Promise<void> {
+  for (const spec of specs) {
+    if (loop.e2eAttributed.has(spec)) continue;
+    loop.e2eAttributed.add(spec);
+    try {
+      await issueAttributionCard({ tasks: loop.deps.tasks }, loop.source, loop.scope.projectId, spec);
+    } catch (cause) {
+      emitLoopDiag(
+        loop,
+        "warn",
+        "loop-e2e-baseline",
+        `forge loop e2e baseline attribution card failed (${spec}): ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    }
+  }
+}
+
+/**
+ * e2e 基线取数（HEAD 键控刷新）：读循环 worktree 当前 HEAD → baselineForHead
+ * （一致复用缓存 / 漂移重算）。readHead 故障（git 不可用）= 漂移不可判，复用现有缓存
+ * fail-soft（不重跑昂贵套件）；重算故障 = 空清单 + warn（机制静默关闭，循环不阻）。
+ */
+async function ensureE2eBaseline(loop: ActiveLoop): Promise<E2eBaselineCache | undefined> {
+  // in-flight 去重（bug 006d8bfe 后台化——start fire-and-forget 与 runRound 首领并发触达时
+  // 套件只跑一次；settle 后清位，后续调用走磁盘持久层 + 每轮 HEAD 键控重验语义）
+  if (loop.e2eBaselineInflight !== undefined) return loop.e2eBaselineInflight;
+  const inflight = ensureE2eBaselineUncached(loop);
+  loop.e2eBaselineInflight = inflight;
+  try {
+    return await inflight;
+  } finally {
+    if (loop.e2eBaselineInflight === inflight) loop.e2eBaselineInflight = undefined;
+  }
+}
+
+async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineCache | undefined> {
+  const cfg = loop.deps.e2eBaseline;
+  if (cfg === undefined) return undefined;
+  const slug = loop.record.source.slug;
+  let head: string | undefined;
+  if (cfg.readHead !== undefined && loop.record.worktree !== undefined) {
+    try {
+      head = await cfg.readHead(loop.record.worktree);
+    } catch (cause) {
+      // HEAD 读失败（git 故障）——键不可得：基线跳过（简报零红灯行），循环不阻。
+      emitLoopDiag(
+        loop,
+        "warn",
+        "loop-e2e-baseline",
+        `forge loop e2e baseline head read failed (${slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+      return undefined;
+    }
+  }
+  // 磁盘即唯一缓存层（用户裁决 2026-10-18：不缓存到内存）：每次取基线 = 现算 HEAD →
+  // 查持久层（head 键匹配才命中）→ miss 才跑套件 → 落盘。runSuite 传同一 worktree——
+  // 基线取数点与 readHead 缓存键同源（多 worktree 并行不错位）。
+  const cachePath = cfg.cacheFile?.({ slug, worktree: loop.record.worktree });
+  if (head !== undefined && cachePath !== undefined) {
+    const persisted = loadPersistedBaseline(cachePath, head, (payload) =>
+      emitLoopDiag(loop, "debug", "loop-e2e-baseline", payload.message),
+    );
+    if (persisted !== undefined) return persisted;
+  }
+  const entry = await baselineForHead(head, undefined, () => cfg.runSuite(loop.record.worktree));
+  if (entry.error !== undefined) {
+    emitLoopDiag(loop, "warn", "loop-e2e-baseline", `forge loop e2e baseline failed (${slug}): ${entry.error}`);
+  }
+  // 成功解析结果落持久化缓存（error 形态不落——不可得 ≠ 全绿，下轮重算）；IO 故障 fail-soft
+  if (head !== undefined && cachePath !== undefined && entry.error === undefined) {
+    try {
+      persistBaseline(cachePath, head, entry.redCases);
+    } catch (cause) {
+      emitLoopDiag(
+        loop,
+        "warn",
+        "loop-e2e-baseline",
+        `forge loop e2e baseline cache persist failed (${slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    }
+  }
+  return entry;
+}
+
+// ─────────────────────────── 测试基线文档存在性检查 ───────────────────────────
+
+/**
+ * 容器测试基线文档存在性检查（claim 时现查、结果不缓存）：projectId 文档根锚定解析
+ * （docsRoot 绝对路径 + 容器目录——slug 化后容器目录双落点 proposals/<slug>/ 与
+ * features/<slug>/ 按序现查，首个命中即基线——判别词退役后目录归属由文件在位性判定，禁裸
+ * 相对路径）→ stat 存在性判定。三形态收敛两态载荷：
+ * - 在场 = { present: true, path（文档根锚定绝对路径）, recordedAt（文件 mtime ISO——基线
+ *   时点，不解析文档内容）}；
+ * - 缺席 / 检查故障（stat 异常与文件缺席同形回落）/ docsRoot 缺席（无锚定根）=
+ *   { present: false }——fail-soft，任何异常不上抛进 claim 链（零防线计数）。
+ */
+export async function testBaselineBriefOf(docsRoot: string | undefined, source: ContainerRef): Promise<TestBaselineBrief> {
+  if (docsRoot === undefined) return { present: false };
+  const candidates = [join(docsRoot, "proposals", source.slug, "test-baseline.md"), join(docsRoot, "features", source.slug, "test-baseline.md")];
+  for (const path of candidates) {
+    try {
+      const s = await stat(path);
+      if (!s.isFile()) continue;
+      return { present: true, path, recordedAt: s.mtime.toISOString() };
+    } catch {
+      continue; // 文件缺席 = 尝试下一落点（fail-soft——异常与缺席同形）
+    }
+  }
+  return { present: false };
+}
+
+/**
+ * 每轮（runRound 状态机）：① 逐个恢复优先（任务源内最早 interrupted →
+ * adopt 定向领取径）→ ② 领取（dispatch-core 阶段一）→ ③ 领取通知 → ④ spawn
+ * （阶段二，句柄直持）→ ⑤ 结算（阶段三）→ ⑥ 结果通知 + 三层阶梯判定 → 续派/终局。
+ */
+async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
+  const { deps, record, exec, scope, source } = loop;
+  const signal = killSignalOf(loop); // stop ∪ pause 合成——单任务暂停只中断在飞 worker，不杀循环
+  if (signal.aborted) return unwindOutcome(loop);
+  const owner = record.ownerSessionId;
+  const slug = record.source.slug;
+
+  // ① 逐个恢复：任务源内有 interrupted → 定向领最早中断的一个（adopt 定向恢复径与重入径
+  //    豁免容器阶段门；盲选就绪选择受门约束）
+  const stale = await deps.tasks.listTasks({
+    projectKey: scope.projectId,
+    slug: source.slug,
+    statusFilter: ["interrupted"],
+    sort: "interrupted",
+  });
+  const first = stale[0];
+  const adoptRef = first !== undefined ? { slug: first.slug, localId: first.localId } : undefined;
+
+  // ② 领取（dispatch-core 阶段一）：主会话真实 id + loopSourced=true（claim 记录循环来源
+  //    标记——对账判据）+ guardKey = LoopInstanceId（spawn 防线粘性载体）
+  // 改进7：基线红灯清单按 HEAD 键控刷新后随 claim 简报递达（commit 落地漂移 → 重算，
+  // 简报不再烤死于循环启动时点；稳定 HEAD = 缓存复用，零额外套件执行）；
+  // 漂移重算的新增红灯同启动时点行为——补生成归因卡（已发不重发）。
+  const baseline = await ensureE2eBaseline(loop);
+  if (baseline !== undefined) await issueAttributionCards(loop, baseline.redCases);
+  // 测试基线文档简报载荷：每 claim 现查（结果不缓存），
+  // stat/IO 故障与缺席同形 fail-soft——异常不上抛进 claim 链
+  const testBaseline = await testBaselineBriefOf(record.docsRoot, source);
+  let claim: Awaited<ReturnType<typeof claimForDispatch>>;
+  try {
+    claim = await claimForDispatch(loop.core, exec, {
+      identity: { sessionId: owner, loopSourced: true },
+      guardKey: record.id,
+      projectId: scope.projectId,
+      source,
+      ...(adoptRef !== undefined ? { adopt: adoptRef } : {}),
+      ...(baseline !== undefined && baseline.redCases.length > 0 ? { e2eBaselineRedCases: baseline.redCases } : {}),
+      testBaseline, // TestBaselineBrief 非可选（testBaselineBriefOf 恒返回兜底形态——无 undefined 分支）
+      // disc 效度戳：效度比对检出根 = 发起循环的检出（cwd 钉定同源锚——重领证据机械
+      // 比对此效度域，漂移 = stale 强制重跑）
+      ...(record.worktree !== undefined ? { checkoutRoot: record.worktree } : {}),
+    });
+  } catch (cause) {
+    // FAIL-2 修正：claim 期 fail-loud（专家档案缺失/禁用等——
+    // 消息含键名）不再沿 claim 链外抛终止整循环——错误转交处置阶梯（任务身份经 core 附带的
+    // data.taskRef 解析）或挂起问询兜底，由处置层决定修复路径。
+    if (await bailIfAborted(loop, undefined)) return "terminal";
+    return await onClaimFailLoud(loop, cause);
+  }
+  // 停止竞态收口（claim 已落而循环被叫停）：本实例未接管的孤儿 in_progress → 真化 interrupted
+  if (await bailIfAborted(loop, claim.kind === "claimed" ? claim : undefined)) return "terminal";
+  // pause 竞态收口：挂起暂停已接管本任务（pause 面摘牌 + abort +
+  // 真化 suspended）——本轮让渡，返回 suspend 保留登记（resume 序恢复续跑）
+  if (loop.pause.signal.aborted) return "suspend";
+  if (claim.kind === "halted") return haltLoop(loop); // spawn 连败 ×3 粘住（guard 入口检查兑现）
+  if (claim.kind === "no-task") return onNoTask(loop, claim.pool); // no-task 三态判词
+  if (claim.kind === "escalation-required") {
+    return onRecurrenceEscalation(loop, claim.task, claim.failure, claim.chain, claim.count); // T3 同缝拦截 → escalation
+  }
+
+  const task = claim.task;
+  const taskKey = `${task.slug}/${task.localId}`;
+  // in-flight 立即登记（claim↔spawn 窗口的停止竞态归属锚——stop 面见此行即接管真化）
+  const inFlight: LoopInFlight = {
+    taskRef: { slug: task.slug, localId: task.localId },
+    taskKey,
+    taskId: task.taskId,
+    title: task.title,
+  };
+  record.inFlight = inFlight;
+  // 专家键登记：claim 结果带回的执行专家键——后续携带任务键的
+  // 发射点（claim/spawned/retry/settle/stop/suspend）经 emitProgress 统一回填
+  if (claim.expertKey !== undefined) loop.expertByTaskKey.set(taskKey, claim.expertKey);
+
+  // 任务起记（结算概要耗时源——幂等重入重领不覆盖首次起点）
+  recordTaskStart(loop, taskKey, task.title);
+
+  // 领取进度事件（常规 = claim/new / 恢复 = claim/interrupted；重入重领零新消息，
+  // 重试计数进 note——卡片就地更新）；池级 pending 快照（统计条「待执行」
+  // 计数承载：池级事件 + counts，fold unit 提取为 pending 字段，web/mobile 统计条消费；
+  // 无任务键 = 不进任务时间线）
+  const stats = await statsFailSoft(loop);
+  const retryAttempt = loop.spawnFailures > 0 ? loop.spawnFailures : loop.workerAborts;
+  emitProgress(loop, {
+    verb: adoptRef !== undefined ? "claim-resume" : "claim",
+    status: "running",
+    scenario: adoptRef !== undefined ? "claim/interrupted" : "claim/new",
+    taskKey,
+    taskTitle: task.title,
+    counts: progressCountsOf(stats),
+    ...(retryAttempt > 0 ? { note: `重试第 ${String(retryAttempt)} 次` } : {}),
+  });
+  emitProgress(loop, {
+    verb: "loop",
+    status: "running",
+    scenario: "pool/pending",
+    counts: progressCountsOf(stats),
+  });
+  // 进度发射后的停止竞态收口（同上——stop 已接管则让渡）
+  if (await bailIfAborted(loop, claim)) return "terminal";
+
+  // ③ spawn（dispatch-core 阶段二）：SpawnWorkerHandle 直持不经 jobs；
+  //    信号 = 循环控制器——stop 经 abort 取消 worker 剩余回合
+  const spawned = await spawnClaimed(loop.core, exec, claim, {
+    scope,
+    signal,
+    // cwd 钉定：worker 会话 cwd 机械钉定 = 发起循环的检出
+    ...(record.worktree !== undefined ? { workspaceCwd: record.worktree } : {}),
+  });
+  if (!spawned.ok) {
+    record.inFlight = undefined; // spawn 未成——任务留 in_progress 走幂等重入径（不走 submit-blocked）
+    // pause 竞态收口：暂停接管本任务（已真化 suspended）——让渡，
+    // 不入重试叙述/防线阶梯
+    if (loop.pause.signal.aborted) return "suspend";
+    if ("kind" in spawned.failure) return haltLoop(loop); // HaltedOutcome——唯一 kind 承载成员（guard 粘住）
+    const failure = spawned.failure; // ERR_SPAWN_FAILED DTO（防线计数已按 guardKey 落面）
+    // 流控分流（bug 63112ab2）：限流窗口内退避重试必再撞限流——零重试直接挂起返回主会话
+    // （附流控原因），择时重派由主会话决定；非流控照旧走退避阶梯。
+    if (isRateLimitFailure(failure.message)) {
+      // 静默挂起径补录：incident 落盘 + forge/progress suspend + send(nextStep, true) 唤醒
+      return await suspendWithWakeup(loop, { kind: "rate-limit", ownerSessionId: owner, source: record.source, taskKey, reason: failure.message }, {
+        minor: "spawn-rate-limited",
+        eventType: "spawn-rate-limited",
+        reason: failure.message,
+        incidentTaskKey: task.localId,
+        progressTaskKey: taskKey,
+        taskTitle: task.title,
+        headline: "任务启动被限流——循环已挂起，择时重派由你决定",
+      });
+    }
+    // 第一层机械守卫：退避后幂等重入（不立即重试——间隔递增 base×N；×3 halted 由 guard 兑现）
+    loop.spawnFailures += 1;
+    const attempt = loop.spawnFailures;
+    const delayMs = backoffDelayMs(loop.delays.backoffBaseMs, attempt);
+    loop.lastSpawnError = failure.message; // 终局 halt 消息「错误」行数据源
+    // 启动子代理失败（自动重试）——零消息，重试计数进进度事件；任务留在源内等幂等重入
+    emitProgress(loop, {
+      verb: "retry",
+      status: "blocked",
+      scenario: "retry/spawn-failed",
+      taskKey,
+      taskTitle: task.title,
+      note: `第 ${String(attempt)}/${String(HALT_THRESHOLD)} 次 — ${failure.message}`,
+    });
+    emitLoopDiag(loop, "warn", "loop-retry", `spawn 失败第 ${String(attempt)}/${String(HALT_THRESHOLD)} 次 — ${taskKey}: ${failure.message}`);
+    if (signal.aborted) return unwindOutcome(loop); // 退避途中被叫停/暂停——让渡（pause 保留登记）
+    return (await sleepOrAbort(signal, delayMs)) ? "continue" : unwindOutcome(loop);
+  }
+  inFlight.workerSessionId = spawned.handle.workerSessionId; // 对账锚回填（登记表 worker 子会话位）
+  const workerSessionId = spawned.handle.workerSessionId; // 结算/挂起径进度事件 workerSessionId 段同源
+  // 领取确认事件（bug 3bd8b829——claim 原事件先于 spawn 发出、载荷缺 workerSessionId，
+  // 执行中行两路跳转皆断；spawn 成功回填后补发本枚，面板按任务键聚合取最新态即得直跳锚）
+  emitProgress(loop, {
+    verb: "claim",
+    status: "running",
+    scenario: "claim/spawned",
+    taskKey,
+    taskTitle: task.title,
+    workerSessionId,
+  });
+
+  // ④ 结算（dispatch-core 阶段三）：await handle.result（事件循环挂起零线程占用）；
+  //    killSignal = 循环控制器（stop 主动终态按 killed 分类——零 bump 零 tool-error）；
+  //    guardOnFailure = false——worker 异常终止属执行受阻，bounded 阶梯归循环自有计数
+  const settled = await settleClaimed(loop.core, exec, {
+    scope,
+    claimed: claim,
+    handle: spawned.handle,
+    spawnStartedAt: spawned.spawnStartedAt,
+    killSignal: signal,
+    guardOnFailure: false,
+    // 提交落点核验（cwd 钉定收口）：容器检出 = 发起循环 worktree
+    ...(record.worktree !== undefined ? { worktreeCwd: record.worktree } : {}),
+    ...(record.docsRoot !== undefined ? { docsRoot: record.docsRoot } : {}),
+    // 改进7（bug ca061ef6）：欠账卡文案与简报行真实存在性一致——本轮 claim 简报红灯清单
+    // 在场时欠账卡才指示「比对 E2E_BASELINE_RED 行」；无红灯/基线未接线 = 兜底文案
+    // （不指示真机不存在的简报行）
+    ...(baseline !== undefined && baseline.redCases.length > 0 ? { e2eBaselineRedCases: baseline.redCases } : {}),
+    // 机械④（bug 548ea94b 装配断链修复）：提案 id 归属锚随结算输入透传——recordWaveCheckpoint
+    // 的 proposalId 缺席短路恒不触发，此映射是修正波标记的真实结算路径开关
+    ...(loop.proposalId !== undefined ? { proposalId: loop.proposalId } : {}),
+  });
+  record.inFlight = undefined; // 结算已定（success/blocked/killed/失败同径）——在飞清位
+  if (signal.aborted) return unwindOutcome(loop); // stop 径终态注销 / pause 径挂起保留登记
+
+  // 落点核验失败径（bug d8029b20——显式处置收口，不走 worker-abort 失败阶梯）：
+  // 结算核已把任务 completed → interrupted 真化（可恢复态）；此处事件留痕 + 挂起升级
+  // 问询——重入 claim 对 completed 任务结构性不可达（旧径静默 finished-all 的根因）。
+  if ("kind" in settled && settled.kind === "landing-rejected") {
+    // 静默挂起径补录：incident 落盘 + forge/progress suspend + send(nextStep, true) 唤醒
+    return await suspendWithWakeup(loop, {
+      kind: "settle-landing-rejected",
+      ownerSessionId: owner,
+      source: record.source,
+      taskKey,
+      reason: settled.reason,
+    }, {
+      minor: "landing-rejected",
+      eventType: "settle-landing-rejected",
+      reason: settled.reason,
+      incidentTaskKey: task.localId,
+      progressTaskKey: taskKey,
+      taskTitle: task.title,
+      workerSessionId,
+      headline: "任务结算落点核验未通过——任务已转中断、循环挂起待处置",
+    });
+  }
+  if ("ok" in settled) {
+    // 失败 DTO（结算核 failed 径——killSignal 在场时 killed 已先行返回）：
+    // worker 异常终止属执行受阻非 spawn 机制故障（guardOnFailure=false 零防线计数零 tool-error）——
+    // bounded 立即重入（claim 面按 links 幂等重入同任务，不退避）→ 超限第三层
+    // 流控分流（bug 63112ab2）：限流终态（输出原文随判词在场）零重入——挂起返回主会话择时重派
+    if (isRateLimitFailure(settled.message)) {
+      // 静默挂起径补录：incident 落盘 + forge/progress suspend + send(nextStep, true) 唤醒
+      return await suspendWithWakeup(loop, { kind: "rate-limit", ownerSessionId: owner, source: record.source, taskKey, reason: settled.message }, {
+        minor: "worker-rate-limited",
+        eventType: "worker-rate-limited",
+        reason: settled.message,
+        incidentTaskKey: task.localId,
+        progressTaskKey: taskKey,
+        taskTitle: task.title,
+        workerSessionId,
+        headline: "子代理执行被限流——循环已挂起，择时重派由你决定",
+      });
+    }
+    // 分桶（spawn-false-alarm——失败 DTO category）：跑完未结算（协议违约）与进程异常退出
+    // 分开措辞——diag warn / incident / 挂起判词不再一律冠「异常退出」（判例 014 误报）
+    const noSettlement = settled.category === "ended-without-settlement";
+    loop.workerAborts += 1;
+    const attempt = loop.workerAborts;
+    loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: noSettlement ? "worker-no-settlement" : "worker-aborted", error: settled.message });
+    if (attempt > LOOP_WORKER_ABORT_MAX_RETRIES) {
+      // 裁决①：worker-abort-over-limit → 挂起待裁决（执行面反复崩溃需人裁决——非终局）
+      // 静默挂起径补录：incident 落盘 + forge/progress suspend + send(nextStep, true) 唤醒
+      return await suspendWithWakeup(loop, {
+        kind: "worker-abort-over-limit",
+        ownerSessionId: owner,
+        source: record.source,
+        taskKey,
+        attempts: attempt,
+      }, {
+        minor: "abort-over-limit",
+        eventType: "worker-abort-over-limit",
+        reason: settled.message,
+        incidentTaskKey: task.localId,
+        progressTaskKey: taskKey,
+        taskTitle: task.title,
+        workerSessionId,
+        headline: noSettlement
+          ? `worker 反复跑完未结算（第 ${String(attempt)} 次，超过重试上限）——循环已挂起待处置`
+          : `子代理反复异常退出（第 ${String(attempt)} 次，超过重试上限）——循环已挂起待处置`,
+      });
+    }
+    // 子代理异常退出（自动重试）——零消息，重试计数进进度事件；claim 面幂等重入同任务
+    emitProgress(loop, {
+      verb: "retry",
+      status: "blocked",
+      scenario: "retry/worker-aborted",
+      taskKey,
+      taskTitle: task.title,
+      workerSessionId,
+      note: `第 ${String(attempt)}/${String(LOOP_WORKER_ABORT_MAX_RETRIES)} 次 — ${settled.message}`,
+    });
+    emitLoopDiag(loop, "warn", "loop-retry", noSettlement
+      ? `worker 跑完未结算第 ${String(attempt)}/${String(LOOP_WORKER_ABORT_MAX_RETRIES)} 次 — ${taskKey}: ${settled.message}`
+      : `worker 异常退出第 ${String(attempt)}/${String(LOOP_WORKER_ABORT_MAX_RETRIES)} 次 — ${taskKey}: ${settled.message}`);
+    return "continue";
+  }
+
+  // kind 承载成员：killed = 停止/暂停径（stop 收口归停止面；pause 收口归暂停面——挂起保留
+  // 登记）；halted = guard 粘住终局；dispatched/no-task 结构性不出自结算核——防御终局（不可达分支）
+  if (settled.kind === "killed") return unwindOutcome(loop);
+  if (settled.kind === "halted") return haltLoop(loop);
+  if (settled.kind !== "spawned") return "terminal";
+
+  // ⑤ 结果通知 + 三层阶梯判定：结算成功——重试/耐心计数复位（结算序 streak）
+  loop.spawnFailures = 0;
+  loop.workerAborts = 0;
+  loop.waitRounds = 0;
+  loop.gateWaitRounds = 0;
+  const settlement: DispatchSpawnedResult = settled;
+  const label = `${settlement.taskRef.localId} ${settlement.title}`;
+  if (settlement.outcome === "success") {
+    loop.dispositions.delete(taskKey); // 处置簿清账（任务成功——同任务处置计数归零）
+    loop.lastCommitHash = settlement.commitHash ?? loop.lastCommitHash; // 机械③ 标记 HEAD 回落锚
+    recordTaskEnd(loop, taskKey, "完成");
+    // 进度事件（结算成功点：task/complete；完成零消息，投影单源）
+    emitProgress(loop, { verb: "settle", status: "completed", scenario: "task/complete", taskKey, taskTitle: settlement.title, workerSessionId });
+    emitLoopDiag(loop, "info", "loop-settle", `${taskKey} 结算完成`);
+    return "continue"; // 续领下一轮
+  }
+
+  // blocked 静默边界（dispatch-loop-hardening 改进 1）：静默条件收窄为「存在活的后继任务」
+  //（blockSource 挂接本任务的派生 fix/继任处于 pending/in_progress；blocked 后继须自有活后继；
+  // rejected/skipped/completed = 断链）。活后继在场 → 非阻塞 notify（notice 径——reason 摘要 +
+  // 后继任务键进叙述与折叠位）+ 事件子文件夹留痕，不上浮问询、续领后继。
+  // 后继死了（自身 blocked 无再下级活后继 / rejected / skipped）或无后继 → 不静默，照旧落
+  // 下方无进展硬停门与 triage 阶梯（问询恢复上浮；活性查询漏判/故障退化为现状问询）。
+  const meta = { projectId: scope.projectId, taskKey: task.localId, reason: settlement.reason ?? "", settlement };
+  const reason = settlement.reason ?? "";
+  const liveSuccessor = await findLiveSuccessor(deps.tasks, scope.projectId, source, { slug: task.slug, localId: task.localId });
+  if (liveSuccessor !== undefined) {
+    // 自愈阻塞——静默（循环能自行处理的阻塞零消息）；incident 落盘 + 进度事件投影
+    deps.narrator.recordIncident({ ...meta, sourceSlug: slug, eventType: "blocked", error: reason });
+    recordTaskEnd(loop, taskKey, "阻塞", `修复任务 ${liveSuccessor.localId}`);
+    emitProgress(loop, { verb: "settle", status: "blocked", scenario: "blocked/with-fix", taskKey, taskTitle: task.title, workerSessionId, note: reason });
+    return "continue";
+  }
+
+  // 无进展信号（FAIL-2 修正）：blocked 结算零 commit 且零 files = 无进展信号——不再跳过
+  // 处置阶梯（旧「无进展硬停门」语义废止），无进展形态随 noProgress 输入进 triage（含
+  // 处置历史行）；blocked 恒入阶梯，与验收语义（blocked 应触发 triage-analyst）对齐。
+  const noProgress = settlement.commitHash === undefined && (settlement.files === undefined || settlement.files.length === 0);
+  return runTriageLadder(loop, {
+    task,
+    taskKey,
+    label,
+    reason,
+    settlement,
+    workerSessionId,
+    noProgress,
+  });
+}
+
+/**
+ * T3 同缝拦截处置（loop-recurrence-hardening——「claim 被拒 → 转 escalation」分支）：被拒
+ * fix 行由驱动器转 escalation 处置不留孤儿——任务真化 suspended（非终态可恢复；resume 序
+ * restorePausedCards 批量恢复 pending，建模报告落卷后守卫现算即放行）+ 静默挂起径补录
+ * （incident 落盘 + forge/progress suspend + 唤醒卡）+ escalation 问询载荷（triage 升级
+ * 面——归类/处置建议/证据指针由主会话裁决，本载荷只携结构化事实：拒绝全文 + 家族链 + 计数）。
+ */
+async function onRecurrenceEscalation(
+  loop: ActiveLoop,
+  task: TaskSnapshot,
+  failure: { readonly message: string },
+  chain: readonly string[],
+  count: number,
+): Promise<RoundOutcome> {
+  const { deps, record, scope } = loop;
+  const taskKey = `${task.slug}/${task.localId}`;
+  // 挂起/升级叙述（recurrence-signal-tiering 定向核销）：拒绝载荷已改列表式（top-5 限幅），
+  // 挂起叙述不再复用全文——escalate 豁免口径 = 上浮主会话保留链串摘要（因果链证据），
+  // 甄别列表与解除指引以拒绝载荷全文为准（failure.message），叙述只携指针。
+  const narrative =
+    `同缝拦截（${taskKey}）：最长祖先径全边数 ${String(count)} ≥ 2 ∧ 链内有 open 成员——盲试 fix 派发被软拒绝，` +
+    `建议先升级排查建模；链串摘要：${chain.join(" → ")}（候选甄别列表与双轨落卷解除指引见拒绝载荷）`;
+  // 被拒 fix 行转挂起（fail-soft：转移故障只告警——挂起投影与升级载荷照发，re-entry 按容器实际状态收口）
+  try {
+    await deps.tasks.transitionTask({
+      projectKey: scope.projectId,
+      taskId: task.taskId,
+      toStatus: "suspended",
+      reason: narrative,
+      actor: "core",
+    });
+  } catch (cause) {
+    emitLoopDiag(
+      loop,
+      "warn",
+      "loop-recurrence",
+      `forge loop recurrence escalation transition failed (${task.taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  }
+  return await suspendWithWakeup(
+    loop,
+    {
+      kind: "recurrence-escalation",
+      ownerSessionId: record.ownerSessionId,
+      source: record.source,
+      taskKey,
+      reason: `${narrative}\n${failure.message}`,
+      chain,
+      count,
+    },
+    {
+      minor: "recurrence-escalation",
+      eventType: "recurrence-escalation",
+      reason: `${narrative}\n${failure.message}`,
+      incidentTaskKey: task.localId,
+      progressTaskKey: taskKey,
+      taskTitle: task.title,
+      headline: "同缝复发链计数达阈值——盲试修复派发已软拒绝，建议先升级排查建模",
+    },
+  );
+}
+
+/**
+ * add-fix 派生判例事实现查（T0 派生径——loop-recurrence-hardening）：add-fix 建修时经只读
+ * face 现查台账 recurrence 链，链事实结构化写入任务 context（先例 settle.ts E2E_DEBT_SOURCE；
+ * 不落简报——那是 triage 语义产物）。fail-soft：face 缺席/异常/零命中 = 键缺席，行为零变化。
+ */
+async function recurrenceChainVarsOf(loop: ActiveLoop, task: TaskSnapshot): Promise<Record<string, string> | undefined> {
+  const find = loop.core.findRecurrenceCandidates;
+  if (find === undefined) {
+    // AGENTS §7 降级留痕：face 缺席 = 判例注入（T0 派生径）生产静默关停（bug 0db72bcb 教训）
+    emitForgeDiag(loop.deps.diag, {
+      level: "info",
+      event: "recurrence-face-absent",
+      message: `loop add-fix 判例注入降级：findRecurrenceCandidates face 缺席（${task.slug}/${task.localId}）——RECURRENCE_CHAIN/RECURRENCE_COUNT vars 关停（核销装配面接线）`,
+      projectId: loop.scope.projectId,
+    });
+    return undefined;
+  }
+  try {
+    const candidates = await find(loop.scope.projectId, {
+      slug: task.slug,
+      localId: task.localId,
+      ...(task.fixOfTaskId !== undefined ? { sourceTaskId: task.fixOfTaskId } : {}),
+    });
+    if (candidates.length === 0) return undefined;
+    const top = candidates.reduce((a, b) => (recurrenceCountOf(b.chain) > recurrenceCountOf(a.chain) ? b : a));
+    return { RECURRENCE_CHAIN: top.chain.join(" → "), RECURRENCE_COUNT: String(recurrenceCountOf(top.chain)) };
+  } catch (cause) {
+    emitForgeDiag(loop.deps.diag, {
+      level: "warn",
+      event: "recurrence-face-error",
+      message: `loop add-fix 判例注入降级：台账候选检索故障（${task.slug}/${task.localId}）——${cause instanceof Error ? cause.message : String(cause)}`,
+      projectId: loop.scope.projectId,
+    });
+    return undefined;
+  }
+}
+
+/**
+ * claim 阶段 fail-loud 处置（FAIL-2 修正径②）：claim 链抛出的
+ * 错误（典型 = 专家档案缺失/禁用，消息含键名）作为处置输入而非循环终止——
+ * ① core 附带 data.taskRef 且钩子在场 → 快照解析后入处置阶梯（错误全文 = reason，阶梯决策
+ *   照常执行 add-fix/wait-external/split/ask-user）；
+ * ② 兜底（任务身份不可得或钩子缺席）→ incident 落盘 + 挂起问询（原因全文进挂起载荷）——
+ *   循环停驻等人工处置，不再异常终局。
+ */
+async function onClaimFailLoud(loop: ActiveLoop, cause: unknown): Promise<RoundOutcome> {
+  const { deps, record, scope } = loop;
+  const message = cause instanceof Error ? cause.message : String(cause);
+  const claimErrorData = (cause as { data?: { taskRef?: { slug: string; localId: string }; taskTitle?: string } }).data;
+  const ref = claimErrorData?.taskRef;
+  const taskTitle = claimErrorData?.taskTitle;
+  const taskKey = ref !== undefined ? `${ref.slug}/${ref.localId}` : "";
+  deps.narrator.recordIncident({
+    projectId: scope.projectId,
+    sourceSlug: record.source.slug,
+    taskKey: ref?.localId ?? "",
+    eventType: "claim-failed",
+    error: message,
+    settlement: cause,
+  });
+  emitProgress(loop, { verb: "retry", status: "blocked", ...(taskKey !== "" ? { taskKey } : {}), ...(taskTitle !== undefined ? { taskTitle } : {}), note: message });
+  if (ref !== undefined && deps.triage !== undefined) {
+    try {
+      const detail = await deps.tasks.queryTask({ projectKey: scope.projectId, taskRef: ref, include: {} });
+      return await runTriageLadder(loop, {
+        task: detail.task,
+        taskKey,
+        label: `${detail.task.localId} ${detail.task.title}`,
+        reason: `claim 阶段 fail-loud：${message}`,
+        settlement: cause,
+        noProgress: false,
+      });
+    } catch (ladderCause) {
+      // 快照读失败或阶梯内部异常——降级兜底径（阶梯异常不吞：升级载荷载阶梯失败摘要）；
+      // 失败散点走 diag 埋点（AGENTS §7——event 前缀 triage，落盘可查）
+      const ladderMessage = ladderCause instanceof Error ? ladderCause.message : String(ladderCause);
+      emitLoopDiag(loop, "warn", "triage-claim-failed", `${taskKey}: ${ladderMessage}`);
+    }
+  }
+  await deps.narrator.blocked(
+    record.ownerSessionId,
+    "blocked-ask-user",
+    { sourceSlug: record.source.slug, taskLabel: ref !== undefined ? `${ref.localId}${taskTitle !== undefined ? ` ${taskTitle}` : ""}` : "未知任务" },
+    { projectId: scope.projectId, taskKey: ref?.localId ?? "", reason: message, settlement: cause },
+  );
+  return suspendForVerdict(loop, {
+    kind: "blocked-ask-user",
+    ownerSessionId: record.ownerSessionId,
+    source: record.source,
+    task: {
+      taskId: "",
+      slug: ref?.slug ?? record.source.slug,
+      localId: ref?.localId ?? "",
+      title: taskTitle ?? "claim 阶段失败（任务身份不可得）",
+      taskType: "coding-fix",
+      taskStatus: "pending",
+      breaking: false,
+      complexity: "medium",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    reason: message,
+    history: ["claim 阶段 fail-loud（任务派发前置失败，典型为专家档案缺失/禁用）——错误全文随载荷，待人工处置"],
+  });
+}
+
+/** 处置阶梯入参（blocked 结算径与 claim fail-loud 径的共享面——FAIL-2 修正提取） */
+interface TriageLadderInput {
+  readonly task: TaskSnapshot;
+  readonly taskKey: string;
+  readonly label: string;
+  readonly reason: string;
+  /** 结算载荷（结算径 = DispatchSpawnedResult；claim fail-loud 径 = 错误对象） */
+  readonly settlement: unknown;
+  readonly workerSessionId?: string;
+  readonly noProgress: boolean;
+}
+
+/**
+ * 处置阶梯（同任务处置计数封顶强制升级；无效/越权输出计处置失败入重试上限。钩子缺席
+ * （装配降级）= 无进展保留问询硬停、其余仅落盘续领。
+ */
+async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Promise<RoundOutcome> {
+  const { deps, record, scope, source, controller, exec } = loop;
+  const signal = controller.signal;
+  const owner = record.ownerSessionId;
+  const slug = record.source.slug;
+  const { task, taskKey, label, reason, workerSessionId } = input;
+  const meta = { projectId: scope.projectId, taskKey: task.localId, reason, settlement: input.settlement };
+
+  // 钩子缺席（装配降级）：无进展形态保留问询硬停（原因全文进挂起载荷）；其余仅落盘续领，
+  // 池态判词机械接管后续叙述。
+  if (deps.triage === undefined) {
+    if (input.noProgress) {
+      await deps.narrator.blocked(owner, "blocked-ask-user", { sourceSlug: slug, taskLabel: label }, meta);
+      emitProgress(loop, { verb: "settle", status: "blocked", scenario: "blocked/ask-user", taskKey, taskTitle: task.title, ...(workerSessionId !== undefined ? { workerSessionId } : {}), note: reason });
+      return suspendForVerdict(loop, {
+        kind: "blocked-ask-user",
+        ownerSessionId: owner,
+        source: record.source,
+        task,
+        reason,
+        history: ["本次阻塞没有任何进展信号（无提交、无文件改动）——处置钩子未装配，按规则直接向你询问"],
+      });
+    }
+    deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: "blocked", error: reason, settlement: input.settlement });
+    return "continue";
+  }
+
+  const book = dispositionBookOf(loop, taskKey);
+  if (input.noProgress) {
+    // 无进展信号进处置历史（问询升级时随载荷上浮——裁决全文档口径）
+    book.history.push("本次结算无进展信号（无提交、无文件改动）——已纳入处置输入");
+  }
+  const fixChain = await fixChainOf(deps.tasks, scope.projectId, source, task);
+  // 处置循环（失败回灌/无效输出立即重试/缓存决策重放/链深余量守卫/slug 校验）
+  let triageSessionId: string | undefined;
+  let decision: LoopTriageDecision | undefined;
+  let replayed = false;
+  if (book.decision !== undefined) {
+    decision = book.decision.decision;
+    triageSessionId = book.decision.workerSessionId;
+    replayed = true;
+    book.history.push("重放已缓存处置决策（不重跑分析）——执行");
+  } else {
+    while (decision === undefined && book.attempts < LOOP_TRIAGE_MAX_ATTEMPTS) {
+      book.attempts += 1;
+      // 开始事件（压模型分析静默窗；无 workerSessionId）
+      emitProgress(loop, {
+        verb: "triage",
+        status: "running",
+        scenario: "loop/triage",
+        taskKey,
+        taskTitle: task.title,
+        expertKey: TRIAGE_EXPERT_KEY,
+        attempt: book.attempts,
+        note: `处置分析（第 ${String(book.attempts)} 次）`,
+      });
+      try {
+        const result = await deps.triage.run({
+          projectId: scope.projectId,
+          source: record.source,
+          ownerSessionId: owner,
+          parent: exec.parent,
+          signal,
+          task,
+          reason,
+          settlement: input.settlement,
+          ...(input.noProgress ? { noProgress: true } : {}),
+          ...(book.lastFailure !== undefined ? { lastFailure: book.lastFailure } : {}),
+          ...(fixChain !== undefined ? { fixChain } : {}),
+        });
+        const candidate = result.decision;
+        triageSessionId = result.workerSessionId;
+        // 宿主执行前置校验（拒绝 = 计处置失败并回灌，同无效输出径）
+        if (candidate.action === "add-fix" && fixChain !== undefined && fixChain.remaining < 1) {
+          throw hostRejection(
+            `add-fix 被拒——fix 链余量不足（链深 ${String(fixChain.depth)}/上限 ${String(fixChain.limit)}，余量 ${String(fixChain.remaining)}）；应选 split-remainder 或 escalate`,
+            JSON.stringify(candidate),
+          );
+        }
+        if (candidate.action === "wait-external" && deps.knownContainers !== undefined) {
+          const known = await deps.knownContainers(scope.projectId);
+          if (!known.includes(candidate.externalSlug)) {
+            throw hostRejection(
+              `wait-external.externalSlug 无效——${candidate.externalSlug} 不在已知容器集`,
+              JSON.stringify(candidate),
+            );
+          }
+        }
+        decision = candidate;
+        book.lastFailure = undefined; // 决策通过——回灌摘要清账
+        book.history.push(`第${String(book.attempts)}次处置——${triageDecisionNote(decision)}`);
+        // 终态事件（决策动作折入 note；workerSessionId 缺席 = spawn 失败径照发）
+        emitProgress(loop, {
+          verb: "triage",
+          status: "completed",
+          scenario: "loop/triage",
+          taskKey,
+          taskTitle: task.title,
+          expertKey: TRIAGE_EXPERT_KEY,
+          ...(triageSessionId !== undefined ? { workerSessionId: triageSessionId } : {}),
+          attempt: book.attempts,
+          note: triageDecisionNote(decision),
+        });
+      } catch (cause) {
+        // 处置失败——入重试上限；失败摘要回灌（下一轮 prompt lastFailure）；
+        // 分流：模型输出无效 → 立即重试；基建故障 → spawn 同款 backoff 退避
+        const summary = triageFailureSummary(cause);
+        book.lastFailure = summary;
+        const invalid = isTriageInvalidOutput(cause);
+        book.history.push(`第${String(book.attempts)}次处置——分析未得出结论${invalid ? `（输出摘要: ${summary}）` : ""}`);
+        // 失败散点走 diag 埋点（AGENTS §7——event 前缀 triage，落盘可查，不再 console 散点）
+        emitLoopDiag(loop, "warn", "triage-failed", `${taskKey} attempt ${String(book.attempts)}/${String(LOOP_TRIAGE_MAX_ATTEMPTS)}: ${summary}`);
+        // 重试失败径必发台账 outcome（失败原因——复盘事实源关键组成，不只进 escalation history）
+        emitTriageEvent(loop, "triage-outcome", { taskKey, attempt: book.attempts, outcome: "failed", failureReason: summary });
+        // 终态进度事件（spawn 失败径仍发射且 payload 无 workerSessionId）
+        emitProgress(loop, {
+          verb: "triage",
+          status: "blocked",
+          scenario: "loop/triage",
+          taskKey,
+          taskTitle: task.title,
+          expertKey: TRIAGE_EXPERT_KEY,
+          attempt: book.attempts,
+          note: `处置分析失败：${summary}`,
+        });
+        if (!invalid) {
+          const paused = await sleepOrAbort(signal, backoffDelayMs(loop.delays.backoffBaseMs, book.attempts));
+          if (!paused) return "terminal"; // 退避途中被叫停——让渡终止收口
+        }
+      }
+    }
+  }
+  if (decision === undefined) {
+    // 处置重试超限（同任务计数封顶）→ 异常径 + 裁决③：挂起待裁决（reason 全文与处置历史进挂起载荷）
+    await deps.narrator.blocked(owner, "blocked-ask-user", { sourceSlug: slug, taskLabel: label }, meta);
+    recordTaskEnd(loop, taskKey, "阻塞", summarizeReason(reason, 40));
+    // 阻塞（处置重试超限）
+    emitProgress(loop, { verb: "settle", status: "blocked", scenario: "blocked/ask-user", taskKey, taskTitle: task.title, workerSessionId, note: reason });
+    return suspendForVerdict(loop, {
+      kind: "disposition-over-limit",
+      ownerSessionId: owner,
+      source: record.source,
+      task,
+      reason,
+      attempts: book.attempts,
+      history: [...book.history],
+    });
+  }
+  book.decision = { decision, ...(triageSessionId !== undefined ? { workerSessionId: triageSessionId } : {}) }; // 决策缓存（执行成功/重放再败即清账）
+  // 台账 decided（新决策产出点，执行前；重放径不发、每次执行尝试发 outcome）
+  if (!replayed) {
+    emitTriageEvent(loop, "triage-decided", {
+      taskKey,
+      attempt: book.attempts,
+      action: decision.action,
+      ...((decision.action === "add-fix" || decision.action === "split-remainder") && decision.note !== undefined ? { note: decision.note } : {}),
+      inputDigest: `${summarizeReason(reason)}｜处置历史：${book.history.join("；")}`,
+      ...(triageSessionId !== undefined ? { workerSessionId: triageSessionId } : {}),
+      expertKey: TRIAGE_EXPERT_KEY,
+    });
+  }
+
+  // 台账 outcome 发射缝（每次执行尝试点——attempt/replayed/处置会话 id/expertKey 统一承载）
+  const emitTriageOutcome = (outcome: TriageOutcomePayload["outcome"], extra: Partial<TriageOutcomePayload> = {}): void => {
+    emitTriageEvent(loop, "triage-outcome", {
+      taskKey,
+      attempt: book.attempts,
+      outcome,
+      ...(replayed ? { replayed: true } : {}),
+      ...(triageSessionId !== undefined ? { workerSessionId: triageSessionId } : {}),
+      expertKey: TRIAGE_EXPERT_KEY,
+      ...extra,
+    });
+  };
+
+  if (decision.action === "add-fix") {
+    try {
+      const recurrenceVars = await recurrenceChainVarsOf(loop, task);
+      const added = await deps.tasks.addTask({
+        projectKey: scope.projectId,
+        slug: source.slug,
+        title: decision.title ?? `Fix: ${task.title}`,
+        type: decision.type ?? "coding-fix",
+        ...(decision.taskDesc !== undefined ? { brief: decision.taskDesc } : {}),
+        sourceTask: { slug: task.slug, localId: task.localId },
+        blockSource: true, // 单事务同置源 blocked + fix 完成自动恢复（addTask 机械面）
+        ...(recurrenceVars !== undefined ? { context: recurrenceVars } : {}), // 判例事实结构化携带（T0 派生径——零语义）
+      });
+      book.decision = undefined; // 执行成功——缓存清账（防陈旧决策跨结算重放）
+      emitTriageOutcome("add-fix", { fixTaskKey: `${task.slug}/${added.localId}` });
+      // 自愈阻塞——静默：incident 落盘 + 进度事件投影
+      deps.narrator.recordIncident({ ...meta, sourceSlug: slug, eventType: "blocked", error: reason });
+      recordTaskEnd(loop, taskKey, "阻塞", `修复任务 ${added.localId}`);
+      emitProgress(loop, { verb: "settle", status: "blocked", scenario: "blocked/auto-fixed", taskKey, taskTitle: task.title, workerSessionId, note: reason });
+    } catch (cause) {
+      const execMessage = cause instanceof Error ? cause.message : String(cause);
+      if ((cause as { code?: unknown }).code === "ERR_CHAIN_DEPTH_EXCEEDED") {
+        // fix 链深到顶（addTask 权威校验）→ 叙述 + 裁决④：挂起待裁决
+        book.decision = undefined;
+        emitTriageOutcome("failed", { failureReason: `add-fix 被拒——fix 链已达上限（${execMessage}）` });
+        const depthData = (cause as { data?: { depth?: number; limit?: number } }).data;
+        book.history.push(`第${String(book.attempts)}次处置——修复任务创建被拒（修复链已达上限）`);
+        await deps.narrator.blocked(owner, "blocked-ask-user", { sourceSlug: slug, taskLabel: label }, meta);
+        recordTaskEnd(loop, taskKey, "阻塞", summarizeReason(reason, 40));
+        // 阻塞（fix 链深到顶——add-fix 结构性被拒）
+        emitProgress(loop, { verb: "settle", status: "blocked", scenario: "blocked/ask-user", taskKey, taskTitle: task.title, workerSessionId, note: reason });
+        return suspendForVerdict(loop, {
+          kind: "fix-chain-over-limit",
+          ownerSessionId: owner,
+          source: record.source,
+          task,
+          reason,
+          ...(depthData?.depth !== undefined ? { depth: depthData.depth } : {}),
+          ...(depthData?.limit !== undefined ? { limit: depthData.limit } : {}),
+          history: [...book.history],
+        });
+      }
+      // 落库失败 fail-soft：首次失败保留决策缓存（再遇 blocked 重放执行不重跑分析）；
+      // 重放再败 → 清缓存升级第三层（有界——防无限重放同失败径）。
+      // 台账：执行失败径必发 outcome（失败原因）。
+      emitTriageOutcome("failed", { failureReason: execMessage });
+      if (replayed) {
+        book.decision = undefined;
+        book.history.push("重放执行再次失败——缓存清账，交人工裁决");
+        emitLoopDiag(loop, "warn", "triage-replay-failed", `${taskKey}: ${execMessage}`);
+        await deps.narrator.blocked(owner, "blocked-ask-user", { sourceSlug: slug, taskLabel: label }, meta);
+        recordTaskEnd(loop, taskKey, "阻塞", summarizeReason(reason, 40));
+        // 阻塞（add-fix 重放再败——缓存清账交人工裁决）
+        emitProgress(loop, { verb: "settle", status: "blocked", scenario: "blocked/ask-user", taskKey, taskTitle: task.title, workerSessionId, note: reason });
+        // 裁决⑤⑥（重放再败径 ×2）：挂起待裁决（缓存清账后交 owner 对话面）
+        return suspendForVerdict(loop, {
+          kind: "blocked-ask-user",
+          ownerSessionId: owner,
+          source: record.source,
+          task,
+          reason,
+          history: [...book.history],
+        });
+      }
+      emitLoopDiag(loop, "warn", "triage-exec-failed", `${taskKey} add-fix: ${execMessage}`);
+      deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: "blocked", error: reason, settlement: input.settlement });
+    }
+    return "continue";
+  }
+  if (decision.action === "split-remainder") {
+    try {
+      // disc-N 机械（blockSource:false）：继任任务承接剩余范围，源任务保持 blocked 不恢复
+      // ——不重头开始的结构保证（继任活跃期源不重跑全简报；pending 继任在场，池态判词不误报）
+      const added = await deps.tasks.addTask({
+        projectKey: scope.projectId,
+        slug: source.slug,
+        title: decision.title ?? `Split: ${task.title}`,
+        type: decision.type ?? task.taskType,
+        ...(decision.taskDesc !== undefined ? { brief: decision.taskDesc } : {}),
+        sourceTask: { slug: task.slug, localId: task.localId },
+        blockSource: false,
+      });
+      book.decision = undefined; // 执行成功——缓存清账（防陈旧决策跨结算重放）
+      emitTriageOutcome("split-remainder", { splitTaskKey: `${task.slug}/${added.localId}` });
+      // 自愈阻塞——静默：incident 落盘 + 进度事件投影
+      deps.narrator.recordIncident({ ...meta, sourceSlug: slug, eventType: "blocked", error: reason });
+      recordTaskEnd(loop, taskKey, "阻塞", `继任 ${added.localId}`);
+      emitProgress(loop, { verb: "settle", status: "blocked", scenario: "blocked/split", taskKey, taskTitle: task.title, workerSessionId, note: reason });
+    } catch (cause) {
+      const execMessage = cause instanceof Error ? cause.message : String(cause);
+      // split 落库失败 fail-soft（缓存语义同 add-fix：首次保缓存待重放、重放再败清账升级）；
+      // 台账：执行失败径必发 outcome（失败原因）。
+      emitTriageOutcome("failed", { failureReason: execMessage });
+      if (replayed) {
+        book.decision = undefined;
+        book.history.push("重放执行再次失败——缓存清账，交人工裁决");
+        emitLoopDiag(loop, "warn", "triage-replay-failed", `${taskKey}: ${execMessage}`);
+        await deps.narrator.blocked(owner, "blocked-ask-user", { sourceSlug: slug, taskLabel: label }, meta);
+        recordTaskEnd(loop, taskKey, "阻塞", summarizeReason(reason, 40));
+        // 阻塞（split 重放再败——缓存清账交人工裁决）
+        emitProgress(loop, { verb: "settle", status: "blocked", scenario: "blocked/ask-user", taskKey, taskTitle: task.title, workerSessionId, note: reason });
+        // 裁决⑤⑥（重放再败径 ×2）：挂起待裁决（缓存清账后交 owner 对话面）
+        return suspendForVerdict(loop, {
+          kind: "blocked-ask-user",
+          ownerSessionId: owner,
+          source: record.source,
+          task,
+          reason,
+          history: [...book.history],
+        });
+      }
+      emitLoopDiag(loop, "warn", "triage-exec-failed", `${taskKey} split-remainder: ${execMessage}`);
+      deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: "blocked", error: reason, settlement: input.settlement });
+    }
+    return "continue";
+  }
+  if (decision.action === "wait-external") {
+    book.decision = undefined; // 执行（记录等待）即清账——后续 blocked 再入阶梯重跑分析
+    emitTriageOutcome("wait-external"); // 挂起动作本身即执行回执（真实终局由后续任务事件承载）
+    // 自愈阻塞——静默：incident 落盘 + 进度事件投影
+    deps.narrator.recordIncident({ ...meta, sourceSlug: slug, eventType: "blocked", error: reason });
+    recordTaskEnd(loop, taskKey, "阻塞", `等待 ${decision.externalSlug}`);
+    emitProgress(loop, { verb: "settle", status: "blocked", scenario: "blocked/wait-external", taskKey, taskTitle: task.title, workerSessionId, note: `等待 ${decision.externalSlug} 先完成` });
+    return "continue"; // 记录等待 → 续领其它（若整源无可领，池态判词收口）
+  }
+  // escalate → 异常径 + 裁决⑦：挂起待裁决（处置历史已由阶梯循环记录本决策行；
+  //  escalate = 上浮主会话——升级载荷四节建议随挂起载荷上浮，缺席 = 旧无载荷形态）
+  emitTriageOutcome("escalate"); // 挂起动作本身即执行回执（真实终局由后续 suspension 与任务事件承载）
+  await deps.narrator.blocked(owner, "blocked-ask-user", { sourceSlug: slug, taskLabel: label }, meta);
+  recordTaskEnd(loop, taskKey, "阻塞", summarizeReason(reason, 40));
+  // 阻塞（循环无法自行处理——处置阶梯 escalate 上浮）
+  emitProgress(loop, { verb: "settle", status: "blocked", scenario: "blocked/ask-user", taskKey, taskTitle: task.title, workerSessionId, note: reason });
+  return suspendForVerdict(loop, {
+    kind: "blocked-ask-user",
+    ownerSessionId: owner,
+    source: record.source,
+    task,
+    reason,
+    history: [...book.history],
+    ...(decision.payload !== undefined ? { advice: decision.payload } : {}),
+  });
+}
+
+// ─────────────────────────── no-task 三态判词与终局收口 ───────────────────────────
+
+/**
+ * done 径承接检查（bug b1e94915 recordBug 被拒链丢失机械承接）：
+ * 收口前扫描 bug 台账 open 行——源任务在本容器 ∧ 源任务非终态（非 completed/skipped）∧
+ * findLiveSuccessor 为空 = 无承接修复链 → 未承接清单（载荷带清单转挂起问询）。边界声明：
+ * 本检查只收 done 径（no-task 全终态收口）；「被拒后重试」属流程项，不设机械。
+ * bugs face 缺席 = 机制惰性不判（装配断链 = 生产静默关停——见 LoopDriverDeps.bugs 注入纪律）。
+ */
+async function unclaimedOpenBugs(loop: ActiveLoop): Promise<Array<{ bugId: string; summary: string; taskKey: string }>> {
+  const bugs = loop.deps.bugs;
+  if (bugs === undefined) return [];
+  let open: Awaited<ReturnType<typeof bugs.listBugs>>;
+  try {
+    open = await bugs.listBugs({ projectId: loop.scope.projectId, status: ["open"] });
+  } catch (cause) {
+    emitLoopDiag(loop, "warn", "loop-unclaimed-bugs", `forge loop unclaimed-bugs scan failed (${loop.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`);
+    return [];
+  }
+  if (open.length === 0) return [];
+  const cards = await loop.deps.tasks.listTasks({ projectKey: loop.scope.projectId, slug: loop.source.slug }).catch(() => []);
+  const byTaskId = new Map(cards.map((card) => [card.taskId, card]));
+  const unclaimed: Array<{ bugId: string; summary: string; taskKey: string }> = [];
+  for (const bug of open) {
+    if (bug.sourceTaskId === undefined) continue;
+    const card = byTaskId.get(bug.sourceTaskId);
+    if (card === undefined) continue; // 源任务不在本容器——他容器循环的承接检查负责
+    if (card.taskStatus === "completed" || card.taskStatus === "skipped") continue; // 终态源——修复链已收口
+    const successor = await findLiveSuccessor(loop.deps.tasks, loop.scope.projectId, loop.source, { slug: card.slug, localId: card.localId });
+    if (successor !== undefined) continue; // 活后继在场——承接链在途
+    unclaimed.push({ bugId: bug.bugId, summary: bug.summary, taskKey: `${card.slug}/${card.localId}` });
+  }
+  return unclaimed;
+}
+
+/** 链上滞留 I 卡清单（suspend 载荷透传）：链集合判据单点在 core 服务面
+ *  readUnsettledChain（与 GATE_SQL 同源同执行体）——消费方零第二实现，载荷零复制
+ *  （bug a587123e 收口）。读径 fail-soft 空清单（挂起载荷尽力而为）。 */
+async function unsettledChainCards(loop: ActiveLoop): Promise<Array<{ slug: string; localId: string; taskStatus: string }>> {
+  const { unsettled } = await loop.deps.tasks
+    .readUnsettledChain({ projectKey: loop.scope.projectId, source: loop.source })
+    .catch(() => ({ unsettled: [] }));
+  return unsettled.map((u) => ({ slug: u.slug, localId: u.localId, taskStatus: u.taskStatus }));
+}
+
+/** no-task 三态判词（settled 收口 / 等待 in-flight / halted-受阻）：classifyPool 纯函数裁决 */
+async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutcome> {
+  const verdict = classifyPool(pool);
+  if (verdict === "done") {
+    // done 径承接检查：open bug ∧ 源任务非终态 ∧ 无活后继 → 不收口，转挂起问询
+    // （载荷带未承接清单）——「修复链不丢」的机械保证：bug 卡在台账即队列，收口门兜底
+    const unclaimed = await unclaimedOpenBugs(loop);
+    if (unclaimed.length > 0) {
+      emitProgress(loop, {
+        verb: "loop",
+        status: "blocked",
+        scenario: FORGE_PROGRESS_SCENARIO.loopGateHeld,
+        note: `收口拦截：${String(unclaimed.length)} 条 open bug 无承接修复链`,
+      });
+      return suspendForVerdict(loop, {
+        kind: "unclaimed-bugs",
+        ownerSessionId: loop.record.ownerSessionId,
+        source: loop.record.source,
+        reason: `存在 ${String(unclaimed.length)} 条 open bug 未建立承接修复链（源任务非终态且无活后继）——用 recordBug 结论回填（resolveBug）或 addTask 补承接修复任务后 resume 续跑`,
+        bugs: unclaimed,
+      });
+    }
+    // 机械③：first-pass 标记（幂等）。复盘/知识沉淀不再派生任务卡——改为 settle 收口文本
+    // 直接指示主 agent 在交叉评审后执行（评审 → 复盘 → 沉淀）。标记落库失败 = 本轮不收口
+    // （continue），幂等窗口留给下一轮 no-task done 重试；依赖缺席/无锚 = 照旧收口，零受阻。
+    const markState = await ensureFirstPassMark(loop);
+    if (markState === "failed") return "continue";
+    // 续派静默窗：收口前 wait-for-quiescence——编排层窗内新派任务即自动续派；
+    // 窗满静默才收口；窗内叫停 = 用户终止径（收口归停止径，零结束叙述）。
+    const quiescence = await waitForQuiescence(loop);
+    if (quiescence === "continue") return "continue";
+    if (quiescence === "terminal") return "terminal";
+    // 任务源 settled → settlement 收口（骨架文 + P8 评审指示段追加——四重点逐字在文，
+    // source {kind:'dispatch-loop-settled'} 持久 user message 三径投递）；复盘/沉淀指示段随文
+    // 追加（评审段之后的顺序执行面）。
+    const stats = await statsFailSoft(loop);
+    const settledPayload: InjectionPayload = {
+      slug: loop.record.source.slug,
+      ownerSessionId: loop.record.ownerSessionId,
+      taskKey: "",
+      reason: "",
+      history: "",
+      completed: stats.byStatus.completed,
+      blocked: stats.byStatus.blocked,
+      // expertsAvailable：deps.expertsPresent 消费点现查（AGENTS 1.6 永不缓存）——装配面
+      // 检测集与 P8 三路措辞同源（LOOP_REVIEW_EXPERT_KEYS 三键核验），异常 fail-soft false。
+      expertsAvailable: loop.deps.expertsPresent?.() ?? false,
+    };
+    const retroSection = await retroSectionOf(loop);
+    await loop.deps.narrator.settle(
+      loop.record.ownerSessionId,
+      [
+        renderNarrative("finished-all", {
+          sourceSlug: loop.record.source.slug,
+          completed: stats.byStatus.completed,
+          blocked: stats.byStatus.blocked,
+          instruction: LOOP_INSTRUCTION_ALL_DONE,
+          taskSummaries: taskSummaryLines(loop),
+        }),
+        renderEndOfLoop("finished-all", settledPayload),
+        ...(retroSection !== "" ? [retroSection] : []),
+      ].join("\n\n"),
+    );
+    // 结束（全部完成）——循环级进度事件
+    emitProgress(loop, { verb: "finish-all", status: "completed", scenario: "loop/finish-all" });
+    return "terminal";
+  }
+  if (verdict === "deadlock-suspected") {
+    // blocked 有、通路无 → 受阻终局：叙述 + 第三层裁决钩子（主动停下等裁决）
+    const cards = await loop.deps.tasks
+      .listTasks({ projectKey: loop.scope.projectId, slug: loop.source.slug, statusFilter: ["blocked"] })
+      .catch(() => []);
+    const blockedItems = cards.map((card) => ({ taskKey: card.localId, note: card.title }));
+    await loop.deps.narrator.followup(
+      loop.record.ownerSessionId,
+      renderNarrative("blocked-pool", { sourceSlug: loop.record.source.slug, blockedItems }),
+    );
+    // 无可执行任务且有阻塞——循环级进度事件（阻塞清单入 note，唤醒主 agent 分析可解除性）
+    emitProgress(loop, {
+      verb: "loop",
+      status: "blocked",
+      scenario: "loop/blocked-pool",
+      note: blockedItems.map((item) => `${item.taskKey} ${item.note}`).join("、"),
+    });
+    // 裁决⑧：deadlock-suspected → 挂起待裁决（阻塞清单在挂起载荷——处置后 re-entry 续跑）
+    return suspendForVerdict(loop, {
+      kind: "deadlock",
+      ownerSessionId: loop.record.ownerSessionId,
+      source: loop.record.source,
+      blockedItems,
+    });
+  }
+  // wait 径（loop-phase-gate）：gatedPending > 0 = 被门持有（真无活与仅余被门卡
+  // 分离）——不累计 patience 连击、每轮进度 note；持续持有达上限不走「等待超时收口」，
+  // 改 suspendForVerdict phase-gate（链上存在 suspended/孤儿 I 卡时机械等
+  // 不来，问人；载荷透传 unsettled 清单）
+  if (pool.gatedPending > 0) {
+    loop.gateWaitRounds += 1;
+    emitProgress(loop, {
+      verb: "loop",
+      status: "blocked",
+      scenario: FORGE_PROGRESS_SCENARIO.loopGateHeld,
+      note: `${String(pool.gatedPending)} 张验证卡被实现链阶段门持有`,
+    });
+    if (loop.gateWaitRounds >= LOOP_PATIENCE_MAX_WAIT_ROUNDS) {
+      const unsettled = await unsettledChainCards(loop);
+      return suspendForVerdict(loop, {
+        kind: "phase-gate",
+        ownerSessionId: loop.record.ownerSessionId,
+        source: loop.record.source,
+        reason: `${String(pool.gatedPending)} 张验证卡被容器实现链阶段门持有 ${String(loop.gateWaitRounds)} 轮（实现链未收口）——等待链收口或处置链上滞留卡（pauseTask/人工）后 resume 续跑`,
+        unsettled,
+      });
+    }
+    const gateDone = await sleepOrAbort(loop.controller.signal, loop.delays.patiencePauseMs);
+    return gateDone ? "continue" : "terminal";
+  }
+  // wait：在飞未结 / 前置未满足 → bounded patience（轮间停顿后重试；连续 wait 封顶收口建议重派）
+  loop.waitRounds += 1;
+  if (loop.waitRounds >= LOOP_PATIENCE_MAX_WAIT_ROUNDS) {
+    const stats = await statsFailSoft(loop);
+    // 等待超时收口 = settlement 形态
+    await loop.deps.narrator.settle(
+      loop.record.ownerSessionId,
+      renderNarrative("finished-timeout", {
+        sourceSlug: loop.record.source.slug,
+        reason: "等待超时",
+        completed: stats.byStatus.completed,
+        blocked: stats.byStatus.blocked,
+        pending: stats.byStatus.pending,
+        instruction: loopInstructionOf("timeout", loop.record.source.slug),
+        taskSummaries: taskSummaryLines(loop),
+      }),
+    );
+    // 结束（等待超时）——循环级进度事件（耐心耗尽径）
+    emitProgress(loop, { verb: "timeout", status: "blocked", scenario: "loop/timeout", note: "等待超时" });
+    return "terminal";
+  }
+  const done = await sleepOrAbort(loop.controller.signal, loop.delays.patiencePauseMs);
+  return done ? "continue" : "terminal";
+}
+
+/** spawn 连败粘住的循环终局（终局叙述 + 第三层问询——「×3 仍败循环 halted 并触发
+ *  第三层问询」；同实例不自动复活：登记表即删，复活 = 新实例新 guard 计数） */
+async function haltLoop(loop: ActiveLoop): Promise<RoundOutcome> {
+  const { deps, record } = loop;
+  // 终局异常径先行（问询另行发起——与阻塞径同序）；settlement 形态。
+  // 异常最小充分信息集（AC）：任务标识（taskKey（标题））/错误原文/阶段（spawn）/重试计数/处置入口
+  await deps.narrator.settle(
+    record.ownerSessionId,
+    renderNarrative("spawn-failed-halted", {
+      sourceSlug: record.source.slug,
+      attempts: HALT_THRESHOLD,
+      instruction: loopInstructionOf("halted", record.source.slug),
+      ...(record.inFlight !== undefined ? { taskLabel: `${record.inFlight.taskKey}（${record.inFlight.title}）` } : {}),
+      ...(loop.lastSpawnError !== undefined ? { errorText: loop.lastSpawnError } : {}),
+    }),
+  );
+  // 循环终局（连续失败已停止）——循环级进度事件
+  emitProgress(loop, { verb: "halt", status: "blocked", scenario: "loop/halt", note: HALTED_REASON });
+  // 第三层问询（reason 原文 = HALTED_REASON——不经主会话叙述，escalation-ask 投递 userQuestions）
+  await deps.escalation?.escalate({
+    kind: "halted",
+    ownerSessionId: record.ownerSessionId,
+    source: record.source,
+    attempts: HALT_THRESHOLD,
+    reason: HALTED_REASON,
+  });
+  return "terminal";
+}
+
+/** 停止/启动竞态收口：循环已叫停时，检查本实例是否仍持有刚登记的孤儿 in-flight——
+ *  stop 面未接管（其读数早于本登记）则由本径真化 interrupted（transitionTask 面） */
+async function bailIfAborted(loop: ActiveLoop, claim: ClaimedDispatch | undefined): Promise<boolean> {
+  if (!loop.controller.signal.aborted) return false;
+  const orphan = loop.record.inFlight;
+  if (claim !== undefined && orphan !== undefined && orphan.taskKey === `${claim.task.slug}/${claim.task.localId}`) {
+    loop.record.inFlight = undefined;
+    await interruptedize(loop, claim.task.taskId, { slug: claim.task.slug, localId: claim.task.localId });
+  }
+  return true;
+}
+
+/** in-flight 真化 interrupted（人工转移通道；fail-soft：终止路径的转移故障只告警）。
+ *  停止扫描终态过滤（bug a8fbe860）：转移前现读任务状态——terminal（completed/skipped/rejected，
+ *  TERMINAL_TASK_STATUSES 同源口径）零转移，completed 结算与证据不受停止影响；现读失败同样
+ *  不转移（留 in_progress 走下轮 adopt 恢复径，不冒扫掉终态的风险）。返回是否发生了转移。 */
+async function interruptedize(loop: ActiveLoop | undefined, taskId: string, taskRef: TaskRef): Promise<boolean> {
+  if (loop === undefined) return false;
+  try {
+    const detail = await loop.deps.tasks.queryTask({ projectKey: loop.record.projectId, taskRef, include: {} });
+    if (TERMINAL_TASK_STATUSES.has(detail.task.taskStatus)) return false;
+  } catch (cause) {
+    emitLoopDiag(
+      loop,
+      "warn",
+      "loop-stop",
+      `forge loop stop status read failed, skip transition (${taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    return false;
+  }
+  try {
+    await loop.deps.tasks.transitionTask({
+      projectKey: loop.record.projectId,
+      taskId,
+      toStatus: "interrupted",
+      reason: LOOP_STOP_TRANSITION_REASON,
+      actor: "core", // 循环自动化纠偏——审计归因不再误记人类通道 'ui'
+    });
+    return true;
+  } catch (cause) {
+    emitLoopDiag(
+      loop,
+      "warn",
+      "loop-stop",
+      `forge loop stop transition failed (${taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    return false;
+  }
+}
+
+/** 暂停挂起径的恢复 reason（resume 序批量恢复的转移审计列） */
+export const LOOP_RESUME_RESTORE_REASON = "派发循环恢复——挂起任务批量恢复待执行";
+
+/**
+ * resume 序批量恢复（唯一装配位，runRound 前调用）：容器内全部
+ * suspended paused 卡逐张以 'core' actor 转移 pending（AGENT 矩阵新边 suspended→pending，
+ * 「仅 resume 时点触发」守卫由本装配位承担），随后 runRound 正常 claim。
+ */
+async function restorePausedCards(loop: ActiveLoop): Promise<void> {
+  try {
+    const cards = await loop.deps.tasks.listTasks({
+      projectKey: loop.scope.projectId,
+      slug: loop.source.slug,
+      statusFilter: ["suspended"],
+    });
+    for (const card of cards) {
+      try {
+        await loop.deps.tasks.transitionTask({
+          projectKey: loop.scope.projectId,
+          taskId: card.taskId,
+          toStatus: "pending",
+          reason: LOOP_RESUME_RESTORE_REASON,
+          actor: "core",
+        });
+      } catch (cause) {
+        emitLoopDiag(
+          loop,
+          "warn",
+          "loop-resume",
+          `forge loop resume restore failed (${card.slug}/${card.localId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+        );
+      }
+    }
+  } catch (cause) {
+    emitLoopDiag(
+      loop,
+      "warn",
+      "loop-resume",
+      `forge loop resume restore list failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+  }
+}
+
+/**
+ * kill 信号合成（stop ∪ pause）：任一 abort 即中断在飞 worker；
+ * 结算核见 aborted 按 killed 分类（零防线计数零 tool-error）。stop 信号已 abort 时原样
+ * 返回（stop 径语义零变化），否则合成即时信号（每轮一次，随轮生命周期）。
+ */
+function killSignalOf(loop: ActiveLoop): AbortSignal {
+  const stop = loop.controller.signal;
+  const pause = loop.pause.signal;
+  if (stop.aborted) return stop;
+  if (pause.aborted) return pause;
+  const combined = new AbortController();
+  const onAbort = (): void => {
+    combined.abort();
+    stop.removeEventListener("abort", onAbort);
+    pause.removeEventListener("abort", onAbort);
+  };
+  stop.addEventListener("abort", onAbort, { once: true });
+  pause.addEventListener("abort", onAbort, { once: true });
+  return combined.signal;
+}
+
+/**
+ * runRound unwind 判定（stop/pause 双径分流）：stop 径（循环控制器 abort）维持现状终态
+ * 注销；pause 径（单任务暂停信号 abort、控制器存活）返回 suspend——runLoop 保留登记与
+ * 运行时状态退出，等 resume 序恢复续跑。
+ */
+function unwindOutcome(loop: ActiveLoop): RoundOutcome {
+  if (loop.controller.signal.aborted) return "terminal";
+  return loop.pause.signal.aborted ? "suspend" : "terminal";
+}
+
+/** 池快照 fail-soft 现读（叙述行数据源——读面故障零拖垮叙述/收口，缺省零值；loop 缺席 =
+ *  登记已注销的 stop 竞态——同样零值兜底） */
+async function statsFailSoft(loop: ActiveLoop | undefined): Promise<TaskStats> {
+  if (loop === undefined) return ZERO_STATS;
+  try {
+    return await loop.deps.tasks.taskStats({
+      projectKey: loop.scope.projectId,
+      slug: loop.source.slug,
+    });
+  } catch {
+    return ZERO_STATS;
+  }
+}
+
+/** 池快照零值（fail-soft 兜底——八态键全量） */
+const ZERO_STATS: TaskStats = {
+  total: 0,
+  byStatus: {
+    pending: 0,
+    in_progress: 0,
+    completed: 0,
+    blocked: 0,
+    suspended: 0,
+    interrupted: 0,
+    skipped: 0,
+    rejected: 0,
+  },
+  unmetPending: 0,
+  gatedPending: 0,
+};
