@@ -2,8 +2,8 @@
 // 被测脚本 = scripts/migrate-state-db.mjs（task-loop 搬行段）；判例库 = tests/db/fixtures/
 // 六类预置判例（plugin-task-loop 1.6 入仓基座）。搬行口径 = proposal §二迁移段 +
 // entities.md 迁移映射终态；判例链抽样门 / 断代 / fix 判别三段 / checkpoints slug 回填 /
-// 幂等 + 新线版本门 / staged 临时区 + 原子替换逐项覆盖。
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+// 幂等 + 新线版本门 / copy-out 只读旧库零触碰 + 幂等 + 新线版本门逐项覆盖。
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -258,7 +258,14 @@ describe("判例④ checkpoints slug 回填命中与未命中", () => {
   it("cp-1 命中回填；cp-2 未命中 fail-loud 中断（目标库不落地）", async () => {
     const s = await scenario(["checkpoints-backfill.json"]);
     await expect(run(s)).rejects.toThrow(/p-9/);
-    expect(existsSync(s.target)).toBe(false); // fail-loud：staged 不替换
+    // fail-loud：搬行事务回滚——目标库仅空 schema，零 checkpoints 行
+    expect(existsSync(s.target)).toBe(true);
+    const tFail = openTarget(s);
+    try {
+      expect(tFail.q(`SELECT COUNT(*) AS c FROM task_checkpoints`)[0]!.c).toBe(0);
+    } finally {
+      tFail.close();
+    }
     // 对照组：仅命中行（剔除未命中判例）——slug/project_key/id 逐列核验
     const fx = loadFixture("checkpoints-backfill.json");
     const s2 = await scenario([], {
@@ -418,15 +425,19 @@ describe("fix 链环检测（recursive CTE）", () => {
   });
 });
 
-describe("staged 临时区 + 原子替换 + 幂等 + 新线版本门", () => {
-  it("staged 落 forge/tmp 禁入数据树；重跑跳过零重写；版本>1 拒绝重跑", async () => {
+describe("copy-out：旧库零触碰 + 幂等 + 新线版本门", () => {
+  it("旧库只读零写零改名；manifest 落 db 侧；重跑跳过零重写；版本>1 拒绝重跑", async () => {
     const s = await scenario(["fix-chain-complete.json"]);
+    const legacyFile = join(s.workspacesFrom, s.dirName, "forge.db");
+    const legacyFp = `${statSync(legacyFile).size}:${statSync(legacyFile).mtimeMs}`;
     const first = await run(s);
     expect(first.migratedDirs).toHaveLength(1);
-    const tmpDir = join(s.home, "forge", "tmp", "task-loop-migrate");
-    expect(existsSync(tmpDir)).toBe(true);
-    expect(readdirSync(tmpDir).some((f) => f.startsWith("manifest-"))).toBe(true);
-    // 第二跑：fingerprint 未变 → 跳过 + 计数不变 + 原库备份保留
+    // copy-out：旧库原地只读归档——零写零改名零替换（无 pre-migrate 改名副本、无临时区）
+    expect(`${statSync(legacyFile).size}:${statSync(legacyFile).mtimeMs}`).toBe(legacyFp);
+    const dbDir = join(s.home, "forge", "db", "task-loop");
+    expect(existsSync(join(s.home, "forge", "tmp", "task-loop-migrate"))).toBe(false);
+    expect(readdirSync(dbDir).some((f) => f.startsWith("migrate-manifest-"))).toBe(true);
+    // 第二跑：fingerprint 未变 → 跳过 + 计数不变 + 零改名残留
     const tBefore = openTarget(s);
     const countBefore = tBefore.q(`SELECT COUNT(*) AS c FROM task_tasks`)[0]!.c;
     tBefore.close();
@@ -437,11 +448,8 @@ describe("staged 临时区 + 原子替换 + 幂等 + 新线版本门", () => {
     const countAfter = t.q(`SELECT COUNT(*) AS c FROM task_tasks`)[0]!.c;
     t.close();
     expect(countAfter).toBe(countBefore);
-    const dbDirFiles = readdirSync(join(s.home, "forge", "db", "task-loop"));
-    expect(dbDirFiles.some((f) => f.startsWith("task-loop.db.pre-migrate-"))).toBe(true);
-    // staged 临时文件用后清除（不入数据树残留）
-    expect(existsSync(join(tmpDir, "task-loop.db.staged-migrate"))).toBe(false);
-    // 版本门：新线 version>1 拒绝重跑（fail-loud 保留 staged 现场供取证）
+    expect(readdirSync(dbDir).some((f) => f.includes("pre-migrate"))).toBe(false);
+    // 版本门：新线 version>1 拒绝重跑（fail-loud 保留现场供取证）
     const db = new Database(s.target);
     try {
       db.prepare(`UPDATE schema_meta SET version = 2`).run();
@@ -449,6 +457,39 @@ describe("staged 临时区 + 原子替换 + 幂等 + 新线版本门", () => {
       db.close();
     }
     await expect(run(s)).rejects.toThrow(/version=2/);
+    rmSync(s.home, { recursive: true, force: true });
+  });
+
+  it("源变化后重跑：既有新库行跳过（id 复用）+ 仅增量落行，零重复", async () => {
+    const s = await scenario(["fix-chain-complete.json"]);
+    await run(s);
+    const tBefore = openTarget(s);
+    const rootBefore = tBefore.q(`SELECT id FROM task_tasks WHERE local_id = '1.1'`)[0]!.id as string;
+    tBefore.close();
+    // 旧库追加增量行（fingerprint 变化 → 重进搬行；既有行须按 (project_key, slug, local_id) 跳过）
+    const legacy = new Database(join(s.workspacesFrom, s.dirName, "forge.db"));
+    try {
+      legacy
+        .prepare(`INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_task_id, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run("alpha:1.2", "alpha", "1.2", "增量", "coding-feature", "pending", "alpha:1.1", "2026-11-16T11:00:00.000Z", "2026-11-16T11:00:00.000Z");
+    } finally {
+      legacy.close();
+    }
+    const second = await run(s);
+    expect(second.skippedDirs).toHaveLength(0);
+    const t = openTarget(s);
+    try {
+      const tasks = t.q(`SELECT id, local_id, fix_of_task_id FROM task_tasks ORDER BY local_id`);
+      expect(tasks).toHaveLength(4); // 既有 3 行不重复 + 增量 1 行
+      expect(tasks.filter((r) => r.local_id === "1.1")).toHaveLength(1);
+      expect(tasks.find((r) => r.local_id === "1.1")!.id).toBe(rootBefore); // 既有行 id 复用
+      const fix1 = tasks.find((r) => r.local_id === "fix-1")!;
+      expect(fix1.fix_of_task_id).toBe(rootBefore); // 附属 fix 链随既有 id 保持闭合
+      expect(tasks.find((r) => r.local_id === "1.2")!.fix_of_task_id).toBe(rootBefore); // 增量行 direct 判据回填
+    } finally {
+      t.close();
+    }
     rmSync(s.home, { recursive: true, force: true });
   });
 });

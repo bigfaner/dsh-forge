@@ -31,14 +31,16 @@
 //      (origin='fix-chain') 反查（恰一候选直判）/ 不可判入人工清单禁自动置 NULL；checkpoints 经
 //      旧库 proposals.id→slug 查表回填（slug UNIQUE 一一映射；未命中 fail-loud 中断——迁移回填
 //      禁悬空，与运行期弱引用可悬空两口径显式区分）。
-//      staged 写临时文件落 {home}/forge/tmp/task-loop-migrate（禁入数据树）+ 行数/判例链抽样
-//      校验门 + 原子替换（原库改名保留）+ 幂等标记（task_migrate_state 逐 dir fingerprint）+
-//      新线 schema version>1 拒绝重跑。执行前确认无 dev/安装包双进程持句柄（main 入口统一前置
-//      assertNoHostProcesses + task-loop.db 排他打开兜底）。旧库任务域 per-workspace 单库封闭
+//      copy-out 语义：旧库以 readonly 打开（WAL 只读快照——零写零改名零替换，旧库原地只读归档），
+//      SELECT 判例行 → INSERT 新 task-loop.db（与持句柄进程共存可跑）。行数/判例链抽样校验门 +
+//      幂等标记（task_migrate_state 逐 dir fingerprint；新库行已存在即跳过——tasks 以
+//      (project_key, slug, local_id) 判据复用既有新 id，edges/tsl/records/checkpoints 以唯一键
+//      /存在判据去重）+ 新线 schema version>1 拒绝重跑。宿主进程在场仅观察留痕不阻断
+//      （observeHostProcesses）。旧库任务域 per-workspace 单库封闭
 //      （零跨库引用），逐 dir 独立 UUID 映射域。
 //   ③ 存量 {home}/forge-workspaces/ 目录搬迁：staged copy + 文件数/字节/哈希校验 +
 //      原目录改名保留 + 同卷断言（staged 与目标同卷 → rename 原子）。
-//   ④ 前置：dsh-forge-dev / dsh-forge 双进程持句柄检查（任一在场即中止）。
+//   ④ 观察项：dsh-forge-dev / dsh-forge 进程在场清单留痕（不阻断执行——copy-out 与持句柄进程共存）。
 //
 // 幂等（dba 处方「staged 临时 + NOT EXISTS + 原子改名」）：
 //   · project.db 写入全程走 staged 快照（VACUUM INTO）→ 单事务搬行 → 计数/判例链复验 →
@@ -140,15 +142,18 @@ function emitDiag(level, event, message, data = {}) {
   if (diagFile !== null) appendFileSync(diagFile, line + '\n', 'utf8')
 }
 
-// ── 前置：dsh-forge-dev / dsh-forge 双进程持句柄检查（精确进程名，禁通配——AGENTS §2 判例） ──
-function assertNoHostProcesses() {
+// ── 观察项：dsh-forge-dev / dsh-forge 进程在场清单留痕（不阻断——精确进程名，禁通配——AGENTS §2 判例） ──
+function observeHostProcesses() {
+  const present = []
   for (const image of ['dsh-forge-dev.exe', 'dsh-forge.exe']) {
     const r = spawnSync('tasklist', ['/FI', `IMAGENAME eq ${image}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8' })
     const out = r.stdout ?? ''
-    if (out.toLowerCase().includes(image.toLowerCase())) {
-      throw new Error(`检测到宿主进程 ${image} 在场（持 state.db/forge.db 句柄）——请先退出 dsh-forge 应用后重试`)
-    }
+    if (out.toLowerCase().includes(image.toLowerCase())) present.push(image)
   }
+  if (present.length > 0) {
+    emitDiag('info', 'task-loop-migrate', `宿主进程在场（观察留痕，不阻断——copy-out 与持句柄进程共存）：${present.join(', ')}`)
+  }
+  return present
 }
 
 // ── SQLite 帮手 ──
@@ -369,7 +374,7 @@ function ensureTaskLoopMigrateTables(db) {
 )`)
 }
 
-/** v1 DDL 装配（全新 staged 库首见 schema_meta 时整套落地——已迁移库幂等跳过）。 */
+/** v1 DDL 装配（全新 copy-out 目标库首见 schema_meta 时整套落地——已迁移库幂等跳过）。 */
 function ensureTaskLoopSchema(db) {
   if (!hasTable(db, 'schema_meta')) {
     for (const s of TASK_LOOP_V1_STATEMENTS) db.exec(s)
@@ -420,7 +425,7 @@ function quarantineTaskRow(db, acc, dirName, legacyFile, legacyId, reason, row, 
 
 /** 旧库是否含 task-loop 搬行面数据（五表任一在场即处理）。 */
 function legacyHasTaskLoopTables(legacyFile) {
-  const legacy = openExclusive(legacyFile)
+  const legacy = openReadonly(legacyFile)
   try {
     return (
       hasTable(legacy, 'tasks') ||
@@ -440,7 +445,7 @@ function legacyHasTaskLoopTables(legacyFile) {
  * projectKey = null（归属不可派生）时 tasks 行落隔离区，其余表行入人工清单。
  */
 function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
-  const legacy = openExclusive(legacyFile)
+  const legacy = openReadonly(legacyFile)
   try {
     const hasTasks = hasTable(legacy, 'tasks')
     const hasEdges = hasTable(legacy, 'task_edges')
@@ -458,6 +463,9 @@ function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
     if (hasTasks) {
       const cols = tableColumns(legacy, 'tasks')
       const rows = legacy.prepare(`SELECT * FROM tasks ORDER BY id ASC`).all().map((r) => readLegacyRow(cols, r))
+      // 幂等判据：新库行已存在（同 project_key+slug+local_id）→ 跳过且复用既有新 id（附属行随迁可闭合）
+      const existingTaskId = db.prepare(`SELECT id FROM task_tasks WHERE project_key = ? AND slug = ? AND local_id = ?`)
+      const existingIds = new Set()
       // fix 反查候选集（task_edges origin='fix-chain'——旧 {slug}:{local_id} 键域）
       const fixCandidates = new Map()
       if (hasEdges) {
@@ -468,6 +476,13 @@ function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
         }
       }
       for (const r of rows) {
+        const landed = projectKey !== null ? existingTaskId.get(projectKey, r.slug, r.local_id) : undefined
+        if (landed !== undefined) {
+          idMap.set(r.id, landed.id)
+          existingIds.add(r.id)
+          acc.movedSkipped.tasks += 1
+          continue
+        }
         idMap.set(r.id, randomUUID())
         if (r.blocked_reason !== null && r.blocked_reason !== '') blockedByTask.set(r.id, r.blocked_reason)
         if (r.source_task_id !== null && r.source_task_id !== '') {
@@ -489,6 +504,7 @@ function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
           quarantinedIds.add(r.id)
           continue
         }
+        if (existingIds.has(r.id)) continue // 新库行存在即跳过（幂等——不重放不重写）
         const d = fixDecision.get(r.id)
         let fixOf = null
         if (d.kind === 'direct') {
@@ -552,9 +568,10 @@ function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
           manualEntry(acc, 'task_edges', `${e.task_id}→${e.prerequisite_id}`, 'task_id', `${e.task_id}→${e.prerequisite_id}`, '边端点任务不在迁移全集——人工核验（原值留清单）')
           continue
         }
-        db.prepare(`INSERT OR IGNORE INTO task_edges (task_id, prerequisite_id, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
+        const res = db.prepare(`INSERT OR IGNORE INTO task_edges (task_id, prerequisite_id, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
           .run(t, p, e.origin, e.created_at, e.updated_at)
-        acc.moved.edges += 1
+        if (res.changes > 0) acc.moved.edges += 1
+        else acc.movedSkipped.edges += 1
       }
     }
 
@@ -566,9 +583,10 @@ function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
           manualEntry(acc, 'task_session_links', l.id, 'task_id', l.task_id, 'session link 任务不在迁移全集（孤儿行）——人工核验，禁静默丢弃')
           continue
         }
-        db.prepare(`INSERT INTO task_session_links (id, task_id, session_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
+        const res = db.prepare(`INSERT OR IGNORE INTO task_session_links (id, task_id, session_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
           .run(randomUUID(), t, l.session_id, l.created_at, l.updated_at)
-        acc.moved.sessionLinks += 1
+        if (res.changes > 0) acc.moved.sessionLinks += 1
+        else acc.movedSkipped.sessionLinks += 1
       }
     }
 
@@ -585,6 +603,7 @@ function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
         `INSERT INTO task_records (id, task_id, verb, from_status, to_status, note, payload_json, dispatch_digest, loop_sourced, actor, session_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
+      const recordExists = db.prepare(`SELECT 1 FROM task_records WHERE task_id = ? AND verb = ? AND actor = ? AND created_at = ? AND session_id IS ?`)
       for (const r of rows) {
         if (r.verb === 'submit') {
           acc.submitArchived += 1 // 断代：submit 行随旧库归档——不回填 task_settlements
@@ -601,6 +620,10 @@ function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
           note = fuseNote(note, `blocked: ${br}`) // 退役列事实归流水——blocked 语境回填最新动词行
           blockedByTask.delete(r.task_id)
           acc.dispositions.push({ table: 'task_records', legacyId: String(r.id), disposition: 'blocked_reason→note', value: br })
+        }
+        if (recordExists.get(t, r.verb, r.actor, r.created_at, r.session_id ?? null) !== undefined) {
+          acc.movedSkipped.records += 1 // 新库行存在即跳过
+          continue
         }
         insertRecord.run(
           randomUUID(), t, r.verb, r.from_status ?? null, r.to_status ?? null, note, null /* payload_json 无源 */,
@@ -624,6 +647,7 @@ function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
       if (hasTable(legacy, 'proposals')) {
         for (const p of legacy.prepare(`SELECT id, slug FROM proposals`).all()) slugById.set(p.id, p.slug)
       }
+      const cpExists = db.prepare(`SELECT 1 FROM task_checkpoints WHERE project_key = ? AND slug = ? AND mark = ? AND created_at = ? AND wave_seq IS ?`)
       for (const c of legacy.prepare(`SELECT * FROM implementation_checkpoints ORDER BY id ASC`).all()) {
         const slug = slugById.get(c.proposal_id)
         if (slug === undefined || slug === null) {
@@ -631,6 +655,10 @@ function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
             `checkpoints slug 回填失败（fail-loud 中断）：${legacyFile} 的 implementation_checkpoints.id=${c.id} ` +
             `proposal_id=${c.proposal_id} 在旧库 proposals 表无 slug 映射——迁移回填禁悬空（与运行期弱引用可悬空两口径显式区分）`,
           )
+        }
+        if (cpExists.get(projectKey, slug, c.mark, c.created_at, c.wave_seq ?? null) !== undefined) {
+          acc.movedSkipped.checkpoints += 1 // 新库行存在即跳过
+          continue
         }
         db.prepare(
           `INSERT INTO task_checkpoints (id, project_key, slug, mark, wave_seq, created_at, base_commit_hash, tasks_total, commits_total, fixes_total, evidence_debts_total)
@@ -644,8 +672,8 @@ function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
   }
 }
 
-/** staged 校验门：行数对账 + 判例链抽样 + FK 全库零违例——任一不达即 fail-loud 拒替换。 */
-function verifyTaskLoopStaged(db) {
+/** copy-out 校验门：行数对账 + 判例链抽样 + FK 全库零违例——任一不达即 fail-loud。 */
+function verifyTaskLoopMigration(db) {
   const counts = {
     tasks: db.prepare(`SELECT COUNT(*) AS c FROM task_tasks`).get().c,
     edges: db.prepare(`SELECT COUNT(*) AS c FROM task_edges`).get().c,
@@ -698,35 +726,18 @@ function writeTaskLoopManualList(dbDir, manualList) {
 }
 
 /**
- * task-loop 搬行段主流程：staged 快照（forge/tmp）→ 逐旧库单事务搬行 → 校验门 →
- * 幂等标记 → 人工清单/manifest 留痕 → 原子替换（原库改名保留）。返回搬行汇总。
+ * task-loop copy-out 主流程：新 task-loop.db 直写（缺席即建；在场走幂等判据与版本门）→
+ * 逐旧库只读快照搬行 → 校验门 → 幂等标记 → 人工清单/manifest 留痕。
+ * 旧库零写零改名零替换（原地只读归档）。返回搬行汇总。
  */
 export function runTaskLoopMigration(args, dirNameToWsPath, nowIso) {
   const dbDir = join(args.home, 'forge', 'db', 'task-loop')
   const target = join(dbDir, 'task-loop.db')
-  const tmpDir = join(args.home, 'forge', 'tmp', 'task-loop-migrate')
   mkdirSync(dbDir, { recursive: true })
-  mkdirSync(tmpDir, { recursive: true })
-  const staged = join(tmpDir, 'task-loop.db.staged-migrate')
-  for (const suffix of ['', '-wal', '-shm']) {
-    const p = `${staged}${suffix}`
-    if (existsSync(p)) rmSync(p, { force: true })
-  }
-  // staged 快照：目标在场 = VACUUM INTO 一致快照（幂等重跑基座）；缺席 = 全新空库
-  if (existsSync(target)) {
-    const src = openExclusive(target)
-    try {
-      src.pragma('wal_checkpoint(TRUNCATE)')
-      src.exec(`VACUUM INTO '${staged.replaceAll("'", "''")}'`)
-    } finally {
-      src.close()
-    }
-  } else {
-    openExclusive(staged).close()
-  }
 
   const acc = {
     moved: { tasks: 0, edges: 0, sessionLinks: 0, records: 0, checkpoints: 0 },
+    movedSkipped: { tasks: 0, edges: 0, sessionLinks: 0, records: 0, checkpoints: 0 },
     quarantined: 0,
     submitArchived: 0,
     manualList: [],
@@ -734,7 +745,7 @@ export function runTaskLoopMigration(args, dirNameToWsPath, nowIso) {
     migratedDirs: [],
     skippedDirs: [],
   }
-  const db = openExclusive(staged)
+  const db = openExclusive(target) // copy-out 写面目标（被占用即抛——旧库不受影响）
   try {
     db.pragma('foreign_keys = ON')
     ensureTaskLoopSchema(db)
@@ -758,42 +769,26 @@ export function runTaskLoopMigration(args, dirNameToWsPath, nowIso) {
       const before = { ...acc.moved }
       const apply = db.transaction(() => migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc))
       apply()
-      const movedDelta = Object.fromEntries(Object.entries(acc.moved).map(([k, v]) => [k, v - before[k]]))
+      const movedDelta = Object.fromEntries(
+        Object.entries(acc.moved).map(([k, v]) => [k, v - before[k] + acc.movedSkipped[k]]),
+      ) // 口径 = 该 dir 在新库的在库行数（新搬 + 跳过既有）——校验门「行数 = 累计搬行」跨重跑稳定
       db.prepare(`INSERT OR REPLACE INTO task_migrate_state (step, fingerprint, done_at, summary_json) VALUES (?, ?, ?, ?)`)
         .run(step, fp, nowIso, JSON.stringify({ projectKey, moved: movedDelta }))
       acc.migratedDirs.push(dirName)
     }
-    acc.counts = verifyTaskLoopStaged(db)
+    acc.counts = verifyTaskLoopMigration(db)
     db.prepare(`INSERT OR REPLACE INTO task_migrate_state (step, fingerprint, done_at, summary_json) VALUES (?, ?, ?, ?)`)
       .run('task-loop:section', dirs.join(','), nowIso, JSON.stringify({ migratedDirs: acc.migratedDirs }))
   } finally {
     db.close()
   }
 
-  // 留痕：列映射 manifest（forge/tmp 临时区——禁入数据树）+ 人工清单（db 侧，project 先例同位）
-  const manifestPath = join(tmpDir, `manifest-${nowIso.replace(/[:.]/g, '-')}.json`)
+  // 留痕：列映射 manifest + 人工清单（均落 db 侧同位目录）
+  const manifestPath = join(dbDir, `migrate-manifest-${nowIso.replace(/[:.]/g, '-')}.json`)
   writeFileSync(manifestPath, JSON.stringify({ columnMap: TASK_LOOP_COLUMN_MAP_DOC, ...acc }, null, 2), 'utf8')
   writeTaskLoopManualList(dbDir, acc.manualList)
 
-  // 原子替换：原库改名保留（回滚点）→ staged 就位（WAL 侧车随旧文件清除——staged 无 WAL）
-  if (existsSync(target)) {
-    const keepDb = `${target}.pre-migrate-${nowIso.replace(/[:.]/g, '-')}`
-    renameSync(target, keepDb)
-    for (const suffix of ['-wal', '-shm']) {
-      const p = `${target}${suffix}`
-      if (existsSync(p)) unlinkSync(p)
-    }
-    try {
-      renameSync(staged, target)
-    } catch (cause) {
-      renameSync(keepDb, target)
-      throw new Error(`staged task-loop.db 换回失败（已回滚）：${cause.message}`)
-    }
-    emitDiag('info', 'task-loop-migrate', `task-loop.db 原子替换完成（原库改名保留 ${keepDb}）`)
-  } else {
-    renameSync(staged, target)
-  }
-  emitDiag('info', 'task-loop-migrate', `task-loop 搬行完成：tasks=${acc.moved.tasks} edges=${acc.moved.edges} tsl=${acc.moved.sessionLinks} records=${acc.moved.records}（submit 断代归档 ${acc.submitArchived}）checkpoints=${acc.moved.checkpoints}（隔离区 ${acc.quarantined}，人工清单 ${acc.manualList.length}）；manifest：${manifestPath}`)
+  emitDiag('info', 'task-loop-migrate', `task-loop copy-out 完成（旧库原地只读归档）：tasks=${acc.moved.tasks} edges=${acc.moved.edges} tsl=${acc.moved.sessionLinks} records=${acc.moved.records}（submit 断代归档 ${acc.submitArchived}）checkpoints=${acc.moved.checkpoints}（隔离区 ${acc.quarantined}，人工清单 ${acc.manualList.length}）；manifest：${manifestPath}`)
   return acc
 }
 
@@ -1131,10 +1126,16 @@ function relocateWorkspaces(args, db, nowIso) {
   return { skipped: false, fileCount: manifest.length, totalBytes: sourceBytes, keptOriginal: keepOriginal }
 }
 
-/** 排他打开（宿主持句柄 → 抛错中止）。 */
+/** 排他打开（写面目标被占用 → 抛错中止）。 */
 function openExclusive(file) {
   const Database = loadBetterSqlite3()
   return new Database(file) // 被占用时 open 即抛
+}
+
+/** 旧库只读打开（WAL 只读快照——零写零改名零替换，与持句柄进程共存）。 */
+function openReadonly(file) {
+  const Database = loadBetterSqlite3()
+  return new Database(file, { readonly: true, fileMustExist: true })
 }
 
 // ── 主流程 ──
@@ -1145,11 +1146,9 @@ export function main(argv) {
   diagFile = join(args.projectDbDir, 'migrate-state-db-diag.log')
   emitDiag('info', 'project-migrate', `迁移开始：home=${args.home}`)
 
-  // 前置：双进程持句柄检查 + SQLite 排他打开兜底
-  if (!args.skipProcessCheck) assertNoHostProcesses()
+  // 观察项：宿主进程在场清单留痕（不阻断）+ project 搬行写面目标排他打开兜底
+  if (!args.skipProcessCheck) observeHostProcesses()
   if (existsSync(args.stateDb)) openExclusive(args.stateDb).close()
-  const taskLoopDbFile = join(args.home, 'forge', 'db', 'task-loop', 'task-loop.db')
-  if (existsSync(taskLoopDbFile)) openExclusive(taskLoopDbFile).close()
   if (existsSync(args.projectDb)) openExclusive(args.projectDb).close()
 
   // registry 在场性快照（{ id, path }[]——workspace_id 精确对账；缺席 → ws_path 目录存在性 fallback）
