@@ -15,3 +15,6 @@ export const TASK_LOOP_DB_FILENAME = "task-loop.db";
 
 /** 集成/单装两形态统一表名前缀（单套 DDL 消灭两形态分叉——db 级命名空间防撞）。 */
 export const TASK_LOOP_TABLE_PREFIX = "task_";
+
+/** fix density 口径 pin（entities.md §3.2④ 终态——公式漂移即契约快照 RED）。 */
+export const FIX_DENSITY_FORMULA = "fix_root_chain_dedup × latest_success_commit_hash_dedup / settled_tasks";
