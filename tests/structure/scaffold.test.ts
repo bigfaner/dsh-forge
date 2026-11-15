@@ -131,9 +131,8 @@ describe('AC2–AC4 G0 规则面（oxlint 三铁律 + SC2 watch 禁令 + 令牌 
       'apps/web/src/rpc/**',
       'apps/web/src/styles/**',
       'packages/core/src/db/**',
-      // 铁律③ 同级业务互禁（web 双视图）
+      // 铁律③ 同级业务互禁（web 双视图——knowledge 视图迁 @dsh-forge/knowledge 后余 session 单侧）
       'apps/web/src/views/session/**',
-      'apps/web/src/views/knowledge/**',
     ]) {
       expect(ox).toContain(scope)
     }
@@ -215,7 +214,6 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
     'apps/web/src/rpc',
     'apps/web/src/styles',
     'apps/web/src/views/session',
-    'apps/web/src/views/knowledge',
     'plugins/project/ui/add-project',
     'packages/core/src/db',
     'packages/core/src/forge',

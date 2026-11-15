@@ -15,7 +15,7 @@ import { defineConfig } from 'oxlint'
 const MSG_BASE =
   'dsh-forge 依赖铁律①基础↛业务：基础子模块禁 import 业务子模块（含类型 re-export 转发）——把该逻辑移入业务子模块'
 const MSG_PEER_VIEWS =
-  'dsh-forge 依赖铁律③同级业务互禁：views/session ↔ views/knowledge 互禁 import——跨视图经工作台桥与 rpc/ 解耦'
+  'dsh-forge 依赖铁律③同级业务互禁：web views/ 同级业务视图互禁 import——跨视图经工作台桥与 rpc/ 解耦'
 
 export default defineConfig({
   ignorePatterns: [
@@ -78,18 +78,6 @@ export default defineConfig({
           'error',
           {
             patterns: [{ regex: '^\\.\\./knowledge/', message: MSG_PEER_VIEWS }],
-          },
-        ],
-      },
-    },
-    // —— 铁律③ 同级业务互禁：web views/knowledge/ ↛ views/session/ ——
-    {
-      files: ['apps/web/src/views/knowledge/**'],
-      rules: {
-        'no-restricted-imports': [
-          'error',
-          {
-            patterns: [{ regex: '^\\.\\./session/', message: MSG_PEER_VIEWS }],
           },
         ],
       },

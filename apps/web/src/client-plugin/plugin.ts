@@ -401,9 +401,10 @@ export interface ForgeViewsGlobal {
     ForgeBrandMark: unknown
     ForgeBrandName: unknown
     ForgeShellHost: unknown
-    // fix-13 注记（1.42/1.44）：ForgeHeroPanel / ForgeKnowledgePanel /
-    // ForgeKnowledgeGlyph / ForgeRecallView 四键随 center 族与召回页签注册迁
-    // @dsh-forge/project bundle（ui/hero-panel-face.ts + ui/knowledge-face.ts）退役。
+    // ForgeHeroPanel 注册在 @dsh-forge/project bundle（ui/hero-panel-face.ts）；
+    // ForgeKnowledgePanel / ForgeKnowledgeGlyph / ForgeRecallView 三面注册在
+    // @dsh-forge/knowledge bundle（ui/faces.ts）——组件本体随插件 bundle，
+    // 均不经壳发布面递达。
     // fix-13 注记（1.41）：ForgeDispatchToolRow / ForgeEventEntries 两键随注册面迁
     // @dsh-forge/project bundle 退役——壳发布面零该两键。
     // fix-13 注记（1.43）：ForgeWorktreeSwitchMarker 发布键随切换闸标记行注册迁
@@ -562,10 +563,10 @@ function registerSidebarSlots(
 }
 
 // ============================================================================
-// center 族登记（hero/knowledge 面板 + panellist 行）——fix-13 迁移退役（1.42/1.44）：
-// hero（main 'dswf-hero'，ui/hero-panel-face.ts）与 knowledge 三面（main 'dswf-knowledge'
-// + panellist 行 + 召回页签，ui/knowledge-face.ts——fail-closed 门与桥页内缝现读随迁）
-// 整体迁 @dsh-forge/project bundle apply 期自注册。壳零登记。
+// center 族登记（hero/knowledge 面板 + panellist 行）：hero（main 'dswf-hero'）注册在
+// @dsh-forge/project bundle（ui/hero-panel-face.ts）apply 期自注册；knowledge 三面
+// （main 'dswf-knowledge' + panellist 行 + 召回页签）注册在 @dsh-forge/knowledge bundle
+// （ui/faces.ts——fail-closed 门控 + 桥页内缝 inject 期现读）。壳零登记。
 // ============================================================================
 
 // ============================================================================
@@ -575,8 +576,8 @@ function registerSidebarSlots(
 // 仍随插件 bundle 自注册）。壳零登记（views 族诊断组保留 = 断言锚，registered 恒空）。
 // fix-13 注记（1.41）：dispatchTask 工具行（tool.call.toolview）与事件折叠组三段注册迁
 // @dsh-forge/project bundle（ui/conversation-views-face.ts）——壳零登记。
-// fix-13 注记（1.42）：召回页签（conversation.view 'dswf-recall'）注册随 knowledge 族
-// 三面迁 @dsh-forge/project bundle（ui/knowledge-face.ts）——壳零登记。
+// 召回页签（conversation.view 'dswf-recall'）注册在 @dsh-forge/knowledge bundle
+// （ui/faces.ts，knowledge 族三面同批）——壳零登记。
 // ============================================================================
 
 /**
@@ -895,8 +896,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // 1.6 注记：sidebar.workspaces 顶替注册迁 @dsh-forge/project bundle（fix-13，
         // ui/sidebar-face.ts）——壳零登记；FORGE_HEALTH_SLOT_KEYS 的 workspaces 键保留 =
         // 看门对插件侧登记行的计数消费（官方行计入基线）。
-        // bug 2ffb0a82 门（knowledgeEnabled）随 knowledge 族迁 @dsh-forge/project
-        // bundle（ui/knowledge-face.ts knowledgeEnabledOf——fail-closed 在彼侧读同一页内缝）。
+        // bug 2ffb0a82 门（knowledgeEnabled）= @dsh-forge/knowledge bundle ui/faces.ts
+        // knowledgeEnabledOf——fail-closed 在彼侧读同一页内缝。
         registerSidebarSlots(clientCtx, views, sidebarDiagnostics)
         // 手机远程入口注册已迁 @dsh-forge/project bundle（fix-13，1.40）——壳零登记
         // center 族（hero/knowledge/panellist）注册已迁 @dsh-forge/project bundle（fix-13，1.42/1.44）——壳零登记

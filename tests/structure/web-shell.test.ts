@@ -110,7 +110,6 @@ describe('fix-25 官方基座降位 pin（main.conversation 影子退役——�
       'apps/web/src/workbench/panel-model.ts',
       'apps/web/src/workbench/workbench-bridge.ts',
       'apps/web/src/views/session/ConversationViews.tsx',
-      'apps/web/src/views/sidebar/KnowledgeGlyph.tsx',
       'apps/web/src/client-plugin/plugin.ts',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
@@ -125,6 +124,8 @@ describe('fix-25 官方基座降位 pin（main.conversation 影子退役——�
       'apps/web/src/workbench/ChatSurface.tsx',
       'apps/web/src/views/session/SessionPanel.tsx',
       'apps/web/src/views/session/SessionToolbar.tsx',
+      // 知识面板行字形迁 @dsh-forge/knowledge ui/KnowledgeGlyph.tsx——壳侧死面零残留
+      'apps/web/src/views/sidebar/KnowledgeGlyph.tsx',
     ]) {
       expect(existsSync(join(ROOT, retired)), `${retired} 应已退役（fix-25）`).toBe(false)
     }
@@ -553,7 +554,6 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
       'ForgeShellHost',
       'ForgeHeroPanel',
       'ForgeKnowledgePanel',
-      'ForgeKnowledgeGlyph',
       'ForgeRecallView',
       'ForgeDispatchToolRow',
       'ForgeOverviewTab',

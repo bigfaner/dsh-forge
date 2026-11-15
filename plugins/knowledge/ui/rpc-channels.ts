@@ -282,7 +282,7 @@ export function preloadRpcClientFactory(): ForgeRpcClient {
 // 两宿主同源——dsh-client-connection client.js ctx.provide('connection')，裁决记 faces.ts）；
 // 缺席回落 preload 面（dsh-forge Electron preload）；两缺 = 现行 fail-loud（构造期抛）。
 
-/** knowledge 域连接 RPC 逻辑通道（host 半 ctx.connection.rpc.handle('/knowledge') 同源常量）——常量本体 = shared/connection-rpc.ts（上方 import + re-export） */
+/** knowledge 域连接 RPC 通道（host 半为 '/api' 精确路由族——逐 endpoint 一条 ctx.connection.fetch.register 精确 POST 路由，host/connection-rpc.ts 落座）——通道常量本体 = shared/connection-rpc.ts（上方 import + re-export） */
 
 /** ctx.connection.rpc.call 消费切片（ClientConnectionRpc 结构同型——测试替身同型） */
 export interface ConnectionRpcCallFace {

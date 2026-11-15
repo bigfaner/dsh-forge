@@ -1,6 +1,4 @@
-// knowledge 族面注册面（knowledge-plugin-migration 1.4 子提交 b——自 project 包
-// ui/knowledge-face.ts git mv 随迁本插件，注册归插件域 fix-13 模式；project 注册行同批退役
-// ——杜绝双写源）。1.4 三面：① main keyed 'dswf-knowledge'（知识视图面板——inject 携 workbench
+// knowledge 族面注册面（注册归插件域单写源——project 包无本域注册行）。三面：① main keyed 'dswf-knowledge'（知识视图面板——inject 携 workbench
 // 桥）；② sidebar.panellist 行 'dswf-knowledge'（官方 PanelRow 行——label 经本插件 NS 词典
 // thunk）；③ conversation.view 'dswf-recall'（知识召回页签——ui-trajectory 同型先例）。
 // 1.5 增第四面：④ 项目台 keyed 'project.section.knowledge-dir'「知识库目录」只读节
@@ -54,16 +52,30 @@ interface HostPluginsSeam {
   readonly knowledge?: boolean
 }
 
+/** 集成态壳发布面标记（壳 main.ts 求值期发布——boot 缝缺席时的形态判别锚） */
+interface ShellViewsSeam {
+  readonly __DSH_FORGE_VIEWS__?: unknown
+}
+
+/** 门控读入的全局面（boot 缝 + 壳发布面两页内缝——纯读不缓存） */
+export interface KnowledgeGateGlobal {
+  readonly __DSH_FORGE_HOST_PLUGINS__?: HostPluginsSeam
+  readonly __DSH_FORGE_VIEWS__?: unknown
+}
+
 /**
- * 门控纯函数（fix-3 官方形态 bundle 在场即挂载）：壳缝整体缺席（官方宿主）→ true——
- * client bundle 在场即挂载态本体，apply 期无条件注册；壳缝 knowledge:false（集成态显式
- * 关闭）→ false——唯一 fail-closed 分支；壳缝 knowledge:true → true（恒 true 路径不变）。
- * 纯读页内缝、无缓存、无 ctx 依赖。
+ * 门控纯函数：壳缝在场以壳缝为终裁——knowledge:false（集成态显式关闭）→ false（唯一
+ * fail-closed 分支）；knowledge:true/缺省 → true（恒 true 路径不变）。壳缝整体缺席时按
+ * 形态判别：集成态（壳发布面 __DSH_FORGE_VIEWS__ 在场而 boot 缝缺席 = 壳 boot 缝失效）
+ * → fail-closed false（集成态不宽判半挂载）；官方宿主（无壳页内缝族）→ true——client
+ * bundle 在场即挂载态本体，apply 期无条件注册。纯读页内缝、无缓存、无 ctx 依赖。
  */
 export function knowledgeGateOf(
-  globalObject: { __DSH_FORGE_HOST_PLUGINS__?: HostPluginsSeam } = globalThis as never,
+  globalObject: KnowledgeGateGlobal = globalThis as never,
 ): boolean {
-  return globalObject.__DSH_FORGE_HOST_PLUGINS__?.knowledge !== false
+  const seam = globalObject.__DSH_FORGE_HOST_PLUGINS__
+  if (seam !== undefined) return seam.knowledge !== false
+  return globalObject.__DSH_FORGE_VIEWS__ === undefined
 }
 
 /** 页内桥缝读取（inject 期现查不缓存——缺席/劣形 = undefined fail-soft） */
@@ -91,7 +103,7 @@ export interface KnowledgeFacesDiagnostics {
 export function registerKnowledgeFaces(
   slots: SectionSlotsFace,
   locale: LocaleServiceFace,
-  globalObject: { __DSH_FORGE_HOST_PLUGINS__?: HostPluginsSeam } = globalThis as never,
+  globalObject: KnowledgeGateGlobal = globalThis as never,
   makeClient: RpcClientFactory = preloadRpcClientFactory,
 ): KnowledgeFacesDiagnostics {
   const registered: string[] = []
@@ -157,7 +169,7 @@ export function registerKnowledgeFaces(
  */
 export function registerKnowledgeDirSection(
   slots: SectionSlotsFace,
-  globalObject: { __DSH_FORGE_HOST_PLUGINS__?: HostPluginsSeam } = globalThis as never,
+  globalObject: KnowledgeGateGlobal = globalThis as never,
   makeClient: RpcClientFactory = preloadRpcClientFactory,
 ): { registered: boolean; knowledgeEnabled: boolean } {
   const knowledgeEnabled = knowledgeGateOf(globalObject)
@@ -228,7 +240,7 @@ function applyKnowledgeFaces(ctx: unknown): void {
 
 /**
  * knowledge client face 组合插件对象（client-modules 装载契约——expert-squad 同型判例）：
- * apply 期自注册三面（fix-13 模式）。返回值铁律：必须返回 undefined（cordis 组合把返回值
+ * apply 期自注册三面（官方装载协议形态）。返回值铁律：必须返回 undefined（cordis 组合把返回值
  * 当 effect 消费）。inject = ['slots', 'locale']（cordis 装载契：声明边等待官方服务就绪，
  * 缺声明 = apply 期 `cannot get property` fiber FAILED）。门控（fix-3）：官方形态 bundle
  * 在场即挂载——壳缝缺席 = 无条件注册；集成态壳缝显式 false = 零登记零异常（唯一
