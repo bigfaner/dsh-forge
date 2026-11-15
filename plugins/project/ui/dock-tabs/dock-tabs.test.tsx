@@ -265,7 +265,7 @@ describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 �
     expect(markup).toContain('暂无任务容器') // renderTasksTab 装载在场面（容器空态——SSR 零 effect 头路缺席）
   })
 
-  it('聚焦缺席 = 提案子 tab 缺省（初始态不受扰动——用户定向顺序首位）', () => {
+  it('聚焦缺席 = 任务子 tab 缺省（门关后子 tab 仅 tasks/bugs 且缺省激活 tasks——114d71ba 用户裁定 2026-11-14；初始态不受扰动）', () => {
     const markup = renderToStaticMarkup(
       <OverviewDockAssembly
         {...{
@@ -277,7 +277,8 @@ describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 �
         drawerTaskId={null}
       />,
     )
-    expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="proposals"')
+    expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="tasks"')
+    expect(markup).not.toContain('data-dswf-ov-subtab="proposals"') // 提案子 tab 退场
   })
 
   it('桥聚焦/弹窗/转移三缝直驱（ForgeOverviewTab 面桥缝）：写回 → 快照递达面在场（effect 应用归 e2e——renderToStaticMarkup 零 effect 同全仓口径）', () => {
