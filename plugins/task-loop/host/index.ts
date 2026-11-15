@@ -144,6 +144,26 @@ export function describeSetupFailure(error: unknown): string {
   return errMessage(error);
 }
 
+// ── 类型出口（host 类型锚单源——宿主桥白名单/通道族/remote 只读切片 satisfies 锚定本面，
+//    1.14 host 改指批：宿主禁再引 contracts 旧 ForgeTasksService face）──
+export type { TasksService } from "./domain/tasks/service.js";
+export type { TaskCard, TaskSnapshot } from "./domain/tasks/types.js";
+export type {
+  ListTasksQuery,
+  TaskStats,
+  TaskStatsQuery,
+  TaskGraph,
+  TaskGraphQuery,
+  TaskSettlementRow,
+  TaskSettlementsQuery,
+} from "./domain/tasks/list.js";
+export type { TaskDetail, TaskDetailQuery } from "./domain/tasks/detail.js";
+export type { SessionTaskLinkCard } from "./domain/tasks/types.js";
+export type { SessionLinksQuery } from "./domain/tasks/session-links.js";
+export type { TransitionTaskInput } from "./domain/tasks/transition.js";
+export type { ValidateContainerTasksInput, ValidateReport } from "./domain/tasks/validate.js";
+export type { QueryTaskResult } from "./domain/tasks/query.js";
+
 // inject 名单（proposal 硬判据：装配行 inject 名单显式含 webServer——目标宿主必带；
 // 名单缺席 = ctx 属性访问被 cordis inject 门拒恒 undefined，fix-8 判例。experts = 可选
 // 服务——不入 inject 名单（可选消费不阻载），派发消费点现查（faces.resolveWorkerProfile

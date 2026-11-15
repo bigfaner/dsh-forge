@@ -1109,7 +1109,8 @@ async function main(): Promise<void> {
     // 1.7 A2 服务切换：knowledge 插件 provide 自有 'knowledge' 服务（去 forge 前缀）；
     // 插件行缺席/降级 = undefined，main 侧 forge:knowledge/* 通道不注册
     knowledge: (servicesFace.get('knowledge') as object | undefined) ?? undefined,
-    // M2 四域（Interface 1–4；tasksHome 缺席时 core 不 provide——在场位 false，main 侧降级）
+    // M2 tasks 域（@dsh-forge/task-loop 插件 provide 自有服务——fix-1 域装配；插件行缺席/
+    // 降级 = undefined，main 侧 forge:tasks/* 与 forge:remote/* 通道不注册）
     forgeTasks: (servicesFace.get('forgeTasks') as object | undefined) ?? undefined,
     forgeFeatures: (servicesFace.get('forgeFeatures') as object | undefined) ?? undefined,
     forgeProposals: (servicesFace.get('forgeProposals') as object | undefined) ?? undefined,

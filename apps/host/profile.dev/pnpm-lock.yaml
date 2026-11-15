@@ -50,6 +50,9 @@ importers:
       '@dsh-forge/project':
         specifier: link:../../../plugins/project
         version: link:../../../plugins/project
+      '@dsh-forge/task-loop':
+        specifier: link:../../../plugins/task-loop
+        version: link:../../../plugins/task-loop
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3

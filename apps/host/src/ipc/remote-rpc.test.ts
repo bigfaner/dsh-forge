@@ -62,8 +62,8 @@ describe('1.1 forge:remote/* 注册面（allowlist 正/负样例）', () => {
     const envelope = (await handler(undefined, { projectId: 'p-1' })) as { ok: boolean; data: unknown }
     expect(envelope.ok).toBe(true)
     expect(envelope.data).toEqual({ tasks: [], stats: expect.any(Object) })
-    expect(service.listTasks).toHaveBeenCalledWith({ projectId: 'p-1', statusFilter: undefined, sort: 'active' })
-    expect(service.taskStats).toHaveBeenCalledWith({ projectId: 'p-1' })
+    expect(service.listTasks).toHaveBeenCalledWith({ projectKey: 'p-1', statusFilter: undefined, sort: 'active' })
+    expect(service.taskStats).toHaveBeenCalledWith({ projectKey: 'p-1' })
   })
 
   it('approval 转发器缺席：fail-soft unavailable（forwarded=false + reason——不炸壳）', async () => {

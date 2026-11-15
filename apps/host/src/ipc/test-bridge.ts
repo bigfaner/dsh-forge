@@ -79,7 +79,7 @@ export function registerTestBridge(
       }
       const target = host.services[service as TestBridgeService]
       if (target === undefined) {
-        throw new Error(`[test-bridge] ${service} 服务缺席（M2 面降级——tasksHome 未配置/插件行未装载？）——写动词不可达`)
+        throw new Error(`[test-bridge] ${service} 服务缺席（M2 面降级——@dsh-forge/task-loop 插件行未装载？）——写动词不可达`)
       }
       const method = (target as unknown as Record<string, (input: unknown) => Promise<unknown>>)[verb]
       if (typeof method !== 'function') {

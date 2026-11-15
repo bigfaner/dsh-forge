@@ -129,20 +129,23 @@ it(
       expect(row, '绑定表行缺席（生产端断裂——plugin-forge cwd 路由数据缝无源）').toBeDefined()
       expect(norm(row!.wsPath)).toBe(norm(wsDir))
 
-      // AC3：derive 单源 + 惰性开库（listTasks 触达 → {tasksHome}/{flatten}@{hash8}/forge.db）
+      // AC3（1.14 改指新数据面）：derive 单源（projects 域，core 缝不变）+ task-loop 域
+      // 装配自持库落 {DSH_HOME}/forge/db/task-loop/task-loop.db（fix-1 缺省装配三件单源；
+      // listTasks 触达 → task-loop.db 读面可达，旧 per-workspace forge.db tasks 写链退役）
       const derived = await host.services.forgeProjects!.deriveTaskStoreDir({ workspaceDir: wsDir })
       expect(derived.dir.startsWith(tasksHome)).toBe(true)
-      expect(await host.services.forgeTasks!.listTasks({ projectId: registered.projectId })).toEqual([])
-      expect(existsSync(join(derived.dir, 'forge.db')), '工作区库未落派生目录（惰性开库链断裂）').toBe(true)
+      const taskLoopDb = join(paths.dshHome, 'forge', 'db', 'task-loop', 'task-loop.db')
+      expect(existsSync(taskLoopDb), 'task-loop.db 未落缺省装配路径（@dsh-forge/task-loop 插件行未装载/装配链断裂）').toBe(true)
+      expect(await host.services.forgeTasks!.listTasks({ projectKey: 'Z-project-dsh-dsh-forge' })).toEqual([])
 
       // AC4 前置：句柄在场（WAL 副产物 = 连接存活的机械证据）
-      const wal = `${join(derived.dir, 'forge.db')}-wal`
-      expect(existsSync(wal), 'forge.db-wal 缺席（工作区句柄未开——dispose 断言失据）').toBe(true)
+      const wal = `${taskLoopDb}-wal`
+      expect(existsSync(wal), 'task-loop.db-wal 缺席（域库句柄未开——dispose 断言失据）').toBe(true)
 
-      // AC4：shutdown → fiber disposer → store.dispose → WAL 净场（中央库同判）
+      // AC4：shutdown → fiber disposer → task-loop db dispose → WAL 净场（中央库同判）
       await host.shutdown()
       await expect
-        .poll(() => existsSync(wal), { timeout: 15_000, message: 'dispose 链未收口（工作区句柄仍开）' })
+        .poll(() => existsSync(wal), { timeout: 15_000, message: 'dispose 链未收口（task-loop 域库句柄仍开）' })
         .toBe(false)
       await expect
         .poll(() => existsSync(`${paths.stateDb}-wal`), { timeout: 15_000, message: '中央库句柄未关' })

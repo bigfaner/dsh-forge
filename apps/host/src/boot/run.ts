@@ -20,10 +20,12 @@ import type {
   ForgeFeaturesService,
   ForgeProposalsService,
   ForgeSettingsService,
-  ForgeTasksService,
   ProjectServiceM2,
   TasksChangedEvent,
 } from '@dsh-forge/contracts'
+// 1.14 host 改指：tasks 域类型锚改指 task-loop 包出口（forgeTasks 服务 = task-loop 插件
+// provide——core 旧域停供，contracts 旧 tasks face 退役面禁再引用）。
+import type { TasksService } from '@dsh-forge/task-loop'
 import type { BrowseKnowledgeService } from '@dsh-forge/knowledge'
 import {
   APPROVAL_SERVICE_METHODS,
@@ -103,8 +105,9 @@ export interface DshHostServices {
   /** Interface 2 七法 + browse 聚合第八法（1.7 A2 服务切换：knowledge 插件 provide
    *  'knowledge' 自有服务——去 forge 前缀；类型 = @dsh-forge/knowledge 单一来源） */
   knowledge: BrowseKnowledgeService
-  // ── M2 四域（Interface 1–4；tasksHome 注入时 core provide，缺席 = M2 面降级 undefined） ──
-  forgeTasks: ForgeTasksService
+  // ── M2 tasks 域（@dsh-forge/task-loop 插件 provide——fix-1 域装配；缺席 = 插件行未装载，
+  //    M2 tasks 面降级 undefined）──
+  forgeTasks: TasksService
   forgeFeatures: ForgeFeaturesService
   forgeProposals: ForgeProposalsService
   forgeDocs: ForgeDocsService

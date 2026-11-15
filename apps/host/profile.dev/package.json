@@ -19,7 +19,8 @@
     "better-sqlite3": "13.0.3",
     "gray-matter": "4.0.3",
     "@dsh-forge/plugin-forge-spec": "link:../../../packages/plugin-forge-spec",
-    "@dsh-forge/project": "link:../../../plugins/project"
+    "@dsh-forge/project": "link:../../../plugins/project",
+    "@dsh-forge/task-loop": "link:../../../plugins/task-loop"
   },
   "dsh": {
     "profile": {

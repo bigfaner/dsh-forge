@@ -59,7 +59,7 @@ export function registerM2Channels(
         ? async () => host.clearRemoteDeviceConnected?.()
         : undefined,
     )
-  } else warn('forgeTasks 服务缺席（tasksHome 未配置/插件行未装载）——forge:tasks/* 与 forge:remote/* 通道未注册')
+  } else warn('forgeTasks 服务缺席（@dsh-forge/task-loop 插件行未装载）——forge:tasks/* 与 forge:remote/* 通道未注册')
   if (services.forgeFeatures !== undefined) registerFeaturesChannels(ipc, services.forgeFeatures)
   else warn('forgeFeatures 服务缺席（tasksHome 未配置/插件行未装载）——forge:features/* 通道未注册')
   if (services.forgeProposals !== undefined) registerProposalsChannels(ipc, services.forgeProposals)

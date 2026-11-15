@@ -23,13 +23,15 @@ import {
   type ForgeFeaturesService,
   type ForgeProposalsService,
   type ForgeSettingsService,
-  type ForgeTasksService,
   type ProjectService,
   type ProjectServiceM2,
   type RemoteApprovalDecisionInput,
   type RemoteApprovalForwardResult,
   type TasksChangedEvent,
 } from '@dsh-forge/contracts'
+// 1.14 host 改指：tasks 域类型锚改指 task-loop 包出口（forgeTasks 服务 = @dsh-forge/task-loop
+// 插件 provide——core 旧域停供，contracts 旧 tasks face 退役面禁再引用）。
+import type { TasksService } from '@dsh-forge/task-loop'
 import type { BrowseKnowledgeService } from '@dsh-forge/knowledge'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { TunnelProvider } from '../tunnel/index.js'
@@ -39,8 +41,10 @@ import type { BootDshOptions } from './run.js'
 
 /**
  * 桥接服务名（P1 双服务 + M2 四域 + M3 设置域——Interface 6 六名 → 3.8 七名；runProfile
- * ctx 面世，main 侧 forge:* 通道接线。四域 = tasksHome 注入时 core provide（缺席 = M2 面
- * 降级，ready 位 false）；forgeSettings = settingsFile 注入时 provide（独立缝——缺席仅
+ * ctx 面世，main 侧 forge:* 通道接线。forgeTasks/forgeCheckpoints = @dsh-forge/task-loop
+ * 插件 provide（fix-1 域装配——core 旧域停供；缺席 = 插件行未装载，M2 tasks 面降级）；
+ * forgeFeatures/forgeProposals/forgeDocs/forgeBugs 四小域 = tasksHome 注入时 core provide
+ * （缺席 = 对应域降级）；forgeSettings = settingsFile 注入时 provide（独立缝——缺席仅
  * 设置域降级，六服务形制不动）。
  * knowledge-stage1 1.7（A2 服务切换）：'knowledge' = knowledge 插件 provide 自有服务
  * （去 forge 前缀；forgeKnowledge 退役——五通道句柄来源 = 插件域供数）。
@@ -329,8 +333,9 @@ export const KNOWLEDGE_SERVICE_METHODS = [
 export type KnowledgeWhitelistCoverage = AssertNever<Exclude<keyof BrowseKnowledgeService, (typeof KNOWLEDGE_SERVICE_METHODS)[number]>>
 
 /**
- * M2 四域服务方法白名单（Interface 6 六白名单之四——G1-10 pin：satisfies 收敛到
- * contracts 服务面 + 覆盖完备性 AssertNever）。锚全集而非 RPC 面（knowledge 八法先例：
+ * M2 四域服务方法白名单（Interface 6 六白名单之四——G1-10 pin：satisfies 收敛到 task-loop
+ * TasksService 服务面（1.14 host 改指——类型锚 = @dsh-forge/task-loop 包出口单一来源）+
+ * 覆盖完备性 AssertNever）。锚全集而非 RPC 面（knowledge 八法先例：
  * 双门分工的收窄发生在 ipc 注册面注入类型，桥白名单 = 代理可达面全集锚）——故
  * addTask/claimTask/submitTask/createProposal/transitionProposal 在列（子进程内 tool 面
  * 同服务；renderer 恒不可达：ipc 通道族不注册写动词，SC7 断言面）。
@@ -352,15 +357,23 @@ export const TASKS_SERVICE_METHODS = [
   'taskGraph',
   'taskDetail',
   'sessionLinks',
-] as const satisfies readonly (keyof ForgeTasksService)[]
+] as const satisfies readonly (keyof TasksService)[]
 
-/** 白名单覆盖完备性（= never：缺席的 ForgeTasksService 方法在此编译期点名；
- *  stampEvidenceValidity / markE2eAttribution 显式排除——disc 效度戳写侧与 E2E 归因卡生成侧
- *  标记（loop-phase-gate §2.9）均为装配面专属写动词，不入 renderer RPC 白名单（ipc 通道族
- *  不注册该写动词，SC7 断言面）；readUnsettledChain 排除——loop 循环内部读面（suspend 载荷
- *  数据源），renderer 无消费面，不扩 RPC 表面） */
+/** 白名单覆盖完备性（= never：缺席的 TasksService 方法在此编译期点名；
+ *  markE2eAttribution / readUnsettledChain 排除——E2E 归因卡生成侧标记与 loop 循环内部
+ *  读面（suspend 载荷数据源），renderer/main 代理无消费面，不扩桥白名单表面；
+ *  batchAddTasks / validateBatchAddTasks 排除——批量工具面（agent tool 专属，1.10 双门
+ *  分工同 SC7 口径）；latestSettlementsByTask 排除——typert forgeTasks DTO 聚合内部读面） */
 export type TasksWhitelistCoverage = AssertNever<
-  Exclude<keyof ForgeTasksService, (typeof TASKS_SERVICE_METHODS)[number] | 'stampEvidenceValidity' | 'markE2eAttribution' | 'readUnsettledChain'>
+  Exclude<
+    keyof TasksService,
+    | (typeof TASKS_SERVICE_METHODS)[number]
+    | 'markE2eAttribution'
+    | 'readUnsettledChain'
+    | 'batchAddTasks'
+    | 'validateBatchAddTasks'
+    | 'latestSettlementsByTask'
+  >
 >
 
 export const FEATURES_SERVICE_METHODS = [

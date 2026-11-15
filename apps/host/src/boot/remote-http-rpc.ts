@@ -13,7 +13,9 @@
 // 解密前 channel 字面量不进 diag（定长标记替代——日志注入/枚举分型消解）。
 // 日志：每请求经 diag（/__rvdiag 同链——diag 桥 → harness.log）落一行（结算态 + 脱敏通道）。
 // 纯 handler（fake req/res 可测）——socket/装配归 child.ts。
-import { REMOTE_CHANNELS, PROJECTS_CHANNELS, type ForgeTasksService, type ProjectService, type RemoteApprovalDecisionInput, type RemoteApprovalForwardResult, type RemoteProgressQuery } from '@dsh-forge/contracts'
+import { REMOTE_CHANNELS, PROJECTS_CHANNELS, type ProjectService, type RemoteApprovalDecisionInput, type RemoteApprovalForwardResult, type RemoteProgressQuery } from '@dsh-forge/contracts'
+// 1.14 host 改指：读面类型锚改指 task-loop 包出口（forgeTasks 服务 = task-loop 插件 provide）。
+import type { TasksService } from '@dsh-forge/task-loop'
 import { isPskEnforcedHost, writeConstant401 } from './psk.js'
 import { admitPskRequest, type PskGateDeps } from './psk-gate.js'
 import { proxyChannelTableOf, type ProxyChannelDeps } from './proxy-channels.js'
@@ -55,7 +57,7 @@ export interface FakeRes extends RpcResFace {
 /** 装配依赖缝（child.ts 注入真身；测试注入 fake） */
 export interface RemoteHttpRpcDeps {
   /** forgeTasks 只读切片（缺席 = progress 通道 fail-soft 错误信封） */
-  readonly tasks?: Pick<ForgeTasksService, 'listTasks' | 'taskStats'>
+  readonly tasks?: Pick<TasksService, 'listTasks' | 'taskStats'>
   /** forgeProjects 只读切片（缺席 = projects 通道 fail-soft 错误信封） */
   readonly projects?: Pick<ProjectService, 'listProjects' | 'getProject'>
   /** 审批转发器（worker 侧中继——缺席 = fail-soft unavailable，remote-rpc.ts 同口径） */
@@ -81,8 +83,8 @@ function channelTableOf(deps: RemoteHttpRpcDeps): Record<string, ChannelHandler>
       if (tasks === undefined) throw new Error('forgeTasks 服务缺席——progress 数据面不可达')
       const q = (payload ?? {}) as RemoteProgressQuery
       const [list, stats] = await Promise.all([
-        tasks.listTasks({ projectId: q.projectId, statusFilter: q.statusFilter, sort: 'active' }),
-        tasks.taskStats({ projectId: q.projectId }),
+        tasks.listTasks({ projectKey: q.projectId, statusFilter: q.statusFilter, sort: 'active' }),
+        tasks.taskStats({ projectKey: q.projectId }),
       ])
       return { tasks: list, stats }
     },

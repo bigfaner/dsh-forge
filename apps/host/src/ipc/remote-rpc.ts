@@ -6,18 +6,18 @@
 // unavailable，remote.session 先例同型；通道层零认证逻辑，暴露策略归官方配对）。
 import {
   REMOTE_CHANNELS,
-  type ForgeTasksService,
   type RemoteApprovalDecisionInput,
   type RemoteApprovalForwardResult,
   type RemoteDisconnectResult,
   type RemoteProgressQuery,
-  type RemoteProgressSnapshot,
 } from '@dsh-forge/contracts'
+// 1.14 host 改指：读面类型锚改指 task-loop 包出口（forgeTasks 服务 = task-loop 插件 provide）。
+import type { TasksService } from '@dsh-forge/task-loop'
 import type { ForgeIpc } from './forge-channels.js'
 import { rpcEnvelope } from './rpc-envelope.js'
 
 /** 注入服务面 = RPC 读法二（listTasks/taskStats——progress 复用的既有只读口径） */
-export type RemoteChannelService = Pick<ForgeTasksService, 'listTasks' | 'taskStats'>
+export type RemoteChannelService = Pick<TasksService, 'listTasks' | 'taskStats'>
 
 /** 审批转发器注入缝（官方 user-approval 桥接面——缺席 = fail-soft unavailable；后续任务接线） */
 export type RemoteApprovalForwarder = (
@@ -36,10 +36,10 @@ export function registerRemoteChannels(
 ): void {
   ipc.register(
     REMOTE_CHANNELS.progress,
-    rpcEnvelope(async (q: RemoteProgressQuery): Promise<RemoteProgressSnapshot> => {
+    rpcEnvelope(async (q: RemoteProgressQuery) => {
       const [tasks, stats] = await Promise.all([
-        service.listTasks({ projectId: q.projectId, statusFilter: q.statusFilter, sort: 'active' }),
-        service.taskStats({ projectId: q.projectId }),
+        service.listTasks({ projectKey: q.projectId, statusFilter: q.statusFilter, sort: 'active' }),
+        service.taskStats({ projectKey: q.projectId }),
       ])
       return { tasks, stats }
     }),
