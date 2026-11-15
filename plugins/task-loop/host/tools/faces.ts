@@ -24,6 +24,27 @@ export interface TaskToolExecFace {
   readonly sessionId?: string;
 }
 
+/**
+ * 会话身份注入（bug e7e6a3bc——a033636f 家族共性：官方 ToolRunContext 面字段映射不完整）：
+ * 官方 ToolRunContext 会话身份只落在 agent.session.id，顶层无 sessionId 子面——循环工具
+ * （dispatch_task/stop_task_loop）以 exec.sessionId 做 owner 归属即恒缺席。注册缝包装：
+ * agent.session.id 在场且显式 sessionId 缺席时注入顶层子面；显式身份原值优先，无会话身份
+ * 零注入（缺席自解释拒绝语义不回归）。定义其余字段原样透传（name/render 契约不漂移）。
+ */
+export function withSessionIdentity(definition: TaskToolDefinition): TaskToolDefinition {
+  return {
+    ...definition,
+    execute: async (args: unknown, exec: TaskToolExecFace): Promise<unknown> => {
+      const sessionId = (exec.agent as { session?: { id?: unknown } } | undefined)?.session?.id;
+      const face =
+        typeof sessionId === "string" && sessionId !== "" && (exec.sessionId === undefined || exec.sessionId === "")
+          ? { ...exec, sessionId }
+          : exec;
+      return definition.execute(args, face);
+    },
+  };
+}
+
 /** 注册面 tool 定义（官方 ToolDefinition 消费字段子集：name/description/parameters/output/execute） */
 export interface TaskToolDefinition {
   readonly name: string;

@@ -27,6 +27,7 @@ import {
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
 import { createDiagEmitter, emitForgeDiag } from "./faces.js";
+import { withSessionIdentity } from "./tools/faces.js";
 import type { TasksService } from "./domain/tasks/service.js";
 
 /** host 装配 config（全部可选——缺省面 = DSH_HOME + 缺省 db 落点 + git 查找降级）。 */
@@ -149,7 +150,7 @@ function selfProbeOf(ctx: unknown): ForgeTasksRemoteDeps["selfProbe"] {
  * registerToolLoud 先例，失败 error 留痕其余照常）。缝缺席/劣形 = 工具面零注册 + warn 留痕
  * （降级诚实不阻载——单装全链不可达的根因即本缝遗漏）。
  */
-function registerToolFamily(
+export function registerToolFamily(
   ctx: unknown,
   services: TaskLoopAssembly,
   diag: (line: string, level?: DiagLevel) => void,
@@ -164,7 +165,9 @@ function registerToolFamily(
   const disposers: (() => void)[] = [];
   for (const definition of family.tools) {
     try {
-      disposers.push(register(definition));
+      // 会话身份注入（bug e7e6a3bc——官方 ToolRunContext 只携 agent.session.id，注册缝
+      // withSessionIdentity 填 exec.sessionId 顶层子面；dispatch/stop 两环同缝覆盖）
+      disposers.push(register(withSessionIdentity(definition)));
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       diag(`[task-loop] tool register failed (${definition.name}): ${message}`, "error");
