@@ -184,6 +184,20 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       staticResolveProjectId(cwd) ?? storage.registry.findByWsPath(cwd)?.projectId ?? undefined
     const resolveWsPath: WsPathResolver = (projectId) =>
       staticResolveWsPath(projectId) ?? storage.registry.findByProjectId(projectId)?.wsPath ?? undefined
+    // workspace 域 id 归一步（fix-10——bug bb11c53e）：官方宿主 projects 行 id = workspaceId
+    // （workspaceRegistry 投影），不在绑定表/注册行 project_id 域——经 ctx.workspaceRegistry
+    // 逐调用现查回查 workspace 行 path（AGENTS 1.6 检测永不缓存）；行缺席/面缺席/抛 = undefined
+    // （服务面注册行缺席统一 fail-loud）。dsh-forge 集成宿主 forge projectId 先命中前两级，
+    // 本步零参与零变化。
+    const workspacePathOf = async (workspaceId: string): Promise<string | undefined> => {
+      try {
+        const registry: unknown = (ctx as unknown as { workspaceRegistry?: unknown }).workspaceRegistry
+        if (!isWorkspaceRegistryFace(registry)) return undefined
+        return (await registry.get(workspaceId))?.path
+      } catch {
+        return undefined
+      }
+    }
     // 项目知识目录解析缝（1.5 提案项 4）：注册/收编消费点的缺省派生改经 config 纯解析
     // （host/knowledge-dir.ts resolveKnowledgeDir）；非法回退缺省 + warn 埋点（不静默）。
     // 目录物化仍在消费点（读时 mkdir recursive——apply 期零预建）。
@@ -203,6 +217,7 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
     const service = createKnowledgeService({
       db: storage.db,
       resolveWsPath,
+      resolveWorkspacePath: workspacePathOf,
       emit: diagEmit,
       resolveDefaultKnowledgeDir,
       ...(config.backflow !== undefined ? { backflow: config.backflow } : {}),
