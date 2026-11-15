@@ -130,8 +130,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
   });
 
-  it("版本 bump 0.11.1（1.14 host 改指批——打包形态修复 better-sqlite3 外置 + dependencies 声明，patch 位 +1；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.11.1");
+  it("版本 bump 0.12.0（plugin-task-loop 1.15——skills 归属批：submit-task 结算技能迁入 + quick-tasks 替代退役，minor 位 +1；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.12.0");
   });
 });
 

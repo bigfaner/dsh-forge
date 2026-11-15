@@ -2,7 +2,8 @@
 // 两条对读 pin，配方同 1.4 pin（锚守卫 + 关键句粒度）：
 //   1. 双轨基线裁决句跨包对读：packages/core compose.ts ↔ packages/plugin-forge settle.ts
 //      主短语「双轨基线并存时以 E2E_BASELINE_RED 用例级清单优先」两侧逐字在案。
-//   2. 测试判例三类 SKILL ↔ driver 对读：quick-tasks/SKILL.md ↔ loop/driver.ts
+//   2. 测试判例三类 SKILL ↔ driver 对读：task-loop to-tasks/SKILL.md ↔ task-loop loop/driver.ts
+//      （quick-tasks 随远征退役批替代退役——拆解径判例检索职责由 to-tasks 承接，锚随迁新位）
 //      「flaky 史」「退役理由」「覆盖真空」三类关键词两侧双双在案（对读防闭环错位）。
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -13,8 +14,8 @@ const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 
 const composeSrc = readFileSync(resolve(ROOT, 'packages/core/src/forge/tasks/prompt/compose.ts'), 'utf8')
 const settleSrc = readFileSync(resolve(ROOT, 'packages/plugin-forge/src/dispatch-core/settle.ts'), 'utf8')
-const skillSrc = readFileSync(resolve(ROOT, 'packages/plugin-forge/skills/quick-tasks/SKILL.md'), 'utf8')
-const driverSrc = readFileSync(resolve(ROOT, 'packages/plugin-forge/src/loop/driver.ts'), 'utf8')
+const skillSrc = readFileSync(resolve(ROOT, 'plugins/task-loop/skills/to-tasks/SKILL.md'), 'utf8')
+const driverSrc = readFileSync(resolve(ROOT, 'plugins/task-loop/host/loop/driver.ts'), 'utf8')
 
 describe('对读结构 pin（forge-test-pipeline-hardening 1.12）', () => {
   it('双轨基线裁决句跨包对读：主短语在 compose.ts 与 settle.ts 两侧逐字在案（锚守卫 + 逐字 pin，改一漏一即红）', () => {

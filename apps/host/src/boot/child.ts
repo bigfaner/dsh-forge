@@ -360,6 +360,10 @@ async function main(): Promise<void> {
   // node_modules（anchor = {resources}/runtime/package.json 邻接拓扑）→ 包已 staging 也恒
   // false：不注行 + 装配段跳过 = 能力恒 absent，git 项目 W2 fail-closed 双入口拒绝。
   const gitWorktreeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/project')
+  // 1.15 退役批：@dsh-forge/task-loop 插件行注行门（gitWorktreeRow 双形态探测同径）——
+  // tasks 域服务 provide + 工具/技能/循环注册随包装载；host dist boot 链静态 import 本包
+  // （1.14 host 改指），staged:true 随包后打包形态恒在场，门仅兜 dev 树形态缺包不注行。
+  const taskLoopRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/task-loop')
   // mobile ask 桥插件行注行门（bug f73315a1——gitWorktreeRow 双形态探测同径）∪ dev 形态
   // 第三位：host 自身 node_modules（loader 进程解析根——dev workspace link 挂点）。
   let mobileBridgeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/mobile-bridge')
@@ -384,6 +388,7 @@ async function main(): Promise<void> {
     // 1.7 Q19：knowledge 行 config 注入退役（bindingsFile 缺席——纯 config 静态注入；
     // knowledgeRow 装载位另行上送 ready，不再注 overlay 行）
     gitWorktreeRow, // 1.17 @dsh-forge/project 插件行注行门（dev 树 link 在场才注）
+    taskLoopRow, // 1.15 @dsh-forge/task-loop 插件行注行门（tasks 域随包装载——双形态探测同径）
     mobileBridgeRow, // mobile ask 桥插件行注行门（组合期 answerer 注册）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     remoteExpose, // fix-3 装配期绑定暴露缝（true = webserver 行覆写全卡绑定——重启生效）

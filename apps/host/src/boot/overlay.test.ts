@@ -56,6 +56,18 @@ describe('renderBootOverlay（纯函数形状）', () => {
     expect(off).not.toContain('git-worktree')
   })
 
+  it('tasks 域插件行注行门（plugin-task-loop 1.15 staging 闭包登记随批）：taskLoopRow: true → loader 行以 insert 形态注入（fix-4 同径）；默认门关零注行', () => {
+    const on = renderBootOverlay({
+      stateDb: 'C:\\app-data\\dsh-forge\\state.db',
+      taskLoopRow: true,
+    })
+    expect(on).toContain(`- insert:\n    - id: dsh-forge-task-loop\n      name: '@dsh-forge/task-loop'`)
+    const off = renderBootOverlay({
+      stateDb: 'C:\\app-data\\dsh-forge\\state.db',
+    })
+    expect(off).not.toContain('dsh-forge-task-loop')
+  })
+
   it('行 id 定位用户层产品行（patch 按 row id 整体替换 config——非 insert 新行）；全局零 forge 面（产品裁决 2026-10-09：plugin-forge/skill-filesystem 全局行废除——标准模式不带 forge 工具/技能，仅预设组合携带）', () => {
     const text = renderBootOverlay({ stateDb: '/x/state.db' })
     expect(text).toContain('- id: dsh-forge-core')

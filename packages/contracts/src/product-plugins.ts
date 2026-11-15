@@ -57,5 +57,11 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层：boot overlay presence 门注行
   // （dev 同径单源）。旧 @dsh-forge/git-worktree 域已归并本包，staged 种子随迁。
   project: { userLayerRow: false, staged: true },
+  // task-loop（plugin-task-loop 1.15 退役批 staging 闭包登记，project 同款）：host dist boot
+  // 链（bridge/run/remote-rpc/tasks-rpc/test-bridge）静态 import 本包（1.14 host 改指）——
+  // 缺席即安装版主进程 ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层（组合装配行 =
+  // plugins/task-loop/cordis.patch.yml，dsh.bundle.patch 声明指向）；skills/（to-tasks 拆解
+  // 技能 + 1.15 自 plugin-forge 迁入的 submit-task 结算技能）随包由 STAGING_EXTRAS 承载。
+  'task-loop': { userLayerRow: false, staged: true, dir: 'plugins/task-loop' },
   knowledge: { userLayerRow: true, dir: 'plugins/knowledge' },
 }

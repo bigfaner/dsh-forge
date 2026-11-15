@@ -69,7 +69,7 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
 const STAGING_EXTRAS = {
   // plugin-forge experts/ = 内置专家档案层（FORGE_EXPERTS_ROOT_DIR 相对 dist 解析——
   // 缺席即安装版专家团零 forge 档案，bug a2a54922；随包覆盖由 a2a54922 约定目录扫描守卫）
-  'plugin-forge': { files: ['skills', 'skills-blitz', 'experts'], keyFiles: ['skills/submit-task/SKILL.md', 'skills-blitz/grilling/SKILL.md', 'experts/feature-builder.md'] },
+  'plugin-forge': { files: ['skills', 'skills-blitz', 'experts'], keyFiles: ['skills/fix-bug/SKILL.md', 'skills-blitz/grilling/SKILL.md', 'experts/feature-builder.md'] },
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
   // expert-squad 内置专家层目录（scan.ts resolvePluginExpertsRoot 相对 dist 的
   // ../../experts 解析；bundle-structure 测试钉「随包 ≥1 档案」——缺席即内置层静默缺失）
@@ -88,6 +88,10 @@ const STAGING_EXTRAS = {
   // cordis.patch.yml（package.json dsh.bundle.patch 声明指向——loader 按声明读包内该文件
   // 触发 apply 注册，缺席即 ENOENT，bug a1f13abf 同径）+ skills 约定目录占位（.gitkeep）
   project: { files: ['skills', 'cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] },
+  // task-loop（plugin-task-loop 1.15 staging 闭包登记）：组合装配行本体 cordis.patch.yml
+  // （package.json dsh.bundle.patch 声明指向）+ skills 技能面（to-tasks 拆解技能 + 自
+  // plugin-forge 迁入的 submit-task 结算技能——customSkillDirs 挂载源）
+  'task-loop': { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/to-tasks/SKILL.md', 'skills/submit-task/SKILL.md', 'cordis.patch.yml'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */

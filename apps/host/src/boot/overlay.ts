@@ -65,6 +65,8 @@ export interface BootOverlayInput {
    *  扩展点注入不经 config——函数值走 ctx 服务缝，见 @dsh-forge/project
    *  host/assembly/host-side.ts） */
   readonly gitWorktreeRow?: boolean
+  /** task-loop 域插件行注行门（1.15——包在 profile 树/安装锚邻接树在场才注；child 双形态探测） */
+  readonly taskLoopRow?: boolean
   /** mobile ask 桥插件行（bug f73315a1——缺席不注行 = 零挂接语义）。 */
   readonly mobileBridgeRow?: boolean
   /** M3 预设装配（3.7）：四底稿 + 技能目录物化锚（缺席 = 预设面整体不注行 fail-soft） */
@@ -252,6 +254,12 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     // RPC 恒独立模式）：须以 insert 形态注行（用户层 cordis.patch.yml 同款语义）。
     ...(input.gitWorktreeRow === true
       ? ['- insert:', '    - id: dsh-forge-project', "      name: '@dsh-forge/project'"]
+      : []),
+    // tasks 域插件行（plugin-task-loop 1.15 staging 闭包登记随批：@dsh-forge/task-loop
+    // forgeTasks/forgeCheckpoints 服务 provide + 工具/技能/循环调度注册——1.14 host 改指后
+    // host dist boot 链静态 import 本包，staged:true 随包；门控注行同 project 形态，缺包不注）
+    ...(input.taskLoopRow === true
+      ? ['- insert:', '    - id: dsh-forge-task-loop', "      name: '@dsh-forge/task-loop'"]
       : []),
     // mobile-ui ask 桥（bug f73315a1）：mobile-bridge 插件行（组合期 answerer 注册——
     // 先于 api-remotes 捕获监听；桥本体经全局锚注入）。insert 形态（fix-4 同径）。

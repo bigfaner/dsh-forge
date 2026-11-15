@@ -47,12 +47,13 @@ describe("to-tasks SKILL.md 快照契约", () => {
     expect(doc).toMatch(/^description: /m);
   });
 
-  it("五章骨架在位（适用与前置/spec 探测分叉/拆解规则/收尾模板/自查清单）", () => {
+  it("六章骨架在位（适用与前置/spec 探测分叉/拆解规则/收尾模板/判例检索提示/自查清单——1.15 quick-tasks 替代退役，判例检索职责随迁入章）", () => {
     expect(doc).toContain("## 一、适用与前置");
     expect(doc).toContain("## 二、spec 在场探测分叉");
     expect(doc).toContain("## 三、拆解规则");
     expect(doc).toContain("## 四、收尾模板");
-    expect(doc).toContain("## 五、自查清单");
+    expect(doc).toContain("## 五、判例检索提示");
+    expect(doc).toContain("## 六、自查清单");
   });
 
   it("收尾模板与 batch_add_tasks 工具 schema 必填参数逐项对读一致（模板格覆盖每个必填参数）", () => {

@@ -227,7 +227,8 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/knowledge/skills/learn/SKILL.md',
       'runtime/node_modules/@dsh-forge/knowledge/skills/distill/SKILL.md',
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
-      'runtime/node_modules/@dsh-forge/plugin-forge/skills/submit-task/SKILL.md',
+      // 1.15 退役批：结算技能 submit-task 迁 task-loop 包——本包技能面关键文件改 fix-bug 锚
+      'runtime/node_modules/@dsh-forge/plugin-forge/skills/fix-bug/SKILL.md',
       // blitz 专属技能面（plugin-forge 包内 skills-blitz 旁目录——blitz 预设 customSkillDirs
       // 挂载源；缺席即突击组合技能面静默缺失）
       'runtime/node_modules/@dsh-forge/plugin-forge/skills-blitz/grilling/SKILL.md',
@@ -243,6 +244,12 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       // 旧 @dsh-forge/git-worktree 包退役，staged 种子自 plugins/git-worktree 迁 plugins/project）
       'runtime/node_modules/@dsh-forge/project/package.json',
       'runtime/node_modules/@dsh-forge/project/dist/host/index.js',
+      // 1.15 退役批：task-loop staging 闭包登记（project 同款——host dist boot 链静态 import；
+      // skills/ = to-tasks 拆解技能 + 自 plugin-forge 迁入的 submit-task 结算技能）
+      'runtime/node_modules/@dsh-forge/task-loop/package.json',
+      'runtime/node_modules/@dsh-forge/task-loop/dist/host/index.js',
+      'runtime/node_modules/@dsh-forge/task-loop/skills/to-tasks/SKILL.md',
+      'runtime/node_modules/@dsh-forge/task-loop/skills/submit-task/SKILL.md',
       'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
       'web-dist/index.html',
       'icon.png',
@@ -288,7 +295,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // lib/* = 闭包成员（plugin-project 1.2/1.6/1.7：core 依赖 lib-util/lib-diag/lib-path/lib-db，
     // contracts 兼容面依赖 lib-api——lib/ 子居所自动入场）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/md-mermaid', 'root:plugins/project'].sort(),
+      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/md-mermaid', 'plugins/task-loop', 'root:plugins/project'].sort(),
     )
   })
 
@@ -330,7 +337,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
         `关键文件口径缺席 runtime/node_modules/@dsh-forge/${dir.split('/').pop()}/${rel}（--check 不可达）`,
       ).toContain(`runtime/node_modules/@dsh-forge/${dir.split('/').pop()}/${rel}`)
     }
-    // 现值锚：expert-squad 是当前唯一声明者（回归锚——声明面丢失即本断言红）
+    // 现值锚：expert-squad 声明者回归锚——声明面丢失即本断言红
     expect(staged['plugins/expert-squad']).toContain('cordis.patch.yml')
   })
 
