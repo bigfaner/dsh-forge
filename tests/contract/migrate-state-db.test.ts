@@ -236,4 +236,36 @@ describe('migrate-state-db.mjs（plugin-project 1.18）', () => {
     expect(out2).not.toContain('搬迁完成')
     expect(readdirSync(home).filter((n) => n.startsWith('forge-workspaces.pre-migrate-'))).toHaveLength(1)
   })
+
+  it('⑧ 旧谱系 bugs 表列缺席（无 recurrence_of/container_slug）→ named 绑定键齐全迁入 NULL（真机 005 轮回归判例）', () => {
+    const home = tmpHome()
+    const wsRoot = join(home, 'forge-workspaces')
+    const dir = deriveDirName('C:\\ws\\legacy')
+    mkdirSync(join(wsRoot, dir), { recursive: true })
+    const db = new Database(join(wsRoot, dir, 'forge.db'))
+    // 旧谱系 schema：无 recurrence_of / container_slug 列
+    db.exec(`CREATE TABLE bugs (
+      id TEXT PRIMARY KEY, summary TEXT NOT NULL, bug_desc TEXT, trigger_desc TEXT, expected TEXT, actual TEXT,
+      suspected TEXT, error_type TEXT, bug_status TEXT NOT NULL, commit_hash TEXT, worktree TEXT, branch TEXT,
+      unresolved_reason TEXT, source_task_id TEXT, report_session_id TEXT, fix_session_id TEXT, reporter TEXT,
+      fixer TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, fix_approach TEXT)`)
+    db.prepare(
+      `INSERT INTO bugs (id, summary, bug_desc, trigger_desc, expected, actual, bug_status, source_task_id, reporter, created_at, updated_at)
+       VALUES ('lg-1', 'legacy bug', 'd', 't', 'e', 'a', 'open', NULL, 'old', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
+    ).run()
+    db.close()
+    writeFileSync(
+      join(home, 'registry-snapshot.json'),
+      JSON.stringify([{ id: 'ws-legacy', path: 'C:\\ws\\legacy' }]),
+      'utf8',
+    )
+    const out = runScript(home, ['--skip-task-loop', '--skip-workspaces'])
+    expect(out).not.toContain('Missing named parameter')
+    const conn = openProjectDb(home)
+    const row = conn.prepare(`SELECT * FROM project_bugs WHERE id = 'lg-1'`).get() as Record<string, unknown>
+    expect(row.summary).toBe('legacy bug')
+    expect(row.recurrence_of).toBeNull()
+    expect(row.container_slug).toBeNull()
+    conn.close()
+  })
 })

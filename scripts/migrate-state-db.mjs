@@ -987,7 +987,16 @@ function migrateBugs(db, workspacesFrom, dirNameToWsPath, nowIso) {
              VALUES (@id, @project_key, @summary, @bug_desc, @trigger_desc, @expected, @actual, @suspected, @error_type,
              @bug_status, @commit_hash, @worktree, @branch, @unresolved_reason, @fix_approach, @source_task_id, @recurrence_of,
              @container_slug, @report_session_id, @fix_session_id, @fixer, @reporter, @created_at, @updated_at)`,
-          ).run({ ...r, project_key: projectKey })
+          ).run({
+            // 谱系宽容：旧 bugs 表后加列（recurrence_of/container_slug 等）缺席 → NULL
+            // （named 绑定要求键齐全——缺键即 SqliteError，不能依赖行对象自带全键）
+            id: null, summary: null, bug_desc: null, trigger_desc: null, expected: null, actual: null,
+            suspected: null, error_type: null, bug_status: null, commit_hash: null, worktree: null, branch: null,
+            unresolved_reason: null, fix_approach: null, source_task_id: null, recurrence_of: null, container_slug: null,
+            report_session_id: null, fix_session_id: null, fixer: null, reporter: null, created_at: null, updated_at: null,
+            ...r,
+            project_key: projectKey,
+          })
           moved.push({ bugId: r.id, dirName })
         }
       } finally {
