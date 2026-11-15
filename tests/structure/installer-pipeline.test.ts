@@ -158,6 +158,8 @@ describe('AC2 profile.install 安装树清单 = 运行时并集（漂移守卫�
     'gray-matter': '4.0.3',
     'mermaid': '12.1.0', // @dsh-forge/md-mermaid 原生依赖（bug 62211111——staging 闭包只追 @dsh-forge/*，外部依赖经本清单随包物化）
     '@deepseek-ai/schemastery': '3.18.4', // @dsh-forge/expert-squad 原生依赖（bug 62211111 同类——settings schema 校验面）
+    '@deepseek-ai/dsh-typert-protocol': '0.2.2-rc.2', // @dsh-forge/project 原生依赖（bug 62211111 同类——typert 通道面）
+    'zod': '4.6.6', // @dsh-forge/project 原生依赖（bug 62211111 同类——schema 校验面）
   }
   const expectedSorted = Object.keys(expected).sort()
 
