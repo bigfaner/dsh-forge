@@ -19,6 +19,7 @@ import {
   type TaskLoopAssembly,
   type TaskLoopAssemblyConfig,
 } from "./assembly/default-assembly.js";
+import { assembleTaskLoopToolFamily } from "./assembly/tool-family.js";
 import {
   registerForgeTasksRemote,
   type ForgeProjectsIdentityFace,
@@ -49,6 +50,21 @@ interface TaskLoopPluginCtx {
   };
   /** cordis 事件混入（diag/log 事件域诊断埋点；缺席 = console 兜底） */
   readonly emit?: (event: string, payload: Record<string, unknown>) => void;
+  /** 官方 dsh tools 注册缝（单装工具族注册正门——inject 名单显式声明，缺席 = 零注册降级） */
+  readonly tools?: {
+    register?(definition: unknown): () => void;
+  };
+}
+
+/** 官方 tools 缝防御读取（cordis inject 门：属性访问未被 inject 声明即抛「cannot get
+ *  property without inject」——try/catch fail-soft 归 undefined，apply 永不因缝读取崩） */
+function toolsFaceOf(ctx: unknown): TaskLoopPluginCtx["tools"] | undefined {
+  try {
+    const face = (ctx as TaskLoopPluginCtx).tools;
+    return face !== null && typeof face === "object" ? face : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** forgeTasks 域服务惰性现查缝（AGENTS 1.6——检测永不缓存，每个消费点调用期求值）：
@@ -108,8 +124,7 @@ function selfProbeOf(ctx: unknown): ForgeTasksRemoteDeps["selfProbe"] {
   };
 }
 
-/** 具名服务 provide（常驻 provider——装配期一次，零 provide 降级径由装配面承担）。 */
-function provideResidentServices(ctx: unknown, services: TaskLoopAssembly, diag: (line: string, level?: DiagLevel) => void): void {
+/** 具名服务 provide（常驻 provider——装配期一次，零 provide 降级径由装配面承担）。 */function provideResidentServices(ctx: unknown, services: TaskLoopAssembly, diag: (line: string, level?: DiagLevel) => void): void {
   const reflect = (ctx as TaskLoopPluginCtx).reflect;
   if (typeof reflect?.provide !== "function") {
     diag("[task-loop] ctx.reflect.provide 缺席（非 cordis 宿主）——forgeTasks/forgeCheckpoints 零 provide（降级不阻载）", "warn");
@@ -127,11 +142,57 @@ function provideResidentServices(ctx: unknown, services: TaskLoopAssembly, diag:
   }
 }
 
+/**
+ * 单装工具族注册缝（bug a033636f——fix-8 修型）：官方 ctx.tools.register 正门逐枚注册
+ * 工具族 14 员（10 任务动词 + batch_add_tasks + impl_checkpoint 三员 + dispatch/stop），
+ * 注册 disposer 全量回收（unmount 撤回）；单枚注册抛错不再静默截断（loud 缝——plugin-forge
+ * registerToolLoud 先例，失败 error 留痕其余照常）。缝缺席/劣形 = 工具面零注册 + warn 留痕
+ * （降级诚实不阻载——单装全链不可达的根因即本缝遗漏）。
+ */
+function registerToolFamily(
+  ctx: unknown,
+  services: TaskLoopAssembly,
+  diag: (line: string, level?: DiagLevel) => void,
+): { dispose: () => void } {
+  const toolsFace = toolsFaceOf(ctx);
+  const register = typeof toolsFace?.register === "function" ? toolsFace.register.bind(toolsFace) : undefined;
+  if (register === undefined) {
+    diag("[task-loop] ctx.tools.register 缺席（官方 tools 缝缺失）——单装工具面零注册（任务/派发工具族对本宿主不可达，降级不阻载）", "warn");
+    return { dispose: () => {} };
+  }
+  const family = assembleTaskLoopToolFamily({ services, ctx, diag });
+  const disposers: (() => void)[] = [];
+  for (const definition of family.tools) {
+    try {
+      disposers.push(register(definition));
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      diag(`[task-loop] tool register failed (${definition.name}): ${message}`, "error");
+    }
+  }
+  diag(`[task-loop] 单装工具族注册完成：${String(family.tools.length)} 员经官方 ctx.tools.register（unmount 全撤回）`, "info");
+  return {
+    dispose: () => {
+      for (const dispose of disposers) {
+        try {
+          dispose();
+        } catch {
+          // 宿主注销面异常隔离——卸载收口不外抛
+        }
+      }
+      family.disposeLoop();
+    },
+  };
+}
+
 const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig = {}): (() => void) => {
   const diag = config.diag ?? consoleDiagFallback;
   // 单装缺省装配（三件单源——home 缺席/db 打开失败 = 整体降级零 provide）
   const services = assembleTaskLoopServices(config, diag);
+  // 单装工具族注册（官方 tools 缝——apply 期注册、unmount 撤回；域服务缺席 = 零注册降级）
+  let disposeToolFamily: (() => void) | undefined;
   if (services !== undefined) {
+    disposeToolFamily = registerToolFamily(ctx, services, diag).dispose;
     provideResidentServices(ctx, services, diag);
     // 启动对账接线（reconcile 降级——fire-and-forget，失败 warn 留痕不阻载）
     void services.reconcile().catch((cause: unknown) => {
@@ -157,6 +218,8 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
   };
   registerForgeTasksRemote(ctx as TypertAssemblyCtxFace, remoteDeps);
   return () => {
+    // 工具族注销（官方 tools 缝 disposer 全量回收 + 循环内核活循环终态注销）
+    disposeToolFamily?.();
     // 库句柄关闭（cordis provide 注销面由宿主管辖——本插件自持资源仅 db 句柄）
     services?.dispose();
   };
@@ -192,11 +255,12 @@ export type { QueryTaskResult } from "./domain/tasks/query.js";
 // 服务——不入 inject 名单（可选消费不阻载），派发消费点现查（faces.resolveWorkerProfile
 // ——AGENTS 1.6 检测永不缓存）。forge.projects = 身份解析缝显式入名单（bug 9407ff29
 // 修型——解析缝生命周期绑 inject 名单显式；缺席 fail-soft 降级「无任务数据」+ 诊断留痕，
-// 253b8265 判例同族）。
+// 253b8265 判例同族）。tools = 单装工具族注册缝显式入名单（bug a033636f 修型——官方
+// ctx.tools.register 正门；缺席 fail-soft 零注册 + warn 留痕）。
 /** forge.projects 缝键（plugins/project host/assembly/seams.ts PROJECT_SEAM_KEYS.projects
  *  同值——跨包结构消费，本包零依赖声明只持同值常量，漂移由 identity 解析面诊断兜底） */
 const PROJECT_SEAM_KEY = "forge.projects";
 
-taskLoopPlugin.inject = ["webServer", PROJECT_SEAM_KEY] as const;
+taskLoopPlugin.inject = ["webServer", PROJECT_SEAM_KEY, "tools"] as const;
 
 export default taskLoopPlugin;
