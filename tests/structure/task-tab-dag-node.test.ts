@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
-const taskTabCss = readFileSync(join(ROOT, 'apps/web/src/views/overview/task-tab/task-tab.css'), 'utf8')
+const taskTabCss = readFileSync(join(ROOT, 'plugins/project/ui/dock-tabs/overview/task-tab/task-tab.css'), 'utf8')
 
 /** 选择器规则块声明集（平铺 CSS 零嵌套；注释先剥离；多命中取并集） */
 function declsOf(css: string, selector: string): string {

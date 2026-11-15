@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
-const OV = 'apps/web/src/views/overview'
+const OV = 'plugins/project/ui/dock-tabs/overview'
 const overviewCss = readFileSync(join(ROOT, `${OV}/overview.css`), 'utf8')
 const proposalCss = readFileSync(join(ROOT, `${OV}/proposal-tab/proposal-tab.css`), 'utf8')
 const featureCss = readFileSync(join(ROOT, `${OV}/feature-tab/feature-tab.css`), 'utf8')

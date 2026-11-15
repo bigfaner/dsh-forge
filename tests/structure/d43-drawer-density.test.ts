@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
-const drawerCss = readFileSync(join(ROOT, 'apps/web/src/views/overview/drawer/drawer.css'), 'utf8')
+const drawerCss = readFileSync(join(ROOT, 'plugins/project/ui/dock-tabs/overview/drawer/drawer.css'), 'utf8')
 
 /** 整行高令牌之半（D36 ×0.5 → D43 收档同款刻度——CSS 值断言锚） */
 const HALF = 'calc(var(--dsw-font-xs-13-line-height) / 2)'
