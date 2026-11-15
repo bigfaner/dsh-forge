@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest'
 import { ROOT } from './pins.js'
 
 const css = readFileSync(join(ROOT, 'apps/web/src/styles/cursors.css'), 'utf8')
-const drawer = readFileSync(join(ROOT, 'apps/web/src/views/overview/drawer/drawer.css'), 'utf8')
+const drawer = readFileSync(join(ROOT, 'plugins/project/ui/dock-tabs/overview/drawer/drawer.css'), 'utf8')
 const dispatch = readFileSync(join(ROOT, 'apps/web/src/views/session/dispatch-events-panel.css'), 'utf8')
 const wco = readFileSync(join(ROOT, 'apps/web/src/styles/wco.css'), 'utf8')
 const main = readFileSync(join(ROOT, 'apps/web/src/main.ts'), 'utf8')
@@ -134,8 +134,11 @@ describe('pin ⑰-3 消费面（文字面 / 官方 DragHandle / 产品自持拖�
 })
 
 describe('pin ⑰-4 指针面双径（v4 用户裁决「按钮这个全局修改——整个产品保持一致」）', () => {
-  it('径 a 产品面全量接线：apps/web/src 零裸 cursor:pointer 声明（45 处 sweep 零残留）', () => {
-    const files = walkCss(join(ROOT, 'apps/web/src')).filter((p) => !p.includes('styles/cursors.css'))
+  it('径 a 产品面全量接线：apps/web/src + plugins 产品面零裸 cursor:pointer 声明（45 处 sweep 零残留——k-m 迁移后扫描域扩 plugins）', () => {
+    const files = [
+      ...walkCss(join(ROOT, 'apps/web/src')),
+      ...walkCss(join(ROOT, 'plugins')),
+    ].filter((p) => !p.includes('styles/cursors.css') && !p.includes('node_modules'))
     expect(files.length).toBeGreaterThan(10)
     const offenders: string[] = []
     let wired = 0

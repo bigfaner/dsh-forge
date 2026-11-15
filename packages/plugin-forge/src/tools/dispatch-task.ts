@@ -123,9 +123,10 @@ const POOL_SCHEMA = {
     inProgress: { type: 'integer' },
     blocked: { type: 'integer' },
     unmetPending: { type: 'integer' },
+    gatedPending: { type: 'integer' },
     readFailed: { type: 'boolean', description: 'true = pool stats read failed; the zero values are a fallback, not actual counts' },
   },
-  required: ['pending', 'inProgress', 'blocked', 'unmetPending'],
+  required: ['pending', 'inProgress', 'blocked', 'unmetPending', 'gatedPending'],
 } as const
 
 const SOURCE_SCHEMA = {
@@ -237,7 +238,7 @@ async function poolSnapshotOf(tasks: ForgeTasksService, projectId: string, sourc
   try {
     return poolOf(await tasks.taskStats({ projectId, source }))
   } catch {
-    return { pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, readFailed: true }
+    return { pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, gatedPending: 0, readFailed: true }
   }
 }
 

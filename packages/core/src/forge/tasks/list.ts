@@ -44,6 +44,7 @@ import {
 } from '@dsh-forge/contracts'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { TASK_COLUMNS, type TaskStorageRow } from './query.js'
+import { countGatedPending } from './phase-gate.js'
 
 /** 读面装配依赖（service.ts 装配面结构传入——与 query.ts TasksQueryDeps 同形） */
 export interface TasksListDeps {
@@ -87,8 +88,9 @@ interface ContainerScope {
 /** 容器引用 → 作用域双列（按 kind 解析对应表 id；未命中 = undefined → 读面空结果，零 404）。
  *  M3 2.5 读面泛化：feature/proposal 双轨同形——成链撞键（同 slug 的 feature 与 proposal
  *  并存）下 kind + source_id 双列判别（claim 盲选 = kind+slug 直筛同判别口径；读面走
- *  source_id 解析——EQP 索引前缀锚 idx_tasks_source_status）。 */
-function resolveContainerScope(db: Database.Database, source: ContainerRef): ContainerScope | undefined {
+ *  source_id 解析——EQP 索引前缀锚 idx_tasks_source_status）。
+ *  导出面（bug a587123e 收口）：readUnsettledChain 服务动词复用同一容器解析（零第二实现）。 */
+export function resolveContainerScope(db: Database.Database, source: ContainerRef): ContainerScope | undefined {
   const table = source.kind === 'feature' ? 'features' : 'proposals'
   const id = db.prepare<unknown[], { id: string }>(`SELECT id FROM ${table} WHERE slug = ?`).get(source.slug)?.id
   return id === undefined ? undefined : { kind: source.kind, sourceId: id }
@@ -278,7 +280,7 @@ export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise
   const byStatus = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>
   const scope = q.source === undefined ? undefined : resolveContainerScope(db, q.source)
   if (q.source !== undefined && scope === undefined) {
-    return { total: 0, byStatus, unmetPending: 0 }
+    return { total: 0, byStatus, unmetPending: 0, gatedPending: 0 }
   }
   const rows = db
     .prepare<unknown[], { task_status: TaskStatus; n: number }>(
@@ -295,7 +297,10 @@ export async function taskStats(deps: TasksListDeps, q: TaskStatsQuery): Promise
   // M3 池快照派生（Interface 1：pending ∧ 前置未全 ∈ {completed, skipped} 计数——单查询派生；
   // dispatchTask 池快照数据源，与 byStatus 同 scope 口径）
   const unmetPending = countUnmetPending(db, scope)
-  return { total, byStatus, unmetPending }
+  // gatedPending = pending ∧ GATE_SQL 命中（loop-phase-gate §1.4）——phase-gate.countGatedPending
+  // 同源计数（谓词复用 GATE_SQL 零复制），与 byStatus/unmetPending 同 scope 口径
+  const gatedPending = countGatedPending(db, scope)
+  return { total, byStatus, unmetPending, gatedPending }
 }
 
 /** unmetPending 计数（pending 且存在未终态前置——EXISTS 半连接单查询；scope 可选） */

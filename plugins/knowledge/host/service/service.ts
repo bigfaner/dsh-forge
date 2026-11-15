@@ -7,8 +7,8 @@
 // knowledge_dir 下的 id 集（每调用期 SQL 子查询现算——判例 d24a4464：read/search 解析
 // 须每调用期求值，禁装配期静态快照）。
 // 召回准入（§2.4 裁决 #10）：同 id 有 confirmed 版时 unconfirmed 权威投影不进召回；
-// 0.4/0.2 两档经回流（滞回限次+冷却，阈值归 config）保留轻量召回出口；readAbstract/
-// read 对 unconfirmed 拒且不露存在性。
+// 0.4/0.2 两档经回流（滞回限次+冷却，阈值归 config）保留轻量召回出口；readAbstract 对
+// unconfirmed 拒且不露存在性；read 全文对 unconfirmed 放开（用户裁决改判，与 search 对齐）。
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -55,7 +55,7 @@ import {
   escapeLike,
   groupRecallRows,
   isNonEmptyString,
-  keywordDirectHit,
+  keywordDirectHitCount,
   KNOWLEDGE_HEAT_TERM,
   normalizeUpdated,
   prepareHeatByEntry,
@@ -775,18 +775,21 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       // OR 容错准入后的中性层细分（bug db58e1c4 修复配对）：子串通道 OR 并集把单词元
       // 弱命中行也放进无词面证据的中性分层——按词元覆盖度微升序（覆盖多者居前，1e-3
       // 步进远小于 bm25Norm 区分度），免单 bigram 弱命中淹没整 run 强覆盖行。
+      // 统一加法计分（用户裁决 2026-12 改判）：norm(bm25) + confirmed +2 + keywords
+      // 逐词元直查每命中 +1 + 热度加分——确认状态与关键词精确匹配均为加法位。
       // 1.17 精度调优（排序收敛非硬判定——db58e1c4/4cf01aa9 OR 兜底禁退化）：
-      // · keywords 列直查（整词/短语精确命中）= 强信号 +2.0 加权位（压过词面高词频）；
+      // · keywords 列直查（整词/短语精确命中）= 逐词元命中计数线性加权（每命中词元
+      //   +1.0——keywords 精确匹配数量越多 score 越高）；
       // · 词元碎片收敛：覆盖度以 title/summary/keywords 三元数据面计（1e-3 微升序不变）；
       // · 单碎片弱命中（覆盖不足半数词元、非 keywords 直查、无 FTS 强证据）降权截断——
       //   仅当强候选在场时生效；全候选皆弱时保留（OR 兜底 ≥1 命中不退化）。
       const substringTerms = text === '' ? [] : tokenizeSearchTerms(text)
       const keywordsOf = (r: EntryRow): string[] => splitKeywords(r.keywords)
       const coverageOf = (r: EntryRow): number => termCoverageOf(substringTerms, r.title, r.summary, keywordsOf(r))
-      const KEYWORD_DIRECT_BONUS = 2
+      const KEYWORD_DIRECT_BONUS = 1
       const weakFragmentOf = (r: EntryRow, bm25: number | undefined): boolean =>
         substringTerms.length > 1
-        && !keywordDirectHit(keywordsOf(r), substringTerms)
+        && keywordDirectHitCount(keywordsOf(r), substringTerms) === 0
         && bm25 === undefined
         && coverageOf(r) * 2 < substringTerms.length
 
@@ -802,7 +805,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
           effectiveRank: r.effective_rank,
           heat: heatByEntry.get(r.rid) ?? 0,
         })
-        const kwBonus = keywordDirectHit(keywordsOf(r), substringTerms) ? KEYWORD_DIRECT_BONUS : 0
+        const kwBonus = keywordDirectHitCount(keywordsOf(r), substringTerms) * KEYWORD_DIRECT_BONUS
         const score = base + kwBonus + (bm25 === undefined ? coverageOf(r) * 1e-3 : 0)
         scored.push({ entry: r, score, weakFragment: weakFragmentOf(r, bm25) })
       }

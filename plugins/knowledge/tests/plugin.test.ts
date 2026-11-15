@@ -320,6 +320,33 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词�
     }
   })
 
+  it('worktree 会话路由（bug b979ec34）：注册行只落主检出，cwd 在 .forge/worktrees 子树 → 解析到该 projectId 非 not bound', async () => {
+    const rt = freshRt()
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-wt-'))
+    try {
+      const wsDir = join(root, 'ws')
+      const worktree = join(wsDir, '.forge', 'worktrees', 'plugins')
+      mkdirSync(worktree, { recursive: true })
+      const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() }) // 零 config.projects
+      const service = rt.provided.get(KNOWLEDGE_SERVICE_NAME) as {
+        registerProject(q: { wsPath: string; projectId: string }): Promise<unknown>
+      }
+      await service.registerProject({ wsPath: wsDir, projectId: 'p-wt' }) // 只落主检出注册行
+      const search = rt.registeredTools.find((t) => t.name === 'knowledge_search')
+      // worktree cwd → 解析出 p-wt 注入服务（空知识库零命中，不抛 not bound）
+      const result = (await search?.execute({}, { agent: { session: { id: 's', header: { cwd: worktree } } } })) as unknown
+      expect(result).toBeDefined()
+      expect(JSON.stringify(result)).not.toContain('not bound')
+      // 主检出外非 worktree 路径失败口径不变
+      await expect(
+        search?.execute({}, { agent: { session: { id: 's', header: { cwd: join(root, 'other') } } } }),
+      ).rejects.toThrow(/not bound/)
+      dispose()
+    } finally {
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    }
+  })
+
   it('服务面反向解析同获注册表回退径（projectId→wsPath 两级解析第二级）：config 零绑定、注册行在场 → sessionRecall 可用', async () => {
     const rt = freshRt()
     const root = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-regfb2-'))

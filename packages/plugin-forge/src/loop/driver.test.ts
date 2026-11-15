@@ -5,12 +5,13 @@
 // 退避 ×3 halted 粘性、worker 异常终止 bounded 重入超限升级、停止（in-flight 真化
 // interrupted + ⑰ 收口）、v1 单活守卫。spawn/tasks/narrator 通道全桩（真 narrator 渲染 +
 // 录制通道；incident 仓缺目录 = 零 I/O）。
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AddTaskInput,
+  BugCard,
   ClaimTaskInput,
   ClaimTaskResult,
   ForgePluginEvent,
@@ -25,12 +26,12 @@ import type {
   TriageDecidedPayload,
   TriageOutcomePayload,
 } from '@dsh-forge/contracts'
-import { FIX_CHAIN_DEPTH_LIMIT } from '@dsh-forge/contracts'
+import { FIX_CHAIN_DEPTH_LIMIT, IMPLEMENTATION_TASK_TYPES } from '@dsh-forge/contracts'
 import { createLoopDriver } from './driver.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageDecisionResult, LoopTriageHook, LoopTriageInput } from './driver.js'
 import type { LoopRecord } from './registry.js'
-import { backoffDelayMs, isRateLimitFailure, isTriageInvalidOutput, LOOP_RESUME_RESTORE_REASON, LOOP_TRIAGE_MAX_ATTEMPTS, TRIAGE_FIX_CHAIN_DEPTH_LIMIT, triageFailureSummary } from './driver.js'
+import { backoffDelayMs, isRateLimitFailure, isTriageInvalidOutput, LOOP_RESUME_RESTORE_REASON, LOOP_TRIAGE_MAX_ATTEMPTS, TRIAGE_FIX_CHAIN_DEPTH_LIMIT, testBaselineBriefOf, triageFailureSummary } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { IncidentStore, NarrationChannel, Narrator } from '../notify/index.js'
 import { FORGE_PROGRESS_SCENARIO as S } from '../progress/index.js'
@@ -68,7 +69,7 @@ function snapshot(over: Partial<TaskSnapshot> = {}): TaskSnapshot {
   }
 }
 
-function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number } = {}): TaskStats {
+function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number; gatedPending?: number } = {}): TaskStats {
   const byStatus: Record<TaskStatus, number> = {
     pending: 0,
     in_progress: 0,
@@ -80,7 +81,7 @@ function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: nu
     interrupted: 0,
     ...over,
   }
-  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0 }
+  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0, gatedPending: over.gatedPending ?? 0 }
 }
 
 function card(slug: string, localId: string, over: Partial<TaskCard> = {}): TaskCard {
@@ -212,6 +213,15 @@ function tasksHarness(options?: { addTaskFailures?: number }) {
       if (bucket === 'suspended') return lists.suspended
       return lists.created
     },
+    // 链清单读面桩（bug a587123e 收口后 driver 消费 core readUnsettledChain 动词）：
+    // created 桶同判据投影（I 词表 + fix-/disc- 排除 + 非终态）——T5 夹具语义镜像
+    readUnsettledChain: async () => ({
+      unsettled: lists.created
+        .filter((c) => (IMPLEMENTATION_TASK_TYPES as readonly string[]).includes(c.taskType))
+        .filter((c) => !c.localId.startsWith('fix-') && !c.localId.startsWith('disc-'))
+        .filter((c) => c.taskStatus !== 'completed' && c.taskStatus !== 'skipped')
+        .map((c) => ({ slug: c.slug, localId: c.localId, taskStatus: c.taskStatus })),
+    }),
     queryTask: async () => shift(queryQueue),
     // 1.16 批量结算读面桩（wave 快照数据源——completed created 桶投影，commit/债计数零值）
     taskSettlements: async () =>
@@ -364,6 +374,10 @@ function build(options: {
   findRecurrenceCandidates?: (projectId: string, scope: { readonly slug: string; readonly localId: string; readonly sourceTaskId: string | undefined }) => Promise<unknown[]> | unknown[]
   /** T3「待建模」解除判据：卷宗建模报告在场桩 */
   modelingReportPresent?: (input: { readonly projectId: string; readonly slug: string; readonly localId: string; readonly bugIds: readonly string[] }) => boolean
+  /** bug 台账桩（loop-phase-gate 提案⑤——done 径承接检查数据源；open 行清单直录） */
+  bugs?: readonly { bugId: string; summary: string; sourceTaskId?: string }[]
+  /** P8 评审指示单选缝（bug cf6254ff）：deps.expertsPresent 桩——true = 三路措辞 / false|缺席 = subagent 回落 */
+  expertsPresent?: () => boolean
 } = {}): Built {
   const h = tasksHarness({ addTaskFailures: options.addTaskFailures })
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -440,6 +454,27 @@ function build(options: {
     ...(options.diag !== undefined ? { diag: options.diag } : {}),
     ...(options.findRecurrenceCandidates !== undefined ? { findRecurrenceCandidates: options.findRecurrenceCandidates as LoopDriverDeps['findRecurrenceCandidates'] } : {}),
     ...(options.modelingReportPresent !== undefined ? { modelingReportPresent: options.modelingReportPresent as LoopDriverDeps['modelingReportPresent'] } : {}),
+    ...(options.bugs !== undefined
+      ? {
+          bugs: {
+            listBugs: async (): Promise<readonly BugCard[]> =>
+              options.bugs!.map((bug): BugCard => ({
+                bugId: bug.bugId,
+                summary: bug.summary,
+                bugDesc: '',
+                triggerDesc: '',
+                expected: '',
+                actual: '',
+                bugStatus: 'open',
+                reporter: '',
+                createdAt: '',
+                updatedAt: '',
+                ...(bug.sourceTaskId !== undefined ? { sourceTaskId: bug.sourceTaskId } : {}),
+              })),
+          },
+        }
+      : {}),
+    ...(options.expertsPresent !== undefined ? { expertsPresent: options.expertsPresent } : {}),
     escalation: {
       escalate: async (e) => {
         escalations.push(e)
@@ -498,8 +533,8 @@ describe('runRound 全链（领取→领取通知→spawn→结算→结果通�
     // claim：主会话真实 id + loopSourced 循环来源标记 + source 对（无 adopt——就绪盲选）；
     // 次轮 no-task 判词后收口——claim 恰两次（第二轮零 adopt 键）
     expect(built.h.claimInputs).toHaveLength(2)
-    expect(built.h.claimInputs[0]).toEqual({ projectId: PROJECT, sessionId: OWNER, source: SOURCE, loopSourced: true })
-    expect(built.h.claimInputs[1]).toEqual({ projectId: PROJECT, sessionId: OWNER, source: SOURCE, loopSourced: true })
+    expect(built.h.claimInputs[0]).toEqual({ projectId: PROJECT, sessionId: OWNER, source: SOURCE, loopSourced: true, testBaseline: { present: false } })
+    expect(built.h.claimInputs[1]).toEqual({ projectId: PROJECT, sessionId: OWNER, source: SOURCE, loopSourced: true, testBaseline: { present: false } })
     // spawn：全文 prompt + label（任务键 · 任务名）+ parent 透传
     expect(built.spawn.requests).toHaveLength(1)
     expect(built.spawn.requests[0]).toMatchObject({
@@ -823,6 +858,129 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
 // 生产路径测试覆盖）。
 
 
+// ─────────────────────────── 测试基线文档简报递达（forge-test-boundary-gates 方案2） ───────────────────────────
+
+describe('测试基线文档简报递达（forge-test-boundary-gates 方案2）', () => {
+  const FULL_FLOW = () => ({
+    claim: [claimed(), NO_TASK],
+    stats: [
+      statsOf({ pending: 1 }),
+      statsOf({ in_progress: 1 }),
+      statsOf({ in_progress: 1 }),
+      statsOf({ completed: 1 }),
+      statsOf({ completed: 1 }),
+    ],
+  })
+
+  /** docsRoot 临时目录工厂（withBaseline = 落一份 features/feat-x/test-baseline.md） */
+  function makeDocsRoot(withBaseline: boolean): string {
+    const docsRoot = mkdtempSync(join(tmpdir(), 'forge-test-baseline-'))
+    if (withBaseline) {
+      const dir = join(docsRoot, 'features', 'feat-x')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'test-baseline.md'), '# test baseline\n')
+    }
+    return docsRoot
+  }
+
+  it('在场：claim 入参携文档根锚定绝对路径 + 基线时点（文件 mtime——零内容解析）', async () => {
+    const docsRoot = makeDocsRoot(true)
+    try {
+      const built = build({ ...FULL_FLOW() })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs[0]).toMatchObject({
+        testBaseline: { present: true, path: join(docsRoot, 'features', 'feat-x', 'test-baseline.md'), recordedAt: expect.any(String) },
+      })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('缺席：基线文档不在场 → present:false 兜底形态（循环照常领取零受阻）', async () => {
+    const docsRoot = makeDocsRoot(false)
+    try {
+      const built = build({ ...FULL_FLOW() })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: false } })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('检查故障与缺席同形：锚定路径 stat 异常（docsRoot 为文件——ENOTDIR）→ present:false 兜底、异常不上抛进 claim 链', async () => {
+    const docsRoot = mkdtempSync(join(tmpdir(), 'forge-test-baseline-'))
+    try {
+      const blocker = join(docsRoot, 'blocker.txt')
+      writeFileSync(blocker, 'x') // docsRoot 指向文件——其下 stat 必故障
+      const built = build({ ...FULL_FLOW() })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot: blocker })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs).toHaveLength(2) // claim 链零异常——两轮照常
+      expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: false } })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('每 claim 现查不缓存：文件中途删除 → 次轮 claim 转兜底形态', async () => {
+    const docsRoot = makeDocsRoot(true)
+    try {
+      const baselinePath = join(docsRoot, 'features', 'feat-x', 'test-baseline.md')
+      const built = build({
+        claim: [claimed(), claimed(), NO_TASK],
+        stats: [
+          statsOf({ pending: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ completed: 2 }),
+          statsOf({ completed: 2 }),
+        ],
+        // 首个 worker spawn 时点删除基线文档——次轮 claim 现查必见缺席
+        spawnBehavior: (s) => {
+          s.setBehavior(async (n) => {
+            if (n === 1) rmSync(baselinePath)
+            return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'completed', output: '' }), dispose: async () => {} }
+          })
+        },
+      })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs).toHaveLength(3)
+      expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: true } })
+      expect(built.h.claimInputs[1]).toMatchObject({ testBaseline: { present: false } })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('docsRoot 缺席（start 未携带）→ present:false 兜底形态（禁裸相对路径——无锚定根即兜底）', async () => {
+    const built = build({ ...FULL_FLOW() })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: false } })
+  })
+
+  it('helper 锚定矩阵：proposal 容器 → proposals/<slug>/；目录形态（非文件）→ 兜底', async () => {
+    const docsRoot = mkdtempSync(join(tmpdir(), 'forge-test-baseline-'))
+    try {
+      const pDir = join(docsRoot, 'proposals', 'prop-a')
+      mkdirSync(pDir, { recursive: true })
+      writeFileSync(join(pDir, 'test-baseline.md'), '# baseline\n')
+      mkdirSync(join(docsRoot, 'features', 'feat-dir', 'test-baseline.md'), { recursive: true }) // 目录非文件
+      const present = await testBaselineBriefOf(docsRoot, { kind: 'proposal', slug: 'prop-a' })
+      expect(present).toEqual({ present: true, path: join(pDir, 'test-baseline.md'), recordedAt: expect.any(String) })
+      const notFile = await testBaselineBriefOf(docsRoot, { kind: 'feature', slug: 'feat-dir' })
+      expect(notFile).toEqual({ present: false })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged lazy 补标记', () => {
   it('first-pass done：落标记一枚（HEAD 回落结算 commit）+ settle 文本含复盘/沉淀直接指示（指标/越阈/learn/retro-done）——零任务派生（bug 4186a70c）', async () => {
     const built = build({
@@ -875,6 +1033,35 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
     expect(settle.text).toContain('< 6 → 未越阈')
     expect(settle.text).toContain('retro-done')
     expect(settle.text).toContain('recordImplCheckpoint')
+  })
+
+  it('P8 评审指示单选随 deps.expertsPresent 分流（bug cf6254ff 消费链回归）：true = 三路实名措辞 / false = subagent 回落', async () => {
+    const runOnce = async (expertsPresent: (() => boolean) | undefined) => {
+      const built = build({
+        claim: [claimed(), NO_TASK],
+        stats: [
+          statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }),
+          statsOf({ completed: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 }),
+          statsOf({ completed: 1 }), statsOf({ completed: 1 }),
+        ],
+        checkpointRows: [],
+        resolveProposalId: async () => 'prop-1',
+        ...(expertsPresent !== undefined ? { expertsPresent } : {}),
+      })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+      await untilSettled(built.driver)
+      const settle = built.calls.at(-1)!
+      expect(settle.method).toBe('settle')
+      return settle.text
+    }
+    const withExperts = await runOnce(() => true)
+    expect(withExperts).toContain('三路交叉评审：spec-reviewer')
+    expect(withExperts).toContain('architecture-reviewer')
+    expect(withExperts).toContain('code-reviewer')
+    expect(withExperts).not.toContain('subagent 分域交叉评审')
+    const fallback = await runOnce(() => false)
+    expect(fallback).toContain('subagent 分域交叉评审')
+    expect(fallback).not.toContain('spec-reviewer')
   })
 
   it('标记落库失败不收口：本轮 continue 留幂等窗口，次轮补落标记后才 settle（零任务派生）', async () => {
@@ -2095,6 +2282,102 @@ describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
     expect(timeout?.wakeup).toBe(true) // ⑮ 结算单点唤醒（AC）
     expect(timeout?.text).toContain('完成 4 · 阻塞 0 · 待处理 2')
     expect(timeout?.text).toContain('提示用户"稍后重新执行 /run-dag-tasks feat-x"')
+  })
+})
+
+describe('CE-1 收工判据（loop-phase-gate）', () => {
+  it('T5 wait 径 gatedPending>0：不计 patience 连击、每轮进度 note；达上限 → phase-gate 挂起（载荷透传 unsettled）', async () => {
+    const gated = statsOf({ pending: 1, gatedPending: 1 })
+    const built = build({
+      claim: [NO_TASK],
+      stats: [gated, gated, gated, gated],
+    })
+    // 容器夹具：I 卡 1.13 已 completed（终态不计）；I 卡 2.1 in_progress（滞留——入 unsettled）；
+    // fix-1 前缀排除；3.1 test-run 是 V 卡本身（不进链集合）
+    built.h.lists.created = [
+      card('feat-x', '1.13', { taskStatus: 'completed' }),
+      card('feat-x', '2.1', { taskStatus: 'in_progress' }),
+      card('feat-x', 'fix-1', { taskStatus: 'pending' }),
+      card('feat-x', '3.1', { taskStatus: 'pending', taskType: 'test-run' }),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 三轮 gate 持有等待（不并入 patience），第三轮达上限 → phase-gate 挂起（非 ⑮ 超时收口）
+    expect(built.h.claimInputs).toHaveLength(3)
+    expect(built.calls.filter((c) => c.method === 'settle')).toEqual([])
+    expect(suspended.escalation).toMatchObject({
+      kind: 'phase-gate',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+    })
+    const phaseGate = suspended.escalation as Extract<LoopEscalation, { kind: 'phase-gate' }>
+    expect(phaseGate.unsettled).toEqual([{ slug: 'feat-x', localId: '2.1', taskStatus: 'in_progress' }])
+    // 每轮进度 note（loop/gate-held 场景）
+    const gateEvents = built.progressCalls.filter((e) => e.scenario === S.loopGateHeld)
+    expect(gateEvents.length).toBeGreaterThanOrEqual(3)
+    expect(gateEvents[0]?.note).toContain('1 张验证卡被实现链阶段门持有')
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('T5 反例：链终态后（gatedPending 归零）正常 done 径收口', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ pending: 1, gatedPending: 1 }), statsOf({ completed: 2 }), statsOf({ completed: 2 }), statsOf({ completed: 2 })],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
+    expect(built.calls.at(-1)?.text).toContain('全部任务已完成')
+  })
+})
+
+describe('done 径承接检查（loop-phase-gate 提案⑤——open bug 无承接修复链不收口）', () => {
+  const doneStats = statsOf({ completed: 1, interrupted: 1 })
+
+  it('T10：open bug ∧ 源任务非终态 ∧ 无活后继 → 不收口转 unclaimed-bugs 挂起（载荷带未承接清单）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [doneStats, doneStats, doneStats, doneStats],
+      bugs: [{ bugId: 'bug-1', summary: 'worker 登记的缺陷', sourceTaskId: 'card-feat-x-2.9' }],
+    })
+    built.h.lists.created = [card('feat-x', '2.9', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(built.calls.filter((c) => c.method === 'settle')).toEqual([])
+    expect(suspended.escalation).toMatchObject({
+      kind: 'unclaimed-bugs',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+    })
+    const unclaimed = suspended.escalation as Extract<LoopEscalation, { kind: 'unclaimed-bugs' }>
+    expect(unclaimed.bugs).toEqual([{ bugId: 'bug-1', summary: 'worker 登记的缺陷', taskKey: 'feat-x/2.9' }])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('T10 反例一：有活后继（interrupted fix 卡）→ 承接在途，正常收口', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [doneStats, doneStats, doneStats, doneStats],
+      bugs: [{ bugId: 'bug-1', summary: 'worker 登记的缺陷', sourceTaskId: 'card-feat-x-2.9' }],
+    })
+    built.h.lists.created = [
+      card('feat-x', '2.9', { taskStatus: 'completed' }),
+      card('feat-x', 'fix-1', { taskStatus: 'interrupted', sourceTask: { slug: 'feat-x', localId: '2.9' } }),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.calls.at(-1)?.text).toContain('全部任务已完成')
+  })
+
+  it('T10 反例二：无 open bug / bugs face 缺席 → 正常收口（机制惰性不判）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [doneStats, doneStats, doneStats, doneStats],
+    })
+    built.h.lists.created = [card('feat-x', '2.9', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.calls.at(-1)?.text).toContain('全部任务已完成')
   })
 })
 

@@ -307,7 +307,7 @@ test('J1·Golden 5-6：驳回 Modal 取消零动作/确认三表零残留 + reca
 // 边界：部分失败不回滚（J1-3 rejected-confirmed）+ 多选模式退出零残留（J1-4 反向锚）
 // ─────────────────────────────────────────────────────────────────────────────
 test('J1·边界：混合集驳回部分失败不回滚（rejected-confirmed）+ 退出多选零残留', async () => {
-  const corpus: readonly CorpusEntry[] = [J1_CORPUS[0], J1_CORPUS[1], J1_CORPUS[4]]
+  const corpus: readonly CorpusEntry[] = [J1_CORPUS[0]!, J1_CORPUS[1]!, J1_CORPUS[4]!]
   const { root, wsDir } = makeReviewCorpus(corpus)
   let launched: ReviewLaunch | undefined
   try {

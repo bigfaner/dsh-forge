@@ -33,9 +33,10 @@ describe('描述面：tool 定义与参数 schema 契约锚', () => {
     expect(tool.parameters.required).toEqual(['id'])
   })
 
-  it('描述面披露准入三分支语义（confirmed 全开 / superseded 曾审可读 / unconfirmed 拒且不露存在性）', () => {
+  it('描述面披露准入语义（confirmed/unconfirmed/superseded 曾审全可读）', () => {
     expect(tool.description).toContain('confirmed')
-    expect(tool.description).toContain('unconfirmed drafts are denied')
+    expect(tool.description).toContain('unconfirmed')
+    expect(tool.description).toContain('all fully readable')
   })
 })
 
@@ -70,7 +71,7 @@ describe('execute：会话上下文解析 → 服务调用 → 透传', () => {
 
   it('denied 回执渲染 = 通用拒读文案（不露存在性）', () => {
     const tool = createReadTool(deps(stubService().service))
-    const denied: KnowledgeReadOutcome = { outcome: 'denied', message: 'knowledge_read denied: full-text access requires a confirmed entry (unconfirmed drafts are not readable)' }
+    const denied: KnowledgeReadOutcome = { outcome: 'denied', message: 'knowledge_read denied: entry not found or its source file is not readable' }
     const text = tool.output.render({}, denied)
     expect(text[0]?.text).toBe(denied.message)
   })

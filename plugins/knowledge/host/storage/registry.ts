@@ -52,6 +52,12 @@ export interface KnowledgeRegistry {
   upsert(wsPath: string, knowledgeDir: string, projectId?: string): RegistryRow
   /** 按键查行（入参同样 realpath 归一——变体拼写命中 canonical 键） */
   findByWsPath(wsPath: string): RegistryRow | undefined
+  /**
+   * worktree 包含层查行（bug b979ec34）：cwd 严格落在 `<wsPath>/.forge/worktrees` 子树
+   * （forge 派发工作树保留段——forge.worktrees 锚同位）→ 返回该注册行；projectId 缺席的
+   * 行不参与（无路由价值）。非保留段子树不命中（前缀匹配不放开——任意项目子目录不误绑）。
+   */
+  findByWorktreePath(cwd: string): RegistryRow | undefined
   /** 按 API 级 projectId 查行（fix-2 一级解析动态化回查面；无值/未命中 → undefined） */
   findByProjectId(projectId: string): RegistryRow | undefined
   /**
@@ -139,6 +145,25 @@ export function createKnowledgeRegistry(db: Database.Database): KnowledgeRegistr
     findByProjectId(projectId) {
       const row = selectByProjectId.get(projectId)
       return row === undefined ? undefined : toRow(row)
+    },
+    findByWorktreePath(cwd) {
+      // 双分隔符归一比较（canonical 键 realpath 真值拼写，Windows 反斜杠/posix 正斜杠并防）
+      const norm = (p: string): string => p.replace(/[\\/]+$/, '').replace(/[\\/]+/g, '\\')
+      const key = norm(canonicalWsPath(cwd))
+      // 嵌套注册时最长 wsPath 胜出（深行更特异）
+      let best: RegistryRow | undefined
+      let bestLen = -1
+      for (const row of listAll.all()) {
+        if (row.project_id === null) continue
+        const base = norm(row.ws_path)
+        if (base.length <= bestLen) continue
+        const under = `${base}\\.forge\\worktrees`
+        if (key === under || key.startsWith(`${under}\\`)) {
+          best = toRow(row)
+          bestLen = base.length
+        }
+      }
+      return best
     },
     remove(wsPath) {
       const key = canonicalWsPath(wsPath)

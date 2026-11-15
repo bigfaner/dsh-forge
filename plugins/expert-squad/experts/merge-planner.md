@@ -4,7 +4,7 @@ description: >-
   梳理两分支 commit 与冲突面、预演合并差异、产出完整合并计划供主 agent 执行；
   只读 git 不动手合并。
 title: 合并计划专家
-tools: [pwsh, read, write, edit, glob, grep]
+tools: [pwsh, read, write, edit, glob, grep, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

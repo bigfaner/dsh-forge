@@ -181,7 +181,12 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
     const staticResolveProjectId = createProjectResolver(config.projects ?? [])
     const staticResolveWsPath = createWsPathResolver(config.projects ?? [])
     const resolveProjectId: ProjectIdResolver = (cwd) =>
-      staticResolveProjectId(cwd) ?? storage.registry.findByWsPath(cwd)?.projectId ?? undefined
+      staticResolveProjectId(cwd)
+      ?? storage.registry.findByWsPath(cwd)?.projectId
+      // worktree 包含层（bug b979ec34）：循环派发把 worker cwd 钉定到
+      // .forge/worktrees/<slug> 检出——整串相等恒 miss → 按保留段路由到主检出项目
+      ?? storage.registry.findByWorktreePath(cwd)?.projectId
+      ?? undefined
     const resolveWsPath: WsPathResolver = (projectId) =>
       staticResolveWsPath(projectId) ?? storage.registry.findByProjectId(projectId)?.wsPath ?? undefined
     // workspace 域 id 归一步（fix-10——bug bb11c53e）：官方宿主 projects 行 id = workspaceId

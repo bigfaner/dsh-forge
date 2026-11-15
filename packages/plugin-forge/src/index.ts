@@ -41,7 +41,7 @@ import { adaptSessionProgressAppend, createSubmitSettleDisplay, FORGE_PROGRESS_S
 import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
 import { createSettleReportRecovery, createRecurrenceFaces, gitHeadCommit } from './dispatch-core/index.js'
 import type { EscalationAskFace } from './loop/index.js'
-import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
+import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, LOOP_REVIEW_EXPERT_KEYS, renderInjection } from './loop/injection.js'
 import { createLoopRegistry } from './loop/registry.js'
 import { createForgeDispatchEventsProjection, createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
@@ -529,18 +529,46 @@ const forgePlugin: ForgePlugin = Object.assign(
         : undefined
     // 专家团服务在场探测（AGENTS 1.6——检测永不缓存，每次消费点调用期现查；bug 0b83e3aa
     // 同款双通道：ctx.experts 注入属性面（跨 realm 可达）+ reflect.get（同 scope 先例面）。
-    // 缺席/异常/非函数面 = false。双消费面：forge:commander 段条件注入 + P8 评审指示
-    // 组装期单选（专家双路/回落文案）。
+    // 双谓词拆分（bug cf6254ff——单探测面服务两个谓词不同的消费方）：
+    // - expertsServicePresent：服务在场原语义——forge:commander 段条件注入消费，服务
+    //   在场即注入，不核验具体专家键；
+    // - loopReviewExpertsPresent：P8 三键核验——LOOP_REVIEW_EXPERT_KEYS 三键同源
+    //   （get 对缺席/禁用键 fail-loud 抛错 = 该键缺席；任一键不在场/异常 = false，
+    //   fail-soft 回落 P8 回落版），仅供 loop driver deps.expertsPresent 消费。
     function expertsServicePresent(): boolean {
       try {
-        const viaInject = (ctx as ForgeContextFace & { readonly experts?: { get?: unknown } }).experts
+        const viaInject = (ctx as ForgeContextFace & { readonly experts?: ExpertsServiceFace }).experts
         if (viaInject !== undefined && typeof viaInject.get === 'function') return true
       } catch {
         // 注入服务未就绪 = 降级到 reflect 通道
       }
       try {
-        const experts = ctx.reflect?.get('experts') as { get?: unknown } | undefined
+        const experts = ctx.reflect?.get('experts') as ExpertsServiceFace | undefined
         return experts !== undefined && typeof experts.get === 'function'
+      } catch {
+        return false
+      }
+    }
+    function expertsKeyPresent(experts: ExpertsServiceFace, key: string): boolean {
+      try {
+        return experts.get(key) !== undefined
+      } catch {
+        return false
+      }
+    }
+    function loopReviewExpertsPresent(): boolean {
+      try {
+        const viaInject = (ctx as ForgeContextFace & { readonly experts?: ExpertsServiceFace }).experts
+        if (viaInject !== undefined && typeof viaInject.get === 'function') {
+          return LOOP_REVIEW_EXPERT_KEYS.every((key) => expertsKeyPresent(viaInject, key))
+        }
+      } catch {
+        // 注入服务未就绪 = 降级到 reflect 通道
+      }
+      try {
+        const experts = ctx.reflect?.get('experts') as ExpertsServiceFace | undefined
+        return experts !== undefined && typeof experts.get === 'function'
+          && LOOP_REVIEW_EXPERT_KEYS.every((key) => expertsKeyPresent(experts, key))
       } catch {
         return false
       }
@@ -587,7 +615,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
     const loopDriverBase = createLoopDriver({
       registry: loopRegistry,
-      expertsPresent: expertsServicePresent,
+      expertsPresent: loopReviewExpertsPresent,
       // 跨 preset 并集探针（bug a5b12254——求交基准不接 global 单层投影：官方工具全随
       // preset 装 preset scope 层，无参 schemas() 只剩 expert 域名 → 金丝雀守卫判不可信
       // → 不裁剪 → 档案 pwsh 落 Mac 原样放行拆 spawn。改接 contracts
@@ -599,6 +627,8 @@ const forgePlugin: ForgePlugin = Object.assign(
       globalToolNames: createUnionToolNamesProbe(toolsSchemasReaderOf(ctx), agentPresetsOf),
       ...(e2eBaseline !== undefined ? { e2eBaseline } : {}),
       tasks: ctx.forgeTasks,
+      // bug 台账读面（loop-phase-gate 提案⑤——done 径承接检查数据源；缺席 = 机制惰性不判）
+      bugs: ctx.forgeBugs,
       spawn,
       narrator,
       events: sink,

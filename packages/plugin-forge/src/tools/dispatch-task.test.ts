@@ -5,6 +5,7 @@
 // 循环核心全桩（LoopDriver/LoopRegistry 缝——真 registry + 驱动器录制桩）；纯函数面
 // （池三分/收窄矩阵/agentOptions）单测保留（dispatch-core 单源再导出）。
 import { describe, expect, it, vi } from 'vitest'
+import AjvModule from 'ajv'
 import type { ForgePluginEvent, ForgeTasksService, TaskStats, TaskStatus } from '@dsh-forge/contracts'
 import { TASK_TYPES, WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
 import { createUnionToolNamesProbe, platformShellToolName, probeIsSubdomain } from '@dsh-forge/contracts'
@@ -42,6 +43,18 @@ import {
 
 // ─────────────────────────── 夹具 ───────────────────────────
 
+/** ajv CJS 默认导出在 NodeNext+verbatimModuleSyntax 下的类型面窄化（同 output-schemas.test.ts 先例） */
+interface AjvErrorLike {
+  instancePath: string
+  message?: string
+}
+type ValidateFn = ((data: unknown) => boolean) & { errors?: AjvErrorLike[] | null }
+const Ajv = AjvModule as unknown as new (options?: { allErrors?: boolean }) => {
+  compile(schema: object): ValidateFn
+}
+const ajv = new Ajv({ allErrors: true })
+
+
 /** 会话唯一后缀（跨用例零污染） */
 let sessionSeq = 0
 function execOf(): ToolExecFace {
@@ -49,7 +62,7 @@ function execOf(): ToolExecFace {
   return { agent: { session: { id: `dispatch-${sessionSeq}`, header: { cwd: 'C:\\ws\\demo' } } } }
 }
 
-function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number } = {}): TaskStats {
+function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number; gatedPending?: number } = {}): TaskStats {
   const byStatus: Record<TaskStatus, number> = {
     pending: 0,
     in_progress: 0,
@@ -61,7 +74,7 @@ function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: nu
     interrupted: 0,
     ...over,
   }
-  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0 }
+  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0, gatedPending: over.gatedPending ?? 0 }
 }
 
 /** 事件捕获 sink 桩（零 I/O；prepare no-op） */
@@ -136,7 +149,7 @@ function harness(): Harness {
   const { sink, events } = sinkStub()
   const calls = { stats: 0 }
   const statsInputs: unknown[] = []
-  let statsResult: TaskStats = statsOf({ pending: 1, blocked: 1, unmetPending: 2 })
+  let statsResult: TaskStats = statsOf({ pending: 1, blocked: 1, unmetPending: 2, gatedPending: 0 })
   let statsError: Error | undefined
   const tasks = {
     taskStats: async (input: unknown) => {
@@ -214,21 +227,22 @@ describe('parseDispatchTaskArgs（3b 契约：source 对成对必填，缺失即
 
 describe('poolOf + classifyPool（池态三分）', () => {
   it('poolOf：byStatus 四键 + unmetPending 投影', () => {
-    expect(poolOf(statsOf({ pending: 3, in_progress: 1, blocked: 2, unmetPending: 4 }))).toEqual({
+    expect(poolOf(statsOf({ pending: 3, in_progress: 1, blocked: 2, unmetPending: 4, gatedPending: 0 }))).toEqual({
       pending: 3,
       inProgress: 1,
       blocked: 2,
       unmetPending: 4,
+      gatedPending: 0,
     })
   })
 
   it('三分：全终态收工 / blocked 无通路疑似死锁 / 其余等待', () => {
-    expect(classifyPool({ pending: 0, inProgress: 0, blocked: 0, unmetPending: 0 })).toBe('done')
-    expect(classifyPool({ pending: 0, inProgress: 0, blocked: 2, unmetPending: 0 })).toBe('deadlock-suspected')
-    expect(classifyPool({ pending: 0, inProgress: 1, blocked: 0, unmetPending: 0 })).toBe('wait')
-    expect(classifyPool({ pending: 2, inProgress: 0, blocked: 0, unmetPending: 2 })).toBe('wait')
+    expect(classifyPool({ pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, gatedPending: 0 })).toBe('done')
+    expect(classifyPool({ pending: 0, inProgress: 0, blocked: 2, unmetPending: 0, gatedPending: 0 })).toBe('deadlock-suspected')
+    expect(classifyPool({ pending: 0, inProgress: 1, blocked: 0, unmetPending: 0, gatedPending: 0 })).toBe('wait')
+    expect(classifyPool({ pending: 2, inProgress: 0, blocked: 0, unmetPending: 2, gatedPending: 0 })).toBe('wait')
     // pending>0 且全满足（claim 空转竞态）→ 等待兜底
-    expect(classifyPool({ pending: 1, inProgress: 0, blocked: 0, unmetPending: 0 })).toBe('wait')
+    expect(classifyPool({ pending: 1, inProgress: 0, blocked: 0, unmetPending: 0, gatedPending: 0 })).toBe('wait')
   })
 })
 
@@ -636,7 +650,7 @@ describe('execute · 池快照读数失败标注（R2-minor⑤——零值为兜
     h.failStats('task_stats read failed')
     const out = (await h.tool.execute(ARGS, h.exec)) as { kind: string; pool: { pending: number; readFailed?: boolean } }
     expect(out.kind).toBe('started')
-    expect(out.pool).toEqual({ pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, readFailed: true })
+    expect(out.pool).toEqual({ pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, gatedPending: 0, readFailed: true })
     const text = h_render(h, out)
     expect(text).toContain('pool read FAILED')
     expect(text).toContain('not actual counts')
@@ -677,6 +691,22 @@ describe('协议 pin（description 完整承载调用协议 ↔ 注入模板同�
     // parameters 面成对必填（schema 强制——缺失即拒绝的数据面）
     const params = h.tool.parameters as { required?: string[] }
     expect(params.required).toEqual(['source_kind', 'source_slug'])
+  })
+
+  it('三态载荷过 output schema oneOf 校验（真实 PoolSnapshot 含 gatedPending——实现加字段 schema 漏同步防回退锚，bug 22c09d93）', () => {
+    const h = harness()
+    const validate = ajv.compile(h.tool.output.schema as object)
+    const pool = poolOf(statsOf({ pending: 1, in_progress: 1, blocked: 1, unmetPending: 2, gatedPending: 3 }))
+    expect(pool).toHaveProperty('gatedPending', 3)
+    const source = { kind: 'feature' as const, slug: 'demo' }
+    const payloads = [
+      { kind: 'started', loopId: 'loop-1', source, pool },
+      { kind: 'running', source, ownerSessionId: 's-1', pool },
+      { kind: 'suspended', loopId: 'loop-1', source, summary: 's', resumed: false, takenOver: false, pool },
+    ]
+    for (const payload of payloads) {
+      expect(validate(payload), JSON.stringify(validate.errors)).toBe(true)
+    }
   })
 })
 

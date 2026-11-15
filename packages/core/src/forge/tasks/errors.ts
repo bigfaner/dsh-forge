@@ -20,8 +20,11 @@ import type {
   AcCriteriaMismatchData,
   AcNotMetData,
   BeforeSuccessorInvalidData,
+  BlockSourceInProgressData,
+  BlockSourceTerminalData,
   DependenciesUnmetData,
   FilesUnionMismatchData,
+  PhaseGateUnsettledData,
   RuntimeEvidenceRequiredData,
   TaskRef,
   TaskStatus,
@@ -549,6 +552,71 @@ export class BlockClassificationRequiredError extends Error {
         `闸门按任务 scope 交叉校验台账候选并携「疑似同族」警示）`,
     )
     this.name = 'BlockClassificationRequiredError'
+    this.data = data
+  }
+}
+
+// ───────── loop-phase-gate B1：阶段门守卫 + block_source 状态守卫 ─────────
+
+/**
+ * claim fresh 径容器实现链阶段门未收口（409）：V ∧ feature 容器 ∧ ¬(无入边 ∧ e2e_attribution=1)
+ * ∧ 链非终态时 pending→in_progress 转移被门拒（adopt 定向恢复径与 in_progress 幂等重入径豁免）。
+ * data.unsettled 带链上未终态 I 卡清单——agent 可据以推进；链卡死时走处置阶梯（pauseTask/人工）。
+ */
+export class PhaseGateUnsettledError extends Error {
+  readonly code = 'ERR_PHASE_GATE_UNSETTLED' as const
+  readonly data: PhaseGateUnsettledData
+
+  constructor(data: PhaseGateUnsettledData) {
+    super(
+      `容器实现链阶段门未收口：${data.taskRef.slug}/${data.taskRef.localId} 需待容器实现链全部终态 ` +
+        `（completed/skipped）后方可领取——链上未终态：\n` +
+        `${data.unsettled.map((u) => `- ${u.slug}/${u.localId} ${u.taskStatus}`).join('\n')}\n` +
+        `等待容器实现链收口；链卡死时走处置阶梯（pauseTask/人工）` +
+        `（project ${data.projectId}，container ${data.containerSlug}）`,
+    )
+    this.name = 'PhaseGateUnsettledError'
+    this.data = data
+  }
+}
+
+/** 运行期判别（跨 IPC / 日志附载后仍可识别）。 */
+export function isPhaseGateUnsettledError(e: unknown): e is PhaseGateUnsettledError {
+  return e instanceof PhaseGateUnsettledError
+}
+
+/**
+ * addTask block_source 对在飞源（409）：源任务 in_progress 不可挂 fix 链等待边——
+ * 指路「先 pauseTask 源任务 → addTask(blockSource=true) → resume」。
+ */
+export class BlockSourceInProgressError extends Error {
+  readonly code = 'ERR_BLOCK_SOURCE_IN_PROGRESS' as const
+  readonly data: BlockSourceInProgressData
+
+  constructor(data: BlockSourceInProgressData) {
+    super(
+      `block_source 源任务在飞：${data.taskRef.slug}/${data.taskRef.localId} 当前 in_progress——` +
+        `先 pauseTask 源任务 → addTask(blockSource=true) → resume（project ${data.projectId}）`,
+    )
+    this.name = 'BlockSourceInProgressError'
+    this.data = data
+  }
+}
+
+/**
+ * addTask block_source 对终态源（409）：源 completed/skipped/rejected 后挂 fix 链等待边无解锁语义——
+ * 指路「源已终态，改用 disc 径（不携 blockSource）或改选未终态源」。
+ */
+export class BlockSourceTerminalError extends Error {
+  readonly code = 'ERR_BLOCK_SOURCE_TERMINAL' as const
+  readonly data: BlockSourceTerminalData
+
+  constructor(data: BlockSourceTerminalData) {
+    super(
+      `block_source 源任务已终态：${data.taskRef.slug}/${data.taskRef.localId} 当前 ${data.taskStatus}——` +
+        `源已终态，改用 disc 径（不携 blockSource）或改选未终态源（project ${data.projectId}）`,
+    )
+    this.name = 'BlockSourceTerminalError'
     this.data = data
   }
 }

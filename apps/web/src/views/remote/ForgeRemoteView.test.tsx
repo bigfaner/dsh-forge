@@ -22,7 +22,7 @@ function taskOf(partial: Partial<TaskCard> & Pick<TaskCard, 'taskId' | 'taskStat
 
 const SNAPSHOT = (tasks: TaskCard[]): RemoteProgressSnapshot => ({
   tasks,
-  stats: { total: tasks.length, byStatus: {} as never, unmetPending: 0 },
+  stats: { total: tasks.length, byStatus: {} as never, unmetPending: 0, gatedPending: 0 },
 })
 
 describe('RemotePairingGuide 配对引导页', () => {

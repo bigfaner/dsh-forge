@@ -23,7 +23,7 @@ function freshPair(): { tasksHome: string; workspaceDir: string } {
 }
 
 describe('5.1 openForgeDb · core testutil 形制建库（派生目录单源）', () => {
-  it('缺席建库：{tasksHome}/{flatten}@{hash8}/forge.db 落位 + 十四表（八域表 + bugs + 基建表 + v4 归档表 + v5 implementation_checkpoints）+ schema v7（v5=实现检查点流水一表新增；v6=proposals 承接链左列；v7=bugs.container_slug 归属列）+ busy_timeout', () => {
+  it('缺席建库：{tasksHome}/{flatten}@{hash8}/forge.db 落位 + 十四表（八域表 + bugs + 基建表 + v4 归档表 + v5 implementation_checkpoints）+ schema v8（v5=实现检查点流水一表新增；v6=proposals 承接链左列；v7=bugs.container_slug 归属列；v8=tasks.e2e_attribution 归因卡承载列——守卫式 ALTER 只增列不改表数，8391a22b）+ busy_timeout', () => {
     const { tasksHome, workspaceDir } = freshPair()
     const db = openForgeDb(tasksHome, workspaceDir)
     try {
@@ -50,7 +50,7 @@ describe('5.1 openForgeDb · core testutil 形制建库（派生目录单源）'
         'tasks',
         'tasks_surface_archive',
       ])
-      expect(db.prepare<unknown[], { v: number | null }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(7)
+      expect(db.prepare<unknown[], { v: number | null }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(8)
       expect(db.pragma('busy_timeout', { simple: true })).toBe(5000)
       expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
     } finally {
@@ -64,7 +64,7 @@ describe('5.1 openForgeDb · core testutil 形制建库（派生目录单源）'
     first.close()
     const second = openForgeDb(tasksHome, workspaceDir)
     try {
-      expect(second.prepare<unknown[], { c: number }>(`SELECT COUNT(*) AS c FROM schema_meta`).get()?.c).toBe(7)
+      expect(second.prepare<unknown[], { c: number }>(`SELECT COUNT(*) AS c FROM schema_meta`).get()?.c).toBe(8)
     } finally {
       second.close()
     }

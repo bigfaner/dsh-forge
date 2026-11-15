@@ -85,9 +85,9 @@ export function bm25Norm(bm25: number): number {
   return -bm25 / (1 - bm25)
 }
 
-/** effective_rank 准入因子（1.0→1.0 / 0.6→0.92 / 0.4→0.84 / 0.2→0.76——微调档位） */
-export function rankFactorOf(effectiveRank: number): number {
-  return 1 + 0.2 * (effectiveRank - 1)
+/** confirmed 加法加分（用户裁决 2026-12 改判——统一加法：已确认 +2 分；其余档位 0 分） */
+export function rankBonusOf(effectiveRank: number): number {
+  return effectiveRank >= 1 ? 2 : 0
 }
 
 /** 热度轻加分（0.05×log(1+heat)——BM25 主导，热度不挤出相关条目） */
@@ -96,13 +96,13 @@ export function heatBonusOf(heat: number): number {
 }
 
 /**
- * 三因子融合终式（裁决 #2）：score = norm(bm25) × rank因子 + 热度加分（降序 = 相关居前）。
- * bm25 缺位（无词面证据：无过滤全域查询 / 仅子串通道命中）→ norm 取中性 0.5
- * （不与强弱任一端重叠，避免无证据行挤占或沉底）。
+ * 融合终式（用户裁决 2026-12 改判——统一加法）：score = norm(bm25) + confirmed 加分
+ * （+2）+ 热度加分（降序 = 相关居前）。bm25 缺位（无词面证据：无过滤全域查询 /
+ * 仅子串通道命中）→ norm 取中性 0.5（不与强弱任一端重叠，避免无证据行挤占或沉底）。
  */
 export function composeSearchScore(input: { bm25?: number; effectiveRank: number; heat: number }): number {
   const norm = input.bm25 === undefined ? 0.5 : bm25Norm(input.bm25)
-  return norm * rankFactorOf(input.effectiveRank) + heatBonusOf(input.heat)
+  return norm + rankBonusOf(input.effectiveRank) + heatBonusOf(input.heat)
 }
 
 /** FTS5 phrase 引号包裹（内嵌引号转义——防 MATCH 注入） */
@@ -177,11 +177,20 @@ export function textSubstringHit(title: string, summary: string, text: string): 
 /**
  * keywords 列直查命中（1.17 强信号）：query 词元（tokenizeSearchTerms 口径）对条目
  * keywords 词条整词全等或短语包含（大小写不敏感——CJK 词条内子串即短语命中；ASCII
- * 词条含词元视同整词族命中，低风险放宽已随任务上报）。命中即排序加权位，不参与准入。
+ * 词条含词元视同整词族命中，低风险放宽已随任务上报）。命中即排序加权位，不参与准入；
+ * 加权按逐词元命中计数计（keywordDirectHitCount——匹配词元越多精确信号越强，score 越高）。
  */
+export function keywordDirectHitCount(keywords: readonly string[], terms: readonly string[]): number {
+  if (keywords.length === 0 || terms.length === 0) return 0
+  let n = 0
+  for (const t of terms) {
+    if (keywords.some((k) => k.toLowerCase().includes(t))) n += 1
+  }
+  return n
+}
+
 export function keywordDirectHit(keywords: readonly string[], terms: readonly string[]): boolean {
-  if (keywords.length === 0 || terms.length === 0) return false
-  return terms.some((t) => keywords.some((k) => k.toLowerCase().includes(t)))
+  return keywordDirectHitCount(keywords, terms) > 0
 }
 
 /**

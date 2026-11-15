@@ -170,11 +170,14 @@ describe('写门三法（stage② §2.3/§2.4）', () => {
     expect(out.id).toMatch(/^[a-z0-9-]+$/)
     expect(out.id).toBe('deploy-baseline')
     expect(existsSync(out.filePath)).toBe(true)
-    // read：unconfirmed 拒正文且不露存在性（denied 与未知 id 同形）
-    const denied = await service.read({ projectId, id: out.id })
-    expect(denied.outcome).toBe('denied')
+    // read：unconfirmed 可读（用户裁决改判——search 召回链路对齐）；未知 id 仍 denied
+    const readOut = await service.read({ projectId, id: out.id })
+    expect(readOut.outcome).toBe('read')
+    if (readOut.outcome !== 'read') return
+    expect(readOut.status).toBe('unconfirmed')
+    expect(readOut.body).toContain('部署正文')
     const unknown = await service.read({ projectId, id: 'no-such-id' })
-    expect(unknown).toEqual(denied)
+    expect(unknown.outcome).toBe('denied')
   })
 
   it('write：frontmatter 白名单闭集——关键字段（id 等）必写 + 零冗余字段（源头杜绝身份缺失/字段蔓延）', async () => {

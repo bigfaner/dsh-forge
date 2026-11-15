@@ -147,7 +147,10 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
   if (reason !== undefined) out.reason = reason
   // T2 归类（blocked 根因归类——kind 单参 + recurrence_of 成组参；presence 必带性与 kind
   // 枚举终判归 core ERR_BLOCK_CLASSIFICATION_REQUIRED——归属域单点，此处只做形状收窄）
+  // Root cause: 成对校验一侧用 optionalString 归一化值（空串→缺省）、另一侧用原始键在场检查——
+  // 同一份空值载荷两种口径自相矛盾；统一按归一化值判定（空串/空数组皆视为缺省）。
   const classificationKind = optionalString(a, 'block_classification_kind', TOOL)
+  const classificationRecurrenceOf = optionalString(a, 'block_classification_recurrence_of', TOOL)
   if (classificationKind !== undefined) {
     if (classificationKind !== 'new-problem' && classificationKind !== 'same-family-recurrence') {
       throw new Error(
@@ -155,16 +158,10 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
       )
     }
     out.block_classification_kind = classificationKind
-    const recurrenceOf = optionalString(a, 'block_classification_recurrence_of', TOOL)
-    if (recurrenceOf !== undefined) {
-      if (recurrenceOf === '') {
-        throw new Error(
-          `${TOOL}: block_classification_recurrence_of must be a non-empty string when given`,
-        )
-      }
-      out.block_classification_recurrence_of = recurrenceOf
+    if (classificationRecurrenceOf !== undefined) {
+      out.block_classification_recurrence_of = classificationRecurrenceOf
     }
-  } else if (a['block_classification_recurrence_of'] !== undefined) {
+  } else if (classificationRecurrenceOf !== undefined) {
     throw new Error(
       `${TOOL}: block_classification_recurrence_of requires block_classification_kind`,
     )
@@ -226,32 +223,35 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
   if (gateCoverage !== undefined) out.gate_coverage = gateCoverage
   const commitHash = optionalString(a, 'commit_hash', TOOL)
   if (commitHash !== undefined) out.commit_hash = commitHash
-  // e2e 取证债（改进7——三参成组：suite 必带、specs 必带非空、note 可选）
+  // e2e 取证债（改进7——三参成组：suite 必带、specs 必带非空、note 可选；空串/空数组视为缺省）
   const debtSuite = optionalString(a, 'evidence_debt_suite', TOOL)
-  const debtSpecs = optionalStringArray(a, 'evidence_debt_specs', TOOL)
+  const debtSpecsRaw = optionalStringArray(a, 'evidence_debt_specs', TOOL)
+  const debtSpecs = debtSpecsRaw !== undefined && debtSpecsRaw.length > 0 ? debtSpecsRaw : undefined
+  const debtNote = optionalString(a, 'evidence_debt_note', TOOL)
   if (debtSuite !== undefined || debtSpecs !== undefined) {
-    if (debtSuite === undefined || debtSpecs === undefined || debtSpecs.length === 0) {
+    if (debtSuite === undefined || debtSpecs === undefined) {
       throw new Error(`${TOOL}: evidence_debt_suite and a non-empty evidence_debt_specs must be given together`)
     }
     out.evidence_debt_suite = debtSuite
     out.evidence_debt_specs = debtSpecs
-    const debtNote = optionalString(a, 'evidence_debt_note', TOOL)
     if (debtNote !== undefined) out.evidence_debt_note = debtNote
-  } else if (a['evidence_debt_note'] !== undefined) {
+  } else if (debtNote !== undefined) {
     throw new Error(`${TOOL}: evidence_debt_note requires evidence_debt_suite and evidence_debt_specs`)
   }
-  // 机械⑤取证声明口径（runtime_surface + runtime_evidence 三参）：face/artifacts 成组必带、note 可选
+  // 机械⑤取证声明口径（runtime_surface + runtime_evidence 三参）：face/artifacts 成组必带、note 可选；空串/空数组视为缺省
   const evFace = optionalString(a, 'runtime_evidence_face', TOOL)
-  const evArtifacts = optionalStringArray(a, 'runtime_evidence_artifacts', TOOL)
+  const evArtifactsRaw = optionalStringArray(a, 'runtime_evidence_artifacts', TOOL)
+  const evArtifacts =
+    evArtifactsRaw !== undefined && evArtifactsRaw.length > 0 ? evArtifactsRaw : undefined
+  const evNote = optionalString(a, 'runtime_evidence_note', TOOL)
   if (evFace !== undefined || evArtifacts !== undefined) {
-    if (evFace === undefined || evArtifacts === undefined || evArtifacts.length === 0) {
+    if (evFace === undefined || evArtifacts === undefined) {
       throw new Error(`${TOOL}: runtime_evidence_face and a non-empty runtime_evidence_artifacts must be given together`)
     }
     out.runtime_evidence_face = evFace
     out.runtime_evidence_artifacts = evArtifacts
-    const evNote = optionalString(a, 'runtime_evidence_note', TOOL)
     if (evNote !== undefined) out.runtime_evidence_note = evNote
-  } else if (a['runtime_evidence_note'] !== undefined) {
+  } else if (evNote !== undefined) {
     throw new Error(`${TOOL}: runtime_evidence_note requires runtime_evidence_face and runtime_evidence_artifacts`)
   }
   const runtimeSurface = optionalStringArray(a, 'runtime_surface', TOOL)

@@ -50,21 +50,25 @@ function renderDirBlock(label: string, abs: string, note: string): string | unde
   } catch {
     return undefined
   }
-  const lines: string[] = [`${label}——${note}`, `  ${abs}${sep}`]
+  // Markdown 往返安全：路径行以反引号包裹（inline code 不做转义处理）——裸 Windows 反斜杠
+  // 路径经任何 Markdown 渲染面会被转义吞噬（`\.` → `.`、行尾 `\` + 换行 = 硬换行），
+  // 复制/转抄所得路径损坏指向不存在的文件（bug 44fb1da2）。
+  const pathLine = `  \`${abs}${sep}\``
+  const lines: string[] = [`${label}——${note}`, pathLine]
   scanLines(abs, '  ', 1, lines)
   return lines.join('\n')
 }
 
 /** logs 根锚点段：恒出（目录未建也不依赖在盘性——根路径由装配解析给出） */
 function renderLogsRootBlock(abs: string): string {
-  return [`forge.project_logs_dir——${DIR_ROLE_NOTES['forge.project_logs_dir']}`, `  ${abs}${sep}`].join('\n')
+  return [`forge.project_logs_dir——${DIR_ROLE_NOTES['forge.project_logs_dir']}`, `  \`${abs}${sep}\``].join('\n')
 }
 
 /** 任务日志锚点段：恒出；树仅任务目录在盘时追加（首跑未建 → 介绍行 + 路径行） */
 function renderTaskLogsBlock(abs: string): string {
   const note =
     '任务日志目录：{forge.task_logs_dir} = {forge.project_logs_dir}/{slug}/{local_id}；本轮任务的证据子文件夹与 resume.md 进度文件（随附 resume.validity.json 效度戳——跨 HEAD/基线漂移的证据强制重跑）存储在此。'
-  const lines: string[] = [`forge.task_logs_dir——${note}`, `  ${abs}${sep}`]
+  const lines: string[] = [`forge.task_logs_dir——${note}`, `  \`${abs}${sep}\``]
   scanLines(abs, '  ', 1, lines)
   return lines.join('\n')
 }

@@ -298,6 +298,35 @@ export function renderEscalationAsk(escalation: LoopEscalation): EscalationAskMa
         ].join('\n'),
         options: ESCALATION_OPTIONS,
       }
+    case 'phase-gate':
+      return {
+        header: '派发循环裁决',
+        question: `任务源 ${escalation.source.slug} 的验证任务被实现链阶段门持续持有（机械等待已达上限），需要你决定下一步`,
+        detail: [
+          `任务源: ${escalation.source.slug}（${escalation.source.kind}）`,
+          '',
+          '持有原因（全文）：',
+          escalation.reason,
+          '',
+          '链上滞留卡:',
+          ...escalation.unsettled.map((card) => `- ${card.slug}/${card.localId} ${card.taskStatus}`),
+        ].join('\n'),
+        options: ESCALATION_OPTIONS,
+      }
+    case 'unclaimed-bugs':
+      return {
+        header: '派发循环裁决',
+        question: `任务源 ${escalation.source.slug} 仍有 open bug 未建立承接修复链，循环不收口，需要你决定下一步`,
+        detail: [
+          `任务源: ${escalation.source.slug}（${escalation.source.kind}）`,
+          '未承接 bug 清单:',
+          ...escalation.bugs.map((bug) => `- ${bug.taskKey} ${bug.summary}（bug_id ${bug.bugId}）`),
+          '',
+          '判定原文：',
+          escalation.reason,
+        ].join('\n'),
+        options: ESCALATION_OPTIONS,
+      }
     case 'deadlock':
       return {
         header: '派发循环裁决',

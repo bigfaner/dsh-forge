@@ -211,19 +211,19 @@ describe('CT-bm25-recall-02 归一非平顶（BR-E2）', () => {
 
 // ── CT-bm25-recall-03 档位微调语义（BR-G3） ──
 
-describe('CT-bm25-recall-03 rank 档位微调（BR-G3）', () => {
-  it('O1 同相关度高档位在前；O2 微调不翻盘（强相关低档 < 弱相关高档）；O3 同档位次 = 纯 BM25 序', async () => {
+describe('CT-bm25-recall-03 confirmed 加法加分（BR-G3——用户裁决改判：统一加法计分）', () => {
+  it('O1 同相关度 confirmed（+2）前于 unconfirmed（0）；O2 confirmed 加分可翻盘（弱相关 confirmed > 强相关 unconfirmed）；O3 同档位次 = 纯 BM25 序', async () => {
     const w = world('ct03')
     await w.service.rebuildIndex(w.projectId)
     const hits = await w.service.search({ projectId: w.projectId, text: 'krecall', sessionId: 's' })
-    // O1：同文本 confirmed(1.0) 前于 unconfirmed(0.6)
+    // O1：同文本 confirmed(1.0,+2) 前于 unconfirmed(0.6,+0)
     const mid = hits.find((h) => h.frontmatterId === 'br-mid')!
     const twin = hits.find((h) => h.frontmatterId === 'br-mid-twin')!
     expect(posOf(hits, 'br-mid')).toBeLessThan(posOf(hits, 'br-mid-twin'))
     expect(mid.effectiveRank).toBe(1.0)
     expect(twin.effectiveRank).toBe(0.6)
-    // O2：强相关低档（unconfirmed 强文本）不落后于弱相关高档（confirmed 弱文本）
-    expect(posOf(hits, 'br-strong-low')).toBeLessThan(posOf(hits, 'br-weak-high'))
+    // O2（改判语义）：弱相关 confirmed（+2 加分）前于强相关 unconfirmed（0 加分）——加法位允许翻盘
+    expect(posOf(hits, 'br-weak-high')).toBeLessThan(posOf(hits, 'br-strong-low'))
     // O3：同为 confirmed 档的 strong/mid/weak 位次纯由相关度决定（同 CT-01 结论在档位内成立）
     expect(posOf(hits, 'br-strong')).toBeLessThan(posOf(hits, 'br-mid'))
     expect(posOf(hits, 'br-mid')).toBeLessThan(posOf(hits, 'br-weak'))

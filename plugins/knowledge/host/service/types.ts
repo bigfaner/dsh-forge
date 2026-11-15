@@ -107,7 +107,7 @@ export interface KnowledgeService {
   // ── stage② 写入门（§2.3/§2.4——write/read/confirm 三法） ──
   /** 严契约写入：三拒收/三问不过/查重建议/版本化复用 id（回执面见 KnowledgeWriteOutcome） */
   write(q: KnowledgeWriteQuery): Promise<KnowledgeWriteOutcome>
-  /** 全文读取（agent 面）：confirmed 全开 / unconfirmed 拒且不露存在性 / superseded 曾审可读 */
+  /** 全文读取（agent 面）：confirmed / unconfirmed / superseded（曾审）全可读 */
   read(q: KnowledgeReadQuery): Promise<KnowledgeReadOutcome>
   /** confirm 升格（服务方法非 tool）：CAS 前置（未归并）+ 事务内旧版降 superseded + 指针前移 */
   confirm(q: KnowledgeConfirmQuery): Promise<KnowledgeConfirmOutcome>
@@ -332,7 +332,7 @@ export interface KnowledgeReadQuery {
   readonly triggerText?: string
 }
 
-/** read 回执联合：read（md 全文）/ denied（unconfirmed 拒正文且不露存在性） */
+/** read 回执联合：read（md 全文）/ denied（未知 id / 源文件不可读） */
 export type KnowledgeReadOutcome =
   | {
       readonly outcome: 'read'

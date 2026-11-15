@@ -3,10 +3,9 @@
 //（§1 通道形状 / §2 回执 code 封闭字面量联合）。接口形状为编译期面——键结构断言锚，
 // expectTypeOf 锚经 lint:test-types 机械执行。
 // 定位铁律：dto 文件纯类型零逻辑零依赖（本测试只 pin 形状）。
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+// stage④ golden 零漂移对照（运行期 fixture 断言）已迁 tests/knowledge/stage4-golden-mirror/
+//（bug c8a50d50：e2e/support import 越出 contracts 测试 tsconfig rootDir，TS6059）。
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { assertSameStructure } from '../../../../e2e/support/knowledge-golden/compare.js'
 import type {
   DomainNode,
   EntryActionFailureCode,
@@ -71,7 +70,9 @@ describe('knowledge-review-ui AC1 EntryActionRequest 判别联合（action 判�
   it('批量/单条/空校验语义入注释锚：move/editMeta entryIds 元组 [number]（恰 1 条编译期形状）', () => {
     expectTypeOf<Extract<EntryActionRequest, { action: 'move' }>['entryIds']>().toEqualTypeOf<[number]>()
     expectTypeOf<Extract<EntryActionRequest, { action: 'editMeta' }>['entryIds']>().toEqualTypeOf<[number]>()
-    expectTypeOf<Extract<EntryActionRequest, { action: 'confirm' }>['entryIds']>().toEqualTypeOf<number[]>()
+    // confirm/reject 共享同一联合成员（action: 'confirm' | 'reject'）——单键 Extract 得
+    // never（bug c8a50d50 TS2344），按成员判别键全集断言
+    expectTypeOf<Extract<EntryActionRequest, { action: 'confirm' | 'reject' }>['entryIds']>().toEqualTypeOf<number[]>()
     expectTypeOf<Extract<EntryActionRequest, { action: 'createDomain' }>>().not.toHaveProperty('entryIds')
   })
 })
@@ -133,7 +134,8 @@ describe('stage④ 1.7 RecallGroup 扩 call 级三字段（S2/S3/S4）', () => {
       hits: [],
     }
     for (const key of Object.keys(group)) {
-      expect((group as Record<string, unknown>)[key], `键 ${key} 不得为 undefined`).not.toBeUndefined()
+      // 接口无字符串索引签名——经 unknown 二段转（bug c8a50d50 TS2352）
+      expect((group as unknown as Record<string, unknown>)[key], `键 ${key} 不得为 undefined`).not.toBeUndefined()
     }
     expect(JSON.parse(JSON.stringify(group))).toEqual(group)
   })
@@ -183,75 +185,5 @@ describe('stage④ 1.7 recallFeedback 第七通道信封（feedback-channel.md �
     expectTypeOf<RecallFeedbackResult['outcome']>().toEqualTypeOf<'success' | 'failure'>()
     const rejected: RecallFeedbackOutcome = { outcome: 'rejected-request', code: 'invalid-request', message: 'x' }
     expect(rejected.outcome).toBe('rejected-request')
-  })
-})
-
-// ───────────────────────── stage④ 1.2 golden 零漂移对照（J2-CT-04 / 动工固化后契约↔golden 形状一致） ─────────────────────────
-
-const STAGE4_FIXTURES = join(import.meta.dirname, '../../../../e2e/support/knowledge-golden/fixtures/stage4')
-
-/** 契约 DTO 镜像（typed）↔ golden fixture 结构等价：golden 任一键集/类型/长度漂移即红 */
-describe('stage4 golden 对照：契约与响应形状零漂移（assertSameStructure——标量不参与）', () => {
-  it('sessionRecall.json ↔ RecallGroup[] 契约镜像（六组：search×2/read/read-abstract/browse/legacy）', () => {
-    const fixture = JSON.parse(readFileSync(join(STAGE4_FIXTURES, 'sessionRecall.json'), 'utf8')) as { response: unknown }
-    const mirror: RecallGroup[] = [
-      {
-        callId: 'g1', turnSeq: 3, verb: 'search',
-        query: { text: 'q', domainPrefix: 'd', hint: 'h' },
-        hitCount: 2, durationMs: 4, createdAt: 't', triggerSnap: 's', contentSnap: null,
-        hits: [
-          { rowId: 41, entryId: 1, frontmatterId: 'id', title: 't', domainPath: 'd', heat: 2, score: 0.91, scope: 'project' },
-          { rowId: 42, entryId: 6, frontmatterId: 'id', title: 't', domainPath: '', heat: 1, score: 0.72, scope: 'global' },
-        ],
-      },
-      {
-        callId: 'g2', turnSeq: 3, verb: 'search',
-        query: { text: 'q', hint: 'h' },
-        hitCount: 0, durationMs: 2, createdAt: 't', triggerSnap: 's', contentSnap: null, hits: [],
-      },
-      {
-        callId: 'g3', turnSeq: 3, verb: 'read',
-        query: { frontmatterId: 'kb-be-001' },
-        hitCount: 1, durationMs: 1, createdAt: 't', triggerSnap: 's', contentSnap: '# 标题\n正文',
-        hits: [{ rowId: 43, entryId: 3, frontmatterId: 'id', title: 't', domainPath: 'd', heat: 1, score: null, scope: 'project' }],
-      },
-      {
-        callId: 'g4', turnSeq: 3, verb: 'read-abstract',
-        query: { entryId: 2 },
-        hitCount: 1, durationMs: 1, createdAt: 't', triggerSnap: 's', contentSnap: null,
-        hits: [{ rowId: 44, entryId: 2, frontmatterId: 'id', title: 't', domainPath: 'd', heat: 2, score: null, scope: 'project' }],
-      },
-      {
-        callId: 'g5', turnSeq: 3, verb: 'browse',
-        query: { domain: 'd', offset: 0, limit: 20, order: 'status' },
-        hitCount: 2, durationMs: 3, createdAt: 't', triggerSnap: 's', contentSnap: null,
-        hits: [
-          { rowId: 45, entryId: 4, frontmatterId: 'id', title: 't', domainPath: 'd', heat: 1, score: null, scope: 'project' },
-          { rowId: 46, entryId: 5, frontmatterId: 'id', title: 't', domainPath: 'd', heat: 0, score: null, scope: 'global' },
-        ],
-      },
-      {
-        callId: 'g6', turnSeq: null, verb: 'search',
-        query: { keywords: ['legacy'] },
-        hitCount: 0, durationMs: 0, createdAt: 't', triggerSnap: null, contentSnap: null, hits: [],
-      },
-    ]
-    expect(() => assertSameStructure(fixture.response, mirror, '$.response')).not.toThrow()
-  })
-
-  it('listEntries.json ↔ KnowledgeCard[] 契约镜像（scopeFilter=global 请求——卡级 scope 在场）', () => {
-    const fixture = JSON.parse(readFileSync(join(STAGE4_FIXTURES, 'listEntries.json'), 'utf8')) as { request: { scopeFilter?: string }; response: unknown }
-    expect(fixture.request.scopeFilter).toBe('global')
-    const mirror: KnowledgeCard[] = [
-      { entryId: 6, title: 't', summary: 's', keywords: ['k'], status: 'confirmed', domainPath: '', updated: 'u', heat: 1, scope: 'global' },
-      { entryId: 5, title: 't', summary: 's', keywords: ['k1', 'k2'], status: 'unconfirmed', domainPath: 'd', updated: 'u', heat: 0, scope: 'global' },
-    ]
-    expect(() => assertSameStructure(fixture.response, mirror, '$.response')).not.toThrow()
-  })
-
-  it('recallFeedback.json ↔ RecallFeedbackOutcome 契约镜像（行级 👍 成功回执——第七通道）', () => {
-    const fixture = JSON.parse(readFileSync(join(STAGE4_FIXTURES, 'recallFeedback.json'), 'utf8')) as { response: unknown }
-    const mirror: RecallFeedbackOutcome = { results: [{ rowId: 41, outcome: 'success' }] }
-    expect(() => assertSameStructure(fixture.response, mirror, '$.response')).not.toThrow()
   })
 })

@@ -16,6 +16,10 @@ import {
   TASK_STATUS_LABELS,
   TASK_TYPES,
   TASK_TYPE_LABELS,
+  type TaskType,
+  E2E_ATTRIBUTION_COLUMN,
+  IMPLEMENTATION_TASK_TYPES,
+  VALIDATION_TASK_TYPES,
   type BilingualLabel,
 } from './labels.js'
 
@@ -55,6 +59,39 @@ describe('AC4 TaskType 20 值词汇（§7-6 映射定稿）', () => {
     for (const type of TASK_TYPES) {
       expect(type).toMatch(/^[a-z][a-z-]*$/)
     }
+  })
+})
+
+describe('loop-phase-gate T11 验证类词表 pin（设计 §3——词表单点）', () => {
+  it('VALIDATION_TASK_TYPES = 5 值齐备（实现收口后验证动作；test-gen-* 属实现族、gate 单列不入）', () => {
+    expect([...VALIDATION_TASK_TYPES]).toEqual([
+      'test-run',
+      'validation-code',
+      'validation-ux',
+      'eval-contract',
+      'eval-journey',
+    ])
+  })
+
+  it('IMPLEMENTATION_TASK_TYPES = TASK_TYPES − V − gate 派生完备（V ∪ I ∪ {gate} = TASK_TYPES）', () => {
+    const union = new Set([...VALIDATION_TASK_TYPES, ...IMPLEMENTATION_TASK_TYPES, 'gate'])
+    expect(union.size).toBe(TASK_TYPES.length)
+    for (const t of TASK_TYPES) expect(union.has(t)).toBe(true)
+  })
+
+  it('V 与 I 均 ⊆ TASK_TYPES（子集与派生同源——消费方不手抄字面清单）', () => {
+    for (const v of VALIDATION_TASK_TYPES) expect(TASK_TYPES).toContain(v)
+    for (const i of IMPLEMENTATION_TASK_TYPES) expect(TASK_TYPES).toContain(i)
+  })
+
+  it('I ∩ V = ∅ ∧ gate ∉ I（三集两两不交——GATE_SQL 换元洞闭合 pin：交集成员会在门判据换元下双向穿透）', () => {
+    const iSet = new Set<TaskType>(IMPLEMENTATION_TASK_TYPES)
+    for (const v of VALIDATION_TASK_TYPES) expect(iSet.has(v)).toBe(false)
+    expect(iSet.has('gate')).toBe(false)
+  })
+
+  it('E2E_ATTRIBUTION_COLUMN 标记列常量在场（tasks.e2e_attribution——生成侧机械事实）', () => {
+    expect(E2E_ATTRIBUTION_COLUMN).toBe('e2e_attribution')
   })
 })
 

@@ -410,8 +410,8 @@ async function createE2eDebtTask(
         // 文案与简报行真实存在性一致（bug ca061ef6）：简报红灯清单在场才指示比对——
         // 无红灯/基线门未接线时兜底文案，不指示真机不存在的简报行
         e2eBaselineRedCases !== undefined && e2eBaselineRedCases.length > 0
-          ? '执行 e2e 并断言上述 spec；如遇失败，先比对任务说明中的 E2E_BASELINE_RED 行——其中列出的失败在本任务开始前就已存在，不是本任务造成的回归；上报结论时注明这一背景。'
-          : '执行 e2e 并断言上述 spec；本任务创建时说明中没有 E2E_BASELINE_RED 行（基线未启用，或当时没有已知的既有失败）——遇失败不要默认当作本任务的回归，先区分三类原因（环境问题 / 断言过时 / 真实回归）再上报。',
+          ? '执行 e2e 并断言上述 spec；如遇失败，先比对任务说明中的 E2E_BASELINE_RED 行——其中列出的失败在本任务开始前就已存在，不是本任务造成的回归；上报结论时注明这一背景。双轨基线并存时以 E2E_BASELINE_RED 用例级清单优先，TEST_BASELINE 文档基线作补充归因参考。'
+          : '执行 e2e 并断言上述 spec；本任务创建时说明中没有 E2E_BASELINE_RED 行（基线未启用，或当时没有已知的既有失败）——遇失败不要默认当作本任务的回归，先区分三类原因（环境问题 / 断言过时 / 真实回归）再上报。双轨基线并存时以 E2E_BASELINE_RED 用例级清单优先，TEST_BASELINE 文档基线作补充归因参考。',
       ].join('\n'),
       dependsOn: [ctx.task.localId],
       priority: 'P1',

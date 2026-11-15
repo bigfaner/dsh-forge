@@ -29,7 +29,9 @@
 //
 // 依赖方向：loop → dispatch-core / notify / contracts 单向；零工具壳 import（可拆卸壳纪律）。
 import { FIX_CHAIN_DEPTH_LIMIT, FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from '@dsh-forge/contracts'
-import type { ContainerRef, DiagLevel, ForgePluginEvent, ForgeSettingsService, ForgeTasksService, TaskRef, TaskSnapshot, TaskStats, TaskType, TriageDecidedPayload, TriageOutcomePayload } from '@dsh-forge/contracts'
+import type { BugCard, ContainerRef, DiagLevel, ForgePluginEvent, ForgeSettingsService, ForgeTasksService, ListBugsQuery, TaskRef, TaskSnapshot, TaskStats, TaskType, TriageDecidedPayload, TriageOutcomePayload, TestBaselineBrief } from '@dsh-forge/contracts'
+import { stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { HALT_THRESHOLD, HALTED_REASON } from '../dispatch-core/index.js'
 // S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
 import { claimForDispatch, classifyPool, computeWaveSnapshot, findLiveSuccessor, gitHeadCommit, poolOf, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
@@ -53,7 +55,7 @@ import type { ForgeProgressCounts, ForgeProgressEventData, ForgeProgressScenario
 import { FORGE_PROGRESS_SCENARIO, FORGE_PROGRESS_SCENARIOS } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
-import { attributionTaskInput, baselineForHead, loadPersistedBaseline, persistBaseline, type E2eBaselineCache } from './e2e-baseline.js'
+import { baselineForHead, issueAttributionCard, loadPersistedBaseline, persistBaseline, type E2eBaselineCache } from './e2e-baseline.js'
 
 // ─────────────────────────── 机械常量（第一层守卫/耐心参数） ───────────────────────────
 
@@ -324,6 +326,28 @@ export type LoopEscalation =
         /** 同缝计数（≥ RECURRENCE_ESCALATION_THRESHOLD） */
         readonly count: number
       }
+    | {
+        /** CE-1 阶段门持有挂起（loop-phase-gate——gated 持续等待达 patience 上限；链上存在
+         *  suspended/孤儿 I 卡时机械等不来，主动停下问人，decisions #16） */
+        readonly kind: 'phase-gate'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        /** 持有原因全文（问询 detail） */
+        readonly reason: string
+        /** 链上滞留 I 卡清单（suspend 载荷透传——问询侧直接看到链上滞留卡，design §7 F-1） */
+        readonly unsettled: readonly { readonly slug: string; readonly localId: string; readonly taskStatus: string }[]
+      }
+    | {
+        /** done 径承接检查挂起（loop-phase-gate 提案⑤——open bug 无承接修复链不收口；
+         *  bug 卡在台账即队列，收口门兜底，不依赖 agent 记忆重试） */
+        readonly kind: 'unclaimed-bugs'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        /** 判定全文（问询 detail） */
+        readonly reason: string
+        /** 未承接 bug 清单（bug_id + 摘要 + 源任务键） */
+        readonly bugs: readonly { readonly bugId: string; readonly summary: string; readonly taskKey: string }[]
+      }
 
 export interface LoopEscalationHook {
   escalate(escalation: LoopEscalation): Promise<void>
@@ -447,6 +471,8 @@ export function renderRetroInstruction(slug: string, rows: readonly LoopCheckpoi
       '（markdown 同构字段 title/summary/keywords/domainPath + 溯源字段：来源容器 slug / 来源任务 / bug id）；' +
       '交叉核验取到的共识为沉淀输入。',
     '- 提炼态 conventions 晋升 docs/conventions 正本仍走提案管线裁决，不直改技能检查项。',
+    '- 测试判例三类沉淀：flaky 史（用例 + 环境 + 复发轮次）、测试退役理由（被测物变更 → 用例去向）、' +
+      '覆盖真空（评审发现的缺席面）——评审发现的测试判例/翻车点按此三类归类沉淀，不漏判例。',
     '',
     '三、收口标记（知识沉淀完成后执行）：',
     `- 用 recordImplCheckpoint 为 ${slug} 落 retro-done 标记` +
@@ -663,6 +689,12 @@ export interface LoopDriverDeps {
    */
   readonly projectId?: string
   readonly tasks: ForgeTasksService
+  /**
+   * bug 台账读面（可选——done 径承接检查提案⑤的数据源；缺席 = 机制惰性不判，行为零变化。
+   * 结构兼容 ForgeBugsService.listBugs——装配面 ctx.forgeBugs 直传，缺席即四处机制生产
+   * 静默关停（loop-recurrence-hardening 0db72bcb 同款断链警示），本注入是生产路径的装配前提）
+   */
+  readonly bugs?: { listBugs(q: ListBugsQuery): Promise<readonly BugCard[]> }
   readonly spawn: SpawnWorker
   /** 提交落点核验器（可选——透传 dispatch-core 结算核；缺席回落 gitCommitLanding 真核验） */
   readonly commitLanding?: DispatchCoreDeps['commitLanding']
@@ -851,6 +883,8 @@ interface ActiveLoop {
   workerAborts: number
   /** no-task 等待判词连击（bounded patience——claim 成功即复位） */
   waitRounds: number
+  /** no-task 阶段门持有连击（CE-1——被门持有不计 patience；claim 成功即复位） */
+  gateWaitRounds: number
   /** 同任务处置簿（S1c 第二层——taskKey → { 处置次数, 处置历史 }；封顶强制升级，结算成功清账） */
   readonly dispositions: Map<string, DispositionBook>
   /** 基线在飞去重（bug 006d8bfe 后台化——start fire-and-forget 与 runRound 首 claim 并发同跑套件的 dedup 缝） */
@@ -1416,6 +1450,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         spawnFailures: 0,
         workerAborts: 0,
         waitRounds: 0,
+        gateWaitRounds: 0,
         dispositions: new Map<string, DispositionBook>(),
         taskSpans: new Map<string, { title: string; startedAt: number }>(),
         expertByTaskKey: new Map<string, string>(),
@@ -1491,7 +1526,15 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         .then(async (baseline) => {
           if (baseline !== undefined) await issueAttributionCards(loop, baseline.redCases)
         })
-        .catch(() => {})
+        .catch((cause) => {
+          // 归因卡/标记故障不静默（AGENTS §7）：fiber 径 warn 留痕，循环照常入场
+          emitLoopDiag(
+            loop,
+            'warn',
+            'loop-e2e-baseline',
+            `forge loop e2e baseline attribution chain failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+          )
+        })
       void runLoop(loop) // 循环自身 async 挂起（零线程占用——await handle.result 即事件循环挂起）
       return { ok: true, loopId: id }
     },
@@ -1751,15 +1794,16 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
 
 /**
  * e2e 归因卡补发（改进7 · R2-minor⑥）：红灯 spec 逐一生成归因卡——启动时点与 HEAD 漂移
- * 重算径同源消费；e2eAttributed 已发不重发（漂移后仍在场的旧红灯零重复卡）。落库失败
- * fail-soft（warn——红灯清单仍在简报面承担机械判定）。
+ * 重算径同源消费；e2eAttributed 已发不重发（漂移后仍在场的旧红灯零重复卡）。落卡与标记
+ * 故障 warn 留痕（AGENTS §7——不静默；标记 verb 本体 fail-loud——UPDATE 未命中即抛，归因卡
+ * 无标记等于无豁免：无标记卡被 CE-1 阶段门持有，gated 持续等待由 phase-gate 问询兜底收口）。
  */
 async function issueAttributionCards(loop: ActiveLoop, specs: readonly string[]): Promise<void> {
   for (const spec of specs) {
     if (loop.e2eAttributed.has(spec)) continue
     loop.e2eAttributed.add(spec)
     try {
-      await loop.deps.tasks.addTask(attributionTaskInput(loop.source, spec, { projectId: loop.scope.projectId }))
+      await issueAttributionCard({ tasks: loop.deps.tasks }, loop.source, loop.scope.projectId, spec)
     } catch (cause) {
       emitLoopDiag(
         loop,
@@ -1838,6 +1882,30 @@ async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineC
   return entry
 }
 
+// ─────────────────────────── 测试基线文档存在性检查（forge-test-boundary-gates 方案2） ───────────────────────────
+
+/**
+ * 容器测试基线文档存在性检查（claim 时现查、结果不缓存）：projectId 文档根锚定解析
+ * （docsRoot 绝对路径 + 容器容器目录——proposals/<slug>/ 或 features/<slug>/，禁裸相对
+ * 路径）→ stat 存在性判定。三形态收敛两态载荷：
+ * - 在场 = { present: true, path（文档根锚定绝对路径）, recordedAt（文件 mtime ISO——基线
+ *   时点，不解析文档内容）}；
+ * - 缺席 / 检查故障（stat 异常与文件缺席同形回落）/ docsRoot 缺席（无锚定根）=
+ *   { present: false }——fail-soft，任何异常不上抛进 claim 链（零防线计数）。
+ */
+export async function testBaselineBriefOf(docsRoot: string | undefined, source: ContainerRef): Promise<TestBaselineBrief> {
+  if (docsRoot === undefined) return { present: false }
+  const dir = source.kind === 'proposal' ? 'proposals' : 'features'
+  const path = join(docsRoot, dir, source.slug, 'test-baseline.md')
+  try {
+    const s = await stat(path)
+    if (!s.isFile()) return { present: false }
+    return { present: true, path, recordedAt: s.mtime.toISOString() }
+  } catch {
+    return { present: false }
+  }
+}
+
 /**
  * 每轮（implementation-blueprint §3 runRound）：① 逐个恢复优先（任务源内最早 interrupted →
  * adopt 定向领取径）→ ② 领取（dispatch-core 阶段一）→ ③ 领取通知（S4 notice）→ ④ spawn
@@ -1850,8 +1918,8 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   const owner = record.ownerSessionId
   const slug = record.source.slug
 
-  // ① 逐个恢复：任务源内有 interrupted → 定向领最早中断的一个（adopt 径·不经 pending 池——
-  //    claim 就绪选择零改动，decisions #12）
+  // ① 逐个恢复：任务源内有 interrupted → 定向领最早中断的一个（adopt 定向恢复径与重入径
+  //    豁免容器阶段门，decisions #12 收窄后口径；盲选就绪选择受门约束）
   const stale = await deps.tasks.listTasks({
     projectId: scope.projectId,
     source,
@@ -1868,6 +1936,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // R2-minor⑥：漂移重算的新增红灯同启动时点行为——补生成归因卡（已发不重发）。
   const baseline = await ensureE2eBaseline(loop)
   if (baseline !== undefined) await issueAttributionCards(loop, baseline.redCases)
+  // 测试基线文档简报载荷（forge-test-boundary-gates 方案2）：每 claim 现查（结果不缓存），
+  // stat/IO 故障与缺席同形 fail-soft——异常不上抛进 claim 链
+  const testBaseline = await testBaselineBriefOf(record.docsRoot, source)
   let claim: Awaited<ReturnType<typeof claimForDispatch>>
   try {
     claim = await claimForDispatch(loop.core, exec, {
@@ -1879,6 +1950,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       ...(baseline !== undefined && baseline.redCases.length > 0
         ? { e2eBaselineRedCases: baseline.redCases }
         : {}),
+      testBaseline, // TestBaselineBrief 非可选（testBaselineBriefOf 恒返回兜底形态——无 undefined 分支）
       // disc 效度戳：效度比对检出根 = 发起循环的检出（1.14 cwd 钉定同源锚——重领证据机械
       // 比对此效度域，漂移 = stale 强制重跑）
       ...(record.worktree !== undefined ? { checkoutRoot: record.worktree } : {}),
@@ -2120,6 +2192,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   loop.spawnFailures = 0
   loop.workerAborts = 0
   loop.waitRounds = 0
+  loop.gateWaitRounds = 0
   const settlement: DispatchSpawnedResult = settled
   const label = `${settlement.taskRef.localId} ${settlement.title}`
   if (settlement.outcome === 'success') {
@@ -2669,10 +2742,73 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
 
 // ─────────────────────────── no-task 三态判词与终局收口 ───────────────────────────
 
+/**
+ * done 径承接检查（loop-phase-gate 提案⑤——bug b1e94915 recordBug 被拒链丢失机械承接）：
+ * 收口前扫描 bug 台账 open 行——源任务在本容器 ∧ 源任务非终态（非 completed/skipped）∧
+ * findLiveSuccessor 为空 = 无承接修复链 → 未承接清单（载荷带清单转挂起问询）。边界声明：
+ * 本检查只收 done 径（no-task 全终态收口）；「被拒后重试」属流程项，不设机械。
+ * bugs face 缺席 = 机制惰性不判（装配断链 = 生产静默关停——见 LoopDriverDeps.bugs 注入纪律）。
+ */
+async function unclaimedOpenBugs(loop: ActiveLoop): Promise<Array<{ bugId: string; summary: string; taskKey: string }>> {
+  const bugs = loop.deps.bugs
+  if (bugs === undefined) return []
+  let open: Awaited<ReturnType<typeof bugs.listBugs>>
+  try {
+    open = await bugs.listBugs({ projectId: loop.scope.projectId, status: ['open'] })
+  } catch (cause) {
+    emitLoopDiag(loop, 'warn', 'loop-unclaimed-bugs', `forge loop unclaimed-bugs scan failed (${loop.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`)
+    return []
+  }
+  if (open.length === 0) return []
+  const cards = await loop.deps.tasks
+    .listTasks({ projectId: loop.scope.projectId, source: { kind: loop.source.kind, slug: loop.source.slug } })
+    .catch(() => [])
+  const byTaskId = new Map(cards.map((card) => [card.taskId, card]))
+  const unclaimed: Array<{ bugId: string; summary: string; taskKey: string }> = []
+  for (const bug of open) {
+    if (bug.sourceTaskId === undefined) continue
+    const card = byTaskId.get(bug.sourceTaskId)
+    if (card === undefined) continue // 源任务不在本容器——他容器循环的承接检查负责
+    if (card.taskStatus === 'completed' || card.taskStatus === 'skipped') continue // 终态源——修复链已收口
+    const successor = await findLiveSuccessor(loop.deps.tasks, loop.scope.projectId, loop.source, { slug: card.slug, localId: card.localId })
+    if (successor !== undefined) continue // 活后继在场——承接链在途
+    unclaimed.push({ bugId: bug.bugId, summary: bug.summary, taskKey: `${card.slug}/${card.localId}` })
+  }
+  return unclaimed
+}
+
+/** 链上滞留 I 卡清单（CE-1 suspend 载荷透传——design §7 F-1）：链集合判据单点在 core 服务面
+ *  readUnsettledChain（与 GATE_SQL 第④支同源同执行体）——plugin-forge 侧零第二实现，载荷零复制
+ *  （bug a587123e 收口）。读径 fail-soft 空清单（与原 listTasks 挂起径同语义——挂起载荷尽力而为）。 */
+async function unsettledChainCards(loop: ActiveLoop): Promise<Array<{ slug: string; localId: string; taskStatus: string }>> {
+  const { unsettled } = await loop.deps.tasks
+    .readUnsettledChain({ projectId: loop.scope.projectId, source: { kind: loop.source.kind, slug: loop.source.slug } })
+    .catch(() => ({ unsettled: [] }))
+  return unsettled.map((u) => ({ slug: u.slug, localId: u.localId, taskStatus: u.taskStatus }))
+}
+
 /** no-task 三态判词（AC：settled 收口 / 等待 in-flight / halted-受阻）：classifyPool 纯函数裁决 */
 async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutcome> {
   const verdict = classifyPool(pool)
   if (verdict === 'done') {
+    // done 径承接检查（提案⑤）：open bug ∧ 源任务非终态 ∧ 无活后继 → 不收口，转挂起问询
+    // （载荷带未承接清单）——「修复链不丢」的机械保证：bug 卡在台账即队列，收口门兜底
+    const unclaimed = await unclaimedOpenBugs(loop)
+    if (unclaimed.length > 0) {
+      emitProgress(loop, {
+        verb: 'loop',
+        status: 'blocked',
+        scenario: FORGE_PROGRESS_SCENARIO.loopGateHeld,
+        note: `收口拦截：${unclaimed.length} 条 open bug 无承接修复链`,
+      })
+      return suspendForVerdict(loop, {
+        kind: 'unclaimed-bugs',
+        ownerSessionId: loop.record.ownerSessionId,
+        source: loop.record.source,
+        reason: `存在 ${unclaimed.length} 条 open bug 未建立承接修复链（源任务非终态且无活后继）——用 recordBug 结论回填（resolveBug）或 addTask 补承接修复任务后 resume 续跑`,
+        bugs: unclaimed,
+      })
+    }
     // 机械③：first-pass 标记（幂等）。复盘/知识沉淀不再派生任务卡（bug 4186a70c——任务卡径
     // 先于收口消息的交叉评审执行，时序倒挂）：改为 settle 收口文本直接指示主 agent 在交叉评审
     // 后执行（评审 → 复盘 → 沉淀）。标记落库失败 = 本轮不收口（continue），幂等窗口留给下一轮
@@ -2697,6 +2833,8 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
       history: '',
       completed: stats.byStatus.completed,
       blocked: stats.byStatus.blocked,
+      // expertsAvailable：deps.expertsPresent 消费点现查（AGENTS 1.6 永不缓存）——装配面
+      // 检测集与 P8 三路措辞同源（LOOP_REVIEW_EXPERT_KEYS 三键核验），异常 fail-soft false。
       expertsAvailable: loop.deps.expertsPresent?.() ?? false,
     }
     const retroSection = await retroSectionOf(loop)
@@ -2742,6 +2880,31 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
       source: loop.record.source,
       blockedItems,
     })
+  }
+  // wait 径 CE-1（loop-phase-gate §2.8）：gatedPending > 0 = 被门持有（真无活与仅余被门卡
+  // 分离）——不累计 patience 连击、每轮进度 note；持续持有达上限不走「等待超时收口」，
+  // 改 suspendForVerdict phase-gate（decisions #16——链上存在 suspended/孤儿 I 卡时机械等
+  // 不来，问人；载荷透传 unsettled 清单 §7 F-1）
+  if (pool.gatedPending > 0) {
+    loop.gateWaitRounds += 1
+    emitProgress(loop, {
+      verb: 'loop',
+      status: 'blocked',
+      scenario: FORGE_PROGRESS_SCENARIO.loopGateHeld,
+      note: `${pool.gatedPending} 张验证卡被实现链阶段门持有`,
+    })
+    if (loop.gateWaitRounds >= LOOP_PATIENCE_MAX_WAIT_ROUNDS) {
+      const unsettled = await unsettledChainCards(loop)
+      return suspendForVerdict(loop, {
+        kind: 'phase-gate',
+        ownerSessionId: loop.record.ownerSessionId,
+        source: loop.record.source,
+        reason: `${pool.gatedPending} 张验证卡被容器实现链阶段门持有 ${loop.gateWaitRounds} 轮（实现链未收口）——等待链收口或处置链上滞留卡（pauseTask/人工）后 resume 续跑`,
+        unsettled,
+      })
+    }
+    const gateDone = await sleepOrAbort(loop.controller.signal, loop.delays.patiencePauseMs)
+    return gateDone ? 'continue' : 'terminal'
   }
   // wait：在飞未结 / 前置未满足 → bounded patience（轮间停顿后重试；连续 wait 封顶收口建议重派）
   loop.waitRounds += 1
@@ -2949,4 +3112,5 @@ const ZERO_STATS: TaskStats = {
     rejected: 0,
   },
   unmetPending: 0,
+  gatedPending: 0,
 }

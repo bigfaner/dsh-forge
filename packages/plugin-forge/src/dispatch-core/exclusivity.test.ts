@@ -57,7 +57,7 @@ function statsOf(pending: number): TaskStats {
     suspended: 0,
     interrupted: 0,
   }
-  return { total: pending, byStatus, unmetPending: 0 }
+  return { total: pending, byStatus, unmetPending: 0, gatedPending: 0 }
 }
 
 interface Harness {

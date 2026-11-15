@@ -72,7 +72,7 @@ function statsOf(over: Partial<Record<TaskStatus, number>> = {}): TaskStats {
     interrupted: 0,
     ...over,
   }
-  return { total: 1, byStatus, unmetPending: 0 }
+  return { total: 1, byStatus, unmetPending: 0, gatedPending: 0 }
 }
 
 const NO_TASK: ClaimTaskResult = { task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false }

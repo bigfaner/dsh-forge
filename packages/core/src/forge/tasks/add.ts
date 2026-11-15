@@ -31,6 +31,7 @@ import type {
 } from '@dsh-forge/contracts'
 import {
   BEFORE_SUCCESSOR_ALLOWED_STATUSES,
+  E2E_ATTRIBUTION_COLUMN,
   FIX_CHAIN_DEPTH_LIMIT,
 } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
@@ -38,7 +39,9 @@ import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import {
   BeforeSuccessorInvalidError,
+  BlockSourceInProgressError,
   BlockSourceRequiredError,
+  BlockSourceTerminalError,
   ChainDepthExceededError,
   CycleDetectedError,
   TaskExistsError,
@@ -116,6 +119,28 @@ interface TaskKeyRow {
 /** 语义等价判据（M2 同容器校验 → M3 source 双列）：source_kind 判别后 source_id 相等 */
 function sameContainer(row: TaskKeyRow, kind: 'feature' | 'proposal', sourceId: string): boolean {
   return row.source_kind === kind && row.source_id === sourceId
+}
+
+/** vars_json 规范形（键序无关——存储串/输入串两侧统一按键序排序后比较；null/非法串 → 原样区分） */
+function canonicalVars(varsJson: string | null): string | null {
+  if (varsJson === null) return null
+  try {
+    return JSON.stringify(sortKeys(JSON.parse(varsJson) as unknown))
+  } catch {
+    return varsJson
+  }
+}
+
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeys)
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .sort()
+        .map((k) => [k, sortKeys((value as Record<string, unknown>)[k])]),
+    )
+  }
+  return value
 }
 
 /**
@@ -324,6 +349,29 @@ function sourceAncestry(db: Database.Database, sourceId: string): TaskKeyRow[] {
   return ancestry
 }
 
+/** block_source 状态守卫（loop-phase-gate §2.5——与 ④ before ERR_BEFORE_SUCCESSOR_INVALID 对称）：
+ *  blockSource=true 对 in_progress 源（fix 链等待边不可挂在在飞任务上——worker 不停、状态闪变
+ *  的静默半生效根因，fail-loud 收口）→ ERR_BLOCK_SOURCE_IN_PROGRESS 指路 pauseTask → add →
+ *  resume；对终态源（completed/skipped/rejected——等待边无解锁语义）→ ERR_BLOCK_SOURCE_TERMINAL
+ *  指路 disc 径或改选未终态源。事务内先于一切写，零副作用。 */
+function assertBlockSourceAllowed(projectId: string, source: TaskKeyRow, blockSource: boolean | undefined): void {
+  if (blockSource !== true) return
+  if (source.task_status === 'in_progress') {
+    throw new BlockSourceInProgressError({
+      projectId,
+      taskRef: { slug: source.slug, localId: source.local_id },
+      taskStatus: 'in_progress',
+    })
+  }
+  if ((['completed', 'skipped', 'rejected'] as readonly string[]).includes(source.task_status)) {
+    throw new BlockSourceTerminalError({
+      projectId,
+      taskRef: { slug: source.slug, localId: source.local_id },
+      taskStatus: source.task_status as 'completed' | 'skipped' | 'rejected',
+    })
+  }
+}
+
 /** Interface 1 addTask：tasks 行 → edges 行 → records 行单事务全成全败（详见文件头） */
 export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise<AddTaskResult> {
   const db = deps.store.ensureOpen(input.projectId)
@@ -359,17 +407,19 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
     }
 
     // ③ 任务级去重（两级去重之一——纯读零变更，老 forge built-in dedup 平移）：同源同型且未终态
-    //    → 复用既有行（reused=true；不重复建链/不重复置 blocked——持久边已承载等待事实）
+    //    → 复用既有行（reused=true；不重复建链/不重复置 blocked——持久边已承载等待事实）。
+    //    判据扩含 task_desc + vars（判例 fix-11：异 desc 第二单被吞并——内容不同即不同任务，
+    //    正常建行）；vars 比较走键序无关的规范化 JSON（存储串键序不可依）。
     if (source !== undefined) {
       const active = db
-        .prepare<unknown[], { id: string; slug: string; local_id: string }>(
-          `SELECT id, slug, local_id FROM tasks
+        .prepare<unknown[], { id: string; slug: string; local_id: string; task_desc: string | null; vars_json: string | null }>(
+          `SELECT id, slug, local_id, task_desc, vars_json FROM tasks
            WHERE source_task_id = ? AND task_type = ?
              AND task_status NOT IN ('completed', 'skipped', 'rejected')
            ORDER BY created_at, id LIMIT 1`,
         )
         .get(source.id, input.type)
-      if (active !== undefined) {
+      if (active !== undefined && active.task_desc === (input.taskDesc ?? null) && canonicalVars(active.vars_json) === canonicalVars(input.vars === undefined ? null : JSON.stringify(input.vars))) {
         return { taskId: active.id, slug: active.slug, localId: active.local_id, reused: true }
       }
     }
@@ -443,6 +493,13 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
         taskRef: { slug: source.slug, localId: source.local_id },
         taskStatus: 'blocked',
       })
+    }
+
+    // ④d block_source 状态守卫（loop-phase-gate §2.5）：blockSource=true 对 in_progress /
+    //    终态源 fail-loud（④b before 守卫同位同形——单事务内先于一切写，零副作用）；
+    //    守卫前置后 ⑫ 只可能作用于 pending/blocked/suspended 源
+    if (source !== undefined) {
+      assertBlockSourceAllowed(input.projectId, source, input.blockSource)
     }
 
     // ⑤ localId 分配（§6-35⑦：blockSource → fix-N / 携源未阻 → disc-N / 常规 → 数值顺延；
@@ -530,8 +587,8 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       db.prepare(
         `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, ac_json, priority,
            estimated_time, vars_json, source_task_id, blocked_reason, breaking,
-           coverage, complexity, source_kind, source_id, mode, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           coverage, complexity, source_kind, source_id, mode, ${E2E_ATTRIBUTION_COLUMN}, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       ).run(
         taskId,
         container.slug,

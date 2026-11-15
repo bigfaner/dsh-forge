@@ -531,9 +531,10 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
       if (typeof fm.status === 'string') status = fm.status
       confirmedAt = typeof fm.confirmed_at === 'string' ? fm.confirmed_at : undefined
       title = typeof fm.title === 'string' ? fm.title : undefined
-      // 准入：confirmed 全开 / superseded 曾审可读（confirmed_at 在场 = 曾 confirmed）
-      // / unconfirmed 拒正文且不露存在性 / merged redirect 承载可回看正文（§2.6）
-      if (status === 'confirmed' || status === 'superseded') {
+      // 准入（用户裁决 2026-12-XX 改判——search 已召回 unconfirmed，read 链路对齐放开）：
+      // confirmed 全开 / superseded 曾审可读（confirmed_at 在场 = 曾 confirmed）
+      // / unconfirmed 可读（不再拒且不露存在性）/ merged redirect 承载可回看正文（§2.6）
+      if (status === 'confirmed' || status === 'superseded' || status === 'unconfirmed') {
         if (status === 'superseded' && confirmedAt === undefined) return denied()
         return { outcome: 'read', id: q.id, title: title ?? q.id, status, versionTs: authority.version_ts, body: raw }
       }
@@ -547,7 +548,7 @@ export function createWriteGateway(deps: WriteGatewayDeps) {
   }
 
   function denied(): KnowledgeReadOutcome {
-    return { outcome: 'denied', message: 'knowledge_read denied: full-text access requires a confirmed entry (unconfirmed drafts are not readable)' }
+    return { outcome: 'denied', message: 'knowledge_read denied: entry not found or its source file is not readable' }
   }
 
   /** confirm 升格（CAS 前置 + 事务内旧版降 superseded + 权威指针前移——CT-WG-15） */

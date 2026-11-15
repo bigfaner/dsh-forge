@@ -89,6 +89,7 @@ const ZERO_TASK_STATS = {
     rejected: 0,
   },
   unmetPending: 0,
+  gatedPending: 0,
 } as const
 
 /** 头路装载（纯异步面）：projects 单点权威（get 优先，typed 失败回退 list 现查——官方宿主

@@ -228,6 +228,123 @@ describe('AC4 fix-chain/autoconfig 边改写被拒，仅 manual 边可改写', (
   })
 })
 
+describe('AC（loop-phase-gate B3/T7）dependsOnAppend 白通道（manual 边增量追加）', () => {
+  it('带 fix-chain 派生边卡 dependsOnAppend → 成功：派生边与既有 manual 边原样 + 新 manual 边插入（零删除）', async () => {
+    const update = svc()
+    seedFeature(h!.db, { slug: 'fa', status: 'tasks' })
+    const t = seedTask(h!.db, 'fa', '1.1')
+    seedTask(h!.db, 'fa', '1.2')
+    seedTask(h!.db, 'fa', '1.3')
+    seedTask(h!.db, 'fa', '2.1')
+    seedEdge(h!.db, t, 't-fa-1.2', 'manual')
+    seedEdge(h!.db, t, 't-fa-2.1', 'fix-chain') // 派生边在场——append 径不触锁边护栏
+    const snap = await update({ projectId: P(), taskRef: { slug: 'fa', localId: '1.1' }, dependsOnAppend: ['1.3'] })
+    expect(snap.taskStatus).toBe('pending')
+    expect(rows(`SELECT prerequisite_id, origin FROM task_edges WHERE task_id = ?`, t)).toEqual([
+      { prerequisite_id: 't-fa-1.2', origin: 'manual' },
+      { prerequisite_id: 't-fa-1.3', origin: 'manual' },
+      { prerequisite_id: 't-fa-2.1', origin: 'fix-chain' },
+    ])
+  })
+
+  it('append 成环 → ERR_CYCLE_DETECTED + 既有拓扑零残留（事务回滚）', async () => {
+    const update = svc()
+    seedFeature(h!.db, { slug: 'fc', status: 'tasks' })
+    seedTask(h!.db, 'fc', '1.1')
+    seedTask(h!.db, 'fc', '1.2')
+    seedTask(h!.db, 'fc', '1.3')
+    seedEdge(h!.db, 't-fc-1.2', 't-fc-1.1')
+    seedEdge(h!.db, 't-fc-1.3', 't-fc-1.2')
+    const err = await update({
+      projectId: P(),
+      taskRef: { slug: 'fc', localId: '1.1' },
+      dependsOnAppend: ['1.3'], // 1.1 → 1.3 → 1.2 → 1.1 成环
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(CycleDetectedError)
+    expect((err as CycleDetectedError).data.cycle).toEqual(['fc/1.1', 'fc/1.3', 'fc/1.2', 'fc/1.1'])
+    expect(rows(`SELECT task_id, prerequisite_id FROM task_edges WHERE task_id = 't-fc-1.1'`)).toEqual([])
+  })
+
+  it('append 重复边幂等（INSERT OR IGNORE）：同边重复追加成功、不产生重复行', async () => {
+    const update = svc()
+    seedFeature(h!.db, { slug: 'fi', status: 'tasks' })
+    const t = seedTask(h!.db, 'fi', '1.1')
+    seedTask(h!.db, 'fi', '1.2')
+    seedEdge(h!.db, t, 't-fi-1.2') // 既有同前置 manual 边
+    const first = await update({ projectId: P(), taskRef: { slug: 'fi', localId: '1.1' }, dependsOnAppend: ['1.2'] })
+    expect(first.taskStatus).toBe('pending')
+    const second = await update({ projectId: P(), taskRef: { slug: 'fi', localId: '1.1' }, dependsOnAppend: ['1.2'] })
+    expect(second.taskStatus).toBe('pending')
+    expect(rows(`SELECT task_id, prerequisite_id, origin FROM task_edges WHERE task_id = ?`, t)).toEqual([
+      { task_id: t, prerequisite_id: 't-fi-1.2', origin: 'manual' },
+    ])
+  })
+
+  it('blocked 卡 append 后前置全满足 → 同事务恢复 pending + auto-restore 记录（恢复钩子补跑）', async () => {
+    const update = svc()
+    seedFeature(h!.db, { slug: 'fr', status: 'tasks' })
+    const done = seedTask(h!.db, 'fr', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'fr', '2.1', { status: 'blocked' })
+    const snap = await update({ projectId: P(), taskRef: { slug: 'fr', localId: '2.1' }, dependsOnAppend: ['1.1'] })
+    expect(snap.taskStatus).toBe('pending')
+    expect(rows(`SELECT verb, from_status, to_status, actor FROM task_records WHERE task_id = 't-fr-2.1'`)).toEqual([
+      { verb: 'auto-restore', from_status: 'blocked', to_status: 'pending', actor: 'core' },
+      { verb: 'updateTask', from_status: null, to_status: null, actor: 'plugin-tool' },
+    ])
+    expect(rows(`SELECT prerequisite_id FROM task_edges WHERE task_id = 't-fr-2.1'`)).toEqual([{ prerequisite_id: done }])
+  })
+
+  it('dependsOn 整体改写径语义逐字节不变：锁边护栏仍拒 + 删旧插新（回归）', async () => {
+    const update = svc()
+    seedFeature(h!.db, { slug: 'fw', status: 'tasks' })
+    const t = seedTask(h!.db, 'fw', '1.1')
+    seedTask(h!.db, 'fw', '2.1')
+    seedEdge(h!.db, t, 't-fw-2.1', 'fix-chain')
+    const err = await update({ projectId: P(), taskRef: { slug: 'fw', localId: '1.1' }, dependsOn: [] }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(EdgeOriginLockedError)
+    expect((err as EdgeOriginLockedError).code).toBe('ERR_TASK_EDGE_ORIGIN_LOCKED')
+    // append 径对同卡放行（护栏仅限整体改写径）；append 同前置 2.1 与既有 fix-chain 边同 PK
+    // （task_edges PK = task_id + prerequisite_id，不含 origin）→ INSERT OR IGNORE 幂等 no-op，
+    // 派生边原样、零重复行
+    const snap = await update({ projectId: P(), taskRef: { slug: 'fw', localId: '1.1' }, dependsOnAppend: ['2.1'] })
+    expect(snap.taskStatus).toBe('pending')
+    expect(rows(`SELECT prerequisite_id, origin FROM task_edges WHERE task_id = ?`, t)).toEqual([
+      { prerequisite_id: 't-fw-2.1', origin: 'fix-chain' },
+    ])
+  })
+
+  it('dependsOn 与 dependsOnAppend 并存 → 输入契约拒绝（裸 Error——一次调用一个意图）', async () => {
+    const update = svc()
+    seedFeature(h!.db, { slug: 'fx', status: 'tasks' })
+    seedTask(h!.db, 'fx', '1.1')
+    seedTask(h!.db, 'fx', '1.2')
+    const err = await update({
+      projectId: P(),
+      taskRef: { slug: 'fx', localId: '1.1' },
+      dependsOn: ['1.2'],
+      dependsOnAppend: ['1.2'],
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toContain('dependsOnAppend')
+    // 零写入：审计行零残留
+    expect(rows(`SELECT verb FROM task_records WHERE task_id = 't-fx-1.1'`)).toEqual([])
+    expect(h!.events.emitted).toEqual([])
+  })
+
+  it('append 径未命中前置 → ERR_TASK_NOT_FOUND（同容器解析口径不变）', async () => {
+    const update = svc()
+    seedFeature(h!.db, { slug: 'fm', status: 'tasks' })
+    seedTask(h!.db, 'fm', '1.1')
+    const err = await update({ projectId: P(), taskRef: { slug: 'fm', localId: '1.1' }, dependsOnAppend: ['ghost'] }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(TaskNotFoundError)
+    expect((err as TaskNotFoundError).data.taskRef).toEqual({ slug: 'fm', localId: 'ghost' })
+  })
+})
+
 describe('AC5 records 表追加 verb=updateTask 审计行（actor=plugin-tool）', () => {
   it('每次成功改写 append 一行：无 from/to；多次改写多行；字段改写与边改写均留痕', async () => {
     const update = svc()

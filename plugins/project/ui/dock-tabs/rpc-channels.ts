@@ -145,6 +145,10 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   // ── forge-dirs-query-tool（双查询工具受控面拒绝）──
   // 未知 dirKey/dest / requires 缺参 → 错误条（查询语境原地反馈——文案带法集改参重试）
   ERR_DIR_PATH_INVALID: 'error-bar',
+  // loop-phase-gate B1 三码（main 并入）：阶段门未收口 = 应用级横幅；block_source 状态守卫 = 动作反馈错误条
+  ERR_PHASE_GATE_UNSETTLED: 'banner',
+  ERR_BLOCK_SOURCE_IN_PROGRESS: 'error-bar',
+  ERR_BLOCK_SOURCE_TERMINAL: 'error-bar',
 }
 
 /**

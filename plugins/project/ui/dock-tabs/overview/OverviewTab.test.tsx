@@ -46,7 +46,7 @@ const HEAD: OverviewHeadBundle = {
   stats: {
     total: 5,
     byStatus: { pending: 2, in_progress: 0, completed: 3, blocked: 0, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 },
-    unmetPending: 0,
+    unmetPending: 0, gatedPending: 0,
   },
 }
 

@@ -51,6 +51,7 @@ export {
   E2E_BASELINE_SUITE_TIMEOUT_MS,
   attributionTaskInput,
   baselineForHead,
+  issueAttributionCard,
   parseE2eRedCases,
   runE2eBaseline,
 } from './e2e-baseline.js'

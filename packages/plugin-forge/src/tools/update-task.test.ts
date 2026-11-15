@@ -168,6 +168,34 @@ describe('UPDATE_TASK_OUTPUT_SCHEMA 结构 pin（TaskSnapshot 镜像 + 失败支
   })
 })
 
+describe('loop-phase-gate B3/T12：depends_on_append snake_case 路由 + schema pin', () => {
+  it('输入 schema 声明 depends_on_append（array of string）且互斥语义入描述', () => {
+    const props = (toolWithCapture().tool.parameters as { properties: Record<string, unknown> }).properties
+    expect(props.depends_on_append).toMatchObject({ type: 'array', items: { type: 'string' } })
+    expect(JSON.stringify(props.depends_on_append)).toContain('mutually exclusive with depends_on')
+    expect(toolWithCapture().tool.description).toContain('depends_on_append')
+  })
+
+  it('parseUpdateTaskArgs 收窄 depends_on_append 字符串数组', () => {
+    expect(parseUpdateTaskArgs({ slug: 'f1', local_id: '1.3', depends_on_append: ['1.1'] })).toEqual({
+      slug: 'f1',
+      local_id: '1.3',
+      depends_on_append: ['1.1'],
+    })
+    expect(() => parseUpdateTaskArgs({ slug: 'f1', local_id: '1.3', depends_on_append: [1] })).toThrow(
+      /depends_on_append must be an array of non-empty strings/,
+    )
+  })
+
+  it('execute 路由 depends_on_append → dependsOnAppend（snake_case → camelCase）', async () => {
+    const { tool, captured } = toolWithCapture()
+    await tool.execute({ slug: 'f1', local_id: '1.3', depends_on_append: ['1.1', '1.2'] }, EXEC)
+    expect(captured).toEqual([
+      { projectId: 'p-1', taskRef: { slug: 'f1', localId: '1.3' }, dependsOnAppend: ['1.1', '1.2'] },
+    ])
+  })
+})
+
 describe('updateTask 事件发射（typed 错误 → tool-error；verb=updateTask）', () => {
   it('typed 服务错误 → tool-error（归属 = 任务容器 slug）+ 失败 DTO 照常', async () => {
     const events: ForgePluginEvent[] = []

@@ -11,7 +11,7 @@
 // ForgePluginEvent 事件两层联合（Interface 3）。
 // 定位铁律：纯类型与纯常量，零逻辑零依赖。
 import type { ForgeEventChannel } from '../channels.js'
-import type { ErrorCode } from '../errors.js'
+import type { ErrorCode, UnmetDependency } from '../errors.js'
 import type { FeatureStatus, ProposalStatus, TaskStatus, TaskType } from '../labels.js'
 import type { BugStatus } from './bugs.js'
 import type { BugCard, BugCommitFile, BugCommitFilesQuery, BugFileDiffQuery, ListBugsQuery } from './bugs.js'
@@ -435,7 +435,10 @@ export interface ValidateReport {
  *  M3 容器化（Interface 1）：featureSlug → source: ContainerRef——容器必须在场（服务不变量·
  *  多态引用无 DB FK，写入校验 source_id 必命中 kind 对应表）；tasks.mode = 容器 mode 创建时
  *  快照（feature 容器恒 'expedition'；proposal 容器取 proposals.mode·可 NULL——键缺席）。
- *  main_session 砍除（M3 裁决⑦：老 forge 形态约束残留·新形态零消费者）。 */
+ *  main_session 砍除（M3 裁决⑦：老 forge 形态约束残留·新形态零消费者）。
+ *  loop-phase-gate 硬约束（设计 §1.1）：本 DTO 不含 e2e_attribution 标记字段（E2E_ATTRIBUTION_COLUMN
+ *  列常量在 contracts labels.ts）——归因卡生成侧标记是机械事实，不可经 addTask 参数暴露；
+ *  写入路径 = 归因卡生成点 addTask 返回后经任务存储句柄后置 UPDATE。 */
 export interface AddTaskInput {
   projectId: string
   /** 任务容器（feature = 远征链分解 / proposal = 突击直挂） */
@@ -495,6 +498,12 @@ export interface UpdateTaskInput {
   vars?: Record<string, string>
   /** 依赖改写（manual 边整体置换：删旧 manual 边 → 增量环校验 → 插新 manual 边） */
   dependsOn?: string[]
+  /**
+   * manual 边增量追加（loop-phase-gate B1 白通道）：既有 manual/fix-chain/autoconfig 边一律不动
+   * （零删除、锁边护栏不作用于此径）；元素 = 同容器前置 localId；重复追加幂等（INSERT OR IGNORE）。
+   * 与 dependsOn 互斥——并存即输入契约拒绝（一次调用一个意图：整体置换 vs 增量追加语义歧义）。
+   */
+  dependsOnAppend?: string[]
 }
 
 /** updateTask 返回体（更新后任务快照——同 transitionTask 返回口径） */
@@ -509,6 +518,17 @@ export interface ClaimExclusivityTarget {
   localId: string
   taskStatus: TaskStatus
 }
+
+/**
+ * 测试基线文档简报载荷（forge-test-boundary-gates 方案2——循环驱动器 claim 时对容器测试
+ * 基线文档（proposals/<slug>/test-baseline.md 或 features/<slug>/test-baseline.md）做存在性
+ * 检查后的两形态合成结果：在场 = 文档根锚定绝对路径 + 基线时点（文件 mtime——不解析文档
+ * 内容）；缺席 = 兜底形态（文件缺席与 stat/IO 故障同形回落——fail-soft，检查故障不上抛）。
+ * 缺席入参 = 机制关闭，简报零 TEST_BASELINE 行。
+ */
+export type TestBaselineBrief =
+  | { readonly present: true; readonly path: string; readonly recordedAt?: string }
+  | { readonly present: false }
 
 /** claimTask 入参（M3 容器化：featureSlug? → source?: ContainerRef——容器限定盲选，缺省 = 全库） */
 export interface ClaimTaskInput {
@@ -537,6 +557,13 @@ export interface ClaimTaskInput {
    * 缺席/空 = 机制关闭或基线全绿，简报零此行）。
    */
   e2eBaselineRedCases?: readonly string[]
+  /**
+   * 测试基线文档简报载荷（forge-test-boundary-gates 方案2——可选；循环驱动器 claim 时
+   * 现查合成，随 dispatchPrompt TEST_BASELINE 行递达 worker：在场 = 路径 + 基线时点行，
+   * 缺席 = 兜底行「无既有失败清单，遇失败默认按新回归上报」。缺席入参 = 机制关闭，
+   * 简报零此行。IO 检查归驱动器侧——core 只收合成结果零 IO。）
+   */
+  testBaseline?: TestBaselineBrief
   /**
    * 效度比对检出根（disc 跟进——证据效度戳机械比对的当前效度域取数锚：worker/循环检出
    * worktree。缺席 = 当前效度域不可取 → 机制惰性不判（形态兼容））。
@@ -804,6 +831,8 @@ export interface TaskStats {
   byStatus: Record<TaskStatus, number>
   /** pending 且前置未全 ∈ {completed, skipped} 的任务数（池快照「等待」判据成分） */
   unmetPending: number
+  /** pending 且被容器实现链阶段门持有（GATE_SQL 命中——CE-1 挂起判据取数面；loop-phase-gate §1.4） */
+  gatedPending: number
 }
 
 /** taskSettlements 查询（容器作用域 completed 任务结算面批量读——wave 快照聚合单批数据源） */
@@ -865,6 +894,27 @@ export interface RecordSpawnInput {
   sessionId: string
 }
 
+/** markE2eAttribution 入参（loop-phase-gate §2.9——归因卡生成侧标记写面） */
+export interface MarkE2eAttributionInput {
+  projectId: string
+  /** 容器 slug（≡ 任务 slug 服务不变量） */
+  slug: string
+  /** addTask 返回的自然键 localId（生成点用返回体回填——不重解析） */
+  localId: string
+}
+
+/** readUnsettledChain 入参（loop-phase-gate 评审收口——容器实现链未终态 I 卡清单读面；链集合判据单点在 core） */
+export interface ReadUnsettledChainInput {
+  projectId: string
+  /** 容器引用（feature/proposal 双轨同形） */
+  source: ContainerRef
+}
+
+/** readUnsettledChain 出参（载荷 = UnmetDependency 同形——PhaseGateUnsettledData.unsettled 一致口径） */
+export interface ReadUnsettledChainResult {
+  unsettled: readonly UnmetDependency[]
+}
+
 /** Interface 1：core · forge 任务域服务面（ctx.forgeTasks） */
 export interface ForgeTasksService {
   /** tasks 行 + edges 行 + records 行单事务全成全败（增量环校验 + 两级去重 + 相位重算） */
@@ -878,6 +928,20 @@ export interface ForgeTasksService {
    * 未命中 ERR_TASK_NOT_FOUND。agent 面专用（dispatchTask 内部径），不入 RPC/tool 面。
    */
   recordSpawn(input: RecordSpawnInput): Promise<void>
+  /**
+   * E2E 归因卡生成侧标记（loop-phase-gate §2.9——CE-6 方案 A 写入径）：归因卡生成点
+   * （plugin-forge issueAttributionCard）addTask 返回后调用——后置 UPDATE tasks.e2e_attribution = 1
+   * （单点写；标记不经 addTask 参数暴露——硬约束见 AddTaskInput）。未命中 fail-loud
+   * （ERR_TASK_NOT_FOUND——归因卡无标记等于无豁免）；幂等重写无害。必选面（bug 834d975d
+   * 收口）：生成侧调用零可选链——面缺席 fail-loud（TypeError），不做形态兼容跳过。
+   */
+  markE2eAttribution(input: MarkE2eAttributionInput): Promise<void>
+  /**
+   * 容器实现链未终态 I 卡清单只读读面（bug a587123e 收口——链集合判据单点）：与 GATE_SQL
+   * 第④支同判据同执行体（type ∈ IMPLEMENTATION_TASK_TYPES ∧ local_id 非 fix-/disc- 前缀
+   * ∧ 状态非终态）。消费方（plugin-forge loop suspend 载荷）零第二实现、载荷零复制。
+   */
+  readUnsettledChain(input: ReadUnsettledChainInput): Promise<ReadUnsettledChainResult>
   /** 转移 + record(files/gate/commit) + 恢复钩子反查 + 相位重算 */
   submitTask(input: SubmitTaskInput): Promise<SubmitTaskResult>
   /** blocked→pending 出口（blocked-verdict-restore-primitive：转移 + 'unblock' 审计行 + 相位重算；不挂恢复钩子） */

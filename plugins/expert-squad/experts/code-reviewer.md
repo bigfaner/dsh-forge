@@ -4,7 +4,7 @@ description: >-
   Reviews diffs and files for correctness, boundary violations and
   maintainability; reports findings ranked by severity.
 title: 资深评审
-tools: [read, grep]
+tools: [read, grep, knowledge_search, knowledge_browse, knowledge_read]
 skills: []
 ---
 

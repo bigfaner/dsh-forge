@@ -388,7 +388,7 @@ describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——c
 
   it('experts 服务在场：注入指挥者段（委派边界话术在场）', () => {
     const rt = new TempRuntime()
-    const dispose = forgePlugin(rt.withReflect({ experts: { get: () => undefined } }) as never)
+    const dispose = forgePlugin(rt.withReflect({ experts: { get: (key: string) => ({ name: key, personaMd: '' }) } }) as never)
     const text = commanderTextOf(rt)
     expect(text).toContain('指挥者模式')
     expect(text).toContain('信息搜索与核实')
@@ -421,9 +421,41 @@ describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——c
     d2()
   })
 
+  it('commander 段门控 = 服务在场原语义（bug cf6254ff 回归）：三键任一缺席（get 抛错）不阻断注入', async () => {
+    const { LOOP_REVIEW_EXPERT_KEYS } = await import('./loop/injection.js')
+    const partialFace = (missing: string) => ({
+      get: (key: string) => {
+        if (key === missing) throw new Error(`expert not found: ${missing}`)
+        return { name: key, personaMd: '' }
+      },
+    })
+    for (const key of LOOP_REVIEW_EXPERT_KEYS) {
+      const rt = new TempRuntime()
+      const dispose = forgePlugin(rt.withReflect({ experts: partialFace(key) }) as never)
+      expect(commanderTextOf(rt), `缺 ${key} 时服务仍在场 → 照常注入`).toContain('指挥者模式')
+      dispose()
+    }
+  })
+
+  it('双谓词拆分结构 pin（bug cf6254ff）：LOOP_REVIEW_EXPERT_KEYS 仅被 loopReviewExpertsPresent 消费——expertsServicePresent 保持服务在场原语义', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+    // commander 段消费面 = 服务在场谓词（不接三键核验）
+    expect(src).toContain('commanderSectionText(context, expertsServicePresent)')
+    // driver deps.expertsPresent = 三键谓词
+    expect(src).toContain('expertsPresent: loopReviewExpertsPresent')
+    // 同源常量只出现在 loopReviewExpertsPresent 函数体内（服务在场谓词零消费）
+    const serviceFnStart = src.indexOf('function expertsServicePresent')
+    const serviceFnEnd = src.indexOf('\n    }', serviceFnStart)
+    expect(src.slice(serviceFnStart, serviceFnEnd)).not.toContain('LOOP_REVIEW_EXPERT_KEYS')
+    const reviewFnStart = src.indexOf('function loopReviewExpertsPresent')
+    const reviewFnEnd = src.indexOf('\n    }', reviewFnStart)
+    expect(src.slice(reviewFnStart, reviewFnEnd)).toContain('LOOP_REVIEW_EXPERT_KEYS')
+  })
+
   it('subagent 子会话装配：零注入（header.origin === subagent——指挥者话术只属于主会话，判例 2026-11）', () => {
     const rt = new TempRuntime()
-    const dispose = forgePlugin(rt.withReflect({ experts: { get: () => undefined } }) as never)
+    const dispose = forgePlugin(rt.withReflect({ experts: { get: (key: string) => ({ name: key, personaMd: '' }) } }) as never)
     // 主会话形态（agent.id 在场、无 origin 标记）：照常注入
     expect(commanderTextOf(rt, { agent: { id: 'main-s' } })).toContain('指挥者模式')
     // subagent 子会话（live Agent 附带 session.header.origin）：零注入
