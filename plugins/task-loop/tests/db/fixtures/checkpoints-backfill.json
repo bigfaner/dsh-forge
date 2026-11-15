@@ -1,0 +1,14 @@
+{
+  "category": "checkpoints-backfill",
+  "description": "判例④：checkpoints 回填命中与未命中——旧 implementation_checkpoints.proposal_id 经旧库 proposals.id→slug 查表回填；未命中 fail-loud 禁悬空（entities.md §3.3 迁移注记）。",
+  "expectation": "cp-1 命中回填 slug='alpha-slug'；cp-2 未命中（p-9 不在表）入人工清单，禁自动置 NULL。",
+  "oldDb": {
+    "proposals": [
+      { "id": "p-1", "slug": "alpha-slug" }
+    ],
+    "implementation_checkpoints": [
+      { "id": "cp-1", "proposal_id": "p-1", "mark": "first-pass-complete", "wave_seq": null, "created_at": "2026-11-04T10:00:00.000Z", "base_commit_hash": "abc1234", "tasks_total": 5, "commits_total": 7, "fixes_total": 1, "evidence_debts_total": 0 },
+      { "id": "cp-2", "proposal_id": "p-9", "mark": "review-wave-N", "wave_seq": 1, "created_at": "2026-11-04T11:00:00.000Z", "base_commit_hash": "def5678", "tasks_total": 5, "commits_total": 9, "fixes_total": 2, "evidence_debts_total": 1 }
+    ]
+  }
+}
