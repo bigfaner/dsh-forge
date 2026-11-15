@@ -60,7 +60,48 @@ describe('knowledgeRpcHandler 端点分发（case 集 = client 映射表值集�
     expect(heat).toMatchObject({ ok: true })
     expect(seen).toEqual(['browse:p-1', 'heat:p-2'])
     expect(await call(handler, 'knowledge.listEntries', { projectId: 'p-1' })).toMatchObject({ ok: true })
-    expect(await call(handler, 'knowledge.sessionRecall', { projectId: 'p-1' })).toMatchObject({ ok: true })
+    expect(await call(handler, 'knowledge.sessionRecall', { projectId: 'p-1', sessionId: 's-1' })).toMatchObject({ ok: true })
+  })
+
+  it('透传端点全量劣形反例：入口即拒（invalid-request 信封带 endpoint+field 字段级报文，服务零触达）', async () => {
+    const touched: string[] = []
+    const probe = (): Partial<KnowledgeConnectionService> => ({
+      browse: (async () => { touched.push('browse'); return [] }),
+      listEntries: (async () => { touched.push('listEntries'); return [] }),
+      getEntryDetail: (async () => { touched.push('entryDetail'); throw new EntryNotFoundError({ projectId: 'p-1', entryId: 9 }) }),
+      heatByEntry: (async () => { touched.push('heat'); return new Map() }),
+      sessionRecall: (async () => { touched.push('sessionRecall'); return [] }),
+    })
+    const handler = knowledgeRpcHandler({ service: fakeService(probe()), projects: () => undefined })
+    const cases: [endpoint: string, payload: unknown, field: string][] = [
+      ['knowledge.browse', {}, 'projectId'],
+      ['knowledge.browse', { projectId: 7 }, 'projectId'],
+      ['knowledge.listEntries', {}, 'projectId'],
+      ['knowledge.listEntries', { projectId: 'p-1', domainPrefix: 1 }, 'domainPrefix'],
+      ['knowledge.listEntries', { projectId: 'p-1', keyword: 2 }, 'keyword'],
+      ['knowledge.listEntries', { projectId: 'p-1', statusFilter: 'recent' }, 'statusFilter'],
+      ['knowledge.listEntries', { projectId: 'p-1', scopeFilter: 'mine' }, 'scopeFilter'],
+      ['knowledge.entryDetail', { projectId: 'p-1' }, 'entryId'],
+      ['knowledge.entryDetail', { projectId: 'p-1', entryId: 1.5 }, 'entryId'],
+      ['knowledge.heat', {}, 'projectId'],
+      ['knowledge.heat', { projectId: null }, 'projectId'],
+      ['knowledge.sessionRecall', { projectId: 'p-1' }, 'sessionId'],
+      ['knowledge.sessionRecall', { sessionId: 's-1' }, 'projectId'],
+      ['projects.get', {}, 'id'],
+      ['projects.get', { id: 9 }, 'id'],
+    ]
+    for (const [endpoint, payload, field] of cases) {
+      const out = await call(handler, endpoint, payload) as { ok: boolean; error?: { code: string; details: Record<string, unknown> } }
+      expect(out.ok, `${endpoint} ${JSON.stringify(payload)} 应拒`).toBe(false)
+      expect(out.error?.code, endpoint).toBe('invalid-request')
+      expect(out.error?.details, endpoint).toMatchObject({ endpoint, field })
+    }
+    // 劣形载荷入口即拒——服务零触达（写面/读面均未分派）
+    expect(touched).toEqual([])
+    // 合法载荷不受累（同 handler 正常透传）
+    expect(await call(handler, 'knowledge.browse', { projectId: 'p-1' })).toMatchObject({ ok: true })
+    expect(await call(handler, 'knowledge.listEntries', { projectId: 'p-1', statusFilter: 'unconfirmed', scopeFilter: 'global', domainPrefix: 'a', keyword: 'k' })).toMatchObject({ ok: true })
+    expect(await call(handler, 'knowledge.entryDetail', { projectId: 'p-1', entryId: 3 })).toMatchObject({ ok: false, error: { code: 'ERR_ENTRY_NOT_FOUND' } })
   })
 
   it('entryAction：confirm 批量透传 + 形状拒收（invalid-request 请求级信封）', async () => {
@@ -96,7 +137,7 @@ describe('knowledgeRpcHandler 端点分发（case 集 = client 映射表值集�
   it('非 typed 异常收敛 internal（连接面无拒绝通道——信封带内可辨）', async () => {
     const service = fakeService({ listEntries: (async () => { throw new Error('boom') }) })
     const handler = knowledgeRpcHandler({ service, projects: () => undefined })
-    const out = await call(handler, 'knowledge.listEntries', {}) as { ok: boolean; error?: { code: string } }
+    const out = await call(handler, 'knowledge.listEntries', { projectId: 'p-1' }) as { ok: boolean; error?: { code: string } }
     expect(out).toMatchObject({ ok: false, error: { code: 'internal' } })
   })
 

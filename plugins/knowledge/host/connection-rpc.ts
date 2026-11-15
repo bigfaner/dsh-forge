@@ -11,7 +11,8 @@
 // knowledge-rpc.ts 同语义分派，插件域自持副本：host main pin 禁插件源码反向 import）
 // + projects 两端点（knowledge UI 消费切片 list/get——core forgeProjects 具名服务
 // 优先（dsh-forge 集成态运营真源单源），缺席回落官方 workspaceRegistry 投影
-// （官方宿主添加项目向导注册行））。
+// （官方宿主添加项目向导注册行））。全端点入口同强度 payload 校验（劣形入口即拒
+// 带字段级报文——手检端点判别联合逐分支、透传端点 validatePayload 单点）。
 // 信封：ConnectionRpcHandlerResult {ok,value}|{ok,error:{code,message,details}}
 // （上游 rpc.d.ts:34-42）——typed error（code ∈ contracts ERROR_CODES）映射
 // {code,message,data:details}（apps/host rpc-envelope serializeRpcError 同口径）；
@@ -85,6 +86,73 @@ function errorResult(error: unknown): ConnectionRpcHandlerResult {
 
 function invalidRequest(message: string): EntryActionRequestReject {
   return { outcome: 'rejected-request', code: 'invalid-request', message }
+}
+
+// ───────────────── 透传端点入口校验（bug 060adb4d——全端点同强度单标准） ─────────────────
+// 手检端点（entryAction/recallFeedback）为判别联合逐分支字段校验；透传端点（browse/
+// listEntries/entryDetail/heat/sessionRecall/projects.get）同强度入口校验——劣形载荷
+// 入口即拒，typed 信封 fail('invalid-request') 带 endpoint+field 字段级报文（消费面
+// 错误相位可辨，业务校验仍归服务域——通道层只做形状防线，apps/host ipc 同分工）。
+type PayloadBody = Record<string, unknown>
+
+const isStr = (v: unknown): v is string => typeof v === 'string'
+const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v)
+
+const STATUS_FILTERS: readonly string[] = ['all', 'unconfirmed', 'confirmed']
+const SCOPE_FILTERS: readonly string[] = ['all', 'project', 'global']
+
+function invalidPayload(endpoint: string, field: string, message: string): ConnectionRpcHandlerResult {
+  return fail('invalid-request', message, { endpoint, field })
+}
+
+function projectIdOf(endpoint: string, body: PayloadBody): string | ConnectionRpcHandlerResult {
+  const v = body['projectId']
+  if (!isStr(v)) return invalidPayload(endpoint, 'projectId', `${endpoint} 需 projectId string 载荷`)
+  return v
+}
+
+/** 透传端点载荷校验（通过 = null，劣形 = typed 拒绝信封）——case 分派前单点调用 */
+function validatePayload(endpoint: string, body: PayloadBody): ConnectionRpcHandlerResult | null {
+  switch (endpoint) {
+    case 'knowledge.browse':
+    case 'knowledge.heat': {
+      const project = projectIdOf(endpoint, body)
+      return typeof project === 'string' ? null : project
+    }
+    case 'knowledge.listEntries': {
+      const project = projectIdOf(endpoint, body)
+      if (typeof project !== 'string') return project
+      for (const field of ['domainPrefix', 'keyword'] as const) {
+        const v = body[field]
+        if (v !== undefined && !isStr(v)) return invalidPayload(endpoint, field, `listEntries.${field} 需 string 载荷`)
+      }
+      const status = body['statusFilter']
+      if (status !== undefined && !STATUS_FILTERS.includes(status as string)) {
+        return invalidPayload(endpoint, 'statusFilter', `listEntries.statusFilter 需 ${STATUS_FILTERS.join('|')}（得 ${JSON.stringify(status)}）`)
+      }
+      const scope = body['scopeFilter']
+      if (scope !== undefined && !SCOPE_FILTERS.includes(scope as string)) {
+        return invalidPayload(endpoint, 'scopeFilter', `listEntries.scopeFilter 需 ${SCOPE_FILTERS.join('|')}（得 ${JSON.stringify(scope)}）`)
+      }
+      return null
+    }
+    case 'knowledge.entryDetail': {
+      if (!isStr(body['projectId'])) return invalidPayload(endpoint, 'projectId', 'entryDetail 需 projectId string 载荷')
+      if (!isInt(body['entryId'])) return invalidPayload(endpoint, 'entryId', 'entryDetail 需整数 entryId 载荷')
+      return null
+    }
+    case 'knowledge.sessionRecall': {
+      if (!isStr(body['projectId'])) return invalidPayload(endpoint, 'projectId', 'sessionRecall 需 projectId string 载荷')
+      if (!isStr(body['sessionId'])) return invalidPayload(endpoint, 'sessionId', 'sessionRecall 需 sessionId string 载荷')
+      return null
+    }
+    case 'projects.get': {
+      if (!isStr(body['id'])) return invalidPayload(endpoint, 'id', 'projects.get 需 id string 载荷')
+      return null
+    }
+    default:
+      return null
+  }
 }
 
 /** entryAction 判别联合分派（apps/host ipc knowledge-rpc.ts 同语义插件域自持副本） */
@@ -171,7 +239,7 @@ export interface KnowledgeRpcHandlerDeps {
 }
 
 /**
- * '/knowledge' 通道 handler 工厂（endpoint 分发单点——dispatch 表与 client 映射表
+ * 连接 RPC handler 工厂（endpoint 分发单点——dispatch 表与 client 映射表
  * 共享锚对账：CONNECTION_ENDPOINT_BY_CHANNEL 值集 = 本 switch case 集）。
  */
 export function knowledgeRpcHandler(deps: KnowledgeRpcHandlerDeps): (endpoint: string, payload: unknown, signal: AbortSignal, peer: unknown) => Promise<ConnectionRpcHandlerResult> {
@@ -180,6 +248,8 @@ export function knowledgeRpcHandler(deps: KnowledgeRpcHandlerDeps): (endpoint: s
   return async (endpoint, payload) => {
     try {
       const body = req(payload)
+      const invalid = validatePayload(endpoint, body)
+      if (invalid !== null) return invalid
       switch (endpoint) {
         case 'knowledge.browse':
           return ok(await deps.service.browse({ projectId: body['projectId'] as string }))
