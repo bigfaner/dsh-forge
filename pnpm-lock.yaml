@@ -856,6 +856,9 @@ importers:
       '@deepseek-ai/dsh-typert-generator':
         specifier: 0.2.2-rc.2
         version: 0.2.2-rc.2(@deepseek-ai/cordis@4.0.4)
+      '@dsh-forge/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@dsh-forge/lib-api':
         specifier: workspace:*
         version: link:../../lib/api

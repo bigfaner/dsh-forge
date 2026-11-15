@@ -12,6 +12,7 @@
   "exclude": ["**/*.test.ts", "**/*.test.tsx"],
   "references": [
     { "path": "./tsconfig.client.json" },
+    { "path": "../../packages/contracts" },
     { "path": "../../lib/diag" },
     { "path": "../../lib/db" },
     { "path": "../../lib/path" },

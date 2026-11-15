@@ -126,8 +126,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
   });
 
-  it("版本 bump 0.2.0（1.6 db 新线六表/连接工厂/判例 fixture 功能升级——minor 位 +1）", () => {
-    expect(pkg.version).toBe("0.2.0");
+  it("版本 bump 0.3.0（1.7 tasks 域内联迁移 + 容器语义 slug 化——功能升级 minor 位 +1）", () => {
+    expect(pkg.version).toBe("0.3.0");
   });
 });
 
