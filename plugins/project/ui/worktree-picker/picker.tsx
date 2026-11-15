@@ -7,7 +7,7 @@
 //   · ForgeWorktreeSwitchMarker——切换闸虚线标记（视觉命中锚）。
 // 数据面 = 官方 forgeWorktree/forgeProposals/forgeFeatures remote + configForms 偏好
 // （1.38 正典化——../rpc.ts 消费切片 + ../settings-section 偏好面缝；namespace/方法单源 =
-// ../remote.ts descriptor 表）。
+// typert strict 生成贡献——../remote.ts 为生成投影再导出）。
 // 点选 = 纯选中态 + 点选时点跨分支确认（1.19 语义回归）；会话创建唯一时机 = 官方 create
 // 调用点（wrap 改道预铸，create 失败走官方 createFailed toast）；1.34 闩锁与「不再提示」
 // 语义见 ./model.ts。

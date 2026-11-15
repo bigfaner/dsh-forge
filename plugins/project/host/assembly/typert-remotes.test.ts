@@ -55,7 +55,7 @@ function fakeCtx(): Context {
   return new Context() as unknown as Context
 }
 
-describe('marker 端点表 pin（gateway SRC 端点真源——ui/remote.ts descriptor 表成对锁定）', () => {
+describe('端点面 pin（gateway SRC 端点真源——strict 生成贡献锁定，手写 descriptor 表已退役）', () => {
   it('forgeProjects：list/register/deriveTaskStoreDir/update 四端点（一元直通；update = sidebar 五功能写面 1.6）', () => {
     const svc = new ForgeProjectsRemote(fakeCtx(), {})
     expect(endpointsOf(svc)).toEqual(['list', 'register', 'deriveTaskStoreDir', 'update'])

@@ -158,7 +158,12 @@ export class ForgeProjectsRemote extends TypertRemoteService {
     return await port.registerProject(input);
   }
 
-  /** 任务库派生行（core forgeProjects 服务专属——本插件 port 不承载，typed unavailable） */
+  /**
+   * 任务库派生行（core forgeProjects 服务专属——本插件 port 不承载，typed unavailable）。
+   * 【退役面登记】占位端点：本插件 host face 无 core forgeProjects 依赖，typed unavailable
+   * 为诚实语义；官方宿主接手 forge 任务库真实现时须归并/删除本占位（face 合同含本端点，
+   * 不可静默漏删）——防占位转永久。
+   */
   @Remote
   async deriveTaskStoreDir(workspaceDir: string, signal?: AbortSignal): Promise<never> {
     signal?.throwIfAborted();
@@ -195,6 +200,10 @@ export class ForgeBugsRemote extends TypertRemoteService {
     return await port.listBugs(query);
   }
 
+  /**
+   * 【退役面登记】占位端点（Bug 变更读面归宿主 git 面——本插件 typed unavailable）：
+   * 官方宿主 git 真实现落位时须归并/删除，face 合同含本端点——防占位转永久。
+   */
   @Remote
   async commitFiles(input: BugCommitFilesQuery, signal?: AbortSignal): Promise<never> {
     signal?.throwIfAborted();
@@ -202,6 +211,7 @@ export class ForgeBugsRemote extends TypertRemoteService {
     throw unavailable("commitFiles", "bugs");
   }
 
+  /** 【退役面登记】占位端点（同 commitFiles——官方宿主 git 面落位时归并/删除） */
   @Remote
   async fileDiff(input: BugFileDiffQuery, signal?: AbortSignal): Promise<never> {
     signal?.throwIfAborted();
