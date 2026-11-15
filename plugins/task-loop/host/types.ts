@@ -12,6 +12,15 @@ export type {
   TaskGraphDto,
   TasksFollowQuery,
   TasksQueryRequest,
+  TasksRemoteDetailQuery,
+  TasksRemoteFollowQuery,
+  TasksRemoteGraphQuery,
+  TasksRemoteListQuery,
+  TasksRemoteQueryRequest,
+  TasksRemoteSessionLinksQuery,
+  TasksRemoteStatsQuery,
+  TasksRemoteTransitionInput,
+  TasksRemoteValidateInput,
 } from "./assembly/typert-remotes.js";
 export type {
   ListTasksQuery,

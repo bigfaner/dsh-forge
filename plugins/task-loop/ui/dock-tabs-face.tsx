@@ -4,9 +4,10 @@
 //     files/terminal/browser = 10/20/30 排最前）；
 //   第二段 = `sidebar.right.pane.tab` keyed `dswf-overview` body（组件 = 本包 overview/
 //     OverviewTab——提案/feature 子块已摘、主指标 = AC 核销进度）。
-// projectKey 解析 = 页内 workbench 桥缝（`__DSH_FORGE_WORKBENCH__` overview.projectId——
-// inject 期现查不缓存，缺席 = 「无任务数据」降级呈现不报错）；数据通道 = forgeTasks
-// Typert namespace（makeClient 注入真身，缺席 = 调用期诚实降级）。
+// projectId 解析 = 页内 workbench 桥缝（`__DSH_FORGE_WORKBENCH__` overview.projectId——
+// inject 期现查不缓存，缺席 = 「无任务数据」降级呈现不报错；身份官方语境直投 forgeTasks
+// 快照族，host 半 forge.projects 缝解析归属键——客户端零投影，bug 9407ff29 修型）；数据
+// 通道 = forgeTasks Typert namespace（makeClient 注入真身，缺席 = 调用期诚实降级）。
 // 逐面 try/catch fail-soft（单面异常只降本面，console.warn 留痕不炸装配）。
 import { useEffect, useState, type ReactNode } from "react";
 import { OverviewTab } from "./overview/overview-tab.js";
@@ -54,8 +55,9 @@ export function workbenchBridgeOf(): WorkbenchBridgeMirror | undefined {
     : undefined;
 }
 
-/** 桥快照 → 项目键投影（overview.projectId 窄读——缺席 = undefined） */
-export function bridgeProjectKeyOf(bridge: WorkbenchBridgeMirror | undefined): string | undefined {
+/** 桥快照 → 项目身份投影（overview.projectId 窄读——缺席 = undefined；bug 9407ff29 修型：
+ *  客户端零投影零派生，uuid 原样直投 forgeTasks projectId 入参，host 半解析归属键） */
+export function bridgeProjectIdOf(bridge: WorkbenchBridgeMirror | undefined): string | undefined {
   if (bridge === undefined) return undefined;
   const overview = bridge.getSnapshot()["overview"];
   if (typeof overview !== "object" || overview === null) return undefined;
@@ -63,22 +65,22 @@ export function bridgeProjectKeyOf(bridge: WorkbenchBridgeMirror | undefined): s
   return typeof projectId === "string" && projectId !== "" ? projectId : undefined;
 }
 
-/** 概览 seat 组件（keyed body——projectKey 经桥缝订阅解析，缺席降级「无任务数据」） */
+/** 概览 seat 组件（keyed body——projectId 经桥缝订阅解析，缺席降级「无任务数据」） */
 export function OverviewSeat(props: {
-  readonly projectKeyOf?: () => string | undefined;
+  readonly projectIdOf?: () => string | undefined;
   readonly makeClient?: ForgeTasksClientFactory;
   readonly bridge?: WorkbenchBridgeMirror;
 }): ReactNode {
-  const resolve = props.projectKeyOf ?? (() => bridgeProjectKeyOf(props.bridge));
-  const [projectKey, setProjectKey] = useState<string | undefined>(resolve());
+  const resolve = props.projectIdOf ?? (() => bridgeProjectIdOf(props.bridge));
+  const [projectId, setProjectId] = useState<string | undefined>(resolve());
   useEffect(() => {
     const bridge = props.bridge ?? workbenchBridgeOf();
     if (bridge === undefined) return;
-    setProjectKey(resolve());
-    return bridge.subscribe(() => setProjectKey(resolve()));
+    setProjectId(resolve());
+    return bridge.subscribe(() => setProjectId(resolve()));
     // resolve 闭包随 props 稳定（调用方保证——face 工厂单次装配）
-  }, [props.bridge, props.projectKeyOf]);
-  return <OverviewTab projectKey={projectKey} {...(props.makeClient !== undefined ? { makeClient: props.makeClient } : {})} />;
+  }, [props.bridge, props.projectIdOf]);
+  return <OverviewTab projectId={projectId} {...(props.makeClient !== undefined ? { makeClient: props.makeClient } : {})} />;
 }
 
 /** 注册面诊断（registered = 实际落座面；e2e/排障锚） */

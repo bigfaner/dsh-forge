@@ -16,7 +16,9 @@
 // 非 root 子路径——官方边界门要求，根出口不在白名单）。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
+import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/contracts";
 import { FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
+import { deriveProjectKey } from "../db/repositories/project-key.js";
 import { err, ok, type Envelope, type Result } from "../../shared/result.js";
 import type { SessionTaskLinkCard, TaskCard, TaskSnapshot } from "../domain/tasks/types.js";
 import type { QueryTaskResult } from "../domain/tasks/query.js";
@@ -90,6 +92,68 @@ export interface TasksFollowQuery {
   readonly slug?: string;
 }
 
+// ── 入参身份（bug 9407ff29 修型——host 半解析、客户端零投影，架构裁决）：快照方法族
+//    入参身份统一官方语境（projectId），host 半经 forge.projects 缝解析为 project_key 后
+//    查域表；浏览器半缺 dirName 派生源（derive-dir 承载 node:crypto），正确性 host 单点
+//    保证（AGENTS 1.1 硬约束）。domain 查询类型仍持 projectKey（工具/loop 面 cwd 绑定语义
+//    不变）——remote 面 Omit 换身份为唯一改型位。
+
+/** forge.projects 缝结构窄面（projectId → 行真值——plugins/project 五缝 forge.projects
+ *  同键结构消费；expert-squad 同径不依赖该包，结构兼容最小面） */
+export interface ForgeProjectsIdentityFace {
+  getProject(projectId: string): Promise<{ readonly wsPath: string } | null>;
+}
+
+/** remote 面查询（list 同形——身份换 projectId） */
+export interface TasksRemoteListQuery extends Omit<ListTasksQuery, "projectKey"> {
+  readonly projectId: string;
+}
+
+/** remote 面查询（stats 同形——身份换 projectId） */
+export interface TasksRemoteStatsQuery extends Omit<TaskStatsQuery, "projectKey"> {
+  readonly projectId: string;
+}
+
+/** remote 面查询（graph 同形——身份换 projectId） */
+export interface TasksRemoteGraphQuery extends Omit<TaskGraphQuery, "projectKey"> {
+  readonly projectId: string;
+}
+
+/** remote 面查询（detail 同形——身份换 projectId） */
+export interface TasksRemoteDetailQuery extends Omit<TaskDetailQuery, "projectKey"> {
+  readonly projectId: string;
+}
+
+/** remote 面查询入参（query 同形——身份换 projectId） */
+export interface TasksRemoteQueryRequest extends Omit<TasksQueryRequest, "projectKey"> {
+  readonly projectId: string;
+}
+
+/** remote 面查询（sessionLinks 同形——身份换 projectId） */
+export interface TasksRemoteSessionLinksQuery extends Omit<SessionLinksQuery, "projectKey"> {
+  readonly projectId: string;
+}
+
+/** remote 面入参（validateFeatureTasks 同形——身份换 projectId） */
+export interface TasksRemoteValidateInput extends Omit<ValidateContainerTasksInput, "projectKey"> {
+  readonly projectId: string;
+}
+
+/** remote 面入参（transition 同形——身份换 projectId） */
+export interface TasksRemoteTransitionInput extends Omit<TransitionTaskInput, "projectKey"> {
+  readonly projectId: string;
+}
+
+/** remote 面查询（follow 同形——身份换 projectId） */
+export interface TasksRemoteFollowQuery extends Omit<TasksFollowQuery, "projectKey"> {
+  readonly projectId: string;
+}
+
+/** 项目身份未解析 typed message（钉单源——实现与测试同引本函数） */
+export function projectUnresolvedMessage(projectId: string): string {
+  return `forge.tasks project 未解析（forge.projects 缝缺席或 projectId 未命中）：projectId=${projectId}`;
+}
+
 /** query 方法入参（显式命名边界类型——四节 include 门控；agent 面同形） */
 export interface TasksQueryRequest {
   readonly projectKey: string;
@@ -110,6 +174,12 @@ export interface ForgeTasksRemoteDeps {
   readonly followIntervalMs?: number;
   /** 诊断缝（装配/降级留痕——禁直落 console 新增站点，走 config.diag 注入面） */
   readonly diag?: (line: string) => void;
+  /**
+   * forge.projects 身份解析缝（惰性现查——每个消费点调用期求值，AGENTS 1.6；缺席 =
+   * 解析失败 fail-soft 降级「无任务数据」+ 诊断留痕，不静默空集）。253b8265 判例同族：
+   * 缝生命周期绑由 host/index.ts inject 名单显式声明承担，本面零缓存。
+   */
+  readonly projects?: () => ForgeProjectsIdentityFace | undefined;
   /**
    * 注册后自探针缝（boot 竞速根治——project 实况同径）：typertGateway invoke 直探 =
    * serve 层认领自证（零副作用读面；注册完成行后时点即装配序判据——先于 client mount
@@ -172,6 +242,22 @@ async function estimateBoard(svc: TasksServiceFace, q: TasksFollowQuery): Promis
   return { projectKey: q.projectKey, cards, stats };
 }
 
+/** 零任务统计（解析失败 fail-soft 降级形态——八态含 0 键，域统计同形） */
+function zeroStats(): {
+  total: number;
+  byStatus: Record<TaskStatus, number>;
+  unmetPending: number;
+  gatedPending: number;
+} {
+  const byStatus = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>;
+  return { total: 0, byStatus, unmetPending: 0, gatedPending: 0 };
+}
+
+/** 项目身份未解析 typed Result（row/write 面——非快照族，诚实拒绝不空集） */
+function unresolvedResult<T>(projectId: string): Result<T> {
+  return err<T>({ code: "ERR_FORGE_TASKS_PROJECT_UNRESOLVED", message: projectUnresolvedMessage(projectId) });
+}
+
 /** follow 流节拍（abort 感知 sleep——取消即出循环，不悬空 fiber；project 同型） */
 function followDelay(signal: AbortSignal | undefined, intervalMs: number): Promise<void> {
   return new Promise((resolveDelay) => {
@@ -209,80 +295,138 @@ export class ForgeTasksRemote extends TypertRemoteService {
     return svc;
   }
 
+  /**
+   * 项目身份解析（host 半单点——projectId → project_key）：forge.projects 缝现查
+   * getProject().wsPath → deriveProjectKey 本地派生（lib-path 单源）；缝缺席/未命中/
+   * 抛错 = 诊断留痕（不静默）返回 undefined——快照族调用方降级「无任务数据」。
+   */
+  private async keyOf(projectId: string): Promise<string | undefined> {
+    const projects = this.deps.projects?.();
+    if (projects === undefined) {
+      this.deps.diag?.(`[forgeTasks] 身份解析缝缺席（forge.projects）——快照族降级无任务数据：projectId=${projectId}`);
+      return undefined;
+    }
+    try {
+      const project = await projects.getProject(projectId);
+      if (project !== null && project !== undefined && typeof project.wsPath === "string" && project.wsPath !== "") {
+        return deriveProjectKey(project.wsPath);
+      }
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      this.deps.diag?.(`[forgeTasks] 身份解析失败（getProject 抛错 fail-soft）——快照族降级无任务数据：projectId=${projectId}：${message}`);
+      return undefined;
+    }
+    this.deps.diag?.(`[forgeTasks] 身份解析未命中（行空/wsPath 空）——快照族降级无任务数据：projectId=${projectId}`);
+    return undefined;
+  }
+
   /** 任务清单（search 中英过滤 + sort + AC 进度批水化） */
   @Remote
-  async list(q: ListTasksQuery, signal?: AbortSignal): Promise<Result<TaskCardDto[]>> {
+  async list(q: TasksRemoteListQuery, signal?: AbortSignal): Promise<Result<TaskCardDto[]>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<TaskCardDto[]>("list");
-    return ok(await hydrateCards(svc, q.projectKey, await svc.listTasks(q)));
+    const projectKey = await this.keyOf(q.projectId);
+    if (projectKey === undefined) return ok<TaskCardDto[]>([]);
+    return ok(
+      await hydrateCards(
+        svc,
+        projectKey,
+        await svc.listTasks({
+          projectKey,
+          ...(q.slug !== undefined ? { slug: q.slug } : {}),
+          ...(q.statusFilter !== undefined ? { statusFilter: q.statusFilter } : {}),
+          ...(q.search !== undefined ? { search: q.search } : {}),
+          ...(q.sort !== undefined ? { sort: q.sort } : {}),
+        }),
+      ),
+    );
   }
 
   /** 八态计数（total + byStatus + unmetPending + gatedPending） */
   @Remote
-  async stats(q: TaskStatsQuery, signal?: AbortSignal): Promise<Result<TaskStats>> {
+  async stats(q: TasksRemoteStatsQuery, signal?: AbortSignal): Promise<Result<TaskStats>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<TaskStats>("stats");
-    return ok(await svc.taskStats(q));
+    const projectKey = await this.keyOf(q.projectId);
+    if (projectKey === undefined) return ok(zeroStats());
+    return ok(
+      await svc.taskStats({
+        projectKey,
+        ...(q.slug !== undefined ? { slug: q.slug } : {}),
+      }),
+    );
   }
 
   /** 容器任务图（DAG/泳道渲染源——cards 全量 AC 进度水化） */
   @Remote
-  async graph(q: TaskGraphQuery, signal?: AbortSignal): Promise<Result<TaskGraphDto>> {
+  async graph(q: TasksRemoteGraphQuery, signal?: AbortSignal): Promise<Result<TaskGraphDto>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<TaskGraphDto>("graph");
-    const graph = await svc.taskGraph(q);
-    return ok({ tasks: await hydrateCards(svc, q.projectKey, graph.tasks), edges: graph.edges });
+    const projectKey = await this.keyOf(q.projectId);
+    if (projectKey === undefined) return ok({ tasks: [], edges: [] });
+    const graph = await svc.taskGraph({ projectKey, slug: q.slug });
+    return ok({ tasks: await hydrateCards(svc, projectKey, graph.tasks), edges: graph.edges });
   }
 
   /** 任务详情（records/waitingOnMe/sessions/actualFiles/refs 全量水化 + AC 进度） */
   @Remote
-  async detail(q: TaskDetailQuery, signal?: AbortSignal): Promise<Result<TaskDetailDto>> {
+  async detail(q: TasksRemoteDetailQuery, signal?: AbortSignal): Promise<Result<TaskDetailDto>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<TaskDetailDto>("detail");
-    const detail = await svc.taskDetail(q);
-    const rows = await svc.latestSettlementsByTask(q.projectKey, [detail.slug]);
+    const projectKey = await this.keyOf(q.projectId);
+    if (projectKey === undefined) return unresolvedResult<TaskDetailDto>(q.projectId);
+    const detail = await svc.taskDetail({ ...q, projectKey });
+    const rows = await svc.latestSettlementsByTask(projectKey, [detail.slug]);
     const progress = acProgressOf(rows.find((r) => r.taskId === detail.taskId));
     return ok(progress === undefined ? detail : { ...detail, acProgress: progress });
   }
 
   /** 查询（四节按 include 门控——agent 面同法的 RPC 读面复用） */
   @Remote
-  async query(input: TasksQueryRequest, signal?: AbortSignal): Promise<Result<QueryTaskResult>> {
+  async query(input: TasksRemoteQueryRequest, signal?: AbortSignal): Promise<Result<QueryTaskResult>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<QueryTaskResult>("query");
-    return ok(await svc.queryTask(input));
+    const projectKey = await this.keyOf(input.projectId);
+    if (projectKey === undefined) return unresolvedResult<QueryTaskResult>(input.projectId);
+    return ok(await svc.queryTask({ ...input, projectKey }));
   }
 
   /** 挂接双源分型卡（会话头 pill 数据源） */
   @Remote
-  async sessionLinks(q: SessionLinksQuery, signal?: AbortSignal): Promise<Result<SessionTaskLinkCard[]>> {
+  async sessionLinks(q: TasksRemoteSessionLinksQuery, signal?: AbortSignal): Promise<Result<SessionTaskLinkCard[]>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<SessionTaskLinkCard[]>("sessionLinks");
-    return ok(await svc.sessionLinks(q));
+    const projectKey = await this.keyOf(q.projectId);
+    if (projectKey === undefined) return unresolvedResult<SessionTaskLinkCard[]>(q.projectId);
+    return ok(await svc.sessionLinks({ ...q, projectKey }));
   }
 
   /** 只读校验（单 feature 子图五类检查） */
   @Remote
-  async validateFeatureTasks(input: ValidateContainerTasksInput, signal?: AbortSignal): Promise<Result<ValidateReport>> {
+  async validateFeatureTasks(input: TasksRemoteValidateInput, signal?: AbortSignal): Promise<Result<ValidateReport>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<ValidateReport>("validateFeatureTasks");
-    return ok(await svc.validateFeatureTasks(input));
+    const projectKey = await this.keyOf(input.projectId);
+    if (projectKey === undefined) return unresolvedResult<ValidateReport>(input.projectId);
+    return ok(await svc.validateFeatureTasks({ ...input, projectKey }));
   }
 
   /** 人类纠偏转移（写面透传——域服务 face 在场才可调用；缺席 typed unavailable） */
   @Remote
-  async transition(input: TransitionTaskInput, signal?: AbortSignal): Promise<Result<TaskSnapshot>> {
+  async transition(input: TasksRemoteTransitionInput, signal?: AbortSignal): Promise<Result<TaskSnapshot>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<TaskSnapshot>("transition");
-    return ok(await svc.transitionTask(input));
+    const projectKey = await this.keyOf(input.projectId);
+    if (projectKey === undefined) return unresolvedResult<TaskSnapshot>(input.projectId);
+    return ok(await svc.transitionTask({ ...input, projectKey }));
   }
 
   /**
@@ -291,14 +435,21 @@ export class ForgeTasksRemote extends TypertRemoteService {
    * 重估间隔 TASKS_FOLLOW_INTERVAL_MS（project followSeal 节拍形态同型）。
    */
   @Remote({ mode: "stream" })
-  async *follow(q: TasksFollowQuery, signal?: AbortSignal): AsyncIterable<Envelope<TaskBoardDto>> {
+  async *follow(q: TasksRemoteFollowQuery, signal?: AbortSignal): AsyncIterable<Envelope<TaskBoardDto>> {
     const svc = this.service();
     let seq = 0;
     let last = "";
     let first = true;
     while (first || signal?.aborted !== true) {
       first = false;
-      const snapshot = await estimateBoard(svc, q);
+      const projectKey = await this.keyOf(q.projectId);
+      if (projectKey === undefined) {
+        // 解析失败 fail-soft：单帧「无任务数据」baseline 后收流（每帧诊断已由 keyOf 留痕，
+        // 不静默空转——客户端呈「无任务数据」终态，缝到场由客户端重订阅承接）
+        yield { seq, snapshot: { projectKey: "", cards: [], stats: zeroStats() } };
+        return;
+      }
+      const snapshot = await estimateBoard(svc, { projectKey, ...(q.slug !== undefined ? { slug: q.slug } : {}) });
       const json = JSON.stringify(snapshot);
       if (json !== last) {
         last = json;
@@ -416,7 +567,7 @@ export function registerForgeTasksRemote(
   // fail-soft：结果只落诊断（ok=info 形完成行、失败=失败因），不阻载。
   if (typeof deps.selfProbe === "function" && registered.includes("forgeTasks")) {
     void Promise.resolve()
-      .then(() => deps.selfProbe!("forgeTasks", "list", { projectKey: "" }))
+      .then(() => deps.selfProbe!("forgeTasks", "list", { projectId: "" }))
       .then(
         () => diag?.("[task-loop-typert] 注册后自探针 ok：forgeTasks/list（serve 层认领在场）"),
         (cause: unknown) =>

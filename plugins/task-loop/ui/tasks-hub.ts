@@ -70,7 +70,7 @@ export function createTasksBoardHub(options: TasksBoardHubOptions): TasksBoardHu
         .list(options.query)
         .then((cards) => {
           enqueue({
-            projectKey: options.query.projectKey,
+            projectKey: options.query.projectId,
             cards,
             stats: { total: cards.length, byStatus: countByStatus(cards) },
           });

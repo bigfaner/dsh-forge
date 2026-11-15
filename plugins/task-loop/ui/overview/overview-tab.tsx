@@ -52,7 +52,8 @@ export function visibleCardsOf(cards: readonly TaskCardView[], active: ReadonlyS
 }
 
 export interface OverviewFrameProps {
-  readonly projectKey: string | undefined;
+  /** 项目身份（官方语境 projectId——head 呈现锚；缺席 = 「无任务数据」降级） */
+  readonly projectId: string | undefined;
   /** 任务板快照（undefined = 首装在途/降级在途） */
   readonly board: TaskBoardDtoView | undefined;
   readonly phase: "loading" | "ready" | "error";
@@ -65,7 +66,7 @@ export interface OverviewFrameProps {
 
 /** 概览纯呈现帧（结构静态可测——head 主指标 + chips + 行列表） */
 export function OverviewFrame({
-  projectKey,
+  projectId,
   board,
   phase,
   error,
@@ -84,7 +85,7 @@ export function OverviewFrame({
       <div className="dswf-ov-panel" data-dswf-ov-panel="">
         <div className="dswf-ov-head" data-dswf-ov-head="">
           <span className="dswf-ov-title" data-dswf-ov-title="">
-            {projectKey ?? "任务概览"}
+            {projectId ?? "任务概览"}
           </span>
           <span className="dswf-ov-ac" data-dswf-ov-ac="">
             {acLabel}
@@ -139,8 +140,9 @@ export function OverviewFrame({
 }
 
 export interface OverviewTabProps {
-  /** 项目键（host 域服务作用域键——缺席 = 「无任务数据」降级呈现，不报错） */
-  readonly projectKey: string | undefined;
+  /** 项目身份（官方语境 projectId——直投 forgeTasks 快照族，host 半解析归属键；
+   * 缺席 = 「无任务数据」降级呈现，不报错。bug 9407ff29 修型：客户端零投影） */
+  readonly projectId: string | undefined;
   /** RPC client（缺省 = forgeTasks Typert 真身；注入 = 测试面） */
   readonly makeClient?: () => ForgeTasksRpc;
   /** 容器限定（可选——缺省全项目板） */
@@ -148,7 +150,7 @@ export interface OverviewTabProps {
 }
 
 /** 概览 tab body（状态 + 装载胶水——follow hub 订阅单源 + 降级重取 nonce） */
-export function OverviewTab({ projectKey, makeClient, slug }: OverviewTabProps): ReactNode {
+export function OverviewTab({ projectId, makeClient, slug }: OverviewTabProps): ReactNode {
   const [board, setBoard] = useState<TaskBoardDtoView | undefined>(undefined);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | undefined>(undefined);
@@ -156,8 +158,8 @@ export function OverviewTab({ projectKey, makeClient, slug }: OverviewTabProps):
   const [activeStatuses, setActiveStatuses] = useState<ReadonlySet<OverviewStatus>>(new Set());
 
   useEffect(() => {
-    if (projectKey === undefined || projectKey === "") {
-      // spec 投影缺席降级：不报错，「无任务数据」终态呈现（负缓存不锁存——projectKey
+    if (projectId === undefined || projectId === "") {
+      // spec 投影缺席降级：不报错，「无任务数据」终态呈现（负缓存不锁存——projectId
       // 到场即重订阅，风险 8 对策）
       setPhase("ready");
       setBoard(undefined);
@@ -169,7 +171,7 @@ export function OverviewTab({ projectKey, makeClient, slug }: OverviewTabProps):
     try {
       hub = createTasksBoardHub({
         client,
-        query: { projectKey, ...(slug !== undefined ? { slug } : {}) },
+        query: { projectId, ...(slug !== undefined ? { slug } : {}) },
         onSnapshot: (snapshot) => {
           if (cancelled) return;
           setBoard(snapshot);
@@ -181,10 +183,10 @@ export function OverviewTab({ projectKey, makeClient, slug }: OverviewTabProps):
       });
       hub.start();
       void client
-        .list({ projectKey, ...(slug !== undefined ? { slug } : {}) })
+        .list({ projectId, ...(slug !== undefined ? { slug } : {}) })
         .then((cards) => {
           if (cancelled) return;
-          setBoard((prev) => prev ?? { projectKey, cards, stats: { total: cards.length, byStatus: {} } });
+          setBoard((prev) => prev ?? { projectKey: projectId, cards, stats: { total: cards.length, byStatus: {} } });
           setPhase((prev) => (prev === "loading" ? "ready" : prev));
         })
         .catch((cause: unknown) => {
@@ -200,7 +202,7 @@ export function OverviewTab({ projectKey, makeClient, slug }: OverviewTabProps):
       cancelled = true;
       hub?.dispose();
     };
-  }, [projectKey, slug, nonce, makeClient]);
+  }, [projectId, slug, nonce, makeClient]);
 
   const handleToggleStatus = useCallback((status: OverviewStatus) => {
     setActiveStatuses((prev) => new Set(prev).add(status));
@@ -216,7 +218,7 @@ export function OverviewTab({ projectKey, makeClient, slug }: OverviewTabProps):
   const memoActive = useMemo(() => activeStatuses, [activeStatuses]);
   return (
     <OverviewFrame
-      projectKey={projectKey}
+      projectId={projectId}
       board={board}
       phase={phase}
       {...(error !== undefined ? { error } : {})}

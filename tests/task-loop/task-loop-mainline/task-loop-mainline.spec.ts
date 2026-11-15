@@ -216,6 +216,8 @@ test('@task-loop-e2e @task-loop-mainline 主线全链：建卡→依赖边→领
     await expect(page.locator('[data-dswf-ov-rows] button'), 'B4.O1：行列表零按钮（零迁移 affordance）').toHaveCount(0)
     await expect(page.locator('[data-dswf-ov-rows] [draggable]'), 'B4.O1：行列表零拖拽载体').toHaveCount(0)
     const statsBefore = await taskStats(page, projectKey)
+    // 纯读投影（bug 9543f496 修型——比对锚 = CT-02.O2 打开看板前快照，非跨 claim/submit）
+    expect(statsBefore, 'B4.O1 纯读投影：打开看板前后任务域计数零变化').toEqual(stats)
 
     // ── CT-MAINLINE-03.O1：桥 claimTask 领取——信封 + 状态迁移执行中（AN-1 + AN-5） ──
     const claimed = await claimCard(env)
@@ -251,7 +253,12 @@ test('@task-loop-e2e @task-loop-mainline 主线全链：建卡→依赖边→领
     await expect(rowB, 'CT-MAINLINE-05.O3：未结算行「—」与已结算行并存可辨').toContainText('—')
 
     // ── CT-MAINLINE-B4.O1 后效 + O2：结算门只封绕道不封正道——正道结算后看板反映终态 ──
-    expect(await taskStats(page, projectKey), 'B4.O1 状态后效：打开看板前后任务域计数零变化（纯读投影）').toEqual(statsBefore)
+    expect(await taskStats(page, projectKey), 'B4.O1 状态后效：正道结算后计数 = completed 1 + pending 1（unmetPending 随前置终态收敛）').toEqual({
+      total: 2,
+      byStatus: { pending: 1, in_progress: 0, completed: 1, blocked: 0, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 },
+      unmetPending: 0,
+      gatedPending: 0,
+    })
     await expect(rowA, 'B4.O2：completed 呈现经 submitTask 结算门产生（同任务）').toBeVisible()
 
     // ── CT-MAINLINE-B5.O1/O2：spec 缺席独立收口（全程零 spec = M2 必然态） ──

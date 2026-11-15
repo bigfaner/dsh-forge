@@ -21,6 +21,7 @@ import {
 } from "./assembly/default-assembly.js";
 import {
   registerForgeTasksRemote,
+  type ForgeProjectsIdentityFace,
   type ForgeTasksRemoteDeps,
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
@@ -50,9 +51,8 @@ interface TaskLoopPluginCtx {
   readonly emit?: (event: string, payload: Record<string, unknown>) => void;
 }
 
-/**
- * forgeTasks 域服务惰性现查缝（AGENTS 1.6——检测永不缓存，每个消费点调用期求值）：
- * reflect.get 具名服务防御读取；缺席/抛错 = undefined（namespace 诚实降级 404 语义）。
+/** forgeTasks 域服务惰性现查缝（AGENTS 1.6——检测永不缓存，每个消费点调用期求值）：
+ *  reflect.get 具名服务防御读取；缺席/抛错 = undefined（namespace 诚实降级 404 语义）。
  */
 function lazyTasksFace(ctx: unknown): () => TasksService | undefined {
   return () => {
@@ -60,6 +60,28 @@ function lazyTasksFace(ctx: unknown): () => TasksService | undefined {
       const face = ctx as { reflect?: { get?(name: string): unknown } };
       const svc = face.reflect?.get?.(FORGE_TASKS_SERVICE_KEY);
       return (svc ?? undefined) as TasksService | undefined;
+    } catch {
+      return undefined;
+    }
+  };
+}
+
+/**
+ * forge.projects 身份解析缝（bug 9407ff29——projectId → project_key 的 host 半解析源）：
+ * plugins/project 五缝 forge.projects 结构消费（PROJECT_SEAM_KEYS.projects 同键——seam 为
+ * 惰性工厂 provide，工厂调用产出 ProjectsServicePort；本面只取 getProject 行真值窄面）。
+ * 现查永不缓存（AGENTS 1.6）；缝缺席/劣形/抛错 = undefined——快照族 fail-soft 降级由
+ * remote 面承担（emitDiag 留痕）。
+ */
+function lazyProjectsFace(ctx: unknown): ForgeTasksRemoteDeps["projects"] {
+  return () => {
+    try {
+      const factory = (ctx as TaskLoopPluginCtx).reflect?.get?.(PROJECT_SEAM_KEY);
+      if (typeof factory !== "function") return undefined;
+      const face = (factory as () => unknown)();
+      if (face === null || face === undefined || typeof face !== "object") return undefined;
+      const candidate = face as { getProject?: unknown };
+      return typeof candidate.getProject === "function" ? (candidate as ForgeProjectsIdentityFace) : undefined;
     } catch {
       return undefined;
     }
@@ -126,6 +148,7 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
   const diagEmit = createDiagEmitter((ctx as TaskLoopPluginCtx).emit);
   const remoteDeps: ForgeTasksRemoteDeps = {
     tasks: lazyTasksFace(ctx),
+    projects: lazyProjectsFace(ctx),
     diag: (line) => {
       diag(line, "info");
       emitForgeDiag(diagEmit, { event: "task-loop-typert", level: "info", message: line });
@@ -167,7 +190,13 @@ export type { QueryTaskResult } from "./domain/tasks/query.js";
 // inject 名单（proposal 硬判据：装配行 inject 名单显式含 webServer——目标宿主必带；
 // 名单缺席 = ctx 属性访问被 cordis inject 门拒恒 undefined，fix-8 判例。experts = 可选
 // 服务——不入 inject 名单（可选消费不阻载），派发消费点现查（faces.resolveWorkerProfile
-// ——AGENTS 1.6 检测永不缓存）。
-taskLoopPlugin.inject = ["webServer"] as const;
+// ——AGENTS 1.6 检测永不缓存）。forge.projects = 身份解析缝显式入名单（bug 9407ff29
+// 修型——解析缝生命周期绑 inject 名单显式；缺席 fail-soft 降级「无任务数据」+ 诊断留痕，
+// 253b8265 判例同族）。
+/** forge.projects 缝键（plugins/project host/assembly/seams.ts PROJECT_SEAM_KEYS.projects
+ *  同值——跨包结构消费，本包零依赖声明只持同值常量，漂移由 identity 解析面诊断兜底） */
+const PROJECT_SEAM_KEY = "forge.projects";
+
+taskLoopPlugin.inject = ["webServer", PROJECT_SEAM_KEY] as const;
 
 export default taskLoopPlugin;

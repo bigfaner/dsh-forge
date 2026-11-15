@@ -14,8 +14,10 @@ import { createSettlementRepo } from "../../host/db/repositories/settlement-repo
 import {
   ForgeTasksRemote,
   TASKS_FOLLOW_INTERVAL_MS,
+  projectUnresolvedMessage,
   registerForgeTasksRemote,
   unavailableMessage,
+  type ForgeProjectsIdentityFace,
   type TasksServiceFace,
   type TypertAssemblyCtxFace,
 } from "../../host/assembly/typert-remotes.js";
@@ -113,8 +115,8 @@ describe("快照方法族 DTO 聚合（AC 进度批水化）", () => {
       return originPrepare(sql, ...rest);
     }) as typeof h.db.prepare;
 
-    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc });
-    const result = await remote.list({ projectKey: h.projectKey });
+    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, projects: () => projectsFaceOf("Z:\\ws\\domain-tasks") });
+    const result = await remote.list({ projectId: h.projectKey });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const cards = result.value;
@@ -144,8 +146,8 @@ describe("快照方法族 DTO 聚合（AC 进度批水化）", () => {
       gate: { compile: true, fmt: true, lint: true, test: true },
       acceptanceCriteria: [{ criterion: "唯一判据", met: true, evidence: "绿" }],
     });
-    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc });
-    const result = await remote.graph({ projectKey: h.projectKey, slug: "alpha" });
+    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, projects: () => projectsFaceOf("Z:\\ws\\domain-tasks") });
+    const result = await remote.graph({ projectId: h.projectKey, slug: "alpha" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.tasks[0]?.acProgress).toEqual({ done: 1, total: 1 });
@@ -155,14 +157,14 @@ describe("快照方法族 DTO 聚合（AC 进度批水化）", () => {
   it("stats/query/sessionLinks：域读面原样透传（ok 分支携值）", async () => {
     const svc = buildService();
     const t = await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "alpha", title: "T", type: "coding-feature" });
-    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc });
-    const stats = await remote.stats({ projectKey: h.projectKey });
+    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, projects: () => projectsFaceOf("Z:\\ws\\domain-tasks") });
+    const stats = await remote.stats({ projectId: h.projectKey });
     expect(stats.ok).toBe(true);
     if (!stats.ok) return;
     expect(stats.value.total).toBe(1);
     expect(stats.value.byStatus.pending).toBe(1);
     expect(stats.value.unmetPending).toBe(0);
-    const query = await remote.query({ projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t.localId } });
+    const query = await remote.query({ projectId: h.projectKey, taskRef: { slug: "alpha", localId: t.localId } });
     expect(query.ok && query.value.container).toEqual({ slug: "alpha" });
   });
 });
@@ -171,14 +173,14 @@ describe("typed unavailable 与 follow 快照钩", () => {
   it("族服务缺席 → Result error 诚实拒绝（message 钉 unavailableMessage 单源）", async () => {
     const remote = new ForgeTasksRemote(fakeCtx(), {});
     for (const [name, run] of [
-      ["list", () => remote.list({ projectKey: "p" })],
-      ["stats", () => remote.stats({ projectKey: "p" })],
-      ["graph", () => remote.graph({ projectKey: "p", slug: "alpha" })],
-      ["detail", () => remote.detail({ projectKey: "p", taskId: "t-1" })],
-      ["query", () => remote.query({ projectKey: "p", taskRef: { slug: "alpha", localId: "1" } })],
-      ["sessionLinks", () => remote.sessionLinks({ projectKey: "p" })],
-      ["validateFeatureTasks", () => remote.validateFeatureTasks({ projectKey: "p", slug: "alpha" })],
-      ["transition", () => remote.transition({ projectKey: "p", taskId: "t-1", toStatus: "completed", reason: "r" })],
+      ["list", () => remote.list({ projectId: "p" })],
+      ["stats", () => remote.stats({ projectId: "p" })],
+      ["graph", () => remote.graph({ projectId: "p", slug: "alpha" })],
+      ["detail", () => remote.detail({ projectId: "p", taskId: "t-1" })],
+      ["query", () => remote.query({ projectId: "p", taskRef: { slug: "alpha", localId: "1" } })],
+      ["sessionLinks", () => remote.sessionLinks({ projectId: "p" })],
+      ["validateFeatureTasks", () => remote.validateFeatureTasks({ projectId: "p", slug: "alpha" })],
+      ["transition", () => remote.transition({ projectId: "p", taskId: "t-1", toStatus: "completed", reason: "r" })],
     ] as const) {
       const result = await run();
       expect(result.ok, name).toBe(false);
@@ -192,17 +194,17 @@ describe("typed unavailable 与 follow 快照钩", () => {
   it("follow：族服务缺席 → 流启动即 typed unavailable（gateway 折叠 RemoteFailure）", async () => {
     const remote = new ForgeTasksRemote(fakeCtx(), {});
     await expect(async () => {
-      for await (const _frame of remote.follow({ projectKey: "p" })) void _frame;
+      for await (const _frame of remote.follow({ projectId: "p" })) void _frame;
     }).rejects.toThrow(unavailableMessage("*"));
   });
 
   it("follow：首帧 baseline（seq=0）+ 快照变化才逐帧增量（seq 单调）+ abort 出循环", async () => {
     const svc = buildService();
     await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "alpha", title: "T", type: "coding-feature" });
-    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, followIntervalMs: 0 });
+    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, projects: () => projectsFaceOf("Z:\\ws\\domain-tasks"), followIntervalMs: 0 });
     const frames: number[] = [];
     const controller = new AbortController();
-    for await (const frame of remote.follow({ projectKey: h.projectKey }, controller.signal)) {
+    for await (const frame of remote.follow({ projectId: h.projectKey }, controller.signal)) {
       frames.push(frame.seq);
       if (frame.seq === 0) {
         expect(frame.snapshot.cards).toHaveLength(1);
@@ -327,8 +329,8 @@ describe("registerForgeTasksRemote（根 ctx plugin 装配）", () => {
     const svc = buildService();
     const { face } = captureInjectLifecycle({ forgeTasks: svc });
     registerForgeTasksRemote(face, {});
-    const remote = new ForgeTasksRemote(new Context(), { tasks: () => svc });
-    const result = await remote.list({ projectKey: h.projectKey });
+    const remote = new ForgeTasksRemote(new Context(), { tasks: () => svc, projects: () => projectsFaceOf("Z:\\ws\\domain-tasks") });
+    const result = await remote.list({ projectId: h.projectKey });
     expect(result.ok).toBe(true);
   });
 });
@@ -341,7 +343,7 @@ describe("注册后自探针（boot 竞速根治——serve 层认领自证）",
     const result = registerForgeTasksRemote(face, { diag, tasks: () => ({}) as TasksServiceFace, selfProbe: probe });
     expect(result.registered).toContain("forgeTasks");
     await vi.waitFor(() => {
-      expect(probe).toHaveBeenCalledWith("forgeTasks", "list", { projectKey: "" });
+      expect(probe).toHaveBeenCalledWith("forgeTasks", "list", { projectId: "" });
       expect(diag).toHaveBeenCalledWith(expect.stringContaining("自探针 ok"));
     });
   });
@@ -362,5 +364,87 @@ describe("注册后自探针（boot 竞速根治——serve 层认领自证）",
     const result = registerForgeTasksRemote(face, { diag, tasks: () => ({}) as TasksServiceFace });
     expect(result.registered).toEqual(["forgeTasks"]);
     expect(diag).toHaveBeenCalledTimes(1); // 仅完成行
+  });
+});
+
+// ── 入参身份 host 半解析（bug 9407ff29 修型——host 半解析、客户端零投影，架构裁决） ──
+
+/** forge.projects 缝替身（getProject 行真值锚——wsPath 派生归属键单源 harness PROJECT_CWD） */
+function projectsFaceOf(wsPath: string | null): ForgeProjectsIdentityFace {
+  return { getProject: async () => (wsPath === null ? null : { wsPath }) };
+}
+
+describe("入参身份 host 半解析（projectId → project_key）", () => {
+  it("缝在场：projectId 经 wsPath 派生归属键后查域表——list/stats/graph 命中行集", async () => {
+    const svc = buildService();
+    await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "alpha", title: "T", type: "coding-feature" });
+    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, projects: () => projectsFaceOf("Z:\\ws\\domain-tasks") });
+    const listed = await remote.list({ projectId: "uuid-1" });
+    expect(listed.ok && listed.value).toHaveLength(1);
+    const stats = await remote.stats({ projectId: "uuid-1" });
+    expect(stats.ok && stats.value.total).toBe(1);
+    const graph = await remote.graph({ projectId: "uuid-1", slug: "alpha" });
+    expect(graph.ok && graph.value.tasks).toHaveLength(1);
+  });
+
+  it("缝缺席：快照族 fail-soft 降级「无任务数据」（list 空集/stats 全零/graph 空板/follow 单帧空板）+ 诊断留痕不静默", async () => {
+    const svc = buildService();
+    await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "alpha", title: "T", type: "coding-feature" });
+    const diag = vi.fn();
+    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, diag });
+    const listed = await remote.list({ projectId: "uuid-2" });
+    expect(listed.ok).toBe(true);
+    if (listed.ok) expect(listed.value).toEqual([]);
+    const stats = await remote.stats({ projectId: "uuid-2" });
+    expect(stats.ok).toBe(true);
+    if (stats.ok) {
+      expect(stats.value.total).toBe(0);
+      expect(Object.keys(stats.value.byStatus)).toHaveLength(8);
+    }
+    const graph = await remote.graph({ projectId: "uuid-2", slug: "alpha" });
+    expect(graph.ok && graph.value).toEqual({ tasks: [], edges: [] });
+    const frames: unknown[] = [];
+    for await (const frame of remote.follow({ projectId: "uuid-2" })) frames.push(frame);
+    expect(frames).toHaveLength(1); // 单帧空板后收流（不静默空转）
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining("身份解析缝缺席"));
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining("uuid-2"));
+  });
+
+  it("缝在场但 projectId 未命中（行空）→ 同 fail-soft 降级 + 诊断留痕", async () => {
+    const diag = vi.fn();
+    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => ({}) as TasksServiceFace, projects: () => projectsFaceOf(null), diag });
+    const listed = await remote.list({ projectId: "miss" });
+    expect(listed.ok && listed.value).toEqual([]);
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining("身份解析未命中"));
+  });
+
+  it("row/write 面（detail/query/sessionLinks/validateFeatureTasks/transition）解析失败 → typed 拒绝不空集", async () => {
+    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => ({}) as TasksServiceFace });
+    for (const [name, run] of [
+      ["detail", () => remote.detail({ projectId: "p", taskId: "t-1" })],
+      ["query", () => remote.query({ projectId: "p", taskRef: { slug: "alpha", localId: "1" } })],
+      ["sessionLinks", () => remote.sessionLinks({ projectId: "p" })],
+      ["validateFeatureTasks", () => remote.validateFeatureTasks({ projectId: "p", slug: "alpha" })],
+      ["transition", () => remote.transition({ projectId: "p", taskId: "t-1", toStatus: "completed", reason: "r" })],
+    ] as const) {
+      const result = await run();
+      expect(result.ok, name).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("ERR_FORGE_TASKS_PROJECT_UNRESOLVED");
+        expect(result.error.message).toBe(projectUnresolvedMessage("p"));
+      }
+    }
+  });
+
+  it("getProject 抛错 → fail-soft 降级 + 诊断留痕（不炸读面）", async () => {
+    const diag = vi.fn();
+    const remote = new ForgeTasksRemote(fakeCtx(), {
+      tasks: () => ({}) as TasksServiceFace,
+      projects: () => ({ getProject: async () => { throw new Error("seam broke"); } }),
+      diag,
+    });
+    const listed = await remote.list({ projectId: "boom" });
+    expect(listed.ok && listed.value).toEqual([]);
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining("身份解析失败"));
   });
 });

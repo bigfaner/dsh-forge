@@ -55,9 +55,10 @@ export interface TasksBoardEnvelope {
   readonly snapshot: TaskBoardDtoView;
 }
 
-/** list 查询参（host ListTasksQuery 消费切片） */
+/** list 查询参（host TasksRemoteListQuery 消费切片——身份官方语境 projectId，bug 9407ff29
+ *  修型：客户端零投影零派生，host 半 forge.projects 缝解析归属键） */
 export interface TasksListQuery {
-  readonly projectKey: string;
+  readonly projectId: string;
   readonly slug?: string;
   readonly search?: string;
   readonly sort?: "created" | "priority";
@@ -65,7 +66,7 @@ export interface TasksListQuery {
 
 /** follow 查询参（list 同形作用域——容器限定可选） */
 export interface TasksFollowQuery {
-  readonly projectKey: string;
+  readonly projectId: string;
   readonly slug?: string;
 }
 
