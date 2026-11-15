@@ -130,8 +130,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
   });
 
-  it("版本 bump 0.13.6（plugin-task-loop 1.18-a 判例——worker/triage toolFilter 名字表随迁官方宿主 snake_case 注册名 + globalToolNames 探针装配缝：patch 位 +1；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.13.6");
+  it("版本 bump 0.13.7（plugin-task-loop 1.18-a 判例二段——globalToolNames 探针改接跨 preset 并集（global 单层无金丝雀不可信），task-loop 0.13.7；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.13.7");
   });
 });
 

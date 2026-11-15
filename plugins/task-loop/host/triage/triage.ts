@@ -104,9 +104,10 @@ export interface TriageHookDeps {
   readonly diag?: ForgeDiagEmitFace;
   /**
    * 全局工具注册名读取缝（plugin-task-loop/1.18-a 判例——parent 投影在官方 harness 形状
-   * 不命中时 deny 未知名拆 spawn）：优先取插件 ctx.tools 全局视图；缺席回落 parent 探针。
+   * 不命中时 deny 未知名拆 spawn）：优先取跨 preset 并集探针（异步——global ∪ preset scope
+   * 并集，plugin-forge index 同径配方）；缺席/undefined 回落 parent 探针。
    */
-  readonly globalToolNames?: () => readonly string[] | undefined;
+  readonly globalToolNames?: () => readonly string[] | undefined | Promise<readonly string[] | undefined>;
 }
 
 /** 人格解析依赖（resolveTriagePersona 入参面——TriageHookDeps 的 persona 相关子集） */
@@ -265,7 +266,9 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
         prompt,
         parent: input.parent,
         signal: input.signal,
-        toolFilter: deriveTriageToolFilter(deps.globalToolNames?.() ?? registeredToolNamesOf(input.parent)),
+        toolFilter: deriveTriageToolFilter(
+          (await deps.globalToolNames?.()) ?? registeredToolNamesOf(input.parent),
+        ),
         ...(agentOptions !== undefined ? { agentOptions } : {}),
         ...(persona !== undefined ? { persona } : {}),
         label: `${input.task.slug}/${input.task.localId} · 处置分析`,

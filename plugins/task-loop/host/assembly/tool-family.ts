@@ -12,7 +12,7 @@ import { createNarrator } from "../notify/narrator.js";
 import { createInProcessDriverSpawn } from "../spawn/in-process-driver.js";
 import { defaultWorkerTreeGuard } from "../spawn/job-tree.js";
 import { createTriageHook } from "../triage/triage.js";
-import { globalToolNamesOfToolsFace } from "../dispatch-core/index.js";
+import { createUnionToolNamesProbe, type AgentPresetsFace, type ToolsSchemasReader } from "@dsh-forge/contracts";
 import {
   adaptAgentNarrationChannel,
   createDiagEmitter,
@@ -96,9 +96,42 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
   });
   // 全局工具注册名探针（plugin-task-loop/1.18-a 判例）：官方 harness 的 parent/agent 形状
   // 无 ctx.tools 投影，parent 探针恒 undefined → toolFilter 未知名直落 restrict 拆一切
-  // spawn。此处从插件 ctx.tools 全局视图取数（调用期现查不缓存），worker/trage 两面共用。
-  const globalToolNames = (): readonly string[] | undefined =>
-    globalToolNamesOfToolsFace((input.ctx as { tools?: unknown }).tools);
+  // spawn。正典配方 = plugin-forge index 同径（bug a5b12254）：无参 schemas() 只是 global
+  // 单层视图（官方工具全随 preset 装 preset scope 层）——必须接 contracts
+  // createUnionToolNamesProbe（global ∪ 逐 preset acquireScope 租约内 scope 视图并集，
+  // 含 read 金丝雀 → 可信求交）；agentPresets 经 ctx 具名属性 + reflect 双通道现查
+  // （AGENTS 1.6 不缓存），缺席 fail-soft 降级 global 单层。worker/triage 两面共用。
+  const hostCtx = input.ctx as {
+    tools?: unknown;
+    agentPresets?: AgentPresetsFace;
+    reflect?: { get?(name: string): unknown };
+  };
+  const toolsSchemasReaderOf = (): ToolsSchemasReader => (scope?: object) => {
+    const tools = hostCtx.tools as
+      | { schemas?: (this: unknown, scope?: object) => readonly { name: string }[] | undefined }
+      | undefined;
+    return tools?.schemas?.call(hostCtx.tools, scope);
+  };
+  const agentPresetsOf = (): AgentPresetsFace | undefined => {
+    try {
+      const viaInject = hostCtx.agentPresets;
+      if (viaInject !== undefined && typeof viaInject.list === "function" && typeof viaInject.acquireScope === "function") {
+        return viaInject;
+      }
+    } catch {
+      // 注入服务未就绪 = 降级到 reflect 通道
+    }
+    try {
+      const viaReflect = hostCtx.reflect?.get?.("agentPresets") as AgentPresetsFace | undefined;
+      if (viaReflect !== undefined && typeof viaReflect.list === "function" && typeof viaReflect.acquireScope === "function") {
+        return viaReflect;
+      }
+    } catch {
+      // reflect 通道异常 = 缺席
+    }
+    return undefined;
+  };
+  const globalToolNames = createUnionToolNamesProbe(toolsSchemasReaderOf(), agentPresetsOf);
   const narrator = createNarrator({ channel: narrationChannel });
   const triage = createTriageHook({ tasks: services.tasks, spawn, globalToolNames, ...(diagEmit !== undefined ? { diag: diagEmit } : {}) });
   const driver: LoopDriver = createLoopDriver({
