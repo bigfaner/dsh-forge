@@ -30,9 +30,9 @@ import {
   type ForgeBrandNameProps,
 } from './views/sidebar/index.js'
 import { ForgeShellHost, type ForgeShellHostProps } from './workbench/ShellHost.js'
-// fix-13 注记（1.42/1.44）：ForgeHeroPanel / ForgeKnowledgePanel / ForgeKnowledgeGlyph /
-// ForgeRecallView 发布退役——注册面迁 @dsh-forge/project bundle（ui/hero-panel-face.ts
-// + ui/knowledge-face.ts），组件本体随插件包，不经壳发布面递达。
+// ForgeHeroPanel / ForgeKnowledgePanel / ForgeKnowledgeGlyph / ForgeRecallView 不经壳
+// 发布面递达——hero 面板注册在 @dsh-forge/project bundle（ui/hero-panel-face.ts），
+// knowledge 三面注册在 @dsh-forge/knowledge bundle（ui/faces.ts），组件本体随插件包。
 // fix-13 注记（1.45）：ForgeOverviewTab / ForgeDocsTab 发布退役——dock tab 族注册面与
 // 组件本体随 @dsh-forge/project bundle（ui/dock-tabs-face.ts + ui/dock-tabs/）。
 // 1.7 注记：ForgeHeroWorkspacePicker 发布退役——B 类顶替②（hero 项目+worktree 双 select

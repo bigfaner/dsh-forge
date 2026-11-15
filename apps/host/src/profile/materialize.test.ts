@@ -74,8 +74,9 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
       })
     expect(expectedRows.length, '配置应至少含一个 userLayerRow 行（全关 = 打包形态零产品服务——疑配置误改）').toBeGreaterThan(0)
     expect(patch).toContain(['- insert:', ...expectedRows].join('\n'))
-    // 现值 pin：knowledge 开（1.9 A5 重开放——阶段①地基落位，全局装载 + 随包）
-    expect(PRODUCT_PLUGINS['knowledge']).toEqual({ userLayerRow: true })
+    // 现值 pin：knowledge 开（1.9 A5 重开放——阶段①地基落位，全局装载 + 随包）；
+    // dir = 迁移批1.3 root 级 plugins/knowledge 居所声明（expert-squad 行同型）
+    expect(PRODUCT_PLUGINS['knowledge']).toEqual({ userLayerRow: true, dir: 'plugins/knowledge' })
     expect(patch).toContain("name: '@dsh-forge/knowledge'")
     // 预设携带插件不入配置表（行在预设底稿内——产品裁决 2026-10-09 标准模式零 forge
     // 面；staging 由 assemble 从底稿扫描 + 依赖闭包自动推导）
@@ -262,7 +263,7 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dsh.profile.bundles).toEqual([...packaged.dsh.profile.bundles, '@dsh-forge/expert-squad', '@dsh-forge/snapnote'])
     // dev 直链 workspace 构建产物（4.2：装载面 = loader 行 import 以 profileDir 为锚）
     expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')
-    expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/plugins/knowledge')
+    expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../plugins/knowledge')
     expect(dev.dependencies['@dsh-forge/contracts']).toBe('link:../../../packages/contracts')
     expect(dev.dependencies['@dsh-forge/plugin-forge']).toBe('link:../../../packages/plugin-forge')
     // M3 3.7：远征组合 in-preset plugin-forge-spec 行的 loader 解析锚（预设装配 dev 供应面）

@@ -592,7 +592,7 @@ test('@web-e2e @p1mvp flywheel·Step3b blank-question-blocked：空/纯空白提
 //     → 召回 pane（conversation.view 'dswf-recall' 占用者）无法挂载。
 // 故「空会话点知识召回 tab」载体在产品面不可达（官方 hero chrome 语义，非产品缺陷）。
 // 占位Outcome「本会话暂无召回」的确定性承载：
-//   - 单测 pin：plugins/project/ui/knowledge/RecallTab.test.tsx（idle/readyEmpty 两相位
+//   - 单测 pin：plugins/knowledge/ui/RecallTab.test.tsx（idle/readyEmpty 两相位
 //     均断 data-dswf-recall-face="empty" + 「本会话暂无召回」）；
 //   - e2e 占位半边：Step4d（无关库 dogfood——agent 未走知识检索时召回 tab 保持占位，
 //     soft 承载）+ 冒烟 Step 7（有召回统计面实证）。

@@ -219,7 +219,9 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
       // knowledge 1.9 A5 重开放：用户层全局行 + skills/learn 技能面（customSkillDirs[knowledge]
       // 挂载源——STAGING_EXTRAS 承载）；stage② 1.5 增 skills/distill 整合技能（随包交付面同步）
-      'runtime/node_modules/@dsh-forge/knowledge/dist/index.js',
+      // knowledge 迁移批1.3：root 级 plugins/knowledge 三目录制——dist 入口随
+      // exports/main 重锚 dist/host/index.js（双面包装载范式同 expert-squad）
+      'runtime/node_modules/@dsh-forge/knowledge/dist/host/index.js',
       'runtime/node_modules/@dsh-forge/knowledge/skills/learn/SKILL.md',
       'runtime/node_modules/@dsh-forge/knowledge/skills/distill/SKILL.md',
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
@@ -426,7 +428,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
   })
 
   it('knowledge 重开放 pin（knowledge-stage1-foundation 1.9 A5：用户层全局行 + staging 种子随包 + skills/learn 技能面口径）', () => {
-    expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为开（userLayerRow:true）').toEqual({ userLayerRow: true })
+    expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为开（userLayerRow:true + dir 居所声明）').toEqual({ userLayerRow: true, dir: 'plugins/knowledge' })
     expect(stagedPackages.has('knowledge'), 'knowledge 应在场 staging（userLayerRow 种子自动推导）').toBe(true)
     expect(KEY_FILES.some((rel) => rel.includes('@dsh-forge/knowledge')), '关键文件口径应含 knowledge 行（技能面 + dist）').toBe(true)
   })

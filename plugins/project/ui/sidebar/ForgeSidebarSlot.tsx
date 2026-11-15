@@ -18,7 +18,7 @@
 // 页内缝 __DSH_FORGE_ADD_PROJECT_FLOW__ 由本面发布，空态 CTA 与 hero CTA 两入口直达。
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
 import { AddProjectFlow, openAddProjectFlow } from '../add-project/index.js'
-import { useWorkspaceProjectMap } from '../knowledge/anchored-projects.js'
+import { useWorkspaceProjectMap } from '../anchored-projects.js'
 import { preloadRpcClientFactory } from '../rpc.js'
 import { ForgeWorkspacePanel } from './ForgeWorkspacePanel.js'
 import { sidebarActions } from './sidebar-actions.js'

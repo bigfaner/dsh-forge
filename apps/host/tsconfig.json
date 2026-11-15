@@ -20,7 +20,7 @@
       "path": "../../packages/core"
     },
     {
-      "path": "../../packages/plugins/knowledge"
+      "path": "../../plugins/knowledge"
     },
     {
       "path": "../../plugins/project/tsconfig.host.json"

@@ -8,7 +8,7 @@
 // 派生行单源 = core deriveTaskStoreDir（RPC forge:projects/deriveTaskStoreDir 下发，
 // derive-source 装配；本模块零路径派生残留）。
 import type { RegisterProjectInput } from '@dsh-forge/contracts'
-import { isWindowsStylePath, normalizeDirPath } from '@dsh-forge/lib-path/path-key'
+import { dirSeparatorOf, normalizeDirPath } from '@dsh-forge/lib-path/path-key'
 import type { BrowserSelection } from './browser-model.js'
 
 /** 表单字段值（采集面 = RegisterProjectInput 三输入字段；workspaceDir 只读回填；知识目录随 knowledge_dir 列退役不采集——缺省 `<工作区>/.knowledge` 由 knowledge 注册径派生） */
@@ -50,13 +50,14 @@ export interface FormState {
  * 单源（与 core derive-dir normalizeDirSpelling 同则一份）——本位 re-export 保持既有消费面
  * 与单测 import 路径不变。
  */
-export { isWindowsStylePath, normalizeDirPath } from '@dsh-forge/lib-path/path-key'
+export { isWindowsStylePath, normalizeDirPath, dirSeparatorOf } from '@dsh-forge/lib-path/path-key'
 
-/** 目录分隔符（随路径风格：Windows `\` / POSIX `/`——拼接与段边界判定的统一基准；盘符根 `Z:`（归一去尾后）仍按 Windows） */
-export function dirSeparatorOf(path: string): '\\' | '/' {
-  const norm = normalizeDirPath(path)
-  return isWindowsStylePath(path) || /^[A-Za-z]:$/.test(norm) ? '\\' : '/'
-}
+/**
+ * 工作区目录 → 知识库目录缺省值（白名单条目·已处置——knowledge-plugin-migration 1.4：
+ * 本体下沉 @dsh-forge/lib-path/path-key 共享逻辑单源（knowledge 插件 ui 面双侧消费）；
+ * 本位 re-export 保持注册表单消费面与单测 import 路径不变）。
+ */
+export { deriveKnowledgeDir } from '@dsh-forge/lib-path/path-key'
 
 /**
  * 浏览改选起始目录（「浏览…」回退面——RegisterForm BrowsePanel 相位消费）：
@@ -90,15 +91,6 @@ export function folderNameOf(workspaceDir: string): string {
 /** 工作区目录 → forge 目录默认值（`<工作区>/.forge`——分隔符随工作区风格） */
 export function deriveForgeDir(workspaceDir: string): string {
   return `${normalizeDirPath(workspaceDir)}${dirSeparatorOf(workspaceDir)}.forge`
-}
-
-/**
- * 工作区目录 → 知识库目录缺省值（`<工作区>/.knowledge`——分隔符随工作区风格）。
- * 知识目录随 knowledge_dir 列退役退出注册采集面（1.15）；本派生保留供知识视图空库
- * 引导文案（目录位置说明）——产品口径恒缺省派生，无用户改选面。
- */
-export function deriveKnowledgeDir(workspaceDir: string): string {
-  return `${normalizeDirPath(workspaceDir)}${dirSeparatorOf(workspaceDir)}.knowledge`
 }
 
 /**

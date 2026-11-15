@@ -16,7 +16,7 @@ import {
   KNOWLEDGE_SECTION_ORDER,
   renderKnowledgeDomainsSection,
   renderKnowledgeStaticSection,
-} from '../../packages/plugins/knowledge/src/prompt/index.js'
+} from '../../plugins/knowledge/host/prompt/index.js'
 import { expectPinnedVersion, importUpstream, interfaceMembers, norm, readUpstream } from './pins.js'
 
 /** cordis Context 结构化最小面（真实 Context 结构兼容——探针实测） */

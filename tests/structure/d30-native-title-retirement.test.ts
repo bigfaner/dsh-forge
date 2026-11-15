@@ -114,7 +114,17 @@ function titleAttrs(file: string): TitleAttr[] {
 // 1.15 拆迁批收口：worktree-picker/session-badge（WorktreeFaces 拆解件）仍不入本扫描面
 // ——其 title= 位均官方 Modal/RiskConfirmation 标题 prop（EXEMPT_LEDGER 冻结账目边界）
 // 与 chip sealed 提示位，维持现状记账不扩。
-const PROJECT_UI = [join(ROOT, 'plugins/project/ui/add-project'), join(ROOT, 'plugins/project/ui/bug-refs')]
+// knowledge-plugin-migration 合并随迁（2026-11-15）：overview/docs 视图族迁
+// plugins/project/ui/dock-tabs、knowledge 视图族迁 plugins/knowledge/ui——扫描面随迁扩根。
+const PROJECT_UI = [
+  join(ROOT, 'plugins/project/ui/add-project'),
+  join(ROOT, 'plugins/project/ui/bug-refs'),
+  join(ROOT, 'plugins/project/ui/dock-tabs'),
+  join(ROOT, 'plugins/project/ui/event-node'),
+  join(ROOT, 'plugins/project/ui/remote-entry'),
+  join(ROOT, 'plugins/project/ui/sidebar'),
+  join(ROOT, 'plugins/knowledge/ui'),
+]
 
 const all = [...tsxFiles(SRC), ...PROJECT_UI.flatMap((d) => tsxFiles(d))].flatMap((f) => titleAttrs(f))
 /** DOM 元素（小写标签）= 原生 tooltip 位；大写标签 = 组件标题 prop（排除清单） */
@@ -132,26 +142,26 @@ const TOOLTIP_FILES = [
   'apps/web/src/components/ModeChip.tsx',
   'plugins/project/ui/add-project/DirectoryBrowser.tsx',
   'plugins/project/ui/add-project/RegisterForm.tsx',
-  'apps/web/src/views/docs/index.tsx',
-  'apps/web/src/views/knowledge/DomainTree.tsx',
-  'apps/web/src/views/knowledge/EntryDrawer.tsx',
-  'apps/web/src/views/knowledge/KnowledgeToolbar.tsx',
-  'apps/web/src/views/overview/feature-tab.tsx',
-  'apps/web/src/views/overview/feature-tab/DocGroupList.tsx',
-  'apps/web/src/views/overview/ov-head.tsx',
-  'apps/web/src/views/overview/proposal-tab.tsx',
-  'apps/web/src/views/overview/drawer/index.tsx',
-  'apps/web/src/views/overview/drawer/timeline.tsx',
-  'apps/web/src/views/overview/drawer/transition-dialog.tsx',
-  'apps/web/src/views/overview/drawer/type-templates/coding.tsx',
-  'apps/web/src/views/overview/drawer/type-templates/parts.tsx',
-  'apps/web/src/views/overview/task-tab/dag-view.tsx',
-  'apps/web/src/views/overview/task-tab/list-view.tsx',
-  'apps/web/src/views/overview/task-tab/swimlane-view.tsx',
-  'apps/web/src/views/overview/task-tab/task-tab.tsx',
+  'plugins/project/ui/dock-tabs/docs/index.tsx',
+  'plugins/knowledge/ui/DomainTree.tsx',
+  'plugins/knowledge/ui/EntryDrawer.tsx',
+  'plugins/knowledge/ui/KnowledgeToolbar.tsx',
+  'plugins/project/ui/dock-tabs/overview/feature-tab.tsx',
+  'plugins/project/ui/dock-tabs/overview/feature-tab/DocGroupList.tsx',
+  'plugins/project/ui/dock-tabs/overview/ov-head.tsx',
+  'plugins/project/ui/dock-tabs/overview/proposal-tab.tsx',
+  'plugins/project/ui/dock-tabs/overview/drawer/index.tsx',
+  'plugins/project/ui/dock-tabs/overview/drawer/timeline.tsx',
+  'plugins/project/ui/dock-tabs/overview/drawer/transition-dialog.tsx',
+  'plugins/project/ui/dock-tabs/overview/drawer/type-templates/coding.tsx',
+  'plugins/project/ui/dock-tabs/overview/drawer/type-templates/parts.tsx',
+  'plugins/project/ui/dock-tabs/overview/task-tab/dag-view.tsx',
+  'plugins/project/ui/dock-tabs/overview/task-tab/list-view.tsx',
+  'plugins/project/ui/dock-tabs/overview/task-tab/swimlane-view.tsx',
+  'plugins/project/ui/dock-tabs/overview/task-tab/task-tab.tsx',
   'apps/web/src/views/session/DispatchEventsPanel.tsx',
-  // disc-2 壳侧死面退役：RecallTab 本体迁 @dsh-forge/project（ui/knowledge/RecallTab.tsx）——扫描路径随迁
-  'plugins/project/ui/knowledge/RecallTab.tsx',
+  // disc-2 壳侧死面退役：RecallTab 本体迁 @dsh-forge/knowledge（ui/RecallTab.tsx）——扫描路径随迁
+  'plugins/knowledge/ui/RecallTab.tsx',
   // 1.6：面板本体迁 @dsh-forge/project（ui/sidebar/）——扫描路径随迁
   'plugins/project/ui/sidebar/ForgeWorkspacePanel.tsx',
 ] as const
@@ -188,12 +198,12 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
 /** D36 ⑤ + D37 Tooltip 退役锚（采纳锚位 1:1 对位迁移——零 Tooltip 在场；29 walk 位恒数：
  * TOOLTIP_FILES 23 + TOOLTIP_RETIRED_FILES 6） */
 const TOOLTIP_RETIRED_FILES = [
-  'apps/web/src/views/overview/task-tab/ViewDropdown.tsx', // D36 ⑤：视图切换钮控件自释（1.23）
-  'apps/web/src/views/overview/status-chips.tsx', // D37：七态筛选 chips（zh 标签在 chip 面；0 计数淡化自释）
-  'apps/web/src/views/overview/proposal-tab/ProposalStatusChips.tsx', // D37：五态筛选 chips（同族）
-  'apps/web/src/views/overview/feature-tab/PhaseChips.tsx', // D37：阶段筛选 chips（同族）
-  'apps/web/src/views/overview/task-tab/DispatchButton.tsx', // D37：派发钮（「派发」label 自明；置灰深灰实底自释）
-  'apps/web/src/views/overview/sticky-bar.tsx', // D37：✕ 清除钮 + ⇅ 排序 pill（通用惯例 + 当前模式标签直出）
+  'plugins/project/ui/dock-tabs/overview/task-tab/ViewDropdown.tsx', // D36 ⑤：视图切换钮控件自释（1.23）
+  'plugins/project/ui/dock-tabs/overview/status-chips.tsx', // D37：七态筛选 chips（zh 标签在 chip 面；0 计数淡化自释）
+  'plugins/project/ui/dock-tabs/overview/proposal-tab/ProposalStatusChips.tsx', // D37：五态筛选 chips（同族）
+  'plugins/project/ui/dock-tabs/overview/feature-tab/PhaseChips.tsx', // D37：阶段筛选 chips（同族）
+  'plugins/project/ui/dock-tabs/overview/task-tab/DispatchButton.tsx', // D37：派发钮（「派发」label 自明；置灰深灰实底自释）
+  'plugins/project/ui/dock-tabs/overview/sticky-bar.tsx', // D37：✕ 清除钮 + ⇅ 排序 pill（通用惯例 + 当前模式标签直出）
 ] as const
 
 /**
@@ -203,11 +213,11 @@ const TOOLTIP_RETIRED_FILES = [
  * 1.23 ⑥ 行卡增量悬停/边界位 ⟞ 跳转会话与拖宽柄）。
  */
 const TOOLTIP_REMAINING_COUNTS: Readonly<Record<string, number>> = {
-  'apps/web/src/views/overview/ov-head.tsx': 2, // projectName + row.value（截断兜底）
-  'apps/web/src/views/overview/proposal-tab.tsx': 4, // title + 打开新会话（副作用说明）+ slug + createdAt（1.7 裁决：提案文档行 relPath 悬浮退役——无摘要不出路径）
-  'apps/web/src/views/overview/task-tab/list-view.tsx': 4, // key/title/sub（1.23 ⑥ 增量悬停交付面）+ S5 ⟞ 执行子会话钮（图标把手非自释——副作用说明，扩记）
-  'apps/web/src/views/overview/drawer/index.tsx': 6, // 拖宽柄（边界位）+ taskKey + title + 诊断失败说明 + S3 扩记：前置引用编号 chip / 会话 chip / 弹窗头编号 chip（{编号} {title} 全名兜底 ×3 位）
-  'apps/web/src/views/overview/drawer/transition-dialog.tsx': 1, // taskKey（截断兜底）
+  'plugins/project/ui/dock-tabs/overview/ov-head.tsx': 2, // projectName + row.value（截断兜底）
+  'plugins/project/ui/dock-tabs/overview/proposal-tab.tsx': 4, // title + 打开新会话（副作用说明）+ slug + createdAt（1.7 裁决：提案文档行 relPath 悬浮退役——无摘要不出路径）
+  'plugins/project/ui/dock-tabs/overview/task-tab/list-view.tsx': 4, // key/title/sub（1.23 ⑥ 增量悬停交付面）+ S5 ⟞ 执行子会话钮（图标把手非自释——副作用说明，扩记）
+  'plugins/project/ui/dock-tabs/overview/drawer/index.tsx': 6, // 拖宽柄（边界位）+ taskKey + title + 诊断失败说明 + S3 扩记：前置引用编号 chip / 会话 chip / 弹窗头编号 chip（{编号} {title} 全名兜底 ×3 位）
+  'plugins/project/ui/dock-tabs/overview/drawer/transition-dialog.tsx': 1, // taskKey（截断兜底）
 }
 
 describe('D30 自绘面原生 title= 清零（官方 Tooltip 件对齐——结构 pin）', () => {

@@ -8,8 +8,8 @@
 // 形状漂移/解析缝故障 = null fail-soft 不炸壳（AGENTS 1.6 现查不缓存）。
 import { useEffect, useState } from "react";
 import { activeSessionIdOf, type ForgeSessionsService, type ForgeWorkspacesService } from "../session-actions.js";
-import { isWorkspacesSnapshot } from "../knowledge/anchored-projects.js";
-import type { LedgerWorkspacesSnapshot } from "../knowledge/kit-types.js";
+import { isWorkspacesSnapshot } from "../anchored-projects.js";
+import type { LedgerWorkspacesSnapshot } from "../sidebar/sidebar-model.js";
 
 /**
  * 归属解析缝（纯本地单路径裁决——宿主半 project.db 归属行 + workspaceRegistry 进程内

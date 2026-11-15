@@ -1,0 +1,8 @@
+# @dsh-forge/knowledge 组合层：单行插入本包——host 半 apply 内 provide 服务键
+# `knowledge`（host servicesFace 正门）+ knowledge_* 七工具注册 + 系统提示词静态段
+# forge:knowledge(910) 插件工厂全局注册（动态段 forge:knowledge-domains(911) 走
+# session-bind scoped 缝）；浏览器半应 dsh.client.platform=web 由 modules 行扫描进
+# 花名册（./client = 自注册 CJS bundle）。
+- insert:
+    - id: knowledge
+      name: '@dsh-forge/knowledge'

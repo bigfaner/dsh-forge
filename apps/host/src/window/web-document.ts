@@ -223,6 +223,11 @@ export function createShellProtocolHandler(options: {
       || SHELL_ASSET_ROOT_CLIENT.test(url.pathname)
       || url.pathname.startsWith('/brand/')
     if (isAsset) return serveShellDocument(request, options.distRoot)
+    // 诊断探测信令端点（apps/web main.ts 落地判定 beacon GET /__rvdiag?line=…）：壳侧就地
+    // 应答 204，不转发 Host——Host webserver 侧 /__rvdiag 注册在 remoteHost LAN 分支内
+    // （boot/child.ts），dev/e2e 环境不注册，转发即 404 → console error 级条目挂旅程 e2e
+    // 「diag 零 error」不变式（bug 0e836cc5）。fire-and-forget：204 无体，决策行已落浏览器面。
+    if (url.pathname === '/__rvdiag') return new Response(null, { status: 204 })
     const host = options.host()
     if (host === undefined) return new Response(null, { status: 503 })
     return forwardToHost(request, host.url, host.cookie, pageOrigin, fetchImpl)

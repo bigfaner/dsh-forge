@@ -63,3 +63,21 @@ export function normalizeDirPath(path: string): string {
   if (isWindowsStylePath(path)) return normalizeDirSpelling(path)
   return path.replace(/\/+$/, '')
 }
+
+// ── 目录段派生（knowledge-plugin-migration 1.4 下沉：自 project form-model 单源迁入——
+//    knowledge 插件 ui 面与 project 注册表单双侧消费，本模块 = 共享逻辑唯一去处） ──
+
+/** 目录分隔符（随路径风格：Windows `\` / POSIX `/`——拼接与段边界判定的统一基准；盘符根 `Z:`（归一去尾后）仍按 Windows） */
+export function dirSeparatorOf(path: string): '\\' | '/' {
+  const norm = normalizeDirPath(path)
+  return isWindowsStylePath(path) || /^[A-Za-z]:$/.test(norm) ? '\\' : '/'
+}
+
+/**
+ * 工作区目录 → 知识库目录缺省值（`<工作区>/.knowledge`——分隔符随工作区风格）。
+ * 知识目录随 knowledge_dir 列退役退出注册采集面（1.15）；本派生保留供知识视图空库
+ * 引导文案（目录位置说明）——产品口径恒缺省派生，无用户改选面。
+ */
+export function deriveKnowledgeDir(workspaceDir: string): string {
+  return `${normalizeDirPath(workspaceDir)}${dirSeparatorOf(workspaceDir)}.knowledge`
+}

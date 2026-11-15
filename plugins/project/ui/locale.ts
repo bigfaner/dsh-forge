@@ -14,15 +14,13 @@ export interface LocaleServiceFace {
   bind(ns: string): (key: string) => string
 }
 
-/** 插件侧词典（迁移面词条归集单源——1.40 remote.entry；1.41 dispatchTask 工具行族；1.42 knowledge 族；1.45 dock tab 族） */
+/** 插件侧词典（迁移面词条归集单源——1.40 remote.entry；1.41 dispatchTask 工具行族；1.45 dock tab 族；knowledge 族两词条已随迁 knowledge 插件 NS——1.4） */
 export const FORGE_PROJECT_LOCALE_DICTS = {
   zh: {
     'remote.entry': '手机远程',
     // dock tab 族（1.45 自壳侧 'dsh-forge' NS 迁入——概览页型标题 + guide 入口卡描述）
     'tab.overview': '项目概览',
     'guide.overview.desc': 'feature · 任务 · 提案与文档——管线接管工作台',
-    'panel.knowledge': '知识库',
-    'view.recall': '知识召回',
     // dispatchTask 对话工具行（toolview 行内 t 座——文案对齐官方通用行用词）
     'tool.dispatchTask.title': '工具调用',
     'tool.dispatchTask.preparing': '正在准备调用',
@@ -36,8 +34,6 @@ export const FORGE_PROJECT_LOCALE_DICTS = {
     'remote.entry': 'Mobile Remote',
     'tab.overview': 'Overview',
     'guide.overview.desc': 'Features, tasks, proposals and docs',
-    'panel.knowledge': 'Knowledge',
-    'view.recall': 'Recall',
     'tool.dispatchTask.title': 'Tool call',
     'tool.dispatchTask.preparing': 'Preparing call',
     'tool.dispatchTask.running': 'Running',

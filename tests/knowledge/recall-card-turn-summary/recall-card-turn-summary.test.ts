@@ -6,14 +6,14 @@
 // 分层：本 spec 承载通道/供数面可判定的 Outcome（turn 分组聚合/verb 四分型/hint 快照键/
 // sessionRecall 形状零漂移/命中行机械字段收敛）；卡片渲染真机面（分节展开/hint note 行/
 // read dialog）归 Playwright test-run 收口（skip 留痕）——SSR 直渲单测已持语义等价覆盖
-// （plugins/project/ui/knowledge/RecallTab.test.tsx），一轮内多次调用聚合为一张卡的链路行为归真机（journey §1）。
+// （plugins/knowledge/ui/RecallTab.test.tsx），一轮内多次调用聚合为一张卡的链路行为归真机（journey §1）。
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/index.js'
-import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/service.js'
-import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/service/types.js'
+import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../plugins/knowledge/host/storage/index.js'
+import { createKnowledgeService } from '../../../plugins/knowledge/host/service/service.js'
+import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/types.js'
 
 const root = mkdtempSync(join(tmpdir(), 'knowledge-j-j2-'))
 const ws = join(root, 'ws')
@@ -132,7 +132,7 @@ describe('J2-CT-05 机械字段收敛（O-数据面在/O-UI 不渲染）', () =>
       expect(h.heat).toBeGreaterThanOrEqual(0)
     }
   })
-  it.skip('O-UI 不渲染：命中行无热度徽/slug/rank 元素（INV-4——SSR 断言位 = plugins/project/ui/knowledge/RecallTab.test.tsx；真机归 test-run）', () => {})
+  it.skip('O-UI 不渲染：命中行无热度徽/slug/rank 元素（INV-4——SSR 断言位 = plugins/knowledge/ui/RecallTab.test.tsx；真机归 test-run）', () => {})
 })
 
 // ── 真机面留痕（卡片展开态分节/函数式调用头/read dialog——journey G2/G5） ──

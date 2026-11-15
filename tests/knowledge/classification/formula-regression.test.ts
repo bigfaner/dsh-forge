@@ -6,8 +6,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { predictType } from '../../../packages/plugins/knowledge/src/service/write.js'
-import type { KnowledgeType } from '../../../packages/plugins/knowledge/src/service/types.js'
+import { predictType } from '../../../plugins/knowledge/host/service/write.js'
+import type { KnowledgeType } from '../../../plugins/knowledge/host/service/types.js'
 
 /** 真实语料锚点（.knowledge 存量——人工定标 + 判定式高置信一致） */
 const CORPUS_PINS: ReadonlyArray<readonly [KnowledgeType, string]> = [

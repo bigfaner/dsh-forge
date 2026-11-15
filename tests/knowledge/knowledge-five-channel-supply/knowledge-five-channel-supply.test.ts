@@ -17,10 +17,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { KNOWLEDGE_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { openKnowledgeDatabase, createKnowledgeRegistry } from '../../../packages/plugins/knowledge/src/storage/index.js'
-import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/index.js'
-import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/service/index.js'
-import { createWsPathResolver } from '../../../packages/plugins/knowledge/src/tools/session.js'
+import { openKnowledgeDatabase, createKnowledgeRegistry } from '../../../plugins/knowledge/host/storage/index.js'
+import { createKnowledgeService } from '../../../plugins/knowledge/host/service/index.js'
+import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/index.js'
+import { createWsPathResolver } from '../../../plugins/knowledge/host/tools/session.js'
 import { GOLDEN_CORPUS, GOLDEN_SESSION_ID, invokeGoldenChannel } from '../../../e2e/support/knowledge-golden/harness.js'
 import type { GoldenChannelRequest } from '../../../e2e/support/knowledge-golden/harness.js'
 import { assertSameStructure, loadGoldenFixture } from '../../../e2e/support/knowledge-golden/compare.js'
@@ -258,7 +258,7 @@ describe('CT-five-channel-4（J2-4：expert-squad 装卸行为独立——SC-2 �
     // 依赖面机械锚：knowledge 包零 expert-squad（与零 core）依赖——装卸 expert-squad 不可能
     // 改变五通道行为（供数路径上不存在 expert-squad 代码面）
     const pkg = JSON.parse(readFileSync(
-      join(import.meta.dirname, '..', '..', '..', 'packages', 'plugins', 'knowledge', 'package.json'),
+      join(import.meta.dirname, '..', '..', '..', 'plugins', 'knowledge', 'package.json'),
       'utf8',
     )) as { dependencies?: Record<string, string>; peerDependencies?: Record<string, string> }
     const deps = { ...pkg.dependencies, ...pkg.peerDependencies }
@@ -266,7 +266,7 @@ describe('CT-five-channel-4（J2-4：expert-squad 装卸行为独立——SC-2 �
     expect(deps['@dsh-forge/expert-squad']).toBeUndefined() // SC-2 伴生：零 expert-squad
     // 行为等价面：包内 boundaries.test.ts 三面断言承接（零 import 结构钉死）
     const boundaries = readFileSync(
-      join(import.meta.dirname, '..', '..', '..', 'packages', 'plugins', 'knowledge', 'src', 'boundaries.test.ts'),
+      join(import.meta.dirname, '..', '..', '..', 'plugins', 'knowledge', 'tests', 'boundaries.test.ts'),
       'utf8',
     )
     expect(boundaries).toMatch(/expert-squad/)

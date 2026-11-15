@@ -13,10 +13,10 @@ import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DiagEventPayload } from '../../../packages/contracts/src/index.js'
-import { startSelfHostedStorage } from '../../../packages/plugins/knowledge/src/storage/start.js'
-import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/index.js'
-import { createWsPathResolver } from '../../../packages/plugins/knowledge/src/tools/session.js'
-import { canonicalWsPath } from '../../../packages/plugins/knowledge/src/storage/registry.js'
+import { startSelfHostedStorage } from '../../../plugins/knowledge/host/storage/start.js'
+import { createKnowledgeService } from '../../../plugins/knowledge/host/service/index.js'
+import { createWsPathResolver } from '../../../plugins/knowledge/host/tools/session.js'
+import { canonicalWsPath } from '../../../plugins/knowledge/host/storage/registry.js'
 
 const roots: string[] = []
 function tmpRoot(): string {
@@ -267,7 +267,7 @@ describe('CT-seed-migration-4（J1-4：entries 零迁 + 首用 rebuild 再生）
 // CT-seed-migration-1 Outcome 2（fail-注册行写入异常：自持库写径故障注入）与 Outcome 4
 // （双实例并发首启）：需真机进程对 + 真实写径故障面承载，归 Playwright test-run 收口任务
 // （pnpm test:e2e）；vitest 层等价面已由包内单测承接——
-// packages/plugins/knowledge/src/storage/{migrate,concurrency}.test.ts（短事务/BEGIN
+// plugins/knowledge/tests/storage/{migrate,concurrency}.test.ts（短事务/BEGIN
 // IMMEDIATE 单飞语义）。旧表随 core 退役移除的实机时序（无双供数窗口）由 core schema
 // v4 结构退役迁移线承载（1.8 落地）。
 describe('真机面留痕（CT-seed-migration-1 fail/并发分支）', () => {

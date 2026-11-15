@@ -110,7 +110,6 @@ describe('fix-25 官方基座降位 pin（main.conversation 影子退役——�
       'apps/web/src/workbench/panel-model.ts',
       'apps/web/src/workbench/workbench-bridge.ts',
       'apps/web/src/views/session/ConversationViews.tsx',
-      'apps/web/src/views/sidebar/KnowledgeGlyph.tsx',
       'apps/web/src/client-plugin/plugin.ts',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
@@ -125,6 +124,8 @@ describe('fix-25 官方基座降位 pin（main.conversation 影子退役——�
       'apps/web/src/workbench/ChatSurface.tsx',
       'apps/web/src/views/session/SessionPanel.tsx',
       'apps/web/src/views/session/SessionToolbar.tsx',
+      // 知识面板行字形迁 @dsh-forge/knowledge ui/KnowledgeGlyph.tsx——壳侧死面零残留
+      'apps/web/src/views/sidebar/KnowledgeGlyph.tsx',
     ]) {
       expect(existsSync(join(ROOT, retired)), `${retired} 应已退役（fix-25）`).toBe(false)
     }
@@ -231,8 +232,8 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
     expect(existsSync(join(ROOT, 'apps/web/src/views/session/SessionTaskPills.tsx'))).toBe(false)
   })
 
-  it('官方 roster 占用 pin：召回视图登记 id + pane 锚（本体归 @dsh-forge/project——壳侧死面退役）；fix-29 轨迹零登记（对话/轨迹 = 官方 chat/trajectory 直用）', () => {
-    const views = read('plugins/project/ui/knowledge/RecallTab.tsx')
+  it('官方 roster 占用 pin：召回视图登记 id + pane 锚（本体归 @dsh-forge/knowledge 插件——壳侧死面退役）；fix-29 轨迹零登记（对话/轨迹 = 官方 chat/trajectory 直用）', () => {
+    const views = read('plugins/knowledge/ui/RecallTab.tsx')
     expect(views).toContain('data-dswf-pane="recall"')
     const shellViews = read('apps/web/src/views/session/ConversationViews.tsx')
     expect(shellViews).not.toContain('data-dswf-pane') // 壳侧零召回 pane（本体随注册面迁插件域）
@@ -553,7 +554,6 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
       'ForgeShellHost',
       'ForgeHeroPanel',
       'ForgeKnowledgePanel',
-      'ForgeKnowledgeGlyph',
       'ForgeRecallView',
       'ForgeDispatchToolRow',
       'ForgeOverviewTab',
