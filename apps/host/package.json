@@ -53,7 +53,8 @@
     "@dsh-forge/path-key": "workspace:*",
     "@dsh-forge/plugin-forge": "workspace:*",
     "@dsh-forge/plugin-forge-spec": "workspace:*",
-    "@dsh-forge/project": "workspace:*"
+    "@dsh-forge/project": "workspace:*",
+    "@dsh-forge/task-loop": "workspace:*"
   },
   "devDependencies": {
     "electron": "44.0.0"

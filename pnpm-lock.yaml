@@ -173,6 +173,9 @@ importers:
       '@dsh-forge/project':
         specifier: workspace:*
         version: link:../../plugins/project
+      '@dsh-forge/task-loop':
+        specifier: workspace:*
+        version: link:../../plugins/task-loop
     devDependencies:
       electron:
         specifier: 44.0.0
