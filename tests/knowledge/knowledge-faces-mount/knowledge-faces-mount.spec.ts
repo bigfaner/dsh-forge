@@ -17,9 +17,11 @@ import {
   RECALL_PANE,
   WORKBENCH,
   projectRowOf,
+  workbenchOfView,
 } from '../../../e2e/support/anchors.js'
 import { realCredentials, seedDshHome, writeDogfoodOverlay } from '../../../e2e/support/dogfood.js'
-import { launchHost, type Launched } from '../../../e2e/support/launch.js'
+import { bridgeDispatch, launchHost, type Launched } from '../../../e2e/support/launch.js'
+import { selectWorkspaceViaChip } from '../../../e2e/support/rpc.js'
 import { rmDirBestEffort, rmFileBestEffort } from '../../../e2e/support/cleanup.js'
 
 test.setTimeout(600_000)
@@ -111,6 +113,13 @@ test('CT-M1 GP4 + CT-M2.O1 会话召回页签正向呈现（A-KN-5/6/7——真�
     // [GP3/A-KN-1..3 前置] 三面正向呈现 = CT-M1.O1 态
     await openKnowledgePanel(page, projectId)
     await expect(page.locator(WORKBENCH).first()).toBeVisible()
+
+    // 回到会话面（知识面板打开态中区 = knowledge 视图，composer 由官方会话面/hero 相位承载
+    // ——桥导航切回官方会话面板）→ 芯片菜单选夹具工作区（flywheel.spec / rpc.ts
+    // selectWorkspaceViaChip 同语义流程——composer 出场前置）→ 等 composer 锚
+    await bridgeDispatch(page, 'show-session')
+    await expect(page.locator(workbenchOfView('session')).first(), '回到会话视图').toBeAttached({ timeout: 15_000 })
+    await selectWorkspaceViaChip(page, 'demo-proj')
 
     // 发起会话上下文（composer 首消息建档——会话作用域页签行渲染前置）
     const composer = page.locator(COMPOSER_INPUT).last()
