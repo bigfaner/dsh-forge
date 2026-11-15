@@ -104,8 +104,8 @@ export interface TestBaselineBrief {
 
 // ─────────────────────────── 续跑规则段 ───────────────────────────
 
-/** 断点续跑进度文件名（探测侧与落盘侧共享单点定义） */
-export const RESUME_POINTER_FILE = "resume.md";
+/** 断点续跑进度文件名（单点收敛 domain/tasks/evidence-pointer.ts——此处转出口兼容既有消费面） */
+export { RESUME_POINTER_FILE } from "../evidence-pointer.js";
 
 /** `<resume>` 续跑规则段（fresh 形态——路径只引用变量 `{forge.task_logs_dir}`） */
 export const RESUME_SECTION = `<resume>

@@ -157,15 +157,16 @@ describe("phase-gate / readUnsettledChain / markE2eAttribution", () => {
   });
 });
 
-describe("submit → settlement 读面前向兼容（模块②落位前结算行可空）", () => {
-  it("success 结算后 settlements 无行（模块②写点待落位）→ taskSettlements 返回 completed 行集零 commit", async () => {
+describe("submit → settlement 单事务两写（模块②落位）→ taskSettlements 读面", () => {
+  it("success 结算落 settlement 行（单事务两写）→ taskSettlements 消费 commit_hash", async () => {
     const t = await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "alpha", title: "A", type: "coding-feature" });
     await claim();
     await submitTask(h.verbDeps, {
       projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t.localId }, result: "success", summary: "S",
-      gate: { test: true }, acceptanceCriteria: [],
+      gate: { test: true }, acceptanceCriteria: [], commitHash: "abc123",
     });
     const rows = await taskSettlements(h.verbDeps, { projectKey: h.projectKey, slug: "alpha" });
-    expect(rows[0]).toMatchObject({ localId: t.localId, commitHashes: [] });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ localId: t.localId, commitHashes: ["abc123"] });
   });
 });

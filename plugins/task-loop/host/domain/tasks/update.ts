@@ -188,11 +188,19 @@ export async function updateTask(deps: TasksVerbDeps, input: UpdateTaskInput): P
     args.push(now, row.id);
     db.prepare(`UPDATE task_tasks SET ${sets.join(", ")} WHERE id = ?`).run(...args);
 
-    // ⑤ 审计行：updateTask（actor='plugin-tool'；无 from/to）
+    // ⑤ 审计行：updateTask（actor='plugin-tool'；无 from/to）；
+    //    AC 变更同事务追加 verb='update-ac' 行（payload_json = 新版判据全文——diff 相邻行可得变更，
+    //    entities.md §3.4 payload_json 写点 + code-design §2 AC 载荷终态）。
     db.prepare(
       `INSERT INTO task_records (task_id, verb, actor, created_at, updated_at)
        VALUES (?, 'updateTask', 'plugin-tool', ?, ?)`,
     ).run(row.id, now, now);
+    if (input.acceptanceCriteria !== undefined) {
+      db.prepare(
+        `INSERT INTO task_records (task_id, verb, payload_json, actor, created_at, updated_at)
+         VALUES (?, 'update-ac', ?, 'plugin-tool', ?, ?)`,
+      ).run(row.id, JSON.stringify(input.acceptanceCriteria), now, now);
+    }
 
     // ⑥ 快照（写后重读）
     return toTaskSnapshot(resolveTaskRef(db, input.projectKey, input.taskRef));

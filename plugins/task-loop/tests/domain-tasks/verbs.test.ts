@@ -87,7 +87,7 @@ describe("submitTask 输入面校验 + 双门（仅挂 success）", () => {
     ).rejects.toMatchObject({ code: "ERR_AC_NOT_MET" });
   });
 
-  it("blocked 结算：in_progress→blocked + note 承载 reason + 恢复钩子不挂", async () => {
+  it("blocked 结算：in_progress→blocked + evidence_json.reason 权威承载 + records 纯轨迹（note 封闭）", async () => {
     const t = await inFlightTask();
     const r = await submitTask(h.verbDeps, {
       projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t.localId }, result: "blocked", reason: "测试红",
@@ -97,9 +97,13 @@ describe("submitTask 输入面校验 + 双门（仅挂 success）", () => {
     expect(r.restored).toEqual([]);
     const rec = h.db
       .prepare(`SELECT note, to_status FROM task_records WHERE task_id = ? AND verb = 'submit'`)
-      .get(t.taskId) as { note: string; to_status: string };
-    expect(rec.note).toBe("测试红");
+      .get(t.taskId) as { note: string | null; to_status: string };
+    expect(rec.note).toBeNull(); // 纯轨迹——reason 归 settlements.evidence_json（records 列面 submit 封闭）
     expect(rec.to_status).toBe("blocked");
+    const settle = h.db
+      .prepare(`SELECT evidence_json FROM task_settlements WHERE task_id = ?`)
+      .get(t.taskId) as { evidence_json: string };
+    expect(JSON.parse(settle.evidence_json)).toMatchObject({ reason: "测试红" });
   });
 
   it("恢复钩子：completed 挂——blocked 后继前置全满足 → auto-restore pending（边不删）", async () => {

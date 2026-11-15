@@ -1,18 +1,35 @@
 // submitTask——任务域结算动词（core forge/tasks/submit.ts 直迁——plugin-task-loop 1.7 内联 +
 // v1 列面适配）。actor 由通道推断：submitTask = tool 专属动词，submit 记录 actor 恒 'plugin-tool'。
 //
-// v1 列面适配（records 列面对 submit 载荷封闭——entities §3.4）：submit 动词行 = 轨迹
-// （verb/from_status/to_status/actor/session_id），结构化结算证据（ac_results/gate/files/
-// evidence）归 task_settlements.appendSettlement 单事务两写——该写点归模块②（1.8）落位，
-// 本迁移批双门校验面保持、records 写点按 v1 封闭口径落轨迹行；reason/summary 载荷以
-// note 列暂承（transition/pause/unblock 同列语义——模块②落位后随 evidence_json 收口）。
+// 模块②终态（1.8——entities.md §3.2）：结算写点 = 单事务两写——task_tasks 终态迁移 +
+// task_settlements append 同一 db.transaction（拆条即 RED）；records 行 = 纯轨迹
+// （verb/from_status/to_status——note 对 submit 载荷封闭），submit 全语义载荷归
+// settlements.evidence_json 两形（success = {summary, gates, files, fields}；
+// blocked = {reason 必填, gates?, files?, fields?}）；ac_results_json 单列同位快照
+// （[{criterion, met, evidence?}] 逐字判据）；fix 链结算行 fix_root_id 事务内
+// resolveFixRoot 解析（isFixTask 单源谓词 settle 消费点）。
+// 派生失败拒写（projectKey 空）→ 隔离区暂存（deps.stagePendingSettlement 在场时），
+// 不丢结算证据。
 //
 // 单事务全成全败（Hard Rule）：行解析 → 输入面校验（blocked reason 必带 / success summary
 // 必带 / T2 归类必带）→ 双门（gate 摘要门 → AC 证据门——均仅挂 success 结算）→ agent 面
 // 矩阵先验（in_progress→completed|blocked + blocked→completed 直达）→ 转移 UPDATE →
-// submit 记录 → 恢复钩子（completed 挂）；闭包尾部（提交后）T2 应答增补 + emitTasksChanged。
+// settlement append（同事务）→ submit 轨迹行 → 恢复钩子（completed 挂）；闭包尾部
+// （提交后）T2 应答增补 + emitTasksChanged。
 import { taskFilesUnion } from "./files.js";
 import { withTransaction } from "@dsh-forge/lib-db";
+import { ProjectKeyDerivationError } from "../../db/repositories/project-key.js";
+import {
+  createSettlementRepo,
+  FixRootResolutionError,
+  type PendingSettlementPayload,
+  type SettlementEvidence,
+  type SettlementEvidenceBlocked,
+  type SettlementEvidenceSuccess,
+  type SettlementFields,
+  type SettlementGates,
+  type SettlementRepo,
+} from "../../db/repositories/settlement-repo.js";
 import {
   AcCriteriaMismatchError,
   AcNotMetError,
@@ -26,7 +43,7 @@ import {
   TestEvidenceRequiredError,
   emitDiagOrFallback,
 } from "./errors.js";
-import { resolveTaskRef } from "./query.js";
+import { resolveTaskRef, isFixTask, type TaskStorageRow } from "./query.js";
 import { SATISFYING_TASK_STATUSES, assertTransitionAllowed } from "./state-machine.js";
 import { runRestoreHook } from "./transition.js";
 import type {
@@ -137,6 +154,92 @@ export function requiresRuntimeAssemblyEvidence(faces: readonly string[]): boole
   return faces.some((face) => !RUNTIME_EXEMPT_FACES.has(face.trim().toLowerCase()));
 }
 
+/**
+ * evidence_json 两形聚合（entities.md §3.2 evidence_json 终态）：
+ * success = {summary, gates?, files?, fields?}；blocked = {reason 必填, gates?, files?, fields?}。
+ * 改接注口径：actualFiles 级联 → files 键 / gates ∪ evidenceDebt → gates 键 /
+ * 类型化卡片扩展（分组 files/扩展字段/取证声明/T2 归类）→ fields 键。
+ */
+function buildEvidence(input: SubmitTaskInput): SettlementEvidence {
+  const gates: SettlementGates | undefined =
+    input.gate === undefined && input.evidenceDebt === undefined
+      ? undefined
+      : {
+          ...input.gate,
+          ...(input.evidenceDebt !== undefined ? { evidenceDebt: input.evidenceDebt } : {}),
+        };
+  const files: readonly string[] | undefined =
+    input.files ??
+    (input.filesCreated !== undefined || input.filesModified !== undefined
+      ? taskFilesUnion({ created: input.filesCreated ?? [], modified: input.filesModified ?? [] })
+      : undefined);
+  const fields: SettlementFields = {
+    ...(input.filesCreated !== undefined ? { filesCreated: input.filesCreated } : {}),
+    ...(input.filesModified !== undefined ? { filesModified: input.filesModified } : {}),
+    ...(input.keyDecisions !== undefined ? { keyDecisions: input.keyDecisions } : {}),
+    ...(input.testsPassed !== undefined ? { testsPassed: input.testsPassed } : {}),
+    ...(input.testsFailed !== undefined ? { testsFailed: input.testsFailed } : {}),
+    ...(input.coverage !== undefined ? { coverage: input.coverage } : {}),
+    ...(input.notes !== undefined ? { notes: input.notes } : {}),
+    ...(input.runtimeSurface !== undefined ? { runtimeSurface: input.runtimeSurface } : {}),
+    ...(input.runtimeEvidence !== undefined ? { runtimeEvidence: input.runtimeEvidence } : {}),
+    ...(input.blockClassification !== undefined ? { blockClassification: input.blockClassification } : {}),
+  };
+  const hasFields = Object.keys(fields).length > 0;
+  if (input.result === "blocked") {
+    const evidence: SettlementEvidenceBlocked = {
+      reason: input.reason as string,
+      ...(gates !== undefined ? { gates } : {}),
+      ...(files !== undefined ? { files } : {}),
+      ...(hasFields ? { fields } : {}),
+    };
+    return evidence;
+  }
+  const evidence: SettlementEvidenceSuccess = {
+    summary: input.summary as string,
+    ...(gates !== undefined ? { gates } : {}),
+    ...(files !== undefined ? { files } : {}),
+    ...(hasFields ? { fields } : {}),
+  };
+  return evidence;
+}
+
+/**
+ * resolveFixRoot——fix 链身份解析（appendSettlement 同事务内单次解析，entities.md §3.2②）：
+ * 非 fix 任务 → NULL；fix 任务沿 fix_of_task_id 逐跳上溯至根任务，取触发派生的
+ * 最新 blocked 结算行 id（ORDER BY created_at DESC, seq DESC）；根任务无 blocked 结算行
+ * = 域不变量违例 fail-loud 拒写（环由 addTask 写点预检保证，防御性检测兜底）。
+ */
+export function resolveFixRoot(
+  db: import("better-sqlite3").Database,
+  repo: SettlementRepo,
+  task: Pick<TaskStorageRow, "id" | "fix_of_task_id">,
+): string | null {
+  if (!isFixTask(task)) return null;
+  const byId = db.prepare<unknown[], Pick<TaskStorageRow, "id" | "fix_of_task_id">>(
+    `SELECT id, fix_of_task_id FROM task_tasks WHERE id = ?`,
+  );
+  let cur = task;
+  const visited = new Set<string>([task.id]);
+  while (cur.fix_of_task_id !== null) {
+    const nextId = cur.fix_of_task_id;
+    if (visited.has(nextId)) {
+      throw new FixRootResolutionError({ taskId: task.id, reason: "fix_of 链成环（数据漂移）" });
+    }
+    visited.add(nextId);
+    const next = byId.get(nextId);
+    if (next === undefined) {
+      throw new FixRootResolutionError({ taskId: task.id, reason: `前驱行缺席（${nextId}）` });
+    }
+    cur = next;
+  }
+  const head = repo.latestBlockedByTask(cur.id);
+  if (head === undefined) {
+    throw new FixRootResolutionError({ taskId: task.id, reason: "根任务无 blocked 结算行" });
+  }
+  return head.id;
+}
+
 export interface SubmitTaskInput {
   readonly projectKey: string;
   readonly taskRef: TaskRef;
@@ -190,6 +293,29 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
   const db = deps.db;
   const now = new Date().toISOString();
 
+  // ⓪ 归属键派生失败拒写（cwd 推导不出 project_key）——结算载荷降级隔离区暂存
+  //   （stagePendingSettlement face 在场时；缺席 = 纯拒写 fail-loud），不丢结算证据。
+  if (input.projectKey.trim() === "") {
+    const payload: PendingSettlementPayload = {
+      ...(input.taskRef.slug !== undefined ? { taskRef: input.taskRef } : {}),
+      result: input.result,
+      acResults: input.acceptanceCriteria ?? [],
+      ...(input.commitHash !== undefined ? { commitHash: input.commitHash } : {}),
+      evidence: buildEvidence(input),
+      createdAt: now,
+    };
+    if (deps.stagePendingSettlement !== undefined) {
+      deps.stagePendingSettlement(payload);
+      emitDiagOrFallback(deps.onDiag, {
+        level: "warn",
+        event: "settlement-quarantined",
+        message: `submitTask 归属键派生失败——结算载荷隔离区暂存待重放（${input.taskRef.slug}/${input.taskRef.localId}）`,
+      });
+    }
+    throw new ProjectKeyDerivationError();
+  }
+
+  const repo = createSettlementRepo(db);
   const result = withTransaction(db, (): SubmitTaskResult => {
     // ① 行解析（agent 面 TaskRef 三键查捞）
     const row = resolveTaskRef(db, input.projectKey, input.taskRef);
@@ -275,21 +401,24 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
     const toStatus = input.result === "success" ? "completed" : "blocked";
     assertTransitionAllowed(row.task_status, toStatus, "agent");
 
-    // ⑤ 转移 + submit 记录轨迹行（v1 封闭口径——结构化证据落点归 task_settlements，模块②）；
-    //    note 暂承 reason|summary（transition/pause/unblock 同列语义）
+    // ⑤ 单事务两写：任务终态迁移 + settlement append（同 db.transaction——拆条即 RED）；
+    //    fix 链身份事务内 resolveFixRoot 解析；records 行 = 纯轨迹（submit 载荷列封闭，
+    //    全语义载荷归 evidence_json 两形）。
+    const fixRootId = resolveFixRoot(db, repo, row);
     db.prepare(`UPDATE task_tasks SET task_status = ?, updated_at = ? WHERE id = ?`).run(toStatus, now, row.id);
+    repo.appendSettlement({
+      taskId: row.id,
+      result: input.result,
+      acResults: input.acceptanceCriteria ?? [],
+      ...(input.commitHash !== undefined ? { commitHash: input.commitHash } : {}),
+      evidence: buildEvidence(input),
+      fixRootId,
+      createdAt: now,
+    });
     db.prepare(
       `INSERT INTO task_records (task_id, verb, from_status, to_status, note, actor, session_id, created_at, updated_at)
-       VALUES (?, 'submit', ?, ?, ?, 'plugin-tool', ?, ?, ?)`,
-    ).run(
-      row.id,
-      row.task_status,
-      toStatus,
-      input.result === "blocked" ? (input.reason as string) : (input.summary as string),
-      input.sessionId ?? null,
-      now,
-      now,
-    );
+       VALUES (?, 'submit', ?, ?, NULL, 'plugin-tool', ?, ?, ?)`,
+    ).run(row.id, row.task_status, toStatus, input.sessionId ?? null, now, now);
 
     // ⑥ 恢复钩子（completed 挂——反查后继 blocked 且前置全满足 → auto-restore，边不删；
     //    blocked submit 不挂）
