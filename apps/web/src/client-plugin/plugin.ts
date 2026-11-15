@@ -629,7 +629,7 @@ export const FORGE_HEALTH_SLOT_KEYS = [
   // fix-13 注记（1.41/1.43）：TOOL_CALL_TOOLVIEW_SLOT / FORGE_EVENT_NODE_SLOT /
   // CONVERSATION_INPUT_OVERLAY_SLOT 三键注册迁 @dsh-forge/project bundle——壳清单摘除。
   // fix-13 注记（1.42/1.44）：MAIN_SLOT / SIDEBAR_PANELLIST_SLOT / CONVERSATION_VIEW_SLOT
-  // 注册随 center 族与召回页签迁 @dsh-forge/project bundle——壳清单摘除三键。
+  // 注册随 center 族与召回页签迁 @dsh-forge/knowledge bundle（ui/faces.ts）——壳清单摘除三键。
   SETTINGS_SECTION_SLOT,
   SHELL_OVERLAY_SLOT,
 ] as const
@@ -889,9 +889,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
 
         // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 常驻壳宿主。
         // m3.1 D5：会话头挂接 pill 登记退役（conversation.session.header.actions 零产品登记）。
-        // fix-13 注记（1.40-1.44）：remote 入口/center 族（hero/knowledge/panellist）/
-        // 召回页签/工具行/事件组/切换闸标记七组注册面均已迁 @dsh-forge/project bundle——
-        // 壳登记仅余 sidebar 品牌行/dock 族/shell.overlay。1.7 注记：hero picker 影子随
+        // fix-13 注记（1.40-1.44）：remote 入口/hero/工具行/事件组/切换闸标记迁
+        // @dsh-forge/project bundle；知识面板族（knowledge/panellist/main）/召回页签迁
+        // @dsh-forge/knowledge bundle——七组注册面壳登记仅余 sidebar 品牌行/dock 族/shell.overlay。1.7 注记：hero picker 影子随
         // B 类顶替②同迁（ui/hero-picker-face.ts）——views 族壳登记归零。
         // 1.6 注记：sidebar.workspaces 顶替注册迁 @dsh-forge/project bundle（fix-13，
         // ui/sidebar-face.ts）——壳零登记；FORGE_HEALTH_SLOT_KEYS 的 workspaces 键保留 =
@@ -900,7 +900,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // knowledgeEnabledOf——fail-closed 在彼侧读同一页内缝。
         registerSidebarSlots(clientCtx, views, sidebarDiagnostics)
         // 手机远程入口注册已迁 @dsh-forge/project bundle（fix-13，1.40）——壳零登记
-        // center 族（hero/knowledge/panellist）注册已迁 @dsh-forge/project bundle（fix-13，1.42/1.44）——壳零登记
+        // center 族 hero 注册已迁 @dsh-forge/project bundle（fix-13，1.42）——壳零登记
+        // 知识面板族（knowledge/panellist）注册已迁 @dsh-forge/knowledge bundle（fix-13，1.42）——壳零登记
         // hero 工作区控件（conversation.hero.workspace）注册已迁 @dsh-forge/project bundle
         // （1.7 B 类顶替②——ui/hero-picker-face.ts）——壳零登记（views 诊断组恒空 = 断言锚）
         // 切换闸虚线标记行注册已迁 @dsh-forge/project bundle（fix-13，1.43）——壳零登记

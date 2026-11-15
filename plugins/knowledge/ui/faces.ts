@@ -9,8 +9,10 @@
 //       ['slots','locale']；上游 fixture-live-client 正本核销；plugin remove 即移除 bundle，
 //       卸载态无需门控感知）——壳缝缺席 → 无条件 true；
 //   G-A dsh-forge 集成态：壳 bootShell 发布 __DSH_FORGE_HOST_PLUGINS__.knowledge——true
-//       → true（恒 true 路径不变）；false → false（集成态显式关闭 = 唯一 fail-closed
-//       分支——壳掌舵让位 + 零登记零异常）。
+//       → true（恒 true 路径不变）；false → false（集成态显式关闭——fail-closed 路径一：
+//       壳掌舵让位 + 零登记零异常）。
+//   G-B 壳 boot 缝失效态：boot 缝整体缺席而壳发布面 __DSH_FORGE_VIEWS__ 在场（集成态
+//       形态判别）→ false——fail-closed 路径二：集成态不宽判半挂载（零登记零异常）。
 //   G-B reflect 现查分支已删除（fix-3 裁决）：官方宿主 client isolate 里 Node 侧服务经桥
 //       到达、不经 cordis reflect——ctx.reflect.get('knowledge') 结构性恒 false（run3 真机
 //       事实），缝选错非迟到问题；fix-2 迟到补偿订阅（internal/service 事件）随之裁撤——
@@ -163,7 +165,8 @@ export function registerKnowledgeFaces(
  * 项目台「知识库目录」只读节注册（knowledge-plugin-migration 1.5 提案项 4——单向零写面）：
  * 官方缝 = project.section.knowledge-dir（槽名/行协议自 plugins/project/ui keyed-section.ts
  * 正本读源核销后落座——只插孔纪律；bundle 自含副本逐字 pin = mirrors-pin）。门控复用
- * knowledgeGateOf（fix-3 官方形态 bundle 在场即挂载——集成态显式 false 为唯一关断分支）；
+ * knowledgeGateOf（fix-3 官方形态 bundle 在场即挂载——集成态显式 false 与壳 boot 缝失效
+ * 形态判别为两条 fail-closed 关断分支）；
  * 降级 = registerKeyedSection 内 safeRegisterSection 单行守卫——异常只降本节，不阻宿主不阻
  * 其余三面；缺席路径（gate false / slots 劣形 / 同 cell 占用）diag 留痕不静默（AGENTS §7）。
  */
