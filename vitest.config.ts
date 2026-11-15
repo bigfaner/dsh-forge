@@ -124,6 +124,14 @@ export default defineConfig({
           },
         },
       },
+      // task-loop 插件包（plugin-task-loop 1.5 包骨架——结构镜像 + 门禁序铁律脚本面 pin +
+      // bundle self-containment 守卫；域单测池随迁移批扩）
+      {
+        test: {
+          name: 'task-loop',
+          include: ['plugins/task-loop/tests/**/*.test.ts'],
+        },
+      },
       // project 域代码池（plugin-project 1.8：git-worktree 域平移——host/worktrees + ui 随迁单测；
       // ui 消费官方 primitives——css 副产物走 vite 转换管道（inline，git-worktree 判例同构））
       {

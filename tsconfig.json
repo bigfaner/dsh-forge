@@ -20,6 +20,9 @@
       "path": "plugins/project"
     },
     {
+      "path": "plugins/task-loop"
+    },
+    {
       "path": "packages/contracts"
     },
     {

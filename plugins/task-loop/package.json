@@ -1,0 +1,60 @@
+{
+  "name": "@dsh-forge/task-loop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "任务环（task-loop）插件：任务域（addTask/拆解/循环调度/结算）+ AC 结算单源 + checkpoints 域内现算（包骨架阶段——域代码随迁移任务逐批落位）。",
+  "main": "./dist/host/index.js",
+  "types": "./dist/host/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/host/index.d.ts",
+      "import": "./dist/host/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/ui/index.d.ts",
+      "default": "./dist/client.js"
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "external": [
+        "@deepseek-ai/dsh-api-gateway/client"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "node scripts/clean-dist.mjs && node scripts/generate-typert.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
+    "prepack": "node scripts/self-containment.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.4"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-subagent-in-process-driver": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-typert-generator": "0.2.2-rc.2",
+    "@dsh-forge/lib-api": "workspace:*",
+    "@dsh-forge/lib-db": "workspace:*",
+    "@dsh-forge/lib-diag": "workspace:*",
+    "@dsh-forge/lib-path": "workspace:*",
+    "@dsh-forge/lib-util": "workspace:*",
+    "@types/node": "24.19.0",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.0",
+    "esbuild": "0.24.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "6.0.3"
+  }
+}
