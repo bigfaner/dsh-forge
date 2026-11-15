@@ -1,4 +1,4 @@
-﻿// S1b · 宿主派发循环驱动器单测（run-tasks-host-command/1.4 验收面）：
+// S1b · 宿主派发循环驱动器单测（run-tasks-host-command/1.4 验收面）：
 // runRound 状态机全链（领取→领取通知→spawn→结算→结果通知→判定→续派）宿主代码驱动、
 // 任意时刻 in-flight ≤1（串行跟踪）、no-task 三态判词（settled 收口/等待 patience/halted）、
 // adopt 逐个恢复重入、blocked 有 fix 机械续领 / 无 fix 处置钩子桩（三动作）、spawn 失败
@@ -1896,11 +1896,11 @@ describe('装配接线收口（SC4 端到端——真实 createTriageHook 注册
     expect(req.label).toBe('feat-x/2.5 · 处置分析')
     expect(req.prompt).toContain('feat-x/2.5 Implement the thing')
     expect(req.prompt).toContain('tests hang on flaky selector') // reason 全文进处置输入
-    // addTask triage 放行（用户裁决 2026-11-02——处置派生径，与 add-fix 链宿主忠实执行面一致）
-    for (const name of ['bash', 'read', 'write', 'submitTask', 'dispatchTask', 'queryTask']) {
+    // add_task triage 放行（用户裁决 2026-11-02——处置派生径，与 add-fix 链宿主忠实执行面一致）
+    for (const name of ['bash', 'read', 'write', 'submit_task', 'dispatch_task', 'query_task']) {
       expect(req.toolFilter.deny).toContain(name)
     }
-    expect(req.toolFilter.deny).not.toContain('addTask')
+    expect(req.toolFilter.deny).not.toContain('add_task')
     expect(req.parent).toBe(parent) // 每循环 parent 载体经输入面绑定（非装配期烘焙）
     expect(req.signal).toBeInstanceOf(AbortSignal)
     expect(req.signal.aborted).toBe(false)

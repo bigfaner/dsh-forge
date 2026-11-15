@@ -12,6 +12,7 @@ import { createNarrator } from "../notify/narrator.js";
 import { createInProcessDriverSpawn } from "../spawn/in-process-driver.js";
 import { defaultWorkerTreeGuard } from "../spawn/job-tree.js";
 import { createTriageHook } from "../triage/triage.js";
+import { globalToolNamesOfToolsFace } from "../dispatch-core/index.js";
 import {
   adaptAgentNarrationChannel,
   createDiagEmitter,
@@ -93,8 +94,13 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     treeGuard: () => defaultWorkerTreeGuard(),
     ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
   });
+  // 全局工具注册名探针（plugin-task-loop/1.18-a 判例）：官方 harness 的 parent/agent 形状
+  // 无 ctx.tools 投影，parent 探针恒 undefined → toolFilter 未知名直落 restrict 拆一切
+  // spawn。此处从插件 ctx.tools 全局视图取数（调用期现查不缓存），worker/trage 两面共用。
+  const globalToolNames = (): readonly string[] | undefined =>
+    globalToolNamesOfToolsFace((input.ctx as { tools?: unknown }).tools);
   const narrator = createNarrator({ channel: narrationChannel });
-  const triage = createTriageHook({ tasks: services.tasks, spawn, ...(diagEmit !== undefined ? { diag: diagEmit } : {}) });
+  const triage = createTriageHook({ tasks: services.tasks, spawn, globalToolNames, ...(diagEmit !== undefined ? { diag: diagEmit } : {}) });
   const driver: LoopDriver = createLoopDriver({
     registry,
     tasks: services.tasks,
@@ -102,6 +108,7 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     narrator,
     checkpoints: services.checkpoints,
     triage,
+    globalToolNames,
     ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
   });
 

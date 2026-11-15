@@ -102,6 +102,11 @@ export interface TriageHookDeps {
   readonly findRecurrenceCandidates?: SameSeamRecurrenceFace;
   /** 诊断发射缝（AGENTS §7——降级径留痕：experts 缺席 info / 台账读故障 warn；缺席 = console 兜底） */
   readonly diag?: ForgeDiagEmitFace;
+  /**
+   * 全局工具注册名读取缝（plugin-task-loop/1.18-a 判例——parent 投影在官方 harness 形状
+   * 不命中时 deny 未知名拆 spawn）：优先取插件 ctx.tools 全局视图；缺席回落 parent 探针。
+   */
+  readonly globalToolNames?: () => readonly string[] | undefined;
 }
 
 /** 人格解析依赖（resolveTriagePersona 入参面——TriageHookDeps 的 persona 相关子集） */
@@ -260,7 +265,7 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
         prompt,
         parent: input.parent,
         signal: input.signal,
-        toolFilter: deriveTriageToolFilter(registeredToolNamesOf(input.parent)),
+        toolFilter: deriveTriageToolFilter(deps.globalToolNames?.() ?? registeredToolNamesOf(input.parent)),
         ...(agentOptions !== undefined ? { agentOptions } : {}),
         ...(persona !== undefined ? { persona } : {}),
         label: `${input.task.slug}/${input.task.localId} · 处置分析`,

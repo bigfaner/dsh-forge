@@ -291,9 +291,9 @@ describe("dispatchCore 主链（claim→组装→spawn→事件发射）", () =>
     expect(req.prompt).not.toContain(req.persona!)
     expect(req.parent).toBe(parent)
     expect(req.signal).toBeInstanceOf(AbortSignal)
-    // 模块④：路由档位解析面缺席 = generic 兜底档——allow = 管线必备（submitTask/todo_write）
-    expect(req.toolFilter.allow).toEqual(["submitTask", "todo_write"])
-    expect(req.toolFilter.deny).toEqual(expect.arrayContaining(["ask_user_question", "subagent_fork", "queryTask", "dispatchTask"]))
+    // 模块④：路由档位解析面缺席 = generic 兜底档——allow = 管线必备（submit_task/todo_write）
+    expect(req.toolFilter.allow).toEqual(["submit_task", "todo_write"])
+    expect(req.toolFilter.deny).toEqual(expect.arrayContaining(["ask_user_question", "subagent_fork", "query_task", "dispatch_task"]))
     // spawn 审计（执行会话事实诞生即入库——fail-soft 前的单调用断言）
     expect(h.calls.spawnRecord).toBe(1)
     expect(h.spawnRecords[0]).toEqual({ projectKey: "p-1", taskId: "t-1", sessionId: "worker-1" })
@@ -593,13 +593,13 @@ describe("路由档位 spawn 组装消费（模块④——resolveWorkerProfile�
     expect(profileCalls).toEqual(["coding-fix"]);
     const req = h.spawnRequests[0]!;
     expect(req.toolFilter.allow).toBeDefined();
-    // 并集保底：档案白名单（read/custom-lint）+ 管线必备（submitTask/todo_write + bug 三动词；addTask 不保底——worker 不派任务）
-    for (const name of ["read", "custom-lint", "submitTask", "recordBug", "resolveBug", "getBug", "todo_write"]) {
+    // 并集保底：档案白名单（read/custom-lint）+ 管线必备（submit_task/todo_write + bug 三动词；add_task 不保底——worker 不派任务）
+    for (const name of ["read", "custom-lint", "submit_task", "record_bug", "resolve_bug", "get_bug", "todo_write"]) {
       expect(req.toolFilter.allow, `allow 保底 ${name}`).toContain(name);
     }
-    expect(req.toolFilter.allow).not.toContain("addTask");
+    expect(req.toolFilter.allow).not.toContain("add_task");
     // deny 收窄面照旧（矩阵派生不回退）
-    expect(req.toolFilter.deny).toEqual(expect.arrayContaining(["ask_user_question", "queryTask", "dispatchTask"]));
+    expect(req.toolFilter.deny).toEqual(expect.arrayContaining(["ask_user_question", "query_task", "dispatch_task"]));
     // 路由消费：档案成对路由 → 整组进 agentOptions
     expect(req.agentOptions).toEqual({ provider: "deepseek-official", model: "expert-model" });
     const spawned = h.events.find((e) => e.type === "task-spawned") as unknown as { payload: { model: string } };
@@ -612,7 +612,7 @@ describe("路由档位 spawn 组装消费（模块④——resolveWorkerProfile�
     });
     await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { slug: "feat-x" } }));
     const req = h.spawnRequests[0]!;
-    expect(req.toolFilter.allow).toEqual(["submitTask", "todo_write"]); // bug 三动词剔除（bugsPresent 缺席）
+    expect(req.toolFilter.allow).toEqual(["submit_task", "todo_write"]); // bug 三动词剔除（bugsPresent 缺席）
     expect(req.agentOptions).toEqual({ provider: "deepseek", model: "expert-chat" });
   });
 
@@ -620,8 +620,8 @@ describe("路由档位 spawn 组装消费（模块④——resolveWorkerProfile�
     const h = harness();
     await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { slug: "feat-x" } }));
     const req = h.spawnRequests[0]!;
-    expect(req.toolFilter.allow).toEqual(["submitTask", "todo_write"]);
-    expect(req.toolFilter.deny).toContain("queryTask");
+    expect(req.toolFilter.allow).toEqual(["submit_task", "todo_write"]);
+    expect(req.toolFilter.deny).toContain("query_task");
     expect(req.agentOptions).toBeUndefined();
   });
 

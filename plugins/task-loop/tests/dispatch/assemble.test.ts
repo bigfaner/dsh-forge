@@ -120,17 +120,17 @@ const expertRoute = (tools?: readonly string[]): WorkerRouteProfile => ({
 });
 
 describe("deriveWorkerToolFilter：路由档位收敛注入（模块④）", () => {
-  it("generic 档：allow = 管线必备用具集（submitTask + todo_write）；bug 三动词缺席剔除 + diag warn 留痕", () => {
+  it("generic 档：allow = 管线必备用具集（submit_task + todo_write）；bug 三动词缺席剔除 + diag warn 留痕", () => {
     const diags: { level: string; event: string; message: string }[] = [];
     const out = deriveWorkerToolFilter(TASK_TYPE, { kind: "generic" }, undefined, undefined, {
       diag: (d) => diags.push({ level: d.level, event: d.event, message: d.message }),
     });
     expect(out.allow).toEqual([...WORKER_PIPELINE_ESSENTIAL_TOOLS]);
-    expect(out.allow).not.toContain("addTask");
-    expect(out.deny).toContain("queryTask");
-    expect(out.deny).toContain("dispatchTask");
+    expect(out.allow).not.toContain("add_task");
+    expect(out.deny).toContain("query_task");
+    expect(out.deny).toContain("dispatch_task");
     const warn = diags.find((d) => d.level === "warn" && d.event === "worker-route");
-    expect(warn?.message).toContain("recordBug");
+    expect(warn?.message).toContain("record_bug");
     expect(warn?.message).toContain("剔除");
   });
 
@@ -149,10 +149,10 @@ describe("deriveWorkerToolFilter：路由档位收敛注入（模块④）", () 
     let calls = 0;
     const opts = { bugsPresent: () => (calls += 1, present) };
     const a = deriveWorkerToolFilter(TASK_TYPE, { kind: "generic" }, undefined, undefined, opts);
-    expect(a.allow).not.toContain("getBug");
+    expect(a.allow).not.toContain("get_bug");
     present = true;
     const b = deriveWorkerToolFilter(TASK_TYPE, { kind: "generic" }, undefined, undefined, opts);
-    expect(b.allow).toContain("getBug");
+    expect(b.allow).toContain("get_bug");
     expect(calls).toBe(2);
   });
 
@@ -161,8 +161,8 @@ describe("deriveWorkerToolFilter：路由档位收敛注入（模块④）", () 
     for (const name of ["read", "custom-lint", ...WORKER_PIPELINE_ESSENTIAL_TOOLS]) {
       expect(out.allow, `allow 保底 ${name}`).toContain(name);
     }
-    expect(out.allow).not.toContain("addTask");
-    expect(out.deny).toContain("queryTask");
+    expect(out.allow).not.toContain("add_task");
+    expect(out.deny).toContain("query_task");
   });
 
   it("deny 矩阵两档位同构（generic 与 expert 输出同一 deny 集）", () => {

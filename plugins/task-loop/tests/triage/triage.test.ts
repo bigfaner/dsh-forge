@@ -155,17 +155,17 @@ describe("处置代理被 spawn（与 worker 同款 in-process 形态）", () =>
     expect(req.prompt).toContain("[AC-1] 编译通过")
     expect(req.prompt).toContain("待执行 2 · 执行中 0 · 阻塞 1 · 前置未满足 1")
     expect(req.prompt).toContain("[submit] → blocked — pnpm 安装失败")
-    // 决策权与执行权分离：只读放开（getBug/listBugs 在场 = 不 deny——台账深挖面）+
-    // addTask 放开（处置派生径——用户裁决 2026-11-02，与 execute 面 caller 分流放行对齐）+
-    // 其余写面/任务域动词/shell 恒 deny（结构性不可达断言保留）
-    for (const name of ["bash", "read", "write", "submitTask", "recordBug", "resolveBug", "dispatchTask", "queryTask"]) {
+    // 决策权与执行权分离：只读放开（get_bug 在场 = 不 deny——台账深挖面）+
+    // add_task 放开（处置派生径——用户裁决 2026-11-02，与 execute 面 caller 分流放行对齐）+
+    // 其余写面/任务域动词/shell 恒 deny（结构性不可达断言保留；list_bugs/aggregate_bugs
+    // 等未注册名恒不在 deny——restrict 未知名会拆 spawn，判例 plugin-task-loop/1.18-a）
+    for (const name of ["bash", "read", "write", "submit_task", "record_bug", "resolve_bug", "dispatch_task", "query_task"]) {
       expect(req.toolFilter.deny).toContain(name)
     }
-    expect(req.toolFilter.deny).not.toContain("getBug")
-    expect(req.toolFilter.deny).not.toContain("listBugs")
-    // recurrence-signal-tiering：聚合读径同面放开（量化判据 SOP 消费——组级只读零写径）
-    expect(req.toolFilter.deny).not.toContain("aggregateBugs")
-    expect(req.toolFilter.deny).not.toContain("addTask")
+    expect(req.toolFilter.deny).not.toContain("get_bug")
+    expect(req.toolFilter.deny).not.toContain("list_bugs")
+    expect(req.toolFilter.deny).not.toContain("aggregate_bugs")
+    expect(req.toolFilter.deny).not.toContain("add_task")
     expect(req.parent).toEqual({ agentTag: "owner-root" })
     expect(req.label).toBe("feat-x/3.2 · 处置分析")
   })
@@ -173,7 +173,7 @@ describe("处置代理被 spawn（与 worker 同款 in-process 形态）", () =>
   it("bug 989997bd：parent 真机工具面在场 = deny 与注册面求交（未注册名 bash 剔除）；缺席 = 全表兼容", async () => {
     // 真机形态：parent.ctx.tools.schemas() 投影已注册全局工具名（win 域无 bash）
     const parentWithFace = {
-      ctx: { tools: { schemas: () => [{ name: "pwsh" }, { name: "read" }, { name: "submitTask" }] } },
+      ctx: { tools: { schemas: () => [{ name: "pwsh" }, { name: "read" }, { name: "submit_task" }] } },
     }
     const builtFace = build()
     const doneFace = createTriageHook(builtFace.hookDeps).run(triageInput({ parent: parentWithFace }))
@@ -182,9 +182,9 @@ describe("处置代理被 spawn（与 worker 同款 in-process 形态）", () =>
     const denyFace = (builtFace.requests[0] as SpawnWorkerRequest).toolFilter.deny!;
     expect(denyFace).not.toContain("bash")
     expect(denyFace).toContain("pwsh")
-    expect(denyFace).toContain("submitTask")
+    expect(denyFace).toContain("submit_task")
     for (const name of denyFace) {
-      expect(["pwsh", "read", "submitTask"], `${name} 应在注册面内`).toContain(name)
+      expect(["pwsh", "read", "submit_task"], `${name} 应在注册面内`).toContain(name)
     }
     // 兼容形态：parent 无工具面（测试桩/极简 profile）= 全表 deny（既有 loud 语义不变）
     const builtPlain = build()

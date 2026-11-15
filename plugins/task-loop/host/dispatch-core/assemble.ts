@@ -53,35 +53,31 @@ export {
  * 守护）——其余九员 deny（updateTask/taskStats/listTasks/listBugs 等仅主 agent 面——listBugs
  * 台账查询面分治主 agent；transitionFeature 相位转移入口（implicit-stage-approval §2.3——
  * 仅主 agent，worker 面无代转相位动词））。
- * validateMermaid = md-mermaid 插件工具单源锚（字面量 + 锚注释对齐，工具面仅主 agent，
- * 附录 F deny 约束）。plugin-forge-spec 三动词不入本 deny：其注册面预设相依（突击组合
- * 物理缺席），driver 的 toolFilter 对未知名 loud 校验会拆 spawn——spec 面收口归 5.1
- * 工具名映射 pin（OQ#2）。
+ * 官方宿主（DSH harness）迁移判例：工具注册名 = snake_case（tools/submit-task.ts
+ * TOOL = "submit_task" 单源）；本表随迁，且只收**真机注册面在场的名**——未注册名
+ * （createProposal/transitionProposal/transitionFeature/listBugs/aggregateBugs/
+ * validateMermaid 等）入 deny 会在探针缺席时被 driver restrict() 未知名 loud 校验
+ * 拆一切 spawn（判例 plugin-task-loop/1.18-a：camelCase 旧名 + 未注册名直落 deny
+ * 连续 3 次 spawn 失败停循环）。探针在场时未知 deny 名会被求交剔除（双保险）。
+ * batch_add_tasks 与 add_task 同入 deny（任务派生权限归主会话/循环处置层，单/批量
+ * 同语义）。knowledge 归并双 tool（knowledge_supersede/knowledge_reinstate）为
+ * harness 全局注册名，保留 deny（用户裁决 2026-11-05——唯一放行径 = 专家档案
+ * tools 白名单 WORKER_EXPERT_RELEASABLE_DENY 或主会话）。
  */
 const FORGE_DENY_IN_WORKER: readonly string[] = [
-  "addTask", // dispatch-loop-hardening 改进 5——任务派生权限归主会话/循环处置层（worker 面不注入）
-  "queryTask",
-  "createProposal",
-  "transitionProposal",
-  "transitionFeature", // implicit-stage-approval §2.3——相位转移仅主 agent（worker 拒）
-  "dispatchTask",
-  "stopTaskLoop",
-  "updateTask",
-  "taskStats",
-  "listTasks",
-  "listBugs",
-  "aggregateBugs", // recurrence-signal-tiering——聚合读径仅主 agent + triage（worker 拒）
-  "recordImplCheckpoint", // 机械⑥实现检查点三工具——仅主 agent 面（记录/查询/跨容器清单）
-  "queryImplCheckpoint",
-  "listImplCheckpoints",
-  "pauseTask", // task-pause-primitive——单任务暂停入口仅主 agent 面（worker 拒）
-  "unblockTask", // blocked-verdict-restore-primitive——blocked→pending 出口仅主 agent 面（worker 拒）
-  "validateMermaid", // md-mermaid 插件工具（MERMAID_TOOL_NAME 单源锚，见上注）
-  // knowledge 归并双 tool（knowledge-stage2-followups #2——用户裁决 2026-11-05「入 deny +
-  // distill 专属专家放行」：归并是裁决动词，不随默认面放行——对一切 spawn worker 默认禁；
-  // 唯一放行径 = 专家档案 tools 白名单（见 WORKER_EXPERT_RELEASABLE_DENY）或主会话。
-  // 工具名单源锚 = plugins/knowledge/host/tools/supersede.ts / reinstate.ts
-  //（followups #1 重命名后名——本插件不反依赖插件包，字面量 + 锚注释对齐，同 validateMermaid 先例）。
+  "add_task", // 任务派生权限归主会话/循环处置层（worker 面不注入；execute 面拒收双保险）
+  "batch_add_tasks", // 同上——批量派生径同语义拒
+  "query_task",
+  "dispatch_task",
+  "stop_task_loop",
+  "update_task",
+  "task_stats",
+  "list_tasks",
+  "record_impl_checkpoint", // 实现检查点三工具——仅主 agent 面（记录/查询/跨容器清单）
+  "query_impl_checkpoint",
+  "list_impl_checkpoints",
+  "pause_task", // 单任务暂停入口仅主 agent 面（worker 拒）
+  "unblock_task", // blocked→pending 出口仅主 agent 面（worker 拒）
   "knowledge_supersede",
   "knowledge_reinstate",
 ]
@@ -126,7 +122,7 @@ export function forgetWorkerSourceTask(workerSessionId: string): void {
  * 在场现查，见 deriveWorkerToolFilter）。派发链组装公式见 deriveWorkerToolFilter；穷举
  * 20 任务类型的保底单测锚定本集。
  */
-export const WORKER_PIPELINE_ESSENTIAL_TOOLS: readonly string[] = ["submitTask", "todo_write"]
+export const WORKER_PIPELINE_ESSENTIAL_TOOLS: readonly string[] = ["submit_task", "todo_write"]
 
 /**
  * bug 三动词必备集（模块④跨域条件段——WORKER_FORGE_TOOLS bug 域子集锚，字面量对齐）：
@@ -134,7 +130,7 @@ export const WORKER_PIPELINE_ESSENTIAL_TOOLS: readonly string[] = ["submitTask",
  * host/bugs——本插件不依赖该包，三动词是否入 allow = project bugs 服务在场现查
  * （调用期求值，检测结果不缓存）裁定。
  */
-export const WORKER_BUG_ESSENTIAL_TOOLS: readonly string[] = ["recordBug", "resolveBug", "getBug"]
+export const WORKER_BUG_ESSENTIAL_TOOLS: readonly string[] = ["record_bug", "resolve_bug", "get_bug"]
 
 /**
  * deriveWorkerToolFilter 现查/留痕选项（模块④——跨域条件段的取数与诊断缝）：
@@ -209,7 +205,7 @@ export function deriveWorkerToolFilter(
     options?.diag?.({
       level: "warn",
       event: "worker-route",
-      message: `bug 三动词（recordBug/resolveBug/getBug）从 worker allow 剔除：project bugs 服务缺席现查未命中（${taskType}）——fix 链写径对本次派发不可用（核销装配面接线）`,
+      message: `bug 三动词（record_bug/resolve_bug/get_bug）从 worker allow 剔除：project bugs 服务缺席现查未命中（${taskType}）——fix 链写径对本次派发不可用（核销装配面接线）`,
       ...(options.projectId !== undefined ? { projectId: options.projectId } : {}),
     })
   }
@@ -266,40 +262,47 @@ export function intersectAllowNames(names: readonly string[], registeredTools?: 
 }
 
 /**
- * 处置代理面禁入的 forge 动词（worker 名单剔除台账只读两工具与 addTask——loop-recurrence-
- * hardening §2.2.1：getBug/listBugs 只读放开供台账深挖；addTask 放开 = 处置派生径
- * （用户裁决 2026-11-02——triage 分类后建 fix 卡与 execute 面 ERR_WORKER_ADDTASK_DENIED
- * 的身份分流「main session and the loop triage layer 放行」对齐）；写面（recordBug/
- * resolveBug/submitTask）与任务域动词恒 deny）。
+ * 处置代理面禁入的 forge 动词（worker 名单剔除台账只读工具与 add_task——loop-recurrence-
+ * hardening §2.2.1：get_bug 放开供台账深挖（在场面）；add_task 放开 = 处置派生径
+ * （用户裁决 2026-11-02——triage 分类后建 fix 卡与 execute 面 worker 拒收的身份分流
+ * 「main session and the loop triage layer 放行」对齐）；写面（record_bug/resolve_bug/
+ * submit_task）与任务域动词恒 deny。
  */
 const TRIAGE_FORGE_DENY: readonly string[] = FORGE_DENY_IN_WORKER.filter(
-  (name) => name !== "listBugs" && name !== "aggregateBugs" && name !== "addTask",
+  (name) => name !== "add_task",
 )
 
 /**
+ * triage 额外写面 deny（plugin-task-loop/1.18-a 判例）：contracts 名表 forge 族键仍为旧宿主
+ * camelCase 名（plugin-forge legacy 在册——不可单方随迁），triage deny 不再全量收编名表键，
+ * forge 写面（结算/缺陷写径）改在此显式列名（本宿主注册名）。
+ */
+const TRIAGE_EXTRA_DENY: readonly string[] = ["submit_task", "record_bug", "resolve_bug"]
+
+/**
  * 处置代理 toolFilter（S1c 第二层——「收窄工具面」的只读放开形，loop-recurrence-hardening
- * §2.2.1）：一次性处置代理只做决策与台账深挖不执行——已知工具名 deny，唯 getBug/listBugs
- * 两只读台账工具放行（问题分类器自主深挖缺陷背景与 errorType 语义归类；缺陷写面/任务域
+ * §2.2.1）：一次性处置代理只做决策与台账深挖不执行——已知工具名 deny，唯 get_bug
+ * 只读台账工具放行（问题分类器自主深挖缺陷背景与 errorType 语义归类；缺陷写面/任务域
  * 写动词/shell/fs 恒 deny——越权动作结构性不可达；输出契约 = 终态 output 文本内的 JSON
- * 决策，由宿主解析忠实执行）。deny 全集 = worker 名表 − getBug + forge 动词
- * （含 validateMermaid，listBugs 已剔除）+ 全局拒绝集 − {getBug, listBugs}。
+ * 决策，由宿主解析忠实执行）。deny 全集 = worker 名表 − get_bug + add_task 放行
+ * （forge 动词）+ 全局拒绝集 − {get_bug}。
  * registeredTools 参数（bug 989997bd）：真机已注册全局工具名在场 = deny 与其求交；缺席
  * （取数缝失败/极简 profile）= 全表（与既有 loud 行为逐字节等价）。
  */
 export function deriveTriageToolFilter(registeredTools?: readonly string[]): { deny: string[] } {
   const deny = new Set<string>(WORKER_GLOBAL_DENY_TOOLS)
-  for (const name of Object.keys(WORKER_TOOL_NAME_FAMILY)) deny.add(name)
+  // 名表按族收编、forge 族除外（键为旧宿主 camelCase 名——未注册名入 deny 会被 restrict
+  // loud 校验拆 spawn；forge 面写径由 TRIAGE_EXTRA_DENY 显式承载，判例 plugin-task-loop/1.18-a）
+  for (const [name, fam] of Object.entries(WORKER_TOOL_NAME_FAMILY)) {
+    if (fam !== "forge") deny.add(name)
+  }
   for (const name of TRIAGE_FORGE_DENY) deny.add(name)
+  for (const name of TRIAGE_EXTRA_DENY) deny.add(name)
   // 只读放开 + 处置派生径（loop-recurrence-hardening §2.2.1 + 用户裁决 2026-11-02）：
-  // getBug = 名表 forge 族成员，listBugs = FORGE_DENY_IN_WORKER 成员，addTask = 处置
-  // 分类后建 fix 卡派生径。其余写面不可达断言不变（recordBug/resolveBug/submitTask 仍在 deny）。
-  deny.delete("getBug")
-  deny.delete("listBugs")
-  deny.delete("addTask")
-  // 目录查询双只读径放开（forge-dirs-query-tool §2.3——零副作用，与 worker 面同为放行面）：
-  // 处置代理定位卷宗（dossier）/任务日志（taskLogs）经工具同源解析，不落文档口径。
-  deny.delete("forgeDirs")
-  deny.delete("forgeResolvePath")
+  // get_bug = bug 台账单条全卡/链上下文只读径（在场面）；add_task = 处置分类后建 fix 卡
+  // 派生径。其余写面不可达断言不变（record_bug/resolve_bug/submit_task 仍在 deny）。
+  deny.delete("get_bug")
+  deny.delete("add_task")
   return { deny: [...deny].filter((name) => registeredTools === undefined || registeredTools.includes(name)) }
 }
 

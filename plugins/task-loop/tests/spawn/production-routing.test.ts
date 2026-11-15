@@ -140,7 +140,7 @@ describe('生产装配路径（真实 resolver → 投影 → spawnClaimed → �
     const { deps, exec, scope, claimed } = buildProductionChain({ provider: 'deepseek-official', model: 'deepseek-flash' })
     // 父会话工具投影在场但缺管线必备（真机注册缺损形态——plugin-forge 工具注册中断后残留）
     ;(exec.parent as { ctx?: unknown }).ctx = {
-      tools: { schemas: () => [{ name: 'addTask' }, { name: 'read' }] }, // submitTask 等五动词缺席
+      tools: { schemas: () => [{ name: 'add_task' }, { name: 'read' }] }, // submit_task 等动词缺席
     }
     const upstreamBefore = upstreamRequests.length
     const stage = await spawnClaimed(deps, exec, claimed, { scope })
@@ -186,19 +186,19 @@ describe('生产装配路径（真实 resolver → 投影 → spawnClaimed → �
     }
     // 装配期全局视图（插件 ctx.tools 无作用域面——官方工具 + forge 管线动词全在）
     ;(deps as { globalToolNames?: () => readonly string[] }).globalToolNames = () => [
-      'read', 'write', 'pwsh', 'todo_write', 'submitTask', 'recordBug', 'resolveBug', 'getBug',
-      'forgeDirs', 'forgeResolvePath', 'addTask', 'dispatchTask', 'list_tasks_placeholder',
+      'read', 'write', 'pwsh', 'todo_write', 'submit_task',
+      'query_task', 'dispatch_task', 'list_tasks_placeholder',
     ]
     const upstreamBefore = upstreamRequests.length
     const stage = await spawnClaimed(deps, exec, claimed, { scope })
     // 全局视图优先 → essentials 断言以全局视图判定（全在 → 零抛错）+ allow 以全局视图求交
-    // （含 submitTask——worker 结算链保底不再被受限视图剔除）
+    // （含 submit_task——worker 结算链保底不再被受限视图剔除）
     expect(stage.ok).toBe(true)
     if (!stage.ok) return
     await stage.handle.dispose()
     expect(upstreamRequests.length).toBeGreaterThan(upstreamBefore)
     const req = upstreamRequests[upstreamRequests.length - 1] as { toolFilter: { allow?: readonly string[]; deny: readonly string[] } }
-    expect(req.toolFilter.allow).toContain('submitTask')
+    expect(req.toolFilter.allow).toContain('submit_task')
     expect(req.toolFilter.allow).toContain('read') // 档案 tools ∪ essentials ∩ 全局视图
     expect(req.toolFilter.allow).not.toContain('delegate_expert') // 子域采样未参与求交
   })
