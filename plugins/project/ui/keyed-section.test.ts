@@ -71,6 +71,20 @@ describe("registerKeyedSection（tab keyed 占用者两段注册泛化）", () =
     expect((options.inject as typeof inject)().form).toBe("form-sentinel");
   });
 
+  it("children 槽声明表逐字透传（宿主单点声明缝——官方 SlotCore.register children 协议）", () => {
+    const fake = slotsFake();
+    const children = { "project.section.knowledge-dir": { kind: "keyed", scope: "root" } };
+    registerKeyedSection(fake.slots, { ...REG, children });
+    const options = fake.registered[0]!.options;
+    expect(options.children).toBe(children);
+  });
+
+  it("children 缺省 = 注册 options 零 children 键（登记面形状不变）", () => {
+    const fake = slotsFake();
+    registerKeyedSection(fake.slots, REG);
+    expect("children" in fake.registered[0]!.options).toBe(false);
+  });
+
   it("inject 缺席（宿主形状漂移）= fail-soft 不注册（warn 留痕）", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const fake = slotsFake({ inject: undefined });

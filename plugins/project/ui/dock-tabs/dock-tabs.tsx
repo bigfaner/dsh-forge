@@ -21,6 +21,7 @@ import type { TaskStatus } from '@dsh-forge/contracts'
 import { EmptyState } from '../components.js'
 import type { RpcClientFactory } from './rpc-channels.js'
 import { anchorProjectResolver } from './anchor-resolver.js'
+import { KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT } from '../keyed-section.js'
 
 // 概览锚归属解析缝（模块级单例——引用稳定，useSelfAnchor effect deps 不逐帧重挂）
 const SELF_ANCHOR_PROJECT_RESOLVER = anchorProjectResolver()
@@ -367,6 +368,51 @@ export function ForgeOverviewTab(props: ForgeOverviewTabProps): ReactNode {
   )
 }
 
+// ── 项目台插槽节宿主（fix-7——project.section.knowledge-dir 渲染消费面） ──
+
+/** 知识库目录节 keyed 占用键（knowledge 侧 KNOWLEDGE_DIR_SECTION_KEY 同源字面——跨 bundle 契约）。 */
+export const OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY = 'dswf-knowledge-dir'
+
+/**
+ * 概览 tab 子槽声明表（宿主单点声明缝——settings-unification 圆桌裁定）：knowledge 等
+ * 消费方 apply 期经 slots.inject(slot) 声明缝现查本声明落座（官方 SlotCore.register
+ * children 协议——声明即占有，本登记卸载级联收拢子槽）。
+ */
+export const OVERVIEW_SECTIONS_CHILDREN: Record<string, { readonly kind: string; readonly scope: string }> = {
+  [KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT]: { kind: 'keyed', scope: 'root' },
+}
+
+/** 官方 renderSlot 消费窄面（PropsRenderSlots 非 chain 键签名——结构同型镜像）。 */
+export type OverviewSectionSlots = (
+  key: string,
+  owner?: Record<string, unknown>,
+  opts?: { readonly entryKey?: string },
+) => ReactNode
+
+/** 项目台插槽节宿主 props（概览 tab 全部 props + 框架递达的子槽渲染 share）。 */
+export interface ForgeOverviewSectionHostProps extends ForgeOverviewTabProps {
+  /** 子槽渲染 share（children 声明在场由官方槽 runtime 递达；缺席 = 概览主体照常）。 */
+  readonly renderSlot?: OverviewSectionSlots
+}
+
+/**
+ * 概览 tab 插槽节宿主（`sidebar.right.pane.tab` keyed 'dswf-overview' 占用者——fix-7）：
+ * 概览主体原样呈现后，经 renderSlot 消费 project.section.knowledge-dir keyed 槽 roster
+ * （entryKey 分发 = 知识库目录节占用键）。renderSlot 缺席（宿主形状漂移/SSR 面）或槽
+ * roster 空（占用键无落座/节组件退 null）= 零节呈现，概览主体不悬空不炸。
+ */
+export function ForgeOverviewSectionHost({ renderSlot, ...tabProps }: ForgeOverviewSectionHostProps): ReactNode {
+  const section =
+    typeof renderSlot === 'function'
+      ? renderSlot(KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT, {}, { entryKey: OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY })
+      : null
+  return (
+    <>
+      <ForgeOverviewTab {...tabProps} />
+      {section !== null && section !== undefined ? section : null}
+    </>
+  )
+}
 /** 概览 tab body 桥订阅层（useSyncExternalStore 读锚定上下文 + 任务聚焦 + 弹窗受控态
  *  ——ShellHost/pill 点击写回驱动；任务行 → 弹窗/对话框经桥写面[D23 跨树通道]） */
 function OverviewTabWithBridge(

@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { registerDockTabsFace } from "./dock-tabs-face.js";
 import { installForgeRemoteFace } from "./rpc.js";
-import { DSWF_OVERVIEW_TAB_KIND } from "./dock-tabs/dock-tabs.js";
+import { DSWF_OVERVIEW_TAB_KIND, ForgeOverviewSectionHost, OVERVIEW_SECTIONS_CHILDREN } from "./dock-tabs/dock-tabs.js";
 
 interface RegisteredEntry {
   options: Record<string, unknown>;
@@ -121,6 +121,31 @@ describe("概览 keyed body 注册/挂载拆分（bug 757b0441 RED→GREEN——
     expect(face["addBugToSession"]).toBeUndefined();
     expect(face["selfAnchor"]).toBeUndefined();
     expect(face["makeClient"]).toBeDefined();
+  });
+});
+
+describe("项目台插槽节宿主（fix-7——project.section.knowledge-dir 槽声明缝 + 渲染消费面）", () => {
+  it("概览 keyed body 注册携 children 槽声明：project.section.knowledge-dir = keyed/root（宿主单点声明——settings-unification 圆桌裁定）", () => {
+    const backing: Record<string, unknown> = {
+      sidebarRightTabs: { register: () => () => undefined },
+    };
+    const fake = slotsFake();
+    registerDockTabsFace(ctxOf(backing) as never, fake.slots as never, localeFake as never);
+    const overview = fake.registered.find((e) => e.options.key === DSWF_OVERVIEW_TAB_KIND)!;
+    expect(overview.options.children).toEqual(OVERVIEW_SECTIONS_CHILDREN);
+    expect(OVERVIEW_SECTIONS_CHILDREN).toEqual({
+      "project.section.knowledge-dir": { kind: "keyed", scope: "root" },
+    });
+  });
+
+  it("概览 keyed body 组件 = 插槽节宿主（ForgeOverviewSectionHost——renderSlot 消费面）", () => {
+    const backing: Record<string, unknown> = {
+      sidebarRightTabs: { register: () => () => undefined },
+    };
+    const fake = slotsFake();
+    registerDockTabsFace(ctxOf(backing) as never, fake.slots as never, localeFake as never);
+    const overview = fake.registered.find((e) => e.options.key === DSWF_OVERVIEW_TAB_KIND)!;
+    expect(overview.component).toBe(ForgeOverviewSectionHost);
   });
 });
 

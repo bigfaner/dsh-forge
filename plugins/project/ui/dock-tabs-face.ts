@@ -17,7 +17,14 @@
 // （buildBugQuickAdder——noteInserted 用本包 bugSourceCacheOf，official-seams 已有）}。
 // 逐面 try/catch fail-soft（单面异常只降本面，console.warn 留痕不炸装配）；类型撤销器
 // 归 ctx.effect 级联（official-seams Bug tab 同径）。
-import { ForgeDocsTab, ForgeOverviewTab, DSWF_DOC_ADDRESS_PREFIX, DSWF_DOC_TAB_KIND, DSWF_OVERVIEW_TAB_KIND } from './dock-tabs/dock-tabs.js'
+import {
+  ForgeOverviewSectionHost,
+  ForgeDocsTab,
+  DSWF_DOC_ADDRESS_PREFIX,
+  DSWF_DOC_TAB_KIND,
+  DSWF_OVERVIEW_TAB_KIND,
+  OVERVIEW_SECTIONS_CHILDREN,
+} from './dock-tabs/dock-tabs.js'
 import { typertRpcClientFactory } from './dock-tabs/typert-transport.js'
 import { SIDEBAR_RIGHT_PANE_TAB_SLOT, type OfficialSeamCtx } from './official-seams.js'
 import { bugSourceCacheOf } from './official-seams.js'
@@ -151,6 +158,9 @@ export function registerDockTabsFace(
     if (registerKeyedSection(slots, {
       slot: SIDEBAR_RIGHT_PANE_TAB_SLOT,
       key: DSWF_OVERVIEW_TAB_KIND,
+      // 项目台插槽节声明缝（fix-7——宿主单点声明 project.section.knowledge-dir keyed 槽，
+      // knowledge 等消费方经 slots.inject 现查本声明落座；登记卸载级联收拢子槽）
+      children: OVERVIEW_SECTIONS_CHILDREN,
       inject: () => {
         // 消费点现查（apply 期闭包缓存退役——bug fba7913c 同径；electron dev 宿主服务
         // 惰性实例化，apply 点 sessions/uiWorkspace 缺席 = 挂载点现查命中补挂）
@@ -195,7 +205,7 @@ export function registerDockTabsFace(
             : {}),
         }
       },
-      component: ForgeOverviewTab,
+      component: ForgeOverviewSectionHost,
     }) === undefined) throw new Error('slots face unavailable')
   })
 

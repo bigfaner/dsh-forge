@@ -4,7 +4,7 @@
 // D21/D23——本体迁 ShellHost]）+ 文档 tab body 地址解析。effect 面（事件订阅/详情拉取/
 // 桥订阅驱动）归 e2e（5.2）——renderToStaticMarkup 零 effect 同全仓口径。
 import { renderToStaticMarkup } from 'react-dom/server'
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClientFactory } from './rpc-channels.js'
 import { detailFixture } from './overview/drawer/detail-model.test.js'
@@ -12,7 +12,9 @@ import { TransitionDialog } from './overview/drawer/transition-dialog.js'
 import {
   DSWF_DOC_ADDRESS_PREFIX,
   ForgeDocsTab,
+  ForgeOverviewSectionHost,
   ForgeOverviewTab,
+  OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY,
   OverviewDockAssembly,
   TabInfoReader,
   dockDocOpener,
@@ -20,6 +22,7 @@ import {
   nextTaskFocusApply,
   parseForgeDocAddress,
   type DockTabActionsMirror,
+  type OverviewSectionSlots,
   type TransitionTarget,
   type UseDockTabInfoMirror,
 } from './dock-tabs.js'
@@ -109,6 +112,40 @@ describe('TabInfoReader 钩子形制（fix-33 ⑤：可选 tabInfo 钩子经子�
     )
     expect(markup).toContain('data-seen="x"')
     expect(seen).toHaveLength(1)
+  })
+})
+
+describe('ForgeOverviewSectionHost 项目台插槽节宿主（fix-7：消费 project.section.knowledge-dir roster）', () => {
+  const renderSlotFixture = (node: ReactNode): { readonly renderSlot: OverviewSectionSlots; readonly calls: unknown[] } => {
+    const calls: unknown[] = []
+    const renderSlot: OverviewSectionSlots = (key, owner, opts) => {
+      calls.push([key, owner, opts])
+      return node
+    }
+    return { renderSlot, calls }
+  }
+
+  it('renderSlot 在场：槽名 + keyed 占用键逐字分发（entryKey = dswf-knowledge-dir），节渲染于概览主体之后', () => {
+    const { renderSlot, calls } = renderSlotFixture(<div data-kd-section="y" />)
+    const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} renderSlot={renderSlot} />)
+    expect(calls).toEqual([['project.section.knowledge-dir', {}, { entryKey: OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY }]])
+    expect(OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY).toBe('dswf-knowledge-dir')
+    expect(markup).toContain('data-kd-section="y"')
+    expect(markup).toContain('data-dswf-ov-unanchored')
+    expect(markup.indexOf('data-dswf-ov-unanchored')).toBeLessThan(markup.indexOf('data-kd-section'))
+  })
+
+  it('renderSlot 缺席（宿主形状漂移/SSR 面）= 概览主体照常呈现、零节渲染不炸', () => {
+    const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} />)
+    expect(markup).toContain('data-dswf-ov-unanchored')
+    expect(markup).not.toContain('data-kd-section')
+  })
+
+  it('槽 roster 空（renderSlot 返回 null）= 零节呈现不悬空', () => {
+    const { renderSlot } = renderSlotFixture(null)
+    const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} renderSlot={renderSlot} />)
+    expect(markup).toContain('data-dswf-ov-unanchored')
+    expect(markup).not.toContain('data-kd-section')
   })
 })
 

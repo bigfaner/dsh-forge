@@ -8,11 +8,13 @@
 // 再注册抛错）。消费面（插件页双缝配置节 ui/settings-section）与本扩展点同型——
 // 泛化后新 keyed/list 型节只写声明行，不复制装载样板。
 //
-// M2 预留（settings-unification 提案 settings-unification/proposal.md 圆桌裁定）：
+// M2（settings-unification 提案 settings-unification/proposal.md 圆桌裁定）：
 // 知识库目录节接口——keyed section 插槽的在场性由宿主（project）单点声明；knowledge 等
 // 消费方 apply 期现查 project 具名服务（PROJECT_SECTION_HOST_SERVICE）在场才注册插槽
 // （whileServed 门控 + 宿主在场性声明）——project 缺席时零等待零悬挂；槽名/形状契约由
-// 双包快照测试互检，不靠运行期超时。本批只落契约常量与形状，挂载实现随 M2。
+// 双包快照测试互检，不靠运行期超时。消费面（fix-7）：宿主 dock-tabs 概览节宿主经
+// children 声明缝单点声明槽（OVERVIEW_SECTIONS_CHILDREN）+ ForgeOverviewSectionHost
+// renderSlot 消费 roster——注册侧只写声明行。
 // bundle 自含纪律：零上游 import（结构与 @deepseek-ai/dsh-client-ui-slots 消费切片同型镜像）。
 
 /** keyed/list 型节登记契约（泛化自 tab keyed 占用者两段注册——slot+kind options 逐字透传）。 */
@@ -33,6 +35,8 @@ export interface KeyedSectionRegistration {
   readonly priority?: number;
   /** 节 inject face 工厂（登记面声明——槽 runtime 与 ownerProps 并合透传组件）。 */
   readonly inject?: () => Record<string, unknown>;
+  /** 子槽声明表（官方 SlotCore.register children 协议——声明即占有，宿主单点声明缝）。 */
+  readonly children?: Record<string, unknown>;
   /** 节组件本体（官方五份额组合 props 契约——本扩展点零裁剪透传）。 */
   readonly component: unknown;
 }
@@ -76,7 +80,7 @@ export function registerKeyedSection(
     console.warn("[dsh-forge/project] ctx.slots.inject absent; keyed section not mounted");
     return undefined;
   }
-  const { slot, key, id, order, label, locale, priority, inject: face, component } = registration;
+  const { slot, key, id, order, label, locale, priority, inject: face, children, component } = registration;
   const options: Record<string, unknown> = { name: slot };
   if (key !== undefined) options.key = key;
   if (id !== undefined) options.id = id;
@@ -85,10 +89,11 @@ export function registerKeyedSection(
   if (locale !== undefined) options.locale = locale;
   if (priority !== undefined) options.priority = priority;
   if (face !== undefined) options.inject = face;
+  if (children !== undefined) options.children = children;
   return inject.call(slots, slot, () => safeRegisterSection(slots, options, component));
 }
 
-// ── M2 预留：知识库目录节（本批契约锚，零运行时行为） ──────────────
+// ── M2：知识库目录节（契约锚 + 宿主消费面随 fix-7 落地） ──────────────
 
 /** 宿主在场性声明服务名（project 插件具名服务——knowledge 消费方 apply 期现查锚）。 */
 export const PROJECT_SECTION_HOST_SERVICE = "project.sections";
