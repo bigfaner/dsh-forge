@@ -248,11 +248,23 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
     }
     // fix-9 连接 RPC 注册（官方 exact Fetch-route 缝——/api/knowledge.*|/api/projects.*
     // 逐 endpoint 一条 POST 精确路由，落座 = connection 服务内建表 + 既有 /api 共享路由
-    // 分发，零 webServer 依赖；session-log-export 先例）。注册失败/连接面缺席 = 零注册
-    // 零抛 fail-soft 不阻载，diag 留痕不静默——AGENTS §7。
+    // 分发，零 webServer 依赖；session-log-export 先例）。
+    // cordis inject 语义核销（vendor cordis fiber.ts:603-628 _checkImpl/_refresh）：inject
+    // 硬声明的服务缺席时 impl 不入 _store、fiber epoch 置 INACTIVE——插件停在 PENDING 等
+    // 待，apply 不执行；服务迟到 provide 后自动装载。故 apply 期 connection 恒在场，
+    // 「服务缺席」分支结构性不可达（本插件 inject 硬声明见下方 options）——此处仅保留
+    // 形状劣形守卫（fetch.register 非函数 = 零注册零抛 fail-soft 不阻载），diag 留痕
+    // 不静默——AGENTS §7。
     const connectionFace = (ctx as unknown as { connection?: HostConnectionFace }).connection
     const connectionDisposers: (() => void)[] = []
-    if (connectionFace !== undefined && typeof connectionFace.fetch?.register === 'function') {
+    if (typeof connectionFace?.fetch?.register !== 'function') {
+      diagEmit?.({
+        event: 'knowledge-connection-rpc',
+        level: 'warn',
+        message: 'ctx.connection.fetch.register 形状劣形——/api 知识端点零注册（fail-soft 不阻载，UI 数据层回落宿主既有运输面）',
+        process: 'main',
+      })
+    } else {
       try {
         const d = registerKnowledgeConnectionRpc(connectionFace, { service, projects: projectsSourceOf })
         connectionDisposers.push(d)
@@ -270,13 +282,6 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
           process: 'main',
         })
       }
-    } else {
-      diagEmit?.({
-        event: 'knowledge-connection-rpc',
-        level: 'warn',
-        message: 'ctx.connection.fetch.register 缺席——/api 知识端点零注册（UI 数据层回落宿主既有运输面）',
-        process: 'main',
-      })
     }
     const tools = createKnowledgeTools({
       knowledge: service,

@@ -64,6 +64,15 @@ describe('knowledgeGateOf 门控（CT-KN-GATE fix-3 修订：官方形态 bundle
     const g = { __DSH_FORGE_HOST_PLUGINS__: { knowledge: false } } as never
     expect(knowledgeGateOf(g)).toBe(false) // 服务在场也不翻转——壳缝 false 是集成态终裁
   })
+
+  it('集成态壳缝失效兜底（bug a7f231c6 F3）：壳缝整体缺席 + 壳发布面 __DSH_FORGE_VIEWS__ 在场 → false（boot 缝失效不宽判半挂载）', () => {
+    const g = { __DSH_FORGE_VIEWS__: { ForgeShellHost: () => {} } } as never
+    expect(knowledgeGateOf(g)).toBe(false)
+  })
+
+  it('官方形态判别不受牵连：壳缝缺席且零壳发布面（无 __DSH_FORGE_VIEWS__）→ true（官方分支不变）', () => {
+    expect(knowledgeGateOf({})).toBe(true)
+  })
 })
 
 describe('registerKnowledgeFaces 编排（diag 读数 = A-KN-8 语义）', () => {
@@ -81,6 +90,14 @@ describe('registerKnowledgeFaces 编排（diag 读数 = A-KN-8 语义）', () =>
     const out = registerKnowledgeFaces(slots, locale, {})
     expect(out.knowledgeEnabled).toBe(true)
     expect(out.registered).toEqual(['dswf-knowledge', 'panellist:dswf-knowledge', 'dswf-recall'])
+  })
+
+  it('集成态壳缝失效（壳发布面在场、boot 缝缺席）→ 门 false 零登记零异常（bug a7f231c6 F3 反例）', () => {
+    const slots = fakeSlots()
+    const g = { __DSH_FORGE_VIEWS__: {} } as never
+    const out: KnowledgeFacesDiagnostics = registerKnowledgeFaces(slots, fakeLocale(), g)
+    expect(out).toEqual({ registered: [], knowledgeEnabled: false })
+    expect(slots.registered).toEqual([])
   })
 
   it('apply 编排（官方形态默认参数）：词典登记 = knowledge 自有 NS（词条随迁锚）+ 三面 registered 读数 + 项目台知识目录节（1.5）', () => {

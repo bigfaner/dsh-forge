@@ -2,7 +2,7 @@
 // 形状校验、carrier 推导、掌舵入图（追加语义 + 负样例）、宿主插件位发布（bug 2ffb0a82）。
 // DOM/IPC 面由 e2e（web-shell.spec）覆盖。
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bootShell, steerBootGraph, type ProductClientEntry } from './boot.js'
+import { bootReadinessGate, bootShell, steerBootGraph, type ProductClientEntry } from './boot.js'
 import { transportCarrierFor } from './carrier.js'
 import { assertBootManifestShape, type BootManifestPayload, preloadBridge } from './bridge.js'
 
@@ -139,6 +139,18 @@ describe('bootShell 宿主插件位发布（bug 2ffb0a82：manifest.knowledgePlu
     expect((globalThis as { __DSH_FORGE_HOST_PLUGINS__?: Record<string, boolean> }).__DSH_FORGE_HOST_PLUGINS__).toMatchObject({ knowledge: true })
     await boot({})
     expect((globalThis as { __DSH_FORGE_HOST_PLUGINS__?: Record<string, boolean> }).__DSH_FORGE_HOST_PLUGINS__).toMatchObject({ knowledge: false })
+  })
+  it('boot 失败路径 fail-closed 兜底（bug a7f231c6）：manifest 读取失败 → 缝缺省先发布 false，页内缝恒在场（集成态门控不宽判半挂载）', async () => {
+    ;(globalThis as { dshForge?: unknown }).dshForge = {
+      getBootManifest: () => Promise.reject(new Error('manifest unreachable')),
+    }
+    const gatePromise = bootReadinessGate().promise
+    gatePromise.catch(() => {}) // 就绪门 reject 路径显式接住（防 unhandled rejection 噪声）
+    await expect(bootShell([product()])).rejects.toThrow(/manifest unreachable/)
+    const seam = (globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean; expertSquad: boolean } }).__DSH_FORGE_HOST_PLUGINS__
+    expect(seam).toEqual({ knowledge: false, expertSquad: false })
+    // 缝在 falsy 缺省下，集成态门控读 false——壳缝整体缺席 + 集成态形态不宽判
+    expect(seam).not.toBeUndefined()
   })
   it('bug 4d55ba98：expert-squad 装载位发布 + 壳掌舵门控（位 true = 掌舵；缺席/false = 不掌舵——显示的状态 = 实际生效的状态）', async () => {
     const boot = (manifestOver: Partial<BootManifestPayload>) => {

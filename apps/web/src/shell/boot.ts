@@ -103,6 +103,13 @@ export function steerBootGraph(wire: unknown, product: ProductClientEntry): Boot
  */
 export async function bootShell(products: readonly ProductClientEntry[]): Promise<void> {
   const gate = bootReadinessGate()
+  // fail-closed 兜底（bug a7f231c6）：宿主插件位缝缺省先发布 false——manifest 读取/
+  // 注入行执行任一步失败时页内缝仍在场且 knowledge:false，集成态门控（knowledgeGateOf）
+  // 不宽判半挂载；manifest 成功读取后以实况覆写。
+  ;(globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean; expertSquad: boolean } }).__DSH_FORGE_HOST_PLUGINS__ = {
+    knowledge: false,
+    expertSquad: false,
+  }
   try {
     const manifest = assertBootManifestShape(await preloadBridge().getBootManifest())
     // bug 2ffb0a82：宿主插件装载位发布（页内缝——与 __DSH_FORGE_VIEWS__ 同族装配↔插件
