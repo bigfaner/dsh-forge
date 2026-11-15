@@ -181,7 +181,7 @@ function buildEvidence(input: SubmitTaskInput): SettlementEvidence {
     ...(input.testsFailed !== undefined ? { testsFailed: input.testsFailed } : {}),
     ...(input.coverage !== undefined ? { coverage: input.coverage } : {}),
     ...(input.notes !== undefined ? { notes: input.notes } : {}),
-    ...(input.runtimeSurface !== undefined ? { runtimeSurface: input.runtimeSurface } : {}),
+    ...(input.runtimeFace !== undefined ? { runtimeFace: input.runtimeFace } : {}),
     ...(input.runtimeEvidence !== undefined ? { runtimeEvidence: input.runtimeEvidence } : {}),
     ...(input.blockClassification !== undefined ? { blockClassification: input.blockClassification } : {}),
   };
@@ -267,7 +267,7 @@ export interface SubmitTaskInput {
   readonly coverage?: number;
   readonly notes?: string;
   readonly evidenceDebt?: { readonly suite: string; readonly specs: readonly string[]; readonly note?: string };
-  readonly runtimeSurface?: readonly string[];
+  readonly runtimeFace?: readonly string[];
   readonly runtimeEvidence?: {
     readonly face: string;
     readonly artifacts: readonly string[];
@@ -374,13 +374,13 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
         throw new RuntimeEvidenceConflictError({ verb: "submitTask" });
       }
       if (
-        input.runtimeSurface !== undefined &&
-        input.runtimeSurface.length > 0 &&
-        requiresRuntimeAssemblyEvidence(input.runtimeSurface) &&
+        input.runtimeFace !== undefined &&
+        input.runtimeFace.length > 0 &&
+        requiresRuntimeAssemblyEvidence(input.runtimeFace) &&
         input.runtimeEvidence === undefined &&
         input.evidenceDebt === undefined
       ) {
-        throw new RuntimeEvidenceRequiredError({ faces: input.runtimeSurface });
+        throw new RuntimeEvidenceRequiredError({ faces: input.runtimeFace });
       }
     }
 

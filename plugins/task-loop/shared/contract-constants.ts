@@ -16,5 +16,16 @@ export const TASK_LOOP_DB_FILENAME = "task-loop.db";
 /** 集成/单装两形态统一表名前缀（单套 DDL 消灭两形态分叉——db 级命名空间防撞）。 */
 export const TASK_LOOP_TABLE_PREFIX = "task_";
 
+/** AC 核销快照键（submit_task 入参 `ac_results`——契约冻结：ac_results_json 单列同位）。 */
+export const AC_RESULTS_KEY = "ac_results";
+
+/** 判据文本对齐规则（spec 投影唯一对齐面——台账 12：判据原文逐字一致，转述即断链）。 */
+export interface CriterionAlignmentRule {
+  /** settlements.ac_results_json 内嵌 criterion 文本 = 对齐键 */
+  readonly joinKey: "ac_results_json[].criterion";
+  /** spec 侧 AC 判据必须与拆解时下发的 acceptance_criteria 逐字一致（to-tasks skill 保证） */
+  readonly invariant: "verbatim";
+}
+
 /** fix density 口径 pin（entities.md §3.2④ 终态——公式漂移即契约快照 RED）。 */
 export const FIX_DENSITY_FORMULA = "fix_root_chain_dedup × latest_success_commit_hash_dedup / settled_tasks";

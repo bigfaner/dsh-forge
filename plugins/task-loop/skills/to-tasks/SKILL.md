@@ -1,0 +1,73 @@
+---
+name: to-tasks
+description: 把共识终态（spec / 用户直接拆解）转化为任务容器内的任务批次——spec 探测分叉、逐 AC 拆解、单次 batch_add_tasks 全批提交与提交前自查。
+---
+
+# to-tasks：拆解为任务
+
+## 一、适用与前置
+
+- 何时用本 skill：spec 共识终态后拆解任务；或用户直接给出口头/文字目标要求拆解（两入口同一文档、同一收尾模板）。
+- 前置：
+  - 容器 slug 已定（任务容器 = slug 本身；向用户确认或从上下文取用，不得臆造）。
+  - spec 在场时，以其 AC 判据清单为拆解输入；task 侧零 spec 感知——判据经拆解逐字下发到任务 `acceptance_criteria`。
+
+## 二、spec 在场探测分叉
+
+1. 先调 spec 域查询工具探测 spec 是否在场（工具返回值即事实，零服务依赖）。
+2. 在场 → 读其 AC 判据清单（逐条 AC 判据原文），整理为判据清单后进入第三节。
+3. 缺席 → 独立拆解路径照常：判据由用户/你自己直接给出并逐条列明，继续第三节。
+
+## 三、拆解规则
+
+- 粒度：一任务 = agent 一次可独立收口的委派粒度；逐 AC 映射承担——每条 AC 判据原文落到恰好一个任务的 `acceptance_criteria`（一格一 AC）。
+- 依赖排序：拆解产出按执行序排列；`depends_on` / `before` 用批内 `local_id` 表达（批内互引合法）。
+- 类型映射：按任务性质选 `type`（coding / doc / test / validation / gate / eval 族，词汇表见 query_task 帮助）。
+- 其余格填空：`brief` 写清任务目标正文（spec 缺席时它是 worker 的唯一定义源）；`scope` 用结构化三键（created/modified/removed，相对项目根路径）；`context` 用 KEY=VALUE 数组（键唯一）。
+
+## 四、收尾模板（抄写降为填空——模板即合法入参）
+
+1. 先列出 AC 判据清单（spec 在场时逐条判据原文；缺席时列自定判据）。
+2. 用**单次** `batch_add_tasks({ slug, tasks: [ ... ] })` 提交全批，每任务格填空：
+
+```text
+batch_add_tasks({
+  slug: "<容器 slug>",
+  tasks: [
+    {
+      local_id: "<批内唯一 id>",
+      title: "<任务标题>",
+      type: "<task type>",
+      brief: "<任务目标正文>",
+      acceptance_criteria: ["<对应 AC 判据原文——逐字一致>"],
+      priority: "P1",                    // 可选 P0|P1|P2
+      estimated_time: "1-2h",            // 可选
+      scope: { created: [], modified: [], removed: [] },  // 可选，相对路径
+      context: ["KEY=VALUE"],            // 可选，键唯一
+      depends_on: ["<批内 local_id>"],   // 可选，批内互引或同容器既有任务
+      before: ["<批内 local_id>"],       // 可选
+      breaking: false,                   // 可选
+      coverage_threshold: 0.8,           // 可选，0-1
+      complexity: "medium",              // 可选 low|medium|high
+      source_task_slug: "<源任务 slug>", // 可选，fix 链成对参数
+      source_task_local_id: "<源任务 local_id>",
+      block_source: true,                // fix 链：源已 blocked 时必带 true
+    },
+  ],
+})
+```
+
+- **铁律 1（禁散调）**：一次 `batch_add_tasks` 调用提交全批——禁止逐条散调 `add_task`。
+- **铁律 2（判据逐字一致）**：`acceptance_criteria` 每条 = 对应 AC 判据原文逐字复制——禁转述、缩写、改写（下游投影按判据文本逐字对齐，转述即断链）。
+
+## 五、自查清单（提交前逐条对照）
+
+1. `local_id`：批内唯一（重复拒全批）。
+2. `title` 非空；`type` 属任务类型词汇表。
+3. `brief` 正文格已填（spec 缺席任务的定义源）。
+4. `estimated_time` 字符串形（如 "1-2h"）。
+5. `scope`：结构化三键 created/modified/removed；元素为相对项目根路径；同一路径不得跨数组重复；未知键即错。
+6. `context`：KEY=VALUE 数组，键唯一。
+7. `acceptance_criteria`：与 AC 判据逐字一致（禁转述/缩写/改写）。
+8. `depends_on` / `before`：批内 local_id 或同容器既有任务；无悬空引用、无环。
+9. fix 链：`source_task_slug` + `source_task_local_id` 成对；源任务已 blocked 时 `block_source: true` 必带；`priority` P0|P1|P2、`coverage_threshold` 0-1、`complexity` low|medium|high、`breaking` 布尔——形态正确。

@@ -16,9 +16,12 @@ export interface TaskToolParameterProperty {
   readonly description: string;
 }
 
-/** tool 执行上下文（官方 ToolRunContext 子面——本域工具零会话身份消费，占位透传） */
+/** tool 执行上下文（官方 ToolRunContext 子面——结构兼容；sessionId = 会话身份子面，
+ *  官方 ToolRunContext 自带，循环工具（dispatch_task/stop_task_loop）以它做 owner 归属） */
 export interface TaskToolExecFace {
   readonly agent?: unknown;
+  /** 官方 ToolRunContext 子面——敲工具会话 id（循环 owner 锚；缺席 = 自解释拒绝） */
+  readonly sessionId?: string;
 }
 
 /** 注册面 tool 定义（官方 ToolDefinition 消费字段子集：name/description/parameters/output/execute） */
