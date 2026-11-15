@@ -101,6 +101,34 @@ describe("queryTask / taskDetail / sessionLinks", () => {
     });
   });
 
+  it("queryTask latestSettlement：结算史在场带出逐条 AC 状态（1.18-b 判例——读面缺口）；无结算键缺席", async () => {
+    const a = await addTask(h.verbDeps, {
+      projectKey: h.projectKey, slug: "alpha", title: "A", type: "coding-feature",
+      acceptanceCriteria: ["AC1 判据", "AC2 判据"],
+    });
+    await claimTask(h.verbDeps, { projectKey: h.projectKey, sessionId: "sess-1", source: { slug: "alpha" } });
+    const noSettle = await queryTask(h.verbDeps, { projectKey: h.projectKey, taskRef: { slug: "alpha", localId: a.localId } });
+    expect("latestSettlement" in noSettle).toBe(false); // 无结算史 = 键缺席
+    await submitTask(h.verbDeps, {
+      projectKey: h.projectKey,
+      taskRef: { slug: "alpha", localId: a.localId },
+      result: "success",
+      summary: "完成",
+      gate: { compile: true, fmt: true, lint: true, test: true },
+      acceptanceCriteria: [
+        { criterion: "AC1 判据", met: true, evidence: "e1" },
+        { criterion: "AC2 判据", met: true, evidence: "e2" },
+      ],
+    });
+    const r = await queryTask(h.verbDeps, { projectKey: h.projectKey, taskRef: { slug: "alpha", localId: a.localId } });
+    expect(r.latestSettlement?.seq).toBe(1);
+    expect(r.latestSettlement?.result).toBe("success");
+    expect(r.latestSettlement?.acResults).toEqual([
+      { criterion: "AC1 判据", met: true, evidence: "e1" },
+      { criterion: "AC2 判据", met: true, evidence: "e2" },
+    ]);
+  });
+
   it("taskDetail：全量水化（allowedTransitions human 面 + records + actualFiles 双缺省 [] + refs 置灰）", async () => {
     const a = await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "alpha", title: "A", type: "coding-feature" });
     const d = await taskDetail({ db: h.db, resolveWsPath: () => "." }, { projectKey: h.projectKey, taskId: a.taskId });

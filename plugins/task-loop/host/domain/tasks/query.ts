@@ -12,8 +12,13 @@ import {
 import {
   TaskNotFoundError,
 } from "./errors.js";
+import {
+  createSettlementRepo,
+  parseAcResults,
+} from "../../db/repositories/settlement-repo.js";
 import type {
   SessionTaskLinkCard,
+  TaskAcResult,
   TaskActor,
   TaskPrerequisiteSummary,
   TaskRecordEntry,
@@ -231,6 +236,16 @@ export interface QueryTaskResult {
   waitingOnMe?: TaskPrerequisiteSummary[];
   records?: TaskRecordEntry[];
   sessions?: SessionTaskLinkCard[];
+  /**
+   * 最新结算的逐条 AC 状态（plugin-task-loop/1.18-b 判例——读面缺口补齐）：有结算史即带出
+   * （seq/result/acResults/createdAt），主会话核验 AC 逐条完成状态不再需要直查库。
+   */
+  latestSettlement?: {
+    seq: number;
+    result: "success" | "blocked";
+    acResults: TaskAcResult[];
+    createdAt: string;
+  };
 }
 
 /** Interface 1 queryTask：身份解析 + 容器摘要 + include 四节门控读 */
@@ -270,6 +285,18 @@ export async function queryTask(deps: TasksVerbDeps, input: {
 
   if (include.sessions === true) {
     result.sessions = readTaskSessions(db, row);
+  }
+
+  // 最新结算逐条 AC 状态（1.18-b 判例——恒带出，无结算史键缺席）
+  const settlements = createSettlementRepo(db).listByTask(row.id);
+  const latest = settlements[settlements.length - 1];
+  if (latest !== undefined) {
+    result.latestSettlement = {
+      seq: latest.seq,
+      result: latest.result,
+      acResults: parseAcResults(latest.ac_results_json ?? "[]"),
+      createdAt: latest.created_at,
+    };
   }
 
   return result;

@@ -40,6 +40,14 @@ function renderQueryResult(_args: unknown, value: unknown): readonly { readonly 
     ...(t.brief !== undefined ? [`- brief: ${t.brief}`] : []),
     ...(t.acceptanceCriteria !== undefined ? [`- acceptanceCriteria: ${t.acceptanceCriteria.length} items`] : []),
   ];
+  if (v.latestSettlement !== undefined) {
+    entries.push(`- latestSettlement: seq ${v.latestSettlement.seq} result=${v.latestSettlement.result} at ${v.latestSettlement.createdAt}`);
+    entries.push(
+      ...v.latestSettlement.acResults.map(
+        (ac, i) => `  - [AC-${i + 1}] ${ac.met ? "PASS" : "FAIL"} ${ac.criterion}${ac.evidence !== undefined ? ` — ${ac.evidence}` : ""}`,
+      ),
+    );
+  }
   if (v.prerequisites !== undefined) {
     entries.push(
       v.prerequisites.length === 0
