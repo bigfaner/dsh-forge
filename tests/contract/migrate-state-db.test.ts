@@ -90,7 +90,9 @@ function buildLegacyHome(): string {
 function runScript(home: string, extra: readonly string[] = []): string {
   return execFileSync(
     process.execPath,
-    [SCRIPT, '--home', home, '--registry', join(home, 'registry-snapshot.json'), '--skip-process-check', ...extra],
+    // --skip-task-loop：task-loop 搬行段 fixture 驱动测试归 plugins/task-loop/tests/migration/
+    //（本 fixture 为 project 段最小合成 schema，不含 task-loop 搬行面列集——不在此混跑）
+    [SCRIPT, '--home', home, '--registry', join(home, 'registry-snapshot.json'), '--skip-process-check', '--skip-task-loop', ...extra],
     { encoding: 'utf8', cwd: REPO_ROOT },
   )
 }

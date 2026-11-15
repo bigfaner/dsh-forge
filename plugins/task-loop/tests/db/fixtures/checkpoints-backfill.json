@@ -1,7 +1,7 @@
 {
   "category": "checkpoints-backfill",
   "description": "判例④：checkpoints 回填命中与未命中——旧 implementation_checkpoints.proposal_id 经旧库 proposals.id→slug 查表回填；未命中 fail-loud 禁悬空（entities.md §3.3 迁移注记）。",
-  "expectation": "cp-1 命中回填 slug='alpha-slug'；cp-2 未命中（p-9 不在表）入人工清单，禁自动置 NULL。",
+  "expectation": "cp-1 命中回填 slug='alpha-slug'；cp-2 未命中（p-9 不在表）→ 迁移脚本 fail-loud 中断（迁移回填禁悬空，与运行期弱引用可悬空两口径显式区分）。",
   "oldDb": {
     "proposals": [
       { "id": "p-1", "slug": "alpha-slug" }

@@ -9,6 +9,33 @@
 //        回填失败 → 隔离区表 project_bugs_quarantine（原行 JSON 全量留档，禁丢弃）；
 //      · source_task_id 逐条核验（ATTACH 旧库查 tasks 表），失败 → 人工清单（禁置 NULL，原值照搬）；
 //      · recurrence_of 链闭合校验（迁移全集内查前驱），断链 → 人工清单（原值照搬）。
+//   ②b task-loop 搬行段（plugin-task-loop 1.16——proposal plugin-task-loop §二迁移段 +
+//      entities.md 迁移映射终态）：旧工作区库 tasks + task_edges + task_records +
+//      task_session_links + implementation_checkpoints 五表搬行进 task-loop.db 新线六表。
+//      断代表注记（退役列/表处置——列映射留痕单源 = TASK_LOOP_COLUMN_MAP_DOC，随每次运行落
+//      manifest JSON，脚本头部注释同源）：
+//      · tasks.blocked_reason：退役不建列——旧值回填该任务最新非 submit 动词 records 行 note
+//        （blocked 语境前缀）；无可挂流水行 → 人工清单禁丢弃；
+//      · tasks.source_kind / source_id / mode：退役不建（容器语义 slug 化）——manifest 处置留痕；
+//      · tasks.e2e_attribution（旧 v8 列）：退役随旧库归档——新线无对应列；
+//      · task_records.ac_json / commit_hash（含 gate_json/files_json/record_fields_json 镜像三列）：
+//        退役随旧库归档——结算数据单源 = task_settlements；历史 submit 行整体不搬（断代），
+//        不回填 task_settlements（结算单源自新线起记）；
+//      · tasks_surface_archive：surface 概念整体退役——不迁入新线、旧表随旧库只读归档；
+//      · app_key_logs：不搬——task-loop 零写入面，旧表随旧库归档；
+//      · goal_id：不建（注记：旧库无此列；新线零 goal 概念词——task 唯一验收承接面 = 自带 AC 判据）。
+//      列映射：task_desc→brief、vars_json→context_json、coverage→coverage_threshold（改名直搬）；
+//      source_task_id→fix_of_task_id（值随 UUID 改写映射改写）；旧 `{slug}:{local_id}` id 与各表
+//      INTEGER 自增 id → 纯 UUID 一次性改写，edges/tsl/records 的 task_id 值随迁（回填失败禁 NULL
+//      留人工清单）；fix 判别三段回填：source_task_id 非空直搬 / `fix-%` 前缀经 task_edges
+//      (origin='fix-chain') 反查（恰一候选直判）/ 不可判入人工清单禁自动置 NULL；checkpoints 经
+//      旧库 proposals.id→slug 查表回填（slug UNIQUE 一一映射；未命中 fail-loud 中断——迁移回填
+//      禁悬空，与运行期弱引用可悬空两口径显式区分）。
+//      staged 写临时文件落 {home}/forge/tmp/task-loop-migrate（禁入数据树）+ 行数/判例链抽样
+//      校验门 + 原子替换（原库改名保留）+ 幂等标记（task_migrate_state 逐 dir fingerprint）+
+//      新线 schema version>1 拒绝重跑。执行前确认无 dev/安装包双进程持句柄（main 入口统一前置
+//      assertNoHostProcesses + task-loop.db 排他打开兜底）。旧库任务域 per-workspace 单库封闭
+//      （零跨库引用），逐 dir 独立 UUID 映射域。
 //   ③ 存量 {home}/forge-workspaces/ 目录搬迁：staged copy + 文件数/字节/哈希校验 +
 //      原目录改名保留 + 同卷断言（staged 与目标同卷 → rename 原子）。
 //   ④ 前置：dsh-forge-dev / dsh-forge 双进程持句柄检查（任一在场即中止）。
@@ -21,11 +48,11 @@
 //
 // 用法：
 //   node scripts/migrate-state-db.mjs [--home <DSH_HOME>] [--registry <snapshot.json>]
-//        [--workspaces-to <dir>] [--skip-db] [--skip-workspaces] [--skip-process-check]
+//        [--workspaces-to <dir>] [--skip-db] [--skip-task-loop] [--skip-workspaces] [--skip-process-check]
 // 诊断：JSONL 追加 {home}/forge/db/project/migrate-state-db-diag.log（emitDiag 等价面——
 // 脚本态无 cordis ctx，落盘 JSONL + stdout；字段与 DIAG_EVENT 同形）。
 import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   copyFileSync,
   existsSync,
@@ -82,6 +109,7 @@ function parseArgs(argv) {
     registry: null,
     workspacesTo: null,
     skipDb: false,
+    skipTaskLoop: false,
     skipWorkspaces: false,
     skipProcessCheck: false,
   }
@@ -91,6 +119,7 @@ function parseArgs(argv) {
     else if (a === '--registry') args.registry = resolve(argv[++i])
     else if (a === '--workspaces-to') args.workspacesTo = resolve(argv[++i])
     else if (a === '--skip-db') args.skipDb = true
+    else if (a === '--skip-task-loop') args.skipTaskLoop = true
     else if (a === '--skip-workspaces') args.skipWorkspaces = true
     else if (a === '--skip-process-check') args.skipProcessCheck = true
     else throw new Error(`未知参数：${a}`)
@@ -134,6 +163,638 @@ function readLegacyRow(columns, row) {
   const out = {}
   for (const c of Object.keys(row)) out[c] = columns.has(c) ? row[c] : null
   return out
+}
+
+
+// ════════ task-loop 搬行段（plugin-task-loop 1.16） ════════
+// 断代表注记 + 逐表列映射留痕单源 = TASK_LOOP_COLUMN_MAP_DOC（随每次运行落 manifest JSON，
+// 脚本头部注释同源）。DDL 单源锚 = plugins/task-loop/host/db/migrations/version-1.ts
+// TASK_LOOP_MIGRATIONS[0].statements 逐字镜像——DDL pin 测试断言两侧逐语句等价，漂移即测试红。
+
+/** task-loop.db 新线 v1 DDL（version-1.ts 逐字镜像——patch 由 version-1.ts 机械抽取生成）。 */
+export const TASK_LOOP_V1_STATEMENTS = [
+`CREATE TABLE schema_meta (
+    version     INTEGER PRIMARY KEY,
+    applied_at  TEXT    NOT NULL
+)`,
+`CREATE TABLE task_tasks (
+    id              TEXT PRIMARY KEY,                      -- 纯 UUID（写入点 addTask/batchAddTasks 生成；业务唯一由 uq_task_tasks_project_slug_local 承担）
+    slug            TEXT NOT NULL,                         -- 容器键（通用执行容器，无容器主表）
+    local_id        TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    task_type       TEXT NOT NULL,
+    task_status     TEXT NOT NULL DEFAULT 'pending'
+                    CONSTRAINT ck_task_tasks_status CHECK (task_status IN
+                      ('pending', 'in_progress', 'completed', 'blocked',
+                       'suspended', 'interrupted', 'skipped', 'rejected')),
+    brief           TEXT,                                  -- 任务简报正文内容源（worker 简报 TITLE 后裸文本段）
+    ac_json         TEXT,                                  -- AC 承担面（任务定义侧清单）——task 唯一验收承接面
+    priority        TEXT CONSTRAINT ck_task_tasks_priority CHECK (priority IN ('P0', 'P1', 'P2')),
+    estimated_time  TEXT,                                  -- 未来 UI 消费预留；当前读取面 = list/query 卡片透传
+    scope_json      TEXT,                                  -- 受影响文件范围（结构化对象 JSON）
+    context_json    TEXT,                                  -- 附加上下文注入（KEY=VALUE JSON）
+    fix_of_task_id  TEXT REFERENCES task_tasks(id),        -- fix 链前驱（域内 FK 可空）——fix 判别单源
+    breaking        INTEGER NOT NULL DEFAULT 0
+                    CONSTRAINT ck_task_tasks_breaking CHECK (breaking IN (0, 1)),
+    coverage_threshold REAL,                               -- 验收阈值期望值（0–1；实测面在 settlements gate_coverage）
+    complexity      TEXT NOT NULL DEFAULT 'medium'
+                    CONSTRAINT ck_task_tasks_complexity CHECK (complexity IN ('low', 'medium', 'high')),
+    project_key       TEXT NOT NULL,                       -- 行级归属键（cwd 纯函数派生，无 default）
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    CONSTRAINT uq_task_tasks_project_slug_local UNIQUE (project_key, slug, local_id)
+)`,
+`CREATE INDEX idx_task_tasks_container ON task_tasks(project_key, slug, task_status)`,
+`CREATE INDEX idx_task_tasks_fix       ON task_tasks(fix_of_task_id)`,
+`CREATE TABLE task_settlements (
+    id            TEXT PRIMARY KEY,                        -- 定位键（纯 UUID）——全局单调性由 (created_at, seq) 承担，id 仅 tiebreaker
+    task_id       TEXT NOT NULL REFERENCES task_tasks(id), -- 任务定位；归属/容器维度经 JOIN tasks 传导
+    seq           INTEGER NOT NULL,                        -- 同 task_id 链内单调递增
+    fix_root_id   TEXT,                                    -- fix 链身份列：链首结算行 id（可空 = 非 fix 链）
+    result        TEXT NOT NULL CONSTRAINT ck_task_settle_result
+                    CHECK (result IN ('success', 'blocked')),
+    ac_results_json TEXT NOT NULL DEFAULT '[]',            -- AC 核销快照（[{criterion, met, evidence?}] 单列同位）
+    commit_hash   TEXT,                                    -- fix density 口径消费列
+    evidence_json TEXT,                                    -- submit 全语义载荷终态聚合（success/blocked 两形同构）
+    created_at    TEXT NOT NULL                            -- 原结算时戳
+)`,
+`CREATE UNIQUE INDEX uq_task_settle_seq ON task_settlements(task_id, seq)`,
+`CREATE TRIGGER trg_task_settlements_no_update BEFORE UPDATE ON task_settlements
+BEGIN SELECT RAISE(ABORT, 'task_settlements: append-only violation (update)'); END`,
+`CREATE TRIGGER trg_task_settlements_no_delete BEFORE DELETE ON task_settlements
+BEGIN SELECT RAISE(ABORT, 'task_settlements: append-only violation (delete)'); END`,
+`CREATE TABLE task_checkpoints (
+    id                    TEXT PRIMARY KEY,                -- 纯 UUID（定位键）
+    project_key             TEXT NOT NULL,
+    slug        TEXT NOT NULL,                             -- 弱引用锚，零 FK
+    mark                  TEXT NOT NULL
+                          CONSTRAINT ck_task_cp_mark CHECK (mark IN
+                            ('first-pass-complete', 'retro-done', 'review-wave-N',
+                             'stabilized', 'merged', 'derived-to-child')),
+    wave_seq              INTEGER,
+    created_at            TEXT NOT NULL,
+    base_commit_hash      TEXT NOT NULL,
+    tasks_total           INTEGER NOT NULL,
+    commits_total         INTEGER NOT NULL,
+    fixes_total           INTEGER NOT NULL,
+    evidence_debts_total  INTEGER NOT NULL
+)`,
+`CREATE UNIQUE INDEX uq_task_cp_milestone ON task_checkpoints(project_key, slug, mark, wave_seq)
+  WHERE mark IN ('first-pass-complete', 'retro-done', 'review-wave-N', 'stabilized', 'merged')`,
+`CREATE INDEX idx_task_cp_container ON task_checkpoints(project_key, slug, created_at)`,
+`CREATE TRIGGER trg_task_checkpoints_no_update BEFORE UPDATE ON task_checkpoints
+BEGIN SELECT RAISE(ABORT, 'task_checkpoints: append-only violation (update)'); END`,
+`CREATE TRIGGER trg_task_checkpoints_no_delete BEFORE DELETE ON task_checkpoints
+BEGIN SELECT RAISE(ABORT, 'task_checkpoints: append-only violation (delete)'); END`,
+`CREATE TABLE task_edges (
+    task_id          TEXT NOT NULL REFERENCES task_tasks(id),
+    prerequisite_id  TEXT NOT NULL REFERENCES task_tasks(id),
+    origin           TEXT NOT NULL
+                     CONSTRAINT ck_task_edges_origin CHECK (origin IN ('manual', 'fix-chain', 'autoconfig')),
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    PRIMARY KEY (task_id, prerequisite_id)
+)`,
+`CREATE INDEX idx_task_edges_prerequisite ON task_edges(prerequisite_id)`,
+`CREATE TABLE task_session_links (
+    id          TEXT PRIMARY KEY,                      -- 纯 UUID（定位键）
+    task_id     TEXT NOT NULL REFERENCES task_tasks(id),
+    session_id  TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    CONSTRAINT uq_task_tsl_task_session UNIQUE (task_id, session_id)
+)`,
+`CREATE INDEX idx_task_tsl_session ON task_session_links(session_id)`,
+`CREATE TABLE task_records (
+    id                 TEXT PRIMARY KEY,               -- 纯 UUID（定位键）
+    task_id            TEXT NOT NULL REFERENCES task_tasks(id),
+    verb               TEXT NOT NULL,
+    from_status        TEXT,
+    to_status          TEXT,
+    note               TEXT,                           -- 非 submit 动词语境载荷（reason+summary 归一）
+    payload_json       TEXT,                           -- 非 submit 动词的结构化载荷位
+    dispatch_digest    TEXT,
+    loop_sourced       INTEGER NOT NULL DEFAULT 0
+                       CONSTRAINT ck_task_records_loop CHECK (loop_sourced IN (0, 1)),
+    actor              TEXT NOT NULL
+                       CONSTRAINT ck_task_records_actor CHECK (actor IN ('plugin-tool', 'ui', 'core')),
+    session_id         TEXT,
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL
+)`,
+`CREATE INDEX idx_task_records_task    ON task_records(task_id, created_at)`,
+`CREATE INDEX idx_task_records_session ON task_records(session_id)`,
+`CREATE TRIGGER trg_task_records_no_update BEFORE UPDATE ON task_records
+BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (update)'); END`,
+`CREATE TRIGGER trg_task_records_no_delete BEFORE DELETE ON task_records
+BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (delete)'); END`,
+];
+
+/** 列映射留痕（断代表注记详见脚本头部注释，与此同源）。 */
+export const TASK_LOOP_COLUMN_MAP_DOC = {
+  task_tasks: {
+    direct: ['slug', 'local_id', 'title', 'task_type', 'task_status', 'ac_json', 'priority', 'estimated_time', 'breaking', 'complexity', 'created_at', 'updated_at'],
+    renamed: { task_desc: 'brief', vars_json: 'context_json', coverage: 'coverage_threshold', source_task_id: 'fix_of_task_id' },
+    added: {
+      id: '旧 {slug}:{local_id} → 纯 UUID 一次性改写',
+      project_key: 'cwd 纯函数派生（state.db ws_path 映射 / 目录名自证）——派生失败落隔离区禁 NULL',
+      scope_json: '旧库无对应列——全 NULL（未声明触点）',
+    },
+    retired: {
+      blocked_reason: '退役不建列——旧值回填该任务最新非 submit 动词 records 行 note（blocked 语境）；无可挂流水行 → 人工清单',
+      source_kind: '退役不建（容器语义 slug 化）——manifest 留痕',
+      source_id: '退役不建（容器语义 slug 化）——manifest 留痕',
+      mode: '退役不建（容器语义 slug 化）——manifest 留痕',
+      e2e_attribution: '退役随旧库归档（旧 v8 列——新线无对应列）',
+      surface_key: 'v4 已摘除（旧库终态无此列）——surface 概念整体退役',
+      surface_type: 'v4 已摘除（旧库终态无此列）——surface 概念整体退役',
+    },
+  },
+  task_edges: {
+    direct: ['origin', 'created_at', 'updated_at'],
+    rewritten: { task_id: 'UUID 改写映射随迁', prerequisite_id: 'UUID 改写映射随迁' },
+    orphan: '端点任务不在迁移全集 → 人工清单（禁 NULL）',
+  },
+  task_session_links: {
+    direct: ['session_id', 'created_at', 'updated_at'],
+    rewritten: { id: '旧自增 → 纯 UUID', task_id: 'UUID 改写映射随迁' },
+    orphan: 'task_id 无任务行 → 人工清单（禁 NULL）',
+  },
+  task_records: {
+    direct: ['verb', 'from_status', 'to_status', 'dispatch_digest', 'loop_sourced', 'actor', 'session_id', 'created_at', 'updated_at'],
+    fused: { note: '旧 reason+summary 融合（非 submit 行）；blocked_reason 退役值按 blocked 语境回填最新动词行' },
+    rewritten: { id: '旧自增 → 纯 UUID', task_id: 'UUID 改写映射随迁' },
+    generationGap: 'verb=submit 行整体不搬（断代）——不回填 task_settlements（结算单源自新线起记）',
+    retired: {
+      ac_json: '退役随旧库归档——结算数据单源 = task_settlements',
+      commit_hash: '退役随旧库归档——结算数据单源 = task_settlements',
+      files_json: '退役随旧库归档——submit 结构化证据全族归 settlements.evidence_json',
+      gate_json: '退役随旧库归档——submit 结构化证据全族归 settlements.evidence_json',
+      record_fields_json: '退役随旧库归档——submit 结构化证据全族归 settlements.evidence_json',
+    },
+    added: { payload_json: '旧库无对应列——全 NULL' },
+  },
+  task_checkpoints: {
+    direct: ['mark', 'wave_seq', 'created_at', 'base_commit_hash', 'tasks_total', 'commits_total', 'fixes_total', 'evidence_debts_total'],
+    rewritten: { id: '旧自增 → 纯 UUID（新线零外部 FK 指向 checkpoints，无引用值随迁）' },
+    backfilled: {
+      slug: '旧 proposal_id 经旧库 proposals.id→slug 查表回填（slug UNIQUE 一一映射；未命中 fail-loud 中断——迁移回填禁悬空）',
+      project_key: 'cwd 纯函数派生回填',
+    },
+  },
+  notMigrated: {
+    task_settlements: '全新表——历史 submit 行不回填（旧容器指标断代明示）',
+    tasks_surface_archive: 'surface 概念整体退役——不迁入新线、旧表随旧库只读归档',
+    app_key_logs: '不搬——task-loop 零写入面，旧表随旧库归档',
+    goal_id: '不建（注记：旧库无此列；新线零 goal 概念词——task 唯一验收承接面 = 自带 AC 判据）',
+  },
+}
+
+/** 幂等标记表 + tasks 隔离区（project_migrate_state / project_bugs_quarantine 同构）。 */
+function ensureTaskLoopMigrateTables(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS task_migrate_state (
+    step          TEXT PRIMARY KEY,
+    fingerprint   TEXT NOT NULL,
+    done_at       TEXT NOT NULL,
+    summary_json  TEXT NOT NULL
+)`)
+  db.exec(`CREATE TABLE IF NOT EXISTS task_migrate_quarantine (
+    source_dir     TEXT NOT NULL,
+    legacy_id      TEXT NOT NULL,
+    reason         TEXT NOT NULL,
+    source_db      TEXT NOT NULL,
+    row_json       TEXT NOT NULL,
+    quarantined_at TEXT NOT NULL,
+    PRIMARY KEY (source_dir, legacy_id)
+)`)
+}
+
+/** v1 DDL 装配（全新 staged 库首见 schema_meta 时整套落地——已迁移库幂等跳过）。 */
+function ensureTaskLoopSchema(db) {
+  if (!hasTable(db, 'schema_meta')) {
+    for (const s of TASK_LOOP_V1_STATEMENTS) db.exec(s)
+  }
+  // 版本线锚行：全新库落 v1（schema_meta 缺行 = 未锚定——补写，门禁由此可判）
+  const cur = db.prepare(`SELECT MAX(version) AS v FROM schema_meta`).get()
+  if ((cur?.v ?? 0) < 1) {
+    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (1, ?)`).run(new Date().toISOString())
+  }
+  ensureTaskLoopMigrateTables(db)
+}
+
+/** 新线版本门：task-loop.db schema version>1 = 已进入新线演化——迁移脚本拒绝重跑。 */
+function assertTaskLoopVersionGate(db) {
+  if (!hasTable(db, 'schema_meta')) return
+  const row = db.prepare(`SELECT MAX(version) AS v FROM schema_meta`).get()
+  if (row.v > 1) {
+    throw new Error(`task-loop.db 新线 schema version=${row.v} > 1——迁移脚本拒绝重跑（版本漂移需人工核验）`)
+  }
+}
+
+/** dir → project_key（state.db ws_path 映射优先；`{flatten}@{hash8}` 孤目录名自证兜底；不可得 = null）。 */
+function taskLoopProjectKeyOf(dirName, dirNameToWsPath) {
+  const mapped = dirNameToWsPath.get(dirName)
+  if (mapped !== undefined) return projectKeyOf(mapped)
+  if (DIR_NAME_RE.test(dirName)) return dirName
+  return null
+}
+
+/** reason+summary 融合（非空段以「 ｜ 」连接——note 归一单点）。 */
+function fuseNote(...parts) {
+  return parts.filter((p) => p !== null && p !== undefined && p !== '').join(' ｜ ') || null
+}
+
+/** 人工清单条目登记（禁置 NULL 的不可判值原样照搬）。 */
+function manualEntry(acc, table, legacyId, field, value, reason) {
+  acc.manualList.push({ table, legacyId: String(legacyId), field, value: value === null ? '(null)' : String(value), reason })
+}
+
+/** tasks 行隔离区（project_key 派生失败——原行 JSON 全量留档，禁丢弃禁置 NULL）。 */
+function quarantineTaskRow(db, acc, dirName, legacyFile, legacyId, reason, row, nowIso) {
+  db.prepare(
+    `INSERT OR IGNORE INTO task_migrate_quarantine (source_dir, legacy_id, reason, source_db, row_json, quarantined_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(dirName, String(legacyId), reason, legacyFile, JSON.stringify(row), nowIso)
+  acc.quarantined += 1
+}
+
+/** 旧库是否含 task-loop 搬行面数据（五表任一在场即处理）。 */
+function legacyHasTaskLoopTables(legacyFile) {
+  const legacy = openExclusive(legacyFile)
+  try {
+    return (
+      hasTable(legacy, 'tasks') ||
+      hasTable(legacy, 'task_edges') ||
+      hasTable(legacy, 'task_records') ||
+      hasTable(legacy, 'task_session_links') ||
+      hasTable(legacy, 'implementation_checkpoints')
+    )
+  } finally {
+    legacy.close()
+  }
+}
+
+/**
+ * 单旧库搬行（tasks + task_edges + task_records + task_session_links + implementation_checkpoints
+ * 五表，单事务由调用方圈定）：UUID 改写映射 + fix 判别三段 + checkpoints slug 回填。
+ * projectKey = null（归属不可派生）时 tasks 行落隔离区，其余表行入人工清单。
+ */
+function migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc) {
+  const legacy = openExclusive(legacyFile)
+  try {
+    const hasTasks = hasTable(legacy, 'tasks')
+    const hasEdges = hasTable(legacy, 'task_edges')
+    const hasRecords = hasTable(legacy, 'task_records')
+    const hasTsl = hasTable(legacy, 'task_session_links')
+    const hasCps = hasTable(legacy, 'implementation_checkpoints')
+    if (!hasTasks && !hasEdges && !hasRecords && !hasTsl && !hasCps) return
+
+    // ── tasks：pass1 建 UUID 映射 + fix 判别预判；pass2 落行（前驱/后继行序容错） ──
+    const idMap = new Map()
+    const quarantinedIds = new Set() // 隔离区任务——附属行随迁转人工清单
+    const deferredFix = [] // fix_of 延迟回填（FK 插入序无关——环/前驱后行序均安全） // 旧 task id → 新 UUID
+    const fixDecision = new Map() // 旧 task id → { kind: 'direct'|'reverse'|'none', value?|candidates? }
+    const blockedByTask = new Map() // 旧 task id → blocked_reason（退役列事实归流水）
+    if (hasTasks) {
+      const cols = tableColumns(legacy, 'tasks')
+      const rows = legacy.prepare(`SELECT * FROM tasks ORDER BY id ASC`).all().map((r) => readLegacyRow(cols, r))
+      // fix 反查候选集（task_edges origin='fix-chain'——旧 {slug}:{local_id} 键域）
+      const fixCandidates = new Map()
+      if (hasEdges) {
+        for (const e of legacy.prepare(`SELECT task_id, prerequisite_id FROM task_edges WHERE origin = 'fix-chain'`).all()) {
+          const list = fixCandidates.get(e.task_id) ?? []
+          list.push(e.prerequisite_id)
+          fixCandidates.set(e.task_id, list)
+        }
+      }
+      for (const r of rows) {
+        idMap.set(r.id, randomUUID())
+        if (r.blocked_reason !== null && r.blocked_reason !== '') blockedByTask.set(r.id, r.blocked_reason)
+        if (r.source_task_id !== null && r.source_task_id !== '') {
+          fixDecision.set(r.id, { kind: 'direct', value: r.source_task_id })
+        } else if ((r.local_id ?? '').startsWith('fix-')) {
+          fixDecision.set(r.id, { kind: 'reverse', candidates: fixCandidates.get(r.id) ?? [] })
+        } else {
+          fixDecision.set(r.id, { kind: 'none' })
+        }
+      }
+      const insertTask = db.prepare(
+        `INSERT INTO task_tasks (id, slug, local_id, title, task_type, task_status, brief, ac_json, priority, estimated_time,
+         scope_json, context_json, fix_of_task_id, breaking, coverage_threshold, complexity, project_key, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      for (const r of rows) {
+        if (projectKey === null) {
+          quarantineTaskRow(db, acc, dirName, legacyFile, r.id, 'project-key-derive-failed', r, nowIso)
+          quarantinedIds.add(r.id)
+          continue
+        }
+        const d = fixDecision.get(r.id)
+        let fixOf = null
+        if (d.kind === 'direct') {
+          const mapped = idMap.get(d.value)
+          if (mapped === undefined) {
+            manualEntry(acc, 'task_tasks', r.id, 'fix_of_task_id', d.value, 'fix 前驱不在迁移全集（悬空引用）——人工核验，禁静默置 NULL')
+          } else {
+            fixOf = mapped
+          }
+        } else if (d.kind === 'reverse') {
+          const resolvable = d.candidates.filter((c) => idMap.has(c))
+          if (resolvable.length === 1) {
+            fixOf = idMap.get(resolvable[0])
+          } else if (resolvable.length === 0) {
+            manualEntry(acc, 'task_tasks', r.id, 'fix_of_task_id', '(task_edges 反查零候选)', 'fix-% 行反查零候选——人工核验，禁自动置 NULL')
+          } else {
+            manualEntry(acc, 'task_tasks', r.id, 'fix_of_task_id', JSON.stringify(d.candidates), 'fix-% 行反查多候选——禁任取，人工核验')
+          }
+        }
+        if (fixOf !== null) deferredFix.push([idMap.get(r.id), fixOf])
+        insertTask.run(
+          idMap.get(r.id), r.slug, r.local_id, r.title, r.task_type, r.task_status ?? 'pending',
+          r.task_desc ?? null, r.ac_json ?? null, r.priority ?? null, r.estimated_time ?? null,
+          null /* scope_json——旧库无对应列，全 NULL */, r.vars_json ?? null, null /* fix_of 延迟回填 */,
+          r.breaking ?? 0, r.coverage ?? null, r.complexity ?? 'medium', projectKey, r.created_at, r.updated_at,
+        )
+        acc.moved.tasks += 1
+      }
+    }
+
+    // ── task_edges：两端随 UUID 映射改写；孤儿端 → 人工清单 ──
+    // fix_of 延迟回填（前驱未落库——隔离区等）→ 人工清单，禁静默置 NULL
+    for (const [newId, fixOf] of deferredFix) {
+      const landed = db.prepare('SELECT 1 FROM task_tasks WHERE id = ?').get(fixOf)
+      if (landed === undefined) {
+        manualEntry(acc, 'task_tasks', newId, 'fix_of_task_id', '(fix 前驱未落库)', 'fix 前驱不在新线任务集（隔离区/缺行）——人工核验，禁自动置 NULL')
+        continue
+      }
+      db.prepare('UPDATE task_tasks SET fix_of_task_id = ? WHERE id = ?').run(fixOf, newId)
+    }
+
+    // ── fix 链环检测（WITH RECURSIVE 自环可达）——环成员入人工清单，禁自动置 NULL ──
+    {
+      const cycleRows = db.prepare(
+        `WITH RECURSIVE walk(start, node) AS (
+          SELECT id, fix_of_task_id FROM task_tasks WHERE fix_of_task_id IS NOT NULL
+          UNION
+          SELECT w.start, t.fix_of_task_id FROM walk w JOIN task_tasks t ON t.id = w.node WHERE w.node IS NOT NULL
+        )
+        SELECT DISTINCT start AS id FROM walk WHERE start = node`,
+      ).all()
+      for (const c of cycleRows) {
+        manualEntry(acc, 'task_tasks', c.id, 'fix_of_task_id', '(fix 链环检测命中)', 'fix 链环（recursive CTE 自环可达）——人工核验，禁自动置 NULL')
+      }
+    }
+    if (hasEdges) {
+      for (const e of legacy.prepare(`SELECT * FROM task_edges ORDER BY task_id ASC, prerequisite_id ASC`).all()) {
+        const t = idMap.get(e.task_id)
+        const p = idMap.get(e.prerequisite_id)
+        if (t === undefined || p === undefined || quarantinedIds.has(e.task_id) || quarantinedIds.has(e.prerequisite_id)) {
+          manualEntry(acc, 'task_edges', `${e.task_id}→${e.prerequisite_id}`, 'task_id', `${e.task_id}→${e.prerequisite_id}`, '边端点任务不在迁移全集——人工核验（原值留清单）')
+          continue
+        }
+        db.prepare(`INSERT OR IGNORE INTO task_edges (task_id, prerequisite_id, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
+          .run(t, p, e.origin, e.created_at, e.updated_at)
+        acc.moved.edges += 1
+      }
+    }
+
+    // ── task_session_links：id UUID 化 + task_id 随迁；孤儿行 → 人工清单 ──
+    if (hasTsl) {
+      for (const l of legacy.prepare(`SELECT * FROM task_session_links ORDER BY id ASC`).all()) {
+        const t = idMap.get(l.task_id)
+        if (t === undefined || quarantinedIds.has(l.task_id)) {
+          manualEntry(acc, 'task_session_links', l.id, 'task_id', l.task_id, 'session link 任务不在迁移全集（孤儿行）——人工核验，禁静默丢弃')
+          continue
+        }
+        db.prepare(`INSERT INTO task_session_links (id, task_id, session_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
+          .run(randomUUID(), t, l.session_id, l.created_at, l.updated_at)
+        acc.moved.sessionLinks += 1
+      }
+    }
+
+    // ── task_records：非 submit 行搬行（note 融合）；submit 行断代不搬；blocked_reason 归流水 ──
+    if (hasRecords) {
+      const cols = tableColumns(legacy, 'task_records')
+      const rows = legacy.prepare(`SELECT * FROM task_records ORDER BY id ASC`).all().map((r) => readLegacyRow(cols, r))
+      // blocked_reason 回填锚：每任务最新非 submit 流水行（禁 UPDATE append-only 表——构造期融合）
+      const latestNonSubmit = new Map()
+      for (const r of rows) {
+        if (r.verb !== 'submit') latestNonSubmit.set(r.task_id, r.id)
+      }
+      const insertRecord = db.prepare(
+        `INSERT INTO task_records (id, task_id, verb, from_status, to_status, note, payload_json, dispatch_digest, loop_sourced, actor, session_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      for (const r of rows) {
+        if (r.verb === 'submit') {
+          acc.submitArchived += 1 // 断代：submit 行随旧库归档——不回填 task_settlements
+          continue
+        }
+        const t = idMap.get(r.task_id)
+        if (t === undefined || quarantinedIds.has(r.task_id)) {
+          manualEntry(acc, 'task_records', r.id, 'task_id', r.task_id, '非 submit 流水行任务不在迁移全集——人工核验（原值留清单）')
+          continue
+        }
+        let note = fuseNote(r.reason, r.summary)
+        const br = blockedByTask.get(r.task_id)
+        if (br !== undefined && latestNonSubmit.get(r.task_id) === r.id) {
+          note = fuseNote(note, `blocked: ${br}`) // 退役列事实归流水——blocked 语境回填最新动词行
+          blockedByTask.delete(r.task_id)
+          acc.dispositions.push({ table: 'task_records', legacyId: String(r.id), disposition: 'blocked_reason→note', value: br })
+        }
+        insertRecord.run(
+          randomUUID(), t, r.verb, r.from_status ?? null, r.to_status ?? null, note, null /* payload_json 无源 */,
+          r.dispatch_digest ?? null, r.loop_sourced ?? 0, r.actor, r.session_id ?? null, r.created_at, r.updated_at,
+        )
+        acc.moved.records += 1
+      }
+    }
+
+    // ── implementation_checkpoints：proposal_id→slug 查表回填（未命中 fail-loud 中断） ──
+    // blocked_reason 无可挂流水行 → 人工清单（禁丢弃）
+    for (const [tid, br] of blockedByTask) {
+      manualEntry(acc, 'task_tasks', tid, 'blocked_reason', br, 'blocked_reason 退役且无可挂动词流水行——人工核验')
+    }
+
+    if (hasCps) {
+      if (projectKey === null) {
+        throw new Error(`checkpoints 搬行中止（fail-loud）：${legacyFile} 的 project_key 不可派生（目录名不自证且无 ws_path 映射）——人工归属后重跑`)
+      }
+      const slugById = new Map()
+      if (hasTable(legacy, 'proposals')) {
+        for (const p of legacy.prepare(`SELECT id, slug FROM proposals`).all()) slugById.set(p.id, p.slug)
+      }
+      for (const c of legacy.prepare(`SELECT * FROM implementation_checkpoints ORDER BY id ASC`).all()) {
+        const slug = slugById.get(c.proposal_id)
+        if (slug === undefined || slug === null) {
+          throw new Error(
+            `checkpoints slug 回填失败（fail-loud 中断）：${legacyFile} 的 implementation_checkpoints.id=${c.id} ` +
+            `proposal_id=${c.proposal_id} 在旧库 proposals 表无 slug 映射——迁移回填禁悬空（与运行期弱引用可悬空两口径显式区分）`,
+          )
+        }
+        db.prepare(
+          `INSERT INTO task_checkpoints (id, project_key, slug, mark, wave_seq, created_at, base_commit_hash, tasks_total, commits_total, fixes_total, evidence_debts_total)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(randomUUID(), projectKey, slug, c.mark, c.wave_seq ?? null, c.created_at, c.base_commit_hash, c.tasks_total, c.commits_total, c.fixes_total, c.evidence_debts_total)
+        acc.moved.checkpoints += 1
+      }
+    }
+  } finally {
+    legacy.close()
+  }
+}
+
+/** staged 校验门：行数对账 + 判例链抽样 + FK 全库零违例——任一不达即 fail-loud 拒替换。 */
+function verifyTaskLoopStaged(db) {
+  const counts = {
+    tasks: db.prepare(`SELECT COUNT(*) AS c FROM task_tasks`).get().c,
+    edges: db.prepare(`SELECT COUNT(*) AS c FROM task_edges`).get().c,
+    sessionLinks: db.prepare(`SELECT COUNT(*) AS c FROM task_session_links`).get().c,
+    records: db.prepare(`SELECT COUNT(*) AS c FROM task_records`).get().c,
+    checkpoints: db.prepare(`SELECT COUNT(*) AS c FROM task_checkpoints`).get().c,
+    settlements: db.prepare(`SELECT COUNT(*) AS c FROM task_settlements`).get().c,
+  }
+  // 幂等口径：对照值 = task_migrate_state 逐 dir 标记累计（含本轮 movedDelta，重跑安全）
+  const expected = { tasks: 0, edges: 0, sessionLinks: 0, records: 0, checkpoints: 0 }
+  for (const row of db.prepare(`SELECT summary_json FROM task_migrate_state WHERE step LIKE 'task-loop:%' AND step != 'task-loop:section'`).all()) {
+    const m = JSON.parse(row.summary_json).moved ?? {}
+    for (const k of Object.keys(expected)) expected[k] += m[k] ?? 0
+  }
+  for (const k of Object.keys(expected)) {
+    if (counts[k] !== expected[k]) throw new Error(`校验门失败：${k} 行数 ${counts[k]} ≠ 累计搬行 ${expected[k]}`)
+  }
+  // 判例链抽样：fix 链闭合（fix_of_task_id 全指在场任务）
+  const danglingFix = db.prepare(`SELECT COUNT(*) AS c FROM task_tasks t WHERE t.fix_of_task_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM task_tasks p WHERE p.id = t.fix_of_task_id)`).get().c
+  if (danglingFix !== 0) throw new Error(`判例链抽样失败：fix_of_task_id 悬空引用 ${danglingFix} 行——禁悬空`)
+  // 判例链抽样：submit 断代（新线 records 内零 submit 行）
+  const submitInTarget = db.prepare(`SELECT COUNT(*) AS c FROM task_records WHERE verb = 'submit'`).get().c
+  if (submitInTarget !== 0) throw new Error(`断代门失败：新线 task_records 混入 submit 行 ${submitInTarget} 条（应随旧库归档）`)
+  // 判例链抽样：checkpoints slug 全回填
+  const cpNoSlug = db.prepare(`SELECT COUNT(*) AS c FROM task_checkpoints WHERE slug IS NULL OR slug = ''`).get().c
+  if (cpNoSlug !== 0) throw new Error(`判例链抽样失败：task_checkpoints 空 slug ${cpNoSlug} 行——回填禁悬空`)
+  // FK 全库复验（foreign_keys 开启连接上插入，双保险）
+  const fkIssues = db.prepare(`PRAGMA foreign_key_check`).all()
+  if (fkIssues.length !== 0) throw new Error(`FK 复验失败：foreign_key_check 非空（${JSON.stringify(fkIssues.slice(0, 3))}）`)
+  return counts
+}
+
+/** 人工清单 md 落盘（追加去重——同 table#id 同 field 不重写，重跑安全）。 */
+function writeTaskLoopManualList(dbDir, manualList) {
+  if (manualList.length === 0) return
+  const manualPath = join(dbDir, 'migrate-task-loop-manual-review.md')
+  let existing = ''
+  try {
+    existing = readFileSync(manualPath, 'utf8')
+  } catch {
+    /* 首次创建 */
+  }
+  for (const m of manualList) {
+    const line = `- [ ] ${m.table}#${m.legacyId} (${m.field}) = ${m.value} —— ${m.reason}\n`
+    if (existing.includes(line)) continue
+    appendFileSync(manualPath, line, 'utf8')
+    existing += line
+  }
+  emitDiag('warn', 'task-loop-migrate', `人工清单 ${manualList.length} 条（fix 判别不可判 / 孤儿行 / blocked_reason 无可挂流水——原值照搬禁置 NULL）：${manualPath}`)
+}
+
+/**
+ * task-loop 搬行段主流程：staged 快照（forge/tmp）→ 逐旧库单事务搬行 → 校验门 →
+ * 幂等标记 → 人工清单/manifest 留痕 → 原子替换（原库改名保留）。返回搬行汇总。
+ */
+export function runTaskLoopMigration(args, dirNameToWsPath, nowIso) {
+  const dbDir = join(args.home, 'forge', 'db', 'task-loop')
+  const target = join(dbDir, 'task-loop.db')
+  const tmpDir = join(args.home, 'forge', 'tmp', 'task-loop-migrate')
+  mkdirSync(dbDir, { recursive: true })
+  mkdirSync(tmpDir, { recursive: true })
+  const staged = join(tmpDir, 'task-loop.db.staged-migrate')
+  for (const suffix of ['', '-wal', '-shm']) {
+    const p = `${staged}${suffix}`
+    if (existsSync(p)) rmSync(p, { force: true })
+  }
+  // staged 快照：目标在场 = VACUUM INTO 一致快照（幂等重跑基座）；缺席 = 全新空库
+  if (existsSync(target)) {
+    const src = openExclusive(target)
+    try {
+      src.pragma('wal_checkpoint(TRUNCATE)')
+      src.exec(`VACUUM INTO '${staged.replaceAll("'", "''")}'`)
+    } finally {
+      src.close()
+    }
+  } else {
+    openExclusive(staged).close()
+  }
+
+  const acc = {
+    moved: { tasks: 0, edges: 0, sessionLinks: 0, records: 0, checkpoints: 0 },
+    quarantined: 0,
+    submitArchived: 0,
+    manualList: [],
+    dispositions: [],
+    migratedDirs: [],
+    skippedDirs: [],
+  }
+  const db = openExclusive(staged)
+  try {
+    db.pragma('foreign_keys = ON')
+    ensureTaskLoopSchema(db)
+    assertTaskLoopVersionGate(db)
+    const dirs = existsSync(args.workspacesFrom)
+      ? readdirSync(args.workspacesFrom, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort()
+      : []
+    for (const dirName of dirs) {
+      const legacyFile = join(args.workspacesFrom, dirName, 'forge.db')
+      if (!existsSync(legacyFile)) continue
+      if (!legacyHasTaskLoopTables(legacyFile)) continue
+      const fp = `${statSync(legacyFile).size}:${statSync(legacyFile).mtimeMs}`
+      const step = `task-loop:${dirName}`
+      const done = db.prepare(`SELECT fingerprint FROM task_migrate_state WHERE step = ?`).get(step)
+      if (done !== undefined && done.fingerprint === fp) {
+        acc.skippedDirs.push(dirName)
+        emitDiag('info', 'task-loop-migrate', `旧库已迁移且源未变（fingerprint 同）——跳过：${dirName}`)
+        continue
+      }
+      const projectKey = taskLoopProjectKeyOf(dirName, dirNameToWsPath)
+      const before = { ...acc.moved }
+      const apply = db.transaction(() => migrateLegacyTaskDb(db, legacyFile, projectKey, dirName, nowIso, acc))
+      apply()
+      const movedDelta = Object.fromEntries(Object.entries(acc.moved).map(([k, v]) => [k, v - before[k]]))
+      db.prepare(`INSERT OR REPLACE INTO task_migrate_state (step, fingerprint, done_at, summary_json) VALUES (?, ?, ?, ?)`)
+        .run(step, fp, nowIso, JSON.stringify({ projectKey, moved: movedDelta }))
+      acc.migratedDirs.push(dirName)
+    }
+    acc.counts = verifyTaskLoopStaged(db)
+    db.prepare(`INSERT OR REPLACE INTO task_migrate_state (step, fingerprint, done_at, summary_json) VALUES (?, ?, ?, ?)`)
+      .run('task-loop:section', dirs.join(','), nowIso, JSON.stringify({ migratedDirs: acc.migratedDirs }))
+  } finally {
+    db.close()
+  }
+
+  // 留痕：列映射 manifest（forge/tmp 临时区——禁入数据树）+ 人工清单（db 侧，project 先例同位）
+  const manifestPath = join(tmpDir, `manifest-${nowIso.replace(/[:.]/g, '-')}.json`)
+  writeFileSync(manifestPath, JSON.stringify({ columnMap: TASK_LOOP_COLUMN_MAP_DOC, ...acc }, null, 2), 'utf8')
+  writeTaskLoopManualList(dbDir, acc.manualList)
+
+  // 原子替换：原库改名保留（回滚点）→ staged 就位（WAL 侧车随旧文件清除——staged 无 WAL）
+  if (existsSync(target)) {
+    const keepDb = `${target}.pre-migrate-${nowIso.replace(/[:.]/g, '-')}`
+    renameSync(target, keepDb)
+    for (const suffix of ['-wal', '-shm']) {
+      const p = `${target}${suffix}`
+      if (existsSync(p)) unlinkSync(p)
+    }
+    try {
+      renameSync(staged, target)
+    } catch (cause) {
+      renameSync(keepDb, target)
+      throw new Error(`staged task-loop.db 换回失败（已回滚）：${cause.message}`)
+    }
+    emitDiag('info', 'task-loop-migrate', `task-loop.db 原子替换完成（原库改名保留 ${keepDb}）`)
+  } else {
+    renameSync(staged, target)
+  }
+  emitDiag('info', 'task-loop-migrate', `task-loop 搬行完成：tasks=${acc.moved.tasks} edges=${acc.moved.edges} tsl=${acc.moved.sessionLinks} records=${acc.moved.records}（submit 断代归档 ${acc.submitArchived}）checkpoints=${acc.moved.checkpoints}（隔离区 ${acc.quarantined}，人工清单 ${acc.manualList.length}）；manifest：${manifestPath}`)
+  return acc
 }
 
 // project.db 新线 v1 DDL（单源锚 = plugins/project/host/db/migrations.ts makeProjectMigrations('project')——
@@ -487,6 +1148,8 @@ export function main(argv) {
   // 前置：双进程持句柄检查 + SQLite 排他打开兜底
   if (!args.skipProcessCheck) assertNoHostProcesses()
   if (existsSync(args.stateDb)) openExclusive(args.stateDb).close()
+  const taskLoopDbFile = join(args.home, 'forge', 'db', 'task-loop', 'task-loop.db')
+  if (existsSync(taskLoopDbFile)) openExclusive(taskLoopDbFile).close()
   if (existsSync(args.projectDb)) openExclusive(args.projectDb).close()
 
   // registry 在场性快照（{ id, path }[]——workspace_id 精确对账；缺席 → ws_path 目录存在性 fallback）
@@ -567,6 +1230,11 @@ export function main(argv) {
       }
 
       // ③ forge-workspaces 目录搬迁（在 staged 连接上记账 marker；原子换回前完成）
+      // ②b task-loop 搬行（五表 + UUID 改写 + checkpoints slug 回填——须先于 ③ 目录搬迁：
+      // 搬行消费旧库 forge.db，搬迁后源目录已改名）
+      summary.taskLoop = args.skipTaskLoop
+        ? { skipped: true }
+        : runTaskLoopMigration(args, dirNameToWsPath, nowIso)
       summary.workspaces = args.skipWorkspaces ? { skipped: true } : relocateWorkspaces(args, db, nowIso)
     } finally {
       db.close()
@@ -595,6 +1263,7 @@ export function main(argv) {
   emitDiag('info', 'project-migrate', `迁移完成：${JSON.stringify({
     projects: summary.projects?.skipped ? 'skipped' : `${summary.projects.inserted?.length ?? 0} 行拆两表（degraded ${summary.projects.degraded?.length ?? 0}）`,
     bugs: summary.bugs?.skipped ? 'skipped' : `${summary.bugs.moved?.length ?? 0} 行搬入（隔离区 ${summary.bugs.quarantined?.length ?? 0}，人工清单 ${summary.bugs.manualList?.length ?? 0}）`,
+    taskLoop: summary.taskLoop === undefined || summary.taskLoop?.skipped ? 'skipped' : `tasks=${summary.taskLoop.moved.tasks} records=${summary.taskLoop.moved.records}（submit 断代 ${summary.taskLoop.submitArchived}）cp=${summary.taskLoop.moved.checkpoints}`,
     workspaces: summary.workspaces?.skipped ? 'skipped' : `${summary.workspaces.fileCount} 文件 / ${summary.workspaces.totalBytes} 字节`,
   })}`)
   return summary
