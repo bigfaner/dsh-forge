@@ -9,6 +9,8 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../host/storage/index.js'
 import { createKnowledgeService } from '../../host/service/service.js'
+import { projectKeyOf } from '../../host/project-key.js'
+import { registryProjectsSource, type WorkspaceRegistryFace } from '../../host/connection-rpc.js'
 import type { BrowseKnowledgeService } from '../../host/service/types.js'
 
 let home: string
@@ -84,5 +86,41 @@ describe('requireProject 解析链 workspace 域 id 归一步（fix-10）', () =
     expect(message).toMatch(/项目不存在/)
     expect(message).not.toMatch(/listEntries|browse|search|readAbstract|rebuildIndex/)
     expect(message).toContain('no-such-project')
+  })
+})
+
+describe('官方宿主全链派生键同域（fix-11 B 方案——身份统一）', () => {
+  const officialRow = () => ({ id: 'ws-official', path: wsDir, title: 'ws' })
+
+  /** projects.list 投影源（官方 workspaceRegistry 形态） */
+  const projectsSource = () => registryProjectsSource({
+    list: async () => [officialRow()],
+    get: async (id: string) => (id === 'ws-official' ? officialRow() : undefined),
+  } satisfies WorkspaceRegistryFace)
+
+  it('注册 → projects.list(派生 key) → listEntries(派生 key) → requireProject 命中注册行（project_id 列 null 形态）', async () => {
+    const key = projectKeyOf(wsDir)
+    const summaries = await projectsSource().listProjects()
+    expect(summaries[0]!.id).toBe(key)
+    expect(summaries[0]!.workspaceId).toBe('ws-official')
+    const rows = await officialHostService().listEntries({ projectId: key })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.title).toBe('Domain Note')
+  })
+
+  it('project_id 列为 core randomUUID 形态：派生 key 双域键命中（回查链不依赖该列）', async () => {
+    const wsDir2 = join(home, 'ws-uuid')
+    const knowledgeDir2 = join(wsDir2, '.knowledge')
+    mkdirSync(knowledgeDir2, { recursive: true })
+    writeFileSync(join(knowledgeDir2, 'b.md'), md('UUID Note', 'wsidom-b', ['anchor'], '双域键命中样本条目'), 'utf8')
+    createKnowledgeRegistry(db).upsert(wsDir2, knowledgeDir2, '6f1c0aae-9b2c-4d3e-8f70-1a2b3c4d5e6f')
+    const service = createKnowledgeService({
+      db,
+      resolveWsPath: () => undefined,
+      resolveWorkspacePath: async () => undefined,
+    })
+    const rows = await service.listEntries({ projectId: projectKeyOf(wsDir2) })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.title).toBe('UUID Note')
   })
 })

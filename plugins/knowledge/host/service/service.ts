@@ -30,6 +30,7 @@ import type {
 import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/contracts'
 import { withImmediateTransaction } from '../storage/concurrency.js'
 import { canonicalWsPath, createKnowledgeRegistry } from '../storage/registry.js'
+import { projectKeyOf } from '../project-key.js'
 import { rebuildKnowledgeIndex } from '../storage/rebuild.js'
 import { InvalidKnowledgeDirError as StorageInvalidKnowledgeDirError } from '../storage/scan.js'
 import {
@@ -254,6 +255,11 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
   const selectWsPathByProjectId = db.prepare<[string], { ws_path: string }>(
     `SELECT ws_path FROM knowledge_registry WHERE project_id = ?`,
   )
+  // fix-11 B 方案·身份统一：派生 key 反查行集（注册行数零星——逐行现派生比对，键基准
+  // 双侧 canonical 同域；project_id 列 core randomUUID/null 形态不阻派生键命中）
+  const selectRegistryWsPaths = db.prepare<unknown[], { ws_path: string }>(
+    `SELECT ws_path FROM knowledge_registry`,
+  )
   // SC-1 全域检索改判：registry 全行枚举语句（现役只有单行查询——search 覆盖全部
   // 注册域的行集来源，每调用期现查禁缓存——判例 d24a4464 同口径）。
   // stage④ 1.7：scope 列同捞（entryScopeIndex 来源归属派生——global 行识别）。
@@ -284,6 +290,17 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
   async function requireProject(projectId: string): Promise<{ wsPath: string; knowledgeDir: string }> {
     const direct = deps.resolveWsPath(projectId) ?? selectWsPathByProjectId.get(projectId)?.ws_path
     let bound = direct
+    // 派生 key 域（fix-11 B 方案）：投影行 id = projectKeyOf(wsPath)——静态表/project_id 列
+    // 双 miss 时逐注册行反派生比对命中
+    if (bound === undefined) {
+      for (const r of selectRegistryWsPaths.all()) {
+        if (projectKeyOf(r.ws_path) === projectId) {
+          bound = r.ws_path
+          break
+        }
+      }
+    }
+    // A 方案兜底（fix-10 保留——防御径非主径）：旧客户端直传 workspace 域 id 归一步
     if (bound === undefined && deps.resolveWorkspacePath !== undefined) {
       try {
         bound = await deps.resolveWorkspacePath(projectId)

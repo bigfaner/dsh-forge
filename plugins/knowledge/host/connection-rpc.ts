@@ -20,6 +20,7 @@
 import { API_PATH, clientRequestSchema } from '@deepseek-ai/dsh-client-connection'
 import { ERROR_CODES, type EntryActionRequest, type EntryActionRequestReject, type EntryDetailQuery, type ListEntriesQuery, type Project, type ProjectSummary, type RecallFeedbackOutcome, type RecallFeedbackRequest, type SessionRecallQuery } from '@dsh-forge/contracts'
 import { CONNECTION_ENDPOINT_BY_CHANNEL } from '../shared/connection-rpc.js'
+import { projectKeyOf } from './project-key.js'
 import type { BrowseKnowledgeService } from './service/index.js'
 
 /** 知识七端点注入服务面（apps/host ipc knowledge-rpc.ts KnowledgeChannelService 同形 Pick） */
@@ -282,9 +283,14 @@ export function isWorkspaceRegistryFace(value: unknown): value is WorkspaceRegis
   return typeof candidate.list === 'function' && typeof candidate.get === 'function'
 }
 
-/** 官方 workspace 行 → ProjectSummary 投影（archived 概念官方注册行缺席——恒 false） */
+/**
+ * 官方 workspace 行 → ProjectSummary 投影（archived 概念官方注册行缺席——恒 false）。
+ * fix-11 B 方案·身份统一：行 id = projectKeyOf(path) 派生稳定 forge project key
+ *（lib-path 单源——plugins/project 同款先例），workspaceId 归位官方 workspace id
+ * 关联列——两字段不再同值；派生键与 knowledge_registry 注册行解析同域。
+ */
 function registryRowToSummary(row: { id: string; path: string; title: string }): ProjectSummary {
-  return { id: row.id, workspaceId: row.id, name: row.title, wsPath: row.path, archived: false }
+  return { id: projectKeyOf(row.path), workspaceId: row.id, name: row.title, wsPath: row.path, archived: false }
 }
 
 /** 官方 workspaceRegistry → projects 数据源投影（官方宿主形态——添加项目向导注册行） */
@@ -292,10 +298,11 @@ export function registryProjectsSource(registry: WorkspaceRegistryFace): ForgePr
   return {
     listProjects: async () => (await registry.list()).map(registryRowToSummary),
     getProject: async (id: string): Promise<Project | null> => {
-      const row = await registry.get(id)
+      // 派生键域内反查（官方 get(id) 面 = workspace 域 id，不在本源 id 域——逐行现派生比对）
+      const row = (await registry.list()).find((r) => projectKeyOf(r.path) === id)
       if (row === undefined) return null
       return {
-        id: row.id,
+        id,
         workspaceId: row.id,
         wsPath: row.path,
         name: row.title,

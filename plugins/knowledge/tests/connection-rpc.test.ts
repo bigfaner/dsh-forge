@@ -14,6 +14,7 @@ import {
   type KnowledgeConnectionService,
 } from '../host/connection-rpc.js'
 import { CONNECTION_ENDPOINT_BY_CHANNEL } from '../shared/connection-rpc.js'
+import { projectKeyOf } from '../host/project-key.js'
 
 /** 知识服务替身（KnowledgeConnectionService 结构切片——逐端点捕获） */
 function fakeService(overrides: Partial<KnowledgeConnectionService> = {}): KnowledgeConnectionService {
@@ -123,19 +124,26 @@ describe('projects 数据源两形态', () => {
     expect(await call(handler, 'knowledge.heat', { projectId: 'p-1' })).toMatchObject({ ok: true })
   })
 
-  it('workspaceRegistry 投影（官方宿主形态——archived 恒 false + Project get 投影）', async () => {
+  it('workspaceRegistry 投影（fix-11 B 方案——行 id = projectKeyOf 派生 forge project key，workspaceId 归位关联列两字段不同值）', async () => {
+    const row = { id: 'w-9', path: 'C:/kn', title: 'kn' }
     const registry = {
-      list: async () => [{ id: 'w-9', path: 'C:/kn', title: 'kn' }],
-      get: async (id: string) => (id === 'w-9' ? { id: 'w-9', path: 'C:/kn', title: 'kn' } : undefined),
+      list: async () => [row],
+      get: async (id: string) => (id === 'w-9' ? row : undefined),
     }
     expect(isWorkspaceRegistryFace(registry)).toBe(true)
     expect(isWorkspaceRegistryFace({ list: async () => [] })).toBe(false)
+    const key = projectKeyOf(row.path)
     const source = registryProjectsSource(registry)
-    expect(await source.listProjects()).toEqual([
-      { id: 'w-9', workspaceId: 'w-9', name: 'kn', wsPath: 'C:/kn', archived: false },
+    const summaries = await source.listProjects()
+    expect(summaries).toEqual([
+      { id: key, workspaceId: 'w-9', name: 'kn', wsPath: 'C:/kn', archived: false },
     ])
-    const project = await source.getProject('w-9')
-    expect(project).toMatchObject({ id: 'w-9', wsPath: 'C:/kn', name: 'kn', archived: false })
+    // 两字段不再同值（id 域统一 forge project key；workspaceId 归位官方关联列）
+    expect(summaries[0]!.id).not.toBe(summaries[0]!.workspaceId)
+    // getProject 派生键命中（域内反查）；workspace 域 id 不再命中
+    const project = await source.getProject(key)
+    expect(project).toMatchObject({ id: key, workspaceId: 'w-9', wsPath: 'C:/kn', name: 'kn', archived: false })
+    expect(await source.getProject('w-9')).toBeNull()
     expect(await source.getProject('absent')).toBeNull()
   })
 })
