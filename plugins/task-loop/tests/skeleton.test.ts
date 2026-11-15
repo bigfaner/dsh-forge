@@ -130,8 +130,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
   });
 
-  it("版本 bump 0.12.0（plugin-task-loop 1.15——skills 归属批：submit-task 结算技能迁入 + quick-tasks 替代退役，minor 位 +1；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.12.0");
+  it("版本 bump 0.13.0（plugin-task-loop 1.25——循环救援技能迁移批：循环阻塞 SOP 更名 rescue-task-loop 迁入 skills/，minor 位 +1；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.13.0");
   });
 });
 

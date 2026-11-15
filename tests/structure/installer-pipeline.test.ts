@@ -245,11 +245,12 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/project/package.json',
       'runtime/node_modules/@dsh-forge/project/dist/host/index.js',
       // 1.15 退役批：task-loop staging 闭包登记（project 同款——host dist boot 链静态 import；
-      // skills/ = to-tasks 拆解技能 + 自 plugin-forge 迁入的 submit-task 结算技能）
+      // skills/ = to-tasks 拆解技能 + 自 plugin-forge 迁入的 submit-task 结算技能 + 1.25 迁入更名的 rescue-task-loop 循环救援技能）
       'runtime/node_modules/@dsh-forge/task-loop/package.json',
       'runtime/node_modules/@dsh-forge/task-loop/dist/host/index.js',
       'runtime/node_modules/@dsh-forge/task-loop/skills/to-tasks/SKILL.md',
       'runtime/node_modules/@dsh-forge/task-loop/skills/submit-task/SKILL.md',
+      'runtime/node_modules/@dsh-forge/task-loop/skills/rescue-task-loop/SKILL.md',
       'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
       'web-dist/index.html',
       'icon.png',

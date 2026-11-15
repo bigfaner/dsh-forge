@@ -91,7 +91,7 @@ const STAGING_EXTRAS = {
   // task-loop（plugin-task-loop 1.15 staging 闭包登记）：组合装配行本体 cordis.patch.yml
   // （package.json dsh.bundle.patch 声明指向）+ skills 技能面（to-tasks 拆解技能 + 自
   // plugin-forge 迁入的 submit-task 结算技能——customSkillDirs 挂载源）
-  'task-loop': { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/to-tasks/SKILL.md', 'skills/submit-task/SKILL.md', 'cordis.patch.yml'] },
+  'task-loop': { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/to-tasks/SKILL.md', 'skills/submit-task/SKILL.md', 'skills/rescue-task-loop/SKILL.md', 'cordis.patch.yml'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */
