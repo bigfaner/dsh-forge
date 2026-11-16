@@ -37,10 +37,28 @@ for (let i = 0; i < shifted.length; i++) {
       throw new Error('skill-filesystem 行形状漂移——重检官方底稿')
     }
     out.push(name)
-    out.push("        config:")
-    out.push("          customSkillDirs:")
-    out.push("            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/spec/package.json')), 'skills')")
-    i += 1
+    const SPEC_EXPR = "!!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/spec/package.json')), 'skills')"
+    // 行形状：name 在 i+1；config 在 i+2、customSkillDirs 在 i+3（既有 = 整块重出，
+    // 折叠标量（>-）续行拼回单行表达式）+ 追加 spec 目录项；无 config = 新建单项目录。
+    const hasDirs = (shifted[i + 2] ?? '').trim() === 'config:' && (shifted[i + 3] ?? '').trim() === 'customSkillDirs:'
+    let j = hasDirs ? i + 4 : i + 2
+    const items = []
+    let cur = undefined
+    for (; j < shifted.length; j++) {
+      const l2 = shifted[j]
+      if (l2.startsWith('          - ')) {
+        if (cur !== undefined) items.push(cur)
+        cur = l2.slice('          - '.length)
+      } else if (cur !== undefined && l2.startsWith('            ') && !l2.startsWith('             - ') && l2.trim() !== '') {
+        cur = `${cur} ${l2.trim()}` // 折叠标量（>-）续行拼回
+      } else break
+    }
+    if (cur !== undefined) items.push(cur)
+    out.push('        config:')
+    out.push('          customSkillDirs:')
+    for (const item of items) out.push(`            - ${item}`)
+    out.push(`            - ${SPEC_EXPR}`)
+    i = j - 1
   }
 }
 
