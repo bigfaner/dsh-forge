@@ -46,6 +46,7 @@ export function createTasksBoardHub(options: TasksBoardHubOptions): TasksBoardHu
   let cancelMerge: (() => void) | undefined;
   let cancelPoll: (() => void) | undefined;
   let pending: TaskBoardDtoView | undefined;
+  let lastPollError: string | undefined;
 
   const flush = (): void => {
     cancelMerge = undefined;
@@ -74,9 +75,16 @@ export function createTasksBoardHub(options: TasksBoardHubOptions): TasksBoardHu
             cards,
             stats: { total: cards.length, byStatus: countByStatus(cards) },
           });
+          lastPollError = undefined; // 恢复后重置——同因复发再留痕
         })
-        .catch(() => {
-          /* 降级轮询静默——消费面呈现「无任务数据」终态，不刷诊断 */
+        .catch((cause: unknown) => {
+          // 降级轮询失败留痕（AGENTS §7——fail-soft 不得静默）；同因去重不刷屏：
+          // 仅首轮与 error 变化时各 warn 一行，恢复后同因复发再留痕。
+          const reason = cause instanceof Error ? cause.message : String(cause);
+          if (reason !== lastPollError) {
+            lastPollError = reason;
+            diag(`降级轮询 list 不可达（${reason}）——保持「无任务数据」终态继续重取`);
+          }
         });
       if (!disposed) cancelPoll = schedule(tick, TASKS_HUB_FALLBACK_POLL_MS);
     };

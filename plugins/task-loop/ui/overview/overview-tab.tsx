@@ -160,7 +160,8 @@ export function OverviewTab({ projectId, makeClient, slug }: OverviewTabProps): 
   useEffect(() => {
     if (projectId === undefined || projectId === "") {
       // spec 投影缺席降级：不报错，「无任务数据」终态呈现（负缓存不锁存——projectId
-      // 到场即重订阅，风险 8 对策）
+      // 到场即重订阅，风险 8 对策）；缺席本身 warn 留痕一行（AGENTS §7——fail-soft 不静默）
+      console.warn("[dsh-forge/task-loop] overview projectId 缺席——降级「无任务数据」呈现（不报错）");
       setPhase("ready");
       setBoard(undefined);
       return;

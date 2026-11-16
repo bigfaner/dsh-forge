@@ -22,9 +22,9 @@
 //   - CT-MAINLINE-B6.O1/O2（「无任务数据」降级呈现 + 恢复正向）
 //   - CT-MAINLINE-B1/B2/B3、CT-MAINLINE-01：R3 移出 e2e（1.10 单测 13 例 + 1.18 真机走查
 //     承载）——零残留断言，本 spec 不覆盖（契约 §溯源表同口径）。
-//   - CT-MAINLINE-B6.O3（降级诊断留痕 emitDiag）：留痕 skip——契约/实现不一致已 fix/disc
-//     上报（实现降级径有意静默：tasks-hub.ts「降级轮询静默——不刷诊断」+ overview-tab
-//     projectKey 缺席分支零 emitDiag），禁脚本内就地调和，待契约修订或实现补发射后回填。
+//   - CT-MAINLINE-B6.O3（降级诊断留痕 warn）：实现降级径已补 warn 留痕（1.29 收尾批——
+//     tasks-hub 降级轮询失败去重 warn + overview-tab projectId 缺席分支 warn）；本 spec
+//     断言仍留痕 skip——真机 console 捕获断言随后续真机批回填。
 //
 // projectKey 口径（任务域归属键单源）：lib-path deriveDirName(ws)——与 task-loop.db
 // project_key 写点同源（db/repositories/project-key.ts 单源函数）；seed/写/读三方同锚。
