@@ -23,6 +23,7 @@ description: 把共识终态（spec / 用户直接拆解）转化为任务容器
 - 粒度：一任务 = agent 一次可独立收口的委派粒度；逐 AC 映射承担——每条 AC 判据原文落到恰好一个任务的 `acceptance_criteria`（一格一 AC）。
 - 依赖排序：拆解产出按执行序排列；`depends_on` / `before` 用批内 `local_id` 表达（批内互引合法）。
 - 类型映射：按任务性质选 `type`（coding / doc / test / validation / gate / eval 族，词汇表见 query_task 帮助）。
+- facets 提示：spec 在场时，把交付档位期望面（档位→面映射：ui / api / pure-logic / docs）经 `context` 的 `facets` 键逗号分隔预填进任务定义（如 `facets=ui,api`）——纯文本随 acceptance_criteria 走，task 侧零 spec 感知；worker 结算自报 facets ≠ 该提示时 submit_task 仅 warn 提示（不拒写）。无 spec 或无面可判时省略该键。
 - 其余格填空：`brief` 写清任务目标正文（spec 缺席时它是 worker 的唯一定义源）；`scope` 用结构化三键（created/modified/removed，相对项目根路径）；`context` 用 KEY=VALUE 数组（键唯一）。
 
 ## 四、收尾模板（抄写降为填空——模板即合法入参）
@@ -43,7 +44,7 @@ batch_add_tasks({
       priority: "P1",                    // 可选 P0|P1|P2
       estimated_time: "1-2h",            // 可选
       scope: { created: [], modified: [], removed: [] },  // 可选，相对路径
-      context: ["KEY=VALUE"],            // 可选，键唯一
+      context: ["KEY=VALUE", "facets=<ui,api>"],  // facets 提示格：交付档位期望面逗号分隔；无面省略
       depends_on: ["<批内 local_id>"],   // 可选，批内互引或同容器既有任务
       before: ["<批内 local_id>"],       // 可选
       breaking: false,                   // 可选
@@ -78,3 +79,4 @@ batch_add_tasks({
 7. `acceptance_criteria`：与 AC 判据逐字一致（禁转述/缩写/改写）。
 8. `depends_on` / `before`：批内 local_id 或同容器既有任务；无悬空引用、无环。
 9. fix 链：`source_task_slug` + `source_task_local_id` 成对；源任务已 blocked 时 `block_source: true` 必带；`priority` P0|P1|P2、`coverage_threshold` 0-1、`complexity` low|medium|high、`breaking` 布尔——形态正确。
+10. facets 提示：交付档位期望面经 `context` 的 `facets` 键逗号分隔预填（如 `facets=ui,api`）；无面可判时明确省略，不留空串。

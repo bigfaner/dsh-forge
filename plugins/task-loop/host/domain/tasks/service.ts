@@ -37,6 +37,7 @@ import {
   type TaskStatsQuery,
 } from "./list.js";
 import { createSettlementRepo, parseAcResults, type LatestSettlementRow } from "../../db/repositories/settlement-repo.js";
+import { aggregateAcSettlements, type AcSettlementsAggregate } from "./ac-match.js";
 import { markE2eAttribution, type MarkE2eAttributionInput } from "./mark-e2e-attribution.js";
 import { queryTask } from "./query.js";
 import { readUnsettledChain, type ReadUnsettledChainInput, type ReadUnsettledChainResult } from "./read-unsettled-chain.js";
@@ -157,7 +158,29 @@ export function createTasksService(deps: TasksServiceDeps) {
     async sessionLinks(q: SessionLinksQuery): Promise<SessionTaskLinkCard[]> {
       return sessionLinks(linksDeps, q);
     },
-    /** 批量最新结算行读（typert forgeTasks DTO 聚合 AC 进度数据源——settlement-repo 单条 SQL 透传） */
+    /**
+   * AC 结算聚合投影（聚合动词 matchAcSettlements——判据文本清单进、聚合 DTO 出，
+   * 零跨域 id：判据文本是唯一对齐键）。每任务取最新结算行，归一化匹配（trim+全半角折叠
+   * 精确相等）+ OR 聚合，未达成判据并入 unmatched。纯匹配语义单源在 ac-match.ts。
+   */
+  async matchAcSettlements(projectKey: string, criteria: readonly string[]): Promise<AcSettlementsAggregate> {
+    const rows = deps.db
+      .prepare<unknown[], { id: string; slug: string; local_id: string }>(
+        `SELECT id, slug, local_id FROM task_tasks WHERE project_key = ? ORDER BY slug, local_id`,
+      )
+      .all(projectKey);
+    const slugs = [...new Set(rows.map((r) => r.slug))];
+    const latest = settlements.latestSettlementsByTask(projectKey, slugs);
+    const acByTask = new Map(latest.map((r) => [r.task_id, parseAcResults(r.ac_results_json)]));
+    return aggregateAcSettlements(
+      criteria,
+      rows.map((r) => ({
+        taskRef: { slug: r.slug, localId: r.local_id },
+        acResults: acByTask.get(r.id) ?? [],
+      })),
+    );
+  },
+  /** 批量最新结算行读（typert forgeTasks DTO 聚合 AC 进度数据源——settlement-repo 单条 SQL 透传） */
     async latestSettlementsByTask(projectKey: string, slugs: readonly string[]): Promise<LatestSettlementRow[]> {
       return settlements.latestSettlementsByTask(projectKey, slugs).map((row) => ({
         taskId: row.task_id,

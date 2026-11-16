@@ -66,18 +66,21 @@ describe("submitTask 输入面校验 + 双门（仅挂 success）", () => {
     expect(r.status).toBe("completed");
   });
 
-  it("AC 交叉校验：criterion 与定义侧镜像失配拒（ERR_AC_CRITERIA_MISMATCH）；met=false 拒（ERR_AC_NOT_MET）", async () => {
+  it("双 warn 机械门①：结算判据 ≠ 定义判据 warn 不拒写（ac-criteria-drift）；met=false 仍拒（ERR_AC_NOT_MET）", async () => {
+    const diags: { level: string; event: string }[] = [];
+    const deps = { ...h.verbDeps, onDiag: (p: { level: string; event: string }) => diags.push(p) };
     const t = await inFlightTask(["判据一", "判据二"]);
+    const r = await submitTask(deps, {
+      projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t.localId }, result: "success", summary: "S",
+      gate: { test: true },
+      acceptanceCriteria: [{ criterion: "判据一", met: true }],
+    });
+    expect(r.status).toBe("completed");
+    expect(diags.some((d) => d.level === "warn" && d.event === "ac-criteria-drift")).toBe(true);
+    const t2 = await inFlightTask(["判据一", "判据二"]);
     await expect(
       submitTask(h.verbDeps, {
-        projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t.localId }, result: "success", summary: "S",
-        gate: { test: true },
-        acceptanceCriteria: [{ criterion: "判据一", met: true }],
-      }),
-    ).rejects.toMatchObject({ code: "ERR_AC_CRITERIA_MISMATCH" });
-    await expect(
-      submitTask(h.verbDeps, {
-        projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t.localId }, result: "success", summary: "S",
+        projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t2.localId }, result: "success", summary: "S",
         gate: { test: true },
         acceptanceCriteria: [
           { criterion: "判据一", met: true },
@@ -85,6 +88,35 @@ describe("submitTask 输入面校验 + 双门（仅挂 success）", () => {
         ],
       }),
     ).rejects.toMatchObject({ code: "ERR_AC_NOT_MET" });
+  });
+
+  it("双 warn 机械门②：结算 facets ≠ 任务定义 facets 提示 warn（facets-hint-drift）；一致/提示缺席零 warn", async () => {
+    const diags: { level: string; event: string }[] = [];
+    const deps = { ...h.verbDeps, onDiag: (p: { level: string; event: string }) => diags.push(p) };
+    const t = await inFlightTask();
+    // 提示预填（context facets 键——to-tasks 拆解预填面）
+    h.db.prepare(`UPDATE task_tasks SET context_json = ? WHERE id = ?`).run(JSON.stringify({ facets: "docs" }), t.taskId);
+    // 提示与结算失配（豁免域标签——不经强制域取证门）→ warn + 落库
+    await submitTask(deps, {
+      projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t.localId }, result: "success", summary: "S",
+      facets: ["pure-logic"],
+    });
+    expect(diags.some((d) => d.level === "warn" && d.event === "facets-hint-drift")).toBe(true);
+    // 一致 → 无 facets-hint-drift
+    const t2 = await inFlightTask();
+    h.db.prepare(`UPDATE task_tasks SET context_json = ? WHERE id = ?`).run(JSON.stringify({ facets: "docs" }), t2.taskId);
+    await submitTask(deps, {
+      projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t2.localId }, result: "success", summary: "S",
+      facets: ["docs"],
+    });
+    expect(diags.filter((d) => d.event === "facets-hint-drift")).toHaveLength(1);
+    // 提示缺席 → 零对照零 warn
+    const t3 = await inFlightTask();
+    await submitTask(deps, {
+      projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t3.localId }, result: "success", summary: "S",
+      facets: ["pure-logic"],
+    });
+    expect(diags.filter((d) => d.event === "facets-hint-drift")).toHaveLength(1);
   });
 
   it("blocked 结算：in_progress→blocked + evidence_json.reason 权威承载 + records 纯轨迹（note 封闭）", async () => {

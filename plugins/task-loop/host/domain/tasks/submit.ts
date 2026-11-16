@@ -17,7 +17,7 @@
 // settlement append（同事务）→ submit 轨迹行 → 恢复钩子（completed 挂）；闭包尾部
 // （提交后）T2 应答增补 + emitTasksChanged。
 import { taskFilesUnion } from "./files.js";
-import { FACETS_KEY } from "../../../shared/contract-constants.js";
+import { FACETS_HINT_CONTEXT_KEY, FACETS_KEY } from "../../../shared/contract-constants.js";
 import { withTransaction } from "@dsh-forge/lib-db";
 import { ProjectKeyDerivationError } from "../../db/repositories/project-key.js";
 import {
@@ -32,7 +32,6 @@ import {
   type SettlementRepo,
 } from "../../db/repositories/settlement-repo.js";
 import {
-  AcCriteriaMismatchError,
   AcNotMetError,
   BlockClassificationRequiredError,
   FilesUnionMismatchError,
@@ -59,6 +58,33 @@ import type {
 
 /** 归类 kind 合法集（T2 presence 校验——kind 非法同形拒绝；程序零语义判断） */
 const BLOCK_CLASSIFICATION_KINDS = new Set(["new-problem", "same-family-recurrence"]);
+
+/** 任务定义 facets 提示解析（context_json 的提示键逗号分隔形——提示缺席/畸形 = undefined 零对照）。 */
+function facetsHintOf(row: { readonly context_json: string | null }): readonly string[] | undefined {
+  if (row.context_json === null) return undefined;
+  try {
+    const ctx = JSON.parse(row.context_json) as unknown;
+    if (typeof ctx === "object" && ctx !== null && !Array.isArray(ctx)) {
+      const raw = (ctx as Record<string, unknown>)[FACETS_HINT_CONTEXT_KEY];
+      if (typeof raw === "string" && raw.trim() !== "") {
+        const parts = raw.split(",").map((f) => f.trim()).filter((f) => f !== "");
+        if (parts.length > 0) return parts;
+      }
+    }
+  } catch {
+    // 畸形 context_json 跳过对照（不炸结算面）
+  }
+  return undefined;
+}
+
+/** facets 集合等值（trim+小写归一化后无序集相等）。 */
+function facetsSetEqual(a: readonly string[], b: readonly string[]): boolean {
+  const norm = (xs: readonly string[]): Set<string> =>
+    new Set(xs.map((x) => x.trim().toLowerCase()).filter((x) => x !== ""));
+  const sa = norm(a);
+  const sb = norm(b);
+  return sa.size === sb.size && [...sa].every((x) => sb.has(x));
+}
 
 /** T2 advisory 候选列表限幅（渐进式披露：候选 >5 条时 top-5 + 计数） */
 const ADVISORY_LIST_LIMIT = 5;
@@ -352,15 +378,22 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
         throw new FixTaskAcRequiredError({ verb: "submitTask" });
       }
 
-      // ②d AC 交叉校验：提交面 criterion 与定义侧逐项对应（条数与顺序一致、判据原文相同）。
-      //   fix 任务（ac_json 缺席 = 无定义侧锚）跳过逐字交叉——核销快照自报面照落。
+      // ②d AC 交叉 warn 门（双 warn 机械门①——结算判据 ≠ 任务定义判据仅 warn 不拒写：
+      //   投影层按归一化匹配显形漂移，机械门降为诊断留痕；fix 任务跳过同前）。
       if (input.acceptanceCriteria !== undefined && row.ac_json !== null && !isFixTask(row)) {
         const actual = input.acceptanceCriteria.map((ac) => ac.criterion);
         const mismatched =
           actual.length !== acceptanceCriteria.length ||
           actual.some((criterion, i) => criterion !== acceptanceCriteria[i]);
         if (mismatched) {
-          throw new AcCriteriaMismatchError({ expected: acceptanceCriteria, actual });
+          emitDiagOrFallback(deps.onDiag, {
+            level: "warn",
+            event: "ac-criteria-drift",
+            message:
+              `submitTask 结算判据 ≠ 任务定义判据（逐字交叉失配——投影按归一化匹配显形漂移）：` +
+              `${input.taskRef.slug}/${input.taskRef.localId} ` +
+              `expected=${JSON.stringify(acceptanceCriteria)} actual=${JSON.stringify(actual)}`,
+          });
         }
       }
 
@@ -391,6 +424,22 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
         input.evidenceDebt === undefined
       ) {
         throw new RuntimeEvidenceRequiredError({ faces: input.facets });
+      }
+
+      // ②h facets 提示对照 warn 门（双 warn 机械门②——结算 facets ≠ 任务定义 facets
+      //   提示仅 warn 不拒写；提示缺席/结算未声明 = 零对照跳过，纯提示不设硬门）。
+      if (input.facets !== undefined) {
+        const hint = facetsHintOf(row);
+        if (hint !== undefined && !facetsSetEqual(input.facets, hint)) {
+          emitDiagOrFallback(deps.onDiag, {
+            level: "warn",
+            event: "facets-hint-drift",
+            message:
+              `submitTask 结算 facets ≠ 任务定义 facets 提示（对照仅提示）：` +
+              `${input.taskRef.slug}/${input.taskRef.localId} ` +
+              `expected=${JSON.stringify(hint)} actual=${JSON.stringify(input.facets)}`,
+          });
+        }
       }
     }
 

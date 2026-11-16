@@ -25,6 +25,12 @@ export const AC_RESULTS_KEY = "ac_results";
  */
 export const FACETS_KEY = "facets";
 
+/**
+ * 任务定义 facets 提示键（task context_json 的 KEY=VALUE 条目键——to-tasks 拆解时把
+ * 交付档位期望面逗号分隔预填，如 `facets=ui,api`；submit_task 结算 facets ≠ 提示仅 warn）。
+ */
+export const FACETS_HINT_CONTEXT_KEY = "facets";
+
 /** 判据文本对齐规则（spec 投影唯一对齐面——台账 12：判据原文逐字一致，转述即断链）。 */
 export interface CriterionAlignmentRule {
   /** settlements.ac_results_json 内嵌 criterion 文本 = 对齐键 */

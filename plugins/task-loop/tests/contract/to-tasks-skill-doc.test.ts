@@ -81,6 +81,12 @@ describe("to-tasks SKILL.md 快照契约", () => {
     expect(doc).toContain("禁转述");
   });
 
+  it("facets 提示字段在位（档位期望面 → context facets 键预填，零 spec 感知随判据走）", () => {
+    expect(doc).toContain("facets 提示");
+    expect(doc).toContain("facets=<ui,api>");
+    expect(doc).toContain("仅 warn 提示");
+  });
+
   it("shared 契约常量快照一致（AC 核销键 + 判据文本对齐规则）", () => {
     expect(AC_RESULTS_KEY).toBe("ac_results");
     const rule: CriterionAlignmentRule = {

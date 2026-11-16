@@ -55,7 +55,7 @@ function methodParameterNames(fn: (...args: unknown[]) => unknown): string[] {
 }
 
 describe("端点面 pin（gateway SRC 端点真源）", () => {
-  it("forgeTasks 九端点——八读/写面键名沿用 ForgeTasksRpc 清单 + follow mode:stream", () => {
+  it("forgeTasks 十端点——九读/写面键名沿用 ForgeTasksRpc 清单 + acSettlements 聚合 + follow mode:stream", () => {
     const svc = new ForgeTasksRemote(fakeCtx(), { tasks: () => ({}) as TasksServiceFace });
     expect(endpointsOf(svc)).toEqual([
       "list",
@@ -66,6 +66,7 @@ describe("端点面 pin（gateway SRC 端点真源）", () => {
       "sessionLinks",
       "validateFeatureTasks",
       "transition",
+      "acSettlements",
       "follow:stream",
     ]);
   });
@@ -81,6 +82,7 @@ describe("端点面 pin（gateway SRC 端点真源）", () => {
       ["sessionLinks", ["q", "signal"]],
       ["validateFeatureTasks", ["input", "signal"]],
       ["transition", ["input", "signal"]],
+      ["acSettlements", ["q", "signal"]],
       ["follow", ["q", "signal"]],
     ] as const) {
       expect(methodParameterNames(svc[name] as never), name).toEqual(params);

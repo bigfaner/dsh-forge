@@ -31,6 +31,7 @@ import type {
   TaskStatsQuery,
 } from "../domain/tasks/list.js";
 import type { SessionLinksQuery } from "../domain/tasks/session-links.js";
+import type { AcSettlementsAggregate } from "../domain/tasks/ac-match.js";
 import type { TasksService } from "../domain/tasks/service.js";
 import type { TransitionTaskInput } from "../domain/tasks/transition.js";
 import type { ValidateContainerTasksInput, ValidateReport } from "../domain/tasks/validate.js";
@@ -53,7 +54,16 @@ export type TasksServiceFace = Pick<
   | "validateFeatureTasks"
   | "transitionTask"
   | "latestSettlementsByTask"
+  | "matchAcSettlements"
 >;
+
+export type { AcSettlementsAggregate };
+
+/** matchAcSettlements 入参（agent/域面同形——判据文本清单进、聚合 DTO 出） */
+export interface AcSettlementsRequest {
+  readonly projectKey: string;
+  readonly criteria: readonly string[];
+}
 
 // ── 聚合 DTO（水化 host 半单点完成——client 零拼装）──
 
@@ -146,6 +156,11 @@ export interface TasksRemoteTransitionInput extends Omit<TransitionTaskInput, "p
 
 /** remote 面查询（follow 同形——身份换 projectId） */
 export interface TasksRemoteFollowQuery extends Omit<TasksFollowQuery, "projectKey"> {
+  readonly projectId: string;
+}
+
+/** remote 面入参（acSettlements 同形——身份换 projectId） */
+export interface TasksRemoteAcSettlementsRequest extends Omit<AcSettlementsRequest, "projectKey"> {
   readonly projectId: string;
 }
 
@@ -427,6 +442,17 @@ export class ForgeTasksRemote extends TypertRemoteService {
     const projectKey = await this.keyOf(input.projectId);
     if (projectKey === undefined) return unresolvedResult<TaskSnapshot>(input.projectId);
     return ok(await svc.transitionTask({ ...input, projectKey }));
+  }
+
+  /** AC 结算聚合（判据文本清单进、聚合 DTO 出——criterion/met/evidence?/taskRefs[]/unmatched） */
+  @Remote
+  async acSettlements(q: TasksRemoteAcSettlementsRequest, signal?: AbortSignal): Promise<Result<AcSettlementsAggregate>> {
+    signal?.throwIfAborted();
+    const svc = resolveService(this.deps);
+    if (svc === undefined) return unavailableResult<AcSettlementsAggregate>("acSettlements");
+    const projectKey = await this.keyOf(q.projectId);
+    if (projectKey === undefined) return unresolvedResult<AcSettlementsAggregate>(q.projectId);
+    return ok(await svc.matchAcSettlements(projectKey, q.criteria));
   }
 
   /**
