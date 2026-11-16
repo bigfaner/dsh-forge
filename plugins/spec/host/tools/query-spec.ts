@@ -11,12 +11,20 @@ import {
   requiredString,
   withFailureVariant,
 } from "@dsh-forge/lib-api";
+import { emitDiagOrFallback, type DiagEventPayload } from "@dsh-forge/lib-diag";
 import type { ForgeSpecsService } from "../domain/specs/service.js";
 import { SpecError } from "../domain/specs/errors.js";
 import { requireSessionCwd, type SpecToolDefinition, type SpecToolExecFace } from "./faces.js";
 import { projectAcsStates, type AcProjectionRow, type AcSettlementsFace } from "./projection.js";
 
 const TOOL = "query_spec";
+
+/** AC 投影 diag 埋点事件（AGENTS §7——功能域前缀 spec-ac-projection） */
+const DIAG_EVENT_AC_ABSENT = "spec-ac-projection-absent";
+const DIAG_EVENT_AC_UNMATCHED = "spec-ac-projection-unmatched";
+
+/** 诊断发射缝载荷（process 进程位由装配桥接层补齐——emitDiagOrFallback 同构） */
+type SpecDiagPayload = Omit<DiagEventPayload, "process">;
 
 const QUERY_SPEC_PARAMETERS = {
   type: "object",
@@ -44,6 +52,8 @@ export interface QuerySpecResult {
 export function createQuerySpecTool(deps: {
   readonly specs: ForgeSpecsService;
   readonly acSettlementsOf?: () => AcSettlementsFace | undefined;
+  /** 诊断发射缝（emitDiagOrFallback 语义——缝缺席 console 按级兜底；host 侧 emitDiag 透传） */
+  readonly onDiag?: (payload: SpecDiagPayload) => void;
 }): SpecToolDefinition {
   return {
     name: TOOL,
@@ -98,13 +108,47 @@ export function createQuerySpecTool(deps: {
         if (includeProjection) {
           // 消费点现查永不缓存（AGENTS 1.6）；抛错 → no-task-data 降级（与缺席同投影态）
           let settlements;
+          let degradedBy = "absent"; // absent = 缝缺席 | throw = 调用抛错（同投影态降级）
           try {
             const face = deps.acSettlementsOf?.();
-            settlements = face !== undefined ? await face.matchAcSettlements((chain.spec as { projectKey: string }).projectKey, criteria) : undefined;
-          } catch {
+            if (face === undefined) {
+              settlements = undefined;
+            } else {
+              degradedBy = "";
+              settlements = await face.matchAcSettlements((chain.spec as { projectKey: string }).projectKey, criteria);
+            }
+          } catch (cause) {
             settlements = undefined;
+            degradedBy = "throw";
+            void cause;
           }
           acProjection = projectAcsStates(criteria, settlements);
+          // 缺席降级「无任务数据」不报错 + emitDiag（三铁律之二——诊断不静默）
+          if (degradedBy !== "") {
+            emitDiagOrFallback(deps.onDiag, {
+              event: DIAG_EVENT_AC_ABSENT,
+              level: degradedBy === "throw" ? "warn" : "info",
+              message:
+                degradedBy === "throw"
+                  ? `AC 投影降级：matchAcSettlements 调用抛错——全 AC 无任务数据（fail-soft 不报错）spec=${slug}`
+                  : `AC 投影降级：task-loop 服务缺席——全 AC 无任务数据（不报错留痕）spec=${slug}`,
+              projectId: chain.spec.projectKey,
+              sessionId: exec.agent?.session?.id,
+              cwd,
+            });
+          }
+          // unmatched 非空 emitDiag warn（漂移信号 → M4 Goal 自动复核触发）
+          const unmatched = acProjection.filter((p) => p.state === "unmatched");
+          if (unmatched.length > 0) {
+            emitDiagOrFallback(deps.onDiag, {
+              event: DIAG_EVENT_AC_UNMATCHED,
+              level: "warn",
+              message: `AC 投影 unmatched 非空（漂移信号——有结算记录但判据未命中）：spec=${slug} 判据=[${unmatched.map((p) => p.criterion).join("；")}]`,
+              projectId: chain.spec.projectKey,
+              sessionId: exec.agent?.session?.id,
+              cwd,
+            });
+          }
         }
         return {
           spec: chain.spec,

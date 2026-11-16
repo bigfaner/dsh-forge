@@ -373,6 +373,7 @@ export type TasksWhitelistCoverage = AssertNever<
     | 'batchAddTasks'
     | 'validateBatchAddTasks'
     | 'latestSettlementsByTask'
+  | 'matchAcSettlements'
   >
 >
 

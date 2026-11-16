@@ -3,6 +3,7 @@
 // 本插件 forgeSpecs 服务（域逻辑单一事实源）；投影缝按 AGENTS 1.6 每次调用期现查
 //（task-loop forgeTasks 缺席/劣形 = undefined → no-task-data 降级，不缓存）。
 import { FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
+import type { DiagLevel } from "@dsh-forge/lib-diag";
 import type { SpecAssembly } from "./default-assembly.js";
 import type { AcSettlementsFace } from "../tools/projection.js";
 import { createSpecTools, type SpecToolDeps } from "../tools/index.js";
@@ -12,7 +13,7 @@ import type { SpecToolDefinition } from "../tools/faces.js";
 export interface ToolFamilyAssemblyInput {
   readonly services: SpecAssembly;
   readonly ctx: unknown;
-  readonly diag: (line: string, level?: "info" | "warn" | "error") => void;
+  readonly diag: (line: string, level?: DiagLevel) => void;
 }
 
 /**
@@ -44,6 +45,8 @@ export function assembleSpecToolFamily(input: ToolFamilyAssemblyInput): { readon
   const verbDeps: SpecToolDeps = {
     specs: input.services.specs,
     acSettlementsOf: acSettlementsFaceOf(input.ctx),
+    // 诊断缝：payload 形态 → 行形态（diagConsoleLine 同构——[event] message 按级分流）
+    onDiag: (payload) => input.diag(`[${payload.event}] ${payload.message}`, payload.level),
   };
   const tools = createSpecTools(verbDeps);
   const list = [

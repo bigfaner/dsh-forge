@@ -2,6 +2,7 @@
 // 入参防御收窄 + 服务面转发 + 双友好返回面投影；禁 import db/repositories 与
 // @dsh-forge/lib-db——机检 tests/structure/thin-gate.test.ts 锁定）。
 import type { ForgeSpecsService } from "../domain/specs/service.js";
+import type { DiagEventPayload } from "@dsh-forge/lib-diag";
 import { createCreateSpecTool } from "./create-spec.js";
 import { createListSpecsTool } from "./list-specs.js";
 import { createQuerySpecTool } from "./query-spec.js";
@@ -16,6 +17,8 @@ export interface SpecToolDeps {
   readonly specs: ForgeSpecsService;
   /** AC 投影现查缝（task-loop forgeTasks.matchAcSettlements 窄面；缺席 = no-task-data 降级） */
   readonly acSettlementsOf?: () => AcSettlementsFace | undefined;
+  /** 诊断发射缝（AC 投影缺席降级 / unmatched 非空埋点——query_spec 消费） */
+  readonly onDiag?: (payload: Omit<DiagEventPayload, "process">) => void;
 }
 
 /** tool 定义组（键序 = FORGE_SPEC_TOOL_NAMES 列序——注册序单源） */
