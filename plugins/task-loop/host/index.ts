@@ -255,8 +255,9 @@ export type { QueryTaskResult } from "./domain/tasks/query.js";
 
 // inject 名单（proposal 硬判据：装配行 inject 名单显式含 webServer——目标宿主必带；
 // 名单缺席 = ctx 属性访问被 cordis inject 门拒恒 undefined，fix-8 判例。experts = 可选
-// 服务——不入 inject 名单（可选消费不阻载），派发消费点现查（faces.resolveWorkerProfile
-// ——AGENTS 1.6 检测永不缓存）。forge.projects = 身份解析缝显式入名单（bug 9407ff29
+// 消费面（bug dc0f9de3 修型——worker 路由档案取用源）：照 plugin-forge 0b83e3aa 跨 realm
+// 正门声明入名单 + 调用期防御读取（assembly/tool-family expertsFaceOf fail-soft，缺席 =
+// generic 兜底档不阻载）；forge.projects = 身份解析缝显式入名单（bug 9407ff29
 // 修型——解析缝生命周期绑 inject 名单显式；缺席 fail-soft 降级「无任务数据」+ 诊断留痕，
 // 253b8265 判例同族）。tools = 单装工具族注册缝显式入名单（bug a033636f 修型——官方
 // ctx.tools.register 正门；缺席 fail-soft 零注册 + warn 留痕）。
@@ -264,6 +265,6 @@ export type { QueryTaskResult } from "./domain/tasks/query.js";
  *  同值——跨包结构消费，本包零依赖声明只持同值常量，漂移由 identity 解析面诊断兜底） */
 const PROJECT_SEAM_KEY = "forge.projects";
 
-taskLoopPlugin.inject = ["webServer", PROJECT_SEAM_KEY, "tools"] as const;
+taskLoopPlugin.inject = ["webServer", PROJECT_SEAM_KEY, "tools", "experts"] as const;
 
 export default taskLoopPlugin;

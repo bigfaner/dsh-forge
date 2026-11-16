@@ -7,6 +7,8 @@
 // disc 效度戳 / submitSettleDisplay / 事件缝是宿主装配面职责——工具不迁移（后续装配任务接）。
 // 定位 = 域动词薄封装：submitTask（submit.ts，双门 + 单事务两写单源），本文件只做
 // snake_case 入参收窄 + gate all-or-none 组合形状先证 + 结算要点文本投影。
+import { existsSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import { submitTask, type SubmitTaskInput, type SubmitTaskResult } from "../domain/tasks/submit.js";
 import type { TaskAcResult, TasksVerbDeps } from "../domain/tasks/types.js";
 import {
@@ -20,8 +22,39 @@ import {
   requiredString,
 } from "./args.js";
 import type { TaskToolDefinition, TaskToolExecFace } from "./faces.js";
+import { sessionContextOf } from "./session.js";
 
 const TOOL = "submit_task";
+
+/**
+ * 证据文件在场性核验（bug faf0ca57①——结算证据真实性门）：success 结算的
+ * runtime_evidence_artifacts 逐条 + ac_results[].evidence（met=true）内引用文件必须落盘在场，
+ * 缺席 = 拒结算（信封指认缺席路径）——「取证文件在场」先于「核销快照落库」。
+ * 路径识别（保守启发式，零误伤优先）：绝对路径 / . .. 前缀相对路径 / 含分隔符的相对路径 /
+ * 无分隔符但带常见工件扩展名的裸文件名（walk-010b.md 类判例——真机 b1 失实结算即此形）。
+ * 判据文本/命令行混排中不含路径形 token 的 evidence 不核验（documented limitation）。
+ */
+const ARTIFACT_EXTS = "md|log|json|png|jpg|jpeg|gif|svg|txt|html|css|ts|tsx|js|mjs|cjs|yaml|yml|csv|xml|har|tgz|zip|pdf";
+const PATH_TOKEN = /(?:[A-Za-z]:[\\/][^\s,;，。；()（）]+|\.{1,2}[\\/][^\s,;，。；()（）]+|[^\s,;，。；()（）]*[\\/][^\s,;，。；()（）]+)/g;
+const BARE_ARTIFACT = new RegExp(`[^\\s,;，。；()（）]+\\.(?:${ARTIFACT_EXTS})`, "gi");
+
+function referencedPathsOf(evidence: string): string[] {
+  const tokens = [...evidence.matchAll(PATH_TOKEN)].map((m) => m[0]);
+  if (tokens.length === 0) {
+    // 无分隔符路径 token 时退一级：裸工件文件名（带扩展名整 token）——仅当 evidence 全串
+    // 含扩展名 token（walk-010b.md 形），命令行混排（无扩展名 token）不误伤。
+    for (const m of evidence.matchAll(BARE_ARTIFACT)) tokens.push(m[0]);
+  }
+  return tokens;
+}
+
+/** evidence/artifacts 引用文件缺席清单（相对路径按会话 cwd 解析；缺席 = 绝对路径原样回显） */
+function missingEvidenceFiles(paths: readonly string[], cwd: string | undefined): string[] {
+  return paths.filter((p) => {
+    const abs = isAbsolute(p) ? p : resolve(cwd ?? process.cwd(), p);
+    return !existsSync(abs);
+  });
+}
 
 /** gate 平铺四参 → TaskGateReport（all-or-none + coverage 依赖门在场） */
 export function gateOf(a: Record<string, unknown>, tool = TOOL): SubmitTaskInput["gate"] {
@@ -228,6 +261,31 @@ export function createSubmitTaskTool(deps: {
       const runtimeFace = optionalStringArray(a, "runtime_face", TOOL);
       if (runtimeFace !== undefined && runtimeFace.length === 0) {
         throw new Error(`${TOOL}: runtime_face must be a non-empty array when given`);
+      }
+      // 证据真实性门（bug faf0ca57①——仅挂 success 结算）：引用文件缺席 = 拒结算信封指认
+      if (result === "success") {
+        const session = sessionContextOf(exec as unknown as Parameters<typeof sessionContextOf>[0]);
+        const cwd = session.cwd;
+        const claimed: string[] = (acResults ?? [])
+          .filter((ac) => ac.met === true && ac.evidence !== undefined)
+          .map((ac) => ac.evidence as string)
+          .flatMap(referencedPathsOf);
+        const missing = missingEvidenceFiles([...new Set(claimed)], cwd);
+        if (missing.length > 0) {
+          throw new Error(
+            `${TOOL}: evidence authenticity gate — referenced file(s) not found on disk: ${missing.join(", ")}. ` +
+              `Archive the artifact on disk before settling met=true (路径落盘根实证缺席 → 不予核销)`,
+          );
+        }
+        if (evArtifacts !== undefined) {
+          const missingArtifacts = missingEvidenceFiles(evArtifacts, cwd);
+          if (missingArtifacts.length > 0) {
+            throw new Error(
+              `${TOOL}: runtime_evidence_artifacts missing file(s): ${missingArtifacts.join(", ")} — ` +
+                `archive the forensic artifacts on disk before settling success`,
+            );
+          }
+        }
       }
       const input: SubmitTaskInput = {
         projectKey: deps.resolveProjectKey(exec),

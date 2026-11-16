@@ -35,6 +35,7 @@ import {
   AcNotMetError,
   BlockClassificationRequiredError,
   FilesUnionMismatchError,
+  FixTaskAcRequiredError,
   GateSummaryRequiredError,
   ReasonRequiredError,
   RuntimeEvidenceConflictError,
@@ -343,8 +344,15 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
     if (input.result === "success") {
       const acceptanceCriteria = row.ac_json !== null ? (JSON.parse(row.ac_json) as string[]) : [];
 
-      // ②d AC 交叉校验：提交面 criterion 与定义侧逐项对应（条数与顺序一致、判据原文相同）
-      if (input.acceptanceCriteria !== undefined) {
+      // ②c' rescue fix 核销门（bug faf0ca57②——结算证据真实性门）：fix 任务 success 零核销
+      //   （ac_results 缺席/空数组）= 未核销拒写——rescue 轮必须逐条核验（或 blocked 收口）。
+      if (isFixTask(row) && (input.acceptanceCriteria?.length ?? 0) === 0) {
+        throw new FixTaskAcRequiredError({ verb: "submitTask" });
+      }
+
+      // ②d AC 交叉校验：提交面 criterion 与定义侧逐项对应（条数与顺序一致、判据原文相同）。
+      //   fix 任务（ac_json 缺席 = 无定义侧锚）跳过逐字交叉——核销快照自报面照落。
+      if (input.acceptanceCriteria !== undefined && row.ac_json !== null && !isFixTask(row)) {
         const actual = input.acceptanceCriteria.map((ac) => ac.criterion);
         const mismatched =
           actual.length !== acceptanceCriteria.length ||

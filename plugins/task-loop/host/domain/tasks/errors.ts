@@ -263,6 +263,20 @@ export class AcCriteriaMismatchError extends Error {
   }
 }
 
+/** ERR_FIX_TASK_AC_REQUIRED（rescue fix 任务 success 零核销——bug faf0ca57②真实性门） */
+export class FixTaskAcRequiredError extends Error {
+  readonly code = "ERR_FIX_TASK_AC_REQUIRED" as const;
+
+  constructor(data: { readonly verb: "submitTask" }) {
+    super(
+      `${data.verb} rescue fix 任务零核销拒写：fix 任务 result=success 必带非空 ac_results ` +
+        `（[{criterion, met, evidence?}] 自报核销快照——零判据 = 未核销，拒绝结算；` +
+        `无法逐条核验时以 result=blocked 收口走 fix 链承接）`,
+    );
+    this.name = "FixTaskAcRequiredError";
+  }
+}
+
 /** ERR_FILES_UNION_MISMATCH（files 与 {created, modified} 并存且 files ≠ 并集） */
 export interface FilesUnionMismatchData {
   readonly files: readonly string[];

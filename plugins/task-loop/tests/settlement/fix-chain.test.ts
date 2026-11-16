@@ -31,9 +31,74 @@ const successSubmit = (slug: string, localId: string, commitHash: string) =>
     result: "success",
     summary: "fixed",
     gate: { test: true },
-    acceptanceCriteria: [],
+    // fix 任务核销门（bug faf0ca57②）起效后：success 结算必带自报核销快照（零判据 = 未核销拒写）
+    acceptanceCriteria: [{ criterion: "修复面复跑绿", met: true }],
     commitHash,
   });
+
+describe("rescue fix 核销门（bug faf0ca57②——fix 任务 success 零判据 = 未核销拒写）", () => {
+  const blockedThenFix = async (): Promise<{ taskId: string; localId: string }> => {
+    const t1 = await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "alpha", title: "T1", type: "coding-feature" });
+    await claim();
+    await blockedSubmit("alpha", t1.localId, "红");
+    const t2 = await addTask(h.verbDeps, {
+      projectKey: h.projectKey,
+      slug: "alpha",
+      title: "fix",
+      type: "coding-fix",
+      sourceTask: { slug: "alpha", localId: t1.localId },
+      blockSource: true,
+    });
+    await claim();
+    return { taskId: t2.taskId, localId: t2.localId };
+  };
+
+  it("fix 任务 success 零判据（ac_results 缺席）→ 拒写（ERR_FIX_TASK_AC_REQUIRED）+ 零结算行", async () => {
+    const { taskId, localId } = await blockedThenFix();
+    await expect(
+      submitTask(h.verbDeps, {
+        projectKey: h.projectKey,
+        taskRef: { slug: "alpha", localId },
+        result: "success",
+        summary: "fixed",
+        gate: { test: true },
+      }),
+    ).rejects.toMatchObject({ code: "ERR_FIX_TASK_AC_REQUIRED" });
+    expect((h.db.prepare(`SELECT COUNT(*) AS n FROM task_settlements`).get() as { n: number }).n).toBe(1); // 仅根 blocked 行
+    expect(h.db.prepare(`SELECT task_status FROM task_tasks WHERE id = ?`).get(taskId)).toMatchObject({ task_status: "in_progress" });
+  });
+
+  it("fix 任务 success 空数组 ac_results → 同门拒写", async () => {
+    const { localId } = await blockedThenFix();
+    await expect(
+      submitTask(h.verbDeps, {
+        projectKey: h.projectKey,
+        taskRef: { slug: "alpha", localId },
+        result: "success",
+        summary: "fixed",
+        gate: { test: true },
+        acceptanceCriteria: [],
+      }),
+    ).rejects.toMatchObject({ code: "ERR_FIX_TASK_AC_REQUIRED" });
+  });
+
+  it("fix 任务 success 带自报核销快照（ac_json 缺席 = 无定义侧锚，跳过逐字交叉）→ 走通", async () => {
+    const { taskId, localId } = await blockedThenFix();
+    const r = await submitTask(h.verbDeps, {
+      projectKey: h.projectKey,
+      taskRef: { slug: "alpha", localId },
+      result: "success",
+      summary: "fixed",
+      gate: { test: true },
+      acceptanceCriteria: [{ criterion: "修复面复跑绿", met: true, evidence: "vitest run 3 passed" }],
+    });
+    expect(r.status).toBe("completed");
+    const row = h.db.prepare(`SELECT ac_results_json FROM task_settlements WHERE task_id = ?`).get(taskId) as {
+      ac_results_json: string;
+    };
+    expect(JSON.parse(row.ac_results_json)).toHaveLength(1);
+  });
+});
 
 describe("fix 链构造（fix_root_id × fix_of_task_id 分工）", () => {
   it("T1 blocked → T2(fix of T1) success：S2.fix_root_id = S1.id（链首，非父结算歧义）", async () => {

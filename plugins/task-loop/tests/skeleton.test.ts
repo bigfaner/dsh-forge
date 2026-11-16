@@ -137,8 +137,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.1");
   });
 
-  it("版本 bump 0.14.2（fix-12 patch——运行期依赖归位 + 对话面 keyed 撞车残余 shadow 治理；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.14.2");
+  it("版本 bump 0.14.3（fix-13 patch——结算证据真实性门 + 首轮 worker 路由装配接线；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.14.3");
   });
 });
 

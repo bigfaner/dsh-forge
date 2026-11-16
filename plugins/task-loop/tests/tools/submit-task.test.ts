@@ -2,6 +2,9 @@
 // ① ac_results 单数组解析（合法 / 缺 criterion / met 形状错 / 空/非数组拒）；
 // ② runtime_face 更名（旧 runtime_surface 入参被拒、新参走通域 runtimeFace 径）；
 // ③ gate all-or-none（半门 / 孤 coverage 拒）。
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { acResultsOf, createSubmitTaskTool, gateOf } from "../../host/tools/submit-task.js";
 import { createTasksHarness, type TasksHarness } from "../domain-tasks/harness.js";
@@ -80,6 +83,58 @@ describe("ac_results 单数组解析", () => {
         ac_results: [{ criterion: "A", met: false }],
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("证据真实性门（bug faf0ca57——evidence 引用文件在场性核验）", () => {
+  it("met=true evidence 引用不存在路径 → 拒结算并信封指认缺席路径", async () => {
+    seedInProgress(["A"]);
+    const missing = join(tmpdir(), `fix13-evidence-absent-${process.pid}.md`);
+    await expect(
+      exec({
+        result: "success",
+        summary: "done",
+        gate_compile: true,
+        gate_fmt: true,
+        gate_lint: true,
+        gate_test: true,
+        ac_results: [{ criterion: "A", met: true, evidence: `${missing} 已落盘` }],
+      }),
+    ).rejects.toThrow(/evidence authenticity gate/);
+    // 拒结算 = 零落库（终态不变 + 零结算行）
+    expect(h.db.prepare(`SELECT task_status FROM task_tasks WHERE local_id = '1'`).get()).toMatchObject({ task_status: "in_progress" });
+    expect((h.db.prepare(`SELECT COUNT(*) AS n FROM task_settlements`).get() as { n: number }).n).toBe(0);
+  });
+
+  it("runtime_evidence_artifacts 引用不存在文件 → 拒结算（信封指认）", async () => {
+    seedInProgress(null);
+    const missing = join(tmpdir(), `fix13-artifact-absent-${process.pid}.png`);
+    await expect(
+      exec({
+        result: "success",
+        summary: "done",
+        runtime_face: ["ui"],
+        runtime_evidence_face: "ui",
+        runtime_evidence_artifacts: [missing],
+      }),
+    ).rejects.toThrow(/runtime_evidence_artifacts.*missing file/s);
+  });
+
+  it("evidence 引用在场文件 → 照常结算（零误伤）", async () => {
+    seedInProgress(["A"]);
+    const dir = mkdtempSync(join(tmpdir(), "fix13-evidence-"));
+    const present = join(dir, "walk.md");
+    writeFileSync(present, "ok", "utf8");
+    const r = await exec({
+      result: "success",
+      summary: "done",
+      gate_compile: true,
+      gate_fmt: true,
+      gate_lint: true,
+      gate_test: true,
+      ac_results: [{ criterion: "A", met: true, evidence: `${present} 已创建，内容一行 ok` }],
+    });
+    expect(r.status).toBe("completed");
   });
 });
 

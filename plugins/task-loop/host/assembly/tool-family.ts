@@ -16,10 +16,14 @@ import { createUnionToolNamesProbe, type AgentPresetsFace, type ToolsSchemasRead
 import {
   adaptAgentNarrationChannel,
   createDiagEmitter,
+  createExpertProfileResolver,
   emitForgeDiag,
+  resolveWorkerProfile as resolveWorkerRouteProfile,
   type AgentLookupFace,
+  type ExpertsServiceFace,
   type ForgeDiagEmitFace,
   type ToolExecFace,
+  type WorkerRouteProfile,
 } from "../faces.js";
 import { WorkspaceNotRegisteredError, sessionContextOf } from "../tools/session.js";
 import type { TaskToolDefinition, TaskToolExecFace } from "../tools/faces.js";
@@ -64,6 +68,31 @@ function agentsRegistryOf(ctx: unknown): AgentLookupFace | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * experts 服务面现查缝（bug dc0f9de3——worker 路由档案取用源）：双通道防御读取——
+ * ① ctx.experts 具名属性面（inject: ['experts'] 声明后的正门，plugin-forge 0b83e3aa 判例：
+ * 跨 realm 顶层服务仅此通道可达）；② reflect.get('experts') 先例面（同 scope 拓扑命中）。
+ * 注入名单未声明 / 服务晚到 / 劣形 / 抛错 = undefined（fail-soft——generic 兜底档，不阻载）。
+ * AGENTS 1.6：检测永不缓存，每个派发消费点调用期求值。
+ */
+export function expertsFaceOf(ctx: unknown): ExpertsServiceFace | undefined {
+  try {
+    const viaInject = (ctx as { experts?: ExpertsServiceFace }).experts;
+    if (viaInject !== undefined && typeof viaInject.get === "function") return viaInject;
+  } catch {
+    // inject 门拒（名单未声明环境）= 降级 reflect 通道
+  }
+  try {
+    const viaReflect = (ctx as { reflect?: { get?(name: string): unknown } }).reflect?.get?.("experts") as
+      | ExpertsServiceFace
+      | undefined;
+    if (viaReflect !== undefined && typeof viaReflect.get === "function") return viaReflect;
+  } catch {
+    // 反射通道异常 = 缺席
+  }
+  return undefined;
 }
 
 /**
@@ -132,6 +161,25 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     return undefined;
   };
   const globalToolNames = createUnionToolNamesProbe(toolsSchemasReaderOf(), agentPresetsOf);
+  // worker 路由档案解析缝（bug dc0f9de3——装配分支对齐：生产装配此前零 resolveWorkerProfile
+  // 注入，循环驱动器恒走 generic 兜底档 = allow keep-only 管线必备两员，worker 无档案 tools
+  // （写/执行族全滤除，真机判例 fix-12 010-final-web a1）。现按 faces.resolveWorkerProfile
+  // 单源配方接线：experts 面每次派发现查（AGENTS 1.6 不缓存）——在场 = expert 档（档案 tools
+  // → allow 并集面）；缺席/劣形 = undefined（core 侧 generic 兜底档，行为零变化）。
+  // settings/expert-squad refresh 屏障缺省不接（本插件零 settings 面——预设映射单源）。
+  const resolveWorkerProfile = (taskType: string, expertKey?: string): Promise<WorkerRouteProfile | undefined> => {
+    const experts = expertsFaceOf(input.ctx);
+    if (experts === undefined) return Promise.resolve(undefined);
+    const resolver = createExpertProfileResolver({
+      experts,
+      ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
+    });
+    return resolveWorkerRouteProfile(
+      { expertsOf: () => resolver, parentAgentOptions: () => undefined },
+      taskType,
+      expertKey,
+    );
+  };
   const narrator = createNarrator({ channel: narrationChannel });
   const triage = createTriageHook({ tasks: services.tasks, spawn, globalToolNames, ...(diagEmit !== undefined ? { diag: diagEmit } : {}) });
   const driver: LoopDriver = createLoopDriver({
@@ -142,6 +190,7 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     checkpoints: services.checkpoints,
     triage,
     globalToolNames,
+    resolveWorkerProfile,
     ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
   });
 
