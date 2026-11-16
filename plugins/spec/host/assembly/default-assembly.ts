@@ -8,7 +8,7 @@ import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { openSpecDb, specDbFileName, type SpecDomainDb } from "../db/connection.js";
 import { SpecError } from "../domain/specs/errors.js";
-import { createForgeSpecsService, type ForgeSpecsService } from "../domain/specs/service.js";
+import { createForgeSpecsService, deriveProjectKey, type ForgeSpecsService } from "../domain/specs/service.js";
 
 export { specDbFileName };
 
@@ -38,7 +38,7 @@ export interface SpecAssembly {
  *（resolveWsPath(projectKey)），目录逐级创建；任一步失败上抛 → 服务层事务回滚零半态。
  * 检出根解析缺席 = 抛错拒绝（fail-loud——不静默吞写）。
  */
-export function createSpecDocWriter(resolveWsPath: ((projectKey: string) => string) | undefined): (
+export function createSpecDocWriter(resolveWsPath: ((projectKey: string) => string | undefined) | undefined): (
   relPath: string,
   content: string,
   projectKey: string,
@@ -83,8 +83,13 @@ export function assembleSpecServices(config: SpecAssemblyConfig = {}, diag?: Ass
   const specs = createForgeSpecsService({
     db: db.db,
     repos: db.repos,
-    writeSpecDoc: (relPath, content, projectKey) => {
-      const write = createSpecDocWriter(config.resolveWsPath);
+    writeSpecDoc: (relPath, content, projectKey, cwd) => {
+      // 检出根解析缝（bug fefd5149 缝②）：config.resolveWsPath 显式注入优先（组合器/测试
+      // 缝）；缺席 = 缺省缝按调用 cwd 直写——cwd 即会话检出根时 deriveProjectKey 同键守卫
+      // 命中（单装缺省装配的正径），键不匹配（跨项目 cwd）= 拒绝 fail-loud 不猜。
+      const write = createSpecDocWriter(
+        config.resolveWsPath ?? ((key) => (cwd !== "" && key === deriveProjectKey(cwd) ? cwd : undefined)),
+      );
       return write(relPath, content, projectKey);
     },
   });

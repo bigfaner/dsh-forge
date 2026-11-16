@@ -70,9 +70,9 @@ describe("包骨架（三目录制 + scripts 五件 + build 链）", () => {
 });
 
 describe("包 manifest（plugin-spec 1.2 验收面）", () => {
-  it("名称与版本：@dsh-forge/spec 0.7.0（1.9 skill 面迁移 minor bump）", () => {
+  it("名称与版本：@dsh-forge/spec 0.7.1（fefd5149 装配三缝修复 patch bump）", () => {
     expect(pkg.name).toBe("@dsh-forge/spec");
-    expect(pkg.version).toBe("0.7.0");
+    expect(pkg.version).toBe("0.7.1");
   });
 
   it("exports 四键：. + ./client + ./typert + ./remote（typert 双键预留）", () => {
@@ -110,6 +110,12 @@ describe("包 manifest（plugin-spec 1.2 验收面）", () => {
     expect(insertBlock, "patch 缺单行 insert {id, name} 结构").not.toBeNull();
     expect(insertBlock?.[1]).toBe("spec");
     expect(insertBlock?.[2]).toBe("@dsh-forge/spec");
+    // 单装 skills 挂载行（bug fefd5149 缝③）：按 row id 覆写 skill-filesystem——
+    // customSkillDirs 指向包内 skills/ 的 !!js 安装后绝对路径表达式（官方 dsh-web-app
+    // 预设底稿同款先例；research/official-verification.md §2 挂载唯一机械核销）。
+    expect(patchYaml, "patch 缺 skill-filesystem customSkillDirs 挂载行").toMatch(
+      /- id: skill-filesystem[\s\S]*customSkillDirs:[\s\S]*'@dsh-forge\/spec\/package\.json'/,
+    );
   });
 
   it("peer 依赖精确 pin（无范围符号）", () => {

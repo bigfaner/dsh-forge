@@ -245,9 +245,10 @@ function registerSpecPromptSectionsFromCordis(ctx: unknown, config: SpecPluginCo
   return () => {}
 }
 
-// inject 名单：tools = 单装工具族注册缝显式入名单（bug a033636f 同判据——名单缺席 =
-// ctx 属性访问被 cordis inject 门拒恒 undefined）。reflect/emit 经防御读取消费（try/catch
-// fail-soft），不入名单（task-loop 同型——具名服务 provide 与事件混入为宿主根面）。
-specCordisPlugin.inject = ["tools"] as const
+// inject 名单：tools = 单装工具族注册缝 + systemPrompt = 提示段注册缝（bug fefd5149 缝①，
+// 同缝先例 plugins/knowledge/host/index.ts:341——名单缺席 = ctx 属性访问被 cordis inject
+// 门拒恒 undefined，两段提示段零注册）。reflect/emit 经防御读取消费（try/catch fail-soft），
+// 不入名单（task-loop 同型——具名服务 provide 与事件混入为宿主根面）。
+specCordisPlugin.inject = ["tools", "systemPrompt"] as const
 
 export default specCordisPlugin

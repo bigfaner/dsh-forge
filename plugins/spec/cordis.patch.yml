@@ -1,8 +1,17 @@
-# @dsh-forge/spec 组合层：单行插入本包（A1 自含形态）。
+# @dsh-forge/spec 组合层：单行插入本包（A1 自含形态）+ skill-filesystem 挂载行。
 # 零模式/预设知识：spec 行不携 mode、不携预设绑定缺省值——presetBinding 由 forge
 # 组合器（M5）经 config 约定缝下发（遮蔽语义：patch config 同名行整体替换非合并）。
-# skills 挂载 = config 载体（customSkillDirs 行随宿主 preset 底稿/单装 patch 声明——
-# 官方核销报告 research/official-verification.md §2），本包 patch 本体零挂载行。
+# skills 挂载 = config 载体（官方核销报告 research/official-verification.md §2——
+# plugin-manager 不自动挂载包 skills/ 目录，唯一机械 = dsh-skill-filesystem 的
+# customSkillDirs config 行）：单装形态经本 overlay patch 按 row id 覆写全局
+# skill-filesystem 行（dsh-base 底稿该行零 config——整行替换零覆盖损失），目录锚 =
+# 包内 skills/ 的安装后绝对路径（!!js baseUrl 表达式——官方 dsh-web-app 预设底稿
+# 同款表达式先例，安装世代锚定非 !!js 全形态死刑所辖的预设物化场景）。
 - insert:
     - id: spec
       name: '@dsh-forge/spec'
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    customSkillDirs:
+      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/spec/package.json')), 'skills')

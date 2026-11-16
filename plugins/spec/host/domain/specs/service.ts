@@ -74,8 +74,9 @@ export interface SpecVerbDeps {
     docs: DocsRepo;
   };
   /** 文件写缝（code-design 替身位置①）：装配面注入真实现（tmp+rename），测试注入桩。
-   *  第三参 projectKey = 归属键（plugin-spec 1.4：装配面真实现按键解析项目检出根落盘）。 */
-  writeSpecDoc: (relPath: string, content: string, projectKey: string) => void;
+   *  第三参 projectKey = 归属键（plugin-spec 1.4：装配面真实现按键解析项目检出根落盘）；
+   *  第四参 cwd = 本次调用会话检出根（缺省装配缝的键守卫回退锚——bug fefd5149 缝②）。 */
+  writeSpecDoc: (relPath: string, content: string, projectKey: string, cwd: string) => void;
   generateId?: () => string;
   now?: () => string;
   /** M4 专家门挂缝（guards.ts seam 单源） */
@@ -247,7 +248,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
           createdAt: ts,
           updatedAt: ts,
         });
-        writeSpecDoc(input.docRelPath, content, projectKey);
+        writeSpecDoc(input.docRelPath, content, projectKey, input.cwd);
         return row;
       });
     },
