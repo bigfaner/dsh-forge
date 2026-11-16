@@ -60,6 +60,7 @@ export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = [
   '@dsh-forge/md-mermaid',
   '@dsh-forge/knowledge',
   '@dsh-forge/project', // 1.17 批二卸旧装新：boot 链静态 import + overlay 注行（接替 git-worktree）
+  '@dsh-forge/spec', // plugin-spec 1.10 docs 域收编：core dist 静态 import（librarySeed——dev 锚树供应面）
 ]
 
 /** 仓库内源目录（默认平铺 packages/<short>；值 = packages/ 子居所，md-mermaid 居 packages/plugins/；
@@ -70,6 +71,7 @@ export const PRODUCT_PLUGIN_PACKAGE_DIRS: Readonly<Record<string, string>> = {
   '@dsh-forge/expert-squad': 'plugins/expert-squad',
   '@dsh-forge/knowledge': 'plugins/knowledge',
   '@dsh-forge/project': '/plugins',
+  '@dsh-forge/spec': '/plugins',
 }
 
 /** 包名 → profile.dev link 相对路径（runtime-packages.test / materialize.test 同源 pin）。

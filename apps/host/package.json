@@ -54,6 +54,7 @@
     "@dsh-forge/plugin-forge": "workspace:*",
     "@dsh-forge/plugin-forge-spec": "workspace:*",
     "@dsh-forge/project": "workspace:*",
+    "@dsh-forge/spec": "workspace:*",
     "@dsh-forge/task-loop": "workspace:*"
   },
   "devDependencies": {

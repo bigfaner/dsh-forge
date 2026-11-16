@@ -32,6 +32,9 @@ export interface ProductPluginSwitch {
    *  root 级树形态；缺席 = assemble 脚本按既有树探测推导）。批1 包归位表驱动面：
    *  packageDirOf 改读本字段（dir 字段包不再按 packages/plugins/<short> 推导）。 */
   readonly dir?: string
+  /** 库形态种子（staged 仅作运行时依赖闭包——宿主 dist 静态 import，无装载行）：
+   *  dev 装载行漂移对账豁免（plugin-bundle 守卫）；userLayerRow 恒 false。 */
+  readonly librarySeed?: boolean
 }
 
 /**
@@ -63,5 +66,11 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // plugins/task-loop/cordis.patch.yml，dsh.bundle.patch 声明指向）；skills/（to-tasks 拆解
   // 技能 + 1.15 自 plugin-forge 迁入的 submit-task 结算技能）随包由 STAGING_EXTRAS 承载。
   'task-loop': { userLayerRow: false, staged: true, dir: 'plugins/task-loop' },
+  // spec（plugin-spec 1.10 docs 域收编，task-loop 同款 staging 闭包登记）：core dist 装配行
+  // 静态 import 本包（forgeDocs 读域 factory——收编改指 @dsh-forge/spec 出口）——缺席即安装
+  // 版主进程 ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层：M5 组合器接线前为库形态种子
+  // （librarySeed——零装载行，dev 漂移对账豁免）；组合装配行 cordis.patch.yml 随包由
+  // STAGING_EXTRAS 承载（dsh.bundle.patch 声明指向——行接线后 loader 按声明读包内该文件）。
+  spec: { userLayerRow: false, staged: true, dir: 'plugins/spec', librarySeed: true },
   knowledge: { userLayerRow: true, dir: 'plugins/knowledge' },
 }

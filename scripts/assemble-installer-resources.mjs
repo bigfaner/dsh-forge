@@ -92,6 +92,10 @@ const STAGING_EXTRAS = {
   // （package.json dsh.bundle.patch 声明指向）+ skills 技能面（to-tasks 拆解技能 + 自
   // plugin-forge 迁入的 submit-task 结算技能——customSkillDirs 挂载源）
   'task-loop': { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/to-tasks/SKILL.md', 'skills/submit-task/SKILL.md', 'skills/rescue-task-loop/SKILL.md', 'cordis.patch.yml'] },
+  // spec（plugin-spec 1.10 docs 域收编——librarySeed：core dist 静态 import 闭包随包）：
+  // 组合装配行本体 cordis.patch.yml（package.json dsh.bundle.patch 声明指向——M5 组合器
+  // 行接线后 loader 按声明读包内该文件，缺席即 ENOENT，bug a1f13abf 同径）
+  spec: { files: ['cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */

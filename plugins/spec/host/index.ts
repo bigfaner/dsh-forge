@@ -13,6 +13,10 @@ import {
   specPipelineSectionText,
 } from './prompt/index.js'
 
+// docs 读域（plugin-spec 1.10 收编——forgeDocs 双锚兼容读域出口；装配层 consume）
+export { createDocsService, type DocsServiceDeps } from './docs/index.js'
+export { DocPathInvalidError, type DocPathInvalidData } from './docs/errors.js'
+
 /** spec 插件装配入参（spec 行 config；presetBinding 缺省 = 无条件注入） */
 export interface SpecPluginConfig {
   /** forge 组合器（M5）经 config 约定缝下发的预设绑定值；缺省 = 无条件注入 */

@@ -3,7 +3,8 @@
 // 四步补偿链）。M2（2.7）：tasksHome
 // 注入时增注册四域服务 ctx.forgeFeatures/forgeProposals/forgeDocs/forgeBugs（装配壳 +
 // 三小域实现；fix-1 装配缝解耦：forgeTasks/forgeCheckpoints 停供——tasksHome 缝移交
-// @dsh-forge/task-loop 插件域 provide）。共享 ForgeWorkspaceStore 惰性多句柄 +
+// @dsh-forge/task-loop 插件域 provide；plugin-spec 1.10：forgeDocs 读域收编——实现改指
+// @dsh-forge/spec 包出口，core 只保留 routing 注入装配行）。共享 ForgeWorkspaceStore 惰性多句柄 +
 // 事件发射器装配单例；首建挂点 = 发现面只读扫描（交互二/三）。M3（2.7）：settingsFile
 // 注入时增注册第七服务 ctx.forgeSettings（get/set 单门——UI 与 dispatchTask 同门消费，
 // host 接线 = 3.8）。无逻辑：开句柄 → 注册服务 →
@@ -20,7 +21,7 @@ import { openDatabase } from './db/index.js'
 import { createProjectService } from './forge/project-service.js'
 import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
 import { createSettingsService } from './forge/settings/service.js'
-import { createDocsService } from './forge/small-domains/docs.js'
+import { createDocsService } from '@dsh-forge/spec'
 import { createBugsService } from './forge/small-domains/bugs.js'
 import { createFeaturesService, registerFeatureInTx } from './forge/small-domains/features.js'
 import { createProposalsService } from './forge/small-domains/proposals.js'
@@ -223,7 +224,9 @@ const corePlugin: CorePlugin = Object.assign(
           registerFeatureInTx, // 2.2 成链内聚同事务核心（装配注边——四域互禁 import 消解）
         }),
       )
-      ctx.reflect.provide('forgeDocs', createDocsService({ store, resolveForgeDir: routing.forgeDir }))
+      // docs 域装配行（plugin-spec 1.10 收编——factory 源 @dsh-forge/spec 包出口；
+      // 双锚读域：.forge/specs/ 主锚 + .forge/docs/ 只读兼容锚；routing 单注入）
+      ctx.reflect.provide('forgeDocs', createDocsService({ resolveForgeDir: routing.forgeDir }))
       ctx.reflect.provide('forgeBugs', bugsService)
     }
     return () => {

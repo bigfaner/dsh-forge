@@ -295,8 +295,10 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // knowledge = userLayerRow 种子（1.9 A5 重开放——用户层全局行 + skills/learn 技能面）
     // lib/* = 闭包成员（plugin-project 1.2/1.6/1.7：core 依赖 lib-util/lib-diag/lib-path/lib-db，
     // contracts 兼容面依赖 lib-api——lib/ 子居所自动入场）
+    // spec = staged:true 覆写种子（plugin-spec 1.10 docs 域收编：core dist 装配行静态 import
+    // @dsh-forge/spec——forgeDocs factory 改指新包，缺席即 boot ESM 解析断裂）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/md-mermaid', 'plugins/task-loop', 'root:plugins/project'].sort(),
+      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/md-mermaid', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
     )
   })
 

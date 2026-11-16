@@ -27,6 +27,7 @@
     "@dsh-forge/lib-diag": "workspace:*",
     "@dsh-forge/lib-path": "workspace:*",
     "@dsh-forge/lib-util": "workspace:*",
+    "@dsh-forge/spec": "workspace:*",
     "better-sqlite3": "13.0.3"
   }
 }

@@ -111,7 +111,8 @@ describe('dev profile 装载行漂移守护（bug bc89637c 类别回归守卫）
     )
     const stagedNames = new Set(
       Object.entries(PRODUCT_PLUGINS)
-        .filter(([, sw]) => sw.staged !== false)
+        // librarySeed（库形态闭包种子——宿主 dist 静态 import，零装载行）不入装载对账期望集
+        .filter(([, sw]) => sw.staged !== false && sw.librarySeed !== true)
         .map(([name]) => name),
     )
 
