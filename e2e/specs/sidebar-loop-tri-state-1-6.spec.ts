@@ -19,6 +19,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { launchHost, closeApp, ROOT } from '../support/launch.js'
 import { registerProject } from '../support/rpc.js'
 import { createBridgeDriver } from '../support/replay/executor.js'
+import { projectKeyOf } from '../support/project-key.js'
 
 /** 真实凭据源（主检出 dev 实例 dsh-home——同文件同字节播种，walk14 先例） */
 const CRED_SRC = join(ROOT, 'apps', 'host', 'userdata.dev', 'dsh-home', '.credentials.yaml')
@@ -64,10 +65,11 @@ async function bootFixture(options: {
   const launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
   const { app, page } = launched
   const project = await registerProject(page, wsDir, wsName)
+  const projectKey = projectKeyOf(wsDir)
   const driver = createBridgeDriver(app)
   await driver.call('forgeProposals', 'createProposal', { projectId: project.id, slug, title: proposalTitle, mode: 'blitz' })
   for (const t of taskTitles) {
-    await driver.call('forgeTasks', 'addTask', { projectId: project.id, source: { kind: 'proposal', slug }, title: t, type: 'doc' })
+    await driver.call('forgeTasks', 'addTask', { projectKey, slug, title: t, type: 'doc' })
   }
   // 会话创建（官方直通——项目行尾新会话钮 startSession(workspaceId)，walk14 同款）
   await page

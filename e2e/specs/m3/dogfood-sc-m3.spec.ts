@@ -45,6 +45,7 @@ import { closeApp, launchHost, ROOT, type Launched } from '../../support/launch.
 import { openOverviewDock } from '../../support/navigation.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { projectKeyOf } from '../../support/project-key.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { readDogfoodAudit, seedDogfoodTaskRow, type DogfoodAuditRecord } from '../../support/replay/dogfood-record.js'
 import { findFixtureSession } from '../../support/session-files.js'
@@ -185,6 +186,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     // ── 立项链：注册（清洁夹具——发现面零吸收）→ createProposal（bridge = 技能代笔承载）→ 真实提案文档入树 ──
     const project = await registerProject(page, ws, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(ws)
     const dir = (
       await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: ws })
     ).dir
@@ -355,7 +357,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     // ── 1.4 收官占位预领（harness 会话身份）：他会话 in_progress 对 dispatcher 盲选不可见
     //    （双 dispatcher 不双派发防线）——其余任务全终态后 dispatcher 必命中 no-task ──
     await driver.call('forgeTasks', 'claimTask', {
-      projectId,
+      projectKey,
       taskRef: { slug: FEATURE, localId: '1.4' },
       sessionId: 'e2e-harness',
     })
@@ -483,7 +485,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
     })
     const task11Id = `t-${FEATURE}-1.1`
     await forgeInvoke(page, TASKS_CHANNELS.transition, {
-      projectId, taskId: task11Id, toStatus: 'pending',
+      projectKey, taskId: task11Id, toStatus: 'pending',
       reason: 'SC-M3 走查：halted 复位——人工转移后经派发入口新会话重派（worker 异常终止阶梯终局指引径）',
     })
     {
@@ -545,7 +547,7 @@ test('@web-e2e @m3 5.3 SC-M3 门：M3.5 自举走查（评审成链 + dispatchTa
       if (othersTerminal && othersTerminalSince === 0) othersTerminalSince = Date.now()
       if (!closerSettled && othersTerminal && (noReadySeen() || Date.now() - othersTerminalSince > 90_000)) {
         await driver.call('forgeTasks', 'submitTask', {
-          projectId,
+          projectKey,
           taskRef: { slug: FEATURE, localId: '1.4' },
           result: 'success',
           summary: 'harness 收官结算 1.4（no-task 收工信号驱动——双 dispatcher 防线占位）',

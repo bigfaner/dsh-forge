@@ -32,6 +32,7 @@ import { closeApp, launchHost, ROOT, type Launched } from '../../support/launch.
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { loadFixture } from '../../support/replay/fixtures.js'
 import type { ReplayVerbStep } from '../../support/replay/format.js'
@@ -86,6 +87,7 @@ test('@web-e2e @m2 5.4 SC-M2 门回放版：录制夹具 verb 重放（fix 链 +
     // ── 受控初态：注册 + feature 行（人类径 RPC）+ 相位号任务直种（与录制轮同构——审计链同构前提） ──
     const project = await registerProject(page, ws, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(ws)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: 'dogfood 派发链演示' })
     const derived = await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: ws })
     {
@@ -124,7 +126,7 @@ test('@web-e2e @m2 5.4 SC-M2 门回放版：录制夹具 verb 重放（fix 链 +
       }
     }
 
-    // ── verb 行依序重放（projectId 同机重键 + 工件代位 + commitHash 覆写）+ golden 对拍 ──
+    // ── verb 行依序重放（projectKey 同机重键 + 工件代位 + commitHash 覆写）+ golden 对拍 ──
     const verbs = fixture.steps.filter((s): s is ReplayVerbStep => s.kind === 'verb')
     const observedBySeq = new Map(
       fixture.steps.filter((s) => s.kind === 'observed').map((s) => [s.seq, s]),
@@ -136,7 +138,7 @@ test('@web-e2e @m2 5.4 SC-M2 门回放版：录制夹具 verb 重放（fix 链 +
       [23, [['target.md', 'marker\n']]],
     ])
     for (const step of verbs) {
-      const args: Record<string, unknown> = { ...step.args, projectId }
+      const args: Record<string, unknown> = { ...step.args, projectKey }
       if (step.verb === 'submitTask') {
         const artifacts = stageBySeq.get(step.seq)
         if (artifacts !== undefined) {

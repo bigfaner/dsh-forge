@@ -75,6 +75,7 @@ import { openForgeDbAt, seedEdge, seedTask } from '../../support/replay/db-inser
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, projectRowOf, sessionRowOf, ttItemOf } from '../../support/anchors.js'
 import { awaitNoLateModals, awaitPresetHeaderLabel, seatPresent } from '../../support/m3.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-joes'
 
@@ -274,6 +275,7 @@ test('@web-e2e @m3 概览入口·T2：子图诊断失败 → 发送给 agent（�
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
 
@@ -293,11 +295,11 @@ test('@web-e2e @m3 概览入口·T2：子图诊断失败 → 发送给 agent（�
     // 健康容器 + 突击容器（对照面）
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: 'joe-ok', title: 'Joe 健康子图 feature' })
     const okTask = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: 'joe-ok' }, title: '健康容器任务', type: 'doc',
+      projectKey, slug: 'joe-ok', title: '健康容器任务', type: 'doc',
     })) as { taskId: string }
     await driver.call('forgeProposals', 'createProposal', { projectId, slug: 'joe-blitzdiag', title: 'Joe 突击容器（无诊断钮）', mode: 'blitz' })
     const blitzTask = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: 'joe-blitzdiag' }, title: '突击容器任务', type: 'doc',
+      projectKey, slug: 'joe-blitzdiag', title: '突击容器任务', type: 'doc',
     })) as { taskId: string }
 
     // ── Step4 success：违规容器诊断 → 失败 toast（五类检查行）→ 发送 ──
@@ -361,18 +363,19 @@ test('@web-e2e @m3 概览入口·T3：blocked 任务「诊断失败」→ 发送
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
     const PROP = 'joef-blitz'
     await driver.call('forgeProposals', 'createProposal', { projectId, slug: PROP, title: 'Joe 失败诊断突击提案', mode: 'blitz' })
     const blocked = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '受阻任务', type: 'doc',
+      projectKey, slug: PROP, title: '受阻任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const pending = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '待办任务', type: 'doc',
+      projectKey, slug: PROP, title: '待办任务', type: 'doc',
     })) as { taskId: string }
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: blocked.slug, localId: blocked.localId }, sessionId: 'e2e-joes3-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: blocked.slug, localId: blocked.localId }, sessionId: 'e2e-joes3-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: blocked.slug, localId: blocked.localId }, result: 'blocked',
+      projectKey, taskRef: { slug: blocked.slug, localId: blocked.localId }, result: 'blocked',
       reason: 'Joe 失败诊断演示（AC 证据缺口）', sessionId: 'e2e-joes3-executor',
       blockClassification: { kind: 'new-problem' },
     })

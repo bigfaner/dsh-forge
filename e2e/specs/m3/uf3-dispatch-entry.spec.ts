@@ -22,6 +22,7 @@ import { createBridgeDriver } from '../../support/replay/executor.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, OV_PANEL, TD_DRAWER, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { awaitNoLateModals, awaitPresetHeaderLabel, newBlankSession } from '../../support/m3.js'
 import { forgeInvoke } from '../../support/rpc.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-uf3'
 const FEATURE = 'uf3-feat'
@@ -72,13 +73,14 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
     await anchorConverge(page)
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
     await forgeInvoke(page, 'forge:features/register', { projectId, slug: FEATURE, title: 'UF-3 派发入口演示' })
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: 'UF-3 演示任务甲', type: 'doc',
+      projectKey, slug: FEATURE, title: 'UF-3 演示任务甲', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: 'UF-3 演示任务乙', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: FEATURE, title: 'UF-3 演示任务乙', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string; slug: string; localId: string }
 
     // ── 跳转目标会话夹具：芯片流 → 夹具消息（会话 A·非 blank）→ 新开 blank（会话 B·hero 面）──
@@ -118,7 +120,7 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
     await expect(drawer).toBeHidden({ timeout: 10_000 })
 
     // ── ② 执行中在场跳转不重发：claim（挂接 = 会话 A）→ 派发 → jump ──
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: jumpSessionId })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: jumpSessionId })
     const dispatchOn = page.locator('[data-dswf-tt-dispatch="on"]').first()
     await expect(dispatchOn, '派发按钮亮起（执行中在场）').toBeVisible({ timeout: 30_000 })
     await dispatchOn.click()
@@ -128,12 +130,12 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
 
     // ── ③ 全终态置灰：结算双任务 → 终态全集 → 深灰实底 + tooltip ──
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
+      projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
       summary: 'UF-3 甲结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: jumpSessionId,
     })
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: jumpSessionId })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: jumpSessionId })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t2.slug, localId: t2.localId }, result: 'success',
+      projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, result: 'success',
       summary: 'UF-3 乙结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: jumpSessionId,
     })
     const dispatchOff = page.locator('[data-dswf-tt-dispatch="off"]').first()
@@ -165,10 +167,11 @@ test('@web-e2e @m3 UF-3·新开路由：突击提案容器派发 → 突击模�
     await anchorConverge(page)
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
     await driver.call('forgeProposals', 'createProposal', { projectId, slug: PROP, title: 'UF-3 突击容器演示', mode: 'blitz' })
     await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: 'UF-3 突击容器任务', type: 'doc',
+      projectKey, slug: PROP, title: 'UF-3 突击容器任务', type: 'doc',
     })
     await selectWorkspaceViaChip(page, WS_NAME)
 

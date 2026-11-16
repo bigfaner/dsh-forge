@@ -12,6 +12,7 @@ export type {
   TaskGraphDto,
   TasksFollowQuery,
   TasksQueryRequest,
+  TasksRemoteAcSettlementsRequest,
   TasksRemoteDetailQuery,
   TasksRemoteFollowQuery,
   TasksRemoteGraphQuery,
@@ -22,6 +23,7 @@ export type {
   TasksRemoteTransitionInput,
   TasksRemoteValidateInput,
 } from "./assembly/typert-remotes.js";
+export type { AcSettlementsAggregate } from "./domain/tasks/ac-match.js";
 export type {
   ListTasksQuery,
   TaskGraph,

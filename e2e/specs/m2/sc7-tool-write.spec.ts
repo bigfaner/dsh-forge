@@ -26,6 +26,7 @@ import { FEATURES_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/s
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { switchTaskView } from '../../support/m3.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { OV_PANEL, TD_DRAWER, ovSubtabOf, ttCardOf, ttColOf, ttItemOf } from '../../support/anchors.js'
@@ -65,14 +66,15 @@ test('@web-e2e @m2 5.2 SC7：tool 写 → 三读面单次重取即见新值 + �
     // ── 底座：注册 + feature 登记（人类径 RPC）──
     const project = await registerProject(page, wsDir, 'SC7 真闭环')
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: 'sc7-feat', title: 'SC7 真闭环演示' })
 
     // ── 回放主径写段（hand 夹具）：addTask → 单次重取即见 pending ──
     const driver = createBridgeDriver(app)
     const addFixture = createFixtureBuilder({ source: 'hand', note: '5.2 SC7 写段' })
       .verb('forgeTasks', 'addTask', {
-        projectId,
-        source: { kind: 'feature', slug: 'sc7-feat' },
+        projectKey,
+        slug: 'sc7-feat',
         title: 'SC7 真闭环任务（列表/抽屉/泳道三面）',
         type: 'coding-feature',
         priority: 'P0',
@@ -81,7 +83,7 @@ test('@web-e2e @m2 5.2 SC7：tool 写 → 三读面单次重取即见新值 + �
     const addOutcomes = await replayWrites(driver, addFixture)
     const added = (addOutcomes[0] as { result: { taskId: string; slug: string; localId: string; reused: boolean } }).result
     expect(added.reused).toBe(false)
-    const cards0 = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'sc7-feat' } })
+    const cards0 = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: 'sc7-feat' })
     expect(cards0.find((c) => c.taskId === added.taskId)?.taskStatus, 'add 后单次重取即见 pending').toBe('pending')
 
     // ── UI 预开：概览 dock → 任务子 tab → 列表行初始态可见（事件刷新断言的对照面）──
@@ -96,16 +98,16 @@ test('@web-e2e @m2 5.2 SC7：tool 写 → 三读面单次重取即见新值 + �
     // ── claim（回放主径）：三读面单次重取即见 in_progress + 事件 ≤500ms ──
     const eventsBeforeClaim = (await driver.events()).length
     const claimFixture = createFixtureBuilder({ source: 'hand', note: '5.2 SC7 claim 段' })
-      .verb('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISPATCH_SESSION })
+      .verb('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISPATCH_SESSION })
       .build()
     const t0 = Date.now()
     await replayWrites(driver, claimFixture)
     // 即时判据：claim 返回后单发读面（无等待兜底）——列表（列表视图源）/graph（泳道源）/detail（抽屉源）
-    const listAfterClaim = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'sc7-feat' } })
+    const listAfterClaim = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: 'sc7-feat' })
     expect(listAfterClaim.find((c) => c.taskId === added.taskId)?.taskStatus, '列表读面：claim 后单次重取即见 in_progress').toBe('in_progress')
-    const graphAfterClaim = await refetchOnce<{ tasks: TaskCard[] }>(page, TASKS_CHANNELS.graph, { projectId, source: { kind: 'feature', slug: 'sc7-feat' } })
+    const graphAfterClaim = await refetchOnce<{ tasks: TaskCard[] }>(page, TASKS_CHANNELS.graph, { projectKey, slug: 'sc7-feat' })
     expect(graphAfterClaim.tasks.find((c) => c.taskId === added.taskId)?.taskStatus, '图读面（泳道数据源）：单次重取即见 in_progress').toBe('in_progress')
-    const detailAfterClaim = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: added.taskId })
+    const detailAfterClaim = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: added.taskId })
     expect(detailAfterClaim.taskStatus, '详情读面（抽屉数据源）：单次重取即见 in_progress').toBe('in_progress')
     // 事件 ≤500ms（主侧收讫时戳——evt.at 距写发起时刻；含动词执行时间的保守超集口径）
     const claimEvent = await awaitTasksChangedEvent(driver, eventsBeforeClaim)
@@ -118,7 +120,7 @@ test('@web-e2e @m2 5.2 SC7：tool 写 → 三读面单次重取即见新值 + �
     const eventsBeforeSubmit = (await driver.events()).length
     const submitFixture = createFixtureBuilder({ source: 'hand', note: '5.2 SC7 结算段' })
       .verb('forgeTasks', 'submitTask', {
-        projectId,
+        projectKey,
         taskRef: { slug: added.slug, localId: added.localId },
         result: 'success',
         summary: 'SC7 真闭环结算（5.2 e2e）',
@@ -129,7 +131,7 @@ test('@web-e2e @m2 5.2 SC7：tool 写 → 三读面单次重取即见新值 + �
     const t1 = Date.now()
     const submitOutcomes = await replayWrites(driver, submitFixture)
     expect((submitOutcomes[0] as { result: { status: string } }).result.status).toBe('completed')
-    const detailAfterSubmit = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: added.taskId })
+    const detailAfterSubmit = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: added.taskId })
     expect(detailAfterSubmit.taskStatus, '详情读面：submit 后单次重取即见 completed').toBe('completed')
     expect(detailAfterSubmit.records.length, 'submit 记录水化（时间线数据源同步即见）').toBeGreaterThanOrEqual(3) // add + claim + submit
     const submitEvent = await awaitTasksChangedEvent(driver, eventsBeforeSubmit)
@@ -162,7 +164,7 @@ test('@web-e2e @m2 5.2 SC7：tool 写 → 三读面单次重取即见新值 + �
     //    类型面收窄为五写动词——探针刻意传面外动词，经 string 面绕开编译期收窄（运行期
     //    拒绝即断言本体，非类型面缺口）
     const callAny = driver.call as unknown as (service: string, verb: string, args: unknown) => Promise<unknown>
-    const toolFaceRejection = await callAny('forgeTasks', 'transitionTask', { projectId, taskId: added.taskId, toStatus: 'skipped', reason: '面分治探针' })
+    const toolFaceRejection = await callAny('forgeTasks', 'transitionTask', { projectKey, taskId: added.taskId, toStatus: 'skipped', reason: '面分治探针' })
       .then(() => 'unexpectedly-resolved', (cause: unknown) => String((cause as Error)?.message ?? cause))
     expect(toolFaceRejection, 'tool 传输面拒绝 transitionTask（注册面缺席的运行面自证——G1-11 pin 呼应）').toContain('不在测试钩子可达面')
 

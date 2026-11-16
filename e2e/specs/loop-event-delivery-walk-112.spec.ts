@@ -19,6 +19,7 @@ import { realCredentials, seedDshHome } from '../support/dogfood.js'
 import { registerProject } from '../support/rpc.js'
 import { createBridgeDriver } from '../support/replay/executor.js'
 import { CONVERSATION_CONTENT } from '../support/anchors.js'
+import { projectKeyOf } from '../support/project-key.js'
 
 const WS_NAME = 'ws-led-walk112'
 const PROP = 'led-walk112-prop'
@@ -155,21 +156,22 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
   const meta: Record<string, unknown> = { userData, wsDir }
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
     await driver.call('forgeProposals', 'createProposal', { projectId: project.id, slug: PROP, title: '真机走查容器（1.12）', mode: 'blitz' })
     for (const t of ['walk112-任务甲：在 ws 根写 walk112-a.md 一行内容', 'walk112-任务乙：在 ws 根写 walk112-b.md 一行内容']) {
       await driver.call('forgeTasks', 'addTask', {
-        projectId: project.id, source: { kind: 'proposal', slug: PROP }, title: t, type: 'doc',
+        projectKey, slug: PROP, title: t, type: 'doc',
       })
     }
     // ── 驱动前夹具重置（fix-6）：容器内一切非 pending 任务回退 pending（种子任务重跑幂等）；
     // 历史派生 fix 任务容忍保留（结算断言为收敛语义，不钉完成数）。转移失败容忍（fail-soft 记账）──
-    const fixtureReset = await page.evaluate(async ({ pid, slug }) => {
+    const fixtureReset = await page.evaluate(async ({ projectKey, slug }) => {
       const forge = (globalThis as unknown as {
         dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: unknown; message?: string }> }
       }).dshForge
       if (forge === undefined) throw new Error('dshForge preload 面缺席')
-      const listed = await forge.invoke('forge:tasks/list', { projectId: pid, source: { kind: 'proposal', slug } })
+      const listed = await forge.invoke('forge:tasks/list', { projectKey, slug })
       if (!listed.ok) throw new Error(`forge:tasks/list 失败：${String(listed.message)}`)
       const cards = (listed.data as { status?: string; taskId?: string }[]) ?? []
       const resetTo: string[] = []
@@ -177,7 +179,7 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
       for (const card of cards) {
         if (card.status !== undefined && card.status !== 'pending' && card.taskId !== undefined) {
           const moved = await forge.invoke('forge:tasks/transition', {
-            projectId: pid,
+            projectKey,
             taskId: card.taskId,
             toStatus: 'pending',
             reason: 'walk112 驱动前夹具重置（回 pending）',
@@ -187,7 +189,7 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
         }
       }
       return { total: cards.length, resetTo, failed }
-    }, { pid: project.id, slug: PROP })
+    }, { slug: PROP, projectKey })
     meta.fixtureReset = fixtureReset
     console.log(`[walk112] fixture reset = ${JSON.stringify(fixtureReset)}`)
     // 官方认证 + boot manifest 前移（会话创建 HTTP 通路前提）

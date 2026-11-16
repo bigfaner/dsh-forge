@@ -55,6 +55,7 @@ import { openOverviewDock } from '../../support/navigation.js'
 import { forgeInvoke } from '../../support/rpc.js'
 import { ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { awaitSeatLabel, seatLabel, seatPresent, seatRoot, selectPreset } from '../../support/m3.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-jmsa'
 
@@ -160,6 +161,7 @@ test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
     const blitzProp = (await driver.call('forgeProposals', 'createProposal', {
       projectId, slug: 'jmsa-blitz', title: 'Jmsa 突击对齐提案', mode: 'blitz',
@@ -168,7 +170,7 @@ test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）
       projectId, slug: 'jmsa-old', title: 'Jmsa 无溯源提案（扫描吸收形态）',
     })) as { proposalId: string; slug: string }
     await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: blitzProp.slug }, title: '对齐演示直挂任务', type: 'doc',
+      projectKey, slug: blitzProp.slug, title: '对齐演示直挂任务', type: 'doc',
     })
 
     // ── Step4：经提案绑定入口创建新会话 → 自动对齐突击（blank 期 select）──
@@ -227,6 +229,7 @@ test('@web-e2e @m3 模式选择·T3：错配守卫可读面零阻断（会话组
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     // Step5b 世界：hero 自由会话（registry 缺省 = blitz——bug 2ba146d8，无提案上下文无切面）+ 带直挂任务的 blitz 提案
@@ -234,7 +237,7 @@ test('@web-e2e @m3 模式选择·T3：错配守卫可读面零阻断（会话组
       projectId, slug: 'jmsa-guard', title: 'Jmsa 错配守卫演示提案', mode: 'blitz',
     })) as { proposalId: string; slug: string }
     const task = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: blitzProp.slug }, title: '错配守卫直挂任务', type: 'doc',
+      projectKey, slug: blitzProp.slug, title: '错配守卫直挂任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     await selectWorkspaceWithRetry(page, WS_NAME)
 

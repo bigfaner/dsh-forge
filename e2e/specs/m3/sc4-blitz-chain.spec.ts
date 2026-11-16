@@ -14,6 +14,7 @@ import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { ovSubtabOf, ttCardOf, ttColOf, ttItemOf } from '../../support/anchors.js'
 import { switchTaskView } from '../../support/m3.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-sc4'
 const PROP = 'sc4-blitz'
@@ -32,6 +33,7 @@ test('@web-e2e @m3 SC4·突击直达链：accepted 无 feature 行 + 直挂任�
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
 
@@ -40,10 +42,10 @@ test('@web-e2e @m3 SC4·突击直达链：accepted 无 feature 行 + 直挂任�
       projectId, slug: PROP, title: 'SC4 突击直达链演示', mode: 'blitz',
     })) as { proposalId: string; slug: string }
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '突击任务甲', type: 'doc',
+      projectKey, slug: PROP, title: '突击任务甲', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '突击任务乙', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: PROP, title: '突击任务乙', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string; slug: string; localId: string }
 
     // ── accepted → 无 feature 行（成链分叉：blitz 不成链——任务直挂提案）──
@@ -79,9 +81,9 @@ test('@web-e2e @m3 SC4·突击直达链：accepted 无 feature 行 + 直挂任�
     await expect(page.locator(ttItemOf(t1.taskId)).first(), '直挂任务行在场（列表视图）').toBeVisible({ timeout: 30_000 })
 
     // ── 派发（回放主径承载）：claim + submit 甲 → 三视图即时刷新 ──
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-sc4-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-sc4-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
+      projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
       summary: 'SC4 突击甲结算（三视图即时刷新断言）', gate: { compile: true, fmt: true, lint: true, test: true },
       sessionId: 'e2e-sc4-executor',
     })

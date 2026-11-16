@@ -50,6 +50,7 @@ import type { ClaimTaskResult, SubmitTaskResult, TaskCard, TaskDetail } from '..
 // e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（spec 级单次冷启 + 用例间重播种）
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { bridgeDispatch } from '../../support/launch.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
@@ -80,9 +81,10 @@ async function rejectMessage(promise: Promise<unknown>): Promise<string> {
 async function setupWorld(page: Page, wsDir: string, wsName: string, feature: string) {
   const project = await registerProject(page, wsDir, wsName)
   const projectId = project.id
+  const projectKey = projectKeyOf(wsDir)
   await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: feature, title: `派发链演示 ${feature}` })
   const dir = (await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: wsDir })).dir
-  return { projectId, dir }
+  return { projectKey, projectId, dir }
 }
 
 test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算→概览即时（Step1-6 success 全链）', async ({ sharedLaunch }) => {
@@ -91,7 +93,7 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-tdp')
     const FEATURE = 'tdp-feat'
-    const { projectId, dir } = await setupWorld(page, wsDir, '派发链冒烟', FEATURE)
+    const { projectKey, projectId, dir } = await setupWorld(page, wsDir, '派发链冒烟', FEATURE)
     // 共享 launch 适配（用例内显式收口）：fixture 首注册根项目 → 概览默认绑定偏移，芯片流显式选定本项目
     await selectWorkspaceViaChip(page, '派发链冒烟')
     const driver = createBridgeDriver(app)
@@ -99,13 +101,13 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
 
     // ── Step 1（意图入口）：夹具就位 = 就绪任务在场（前置全终态的 pending）──
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '派发链冒烟任务', type: 'doc',
+      projectKey, slug: FEATURE, title: '派发链冒烟任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string; reused: boolean }
     expect(added.reused, 'addTask 新建（非复用）').toBe(false)
 
     // ── Step 2（领取）：pending→in_progress + dispatchPrompt 四段 + 审计 + 挂接 ──
     const claim = (await driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
     })) as ClaimTaskResult
     expect(claim.task?.taskStatus, '领取后 in_progress').toBe('in_progress')
     expect(claim.reclaimed, '首领非重入').toBe(false)
@@ -120,7 +122,7 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
     expect(claim.dispatchPrompt, '无类型策略工作流段（迁 persona 变体表）').not.toContain('<type-policy>')
     expect(claim.digest, 'digest = 12 hex 简报指纹').toMatch(/^[0-9a-f]{12}$/)
     // 单发重取即见（即时判据——无轮询）
-    const detailAfterClaim = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: added.taskId })
+    const detailAfterClaim = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: added.taskId })
     expect(detailAfterClaim.taskStatus, '读面单发即见 in_progress').toBe('in_progress')
 
     const db = openForgeDbAt(dir)
@@ -143,7 +145,7 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
     // ── Step 5（结算）：completed + submit 审计（gate/commit/执行会话）──
     const COMMIT = 'abcd1234e5f67890abcd1234e5f67890abcd1234'
     const submit = (await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
       summary: '派发链冒烟结算（gate 全过）',
       gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT, sessionId: EXEC_SESSION,
@@ -183,7 +185,7 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
     await expect(row, '概览任务行在场（写入后浏览即见）').toBeVisible({ timeout: 30_000 })
     await expect(row, '任务行主行中文状态 tag = 已完成').toContainText(ZH_DONE)
     // 即时判据（读面）：写入返回后单次重取即见 completed——无 watch 无同步延迟
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE })
     expect(cards.find((c) => c.taskId === added.taskId)?.taskStatus, '概览列表单发重取即见 completed').toBe('completed')
     await expect(page.locator(OV_PANEL).first(), '概览面板持续在场（读路径活跃无阻塞）').toBeVisible()
 
@@ -195,13 +197,13 @@ test('@web-e2e @m2 派发链·Step2b 无就绪任务：空出口信号 + 零写�
 
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-tdp2b')
-    const { projectId, dir } = await setupWorld(page, wsDir, '无就绪演示', 'tdp2b')
+    const { projectKey, dir } = await setupWorld(page, wsDir, '无就绪演示', 'tdp2b')
     const driver = createBridgeDriver(app)
     const eventsBefore = (await driver.events()).length
 
     // 空库盲选：无任务被领取——Z1 出口信号（task null + 空简报 + 非重入）
     const claim = (await driver.call('forgeTasks', 'claimTask', {
-      projectId, sessionId: DISP_SESSION,
+      projectKey, sessionId: DISP_SESSION,
     })) as ClaimTaskResult
     expect(claim.task, '空库盲选 → task = null（不制造虚假就绪）').toBeNull()
     expect(claim.dispatchPrompt, '空出口 dispatchPrompt = 空串').toBe('')
@@ -227,21 +229,21 @@ test('@web-e2e @m2 派发链·Step2c 前置未终态：守卫拒绝 + 未满足�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-tdp2c')
     const FEATURE = 'tdp2c'
-    const { projectId, dir } = await setupWorld(page, wsDir, '守卫拒绝演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '守卫拒绝演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 前置 P（in_progress——满足集外）+ 等待方 W（dependsOn P，pending）
     const p = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '前置 P（保持未终态）', type: 'doc',
+      projectKey, slug: FEATURE, title: '前置 P（保持未终态）', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const w = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '等待方 W', type: 'doc', dependsOn: [p.localId],
+      projectKey, slug: FEATURE, title: '等待方 W', type: 'doc', dependsOn: [p.localId],
     })) as { taskId: string; slug: string; localId: string }
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: p.slug, localId: p.localId }, sessionId: DISP_SESSION })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: p.slug, localId: p.localId }, sessionId: DISP_SESSION })
 
     // 显式 taskRef 领取 W → 依赖终态守卫拒绝（不产生部分领取或越序领取）
     const rejection = await rejectMessage(driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: w.slug, localId: w.localId }, sessionId: DISP_SESSION,
+      projectKey, taskRef: { slug: w.slug, localId: w.localId }, sessionId: DISP_SESSION,
     }))
     expect(rejection, '守卫拒绝 = ERR_DEPENDENCIES_UNMET 面（未满足清单携带前置自然键 + 当前状态）').toContain('前置依赖未满足')
     expect(rejection, '清单含前置自然键').toContain(`${p.slug}/${p.localId}`)
@@ -249,7 +251,7 @@ test('@web-e2e @m2 派发链·Step2c 前置未终态：守卫拒绝 + 未满足�
     expect(rejection, '满足集口径呈现').toContain('{completed, skipped}')
 
     // 零残留：W 保持 pending + W 零 claim 审计（单事务全成全败）
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: w.taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: w.taskId })
     expect(detail.taskStatus, '目标任务保持 pending（库不被破坏）').toBe('pending')
     const db = openForgeDbAt(dir)
     try {
@@ -269,7 +271,7 @@ test('@web-e2e @m2 派发链·Step2d 盲选不领他会话 in_progress（双派�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-tdp2d')
     const FEATURE = 'tdp2d'
-    const { projectId, dir } = await setupWorld(page, wsDir, '盲选防线演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '盲选防线演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 受控初态（直插通道——不可经动词构造）：他会话挂接的 in_progress + 当前会话零挂接 + 无就绪 pending
@@ -292,7 +294,7 @@ test('@web-e2e @m2 派发链·Step2d 盲选不领他会话 in_progress（双派�
 
     // 会话 A 盲选：不领取他会话 in_progress（就绪选择仅扫 pending 池）
     const claim = (await driver.call('forgeTasks', 'claimTask', {
-      projectId, sessionId: DISP_SESSION,
+      projectKey, sessionId: DISP_SESSION,
     })) as ClaimTaskResult
     expect(claim.task, '盲选不领他会话 in_progress（task = null）').toBeNull()
     expect(claim.reclaimed, '非重入形态').toBe(false)
@@ -318,7 +320,7 @@ test('@web-e2e @m2 派发链·Step3b from 不匹配：结算拒绝 + 库不被�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-tdp3b')
     const FEATURE = 'tdp3b'
-    const { projectId, dir } = await setupWorld(page, wsDir, 'from 不匹配演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, 'from 不匹配演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 受控初态：任务被人工转移出 in_progress（suspended）+ 历史 claim 行（简报按 in_progress 假设持有）
@@ -339,14 +341,14 @@ test('@web-e2e @m2 派发链·Step3b from 不匹配：结算拒绝 + 库不被�
 
     // executor 持过期假设结算 → agent 面矩阵先验拒绝（仅 in_progress 可提交）
     const rejection = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: '3.1' }, result: 'success',
+      projectKey, taskRef: { slug: FEATURE, localId: '3.1' }, result: 'success',
       summary: '过期假设结算（应被拒）', sessionId: EXEC_SESSION,
     }))
     expect(rejection, '拒绝 = ERR_INVALID_TRANSITION（from 不匹配）').toContain('非法任务转移')
     expect(rejection, '校验面呈现实际当前态').toContain('suspended')
 
     // 库不被破坏：保持人工处置后状态 + 零 submit 审计（单事务拒绝零残留）
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId })
     expect(detail.taskStatus, '任务保持 suspended（人工处置不被覆盖）').toBe('suspended')
     const db2 = openForgeDbAt(dir)
     try {
@@ -366,17 +368,17 @@ test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-tdp5b')
     const FEATURE = 'tdp5b'
-    const { projectId, dir } = await setupWorld(page, wsDir, '受阻结算演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '受阻结算演示', FEATURE)
     await selectWorkspaceViaChip(page, '受阻结算演示')
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '受阻结算任务', type: 'doc',
+      projectKey, slug: FEATURE, title: '受阻结算任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION })
 
     const REASON = '5b 演示受阻：质量门 lint 未过'
     const submit = (await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'blocked', reason: REASON, sessionId: EXEC_SESSION,
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, result: 'blocked', reason: REASON, sessionId: EXEC_SESSION,
       blockClassification: { kind: 'new-problem' },
     })) as SubmitTaskResult
     expect(submit.status, 'in_progress→blocked').toBe('blocked')
@@ -405,7 +407,7 @@ test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入�
     const row = page.locator(ttItemOf(added.taskId)).first()
     await expect(row, '概览任务行在场').toBeVisible({ timeout: 30_000 })
     await expect(row, '行状态 tag = 已阻塞').toContainText(ZH_BLOCKED)
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE })
     expect(cards.find((c) => c.taskId === added.taskId)?.taskStatus, '读面单发即见 blocked').toBe('blocked')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -417,27 +419,27 @@ test('@web-e2e @m2 派发链·Step5c/5d reason/summary 缺席：输入面拒绝�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-tdp5cd')
     const FEATURE = 'tdp5cd'
-    const { projectId, dir } = await setupWorld(page, wsDir, '输入面校验演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '输入面校验演示', FEATURE)
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '输入面校验任务', type: 'doc',
+      projectKey, slug: FEATURE, title: '输入面校验任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION })
 
     // 5c：blocked 缺 reason → ERR_REASON_REQUIRED
     const noReason = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'blocked', sessionId: EXEC_SESSION,
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, result: 'blocked', sessionId: EXEC_SESSION,
     }))
     expect(noReason, 'blocked 缺 reason → ERR_REASON_REQUIRED 文案面').toContain('需要 reason')
 
     // 5d（对称边界）：success 缺 summary → ERR_SUMMARY_REQUIRED
     const noSummary = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success', sessionId: EXEC_SESSION,
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, result: 'success', sessionId: EXEC_SESSION,
     }))
     expect(noSummary, 'success 缺 summary → ERR_SUMMARY_REQUIRED 文案面').toContain('需要 summary')
 
     // 双拒绝后：状态不变更（仍 in_progress）+ 零 submit 审计（不落部分审计）
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: added.taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: added.taskId })
     expect(detail.taskStatus, '两次拒绝后仍 in_progress（零变更）').toBe('in_progress')
     const db = openForgeDbAt(dir)
     try {
@@ -457,13 +459,13 @@ test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-tdp6b')
     const FEATURE = 'tdp6b'
-    const { projectId } = await setupWorld(page, wsDir, '并发浏览演示', FEATURE)
+    const { projectKey } = await setupWorld(page, wsDir, '并发浏览演示', FEATURE)
     await selectWorkspaceViaChip(page, '并发浏览演示')
     // 芯片流菜单残留收口（防遮罩拦截概览 subtab 点击——用例内显式收口）
     await page.keyboard.press('Escape')
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '并发浏览任务', type: 'doc',
+      projectKey, slug: FEATURE, title: '并发浏览任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
 
     // 前置：概览页签打开且读路径活跃（用户正在浏览）
@@ -477,14 +479,14 @@ test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期�
     await expect(page.locator(ttItemOf(added.taskId)).first()).toContainText('待处理')
 
     // 浏览进行中执行写动词（claim → submit）——WAL 读写并发，UI 不冻结不阻塞
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION })
-    const midCards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION })
+    const midCards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE })
     expect(midCards.find((c) => c.taskId === added.taskId)?.taskStatus, 'claim 写入返回后单发重取即见 in_progress').toBe('in_progress')
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
       summary: '6b 并发浏览期结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC_SESSION,
     })
-    const endCards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
+    const endCards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE })
     expect(endCards.find((c) => c.taskId === added.taskId)?.taskStatus, 'submit 写入返回后单发重取即见 completed（不丢更新）').toBe('completed')
 
     // UI 读路径仍活跃（未冻结）：面板在场 + 行状态事件驱动收敛

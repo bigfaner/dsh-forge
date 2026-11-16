@@ -52,6 +52,7 @@ import { COMPOSER_INPUT } from '../../support/anchors.js'
 import { waitForFixtureSession } from '../../support/session-files.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { projectKeyOf } from '../../support/project-key.js'
 import { loadFixture, writeFixture } from '../../support/replay/fixtures.js'
 import {
   buildDogfoodFixture,
@@ -169,6 +170,7 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
     // 注册名 = 工作区目录名（芯片菜单按注册名列示——flywheel 同径按目录名过滤）
     const project = await registerProject(page, ws, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(ws)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: 'dogfood 派发链演示' })
     const derived = await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: ws })
     {
@@ -276,19 +278,19 @@ test('@web-e2e @m2 5.4 SC-M2 门：真实模型派发链 dogfood（fix 链 + 中
         //    零执行零结算。dispatcher 下轮 dispatchTask 盲选必重入（latestInProgressBySession
         //    ——C1 幂等重入），恢复 worker 按简报全量执行并结算。
         const interruptClaim = await driver.call('forgeTasks', 'claimTask', {
-          projectId,
+          projectKey,
           taskRef: { slug: FEATURE, localId: '3.1' },
           sessionId: dispatcherSessionId,
         })
         // ② 3.2 harness 结算（重入简报 digest 新值驱动：3.2 完成于两 claim 之间 →
         //    PHASE_SUMMARY 行消失 → 简报重合成必异文）
         const claim = await driver.call('forgeTasks', 'claimTask', {
-          projectId,
+          projectKey,
           taskRef: { slug: FEATURE, localId: '3.2' },
           sessionId: HARNESS_SESSION,
         })
         const submit = await driver.call('forgeTasks', 'submitTask', {
-          projectId,
+          projectKey,
           taskRef: { slug: FEATURE, localId: '3.2' },
           result: 'success',
           summary: 'harness 结算 3.2（3.1 重入简报 PHASE_SUMMARY 消失驱动——digest 新值）',

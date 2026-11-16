@@ -55,6 +55,7 @@ import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { ovSubtabOf, ttItemOf } from '../../support/anchors.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-jwp'
 
@@ -77,21 +78,22 @@ test('@web-e2e @m3 worker 供给·T1：addTask 逃生通道前缀二分（fix-N 
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const PROP = 'jwp-escape'
     await driver.call('forgeProposals', 'createProposal', { projectId, slug: PROP, title: 'Jwp 逃生通道演示提案', mode: 'blitz' })
     const add = async (title: string, sourceTask?: { slug: string; localId: string }, blockSource?: boolean): Promise<{ taskId: string; slug: string; localId: string }> =>
       (await driver.call('forgeTasks', 'addTask', {
-        projectId, source: { kind: 'proposal', slug: PROP }, title, type: 'doc',
+        projectKey, slug: PROP, title, type: 'doc',
         ...(sourceTask !== undefined ? { sourceTask } : {}), ...(blockSource !== undefined ? { blockSource } : {}),
       })) as { taskId: string; slug: string; localId: string }
 
     // ── 两个受阻场景双份夹具（源任务均已领取 = worker 执行中形态）──
     const srcFix = await add('fix 径源任务')
     const srcDisc = await add('disc 径源任务')
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: srcFix.slug, localId: srcFix.localId }, sessionId: 'e2e-jwp-w1' })
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: srcDisc.slug, localId: srcDisc.localId }, sessionId: 'e2e-jwp-w2' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: srcFix.slug, localId: srcFix.localId }, sessionId: 'e2e-jwp-w1' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: srcDisc.slug, localId: srcDisc.localId }, sessionId: 'e2e-jwp-w2' })
 
     // ── prefix-bifurcation：fix-N（block_source 单事务——源即时 blocked 并引用）──
     const fix1 = await add('修复任务（走 fix 链协议）', { slug: srcFix.slug, localId: srcFix.localId }, true)

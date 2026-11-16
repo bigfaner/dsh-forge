@@ -24,6 +24,7 @@ import { FEATURES_CHANNELS, PROPOSALS_CHANNELS, TASKS_CHANNELS, DOCS_CHANNELS } 
 import { runAllSourceAuditAnchors } from '../../support/audit/anchors.js'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 
 // ───────────────────────── ① 源码面审计锚（无 app——扫描即断言） ─────────────────────────
 
@@ -103,6 +104,7 @@ testShared('@web-e2e @m2 5.3 审计锚（运行面）：SC3 全流程零写入 +
   // ── 全流程：注册（发现面扫描内聚）→ 四域读（features/proposals/docs/tasks）──
   const project = await registerProject(page, wsDir, '旧仓零迁移演示')
   const projectId = project.id
+  const projectKey = projectKeyOf(wsDir)
 
   const features = await forgeInvoke<readonly { slug: string; title: string; docCount: number; proposalSlug?: string }[]>(
     page,
@@ -125,8 +127,8 @@ testShared('@web-e2e @m2 5.3 审计锚（运行面）：SC3 全流程零写入 +
   expect(doc.dangling).toBe(false)
 
   const tasks = await forgeInvoke<readonly { localId: string }[]>(page, TASKS_CHANNELS.list, {
-    projectId,
-    source: { kind: 'feature', slug: 'legacy-demo' },
+    projectKey,
+    slug: 'legacy-demo',
   })
   expect(tasks, 'SC8 零迁移：旧仓任务文件零吸收为任务行（发现面白名单无 tasks 面）').toEqual([])
 

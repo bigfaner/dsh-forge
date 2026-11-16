@@ -41,6 +41,7 @@ import type { AddTaskResult, ClaimTaskResult, SubmitTaskResult, TaskCard, TaskDe
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { switchTaskView } from '../../support/m3.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { OV_PANEL, ovSubtabOf, ttCardOf, ttColOf, ttItemOf } from '../../support/anchors.js'
@@ -68,15 +69,16 @@ async function rejectMessage(promise: Promise<unknown>): Promise<string> {
 async function setupWorld(page: Page, wsDir: string, wsName: string, feature: string) {
   const project = await registerProject(page, wsDir, wsName)
   const projectId = project.id
+  const projectKey = projectKeyOf(wsDir)
   await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: feature, title: `fix 链演示 ${feature}` })
   const dir = (await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: wsDir })).dir
-  return { projectId, dir }
+  return { projectKey, projectId, dir }
 }
 
 /** 挂 fix（blockSource 形态——type 缺省 coding-fix 由调用侧显式传） */
-function fixArgs(projectId: string, feature: string, source: AddResult, title: string): Record<string, unknown> {
+function fixArgs(projectKey: string, feature: string, source: AddResult, title: string): Record<string, unknown> {
   return {
-    projectId, source: { kind: 'feature', slug: feature }, title, type: 'coding-fix',
+    projectKey, slug: feature, title, type: 'coding-fix',
     sourceTask: { slug: feature, localId: source.localId }, blockSource: true,
   }
 }
@@ -86,23 +88,23 @@ test('@web-e2e @m2 fix链·冒烟：受阻→建链→修复→恢复→三视�
 
   const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-feat'
-    const { projectId, dir } = await setupWorld(page, wsDir, 'fix 链冒烟', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, 'fix 链冒烟', FEATURE)
     const driver = createBridgeDriver(app)
 
     // ── Step 1：源任务受阻结算（in_progress→blocked，reason 落审计）──
     const src = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '源任务 X（将受阻）', type: 'doc',
+      projectKey, slug: FEATURE, title: '源任务 X（将受阻）', type: 'doc',
     })) as AddResult
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
     const REASON = 'fxr 冒烟：测试面红灯受阻'
     const blocked = (await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: REASON, sessionId: EXEC,
+      projectKey, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: REASON, sessionId: EXEC,
       blockClassification: { kind: 'new-problem' },
     })) as SubmitResult
     expect(blocked.status, '源任务落账 blocked').toBe('blocked')
 
     // ── Step 2：创建 fix 任务（三件套单事务原子）──
-    const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, src, '修复任务 F'))) as AddResult
+    const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectKey, FEATURE, src, '修复任务 F'))) as AddResult
     expect(fix.reused, 'fix 新建（非复用）').toBe(false)
     expect(fix.localId, 'fix localId = fix-N 前缀分配').toMatch(/^fix-\d+$/)
 
@@ -124,9 +126,9 @@ test('@web-e2e @m2 fix链·冒烟：受阻→建链→修复→恢复→三视�
     }
 
     // ── Step 3：fix 执行至完成（领取 + 质量门 + 结算；恢复钩子触发）──
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: fix.localId }, sessionId: DISP })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: fix.localId }, sessionId: DISP })
     const fixSubmit = (await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: fix.localId }, result: 'success',
+      projectKey, taskRef: { slug: FEATURE, localId: fix.localId }, result: 'success',
       summary: 'fxr 冒烟：修复完成', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC,
     })) as SubmitResult
     expect(fixSubmit.status, 'fix 任务落账 completed').toBe('completed')
@@ -167,7 +169,7 @@ test('@web-e2e @m2 fix链·冒烟：受阻→建链→修复→恢复→三视�
     await expect(page.locator(ttColOf('pending')).locator(ttCardOf(src.taskId)).first(), '泳道：源卡片在 pending 列（恢复后状态）').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ttColOf('completed')).locator(ttCardOf(fix.taskId)).first(), '泳道：fix 卡片在 completed 列').toBeVisible({ timeout: 30_000 })
     // 读面即时（写入返回后单次重取即见——Step 5 Output）
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE })
     const srcCard = cards.find((c) => c.taskId === src.taskId)
     const fixCard = cards.find((c) => c.taskId === fix.taskId)
     expect(srcCard?.taskStatus, '读面单发即见源 pending').toBe('pending')
@@ -183,20 +185,20 @@ test('@web-e2e @m2 fix链·Step1 受阻结算缺 reason：输入面拒绝（不�
 
   const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-rr'
-    const { projectId, dir } = await setupWorld(page, wsDir, '缺因拒绝演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '缺因拒绝演示', FEATURE)
     const driver = createBridgeDriver(app)
     const src = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '缺因结算任务', type: 'doc',
+      projectKey, slug: FEATURE, title: '缺因结算任务', type: 'doc',
     })) as AddResult
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
 
     const rejection = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', sessionId: EXEC,
+      projectKey, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', sessionId: EXEC,
     }))
     expect(rejection, '缺 reason → ERR_REASON_REQUIRED').toContain('需要 reason')
 
     // 不进入 fix 链：任务保持 in_progress + 零 submit 审计
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: src.taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: src.taskId })
     expect(detail.taskStatus, '仍 in_progress（状态不变更）').toBe('in_progress')
     const db = openForgeDbAt(dir)
     try {
@@ -215,7 +217,7 @@ test('@web-e2e @m2 fix链·Step1 源已被人工处置：blocked 结算被矩阵
 
   const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-fm'
-    const { projectId, dir } = await setupWorld(page, wsDir, '人工处置拒绝演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '人工处置拒绝演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 受控初态：源已被人工置 suspended（中断窗口内处置）+ 历史 claim 行
@@ -235,13 +237,13 @@ test('@web-e2e @m2 fix链·Step1 源已被人工处置：blocked 结算被矩阵
     db.close()
 
     const rejection = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: '2.1' }, result: 'blocked', reason: '迟到的受阻结算', sessionId: EXEC,
+      projectKey, taskRef: { slug: FEATURE, localId: '2.1' }, result: 'blocked', reason: '迟到的受阻结算', sessionId: EXEC,
       blockClassification: { kind: 'new-problem' },
     }))
     expect(rejection, 'from 不匹配 → ERR_INVALID_TRANSITION（submit 唯一合法 from = in_progress）').toContain('非法任务转移')
     expect(rejection, '矩阵呈现实际当前态 suspended').toContain('suspended')
 
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId })
     expect(detail.taskStatus, '人工处置结果不被覆盖（仍 suspended）').toBe('suspended')
     const db2 = openForgeDbAt(dir)
     try {
@@ -260,22 +262,22 @@ test('@web-e2e @m2 fix链·Step2 环构造双 flag：拒绝 + 完整环路径 + 
 
   const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-cy'
-    const { projectId, dir } = await setupWorld(page, wsDir, '环守卫演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '环守卫演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 既有等待链：S(1.1) ← D(1.2)（D dependsOn S）；T = dependsOn D × blockSource S → 环 S→T→D→S
     const s = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '源 S（环构造）', type: 'doc',
+      projectKey, slug: FEATURE, title: '源 S（环构造）', type: 'doc',
     })) as AddResult
     const d = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '等待方 D', type: 'doc', dependsOn: [s.localId],
+      projectKey, slug: FEATURE, title: '等待方 D', type: 'doc', dependsOn: [s.localId],
     })) as AddResult
     const db = openForgeDbAt(dir)
     const countBefore = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = ?`).get(FEATURE)?.n ?? 0
     db.close()
 
     const rejection = await rejectMessage(driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '环构造 T', type: 'coding-fix',
+      projectKey, slug: FEATURE, title: '环构造 T', type: 'coding-fix',
       dependsOn: [d.localId], sourceTask: { slug: FEATURE, localId: s.localId }, blockSource: true,
     }))
     expect(rejection, '双 flag 组合 → ERR_CYCLE_DETECTED').toContain('检测到依赖环')
@@ -299,30 +301,30 @@ test('@web-e2e @m2 fix链·Step2 链深 6 上限：第 7 层拒绝 + 提示人�
 
   const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-cd'
-    const { projectId, dir } = await setupWorld(page, wsDir, '链深上限演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '链深上限演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 建链：T1（根）→ fix(T1)=T2 → … 直至根 + 6 层 fix（第 6 层 fix 链深 = 6——add.test
     // 单测钉死边界：根 + 6 fix 合法，挂第 7 层 fix 才拒绝 ERR_CHAIN_DEPTH_EXCEEDED）
     let current = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '链深任务 T1（根）', type: 'doc',
+      projectKey, slug: FEATURE, title: '链深任务 T1（根）', type: 'doc',
     })) as AddResult
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: current.localId }, sessionId: DISP })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: current.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: current.localId }, result: 'blocked', reason: '链深演示：层 1 受阻', sessionId: EXEC,
+      projectKey, taskRef: { slug: FEATURE, localId: current.localId }, result: 'blocked', reason: '链深演示：层 1 受阻', sessionId: EXEC,
       blockClassification: { kind: 'new-problem' },
     })
     for (let level = 2; level <= 7; level++) {
-      current = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, current, `fix 层 ${level}`))) as AddResult
-      await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: current.localId }, sessionId: DISP })
+      current = (await driver.call('forgeTasks', 'addTask', fixArgs(projectKey, FEATURE, current, `fix 层 ${level}`))) as AddResult
+      await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: current.localId }, sessionId: DISP })
       await driver.call('forgeTasks', 'submitTask', {
-        projectId, taskRef: { slug: FEATURE, localId: current.localId }, result: 'blocked', reason: `链深演示：层 ${level} 受阻`, sessionId: EXEC,
+        projectKey, taskRef: { slug: FEATURE, localId: current.localId }, result: 'blocked', reason: `链深演示：层 ${level} 受阻`, sessionId: EXEC,
         blockClassification: { kind: 'same-family-recurrence' },
       })
     }
 
     // 对链深 6 的任务再挂 fix → 第 7 层超限拒绝
-    const rejection = await rejectMessage(driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, current, '越界的第 7 层')))
+    const rejection = await rejectMessage(driver.call('forgeTasks', 'addTask', fixArgs(projectKey, FEATURE, current, '越界的第 7 层')))
     expect(rejection, '链深超限 → ERR_CHAIN_DEPTH_EXCEEDED').toContain('fix 链深超限')
     expect(rejection, '新任务将处第 7 级（上限 6 呈现）').toContain('7')
     expect(rejection, '提示人工介入').toContain('人工介入')
@@ -346,18 +348,18 @@ test('@web-e2e @m2 fix链·Step2 重复受阻重试：任务级去重复用（�
 
   const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-dup'
-    const { projectId, dir } = await setupWorld(page, wsDir, '去重复用演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '去重复用演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     const src = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '去重演示源任务', type: 'doc',
+      projectKey, slug: FEATURE, title: '去重演示源任务', type: 'doc',
     })) as AddResult
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: '去重演示受阻', sessionId: EXEC,
+      projectKey, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: '去重演示受阻', sessionId: EXEC,
       blockClassification: { kind: 'new-problem' },
     })
-    const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, src, '既有修复任务'))) as AddResult
+    const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectKey, FEATURE, src, '既有修复任务'))) as AddResult
     expect(fix.reused, '首建非复用').toBe(false)
 
     const db = openForgeDbAt(dir)
@@ -366,7 +368,7 @@ test('@web-e2e @m2 fix链·Step2 重复受阻重试：任务级去重复用（�
     const eventsBefore = (await driver.events()).length
 
     // 同源同型未终态重复声明 → 复用既有 fix 行（纯读零变更，不重复建链不重复置 blocked）
-    const again = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, src, '重复声明——应复用'))) as AddResult
+    const again = (await driver.call('forgeTasks', 'addTask', fixArgs(projectKey, FEATURE, src, '重复声明——应复用'))) as AddResult
     expect(again.reused, '任务级去重：reused = true').toBe(true)
     expect(again.taskId, '复用既有 fix 行（同 taskId）').toBe(fix.taskId)
 
@@ -393,27 +395,27 @@ test('@web-e2e @m2 fix链·Step3 fix 自身受阻：fix-of-fix 链深 +1（单�
 
   const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-ff'
-    const { projectId, dir } = await setupWorld(page, wsDir, '嵌套 fix 演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '嵌套 fix 演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // X 受阻 → fix F；F 自身执行受阻 → fix-of-fix FF（同三件套原子语义，localId 顺延）
     const x = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '源 X（fix-of-fix 演示）', type: 'doc',
+      projectKey, slug: FEATURE, title: '源 X（fix-of-fix 演示）', type: 'doc',
     })) as AddResult
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: x.localId }, sessionId: DISP })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: x.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: x.localId }, result: 'blocked', reason: 'ff 演示：X 受阻', sessionId: EXEC,
+      projectKey, taskRef: { slug: FEATURE, localId: x.localId }, result: 'blocked', reason: 'ff 演示：X 受阻', sessionId: EXEC,
       blockClassification: { kind: 'new-problem' },
     })
-    const f = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, x, 'fix F'))) as AddResult
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: f.localId }, sessionId: DISP })
+    const f = (await driver.call('forgeTasks', 'addTask', fixArgs(projectKey, FEATURE, x, 'fix F'))) as AddResult
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: f.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: f.localId }, result: 'blocked', reason: 'ff 演示：F 亦受阻（质量门未过）', sessionId: EXEC,
+      projectKey, taskRef: { slug: FEATURE, localId: f.localId }, result: 'blocked', reason: 'ff 演示：F 亦受阻（质量门未过）', sessionId: EXEC,
       blockClassification: { kind: 'same-family-recurrence' },
     })
-    expect((await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: f.taskId })).taskStatus, 'F 落账 blocked').toBe('blocked')
+    expect((await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: f.taskId })).taskStatus, 'F 落账 blocked').toBe('blocked')
 
-    const ff = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, f, 'fix-of-fix FF'))) as AddResult
+    const ff = (await driver.call('forgeTasks', 'addTask', fixArgs(projectKey, FEATURE, f, 'fix-of-fix FF'))) as AddResult
     expect(ff.reused, 'FF 新建（同源同型首建）').toBe(false)
     expect(ff.localId, 'FF localId = fix-N 顺延（≠ F）').not.toBe(f.localId)
     expect(ff.localId, 'fix-N 前缀保持').toMatch(/^fix-\d+$/)
@@ -441,27 +443,27 @@ test('@web-e2e @m2 fix链·Step4 人工跳过 fix：skipped ∈ 满足集 → �
 
   const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-sk'
-    const { projectId, dir } = await setupWorld(page, wsDir, '跳过恢复演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '跳过恢复演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     const src = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '跳过恢复源任务', type: 'doc',
+      projectKey, slug: FEATURE, title: '跳过恢复源任务', type: 'doc',
     })) as AddResult
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: 'sk 演示：源受阻', sessionId: EXEC,
+      projectKey, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: 'sk 演示：源受阻', sessionId: EXEC,
       blockClassification: { kind: 'new-problem' },
     })
-    const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, src, '将被人工跳过的 fix'))) as AddResult
+    const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectKey, FEATURE, src, '将被人工跳过的 fix'))) as AddResult
 
     // 人工径（RPC 人类面）：fix → skipped（属终态满足集）
     const skipped = await forgeInvoke<{ taskStatus: string }>(page, TASKS_CHANNELS.transition, {
-      projectId, taskId: fix.taskId, toStatus: 'skipped', reason: 'fxr Step4：人工跳过该修复（不修了）',
+      projectKey, taskId: fix.taskId, toStatus: 'skipped', reason: 'fxr Step4：人工跳过该修复（不修了）',
     })
     expect(skipped.taskStatus, 'fix 人工跳过落账').toBe('skipped')
 
     // 恢复钩子（人工转移同挂——与 submitTask 同族 C3）：源 blocked→pending + auto-restore 行
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: src.taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: src.taskId })
     expect(detail.taskStatus, 'skipped ∈ {completed, skipped} → 源恢复 pending').toBe('pending')
     const db = openForgeDbAt(dir)
     try {
@@ -485,16 +487,16 @@ test('@web-e2e @m2 fix链·blocked 源建链守卫：disc 径缺省被拒 → fi
 
   const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-bg'
-    const { projectId, dir } = await setupWorld(page, wsDir, 'blocked 源守卫演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, 'blocked 源守卫演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 源任务受阻（worker submit result=blocked 落账——与真实事故链同态）
     const src = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '源任务（将受阻）', type: 'doc',
+      projectKey, slug: FEATURE, title: '源任务（将受阻）', type: 'doc',
     })) as AddResult
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: 'bg 演示：源受阻', sessionId: EXEC,
+      projectKey, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: 'bg 演示：源受阻', sessionId: EXEC,
       blockClassification: { kind: 'new-problem' },
     })
 
@@ -503,7 +505,7 @@ test('@web-e2e @m2 fix链·blocked 源建链守卫：disc 径缺省被拒 → fi
     const countBlocked = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = ?`).get(FEATURE)?.n ?? 0
     db.close()
     const rejection = await rejectMessage(driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: 'disc 逃生径（应被拒）', type: 'doc',
+      projectKey, slug: FEATURE, title: 'disc 逃生径（应被拒）', type: 'doc',
       sourceTask: { slug: FEATURE, localId: src.localId },
     }))
     expect(rejection, 'blocked 源 + 缺省 → ERR_BLOCK_SOURCE_REQUIRED（typed 守卫拒绝）').toContain('源任务已 blocked')
@@ -517,18 +519,18 @@ test('@web-e2e @m2 fix链·blocked 源建链守卫：disc 径缺省被拒 → fi
     }
 
     // 放行径：按指引改带 block_source=true → fix 链正常建（等待边 + auto-block）
-    const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, src, '修复任务 G'))) as AddResult
+    const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectKey, FEATURE, src, '修复任务 G'))) as AddResult
     expect(fix.localId, 'fix-N 前缀分配').toMatch(/^fix-\d+$/)
 
     // fix 完成 → 恢复钩子同事务恢复源 → 二轮 claim 可认领
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: fix.localId }, sessionId: DISP })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: fix.localId }, sessionId: DISP })
     const fixSubmit = (await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: fix.localId }, result: 'success',
+      projectKey, taskRef: { slug: FEATURE, localId: fix.localId }, result: 'success',
       summary: 'bg 演示：修复完成', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC,
     })) as SubmitResult
     expect(fixSubmit.restored.map((r) => r.localId), '源 auto-restore（restored 面）').toContain(src.localId)
     const reentry = (await driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP,
+      projectKey, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP,
     })) as ClaimResult
     expect(reentry.task?.localId, '源恢复后二轮 claim 可认领（pending 源重新进就绪池）').toBe(src.localId)
     expect(reentry.task?.taskStatus, 'claim 落账 in_progress').toBe('in_progress')
@@ -541,7 +543,7 @@ test('@web-e2e @m2 fix链·Step4 部分前置未终态：不恢复；补齐后�
 
   const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-pt'
-    const { projectId, dir } = await setupWorld(page, wsDir, '部分前置演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '部分前置演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 受控初态：源 X blocked + 双前置边（依赖 F 与依赖 P）；F pending（可经动词终态化）、P in_progress
@@ -575,27 +577,27 @@ test('@web-e2e @m2 fix链·Step4 部分前置未终态：不恢复；补齐后�
     db.close()
 
     // F 完成（claim + submit success）→ 恢复钩子反查：P 未终态 → X 不恢复
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: '3.2' }, sessionId: DISP })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: FEATURE, localId: '3.2' }, sessionId: DISP })
     const fSubmit = (await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: '3.2' }, result: 'success',
+      projectKey, taskRef: { slug: FEATURE, localId: '3.2' }, result: 'success',
       summary: 'pt 演示：F 完成（部分满足）', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC,
     })) as SubmitResult
     expect(fSubmit.status, 'F 落账 completed').toBe('completed')
     expect(fSubmit.restored.map((r) => r.localId), 'X 不在恢复清单（任一前置未满足即不恢复）').not.toContain('3.1')
-    const xAfterF = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: xId })
+    const xAfterF = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: xId })
     expect(xAfterF.taskStatus, 'X 保持 blocked（全满足才恢复，非任一满足）').toBe('blocked')
 
     // P 补齐（in_progress 显式重入 + submit success）→ 全前置终态 → X 恢复
     const pReentry = (await driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: FEATURE, localId: '3.3' }, sessionId: DISP,
+      projectKey, taskRef: { slug: FEATURE, localId: '3.3' }, sessionId: DISP,
     })) as ClaimResult
     expect(pReentry.reclaimed, 'P in_progress 幂等重入（跨会话显式重入径）').toBe(true)
     const pSubmit = (await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: '3.3' }, result: 'success',
+      projectKey, taskRef: { slug: FEATURE, localId: '3.3' }, result: 'success',
       summary: 'pt 演示：P 补齐（全满足）', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC,
     })) as SubmitResult
     expect(pSubmit.restored.map((r) => r.localId), 'P 补齐后 X 恢复（restored 清单含 3.1）').toContain('3.1')
-    const xAfterP = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: xId })
+    const xAfterP = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: xId })
     expect(xAfterP.taskStatus, 'X 终于恢复 pending').toBe('pending')
 
     const db2 = openForgeDbAt(dir)

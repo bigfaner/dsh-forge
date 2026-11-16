@@ -54,6 +54,7 @@ import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { ovDocRowOf, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-jbw'
 
@@ -89,6 +90,7 @@ test('@web-e2e @m3 自举走查·冒烟：M3.5 同构走查（成链时序耦合
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const PROP = 'jbw-m35'
@@ -148,20 +150,20 @@ test('@web-e2e @m3 自举走查·冒烟：M3.5 同构走查（成链时序耦合
 
     // ── Step2：派发开发链（回放主径）——任务 + 执行记录全入自身 forge.db ──
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: '走查任务甲', type: 'doc',
+      projectKey, slug: PROP, title: '走查任务甲', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: '走查任务乙', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: PROP, title: '走查任务乙', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string; slug: string; localId: string }
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jbw-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jbw-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
+      projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
       summary: 'Jbw 走查甲结算', gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT, sessionId: 'e2e-jbw-executor',
     })
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jbw-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jbw-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t2.slug, localId: t2.localId }, result: 'success',
+      projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, result: 'success',
       summary: 'Jbw 走查乙结算', gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT, sessionId: 'e2e-jbw-executor',
     })

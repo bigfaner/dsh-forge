@@ -55,6 +55,7 @@ import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-jgsd'
 
@@ -83,21 +84,22 @@ test('@web-e2e @m3 gate 提交定式·冒烟：AGENTS.md 两态结算账本（co
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const FEATURE = 'jgsd-feat'
     await forgeInvoke(page, 'forge:features/register', { projectId, slug: FEATURE, title: 'Jgsd gate 定式演示' })
     const add = async (title: string, type: string): Promise<{ taskId: string; slug: string; localId: string }> =>
       (await driver.call('forgeTasks', 'addTask', {
-        projectId, source: { kind: 'feature', slug: FEATURE }, title, type,
+        projectKey, slug: FEATURE, title, type,
       })) as { taskId: string; slug: string; localId: string }
     const COMMIT_A = 'aaaa1234bbbb5678cccc9012dddd3456eeee7890'
 
     // ── Step1（AGENTS.md 配置态）：提交 + submit 记录含 commit_hash ──
     const withAgents = await add('配置态结算任务', 'doc')
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: withAgents.slug, localId: withAgents.localId }, sessionId: 'e2e-jgsd-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: withAgents.slug, localId: withAgents.localId }, sessionId: 'e2e-jgsd-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: withAgents.slug, localId: withAgents.localId }, result: 'success',
+      projectKey, taskRef: { slug: withAgents.slug, localId: withAgents.localId }, result: 'success',
       summary: 'Jgsd 配置态结算（AGENTS.md 在场）', gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT_A, sessionId: 'e2e-jgsd-executor',
     })
@@ -106,18 +108,18 @@ test('@web-e2e @m3 gate 提交定式·冒烟：AGENTS.md 两态结算账本（co
     unlinkSync(join(wsDir, 'AGENTS.md'))
     const COMMIT_B = 'bbbb5678aaaa1234dddd3456cccc9012eeee7890'
     const withoutAgents = await add('未配置态结算任务', 'doc')
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: withoutAgents.slug, localId: withoutAgents.localId }, sessionId: 'e2e-jgsd-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: withoutAgents.slug, localId: withoutAgents.localId }, sessionId: 'e2e-jgsd-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: withoutAgents.slug, localId: withoutAgents.localId }, result: 'success',
+      projectKey, taskRef: { slug: withoutAgents.slug, localId: withoutAgents.localId }, result: 'success',
       summary: 'Jgsd 未配置态结算（回退常识级）', gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT_B, sessionId: 'e2e-jgsd-executor',
     })
 
     // ── Step3（gate 类型任务）：数字摘要 gate_json 落账 ──
     const gateTask = await add('gate 数字摘要任务', 'gate')
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, sessionId: 'e2e-jgsd-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, sessionId: 'e2e-jgsd-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, result: 'success',
       summary: 'Jgsd gate 四门结算（lint 如实 false）', gate: { compile: true, fmt: true, lint: false, test: true },
       sessionId: 'e2e-jgsd-executor',
     })
@@ -154,16 +156,17 @@ test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const FEATURE = 'jgsd-reject'
     await forgeInvoke(page, 'forge:features/register', { projectId, slug: FEATURE, title: 'Jgsd 拒绝面演示' })
     const add = async (title: string, type: string, acceptanceCriteria?: string[]): Promise<{ taskId: string; slug: string; localId: string }> =>
       (await driver.call('forgeTasks', 'addTask', {
-        projectId, source: { kind: 'feature', slug: FEATURE }, title, type, ...(acceptanceCriteria !== undefined ? { acceptanceCriteria } : {}),
+        projectKey, slug: FEATURE, title, type, ...(acceptanceCriteria !== undefined ? { acceptanceCriteria } : {}),
       })) as { taskId: string; slug: string; localId: string }
     const claim = async (t: { slug: string; localId: string }): Promise<void> => {
-      await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t.slug, localId: t.localId }, sessionId: 'e2e-jgsd2-dispatch' })
+      await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t.slug, localId: t.localId }, sessionId: 'e2e-jgsd2-dispatch' })
     }
 
     // ── AC 证据门：错误信息含 AC 清单逐行 + 状态不变 + 零记录 ──
@@ -171,7 +174,7 @@ test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 
     const acTask = await add('带清单任务', 'doc', AC)
     await claim(acTask)
     const noEvidence = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: acTask.slug, localId: acTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: acTask.slug, localId: acTask.localId }, result: 'success',
       summary: '缺证据结算（应被拒）', gate: { compile: true, fmt: true, lint: true, test: false },
       sessionId: 'e2e-jgsd2-executor',
     }))
@@ -183,7 +186,7 @@ test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 
     const summaryTask = await add('空摘要任务', 'doc')
     await claim(summaryTask)
     const noSummary = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: summaryTask.slug, localId: summaryTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: summaryTask.slug, localId: summaryTask.localId }, result: 'success',
       summary: '   ', gate: { compile: true, fmt: true, lint: true, test: true },
       sessionId: 'e2e-jgsd2-executor',
     }))
@@ -191,7 +194,7 @@ test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 
 
     // ── blocked 空因拒绝（受阻结算 reason 必带）──
     const noReason = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: summaryTask.slug, localId: summaryTask.localId }, result: 'blocked',
+      projectKey, taskRef: { slug: summaryTask.slug, localId: summaryTask.localId }, result: 'blocked',
       reason: '', sessionId: 'e2e-jgsd2-executor',
     }))
     expect(noReason, 'blocked 空因拒绝').toContain('需要 reason')
@@ -200,19 +203,19 @@ test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 
     const gateTask = await add('gate 缺摘要任务', 'gate')
     await claim(gateTask)
     const noGate = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, result: 'success',
       summary: '缺数字摘要（应被拒）', sessionId: 'e2e-jgsd2-executor',
     }))
     expect(noGate, 'gate 缺摘要拒绝（数字摘要必带）').toContain('需要 gate 数字摘要')
 
     // ── 非法状态转移：已 completed 再提交 = from 不匹配（库不被破坏）──
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: summaryTask.slug, localId: summaryTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: summaryTask.slug, localId: summaryTask.localId }, result: 'success',
       summary: 'Jgsd 正常结算（供 from 不匹配对照）', gate: { compile: true, fmt: true, lint: true, test: true },
       sessionId: 'e2e-jgsd2-executor',
     })
     const stale = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: summaryTask.slug, localId: summaryTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: summaryTask.slug, localId: summaryTask.localId }, result: 'success',
       summary: '终态后重复结算（应被拒）', gate: { compile: true, fmt: true, lint: true, test: true },
       sessionId: 'e2e-jgsd2-executor',
     }))
@@ -221,7 +224,7 @@ test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 
 
     // ── 错键结算：TaskRef 未命中（不落任何记录）──
     const wrongKey = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: FEATURE, localId: '99.9' }, result: 'success',
+      projectKey, taskRef: { slug: FEATURE, localId: '99.9' }, result: 'success',
       summary: '错键结算（应被拒）', gate: { compile: true, fmt: true, lint: true, test: true },
       sessionId: 'e2e-jgsd2-executor',
     }))
@@ -249,30 +252,31 @@ test('@web-e2e @m3 gate 提交定式·受阻径：blocked submit 不经双门（
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const FEATURE = 'jgsd-blocked'
     await forgeInvoke(page, 'forge:features/register', { projectId, slug: FEATURE, title: 'Jgsd 受阻径演示' })
     const add = async (title: string, type: string, acceptanceCriteria?: string[]): Promise<{ taskId: string; slug: string; localId: string }> =>
       (await driver.call('forgeTasks', 'addTask', {
-        projectId, source: { kind: 'feature', slug: FEATURE }, title, type, ...(acceptanceCriteria !== undefined ? { acceptanceCriteria } : {}),
+        projectKey, slug: FEATURE, title, type, ...(acceptanceCriteria !== undefined ? { acceptanceCriteria } : {}),
       })) as { taskId: string; slug: string; localId: string }
 
     // ── blocked-submit-skips-doors：带 AC 任务受阻结算（reason 在场、无证据）双门不拦 ──
     const AC = ['[AC-1] 受阻径证据门不拦（Jgsd）']
     const acBlocked = await add('带清单受阻任务', 'doc', AC)
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: acBlocked.slug, localId: acBlocked.localId }, sessionId: 'e2e-jgsd3-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: acBlocked.slug, localId: acBlocked.localId }, sessionId: 'e2e-jgsd3-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: acBlocked.slug, localId: acBlocked.localId }, result: 'blocked',
+      projectKey, taskRef: { slug: acBlocked.slug, localId: acBlocked.localId }, result: 'blocked',
       reason: 'Jgsd 受阻（AC 证据缺口——修复后重试）', sessionId: 'e2e-jgsd3-executor',
       blockClassification: { kind: 'new-problem' },
     })
 
     // ── gate-failure：gate 任务失败结算（可附失败 gate 载荷原样落账）→ blocked 承接 fix 链 ──
     const gateFailed = await add('gate 失败任务', 'gate')
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: gateFailed.slug, localId: gateFailed.localId }, sessionId: 'e2e-jgsd3-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: gateFailed.slug, localId: gateFailed.localId }, sessionId: 'e2e-jgsd3-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: gateFailed.slug, localId: gateFailed.localId }, result: 'blocked',
+      projectKey, taskRef: { slug: gateFailed.slug, localId: gateFailed.localId }, result: 'blocked',
       reason: 'Jgsd gate 失败（lint/test 双红——走 fix 链处置）', gate: { compile: true, fmt: true, lint: false, test: false },
       sessionId: 'e2e-jgsd3-executor',
       blockClassification: { kind: 'new-problem' },

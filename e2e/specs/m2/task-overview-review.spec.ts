@@ -56,6 +56,7 @@ import type { TaskCard, TaskDetail } from '../../../packages/contracts/src/dto/f
 import { archiveActiveProjects, createSharedLaunchFixture } from '../../support/fixtures.js'
 import { switchTaskView } from '../../support/m3.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { OV_PANEL, TD_DRAWER, docPanelOf, ovSubtabOf, ttColOf, ttContpillOf, ttItemOf } from '../../support/anchors.js'
@@ -91,9 +92,10 @@ async function setupWorld(page: Page, wsDir: string, wsName: string, feature: st
   await archiveActiveProjects(page)
   const project = await registerProject(page, wsDir, wsName)
   const projectId = project.id
+  const projectKey = projectKeyOf(wsDir)
   await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: feature, title: `概览演示 ${feature}` })
   const dir = (await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: wsDir })).dir
-  return { projectId, dir }
+  return { projectKey, projectId, dir }
 }
 
 /** 直插多态任务（受控 status/createdAt/类型/描述/覆盖率——排序与过滤断言基准；desc = 参考文档锚点载体） */
@@ -165,7 +167,7 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
   const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-feat'
     const WS_NAME = '概览走查演示'
-    const { projectId, dir } = await setupWorld(page, wsDir, WS_NAME, FEATURE)
+    const { projectKey, projectId, dir } = await setupWorld(page, wsDir, WS_NAME, FEATURE)
     /** 参考文档 docRel（D22：完整形态参考 chip → dock 文档 tab 断言锚——1.3 desc 声明 + feature_documents 在册） */
     const REF_DOC = 'docs/features/ovr-feat/prd/prd-spec.md'
 
@@ -202,7 +204,7 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     for (const id of ids) {
       await expect(page.locator(ttItemOf(id)).first(), `任务行在场（${id}）`).toBeVisible({ timeout: 30_000 })
     }
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE })
     expect(cards, '列表 = 该 feature 任务集（三行）').toHaveLength(3)
 
     // ── Step 2.5（m3.1 D18）：taskbar 形态——视图下拉 = 容器 pill 同行右侧（y ±6 原型 C 区
@@ -376,7 +378,7 @@ test('@web-e2e @m2 概览走查·Step1 @500 首屏 ≤2s（UI 面——数据面
   const wsDir = join(sharedLaunch.wsDir, 'ws-ovr500')
   const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-big'
-    const { projectId, dir } = await setupWorld(page, wsDir, '概览压力演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '概览压力演示', FEATURE)
     // @500 造数（七态轮转 + 创建时间递增——直插通道，sc2 同构）
     const statuses: readonly TaskStatus[] = ['pending', 'in_progress', 'completed', 'blocked', 'suspended', 'skipped', 'rejected']
     seedTasks(dir, FEATURE, Array.from({ length: 500 }, (_, i) => ({
@@ -398,7 +400,7 @@ test('@web-e2e @m2 概览走查·Step1 @500 首屏 ≤2s（UI 面——数据面
     // 预算判定带环境注记：真实终端（DSH_SHELL 缺席）= 严格 2000ms；派生会话 = 2500ms 容忍档。
     expect(elapsed, `首屏呈现 ≤${FIRST_SCREEN_BUDGET_EFFECTIVE_MS}ms（基准 2000ms × ${DERIVED_SHELL_BUDGET_FACTOR}；实测 ${elapsed}ms @500 任务；环境=${process.env.DSH_SHELL === '1' ? '派生会话/容忍 1.25（裁决 2026-10-19）' : '真实终端/严格'}）`).toBeLessThanOrEqual(FIRST_SCREEN_BUDGET_EFFECTIVE_MS)
     // 读面全量直读（EQP 索引面 = sc2-perf 已钉；此处补数据量行为断言）
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE })
     expect(cards, '全量 500 行直读（无截断）').toHaveLength(500)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -412,6 +414,7 @@ test('@web-e2e @m2 概览走查·Step2 feature 绑定切换：列表随绑定切
     await archiveActiveProjects(page)
     const project = await registerProject(page, wsDir, '绑定切换演示')
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     // 注册序 = 列表 created_at 降序的反面：后注册者最新、居列表头——activeFeatureSlug 缺省
     // 绑定最新活跃 feature（overview-model 单测钉死），故甲须后注册才能成为初始绑定
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: 'fb', title: '绑定乙' })
@@ -433,7 +436,7 @@ test('@web-e2e @m2 概览走查·Step2 feature 绑定切换：列表随绑定切
     await expect(page.locator(ttItemOf(idOf(aIds, 0))).first(), '甲任务行退场（绑定过滤）').toHaveCount(0)
 
     // 数据来源断言：读面单发 = 该 feature 任务集（服务端 core 过滤）
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'fb' } })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: 'fb' })
     expect(cards.map((c) => c.taskId), '直读每工作区库（无第二来源）').toEqual(bIds)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -444,7 +447,7 @@ test('@web-e2e @m2 概览走查·Step2 中英双语搜索过滤（IME 稳定子�
   const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-srch')
   const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-srch'
-    const { projectId, dir } = await setupWorld(page, wsDir, '双语搜索演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '双语搜索演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [
       { localId: '1.1', title: '修复登录 fix-login', status: 'pending' },
       { localId: '1.2', title: '文档撰写 doc-write', status: 'in_progress' },
@@ -477,7 +480,7 @@ test('@web-e2e @m2 概览走查·Step2 中英双语搜索过滤（IME 稳定子�
     }
 
     // 服务端过滤断言（search 参数经 core——renderer 不自滤）
-    const filtered = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE }, search: 'fix' })
+    const filtered = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE, search: 'fix' })
     expect(filtered.map((c) => c.taskId).sort(), '服务端过滤 = fix 系两行').toEqual([idOf(ids, 0), idOf(ids, 2)].sort())
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -488,7 +491,7 @@ test('@web-e2e @m2 概览走查·Step3 零计数 chip 禁用（不可触发过�
   const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-chip')
   const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-chip'
-    const { projectId, dir } = await setupWorld(page, wsDir, '零计数演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '零计数演示', FEATURE)
     // 仅两态在场（in_progress 计数 0——chips 断言基准）
     const ids = seedTasks(dir, FEATURE, [
       { localId: '1.1', title: '零计数·待办', status: 'pending' },
@@ -496,7 +499,7 @@ test('@web-e2e @m2 概览走查·Step3 零计数 chip 禁用（不可触发过�
     ])
 
     // 计数单源：taskStats（七态 chips 计数同源）
-    const stats = await refetchOnce<{ total: number; byStatus: Record<string, number> }>(page, TASKS_CHANNELS.stats, { projectId, source: { kind: 'feature', slug: FEATURE } })
+    const stats = await refetchOnce<{ total: number; byStatus: Record<string, number> }>(page, TASKS_CHANNELS.stats, { projectKey, slug: FEATURE })
     expect(stats.total, 'stats 总数 = 2').toBe(2)
     expect(stats.byStatus.in_progress, 'in_progress 计数 0（禁用基准）').toBe(0)
 
@@ -517,7 +520,7 @@ test('@web-e2e @m2 概览走查·Step4 排序切换：全列表重排（活跃�
   const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-sort')
   const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-sort'
-    const { projectId, dir } = await setupWorld(page, wsDir, '排序演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '排序演示', FEATURE)
     // 三态三时（活跃优先序 ≠ 创建序——重排可判）
     const ids = seedTasks(dir, FEATURE, [
       { localId: '1.1', title: '最早待办', status: 'pending', createdAt: '2026-10-01T00:00:00.000Z' },
@@ -547,9 +550,9 @@ test('@web-e2e @m2 概览走查·Step4 排序切换：全列表重排（活跃�
     expect(activeOrder, '活跃优先序（blocked > pending > completed）').toEqual([idOf(ids, 1), idOf(ids, 0), idOf(ids, 2)])
 
     // 服务端排序断言（sort 参数——三子 tab 共用同源）
-    const byCreated = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE }, sort: 'created' })
+    const byCreated = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE, sort: 'created' })
     expect(byCreated.map((c) => c.taskId), '读面 created 降序').toEqual([idOf(ids, 2), idOf(ids, 1), idOf(ids, 0)])
-    const byActive = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE }, sort: 'active' })
+    const byActive = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE, sort: 'active' })
     expect(byActive.map((c) => c.taskId), '读面活跃优先').toEqual([idOf(ids, 1), idOf(ids, 0), idOf(ids, 2)])
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -560,7 +563,7 @@ test('@web-e2e @m2 概览走查·Step5 人工转移：对话框落库 + reason �
   const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-tr')
   const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-tr'
-    const { projectId, dir } = await setupWorld(page, wsDir, '人工转移演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '人工转移演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [{ localId: '1.1', title: '人工转移目标任务', status: 'pending' }])
     const taskId = idOf(ids, 0)
 
@@ -582,7 +585,7 @@ test('@web-e2e @m2 概览走查·Step5 人工转移：对话框落库 + reason �
     await expect(page.locator('[data-dswf-td-tr-dialog]'), '确认后对话框收场').toHaveCount(0, { timeout: 15_000 })
 
     // 落库 + 审计（actor=ui + reason）+ 概览即时反映（单发重取即见）
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId })
     expect(detail.taskStatus, '转移落库 suspended').toBe('suspended')
     const db = openForgeDbAt(dir)
     try {
@@ -604,7 +607,7 @@ test('@web-e2e @m2 概览走查·Step5 空因拒绝：错误条留场可修正 +
   const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-rr')
   const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-rr'
-    const { projectId, dir } = await setupWorld(page, wsDir, '空因拒绝演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '空因拒绝演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [{ localId: '1.1', title: '空因拒绝目标任务', status: 'pending' }])
     const taskId = idOf(ids, 0)
     const db = openForgeDbAt(dir)
@@ -630,14 +633,14 @@ test('@web-e2e @m2 概览走查·Step5 空因拒绝：错误条留场可修正 +
     } finally {
       db2.close()
     }
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId })
     expect(detail.taskStatus, '状态不变（仍 pending）').toBe('pending')
 
     // 修正后可提交（同对话框续走——留场可修正语义）
     await page.locator('[data-dswf-td-tr-reason]').fill('ovr Step5：补填原因后提交')
     await page.locator('[data-dswf-td-tr-confirm]').first().click()
     await expect(page.locator('[data-dswf-td-tr-dialog]'), '补填后确认成功收场').toHaveCount(0, { timeout: 15_000 })
-    const detail2 = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })
+    const detail2 = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId })
     expect(detail2.taskStatus, '修正后转移落库').toBe('suspended')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -648,12 +651,12 @@ test('@web-e2e @m2 概览走查·Step5 非法目标：选项集排除（所见�
   const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-it')
   const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-it'
-    const { projectId, dir } = await setupWorld(page, wsDir, '非法目标演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '非法目标演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [{ localId: '1.1', title: '非法目标目标任务', status: 'pending' }])
     const taskId = idOf(ids, 0)
 
     // 抽屉读侧：allowedTransitions 恒 props 下发（与服务端 transitionTargets 同源零漂移）
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId })
     expect(detail.allowedTransitions, '详情面携带允许目标集').not.toContain('pending')
 
     // 对话框选项集 = 允许集（当前态机械排除——用户点不到非法目标）
@@ -667,9 +670,9 @@ test('@web-e2e @m2 概览走查·Step5 非法目标：选项集排除（所见�
     await expect(page.locator('[data-dswf-td-tr-dialog]')).toHaveCount(0)
 
     // 服务端先验兜底：RPC 直打目标 = 当前态 → ERR_INVALID_TRANSITION
-    const rejection = await rejectMessage(forgeInvoke(page, TASKS_CHANNELS.transition, { projectId, taskId, toStatus: 'pending', reason: '同态转移（应拒）' }))
+    const rejection = await rejectMessage(forgeInvoke(page, TASKS_CHANNELS.transition, { projectKey, taskId, toStatus: 'pending', reason: '同态转移（应拒）' }))
     expect(rejection, '服务端同一纯函数先验拒绝').toContain('非法任务转移')
-    const detail2 = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })
+    const detail2 = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId })
     expect(detail2.taskStatus, '状态零变更').toBe('pending')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -680,7 +683,7 @@ test('@web-e2e @m2 概览走查·Step5 终态转移触发恢复：blocked 后继
   const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-rs')
   const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-rs'
-    const { projectId, dir } = await setupWorld(page, wsDir, '终态恢复演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '终态恢复演示', FEATURE)
     // 受控初态：W（blocked 后继）依赖 T（pending 待转移源）
     const ids = seedTasks(dir, FEATURE, [
       { localId: '2.1', title: '待转移源 T', status: 'pending' },
@@ -706,9 +709,9 @@ test('@web-e2e @m2 概览走查·Step5 终态转移触发恢复：blocked 后继
     await expect(page.locator('[data-dswf-td-tr-dialog]')).toHaveCount(0, { timeout: 15_000 })
 
     // T 落 completed；W 恢复 pending（人工终态转移同挂恢复钩子——C3 同族）
-    const tDetail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: tId })
+    const tDetail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: tId })
     expect(tDetail.taskStatus, 'T 落目标态 completed').toBe('completed')
-    const wDetail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: wId })
+    const wDetail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: wId })
     expect(wDetail.taskStatus, 'W 由 blocked 转 pending（恢复钩子）').toBe('pending')
     const db = openForgeDbAt(dir)
     try {
@@ -735,7 +738,7 @@ test('@web-e2e @m2 概览走查·Step6 eval 族条件区空态注记（不伪造
   const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-ev')
   const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-ev'
-    const { projectId, dir } = await setupWorld(page, wsDir, 'eval 空态演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, 'eval 空态演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [
       { localId: '1.1', title: 'eval 族任务（契约评审）', status: 'pending', type: 'eval-contract' },
     ])
@@ -748,7 +751,7 @@ test('@web-e2e @m2 概览走查·Step6 eval 族条件区空态注记（不伪造
     await page.locator('[data-dswf-td-expand]').first().click()
     // 评估结果条件区呈空态注记（M2 无技能写入——在场但不伪造结构化数据）
     await expect(page.locator('[data-dswf-td-eval-empty]').first(), 'eval 空态注记在场').toBeVisible({ timeout: 15_000 })
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId })
     expect(detail.taskType, '任务类型 = eval-contract（条件区路由基准）').toBe('eval-contract')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])

@@ -41,6 +41,7 @@ import { findFixtureSession, waitForSessionEvents } from '../../support/session-
 import { awaitNoLateModals, awaitPresetHeaderLabel } from '../../support/m3.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { writeReplayPlan, type ReplayPlan } from '../../../packages/plugin-forge/src/spawn/seam.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 /** M3.5 真实提案（仓内 Draft——夹具内逐字拷贝；与录制轮同源） */
 const M35_REPO_PROPOSAL = join(ROOT, '.forge', 'docs', 'proposals', 'dsh-forge-m3.5-knowledge-consolidation', 'proposal.md')
@@ -315,6 +316,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     // ── 立项链：注册 → createProposal（expedition）→ 真实提案文档入树 ──
     const project = await registerProject(page, ws, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(ws)
     const dir = (
       await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: ws })
     ).dir
@@ -480,7 +482,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     ]
     const hashBefore = new Map(presetFiles.map((f) => [f, hashFile(f)]))
     await driver.call('forgeTasks', 'claimTask', {
-      projectId,
+      projectKey,
       taskRef: { slug: FEATURE, localId: '1.4' },
       sessionId: 'e2e-harness',
     })
@@ -615,7 +617,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     // ── 复位：人工转移（in_progress → pending——人类面 transition） ──
     const task11Id = `t-${FEATURE}-1.1`
     await forgeInvoke(page, TASKS_CHANNELS.transition, {
-      projectId, taskId: task11Id, toStatus: 'pending',
+      projectKey, taskId: task11Id, toStatus: 'pending',
       reason: 'SC-M3 回放走查：halted 复位——人工转移后经派发入口新会话重派',
     })
     {
@@ -669,8 +671,8 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     }
     console.log(`[m35-replay] 1.3 一轮受阻 +${Math.round((Date.now() - startedAt) / 1000)}s（1.1 completed / 1.3 blocked）`)
     await driver.call('forgeTasks', 'addTask', {
-      projectId,
-      source: { kind: 'feature', slug: FEATURE },
+      projectKey,
+      slug: FEATURE,
       title: 'Fix: create freshness-checklist.md',
       type: 'doc',
       sourceTask: { slug: FEATURE, localId: '1.3' },
@@ -726,7 +728,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       if (othersTerminal && othersTerminalSince === 0) othersTerminalSince = Date.now()
       if (!closerSettled && othersTerminal && (noReadySeen() || Date.now() - othersTerminalSince > 90_000)) {
         await driver.call('forgeTasks', 'submitTask', {
-          projectId,
+          projectKey,
           taskRef: { slug: FEATURE, localId: '1.4' },
           result: 'success',
           summary: 'harness 收官结算 1.4（no-task 收工信号驱动——双 dispatcher 防线占位）',

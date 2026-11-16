@@ -62,6 +62,7 @@ import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { ovDocRowOf, ttItemOf } from '../../support/anchors.js'
 import { presetSkillDirs } from '../../support/m3.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-jefc'
 
@@ -106,6 +107,7 @@ test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const PROP = 'jefc-golden'
@@ -157,23 +159,23 @@ test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成
 
     // ── Step6：breakdown-tasks 建任务（挂 feature = 提案链 + 依赖 DAG）──
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: '远征任务甲', type: 'doc',
+      projectKey, slug: PROP, title: '远征任务甲', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: '远征任务乙', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: PROP, title: '远征任务乙', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string; slug: string; localId: string }
 
     // ── Step7：派发执行（回放主径）——AC gate → commit → submitTask 全绿 ──
     const COMMIT = '0f1e2d3c4b5a6978877665544332211ff0e1d2c3'
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jefc-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jefc-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
+      projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
       summary: 'Jefc 甲结算', gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT, sessionId: 'e2e-jefc-executor',
     })
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t2.slug, localId: t2.localId }, result: 'success',
+      projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, result: 'success',
       summary: 'Jefc 乙结算', gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT, sessionId: 'e2e-jefc-executor',
     })
@@ -330,6 +332,7 @@ test('@web-e2e @m3 远征全链·Step3b/4b/6b/8b：成链幂等 + 文档 upsert 
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const PROP = 'jefc-idem'
@@ -367,24 +370,24 @@ test('@web-e2e @m3 远征全链·Step3b/4b/6b/8b：成链幂等 + 文档 upsert 
 
     // ── DAG 领取守卫：前置未终态不可领取（无越序）──
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: '前置任务', type: 'doc',
+      projectKey, slug: PROP, title: '前置任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: '依赖任务', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: PROP, title: '依赖任务', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string; slug: string; localId: string }
     const premature = await rejectMessage(driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc3-dispatch',
+      projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc3-dispatch',
     }))
     expect(premature, '前置未终态领取拒（ERR_DEPENDENCIES_UNMET 面）').toContain('前置依赖未满足')
     expect(premature, '未满足清单含前置自然键 + 当前状态').toContain(`${PROP}/${t1.localId} pending`)
     // 前置终态后放行（满足集 = completed ∪ skipped）
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jefc3-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jefc3-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
+      projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
       summary: 'Jefc 前置结算（守卫放行门）', gate: { compile: true, fmt: true, lint: true, test: true },
       sessionId: 'e2e-jefc3-executor',
     })
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc3-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc3-dispatch' })
     const db3 = openForgeDbAt(dir)
     try {
       expect(db3.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(t2.taskId)?.task_status, '前置终态后领取放行（按 DAG 顺序）').toBe('in_progress')

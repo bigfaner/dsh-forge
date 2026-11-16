@@ -59,6 +59,7 @@ import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { ovSubtabOf, ttCardOf, ttColOf, ttItemOf, OV_PARENT_ANY } from '../../support/anchors.js'
 import { switchTaskView, presetSkillDirs } from '../../support/m3.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-jbdc'
 
@@ -84,6 +85,7 @@ test('@web-e2e @m3 突击直达链·冒烟：quick-tasks 产出 → accepted 无
   const project = await registerProject(page, wsDir, WS_NAME)
   try {
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const PROP = 'jbdc-blitz'
@@ -105,10 +107,10 @@ test('@web-e2e @m3 突击直达链·冒烟：quick-tasks 产出 → accepted 无
       db0.close()
     }
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '突击任务甲', type: 'doc',
+      projectKey, slug: PROP, title: '突击任务甲', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '突击任务乙', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: PROP, title: '突击任务乙', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string; slug: string; localId: string }
     expect(/^\d+(\.\d+)?$/.test(t1.localId), `突击整数 ID 语义（localId=${t1.localId}——无 stage-gate 段，sc3 同口径）`).toBe(true)
     expect(/^\d+(\.\d+)?$/.test(t2.localId), '乙同为整数 ID（依赖前置声明可解析）').toBe(true)
@@ -161,17 +163,17 @@ test('@web-e2e @m3 突击直达链·冒烟：quick-tasks 产出 → accepted 无
     await expect(pill.locator('.dswf-tt-contdot'), '琥珀点 = blitz 容器标记').toHaveAttribute('data-mode', 'blitz')
 
     // ── Step4：worker submit 全绿（回放主径）+ 单次重取即见（即时判据——无 watch）──
-    const cards0 = await refetchOnce<readonly { taskId: string; taskStatus: string }[]>(page, TASKS_CHANNELS.list, { projectId })
+    const cards0 = await refetchOnce<readonly { taskId: string; taskStatus: string }[]>(page, TASKS_CHANNELS.list, { projectKey })
     expect(cards0.find((c) => c.taskId === t1.taskId)?.taskStatus, '写前读面 = pending（对照锚）').toBe('pending')
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jbdc-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jbdc-dispatch' })
     const COMMIT = '1357bdf02468ace1357bdf02468ace1357bdf0'
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
+      projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
       summary: 'Jbdc 突击甲结算（全绿三视图断言）', gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT, sessionId: 'e2e-jbdc-executor',
     })
     // concurrent-browsing-single-refetch：写入返回后单发重取即见新值（概览页签全程开着——读路径活跃）
-    const cards1 = await refetchOnce<readonly { taskId: string; taskStatus: string }[]>(page, TASKS_CHANNELS.list, { projectId })
+    const cards1 = await refetchOnce<readonly { taskId: string; taskStatus: string }[]>(page, TASKS_CHANNELS.list, { projectKey })
     expect(cards1.find((c) => c.taskId === t1.taskId)?.taskStatus, '写入返回后单次重取即见 completed（即时判据）').toBe('completed')
     expect(cards1.find((c) => c.taskId === t2.taskId)?.taskStatus, '依赖方保持待处理（池态一致）').toBe('pending')
     // 列表视图即时刷新（事件驱动 UI 收敛）
@@ -217,6 +219,7 @@ test('@web-e2e @m3 突击直达链·Step2b：打回修订（under-review → dra
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const PROP = 'jbdc-revise'
@@ -224,7 +227,7 @@ test('@web-e2e @m3 突击直达链·Step2b：打回修订（under-review → dra
       projectId, slug: PROP, title: 'Jbdc 打回修订演示', mode: 'blitz',
     })) as { proposalId: string }
     await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '打回期间不派发任务', type: 'doc',
+      projectKey, slug: PROP, title: '打回期间不派发任务', type: 'doc',
     })
     await driver.call('forgeProposals', 'transitionProposal', { projectId, proposalId: proposal.proposalId, toStatus: 'under-review' })
 
@@ -280,6 +283,7 @@ test('@web-e2e @m3 突击直达链·Step3b/4b：受阻结算落账 + AC 缺证�
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const PROP = 'jbdc-block'
@@ -289,17 +293,17 @@ test('@web-e2e @m3 突击直达链·Step3b/4b：受阻结算落账 + AC 缺证�
     await driver.call('forgeProposals', 'transitionProposal', { projectId, proposalId: proposal.proposalId, toStatus: 'under-review' })
     await driver.call('forgeProposals', 'transitionProposal', { projectId, proposalId: proposal.proposalId, toStatus: 'accepted' })
     const tBlocked = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '受阻任务', type: 'doc',
+      projectKey, slug: PROP, title: '受阻任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const AC = ['[AC-1] 突击证据甲在场（Jbdc）', '[AC-2] 突击证据乙含清单（Jbdc）']
     const tAc = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '带清单任务', type: 'doc', acceptanceCriteria: AC,
+      projectKey, slug: PROP, title: '带清单任务', type: 'doc', acceptanceCriteria: AC,
     })) as { taskId: string; slug: string; localId: string }
 
     // ── worker-blocked：submitTask result=blocked（reason 必带）→ 落账 + 审计行 ──
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: tBlocked.slug, localId: tBlocked.localId }, sessionId: 'e2e-jbdc3-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: tBlocked.slug, localId: tBlocked.localId }, sessionId: 'e2e-jbdc3-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: tBlocked.slug, localId: tBlocked.localId }, result: 'blocked',
+      projectKey, taskRef: { slug: tBlocked.slug, localId: tBlocked.localId }, result: 'blocked',
       reason: 'Jbdc 受阻演示（重大问题——逃生通道前缀语义归 worker-provisioning 旅程）', sessionId: 'e2e-jbdc3-executor',
       blockClassification: { kind: 'new-problem' },
     })
@@ -312,9 +316,9 @@ test('@web-e2e @m3 突击直达链·Step3b/4b：受阻结算落账 + AC 缺证�
     }
 
     // ── ac-evidence-missing：带 AC 任务缺测试证据 → 拒绝且错误信息含 AC 清单逐行 ──
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: tAc.slug, localId: tAc.localId }, sessionId: 'e2e-jbdc3-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: tAc.slug, localId: tAc.localId }, sessionId: 'e2e-jbdc3-dispatch' })
     const noEvidence = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: tAc.slug, localId: tAc.localId }, result: 'success',
+      projectKey, taskRef: { slug: tAc.slug, localId: tAc.localId }, result: 'success',
       summary: '缺测试证据的结算（应被拒）', gate: { compile: true, fmt: true, lint: true, test: false },
       sessionId: 'e2e-jbdc3-executor',
     }))
@@ -330,7 +334,7 @@ test('@web-e2e @m3 突击直达链·Step3b/4b：受阻结算落账 + AC 缺证�
     }
     // 补齐证据后过门（gate 纪律不折扣——补证放行）
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: tAc.slug, localId: tAc.localId }, result: 'success',
+      projectKey, taskRef: { slug: tAc.slug, localId: tAc.localId }, result: 'success',
       summary: 'Jbdc 补齐测试证据结算', gate: { compile: true, fmt: true, lint: true, test: true },
       sessionId: 'e2e-jbdc3-executor',
     })

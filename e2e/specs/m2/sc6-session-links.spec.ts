@@ -41,6 +41,7 @@ import {
   projectRowOf,
 } from '../../support/anchors.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 
 /** 夹具工作区名（芯片选择/会话目录定位共用——注册名 = 目录名） */
 const WS_NAME = 'ws-sc6'
@@ -59,11 +60,12 @@ test('@web-e2e @m2 5.2 SC6③：挂接双侧双源相异断言（悬浮面板呈
     // ── 底座：注册 + feature + 任务（回放主径写）──
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: 'SC6③ 挂接双侧演示' })
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId,
-      source: { kind: 'feature', slug: FEATURE },
+      projectKey,
+      slug: FEATURE,
       title: 'SC6③ 挂接双侧任务',
       type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
@@ -84,7 +86,7 @@ test('@web-e2e @m2 5.2 SC6③：挂接双侧双源相异断言（悬浮面板呈
     const sessionId = (session as { sessionId: string }).sessionId
 
     // ── 挂接前：面板空态（零挂接不占对话区）+ RPC 双源空 + D5 会话头零产品 pill ──
-    const before = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
+    const before = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId })
     expect(before, '挂接前 sessionLinks 空').toEqual([])
     await expect(page.locator(DP_PANEL), '挂接前面板不出场（零挂接零占位）').toHaveCount(0)
     // D5 卸载断言：会话头动作带槽零产品件（4.2 首位注册退役——官方占用者不受扰）
@@ -94,10 +96,10 @@ test('@web-e2e @m2 5.2 SC6③：挂接双侧双源相异断言（悬浮面板呈
     ).toHaveCount(0)
 
     // ── 双源构造：claim（回放主径写）→ link 行（派发会话）+ claim 记录 session_id（执行会话）──
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
 
     // RPC 单发读：双源两卡（同任务同会话双侧参与 → 两卡并存，source 分型相异）
-    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
+    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId })
     expect(cards, 'sessionLinks 双源两卡并存（§6-24④ 不合并解释）').toHaveLength(2)
     expect(cards.map((c) => c.source).sort(), '分型相异：link + record 各一').toEqual(['link', 'record'])
     expect(cards.every((c) => c.taskId === added.taskId && c.sessionId === sessionId), '两卡同任务同会话（taskId 含卡）').toBe(true)
@@ -115,7 +117,7 @@ test('@web-e2e @m2 5.2 SC6③：挂接双侧双源相异断言（悬浮面板呈
 
     // ── 结算（同会话执行）：submit success → 行状态文本写推送刷新（subscribeTasksChanged）──
     await driver.call('forgeTasks', 'submitTask', {
-      projectId,
+      projectKey,
       taskRef: { slug: added.slug, localId: added.localId },
       result: 'success',
       summary: 'SC6③ 挂接双侧结算（5.2 e2e）',

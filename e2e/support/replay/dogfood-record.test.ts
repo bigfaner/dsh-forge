@@ -165,14 +165,15 @@ describe('5.4 buildDogfoodFixture：审计重建三类行', () => {
       'claimTask:fix-1', 'submitTask:fix-1',
       'claimTask:2.1', 'submitTask:2.1',
     ])
-    // fix addTask 行（M3 容器形态）：source ContainerRef + block_source 数据面（sourceRef + blockSource + vars + desc）
+    // fix addTask 行（slug 直键终态）：slug 容器 + block_source 数据面（sourceRef + blockSource + vars + desc）
     const addArgs = verbs.find((v) => v.verb === 'addTask')!.args as Record<string, unknown>
     expect(addArgs).toMatchObject({
-      projectId: PROJECT, source: { kind: 'feature', slug: 'dogfood-demo' }, type: 'doc',
+      projectKey: PROJECT, slug: 'dogfood-demo', type: 'doc',
       sourceTask: { slug: 'dogfood-demo', localId: '2.1' }, blockSource: true,
       vars: { SOURCE_FILES: 'target.md' },
     })
-    expect(addArgs.featureSlug, 'M2 旧载荷 featureSlug 已退役（drift #1——addTask source 容器双轨）').toBeUndefined()
+    expect(addArgs.featureSlug, 'M2 旧载荷 featureSlug 已退役（drift #1——addTask slug 直键）').toBeUndefined()
+    expect(addArgs.source, 'M3 容器双轨 source 包装已退役（bug acc0f7cd 契约）').toBeUndefined()
     // observed：首 claim 全文 + digest + reclaimed=false；重入 claim reclaimed=true；快照 M3 形态（source 容器 + mode 快照）
     const observed = fx.steps.filter(isObserved)
     const claimObs = observed.filter((o) => o.verb === 'claimTask')
@@ -181,14 +182,13 @@ describe('5.4 buildDogfoodFixture：审计重建三类行', () => {
       dispatchPrompt: string
       digest: string
       reclaimed: boolean
-      task: { localId: string; source: { kind: string; slug: string }; mode?: string; featureId?: string }
+      task: { localId: string; slug: string; mode?: string }
     }
     expect(first.dispatchPrompt).toBe(BRIEF_A1)
     expect(first.digest).toBe(digestOf(BRIEF_A1))
     expect(first.reclaimed).toBe(false)
-    expect(first.task.source, 'TaskSnapshot M3 形态：source 容器双轨').toEqual({ kind: 'feature', slug: 'dogfood-demo' })
-    expect(first.task.mode, 'mode 快照（tasks.mode 创建时快照）').toBe('expedition')
-    expect(first.task.featureId, 'M2 旧载荷 featureId 已退役（drift #1）').toBeUndefined()
+    expect(first.task.slug, 'TaskSnapshot slug 直键终态（source 双轨退役）').toBe('dogfood-demo')
+    expect((first.task as Record<string, unknown>).source, 'M3 容器双轨 source 已退役').toBeUndefined()
     const reclaim = claimObs.find((o) => (o.result as { task?: { localId?: string } }).task?.localId === '3.1' && (o.result as { reclaimed: boolean }).reclaimed === true)
     expect(reclaim, '3.1 重入行 reclaimed=true 在场').toBeDefined()
     expect((reclaim!.result as { dispatchPrompt: string }).dispatchPrompt).toBe(BRIEF_C2)
@@ -224,7 +224,7 @@ describe('5.4 buildDogfoodFixture：审计重建三类行', () => {
           service: 'forgeTasks' as const,
           verb: 'claimTask' as const,
           at: harnessAt,
-          args: { projectId: PROJECT, taskRef: { slug: 'dogfood-demo', localId: '3.2' }, sessionId: 'e2e-harness' },
+          args: { projectKey: PROJECT, taskRef: { slug: 'dogfood-demo', localId: '3.2' }, sessionId: 'e2e-harness' },
           result: { task: { taskId: 't-s', slug: 'dogfood-demo', localId: '3.2', taskStatus: 'in_progress' }, dispatchPrompt: BRIEF_S, digest: digestOf(BRIEF_S), reclaimed: false },
         },
       ],

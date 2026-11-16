@@ -19,6 +19,7 @@ import type { TaskStatus } from '../../../packages/contracts/src/labels.js'
 import { PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt, seedEdge, seedFeature, seedLink, seedRecord, seedTask } from '../../support/replay/db-insert.js'
@@ -48,7 +49,8 @@ test('@web-e2e @m2 5.3 SC2：@500 任务列表/图/详情 ≤2s（e2e 计时）+
   try {
     // ── 底座：产品面注册（建库 v1 + 空发现面）→ 派生目录（产品面单源 RPC）──
     const project = await registerProject(page, wsDir, 'SC2 性能演示')
-    const projectId = project.id
+    void project
+    const projectKey = projectKeyOf(wsDir)
     const derived = await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: wsDir })
 
     // ── @500 造数（5.1 直插通道——2.6 单测基准同构：七态轮转 + 499 链边 + 抽样记录/挂接）──
@@ -104,15 +106,15 @@ test('@web-e2e @m2 5.3 SC2：@500 任务列表/图/详情 ≤2s（e2e 计时）+
 
     // ── 三读面 e2e 计时（产品读面单发——写入后首读即见，直读无 watch/回流）──
     const list = await timedRefetch<readonly { localId: string; taskStatus: TaskStatus }[]>(page, TASKS_CHANNELS.list, {
-      projectId,
-      source: { kind: 'feature', slug: 'big' },
+      projectKey,
+      slug: 'big',
     })
     expect(list.value, '直插 500 行对产品读面全量可见（直读保证）').toHaveLength(TASK_COUNT)
     expect(list.ms, `任务列表 ≤2s（实测 ${list.ms}ms）`).toBeLessThan(PERF_BUDGET_MS)
 
     const graph = await timedRefetch<{ tasks: readonly unknown[]; edges: readonly unknown[] }>(page, TASKS_CHANNELS.graph, {
-      projectId,
-      source: { kind: 'feature', slug: 'big' },
+      projectKey,
+      slug: 'big',
     })
     expect(graph.value.tasks).toHaveLength(TASK_COUNT)
     expect(graph.value.edges).toHaveLength(TASK_COUNT - 1)
@@ -122,7 +124,7 @@ test('@web-e2e @m2 5.3 SC2：@500 任务列表/图/详情 ≤2s（e2e 计时）+
     const detail = await timedRefetch<{ localId: string; records: readonly unknown[]; prerequisites: readonly unknown[] }>(
       page,
       TASKS_CHANNELS.detail,
-      { projectId, taskId: `t-big-${detailIndex + 1}` },
+      { projectKey, taskId: `t-big-${detailIndex + 1}` },
     )
     expect(detail.value.localId).toBe(String(detailIndex + 1))
     expect(detail.value.records.length).toBeGreaterThanOrEqual(1) // 抽样记录水化（idx_records_task 同源）

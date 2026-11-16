@@ -30,6 +30,7 @@ import type { TaskCard } from '../../../packages/contracts/src/dto/forge.js'
 import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createFixtureBuilder } from '../../support/replay/fixtures.js'
 import { createBridgeDriver, refetchOnce, replayWrites } from '../../support/replay/executor.js'
@@ -46,13 +47,14 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     // ── 夹具底座：产品面注册项目 + feature 登记（人类径 RPC——回放写动词外的产品写面） ──
     const project = await registerProject(page, wsDir, '回放演示')
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: 'demo-feature', title: '演示特性' })
 
     // ── ①③ 手工夹具回放：add×2（P0/P2 定序——就绪选择确定性）→ 单次重取即见 pending ──
     const driver = createBridgeDriver(app)
     const addFixture = createFixtureBuilder({ source: 'hand', note: '5.1 运行面自证·写段' })
-      .verb('forgeTasks', 'addTask', { projectId, source: { kind: 'feature', slug: 'demo-feature' }, title: '任务甲（回放）', type: 'coding-feature', priority: 'P0' })
-      .verb('forgeTasks', 'addTask', { projectId, source: { kind: 'feature', slug: 'demo-feature' }, title: '任务乙（回放）', type: 'test-run', priority: 'P2' })
+      .verb('forgeTasks', 'addTask', { projectKey, slug: 'demo-feature', title: '任务甲（回放）', type: 'coding-feature', priority: 'P0' })
+      .verb('forgeTasks', 'addTask', { projectKey, slug: 'demo-feature', title: '任务乙（回放）', type: 'test-run', priority: 'P2' })
       .build()
     const addOutcomes = await replayWrites(driver, addFixture)
     expect(addOutcomes.map((o) => o.verb)).toEqual(['addTask', 'addTask'])
@@ -60,14 +62,14 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     const addB = addOutcomes[1]!.result as { localId: string }
     expect(addA.reused).toBe(false)
     // 即时判据①：add 返回后单次重取即见两任务（pending——无轮询等待兜底）
-    let cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'demo-feature' } })
+    let cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: 'demo-feature' })
     expect(cards.map((c) => [c.localId, c.taskStatus]).sort()).toEqual([
       [addA.localId, 'pending'],
       [addB.localId, 'pending'],
     ])
 
     // ── ② claim：就绪选择（P0 优先）→ dispatchPrompt 全文 + digest 12hex（observed 载荷面同构） ──
-    const claim = (await driver.call('forgeTasks', 'claimTask', { projectId, source: { kind: 'feature', slug: 'demo-feature' }, sessionId: 'e2e-replay-dispatch' })) as {
+    const claim = (await driver.call('forgeTasks', 'claimTask', { projectKey, source: { slug: 'demo-feature' }, sessionId: 'e2e-replay-dispatch' })) as {
       task: { taskId: string; slug: string; localId: string } | null
       dispatchPrompt: string
       digest: string
@@ -78,13 +80,13 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     expect(claim.dispatchPrompt, '全文简报（S2b 任务级单块——task-context + TASK_ID）').toContain('TASK_ID:')
     expect(claim.digest).toMatch(/^[0-9a-f]{12}$/)
     // 即时判据②：claim 返回后单次重取即见 in_progress
-    cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'demo-feature' } })
+    cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: 'demo-feature' })
     expect(cards.find((c) => c.taskId === addA.taskId)?.taskStatus).toBe('in_progress')
 
     // ── ②③ submit success（夹具收尾段——taskRef 取 claim 结算自然键）→ 单次重取即见 completed ──
     const tailFixture = createFixtureBuilder({ source: 'hand', note: '5.1 运行面自证·结算段' })
       .verb('forgeTasks', 'submitTask', {
-        projectId,
+        projectKey,
         taskRef: { slug: claim.task!.slug, localId: claim.task!.localId },
         result: 'success',
         summary: '回放演示提交（5.1）',
@@ -94,7 +96,7 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
       .build()
     const [submitOutcome] = await replayWrites(driver, tailFixture)
     expect((submitOutcome!.result as { status: string }).status).toBe('completed')
-    cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: 'demo-feature' } })
+    cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: 'demo-feature' })
     expect(cards.find((c) => c.taskId === addA.taskId)?.taskStatus).toBe('completed')
     expect(cards.find((c) => c.localId === addB.localId)?.taskStatus).toBe('pending')
 

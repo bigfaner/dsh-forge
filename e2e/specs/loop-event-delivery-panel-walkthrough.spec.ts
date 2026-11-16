@@ -20,6 +20,7 @@ import { registerProject } from '../support/rpc.js'
 import { createBridgeDriver } from '../support/replay/executor.js'
 import { CONVERSATION_CONTENT } from '../support/anchors.js'
 import { rmDirBestEffort } from '../support/cleanup.js'
+import { projectKeyOf } from '../support/project-key.js'
 
 const WS_NAME = 'ws-led-panel'
 const PROP = 'led-panel-prop'
@@ -104,10 +105,11 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
   try {
     // ── 夹具：项目注册（RPC 直注）+ 突击提案容器 + 任务（测试钩子写动词——恒不上 RPC；主进程面）──
     const project = await registerProject(page, wsDir, WS_NAME)
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
     await driver.call('forgeProposals', 'createProposal', { projectId: project.id, slug: PROP, title: '面板走查突击容器', mode: 'blitz' })
     await driver.call('forgeTasks', 'addTask', {
-      projectId: project.id, source: { kind: 'proposal', slug: PROP }, title: '面板走查任务', type: 'doc',
+      projectKey, slug: PROP, title: '面板走查任务', type: 'doc',
     })
     // 官方认证 + boot manifest 前移（会话创建 HTTP 通路前提）
     const manifest = (await page.evaluate(() => {

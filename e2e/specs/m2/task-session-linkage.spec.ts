@@ -65,6 +65,7 @@ import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { bestSessionLog, findFixtureSession } from '../../support/session-files.js'
 import { expandDispatchPanel } from '../../support/dispatch-panel.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { newBlankSession } from '../../support/m3.js'
 import {
@@ -159,13 +160,14 @@ async function openWorkerSession(page: Page, userData: string, before: readonly 
 async function linkedTask(
   page: Page,
   driver: ReturnType<typeof createBridgeDriver>,
+  projectKey: string,
   projectId: string,
   userData: string,
   feature: string,
   title: string,
 ): Promise<{ added: AddTaskResult; sessionId: string }> {
   const added = (await driver.call('forgeTasks', 'addTask', {
-    projectId, source: { kind: 'feature', slug: feature }, title, type: 'doc',
+    projectKey, slug: feature, title, type: 'doc',
   })) as AddTaskResult
   const sessionId = await openRealSession(page, userData, projectId)
   return { added, sessionId }
@@ -182,12 +184,13 @@ test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + �
     const FEATURE = 'tsl-feat'
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: '挂接双侧演示' })
     const driver = createBridgeDriver(app)
-    const { added, sessionId } = await linkedTask(page, driver, projectId, userData, FEATURE, '挂接双侧冒烟任务')
+    const { added, sessionId } = await linkedTask(page, driver, projectKey, projectId, userData, FEATURE, '挂接双侧冒烟任务')
 
     // ── 挂接前基线：零挂接（面板零挂载 + 双源空 + D5 会话头零产品 pill）──
-    const before = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
+    const before = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId })
     expect(before, '挂接前 sessionLinks 空').toEqual([])
     await expect(page.locator(DP_PANEL), '挂接前面板零挂载（零挂接不占对话区）').toHaveCount(0)
     await expect(
@@ -199,25 +202,25 @@ test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + �
     //    + claim 真实会话 A（link 派发源）+ submit 会话 B（record 执行源）──
     const beforeWorker = fixtureSessionIds(join(userData, 'dsh-home'), WS_NAME)
     const workerSession = await openWorkerSession(page, userData, beforeWorker)
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
       summary: 'tsl 冒烟：执行会话结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: workerSession,
     })
     // 回 dispatcher 会话 A（面板断言面——worker 开户后主视图切到了 B）
     await page.locator(sessionRowOf(sessionId)).first().click()
 
     // ── Step 1：任务列表副行挂接计数（双源去重 = 2）──
-    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
+    const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE })
     const card = cards.find((c) => c.taskId === added.taskId)
     expect(card?.sessionCount, '副行承重数据：挂接计数 = 2（link + record 去重）').toBe(2)
 
     // ── Step 2：详情分型（两类各自与来源库记录一致）──
-    const detailCards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId: workerSession })
+    const detailCards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId: workerSession })
     expect(detailCards, '执行会话侧：record 分型单卡').toEqual([
       { taskId: added.taskId, slug: added.slug, localId: added.localId, title: '挂接双侧冒烟任务', taskStatus: 'completed', sessionId: workerSession, source: 'record' },
     ])
-    const realCards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
+    const realCards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId })
     // §6-24④ 诚实审计：claim 审计行也带本会话 id → 派发会话两卡并存（link + record——
     // sc6-session-links.spec 已钉死；此处 record 卡源于 claim 审计行，非 submit 执行会话）
     expect(realCards.map((c) => c.source).sort(), '派发会话侧：link + record 两卡并存（§6-24④）').toEqual(['link', 'record'])
@@ -288,14 +291,15 @@ test('@web-e2e @m2 挂接双侧·Step3 派发类行：挂接表源过滤（recor
     const FEATURE = 'tsl-dp'
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: '派发行演示' })
     const driver = createBridgeDriver(app)
-    const { added, sessionId } = await linkedTask(page, driver, projectId, userData, FEATURE, '派发面板任务')
+    const { added, sessionId } = await linkedTask(page, driver, projectKey, projectId, userData, FEATURE, '派发面板任务')
 
     // claim 绑真实会话（link 源）；submit 绑合成执行会话（record 源不在本会话面板）
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
       summary: 'dp：执行会话结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC_SESSION,
     })
 
@@ -308,7 +312,7 @@ test('@web-e2e @m2 挂接双侧·Step3 派发类行：挂接表源过滤（recor
     await expect(page.locator(DP_ROW_ANY), '面板恒单行（record 审计卡过滤）').toHaveCount(1)
 
     // 分型数据面：本会话 sessionLinks = link + claim record 两卡（§6-24④）
-    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
+    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId })
     expect(cards.map((c) => c.source).sort(), 'sessionLinks 两卡并存（读面直读映射）').toEqual(['link', 'record'])
   } finally {
     await closeApp(app)
@@ -328,6 +332,7 @@ test('@web-e2e @m2 挂接双侧·Step3b 多任务：全量行呈现 + 计数角�
     const FEATURE = 'tsl-ov'
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: '全量行演示' })
     const driver = createBridgeDriver(app)
 
@@ -338,9 +343,9 @@ test('@web-e2e @m2 挂接双侧·Step3b 多任务：全量行呈现 + 计数角�
     const tasks: AddTaskResult[] = []
     for (let i = 1; i <= 3; i++) {
       const added = (await driver.call('forgeTasks', 'addTask', {
-        projectId, source: { kind: 'feature', slug: FEATURE }, title: `全量行任务 ${i}`, type: 'doc',
+        projectKey, slug: FEATURE, title: `全量行任务 ${i}`, type: 'doc',
       })) as AddTaskResult
-      await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
+      await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
       tasks.push(added)
     }
 
@@ -375,6 +380,7 @@ test('@web-e2e @m2 挂接双侧·Step3c 恰 2：两行全量 + 零角标（off-b
     const FEATURE = 'tsl-e2'
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: '恰二演示' })
     const driver = createBridgeDriver(app)
     const sessionId = await openRealSession(page, userData, projectId)
@@ -382,15 +388,15 @@ test('@web-e2e @m2 挂接双侧·Step3c 恰 2：两行全量 + 零角标（off-b
     // 两任务各 claim → 2 link 行全量（每任务 claim 审计 record 卡过滤——读面 4 卡）
     for (let i = 1; i <= 2; i++) {
       const added = (await driver.call('forgeTasks', 'addTask', {
-        projectId, source: { kind: 'feature', slug: FEATURE }, title: `恰二任务 ${i}`, type: 'doc',
+        projectKey, slug: FEATURE, title: `恰二任务 ${i}`, type: 'doc',
       })) as AddTaskResult
-      await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
+      await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
     }
 
     await expandDispatchPanel(page)
     await expect(page.locator(DP_ROW_ANY), '恰 2 = 两行全量展示').toHaveCount(2, { timeout: 30_000 })
     await expect(page.locator(DP_BADGE), '展开态零折叠角标').toHaveCount(0)
-    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
+    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId })
     expect(cards, '库行双源四卡（读面——行集 = link 过滤投影）').toHaveLength(4)
   } finally {
     await closeApp(app)
@@ -410,14 +416,15 @@ test('@web-e2e @m2 挂接双侧·Step3d 重领去重：幂等重入单一行（U
     const FEATURE = 'tsl-dd'
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: '重领去重演示' })
     const driver = createBridgeDriver(app)
-    const { added, sessionId } = await linkedTask(page, driver, projectId, userData, FEATURE, '重领去重任务')
+    const { added, sessionId } = await linkedTask(page, driver, projectKey, projectId, userData, FEATURE, '重领去重任务')
 
     // 首 claim + 同会话二次 claim（幂等重入——挂接表 UNIQUE 不增行）
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
     const reentry = (await driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId,
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId,
     })) as ClaimTaskResult
     expect(reentry.reclaimed, '二次 claim = 幂等重入').toBe(true)
 
@@ -433,7 +440,7 @@ test('@web-e2e @m2 挂接双侧·Step3d 重领去重：幂等重入单一行（U
     } finally {
       db.close()
     }
-    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
+    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId })
     expect(cards, '读面恒两卡（重领幂等不产生重复）').toHaveLength(2)
   } finally {
     await closeApp(app)
@@ -453,22 +460,23 @@ test('@web-e2e @m2 挂接双侧·Step3e 活体挂接：claim 后行即时出现�
     const FEATURE = 'tsl-live'
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: '活体挂接演示' })
     const driver = createBridgeDriver(app)
 
     // 会话视图已渲染（订阅层活跃）+ 任务 X 尚未挂接
     const sessionId = await openRealSession(page, userData, projectId)
     const x = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '活体挂接任务 X', type: 'doc',
+      projectKey, slug: FEATURE, title: '活体挂接任务 X', type: 'doc',
     })) as AddTaskResult
     await expect(page.locator(DP_PANEL), 'claim 前无面板（零挂接不占对话区）').toHaveCount(0)
 
     // 停留在会话视图（不切换会话不重开页签）完成 claim → 行在当前视图出现
     // （subscribeTasksChanged 写推送静默重取——≤500ms 反映归订阅层契约 events 断言面；
     //  e2e 断言 = 写后行呈现收敛）
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: x.slug, localId: x.localId }, sessionId })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: x.slug, localId: x.localId }, sessionId })
     // 数据面即时判据：写入返回后单发重取即见新值（事件订阅驱动的数据前提）
-    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
+    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId })
     expect(cards.map((c) => c.taskId), '单发重取即见 X 挂接（双源两卡同任务——§6-24④）').toEqual([x.taskId, x.taskId])
     // UI 面：默认折叠悬浮球出现 → 展开后行呈现（事件驱动渲染收敛——fix bug 570fa4e2）
     await expandDispatchPanel(page)
@@ -492,14 +500,15 @@ test('@web-e2e @m2 挂接双侧·Step5 执行源会话：零面板（link 源过
     const FEATURE = 'tsl-ex'
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: '执行源演示' })
     const driver = createBridgeDriver(app)
-    const { added, sessionId } = await linkedTask(page, driver, projectId, userData, FEATURE, '执行源任务')
+    const { added, sessionId } = await linkedTask(page, driver, projectKey, projectId, userData, FEATURE, '执行源任务')
 
     // claim 绑合成派发会话（link 源不在本会话面板）；submit 绑真实会话（record 源）
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: EXEC_SESSION })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId: EXEC_SESSION })
     const submit = (await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
       summary: 'ex：真实会话作为执行会话结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId,
     })) as SubmitTaskResult
     expect(submit.status, '结算落账 completed').toBe('completed')
@@ -508,7 +517,7 @@ test('@web-e2e @m2 挂接双侧·Step5 执行源会话：零面板（link 源过
     // 执行源归 worker 会话与任务详情时间线）
     await expect(page.locator(DP_PANEL), '执行源会话零面板（link 源过滤）').toHaveCount(0, { timeout: 15_000 })
     await expect(page.locator(DP_BADGE), '执行源会话零角标').toHaveCount(0)
-    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
+    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId })
     expect(cards.map((c) => c.source), '本会话读面 = record 单卡（审计行源）').toEqual(['record'])
   } finally {
     await closeApp(app)
@@ -528,13 +537,14 @@ test('@web-e2e @m2 挂接双侧·Step5b 零挂接会话：无面板无角标（�
     const FEATURE = 'tsl-empty'
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: '零挂接演示' })
     // 从未 claim 的会话（也无以其为执行会话的审计行）——两源零匹配
     const sessionId = await openRealSession(page, userData, projectId)
 
     await expect(page.locator(DP_PANEL), '无面板（零匹配行即无展示元素）').toHaveCount(0)
     await expect(page.locator(DP_BADGE), '无折叠角标（空输出）').toHaveCount(0)
-    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
+    const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectKey, sessionId })
     expect(cards, '双源读面零匹配（links ∪ records 均无行）').toEqual([])
   } finally {
     await closeApp(app)
@@ -554,16 +564,17 @@ test('@web-e2e @m2 挂接双侧·m3.1 D6 悬浮面板几何与交互：默认落
     const FEATURE = 'tsl-geo'
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: '几何交互演示' })
     const driver = createBridgeDriver(app)
-    const { added, sessionId } = await linkedTask(page, driver, projectId, userData, FEATURE, '几何交互任务')
+    const { added, sessionId } = await linkedTask(page, driver, projectKey, projectId, userData, FEATURE, '几何交互任务')
 
     // worker 真实会话 B + claim A + submit B（⟞ 可解析执行会话）
     const beforeWorker = fixtureSessionIds(join(userData, 'dsh-home'), WS_NAME)
     const workerSession = await openWorkerSession(page, userData, beforeWorker)
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
       summary: 'geo：执行会话结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: workerSession,
     })
     // 回派发会话 A（面板断言面）——默认折叠悬浮球（fix bug 570fa4e2：不默认展开遮挡消息）

@@ -16,6 +16,7 @@ import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.j
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { ovSubtabOf } from '../../support/anchors.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-sc3'
 
@@ -33,6 +34,7 @@ test('@web-e2e @m3 SC3·mode 溯源解耦：chip↔库一致/缺省占位/快照
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
 
@@ -49,10 +51,10 @@ test('@web-e2e @m3 SC3·mode 溯源解耦：chip↔库一致/缺省占位/快照
 
     // ── ② 直挂任务快照（proposal 容器取 proposals.mode 创建时快照）──
     const expTaskId = ((await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: expProp.slug }, title: '远征提案直挂任务', type: 'doc',
+      projectKey, slug: expProp.slug, title: '远征提案直挂任务', type: 'doc',
     })) as { taskId: string }).taskId
     const blitzTask = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: blitzProp.slug }, title: '突击提案直挂任务', type: 'doc',
+      projectKey, slug: blitzProp.slug, title: '突击提案直挂任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     expect(/^\d+(\.\d+)?$/.test(blitzTask.localId), `突击直挂任务整数 ID 语义（localId=${blitzTask.localId}）`).toBe(true)
 
@@ -73,7 +75,7 @@ test('@web-e2e @m3 SC3·mode 溯源解耦：chip↔库一致/缺省占位/快照
     }
     // 读面单发：任务详情容器水化即时反映新 mode（proposals.mode 单侧更新）；既有任务快照
     // 不回溯的库级断言见上（tasks.mode 仍 expedition——TaskSnapshot.mode 无 RPC 面，db 为权威）
-    const detail = await refetchOnce<{ container?: { mode?: string } }>(page, TASKS_CHANNELS.detail, { projectId, taskId: String(expTaskId) })
+    const detail = await refetchOnce<{ container?: { mode?: string } }>(page, TASKS_CHANNELS.detail, { projectKey, taskId: String(expTaskId) })
     expect(detail.container?.mode, '任务详情容器水化 = 新值 blitz（即时更新）').toBe('blitz')
 
     // ── ① mode chip ↔ 库一致（UI 投影）+ ② 缺省占位（未标记不可点）──
@@ -108,7 +110,7 @@ test('@web-e2e @m3 SC3·mode 溯源解耦：chip↔库一致/缺省占位/快照
     })) as { chained?: { featureId: string; slug: string } }
     expect(chained.chained, '成链返回 chained feature（accepted ∧ expedition）').toBeDefined()
     const featTask = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: chainProp.slug }, title: 'feature 容器任务（恒远征）', type: 'doc',
+      projectKey, slug: chainProp.slug, title: 'feature 容器任务（恒远征）', type: 'doc',
     })) as { taskId: string; slug: string }
     const db2 = openForgeDbAt(dir)
     try {

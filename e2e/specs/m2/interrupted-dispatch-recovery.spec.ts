@@ -38,6 +38,7 @@ import type { ClaimTaskResult, SubmitTaskResult, TaskDetail } from '../../../pac
 // e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（spec 级单次冷启 + 用例间重播种）
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 
@@ -58,9 +59,10 @@ async function rejectMessage(promise: Promise<unknown>): Promise<string> {
 async function setupWorld(page: Page, wsDir: string, wsName: string, feature: string) {
   const project = await registerProject(page, wsDir, wsName)
   const projectId = project.id
+  const projectKey = projectKeyOf(wsDir)
   await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: feature, title: `中断恢复演示 ${feature}` })
   const dir = (await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: wsDir })).dir
-  return { projectId, dir }
+  return { projectKey, projectId, dir }
 }
 
 /** 受控初态直插（feature 行 + 指定状态任务 + 可选 claim 审计/挂接/边）——不可经动词构造的中断形态 */
@@ -129,22 +131,22 @@ test('@web-e2e @m2 中断恢复·冒烟：中断→重入→重简报→结算�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-idr')
     const FEATURE = 'idr-feat'
-    const { projectId, dir } = await setupWorld(page, wsDir, '中断恢复冒烟', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '中断恢复冒烟', FEATURE)
     const driver = createBridgeDriver(app)
 
     // ── 中断前：首次领取（claim 行 + 挂接落账）──
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '中断恢复冒烟任务', type: 'doc',
+      projectKey, slug: FEATURE, title: '中断恢复冒烟任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const first = (await driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
     })) as ClaimTaskResult
     expect(first.reclaimed, '首领 = 非重入').toBe(false)
     expect(first.digest, '首领 digest 在场（12 hex）').toMatch(/^[0-9a-f]{12}$/)
 
     // ── 中断（submit 缺席——执行记录缺失态）→ 外环重入领取 ──
     const reentry = (await driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
     })) as ClaimTaskResult
     expect(reentry.reclaimed, '重入领取 reclaimed = true（中断恢复零人工清理）').toBe(true)
     expect(reentry.task?.taskId, '重入返回同一任务').toBe(added.taskId)
@@ -181,7 +183,7 @@ test('@web-e2e @m2 中断恢复·冒烟：中断→重入→重简报→结算�
 
     // ── 恢复结算（Step 3）：重派简报派发 executor → completed ──
     const submit = (await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
       summary: '中断恢复后结算（链路自愈完成）',
       gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC_SESSION,
     })) as SubmitTaskResult
@@ -195,7 +197,7 @@ test('@web-e2e @m2 中断恢复·冒烟：中断→重入→重简报→结算�
     } finally {
       db2.close()
     }
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId: added.taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId: added.taskId })
     expect(detail.taskStatus, '读面单发即见 completed').toBe('completed')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -207,7 +209,7 @@ test('@web-e2e @m2 中断恢复·Step1 执行记录在场：盲选幂等重入�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-idr-rec')
     const FEATURE = 'idr-rec'
-    const { projectId, dir } = await setupWorld(page, wsDir, '记录在场演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '记录在场演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 受控初态：in_progress + 本会话挂接 + 活跃执行记录（claim 与 submit 前置均在——executor 正常执行中）
@@ -215,7 +217,7 @@ test('@web-e2e @m2 中断恢复·Step1 执行记录在场：盲选幂等重入�
       localId: '2.1', status: 'in_progress', claimRecord: true, linkSession: DISP_SESSION,
     })
     // 活跃执行面：submit 缺席即「未结算」；本用例补充记录在场形态——盲选对本会话 in_progress 幂等重入
-    const claim = (await driver.call('forgeTasks', 'claimTask', { projectId, sessionId: DISP_SESSION })) as ClaimTaskResult
+    const claim = (await driver.call('forgeTasks', 'claimTask', { projectKey, sessionId: DISP_SESSION })) as ClaimTaskResult
     expect(claim.task?.taskId, '盲选重入本会话 in_progress（同任务）').toBe(taskId)
     expect(claim.reclaimed, '幂等重入形态（reclaimed=true）').toBe(true)
     expect(claim.task?.taskStatus, '零状态转移（不重复派发不重复执行）').toBe('in_progress')
@@ -241,7 +243,7 @@ test('@web-e2e @m2 中断恢复·Step1 前置回归非终态：重入被守卫�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-idr-pr')
     const FEATURE = 'idr-pr'
-    const { projectId, dir } = await setupWorld(page, wsDir, '前置回归演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '前置回归演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 受控初态：T in_progress（中断态）+ 前置 P 中断窗口内回归 suspended（守卫适用一切路径）
@@ -251,13 +253,13 @@ test('@web-e2e @m2 中断恢复·Step1 前置回归非终态：重入被守卫�
     })
 
     const rejection = await rejectMessage(driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: FEATURE, localId: '3.1' }, sessionId: DISP_SESSION,
+      projectKey, taskRef: { slug: FEATURE, localId: '3.1' }, sessionId: DISP_SESSION,
     }))
     expect(rejection, '重入领取被依赖守卫拒绝（守卫适用一切路径）').toContain('前置依赖未满足')
     expect(rejection, '未满足清单携带回归前置（suspended）').toContain('suspended')
 
     // 任务保持 in_progress（无状态转移）+ 零残留（重入 claim 未落账）
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId })
     expect(detail.taskStatus, '中断任务保持 in_progress（不可强行续链）').toBe('in_progress')
     const db = openForgeDbAt(dir)
     try {
@@ -278,7 +280,7 @@ test('@web-e2e @m2 中断恢复·Step1 他会话 in_progress：盲选不领（�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-idr-fo')
     const FEATURE = 'idr-fo'
-    const { projectId, dir } = await setupWorld(page, wsDir, '双外环演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '双外环演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 受控初态：旧外环（他会话）挂接的 in_progress；当前会话零挂接、无就绪 pending
@@ -286,7 +288,7 @@ test('@web-e2e @m2 中断恢复·Step1 他会话 in_progress：盲选不领（�
       localId: '4.1', status: 'in_progress', claimRecord: true, linkSession: 'e2e-idr-stale-loop',
     })
 
-    const claim = (await driver.call('forgeTasks', 'claimTask', { projectId, sessionId: DISP_SESSION })) as ClaimTaskResult
+    const claim = (await driver.call('forgeTasks', 'claimTask', { projectKey, sessionId: DISP_SESSION })) as ClaimTaskResult
     expect(claim.task, '新外环盲选不领旧外环 in_progress（task = null）').toBeNull()
     expect(claim.dispatchPrompt, '空出口信号（空简报）').toBe('')
 
@@ -309,21 +311,21 @@ test('@web-e2e @m2 中断恢复·Step2 多次中断：逐次幂等重入 + diges
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-idr-multi')
     const FEATURE = 'idr-multi'
-    const { projectId, dir } = await setupWorld(page, wsDir, '多次中断演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '多次中断演示', FEATURE)
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: '多次中断任务', type: 'doc',
+      projectKey, slug: FEATURE, title: '多次中断任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
 
     // 首领领取（round 0 = 首次 claim——reclaimed=false）+ 两次中断重入（reclaimed=true）
     const first = (await driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
+      projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
     })) as ClaimTaskResult
     expect(first.reclaimed, '首领领取 reclaimed = false').toBe(false)
     const digests = new Set<string>([first.digest])
     for (let round = 1; round <= 2; round++) {
       const claim = (await driver.call('forgeTasks', 'claimTask', {
-        projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
+        projectKey, taskRef: { slug: added.slug, localId: added.localId }, sessionId: DISP_SESSION,
       })) as ClaimTaskResult
       expect(claim.reclaimed, `第 ${round} 次中断后重入：reclaimed=true`).toBe(true)
       expect(claim.task?.taskStatus, '状态恒 in_progress（零状态转移）').toBe('in_progress')
@@ -355,7 +357,7 @@ test('@web-e2e @m2 中断恢复·Step3 人工处置态：重入领取被矩阵�
   const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
   const wsDir = join(wsRoot, 'ws-idr-md')
     const FEATURE = 'idr-md'
-    const { projectId, dir } = await setupWorld(page, wsDir, '人工处置演示', FEATURE)
+    const { projectKey, dir } = await setupWorld(page, wsDir, '人工处置演示', FEATURE)
     const driver = createBridgeDriver(app)
 
     // 受控初态：中断窗口内人工置 skipped（claim 历史行 + transition 人工处置行在场）
@@ -364,13 +366,13 @@ test('@web-e2e @m2 中断恢复·Step3 人工处置态：重入领取被矩阵�
     })
 
     const rejection = await rejectMessage(driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: FEATURE, localId: '5.1' }, sessionId: DISP_SESSION,
+      projectKey, taskRef: { slug: FEATURE, localId: '5.1' }, sessionId: DISP_SESSION,
     }))
     expect(rejection, '人工处置态重入 → ERR_INVALID_TRANSITION（非 pending/blocked 不可转 in_progress）').toContain('非法任务转移')
     expect(rejection, '矩阵先验呈现实际当前态').toContain('skipped')
 
     // 处置结果不被覆盖 + 零残留
-    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectId, taskId })
+    const detail = await refetchOnce<TaskDetail>(page, TASKS_CHANNELS.detail, { projectKey, taskId })
     expect(detail.taskStatus, '任务保持 skipped（人工处置不被覆盖）').toBe('skipped')
     const db = openForgeDbAt(dir)
     try {

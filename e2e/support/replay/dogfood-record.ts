@@ -294,13 +294,12 @@ export function buildDogfoodFixture(input: DogfoodFixtureInput): ReplayFixture {
         at,
         make: (b) => {
           b.verb('forgeTasks', 'claimTask', {
-            projectId: input.projectId,
+            projectKey: input.projectId,
             taskRef: { slug: record.slug, localId: record.localId },
             sessionId: record.sessionId ?? '',
           }).observed('forgeTasks', 'claimTask', {
             task: {
               taskId: task.id, slug: task.slug, localId: task.localId,
-              source: { kind: task.sourceKind, slug: task.slug }, // M3 容器双轨（featureId 退役）
               title: task.title,
               taskType: task.taskType, taskStatus: 'in_progress', ...(task.taskDesc !== null ? { taskDesc: task.taskDesc } : {}),
               ...(task.priority !== null ? { priority: task.priority } : {}),
@@ -335,7 +334,7 @@ export function buildDogfoodFixture(input: DogfoodFixtureInput): ReplayFixture {
         at,
         make: (b) => {
           b.verb('forgeTasks', 'submitTask', {
-            projectId: input.projectId,
+            projectKey: input.projectId,
             taskRef: { slug: record.slug, localId: record.localId },
             result,
             ...(result === 'blocked' ? { reason: record.reason ?? '' } : { summary: record.summary ?? '' }),
@@ -363,8 +362,8 @@ export function buildDogfoodFixture(input: DogfoodFixtureInput): ReplayFixture {
         at,
         make: (b) => {
           b.verb('forgeTasks', 'addTask', {
-            projectId: input.projectId,
-            source: { kind: task.sourceKind, slug: task.slug }, // M3 容器双轨（featureSlug 退役——drift #1）
+            projectKey: input.projectId,
+            slug: task.slug,
             title: task.title,
             type: task.taskType,
             ...(task.taskDesc !== null ? { taskDesc: task.taskDesc } : {}),

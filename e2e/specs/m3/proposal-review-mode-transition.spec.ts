@@ -53,6 +53,7 @@ import { createSharedLaunchFixture, openOverviewSubtab } from '../../support/fix
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { ovSubtabOf, docPanelOf } from '../../support/anchors.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-jprm'
 
@@ -267,6 +268,7 @@ test('@web-e2e @m3 提案评审流转·T4：在途模式更改唯一正门（二
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
 
@@ -275,7 +277,7 @@ test('@web-e2e @m3 提案评审流转·T4：在途模式更改唯一正门（二
       projectId, slug: 'jprm-inflight', title: 'Jprm 在途升级提案', mode: 'blitz',
     })) as { proposalId: string }
     const inFlight = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: 'jprm-inflight' }, title: '在途直挂任务', type: 'doc',
+      projectKey, slug: 'jprm-inflight', title: '在途直挂任务', type: 'doc',
     })) as { taskId: string }
     const pExp = (await driver.call('forgeProposals', 'createProposal', {
       projectId, slug: 'jprm-chain', title: 'Jprm 成链对照提案', mode: 'expedition',

@@ -16,6 +16,7 @@ import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { awaitPresetHeaderLabel, seatPresent } from '../../support/m3.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-sc5'
 const PROP = 'sc5-expedition'
@@ -36,6 +37,7 @@ test('@web-e2e @m3 SC5·远征全链：成链原子三行 → 规格文档 → �
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
 
@@ -68,10 +70,10 @@ test('@web-e2e @m3 SC5·远征全链：成链原子三行 → 规格文档 → �
 
     // ── 任务（breakdown-tasks 产出承载：source=feature·mode=expedition 快照）──
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: 'SC5 远征任务甲', type: 'doc',
+      projectKey, slug: PROP, title: 'SC5 远征任务甲', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: 'SC5 远征任务乙', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: PROP, title: 'SC5 远征任务乙', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string }
 
     // ── 派发入口（UF-3 新开路由联动）：任务子 tab「派发」→ 新会话（远征）+ 单行指令自动发送 ──
