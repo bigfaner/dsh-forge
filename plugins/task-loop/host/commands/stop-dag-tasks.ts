@@ -4,8 +4,8 @@
 // 叙述 + 循环终态全归驱动器 stop 面；本 handler 只做会话作用域透传与回执。本会话无活循环
 // = no-op 文本「本会话没有派发任务」，不附归属、不误停其它会话循环（跨会话隔离判定在
 // 驱动器 registry.byOwner）。
-import { emitForgeDiag } from "./faces.js";
 import type { ForgeCommandInvocation, ForgeCommandResult, ForgeDiagEmitFace } from "./faces.js";
+import { emitForgeDiag } from "../faces.js";
 import type { LoopDriver } from "../loop/driver-face.js";
 
 /** 指令名（无 input 描述符——无参指令，composer 不展示占位） */

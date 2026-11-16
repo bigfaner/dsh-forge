@@ -137,7 +137,8 @@ export function selfProbeOf(ctx: unknown): ForgeTasksRemoteDeps["selfProbe"] {
   };
 }
 
-/** 具名服务 provide（常驻 provider——装配期一次，零 provide 降级径由装配面承担）。 */function provideResidentServices(ctx: unknown, services: TaskLoopAssembly, diag: (line: string, level?: DiagLevel) => void): void {
+/** 具名服务 provide（常驻 provider——装配期一次，零 provide 降级径由装配面承担）。 */
+function provideResidentServices(ctx: unknown, services: TaskLoopAssembly, diag: (line: string, level?: DiagLevel) => void): void {
   const reflect = (ctx as TaskLoopPluginCtx).reflect;
   if (typeof reflect?.provide !== "function") {
     diag("[task-loop] ctx.reflect.provide 缺席（非 cordis 宿主）——forgeTasks/forgeCheckpoints 零 provide（降级不阻载）", "warn");

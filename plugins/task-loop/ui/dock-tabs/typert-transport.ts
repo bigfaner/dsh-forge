@@ -6,7 +6,7 @@
 // 错误相位收敛，零槽渲染崩溃。forgeTasks = 本包自有 namespace（host 半 Typert 工件
 // 另批落位——face 缺席同径 typed 降级）。preload dshForge transport 不随迁（本包 client
 // 产物零 dshForge 引用——self-containment 机检锚）。
-import { createForgeRpcClient, type ForgeTransport, type TasksChangedSubscribe } from "./rpc-channels.js";
+import { createForgeRpcClient, type ForgeTransport } from "./rpc-channels.js";
 import { forgeRemoteFaceOf, namespaceFaceOf, type ForgeRemoteFace } from "../rpc.js";
 
 /** 通道 seg → Typert namespace（在场集 + 可选族；contracts channels 常量的 seg 单源映射） */
@@ -79,14 +79,3 @@ export function typertRpcClientFactory(): ReturnType<typeof createForgeRpcClient
   return createForgeRpcClient(typertTransport())
 }
 
-/**
- * tasks-changed 底层订阅（Typert follow 形态——ui-slots §③ B2 处方）：
- * 官方正门 = `ctx.remote.$stream({ open: (signal) => remote.forgeTasks.follow(signal) })`
- * + 快照流镜像。TODO(typert-follow)：官方 $stream/RemoteSnapshotStream 契约正本
- * （slot-catalog 同源的 client remote 类型面）本批未核销——follow 订阅待 M3 正门探针
- * 真机核销后接通（接通点 = 本函数返回底层适配 subscribe；现返回 undefined =
- * 投影快照单源 + 交互重取降级——正确性 host 单点保证，降级不锁存）。
- */
-export function typertTasksChangedSubscribe(): TasksChangedSubscribe | undefined {
-  return undefined;
-}

@@ -20,39 +20,6 @@ export interface ForgeCommandInvocation {
   readonly signal?: AbortSignal;
 }
 
-/** 诊断发射基础载荷（host emitDiag DiagEventPayload 结构子面——process 进程位由发射缝补齐） */
-export interface ForgeDiagBase {
-  readonly level: "info" | "warn" | "error";
-  /** 诊断事件类别（功能域前缀命名） */
-  readonly event: string;
-  readonly message: string;
-  readonly projectId?: string;
-  readonly sessionId?: string;
-}
-
-/** 诊断发射载荷（基础面 + 就地可得扩展字段——index signature 透传） */
-export interface ForgeDiagPayload extends ForgeDiagBase {
-  readonly [key: string]: unknown;
-}
-
-/** 注入式诊断发射缝（装配期注入——ctx.emit 类型化闭包） */
-export type ForgeDiagEmitFace = (payload: ForgeDiagPayload) => void;
-
-/**
- * 注入式诊断缝发射（本地化 emitForgeDiag——缝在场 → 透传；缝缺席或发射失败 → 按级分流
- * console 兜底（error→console.error、其余→console.warn——诊断不静默）。fire-and-forget：
- * 兜底自身永不抛（诊断面零反压业务）。
- */
-export function emitForgeDiag(diag: ForgeDiagEmitFace | undefined, payload: ForgeDiagPayload): void {
-  if (diag !== undefined) {
-    try {
-      diag(payload);
-      return;
-    } catch {
-      // 发射失败 → 兜底（诊断不静默）
-    }
-  }
-  const line = `[${payload.event}] ${payload.message}`;
-  if (payload.level === "error") console.error(line);
-  else console.warn(line);
-}
+// 诊断发射面单源：ForgeDiagBase / ForgeDiagPayload / ForgeDiagEmitFace / emitForgeDiag
+// 统一收敛到 host/faces.ts 单实现（本文件曾持本地化副本——双实现漂移风险清除）。
+export type { ForgeDiagBase, ForgeDiagPayload, ForgeDiagEmitFace } from "../faces.js";

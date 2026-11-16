@@ -294,6 +294,102 @@ function resolveContainerTask(
     .get(projectKey, slug, localId);
 }
 
+/** 任务级去重查捞（判例 fix-11 硬约束——判据四支合取的后三支：同源同型且未终态 +
+ *  brief 相等 + context 键序无关规范化相等；命中即复用既有行，异内容正常建行） */
+function findReusableTask(
+  db: Database.Database,
+  sourceId: string,
+  type: TaskType,
+  brief: string | undefined,
+  context: Readonly<Record<string, string>> | undefined,
+): { id: string; slug: string; local_id: string } | undefined {
+  const active = db
+    .prepare<unknown[], { id: string; slug: string; local_id: string; brief: string | null; context_json: string | null }>(
+      `SELECT id, slug, local_id, brief, context_json FROM task_tasks
+       WHERE fix_of_task_id = ? AND task_type = ?
+         AND task_status NOT IN ('completed', 'skipped', 'rejected')
+       ORDER BY created_at, id LIMIT 1`,
+    )
+    .get(sourceId, type);
+  if (
+    active !== undefined &&
+    active.brief === (brief ?? null) &&
+    canonicalContext(active.context_json) ===
+      canonicalContext(context === undefined ? null : JSON.stringify(context))
+  ) {
+    return active;
+  }
+  return undefined;
+}
+
+/** task_tasks 行写入点（task_tasks 列面 v1——缺省 pending/medium/false 族；id 纯 UUID
+ *  调用点生成。唯一键冲突原样上抛——错误映射归调用点语义，本 helper 零吞零转） */
+function insertTaskRow(
+  db: Database.Database,
+  now: string,
+  projectKey: string,
+  slug: string,
+  localId: string,
+  fields: Pick<
+    AddTaskInput,
+    | "title" | "type" | "brief" | "acceptanceCriteria" | "priority" | "estimatedTime"
+    | "scope" | "context" | "breaking" | "coverageThreshold" | "complexity"
+  >,
+  sourceId: string | null,
+): string {
+  const taskId = randomUUID();
+  db.prepare(
+    `INSERT INTO task_tasks (id, slug, local_id, title, task_type, task_status, brief, ac_json, priority,
+       estimated_time, scope_json, context_json, fix_of_task_id, breaking,
+       coverage_threshold, complexity, project_key, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    taskId,
+    slug,
+    localId,
+    fields.title,
+    fields.type,
+    fields.brief ?? null,
+    fields.acceptanceCriteria === undefined ? null : JSON.stringify(fields.acceptanceCriteria),
+    fields.priority ?? null,
+    fields.estimatedTime ?? null,
+    fields.scope === undefined ? null : JSON.stringify(fields.scope),
+    fields.context === undefined ? null : JSON.stringify(fields.context),
+    sourceId,
+    fields.breaking === true ? 1 : 0,
+    fields.coverageThreshold ?? null,
+    fields.complexity ?? "medium",
+    projectKey,
+    now,
+    now,
+  );
+  return taskId;
+}
+
+/** add 记录行（actor='plugin-tool'） */
+function insertAddRecord(db: Database.Database, now: string, taskId: string): void {
+  db.prepare(
+    `INSERT INTO task_records (task_id, verb, actor, created_at, updated_at)
+     VALUES (?, 'add', 'plugin-tool', ?, ?)`,
+  ).run(taskId, now, now);
+}
+
+/** block-source 写路径内聚效果：源同事务置 blocked + auto-block 记录（不经转移校验面；
+ *  fix-chain 边插入语句由调用点注入——单条 INSERT vs INSERT OR IGNORE 幂等形态分叉保留原样） */
+function appendAutoBlock(
+  db: Database.Database,
+  now: string,
+  insertFixChainEdge: (sourceId: string) => void,
+  source: TaskKeyRow,
+): void {
+  insertFixChainEdge(source.id);
+  db.prepare(`UPDATE task_tasks SET task_status = 'blocked', updated_at = ? WHERE id = ?`).run(now, source.id);
+  db.prepare(
+    `INSERT INTO task_records (task_id, verb, from_status, to_status, actor, created_at, updated_at)
+     VALUES (?, 'auto-block', ?, 'blocked', 'core', ?, ?)`,
+  ).run(source.id, source.task_status, now, now);
+}
+
 /**
  * Interface 1 addTask：task_tasks 行 → task_edges 行 → task_records 行单事务全成全败。
  * 顺序：sourceTask 解析 → 任务级去重（四判据合取）→ dependsOn 解析 → before 解析 + 状态守卫
@@ -326,21 +422,9 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
     //    context 键序无关规范化相等 → 复用既有行（reused=true；判例 fix-11 硬约束——
     //    判据四支合取，异内容第二单正常建行，禁回退「同源同型即吞并」旧判据）
     if (source !== undefined) {
-      const active = db
-        .prepare<unknown[], { id: string; slug: string; local_id: string; brief: string | null; context_json: string | null }>(
-          `SELECT id, slug, local_id, brief, context_json FROM task_tasks
-           WHERE fix_of_task_id = ? AND task_type = ?
-             AND task_status NOT IN ('completed', 'skipped', 'rejected')
-           ORDER BY created_at, id LIMIT 1`,
-        )
-        .get(source.id, input.type);
-      if (
-        active !== undefined &&
-        active.brief === (input.brief ?? null) &&
-        canonicalContext(active.context_json) ===
-          canonicalContext(input.context === undefined ? null : JSON.stringify(input.context))
-      ) {
-        return { taskId: active.id, slug: active.slug, localId: active.local_id, reused: true };
+      const hit = findReusableTask(db, source.id, input.type, input.brief, input.context);
+      if (hit !== undefined) {
+        return { taskId: hit.id, slug: hit.slug, localId: hit.local_id, reused: true };
       }
     }
 
@@ -456,33 +540,9 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
     }
 
     // ⑨ task_tasks 行（id = 纯 UUID 写入点生成 + 缺省 pending/medium/false 族；v1 列面）
-    const taskId = randomUUID();
+    let taskId: string;
     try {
-      db.prepare(
-        `INSERT INTO task_tasks (id, slug, local_id, title, task_type, task_status, brief, ac_json, priority,
-           estimated_time, scope_json, context_json, fix_of_task_id, breaking,
-           coverage_threshold, complexity, project_key, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        taskId,
-        input.slug,
-        localId,
-        input.title,
-        input.type,
-        input.brief ?? null,
-        input.acceptanceCriteria === undefined ? null : JSON.stringify(input.acceptanceCriteria),
-        input.priority ?? null,
-        input.estimatedTime ?? null,
-        input.scope === undefined ? null : JSON.stringify(input.scope),
-        input.context === undefined ? null : JSON.stringify(input.context),
-        source?.id ?? null,
-        input.breaking === true ? 1 : 0,
-        input.coverageThreshold ?? null,
-        input.complexity ?? "medium",
-        input.projectKey,
-        now,
-        now,
-      );
+      taskId = insertTaskRow(db, now, input.projectKey, input.slug, localId, input, source?.id ?? null);
     } catch (cause) {
       if (isUniqueViolation(cause, "uq_task_tasks_project_slug_local")) {
         throw new TaskExistsError({ projectKey: input.projectKey, slug: input.slug, localId });
@@ -526,19 +586,11 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
     }
 
     // ⑪ records 行：add（actor='plugin-tool'）
-    db.prepare(
-      `INSERT INTO task_records (task_id, verb, actor, created_at, updated_at)
-       VALUES (?, 'add', 'plugin-tool', ?, ?)`,
-    ).run(taskId, now, now);
+    insertAddRecord(db, now, taskId);
 
     // ⑫ block-source 写路径内聚效果：源同事务置 blocked + auto-block 记录（不经转移校验面）
     if (input.blockSource === true && source !== undefined) {
-      insertEdgeIgnore.run(source.id, taskId, "fix-chain", now, now);
-      db.prepare(`UPDATE task_tasks SET task_status = 'blocked', updated_at = ? WHERE id = ?`).run(now, source.id);
-      db.prepare(
-        `INSERT INTO task_records (task_id, verb, from_status, to_status, actor, created_at, updated_at)
-         VALUES (?, 'auto-block', ?, 'blocked', 'core', ?, ?)`,
-      ).run(source.id, source.task_status, now, now);
+      appendAutoBlock(db, now, (sourceId) => insertEdgeIgnore.run(sourceId, taskId, "fix-chain", now, now), source);
     }
 
     return {
@@ -794,7 +846,8 @@ export function validateBatchAddTasks(
  * 落库（①全量 INSERT task_tasks → ②同事务连 task_edges（批内互引解析为批内 localId）+
  * fix 链派生（blockSource 逐条锁源置 blocked））。校验失败零落库；落库中途失败全批回滚零残留。
  */
-export async function batchAddTasks(deps: TasksVerbDeps, input: BatchAddTasksInput): Promise<BatchAddTasksResult> {  assertContainerSlugAllowed(input.slug);
+export async function batchAddTasks(deps: TasksVerbDeps, input: BatchAddTasksInput): Promise<BatchAddTasksResult> {
+  assertContainerSlugAllowed(input.slug);
   const db = deps.db;
   const now = new Date().toISOString();
 
@@ -814,57 +867,17 @@ export async function batchAddTasks(deps: TasksVerbDeps, input: BatchAddTasksInp
         ? resolveContainerTask(db, input.projectKey, item.sourceTask.slug, item.sourceTask.localId)
         : undefined;
       if (source !== undefined) {
-        const active = db
-          .prepare<unknown[], { id: string; slug: string; local_id: string; brief: string | null; context_json: string | null }>(
-            `SELECT id, slug, local_id, brief, context_json FROM task_tasks
-             WHERE fix_of_task_id = ? AND task_type = ?
-               AND task_status NOT IN ('completed', 'skipped', 'rejected')
-             ORDER BY created_at, id LIMIT 1`,
-          )
-          .get(source.id, item.type);
-        if (
-          active !== undefined &&
-          active.brief === (item.brief ?? null) &&
-          canonicalContext(active.context_json) ===
-            canonicalContext(item.context === undefined ? null : JSON.stringify(item.context))
-        ) {
-          inserted.set(item.localId, { id: active.id, status: "reused" });
-          out.push({ localId: item.localId, status: "reused", taskId: active.id, slug: active.slug });
+        const hit = findReusableTask(db, source.id, item.type, item.brief, item.context);
+        if (hit !== undefined) {
+          inserted.set(item.localId, { id: hit.id, status: "reused" });
+          out.push({ localId: item.localId, status: "reused", taskId: hit.id, slug: hit.slug });
           continue;
         }
       }
       const localId = item.localId;
-      const taskId = randomUUID();
-      db.prepare(
-        `INSERT INTO task_tasks (id, slug, local_id, title, task_type, task_status, brief, ac_json, priority,
-           estimated_time, scope_json, context_json, fix_of_task_id, breaking,
-           coverage_threshold, complexity, project_key, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        taskId,
-        input.slug,
-        localId,
-        item.title,
-        item.type,
-        item.brief ?? null,
-        item.acceptanceCriteria === undefined ? null : JSON.stringify(item.acceptanceCriteria),
-        item.priority ?? null,
-        item.estimatedTime ?? null,
-        item.scope === undefined ? null : JSON.stringify(item.scope),
-        item.context === undefined ? null : JSON.stringify(item.context),
-        source?.id ?? null,
-        item.breaking === true ? 1 : 0,
-        item.coverageThreshold ?? null,
-        item.complexity ?? "medium",
-        input.projectKey,
-        now,
-        now,
-      );
+      const taskId = insertTaskRow(db, now, input.projectKey, input.slug, localId, item, source?.id ?? null);
       inserted.set(localId, { id: taskId, status: "added" });
-      db.prepare(
-        `INSERT INTO task_records (task_id, verb, actor, created_at, updated_at)
-         VALUES (?, 'add', 'plugin-tool', ?, ?)`,
-      ).run(taskId, now, now);
+      insertAddRecord(db, now, taskId);
       out.push({ localId, status: "added", taskId, slug: input.slug });
     }
 
@@ -890,12 +903,7 @@ export async function batchAddTasks(deps: TasksVerbDeps, input: BatchAddTasksInp
       if (item.blockSource === true && item.sourceTask !== undefined) {
         const source = resolveContainerTask(db, input.projectKey, item.sourceTask.slug, item.sourceTask.localId);
         if (source !== undefined) {
-          insertEdge.run(source.id, selfId, "fix-chain", now, now);
-          db.prepare(`UPDATE task_tasks SET task_status = 'blocked', updated_at = ? WHERE id = ?`).run(now, source.id);
-          db.prepare(
-            `INSERT INTO task_records (task_id, verb, from_status, to_status, actor, created_at, updated_at)
-             VALUES (?, 'auto-block', ?, 'blocked', 'core', ?, ?)`,
-          ).run(source.id, source.task_status, now, now);
+          appendAutoBlock(db, now, (sourceId) => insertEdge.run(sourceId, selfId, "fix-chain", now, now), source);
         }
       }
     }

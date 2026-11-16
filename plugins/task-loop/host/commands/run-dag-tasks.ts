@@ -16,7 +16,7 @@ import type { EscalationAskFace } from "../loop/escalation-ask.js";
 import type { LoopDriver } from "../loop/driver-face.js";
 import type { LoopRecord } from "../loop/registry.js";
 import type { ContainerRef, TaskCard } from "../domain/tasks/types.js";
-import { emitForgeDiag } from "./faces.js";
+import { emitForgeDiag } from "../faces.js";
 import type { ForgeCommandInvocation, ForgeCommandResult, ForgeDiagEmitFace, ForgeDiagPayload } from "./faces.js";
 import { NO_ACTIVE_LOOP_TEXT } from "./stop-dag-tasks.js";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@dsh-forge/contracts";
@@ -533,13 +533,14 @@ function commitDispatchLine(
       dispatchLineMessage(`/${RUN_DAG_TASKS_NAME} ${source.slug}`, { task: source.slug, state: "dispatch" }),
     );
     // 成功里程碑 info 埋点（派发成功此前仅失败 warn，成功径不可见）
-    emitForgeDiag(diag, {
+    const committedPayload: ForgeDiagPayload = {
       level: "info",
       event: "forge-dispatch-line",
       message: `forge dispatch line committed (${source.slug}) -> ${sessionId}`,
       sessionId,
       slug: source.slug,
-    });
+    };
+    emitForgeDiag(diag, committedPayload);
     return { committed: true, registryMissed: !viaRegistry && resolveAgent !== undefined };
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause);
