@@ -1,4 +1,4 @@
-﻿// forge:commander 指挥者段模板（expert-squad-forge-2 纳入 10）。
+// forge:commander 指挥者段模板（expert-squad-forge-2 纳入 10）。
 // 条件注入语义：段注册无条件（同构 forge:doc-style 三先例），段 text 运行期按
 // ctx.experts 服务在场性求值——服务缺席 = 空串（官方 dsh-system-prompt 对空串
 // section 整体过滤，与「从未注册」逐字节一致）；在场 = 注入指挥者行为话术。

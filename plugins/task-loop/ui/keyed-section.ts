@@ -1,11 +1,12 @@
-// keyed section 鎻掓Ы鎵╁睍鐐?鈥斺€?tab keyed 鍗犵敤鑰呮ā寮忔硾鍖栵紙1.16锛夈€倀ab 闈㈠厛渚?// 锛坰idebar.right.pane.tab keyed 'dswf-bug'鈥斺€擝ugPreview锛夌殑瑁呰浇褰㈡€佹敹鎷负鍗曚竴鐧昏濂戠害锛?// 鐩爣妲藉０鏄庣紳锛堝畼鏂?SlotRegistry.inject鈥斺€斻€屽０鏄庡湪鍦猴紙鎴栧叆搴э級鍗宠銆嶉殢 fiber 鍗歌浇绾ц仈锛?// + keyed 鍗犵敤鑰呰惤搴э紙瀹樻柟 SlotCore.register鈥斺€攌eyed 妲芥寜 key 鍞竴銆佸悓 cell 鍚?priority
-// 鍐嶆敞鍐屾姏閿欙級銆傛秷璐归潰锛堟彃浠堕〉鍙岀紳閰嶇疆鑺?ui/settings-section锛変笌鏈墿灞曠偣鍚屽瀷鈥斺€?// 娉涘寲鍚庢柊 keyed/list 鍨嬭妭鍙啓澹版槑琛岋紝涓嶅鍒惰杞芥牱鏉裤€?//
-// M2锛坰ettings-unification 鎻愭 settings-unification/proposal.md 鍦嗘瑁佸畾锛夛細
-// 鐭ヨ瘑搴撶洰褰曡妭鎺ュ彛鈥斺€攌eyed section 鎻掓Ы鐨勫湪鍦烘€х敱瀹夸富锛坧roject锛夊崟鐐瑰０鏄庯紱knowledge 绛?// 娑堣垂鏂?apply 鏈熺幇鏌?project 鍏峰悕鏈嶅姟锛圥ROJECT_SECTION_HOST_SERVICE锛夊湪鍦烘墠娉ㄥ唽鎻掓Ы
-// 锛坵hileServed 闂ㄦ帶 + 瀹夸富鍦ㄥ満鎬у０鏄庯級鈥斺€攑roject 缂哄腑鏃堕浂绛夊緟闆舵偓鎸傦紱妲藉悕/褰㈢姸濂戠害鐢?// 鍙屽寘蹇収娴嬭瘯浜掓锛屼笉闈犺繍琛屾湡瓒呮椂銆傛秷璐归潰锛坒ix-7锛夛細瀹夸富 dock-tabs 姒傝鑺傚涓荤粡
-// children 澹版槑缂濆崟鐐瑰０鏄庢Ы锛圤VERVIEW_SECTIONS_CHILDREN锛? ForgeOverviewSectionHost
-// renderSlot 娑堣垂 roster鈥斺€旀敞鍐屼晶鍙啓澹版槑琛屻€?// bundle 鑷惈绾緥锛氶浂涓婃父 import锛堢粨鏋勪笌 @deepseek-ai/dsh-client-ui-slots 娑堣垂鍒囩墖鍚屽瀷闀滃儚锛夈€?
-/** keyed/list 鍨嬭妭鐧昏濂戠害锛堟硾鍖栬嚜 tab keyed 鍗犵敤鑰呬袱娈垫敞鍐屸€斺€攕lot+kind options 閫愬瓧閫忎紶锛夈€?*/
+// keyed section 插槽扩展点（task-loop 自含副本——tab keyed 占用者模式泛化）：
+// 目标槽声明缝（官方 SlotRegistry.inject——「声明在场（或入座）即装」随 fiber 卸载级联）
+// + keyed 占用者落座（官方 SlotCore.register——keyed 槽按 key 唯一、同 cell 同 priority
+// 再注册抛错）。泛化后新 keyed/list 型节只写声明行，不复制装载样板。
+//
+// task-loop 差异面：conversation/dock-tab 族 keyed 槽与宿主 project 插件同键——落座走
+// KEYED_SHADOW_PRIORITY 负值遮蔽（见下）；单装形态（无占用者）同值落座零行为差异。
+// bundle 自含纪律：零上游 import（结构与 @deepseek-ai/dsh-client-ui-slots 消费切片同型镜像）。
+
 /**
  * keyed 槽遮蔽 priority（fix-10 bug 400b3952 + fix-12 撞车残余）：同宿主 project 插件
  * 先装、已按同键 priority 0 占用 keyed 槽——同 key 同 priority 注册被官方 slots 拒收
@@ -15,38 +16,40 @@
 export const KEYED_SHADOW_PRIORITY = -10;
 
 export interface KeyedSectionRegistration {
-  /** 鐩爣妲藉悕锛堝畼鏂?SlotMap key鈥斺€斿０鏄庣紳涓庤惤搴у悓鍚嶏級銆?*/
+  /** 目标槽名（官方 SlotMap key——声明缝与落座同名）。 */
   readonly slot: string;
-  /** keyed 妲藉崰鐢ㄩ敭锛坘ind: keyed 蹇呭～锛沴ist 鍨嬭妭缂虹渷锛夈€?*/
+  /** keyed 槽占用键（kind: keyed 必填；list 型节缺省）。 */
   readonly key?: string;
-  /** list 妲借閿紙kind: list 蹇呭～锛沰eyed 鍨嬭妭缂虹渷锛夈€?*/
+  /** list 槽行键（kind: list 必填；keyed 型节缺省）。 */
   readonly id?: string;
-  /** list 妲借搴忋€?*/
+  /** list 槽行序。 */
   readonly order?: number;
-  /** 琛屾樉绀烘爣绛撅紙瀛楃涓叉垨 thunk鈥斺€斿畼鏂?SlotLabel 褰㈢姸锛宼hunk 闅?active locale 閫愯锛夈€?*/
+  /** 行显示标签（字符串或 thunk——官方 SlotLabel 形状，thunk 随 active locale 逐读）。 */
   readonly label?: string | (() => string);
-  /** 琛?label 鎵€灞炲懡鍚嶇┖闂达紙鐧昏闈㈠０鏄庯紝瀹樻柟 roster 娑堣垂鈥斺€攍ocale.register 鐨?NS 鍚屾簮锛夈€?*/
+  /** 行 label 所属命名空间（登记面声明，官方 roster 消费——locale.register 的 NS 同源）。 */
   readonly locale?: string;
-  /** cell 褰卞瓙/閾惧簭锛堝畼鏂?priority鈥斺€斿崌搴忥紝鍚?cell 鍚屽€兼姏閿欙級銆?*/
+  /** cell 影子/链序（官方 priority——升序，同 cell 同值抛错）。 */
   readonly priority?: number;
-  /** 鑺?inject face 宸ュ巶锛堢櫥璁伴潰澹版槑鈥斺€旀Ы runtime 涓?ownerProps 骞跺悎閫忎紶缁勪欢锛夈€?*/
+  /** 节 inject face 工厂（登记面声明——槽 runtime 与 ownerProps 并合透传组件）。 */
   readonly inject?: () => Record<string, unknown>;
-  /** 瀛愭Ы澹版槑琛紙瀹樻柟 SlotCore.register children 鍗忚鈥斺€斿０鏄庡嵆鍗犳湁锛屽涓诲崟鐐瑰０鏄庣紳锛夈€?*/
+  /** 子槽声明表（官方 SlotCore.register children 协议——声明即占有，宿主单点声明缝）。 */
   readonly children?: Record<string, unknown>;
-  /** 鑺傜粍浠舵湰浣擄紙瀹樻柟浜斾唤棰濈粍鍚?props 濂戠害鈥斺€旀湰鎵╁睍鐐归浂瑁佸壀閫忎紶锛夈€?*/
+  /** 节组件本体（官方五份额组合 props 契约——本扩展点零裁剪透传）。 */
   readonly component: unknown;
 }
 
-/** 瀹樻柟 slots 鏈嶅姟娑堣垂鍒囩墖锛堢粨鏋勫悓鍨嬮暅鍍忊€斺€攂undle 鑷惈闆朵笂娓?import锛夈€?*/
+/** 官方 slots 服务消费切片（结构同型镜像——bundle 自含零上游 import）。 */
 export interface SectionSlotsFace {
-  /** 妲藉０鏄庣紳锛氬０鏄庡湪鍦猴紙鎴栧叆搴э級鍗宠 cb锛沜b 杩斿洖閲婃斁鍣ㄩ殢 fiber 鍗歌浇绾ц仈銆?*/
+  /** 槽声明缝：声明在场（或入座）即装 cb；cb 返回释放器随 fiber 卸载级联。 */
   inject?(key: string, callback: () => (() => void) | undefined): (() => void) | undefined;
-  /** 娉ㄥ唽鍗犵敤鑰咃紙options.name = 妲藉悕锛沰ey/id/order/label/priority = kind 褰㈢姸瀛楁锛夈€?*/
+  /** 注册占用者（options.name = 槽名；key/id/order/label/priority = kind 形状字段）。 */
   register?(options: Record<string, unknown>, component: unknown): (() => void) | undefined;
 }
 
 /**
- * 鍗曡鐧昏瀹堝崼锛堟敞鍐岄潰寮傚父鍙檷鏈鈥斺€攃onsole.error 鐣欑棔涓嶅婧㈢偢瑁呴厤锛? * expert-squad safeRegister 鍚屾寰鍒垛€斺€斾袱澶勫潎涓烘Ы鐧昏瀹堝崼锛屾娊鍏变韩妯″潡鍙嶅鑰﹀悎锛夈€? */
+ * 单行登记守卫（注册面异常只降本行——console.error 留痕不外溢炸装配；
+ * expert-squad safeRegister 同款微复制——两处均为槽登记守卫，抽共享模块反增耦合）。
+ */
 export function safeRegisterSection(
   slots: SectionSlotsFace,
   options: Record<string, unknown>,
@@ -56,13 +59,15 @@ export function safeRegisterSection(
   try {
     return slots.register(options, component);
   } catch (error) {
-    console.error("[dsh-forge/task-loop] keyed section registration failed鈥斺€旈檷绾т笉娉ㄥ唽", error);
+    console.error("[dsh-forge/task-loop] keyed section registration failed——降级不注册", error);
     return undefined;
   }
 }
 
 /**
- * 娉ㄥ唽涓€涓?keyed/list 鍨嬭妭锛堜袱娈靛紡锛歴lots.inject(slot) 澹版槑缂?鈫?safeRegisterSection 钀藉骇锛夈€? * slots 鍔ｅ舰锛坕nject/register 缂哄腑锛? fail-soft 涓嶆敞鍐岋紙warn 鐣欑棔锛屼笉鐐哥粍鍚堬級銆? */
+ * 注册一个 keyed/list 型节（两段式：slots.inject(slot) 声明缝 → safeRegisterSection 落座）。
+ * slots 劣形（inject/register 缺席）= fail-soft 不注册（warn 留痕，不炸组合）。
+ */
 export function registerKeyedSection(
   slots: SectionSlotsFace | undefined,
   registration: KeyedSectionRegistration,
@@ -96,21 +101,22 @@ export function registerKeyedSection(
   return settled ? installed : disposer;
 }
 
-// 鈹€鈹€ M2锛氱煡璇嗗簱鐩綍鑺傦紙濂戠害閿?+ 瀹夸富娑堣垂闈㈤殢 fix-7 钀藉湴锛?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── 宿主 section 消费切片（契约锚；M2 目录节消费面随宿主落地） ──────────────
 
-/** 瀹夸富鍦ㄥ満鎬у０鏄庢湇鍔″悕锛坧roject 鎻掍欢鍏峰悕鏈嶅姟鈥斺€攌nowledge 娑堣垂鏂?apply 鏈熺幇鏌ラ敋锛夈€?*/
+/** 宿主在场性声明服务名（project 插件具名服务——消费方 apply 期现查锚）。 */
 export const PROJECT_SECTION_HOST_SERVICE = "project.sections";
 
-/** 鐭ヨ瘑搴撶洰褰曡妭妲藉悕锛圡2 鎸傝浇鐐癸紱妲藉悕濂戠害鐢卞弻鍖呭揩鐓ф祴璇曚簰妫€鈥斺€攕ettings-unification 鍦嗘瑁佸畾锛夈€?*/
+/** 知识库目录节槽名（M2 挂载点；槽名契约由双包快照测试互检——settings-unification 圆桌裁定）。 */
 export const KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT = "project.section.knowledge-dir";
 
 /**
- * 瀹夸富 section 鏈嶅姟褰㈢姸锛圡2 娑堣垂鍒囩墖棰勭暀锛夛細knowledge 鐜版煡 ctx[PROJECT_SECTION_HOST_SERVICE]
- * 鍦ㄥ満鍚庯紝缁?whileServed 闂ㄦ帶娉ㄥ唽 keyed 鐩綍鑺傦紙瀹夸富缂哄腑 = 闆剁瓑寰呴浂鎮寕鈥斺€擜GENTS 1.6
- * 鍦ㄥ満鎬ф娴嬫案涓嶇紦瀛樸€佹秷璐圭偣鐜版煡锛夈€? */
+ * 宿主 section 服务形状（消费切片预留）：消费方现查 ctx[PROJECT_SECTION_HOST_SERVICE]
+ * 在场后，经 whileServed 门控注册 keyed 节（宿主缺席 = 零等待零悬挂——AGENTS 1.6
+ * 在场性检测永不缓存、消费点现查）。
+ */
 export interface ProjectSectionHostFace {
-  /** 瀹夸富鍗曠偣澹版槑鐨?keyed section 妲藉悕锛堢幇鍊?= KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT锛夈€?*/
+  /** 宿主单点声明的 keyed section 槽名（现值由宿主声明缝给出）。 */
   readonly slot: string;
-  /** 鍦ㄥ満闂ㄦ帶锛堝畼鏂?configForms.whileServed 鍚屽瀷鈥斺€攏amespace 鏈鏈嶅姟鍗虫媶鍗革級銆?*/
+  /** 在场门控（官方 configForms.whileServed 同型——namespace 未被服务即拆卸）。 */
   whileServed(namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void): () => void;
 }

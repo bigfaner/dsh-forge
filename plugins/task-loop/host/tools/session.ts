@@ -1,4 +1,4 @@
-﻿// 会话上下文解析与 cwd 路由（定位：业务——Interface 8「exec ctx 解析 cwd→projectId
+// 会话上下文解析与 cwd 路由（定位：业务——Interface 8「exec ctx 解析 cwd→projectId
 // 与 sessionId」的执行面；knowledge session.ts 同型平移，差异在失败口径：
 // 未命中 = typed ERR_WORKSPACE_NOT_REGISTERED（错误码锚 contracts ERROR_CODES），
 // 而非 knowledge 的可回落检索文案——forge 动词无回落原语，无路由即拒）。
