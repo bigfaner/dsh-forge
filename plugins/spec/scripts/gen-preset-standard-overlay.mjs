@@ -3,13 +3,20 @@
 // 生成规则：config 子树整体左移 4 列；skill-filesystem 行补 customSkillDirs（spec 包
 // skills/ 安装后绝对路径 !!js 表达式——官方同款 baseUrl 表达式先例）；其余逐字保留。
 // 漂移提示：官方底稿更新后需重跑本脚本再生成（源锚 = 安装树 dsh-web-app/presets/standard.patch.yml）。
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..')
 const REPO = join(PKG, '..', '..')
-const SRC = join(REPO, 'apps/host/profile.install/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml')
+// 源锚 = 官方 dsh CLI 安装树（被测宿主运行时实际装载的 dsh-web-app 世代——profile.install
+// 树 pin 的是 forge 打包代（0.2.0-rc.2），与 CLI 宿主（0.2.2-rc.2）不同世代，勿混用）。
+const SOURCES = [
+  'Z:/project/github/deepseek-harness/apps/cli/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml',
+  join(REPO, 'apps/host/profile.install/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml'),
+]
+const SRC = SOURCES.find((p) => existsSync(p))
+if (SRC === undefined) throw new Error('standard.patch.yml 源锚双双缺席')
 
 const raw = readFileSync(SRC, 'utf8').replaceAll('\r\n', '\n')
 const lines = raw.split('\n')
