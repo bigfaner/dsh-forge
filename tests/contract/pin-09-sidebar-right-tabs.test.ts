@@ -14,9 +14,18 @@
 // 我方镜像：apps/web/src/client-plugin/plugin.ts（FORGE_CLIENT_INJECT += sidebarRightTabs +
 // 两段注册：registerDockTabs 两类型定义 + sidebar.right.pane.tab 两 keyed body——行为面断言
 // 在 apps/web/src/client-plugin/plugin.test.ts）。
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DOC_ADDRESS_PREFIX, DOC_TAB_KIND, OVERVIEW_TAB_KIND } from '../../apps/web/src/client-plugin/plugin.js'
+import { DOC_ADDRESS_PREFIX, DOC_TAB_KIND } from '../../apps/web/src/client-plugin/plugin.js'
 import { dshClientDecl, expectPinnedVersion, readTypes, readUpstream, slotHole } from './pins.js'
+
+// 概览页型 kind 常量已随任务域接管迁 plugins/task-loop ui（fix-10 keyed 遮蔽批）——
+// pin 锚改任务域单源（源码审计形：不加载 ui 模块图，直读导出字面量）。
+const TASK_LOOP_DOCK_TABS_SRC = readFileSync(
+  join(import.meta.dirname, '../../plugins/task-loop/ui/dock-tabs-face.tsx'),
+  'utf8',
+)
 
 const RIGHT_SLOTS = 'lib/types/client/contract/slots.d.ts'
 const rawRightSlots = () => readUpstream('profile', '@deepseek-ai/dsh-client-ui-sidebar-right', RIGHT_SLOTS)
@@ -104,7 +113,7 @@ describe('pin ⑯-4 `conversation.session.header.actions` 槽面声明（4.2 挂
 
 describe('pin ⑯-5 产品镜像面（插件注册键与上游口径一致）', () => {
   it('两 kind = dswf-overview / dswf-doc；文档地址前缀 = dsh-resource:// 资源面 scheme', () => {
-    expect(OVERVIEW_TAB_KIND).toBe('dswf-overview')
+    expect(TASK_LOOP_DOCK_TABS_SRC).toContain('export const DSWF_OVERVIEW_TAB_KIND = "dswf-overview"')
     expect(DOC_TAB_KIND).toBe('dswf-doc')
     expect(DOC_ADDRESS_PREFIX).toBe(`${'dsh-resource://'}${DOC_TAB_KIND}/`)
   })

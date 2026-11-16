@@ -68,6 +68,12 @@ const ALLOWLIST: Record<string, number> = {
   'plugins/task-loop/tests/spawn/in-process-driver.test.ts': 1,
   'plugins/task-loop/tests/spawn/job-tree.test.ts': 2,
   'plugins/task-loop/tests/spawn/seam.test.ts': 1,
+  // plugin-task-loop 1.13/1.14/fix-10 迁移批随迁基线（六组件/UI 三面/遮蔽注册——fix-13 欠账校正入册）
+  'plugins/task-loop/tests/skeleton.test.ts': 2,
+  'plugins/task-loop/tests/tools/exec-face-injection.test.ts': 1,
+  'plugins/task-loop/tests/ui/client-mount.test.ts': 1,
+  'plugins/task-loop/tests/ui/conversation-shadow.test.ts': 2,
+  'plugins/task-loop/tests/ui/dock-tabs-shadow.test.ts': 3,
   'plugins/task-loop/tests/tools/dispatch-parse.test.ts': 1,
   'plugins/task-loop/tests/triage/triage.test.ts': 1,
   'plugins/task-loop/tests/ui/event-node/forge-event-node.replay.test.ts': 4,

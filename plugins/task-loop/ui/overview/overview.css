@@ -45,7 +45,7 @@
   gap: 8px;
 }
 .dswf-ov-retry {
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   color: var(--dsw-alias-accent, var(--dsw-alias-text-primary, inherit));
   background: none;
   border: none;
@@ -61,7 +61,7 @@
   gap: 6px;
 }
 .dswf-ov-chip {
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   padding: 2px 8px;
   border-radius: var(--dsw-alias-radius-full, 999px);
   border: 1px solid var(--dsw-alias-border, rgba(127, 127, 127, 0.3));

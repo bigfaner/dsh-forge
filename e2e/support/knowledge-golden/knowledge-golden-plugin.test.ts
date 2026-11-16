@@ -92,7 +92,7 @@ describe('SC-8 golden ↔ 插件服务面（A2 切换后）结构等价比对', 
     void service.search({ projectId, text: '不存在的词', sessionId: GOLDEN_SESSION_ID })
     void service.search({ projectId, text: 'api', sessionId: GOLDEN_SESSION_ID })
     void service.browseEntries({ projectId, domain: '后端', offset: 0, limit: 20, order: 'status', sessionId: GOLDEN_SESSION_ID })
-    void service.read({ projectId, id: 'kb-fe-001', sessionId: GOLDEN_SESSION_ID })
+    await service.read({ projectId, id: 'kb-fe-001', sessionId: GOLDEN_SESSION_ID })
     // v7 热度终式对齐（stage④ 1.3——判例 293aecba/44bd7579 夹具同步）：过程动词零计热，
     // heat 通道形状（4 组 [entryId, heat] 数值对）由采纳事件（verb='read'，score 1.0）直插承载。
     const insertRead = db.prepare(
