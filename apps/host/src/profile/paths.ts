@@ -58,14 +58,11 @@ export interface HostPaths {
    *  dev = workspace 链接解析 packages/plugin-forge/skills，packaged = runtime/node_modules
    *  邻接树。解析失败 = undefined 不注入（预设技能目录剔除 fail-soft——不抛断启动） */
   skillsDir?: string
-  /** plugin-forge-spec skills 物理挂载目录（M3 3.7 预设装配 customSkillDirs[spec]——仅远征
-   *  携带；dev = workspace 链接、packaged = runtime/node_modules 邻接。解析失败 = undefined
-   *  不注入（spec 技能面降级 fail-soft；突击/blitz 本就物理不含） */
+  /** @dsh-forge/spec skills 物理挂载目录（plugin-spec 1.9：预设装配 customSkillDirs[spec]
+   *  ——grilling/fix-bug/investigate-bug/loop-blocking 随 spec 包分发；dev = workspace 链接、
+   *  packaged = runtime/node_modules 邻接。解析失败 = undefined 不注入（spec 技能面降级
+   *  fail-soft；突击/blitz 本就物理不含） */
   specSkillsDir?: string
-  /** plugin-forge skills-blitz 突击专属技能挂载目录（预设装配 customSkillDirs[blitz]——仅
-   *  突击携带；同包 skills 旁子目录，dev junction 随包透传。解析失败 = undefined 不注入
-   *  （blitz 技能面降级 fail-soft；远征本就物理不含） */
-  blitzSkillsDir?: string
   /** expert-squad skills 物理挂载目录（预设装配 customSkillDirs[squad]——专家域技能
    *  （roundtable）挂载锚；dev = workspace 链接、packaged = runtime/node_modules 邻接。
    *  解析失败 = undefined 不注入（squad 技能面降级 fail-soft，不抛断启动） */
@@ -147,8 +144,7 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
     tasksHome: resolveTasksHome(env, userData),
     settingsFile: join(userData, 'forge-settings.json'),
     skillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge'),
-    specSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge-spec'),
-    blitzSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge', 'skills-blitz'),
+    specSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/spec'),
     squadSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/expert-squad'),
     knowledgeSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/knowledge'),
     resourcesDir,
@@ -166,8 +162,8 @@ function resolveTasksHome(env: PathEnv, userData: string): string {
 
 /** 产品包 skills 目录解析（installAnchor 树锚定——与 loader 插件行解析同源逻辑：自
  *  anchor 所在目录逐级上溯探 node_modules/@dsh-forge/<pkg>/<sub>；3.4 plugin-forge 起，
- *  M3 3.7 增 plugin-forge-spec 同法；skills-blitz = 同包 skills 旁子目录（sub 可选，缺省
- *  skills）。dev = apps/host 树 workspace 链接（junction 透传到 packages/<pkg> 子目录）；
+ *  M3 3.7 增 plugin-forge-spec 同法；1.9 spec 锚改指 @dsh-forge/spec（skills 随新包分发）。
+ *  dev = apps/host 树 workspace 链接（junction 透传到 packages/<pkg> 子目录）；
  *  packaged = runtime/node_modules 邻接（anchor = {resources}/runtime/package.json，首探
  *  即中）。不走 require.resolve：产品包 ESM-only（exports 无 require 条件，CJS 解析恒拒）。
  *  解析失败返回 undefined（fail-soft：技能面缺席降级，不抛断启动——tools 半身照常，装配

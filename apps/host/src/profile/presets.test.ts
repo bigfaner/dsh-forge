@@ -173,11 +173,11 @@ for (const preset of ['expedition', 'blitz'] as const) {
       expect(skill).toContain('                - "{{knowledge-skills}}"') // knowledge 技能（skills/learn）——1.9 A5 双预设同挂（插件本体走用户层全局行）
       if (isExpedition) {
         expect(skill).toContain('                - "{{plugin-forge-spec-skills}}"')
-        expect(skill).not.toContain('{{plugin-forge-blitz-skills}}')
       } else {
         expect(skill).not.toContain('{{plugin-forge-spec-skills}}')
-        expect(skill).toContain('                - "{{plugin-forge-blitz-skills}}"')
       }
+      // plugin-spec 1.9：skills-blitz 退役（grilling 迁 spec 包）——blitz 占位符零残留
+      expect(skill).not.toContain('{{plugin-forge-blitz-skills}}')
     })
 
     it(`产品增量行：plugin-forge 恒携${isExpedition ? ' + plugin-forge-spec（远征 spec 全量）' : '，物理无 plugin-forge-spec（Story 6：L1 物理隔离）'}`, () => {

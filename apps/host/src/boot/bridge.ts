@@ -536,8 +536,6 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
   const skillsDir = typeof o.skillsDir === 'string' && o.skillsDir !== '' ? o.skillsDir : undefined
   // M3 3.7：spec skills 物化锚（预设 customSkillDirs[spec]——远征组合携带；缺席 = spec 技能面降级）
   const specSkillsDir = typeof o.specSkillsDir === 'string' && o.specSkillsDir !== '' ? o.specSkillsDir : undefined
-  // blitz skills 物化锚（预设 customSkillDirs[blitz]——突击组合携带；缺席 = blitz 技能面降级）
-  const blitzSkillsDir = typeof o.blitzSkillsDir === 'string' && o.blitzSkillsDir !== '' ? o.blitzSkillsDir : undefined
   // squad skills 物化锚（预设 customSkillDirs[squad]——expert-squad 专家域技能；缺席 = squad 技能面降级）
   const squadSkillsDir = typeof o.squadSkillsDir === 'string' && o.squadSkillsDir !== '' ? o.squadSkillsDir : undefined
   // knowledge skills 物化锚（knowledge-stage1 1.9 A5：预设 customSkillDirs[knowledge]；缺席 = knowledge 技能面降级）
@@ -554,7 +552,6 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
     tasksHome,
     skillsDir,
     specSkillsDir,
-    blitzSkillsDir,
     squadSkillsDir,
     knowledgeSkillsDir,
     settingsFile,

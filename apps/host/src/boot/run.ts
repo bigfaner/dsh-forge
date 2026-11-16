@@ -75,12 +75,9 @@ export interface BootDshOptions {
    *  ——产品裁决 2026-10-09：全局 skill-filesystem 行已废除，标准模式零 forge 技能；
    *  缺席 = 预设技能目录剔除 fail-soft） */
   skillsDir?: string
-  /** plugin-forge-spec skills 物理挂载目录（M3 3.7：预设装配 customSkillDirs[spec]——仅远征
-   *  组合携带；缺席 = spec 技能面降级 fail-soft 不注入） */
+  /** @dsh-forge/spec skills 物理挂载目录（plugin-spec 1.9：预设装配 customSkillDirs[spec]
+   *  ——仅远征组合携带；缺席 = spec 技能面降级 fail-soft 不注入） */
   specSkillsDir?: string
-  /** plugin-forge skills-blitz 突击专属技能挂载目录（预设装配 customSkillDirs[blitz]——仅
-   *  突击组合携带；缺席 = blitz 技能面降级 fail-soft 不注入） */
-  blitzSkillsDir?: string
   /** expert-squad skills 物理挂载目录（预设装配 customSkillDirs[squad]——专家域技能
    *  （roundtable）挂载锚；缺席 = squad 技能面降级 fail-soft 不注入） */
   squadSkillsDir?: string

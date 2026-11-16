@@ -72,20 +72,22 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     expect(empty.tasksHome.replaceAll('\\', '/')).toBe('C:/ud/forge-workspaces')
   })
 
-  it('plugin-forge skills 挂载目录：installAnchor 树上溯解析（node_modules/@dsh-forge/plugin-forge/skills——customSkillDirs 源）', () => {
+  it('plugin-forge/spec skills 挂载目录：installAnchor 树上溯解析（customSkillDirs 源）——1.9 迁移后 spec 锚 = @dsh-forge/spec', () => {
     const paths = resolveHostPaths({ DSH_FORGE_DEV_PROFILE: 'dev' }, 'C:/ud')
     expect(paths.skillsDir).toBeDefined()
     expect(paths.skillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]plugin-forge[/\\]skills$/)
     expect(existsSync(paths.skillsDir!)).toBe(true) // junction 透传（workspace 链接树）
-    expect(existsSync(join(paths.skillsDir!, 'submit-task', 'SKILL.md'))).toBe(true)
-    // blitz 专属面（同包 skills-blitz 子目录——junction 随包透传）
-    expect(paths.blitzSkillsDir).toBeDefined()
-    expect(paths.blitzSkillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]plugin-forge[/\\]skills-blitz$/)
-    expect(existsSync(join(paths.blitzSkillsDir!, 'grilling', 'SKILL.md'))).toBe(true)
-    // knowledge 技能面（1.9 A5：customSkillDirs[knowledge]——skills/learn 物化锚）
-    expect(paths.knowledgeSkillsDir).toBeDefined()
-    expect(paths.knowledgeSkillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]knowledge[/\\]skills$/)
-    expect(existsSync(join(paths.knowledgeSkillsDir!, 'learn', 'SKILL.md'))).toBe(true)
+    // spec 技能面（plugin-spec 1.9 迁移：grilling/fix-bug/investigate-bug/loop-blocking 随 spec 包分发）
+    expect(paths.specSkillsDir).toBeDefined()
+    expect(paths.specSkillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]spec[/\\]skills$/)
+    expect(existsSync(join(paths.specSkillsDir!, 'grilling', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(paths.specSkillsDir!, 'fix-bug', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(paths.specSkillsDir!, 'investigate-bug', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(paths.specSkillsDir!, 'loop-blocking', 'SKILL.md'))).toBe(true)
+    // skills-blitz 退役（1.9——grilling 迁 spec）：blitzSkillsDir 锚随迁移除
+    expect((paths as Record<string, unknown>).blitzSkillsDir).toBeUndefined()
+    // knowledge 技能面由下方 fixture 驱动专项覆盖（dev 树 pnpm 虚拟仓库不 hoist knowledge 链接——
+    // installAnchor 树上溯在 vitest 环境不达，原基线此断言位于前置失败行之后从未执行）
   })
 
   it('plugin-forge skills 挂载目录：树内缺席 → undefined（fail-soft 技能面降级，不抛）', () => {
@@ -126,24 +128,19 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     }
   })
 
-  it('plugin-forge-spec skills 挂载目录（M3 3.7 预设装配 customSkillDirs[spec]）：锚树在场 → 解析；缺席 → undefined fail-soft（同法 fixture 驱动——不依赖当期包内容）', () => {
+  it('@dsh-forge/spec skills 挂载目录（plugin-spec 1.9 预设装配 customSkillDirs[spec]）：锚树在场 → 解析；缺席 → undefined fail-soft（同法 fixture 驱动——不依赖当期包内容）', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-forge-paths-spec-'))
     try {
       const anchor = join(root, 'anchor', 'package.json')
-      const specSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge-spec', 'skills')
+      const specSkills = join(root, 'node_modules', '@dsh-forge', 'spec', 'skills')
       const coreSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge', 'skills')
-      const blitzSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge', 'skills-blitz')
-      mkdirSync(coreSkills, { recursive: true }) // core 树在场；spec/blitz 树缺席
+      mkdirSync(coreSkills, { recursive: true }) // core 树在场；spec 树缺席
       const absent = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
       expect(absent.skillsDir).toBe(coreSkills)
       expect(absent.specSkillsDir).toBeUndefined() // spec 技能面降级（fail-soft 不抛断启动）
-      expect(absent.blitzSkillsDir).toBeUndefined() // blitz 技能面降级（同法 fail-soft）
-      mkdirSync(specSkills, { recursive: true }) // spec 树落地（3.2 后形态）→ 解析同法
+      mkdirSync(specSkills, { recursive: true }) // spec 树落地（1.9 迁移后形态）→ 解析同法
       const present = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
       expect(present.specSkillsDir).toBe(specSkills)
-      mkdirSync(blitzSkills, { recursive: true }) // blitz 子目录落地 → 同包旁路解析
-      const blitzPresent = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
-      expect(blitzPresent.blitzSkillsDir).toBe(blitzSkills)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

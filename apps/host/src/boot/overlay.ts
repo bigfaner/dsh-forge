@@ -84,12 +84,9 @@ export interface BootOverlayInput {
 export interface PresetOverlayInput extends PresetPatches {
   /** plugin-forge skills 当形态绝对路径（customSkillDirs[core]；缺席 = 剔除该目录行） */
   readonly coreSkillsDir?: string
-  /** plugin-forge-spec skills 当形态绝对路径（customSkillDirs[spec]；缺席 = 剔除
+  /** @dsh-forge/spec skills 当形态绝对路径（customSkillDirs[spec]；缺席 = 剔除
    *  ——spec 技能面降级 fail-soft，突击/blitz 本就物理不含） */
   readonly specSkillsDir?: string
-  /** plugin-forge skills-blitz 突击专属技能当形态绝对路径（customSkillDirs[blitz]；缺席 =
-   *  剔除——blitz 技能面降级 fail-soft，远征本就物理不含） */
-  readonly blitzSkillsDir?: string
   /** expert-squad skills 当形态绝对路径（customSkillDirs[squad]；缺席 = 剔除——squad
    *  技能面降级 fail-soft） */
   readonly squadSkillsDir?: string
@@ -105,7 +102,6 @@ export interface PresetOverlayInput extends PresetPatches {
 const PRESET_SKILL_DIR_TOKENS = {
   core: '{{plugin-forge-skills}}',
   spec: '{{plugin-forge-spec-skills}}',
-  blitz: '{{plugin-forge-blitz-skills}}',
   squad: '{{expert-squad-skills}}',
   knowledge: '{{knowledge-skills}}',
 } as const
@@ -152,17 +148,12 @@ function materializePresetLines(patch: string, input: PresetOverlayInput): strin
     const trimmed = line.trim()
     const coreToken = `- "${PRESET_SKILL_DIR_TOKENS.core}"`
     const specToken = `- "${PRESET_SKILL_DIR_TOKENS.spec}"`
-    const blitzToken = `- "${PRESET_SKILL_DIR_TOKENS.blitz}"`
     if (trimmed === coreToken) {
       if (input.coreSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.coreSkillsDir)}`)
       continue
     }
     if (trimmed === specToken) {
       if (input.specSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.specSkillsDir)}`)
-      continue
-    }
-    if (trimmed === blitzToken) {
-      if (input.blitzSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.blitzSkillsDir)}`)
       continue
     }
     const squadToken = `- "${PRESET_SKILL_DIR_TOKENS.squad}"`
