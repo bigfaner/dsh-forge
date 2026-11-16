@@ -215,10 +215,8 @@ export function resolveTaskById(db: Database.Database, projectKey: string, taskI
   return row;
 }
 
-/** isFixTask——fix 判别单源谓词（圆桌处方 5：claim/T3/settle/checkpoints 四消费点共用） */
-export function isFixTask(row: Pick<TaskStorageRow, "fix_of_task_id">): boolean {
-  return row.fix_of_task_id !== null;
-}
+/** isFixTask——fix 判别单源谓词（圆桌处方 5）；实现单点在 fix-predicate.ts（db 层运行时消费不形成 domain⇄db 环），此处 re-export 保持四消费点 import 面不变 */
+export { isFixTask } from "./fix-predicate.js";
 
 /** 启动对账全域键枚举（task_tasks 去重 project_key，升序稳定——读面 DAO 单点，调用方零裸 SQL） */
 export function listDistinctProjectKeys(db: Database.Database): string[] {

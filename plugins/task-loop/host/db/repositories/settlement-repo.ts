@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type Database from "better-sqlite3";
-import { isFixTask } from "../../domain/tasks/query.js";
+import { isFixTask } from "../../domain/tasks/fix-predicate.js";
 import type { TaskAcResult } from "../../domain/tasks/types.js";
 
 /** 结算 evidence 载荷键面（submit gates/证据 debt 聚合位——entities.md §3.2 evidence_json）。 */
