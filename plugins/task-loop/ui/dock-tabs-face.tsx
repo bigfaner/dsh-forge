@@ -14,12 +14,23 @@ import { OverviewTab } from "./overview/overview-tab.js";
 import { createForgeTasksClient, type ForgeTasksClientFactory } from "./tasks-rpc.js";
 import { DSWF_DOC_ADDRESS_PREFIX, DSWF_DOC_TAB_KIND, docTabTitle, ForgeDocsTab } from "./dock-tabs/docs-tab.js";
 import { typertRpcClientFactory } from "./dock-tabs/typert-transport.js";
-import { SIDEBAR_RIGHT_PANE_TAB_SLOT, type OfficialSeamCtx } from "./official-seams.js";
+import { SIDEBAR_RIGHT_PANE_TAB_SLOT, SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT, reflectGet, type OfficialSeamCtx } from "./official-seams.js";
+import { defaultSelfAnchorResolver, useSelfAnchorProjectId, type SelfAnchorServices } from "./self-anchor.js";
 import { registerKeyedSection, type SectionSlotsFace } from "./keyed-section.js";
 import { FORGE_TASK_LOOP_LOCALE_NS, type LocaleServiceFace } from "./locale.js";
 
 /** task-loop 概览 tab 类型 kind（注册键 = keyed body dispatch 键——字面量单源） */
 export const DSWF_OVERVIEW_TAB_KIND = "dswf-overview";
+
+/**
+ * dock tab keyed 遮蔽 priority（fix-10 bug 400b3952）：同宿主 project 插件先装、已占
+ * sidebar.right.pane.tab 的 dswf-overview/dswf-doc 键（priority 0）与 tab 类型 id——同
+ * priority 注册被官方 slots 拒收（keyed 同 key 同 priority 才撞车），task-loop 接管版
+ * 全降级零渲染。官方报错明示正缝：「register at a different priority to shadow it
+ * (lowest renders)」——负 priority 遮蔽占用者（升序分发最低者渲染），单装形态（无占用
+ * 者）同值落座零行为差异。project 侧同键退役 = 迁移收口范围外事项，不混修。
+ */
+const TAB_KEYED_SHADOW_PRIORITY = -10;
 
 /** 官方右栏 tab 类型注册表窄面（ui-sidebar-right SidebarRightTabRegistry 消费切片） */
 interface SidebarRightTabsMirror {
@@ -65,14 +76,18 @@ export function bridgeProjectIdOf(bridge: WorkbenchBridgeMirror | undefined): st
   return typeof projectId === "string" && projectId !== "" ? projectId : undefined;
 }
 
-/** 概览 seat 组件（keyed body——projectId 经桥缝订阅解析，缺席降级「无任务数据」） */
+/** 概览 seat 组件（keyed body——projectId 双源解析：桥缝优先[壳宿主]，缺席宿主 =
+ * self-anchor 自解析补位[官方宿主——sessions/workspaces 快照 + forgeWorktree 归属裁决]，
+ * 双缺 = 「无任务数据」降级呈现不报错） */
 export function OverviewSeat(props: {
   readonly projectIdOf?: () => string | undefined;
   readonly makeClient?: ForgeTasksClientFactory;
   readonly bridge?: WorkbenchBridgeMirror;
+  readonly selfAnchor?: SelfAnchorServices;
 }): ReactNode {
   const resolve = props.projectIdOf ?? (() => bridgeProjectIdOf(props.bridge));
   const [projectId, setProjectId] = useState<string | undefined>(resolve());
+  const anchored = useSelfAnchorProjectId(props.selfAnchor);
   useEffect(() => {
     const bridge = props.bridge ?? workbenchBridgeOf();
     if (bridge === undefined) return;
@@ -80,7 +95,9 @@ export function OverviewSeat(props: {
     return bridge.subscribe(() => setProjectId(resolve()));
     // resolve 闭包随 props 稳定（调用方保证——face 工厂单次装配）
   }, [props.bridge, props.projectIdOf]);
-  return <OverviewTab projectId={projectId} {...(props.makeClient !== undefined ? { makeClient: props.makeClient } : {})} />;
+  // 双源归一：桥缝优先（壳宿主），桥值缺席时自解析补位（官方宿主水化门）
+  const effective = projectId ?? anchored;
+  return <OverviewTab projectId={effective} {...(props.makeClient !== undefined ? { makeClient: props.makeClient } : {})} />;
 }
 
 /** 注册面诊断（registered = 实际落座面；e2e/排障锚） */
@@ -137,6 +154,7 @@ export function registerDockTabsFace(
       slot: SIDEBAR_RIGHT_PANE_TAB_SLOT,
       key: DSWF_OVERVIEW_TAB_KIND,
       locale: FORGE_TASK_LOOP_LOCALE_NS,
+      priority: TAB_KEYED_SHADOW_PRIORITY,
       inject: () => {
         const bridge = workbenchBridgeOf();
         return {
@@ -144,9 +162,29 @@ export function registerDockTabsFace(
           ...(bridge !== undefined ? { bridge } : {}),
           // 数据通道真身（forgeTasks Typert namespace——face 缺席调用期诚实降级）
           makeClient: createForgeTasksClient as ForgeTasksClientFactory,
+          // 自解析补位缝（桥缺席宿主的身份水化门——服务惰性现查闭包，apply 点零实例缓存）
+          selfAnchor: {
+            sessionsList: () => reflectGet(ctx, "sessions", false),
+            workspacesList: () => reflectGet(ctx, "workspaces", false),
+            resolveProjectId: defaultSelfAnchorResolver(),
+          } satisfies SelfAnchorServices,
         };
       },
       component: OverviewSeat,
+    }) === undefined) throw new Error("slots face unavailable");
+  });
+
+  // 第三段：概览 chip 标题段（`sidebar.right.pane.tab.title` keyed 'dswf-overview'——
+  // 同 shadow priority 遮蔽语义；类型面归属 project 旧注册[fallback 题写「项目概览」]，
+  // 接管版题写 = 本段。缺席时官方回退开 tab 时点捕获题写，不炸渲染）。
+  face(`${SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT}:${DSWF_OVERVIEW_TAB_KIND}`, () => {
+    if (registerKeyedSection(slots, {
+      slot: SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT,
+      key: DSWF_OVERVIEW_TAB_KIND,
+      priority: TAB_KEYED_SHADOW_PRIORITY,
+      component: function OverviewTitleChip(): ReactNode {
+        return <span>{t("tab.overview")}</span>;
+      },
     }) === undefined) throw new Error("slots face unavailable");
   });
 
@@ -170,6 +208,7 @@ export function registerDockTabsFace(
     if (registerKeyedSection(slots, {
       slot: SIDEBAR_RIGHT_PANE_TAB_SLOT,
       key: DSWF_DOC_TAB_KIND,
+      priority: TAB_KEYED_SHADOW_PRIORITY,
       inject: () => ({ makeClient: typertRpcClientFactory }),
       component: ForgeDocsTab,
     }) === undefined) throw new Error("slots face unavailable");

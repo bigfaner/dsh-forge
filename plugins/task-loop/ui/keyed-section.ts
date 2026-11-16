@@ -1,4 +1,4 @@
-﻿// keyed section 鎻掓Ы鎵╁睍鐐?鈥斺€?tab keyed 鍗犵敤鑰呮ā寮忔硾鍖栵紙1.16锛夈€倀ab 闈㈠厛渚?// 锛坰idebar.right.pane.tab keyed 'dswf-bug'鈥斺€擝ugPreview锛夌殑瑁呰浇褰㈡€佹敹鎷负鍗曚竴鐧昏濂戠害锛?// 鐩爣妲藉０鏄庣紳锛堝畼鏂?SlotRegistry.inject鈥斺€斻€屽０鏄庡湪鍦猴紙鎴栧叆搴э級鍗宠銆嶉殢 fiber 鍗歌浇绾ц仈锛?// + keyed 鍗犵敤鑰呰惤搴э紙瀹樻柟 SlotCore.register鈥斺€攌eyed 妲芥寜 key 鍞竴銆佸悓 cell 鍚?priority
+// keyed section 鎻掓Ы鎵╁睍鐐?鈥斺€?tab keyed 鍗犵敤鑰呮ā寮忔硾鍖栵紙1.16锛夈€倀ab 闈㈠厛渚?// 锛坰idebar.right.pane.tab keyed 'dswf-bug'鈥斺€擝ugPreview锛夌殑瑁呰浇褰㈡€佹敹鎷负鍗曚竴鐧昏濂戠害锛?// 鐩爣妲藉０鏄庣紳锛堝畼鏂?SlotRegistry.inject鈥斺€斻€屽０鏄庡湪鍦猴紙鎴栧叆搴э級鍗宠銆嶉殢 fiber 鍗歌浇绾ц仈锛?// + keyed 鍗犵敤鑰呰惤搴э紙瀹樻柟 SlotCore.register鈥斺€攌eyed 妲芥寜 key 鍞竴銆佸悓 cell 鍚?priority
 // 鍐嶆敞鍐屾姏閿欙級銆傛秷璐归潰锛堟彃浠堕〉鍙岀紳閰嶇疆鑺?ui/settings-section锛変笌鏈墿灞曠偣鍚屽瀷鈥斺€?// 娉涘寲鍚庢柊 keyed/list 鍨嬭妭鍙啓澹版槑琛岋紝涓嶅鍒惰杞芥牱鏉裤€?//
 // M2锛坰ettings-unification 鎻愭 settings-unification/proposal.md 鍦嗘瑁佸畾锛夛細
 // 鐭ヨ瘑搴撶洰褰曡妭鎺ュ彛鈥斺€攌eyed section 鎻掓Ы鐨勫湪鍦烘€х敱瀹夸富锛坧roject锛夊崟鐐瑰０鏄庯紱knowledge 绛?// 娑堣垂鏂?apply 鏈熺幇鏌?project 鍏峰悕鏈嶅姟锛圥ROJECT_SECTION_HOST_SERVICE锛夊湪鍦烘墠娉ㄥ唽鎻掓Ы
@@ -74,7 +74,18 @@ export function registerKeyedSection(
   if (priority !== undefined) options.priority = priority;
   if (face !== undefined) options.inject = face;
   if (children !== undefined) options.children = children;
-  return inject.call(slots, slot, () => safeRegisterSection(slots, options, component));
+  // 落座结果如实回传（fix-10 bug 400b3952 修型）：声明缝同步落座（宿主 slot 已在场的
+  // 常态）→ 返回 safeRegisterSection 落座结果——注册撞车降级（undefined）可被调用方
+  // `=== undefined` 门如实裁决，boot 日志不再假阳性；声明边迟到激活（slot 未声明，
+  // cb 异步触发）→ 返回 inject 撤销器（落座成败随激活期如实留痕）。
+  let installed: (() => void) | undefined;
+  let settled = false;
+  const disposer = inject.call(slots, slot, () => {
+    installed = safeRegisterSection(slots, options, component);
+    settled = true;
+    return installed;
+  });
+  return settled ? installed : disposer;
 }
 
 // 鈹€鈹€ M2锛氱煡璇嗗簱鐩綍鑺傦紙濂戠害閿?+ 瀹夸富娑堣垂闈㈤殢 fix-7 钀藉湴锛?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€

@@ -5,6 +5,9 @@
 /** 官方右栏 tab 体 keyed 槽（dock tab body dispatch 键载体——ui-sidebar-right） */
 export const SIDEBAR_RIGHT_PANE_TAB_SLOT = "sidebar.right.pane.tab";
 
+/** 官方右栏 tab chip 题写 keyed 槽（占用者缺席 = 回退开 tab 时点捕获题写——ui-sidebar-right） */
+export const SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT = "sidebar.right.pane.tab.title";
+
 /** 官方会话头 utilities 带（list 槽 scope session——「右对齐会话 utilities 升序」，ui-conversation 槽面核销 2026-11：kind list / scope session / owner ConversationHeaderActionOwnerProps） */
 export const SESSION_HEADER_UTILITIES_SLOT = "conversation.session.header.utilities";
 
