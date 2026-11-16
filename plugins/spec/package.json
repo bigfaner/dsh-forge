@@ -10,27 +10,59 @@
     ".": {
       "types": "./dist/host/index.d.ts",
       "import": "./dist/host/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/ui/index.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./typert": {
+      "types": "./dist/typert.host.d.ts",
+      "default": "./dist/typert.host.js"
+    },
+    "./remote": {
+      "types": "./dist/typert.remote-client.d.ts",
+      "default": "./dist/typert.remote-client.js"
     }
   },
   "files": [
     "dist",
     "skills",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "dist/typert.host.js",
+    "dist/typert.host.d.ts",
+    "dist/typert.remote-client.js",
+    "dist/typert.remote-client.d.ts",
+    "dist/typert.remote-client.d.ts.map"
   ],
   "scripts": {
-    "build": "tsc -b"
+    "build": "node scripts/clean-dist.mjs && node scripts/generate-typert.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
+    "prepack": "node scripts/self-containment.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.4"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-typert-generator": "0.2.2-rc.2",
     "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/project": "workspace:*",
-    "@types/node": "24.19.0"
+    "@types/node": "24.19.0",
+    "esbuild": "0.24.2",
+    "typescript": "6.0.3"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "external": [
+        "@deepseek-ai/dsh-api-gateway/client"
+      ]
     }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.2",
+    "zod": "4.6.6"
   }
 }

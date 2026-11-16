@@ -1,16 +1,8 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "composite": true,
-    "types": ["node"],
-    "outDir": "dist",
-    "rootDir": ".",
-    "emitDeclarationOnly": true,
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
-  },
-  "include": ["host"],
-  "exclude": ["**/*.test.ts"],
+  "files": [],
   "references": [
-    { "path": "../../packages/contracts" }
+    { "path": "./tsconfig.shared.json" },
+    { "path": "./tsconfig.host.json" },
+    { "path": "./tsconfig.ui.json" }
   ]
 }
