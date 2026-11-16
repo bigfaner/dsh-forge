@@ -13,6 +13,7 @@
 //     构建期内联进 dist——产物自含，dist 零 @dsh-forge/lib-* 裸 import）。
 import { errMessage } from "@dsh-forge/lib-util";
 import { consoleDiagFallback, type DiagLevel } from "@dsh-forge/lib-diag";
+import { Peer } from "@deepseek-ai/dsh-client-connection";
 import { FORGE_CHECKPOINTS_SERVICE_KEY, FORGE_TASKS_SERVICE_KEY } from "../shared/contract-constants.js";
 import {
   assembleTaskLoopServices,
@@ -105,8 +106,11 @@ function lazyProjectsFace(ctx: unknown): ForgeTasksRemoteDeps["projects"] {
   };
 }
 
-/** Typert 注册后自探针缝（gateway invoke 直探——serve 层认领自证；缺席/失败由注册面诊断）。 */
-function selfProbeOf(ctx: unknown): ForgeTasksRemoteDeps["selfProbe"] {
+/** Typert 注册后自探针缝（gateway invoke 直探——serve 层认领自证；缺席/失败由注册面诊断）。
+ *  bug a99a7293 同族修型：官方 gateway 2.x `invoke` 请求必携 Peer（assertPeerLive 读
+ *  `peer.signal`——缺 peer 即 undefined 'signal'），owner Peer 经官方 dsh-client-connection
+ *  正门构造（principal kind = owner），探针结算即 dispose（零悬空 Peer）。 */
+export function selfProbeOf(ctx: unknown): ForgeTasksRemoteDeps["selfProbe"] {
   const root = ((ctx as { root?: unknown }).root ?? ctx) as {
     get?: (name: string) => unknown;
   };
@@ -121,7 +125,14 @@ function selfProbeOf(ctx: unknown): ForgeTasksRemoteDeps["selfProbe"] {
     if (invoke === undefined) {
       throw new Error("typertGateway 服务缺席——serve 层认领不可达");
     }
-    return await invoke({ namespace, method, args: args ?? {} });
+    // Peer owner 须为 cordis Context（scope fiber 挂靠——root ctx 即宿主根；跨包类型双源
+    // 以结构窄面通过，构造点 as never 收口）
+    const peer = new Peer(root as never, { principal: { kind: "owner" } });
+    try {
+      return await invoke({ namespace, method, args: args ?? {}, peer });
+    } finally {
+      await peer.dispose();
+    }
   };
 }
 

@@ -883,7 +883,10 @@ export interface WorkerRouteProfile {
  * 派发路由档位解析（消费点现查单源——AGENTS 1.6：experts 在场性每次派发调用期求值，
  * 检测结果永不 memoize；expertsOf 现查缝由装配方闭包注入）。experts 在场且档案命中 →
  * expert 档位；服务整体缺席或未命中映射 → generic 档位 + emitDiag info 留痕（不静默）；
- * 档案键坏（resolver fail-loud）→ 原样外抛（既有 :829-833 判据保留——fail-loud 入重试上限）。
+ * 专家档案缺席（bug d14b0b6c——官方宿主无 tech-writer 预设等「expert not found: <key>」
+ * 缺席族抛错）→ generic 档位 + emitDiag info 留痕（fail-soft 不停环——三铁律与 experts
+ * 服务缺席同构：现查/fail-soft/emitDiag）；其余档案键坏（registry unavailable 等真实故障）
+ * → 原样外抛（fail-loud 入重试上限，既有判据保留——禁用/服务故障仍 loud 可见）。
  * ctx 形参保留派发上下文位（现 DispatchCtx 语义并入 deps——签名稳定优先）。
  */
 export async function resolveWorkerProfile(
@@ -907,7 +910,24 @@ export async function resolveWorkerProfile(
     })
     return { kind: "generic", agentOptions: deps.parentAgentOptions() }
   }
-  const profile = await experts(taskType, expertKey)
+  let profile: Awaited<ReturnType<ExpertProfileResolver>>
+  try {
+    profile = await experts(taskType, expertKey)
+  } catch (cause) {
+    // 档案缺席族（expert not found: <key>——官方宿主无该预设档案；映射指向缺席键同路）
+    // = generic 兜底 fail-soft 不停环（bug d14b0b6c——首行保真键名，诊断可判）；其余故障
+    // 原样外抛（fail-loud 判据保留）
+    const message = cause instanceof Error ? cause.message : String(cause)
+    if (/^expert not found:/m.test(message)) {
+      emitForgeDiag(deps.diag, {
+        level: "info",
+        event: "worker-route",
+        message: `专家档案缺席（${message.split("\n")[0]}）——${taskType} 走通用 worker 兜底档（fail-soft 不停环）`,
+      })
+      return { kind: "generic", agentOptions: deps.parentAgentOptions() }
+    }
+    throw cause
+  }
   if (profile === undefined) {
     emitForgeDiag(deps.diag, {
       level: "info",

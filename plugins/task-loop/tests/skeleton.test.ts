@@ -137,8 +137,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.1");
   });
 
-  it("版本 bump 0.14.3（fix-13 patch——结算证据真实性门 + 首轮 worker 路由装配接线；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.14.3");
+  it("版本 bump 0.14.4（fix-14 patch——自探针 owner Peer + 专家档案缺席降级；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.14.4");
   });
 });
 
@@ -213,7 +213,7 @@ describe("bundle 管线产物 self-containment", () => {
     const deps = pkg.dependencies ?? {};
     // 宿主壳单例豁免面：静态 import 经宿主解析路径成功（010-final 轮 boot 实证），
     // 且该包自带 cordis plugin manifest——入 dependencies 即 profile plugin row 撞车。
-    const hostSingleton = new Set(["@deepseek-ai/dsh-session"]);
+    const hostSingleton = new Set(["@deepseek-ai/dsh-session", "@deepseek-ai/dsh-client-connection"]);
     const specs = new Set<string>();
     for (const m of bundled.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)["'](@deepseek-ai\/[^"']+)["']/g)) {
       specs.add(m[1]!.split("/").slice(0, 2).join("/"));

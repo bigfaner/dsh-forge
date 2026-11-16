@@ -53,14 +53,14 @@ function snapshot(): TaskSnapshot {
 }
 
 /** 真实装配链构建（模块④ 装配同构：resolver → resolveWorkerProfile 路由档 → spawnClaimed deps.spawn = 真适配层） */
-function buildProductionChain(entries: { provider?: string; model?: string } | undefined) {
+function buildProductionChain(entries: { provider?: string; model?: string } | undefined, expertsGet?: (key: string) => unknown) {
   const experts = {
-    get: (key: string) => ({
+    get: expertsGet ?? ((key: string) => ({
       name: key,
       personaMd: `档案正文：${key}`,
       tools: ['read'],
       ...entries,
-    }),
+    })),
     registerRoot: () => {},
   }
   const resolver = createExpertProfileResolver({ experts })
@@ -201,5 +201,23 @@ describe('生产装配路径（真实 resolver → 投影 → spawnClaimed → �
     expect(req.toolFilter.allow).toContain('submit_task')
     expect(req.toolFilter.allow).toContain('read') // 档案 tools ∪ essentials ∩ 全局视图
     expect(req.toolFilter.allow).not.toContain('delegate_expert') // 子域采样未参与求交
+  })
+
+  it('bug d14b0b6c：doc 任务映射 tech-writer 档案缺席（expert not found）→ 真链走 generic 档 spawn 成功（不停环）', async () => {
+    // 官方宿主真实缺档形态：experts.get('tech-writer') 抛 not-found（resolver 原样外抛）
+    const { deps, exec, scope, claimed } = buildProductionChain(undefined, (key: string) => {
+      if (key === 'tech-writer') throw new Error(`expert not found: ${key}`)
+      return { name: key, personaMd: `档案正文：${key}`, tools: ['read'] }
+    })
+    // DEFAULT_EXPERT_MAPPING doc → tech-writer：resolver 经类型映射取档 → 修前 fail-loud 三连败停环
+    const docClaimed: ClaimedDispatch = { ...claimed, task: { ...claimed.task, taskType: 'doc' } }
+    const stage = await spawnClaimed(deps, exec, docClaimed, { scope })
+    expect(stage.ok).toBe(true)
+    if (!stage.ok) return
+    await stage.handle.dispose()
+    expect(upstreamRequests.length).toBeGreaterThan(0)
+    // generic 档：agentOptions 父会话继承（本链 parentAgentOptions = undefined）→ 零 expert 路由对
+    const req = upstreamRequests[upstreamRequests.length - 1] as { agentOptions?: unknown; toolFilter?: { allow?: readonly string[] } }
+    expect('agentOptions' in req).toBe(false)
   })
 })

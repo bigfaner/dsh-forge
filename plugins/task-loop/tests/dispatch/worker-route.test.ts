@@ -60,7 +60,7 @@ describe("resolveWorkerProfile：通用 worker 兜底档（同结算门异路由
     expect(diagCalls.some((c) => c.level === "info" && c.event === "worker-route")).toBe(true);
   });
 
-  it("experts 在场且档案命中 → expert 档位；档案键坏 fail-loud 原样外抛", async () => {
+  it("experts 在场且档案命中 → expert 档位；非缺席故障 fail-loud 原样外抛", async () => {
     const resolver: ExpertProfileResolver = async (taskType) =>
       taskType === "coding" ? { name: "coder", personaMd: "# coder", tools: ["read"], expertKey: "coder" } : undefined;
     const expert = await resolveWorkerProfile(
@@ -71,11 +71,37 @@ describe("resolveWorkerProfile：通用 worker 兜底档（同结算门异路由
     expect(expert.toolFilter?.allow).toEqual(["read"]);
 
     const loud: ExpertProfileResolver = async () => {
-      throw new Error("expert not found: typo-key");
+      throw new Error("experts registry unavailable");
     };
     await expect(
       resolveWorkerProfile({ expertsOf: () => loud, parentAgentOptions: () => parentAgentOptions }, "coding"),
-    ).rejects.toThrow("expert not found: typo-key");
+    ).rejects.toThrow("experts registry unavailable");
+  });
+
+  it("bug d14b0b6c：专家档案缺席（expert not found）→ generic 兜底档 + diag 留痕（fail-soft 不停环）", async () => {
+    diagCalls.length = 0;
+    // 官方宿主无 tech-writer 预设形态：resolver 抛「expert not found: tech-writer」
+    const absent: ExpertProfileResolver = async () => {
+      throw new Error("expert not found: tech-writer");
+    };
+    const profile = await resolveWorkerProfile(
+      { expertsOf: () => absent, parentAgentOptions: () => parentAgentOptions, diag },
+      "doc",
+    );
+    expect(profile.kind).toBe("generic");
+    expect(profile.agentOptions).toEqual(parentAgentOptions);
+    expect(diagCalls.some((c) => c.level === "info" && c.event === "worker-route" && c.message.includes("tech-writer"))).toBe(true);
+    // resolver 包装形态（附提示行）同路降级——首行缺席键名保真
+    const wrapped: ExpertProfileResolver = async () => {
+      throw new Error("expert not found: tech-writer\n提示：映射值应为人格键（如 tech-writer）；可用专家经 list_experts 工具列出后自查");
+    };
+    diagCalls.length = 0;
+    const profile2 = await resolveWorkerProfile(
+      { expertsOf: () => wrapped, parentAgentOptions: () => parentAgentOptions, diag },
+      "doc",
+    );
+    expect(profile2.kind).toBe("generic");
+    expect(diagCalls[0]?.message).toContain("expert not found: tech-writer");
   });
 
   it("每次派发现查不缓存：缺席 → 途中装卸 → 现查生效（缓存即 RED）", async () => {
