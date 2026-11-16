@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/plugin-forge",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "private": true,
   "type": "module",
   "description": "dsh 插件：forge 管线 tool 半身（动词透传 + 派发循环驱动器 + forge:dispatch-loop 提示段——forge:pipeline/forge:doc-style 段已迁 plugins/spec）。",

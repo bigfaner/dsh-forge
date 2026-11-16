@@ -13,7 +13,9 @@
   "references": [
     { "path": "./tsconfig.shared.json" },
     { "path": "../../packages/contracts" },
+    { "path": "../../lib/api" },
     { "path": "../../lib/db" },
+    { "path": "../../lib/diag" },
     { "path": "../../lib/path" },
     { "path": "../../plugins/project/tsconfig.host.json" }
   ]

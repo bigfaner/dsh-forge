@@ -73,8 +73,9 @@ export interface SpecVerbDeps {
     transitions: TransitionsRepo;
     docs: DocsRepo;
   };
-  /** 文件写缝（code-design 替身位置①）：装配面注入真实现（tmp+rename），测试注入桩。 */
-  writeSpecDoc: (relPath: string, content: string) => void;
+  /** 文件写缝（code-design 替身位置①）：装配面注入真实现（tmp+rename），测试注入桩。
+   *  第三参 projectKey = 归属键（plugin-spec 1.4：装配面真实现按键解析项目检出根落盘）。 */
+  writeSpecDoc: (relPath: string, content: string, projectKey: string) => void;
   generateId?: () => string;
   now?: () => string;
   /** M4 专家门挂缝（guards.ts seam 单源） */
@@ -246,7 +247,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
           createdAt: ts,
           updatedAt: ts,
         });
-        writeSpecDoc(input.docRelPath, content);
+        writeSpecDoc(input.docRelPath, content, projectKey);
         return row;
       });
     },

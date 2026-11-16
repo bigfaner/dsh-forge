@@ -76,6 +76,20 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_PHASE_GATE_UNSETTLED: 'error-bar',
   ERR_BLOCK_SOURCE_IN_PROGRESS: 'error-bar',
   ERR_BLOCK_SOURCE_TERMINAL: 'error-bar',
+  // ── plugin-spec 1.4（spec 域 typed 码池 + tool 入参收窄）──
+  ERR_SPEC_NOT_FOUND: 'empty-state',
+  ERR_SPEC_GOALS_EMPTY: 'error-bar',
+  ERR_SPEC_CRITERION_EMPTY: 'error-bar',
+  ERR_SPEC_TIERS_INVALID: 'error-bar',
+  ERR_SPEC_DUPLICATE_SLUG: 'error-bar',
+  ERR_SPEC_DUPLICATE_DOC_PATH: 'error-bar',
+  ERR_SPEC_PROJECT_KEY_DERIVATION: 'error-bar',
+  ERR_SPEC_ARCHIVED_FROZEN: 'error-bar',
+  ERR_SPEC_ILLEGAL_TRANSITION: 'error-bar',
+  ERR_SPEC_REJECT_NOTE_REQUIRED: 'error-bar',
+  ERR_SPEC_ACTOR_INVALID: 'error-bar',
+  ERR_SPEC_DOC_WRITE: 'error-bar',
+  ERR_TOOL_ARGS_INVALID: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

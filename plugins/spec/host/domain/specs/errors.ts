@@ -11,7 +11,8 @@ export type SpecErrorCode =
   | "ERR_SPEC_ARCHIVED_FROZEN"
   | "ERR_SPEC_ILLEGAL_TRANSITION"
   | "ERR_SPEC_REJECT_NOTE_REQUIRED"
-  | "ERR_SPEC_ACTOR_INVALID";
+  | "ERR_SPEC_ACTOR_INVALID"
+  | "ERR_SPEC_DOC_WRITE";
 
 export interface SpecErrorData {
   readonly code: SpecErrorCode;

@@ -13,3 +13,8 @@ export * from './dto/project.js'
 export * from './dto/rpc.js'
 export * from './dto/worktree.js'
 export * from './ports.js'
+// tool 面共享原语（plugin-spec 1.4 下沉单源：format 双友好模板 + args 防御收窄 +
+// forge-paths 路径派生常量——插件 tool 层统一经本单源消费，禁插件间互拷）
+export * from './tools/format.js'
+export * from './tools/args.js'
+export * from './tools/forge-paths.js'

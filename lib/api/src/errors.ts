@@ -85,6 +85,23 @@ export const ERROR_CODES = [
   'ERR_PHASE_GATE_UNSETTLED', // → PhaseGateUnsettledError：claim fresh 径容器实现链阶段门未收口（409；data 带 unsettled 未终态 I 卡清单）
   'ERR_BLOCK_SOURCE_IN_PROGRESS', // → BlockSourceInProgressError：addTask block_source 对 in_progress 源（409；指路 pauseTask → addTask(blockSource) → resume）
   'ERR_BLOCK_SOURCE_TERMINAL', // → BlockSourceTerminalError：addTask block_source 对终态源（409；指路 disc 径或改选未终态源）
+  // ── plugin-spec 1.4（spec 域 typed 错误码池——SpecError.code 字面量锚定本表；
+  //    锚定理由：spec 六动词 tool 失败面经 format 单源 errorCodeOf 判别，码须入册） ──
+  'ERR_SPEC_GOALS_EMPTY', // → SpecError：Spec 必含至少一个 Goal（Goal 删至零行拒写）/ Goal title 缺失（400）
+  'ERR_SPEC_CRITERION_EMPTY', // → SpecError：Goal AC 判据文本缺失（400）
+  'ERR_SPEC_TIERS_INVALID', // → SpecError：tiers 越界值（封闭四值 ui/api/pure-logic/docs 外——400）
+  'ERR_SPEC_DUPLICATE_SLUG', // → SpecError：slug 重复（UNIQUE 冲突——409）
+  'ERR_SPEC_DUPLICATE_DOC_PATH', // → SpecError：文档登记路径跨 spec 重复（409）
+  'ERR_SPEC_PROJECT_KEY_DERIVATION', // → SpecError：归属键 cwd 派生失败（400；NOT NULL 无 default 服务层前置门）
+  'ERR_SPEC_NOT_FOUND', // → SpecError：spec slug 未命中（404）
+  'ERR_SPEC_ARCHIVED_FROZEN', // → SpecError：归档态冻结快照写面拒绝（409）
+  'ERR_SPEC_ILLEGAL_TRANSITION', // → SpecError：状态机非法边（携 from/to；409）
+  'ERR_SPEC_REJECT_NOTE_REQUIRED', // → SpecError：驳回（→draft）缺理由（400）
+  'ERR_SPEC_ACTOR_INVALID', // → SpecError：动作者通道非法（accepted human-only 纪律锚；400）
+  'ERR_SPEC_DOC_WRITE', // → SpecError：Spec 文档文件写盘失败（createSpec 同事务回滚零半态——500；data 带 relPath/projectKey）
+  // ── plugin-spec 1.4（tool 入参防御收窄——args 原语 ToolArgsError 码锚；tool 失败面
+  //    经 format 单源 errorCodeOf 判别，参数形状/词表违规以失败 DTO 回面不炸注册链） ──
+  'ERR_TOOL_ARGS_INVALID', // → ToolArgsError：tool 入参形状/词表违规（执行点自证拒绝；400；message 带 tool 可读上下文）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
