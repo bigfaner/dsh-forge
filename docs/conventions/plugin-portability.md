@@ -2,7 +2,7 @@
 
 ## 裁决
 
-插件包（`packages/plugins/*`，如 `@dsh-forge/git-worktree`）的**装配缝属于插件自身，不属于任何宿主应用**。插件面向一切满足 dsh 规范的应用，不只服务 dsh-forge 本项目。
+插件包（`packages/plugins/*` 与根级 `plugins/*`，如 `@dsh-forge/git-worktree`、`@dsh-forge/task-loop`）的**装配缝属于插件自身，不属于任何宿主应用**。插件面向一切满足 dsh 规范的应用，不只服务 dsh-forge 本项目。
 
 ## 目标分层
 
@@ -34,3 +34,4 @@ flowchart LR
 
 - `packages/plugins/git-worktree`：域实现（ops / session-attach / seal-guard / 扩展点契约）已自含。
 - `apps/host/src/ipc/worktree-rpc.ts`：承载装配缝编排本体（预铸采纳编排、G3 互斥、guard、healing）——按本裁决属漂移面，待下沉插件包；宿主目标态只留通道注册行。
+- 根级 `plugins/*`（task-loop / project / expert-squad / knowledge）：装配缝自含于插件包（`plugins/<pkg>/host/index.ts`），宿主只做插件行注行与服务 wiring——本裁决的现行先例。
