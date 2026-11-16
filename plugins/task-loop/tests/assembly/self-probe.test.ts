@@ -8,13 +8,15 @@ import { selfProbeOf } from '../../host/index.js'
 describe('selfProbeOf（owner Peer 直探缝）', () => {
   it('invoke 请求携 owner Peer；结算后 Peer dispose（signal aborted）', async () => {
     const requests: unknown[] = []
-    const ctx = new Context()
-    ctx.provide('typertGateway', {
-      invoke: async (request: unknown) => {
+    // 类形态桩（invoke 走原型链——receiver 解绑即红：bare extraction 调用丢 this）
+    class GatewayStub {
+      async invoke(request: unknown) {
         requests.push(request)
         return { ok: true }
-      },
-    } as never)
+      }
+    }
+    const ctx = new Context()
+    ctx.provide('typertGateway', new GatewayStub() as never)
     const probe = selfProbeOf(ctx)
     await expect(probe('forgeTasks', 'list', { projectId: '' })).resolves.toEqual({ ok: true })
     expect(requests).toHaveLength(1)

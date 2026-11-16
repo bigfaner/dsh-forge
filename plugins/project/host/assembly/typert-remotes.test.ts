@@ -350,14 +350,16 @@ describe('registerForgeTypertRemotes（根 ctx plugin 装配）', () => {
 
 describe('selfProbeOf（bug a99a7293——官方 gateway 2.x invoke 必携 owner Peer）', () => {
   it('invoke 请求携 owner Peer（principal.kind = owner + AbortSignal）；结算后 Peer dispose（signal aborted）', async () => {
-    const requests: unknown[] = []
+    const requests: unknown[] = [];
+    // 类形态桩（invoke 走原型链——receiver 解绑即红：bare extraction 调用丢 this）
+    class GatewayStub {
+      async invoke(request: unknown) {
+        requests.push(request);
+        return { ok: true };
+      }
+    }
     const ctx = new Context()
-    ctx.provide('typertGateway', {
-      invoke: async (request: unknown) => {
-        requests.push(request)
-        return { ok: true }
-      },
-    } as never)
+    ctx.provide('typertGateway', new GatewayStub() as never)
     const probe = selfProbeOf({ root: ctx })
     await expect(probe('forgeProjects', 'list')).resolves.toEqual({ ok: true })
     expect(requests).toHaveLength(1)

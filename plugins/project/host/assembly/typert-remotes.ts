@@ -635,7 +635,9 @@ export function selfProbeOf(face: TypertAssemblyCtxFace): NonNullable<ForgeTyper
     }
     const peer = new Peer(root, { principal: { kind: "owner" } });
     try {
-      return await invoke({ namespace, method, args: {}, peer });
+      // receiver 保真调用（cordis/gateway Service 方法解绑 this 即崩——原型链 invokePrepared
+      // 取不到；方法调用形态判例同 task-loop reflect.provide）
+      return await Reflect.apply(invoke, gateway, [{ namespace, method, args: {}, peer }]);
     } finally {
       await peer.dispose();
     }

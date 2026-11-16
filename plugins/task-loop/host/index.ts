@@ -129,7 +129,8 @@ export function selfProbeOf(ctx: unknown): ForgeTasksRemoteDeps["selfProbe"] {
     // 以结构窄面通过，构造点 as never 收口）
     const peer = new Peer(root as never, { principal: { kind: "owner" } });
     try {
-      return await invoke({ namespace, method, args: args ?? {}, peer });
+      // receiver 保真调用（gateway Service 方法解绑 this 即崩——invokePrepared undefined 判例）
+      return await Reflect.apply(invoke, gateway, [{ namespace, method, args: args ?? {}, peer }]);
     } finally {
       await peer.dispose();
     }
