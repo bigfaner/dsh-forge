@@ -127,15 +127,14 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
   });
 
-  it("运行期依赖归位（fix-12 bug 2523f72c——dist/host 运行期 import 的 driver/dsh-session 误挂 devDeps，tgz 独立安装断链）：两包在 dependencies 且零 devDeps 残留", () => {
+  it("运行期依赖归位（fix-12 bug 2523f72c——dist/host 运行期 import 的 driver 误挂 devDeps，tgz 独立安装断链）：driver 在 dependencies 且零 devDeps 残留；dsh-session 不入 dependencies（host 单例解析——dependencies 形态会在 profile node_modules 落第二副本，被 plugin-manager 扫成 profile plugin row 与宿主运行时版本线撞车，启动期整环禁用判例 2026-11-16）", () => {
     const deps = pkg.dependencies ?? {};
     const devDeps = pkg.devDependencies ?? {};
-    for (const name of ["@deepseek-ai/dsh-subagent-in-process-driver", "@deepseek-ai/dsh-session"]) {
-      expect(deps[name], `${name} 须在 dependencies（tgz 独立安装运行期装载）`).toBeDefined();
-      expect(devDeps[name], `${name} devDeps 残留（运行期包不得误挂 devDeps）`).toBeUndefined();
-    }
+    expect(deps["@deepseek-ai/dsh-subagent-in-process-driver"], "driver 须在 dependencies（tgz 独立安装运行期装载——spawn 动态 import 自包内解析）").toBeDefined();
+    expect(devDeps["@deepseek-ai/dsh-subagent-in-process-driver"], "driver devDeps 残留").toBeUndefined();
     expect(deps["@deepseek-ai/dsh-subagent-in-process-driver"]).toBe("0.2.0-rc.2");
-    expect(deps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.1");
+    expect(deps["@deepseek-ai/dsh-session"], "dsh-session 不得入 dependencies（官方单例 + plugin row 撞车）").toBeUndefined();
+    expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.1");
   });
 
   it("版本 bump 0.14.2（fix-12 patch——运行期依赖归位 + 对话面 keyed 撞车残余 shadow 治理；pin 随批校正）", () => {
@@ -207,21 +206,25 @@ describe("bundle 管线产物 self-containment", () => {
     expect(bundled).toContain("errMessage"); // lib-util 内联锚（host/index.ts 消费点）
   });
 
-  it("host bundle 运行期 @deepseek-ai/* import 面全量在 dependencies/peerDependencies（fix-12 bug 2523f72c 防复发——official singleton 豁免不查声明面，本门补声明面对账）", () => {
+  it("host bundle 运行期 @deepseek-ai/* import 面对账：driver 类非插件单例须在 dependencies；dsh-session 豁免（host 壳单例解析 + plugin row 撞车禁入 dependencies——fix-12 判例）", () => {
     const distEntry = resolve(pkgDir, "dist", "host", "index.js");
     if (!existsSync(distEntry)) return; // 未构建（纯 src 测试树）
     const bundled = readFileSync(distEntry, "utf8");
-    const declared = new Set([
-      ...Object.keys(pkg.dependencies ?? {}),
-      ...Object.keys(pkg.peerDependencies ?? {}),
-    ]);
+    const deps = pkg.dependencies ?? {};
+    // 宿主壳单例豁免面：静态 import 经宿主解析路径成功（010-final 轮 boot 实证），
+    // 且该包自带 cordis plugin manifest——入 dependencies 即 profile plugin row 撞车。
+    const hostSingleton = new Set(["@deepseek-ai/dsh-session"]);
     const specs = new Set<string>();
     for (const m of bundled.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)["'](@deepseek-ai\/[^"']+)["']/g)) {
       specs.add(m[1]!.split("/").slice(0, 2).join("/"));
     }
     expect(specs.size, "host bundle 零官方包运行期 import（对账面漂移——判据失效）").toBeGreaterThan(0);
     for (const spec of specs) {
-      expect(declared.has(spec), `${spec} 运行期 import 未在 dependencies/peerDependencies（tgz 独立安装断链）`).toBe(true);
+      if (hostSingleton.has(spec)) {
+        expect(deps[spec], `${spec} 豁免面漂移：不得入 dependencies（plugin row 撞车）`).toBeUndefined();
+        continue;
+      }
+      expect(deps[spec], `${spec} 运行期 import 未在 dependencies（tgz 独立安装断链）`).toBeDefined();
     }
   });
 
