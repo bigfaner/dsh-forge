@@ -144,4 +144,39 @@ describe('ProjectsQueryService（查询面）', () => {
       domain.db.close()
     }
   })
+
+  it('getProject workspaceId 别名（bug a99a7293 读面）：官方语境 projectId = workspace_id 形态经 main 行锚解析行真值', async () => {
+    const domain = mem()
+    try {
+      // 单装注册形态：行 id = randomUUID、main 行 workspace_id = 官方 workspace id
+      seedProject(domain, { id: 'uuid-1', projectKey: deriveDirName('Z:\\ws\\alpha'), title: 'alpha' })
+      seedMain(domain, 'uuid-1', 'Z:\\ws\\alpha', 'Z-project-dsh-dsh-forge@dadf6b04')
+      const svc = new ProjectsQueryService({ projects: domain.repos.projects, workspaces: domain.repos.workspaces })
+      const p = await svc.getProject('Z-project-dsh-dsh-forge@dadf6b04')
+      expect(p).not.toBeNull()
+      expect(p!.id).toBe('uuid-1')
+      expect(p!.workspaceId).toBe('Z-project-dsh-dsh-forge@dadf6b04')
+      expect(p!.wsPath).toBe('Z:\\ws\\alpha')
+      // 行 id 直读形态不受影响
+      expect((await svc.getProject('uuid-1'))?.id).toBe('uuid-1')
+    } finally {
+      domain.db.close()
+    }
+  })
+
+  it('getProject project_key 别名：forge 语境归属键直投形态（bug a99a7293 未命中实锚）同链解析', async () => {
+    const domain = mem()
+    try {
+      const key = deriveDirName('Z:\\ws\\alpha')
+      seedProject(domain, { id: 'uuid-2', projectKey: key, title: 'alpha' })
+      seedMain(domain, 'uuid-2', 'Z:\\ws\\alpha', 'ws-2')
+      const svc = new ProjectsQueryService({ projects: domain.repos.projects, workspaces: domain.repos.workspaces })
+      const p = await svc.getProject(key)
+      expect(p).not.toBeNull()
+      expect(p!.id).toBe('uuid-2')
+      expect(p!.wsPath).toBe('Z:\\ws\\alpha')
+    } finally {
+      domain.db.close()
+    }
+  })
 })

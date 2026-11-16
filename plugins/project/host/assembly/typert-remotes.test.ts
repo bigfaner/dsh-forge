@@ -21,6 +21,7 @@ import {
   ForgeWorktreeRemote,
   listDir,
   registerForgeTypertRemotes,
+  selfProbeOf,
   SEAL_FOLLOW_INTERVAL_MS,
   type ForgeTypertDeps,
   type TypertAssemblyCtxFace,
@@ -344,6 +345,35 @@ describe('registerForgeTypertRemotes（根 ctx plugin 装配）', () => {
     registerForgeTypertRemotes(captureRoot().face, { selfProbe })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(selfProbe).not.toHaveBeenCalled()
+  })
+})
+
+describe('selfProbeOf（bug a99a7293——官方 gateway 2.x invoke 必携 owner Peer）', () => {
+  it('invoke 请求携 owner Peer（principal.kind = owner + AbortSignal）；结算后 Peer dispose（signal aborted）', async () => {
+    const requests: unknown[] = []
+    const ctx = new Context()
+    ctx.provide('typertGateway', {
+      invoke: async (request: unknown) => {
+        requests.push(request)
+        return { ok: true }
+      },
+    } as never)
+    const probe = selfProbeOf({ root: ctx })
+    await expect(probe('forgeProjects', 'list')).resolves.toEqual({ ok: true })
+    expect(requests).toHaveLength(1)
+    const req = requests[0] as { namespace: string; method: string; args: Record<string, never>; peer: { principal: { kind: string }; signal: AbortSignal; dispose(): Promise<void> } }
+    expect(req.namespace).toBe('forgeProjects')
+    expect(req.method).toBe('list')
+    expect(req.args).toEqual({})
+    expect(req.peer.principal.kind).toBe('owner')
+    expect(req.peer.signal).toBeInstanceOf(AbortSignal)
+    // 探针结算即 dispose——零悬空 Peer（scope fiber 回收判据 = lifetime signal aborted）
+    await vi.waitFor(() => expect(req.peer.signal.aborted).toBe(true))
+  })
+
+  it('gateway 缺席 → 缺席错误（fail-soft 语义由注册面诊断承担，本缝只如实抛错）', async () => {
+    const probe = selfProbeOf({ root: new Context() })
+    await expect(probe('forgeProjects', 'list')).rejects.toThrow('typertGateway 服务缺席')
   })
 })
 

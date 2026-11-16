@@ -122,6 +122,16 @@ export class WorkspacesRepo {
     return r ? toRow(r) : undefined
   }
 
+  /** 身份别名 DAO 单点（bug a99a7293 读面）：workspace_id（官方语境 projectId 形态）→ main 行。 */
+  getMainByWorkspaceId(workspaceId: string): WorkspaceRow | undefined {
+    const r = this.#db
+      .prepare<[string], WorkspaceDbRow>(
+        `SELECT ${COLUMNS} FROM ${this.#tables.workspaces} WHERE workspace_id = ? AND member_role = 'main'`,
+      )
+      .get(workspaceId)
+    return r ? toRow(r) : undefined
+  }
+
   listByProject(projectId: string): WorkspaceRow[] {
     return (
       this.#db

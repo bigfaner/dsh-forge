@@ -66,11 +66,9 @@ export function createProjectsServicePort(deps: ProjectsPortDeps): ProjectServic
   return {
     registerProject: (input: RegisterProjectInput): Promise<RegisterResult> => registerService.register(input),
     listProjects: (): Promise<ProjectSummary[]> => Promise.resolve(queryService.listProjects()),
-    getProject: async (id: string): Promise<Project | null> => {
-      const row = projects.get(id)
-      if (row === undefined) return null
-      return toProject(row, workspaces.getMain(id))
-    },
+    // getProject 委托域本体（bug a99a7293：workspaceId 别名锚单源在 queries——行 id 与
+    // 官方语境 projectId 双形态同源解析，端口面零平行实现）
+    getProject: (id: string): Promise<Project | null> => queryService.getProject(id),
     updateProject: async (id: string, patch: ProjectPatch): Promise<Project> => {
       const row = projects.get(id)
       if (row === undefined) throw new Error(`project 不在册：${id}`)

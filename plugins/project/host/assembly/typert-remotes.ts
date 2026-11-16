@@ -19,6 +19,7 @@
 //
 // 范围边界：forge:settings 族归 configForms 自有 namespace（偏好值不经本面——AC③）。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
+import { Peer } from "@deepseek-ai/dsh-client-connection";
 import type { Context } from "@deepseek-ai/cordis";
 import type {
   BugsServicePort,
@@ -610,4 +611,33 @@ export function registerForgeTypertRemotes(
       );
   }
   return { registered, degraded, pending };
+}
+
+/**
+ * 注册后自探针缝实现（bug a99a7293——官方 gateway 2.x `invoke` 请求必携 Peer：
+ * prepareInvocation 首行 `assertPeerLive(request.peer)` 读 `peer.signal`，缺 peer 即
+ * 「Cannot read properties of undefined (reading 'signal')」）。owner Peer 经官方
+ * dsh-client-connection 正门构造（principal kind = owner——宿主浏览器连接同型），
+ * 探针结算即 dispose（scope fiber 随 root ctx 生命周期兜底回收，零悬空 Peer）。
+ */
+export function selfProbeOf(face: TypertAssemblyCtxFace): NonNullable<ForgeTypertDeps["selfProbe"]> {
+  const root = (face.root ?? face) as Context & { get?: (name: string) => unknown };
+  return async (namespace, method) => {
+    let gateway: unknown;
+    try {
+      gateway = root.get?.("typertGateway");
+    } catch {
+      gateway = undefined;
+    }
+    const invoke = (gateway as { invoke?: (request: unknown) => Promise<unknown> } | undefined)?.invoke;
+    if (invoke === undefined) {
+      throw new Error("typertGateway 服务缺席——serve 层认领不可达");
+    }
+    const peer = new Peer(root, { principal: { kind: "owner" } });
+    try {
+      return await invoke({ namespace, method, args: {}, peer });
+    } finally {
+      await peer.dispose();
+    }
+  };
 }

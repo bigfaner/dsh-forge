@@ -43,14 +43,17 @@ export class ProjectsQueryService {
     return summaries
   }
 
-  /** 单项目读（含归档）；标题对齐读面：registry title 在场且与库内不一致 → 以 registry 为准返回。 */
+  /** 单项目读（含归档）；标题对齐读面：registry title 在场且与库内不一致 → 以 registry 为准返回。
+   *  身份别名（bug a99a7293 读面）：官方语境 projectId 三形态任一命中——行 id（randomUUID）/
+   *  workspace_id（官方 workspace id）/ project_key（归属键；forge 语境直投形态）→ 行真值；
+   *  全链未命中同 null（零行语义不变）。 */
   async getProject(id: string): Promise<Project | null> {
     const { projects, workspaces } = this.#deps
-    const row = projects.get(id)
+    const row = projects.get(id) ?? this.rowByWorkspaceId(id) ?? projects.getByKey(id)
     if (row === undefined) return null
-    const main = workspaces.getMain(id)
-    this.selfCertify(row.projectKey, id, main?.wsPath)
-    const title = await this.alignedTitle(id, row.title)
+    const main = workspaces.getMain(row.id)
+    this.selfCertify(row.projectKey, row.id, main?.wsPath)
+    const title = await this.alignedTitle(row.id, row.title)
     return {
       id: row.id,
       workspaceId: main?.workspaceId ?? '',
@@ -63,6 +66,12 @@ export class ProjectsQueryService {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     }
+  }
+
+  /** workspace_id → 项目行（别名锚；未命中 undefined——读面零写零副作用）。 */
+  private rowByWorkspaceId(workspaceId: string) {
+    const main = this.#deps.workspaces.getMainByWorkspaceId(workspaceId)
+    return main === undefined ? undefined : this.#deps.projects.get(main.projectId)
   }
 
   /** 标题对齐读面：registry entry title 在场且 ≠ 库内 title → registry 为准（库侧不被自动改写）。 */
