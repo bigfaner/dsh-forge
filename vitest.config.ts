@@ -20,8 +20,9 @@ const dshDecoratorsPlugin = (): Plugin => ({
     const file = id.split('?')[0]
     if (!DSH_DECORATOR_TS.test(file)) return
     // 装饰器源码域：project + task-loop（plugin-task-loop 1.13——forgeTasks @Remote 控制器
-    // 落位 task-loop host 半，测试面降级同链同径）。
-    if (!file.includes('plugins/project') && !file.includes('plugins/task-loop')) return
+    // 落位 task-loop host 半，测试面降级同链同径）+ spec（plugin-spec 1.5——forgeSpecs
+    // host 半 @Remote 控制器落位，同链同径）。
+    if (!file.includes('plugins/project') && !file.includes('plugins/task-loop') && !file.includes('plugins/spec')) return
     if (!DECORATOR_SYNTAX.test(code)) return
     const result = ts.transpileModule(code, {
       fileName: file,

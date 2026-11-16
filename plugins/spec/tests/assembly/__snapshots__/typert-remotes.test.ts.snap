@@ -1,0 +1,159 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`forgeSpecs 端点族契约快照（真服务 + 假 identity） > detail：父链全量 + transitions 台账 + doc 悬空态现算——形状契约快照 1`] = `
+[
+  {
+    "acCount": 3,
+    "doc": {
+      "dangling": false,
+      "relPath": ".forge/specs/alpha/spec.md",
+    },
+    "goalCount": 2,
+    "goals": [
+      {
+        "acs": [
+          {
+            "criterion": "AC one",
+          },
+          {
+            "criterion": "AC two",
+          },
+        ],
+        "brief": "首个目标",
+        "title": "G1",
+      },
+      {
+        "acs": [
+          {
+            "criterion": "AC three",
+          },
+        ],
+        "title": "G2",
+      },
+    ],
+    "slug": "alpha",
+    "specStatus": "draft",
+    "tiers": [
+      "api",
+    ],
+    "title": "Alpha Spec",
+    "transitions": [],
+    "updatedAt": "<updatedAt>",
+  },
+]
+`;
+
+exports[`forgeSpecs 端点族契约快照（真服务 + 假 identity） > list：卡片清单（listing 序 + goalCount/acCount host 半水化）——形状契约快照 1`] = `
+[
+  {
+    "acCount": 3,
+    "goalCount": 2,
+    "slug": "alpha",
+    "specStatus": "draft",
+    "tiers": [
+      "api",
+    ],
+    "title": "Alpha Spec",
+    "updatedAt": "<updatedAt>",
+  },
+  {
+    "acCount": 1,
+    "goalCount": 1,
+    "slug": "beta",
+    "specStatus": "draft",
+    "tiers": [],
+    "title": "Beta Spec",
+    "updatedAt": "<updatedAt>",
+  },
+]
+`;
+
+exports[`forgeSpecs 端点族契约快照（真服务 + 假 identity） > projection：缺席缝 → 全 AC no-task-data——形状契约快照 1`] = `
+[
+  {
+    "goals": [
+      {
+        "acs": [
+          {
+            "criterion": "AC one",
+            "state": "no-task-data",
+          },
+          {
+            "criterion": "AC two",
+            "state": "no-task-data",
+          },
+        ],
+        "title": "G1",
+      },
+      {
+        "acs": [
+          {
+            "criterion": "AC three",
+            "state": "no-task-data",
+          },
+        ],
+        "title": "G2",
+      },
+    ],
+  },
+]
+`;
+
+exports[`forgeSpecs 端点族契约快照（真服务 + 假 identity） > query：include 四节门控（默认全节；projection 关 = 零投影节）——形状契约快照 1`] = `
+[
+  {
+    "acProjection": [
+      {
+        "criterion": "AC one",
+        "state": "no-task-data",
+      },
+      {
+        "criterion": "AC two",
+        "state": "no-task-data",
+      },
+      {
+        "criterion": "AC three",
+        "state": "no-task-data",
+      },
+    ],
+    "doc": {
+      "relPath": ".forge/specs/alpha/spec.md",
+    },
+    "goals": [
+      {
+        "acs": [
+          {
+            "criterion": "AC one",
+          },
+          {
+            "criterion": "AC two",
+          },
+        ],
+        "brief": "首个目标",
+        "title": "G1",
+      },
+      {
+        "acs": [
+          {
+            "criterion": "AC three",
+          },
+        ],
+        "title": "G2",
+      },
+    ],
+    "spec": {
+      "createdAt": "<createdAt>",
+      "id": "<id>",
+      "projectKey": "<projectKey>",
+      "slug": "alpha",
+      "specStatus": "draft",
+      "tiers": [
+        "api",
+      ],
+      "title": "Alpha Spec",
+      "updatedAt": "<updatedAt>",
+    },
+    "transitions": [],
+  },
+]
+`;

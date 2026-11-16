@@ -18,7 +18,15 @@ import {
   type SpecAssembly,
   type SpecAssemblyConfig,
 } from "./assembly/default-assembly.js";
-import { assembleSpecToolFamily } from "./assembly/tool-family.js";
+import {
+  acSettlementsFaceOf,
+  assembleSpecToolFamily,
+} from "./assembly/tool-family.js";
+import {
+  forgeProjectsIdentityOf,
+  registerSpecTypertRemotes,
+  type TypertAssemblyCtxFace,
+} from "./assembly/typert-remotes.js";
 import type { SpecContextFace } from "./faces.js";
 import {
   FORGE_DOC_STYLE_SECTION_NAME,
@@ -118,6 +126,42 @@ function toolsFaceOf(ctx: unknown): SpecPluginCtx["tools"] | undefined {
 }
 
 /**
+ * Typert 遥控器装配缝（plugin-spec 1.5——forgeSpecs host 半根 ctx plugin 注册，三态
+ * 可观测 registered/degraded/pending；fail-soft 不阻载，诊断留痕分级分流）。
+ */
+function registerSpecTypertFromCordis(
+  ctx: unknown,
+  services: SpecAssembly,
+  diag: (line: string, level?: DiagLevel) => void,
+): void {
+  try {
+    const source = ctx as { root?: unknown; plugin?: unknown; inject?: unknown }
+    const face: TypertAssemblyCtxFace = {
+      ...(source.root !== undefined ? { root: source.root } : {}),
+      ...(typeof source.plugin === "function"
+        ? { plugin: source.plugin as TypertAssemblyCtxFace["plugin"] }
+        : {}),
+      ...(typeof source.inject === "function"
+        ? { inject: source.inject as TypertAssemblyCtxFace["inject"] }
+        : {}),
+    }
+    const result = registerSpecTypertRemotes(face, {
+      specs: () => services.specs,
+      acSettlementsOf: acSettlementsFaceOf(ctx),
+      identity: forgeProjectsIdentityOf(ctx),
+      diag: (line) => diag(line, /失败|缺席|降级|抛错/.test(line) ? "warn" : "info"),
+    })
+    diag(
+      `[spec-typert] 装配完成：registered=[${result.registered.join(", ")}] degraded=[${result.degraded.join(", ")}] pending=[${result.pending.join(", ")}]`,
+      "info",
+    )
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause)
+    diag(`[spec-typert] Typert 遥控器装配异常（fail-soft 不阻载）：${message}`, "error")
+  }
+}
+
+/**
  * 单装工具族注册缝：官方 ctx.tools.register 正门逐枚注册六动词（unmount 全撤回）；
  * 单枚注册抛错不静默截断（loud 缝——失败 error 留痕其余照常）。缝缺席/劣形 = 工具面
  * 零注册 + warn 留痕（降级诚实不阻载）。
@@ -176,6 +220,7 @@ const specCordisPlugin: SpecCordisPlugin = (ctx: unknown, config: SpecHostConfig
   if (services !== undefined) {
     provideSpecsService(ctx, services, diag)
     disposeToolFamily = registerSpecToolFamily(ctx, services, diag).dispose
+    registerSpecTypertFromCordis(ctx, services, diag)
   }
   return () => {
     // 工具族注销（官方 tools 缝 disposer 全量回收）+ 提示段摘除 + 库句柄关闭

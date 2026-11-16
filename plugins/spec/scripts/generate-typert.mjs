@@ -97,6 +97,7 @@ writeFileSyncStaged(join("packages", "spec", "package.json"), JSON.stringify({
   type: "module",
   exports: {
     ".": "./src/index.ts",
+    "./types": "./src/types.ts",
     "./client": { types: "./ui/index.ts", default: "./ui/index.ts" },
     "./typert": { types: "./lib/typert.host.d.ts", default: "./lib/typert.host.js" },
     "./client/typert": { types: "./lib/typert.client.d.ts", default: "./lib/typert.client.js" },
