@@ -227,11 +227,13 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/knowledge/skills/learn/SKILL.md',
       'runtime/node_modules/@dsh-forge/knowledge/skills/distill/SKILL.md',
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
-      // 1.15 退役批：结算技能 submit-task 迁 task-loop 包——本包技能面关键文件改 fix-bug 锚
-      'runtime/node_modules/@dsh-forge/plugin-forge/skills/fix-bug/SKILL.md',
-      // blitz 专属技能面（plugin-forge 包内 skills-blitz 旁目录——blitz 预设 customSkillDirs
-      // 挂载源；缺席即突击组合技能面静默缺失）
-      'runtime/node_modules/@dsh-forge/plugin-forge/skills-blitz/grilling/SKILL.md',
+      // plugin-spec 1.9 skill 面迁移：plugin-forge 技能全数迁出（grilling/fix-bug/investigate-bug
+      // 迁 spec 包、brainstorm 退役、skills-blitz 随迁清理）——本包 skills/ 仅 README 占位
+      // spec 包技能面（1.9 迁入四技能——customSkillDirs[spec] 挂载源；缺席即远征组合技能面静默缺失）
+      'runtime/node_modules/@dsh-forge/spec/skills/grilling/SKILL.md',
+      'runtime/node_modules/@dsh-forge/spec/skills/fix-bug/SKILL.md',
+      'runtime/node_modules/@dsh-forge/spec/skills/investigate-bug/SKILL.md',
+      'runtime/node_modules/@dsh-forge/spec/skills/loop-blocking/SKILL.md',
       // M3 3.8 packaging 三处同步（TECH-packaging-001）：plugin-forge-spec 新包——漏列 =
       // 打包形态 boot ESM 解析断裂（远征预设行装载失败，TECH-packaging-001 症状面）
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/package.json',
@@ -344,8 +346,8 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     expect(staged['plugins/expert-squad']).toContain('cordis.patch.yml')
   })
 
-  it('bug a2a54922（G5 约定目录结构扫描）：staged 包源目录含约定资源目录（experts/skills/skills-blitz）→ 必在物化 files 集（漏配从人记变机械）', () => {
-    const CONVENTION_DIRS = ['experts', 'skills', 'skills-blitz']
+  it('bug a2a54922（G5 约定目录结构扫描）：staged 包源目录含约定资源目录（experts/skills）→ 必在物化 files 集（漏配从人记变机械；skills-blitz 随 plugin-spec 1.9 退役出宇宙）', () => {
+    const CONVENTION_DIRS = ['experts', 'skills']
     const staged = stagedProductPackages(PRODUCT_PLUGINS)
     const problems: string[] = []
     for (const [dir, files] of Object.entries(staged)) {

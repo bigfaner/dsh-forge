@@ -64,12 +64,13 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
  * （PRODUCT_PLUGINS userLayerRow: true），skills/learn 技能面由 STAGING_EXTRAS 承载。
  * 守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段。
  */
-/** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件；
- *  skills-blitz = plugin-forge 包内突击专属技能旁目录——blitz 预设 customSkillDirs 挂载源） */
+/** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件） */
 const STAGING_EXTRAS = {
   // plugin-forge experts/ = 内置专家档案层（FORGE_EXPERTS_ROOT_DIR 相对 dist 解析——
-  // 缺席即安装版专家团零 forge 档案，bug a2a54922；随包覆盖由 a2a54922 约定目录扫描守卫）
-  'plugin-forge': { files: ['skills', 'skills-blitz', 'experts'], keyFiles: ['skills/fix-bug/SKILL.md', 'skills-blitz/grilling/SKILL.md', 'experts/feature-builder.md'] },
+  // 缺席即安装版专家团零 forge 档案，bug a2a54922；随包覆盖由 a2a54922 约定目录扫描守卫）。
+  // skills/ = 约定目录占位（plugin-spec 1.9 技能全数迁出——grilling/fix-bug/investigate-bug
+  // 迁 spec、brainstorm 退役、skills-blitz 随迁清理；README 占位保持目录声明面）
+  'plugin-forge': { files: ['skills', 'experts'], keyFiles: ['experts/feature-builder.md'] },
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
   // expert-squad 内置专家层目录（scan.ts resolvePluginExpertsRoot 相对 dist 的
   // ../../experts 解析；bundle-structure 测试钉「随包 ≥1 档案」——缺席即内置层静默缺失）
@@ -92,14 +93,16 @@ const STAGING_EXTRAS = {
   // （package.json dsh.bundle.patch 声明指向）+ skills 技能面（to-tasks 拆解技能 + 自
   // plugin-forge 迁入的 submit-task 结算技能——customSkillDirs 挂载源）
   'task-loop': { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/to-tasks/SKILL.md', 'skills/submit-task/SKILL.md', 'skills/rescue-task-loop/SKILL.md', 'cordis.patch.yml'] },
-  // spec（plugin-spec 1.10 docs 域收编——librarySeed：core dist 静态 import 闭包随包）：
+  // spec（plugin-spec 1.9 skill 面迁移——grilling/fix-bug/investigate-bug/loop-blocking 随包）：
   // 组合装配行本体 cordis.patch.yml（package.json dsh.bundle.patch 声明指向——M5 组合器
   // 行接线后 loader 按声明读包内该文件，缺席即 ENOENT，bug a1f13abf 同径）
-  spec: { files: ['cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] },
+  // + skills 技能面（customSkillDirs[spec] 挂载源——1.9 自 plugin-forge 迁入）
+  spec: { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/grilling/SKILL.md', 'skills/fix-bug/SKILL.md', 'skills/investigate-bug/SKILL.md', 'skills/loop-blocking/SKILL.md', 'cordis.patch.yml'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
-/** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */
-const CONVENTION_DIRS = ['skills', 'skills-blitz', 'experts']
+/** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙；
+ *  skills-blitz 随 plugin-spec 1.9 grilling 迁 spec 退役——目录宇宙同步收缩） */
+const CONVENTION_DIRS = ['skills', 'experts']
 
 /** 包短名 → workspace 子路径。批1 包归位表驱动面：PRODUCT_PLUGINS 声明 dir 字段的包
  *  直取表值（expert-squad 载 'plugins/expert-squad' root 级树——不再按 packages/plugins/<short>
@@ -184,7 +187,7 @@ export function stagedProductPackages(plugins, root = ROOT) {
 /**
  * STAGING_EXTRAS 白名单自动比对守卫（漂移双向 fail-loud，返回问题清单——空 = 无漂移）：
  * 对 stagedProductPackages 推导出的每个 staged 包，扫描 packages/<dir> 内实际存在的
- * 「额外物化面」（约定资源目录 skills/skills-blitz/experts + package.json
+ * 「额外物化面」（约定资源目录 skills/experts + package.json
  * dsh.bundle.patch 指向的补丁文件），与 STAGING_EXTRAS 声明集双向比对：
  *   ① 实际存在而未声明 → 漏随包（bug c85c157c/dd76f14c 类别：新插件带 extras 面
  *      未登记即安装版静默缺失）——报出包名与遗漏路径；
