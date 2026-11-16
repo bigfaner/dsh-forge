@@ -16,21 +16,17 @@ import { DSWF_DOC_ADDRESS_PREFIX, DSWF_DOC_TAB_KIND, docTabTitle, ForgeDocsTab }
 import { typertRpcClientFactory } from "./dock-tabs/typert-transport.js";
 import { SIDEBAR_RIGHT_PANE_TAB_SLOT, SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT, reflectGet, type OfficialSeamCtx } from "./official-seams.js";
 import { defaultSelfAnchorResolver, useSelfAnchorProjectId, type SelfAnchorServices } from "./self-anchor.js";
-import { registerKeyedSection, type SectionSlotsFace } from "./keyed-section.js";
+import { KEYED_SHADOW_PRIORITY, registerKeyedSection, type SectionSlotsFace } from "./keyed-section.js";
 import { FORGE_TASK_LOOP_LOCALE_NS, type LocaleServiceFace } from "./locale.js";
 
 /** task-loop 概览 tab 类型 kind（注册键 = keyed body dispatch 键——字面量单源） */
 export const DSWF_OVERVIEW_TAB_KIND = "dswf-overview";
 
 /**
- * dock tab keyed 遮蔽 priority（fix-10 bug 400b3952）：同宿主 project 插件先装、已占
- * sidebar.right.pane.tab 的 dswf-overview/dswf-doc 键（priority 0）与 tab 类型 id——同
- * priority 注册被官方 slots 拒收（keyed 同 key 同 priority 才撞车），task-loop 接管版
- * 全降级零渲染。官方报错明示正缝：「register at a different priority to shadow it
- * (lowest renders)」——负 priority 遮蔽占用者（升序分发最低者渲染），单装形态（无占用
- * 者）同值落座零行为差异。project 侧同键退役 = 迁移收口范围外事项，不混修。
+ * dock tab keyed 遮蔽 priority——单源 = keyed-section KEYED_SHADOW_PRIORITY
+ * （fix-10 bug 400b3952 引入；fix-12 起对话面 keyed 槽共用同值遮蔽语义）。
  */
-const TAB_KEYED_SHADOW_PRIORITY = -10;
+const TAB_KEYED_SHADOW_PRIORITY = KEYED_SHADOW_PRIORITY;
 
 /** 官方右栏 tab 类型注册表窄面（ui-sidebar-right SidebarRightTabRegistry 消费切片） */
 interface SidebarRightTabsMirror {

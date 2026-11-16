@@ -15,7 +15,7 @@ import {
   setForgeEventNodeDiag,
 } from "./event-node/forge-event-node.js";
 import { tapForgeProgressEvent } from "./event-node/progress-log-tap.js";
-import { registerKeyedSection, type SectionSlotsFace } from "./keyed-section.js";
+import { KEYED_SHADOW_PRIORITY, registerKeyedSection, type SectionSlotsFace } from "./keyed-section.js";
 import { FORGE_TASK_LOOP_LOCALE_NS } from "./locale.js";
 import { asRecord, type OfficialSeamCtx } from "./official-seams.js";
 
@@ -54,6 +54,7 @@ export function registerConversationToolFaces(
       slot: TOOL_CALL_TOOLVIEW_SLOT,
       key: DISPATCH_TASK_TOOL_KEY,
       locale: FORGE_TASK_LOOP_LOCALE_NS,
+      priority: KEYED_SHADOW_PRIORITY,
       component: ForgeDispatchToolRow,
     }) === undefined) throw new Error("slots face unavailable");
   });
@@ -68,6 +69,7 @@ export function registerConversationToolFaces(
       slot: FORGE_EVENT_NODE_SLOT,
       key: FORGE_EVENT_NODE_KIND,
       locale: FORGE_TASK_LOOP_LOCALE_NS,
+      priority: KEYED_SHADOW_PRIORITY,
       component: ForgeEventEntries,
     }) === undefined) throw new Error("slots face unavailable");
     const streamWithTap = {

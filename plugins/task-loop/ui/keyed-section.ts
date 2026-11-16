@@ -6,6 +6,14 @@
 // children 澹版槑缂濆崟鐐瑰０鏄庢Ы锛圤VERVIEW_SECTIONS_CHILDREN锛? ForgeOverviewSectionHost
 // renderSlot 娑堣垂 roster鈥斺€旀敞鍐屼晶鍙啓澹版槑琛屻€?// bundle 鑷惈绾緥锛氶浂涓婃父 import锛堢粨鏋勪笌 @deepseek-ai/dsh-client-ui-slots 娑堣垂鍒囩墖鍚屽瀷闀滃儚锛夈€?
 /** keyed/list 鍨嬭妭鐧昏濂戠害锛堟硾鍖栬嚜 tab keyed 鍗犵敤鑰呬袱娈垫敞鍐屸€斺€攕lot+kind options 閫愬瓧閫忎紶锛夈€?*/
+/**
+ * keyed 槽遮蔽 priority（fix-10 bug 400b3952 + fix-12 撞车残余）：同宿主 project 插件
+ * 先装、已按同键 priority 0 占用 keyed 槽——同 key 同 priority 注册被官方 slots 拒收
+ * （报错明示正缝：「register at a different priority to shadow it (lowest renders)」）。
+ * 负 priority 遮蔽占用者（升序分发最低者渲染），单装形态（无占用者）同值落座零行为差异。
+ */
+export const KEYED_SHADOW_PRIORITY = -10;
+
 export interface KeyedSectionRegistration {
   /** 鐩爣妲藉悕锛堝畼鏂?SlotMap key鈥斺€斿０鏄庣紳涓庤惤搴у悓鍚嶏級銆?*/
   readonly slot: string;

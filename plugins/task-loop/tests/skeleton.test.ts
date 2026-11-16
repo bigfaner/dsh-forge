@@ -117,21 +117,29 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     }
   });
 
-  it("lib 五子包 devDeps 接线 + 本包触面 @deepseek-ai/* pin 升 0.2.2-rc.1（typert generator 0.2.2-rc.2 版本线；dsh-subagent-in-process-driver 0.2.2-rc.1 上游未发布——0.2.0-rc.2 仓内既有线，升版随上游 next 发布收口）", () => {
+  it("lib 五子包 devDeps 接线 + 本包触面 @deepseek-ai/* pin 升 0.2.2-rc.1（typert generator 0.2.2-rc.2 版本线）", () => {
     const devDeps = pkg.devDependencies ?? {};
     for (const lib of ["lib-api", "lib-db", "lib-diag", "lib-path", "lib-util"]) {
       expect(Object.keys(devDeps)).toContain(`@dsh-forge/${lib}`);
     }
-    for (const name of ["dsh-session", "dsh-client-ui-primitives"]) {
-      expect(devDeps[`@deepseek-ai/${name}`]).toBe("0.2.2-rc.1");
-    }
-    expect(devDeps["@deepseek-ai/dsh-subagent-in-process-driver"]).toBe("0.2.0-rc.2");
+    expect(devDeps["@deepseek-ai/dsh-client-ui-primitives"]).toBe("0.2.2-rc.1");
     expect(devDeps["@deepseek-ai/dsh-typert-generator"]).toBe("0.2.2-rc.2");
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
   });
 
-  it("版本 bump 0.14.1（plugin-task-loop 1.18-b 判例——queryTask 读面带出最新结算逐条 AC 状态（latestSettlement 节 + 呈现投影）：新增读面能力 minor 位 +1；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.14.1");
+  it("运行期依赖归位（fix-12 bug 2523f72c——dist/host 运行期 import 的 driver/dsh-session 误挂 devDeps，tgz 独立安装断链）：两包在 dependencies 且零 devDeps 残留", () => {
+    const deps = pkg.dependencies ?? {};
+    const devDeps = pkg.devDependencies ?? {};
+    for (const name of ["@deepseek-ai/dsh-subagent-in-process-driver", "@deepseek-ai/dsh-session"]) {
+      expect(deps[name], `${name} 须在 dependencies（tgz 独立安装运行期装载）`).toBeDefined();
+      expect(devDeps[name], `${name} devDeps 残留（运行期包不得误挂 devDeps）`).toBeUndefined();
+    }
+    expect(deps["@deepseek-ai/dsh-subagent-in-process-driver"]).toBe("0.2.0-rc.2");
+    expect(deps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.1");
+  });
+
+  it("版本 bump 0.14.2（fix-12 patch——运行期依赖归位 + 对话面 keyed 撞车残余 shadow 治理；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.14.2");
   });
 });
 
@@ -197,6 +205,24 @@ describe("bundle 管线产物 self-containment", () => {
     // 内联后 import 形态残留 = bundle 未生效（self-containment 口径：dist 零 @dsh-forge/* 运行期 import）
     expect(bundled).not.toMatch(/(?:from\s*|require\(\s*|import\(\s*)["']@dsh-forge\//);
     expect(bundled).toContain("errMessage"); // lib-util 内联锚（host/index.ts 消费点）
+  });
+
+  it("host bundle 运行期 @deepseek-ai/* import 面全量在 dependencies/peerDependencies（fix-12 bug 2523f72c 防复发——official singleton 豁免不查声明面，本门补声明面对账）", () => {
+    const distEntry = resolve(pkgDir, "dist", "host", "index.js");
+    if (!existsSync(distEntry)) return; // 未构建（纯 src 测试树）
+    const bundled = readFileSync(distEntry, "utf8");
+    const declared = new Set([
+      ...Object.keys(pkg.dependencies ?? {}),
+      ...Object.keys(pkg.peerDependencies ?? {}),
+    ]);
+    const specs = new Set<string>();
+    for (const m of bundled.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)["'](@deepseek-ai\/[^"']+)["']/g)) {
+      specs.add(m[1]!.split("/").slice(0, 2).join("/"));
+    }
+    expect(specs.size, "host bundle 零官方包运行期 import（对账面漂移——判据失效）").toBeGreaterThan(0);
+    for (const spec of specs) {
+      expect(declared.has(spec), `${spec} 运行期 import 未在 dependencies/peerDependencies（tgz 独立安装断链）`).toBe(true);
+    }
   });
 
   it("client bundle 产物自含：ui 内联、零 @dsh-forge/* import、自注册装载头在位", () => {
