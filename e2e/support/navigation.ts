@@ -164,8 +164,8 @@ const REVEAL_RETRY = 3
  */
 export async function openOverviewDock(page: Page): Promise<void> {
   if ((await page.locator(OV_PANEL).first().isVisible().catch(() => false)) === true) return
-  const stripTab = page.locator(DOCKKIT_STRIP_TAB).filter({ hasText: '项目概览' }).first()
-  const entry = page.locator(RIGHTBAR_COL).locator('button', { hasText: '项目概览' }).first()
+  const stripTab = page.locator(DOCKKIT_STRIP_TAB).filter({ hasText: /项目概览|任务概览/ }).first()
+  const entry = page.locator(RIGHTBAR_COL).locator('button', { hasText: /项目概览|任务概览/ }).first()
   // fix-2 重试形态：reveal 后入口未水化（右栏休眠/零内容——revealRightbar 内会话物化竞速
   // 败者窗）时重走 reveal 物化径再等入口，限 REVEAL_RETRY 轮，取代「仅判右栏展开」的
   // 一次性时序假设。
