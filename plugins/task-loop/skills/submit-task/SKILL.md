@@ -35,16 +35,16 @@ ac_results: [
 
 数组与任务定义同数同序；任一条 `met: false` 即拒绝 success——要么补测试，要么以 blocked 结算并点名未覆盖的标准。
 
-### 强制域结算——`runtime_face` 声明与证据两形
+### 强制域结算——`facets` 声明与证据两形
 
-**强制域判定**（按交付物性质，不随 AC 文案漂移）：交付物含**运行期装配面**（进程、网络端点、真实调度/时钟、对外部系统/硬件的真实副作用）的任务属强制域——以 `runtime_face` 入参声明其面（`ui` / `api` / `cli` / `tui` / `desktop` / `web-server` / `mq` 为常见示例，非白名单；`library` / `sdk` / `pure-logic` / `docs` 声明豁免域）。旧 `runtime_surface` 参数已退役——误用会被拒并指认改传 `runtime_face`。
+**强制域判定**（按交付物性质，不随 AC 文案漂移）：交付物含**运行期装配面**（进程、网络端点、真实调度/时钟、对外部系统/硬件的真实副作用）的任务属强制域——以 `facets` 入参声明其面（`ui` / `api` / `cli` / `tui` / `desktop` / `web-server` / `mq` 为常见示例，非白名单；`library` / `sdk` / `pure-logic` / `docs` 声明豁免域）。旧 `runtime_surface` / `runtime_face` 参数已退役（两跳更名终态）——误用会被拒并指认改传 `facets`。
 
 强制域任务结算时的口径——**证据两形二选一**：
 
 - **取证完成形**：`runtime_evidence_face` + `runtime_evidence_artifacts`（真机取证工件归档路径：截图/trace/日志）。fake 契约测试全绿不算取证。
 - **债务声明形**：`evidence_debt_suite` + `evidence_debt_specs`（可选 `evidence_debt_note`）——实现 + 单测绿、唯一缺口是真机取证时，声明欠账照常结算（实现态），欠账 test-run 任务由循环自动派生。前提如实：声明的只是「尚未取得的真机取证」，不是「不需要取证」。
 
-两形各自可带一个可选 `*_note`（`runtime_evidence_note` / `evidence_debt_note`）——只写取证方式与环境说明/欠账缘由，语境性内容；判定事实不进 note。已取得取证证据的，同时在 `ac_results` 对应条目的 `evidence` 引用归档子目录路径。`result=success` 声明了 `runtime_face` 却两形皆缺，提交即被拒。
+两形各自可带一个可选 `*_note`（`runtime_evidence_note` / `evidence_debt_note`）——只写取证方式与环境说明/欠账缘由，语境性内容；判定事实不进 note。已取得取证证据的，同时在 `ac_results` 对应条目的 `evidence` 引用归档子目录路径。`result=success` 声明了 `facets` 却两形皆缺，提交即被拒。
 
 ### 三类测试任务的证据口径
 
@@ -107,4 +107,4 @@ ac_results: [
 
 ## 如果 submitTask 调用本身失败
 
-错误文本会写明被违反的预期（缺 summary、`ac_results` 形状/条数不符、门只给了一半、`runtime_face` 缺证据两形）。按其所列修好输入后重试。若工具不可达，上报派发方或用户——绝不改用文件编辑作为变通。
+错误文本会写明被违反的预期（缺 summary、`ac_results` 形状/条数不符、门只给了一半、`facets` 缺证据两形）。按其所列修好输入后重试。若工具不可达，上报派发方或用户——绝不改用文件编辑作为变通。

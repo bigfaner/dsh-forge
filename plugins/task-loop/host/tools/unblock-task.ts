@@ -31,7 +31,7 @@ const SETTLEMENT_LOAD_KEYS = [
   "evidence_debt_suite",
   "evidence_debt_specs",
   "evidence_debt_note",
-  "runtime_face",
+  "facets",
   "runtime_evidence_face",
   "runtime_evidence_artifacts",
   "runtime_evidence_note",

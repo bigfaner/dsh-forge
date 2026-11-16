@@ -17,6 +17,7 @@
 // settlement append（同事务）→ submit 轨迹行 → 恢复钩子（completed 挂）；闭包尾部
 // （提交后）T2 应答增补 + emitTasksChanged。
 import { taskFilesUnion } from "./files.js";
+import { FACETS_KEY } from "../../../shared/contract-constants.js";
 import { withTransaction } from "@dsh-forge/lib-db";
 import { ProjectKeyDerivationError } from "../../db/repositories/project-key.js";
 import {
@@ -182,7 +183,7 @@ function buildEvidence(input: SubmitTaskInput): SettlementEvidence {
     ...(input.testsFailed !== undefined ? { testsFailed: input.testsFailed } : {}),
     ...(input.coverage !== undefined ? { coverage: input.coverage } : {}),
     ...(input.notes !== undefined ? { notes: input.notes } : {}),
-    ...(input.runtimeFace !== undefined ? { runtimeFace: input.runtimeFace } : {}),
+    ...(input.facets !== undefined ? { [FACETS_KEY]: input.facets } : {}),
     ...(input.runtimeEvidence !== undefined ? { runtimeEvidence: input.runtimeEvidence } : {}),
     ...(input.blockClassification !== undefined ? { blockClassification: input.blockClassification } : {}),
   };
@@ -268,7 +269,8 @@ export interface SubmitTaskInput {
   readonly coverage?: number;
   readonly notes?: string;
   readonly evidenceDebt?: { readonly suite: string; readonly specs: readonly string[]; readonly note?: string };
-  readonly runtimeFace?: readonly string[];
+  /** 运行期装配面声明（工具入参 facets——两跳更名终态 runtime_surface→runtime_face→facets） */
+  readonly facets?: readonly string[];
   readonly runtimeEvidence?: {
     readonly face: string;
     readonly artifacts: readonly string[];
@@ -382,13 +384,13 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
         throw new RuntimeEvidenceConflictError({ verb: "submitTask" });
       }
       if (
-        input.runtimeFace !== undefined &&
-        input.runtimeFace.length > 0 &&
-        requiresRuntimeAssemblyEvidence(input.runtimeFace) &&
+        input.facets !== undefined &&
+        input.facets.length > 0 &&
+        requiresRuntimeAssemblyEvidence(input.facets) &&
         input.runtimeEvidence === undefined &&
         input.evidenceDebt === undefined
       ) {
-        throw new RuntimeEvidenceRequiredError({ faces: input.runtimeFace });
+        throw new RuntimeEvidenceRequiredError({ faces: input.facets });
       }
     }
 

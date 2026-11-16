@@ -19,6 +19,12 @@ export const TASK_LOOP_TABLE_PREFIX = "task_";
 /** AC 核销快照键（submit_task 入参 `ac_results`——契约冻结：ac_results_json 单列同位）。 */
 export const AC_RESULTS_KEY = "ac_results";
 
+/**
+ * 运行期装配面声明键（submit_task 入参 `facets`——两跳更名终态
+ * runtime_surface → runtime_face → facets；evidence_json fields 键同位冻结）。
+ */
+export const FACETS_KEY = "facets";
+
 /** 判据文本对齐规则（spec 投影唯一对齐面——台账 12：判据原文逐字一致，转述即断链）。 */
 export interface CriterionAlignmentRule {
   /** settlements.ac_results_json 内嵌 criterion 文本 = 对齐键 */

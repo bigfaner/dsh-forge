@@ -123,11 +123,11 @@ describe("unblock_task reason 必带 + 结算负载黑名单", () => {
     await expect(tool.execute({ slug: "alpha", local_id: "1", reason: "  " }, {})).rejects.toThrow(/reason must be a non-empty string/);
   });
 
-  it("结算面负载键命中即拒（ac_results / gate_compile / runtime_face 指认 submit_task）", async () => {
+  it("结算面负载键命中即拒（ac_results / gate_compile / facets 指认 submit_task）", async () => {
     const tool = toolOf("unblock");
     await expect(tool.execute({ slug: "alpha", local_id: "1", reason: "x", ac_results: [] }, {})).rejects.toThrow(/submit_task/);
     await expect(tool.execute({ slug: "alpha", local_id: "1", reason: "x", gate_compile: true }, {})).rejects.toThrow(/settlement\/gate\/AC loads/);
-    await expect(tool.execute({ slug: "alpha", local_id: "1", reason: "x", runtime_face: ["ui"] }, {})).rejects.toThrow(/runtime_face/);
+    await expect(tool.execute({ slug: "alpha", local_id: "1", reason: "x", facets: ["ui"] }, {})).rejects.toThrow(/facets/);
   });
 
   it("blocked → pending 走通（域唯一入口格）", async () => {

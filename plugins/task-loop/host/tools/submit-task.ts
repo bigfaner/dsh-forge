@@ -2,8 +2,9 @@
 // 直迁 + 两处契约改造（提案裁决）：
 // ① AC 入参单数组化：旧 ac_criteria/ac_met/ac_evidence 三平行数组退役 → 单参 ac_results
 //    （[{criterion, met, evidence?}]，逐项形状校验）→ 域 submitTask acceptanceCriteria。
-// ② runtime_face 更名：旧 runtime_surface 退役（入参被拒并指认新参）→ runtime_face；
-//    runtime_evidence_face/artifacts/note 命名不变。
+// ② facets 更名（词汇终选）：两跳 runtime_surface → runtime_face → facets——两旧名均
+//    退役（入参被拒并指认新参 facets）；runtime_evidence_face/artifacts/note 命名不变
+//    （证据呈现面与声明面不同轴，见 proposal 词源裁决）。
 // disc 效度戳 / submitSettleDisplay / 事件缝是宿主装配面职责——工具不迁移（后续装配任务接）。
 // 定位 = 域动词薄封装：submitTask（submit.ts，双门 + 单事务两写单源），本文件只做
 // snake_case 入参收窄 + gate all-or-none 组合形状先证 + 结算要点文本投影。
@@ -179,11 +180,11 @@ export function createSubmitTaskTool(deps: {
           description: "Spec paths the owed e2e assertions cover (forward slashes) — required with evidence_debt_suite.",
         },
         evidence_debt_note: { type: "string", description: "What evidence is owed and why (optional, with the debt pair)." },
-        runtime_face: {
+        facets: {
           type: "array",
           items: { type: "string" },
           description:
-            "Runtime assembly surface declaration (mandatory-evidence-domain input): faces the deliverable touches at runtime — common examples ui/api/cli/tui/desktop/web-server/mq (non-exhaustive; anything with a runtime assembly face qualifies, e.g. browser-extension, mobile-app, cron, db-migration); 'library'/'sdk'/'pure-logic'/'docs' declare the exempt domain — the exemption presupposes no subprocess/network side effects of its own; multiple faces take the strictest ('highest') interpretation. On result=success, a declared runtime_face requires either runtime_evidence_face+runtime_evidence_artifacts (evidence done) or evidence_debt (debt declared); without either, the submit is rejected.",
+            "Runtime assembly facets declaration (mandatory-evidence-domain input): facets the deliverable touches at runtime — common examples ui/api/cli/tui/desktop/web-server/mq (non-exhaustive; anything with a runtime assembly facet qualifies, e.g. browser-extension, mobile-app, cron, db-migration); 'library'/'sdk'/'pure-logic'/'docs' declare the exempt domain — the exemption presupposes no subprocess/network side effects of its own; multiple facets take the strictest ('highest') interpretation. On result=success, a declared facets requires either runtime_evidence_face+runtime_evidence_artifacts (evidence done) or evidence_debt (debt declared); without either, the submit is rejected.",
         },
         runtime_evidence_face: {
           type: "string",
@@ -221,9 +222,10 @@ export function createSubmitTaskTool(deps: {
     },
     async execute(args: unknown, exec: TaskToolExecFace): Promise<SubmitTaskResult> {
       const a = requireArgsObject(args, TOOL);
-      // 旧 runtime_surface 入参被拒（更名裁决——fail-loud 指认新参，零静默兼容）
-      if (a["runtime_surface"] !== undefined) {
-        throw new Error(`${TOOL}: runtime_surface was renamed to runtime_face (same semantics — resend the faces array as runtime_face)`);
+      // 旧 runtime_surface / runtime_face 入参被拒（两跳更名终态——fail-loud 指认 facets，零静默兼容）
+      const renamed = a["runtime_surface"] !== undefined ? "runtime_surface" : a["runtime_face"] !== undefined ? "runtime_face" : undefined;
+      if (renamed !== undefined) {
+        throw new Error(`${TOOL}: ${renamed} was renamed to facets (same semantics — resend the facets array as facets)`);
       }
       const result = requiredEnum(a, "result", ["success", "blocked"] as const, TOOL);
       const gate = gateOf(a, TOOL);
@@ -258,9 +260,9 @@ export function createSubmitTaskTool(deps: {
       } else if (evNote !== undefined) {
         throw new Error(`${TOOL}: runtime_evidence_note requires runtime_evidence_face and runtime_evidence_artifacts`);
       }
-      const runtimeFace = optionalStringArray(a, "runtime_face", TOOL);
-      if (runtimeFace !== undefined && runtimeFace.length === 0) {
-        throw new Error(`${TOOL}: runtime_face must be a non-empty array when given`);
+      const facets = optionalStringArray(a, "facets", TOOL);
+      if (facets !== undefined && facets.length === 0) {
+        throw new Error(`${TOOL}: facets must be a non-empty array when given`);
       }
       // 证据真实性门（bug faf0ca57①——仅挂 success 结算）：引用文件缺席 = 拒结算信封指认
       if (result === "success") {
@@ -315,7 +317,7 @@ export function createSubmitTaskTool(deps: {
         ...(debtSuite !== undefined && debtSpecs !== undefined
           ? { evidenceDebt: { suite: debtSuite, specs: debtSpecs, ...(debtNote !== undefined ? { note: debtNote } : {}) } }
           : {}),
-        ...(runtimeFace !== undefined ? { runtimeFace } : {}),
+        ...(facets !== undefined ? { facets } : {}),
         ...(evFace !== undefined && evArtifacts !== undefined
           ? { runtimeEvidence: { face: evFace, artifacts: evArtifacts, ...(evNote !== undefined ? { note: evNote } : {}) } }
           : {}),

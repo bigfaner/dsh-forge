@@ -1,6 +1,6 @@
 // submit_task 工具层契约测试（plugin-task-loop 1.11——提案裁决两处改造面）：
 // ① ac_results 单数组解析（合法 / 缺 criterion / met 形状错 / 空/非数组拒）；
-// ② runtime_face 更名（旧 runtime_surface 入参被拒、新参走通域 runtimeFace 径）；
+// ② facets 更名（两跳终态：旧 runtime_surface/runtime_face 入参被拒、新参走通域 facets 径）；
 // ③ gate all-or-none（半门 / 孤 coverage 拒）。
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -113,7 +113,7 @@ describe("证据真实性门（bug faf0ca57——evidence 引用文件在场性�
       exec({
         result: "success",
         summary: "done",
-        runtime_face: ["ui"],
+        facets: ["ui"],
         runtime_evidence_face: "ui",
         runtime_evidence_artifacts: [missing],
       }),
@@ -138,27 +138,34 @@ describe("证据真实性门（bug faf0ca57——evidence 引用文件在场性�
   });
 });
 
-describe("runtime_face 更名（旧 runtime_surface 入参被拒）", () => {
-  it("runtime_surface 入参 fail-loud 指认 runtime_face", async () => {
+describe("facets 更名（两跳终态——旧 runtime_surface/runtime_face 入参被拒）", () => {
+  it("runtime_surface 入参 fail-loud 指认 facets", async () => {
     seedInProgress(null);
     await expect(
       exec({ result: "success", summary: "done", runtime_surface: ["ui"] }),
-    ).rejects.toThrow(/runtime_surface was renamed to runtime_face/);
+    ).rejects.toThrow(/runtime_surface was renamed to facets/);
   });
 
-  it("runtime_face + evidence_debt 声明走通（取证债径，域 runtimeFace 键落位）", async () => {
+  it("runtime_face 入参 fail-loud 指认 facets", async () => {
+    seedInProgress(null);
+    await expect(
+      exec({ result: "success", summary: "done", runtime_face: ["ui"] }),
+    ).rejects.toThrow(/runtime_face was renamed to facets/);
+  });
+
+  it("facets + evidence_debt 声明走通（取证债径，域 facets 键落位）", async () => {
     const id = seedInProgress(null);
     const r = await exec({
       result: "success",
       summary: "done",
-      runtime_face: ["web-server"],
+      facets: ["web-server"],
       evidence_debt_suite: "e2e",
       evidence_debt_specs: ["specs/a.spec.ts"],
     });
     expect(r.status).toBe("completed");
     const row = h.db.prepare(`SELECT evidence_json FROM task_settlements WHERE task_id = ?`).get(id) as { evidence_json: string };
-    const evidence = JSON.parse(row.evidence_json) as { fields?: { runtimeFace?: string[] }; gates?: { evidenceDebt?: { suite: string } } };
-    expect(evidence.fields?.runtimeFace).toEqual(["web-server"]);
+    const evidence = JSON.parse(row.evidence_json) as { fields?: { facets?: string[] }; gates?: { evidenceDebt?: { suite: string } } };
+    expect(evidence.fields?.facets).toEqual(["web-server"]);
     expect(evidence.gates?.evidenceDebt).toMatchObject({ suite: "e2e" }); // debt 并 gates 键（buildEvidence 口径）
   });
 });
