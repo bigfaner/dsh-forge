@@ -169,7 +169,7 @@ export function dispatchToolRowModel(toolName: string, block: DispatchToolBlock)
 export interface ForgeDispatchToolRowProps {
   /** 调用身份（三相稳定——上游 callId） */
   readonly callId: string
-  /** wire 工具名（keyed 分发值 = 'dispatchTask'） */
+  /** wire 工具名（keyed 分发值 = 官方宿主 snake_case 'dispatch_task'） */
   readonly toolName: string
   /** 当前阶段判别（owner 相位 props——block 同步判别，双轨一致） */
   readonly phase: "preparing" | "start" | "result"

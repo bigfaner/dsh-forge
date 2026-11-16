@@ -68,6 +68,10 @@ function fakeCtx(): { uiConversation: { events: { register: () => () => void } }
 const DECLARED = [TOOL_CALL_TOOLVIEW_SLOT, FORGE_EVENT_NODE_SLOT]
 
 describe('对话面 keyed 遮蔽注册（fix-12 bug ea968ae4）', () => {
+  it('toolview keyed 键 = 官方宿主 snake_case wire 名（fix-12 真机判例——camelCase 永不命中，业务行静默落官方通用行）', () => {
+    expect(DISPATCH_TASK_TOOL_KEY).toBe('dispatch_task')
+  })
+
   it('project 同键占用 priority 0 在场 → 两槽以低 priority 遮蔽落座且分发胜出', () => {
     const slots = officialishSlots(DECLARED, [
       { name: TOOL_CALL_TOOLVIEW_SLOT, key: DISPATCH_TASK_TOOL_KEY, priority: 0 },

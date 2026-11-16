@@ -21,8 +21,11 @@ import { asRecord, type OfficialSeamCtx } from "./official-seams.js";
 
 /** 官方 ui-tool 原子工具行 keyed 槽名（按 wire 工具名分发——未注册名走官方通用行 fallback） */
 export const TOOL_CALL_TOOLVIEW_SLOT = "tool.call.toolview";
-/** dispatchTask 工具行 keyed 键（= task-loop wire 工具名——plugin-forge FORGE_TOOL_NAMES 单源字面量镜像） */
-export const DISPATCH_TASK_TOOL_KEY = "dispatchTask";
+/** dispatchTask 工具行 keyed 键（= 官方宿主 snake_case wire 注册名——ctx.tools.register 落
+ * 座名官方归一 snake_case（1.18-a 判例同源），keyed 分发值 = 会话 tool.call wire 名；
+ * camelCase 字面量 'dispatchTask' 在官方宿主永不命中——业务行静默落官方通用行，
+ * fix-12 真机判例 2026-11-16：通用行呈现「dispatch_task · slug」实证键漂移） */
+export const DISPATCH_TASK_TOOL_KEY = "dispatch_task";
 
 /** 注册面诊断（registered = 实际落座面；e2e/排障锚） */
 export interface ConversationToolFacesDiagnostics {
