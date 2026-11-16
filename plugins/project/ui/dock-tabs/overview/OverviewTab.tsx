@@ -8,7 +8,7 @@
 // 排序/过滤为视图本地态（任务子 tab 三视图 = renderTasksTab 槽——3.6 注入；缺省呈现
 // chips 过滤接口）；文档行点击经 props 回调上抛（dock 开 tab——4.1 接线）。
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { BugCard, BugStatus, DirFactRow, FeatureCard, ProposalStatus, FeatureStatus, ProposalCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, DirFactRow, FeatureCard, FeatureStatus, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import { type RpcClientFactory } from '../rpc-channels.js'
 import { overviewRpcClientFactory } from './overview-client.js'
 import { useDirFactRows } from './dir-rows.js'
@@ -18,12 +18,10 @@ import {
   bugStatusFilterParam,
   clearBugStatusFilter,
   clearPhaseFilter,
-  clearProposalStatusFilter,
   clearStatusFilter,
   initialOverviewFilter,
   nextSort,
   overviewHeadSummary,
-  proposalRowKey,
   searchQueryOf,
   statusFilterParam,
   switchSubtab,
@@ -31,7 +29,6 @@ import {
   toggleOpenRow,
   togglePhaseFilter,
   toggleBugStatusFilter,
-  toggleProposalStatusFilter,
   toggleStatusFilter,
   type OverviewFilterState,
   type OverviewSort,
@@ -40,20 +37,17 @@ import {
 import {
   overviewHeadRows,
   useOverviewLoad,
-  useProposalDocs,
   type OverviewErrorInfo,
   type OverviewHeadBundle,
   type OverviewListData,
 } from './overview-data.js'
 import { docsRootOf, type SessionOpenRequest } from './message-format.js'
-import { proposalStatusCounts } from './proposal-tab/ProposalStatusChips.js'
 import { phaseCounts } from './feature-tab/PhaseChips.js'
 import { OverviewHead } from './ov-head.js'
 import { StickyBar } from './sticky-bar.js'
 import { StatusChips } from './status-chips.js'
 import { BugList, bugChainGroups } from './bug-tab/bug-list.js'
 import { BugDialog } from './bug-tab/index.js'
-import { ProposalsTab } from './proposal-tab.js'
 import { FeaturesTab } from './feature-tab.js'
 import './overview.css'
 
@@ -71,8 +65,6 @@ export interface OverviewTasksContext {
   readonly stats: TaskStats | undefined
   /** 无参 feature 列（feature pill 数据源——不随搜索漂移） */
   readonly features: readonly FeatureCard[]
-  /** 无参提案列（4.6 容器 pill 双轨突击源——taskCount>0 判据；不随搜索漂移） */
-  readonly proposals: readonly ProposalCard[]
   /** @ 锚文档根（帧内以 head 项目行推导填充——docsRootOf(ws, forge)；head 缺席 = 键缺席，
    *  消费方回退 `docs` 缺省锚——消息内 @ 引用按会话工作区根解析需真实文档根前缀） */
   readonly docsRoot?: string
@@ -101,9 +93,6 @@ export interface OverviewFrameProps {
   readonly onSortToggle: () => void
   readonly onToggleStatus: (status: TaskStatus) => void
   readonly onClearStatuses: () => void
-  /** 提案五态 chips toggle/清空（4.6 UF-1——受控归帧侧模型） */
-  readonly onToggleProposalStatus: (status: ProposalStatus) => void
-  readonly onClearProposalStatuses: () => void
   /** feature 阶段 chips toggle/清空（4.6 UF-4——受控归帧侧模型） */
   readonly onTogglePhase: (phase: FeatureStatus) => void
   readonly onClearPhases: () => void
@@ -144,8 +133,6 @@ export function OverviewFrame({
   onSortToggle,
   onToggleStatus,
   onClearStatuses,
-  onToggleProposalStatus,
-  onClearProposalStatuses,
   onTogglePhase,
   onClearPhases,
   onToggleBugStatus,
@@ -173,7 +160,6 @@ export function OverviewFrame({
     statusFilter: statusFilterParam(filter.activeStatuses),
     stats: head?.stats,
     features: head?.features ?? [],
-    proposals: head?.proposals ?? [],
     ...(docsRoot !== undefined ? { docsRoot } : {}),
     onToggleStatus,
     onClearStatuses,
@@ -194,26 +180,6 @@ export function OverviewFrame({
   } else if (list === undefined) {
     content = (
       <ErrorBar className="dswf-ov-error" message={`概览装载失败：${error?.message ?? ''}`} retryClassName="dswf-ov-retry" onRetry={onRetry} anchor="data-dswf-ov-error" retryAnchor="data-dswf-ov-retry" />
-    )
-  } else if (filter.subtab === 'proposals' && list.kind === 'proposals') {
-    content = (
-      <>
-        {listErrorBar(error, onRetry)}
-        <ProposalsTabBodySlot
-          projectId={projectId}
-          head={head}
-          list={list}
-          filter={filter}
-          searchActive={searchActive}
-          docsRoot={docsRoot}
-          onToggleRow={onToggleRow}
-          onToggleProposalStatus={onToggleProposalStatus}
-          onClearProposalStatuses={onClearProposalStatuses}
-          onOpenDoc={openDoc}
-          onStartSession={onStartSession}
-          now={now}
-        />
-      </>
     )
   } else if (filter.subtab === 'bugs' && list.kind === 'bugs') {
     content = (
@@ -237,7 +203,6 @@ export function OverviewFrame({
         {listErrorBar(error, onRetry)}
         <FeaturesTab
           features={list.kind === 'features' ? list.features : []}
-          proposals={list.kind === 'features' ? list.proposals : []}
           docs={list.kind === 'features' ? list.docs : undefined}
           counts={head === undefined ? emptyPhaseCounts() : phaseCounts(head.features)}
           activePhases={filter.activePhases}
@@ -295,66 +260,6 @@ export function OverviewFrame({
       </div>
     </div>
   )
-}
-
-/**
- * 提案子 tab 装载位（帧内拆件——docsMap 按需装载归帧壳 useProposalDocs，对话框开合归
- * ProposalsTab 装载壳）：openRows → 展开 slug 投影（prop:{id} → slug）驱动文档重拉。
- */
-function ProposalsTabBodySlot({
-  projectId,
-  head,
-  list,
-  filter,
-  searchActive,
-  docsRoot,
-  onToggleRow,
-  onToggleProposalStatus,
-  onClearProposalStatuses,
-  onOpenDoc,
-  onStartSession,
-  now,
-}: {
-  readonly projectId: string
-  readonly head: OverviewHeadBundle | undefined
-  readonly list: Extract<OverviewListData, { kind: 'proposals' }>
-  readonly filter: OverviewFilterState
-  readonly searchActive: boolean
-  /** @ 锚文档根（帧内 head 推导；缺席 = ProposalsTab 回退 `docs` 缺省锚） */
-  readonly docsRoot?: string
-  readonly onToggleRow: (key: string) => void
-  readonly onToggleProposalStatus: (status: ProposalStatus) => void
-  readonly onClearProposalStatuses: () => void
-  readonly onOpenDoc: (docRel: string) => void
-  readonly onStartSession?: (request: SessionOpenRequest) => void
-  readonly now?: number
-}): ReactNode {
-  const openSlugs = list.proposals.filter((p) => filter.openRows.has(proposalRowKey(p.proposalId))).map((p) => p.slug)
-  const docsMap = useProposalDocs(projectId, openSlugs)
-  return (
-    <ProposalsTab
-      projectId={projectId}
-      proposals={list.proposals}
-      counts={head === undefined ? emptyProposalCounts() : proposalStatusCounts(head.proposals)}
-      activeStatuses={filter.activeProposalStatuses}
-      onToggleStatus={onToggleProposalStatus}
-      onClearStatuses={onClearProposalStatuses}
-      features={head?.features ?? []}
-      openRows={filter.openRows}
-      onToggleRow={onToggleRow}
-      docsMap={docsMap}
-      onOpenDoc={onOpenDoc}
-      {...(onStartSession !== undefined ? { onStartSession } : {})}
-      {...(docsRoot !== undefined ? { docsRoot } : {})}
-      emptyTitle={searchActive ? `无匹配「${filter.search.trim()}」的提案` : undefined}
-      {...(now !== undefined ? { now } : {})}
-    />
-  )
-}
-
-/** 空提案计数（head 缺席 = chips 全 0 全禁用——首装在途不可点出空态） */
-function emptyProposalCounts(): Record<ProposalStatus, number> {
-  return { draft: 0, 'under-review': 0, accepted: 0, rejected: 0, superseded: 0 }
 }
 
 /** 空阶段计数（同口径） */
@@ -472,7 +377,7 @@ export function OverviewTab({
   now,
 }: OverviewTabProps): ReactNode {
   // 初始态（4.2）：挂载即带任务聚焦（pill 点击 → dock 首开概览 tab）= 任务子 tab 起步；
-  // 否则提案子 tab 缺省（用户定向顺序首位）
+  // 否则 feature 子 tab 缺省（用户定向顺序首位）
   const [filter, setFilter] = useState<OverviewFilterState>(() =>
     focusTasksNonce === undefined ? initialOverviewFilter() : switchSubtab(initialOverviewFilter(), 'tasks'),
   )
@@ -513,12 +418,6 @@ export function OverviewTab({
   const handleClearStatuses = useCallback((): void => {
     setFilter((prev) => clearStatusFilter(prev))
   }, [])
-  const handleToggleProposalStatus = useCallback((status: ProposalStatus): void => {
-    setFilter((prev) => toggleProposalStatusFilter(prev, status))
-  }, [])
-  const handleClearProposalStatuses = useCallback((): void => {
-    setFilter((prev) => clearProposalStatusFilter(prev))
-  }, [])
   const handleTogglePhase = useCallback((phase: FeatureStatus): void => {
     setFilter((prev) => togglePhaseFilter(prev, phase))
   }, [])
@@ -558,8 +457,6 @@ export function OverviewTab({
         onSortToggle={handleSortToggle}
         onToggleStatus={handleToggleStatus}
         onClearStatuses={handleClearStatuses}
-        onToggleProposalStatus={handleToggleProposalStatus}
-        onClearProposalStatuses={handleClearProposalStatuses}
         onTogglePhase={handleTogglePhase}
         onClearPhases={handleClearPhases}
         onToggleBugStatus={handleToggleBugStatus}

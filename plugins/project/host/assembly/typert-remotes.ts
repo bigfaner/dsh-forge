@@ -1,4 +1,4 @@
-// host/assembly · typert-remotes.ts —— forge:* 六族 UI 数据通路（官方 Typert Remote namespace =
+// host/assembly · typert-remotes.ts —— forge:* 五族 UI 数据通路（官方 Typert Remote namespace =
 // 官方 UI 数据第一等通道；官方 ui-settings-* / ForgePanelController 动态插件先例同形态背书）。
 //
 // 形态（typert strict 迁移 1.4 落地——@Remote 装饰器源码形态，U1 消解）：
@@ -62,8 +62,6 @@ import type {
 import type {
   FeatureCard,
   ListFeaturesQuery,
-  ListProposalsQuery,
-  ProposalCard,
 } from "@dsh-forge/contracts";
 import type { DirFactsPort } from "@dsh-forge/lib-api";
 import { forgeDirOfWorkspace } from "../dirs/anchors.js";
@@ -79,13 +77,11 @@ export const SEAL_FOLLOW_INTERVAL_MS = 3_000;
 /** 提案/feature 域服务惰性取法缝（core 域服务注根 ctx——缺席 = typed unavailable 诚实拒绝） */
 export type LazyDomainService = () => unknown;
 
-/** 六族控制器依赖缝（工厂惰性——缺族 = 该 namespace 不注册，不空挂） */
+/** 五族控制器依赖缝（工厂惰性——缺族 = 该 namespace 不注册，不空挂） */
 export interface ForgeTypertDeps {
   readonly projects?: () => ProjectsServicePort | undefined;
   readonly bugs?: () => BugsServicePort | undefined;
   readonly worktrees?: () => WorktreeRpcService | undefined;
-  /** core forgeProposals 服务（listProposals 读面）——缺席宿主 typed unavailable */
-  readonly proposals?: LazyDomainService;
   /** core forgeFeatures 服务（listFeatures 读面）——缺席宿主 typed unavailable */
   readonly features?: LazyDomainService;
   /** workspaceRoot 解析缝（projectId → 工作区根——fix-1 插件自装配：官方宿主工作区面，零 core face），缺席 typed unavailable */
@@ -458,29 +454,7 @@ function sealFollowDelay(signal: AbortSignal | undefined, intervalMs: number): P
   });
 }
 
-// ── forge:{proposals,features} 族（core 域服务读面——惰性现查，缺席 typed unavailable）──
-
-export class ForgeProposalsRemote extends TypertRemoteService {
-  private readonly resolve: LazyDomainService;
-
-  constructor(ctx: Context, deps: ForgeTypertDeps) {
-    super(ctx, "forgeProposalsController", { namespace: "forgeProposals" });
-    this.resolve = deps.proposals ?? (() => undefined);
-  }
-
-  /** 提案清单（新建弹窗 slug 候选数据源） */
-  @Remote
-  async list(query: ListProposalsQuery, signal?: AbortSignal): Promise<ProposalCard[]> {
-    signal?.throwIfAborted();
-    const svc = this.resolve() as
-      | { listProposals?: (q: ListProposalsQuery) => Promise<ProposalCard[]> }
-      | undefined;
-    if (svc === undefined || typeof svc.listProposals !== "function") {
-      throw unavailable("list", "proposals");
-    }
-    return await svc.listProposals(query);
-  }
-}
+// ── forge:features 族（core 域服务读面——惰性现查，缺席 typed unavailable）──
 
 export class ForgeFeaturesRemote extends TypertRemoteService {
   private readonly resolve: LazyDomainService;
@@ -528,13 +502,12 @@ const CONTROLLERS: readonly {
   { namespace: "forgeBugs", absentWhen: (d) => d.bugs?.() === undefined, mount: (s, d) => new ForgeBugsRemote(s, d) },
   { namespace: "forgeFs", mount: (s) => new ForgeFsRemote(s) },
   { namespace: "forgeWorktree", absentWhen: (d) => d.worktrees?.() === undefined, mount: (s, d) => new ForgeWorktreeRemote(s, d) },
-  { namespace: "forgeProposals", injectKey: "forgeProposals", absentWhen: (d) => d.proposals?.() === undefined, mount: (s, d) => new ForgeProposalsRemote(s, d) },
   { namespace: "forgeFeatures", injectKey: "forgeFeatures", absentWhen: (d) => d.features?.() === undefined, mount: (s, d) => new ForgeFeaturesRemote(s, d) },
   { namespace: "forgeDirs", absentWhen: (d) => d.dirsWorkspaceRoot?.() === undefined && d.dirFacts?.() === undefined, mount: (s, d) => new ForgeDirsRemote(s, d) },
 ];
 
 /**
- * 六族 Typert Remote 控制器注册（根 ctx plugin——fiber 生命周期归宿主管辖，dispose
+ * 五族 Typert Remote 控制器注册（根 ctx plugin——fiber 生命周期归宿主管辖，dispose
  * 级联拆卸；单族注册抛错只降本族 fail-soft 不阻载，诊断留痕不静默）。
  */
 export function registerForgeTypertRemotes(

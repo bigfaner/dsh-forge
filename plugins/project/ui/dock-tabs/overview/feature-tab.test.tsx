@@ -6,7 +6,7 @@
 // 组件测试——本文件只断言接线位置。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { FeatureCard, FeatureDocumentRow, FeatureStatus, ProposalCard, ProposalStatus, TaskStatus } from '@dsh-forge/contracts'
+import type { FeatureCard, FeatureDocumentRow, FeatureStatus, TaskStatus } from '@dsh-forge/contracts'
 import { FeaturesTab, featurePrefillDocs, featurePrefillRequest, featureTaskTotal } from './feature-tab.js'
 import { docsRootOf } from './message-format.js'
 
@@ -37,23 +37,9 @@ function feature(slug: string, byStatus: Partial<Record<TaskStatus, number>> = {
   }
 }
 
-function proposalCard(slug: string, status: ProposalStatus = 'accepted'): ProposalCard {
-  return {
-    proposalId: `pr-${slug}`,
-    slug,
-    title: `提案 ${slug}`,
-    proposalStatus: status,
-    relPath: `docs/proposals/${slug}/proposal.md`,
-    taskCount: 0,
-    createdAt: CREATED,
-    updatedAt: CREATED,
-  }
-}
-
 const M2_FEATURE = feature('m2-pipeline', { pending: 2, completed: 3 })
 const BRAND_FEATURE = feature('brand-refresh', { blocked: 1 })
 const FEATURES = [M2_FEATURE, BRAND_FEATURE]
-const PROPOSALS = [proposalCard('m2-pipeline')]
 
 const DOCS: readonly FeatureDocumentRow[] = [
   { featureId: 'fid-m2-pipeline', docKind: 'prd-spec', relPath: 'docs/features/m2-pipeline/prd/prd-spec.md', createdAt: CREATED, updatedAt: CREATED },
@@ -68,7 +54,6 @@ const base = {
   activePhases: new Set<FeatureStatus>(),
   onTogglePhase: () => {},
   onClearPhases: () => {},
-  proposals: PROPOSALS,
   docs: DOCS,
   openRows: new Set<string>(),
   onToggleRow: () => {},
@@ -109,7 +94,7 @@ describe('FeaturesTab · 阶段 chips 插入点与父行行头（AC2/AC6）', ()
     const markup = renderToStaticMarkup(<FeaturesTab {...base} openRows={new Set(['feat:m2-pipeline'])} />)
     expect(markup).toContain('data-dswf-ov-fmeta="m2-pipeline"')
     expect(markup).toContain('dswf-ov-fmeta-grid')
-    expect(markup).toContain('成链自 m2-pipeline（已接受）') // MetaGrid 谱系（4.3）
+    expect(markup).toContain('成链自 m2-pipeline') // MetaGrid 谱系（4.3）
     expect(markup).toContain('data-dswf-ov-dgroups="m2-pipeline"') // DocGroupList（4.3）
     expect(markup).toContain('文档（2 篇）')
     expect(markup).toContain('需求文档（1）')

@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import type { FeatureCard, ProposalCard, TaskStatus } from '@dsh-forge/contracts'
+import type { FeatureCard, TaskStatus } from '@dsh-forge/contracts'
 import { initialOverviewFilter, type OverviewFilterState } from './overview-model.js'
 import type { OverviewHeadBundle, OverviewListData } from './overview-data.js'
 import { OverviewBugDialogMount, OverviewFrame, OverviewTab, openBugCardOf } from './OverviewTab.js'
@@ -31,18 +31,6 @@ const HEAD: OverviewHeadBundle = {
       docCount: 4,
     },
   ],
-  proposals: [
-    {
-      proposalId: 'pr-1',
-      slug: 'm2-pipeline',
-      title: '提案 m2-pipeline',
-      proposalStatus: 'under-review',
-      relPath: 'docs/proposals/m2-pipeline/proposal.md',
-      taskCount: 0,
-      createdAt: CREATED,
-      updatedAt: CREATED,
-    },
-  ],
   stats: {
     total: 5,
     byStatus: { pending: 2, in_progress: 0, completed: 3, blocked: 0, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 },
@@ -50,24 +38,9 @@ const HEAD: OverviewHeadBundle = {
   },
 }
 
-const PROPOSALS: readonly ProposalCard[] = [
-  {
-    proposalId: 'pr-1',
-    slug: 'm2-pipeline',
-    title: '提案 m2-pipeline',
-    proposalStatus: 'under-review',
-    relPath: 'docs/proposals/m2-pipeline/proposal.md',
-    taskCount: 0,
-    createdAt: CREATED,
-    updatedAt: CREATED,
-  },
-]
-
-const PROPOSALS_LIST: OverviewListData = { kind: 'proposals', proposals: PROPOSALS }
 const FEATURES_LIST: OverviewListData = {
   kind: 'features',
   features: HEAD.features,
-  proposals: PROPOSALS,
   docs: [
     {
       featureId: 'fid-1',
@@ -85,8 +58,6 @@ const handlers = {
   onSortToggle: () => {},
   onToggleStatus: () => {},
   onClearStatuses: () => {},
-  onToggleProposalStatus: () => {},
-  onClearProposalStatuses: () => {},
   onTogglePhase: () => {},
   onClearPhases: () => {},
   onToggleBugStatus: () => {},
@@ -96,9 +67,9 @@ const handlers = {
   onRetry: () => {},
 }
 
-// 帧渲染分派路径测试缺省腿 = 提案子 tab（门关期仍保持可渲染——恢复接入判据位；
+// 帧渲染分派路径测试缺省腿 = feature 子 tab（门关期仍保持可渲染——恢复接入判据位；
 // 用户裁定 2026-11-14 只退消费入口，渲染面不拆）
-const DEFAULT_FRAME_FILTER: OverviewFilterState = { ...initialOverviewFilter(), subtab: 'proposals' }
+const DEFAULT_FRAME_FILTER: OverviewFilterState = { ...initialOverviewFilter(), subtab: 'features' }
 
 const frame = (over: {
   filter?: OverviewFilterState
@@ -152,21 +123,7 @@ describe('OverviewFrame 面板骨架（AC1/AC2）', () => {
   })
 })
 
-describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 三子 tab 接线）', () => {
-  it('proposals 子 tab（默认）：五态 chips（列表之上）+ 提案父行 + 展开元数据/文档区（useProposalDocs 按需装载位）', () => {
-    const filter = { ...DEFAULT_FRAME_FILTER, openRows: new Set(['prop:pr-1']) }
-    const markup = frame({ list: PROPOSALS_LIST, filter })
-    expect(markup).toContain('data-dswf-ov-proposals')
-    // 五态 chips 插入点（AC6）：ov-sticky 之下、列表之上
-    const stickyAt = markup.indexOf('data-dswf-ov-sticky=""')
-    const chipsAt = markup.indexOf('data-dswf-ov-pschips=""')
-    const listAt = markup.indexOf('data-dswf-ov-proposals=""')
-    expect(chipsAt).toBeGreaterThan(stickyAt)
-    expect(listAt).toBeGreaterThan(chipsAt)
-    expect(markup).toContain('data-dswf-ov-meta="prop:pr-1"') // 展开元数据（两列网格）
-    expect(markup).toContain('文档（0 篇）') // 文档区标题在场（docsMap 按需装载——effect 归 e2e）
-  })
-
+describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 子 tab 接线）', () => {
   it('features 子 tab：阶段 chips（列表之上）+ feature 父行 + 展开分层文档（list.docs 接线）', () => {
     const filter = { ...initialOverviewFilter(), subtab: 'features' as const, openRows: new Set(['feat:m2-pipeline']) }
     const markup = frame({ filter, list: FEATURES_LIST })
@@ -179,9 +136,9 @@ describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 三子 tab 接线）', 
 
   it('搜索在场 + 空结果 = 无匹配空态（服务端过滤——空标题由帧侧注入）', () => {
     const filter = { ...DEFAULT_FRAME_FILTER, search: '不存在' }
-    const empty: OverviewListData = { kind: 'proposals', proposals: [] }
+    const empty: OverviewListData = { kind: 'features', features: [], docs: [] }
     const markup = frame({ filter, list: empty })
-    expect(markup).toContain('无匹配「不存在」的提案')
+    expect(markup).toContain('无匹配「不存在」的 feature')
   })
 
   it('列路在途（busy）= aria-busy 内容区标注（旧行保持）', () => {
@@ -189,7 +146,7 @@ describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 三子 tab 接线）', 
       <OverviewFrame
         projectId="p-1"
         head={HEAD}
-        list={PROPOSALS_LIST}
+        list={FEATURES_LIST}
         phase="ready"
         busy={true}
         error={undefined}
@@ -200,7 +157,7 @@ describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 三子 tab 接线）', 
       />,
     )
     expect(markup).toContain('aria-busy="true"')
-    expect(markup).toContain('data-dswf-ov-proposals') // 旧内容不掏空
+    expect(markup).toContain('data-dswf-ov-features') // 旧内容不掏空
   })
 })
 
@@ -217,7 +174,7 @@ describe('OverviewFrame 任务子 tab（AC5——chips 过滤接口）', () => {
     expect(suspendedChip).toContain('disabled')
   })
 
-  it('renderTasksTab 槽注入（3.6 消费）：ctx 携带 search/sort/statusFilter/stats/features/proposals（4.6 容器双轨源）+ docsRoot（head 项目行推导）', () => {
+  it('renderTasksTab 槽注入（3.6 消费）：ctx 携带 search/sort/statusFilter/stats/features + docsRoot（head 项目行推导）', () => {
     const filter: OverviewFilterState = {
       ...initialOverviewFilter(),
       subtab: 'tasks',
@@ -234,19 +191,18 @@ describe('OverviewFrame 任务子 tab（AC5——chips 过滤接口）', () => {
           statusFilter: readonly TaskStatus[]
           stats: { byStatus: Record<string, number> }
           features: readonly FeatureCard[]
-          proposals: readonly { slug: string }[]
           projectId: string
           docsRoot?: string
         }
         return (
           <div data-dswf-test-slot="">
-            {`${c.projectId}|${c.search}|${c.sort}|${c.statusFilter.join(',')}|${c.stats.byStatus.completed}|${c.features[0]?.slug ?? ''}|${c.proposals[0]?.slug ?? ''}|${c.docsRoot ?? ''}`}
+            {`${c.projectId}|${c.search}|${c.sort}|${c.statusFilter.join(',')}|${c.stats.byStatus.completed}|${c.features[0]?.slug ?? ''}|${c.docsRoot ?? ''}`}
           </div>
         )
       },
     })
     expect(markup).toContain('data-dswf-test-slot')
-    expect(markup).toContain('p-1|网关|created|blocked|3|m2-pipeline|m2-pipeline|.forge/docs')
+    expect(markup).toContain('p-1|网关|created|blocked|3|m2-pipeline|.forge/docs')
     expect(markup).not.toContain('data-dswf-ov-stchips') // 槽在场 = chips 由 3.6 组合（接口同源）
   })
 
@@ -344,9 +300,9 @@ describe('OverviewFrame 错误三态', () => {
   })
 
   it('error-bar（列路失败旧行在场）= 错误条 + 旧列表同现', () => {
-    const markup = frame({ list: PROPOSALS_LIST, error: { message: '列表失败', uiState: 'error-bar' } })
+    const markup = frame({ list: FEATURES_LIST, error: { message: '列表失败', uiState: 'error-bar' } })
     expect(markup).toContain('列表装载失败')
-    expect(markup).toContain('data-dswf-ov-proposals')
+    expect(markup).toContain('data-dswf-ov-features')
   })
 })
 
@@ -387,7 +343,7 @@ describe('BugDialog 挂载接线（fix-bug 收尾——onOpenBug → 开合 → 
     expect(openBugCardOf(BUGS_LIST, null)).toBeUndefined()
     expect(openBugCardOf(BUGS_LIST, 'miss')).toBeUndefined()
     expect(openBugCardOf(undefined, 'b1')).toBeUndefined()
-    expect(openBugCardOf(PROPOSALS_LIST, 'b1')).toBeUndefined()
+    expect(openBugCardOf(FEATURES_LIST, 'b1')).toBeUndefined()
   })
 
   it('选中即开：OverviewBugDialogMount 渲染 BugDialog（bdialog 锚 + bugId 标注）', () => {

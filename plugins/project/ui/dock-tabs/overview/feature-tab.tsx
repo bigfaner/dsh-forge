@@ -12,7 +12,6 @@ import {
   type FeatureCard,
   type FeatureDocumentRow,
   type FeatureStatus,
-  type ProposalCard,
   type TaskStatus,
 } from '@dsh-forge/contracts'
 import { Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -36,8 +35,6 @@ export interface FeatureTabProps {
   readonly onTogglePhase: (phase: FeatureStatus) => void
   /** 清过滤（缺席 = 无清入口面） */
   readonly onClearPhases?: () => void
-  /** 无参提案列（来源提案标题/状态查找——不随搜索漂移） */
-  readonly proposals: readonly ProposalCard[]
   /** feature 文档行（features.listDocs 列举读面——列路装载注入；featureId 归属过滤在本层） */
   readonly docs?: readonly FeatureDocumentRow[]
   /** 父行展开键集（受控——帧侧 openRows） */
@@ -101,7 +98,6 @@ export function FeaturesTab({
   activePhases,
   onTogglePhase,
   onClearPhases,
-  proposals,
   docs,
   openRows,
   onToggleRow,
@@ -175,7 +171,7 @@ export function FeaturesTab({
               </div>
               {open ? (
                 <div className="dswf-ov-meta" data-dswf-ov-meta={key}>
-                  <MetaGrid feature={feature} proposals={proposals} />
+                  <MetaGrid feature={feature} />
                   <DocGroupList featureSlug={feature.slug} docs={featureDocs} onOpenDoc={onOpenDoc} />
                 </div>
               ) : null}

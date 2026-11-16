@@ -1,6 +1,6 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // views/overview barrel（定位：业务——UF-1 概览 dock tab 框架：ov-head/sticky 三子 tab/
-// 搜索排序/七态 chips/提案·feature 子 tab；任务三视图（3.6 task-tab/）经 renderTasksTab
+// 搜索排序/七态 chips/feature 子 tab；任务三视图（3.6 task-tab/）经 renderTasksTab
 // 槽接入；任务详情抽屉（3.7 drawer/）。边界：禁 import ../session/ ../knowledge/（依赖
 // 铁律③ 同级业务互禁——跨视图经 zones/ 槽位与 rpc/ 解耦）。
 export * from './overview-model.js'
@@ -9,7 +9,6 @@ export * from './ov-head.js'
 export * from './sticky-bar.js'
 export * from './status-chips.js'
 export * from './bug-tab/index.js'
-export * from './proposal-tab.js'
 export * from './feature-tab.js'
 export * from './OverviewTab.js'
 export * from './task-tab/task-tab-model.js'

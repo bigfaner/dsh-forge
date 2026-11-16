@@ -14,7 +14,6 @@ import {
   KNOWLEDGE_CHANNELS,
   PROJECTS_CHANNELS,
   PROJECTS_M2_CHANNELS,
-  PROPOSALS_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
   WORKTREE_CHANNELS,
@@ -43,15 +42,10 @@ import {
   type ListEntriesQuery,
   type ListFeatureDocsQuery,
   type ListFeaturesQuery,
-  type ListProposalDocsQuery,
-  type ListProposalsQuery,
   type ListTasksQuery,
   type Project,
   type ProjectPatch,
   type ProjectSummary,
-  type ProposalCard,
-  type ProposalDocRow,
-  type ProposalRow,
   type QueryTaskInput,
   type QueryTaskResult,
   type ReadDocRequest,
@@ -68,7 +62,6 @@ import {
   type SessionRecallQuery,
   type SessionTaskLinkCard,
   type SetForgeSettingsInput,
-  type SetProposalModeInput,
   type TaskCard,
   type TaskDetail,
   type TaskDetailQuery,
@@ -78,8 +71,6 @@ import {
   type TaskStats,
   type TaskStatsQuery,
   type TransitionFeatureInput,
-  type TransitionProposalInput,
-  type TransitionProposalResult,
   type TransitionTaskInput,
   type UpdateProjectRequest,
   type UpsertFeatureDocInput,
@@ -366,21 +357,6 @@ export interface ForgeFeaturesRpc {
 }
 
 /**
- * forge:proposals/* 面方法集（M3 Interface 4 扩池四通道；createProposal 恒 tool 专属不上 RPC）。
- * transition = 人工裁决（M3 双面 drift 修订——agent 面保留）；setMode = 律三唯一正门
- * （agent tool 面无模式改写动词——SC6 断言面）；listDocs = 提案文档区只读扫描。
- */
-export interface ForgeProposalsRpc {
-  list(q: ListProposalsQuery): Promise<ProposalCard[]>
-  /** 裁决转移（toStatus=accepted ∧ 远征 → 成链分叉内聚——返回 chained 水化） */
-  transition(input: TransitionProposalInput): Promise<TransitionProposalResult>
-  /** 模式改写唯一正门（单事务只写 proposals.mode——tasks.mode 快照永不触碰） */
-  setMode(input: SetProposalModeInput): Promise<ProposalRow>
-  /** 提案文档区读（docs/proposals/<slug>/ 全部 .md 目录扫描——零状态零写径） */
-  listDocs(q: ListProposalDocsQuery): Promise<ProposalDocRow[]>
-}
-
-/**
  * forge:bugs/* 面方法集（fix-bug：list 列表读面 + commitFiles/fileDiff 变更内容读面——
  * fixed 证据的文件清单与单文件 diff；recordBug/resolveBug 写动词 = agent tool 专属，恒不上 RPC）。
  */
@@ -431,7 +407,6 @@ export interface ForgeRpcClient {
   readonly knowledge: ForgeKnowledgeRpc
   readonly tasks: ForgeTasksRpc
   readonly features: ForgeFeaturesRpc
-  readonly proposals: ForgeProposalsRpc
   readonly bugs: ForgeBugsRpc
   readonly docs: ForgeDocsRpc
   readonly settings: ForgeSettingsRpc
@@ -488,12 +463,6 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       upsertDoc: (input) => invokeRpc<FeatureDocumentRow>(transport, FEATURES_CHANNELS.upsertDoc, input),
       list: (q) => invokeRpc<FeatureCard[]>(transport, FEATURES_CHANNELS.list, q),
       listDocs: (q) => invokeRpc<FeatureDocumentRow[]>(transport, FEATURES_CHANNELS.listDocs, q),
-    },
-    proposals: {
-      list: (q) => invokeRpc<ProposalCard[]>(transport, PROPOSALS_CHANNELS.list, q),
-      transition: (input) => invokeRpc<TransitionProposalResult>(transport, PROPOSALS_CHANNELS.transition, input),
-      setMode: (input) => invokeRpc<ProposalRow>(transport, PROPOSALS_CHANNELS.setMode, input),
-      listDocs: (q) => invokeRpc<ProposalDocRow[]>(transport, PROPOSALS_CHANNELS.listDocs, q),
     },
     bugs: {
       list: (q) => invokeRpc<BugCard[]>(transport, BUGS_CHANNELS.list, q),

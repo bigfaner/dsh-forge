@@ -53,7 +53,7 @@ export interface ProposalNotFoundData {
   readonly proposalId: string
 }
 
-/** proposalId 未命中（404）：transitionProposal 定位 / registerFeature 谱系 FK 预检 */
+/** proposalId 未命中（404）：提案域转移定位 / registerFeature 谱系 FK 预检 */
 export class ProposalNotFoundError extends Error {
   readonly code = 'ERR_PROPOSAL_NOT_FOUND' as const
   readonly data: ProposalNotFoundData

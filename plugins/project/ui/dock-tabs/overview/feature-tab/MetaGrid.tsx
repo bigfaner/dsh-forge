@@ -7,7 +7,7 @@
 // 「标识」原 slug 更名（v18——见名知义）；阶段 = PHASE_PHRASES 短形词汇单源。
 // 组件半身（Build）：数据经 props 注入、tab 接线归 4.6。
 import type { ReactNode } from 'react'
-import { PROPOSAL_STATUS_LABELS, type FeatureCard, type ProposalCard } from '@dsh-forge/contracts'
+import { type FeatureCard } from '@dsh-forge/contracts'
 import { ModeChip } from '../../../components.js'
 import { PHASE_PHRASES } from '../message-format.js'
 import './feature-tab.css'
@@ -16,22 +16,17 @@ import './feature-tab.css'
 export const FEATURE_FIXED_MODE = 'expedition' as const
 
 /**
- * 谱系（proposal_id 关联链水化反查）：proposalSlug 在场且提案行可查 =
- * 「成链自 slug（状态中文）」；在场不可查（提案行缺席——悬空容忍）= 无括注；
+ * 谱系（proposal_id 关联链）：proposalSlug 在场 = 「成链自 <slug>」；
  * 缺席（无提案来源）= —。
  */
-export function featureLineage(feature: FeatureCard, proposals: readonly ProposalCard[]): string {
+export function featureLineage(feature: FeatureCard): string {
   if (feature.proposalSlug === undefined) return '—'
-  const source = proposals.find((p) => p.slug === feature.proposalSlug)
-  if (source === undefined) return `成链自 ${feature.proposalSlug}`
-  return `成链自 ${feature.proposalSlug}（${PROPOSAL_STATUS_LABELS[source.proposalStatus].zh}）`
+  return `成链自 ${feature.proposalSlug}`
 }
 
 export interface MetaGridProps {
   /** feature 行（标识/阶段/摘要——FeatureCard 数据面） */
   readonly feature: FeatureCard
-  /** 无参提案列（谱系反查源——头路装载，不随搜索漂移） */
-  readonly proposals: readonly ProposalCard[]
 }
 
 /** 元数据键值行（两列网格格元 + 摘要独行共用行语言） */
@@ -45,7 +40,7 @@ function MetaRow({ k, children, full }: { k: string; children: ReactNode; full?:
 }
 
 /** 展开元数据块（AC2：摘要独行 + 两列网格 + 只读远征 chip） */
-export function MetaGrid({ feature, proposals }: MetaGridProps): ReactNode {
+export function MetaGrid({ feature }: MetaGridProps): ReactNode {
   return (
     <div className="dswf-ov-fmeta" data-dswf-ov-fmeta={feature.slug}>
       <MetaRow k="摘要" full>{feature.summary ?? '—'}</MetaRow>
@@ -55,7 +50,7 @@ export function MetaGrid({ feature, proposals }: MetaGridProps): ReactNode {
         <MetaRow k="模式">
           <ModeChip mode={FEATURE_FIXED_MODE} />
         </MetaRow>
-        <MetaRow k="谱系">{featureLineage(feature, proposals)}</MetaRow>
+        <MetaRow k="谱系">{featureLineage(feature)}</MetaRow>
       </div>
     </div>
   )

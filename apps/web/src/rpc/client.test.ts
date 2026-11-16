@@ -2,11 +2,10 @@
 // 2.8 增 fs 面（forge:fs/listDir）：通道常量唯一源 + 缺省主目录请求负载形状。
 // 3.5 增 knowledge 面（forge:knowledge/* 五通道）：typed 结果、负载形状、双门分工（AC4）、
 // 知识域三码 typed error 反序列化（AC2 renderer 侧半边——与 host 实层信封互为往返自证）。
-// 3.1 增 M2 四族（forge:{tasks,features,proposals,docs}/*）+ projects 派生行扩族：
+// 3.1 增 M2 三族（forge:{tasks,features,docs}/*）+ projects 派生行扩族：
 // 通道常量本尊、负载形状、SC7 面分治（写动词恒不在 client 面）。
-// M3 4.1 扩池（AC1）：forge:proposals/{transition,setMode,listDocs} + forge:settings/{get,set}——
-// 通道常量本尊、负载形状、typed 返回（transition 含成链水化）；SC7 收口面随 M3 drift 修订
-// （transitionProposal 双面上 RPC；恒不在面 = addTask/submitTask/createProposal）。
+// M3 4.1 扩池（AC1）：forge:settings/{get,set}——通道常量本尊、负载形状、typed 返回；
+// SC7 收口面随 M3 drift 修订（恒不在面 = addTask/submitTask）。
 import { describe, expect, it, vi } from 'vitest'
 import {
   DOCS_CHANNELS,
@@ -15,7 +14,6 @@ import {
   KNOWLEDGE_CHANNELS,
   PROJECTS_CHANNELS,
   PROJECTS_M2_CHANNELS,
-  PROPOSALS_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
   type DirListing,
@@ -298,7 +296,7 @@ describe('3.1 M2 四族 renderer 侧（typed 结果 + 通道常量本尊 + 负�
     expect(t.calls[1]?.payload).toEqual({ projectId: 'p-1', taskRef: { slug: 'demo', localId: '2.1' } })
   })
 
-  it('features 五法 + proposals list + docs read/openExternal：通道常量本尊 + typed 返回', async () => {
+  it('features 五法 + docs read/openExternal：通道常量本尊 + typed 返回', async () => {
     const t = fakeTransport()
     const featureRow = {
       featureId: 'f-1', slug: 'demo', title: '演示', featureStatus: 'discovery',
@@ -313,9 +311,6 @@ describe('3.1 M2 四族 renderer 侧（typed 结果 + 通道常量本尊 + 负�
       if (channel === FEATURES_CHANNELS.listDocs) {
         return { ok: true, data: [{ featureId: 'f-1', docKind: 'tech-design', relPath: 'docs/features/demo/design/tech-design.md', createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z' }] }
       }
-      if (channel === PROPOSALS_CHANNELS.list) {
-        return { ok: true, data: [{ proposalId: 'pr-1', slug: 'p', title: '提案', proposalStatus: 'open', createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z' }] }
-      }
       if (channel === DOCS_CHANNELS.read) return { ok: true, data: { content: '# T', canonicalPath: 'C:/x.md', dangling: false } }
       return { ok: true, data: undefined } // openExternal = void
     })
@@ -325,58 +320,23 @@ describe('3.1 M2 四族 renderer 侧（typed 结果 + 通道常量本尊 + 负�
     await client.features.upsertDoc({ projectId: 'p-1', featureSlug: 'demo', docKind: 'prd-spec', relPath: 'features/demo/prd-spec.md' })
     await client.features.list({ projectId: 'p-1' })
     await expect(client.features.listDocs({ projectId: 'p-1' })).resolves.toHaveLength(1)
-    await expect(client.proposals.list({ projectId: 'p-1' })).resolves.toHaveLength(1)
     await expect(client.docs.read({ projectId: 'p-1', docRel: 'x.md' })).resolves.toMatchObject({ dangling: false })
     await expect(client.docs.openExternal({ projectId: 'p-1', docRel: 'x.md' })).resolves.toBeUndefined()
     expect(t.calls.map((c) => c.channel)).toEqual([
       ...Object.values(FEATURES_CHANNELS),
-      PROPOSALS_CHANNELS.list,
       DOCS_CHANNELS.read,
       DOCS_CHANNELS.openExternal,
     ])
   })
 
-  it('SC7 面分治（M3 4.1 drift 修订）：恒不在 client 面的写动词 = add/claim/submit/createProposal（transitionProposal 已双面上 RPC）', () => {
+  it('SC7 面分治：恒不在 client 面的写动词 = add/claim/submit（proposals 面已退役，零方法）', () => {
     const client = createForgeRpcClient(fakeTransport().transport)
     expect(Object.keys(client.tasks).sort()).toEqual([
       'detail', 'graph', 'list', 'query', 'sessionLinks', 'stats', 'transition', 'validateFeatureTasks',
     ])
     expect('add' in client.tasks && 'claim' in client.tasks && 'submit' in client.tasks).toBe(false)
-    // M3 Interface 4：transitionProposal tool 专属 → 双面（UF-1 人工裁决）；setMode = 律三唯一正门
-    expect(Object.keys(client.proposals).sort()).toEqual(['list', 'listDocs', 'setMode', 'transition'])
-    expect('createProposal' in client.proposals).toBe(false)
+    expect('proposals' in client).toBe(false)
     expect(Object.keys(client.settings).sort()).toEqual(['get', 'set'])
-  })
-
-  it('M3 proposals 三新法：通道名 = PROPOSALS_CHANNELS 常量值本尊；负载原样；typed 返回（transition 含 chained 水化）', async () => {
-    const t = fakeTransport()
-    const proposalRow = {
-      proposalId: 'pr-1', slug: 'm3', title: 'M3 自举', proposalStatus: 'under-review' as const,
-      mode: 'expedition' as const, createdAt: '2026-10-08T00:00:00.000Z', updatedAt: '2026-10-08T00:00:00.000Z',
-    }
-    t.respondWith((channel) => {
-      if (channel === PROPOSALS_CHANNELS.transition) {
-        return { ok: true, data: { ...proposalRow, proposalStatus: 'accepted', decidedAt: '2026-10-08T01:00:00.000Z', chained: { featureId: 'f-9', slug: 'm3', title: 'M3 自举', featureStatus: 'prd', createdAt: '2026-10-08T01:00:00.000Z', updatedAt: '2026-10-08T01:00:00.000Z' } } }
-      }
-      if (channel === PROPOSALS_CHANNELS.setMode) return { ok: true, data: { ...proposalRow, mode: 'blitz' } }
-      return { ok: true, data: [{ fileName: 'proposal.md', relPath: 'docs/proposals/m3/proposal.md', title: 'M3 自举' }] }
-    })
-    const client = createForgeRpcClient(t.transport)
-    await expect(client.proposals.transition({ projectId: 'p-1', proposalId: 'pr-1', toStatus: 'accepted' })).resolves.toMatchObject({
-      proposalId: 'pr-1',
-      chained: { featureId: 'f-9' },
-    })
-    await expect(client.proposals.setMode({ projectId: 'p-1', proposalId: 'pr-1', mode: 'blitz', reason: '直挂' })).resolves.toMatchObject({ mode: 'blitz' })
-    await expect(client.proposals.listDocs({ projectId: 'p-1', slug: 'm3' })).resolves.toEqual([
-      { fileName: 'proposal.md', relPath: 'docs/proposals/m3/proposal.md', title: 'M3 自举' },
-    ])
-    expect(t.calls.map((c) => c.channel)).toEqual([
-      PROPOSALS_CHANNELS.transition,
-      PROPOSALS_CHANNELS.setMode,
-      PROPOSALS_CHANNELS.listDocs,
-    ])
-    expect(t.calls[1]?.payload).toEqual({ projectId: 'p-1', proposalId: 'pr-1', mode: 'blitz', reason: '直挂' })
-    expect(t.calls[2]?.payload).toEqual({ projectId: 'p-1', slug: 'm3' })
   })
 
   it('M3 settings 两法：通道名 = SETTINGS_CHANNELS 常量值本尊；get 无负载；set 负载原样 + void；typed error 信封', async () => {

@@ -189,7 +189,7 @@ export function DocsFrame({ projectId, docRel, phase, doc, busy, error, onReread
 export interface DocsTabProps {
   /** 当前项目（4.1 ShellHost 锚定注入——knowledge-anchor 裁决同源） */
   readonly projectId: string
-  /** 文档相对键（feature_documents ∪ proposals 的 rel_path；tab 去重键——4.1 dock 注册面） */
+  /** 文档相对键（feature_documents 的 rel_path；tab 去重键——4.1 dock 注册面） */
   readonly docRel: string
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory

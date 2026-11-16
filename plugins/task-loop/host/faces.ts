@@ -2,7 +2,7 @@
 // 与 core/index.ts 的 CoreContextFace 同一纪律：插件不依赖 dsh 运行时包
 // （@deepseek-ai/* / cordis），仅以结构化子面消费官方面——真实现
 // （ToolRuntime / SystemPrompt / 真 Context）结构兼容，运行期由 profile 装配注入。
-// 对 core 的唯一依赖 = forgeTasks / forgeProposals 两服务接口类型（contracts 单一来源），
+// 对 core 的唯一依赖 = forgeTasks 服务接口类型（contracts 单一来源），
 // 零实现级 import（可独立发版前提）。参数 schema 面恒取官方 enforced subset 标量形
 // （string/integer/number/boolean + 数组）——嵌套负载（gate/include/vars）在 tool 面
 // 平铺为显式参数（Interface 8 snake_case + 任务定位两显式参口径的延伸）。
@@ -253,8 +253,8 @@ export function adaptDispatchJobs(registry: DispatchJobsRegistryFace): DispatchJ
   }
 }
 
-/** 插件对宿主 ctx 的结构化消费面（真 Context 结构兼容；容器语义 slug 化——提案域/bugs 域
- *  服务面随退役批移出本包：forgeProposals→spec、forgeBugs→project、forgeProjects→project） */
+/** 插件对宿主 ctx 的结构化消费面（真 Context 结构兼容；容器语义 slug 化——bugs 域
+ *  服务面随退役批移出本包：forgeBugs→project、forgeProjects→project） */
 export interface ForgeContextFace {
   /** 任务域服务（本插件域内 provide——host/domain/tasks/service.ts；运行期 Cordis inject 具名契约） */
   forgeTasks: TasksService

@@ -11,7 +11,7 @@ import {
   type ForgeRemoteFace,
 } from './rpc.js'
 
-const NAMESPACES = ['forgeProjects', 'forgeFs', 'forgeBugs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures'] as const
+const NAMESPACES = ['forgeProjects', 'forgeFs', 'forgeBugs', 'forgeWorktree', 'forgeFeatures'] as const
 
 /** namespace 代理（方法 = `ns.method` 表驱动——getter 函数属性同型） */
 function makeNamespace(ns: string, table: Record<string, (args: unknown[]) => unknown>): Record<string, unknown> {

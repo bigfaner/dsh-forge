@@ -287,13 +287,12 @@ export function subscribeTasksChanged(listener: TasksChangedListener): () => voi
 // 形状非法 fail-loud（不静默捏造结果）。3.5 增 knowledge 面（forge:knowledge/* 五通道——
 // 只增面不改建制；search/readAbstract 不在面，agent 面唯一门 = knowledge 插件 tool，双门分工）。
 // 2.8 增 fs 面（forge:fs/listDir——文件浏览器数据源；三处一体：contracts → 本文件 → host ipc）。
-// 3.1 增 M2 四族（forge:{tasks,features,proposals,docs}/* + projects 派生行扩族——Interface 7；
+// 3.1 增 M2 四族（forge:{tasks,features,docs}/* + projects 派生行扩族——Interface 7；
 // 薄 Controller：仅参数映射与路由，禁业务逻辑。
 // M3 4.1 扩池（Interface 4 三处一体的 web 侧落点；contracts/host 已先行）：forge:settings/{get,set}
-// 新族（Forge设置 读写——forgeSettings 服务单门）+ forge:proposals/{transition,setMode,listDocs}
-// （transitionProposal 从 tool 专属 → 双面——M2 纪律 drift 修订；setMode = 律三唯一正门·UI 专属；
-// listDocs = 提案文档区目录扫描读）；恒不在面的写动词收窄为 addTask/submitTask/createProposal
-// （claimTask 退役并入 dispatchTask——仅存 core 服务 API）。
+// 新族（Forge设置 读写——forgeSettings 服务单门）；恒不在面的写动词收窄为 addTask/submitTask
+// （claimTask 退役并入 dispatchTask——仅存 core 服务 API）。提案域通道族已随 proposal 域
+// 整域下线批整体退役（plugin-spec/1.11）。
 import {
   BUGS_CHANNELS,
   DOCS_CHANNELS,
@@ -302,7 +301,6 @@ import {
   KNOWLEDGE_CHANNELS,
   PROJECTS_CHANNELS,
   PROJECTS_M2_CHANNELS,
-  PROPOSALS_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
   WORKTREE_CHANNELS,
@@ -349,15 +347,10 @@ import {
   type ListFeatureDocsQuery,
   type ListEntriesQuery,
   type ListFeaturesQuery,
-  type ListProposalDocsQuery,
-  type ListProposalsQuery,
   type ListTasksQuery,
   type Project,
   type ProjectPatch,
   type ProjectSummary,
-  type ProposalCard,
-  type ProposalDocRow,
-  type ProposalRow,
   type QueryTaskInput,
   type QueryTaskResult,
   type ReadDocRequest,
@@ -373,7 +366,6 @@ import {
   type SessionRecallQuery,
   type SessionTaskLinkCard,
   type SetForgeSettingsInput,
-  type SetProposalModeInput,
   type TaskCard,
   type TaskDetail,
   type TaskDetailQuery,
@@ -383,8 +375,6 @@ import {
   type TaskStats,
   type TaskStatsQuery,
   type TransitionFeatureInput,
-  type TransitionProposalInput,
-  type TransitionProposalResult,
   type TransitionTaskInput,
   type UpdateProjectRequest,
   type UpsertFeatureDocInput,
@@ -478,21 +468,6 @@ export interface ForgeFeaturesRpc {
 }
 
 /**
- * forge:proposals/* 面方法集（M3 Interface 4 扩池四通道；createProposal 恒 tool 专属不上 RPC）。
- * transition = 人工裁决（M3 双面 drift 修订——agent 面保留）；setMode = 律三唯一正门
- * （agent tool 面无模式改写动词——SC6 断言面）；listDocs = 提案文档区只读扫描。
- */
-export interface ForgeProposalsRpc {
-  list(q: ListProposalsQuery): Promise<ProposalCard[]>
-  /** 裁决转移（toStatus=accepted ∧ 远征 → 成链分叉内聚——返回 chained 水化） */
-  transition(input: TransitionProposalInput): Promise<TransitionProposalResult>
-  /** 模式改写唯一正门（单事务只写 proposals.mode——tasks.mode 快照永不触碰） */
-  setMode(input: SetProposalModeInput): Promise<ProposalRow>
-  /** 提案文档区读（docs/proposals/<slug>/ 全部 .md 目录扫描——零状态零写径） */
-  listDocs(q: ListProposalDocsQuery): Promise<ProposalDocRow[]>
-}
-
-/**
  * forge:bugs/* 面方法集（fix-bug：list 列表读面 + commitFiles/fileDiff 变更内容读面——
  * fixed 证据的文件清单与单文件 diff；recordBug/resolveBug 写动词 = agent tool 专属，恒不上 RPC）。
  */
@@ -544,7 +519,6 @@ export interface ForgeRpcClient {
   readonly knowledge: ForgeKnowledgeRpc
   readonly tasks: ForgeTasksRpc
   readonly features: ForgeFeaturesRpc
-  readonly proposals: ForgeProposalsRpc
   readonly bugs: ForgeBugsRpc
   readonly docs: ForgeDocsRpc
   readonly settings: ForgeSettingsRpc
@@ -601,12 +575,6 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       upsertDoc: (input) => invokeRpc<FeatureDocumentRow>(transport, FEATURES_CHANNELS.upsertDoc, input),
       list: (q) => invokeRpc<FeatureCard[]>(transport, FEATURES_CHANNELS.list, q),
       listDocs: (q) => invokeRpc<FeatureDocumentRow[]>(transport, FEATURES_CHANNELS.listDocs, q),
-    },
-    proposals: {
-      list: (q) => invokeRpc<ProposalCard[]>(transport, PROPOSALS_CHANNELS.list, q),
-      transition: (input) => invokeRpc<TransitionProposalResult>(transport, PROPOSALS_CHANNELS.transition, input),
-      setMode: (input) => invokeRpc<ProposalRow>(transport, PROPOSALS_CHANNELS.setMode, input),
-      listDocs: (q) => invokeRpc<ProposalDocRow[]>(transport, PROPOSALS_CHANNELS.listDocs, q),
     },
     bugs: {
       list: (q) => invokeRpc<BugCard[]>(transport, BUGS_CHANNELS.list, q),

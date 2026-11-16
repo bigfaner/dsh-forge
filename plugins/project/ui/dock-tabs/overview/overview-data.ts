@@ -1,25 +1,25 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
-// 概览数据装载（定位：业务——UF-1 概览 tab 框架的 forge:{projects,features,proposals,tasks}/* 消费面）。
-// Hard Rule「搜索过滤服务端承载」：search/sort 一律作为 listProposals/listFeatures 查询参
+// 概览数据装载（定位：业务——UF-1 概览 tab 框架的 forge:{projects,features,tasks,bugs}/* 消费面）。
+// Hard Rule「搜索过滤服务端承载」：search/sort 一律作为 listFeatures/listBugs 查询参
 // 透传（core 侧 matchesSearch + sortByActiveThenCreated），前端禁全量拉取本地过滤——
 // 本文件零行本地过滤逻辑。装载拆两路（口径沿 use-knowledge-browse 先例）：
 //   - 头路（mount/projectId/重试）：projects.get（项目名 + 三个目录位）∥ deriveTaskStoreDir
 //     （任务清单 {flatten}@{hash8} 单源——fail-soft）∥ features.list（无参——ov-head 摘要
-//     活跃 feature 与提案子 tab 谱系查找源，不随搜索漂移）∥ tasks.stats（chips 计数 + 完成数）
-//   - 列路（subtab/search/sort/重试）：proposals 子 tab = proposals.list(search,sort)；
-//     features 子 tab = features.list(search,sort) ∥ proposals.list（无参——来源提案查找源）
+//     活跃 feature 查找源，不随搜索漂移）∥ tasks.stats（chips 计数 + 完成数）
+//   - 列路（subtab/search/sort/重试）：features 子 tab = features.list(search,sort)
 //     ∥ features.listDocs（fix-2：feature_documents 列举——文档行数据源，无 search 面）；
 //     tasks 子 tab = 3.5 无列装载（chips 消费头路 stats；三视图装载归 3.6）
+//     bugs 子 tab = bugs.list(search,sort,status) ∥ bugs.list（无参——三态计数）
 // 竞态守卫 = 序号递增（快速连续键入不串台）；相位机 loading → ready | error（typed error
 // 经 rpcUiState 三态映射）。effect 仅编排胶水（Node 测面外，归 4.1 装配 + e2e）。
 import { useEffect, useRef, useState } from 'react'
-import type { BugCard, BugStatus, DirFactRow, FeatureCard, FeatureDocumentRow, ProposalCard, ProposalDocRow, TaskStats } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, DirFactRow, FeatureCard, FeatureDocumentRow, TaskStats } from '@dsh-forge/contracts'
 import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../rpc-channels.js'
 import { overviewRpcClientFactory } from './overview-client.js'
 import { RpcClientError } from '../rpc-channels.js'
 import { rpcUiState, type RpcUiStateKind } from '../rpc-channels.js'
 import { DIR_FACTS_ROW_KEYS, dirFactRowLabel, type DirFactRowKey } from './dir-rows.js'
-import { bugStatusCounts, OVERVIEW_PROPOSAL_FEATURE_ENABLED, searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
+import { bugStatusCounts, OVERVIEW_FEATURE_ENABLED, searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
 import { docsRootOf } from './message-format.js'
 
 /** 错误附载（message = 信封 message 原样；uiState = rpcUiState(code) 三态映射） */
@@ -48,11 +48,8 @@ export interface OverviewHeadBundle {
   readonly workspaceDir: string
   /** 本工作区 .forge 目录（forgeDir 行回退源——同上） */
   readonly forgeDir: string
-  /** 无搜索全量 feature 卡（ov-head 摘要活跃 feature + 提案子 tab 谱系查找源） */
+  /** 无搜索全量 feature 卡（ov-head 摘要活跃 feature 查找源） */
   readonly features: readonly FeatureCard[]
-  /** 无搜索全量提案卡（4.6：提案五态 chips 计数 + 任务子 tab 容器 pill 双轨突击源 + feature
-   *  来源提案查找——不随搜索漂移） */
-  readonly proposals: readonly ProposalCard[]
   /** 七态计数（chips 计数与摘要完成数单源） */
   readonly stats: TaskStats
 }
@@ -93,9 +90,9 @@ const ZERO_TASK_STATS = {
 } as const
 
 /** 头路装载（纯异步面）：projects 单点权威（get 优先，typed 失败回退 list 现查——官方宿主
- * 网关无 get 路由，fix-15）∥ features/proposals/stats 三路增强并发——增强路 typed 失败
+ * 网关无 get 路由，fix-15）∥ features/stats 两路增强并发——增强路 typed 失败
  * （官方宿主 degraded 族）= 空增强值落 head，ov-head/五行目录真值不被缺席族阻断；
- * 集成态四路全通行为不变。 */
+ * 集成态三路全通行为不变。 */
 export async function loadOverviewHead(client: ForgeRpcClient, projectId: string): Promise<OverviewFetch<OverviewHeadBundle>> {
   try {
     const [project, enhancements] = await Promise.all([
@@ -106,18 +103,15 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
           return rows.find((row) => row.id === projectId) ?? null
         }),
       Promise.all([
-        // 提案/feature 行集消费门（用户裁定 2026-11-14）：门关 = 通道零调用（空增强值直落
-        // head——degraded warn 噪音随之消失；数据面 forgeFeatures/forgeProposals 不动）
-        OVERVIEW_PROPOSAL_FEATURE_ENABLED
+        // feature 行集消费门（用户裁定 2026-11-14）：门关 = 通道零调用（空增强值直落
+        // head——degraded warn 噪音随之消失；数据面 forgeFeatures 不动）
+        OVERVIEW_FEATURE_ENABLED
           ? client.features.list({ projectId }).catch(() => [] as Awaited<ReturnType<typeof client.features.list>>)
           : Promise.resolve<FeatureCard[]>([]),
-        OVERVIEW_PROPOSAL_FEATURE_ENABLED
-          ? client.proposals.list({ projectId }).catch(() => [] as Awaited<ReturnType<typeof client.proposals.list>>)
-          : Promise.resolve<ProposalCard[]>([]),
         client.tasks.stats({ projectId }).catch(() => ZERO_TASK_STATS),
       ]),
     ])
-    const [features, proposals, stats] = enhancements
+    const [features, stats] = enhancements
     if (project === null) throw new Error('项目不存在或已移除')
     return {
       ok: true,
@@ -128,7 +122,6 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
         // 五行 forgeDir 行由 forgeDirs dirRows 真值补位（overviewHeadRows fallback 链）
         forgeDir: 'forgeDir' in project ? project.forgeDir : '',
         features,
-        proposals,
         stats,
       },
     }
@@ -137,14 +130,11 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
   }
 }
 
-/** 子 tab 列数据（tagged——proposals 行 / features 行含来源提案查找源 + 文档行列举源） */
+/** 子 tab 列数据（tagged——features 行含文档行列举源） */
 export type OverviewListData =
-  | { readonly kind: 'proposals'; readonly proposals: readonly ProposalCard[] }
   | {
       readonly kind: 'features'
       readonly features: readonly FeatureCard[]
-      /** 无参提案列（来源提案标题/状态查找——不随搜索漂移） */
-      readonly proposals: readonly ProposalCard[]
       /** feature 文档行（fix-2：feature_documents 列举——FeaturesTab 文档行数据源，
        *  featureId 归属过滤归呈现层） */
       readonly docs: readonly FeatureDocumentRow[]
@@ -174,12 +164,9 @@ export async function fetchOverviewList(
 ): Promise<OverviewFetch<OverviewListData> | null> {
   const search = searchQueryOf(q.search)
   if (q.subtab === 'tasks') return null
-  // 消费门（用户裁定 2026-11-14）：门关 = 提案/feature 子 tab 短路 null（零通道调用）
-  if (!OVERVIEW_PROPOSAL_FEATURE_ENABLED && (q.subtab === 'proposals' || q.subtab === 'features')) return null
+  // 消费门（用户裁定 2026-11-14）：门关 = feature 子 tab 短路 null（零通道调用）
+  if (!OVERVIEW_FEATURE_ENABLED && q.subtab === 'features') return null
   try {
-    if (q.subtab === 'proposals') {
-      return { ok: true, data: { kind: 'proposals', proposals: await client.proposals.list({ projectId: q.projectId, search, sort: q.sort }) } }
-    }
     if (q.subtab === 'bugs') {
       const status = q.status ?? []
       const [bugs, all] = await Promise.all([
@@ -193,86 +180,14 @@ export async function fetchOverviewList(
       ])
       return { ok: true, data: { kind: 'bugs', bugs, counts: bugStatusCounts(all) } }
     }
-    const [features, proposals, docs] = await Promise.all([
+    const [features, docs] = await Promise.all([
       client.features.list({ projectId: q.projectId, search, sort: q.sort }),
-      client.proposals.list({ projectId: q.projectId }),
       client.features.listDocs({ projectId: q.projectId }),
     ])
-    return { ok: true, data: { kind: 'features', features, proposals, docs } }
+    return { ok: true, data: { kind: 'features', features, docs } }
   } catch (error) {
     return { ok: false, error: mapOverviewError(error) }
   }
-}
-
-// ─────────────────────────── 提案文档区读面（4.6 UF-1 · Integration #1） ───────────────────────────
-// 展开元数据文档区数据源 = proposals.listDocs 只读目录扫描（docs/proposals/<slug>/ 全部
-// .md——文件系统为事实源）。按需装载：仅展开行（openRows 对应 slug 集）逐 slug 并发拉取；
-// 单 slug 失败 fail-soft（键缺席 → 文档区按 0 篇呈现，不阻断其余行）。
-
-/** 提案文档拉取结果（ok/error 归一——永不 reject；slug 随行供合并定位） */
-export type ProposalDocsFetch =
-  | { readonly ok: true; readonly slug: string; readonly docs: readonly ProposalDocRow[] }
-  | { readonly ok: false; readonly slug: string; readonly error: OverviewErrorInfo }
-
-/** 提案文档拉取（纯异步面——proposals.listDocs 唯一通道） */
-export async function fetchProposalDocs(client: ForgeRpcClient, projectId: string, slug: string): Promise<ProposalDocsFetch> {
-  try {
-    const docs = await client.proposals.listDocs({ projectId, slug })
-    return { ok: true, slug, docs }
-  } catch (error) {
-    return { ok: false, slug, error: mapOverviewError(error) }
-  }
-}
-
-/** 文档行合并落点（纯函数）：ok = 覆盖键（重取即时见新值）；error = 保持旧值（fail-soft） */
-export function mergeProposalDocs(
-  prev: ReadonlyMap<string, readonly ProposalDocRow[]>,
-  out: ProposalDocsFetch,
-): ReadonlyMap<string, readonly ProposalDocRow[]> {
-  if (!out.ok) return prev
-  const next = new Map(prev)
-  next.set(out.slug, [...out.docs])
-  return next
-}
-
-/**
- * 提案文档装载 hook（展开行按需）：slugs 键变（展开/收起）与写推送事件 → 逐 slug 并发
- * 重拉（目录扫描幂等）；序号守卫防串台。返回 slug → 文档行映射（缺席 = 该行按 0 篇呈现）。
- * @param projectId - 当前项目
- * @param slugs - 展开行 slug 清单（提案子 tab openRows 投影）
- * @param makeClient - RPC client 构造器（缺省 preload 真身；注入 = 测试面）
- */
-export function useProposalDocs(
-  projectId: string,
-  slugs: readonly string[],
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
-): ReadonlyMap<string, readonly ProposalDocRow[]> {
-  const [docs, setDocs] = useState<ReadonlyMap<string, readonly ProposalDocRow[]>>(() => new Map())
-  const [eventNonce, setEventNonce] = useState(0)
-  const seqRef = useRef(0)
-  const slugsKey = [...slugs].sort().join('|')
-
-  useEffect(() => {
-    const slugsList = slugsKey === '' ? [] : slugsKey.split('|')
-    if (slugsList.length === 0) return
-    const seq = ++seqRef.current
-    void Promise.all(slugsList.map((slug) => fetchProposalDocs(makeClient(), projectId, slug))).then((outs) => {
-      if (seq !== seqRef.current) return
-      setDocs((prev) => outs.reduce((acc, out) => mergeProposalDocs(acc, out), prev))
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- slugs 投影键化（slugsKey）驱动；projectId/makeClient 同 Effect 依赖
-  }, [projectId, slugsKey, eventNonce, makeClient])
-
-  // 写推送事件（forge:events/tasks-changed）→ 展开行重扫（文档经人/git 摆放后事件驱动刷新）
-  useEffect(
-    () =>
-      subscribeTasksChanged((payload) => {
-        if (payload.projectId === projectId) setEventNonce((n) => n + 1)
-      }),
-    [projectId],
-  )
-
-  return docs
 }
 
 /**

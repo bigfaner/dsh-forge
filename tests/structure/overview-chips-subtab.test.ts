@@ -13,7 +13,6 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 const OV = 'plugins/project/ui/dock-tabs/overview'
 const overviewCss = readFileSync(join(ROOT, `${OV}/overview.css`), 'utf8')
-const proposalCss = readFileSync(join(ROOT, `${OV}/proposal-tab/proposal-tab.css`), 'utf8')
 const featureCss = readFileSync(join(ROOT, `${OV}/feature-tab/feature-tab.css`), 'utf8')
 
 /** 选择器规则块声明集（平铺 CSS——三文件零 @media/@keyframes 嵌套；多命中取并集；
@@ -32,7 +31,6 @@ const onBlock = (css: string, cls: string, state: string): string =>
 
 describe('D14 状态 chips = 彩色胶囊（矩形 radius-xs 退役）', () => {
   const families = [
-    { face: '五态（提案面）', css: proposalCss, cls: 'dswf-ov-pschip' },
     { face: '阶段（feature 面）', css: featureCss, cls: 'dswf-ov-phchip' },
     { face: '七态（任务面）', css: overviewCss, cls: 'dswf-ov-stchip' },
   ] as const
@@ -42,29 +40,6 @@ describe('D14 状态 chips = 彩色胶囊（矩形 radius-xs 退役）', () => {
     expect(block, `${cls} 胶囊半径`).toContain('border-radius: 999px')
     expect(block, `${cls} 灰底承载面`).toContain('background: var(--dsw-alias-bg-base)')
     expect(block, `${cls} 矩形半径退役`).not.toContain('var(--dsw-radius-xs)')
-  })
-
-  it('五态激活分色：draft=中性三级 / under-review=蓝link / accepted=绿 / rejected=红 / superseded=紫→中性（无官方紫令牌——M3 记账裁决）', () => {
-    const cases: ReadonlyArray<[status: string, border: string]> = [
-      ['draft', 'var(--dsw-alias-label-tertiary)'],
-      ['under-review', 'var(--dsw-alias-link)'],
-      ['accepted', 'var(--dsw-alias-state-success-primary)'],
-      ['rejected', 'var(--dsw-alias-state-error-primary)'],
-      ['superseded', 'var(--dsw-alias-label-secondary)'],
-    ]
-    for (const [status, border] of cases) {
-      expect(onBlock(proposalCss, 'dswf-ov-pschip', status), status).toContain(`border-color: ${border}`)
-    }
-    // 底色分色抽点：绿=success 软底 / 红=danger 软底（原型 error-tertiary 死名→最近语义）
-    expect(onBlock(proposalCss, 'dswf-ov-pschip', 'accepted')).toContain(
-      'background: var(--dsw-alias-state-success-tertiary)',
-    )
-    expect(onBlock(proposalCss, 'dswf-ov-pschip', 'rejected')).toContain(
-      'background: var(--dsw-alias-interactive-bg-hover-danger)',
-    )
-    expect(onBlock(proposalCss, 'dswf-ov-pschip', 'under-review')).toContain(
-      'background: var(--dsw-alias-interactive-bg-active)',
-    )
   })
 
   it('阶段激活分色（同胶囊语言）：进行中/设计=蓝 / 需求/已归档=中性 / 任务=紫→中性 / 已完成=绿', () => {

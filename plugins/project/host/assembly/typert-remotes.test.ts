@@ -17,7 +17,6 @@ import {
   ForgeFeaturesRemote,
   ForgeFsRemote,
   ForgeProjectsRemote,
-  ForgeProposalsRemote,
   ForgeWorktreeRemote,
   listDir,
   registerForgeTypertRemotes,
@@ -90,8 +89,7 @@ describe('端点面 pin（gateway SRC 端点真源——strict 生成贡献锁�
     ])
   })
 
-  it('forge:{proposals,features}：list 单端点各一', () => {
-    expect(endpointsOf(new ForgeProposalsRemote(fakeCtx(), {}))).toEqual(['list'])
+  it('forgeFeatures：list 单端点', () => {
     expect(endpointsOf(new ForgeFeaturesRemote(fakeCtx(), {}))).toEqual(['list'])
   })
 
@@ -219,10 +217,10 @@ describe('followSeal 快照钩（baseline + 变化才 yield + abort 出循环）
 
 // ── inject 生命周期缝替身（1.12 conversation-views-face 同径——服务在场同步激活、缺席挂起、provide 后补激活） ──
 
-function captureInjectLifecycle(initial?: { forgeProposals?: unknown; forgeFeatures?: unknown }): {
+function captureInjectLifecycle(initial?: { forgeFeatures?: unknown }): {
   face: TypertAssemblyCtxFace
   mounted: { name: string; scope: Context }[]
-  provide: (key: 'forgeProposals' | 'forgeFeatures', svc: unknown) => void
+  provide: (key: 'forgeFeatures', svc: unknown) => void
   pendingCount: () => number
 } {
   const mounted: { name: string; scope: Context }[] = []
@@ -260,39 +258,37 @@ function captureInjectLifecycle(initial?: { forgeProposals?: unknown; forgeFeatu
 }
 
 describe('registerForgeTypertRemotes（根 ctx plugin 装配）', () => {
-  it('全族在场 → 七 plugin 挂根 ctx，各 scope 构造控制器（registered 清单）', () => {
+  it('全族在场 → 六 plugin 挂根 ctx，各 scope 构造控制器（registered 清单）', () => {
     const { face, mounted } = captureRoot()
     const deps: ForgeTypertDeps = {
       projects: () => ({}) as never,
       bugs: () => ({}) as never,
       worktrees: () => ({}) as never,
-      proposals: () => ({}),
       features: () => ({}),
       dirFacts: () => ({}) as never,
     }
     const result = registerForgeTypertRemotes(face, deps)
-    expect(result.registered).toEqual(['forgeProjects', 'forgeBugs', 'forgeFs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures', 'forgeDirs'])
+    expect(result.registered).toEqual(['forgeProjects', 'forgeBugs', 'forgeFs', 'forgeWorktree', 'forgeFeatures', 'forgeDirs'])
     expect(result.degraded).toEqual([])
     expect(mounted.map((m) => m.name)).toEqual([
       'project-typert-forgeProjects',
       'project-typert-forgeBugs',
       'project-typert-forgeFs',
       'project-typert-forgeWorktree',
-      'project-typert-forgeProposals',
       'project-typert-forgeFeatures',
       'project-typert-forgeDirs',
     ])
     // 根 ctx 取法：face.root 在场 = 挂 root 而非插件子 ctx 自身
     const rootFace: TypertAssemblyCtxFace = { root: face, plugin: face.plugin }
     const nested = registerForgeTypertRemotes(rootFace, deps)
-    expect(nested.registered).toHaveLength(7)
+    expect(nested.registered).toHaveLength(6)
   })
 
-  it('缺族降级（projects/bugs/worktrees/proposals/features/dirs 缺席）→ 仅 forgeFs 注册 + degraded 清单', () => {
+  it('缺族降级（projects/bugs/worktrees/features/dirs 缺席）→ 仅 forgeFs 注册 + degraded 清单', () => {
     const { face, mounted } = captureRoot()
     const result = registerForgeTypertRemotes(face, {})
     expect(result.registered).toEqual(['forgeFs'])
-    expect(result.degraded).toEqual(['forgeProjects', 'forgeBugs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures', 'forgeDirs'])
+    expect(result.degraded).toEqual(['forgeProjects', 'forgeBugs', 'forgeWorktree', 'forgeFeatures', 'forgeDirs'])
     expect(mounted.map((m) => m.name)).toEqual(['project-typert-forgeFs'])
   })
 
@@ -379,8 +375,7 @@ describe('selfProbeOf（bug a99a7293——官方 gateway 2.x invoke 必携 owner
   })
 })
 
-describe('forgeProposals/forgeFeatures inject 生命周期绑（迟到重绑——bug 253b8265）', () => {
-  const proposalSvc = { listProposals: async () => [{ id: 'p-1' }] }
+describe('forgeFeatures inject 生命周期绑（迟到重绑——bug 253b8265）', () => {
   const featureSvc = { listFeatures: async () => [] }
 
   it('迟到场景钉：apply 时 core 服务未提供 = 挂起不注册（pending 记录）；provide 后补激活注册认领 + 迟到重绑诊断行', () => {
@@ -390,33 +385,24 @@ describe('forgeProposals/forgeFeatures inject 生命周期绑（迟到重绑—�
     const result = registerForgeTypertRemotes(face, { diag })
 
     // apply 时点：注入族挂起（零 mount），degraded 如实记录、pending 面可观测
-    expect(result.registered).not.toContain('forgeProposals')
     expect(result.registered).not.toContain('forgeFeatures')
-    expect(result.pending).toEqual(['forgeProposals', 'forgeFeatures'])
-    expect(result.degraded).toContain('forgeProposals')
-    expect(pendingCount()).toBe(2)
+    expect(result.pending).toEqual(['forgeFeatures'])
+    expect(result.degraded).toContain('forgeFeatures')
+    expect(pendingCount()).toBe(1)
 
     // 服务后到（cordis inject 补激活）→ 控制器注册进根 ctx、registered 补入、诊断留痕
-    provide('forgeProposals', proposalSvc)
     provide('forgeFeatures', featureSvc)
-    expect(mounted.map((m) => m.name)).toContain('project-typert-forgeProposals')
     expect(mounted.map((m) => m.name)).toContain('project-typert-forgeFeatures')
-    expect(result.registered).toContain('forgeProposals')
     expect(result.registered).toContain('forgeFeatures')
     expect(diag).toHaveBeenCalledWith(expect.stringContaining('迟到重绑'))
   })
 
   it('服务在场：apply 即注册认领（cordis inject 同步激活——boot log registered 形态）', () => {
-    const { face, mounted } = captureInjectLifecycle({
-      forgeProposals: proposalSvc,
-      forgeFeatures: featureSvc,
-    })
+    const { face, mounted } = captureInjectLifecycle({ forgeFeatures: featureSvc })
 
     const result = registerForgeTypertRemotes(face, {})
 
-    expect(result.registered).toContain('forgeProposals')
     expect(result.registered).toContain('forgeFeatures')
-    expect(mounted.map((m) => m.name)).toContain('project-typert-forgeProposals')
     expect(mounted.map((m) => m.name)).toContain('project-typert-forgeFeatures')
   })
 
@@ -425,11 +411,9 @@ describe('forgeProposals/forgeFeatures inject 生命周期绑（迟到重绑—�
 
     const result = registerForgeTypertRemotes(face, {})
 
-    expect(result.registered).not.toContain('forgeProposals')
     expect(result.registered).not.toContain('forgeFeatures')
-    expect(mounted.map((m) => m.name)).not.toContain('project-typert-forgeProposals')
     expect(mounted.map((m) => m.name)).not.toContain('project-typert-forgeFeatures')
-    expect(result.degraded).toEqual(expect.arrayContaining(['forgeProposals', 'forgeFeatures']))
+    expect(result.degraded).toEqual(expect.arrayContaining(['forgeFeatures']))
   })
 
   it('激活时控制器构造抛错 → fail-soft 不炸 inject 缝（诊断留痕，他族不受影响）', () => {
@@ -442,27 +426,24 @@ describe('forgeProposals/forgeFeatures inject 生命周期绑（迟到重绑—�
     }
 
     const result = registerForgeTypertRemotes(face, { diag })
-    provide('forgeProposals', proposalSvc)
     provide('forgeFeatures', featureSvc)
 
-    expect(result.registered).toContain('forgeProposals')
     expect(result.registered).not.toContain('forgeFeatures')
     expect(diag).toHaveBeenCalledWith(expect.stringContaining('forgeFeatures 激活失败'))
   })
 
   it('inject 激活后控制器调用期现查 core 服务（list 走注入所得服务——惰性语义不回归）', async () => {
-    const { face } = captureInjectLifecycle({ forgeProposals: proposalSvc })
+    const { face } = captureInjectLifecycle({ forgeFeatures: featureSvc })
     registerForgeTypertRemotes(face, {})
-    const row = await new ForgeProposalsRemote(new Context() as never, { proposals: () => proposalSvc }).list({})
-    expect(row).toEqual([{ id: 'p-1' }])
+    const row = await new ForgeFeaturesRemote(new Context() as never, { features: () => featureSvc }).list({})
+    expect(row).toEqual([])
   })
 })
 
 describe('typed unavailable 与 fs listDir（诚实降级面）', () => {
-  it('族服务缺席 → 调用期 typed unavailable（projects.list / worktree.* / proposals.list）', async () => {
+  it('族服务缺席 → 调用期 typed unavailable（projects.list / worktree.* / features.list）', async () => {
     await expect(new ForgeProjectsRemote(fakeCtx(), {}).list()).rejects.toThrow(unavailableMessage('list', 'projects'))
     await expect(new ForgeWorktreeRemote(fakeCtx(), {}).list({} as never)).rejects.toThrow(unavailableMessage('*', 'worktree'))
-    await expect(new ForgeProposalsRemote(fakeCtx(), {}).list({})).rejects.toThrow(unavailableMessage('list', 'proposals'))
     await expect(new ForgeFeaturesRemote(fakeCtx(), {}).list({})).rejects.toThrow(unavailableMessage('list', 'features'))
   })
 

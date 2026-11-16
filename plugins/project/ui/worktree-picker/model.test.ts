@@ -138,27 +138,21 @@ describe('pendingAheadBehindPaths（懒加载待拉清单：展开才拉、缓�
 })
 
 describe('collectSlugCandidates（slug 候选：去重 + 未完成排前）', () => {
-  it('提案与 feature slug 合并；同 slug 去重（任一未完成即未完成）；未完成排前、组内保持输入序', () => {
-    const proposals: SlugCandidate[] = [
-      { slug: 'done-proposal', done: true },
-      { slug: 'open-proposal', done: false },
-      { slug: 'shared', done: true },
-    ]
+  it('feature slug 去重；未完成排前、组内保持输入序', () => {
     const features: SlugCandidate[] = [
       { slug: 'open-feature', done: false },
       { slug: 'done-feature', done: true },
       { slug: 'shared', done: false },
+      { slug: 'open-feature', done: false },
     ]
-    expect(collectSlugCandidates(proposals, features)).toEqual([
+    expect(collectSlugCandidates(features)).toEqual([
       { slug: 'open-feature', done: false },
       { slug: 'shared', done: false },
-      { slug: 'open-proposal', done: false },
       { slug: 'done-feature', done: true },
-      { slug: 'done-proposal', done: true },
     ])
   })
   it('空输入 = 空候选', () => {
-    expect(collectSlugCandidates([], [])).toEqual([])
+    expect(collectSlugCandidates([])).toEqual([])
   })
 })
 

@@ -8,7 +8,7 @@ import { createForgeRpcClient, FORGE_REMOTE_FACE_ANCHOR_KEY, installForgeRemoteF
 import { ForgeProjectsRemote } from '../host/assembly/typert-remotes.js'
 import type { Context as CordisContext } from '@deepseek-ai/cordis'
 
-const NAMESPACES = ['forgeProjects', 'forgeFs', 'forgeBugs', 'forgeWorktree', 'forgeProposals', 'forgeFeatures'] as const
+const NAMESPACES = ['forgeProjects', 'forgeFs', 'forgeBugs', 'forgeWorktree', 'forgeFeatures'] as const
 
 /** 官方 ClientRemoteService 手写同型（$mount 异步建 namespace 子 Service） */
 class FakeClientRemote extends Service {

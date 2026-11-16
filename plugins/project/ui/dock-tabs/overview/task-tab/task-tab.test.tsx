@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { FeatureCard, ProposalCard, TaskGraph, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { FeatureCard, TaskGraph, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import { TasksTabBody, containerMenuItems, runDispatchRoute, subgraphDiagContainer } from './task-tab.js'
 import { formatDiagMessage } from '../message-format.js'
 import { docsRootOf } from '../message-format.js'
@@ -42,15 +42,13 @@ const FEATURES: readonly FeatureCard[] = [
   },
 ]
 
-const BLITZ_PROPOSAL: ProposalCard = {
-  proposalId: 'pr-blitz',
+/** 突击容器选项（呈现面钉——kind='proposal' 仍在役；不再由 taskContainerOptions 产出） */
+const BLITZ_CONTAINER: TaskContainerOption = {
+  kind: 'proposal',
   slug: 'legacy-eval-retire',
   title: '旧线 eval 退役',
-  proposalStatus: 'accepted',
   mode: 'blitz',
   taskCount: 2,
-  createdAt: '2026-10-01T00:00:00.000Z',
-  updatedAt: '2026-10-01T00:00:00.000Z',
 }
 
 const STATS: TaskStats = {
@@ -61,9 +59,8 @@ const STATS: TaskStats = {
 
 const GRAPH: TaskGraph = { tasks: [cardFixture()], edges: [] }
 
-const OPTIONS = taskContainerOptions(FEATURES, [BLITZ_PROPOSAL])
+const OPTIONS = taskContainerOptions(FEATURES)
 const FEATURE_CONTAINER = OPTIONS[0] as TaskContainerOption
-const BLITZ_CONTAINER = OPTIONS[1] as TaskContainerOption
 
 function load(over: Partial<TasksTabLoadState> = {}): TasksTabLoadState {
   return {
@@ -241,9 +238,9 @@ describe('TasksTabBody · 三态面与空态', () => {
   })
 })
 
-describe('容器菜单与解析纯函数（AC5 双轨）', () => {
-  it('containerMenuItems：双轨行集——feature 完成比 + 突击（突击提案）标记 + N 任务', () => {
-    const items = containerMenuItems(OPTIONS, FEATURES)
+describe('容器菜单与解析纯函数（AC5）', () => {
+  it('containerMenuItems：行集——feature 完成比 + 突击（突击提案）标记 + N 任务', () => {
+    const items = containerMenuItems([...OPTIONS, BLITZ_CONTAINER], FEATURES)
     expect(items.map((entry) => entry.id)).toEqual(['feature:m2-pipeline', 'proposal:legacy-eval-retire'])
     const first = renderToStaticMarkup(menuRowLabel(items, 0))
     expect(first).toContain('m2-pipeline')
@@ -254,7 +251,7 @@ describe('容器菜单与解析纯函数（AC5 双轨）', () => {
   })
 
   it('containerMenuSelect：id → 选项；未知 id = undefined', () => {
-    expect(containerMenuSelect(OPTIONS, 'proposal:legacy-eval-retire')?.slug).toBe('legacy-eval-retire')
+    expect(containerMenuSelect([...OPTIONS, BLITZ_CONTAINER], 'proposal:legacy-eval-retire')?.slug).toBe('legacy-eval-retire')
     expect(containerMenuSelect(OPTIONS, 'ghost')).toBeUndefined()
   })
 
@@ -265,7 +262,7 @@ describe('容器菜单与解析纯函数（AC5 双轨）', () => {
   })
 
   it('resolveContainer：显式命中优先；未命中回退活跃 feature；零选项 = undefined', () => {
-    expect(resolveContainer(OPTIONS, { kind: 'proposal', slug: 'legacy-eval-retire' }, 'm2-pipeline')?.slug).toBe('legacy-eval-retire')
+    expect(resolveContainer([...OPTIONS, BLITZ_CONTAINER], { kind: 'proposal', slug: 'legacy-eval-retire' }, 'm2-pipeline')?.slug).toBe('legacy-eval-retire')
     expect(resolveContainer(OPTIONS, { kind: 'feature', slug: 'ghost' }, 'm2-pipeline')?.slug).toBe('m2-pipeline')
     expect(resolveContainer(OPTIONS, undefined, 'm2-pipeline')?.slug).toBe('m2-pipeline')
     expect(resolveContainer(OPTIONS, undefined, undefined)?.slug).toBe('m2-pipeline') // 首 feature 缺省
@@ -293,7 +290,6 @@ function dispatchClient(impl: {
     fs: { listDir: fail },
     knowledge: { browse: fail, listEntries: fail, entryDetail: fail, heat: fail, sessionRecall: fail },
     features: { register: fail, transition: fail, upsertDoc: fail, list: fail, listDocs: fail },
-    proposals: { list: fail, transition: fail, setMode: fail, listDocs: fail },
     docs: { read: fail, openExternal: fail },
     settings: { get: fail, set: fail },
   } as unknown as ForgeRpcClient
@@ -388,7 +384,6 @@ describe('TasksTab 装载壳（静态首帧——effect 未跑）', () => {
         activeStatuses={new Set<TaskStatus>()}
         statusFilter={[]}
         features={FEATURES}
-        proposals={[BLITZ_PROPOSAL]}
         onToggleStatus={NOOP}
         onClearStatuses={NOOP}
       />,

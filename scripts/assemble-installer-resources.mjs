@@ -69,7 +69,7 @@ const STAGING_EXTRAS = {
   // plugin-forge experts/ = 内置专家档案层（FORGE_EXPERTS_ROOT_DIR 相对 dist 解析——
   // 缺席即安装版专家团零 forge 档案，bug a2a54922；随包覆盖由 a2a54922 约定目录扫描守卫）。
   // skills/ = 约定目录占位（plugin-spec 1.9 技能全数迁出——grilling/fix-bug/investigate-bug
-  // 迁 spec、brainstorm 退役、skills-blitz 随迁清理；README 占位保持目录声明面）
+  // 迁 spec、brainstorm 退役、blitz 技能面随迁清理；README 占位保持目录声明面）
   'plugin-forge': { files: ['skills', 'experts'], keyFiles: ['experts/feature-builder.md'] },
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
   // expert-squad 内置专家层目录（scan.ts resolvePluginExpertsRoot 相对 dist 的
@@ -101,7 +101,7 @@ const STAGING_EXTRAS = {
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙；
- *  skills-blitz 随 plugin-spec 1.9 grilling 迁 spec 退役——目录宇宙同步收缩） */
+ *  blitz 技能面随 plugin-spec 1.9 grilling 迁 spec 退役——目录宇宙同步收缩） */
 const CONVENTION_DIRS = ['skills', 'experts']
 
 /** 包短名 → workspace 子路径。批1 包归位表驱动面：PRODUCT_PLUGINS 声明 dir 字段的包

@@ -1,5 +1,5 @@
 // 任务 2.2 测试 —— index.ts（插件装配入口，原 service.ts——fix-35 对称化）装配点：ctx.forgeProjects Cordis 服务注册。
-// 2.7 扩测 + fix-1 装配缝解耦改锚：tasksHome 注入时 provide ×4（ctx.forgeFeatures/forgeProposals/
+// 2.7 扩测 + fix-1 装配缝解耦改锚：tasksHome 注入时 provide 域服务（ctx.forgeFeatures/
 // forgeDocs/forgeBugs 四域——forgeTasks/forgeCheckpoints 停供，tasksHome 缝移交 @dsh-forge/task-loop
 // 插件域）+ tasksHome 缺席降级 + 惰性首开发现面接线端到端。Cordis Plugin.Function 形态断言：loader 取 default 导出
 // （exports.default ?? exports，上游核实），inject 依赖声明、reflect.provide 注册官方面
@@ -108,8 +108,8 @@ describe('service.ts 装配：ctx.forgeProjects 注册（Plugin.Function 形态�
   })
 })
 
-describe('2.7 provide ×4 装配（fix-1 解耦终态）：ctx.forgeFeatures / forgeProposals / forgeDocs / forgeBugs', () => {
-  it('tasksHome 注入：四域服务全部在场，方法面完整（Interface 2/3/4 + fix-bug 锚）；forgeTasks/forgeCheckpoints 停供（缝移交 task-loop）', () => {
+describe('2.7 provide 装配（fix-1 解耦终态）：ctx.forgeFeatures / forgeDocs / forgeBugs', () => {
+  it('tasksHome 注入：三域服务全部在场，方法面完整（Interface 2/4 + fix-bug 锚）；forgeProposals 零注册（proposal 域已下线）、forgeTasks/forgeCheckpoints 停供（缝移交 task-loop）', () => {
     const { ctx, provided } = stubCtx()
     const tasksHome = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-m2-'))
     try {
@@ -120,12 +120,8 @@ describe('2.7 provide ×4 装配（fix-1 解耦终态）：ctx.forgeFeatures / f
       for (const method of ['registerFeature', 'transitionFeature', 'upsertFeatureDoc', 'listFeatures', 'listFeatureDocs']) {
         expect(typeof features?.[method]).toBe('function')
       }
-      // Interface 3：提案域三法
-      const proposals = provided.get('forgeProposals') as Record<string, unknown> | undefined
-      expect(proposals).toBeDefined()
-      for (const method of ['createProposal', 'transitionProposal', 'listProposals']) {
-        expect(typeof proposals?.[method]).toBe('function')
-      }
+      // proposal 域零注册（plugin-spec 下线批——forgeProposals 服务面整体退役）
+      expect(provided.has('forgeProposals')).toBe(false)
       // Interface 4：文档读域单法
       const docs = provided.get('forgeDocs') as Record<string, unknown> | undefined
       expect(docs).toBeDefined()
@@ -148,7 +144,7 @@ describe('2.7 provide ×4 装配（fix-1 解耦终态）：ctx.forgeFeatures / f
     }
   })
 
-  it('tasksHome 缺席：四域降级缺席（projects 服务零变化）——1.4 降级语义同径', () => {
+  it('tasksHome 缺席：域服务降级缺席（projects 服务零变化）——1.4 降级语义同径', () => {
     const { ctx, provided } = stubCtx()
     const dispose = corePlugin(ctx, { dbFile: dbPath() })
     expect([...provided.keys()].sort()).toEqual(['forgeProjects'])
@@ -287,14 +283,13 @@ describe('2.7(M3) provide ×1 装配：ctx.forgeSettings（六服务 → 七）'
     try {
       const dispose = corePlugin(ctx, { dbFile: dbPath(), tasksHome })
       expect(provided.has('forgeSettings')).toBe(false)
-      // tasksHome 四域仍齐（projects + features/proposals/docs/bugs——fix-1 解耦终态：
-      // forgeTasks/forgeCheckpoints 停供，缝移交 @dsh-forge/task-loop）
+      // tasksHome 域仍齐（projects + features/docs/bugs——fix-1 解耦终态：forgeTasks/
+      // forgeCheckpoints 停供，缝移交 @dsh-forge/task-loop；forgeProposals 已下线零注册）
       expect([...provided.keys()].sort()).toEqual([
         'forgeBugs',
         'forgeDocs',
         'forgeFeatures',
         'forgeProjects',
-        'forgeProposals',
       ])
       dispose()
     } finally {

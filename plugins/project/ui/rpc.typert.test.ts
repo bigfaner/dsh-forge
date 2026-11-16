@@ -9,7 +9,7 @@ import {
   type ForgeRemoteFace,
 } from './rpc.js'
 
-/** 官方 ctx.remote 六族面替身（namespace 记录调用 + 按表回信 RemoteResult 信封） */
+/** 官方 ctx.remote 五族面替身（namespace 记录调用 + 按表回信 RemoteResult 信封） */
 function stubRemoteFace(table: Record<string, (args: unknown[]) => unknown>): ForgeRemoteFace {
   const make = (ns: string): Record<string, unknown> =>
     new Proxy({}, {
@@ -24,7 +24,6 @@ function stubRemoteFace(table: Record<string, (args: unknown[]) => unknown>): Fo
     forgeFs: make('forgeFs') as ForgeRemoteFace['forgeFs'],
     forgeBugs: make('forgeBugs') as ForgeRemoteFace['forgeBugs'],
     forgeWorktree: make('forgeWorktree') as ForgeRemoteFace['forgeWorktree'],
-    forgeProposals: make('forgeProposals') as ForgeRemoteFace['forgeProposals'],
     forgeFeatures: make('forgeFeatures') as ForgeRemoteFace['forgeFeatures'],
   }
 }

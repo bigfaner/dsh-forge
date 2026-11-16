@@ -1,6 +1,6 @@
 // forge RPC client 窄面（定位：装配——插件 bundle 内部面，inventory §2.4「RPC 数据源改
 // 插件 bundle 内部面」）：add-project 流程与 Bug 台账 pane 的数据源单门。传输真身 =
-// 官方 Typert Remote namespace（六族 forge:* 收编 ctx.remote 第一等通道）。
+// 官方 Typert Remote namespace（五族 forge:* 收编 ctx.remote 第一等通道）。
 // face 安装：apply 期 installForgeRemoteFace 安装解析缝（逐调用现查不缓存——AGENTS 1.6），
 // 官方 remote 面缺席 = 通道不可用诚实降级（diag 留痕 + typed Error，不静默不炸壳；
 // mount 终态前竞速窗口的诊断静默——FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY 注）。
@@ -15,10 +15,8 @@ import {
   type FeatureCard,
   type ListBugsQuery,
   type ListFeaturesQuery,
-  type ListProposalsQuery,
   type Project,
   type ProjectPatch,
-  type ProposalCard,
   type ProjectSummary,
   type RegisterProjectInput,
   type RegisterResult,
@@ -64,14 +62,13 @@ export interface ForgeRemoteNamespaceFace {
   readonly [method: string]: ((...args: never[]) => unknown) | undefined
 }
 
-/** 官方 ctx.remote 六族消费切片（apply 期 installForgeRemoteFace 安装的解析目标；
- *  forgeDirs = 基本信息区族——可选边，缺席 = 事实行 fail-soft「—」，不影响其余六族） */
+/** 官方 ctx.remote 五族消费切片（apply 期 installForgeRemoteFace 安装的解析目标；
+ *  forgeDirs = 基本信息区族——可选边，缺席 = 事实行 fail-soft「—」，不影响其余五族） */
 export interface ForgeRemoteFace {
   readonly forgeProjects: ForgeRemoteNamespaceFace
   readonly forgeFs: ForgeRemoteNamespaceFace
   readonly forgeBugs: ForgeRemoteNamespaceFace
   readonly forgeWorktree: ForgeRemoteNamespaceFace
-  readonly forgeProposals: ForgeRemoteNamespaceFace
   readonly forgeFeatures: ForgeRemoteNamespaceFace
   readonly forgeDirs?: ForgeRemoteNamespaceFace
 }
@@ -137,7 +134,7 @@ function faceSeamOf(): ForgeRemoteFaceAnchor {
 
 /**
  * 安装官方 Typert remote 解析缝（projectClient.apply 装配期调用一次）：
- * resolver 逐调用现查 ctx.remote 六族面（reflect 防御读取，缺席宿主 = undefined 诚实降级）。
+ * resolver 逐调用现查 ctx.remote 五族面（reflect 防御读取，缺席宿主 = undefined 诚实降级）。
  */
 export function installForgeRemoteFace(
   resolver: () => ForgeRemoteFace | undefined,
@@ -184,21 +181,20 @@ export function namespaceFaceOf(face: ForgeRemoteFace, namespace: keyof ForgeRem
   return ns as ForgeRemoteNamespaceFace
 }
 
-/** 六族 forge:* namespace 键单源（forgeFaceOf 形状校验 + apply 期 inject 边声明共用） */
+/** 五族 forge:* namespace 键单源（forgeFaceOf 形状校验 + apply 期 inject 边声明共用） */
 export const FORGE_REMOTE_NAMESPACES = [
   'forgeProjects',
   'forgeFs',
   'forgeBugs',
   'forgeWorktree',
-  'forgeProposals',
   'forgeFeatures',
 ] as const
 
 /**
- * 六族 forge remote face 归一解析（apply 期 inject 子 fiber 解析缝消费——bug 145b3d3b
+ * 五族 forge remote face 归一解析（apply 期 inject 子 fiber 解析缝消费——bug 145b3d3b
  * 真根因修口）：官方 gateway client 半 rc.2 形态 = ClientRemoteService，namespace 面
  * 物化为 remote.namespaces Map（entry {service}）+ remote.<ns> 平铺 cordis 服务，
- * ctx.remote 顶层无六族属性——旧顶层六属性校验恒 false → face 恒 undefined（fiber
+ * ctx.remote 顶层无五族属性——旧顶层五属性校验恒 false → face 恒 undefined（fiber
  * 已激活、锚已发布、resolver 恒 undefined）。归一取法复用 namespaceFaceOf 三形态
  * 回退（Map → namespaces 对象 → 顶层属性），官方 web 舞台顶层形态与 electron dev
  * Map 形态两界同源解析；缺一族 = undefined 诚实降级。
@@ -339,16 +335,12 @@ export interface ForgeWorktreeRpc {
   resolve(q: WorktreeResolveRequest): Promise<WorktreeResolveResult>
 }
 
-/** forge:{proposals,features}/* list 读面（新建弹窗 slug 候选数据源——worktree-picker 消费切片） */
-export interface ForgeProposalFeaturesListRpc {
-  list(q: ListProposalsQuery): Promise<ProposalCard[]>
-}
-
 /** forge:dirs/* 面方法集（基本信息区五行目录事实——host 侧锚注册表解析下发，UI 只渲染） */
 export interface ForgeDirsRpc {
   facts(projectId: string): Promise<DirFactRow[]>
 }
 
+/** forge:features/* list 读面（新建弹窗 slug 候选数据源——worktree-picker 消费切片） */
 export interface ForgeFeaturesListRpc {
   list(q: ListFeaturesQuery): Promise<FeatureCard[]>
 }
@@ -362,7 +354,6 @@ export interface ForgeFeaturesListRpc {
  */
 export type WorktreeFacesRpc = {
   projects: ForgeRpcClient['projects']
-  proposals: ForgeRpcClient['proposals']
   features: ForgeRpcClient['features']
   worktree: Omit<ForgeRpcClient['worktree'], 'followSeal'> & Partial<Pick<ForgeRpcClient['worktree'], 'followSeal'>>
 }
@@ -373,7 +364,6 @@ export interface ForgeRpcClient {
   readonly fs: ForgeFsRpc
   readonly bugs: ForgeBugsRpc
   readonly worktree: ForgeWorktreeRpc
-  readonly proposals: ForgeProposalFeaturesListRpc
   readonly features: ForgeFeaturesListRpc
   readonly dirs: ForgeDirsRpc
 }
@@ -406,9 +396,6 @@ export function createForgeRpcClient(): ForgeRpcClient {
       selected: (q) => invokeRemote<{ readonly path?: string }>('forgeWorktree', 'selected', [q]),
       ensureWorkspace: (q) => invokeRemote<WorktreeEnsureWorkspaceResult>('forgeWorktree', 'ensureWorkspace', [q]),
       resolve: (q) => invokeRemote<WorktreeResolveResult>('forgeWorktree', 'resolve', [q]),
-    },
-    proposals: {
-      list: (q) => invokeRemote<ProposalCard[]>('forgeProposals', 'list', [q]),
     },
     features: {
       list: (q) => invokeRemote<FeatureCard[]>('forgeFeatures', 'list', [q]),

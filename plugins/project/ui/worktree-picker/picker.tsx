@@ -5,7 +5,7 @@
 //     影子占用者 ForgeHeroWorkspacePicker 在其渲染面就地并列，取证见 walkthrough/
 //     hero-second-chip-decision.md）——选择菜单 + 新建/删除两弹窗 + ahead/behind 懒加载；
 //   · ForgeWorktreeSwitchMarker——切换闸虚线标记（视觉命中锚）。
-// 数据面 = 官方 forgeWorktree/forgeProposals/forgeFeatures remote + configForms 偏好
+// 数据面 = 官方 forgeWorktree/forgeFeatures remote + configForms 偏好
 // （1.38 正典化——../rpc.ts 消费切片 + ../settings-section 偏好面缝；namespace/方法单源 =
 // typert strict 生成贡献——../remote.ts 为生成投影再导出）。
 // 点选 = 纯选中态 + 点选时点跨分支确认（1.19 语义回归）；会话创建唯一时机 = 官方 create
@@ -134,7 +134,7 @@ export function ForgeHeroWorktreeMount({
   const [aheadBehind, setAheadBehind] = useState<ReadonlyMap<string, AheadBehind>>(new Map())
   const [createOpen, setCreateOpen] = useState(false)
   const [branches, setBranches] = useState<{ readonly defaultBranch: string; readonly names: readonly string[] }>({ defaultBranch: 'main', names: [] })
-  // 分支下拉 slug 候选（提案/feature slug——proposals.list + features.list RPC；挂载面归一为 {slug, done}）
+  // 分支下拉 slug 候选（feature slug——features.list RPC；挂载面归一为 {slug, done}）
   const [slugCandidates, setSlugCandidates] = useState<readonly SlugCandidate[]>([])
   const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
@@ -371,25 +371,22 @@ export function ForgeHeroWorktreeMount({
         ),
       )
       .catch(() => {})
-    // slug 候选拉取：projects.list 解析 ws_path → projectId（归一比对），proposals/features 并读——
-    // 终态归一（提案 rejected/superseded、feature completed/archived = done）
+    // slug 候选拉取：projects.list 解析 ws_path → projectId（归一比对），features.list 读面——
+    // 终态归一（feature completed/archived = done）
     const key = (path: string): string => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
     makeRpc()
       .projects.list()
       .then((projects) => {
         const project = projects.find((summary) => key(summary.wsPath) === key(projectRoot))
         if (project === undefined) return []
-        const isDoneProposal = (status: string): boolean => status === 'rejected' || status === 'superseded'
         const isDoneFeature = (status: string): boolean => status === 'completed' || status === 'archived'
-        return Promise.all([
-          makeRpc().proposals.list({ projectId: project.id }),
-          makeRpc().features.list({ projectId: project.id }),
-        ]).then(([proposalCards, featureCards]) =>
-          collectSlugCandidates(
-            proposalCards.map((card) => ({ slug: card.slug, done: isDoneProposal(card.proposalStatus) })),
-            featureCards.map((card) => ({ slug: card.slug, done: isDoneFeature(card.featureStatus) })),
-          ),
-        )
+        return makeRpc()
+          .features.list({ projectId: project.id })
+          .then((featureCards) =>
+            collectSlugCandidates(
+              featureCards.map((card) => ({ slug: card.slug, done: isDoneFeature(card.featureStatus) })),
+            ),
+          )
       })
       .then((candidates) => setSlugCandidates(candidates))
       .catch(() => setSlugCandidates([]))

@@ -1,6 +1,6 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // 概览过滤/折叠态模型（定位：业务——UF-1 概览 tab 框架的视图本地态单一来源）。
-// 纯函数面（零 RPC / 零 effect）：四子 tab（用户定向顺序 提案|feature|任务|Bug）+ 搜索 + 排序 +
+// 纯函数面（零 RPC / 零 effect）：三子 tab（feature|任务|Bug）+ 搜索 + 排序 +
 // 七态 chips 过滤 + 父行/ov-head 展开态。Hard Rule「搜索过滤服务端承载」：本模型只持有
 // 关键词原文与过滤集合，转查询参（searchQueryOf / statusFilterParam）交数据层透传——
 // 前端禁全量拉取本地过滤。排序同为服务端参（sort: 'active'|'created'——活跃优先权重
@@ -14,13 +14,12 @@ import {
   type BugStatus,
   type FeatureCard,
   type FeatureStatus,
-  type ProposalStatus,
   type TaskStatus,
 } from '@dsh-forge/contracts'
 
-/** 四子 tab（用户定向顺序：提案 | feature | 任务 | Bug——fix-bug 第 4 子 tab） */
+/** 三子 tab（用户定向顺序：feature | 任务 | Bug——fix-bug 第 3 子 tab；提案子 tab 已随
+ *  proposal 域消费面退役拆除，用户裁定 2026-11-14） */
 export const OVERVIEW_SUBTABS = [
-  { value: 'proposals', label: '提案' },
   { value: 'features', label: 'feature' },
   { value: 'tasks', label: '任务' },
   { value: 'bugs', label: 'Bug' },
@@ -29,18 +28,18 @@ export const OVERVIEW_SUBTABS = [
 export type OverviewSubtab = (typeof OVERVIEW_SUBTABS)[number]['value']
 
 /**
- * 提案/feature 行集消费门（用户裁定 2026-11-14：项目概览暂时不要接入 feature 与提案）。
- * 数据面 forgeFeatures/forgeProposals 不动（保持诚实 degraded 语义——与官方 web 舞台同口径）；
- * 本门只把消费面默认关掉：子 tab 栏隐藏提案/feature、默认子 tab = 任务、头路/列路对
- * features/proposals 通道零调用（降级 warn 噪音随之消失）。将来恢复接入置 true 即回全量行集。
+ * feature 行集消费门（用户裁定 2026-11-14：项目概览暂时不要接入 feature）。
+ * 数据面 forgeFeatures 不动（保持诚实 degraded 语义——与官方 web 舞台同口径）；
+ * 本门只把消费面默认关掉：子 tab 栏隐藏 feature、默认子 tab = 任务、头路/列路对
+ * features 通道零调用（降级 warn 噪音随之消失）。将来恢复接入置 true 即回全量行集。
  */
-export const OVERVIEW_PROPOSAL_FEATURE_ENABLED = false
+export const OVERVIEW_FEATURE_ENABLED = false
 
 /** 当前可见子 tab 谱（门关 = 任务 | Bug；门开 = 全量注册序） */
 export function visibleOverviewSubtabs(): readonly { readonly value: OverviewSubtab; readonly label: string }[] {
-  return OVERVIEW_PROPOSAL_FEATURE_ENABLED
+  return OVERVIEW_FEATURE_ENABLED
     ? OVERVIEW_SUBTABS
-    : OVERVIEW_SUBTABS.filter((tab) => tab.value !== 'proposals' && tab.value !== 'features')
+    : OVERVIEW_SUBTABS.filter((tab) => tab.value !== 'features')
 }
 
 /** 排序模式（contracts ListTasksQuery/ListFeaturesQuery/ListProposalsQuery 同构参） */
@@ -60,8 +59,6 @@ export interface OverviewFilterState {
   readonly sort: OverviewSort
   /** 七态 chips 激活集（空 = 全部；statusFilterParam 转白名单参——任务子 tab） */
   readonly activeStatuses: ReadonlySet<TaskStatus>
-  /** 提案五态 chips 激活集（空 = 全部；多选并集客户端过滤——提案子 tab，4.6 UF-1） */
-  readonly activeProposalStatuses: ReadonlySet<ProposalStatus>
   /** feature 阶段 chips 激活集（空 = 全部；多选并集客户端过滤——feature 子 tab，4.6 UF-4） */
   readonly activePhases: ReadonlySet<FeatureStatus>
   /** Bug 三态 chips 激活集（空 = 全部；bugStatusFilterParam 转白名单参——Bug 子 tab，fix-bug） */
@@ -72,14 +69,13 @@ export interface OverviewFilterState {
   readonly headOpen: boolean
 }
 
-/** 初始态（默认子 tab = 门开提案 / 门关任务——用户裁定 2026-11-14 消费面退场；排序默认活跃优先；ov-head 默认折叠） */
+/** 初始态（默认子 tab = 门开 feature / 门关任务——用户裁定 2026-11-14 消费面退场；排序默认活跃优先；ov-head 默认折叠） */
 export function initialOverviewFilter(): OverviewFilterState {
   return {
-    subtab: OVERVIEW_PROPOSAL_FEATURE_ENABLED ? 'proposals' : 'tasks',
+    subtab: OVERVIEW_FEATURE_ENABLED ? 'features' : 'tasks',
     search: '',
     sort: 'active',
     activeStatuses: new Set<TaskStatus>(),
-    activeProposalStatuses: new Set<ProposalStatus>(),
     activePhases: new Set<FeatureStatus>(),
     activeBugStatuses: new Set<BugStatus>(),
     openRows: new Set<string>(),
@@ -95,7 +91,6 @@ export function switchSubtab(state: OverviewFilterState, subtab: OverviewSubtab)
     subtab,
     search: '',
     activeStatuses: new Set(),
-    activeProposalStatuses: new Set(),
     activePhases: new Set(),
     activeBugStatuses: new Set(),
     openRows: new Set(),
@@ -117,8 +112,7 @@ export function searchQueryOf(text: string): string | undefined {
 export function searchPlaceholderOf(subtab: OverviewSubtab): string {
   if (subtab === 'tasks') return '搜索标题/类型/状态(中英)…'
   if (subtab === 'features') return '搜索 feature/文档…'
-  if (subtab === 'bugs') return '搜索 Bug 摘要/错误类型…'
-  return '搜索提案/slug/状态…'
+  return '搜索 Bug 摘要/错误类型…'
 }
 
 /** chip 禁用判据（AC5）：0 计数 disabled（不可点出空态） */
@@ -147,19 +141,6 @@ export function statusFilterParam(active: ReadonlySet<TaskStatus>): TaskStatus[]
 /** chips 过滤在场判据（清过滤入口显隐——任务/提案/feature/Bug chips 族共用） */
 export function hasActiveStatusFilter(active: ReadonlySet<unknown>): boolean {
   return active.size > 0
-}
-
-/** 提案五态 chips toggle（纯集合翻转——多选并集，4.6 UF-1） */
-export function toggleProposalStatusFilter(state: OverviewFilterState, status: ProposalStatus): OverviewFilterState {
-  const next = new Set(state.activeProposalStatuses)
-  if (next.has(status)) next.delete(status)
-  else next.add(status)
-  return { ...state, activeProposalStatuses: next }
-}
-
-/** 提案五态 chips 全清 */
-export function clearProposalStatusFilter(state: OverviewFilterState): OverviewFilterState {
-  return { ...state, activeProposalStatuses: new Set() }
 }
 
 /** feature 阶段 chips toggle（多选并集，4.6 UF-4） */
@@ -204,11 +185,6 @@ export function bugStatusCounts(bugs: readonly BugCard[]): Record<BugStatus, num
 // M3.1 D12（用户裁决 #1）：概览内容弹性填满整个 tab——旧定宽管线（OVERVIEW_WIDTH_*
 // / clampOverviewWidth / overviewWidthFromDrag + 左缘拖拽手柄）整体退役；dock 宽度
 // 归右栏官方拖柄（用户调宽），本模型零宽度态。
-
-/** 父行展开键（提案行——prop:{proposalId}，原型 key 方案） */
-export function proposalRowKey(proposalId: string): string {
-  return `prop:${proposalId}`
-}
 
 /** 父行展开键（feature 行——feat:{slug}） */
 export function featureRowKey(slug: string): string {

@@ -15,10 +15,8 @@ import {
   type FeatureCard,
   type ListBugsQuery,
   type ListFeaturesQuery,
-  type ListProposalsQuery,
   type Project,
   type ProjectPatch,
-  type ProposalCard,
   type ProjectSummary,
   type RegisterProjectInput,
   type RegisterResult,
@@ -75,7 +73,6 @@ export interface ForgeRemoteFace {
   readonly forgeFs: ForgeRemoteNamespaceFace
   readonly forgeBugs: ForgeRemoteNamespaceFace
   readonly forgeWorktree: ForgeRemoteNamespaceFace
-  readonly forgeProposals: ForgeRemoteNamespaceFace
   readonly forgeFeatures: ForgeRemoteNamespaceFace
   readonly forgeDirs?: ForgeRemoteNamespaceFace
   readonly forgeTasks?: ForgeRemoteNamespaceFace
@@ -198,7 +195,6 @@ export const FORGE_REMOTE_NAMESPACES = [
   "forgeFs",
   "forgeBugs",
   "forgeWorktree",
-  "forgeProposals",
   "forgeFeatures",
 ] as const;
 
@@ -347,16 +343,12 @@ export interface ForgeWorktreeRpc {
   resolve(q: WorktreeResolveRequest): Promise<WorktreeResolveResult>
 }
 
-/** forge:{proposals,features}/* list 读面（新建弹窗 slug 候选数据源——worktree-picker 消费切片） */
-export interface ForgeProposalFeaturesListRpc {
-  list(q: ListProposalsQuery): Promise<ProposalCard[]>
-}
-
 /** forge:dirs/* 面方法集（基本信息区五行目录事实——host 侧锚注册表解析下发，UI 只渲染） */
 export interface ForgeDirsRpc {
   facts(projectId: string): Promise<DirFactRow[]>
 }
 
+/** forge:features/* list 读面（新建弹窗 slug 候选数据源——worktree-picker 消费切片） */
 export interface ForgeFeaturesListRpc {
   list(q: ListFeaturesQuery): Promise<FeatureCard[]>
 }
@@ -370,7 +362,6 @@ export interface ForgeFeaturesListRpc {
  */
 export type WorktreeFacesRpc = {
   projects: ForgeRpcClient["projects"]
-  proposals: ForgeRpcClient["proposals"]
   features: ForgeRpcClient["features"]
   worktree: Omit<ForgeRpcClient["worktree"], "followSeal"> & Partial<Pick<ForgeRpcClient["worktree"], "followSeal">>
 };
@@ -381,7 +372,6 @@ export interface ForgeRpcClient {
   readonly fs: ForgeFsRpc
   readonly bugs: ForgeBugsRpc
   readonly worktree: ForgeWorktreeRpc
-  readonly proposals: ForgeProposalFeaturesListRpc
   readonly features: ForgeFeaturesListRpc
   readonly dirs: ForgeDirsRpc
 }
@@ -414,9 +404,6 @@ export function createForgeRpcClient(): ForgeRpcClient {
       selected: (q) => invokeRemote<{ readonly path?: string }>("forgeWorktree", "selected", [q]),
       ensureWorkspace: (q) => invokeRemote<WorktreeEnsureWorkspaceResult>("forgeWorktree", "ensureWorkspace", [q]),
       resolve: (q) => invokeRemote<WorktreeResolveResult>("forgeWorktree", "resolve", [q]),
-    },
-    proposals: {
-      list: (q) => invokeRemote<ProposalCard[]>("forgeProposals", "list", [q]),
     },
     features: {
       list: (q) => invokeRemote<FeatureCard[]>("forgeFeatures", "list", [q]),

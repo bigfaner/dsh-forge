@@ -146,24 +146,21 @@ export function isCrossBranchRisk(targetBranch: string | null, currentBranch: st
 }
 
 /**
- * slug 候选（新建弹窗分支下拉数据源——通用层零 dsh-forge 依赖，提案/feature 行在
- * 挂载面归一为 {slug, done} 两字段后进本函数）：并集去重（同 slug 任一未完成即未完成）、
- * 未完成（非终态）排前、组内保持输入序。
+ * slug 候选（新建弹窗分支下拉数据源——通用层零 dsh-forge 依赖，feature 行在
+ * 挂载面归一为 {slug, done} 两字段后进本函数）：未完成（非终态）排前、组内保持输入序。
  */
 export interface SlugCandidate {
   readonly slug: string
-  /** 终态（提案 rejected/superseded；feature completed/archived）= true */
+  /** 终态（feature completed/archived）= true */
   readonly done: boolean
 }
 
 export function collectSlugCandidates(
-  proposals: readonly SlugCandidate[],
   features: readonly SlugCandidate[],
 ): readonly SlugCandidate[] {
   const bySlug = new Map<string, SlugCandidate>()
-  for (const candidate of [...features, ...proposals]) {
-    const previous = bySlug.get(candidate.slug)
-    bySlug.set(candidate.slug, previous ? { slug: candidate.slug, done: previous.done && candidate.done } : candidate)
+  for (const candidate of features) {
+    bySlug.set(candidate.slug, candidate)
   }
   const all = [...bySlug.values()]
   return [...all.filter((candidate) => !candidate.done), ...all.filter((candidate) => candidate.done)]

@@ -35,7 +35,7 @@
 
 ## 关键口径
 
-- **搜索过滤服务端承载（Hard Rule）**：`searchQueryOf` 只做 trim/空归一，关键词原文经 `fetchOverviewList` 透传 `listProposals`/`listFeatures` 查询参（core `matchesSearch` + `sortByActiveThenCreated` 执行）——本目录零行本地过滤/排序逻辑；chips 同理转 `statusFilterParam` 白名单参（3.6 `listTasks` 消费）。
+- **搜索过滤服务端承载（Hard Rule）**：`searchQueryOf` 只做 trim/空归一，关键词原文经 `fetchOverviewList` 透传 `listFeatures`/`listTasks` 查询参（core `matchesSearch` + `sortByActiveThenCreated` 执行）——本目录零行本地过滤/排序逻辑；chips 同理转 `statusFilterParam` 白名单参（3.6 `listTasks` 消费）。
 - **子 tab 切换清空（AC3）**：`switchSubtab` = 清空搜索 + 清空 chips + 收起全部展开态（ov-head 展开态跨子 tab 保持——路径详情与内容区正交）。
 - **IME 安全（AC2）**：搜索行 = 稳定受控子树——输入值仅回流 input `value` 属性与（非空的）清除钮兄弟位；结构不变式断言（input 前键树前缀等价 + 唯一 input）见 sticky-bar.test。
 - **feature 文档行 = 契约张力裁决**：ui-design 要求文档行，但 Interface 2 读面（`listFeatures → FeatureCard`）仅含 `docCount`、全契约无 feature_documents 列举 API——`FeatureTab.docs` props 携契约类型接口在场，3.5 帧不喂行（展开元数据呈现 `docCount` 统计）；提案子 tab 文档行 = `ProposalCard.relPath` 真数据。

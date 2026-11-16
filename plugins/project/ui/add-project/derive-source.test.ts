@@ -85,7 +85,7 @@ describe('rpcDeriveSource 缺省真身（官方 forgeProjects.deriveTaskStoreDir
     })
     installForgeRemoteFace(() =>
       ({
-        forgeFs: {}, forgeBugs: {}, forgeWorktree: {}, forgeProposals: {}, forgeFeatures: {},
+        forgeFs: {}, forgeBugs: {}, forgeWorktree: {}, forgeFeatures: {},
         forgeProjects: ns,
       }) as unknown as ForgeRemoteFace,
     )

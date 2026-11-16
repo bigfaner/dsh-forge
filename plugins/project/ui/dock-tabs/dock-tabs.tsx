@@ -165,7 +165,7 @@ export interface OverviewDockAssemblyProps {
 
 /**
  * 概览 dock 装配体（纯渲染）：无锚空态 | OverviewTab（renderTasksTab 槽 = TasksTab 全
- * 接线[onOpenTask/onTransition/activeTaskId/featureSlug 聚焦/proposals 双轨/会话通道]）。
+ * 接线[onOpenTask/onTransition/activeTaskId/featureSlug 聚焦/会话通道]）。
  * m3.1 D21/D23：任务详情弹窗与转移对话框退役于本装配体——迁 ShellHost 常驻树（挂载
  * 独立于 dock，对话中直接打开）；任务行/DAG 节点/泳道卡片三途径经 onOpenTask 汇于
  * 桥 openTaskDrawer；会话头挂接 pill（4.2）经 taskFocus 注入（feature 选中 + 子 tab 切换）。
@@ -204,7 +204,6 @@ export function OverviewDockAssembly({
       activeStatuses={ctx.activeStatuses}
       statusFilter={ctx.statusFilter}
       features={ctx.features}
-      proposals={ctx.proposals}
       onToggleStatus={ctx.onToggleStatus}
       onClearStatuses={ctx.onClearStatuses}
       {...(onOpenTask !== undefined ? { onOpenTask } : {})}

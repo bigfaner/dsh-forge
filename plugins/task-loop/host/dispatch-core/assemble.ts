@@ -55,7 +55,7 @@ export {
  * 仅主 agent，worker 面无代转相位动词））。
  * 官方宿主（DSH harness）迁移判例：工具注册名 = snake_case（tools/submit-task.ts
  * TOOL = "submit_task" 单源）；本表随迁，且只收**真机注册面在场的名**——未注册名
- * （createProposal/transitionProposal/transitionFeature/listBugs/aggregateBugs/
+ * （transitionFeature/listBugs/aggregateBugs/
  * validateMermaid 等）入 deny 会在探针缺席时被 driver restrict() 未知名 loud 校验
  * 拆一切 spawn（判例 plugin-task-loop/1.18-a：camelCase 旧名 + 未注册名直落 deny
  * 连续 3 次 spawn 失败停循环）。探针在场时未知 deny 名会被求交剔除（双保险）。

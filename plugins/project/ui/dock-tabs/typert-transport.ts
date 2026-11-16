@@ -11,13 +11,12 @@
 import { createForgeRpcClient, type ForgeTransport } from './rpc-channels.js'
 import { forgeRemoteFaceOf, namespaceFaceOf, type ForgeRemoteFace } from '../rpc.js'
 
-/** 通道 seg → Typert namespace（七族在场集；contracts channels 常量的 seg 单源映射） */
+/** 通道 seg → Typert namespace（六族在场集；contracts channels 常量的 seg 单源映射） */
 const SEG_NAMESPACE: Readonly<Record<string, keyof ForgeRemoteFace>> = {
   projects: 'forgeProjects',
   fs: 'forgeFs',
   bugs: 'forgeBugs',
   worktree: 'forgeWorktree',
-  proposals: 'forgeProposals',
   features: 'forgeFeatures',
   dirs: 'forgeDirs',
 }

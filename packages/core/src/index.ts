@@ -1,7 +1,7 @@
 // @dsh-forge/core 插件定义（定位：装配；入口文件 index.ts——fix-35 对称化，
 // contracts/path-key 同惯例）——注册 ctx.forgeProjects（2.2：registerProject
 // 四步补偿链）。M2（2.7）：tasksHome
-// 注入时增注册四域服务 ctx.forgeFeatures/forgeProposals/forgeDocs/forgeBugs（装配壳 +
+// 注入时增注册域服务 ctx.forgeFeatures/forgeDocs/forgeBugs（装配壳 +
 // 三小域实现；fix-1 装配缝解耦：forgeTasks/forgeCheckpoints 停供——tasksHome 缝移交
 // @dsh-forge/task-loop 插件域 provide；plugin-spec 1.10：forgeDocs 读域收编——实现改指
 // @dsh-forge/spec 包出口，core 只保留 routing 注入装配行）。共享 ForgeWorkspaceStore 惰性多句柄 +
@@ -23,8 +23,7 @@ import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registr
 import { createSettingsService } from './forge/settings/service.js'
 import { createDocsService } from '@dsh-forge/spec'
 import { createBugsService } from './forge/small-domains/bugs.js'
-import { createFeaturesService, registerFeatureInTx } from './forge/small-domains/features.js'
-import { createProposalsService } from './forge/small-domains/proposals.js'
+import { createFeaturesService } from './forge/small-domains/features.js'
 import type { EvidenceValidityStamp } from './forge/tasks/evidence-pointer.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './forge/tasks/phase-deriver.js'
 import { validateFeatureTasks } from './forge/tasks/validate.js'
@@ -96,7 +95,7 @@ export interface CorePluginConfig {
    * M2 派生根 {dsh-forge-home}（1.4 缝——3.4 注入：env DSH_FORGE_TASKS_HOME > {userData}/
    * forge-workspaces；每工作区任务库 {tasksHome}/{flatten}@{hash8}/forge.db 的根）。
    * 缺席 = M2 面降级缺席（注册碰撞复检 + deriveTaskStoreDir 动词 + 四域服务
-   * forgeFeatures/forgeProposals/forgeDocs/forgeBugs 均不装配），P1 行为零变化。
+   * forgeFeatures/forgeDocs/forgeBugs 均不装配），P1 行为零变化。
    */
   tasksHome?: string
   /**
@@ -164,7 +163,7 @@ const corePlugin: CorePlugin = Object.assign(
     if (settings !== undefined) {
       ctx.reflect.provide('forgeSettings', settings) // Interface 1（M3）设置域两法——单门读写（3.8 host 接线）
     }
-    // M2 四域装配（2.7 provide ×4）：tasksHome 缺席 = 四域整体降级缺席（P1 行为零变化）。
+    // M2 三域装配（2.7 provide，proposals 域已随 plugin-spec 下线批退役）：tasksHome 缺席 = 整体降级缺席
     // 共享单例：中央行路由 + ForgeWorkspaceStore（惰性多句柄；首建挂点 = 发现面只读扫描——
     // 交互二「库文件缺席 → 新建 v1 + 发现面扫描」，P1 存量工作区升级 M2 首次触达补建；
     // 2.5 送校接线：post-ingestion 挂点 → 对新入库 feature 逐个送校 validateFeatureTasks
@@ -213,15 +212,6 @@ const corePlugin: CorePlugin = Object.assign(
           store,
           events,
           phase: { derivePhase: deriveFeaturePhase, assertPhaseInvariant },
-        }),
-      )
-      ctx.reflect.provide(
-        'forgeProposals',
-        createProposalsService({
-          store,
-          events,
-          resolveForgeDir: routing.forgeDir, // 2.3 文档区扫描基准
-          registerFeatureInTx, // 2.2 成链内聚同事务核心（装配注边——四域互禁 import 消解）
         }),
       )
       // docs 域装配行（plugin-spec 1.10 收编——factory 源 @dsh-forge/spec 包出口；

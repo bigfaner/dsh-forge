@@ -15,7 +15,6 @@ const SEG_NAMESPACE: Readonly<Record<string, keyof ForgeRemoteFace>> = {
   fs: "forgeFs",
   bugs: "forgeBugs",
   worktree: "forgeWorktree",
-  proposals: "forgeProposals",
   features: "forgeFeatures",
   dirs: "forgeDirs",
   tasks: "forgeTasks",

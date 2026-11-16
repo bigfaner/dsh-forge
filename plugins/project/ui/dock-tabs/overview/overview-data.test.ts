@@ -4,13 +4,12 @@
 // 归一 + 派生行 fail-soft + typed error 三态映射 + 落点纯函数。
 // 口径沿 use-knowledge-browse 先例：effect 胶水不在 Node 测面；纯异步面全量单测。
 import { describe, expect, it } from 'vitest'
-import type { BugCard, BugStatus, FeatureCard, FeatureDocumentRow, Project, ProposalCard, ProposalStatus, TaskStatus } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, FeatureCard, FeatureDocumentRow, Project, TaskStatus } from '@dsh-forge/contracts'
 import {
   BUGS_CHANNELS,
   FEATURES_CHANNELS,
   PROJECTS_CHANNELS,
   PROJECTS_M2_CHANNELS,
-  PROPOSALS_CHANNELS,
   TASKS_CHANNELS,
 } from '@dsh-forge/contracts'
 import { createForgeRpcClient, type ForgeRpcClient } from '../rpc-channels.js'
@@ -19,11 +18,9 @@ import {
   applyOverviewHead,
   applyOverviewList,
   fetchOverviewList,
-  fetchProposalDocs,
   initialOverviewLoadState,
   loadOverviewHead,
   mapOverviewError,
-  mergeProposalDocs,
   overviewHeadRows,
   overviewListPlan,
   pendingOverviewList,
@@ -57,20 +54,6 @@ function featureCard(slug: string): FeatureCard {
     ) as Record<TaskStatus, number>,
     docCount: 3,
     proposalSlug: 'prop-1',
-  }
-}
-
-function proposalCard(id: string, slug: string, status: ProposalStatus = 'under-review'): ProposalCard {
-  return {
-    proposalId: id,
-    slug,
-    title: `提案 ${slug}`,
-    proposalStatus: status,
-    relPath: `docs/proposals/${slug}/proposal.md`,
-    author: 'faner',
-    taskCount: 0,
-    createdAt: '2026-10-01T00:00:00.000Z',
-    updatedAt: '2026-10-01T00:00:00.000Z',
   }
 }
 
@@ -116,7 +99,6 @@ function headOkClient(overrides: { deriveTaskStoreDir?: () => unknown } = {}) {
     if (channel === FEATURES_CHANNELS.list) return [featureCard('m2-pipeline')]
     if (channel === FEATURES_CHANNELS.listDocs) return [featureDocRow()]
     if (channel === TASKS_CHANNELS.stats) return STATS
-    if (channel === PROPOSALS_CHANNELS.list) return [proposalCard('pr-1', 'prop-1')]
     if (channel === BUGS_CHANNELS.list) return []
     throw new Error(`unexpected channel: ${channel}`)
   })
@@ -133,8 +115,8 @@ function featureDocRow(docKind: 'prd-spec' | 'tech-design' = 'tech-design'): Fea
   }
 }
 
-describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列）', () => {
-  it('门关（用户裁定 2026-11-14）：features/proposals 通道零调用——head 空增强值照常落束', async () => {
+describe('loadOverviewHead（头路并发——projects 单点 + features/stats 增强）', () => {
+  it('门关（用户裁定 2026-11-14）：features 通道零调用——head 空增强值照常落束', async () => {
     const { client, calls } = headOkClient()
     const out = await loadOverviewHead(client, 'p-1')
     expect(out).toEqual({
@@ -144,12 +126,10 @@ describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列
         workspaceDir: 'Z:/ws/demo',
         forgeDir: 'Z:/ws/demo/.forge',
         features: [],
-        proposals: [],
         stats: STATS,
       },
     })
     expect(calls.find((c) => c.channel === FEATURES_CHANNELS.list)).toBeUndefined()
-    expect(calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)).toBeUndefined()
   })
 
   it('基本信息区五行：dirRows 键投影；workspaceRoot/forgeDir 项目行回退；其余缺席 = 「—」', async () => {
@@ -165,10 +145,10 @@ describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列
     }
   })
 
-  it('fix-15 官方宿主降级：features/proposals/stats 通道 typed 失败 = 头路空增强值照常落 head（projects.get 单点权威）', async () => {
+  it('fix-15 官方宿主降级：features/stats 通道 typed 失败 = 头路空增强值照常落 head（projects.get 单点权威）', async () => {
     const client = createForgeRpcClient(async (channel) => {
       if (channel === PROJECTS_CHANNELS.get) return { ok: true, data: PROJECT }
-      // 官方宿主 degraded 族（forgeFeatures/forgeProposals/forgeTasks namespace 未挂载）→
+      // 官方宿主 degraded 族（forgeFeatures/forgeTasks namespace 未挂载）→
       // typert 适配 typed 拒绝信封
       return { ok: false, error: { code: 'internal', message: '通道在官方宿主不可达（Typert 未提供该 namespace 方法）——typed 降级' } }
     })
@@ -178,7 +158,6 @@ describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列
       expect(out.data.projectName).toBe('demo')
       expect(out.data.workspaceDir).toBe('Z:/ws/demo')
       expect(out.data.features).toEqual([])
-      expect(out.data.proposals).toEqual([])
       expect(out.data.stats.total).toBe(0)
     }
   })
@@ -227,20 +206,12 @@ describe('loadOverviewHead（头路四路并发——4.6 增 proposals 无参列
 })
 
 describe('fetchOverviewList（AC6 搜索传参——服务端过滤调用断言）', () => {
-  it('门关（用户裁定 2026-11-14）：proposals 子 tab 短路 null——proposals.list 零调用（降级 warn 噪音随之消失）', async () => {
-    const { client, calls } = headOkClient()
-    const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'proposals', search: ' 网关 ', sort: 'created' })
-    expect(out).toBeNull()
-    expect(calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)).toBeUndefined()
-  })
-
-  it('门关：features 子 tab 短路 null——features.list/listDocs/proposals.list 零调用', async () => {
+  it('门关：features 子 tab 短路 null——features.list/listDocs 零调用', async () => {
     const { client, calls } = headOkClient()
     const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'features', search: 'pipeline', sort: 'active' })
     expect(out).toBeNull()
     expect(calls.find((c) => c.channel === FEATURES_CHANNELS.list)).toBeUndefined()
     expect(calls.find((c) => c.channel === FEATURES_CHANNELS.listDocs)).toBeUndefined()
-    expect(calls.find((c) => c.channel === PROPOSALS_CHANNELS.list)).toBeUndefined()
   })
 
   it('tasks 子 tab = null（3.5 无列装载——三视图归 3.6，chips 消费头路 stats）', async () => {
@@ -323,7 +294,7 @@ describe('fetchOverviewList · bugs 子 tab（fix-bug——bugs.list 通道与�
 describe('落点纯函数', () => {
   it('applyOverviewHead：ok 落 bundle（ready）；error 置相位但保留旧列内容', () => {
     const base = initialOverviewLoadState()
-    const withList = { ...base, list: { kind: 'proposals' as const, proposals: [] } }
+    const withList = { ...base, list: { kind: 'bugs' as const, bugs: [], counts: { open: 0, fixed: 0, unresolved: 0 } } }
     const errored = applyOverviewHead(withList, { ok: false, error: { message: 'x', uiState: 'error-bar' as const } })
     expect(errored.phase).toBe('error')
     expect(errored.list).toBeDefined()
@@ -331,7 +302,7 @@ describe('落点纯函数', () => {
 
   it('pendingOverviewList：清场 = 掏空列 + busy；非清场 = 旧行保持 + busy（缓存先行）', () => {
     const base = initialOverviewLoadState()
-    const withList = { ...base, list: { kind: 'proposals' as const, proposals: [proposalCard('pr-1', 'prop-1')] } }
+    const withList = { ...base, list: { kind: 'bugs' as const, bugs: [], counts: { open: 0, fixed: 0, unresolved: 0 } } }
     expect(pendingOverviewList(withList, true).list).toBeUndefined()
     expect(pendingOverviewList(withList, true).busy).toBe(true)
     expect(pendingOverviewList(withList, false).list).toBeDefined()
@@ -339,11 +310,11 @@ describe('落点纯函数', () => {
   })
 
   it('applyOverviewList：null（tasks）= 解除 busy；ok 换列清错；error 保留旧行', () => {
-    const withList = { ...initialOverviewLoadState(), list: { kind: 'proposals' as const, proposals: [] } }
+    const withList = { ...initialOverviewLoadState(), list: { kind: 'bugs' as const, bugs: [], counts: { open: 0, fixed: 0, unresolved: 0 } } }
     expect(applyOverviewList(withList, null).busy).toBe(false)
     const ok = applyOverviewList(withList, {
       ok: true,
-      data: { kind: 'proposals', proposals: [proposalCard('pr-9', 'p9')] },
+      data: { kind: 'bugs', bugs: [], counts: { open: 0, fixed: 0, unresolved: 0 } },
     })
     expect(ok.error).toBeUndefined()
     const err = applyOverviewList(withList, { ok: false, error: { message: 'y', uiState: 'error-bar' as const } })
@@ -354,19 +325,19 @@ describe('落点纯函数', () => {
   it('overviewListPlan：键变 = 重拉；子 tab/项目切换 = 清场（同键 = 零装载）', () => {
     // 同键 = 不重拉（重渲染零装载）
     expect(
-      overviewListPlan({ listKey: 'k', lastListKey: 'k', subtab: 'proposals', lastSubtab: 'proposals', projectId: 'p', lastProjectId: 'p' }),
+      overviewListPlan({ listKey: 'k', lastListKey: 'k', subtab: 'features', lastSubtab: 'features', projectId: 'p', lastProjectId: 'p' }),
     ).toEqual({ isFetch: false, mustClear: false })
     // 搜索键入 = 重拉不清场（旧行保持——IME 安全配套：内容区在途更新非重建）
     expect(
-      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'proposals', lastSubtab: 'proposals', projectId: 'p', lastProjectId: 'p' }),
+      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'features', lastSubtab: 'features', projectId: 'p', lastProjectId: 'p' }),
     ).toEqual({ isFetch: true, mustClear: false })
     // 子 tab 切换 = 重拉 + 清场（旧子 tab 内容不残留）
     expect(
-      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'tasks', lastSubtab: 'proposals', projectId: 'p', lastProjectId: 'p' }),
+      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'tasks', lastSubtab: 'features', projectId: 'p', lastProjectId: 'p' }),
     ).toEqual({ isFetch: true, mustClear: true })
     // 项目切换 = 重拉 + 清场（跨项目旧内容不残留）
     expect(
-      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'proposals', lastSubtab: 'proposals', projectId: 'p2', lastProjectId: 'p' }),
+      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'features', lastSubtab: 'features', projectId: 'p2', lastProjectId: 'p' }),
     ).toEqual({ isFetch: true, mustClear: true })
   })
 })
@@ -378,51 +349,5 @@ describe('mapOverviewError', () => {
     ).toBe('banner')
     expect(mapOverviewError(new Error('传输失败')).uiState).toBe('error-bar')
     expect(mapOverviewError('裸串').message).toBe('裸串')
-  })
-})
-
-// ─────────────────────────── 4.6 提案文档区读面（UF-1 · Integration #1） ───────────────────────────
-
-describe('fetchProposalDocs / mergeProposalDocs（proposals.listDocs 唯一通道 + fail-soft 合并）', () => {
-  it('ok：{projectId, slug} 入参 + 行集归一（frontmatter 可选初值）', async () => {
-    const { client, calls } = clientResponding((channel) => {
-      if (channel === PROPOSALS_CHANNELS.listDocs) {
-        return [
-          { fileName: 'proposal.md', relPath: 'docs/proposals/prop-1/proposal.md', title: '提案', status: '评审中' },
-          { fileName: 'spike.md', relPath: 'docs/proposals/prop-1/spike.md' },
-        ]
-      }
-      throw new Error(`unexpected channel: ${channel}`)
-    })
-    const out = await fetchProposalDocs(client, 'p-1', 'prop-1')
-    expect(out).toEqual({
-      ok: true,
-      slug: 'prop-1',
-      docs: [
-        { fileName: 'proposal.md', relPath: 'docs/proposals/prop-1/proposal.md', title: '提案', status: '评审中' },
-        { fileName: 'spike.md', relPath: 'docs/proposals/prop-1/spike.md' },
-      ],
-    })
-    expect(calls[0]?.payload).toEqual({ projectId: 'p-1', slug: 'prop-1' })
-  })
-
-  it('error：typed error 归一（fail-soft 单 slug 失败不炸批次）', async () => {
-    const client = createForgeRpcClient(async () => ({
-      ok: false,
-      error: { code: 'ERR_DOC_PATH_INVALID', message: '路径越界' },
-    }))
-    const out = await fetchProposalDocs(client, 'p-1', 'prop-1')
-    expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.error.message).toBe('路径越界')
-  })
-
-  it('mergeProposalDocs：ok 覆盖键（重取即时见新值）；error 保持旧值', () => {
-    const prev = new Map([['a', [{ fileName: 'a.md', relPath: 'docs/proposals/a/a.md' }]]])
-    const mergedOk = mergeProposalDocs(prev, { ok: true, slug: 'b', docs: [{ fileName: 'b.md', relPath: 'docs/proposals/b/b.md' }] })
-    expect([...mergedOk.keys()].sort()).toEqual(['a', 'b'])
-    const rerun = mergeProposalDocs(prev, { ok: true, slug: 'a', docs: [] })
-    expect(rerun.get('a')).toEqual([])
-    const kept = mergeProposalDocs(prev, { ok: false, slug: 'a', error: { message: 'x', uiState: 'error-bar' } })
-    expect(kept.get('a')).toHaveLength(1)
   })
 })

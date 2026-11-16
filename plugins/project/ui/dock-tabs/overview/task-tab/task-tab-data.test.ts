@@ -58,7 +58,6 @@ function recordingClient(impl: {
         sessionLinks: fail,
       },
       features: { register: fail, transition: fail, upsertDoc: fail, list: fail },
-      proposals: { list: fail },
       docs: { read: fail, openExternal: fail },
     } as unknown as ForgeRpcClient,
   }

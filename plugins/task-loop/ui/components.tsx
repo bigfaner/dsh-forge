@@ -120,13 +120,13 @@ export function EmptyState({ title, description, action, className }: EmptyState
 /** 模式双值（contracts MODES 同词汇——基础层零 contracts 引入 pin 的本地声明面） */
 export type ModeChipMode = "expedition" | "blitz";
 
-/** 模式中文标签（mode chip 紧凑面：远征/突击；带说明版选项归 ProposalModeDialog） */
+/** 模式中文标签（mode chip 紧凑面：远征/突击） */
 export const MODE_CHIP_LABELS: Readonly<Record<ModeChipMode, string>> = {
   expedition: "远征",
   blitz: "突击",
 };
 
-/** 未标记缺省占位文案（扫描吸收旧行 = proposals.mode NULL 键缺席） */
+/** 未标记缺省占位文案（扫描吸收旧行 = mode 键缺席） */
 export const MODE_CHIP_UNMARKED_LABEL = "未标记";
 
 /** 未标记悬停说明（ui-design UF-1 States「mode 缺省」行） */

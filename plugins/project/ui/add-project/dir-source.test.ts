@@ -49,7 +49,7 @@ describe('rpcDirSource 缺省真身（官方 forgeFs.listDir Typert remote 面�
     })
     installForgeRemoteFace(() =>
       ({
-        forgeProjects: {}, forgeBugs: {}, forgeWorktree: {}, forgeProposals: {}, forgeFeatures: {},
+        forgeProjects: {}, forgeBugs: {}, forgeWorktree: {}, forgeFeatures: {},
         forgeFs: ns,
       }) as unknown as ForgeRemoteFace,
     )

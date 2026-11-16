@@ -4,7 +4,8 @@
 //  最长 auto 宽收紧走查对照」归实机亮/暗双主题走查证据面 SC-4 扩展——本 pin 以 CSS
 //  width 同值断言承载机械面。）
 // 断言面：
-//   ① 三族状态 chip（.dswf-ov-stchip 七态 / .dswf-ov-pschip 五态 / .dswf-ov-phchip 阶段）
+//   ① 两族状态 chip（.dswf-ov-stchip 七态 / .dswf-ov-phchip 阶段；提案五态族已随
+//      proposal-tab 退役出本 pin 面）
 //      固定统一宽 90px（S6 加宽——原 78px 档实测「已完成 + 点 + 两位计数」溢出致内部换行，
 //      D44 固定统一宽形态保留仅换值：3 字 label 39 + 点 8 + 两位计数 ~15 + chip 内距 gap
 //      12 + 横向 padding 4 + 边框 2 ≈ 80，90px 档容纳；渲染总宽 96px = 90 内容 + 2×2
@@ -28,7 +29,6 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 const OV = 'plugins/project/ui/dock-tabs/overview'
 const overviewCss = readFileSync(join(ROOT, `${OV}/overview.css`), 'utf8')
-const proposalCss = readFileSync(join(ROOT, `${OV}/proposal-tab/proposal-tab.css`), 'utf8')
 const featureCss = readFileSync(join(ROOT, `${OV}/feature-tab/feature-tab.css`), 'utf8')
 
 /** D44 执行期定值 + S6 加宽：三族状态 chip 固定统一宽（渲染总宽 96px） */
@@ -55,21 +55,14 @@ const families = [
     css: overviewCss,
     chip: 'dswf-ov-stchip',
     clear: 'dswf-ov-stchip-clear',
-    peers: ['dswf-ov-pschip', 'dswf-ov-phchip'],
-  },
-  {
-    face: '五态（提案面）',
-    css: proposalCss,
-    chip: 'dswf-ov-pschip',
-    clear: 'dswf-ov-pschip-clear',
-    peers: ['dswf-ov-stchip', 'dswf-ov-phchip'],
+    peers: ['dswf-ov-phchip'],
   },
   {
     face: '阶段（feature 面）',
     css: featureCss,
     chip: 'dswf-ov-phchip',
     clear: 'dswf-ov-phchip-clear',
-    peers: ['dswf-ov-stchip', 'dswf-ov-pschip'],
+    peers: ['dswf-ov-stchip'],
   },
 ] as const
 

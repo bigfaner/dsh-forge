@@ -17,7 +17,6 @@ import {
   FEATURE_STATUS_LABELS,
   type FeatureCard,
   type Mode,
-  type ProposalCard,
   type SessionTaskLinkCard,
   type TaskStatus,
 } from '@dsh-forge/contracts'
@@ -174,7 +173,7 @@ export interface TasksTabBodyProps {
   // ── 概览帧 ctx 消费面（4.1 renderTasksTab 闭包注入——过滤/搜索态帧侧单一来源） ──
   readonly search: string
   readonly activeStatuses: ReadonlySet<TaskStatus>
-  /** 容器选项集（双轨并集——taskContainerOptions(features, proposals) 投影） */
+  /** 容器选项集（taskContainerOptions(features) 投影） */
   readonly options: readonly TaskContainerOption[]
   /** 无参 feature 列（菜单 chip 完成比查找源——不随搜索漂移） */
   readonly features: readonly FeatureCard[]
@@ -440,8 +439,6 @@ export interface TasksTabProps {
   /** statusFilter 白名单参（帧侧 statusFilterParam——装载查询参） */
   readonly statusFilter: readonly TaskStatus[]
   readonly features: readonly FeatureCard[]
-  /** 无参提案列（4.6 容器 pill 双轨突击源——head 无参 proposals） */
-  readonly proposals: readonly ProposalCard[]
   readonly onToggleStatus: (status: TaskStatus) => void
   readonly onClearStatuses: () => void
   // ── 装配注入（4.1 接线） ──
@@ -479,7 +476,6 @@ export function TasksTab({
   activeStatuses,
   statusFilter,
   features,
-  proposals,
   onToggleStatus,
   onClearStatuses,
   featureSlug: controlledFeature,
@@ -493,7 +489,7 @@ export function TasksTab({
   docsRoot,
   makeClient = preloadRpcClientFactory,
 }: TasksTabProps): ReactNode {
-  const options = useMemo(() => taskContainerOptions(features, proposals), [features, proposals])
+  const options = useMemo(() => taskContainerOptions(features), [features])
   const [localContainer, setLocalContainer] = useState<TaskContainerSel | undefined>(undefined)
   const [view, setView] = useState<TaskViewMode>('list')
   const [containerMenuOpen, setContainerMenuOpen] = useState(false)

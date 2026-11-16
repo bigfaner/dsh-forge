@@ -277,7 +277,6 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       projects: deps.projects,
       bugs: deps.bugs,
       worktrees: worktreesSvcOnceOf(worktreesResident),
-      proposals: () => face.reflect?.get?.("forgeProposals"),
       features: () => face.reflect?.get?.("forgeFeatures"),
       // 基本信息区数据源（fix-1 插件自装配）：workspaceRoot 官方工作区面 + dirFacts 缝
       //（注册表三键解析——overrides.dirFacts 在场即覆写，与 forge.dirFacts 缝同源）。

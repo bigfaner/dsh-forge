@@ -7,7 +7,7 @@
 // 无溯源（mode NULL）提案无「容器对应模式」路由（openSessionWithPreset mode 参不可缺省成谎）。
 // 呈现判据：突击容器带「（突击提案）」菜单标记 + 无「诊断」按钮
 //（validateFeatureTasks 为 feature 域校验——一次一 feature，M2 既定口径）。
-import { TASK_STATUSES, type ContainerKind, type FeatureCard, type Mode, type ProposalCard } from '@dsh-forge/contracts'
+import { TASK_STATUSES, type ContainerKind, type FeatureCard, type Mode } from '@dsh-forge/contracts'
 
 /** 任务容器选项（pill 选中 + 菜单行 + 派发/诊断语境的单源投影） */
 export interface TaskContainerOption {
@@ -30,25 +30,20 @@ function featureTotal(feature: FeatureCard): number {
 }
 
 /**
- * 双轨并集（AC5）：features（输入序）∪ 有任务突击提案（taskCount > 0 判据——2.3 单查询；
- * 输入序随行）。feature 轨 mode 恒 'expedition'；突击轨 mode = 'blitz'。
+ * 容器选项集（feature 轨——AC5 输入序）：feature 全量（远征轨——蓝点，mode 恒
+ * 'expedition'）。proposal kind 选项仍在役（容器 pill/派发路由渲染面零改动），
+ * 仅不再由本投影产出——proposal 域 UI 消费面退役后无提案行源。
  */
 export function taskContainerOptions(
   features: readonly FeatureCard[],
-  proposals: readonly ProposalCard[],
 ): readonly TaskContainerOption[] {
-  const options: TaskContainerOption[] = features.map((feature) => ({
+  return features.map((feature) => ({
     kind: 'feature',
     slug: feature.slug,
     title: feature.title,
-    mode: 'expedition',
+    mode: 'expedition' as const,
     taskCount: featureTotal(feature),
   }))
-  for (const proposal of proposals) {
-    if (proposal.mode !== 'blitz' || proposal.taskCount <= 0) continue
-    options.push({ kind: 'proposal', slug: proposal.slug, title: proposal.title, mode: 'blitz', taskCount: proposal.taskCount })
-  }
-  return options
 }
 
 /** 选中解析（命中 = 对应选项；未命中 = undefined 不派发切换） */
