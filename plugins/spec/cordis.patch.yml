@@ -1,0 +1,8 @@
+# @dsh-forge/spec 组合层：单行插入本包（A1 自含形态）。
+# 零模式/预设知识：spec 行不携 mode、不携预设绑定缺省值——presetBinding 由 forge
+# 组合器（M5）经 config 约定缝下发（遮蔽语义：patch config 同名行整体替换非合并）。
+# skills 挂载 = config 载体（customSkillDirs 行随宿主 preset 底稿/单装 patch 声明——
+# 官方核销报告 research/official-verification.md §2），本包 patch 本体零挂载行。
+- insert:
+    - id: spec
+      name: '@dsh-forge/spec'

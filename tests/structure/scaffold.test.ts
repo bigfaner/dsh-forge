@@ -49,7 +49,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ).toBe(true)
   })
 
-  it('根 solution tsconfig references 十四工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；md-mermaid/input-history/expert-squad/quote-reference/super-composer/mobile-bridge 先后入 packages/plugins/ 子居所；1.17 批二 git-worktree 旧包退役）', () => {
+  it('根 solution tsconfig references 十五工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；plugin-spec 建位 plugins/spec——提示段迁入批；md-mermaid/input-history/expert-squad/quote-reference/super-composer/mobile-bridge 先后入 packages/plugins/ 子居所；1.17 批二 git-worktree 旧包退役）', () => {
     const refs = ((readJson('tsconfig.json').references ?? []) as { path: string }[]).map((r) => rel(r.path))
     expect([...refs].sort()).toEqual(
       [
@@ -67,6 +67,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'plugins/project',
         // plugin-task-loop 1.5 包骨架入拓扑（引用面随包建位补记——1.13 欠账校正）
         'plugins/task-loop',
+        // plugin-spec：spec 插件包（提示段迁入批建位——forge:pipeline/forge:doc-style 段归属）
+        'plugins/spec',
         'plugins/knowledge',
         'packages/path-key',
         'packages/plugin-forge',
@@ -224,7 +226,8 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
     'plugins/knowledge/host/tools',
     'plugins/knowledge/host/prompt',
     'packages/plugin-forge/src/tools',
-    'packages/plugin-forge/src/prompt',
+    // plugin-spec 1.8 提示段迁入——plugin-forge src/prompt 退役，prompt 定位归 plugins/spec/host/prompt
+    'plugins/spec/host/prompt',
     'packages/plugin-forge-spec/src/tools',
     'packages/plugin-forge-spec/src/prompt',
     'packages/contracts/src/dto',
@@ -244,6 +247,7 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
       'packages/core/src/index.ts',
       'plugins/knowledge/host/index.ts',
       'packages/plugin-forge/src/index.ts',
+      'plugins/spec/host/index.ts',
       'packages/plugin-forge-spec/src/index.ts',
     ]) {
       expect(existsSync(join(ROOT, f))).toBe(true)

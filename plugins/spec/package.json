@@ -1,0 +1,36 @@
+{
+  "name": "@dsh-forge/spec",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "dsh 插件：Spec/Goal/AC 共识域——forge:pipeline 系统提示段（Spec 词汇唯一模式 + presetBinding 注入判据）与 forge:doc-style 段注册。A1 自含形态：单行 patch、skills 随包、提示段注册恒在，包本体零预设知识。",
+  "main": "./dist/host/index.js",
+  "types": "./dist/host/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/host/index.d.ts",
+      "import": "./dist/host/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "skills",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.4"
+  },
+  "devDependencies": {
+    "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/project": "workspace:*",
+    "@types/node": "24.19.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

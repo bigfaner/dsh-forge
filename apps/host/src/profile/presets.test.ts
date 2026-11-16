@@ -160,9 +160,9 @@ for (const preset of ['expedition', 'blitz'] as const) {
       expect(line).toBe(lineOf(blitzPersona, '行为纪律：'))
     })
 
-    it('plugin-forge 行 config mode 键（dual-mode-overhaul：双模式独立渲染——缺省回退远征）', () => {
+    it('plugin-forge 行 config 零 mode 键（plugin-spec 1.8 模式概念退役——唯一模式，双模板面不迁）', () => {
       const row = rows.get('plugin-forge')!
-      expect(row).toContain(isExpedition ? 'mode: expedition' : 'mode: blitz')
+      expect(row).not.toContain('mode:')
       expect(row).toContain('bindingsFile: "{{plugin-forge-bindings}}"')
     })
 

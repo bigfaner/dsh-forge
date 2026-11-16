@@ -23,6 +23,9 @@
       "path": "plugins/task-loop"
     },
     {
+      "path": "plugins/spec"
+    },
+    {
       "path": "packages/contracts"
     },
     {

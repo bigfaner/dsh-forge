@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/plugin-forge",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "private": true,
   "type": "module",
-  "description": "dsh 插件：forge 主线 tool 半身（动词透传 + forge:pipeline 系统提示段——运行期经 Cordis inject forgeTasks；persona 合成单源 = @dsh-forge/core）。",
+  "description": "dsh 插件：forge 管线 tool 半身（动词透传 + 派发循环驱动器 + forge:dispatch-loop 提示段——forge:pipeline/forge:doc-style 段已迁 plugins/spec）。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -845,6 +845,22 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  plugins/spec:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.0.4
+        version: 4.0.4(@deepseek-ai/cordis-plugin-include@1.0.9)(@deepseek-ai/cordis-plugin-loader@1.0.5)
+    devDependencies:
+      '@dsh-forge/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@dsh-forge/project':
+        specifier: workspace:*
+        version: link:../project
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
+
   plugins/task-loop:
     dependencies:
       '@deepseek-ai/dsh-subagent-in-process-driver':
