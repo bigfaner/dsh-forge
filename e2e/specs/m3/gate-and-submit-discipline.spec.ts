@@ -17,8 +17,9 @@
 //     验收清单（逐条补证据后重新提交）」）→ 转移校验（pending/blocked/终态提交 =
 //     「非法任务转移：<current> → <to>（agent 面）——合法目标 [in_progress]」）；
 //   - 行解析：TaskRef UNIQUE(slug, local_id) 未命中 = 「任务未命中：<where>（project…）」；
-//   - task_records：verb='submit' 行携 commit_hash / gate_json（sc7 账本断言面）；
-//   - gate_json = {compile, fmt, lint, test[, coverage]} 四布尔结构化落账。
+//   - task_settlements（task-loop.db 结算域账——f84fabfa sc7-gate-submit 迁移先例同锚）：
+//     结算行携 result/commit_hash/evidence_json（gates 聚合 = {compile, fmt, lint, test[, coverage]}
+//     四布尔结构化落账）；按 task 最新结算行断言任务终态。
 //
 // Outcome → 测试映射：
 //   Step1 success（AGENTS.md 配置态提交 + submit 记录含 commit_hash）……………………「冒烟」
@@ -54,7 +55,7 @@ import { expect } from '@playwright/test'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
-import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { openTaskLoopDb } from '../../support/sqlite.js'
 import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-jgsd'
@@ -80,12 +81,11 @@ async function rejectMessage(promise: Promise<unknown>): Promise<string> {
 
 test('@web-e2e @m3 gate 提交定式·冒烟：AGENTS.md 两态结算账本（commit_hash 恒含）+ gate_json 数字摘要（Step1-3 success）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
     const projectKey = projectKeyOf(wsDir)
-    const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const FEATURE = 'jgsd-feat'
     await forgeInvoke(page, 'forge:features/register', { projectId, slug: FEATURE, title: 'Jgsd gate 定式演示' })
@@ -124,22 +124,25 @@ test('@web-e2e @m3 gate 提交定式·冒烟：AGENTS.md 两态结算账本（co
       sessionId: 'e2e-jgsd-executor',
     })
 
-    // ── 账本断言（三任务终态 + 记录负载结构化）──
-    const db = openForgeDbAt(dir)
+    // ── 账本断言（三任务终态 + 结算行负载结构化——task-loop.db task_settlements 域账，
+    //   契约溯源 = f84fabfa sc7-gate-submit 迁移先例同锚：按 task 最新结算行断言终态）──
+    const db = openTaskLoopDb(udDir)
     try {
-      const gateOf = (taskId: string): Record<string, unknown> | undefined => {
-        const row = db.prepare<unknown[], { gate_json: string | null }>(`SELECT gate_json FROM task_records WHERE task_id = ? AND verb = 'submit'`).get(taskId)
-        return row?.gate_json === null || row?.gate_json === undefined ? undefined : (JSON.parse(row.gate_json) as Record<string, unknown>)
+      const latest = (taskId: string): { result: string; commit_hash: string | null; evidence_json: string | null } | undefined =>
+        db.prepare<unknown[], { result: string; commit_hash: string | null; evidence_json: string | null }>(
+          `SELECT result, commit_hash, evidence_json FROM task_settlements WHERE task_id = ? ORDER BY id DESC LIMIT 1`,
+        ).get(taskId)
+      const gatesOf = (taskId: string): Record<string, unknown> | undefined => {
+        const evidence = latest(taskId)?.evidence_json
+        return evidence == null ? undefined : (JSON.parse(evidence) as { gates?: Record<string, unknown> }).gates
       }
-      expect(db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(withAgents.taskId)?.task_status, '配置态任务 completed').toBe('completed')
-      expect(db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(withoutAgents.taskId)?.task_status, '未配置态任务 completed').toBe('completed')
-      expect(db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(gateTask.taskId)?.task_status, 'gate 任务 completed').toBe('completed')
-      const recA = db.prepare<unknown[], { commit_hash: string | null }>(`SELECT commit_hash FROM task_records WHERE task_id = ? AND verb = 'submit'`).get(withAgents.taskId)
-      expect(recA?.commit_hash, '配置态 submit 记录含 commit_hash').toBe(COMMIT_A)
-      const recB = db.prepare<unknown[], { commit_hash: string | null }>(`SELECT commit_hash FROM task_records WHERE task_id = ? AND verb = 'submit'`).get(withoutAgents.taskId)
-      expect(recB?.commit_hash, '未配置态 submit 记录含 commit_hash（两态账本齐）').toBe(COMMIT_B)
-      expect(gateOf(withAgents.taskId), '配置态 gate_json 四布尔').toMatchObject({ compile: true, fmt: true, lint: true, test: true })
-      expect(gateOf(gateTask.taskId), 'gate 任务 gate_json 结构化（lint=false 如实落账）').toMatchObject({ compile: true, fmt: true, lint: false, test: true })
+      expect(latest(withAgents.taskId)?.result, '配置态任务最新结算行 success（终态 completed）').toBe('success')
+      expect(latest(withoutAgents.taskId)?.result, '未配置态任务最新结算行 success（终态 completed）').toBe('success')
+      expect(latest(gateTask.taskId)?.result, 'gate 任务最新结算行 success（终态 completed）').toBe('success')
+      expect(latest(withAgents.taskId)?.commit_hash, '配置态结算行含 commit_hash').toBe(COMMIT_A)
+      expect(latest(withoutAgents.taskId)?.commit_hash, '未配置态结算行含 commit_hash（两态账本齐）').toBe(COMMIT_B)
+      expect(gatesOf(withAgents.taskId), '配置态 gate 四布尔（evidence_json.gates 聚合）').toMatchObject({ compile: true, fmt: true, lint: true, test: true })
+      expect(gatesOf(gateTask.taskId), 'gate 任务 gate 结构化（lint=false 如实落账）').toMatchObject({ compile: true, fmt: true, lint: false, test: true })
     } finally {
       db.close()
     }
@@ -152,12 +155,11 @@ test('@web-e2e @m3 gate 提交定式·冒烟：AGENTS.md 两态结算账本（co
 
 test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 空摘要 / 空因 / gate 摘要 / 错键（Step1b-3 边界）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
     const projectKey = projectKeyOf(wsDir)
-    const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const FEATURE = 'jgsd-reject'
     await forgeInvoke(page, 'forge:features/register', { projectId, slug: FEATURE, title: 'Jgsd 拒绝面演示' })
@@ -230,12 +232,17 @@ test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 
     }))
     expect(wrongKey, '错键 = 任务未命中').toContain('任务未命中')
 
-    // ── 库不被破坏：拒绝面零残留（各任务态如实 + 无部分审计）──
-    const db = openForgeDbAt(dir)
+    // ── 库不被破坏：拒绝面零残留（结算域账口径——拒结算 = 结算行缺席语义，
+    //   task-loop.db task_settlements，f84fabfa 迁移先例同锚）──
+    const db = openTaskLoopDb(udDir)
     try {
-      expect(db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(acTask.taskId)?.task_status, 'AC 任务保持 in_progress（未过门）').toBe('in_progress')
-      expect(db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(summaryTask.taskId)?.task_status, '空摘要任务已正常结算（拒绝不破坏后续合法提交）').toBe('completed')
-      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_records WHERE task_id = ? AND verb = 'submit'`).get(acTask.taskId)?.n, 'AC 任务零 submit 记录（单事务全成全败）').toBe(0)
+      const settleCount = (taskId: string): number =>
+        db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_settlements WHERE task_id = ?`).get(taskId)?.n ?? 0
+      expect(settleCount(acTask.taskId), 'AC 任务零结算行（未过门——结算缺席语义）').toBe(0)
+      expect(
+        db.prepare<unknown[], { result: string }>(`SELECT result FROM task_settlements WHERE task_id = ? ORDER BY id DESC LIMIT 1`).get(summaryTask.taskId)?.result,
+        '空摘要任务已正常结算（拒绝不破坏后续合法提交——最新结算行 success）',
+      ).toBe('success')
     } finally {
       db.close()
     }
@@ -248,12 +255,11 @@ test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 
 
 test('@web-e2e @m3 gate 提交定式·受阻径：blocked submit 不经双门（reason 落账）+ gate 失败受阻承接', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
     const projectKey = projectKeyOf(wsDir)
-    const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const FEATURE = 'jgsd-blocked'
     await forgeInvoke(page, 'forge:features/register', { projectId, slug: FEATURE, title: 'Jgsd 受阻径演示' })
@@ -282,17 +288,23 @@ test('@web-e2e @m3 gate 提交定式·受阻径：blocked submit 不经双门（
       blockClassification: { kind: 'new-problem' },
     })
 
-    const db = openForgeDbAt(dir)
+    const db = openTaskLoopDb(udDir)
     try {
-      expect(db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(acBlocked.taskId)?.task_status, '带 AC 任务受阻径 blocked（双门不拦——C4 失败分诊）').toBe('blocked')
-      expect(db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(gateFailed.taskId)?.task_status, 'gate 失败任务 blocked（失败不丢弃）').toBe('blocked')
-      const rec = db.prepare<unknown[], { gate_json: string | null }>(`SELECT gate_json FROM task_records WHERE task_id = ? AND verb = 'submit'`).get(gateFailed.taskId)
-      expect(rec?.gate_json !== null && rec?.gate_json !== undefined, '失败 gate 载荷原样落账（数字摘要可审计）').toBe(true)
-      if (rec?.gate_json != null) {
-        expect(JSON.parse(rec.gate_json) as Record<string, unknown>, '失败面四布尔如实（lint/test=false）').toMatchObject({ lint: false, test: false })
-      }
+      const latest = (taskId: string): { result: string; evidence_json: string | null } | undefined =>
+        db.prepare<unknown[], { result: string; evidence_json: string | null }>(
+          `SELECT result, evidence_json FROM task_settlements WHERE task_id = ? ORDER BY id DESC LIMIT 1`,
+        ).get(taskId)
+      expect(latest(acBlocked.taskId)?.result, '带 AC 任务受阻径最新结算行 blocked（双门不拦——C4 失败分诊）').toBe('blocked')
+      expect(latest(gateFailed.taskId)?.result, 'gate 失败任务最新结算行 blocked（失败不丢弃）').toBe('blocked')
+      const gates = (() => {
+        const evidence = latest(gateFailed.taskId)?.evidence_json
+        return evidence == null ? undefined : (JSON.parse(evidence) as { gates?: Record<string, unknown> }).gates
+      })()
+      expect(gates, '失败 gate 载荷原样落账（数字摘要可审计——evidence_json.gates 聚合）').toBeDefined()
+      expect(gates, '失败面四布尔如实（lint/test=false）').toMatchObject({ lint: false, test: false })
       for (const t of [acBlocked, gateFailed]) {
-        expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_records WHERE task_id = ? AND verb = 'submit'`).get(t.taskId)?.n, `受阻审计行在场（${t.slug}——reason 单源）`).toBeGreaterThanOrEqual(1)
+        const n = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_settlements WHERE task_id = ?`).get(t.taskId)?.n ?? 0
+        expect(n, `受阻结算行在场（${t.slug}——reason 单源）`).toBeGreaterThanOrEqual(1)
       }
     } finally {
       db.close()

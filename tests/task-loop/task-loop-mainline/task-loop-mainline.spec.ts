@@ -15,7 +15,8 @@
 // 覆盖半径（R3 收缩后）：
 //   - CT-MAINLINE-02.O1/O2（建卡落库 + 依赖边解析 + 计数一致——桥 addTask 重锚）
 //   - CT-MAINLINE-03.O1（claim 序——桥 claimTask 重锚；偏序/循环轨迹归 1.18）
-//   - CT-MAINLINE-04.O1/O2/O3（结算核销 success/blocked/AC 交叉校验拒——桥 claim+submit）
+//   - CT-MAINLINE-04.O1/O2/O3（结算核销 success/blocked + 双 warn 契约 O3：判据漂移
+//     warn 不拒写 + met=false 仍拒——桥 claim+submit）
 //   - CT-MAINLINE-05.O1/O2/O3（看板 AC 核销计数呈现——AN-2 实锚计数口径）
 //   - CT-MAINLINE-B4.O1/O2（只读结算门——零迁移 affordance 否定断言 + 正道可达）
 //   - CT-MAINLINE-B5.O1/O2（spec 缺席独立收口——本套件全程零 spec 即 M2 必然态）
@@ -42,6 +43,7 @@ import { forgeInvoke } from '../../../e2e/support/rpc.js'
 import { refetchOnce, createBridgeDriver, type ReplayWriteDriver } from '../../../e2e/support/replay/executor.js'
 import { openOverviewDock, revealRightbar } from '../../../e2e/support/navigation.js'
 import { DOCKKIT_STRIP_TAB, RIGHTBAR_COL } from '../../../e2e/support/anchors.js'
+import { openTaskLoopDb } from '../../../e2e/support/sqlite.js'
 import { TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 
 // 归属键派生单源复用（lib-path deriveDirName——tests 树无 workspace dep 解析径，经插件侧
@@ -81,6 +83,7 @@ interface Boot {
   readonly page: Page
   readonly driver: ReplayWriteDriver
   readonly projectKey: string
+  readonly userData: string
   /** renderer 未捕获异常（launchHost 收集——B5/B6 零崩断言面） */
   readonly pageErrors: readonly string[]
 }
@@ -96,7 +99,7 @@ async function bootHost(tag: string): Promise<Boot> {
     forgeDir: join(ws, '.forge'),
   })
   const projectKey = deriveDirName(ws)
-  return { app: launched.app, page, driver: createBridgeDriver(launched.app), projectKey, pageErrors: launched.pageErrors }
+  return { app: launched.app, page, driver: createBridgeDriver(launched.app), projectKey, userData, pageErrors: launched.pageErrors }
 }
 
 interface Card {
@@ -301,39 +304,58 @@ test('@task-loop-e2e @task-loop-mainline CT-04.O2：blocked 结算——reason �
   }
 })
 
-test('@task-loop-e2e @task-loop-mainline CT-04.O3：AC 交叉校验不符拒结算——零行落库 + 任务保持执行中', async () => {
+test('@task-loop-e2e @task-loop-mainline CT-04.O3：双 warn 契约——判据漂移 warn 不拒写（结算落账）+ met=false 仍拒（保持执行中）', async () => {
   test.setTimeout(300_000)
   const env = await bootHost('acmismatch')
-  const { page, projectKey } = env
+  const { page, projectKey, userData } = env
   try {
     const a = await addCard(env, '交叉校验任务', [AC_A])
     await claimCard(env)
-    // O3 形态①：criterion 与任务 AC 非逐字一致 → 拒（信封携 ERR_AC_CRITERIA_MISMATCH）
-    const mismatch = await rejectMessage(
-      submitCard(env, a, {
-        result: 'success',
-        summary: '判据被改写的越权结算（应拒）',
-        acceptanceCriteria: [{ criterion: `${AC_A}（被改写）`, met: true, evidence: 'x' }],
-        gate: { test: true },
-      }),
-    )
-    expect(mismatch, 'CT-04.O3 形态①：判据非逐字一致拒结算（域拒绝文案——errors.ts AcCriteriaMismatchError message）').toContain('AC 交叉校验失败')
-    // O3 形态②：任一 met=false → 拒（ERR_AC_NOT_MET）
+    // O3 形态①（契约溯源：1.6 双 warn 机械门① plugins/task-loop/host/domain/tasks/submit.ts:381
+    //   ac-criteria-drift 仅 emitDiag warn 不拒写——已裁决契约，不改产品代码；真机断言形态
+    //   对齐 task-loop-double-warn-gates spec 先例）：criterion 与任务 AC 非逐字一致 → 结算
+    //   照常落账 completed（原「拒结算零行落库」断言随契约退役）
+    const DRIFTED = `${AC_A}（被改写）`
+    const drifted = await submitCard(env, a, {
+      result: 'success',
+      summary: '判据被改写的越权结算（warn 不拒写）',
+      acceptanceCriteria: [{ criterion: DRIFTED, met: true, evidence: 'x' }],
+      gate: { test: true },
+    })
+    expect(drifted.status, 'CT-04.O3 形态①：判据漂移 warn 不拒写（结算信封终态 completed）').toBe('completed')
+    const cardsAfterDrift = await listCards(page, projectKey)
+    expect(cardsAfterDrift.find((c) => c.localId === a.localId)?.taskStatus, '漂移结算落账：list-tasks 呈现 completed').toBe('completed')
+    // 漂移判据原文在账（warn 不拒写的状态后果——结算域账 ac_results 携原文；ac-criteria-drift
+    // 事件捕获缝缺席 → 留痕 skip 同文件尾 B6.O3 口径，发射由 domain-tasks/verbs.test.ts 注入桩 pin）
+    const db = openTaskLoopDb(userData)
+    try {
+      const row = db.prepare<unknown[], { ac_results_json: string }>(
+        `SELECT ac_results_json FROM task_settlements WHERE task_id = ? ORDER BY id DESC LIMIT 1`,
+      ).get(a.taskId)
+      const acResults = JSON.parse(row?.ac_results_json ?? '[]') as readonly { criterion: string }[]
+      expect(acResults.map((r) => r.criterion), 'ac_results 携漂移判据原文（warn 不拒写——原文在账）').toEqual([DRIFTED])
+    } finally {
+      db.close()
+    }
+
+    // O3 形态②：任一 met=false → 拒（ERR_AC_NOT_MET——逐项闭环硬门仍在）
+    const b = await addCard(env, '未闭环任务', [AC_B])
+    await claimCard(env)
     const unmet = await rejectMessage(
-      submitCard(env, a, {
+      submitCard(env, b, {
         result: 'success',
         summary: '未闭环结算（应拒）',
-        acceptanceCriteria: [{ criterion: AC_A, met: false, evidence: '未完成' }],
+        acceptanceCriteria: [{ criterion: AC_B, met: false, evidence: '未完成' }],
         gate: { test: true },
       }),
     )
     expect(unmet, 'CT-04.O3 形态②：met=false 拒结算（域拒绝文案——errors.ts AcNotMetError message）').toContain('AC 逐项核验未通过')
-    // 零行落库 + 任务保持 claim 态（State 断言）
+    // 拒结算后任务保持 claim 态（State 断言）
     const cards = await listCards(page, projectKey)
-    expect(cards.find((c) => c.localId === a.localId)?.taskStatus, '拒结算后任务保持执行中').toBe('in_progress')
+    expect(cards.find((c) => c.localId === b.localId)?.taskStatus, '拒结算后任务保持执行中').toBe('in_progress')
     const stats = await taskStats(page, projectKey)
-    expect(stats.byStatus.completed ?? 0, '零行落库：completed 计数零新增').toBe(0)
-    expect(stats.byStatus.in_progress, '执行中计数保持').toBe(1)
+    expect(stats.byStatus.completed ?? 0, '漂移结算 1 completed（形态①落账）').toBe(1)
+    expect(stats.byStatus.in_progress, '执行中计数保持（拒结算零迁移）').toBe(1)
   } finally {
     await closeApp(env.app)
   }
