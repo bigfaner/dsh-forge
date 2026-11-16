@@ -389,7 +389,12 @@ export function ForgeHeroWorktreeMount({
           )
       })
       .then((candidates) => setSlugCandidates(candidates))
-      .catch(() => setSlugCandidates([]))
+      .catch((cause: unknown) => {
+        // 候选拉取失败留痕（不静默——AGENTS §7 诊断纪律）：静默吞会使新建弹窗 slug 候选
+        // 无声退化为空集（bug 8ba8e7d3——陈旧装载物调已下线 forgeProposals 面即此形态），
+        // 失败可观测才能与「真零候选」区分。
+        console.warn(`[dswf-worktree] slug 候选拉取失败（projectRoot=${projectRoot}）：${String(cause)}`)
+      })
   }, [createOpen, projectRoot, makeRpc])
 
   // ahead/behind 懒加载器（组件展开才拉 + 本面缓存共享）
