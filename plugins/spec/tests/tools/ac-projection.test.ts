@@ -67,7 +67,11 @@ function stubTools(
     matchAcSettlements: async (projectKey, criteria) => {
       calls.n += 1;
       expect(projectKey).toBe(deriveProjectKey(CWD));
-      return rowsFor(criteria, calls.n);
+      const matches = rowsFor(criteria, calls.n);
+      return {
+        matches,
+        unmatched: matches.filter((m) => m.met !== true).map((m) => m.criterion),
+      };
     },
   };
   return { tools: createSpecTools({ ...h.deps, acSettlementsOf: () => seam }), calls };
@@ -79,22 +83,21 @@ describe("AC 投影在场三态契约（进程内注入桩——met / unmet / un
     try {
       await createDemo(h.tools);
       // 抄写漂移形态：spec 判据「判据 B'」与任务侧判据「判据 B」文本不一致 →
-      // 桩按归一化精确等返回 unmatched 行（task-loop 匹配语义归一化单源在彼侧）
+      // 桩按归一化精确等返回聚合行（task-loop 匹配语义归一化单源在彼侧）
       const { tools } = stubTools(h, (criteria) =>
         criteria.map((c) =>
           c === "判据 A"
             ? { criterion: c, met: true, evidence: "e1", taskRefs: ["demo/1.1"] }
-            : c === "判据 B"
-              ? { criterion: c, met: false } // 部分核销（有结算未达成）→ unmet
-              : { criterion: c, met: false, unmatched: true }, // 未执行/漂移 → unmatched
+            : { criterion: c, met: false }, // 未达成 → unmet 并入 unmatched（聚合清单）
         ),
       );
       const result = (await tools.querySpec.execute(
         { slug: "demo-spec", include_ac_projection: true },
         execOf(),
       )) as { acProjection: AcProjectionRow[] };
-      expect(result.acProjection.map((p) => p.state)).toEqual(["met", "unmet", "unmatched"]);
+      expect(result.acProjection.map((p) => p.state)).toEqual(["met", "unmet", "unmet"]);
       expect(result.acProjection[0]).toMatchObject({ criterion: "判据 A", evidence: "e1", taskRefs: ["demo/1.1"] });
+      expect(result.acProjection.filter((p) => p.unmatched === true).map((p) => p.criterion)).toEqual(["判据 B", "判据 C"]);
     } finally {
       h.close();
     }
@@ -224,8 +227,10 @@ describe("消费点现查永不缓存（AGENTS 1.6）——重复查询现查 + 
       await createDemo(h.tools);
       const rows: AcMatchRow[] = GOALS.flatMap((g) => g.acs).map((c) => ({ criterion: c, met: true }));
       const seam: AcSettlementsFace = {
-        matchAcSettlements: async (_key, criteria) =>
-          criteria.map((c) => rows.find((r) => r.criterion === c) ?? { criterion: c, met: false, unmatched: true }),
+        matchAcSettlements: async (_key, criteria) => {
+          const matches = criteria.map((c) => rows.find((r) => r.criterion === c) ?? { criterion: c, met: false });
+          return { matches, unmatched: matches.filter((m) => m.met !== true).map((m) => m.criterion) };
+        },
       };
       const tools = createSpecTools({ ...h.deps, acSettlementsOf: () => seam });
       const first = (await tools.querySpec.execute(

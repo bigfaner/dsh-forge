@@ -138,7 +138,7 @@ export function createQuerySpecTool(deps: {
             });
           }
           // unmatched 非空 emitDiag warn（漂移信号 → M4 Goal 自动复核触发）
-          const unmatched = acProjection.filter((p) => p.state === "unmatched");
+          const unmatched = acProjection.filter((p) => p.unmatched === true);
           if (unmatched.length > 0) {
             emitDiagOrFallback(deps.onDiag, {
               event: DIAG_EVENT_AC_UNMATCHED,

@@ -45,10 +45,15 @@ function harness(opts: { failWrite?: boolean } = {}) {
 /** 投影缝替身组合根：以显式 seam 重建工具组（AGENTS 1.6——缝每次调用期求值） */
 function toolsWithSeam(service: ForgeSpecsService, rows: readonly AcMatchRow[]) {
   const seam: AcSettlementsFace = {
-    matchAcSettlements: (_projectKey, criteria) =>
-      Promise.resolve(
-        criteria.map((c) => rows.find((r) => r.criterion === c) ?? { criterion: c, met: false, unmatched: true }),
-      ),
+    matchAcSettlements: (_projectKey, criteria) => {
+      const matches = criteria.map(
+        (c) => rows.find((r) => r.criterion === c) ?? { criterion: c, met: false },
+      );
+      return Promise.resolve({
+        matches,
+        unmatched: matches.filter((m) => m.met !== true).map((m) => m.criterion),
+      });
+    },
   };
   return createSpecTools({ specs: service, acSettlementsOf: () => seam });
 }
@@ -221,13 +226,14 @@ describe("query_spec / list_specs（查询族薄封装 + AC 投影缝）", () =>
       const withSeam = toolsWithSeam(h.service, [
         { criterion: "判据 A", met: true, evidence: "e1", taskRefs: ["demo/1.1"] },
         { criterion: "判据 B", met: false },
-        { criterion: "判据 C", met: false, unmatched: true },
+        { criterion: "判据 C", met: false },
       ]);
       const result = (await withSeam.querySpec.execute(
         { slug: "demo-spec", include_ac_projection: true },
         execOf(),
       )) as { acProjection: { criterion: string; state: string }[] };
-      expect(result.acProjection.map((p) => p.state)).toEqual(["met", "unmet", "unmatched"]);
+      expect(result.acProjection.map((p) => p.state)).toEqual(["met", "unmet", "unmet"]);
+      expect(result.acProjection.filter((p) => p.unmatched === true).map((p) => p.criterion)).toEqual(["判据 B", "判据 C"]);
 
       // 缺席缝降级（default 工具组零 acSettlementsOf）
       const degraded = (await h.tools.querySpec.execute(
