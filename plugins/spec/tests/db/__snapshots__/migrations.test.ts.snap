@@ -1,0 +1,69 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DDL 快照锚（已发布迁移语句禁改——防抖动） > v1 语句集快照 1`] = `
+[
+  "CREATE TABLE schema_meta (
+    version     INTEGER PRIMARY KEY,
+    applied_at  TEXT    NOT NULL
+)",
+  "CREATE TABLE spec_specs (
+    id           TEXT PRIMARY KEY,                    -- 纯 UUID（写入点 createSpec 生成；业务唯一由 uq_spec_specs_project_slug 承担）
+    slug         TEXT NOT NULL,                       -- Spec 文档目录键（.forge/specs/{slug}/）与对外逻辑键
+    title        TEXT NOT NULL,
+    spec_status   TEXT NOT NULL DEFAULT 'draft'
+                  CONSTRAINT ck_spec_specs_status CHECK (spec_status IN
+                    ('draft', 'under-review', 'accepted', 'archived')),
+    tiers_json   TEXT NOT NULL DEFAULT '[]'
+                  CONSTRAINT ck_spec_specs_tiers CHECK (json_valid(tiers_json)),
+    project_key  TEXT NOT NULL,                       -- 行级归属键（cwd 纯函数派生，无 default）
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL,
+    CONSTRAINT uq_spec_specs_project_slug UNIQUE (project_key, slug)
+)",
+  "CREATE INDEX idx_spec_specs_listing ON spec_specs(project_key, spec_status, created_at)",
+  "CREATE TABLE spec_goals (
+    id          TEXT PRIMARY KEY,                     -- 纯 UUID
+    spec_id     TEXT NOT NULL REFERENCES spec_specs(id),
+    sort_key    INTEGER NOT NULL,                     -- Goal 呈现序（goal 间无依赖拓扑，纯排序）
+    title       TEXT NOT NULL,
+    brief       TEXT,                                 -- Goal 简报（拆解上下文承载，可空）
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+)",
+  "CREATE UNIQUE INDEX uq_spec_goals_order ON spec_goals(spec_id, sort_key)",
+  "CREATE TABLE spec_acs (
+    id          TEXT PRIMARY KEY,                     -- 纯 UUID
+    goal_id     TEXT NOT NULL REFERENCES spec_goals(id),
+    sort_key    INTEGER NOT NULL,                     -- AC 呈现序
+    criterion   TEXT NOT NULL,                        -- 判据原文（逐字精确——对齐键本体）
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+)",
+  "CREATE UNIQUE INDEX uq_spec_acs_order ON spec_acs(goal_id, sort_key)",
+  "CREATE TABLE spec_docs (
+    spec_id     TEXT PRIMARY KEY REFERENCES spec_specs(id),   -- 1:1：登记行以 spec_id 为自然键 PK
+    rel_path    TEXT NOT NULL,                          -- 相对项目根路径（createSpec 随参显式）
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+)",
+  "CREATE TABLE spec_transitions (
+    id          TEXT PRIMARY KEY,                     -- 纯 UUID
+    spec_id     TEXT NOT NULL REFERENCES spec_specs(id),
+    from_status TEXT NOT NULL
+                CONSTRAINT ck_spec_trans_from CHECK (from_status IN
+                  ('draft', 'under-review', 'accepted', 'archived')),
+    to_status   TEXT NOT NULL
+                CONSTRAINT ck_spec_trans_to CHECK (to_status IN
+                  ('draft', 'under-review', 'accepted', 'archived')),
+    note        TEXT,                                 -- 驳回理由留痕（驳回行服务层强制非空）
+    actor       TEXT NOT NULL
+                CONSTRAINT ck_spec_trans_actor CHECK (actor IN ('plugin-tool', 'ui')),
+    created_at  TEXT NOT NULL
+)",
+  "CREATE INDEX idx_spec_transitions_spec ON spec_transitions(spec_id, created_at)",
+  "CREATE TRIGGER trg_spec_transitions_no_update BEFORE UPDATE ON spec_transitions
+BEGIN SELECT RAISE(ABORT, 'spec_transitions: append-only violation (update)'); END",
+  "CREATE TRIGGER trg_spec_transitions_no_delete BEFORE DELETE ON spec_transitions
+BEGIN SELECT RAISE(ABORT, 'spec_transitions: append-only violation (delete)'); END",
+]
+`;

@@ -13,6 +13,8 @@
   "references": [
     { "path": "./tsconfig.shared.json" },
     { "path": "../../packages/contracts" },
+    { "path": "../../lib/db" },
+    { "path": "../../lib/path" },
     { "path": "../../plugins/project/tsconfig.host.json" }
   ]
 }
