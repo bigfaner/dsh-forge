@@ -6,7 +6,9 @@
 // 审计面（机械断言）：
 //   1. contracts：族常量值精确 + 平铺视图键（族前缀）+ allowlist 全收 + dto 负载映射键 ↔ 族常量键；
 //   2. host ipc：三域注册文件逐通道 ipc.register(<族常量>.<键>) + m2-wiring 装配行；
-//   3. web/rpc：client.ts 逐通道 invokeRpc(...<族常量>.<键>) 消费行。
+//   3. web/rpc：client.ts settings/features 逐通道消费行；proposals 族消费行零在场
+//      （plugin-spec/1.11 proposal 域整域下线——UI 消费面退役反转 pin；contracts/host ipc
+//      词汇面随 core 解散批退役，故 ㉒-1/㉒-2 的 proposals 行仍按 contracts 现值 pin）。
 // 任一侧私改（加通道/改值/漏注册/漏消费）即红——M2 G1-13 机制 pin（forge-channels.test.ts
 // allowlist 校验机制）之上的新通道内容 pin。
 import { readFileSync } from 'node:fs'
@@ -114,12 +116,13 @@ describe('pin ㉒-2 host ipc 面（注册行逐通道机械审计）', () => {
 })
 
 describe('pin ㉒-3 web/rpc 面（client 消费行逐通道机械审计）', () => {
-  it('client.ts：proposals transition/setMode/listDocs 三消费行（族常量引用）', () => {
-    for (const key of ['transition', 'setMode', 'listDocs'] as const) {
-      expect(webClient, `client.ts 应消费 PROPOSALS_CHANNELS.${key}`).toContain(
+  it('client.ts：proposals 族消费行零在场（proposal 域整域下线——plugin-spec/1.11 消费面退役反转 pin）', () => {
+    for (const key of ['list', 'transition', 'setMode', 'listDocs'] as const) {
+      expect(webClient, `client.ts 不应再消费 PROPOSALS_CHANNELS.${key}`).not.toContain(
         `PROPOSALS_CHANNELS.${key}`,
       )
     }
+    expect(webClient).not.toContain('client.proposals')
   })
 
   it('client.ts：settings get/set 两消费行 + features.listDocs 消费行', () => {
