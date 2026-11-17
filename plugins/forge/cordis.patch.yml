@@ -1,0 +1,31 @@
+# @dsh-forge/forge 组合器：五件插行 + 集成 config 下发（纯声明物化器——零域逻辑、
+# 零 db 句柄、不持运行态）。
+# - 五条 insert 行 = 官方 patch 正门（package.json dsh.bundle.patch 声明指向本文件，
+#   loader 逐层应用——组合行识别面对齐既有插件单行插行先例 plugins/project）。
+# - 四件持库插件（project/spec/task-loop/knowledge）统一下发共库 dbFile =
+#   {DSH_HOME}/forge/db/forge/forge.db（域前缀分表互不越界）；expert-squad 无库，裸行。
+# - {DSH_HOME} 占位符 host 级 boot 期物化：patch 文件经官方 userPatchesSchema（cordis
+#   entry-list 方言，!!js 表达式合法——dsh-app-boot parsePatchList 核销）解析、Loader
+#   行激活期求值，本文件以 !!js 表达式承担替换，不设独立 host 物化入口；DSH_HOME 缺席
+#   → dbFile undefined → 各件回落单装缺省装配（fail-soft 不阻载）。
+# - patch config 为完整对象：官方 override 语义 = config 整体替换非深合并（dsh-app-boot
+#   applyEntryPatches 核销）——卸下 forge 后五件回落各自单装行与缺省 config，语义不变。
+- insert:
+    - id: project
+      name: '@dsh-forge/project'
+      config:
+        dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+    - id: spec
+      name: '@dsh-forge/spec'
+      config:
+        dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+    - id: task-loop
+      name: '@dsh-forge/task-loop'
+      config:
+        dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+    - id: expert-squad
+      name: '@dsh-forge/expert-squad'
+    - id: knowledge
+      name: '@dsh-forge/knowledge'
+      config:
+        dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
