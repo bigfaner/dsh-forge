@@ -13,7 +13,10 @@
 //     构建期内联进 dist——产物自含，dist 零 @dsh-forge/lib-* 裸 import）。
 import { errMessage } from "@dsh-forge/lib-util";
 import { consoleDiagFallback, type DiagLevel } from "@dsh-forge/lib-diag";
-import { Peer } from "@deepseek-ai/dsh-client-connection";
+// owner Peer 类型侧引入（AGENTS 1.6 配方——bug e4aa1a5f：静态具名导入经宿主解析面落到
+// 无 Peer 导出的旧版本时整 entry 拒激活；runtime ctor 由 loadOwnerPeerCtor 惰性动态加载
+// + fail-soft 承担，装载期零耦合）。
+import type { Peer } from "@deepseek-ai/dsh-client-connection";
 import { FORGE_CHECKPOINTS_SERVICE_KEY, FORGE_TASKS_SERVICE_KEY } from "../shared/contract-constants.js";
 import {
   assembleTaskLoopServices,
@@ -109,11 +112,32 @@ function lazyProjectsFace(ctx: unknown): ForgeTasksRemoteDeps["projects"] {
 /** Typert 注册后自探针缝（gateway invoke 直探——serve 层认领自证；缺席/失败由注册面诊断）。
  *  bug a99a7293 同族修型：官方 gateway 2.x `invoke` 请求必携 Peer（assertPeerLive 读
  *  `peer.signal`——缺 peer 即 undefined 'signal'），owner Peer 经官方 dsh-client-connection
- *  正门构造（principal kind = owner），探针结算即 dispose（零悬空 Peer）。 */
-export function selfProbeOf(ctx: unknown): ForgeTasksRemoteDeps["selfProbe"] {
+ *  正门构造（principal kind = owner），探针结算即 dispose（零悬空 Peer）。
+ *  bug e4aa1a5f 修型：Peer ctor 改运行期惰性动态加载（官方包源码核销——0.2.2-rc.2 导出
+ *  `Peer`，0.2.0-rc.2 仅 `OperatorPeer`；宿主解析面版本不可静态假设），导出缺席 → 探针
+ *  如实降级抛错（fail-soft 归注册面），entry 装载不再被导入面炸掉。 */
+/** owner Peer 构造面（类型侧引入保形——principal kind = owner）。 */
+export type OwnerPeerCtor = new (owner: never, options: { principal: { kind: "owner" } }) => Peer;
+
+/** 官方 dsh-client-connection 导出面现查（每个消费点调用期求值——检测结果不缓存）。
+ *  模块解析失败/无 Peer 导出 = undefined（降级语义由调用方承担）。 */
+export async function loadOwnerPeerCtor(): Promise<OwnerPeerCtor | undefined> {
+  try {
+    const mod = (await import("@deepseek-ai/dsh-client-connection")) as { Peer?: OwnerPeerCtor };
+    return mod.Peer;
+  } catch {
+    return undefined;
+  }
+}
+
+export function selfProbeOf(
+  ctx: unknown,
+  deps?: { readonly peerLoader?: () => Promise<OwnerPeerCtor | undefined> },
+): ForgeTasksRemoteDeps["selfProbe"] {
   const root = ((ctx as { root?: unknown }).root ?? ctx) as {
     get?: (name: string) => unknown;
   };
+  const peerLoader = deps?.peerLoader ?? loadOwnerPeerCtor;
   return async (namespace, method, args) => {
     let gateway: unknown;
     try {
@@ -125,9 +149,13 @@ export function selfProbeOf(ctx: unknown): ForgeTasksRemoteDeps["selfProbe"] {
     if (invoke === undefined) {
       throw new Error("typertGateway 服务缺席——serve 层认领不可达");
     }
+    const PeerCtor = await peerLoader();
+    if (PeerCtor === undefined) {
+      throw new Error("官方 dsh-client-connection 导出面无 Peer（宿主解析版本过旧）——owner Peer 不可构造，自探针降级");
+    }
     // Peer owner 须为 cordis Context（scope fiber 挂靠——root ctx 即宿主根；跨包类型双源
     // 以结构窄面通过，构造点 as never 收口）
-    const peer = new Peer(root as never, { principal: { kind: "owner" } });
+    const peer = new PeerCtor(root as never, { principal: { kind: "owner" } });
     try {
       // receiver 保真调用（gateway Service 方法解绑 this 即崩——invokePrepared undefined 判例）
       return await Reflect.apply(invoke, gateway, [{ namespace, method, args: args ?? {}, peer }]);

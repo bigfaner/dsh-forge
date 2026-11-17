@@ -137,8 +137,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.1");
   });
 
-  it("版本 bump 0.16.0（plugin-spec/1.11 minor——forgeProposals RPC 镜像面退役拆除；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.16.0");
+  it("版本 bump 0.17.2（plugin-forge-combo/fix-2 patch——owner Peer 装载期解耦 bug e4aa1a5f；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.17.2");
   });
 });
 
@@ -226,6 +226,15 @@ describe("bundle 管线产物 self-containment", () => {
       }
       expect(deps[spec], `${spec} 运行期 import 未在 dependencies（tgz 独立安装断链）`).toBeDefined();
     }
+  });
+
+  it("host bundle 零静态 dsh-client-connection 具名导入（装载期解耦——bug e4aa1a5f：宿主解析面无 Peer 导出即整 entry 拒激活；运行期 ctor 惰性动态加载承担）", () => {
+    const distEntry = resolve(pkgDir, "dist", "host", "index.js");
+    if (!existsSync(distEntry)) return; // 未构建（纯 src 测试树）
+    const bundled = readFileSync(distEntry, "utf8");
+    expect(bundled).not.toMatch(
+      /import\s*\{[^}]*Peer[^}]*\}\s*from\s*["']@deepseek-ai\/dsh-client-connection["']/,
+    );
   });
 
   it("client bundle 产物自含：ui 内联、零 @dsh-forge/* import、自注册装载头在位", () => {

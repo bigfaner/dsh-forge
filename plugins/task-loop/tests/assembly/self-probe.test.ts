@@ -3,7 +3,7 @@
 // （lifetime signal aborted——零悬空 Peer）；③ gateway 缺席如实抛错（fail-soft 归注册面）。
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { selfProbeOf } from '../../host/index.js'
+import { loadOwnerPeerCtor, selfProbeOf } from '../../host/index.js'
 
 describe('selfProbeOf（owner Peer 直探缝）', () => {
   it('invoke 请求携 owner Peer；结算后 Peer dispose（signal aborted）', async () => {
@@ -37,5 +37,22 @@ describe('selfProbeOf（owner Peer 直探缝）', () => {
   it('gateway 缺席 → 缺席错误', async () => {
     const probe = selfProbeOf(new Context())
     await expect(probe('forgeTasks', 'list')).rejects.toThrow('typertGateway 服务缺席')
+  })
+
+  it('workspace 解析面 owner Peer ctor 在场（官方 0.2.2-rc.2 导出面核销——Peer 具名导出）', async () => {
+    const ctor = await loadOwnerPeerCtor()
+    expect(ctor).toBeTypeOf('function')
+  })
+
+  it('官方导出面无 Peer → 探针降级错误（bug e4aa1a5f——宿主解析面 0.2.0-rc.2 仅 OperatorPeer，fail-soft 不炸 entry 装载）', async () => {
+    class GatewayStub {
+      async invoke() {
+        return { ok: true }
+      }
+    }
+    const ctx = new Context()
+    ctx.provide('typertGateway', new GatewayStub() as never)
+    const probe = selfProbeOf(ctx, { peerLoader: async () => undefined })
+    await expect(probe('forgeTasks', 'list')).rejects.toThrow('Peer')
   })
 })
