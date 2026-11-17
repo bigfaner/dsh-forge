@@ -81,7 +81,7 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     rmSync(join(env.dshHome, 'profiles', 'forge-cal'), { recursive: true, force: true })
   })
 
-  test('CT-NPM-01 #step-1/#step-2/#B2 O1：profile forge 创建 + 组合器条目物化（启动前即就绪）+ desktop 零渗透', async () => {
+  test('CT-NPM-01 #step-1/#step-2/#B2 O1：profile forge 创建 + 组合器条目物化（启动前即就绪）+ insert patch 行生效 + desktop 零渗透', async () => {
     // Invariants 基线（CT-NPM-01）：desktop profile 对账面先拍快照
     const desktopBundlesBefore = JSON.stringify(installedBundles(env.dshHome, 'desktop'))
 
@@ -98,10 +98,16 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     expect(existsSync(forgeEntry), `forge 组合器条目物化在场 ${forgeEntry}`).toBe(true)
     expect(readdirSync(forgeEntry).length, 'forge 组合器条目目录非空').toBeGreaterThan(0)
 
-    // State（CT-NPM-01）：dsh.profile.bundles 对账含 forge + 五条裸名行（逐条精确——禁 OR 稀释）
-    const bundles = installedBundles(env.dshHome, 'forge')
-    expect(bundles, '对账含 forge 条目').toContain(FORGE_PKG)
-    for (const bare of BARE_BUNDLES) expect(bundles, `对账含裸名行 ${bare}`).toContain(bare)
+    // State（CT-NPM-01）：boot 期 insert patch 行生效证据（fix-6 锚修订——
+    // dsh.profile.bundles 为 profile 目录字段，patch 插行不经该面，bundles 对账断言废除；
+    // 生效判据 = dump-config 组合实况五条 insert 行 + 共库 config 全量在场；
+    // 五件冷启动装载运行期锚归 CT-NPM-03）
+    const dump = await runDsh(env.dshBin, ['--profile', 'forge', '--dump-config'], env.dshHome)
+    expect(dump.code, `dump-config 组合实况成功（exit=${String(dump.code)}）stderr=${dump.stderr.slice(-400)}`).toBe(0)
+    expect(dump.stdout, 'dump-config 含 forge patch 段标记').toContain('# == @dsh-forge/forge')
+    for (const bare of BARE_BUNDLES) expect(dump.stdout, `dump-config 含 insert 行 ${bare}`).toContain(`- name: '${bare}'`)
+    const dbFileHits = dump.stdout.match(/forge\/db\/forge\/forge\.db/g)?.length ?? 0
+    expect(dbFileHits, '共库 config 全量在场（project/spec/task-loop/knowledge 四件 dbFile 表达式）').toBeGreaterThanOrEqual(4)
 
     // Invariants（CT-NPM-01）：desktop profile 零变化（通道不渗透）
     expect(JSON.stringify(installedBundles(env.dshHome, 'desktop')), 'desktop 对账面零变化').toBe(desktopBundlesBefore)
