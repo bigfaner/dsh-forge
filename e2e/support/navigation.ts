@@ -7,7 +7,7 @@
 import { expect, type Page } from '@playwright/test'
 import { homedir } from 'node:os'
 import { isAbsolute, relative, resolve } from 'node:path'
-import { DOCKKIT_STRIP_TAB, OV_PANEL, RIGHTBAR_COLLAPSED, RIGHTBAR_COL } from './anchors.js'
+import { COMPOSER_INPUT, DOCKKIT_STRIP_TAB, OV_PANEL, RIGHTBAR_COLLAPSED, RIGHTBAR_COL, addProjectPhase } from './anchors.js'
 
 /**
  * 回退浏览器起始根（host listDir 缺省 = os.homedir() 的 spec 侧镜像）。
@@ -185,4 +185,46 @@ export async function openOverviewDock(page: Page): Promise<void> {
     await entry.click()
   }
   await expect(page.locator(OV_PANEL).first(), '概览 tab body 挂载（dswf-overview）').toBeVisible({ timeout: 30_000 })
+}
+
+/**
+ * 会话相位添加项目入口（fix-8 锚迁移：data-dswf-nav「＋」侧栏入口随 37fef243 收敛退役——
+ * 空态 CTA 之外唯一残存添加径 = hero 芯片弹层 footer「添加项目…」）。composer 宿主在场的
+ * 会话相位打开弹层 → 点 footer 项 → 注册两段模态 browser 相位就位。
+ */
+export async function openAddProjectViaHeroMenu(page: Page): Promise<void> {
+  // 双径（fix-8 入口锚迁移）：侧栏空态「添加项目」CTA 在场优先（37fef243 收敛后唯一残存
+  // 添加入口——注册后侧栏空态形态亦承载）；缺席 = 会话相位 hero 芯片弹层 footer 径。
+  const { CTA_ADD_PROJECT } = await import('./anchors.js')
+  const cta = page.locator(CTA_ADD_PROJECT).first()
+  if ((await cta.isVisible().catch(() => false)) === true) {
+    await cta.click()
+    await expect(page.locator(addProjectPhase('browser')), '添加项目模态 browser 相位（注册流入口）').toBeVisible({ timeout: 30_000 })
+    return
+  }
+  const composer = page.locator(COMPOSER_INPUT).last()
+  await expect(composer, '官方会话面 composer 在场（chip 宿主）').toBeVisible({ timeout: 60_000 })
+  // 晚到模态处置（openRealSession 同径）：零凭据形态 API Key onboarding 可晚挂 mask 拦 chip 点击
+  const { ensureNoBlockingDialog } = await import('./modals.js')
+  await ensureNoBlockingDialog(page)
+  const menu = page.locator('.dswf-hero-picker-list')
+  // 产品芯片锚 = data-dswt-hero-trigger（bug-hero 判例锚——官方 blank composer 自带同名
+  // aria「选择工作区」钮，aria .first() 会误中官方面；触发器锚唯一定位产品弹层宿主；
+  // 缺席回退 aria 面——hero 相位变体）
+  const chip = page.locator('[data-dswt-hero-trigger]').first()
+  const chipTarget = (await chip.isVisible().catch(() => false)) === true ? chip : page.locator('button[aria-label="选择工作区"]').first()
+  // 两轮尝试（show-session 还原序列下 chip 水化/菜单竞速——首轮空等即重开）
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await chipTarget.click()
+    const appeared = await menu
+      .waitFor({ state: 'visible', timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (appeared) break
+    await page.keyboard.press('Escape')
+    await ensureNoBlockingDialog(page)
+  }
+  await expect(menu, 'hero 芯片弹层卡在场').toBeVisible({ timeout: 15_000 })
+  await menu.locator('[role="menuitem"]', { hasText: '添加项目…' }).first().click()
+  await expect(page.locator(addProjectPhase('browser')), '添加项目模态 browser 相位（注册流入口）').toBeVisible({ timeout: 30_000 })
 }
