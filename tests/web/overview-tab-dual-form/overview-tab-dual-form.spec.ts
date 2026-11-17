@@ -72,10 +72,31 @@ function overviewTab(page: Page) {
   return page.locator(DOCKKIT_STRIP_TAB).filter({ hasText: '概览' }).first()
 }
 
+/**
+ * 概览 tab 官方开出径（ui-sidebar-right README「The guide」机械——README.md:119）：默认页
+ * 按在册 guide 入口数裁决，零/多入口 = 开引导页——概览页型不自动开出，须经引导页入口
+ * 拾取（`tab.actions.openTab(kind, { replaceTab: true })`，产品零代码）。tab 已在座 =
+ * 零动作（布局记忆/上轮开出形态）；未在座 = 收展右栏 + 点引导页 `dswf-overview` 入口卡。
+ */
+async function openOverviewViaGuide(page: Page): Promise<void> {
+  if ((await overviewTab(page).count()) > 0) return
+  const openRb = page.getByRole('button', { name: '打开右侧边栏' }).first()
+  if ((await openRb.count()) > 0) {
+    await openRb.click({ force: true })
+    await page.waitForTimeout(3_000)
+  }
+  const entry = page.locator('[data-sidebar-right-guide-entry="dswf-overview"]').first()
+  await expect(entry, 'CT-OVERVIEW-1 前置：引导页概览入口卡在座（页型 + guide 注册锚）').toBeVisible({ timeout: 30_000 })
+  await entry.click({ force: true })
+  await page.waitForTimeout(3_000)
+}
+
 test('@hif-e2e @overview-dual-form CT-OVERVIEW-1 集成形态终态：project 拥有 body + AC 进度段落座 + 零自身 body 叠加', async () => {
   test.setTimeout(300_000)
   const page = harness.page
-  // Input（CT-OVERVIEW-1 ①②）：进入侧栏工作区 + 双插件装载（beforeAll 已装）→ 概览 tab 打开
+  // Input（CT-OVERVIEW-1 ①②）：进入侧栏工作区 + 双插件装载（beforeAll 已装）→ 概览 tab 开出
+  // （官方引导页开出径——默认页按 guide 入口数裁决，见 openOverviewViaGuide 注）
+  await openOverviewViaGuide(page)
   await expect(overviewTab(page), 'CT-OVERVIEW-1/INV-A1：概览 tab 恒在座且可见').toBeVisible({ timeout: 30_000 })
   await overviewTab(page).click({ force: true })
   await page.waitForTimeout(3_000)

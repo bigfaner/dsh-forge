@@ -177,6 +177,7 @@ export * from './session-actions.js'
 
 
 import { registerOfficialSeamFaces, revokeOfficialSeamGlobals } from './official-seams.js'
+import { registerOverviewDockFace } from './overview-dock-face.js'
 import { FORGE_REMOTE_CONTRIBUTION } from './remote.js'
 import { createForgeRpcClient, FORGE_REMOTE_NAMESPACES, forgeFaceOf, installForgeRemoteFace, markForgeRemoteMountSettled } from './rpc.js'
 import { installWorktreePrefsFace, type ConfigFormsFace } from './settings-section/index.js'
@@ -391,9 +392,15 @@ export const projectClient = {
     }
     // knowledge 族三面已随迁 knowledge 插件 bundle 自注册（knowledge-plugin-migration
     // 1.4——faces.ts apply 期自注册 + knowledgeGateOf 双门控；本包注册行退役，杜绝双写源）。
-    // dock tab 族（1.13 迁移退役：overview/doc 两键注册面迁 @dsh-forge/task-loop
-    // bundle（ui/dock-tabs-face.ts）——本包 apply 零 dock 登记（bug tab 两段仍归
-    // official-seams.ts ④，注册归属不变）。
+    // dock tab 族（裁决 1 复位：overview 键注册面归本包——project 恒 priority 0 拥有
+    // 并渲染概览主体，task-loop 双形态遮蔽兜底；doc 键 + bug tab 两段仍归
+    // official-seams.ts ④/task-loop dock-tabs-face，注册归属不变）。
+    try {
+      const overviewDock = registerOverviewDockFace(rec as never, slots)
+      console.info(`[dsh-forge/project] overview dock faces registered=[${overviewDock.registered.join(', ')}]`)
+    } catch (error) {
+      console.warn('[dsh-forge/project] overview dock face registration failed——降级不注册', error)
+    }
     // sidebar.workspaces 顶替（1.6 迁入——B 类顶替①：官方 WorkspaceBrowser 整段替换，
     // 负优先级恒选胜语义 audit §6；项目列表五功能复刻，数据源 = forge.projects Typert；
     // sessions/workspaces/uiWorkspace 服务经 ctx.get 现查，缺席 = 不注册官方保持）。

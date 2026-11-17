@@ -77,14 +77,24 @@ function fakeLocale(): LocaleServiceFace {
   return { register: () => () => {}, bind: () => (key: string) => key }
 }
 
-/** 形状合法 ctx（effect 工厂捕获[带 name]——卸载级联断言面） */
-function fakeCtx(): { get(name: string): unknown; effects: [string, () => (() => void) | undefined][] } {
+/** 形状合法 ctx（effect 工厂捕获[带 name]——卸载级联断言面；register 记 dispose 调用——页型级联断言面） */
+function fakeCtx(): {
+  get(name: string): unknown
+  effects: [string, () => (() => void) | undefined][]
+  disposedTypes: string[]
+} {
   const effects: [string, () => (() => void) | undefined][] = []
+  const disposedTypes: string[] = []
   return {
     effects,
+    disposedTypes,
     get: (name: string) =>
       name === 'sidebarRightTabs'
-        ? { register: () => () => {} }
+        ? {
+            register: (definition: { readonly id: string }) => () => {
+              disposedTypes.push(definition.id)
+            },
+          }
         : undefined,
     // OfficialSeamCtx.effect 同形窄面
     effect: (factory: () => (() => void) | undefined, name?: string) => {
@@ -119,23 +129,34 @@ describe('概览 tab 双形态注册切换（裁决 1）', () => {
     expect(diag.registered).toContain(`${DSWF_OVERVIEW_AC_PROGRESS_SLOT}:${AC_ENTRY_KEY}`)
   })
 
-  it('单装形态：project 缺席 → priority -10 独立 body + chip 标题段，AC 段零注册', () => {
+  it('单装形态：project 缺席 → 页型 + priority -10 独立 body + chip 标题段，AC 段零注册', () => {
     const slots = dualSlots()
     const diag = registerDockTabsFace(fakeCtx() as never, slots, fakeLocale())
     expect(diag.mode).toBe('standalone')
+    expect(diag.registered, '单装形态页型兜底注册（guide 入口卡载体）').toContain('dswf-overview: dock tab type')
     const body = slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY)
     expect(body?.priority).toBe(PRIORITY_TASK_LOOP_FALLBACK)
     expect(slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT)).toBeUndefined()
     expect(slots.dispatch(SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT, OVERVIEW_KEY)).toBeDefined()
   })
 
+  it('集成形态零页型注册（project 拥有者——官方 registry 同 id 撞车零触发）', () => {
+    const slots = dualSlots([{ name: SIDEBAR_RIGHT_PANE_TAB_SLOT, key: OVERVIEW_KEY, priority: PRIORITY_PROJECT_OVERVIEW_OWNER }])
+    const diag = registerDockTabsFace(fakeCtx() as never, slots, fakeLocale())
+    expect(diag.mode).toBe('integrated')
+    expect(diag.registered, '集成形态页型归 project——task-loop 零页型注册').not.toContain('dswf-overview: dock tab type')
+  })
+
   it('后装分支：task-loop 先启 → project 后到注册通知 → dispose 自身 body 切集成', () => {
     const slots = dualSlots()
-    const diag = registerDockTabsFace(fakeCtx() as never, slots, fakeLocale())
+    const ctx = fakeCtx()
+    const diag = registerDockTabsFace(ctx as never, slots, fakeLocale())
     expect(diag.mode).toBe('standalone')
     seatProject(slots)
     slots.notify()
     expect(diag.mode).toBe('integrated')
+    // 页型随切换级联让位（官方 registry 同 id 二次注册抛错——project 拥有者重试落座前提）
+    expect(ctx.disposedTypes, '切集成时单装页型已 dispose').toContain(OVERVIEW_KEY)
     expect(slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY && e.priority !== PRIORITY_PROJECT_OVERVIEW_OWNER)).toBeUndefined()
     expect(slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT && e.key === AC_ENTRY_KEY)).toBeDefined()
     expect(slots.dispatch(SIDEBAR_RIGHT_PANE_TAB_SLOT, OVERVIEW_KEY)).toBe('project-body')

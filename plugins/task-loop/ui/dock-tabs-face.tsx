@@ -1,7 +1,8 @@
 // dock tab 族注册面（1.13——概览 tab 双形态注册切换版）：
 // 两段注册（官方口径「adding a type is a registration, never an edit」）：
-//   第一段 = sidebarRightTabs.register 页型（guide 入口卡 order 0——官方
-//     files/terminal/browser = 10/20/30 排最前）；
+//   第一段 = sidebarRightTabs.register 页型（单装形态专属——project 在场时页型归
+//     project 拥有者，官方 registry 同 id 二次注册抛错；单装缺位兜底 guide 入口卡
+//     order 0 排最前）；
 //   第二段 = `sidebar.right.pane.tab` keyed body（host-integration-fixes 裁决 1 双形态）：
 //     apply 期槽 ledger 现查 project registrant 在座性——
 //       在场（集成形态）→ 不注册自身 body/title，AC 进度段按子槽键落座注入 project 概览；
@@ -124,8 +125,8 @@ export interface DockTabsFaceDiagnostics {
 }
 
 /**
- * dock tab 族注册（apply 编排）：页型类型定义 + 概览 keyed body 双形态切换 + 文档资源型
- * 两段，逐面 fail-soft。locale 缺席 = title 回退 NS 键名呈现（注册不阻断）。
+ * dock tab 族注册（apply 编排）：概览页型（单装兜底）+ 概览 keyed body 双形态切换 +
+ * 文档资源型两段，逐面 fail-soft。locale 缺席 = title 回退 NS 键名呈现（注册不阻断）。
  */
 export function registerDockTabsFace(
   ctx: OfficialSeamCtx,
@@ -144,28 +145,31 @@ export function registerDockTabsFace(
   const t = locale?.bind(FORGE_TASK_LOOP_LOCALE_NS) ?? ((key: string) => key);
   const tabs = ctx.get("sidebarRightTabs") as SidebarRightTabsMirror | undefined;
 
-  // 第一段：概览页型 + guide 入口卡 order 0（官方入口卡 10/20/30——升序排最前）。
-  // 类型面 project 在场时同 id 注册被官方 registry 拒收——fail-soft 只降本面（拥有者已
-  // 声明页型，单装形态本段兜底）。
-  face(DSWF_OVERVIEW_TAB_KIND, () => {
-    if (tabs === undefined || typeof tabs.register !== "function") {
-      throw new Error("ctx.sidebarRightTabs.register absent");
-    }
-    const disposeType = tabs.register({
-      id: DSWF_OVERVIEW_TAB_KIND,
-      kind: DSWF_OVERVIEW_TAB_KIND,
-      title: () => t("tab.overview"),
-      guide: [
-        {
-          id: "overview",
-          order: 0,
-          title: () => t("tab.overview"),
-          description: () => t("guide.overview.desc"),
-        },
-      ],
+  // 概览页型注册（单装形态专属段——裁决 1 复位：project 在场时页型归 project
+  // （官方 registry 同 id 二次注册抛错），本包集成形态零页型注册；project 单装
+  // 缺席时本段兜底承载页型 + guide 入口卡 order 0（官方入口卡 10/20/30——升序排最前）。
+  const registerOverviewType = (): void => {
+    face(`${DSWF_OVERVIEW_TAB_KIND}: dock tab type`, () => {
+      if (tabs === undefined || typeof tabs.register !== "function") {
+        throw new Error("ctx.sidebarRightTabs.register absent");
+      }
+      const disposeType = tabs.register({
+        id: DSWF_OVERVIEW_TAB_KIND,
+        kind: DSWF_OVERVIEW_TAB_KIND,
+        title: () => t("tab.overview"),
+        guide: [
+          {
+            id: "overview",
+            order: 0,
+            title: () => t("tab.overview"),
+            description: () => t("guide.overview.desc"),
+          },
+        ],
+      });
+      disposerType = typeof disposeType === "function" ? disposeType : undefined;
+      if (disposerType === undefined) throw new Error("sidebarRightTabs.register returned no disposer");
     });
-    ctx.effect?.(() => (typeof disposeType === "function" ? disposeType : undefined), `${DSWF_OVERVIEW_TAB_KIND}: dock tab type`);
-  });
+  };
 
   // 第二段：概览 keyed body 双形态切换（裁决 1）。
   // project 在场现查 = 槽 ledger 原始账本（官方 SlotService.entries——含 options.key/
@@ -210,6 +214,7 @@ export function registerDockTabsFace(
   };
 
   // 当前代注册撤销器（rebind 逐代置换——ctx.effect 闭包按变量现值级联清理）
+  let disposerType: (() => void) | undefined;
   let disposerBody: (() => void) | undefined;
   let disposerTitle: (() => void) | undefined;
   let disposerAc: (() => void) | undefined;
@@ -228,8 +233,9 @@ export function registerDockTabsFace(
     });
   };
 
-  /** 单装形态：priority -10 独立任务概览 body + chip 标题段（project 缺席兜底）。 */
+  /** 单装形态：页型 + priority -10 独立任务概览 body + chip 标题段（project 缺席兜底）。 */
   const registerStandalone = (): void => {
+    registerOverviewType();
     face(`${SIDEBAR_RIGHT_PANE_TAB_SLOT}:${DSWF_OVERVIEW_TAB_KIND}`, () => {
       disposerBody = registerKeyedSection(slots, {
         slot: SIDEBAR_RIGHT_PANE_TAB_SLOT,
@@ -256,9 +262,11 @@ export function registerDockTabsFace(
 
   /** dispose 当前代全部注册（幂等——官方 register 撤销器幂等语义）。 */
   const disposeOwn = (): void => {
+    disposerType?.();
     disposerBody?.();
     disposerTitle?.();
     disposerAc?.();
+    disposerType = undefined;
     disposerBody = undefined;
     disposerTitle = undefined;
     disposerAc = undefined;
