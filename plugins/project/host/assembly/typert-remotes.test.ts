@@ -465,6 +465,42 @@ describe('ForgeProjectsRemote.deriveTaskStoreDir（bug 8de6b903——占位端�
       unavailableMessage('deriveTaskStoreDir', 'projects'),
     )
   })
+
+  it('core face 缺席 + selfDerive 在场（单装态兜底——1.32②）：兜底结果直返 + 降级 diag 留痕', async () => {
+    const diag: string[] = []
+    const svc = new ForgeProjectsRemote(fakeCtx(), {
+      selfDerive: () => async (workspaceDir: string) => ({ dir: `T:\\tasks\\self@${workspaceDir.length}` }),
+      diag: (line) => diag.push(line),
+    })
+    await expect(svc.deriveTaskStoreDir('Z:\\ws\\demo')).resolves.toEqual({ dir: 'T:\\tasks\\self@10' })
+    expect(diag.join('\n')).toContain('self-derive 单装态兜底承接')
+  })
+
+  it('core face 在场时 selfDerive 不接管（优先级纪律——集成态派生根与注册闭包不分叉）', async () => {
+    const calls: unknown[] = []
+    const core = { deriveTaskStoreDir: async (q: { readonly workspaceDir: string }) => (calls.push(q), { dir: 'core-dir' }) }
+    const svc = new ForgeProjectsRemote(fakeCtx(), {
+      deriveTaskStoreDir: () => core,
+      selfDerive: () => async () => ({ dir: 'fallback-dir' }),
+    })
+    await expect(svc.deriveTaskStoreDir('Z:\\x')).resolves.toEqual({ dir: 'core-dir' })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('core face 抛错时不落兜底（真失败不遮蔽——bug 8de6b903 教训同径）', async () => {
+    const core = { deriveTaskStoreDir: async () => { throw new Error('tasksHome 未注入') } }
+    const svc = new ForgeProjectsRemote(fakeCtx(), {
+      deriveTaskStoreDir: () => core,
+      selfDerive: () => async () => ({ dir: 'fallback-dir' }),
+    })
+    await expect(svc.deriveTaskStoreDir('Z:\\x')).rejects.toThrow('tasksHome 未注入')
+  })
+
+  it('core 与 selfDerive 双缺：typed unavailable 诚实拒绝（语义不变）', async () => {
+    await expect(new ForgeProjectsRemote(fakeCtx(), {}).deriveTaskStoreDir('Z:\\x')).rejects.toThrow(
+      unavailableMessage('deriveTaskStoreDir', 'projects'),
+    )
+  })
 })
 
 describe('typed unavailable 与 fs listDir（诚实降级面）', () => {

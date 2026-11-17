@@ -85,8 +85,10 @@ export interface ForgeTypertDeps {
   readonly worktrees?: () => WorktreeRpcService | undefined;
   /** core forgeFeatures 服务（listFeatures 读面）——缺席宿主 typed unavailable */
   readonly features?: LazyDomainService;
-  /** core forgeProjects 服务（deriveTaskStoreDir 第六法真实现）——缺席宿主 typed unavailable（bug 8de6b903 委托缝） */
+  /** core forgeProjects 服务（deriveTaskStoreDir 第六法真实现）——在场恒优先委托（bug 8de6b903 委托缝） */
   readonly deriveTaskStoreDir?: LazyDomainService;
+  /** 单装态自 derivation 兜底（core face 缺席 = 插件自链——self-derive 缝；双缺 = typed unavailable） */
+  readonly selfDerive?: LazyDomainService;
   /** workspaceRoot 解析缝（projectId → 工作区根——fix-1 插件自装配：官方宿主工作区面，零 core face），缺席 typed unavailable */
   readonly dirsWorkspaceRoot?: LazyDomainService;
   /** DirFactsPort 缝（锚注册表解析——forge.docs_root/task_home/worktrees 行事实源），缺席 typed unavailable */
@@ -135,11 +137,15 @@ function messageOf(cause: unknown): string {
 export class ForgeProjectsRemote extends TypertRemoteService {
   private readonly port: () => ProjectsServicePort | undefined;
   private readonly derive: LazyDomainService;
+  private readonly selfDerive: LazyDomainService;
+  private readonly diag: ((line: string) => void) | undefined;
 
   constructor(ctx: Context, deps: ForgeTypertDeps) {
     super(ctx, "forgeProjectsController", { namespace: "forgeProjects" });
     this.port = deps.projects ?? (() => undefined);
     this.derive = deps.deriveTaskStoreDir ?? (() => undefined);
+    this.selfDerive = deps.selfDerive ?? (() => undefined);
+    this.diag = deps.diag;
   }
 
   /** 项目清单（UI 台账/选择器数据源） */
@@ -162,9 +168,10 @@ export class ForgeProjectsRemote extends TypertRemoteService {
 
   /**
    * 任务库派生行（core forgeProjects 服务专属——本插件 port 不承载）：core face 在场
-   * （宿主集成态）经 deps.deriveTaskStoreDir 现查委托（bug 8de6b903：占位端点恒抛
-   * unavailable 遮蔽 core 真实现致 e2e 服务缺席降级族——派生行 ready 永不出现）；
-   * 缺席/劣形（单装态）= typed unavailable 诚实拒绝，语义不变。
+   * （宿主集成态）恒委托 core（bug 8de6b903：占位端点恒抛 unavailable 遮蔽 core 真实现
+   * ——不遮蔽真失败纪律，集成态派生根与注册闭包同 core 单源不分叉）；core face 缺席/劣形
+   * （单装态）= selfDerive 插件自链兜底（1.32②——dsh desktop 派生行不再恒 unavailable）；
+   * 兜底亦缺席 = typed unavailable 诚实拒绝。
    */
   @Remote
   async deriveTaskStoreDir(workspaceDir: string, signal?: AbortSignal): Promise<DeriveTaskStoreDirResult> {
@@ -172,10 +179,13 @@ export class ForgeProjectsRemote extends TypertRemoteService {
     const face = this.derive() as
       | { deriveTaskStoreDir?: (q: { workspaceDir: string }) => Promise<DeriveTaskStoreDirResult> }
       | undefined;
-    if (face === undefined || typeof face.deriveTaskStoreDir !== "function") {
-      throw unavailable("deriveTaskStoreDir", "projects");
+    if (face !== undefined && typeof face.deriveTaskStoreDir === "function") {
+      return await face.deriveTaskStoreDir({ workspaceDir });
     }
-    return await face.deriveTaskStoreDir({ workspaceDir });
+    const fallback = this.selfDerive() as ((workspaceDir: string) => Promise<DeriveTaskStoreDirResult>) | undefined;
+    if (fallback === undefined) throw unavailable("deriveTaskStoreDir", "projects");
+    this.diag?.("[project-typert] deriveTaskStoreDir core face 缺席——self-derive 单装态兜底承接");
+    return await fallback(workspaceDir);
   }
 
   /** 项目行变更（sidebar 五功能写面：rename/archived/sortOrders patch——host 权威 registry 写入） */

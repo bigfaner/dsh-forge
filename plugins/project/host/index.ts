@@ -29,6 +29,7 @@ import { createBugsService } from "./bugs/service.js";
 import { createProjectKeyResolver } from "./assembly/project-key.js";
 import { minimalDirFactsPort } from "./dirs/dir-facts.js";
 import { createSelfAnchorsOf } from "./dirs/self-anchors.js";
+import { createSelfDeriveOf } from "./dirs/self-derive.js";
 // 单行装载 = 五缝注册 + worktree 域插件（gitWorktree 能力服务 provide）——能力面在此
 // 组合保持外部行为不变（git 缺席 fail-soft 不生效语义归插件启动检测）。
 import worktreePlugin, {
@@ -278,9 +279,26 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       bugs: deps.bugs,
       worktrees: worktreesSvcOnceOf(worktreesResident),
       features: () => face.reflect?.get?.("forgeFeatures"),
-      // bug 8de6b903：派生行第六法真实现委托缝——core forgeProjects 现查（缺席 = typed
-      // unavailable 诚实拒绝；检测永不缓存，调用期求值——AGENTS §1.6 同先例形制）
+      // bug 8de6b903：派生行第六法真实现委托缝——core forgeProjects 现查（缺席 = 单装态
+      // selfDerive 兜底；检测永不缓存，调用期求值——AGENTS §1.6 同先例形制）
       deriveTaskStoreDir: () => face.reflect?.get?.("forgeProjects"),
+      // 1.32②：单装态派生行兜底（dsh desktop 添加项目向导不再恒 unavailable）——
+      // self-derive 缝：config.tasksHome > env > home 三级根 + lib-path 单源算法 + 碰撞
+      // 三态同收口（行源 = 插件 project.db 在册 ws_path——core registeredStoreDirs 同语义）。
+      selfDerive: () =>
+        createSelfDeriveOf({
+          tasksHome: config.tasksHome,
+          home,
+          env: process.env,
+          registeredWsPaths: () => {
+            const db = domainDb;
+            if (db === undefined) return [];
+            return db.repos.projects
+              .list()
+              .map((p) => db.repos.workspaces.getMain(p.id)?.wsPath)
+              .filter((ws): ws is string => typeof ws === "string" && ws !== "");
+          },
+        }),
       // 基本信息区数据源（fix-1 插件自装配）：workspaceRoot 官方工作区面 + dirFacts 缝
       //（注册表三键解析——overrides.dirFacts 在场即覆写，与 forge.dirFacts 缝同源）。
       // 概览基本信息数据面零 core 服务消费（用户裁定 2026-11-13⑤）。
