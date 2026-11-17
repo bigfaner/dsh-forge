@@ -49,7 +49,7 @@ function parseInsertRows(yaml: string): InsertRow[] {
     const configKeyMatch = inConfig ? line.match(/^\s+(\S+?):/) : undefined;
     if (configKeyMatch) {
       current.configKeys.push(configKeyMatch[1]!);
-      const exprMatch = line.match(/^\s+dbFile:\s*!!js\s+(.+)$/);
+      const exprMatch = line.match(/^\s+(?:dbFile|home):\s*!!js\s+(.+)$/);
       if (exprMatch) current.dbFileExpr = exprMatch[1]!;
     }
   }
@@ -92,12 +92,13 @@ describe("forge patch 插行清单契约", () => {
     expect(Object.keys(deps).length).toBe(EXPECTED_ROWS.length);
   });
 
-  it("expert-squad 无库裸行插装；其余四件各携 config（持库件）", () => {
+  it("expert-squad 无库裸行插装；其余四件各携 config（持库件——config 键各随对端契约消费键：project=home，spec/task-loop/knowledge=dbFile，bug 3c17010a）", () => {
     const expert = rows.find((r) => r.id === "expert-squad");
     expect(expert!.configKeys, "expert-squad 应为裸行（无 config）").toEqual([]);
-    for (const id of ["project", "spec", "task-loop", "knowledge"]) {
+    expect(rows.find((r) => r.id === "project")!.configKeys, "project 应携 config.home（契约消费键）").toContain("home");
+    for (const id of ["spec", "task-loop", "knowledge"]) {
       const row = rows.find((r) => r.id === id);
-      expect(row!.configKeys, `${id} 应携 config 段`).toContain("dbFile");
+      expect(row!.configKeys, `${id} 应携 config.dbFile`).toContain("dbFile");
     }
   });
 });
