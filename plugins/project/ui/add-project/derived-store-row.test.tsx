@@ -92,7 +92,7 @@ describe('未映射失败兜底（4.3 接线增态：error → 通用错误条�
     expect(markup).toContain('data-dswf-dsr="error"')
     expect(markup).toContain('role="alert"')
     expect(markup).toContain('data-dswf-dsr-error')
-    expect(markup).toContain('任务清单路径获取失败：bridge 服务缺席（forge:projects 通道未注册）')
+    expect(markup).toContain('运行时产物目录路径获取失败：bridge 服务缺席（forge:projects 通道未注册）')
   })
 
   it('兜底态不呈现路径值/骨架/指引（相位互斥）；非阻断位——无重试钮', () => {
@@ -105,9 +105,9 @@ describe('未映射失败兜底（4.3 接线增态：error → 通用错误条�
 
 describe('AC-3 props 驱动（三态全由 phase 注入——组件无本地推导）', () => {
   it('行标签三态恒在场（任务清单行上下文沿 RegisterForm 既有文案）', () => {
-    expect(render({ state: 'loading' })).toContain('任务清单与记录（自动派生 · 无需填写）')
-    expect(render({ state: 'ready', dir: DERIVED_DIR })).toContain('任务清单与记录（自动派生 · 无需填写）')
-    expect(render({ state: 'suspected-move', data: MOVE_DATA })).toContain('任务清单与记录（自动派生 · 无需填写）')
+    expect(render({ state: 'loading' })).toContain('运行时产物目录（自动派生 · 无需填写）')
+    expect(render({ state: 'ready', dir: DERIVED_DIR })).toContain('运行时产物目录（自动派生 · 无需填写）')
+    expect(render({ state: 'suspected-move', data: MOVE_DATA })).toContain('运行时产物目录（自动派生 · 无需填写）')
   })
 
   it('三态互斥呈现（容器相位锚各态独占）', () => {

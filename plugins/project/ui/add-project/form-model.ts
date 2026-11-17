@@ -132,7 +132,7 @@ export function editFieldValue(state: FormState, field: EditableField, value: st
 
 /**
  * 换选工作区联动（AC4）：未手改字段随新工作区重构、手改或浏览选定过的字段保留；
- * touched 标记跨换选保持。任务清单与记录不在状态内（4.3 起 = RPC 派生行，装配壳
+ * touched 标记跨换选保持。运行时产物目录不在状态内（4.3 起 = RPC 派生行，装配壳
  * 按 workspaceDir 预检驱动——本模型零涉及）。
  */
 export function relinkWorkspace(state: FormState, workspaceDir: string): FormState {

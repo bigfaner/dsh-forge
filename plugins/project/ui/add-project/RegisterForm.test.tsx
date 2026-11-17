@@ -66,9 +66,9 @@ describe('AC1 回填与默认值（View 静态结构）', () => {
     expect(markup.match(/浏览…/g)?.length).toBe(2)
   })
 
-  it('任务清单与记录：DerivedTaskStoreRow 嵌入（4.3 整行替换——RPC 下发值逐字呈现，非 input value）', () => {
+  it('运行时产物目录：DerivedTaskStoreRow 嵌入（4.3 整行替换——RPC 下发值逐字呈现，非 input value）', () => {
     expect(markup).toContain('data-dswf-dsr="ready"')
-    expect(markup).toContain('任务清单与记录（自动派生 · 无需填写）')
+    expect(markup).toContain('运行时产物目录（自动派生 · 无需填写）')
     expect(markup).toContain(`>${DERIVED_DIR}</`)
     // 旧派生行（input value 自算呈现）废除
     expect(markup).not.toContain('data-dswf-rf-tasks')
@@ -110,7 +110,7 @@ describe('AC2/AC4 派生行 RPC 化（相位驱动——单源下发逐字呈现
   it('error 兜底（未映射失败）：通用错误条——非阻断位，确认不受阻', () => {
     const markup = view({ taskStorePhase: { state: 'error', message: 'bridge 服务缺席' } })
     expect(markup).toContain('data-dswf-dsr="error"')
-    expect(markup).toContain('任务清单路径获取失败：bridge 服务缺席')
+    expect(markup).toContain('运行时产物目录路径获取失败：bridge 服务缺席')
     expect(confirmBtn(markup)).not.toContain('disabled')
   })
 })

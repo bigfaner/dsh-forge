@@ -34,8 +34,8 @@ export interface DerivedTaskStoreRowProps {
   readonly phase: DerivedTaskStorePhase
 }
 
-/** 行标签（沿 RegisterForm 既有派生行文案——全相位恒在场） */
-const ROW_LABEL = '任务清单与记录（自动派生 · 无需填写）'
+/** 行标签（术语对齐——字段装 task-loop 运行产物目录而非 task-specific 清单；全相位恒在场） */
+const ROW_LABEL = '运行时产物目录（自动派生 · 无需填写）'
 
 /**
  * 派生行纯渲染（相位互斥）：值/错误全部来自 props——全路径逐字呈现（AC1）与
@@ -68,7 +68,7 @@ export function DerivedTaskStoreRow({ phase }: DerivedTaskStoreRowProps): ReactN
       ) : (
         <ErrorBar
           className="dswf-dsr-error"
-          message={`任务清单路径获取失败：${phase.message}`}
+          message={`运行时产物目录路径获取失败：${phase.message}`}
           retryClassName="dswf-dsr-retry"
           anchor="data-dswf-dsr-error"
           textClassName="dswf-dsr-error-text"

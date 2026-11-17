@@ -62,7 +62,7 @@ export interface RegisterFormViewProps {
   readonly values: FormValues
   /** 校验问题（随值即时重算——AC5 表单态拦截呈现） */
   readonly issues: readonly FormIssue[]
-  /** 任务清单与记录只读派生行相位（4.3：RPC 单源下发——loading/ready/suspected-move/error） */
+  /** 运行时产物目录只读派生行相位（4.3：RPC 单源下发——loading/ready/suspected-move/error） */
   readonly taskStorePhase: DerivedTaskStorePhase
   /** 仓内/仓外推导结果（true = 仓外；随 forge 目录即时更新） */
   readonly forgeDirExternal: boolean
