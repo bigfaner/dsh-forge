@@ -7,7 +7,7 @@
 // → 记录随整表重建同步消失，并按缺失前状态发 knowledge-entry-purge 埋点
 // （unconfirmed=info / confirmed 与 superseded=warn——已审知识意外丢失应被看见），
 // 无孤儿中间态。id 缺席的存量文件不入实体表（skipped 计数——存量收编任务补发 id 后入表）。
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import type Database from 'better-sqlite3'
 import { withImmediateTransaction } from './concurrency.js'
 import { parseKnowledgeFile } from './parser.js'
@@ -136,6 +136,9 @@ export function rebuildKnowledgeIndex(db: Database.Database, opts: RebuildOption
     const liveDomains = new Map<string, Set<string>>()
     let skipped = 0
     for (const row of registryRows) {
+      // 目录缺席行 = 零条目（装载期回填径——bug d927e8dc：注册行落表跳过 .knowledge
+      // 物化，目录延迟至首次条目写入；不可达非 ENOENT 仍 fail-loud 由 scanKnowledgeDir 收口）
+      if (!existsSync(row.knowledge_dir)) continue
       for (const f of scanKnowledgeDir(row.knowledge_dir)) {
         try {
           const content = readFileSync(f.absPath, 'utf8')

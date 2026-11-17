@@ -398,6 +398,14 @@ describe('registerProject（第九法——1.15 注册链进表径）', () => {
     expect(createKnowledgeRegistry(db).findByWsPath(ws)?.knowledgeDir).toBe(dir)
   })
 
+  it('skipMaterialize（装载期回填径——bug d927e8dc）：注册行落表、.knowledge 不物化（延迟至首次条目写入）、缺省派生列照常', async () => {
+    const ws = join(home, 'ws-skip')
+    await service.registerProject({ wsPath: ws, skipMaterialize: true })
+    expect(existsSync(join(ws, '.knowledge'))).toBe(false)
+    expect(createKnowledgeRegistry(db).findByWsPath(ws)?.knowledgeDir).toBe(join(ws, '.knowledge'))
+    expect(createKnowledgeRegistry(db).list().filter((r) => r.wsPath === ws)).toHaveLength(1)
+  })
+
   it('一级解析动态化（fix-2）：config 静态表未命中 → 回查注册行 project_id 列', async () => {
     const svc = createKnowledgeService({ db, resolveWsPath: () => undefined })
     const ws = join(home, 'ws-dyn')

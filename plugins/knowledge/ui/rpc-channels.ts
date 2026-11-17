@@ -13,12 +13,9 @@ import {
   FS_CHANNELS,
   KNOWLEDGE_CHANNELS,
   PROJECTS_CHANNELS,
-  PROJECTS_M2_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
   WORKTREE_CHANNELS,
-  type DeriveTaskStoreDirRequest,
-  type DeriveTaskStoreDirResult,
   type DirListing,
   type DocContent,
   type DomainNode,
@@ -291,8 +288,6 @@ export interface ForgeProjectsRpc {
   get(id: string): Promise<Project | null>
   update(id: string, patch: ProjectPatch): Promise<Project>
   reconcile(): Promise<ReconcileReport>
-  /** M2 派生行（{tasksHome}/{flatten}@{hash8} 单源——注册表单预检位，纯读） */
-  deriveTaskStoreDir(workspaceDir: string): Promise<DeriveTaskStoreDirResult>
 }
 
 /** forge:fs/* 面方法集（宿主文件系统浏览面——只读目录列举，renderer 不开 Node fs 通道） */
@@ -426,10 +421,6 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
           patch,
         } satisfies UpdateProjectRequest),
       reconcile: () => invokeRpc<ReconcileReport>(transport, PROJECTS_CHANNELS.reconcile),
-      deriveTaskStoreDir: (workspaceDir) =>
-        invokeRpc<DeriveTaskStoreDirResult>(transport, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, {
-          workspaceDir,
-        } satisfies DeriveTaskStoreDirRequest),
     },
     fs: {
       listDir: (dirPath) =>

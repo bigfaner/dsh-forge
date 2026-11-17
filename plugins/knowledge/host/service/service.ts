@@ -94,6 +94,7 @@ import type {
   ReadAbstractQuery,
   RecallFeedbackOutcome,
   RecallFeedbackRequest,
+  RegisterProjectWrite,
   SearchHit,
   SearchQuery,
   SetDomainDescriptionQuery,
@@ -517,7 +518,7 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
 
   /** 注册行写入（第九法）：目录缺则递归建 → upsert 注册行（幂等，projectId 落 project_id 列）；
    *  成败均发 knowledge-register 事件（SC-10）。建目录失败 = 抛（host wiring 侧 fail-soft 记账）。 */
-  async function registerProjectRow(input: { wsPath: string; knowledgeDir?: string; projectId?: string }): Promise<void> {
+  async function registerProjectRow(input: RegisterProjectWrite): Promise<void> {
     // 缺省派生单源（1.5 提案项 4）：config.knowledgeDir 解析缝（host/index 注入——显式
     // 字面量 / per-project map / 缺省 {wsPath}/.knowledge）；物化在此消费点（读时 mkdir
     // recursive——不在 apply 期预建）。
@@ -525,18 +526,21 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
       input.knowledgeDir
       ?? deps.resolveDefaultKnowledgeDir?.(input.wsPath)
       ?? joinDirSegment(input.wsPath, '.knowledge')
-    try {
-      mkdirSync(dir, { recursive: true })
-    } catch (cause) {
-      emitStorageDiag(
-        emit,
-        storageDiag('error', KNOWLEDGE_REGISTER_EVENT, `知识目录建失败，注册行未落：${dir}：${String(cause)}`, {
-          cwd: input.wsPath,
-          projectId: input.projectId,
-          stack: cause instanceof Error ? cause.stack : undefined,
-        }),
-      )
-      throw cause
+    // 跳过物化（装载期回填径）：零 mkdir、注册后零 rebuild——目录延迟至首次条目写入。
+    if (input.skipMaterialize !== true) {
+      try {
+        mkdirSync(dir, { recursive: true })
+      } catch (cause) {
+        emitStorageDiag(
+          emit,
+          storageDiag('error', KNOWLEDGE_REGISTER_EVENT, `知识目录建失败，注册行未落：${dir}：${String(cause)}`, {
+            cwd: input.wsPath,
+            projectId: input.projectId,
+            stack: cause instanceof Error ? cause.stack : undefined,
+          }),
+        )
+        throw cause
+      }
     }
     const row = registry.upsert(input.wsPath, dir, input.projectId)
     emitStorageDiag(
@@ -549,17 +553,20 @@ function rankedToHits(ranked: readonly { entry: HitSource; score: number }[]): S
     // F1（1.7 真机发现）：注册径触发入库 rebuild——绑定会话首 turn 动态段供数就位，
     // 不依赖 listEntries 静默重建。失败 best-effort（注册行已落、留 error 埋点；
     // 后续 listEntries 仍按既有 IndexStale 静默重建兜底）。
-    try {
-      runRebuild(input.wsPath, { emit, silent: true })
-    } catch (cause) {
-      emitStorageDiag(
-        emit,
-        storageDiag('error', KNOWLEDGE_REGISTER_EVENT, `注册后入库重建失败（首 turn 兜底转 listEntries 静默重建）：${row.wsPath}（${String(cause)}）`, {
-          cwd: row.wsPath,
-          projectId: input.projectId,
-          stack: cause instanceof Error ? cause.stack : undefined,
-        }),
-      )
+    // 跳过物化径零 rebuild（空目录无条目可扫；物化延迟至首次条目写入）。
+    if (input.skipMaterialize !== true) {
+      try {
+        runRebuild(input.wsPath, { emit, silent: true })
+      } catch (cause) {
+        emitStorageDiag(
+          emit,
+          storageDiag('error', KNOWLEDGE_REGISTER_EVENT, `注册后入库重建失败（首 turn 兜底转 listEntries 静默重建）：${row.wsPath}（${String(cause)}）`, {
+            cwd: row.wsPath,
+            projectId: input.projectId,
+            stack: cause instanceof Error ? cause.stack : undefined,
+          }),
+        )
+      }
     }
   }
 

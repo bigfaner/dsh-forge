@@ -247,15 +247,28 @@ describe('rebuildKnowledgeIndex（stage② 文档权威对账）', () => {
     db.close()
   })
 
-  it('失败路径：注册行知识目录不可达 → error 事件 + InvalidKnowledgeDirError 上抛', () => {
+  it('失败路径：注册行知识目录存在但非目录 → error 事件 + InvalidKnowledgeDirError 上抛', () => {
     const root = tmpRoot()
     const { db, wsPath } = setup(root)
     const { emit, events } = collector()
-    db.prepare(`UPDATE knowledge_registry SET knowledge_dir = ? WHERE ws_path = ?`).run(join(root, 'missing'), wsPath)
+    const notADir = join(root, 'blocked')
+    writeFileSync(notADir, '占位', 'utf8')
+    db.prepare(`UPDATE knowledge_registry SET knowledge_dir = ? WHERE ws_path = ?`).run(notADir, wsPath)
     expect(() => rebuildKnowledgeIndex(db, { emit })).toThrow(/知识目录/)
     expect(events).toHaveLength(1)
     expect(events[0]!.level).toBe('error')
     expect(events[0]!.event).toBe(KNOWLEDGE_REBUILD_EVENT)
+    db.close()
+  })
+
+  it('目录缺席行（装载期回填径——bug d927e8dc 跳过物化）= 零条目跳过不报错', () => {
+    const root = tmpRoot()
+    const { db, wsPath } = setup(root)
+    const { emit } = collector()
+    db.prepare(`UPDATE knowledge_registry SET knowledge_dir = ? WHERE ws_path = ?`).run(join(root, 'unmaterialized'), wsPath)
+    expect(() => rebuildKnowledgeIndex(db, { emit })).not.toThrow()
+    const report = rebuildKnowledgeIndex(db, { emit, silent: true })
+    expect(report).toEqual({ indexed: 0, skipped: 0, purged: 0 })
     db.close()
   })
 })

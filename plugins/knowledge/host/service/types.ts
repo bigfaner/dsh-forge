@@ -208,6 +208,11 @@ export interface RegisterProjectWrite {
   readonly knowledgeDir?: string
   /** API 级 projectId（fix-2 一级解析动态化：落注册行 project_id 列——config 静态表未命中时回查此列） */
   readonly projectId?: string
+  /**
+   * 跳过物化（装载期回填径——提案裁决 6 / bug d927e8dc）：true = 零 mkdir、注册后
+   * 零入库 rebuild——.knowledge 目录延迟至首次条目写入物化（既有调用方缺省 false，语义不变）。
+   */
+  readonly skipMaterialize?: boolean
 }
 
 /** 注册行写入面（BrowseKnowledgeService 第九法：host 注册链 wiring 消费，fail-soft 于 host 侧） */

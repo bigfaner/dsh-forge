@@ -3,11 +3,12 @@
 // 与注册/provide/disposer 全生命周期。
 // 假宿主语义锚定 Cordis：inject 声明的服务全部可提供才加载（service-availability）；
 // register/section 各返回注销器（effect disposer 同型）。
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import knowledgePlugin, { KNOWLEDGE_SERVICE_NAME } from '../host/index.js'
+import { projectKeyOf } from '../host/project-key.js'
 import type { KnowledgePromptSection, KnowledgeToolDefinition, ScopedAgentFace } from '../host/tools/index.js'
 import type { BrowseKnowledgeService } from '../host/service/index.js'
 
@@ -80,6 +81,10 @@ class TempRuntime {
       connection: this.connection,
       // fix-9：官方 workspaceRegistry 具名服务替身（inject 声明边；官方宿主 projects 投影源）
       workspaceRegistry: this.workspaceRegistry,
+      // 诊断发射面捕获（host/index diagEmit 消费——fail-soft 留痕断言）
+      emit: (_event: string, payload: Record<string, unknown>) => {
+        this.diag.push(payload)
+      },
     }
   }
 
@@ -104,11 +109,15 @@ class TempRuntime {
     },
   }
 
-  /** 官方 workspaceRegistry 替身（list/get 窄面——空集；投影源形状校验消费） */
+  /** 官方 workspaceRegistry 替身（list/get 窄面——workspaceRows 可预置注册行；投影源形状校验消费） */
+  readonly workspaceRows: { id: string; path: string; title: string }[] = []
   private readonly workspaceRegistry = {
-    list: async (): Promise<readonly never[]> => [],
-    get: async (): Promise<undefined> => undefined,
+    list: async (): Promise<readonly { id: string; path: string; title: string }[]> => this.workspaceRows,
+    get: async (id: string) => this.workspaceRows.find((r) => r.id === id),
   }
+
+  /** 诊断发射捕获（DIAG_EVENT 直写——knowledge-register 留痕断言用） */
+  readonly diag: Record<string, unknown>[] = []
 
   disposedCounts() {
     return { ...this.disposed, services: [...this.disposedServices] }
@@ -374,6 +383,72 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词�
     expect(rt.sections).toHaveLength(0)
     expect(rt.provided.size).toBe(0)
     expect(() => dispose()).not.toThrow()
+  })
+})
+
+describe('装载期项目行回填（提案裁决 6——bug d927e8dc：官方宿主 registerProject 零调用方致 registry 零项目行）', () => {
+  /** fire-and-forget 回填结算等待（异步枚举 + 逐行落行全微任务排空） */
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+
+  it('workspaceRegistry 在座：apply 段回填落在册项目行 + 知识页条目加载过（listEntries 投影 id 不报项目不存在）+ .knowledge 不物化', async () => {
+    const rt = freshRt()
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-backfill-'))
+    try {
+      const wsDir = join(root, 'ws')
+      mkdirSync(wsDir, { recursive: true })
+      rt.workspaceRows.push({ id: 'w1', path: wsDir, title: 'WS' })
+      const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
+      await settle()
+      // 知识页条目加载断言：/api knowledge.listEntries 以投影行 id（projectKeyOf 同域）查询合法应答
+      const route = rt.connectionRpc.routes.get('/api/knowledge.listEntries')!
+      const response = await route({
+        json: async () => ({ type: 'client-request', rpcId: 'bf1', method: 'knowledge.listEntries', payload: { projectId: projectKeyOf(wsDir) } }),
+        signal: AbortSignal.abort(),
+      })
+      const body = await response.json() as { result?: { ok?: boolean; error?: { message?: string } } }
+      expect(body.result?.ok).toBe(true)
+      expect(JSON.stringify(body)).not.toContain('项目不存在')
+      // 回填落行跳过物化：.knowledge 目录不存在（物化延迟至首次条目写入）
+      expect(existsSync(join(wsDir, '.knowledge'))).toBe(false)
+      dispose()
+    } finally {
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    }
+  })
+
+  it('幂等钉：重复 boot 同一在册行只落一次注册行（第二次回填 wsPath 已在座跳过，knowledge_dir 不改写）', async () => {
+    const rt = freshRt()
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-backfill-idem-'))
+    try {
+      const wsDir = join(root, 'ws')
+      mkdirSync(wsDir, { recursive: true })
+      rt.workspaceRows.push({ id: 'w1', path: wsDir, title: 'WS' })
+      const dispose1 = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
+      await settle()
+      dispose1()
+      const landings = () => rt.diag.filter((d) => d['event'] === 'knowledge-register' && String(d['message']).startsWith('注册行落表')).length
+      expect(landings()).toBe(1)
+      const dispose2 = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
+      await settle()
+      expect(landings()).toBe(1) // 第二次 boot 回填幂等跳过
+      dispose2()
+    } finally {
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    }
+  })
+
+  it('workspaceRegistry face 缺席：插件不阻载（fail-soft 全装配照常）+ knowledge-register warn 留痕', async () => {
+    const rt = freshRt()
+    const ctx = rt.ctx() as Record<string, unknown>
+    delete ctx['workspaceRegistry']
+    const dispose = knowledgePlugin(ctx, { dbFile: rt.dbFile() })
+    expect(rt.registeredTools).toHaveLength(7) // 不阻载
+    expect(rt.provided.has(KNOWLEDGE_SERVICE_NAME)).toBe(true)
+    await settle()
+    expect(rt.diag.some((d) => d['event'] === 'knowledge-register' && d['level'] === 'warn')).toBe(true)
+    dispose()
   })
 })
 

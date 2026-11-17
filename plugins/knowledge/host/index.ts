@@ -31,6 +31,7 @@ import {
 import { dirname } from 'node:path'
 import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
 import { joinDirSegment } from '@dsh-forge/path-key'
+import { projectKeyOf } from './project-key.js'
 import { defaultKnowledgeDirOf, resolveKnowledgeDir, type KnowledgeDirSetting } from './knowledge-dir.js'
 import {
   isForgeProjectsSource,
@@ -232,6 +233,57 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       isRegistered: (wsPath: string) => storage.registry.findByWsPath(wsPath) !== undefined,
       topDomains: (wsPath: string) => domainTreeIndexOf(storage.db, wsPath),
     }
+
+    // 装载期项目行回填（提案裁决 6——bug d927e8dc）：官方宿主 registerProject 零调用方致
+    // registry 零项目行——workspaceRegistry face 在座即枚举其注册行，按 wsPath 幂等回填
+    // （行已在座跳过；回填落行跳过 .knowledge 目录物化——延迟至首次条目写入）。回填在本
+    // 工厂同步段内启动（SC-1 全局库注册同段——判例 5e5592dc：注册行缺装载期回填致存量
+    // 项目报不存在），枚举/落行异步 fire-and-forget：失败 fail-soft + knowledge-register
+    // diag（event 走既有缝），不阻载；face 缺席/劣形同样 warn 留痕。projectId 落
+    // projectKeyOf(path)（与 projects 投影行 id 同域——fix-11 身份统一）。requireProject
+    // 四级解析 fail-loud 收口链不动。
+    {
+      const registryFace: unknown = (ctx as unknown as { workspaceRegistry?: unknown }).workspaceRegistry
+      if (!isWorkspaceRegistryFace(registryFace)) {
+        diagEmit?.({
+          event: 'knowledge-register',
+          level: 'warn',
+          message: 'workspaceRegistry face 缺席/劣形——项目行装载期回填跳过（fail-soft 不阻载）',
+          process: 'main',
+        })
+      } else {
+        const backfillFace = registryFace
+        void (async () => {
+          for (const row of await backfillFace.list()) {
+            try {
+              if (storage.registry.findByWsPath(row.path) !== undefined) continue
+              await service.registerProject({
+                wsPath: row.path,
+                projectId: projectKeyOf(row.path),
+                skipMaterialize: true,
+              })
+            } catch (cause) {
+              diagEmit?.({
+                event: 'knowledge-register',
+                level: 'error',
+                message: `项目行装载期回填失败（fail-soft 不阻载）：${row.path}：${String(cause)}`,
+                process: 'main',
+                stack: cause instanceof Error ? cause.stack : undefined,
+              })
+            }
+          }
+        })().catch((cause) => {
+          diagEmit?.({
+            event: 'knowledge-register',
+            level: 'error',
+            message: `项目行装载期回填枚举失败（fail-soft 不阻载）：${String(cause)}`,
+            process: 'main',
+            stack: cause instanceof Error ? cause.stack : undefined,
+          })
+        })
+      }
+    }
+
     // fix-9 连接 RPC 数据源现查（逐调用现查不缓存——AGENTS 1.6）：① core forgeProjects
     // 具名服务（dsh-forge 集成态——core 行 provide，运营真源单源，与 preload 面同源）；
     // ② 官方 workspaceRegistry 投影（官方宿主——添加项目向导注册行；archived 概念缺席
