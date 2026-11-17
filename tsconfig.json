@@ -17,6 +17,9 @@
       "path": "lib/path"
     },
     {
+      "path": "lib/ui"
+    },
+    {
       "path": "plugins/project"
     },
     {

@@ -395,6 +395,12 @@ importers:
         specifier: 24.19.0
         version: 24.19.0
 
+  lib/ui:
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
+
   lib/util:
     devDependencies:
       '@types/node':
