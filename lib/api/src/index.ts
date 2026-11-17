@@ -18,3 +18,6 @@ export * from './ports.js'
 export * from './tools/format.js'
 export * from './tools/args.js'
 export * from './tools/forge-paths.js'
+// forge:doc-style 系统提示段渲染单源（plugin-spec 1.18 自 plugins/project host/dirs 下沉
+// ——project/spec 双侧改消费本单源，禁插件间 import 域实现）
+export * from './tools/doc-style.js'

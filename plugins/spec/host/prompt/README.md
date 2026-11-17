@@ -6,7 +6,7 @@
   目录树 `.forge/specs/{slug}/`）；`presetBinding` 注入判据（缺省无条件注入 / forge 绑定
   会话预设命中才注入、未命中空串过滤——官方 dsh-system-prompt 对空串 section 整体过滤；
   会话预设 = 事件回放投影，出生头为基 + `agent-preset/selected` 覆盖）；`forge:doc-style`
-  段直迁在位（渲染本体单源 = `@dsh-forge/project/host-dirs`，此处 re-export + 注册）。
+  段直迁在位（渲染本体单源 = `@dsh-forge/lib-api/tools/doc-style`，此处 re-export + 注册）。
   段名 `forge:pipeline` / order 510（knowledge 500 之后）；`<forge-pipeline>` 包裹标签 =
   contracts `XML_TAGS` 单源；不含 tool 说明——dsh tool 注册面自带。
 - `../index.ts` —— 注册胶水 `registerSpecPromptSections`（A1 自含形态：提示段注册恒在）。

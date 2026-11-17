@@ -15,7 +15,7 @@
 // A1 自含形态：spec 包零预设知识——presetBinding 仅作不透明字符串比对，包内零预设词汇。
 // forge:commander 段不迁（已在 plugins/task-loop/host/prompt/commander.ts——本包不承载）。
 import { XML_TAGS } from '@dsh-forge/contracts'
-import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, renderDocStyleSection } from '@dsh-forge/project/host-dirs'
+import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, renderDocStyleSection } from '@dsh-forge/lib-api/tools/doc-style'
 import type { SpecAssembleContext, SpecSessionEventFace, SpecSessionFace } from '../faces.js'
 
 /** forge:pipeline 段名（Interface 8 定死） */
@@ -24,8 +24,8 @@ export const FORGE_PIPELINE_SECTION_NAME = 'forge:pipeline'
 /** forge:pipeline 段序（order 510——knowledge 500 之后） */
 export const FORGE_PIPELINE_SECTION_ORDER = 510
 
-// forge:doc-style 段直迁在位（名称/段序/渲染本体单源仍在 plugins/project host/dirs——
-// plugin-project 1.12 目录事实面归拢；此处 re-export 保持消费面零改动）。
+// forge:doc-style 段直迁在位（名称/段序/渲染本体单源已下沉 lib/api/tools/doc-style——
+// 1.18 消插件间 import 活边；此处 re-export 保持消费面零改动）。
 export { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, renderDocStyleSection }
 
 /** 段渲染入参（presetBinding 绑定值 + git 探测结果） */

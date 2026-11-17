@@ -62,6 +62,10 @@
     "./tools/forge-paths": {
       "types": "./dist/tools/forge-paths.d.ts",
       "import": "./dist/tools/forge-paths.js"
+    },
+    "./tools/doc-style": {
+      "types": "./dist/tools/doc-style.d.ts",
+      "import": "./dist/tools/doc-style.js"
     }
   },
   "files": [

@@ -884,9 +884,6 @@ importers:
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path
-      '@dsh-forge/project':
-        specifier: workspace:*
-        version: link:../project
       '@types/better-sqlite3':
         specifier: 9.6.0
         version: 9.6.0
