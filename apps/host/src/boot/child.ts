@@ -95,12 +95,33 @@ import {
   createDiagContextStore,
   emitDiag,
   relayDiagOverBridge,
+  type DiagEventPayload,
 } from '../telemetry/index.js'
 import { attachGatewayFoldDiag, type GatewayFoldFace } from '../telemetry/gateway-fold.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
   get(name: string): unknown
+}
+
+/**
+ * forge-bundle-absent 诊断载荷投影（plugin-forge-combo fix-1 D3——CT-DISK-07 / CT-NPM-06
+ * 意向锚核销）：profile 装载期 skippedBundles 中的 @dsh-forge 裸包行（forge patch 五件插行
+ * 缺席面）逐件投影为诊断事件域载荷——event 'forge-bundle-absent'、message 携带缺席裸包名
+ * 与官方 skip reason。官方 reportSkippedBundles 只落 stderr，web 生境不可见——emitDiag
+ * 留痕为可见面兜底（AGENTS §7 诊断纪律：新增错误源 = 新增 emit 点）。
+ */
+export function forgeBundleAbsentPayloads(
+  skippedBundles: ReadonlyArray<{ packageName: string; reason: string }>,
+): DiagEventPayload[] {
+  return skippedBundles
+    .filter((bundle) => bundle.packageName.startsWith('@dsh-forge/'))
+    .map((bundle) => ({
+      level: 'warn' as const,
+      process: 'child' as const,
+      event: 'forge-bundle-absent',
+      message: `forge bundle absent: ${bundle.packageName} (${bundle.reason})`,
+    }))
 }
 
 /** cordis 可选具名服务惰性取法（AGENTS.md 裁决——具名访问 + 运行期存在性检查承担 fail-soft；
@@ -340,6 +361,9 @@ async function main(): Promise<void> {
   const { dshAppBoot, runProfile } = await loadBootChain(options.profileDir)
   const profile = dshAppBoot.loadProfileDirectory('dsh', options.profileDir, options.installAnchor)
   dshAppBoot.reportSkippedBundles('dsh', profile)
+  // fix-1 D3：缺席 @dsh-forge 裸包行载荷在此预铸（ctx 于 runProfile 之后才可用）——
+  // relay 接线后逐件 emitDiag（forge-bundle-absent，诊断留痕可见面兜底）。
+  const forgeAbsentPayloads = forgeBundleAbsentPayloads(profile.skippedBundles)
   // 产品插件行 config 装配期注入（用户层之后应用的 patchFiles 叠层——见 overlay.ts 动机）
   // M3 3.7 预设装配：四底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
   // 注行产品工件（customSkillDirs 物化当形态绝对路径）；底稿缺席 fail-soft 不注行。
@@ -439,6 +463,15 @@ async function main(): Promise<void> {
   //   ③ fail-open 计数：拦截层降级放行每笔落诊断事件（UI 零呈现——方案 9）。
   const diagAls = createDiagContextStore()
   relayDiagOverBridge(ctx, (line) => send({ type: 'diag', line }), diagAls)
+  // fix-1 D3：装配期缺席诊断补发射（载荷预铸于 loadProfileDirectory 后）——
+  // 经 relay 半边回 main appender 单源落盘；异常不反压 boot 链（红线①同构）。
+  for (const payload of forgeAbsentPayloads) {
+    try {
+      emitDiag(ctx, payload)
+    } catch {
+      // 诊断面异常不反压 boot 链
+    }
+  }
   const failOpenDiag = (line: string): void => {
     diag(line) // 既有 harness.log 链保留（双轨兼容——评审 Note-2）
     try {
