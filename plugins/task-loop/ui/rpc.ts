@@ -9,7 +9,6 @@
 // 生成化：$mount 贡献 = generator 产出 ./remote TYPERT_REMOTE，手写表退役）。
 import {
   type BugCard,
-  type DeriveTaskStoreDirResult,
   type DirFactRow,
   type DirListing,
   type FeatureCard,
@@ -306,11 +305,10 @@ function streamRemote<T>(
   })()
 }
 
-/** forge:projects/* 面方法集（本插件消费切片：list/register/deriveTaskStoreDir/update） */
+/** forge:projects/* 面方法集（本插件消费切片：list/register/update） */
 export interface ForgeProjectsRpc {
   list(): Promise<ProjectSummary[]>
   register(input: RegisterProjectInput): Promise<RegisterResult>
-  deriveTaskStoreDir(workspaceDir: string): Promise<DeriveTaskStoreDirResult>
   /** 项目行变更（sidebar 五功能写面：rename/archived/sortOrders patch——1.6） */
   update(id: string, patch: ProjectPatch): Promise<Project>
 }
@@ -381,8 +379,6 @@ export function createForgeRpcClient(): ForgeRpcClient {
     projects: {
       list: () => invokeRemote<ProjectSummary[]>("forgeProjects", "list", []),
       register: (input) => invokeRemote<RegisterResult>("forgeProjects", "register", [input]),
-      deriveTaskStoreDir: (workspaceDir) =>
-        invokeRemote<DeriveTaskStoreDirResult>("forgeProjects", "deriveTaskStoreDir", [workspaceDir]),
       update: (id, patch) => invokeRemote<Project>("forgeProjects", "update", [id, patch]),
     },
     fs: {
