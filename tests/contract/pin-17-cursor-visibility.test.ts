@@ -37,9 +37,12 @@ const defsOf = (cssText: string) =>
 const lightDefs = defsOf(css.slice(0, css.indexOf('body[data-ds-dark-theme]')))
 const darkDefs = defsOf(css.slice(css.indexOf('body[data-ds-dark-theme]')))
 
-/** apps/web/src 递归 css 文件清单（sweep 零残留断言面） */
+/** apps/web/src 递归 css 文件清单（sweep 零残留断言面；node_modules 恒不入列——
+ *  依赖目录含 pnpm workspace junction（manifest 级循环 core→spec→project 的物理物化），
+ *  递归 stat 触发 ELOOP——依赖目录非产品扫描域，walker 单点排除防复发（plugin-spec/fix-6）） */
 function walkCss(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
+    if (name === 'node_modules') return []
     const p = join(dir, name)
     return statSync(p).isDirectory() ? walkCss(p) : p.endsWith('.css') ? [p] : []
   })
