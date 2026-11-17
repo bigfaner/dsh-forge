@@ -11,10 +11,13 @@ import { detailFixture } from './overview/drawer/detail-model.test.js'
 import { TransitionDialog } from './overview/drawer/transition-dialog.js'
 import {
   DSWF_DOC_ADDRESS_PREFIX,
+  DSWF_OVERVIEW_TAB_KIND,
   ForgeDocsTab,
   ForgeOverviewSectionHost,
   ForgeOverviewTab,
+  OVERVIEW_AC_PROGRESS_ENTRY_KEY,
   OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY,
+  OVERVIEW_SECTIONS_CHILDREN,
   OverviewDockAssembly,
   TabInfoReader,
   dockDocOpener,
@@ -26,6 +29,8 @@ import {
   type TransitionTarget,
   type UseDockTabInfoMirror,
 } from './dock-tabs.js'
+import { DSWF_OVERVIEW_AC_PROGRESS_SLOT, DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
+import { KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT } from '../keyed-section.js'
 import {
   createWorkbenchBridge,
   initialOverviewContext,
@@ -115,37 +120,80 @@ describe('TabInfoReader 钩子形制（fix-33 ⑤：可选 tabInfo 钩子经子�
   })
 })
 
-describe('ForgeOverviewSectionHost 项目台插槽节宿主（fix-7：消费 project.section.knowledge-dir roster）', () => {
-  const renderSlotFixture = (node: ReactNode): { readonly renderSlot: OverviewSectionSlots; readonly calls: unknown[] } => {
+describe('ForgeOverviewSectionHost 项目台插槽节宿主（fix-7 knowledge-dir + 裁决 1 AC 进度：双 keyed 子槽消费）', () => {
+  const renderSlotFixture = (
+    render: (key: string) => ReactNode,
+  ): { readonly renderSlot: OverviewSectionSlots; readonly calls: unknown[] } => {
     const calls: unknown[] = []
     const renderSlot: OverviewSectionSlots = (key, owner, opts) => {
       calls.push([key, owner, opts])
-      return node
+      return render(key)
     }
     return { renderSlot, calls }
   }
 
-  it('renderSlot 在场：槽名 + keyed 占用键逐字分发（entryKey = dswf-knowledge-dir），节渲染于概览主体之后', () => {
-    const { renderSlot, calls } = renderSlotFixture(<div data-kd-section="y" />)
+  it('键改引单源（裁决 5）：概览 tab kind = lib-ui DSWF_OVERVIEW_TAB_KEY 同源镜像（包内字面量退役）', () => {
+    expect(DSWF_OVERVIEW_TAB_KIND).toBe(DSWF_OVERVIEW_TAB_KEY)
+    expect(DSWF_OVERVIEW_TAB_KEY).toBe('dswf-overview')
+  })
+
+  it('AC 子槽声明表在座（裁决 1——声明即占有，宿主单点声明缝）', () => {
+    expect(OVERVIEW_SECTIONS_CHILDREN[KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT]).toEqual({ kind: 'keyed', scope: 'root' })
+    expect(OVERVIEW_SECTIONS_CHILDREN[DSWF_OVERVIEW_AC_PROGRESS_SLOT]).toEqual({ kind: 'keyed', scope: 'root' })
+    expect(OVERVIEW_AC_PROGRESS_ENTRY_KEY).toBe('dswf-ac-progress')
+  })
+
+  it('renderSlot 在场：knowledge-dir 槽名 + keyed 占用键逐字分发（entryKey = dswf-knowledge-dir），节渲染于概览主体之后', () => {
+    const { renderSlot, calls } = renderSlotFixture((key) =>
+      key === KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT ? <div data-kd-section="y" /> : null,
+    )
     const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} renderSlot={renderSlot} />)
-    expect(calls).toEqual([['project.section.knowledge-dir', {}, { entryKey: OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY }]])
+    expect(calls).toContainEqual(['project.section.knowledge-dir', {}, { entryKey: OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY }])
     expect(OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY).toBe('dswf-knowledge-dir')
     expect(markup).toContain('data-kd-section="y"')
     expect(markup).toContain('data-dswf-ov-unanchored')
     expect(markup.indexOf('data-dswf-ov-unanchored')).toBeLessThan(markup.indexOf('data-kd-section'))
   })
 
-  it('renderSlot 缺席（宿主形状漂移/SSR 面）= 概览主体照常呈现、零节渲染不炸', () => {
+  it('AC 进度子槽消费（裁决 1）：renderSlot 以 DSWF_OVERVIEW_AC_PROGRESS_SLOT + entryKey 分发，AC 段容器渲染于概览主体之后', () => {
+    const { renderSlot, calls } = renderSlotFixture((key) =>
+      key === DSWF_OVERVIEW_AC_PROGRESS_SLOT ? <div data-ac-progress-section="y" /> : null,
+    )
+    const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} renderSlot={renderSlot} />)
+    expect(calls).toContainEqual([DSWF_OVERVIEW_AC_PROGRESS_SLOT, {}, { entryKey: OVERVIEW_AC_PROGRESS_ENTRY_KEY }])
+    expect(DSWF_OVERVIEW_AC_PROGRESS_SLOT).toBe('dswf-overview.ac-progress')
+    expect(markup).toContain('data-ac-progress-section="y"')
+    expect(markup).toContain('data-dswf-ov-unanchored')
+    expect(markup.indexOf('data-dswf-ov-unanchored')).toBeLessThan(markup.indexOf('data-ac-progress-section'))
+  })
+
+  it('双子槽同请求各分发一次（槽名互异、零串扰）', () => {
+    const { renderSlot, calls } = renderSlotFixture((key) =>
+      key === DSWF_OVERVIEW_AC_PROGRESS_SLOT ? (
+        <div data-ac-progress-section="y" />
+      ) : (
+        <div data-kd-section="y" />
+      ),
+    )
+    const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} renderSlot={renderSlot} />)
+    expect(calls).toHaveLength(2)
+    expect(markup).toContain('data-kd-section="y"')
+    expect(markup).toContain('data-ac-progress-section="y"')
+  })
+
+  it('renderSlot 缺席（宿主形状漂移/SSR 面）= 概览主体照常呈现、双子槽零节渲染不炸', () => {
     const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} />)
     expect(markup).toContain('data-dswf-ov-unanchored')
     expect(markup).not.toContain('data-kd-section')
+    expect(markup).not.toContain('data-ac-progress-section')
   })
 
   it('槽 roster 空（renderSlot 返回 null）= 零节呈现不悬空', () => {
-    const { renderSlot } = renderSlotFixture(null)
+    const { renderSlot } = renderSlotFixture(() => null)
     const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} renderSlot={renderSlot} />)
     expect(markup).toContain('data-dswf-ov-unanchored')
     expect(markup).not.toContain('data-kd-section')
+    expect(markup).not.toContain('data-ac-progress-section')
   })
 })
 

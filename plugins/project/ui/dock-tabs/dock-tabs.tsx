@@ -1,6 +1,7 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // 右栏两 dock tab 装配体（定位：装配——4.1 Integration #4）：官方 `sidebar.right.pane.tab`
-// keyed 槽两占用者（`dswf-overview` / `dswf-doc`——注册面在 client-plugin/plugin.ts 两段：
+// keyed 槽两占用者（概览 tab 键 / 文档 tab 键——键族单源 @dsh-forge/lib-ui[裁决 5]；
+// 注册面在 client-plugin/plugin.ts 两段：
 // sidebarRightTabs.register 类型定义 + 本模块组件经 product-views 发布为 keyed body）。
 // 官方缝口径（上游 ui-sidebar-right 0.2.0-rc.2 源码核实）：
 //   - 槽声明 inject `{ hooks: { tabInfo } }` → 占用者 props 恒收 `useTabInfo`（读取 pane/
@@ -16,8 +17,9 @@
 // 流程 7 全链路的右栏半段）。
 // 三签不动（Hard Rule）：零左栏/中区/conversation.view 改动；概览内容禁编排逻辑（纯视图
 // 组合多域读——编排归 core）。
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, Fragment, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { TaskStatus } from '@dsh-forge/contracts'
+import { DSWF_OVERVIEW_AC_PROGRESS_SLOT, DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
 import { EmptyState } from '../components.js'
 import type { RpcClientFactory } from './rpc-channels.js'
 import { anchorProjectResolver } from './anchor-resolver.js'
@@ -42,8 +44,8 @@ import { useSelfAnchor, type SelfAnchorServices } from './self-anchor.js'
 
 /** 文档 tab 类型 kind（plugin.ts DOC_TAB_KIND 结构同型镜像——plugin.test 字面量同源 pin） */
 export const DSWF_DOC_TAB_KIND = 'dswf-doc'
-/** 概览 tab 类型 kind（plugin.ts OVERVIEW_TAB_KIND 结构同型镜像） */
-export const DSWF_OVERVIEW_TAB_KIND = 'dswf-overview'
+/** 概览 tab 类型 kind（裁决 5 键族单源改引——lib/ui DSWF_OVERVIEW_TAB_KEY 同源镜像，包内字面量退役） */
+export const DSWF_OVERVIEW_TAB_KIND = DSWF_OVERVIEW_TAB_KEY
 /** 文档 tab 资源地址前缀（dsh-resource:// 资源面——plugin.ts DOC_ADDRESS_PREFIX 同源镜像） */
 export const DSWF_DOC_ADDRESS_PREFIX = `dsh-resource://${DSWF_DOC_TAB_KIND}/`
 
@@ -333,7 +335,7 @@ export function OverviewDockBody({
 }
 
 /**
- * 概览 tab body（`sidebar.right.pane.tab` keyed 'dswf-overview' 占用者——product-views
+ * 概览 tab body（`sidebar.right.pane.tab` keyed 概览 tab 键占用者——product-views
  * 发布件）：tabInfo 钩子（seat inject 恒递达）经 TabInfoReader 解出动作面 → 桥订阅锚定
  * 上下文（ShellHost 写回）→ OverviewDockBody。useTabInfo 缺席（非壳载体/SSR 单测）=
  * 动作面降级（文档行非交互），概览主体照常呈现。
@@ -372,13 +374,17 @@ export function ForgeOverviewTab(props: ForgeOverviewTabProps): ReactNode {
 /** 知识库目录节 keyed 占用键（knowledge 侧 KNOWLEDGE_DIR_SECTION_KEY 同源字面——跨 bundle 契约）。 */
 export const OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY = 'dswf-knowledge-dir'
 
+/** AC 进度子槽 keyed 占用键（task-loop 侧落座键同源字面——跨 bundle 契约，host-integration-fixes 裁决 1）。 */
+export const OVERVIEW_AC_PROGRESS_ENTRY_KEY = 'dswf-ac-progress'
+
 /**
- * 概览 tab 子槽声明表（宿主单点声明缝——settings-unification 圆桌裁定）：knowledge 等
- * 消费方 apply 期经 slots.inject(slot) 声明缝现查本声明落座（官方 SlotCore.register
- * children 协议——声明即占有，本登记卸载级联收拢子槽）。
+ * 概览 tab 子槽声明表（宿主单点声明缝——settings-unification 圆桌裁定 + 裁决 1 AC 进度
+ * 承接）：knowledge / task-loop 等消费方 apply 期经 slots.inject(slot) 声明缝现查本声明
+ * 落座（官方 SlotCore.register children 协议——声明即占有，本登记卸载级联收拢子槽）。
  */
 export const OVERVIEW_SECTIONS_CHILDREN: Record<string, { readonly kind: string; readonly scope: string }> = {
   [KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT]: { kind: 'keyed', scope: 'root' },
+  [DSWF_OVERVIEW_AC_PROGRESS_SLOT]: { kind: 'keyed', scope: 'root' },
 }
 
 /** 官方 renderSlot 消费窄面（PropsRenderSlots 非 chain 键签名——结构同型镜像）。 */
@@ -395,20 +401,27 @@ export interface ForgeOverviewSectionHostProps extends ForgeOverviewTabProps {
 }
 
 /**
- * 概览 tab 插槽节宿主（`sidebar.right.pane.tab` keyed 'dswf-overview' 占用者——fix-7）：
- * 概览主体原样呈现后，经 renderSlot 消费 project.section.knowledge-dir keyed 槽 roster
- * （entryKey 分发 = 知识库目录节占用键）。renderSlot 缺席（宿主形状漂移/SSR 面）或槽
- * roster 空（占用键无落座/节组件退 null）= 零节呈现，概览主体不悬空不炸。
+ * 概览 tab 插槽节宿主（`sidebar.right.pane.tab` keyed 概览 tab 键占用者——fix-7
+ * knowledge-dir + 裁决 1 AC 进度）：概览主体原样呈现后，经 renderSlot 消费两 keyed 槽
+ * roster——project.section.knowledge-dir（entryKey 分发 = 知识库目录节占用键）与概览
+ * AC 进度子槽（entryKey 分发 = AC 进度段占用键；段本体由 task-loop 落座）。renderSlot
+ * 缺席（宿主形状漂移/SSR 面）或槽 roster 空（占用键无落座/节组件退 null）= 零节呈现，
+ * 概览主体不悬空不炸。
  */
 export function ForgeOverviewSectionHost({ renderSlot, ...tabProps }: ForgeOverviewSectionHostProps): ReactNode {
-  const section =
+  const sections =
     typeof renderSlot === 'function'
-      ? renderSlot(KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT, {}, { entryKey: OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY })
-      : null
+      ? [
+          renderSlot(KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT, {}, { entryKey: OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY }),
+          renderSlot(DSWF_OVERVIEW_AC_PROGRESS_SLOT, {}, { entryKey: OVERVIEW_AC_PROGRESS_ENTRY_KEY }),
+        ]
+      : []
   return (
     <>
       <ForgeOverviewTab {...tabProps} />
-      {section !== null && section !== undefined ? section : null}
+      {sections.map((section, i) =>
+        section !== null && section !== undefined ? <Fragment key={i}>{section}</Fragment> : null,
+      )}
     </>
   )
 }
