@@ -186,6 +186,9 @@ export default defineConfig({
         },
       },
       // spec 插件包（plugin-spec 提案——host/prompt 提示段迁入 + 后续 Spec/Goal/AC 域面）
+      // forge 组合器 bundle（plugin-forge-combo 1.4——patch/config 契约测试 + 边界门机检；
+      // 纯声明物化器零源码，契约面 = 包内声明物文本机检）
+      { test: { name: 'forge-combo', include: ['plugins/forge/tests/**/*.test.ts'] } },
       { test: { name: 'spec', include: ['plugins/spec/tests/**/*.test.ts'] } },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
       // mobile 工程（1.2）：纯 view 层单测（wire 投影/store/router 等纯逻辑面）
