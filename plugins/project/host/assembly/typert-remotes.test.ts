@@ -440,6 +440,33 @@ describe('forgeFeatures inject 生命周期绑（迟到重绑——bug 253b8265�
   })
 })
 
+describe('ForgeProjectsRemote.deriveTaskStoreDir（bug 8de6b903——占位端点退役：core forgeProjects 真实现委托）', () => {
+  it('core face 在场（宿主集成态）：委托 core deriveTaskStoreDir，结果逐字直返', async () => {
+    const calls: unknown[] = []
+    const core = {
+      deriveTaskStoreDir: async (q: { readonly workspaceDir: string }) => {
+        calls.push(q)
+        return { dir: 'T:\\tasks\\demo@1a2b3c4d' }
+      },
+    }
+    const svc = new ForgeProjectsRemote(fakeCtx(), { deriveTaskStoreDir: () => core })
+    await expect(svc.deriveTaskStoreDir('Z:\\ws\\demo')).resolves.toEqual({ dir: 'T:\\tasks\\demo@1a2b3c4d' })
+    expect(calls).toEqual([{ workspaceDir: 'Z:\\ws\\demo' }])
+  })
+
+  it('core face 缺席（单装态）：typed unavailable 诚实拒绝（语义不变）', async () => {
+    await expect(new ForgeProjectsRemote(fakeCtx(), {}).deriveTaskStoreDir('Z:\\x')).rejects.toThrow(
+      unavailableMessage('deriveTaskStoreDir', 'projects'),
+    )
+  })
+
+  it('core face 劣形（缺 deriveTaskStoreDir 法）：typed unavailable 诚实拒绝', async () => {
+    await expect(new ForgeProjectsRemote(fakeCtx(), { deriveTaskStoreDir: () => ({}) }).deriveTaskStoreDir('Z:\\x')).rejects.toThrow(
+      unavailableMessage('deriveTaskStoreDir', 'projects'),
+    )
+  })
+})
+
 describe('typed unavailable 与 fs listDir（诚实降级面）', () => {
   it('族服务缺席 → 调用期 typed unavailable（projects.list / worktree.* / features.list）', async () => {
     await expect(new ForgeProjectsRemote(fakeCtx(), {}).list()).rejects.toThrow(unavailableMessage('list', 'projects'))

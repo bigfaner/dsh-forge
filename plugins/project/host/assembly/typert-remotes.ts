@@ -29,6 +29,7 @@ import type {
   BugCard,
   BugCommitFilesQuery,
   BugFileDiffQuery,
+  DeriveTaskStoreDirResult,
   DirFactRow,
   DirFactsQuery,
   DirListing,
@@ -84,6 +85,8 @@ export interface ForgeTypertDeps {
   readonly worktrees?: () => WorktreeRpcService | undefined;
   /** core forgeFeatures 服务（listFeatures 读面）——缺席宿主 typed unavailable */
   readonly features?: LazyDomainService;
+  /** core forgeProjects 服务（deriveTaskStoreDir 第六法真实现）——缺席宿主 typed unavailable（bug 8de6b903 委托缝） */
+  readonly deriveTaskStoreDir?: LazyDomainService;
   /** workspaceRoot 解析缝（projectId → 工作区根——fix-1 插件自装配：官方宿主工作区面，零 core face），缺席 typed unavailable */
   readonly dirsWorkspaceRoot?: LazyDomainService;
   /** DirFactsPort 缝（锚注册表解析——forge.docs_root/task_home/worktrees 行事实源），缺席 typed unavailable */
@@ -131,10 +134,12 @@ function messageOf(cause: unknown): string {
 /** forgeProjects namespace 控制器（serviceKey = forgeProjectsController——官方 settingsController 同型） */
 export class ForgeProjectsRemote extends TypertRemoteService {
   private readonly port: () => ProjectsServicePort | undefined;
+  private readonly derive: LazyDomainService;
 
   constructor(ctx: Context, deps: ForgeTypertDeps) {
     super(ctx, "forgeProjectsController", { namespace: "forgeProjects" });
     this.port = deps.projects ?? (() => undefined);
+    this.derive = deps.deriveTaskStoreDir ?? (() => undefined);
   }
 
   /** 项目清单（UI 台账/选择器数据源） */
@@ -156,16 +161,21 @@ export class ForgeProjectsRemote extends TypertRemoteService {
   }
 
   /**
-   * 任务库派生行（core forgeProjects 服务专属——本插件 port 不承载，typed unavailable）。
-   * 【退役面登记】占位端点：本插件 host face 无 core forgeProjects 依赖，typed unavailable
-   * 为诚实语义；官方宿主接手 forge 任务库真实现时须归并/删除本占位（face 合同含本端点，
-   * 不可静默漏删）——防占位转永久。
+   * 任务库派生行（core forgeProjects 服务专属——本插件 port 不承载）：core face 在场
+   * （宿主集成态）经 deps.deriveTaskStoreDir 现查委托（bug 8de6b903：占位端点恒抛
+   * unavailable 遮蔽 core 真实现致 e2e 服务缺席降级族——派生行 ready 永不出现）；
+   * 缺席/劣形（单装态）= typed unavailable 诚实拒绝，语义不变。
    */
   @Remote
-  async deriveTaskStoreDir(workspaceDir: string, signal?: AbortSignal): Promise<never> {
+  async deriveTaskStoreDir(workspaceDir: string, signal?: AbortSignal): Promise<DeriveTaskStoreDirResult> {
     signal?.throwIfAborted();
-    void workspaceDir;
-    throw unavailable("deriveTaskStoreDir", "projects");
+    const face = this.derive() as
+      | { deriveTaskStoreDir?: (q: { workspaceDir: string }) => Promise<DeriveTaskStoreDirResult> }
+      | undefined;
+    if (face === undefined || typeof face.deriveTaskStoreDir !== "function") {
+      throw unavailable("deriveTaskStoreDir", "projects");
+    }
+    return await face.deriveTaskStoreDir({ workspaceDir });
   }
 
   /** 项目行变更（sidebar 五功能写面：rename/archived/sortOrders patch——host 权威 registry 写入） */

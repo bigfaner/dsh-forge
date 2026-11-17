@@ -278,6 +278,9 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       bugs: deps.bugs,
       worktrees: worktreesSvcOnceOf(worktreesResident),
       features: () => face.reflect?.get?.("forgeFeatures"),
+      // bug 8de6b903：派生行第六法真实现委托缝——core forgeProjects 现查（缺席 = typed
+      // unavailable 诚实拒绝；检测永不缓存，调用期求值——AGENTS §1.6 同先例形制）
+      deriveTaskStoreDir: () => face.reflect?.get?.("forgeProjects"),
       // 基本信息区数据源（fix-1 插件自装配）：workspaceRoot 官方工作区面 + dirFacts 缝
       //（注册表三键解析——overrides.dirFacts 在场即覆写，与 forge.dirFacts 缝同源）。
       // 概览基本信息数据面零 core 服务消费（用户裁定 2026-11-13⑤）。
