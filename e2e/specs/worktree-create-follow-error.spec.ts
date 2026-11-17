@@ -8,6 +8,7 @@
 // e2e-fast-shared-launch 存量迁移（批次三a）：共享 launch fixture——launchHost 整 spec 一次，
 // 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态，单用例 spec = 每跑批一次冷启）。
 import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSharedLaunchFixture } from '../support/fixtures.js'
@@ -148,6 +149,14 @@ test('1.24 UI：同名去重 + 创建成功自动跟进 + 失败错误呈现', a
   expect(headBranch(wsDir), '主树 HEAD 不动').toBe('main')
 
   // ── 场景 C：创建失败——表单保持打开 + 错误行呈现（不静默） ──
+  // 环境前提门控（plugin-spec/fix-8）：场景 C 的确定性失败依赖「Q: 卷不存在」这一环境前提
+  //（自定义路径 Q:\dsh-e2e-no-such-volume——卷级缺失才确定性失败，见下方头注）。
+  // 前提不满足（Q: 卷实存）时创建可能成功、断言面失义——skip 留痕非红；前提满足 = 门控放行。
+  if (existsSync('Q:/')) {
+    console.log(
+      '[1.24-scene-c-gate] 环境前提不满足：Q: 卷实存，创建失败路径失去确定性失败前提——场景 C skip 留痕（场景 A/B 不受影响）',
+    )
+  } else {
   await pickMenuRow(page, '新建 worktree…')
   await expect(createDialog(page)).toBeVisible()
   await branchInput(page).fill('fail-row')
@@ -169,4 +178,5 @@ test('1.24 UI：同名去重 + 创建成功自动跟进 + 失败错误呈现', a
 
   // 清理失败残留（无——git 未落树）；主树 HEAD 复核
   expect(headBranch(wsDir), '失败路径主树 HEAD 仍不动').toBe('main')
+  }
 })
