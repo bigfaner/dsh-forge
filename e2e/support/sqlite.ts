@@ -39,3 +39,13 @@ export function openTaskLoopDb(userData: string): import('../../packages/core/sr
   db.pragma('busy_timeout = 5000')
   return db
 }
+
+/** 打开 task-loop 域库（全量 better-sqlite3 形态——事务 + 泛型 prepare 的账本断言消费面；
+ *  只读探针 + 受控初态直插两用，busy_timeout 预设同上） */
+export function openTaskLoopDbFull(userData: string): import('better-sqlite3').Database {
+  const db = new (requireFromCore('better-sqlite3') as unknown as new (path: string) => import('better-sqlite3').Database)(
+    join(userData, 'dsh-home', 'forge', 'db', 'task-loop', 'task-loop.db'),
+  )
+  db.pragma('busy_timeout = 5000')
+  return db
+}
