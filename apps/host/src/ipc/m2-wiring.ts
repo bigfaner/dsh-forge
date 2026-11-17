@@ -1,8 +1,8 @@
-// M2 通道族接线收口（3.1；M3 3.8 扩池 settings 族与 proposals 三新通道；定位：基础——
-// 装配聚合，main.ts ~100 行纪律的单行编排位；域注册行在 {tasks,features,proposals,docs,
+// M2 通道族接线收口（3.1；M3 3.8 扩池 settings 族；定位：基础——
+// 装配聚合，main.ts ~100 行纪律的单行编排位；域注册行在 {tasks,features,docs,
 // settings}-rpc.ts，此处仅聚合 + 事件广播）。
 // 三职责：
-//   · M2 通道族注册：forge:projects/deriveTaskStoreDir + forge:{tasks,features,proposals,docs,
+//   · M2 通道族注册：forge:projects/deriveTaskStoreDir + forge:{tasks,features,docs,
 //     bugs}/* 族 + M3 3.8 forge:settings/* + 1.1 forge:remote/* 两通道（progress 只读进度 /
 //     approval 审批转发——随 forgeTasks 在场接线，缺席同族 fail-soft 记 warn 不注册；
 //   · 写推送事件广播（交互二事件链末段）：DshHostHandle.onEvent → webContents.send
@@ -16,7 +16,6 @@ import { registerBugsChannels } from './bugs-rpc.js'
 import { registerDocsChannels } from './docs-rpc.js'
 import { registerFeaturesChannels } from './features-rpc.js'
 import { registerProjectsM2Channels } from './projects-rpc.js'
-import { registerProposalsChannels } from './proposals-rpc.js'
 import { registerRemoteChannels } from './remote-rpc.js'
 import { registerSettingsChannels } from './settings-rpc.js'
 import { registerTasksChannels } from './tasks-rpc.js'
@@ -62,8 +61,6 @@ export function registerM2Channels(
   } else warn('forgeTasks 服务缺席（@dsh-forge/task-loop 插件行未装载）——forge:tasks/* 与 forge:remote/* 通道未注册')
   if (services.forgeFeatures !== undefined) registerFeaturesChannels(ipc, services.forgeFeatures)
   else warn('forgeFeatures 服务缺席（tasksHome 未配置/插件行未装载）——forge:features/* 通道未注册')
-  if (services.forgeProposals !== undefined) registerProposalsChannels(ipc, services.forgeProposals)
-  else warn('forgeProposals 服务缺席（tasksHome 未配置/插件行未装载）——forge:proposals/* 通道未注册')
   if (services.forgeDocs !== undefined) registerDocsChannels(ipc, { docs: services.forgeDocs, openPath })
   else warn('forgeDocs 服务缺席（tasksHome 未配置/插件行未装载）——forge:docs/* 通道未注册')
   if (services.forgeSettings !== undefined) registerSettingsChannels(ipc, services.forgeSettings)

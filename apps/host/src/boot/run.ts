@@ -18,7 +18,6 @@ import type {
   ForgeBugsService,
   ForgeDocsService,
   ForgeFeaturesService,
-  ForgeProposalsService,
   ForgeSettingsService,
   ProjectServiceM2,
   TasksChangedEvent,
@@ -43,7 +42,6 @@ import {
   KNOWLEDGE_SERVICE_METHODS,
   PROJECT_SERVICE_METHODS,
   PROJECTS_M2_SERVICE_METHODS,
-  PROPOSALS_SERVICE_METHODS,
   rebuildBridgeError,
   BUGS_SERVICE_METHODS,
   SETTINGS_SERVICE_METHODS,
@@ -106,7 +104,6 @@ export interface DshHostServices {
   //    M2 tasks 面降级 undefined）──
   forgeTasks: TasksService
   forgeFeatures: ForgeFeaturesService
-  forgeProposals: ForgeProposalsService
   forgeDocs: ForgeDocsService
   /** M3 3.8 设置域（Interface 1 M3；settingsFile 注入时 core provide，缺席 = 设置域降级 undefined） */
   forgeSettings: ForgeSettingsService
@@ -488,9 +485,6 @@ export async function bootDshHost(
         : undefined,
       forgeFeatures: ready.services.forgeFeatures
         ? createBridgeProxy<DshHostServices['forgeFeatures']>('forgeFeatures', FEATURES_SERVICE_METHODS, call)
-        : undefined,
-      forgeProposals: ready.services.forgeProposals
-        ? createBridgeProxy<DshHostServices['forgeProposals']>('forgeProposals', PROPOSALS_SERVICE_METHODS, call)
         : undefined,
       forgeDocs: ready.services.forgeDocs
         ? createBridgeProxy<DshHostServices['forgeDocs']>('forgeDocs', DOCS_SERVICE_METHODS, call)

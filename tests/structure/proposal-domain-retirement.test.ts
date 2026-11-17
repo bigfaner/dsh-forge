@@ -4,9 +4,10 @@
 // 重新注册/引用 proposal 域任何标识符」。
 //
 // 显式豁免（边界声明，防误报与假绿）：
-// - lib/api（contracts）proposal DTO/通道词汇面随 core 解散批退役（plugin-spec 提案 §三
-//   「plugin-forge-spec 包与 core features 域不在本批」同族边界）——本批不动，不入扫描范围；
-// - apps/host/src/{boot,ipc} 桥接白名单与通道注册面同上（依存 contracts 类型，core 解散批收口）；
+// - lib/api（contracts）proposal DTO/通道词汇面、apps/host/src/boot/bridge.ts 服务名与方法
+//   白名单、ipc/proposals-rpc.ts 通道注册面（含 ipc/index.ts 再导出行）：三者依存 contracts
+//   类型，随 core 解散批退役——1.11 显式豁免三件，不入扫描范围；boot child ready 位
+//   forgeProposals 恒 false 为 bridge 全名记录类型的伴生位，随白名单同族豁免；
 // - e2e/specs 归档走查脚本（历史旅程证据，M5 归档收尾批处理）；
 // - *.test.* 与 tests/：机检断言本体（not.toContain 禁词）合法出现禁词 token；
 // - core tasks/features 域的 proposals 表 SQL 与容器 kind 'proposal' 词汇（容器语义在役，

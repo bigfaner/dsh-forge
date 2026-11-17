@@ -1117,7 +1117,6 @@ async function main(): Promise<void> {
     // 降级 = undefined，main 侧 forge:tasks/* 与 forge:remote/* 通道不注册）
     forgeTasks: (servicesFace.get('forgeTasks') as object | undefined) ?? undefined,
     forgeFeatures: (servicesFace.get('forgeFeatures') as object | undefined) ?? undefined,
-    forgeProposals: (servicesFace.get('forgeProposals') as object | undefined) ?? undefined,
     forgeDocs: (servicesFace.get('forgeDocs') as object | undefined) ?? undefined,
     // M3 3.8 设置域（settingsFile 缺席时 core 不 provide——独立缝降级，六服务形制不动）
     forgeSettings: (servicesFace.get('forgeSettings') as object | undefined) ?? undefined,
@@ -1183,7 +1182,7 @@ async function main(): Promise<void> {
       knowledge: services.knowledge !== undefined,
       forgeTasks: services.forgeTasks !== undefined,
       forgeFeatures: services.forgeFeatures !== undefined,
-      forgeProposals: services.forgeProposals !== undefined,
+      forgeProposals: false, // proposal 域已下线（1.11 整域退役）——BridgeReadyMessage 全名记录类型的恒缺席位
       forgeDocs: services.forgeDocs !== undefined,
       forgeSettings: services.forgeSettings !== undefined,
       forgeBugs: services.forgeBugs !== undefined,
