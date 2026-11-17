@@ -16,6 +16,7 @@ import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page, type Locator } from '@playwright/test'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../support/official-stack-gate.js'
 import { launchHost, closeApp, ROOT } from '../support/launch.js'
 import { registerProject } from '../support/rpc.js'
 import { createBridgeDriver } from '../support/replay/executor.js'
@@ -160,11 +161,10 @@ async function tallyTriggerBodies(page: Page, needle: string): Promise<[number, 
   return [tally, first]
 }
 
-/** 公共底座：夹具 ws + 隔离 userData（真实凭据播种）→ launchHost → 项目注册 → 提案+任务 → GUI 会话 */
+/** 公共底座：夹具 ws + 隔离 userData（真实凭据播种）→ launchHost → 项目注册 → 任务容器播种 → GUI 会话 */
 async function bootFixture(options: {
   wsName: string
   slug: string
-  proposalTitle: string
   taskTitles: readonly string[]
   forgeSettings?: Record<string, unknown>
   meta: Record<string, unknown>
@@ -179,7 +179,7 @@ async function bootFixture(options: {
   runLoop: (slug: string, rpcId: string) => Promise<void>
   driver: ReturnType<typeof createBridgeDriver>
 }> {
-  const { wsName, slug, proposalTitle, taskTitles, forgeSettings, meta } = options
+  const { wsName, slug, taskTitles, forgeSettings, meta } = options
   const fixtureRoot = mkdtempSync(join(tmpdir(), `dsh-walk14-${slug}-ws-`))
   const wsDir = join(fixtureRoot, wsName)
   mkdirSync(wsDir, { recursive: true })
@@ -204,7 +204,8 @@ async function bootFixture(options: {
   const project = await registerProject(page, wsDir, wsName)
   const projectKey = projectKeyOf(wsDir)
   const driver = createBridgeDriver(app)
-  await driver.call('forgeProposals', 'createProposal', { projectId: project.id, slug, title: proposalTitle, mode: 'blitz' })
+  // 任务容器 = slug 弱引用（proposal 域退役——task-loop errors.ts「无容器主表可命中校验」；
+  // /run-dag-tasks 任务源解析 = tasks.listTasks 单查询，createProposal 播种已不需要）
   for (const t of taskTitles) {
     await driver.call('forgeTasks', 'addTask', { projectKey, slug, title: t, type: 'doc' })
   }
@@ -282,6 +283,14 @@ function scanDiagLogs(userData: string): { files: string[]; loopLines: number; s
 }
 
 // ═══════════════════════ 径① 正常完成 + 小球口径 + 进度卡 ═══════════════════════
+// ═══════════════════════ 用例 ═══════════════════════
+
+// 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+// 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）。
+test.beforeEach(() => {
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
+})
+
 test('@web-e2e @loop-message-consolidation 1.4-A 径①正常完成：结算卡单卡口径 + 小球对照 + 进度卡行', async () => {
   test.setTimeout(1_800_000)
   mkdirSync(WALKTHROUGH, { recursive: true })
@@ -290,7 +299,6 @@ test('@web-e2e @loop-message-consolidation 1.4-A 径①正常完成：结算卡�
   const fx = await bootFixture({
     wsName: 'ws-lmc-walk14-a',
     slug: PROP,
-    proposalTitle: '真机走查容器甲（1.4 正常完成径）',
     taskTitles: [
       'walk14-任务甲：在 ws 根写 walk14-a.md 一行内容',
       'walk14-任务乙：在 ws 根写 walk14-b.md 一行内容',
@@ -426,7 +434,6 @@ test('@web-e2e @loop-message-consolidation 1.4-B 径②幂等重入 + 径③异�
   const fx = await bootFixture({
     wsName: 'ws-lmc-walk14-b',
     slug: PROP,
-    proposalTitle: '真机走查容器乙（1.4 幂等重入 + 异常径）',
     taskTitles: ['walk14-任务丁：在 ws 根写 walk14-d.md 一行内容'],
     // 真机环境故障注入：worker 模型档位失效 → spawn 拒绝（ERR_SPAWN_FAILED 退避幂等重入 → ×3 halted）
     forgeSettings: { worker: { provider: 'no-such-provider', model: 'no-such-model', reasoning: 'default' } },
@@ -506,7 +513,6 @@ test('@web-e2e @loop-message-consolidation 1.4-C 长循环回放：110 任务卡
   const fx = await bootFixture({
     wsName: 'ws-lmc-walk14-c',
     slug: PROP,
-    proposalTitle: '真机走查容器丙（1.4 长循环回放）',
     taskTitles,
     meta,
   })

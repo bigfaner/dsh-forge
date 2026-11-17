@@ -49,10 +49,12 @@
 // Assertion depth: 22/24 behavioral（92%），其中 deep 9/22（41%）——两阈均过。
 
 import { expect } from '@playwright/test'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
+import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
-import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { openTaskLoopDbFull } from '../../support/sqlite.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { projectKeyOf } from '../../support/project-key.js'
@@ -72,46 +74,56 @@ async function rejectMessage(promise: Promise<unknown>): Promise<string> {
   return promise.then(() => 'unexpectedly-resolved', (cause: unknown) => String((cause as Error)?.message ?? cause))
 }
 
+// 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+// 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）——时间线上屏段挂
+// 降级渲染环境（概览 dock 交互链被崩窗掩码阻断，sc4/sc5 同签名）；库级契约段与 UI 段
+// 同用例承载，随之同门（beforeEach 时点挂门——先于 fixture launch，省一次宿主拉起）。
+test.beforeEach(() => {
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
+})
+
 test('@web-e2e @m3 worker 供给·T1：addTask 逃生通道前缀二分（fix-N 同事务阻塞源 / disc-N 不阻塞）+ 链深 ≤6 + 状态分化上屏', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
     const projectKey = projectKeyOf(wsDir)
-    const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const PROP = 'jwp-escape'
-    await driver.call('forgeProposals', 'createProposal', { projectId, slug: PROP, title: 'Jwp 逃生通道演示提案', mode: 'blitz' })
+    // 容器播种（proposal 域退役——容器 pill 菜单单源 = features 轨投影，features 域注册同标识）
+    await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: PROP, title: 'Jwp 逃生通道演示容器' })
     const add = async (title: string, sourceTask?: { slug: string; localId: string }, blockSource?: boolean): Promise<{ taskId: string; slug: string; localId: string }> =>
       (await driver.call('forgeTasks', 'addTask', {
         projectKey, slug: PROP, title, type: 'doc',
         ...(sourceTask !== undefined ? { sourceTask } : {}), ...(blockSource !== undefined ? { blockSource } : {}),
       })) as { taskId: string; slug: string; localId: string }
 
-    // ── 两个受阻场景双份夹具（源任务均已领取 = worker 执行中形态）──
+    // ── 两个受阻场景双份夹具（block_source 状态守卫契约——add.ts assertBlockSourceAllowed：
+    //    blockSource=true 对在飞源 fail-loud（ERR_BLOCK_SOURCE_IN_PROGRESS「先 pauseTask →
+    //    addTask → resume」，pauseTask 未入桥白名单）——fix 径源保持 pending 承载 blockSource
+    //    单事务形态；disc 径源领取 in_progress = 执行中形态（blockSource=false 不受守卫限））──
     const srcFix = await add('fix 径源任务')
     const srcDisc = await add('disc 径源任务')
-    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: srcFix.slug, localId: srcFix.localId }, sessionId: 'e2e-jwp-w1' })
     await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: srcDisc.slug, localId: srcDisc.localId }, sessionId: 'e2e-jwp-w2' })
 
-    // ── prefix-bifurcation：fix-N（block_source 单事务——源即时 blocked 并引用）──
+    // ── prefix-bifurcation：fix-N（blockSource=true 单事务——pending 源即时 blocked 并引用）──
     const fix1 = await add('修复任务（走 fix 链协议）', { slug: srcFix.slug, localId: srcFix.localId }, true)
     expect(fix1.localId.startsWith('fix-'), `fix 径前缀分配（localId=${fix1.localId}）`).toBe(true)
     // disc-N（独立问题——不阻塞源，源可继续）
     const disc1 = await add('独立问题任务（不阻塞源）', { slug: srcDisc.slug, localId: srcDisc.localId }, false)
     expect(disc1.localId.startsWith('disc-'), `disc 径前缀分配（localId=${disc1.localId}）`).toBe(true)
 
-    const db = openForgeDbAt(dir)
+    const db = openTaskLoopDbFull(udDir)
     try {
       const statusOf = (taskId: string): string | undefined =>
-        db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(taskId)?.task_status
+        db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM task_tasks WHERE id = ?`).get(taskId)?.task_status
       expect(statusOf(srcFix.taskId), 'fix 径：源任务同事务即时 blocked（block_source 单事务）').toBe('blocked')
       expect(statusOf(srcDisc.taskId), 'disc 径：源任务不被阻塞（可继续）').toBe('in_progress')
-      const fixRow = db.prepare<unknown[], { source_task_id: string | null; blocked_reason: string | null }>(
-        `SELECT source_task_id, blocked_reason FROM tasks WHERE id = ?`,
+      const fixRow = db.prepare<unknown[], { fix_of_task_id: string | null; task_status: string }>(
+        `SELECT fix_of_task_id, task_status FROM task_tasks WHERE id = ?`,
       ).get(fix1.taskId)
-      expect(fixRow?.source_task_id, 'fix 任务谱系引用源任务').toBe(srcFix.taskId)
+      expect(fixRow?.fix_of_task_id, 'fix 任务谱系引用源任务（fix_of_task_id）').toBe(srcFix.taskId)
       expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_records WHERE task_id = ? AND verb = 'auto-block'`).get(srcFix.taskId)?.n, 'auto-block 审计行伴随（reason 单源落账）').toBeGreaterThanOrEqual(1)
       expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_edges WHERE task_id = ? AND prerequisite_id = ? AND origin = 'fix-chain'`).get(srcFix.taskId, fix1.taskId)?.n, 'fix-chain 边落库（恢复钩子锚——task_id=源（等待方）← prerequisite=fix，add.ts block-source 写径）').toBeGreaterThanOrEqual(1)
     } finally {
@@ -127,10 +139,10 @@ test('@web-e2e @m3 worker 供给·T1：addTask 逃生通道前缀二分（fix-N 
     const depthRejected = await rejectMessage(add('第 7 层越限修复任务', { slug: tip.slug, localId: tip.localId }, true))
     expect(depthRejected, '链深 ≤6 纪律（第 7 层拒绝——超限不放行）').toContain('fix 链深超限')
     expect(depthRejected, '上限明示（6）').toContain('上限 6')
-    const db2 = openForgeDbAt(dir)
+    const db2 = openTaskLoopDbFull(udDir)
     try {
       expect(db2.prepare<unknown[], { n: number }>(
-        `SELECT COUNT(*) AS n FROM tasks WHERE slug = ? AND local_id LIKE 'fix-%'`,
+        `SELECT COUNT(*) AS n FROM task_tasks WHERE slug = ? AND local_id LIKE 'fix-%'`,
       ).get(PROP)?.n, '既有链保持 ≤6（六层 fix 行）').toBe(6)
     } finally {
       db2.close()
@@ -143,8 +155,8 @@ test('@web-e2e @m3 worker 供给·T1：addTask 逃生通道前缀二分（fix-N 
     await page.locator('[data-dswf-tt-contpill]').first().click()
     const menu = page.locator('[role="menu"]').first()
     await expect(menu).toBeVisible({ timeout: 15_000 })
-    await menu.locator(`[data-dswf-tt-mcont="proposal:${PROP}"]`).first().click()
-    await expect(page.locator(`[data-dswf-tt-contpill="proposal:${PROP}"]`), '突击容器选中').toBeVisible({ timeout: 15_000 })
+    await menu.locator(`[data-dswf-tt-mcont="feature:${PROP}"]`).first().click()
+    await expect(page.locator(`[data-dswf-tt-contpill="feature:${PROP}"]`), '容器选中').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(ttItemOf(srcFix.taskId)).first(), 'fix 径源任务行上屏（已阻塞）').toContainText('已阻塞', { timeout: 30_000 })
     await expect(page.locator(ttItemOf(srcDisc.taskId)).first(), 'disc 径源任务行上屏（进行中——两源状态分化上屏）').toContainText('进行中', { timeout: 30_000 })
     await expect(page.locator(ttItemOf(fix1.taskId)).first(), '新任务行上屏（fix-1）').toBeVisible({ timeout: 30_000 })

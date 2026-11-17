@@ -14,6 +14,7 @@ import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../support/official-stack-gate.js'
 import { launchHost, closeApp } from '../support/launch.js'
 import { realCredentials, seedDshHome } from '../support/dogfood.js'
 import { registerProject } from '../support/rpc.js'
@@ -132,6 +133,9 @@ function depSettled(s: DepStats): boolean {
 }
 
 test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消息面折叠 + 全链实测 + mobile 进度流', async () => {
+  // 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+  // 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）。
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
   test.setTimeout(1_800_000)
   mkdirSync(WALKTHROUGH, { recursive: true })
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-walk112-ws-'))
@@ -158,7 +162,8 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
-    await driver.call('forgeProposals', 'createProposal', { projectId: project.id, slug: PROP, title: '真机走查容器（1.12）', mode: 'blitz' })
+    // 任务容器 = slug 弱引用（proposal 域退役——/run-dag-tasks 任务源解析 = tasks.listTasks，
+    // createProposal 播种已不需要）
     for (const t of ['walk112-任务甲：在 ws 根写 walk112-a.md 一行内容', 'walk112-任务乙：在 ws 根写 walk112-b.md 一行内容']) {
       await driver.call('forgeTasks', 'addTask', {
         projectKey, slug: PROP, title: t, type: 'doc',

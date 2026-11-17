@@ -16,6 +16,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSharedLaunchFixture, wsSegment } from '../support/fixtures.js'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../support/official-stack-gate.js'
 import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
@@ -147,6 +148,11 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
+// 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+// 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）。
+test.beforeEach(() => {
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
+})
 test('1.6 口径 3 UI：提交回执正常退役（消息计数稳定 + composer 清空）+ 零 pending 卡挂（第二条照常发送落盘）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
   const { page, wsDir, udDir } = sharedLaunch

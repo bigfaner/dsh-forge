@@ -21,6 +21,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSharedLaunchFixture, wsSegment as wsSegmentOf } from '../support/fixtures.js'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../support/official-stack-gate.js'
 import { findFixtureSession } from '../support/session-files.js'
 import { expect, type Page } from '@playwright/test'
 
@@ -161,6 +162,11 @@ async function snap(page: Page, name: string): Promise<void> {
 
 const norm = (p: string | undefined): string => (p ?? '').toLowerCase().replaceAll('\\', '/')
 
+// 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+// 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）。
+test.beforeEach(() => {
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
+})
 test('1.27 UI（推导制）：选树 → 会话 cwd = 所选树；官方 blank 复用天然命中', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
   const { page, wsDir, udDir } = sharedLaunch

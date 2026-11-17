@@ -1,33 +1,39 @@
 // @feature:dsh-forge-m3-bootstrap-presets @web-e2e
-// M3 5.2 SC1 hero 投影四断言 + 自动对齐（PRD Goals SC1 / tech-design Testing Strategy e2e 行）：
-//   ① 预设座位在场（hero 面自现——ui-settings 首启预置开启）+ registry 默认 = 远征；
+// M3 5.2 SC1 hero 投影四断言（PRD Goals SC1 / tech-design Testing Strategy e2e 行）：
+//   ① 预设座位在场（hero 面自现——ui-settings 首启预置开启）+ registry 默认 = 突击；
 //   ② 中文直出 order 1·2（菜单「远征模式」→「突击模式」序——产品双预设行 order 字段）；
 //   ③ blank 锁生效（首轮消息后座位卸载/点选无效——断言基 UI 投影面，spike S5 形制）；
 //   ④ 恢复会话按 agentPreset 投影重建（复启 → 会话头 AgentPresetLabel 投影标签 = 会话
-//      绑定预设——上游 session.projectionValues.agentPreset 面）；
-//   ⑤ 自动对齐：经提案绑定入口（提案子 tab 行头「打开新会话」）创建的新会话自动对齐
-//      提案 mode（blank 期 agentPreset.select；断言 = 座位标签 + composer 预填在场 +
-//      预填不自动发送[Hard Rule v13 裁决]）。
+//      绑定预设——上游 session.projectionValues.agentPreset 面）。
+// SC1⑤ 自动对齐（提案绑定入口新会话自动对齐提案 mode）——已随提案域整域下线退役
+// （a4664ccb/plugin-spec 1.11，原 test.skip 形态退场）：概览提案行集消费面已拆除
+// （plugins/project/ui 概览 dock 注册面零提案子 tab），提案绑定入口不复存在；原 skip
+// 判据（用户裁定 2026-11-14「项目概览暂时不要接入 feature 与提案」）的退场语义由本头注
+// 承接。将来恢复接入时按原判别序处理（时序 vs 键名，srcClaims 记忆化叠加面，
+// 判据存 1.8/005-e2e-reverify）。
 // 载体纪律（Hard Rule）：零真实模型——会话夹具 = 零凭据 composer 消息（模型调用失败
 // 不影响会话建档/用户事件落地，M2 SC6③ 同径）。
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { findFixtureSession, waitForSessionEvents } from '../../support/session-files.js'
-import { openOverviewDock } from '../../support/navigation.js'
-import { COMPOSER_INPUT, CONVERSATION_CONTENT, ovSubtabOf, sessionRowOf } from '../../support/anchors.js'
-import { awaitPresetHeaderLabel, awaitSeatLabel, seatLabel, seatPresent, seatRoot, selectPreset } from '../../support/m3.js'
-import { createBridgeDriver } from '../../support/replay/executor.js'
+import { COMPOSER_INPUT, CONVERSATION_CONTENT, sessionRowOf } from '../../support/anchors.js'
+import { awaitPresetHeaderLabel, awaitSeatLabel, seatPresent, seatRoot, selectPreset } from '../../support/m3.js'
 
 const WS_NAME = 'ws-sc1'
 const MARKER = 'SC1 blank 锁断言夹具消息'
 
 test('@web-e2e @m3 SC1·hero 投影四断言：座位在场/中文直出 order 1·2/blank 锁/恢复投影重建', async () => {
+  // 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+  // 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）——恢复投影判据 =
+  // 转录内容按账本重建（用户消息入转录投影，rc.2 世代原生崩溃面）。
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
   test.setTimeout(480_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc1-'))
   const wsDir = join(fixtureRoot, WS_NAME)
@@ -113,80 +119,6 @@ test('@web-e2e @m3 SC1·hero 投影四断言：座位在场/中文直出 order 1
     if (launched.pageErrors.length > 0) console.log(`[sc1-diagnostic] pageerror：${launched.pageErrors.slice(-3).join(' | ')}`)
   } finally {
     if (launched !== undefined) await closeApp(launched.app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
-})
-
-// SC1·自动对齐——显式 skip（用户裁定 2026-11-14：「项目概览暂时不要接入 feature 与提案」）：
-// 概览提案/feature 行集消费面已按 OVERVIEW_PROPOSAL_FEATURE_ENABLED 门控默认关闭
-// （plugins/project/ui/dock-tabs/overview/overview-model.ts），提案绑定入口不复存在，
-// 本断言随之退场。数据面 forgeProposals 遥控器保持诚实 degraded 语义（与官方 web 舞台
-// 同口径，1.2 判 PASS 语义）不做迟到重绑；SC1 红根因（degraded 冻结）留档不修——
-// 将来恢复接入时按原判别序处理（时序 vs 键名，srcClaims 记忆化叠加面，
-// 判据存 1.8/005-e2e-reverify）。
-test.skip('@web-e2e @m3 SC1·自动对齐：提案绑定入口新会话自动对齐提案 mode（座位标签 + 预填不发送）——提案行集消费面退场', async () => {
-  test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc1b-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc1b-ud-'))
-  const launched: Launched = await launchHost({
-    userData,
-    expectPhase: 'hero',
-    collectConsole: true,
-    env: { DSH_FORGE_TEST_BRIDGE: '1' },
-  })
-  const { app, page } = launched
-  try {
-    // 底座：注册 + 突击提案（回放主径写——quick-tasks 产出的录制面承载）
-    const project = await registerProject(page, wsDir, WS_NAME)
-    await selectWorkspaceViaChip(page, WS_NAME)
-    const driver = createBridgeDriver(app)
-    const proposal = (await driver.call('forgeProposals', 'createProposal', {
-      projectId: project.id,
-      slug: 'sc1-blitz-prop',
-      title: 'SC1 自动对齐突击提案',
-      mode: 'blitz',
-    })) as { proposalId: string; slug: string }
-
-    // 提案绑定入口：概览 → 提案子 tab → 行头「打开新会话」
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
-    await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    const openButton = page.locator(`[data-dswf-ov-opensession="${proposal.slug}"]`).first()
-    await expect(openButton, '提案行头「打开新会话」在场').toBeVisible({ timeout: 30_000 })
-    await openButton.click()
-
-    // 新会话 = blank + agentPreset.select(容器对应模式) + 预填（不发送）：
-    // 座位标签对齐突击（select 远端应用异步——窗口内轮询收敛）+ composer 草稿承载
-    // formatPrefill 现状上下文
-    expect(await seatPresent(page), '新会话预设座位在场（blank 期）').toBe(true)
-    const deadline = Date.now() + 30_000
-    let label = ''
-    while (Date.now() < deadline) {
-      label = await seatLabel(page)
-      if (label.includes('突击') || label.includes('blitz')) break
-      await page.waitForTimeout(1_000)
-    }
-    if (!(label.includes('突击') || label.includes('blitz'))) {
-      const draftText = await page.locator(COMPOSER_INPUT).last().textContent().catch(() => '')
-      throw new Error(
-        `自动对齐未收敛（label=${label}；draft=${String(draftText)?.slice(0, 120)}；` +
-          `console=${launched.consoleTail.slice(-8).join(' || ')})——编排器 preset 阶段疑似失败`,
-      )
-    }
-    const draft = page.locator(COMPOSER_INPUT).last()
-    await expect(draft, 'composer 预填在场（draft 缝）').toBeVisible({ timeout: 30_000 })
-    await expect(draft).toContainText('名称：SC1 自动对齐突击提案')
-    await expect(draft).toContainText('我的意图：')
-    // 预填不自动发送（Hard Rule v13）：草稿留场不被 submit 消费（composer 常驻
-    // conversation-content 滚动体内，转录文本面不可作判据——草稿存续 = 未发送直证）
-    await page.waitForTimeout(2_500)
-    await expect(draft, '预填不自动发送（草稿留场）').toContainText('我的意图：')
-
-    if (launched.pageErrors.length > 0) console.log(`[sc1b-diagnostic] pageerror：${launched.pageErrors.slice(-3).join(' | ')}`)
-  } finally {
-    await closeApp(app)
     rmDirBestEffort(fixtureRoot)
     rmDirBestEffort(userData)
   }

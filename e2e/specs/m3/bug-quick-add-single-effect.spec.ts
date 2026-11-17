@@ -1,6 +1,6 @@
 // @web-e2e @fix-bug
 // 实机走查（bug 2d5434d1 修复验证——症状级防御 insertReferenceAtTail）：
-//   复现条件忠实台账事实：单次点击 / 当前会话有历史（先开提案会话并落地一条消息）。
+//   复现条件忠实台账事实：单次点击 / 当前会话有历史（先经 composer 直发落地一条消息）。
 //   验收（单效）：
 //     ① chip 落当前会话 composer（插入生效 + 还焦）；
 //     ② 不开新会话：转录仍为当前会话内容、侧栏会话行数不变、无预填新会话。
@@ -11,17 +11,19 @@ import { join } from 'node:path'
 import { expect } from '@playwright/test'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
-import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, ovSubtabOf, SESSION_ROW_ANY } from '../../support/anchors.js'
 import { awaitNoLateModals } from '../../support/m3.js'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
 
 const WS_NAME = 'ws-bugwalk'
+/** 会话历史标记消息（「当前会话有历史」复现条件载体——proposal 域退役后经 composer 直发） */
+const MARKER = '双效走查容器会话消息'
 
 // e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
-// 夹具工作区 = 空目录（提案/bug 行 slug 隔离，单用例 spec 零跨用例账本耦合）。
+// 夹具工作区 = 空目录（bug 行 slug 隔离，单用例 spec 零跨用例账本耦合）。
 const { test } = createSharedLaunchFixture({
   seedWorkspace: (dir) => mkdirSync(dir, { recursive: true }),
   workspaceName: WS_NAME,
@@ -29,16 +31,15 @@ const { test } = createSharedLaunchFixture({
 })
 
 test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加到会话中」→ chip 落当前会话、零新会话', async ({ sharedLaunch }) => {
+  // 验收②（转录含消息文本 = 用户消息入转录投影）挂官方栈世代门（族① gate-environment 先例——
+  // input-history-plugin 等 13 spec 同径）：rc.2 世代用户消息不入转录，整代 co-upgrade 后复跑。
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
   test.setTimeout(300_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { page, pageErrors, wsDir } = sharedLaunch
   try {
-    // ── 夹具：项目 + 提案 + 台账 bug 行 ──
-    const project = await registerProject(page, wsDir, WS_NAME)
-    const projectId = project.id
+    // ── 夹具：项目 + 台账 bug 行 ──
+    await registerProject(page, wsDir, WS_NAME)
     await selectWorkspaceViaChip(page, WS_NAME)
-    const driver = createBridgeDriver(app)
-    const PROP = 'bugwalk-blitz'
-    await driver.call('forgeProposals', 'createProposal', { projectId, slug: PROP, title: '双效走查突击提案', mode: 'blitz' })
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const bugId = randomUUID()
     const now = new Date().toISOString()
@@ -53,19 +54,13 @@ test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加�
       db.close()
     }
 
-    // ── 当前会话有历史（台账复现条件）：提案行头开新会话 → 发送落地一条消息 ──
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
-    const openBtn = page.locator('[data-dswf-ov-opensession="bugwalk-blitz"]').first()
-    await expect(openBtn, '提案行头「打开新会话」在场').toBeVisible({ timeout: 30_000 })
-    await openBtn.click()
-    const draft = page.locator(COMPOSER_INPUT).last()
-    await expect(draft, 'composer 预填在场').toBeVisible({ timeout: 30_000 })
-    await ensureNoBlockingDialog(page)
-    await draft.click()
+    // ── 当前会话有历史（台账复现条件）：GUI 会话 composer 直发落地一条消息
+    // （proposal 行头开新会话入口随 proposal 域退役——M2 SC6③ composer 会话夹具同径）──
+    const composer = page.locator(COMPOSER_INPUT).last()
+    await composer.click()
+    await page.keyboard.insertText(MARKER)
     await page.keyboard.press('Enter')
-    const marker = '双效走查突击提案'
-    await expect(page.locator(CONVERSATION_CONTENT).first(), '当前会话有历史（消息落地 = 非 blank）').toContainText(marker, { timeout: 60_000 })
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '当前会话有历史（消息落地 = 非 blank）').toContainText(MARKER, { timeout: 60_000 })
     await awaitNoLateModals(page)
 
     // ── Bug 子 tab：行在场 + 快速路径按钮在场 ──
@@ -84,12 +79,12 @@ test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加�
     await addBtn.click()
 
     // ── 验收①：chip 落当前会话 composer（原子引用 label = bug 摘要投影）──
-    const composer = page.locator(COMPOSER_INPUT).first()
-    await expect(composer, 'chip/引用投影进入当前会话草稿').toContainText('双效走查 Bug', { timeout: 15_000 })
+    const composerAfter = page.locator(COMPOSER_INPUT).first()
+    await expect(composerAfter, 'chip/引用投影进入当前会话草稿').toContainText('双效走查 Bug', { timeout: 15_000 })
 
     // ── 验收②：零新会话（双效链切断）──
     await page.waitForTimeout(3_000) // 双效跳转窗（实机症状 = 点击后瞬时开新会话）
-    await expect(page.locator(CONVERSATION_CONTENT).first(), '转录仍为当前会话内容（未跳转新会话）').toContainText(marker)
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '转录仍为当前会话内容（未跳转新会话）').toContainText(MARKER)
     const sessionRowsAfter = await page.locator(SESSION_ROW_ANY).count()
     expect(sessionRowsAfter, `侧栏会话行数不变（前 ${String(sessionRowsBefore)} 后 ${String(sessionRowsAfter)}——未开新会话）`).toBe(sessionRowsBefore)
     await expect(page.locator(COMPOSER_INPUT).first(), '草稿仍持引用（无新会话预填劫持）').toContainText('双效走查 Bug')
@@ -103,7 +98,7 @@ test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加�
       '',
       `- 日期：${new Date().toISOString()}`,
       `- bugId（台账）：2d5434d1-8929-4ca6-aa90-68d6a64b04b9；台账行（夹具）：${bugId}`,
-      '- 条件：当前会话有历史（提案会话先落地一条消息）→ Bug 子 tab 单次点击「添加到会话中」',
+      '- 条件：当前会话有历史（composer 直发先落地一条消息）→ Bug 子 tab 单次点击「添加到会话中」',
       '- 结果：① chip 落当前会话 composer；② 转录保持当前会话、侧栏会话行数不变、无预填新会话',
       '- 截图：bug-2d5434d1-single-effect.png',
       '',

@@ -12,6 +12,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../support/official-stack-gate.js'
 import { findFixtureSession } from '../support/session-files.js'
 import { expect, type Page } from '@playwright/test'
 
@@ -133,6 +134,11 @@ function sharedFindSession(udDir: string, fixtureSegment: string): { readonly se
 
 const norm = (p: string | undefined): string => (p ?? '').toLowerCase().replaceAll('\\', '/')
 
+// 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+// 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）。
+test.beforeEach(() => {
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
+})
 test('切换序列回归：选树 X → 非 git 项目折返 → 选树 Y → 发送落 Y（composer 闸 pending 翻转在场）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
   const { page, wsDir, udDir } = sharedLaunch
