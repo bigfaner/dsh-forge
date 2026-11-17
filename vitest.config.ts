@@ -77,6 +77,9 @@ export default defineConfig({
       // 断言-契约溯源：每条断言标注 testing/contracts/knowledge-* 契约条目 id；
       // 真机 Electron 面用例在 spec 内 skip 留痕，归 Playwright test-run 收口）
       { test: { name: 'knowledge-journeys', include: ['tests/knowledge/**/*.test.ts'] } },
+      // forge 组合器旅程池（plugin-forge-combo fix-8——tests/forge 旅程支持层单测：
+      // CT-NPM-03 零缺席判据正反自证；真机 spec 归 Playwright desktop-journeys 池）
+      { test: { name: 'forge-combo-journeys', include: ['tests/forge/**/*.test.ts'] } },
       { test: { name: 'contracts', include: ['packages/contracts/src/**/*.test.ts'] } },
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
       // knowledge 插件包（UI 三面归位 1.4：ui 面 .test 随迁本池——组件消费官方 primitives，

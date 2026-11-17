@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import Database from 'better-sqlite3'
+import { forgeBundleAbsenceClues } from '../../../e2e/support/bundle-absence.js'
 import {
   BARE_BUNDLES,
   FORGE_PKG,
@@ -146,9 +147,13 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     // 全解析、装载链通——不预设依赖物化在 profile 侧的布局位置）
     const win = await bootWindow(env.dshBin, 'forge', env.dshHome, [], 20_000)
     expect(win.alive, 'CLI 宿主冷启动观察窗内存活').toBe(true)
-    // State（CT-NPM-03）：零缺席装配 = stderr 无 @dsh-forge 缺席线索（缺席时官方
-    // skippedBundles stderr 直落；CT-DISK-07/CT-NPM-06 forge-bundle-absent 反锚面）
-    expect(win.stderr.includes('@dsh-forge'), '零缺席装配（stderr 无 @dsh-forge 缺席线索）').toBe(false)
+    // State（CT-NPM-03）：零缺席装配 = stderr 无真缺席线索（bug 47af0d8c fix-8 锚收窄——
+    // 缺席判据 = entries 未解析/装载失败形态；合法 pending 诊断行
+    // `did not activate … (@dsh-forge/x): pending (waiting for service …)` 为背板服务缺席的
+    // 正常非缺席证据（headless CLI 背板无 webServer/connection 等服务），不判 FAIL。
+    // 判据实现与正反双向自证 = e2e/support/bundle-absence.ts + tests/forge/.../bundle-absence 单测；
+    // 反锚面 CT-DISK-07/CT-NPM-06 forge-bundle-absent 不变）
+    expect(forgeBundleAbsenceClues(win.stderr), `零真缺席装配（合法 pending 除外）stderr=${win.stderr.slice(-600)}`).toEqual([])
   })
 
   test('CT-NPM-03 #step-4（web 校准轮，FORGE_COMBO_WEB_LOOP=1）：client 半侧 HTTP 取件观察', async () => {
