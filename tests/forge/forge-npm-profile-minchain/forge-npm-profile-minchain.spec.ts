@@ -100,12 +100,20 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
 
     // State（CT-NPM-01）：boot 期 insert patch 行生效证据（fix-6 锚修订——
     // dsh.profile.bundles 为 profile 目录字段，patch 插行不经该面，bundles 对账断言废除；
-    // 生效判据 = dump-config 组合实况五条 insert 行 + 共库 config 全量在场；
+    // 生效判据 = dump-config 组合实况五条 insert 条目 + 共库 config 全量在场；
+    // 断言字面按 dump-config 实际序列化形状（bug 13ffb081 fix-7）：
+    // 逐条目 `- id: <bareId>` 行 + 缩进 `  name: '@dsh-forge/<bare>'` 行（\r?\n CRLF 容忍），
+    // 实锚样本 = task_logs 1.6/007-fcombo16c/dump-config.txt 与 009-fcombo16d/dump-config2.txt L373-400；
     // 五件冷启动装载运行期锚归 CT-NPM-03）
     const dump = await runDsh(env.dshBin, ['--profile', 'forge', '--dump-config'], env.dshHome)
     expect(dump.code, `dump-config 组合实况成功（exit=${String(dump.code)}）stderr=${dump.stderr.slice(-400)}`).toBe(0)
     expect(dump.stdout, 'dump-config 含 forge patch 段标记').toContain('# == @dsh-forge/forge')
-    for (const bare of BARE_BUNDLES) expect(dump.stdout, `dump-config 含 insert 行 ${bare}`).toContain(`- name: '${bare}'`)
+    for (const bare of BARE_BUNDLES) {
+      const bareId = bare.slice('@dsh-forge/'.length)
+      expect(dump.stdout, `dump-config 含 insert 条目 ${bare}（- id: ${bareId} + 缩进 name: 行——bug 13ffb081 fix-7 序列化形状）`).toMatch(
+        new RegExp(`^- id: ${bareId}$\\r?\\n^  name: '${bare}'$`, 'm'),
+      )
+    }
     const dbFileHits = dump.stdout.match(/forge\/db\/forge\/forge\.db/g)?.length ?? 0
     expect(dbFileHits, '共库 config 全量在场（project/spec/task-loop/knowledge 四件 dbFile 表达式）').toBeGreaterThanOrEqual(4)
 
