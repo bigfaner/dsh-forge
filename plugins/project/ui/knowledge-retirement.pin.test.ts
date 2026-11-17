@@ -30,6 +30,8 @@ const WHITELIST: readonly { readonly pattern: RegExp; readonly reason: string }[
   { pattern: /'knowledge\.[A-Za-z]+'/, reason: 'overview drawer/task-tab 测试假 client 标记字面（通道方法名 fixture——非域引用）' },
   { pattern: /knowledge: \{ (browse|fail)/, reason: 'overview 测试假 client 对象字面（通道切片 fixture——非域引用）' },
   { pattern: /\.knowledge/, reason: '知识库目录缺省值字面（ov-head 测试 fixture——`<工作区>/.knowledge` 产品口径）' },
+  { pattern: /knowledge-dir/, reason: 'keyed 槽占用键契约字面（OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY 同源 `dswf-knowledge-dir`——dock-tabs 测试标题叙述消费契约，非域残留）' },
+  { pattern: /foreign-knowledge-digest/, reason: 'migration digest fixture 字面（combo-assembly 迁移账本假数据键——非域引用）' },
 ]
 
 const ROOTS = ['plugins/project/ui', 'plugins/project/host']

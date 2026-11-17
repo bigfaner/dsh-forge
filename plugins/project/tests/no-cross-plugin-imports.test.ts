@@ -15,6 +15,7 @@ const ALLOWED = new Set([
   "@dsh-forge/lib-db",
   "@dsh-forge/lib-diag",
   "@dsh-forge/lib-path",
+  "@dsh-forge/lib-ui",
   "@dsh-forge/lib-util",
   "@dsh-forge/path-key",
   SELF,
