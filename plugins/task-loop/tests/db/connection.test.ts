@@ -137,12 +137,12 @@ describe("task_ 前缀域装配", () => {
     });
   });
 
-  it("17 棵 B-tree（5 TEXT PK 隐式 + 1 复合自然键 PK 隐式 + 2 表级 UNIQUE 隐式 + 9 CREATE）", () => {
+  it("19 棵 B-tree（5 TEXT PK 隐式 + 1 复合自然键 PK 隐式 + 2 表级 UNIQUE 隐式 + 9 CREATE + schema_meta/migration_digests 分域锚复合主键隐式 ×2——R3-dba 分域版本线）", () => {
     withMemoryDomain((domain) => {
       const indexes = domain.db.prepare(`SELECT name FROM sqlite_master WHERE type='index'`).all() as Array<{
         name: string | null;
       }>;
-      expect(indexes).toHaveLength(17);
+      expect(indexes).toHaveLength(19);
       for (const expected of [
         "idx_task_tasks_container",
         "idx_task_tasks_fix",

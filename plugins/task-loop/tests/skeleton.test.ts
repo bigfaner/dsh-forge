@@ -137,8 +137,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.1");
   });
 
-  it("版本 bump 0.17.2（plugin-forge-combo/fix-2 patch——owner Peer 装载期解耦 bug e4aa1a5f；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.17.2");
+  it("版本 bump 0.17.3（plugin-forge-combo/fix-3 patch——共库分域版本线 bug e62f3458；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.17.3");
   });
 });
 

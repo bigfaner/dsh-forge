@@ -7,6 +7,7 @@ import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { openDatabase } from "@dsh-forge/lib-db";
 import {
+  TASK_LOOP_DB_SCHEMA_DOMAIN,
   TASK_LOOP_DB_SCHEMA_VERSION,
   TASK_LOOP_MIGRATIONS,
   taskTableNames,
@@ -41,6 +42,9 @@ export function openDomainDb(home: string, opts: DomainDbOpts = {}): DomainDb {
   const db = openDatabase(file, {
     migrations: TASK_LOOP_MIGRATIONS,
     schemaVersion: TASK_LOOP_DB_SCHEMA_VERSION,
+    // 分域版本线锚（R3-dba）：版本门只判读 task-loop 域版本线——共库形态下 spec/knowledge
+    // 先行迁移抬升的异域版本行不触发拒开（bug e62f3458 处方；单装形态语义不变）。
+    domain: TASK_LOOP_DB_SCHEMA_DOMAIN,
   });
   return {
     db,

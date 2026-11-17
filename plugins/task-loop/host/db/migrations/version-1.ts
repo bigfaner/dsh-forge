@@ -13,6 +13,13 @@ import type { Migration } from "@dsh-forge/lib-db";
 /** task-loop.db schema 版本上限（独立版本线；version 1 起新线）。 */
 export const TASK_LOOP_DB_SCHEMA_VERSION = 1;
 
+/**
+ * 分域版本线锚（R3-dba「锚域不锚表集合」）：openDatabase domain 选项值——
+ * 共库形态下版本门只判读本域版本线，spec/knowledge 等异域先行抬升的版本不触发拒开
+ * （bug e62f3458 处方）；单装缺省形态同锚（自持库单域独占，语义不变）。
+ */
+export const TASK_LOOP_DB_SCHEMA_DOMAIN = "task-loop";
+
 /** 表名模板（唯一模板面——connection/后续 repositories 共此单源；恒 task_ 前缀）。 */
 export interface TaskDbTables {
   tasks: string;
@@ -42,8 +49,9 @@ export const TASK_LOOP_MIGRATIONS: readonly Migration[] = [
   {
     version: 1,
     statements: [
-      // lib/db 机制基建表（版本线锚域，entities.md §6.1「schema_meta 版本线锚域」）。
-      `CREATE TABLE schema_meta (
+      // lib/db 机制基建表（版本线锚域，entities.md §6.1「schema_meta 版本线锚域」）——
+      // IF NOT EXISTS：共库形态锚表由先开域（或 lib/db 分域机制）建立，本域不重 建（bug e62f3458）。
+      `CREATE TABLE IF NOT EXISTS schema_meta (
     version     INTEGER PRIMARY KEY,
     applied_at  TEXT    NOT NULL
 )`,
