@@ -478,17 +478,12 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
       timeout: 30_000,
     })
 
-    // ── L766 ① 已注册目录带标记（注册后实机：重开向导 → 目录行「已注册」标记）──
-    await page.locator('[data-dswf-nav="add-project"]').first().click()
-    await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
-      await enterDir(page, segment)
-    }
-    const legacyRow = page.locator('.dswf-fb-item', { hasText: 'legacy-app' }).first()
-    await expect(legacyRow).toHaveAttribute('data-registered')
-    await expect(legacyRow.locator('.dswf-fb-reg', { hasText: '已注册' })).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(page.locator('.dswf-ap')).toHaveCount(0)
+    // ── L766 ① 已注册目录带标记（记账留痕，不活跑——断言面载体退役）──
+    // 「重开向导 → 目录行已注册标记」的入口 = 侧栏空态「添加项目」钮（data-dswf-nav）；
+    // project 1.6（commit 37fef243，用户裁决 2026-11-12）起空态 CTA = 唯一残存添加入口，
+    // 注册成功（hasProjects=true）后入口按设计消失——注册后重开向导路径在现役产品形态
+    // 不可达。断言面随载体退役（同 fix-3 退役判例）；「已注册」标记面归 add-project
+    // journey 组件级单测承载（ForgeWorkspacePanel.test.tsx 同锚）。
   } finally {
     await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
