@@ -131,8 +131,21 @@ export function versionPairs(nodeModules: string): readonly { pkg: string; insta
 }
 
 /**
- * CT-DISK-01 / CT-NPM-01 State 锚：六包物化目录在场且非空（pnpm 嵌套相对 file: 依赖
- * 解析物化——目录存在 + 至少一个条目；返回缺陷清单供 expect 逐条断言）。
+ * 版本双校验——单包形态（bug c26a8c2a fix-4：pnpm 11.0.9 将 link: 依赖物化进链接包自身
+ * node_modules，profile 侧六包布局锚结构性失效；npm 通道（CT-NPM-*）版本双校验收窄至
+ * forge 组合器条目——add 目标直挂物化，与依赖物化布局无关）。
+ */
+export function comboEntryVersionPair(nodeModules: string): { pkg: string; installed: string; source: string } {
+  const installed = readPkgJson(installedPkgDir(nodeModules, FORGE_PKG)).version ?? '(缺)'
+  const source = readPkgJson(sourcePkgDir(FORGE_PKG)).version ?? '(缺)'
+  return { pkg: FORGE_PKG, installed, source }
+}
+
+/**
+ * CT-DISK-01 通道专用：六包物化目录在场且非空（pnpm 嵌套相对 file: 依赖解析物化——
+ * 目录存在 + 至少一个条目；返回缺陷清单供 expect 逐条断言）。
+ * 注（bug c26a8c2a fix-4）：npm 通道（CT-NPM-*）不再用本锚——link: 依赖物化位置随
+ * 包管理器版本漂移，闭包解析改锚运行期冷启动装载行为（CT-NPM-03）。
  */
 export function closureGaps(nodeModules: string): readonly string[] {
   const gaps: string[] = []
@@ -147,12 +160,22 @@ export function closureGaps(nodeModules: string): readonly string[] {
   return gaps
 }
 
-/** dsh.client.platform 指向物（client 半侧装载文件锚——CT-DISK-02/CT-NPM-03） */
+/**
+ * dsh.client.platform 指向物（client 半侧装载文件锚——CT-DISK-02/CT-NPM-03）。
+ * 解析随装载链（bug c26a8c2a fix-4：不锁单一物化布局）——先查 profile 侧
+ * node_modules，缺席则回落链接包自身 node_modules（pnpm 11.x link: 依赖物化位）。
+ */
 export function clientBundleFiles(nodeModules: string): readonly { pkg: string; file: string; exists: boolean }[] {
+  const fallbackRoot = join(installedPkgDir(nodeModules, FORGE_PKG), 'node_modules')
   return BARE_BUNDLES.map((pkg) => {
-    const declared = readPkgJson(installedPkgDir(nodeModules, pkg)).dsh?.client?.platform
+    const roots = [nodeModules, fallbackRoot]
+    const declared = roots.map((root) => {
+      const dir = installedPkgDir(root, pkg)
+      return existsSync(join(dir, 'package.json')) ? (readPkgJson(dir).dsh?.client?.platform ?? undefined) : undefined
+    }).find((p) => p !== undefined)
     if (declared === undefined) return { pkg, file: '(未声明)', exists: false }
-    const file = join(installedPkgDir(nodeModules, pkg), declared)
+    const root = roots.find((r) => existsSync(join(installedPkgDir(r, pkg), declared))) ?? roots[0]
+    const file = join(installedPkgDir(root, pkg), declared)
     return { pkg, file, exists: existsSync(file) }
   })
 }

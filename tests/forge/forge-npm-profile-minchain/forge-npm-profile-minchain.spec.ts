@@ -5,12 +5,13 @@
 // 环境面（e2e/support/forge-combo.ts 头注正本）：FORGE_COMBO_E2E=1 + FORGE_COMBO_DSH_HOME。
 // 观察面注记：profile forge = dsh-base 背板（无 web UI——CT-NPM-01 State）——
 // CT-NPM-03 client 半侧的全量双查在 desktop 通道（CT-DISK-02，同安装物同机械）承载；
-// 本 spec 以（a）闭包文件锚 +（b）CLI 冷启动零缺席装配两条机械锚取证 server 侧，
+// 本 spec 以（a）forge 组合器条目直挂物化锚 +（b）CLI 冷启动零缺席装配两条机械锚取证
+// server 侧（闭包解析锚运行期冷启动装载——bug c26a8c2a fix-4：不锁包管理器物化布局），
 // web 校准轮（FORGE_COMBO_WEB_LOOP=1）补 HTTP 取件观察（journey 环境锚：校准轮 = dsh --profile web）。
 // 最小链交互段（CT-NPM-04 步 5/6）= 真机 agent 会话驱动——收口执行体完成交互后，spec 经
 // FORGE_COMBO_NPM_PROJECT_KEY 指认已注册项目键，机械断言共库双前缀分表与 config 落点。
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
@@ -18,19 +19,19 @@ import Database from 'better-sqlite3'
 import {
   BARE_BUNDLES,
   FORGE_PKG,
-  closureGaps,
   clientBundleFiles,
   comboDbPath,
   comboEnv,
+  comboEntryVersionPair,
   comboGateOn,
   defaultProjectDb,
   defaultTaskLoopDb,
   findDispatchLogs,
   installedBundles,
+  installedPkgDir,
   profileNodeModules,
   runDsh,
   sqliteTables,
-  versionPairs,
 } from '../../../e2e/support/forge-combo.js'
 
 test.skip(!comboGateOn(), 'FORGE_COMBO_E2E=1 真机收口轮专用套件（e2e/SMOKE-LEDGER.md §8 留痕）——常规跑批跳过')
@@ -80,7 +81,7 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     rmSync(join(env.dshHome, 'profiles', 'forge-cal'), { recursive: true, force: true })
   })
 
-  test('CT-NPM-01 #step-1/#step-2/#B2 O1：profile forge 创建 + 闭包物化（启动前即就绪）+ desktop 零渗透', async () => {
+  test('CT-NPM-01 #step-1/#step-2/#B2 O1：profile forge 创建 + 组合器条目物化（启动前即就绪）+ desktop 零渗透', async () => {
     // Invariants 基线（CT-NPM-01）：desktop profile 对账面先拍快照
     const desktopBundlesBefore = JSON.stringify(installedBundles(env.dshHome, 'desktop'))
 
@@ -89,9 +90,13 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     const add = await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'add', `link:${env.forgeDir}`], env.dshHome)
     expect(add.code, `add 成功退出（exit=${String(add.code)}）stderr=${add.stderr.slice(-400)}`).toBe(0)
 
-    // State（CT-NPM-01）：profile 目录创建 + 六包闭包物化（Side-effect：add 后未启动宿主即检查——安装期完成，#B2）
+    // State（CT-NPM-01）：profile 目录创建 + forge 组合器条目直挂物化（add 目标，
+    // 与依赖物化布局无关——bug c26a8c2a fix-4：闭包解析锚运行期 CT-NPM-03，不锁布局）
+    // （Side-effect：add 后未启动宿主即检查——安装期完成，#B2）
     const nodeModules = profileNodeModules(env.dshHome, 'forge')
-    expect(closureGaps(nodeModules), '六包物化目录全部存在且非空（启动前）').toEqual([])
+    const forgeEntry = installedPkgDir(nodeModules, FORGE_PKG)
+    expect(existsSync(forgeEntry), `forge 组合器条目物化在场 ${forgeEntry}`).toBe(true)
+    expect(readdirSync(forgeEntry).length, 'forge 组合器条目目录非空').toBeGreaterThan(0)
 
     // State（CT-NPM-01）：dsh.profile.bundles 对账含 forge + 五条裸名行（逐条精确——禁 OR 稀释）
     const bundles = installedBundles(env.dshHome, 'forge')
@@ -115,28 +120,27 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     expect(existsSync(join(profileNodeModules(env.dshHome, 'desktop'), '@dsh-forge', 'forge')), 'desktop 闭包无 forge 条目').toBe(false)
   })
 
-  test('CT-NPM-03 #step-3（server 侧）：dsh --profile forge 冷启动——零缺席装配 + 版本双校验', async () => {
+  test('CT-NPM-03 #step-3（server 侧）：dsh --profile forge 冷启动——五件 bundle 全解析装载 + 零缺席装配 + 版本双校验', async () => {
     const nodeModules = profileNodeModules(env.dshHome, 'forge')
-    // 版本双校验前置（CT-NPM-03 Invariants / AGENTS 1.8）：不符即停取证
-    for (const { pkg, installed, source } of versionPairs(nodeModules)) {
-      expect(installed, `版本双校验 ${pkg}`).toBe(source)
-    }
-    // client 半侧文件锚（CT-NPM-03 State 前提）：五件 dsh.client.platform 指向物在闭包内在场
-    for (const { pkg, file, exists } of clientBundleFiles(nodeModules)) {
-      expect(exists, `client bundle 指向物在场 ${pkg} → ${file}`).toBe(true)
-    }
+    // 版本双校验前置（CT-NPM-03 Invariants / AGENTS 1.8）——收窄至 forge 组合器条目
+    // （bug c26a8c2a fix-4：依赖闭包不锁物化布局；不符即停取证）
+    const { pkg, installed, source } = comboEntryVersionPair(nodeModules)
+    expect(installed, `版本双校验 ${pkg}`).toBe(source)
 
-    // Input（CT-NPM-03）：`dsh --profile forge` 冷启动——观察窗内存活（装载链无崩溃退出）
+    // Input（CT-NPM-03）：`dsh --profile forge` 冷启动——观察窗内存活（装载链无崩溃退出）。
+    // 五件 bundle 全解析装载 = 运行期可观测行为锚（c26a8c2a 复跑取证形态：冷启动五件
+    // 全解析、装载链通——不预设依赖物化在 profile 侧的布局位置）
     const win = await bootWindow(env.dshBin, 'forge', env.dshHome, [], 20_000)
     expect(win.alive, 'CLI 宿主冷启动观察窗内存活').toBe(true)
-    // Side-effect（CT-DISK-07/CT-NPM-06 反向锚——fix-1 forge-bundle-absent 兜底面）：
-    // 零缺席装配 = stderr 无 @dsh-forge 缺席线索（缺席时官方 skippedBundles stderr 直落）
+    // State（CT-NPM-03）：零缺席装配 = stderr 无 @dsh-forge 缺席线索（缺席时官方
+    // skippedBundles stderr 直落；CT-DISK-07/CT-NPM-06 forge-bundle-absent 反锚面）
     expect(win.stderr.includes('@dsh-forge'), '零缺席装配（stderr 无 @dsh-forge 缺席线索）').toBe(false)
   })
 
   test('CT-NPM-03 #step-4（web 校准轮，FORGE_COMBO_WEB_LOOP=1）：client 半侧 HTTP 取件观察', async () => {
     test.skip(process.env.FORGE_COMBO_WEB_LOOP !== '1', 'web 校准轮门未置位（journey 环境锚：校准轮 = dsh --profile web）——SMOKE-LEDGER §8')
-    // 校准回路：同一安装物装 web 模板 profile → HTTP 直取五件 client bundle（裸名行 client 注入正门）
+    // 校准回路：同一安装物装 web 模板 profile → HTTP 直取五件 client bundle（裸名行 client 注入正门）。
+    // 取件路径经 clientBundleFiles 装载链解析（profile 侧 → 链接包自身 node_modules 回落——c26a8c2a）
     const calProfile = 'forge-cal'
     const addBase = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'], env.dshHome)
     expect(addBase.code, `web 背板就绪（exit=${String(addBase.code)}）`).toBe(0)
@@ -175,10 +179,9 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     const projectKey = process.env.FORGE_COMBO_NPM_PROJECT_KEY
     test.skip(projectKey === undefined || projectKey === '', '最小链交互段（真机 agent 会话 add_task/dispatch_task）未完成——SMOKE-LEDGER §8')
     const nodeModules = profileNodeModules(env.dshHome, 'forge')
-    // 版本双校验（AGENTS 1.8——取证前廉价校验）
-    for (const { pkg, installed, source } of versionPairs(nodeModules)) {
-      expect(installed, `版本双校验 ${pkg}`).toBe(source)
-    }
+    // 版本双校验（AGENTS 1.8——取证前廉价校验；收窄至 forge 组合器条目，c26a8c2a fix-4）
+    const { pkg, installed, source } = comboEntryVersionPair(nodeModules)
+    expect(installed, `版本双校验 ${pkg}`).toBe(source)
 
     // State（CT-NPM-04）：两域数据均落共库（project_* / task_* 前缀分表——同库互不越界）
     const comboDb = comboDbPath(env.dshHome)
