@@ -38,12 +38,23 @@ export interface KeyedSectionRegistration {
   readonly component: unknown;
 }
 
+/** 槽 ledger 条目投影窄面（官方 entries 条目 options 消费切片——占用者在座性判读） */
+export interface SlotEntryProjection {
+  readonly options?: Record<string, unknown>;
+}
+
 /** 官方 slots 服务消费切片（结构同型镜像——bundle 自含零上游 import）。 */
 export interface SectionSlotsFace {
   /** 槽声明缝：声明在场（或入座）即装 cb；cb 返回释放器随 fiber 卸载级联。 */
   inject?(key: string, callback: () => (() => void) | undefined): (() => void) | undefined;
   /** 注册占用者（options.name = 槽名；key/id/order/label/priority = kind 形状字段）。 */
   register?(options: Record<string, unknown>, component: unknown): (() => void) | undefined;
+  /** 槽 ledger 只读查询（官方 SlotService.entries 原始账本——跨插件占用者在座性现查，
+   *  含各条目 options.key/priority；检测永不缓存——每个消费点现查，AGENTS 1.6）。 */
+  entries?(slot: string): readonly SlotEntryProjection[];
+  /** 槽变更订阅（官方 SlotCore.subscribe——通知微任务批量送达，声明前订阅合法；
+   *  返回撤销器，驱动占用者切换重绑。缺席 = fail-soft 不订阅）。 */
+  subscribe?(slot: string, listener: () => void): (() => void) | undefined;
 }
 
 /**

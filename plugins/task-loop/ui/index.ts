@@ -10,9 +10,8 @@
 //                             'forge-event-group' 三段（conversation-views-face）
 //   ③ DispatchEventsPanel   → conversation.session.header.utilities list（改缝注册——
 //                             壳 ShellHost overlay 直挂退役；dispatch-events-face）
-//   ④ 概览 dock tab         → sidebarRightTabs 类型 + sidebar.right.pane.tab keyed
-//                             'dswf-overview'（改造版：摘提案/feature 子块 + 主指标 AC
-//                             核销进度；dock-tabs-face）
+//   ④ 概览 dock tab         → sidebarRightTabs 类型 + sidebar.right.pane.tab keyed 概览键
+//                             （双形态注册切换 + 主指标 AC 核销进度；dock-tabs-face）
 //   ⑤ tasks-changed 订阅    → forgeTasks follow 流 + 快照镜像（tasks-hub——50ms 合并窗
 //                             latest-wins 判例沿用；降级终态 = 静默重取）
 //   ⑥ forge:tasks/* 读通道  → forgeTasks Typert namespace 快照方法族（tasks-rpc——键名

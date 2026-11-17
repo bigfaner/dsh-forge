@@ -972,6 +972,9 @@ importers:
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path
+      '@dsh-forge/lib-ui':
+        specifier: workspace:*
+        version: link:../../lib/ui
       '@dsh-forge/lib-util':
         specifier: workspace:*
         version: link:../../lib/util

@@ -113,7 +113,10 @@ describe('pin ⑯-4 `conversation.session.header.actions` 槽面声明（4.2 挂
 
 describe('pin ⑯-5 产品镜像面（插件注册键与上游口径一致）', () => {
   it('两 kind = dswf-overview / dswf-doc；文档地址前缀 = dsh-resource:// 资源面 scheme', () => {
-    expect(TASK_LOOP_DOCK_TABS_SRC).toContain('export const DSWF_OVERVIEW_TAB_KIND = "dswf-overview"')
+    // host-integration-fixes 裁决 5：概览键族单源 = @dsh-forge/lib-ui DSWF_OVERVIEW_TAB_KEY
+    // （task-loop / project 双插件改引，包内字面量退役——撞车 bug 400b3952 结构性根因）。
+    expect(TASK_LOOP_DOCK_TABS_SRC).toContain('export const DSWF_OVERVIEW_TAB_KIND = DSWF_OVERVIEW_TAB_KEY')
+    expect(TASK_LOOP_DOCK_TABS_SRC).toContain('@dsh-forge/lib-ui')
     expect(DOC_TAB_KIND).toBe('dswf-doc')
     expect(DOC_ADDRESS_PREFIX).toBe(`${'dsh-resource://'}${DOC_TAB_KIND}/`)
   })
