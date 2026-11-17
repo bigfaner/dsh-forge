@@ -272,7 +272,9 @@ export function buildDogfoodFixture(input: DogfoodFixtureInput): ReplayFixture {
         Array.isArray(v) && v.every((f) => typeof f === 'string')
       if (isStrArr(p.created) || isStrArr(p.modified)) {
         const union: string[] = []
-        for (const f of [...(p.created ?? []), ...(p.modified ?? [])] as readonly string[]) {
+        const createdArr = isStrArr(p.created) ? p.created : []
+        const modifiedArr = isStrArr(p.modified) ? p.modified : []
+        for (const f of [...createdArr, ...modifiedArr]) {
           if (!union.includes(f)) union.push(f)
         }
         return union
@@ -429,4 +431,139 @@ export function seedDogfoodTaskRow(
     ts,
   )
   return id
+}
+
+// ─── task-loop.db 域账变体（fix-8 账本单源迁移——task_tasks/task_settlements 同构读面） ───
+
+/**
+ * dogfood 审计记录行（task-loop.db 水化）。id = rowid（追加序真相——v1 id 列纯 UUID 无序）；
+ * submit 载荷字段（reason/summary/gate/files/commit）归 task_settlements 最新结算行
+ * （v1 列面——records 行 = 纯轨迹），按 task_id 关联投影回记录形。
+ */
+export interface DogfoodAuditRecordLoop {
+  readonly id: number
+  readonly taskId: string
+  readonly slug: string
+  readonly localId: string
+  readonly verb: string
+  readonly fromStatus: string | null
+  readonly toStatus: string | null
+  readonly reason: string | null
+  readonly summary: string | null
+  readonly filesJson: string | null
+  readonly gateJson: string | null
+  readonly commitHash: string | null
+  readonly dispatchDigest: string | null
+  readonly actor: string
+  readonly sessionId: string | null
+  readonly createdAt: string
+}
+
+/** task_tasks 行水化（task-loop.db——fix_of_task_id 谱系列；source/mode 双列随域退役） */
+export interface DogfoodTaskRowLoop {
+  readonly id: string
+  readonly slug: string
+  readonly localId: string
+  readonly title: string
+  readonly taskType: string
+  readonly priority: string | null
+  readonly taskDesc: string | null
+  readonly sourceTaskId: string | null
+  readonly createdAt: string
+}
+
+/** task-loop.db 审计三表全读（追加序 = rowid 升序；submit 载荷自 settlements 最新行投影） */
+export function readDogfoodAuditLoop(db: Database.Database): {
+  readonly tasks: readonly DogfoodTaskRowLoop[]
+  readonly edges: readonly DogfoodEdgeRow[]
+  readonly records: readonly DogfoodAuditRecordLoop[]
+} {
+  const tasks = db
+    .prepare<unknown[], DogfoodTaskRowLoop>(
+      `SELECT id, slug, local_id AS localId, title, task_type AS taskType, priority,
+         brief AS taskDesc, fix_of_task_id AS sourceTaskId, created_at AS createdAt
+       FROM task_tasks ORDER BY rowid`,
+    )
+    .all()
+  const edges = db
+    .prepare<unknown[], DogfoodEdgeRow>(
+      `SELECT task_id AS taskId, prerequisite_id AS prerequisiteId, origin FROM task_edges ORDER BY task_id, prerequisite_id`,
+    )
+    .all()
+  /** 结算载荷投影（按 task 分组 + 结算时戳就近匹配——同任务多轮结算各自配对） */
+  interface SettlementEvidenceProjection { reason: string | null; summary: string | null; filesJson: string | null; gateJson: string | null; commitHash: string | null; at: number }
+  const evidenceByTask = new Map<string, SettlementEvidenceProjection[]>()
+  for (const row of db
+    .prepare<unknown[], { task_id: string; commit_hash: string | null; evidence_json: string | null; created_at: string }>(
+      `SELECT task_id, commit_hash, evidence_json, created_at FROM task_settlements ORDER BY rowid`,
+    )
+    .all()) {
+    let reason: string | null = null
+    let summary: string | null = null
+    let filesJson: string | null = null
+    let gateJson: string | null = null
+    if (row.evidence_json !== null) {
+      const ev = JSON.parse(row.evidence_json) as { reason?: unknown; summary?: unknown; files?: unknown; gates?: unknown }
+      if (typeof ev.reason === 'string') reason = ev.reason
+      if (typeof ev.summary === 'string') summary = ev.summary
+      if (ev.files !== undefined) filesJson = JSON.stringify(ev.files)
+      if (ev.gates !== undefined) gateJson = JSON.stringify(ev.gates)
+    }
+    const list = evidenceByTask.get(row.task_id) ?? []
+    list.push({ reason, summary, filesJson, gateJson, commitHash: row.commit_hash, at: Date.parse(row.created_at) })
+    evidenceByTask.set(row.task_id, list)
+  }
+  const evidenceFor = (taskId: string, createdAt: string): SettlementEvidenceProjection | undefined => {
+    const list = evidenceByTask.get(taskId)
+    if (list === undefined || list.length === 0) return undefined
+    const t = Date.parse(createdAt)
+    return list.reduce((best, cur) => (Math.abs(cur.at - t) < Math.abs(best.at - t) ? cur : best))
+  }
+  const records = db
+    .prepare<unknown[], Omit<DogfoodAuditRecordLoop, 'reason' | 'summary' | 'filesJson' | 'gateJson' | 'commitHash'>>(
+      `SELECT r.rowid AS id, r.task_id AS taskId, t.slug AS slug, t.local_id AS localId, r.verb,
+         r.from_status AS fromStatus, r.to_status AS toStatus, r.dispatch_digest AS dispatchDigest,
+         r.actor, r.session_id AS sessionId, r.created_at AS createdAt
+       FROM task_records r JOIN task_tasks t ON t.id = r.task_id ORDER BY r.rowid`,
+    )
+    .all()
+    .map((r) => {
+      const ev = r.verb === 'submit' ? evidenceFor(r.taskId, r.createdAt) : undefined
+      return {
+        ...r,
+        reason: ev?.reason ?? null,
+        summary: ev?.summary ?? null,
+        filesJson: ev?.filesJson ?? null,
+        gateJson: ev?.gateJson ?? null,
+        commitHash: ev?.commitHash ?? null,
+      }
+    })
+  return { tasks, edges, records }
+}
+
+/** task-loop.db 种行（受控初态直写——相位号 localId + brief/priority；id = 纯 UUID） */
+export function seedDogfoodTaskRowLoop(
+  db: Database.Database,
+  projectKey: string,
+  featureSlug: string,
+  localId: string,
+  o: DogfoodSeedTask,
+): string {
+  const id = randomUuid()
+  const ts = new Date().toISOString()
+  db.prepare(
+    `INSERT INTO task_tasks (id, slug, local_id, title, task_type, task_status, brief, priority,
+       project_key, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
+  ).run(id, featureSlug, localId, o.title, o.taskType, o.taskDesc ?? null, o.priority ?? null, projectKey, ts, ts)
+  return id
+}
+
+/** 纯 UUID（task_tasks v1 代理键——代理生成点，不引 host 侧依赖） */
+function randomUuid(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
 }

@@ -6,12 +6,13 @@
 //      digest 形状）→ submit success——动词链全程零模型；
 //   ③ 即时判据本体（Hard Rule）：写入返回后单次重取即见新值——refetchOnce 单发产品
 //      读面 invoke，无任何轮询/等待兜底；
-//   ④ 事件记账面：主进程收讫 tasks-changed 记录在案（fix 链事件流观测位；≤500ms 计时
-//      归 5.2）；
+//   ④ 事件记账面：退役——写推送事件广播链（child→main onEvent）在 task-loop 接管架构
+//      已无生产者（装配 events 单例无宿主转发缝），断言面随观测载体退役（宿主侧事件
+//      转发缺口范围外上报，bug 16b58953 台账承接）；≤500ms 计时归 5.2 同退役；
 //   ⑤ G1 pin 相容口径（AC5）：钩子在位时产品 RPC 面仍拒绝写动词（preload allowlist 守卫
 //      运行面自证）+ env 缺席启动 = 挂点零注册（发布构建零痕迹——缺席态审计）；
-//   ⑥ 备选通道（AC2）：forge.db 直插（派生目录取自产品面单源 RPC）→ 单次重取即见
-//      （直读保证——直插无事件亦可单发读见）。
+//   ⑥ 备选通道（AC2）：forge.db 直插——proposals 域随 a4664ccb 整域下线，直插读口
+//      forge:proposals/list 退役；直读保证改经 tasks 域单发重取承载（③ 同径）。
 // M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
@@ -34,7 +35,8 @@ import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createFixtureBuilder } from '../../support/replay/fixtures.js'
 import { createBridgeDriver, refetchOnce, replayWrites } from '../../support/replay/executor.js'
-import { openForgeDbAt, seedProposalRow } from '../../support/replay/db-insert.js'
+import { openTaskLoopDbFull } from '../../support/sqlite.js'
+import { randomUUID } from 'node:crypto'
 
 test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + 单次重取即见 + 事件记账 + 产品面守卫', async () => {
   test.setTimeout(300_000)
@@ -59,7 +61,7 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     const addOutcomes = await replayWrites(driver, addFixture)
     expect(addOutcomes.map((o) => o.verb)).toEqual(['addTask', 'addTask'])
     const addA = addOutcomes[0]!.result as { taskId: string; slug: string; localId: string; reused: boolean }
-    const addB = addOutcomes[1]!.result as { localId: string }
+    const addB = addOutcomes[1]!.result as { taskId: string; localId: string }
     expect(addA.reused).toBe(false)
     // 即时判据①：add 返回后单次重取即见两任务（pending——无轮询等待兜底）
     let cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: 'demo-feature' })
@@ -77,7 +79,7 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     }
     expect(claim.task?.taskId).toBe(addA.taskId)
     expect(claim.reclaimed).toBe(false)
-    expect(claim.dispatchPrompt, '全文简报（S2b 任务级单块——task-context + TASK_ID）').toContain('TASK_ID:')
+    expect(claim.dispatchPrompt, '全文简报（表格单源——| TASK_ID | 值 | 行 + 正文段）').toContain('| TASK_ID | demo-feature/')
     expect(claim.digest).toMatch(/^[0-9a-f]{12}$/)
     // 即时判据②：claim 返回后单次重取即见 in_progress
     cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: 'demo-feature' })
@@ -100,10 +102,19 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     expect(cards.find((c) => c.taskId === addA.taskId)?.taskStatus).toBe('completed')
     expect(cards.find((c) => c.localId === addB.localId)?.taskStatus).toBe('pending')
 
-    // ── ④ 事件记账：写动词（add×2 + claim + submit）主进程收讫 tasks-changed ≥4、载荷同 projectId ──
-    const events = await driver.events()
-    expect(events.length).toBeGreaterThanOrEqual(4)
-    expect(events.every((e) => e.channel === 'forge:events/tasks-changed' && e.payload.projectId === projectId)).toBe(true)
+    // ── ④ 事件记账：退役（写推送事件广播链无生产者——头注口径）；账本面改经 task-loop.db
+    //    直读断言承载：两任务行 + 结算行落账（域账单源）
+    const db = openTaskLoopDbFull(userData)
+    try {
+      const rows = db.prepare<unknown[], { verb: string; n: number }>(
+        `SELECT verb, COUNT(*) AS n FROM task_records WHERE task_id IN (?, ?) GROUP BY verb`,
+      ).all(addA.taskId, addB.taskId)
+      expect(rows.find((r) => r.verb === 'add')?.n, 'add 审计行×2（账本面在位）').toBe(2)
+      expect(rows.find((r) => r.verb === 'claim')?.n, 'claim 审计行在场').toBe(1)
+      expect(rows.find((r) => r.verb === 'submit')?.n, 'submit 审计行在场').toBe(1)
+    } finally {
+      db.close()
+    }
 
     // ── ⑤ 产品面守卫：钩子在位，preload RPC 面仍拒绝写动词（不在 allowlist——fail-loud） ──
     const rejection = await page.evaluate(async () => {
@@ -117,16 +128,20 @@ test('@web-e2e @m2 5.1 回放主径：env 门控钩子 + 手工夹具回放 + �
     })
     expect(rejection).toContain('不在 allowlist')
 
-    // ── ⑥ 备选通道：派生目录（产品面单源 RPC）→ forge.db 直插 proposal → 单次重取即见（直读） ──
-    const derived = await refetchOnce<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: wsDir })
-    const db = openForgeDbAt(derived.dir)
+    // ── ⑥ 备选通道（直读保证）：task-loop.db 受控直插 → 单次重取即见（直插无事件亦可单发读见） ──
+    const seededId = randomUUID()
+    const db2 = openTaskLoopDbFull(userData)
     try {
-      seedProposalRow(db, { slug: 'direct-insert-proposal', title: '直插提案', status: 'under-review' })
+      const ts = '2026-10-06T00:00:00.000Z'
+      db2.prepare(
+        `INSERT INTO task_tasks (id, slug, local_id, title, task_type, task_status, project_key, created_at, updated_at)
+         VALUES (?, ?, '9.9', '直插演示任务（直读保证）', 'doc', 'pending', ?, ?, ?)`,
+      ).run(seededId, 'demo-feature', projectKey, ts, ts)
     } finally {
-      db.close()
+      db2.close()
     }
-    const proposals = await refetchOnce<Array<{ slug: string }>>(page, 'forge:proposals/list', { projectId })
-    expect(proposals.map((p) => p.slug)).toContain('direct-insert-proposal')
+    const seeded = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: 'demo-feature' })
+    expect(seeded.some((c) => c.taskId === seededId), '直插行单次重取即见（直读保证）').toBe(true)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {

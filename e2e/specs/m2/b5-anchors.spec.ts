@@ -20,13 +20,13 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
-import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { FEATURES_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
-import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { openTaskLoopDbFull } from '../../support/sqlite.js'
 
 /** addTask 结果面（回放动词结算收窄） */
 interface AddResult {
@@ -60,16 +60,15 @@ test('@web-e2e @m2 5.2 B.5 六断言锚：环双 flag / 满足集 rejected / 两
     const driver = createBridgeDriver(app)
     const add = (input: Record<string, unknown>): Promise<AddResult> =>
       driver.call('forgeTasks', 'addTask', { projectKey, slug: 'b5', ...input }) as Promise<AddResult>
-    const taskCount = (db: ReturnType<typeof openForgeDbAt>): number =>
-      db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = 'b5'`).get()?.n ?? 0
+    const taskCount = (db: ReturnType<typeof openTaskLoopDbFull>): number =>
+      db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_tasks WHERE slug = 'b5'`).get()?.n ?? 0
 
     // ══ ① 环构造双 flag（B.5-1）：S(1.1) ← D(1.2) 既有等待链 + T(dependsOn D, blockSource S) ══
     const s = await add({ title: '源任务 S（环构造）', type: 'doc' })
     const d = await add({ title: '等待任务 D（dependsOn S）', type: 'doc', dependsOn: [s.localId] })
     expect(s.localId).toBe('1.1')
     expect(d.localId).toBe('1.2')
-    const derived = await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: wsDir })
-    const db = openForgeDbAt(derived.dir)
+    const db = openTaskLoopDbFull(userData)
     try {
       const countBeforeCycle = taskCount(db)
       const cycleRejection = await add({ title: '环构造 T（dependsOn D × blockSource S）', type: 'doc', dependsOn: [d.localId], sourceTask: { slug: 'b5', localId: s.localId }, blockSource: true })
@@ -86,7 +85,7 @@ test('@web-e2e @m2 5.2 B.5 六断言锚：环双 flag / 满足集 rejected / 两
         .then(() => 'unexpectedly-resolved', (cause: unknown) => String((cause as Error)?.message ?? cause))
       expect(crossRejection, '跨 feature 边 → 同 feature 前置解析未命中拒（slug 作用域查捞）').toContain('任务未命中')
       expect(crossRejection).toContain('b5-other/1.1')
-      const otherCount = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = 'b5-other'`).get()?.n ?? 0
+      const otherCount = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_tasks WHERE slug = 'b5-other'`).get()?.n ?? 0
       expect(otherCount, '跨域任务零行写入（写入即 ABORT——事务回滚）').toBe(0)
       expect(taskCount(db)).toBe(countBeforeCross)
       expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_edges`).get()?.n, '跨域边零行（既有边仅 D←S 一条）').toBe(1)
@@ -94,20 +93,20 @@ test('@web-e2e @m2 5.2 B.5 六断言锚：环双 flag / 满足集 rejected / 两
       // ══ ② 满足集（B.5-2）：fix → rejected ≠ {completed, skipped} → 源不恢复 ══
       const s2 = await add({ title: '源任务 S2（满足集）', type: 'doc' })
       await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: 'b5', localId: s2.localId }, sessionId: 'e2e-b5-s2' })
-      await driver.call('forgeTasks', 'submitTask', { projectKey, taskRef: { slug: 'b5', localId: s2.localId }, result: 'blocked', reason: 'B.5② 满足集演示受阻', sessionId: 'e2e-b5-s2' })
+      await driver.call('forgeTasks', 'submitTask', { projectKey, taskRef: { slug: 'b5', localId: s2.localId }, result: 'blocked', reason: 'B.5② 满足集演示受阻', sessionId: 'e2e-b5-s2', blockClassification: { kind: 'new-problem' } })
       const f2 = await add({ title: 'fix（→ rejected 终态）', type: 'doc', sourceTask: { slug: 'b5', localId: s2.localId }, blockSource: true })
       expect(f2.localId).toMatch(/^fix-\d+$/)
       // 人类径 RPC：fix → rejected（transitionTask 仅 RPC 面——与 G1「不注册 tool」面分治一致）
       await forgeInvoke(page, TASKS_CHANNELS.transition, { projectKey, taskId: f2.taskId, toStatus: 'rejected', reason: 'B.5② 满足集：rejected 不满足（liveness 死锁信号）' })
       const s2AfterRejected = await forgeInvoke<{ taskStatus: string }>(page, TASKS_CHANNELS.detail, { projectKey, taskId: s2.taskId })
       expect(s2AfterRejected.taskStatus, 'rejected ≠ 满足集 {completed, skipped} → 源不恢复（仍 blocked）').toBe('blocked')
-      const s2Verbs = db.prepare<unknown[], { verb: string }>(`SELECT verb FROM task_records WHERE task_id = ? ORDER BY id`).all(s2.taskId).map((r) => r.verb)
+      const s2Verbs = db.prepare<unknown[], { verb: string }>(`SELECT verb FROM task_records WHERE task_id = ? ORDER BY rowid`).all(s2.taskId).map((r) => r.verb)
       expect(s2Verbs, 'S2 记录链无 auto-restore（恢复钩子未触发）').not.toContain('auto-restore')
 
       // ══ ③ 两级去重（B.5-3）：任务级复用（未终态）/ 终态后新建 + 边级幂等 ══
       const s3 = await add({ title: '源任务 S3（两级去重）', type: 'doc' })
       await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: 'b5', localId: s3.localId }, sessionId: 'e2e-b5-s3' })
-      await driver.call('forgeTasks', 'submitTask', { projectKey, taskRef: { slug: 'b5', localId: s3.localId }, result: 'blocked', reason: 'B.5③ 两级去重演示受阻', sessionId: 'e2e-b5-s3' })
+      await driver.call('forgeTasks', 'submitTask', { projectKey, taskRef: { slug: 'b5', localId: s3.localId }, result: 'blocked', reason: 'B.5③ 两级去重演示受阻', sessionId: 'e2e-b5-s3', blockClassification: { kind: 'new-problem' } })
       const f3 = await add({ title: 'fix（未终态复用锚）', type: 'doc', sourceTask: { slug: 'b5', localId: s3.localId }, blockSource: true })
       expect(f3.reused).toBe(false)
       const countWithF3 = taskCount(db)
@@ -129,6 +128,7 @@ test('@web-e2e @m2 5.2 B.5 六断言锚：环双 flag / 满足集 rejected / 两
         result: 'success',
         summary: 'B.5③⑥ fix 完成（恢复钩子 + 边持久锚）',
         gate: { compile: true, fmt: true, lint: true, test: true },
+        acceptanceCriteria: [{ criterion: `${f3.localId}：修复核销（e2e 夹具自报）`, met: true }],
         sessionId: 'e2e-b5-f3',
       })) as SubmitResult
       expect(f3Submit.restored.map((r) => r.localId), '恢复钩子：S3 auto-restore（blocked→pending）').toContain(s3.localId)
@@ -141,31 +141,32 @@ test('@web-e2e @m2 5.2 B.5 六断言锚：环双 flag / 满足集 rejected / 两
       expect(s3Status.taskStatus, 'S3 恢复后 pending（读时派生满足）').toBe('pending')
       // 终态后新建：F3 completed（终态）→ 再次受阻声明 → 新 fix 行（reused=false）
       await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: 'b5', localId: s3.localId }, sessionId: 'e2e-b5-s3b' })
-      await driver.call('forgeTasks', 'submitTask', { projectKey, taskRef: { slug: 'b5', localId: s3.localId }, result: 'blocked', reason: 'B.5③ 二次受阻（终态后新建锚）', sessionId: 'e2e-b5-s3b' })
+      await driver.call('forgeTasks', 'submitTask', { projectKey, taskRef: { slug: 'b5', localId: s3.localId }, result: 'blocked', reason: 'B.5③ 二次受阻（终态后新建锚）', sessionId: 'e2e-b5-s3b', blockClassification: { kind: 'same-family-recurrence' } })
       const f4 = await add({ title: 'fix（终态后新建）', type: 'doc', sourceTask: { slug: 'b5', localId: s3.localId }, blockSource: true })
       expect(f4.reused, '既有 fix 已终态 → 不复用').toBe(false)
       expect(f4.taskId, '新建 fix 行（新 taskId）').not.toBe(f3.taskId)
       expect(f4.localId).toMatch(/^fix-\d+$/)
 
       // ══ ⑤ append-only（B.5-5）：task_records UPDATE/DELETE → 触发器 ABORT ══
-      const firstRecordId = db.prepare<unknown[], { id: number }>(`SELECT id FROM task_records ORDER BY id LIMIT 1`).get()?.id
+      // （v1 id 列 = 纯 UUID 无序——定序键 = rowid 追加序）
+      const firstRecordId = db.prepare<unknown[], { id: number }>(`SELECT rowid AS id FROM task_records ORDER BY rowid LIMIT 1`).get()?.id
       expect(firstRecordId, '记录行在场（断言目标）').toBeDefined()
       const rid = firstRecordId as number
       let updateError = ''
       try {
-        db.prepare(`UPDATE task_records SET reason = 'tamper' WHERE id = ?`).run(rid)
+        db.prepare(`UPDATE task_records SET note = 'tamper' WHERE rowid = ?`).run(rid)
       } catch (cause) {
         updateError = String((cause as Error)?.message ?? cause)
       }
       expect(updateError, 'append-only 触发器：UPDATE ABORT').toContain('append-only violation (update)')
       let deleteError = ''
       try {
-        db.prepare(`DELETE FROM task_records WHERE id = ?`).run(rid)
+        db.prepare(`DELETE FROM task_records WHERE rowid = ?`).run(rid)
       } catch (cause) {
         deleteError = String((cause as Error)?.message ?? cause)
       }
       expect(deleteError, 'append-only 触发器：DELETE ABORT').toContain('append-only violation (delete)')
-      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_records WHERE id = ?`).get(rid)?.n, '记录未被篡改（行原样在场）').toBe(1)
+      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_records WHERE rowid = ?`).get(rid)?.n, '记录未被篡改（行原样在场）').toBe(1)
     } finally {
       db.close()
     }
