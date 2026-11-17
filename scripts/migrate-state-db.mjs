@@ -178,7 +178,7 @@ function readLegacyRow(columns, row) {
 
 /** task-loop.db 新线 v1 DDL（version-1.ts 逐字镜像——patch 由 version-1.ts 机械抽取生成）。 */
 export const TASK_LOOP_V1_STATEMENTS = [
-`CREATE TABLE schema_meta (
+`CREATE TABLE IF NOT EXISTS schema_meta (
     version     INTEGER PRIMARY KEY,
     applied_at  TEXT    NOT NULL
 )`,

@@ -5,7 +5,7 @@
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { openDatabase } from '@dsh-forge/lib-db'
-import { makeProjectMigrations, PROJECT_DB_SCHEMA_VERSION, projectTableNames, type ProjectDbTables } from './migrations.js'
+import { makeProjectMigrations, PROJECT_DB_SCHEMA_DOMAIN, PROJECT_DB_SCHEMA_VERSION, projectTableNames, type ProjectDbTables } from './migrations.js'
 import { BugsRepo, ProjectsRepo, WorkspacesRepo } from './repositories/index.js'
 
 /** 域前缀恒值（单装缺省；表名模板唯一消费此常量与调用方显式前缀）。 */
@@ -43,6 +43,9 @@ export function openDomainDb(home: string, opts: DomainDbOpts): DomainDb {
   const db = openDatabase(file, {
     migrations: makeProjectMigrations(opts.prefix),
     schemaVersion: PROJECT_DB_SCHEMA_VERSION,
+    // 分域版本线锚（R3-dba）：版本门只判读 project 域版本线——共库形态下异域先行迁移
+    // 抬升的版本行不触发拒开（bug ad14e904 共库接管前置；单装形态语义不变）。
+    domain: PROJECT_DB_SCHEMA_DOMAIN,
   })
   db.pragma('busy_timeout = 5000')
   const tables = projectTableNames(opts.prefix)

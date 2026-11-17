@@ -3,8 +3,9 @@
 # - 五条 insert 行 = 官方 patch 正门（package.json dsh.bundle.patch 声明指向本文件，
 #   loader 逐层应用——组合行识别面对齐既有插件单行插行先例 plugins/project）。
 # - 四件持库插件统一下发共库落点根；expert-squad 无库，裸行。config 键各随其契约消费键
-#   （bug 3c17010a 判例——patch 下发键必须与对端插件契约一致，否则整体替换语义下成死键）：
-#   project 消费 home（ProjectHostConfig.home——project 契约按自有落点约定派生域库路径），
+#   （bug 3c17010a / ad14e904 判例——patch 下发键必须与对端插件契约一致，否则整体替换语义下成死键）：
+#   project 消费 home（ProjectHostConfig.home——自锚派生根）+ dbFile（ProjectHostConfig.dbFile——
+#   共库落点覆盖，patch 下发即生效不再自派生 project.db 分库，bug ad14e904）；
 #   spec/task-loop/knowledge 消费 dbFile（{DSH_HOME}/forge/db/forge/forge.db，域前缀分表互不越界）。
 # - {DSH_HOME} 占位符 host 级 boot 期物化：patch 文件经官方 userPatchesSchema（cordis
 #   entry-list 方言，!!js 表达式合法——dsh-app-boot parsePatchList 核销）解析、Loader
@@ -17,6 +18,7 @@
       name: '@dsh-forge/project'
       config:
         home: !!js process.env.DSH_HOME
+        dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
     - id: spec
       name: '@dsh-forge/spec'
       config:

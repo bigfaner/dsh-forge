@@ -89,8 +89,14 @@ export interface BugsResidentDeps {
 
 /** host 装配 config（全部可选——缺席面 = 对应缝退兜底，fail-soft 不阻载） */
 export interface ProjectHostConfig {
-  /** DSH home（project.db 落点 = {home}/forge/db/project/project.db；缺席 = projects/bugs 退兜底） */
+  /** DSH home（自锚派生与兜底根；缺席 = projects/bugs 退兜底） */
   readonly home?: string;
+  /**
+   * 库文件覆盖（共库集成形态——forge patch 下发 {DSH_HOME}/forge/db/forge/forge.db，
+   * project_ 前缀分表；bug ad14e904：patch 下发即生效，不再自派生
+   * {home}/forge/db/project/project.db 分库。缺席 = 单装缺省落点）。
+   */
+  readonly dbFile?: string;
   /** tasksHome（注册三态分类器消费目录） */
   readonly tasksHome?: string;
   /** 官方 workspaceRegistry face（registry-adapter 适配缝） */
@@ -119,14 +125,15 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
 
   // project.db 打开（装配期一次；I4 拒开/文件异常 = fail-soft 退兜底——设计 §6 劣形②同径）。
   // 显式 config > 缺省值两级解析——home 缺省 = env DSH_HOME（官方宿主注行无 config 时
-  // 插件自装配，不再恒退 ErrUnavailable 兜底）。
+  // 插件自装配，不再恒退 ErrUnavailable 兜底）；库落点 = config.dbFile 显式覆盖（共库
+  // 集成形态单一路径，bug ad14e904）> {home}/forge/db/project/project.db 缺省派生。
   const home = config.home ?? process.env.DSH_HOME;
   let domainDb: ReturnType<typeof openProjectsDomainDb> | undefined;
   if (home !== undefined) {
     try {
-      domainDb = openProjectsDomainDb(home);
+      domainDb = openProjectsDomainDb(home, config.dbFile);
       diag(
-        `[project-seams] project.db 已打开：${home === config.home ? "config.home" : "缺省 DSH_HOME"} → ${home}`,
+        `[project-seams] project.db 已打开：${home === config.home ? "config.home" : "缺省 DSH_HOME"} → ${config.dbFile ?? home}`,
       );
     } catch (cause) {
       diag(`[project-seams] project.db 打开失败——projects/bugs 退兜底：${String(cause)}`, "error");

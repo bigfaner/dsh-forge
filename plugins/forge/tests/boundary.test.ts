@@ -58,11 +58,11 @@ describe("forge 边界门（零域逻辑 / 零 db 句柄 / 零自有域数据）
       // 不得出现在 forge 声明面——forge 只下发共库 forge.db。
       expect(text, `${file} 出现自有域 db 落点`).not.toMatch(/forge\/db\/(?:project|spec|task-loop|knowledge)\//);
     }
-    // dbFile 引用恰三条（spec/task-loop/knowledge 共库下发）+ project home 引用恰一条
-    // （bug 3c17010a——config 键各随对端契约消费键；patch-contract 快照锁定表达式，
+    // dbFile 引用恰四条（project/spec/task-loop/knowledge 共库下发）+ project home 引用恰一条
+    // （bug 3c17010a / ad14e904——config 键各随对端契约消费键；patch-contract 快照锁定表达式，
     // 此处做面级复核）。
     const dbFileRefs = [...(texts.get("cordis.patch.yml") ?? "").matchAll(/dbFile:/g)];
-    expect(dbFileRefs).toHaveLength(3);
+    expect(dbFileRefs).toHaveLength(4);
     const homeRefs = [...(texts.get("cordis.patch.yml") ?? "").matchAll(/^\s+home:\s*!!js/gm)];
     expect(homeRefs).toHaveLength(1);
     expect(texts.get("cordis.patch.yml")).toContain("forge/db/forge/forge.db");

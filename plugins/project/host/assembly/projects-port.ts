@@ -87,7 +87,11 @@ export function createProjectsServicePort(deps: ProjectsPortDeps): ProjectServic
   }
 }
 
-/** project.db 打开缝（装配期一次；I4 拒开异常上抛由装配方 fail-soft 退兜底）。 */
-export function openProjectsDomainDb(home: string): DomainDb {
-  return openDomainDb(home, { prefix: 'project', file: domainDbFileName(home) })
+/**
+ * project.db 打开缝（装配期一次；I4 拒开异常上抛由装配方 fail-soft 退兜底）。
+ * dbFile 显式在场即覆盖缺省派生落点（共库集成形态——forge patch 下发 forge/forge.db，
+ * patch 下发即生效单一路径，bug ad14e904：不再自派生 project.db 分库）。
+ */
+export function openProjectsDomainDb(home: string, dbFile?: string): DomainDb {
+  return openDomainDb(home, { prefix: 'project', file: dbFile ?? domainDbFileName(home) })
 }

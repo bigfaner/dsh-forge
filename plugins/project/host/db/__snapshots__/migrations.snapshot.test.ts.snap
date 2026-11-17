@@ -2,7 +2,7 @@
 
 exports[`DDL 快照锚（前缀参数 + 表名模板） > project 前缀 DDL 快照（防抖动） 1`] = `
 [
-  "CREATE TABLE schema_meta (
+  "CREATE TABLE IF NOT EXISTS schema_meta (
     version     INTEGER PRIMARY KEY,
     applied_at  TEXT    NOT NULL
 )",

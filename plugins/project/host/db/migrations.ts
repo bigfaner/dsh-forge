@@ -10,6 +10,13 @@ import type { Migration } from '@dsh-forge/lib-db'
 /** project.db schema 版本上限（独立版本线；version 1 起新线）。 */
 export const PROJECT_DB_SCHEMA_VERSION = 1
 
+/**
+ * 分域版本线锚（R3-dba「锚域不锚表集合」）：openDatabase domain 选项值——共库形态下
+ * 版本门只判读 project 域版本线，spec/knowledge/task-loop 等异域版本行不触发拒开
+ * （bug ad14e904 共库接管前置）；单装缺省形态同锚（自持库单域独占，语义不变）。
+ */
+export const PROJECT_DB_SCHEMA_DOMAIN = 'project'
+
 /** 表名模板（唯一模板面——connection/migrations/repositories 共此单源）。 */
 export interface ProjectDbTables {
   projects: string
@@ -36,7 +43,9 @@ export function makeProjectMigrations(prefix: string): Migration[] {
     {
       version: 1,
       statements: [
-        `CREATE TABLE schema_meta (
+        // 版本线锚表（lib/db 机制基建——分域锚域，锚域不锚表集合）——IF NOT EXISTS：
+        // 共库形态锚表由先开域（或 lib/db 分域机制）建立，本域不重建（bug ad14e904）。
+        `CREATE TABLE IF NOT EXISTS schema_meta (
     version     INTEGER PRIMARY KEY,
     applied_at  TEXT    NOT NULL
 )`,

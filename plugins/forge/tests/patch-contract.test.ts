@@ -92,13 +92,16 @@ describe("forge patch 插行清单契约", () => {
     expect(Object.keys(deps).length).toBe(EXPECTED_ROWS.length);
   });
 
-  it("expert-squad 无库裸行插装；其余四件各携 config（持库件——config 键各随对端契约消费键：project=home，spec/task-loop/knowledge=dbFile，bug 3c17010a）", () => {
+  it("expert-squad 无库裸行插装；其余四件各携 config（持库件——config 键各随对端契约消费键：project=home+dbFile，spec/task-loop/knowledge=dbFile；bug 3c17010a / ad14e904）", () => {
     const expert = rows.find((r) => r.id === "expert-squad");
     expect(expert!.configKeys, "expert-squad 应为裸行（无 config）").toEqual([]);
-    expect(rows.find((r) => r.id === "project")!.configKeys, "project 应携 config.home（契约消费键）").toContain("home");
+    expect(rows.find((r) => r.id === "project")!.configKeys, "project 应携 config.home + config.dbFile（契约消费键）").toEqual([
+      "home",
+      "dbFile",
+    ]);
     for (const id of ["spec", "task-loop", "knowledge"]) {
       const row = rows.find((r) => r.id === id);
-      expect(row!.configKeys, `${id} 应携 config.dbFile`).toContain("dbFile");
+      expect(row!.configKeys, `${id} 应携 config.dbFile`).toEqual(["dbFile"]);
     }
   });
 });
