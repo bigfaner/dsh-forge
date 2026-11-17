@@ -163,3 +163,9 @@
 - **flywheel dogfood（留痕 skip ×1）**：真实模型凭据缺席口径（§6 4.2 行），零凭据 Hard Rule。
 - **installer-smoke NSIS（留痕 skip ×1）**：安装包未构建（`release/installer/`），§6 归并行口径。
 - 背书对账：全量迁移批（53 spec / 159 用例，workers=2，E2E_TMP_ROOT 短路径态）skip 面 = 上列 2 skip，fixme 面 = 上列 2 fixme，零未背书残留。留痕 `proposals/e2e-known-reds-triage/walkthrough/013-final-batch/`。
+
+## 8. forge-combo 真机收口套件（plugin-forge-combo 1.5——条件 skip 留痕）
+
+- 套件：`tests/forge/forge-desktop-install-minchain/`（CT-DISK-*）、`tests/forge/forge-npm-profile-minchain/`（CT-NPM-*）——desktop-journeys Playwright project（testDir ../tests 既有注册）。
+- **整组 skip 门**：`FORGE_COMBO_E2E=1` 未置位即整组 skip（真机收口轮 1.7 专用——隔离 `FORGE_COMBO_DSH_HOME` + 安装产物 exe `FORGE_COMBO_DESKTOP_EXE`；支撑层环境面正本 = `e2e/support/forge-combo.ts` 头注）。常规跑批恒 skip，非失败态。
+- **段级 skip 门**：①最小链派发（CT-DISK-03 #step-6/#step-7）= 真实模型凭据门（flywheel §6 4.2 口径）；②CT-NPM-03 web 校准轮 = `FORGE_COMBO_WEB_LOOP=1`；③CT-NPM-04 = `FORGE_COMBO_NPM_PROJECT_KEY`（收口执行体完成真机 agent 交互后置位）。
