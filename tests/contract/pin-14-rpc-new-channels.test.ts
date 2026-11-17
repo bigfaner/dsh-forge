@@ -107,9 +107,11 @@ describe('pin ㉒-2 host ipc 面（注册行逐通道机械审计）', () => {
     expect(src.match(/ipc\.register\(/g)).toHaveLength(Object.keys(FEATURES_CHANNELS).length)
   })
 
-  it('m2-wiring.ts：三域注册器装配行在场（服务缺席 fail-soft 降级分支成对）', () => {
+  it('m2-wiring.ts：两域注册器装配行在场 + proposals 注册器零在场（4206f66e 拆除后退役反转 pin）', () => {
     const src = host('m2-wiring.ts')
-    expect(src).toContain('registerProposalsChannels(ipc, services.forgeProposals)')
+    expect(src, 'm2-wiring.ts 不应再装配 registerProposalsChannels（proposal 域整域下线）').not.toContain(
+      'registerProposalsChannels',
+    )
     expect(src).toContain('registerSettingsChannels(ipc, services.forgeSettings)')
     expect(src).toContain('registerFeaturesChannels(ipc, services.forgeFeatures)')
   })

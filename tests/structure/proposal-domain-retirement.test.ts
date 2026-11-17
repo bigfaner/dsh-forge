@@ -33,6 +33,7 @@ const VERB_TOKENS = [
   'listDerivedProposals',
   'PROPOSALS_CHANNELS',
   'forge:proposals/',
+  'registerProposalsChannels',
   'ProposalsTab',
   'ProposalVerdictDialog',
   'ProposalModeDialog',
@@ -56,14 +57,17 @@ const SCAN_TARGETS = [
   'plugins/knowledge/host',
   'plugins/knowledge/ui',
   'apps/web/src',
+  'tests/contract',
   'apps/host/src/profile',
   'scripts/assemble-installer-resources.mjs',
 ] as const
 
 const SOURCE_EXT = new Set(['.ts', '.tsx', '.mjs', '.yml', '.css', '.md'])
 
-/** 递归收集源文件（跳 node_modules/dist/skills 内容文件零命中无害；跳测试文件——豁免面） */
-function collectFiles(target: string): string[] {
+/** 递归收集源文件（跳 node_modules/dist/skills 内容文件零命中无害；跳测试文件——豁免面。
+ *  includeTests：tests/contract 契约 pin 面豁免同规则不生效——本族漏扫恰发生在 pin 测试
+ *  文件内（正向 pin 已拆除标识符），故该目标显式纳入测试文件，交由专用正向 pin 检查） */
+function collectFiles(target: string, includeTests = false): string[] {
   const abs = join(ROOT, target)
   const out: string[] = []
   const walk = (p: string): void => {
@@ -76,7 +80,7 @@ function collectFiles(target: string): string[] {
       return
     }
     if (!SOURCE_EXT.has(p.slice(Math.max(0, p.lastIndexOf('.'))))) return
-    if (/\.test\.(ts|tsx|mjs)$/.test(p)) return
+    if (/\.test\.(ts|tsx|mjs)$/.test(p) && !includeTests) return
     out.push(p)
   }
   walk(abs)
@@ -91,6 +95,9 @@ describe('proposal 域下线机检（plugin-spec/1.11 三族名单钉死——�
       return [] // 目标目录缺席（技能面降级等）→ 跳过不误报
     }
   })
+
+  /** 契约 pin 面专用收集（含测试文件——正向 pin 残留检查只在 tests/contract 生效） */
+  const pinFiles = collectFiles('tests/contract', true)
 
   it('扫描面在盘（机检自身健全性——目标树缺席即假绿，先行防呆）', () => {
     expect(ALL_TOKENS.length).toBe(VERB_TOKENS.length + SKILL_TOKENS.length + BANNED_MODE_TOKENS.length)
@@ -133,5 +140,22 @@ describe('proposal 域下线机检（plugin-spec/1.11 三族名单钉死——�
       }
     }
     expect(hits, `模式概念禁词残留：\n${hits.join('\n')}`).toEqual([])
+  })
+
+  it('族①契约 pin 面正向 pin 残留（tests/contract 含测试文件——退役标识符只许 not.toContain 退役断言形态）', () => {
+    // bug 392c6929 判例：pin-14 正向 pin 已拆除的 registerProposalsChannels 装配行——
+    // 同族漏扫根因之一即 SCAN_TARGETS 缺 tests/contract/。此面禁词只查正向 pin 形态
+    // （toContain('退役token')），not.toContain 退役反转断言合法放行。
+    const positivePin = /(?<!\.not\s*\.)toContain\(\s*['"`]([^'"`]+)['"`]/g
+    const hits: string[] = []
+    for (const file of pinFiles) {
+      const src = readFileSync(file, 'utf8')
+      for (const m of src.matchAll(positivePin)) {
+        for (const token of VERB_TOKENS) {
+          if (m[1].includes(token)) hits.push(`${file} → toContain('${m[1]}')（含退役标识符 ${token}）`)
+        }
+      }
+    }
+    expect(hits, `契约 pin 面正向 pin 退役标识符残留：\n${hits.join('\n')}`).toEqual([])
   })
 })
