@@ -210,12 +210,29 @@ export function sqliteTables(file: string): readonly string[] {
 }
 
 /**
- * 派发运营日志发现面：{DSH_HOME}/forge-workspaces 下递归收集 logs/<slug>.jsonl
+ * fix-9 落点单一事实源：task-loop tasksHome（{DSH_HOME} 占位 !!js 表达式，fix-9
+ * b90e94bf patch 下发键）——自 plugins/forge/cordis.patch.yml 正本现读，不在本文件
+ * 硬编码目录字面（bug c422e5f0：落点再迁移时本锚自动跟迁，不再发同族 stale-anchor）。
+ * 求值为封闭枚举：表达式仅允许 `process.env.DSH_HOME && (process.env.DSH_HOME + '<字面段>')`
+ * 形状，字面段取自正本、本文件零目录字面；形状漂移即 fail-loud。
+ */
+export function taskLoopTasksHome(dshHome: string): string {
+  const yml = readFileSync(join(ROOT, 'plugins', 'forge', 'cordis.patch.yml'), 'utf8')
+  const expr = yml.match(/^\s*tasksHome:\s*!!js\s+(.+)$/m)?.[1]
+  if (expr === undefined) throw new Error('单一事实源断裂：cordis.patch.yml task-loop tasksHome 表达式缺席（fix-9 落点锚）')
+  const literal = expr.match(/^process\.env\.DSH_HOME && \(process\.env\.DSH_HOME \+ '(\/.+?)'\)$/)?.[1]
+  if (literal === undefined) throw new Error(`单一事实源漂移：tasksHome 表达式形状超出封闭枚举（fix-9 落点锚）：${expr}`)
+  return join(dshHome, ...literal.split('/').filter((seg) => seg !== ''))
+}
+
+/**
+ * 派发运营日志发现面：task-loop tasksHome（fix-9 落点 = taskLoopTasksHome 单一事实源——
+ * bug c422e5f0 自 {DSH_HOME}/forge-workspaces 旧落点跟迁）下递归收集 logs/<slug>.jsonl
  * （task_home = {tasksHome}/{flatten}@{hash8}——deriveDirName 派生，slug 层单文件追加；
  * 域路径不预设——父目录名 = 'logs' 即收集，机械锚）。
  */
 export function findDispatchLogs(dshHome: string): readonly string[] {
-  const root = join(dshHome, 'forge-workspaces')
+  const root = taskLoopTasksHome(dshHome)
   const hits: string[] = []
   const walk = (dir: string): void => {
     if (!existsSync(dir)) return
