@@ -1,6 +1,8 @@
 // 自持库 schema 版本线（knowledge-stage1 A2 前两弹）：schema_meta 前向迁移骨架 + v1 初始版本行。
 // 前向单向：只追加新版本 StorageMigration（不直改已发布版本）；版本门在 open.ts
-//（库内 version 超出本代码上限 = 拒开）。v1 只含 schema_meta + 注册表（projects）；
+//（库内 version 超出本代码上限 = 拒开）。v1 含注册表（projects）；schema_meta 由
+// lib/db openDatabase 分域机制建立（分域锚表形状 + 旧形状升级），不入迁移语句——
+// 旧形状全局 schema_meta DDL 死语句已清（F1 配方清理）；
 // entries/recall_logs 等表由后续任务按 v2+ 追加（轻量种子迁移任务承接）。
 // 独立版本线：与 core state.db 的 MIGRATIONS 无关（零 core 依赖——SC-2 铁律）。
 import type Database from 'better-sqlite3'
@@ -40,7 +42,8 @@ export const STORAGE_SCHEMA_VERSION = 7
 export const KNOWLEDGE_DB_SCHEMA_DOMAIN = 'knowledge'
 
 /**
- * v1：schema_meta（版本线本体）+ 自持注册表 projects。
+ * v1：自持注册表 projects（schema_meta 版本线锚表由 lib/db openDatabase 分域机制建立，
+ * 不入迁移语句）。
  * 注册键 = ws_path canonical（realpath 归一——open.ts/registry.ts canonicalWsPath），
  * knowledge_dir 列承载项目知识库目录（种子迁移任务自此列承接 core projects.knowledge_dir）。
  */
@@ -48,12 +51,6 @@ export const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
   {
     version: 1,
     statements: [
-      // 版本线锚表（lib/db 机制基建——分域锚域，锚域不锚表集合）——IF NOT EXISTS：
-      // 共库形态锚表由先开域（或 lib/db 分域机制）建立，本域不重建（bug 34645ce2）。
-      `CREATE TABLE IF NOT EXISTS schema_meta (
-    version     INTEGER PRIMARY KEY,
-    applied_at  TEXT    NOT NULL
-)`,
       `CREATE TABLE projects (
     ws_path       TEXT PRIMARY KEY,
     knowledge_dir TEXT NOT NULL,
@@ -339,6 +336,10 @@ export const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
  */
 export function downgradeKnowledgeSchema(db: Database.Database, targetVersion: number): number {
   // 版本线读删一律锚本域（分域锚表——共库形态下异域版本行零触碰，bug 34645ce2 同配方）。
+  // 豁免标注（F2 配方归口）：lib/db 只有前向 openDatabase 分域配方（锚表建立/升级/版本行
+  // 写），无降级语义 API——此处 schema_meta / migration_digests 域锚读删是降级路径的本地
+  // 唯一补偿实现，与 lib/db applyMigration 语义对称（指纹行同事务撤销）；待 lib/db 收编
+  // 降级配方后改引单源口，本标注即豁免理由。
   const current = db
     .prepare<unknown[], { v: number | null }>(`SELECT MAX(version) AS v FROM schema_meta WHERE domain = ?`)
     .get(KNOWLEDGE_DB_SCHEMA_DOMAIN)

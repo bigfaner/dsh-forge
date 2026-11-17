@@ -43,12 +43,6 @@ export function makeProjectMigrations(prefix: string): Migration[] {
     {
       version: 1,
       statements: [
-        // 版本线锚表（lib/db 机制基建——分域锚域，锚域不锚表集合）——IF NOT EXISTS：
-        // 共库形态锚表由先开域（或 lib/db 分域机制）建立，本域不重建（bug ad14e904）。
-        `CREATE TABLE IF NOT EXISTS schema_meta (
-    version     INTEGER PRIMARY KEY,
-    applied_at  TEXT    NOT NULL
-)`,
         `CREATE TABLE ${t.projects} (
     id                   TEXT PRIMARY KEY,
     project_key          TEXT NOT NULL UNIQUE,

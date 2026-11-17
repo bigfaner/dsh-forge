@@ -2,10 +2,6 @@
 
 exports[`DDL 快照锚（已发布迁移语句禁改——防抖动） > v1 语句集快照 1`] = `
 [
-  "CREATE TABLE IF NOT EXISTS schema_meta (
-    version     INTEGER PRIMARY KEY,
-    applied_at  TEXT    NOT NULL
-)",
   "CREATE TABLE spec_specs (
     id           TEXT PRIMARY KEY,                    -- 纯 UUID（写入点 createSpec 生成；业务唯一由 uq_spec_specs_project_slug 承担）
     slug         TEXT NOT NULL,                       -- Spec 文档目录键（.forge/specs/{slug}/）与对外逻辑键

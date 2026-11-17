@@ -40,8 +40,8 @@ export function specDbFileName(home: string): string {
 
 /**
  * 打开（或创建）spec.db 并装配三 repositories（行级读写门）。
- * busy_timeout 预设随连接设置（WAL 活写兼容 app 在场）；foreign_keys 逐连接由 lib/db
- * openDatabase 设置并断言回读（I4——不达即抛错拒开）。
+ * WAL / busy_timeout / foreign_keys 三参数由 lib/db openDatabase 随连接设置并断言回读
+ * （I4——不达即抛错拒开；busy_timeout 重设已收敛归 openDatabase 承担，F5 配方归口）。
  */
 export function openSpecDb(home: string, opts: SpecDbOpts = {}): SpecDomainDb {
   const file = opts.file ?? specDbFileName(home);
@@ -52,7 +52,6 @@ export function openSpecDb(home: string, opts: SpecDbOpts = {}): SpecDomainDb {
     // 先行迁移抬升的异域版本行不触发拒开（bug 34645ce2 处方；单装形态语义不变）。
     domain: SPEC_DB_SCHEMA_DOMAIN,
   })
-  db.pragma("busy_timeout = 5000")
   const tables = specTableNames()
   return {
     db,

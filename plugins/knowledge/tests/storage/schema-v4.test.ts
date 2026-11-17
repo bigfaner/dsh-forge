@@ -23,6 +23,9 @@ afterEach(() => {
 function buildV3Db(file: string): void {
   const db = new Database(file)
   try {
+    // 存量库铸形：schema_meta 版本线锚表由 lib/db openDatabase 机制建立（迁移序列零携带）——
+    // 手工铸库自建旧形状锚表（机制开库时升级认领）
+    db.exec(`CREATE TABLE schema_meta (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`)
     for (const m of STORAGE_MIGRATIONS.filter((m) => m.version <= 3)) {
       for (const stmt of m.statements) db.prepare(stmt).run()
       db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (?, ?)`).run(m.version, '2026-01-01T00:00:00Z')

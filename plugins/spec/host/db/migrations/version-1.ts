@@ -8,7 +8,8 @@
 // 列名避让 SQL 保留词裸名（spec_status / from_status / to_status）。
 // Hard Rule——本序列经 openDatabase 参数化传入（lib/db openDatabase options），
 // 禁硬编码 import 中央序列；PRAGMA（WAL / foreign_keys / busy_timeout）在打开时设置，
-// 不入迁移语句。schema_meta 为 lib/db 机制基建表（版本线锚），随 v1 顺带创建。
+// 不入迁移语句。schema_meta 由 lib/db openDatabase 分域机制建立（分域锚表形状 +
+// 旧形状升级），不入迁移语句——旧形状全局 schema_meta DDL 死语句已清（F1 配方清理）。
 import type { Migration } from "@dsh-forge/lib-db";
 
 /** spec.db schema 版本上限（独立版本线；version 1 起新线）。 */
@@ -48,12 +49,6 @@ export const SPEC_MIGRATIONS: readonly Migration[] = [
   {
     version: 1,
     statements: [
-      // lib/db 机制基建表（版本线锚域，entities.md §6①）——IF NOT EXISTS：共库形态锚表由
-      // 先开域（或 lib/db 分域机制）建立，本域不重建（bug 34645ce2）。
-      `CREATE TABLE IF NOT EXISTS schema_meta (
-    version     INTEGER PRIMARY KEY,
-    applied_at  TEXT    NOT NULL
-)`,
       // ── §1 spec_specs（8 列，主体表——归属键唯一落点）──
       `CREATE TABLE spec_specs (
     id           TEXT PRIMARY KEY,                    -- 纯 UUID（写入点 createSpec 生成；业务唯一由 uq_spec_specs_project_slug 承担）

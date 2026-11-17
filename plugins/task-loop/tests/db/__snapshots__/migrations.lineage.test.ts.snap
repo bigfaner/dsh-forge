@@ -2,10 +2,6 @@
 
 exports[`DDL 快照锚（防抖动） > v1 语句集快照 1`] = `
 [
-  "CREATE TABLE IF NOT EXISTS schema_meta (
-    version     INTEGER PRIMARY KEY,
-    applied_at  TEXT    NOT NULL
-)",
   "CREATE TABLE task_tasks (
     id              TEXT PRIMARY KEY,                      -- 纯 UUID（写入点 addTask/batchAddTasks 生成；业务唯一由 uq_task_tasks_project_slug_local 承担）
     slug            TEXT NOT NULL,                         -- 容器键（通用执行容器，无容器主表）

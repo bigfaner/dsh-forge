@@ -8,7 +8,8 @@
 // · 时序 = proposal §2.2：start → 注册行里程碑 → recall（best-effort）→ cutover。
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import Database from 'better-sqlite3'
+import type Database from 'better-sqlite3'
+import { openReadonlyDatabase } from '@dsh-forge/lib-db'
 import { withImmediateTransaction } from './concurrency.js'
 import { canonicalWsPath } from './registry.js'
 import { KNOWLEDGE_MIGRATE_EVENT, emitStorageDiag, storageDiag, type DiagEmitter } from './diag.js'
@@ -73,10 +74,11 @@ export function runSeedMigration(
     return { status: 'skipped-done', registryRows: 0, recallRows: 0 }
   }
 
-  // 旧库只读打开（零写回——readonly 连接属性承载）
+  // 旧库只读打开（零写回——readonly 连接属性承载；句柄经 lib/db openReadonlyDatabase
+  // 唯一创建口产出——better-sqlite3 构造器不落插件侧，F3 句柄归口）
   let legacy: Database.Database
   try {
-    legacy = new Database(source, { readonly: true })
+    legacy = openReadonlyDatabase(source)
   } catch (cause) {
     emitStorageDiag(
       opts.emit,

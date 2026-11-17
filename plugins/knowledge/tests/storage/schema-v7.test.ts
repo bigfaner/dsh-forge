@@ -24,6 +24,8 @@ afterEach(() => {
 function buildV6Db(file: string, recallRows: number): void {
   const db = new Database(file)
   try {
+    // 存量库铸形：schema_meta 锚表由 lib/db openDatabase 机制建立（迁移序列零携带）——手工铸库自建
+    db.exec(`CREATE TABLE schema_meta (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`)
     for (const m of STORAGE_MIGRATIONS.filter((m) => m.version <= 6)) {
       for (const stmt of m.statements) db.prepare(stmt).run()
       db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (?, ?)`).run(m.version, '2026-01-01T00:00:00Z')

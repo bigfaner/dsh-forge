@@ -9,5 +9,5 @@ export {
   isForeignKeysUnavailableError,
   isUnsupportedSchemaVersionError,
 } from './errors.js'
-export { openDatabase, type OpenDatabaseOptions } from './open.js'
+export { BUSY_TIMEOUT_MS, openDatabase, openReadonlyDatabase, type OpenDatabaseOptions } from './open.js'
 export { withTransaction } from './transaction.js'

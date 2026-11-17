@@ -35,8 +35,9 @@ export function domainDbFileName(home: string): string {
 
 /**
  * 打开（或创建）project.db 并装配三 repositories（行级读写门）。
- * busy_timeout 预设随连接设置（WAL 活写兼容 app 在场）；foreign_keys 逐连接由 lib/db
- * openDatabase 设置并断言回读（I4——不达即抛错拒开，CASCADE 不允许静默失效）。
+ * WAL / busy_timeout / foreign_keys 三参数由 lib/db openDatabase 随连接设置并断言回读
+ * （I4——不达即抛错拒开，CASCADE 不允许静默失效；busy_timeout 重设已收敛归
+ * openDatabase 承担，F5 配方归口）。
  */
 export function openDomainDb(home: string, opts: DomainDbOpts): DomainDb {
   const file = opts.file ?? domainDbFileName(home)
@@ -47,7 +48,6 @@ export function openDomainDb(home: string, opts: DomainDbOpts): DomainDb {
     // 抬升的版本行不触发拒开（bug ad14e904 共库接管前置；单装形态语义不变）。
     domain: PROJECT_DB_SCHEMA_DOMAIN,
   })
-  db.pragma('busy_timeout = 5000')
   const tables = projectTableNames(opts.prefix)
   return {
     db,

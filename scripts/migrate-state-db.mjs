@@ -176,12 +176,10 @@ function readLegacyRow(columns, row) {
 // 脚本头部注释同源）。DDL 单源锚 = plugins/task-loop/host/db/migrations/version-1.ts
 // TASK_LOOP_MIGRATIONS[0].statements 逐字镜像——DDL pin 测试断言两侧逐语句等价，漂移即测试红。
 
-/** task-loop.db 新线 v1 DDL（version-1.ts 逐字镜像——patch 由 version-1.ts 机械抽取生成）。 */
+/** task-loop.db 新线 v1 DDL（version-1.ts 逐字镜像——patch 由 version-1.ts 机械抽取生成）；
+ * schema_meta 锚表由 ensureTaskLoopSchema 显式建立（不入语句集——version-1.ts 旧形状
+ * schema_meta 死语句已清，镜像随批对齐）。 */
 export const TASK_LOOP_V1_STATEMENTS = [
-`CREATE TABLE IF NOT EXISTS schema_meta (
-    version     INTEGER PRIMARY KEY,
-    applied_at  TEXT    NOT NULL
-)`,
 `CREATE TABLE task_tasks (
     id              TEXT PRIMARY KEY,                      -- 纯 UUID（写入点 addTask/batchAddTasks 生成；业务唯一由 uq_task_tasks_project_slug_local 承担）
     slug            TEXT NOT NULL,                         -- 容器键（通用执行容器，无容器主表）
@@ -376,7 +374,14 @@ function ensureTaskLoopMigrateTables(db) {
 
 /** v1 DDL 装配（全新 copy-out 目标库首见 schema_meta 时整套落地——已迁移库幂等跳过）。 */
 function ensureTaskLoopSchema(db) {
-  if (!hasTable(db, 'schema_meta')) {
+  // schema_meta 版本线锚表（本脚本自持旧形状全局线——openDatabase domain 机制开库时升级认领）；
+  // 域表语句集仅在未锚定库整套落地（已迁移库幂等跳过）。
+  const fresh = !hasTable(db, 'schema_meta')
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_meta (
+    version     INTEGER PRIMARY KEY,
+    applied_at  TEXT    NOT NULL
+)`)
+  if (fresh) {
     for (const s of TASK_LOOP_V1_STATEMENTS) db.exec(s)
   }
   // 版本线锚行：全新库落 v1（schema_meta 缺行 = 未锚定——补写，门禁由此可判）

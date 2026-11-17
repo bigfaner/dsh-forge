@@ -226,6 +226,14 @@ function backupBeforeMigrations(db: Database.Database, file: string, targetVersi
 }
 
 /**
+ * 只读打开既有库（句柄唯一创建口配方——种子迁移等零写回消费面经此产出 readonly 句柄，
+ * 插件侧禁止直落 better-sqlite3 构造器）。零迁移零 PRAGMA 写：readonly 连接属性承载零写回。
+ */
+export function openReadonlyDatabase(file: string): Database.Database {
+  return new Database(file, { readonly: true })
+}
+
+/**
  * 打开（或创建）应用状态库并校验/推进 schema 版本。
  *
  * 前向门语义（schema.sql 头注）：

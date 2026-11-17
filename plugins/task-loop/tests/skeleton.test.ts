@@ -137,8 +137,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.1");
   });
 
-  it("版本 bump 0.17.3（plugin-forge-combo/fix-3 patch——共库分域版本线 bug e62f3458；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.17.3");
+  it("版本 bump 0.17.5（plugin-forge-combo/1.10 patch——findings 清理批 F1/F5/M-2；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.17.5");
   });
 });
 
@@ -199,7 +199,11 @@ describe("装载面形态（cordis Loader / 官方 client-modules 消费契约�
 describe("bundle 管线产物 self-containment", () => {
   it("host bundle 产物自含：@dsh-forge/lib-* devDeps 内联，官方机械外置", () => {
     const distEntry = resolve(pkgDir, "dist", "host", "index.js");
-    if (!existsSync(distEntry)) return; // 未构建（纯 src 测试树）——结构面其余用例已覆盖声明面
+    if (!existsSync(distEntry)) {
+      // 跳过留痕（M-2——静默 return 即空洞绿：跳过必须可见可考）
+      console.warn("[task-loop skeleton] dist 未构建——bundle 产物自含用例跳过（纯 src 测试树；build 后复跑补证）");
+      return;
+    }
     const bundled = readFileSync(distEntry, "utf8");
     // 内联后 import 形态残留 = bundle 未生效（self-containment 口径：dist 零 @dsh-forge/* 运行期 import）
     expect(bundled).not.toMatch(/(?:from\s*|require\(\s*|import\(\s*)["']@dsh-forge\//);
@@ -208,7 +212,10 @@ describe("bundle 管线产物 self-containment", () => {
 
   it("host bundle 运行期 @deepseek-ai/* import 面对账：driver 类非插件单例须在 dependencies；dsh-session 豁免（host 壳单例解析 + plugin row 撞车禁入 dependencies——fix-12 判例）", () => {
     const distEntry = resolve(pkgDir, "dist", "host", "index.js");
-    if (!existsSync(distEntry)) return; // 未构建（纯 src 测试树）
+    if (!existsSync(distEntry)) {
+      console.warn("[task-loop skeleton] dist 未构建——bundle 运行期 import 对账用例跳过（纯 src 测试树；build 后复跑补证）");
+      return; // 未构建（纯 src 测试树）
+    }
     const bundled = readFileSync(distEntry, "utf8");
     const deps = pkg.dependencies ?? {};
     // 宿主壳单例豁免面：静态 import 经宿主解析路径成功（010-final 轮 boot 实证），
@@ -230,7 +237,10 @@ describe("bundle 管线产物 self-containment", () => {
 
   it("host bundle 零静态 dsh-client-connection 具名导入（装载期解耦——bug e4aa1a5f：宿主解析面无 Peer 导出即整 entry 拒激活；运行期 ctor 惰性动态加载承担）", () => {
     const distEntry = resolve(pkgDir, "dist", "host", "index.js");
-    if (!existsSync(distEntry)) return; // 未构建（纯 src 测试树）
+    if (!existsSync(distEntry)) {
+      console.warn("[task-loop skeleton] dist 未构建——dsh-client-connection 具名导入用例跳过（纯 src 测试树；build 后复跑补证）");
+      return; // 未构建（纯 src 测试树）
+    }
     const bundled = readFileSync(distEntry, "utf8");
     expect(bundled).not.toMatch(
       /import\s*\{[^}]*Peer[^}]*\}\s*from\s*["']@deepseek-ai\/dsh-client-connection["']/,
@@ -239,7 +249,10 @@ describe("bundle 管线产物 self-containment", () => {
 
   it("client bundle 产物自含：ui 内联、零 @dsh-forge/* import、自注册装载头在位", () => {
     const distClient = resolve(pkgDir, "dist", "client.js");
-    if (!existsSync(distClient)) return;
+    if (!existsSync(distClient)) {
+      console.warn("[task-loop skeleton] dist 未构建——client bundle 自含用例跳过（纯 src 测试树；build 后复跑补证）");
+      return;
+    }
     const bundled = readFileSync(distClient, "utf8");
     // 装载头 PLUGIN_ID 字面量（"@dsh-forge/task-loop"）为自注册识别面，非 import——
     // 口径只断 import 形态（from/require/import()）。

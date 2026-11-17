@@ -3,9 +3,10 @@
 //   better-sqlite3 单连接，fn 内不得 await；与 core db/transaction.ts 同纪律）；
 // · createSingleFlightMutex：进程内互斥（rebuild 单飞——同键临界区串行，跨键互不阻塞）。
 import type Database from 'better-sqlite3'
+import { BUSY_TIMEOUT_MS } from '@dsh-forge/lib-db'
 
-/** busy_timeout 毫秒（open.ts PRAGMA 消费同一常量——锁竞争等持有者落盘） */
-export const BUSY_TIMEOUT_MS = 5000
+/** busy_timeout 毫秒（lib/db open.ts 同源常量 re-export——open.ts PRAGMA 已归 openDatabase 承担，F5 配方归口） */
+export { BUSY_TIMEOUT_MS }
 
 /**
  * BEGIN IMMEDIATE 短事务：入口即取写 RESERVED 锁（并发写者排队等 busy_timeout），
