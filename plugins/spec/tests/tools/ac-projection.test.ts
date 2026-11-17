@@ -250,3 +250,49 @@ describe("消费点现查永不缓存（AGENTS 1.6）——重复查询现查 + 
     }
   });
 });
+
+describe("消费点缝在场性翻转（AGENTS 1.6——服务在场 → 缺席 → 在场，非仅数据态翻转）", () => {
+  it("acSettlementsOf 每查询现求值：在场→缺席→在场 投影即时跟随；缺席期降级留痕且零 seam 调用", async () => {
+    const h = harness();
+    try {
+      await createDemo(h.tools);
+      const calls = { n: 0 };
+      const seam: AcSettlementsFace = {
+        matchAcSettlements: async (_key, criteria) => {
+          calls.n += 1;
+          const matches = criteria.map((c) => ({ criterion: c, met: true }));
+          return { matches, unmatched: [] };
+        },
+      };
+      // 在场性求值缝本身可翻转——模拟 task-loop 插件中途卸载 / 重装
+      let present = true;
+      const tools = createSpecTools({ ...h.deps, acSettlementsOf: () => (present ? seam : undefined) });
+      const q = () =>
+        tools.querySpec.execute(
+          { slug: "demo-spec", include_ac_projection: true },
+          execOf(),
+        ) as Promise<{ acProjection: AcProjectionRow[] }>;
+
+      // 在场 → met
+      const first = await q();
+      expect(first.acProjection.map((p) => p.state)).toEqual(["met", "met", "met"]);
+
+      // 中途卸载：缝缺席 → no-task-data 降级 + absent info 留痕
+      present = false;
+      const second = await q();
+      expect(second.acProjection.map((p) => p.state)).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
+      const absent = h.diag.filter((d) => d.event === "spec-ac-projection-absent");
+      expect(absent).toHaveLength(1);
+      expect(absent[0]!.level).toBe("info");
+
+      // 重装回归：缝再在场 → 投影即时跟随回 met（无缺席残留缓存）
+      present = true;
+      const third = await q();
+      expect(third.acProjection.map((p) => p.state)).toEqual(["met", "met", "met"]);
+      // 缺席期零 seam 调用 + 每在场查询恰好一次现查
+      expect(calls.n).toBe(2);
+    } finally {
+      h.close();
+    }
+  });
+});

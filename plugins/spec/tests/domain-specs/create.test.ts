@@ -11,12 +11,14 @@ function harness() {
   const domain: SpecDomainDb = openSpecDb(".", { file: ":memory:" });
   const written: Array<{ relPath: string; content: string }> = [];
   let failWrite = false;
+  let failAfterWrite = false;
   const service = createForgeSpecsService({
     db: domain.db,
     repos: domain.repos,
     writeSpecDoc: (relPath, content) => {
       if (failWrite) throw new Error("fs write failure");
       written.push({ relPath, content });
+      if (failAfterWrite) throw new Error("fs rename failure after tmp write");
     },
   });
   const counts = () => ({
@@ -36,7 +38,7 @@ function harness() {
     ],
     docRelPath: ".forge/specs/demo-spec/spec.md",
   });
-  return { domain, service, written, setFailWrite: (v: boolean) => (failWrite = v), counts, validInput };
+  return { domain, service, written, setFailWrite: (v: boolean) => (failWrite = v), setFailAfterWrite: (v: boolean) => (failAfterWrite = v), counts, validInput };
 }
 
 function codeOf(fn: () => unknown): string {
@@ -91,6 +93,31 @@ describe("createSpec 单事务原子性（任一失败全回滚零半态）", ()
       expect(() => h.service.createSpec(h.validInput())).toThrowError("fs write failure");
       expect(h.counts()).toEqual({ specs: 0, goals: 0, acs: 0, docs: 0 });
       expect(h.written).toEqual([]);
+    } finally {
+      h.domain.db.close();
+    }
+  });
+
+  it("文件半写态回滚分支：写缝先落文件再抛错（tmp+rename 中途失败形态）→ db 已写仍四表全回滚 + 同 slug 可重试", () => {
+    const h = harness();
+    try {
+      // 半写形态：文件已落（written 在案）随后写缝抛错——区别于「零文件即抛」分支
+      h.setFailAfterWrite(true);
+      expect(() => h.service.createSpec(h.validInput())).toThrowError("fs rename failure after tmp write");
+      // db 侧零半态：specs/goals/acs/docs 四表全回滚（文件写在事务内——失败即整体回退）
+      expect(h.counts()).toEqual({ specs: 0, goals: 0, acs: 0, docs: 0 });
+      // 文件侧残留半写证据在案（真实现 tmp+rename 的残留清理归写缝自身；域侧以 db 回滚为准）
+      expect(h.written).toEqual([
+        { relPath: ".forge/specs/demo-spec/spec.md", content: expect.any(String) },
+      ]);
+      // 回滚不留脏行/脏约束：清障后同 slug 重试全成
+      h.setFailAfterWrite(false);
+      h.written.length = 0;
+      const row = h.service.createSpec(h.validInput());
+      expect(row.specStatus).toBe("draft");
+      expect(h.written).toEqual([
+        { relPath: ".forge/specs/demo-spec/spec.md", content: expect.any(String) },
+      ]);
     } finally {
       h.domain.db.close();
     }

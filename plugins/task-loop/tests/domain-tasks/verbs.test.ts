@@ -119,6 +119,33 @@ describe("submitTask 输入面校验 + 双门（仅挂 success）", () => {
     expect(diags.filter((d) => d.event === "facets-hint-drift")).toHaveLength(1);
   });
 
+  it("双 warn 门跳过分支（零对照缺席即跳过）：判据缺席零 ac-criteria-drift + 结算 facets 未声明零 facets-hint-drift", async () => {
+    const diags: { level: string; event: string }[] = [];
+    const deps = { ...h.verbDeps, onDiag: (p: { level: string; event: string }) => diags.push(p) };
+    // 门① 跳过形 A：结算判据缺席（acceptanceCriteria undefined）∧ 定义判据在 → 零 drift warn
+    const t1 = await inFlightTask(["判据一"]);
+    await submitTask(deps, {
+      projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t1.localId }, result: "success", summary: "S",
+      gate: { test: true },
+    });
+    expect(diags.filter((d) => d.event === "ac-criteria-drift")).toHaveLength(0);
+    // 门① 跳过形 B：定义判据缺席（ac_json 非在——无 AC 任务）∧ 结算判据声明 → 同零对照
+    const t2 = await inFlightTask();
+    await submitTask(deps, {
+      projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t2.localId }, result: "success", summary: "S",
+      acceptanceCriteria: [{ criterion: "判据X", met: true }],
+    });
+    expect(diags.filter((d) => d.event === "ac-criteria-drift")).toHaveLength(0);
+    // 门② 跳过形：结算 facets 未声明（input.facets undefined）∧ 提示在 → 零对照零 warn
+    const t3 = await inFlightTask();
+    h.db.prepare(`UPDATE task_tasks SET context_json = ? WHERE id = ?`).run(JSON.stringify({ facets: "docs" }), t3.taskId);
+    await submitTask(deps, {
+      projectKey: h.projectKey, taskRef: { slug: "alpha", localId: t3.localId }, result: "success", summary: "S",
+    });
+    expect(diags.filter((d) => d.event === "facets-hint-drift")).toHaveLength(0);
+    expect(diags.filter((d) => d.level === "warn")).toHaveLength(0);
+  });
+
   it("blocked 结算：in_progress→blocked + evidence_json.reason 权威承载 + records 纯轨迹（note 封闭）", async () => {
     const t = await inFlightTask();
     const r = await submitTask(h.verbDeps, {
