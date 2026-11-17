@@ -1,4 +1,4 @@
-// @feature:dsh-forge-m2-pipeline @web-e2e
+﻿// @feature:dsh-forge-m2-pipeline @web-e2e
 // 5.1 录制-回放执行器运行面自证（回放基建——AC1/AC2/AC4/AC5 运行判据；spec 面 = 5.2 消费同径）：
 //   ① 主侧测试钩子在位（env DSH_FORGE_TEST_BRIDGE=1 门控）——globalThis 挂点经
 //      electronApp.evaluate 主进程面可达，经 host.services 桥代理直调写动词；
@@ -28,7 +28,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
 import type { TaskCard } from '../../../packages/contracts/src/dto/forge.js'
-import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { FEATURES_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { projectKeyOf } from '../../../e2e/support/project-key.js'
