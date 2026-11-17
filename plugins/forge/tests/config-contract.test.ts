@@ -14,6 +14,8 @@ const DBFILE_IDS = ["project", "spec", "task-loop", "knowledge"] as const;
 const EXPECTED_EXPR =
   "process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')";
 const PROJECT_HOME_EXPR = "process.env.DSH_HOME";
+const TASK_LOOP_TASKS_HOME_EXPR =
+  "process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/projects')";
 
 /** 抽取指定 id 插行 dbFile 键的 !!js 表达式（缺失 = undefined）。 */
 function extractDbFileExpr(id: string): string | undefined {
@@ -25,6 +27,12 @@ function extractDbFileExpr(id: string): string | undefined {
 function extractHomeExpr(id: string): string | undefined {
   const block = patchYaml.match(new RegExp(`-\\s+id:\\s*${id}\\b[\\s\\S]*?(?=\\n\\s*-\\s+id:|$)`));
   return block?.[0]?.match(/^\s+home:\s*!!js\s+(.+)$/m)?.[1];
+}
+
+/** 抽取指定 id 插行 tasksHome 键的 !!js 表达式（缺失 = undefined）。 */
+function extractTasksHomeExpr(id: string): string | undefined {
+  const block = patchYaml.match(new RegExp(`-\\s+id:\\s*${id}\\b[\\s\\S]*?(?=\\n\\s*-\\s+id:|$)`));
+  return block?.[0]?.match(/^\s+tasksHome:\s*!!js\s+(.+)$/m)?.[1];
 }
 
 /** 抽取指定 id 插行 config 段的全部键（无 config 段 = 空数组）。 */
@@ -50,9 +58,15 @@ describe("forge 集成 config 契约（整体替换语义快照锁定）", () =>
 
   it.each([...DBFILE_IDS])("%s：dbFile 下发值为完整 config 对象——config 段仅 dbFile 单键（多键/缺键即红）", (id) => {
     if (id === "project") return; // project 双键形态单独锁定（上一用例）
+    if (id === "task-loop") return; // task-loop 双键形态单独锁定（下一用例——bug a93c1277）
     expect(extractConfigKeys(id), `${id} config 必须是完整对象且只含 dbFile——整体替换语义下多余键会抹掉单装缺省`).toEqual([
       "dbFile",
     ]);
+  });
+
+  it("task-loop：config = dbFile + tasksHome 双键快照（任务目录派生根注入——bug a93c1277；{DSH_HOME}/forge/projects 域对齐主提案产物树「以 slug 为单位管理运行产物」；键序/多键/缺键即红）", () => {
+    expect(extractConfigKeys("task-loop")).toEqual(["dbFile", "tasksHome"]);
+    expect(extractTasksHomeExpr("task-loop")).toBe(TASK_LOOP_TASKS_HOME_EXPR);
   });
 
   it.each([...DBFILE_IDS])("%s：dbFile 表达式快照锁定（物化面封闭——只做 DSH_HOME 拼接，无其它重写逻辑）", (id) => {
@@ -76,6 +90,13 @@ describe("forge 集成 config 契约（整体替换语义快照锁定）", () =>
     }
     expect(evalExpr(extractHomeExpr("project")!, {})).toBeFalsy();
     expect(evalExpr(extractHomeExpr("project")!, { DSH_HOME: "" })).toBeFalsy();
+    expect(evalExpr(extractTasksHomeExpr("task-loop")!, {})).toBeFalsy();
+    expect(evalExpr(extractTasksHomeExpr("task-loop")!, { DSH_HOME: "" })).toBeFalsy();
+  });
+
+  it("task-loop tasksHome 物化目标 = {DSH_HOME}/forge/projects（任务目录域——bug a93c1277 落点对齐产物树）", () => {
+    expect(evalExpr(TASK_LOOP_TASKS_HOME_EXPR, { DSH_HOME: "Z:\\mock-dsh-home" })).toBe("Z:\\mock-dsh-home/forge/projects");
+    expect(evalExpr(TASK_LOOP_TASKS_HOME_EXPR, { DSH_HOME: "/data/dsh" })).toBe("/data/dsh/forge/projects");
   });
 });
 
@@ -90,13 +111,15 @@ describe("占位符物化面（host 级物化 / project 级模板透传）", () 
   it("project 级 path_placeholder 模板原样透传不替换——物化面封闭枚举仅限 DSH_HOME，patch 无 {projectDir}/{homeDir} 模板与替换逻辑", () => {
     expect(patchYaml).not.toContain("{projectDir}");
     expect(patchYaml).not.toContain("{homeDir}");
-    // 封闭枚举：!!js 求值点恰五条（project home+dbFile 双键 + 三件 dbFile）、全部为
-    // DSH_HOME 表达式快照——除 DSH_HOME 拼接外不存在任何字符串替换/模板物化逻辑（透传保证）。
+    // 封闭枚举：!!js 求值点恰六条（project home+dbFile 双键 + 四件 dbFile + task-loop
+    // tasksHome——bug a93c1277）、全部为 DSH_HOME 表达式快照——除 DSH_HOME 拼接外不存在
+    // 任何字符串替换/模板物化逻辑（透传保证）。
     const jsPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!);
-    expect(jsPoints).toHaveLength(DB_HOLDING_IDS.length + 1);
+    expect(jsPoints).toHaveLength(DB_HOLDING_IDS.length + 2);
     expect(jsPoints).toContain(PROJECT_HOME_EXPR);
+    expect(jsPoints).toContain(TASK_LOOP_TASKS_HOME_EXPR);
     for (const point of jsPoints) {
-      expect(point === EXPECTED_EXPR || point === PROJECT_HOME_EXPR).toBe(true);
+      expect(point === EXPECTED_EXPR || point === PROJECT_HOME_EXPR || point === TASK_LOOP_TASKS_HOME_EXPR).toBe(true);
       expect(point).not.toMatch(/\{[^}]+\}/);
     }
   });

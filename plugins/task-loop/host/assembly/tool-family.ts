@@ -191,12 +191,16 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     triage,
     globalToolNames,
     resolveWorkerProfile,
+    // 事件日志链透传（bug a93c1277）：tasksHome 注入时 forgeEvents（sink）+ containerDirOf
+    // 同注——循环里程碑/台账经 bus→监听器落盘 logs/{slug}.jsonl；缺席 = 零透传零行为变化。
+    ...(services.forgeEvents !== undefined ? { events: services.forgeEvents } : {}),
+    ...(services.forgeEvents !== undefined && services.containerDirOf !== undefined ? { containerDirOf: services.containerDirOf } : {}),
     ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
   });
 
   // ── 工具族 14 员（10 任务动词 + batch_add_tasks + impl_checkpoint 三员 + dispatch/stop）──
   const loop = { driver, registry };
-  const tools: readonly TaskToolDefinition[] = [
+  const unprepared: readonly TaskToolDefinition[] = [
     createAddTaskTool({ verbDeps, resolveProjectKey }),
     createBatchAddTasksTool({ tasks: services.tasks, resolveProjectKey }),
     createSubmitTaskTool({ verbDeps, resolveProjectKey }),
@@ -212,6 +216,20 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     createQueryImplCheckpointTool({ checkpoints: services.checkpoints, tasks: services.tasks, resolveProjectKey }),
     createListImplCheckpointsTool({ checkpoints: services.checkpoints, tasks: services.tasks, resolveProjectKey }),
   ];
+  // 会话 → 容器目录记忆缝（bug a93c1277）：forgeEvents 在场时逐员包 execute——执行前
+  // prepare（exec 会话 cwd → deriveTaskStoreDir 派生容器目录记忆）。worker 会话继承父
+  // cwd，同链命中同一容器目录（logs/{slug}.jsonl 归属不断流）；缺席 = 零包装零行为变化。
+  const forgeEvents = services.forgeEvents;
+  const tools: readonly TaskToolDefinition[] =
+    forgeEvents === undefined
+      ? unprepared
+      : unprepared.map((definition) => ({
+          ...definition,
+          execute: async (args: unknown, exec: TaskToolExecFace) => {
+            await forgeEvents.prepare(sessionContextOf(exec as ToolExecFace));
+            return definition.execute(args, exec);
+          },
+        }));
   emitForgeDiag(diagEmit, {
     level: "info",
     event: "task-loop-tools",

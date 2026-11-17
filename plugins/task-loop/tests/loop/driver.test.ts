@@ -337,6 +337,8 @@ interface Built {
   driver: LoopDriver
   calls: NarrationCall[]
   events: ForgePluginEvent[]
+  /** 事件日志容器目录直记录制（bug a93c1277——start 即 remember(owner, containerDir)） */
+  remembers: string[]
   h: ReturnType<typeof tasksHarness>
   spawn: ReturnType<typeof trackedSpawn>
   escalations: LoopEscalation[]
@@ -395,6 +397,8 @@ function build(options: {
   bugs?: readonly { bugId: string; summary: string; sourceTaskId?: string }[]
   /** P8 评审指示单选缝（bug cf6254ff）：deps.expertsPresent 桩——true = 三路措辞 / false|缺席 = subagent 回落 */
   expertsPresent?: () => boolean
+  /** 事件日志容器目录解析缝（bug a93c1277）：deps.containerDirOf 桩——注入 = start 即直记 */
+  containerDirOf?: (projectId: string) => string
 } = {}): Built {
   const h = tasksHarness({ addTaskFailures: options.addTaskFailures })
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -408,11 +412,12 @@ function build(options: {
     ...(options.incidents !== undefined ? { incidents: options.incidents } : {}),
   })
   const events: ForgePluginEvent[] = []
+  const remembers: string[] = []
   const sink: ForgeEventSink = {
     emit: (e) => events.push(e),
     prepare: async () => {},
     dirOf: () => undefined,
-    remember: () => {},
+    remember: (id, dir) => remembers.push(`${id}|${dir}`),
   }
   const spawn = trackedSpawn()
   if (options.spawnBehavior !== undefined) options.spawnBehavior(spawn)
@@ -493,6 +498,7 @@ function build(options: {
         }
       : {}),
     ...(options.expertsPresent !== undefined ? { expertsPresent: options.expertsPresent } : {}),
+    ...(options.containerDirOf !== undefined ? { containerDirOf: options.containerDirOf } : {}),
     escalation: {
       escalate: async (e) => {
         escalations.push(e)
@@ -506,7 +512,7 @@ function build(options: {
     },
     ...(options.limits !== undefined ? { limits: options.limits } : {}),
   }
-  return { driver: createLoopDriver(deps), calls, events, h, spawn, escalations, progressCalls, cpEnsures }
+  return { driver: createLoopDriver(deps), calls, events, remembers, h, spawn, escalations, progressCalls, cpEnsures }
 }
 
 /** 等待循环终局（登记表注销 = 终态唯一机械信号） */
@@ -2925,6 +2931,31 @@ describe('S2 面：active() 单活读数与 projectId 覆盖（S2 指令层消�
       delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
     })
     await expect(driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })).rejects.toThrow(/projectId/)
+  })
+})
+
+// ─────────────────────────── 事件日志容器目录直记（bug a93c1277） ───────────────────────────
+
+describe('事件日志容器目录直记（logs/{slug}.jsonl 归属记忆——bug a93c1277 接线）', () => {
+  it('containerDirOf 注入 → start 即 remember(owner, {tasksHome}/{projectKey})（监听器丢行根因收口）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+      containerDirOf: (projectKey) => `T:/forge/projects/${projectKey}`,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(built.remembers).toEqual([`${OWNER}|T:/forge/projects/${PROJECT}`])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('containerDirOf 缺席 → start 零 remember（单装缺省行为零变化——AC 回归锚）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(built.remembers).toEqual([])
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 })
 

@@ -6,7 +6,10 @@
 #   （bug 3c17010a / ad14e904 判例——patch 下发键必须与对端插件契约一致，否则整体替换语义下成死键）：
 #   project 消费 home（ProjectHostConfig.home——自锚派生根）+ dbFile（ProjectHostConfig.dbFile——
 #   共库落点覆盖，patch 下发即生效不再自派生 project.db 分库，bug ad14e904）；
-#   spec/task-loop/knowledge 消费 dbFile（{DSH_HOME}/forge/db/forge/forge.db，域前缀分表互不越界）。
+#   spec/knowledge 消费 dbFile（{DSH_HOME}/forge/db/forge/forge.db，域前缀分表互不越界）；
+#   task-loop 消费 dbFile + tasksHome（任务目录派生根——bug a93c1277：{DSH_HOME}/forge/projects
+#   域对齐主提案产物树「以 slug 为单位管理运行产物」，容器目录 {tasksHome}/{flatten}@{hash8}
+#   单源派生，logs/{slug}.jsonl 派发运营日志落盘闭环）。
 # - {DSH_HOME} 占位符 host 级 boot 期物化：patch 文件经官方 userPatchesSchema（cordis
 #   entry-list 方言，!!js 表达式合法——dsh-app-boot parsePatchList 核销）解析、Loader
 #   行激活期求值，本文件以 !!js 表达式承担替换，不设独立 host 物化入口；DSH_HOME 缺席
@@ -27,6 +30,7 @@
       name: '@dsh-forge/task-loop'
       config:
         dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        tasksHome: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/projects')
     - id: expert-squad
       name: '@dsh-forge/expert-squad'
     - id: knowledge

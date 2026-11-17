@@ -475,6 +475,12 @@ export interface LoopDriverDeps {
   /** 事件发射面（可选——透传 dispatch-core 事件闭包，logs/<slug>.jsonl 里程碑不断流） */
   readonly events?: DispatchCoreDeps["events"];
   /**
+   * projectKey → 容器库目录（可选——bug a93c1277 事件日志链装配缝：与 events 同注，
+   * 循环启动时点直记 sink 记忆（owner 会话 → 容器目录）——监听器归属解析丢行根因收口；
+   * 缺席 = 零直记零行为变化）
+   */
+  readonly containerDirOf?: (projectId: string) => string;
+  /**
    * 循环进度 append 面（可选——'forge/progress' 会话事件流内交错；缺席/链断 =
    * 零发射 fail-soft，循环正确性零依赖。非模型面：不进模型上下文、零回合唤醒。）
    */
@@ -1128,6 +1134,12 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         ...(input.docsRoot !== undefined ? { docsRoot: input.docsRoot } : {}),
         takeoverSessions: new Set<string>(), // 接管集（登记绑定——remove 随之蒸发）
       };
+      // 事件日志容器目录直记（bug a93c1277——logs/{slug}.jsonl 归属记忆）：循环径不经
+      // tool 执行点，prepare 的 cwd 缝不可达——启动时点以 containerDirOf 解析直记；
+      // 缝缺席 = 零直记零行为变化。
+      if (deps.events !== undefined && deps.containerDirOf !== undefined) {
+        deps.events.remember(input.ownerSessionId, deps.containerDirOf(projectId));
+      }
       const controller = new AbortController();
       const loop: ActiveLoop = {
         deps,
