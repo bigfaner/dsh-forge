@@ -391,7 +391,6 @@ describe('fetchTaskDetail（数据面——rpc tasks.detail 唯一通道）', ()
           get: mark('projects.get', () => Promise.resolve(null)),
           update: mark('projects.update', () => Promise.resolve({})),
           reconcile: mark('projects.reconcile', () => Promise.resolve({})),
-          deriveTaskStoreDir: mark('projects.deriveTaskStoreDir', () => Promise.resolve({})),
         },
         fs: { listDir: mark('fs.listDir', () => Promise.resolve({})) },
         bugs: { list: mark('bugs.list', () => Promise.resolve([])), commitFiles: async () => [], fileDiff: async () => ({ diff: '' }) },
@@ -460,7 +459,7 @@ describe('TaskDrawer（装载壳——静态首帧）', () => {
     const fail = (): Promise<never> => Promise.reject(new Error('不应在静态渲染期调用'))
     const stub = (): Promise<never> => fail()
     return {
-      projects: { register: stub, list: stub, get: stub, update: stub, reconcile: stub, deriveTaskStoreDir: stub },
+      projects: { register: stub, list: stub, get: stub, update: stub, reconcile: stub },
       fs: { listDir: stub },
       knowledge: { browse: stub, listEntries: stub, entryDetail: stub, heat: stub, sessionRecall: stub, entryAction: stub },
       tasks: {

@@ -35,7 +35,7 @@ function recordingClient(impl: {
   return {
     calls,
     client: {
-      projects: { register: fail, list: fail, get: fail, update: fail, reconcile: fail, deriveTaskStoreDir: fail },
+      projects: { register: fail, list: fail, get: fail, update: fail, reconcile: fail },
       fs: { listDir: fail },
       knowledge: { browse: fail, listEntries: fail, entryDetail: fail, heat: fail, sessionRecall: fail },
       tasks: {

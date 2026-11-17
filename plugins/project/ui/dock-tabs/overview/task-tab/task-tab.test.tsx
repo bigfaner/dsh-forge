@@ -286,7 +286,7 @@ function dispatchClient(impl: {
           sessions: (impl.detailSessions ?? []).map((session) => ({ ...session, taskId: 't-run', slug: 'm2-pipeline', localId: '1.1', title: '任务', taskStatus: 'in_progress' })),
         } as never),
     },
-    projects: { register: fail, list: fail, get: fail, update: fail, reconcile: fail, deriveTaskStoreDir: fail },
+    projects: { register: fail, list: fail, get: fail, update: fail, reconcile: fail },
     fs: { listDir: fail },
     knowledge: { browse: fail, listEntries: fail, entryDetail: fail, heat: fail, sessionRecall: fail },
     features: { register: fail, transition: fail, upsertDoc: fail, list: fail, listDocs: fail },

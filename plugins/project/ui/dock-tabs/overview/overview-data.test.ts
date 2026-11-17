@@ -1,7 +1,7 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // overview-data 单测 —— AC6 搜索传参（Hard Rule「搜索过滤服务端承载」的通道面锚：
-// search 关键词经 rpc mock 断言服务端过滤调用——前端零本地过滤逻辑可断言）+ 头路四路并发
-// 归一 + 派生行 fail-soft + typed error 三态映射 + 落点纯函数。
+// search 关键词经 rpc mock 断言服务端过滤调用——前端零本地过滤逻辑可断言）+ 头路并发
+// 归一 + typed error 三态映射 + 落点纯函数。
 // 口径沿 use-knowledge-browse 先例：effect 胶水不在 Node 测面；纯异步面全量单测。
 import { describe, expect, it } from 'vitest'
 import type { BugCard, BugStatus, FeatureCard, FeatureDocumentRow, Project, TaskStatus } from '@dsh-forge/contracts'
@@ -9,7 +9,6 @@ import {
   BUGS_CHANNELS,
   FEATURES_CHANNELS,
   PROJECTS_CHANNELS,
-  PROJECTS_M2_CHANNELS,
   TASKS_CHANNELS,
 } from '@dsh-forge/contracts'
 import { createForgeRpcClient, type ForgeRpcClient } from '../rpc-channels.js'
@@ -90,12 +89,9 @@ function clientResponding(
 }
 
 /** 头路全通替身 */
-function headOkClient(overrides: { deriveTaskStoreDir?: () => unknown } = {}) {
+function headOkClient() {
   return clientResponding((channel) => {
     if (channel === PROJECTS_CHANNELS.get) return PROJECT
-    if (channel === PROJECTS_M2_CHANNELS.deriveTaskStoreDir) {
-      return overrides.deriveTaskStoreDir?.() ?? { dir: 'C:/forge-home/demo@a1b2c3d4' }
-    }
     if (channel === FEATURES_CHANNELS.list) return [featureCard('m2-pipeline')]
     if (channel === FEATURES_CHANNELS.listDocs) return [featureDocRow()]
     if (channel === TASKS_CHANNELS.stats) return STATS

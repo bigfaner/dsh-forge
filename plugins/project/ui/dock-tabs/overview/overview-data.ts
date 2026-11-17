@@ -3,9 +3,8 @@
 // Hard Rule「搜索过滤服务端承载」：search/sort 一律作为 listFeatures/listBugs 查询参
 // 透传（core 侧 matchesSearch + sortByActiveThenCreated），前端禁全量拉取本地过滤——
 // 本文件零行本地过滤逻辑。装载拆两路（口径沿 use-knowledge-browse 先例）：
-//   - 头路（mount/projectId/重试）：projects.get（项目名 + 三个目录位）∥ deriveTaskStoreDir
-//     （任务清单 {flatten}@{hash8} 单源——fail-soft）∥ features.list（无参——ov-head 摘要
-//     活跃 feature 查找源，不随搜索漂移）∥ tasks.stats（chips 计数 + 完成数）
+//   - 头路（mount/projectId/重试）：projects.get（项目名 + 三个目录位）∥ features.list（无参
+//     ——ov-head 摘要活跃 feature 查找源，不随搜索漂移）∥ tasks.stats（chips 计数 + 完成数）
 //   - 列路（subtab/search/sort/重试）：features 子 tab = features.list(search,sort)
 //     ∥ features.listDocs（fix-2：feature_documents 列举——文档行数据源，无 search 面）；
 //     tasks 子 tab = 3.5 无列装载（chips 消费头路 stats；三视图装载归 3.6）
