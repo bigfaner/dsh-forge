@@ -37,7 +37,9 @@ export default defineConfig({
   // 树纪律——存量 specs/ 不迁移）。互斥 testMatch——零既有 spec 漂移。
   projects: [
     { name: 'desktop', testMatch: /specs[\\/].+\.spec\.ts$/ },
-    { name: 'desktop-journeys', testDir: '../tests', testMatch: /tests[\\/].+\.spec\.ts$/ },
+    // desktop-journeys 旅程含 plugin-manager 真机安装 beforeAll（轮询上界 ~6 分钟）——
+    // project 级预算固化 300s（beforeAll hook 超时取 project.timeout），去 CLI --timeout 依赖。
+    { name: 'desktop-journeys', testDir: '../tests', testMatch: /tests[\\/].+\.spec\.ts$/, timeout: 300_000 },
     {
       name: 'mobile',
       testMatch: /mobile[\\/].+\.spec\.ts$/,

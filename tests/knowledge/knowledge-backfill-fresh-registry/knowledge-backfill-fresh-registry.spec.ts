@@ -46,6 +46,9 @@ test.skip(stage === null, '官方宿主舞台缺席（E2E_OFFICIAL_WEB_URL 未�
 
 test.describe.configure({ mode: 'serial' })
 
+// beforeAll 预算固化（plugin-manager 安装轮询上界 ~6 分钟 > e2e config 全局 timeout
+// 60s——desktop-journeys project 预算 300s 见 e2e/playwright.config.ts，去 CLI --timeout 依赖）
+
 const HERE = fileURLToPath(import.meta.url)
 const KNOWLEDGE_PKG_DIR = join(HERE, '..', '..', '..', '..', 'plugins', 'knowledge')
 const requireFromCore = createRequire(join(HERE, '..', '..', '..', '..', 'packages', 'core', 'package.json'))

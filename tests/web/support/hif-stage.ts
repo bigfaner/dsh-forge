@@ -86,8 +86,22 @@ export async function installPkgViaPluginManager(
   if ((await close.count()) > 0) await close.click({ force: true }).catch(() => {})
   await page.waitForTimeout(2_000)
 
-  // ③-a UI 详情 manifest 版本断言
-  const row = page.locator('[data-dockkit-row], [role="listitem"], li').filter({ hasText: pkgBareName }).first()
+  // ③-a UI 详情 manifest 版本断言（安装弹窗关闭后插件列表可能未刷新/视图未归位——
+  // 行卡短窗未现即重开插件页语义：重新 goto → 收模态 → 进插件页，再定位行卡）
+  const rowOf = (): ReturnType<Page['locator']> =>
+    page.locator('[data-dockkit-row], [role="listitem"], li').filter({ hasText: pkgBareName }).first()
+  let row = rowOf()
+  try {
+    await row.waitFor({ state: 'visible', timeout: 8_000 })
+  } catch {
+    log.push('③-a 行卡未现——重开插件页归位重试')
+    await page.goto(stage.webUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    await page.waitForTimeout(12_000)
+    await clearDialogs(page)
+    await page.getByRole('button', { name: '插件', exact: true }).first().click({ force: true })
+    await page.waitForTimeout(5_000)
+    row = rowOf()
+  }
   await expect(row, `③-a 已安装插件行在场（${pkgBareName}）`).toBeVisible({ timeout: 30_000 })
   await row.click({ force: true })
   await page.waitForTimeout(2_000)
@@ -160,15 +174,40 @@ async function returnToMainView(page: Page, log: string[]): Promise<void> {
     (await page.locator('button').evaluateAll((els) =>
       els.some((b) => /默认工作区|选择工作区/.test((b.getAttribute('aria-label') || b.textContent || '').trim())),
     )) || (await page.locator('[data-dswf-hero]').count()) > 0
-  for (let i = 0; i < 3 && !(await back()); i++) {
-    const newSession = page.getByRole('button', { name: /新会话/ }).first()
-    if ((await newSession.count()) > 0) {
-      await newSession.click({ force: true }).catch(() => {})
-      log.push(`return-to-main: 新会话 clicked (round ${String(i + 1)})`)
+  let retried = false
+  for (let i = 0; i < 5 && !(await back()); i++) {
+    // 插件详情页归位（安装收尾停在行卡详情——「返回插件」先离场，新会话/Escape 均不达）
+    const leavePlugin = page.getByRole('button', { name: '返回插件' }).first()
+    if ((await leavePlugin.count()) > 0) {
+      await leavePlugin.click({ force: true }).catch(() => {})
+      log.push(`return-to-main: 返回插件 clicked (round ${String(i + 1)})`)
+      await page.waitForTimeout(3_000)
+      continue
+    }
+    // 重试告警横幅兜底（项目列表加载失败等——单次消费，不劫持归位轮次）
+    const retry = page.getByRole('button', { name: '重试', exact: true }).first()
+    if (!retried && (await retry.count()) > 0) {
+      retried = true
+      await retry.click({ force: true }).catch(() => {})
+      log.push('return-to-main: 重试 clicked')
+      await page.waitForTimeout(3_000)
+      continue
+    }
+    if (i >= 1) {
+      // 插件页整页路由（新会话/Escape 均不达）——浏览器历史后退归位（探针实证通道）
+      await page.goBack({ timeout: 15_000 }).catch(() => {})
+      log.push(`return-to-main: goBack 兜底 (round ${String(i + 1)})`)
     } else {
       await page.keyboard.press('Escape')
-      log.push(`return-to-main: 新会话钮缺席——Escape 兜底 (round ${String(i + 1)})`)
+      log.push('return-to-main: 归位钮缺席——Escape 兜底')
     }
+    await page.waitForTimeout(3_000)
+  }
+  // 右栏归位（主视图回位后右栏可能处于收起态——概览 tab 归 rightbar dock strip）
+  const openRightbar = page.getByRole('button', { name: '打开右侧边栏' }).first()
+  if ((await openRightbar.count()) > 0) {
+    await openRightbar.click({ force: true }).catch(() => {})
+    log.push('return-to-main: 打开右侧边栏 clicked')
     await page.waitForTimeout(3_000)
   }
 }
