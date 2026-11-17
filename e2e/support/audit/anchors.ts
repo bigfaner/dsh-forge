@@ -278,14 +278,19 @@ const isSkillName = (s: string): boolean => /^[a-z0-9][a-z0-9-]*$/.test(s)
 export function auditSkillReferencesResolved(root: string = REPO_ROOT): AuditFinding[] {
   const anchor = 'skill-refs-resolved'
   const findings: AuditFinding[] = []
-  const skillsDir = join(root, 'packages/plugin-forge/skills')
-  const mounted = new Set(
-    pathExists(skillsDir)
-      ? readdirSync(skillsDir, { withFileTypes: true })
-          .filter((e) => e.isDirectory())
-          .map((e) => e.name)
-      : [],
-  )
+  // 挂载技能集（fix-8 断言面随迁）：技能挂载面随 1.9/1.10 迁移分域——fix-bug/investigate-bug/
+  // grilling/loop-blocking 物理落位 plugins/spec/skills（specSkillsDir 锚 @dsh-forge/spec），
+  // plugin-forge 本域目录保留为并集成员（现空）。解析集 = 两域并集（引用可解析性判定
+  // 以真实挂载面为准，断言强度不变——悬空引用仍必 findings）。
+  const skillsDirs = ['packages/plugin-forge/skills', 'plugins/spec/skills'] as const
+  const mounted = new Set<string>()
+  for (const dir of skillsDirs) {
+    const absDir = join(root, dir)
+    if (!pathExists(absDir)) continue
+    for (const e of readdirSync(absDir, { withFileTypes: true })) {
+      if (e.isDirectory()) mounted.add(e.name)
+    }
+  }
   const mountedList = [...mounted].sort().join('/') || '空'
   let refCount = 0
   const checkSkillName = (rel: string, line: number, kind: string, name: string): void => {
