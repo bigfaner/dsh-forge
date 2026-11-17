@@ -56,7 +56,7 @@ function fakeCtx(): Context {
 }
 
 describe('端点面 pin（gateway SRC 端点真源——strict 生成贡献锁定，手写 descriptor 表已退役）', () => {
-  it('forgeProjects：list/register/deriveTaskStoreDir/update 四端点（一元直通；update = sidebar 五功能写面 1.6）', () => {
+  it('forgeProjects：list/register/deriveTaskStoreDir/update 四端点（deriveTaskStoreDir = lib-path 真派生端点，占位已退役）', () => {
     const svc = new ForgeProjectsRemote(fakeCtx(), {})
     expect(endpointsOf(svc)).toEqual(['list', 'register', 'deriveTaskStoreDir', 'update'])
   })
@@ -474,6 +474,43 @@ describe('ForgeProjectsRemote.deriveTaskStoreDir（bug 8de6b903——占位端�
     })
     await expect(svc.deriveTaskStoreDir('Z:\\ws\\demo')).resolves.toEqual({ dir: 'T:\\tasks\\self@10' })
     expect(diag.join('\n')).toContain('self-derive 单装态兜底承接')
+  })
+
+  it('派生失败 fail-soft diag emit（host-integration-fixes/1.3）：typed 错误面上抛 + diagEmit event=project-derive-store-dir 断言在座', async () => {
+    const diagEmit = vi.fn<(p: { level: string; event: string; message: string }) => void>()
+    const svc = new ForgeProjectsRemote(fakeCtx(), { diagEmit })
+    await expect(svc.deriveTaskStoreDir('Z:\\x')).rejects.toThrow(
+      unavailableMessage('deriveTaskStoreDir', 'projects'),
+    )
+    expect(diagEmit).toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'warn', event: 'project-derive-store-dir' }),
+    )
+    expect(diagEmit.mock.calls[0]?.[0]?.message).toContain('projects')
+  })
+
+  it('selfDerive 兜底失败：typed 错误原样上抛（真失败不遮蔽）+ diagEmit 留痕（携带失败因）', async () => {
+    const diagEmit = vi.fn<(p: { level: string; event: string; message: string }) => void>()
+    const svc = new ForgeProjectsRemote(fakeCtx(), {
+      selfDerive: () => async () => {
+        throw new Error('tasksHome 未注入')
+      },
+      diagEmit,
+    })
+    await expect(svc.deriveTaskStoreDir('Z:\\x')).rejects.toThrow('tasksHome 未注入')
+    expect(diagEmit).toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'warn', event: 'project-derive-store-dir' }),
+    )
+    expect(diagEmit.mock.calls[0]?.[0]?.message).toContain('tasksHome 未注入')
+  })
+
+  it('派生成功路径零 diagEmit warn 发射（只留常规 diag 行，不噪声化）', async () => {
+    const diagEmit = vi.fn<(p: { level: string; event: string; message: string }) => void>()
+    const svc = new ForgeProjectsRemote(fakeCtx(), {
+      deriveTaskStoreDir: () => ({ deriveTaskStoreDir: async () => ({ dir: 'T:\\tasks\\demo@1a2b3c4d' }) }),
+      diagEmit,
+    })
+    await expect(svc.deriveTaskStoreDir('Z:\\ws\\demo')).resolves.toEqual({ dir: 'T:\\tasks\\demo@1a2b3c4d' })
+    expect(diagEmit).not.toHaveBeenCalled()
   })
 
   it('core face 在场时 selfDerive 不接管（优先级纪律——集成态派生根与注册闭包不分叉）', async () => {

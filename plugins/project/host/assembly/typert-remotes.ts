@@ -97,6 +97,8 @@ export interface ForgeTypertDeps {
   readonly followIntervalMs?: number;
   /** 诊断缝（装配/降级留痕——缺席 console 兜底，client 束豁免面同插件先例） */
   readonly diag?: (line: string) => void;
+  /** typed 诊断发射缝（AGENTS §7——派生失败等错误源 typed emit，event 用功能域前缀；缺席零发射） */
+  readonly diagEmit?: (payload: { readonly level: "warn"; readonly event: string; readonly message: string }) => void;
   /**
    * 注册后自探针缝（boot 竞速根治——1.2 复核欠账 R2-竞速支 host 半）：typertGateway
    * invoke 直探（serve 层认领自证——装配序要求注册先于 gateway 首个 /api 探测，F3
@@ -139,6 +141,7 @@ export class ForgeProjectsRemote extends TypertRemoteService {
   private readonly derive: LazyDomainService;
   private readonly selfDerive: LazyDomainService;
   private readonly diag: ((line: string) => void) | undefined;
+  private readonly diagEmit: ForgeTypertDeps["diagEmit"];
 
   constructor(ctx: Context, deps: ForgeTypertDeps) {
     super(ctx, "forgeProjectsController", { namespace: "forgeProjects" });
@@ -146,6 +149,7 @@ export class ForgeProjectsRemote extends TypertRemoteService {
     this.derive = deps.deriveTaskStoreDir ?? (() => undefined);
     this.selfDerive = deps.selfDerive ?? (() => undefined);
     this.diag = deps.diag;
+    this.diagEmit = deps.diagEmit;
   }
 
   /** 项目清单（UI 台账/选择器数据源） */
@@ -167,25 +171,36 @@ export class ForgeProjectsRemote extends TypertRemoteService {
   }
 
   /**
-   * 任务库派生行（core forgeProjects 服务专属——本插件 port 不承载）：core face 在场
-   * （宿主集成态）恒委托 core（bug 8de6b903：占位端点恒抛 unavailable 遮蔽 core 真实现
-   * ——不遮蔽真失败纪律，集成态派生根与注册闭包同 core 单源不分叉）；core face 缺席/劣形
-   * （单装态）= selfDerive 插件自链兜底（1.32②——dsh desktop 派生行不再恒 unavailable）；
-   * 兜底亦缺席 = typed unavailable 诚实拒绝。
+   * 任务库派生行（lib-path 单源真派生端点——占位已退役）：core face 在场（宿主集成态）
+   * 恒委托 core（bug 8de6b903——不遮蔽真失败纪律，集成态派生根与注册闭包同 core 单源
+   * 不分叉）；core face 缺席/劣形（单装态）= selfDerive 插件自链兜底（1.32②——tasksHome
+   * 三级解析与官方 forge.project_home 锚同口径：config.tasksHome > env DSH_FORGE_TASKS_HOME
+   * > 宿主 forge-workspaces 数据域约定）；兜底亦缺席 = typed unavailable 诚实拒绝。
+   * 派生失败 fail-soft 观测面（AGENTS §7）：typed 错误原样上抛（UI 派生行降级「—」）+
+   * diagEmit event=project-derive-store-dir 留痕——失败不静默，成功路径零发射。
    */
   @Remote
   async deriveTaskStoreDir(workspaceDir: string, signal?: AbortSignal): Promise<DeriveTaskStoreDirResult> {
     signal?.throwIfAborted();
-    const face = this.derive() as
-      | { deriveTaskStoreDir?: (q: { workspaceDir: string }) => Promise<DeriveTaskStoreDirResult> }
-      | undefined;
-    if (face !== undefined && typeof face.deriveTaskStoreDir === "function") {
-      return await face.deriveTaskStoreDir({ workspaceDir });
+    try {
+      const face = this.derive() as
+        | { deriveTaskStoreDir?: (q: { workspaceDir: string }) => Promise<DeriveTaskStoreDirResult> }
+        | undefined;
+      if (face !== undefined && typeof face.deriveTaskStoreDir === "function") {
+        return await face.deriveTaskStoreDir({ workspaceDir });
+      }
+      const fallback = this.selfDerive() as ((workspaceDir: string) => Promise<DeriveTaskStoreDirResult>) | undefined;
+      if (fallback === undefined) throw unavailable("deriveTaskStoreDir", "projects");
+      this.diag?.("[project-typert] deriveTaskStoreDir core face 缺席——self-derive 单装态兜底承接");
+      return await fallback(workspaceDir);
+    } catch (cause) {
+      this.diagEmit?.({
+        level: "warn",
+        event: "project-derive-store-dir",
+        message: `deriveTaskStoreDir 派生失败（typed 上抛，UI 派生行降级）：${messageOf(cause)}`,
+      });
+      throw cause;
     }
-    const fallback = this.selfDerive() as ((workspaceDir: string) => Promise<DeriveTaskStoreDirResult>) | undefined;
-    if (fallback === undefined) throw unavailable("deriveTaskStoreDir", "projects");
-    this.diag?.("[project-typert] deriveTaskStoreDir core face 缺席——self-derive 单装态兜底承接");
-    return await fallback(workspaceDir);
   }
 
   /** 项目行变更（sidebar 五功能写面：rename/archived/sortOrders patch——host 权威 registry 写入） */

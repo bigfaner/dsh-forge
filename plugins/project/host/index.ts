@@ -308,6 +308,9 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
         diag(line);
         diagEmit?.({ event: "typert-remote-register", level: "warn", message: line });
       },
+      // 派生失败 typed 诊断发射面（AGENTS §7——event 前缀 project-derive-store-dir；
+      // 与注册诊断同一 emitDiagOrFallback 桥接，缺席宿主零发射）
+      diagEmit,
       // 注册后自探针缝（boot 竞速根治——1.2 复核欠账 R2-竞速支 host 半）：typertGateway
       // invoke 直探 = serve 层认领自证（注册完成行后时点即装配序判据——先于 client mount
       // 首探；gateway 缺席/调用失败 = 自探针失败诊断行，fail-soft 不阻载）。
