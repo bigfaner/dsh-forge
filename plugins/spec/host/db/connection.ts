@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type Database from "better-sqlite3";
 import { openDatabase } from "@dsh-forge/lib-db";
 import {
+  SPEC_DB_SCHEMA_DOMAIN,
   SPEC_DB_SCHEMA_VERSION,
   SPEC_MIGRATIONS,
   specTableNames,
@@ -15,7 +16,7 @@ import { SpecRepo } from "./repositories/spec-repo.js";
 import { TransitionsRepo } from "./repositories/transitions-repo.js";
 import { DocsRepo } from "./repositories/docs-repo.js";
 
-export { SPEC_DB_SCHEMA_VERSION, SPEC_MIGRATIONS, specTableNames, type SpecDbTables };
+export { SPEC_DB_SCHEMA_DOMAIN, SPEC_DB_SCHEMA_VERSION, SPEC_MIGRATIONS, specTableNames, type SpecDbTables };
 
 export interface SpecDbOpts {
   /** 库文件覆盖（':memory:' 供域逻辑测试；缺省 = {home}/forge/db/spec/spec.db） */
@@ -47,6 +48,9 @@ export function openSpecDb(home: string, opts: SpecDbOpts = {}): SpecDomainDb {
   const db = openDatabase(file, {
     migrations: SPEC_MIGRATIONS,
     schemaVersion: SPEC_DB_SCHEMA_VERSION,
+    // 分域版本线锚（R3-dba）：版本门只判读 spec 域版本线——共库形态下 knowledge/task-loop
+    // 先行迁移抬升的异域版本行不触发拒开（bug 34645ce2 处方；单装形态语义不变）。
+    domain: SPEC_DB_SCHEMA_DOMAIN,
   })
   db.pragma("busy_timeout = 5000")
   const tables = specTableNames()

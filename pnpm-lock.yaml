@@ -765,6 +765,9 @@ importers:
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@dsh-forge/lib-db':
+        specifier: workspace:*
+        version: link:../../lib/db
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path

@@ -32,6 +32,14 @@ export interface StorageMigration {
 export const STORAGE_SCHEMA_VERSION = 7
 
 /**
+ * 分域版本线锚（R3-dba「锚域不锚表集合」）：openDatabase domain 选项值——共库形态下
+ * 版本门只判读 knowledge 域版本线，spec/task-loop 等异域版本行不触发拒开；版本行/
+ * 指纹行按本域分域写，异域行零触碰（bug 34645ce2 处方——全局 schema_meta 线写法退役，
+ * fix-3 task-loop 同配方）；单装缺省形态同锚（自持库单域独占，语义不变）。
+ */
+export const KNOWLEDGE_DB_SCHEMA_DOMAIN = 'knowledge'
+
+/**
  * v1：schema_meta（版本线本体）+ 自持注册表 projects。
  * 注册键 = ws_path canonical（realpath 归一——open.ts/registry.ts canonicalWsPath），
  * knowledge_dir 列承载项目知识库目录（种子迁移任务自此列承接 core projects.knowledge_dir）。
@@ -40,7 +48,9 @@ export const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
   {
     version: 1,
     statements: [
-      `CREATE TABLE schema_meta (
+      // 版本线锚表（lib/db 机制基建——分域锚域，锚域不锚表集合）——IF NOT EXISTS：
+      // 共库形态锚表由先开域（或 lib/db 分域机制）建立，本域不重建（bug 34645ce2）。
+      `CREATE TABLE IF NOT EXISTS schema_meta (
     version     INTEGER PRIMARY KEY,
     applied_at  TEXT    NOT NULL
 )`,
@@ -328,7 +338,10 @@ export const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
  * targetVersion 超出当前库版本或本代码版本线 = 裸错（调用方 fail-loud）。
  */
 export function downgradeKnowledgeSchema(db: Database.Database, targetVersion: number): number {
-  const current = db.prepare<unknown[], { v: number | null }>(`SELECT MAX(version) AS v FROM schema_meta`).get()
+  // 版本线读删一律锚本域（分域锚表——共库形态下异域版本行零触碰，bug 34645ce2 同配方）。
+  const current = db
+    .prepare<unknown[], { v: number | null }>(`SELECT MAX(version) AS v FROM schema_meta WHERE domain = ?`)
+    .get(KNOWLEDGE_DB_SCHEMA_DOMAIN)
   const from = current?.v ?? 0
   if (targetVersion >= from) {
     throw new Error(`降级目标 ${targetVersion} 不低于库内版本 ${from}——非降级路径`)
@@ -346,7 +359,9 @@ export function downgradeKnowledgeSchema(db: Database.Database, targetVersion: n
     }
     db.transaction(() => {
       for (const stmt of stmts) db.prepare(stmt).run()
-      db.prepare(`DELETE FROM schema_meta WHERE version = ?`).run(migration.version)
+      db.prepare(`DELETE FROM schema_meta WHERE version = ? AND domain = ?`).run(migration.version, KNOWLEDGE_DB_SCHEMA_DOMAIN)
+      // 指纹行随版本行同事务撤销（lib/db applyMigration 语义对称——重开重迁移不撞 UNIQUE）。
+      db.prepare(`DELETE FROM migration_digests WHERE version = ? AND domain = ?`).run(migration.version, KNOWLEDGE_DB_SCHEMA_DOMAIN)
     })()
   }
   return targetVersion

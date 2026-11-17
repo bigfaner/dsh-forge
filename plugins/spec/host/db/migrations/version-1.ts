@@ -14,6 +14,13 @@ import type { Migration } from "@dsh-forge/lib-db";
 /** spec.db schema 版本上限（独立版本线；version 1 起新线）。 */
 export const SPEC_DB_SCHEMA_VERSION = 1;
 
+/**
+ * 分域版本线锚（R3-dba「锚域不锚表集合」）：openDatabase domain 选项值——共库形态下
+ * 版本门只判读 spec 域版本线，knowledge/task-loop 等异域先行抬升的版本不触发拒开
+ * （bug 34645ce2 处方，fix-3 task-loop 同配方）；单装缺省形态同锚（自持库单域独占，语义不变）。
+ */
+export const SPEC_DB_SCHEMA_DOMAIN = "spec";
+
 /** 表名常量（唯一模板面——connection/repositories 共此单源；恒 spec_ 前缀）。 */
 export interface SpecDbTables {
   specs: string;
@@ -41,8 +48,9 @@ export const SPEC_MIGRATIONS: readonly Migration[] = [
   {
     version: 1,
     statements: [
-      // lib/db 机制基建表（版本线锚域，entities.md §6①）。
-      `CREATE TABLE schema_meta (
+      // lib/db 机制基建表（版本线锚域，entities.md §6①）——IF NOT EXISTS：共库形态锚表由
+      // 先开域（或 lib/db 分域机制）建立，本域不重建（bug 34645ce2）。
+      `CREATE TABLE IF NOT EXISTS schema_meta (
     version     INTEGER PRIMARY KEY,
     applied_at  TEXT    NOT NULL
 )`,

@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
 import { BUSY_TIMEOUT_MS } from '../../host/storage/concurrency.js'
 import { ensureKnowledgeDbDir, openKnowledgeDatabase } from '../../host/storage/open.js'
-import { STORAGE_SCHEMA_VERSION } from '../../host/storage/schema.js'
+import { KNOWLEDGE_DB_SCHEMA_DOMAIN, STORAGE_SCHEMA_VERSION } from '../../host/storage/schema.js'
 
 const roots: string[] = []
 function tmpRoot(): string {
@@ -65,15 +65,16 @@ describe('A2 open：单文件全表同库 + 并发 PRAGMA + 版本线', () => {
     }
   })
 
-  it('版本门：库内 version 超出本代码上限 → 拒开（句柄不泄漏）', () => {
+  it('版本门：knowledge 域线 version 超出本代码上限 → 拒开（UnsupportedSchemaVersionError，句柄不泄漏）', () => {
     const file = join(tmpRoot(), 'knowledge.db')
     const db = openKnowledgeDatabase(file)
-    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (?, ?)`).run(
+    db.prepare(`INSERT INTO schema_meta (domain, version, applied_at) VALUES (?, ?, ?)`).run(
+      KNOWLEDGE_DB_SCHEMA_DOMAIN,
       STORAGE_SCHEMA_VERSION + 1,
       new Date().toISOString(),
     )
     db.close()
-    expect(() => openKnowledgeDatabase(file)).toThrow(/exceeds supported/)
+    expect(() => openKnowledgeDatabase(file)).toThrow(/超出本应用支持上限/)
     // 拒开后句柄已关——同进程可再开普通库（不残留句柄锁）
     const other = openKnowledgeDatabase(join(tmpRoot(), 'other.db'))
     other.close()
