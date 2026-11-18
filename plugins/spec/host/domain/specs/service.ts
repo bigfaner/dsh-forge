@@ -322,7 +322,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     },
 
     transitionSpec(input) {
-      // actor 值域守卫：仅用户动作通道（plugin-tool / ui）——accepted human-only 纪律锚
+      // actor 值域守卫：仅用户动作通道（plugin-tool / ui）——completed human-only 纪律锚
       if (input.actor !== "plugin-tool" && input.actor !== "ui") {
         throw new SpecError("ERR_SPEC_ACTOR_INVALID", `非法动作者通道：${input.actor}`, {
           actor: input.actor,
