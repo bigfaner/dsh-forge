@@ -9,6 +9,8 @@ import type Database from "better-sqlite3";
 import { deriveDirName } from "@dsh-forge/lib-path";
 import { withTransaction } from "@dsh-forge/lib-db";
 import type { DocsRepo } from "../../db/repositories/docs-repo.js";
+import type { MilestoneRepo } from "../../db/repositories/milestone-repo.js";
+import type { RoadmapRepo } from "../../db/repositories/roadmap-repo.js";
 import type { SpecRepo } from "../../db/repositories/spec-repo.js";
 import type { TransitionsRepo } from "../../db/repositories/transitions-repo.js";
 import type {
@@ -18,6 +20,7 @@ import type {
   TransitionActor,
 } from "../../db/row-types.js";
 import { isSpecError, SpecError } from "./errors.js";
+import { assertMilestoneLinkable } from "./milestone-link.js";
 import { specMachine } from "../status-machines.js";
 import type { SpecTransitionGuard } from "./guards.js";
 
@@ -44,6 +47,8 @@ export interface CreateSpecInput {
   /** Spec 文档登记路径（相对项目根，随参显式——.forge/specs/{slug}/spec.md 惯例） */
   docRelPath: string;
   docContent?: string;
+  /** 挂链 milestone（plugin-spec-roadmaps 1.13：缺席 = 未挂链；可挂链性经 assertMilestoneLinkable 守卫） */
+  milestoneId?: string;
 }
 
 export interface UpdateSpecInput {
@@ -52,6 +57,8 @@ export interface UpdateSpecInput {
   title?: string;
   tiers?: string[];
   docRelPath?: string;
+  /** 改挂链（plugin-spec-roadmaps 1.13）：改指 = 新 milestoneId（同守卫）；null = 摘链；undefined = 不动挂链 */
+  milestoneId?: string | null;
 }
 
 export interface TransitionSpecInput {
@@ -69,6 +76,9 @@ export interface SpecVerbDeps {
     specs: SpecRepo;
     transitions: TransitionsRepo;
     docs: DocsRepo;
+    /** 挂链守卫查询面（plugin-spec-roadmaps 1.13——assertMilestoneLinkable 单源消费） */
+    milestones: MilestoneRepo;
+    roadmaps: RoadmapRepo;
   };
   /** 文件写缝（code-design 替身位置①）：装配面注入真实现（tmp+rename），测试注入桩。
    *  第三参 projectKey = 归属键（plugin-spec 1.4：装配面真实现按键解析项目检出根落盘）；
@@ -222,6 +232,11 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
           { docRelPath: input.docRelPath },
         );
       }
+      // 挂链守卫（plugin-spec-roadmaps 1.13 校验门追加一门，其余序列零改动）：
+      // milestone 缺席 → ERR_SPEC_MILESTONE_UNKNOWN；跨 project → ERR_SPEC_MILESTONE_PROJECT_MISMATCH
+      if (input.milestoneId !== undefined) {
+        assertMilestoneLinkable(repos, projectKey, input.milestoneId);
+      }
       const ts = now();
       const id = generateId();
       const content = input.docContent ?? renderDefaultSpecDoc(input);
@@ -234,6 +249,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
           specStatus: "draft",
           tiers,
           projectKey,
+          milestoneId: input.milestoneId ?? null,
           createdAt: ts,
           updatedAt: ts,
         };
@@ -263,6 +279,10 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
           { docRelPath: input.docRelPath },
         );
       }
+      // 改挂链走同一守卫单源（createSpec 同径；null = 摘链免守卫）
+      if (input.milestoneId !== undefined && input.milestoneId !== null) {
+        assertMilestoneLinkable(repos, projectKey, input.milestoneId);
+      }
       const ts = now();
       return withTransaction(db, () => {
         repos.specs.updateFields(
@@ -270,6 +290,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
           {
             ...(input.title !== undefined ? { title: input.title } : {}),
             ...(tiers !== undefined ? { tiers } : {}),
+            ...(input.milestoneId !== undefined ? { milestoneId: input.milestoneId } : {}),
           },
           ts,
         );

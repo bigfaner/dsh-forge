@@ -2,6 +2,7 @@
 // 必含 Goal 守卫 / 完成态冻结 / 边表逐格（含 completed 不可 reverse）/ 驳回与退回留痕 /
 // completed human-only / 台账 append-only / 两写原子性（非法流转零变化）。
 import { describe, expect, it } from "vitest";
+import { deriveDirName } from "@dsh-forge/lib-path";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
 import {
   createForgeSpecsService,
@@ -92,6 +93,87 @@ describe("updateSpec 字段改写", () => {
       expect(codeOf(() => h.service.updateSpec({ cwd: CWD, slug: "ghost", title: "x" }))).toBe(
         "ERR_SPEC_NOT_FOUND",
       );
+    } finally {
+      h.domain.db.close();
+    }
+  });
+});
+
+// ── updateSpec 改挂链（plugin-spec-roadmaps 1.13，code-design §2 扩展挂点：同一守卫单源）──
+
+describe("updateSpec 改挂链", () => {
+  function seedMilestone(h: ReturnType<typeof harness>, roadmapKey: string, roadmapId: string, milestoneId: string) {
+    h.domain.repos.roadmaps.insertRoadmap({
+      id: roadmapId,
+      projectKey: roadmapKey,
+      slug: `${roadmapId}-slug`,
+      title: "路线图",
+      brief: null,
+      acJson: [],
+      roadmapStatus: "in_progress",
+      createdAt: "2026-11-18T00:00:00.000Z",
+      updatedAt: "2026-11-18T00:00:00.000Z",
+    });
+    h.domain.repos.milestones.insertMilestone({
+      id: milestoneId,
+      roadmapId,
+      title: "里程碑",
+      brief: null,
+      acJson: [],
+      milestoneStatus: "in_progress",
+      createdAt: "2026-11-18T00:00:00.000Z",
+      updatedAt: "2026-11-18T00:00:00.000Z",
+    });
+  }
+  const KEY = deriveDirName(CWD);
+
+  it("改挂链成功：milestone_id 改写 + 回读一致", () => {
+    const h = harness();
+    try {
+      const spec = h.seed();
+      seedMilestone(h, KEY, "rm-1", "ms-1");
+      const row = h.service.updateSpec({ cwd: CWD, slug: "demo-spec", milestoneId: "ms-1" });
+      expect(row.milestoneId).toBe("ms-1");
+      expect(h.domain.repos.specs.findMilestoneId(spec.id)).toBe("ms-1");
+    } finally {
+      h.domain.db.close();
+    }
+  });
+
+  it("改挂链 milestoneId 缺席 → ERR_SPEC_MILESTONE_UNKNOWN", () => {
+    const h = harness();
+    try {
+      h.seed();
+      expect(codeOf(() => h.service.updateSpec({ cwd: CWD, slug: "demo-spec", milestoneId: "ms-nope" }))).toBe(
+        "ERR_SPEC_MILESTONE_UNKNOWN",
+      );
+    } finally {
+      h.domain.db.close();
+    }
+  });
+
+  it("改挂链跨 project → ERR_SPEC_MILESTONE_PROJECT_MISMATCH", () => {
+    const h = harness();
+    try {
+      h.seed();
+      seedMilestone(h, "other", "rm-2", "ms-2");
+      expect(codeOf(() => h.service.updateSpec({ cwd: CWD, slug: "demo-spec", milestoneId: "ms-2" }))).toBe(
+        "ERR_SPEC_MILESTONE_PROJECT_MISMATCH",
+      );
+    } finally {
+      h.domain.db.close();
+    }
+  });
+
+  it("milestoneId 传 null → 摘链（milestone_id 落 NULL），零守卫拒收", () => {
+    const h = harness();
+    try {
+      const spec = h.seed();
+      seedMilestone(h, KEY, "rm-1", "ms-1");
+      h.service.updateSpec({ cwd: CWD, slug: "demo-spec", milestoneId: "ms-1" });
+      const row = h.service.updateSpec({ cwd: CWD, slug: "demo-spec", milestoneId: null });
+      expect(row.milestoneId ?? null).toBeNull();
+      expect(h.domain.repos.specs.findMilestoneId(spec.id)).toBeNull();
     } finally {
       h.domain.db.close();
     }

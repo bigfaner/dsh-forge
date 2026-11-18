@@ -22,7 +22,7 @@ function harness() {
   };
   const service = createForgeSpecsService({
     db: domain.db,
-    repos: { specs: domain.repos.specs, transitions: domain.repos.transitions, docs: domain.repos.docs },
+    repos: domain.repos,
     writeSpecDoc: () => {},
     now: () => BASE,
     generateId: () => `id-${String(++n).padStart(4, "0")}`,

@@ -144,6 +144,7 @@ exports[`forgeSpecs 端点族契约快照（真服务 + 假 identity） > query�
     "spec": {
       "createdAt": "<createdAt>",
       "id": "<id>",
+      "milestoneId": null,
       "projectKey": "<projectKey>",
       "slug": "alpha",
       "specStatus": "draft",

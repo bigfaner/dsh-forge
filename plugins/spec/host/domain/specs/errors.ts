@@ -22,6 +22,7 @@ export type SpecErrorCode =
    | "ERR_SPEC_ROADMAP_UNKNOWN"
    | "ERR_SPEC_ROADMAP_TERMINAL"
    | "ERR_SPEC_MILESTONE_UNKNOWN"
+   | "ERR_SPEC_MILESTONE_PROJECT_MISMATCH"
    | "ERR_SPEC_MOVE_ANCHOR_INVALID";
 
 export interface SpecErrorData {

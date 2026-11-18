@@ -11,6 +11,7 @@ interface SpecRowDb {
   spec_status: string;
   tiers_json: string;
   project_key: string;
+  milestone_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +24,7 @@ function toSpec(row: SpecRowDb): SpecRow {
     specStatus: row.spec_status as SpecStatus,
     tiers: JSON.parse(row.tiers_json) as string[],
     projectKey: row.project_key,
+    milestoneId: row.milestone_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -34,12 +36,14 @@ export class SpecRepo {
     private readonly t: SpecDbTables,
   ) {}
 
+  /** insertSpecAggregate（code-design §6 形态）——milestone_id 可选列零破坏
+   *  （plugin-spec-roadmaps 1.13：undefined/null = 未挂链 NULL）。 */
   insert(row: SpecRow): void {
     this.db
       .prepare(
         `INSERT INTO ${this.t.specs}
-         (id, slug, title, spec_status, tiers_json, project_key, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, slug, title, spec_status, tiers_json, project_key, milestone_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         row.id,
@@ -48,6 +52,7 @@ export class SpecRepo {
         row.specStatus,
         JSON.stringify(row.tiers),
         row.projectKey,
+        row.milestoneId ?? null,
         row.createdAt,
         row.updatedAt,
       );
@@ -75,7 +80,7 @@ export class SpecRepo {
 
   updateFields(
     id: string,
-    patch: { title?: string; tiers?: string[] },
+    patch: { title?: string; tiers?: string[]; milestoneId?: string | null },
     updatedAt: string,
   ): void {
     const sets: string[] = ["updated_at = ?"];
@@ -87,6 +92,10 @@ export class SpecRepo {
     if (patch.tiers !== undefined) {
       sets.push("tiers_json = ?");
       args.push(JSON.stringify(patch.tiers));
+    }
+    if (patch.milestoneId !== undefined) {
+      sets.push("milestone_id = ?");
+      args.push(patch.milestoneId);
     }
     args.push(id);
     this.db.prepare(`UPDATE ${this.t.specs} SET ${sets.join(", ")} WHERE id = ?`).run(...args);

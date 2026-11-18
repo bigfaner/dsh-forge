@@ -14,6 +14,8 @@ export interface SpecRow {
   /** tiers 交付档位（封闭四值多选 ui/api/pure-logic/docs；[] = 未声明） */
   tiers: string[];
   projectKey: string;
+  /** 挂链 milestone（plugin-spec-roadmaps v2 milestone_id 列；undefined/null = 未挂链） */
+  milestoneId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

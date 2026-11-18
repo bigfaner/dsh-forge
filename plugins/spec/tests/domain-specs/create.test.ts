@@ -199,3 +199,95 @@ describe("createSpec 校验门（事务外拒收，零落库）", () => {
     }
   });
 });
+
+// ── createSpec 挂链扩展（plugin-spec-roadmaps 1.13，code-design §2）──
+
+describe("createSpec 挂链（milestoneId 可选列）", () => {
+  it("挂链成功：milestone_id 落列 + 回读一致", () => {
+    const h = harness();
+    try {
+      h.domain.repos.roadmaps.insertRoadmap({
+        id: "rm-1",
+        projectKey: deriveDirName(CWD),
+        slug: "demo-roadmap",
+        title: "路线图",
+        brief: null,
+        acJson: [],
+        roadmapStatus: "in_progress",
+        createdAt: "2026-11-18T00:00:00.000Z",
+        updatedAt: "2026-11-18T00:00:00.000Z",
+      });
+      h.domain.repos.milestones.insertMilestone({
+        id: "ms-1",
+        roadmapId: "rm-1",
+        title: "里程碑一",
+        brief: null,
+        acJson: [],
+        milestoneStatus: "in_progress",
+        createdAt: "2026-11-18T00:00:00.000Z",
+        updatedAt: "2026-11-18T00:00:00.000Z",
+      });
+      const row = h.service.createSpec({ ...h.validInput(), milestoneId: "ms-1" });
+      expect(row.milestoneId).toBe("ms-1");
+      const db = h.domain.db
+        .prepare(`SELECT milestone_id FROM spec_specs WHERE slug = 'demo-spec'`)
+        .get() as { milestone_id: string | null };
+      expect(db.milestone_id).toBe("ms-1");
+    } finally {
+      h.domain.db.close();
+    }
+  });
+
+  it("milestoneId 缺席 → ERR_SPEC_MILESTONE_UNKNOWN 且零落库", () => {
+    const h = harness();
+    try {
+      const input = { ...h.validInput(), milestoneId: "ms-nope" };
+      expect(codeOf(() => h.service.createSpec(input))).toBe("ERR_SPEC_MILESTONE_UNKNOWN");
+      expect(h.counts()).toEqual({ specs: 0, goals: 0, acs: 0, docs: 0 });
+    } finally {
+      h.domain.db.close();
+    }
+  });
+
+  it("跨 project → ERR_SPEC_MILESTONE_PROJECT_MISMATCH 且零落库", () => {
+    const h = harness();
+    try {
+      h.domain.repos.roadmaps.insertRoadmap({
+        id: "rm-2",
+        projectKey: "other",
+        slug: "other-roadmap",
+        title: "他项目路线图",
+        brief: null,
+        acJson: [],
+        roadmapStatus: "in_progress",
+        createdAt: "2026-11-18T00:00:00.000Z",
+        updatedAt: "2026-11-18T00:00:00.000Z",
+      });
+      h.domain.repos.milestones.insertMilestone({
+        id: "ms-2",
+        roadmapId: "rm-2",
+        title: "他项目里程碑",
+        brief: null,
+        acJson: [],
+        milestoneStatus: "in_progress",
+        createdAt: "2026-11-18T00:00:00.000Z",
+        updatedAt: "2026-11-18T00:00:00.000Z",
+      });
+      const input = { ...h.validInput(), milestoneId: "ms-2" };
+      expect(codeOf(() => h.service.createSpec(input))).toBe("ERR_SPEC_MILESTONE_PROJECT_MISMATCH");
+      expect(h.counts()).toEqual({ specs: 0, goals: 0, acs: 0, docs: 0 });
+    } finally {
+      h.domain.db.close();
+    }
+  });
+
+  it("milestoneId 缺省（undefined）→ 未挂链，milestone_id 落 NULL（零破坏）", () => {
+    const h = harness();
+    try {
+      const row = h.service.createSpec(h.validInput());
+      expect(row.milestoneId ?? null).toBeNull();
+    } finally {
+      h.domain.db.close();
+    }
+  });
+});
