@@ -20,7 +20,9 @@ export type SpecErrorCode =
   | "ERR_SPEC_REVIEW_GOAL_NOT_REVIEWING"
   | "ERR_SPEC_REVIEW_KIND_INVALID"
    | "ERR_SPEC_ROADMAP_UNKNOWN"
-   | "ERR_SPEC_ROADMAP_TERMINAL";
+   | "ERR_SPEC_ROADMAP_TERMINAL"
+   | "ERR_SPEC_MILESTONE_UNKNOWN"
+   | "ERR_SPEC_MOVE_ANCHOR_INVALID";
 
 export interface SpecErrorData {
   readonly code: SpecErrorCode;

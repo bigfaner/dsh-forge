@@ -188,6 +188,17 @@ export class SpecRepo {
     return { spec, goals };
   }
 
+  /** 挂链 milestone 读单源（plugin-spec-roadmaps 1.6 边沿二链入——acceptSpec 事务内重读
+   *  milestone_id；NULL 未挂链）。 */
+  findMilestoneId(specId: string): string | null {
+    const row = this.db
+      .prepare<unknown[], { milestone_id: string | null }>(
+        `SELECT milestone_id FROM ${this.t.specs} WHERE id = ?`,
+      )
+      .get(specId);
+    return row?.milestone_id ?? null;
+  }
+
   /** 聚合派生读面（plugin-spec-roadmaps 1.4，code-design §6）——milestone_id 等值圈行
    *  （idx_spec_specs_milestone partial 索引前缀 + spec_status 过滤列；NULL 未挂链行
    *  拒之索引外）：deriveMilestoneAchieved 输入单源（只出判定列，零全行搬运）。 */

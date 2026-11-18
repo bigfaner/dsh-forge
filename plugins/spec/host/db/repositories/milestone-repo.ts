@@ -113,6 +113,14 @@ export class MilestoneRepo {
     for (const a of assignments) stepTwo.run(a.seq, updatedAt, a.id, roadmapId);
   }
 
+  /** milestone_status 现值改写——唯一合法写径 = 推进动词两写事务闭包内调用
+   *  （domain/specs/objective-lifecycle.ts + spec-lifecycle.ts 边沿二链写）。 */
+  updateStatus(id: string, milestoneStatus: MilestoneRow["milestoneStatus"], updatedAt: string): void {
+    this.db
+      .prepare(`UPDATE ${this.t.milestones} SET milestone_status = ?, updated_at = ? WHERE id = ?`)
+      .run(milestoneStatus, updatedAt, id);
+  }
+
   /** uq(roadmap_id, seq) 前缀 seq 序。 */
   listByRoadmap(roadmapId: string): MilestoneRow[] {
     const rows = this.db
