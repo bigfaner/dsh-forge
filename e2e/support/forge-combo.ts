@@ -1,5 +1,5 @@
-// forge-combo e2e 支撑层（plugin-forge-combo 1.5 脚本任务）——两条宿主路径最小链
-// spec（tests/forge/<journey>/）共用机械锚读取面。
+// forge-combo e2e 支撑层（plugin-forge-combo 1.5 脚本任务；1.15 扩 desktop 实锚读面）——
+// 两条宿主路径最小链 spec（tests/forge/<journey>/）共用机械锚读取面。
 //
 // 被测物 = plugin-manager 正式安装的 @dsh-forge/forge 组合器 + 五件依赖闭包
 // （AGENTS 1.8——junction/dev 形态不作证据）。锚值核销来源：
@@ -7,10 +7,18 @@
 //   四件持库件 dbFile = {DSH_HOME}/forge/db/forge/forge.db、expert-squad 裸行）
 // - forge-bundle-absent 诊断：apps/host/src/boot/child.ts forgeBundleAbsentPayloads
 //   （fix-1——event 'forge-bundle-absent'、warn、逐件携裸包名 + reason）
+// - desktop profile 落点实锚（G3 核销，收口批 1.11 修订留痕）：apps/host/src/profile/
+//   paths.ts resolveHostPaths——packaged 形态 profileDir = {userData}/profile；
+//   {DSH_HOME}/profiles/desktop 恒不产生（反向锚）。诊断落盘面 = apps/host/src/
+//   telemetry/host-wiring.ts——logsDir = {userData}/logs（app-YYYYMMDD.jsonl）。
+// - 发布树（1.12 打包门交付物）：scripts/package-release.mjs assembleRelease 出树——
+//   聚合 forge = <tree>/forge（五条相对 file: 兄弟依赖）、solo 变体 = <tree>/solo/forge
+//   （零 file: 依赖 + 裸名插行原样）、五件成员 = <tree>/<bareId>/。
 // 环境门（真机收口轮置位，避免常规跑批误入）：
 //   FORGE_COMBO_E2E=1             总门（缺省整组 skip——台账 e2e/SMOKE-LEDGER.md）
 //   FORGE_COMBO_DSH_HOME=<dir>    隔离 dsh home（profiles/* 与 forge/db 落此）
 //   FORGE_COMBO_FORGE_DIR=<dir>   forge 目录（缺省 <repo>/plugins/forge）
+//   FORGE_COMBO_RELEASE_TREE=<dir> 1.12 发布树（desktop solo 通道——CT-DISK-09 路 C 安装物）
 //   FORGE_COMBO_DESKTOP_EXE=<exe> desktop 宿主安装产物 exe（旅程 1）
 //   FORGE_COMBO_DESKTOP_DSH=<bin> desktop 通道 CLI（缺省 'dsh'——desktop profile
 //                                 为保留名，npm CLI 拒管（CT-NPM-02）；desktop 通道经
@@ -59,6 +67,8 @@ export interface ComboEnv {
   readonly forgeDir: string
   readonly desktopExe?: string
   readonly desktopDshBin: string
+  /** 1.12 发布树（desktop solo 通道安装物——CT-DISK-09 路 C；收口轮置位） */
+  readonly releaseTree?: string
 }
 
 /** 隔离环境面（总门开启后必填项缺失 = 配置错误 fail-loud，不静默 skip） */
@@ -68,12 +78,14 @@ export function comboEnv(): ComboEnv {
   const dshHome = process.env.FORGE_COMBO_DSH_HOME
   const desktopExe = process.env.FORGE_COMBO_DESKTOP_EXE
   if (dshHome === undefined || dshHome === '') throw new Error('FORGE_COMBO_DSH_HOME 未置位（隔离 dsh home 必填）')
+  const releaseTree = process.env.FORGE_COMBO_RELEASE_TREE
   return {
     dshHome,
     dshBin: process.env.FORGE_COMBO_DSH_BIN ?? 'dsh',
     forgeDir: process.env.FORGE_COMBO_FORGE_DIR ?? join(ROOT, 'plugins', 'forge'),
     ...(desktopExe === undefined ? {} : { desktopExe }),
     desktopDshBin: process.env.FORGE_COMBO_DESKTOP_DSH ?? 'dsh',
+    ...(releaseTree === undefined || releaseTree === '' ? {} : { releaseTree }),
   }
 }
 
@@ -83,9 +95,9 @@ export interface CliResult {
   readonly stderr: string
 }
 
-/** run-once CLI 执行（DSH_HOME 定向隔离 home；非零退出码捕获不抛——失败面断言用） */
-export async function runDsh(bin: string, args: readonly string[], dshHome: string): Promise<CliResult> {
-  const env = { ...process.env, DSH_HOME: dshHome } as Record<string, string>
+/** run-once CLI 执行（DSH_HOME 定向隔离 home；extraEnv 补充 desktop 通道 userData 面等；非零退出码捕获不抛——失败面断言用） */
+export async function runDsh(bin: string, args: readonly string[], dshHome: string, extraEnv: Record<string, string> = {}): Promise<CliResult> {
+  const env = { ...process.env, DSH_HOME: dshHome, ...extraEnv } as Record<string, string>
   try {
     const { stdout, stderr } = await pexec(bin, [...args], { env, encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024 })
     return { code: 0, stdout, stderr }
@@ -324,3 +336,75 @@ export function findDispatchLogs(dshHome: string): readonly string[] {
 
 /** forge-bundle-absent 诊断事件名（fix-1 实锚——CT-DISK-07/CT-NPM-06 意向锚回填形态） */
 export const FORGE_BUNDLE_ABSENT_EVENT = 'forge-bundle-absent'
+
+// ── desktop 通道实锚读面（G3 核销 + host-wiring logsDir——1.15 收口批扩面） ──────────
+
+/** desktop profile 落点实锚（G3：packaged profileDir = {userData}/profile——paths.ts resolveHostPaths） */
+export function desktopProfileDir(userData: string): string {
+  return join(userData, 'profile')
+}
+
+export function desktopProfileNodeModules(userData: string): string {
+  return join(desktopProfileDir(userData), 'node_modules')
+}
+
+/** desktop 已装清单：{userData}/profile/package.json → dsh.profile.bundles */
+export function desktopInstalledBundles(userData: string): readonly string[] {
+  const file = join(desktopProfileDir(userData), 'package.json')
+  if (!existsSync(file)) return []
+  const pkg = JSON.parse(readFileSync(file, 'utf8')) as { dsh?: { profile?: { bundles?: string[] } } }
+  return pkg.dsh?.profile?.bundles ?? []
+}
+
+/** desktop profile 侧包条目目录（@dsh-forge/<short> 形） */
+export function desktopPkgEntryDir(userData: string, pkg: string): string {
+  return join(desktopProfileNodeModules(userData), '@dsh-forge', pkg.slice('@dsh-forge/'.length))
+}
+
+/** desktop 诊断事件行（host-wiring logsDir = {userData}/logs app-YYYYMMDD.jsonl——非 JSON 行容忍跳过） */
+export interface DesktopDiagEvent {
+  readonly file: string
+  readonly line: number
+  readonly level: string
+  readonly event: string
+  readonly message: string
+}
+
+export function desktopDiagEvents(userData: string): readonly DesktopDiagEvent[] {
+  const logsDir = join(userData, 'logs')
+  const out: DesktopDiagEvent[] = []
+  if (!existsSync(logsDir)) return out
+  const files = readdirSync(logsDir).filter((n) => /^app-\d{8}\.jsonl$/u.test(n)).sort()
+  for (const name of files) {
+    const file = join(logsDir, name)
+    const lines = readFileSync(file, 'utf8').split(/\r?\n/)
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i] ?? ''
+      if (line.trim() === '') continue
+      try {
+        const o = JSON.parse(line) as { event?: unknown; message?: unknown; level?: unknown }
+        if (typeof o.event === 'string') {
+          out.push({ file, line: i + 1, level: typeof o.level === 'string' ? o.level : '', event: o.event, message: typeof o.message === 'string' ? o.message : '' })
+        }
+      } catch {
+        // 非 JSON 行（截断/写中）容忍跳过——诊断读面为只读观察，不判 FAIL
+      }
+    }
+  }
+  return out
+}
+
+/** desktop forge-bundle-absent 事件全集（CT-DISK-07 留痕正锚 / CT-DISK-11 零发射反锚） */
+export function desktopAbsenceEvents(userData: string): readonly DesktopDiagEvent[] {
+  return desktopDiagEvents(userData).filter((e) => e.event === FORGE_BUNDLE_ABSENT_EVENT)
+}
+
+/**
+ * dump-config insert 条目断言字面（bug 13ffb081 fix-7 序列化形状——
+ * `- id: <bareId>` 行 + 缩进 `  name: '<bare>'` 行，\r?\n CRLF 容忍；
+ * 实锚样本 = task_logs 1.6/007-fcombo16c/dump-config.txt L373-400）。
+ */
+export function insertEntryPattern(bare: string): RegExp {
+  const bareId = bare.slice('@dsh-forge/'.length)
+  return new RegExp(`^- id: ${bareId}$\\r?\\n^  name: '${bare}'$`, 'm')
+}
