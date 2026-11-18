@@ -32,7 +32,10 @@ describe("human-only 机检（spec_status completed 写点单文件）", () => {
       .filter((f) => /updateStatus\((?:[^();]|"[^"]*"|'[^']*')*?["']completed["']/.test(readFileSync(f, "utf8")))
       .map((f) => f.replace(/\\/g, "/").split("/").slice(-2).join("/"))
       .sort();
-    expect(callers).toEqual(["specs/spec-lifecycle.ts"]);
+    // objective 验收确认动词（code-design §1 confirm*Achieved）为各自实体 kind 的
+    // human-only completed 写点单源——roadmap/milestone 侧与 spec 侧（spec-lifecycle）
+    // 分域对偶，spec_status 锚不变。
+    expect(callers).toEqual(["specs/milestone-service.ts", "specs/roadmap-service.ts", "specs/spec-lifecycle.ts"]);
     const lifecycle = readFileSync(join(hostDir, "domain/specs/spec-lifecycle.ts"), "utf8");
     expect(lifecycle.includes("updateStatus(")).toBe(true);
     expect(lifecycle.includes("decision === \"completed\" ? \"completed\"")).toBe(true);
