@@ -102,6 +102,24 @@ export const ERROR_CODES = [
   // ── plugin-spec 1.4（tool 入参防御收窄——args 原语 ToolArgsError 码锚；tool 失败面
   //    经 format 单源 errorCodeOf 判别，参数形状/词表违规以失败 DTO 回面不炸注册链） ──
   'ERR_TOOL_ARGS_INVALID', // → ToolArgsError：tool 入参形状/词表违规（执行点自证拒绝；400；message 带 tool 可读上下文）
+  // ── plugin-spec-roadmaps 1.5–1.8（spec 目标域扩池——1.5 Goal 终审/复核 + 1.6 生命周期 +
+  //    1.7 roadmap/milestone 服务域 + 1.8 include 封闭枚举；tool 失败面经 format 单源
+  //    errorCodeOf 判别，码须入册） ──
+  'ERR_SPEC_GOAL_ILLEGAL_TRANSITION', // → SpecError：Goal 终审非法边（携 from/to）
+  'ERR_SPEC_GOAL_REJECT_NOTE_REQUIRED', // → SpecError：Goal 终审驳回缺理由（400）
+  'ERR_SPEC_GOAL_NOT_FOUND', // → SpecError：goal 不存在或不属于该 spec（404）
+  'ERR_SPEC_REVIEW_GAP_NOTE_REQUIRED', // → SpecError：复核 failed 缺 gap_note（400）
+  'ERR_SPEC_REVIEW_GOAL_NOT_REVIEWING', // → SpecError：goal 未处 auto_reviewing 复核拒收（409）
+  'ERR_SPEC_REVIEW_KIND_INVALID', // → SpecError：复核对象档非法（400）
+  'ERR_SPEC_ROADMAP_UNKNOWN', // → SpecError：roadmap slug/id 未命中（404）
+  'ERR_SPEC_ROADMAP_TERMINAL', // → SpecError：completed roadmap 禁追加 milestone（409）
+  'ERR_SPEC_MILESTONE_UNKNOWN', // → SpecError：milestone id 未命中或不属于该 roadmap（404）
+  'ERR_SPEC_MILESTONE_PROJECT_MISMATCH', // → SpecError：挂链 milestone 跨 project（409）
+  'ERR_SPEC_MOVE_ANCHOR_INVALID', // → SpecError：move 锚点非法（互斥/缺席/自指）（400）
+  'ERR_SPEC_AC_INVALID', // → SpecError：ac_json 条目结构非法（400）
+  'ERR_SPEC_AC_ADDRESS_UNKNOWN', // → SpecError：milestone 条目 address 指向缺席（400）
+  'ERR_SPEC_CONFIRM_NOT_ACHIEVED', // → SpecError：验收确认前置不满足（聚合派生未达成）（409）
+  'ERR_SPEC_INCLUDE_UNKNOWN', // → SpecError：query 族 include 未知值（封闭枚举外——400）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

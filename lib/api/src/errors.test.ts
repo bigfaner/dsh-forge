@@ -85,8 +85,8 @@ describe('AC3 errors.ts 扩池 15 新码（M2 表逐条一致）', () => {
 })
 
 describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', () => {
-  it('ERROR_CODES = 52 码：… + 1.11 归拢两码（弱引用格式/归属键闸门）+ loop-phase-gate 三码（阶段门未收口 + block_source 在飞源/终态源——main 并入）', () => {
-    expect([...ERROR_CODES]).toHaveLength(52)
+  it('ERROR_CODES = 80 码：… + loop-phase-gate 三码 + plugin-spec 1.4 十二码/tool 入参码 + plugin-spec-roadmaps 1.5–1.8 十五码（goal 终审/复核 + 生命周期 + roadmap/milestone 服务域 + include 封闭枚举）', () => {
+    expect([...ERROR_CODES]).toHaveLength(80)
     expect([...ERROR_CODES].slice(21, 24)).toEqual(M3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(24, 27)).toEqual(S3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(27, 29)).toEqual(TASK_TOOLS_ERROR_TABLE.map(([code]) => code))
@@ -116,8 +116,40 @@ describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', ()
       'ERR_BUG_COVERAGE_ANCHOR_INVALID',
     ])
     expect([...ERROR_CODES].slice(48, 49)).toEqual(['ERR_DIR_PATH_INVALID'])
-    expect([...ERROR_CODES].slice(49)).toEqual(['ERR_PHASE_GATE_UNSETTLED', 'ERR_BLOCK_SOURCE_IN_PROGRESS', 'ERR_BLOCK_SOURCE_TERMINAL'])
-    expect(new Set(ERROR_CODES).size).toBe(52)
+    expect([...ERROR_CODES].slice(49, 52)).toEqual(['ERR_PHASE_GATE_UNSETTLED', 'ERR_BLOCK_SOURCE_IN_PROGRESS', 'ERR_BLOCK_SOURCE_TERMINAL'])
+    expect([...ERROR_CODES].slice(52, 64)).toEqual([
+      'ERR_SPEC_GOALS_EMPTY',
+      'ERR_SPEC_CRITERION_EMPTY',
+      'ERR_SPEC_TIERS_INVALID',
+      'ERR_SPEC_DUPLICATE_SLUG',
+      'ERR_SPEC_DUPLICATE_DOC_PATH',
+      'ERR_SPEC_PROJECT_KEY_DERIVATION',
+      'ERR_SPEC_NOT_FOUND',
+      'ERR_SPEC_ARCHIVED_FROZEN',
+      'ERR_SPEC_ILLEGAL_TRANSITION',
+      'ERR_SPEC_REJECT_NOTE_REQUIRED',
+      'ERR_SPEC_ACTOR_INVALID',
+      'ERR_SPEC_DOC_WRITE',
+    ])
+    expect([...ERROR_CODES].slice(64, 65)).toEqual(['ERR_TOOL_ARGS_INVALID'])
+    expect([...ERROR_CODES].slice(65)).toEqual([
+      'ERR_SPEC_GOAL_ILLEGAL_TRANSITION',
+      'ERR_SPEC_GOAL_REJECT_NOTE_REQUIRED',
+      'ERR_SPEC_GOAL_NOT_FOUND',
+      'ERR_SPEC_REVIEW_GAP_NOTE_REQUIRED',
+      'ERR_SPEC_REVIEW_GOAL_NOT_REVIEWING',
+      'ERR_SPEC_REVIEW_KIND_INVALID',
+      'ERR_SPEC_ROADMAP_UNKNOWN',
+      'ERR_SPEC_ROADMAP_TERMINAL',
+      'ERR_SPEC_MILESTONE_UNKNOWN',
+      'ERR_SPEC_MILESTONE_PROJECT_MISMATCH',
+      'ERR_SPEC_MOVE_ANCHOR_INVALID',
+      'ERR_SPEC_AC_INVALID',
+      'ERR_SPEC_AC_ADDRESS_UNKNOWN',
+      'ERR_SPEC_CONFIRM_NOT_ACHIEVED',
+      'ERR_SPEC_INCLUDE_UNKNOWN',
+    ])
+    expect(new Set(ERROR_CODES).size).toBe(80)
   })
 
   it('M3/S3/工具面/fix-bug/复发链新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {

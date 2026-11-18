@@ -90,6 +90,22 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_SPEC_ACTOR_INVALID: 'error-bar',
   ERR_SPEC_DOC_WRITE: 'error-bar',
   ERR_TOOL_ARGS_INVALID: 'error-bar',
+  // ── plugin-spec-roadmaps 1.5–1.8（goal 终审/复核 + 生命周期 + roadmap/milestone 服务域）──
+  ERR_SPEC_GOAL_ILLEGAL_TRANSITION: 'error-bar',
+  ERR_SPEC_GOAL_REJECT_NOTE_REQUIRED: 'error-bar',
+  ERR_SPEC_GOAL_NOT_FOUND: 'empty-state',
+  ERR_SPEC_REVIEW_GAP_NOTE_REQUIRED: 'error-bar',
+  ERR_SPEC_REVIEW_GOAL_NOT_REVIEWING: 'error-bar',
+  ERR_SPEC_REVIEW_KIND_INVALID: 'error-bar',
+  ERR_SPEC_ROADMAP_UNKNOWN: 'empty-state',
+  ERR_SPEC_ROADMAP_TERMINAL: 'error-bar',
+  ERR_SPEC_MILESTONE_UNKNOWN: 'empty-state',
+  ERR_SPEC_MILESTONE_PROJECT_MISMATCH: 'error-bar',
+  ERR_SPEC_MOVE_ANCHOR_INVALID: 'error-bar',
+  ERR_SPEC_AC_INVALID: 'error-bar',
+  ERR_SPEC_AC_ADDRESS_UNKNOWN: 'error-bar',
+  ERR_SPEC_CONFIRM_NOT_ACHIEVED: 'error-bar',
+  ERR_SPEC_INCLUDE_UNKNOWN: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {
