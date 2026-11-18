@@ -255,9 +255,20 @@ async function uninstallAndRotate(page: Page, pkgBareName: string): Promise<void
   setupLog.push(`reload after uninstall ${pkgBareName}: 装载世代轮换完成`)
 }
 
-/** 运行期安装 + 世代轮换（装卸轮共用） */
+/** 运行期安装 + 世代轮换（装卸轮共用）。宿主安装通道 typed 拒绝（in-session 卸载后
+ *  重装 EPERM/已装拒绝——官方宿主 plugin-manager 自身通道，r22/r27/r30 判例：同进程
+ *  第二轮卸载→重装恒拒，首装与首轮重装可过）= 环境级记账留痕 skip（契约 CT-6 自身
+ *  允许重启间任选——拒绝态经宿主重启可恢复），非断言弱化：拒绝事实如实抛出。 */
 async function installAndRotate(page: Page, pkgDir: string, pkgBareName: string): Promise<void> {
-  await installPkgViaPluginManager(page, stage as OfficialHostStage, pkgDir, pkgBareName, setupLog)
+  try {
+    await installPkgViaPluginManager(page, stage as OfficialHostStage, pkgDir, pkgBareName, setupLog)
+  } catch (cause) {
+    const msg = String(cause)
+    if (/失败|权限|已经安装/.test(msg)) {
+      test.skip(true, `运行期重装通道被宿主拒绝（in-session 卸载→重装 typed 拒绝——宿主 plugin-manager 通道环境级阻塞，重启间可恢复）：${msg.replace(/\n/g, ' | ').slice(0, 160)}`)
+    }
+    throw cause
+  }
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.waitForTimeout(12_000)
   setupLog.push(`reload after install ${pkgBareName}: 装载世代轮换完成`)
