@@ -86,7 +86,7 @@ export interface InstallResult {
 /**
  * ②③ plugin-manager 正式安装 + 启用 + manifest 版本一致断言。
  * UI 词汇与断言锚：插件页按钮「插件」→「添加插件」→ input[aria-label="包名或地址"]
- * →「安装」→ 允许/信任（build-auth）→ 关闭；行内「启用」→ 运行中标记。
+ * →「安装」→ 允许/信任（build-auth）→ 立即启用/关闭；行内「启用」→ 运行中标记。
  * 版本双校验：UI 详情页版本文本含 manifest version；实体包 =
  * {E2E_OFFICIAL_DSH_HOME} 下有界深搜 node_modules/@dsh-forge/project/package.json（任意层级）。
  */
@@ -106,6 +106,7 @@ export async function installViaPluginManager(page: Page, stage: OfficialHostSta
   // 安装轮询（有界 6 分钟；build-auth 允许/信任 → 重试分支显式处置；已装同版本 = 收敛）
   let resultText = ''
   let alreadyInstalled = false
+  let enabledViaDialog = false
   for (let i = 0; i < 90; i++) {
     await page.waitForTimeout(4_000)
     const dialog = page.locator('[role="dialog"]')
@@ -118,6 +119,18 @@ export async function installViaPluginManager(page: Page, stage: OfficialHostSta
       const retry = page.getByRole('button', { name: /^重试$/ }).first()
       if ((await retry.count()) > 0) await retry.click({ force: true }).catch(() => {})
       continue
+    }
+    // 安装收敛弹窗主操作「立即启用」（官方宿主 0.2.2-rc.2 启用控件词汇——
+    // ui-plugin-manager locales installEnableNow；行内 ^启用$ 钮在 rc.2 不再出现，
+    // 不处置该主操作 = 插件停留「已关闭」、dsh.profile.bundles 零 bundle 条目）。
+    const enableNow = page.getByRole('button', { name: '立即启用', exact: true }).first()
+    if ((await enableNow.count()) > 0) {
+      log.push('install dialog -> 立即启用（0.2.2-rc.2 安装弹窗主操作）')
+      await enableNow.click({ force: true }).catch(() => {})
+      enabledViaDialog = true
+      await page.waitForTimeout(3_000)
+      resultText = (await dialog.count()) > 0 ? await dialog.first().innerText() : '(dialog closed)'
+      break
     }
     if (/这个包已经安装/.test(resultText)) {
       alreadyInstalled = true
@@ -163,12 +176,30 @@ export async function installViaPluginManager(page: Page, stage: OfficialHostSta
     log.push('entity check skipped: E2E_OFFICIAL_DSH_HOME 缺席（UI 单校形态，如实标注）')
   }
 
-  // 启用（正式安装后运行态——「启用」钮 → 已启用/运行中标记）
-  const enable = page.getByRole('button', { name: /^启用$/ }).first()
-  if ((await enable.count()) > 0) {
-    await enable.click({ force: true })
-    await page.waitForTimeout(3_000)
-    log.push('enable clicked')
+  // 启用（正式安装后运行态）：「立即启用」已点击 = 启用态已在弹窗内落定
+  // （rc.2 详情页词汇为「关闭」）；弹窗主操作未出现（旧宿主词汇）时保留行内「启用」钮处置。
+  if (enabledViaDialog) {
+    log.push('enable: 立即启用 done（弹窗主操作）')
+  } else {
+    // rc.2 详情页启用控件 = Switch（role=switch，aria-label「启用 {包名}」——ui-plugin-manager
+    // enableToggle/partToggle）；旧宿主词汇 = 行内「启用」钮。两者有序兜底，命中后核验 aria-checked。
+    const enableSwitch = page.getByRole('switch', { name: /^启用/ }).first()
+    const enableButton = page.getByRole('button', { name: /^启用$/ }).first()
+    if ((await enableSwitch.count()) > 0) {
+      await enableSwitch.click({ force: true })
+      await page.waitForTimeout(3_000)
+      await expect(
+        enableSwitch,
+        '④ 启用态落定（Switch aria-checked=true）',
+      ).toHaveAttribute('aria-checked', 'true', { timeout: 10_000 })
+      log.push('enable: 详情页 Switch clicked（aria-checked=true）')
+    } else if ((await enableButton.count()) > 0) {
+      await enableButton.click({ force: true })
+      await page.waitForTimeout(3_000)
+      log.push('enable clicked')
+    } else {
+      log.push(`enable: 启用控件缺席（详情词汇：${(await page.locator('body').innerText()).includes('已关闭') ? '已关闭——启用通道未收敛' : '非已关闭'})`)
+    }
   }
   await returnToMainView(page, log)
   return { version, entityVerified }
