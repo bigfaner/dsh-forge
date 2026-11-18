@@ -27,8 +27,22 @@ import {
   deriveProjectKey,
   type ForgeSpecsService,
 } from "../domain/specs/service.js";
-import type { SpecRow, SpecStatus, TransitionActor } from "../db/row-types.js";
+import { SpecError } from "../domain/specs/errors.js";
+import type { SpecDomainDb } from "../db/connection.js";
+import type {
+  EntityTransitionRow,
+  GoalRow,
+  MilestoneRow,
+  RoadmapRow,
+  SpecRow,
+  SpecStatus,
+  TransitionActor,
+} from "../db/row-types.js";
 import { SPEC_STATUSES } from "../db/row-types.js";
+import { goalMachine, type GoalStatus } from "../domain/status-machines.js";
+import { TRANSITION_TAIL, type ForgeToolServices } from "../domain/specs/tool-service.js";
+import type { RoadmapAchievementDto } from "../domain/specs/roadmap-service.js";
+import type { MoveMilestoneResult } from "../domain/specs/milestone-service.js";
 import {
   projectAcsStates,
   type AcProjectionRow,
@@ -53,6 +67,14 @@ export type SpecIdentityFace = (projectId: string) => Promise<SpecIdentityResolu
 export interface ForgeSpecRemoteDeps {
   /** forgeSpecs 域服务缝（域逻辑唯一事实源只读消费——缺席宿主全族 typed unavailable） */
   readonly specs?: () => ForgeSpecsService | undefined;
+  /** 工具面动词缝（1.8 ForgeToolServices——roadmap/milestone/goal 族读面与 CRUD 复用；
+   *  缺席 = M4a 五端点族 typed unavailable，M3 六端点零感知） */
+  readonly tools?: () => ForgeToolServices | undefined;
+  /** UI 径动词缝（同 ForgeToolServices——actor='ui' 组装第二实例；human-only 写边
+   *  （roadmapMutate confirm / goalReviewMutate）专用，缺席 = 写族 typed unavailable） */
+  readonly uiTools?: () => ForgeToolServices | undefined;
+  /** repo 只读缝（goalBoard 台账/复核现读——缺席 = goalBoard typed unavailable） */
+  readonly repos?: () => SpecDomainDb["repos"] | undefined;
   /** AC 投影现查缝（task-loop forgeTasks matchAcSettlements——AGENTS 1.6 调用期求值） */
   readonly acSettlementsOf?: () => AcSettlementsFace | undefined;
   /** projectId 身份缝（forge.projects 缝——缺席/未解析分层降级） */
@@ -86,6 +108,7 @@ const UNAVAILABLE_CODE = "ERR_SPEC_UNAVAILABLE";
 const IDENTITY_UNRESOLVED_CODE = "ERR_SPEC_IDENTITY_UNRESOLVED";
 const NOT_FOUND_CODE = "ERR_SPEC_NOT_FOUND";
 const FAILED_CODE = "ERR_SPEC_REMOTE_FAILED";
+const INVALID_INPUT_CODE = "ERR_SPEC_REMOTE_INVALID_INPUT";
 
 function resultError(code: string, message: string): Result<never> {
   return err({ code, message });
@@ -95,6 +118,11 @@ function resultError(code: string, message: string): Result<never> {
 function errorOf(cause: unknown): Result<never> {
   if (isSpecError(cause)) return resultError(cause.code, cause.message);
   return resultError(FAILED_CODE, cause instanceof Error ? cause.message : String(cause));
+}
+
+/** 入参封闭枚举/必填违例（typed code——wire 面显式失败非魔法值） */
+function invalidInput(message: string): SpecError {
+  return new SpecError(INVALID_INPUT_CODE, message, {});
 }
 
 // ── host 半 DTO（单点水化——禁 client 拼装）──
@@ -174,9 +202,67 @@ export interface SpecBoardDto {
 /** transition 写面透传快照（SpecRow 形态直投） */
 export type SpecSnapshot = SpecRow;
 
+// ── M4a 目标域 DTO（plugin-spec-roadmaps 1.9，code-design §6 端点族表）——
+//    零拼装纪律：行级/动词出参直投（tools.md §一·五 camelCase 行基线），仅
+//    goalBoard 徽标面（status-machine isTerminal/availableTransitions 数据化）为
+//    本端点族新增节——host 半单点水化，UI 零拼装。
+
+/** Roadmap 快照（RoadmapRow 直投——零拼装） */
+export type RoadmapSnapshot = RoadmapRow;
+
+/** Roadmap 详情（queryRoadmap 动词出参直投：本体 + milestones 内嵌 + 达成派生 + warns） */
+export interface RoadmapDetailDto {
+  readonly roadmap: RoadmapRow;
+  readonly milestones: MilestoneRow[];
+  readonly achievement: RoadmapAchievementDto;
+}
+
+/** Roadmap 写面快照（create/update/confirm → RoadmapRow；moveMilestone → 全量新序） */
+export type RoadmapMutateSnapshot = RoadmapRow | MoveMilestoneResult;
+
+/** Goal 徽标面（status-machine 查询面直译——status(s).isTerminal() / .availableTransitions()） */
+export interface GoalBadgeDto {
+  readonly isTerminal: boolean;
+  readonly availableTransitions: readonly GoalStatus[];
+}
+
+/** Goal 看板行（GoalCard 基形 + 徽标面 + 最新复核摘要——querySpec include 同形 camelCase） */
+export interface GoalBoardEntryDto {
+  readonly goalId: string;
+  readonly goalSeq: number;
+  readonly title: string;
+  readonly brief?: string;
+  readonly goalStatus: GoalStatus;
+  readonly badge: GoalBadgeDto;
+  readonly latestReview?: {
+    readonly verdict: "passed" | "failed";
+    readonly gapNote?: string;
+    readonly createdAt: string;
+  };
+}
+
+/** Goal 看板（spec 本体 + goals 徽标面 + goal 台账尾帧——纯读面，零状态机触发） */
+export interface GoalBoardDto {
+  readonly spec: SpecRow;
+  readonly goals: readonly GoalBoardEntryDto[];
+  readonly transitions: readonly EntityTransitionRow[];
+}
+
+/** Goal 终审写面快照（GoalRow 直投——零拼装；审计史由台账行承载） */
+export type GoalSnapshot = GoalRow;
+
+/** roadmapMutate 封闭动作值域（code-design §6——create/update/moveMilestone/confirm） */
+export type RoadmapMutateAction = "create" | "update" | "moveMilestone" | "confirm";
+
+/** goalReviewMutate 封闭动作值域（finalize=终审确认 / reject=驳回——human-only UI 径） */
+export type GoalReviewMutateAction = "finalize" | "reject";
+
 /** forgeSpecs namespace 控制器（serviceKey = forgeSpecsController——官方 settingsController 同型） */
 export class ForgeSpecsRemote extends TypertRemoteService {
   private readonly specsOf: () => ForgeSpecsService | undefined;
+  private readonly toolsOf: () => ForgeToolServices | undefined;
+  private readonly uiToolsOf: () => ForgeToolServices | undefined;
+  private readonly reposOf: () => SpecDomainDb["repos"] | undefined;
   private readonly acSettlementsOf: () => AcSettlementsFace | undefined;
   private readonly identityOf: SpecIdentityFace | undefined;
   private readonly intervalMs: number;
@@ -184,6 +270,9 @@ export class ForgeSpecsRemote extends TypertRemoteService {
   constructor(ctx: Context, deps: ForgeSpecRemoteDeps) {
     super(ctx, "forgeSpecsController", { namespace: "forgeSpecs" });
     this.specsOf = deps.specs ?? (() => undefined);
+    this.toolsOf = deps.tools ?? (() => undefined);
+    this.uiToolsOf = deps.uiTools ?? (() => undefined);
+    this.reposOf = deps.repos ?? (() => undefined);
     this.acSettlementsOf = deps.acSettlementsOf ?? (() => undefined);
     this.identityOf = deps.identity;
     this.intervalMs = deps.followIntervalMs ?? SPEC_FOLLOW_INTERVAL_MS;
@@ -196,6 +285,33 @@ export class ForgeSpecsRemote extends TypertRemoteService {
       throw new Error(unavailableMessage("*", "specs"));
     }
     return svc;
+  }
+
+  /** 工具面动词窄取（M4a 族缺席 = typed unavailable 同径） */
+  private requireTools(method: string): ForgeToolServices {
+    const tools = this.toolsOf();
+    if (tools === undefined) {
+      throw new Error(unavailableMessage(method, "specs"));
+    }
+    return tools;
+  }
+
+  /** UI 径动词窄取（human-only 写边专用——缺席 = typed unavailable，actor 不降级伪装） */
+  private requireUiTools(method: string): ForgeToolServices {
+    const ui = this.uiToolsOf();
+    if (ui === undefined) {
+      throw new Error(unavailableMessage(method, "specs"));
+    }
+    return ui;
+  }
+
+  /** repo 只读缝窄取（goalBoard 现读——缺席 = typed unavailable 同径） */
+  private requireRepos(method: string): SpecDomainDb["repos"] {
+    const repos = this.reposOf();
+    if (repos === undefined) {
+      throw new Error(unavailableMessage(method, "specs"));
+    }
+    return repos;
   }
 
   /** 族缺席 Result 归一（快照方法族——诚实降级非抛错折叠） */
@@ -399,6 +515,219 @@ export class ForgeSpecsRemote extends TypertRemoteService {
       return ok(row);
     } catch (cause) {
       return errorOf(cause);
+    }
+  }
+
+  // ── M4a 目标域五端点（plugin-spec-roadmaps 1.9——写面透传 actor='ui'，零改 M3 六端点）──
+
+  /** roadmap 清单（listing 索引序——身份未解析 = 空集诚实降级，清单族同 list 判型） */
+  @Remote
+  async roadmaps(q: { readonly projectId: string }, signal?: AbortSignal): Promise<Result<readonly RoadmapRow[]>> {
+    signal?.throwIfAborted();
+    try {
+      const tools = this.requireTools("roadmaps");
+      const ws = await this.resolveIdentity(q.projectId);
+      if (ws === null) return ok<readonly RoadmapRow[]>([]);
+      return ok(tools.listRoadmaps({ cwd: ws.wsPath }));
+    } catch (cause) {
+      return this.toolsOf() === undefined ? this.unavailableResult("roadmaps") : errorOf(cause);
+    }
+  }
+
+  /** roadmap 详情（queryRoadmap 动词直投——milestones 下钻 + 达成派生 + warns） */
+  @Remote
+  async roadmapDetail(q: { readonly projectId: string; readonly slug: string }, signal?: AbortSignal): Promise<Result<RoadmapDetailDto>> {
+    signal?.throwIfAborted();
+    try {
+      const tools = this.requireTools("roadmapDetail");
+      const ws = await this.resolveIdentity(q.projectId);
+      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
+      const detail = tools.queryRoadmap({ cwd: ws.wsPath, slug: q.slug, include: ["achievement"] });
+      return ok({
+        roadmap: detail.roadmap,
+        milestones: detail.milestones,
+        achievement: detail.achievement ?? { roadmap: detail.roadmap, completed: false, perMilestone: [], warns: [] },
+      });
+    } catch (cause) {
+      return this.toolsOf() === undefined ? this.unavailableResult("roadmapDetail") : errorOf(cause);
+    }
+  }
+
+  /**
+   * roadmap 写面透传（CRUD/重排/确认——域动词零重复逻辑）：create/update/moveMilestone
+   * 走工具面动词；confirm = human-only 验收确认边（awaiting_acceptance→completed），走
+   * actor='ui' 实例——actor 不降级伪装（uiTools 缺席 = typed unavailable）。
+   */
+  @Remote
+  async roadmapMutate(
+    input: {
+      readonly projectId: string;
+      readonly action: RoadmapMutateAction;
+      readonly slug?: string;
+      readonly title?: string;
+      readonly brief?: string;
+      /** AC 条目结构面（parseAcEntries 入参形状约束——wire 边界禁 unconstrained unknown） */
+      readonly acEntries?: readonly { readonly criterion: string; readonly id?: string; readonly address?: string }[];
+      readonly milestoneId?: string;
+      readonly before?: string;
+      readonly after?: string;
+      readonly note?: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<Result<RoadmapMutateSnapshot>> {
+    signal?.throwIfAborted();
+    try {
+      const tools = this.requireTools("roadmapMutate");
+      const ws = await this.resolveIdentity(input.projectId);
+      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
+      if (input.action !== "create" && input.action !== "update" && input.action !== "moveMilestone" && input.action !== "confirm") {
+        throw invalidInput(`未知 action：${String(input.action)}`);
+      }
+      if (input.action === "create") {
+        if (input.slug === undefined || input.slug === "" || input.title === undefined || input.title === "") {
+          throw invalidInput("create 动作必填 slug + title");
+        }
+        return ok(
+          tools.createRoadmap({
+            cwd: ws.wsPath,
+            slug: input.slug,
+            title: input.title,
+            ...(input.brief !== undefined ? { brief: input.brief } : {}),
+            ...(input.acEntries !== undefined ? { acEntries: input.acEntries } : {}),
+          }),
+        );
+      }
+      if (input.action === "update") {
+        if (input.slug === undefined || input.slug === "") {
+          throw invalidInput("update 动作必填 slug");
+        }
+        return ok(
+          tools.updateRoadmap({
+            cwd: ws.wsPath,
+            slug: input.slug,
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            ...(input.brief !== undefined ? { brief: input.brief } : {}),
+            ...(input.acEntries !== undefined ? { acEntries: input.acEntries } : {}),
+          }),
+        );
+      }
+      if (input.action === "moveMilestone") {
+        if (input.slug === undefined || input.slug === "" || input.milestoneId === undefined) {
+          throw invalidInput("moveMilestone 动作必填 slug + milestoneId");
+        }
+        if ((input.before === undefined) === (input.after === undefined)) {
+          throw invalidInput("moveMilestone 动作 before/after 互斥二选一");
+        }
+        return ok(
+          tools.moveMilestone({
+            cwd: ws.wsPath,
+            roadmapSlug: input.slug,
+            milestoneId: input.milestoneId,
+            ...(input.before !== undefined ? { before: input.before } : {}),
+            ...(input.after !== undefined ? { after: input.after } : {}),
+          }),
+        );
+      }
+      // confirm：human-only 验收确认边——actor='ui' 实例透传（UI 径审计锚）
+      if (input.slug === undefined || input.slug === "") {
+        throw invalidInput("confirm 动作必填 slug");
+      }
+      const ui = this.requireUiTools("roadmapMutate");
+      return ok(
+        ui.transitionRoadmap({
+          cwd: ws.wsPath,
+          roadmapSlug: input.slug,
+          to: "completed",
+          ...(input.note !== undefined ? { note: input.note } : {}),
+        }),
+      );
+    } catch (cause) {
+      return this.toolsOf() === undefined ? this.unavailableResult("roadmapMutate") : errorOf(cause);
+    }
+  }
+
+  /**
+   * Goal 看板（纯读面——零状态机触发，防 UI 轮询驱动状态机）：goal 现值 + 徽标面
+   * （goalMachine.status(s).isTerminal() / .availableTransitions()）+ 最新复核摘要 +
+   * goal 台账尾帧（统一台账 entity_kind='goal'，尾 TRANSITION_TAIL 条）。
+   */
+  @Remote
+  async goalBoard(q: { readonly projectId: string; readonly specSlug: string }, signal?: AbortSignal): Promise<Result<GoalBoardDto>> {
+    signal?.throwIfAborted();
+    try {
+      const repos = this.requireRepos("goalBoard");
+      const ws = await this.resolveIdentity(q.projectId);
+      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
+      const spec = repos.specs.getBySlug(ws.projectKey, q.specSlug);
+      if (spec === undefined) {
+        return resultError(NOT_FOUND_CODE, `spec 不存在：${q.specSlug}`);
+      }
+      const goals = repos.specs.listGoalsBySpec(spec.id);
+      const entries: GoalBoardEntryDto[] = goals.map((goal) => {
+        const status = goalMachine.status(goal.goalStatus);
+        const latest = repos.reviews.latestByEntity("goal", goal.id);
+        return {
+          goalId: goal.id,
+          goalSeq: goal.sortKey,
+          title: goal.title,
+          ...(goal.brief !== null ? { brief: goal.brief } : {}),
+          goalStatus: goal.goalStatus,
+          badge: { isTerminal: status.isTerminal(), availableTransitions: status.availableTransitions() },
+          ...(latest !== undefined
+            ? {
+                latestReview: {
+                  verdict: latest.verdict,
+                  ...(latest.gapNote !== null ? { gapNote: latest.gapNote } : {}),
+                  createdAt: latest.createdAt,
+                },
+              }
+            : {}),
+        };
+      });
+      const transitions = goals
+        .flatMap((goal) => repos.transitions.listByEntity("goal", goal.id))
+        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1))
+        .slice(-TRANSITION_TAIL);
+      return ok({ spec, goals: entries, transitions });
+    } catch (cause) {
+      return this.reposOf() === undefined ? this.unavailableResult("goalBoard") : errorOf(cause);
+    }
+  }
+
+  /**
+   * Goal 终审写面透传（human-only UI 径——finalizeGoal verb actor='ui' 透传）：
+   * finalize = 终审确认（awaiting_confirmation→completed）/ reject = 驳回（note 域守卫
+   * 必填）。goal 寻径沿工具面纪律 = specSlug + goalSeq（UUID goalId 不作 wire 入参）。
+   */
+  @Remote
+  async goalReviewMutate(
+    input: {
+      readonly projectId: string;
+      readonly specSlug: string;
+      readonly goalSeq: number;
+      readonly action: GoalReviewMutateAction;
+      readonly note?: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<Result<GoalSnapshot>> {
+    signal?.throwIfAborted();
+    try {
+      const ui = this.requireUiTools("goalReviewMutate");
+      const ws = await this.resolveIdentity(input.projectId);
+      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
+      if (input.action !== "finalize" && input.action !== "reject") {
+        throw invalidInput(`未知 action：${String(input.action)}`);
+      }
+      const result = ui.finalizeGoal({
+        cwd: ws.wsPath,
+        slug: input.specSlug,
+        goalSeq: input.goalSeq,
+        decision: input.action === "finalize" ? "completed" : "rejected",
+        ...(input.note !== undefined ? { note: input.note } : {}),
+      });
+      return ok(result.goal);
+    } catch (cause) {
+      return this.uiToolsOf() === undefined ? this.unavailableResult("goalReviewMutate") : errorOf(cause);
     }
   }
 

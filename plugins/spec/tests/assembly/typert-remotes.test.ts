@@ -20,6 +20,7 @@ import {
 } from "../../host/assembly/typert-remotes.js";
 import { assembleSpecServices, type SpecAssembly } from "../../host/assembly/default-assembly.js";
 import { deriveProjectKey } from "../../host/domain/specs/service.js";
+import { createForgeToolServices } from "../../host/domain/specs/tool-service.js";
 import { FORGE_SPECS_SERVICE_KEY } from "../../shared/contract-constants.js";
 
 /** marker 端点表投影（method/exportName/mode 快照——gateway SRC 端点真源） */
@@ -73,7 +74,7 @@ function captureFace(initialServices: Record<string, unknown> = {}): {
 }
 
 describe("端点面 pin（forgeSpecs host 半——gateway SRC 端点真源）", () => {
-  it("六端点：list/detail/query/projection/transition + follow mode:stream", () => {
+  it("十一端点：M3 六端点零改 + M4a 五端点追加（roadmaps/roadmapDetail/roadmapMutate/goalBoard/goalReviewMutate）+ follow mode:stream", () => {
     const svc = new ForgeSpecsRemote(fakeCtx(), {});
     expect(endpointsOf(svc)).toEqual([
       "list",
@@ -81,6 +82,11 @@ describe("端点面 pin（forgeSpecs host 半——gateway SRC 端点真源）",
       "query",
       "projection",
       "transition",
+      "roadmaps",
+      "roadmapDetail",
+      "roadmapMutate",
+      "goalBoard",
+      "goalReviewMutate",
       "follow:stream",
     ]);
   });
@@ -170,12 +176,12 @@ describe("registerSpecTypertRemotes（根 ctx plugin 注册三态可观测）", 
 });
 
 // ── 端到端契约快照（真 in-memory db 服务 → host 半 DTO 单点水化）──
+// fixture 提升模块级（M3 六端点 + M4a 五端点两共用——同一 db 种子面）
 
-describe("forgeSpecs 端点族契约快照（真服务 + 假 identity）", () => {
-  let tempRoot: string;
-  let services: SpecAssembly;
+let tempRoot: string;
+let services: SpecAssembly;
 
-  const lazy = (() => {
+const lazy = (() => {
     let ready: { cwd: string; deps: ForgeSpecRemoteDeps } | undefined;
     return () => {
       if (ready === undefined) {
@@ -210,6 +216,31 @@ describe("forgeSpecs 端点族契约快照（真服务 + 假 identity）", () =>
         });
         // 悬空态：登记在库后移除文档文件（db 行在文件缺失——只读降级语义）
         rmSync(join(ws, ".forge", "specs", "beta", "spec.md"));
+        // M4a 目标域种子（1.9 五端点族取材）：roadmap + milestone + goal 复核报告
+        const makeVerbs = (actor?: "plugin-tool" | "ui") =>
+          createForgeToolServices({
+            db: services.db.db,
+            repos: services.db.repos,
+            specs: services.specs,
+            ...(actor !== undefined ? { actor } : {}),
+          });
+        const seedVerbs = makeVerbs();
+        seedVerbs.createRoadmap({ cwd: ws, slug: "rm-1", title: "Roadmap One", acEntries: [{ criterion: "RM AC one" }] });
+        const rmRow = seedVerbs.queryRoadmap({ cwd: ws, slug: "rm-1" }).roadmap;
+        const rmAcId = rmRow.acJson[0]!.id;
+        seedVerbs.createMilestone({ cwd: ws, roadmapSlug: "rm-1", title: "M1", acEntries: [{ criterion: "M1 AC", address: rmAcId }] });
+        const alphaSpec = services.db.repos.specs.getBySlug(deriveProjectKey(ws), "alpha")!;
+        const alphaGoals = services.db.repos.specs.listGoalsBySpec(alphaSpec.id);
+        services.db.repos.reviews.appendReview({
+          id: "rev-seed-1",
+          entityKind: "goal",
+          entityId: alphaGoals[0]!.id,
+          verdict: "passed",
+          content: "复核通过",
+          gapNote: null,
+          actor: "ui",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        });
         const identity = async (projectId: string) =>
           projectId === "proj-1"
             ? { projectKey: deriveProjectKey(ws), wsPath: ws }
@@ -218,6 +249,9 @@ describe("forgeSpecs 端点族契约快照（真服务 + 假 identity）", () =>
           cwd: ws,
           deps: {
             specs: () => services.specs,
+            tools: () => makeVerbs(),
+            uiTools: () => makeVerbs("ui"),
+            repos: () => services.db.repos,
             identity,
           },
         };
@@ -226,14 +260,17 @@ describe("forgeSpecs 端点族契约快照（真服务 + 假 identity）", () =>
     };
   })();
 
-  afterAll(() => {
-    if (tempRoot !== undefined) rmSync(tempRoot, { recursive: true, force: true });
-    services?.dispose();
-  });
+afterAll(() => {
+  if (tempRoot !== undefined) rmSync(tempRoot, { recursive: true, force: true });
+  services?.dispose();
+});
 
-  function remote(): ForgeSpecsRemote {
-    return new ForgeSpecsRemote(fakeCtx(), lazy().deps);
-  }
+/** M3 六端点共用 remote 构造（fixture 模块级后全 describe 共用） */
+function remote(): ForgeSpecsRemote {
+  return new ForgeSpecsRemote(fakeCtx(), lazy().deps);
+}
+
+describe("forgeSpecs 端点族契约快照（M3 六端点——真服务 + 假 identity）", () => {
 
   it("list：卡片清单（listing 序 + goalCount/acCount host 半水化）——形状契约快照", async () => {
     const result = await remote().list({ projectId: "proj-1" });
@@ -368,6 +405,23 @@ describe("族缺席降级（specs 服务缝 typed unavailable）", () => {
     expect(transition.ok).toBe(false);
   });
 
+  it("族缺席降级：M4a 五端点 Result error（诚实降级非抛错）", async () => {
+    expect(await svc.roadmaps({ projectId: "p" })).toEqual({
+      ok: false,
+      error: { code: "ERR_SPEC_UNAVAILABLE", message: unavailableMessage("roadmaps", "specs") },
+    });
+    for (const call of [
+      () => svc.roadmapDetail({ projectId: "p", slug: "s" }),
+      () => svc.roadmapMutate({ projectId: "p", action: "create", slug: "s", title: "t" }),
+      () => svc.goalBoard({ projectId: "p", specSlug: "s" }),
+      () => svc.goalReviewMutate({ projectId: "p", specSlug: "s", goalSeq: 1, action: "finalize" }),
+    ]) {
+      const result = await call();
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("ERR_SPEC_UNAVAILABLE");
+    }
+  });
+
   it("follow 族缺席 → 调用期诚实抛（AsyncIterable 不可回 Result）", async () => {
     await expect(async () => {
       for await (const frame of svc.follow({ projectId: "p" })) void frame;
@@ -397,6 +451,164 @@ describe("forgeProjectsIdentityOf（forge.projects 缝 identity 单源）", () =
   });
 });
 
+// ── M4a 目标域五端点契约快照（1.9——roadmaps/roadmapDetail/roadmapMutate/goalBoard/goalReviewMutate）──
+
+describe("M4a 目标域五端点契约快照（真服务 + 工具面动词复用）", () => {
+  function remote(): ForgeSpecsRemote {
+    return new ForgeSpecsRemote(fakeCtx(), lazy().deps);
+  }
+  function verbs() {
+    lazy();
+    return createForgeToolServices({
+      db: services.db.db,
+      repos: services.db.repos,
+      specs: services.specs,
+    });
+  }
+
+  it("roadmaps：roadmap 清单（listing 序）——形状契约快照", async () => {
+    const result = await remote().roadmaps({ projectId: "proj-1" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.map((r) => r.slug)).toEqual(["rm-1"]);
+    expect(normalizeIds(result.value)).toMatchSnapshot();
+  });
+
+  it("roadmaps：projectId 未解析 → 空集诚实降级（清单族同 list 判型）", async () => {
+    const result = await remote().roadmaps({ projectId: "unknown" });
+    expect(result.ok && result.value).toEqual([]);
+  });
+
+  it("roadmapDetail：本体 + milestones 下钻 + 达成派生——形状契约快照", async () => {
+    const result = await remote().roadmapDetail({ projectId: "proj-1", slug: "rm-1" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.milestones.map((m) => m.title)).toEqual(["M1"]);
+    expect(result.value.achievement.completed).toBe(false);
+    expect(result.value.achievement.perMilestone).toHaveLength(1);
+    expect(normalizeIds(result.value)).toMatchSnapshot();
+  });
+
+  it("roadmapDetail 未命中 → typed NOT_FOUND", async () => {
+    const result = await remote().roadmapDetail({ projectId: "proj-1", slug: "missing" });
+    expect(!result.ok && result.error.code).toBe("ERR_SPEC_ROADMAP_UNKNOWN");
+  });
+
+  it("roadmapMutate create/update：快照直投——形状契约快照", async () => {
+    const created = await remote().roadmapMutate({
+      projectId: "proj-1",
+      action: "create",
+      slug: "rm-2",
+      title: "Roadmap Two",
+      acEntries: [{ criterion: "RM2 AC" }],
+    });
+    expect(created.ok).toBe(true);
+    if (created.ok && !Array.isArray(created.value)) {
+      expect(created.value.slug).toBe("rm-2");
+      expect(normalizeIds([created.value])).toMatchSnapshot();
+    }
+    const updated = await remote().roadmapMutate({
+      projectId: "proj-1",
+      action: "update",
+      slug: "rm-2",
+      title: "Roadmap Two Renamed",
+    });
+    expect(updated.ok && !Array.isArray(updated.value) && updated.value.title).toBe("Roadmap Two Renamed");
+  });
+
+  it("roadmapMutate moveMilestone：全量新序透传——形状契约快照", async () => {
+    const seed = verbs();
+    const m2 = seed.createMilestone({ cwd: lazy().cwd, roadmapSlug: "rm-1", title: "M2", acEntries: [{ criterion: "M2 AC", address: seed.queryRoadmap({ cwd: lazy().cwd, slug: "rm-1" }).roadmap.acJson[0]!.id }] });
+    const moved = await remote().roadmapMutate({
+      projectId: "proj-1",
+      action: "moveMilestone",
+      slug: "rm-1",
+      milestoneId: m2.id,
+      before: (seed.listMilestones({ cwd: lazy().cwd, roadmapSlug: "rm-1" }))[0]!.id,
+    });
+    expect(moved.ok).toBe(true);
+    if (moved.ok && "assignments" in moved.value) {
+      expect(moved.value.assignments.map((a) => a.seq).sort()).toEqual([1, 2]);
+      expect(normalizeIds([moved.value])).toMatchSnapshot();
+    }
+    // 互斥违例 → typed INVALID_INPUT
+    const bad = await remote().roadmapMutate({
+      projectId: "proj-1",
+      action: "moveMilestone",
+      slug: "rm-1",
+      milestoneId: m2.id,
+    });
+    expect(!bad.ok && bad.error.code).toBe("ERR_SPEC_REMOTE_INVALID_INPUT");
+  });
+
+  it("roadmapMutate confirm：human-only 边走 actor='ui' 实例——非待验收现值 typed 拒", async () => {
+    const result = await remote().roadmapMutate({ projectId: "proj-1", action: "confirm", slug: "rm-1" });
+    // rm-1 现值 pending：pending→completed 非法边（typed code 直透——域状态机守卫）
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("ERR_SPEC_ILLEGAL_TRANSITION");
+  });
+
+  it("goalBoard：徽标面（isTerminal/availableTransitions）+ 最新复核 + 台账尾帧——形状契约快照", async () => {
+    const result = await remote().goalBoard({ projectId: "proj-1", specSlug: "alpha" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.goals.map((g) => g.goalSeq)).toEqual([1, 2]);
+    for (const entry of result.value.goals) {
+      expect(entry.badge.isTerminal).toBe(false);
+      expect(entry.badge.availableTransitions).toEqual(["in_progress"]);
+    }
+    expect(result.value.goals[0]!.latestReview).toEqual({ verdict: "passed", createdAt: "2026-01-01T00:00:00.000Z" });
+    expect(normalizeIds(result.value)).toMatchSnapshot();
+  });
+
+  it("goalBoard 未命中 → typed NOT_FOUND；projectId 未解析 → typed 拒", async () => {
+    const miss = await remote().goalBoard({ projectId: "proj-1", specSlug: "missing" });
+    expect(!miss.ok && miss.error.code).toBe("ERR_SPEC_NOT_FOUND");
+    const unresolved = await remote().goalBoard({ projectId: "unknown", specSlug: "alpha" });
+    expect(!unresolved.ok && unresolved.error.code).toBe("ERR_SPEC_IDENTITY_UNRESOLVED");
+  });
+
+  it("goalReviewMutate：驳回 note 必填守卫 + finalize 终审确认（actor='ui'）——形状契约快照", async () => {
+    const seed = verbs();
+    const alphaSpec = services.db.repos.specs.getBySlug(deriveProjectKey(lazy().cwd), "alpha")!;
+    const goal = services.db.repos.specs.listGoalsBySpec(alphaSpec.id)[1]!;
+    // 现值推至 awaiting_confirmation（写面直设——终审边前置态）
+    services.db.repos.specs.updateGoalStatus(goal.id, "awaiting_confirmation", "2026-01-02T00:00:00.000Z");
+    const rejectNoNote = await remote().goalReviewMutate({
+      projectId: "proj-1",
+      specSlug: "alpha",
+      goalSeq: goal.sortKey,
+      action: "reject",
+    });
+    expect(!rejectNoNote.ok && rejectNoNote.error.code).toBe("ERR_SPEC_GOAL_REJECT_NOTE_REQUIRED");
+    const finalize = await remote().goalReviewMutate({
+      projectId: "proj-1",
+      specSlug: "alpha",
+      goalSeq: goal.sortKey,
+      action: "finalize",
+    });
+    expect(finalize.ok).toBe(true);
+    if (finalize.ok) {
+      expect(finalize.value.goalStatus).toBe("completed");
+      expect(normalizeIds([finalize.value])).toMatchSnapshot();
+    }
+    // 台账 actor 审计锚 = ui
+    const ledger = services.db.repos.transitions.listByEntity("goal", goal.id);
+    expect(ledger.at(-1)?.actor).toBe("ui");
+    void seed;
+  });
+
+  it("goalReviewMutate：projectId 未解析 → typed 拒", async () => {
+    const result = await remote().goalReviewMutate({
+      projectId: "unknown",
+      specSlug: "alpha",
+      goalSeq: 1,
+      action: "finalize",
+    });
+    expect(!result.ok && result.error.code).toBe("ERR_SPEC_IDENTITY_UNRESOLVED");
+  });
+});
+
 /** 快照归一（id/时间戳/actor 审计面——形状 pin 与易变值解耦） */
 function normalize<T>(value: readonly T[]): unknown[] {
   return JSON.parse(
@@ -407,5 +619,20 @@ function normalize<T>(value: readonly T[]): unknown[] {
           ? undefined
           : v,
     ),
+  );
+}
+
+/** M4a 五端点快照归一（在 normalize 基础上追加 UUID 锚族——goalId/entityId/挂链 id 族） */
+function normalizeIds<T>(value: readonly T[]): unknown[] {
+  return JSON.parse(
+    JSON.stringify(value, (key, v) => {
+      if (["id", "goalId", "entityId", "milestoneId", "roadmapId", "specId", "address"].includes(key) && typeof v === "string") {
+        return `<${key}>`;
+      }
+      if (key === "createdAt" || key === "updatedAt") return `<${key}>`;
+      if (key === "projectKey") return "<projectKey>";
+      if (key === "note" && v === null) return undefined;
+      return v;
+    }),
   );
 }

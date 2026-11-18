@@ -6,6 +6,14 @@
 export type { Result, Envelope, RemoteMethodError } from "../shared/result.js";
 export type { SpecStatus, TransitionActor, SpecRow } from "./db/row-types.js";
 export type {
+  GoalRow,
+  EntityTransitionRow,
+  MilestoneRow,
+  RoadmapRow,
+} from "./db/row-types.js";
+export type { GoalStatus } from "./domain/status-machines.js";
+export type { MoveMilestoneResult } from "./domain/specs/milestone-service.js";
+export type {
   AcProjectionDto,
   SpecBoardDto,
   SpecBoardStats,
@@ -15,5 +23,16 @@ export type {
   SpecQueryResultDto,
   SpecSnapshot,
   SpecTransitionDto,
+} from "./assembly/typert-remotes.js";
+export type {
+  GoalBadgeDto,
+  GoalBoardDto,
+  GoalBoardEntryDto,
+  GoalReviewMutateAction,
+  GoalSnapshot,
+  RoadmapDetailDto,
+  RoadmapMutateAction,
+  RoadmapMutateSnapshot,
+  RoadmapSnapshot,
 } from "./assembly/typert-remotes.js";
 export type { AcProjectionRow, AcProjectionState } from "./tools/projection.js";

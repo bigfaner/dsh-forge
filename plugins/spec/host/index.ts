@@ -27,6 +27,8 @@ import {
   registerSpecTypertRemotes,
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
+import type { TransitionActor } from "./db/row-types.js";
+import { createForgeToolServices } from "./domain/specs/tool-service.js";
 import type { SpecContextFace } from "./faces.js";
 import {
   FORGE_DOC_STYLE_SECTION_NAME,
@@ -134,6 +136,16 @@ function registerSpecTypertFromCordis(
   services: SpecAssembly,
   diag: (line: string, level?: DiagLevel) => void,
 ): void {
+  // 工具面动词实例单点组装（actor 注入缝——tool/UI 两径，闭包零域逻辑重复）
+  const makeTypertVerbs = (actor: TransitionActor | undefined) =>
+    createForgeToolServices({
+      db: services.db.db,
+      repos: services.db.repos,
+      specs: services.specs,
+      ...(actor !== undefined ? { actor } : {}),
+      acSettlementsOf: acSettlementsFaceOf(ctx),
+      onDiag: (payload) => diag(`[${payload.event}] ${payload.message}`, payload.level),
+    });
   try {
     const source = ctx as { root?: unknown; plugin?: unknown; inject?: unknown }
     const face: TypertAssemblyCtxFace = {
@@ -147,6 +159,11 @@ function registerSpecTypertFromCordis(
     }
     const result = registerSpecTypertRemotes(face, {
       specs: () => services.specs,
+      // M4a 五端点族缝（1.9）：工具面动词双实例——tool 径（actor 缺省 plugin-tool）+
+      // UI 径（actor='ui'，human-only 写边审计锚）；goalBoard 台账/复核现读走 repo 缝。
+      tools: () => makeTypertVerbs(undefined),
+      uiTools: () => makeTypertVerbs("ui"),
+      repos: () => services.db.repos,
       acSettlementsOf: acSettlementsFaceOf(ctx),
       identity: forgeProjectsIdentityOf(ctx),
       diag: (line) => diag(line, /失败|缺席|降级|抛错/.test(line) ? "warn" : "info"),

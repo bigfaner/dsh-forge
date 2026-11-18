@@ -34,6 +34,9 @@ export interface ToolVerbDeps {
   onDiag?: (payload: Omit<DiagEventPayload, "process">) => void;
   /** AC 投影现查缝（task-loop matchAcSettlements 窄面；缺席 = no-task-data 降级） */
   acSettlementsOf?: () => AcSettlementsFace | undefined;
+  /** 动作者通道覆写（plugin-spec-roadmaps 1.9——Typert UI 径组装第二实例注入 'ui'；
+   *  缺席 = 对话 tool 径缺省 'plugin-tool'，1.8 语义零变化） */
+  actor?: TransitionActor;
 }
 
 /** 工具面 actor 常量（对话 tool 径 = 用户动作驱动——agent 零手填缝）。 */
@@ -95,8 +98,8 @@ function requireSpec(deps: ToolVerbDeps, projectKey: string, slug: string): Spec
 
 export interface ForgeToolServices {
   // ── Roadmap 族 ──
-  createRoadmap(i: { cwd: string; slug: string; title: string; brief?: string; acEntries?: unknown[] }): RoadmapRow;
-  updateRoadmap(i: { cwd: string; slug: string; title?: string; brief?: string; acEntries?: unknown[] }): RoadmapRow;
+  createRoadmap(i: { cwd: string; slug: string; title: string; brief?: string; acEntries?: readonly unknown[] }): RoadmapRow;
+  updateRoadmap(i: { cwd: string; slug: string; title?: string; brief?: string; acEntries?: readonly unknown[] }): RoadmapRow;
   transitionRoadmap(i: { cwd: string; roadmapSlug: string; to: ObjectiveStatus; note?: string }): RoadmapRow;
   queryRoadmap(i: { cwd: string; slug: string; include?: string[] }): {
     roadmap: RoadmapRow;
@@ -105,8 +108,8 @@ export interface ForgeToolServices {
   };
   listRoadmaps(i: { cwd: string }): RoadmapRow[];
   // ── Milestone 族 ──
-  createMilestone(i: { cwd: string; roadmapSlug: string; title: string; brief?: string; acEntries?: unknown[] }): MilestoneRow;
-  updateMilestone(i: { cwd: string; roadmapSlug: string; milestoneId: string; title?: string; brief?: string; acEntries?: unknown[] }): MilestoneRow;
+  createMilestone(i: { cwd: string; roadmapSlug: string; title: string; brief?: string; acEntries?: readonly unknown[] }): MilestoneRow;
+  updateMilestone(i: { cwd: string; roadmapSlug: string; milestoneId: string; title?: string; brief?: string; acEntries?: readonly unknown[] }): MilestoneRow;
   moveMilestone(i: { cwd: string; roadmapSlug: string; milestoneId: string; before?: string; after?: string }): milestones.MoveMilestoneResult;
   transitionMilestone(i: { cwd: string; roadmapSlug: string; milestoneId: string; to: ObjectiveStatus; note?: string }): { milestone: MilestoneRow; edgeWrites: readonly ObjectiveWrite[] };
   queryMilestone(i: { cwd: string; roadmapSlug: string; milestoneId: string; include?: string[] }): {
@@ -134,7 +137,7 @@ export interface ForgeToolServices {
 }
 
 export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
-  function parseAc(raw: unknown[] | undefined, allowAddress: boolean): AcEntry[] | undefined {
+  function parseAc(raw: readonly unknown[] | undefined, allowAddress: boolean): AcEntry[] | undefined {
     if (raw === undefined) return undefined;
     return parseAcEntries(raw, {
       ...(allowAddress ? { allowAddress: true } : {}),
@@ -174,7 +177,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
         roadmapId: roadmap.id,
         to: i.to,
         ...(i.note !== undefined ? { note: i.note } : {}),
-        actor: TOOL_ACTOR,
+        actor: deps.actor ?? TOOL_ACTOR,
       });
     },
 
@@ -241,7 +244,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
         milestoneId: i.milestoneId,
         to: i.to,
         ...(i.note !== undefined ? { note: i.note } : {}),
-        actor: TOOL_ACTOR,
+        actor: deps.actor ?? TOOL_ACTOR,
       });
     },
 
@@ -278,7 +281,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
         specSlug: i.slug,
         decision: i.decision,
         ...(i.note !== undefined ? { note: i.note } : {}),
-        actor: TOOL_ACTOR,
+        actor: deps.actor ?? TOOL_ACTOR,
       });
       return { spec: requireSpec(deps, projectKey, i.slug), from: result.from, to: result.to };
     },
@@ -293,7 +296,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
         goalId: goal.id,
         decision: i.decision,
         ...(i.note !== undefined ? { note: i.note } : {}),
-        actor: TOOL_ACTOR,
+        actor: deps.actor ?? TOOL_ACTOR,
       });
       return { goal: { ...goal, goalStatus: result.to as GoalRow["goalStatus"] }, from: result.from, to: result.to };
     },
@@ -309,7 +312,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
         verdict: i.verdict,
         content: i.content,
         ...(i.gapNote !== undefined ? { gapNote: i.gapNote } : {}),
-        actor: TOOL_ACTOR,
+        actor: deps.actor ?? TOOL_ACTOR,
       });
       return { review: result.review, goal: { ...goal, goalStatus: result.to as GoalRow["goalStatus"] }, from: result.from, to: result.to };
     },
@@ -327,7 +330,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
         verdict: i.verdict,
         content: i.content,
         ...(i.gapNote !== undefined ? { gapNote: i.gapNote } : {}),
-        actor: TOOL_ACTOR,
+        actor: deps.actor ?? TOOL_ACTOR,
       });
     },
 
