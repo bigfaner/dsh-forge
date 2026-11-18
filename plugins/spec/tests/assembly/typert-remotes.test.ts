@@ -429,7 +429,97 @@ describe("族缺席降级（specs 服务缝 typed unavailable）", () => {
   });
 });
 
-describe("forgeProjectsIdentityOf（forge.projects 缝 identity 单源）", () => {
+describe("forgeProjectsIdentityOf（identity 双源缝：workspaceRegistry 优先 + forgeProjects 回落——bug b990aa94）", () => {
+  /** 官方 workspaceRegistry 消费窄面替身（get 窄面——可注入命中/缺席/抛错三态） */
+  function registryFace(
+    rows: Record<string, { path: string }> = {},
+    opts: { throwOnGet?: boolean } = {},
+  ): { get: (id: string) => Promise<{ path: string } | undefined>; getCalls: () => number } {
+    let calls = 0;
+    return {
+      get: async (id: string) => {
+        calls += 1;
+        if (opts.throwOnGet === true) throw new Error("registry boom");
+        return rows[id];
+      },
+      getCalls: () => calls,
+    };
+  }
+
+  /** forgeProjects 反射链替身（既有自家宿主形态——getProject 窄面） */
+  function forgeProjectsFace(rows: Record<string, { wsPath: string }>): unknown {
+    return { getProject: async (id: string) => rows[id] ?? null };
+  }
+
+  function identityOf(ctx: unknown) {
+    const diag: string[] = [];
+    const face = forgeProjectsIdentityOf(ctx, (line: string) => diag.push(line));
+    return { face, diag };
+  }
+
+  it("registry 命中 → wsPath + deriveProjectKey 派生（官方源优先——forgeProjects 同 id 在座也不消费）", async () => {
+    const reg = registryFace({ "ws-1": { path: "Z:\\ws\\official" } });
+    const ctx = {
+      workspaceRegistry: reg,
+      reflect: { get: (name: string) => (name === "forgeProjects" ? forgeProjectsFace({ "ws-1": { wsPath: "Z:\\ws\\forge" } }) : undefined) },
+    };
+    const { face, diag } = identityOf(ctx);
+    expect(await face("ws-1")).toEqual({ wsPath: "Z:\\ws\\official", projectKey: deriveProjectKey("Z:\\ws\\official") });
+    expect(reg.getCalls()).toBe(1);
+    expect(diag).toEqual([]);
+  });
+
+  it("registry 缺席（get miss）→ 回落 forgeProjects（非 null——自家宿主形态不破）", async () => {
+    const reg = registryFace({});
+    const ctx = {
+      workspaceRegistry: reg,
+      reflect: { get: (name: string) => (name === "forgeProjects" ? forgeProjectsFace({ "p-1": { wsPath: "Z:\\ws\\demo" } }) : undefined) },
+    };
+    const { face, diag } = identityOf(ctx);
+    expect(await face("p-1")).toEqual({ wsPath: "Z:\\ws\\demo", projectKey: deriveProjectKey("Z:\\ws\\demo") });
+    expect(diag).toEqual([]);
+  });
+
+  it("registry face 缺席 → 回落 forgeProjects（既有 forgeProjects 径测试形态零改即绿基线）", async () => {
+    const ctx = {
+      reflect: { get: (name: string) => (name === "forgeProjects" ? forgeProjectsFace({ "p-1": { wsPath: "Z:\\ws\\demo" } }) : undefined) },
+    };
+    const { face } = identityOf(ctx);
+    expect(await face("p-1")).toEqual({ wsPath: "Z:\\ws\\demo", projectKey: deriveProjectKey("Z:\\ws\\demo") });
+  });
+
+  it("registry get 抛错 → 回落 forgeProjects（抛错同回落非 null）", async () => {
+    const reg = registryFace({ "p-1": { path: "Z:\\ws\\official" } }, { throwOnGet: true });
+    const ctx = {
+      workspaceRegistry: reg,
+      reflect: { get: (name: string) => (name === "forgeProjects" ? forgeProjectsFace({ "p-1": { wsPath: "Z:\\ws\\demo" } }) : undefined) },
+    };
+    const { face, diag } = identityOf(ctx);
+    expect(await face("p-1")).toEqual({ wsPath: "Z:\\ws\\demo", projectKey: deriveProjectKey("Z:\\ws\\demo") });
+    expect(diag.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("双源全缺 → null + diag 留痕（不静默 null——identity 解析失败路径可观测）", async () => {
+    const ctx = {
+      workspaceRegistry: registryFace({}),
+      reflect: { get: () => undefined },
+    };
+    const { face, diag } = identityOf(ctx);
+    expect(await face("p-none")).toBeNull();
+    expect(diag.length).toBeGreaterThan(0);
+  });
+
+  it("每调用现查零缓存（AGENTS 1.6——同 id 两次调用各现查 registry 一次）", async () => {
+    const reg = registryFace({ "ws-1": { path: "Z:\\ws\\official" } });
+    const ctx = { workspaceRegistry: reg, reflect: { get: () => undefined } };
+    const { face } = identityOf(ctx);
+    await face("ws-1");
+    await face("ws-1");
+    expect(reg.getCalls()).toBe(2);
+  });
+});
+
+describe("forgeProjectsIdentityOf（forge.projects 缝 identity 单源——双源前基线形态）", () => {
   it("getProject 命中 → wsPath + deriveProjectKey 派生；缺席/抛错 = null（fail-soft）", async () => {
     const ctx = {
       reflect: {

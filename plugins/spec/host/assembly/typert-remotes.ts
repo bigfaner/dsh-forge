@@ -20,6 +20,7 @@
 // 快照族（list/follow）空集诚实降级 / detail·query·projection·transition 族 typed 拒绝。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
+import type { WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -789,7 +790,10 @@ function specFollowDelay(signal: AbortSignal | undefined, intervalMs: number): P
   });
 }
 
-// ── 身份缝真实现（forge.projects 缝——结构性窄面现查，零 project 包依赖）──
+// ── 身份缝真实现（identity 双源：官方 workspaceRegistry 优先 + forge.projects 缝回落——
+//    bug b990aa94：官方 dsh 无 projectId 概念，身份语义 ≡ WorkspaceId（官方 wire 范式 =
+//    只传 id、host 侧查 registry）；forgeProjects 是 dsh-forge 自家 host core 私有服务键，
+//    官方 web 宿主缺席 → 单源恒 null。双源 = 官方宿主可移植 + 自家宿主形态不破）──
 
 /** 插件 ctx 结构防御读取（cordis inject 门——属性访问未声明即抛，try/catch fail-soft） */
 function ctxReflectGet(ctx: unknown, name: string): unknown {
@@ -800,24 +804,57 @@ function ctxReflectGet(ctx: unknown, name: string): unknown {
   }
 }
 
+/** 官方 workspaceRegistry 消费窄面（@deepseek-ai/dsh-workspace Workspace 同形子集——get 返回行 path 即 canonical 检出根） */
+interface OfficialWorkspaceRegistryFace {
+  get(id: WorkspaceId): Promise<{ readonly path: string } | undefined>;
+}
+
+/** 官方 workspaceRegistry face 形状校验（防御读取——AGENTS 1.6 检测永不缓存） */
+function isWorkspaceRegistryFace(value: unknown): value is OfficialWorkspaceRegistryFace {
+  if (value === null || typeof value !== "object") return false;
+  return typeof (value as { get?: unknown }).get === "function";
+}
+
 /**
- * forge.projects 缝 identity 单源：projectId（官方 workspace id / forge 归属键别名——
- * project 侧 getProject 别名锚单源承担）→ wsPath → deriveProjectKey 派生归属键。
- * forgeProjects 服务缺席/抛错/未命中 = null（分层降级判定基点，不缓存）。
+ * identity 双源缝（每次调用现查零缓存——AGENTS 1.6）：
+ * ① 官方源：ctx.workspaceRegistry.get(projectId as WorkspaceId).path（type-only import
+ *    保 typed 具名取法——官方宿主 projectId ≡ workspaceId）；
+ * ② 回落源：forgeProjects 反射链（dsh-forge 自家 host core 形态——getProject 别名锚）。
+ * 双源全缺/抛错 = null + diag warn 留痕（不静默）。
  */
-export function forgeProjectsIdentityOf(ctx: unknown): SpecIdentityFace {
+export function forgeProjectsIdentityOf(
+  ctx: unknown,
+  diag?: (line: string) => void,
+): SpecIdentityFace {
   return async (projectId) => {
+    // ① 官方 workspaceRegistry 优先（face 缺席/劣形/抛错/miss = 静默入回落）
+    try {
+      const registry: unknown = (ctx as { workspaceRegistry?: unknown }).workspaceRegistry;
+      if (isWorkspaceRegistryFace(registry)) {
+        const ws = await registry.get(projectId as WorkspaceId);
+        const path = typeof ws?.path === "string" && ws.path !== "" ? ws.path : undefined;
+        if (path !== undefined) {
+          return { wsPath: path, projectKey: deriveProjectKey(path) };
+        }
+      }
+    } catch {
+      // 回落承担——不在此分流诊断（双缺统一留痕）
+    }
+    // ② 回落 forgeProjects 反射链（自家宿主形态）
     try {
       const svc = ctxReflectGet(ctx, "forgeProjects") as
         | { getProject?: (id: string) => Promise<{ wsPath?: string } | null> }
         | undefined;
       const project = await svc?.getProject?.(projectId);
       const wsPath = typeof project?.wsPath === "string" && project.wsPath !== "" ? project.wsPath : undefined;
-      if (wsPath === undefined) return null;
-      return { wsPath, projectKey: deriveProjectKey(wsPath) };
+      if (wsPath !== undefined) {
+        return { wsPath, projectKey: deriveProjectKey(wsPath) };
+      }
     } catch {
-      return null;
+      // 双缺统一留痕
     }
+    diag?.(`[spec-typert] identity 双源未解析（workspaceRegistry miss/缺席 + forgeProjects 缺席/抛错）：projectId=${projectId}`);
+    return null;
   };
 }
 

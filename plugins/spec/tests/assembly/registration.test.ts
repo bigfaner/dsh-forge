@@ -81,10 +81,11 @@ describe("default plugin（cordis 装配入口——三态可观测）", () => {
     }
   });
 
-  it("inject 名单显式含 tools + systemPrompt（cordis inject 门判据——bug fefd5149 缝①）", () => {
+  it("inject 名单显式含 tools + systemPrompt + workspaceRegistry（cordis inject 门判据——bug fefd5149 缝①；workspaceRegistry = bug b990aa94 identity 双源缝官方源取法门）", () => {
     const inject = (specPlugin as unknown as { inject: readonly string[] }).inject;
     expect(inject).toContain("tools");
     expect(inject).toContain("systemPrompt");
+    expect(inject).toContain("workspaceRegistry");
   });
 });
 

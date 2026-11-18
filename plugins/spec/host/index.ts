@@ -165,7 +165,7 @@ function registerSpecTypertFromCordis(
       uiTools: () => makeTypertVerbs("ui"),
       repos: () => services.db.repos,
       acSettlementsOf: acSettlementsFaceOf(ctx),
-      identity: forgeProjectsIdentityOf(ctx),
+      identity: forgeProjectsIdentityOf(ctx, (line) => diag(line, "warn")),
       diag: (line) => diag(line, /失败|缺席|降级|抛错/.test(line) ? "warn" : "info"),
     })
     diag(
@@ -264,8 +264,10 @@ function registerSpecPromptSectionsFromCordis(ctx: unknown, config: SpecPluginCo
 
 // inject 名单：tools = 单装工具族注册缝 + systemPrompt = 提示段注册缝（bug fefd5149 缝①，
 // 同缝先例 plugins/knowledge/host/index.ts:341——名单缺席 = ctx 属性访问被 cordis inject
-// 门拒恒 undefined，两段提示段零注册）。reflect/emit 经防御读取消费（try/catch fail-soft），
-// 不入名单（task-loop 同型——具名服务 provide 与事件混入为宿主根面）。
-specCordisPlugin.inject = ["tools", "systemPrompt"] as const
+// 门拒恒 undefined，两段提示段零注册）+ workspaceRegistry = identity 双源缝官方源具名服务
+// 取法门（bug b990aa94——官方宿主 projectId ≡ workspaceId，forgeProjects 缺席时回落承担）。
+// reflect/emit 经防御读取消费（try/catch fail-soft），不入名单（task-loop 同型——具名服务
+// provide 与事件混入为宿主根面）。
+specCordisPlugin.inject = ["tools", "systemPrompt", "workspaceRegistry"] as const
 
 export default specCordisPlugin
