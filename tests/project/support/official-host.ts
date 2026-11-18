@@ -98,8 +98,18 @@ export async function installViaPluginManager(page: Page, stage: OfficialHostSta
   await page.getByRole('button', { name: '插件', exact: true }).first().click({ force: true })
   await page.waitForTimeout(5_000)
   // ② tarball 正式安装（禁 junction/dist 直载——通道本体即 plugin-manager 安装面）
-  await page.getByText('添加插件', { exact: true }).first().click({ force: true })
+  // 「添加插件」点击有界重试（force 坐标点击可被吞——fix-8 同族判例 r5：input 永不出）
   const input = page.locator('input[aria-label="包名或地址"]')
+  for (let i = 0; i < 3 && (await input.count()) === 0; i++) {
+    const addEntry = page.getByText('添加插件', { exact: true }).first()
+    if ((await addEntry.count()) > 0) {
+      await addEntry.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+      await page.waitForTimeout(3_000)
+    } else {
+      await page.getByRole('button', { name: '插件', exact: true }).first().click({ force: true }).catch(() => {})
+      await page.waitForTimeout(5_000)
+    }
+  }
   await input.waitFor({ state: 'visible', timeout: 30_000 })
   await input.fill(tarball)
   await page.getByRole('button', { name: '安装', exact: true }).first().click({ force: true })
@@ -107,6 +117,7 @@ export async function installViaPluginManager(page: Page, stage: OfficialHostSta
   let resultText = ''
   let alreadyInstalled = false
   let enabledViaDialog = false
+  let installRetries = 0
   for (let i = 0; i < 90; i++) {
     await page.waitForTimeout(4_000)
     const dialog = page.locator('[role="dialog"]')
@@ -137,6 +148,16 @@ export async function installViaPluginManager(page: Page, stage: OfficialHostSta
       log.push('install: already installed (same version) — 收敛跳过安装')
       break
     }
+    // 失败态重试（「没有写入权限，无法安装」等瞬态失败弹窗自带「重试」主操作——
+    // 有界 6 次 × 20s 退避；hif-stage.installPkgViaPluginManager 同修口）
+    const failRetry = page.locator('[role="dialog"]').getByRole('button', { name: '重试', exact: true }).first()
+    if (/失败/.test(resultText) && (await failRetry.count()) > 0 && installRetries < 6) {
+      installRetries++
+      log.push(`install: 失败弹窗重试 (round ${String(installRetries)})`)
+      await failRetry.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+      await page.waitForTimeout(20_000) // 退避重试（EPERM 类文件锁瞬态——立即重试同锁复现）
+      continue
+    }
     if (/失败|成功|完成|已安装/.test(resultText) || resultText === '(no dialog)') break
   }
   if (!alreadyInstalled) {
@@ -147,8 +168,20 @@ export async function installViaPluginManager(page: Page, stage: OfficialHostSta
   if ((await close.count()) > 0) await close.click({ force: true }).catch(() => {})
   await page.waitForTimeout(2_000)
 
-  // ③-a UI 详情 manifest 版本断言（列表行卡无版本文本；点开行卡 → 详情面板 v{version} 在席）
+  // ③-a UI 详情 manifest 版本断言（列表行卡无版本文本；点开行卡 → 详情面板 v{version} 在席。
+  // 行卡短窗未现即重开插件页语义——hif-stage.installPkgViaPluginManager 同款移植：
+  // 重新 goto → 收模态 → 进插件页，再定位行卡）
   const row = page.locator('[data-dockkit-row], [role="listitem"], li').filter({ hasText: '@dsh-forge/project' }).first()
+  try {
+    await row.waitFor({ state: 'visible', timeout: 8_000 })
+  } catch {
+    log.push('③-a 行卡未现——重开插件页归位重试')
+    await page.goto(stage.webUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    await page.waitForTimeout(12_000)
+    await clearDialogs(page)
+    await page.getByRole('button', { name: '插件', exact: true }).first().click({ force: true })
+    await page.waitForTimeout(5_000)
+  }
   await expect(row, '③-a 已安装插件行在场（@dsh-forge/project）').toBeVisible({ timeout: 30_000 })
   await row.click({ force: true })
   await page.waitForTimeout(2_000)
@@ -176,25 +209,27 @@ export async function installViaPluginManager(page: Page, stage: OfficialHostSta
     log.push('entity check skipped: E2E_OFFICIAL_DSH_HOME 缺席（UI 单校形态，如实标注）')
   }
 
-  // 启用（正式安装后运行态）：「立即启用」已点击 = 启用态已在弹窗内落定
-  // （rc.2 详情页词汇为「关闭」）；弹窗主操作未出现（旧宿主词汇）时保留行内「启用」钮处置。
-  if (enabledViaDialog) {
+  // 启用（核验制——不信任点击路径：弹窗「立即启用」/行内钮 force 坐标点击可被弹窗层
+  // 叠面吞事件——fix-8 同族判例 r4「已关闭」残留）：详情页 Switch aria-checked=false
+  // → DOM click 直发 → aria-checked=true 断言；Switch 缺席（旧词汇）→ 行内「启用」钮兜底。
+  const enableSwitch = page.getByRole('switch', { name: /^启用/ }).first()
+  if ((await enableSwitch.count()) > 0 && (await enableSwitch.getAttribute('aria-checked')) !== 'true') {
+    await enableSwitch.evaluate((el) => (el as HTMLElement).click())
+    log.push('enable: 详情页 Switch DOM click（aria-checked 未落定→补击）')
+    await page.waitForTimeout(3_000)
+  } else if (enabledViaDialog) {
     log.push('enable: 立即启用 done（弹窗主操作）')
+  }
+  if ((await enableSwitch.count()) > 0) {
+    await expect(
+      enableSwitch,
+      '④ 启用态落定（Switch aria-checked=true）',
+    ).toHaveAttribute('aria-checked', 'true', { timeout: 10_000 })
+    log.push('enable: Switch aria-checked=true 核验通过')
   } else {
-    // rc.2 详情页启用控件 = Switch（role=switch，aria-label「启用 {包名}」——ui-plugin-manager
-    // enableToggle/partToggle）；旧宿主词汇 = 行内「启用」钮。两者有序兜底，命中后核验 aria-checked。
-    const enableSwitch = page.getByRole('switch', { name: /^启用/ }).first()
     const enableButton = page.getByRole('button', { name: /^启用$/ }).first()
-    if ((await enableSwitch.count()) > 0) {
-      await enableSwitch.click({ force: true })
-      await page.waitForTimeout(3_000)
-      await expect(
-        enableSwitch,
-        '④ 启用态落定（Switch aria-checked=true）',
-      ).toHaveAttribute('aria-checked', 'true', { timeout: 10_000 })
-      log.push('enable: 详情页 Switch clicked（aria-checked=true）')
-    } else if ((await enableButton.count()) > 0) {
-      await enableButton.click({ force: true })
+    if ((await enableButton.count()) > 0) {
+      await enableButton.evaluate((el) => (el as HTMLElement).click())
       await page.waitForTimeout(3_000)
       log.push('enable clicked')
     } else {
@@ -235,6 +270,48 @@ async function returnToMainView(page: Page, log: string[]): Promise<void> {
     }
     await page.waitForTimeout(3_000)
   }
+}
+
+/**
+ * 右栏展开驱动（ui-sidebar-right 实锚机械——本文件为单源，hif-stage 同源复用）：
+ *   展开态锚 = 面板 [data-sidebar-right-open]（SidebarRight.tsx:346——expanded 时置属性，
+ *   收起态缺席）；展开入口 = 会话头角位钮 [data-sidebar-right-expand]（ExpandButton.tsx:49，
+ *   仅收起态在座）+ 官方快捷键 sidebar.right.toggle（shortcuts.ts:33 web:windows =
+ *   Ctrl+Shift+B）。收起态 seed 抑制（stores.ts:254——空收起列零默认页），故引导页入口
+ *   卡仅在展开后物化，展开是引导页前置的必要机械。
+ * 驱动序列：DOM click 直发（Playwright force 坐标点击经命中测试，tooltip/层叠面可吞
+ * 事件——fix-8 失败判例：钮在座 30s 而展开态零变化）→ 展开锚核验 → 快捷键兜底 →
+ * 展开锚最终断言（不弱化：断言对象是展开态实锚，不是钮的存在性）。
+ */
+export async function expandRightSidebar(page: Page, log: string[]): Promise<void> {
+  const panel = page.locator('[data-sidebar-right-open]').first()
+  if ((await panel.count()) > 0) {
+    log.push('expand-rightbar: already expanded（[data-sidebar-right-open] 在座）')
+    return
+  }
+  const expandBtn = page.locator('[data-sidebar-right-expand]').first()
+  if ((await expandBtn.count()) > 0) {
+    await expandBtn.evaluate((el) => (el as HTMLElement).click())
+    log.push('expand-rightbar: [data-sidebar-right-expand] DOM click')
+    await page.waitForTimeout(2_000)
+  }
+  if ((await panel.count()) === 0 && (await expandBtn.count()) === 0) {
+    // 右栏面缺席 = 全页面视图（插件页/插件详情——ui-plugin-manager 整页路由，主视图
+    // 仍在底层挂载但会话右栏面不在屏）——展开机械不适用，fail-soft 记账归位（不阻断
+    // 装载前置成立；主视图会话态的展开失败仍走下方硬断言）
+    log.push('expand-rightbar: 右栏面缺席（全页面视图）——跳过展开')
+    return
+  }
+  if ((await panel.count()) === 0) {
+    await page.keyboard.press('Control+Shift+b')
+    log.push('expand-rightbar: Ctrl+Shift+B 快捷键兜底（sidebar.right.toggle web:windows 绑定）')
+    await page.waitForTimeout(2_000)
+  }
+  await expect(
+    page.locator('[data-sidebar-right-open]').first(),
+    '右栏展开落定（[data-sidebar-right-open] 在座——ui-sidebar-right 展开态实锚）',
+  ).toBeVisible({ timeout: 30_000 })
+  log.push('expand-rightbar: 展开态落定')
 }
 
 /** 有界深搜实体包 package.json 全候选（深度 6 封顶——定位 node_modules/@dsh-forge/project/package.json） */
@@ -302,3 +379,7 @@ export async function tryForgeInvoke<T>(page: Page, channel: string, payload?: u
     return null
   }
 }
+
+
+
+

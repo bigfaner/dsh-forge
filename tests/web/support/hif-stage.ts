@@ -6,13 +6,15 @@
 // 的打包与安装面——official-host 的 buildProjectTarball/installViaPluginManager
 // 硬编码 @dsh-forge/project，不覆盖 task-loop / knowledge 两件被测包。
 // UI 词汇同源移植（插件页 → 添加插件 → 包路径 → 安装 → 允许/信任 → 立即启用/关闭 → 启用）。
+// fix-8 补运行期卸载面（uninstallPkgViaPluginManager——ui-plugin-manager 实锚词汇）
+// 与右栏展开驱动单源复用（expandRightSidebar——official-host 单源，本层转出口）。
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
-import { officialHostStage, openOfficialPage, tryForgeInvoke, type OfficialHostStage } from '../../project/support/official-host.js'
+import { expandRightSidebar, officialHostStage, openOfficialPage, tryForgeInvoke, type OfficialHostStage } from '../../project/support/official-host.js'
 
-export { officialHostStage, openOfficialPage, tryForgeInvoke }
+export { expandRightSidebar, officialHostStage, openOfficialPage, tryForgeInvoke }
 export type { OfficialHostStage }
 
 /** ① 打包任意插件包最新版本：`pnpm pack`（run-once，禁 --watch 形态）→ tarball 绝对路径 */
@@ -51,14 +53,25 @@ export async function installPkgViaPluginManager(
   await clearDialogs(page)
   await page.getByRole('button', { name: '插件', exact: true }).first().click({ force: true })
   await page.waitForTimeout(5_000)
-  await page.getByText('添加插件', { exact: true }).first().click({ force: true })
+  // 「添加插件」点击有界重试（official-host.installViaPluginManager fix-8 同修口）
   const input = page.locator('input[aria-label="包名或地址"]')
+  for (let i = 0; i < 3 && (await input.count()) === 0; i++) {
+    const addEntry = page.getByText('添加插件', { exact: true }).first()
+    if ((await addEntry.count()) > 0) {
+      await addEntry.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+      await page.waitForTimeout(3_000)
+    } else {
+      await page.getByRole('button', { name: '插件', exact: true }).first().click({ force: true }).catch(() => {})
+      await page.waitForTimeout(5_000)
+    }
+  }
   await input.waitFor({ state: 'visible', timeout: 30_000 })
   await input.fill(tarball)
   await page.getByRole('button', { name: '安装', exact: true }).first().click({ force: true })
   let resultText = ''
   let alreadyInstalled = false
   let enabledViaDialog = false
+  let installRetries = 0
   for (let i = 0; i < 90; i++) {
     await page.waitForTimeout(4_000)
     const dialog = page.locator('[role="dialog"]')
@@ -88,6 +101,16 @@ export async function installPkgViaPluginManager(
       alreadyInstalled = true
       log.push(`install ${pkgBareName}: already installed (same version) — 收敛跳过安装`)
       break
+    }
+    // 失败态重试（「没有写入权限，无法安装」等瞬态失败弹窗自带「重试」主操作——
+    // 有界 6 次 × 20s 退避，成功/终态词汇仍走下方收敛）
+    const failRetry = page.locator('[role="dialog"]').getByRole('button', { name: '重试', exact: true }).first()
+    if (/失败/.test(resultText) && (await failRetry.count()) > 0 && installRetries < 6) {
+      installRetries++
+      log.push(`install ${pkgBareName}: 失败弹窗重试 (round ${String(installRetries)})`)
+      await failRetry.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+      await page.waitForTimeout(20_000) // 退避重试（EPERM 类文件锁瞬态——立即重试同锁复现）
+      continue
     }
     if (/失败|成功|完成|已安装/.test(resultText) || resultText === '(no dialog)') break
   }
@@ -134,25 +157,27 @@ export async function installPkgViaPluginManager(
     log.push(`entity check skipped: E2E_OFFICIAL_DSH_HOME 缺席（${pkgBareName} UI 单校形态，如实标注）`)
   }
 
-  // 启用兜底：弹窗主操作未出现（旧宿主词汇）时保留行内「启用」钮处置；
-  // 「立即启用」已点击 = 启用态已在弹窗内落定（rc.2 详情页词汇为「关闭」）。
-  if (enabledViaDialog) {
+  // 启用兜底（核验制——同 official-host.installViaPluginManager fix-8 修口：点击路径
+  // 不信任，以 Switch aria-checked 真值核验收口；「立即启用」已点击仍可能被吞）
+  const enableSwitch = page.getByRole('switch', { name: /^启用/ }).first()
+  if ((await enableSwitch.count()) > 0 && (await enableSwitch.getAttribute('aria-checked')) !== 'true') {
+    await enableSwitch.evaluate((el) => (el as HTMLElement).click())
+    log.push(`enable ${pkgBareName}: 详情页 Switch DOM click（aria-checked 未落定→补击）`)
+    await page.waitForTimeout(3_000)
+  } else if (enabledViaDialog) {
     log.push(`enable ${pkgBareName}: 立即启用 done（弹窗主操作）`)
+  }
+  if ((await enableSwitch.count()) > 0) {
+    await expect(
+      enableSwitch,
+      `④ ${pkgBareName} 启用态落定（Switch aria-checked=true）`,
+    ).toHaveAttribute('aria-checked', 'true', { timeout: 10_000 })
+    log.push(`enable ${pkgBareName}: Switch aria-checked=true 核验通过`)
   } else {
-    // rc.2 详情页启用控件 = Switch（role=switch，aria-label「启用 {包名}」——ui-plugin-manager
-    // enableToggle/partToggle）；旧宿主词汇 = 行内「启用」钮。两者有序兜底，命中后核验 aria-checked。
-    const enableSwitch = page.getByRole('switch', { name: /^启用/ }).first()
+    // 旧宿主词汇 = 行内「启用」钮兜底
     const enableButton = page.getByRole('button', { name: /^启用$/ }).first()
-    if ((await enableSwitch.count()) > 0) {
-      await enableSwitch.click({ force: true })
-      await page.waitForTimeout(3_000)
-      await expect(
-        enableSwitch,
-        `④ ${pkgBareName} 启用态落定（Switch aria-checked=true）`,
-      ).toHaveAttribute('aria-checked', 'true', { timeout: 10_000 })
-      log.push(`enable ${pkgBareName}: 详情页 Switch clicked（aria-checked=true）`)
-    } else if ((await enableButton.count()) > 0) {
-      await enableButton.click({ force: true })
+    if ((await enableButton.count()) > 0) {
+      await enableButton.evaluate((el) => (el as HTMLElement).click())
       await page.waitForTimeout(3_000)
       log.push('enable clicked')
     } else {
@@ -235,11 +260,147 @@ async function returnToMainView(page: Page, log: string[]): Promise<void> {
     }
     await page.waitForTimeout(3_000)
   }
-  // 右栏归位（主视图回位后右栏可能处于收起态——概览 tab 归 rightbar dock strip）
-  const openRightbar = page.getByRole('button', { name: '打开右侧边栏' }).first()
-  if ((await openRightbar.count()) > 0) {
-    await openRightbar.click({ force: true }).catch(() => {})
-    log.push('return-to-main: 打开右侧边栏 clicked')
+  // 插件详情面整页路由（back() 主视图钮在底层可见——r4 判例：详情覆盖层未离场即归位
+  // 误判）——展开右栏前无条件离场（返回插件钮在场即点，DOM click 直发）
+  const leaveDetail = page.getByRole('button', { name: '返回插件' }).first()
+  if ((await leaveDetail.count()) > 0) {
+    await leaveDetail.evaluate((el) => (el as HTMLElement).click())
+    log.push('return-to-main: 返回插件 clicked（详情面离场前置）')
     await page.waitForTimeout(3_000)
   }
+  // 插件页整页路由（列表页——back() 主视图钮在底层可见误判归位，r13 判例）：浏览器历史
+  // 后退归位（探针实证通道——Escape/新会话均不达插件整页）
+  if ((await page.getByText('添加插件', { exact: true }).count()) > 0) {
+    await page.goBack({ timeout: 15_000 }).catch(() => {})
+    log.push('return-to-main: goBack 兜底（插件列表整页离场）')
+    await page.waitForTimeout(3_000)
+  }
+  // 右栏归位（主视图回位后右栏可能处于收起态——概览 tab 归 rightbar dock strip；
+  // 展开驱动 = official-host.expandRightSidebar 单源——展开态实锚断言，非钮存在性）
+  await expandRightSidebar(page, log)
 }
+
+/**
+ * 运行期卸载驱动（ui-plugin-manager 实锚词汇——fix-8 移植，与安装通道同源对偶）：
+ * 插件页行卡 → 详情面（data-plugin-detail）→ 卸载钮（uninstallLabel「卸载 {name}」/
+ * PluginManagerPage.tsx:789）→ 确认弹窗（confirmUninstallTitle「卸载「{name}」？」+
+ * confirmUninstall 主操作「卸载」，:1535-1558）→ 收敛断言 = 行卡离场（卸载后包从列表
+ * 掉卡——view 回列表，:1572）。同会话不重启（removeBundle 运行期通道）。
+ */
+export async function uninstallPkgViaPluginManager(
+  page: Page,
+  stage: OfficialHostStage,
+  pkgBareName: string,
+  log: string[],
+): Promise<void> {
+  await page.goto(stage.webUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await page.waitForTimeout(12_000)
+  await clearDialogs(page)
+  await page.getByRole('button', { name: '插件', exact: true }).first().click({ force: true })
+  await page.waitForTimeout(5_000)
+  const row = page.locator('[data-dockkit-row], [role="listitem"], li').filter({ hasText: pkgBareName }).first()
+  await expect(row, `卸载前置：已安装插件行在场（${pkgBareName}）`).toBeVisible({ timeout: 30_000 })
+  await row.click({ force: true })
+  await page.waitForTimeout(2_000)
+  const uninstallBtn = page.getByRole('button', { name: /^卸载/ }).first()
+  await expect(uninstallBtn, `卸载钮在场（${pkgBareName} 详情面——uninstallLabel 词汇）`).toBeVisible({ timeout: 15_000 })
+  await uninstallBtn.click({ force: true })
+  // 确认弹窗主操作「卸载」（取消 = 取消，exact 区分——ConfirmDialog :1551-1554）
+  const confirm = page.locator('[role="dialog"]').getByRole('button', { name: '卸载', exact: true }).first()
+  await expect(confirm, `卸载确认弹窗在座（confirmUninstall——${pkgBareName}）`).toBeVisible({ timeout: 15_000 })
+  await confirm.click({ force: true })
+  // 收敛：行卡离场（卸载中 phase 后包掉卡；有界 90s）
+  await expect(row, `卸载收敛：行卡离场（${pkgBareName}）`).not.toBeVisible({ timeout: 90_000 })
+  log.push(`uninstall ${pkgBareName}: 确认弹窗已确认 + 行卡离场收敛`)
+  await returnToMainView(page, log)
+}
+
+/**
+ * 项目注册驱动（project 插件官方添加项目向导——fix-8 移植；web 宿主无原生目录桥 =
+ * 内嵌浏览器相位回退形态，DirectoryBrowser.tsx:131 锚面）：
+ * 入口（hero CTA/侧栏 nav）→ 内嵌目录浏览（上一级至根 → 逐段双击进入 targetDir）→
+ * 「下一步」→ 表单（data-dswf-rf-name 填 projectName）→「确认」→ success 相位 +
+ * 项目树行在座。单项目在座 = 概览主体锚数据面（forgeProjects 供数）前置。
+ */
+export async function registerProjectViaAddProjectFlow(
+  page: Page,
+  targetDir: string,
+  projectName: string,
+  log: string[],
+): Promise<void> {
+  // 零项目态入口（尚未注册项目段 + 添加项目钮；已注册态 = CTA/侧栏 nav 入口）
+  const cta = page.locator('[data-dswf-cta="add-project"], [data-dswf-nav="add-project"]').first()
+  if ((await cta.count()) > 0) {
+    await cta.evaluate((el) => (el as HTMLElement).click())
+  } else {
+    const addBtn = page.getByRole('button', { name: '添加项目' }).first()
+    await expect(addBtn, '添加项目入口在座（零项目态官方钮）').toBeVisible({ timeout: 15_000 })
+    await addBtn.evaluate((el) => (el as HTMLElement).click())
+  }
+  await expect(
+    page.locator('[data-dswf-fb="browser"]').first(),
+    '内嵌目录浏览器在座（web 宿主原生目录桥缺席——回退形态）',
+  ).toBeVisible({ timeout: 15_000 })
+  // 导航：上一级至根（禁用态 = 根），再按全路径逐段双击进入（行锚 = data-dswf-path 全路径）
+  const up = page.getByRole('button', { name: '上一级' }).first()
+  for (let i = 0; i < 15 && (await up.getAttribute('disabled')) !== undefined; i++) {
+    await up.evaluate((el) => (el as HTMLElement).click())
+    await page.waitForTimeout(1_500)
+  }
+  log.push(`add-project: 已至根目录（target = ${targetDir}）`)
+  // 逐段进入：行匹配按末段 basename（行锚 data-dswf-path 全路径）。盘符段不是子行
+  // （up-nav 终点 = 盘符根，根列表已在其内）——丢弃盘符段。
+  const segments = targetDir.split('\\').filter((s) => s !== '' && !/^[a-zA-Z]:$/.test(s))
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i] as string
+    const isLast = i === segments.length - 1
+    // 行查找 + 点击一体（evaluateAll 内直点——反斜杠路径不进 CSS 属性选择器）
+    const clicked = await page.locator('[data-dswf-path]').evaluateAll((els, args) => {
+      const norm = (p: string): string => p.replace(/\\$/, '').split('\\').pop() ?? ''
+      const wantNorm = (args.seg as string).toLowerCase()
+      const el = els.find((e) => norm(e.getAttribute('data-dswf-path') ?? '').toLowerCase() === wantNorm) as HTMLElement | undefined
+      if (el === undefined) return false
+      if (args.enter === true) el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+      else el.click()
+      return true
+    }, { seg, enter: !isLast })
+    if (!clicked) {
+      const all = await page.locator('[data-dswf-path]').evaluateAll((els) => els.map((e) => e.getAttribute('data-dswf-path')).join(' | '))
+      throw new Error(`add-project 导航失败：段 ${seg} 无匹配行（在场行：${all}）`)
+    }
+    await page.waitForTimeout(isLast ? 1_000 : 2_000)
+  }
+  // 选中目标目录 → 下一步 → 表单
+  await page.locator('.dswf-fb-confirm').first().evaluate((el) => (el as HTMLElement).click())
+  const nameField = page.locator('[data-dswf-rf-name]').first()
+  await expect(nameField, '表单相位在座（name 字段）').toBeVisible({ timeout: 15_000 })
+  await nameField.fill(projectName)
+  await page.locator('.dswf-rf-confirm').first().evaluate((el) => (el as HTMLElement).click())
+  // 收敛二相：success / failure（failure = typed 拒绝——registry face 缺席等装配降级，
+  // 零副作用设计内行为；如实抛失败详情，调用侧记账降级）
+  const outcome = await page.evaluate(async () => {
+    const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+    for (let i = 0; i < 15; i++) {
+      await wait(2_000)
+      const phase = document.querySelector('[data-dswf-ap="success"], [data-dswf-ap="failure"]')
+      if (phase !== null) return (phase as HTMLElement).getAttribute('data-dswf-ap') ?? ''
+    }
+    return 'timeout'
+  })
+  if (outcome !== 'success') {
+    const detail = await page.locator('[data-dswf-ap="failure"]').first().innerText().catch(() => '(failure 文本不可读)')
+    await page.keyboard.press('Escape').catch(() => {})
+    throw new Error(`add-project 注册未收敛（phase=${outcome}）：${detail.replace(/\n/g, ' | ').slice(0, 200)}`)
+  }
+  await expect(
+    page.locator('[data-dswf-project]').first(),
+    '项目树新项目行呈现',
+  ).toBeVisible({ timeout: 30_000 })
+  log.push(`add-project: ${projectName} 注册收敛（${targetDir}）`)
+  await page.waitForTimeout(2_000)
+}
+
+
+
+
+
