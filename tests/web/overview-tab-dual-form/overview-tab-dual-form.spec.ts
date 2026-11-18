@@ -33,8 +33,15 @@
 //       AC 段 + tab 唯一 + 零 pageerror 全保留）。
 //   [fix-8 形态判定词汇 2026-11-18] 运行期装卸驱动移植后各形态判定统一：
 //       集成形态 = sticky 在座 + AN-2 在座 + tab 唯一；task-loop 单装 = wrap 在座 +
-//       sticky/AN-2 双缺席；project 单装 = sticky 在座 + AN-2/wrap 双缺席。
+//       sticky/AN-2 双缺席；project 单装 = sticky 在座 + task-loop 专属残段锚（AN-2/chip/row）缺席。
 //       （wrap 两形态均在座——独立 body 消失断言以 sticky 唯一承载，同 INV-A2 口径。）
+//   [fix-9 残段判据判别性 2026-11-18] bug d8dac1f3 修口——project 单装「task-loop 残段」
+//       判据弃共用锚 data-dswf-ov-wrap（task-loop overview-tab.tsx:84 与 project
+//       OverviewTab.tsx:224 均渲染；project 单装 wrap=1 属 project 自有概览根，作判据即假红，
+//       1.13/007 轮 r1 定谳 + cdp/w113-ct56-wrapforensic.mjs 归属取证）。改锚 task-loop
+//       专属残段标记缺席：AN-2 data-dswf-ov-ac、题写 chip data-dswf-ov-chip、行列表
+//       data-dswf-ov-row（均仅 task-loop OverviewFrame 渲染，project 零此词汇）；
+//       project 自有锚 sticky 仍作正面断言保留。契约 last_anchor_sync 同步。
 //
 // 驱动面（fix-8 移植——通道实锚词汇，不臆造）：
 //   - 右栏展开 = official-host.expandRightSidebar 单源（ui-sidebar-right 实锚机械：
@@ -326,7 +333,8 @@ async function assertProjectOnlyForm(page: Page, label: string): Promise<void> {
   if (!projectRegistered && (await unanchored.count()) > 0) {
     await expect(unanchored, `${label}：project 概览 body 在座（未锚定空态锚——project 独占 tab）`).toBeVisible({ timeout: 30_000 })
     expect(await page.locator('[data-dswf-ov-ac]').count(), `${label}：AN-2 AC 段零在座（task-loop 缺席）`).toBe(0)
-    expect(await page.locator('[data-dswf-ov-wrap]').count(), `${label}：task-loop 单装 body 锚零在座`).toBe(0)
+    expect(await page.locator('[data-dswf-ov-chip]').count(), `${label}：task-loop 题写 chip 零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
+    expect(await page.locator('[data-dswf-ov-row]').count(), `${label}：task-loop 行列表零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
     await expect(overviewTab(page), `${label}：概览 tab 在座（INV-A1）`).toBeVisible({ timeout: 30_000 })
     expect(await overviewFamilyTabs(page).count(), `${label}：概览族 tab 数 = 1`).toBe(1)
     expect(harness.consoleErrors.filter((e) => e.startsWith('pageerror')), `${label}：零未捕获异常（INV-A4）`).toEqual([])
@@ -337,7 +345,8 @@ async function assertProjectOnlyForm(page: Page, label: string): Promise<void> {
     `${label}：project 概览主体在座（project 独占 tab）`,
   ).toBeVisible({ timeout: 30_000 })
   expect(await page.locator('[data-dswf-ov-ac]').count(), `${label}：AN-2 AC 段零在座（task-loop 缺席）`).toBe(0)
-  expect(await page.locator('[data-dswf-ov-wrap]').count(), `${label}：task-loop 单装 body 锚零在座`).toBe(0)
+  expect(await page.locator('[data-dswf-ov-chip]').count(), `${label}：task-loop 题写 chip 零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
+  expect(await page.locator('[data-dswf-ov-row]').count(), `${label}：task-loop 行列表零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
   await expect(overviewTab(page), `${label}：概览 tab 在座（INV-A1）`).toBeVisible({ timeout: 30_000 })
   expect(await overviewFamilyTabs(page).count(), `${label}：概览族 tab 数 = 1`).toBe(1)
   expect(harness.consoleErrors.filter((e) => e.startsWith('pageerror')), `${label}：零未捕获异常（INV-A4）`).toEqual([])
