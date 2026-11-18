@@ -64,20 +64,46 @@ function officialishSlots(): SectionSlotsFace & {
   return slots as never
 }
 
-/** 形状合法 ctx（sidebarRightTabs.register 可预占 id——官方 registry 同 id 二次注册抛错） */
+/** 形状合法 ctx（sidebarRightTabs 同型假体——register 可预占 id 抛错 + subscribe 同步失效通知，
+ *  官方 SidebarRightTabRegistry 同型：register disposer 内 refresh()→notify） */
 function fakeCtx(taken: readonly string[] = []): {
   get(name: string): unknown
   effects: [string, () => (() => void) | undefined][]
+  notifyRegistry(): void
+  releaseOverviewType(): void
 } {
   const effects: [string, () => (() => void) | undefined][] = []
+  const listeners = new Set<() => void>()
+  const takenIds = [...taken]
+  const notify = (): void => {
+    for (const listener of listeners) listener()
+  }
   return {
     effects,
+    notifyRegistry: notify,
+    releaseOverviewType: () => {
+      // task-loop 让位 = dispose 其页型注册（预占集移除 + registry 同步失效通知）
+      const i = takenIds.indexOf(OVERVIEW_KEY)
+      if (i >= 0) takenIds.splice(i, 1)
+      notify()
+    },
     get: (name: string) =>
       name === 'sidebarRightTabs'
         ? {
             register: (definition: { readonly id: string }) => {
-              if (taken.includes(definition.id)) throw new Error(`sidebarRight: tab type id "${definition.id}" is already registered`)
-              return () => {}
+              if (takenIds.includes(definition.id)) throw new Error(`sidebarRight: tab type id "${definition.id}" is already registered`)
+              const dispose = (): void => {
+                const i = takenIds.indexOf(definition.id)
+                if (i >= 0) takenIds.splice(i, 1)
+                notify()
+              }
+              return dispose
+            },
+            subscribe: (listener: () => void) => {
+              listeners.add(listener)
+              return () => {
+                listeners.delete(listener)
+              }
             },
           }
         : undefined,
@@ -107,20 +133,42 @@ describe('registerOverviewDockFace（裁决 1——project 概览拥有者两段
     expect(slots.occupants.some((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY)).toBe(true)
   })
 
-  it('类型撞车：task-loop 单装先注册同 id → fail-soft 记挫 + 槽通知补判重试落座', () => {
+  it('类型撞车补判（真机 task-loop 先装序）：撞车 deferred → 让位 dispose 即同步补判落座', () => {
     const slots = officialishSlots()
     const taken: string[] = [OVERVIEW_KEY]
     const ctx = fakeCtx(taken)
     const diag = registerOverviewDockFace(ctx, slots)
     expect(diag.registered).not.toContain('dswf-overview: dock tab type')
-    // 槽变更通知（task-loop 集成切换 dispose 页型后官方 subscribe 通知到达）→ 重试成功
-    taken.length = 0
-    slots.notify()
-    expect(diag.registered).toContain('dswf-overview: dock tab type')
-    // 补判重试一次语义：再次通知零重复注册
-    const typeCount = diag.registered.filter((n) => n === 'dswf-overview: dock tab type').length
-    slots.notify()
-    expect(diag.registered.filter((n) => n === 'dswf-overview: dock tab type').length).toBe(typeCount)
+    // task-loop 集成切换 dispose 页型——官方 registry disposer 内同步失效通知驱动补判
+    // （不经 slots 槽变更代理——真机 r4 实证该代理通道补判未生效）
+    ctx.releaseOverviewType()
+    expect(diag.registered.filter((n) => n === 'dswf-overview: dock tab type')).toHaveLength(1)
+    // 落座后后续通知零重复注册
+    ctx.notifyRegistry()
+    expect(diag.registered.filter((n) => n === 'dswf-overview: dock tab type')).toHaveLength(1)
+  })
+
+  it('类型撞车补判重挫不自灭：撞车未清的通知到达后仍可再试（直至落座）', () => {
+    const slots = officialishSlots()
+    const taken: string[] = [OVERVIEW_KEY]
+    const ctx = fakeCtx(taken)
+    const diag = registerOverviewDockFace(ctx, slots)
+    expect(diag.registered).not.toContain('dswf-overview: dock tab type')
+    // 无关注册变更通知（撞车仍在座）——补判重挫但订阅链不灭
+    taken.push('dswf-doc')
+    ctx.notifyRegistry()
+    expect(diag.registered).not.toContain('dswf-overview: dock tab type')
+    // 撞车清后再通知 → 落座
+    ctx.releaseOverviewType()
+    expect(diag.registered.filter((n) => n === 'dswf-overview: dock tab type')).toHaveLength(1)
+  })
+
+  it('registry subscribe 缺席宿主：撞车 fail-soft 记挫不炸装配（无补判通道诚实降级）', () => {
+    const slots = officialishSlots()
+    const ctx = fakeCtx([OVERVIEW_KEY])
+    const tabs = (ctx.get('sidebarRightTabs') as { subscribe?: unknown }) as Record<string, unknown>
+    delete tabs['subscribe']
+    expect(() => registerOverviewDockFace(ctx, slots)).not.toThrow()
   })
 
   it('effect 级联清理：撤销器执行后 body 占用零残留', () => {

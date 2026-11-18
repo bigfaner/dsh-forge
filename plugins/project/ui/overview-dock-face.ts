@@ -8,9 +8,14 @@
 //     （OVERVIEW_SECTIONS_CHILDREN——knowledge-dir / AC 进度两子槽宿主单点声明，
 //     ForgeOverviewSectionHost 经 renderSlot 消费 roster）。
 // 类型注册冲突裁决：官方 registry 同 id 二次注册抛错——task-loop 单装形态会先注册同
-// id 页型（其后到 project 时即让位）。先到撞车 = 本面 fail-soft 记挫后经
-// `sidebar.right.pane.tab` 槽订阅补判重试一次（task-loop 集成切换 dispose 页型 →
-// 槽变更通知 → 重试落座），全走官方 subscribe + register 正缝，零轮询零缓存。
+// id 页型（其后到 project 时即让位）。先到撞车 = 本面 fail-soft 记挫后经**撞车同表**的
+// 官方失效通知缝补判落座：SidebarRightTabRegistry.subscribe（ui-sidebar-right
+// lib/client.js:8836-8841——register enter :8711 / dispose leave :8715 均经 refresh() →
+// notifySubscribers :8842-8850 同步通知；类型面 types/client/tab-registry.d.ts:215）。
+// task-loop 集成切换 dispose 页型 → 同表同步通知 → 重试落座，通知与撞车源同表零代理
+// 零时序赌；未落座前通知每次重试（撞车未清重挫不自灭），落座即退订，全走官方
+// subscribe + register 正缝，零轮询零缓存。（r4 前版曾代理 slots 槽变更通知——间接缝
+// 与单发烧毁，真机实证补判未生效，bug c375d7c3。）
 // 数据通道：组件族缺省真身自洽（overviewRpcClientFactory 本地 forgeBugs 读缝 +
 // Typert 回落；锚自解析 = anchorProjectResolver 模块单例——桥缺席宿主水化门）。
 // 逐面 try/catch fail-soft（单面异常只降本面，console.warn 留痕不炸装配）。
@@ -38,9 +43,9 @@ interface SidebarRightTabsMirror {
   }): () => void
 }
 
-/** 官方 slots 槽变更订阅窄面（SlotCore.subscribe——键微任务批量通知，裁决 1 补判通道） */
-type SlotsSubscribeFace = SectionSlotsFace & {
-  subscribe?(slot: string, listener: () => void): (() => void) | undefined
+/** 官方 tab 注册表失效订阅窄面（SidebarRightTabRegistry.subscribe——同步失效回调） */
+type SidebarRightTabsSubscribeFace = SidebarRightTabsMirror & {
+  subscribe?(listener: () => void): (() => void) | undefined
 }
 
 /** 注册面诊断（registered = 实际落座面——e2e/排障锚） */
@@ -50,8 +55,8 @@ export interface OverviewDockFaceDiagnostics {
 
 /**
  * 概览 dock tab 族注册（裁决 1——project 恒 priority 0 拥有并渲染概览主体）：页型类型
- * 定义 + keyed body 两段，逐面 fail-soft。类型撞车（task-loop 单装先注册）= 订阅补判
- * 重试一次；body 撞车（同 key 同 priority）不吞——越权哨兵直抛外溢。
+ * 定义 + keyed body 两段，逐面 fail-soft。类型撞车（task-loop 单装先注册）= 记挫 +
+ * 撞车同表失效订阅补判落座；body 撞车（同 key 同 priority）不吞——越权哨兵直抛外溢。
  */
 export function registerOverviewDockFace(
   ctx: OfficialSeamCtx,
@@ -69,13 +74,13 @@ export function registerOverviewDockFace(
   const tabs = ctx.get('sidebarRightTabs') as SidebarRightTabsMirror | undefined
 
   // 第一段：页型类型定义 + guide 入口卡 order 0。撞车（task-loop 单装先注册同 id）=
-  // fail-soft 不记座 + 槽订阅补判重试一次（task-loop 集成切换 dispose 页型后通知到达重试）。
+  // fail-soft 记挫 + 撞车同表失效订阅补判（task-loop 集成切换 dispose 页型 → 同表同步
+  // 通知 → 重试落座即退订；subscribe 缺席宿主 = 无补判通道诚实降级不炸装配）。
   {
     if (tabs === undefined || typeof tabs.register !== 'function') {
       console.warn('[dsh-forge/project] ctx.sidebarRightTabs.register absent——概览页型不注册')
     } else {
       let disposeType: (() => void) | undefined
-      let retried = false
       const tryRegisterType = (): boolean => {
         if (disposeType !== undefined) return true
         try {
@@ -95,27 +100,26 @@ export function registerOverviewDockFace(
           disposeType = typeof dispose === 'function' ? dispose : undefined
           return true
         } catch (error) {
-          // 撞车记留痕（订阅补判重试一次）；registry 面缺席同径（补判再挫 = 单装形态
-          // task-loop 拥有页型，集成 body 本席仍渲染）
+          // 撞车记留痕（同表订阅补判，落座前每次通知重试；registry 面缺席同径）
           console.warn('[dsh-forge/project] overview tab type registration deferred——等待让位后补判', error)
           return false
         }
       }
       if (tryRegisterType()) registered.push(`${DSWF_OVERVIEW_TAB_KIND}: dock tab type`)
-      const ledger = slots as SlotsSubscribeFace
-      if (disposeType === undefined && typeof ledger.subscribe === 'function') {
-        const unsubscribe = ledger.subscribe(SIDEBAR_RIGHT_PANE_TAB_SLOT, () => {
-          if (retried || disposeType !== undefined) return
-          retried = true
+      const registry = tabs as SidebarRightTabsSubscribeFace
+      if (disposeType === undefined && typeof registry.subscribe === 'function') {
+        let unsubscribe: (() => void) | undefined
+        unsubscribe = registry.subscribe(() => {
+          if (disposeType !== undefined) return
           if (tryRegisterType()) {
             registered.push(`${DSWF_OVERVIEW_TAB_KIND}: dock tab type`)
+            console.info('[dsh-forge/project] overview tab type retry registered——补判落座（e2e 锚）')
             unsubscribe?.()
           }
         })
         ctx.effect?.call?.(
           ctx as object,
           () => () => {
-            retried = true
             unsubscribe?.()
           },
           'dswf-overview: 页型补判订阅',
