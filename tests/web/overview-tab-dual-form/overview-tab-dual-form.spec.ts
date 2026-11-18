@@ -23,6 +23,14 @@
 //       e2e 黑盒不可直读——占用归属以 AN-1/主体锚组合 DOM 代理判定（契约 AN-4
 //       「registrant + DOM 锚双证」的 e2e 可达半面；registrant 直读面归单元层
 //       dock-tabs-dual-form.test 持有）。
+//   [fix-6 锚调和 2026-11-18] 主体代理锚 data-dswf-ov-featurepage 退役——
+//       OVERVIEW_FEATURE_ENABLED=false（overview-model.ts 单测钉死，2026-11-14
+//       用户裁定消费面退场，默认子 tab = tasks，FeaturesTab 不再默认渲染）。
+//       AN-4 DOM 代理半面改锚 data-dswf-ov-sticky（project OverviewFrame sticky 条——
+//       project 唯一承载，task-loop 单装 seat 零此锚）；契约 last_anchor_sync 同步。
+//       bug 84acf85c 修复面（会话绑定开户 + 概览自解析缝 + ledger 归属径）随本
+//       锚承载同一「project 拥有 body」语义断言，断言强度不降（容器在座 + 唯一 + 
+//       AC 段 + tab 唯一 + 零 pageerror 全保留）。
 //
 // 留痕 skip（通道缺失记账——契约 Outcome 无法在本环境构造，非退役候选）：
 //   - CT-OVERVIEW-2/3/6（后装切换/运行期卸载/重装回切）：同会话不重启的插件
@@ -61,6 +69,12 @@ test.beforeAll(async () => {
   const { installViaPluginManager } = await import('../../project/support/official-host.js')
   await installViaPluginManager(harness.page, stage as OfficialHostStage, setupLog)
   await installPkgViaPluginManager(harness.page, stage as OfficialHostStage, TASK_LOOP_PKG_DIR, '@dsh-forge/task-loop', setupLog)
+  // 装载世代轮换（AGENTS 1.8 装载纪律）：安装期 page 仍持开装前 bundle 世代——重载后
+  // 运行面 = 正式安装的最新世代（manifest 双校已随安装流程断言），不重载 = 断言跑旧代
+  // 服务面（判例：真机三轮取证误测陈旧世代）。
+  await harness.page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await harness.page.waitForTimeout(12_000)
+  setupLog.push('reload after install: 装载世代轮换完成')
 })
 
 test.afterAll(async () => {
@@ -122,11 +136,22 @@ test('@hif-e2e @overview-dual-form CT-OVERVIEW-1 集成形态终态：project �
   // tab/AC 段/零叠加/零异常各锚照常断言。
   const projectListHealthy = (await page.getByText('项目列表加载失败').count()) === 0
   test.skip(!projectListHealthy, 'CT-OVERVIEW-1/O1 主体锚前置：主 home 存量 legacy project.db 开库退兜底（forgeProjects 降级）——环境级阻塞记账留痕，修口面（tab/AC/唯一性）照常验证')
-  // Output（CT-OVERVIEW-1-O1）：body = project 概览主体（AN-4 DOM 代理半面——disc-HIF-A-2）
+  // Output（CT-OVERVIEW-1-O1）：body = project 概览主体（AN-4 DOM 代理半面——fix-6 锚调和：
+  //   代理锚 = data-dswf-ov-sticky（project OverviewFrame sticky 条——子 tab 行/搜索/排序，
+  //   task-loop 单装 seat 零此锚，project 唯一承载；其容器 data-dswf-tt 仅在选中任务容器
+  //   时渲染——空容器项目不可用）。
+  //   前代理锚 data-dswf-ov-featurepage 退役（OVERVIEW_FEATURE_ENABLED=false 单测钉死——
+  //   overview-model.ts:45，2026-11-14 用户裁定消费面退场，默认子 tab = tasks）——契约意向锚
+  //   与实实现 divergence 经契约 last_anchor_sync 同步（2026-11-18 fix-6），非脚本内就地调和）
+  const sticky = page.locator('[data-dswf-ov-sticky]').first()
   await expect(
-    page.locator('[data-dswf-ov-featurepage]').first(),
-    'CT-OVERVIEW-1-O1：project 概览主体在座（占用者归属 = project）',
+    sticky,
+    'CT-OVERVIEW-1-O1：project 概览主体在座（占用者归属 = project——OverviewFrame sticky 实锚）',
   ).toBeVisible({ timeout: 30_000 })
+  await expect(
+    sticky.locator('[data-dswf-ov-subtab="tasks"]'),
+    'CT-OVERVIEW-1-O1：默认子 tab = tasks（feature 消费面退役形态）',
+  ).toBeVisible({ timeout: 10_000 })
   // Output（CT-OVERVIEW-1-O1）：AN-2 实锚 AC 进度段在座（disc-HIF-A-1）
   await expect(
     page.locator('[data-dswf-ov-ac]').first(),
@@ -135,9 +160,9 @@ test('@hif-e2e @overview-dual-form CT-OVERVIEW-1 集成形态终态：project �
   // Output（CT-OVERVIEW-1-O1）：概览族单 tab（侧栏无第二个独立任务概览 tab——O2 反向锚）
   expect(await page.locator(DOCKKIT_STRIP_TAB).filter({ hasText: '概览' }).count(), 'CT-OVERVIEW-1-O1：概览族 tab 数 = 1（400b3952 回归锚）').toBe(1)
   // State（CT-OVERVIEW-1-O3 反向）：task-loop body 未叠加——单装 body 形态缺席
-  // （disc-HIF-A-2：wrap 锚两形态均在座，叠加判定经 project 主体锚唯一承载；
-  //  body 叠加 = featurepage 与独立 body 双root同屏，此处以 tab 数唯一 + 主体锚唯一承载）
-  expect(await page.locator('[data-dswf-ov-featurepage]').count(), 'CT-OVERVIEW-1-O3/INV-A2：渲染主体唯一（无叠加）').toBe(1)
+  // （fix-6 锚调和：叠加判定经 project 主体锚唯一承载——data-dswf-tt 恰一），
+  //  body 叠加 = 主体容器与独立 body 双 root 同屏，此处以 tab 数唯一 + 主体锚唯一承载）
+  expect(await page.locator('[data-dswf-ov-sticky]').count(), 'CT-OVERVIEW-1-O3/INV-A2：渲染主体唯一（无叠加）').toBe(1)
   // 边界（CT-OVERVIEW-1-O4）：AC 段容器在座即空态渲染合规（上断言已覆盖容器在座）；
   // INV-A4：应用不崩溃不白屏（renderer 未捕获异常零新增）
   expect(harness.consoleErrors.filter((e) => e.startsWith('pageerror')), 'CT-OVERVIEW-1/INV-A4：零未捕获异常').toEqual([])

@@ -186,3 +186,14 @@ export function registerFailureCopy(failure: FlowFailure): FlowFailureCopy {
       }
   }
 }
+
+/**
+ * 注册成功会话开户寻址面（bug 84acf85c）：成功结果的 workspaceId 显式传参寻址——
+ * 官方 startSession(workspaceId) 内部 session.create({workspaceId}) 即官方唯一
+ * 绑定缝（attachSession durable 挂账）；workspaceId 缺席/空串 = undefined（不开户，
+ * 官方宿主面漂移防御）。缺席结果（无 result）同判 undefined。
+ */
+export function registeredWorkspaceIdOf(result: RegisterResult | null | undefined): string | undefined {
+  const workspaceId = result?.workspaceId
+  return typeof workspaceId === 'string' && workspaceId !== '' ? workspaceId : undefined
+}

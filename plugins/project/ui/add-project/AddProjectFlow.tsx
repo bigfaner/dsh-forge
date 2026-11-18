@@ -32,6 +32,7 @@ import { rpcDirSource, type DirSource } from './dir-source.js'
 import { flowActions, rpcRegisterSource, type RegisterSource } from './flow-actions.js'
 import {
   registerFailureCopy,
+  registeredWorkspaceIdOf,
   formMountedOf,
   initialFlowState,
   modalClassName,
@@ -278,6 +279,13 @@ export interface AddProjectFlowProps {
   readonly successAutoCloseMs?: number
   /** 注册成功通知（2.12 hero 消退锚——项目数驱动面的刷新提示） */
   readonly onRegistered?: (result: RegisterResult) => void
+  /**
+   * 注册成功会话开户面（bug 84acf85c——官方 uiWorkspace.startSession(workspaceId)）：
+   * 成功相位一次性调用（显式传参官方绑定缝——session.create({workspaceId}) 即官方唯一
+   * attachSession durable 挂账径；AGENTS 3.4 创建绑定 = 创建请求显式传参）。缺席 =
+   * 现行形态（注册后不开户，零行为差异——fail-soft 装配面）。
+   */
+  readonly openRegisteredWorkspace?: (workspaceId: string) => void
   /** 流程收场通知（取消干净退出 / 失败关闭 / 成功自动关闭同径） */
   readonly onClose?: () => void
 }
@@ -295,6 +303,7 @@ export function AddProjectFlow({
   nativePicker,
   successAutoCloseMs = DEFAULT_SUCCESS_AUTOCLOSE_MS,
   onRegistered,
+  openRegisteredWorkspace,
   onClose,
 }: AddProjectFlowProps): ReactNode {
   const [open, setOpen] = useState(false)
@@ -309,6 +318,11 @@ export function AddProjectFlow({
   onRegisteredRef.current = onRegistered
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
+  // 会话开户面 ref 桥 + 一次性守卫（bug 84acf85c：成功相位恰一调用——strict 重挂/终态
+  // 重入不重复开户；面缺席 = 不开户零行为差异）
+  const openRegisteredWorkspaceRef = useRef(openRegisteredWorkspace)
+  openRegisteredWorkspaceRef.current = openRegisteredWorkspace
+  const openedWorkspaceRef = useRef<string | undefined>(undefined)
   // 已注册集合 ref 桥（原生选取 resolve 期读最新集——挂接预演标记判据）
   const registeredPathsRef = useRef(registeredPaths)
   registeredPathsRef.current = registeredPaths
@@ -366,10 +380,16 @@ export function AddProjectFlow({
     }
   }, [openFlow])
 
-  // 成功：通知宿主（2.12 hero 消退锚）+ 自动关闭（AC3）
+  // 成功：通知宿主（2.12 hero 消退锚）+ 会话开户（bug 84acf85c——官方 startSession
+  // 显式携 workspace，绑定会话出生即挂账）+ 自动关闭（AC3）
   useEffect(() => {
     if (flow.phase !== 'success') return
     if (flow.result !== null) onRegisteredRef.current?.(flow.result)
+    const workspaceId = registeredWorkspaceIdOf(flow.result)
+    if (workspaceId !== undefined && openedWorkspaceRef.current !== workspaceId) {
+      openedWorkspaceRef.current = workspaceId
+      openRegisteredWorkspaceRef.current?.(workspaceId)
+    }
     const timer = setTimeout(finish, successAutoCloseMs)
     return () => {
       clearTimeout(timer)

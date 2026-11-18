@@ -157,8 +157,9 @@ export function ForgeSidebarSlot({
       />
       {/* 1.8 D 类接线：流程宿主随本槽位件常驻挂载（官方宿主无壳装配——mount 期发布
           __DSH_FORGE_ADD_PROJECT_FLOW__ 页内缝，空态 CTA / hero CTA 经 openAddProjectFlow
-          直达；数据源 = AddProjectFlow 缺省 Typert 真身；注册成功 → 静默重拉对齐列表）。 */}
-      <AddProjectFlow onRegistered={silentRefreshProjects} />
+          直达；数据源 = AddProjectFlow 缺省 Typert 真身；注册成功 → 静默重拉对齐列表 +
+          官方 startSession(workspaceId) 会话开户——bug 84acf85c 绑定会话出生即挂账）。 */}
+      <AddProjectFlow onRegistered={silentRefreshProjects} openRegisteredWorkspace={startSession} />
     </>
   )
 }

@@ -25,6 +25,7 @@ import {
   isCancelPoint,
   modalClassName,
   registerFailureCopy,
+  registeredWorkspaceIdOf,
   selectDirectory,
   toFlowFailure,
   type FlowState,
@@ -267,5 +268,17 @@ describe('失败文案映射（registerFailureCopy：AC4 typed error code → �
     const copy = registerFailureCopy({ code: null, message: 'm', compensated: false })
     expect(copy.title).toContain('注册失败')
     expect(copy.detail).not.toBe('')
+  })
+})
+
+describe('registeredWorkspaceIdOf（bug 84acf85c——注册成功会话开户寻址面）', () => {
+  it('成功结果 → 携 workspaceId（官方 startSession 显式传参寻址面）', () => {
+    expect(registeredWorkspaceIdOf({ projectId: 'p1', workspaceId: 'w1', attachedToExisting: false })).toBe('w1')
+    expect(registeredWorkspaceIdOf({ projectId: 'p1', workspaceId: 'w2', attachedToExisting: true })).toBe('w2')
+  })
+
+  it('空串/缺席结果 → undefined（不开户——面漂移防御）', () => {
+    expect(registeredWorkspaceIdOf(undefined)).toBeUndefined()
+    expect(registeredWorkspaceIdOf({ projectId: 'p1', workspaceId: '', attachedToExisting: false })).toBeUndefined()
   })
 })

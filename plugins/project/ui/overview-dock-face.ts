@@ -22,6 +22,7 @@
 import { PRIORITY_PROJECT_OVERVIEW_OWNER } from '@dsh-forge/lib-ui'
 import { DSWF_OVERVIEW_TAB_KIND, ForgeOverviewSectionHost, OVERVIEW_SECTIONS_CHILDREN } from './dock-tabs/dock-tabs.js'
 import { registerKeyedSection, type SectionSlotsFace } from './keyed-section.js'
+import type { ForgeSessionsService, ForgeWorkspacesService } from './session-actions.js'
 import { SIDEBAR_RIGHT_PANE_TAB_SLOT, type OfficialSeamCtx } from './official-seams.js'
 
 /** 概览页型标题（guide 入口卡与 tab chip 同词——壳侧退役词条同源字面） */
@@ -136,11 +137,22 @@ export function registerOverviewDockFace(
   // 第二段：keyed body priority 0（拥有者席位）+ 子槽声明表（knowledge-dir / AC 进度
   // 宿主单点声明——ForgeOverviewSectionHost renderSlot 消费 roster）。同 key 同 priority
   // 撞车由官方 slots 抛错（越权哨兵），face 记挫不外溢炸装配。
+  // selfAnchor 服务缝（bug 84acf85c——概览自解析退路的数据源）：声明缝 cb 内现查官方
+  // sessions/workspaces 服务（时序纪律同 sidebar-face——槽声明在场时点服务已入座；
+  // 缺席 = warn 留痕、inject 空 selfAnchor（= 现行无锚形态零行为差异）。
   face(`${SIDEBAR_RIGHT_PANE_TAB_SLOT}:${DSWF_OVERVIEW_TAB_KIND}`, () => {
+    const sessions = ctx.get('sessions') as ForgeSessionsService | undefined
+    const workspaces = ctx.get('workspaces') as ForgeWorkspacesService | undefined
+    if (sessions === undefined || workspaces === undefined) {
+      console.warn('[dsh-forge/project] sessions/workspaces absent at slot seating——概览自解析缝不开（无锚空态保持）')
+    }
+    const inject = (): Record<string, unknown> =>
+      sessions === undefined || workspaces === undefined ? {} : { selfAnchor: { sessions, workspaces } }
     const dispose = registerKeyedSection(slots, {
       slot: SIDEBAR_RIGHT_PANE_TAB_SLOT,
       key: DSWF_OVERVIEW_TAB_KIND,
       priority: PRIORITY_PROJECT_OVERVIEW_OWNER,
+      inject,
       children: OVERVIEW_SECTIONS_CHILDREN,
       component: ForgeOverviewSectionHost,
     })

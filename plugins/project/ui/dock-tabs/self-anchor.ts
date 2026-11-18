@@ -49,26 +49,33 @@ function workspacesSnapshotOf(list: unknown): LedgerWorkspacesSnapshot | null {
 /**
  * 概览锚自解析（纯异步——hook 径与单测共面）：主视图会话 → 归属 workspace 行 path →
  * 解析缝归属裁决 → 项目锚定。任一环缺席/漂移/抛错 = null（消费方维持桥锚现状语义）。
+ * 诊断留痕（AGENTS §7 失败路径不静默——bug 84acf85c 真机取证面）：null 终态逐环 log
+ * 原因（info 级——fail-soft 设计内形态，非错误）。
  */
 export async function resolveSelfAnchor(
   services: SelfAnchorServices | undefined,
   resolveProjectId: AnchorProjectResolver,
 ): Promise<SelfAnchorContext | null> {
-  if (services === undefined) return null;
+  const fail = (reason: string): null => {
+    console.info(`[dsh-forge/project] overview self-anchor 未解析：${reason}`);
+    return null;
+  };
+  if (services === undefined) return fail("services 缺席");
   const sessionId = activeSessionIdOf(services.sessions.list);
-  if (sessionId === undefined) return null;
+  if (sessionId === undefined) return fail("活跃会话缺席（retainedBy.mainView 零在留行）");
   const snapshot = workspacesSnapshotOf(services.workspaces.list);
-  if (snapshot === null) return null;
+  if (snapshot === null) return fail("workspaces 快照形状漂移");
   const home = snapshot.items.find((row) => Array.isArray(row.sessionIds) && row.sessionIds.includes(sessionId));
   const path = home?.path;
-  if (typeof path !== "string" || path === "") return null;
+  if (typeof path !== "string" || path === "") return fail(`会话 ${sessionId} 不在归属行任一 sessionIds（零绑定）`);
   let projectId: string | undefined;
   try {
     projectId = await resolveProjectId(path);
-  } catch {
-    return null;
+  } catch (cause) {
+    return fail(`归属裁决抛错：${path}：${String(cause)}`);
   }
-  if (projectId === undefined) return null;
+  if (projectId === undefined) return fail(`归属裁决未命中：${path}（未注册/未解析）`);
+  console.info(`[dsh-forge/project] overview self-anchor 解析落座：${sessionId} → ${path} → ${projectId}`);
   return {
     projectId,
     workspaceId: typeof home?.workspaceId === "string" ? home.workspaceId : null,
