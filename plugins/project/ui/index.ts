@@ -179,7 +179,7 @@ export * from './session-actions.js'
 import { registerOfficialSeamFaces, revokeOfficialSeamGlobals } from './official-seams.js'
 import { registerOverviewDockFace } from './overview-dock-face.js'
 import { FORGE_REMOTE_CONTRIBUTION } from './remote.js'
-import { createForgeRpcClient, FORGE_REMOTE_NAMESPACES, forgeFaceOf, installForgeRemoteFace, markForgeRemoteMountSettled } from './rpc.js'
+import { FORGE_REMOTE_NAMESPACES, forgeFaceOf, installForgeRemoteFace, markForgeRemoteMountSettled } from './rpc.js'
 import { installWorktreePrefsFace, type ConfigFormsFace } from './settings-section/index.js'
 import { registerSettingsSection } from './settings-section/index.js'
 import { registerWorktreeDetailSection } from './detail-section/index.js'
@@ -190,8 +190,7 @@ import {
 import { registerConversationToolFaces } from './conversation-views-face.js'
 import { registerSidebarFace } from './sidebar-face.js'
 import { registerHeroPickerFace } from './hero-picker-face.js'
-import { startHeroEmptySelfDrive, type HeroLayoutFace } from './hero-panel-drive.js'
-import { registerHeroPanelFace, type SidebarRightOpenTabFace } from './hero-panel-face.js'
+import { registerHeroPanelFace } from './hero-panel-face.js'
 import type { LocaleServiceFace } from './locale.js'
 
 // ── keyed section 扩展点 + 配置节双缝（1.16：tab keyed 占用者模式泛化 + settings 节
@@ -236,38 +235,6 @@ export {
 // reconcile failures 可见诊断）。六族 namespace 键与形状校验单源 = ui/rpc.ts（FORGE_REMOTE_
 // NAMESPACES + forgeFaceOf——bug 145b3d3b 归一修口所在，本文件零副本）。
 
-/** 官方 layout 服务窄读（ctx.get/reflect 逐调用现查不缓存——缺席/劣形 = undefined 诚实降级） */
-function layoutFaceOf(rec: unknown): HeroLayoutFace | undefined {
-  try {
-    const get = (rec as { get?: (name: string) => unknown } | undefined)?.['get']
-    const viaGet = typeof get === 'function' ? get.call(rec, 'layout') : undefined
-    if (viaGet !== undefined && viaGet !== null && typeof viaGet === 'object') return viaGet as HeroLayoutFace
-    const reflect = (rec as { reflect?: { get?: (key: string) => unknown } } | undefined)?.['reflect']
-    const viaReflect = typeof reflect?.get === 'function' ? reflect.get('layout') : undefined
-    return viaReflect !== undefined && viaReflect !== null && typeof viaReflect === 'object'
-      ? (viaReflect as HeroLayoutFace)
-      : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/** 官方右栏服务窄读（bug bd544d59 hero 相位可达缝注入源——ctx.get/reflect 现查零缓存） */
-function sidebarRightFaceOf(rec: unknown): SidebarRightOpenTabFace | undefined {
-  try {
-    const get = (rec as { get?: (name: string) => unknown } | undefined)?.['get']
-    const viaGet = typeof get === 'function' ? get.call(rec, 'sidebarRight') : undefined
-    if (viaGet !== undefined && viaGet !== null && typeof viaGet === 'object') return viaGet as SidebarRightOpenTabFace
-    const reflect = (rec as { reflect?: { get?: (key: string) => unknown } } | undefined)?.['reflect']
-    const viaReflect = typeof reflect?.get === 'function' ? reflect.get('sidebarRight') : undefined
-    return viaReflect !== undefined && viaReflect !== null && typeof viaReflect === 'object'
-      ? (viaReflect as SidebarRightOpenTabFace)
-      : undefined
-  } catch {
-    return undefined
-  }
-}
-
 export const projectClient = {
   // 'remote' 边声明（官方 client-ui-forge 同型——mount.ts inject = ['remote', ...]；
   // namespace 边不在主插件声明：namespace 由本插件 $mount 自供，主插件声明 =
@@ -285,8 +252,6 @@ export const projectClient = {
   ] as string[],
   apply(ctx: unknown): void {
     const rec = ctx as Record<string, unknown> | undefined
-    // hero 面板注册标记（apply 同步段置位——remote $mount 就绪回调读，时序安全）
-    let heroPanelRegistered = false
     // 1.38 正典化装配：①官方 Typert remote 贡献挂载（$mount——六族 forge:* descriptor
     // 表进调用方 fiber，namespace 服务随 fiber 撤销级联拆卸）；②forge remote 六族面 +
     // configForms 偏好面解析缝安装（逐调用现查不缓存——AGENTS 1.6 检测永不缓存）。
@@ -309,16 +274,12 @@ export const projectClient = {
           .then(() => {
             markForgeRemoteMountSettled()
             console.info('[dsh-forge/project] forge remote contribution mounted')
-            // bug 295223da：hero 空态自判定（remote 面就绪后驱动——无壳官方宿主零项目
-            // → 官方 layout.selectPanel('dswf-hero') 单发；壳宿主缝在场 = ShellHost 单驱动）。
-            if (heroPanelRegistered) {
-              void startHeroEmptySelfDrive({
-                layoutOf: () => layoutFaceOf(rec),
-                projectsCount: async () => (await createForgeRpcClient().projects.list()).length,
-              }).then((driven) => {
-                console.info(`[dsh-forge/project] hero empty self-drive driven=${driven}`)
-              })
-            }
+            // bug bd544d59（fix-3）：hero 空态自判定退役——无壳官方宿主零项目
+            // selectPanel('dswf-hero') 把主列切离会话面，官方右栏控制器（ui-sidebar-right
+            // ISidebarRight）require session surface 即拒（真机实证「no session surface is
+            // mounted」）→ ExpandButton/概览/Bug tab 全右栏面不可达。空态引导已有会话面内
+            // 替代呈现（ForgeHeroWorkspacePicker「添加项目…」空集直达 + sidebar 添加项目
+            // CTA）；hero 面板仍归壳宿主 ShellHost 单驱动（295223da 语义不变）。
           })
           .catch((error: unknown) => {
             markForgeRemoteMountSettled()
@@ -397,11 +358,11 @@ export const projectClient = {
       console.warn('[dsh-forge/project] conversation tool faces registration interrupted', error)
     }
     // hero 面板（1.44 迁入——main keyed 'dswf-hero'，零项目引导 + HeroEmpty CTA[D 类载体]）。
-    // bug 295223da：无壳官方宿主空态自判定在 remote $mount 就绪回调触发（上方）——此处
-    // 只置注册标记；壳宿主 ShellHost 单驱动语义不变（hero-panel-drive 壳缝在场即跳过）。
+    // bug bd544d59（fix-3）：选中驱动单源归壳宿主 ShellHost——插件侧空态自判定已退役
+    // （无壳官方宿主 selectPanel('dswf-hero') 切离会话面 → 官方右栏控制器 require
+    // session surface 拒 → 右栏全面不可达；空态引导由会话面内 hero picker/侧栏 CTA 承载）。
     try {
-      const ok = registerHeroPanelFace(slots, () => sidebarRightFaceOf(rec))
-      heroPanelRegistered = ok
+      const ok = registerHeroPanelFace(slots)
       console.info(`[dsh-forge/project] hero panel face registered=${ok}`)
     } catch (error) {
       console.warn('[dsh-forge/project] hero panel registration failed——降级不注册', error)
