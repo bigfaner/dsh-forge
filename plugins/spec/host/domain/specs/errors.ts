@@ -26,7 +26,8 @@ export type SpecErrorCode =
    | "ERR_SPEC_MOVE_ANCHOR_INVALID"
    | "ERR_SPEC_AC_INVALID"
    | "ERR_SPEC_AC_ADDRESS_UNKNOWN"
-   | "ERR_SPEC_CONFIRM_NOT_ACHIEVED";
+   | "ERR_SPEC_CONFIRM_NOT_ACHIEVED"
+   | "ERR_SPEC_INCLUDE_UNKNOWN";
 
 export interface SpecErrorData {
   readonly code: SpecErrorCode;

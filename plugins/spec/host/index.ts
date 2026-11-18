@@ -174,7 +174,7 @@ export function registerSpecToolFamily(
   const toolsFace = toolsFaceOf(ctx)
   const register = typeof toolsFace?.register === "function" ? toolsFace.register.bind(toolsFace) : undefined
   if (register === undefined) {
-    diag("[spec] ctx.tools.register 缺席（官方 tools 缝缺失）——spec 工具面零注册（六动词对本宿主不可达，降级不阻载）", "warn")
+    diag("[spec] ctx.tools.register 缺席（官方 tools 缝缺失）——spec 工具面零注册（22 动词对本宿主不可达，降级不阻载）", "warn")
     return { dispose: () => {} }
   }
   const family = assembleSpecToolFamily({ services, ctx, diag })
@@ -197,7 +197,7 @@ export function registerSpecToolFamily(
           // 宿主注销面异常隔离——卸载收口不外抛
         }
       }
-      diag("[spec] 工具族注销收口：六动词注册全量撤回", "info")
+      diag("[spec] 工具族注销收口：22 动词注册全量撤回", "info")
     },
   }
 }

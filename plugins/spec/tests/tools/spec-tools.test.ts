@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { isForgeToolFailure, specDocRelPath, type ForgeToolFailure } from "@dsh-forge/lib-api";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
 import { createForgeSpecsService, SpecError, type ForgeSpecsService } from "../../host/domain/specs/service.js";
+import { createForgeToolServices, type ForgeToolServices } from "../../host/domain/specs/tool-service.js";
 import { createSpecTools, FORGE_SPEC_TOOL_NAMES } from "../../host/tools/index.js";
 import type { SpecToolExecFace } from "../../host/tools/faces.js";
 import type { AcMatchRow, AcSettlementsFace } from "../../host/tools/projection.js";
@@ -32,18 +33,31 @@ function harness(opts: { failWrite?: boolean } = {}) {
       void projectKey;
     },
   });
-  const tools = createSpecTools({ specs: service });
+  const verbs: ForgeToolServices = createForgeToolServices({
+    db: domain.db,
+    repos: domain.repos,
+    specs: service,
+  });
+  const tools = createSpecTools({ specs: service, verbs });
   const counts = () => ({
     specs: (domain.db.prepare(`SELECT COUNT(*) AS n FROM spec_specs`).get() as { n: number }).n,
     goals: (domain.db.prepare(`SELECT COUNT(*) AS n FROM spec_goals`).get() as { n: number }).n,
     acs: (domain.db.prepare(`SELECT COUNT(*) AS n FROM spec_acs`).get() as { n: number }).n,
     docs: (domain.db.prepare(`SELECT COUNT(*) AS n FROM spec_docs`).get() as { n: number }).n,
   });
-  return { service: service as ForgeSpecsService, tools, counts, close: () => domain.db.close() };
+  return {
+    service: service as ForgeSpecsService,
+    db: domain.db,
+    repos: domain.repos,
+    verbs,
+    tools,
+    counts,
+    close: () => domain.db.close(),
+  };
 }
 
-/** 投影缝替身组合根：以显式 seam 重建工具组（AGENTS 1.6——缝每次调用期求值） */
-function toolsWithSeam(service: ForgeSpecsService, rows: readonly AcMatchRow[]) {
+/** 投影缝替身组合根：以显式 seam 重建组合根 + 工具组（AGENTS 1.6——缝每次调用期求值） */
+function toolsWithSeam(h: ReturnType<typeof harness>, rows: readonly AcMatchRow[]) {
   const seam: AcSettlementsFace = {
     matchAcSettlements: (_projectKey, criteria) => {
       const matches = criteria.map(
@@ -55,7 +69,13 @@ function toolsWithSeam(service: ForgeSpecsService, rows: readonly AcMatchRow[]) 
       });
     },
   };
-  return createSpecTools({ specs: service, acSettlementsOf: () => seam });
+  const verbsWithSeam = createForgeToolServices({
+    db: h.db,
+    repos: h.repos,
+    specs: h.service,
+    acSettlementsOf: () => seam,
+  });
+  return createSpecTools({ specs: h.service, verbs: verbsWithSeam });
 }
 
 const validGoals = [
@@ -118,13 +138,13 @@ describe("create_spec（AC1——单动词全集落库 + 文档写 specs/slug/sp
   });
 });
 
-describe("六动词注册名单（薄封装门面）", () => {
-  it("FORGE_SPEC_TOOL_NAMES 六员与定义组一一对应", () => {
+describe("22 动词注册名单（薄封装门面——tools.md 总表逐行）", () => {
+  it("FORGE_SPEC_TOOL_NAMES 22 员与定义组一一对应", () => {
     const h = harness();
     try {
-      expect(FORGE_SPEC_TOOL_NAMES).toHaveLength(6);
+      expect(FORGE_SPEC_TOOL_NAMES).toHaveLength(22);
       const names = Object.values(h.tools).map((t) => t.name);
-      expect(names).toHaveLength(6);
+      expect(names).toHaveLength(22);
       for (const name of FORGE_SPEC_TOOL_NAMES) expect(names).toContain(name);
     } finally {
       h.close();
@@ -201,18 +221,32 @@ describe("update_spec / replace_spec_goals / transition_spec（调整族 + 状�
   });
 });
 
-describe("query_spec / list_specs（查询族薄封装 + AC 投影缝）", () => {
-  it("父链追溯：goals/acs 三跳出 + 台账在列；未知 slug → ERR_SPEC_NOT_FOUND 失败面", async () => {
+describe("query_spec / list_specs（查询族薄封装 + include 封闭枚举）", () => {
+  it("缺省 = 快照 + goalCount 概览；include=goals+transitions 展开父链 + 台账；未知 slug → ERR_SPEC_NOT_FOUND 失败面", async () => {
     const h = harness();
     try {
       await createDemo(h);
-      const result = (await h.tools.querySpec.execute({ slug: "demo-spec" }, execOf())) as {
-        goals: { title: string; acs: { criterion: string }[] }[];
+      const basic = (await h.tools.querySpec.execute({ slug: "demo-spec" }, execOf())) as {
+        spec: { slug: string };
+        goalCount: number;
+        goals?: unknown[];
+        transitions?: unknown[];
+      };
+      expect(basic.spec.slug).toBe("demo-spec");
+      expect(basic.goalCount).toBe(2);
+      expect(basic.goals).toBeUndefined();
+      expect(basic.transitions).toBeUndefined();
+      const expanded = (await h.tools.querySpec.execute(
+        { slug: "demo-spec", include: ["goals", "transitions"] },
+        execOf(),
+      )) as {
+        goals: { title: string; goalSeq: number; goalStatus: string }[];
         transitions: unknown[];
       };
-      expect(result.goals.map((g) => g.title)).toEqual(["目标一", "目标二"]);
-      expect(result.goals[0]!.acs.map((a) => a.criterion)).toEqual(["判据 A", "判据 B"]);
-      expect(result.transitions).toHaveLength(0);
+      expect(expanded.goals.map((g) => g.title)).toEqual(["目标一", "目标二"]);
+      expect(expanded.goals.map((g) => g.goalSeq)).toEqual([1, 2]);
+      expect(expanded.goals.every((g) => g.goalStatus === "pending")).toBe(true);
+      expect(expanded.transitions).toHaveLength(0);
       const missing = (await h.tools.querySpec.execute({ slug: "nope" }, execOf())) as ForgeToolFailure;
       expect(isForgeToolFailure(missing)).toBe(true);
       expect(missing.code).toBe("ERR_SPEC_NOT_FOUND");
@@ -221,28 +255,37 @@ describe("query_spec / list_specs（查询族薄封装 + AC 投影缝）", () =>
     }
   });
 
-  it("include_ac_projection：缝在场三态映射（met/unmet/unmatched）；缝缺席 → 全 no-task-data", async () => {
+  it("include=acProjection：缝在场三态映射（met/unmet）；缝缺席 → 全 no-task-data；未知 include 值 typed 拒", async () => {
     const h = harness();
     try {
       await createDemo(h);
-      const withSeam = toolsWithSeam(h.service, [
+      const withSeam = toolsWithSeam(h, [
         { criterion: "判据 A", met: true, evidence: "e1", taskRefs: ["demo/1.1"] },
         { criterion: "判据 B", met: false },
         { criterion: "判据 C", met: false },
       ]);
       const result = (await withSeam.querySpec.execute(
-        { slug: "demo-spec", include_ac_projection: true },
+        { slug: "demo-spec", include: ["acProjection"] },
         execOf(),
-      )) as { acProjection: { criterion: string; state: string }[] };
-      expect(result.acProjection.map((p) => p.state)).toEqual(["met", "unmet", "unmet"]);
-      expect(result.acProjection.filter((p) => p.unmatched === true).map((p) => p.criterion)).toEqual(["判据 B", "判据 C"]);
+      )) as { goals: { acs: { criterion: string; state: string }[] }[] };
+      const flat = result.goals.flatMap((g) => g.acs);
+      expect(flat.map((p) => p.state)).toEqual(["met", "unmet", "unmet"]);
+      expect(flat[0]).toEqual({ criterion: "判据 A", state: "met" });
 
       // 缺席缝降级（default 工具组零 acSettlementsOf）
       const degraded = (await h.tools.querySpec.execute(
-        { slug: "demo-spec", include_ac_projection: true },
+        { slug: "demo-spec", include: ["acProjection"] },
         execOf(),
-      )) as { acProjection: { criterion: string; state: string }[] };
-      expect(degraded.acProjection.map((p) => p.state)).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
+      )) as { goals: { acs: { state: string }[] }[] };
+      expect(degraded.goals.flatMap((g) => g.acs).map((p) => p.state)).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
+
+      // 封闭枚举：未知值 typed Error 拒（AC-3）
+      const unknown = (await h.tools.querySpec.execute(
+        { slug: "demo-spec", include: ["bogus"] },
+        execOf(),
+      )) as ForgeToolFailure;
+      expect(isForgeToolFailure(unknown)).toBe(true);
+      expect(unknown.code).toBe("ERR_SPEC_INCLUDE_UNKNOWN");
     } finally {
       h.close();
     }

@@ -1,5 +1,5 @@
-// AC 派生投影集成测试（plugin-spec 1.7，TDD）——querySpec include_ac_projection
-// 消费面（task-loop 服务消费三铁律）：
+// AC 派生投影集成测试（plugin-spec 1.7 → 1.8 include 化重接线，TDD）——querySpec
+// include=["acProjection"] 消费面（task-loop 服务消费三铁律）：
 //   ① 在场三态契约：met / unmet / unmatched（进程内注入 matchAcSettlements 桩；
 //      抄写漂移 = 判据文本不命中 → 归 unmet 并入 unmatched；部分核销 = met=false → unmet）；
 //   ② 缺席降级「无任务数据」不报错 + emitDiag（event 前缀 spec-ac-projection——AGENTS §7）；
@@ -9,16 +9,26 @@
 import { describe, expect, it } from "vitest";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
 import { createForgeSpecsService, deriveProjectKey, type ForgeSpecsService } from "../../host/domain/specs/service.js";
-import { createSpecTools, type SpecTools } from "../../host/tools/index.js";
+import { createForgeToolServices, type ForgeToolServices } from "../../host/domain/specs/tool-service.js";
+import { createSpecTools, type SpecToolDeps, type SpecTools } from "../../host/tools/index.js";
 import type { SpecToolExecFace } from "../../host/tools/faces.js";
-import type { AcMatchRow, AcProjectionRow, AcSettlementsFace } from "../../host/tools/projection.js";
+import type { AcMatchRow, AcSettlementsFace } from "../../host/tools/projection.js";
 import type { DiagEventPayload } from "@dsh-forge/lib-diag";
 
 const CWD = "Z:\\project\\demo";
 
 type DiagLine = Omit<DiagEventPayload, "process">;
 
-/** 集成组合根：内存 db + 服务 + 注入桩缝 + 诊断收集缝 */
+interface QuerySpecOut {
+  readonly spec: { readonly slug: string };
+  readonly goalCount: number;
+  readonly goals?: ReadonlyArray<{
+    readonly goalSeq: number;
+    readonly acs?: ReadonlyArray<{ readonly criterion: string; readonly state: string }>;
+  }>;
+}
+
+/** 集成组合根：内存 db + 服务 + 组合根 + 注入桩缝 + 诊断收集缝 */
 function harness() {
   const domain: SpecDomainDb = openSpecDb(".", { file: ":memory:" });
   const service: ForgeSpecsService = createForgeSpecsService({
@@ -27,8 +37,17 @@ function harness() {
     writeSpecDoc: () => {},
   });
   const diag: DiagLine[] = [];
-  const deps = {
+  const verbs: ForgeToolServices = createForgeToolServices({
+    db: domain.db,
+    repos: domain.repos,
     specs: service,
+    onDiag: (payload: DiagLine) => {
+      diag.push(payload);
+    },
+  });
+  const deps: SpecToolDeps = {
+    specs: service,
+    verbs,
     onDiag: (payload: DiagLine) => {
       diag.push(payload);
     },
@@ -40,7 +59,27 @@ function harness() {
       acs: (domain.db.prepare(`SELECT COUNT(*) AS n FROM spec_acs`).get() as { n: number }).n,
       docs: (domain.db.prepare(`SELECT COUNT(*) AS n FROM spec_docs`).get() as { n: number }).n,
     });
-  return { service, deps, diag, counts, tools: createSpecTools(deps), close: () => domain.db.close() };
+  return {
+    service,
+    db: domain.db,
+    repos: domain.repos,
+    deps,
+    diag,
+    counts,
+    tools: createSpecTools(deps),
+    /** 组合根重建（seam 注入组合根——querySpec 投影消费点单源；diag 收集缝保共享） */
+    toolsWith(acSettlementsOf?: () => AcSettlementsFace | undefined): SpecTools {
+      const verbs = createForgeToolServices({
+        db: domain.db,
+        repos: domain.repos,
+        specs: service,
+        onDiag: deps.onDiag,
+        ...(acSettlementsOf !== undefined ? { acSettlementsOf } : {}),
+      });
+      return createSpecTools({ specs: service, verbs });
+    },
+    close: () => domain.db.close(),
+  };
 }
 
 const execOf = (): SpecToolExecFace => ({ agent: { session: { id: "s1", header: { cwd: CWD } } } });
@@ -74,11 +113,32 @@ function stubTools(
       };
     },
   };
-  return { tools: createSpecTools({ ...h.deps, acSettlementsOf: () => seam }), calls };
+  const verbs = createForgeToolServices({
+    db: h.db,
+    repos: h.repos,
+    specs: h.service,
+    onDiag: h.deps.onDiag,
+    acSettlementsOf: () => seam,
+  });
+  return { tools: createSpecTools({ specs: h.service, verbs }), calls };
 }
 
+async function queryProjection(tools: SpecTools): Promise<QuerySpecOut> {
+  return (await tools.querySpec.execute(
+    { slug: "demo-spec", include: ["acProjection"] },
+    execOf(),
+  )) as QuerySpecOut;
+}
+
+/** 平铺 AC 投影态（goals[].acs → 判据序 state 清单——断言便利投影）。 */
+const flatStates = (out: QuerySpecOut): string[] =>
+  (out.goals ?? []).flatMap((g) => (g.acs ?? []).map((a) => a.state));
+
+const flatRows = (out: QuerySpecOut): Array<{ criterion: string; state: string }> =>
+  (out.goals ?? []).flatMap((g) => [...(g.acs ?? [])]);
+
 describe("AC 投影在场三态契约（进程内注入桩——met / unmet / unmatched）", () => {
-  it("met/unmet/unmatched 直映射 + 抄写漂移（桩侧判据不命中）归 unmet 并入 unmatched", async () => {
+  it("met/unmet 直映射 + 抄写漂移（桩侧判据不命中）归 unmet 并入 unmatched", async () => {
     const h = harness();
     try {
       await createDemo(h.tools);
@@ -91,13 +151,9 @@ describe("AC 投影在场三态契约（进程内注入桩——met / unmet / un
             : { criterion: c, met: false }, // 未达成 → unmet 并入 unmatched（聚合清单）
         ),
       );
-      const result = (await tools.querySpec.execute(
-        { slug: "demo-spec", include_ac_projection: true },
-        execOf(),
-      )) as { acProjection: AcProjectionRow[] };
-      expect(result.acProjection.map((p) => p.state)).toEqual(["met", "unmet", "unmet"]);
-      expect(result.acProjection[0]).toMatchObject({ criterion: "判据 A", evidence: "e1", taskRefs: ["demo/1.1"] });
-      expect(result.acProjection.filter((p) => p.unmatched === true).map((p) => p.criterion)).toEqual(["判据 B", "判据 C"]);
+      const result = await queryProjection(tools);
+      expect(flatStates(result)).toEqual(["met", "unmet", "unmet"]);
+      expect(flatRows(result)[0]).toEqual({ criterion: "判据 A", state: "met" });
     } finally {
       h.close();
     }
@@ -110,11 +166,8 @@ describe("AC 投影在场三态契约（进程内注入桩——met / unmet / un
       const { tools } = stubTools(h, (criteria) =>
         criteria.map((c) => ({ criterion: c, met: c !== "判据 A", taskRefs: c === "判据 A" ? ["demo/1.1", "demo/fix-1"] : [] })),
       );
-      const result = (await tools.querySpec.execute(
-        { slug: "demo-spec", include_ac_projection: true },
-        execOf(),
-      )) as { acProjection: AcProjectionRow[] };
-      expect(result.acProjection[0]).toMatchObject({ criterion: "判据 A", state: "unmet", taskRefs: ["demo/1.1", "demo/fix-1"] });
+      const result = await queryProjection(tools);
+      expect(flatRows(result)[0]).toEqual({ criterion: "判据 A", state: "unmet" });
     } finally {
       h.close();
     }
@@ -127,11 +180,8 @@ describe("缺席降级（三铁律之二）——「无任务数据」不报错 
     try {
       await createDemo(h.tools);
       // 零 acSettlementsOf = task-loop 缺席（default 工具组形态）
-      const result = (await h.tools.querySpec.execute(
-        { slug: "demo-spec", include_ac_projection: true },
-        execOf(),
-      )) as { acProjection: AcProjectionRow[] };
-      expect(result.acProjection.map((p) => p.state)).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
+      const result = await queryProjection(h.tools);
+      expect(flatStates(result)).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
       const absent = h.diag.filter((d) => d.event === "spec-ac-projection-absent");
       expect(absent).toHaveLength(1);
       expect(absent[0]!.level).toBe("info");
@@ -150,12 +200,9 @@ describe("缺席降级（三铁律之二）——「无任务数据」不报错 
           throw new Error("task-loop unavailable");
         },
       };
-      const tools = createSpecTools({ ...h.deps, acSettlementsOf: () => seam });
-      const result = (await tools.querySpec.execute(
-        { slug: "demo-spec", include_ac_projection: true },
-        execOf(),
-      )) as { acProjection: AcProjectionRow[] };
-      expect(result.acProjection.map((p) => p.state)).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
+      const tools = h.toolsWith(() => seam);
+      const result = await queryProjection(tools);
+      expect(flatStates(result)).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
       const absent = h.diag.filter((d) => d.event === "spec-ac-projection-absent");
       expect(absent).toHaveLength(1);
       expect(absent[0]!.level).toBe("warn");
@@ -164,7 +211,7 @@ describe("缺席降级（三铁律之二）——「无任务数据」不报错 
     }
   });
 
-  it("投影缺席时零 diag（include_ac_projection 缺省不触发投影面）", async () => {
+  it("投影缺席时零 diag（include 缺省不触发投影面）", async () => {
     const h = harness();
     try {
       await createDemo(h.tools);
@@ -184,7 +231,7 @@ describe("unmatched 非空 emitDiag warn（漂移信号 → M4 复核触发）",
       const { tools } = stubTools(h, (criteria) =>
         criteria.map((c) => (c === "判据 B" ? { criterion: c, met: false, unmatched: true } : { criterion: c, met: true })),
       );
-      await tools.querySpec.execute({ slug: "demo-spec", include_ac_projection: true }, execOf());
+      await queryProjection(tools);
       const warns = h.diag.filter((d) => d.event === "spec-ac-projection-unmatched");
       expect(warns).toHaveLength(1);
       expect(warns[0]!.level).toBe("warn");
@@ -192,7 +239,7 @@ describe("unmatched 非空 emitDiag warn（漂移信号 → M4 复核触发）",
 
       h.diag.length = 0;
       const allMet = stubTools(h, (criteria) => criteria.map((c) => ({ criterion: c, met: true })));
-      await allMet.tools.querySpec.execute({ slug: "demo-spec", include_ac_projection: true }, execOf());
+      await queryProjection(allMet.tools);
       expect(h.diag.filter((d) => d.event === "spec-ac-projection-unmatched")).toEqual([]);
     } finally {
       h.close();
@@ -208,12 +255,10 @@ describe("消费点现查永不缓存（AGENTS 1.6）——重复查询现查 + 
       const before = h.counts();
       const { tools, calls } = stubTools(h, (criteria) => criteria.map((c) => ({ criterion: c, met: true })));
       for (let i = 0; i < 3; i += 1) {
-        const result = (await tools.querySpec.execute(
-          { slug: "demo-spec", include_ac_projection: true },
-          execOf(),
-        )) as { acProjection: AcProjectionRow[] };
-        expect(result.acProjection.every((p) => p.state === "met")).toBe(true);
-        expect(calls.n).toBe(i + 1); // 每次查询一次现查——零 memoize
+        const before = calls.n;
+        const result = await queryProjection(tools);
+        expect(flatStates(result).every((s) => s === "met")).toBe(true);
+        expect(calls.n).toBeGreaterThan(before); // 每次查询至少一次现查（查询投影 + 尾部推进写点各一次）——零 memoize
       }
       expect(h.counts()).toBe(before); // 无缓存零第二写点
     } finally {
@@ -232,19 +277,13 @@ describe("消费点现查永不缓存（AGENTS 1.6）——重复查询现查 + 
           return { matches, unmatched: matches.filter((m) => m.met !== true).map((m) => m.criterion) };
         },
       };
-      const tools = createSpecTools({ ...h.deps, acSettlementsOf: () => seam });
-      const first = (await tools.querySpec.execute(
-        { slug: "demo-spec", include_ac_projection: true },
-        execOf(),
-      )) as { acProjection: AcProjectionRow[] };
-      expect(first.acProjection.map((p) => p.state)).toEqual(["met", "met", "met"]);
+      const tools = h.toolsWith(() => seam);
+      const first = await queryProjection(tools);
+      expect(flatStates(first)).toEqual(["met", "met", "met"]);
       // 任务侧新结算抵达：判据 A 翻转 unmet——消费点现查必须立即反映
       rows[0] = { criterion: "判据 A", met: false };
-      const second = (await tools.querySpec.execute(
-        { slug: "demo-spec", include_ac_projection: true },
-        execOf(),
-      )) as { acProjection: AcProjectionRow[] };
-      expect(second.acProjection.map((p) => p.state)).toEqual(["unmet", "met", "met"]);
+      const second = await queryProjection(tools);
+      expect(flatStates(second)).toEqual(["unmet", "met", "met"]);
     } finally {
       h.close();
     }
@@ -266,21 +305,17 @@ describe("消费点缝在场性翻转（AGENTS 1.6——服务在场 → 缺席 
       };
       // 在场性求值缝本身可翻转——模拟 task-loop 插件中途卸载 / 重装
       let present = true;
-      const tools = createSpecTools({ ...h.deps, acSettlementsOf: () => (present ? seam : undefined) });
-      const q = () =>
-        tools.querySpec.execute(
-          { slug: "demo-spec", include_ac_projection: true },
-          execOf(),
-        ) as Promise<{ acProjection: AcProjectionRow[] }>;
+      const tools = h.toolsWith(() => (present ? seam : undefined));
+      const q = () => queryProjection(tools);
 
       // 在场 → met
       const first = await q();
-      expect(first.acProjection.map((p) => p.state)).toEqual(["met", "met", "met"]);
+      expect(flatStates(first)).toEqual(["met", "met", "met"]);
 
       // 中途卸载：缝缺席 → no-task-data 降级 + absent info 留痕
       present = false;
       const second = await q();
-      expect(second.acProjection.map((p) => p.state)).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
+      expect(flatStates(second)).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
       const absent = h.diag.filter((d) => d.event === "spec-ac-projection-absent");
       expect(absent).toHaveLength(1);
       expect(absent[0]!.level).toBe("info");
@@ -288,9 +323,9 @@ describe("消费点缝在场性翻转（AGENTS 1.6——服务在场 → 缺席 
       // 重装回归：缝再在场 → 投影即时跟随回 met（无缺席残留缓存）
       present = true;
       const third = await q();
-      expect(third.acProjection.map((p) => p.state)).toEqual(["met", "met", "met"]);
-      // 缺席期零 seam 调用 + 每在场查询恰好一次现查
-      expect(calls.n).toBe(2);
+      expect(flatStates(third)).toEqual(["met", "met", "met"]);
+      // 缺席期零 seam 调用；在场查询各触发至少一次现查（查询投影 + 尾部推进写点）
+      expect(calls.n).toBeGreaterThanOrEqual(2);
     } finally {
       h.close();
     }

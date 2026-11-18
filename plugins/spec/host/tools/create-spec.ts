@@ -24,6 +24,7 @@ const CREATE_SPEC_PARAMETERS = {
     },
     doc_path: { type: "string", description: "Explicit spec doc path (relative to project root). Defaults to the single-source derivation .forge/specs/{slug}/spec.md." },
     doc_content: { type: "string", description: "Optional full spec doc markdown; defaults to a rendered Goals/AC outline." },
+    milestone_id: { type: "string", description: "Optional milestone link (roadmaps proposal): the milestone must exist in this project; linkability is guarded by the service layer." },
   },
   required: ["slug", "title", "goals"],
 } as const;
@@ -74,6 +75,7 @@ export function createCreateSpecTool(deps: { readonly specs: ForgeSpecsService }
         const tiers = optionalStringArray(a, "tiers", TOOL);
         const docPath = typeof a["doc_path"] === "string" && a["doc_path"] !== "" ? (a["doc_path"] as string) : specDocRelPath(slug);
         const content = typeof a["doc_content"] === "string" && a["doc_content"] !== "" ? (a["doc_content"] as string) : undefined;
+        const milestoneId = typeof a["milestone_id"] === "string" && a["milestone_id"] !== "" ? (a["milestone_id"] as string) : undefined;
         const row = deps.specs.createSpec({
           cwd: requireSessionCwd(exec),
           slug,
@@ -82,6 +84,7 @@ export function createCreateSpecTool(deps: { readonly specs: ForgeSpecsService }
           goals,
           docRelPath: docPath,
           ...(content !== undefined ? { docContent: content } : {}),
+          ...(milestoneId !== undefined ? { milestoneId } : {}),
         });
         return { spec: row, docPath };
       });

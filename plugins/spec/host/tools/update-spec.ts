@@ -27,6 +27,7 @@ const UPDATE_SPEC_PARAMETERS = {
     title: { type: "string", description: "New title (optional)." },
     tiers: { type: "array", items: { type: "string" }, description: "New delivery tiers (optional; closed set ui | api | pure-logic | docs)." },
     doc_path: { type: "string", description: "New spec doc registration path (optional; old doc file is kept)." },
+    milestone_id: { type: "string", description: "New milestone link (optional; linkability guarded by the service layer — same gate as create_spec)." },
   },
   required: ["slug"],
 } as const;
@@ -77,12 +78,14 @@ export function createUpdateSpecTool(deps: { readonly specs: ForgeSpecsService }
         const title = typeof a["title"] === "string" && a["title"] !== "" ? (a["title"] as string) : undefined;
         const tiers = optionalStringArray(a, "tiers", UPDATE_TOOL);
         const docPath = typeof a["doc_path"] === "string" && a["doc_path"] !== "" ? (a["doc_path"] as string) : undefined;
+        const milestoneId = typeof a["milestone_id"] === "string" && a["milestone_id"] !== "" ? (a["milestone_id"] as string) : undefined;
         const spec = deps.specs.updateSpec({
           cwd: requireSessionCwd(exec),
           slug,
           ...(title !== undefined ? { title } : {}),
           ...(tiers !== undefined ? { tiers } : {}),
           ...(docPath !== undefined ? { docRelPath: docPath } : {}),
+          ...(milestoneId !== undefined ? { milestoneId } : {}),
         });
         return { spec };
       });

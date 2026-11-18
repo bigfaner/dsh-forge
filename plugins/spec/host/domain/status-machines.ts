@@ -99,3 +99,6 @@ export const goalMachine: StateMachine<GoalStatus> = defineStateMachine(GOAL_STA
 export const specMachine: StateMachine<SpecStatus> = defineStateMachine(SPEC_STATES);
 export const milestoneMachine: StateMachine<ObjectiveStatus> = defineStateMachine(MILESTONE_STATES);
 export const roadmapMachine: StateMachine<ObjectiveStatus> = defineStateMachine(ROADMAP_STATES);
+
+/** Objective 四态词表（工具 schema/收窄共用——DDL CHECK 值域同源）。 */
+export const OBJECTIVE_STATUSES: readonly ObjectiveStatus[] = Object.keys(MILESTONE_STATES.states) as readonly ObjectiveStatus[];

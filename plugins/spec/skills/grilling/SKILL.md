@@ -70,3 +70,40 @@ create_spec({ slug: "<slug>", title: "<title>",
 ```
 
 （goals 全集单次落库，禁散调补写；Spec 出生即 draft，送审与接受走状态流转由用户动作驱动。）
+
+## 注册动词 token 快照（spec 域 22 动词——机检对读锚）
+
+> 薄封装纪律：每动词 = 服务域零域逻辑薄封装；本清单与 `FORGE_SPEC_TOOL_NAMES` 注册序单源对读
+> （机检 tests/structure/tool-token-snapshot.test.ts——双向集合相等）。入参纪律：工具面零
+> projectKey（服务层 cwd 派生）/ 零 actor（对话 tool 径 = plugin-tool 注入）；
+> milestone 寻径 = roadmap_slug + milestone_id；goal 寻径 = slug + goal_seq。
+
+```
+create_spec / update_spec / replace_spec_goals / transition_spec / query_spec / list_specs
+create_roadmap / update_roadmap / transition_roadmap / query_roadmap / list_roadmaps
+create_milestone / update_milestone / move_milestone / transition_milestone / query_milestone / list_milestones
+accept_spec
+finalize_goal
+review_goal / review_objective
+spec_stats
+```
+
+### 工具面消费要点
+
+- **Roadmap/Milestone 拆解（grilling 收尾大需求档）**：`create_roadmap` 共识落档 → 逐批
+  `create_milestone`（seq 服务层赋序，后续操作以出参 `milestone_id` 寻址）；条目修订
+  `update_roadmap` / `update_milestone`；优先级调整 `move_milestone`（before/after 锚点
+  互斥二选一）。
+- **查询**：`query_roadmap`（include=`achievement` 达成派生）、`query_milestone`
+  （include=`specs` / `achievement`）、`query_spec`（include=`goals` / `acProjection` /
+  `latestReviews` / `transitions`——封闭枚举，未知值拒）；清单 `list_roadmaps` /
+  `list_milestones` / `list_specs`；里程诊断 `spec_stats`。
+- **状态流转（human-only 边仅用户明示）**：`transition_spec` / `transition_roadmap` /
+  `transition_milestone`——`awaiting_acceptance → completed` 为 human-only 边，仅用户
+  明示验收时调用；退回边 note 必填。`accept_spec`（decision=`completed|return`）为 spec
+  验收确认/退回 human-only 动词；approved → in_progress 为机械段，零工具。
+- **终审（human-only）**：`finalize_goal`（decision=`completed|rejected`，rejected note
+  必填）——agent 会话禁止自动终审。
+- **复核 agent 专用**：`review_goal`（verdict=`passed|failed`，failed 时 gap_note 必填，
+  报告驱动状态机）与 `review_objective`（milestone/roadmap 验收预检报告，passed 不改
+  状态——人类经 transition_* 完成）；人类零填写复核报告。
