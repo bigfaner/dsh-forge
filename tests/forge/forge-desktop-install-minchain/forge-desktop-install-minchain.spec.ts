@@ -252,6 +252,13 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
   test('CT-DISK-09 #路A/#路B/#原样包：路A/B add 拒绝零写入 + 原样包本代成功进层（5213c7e8 实锚修订）', async () => {
     const tree = requireTree()
     expect(existsSync(soloForgeDir()), '1.12 发布树 solo 变体在盘（solo/forge）').toBe(true)
+    // 基线物化前置（bug 91539063）：desktop 保留 profile 的首启物化必须先于基线采样——
+    // 未物化 userData 下基线恒 []，而拒绝/对照路径触发的首启物化会引入基板层，严格
+    // JSON 比较必然假红。物化通道 = carrier 首启（官方 sanctioned 形态：desktop profile
+    // 由应用首启物化——dsh plugin CLI requireDesktopProfile「Open DSH Desktop once to
+    // initialize its profile」同口径）；物化缺席在此 fail-fast 留痕，不落入假红比较。
+    await ensureCarrier(env, userData)
+    expect(existsSync(desktopProfileDir(userData)), '基线物化留痕：carrier 首启后 {userData}/profile 在场').toBe(true)
     const before = desktopInstalledBundles(userData)
     const beforeJson = JSON.stringify(before)
 
@@ -279,6 +286,9 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
     }
     expect(JSON.stringify(desktopInstalledBundles(userData)), '复位后清单回到基线（零残留）').toBe(beforeJson)
     expect(existsSync(desktopPkgEntryDir(userData, FORGE_PKG)), 'profile 侧零 forge 条目残留').toBe(false)
+    // carrier 收尾（bug 91539063 配套）：后续用例（CT-DISK-07 起）各自按安装世代冷启动
+    // ——本用例的物化首启不作为后续装载世代（carrier 单实例语义下关闭释放锁）。
+    await shutdownCarrier()
   })
 
   test('CT-DISK-07 #B2 O1：缺件不装 + patch 行在场——缺席降级可观察（诊断留痕 + 降级不扩散）', async () => {
