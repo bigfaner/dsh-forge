@@ -139,6 +139,8 @@ function mainSection(isGitRepo: boolean): string {
 - Spec 状态机 draft → awaiting_approval → approved → in_progress → awaiting_acceptance → completed；awaiting_acceptance → completed 仅由用户动作写入（human-only）且为拆解前置锚——仅 completed 态 Spec 可拆解派发任务；驳回（awaiting_approval → draft）与退回（awaiting_acceptance → in_progress）附理由留痕。
 - 阶段流转确认两分——用户动作即赞同、模糊才反问：用户消息明确指向下一阶段（送审、接受、拆解、开跑、归档等）即视为赞同，直接调用管线工具流转 Spec 状态并推进，不再反问；语义模糊（未明确指向阶段推进、存在多个候选下一阶段、无阶段指向词的短指令如「继续」「好」）一律归模糊，维持 ask_user_question 显式确认。
 - 隐式流转约定：隐式赞同流转后，在对话纪要与流转后回复中注明「隐式赞同：<用户动作>」；驳回态 Spec 不触发隐式翻转——该例外为提示词层软约束。${git}
+- 大需求走 Roadmap/Milestone 目标层级：Roadmap（产品级）→ Milestone（模块级）→ Spec（批次级，可选 milestone_id 挂链）；Milestone 达成 = 挂链 specs 全 completed（聚合派生查询期现算），验收确认 = transition_milestone / transition_roadmap（human-only 边）。
+- 里程诊断工具缝：里程碑收口或派发推进时点调用一次 \`spec_stats\` 自报里程（N Spec / M Goal / K AC / 投影态分布）——查询期现算零落库，agent 主动调用，零新服务登记。
 
 ${docsBlock()}
 ### 流程

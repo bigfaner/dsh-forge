@@ -98,6 +98,16 @@ describe('renderSpecPipelineSection——唯一模式（四模板删远征两份
     expect(MAIN_RENDER).toContain('run-dag-tasks')
   })
 
+  it('Milestone/Roadmap 词汇 + spec_stats 工具缝引导行在场（主会话；子会话裁剪版不含总纲词汇）', () => {
+    expect(MAIN_RENDER).toContain('Roadmap')
+    expect(MAIN_RENDER).toContain('Milestone')
+    expect(MAIN_RENDER).toContain('spec_stats')
+    expect(MAIN_RENDER).toContain('里程碑')
+    const sub = renderSpecPipelineSection({ subagent: true })
+    expect(sub).not.toContain('spec_stats')
+    expect(sub).not.toContain('Milestone')
+  })
+
   it('git 纪律条件注入：isGitRepo=true 追加；false/缺省零差异', () => {
     expect(renderSpecPipelineSection({ isGitRepo: true })).toContain('git 纪律')
     expect(renderSpecPipelineSection({})).not.toContain('git 纪律')

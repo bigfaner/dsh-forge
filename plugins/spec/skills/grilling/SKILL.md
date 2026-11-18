@@ -21,6 +21,8 @@ description: 就用户的计划、决策或想法持续追问到底，直至达�
 
 检索代码库相关特性、文档、Spec 与近期历史，把问题组织成设计树：每个决策节点挂着依赖它的子决策。树根 = 根本需求界定（「我理解的需求是 X；备选 Y、Z」）；根未裁决树不往下长。
 
+**档位分叉判据（建树时点即判，成文前必答）**：单次成文能否承载全部验收？——能（验收判据一批发得下）= 单 Spec 档，照常走完全流程；**≥2 批注册物**（验收需拆两批以上 Spec 承载）= 走大需求档（见「大需求档共识流」）：拆 Milestone 逐批挂 Spec，不硬塞单 Spec。分叉是决策——拿不准即问用户裁决。
+
 ### Step 2：分轮访谈
 
 **每轮只问当下就能问的问题**：前置决策已定、不依赖本轮其他未决问题的，才进本轮。每轮经 `ask_user_question` 一次打包发出：
@@ -70,6 +72,18 @@ create_spec({ slug: "<slug>", title: "<title>",
 ```
 
 （goals 全集单次落库，禁散调补写；Spec 出生即 draft，送审与接受走状态流转由用户动作驱动。）
+
+## 大需求档共识流（≥2 批注册物走此档）
+
+单次成文无法承载全部验收的大需求：共识达成后不走单 Spec 注册——**拆 Milestone 逐批挂 Spec，经管理面动词持久化**：
+
+1. 共识落档：`create_roadmap` 注册 Roadmap（产品级目标 + 产品级 AC 清单 ac_json）；
+2. 拆批：逐批 `create_milestone`（序由服务层赋，出参 `milestone_id` 寻址；每 Milestone 挂模块级 AC，条目 `addresses` 指回产品级 AC id）；
+3. 逐批挂 Spec：每批走既有流程单次成文一个 Spec，`create_spec` 时以可选 `milestone_id` 挂链——本批验收由该 Spec 承载；
+4. 批间修订与排序：条目修订 `update_roadmap` / `update_milestone`；优先级调整 `move_milestone`（before/after 锚点互斥二选一）；
+5. 里程查询：`query_roadmap`（include=`achievement`）达成聚合派生——查询期现算，零人工勾对。
+
+（每批 Spec 仍各走既有评审/流转/终审全程；Milestone 达成 = 挂链 specs 全 completed 聚合派生，人工确认走 `transition_milestone` / `transition_roadmap`。）
 
 ## 注册动词 token 快照（spec 域 22 动词——机检对读锚）
 
