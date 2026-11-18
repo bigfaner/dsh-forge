@@ -29,6 +29,7 @@ import {
   comboGateOn,
   defaultProjectDb,
   findDispatchLogs,
+  generationDriftViolations,
   installedBundles,
   profileNodeModules,
   runDsh,
@@ -121,6 +122,9 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*）', () 
     for (const { pkg, installed, source } of versionPairs(nodeModules)) {
       expect(installed, `版本双校验 ${pkg}（安装 manifest == 仓内源）`).toBe(source)
     }
+    // 五件裸包代际漂移探针（M-3——AGENTS 1.8 程序化锚）：逐件 manifest + 服务面标记
+    // 双校验，任一件代际陈旧即 fail-loud（1.8 轮 stale bundle 误测教训固化）
+    expect(generationDriftViolations(nodeModules), '五件裸包代际漂移探针全绿（manifest + 服务面标记双校验）').toEqual([])
     // client 半侧文件锚（CT-DISK-02 State）：五件 dsh.client.platform 指向物在闭包内在场
     for (const { pkg, file, exists } of clientBundleFiles(nodeModules)) {
       expect(exists, `client bundle 指向物在场 ${pkg} → ${file}`).toBe(true)
@@ -173,6 +177,8 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*）', () 
     for (const { pkg, installed, source } of versionPairs(nodeModules)) {
       expect(installed, `版本双校验 ${pkg}`).toBe(source)
     }
+    // 五件裸包代际漂移探针（M-3）——复检同口径
+    expect(generationDriftViolations(nodeModules), '五件裸包代际漂移探针全绿').toEqual([])
     if (userData === '') userData = mkdtempSync(join(tmpdir(), 'dsh-forge-combo-ud-'))
     seedDshHome(env.dshHome, realCredentials() as string)
     const { app, page } = await launchDesktop(env, userData)

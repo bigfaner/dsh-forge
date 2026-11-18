@@ -86,7 +86,7 @@ await build({
   external: PLATFORM_MODULES,
   plugins: [cssInjectPlugin],
   banner: {
-    js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PLUGIN_ID)}, factory: (require) => {\nvar module = { exports: {} }; var exports = module.exports;`,
+    js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PLUGIN_ID)}, factory: (require) => {\nvar module = { exports: {} }; var exports = module.exports;\n/* @dsh-forge-generation:${PLUGIN_ID}*/`,
   },
   footer: { js: `return module.exports; } });` },
   minify: false,

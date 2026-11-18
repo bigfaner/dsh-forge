@@ -142,6 +142,80 @@ export function comboEntryVersionPair(nodeModules: string): { pkg: string; insta
 }
 
 /**
+ * 代际戳标记（M-3 五件代际漂移程序化探针——服务面特有标记）。
+ * 各件 bundle-client.mjs 在 bundle banner 注入 `@dsh-forge-generation:<pkg>@<version>`
+ * 注释标记（构建期单点写入，
+ * 随安装世代快照拷贝——1.8 轮陈旧代际事故的教训固化：manifest 版本一致 ≠ 服务面
+ * bundle 同代，服务面文件必须自证其代际）。
+ */
+export function generationMarker(pkg: string, version: string): string {
+  return `@dsh-forge-generation:${pkg}@${version}`
+}
+
+export interface GenerationViolation {
+  readonly pkg: string
+  readonly kind: 'manifest' | 'service-face'
+  readonly detail: string
+}
+
+export interface GenerationDriftOptions {
+  /** 仓内五件源包根（缺省 ROOT/plugins；单测夹具可注入隔离目录） */
+  readonly sourcePluginsRoot?: string
+}
+
+/** 装载面入口读面：exports["./client"].default（manifest 声明的服务面 bundle 文件——不锁物化布局） */
+function clientFaceRel(dir: string): string | undefined {
+  const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+    exports?: Record<string, { default?: string }>
+  }
+  const rel = pkg.exports?.['./client']?.default
+  return typeof rel === 'string' && rel !== '' ? rel : undefined
+}
+
+/**
+ * M-3 五件裸包代际漂移程序化探针——安装/装载后逐件双校验，任一件代际陈旧即违例
+ * （调用侧 expect 违例清单 == [] 即 fail-loud；AGENTS 1.8 廉价校验前置纪律）：
+ * ① manifest：安装 package.json version == 仓内源 version；
+ * ② 服务面：安装 exports["./client"] 指向物含现行代际标记 generationMarker（陈旧
+ *    世代快照的 bundle 无现行标记 → 红）。
+ * 装载行为锚（c26a8c2a fix-4 同族）：经 manifest exports 声明入口解析文件——不锁
+ * pnpm 物化布局；安装 manifest 缺席/服务面缺席/标记缺席逐件回报，一次收全清单。
+ */
+export function generationDriftViolations(nodeModules: string, opts: GenerationDriftOptions = {}): readonly GenerationViolation[] {
+  const sourceRoot = opts.sourcePluginsRoot ?? join(ROOT, 'plugins')
+  const violations: GenerationViolation[] = []
+  for (const pkg of BARE_BUNDLES) {
+    const short = pkg.slice('@dsh-forge/'.length)
+    const sourceVersion = readPkgJson(join(sourceRoot, short)).version ?? '(缺)'
+    const installedDir = installedPkgDir(nodeModules, pkg)
+    const installedPkgFile = join(installedDir, 'package.json')
+    if (!existsSync(installedPkgFile)) {
+      violations.push({ pkg, kind: 'manifest', detail: `安装 manifest 缺席 ${installedPkgFile}` })
+      continue
+    }
+    const installedVersion = readPkgJson(installedDir).version ?? '(缺)'
+    if (installedVersion !== sourceVersion) {
+      violations.push({ pkg, kind: 'manifest', detail: `安装 manifest ${installedVersion} ≠ 仓内源 ${sourceVersion}（代际陈旧）` })
+    }
+    const rel = clientFaceRel(installedDir)
+    if (rel === undefined) {
+      violations.push({ pkg, kind: 'service-face', detail: 'exports["./client"] 服务面入口未声明' })
+      continue
+    }
+    const faceFile = join(installedDir, ...rel.replace(/^\.\//, '').split('/'))
+    if (!existsSync(faceFile)) {
+      violations.push({ pkg, kind: 'service-face', detail: `服务面 bundle 缺席 ${faceFile}` })
+      continue
+    }
+    const marker = generationMarker(pkg, sourceVersion)
+    if (!readFileSync(faceFile, 'utf8').includes(marker)) {
+      violations.push({ pkg, kind: 'service-face', detail: `服务面缺现行代际标记 ${marker}（陈旧 bundle）` })
+    }
+  }
+  return violations
+}
+
+/**
  * CT-DISK-01 通道专用：六包物化目录在场且非空（pnpm 嵌套相对 file: 依赖解析物化——
  * 目录存在 + 至少一个条目；返回缺陷清单供 expect 逐条断言）。
  * 注（bug c26a8c2a fix-4）：npm 通道（CT-NPM-*）不再用本锚——link: 依赖物化位置随

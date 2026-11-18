@@ -28,6 +28,7 @@ import {
   defaultProjectDb,
   defaultTaskLoopDb,
   findDispatchLogs,
+  generationDriftViolations,
   installedBundles,
   installedPkgDir,
   profileNodeModules,
@@ -141,6 +142,9 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     // （bug c26a8c2a fix-4：依赖闭包不锁物化布局；不符即停取证）
     const { pkg, installed, source } = comboEntryVersionPair(nodeModules)
     expect(installed, `版本双校验 ${pkg}`).toBe(source)
+    // 五件裸包代际漂移探针（M-3——AGENTS 1.8 程序化锚）：逐件 manifest 版本 + 服务面
+    // 代际标记双校验，任一件代际陈旧即 fail-loud（1.8 轮 stale bundle 误测教训固化）
+    expect(generationDriftViolations(nodeModules), '五件裸包代际漂移探针全绿（manifest + 服务面标记双校验）').toEqual([])
 
     // Input（CT-NPM-03）：`dsh --profile forge` 冷启动——观察窗内存活（装载链无崩溃退出）。
     // 五件 bundle 全解析装载 = 运行期可观测行为锚（c26a8c2a 复跑取证形态：冷启动五件
@@ -201,6 +205,8 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     // 版本双校验（AGENTS 1.8——取证前廉价校验；收窄至 forge 组合器条目，c26a8c2a fix-4）
     const { pkg, installed, source } = comboEntryVersionPair(nodeModules)
     expect(installed, `版本双校验 ${pkg}`).toBe(source)
+    // 五件裸包代际漂移探针（M-3）——大取证前廉价校验（AGENTS 1.8 取证顺序纪律）
+    expect(generationDriftViolations(nodeModules), '五件裸包代际漂移探针全绿').toEqual([])
 
     // State（CT-NPM-04）：两域数据均落共库（project_* / task_* 前缀分表——同库互不越界）
     const comboDb = comboDbPath(env.dshHome)
