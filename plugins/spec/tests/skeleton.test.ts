@@ -70,9 +70,9 @@ describe("包骨架（三目录制 + scripts 五件 + build 链）", () => {
 });
 
 describe("包 manifest（plugin-spec 1.2 验收面）", () => {
-  it("名称与版本：@dsh-forge/spec 0.10.0（plugin-spec-roadmaps/1.4 repo 层 minor bump）", () => {
+  it("名称与版本：@dsh-forge/spec 0.11.0（plugin-spec-roadmaps/1.5 Goal 推进+终审/复核动词 minor bump）", () => {
     expect(pkg.name).toBe("@dsh-forge/spec");
-    expect(pkg.version).toBe("0.10.0");
+    expect(pkg.version).toBe("0.11.0");
   });
 
   it("exports 四键：. + ./client + ./typert + ./remote（typert 双键预留）", () => {

@@ -99,6 +99,12 @@ export class RoadmapRepo {
     return row === undefined ? undefined : toRoadmap(row);
   }
 
+  /** id 点查（复核动词 entityId 存在性守卫——milestone-repo.findById 同径）。 */
+  findById(id: string): RoadmapRow | undefined {
+    const row = this.db.prepare<unknown[], RoadmapRowDb>(`SELECT * FROM ${this.t.roadmaps} WHERE id = ?`).get(id);
+    return row === undefined ? undefined : toRoadmap(row);
+  }
+
   /** listing 索引序（idx_spec_roadmaps_listing：project_key 等值前缀 + created_at 序）。 */
   listByProject(projectKey: string): RoadmapRow[] {
     const rows = this.db

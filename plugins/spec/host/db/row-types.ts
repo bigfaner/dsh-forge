@@ -1,8 +1,8 @@
 // 行级类型（plugin-spec 1.3）——repo 行级门进出边界；蛇列/驼列互斥不出本目录。
 // SpecStatus 值域单源 = domain/status-machines.ts SPEC_STATES（六态，与 DDL CHECK 对读锁定）。
 import { SPEC_STATES } from "../domain/status-machines.js";
-export type { SpecStatus, ObjectiveStatus } from "../domain/status-machines.js";
-import type { SpecStatus, ObjectiveStatus } from "../domain/status-machines.js";
+export type { SpecStatus, ObjectiveStatus, GoalStatus } from "../domain/status-machines.js";
+import type { SpecStatus, ObjectiveStatus, GoalStatus } from "../domain/status-machines.js";
 
 export const SPEC_STATUSES: readonly SpecStatus[] = Object.keys(SPEC_STATES.states) as readonly SpecStatus[];
 
@@ -24,6 +24,8 @@ export interface GoalRow {
   sortKey: number;
   title: string;
   brief: string | null;
+  /** Goal 终审状态机现值（v2 goal_status 列——五态，写入面 = goal-advance/goal-finalize 两动词） */
+  goalStatus: GoalStatus;
   createdAt: string;
   updatedAt: string;
 }

@@ -2,7 +2,7 @@
 // 排序锚纪律：读面 ORDER BY created_at/sort_key 索引序，禁 ORDER BY id 单锚。
 import type Database from "better-sqlite3";
 import type { SpecDbTables } from "../migrations/version-1.js";
-import type { AcRow, GoalRow, SpecRow, SpecStatus } from "../row-types.js";
+import type { AcRow, GoalRow, GoalStatus, SpecRow, SpecStatus } from "../row-types.js";
 
 interface SpecRowDb {
   id: string;
@@ -92,7 +92,8 @@ export class SpecRepo {
     this.db.prepare(`UPDATE ${this.t.specs} SET ${sets.join(", ")} WHERE id = ?`).run(...args);
   }
 
-  /** spec_status 现值改写——唯一合法写径 = transitionSpec 两写事务闭包内调用。 */
+  /** spec_status 现值改写——唯一合法写径 = 状态流转动词事务闭包内调用（transitionSpec 两写 /
+   *  goal-advance Goal 链式收口与 C4 竞窗自愈两写）。 */
   updateStatus(id: string, specStatus: SpecStatus, updatedAt: string): void {
     this.db
       .prepare(`UPDATE ${this.t.specs} SET spec_status = ?, updated_at = ? WHERE id = ?`)
@@ -100,7 +101,8 @@ export class SpecRepo {
   }
 
   // ── goals ──
-  insertGoal(row: GoalRow): void {
+  /** insertGoal 入参（goal_status 落 DDL DEFAULT 'pending'——插入面零携带）。 */
+  insertGoal(row: Omit<GoalRow, "goalStatus">): void {
     this.db
       .prepare(
         `INSERT INTO ${this.t.goals}
@@ -124,7 +126,7 @@ export class SpecRepo {
 
   listGoalsBySpec(specId: string): GoalRow[] {
     const rows = this.db
-      .prepare<unknown[], { id: string; spec_id: string; sort_key: number; title: string; brief: string | null; created_at: string; updated_at: string }>(
+      .prepare<unknown[], { id: string; spec_id: string; sort_key: number; title: string; brief: string | null; goal_status: string; created_at: string; updated_at: string }>(
         `SELECT * FROM ${this.t.goals} WHERE spec_id = ? ORDER BY sort_key`,
       )
       .all(specId);
@@ -134,9 +136,18 @@ export class SpecRepo {
       sortKey: r.sort_key,
       title: r.title,
       brief: r.brief,
+      goalStatus: r.goal_status as GoalStatus,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
+  }
+
+  /** goal_status 现值改写——唯一合法写径 = Goal 推进/终审/复核三动词事务闭包内调用；
+   *  human-only 机检锚：completed 写入全包仅 domain/specs/goal-finalize.ts 一处。 */
+  updateGoalStatus(id: string, goalStatus: GoalStatus, updatedAt: string): void {
+    this.db
+      .prepare(`UPDATE ${this.t.goals} SET goal_status = ?, updated_at = ? WHERE id = ?`)
+      .run(goalStatus, updatedAt, id);
   }
 
   // ── acs ──
