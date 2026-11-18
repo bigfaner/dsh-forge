@@ -362,6 +362,56 @@ describe("Spec 生命周期增量 + human-only 链路（accept_spec / review / f
     }
   });
 
+  it("updateSpec 族尾部推进写点（AC 增改后 Goal 推进即时生效——不待 querySpec）", async () => {
+    const h = harness();
+    try {
+      const seam = allMetSeam();
+      const service = createForgeSpecsService({ db: h.domain.db, repos: h.domain.repos, writeSpecDoc: () => {} });
+      const verbsSeamed = createForgeToolServices({
+        db: h.domain.db,
+        repos: h.domain.repos,
+        specs: service,
+        acSettlementsOf: () => seam,
+        onDiag: (payload) => h.diag.push(payload),
+      });
+      const tools = createSpecTools({ specs: service, verbs: verbsSeamed });
+      await tools.createSpec.execute(
+        { slug: "s1", title: "规格", goals: [{ title: "G1", acs: ["判据 A"] }] },
+        execOf(),
+      );
+      await tools.transitionSpec.execute({ slug: "s1", to: "awaiting_approval" }, execOf());
+      await tools.transitionSpec.execute({ slug: "s1", to: "approved" }, execOf());
+      await tools.transitionSpec.execute({ slug: "s1", to: "in_progress" }, execOf());
+
+      // Goal 现值直读（不经 querySpec——querySpec 自带尾部推进写点，直读隔离触发面）
+      const statusOf = (): string => {
+        const spec = h.domain.repos.specs.getBySlug(deriveProjectKey(CWD), "s1");
+        if (spec === undefined) throw new Error("spec 缺失");
+        return h.domain.repos.specs.listGoalsBySpec(spec.id)[0]?.goalStatus ?? "";
+      };
+      expect(statusOf()).toBe("pending");
+
+      // update_spec 尾部：pending + 活动信号 → start（in_progress），不待 querySpec
+      await tools.updateSpec.execute({ slug: "s1", title: "改题" }, execOf());
+      expect(statusOf()).toBe("in_progress");
+
+      // replace_spec_goals（AC 全集增改）：Goal 集删插重置 pending——尾部触发 start 边沿
+      // （in_progress 即时生效，不待 querySpec）
+      const rep = (await tools.replaceSpecGoals.execute(
+        { slug: "s1", goals: [{ title: "G1", acs: ["判据 A"] }] },
+        execOf(),
+      )) as { spec: { specStatus: string } };
+      expect(isForgeToolFailure(rep)).toBe(false);
+      expect(statusOf()).toBe("in_progress");
+
+      // update_spec 尾部：in_progress + 全 met → advance 边沿（auto_reviewing）
+      await tools.updateSpec.execute({ slug: "s1", title: "再改" }, execOf());
+      expect(statusOf()).toBe("auto_reviewing");
+    } finally {
+      h.close();
+    }
+  });
+
   it("必填守卫失败面：review_goal failed 缺 gap_note / finalize_goal rejected 缺 note / accept_spec return 缺 note", async () => {
     const h = harness();
     try {

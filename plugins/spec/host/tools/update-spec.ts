@@ -12,7 +12,7 @@ import {
   withFailureVariant,
 } from "@dsh-forge/lib-api";
 import type { SpecRow } from "../db/row-types.js";
-import type { ForgeSpecsService } from "../domain/specs/service.js";
+import type { ForgeToolServices } from "../domain/specs/tool-service.js";
 import { requireSessionCwd, type SpecToolDefinition, type SpecToolExecFace } from "./faces.js";
 import { parseGoals } from "./parse.js";
 import { specSnapshotLines } from "./create-spec.js";
@@ -56,8 +56,8 @@ function snapshotOutputSchema(headline: string) {
   })
 }
 
-/** tool 定义工厂（updateSpec 字段改写薄封装） */
-export function createUpdateSpecTool(deps: { readonly specs: ForgeSpecsService }): SpecToolDefinition {
+/** tool 定义工厂（updateSpec 字段改写薄封装——组合根 verbs.updateSpec 消费：尾部 Goal 推进触发） */
+export function createUpdateSpecTool(deps: { readonly verbs: ForgeToolServices }): SpecToolDefinition {
   return {
     name: UPDATE_TOOL,
     description:
@@ -79,7 +79,7 @@ export function createUpdateSpecTool(deps: { readonly specs: ForgeSpecsService }
         const tiers = optionalStringArray(a, "tiers", UPDATE_TOOL);
         const docPath = typeof a["doc_path"] === "string" && a["doc_path"] !== "" ? (a["doc_path"] as string) : undefined;
         const milestoneId = typeof a["milestone_id"] === "string" && a["milestone_id"] !== "" ? (a["milestone_id"] as string) : undefined;
-        const spec = deps.specs.updateSpec({
+        const spec = await deps.verbs.updateSpec({
           cwd: requireSessionCwd(exec),
           slug,
           ...(title !== undefined ? { title } : {}),
@@ -93,8 +93,8 @@ export function createUpdateSpecTool(deps: { readonly specs: ForgeSpecsService }
   }
 }
 
-/** tool 定义工厂（Goal/AC 全集批量增改薄封装——必含 Goal 不变式服务层单点守卫） */
-export function createReplaceSpecGoalsTool(deps: { readonly specs: ForgeSpecsService }): SpecToolDefinition {
+/** tool 定义工厂（Goal/AC 全集批量增改薄封装——必含 Goal 不变式服务层单点守卫；组合根 verbs.replaceGoals 消费：尾部 Goal 推进触发） */
+export function createReplaceSpecGoalsTool(deps: { readonly verbs: ForgeToolServices }): SpecToolDefinition {
   return {
     name: REPLACE_GOALS_TOOL,
     description:
@@ -113,7 +113,7 @@ export function createReplaceSpecGoalsTool(deps: { readonly specs: ForgeSpecsSer
         const a = requireArgsObject(args, REPLACE_GOALS_TOOL);
         const slug = requiredString(a, "slug", REPLACE_GOALS_TOOL);
         const goals = parseGoals(a, REPLACE_GOALS_TOOL);
-        const spec = deps.specs.replaceGoals({
+        const spec = await deps.verbs.replaceGoals({
           cwd: requireSessionCwd(exec),
           slug,
           goals,

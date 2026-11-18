@@ -20,7 +20,7 @@ import type { ObjectiveWrite } from "./objective-lifecycle.js";
 import * as roadmaps from "./roadmap-service.js";
 import type { RoadmapAchievementDto } from "./roadmap-service.js";
 import { acceptSpec } from "./spec-lifecycle.js";
-import { deriveProjectKey, type ForgeSpecsService } from "./service.js";
+import { deriveProjectKey, type ForgeSpecsService, type GoalInput } from "./service.js";
 import { specStats, type SpecStatsPayload } from "./spec-stats.js";
 
 /** 组合依赖（SpecVerbDeps/GoalVerbDeps 同形注入——装配面/测试同径组合）。 */
@@ -134,6 +134,11 @@ export interface ForgeToolServices {
   }>;
   /** M3 六动词薄透传（createSpec/updateSpec 挂链扩展随服务层签名） */
   specs: ForgeSpecsService;
+  /** updateSpec 族（1.17 触发点收口——code-design §模块⒞「触发点收敛服务域两处」：
+   *  写动词提交后尾部触发 advanceGoalsIfDue，与 querySpec 同径幂等边沿推进；
+   *  推进失败 emitDiag warn 留痕、写动词返回照常，零补偿） */
+  updateSpec(i: { cwd: string; slug: string; title?: string; tiers?: string[]; docRelPath?: string; milestoneId?: string | null }): Promise<SpecRow>;
+  replaceGoals(i: { cwd: string; slug: string; goals: GoalInput[] }): Promise<SpecRow>;
 }
 
 export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
@@ -145,8 +150,47 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     });
   }
 
+  // 尾部推进写点（updateSpec 族——code-design §模块⒞「触发点收敛服务域两处」收口，
+  // querySpec 消费先例同径）：写动词提交后幂等边沿推进；推进失败 emitDiag warn 留痕、
+  // 写动词返回照常（幂等边沿下次触发自然重试，零补偿）。
+  async function advanceTail(projectKey: string, slug: string, cwd: string): Promise<void> {
+    try {
+      await advanceGoalsIfDue(deps as GoalVerbDeps, { projectKey, specSlug: slug });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      deps.onDiag?.({
+        event: "spec-goal-advanced",
+        level: "warn",
+        message: `Goal 推进事务失败（幂等边沿——下次触发自然重试，零补偿）：spec=${slug} ${message}`,
+        projectId: projectKey,
+        cwd,
+      });
+    }
+  }
+
   return {
     specs: deps.specs,
+
+    async updateSpec(i) {
+      const projectKey = deriveProjectKey(i.cwd);
+      const spec = deps.specs.updateSpec({
+        cwd: i.cwd,
+        slug: i.slug,
+        ...(i.title !== undefined ? { title: i.title } : {}),
+        ...(i.tiers !== undefined ? { tiers: i.tiers } : {}),
+        ...(i.docRelPath !== undefined ? { docRelPath: i.docRelPath } : {}),
+        ...(i.milestoneId !== undefined ? { milestoneId: i.milestoneId } : {}),
+      });
+      await advanceTail(projectKey, i.slug, i.cwd);
+      return spec;
+    },
+
+    async replaceGoals(i) {
+      const projectKey = deriveProjectKey(i.cwd);
+      const spec = deps.specs.replaceGoals({ cwd: i.cwd, slug: i.slug, goals: i.goals });
+      await advanceTail(projectKey, i.slug, i.cwd);
+      return spec;
+    },
 
     createRoadmap(i) {
       const projectKey = deriveProjectKey(i.cwd);
