@@ -246,6 +246,47 @@ function assertExtrasDrift(plugins) {
 }
 
 /**
+ * bug 539b7413 parity 守卫（staged 副本清单逐件对照仓内源，fail-loud 清单）：
+ * staged @dsh-forge/<短名> 副本 manifest 必须 ① 版本 == 仓内源、② 源声明 dsh.bundle
+ * 的插件副本不丢该字段。同名旧壳包遮蔽类缺陷在此拦下（曾发形态：packages/plugins/
+ * knowledge 旧壳 0.30.2 无 dsh 字段被误物化进安装包 runtime——desktop 通道 solo add
+ * 经 resolveBundleDir installation-first 读到无 dsh.bundle 副本，判 plain dependency
+ * 不进 dsh.profile.bundles）。stage() 与 --check 双接线。
+ *
+ * @param {Record<string, { userLayerRow: boolean, staged?: boolean }>} plugins
+ * @param {string} [root]
+ * @param {string} [runtimeNm] staged 运行时 node_modules 根（缺省 = 本次 staging 树）
+ */
+export function stagedManifestParityViolations(plugins, root = ROOT, runtimeNm = join(RUNTIME, 'node_modules')) {
+  const problems = []
+  for (const dir of Object.keys(stagedProductPackages(plugins, root))) {
+    const short = stagedPkgShort(dir)
+    const source = readJson(join(root, ...pkgRootOf(root, dir), 'package.json'), `${dir} manifest`)
+    const stagedFile = join(runtimeNm, '@dsh-forge', short, 'package.json')
+    if (!existsSync(stagedFile)) {
+      problems.push(`@dsh-forge/${short}：staged 副本清单缺席 ${stagedFile}`)
+      continue
+    }
+    const staged = JSON.parse(readFileSync(stagedFile, 'utf8'))
+    if (staged.version !== source.version) {
+      problems.push(`@dsh-forge/${short}：staged 副本 ${staged.version ?? '(缺)'} ≠ 仓内源 ${source.version ?? '(缺)'}（同名旧包遮蔽类缺陷）`)
+    }
+    if (source.dsh?.bundle !== undefined && staged.dsh?.bundle === undefined) {
+      problems.push(`@dsh-forge/${short}：源声明 dsh.bundle 而 staged 副本缺失该字段（plain-dependency 遮蔽类缺陷）`)
+    }
+  }
+  return problems.sort()
+}
+
+/** 守卫接线（stage/--check 共用）：parity 非空即 fail-loud 报出全部问题路径 */
+function assertManifestParity(plugins, runtimeNm) {
+  const problems = stagedManifestParityViolations(plugins, ROOT, runtimeNm)
+  if (problems.length > 0) {
+    fail(`staged @dsh-forge/* 副本 parity 失败（版本/dsh.bundle 对照仓内源）：\n  ${problems.join('\n  ')}`)
+  }
+}
+
+/**
  * --check 断言的安装包关键文件（resources 相对路径；4.3 冒烟对安装后 resources 同口径
  * 复用）。插件条目 = stagedProductPackages 推导：package.json + dist 入口 +
  * STAGING_EXTRAS 附加关键文件（技能面）。
@@ -456,6 +497,7 @@ async function stage() {
     }
   }
   sections.runtimeNodeModules = measureTree(join(RUNTIME, 'node_modules'))
+  assertManifestParity(plugins) // bug 539b7413 parity 守卫——同名旧包遮蔽在物化后即刻 fail-loud
 
   // 2) 合成 anchor 清单（installAnchor = {resources}/runtime/package.json）
   const anchor = buildRuntimeAnchorManifest(installManifest, productVersions, rootVersion)
@@ -525,7 +567,11 @@ function checkKeyFiles(root, appDistRoot, keyFiles) {
 async function check(root = STAGING, appDistRoot = join(ROOT, 'release', 'app')) {
   const plugins = await loadProductPlugins()
   assertExtrasDrift(plugins) // --check 同口径：源树声明漂移即红（与 stage() 共用守卫）
-  const problems = checkKeyFiles(root, appDistRoot, requiredKeyFiles(plugins))
+  const problems = [
+    ...checkKeyFiles(root, appDistRoot, requiredKeyFiles(plugins)),
+    // bug 539b7413 parity 守卫同口径：安装后 runtime @dsh-forge/* 副本对照仓内源
+    ...stagedManifestParityViolations(plugins, ROOT, join(root, 'runtime', 'node_modules')),
+  ]
   if (problems.length > 0) {
     console.error(`CHECK FAILED: ${problems.join('; ')}`)
     process.exit(1)

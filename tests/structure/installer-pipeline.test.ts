@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_PACKAGES, PRODUCT_PLUGIN_PACKAGE_DIRS } from '../../apps/host/src/profile/runtime-packages.js'
-import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedProductPackages, stagedPkgShort, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
+import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedManifestParityViolations, stagedProductPackages, stagedPkgShort, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
 import { PRODUCT_PLUGINS } from '../../packages/contracts/src/product-plugins.js'
 import { createElectronBuilderConfig } from '../../electron-builder.config.mjs'
 
@@ -644,6 +644,107 @@ describe('STAGING_EXTRAS 白名单自动比对守卫（stagingExtrasDrift——s
     const failBranch = source.slice(checkIdx)
     expect(failBranch).toContain('PACKAGING_CHECK_FAILED')
     expect(failBranch).toContain('process.exit(check.status ?? 1)')
+  })
+})
+
+// bug 539b7413 staged 副本 parity 守卫（stagedManifestParityViolations——版本 + dsh.bundle 对照仓内源）。
+// 曾发病理：同名旧壳包（packages/plugins/knowledge 0.30.2 无 dsh 字段）被误物化进安装包 runtime，
+// desktop 通道 solo add 经 resolveBundleDir installation-first 读到无 dsh.bundle 副本判
+// plain dependency 不进 dsh.profile.bundles——守卫把该类缺陷钉在物化/--check 两道缝。
+describe('bug 539b7413 staged 副本 parity 守卫（stagedManifestParityViolations）', () => {
+  /** fixture 根：临时目录 + 空 presets 目录 + staged 副本树挂点 */
+  const makeFixtureRoot = () => {
+    const root = mkdtempSync(join(tmpdir(), 'staging-parity-guard-'))
+    mkdirSync(join(root, 'apps/host/src/profile/presets'), { recursive: true })
+    return root
+  }
+  /** fixture 插件源包（userLayerRow 种子）+ staged 副本（默认同版本同 dsh 形状） */
+  const makeFixture = (root: string, opts: { sourceDshBundle?: boolean; stagedVersion?: string; stagedDshBundle?: boolean; stagedMissing?: boolean }) => {
+    const sourceDir = join(root, 'packages/plugins/fake-plugin')
+    mkdirSync(sourceDir, { recursive: true })
+    const dshShape = (bundle: boolean) => (bundle ? { bundle: { patch: './cordis.patch.yml' } } : undefined)
+    writeFileSync(
+      join(sourceDir, 'package.json'),
+      JSON.stringify({ name: '@dsh-forge/fake-plugin', version: '0.1.0', ...(opts.sourceDshBundle === false ? {} : { dsh: dshShape(true) }) }),
+      'utf8',
+    )
+    if (opts.stagedMissing !== true) {
+      const stagedDir = join(root, 'release/staging/runtime/node_modules/@dsh-forge/fake-plugin')
+      mkdirSync(stagedDir, { recursive: true })
+      const dsh = opts.sourceDshBundle === false ? undefined : dshShape(opts.stagedDshBundle !== false)
+      writeFileSync(
+        join(stagedDir, 'package.json'),
+        JSON.stringify({ name: '@dsh-forge/fake-plugin', version: opts.stagedVersion ?? '0.1.0', ...(dsh === undefined ? {} : { dsh }) }),
+        'utf8',
+      )
+    }
+  }
+  const FIXTURE_PLUGINS = { 'fake-plugin': { userLayerRow: true } }
+  const nmOf = (root: string) => join(root, 'release/staging/runtime/node_modules')
+
+  it('正例：staged 副本与源同版本同 dsh.bundle → 零违例', () => {
+    const root = makeFixtureRoot()
+    try {
+      makeFixture(root, {})
+      expect(stagedManifestParityViolations(FIXTURE_PLUGINS, root, nmOf(root))).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('正例（无 bundle 源）：源不声明 dsh.bundle（纯依赖包如 contracts/core）→ 版本一致即零违例', () => {
+    const root = makeFixtureRoot()
+    try {
+      makeFixture(root, { sourceDshBundle: false })
+      expect(stagedManifestParityViolations(FIXTURE_PLUGINS, root, nmOf(root))).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（版本漂移）：staged 副本版本 ≠ 仓内源 → 违例报出双版本（同名旧包遮蔽病理）', () => {
+    const root = makeFixtureRoot()
+    try {
+      makeFixture(root, { stagedVersion: '0.0.9' })
+      const violations = stagedManifestParityViolations(FIXTURE_PLUGINS, root, nmOf(root))
+      expect(violations.some((p) => p.includes('fake-plugin') && p.includes('0.0.9') && p.includes('0.1.0')), violations.join('; ')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（dsh.bundle 丢失）：源声明 dsh.bundle 而 staged 副本缺字段 → 违例（plain-dependency 遮蔽病理）', () => {
+    const root = makeFixtureRoot()
+    try {
+      makeFixture(root, { stagedDshBundle: false })
+      const violations = stagedManifestParityViolations(FIXTURE_PLUGINS, root, nmOf(root))
+      expect(violations.some((p) => p.includes('fake-plugin') && p.includes('dsh.bundle')), violations.join('; ')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（副本缺席）：staged 副本清单不在场 → 违例报缺席路径', () => {
+    const root = makeFixtureRoot()
+    try {
+      makeFixture(root, { stagedMissing: true })
+      const violations = stagedManifestParityViolations(FIXTURE_PLUGINS, root, nmOf(root))
+      expect(violations.some((p) => p.includes('fake-plugin') && p.includes('缺席')), violations.join('; ')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('接线 fail-loud：stage() 与 --check（check()）均消费 parity 守卫', () => {
+    const source = readFileSync(join(ROOT, 'scripts', 'assemble-installer-resources.mjs'), 'utf8')
+    const first = source.indexOf('assertManifestParity(plugins)')
+    expect(first, 'stage() parity 接线缺席').toBeGreaterThan(-1)
+    const stageCallSite = source.slice(source.indexOf('async function stage()'), first)
+    expect(stageCallSite, 'parity 接线须在 stage() 体内').toContain('async function stage()')
+    expect(
+      source.indexOf('stagedManifestParityViolations(plugins, ROOT, join(root', first + 1),
+      '--check parity 接线缺席',
+    ).toBeGreaterThan(-1)
   })
 })
 
