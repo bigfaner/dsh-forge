@@ -26,7 +26,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import Database from 'better-sqlite3'
 
@@ -195,20 +195,69 @@ function clientFaceRel(dir: string): string | undefined {
  */
 const anchorRequire = createRequire(join(ROOT, 'package.json'))
 
+/** 解析命中后自入口文件上溯定位包目录（package.json 所在层，至多五层） */
+function pkgDirFromEntry(entry: string): string | undefined {
+  let dir = dirname(entry)
+  for (let depth = 0; depth < 5; depth++) {
+    if (existsSync(join(dir, 'package.json'))) return dir
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return undefined
+}
+
+/**
+ * 解析基下的包目录候选（Node node_modules 上溯语义：解析基本身已名 node_modules 时
+ * 不再叠一层——嵌套物化解析基 node_modules/@dsh-forge/forge/node_modules 直接承载包条目）。
+ */
+function pkgDirCandidates(root: string, pkg: string): readonly string[] {
+  const segments = pkg.split('/')
+  return basename(root) === 'node_modules' ? [join(root, ...segments)] : [join(root, 'node_modules', ...segments)]
+}
+
+/** ESM-only 解析回落（bug b4c4d1d7）：exports["."] 声明物（import/default 条件）存在性探针 */
+function esmEntryPkgDir(root: string, pkg: string): string | undefined {
+  for (const dir of pkgDirCandidates(root, pkg)) {
+    const pkgFile = join(dir, 'package.json')
+    if (!existsSync(pkgFile)) continue
+    const manifest = JSON.parse(readFileSync(pkgFile, 'utf8')) as {
+      exports?: Record<string, string | { import?: string; default?: string }>
+    }
+    const entry = manifest.exports?.['.']
+    const rel =
+      typeof entry === 'string'
+        ? entry
+        : typeof entry?.import === 'string'
+          ? entry.import
+          : typeof entry?.default === 'string'
+            ? entry.default
+            : undefined
+    if (rel === undefined) continue
+    const faceFile = join(dir, ...rel.replace(/^\.\//, '').split('/'))
+    if (existsSync(faceFile)) return dir
+  }
+  return undefined
+}
+
 function resolveInstalledPkgDir(resolutionRoots: readonly string[], pkg: string): string | undefined {
+  // 形态①（CJS 条件可达——exports["."] 声明 require/default 条件）：require.resolve
   for (const root of resolutionRoots) {
     try {
       const entry = anchorRequire.resolve(pkg, { paths: [root] })
-      let dir = dirname(entry)
-      for (let depth = 0; depth < 5; depth++) {
-        if (existsSync(join(dir, 'package.json'))) return dir
-        const parent = dirname(dir)
-        if (parent === dir) break
-        dir = parent
-      }
+      const dir = pkgDirFromEntry(entry)
+      if (dir !== undefined) return dir
     } catch {
       // 该解析基解析缺席——下一解析基（不锁单一物化位置）
     }
+  }
+  // 形态②（bug b4c4d1d7：ESM-only exports["."]——真实五件 types+import 双条件、无
+  // require/default，CJS 解析恒 ERR_PACKAGE_PATH_NOT_EXPORTED 误判解析缺席）。探针
+  // 运行形态核销 = Node ESM（vitest，node ≥22.12）——冷启动装载走 ESM import 条件，
+  // 回落 exports["."] import/default 声明物存在性探针（与装载行为同判据），双形态兼容。
+  for (const root of resolutionRoots) {
+    const dir = esmEntryPkgDir(root, pkg)
+    if (dir !== undefined) return dir
   }
   return undefined
 }

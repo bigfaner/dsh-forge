@@ -12,6 +12,10 @@
 // 环境封闭：源侧/安装侧均落在临时目录夹具（sourcePluginsRoot 注入），不依赖仓内
 // 构建产物、不锁 pnpm 物化布局（判据 = 冷启动 Node 解析 + manifest exports["./client"]
 // 声明的服务面入口）。
+// bug b4c4d1d7 反例锚：夹具 exports["."] 取真实五件同形（types+import 双条件、无
+// require/default——ESM-only），CJS require.resolve 打不通该形态
+// （ERR_PACKAGE_PATH_NOT_EXPORTED），探针解析面必须双形态兼容（CJS 条件可达走
+// require.resolve；ESM-only 走 exports["."] 声明物存在性回落）。
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,6 +25,11 @@ import { BARE_BUNDLES, generationDriftViolations, generationMarker } from '../..
 const SOURCE_VERSION = '9.9.0'
 
 /** 源侧五件包夹具：package.json（"." 入口 + exports 声明服务面入口）+ dist 件（含现行代际标记） */
+const PKG_EXPORTS = {
+  '.': { types: './dist/host.d.ts', import: './dist/host.js' },
+  './client': { types: './dist/client.d.ts', default: './dist/client.js' },
+}
+
 function makeSourceRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'gen-drift-src-'))
   for (const pkg of BARE_BUNDLES) {
@@ -33,7 +42,7 @@ function makeSourceRoot(): string {
         name: pkg,
         version: SOURCE_VERSION,
         main: './dist/host.js',
-        exports: { '.': { default: './dist/host.js' }, './client': { default: './dist/client.js' } },
+        exports: PKG_EXPORTS,
       }),
     )
     writeFileSync(join(dir, 'dist', 'host.js'), 'host body\n')
@@ -63,7 +72,7 @@ function installPkg(nodeModules: string, pkg: string, opts: InstallOpts = {}): v
         name: pkg,
         version: opts.version ?? SOURCE_VERSION,
         main: './dist/host.js',
-        exports: { '.': { default: './dist/host.js' }, './client': { default: './dist/client.js' } },
+        exports: PKG_EXPORTS,
       }),
     )
   }
