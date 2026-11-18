@@ -70,9 +70,9 @@ describe("包骨架（三目录制 + scripts 五件 + build 链）", () => {
 });
 
 describe("包 manifest（plugin-spec 1.2 验收面）", () => {
-  it("名称与版本：@dsh-forge/spec 0.17.0（plugin-spec-roadmaps/1.10 grilling 大需求档 + pipeline 词汇 minor bump）", () => {
+  it("名称与版本：@dsh-forge/spec 0.19.0（plugin-spec-roadmaps/1.12 质量门收口 minor bump）", () => {
     expect(pkg.name).toBe("@dsh-forge/spec");
-    expect(pkg.version).toBe("0.17.0");
+    expect(pkg.version).toBe("0.19.0");
   });
 
   it("exports 四键：. + ./client + ./typert + ./remote（typert 双键预留）", () => {
