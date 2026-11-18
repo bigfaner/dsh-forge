@@ -54,11 +54,13 @@ import {
   desktopInstalledBundles,
   desktopPkgEntryDir,
   desktopProfileNodeModules,
+  desktopRuntimeNodeModules,
   findDispatchLogs,
   generationDriftViolations,
   insertEntryPattern,
   runDsh,
   sqliteTables,
+  staleRuntimeShadowCopies,
   versionPairs,
 } from '../../../e2e/support/forge-combo.js'
 
@@ -112,6 +114,17 @@ function cheapGenerationGate(nodeModules: string): void {
     expect(installed, `版本双校验 ${pkg}（安装 manifest == 仓内源）`).toBe(source)
   }
   expect(generationDriftViolations(nodeModules), '五件裸包代际漂移探针全绿（manifest + 服务面标记双校验）').toEqual([])
+}
+
+/** d36710e5 廉价闸：安装宿主 runtime 陈旧副本遮蔽核销——solo add 前逐件核销（539b7413 复发形态） */
+function assertNoStaleRuntimeShadow(env: ReturnType<typeof comboEnv>): void {
+  const runtimeNodeModules = desktopRuntimeNodeModules(env.desktopDshBin)
+  const shadows = staleRuntimeShadowCopies(runtimeNodeModules)
+  expect(
+    shadows,
+    `安装宿主 runtime 零陈旧副本遮蔽（无 dsh 字段捆绑副本 = 陈旧标记，遮蔽在场即 fail-loud 不静默误判五件层清单）` +
+      `runtime=${runtimeNodeModules} ${JSON.stringify(shadows)}`,
+  ).toEqual([])
 }
 
 // ── desktop carrier（案② bug 2f897b71——宿主单实例语义形态）────────────────────────
@@ -269,6 +282,8 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
   })
 
   test('CT-DISK-07 #B2 O1：缺件不装 + patch 行在场——缺席降级可观察（诊断留痕 + 降级不扩散）', async () => {
+    // d36710e5 廉价闸：solo add 前核销安装宿主 runtime 副本代际（遮蔽在场即 fail-loud）
+    assertNoStaleRuntimeShadow(env)
     const four = BARE_BUNDLES.filter((b) => b !== KNOWLEDGE)
     // 构造（CT-DISK-07 Preconditions，solo 形态适配）：knowledge 不逐件 add、forge solo 变体
     // patch 插行仍声明 knowledge——装载缺席可观察构造（旅程 3 #B2 同判据 desktop 通道承载）
@@ -299,6 +314,10 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
   })
 
   test('CT-DISK-01 #step-1/#step-3（路 C 终态）O1：五件逐件 + forge solo add → dump-config 五条 insert 条目 + 反向锚', async () => {
+    // d36710e5 廉价闸：knowledge 补装前核销安装宿主 runtime 副本代际——陈旧副本遮蔽
+    // solo add（539b7413 复发形态：0.30.6 无 dsh 字段副本被判 plain dependency 不进层）
+    // 在场即 fail-loud 留痕，不静默误判五件层清单
+    assertNoStaleRuntimeShadow(env)
     const forgePkgBefore = readFileSync(join(soloForgeDir(), 'package.json'))
     // Input（CT-DISK-01，路 C 终态安装形态）：knowledge 补装 → 五件齐 → forge solo 变体 add
     const addKn = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${memberDir(KNOWLEDGE)}`], userData)

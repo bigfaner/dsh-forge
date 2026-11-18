@@ -25,7 +25,8 @@
 //                                 Desktop 内置命令环境执行，旅程 1 契约 Input 同形）
 import { execFile } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import Database from 'better-sqlite3'
 
@@ -185,24 +186,67 @@ function clientFaceRel(dir: string): string | undefined {
 }
 
 /**
+ * 冷启动解析读面（bug a9404b5d 再锚机械）：从解析基 roots 逐个以 Node 解析 <pkg>
+ * 入口（package.json "." 声明），命中后上溯定位包目录（package.json 所在层）。
+ * 判据 = 装载行为面（运行期冷启动解析）而非物化布局——解析基为包目录（profile 目录
+ * /forge 条目目录），Node 按装载链同径查 node_modules（直挂物化 / 嵌套物化 / 回链
+ * 安装源均命中；dir 已名 node_modules 时 Node 跳过该层——故锚 profile 目录而非
+ * node_modules 本身）。全 roots 解析缺席 → undefined（调用侧 fail-loud）。
+ */
+const anchorRequire = createRequire(join(ROOT, 'package.json'))
+
+function resolveInstalledPkgDir(resolutionRoots: readonly string[], pkg: string): string | undefined {
+  for (const root of resolutionRoots) {
+    try {
+      const entry = anchorRequire.resolve(pkg, { paths: [root] })
+      let dir = dirname(entry)
+      for (let depth = 0; depth < 5; depth++) {
+        if (existsSync(join(dir, 'package.json'))) return dir
+        const parent = dirname(dir)
+        if (parent === dir) break
+        dir = parent
+      }
+    } catch {
+      // 该解析基解析缺席——下一解析基（不锁单一物化位置）
+    }
+  }
+  return undefined
+}
+
+/**
+ * 代际探针解析基（bug a9404b5d 再锚）：①profile 目录解析基（profile package.json
+ * 所在层——冷启动解析主路径：add 目标直挂物化 + 运行期回链安装源均经 Node 解析命中）；
+ * ②forge 条目嵌套 node_modules 候选（pnpm v11 link: 依赖嵌套物化位——c26a8c2a fix-4
+ * 同径回落；判据本体不锚布局，此根仅扩解析候选集）。
+ */
+function generationResolutionRoots(nodeModules: string): readonly string[] {
+  const roots = [dirname(nodeModules)]
+  const nested = join(nodeModules, '@dsh-forge', 'forge', 'node_modules')
+  if (existsSync(nested)) roots.push(nested)
+  return roots
+}
+
+/**
  * M-3 五件裸包代际漂移程序化探针——安装/装载后逐件双校验，任一件代际陈旧即违例
  * （调用侧 expect 违例清单 == [] 即 fail-loud；AGENTS 1.8 廉价校验前置纪律）：
- * ① manifest：安装 package.json version == 仓内源 version；
+ * ① manifest：冷启动解析安装件 → package.json version == 仓内源 version；
  * ② 服务面：安装 exports["./client"] 指向物含现行代际标记 generationMarker（陈旧
  *    世代快照的 bundle 无现行标记 → 红）。
- * 装载行为锚（c26a8c2a fix-4 同族）：经 manifest exports 声明入口解析文件——不锁
- * pnpm 物化布局；安装 manifest 缺席/服务面缺席/标记缺席逐件回报，一次收全清单。
+ * 装载行为锚（bug a9404b5d 再锚——stale-anchor 三律判例「锚布局不锚行为」）：先经
+ * 冷启动 Node 解析定位安装件（不锁 pnpm 物化布局），解析缺席/版本漂移/服务面缺席/
+ * 标记缺席逐件回报，一次收全清单；解析基正反自证见 generation-drift 单测（嵌套
+ * 物化形态正向绿 + 陈旧嵌套副本反向红 + 闭包断裂反向红）。
  */
 export function generationDriftViolations(nodeModules: string, opts: GenerationDriftOptions = {}): readonly GenerationViolation[] {
   const sourceRoot = opts.sourcePluginsRoot ?? join(ROOT, 'plugins')
+  const resolutionRoots = generationResolutionRoots(nodeModules)
   const violations: GenerationViolation[] = []
   for (const pkg of BARE_BUNDLES) {
     const short = pkg.slice('@dsh-forge/'.length)
     const sourceVersion = readPkgJson(join(sourceRoot, short)).version ?? '(缺)'
-    const installedDir = installedPkgDir(nodeModules, pkg)
-    const installedPkgFile = join(installedDir, 'package.json')
-    if (!existsSync(installedPkgFile)) {
-      violations.push({ pkg, kind: 'manifest', detail: `安装 manifest 缺席 ${installedPkgFile}` })
+    const installedDir = resolveInstalledPkgDir(resolutionRoots, pkg)
+    if (installedDir === undefined) {
+      violations.push({ pkg, kind: 'manifest', detail: `冷启动解析缺席（解析基均无法解析 ${pkg} 入口——装载闭包断裂）` })
       continue
     }
     const installedVersion = readPkgJson(installedDir).version ?? '(缺)'
@@ -226,6 +270,66 @@ export function generationDriftViolations(nodeModules: string, opts: GenerationD
   }
   return violations
 }
+
+/**
+ * bug d36710e5 陈旧副本遮蔽探针——安装宿主 runtime node_modules 内五件裸包捆绑副本
+ * 代际核销（539b7413 复发形态）：desktop 通道 resolveBundleDir installation-first——
+ * runtime 已捆绑的副本会遮蔽 solo add 的 link: 安装物；副本无 dsh 字段 = 陈旧标记
+ * （0.30.6 世代捆绑副本无 dsh.bundle/dsh.client 声明 → 组装判「plain dependency」
+ * 不进层）。副本在场且无 dsh 字段 → 违例清单非空，调用侧 fail-loud 留痕（不静默
+ * 误判五件层清单）；无捆绑副本或副本带 dsh 字段 → 零违例。
+ */
+export interface RuntimeShadowViolation {
+  readonly pkg: string
+  readonly path: string
+  readonly version: string
+  readonly detail: string
+}
+
+export function staleRuntimeShadowCopies(
+  runtimeNodeModules: string,
+  opts: GenerationDriftOptions = {},
+): readonly RuntimeShadowViolation[] {
+  const sourceRoot = opts.sourcePluginsRoot ?? join(ROOT, 'plugins')
+  const violations: RuntimeShadowViolation[] = []
+  for (const pkg of BARE_BUNDLES) {
+    const dir = installedPkgDir(runtimeNodeModules, pkg)
+    const pkgFile = join(dir, 'package.json')
+    if (!existsSync(pkgFile)) continue
+    const manifest = JSON.parse(readFileSync(pkgFile, 'utf8')) as { version?: string; dsh?: unknown }
+    if (manifest.dsh !== undefined) continue
+    const sourceVersion = readPkgJson(join(sourceRoot, pkg.slice('@dsh-forge/'.length))).version ?? '(缺)'
+    violations.push({
+      pkg,
+      path: dir,
+      version: manifest.version ?? '(缺)',
+      detail: `安装宿主 runtime 陈旧副本遮蔽：${pkg}@${manifest.version ?? '(缺)'} 无 dsh 字段` +
+        `（仓内源 ${sourceVersion}，组装判 plain dependency 不进层）——solo add 装载前先换装现行宿主世代或卸除该副本`,
+    })
+  }
+  return violations
+}
+
+/**
+ * desktop 安装宿主 runtime node_modules 发现面（bug d36710e5 遮蔽闸前置）：自通道
+ * CLI bin 上溯寻找首个含 @dsh-forge scope 的 node_modules——安装包 runtime 捆绑副本
+ * 所在层。缺席即 throw fail-loud（通道 CLI 配置错/结构漂移不静默）。
+ */
+export function desktopRuntimeNodeModules(desktopDshBin: string): string {
+  let dir = dirname(resolve(desktopDshBin))
+  for (let depth = 0; depth < 7; depth++) {
+    const candidate = join(dir, 'node_modules')
+    if (existsSync(join(candidate, '@dsh-forge'))) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  throw new Error(
+    `desktop runtime node_modules 发现失败：自 CLI bin 上溯七层未见含 @dsh-forge scope 的 node_modules` +
+      `（bin=${desktopDshBin}——FORGE_COMBO_DESKTOP_DSH 指认桌面通道 CLI；bug d36710e5 遮蔽闸前置，缺席不静默）`,
+  )
+}
+
 
 /**
  * CT-DISK-01 通道专用：六包物化目录在场且非空（pnpm 嵌套相对 file: 依赖解析物化——
