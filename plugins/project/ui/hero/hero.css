@@ -12,6 +12,15 @@
   background: var(--dsw-alias-bg-base);
 }
 
+/* hero 相位右栏可达面（bug bd544d59——无壳官方宿主 hero 相位会话头 ExpandButton 载体
+ * 缺席的补偿入口；corner 位，样式贴官方 chrome 令牌） */
+.dswf-hero-rightbar-affordance {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 2;
+}
+
 /* UF-2 hero 相位：文本靠顶引导（价值一句话 + CTA）+「鲸游书海」插画沉底——原型
  * hero 同构构图（标题/CTA 恒落插画渐隐区，零遮挡书本） */
 .dswf-hero {

@@ -190,8 +190,8 @@ import {
 import { registerConversationToolFaces } from './conversation-views-face.js'
 import { registerSidebarFace } from './sidebar-face.js'
 import { registerHeroPickerFace } from './hero-picker-face.js'
-import { registerHeroPanelFace } from './hero-panel-face.js'
 import { startHeroEmptySelfDrive, type HeroLayoutFace } from './hero-panel-drive.js'
+import { registerHeroPanelFace, type SidebarRightOpenTabFace } from './hero-panel-face.js'
 import type { LocaleServiceFace } from './locale.js'
 
 // ── keyed section 扩展点 + 配置节双缝（1.16：tab keyed 占用者模式泛化 + settings 节
@@ -246,6 +246,22 @@ function layoutFaceOf(rec: unknown): HeroLayoutFace | undefined {
     const viaReflect = typeof reflect?.get === 'function' ? reflect.get('layout') : undefined
     return viaReflect !== undefined && viaReflect !== null && typeof viaReflect === 'object'
       ? (viaReflect as HeroLayoutFace)
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** 官方右栏服务窄读（bug bd544d59 hero 相位可达缝注入源——ctx.get/reflect 现查零缓存） */
+function sidebarRightFaceOf(rec: unknown): SidebarRightOpenTabFace | undefined {
+  try {
+    const get = (rec as { get?: (name: string) => unknown } | undefined)?.['get']
+    const viaGet = typeof get === 'function' ? get.call(rec, 'sidebarRight') : undefined
+    if (viaGet !== undefined && viaGet !== null && typeof viaGet === 'object') return viaGet as SidebarRightOpenTabFace
+    const reflect = (rec as { reflect?: { get?: (key: string) => unknown } } | undefined)?.['reflect']
+    const viaReflect = typeof reflect?.get === 'function' ? reflect.get('sidebarRight') : undefined
+    return viaReflect !== undefined && viaReflect !== null && typeof viaReflect === 'object'
+      ? (viaReflect as SidebarRightOpenTabFace)
       : undefined
   } catch {
     return undefined
@@ -384,7 +400,7 @@ export const projectClient = {
     // bug 295223da：无壳官方宿主空态自判定在 remote $mount 就绪回调触发（上方）——此处
     // 只置注册标记；壳宿主 ShellHost 单驱动语义不变（hero-panel-drive 壳缝在场即跳过）。
     try {
-      const ok = registerHeroPanelFace(slots)
+      const ok = registerHeroPanelFace(slots, () => sidebarRightFaceOf(rec))
       heroPanelRegistered = ok
       console.info(`[dsh-forge/project] hero panel face registered=${ok}`)
     } catch (error) {
