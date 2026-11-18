@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/lib-api",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "公共 api 子包：contracts DTO（bugs/forge/fs/knowledge/project/rpc/worktree）+ 词汇/错误码/通道常量单源 + BUG_CARD_SUCCESS_SCHEMA 单源 + tool 面共享原语（format 双友好模板/args 防御收窄/forge-paths 路径派生常量）单源——自 @dsh-forge/contracts 归并迁入（plugin-project 1.7），tool 原语自 plugin-forge 下沉（plugin-spec 1.4），contracts 旧位留 re-export 兼容面。",
