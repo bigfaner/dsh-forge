@@ -15,8 +15,13 @@ type DiagPayload = Omit<DiagEventPayload, 'process'>
 
 export interface ProjectsPortDeps {
   readonly domainDb: DomainDb
-  /** 官方 workspaceRegistry face（registry-adapter 适配——装配期唯一缝合点） */
-  readonly registry?: OfficialRegistryFace | undefined
+/**
+ * 官方 workspaceRegistry face（registry-adapter 适配缝）——值或惰性取法。
+ * bug e6351546：官方 web 宿主 face provide 晚于插件装配——装配期快照取法恒缺，
+ * absentRegistry typed 拒绝「registry face 缺席」。修口 = 调用期现查（惰性取法注入，
+ * 检测永不缓存——AGENTS 1.6；knowledge 同宿主消费点现查口径对齐）。
+ */
+readonly registry?: OfficialRegistryFace | (() => OfficialRegistryFace | undefined) | undefined
   /** tasksHome（三态分类器消费目录；缺席 = 跳过碰撞复检——降级面） */
   readonly tasksHome?: string | undefined
   readonly onDiag?: ((payload: DiagPayload) => void) | undefined
@@ -52,8 +57,27 @@ export function createProjectsServicePort(deps: ProjectsPortDeps): ProjectServic
     delete: async () => undefined,
     resolveByPath: async () => undefined,
   }
-  const registry = deps.registry !== undefined ? createRegistryAdapter(deps.registry) : absentRegistry
-  const hasRegistry = deps.registry !== undefined
+  // face 调用期现查（bug e6351546——惰性取法注入：port 装配早于宿主 face provide 亦可达）
+  const resolveFace = (): OfficialRegistryFace | undefined =>
+    typeof deps.registry === 'function' ? deps.registry() : deps.registry
+  let adapted: ProjectRegistryPort | undefined
+  let adaptedFor: OfficialRegistryFace | undefined
+  const registryPort = (): ProjectRegistryPort => {
+    const face = resolveFace()
+    if (face === undefined) return absentRegistry
+    if (adapted === undefined || adaptedFor !== face) {
+      adapted = createRegistryAdapter(face)
+      adaptedFor = face
+    }
+    return adapted
+  }
+  const registry: ProjectRegistryPort = {
+    list: () => registryPort().list(),
+    get: (workspaceId) => registryPort().get(workspaceId),
+    create: (wsPath, title) => registryPort().create(wsPath, title),
+    delete: (workspaceId) => registryPort().delete(workspaceId),
+    resolveByPath: (wsPath) => registryPort().resolveByPath(wsPath),
+  }
   const registerService = new ProjectsRegisterService({
     projects,
     workspaces,
@@ -79,10 +103,11 @@ export function createProjectsServicePort(deps: ProjectsPortDeps): ProjectServic
       return toProject(updated, workspaces.getMain(id))
     },
     reconcileAtStartup: (): Promise<ReconcileReport> => {
-      if (!hasRegistry) {
+      // face 调用期现查（bug e6351546 同口径——缺席时点对账空转，不缓存装配期快照）
+      if (resolveFace() === undefined) {
         return Promise.resolve({ repaired: [], orphans: [] })
       }
-      return reconcileAtStartup({ projects, workspaces, registry, onDiag: deps.onDiag })
+      return reconcileAtStartup({ projects, workspaces, registry: registryPort(), onDiag: deps.onDiag })
     },
   }
 }

@@ -228,7 +228,8 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
         if (db === undefined) return undefined;
         return createProjectsServicePort({
           domainDb: db,
-          registry: config.registry ?? defaultRegistry(),
+          // bug e6351546：face 惰性取法（调用期现查——宿主 face provide 晚于装配亦可达）
+          registry: () => config.registry ?? defaultRegistry(),
           tasksHome: config.tasksHome,
           onDiag: undefined,
         });
@@ -367,7 +368,8 @@ function provideWorktreeIdentity(
       ? undefined
       : createProjectsServicePort({
           domainDb,
-          registry: config.registry ?? registry,
+          // bug e6351546：face 惰性取法（调用期现查——同注册链口径）
+          registry: () => config.registry ?? registry,
           tasksHome: config.tasksHome,
           onDiag: undefined,
         });
