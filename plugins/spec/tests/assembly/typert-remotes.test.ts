@@ -429,7 +429,7 @@ describe("族缺席降级（specs 服务缝 typed unavailable）", () => {
   });
 });
 
-describe("forgeProjectsIdentityOf（identity 双源缝：workspaceRegistry 优先 + forgeProjects 回落——bug b990aa94）", () => {
+describe("forgeProjectsIdentityOf（identity 双源缝：forge.projects 点分缝正源 + workspaceRegistry 回落——bug ac27ab1a / recurrence b990aa94）", () => {
   /** 官方 workspaceRegistry 消费窄面替身（get 窄面——可注入命中/缺席/抛错三态） */
   function registryFace(
     rows: Record<string, { path: string }> = {},
@@ -446,9 +446,28 @@ describe("forgeProjectsIdentityOf（identity 双源缝：workspaceRegistry 优�
     };
   }
 
-  /** forgeProjects 反射链替身（既有自家宿主形态——getProject 窄面） */
-  function forgeProjectsFace(rows: Record<string, { wsPath: string }>): unknown {
-    return { getProject: async (id: string) => rows[id] ?? null };
+  /** forge.projects 缝替身（plugins/project 五缝形态——reflect.get 返回惰性工厂，调用产 face） */
+  function forgeProjectsSeam(rows: Record<string, { wsPath: string }>): { factory: unknown; calls: () => number } {
+    let calls = 0;
+    const face = {
+      getProject: async (id: string) => {
+        calls += 1;
+        return rows[id] ?? null;
+      },
+    };
+    const factory = () => face;
+    return { factory, calls: () => calls };
+  }
+
+  function ctxWithSeam(seam: unknown, registry?: unknown): {
+    reflect: { get: (name: string) => unknown };
+    workspaceRegistry?: unknown;
+  } {
+    const ctx: { reflect: { get: (name: string) => unknown }; workspaceRegistry?: unknown } = {
+      reflect: { get: (name: string) => (name === "forge.projects" ? seam : undefined) },
+    };
+    if (registry !== undefined) ctx.workspaceRegistry = registry;
+    return ctx;
   }
 
   function identityOf(ctx: unknown) {
@@ -457,49 +476,59 @@ describe("forgeProjectsIdentityOf（identity 双源缝：workspaceRegistry 优�
     return { face, diag };
   }
 
-  it("registry 命中 → wsPath + deriveProjectKey 派生（官方源优先——forgeProjects 同 id 在座也不消费）", async () => {
-    const reg = registryFace({ "ws-1": { path: "Z:\\ws\\official" } });
+  it("缝正源命中 → wsPath + deriveProjectKey 派生（factory 调用产 face；registry 同 id 在座也不消费——projectId 是 forge 签发 ID ≠ workspaceId）", async () => {
+    const seam = forgeProjectsSeam({ "f940767b": { wsPath: "Z:\\ws\\forge" } });
+    const reg = registryFace({ "f940767b": { path: "Z:\\ws\\wrong" } });
+    const { face, diag } = identityOf(ctxWithSeam(seam.factory, reg));
+    expect(await face("f940767b")).toEqual({ wsPath: "Z:\\ws\\forge", projectKey: deriveProjectKey("Z:\\ws\\forge") });
+    expect(seam.calls()).toBe(1);
+    expect(reg.getCalls()).toBe(0);
+    expect(diag).toEqual([]);
+  });
+
+  it("缝反射键 = 点分 forge.projects（plugins/project PROJECT_SEAM_KEYS.projects 同值——camelCase forgeProjects 恒 miss 判例钉死）", async () => {
+    const seen: string[] = [];
     const ctx = {
-      workspaceRegistry: reg,
-      reflect: { get: (name: string) => (name === "forgeProjects" ? forgeProjectsFace({ "ws-1": { wsPath: "Z:\\ws\\forge" } }) : undefined) },
+      reflect: { get: (name: string) => { seen.push(name); return undefined; } },
+      workspaceRegistry: registryFace({}),
     };
+    const { face } = identityOf(ctx);
+    await face("p-1");
+    expect(seen).toContain("forge.projects");
+    expect(seen).not.toContain("forgeProjects");
+  });
+
+  it("缝缺席 → 回落 workspaceRegistry（纯官方 workspaceId 语境——registry.get(id).path 命中）", async () => {
+    const reg = registryFace({ "ws-1": { path: "Z:\\ws\\official" } });
+    const ctx = ctxWithSeam(undefined, reg);
     const { face, diag } = identityOf(ctx);
     expect(await face("ws-1")).toEqual({ wsPath: "Z:\\ws\\official", projectKey: deriveProjectKey("Z:\\ws\\official") });
     expect(reg.getCalls()).toBe(1);
     expect(diag).toEqual([]);
   });
 
-  it("registry 缺席（get miss）→ 回落 forgeProjects（非 null——自家宿主形态不破）", async () => {
-    const reg = registryFace({});
-    const ctx = {
-      workspaceRegistry: reg,
-      reflect: { get: (name: string) => (name === "forgeProjects" ? forgeProjectsFace({ "p-1": { wsPath: "Z:\\ws\\demo" } }) : undefined) },
-    };
-    const { face, diag } = identityOf(ctx);
-    expect(await face("p-1")).toEqual({ wsPath: "Z:\\ws\\demo", projectKey: deriveProjectKey("Z:\\ws\\demo") });
-    expect(diag).toEqual([]);
+  it("缝 getProject miss → 回落 workspaceRegistry（行空不截断回落）", async () => {
+    const seam = forgeProjectsSeam({});
+    const reg = registryFace({ "ws-1": { path: "Z:\\ws\\official" } });
+    const { face } = identityOf(ctxWithSeam(seam.factory, reg));
+    expect(await face("ws-1")).toEqual({ wsPath: "Z:\\ws\\official", projectKey: deriveProjectKey("Z:\\ws\\official") });
   });
 
-  it("registry face 缺席 → 回落 forgeProjects（既有 forgeProjects 径测试形态零改即绿基线）", async () => {
-    const ctx = {
-      reflect: { get: (name: string) => (name === "forgeProjects" ? forgeProjectsFace({ "p-1": { wsPath: "Z:\\ws\\demo" } }) : undefined) },
-    };
-    const { face } = identityOf(ctx);
-    expect(await face("p-1")).toEqual({ wsPath: "Z:\\ws\\demo", projectKey: deriveProjectKey("Z:\\ws\\demo") });
+  it("缝 getProject 抛错 → 回落 workspaceRegistry（抛错 fail-soft 非截断）", async () => {
+    const factory = () => ({ getProject: async () => { throw new Error("seam boom"); } });
+    const reg = registryFace({ "ws-1": { path: "Z:\\ws\\official" } });
+    const { face } = identityOf(ctxWithSeam(factory, reg));
+    expect(await face("ws-1")).toEqual({ wsPath: "Z:\\ws\\official", projectKey: deriveProjectKey("Z:\\ws\\official") });
   });
 
-  it("registry get 抛错 → 回落 forgeProjects（抛错同回落非 null）", async () => {
-    const reg = registryFace({ "p-1": { path: "Z:\\ws\\official" } }, { throwOnGet: true });
-    const ctx = {
-      workspaceRegistry: reg,
-      reflect: { get: (name: string) => (name === "forgeProjects" ? forgeProjectsFace({ "p-1": { wsPath: "Z:\\ws\\demo" } }) : undefined) },
-    };
-    const { face, diag } = identityOf(ctx);
-    expect(await face("p-1")).toEqual({ wsPath: "Z:\\ws\\demo", projectKey: deriveProjectKey("Z:\\ws\\demo") });
-    expect(diag.length).toBeGreaterThanOrEqual(0);
+  it("registry 缺席/抛错 → 缝正源独立承担（双源互不前置依赖）", async () => {
+    const seam = forgeProjectsSeam({ "p-1": { wsPath: "Z:\\ws\\forge" } });
+    const throwingReg = registryFace({}, { throwOnGet: true });
+    const { face } = identityOf(ctxWithSeam(seam.factory, throwingReg));
+    expect(await face("p-1")).toEqual({ wsPath: "Z:\\ws\\forge", projectKey: deriveProjectKey("Z:\\ws\\forge") });
   });
 
-  it("双源全缺 → null + diag 留痕（不静默 null——identity 解析失败路径可观测）", async () => {
+  it("双源全缺 → null + diag warn 留痕（不静默 null——identity 解析失败路径可观测）", async () => {
     const ctx = {
       workspaceRegistry: registryFace({}),
       reflect: { get: () => undefined },
@@ -507,37 +536,17 @@ describe("forgeProjectsIdentityOf（identity 双源缝：workspaceRegistry 优�
     const { face, diag } = identityOf(ctx);
     expect(await face("p-none")).toBeNull();
     expect(diag.length).toBeGreaterThan(0);
+    expect(diag[0]).toContain("p-none");
   });
 
-  it("每调用现查零缓存（AGENTS 1.6——同 id 两次调用各现查 registry 一次）", async () => {
+  it("每调用现查零缓存（AGENTS 1.6——同 id 两次调用缝 factory 与 registry 各现查两次）", async () => {
+    const seam = forgeProjectsSeam({});
     const reg = registryFace({ "ws-1": { path: "Z:\\ws\\official" } });
-    const ctx = { workspaceRegistry: reg, reflect: { get: () => undefined } };
-    const { face } = identityOf(ctx);
+    const { face } = identityOf(ctxWithSeam(seam.factory, reg));
     await face("ws-1");
     await face("ws-1");
+    expect(seam.calls()).toBe(2);
     expect(reg.getCalls()).toBe(2);
-  });
-});
-
-describe("forgeProjectsIdentityOf（forge.projects 缝 identity 单源——双源前基线形态）", () => {
-  it("getProject 命中 → wsPath + deriveProjectKey 派生；缺席/抛错 = null（fail-soft）", async () => {
-    const ctx = {
-      reflect: {
-        get: (name: string) =>
-          name === "forgeProjects"
-            ? { getProject: async (id: string) => (id === "p-1" ? { wsPath: "Z:\\ws\\demo" } : null) }
-            : undefined,
-      },
-    };
-    const identity = forgeProjectsIdentityOf(ctx);
-    expect(await identity("p-1")).toEqual({ wsPath: "Z:\\ws\\demo", projectKey: deriveProjectKey("Z:\\ws\\demo") });
-    expect(await identity("p-miss")).toBeNull();
-    const throwing = forgeProjectsIdentityOf({
-      reflect: { get: () => ({ getProject: async () => { throw new Error("boom"); } }) },
-    });
-    expect(await throwing("p-1")).toBeNull();
-    const absent = forgeProjectsIdentityOf({});
-    expect(await absent("p-1")).toBeNull();
   });
 });
 

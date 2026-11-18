@@ -15,8 +15,9 @@
 // 发现面铁律（project 判例同径）：gateway 只遍历根 ctx reflect.props——控制器经根 ctx
 // plugin 注册进根 ctx；生命周期归插件 fiber（dispose 级联拆卸）。
 //
-// 身份缝：端点入参 projectId → host 半 identity 解析（forge.projects 缝——getProject
-// 别名锚单源在 project 侧 queries；本插件零 project 依赖，结构性窄面现查）。未解析分层：
+// 身份缝：端点入参 projectId → host 半 identity 解析（forge.projects 点分缝正源——签发
+// projectId 的生态正源，getProject 别名锚单源在 project 侧 queries；本插件零 project 依赖，
+// 结构性窄面现查 + workspaceRegistry 回落覆盖纯官方 workspaceId 语境）。未解析分层：
 // 快照族（list/follow）空集诚实降级 / detail·query·projection·transition 族 typed 拒绝。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
@@ -790,10 +791,18 @@ function specFollowDelay(signal: AbortSignal | undefined, intervalMs: number): P
   });
 }
 
-// ── 身份缝真实现（identity 双源：官方 workspaceRegistry 优先 + forge.projects 缝回落——
-//    bug b990aa94：官方 dsh 无 projectId 概念，身份语义 ≡ WorkspaceId（官方 wire 范式 =
-//    只传 id、host 侧查 registry）；forgeProjects 是 dsh-forge 自家 host core 私有服务键，
-//    官方 web 宿主缺席 → 单源恒 null。双源 = 官方宿主可移植 + 自家宿主形态不破）──
+// ── 身份缝真实现（identity 双源：forge.projects 点分缝正源 + workspaceRegistry 回落——
+//    bug ac27ab1a / recurrence b990aa94：projectId 是 forge 签发 ID（register 返回
+//    projectId ≠ workspaceId），workspaceRegistry 以 workspaceId 为键、对 projectId 恒
+//    miss——正源 = 签发方 forge.projects 缝（点分键，plugins/project PROJECT_SEAM_KEYS.projects
+//    同值；读取径对齐 task-loop 在役先例 host/index.ts:100 reflect.get(PROJECT_SEAM_KEY)
+//    + typert-remotes.ts ForgeProjectsIdentityFace 窄面 getProject→wsPath），registry
+//    降回落覆盖纯官方 workspaceId 语境。双源均现查零缓存——AGENTS 1.6）──
+
+/** forge.projects 缝键（plugins/project host/assembly/seams.ts PROJECT_SEAM_KEYS.projects
+ *  同值——跨包结构消费，本包零依赖声明只持同值常量，漂移由 identity 解析面诊断兜底；
+ *  task-loop host/index.ts:307 先例同径） */
+const PROJECT_SEAM_KEY = "forge.projects";
 
 /** 插件 ctx 结构防御读取（cordis inject 门——属性访问未声明即抛，try/catch fail-soft） */
 function ctxReflectGet(ctx: unknown, name: string): unknown {
@@ -802,6 +811,12 @@ function ctxReflectGet(ctx: unknown, name: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/** forge.projects 缝消费窄面（plugins/project ProjectsServicePort getProject 同形子集——
+ *  行真值 wsPath 即 canonical 检出根；缝为惰性工厂 provide，factory 调用产 face） */
+interface ForgeProjectsIdentityFace {
+  getProject(projectId: string): Promise<{ readonly wsPath: string } | null>;
 }
 
 /** 官方 workspaceRegistry 消费窄面（@deepseek-ai/dsh-workspace Workspace 同形子集——get 返回行 path 即 canonical 检出根） */
@@ -815,19 +830,48 @@ function isWorkspaceRegistryFace(value: unknown): value is OfficialWorkspaceRegi
   return typeof (value as { get?: unknown }).get === "function";
 }
 
+/** forge.projects 缝 face 现查（factory 调用产 face + 形状校验——缺席/劣形 = undefined） */
+function forgeProjectsSeamFaceOf(ctx: unknown): ForgeProjectsIdentityFace | undefined {
+  try {
+    const factory = ctxReflectGet(ctx, PROJECT_SEAM_KEY);
+    if (typeof factory !== "function") return undefined;
+    const face = (factory as () => unknown)();
+    if (face === null || typeof face !== "object") return undefined;
+    return typeof (face as { getProject?: unknown }).getProject === "function"
+      ? (face as ForgeProjectsIdentityFace)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * identity 双源缝（每次调用现查零缓存——AGENTS 1.6）：
- * ① 官方源：ctx.workspaceRegistry.get(projectId as WorkspaceId).path（type-only import
- *    保 typed 具名取法——官方宿主 projectId ≡ workspaceId）；
- * ② 回落源：forgeProjects 反射链（dsh-forge 自家 host core 形态——getProject 别名锚）。
- * 双源全缺/抛错 = null + diag warn 留痕（不静默）。
+ * ① 正源：forge.projects 点分缝（签发 projectId 的生态正源——ctx.reflect.get 缝键取
+ *    惰性工厂，factory 调用产 getProject 窄面，wsPath 直取；点分键合法径）；
+ * ② 回落：ctx.workspaceRegistry.get(projectId as WorkspaceId).path（纯官方 workspaceId
+ *    语境——type-only import 保 typed 具名取法）。
+ * 双源全缺/抛错/miss = null + diag warn 留痕（不静默）。
  */
 export function forgeProjectsIdentityOf(
   ctx: unknown,
   diag?: (line: string) => void,
 ): SpecIdentityFace {
   return async (projectId) => {
-    // ① 官方 workspaceRegistry 优先（face 缺席/劣形/抛错/miss = 静默入回落）
+    // ① 正源 forge.projects 点分缝（face 缺席/劣形/抛错/miss = 静默入回落）
+    try {
+      const face = forgeProjectsSeamFaceOf(ctx);
+      if (face !== undefined) {
+        const project = await face.getProject(projectId);
+        const wsPath = typeof project?.wsPath === "string" && project.wsPath !== "" ? project.wsPath : undefined;
+        if (wsPath !== undefined) {
+          return { wsPath, projectKey: deriveProjectKey(wsPath) };
+        }
+      }
+    } catch {
+      // 回落承担——不在此分流诊断（双缺统一留痕）
+    }
+    // ② 回落 workspaceRegistry（官方 workspaceId 语境）
     try {
       const registry: unknown = (ctx as { workspaceRegistry?: unknown }).workspaceRegistry;
       if (isWorkspaceRegistryFace(registry)) {
@@ -838,22 +882,9 @@ export function forgeProjectsIdentityOf(
         }
       }
     } catch {
-      // 回落承担——不在此分流诊断（双缺统一留痕）
-    }
-    // ② 回落 forgeProjects 反射链（自家宿主形态）
-    try {
-      const svc = ctxReflectGet(ctx, "forgeProjects") as
-        | { getProject?: (id: string) => Promise<{ wsPath?: string } | null> }
-        | undefined;
-      const project = await svc?.getProject?.(projectId);
-      const wsPath = typeof project?.wsPath === "string" && project.wsPath !== "" ? project.wsPath : undefined;
-      if (wsPath !== undefined) {
-        return { wsPath, projectKey: deriveProjectKey(wsPath) };
-      }
-    } catch {
       // 双缺统一留痕
     }
-    diag?.(`[spec-typert] identity 双源未解析（workspaceRegistry miss/缺席 + forgeProjects 缺席/抛错）：projectId=${projectId}`);
+    diag?.(`[spec-typert] identity 双源未解析（forge.projects 缝缺席/miss/抛错 + workspaceRegistry miss/缺席）：projectId=${projectId}`);
     return null;
   };
 }

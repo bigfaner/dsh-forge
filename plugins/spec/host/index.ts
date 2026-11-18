@@ -264,10 +264,12 @@ function registerSpecPromptSectionsFromCordis(ctx: unknown, config: SpecPluginCo
 
 // inject 名单：tools = 单装工具族注册缝 + systemPrompt = 提示段注册缝（bug fefd5149 缝①，
 // 同缝先例 plugins/knowledge/host/index.ts:341——名单缺席 = ctx 属性访问被 cordis inject
-// 门拒恒 undefined，两段提示段零注册）+ workspaceRegistry = identity 双源缝官方源具名服务
-// 取法门（bug b990aa94——官方宿主 projectId ≡ workspaceId，forgeProjects 缺席时回落承担）。
+// 门拒恒 undefined，两段提示段零注册）+ workspaceRegistry = identity 回落源具名服务取法门
+// （bug b990aa94——纯官方 workspaceId 语境承担）+ forge.projects = identity 正源缝显式入
+// 名单（bug ac27ab1a——签发 projectId 的生态正源，点分键 reflect.get 合法径；task-loop
+// host/index.ts:309 先例同径，缺席 fail-soft 降级 + 诊断留痕）。
 // reflect/emit 经防御读取消费（try/catch fail-soft），不入名单（task-loop 同型——具名服务
 // provide 与事件混入为宿主根面）。
-specCordisPlugin.inject = ["tools", "systemPrompt", "workspaceRegistry"] as const
+specCordisPlugin.inject = ["tools", "systemPrompt", "workspaceRegistry", "forge.projects"] as const
 
 export default specCordisPlugin

@@ -70,9 +70,9 @@ describe("包骨架（三目录制 + scripts 五件 + build 链）", () => {
 });
 
 describe("包 manifest（plugin-spec 1.2 验收面）", () => {
-  it("名称与版本：@dsh-forge/spec 0.16.1（plugin-spec-roadmaps/fix-2 identity 双源缝 patch bump）", () => {
+  it("名称与版本：@dsh-forge/spec 0.16.2（plugin-spec-roadmaps/fix-3 identity 缝点分键修正 patch bump）", () => {
     expect(pkg.name).toBe("@dsh-forge/spec");
-    expect(pkg.version).toBe("0.16.1");
+    expect(pkg.version).toBe("0.16.2");
   });
 
   it("exports 四键：. + ./client + ./typert + ./remote（typert 双键预留）", () => {
