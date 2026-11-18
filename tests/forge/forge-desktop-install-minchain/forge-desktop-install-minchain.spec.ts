@@ -1,26 +1,41 @@
 // 旅程 1：dsh-desktop solo 逐件安装 forge → 共库装载 → 卸载三段（真机 e2e spec，收口批 1.15）。
 // journey = .forge/docs/proposals/plugin-forge-combo/testing/forge-desktop-install-minchain/journey.md
-// contract = 同目录 contracts/contract.md（behavior_baseline v2——断言-契约溯源：每条断言标注 CT-DISK-* 条目 id）
+// contract = 同目录 contracts/contract.md（behavior_baseline v3——断言-契约溯源：每条断言标注 CT-DISK-* 条目 id）
 //
 // G3 实锚回填（1.11 核销结论）：desktop profile 落点 = {userData}/profile
 // （paths.ts resolveHostPaths），{DSH_HOME}/profiles/desktop 恒不产生（反向锚）——
 // 旧锚 profiles/desktop/** 全部作废，本 spec 全部清单/物化断言走 desktopProfile* 读面。
 // 安装形态（CT-DISK-09 三路裁定）：desktop 通道唯一可行形态 = 路 C solo 逐件——
 // 五件逐件 solo add + forge solo 变体（零 file: 兄弟依赖，1.12 发布树 <tree>/solo/forge）
-// add；原样包（聚合 file: 依赖）add 断裂 ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND（CT-DISK-05 实锚分支）。
+// add；原样包（聚合 file: 依赖）add 本代成功进层（bug 5213c7e8 实锚修订——1.11 世代
+// staging 断裂 ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND 为历史判例留痕，不作现行预期）。
 // CT-DISK-07 缺席降级构造（solo 形态适配）：缺件不装（knowledge 不逐件 add）而 forge
 // patch 插行仍声明 knowledge → 装载缺席——缺席诊断留痕（forge-bundle-absent，fix-1 实锚；
 // 诊断落盘面 = {userData}/logs/app-YYYYMMDD.jsonl，host-wiring.ts）+ 降级不扩散。
 // CT-DISK-08 对照取证构造：solo 变体副本 patch 中 project dbFile 改回单装缺省路径。
 //
+// 案②启动面（bug 2f897b71 测试侧收敛）：desktop 宿主为单实例语义——第二实例 exit 0
+// 立即退出（003-desktop-spec run-output 实锚），electron.launch 第二实例启动面结构性
+// 不可达 → 取证改 carrier 形态：每运行世代 electron.launch 仅首启一次（carrier），
+// 页面取证经 CDP 附着既有实例（chromium.connectOverCDP）；装载世代切换经 restartCarrier
+// 冷启动复锚（锁随旧实例退出释放）——全运行世代任意时刻至多一个宿主实例。
+// 复跑前置：无外部宿主实例持锁（carrier 即唯一实例；外部实例在侧时 carrier 启动即
+// exit 0 退出 = fail-loud，不静默红）。
+//
+// 案③模块态（bug 23608d5b 测试侧收敛）：userData 模块态初始化提升至 beforeAll——
+// worker 重启后模块重求值时 userData 被重建而非残留 '' 零值锚（'' 曾使 DSH_FORGE_USER_DATA
+// 空值下发 + carrier state.json 回落错锚物化）；前置型用例经 ensure/restart carrier
+// 重建启动面，前置缺失（如早期用例安装态随 worker 丢失）如实红不静默。
+// 裁决留痕：per-test 显式重置形态被否——安装链幂等重建成本高且与 CT-DISK-06 幂等断言冲突。
+//
 // 环境面（e2e/support/forge-combo.ts 头注正本）：FORGE_COMBO_E2E=1 + FORGE_COMBO_DSH_HOME
 // + FORGE_COMBO_DESKTOP_EXE + FORGE_COMBO_RELEASE_TREE（1.12 发布树）+ FORGE_COMBO_DESKTOP_DSH。
 // 执行序纪律（AGENTS 1.8）：先廉价校验装载版本/代际（版本双校验 + M-3 代际探针）再做大取证。
-// Hard Rules：零产品源码改动；夹具 = 仓外 tmp；宿主串行启停（closeApp 后复启）。
+// Hard Rules：零产品源码改动；夹具 = 仓外 tmp；宿主单实例（carrier 形态，禁第二实例 launch）。
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { chromium, expect, test, type Browser, type ElectronApplication, type Page } from '@playwright/test'
 import Database from 'better-sqlite3'
 import { closeApp, launchElectron } from '../../../e2e/support/launch.js'
 import { registerProject } from '../../../e2e/support/rpc.js'
@@ -56,8 +71,8 @@ const DESKTOP_PLUGIN = ['plugin', '--profile', 'desktop'] as const
 const hasCredentials = (): boolean => realCredentials() !== undefined
 
 /** desktop 通道 CLI 执行（隔离 home + 隔离 userData——desktop profile 落 {userData}/profile，G3 实锚） */
-function runDesktopDsh(env: ReturnType<typeof comboEnv>, args: readonly string[], userData?: string) {
-  return runDsh(env.desktopDshBin, args, env.dshHome, userData === undefined ? {} : { DSH_FORGE_USER_DATA: userData })
+function runDesktopDsh(env: ReturnType<typeof comboEnv>, args: readonly string[], userData: string) {
+  return runDsh(env.desktopDshBin, args, env.dshHome, { DSH_FORGE_USER_DATA: userData })
 }
 
 /** 只读计数（共库/单装库域表行数——WAL 并发读口径，用后即闭） */
@@ -83,28 +98,6 @@ function makeWorkspace(label: string): string {
   return dir
 }
 
-/** desktop 宿主启动（安装产物 exe——installed 形态，无 dev profile 掌舵；隔离 userData + DSH_HOME） */
-async function launchDesktop(env: ReturnType<typeof comboEnv>, userData: string): Promise<{ app: ElectronApplication; page: Page; clientUrls: string[]; stderr: string }> {
-  if (env.desktopExe === undefined) throw new Error('FORGE_COMBO_DESKTOP_EXE 未置位（desktop 安装产物 exe 必填）')
-  const clientUrls: string[] = []
-  let stderr = ''
-  const app = await launchElectron({
-    executablePath: env.desktopExe,
-    env: { DSH_FORGE_USER_DATA: userData, DSH_HOME: env.dshHome },
-  })
-  // 宿主进程 stderr 收集（官方 reportSkippedBundles 直落面——forgeBundleAbsenceClues 判据源）
-  app.process().stderr?.on('data', (chunk: Buffer) => {
-    stderr += String(chunk)
-  })
-  const page = await app.firstWindow({ timeout: 120_000 })
-  // client 半侧装载观察面：client bundle 经宿主 client 注入通道取件——响应 URL 收集（行为锚）
-  page.on('response', (res) => {
-    const url = res.url()
-    if (url.includes('@dsh-forge/')) clientUrls.push(url)
-  })
-  return { app, page, clientUrls, stderr }
-}
-
 async function waitBootReady(page: Page): Promise<void> {
   await page.waitForFunction(
     () => (globalThis as { __DSH_BOOT_READY__?: unknown }).__DSH_BOOT_READY__ !== undefined,
@@ -121,6 +114,101 @@ function cheapGenerationGate(nodeModules: string): void {
   expect(generationDriftViolations(nodeModules), '五件裸包代际漂移探针全绿（manifest + 服务面标记双校验）').toEqual([])
 }
 
+// ── desktop carrier（案② bug 2f897b71——宿主单实例语义形态）────────────────────────
+// 宿主实锚（003-desktop-spec run-output + ledger 2f897b71）：第二实例 exit 0 立即退出。
+// 取证形态 = carrier 首启（electron.launch 每运行世代一次）+ CDP 附着复用
+// （chromium.connectOverCDP——单实例通道）；electron.launch 第二实例用例退役（契约
+// behavior_baseline v3 修订留痕）。任意时刻至多一个宿主实例。
+
+interface DesktopCarrier {
+  readonly app: ElectronApplication
+  /** 主窗口观察页（boot 就绪门 + client 取件收集——与 CDP 附着页同一 target） */
+  readonly page: Page
+  /** DevTools ws 端点（CDP 附着通道） */
+  readonly wsEndpoint: string
+  /** boot 期 client bundle 取件 URL 收集（CT-DISK-02/07/11 行为锚——首窗 page 侧全程监听） */
+  readonly clientUrls: string[]
+  /** 宿主进程 stderr 收集（官方 reportSkippedBundles 直落面——forgeBundleAbsenceClues 判据源） */
+  readonly stderr: string
+}
+
+let carrier: DesktopCarrier | undefined
+
+async function startCarrier(env: ReturnType<typeof comboEnv>, userData: string): Promise<DesktopCarrier> {
+  if (env.desktopExe === undefined) throw new Error('FORGE_COMBO_DESKTOP_EXE 未置位（desktop 安装产物 exe 必填）')
+  const clientUrls: string[] = []
+  let stderr = ''
+  const app = await launchElectron({
+    executablePath: env.desktopExe,
+    env: { DSH_FORGE_USER_DATA: userData, DSH_HOME: env.dshHome },
+  })
+  // 宿主进程 stderr 收集（官方 reportSkippedBundles 直落面——forgeBundleAbsenceClues 判据源）
+  // + DevTools ws 端点捕获（electron.launch 注入 --remote-debugging-port=0）
+  const proc = app.process()
+  proc.stderr?.on('data', (chunk: Buffer) => {
+    stderr += String(chunk)
+  })
+  const wsDeadline = Date.now() + 30_000
+  let wsEndpoint: string | undefined
+  while (Date.now() < wsDeadline) {
+    wsEndpoint = stderr.match(/DevTools listening on (ws:\/\/\S+)/)?.[1]
+    if (wsEndpoint !== undefined || proc.exitCode !== null) break
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  if (wsEndpoint === undefined) {
+    throw new Error(
+      `desktop carrier 启动失败：DevTools ws 端点未捕获（exit=${String(proc.exitCode)}）——宿主单实例语义下` +
+        `持锁实例在侧即第二实例 exit 0 立即退出（bug 2f897b71 实锚）；复跑前置 = 无外部宿主实例持锁。stderr=${stderr.slice(-600)}`,
+    )
+  }
+  const page = await app.firstWindow({ timeout: 120_000 })
+  // client 半侧装载观察面：client bundle 经宿主 client 注入通道取件——响应 URL 收集（行为锚）
+  page.on('response', (res) => {
+    const url = res.url()
+    if (url.includes('@dsh-forge/')) clientUrls.push(url)
+  })
+  await waitBootReady(page)
+  return { app, page, wsEndpoint, clientUrls, stderr }
+}
+
+/** carrier 在场即复用、缺席即冷启动（worker 重启丢态自愈——案③配套；相位由调用侧保证） */
+async function ensureCarrier(env: ReturnType<typeof comboEnv>, userData: string): Promise<DesktopCarrier> {
+  if (carrier !== undefined) return carrier
+  carrier = await startCarrier(env, userData)
+  return carrier
+}
+
+/** 冷启动复锚（装载世代切换——安装态变化后需冷启动判据的用例专用） */
+async function restartCarrier(env: ReturnType<typeof comboEnv>, userData: string): Promise<DesktopCarrier> {
+  await shutdownCarrier()
+  carrier = await startCarrier(env, userData)
+  return carrier
+}
+
+async function shutdownCarrier(): Promise<void> {
+  if (carrier === undefined) return
+  await closeApp(carrier.app)
+  carrier = undefined
+}
+
+/** CDP 附着既有实例（单实例通道——page 取证面；断开不影响 carrier 生命周期） */
+async function attachCarrier(): Promise<{ browser: Browser; page: Page }> {
+  if (carrier === undefined) throw new Error('desktop carrier 未启动（attach 前置：ensureCarrier/restartCarrier）')
+  const browser = await chromium.connectOverCDP(carrier.wsEndpoint)
+  const ctx = browser.contexts()[0]
+  if (ctx === undefined) {
+    await browser.close().catch(() => undefined)
+    throw new Error('CDP 附着失败：默认 context 缺席（carrier 主窗口未就绪）')
+  }
+  const page = ctx.pages()[0] ?? (await ctx.waitForEvent('page', { timeout: 30_000 }))
+  return { browser, page }
+}
+
+/** CDP 附着断开（carrier 进程保持——Browser.close 对 connectOverCDP 仅断开不杀进程） */
+async function closeAttach(browser: Browser): Promise<void> {
+  await browser.close().catch(() => undefined)
+}
+
 test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo 终态 + 卸载三段）', () => {
   const env = comboEnv()
   const requireTree = (): string => {
@@ -131,40 +219,57 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
   }
   const soloForgeDir = (): string => join(requireTree(), 'solo', 'forge')
   const memberDir = (bare: string): string => join(requireTree(), bare.slice('@dsh-forge/'.length))
+  // 案③（bug 23608d5b）：userData 初始化提升 beforeAll——worker 重启后模块重求值亦重建，
+  // '' 零值锚（空 DSH_FORGE_USER_DATA 下发 + 错锚物化）结构性消除
   let userData = ''
 
-  test.afterAll(async () => {
-    // 卸载收尾（幂等 best-effort——隔离 home 内零真机污染）
-    if (userData !== '') rmSync(userData, { recursive: true, force: true })
-    await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', FORGE_PKG], userData === undefined ? undefined : userData)
+  test.beforeAll(async () => {
+    userData = mkdtempSync(join(tmpdir(), 'dsh-forge-combo-ud-'))
   })
 
-  test('CT-DISK-09 #路A/#路B/#原样包 O1：父目录/原样包 add 拒绝——零清单变化 + 零 profile 写入', async () => {
+  test.afterAll(async () => {
+    // 收尾（幂等 best-effort——隔离 home/userData 内零真机污染；carrier 先关释放锁）
+    await shutdownCarrier()
+    if (userData !== '') {
+      rmSync(userData, { recursive: true, force: true })
+      await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', FORGE_PKG], userData)
+    }
+  })
+
+  test('CT-DISK-09 #路A/#路B/#原样包：路A/B add 拒绝零写入 + 原样包本代成功进层（5213c7e8 实锚修订）', async () => {
     const tree = requireTree()
     expect(existsSync(soloForgeDir()), '1.12 发布树 solo 变体在盘（solo/forge）').toBe(true)
-    const bundlesBefore = JSON.stringify(desktopInstalledBundles(userData))
+    const before = desktopInstalledBundles(userData)
+    const beforeJson = JSON.stringify(before)
 
     // 路 A/B（Input：发布树父目录 = 六包共置布局，两路输入同形——结构性排除判定面相同）
     const routeAB = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', tree], userData)
     expect(routeAB.code, '路 A/B 父目录 add 被拒（非零退出）').not.toBe(0)
     expect(routeAB.stderr.length + routeAB.stdout.length, '路 A/B 错误信息可读（非空）').toBeGreaterThan(0)
 
-    // 对照（原样包实锚分支——staging 单目录拷贝断裂，CT-DISK-05 实锚自证）
-    const aggregate = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${join(tree, 'forge')}`], userData)
-    expect(aggregate.code, '原样包 add 非零退出（staging 断裂）').not.toBe(0)
-    expect(
-      aggregate.stderr + aggregate.stdout,
-      '错误含 pnpm 断裂实锚 ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND（兄弟 file: 依赖在 staging 内结构性缺席）',
-    ).toContain('ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND')
+    // State（路 A/B 反向锚）：已装清单零变化（CT-DISK-09 O1/O3）
+    expect(JSON.stringify(desktopInstalledBundles(userData)), '路 A/B rejection 后已装清单零变化').toBe(beforeJson)
 
-    // State（CT-DISK-09 O1/O3 反向锚）：已装清单零变化 + profile 侧零 forge 写入
-    expect(JSON.stringify(desktopInstalledBundles(userData)), '路 A/B/原样包全 rejection 后已装清单零变化').toBe(bundlesBefore)
-    expect(existsSync(desktopPkgEntryDir(userData, FORGE_PKG)), 'profile 侧零 forge 条目物化（O3 误接纳即红）').toBe(false)
+    // 对照（原样包·bug 5213c7e8 实锚修订）：本代 generation-install 已按依赖闭包拷贝，
+    // staging 断裂（ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND，1.11 世代历史判例留痕）不再复现——
+    // 现行预期 = exit 0 且 forge 进层
+    const aggregate = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${join(tree, 'forge')}`], userData)
+    expect(aggregate.code, `原样包 add 本代成功（exit=${String(aggregate.code)}）stderr=${aggregate.stderr.slice(-400)}`).toBe(0)
+    expect(desktopInstalledBundles(userData), '原样包 add forge 进层（已装清单含 forge 条目）').toContain(FORGE_PKG)
+    expect(existsSync(desktopPkgEntryDir(userData, FORGE_PKG)), 'profile 侧 forge 条目物化在场').toBe(true)
+
+    // 复位：原样包实锚取证物清除——清单回到采样基线（不污染后续用例 Preconditions）
+    const added = desktopInstalledBundles(userData).filter((b) => !before.includes(b))
+    for (const bare of added) await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', bare], userData)
+    if (desktopInstalledBundles(userData).includes(FORGE_PKG)) {
+      await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', FORGE_PKG], userData)
+    }
+    expect(JSON.stringify(desktopInstalledBundles(userData)), '复位后清单回到基线（零残留）').toBe(beforeJson)
+    expect(existsSync(desktopPkgEntryDir(userData, FORGE_PKG)), 'profile 侧零 forge 条目残留').toBe(false)
   })
 
   test('CT-DISK-07 #B2 O1：缺件不装 + patch 行在场——缺席降级可观察（诊断留痕 + 降级不扩散）', async () => {
     const four = BARE_BUNDLES.filter((b) => b !== KNOWLEDGE)
-    userData = mkdtempSync(join(tmpdir(), 'dsh-forge-combo-ud-'))
     // 构造（CT-DISK-07 Preconditions，solo 形态适配）：knowledge 不逐件 add、forge solo 变体
     // patch 插行仍声明 knowledge——装载缺席可观察构造（旅程 3 #B2 同判据 desktop 通道承载）
     for (const bare of four) {
@@ -174,23 +279,19 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
     const addForge = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${soloForgeDir()}`], userData)
     expect(addForge.code, `forge solo 变体 add 成功（exit=${String(addForge.code)}）`).toBe(0)
 
-    const { app, page, clientUrls } = await launchDesktop(env, userData)
-    try {
-      // Output（CT-DISK-07）：宿主正常启动（降级不扩散——O2 回归面：任一在场件不装载即红）
-      await waitBootReady(page)
-      await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 120_000 })
-      // State：在场四件 client 半侧取件；缺席件（knowledge）零取件（负向精确——禁 OR 稀释）
-      for (const bare of four) {
-        expect(clientUrls.some((u) => u.includes(bare)), `在场件 client 取件 ${bare}`).toBe(true)
-      }
-      expect(clientUrls.some((u) => u.includes(KNOWLEDGE)), '缺席件 knowledge client 零取件').toBe(false)
-    } finally {
-      await closeApp(app)
+    // carrier 首启（boot 就绪门在 startCarrier 内；worker 重启后本用例自带安装构造可重建相位）
+    const launched = await ensureCarrier(env, userData)
+    // Output（CT-DISK-07）：宿主正常启动（降级不扩散——O2 回归面：任一在场件不装载即红）
+    await expect(launched.page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 120_000 })
+    // State：在场四件 client 半侧取件；缺席件（knowledge）零取件（负向精确——禁 OR 稀释）
+    for (const bare of four) {
+      expect(launched.clientUrls.some((u) => u.includes(bare)), `在场件 client 取件 ${bare}`).toBe(true)
     }
+    expect(launched.clientUrls.some((u) => u.includes(KNOWLEDGE)), '缺席件 knowledge client 零取件').toBe(false)
     // State（CT-DISK-07 锚点·已回填实锚）：缺席诊断留痕含缺席包名（O3 静默缺席 = 红；
     // 落盘面 = {userData}/logs app-*.jsonl——异步队列，poll 等待落盘）
     await expect
-      .poll(() => desktopAbsenceEvents(userData).filter((e) => e.message.includes(KNOWLEDGE)).length, { timeout: 30_000, interval: 2_000 })
+      .poll(() => desktopAbsenceEvents(userData).filter((e) => e.message.includes(KNOWLEDGE)).length, { timeout: 30_000, intervals: [2_000] })
       .toBeGreaterThanOrEqual(1)
     // 复位：卸 forge（四件条目保留），后续用例重建完整六条目
     const remove = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', FORGE_PKG], userData)
@@ -265,25 +366,20 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
       expect(exists, `client bundle 指向物在场 ${pkg} → ${file}`).toBe(true)
     }
 
-    const { app, page, clientUrls } = await launchDesktop(env, userData)
-    try {
-      // Output（CT-DISK-02）：宿主启动成功——boot 就绪 + 产品工作台可见
-      await waitBootReady(page)
-      await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 120_000 })
-      // State 观察点 B：五件 client bundle 被宿主 client 注入通道实际取件（行为证据，非仅文件在场）
-      for (const bare of BARE_BUNDLES) {
-        expect(clientUrls.some((u) => u.includes(bare)), `client 注入通道实际取件 ${bare}`).toBe(true)
-      }
-    } finally {
-      await closeApp(app)
+    // 冷启动复锚（装载世代切换——CT-DISK-01 新装六件经冷启动生效，案②形态）
+    const launched = await restartCarrier(env, userData)
+    // Output（CT-DISK-02）：宿主启动成功——boot 就绪（startCarrier 内）+ 产品工作台可见
+    await expect(launched.page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 120_000 })
+    // State 观察点 B：五件 client bundle 被宿主 client 注入通道实际取件（行为证据，非仅文件在场）
+    for (const bare of BARE_BUNDLES) {
+      expect(launched.clientUrls.some((u) => u.includes(bare)), `client 注入通道实际取件 ${bare}`).toBe(true)
     }
   })
 
   test('CT-DISK-03 #step-5 O1：共库落点——project_* 域表写入、单装库不存在', async () => {
-    const { app, page } = await launchDesktop(env, userData)
+    await ensureCarrier(env, userData)
+    const { browser, page } = await attachCarrier()
     try {
-      await waitBootReady(page)
-
       // Input（CT-DISK-03）：添加项目（注册链经 RPC 项目面——workspaceDir = 真实目录夹具）
       const ws = makeWorkspace('proj')
       const row = await registerProject(page, ws, 'combo-minchain')
@@ -297,7 +393,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
       // State（CT-DISK-03）：单装库不存在（共库接管）
       expect(existsSync(defaultProjectDb(env.dshHome)), '单装库 project/project.db 不存在（共库接管）').toBe(false)
     } finally {
-      await closeApp(app)
+      await closeAttach(browser)
     }
   })
 
@@ -307,9 +403,9 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
     // 版本双校验 + 代际探针复检（AGENTS 1.8 取证顺序纪律）
     cheapGenerationGate(nodeModules)
     seedDshHome(env.dshHome, realCredentials() as string)
-    const { app, page } = await launchDesktop(env, userData)
+    await ensureCarrier(env, userData)
+    const { browser, page } = await attachCarrier()
     try {
-      await waitBootReady(page)
       const ws = makeWorkspace('task')
       await registerProject(page, ws, 'combo-dispatch')
 
@@ -325,7 +421,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
       await expect
         .poll(() => (existsSync(comboDb) ? scalarCount(comboDb, `SELECT COUNT(*) AS n FROM task_tasks WHERE slug = 'combo-dispatch'`) : 0), {
           timeout: 300_000,
-          interval: 5_000,
+          intervals: [5_000],
         })
         .toBeGreaterThanOrEqual(1)
 
@@ -345,7 +441,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
         db.close()
       }
     } finally {
-      await closeApp(app)
+      await closeAttach(browser)
     }
   })
 
@@ -369,14 +465,15 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
     expect(remove.code, `卸 forge（exit=${String(remove.code)}）`).toBe(0)
     const addVariant = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${variantForge}`], userData)
     expect(addVariant.code, `对照变体 add 成功（exit=${String(addVariant.code)}）stderr=${addVariant.stderr.slice(-400)}`).toBe(0)
-    const { app, page } = await launchDesktop(env, userData)
+    // 冷启动复锚（对照变体生效——装载世代切换，案②形态）
+    await restartCarrier(env, userData)
+    const { browser, page } = await attachCarrier()
     try {
-      await waitBootReady(page)
       const ws = makeWorkspace('contrast')
       const row = await registerProject(page, ws, 'combo-contrast')
       expect(row.id, '对照轮项目注册成功').toBeTruthy()
     } finally {
-      await closeApp(app)
+      await closeAttach(browser)
     }
 
     // State（CT-DISK-08 O1）：单装库文件存在且含新行、共库零新行（O2 仍落共库 = patch 替换语义失效信号即红）
@@ -423,21 +520,16 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
     // 版本双校验 + 代际探针（残留件逐件成立——CT-DISK-11 Invariants）
     cheapGenerationGate(nodeModules)
 
-    // Input：冷启动宿主（无额外参数）
-    const { app, page, clientUrls, stderr } = await launchDesktop(env, userData)
-    try {
-      // Output：宿主正常启动（O2 残留件被拖垮 = 红）
-      await waitBootReady(page)
-      await expect(page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 120_000 })
-      // State（锚点）：五件残留条目服务/client 双查——client 半侧逐件实际取件
-      for (const bare of BARE_BUNDLES) {
-        expect(clientUrls.some((u) => u.includes(bare)), `残留件 client 取件 ${bare}`).toBe(true)
-      }
-      // State（反锚）：零真缺席装配（stderr 判据——forgeBundleAbsenceClues fix-8 收窄形态）
-      expect(forgeBundleAbsenceClues(stderr), `零真缺席装配 stderr=${stderr.slice(-600)}`).toEqual([])
-    } finally {
-      await closeApp(app)
+    // Input：冷启动宿主（无额外参数——卸 forge 后装载世代切换，冷启动复锚）
+    const launched = await restartCarrier(env, userData)
+    // Output：宿主正常启动（O2 残留件被拖垮 = 红）
+    await expect(launched.page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 120_000 })
+    // State（锚点）：五件残留条目服务/client 双查——client 半侧逐件实际取件
+    for (const bare of BARE_BUNDLES) {
+      expect(launched.clientUrls.some((u) => u.includes(bare)), `残留件 client 取件 ${bare}`).toBe(true)
     }
+    // State（反锚）：零真缺席装配（stderr 判据——forgeBundleAbsenceClues fix-8 收窄形态）
+    expect(forgeBundleAbsenceClues(launched.stderr), `零真缺席装配 stderr=${launched.stderr.slice(-600)}`).toEqual([])
     // State（锚点）：forge-bundle-absent 零真缺席发射（任一残留件缺席告警即红）
     expect(desktopAbsenceEvents(userData), 'forge-bundle-absent 零发射（O3 静默缺席反义面：缺席且零诊断才双红）').toEqual([])
   })
@@ -447,15 +539,16 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，solo �
     const comboStatBefore = fileStat(comboDb)
     const comboRowsBefore = scalarCount(comboDb, 'SELECT COUNT(*) AS n FROM project_projects')
 
-    // Input（CT-DISK-04）：宿主冷启动（forge 已卸、五件残留）→ 添加新项目
-    const { app, page } = await launchDesktop(env, userData)
+    // Input（CT-DISK-04）：宿主冷启动相位复用/重建（forge 已卸、五件残留——CT-DISK-11 同相位；
+    // carrier 缺席时 ensureCarrier 冷启动即冷启动判据成立）
+    await ensureCarrier(env, userData)
+    const { browser, page } = await attachCarrier()
     try {
-      await waitBootReady(page)
       const ws = makeWorkspace('fallback')
       const row = await registerProject(page, ws, 'combo-fallback')
       expect(row.id, '回落轮项目注册成功').toBeTruthy()
     } finally {
-      await closeApp(app)
+      await closeAttach(browser)
     }
 
     // State（锚点）：回落新数据落单装库路径（文件出现且有新行）
