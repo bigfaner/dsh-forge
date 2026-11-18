@@ -53,10 +53,19 @@ describe("双记忆缝同目录性（prepare deriveTaskStoreDir × containerDirO
     const family = assembleTaskLoopToolFamily({ services, ctx, diag: () => {} });
     const addTask = family.tools.find((t) => t.name === "add_task")!;
     const ws = "Z:\\project\\prepface";
-    // 只消费 prepare 缝：空参数走域拒绝路径，执行成败不论（catch 吞）
-    await addTask.execute({}, { agent: { session: { id: "s-seam", header: { cwd: ws } } } }).catch(() => {});
+    // 只消费 prepare 缝：空参数走域拒绝路径（执行成败不论）；拒绝不吞错——捕获结局参与分叉断言，
+    // 失败可定位「记忆未落」（dirOf 缺席，携执行结局）vs「目录不等」（路径漂移）两种成因。
+    const outcome = await addTask
+      .execute({}, { agent: { session: { id: "s-seam", header: { cwd: ws } } } })
+      .then(
+        () => "resolved",
+        (err: unknown) => `rejected: ${err instanceof Error ? err.message : String(err)}`,
+      );
     const key = services.db.projectKeyOf(ws);
-    expect(services.forgeEvents!.dirOf("s-seam")).toBe(services.containerDirOf!(key));
+    const expected = services.containerDirOf!(key);
+    const recorded = services.forgeEvents!.dirOf("s-seam");
+    expect(recorded, `记忆未落：dirOf("s-seam") 缺席（执行结局=${outcome}）`).toBeDefined();
+    expect(recorded, `目录不等：dirOf=${recorded} ≠ containerDirOf=${expected}`).toBe(expected);
     services.dispose();
   });
 });

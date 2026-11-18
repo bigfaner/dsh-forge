@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { BUSY_TIMEOUT_MS } from "@dsh-forge/lib-db";
 import { domainDbFileName, openDomainDb } from "../../host/db/connection.js";
 import { ProjectKeyDerivationError } from "../../host/db/repositories/project-key.js";
 
@@ -95,7 +96,7 @@ describe("三参数随连接在场", () => {
     const domain = openDomainDb(domainDbFileName(home));
     try {
       expect(domain.db.pragma("journal_mode", { simple: true })).toBe("wal");
-      expect(domain.db.pragma("busy_timeout", { simple: true })).toBe(5000);
+      expect(domain.db.pragma("busy_timeout", { simple: true })).toBe(BUSY_TIMEOUT_MS);
     } finally {
       domain.db.close();
     }
@@ -103,7 +104,7 @@ describe("三参数随连接在场", () => {
 
   it(":memory: 连接 busy_timeout=5000 在场", () => {
     withMemoryDomain((domain) => {
-      expect(domain.db.pragma("busy_timeout", { simple: true })).toBe(5000);
+      expect(domain.db.pragma("busy_timeout", { simple: true })).toBe(BUSY_TIMEOUT_MS);
     });
   });
 });
