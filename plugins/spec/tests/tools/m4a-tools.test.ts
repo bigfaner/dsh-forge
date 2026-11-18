@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { isForgeToolFailure, type ForgeToolFailure } from "@dsh-forge/lib-api";
 import type { DiagEventPayload } from "@dsh-forge/lib-diag";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
-import { createForgeSpecsService } from "../../host/domain/specs/service.js";
+import { createForgeSpecsService, deriveProjectKey } from "../../host/domain/specs/service.js";
 import { createForgeToolServices } from "../../host/domain/specs/tool-service.js";
 import { createSpecTools, FORGE_SPEC_TOOL_NAMES } from "../../host/tools/index.js";
 import type { SpecToolExecFace } from "../../host/tools/faces.js";
@@ -450,19 +450,32 @@ describe("spec_stats（诊断——零新落库面）", () => {
       );
       const before = h.writeCounts();
       const stats = (await h.tools.specStats.execute({}, execOf())) as {
+        projectKey: string;
         specCount: number;
         goalCount: number;
         acCount: number;
         goalStatusCounts: Record<string, number>;
         projectionStateCounts: Record<string, number>;
       };
+      const expectedKey = deriveProjectKey(CWD);
+      expect(stats.projectKey).toBe(expectedKey);
       expect(stats.specCount).toBe(1);
       expect(stats.goalCount).toBe(1);
       expect(stats.acCount).toBe(2);
       expect(stats.goalStatusCounts["pending"]).toBe(1);
       expect(stats.projectionStateCounts["no-task-data"]).toBe(2);
       expect(h.writeCounts()).toBe(before);
-      expect(h.diag.some((d) => d.event === "spec-milestone")).toBe(true);
+      // diag 桩 payload 逐字段断言（onDiag 注入桩——SpecVerbDeps.onDiag 替身位置）
+      const diagLine = h.diag.find((d) => d.event === "spec-milestone");
+      expect(diagLine).toBeDefined();
+      expect(diagLine!.level).toBe("info");
+      expect(diagLine!.projectId).toBe(expectedKey);
+      expect(diagLine!.message).toContain(`project=${expectedKey}`);
+      expect(diagLine!.message).toContain("specs=1");
+      expect(diagLine!.message).toContain("goals=1");
+      expect(diagLine!.message).toContain("acs=2");
+      expect(diagLine!.message).toContain("goalStatus={pending:1, in_progress:0, auto_reviewing:0, awaiting_confirmation:0, completed:0}");
+      expect(diagLine!.message).toContain("projection={met:0, unmet:0, unmatched:0, no-task-data:2}");
     } finally {
       h.close();
     }
