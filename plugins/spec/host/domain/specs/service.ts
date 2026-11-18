@@ -18,14 +18,11 @@ import type {
   TransitionActor,
 } from "../../db/row-types.js";
 import { isSpecError, SpecError } from "./errors.js";
-import {
-  assertSpecTransitionAllowed,
-  type SpecTransitionGuard,
-} from "./guards.js";
+import { specMachine } from "../status-machines.js";
+import type { SpecTransitionGuard } from "./guards.js";
 
 export { isSpecError, SpecError };
 export type { SpecErrorCode, SpecErrorData } from "./errors.js";
-export { assertSpecTransitionAllowed, SPEC_TRANSITION_EDGES, HUMAN_ONLY_STATUSES } from "./guards.js";
 
 /** tiers 交付档位封闭四值（提案 §二 裁决；应用层校验——DDL 只保 JSON 良构）。 */
 export const SPEC_TIERS = ["ui", "api", "pure-logic", "docs"] as const;
@@ -197,11 +194,11 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     });
   }
 
-  function guardNotArchived(spec: SpecRow): void {
-    if (spec.specStatus === "archived") {
+  function guardNotCompleted(spec: SpecRow): void {
+    if (spec.specStatus === "completed") {
       throw new SpecError(
         "ERR_SPEC_ARCHIVED_FROZEN",
-        `归档态为冻结快照，写面拒绝：${spec.slug}`,
+        `完成态为冻结快照，写面拒绝：${spec.slug}`,
         { slug: spec.slug },
       );
     }
@@ -256,7 +253,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     updateSpec(input) {
       const projectKey = deriveProjectKey(input.cwd);
       const spec = locate(projectKey, input.slug);
-      guardNotArchived(spec);
+      guardNotCompleted(spec);
       const tiers =
         input.tiers !== undefined ? assertTiersValid(input.tiers) : undefined;
       if (input.docRelPath !== undefined && repos.docs.relPathTaken(input.docRelPath, projectKey, spec.id)) {
@@ -291,7 +288,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     replaceGoals({ cwd, slug, goals }) {
       const projectKey = deriveProjectKey(cwd);
       const spec = locate(projectKey, slug);
-      guardNotArchived(spec);
+      guardNotCompleted(spec);
       assertGoalsValid(goals); // 必含 Goal 不变式：删至零行拒写（服务层单点守卫）
       const ts = now();
       return withTransaction(db, () => {
@@ -312,10 +309,20 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
       }
       const projectKey = deriveProjectKey(input.cwd);
       const spec = locate(projectKey, input.slug);
-      assertSpecTransitionAllowed(spec.specStatus, input.to);
-      const isReject = spec.specStatus === "under-review" && input.to === "draft";
-      if (isReject && (!input.note || !input.note.trim())) {
-        throw new SpecError("ERR_SPEC_REJECT_NOTE_REQUIRED", "驳回必须附理由（note 必填）", {
+      // 迁移判定单源 specMachine（status-machine.md §4 条目 3）——非法边转 SpecError（错误码保留）
+      try {
+        specMachine.assertTransition(spec.specStatus, input.to);
+      } catch {
+        throw new SpecError(
+          "ERR_SPEC_ILLEGAL_TRANSITION",
+          `非法状态流转：${spec.specStatus} → ${input.to}`,
+          { fromStatus: spec.specStatus, toStatus: input.to },
+        );
+      }
+      // note 必填守卫单点 = edgeMeta(...).noteRequired（条目 7——驳回/退回边数据化，错误码保留）
+      if (specMachine.edgeMeta(spec.specStatus, input.to)?.noteRequired === true
+        && (!input.note || !input.note.trim())) {
+        throw new SpecError("ERR_SPEC_REJECT_NOTE_REQUIRED", "驳回/退回必须附理由（note 必填）", {
           slug: input.slug,
         });
       }

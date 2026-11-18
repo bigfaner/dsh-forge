@@ -60,7 +60,7 @@ export function createUpdateSpecTool(deps: { readonly specs: ForgeSpecsService }
   return {
     name: UPDATE_TOOL,
     description:
-      "Update spec fields (title / tiers / doc registration path). Rejected when the spec is archived (frozen snapshot) or the doc path collides with another spec.",
+      "Update spec fields (title / tiers / doc registration path). Rejected when the spec is completed (frozen snapshot) or the doc path collides with another spec.",
     parameters: UPDATE_SPEC_PARAMETERS,
     output: {
       schema: snapshotOutputSchema("Updated spec snapshot row."),
@@ -95,7 +95,7 @@ export function createReplaceSpecGoalsTool(deps: { readonly specs: ForgeSpecsSer
   return {
     name: REPLACE_GOALS_TOOL,
     description:
-      "Replace the full Goal + AC set of a spec in one atomic call (delete-and-reinsert under a single transaction). Goal set must not be empty; archived specs are frozen.",
+      "Replace the full Goal + AC set of a spec in one atomic call (delete-and-reinsert under a single transaction). Goal set must not be empty; completed specs are frozen.",
     parameters: REPLACE_GOALS_PARAMETERS,
     output: {
       schema: snapshotOutputSchema("Updated spec snapshot row (goals replaced)."),

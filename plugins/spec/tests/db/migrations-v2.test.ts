@@ -386,8 +386,8 @@ describe("v1 数据行零损（搬行 SELECT 全列 + 守恒）", () => {
   });
 });
 
-describe("迁移原子性（中断零半态）", () => {
-  it("搬行失败（旧四态非 draft 值撞六态 CHECK）→ 整体回滚：版本线停 1、schema 与存量行零半态", () => {
+describe("v1 四态行搬行值域映射（draft→draft / under-review→awaiting_approval / accepted→approved / archived→completed）", () => {
+  it("v1 存量非 draft 行搬行后全部通过 v2 六态 CHECK：逐行映射落位 + 行数守恒（4/4）", () => {
     const { home } = v1Db();
     const seed = openDatabase(specDbFileName(home), {
       migrations: SPEC_MIGRATIONS,
@@ -397,37 +397,33 @@ describe("迁移原子性（中断零半态）", () => {
     seed
       .prepare(
         `INSERT INTO spec_specs (id, slug, title, spec_status, tiers_json, project_key, created_at, updated_at)
-         VALUES ('sp-1', 'demo', '标题', 'accepted', '[]', 'Z-p@a', 'c1', 'u1')`,
+         VALUES ('sp-1', 'd', '草稿', 'draft', '[]', 'Z-p@a', 'c1', 'u1'),
+                ('sp-2', 'r', '送审', 'under-review', '[]', 'Z-p@a', 'c2', 'u2'),
+                ('sp-3', 'a', '接受', 'accepted', '[]', 'Z-p@a', 'c3', 'u3'),
+                ('sp-4', 'h', '归档', 'archived', '[]', 'Z-p@a', 'c4', 'u4')`,
       )
       .run();
     seed.close();
 
-    expect(() => openSpecDb(home)).toThrowError(/CHECK/);
-
-    // 回滚后可经 v1 链重开：版本线仍 1、行仍在、零 _new 残留、旧索引/触发器仍在
-    const rolled = openDatabase(specDbFileName(home), {
-      migrations: SPEC_MIGRATIONS,
-      schemaVersion: 1,
-      domain: "spec",
-    });
+    const domain = openSpecDb(home);
     try {
-      const version = (
-        rolled.prepare(`SELECT MAX(version) AS v FROM schema_meta WHERE domain = 'spec'`).get() as { v: number }
-      ).v;
-      expect(version).toBe(1);
-      expect(rolled.prepare(`SELECT spec_status FROM spec_specs WHERE id = 'sp-1'`).get()).toEqual({
-        spec_status: "accepted",
-      });
-      expect(
-        rolled.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_new'`).all(),
-      ).toEqual([]);
-      expect(
-        rolled
-          .prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name = 'trg_spec_transitions_no_update'`)
-          .get(),
-      ).toBeTruthy();
+      const rows = domain.db
+        .prepare(`SELECT id, spec_status FROM spec_specs ORDER BY id`)
+        .all() as Array<{ id: string; spec_status: string }>;
+      expect(rows).toEqual([
+        { id: "sp-1", spec_status: "draft" },
+        { id: "sp-2", spec_status: "awaiting_approval" },
+        { id: "sp-3", spec_status: "approved" },
+        { id: "sp-4", spec_status: "completed" },
+      ]);
+      // 行数守恒：v1 4 行 → v2 4 行，零丢行零残留
+      expect(rows).toHaveLength(4);
+      const residue = domain.db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_new'`)
+        .all();
+      expect(residue).toEqual([]);
     } finally {
-      rolled.close();
+      domain.db.close();
     }
   });
 });

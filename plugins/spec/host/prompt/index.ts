@@ -125,7 +125,7 @@ function docsBlock(): string {
 
 /**
  * 主会话段模板（自包含，唯一模式）。
- * 总纲 = Spec/Goal/AC 词汇（状态库/AC 对齐键/accepted 拆解前置锚/流转确认两分/隐式赞同）。
+ * 总纲 = Spec/Goal/AC 词汇（状态库/AC 对齐键/completed 拆解前置锚/流转确认两分/隐式赞同）。
  */
 function mainSection(isGitRepo: boolean): string {
   const git = isGitRepo ? gitRule() : ''
@@ -136,7 +136,7 @@ function mainSection(isGitRepo: boolean): string {
 - 状态存于 spec 管线的状态库（Spec/Goal/AC/文档登记四域，按工作区注册）；一切状态判断以管线工具（forgeSpecs 查询族）的结果为准，不以盘上文件或记忆推断。
 - Spec 身份 = slug；Spec 文档目录 = .forge/specs/{slug}/；Goal/AC 经 querySpec 父链追溯（spec → goals → acs）查询，不凭记忆复述。
 - AC 判据 = 投影对齐键：判据文本逐字精确存储，匹配层 trim + 全半角折叠后精确相等即命中——任务侧承接面 = 自带 acceptance_criteria，拆解时与 AC 判据逐字一致（抄写漂移即投影 unmatched）。
-- Spec 状态机 draft → under-review → accepted → archived；accepted 仅由用户动作写入（human-only）且为拆解前置锚——仅 accepted 态 Spec 可拆解派发任务；驳回退 draft 附理由留痕。
+- Spec 状态机 draft → awaiting_approval → approved → in_progress → awaiting_acceptance → completed；awaiting_acceptance → completed 仅由用户动作写入（human-only）且为拆解前置锚——仅 completed 态 Spec 可拆解派发任务；驳回（awaiting_approval → draft）与退回（awaiting_acceptance → in_progress）附理由留痕。
 - 阶段流转确认两分——用户动作即赞同、模糊才反问：用户消息明确指向下一阶段（送审、接受、拆解、开跑、归档等）即视为赞同，直接调用管线工具流转 Spec 状态并推进，不再反问；语义模糊（未明确指向阶段推进、存在多个候选下一阶段、无阶段指向词的短指令如「继续」「好」）一律归模糊，维持 ask_user_question 显式确认。
 - 隐式流转约定：隐式赞同流转后，在对话纪要与流转后回复中注明「隐式赞同：<用户动作>」；驳回态 Spec 不触发隐式翻转——该例外为提示词层软约束。${git}
 
@@ -147,9 +147,10 @@ ${docsBlock()}
 flowchart LR
     A[grilling] -->|"spec.md + createSpec"| B{用户评审}
     B -->|"驳回退 draft"| A
-    B -->|"accepted"| C["to-tasks 拆解（仅 accepted 态）"]
-    C -->|"任务清单"| D["/run-dag-tasks 派发"]
-    D --> E[交付]
+    B -->|"approved"| C["实现推进 in_progress"]
+    C --> D["验收 awaiting_acceptance"]
+    D -->|"completed（仅用户确认）"| E["to-tasks 拆解（仅 completed 态）"]
+    E -->|"任务清单"| F["/run-dag-tasks 派发"]
 \`\`\`
 `
 }

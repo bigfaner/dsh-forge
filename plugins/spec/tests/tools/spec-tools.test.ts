@@ -142,9 +142,11 @@ describe("update_spec / replace_spec_goals / transition_spec（调整族 + 状�
         execOf(),
       )) as { spec: { title: string } };
       expect(updated.spec.title).toBe("新题");
-      await h.tools.transitionSpec.execute({ slug: "demo-spec", to: "under-review" }, execOf());
-      await h.tools.transitionSpec.execute({ slug: "demo-spec", to: "accepted" }, execOf());
-      await h.tools.transitionSpec.execute({ slug: "demo-spec", to: "archived" }, execOf());
+      await h.tools.transitionSpec.execute({ slug: "demo-spec", to: "awaiting_approval" }, execOf());
+      await h.tools.transitionSpec.execute({ slug: "demo-spec", to: "approved" }, execOf());
+      await h.tools.transitionSpec.execute({ slug: "demo-spec", to: "in_progress" }, execOf());
+      await h.tools.transitionSpec.execute({ slug: "demo-spec", to: "awaiting_acceptance" }, execOf());
+      await h.tools.transitionSpec.execute({ slug: "demo-spec", to: "completed" }, execOf());
       const frozen = (await h.tools.updateSpec.execute(
         { slug: "demo-spec", title: "再改" },
         execOf(),
@@ -181,7 +183,7 @@ describe("update_spec / replace_spec_goals / transition_spec（调整族 + 状�
     const h = harness();
     try {
       await createDemo(h);
-      await h.tools.transitionSpec.execute({ slug: "demo-spec", to: "under-review" }, execOf());
+      await h.tools.transitionSpec.execute({ slug: "demo-spec", to: "awaiting_approval" }, execOf());
       const noNote = (await h.tools.transitionSpec.execute(
         { slug: "demo-spec", to: "draft" },
         execOf(),
@@ -252,7 +254,7 @@ describe("query_spec / list_specs（查询族薄封装 + AC 投影缝）", () =>
       await createDemo(h);
       const all = (await h.tools.listSpecs.execute({}, execOf())) as { specs: { slug: string }[] };
       expect(all.specs.map((s) => s.slug)).toEqual(["demo-spec"]);
-      const none = (await h.tools.listSpecs.execute({ status_filter: "accepted" }, execOf())) as { specs: unknown[] };
+      const none = (await h.tools.listSpecs.execute({ status_filter: "approved" }, execOf())) as { specs: unknown[] };
       expect(none.specs).toHaveLength(0);
       const bad = (await h.tools.listSpecs.execute({ status_filter: "bogus" }, execOf())) as ForgeToolFailure;
       expect(isForgeToolFailure(bad)).toBe(true);

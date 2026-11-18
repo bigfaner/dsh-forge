@@ -246,7 +246,7 @@ describe("forgeSpecs 端点族契约快照（真服务 + 假 identity）", () =>
   it("list search/statusFilter 过滤", async () => {
     const bySearch = await remote().list({ projectId: "proj-1", search: "alp" });
     expect(bySearch.ok && bySearch.value.map((c) => c.slug)).toEqual(["alpha"]);
-    const byStatus = await remote().list({ projectId: "proj-1", statusFilter: "accepted" });
+    const byStatus = await remote().list({ projectId: "proj-1", statusFilter: "approved" });
     expect(byStatus.ok && byStatus.value).toEqual([]);
   });
 
@@ -294,10 +294,10 @@ describe("forgeSpecs 端点族契约快照（真服务 + 假 identity）", () =>
     const result = await remote().transition({
       projectId: "proj-1",
       slug: "alpha",
-      to: "under-review",
+      to: "awaiting_approval",
     });
     expect(result.ok).toBe(true);
-    expect(result.ok && result.value.specStatus).toBe("under-review");
+    expect(result.ok && result.value.specStatus).toBe("awaiting_approval");
     // 驳回支：note 必填（域状态机守卫 typed code 直透）
     const rejectNoNote = await remote().transition({
       projectId: "proj-1",
@@ -307,11 +307,11 @@ describe("forgeSpecs 端点族契约快照（真服务 + 假 identity）", () =>
     });
     expect(rejectNoNote.ok).toBe(false);
     if (!rejectNoNote.ok) expect(rejectNoNote.error.code).toBe("ERR_SPEC_REJECT_NOTE_REQUIRED");
-    // 非法跳级边：draft → accepted 拒（typed code 直透）
+    // 非法跳级边：draft → approved 拒（typed code 直透）
     const illegal = await remote().transition({
       projectId: "proj-1",
       slug: "beta",
-      to: "accepted",
+      to: "approved",
       actor: "ui",
     });
     expect(illegal.ok).toBe(false);
@@ -342,7 +342,7 @@ describe("forgeSpecs 端点族契约快照（真服务 + 假 identity）", () =>
       () => r.detail({ projectId: "unknown", slug: "alpha" }),
       () => r.query({ projectId: "unknown", slug: "alpha" }),
       () => r.projection({ projectId: "unknown", slug: "alpha" }),
-      () => r.transition({ projectId: "unknown", slug: "alpha", to: "under-review" }),
+      () => r.transition({ projectId: "unknown", slug: "alpha", to: "awaiting_approval" }),
     ]) {
       const result = await call();
       expect(result.ok).toBe(false);

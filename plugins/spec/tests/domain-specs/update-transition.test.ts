@@ -1,6 +1,6 @@
 // updateSpec 守卫族 + transitionSpec 状态机域逻辑单测（plugin-spec 1.3）——
-// 必含 Goal 守卫 / 归档冻结 / 边表逐格（含 archived 不可 reverse）/ 驳回留痕 /
-// accepted human-only / 台账 append-only / 两写原子性（非法流转零变化）。
+// 必含 Goal 守卫 / 完成态冻结 / 边表逐格（含 completed 不可 reverse）/ 驳回与退回留痕 /
+// completed human-only / 台账 append-only / 两写原子性（非法流转零变化）。
 import { describe, expect, it } from "vitest";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
 import {
@@ -137,18 +137,20 @@ describe("必含 Goal 守卫（replaceGoals）", () => {
   });
 });
 
-describe("归档态边界（裁定：不可 reverse / 冻结快照 / 投影不受影响）", () => {
-  function seedArchived(h: { service: ForgeSpecsService }): void {
+describe("完成态边界（裁定：不可 reverse / 冻结快照 / 投影不受影响）", () => {
+  function seedCompleted(h: { service: ForgeSpecsService }): void {
     h.seed();
-    h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "under-review", actor: "plugin-tool" });
-    h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "accepted", actor: "plugin-tool" });
-    h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "archived", actor: "ui" });
+    h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_approval", actor: "plugin-tool" });
+    h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "approved", actor: "ui" });
+    h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "in_progress", actor: "ui" });
+    h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_acceptance", actor: "ui" });
+    h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "completed", actor: "ui" });
   }
 
-  it("archived 后 updateSpec / replaceGoals 全写面拒（ERR_SPEC_ARCHIVED_FROZEN）", () => {
+  it("completed 后 updateSpec / replaceGoals 全写面拒（ERR_SPEC_ARCHIVED_FROZEN）", () => {
     const h = harness();
     try {
-      seedArchived(h);
+      seedCompleted(h);
       expect(codeOf(() => h.service.updateSpec({ cwd: CWD, slug: "demo-spec", title: "改" }))).toBe(
         "ERR_SPEC_ARCHIVED_FROZEN",
       );
@@ -160,11 +162,11 @@ describe("归档态边界（裁定：不可 reverse / 冻结快照 / 投影不�
     }
   });
 
-  it("archived 不可 reverse：任何出边非法（含 →draft / →under-review / →accepted）", () => {
+  it("completed 不可 reverse：任何出边非法（含 →draft / →awaiting_approval / →in_progress）", () => {
     const h = harness();
     try {
-      seedArchived(h);
-      for (const to of ["draft", "under-review", "accepted"] as const) {
+      seedCompleted(h);
+      for (const to of ["draft", "awaiting_approval", "in_progress"] as const) {
         expect(codeOf(() => h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to, actor: "ui" }))).toBe(
           "ERR_SPEC_ILLEGAL_TRANSITION",
         );
@@ -172,20 +174,20 @@ describe("归档态边界（裁定：不可 reverse / 冻结快照 / 投影不�
       expect(
         (h.domain.db.prepare(`SELECT spec_status FROM spec_specs WHERE slug = 'demo-spec'`).get() as { spec_status: string })
           .spec_status,
-      ).toBe("archived");
+      ).toBe("completed");
     } finally {
       h.domain.db.close();
     }
   });
 
-  it("归档态查询/投影读面不受影响（getSpec / listSpecs 照常）", () => {
+  it("完成态查询/投影读面不受影响（getSpec / listSpecs 照常）", () => {
     const h = harness();
     try {
-      seedArchived(h);
+      seedCompleted(h);
       const detail = h.service.getSpec({ cwd: CWD, slug: "demo-spec" })!;
-      expect(detail.spec.specStatus).toBe("archived");
+      expect(detail.spec.specStatus).toBe("completed");
       expect(detail.goals).toHaveLength(1);
-      expect(h.service.listSpecs({ cwd: CWD, statusFilter: "archived" }).map((s) => s.slug)).toEqual([
+      expect(h.service.listSpecs({ cwd: CWD, statusFilter: "completed" }).map((s) => s.slug)).toEqual([
         "demo-spec",
       ]);
     } finally {
@@ -195,31 +197,37 @@ describe("归档态边界（裁定：不可 reverse / 冻结快照 / 投影不�
 });
 
 describe("transitionSpec 状态机边表", () => {
-  it("合法单向链逐格：draft→under-review→accepted→archived + 台账逐行 append", () => {
+  it("合法单向链逐格：draft→awaiting_approval→approved→in_progress→awaiting_acceptance→completed + 台账逐行 append", () => {
     const h = harness();
     try {
       h.seed();
-      const s1 = h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "under-review", actor: "plugin-tool" });
-      expect(s1.specStatus).toBe("under-review");
-      const s2 = h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "accepted", actor: "ui" });
-      expect(s2.specStatus).toBe("accepted");
-      const s3 = h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "archived", actor: "ui" });
-      expect(s3.specStatus).toBe("archived");
+      const s1 = h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_approval", actor: "plugin-tool" });
+      expect(s1.specStatus).toBe("awaiting_approval");
+      const s2 = h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "approved", actor: "ui" });
+      expect(s2.specStatus).toBe("approved");
+      const s3 = h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "in_progress", actor: "ui" });
+      expect(s3.specStatus).toBe("in_progress");
+      const s4 = h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_acceptance", actor: "ui" });
+      expect(s4.specStatus).toBe("awaiting_acceptance");
+      const s5 = h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "completed", actor: "ui" });
+      expect(s5.specStatus).toBe("completed");
       expect(transitionsOf(h.domain)).toEqual([
-        { from: "draft", to: "under-review", note: null, actor: "plugin-tool" },
-        { from: "under-review", to: "accepted", note: null, actor: "ui" },
-        { from: "accepted", to: "archived", note: null, actor: "ui" },
+        { from: "draft", to: "awaiting_approval", note: null, actor: "plugin-tool" },
+        { from: "awaiting_approval", to: "approved", note: null, actor: "ui" },
+        { from: "approved", to: "in_progress", note: null, actor: "ui" },
+        { from: "in_progress", to: "awaiting_acceptance", note: null, actor: "ui" },
+        { from: "awaiting_acceptance", to: "completed", note: null, actor: "ui" },
       ]);
     } finally {
       h.domain.db.close();
     }
   });
 
-  it("驳回支 under-review→draft：note 必填（ERR_SPEC_REJECT_NOTE_REQUIRED）+ 理由留痕", () => {
+  it("驳回支 awaiting_approval→draft：note 必填（ERR_SPEC_REJECT_NOTE_REQUIRED）+ 理由留痕", () => {
     const h = harness();
     try {
       h.seed();
-      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "under-review", actor: "plugin-tool" });
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_approval", actor: "plugin-tool" });
       expect(codeOf(() =>
         h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "draft", actor: "ui" }),
       )).toBe("ERR_SPEC_REJECT_NOTE_REQUIRED");
@@ -231,7 +239,7 @@ describe("transitionSpec 状态机边表", () => {
         actor: "plugin-tool",
       });
       expect(transitionsOf(h.domain).at(-1)).toEqual({
-        from: "under-review",
+        from: "awaiting_approval",
         to: "draft",
         note: "判据不完整",
         actor: "plugin-tool",
@@ -241,20 +249,49 @@ describe("transitionSpec 状态机边表", () => {
     }
   });
 
-  it("非法边拒写且零半态：draft→accepted 跳级 / draft→archived / accepted→draft 逆向 / accepted→under-review", () => {
+  it("退回支 awaiting_acceptance→in_progress：note 必填（ERR_SPEC_REJECT_NOTE_REQUIRED）+ 理由留痕", () => {
     const h = harness();
     try {
       h.seed();
-      // 跳级/越支：draft 直达 accepted、draft 直达 archived
-      for (const to of ["accepted", "archived"] as const) {
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_approval", actor: "plugin-tool" });
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "approved", actor: "ui" });
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "in_progress", actor: "ui" });
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_acceptance", actor: "ui" });
+      expect(codeOf(() =>
+        h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "in_progress", actor: "ui" }),
+      )).toBe("ERR_SPEC_REJECT_NOTE_REQUIRED");
+      h.service.transitionSpec({
+        cwd: CWD,
+        slug: "demo-spec",
+        to: "in_progress",
+        note: "验收缺口，退回补齐",
+        actor: "ui",
+      });
+      expect(transitionsOf(h.domain).at(-1)).toEqual({
+        from: "awaiting_acceptance",
+        to: "in_progress",
+        note: "验收缺口，退回补齐",
+        actor: "ui",
+      });
+    } finally {
+      h.domain.db.close();
+    }
+  });
+
+  it("非法边拒写且零半态：draft→approved 跳级 / draft→completed / approved→draft 逆向 / approved→awaiting_approval 逆向", () => {
+    const h = harness();
+    try {
+      h.seed();
+      // 跳级/越支：draft 直达 approved、draft 直达 completed
+      for (const to of ["approved", "completed"] as const) {
         expect(codeOf(() =>
           h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to, actor: "plugin-tool" }),
         )).toBe("ERR_SPEC_ILLEGAL_TRANSITION");
       }
-      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "under-review", actor: "plugin-tool" });
-      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "accepted", actor: "ui" });
-      // 逆向：accepted 退 draft / 退 under-review
-      for (const to of ["draft", "under-review"] as const) {
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_approval", actor: "plugin-tool" });
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "approved", actor: "ui" });
+      // 逆向：approved 退 draft / 退 awaiting_approval
+      for (const to of ["draft", "awaiting_approval"] as const) {
         expect(codeOf(() =>
           h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to, actor: "plugin-tool" }),
         )).toBe("ERR_SPEC_ILLEGAL_TRANSITION");
@@ -263,32 +300,35 @@ describe("transitionSpec 状态机边表", () => {
       expect(
         (h.domain.db.prepare(`SELECT spec_status FROM spec_specs WHERE slug = 'demo-spec'`).get() as { spec_status: string })
           .spec_status,
-      ).toBe("accepted");
+      ).toBe("approved");
       expect(transitionsOf(h.domain)).toHaveLength(2);
     } finally {
       h.domain.db.close();
     }
   });
 
-  it("accepted human-only：非用户动作通道拒写（ERR_SPEC_ACTOR_INVALID）", () => {
+  it("completed human-only：非用户动作通道拒写（ERR_SPEC_ACTOR_INVALID）", () => {
     const h = harness();
     try {
       h.seed();
-      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "under-review", actor: "plugin-tool" });
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_approval", actor: "plugin-tool" });
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "approved", actor: "ui" });
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "in_progress", actor: "ui" });
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_acceptance", actor: "ui" });
       expect(codeOf(() =>
-        h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "accepted", actor: "agent" as "plugin-tool" }),
+        h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "completed", actor: "agent" as "plugin-tool" }),
       )).toBe("ERR_SPEC_ACTOR_INVALID");
       expect(
         (h.domain.db.prepare(`SELECT spec_status FROM spec_specs WHERE slug = 'demo-spec'`).get() as { spec_status: string })
           .spec_status,
-      ).toBe("under-review");
-      expect(transitionsOf(h.domain)).toHaveLength(1);
-      // 用户动作双通道（对话 tool 径 / UI 径）均可写 accepted
-      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "accepted", actor: "plugin-tool" });
+      ).toBe("awaiting_acceptance");
+      expect(transitionsOf(h.domain)).toHaveLength(4);
+      // 用户动作双通道（对话 tool 径 / UI 径）均可写 completed
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "completed", actor: "plugin-tool" });
       expect(
         (h.domain.db.prepare(`SELECT spec_status FROM spec_specs WHERE slug = 'demo-spec'`).get() as { spec_status: string })
           .spec_status,
-      ).toBe("accepted");
+      ).toBe("completed");
     } finally {
       h.domain.db.close();
     }
@@ -298,7 +338,7 @@ describe("transitionSpec 状态机边表", () => {
     const h = harness();
     try {
       h.seed();
-      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "under-review", actor: "plugin-tool" });
+      h.service.transitionSpec({ cwd: CWD, slug: "demo-spec", to: "awaiting_approval", actor: "plugin-tool" });
       expect(() =>
         h.domain.db.prepare(`UPDATE spec_transitions SET note = 'x'`).run(),
       ).toThrowError(/append-only/);

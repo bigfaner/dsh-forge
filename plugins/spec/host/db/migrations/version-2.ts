@@ -10,9 +10,10 @@
 // defer_foreign_keys 只把校验延迟到 COMMIT、不豁免暂态违例计数：spec_goals/acs/docs/transitions
 // 四子表均 REFERENCES spec_specs(id)，故先撤入零 FK 暂存表、随父表一并 DROP、按 v1 原形复建后回搬；
 // spec_transitions 旧表先经暂存表再落统一台账新形（entities.md §6 ⑤ 的搬行源 = 暂存表）。
-// 已知值域缺口（如实上报，正本直落口径）：v1 存量行 spec_status/台账 from_to 取值于旧四态
-// （'under-review'/'accepted'/'archived'），重建后六态 CHECK 仅交集 'draft'——存量非 draft 行
-// 将在搬行处 CHECK 拒（整体回滚）。值域映射/服务层重接线归后续任务裁决，本迁移不做映射。
+// 值域映射（用户裁决 2026-11-18）：spec_specs 搬行 spec_status 逐行 CASE 映射
+// draft→draft / under-review→awaiting_approval / accepted→approved / archived→completed
+// （completed 为 human-only 终态不机械授予，accepted 保守落 approved）——v1 存量非 draft 行
+// 映射后全部通过六态 CHECK；台账 from_status/to_status 零 CHECK 直落旧值（历史留痕不改写）。
 import type { Migration } from "@dsh-forge/lib-db";
 
 /** v2 迁移（version 2——SPEC_DB_SCHEMA_VERSION = 2 见 version-1 版本上限）。 */
@@ -112,7 +113,14 @@ SELECT id, spec_id, from_status, to_status, note, actor, created_at FROM spec_tr
     CONSTRAINT uq_spec_specs_project_slug UNIQUE (project_key, slug)
 )`,
       `INSERT INTO spec_specs_new (id, slug, title, spec_status, tiers_json, project_key, created_at, updated_at, milestone_id)
-SELECT id, slug, title, spec_status, tiers_json, project_key, created_at, updated_at, NULL
+SELECT id, slug, title,
+  CASE spec_status
+    WHEN 'under-review' THEN 'awaiting_approval'
+    WHEN 'accepted'     THEN 'approved'
+    WHEN 'archived'     THEN 'completed'
+    ELSE spec_status
+  END,
+  tiers_json, project_key, created_at, updated_at, NULL
 FROM spec_specs`,
       // 行数守恒校验门：计数不等 → 守护行落 CHECK 越界值 → ABORT → 整体回滚
       `INSERT INTO spec_specs_new (id, slug, title, spec_status, tiers_json, project_key, created_at, updated_at)

@@ -9,18 +9,16 @@ import {
   requireArgsObject,
   withFailureVariant,
 } from "@dsh-forge/lib-api";
-import type { SpecRow, SpecStatus } from "../db/row-types.js";
+import { SPEC_STATUSES, type SpecRow, type SpecStatus } from "../db/row-types.js";
 import type { ForgeSpecsService } from "../domain/specs/service.js";
 import { requireSessionCwd, type SpecToolDefinition, type SpecToolExecFace } from "./faces.js";
 
 const TOOL = "list_specs";
 
-const SPEC_STATUSES: readonly SpecStatus[] = ["draft", "under-review", "accepted", "archived"];
-
 const LIST_SPEC_PARAMETERS = {
   type: "object",
   properties: {
-    status_filter: { type: "string", description: "Optional status filter: draft | under-review | accepted | archived. Omit for all." },
+    status_filter: { type: "string", description: `Optional status filter: ${SPEC_STATUSES.join(" | ")}. Omit for all.` },
   },
 } as const;
 

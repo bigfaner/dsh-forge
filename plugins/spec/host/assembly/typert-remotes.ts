@@ -28,6 +28,7 @@ import {
   type ForgeSpecsService,
 } from "../domain/specs/service.js";
 import type { SpecRow, SpecStatus, TransitionActor } from "../db/row-types.js";
+import { SPEC_STATUSES } from "../db/row-types.js";
 import {
   projectAcsStates,
   type AcProjectionRow,
@@ -173,8 +174,6 @@ export interface SpecBoardDto {
 /** transition 写面透传快照（SpecRow 形态直投） */
 export type SpecSnapshot = SpecRow;
 
-const SPEC_STATUSES: readonly SpecStatus[] = ["draft", "under-review", "accepted", "archived"];
-
 /** forgeSpecs namespace 控制器（serviceKey = forgeSpecsController——官方 settingsController 同型） */
 export class ForgeSpecsRemote extends TypertRemoteService {
   private readonly specsOf: () => ForgeSpecsService | undefined;
@@ -231,8 +230,8 @@ export class ForgeSpecsRemote extends TypertRemoteService {
 
   /** 看板快照装配（cards + status 统计——follow/list 共用水化流水） */
   private boardOf(cards: readonly SpecCardDto[]): SpecBoardDto {
-    const byStatus = Object.fromEntries(SPEC_STATUSES.map((s) => [s, 0])) as Record<SpecStatus, number>;
-    for (const card of cards) byStatus[card.specStatus] += 1;
+    const byStatus = Object.fromEntries(SPEC_STATUSES.map((s) => [s, 0] as const)) as Record<SpecStatus, number>;
+    for (const card of cards) byStatus[card.specStatus] = (byStatus[card.specStatus] ?? 0) + 1;
     return { cards, stats: { total: cards.length, byStatus } };
   }
 

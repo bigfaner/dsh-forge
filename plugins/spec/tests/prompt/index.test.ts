@@ -55,7 +55,7 @@ describe('段名/段序（knowledge 500 之后 forge 段族）', () => {
 describe('renderSpecPipelineSection——唯一模式（四模板删远征两份、突击两份改写为 Spec 词汇）', () => {
   const MAIN_RENDER = renderSpecPipelineSection({ isGitRepo: true })
 
-  it('主会话全文：总纲（Spec 状态库 / AC 对齐键 / accepted 拆解前置锚）三段结构在场', () => {
+  it('主会话全文：总纲（Spec 状态库 / AC 对齐键 / completed 拆解前置锚）三段结构在场', () => {
     expect(MAIN_RENDER).toContain('## Forge 任务管线')
     expect(MAIN_RENDER).toContain('### 总纲与核心规则')
     expect(MAIN_RENDER).toContain('### 文档位置与存储约束')
@@ -63,7 +63,7 @@ describe('renderSpecPipelineSection——唯一模式（四模板删远征两份
     // Spec 词汇核心规则
     expect(MAIN_RENDER).toContain('Spec/Goal/AC')
     expect(MAIN_RENDER).toContain('querySpec')
-    expect(MAIN_RENDER).toContain('accepted')
+    expect(MAIN_RENDER).toContain('completed')
     // XML 标签包裹（HTML 块空行边界）
     expect(MAIN_RENDER.startsWith(`<${XML_TAGS.forgePipeline}>\n\n`)).toBe(true)
     expect(MAIN_RENDER.endsWith(`\n\n</${XML_TAGS.forgePipeline}>`)).toBe(true)
