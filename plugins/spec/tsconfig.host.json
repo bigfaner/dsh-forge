@@ -17,6 +17,7 @@
     { "path": "../../lib/db" },
     { "path": "../../lib/diag" },
     { "path": "../../lib/path" },
+    { "path": "../../lib/status-machine" },
     { "path": "../../plugins/project/tsconfig.host.json" }
   ]
 }

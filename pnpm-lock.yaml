@@ -916,6 +916,9 @@ importers:
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path
+      '@dsh-forge/lib-status-machine':
+        specifier: workspace:*
+        version: link:../../lib/status-machine
       '@types/better-sqlite3':
         specifier: 9.6.0
         version: 9.6.0

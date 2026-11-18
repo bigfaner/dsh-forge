@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 const pkgDir = join(import.meta.dirname, "..", "..");
 const SELF = "@dsh-forge/spec";
-const ALLOWED = new Set(["@dsh-forge/contracts", "@dsh-forge/lib-api", "@dsh-forge/lib-db", "@dsh-forge/lib-diag", "@dsh-forge/lib-path", "@dsh-forge/lib-util", SELF]);
+const ALLOWED = new Set(["@dsh-forge/contracts", "@dsh-forge/lib-api", "@dsh-forge/lib-db", "@dsh-forge/lib-diag", "@dsh-forge/lib-path", "@dsh-forge/lib-status-machine", "@dsh-forge/lib-util", SELF]);
 
 function walk(dir: string, rel: string, offenders: string[]): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
