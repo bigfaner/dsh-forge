@@ -386,6 +386,67 @@ describe("v1 数据行零损（搬行 SELECT 全列 + 守恒）", () => {
   });
 });
 
+describe("迁移原子性（中断零半态）", () => {
+  it("v2 迁移中途失败 → 整体回滚：版本线停 1、v1 行零损、v2 表零残留", () => {
+    const { home } = v1Db();
+    const seed = openDatabase(specDbFileName(home), {
+      migrations: SPEC_MIGRATIONS,
+      schemaVersion: 1,
+      domain: "spec",
+    });
+    seed
+      .prepare(
+        `INSERT INTO spec_specs (id, slug, title, spec_status, tiers_json, project_key, created_at, updated_at)
+         VALUES ('sp-1', 'demo', '标题', 'draft', '[]', 'Z-p@a', 'c1', 'u1'),
+                ('sp-2', 'demo2', '标题2', 'under-review', '[]', 'Z-p@a', 'c2', 'u2')`,
+      )
+      .run();
+    seed
+      .prepare(
+        `INSERT INTO spec_transitions (id, spec_id, from_status, to_status, actor, created_at)
+         VALUES ('tr-1', 'sp-1', 'draft', 'under-review', 'ui', 'c1')`,
+      )
+      .run();
+    seed.close();
+
+    // 破损 v2 = 正本语句全量 + 尾部注入必败语句（模拟迁移中断）——lib/db 单事务包裹，
+    // 任一语句失败整体回滚（defer_foreign_keys + transaction 由机制层承担）。
+    const broken = {
+      version: 2,
+      statements: [...SPEC_MIGRATIONS_V2[0]!.statements, `SELECT * FROM no_such_table_xyz`],
+    };
+    expect(() =>
+      openDatabase(specDbFileName(home), {
+        migrations: [...SPEC_MIGRATIONS, broken],
+        schemaVersion: 2,
+        domain: "spec",
+      }),
+    ).toThrowError();
+
+    // 回滚后重开（v1 链可开 = 版本线未抬升）：行零损 + 无 v2 半态表
+    const back = openDatabase(specDbFileName(home), {
+      migrations: SPEC_MIGRATIONS,
+      schemaVersion: 1,
+      domain: "spec",
+    });
+    try {
+      expect(back.prepare(`SELECT COUNT(*) AS n FROM spec_specs`).get()).toEqual({ n: 2 });
+      expect(back.prepare(`SELECT COUNT(*) AS n FROM spec_transitions`).get()).toEqual({ n: 1 });
+      expect(
+        back.prepare(`SELECT spec_status FROM spec_specs WHERE id = 'sp-2'`).get(),
+      ).toEqual({ spec_status: "under-review" }); // v1 形态原样（值域映射未落半态）
+      const v2Tables = back
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'spec_%'`)
+        .all()
+        .map((r) => (r as { name: string }).name)
+        .filter((n) => ["spec_roadmaps", "spec_milestones", "spec_reviews", "spec_specs_new", "spec_transitions_new"].includes(n));
+      expect(v2Tables).toEqual([]);
+    } finally {
+      back.close();
+    }
+  });
+});
+
 describe("v1 四态行搬行值域映射（draft→draft / under-review→awaiting_approval / accepted→approved / archived→completed）", () => {
   it("v1 存量非 draft 行搬行后全部通过 v2 六态 CHECK：逐行映射落位 + 行数守恒（4/4）", () => {
     const { home } = v1Db();
