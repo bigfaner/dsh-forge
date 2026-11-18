@@ -29,7 +29,7 @@ import {
   type TransitionTarget,
   type UseDockTabInfoMirror,
 } from './dock-tabs.js'
-import { DSWF_OVERVIEW_AC_PROGRESS_SLOT, DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
+import { AC_PROGRESS_ENTRY_KEY, DSWF_OVERVIEW_AC_PROGRESS_SLOT, DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
 import { KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT } from '../keyed-section.js'
 import {
   createWorkbenchBridge,
@@ -141,6 +141,8 @@ describe('ForgeOverviewSectionHost 项目台插槽节宿主（fix-7 knowledge-di
     expect(OVERVIEW_SECTIONS_CHILDREN[KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT]).toEqual({ kind: 'keyed', scope: 'root' })
     expect(OVERVIEW_SECTIONS_CHILDREN[DSWF_OVERVIEW_AC_PROGRESS_SLOT]).toEqual({ kind: 'keyed', scope: 'root' })
     expect(OVERVIEW_AC_PROGRESS_ENTRY_KEY).toBe('dswf-ac-progress')
+    // 裁决 5 单源：包内导出 = lib-ui AC_PROGRESS_ENTRY_KEY 改引别名（零字面量再声明）
+    expect(OVERVIEW_AC_PROGRESS_ENTRY_KEY).toBe(AC_PROGRESS_ENTRY_KEY)
   })
 
   it('renderSlot 在场：knowledge-dir 槽名 + keyed 占用键逐字分发（entryKey = dswf-knowledge-dir），节渲染于概览主体之后', () => {

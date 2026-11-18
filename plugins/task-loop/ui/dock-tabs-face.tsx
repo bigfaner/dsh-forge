@@ -18,6 +18,7 @@
 // 逐面 try/catch fail-soft（单面异常只降本面，console.warn 留痕不炸装配）。
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  AC_PROGRESS_ENTRY_KEY,
   DSWF_OVERVIEW_AC_PROGRESS_SLOT,
   DSWF_OVERVIEW_TAB_KEY,
   PRIORITY_PROJECT_OVERVIEW_OWNER,
@@ -39,10 +40,10 @@ import { FORGE_TASK_LOOP_LOCALE_NS, type LocaleServiceFace } from "./locale.js";
 export const DSWF_OVERVIEW_TAB_KIND = DSWF_OVERVIEW_TAB_KEY;
 
 /**
- * AC 进度子槽 keyed 占用键（project 侧 OVERVIEW_AC_PROGRESS_ENTRY_KEY 同源字面——
- * 跨 bundle 契约，project 概览 renderSlot 以本键 entryKey 分发）。
+ * AC 进度子槽 keyed 占用键（单源 = @dsh-forge/lib-ui AC_PROGRESS_ENTRY_KEY——裁决 5
+ * 改引，包内字面量退役；project 概览 renderSlot 以本键 entryKey 分发）。
  */
-export const OVERVIEW_AC_PROGRESS_ENTRY_KEY = "dswf-ac-progress";
+export const OVERVIEW_AC_PROGRESS_ENTRY_KEY = AC_PROGRESS_ENTRY_KEY;
 
 /**
  * 双形态注册形态（诊断/e2e 锚——集成 = project 拥有概览主体 + AC 段注入；

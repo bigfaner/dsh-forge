@@ -27,6 +27,18 @@ const TASK_LOOP_DOCK_TABS_SRC = readFileSync(
   'utf8',
 )
 
+// 裁决 5 单源收口（bug 749335ab）：AC entryKey 与右栏槽名常量单源 = @dsh-forge/lib-ui——
+// 两插件生产代码字面量/本地再声明退役（grep 断言：源文本级，可失败）。
+const LIB_UI_SEAMS_SRC = readFileSync(
+  join(import.meta.dirname, '../../lib/ui/src/ui-seams.ts'),
+  'utf8',
+)
+const readPluginSrc = (...parts: string[]): string =>
+  readFileSync(join(import.meta.dirname, '../../plugins', ...parts), 'utf8')
+const PROJECT_DOCK_TABS_SRC = readPluginSrc('project', 'ui', 'dock-tabs', 'dock-tabs.tsx')
+const TASK_LOOP_OFFICIAL_SEAMS_SRC = readPluginSrc('task-loop', 'ui', 'official-seams.ts')
+const PROJECT_OFFICIAL_SEAMS_SRC = readPluginSrc('project', 'ui', 'official-seams.ts')
+
 const RIGHT_SLOTS = 'lib/types/client/contract/slots.d.ts'
 const rawRightSlots = () => readUpstream('profile', '@deepseek-ai/dsh-client-ui-sidebar-right', RIGHT_SLOTS)
 
@@ -119,5 +131,35 @@ describe('pin ⑯-5 产品镜像面（插件注册键与上游口径一致）', 
     expect(TASK_LOOP_DOCK_TABS_SRC).toContain('@dsh-forge/lib-ui')
     expect(DOC_TAB_KIND).toBe('dswf-doc')
     expect(DOC_ADDRESS_PREFIX).toBe(`${'dsh-resource://'}${DOC_TAB_KIND}/`)
+  })
+
+  it('裁决 5 单源残余收口：AC entryKey / 右栏槽名生产代码零字面量双持（bug 749335ab）', () => {
+    // 单源本体：lib/ui 持 'dswf-ac-progress' 与右栏槽名字面（唯一合法持有点）
+    expect(LIB_UI_SEAMS_SRC).toContain("export const AC_PROGRESS_ENTRY_KEY = 'dswf-ac-progress'")
+    expect(LIB_UI_SEAMS_SRC).toContain("export const SIDEBAR_RIGHT_PANE_TAB_SLOT = 'sidebar.right.pane.tab'")
+    expect(LIB_UI_SEAMS_SRC).toContain(
+      "export const SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT = 'sidebar.right.pane.tab.title'",
+    )
+    // AC entryKey：两插件生产代码字面量退役——grep 断言零字面量双持
+    for (const [name, src] of [
+      ['project dock-tabs', PROJECT_DOCK_TABS_SRC],
+      ['task-loop dock-tabs-face', TASK_LOOP_DOCK_TABS_SRC],
+    ] as const) {
+      expect(src.includes("'dswf-ac-progress'"), `${name} 残留 'dswf-ac-progress' 字面量`).toBe(false)
+      expect(src.includes('"dswf-ac-progress"'), `${name} 残留 "dswf-ac-progress" 字面量`).toBe(false)
+    }
+    expect(PROJECT_DOCK_TABS_SRC).toContain('OVERVIEW_AC_PROGRESS_ENTRY_KEY = AC_PROGRESS_ENTRY_KEY')
+    expect(TASK_LOOP_DOCK_TABS_SRC).toContain('OVERVIEW_AC_PROGRESS_ENTRY_KEY = AC_PROGRESS_ENTRY_KEY')
+    // 槽名单源到底：两插件 official-seams.ts 本地再声明退役——改引 lib/ui 透传
+    for (const [name, src] of [
+      ['project official-seams', PROJECT_OFFICIAL_SEAMS_SRC],
+      ['task-loop official-seams', TASK_LOOP_OFFICIAL_SEAMS_SRC],
+    ] as const) {
+      expect(src, `${name} 缺 lib-ui 改引`).toContain('@dsh-forge/lib-ui')
+      expect(
+        /export const SIDEBAR_RIGHT_PANE_TAB_(TITLE_)?SLOT = /.test(src),
+        `${name} 残留槽名本地再声明`,
+      ).toBe(false)
+    }
   })
 })

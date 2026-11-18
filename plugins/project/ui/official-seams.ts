@@ -29,6 +29,12 @@ import {
   registerKeyedSection,
   type SectionSlotsFace,
 } from './keyed-section.js'
+import { SIDEBAR_RIGHT_PANE_TAB_SLOT } from '@dsh-forge/lib-ui'
+
+// 槽名单源（裁决 5）：sidebar.right.pane.tab 键出自 @dsh-forge/lib-ui（esbuild 内联，
+// 自含审计口径不变），本文件只透传既有消费面 import 路径。
+
+export { SIDEBAR_RIGHT_PANE_TAB_SLOT }
 
 // ── 槽名 / 行键常量（与 apps/web 壳侧退役常量字面同源——官方 SlotMap 键） ──
 
@@ -44,8 +50,6 @@ export const CONVERSATION_INPUT_OVERLAY_SLOT = 'conversation.input.overlay'
 export const SEAL_NOTICE_ENTRY_ID = 'dswf-worktree-seal'
 /** Bug chip 重建 overlay 行 id（零视觉效应行） */
 export const BUG_CHIP_RESTORE_ENTRY_ID = 'dswf-bug-chip-restore'
-/** 官方右栏 tab 体 keyed 槽（Bug 台账 body dispatch 键载体） */
-export const SIDEBAR_RIGHT_PANE_TAB_SLOT = 'sidebar.right.pane.tab'
 /** Bug 台账 tab 类型 kind = keyed body 键（与 ui/bug-refs/BugPreview.tsx DSWF_BUG_TAB_KIND 字面量同源 pin） */
 export const BUG_TAB_KIND = 'dswf-bug'
 /** Bug 台账资源地址前缀（openResource 去重键 = 地址本身；与 BugPreview.tsx DSWF_BUG_ADDRESS_PREFIX 字面量同源 pin） */

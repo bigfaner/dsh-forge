@@ -19,7 +19,7 @@
 // 组合多域读——编排归 core）。
 import { useCallback, useEffect, Fragment, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { TaskStatus } from '@dsh-forge/contracts'
-import { DSWF_OVERVIEW_AC_PROGRESS_SLOT, DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
+import { AC_PROGRESS_ENTRY_KEY, DSWF_OVERVIEW_AC_PROGRESS_SLOT, DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
 import { EmptyState } from '../components.js'
 import type { RpcClientFactory } from './rpc-channels.js'
 import { anchorProjectResolver } from './anchor-resolver.js'
@@ -374,8 +374,8 @@ export function ForgeOverviewTab(props: ForgeOverviewTabProps): ReactNode {
 /** 知识库目录节 keyed 占用键（knowledge 侧 KNOWLEDGE_DIR_SECTION_KEY 同源字面——跨 bundle 契约）。 */
 export const OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY = 'dswf-knowledge-dir'
 
-/** AC 进度子槽 keyed 占用键（task-loop 侧落座键同源字面——跨 bundle 契约，host-integration-fixes 裁决 1）。 */
-export const OVERVIEW_AC_PROGRESS_ENTRY_KEY = 'dswf-ac-progress'
+/** AC 进度子槽 keyed 占用键（单源 = @dsh-forge/lib-ui AC_PROGRESS_ENTRY_KEY——裁决 5 改引，包内字面量退役）。 */
+export const OVERVIEW_AC_PROGRESS_ENTRY_KEY = AC_PROGRESS_ENTRY_KEY
 
 /**
  * 概览 tab 子槽声明表（宿主单点声明缝——settings-unification 圆桌裁定 + 裁决 1 AC 进度

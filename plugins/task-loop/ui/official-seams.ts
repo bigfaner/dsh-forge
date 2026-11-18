@@ -1,12 +1,10 @@
 // 官方服务缝窄面（task-loop 迁移批——镜像自 project ui/official-seams.ts 消费切片，
 // 只保留六组件注册面所需的 ctx 窄面与槽名常量；Bug 台账 tab 等注册面留 project 包）。
-// bundle 自含纪律：官方服务以结构同型镜像承载（keyed-section 同款），零上游 import。
+// bundle 自含纪律：官方服务以结构同型镜像承载（keyed-section 同款）；槽名常量出自
+// @dsh-forge/lib-ui（本 bundle esbuild 内联——自含审计口径不变）。
+import { SIDEBAR_RIGHT_PANE_TAB_SLOT, SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT } from "@dsh-forge/lib-ui";
 
-/** 官方右栏 tab 体 keyed 槽（dock tab body dispatch 键载体——ui-sidebar-right） */
-export const SIDEBAR_RIGHT_PANE_TAB_SLOT = "sidebar.right.pane.tab";
-
-/** 官方右栏 tab chip 题写 keyed 槽（占用者缺席 = 回退开 tab 时点捕获题写——ui-sidebar-right） */
-export const SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT = "sidebar.right.pane.tab.title";
+export { SIDEBAR_RIGHT_PANE_TAB_SLOT, SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT };
 
 /** 官方会话头 utilities 带（list 槽 scope session——「右对齐会话 utilities 升序」，ui-conversation 槽面核销 2026-11：kind list / scope session / owner ConversationHeaderActionOwnerProps） */
 export const SESSION_HEADER_UTILITIES_SLOT = "conversation.session.header.utilities";

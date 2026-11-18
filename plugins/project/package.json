@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.26.0",
+  "version": "0.26.1",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
