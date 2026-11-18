@@ -4,7 +4,7 @@
 // （五步补偿链/对账矩阵/查询口径全部归属 host/projects 域本体，此处只做委托组装）。
 import type { Project, ProjectPatch, ProjectService, ProjectSummary, RegisterProjectInput, RegisterResult, ReconcileReport } from '@dsh-forge/lib-api'
 import type { DiagEventPayload } from '@dsh-forge/lib-diag'
-import { openDomainDb, domainDbFileName, type DomainDb } from '../db/connection.js'
+import { archiveLegacyWindowDb, isLegacyWindowDb, openDomainDb, domainDbFileName, type DomainDb } from '../db/connection.js'
 import type { ProjectRow } from '../db/row-types.js'
 import { ProjectsRegisterService } from '../projects/register.js'
 import { ProjectsQueryService } from '../projects/queries.js'
@@ -91,7 +91,24 @@ export function createProjectsServicePort(deps: ProjectsPortDeps): ProjectServic
  * project.db 打开缝（装配期一次；I4 拒开异常上抛由装配方 fail-soft 退兜底）。
  * dbFile 显式在场即覆盖缺省派生落点（共库集成形态——forge patch 下发 forge/forge.db，
  * patch 下发即生效单一路径，bug ad14e904：不再自派生 project.db 分库）。
+ * bug 897ad81a（fix-3）：开库失败且命中 legacy 窗口库签名（本域版本线 0 + 本域表在座
+ * ——指纹不可认领旧世代库）→ 只读归档 + 新库重建再开一次；其余失败（tampered/版本
+ * 超前/IO）原样上抛不吞。归档动作经 onDiag 留痕（装配期诊断缝——AGENTS §7 不静默）。
  */
-export function openProjectsDomainDb(home: string, dbFile?: string): DomainDb {
-  return openDomainDb(home, { prefix: 'project', file: dbFile ?? domainDbFileName(home) })
+export function openProjectsDomainDb(
+  home: string,
+  dbFile?: string,
+  onDiag?: (line: string) => void,
+): DomainDb {
+  const file = dbFile ?? domainDbFileName(home)
+  try {
+    return openDomainDb(home, { prefix: 'project', file })
+  } catch (cause) {
+    if (!isLegacyWindowDb(file)) throw cause
+    const archived = archiveLegacyWindowDb(file)
+    onDiag?.(
+      `[project-seams] legacy 窗口库指纹不可认领（本域版本线 0）——只读归档 ${archived} 后新库重建（原失败：${String(cause)}）`,
+    )
+    return openDomainDb(home, { prefix: 'project', file })
+  }
 }

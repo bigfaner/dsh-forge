@@ -131,7 +131,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   let domainDb: ReturnType<typeof openProjectsDomainDb> | undefined;
   if (home !== undefined) {
     try {
-      domainDb = openProjectsDomainDb(home, config.dbFile);
+      domainDb = openProjectsDomainDb(home, config.dbFile, (line) => diag(line));
       diag(
         `[project-seams] project.db 已打开：${home === config.home ? "config.home" : "缺省 DSH_HOME"} → ${config.dbFile ?? home}`,
       );
