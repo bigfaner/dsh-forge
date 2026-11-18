@@ -395,6 +395,8 @@ importers:
         specifier: 24.19.0
         version: 24.19.0
 
+  lib/status-machine: {}
+
   lib/ui:
     devDependencies:
       '@types/node':

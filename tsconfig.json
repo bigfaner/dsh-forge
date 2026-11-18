@@ -20,6 +20,9 @@
       "path": "lib/ui"
     },
     {
+      "path": "lib/status-machine"
+    },
+    {
       "path": "plugins/project"
     },
     {

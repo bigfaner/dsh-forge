@@ -60,6 +60,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'lib/db',
         'lib/diag',
         'lib/path',
+        // plugin-spec-roadmaps 1.1：泛型状态机公共包入拓扑
+        'lib/status-machine',
         'lib/util',
         'packages/contracts',
         'packages/core',

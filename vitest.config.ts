@@ -61,6 +61,8 @@ export default defineConfig({
       { test: { name: 'lib-path', include: ['lib/path/src/**/*.test.ts'] } },
       // host-integration-fixes 1.2：lib/ui（slot 键 + priority 约定具名常量单源）
       { test: { name: 'lib-ui', include: ['lib/ui/src/**/*.test.ts'] } },
+      // plugin-spec-roadmaps 1.1：lib/status-machine（泛型状态机 lib 本体单测）
+      { test: { name: 'lib-status-machine', include: ['lib/status-machine/tests/**/*.spec.ts'] } },
       // 1.7 归并到位：api（contracts DTO/词汇/错误码/通道常量 + schema 单源）与 db
       //（openDatabase 整套 + 逐连接 foreign_keys 断言）随本体 git mv 迁入扩池
       { test: { name: 'lib-api', include: ['lib/api/src/**/*.test.ts'] } },
