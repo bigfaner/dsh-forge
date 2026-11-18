@@ -71,13 +71,13 @@ function insertGoal(domain: SpecDomainDb, patch: Record<string, unknown> = {}): 
 }
 
 describe("lineage（v1 新线）", () => {
-  it("v1 = 唯一迁移、schema 版本上限 = 1", () => {
+  it("v1 = 首迁移、schema 版本上限 = 2（v2 重建线见 migrations-v2 测试）", () => {
     expect(SPEC_MIGRATIONS).toHaveLength(1);
     expect(SPEC_MIGRATIONS[0]!.version).toBe(1);
-    expect(SPEC_DB_SCHEMA_VERSION).toBe(1);
+    expect(SPEC_DB_SCHEMA_VERSION).toBe(2);
   });
 
-  it("全新库：schema_meta 落 version 1；打开幂等（重开不重迁移、数据保留）", () => {
+  it("全新库：schema_meta 落 version 1+2；打开幂等（重开不重迁移、数据保留）", () => {
     const { domain, home } = fileDb();
     try {
       insertSpec(domain);
@@ -88,7 +88,7 @@ describe("lineage（v1 新线）", () => {
         (second.db.prepare(`SELECT version FROM schema_meta ORDER BY version`).all() as Array<{ version: number }>).map(
           (r) => r.version,
         ),
-      ).toEqual([1]);
+      ).toEqual([1, 2]);
       expect(second.db.prepare(`SELECT id FROM spec_specs`).all()).toEqual([{ id: "sp-1" }]);
       second.db.close();
     } finally {
@@ -110,7 +110,7 @@ describe("lineage（v1 新线）", () => {
     }
   });
 
-  it("表清单：五域表 + schema_meta（机制基建），零多余域表", () => {
+  it("表清单：八域表 + schema_meta（机制基建），零多余域表", () => {
     const domain = mem();
     try {
       const names = (
@@ -118,7 +118,16 @@ describe("lineage（v1 新线）", () => {
       )
         .map((r) => r.name)
         .filter((n) => !n.startsWith("schema_") && n !== "migration_digests" && n !== "sqlite_sequence");
-      expect(names).toEqual(["spec_acs", "spec_docs", "spec_goals", "spec_specs", "spec_transitions"]);
+      expect(names).toEqual([
+        "spec_acs",
+        "spec_docs",
+        "spec_goals",
+        "spec_milestones",
+        "spec_reviews",
+        "spec_roadmaps",
+        "spec_specs",
+        "spec_transitions",
+      ]);
     } finally {
       domain.db.close();
     }
@@ -228,8 +237,8 @@ describe("spec_transitions append-only 双触发器", () => {
     insertSpec(domain);
     domain.db
       .prepare(
-        `INSERT INTO spec_transitions (id, spec_id, from_status, to_status, note, actor, created_at)
-         VALUES ('tr-1', 'sp-1', 'draft', 'under-review', NULL, 'plugin-tool', 'x')`,
+        `INSERT INTO spec_transitions (id, entity_kind, entity_id, from_status, to_status, note, actor, created_at)
+         VALUES ('tr-1', 'spec', 'sp-1', 'draft', 'under-review', NULL, 'plugin-tool', 'x')`,
       )
       .run();
   }
@@ -265,8 +274,8 @@ describe("spec_transitions append-only 双触发器", () => {
       expect(() =>
         domain.db
           .prepare(
-            `INSERT INTO spec_transitions (id, spec_id, from_status, to_status, note, actor, created_at)
-             VALUES ('tr-2', 'sp-1', 'draft', 'under-review', NULL, 'agent', 'x')`,
+            `INSERT INTO spec_transitions (id, entity_kind, entity_id, from_status, to_status, note, actor, created_at)
+             VALUES ('tr-2', 'spec', 'sp-1', 'draft', 'under-review', NULL, 'agent', 'x')`,
           )
           .run(),
       ).toThrowError(/CHECK/);

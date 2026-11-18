@@ -12,8 +12,11 @@
 // 旧形状升级），不入迁移语句——旧形状全局 schema_meta DDL 死语句已清（F1 配方清理）。
 import type { Migration } from "@dsh-forge/lib-db";
 
-/** spec.db schema 版本上限（独立版本线；version 1 起新线）。 */
-export const SPEC_DB_SCHEMA_VERSION = 1;
+/**
+ * spec.db schema 版本上限（独立版本线；version 1 起新线，version 2 = plugin-spec-roadmaps
+ * v2 目标域表族 + spec_specs/spec_transitions 六态/统一台账重建——语句正本 version-2.ts）。
+ */
+export const SPEC_DB_SCHEMA_VERSION = 2;
 
 /**
  * 分域版本线锚（R3-dba「锚域不锚表集合」）：openDatabase domain 选项值——共库形态下
@@ -29,6 +32,9 @@ export interface SpecDbTables {
   acs: string;
   docs: string;
   transitions: string;
+  roadmaps: string;
+  milestones: string;
+  reviews: string;
 }
 
 export function specTableNames(): SpecDbTables {
@@ -38,6 +44,9 @@ export function specTableNames(): SpecDbTables {
     acs: "spec_acs",
     docs: "spec_docs",
     transitions: "spec_transitions",
+    roadmaps: "spec_roadmaps",
+    milestones: "spec_milestones",
+    reviews: "spec_reviews",
   };
 }
 

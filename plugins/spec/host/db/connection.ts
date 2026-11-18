@@ -12,11 +12,15 @@ import {
   specTableNames,
   type SpecDbTables,
 } from "./migrations/version-1.js";
+import { SPEC_MIGRATIONS_V2 } from "./migrations/version-2.js";
 import { SpecRepo } from "./repositories/spec-repo.js";
 import { TransitionsRepo } from "./repositories/transitions-repo.js";
 import { DocsRepo } from "./repositories/docs-repo.js";
 
-export { SPEC_DB_SCHEMA_DOMAIN, SPEC_DB_SCHEMA_VERSION, SPEC_MIGRATIONS, specTableNames, type SpecDbTables };
+export { SPEC_DB_SCHEMA_DOMAIN, SPEC_DB_SCHEMA_VERSION, SPEC_MIGRATIONS, SPEC_MIGRATIONS_V2, specTableNames, type SpecDbTables };
+
+/** 完整迁移序列（v1 新线 + v2 重建——openDatabase 参数化传入，禁硬编码 import 中央序列）。 */
+export const SPEC_MIGRATION_CHAIN = [...SPEC_MIGRATIONS, ...SPEC_MIGRATIONS_V2];
 
 export interface SpecDbOpts {
   /** 库文件覆盖（':memory:' 供域逻辑测试；缺省 = {home}/forge/db/spec/spec.db） */
@@ -46,7 +50,7 @@ export function specDbFileName(home: string): string {
 export function openSpecDb(home: string, opts: SpecDbOpts = {}): SpecDomainDb {
   const file = opts.file ?? specDbFileName(home);
   const db = openDatabase(file, {
-    migrations: SPEC_MIGRATIONS,
+    migrations: SPEC_MIGRATION_CHAIN,
     schemaVersion: SPEC_DB_SCHEMA_VERSION,
     // 分域版本线锚（R3-dba）：版本门只判读 spec 域版本线——共库形态下 knowledge/task-loop
     // 先行迁移抬升的异域版本行不触发拒开（bug 34645ce2 处方；单装形态语义不变）。

@@ -41,7 +41,7 @@ function seedKnowledgeGlobalLine(file: string): void {
 }
 
 describe("spec 共库分域版本线（bug 34645ce2）", () => {
-  it("共库预置异域高版本行（v7 > 上限 1）→ openSpecDb 开库成功：spec_* 五表落地 + 本域版本行入线，异域行不动", () => {
+  it("共库预置异域高版本行（v7 > 上限）→ openSpecDb 开库成功：spec_* 八表落地 + 本域版本行入线，异域行不动", () => {
     const file = sharedDbFile();
     seedKnowledgeGlobalLine(file);
     const domain = openSpecDb(".", { file });
@@ -69,11 +69,14 @@ describe("spec 共库分域版本线（bug 34645ce2）", () => {
     const rows = again.db
       .prepare<unknown[], { domain: string; version: number }>(`SELECT domain, version FROM schema_meta WHERE domain = ?`)
       .all(SPEC_DB_SCHEMA_DOMAIN);
-    expect(rows).toEqual([{ domain: SPEC_DB_SCHEMA_DOMAIN, version: SPEC_DB_SCHEMA_VERSION }]);
+    expect(rows).toEqual([
+      { domain: SPEC_DB_SCHEMA_DOMAIN, version: 1 },
+      { domain: SPEC_DB_SCHEMA_DOMAIN, version: SPEC_DB_SCHEMA_VERSION },
+    ]);
     again.db.close();
   });
 
-  it("单装缺省路径零变化：spec 自持库版本线 = 1", () => {
+  it("单装缺省路径零变化：spec 自持库版本线 = 上限 2", () => {
     dir ??= mkdtempSync(join(tmpdir(), "spec-shared-db-"));
     const file = join(dir, `solo-${Math.random().toString(36).slice(2)}.db`);
     const domain = openSpecDb(".", { file });
@@ -81,7 +84,7 @@ describe("spec 共库分域版本线（bug 34645ce2）", () => {
       const rows = domain.db
         .prepare<unknown[], { version: number }>(`SELECT version FROM schema_meta ORDER BY version`)
         .all();
-      expect(rows).toEqual([{ version: 1 }]);
+      expect(rows).toEqual([{ version: 1 }, { version: SPEC_DB_SCHEMA_VERSION }]);
     } finally {
       domain.db.close();
     }
