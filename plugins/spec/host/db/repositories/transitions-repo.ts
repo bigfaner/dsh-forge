@@ -1,15 +1,16 @@
-// transitions-repo（plugin-spec 1.3 / v2 统一台账适配）——spec_transitions append-only 台账 DAO：
-// 唯一写径 append（INSERT）；读取面 listBySpec（idx 前缀序）。
-// v2 统一台账形态（entities.md §4）：entity_kind/entity_id 多态归属——本 repo 固定
-// entity_kind='spec'（对读锚 entities.md §3 重建迁入同值），对外 TransitionRow（specId）
-// 形态零改——四级写径（goal/milestone/roadmap）归 v2 服务域任务追加。
-// 台账 UPDATE/DELETE 由双触发器 ABORT 兜底（entities.md §4），repo 零改删路径。
+// transitions-repo（plugin-spec 1.3 → v2 统一台账，plugin-spec-roadmaps 1.4）——
+// spec_transitions append-only 台账 DAO：唯一写径 appendTransition（四级统一——
+// entity_kind/entity_id）+ listByEntity（idx_spec_trans_entity 前缀序）+ collectByGroup
+// （分组归集：调用方父链解析出 (kind,id) 集 → 逐 kind 索引序出 → 应用层归并）。
+// v1 spec 径（append/listBySpec，TransitionRow.specId 形态）保留为统一台账薄委托——
+// M3 现役消费面零改。台账 UPDATE/DELETE 由双触发器 ABORT 兜底（entities.md §4）。
 import type Database from "better-sqlite3";
 import type { SpecDbTables } from "../migrations/version-1.js";
-import type { TransitionRow } from "../row-types.js";
+import type { EntityKind, EntityTransitionRow, SpecStatus, TransitionRow } from "../row-types.js";
 
 interface TransitionRowDb {
   id: string;
+  entity_kind: string;
   entity_id: string;
   from_status: string;
   to_status: string;
@@ -24,31 +25,84 @@ export class TransitionsRepo {
     private readonly t: SpecDbTables,
   ) {}
 
-  append(row: TransitionRow): void {
+  /** 统一台账唯一写径（四级——spec/goal/milestone/roadmap；from/to 值域校验归应用层 per-kind 单点）。 */
+  appendTransition(row: EntityTransitionRow): void {
     this.db
       .prepare(
         `INSERT INTO ${this.t.transitions}
          (id, entity_kind, entity_id, from_status, to_status, note, actor, created_at)
-         VALUES (?, 'spec', ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(row.id, row.specId, row.fromStatus, row.toStatus, row.note, row.actor, row.createdAt);
+      .run(row.id, row.entityKind, row.entityId, row.fromStatus, row.toStatus, row.note, row.actor, row.createdAt);
+  }
+
+  /** idx 前缀序（(kind,id) 等值 + created_at 序）。 */
+  listByEntity(entityKind: EntityKind, entityId: string): EntityTransitionRow[] {
+    const rows = this.db
+      .prepare<unknown[], TransitionRowDb>(
+        `SELECT * FROM ${this.t.transitions} WHERE entity_kind = ? AND entity_id = ? ORDER BY created_at, id`,
+      )
+      .all(entityKind, entityId);
+    return rows.map((r) => ({
+      id: r.id,
+      entityKind: r.entity_kind as EntityKind,
+      entityId: r.entity_id,
+      fromStatus: r.from_status,
+      toStatus: r.to_status,
+      note: r.note,
+      actor: r.actor as EntityTransitionRow["actor"],
+      createdAt: r.created_at,
+    }));
+  }
+
+  /** 分组归集：entries = 调用方父链解析出的 (kind,id) 集——逐项索引序出，键 `${kind}:${id}`
+   *  应用层归并（单 roadmap 行数级，毫秒级；零 GROUP CONCAT 技巧）。 */
+  collectByGroup(
+    entries: ReadonlyArray<{ entityKind: EntityKind; entityId: string }>,
+  ): Map<string, EntityTransitionRow[]> {
+    const grouped = new Map<string, EntityTransitionRow[]>();
+    const stmt = this.db.prepare<unknown[], TransitionRowDb>(
+      `SELECT * FROM ${this.t.transitions} WHERE entity_kind = ? AND entity_id = ? ORDER BY created_at, id`,
+    );
+    for (const e of entries) {
+      grouped.set(`${e.entityKind}:${e.entityId}`, stmt.all(e.entityKind, e.entityId).map((r) => ({
+        id: r.id,
+        entityKind: r.entity_kind as EntityKind,
+        entityId: r.entity_id,
+        fromStatus: r.from_status,
+        toStatus: r.to_status,
+        note: r.note,
+        actor: r.actor as EntityTransitionRow["actor"],
+        createdAt: r.created_at,
+      })));
+    }
+    return grouped;
+  }
+
+  // ── v1 spec 径（薄委托——M3 现役消费面零改）──
+
+  append(row: TransitionRow): void {
+    this.appendTransition({
+      id: row.id,
+      entityKind: "spec",
+      entityId: row.specId,
+      fromStatus: row.fromStatus,
+      toStatus: row.toStatus,
+      note: row.note,
+      actor: row.actor,
+      createdAt: row.createdAt,
+    });
   }
 
   listBySpec(specId: string): TransitionRow[] {
-    return (
-      this.db
-        .prepare<unknown[], TransitionRowDb>(
-          `SELECT * FROM ${this.t.transitions} WHERE entity_kind = 'spec' AND entity_id = ? ORDER BY created_at, id`,
-        )
-        .all(specId) as TransitionRowDb[]
-    ).map((r) => ({
+    return this.listByEntity("spec", specId).map((r) => ({
       id: r.id,
-      specId: r.entity_id,
-      fromStatus: r.from_status as TransitionRow["fromStatus"],
-      toStatus: r.to_status as TransitionRow["toStatus"],
+      specId: r.entityId,
+      fromStatus: r.fromStatus as SpecStatus,
+      toStatus: r.toStatus as SpecStatus,
       note: r.note,
-      actor: r.actor as TransitionRow["actor"],
-      createdAt: r.created_at,
+      actor: r.actor,
+      createdAt: r.createdAt,
     }));
   }
 }

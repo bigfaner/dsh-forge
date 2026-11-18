@@ -12,7 +12,9 @@ export type SpecErrorCode =
   | "ERR_SPEC_ILLEGAL_TRANSITION"
   | "ERR_SPEC_REJECT_NOTE_REQUIRED"
   | "ERR_SPEC_ACTOR_INVALID"
-  | "ERR_SPEC_DOC_WRITE";
+  | "ERR_SPEC_DOC_WRITE"
+   | "ERR_SPEC_ROADMAP_UNKNOWN"
+   | "ERR_SPEC_ROADMAP_TERMINAL";
 
 export interface SpecErrorData {
   readonly code: SpecErrorCode;

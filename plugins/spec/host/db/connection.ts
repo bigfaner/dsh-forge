@@ -16,6 +16,9 @@ import { SPEC_MIGRATIONS_V2 } from "./migrations/version-2.js";
 import { SpecRepo } from "./repositories/spec-repo.js";
 import { TransitionsRepo } from "./repositories/transitions-repo.js";
 import { DocsRepo } from "./repositories/docs-repo.js";
+import { RoadmapRepo } from "./repositories/roadmap-repo.js";
+import { MilestoneRepo } from "./repositories/milestone-repo.js";
+import { ReviewsRepo } from "./repositories/reviews-repo.js";
 
 export { SPEC_DB_SCHEMA_DOMAIN, SPEC_DB_SCHEMA_VERSION, SPEC_MIGRATIONS, SPEC_MIGRATIONS_V2, specTableNames, type SpecDbTables };
 
@@ -34,6 +37,9 @@ export interface SpecDomainDb {
     specs: SpecRepo;
     transitions: TransitionsRepo;
     docs: DocsRepo;
+    roadmaps: RoadmapRepo;
+    milestones: MilestoneRepo;
+    reviews: ReviewsRepo;
   };
 }
 
@@ -64,6 +70,9 @@ export function openSpecDb(home: string, opts: SpecDbOpts = {}): SpecDomainDb {
       specs: new SpecRepo(db, tables),
       transitions: new TransitionsRepo(db, tables),
       docs: new DocsRepo(db, tables),
+      roadmaps: new RoadmapRepo(db, tables),
+      milestones: new MilestoneRepo(db, tables),
+      reviews: new ReviewsRepo(db, tables),
     },
   }
 }

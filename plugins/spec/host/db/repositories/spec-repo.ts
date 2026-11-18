@@ -176,4 +176,19 @@ export class SpecRepo {
     }));
     return { spec, goals };
   }
+
+  /** 聚合派生读面（plugin-spec-roadmaps 1.4，code-design §6）——milestone_id 等值圈行
+   *  （idx_spec_specs_milestone partial 索引前缀 + spec_status 过滤列；NULL 未挂链行
+   *  拒之索引外）：deriveMilestoneAchieved 输入单源（只出判定列，零全行搬运）。 */
+  specsByMilestone(
+    milestoneId: string,
+  ): Array<{ id: string; slug: string; specStatus: SpecStatus }> {
+    const rows = this.db
+      .prepare<unknown[], { id: string; slug: string; spec_status: string }>(
+        `SELECT id, slug, spec_status FROM ${this.t.specs}
+         WHERE milestone_id = ? AND milestone_id IS NOT NULL ORDER BY created_at, id`,
+      )
+      .all(milestoneId);
+    return rows.map((r) => ({ id: r.id, slug: r.slug, specStatus: r.spec_status as SpecStatus }));
+  }
 }
