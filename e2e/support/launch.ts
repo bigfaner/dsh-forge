@@ -10,13 +10,13 @@
 // - stablePhase：'wait'（30s 相位稳定门——常态）| 'probe'（复启链路 60s 逐拍留痕探针
 //   ——comp 形态：settle 慢尾诊断）| 'none'（hero-control：相位由调用侧按项目态断言）。
 // - timeouts：安装形态慢盘 120s（缺省 60/90/60）。
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { expect, type ElectronApplication, type Page } from '@playwright/test'
+import { chromium, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { allocatePort } from './ports.js'
 import { dismissOnboardingModals, READY_ANCHOR } from './modals.js'
 import { writeProviderOverlay } from './dogfood.js'
@@ -141,6 +141,125 @@ export async function launchElectron(opts: RawLaunchOptions = {}): Promise<Elect
       ...opts.env,
     } as Record<string, string>,
   })
+}
+
+// ─── 裸启动 carrier 面（fix-27 根修——038 轮定谳：electron.launch 注入形态退役） ───
+
+/**
+ * 裸启动 carrier 配方（038 轮取证实证单源——piped-probe.log 20s harnessPhase ready 全绿；
+ * 039 轮根修 a96e09a5 复发家族）：直接 spawn Electron 二进制 + piped stdio + FORCE_COLOR=1
+ * + sanitizedLaunchEnv（ELECTRON_RUN_AS_NODE 摘除）。禁 `_electron.launch` 注入形态——
+ * 其 ELECTRON_RUN_AS_NODE 节点包装会杀 app 孙进程 harness（81ms SIGTERM 实锚，
+ * 038-forensics/desktop-attempt1/harness.log.tail）。复刻探针与 e2e carrier 共用本配方
+ * （禁两套漂移）。
+ */
+export interface BareCarrierOptions {
+  /** 宿主二进制（安装产物 exe） */
+  readonly executablePath: string
+  /** 追加 chromium 开关（如 --remote-debugging-port=0——CDP 附着取证通道） */
+  readonly args?: readonly string[]
+  /** 追加 env（叠加于 sanitizedLaunchEnv + FORCE_COLOR=1） */
+  readonly env?: Record<string, string>
+  /** 进程 cwd（缺省 exe 所在目录） */
+  readonly cwd?: string
+  /** DevTools ws 端点捕获上限（缺省 30s）；进程提前退出即抛 */
+  readonly wsTimeoutMs?: number
+}
+
+/** 裸启动 carrier 返回形态 */
+export interface BareCarrier {
+  readonly process: ChildProcess
+  /** DevTools ws 端点（CDP 附着通道——chromium.connectOverCDP） */
+  readonly wsEndpoint: string
+  /** 主窗口观察页（CDP 附着取件——与 launchElectron firstWindow 同面） */
+  readonly page: Page
+  /** CDP 附着句柄（断开不影响 carrier 进程生命周期） */
+  readonly browser: import('@playwright/test').Browser
+  /** stdout/stderr 收集 tail（stderr 判据源：reportSkippedBundles 直落面等） */
+  readonly stdoutTail: (max?: number) => string
+  readonly stderrTail: (max?: number) => string
+}
+
+/** 裸启动 carrier（配方见 BareCarrierOptions 头注——单源，禁另起灶台） */
+export async function launchBareCarrier(opts: BareCarrierOptions): Promise<BareCarrier> {
+  const env = {
+    ...sanitizedLaunchEnv(),
+    FORCE_COLOR: '1',
+    ...opts.env,
+  } as Record<string, string>
+  const proc = spawn(opts.executablePath, [...(opts.args ?? [])], {
+    cwd: opts.cwd ?? dirname(opts.executablePath),
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env,
+  })
+  let stdout = ''
+  let stderr = ''
+  proc.stdout?.on('data', (chunk: Buffer) => {
+    stdout += String(chunk)
+  })
+  proc.stderr?.on('data', (chunk: Buffer) => {
+    stderr += String(chunk)
+  })
+  const wsTimeoutMs = opts.wsTimeoutMs ?? 30_000
+  const wsDeadline = Date.now() + wsTimeoutMs
+  let wsEndpoint: string | undefined
+  while (Date.now() < wsDeadline) {
+    wsEndpoint = stderr.match(/DevTools listening on (ws:\/\/\S+)/)?.[1]
+    if (wsEndpoint !== undefined || proc.exitCode !== null) break
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  if (wsEndpoint === undefined) {
+    throw new Error(
+      `裸启动 carrier 失败：DevTools ws 端点未捕获（exit=${String(proc.exitCode)}，上限 ${String(wsTimeoutMs / 1000)}s）` +
+        `stderr=${stderr.slice(-600)}`,
+    )
+  }
+  const browser = await chromium.connectOverCDP(wsEndpoint)
+  const ctx = browser.contexts()[0]
+  if (ctx === undefined) {
+    await browser.close().catch(() => undefined)
+    throw new Error('裸启动 carrier 失败：CDP 默认 context 缺席（主窗口未就绪）')
+  }
+  const page = ctx.pages()[0] ?? (await ctx.waitForEvent('page', { timeout: 30_000 }))
+  return {
+    process: proc,
+    wsEndpoint,
+    page,
+    browser,
+    stdoutTail: (max = 600) => stdout.slice(-max),
+    stderrTail: (max = 600) => stderr.slice(-max),
+  }
+}
+
+/**
+ * 裸启动 carrier 关闭（closeApp 同语义有界形态）：先优雅 taskkill（无 /F——WM_CLOSE，
+ * 宿主走 graceful quit 通道：日志 flush/锁释放），15s 未决再强制进程树回收
+ * （taskkill /T /F）→ exit 等待（10s 兜底）→ 2s 静置（端口/句柄复用竞态防护）。
+ */
+export async function closeBareCarrier(carrier: Pick<BareCarrier, 'process'>): Promise<void> {
+  const proc = carrier.process
+  const pid = proc.pid
+  if (proc.exitCode === null && pid !== undefined && process.platform === 'win32') {
+    // 优雅面：WM_CLOSE（无 /F）——宿主 graceful quit（日志 flush + 单实例锁释放）
+    spawn('taskkill', ['/PID', String(pid)], { stdio: 'ignore' })
+    const gracefulDeadline = Date.now() + 15_000
+    while (proc.exitCode === null && Date.now() < gracefulDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+    }
+  }
+  if (proc.exitCode === null) {
+    killProcessTree(pid, () => proc.kill('SIGKILL'))
+  }
+  if (proc.exitCode === null) {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 10_000)
+      proc.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2_000))
 }
 
 // ─── 就绪链族 ───

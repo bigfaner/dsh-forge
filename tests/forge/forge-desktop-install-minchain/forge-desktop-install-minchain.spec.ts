@@ -29,11 +29,15 @@
 // 诊断落盘面 = {userData}/logs/app-YYYYMMDD.jsonl，host-wiring.ts）+ 降级不扩散。
 // CT-DISK-08 对照取证构造：solo 变体仓外 tmp 副本 patch 中 project dbFile 改回单装缺省路径。
 //
-// 案②启动面（bug 2f897b71 测试侧收敛）：desktop 宿主为单实例语义——第二实例 exit 0
-// 立即退出（003-desktop-spec run-output 实锚），electron.launch 第二实例启动面结构性
-// 不可达 → 取证改 carrier 形态：每运行世代 electron.launch 仅首启一次（carrier），
-// 页面取证经 CDP 附着既有实例（chromium.connectOverCDP）；装载世代切换经 restartCarrier
+// 案②启动面（bug 2f897b71 测试侧收敛 + fix-27 根修）：desktop 宿主为单实例语义——第二
+// 实例 exit 0 立即退出（003-desktop-spec run-output 实锚）。取证形态 = carrier 首启 +
+// CDP 附着复用（chromium.connectOverCDP——单实例通道）；装载世代切换经 restartCarrier
 // 冷启动复锚（锁随旧实例退出释放）——全运行世代任意时刻至多一个宿主实例。
+// fix-27 根修（038 轮定谳，a96e09a5 复发家族）：carrier 弃 playwright electron.launch
+// 注入形态（ELECTRON_RUN_AS_NODE 节点包装 → app 孙进程 harness 81ms SIGTERM 实锚），改
+// 裸启动配方单源（e2e/support/launch.ts launchBareCarrier：直接 spawn Electron 二进制 +
+// piped stdio + FORCE_COLOR=1——038 轮 piped-probe 实证绿）；页面取证经配方返回的 CDP
+// ws 端点附着。
 // 复跑前置：无外部宿主实例持锁（carrier 即唯一实例；外部实例在侧时 carrier 启动即
 // exit 0 退出 = fail-loud，不静默红）。
 //
@@ -47,12 +51,13 @@
 // 执行序纪律（AGENTS 1.8）：先廉价校验装载版本/代际（版本双校验 + M-3 代际探针）再做大取证。
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp；宿主单实例（carrier 形态，禁第二实例 launch）；
 // 共享树保护面零触碰；teardown 按 PID 定点回收。
+import { type ChildProcess } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { chromium, expect, test, type Browser, type ElectronApplication, type Page } from '@playwright/test'
+import { chromium, expect, test, type Browser, type Page } from '@playwright/test'
 import Database from 'better-sqlite3'
-import { closeApp, launchElectron } from '../../../e2e/support/launch.js'
+import { closeBareCarrier, launchBareCarrier, type BareCarrier } from '../../../e2e/support/launch.js'
 import { registerProject } from '../../../e2e/support/rpc.js'
 import { realCredentials, seedDshHome } from '../../../e2e/support/dogfood.js'
 import { COMPOSER_INPUT } from '../../../e2e/support/anchors.js'
@@ -159,24 +164,22 @@ function assertNoStaleRuntimeShadow(env: ReturnType<typeof comboEnv>): void {
   ).toEqual([])
 }
 
-// ── desktop carrier（案② bug 2f897b71——宿主单实例语义形态）────────────────────────
+// ── desktop carrier（案② bug 2f897b71 + fix-27 根修——裸启动配方单源）────────────────
 // 宿主实锚（003-desktop-spec run-output + ledger 2f897b71）：第二实例 exit 0 立即退出。
-// 取证形态 = carrier 首启（electron.launch 每运行世代一次）+ CDP 附着复用
-// （chromium.connectOverCDP——单实例通道）；electron.launch 第二实例用例退役（契约
-// behavior_baseline v3 修订留痕）。任意时刻至多一个宿主实例。
-// teardown（round8 配方）：closeApp 走 carrier 进程句柄（PID 定点——不按名通配）；
+// 取证形态 = carrier 首启（裸启动配方，launchBareCarrier 单源）+ CDP 附着复用
+// （chromium.connectOverCDP——单实例通道）。任意时刻至多一个宿主实例。
+// teardown（round8 配方）：closeBareCarrier 走 carrier 进程 PID 定点进程树回收（不按名通配）；
 // 异常残留由 runner 按 PID 回收（回收前 Get-Process 回显核对）。
 
-interface DesktopCarrier {
-  readonly app: ElectronApplication
+interface DesktopCarrier extends BareCarrier {
+  /** 宿主进程句柄（裸启动配方返回面） */
+  readonly process: ChildProcess
   /** 主窗口观察页（boot 就绪门 + client 取件收集——与 CDP 附着页同一 target） */
   readonly page: Page
   /** DevTools ws 端点（CDP 附着通道） */
   readonly wsEndpoint: string
   /** boot 期 client bundle 取件 URL 收集（CT-DISK-02/07/11 行为锚——首窗 page 侧全程监听） */
   readonly clientUrls: string[]
-  /** 宿主进程 stderr 收集（官方 reportSkippedBundles 直落面——forgeBundleAbsenceClues 判据源） */
-  readonly stderr: string
 }
 
 let carrier: DesktopCarrier | undefined
@@ -184,41 +187,21 @@ let carrier: DesktopCarrier | undefined
 async function startCarrier(env: ReturnType<typeof comboEnv>): Promise<DesktopCarrier> {
   if (env.desktopExe === undefined) throw new Error('FORGE_COMBO_DESKTOP_EXE 未置位（desktop 安装产物 exe 必填）')
   const clientUrls: string[] = []
-  let stderr = ''
-  const app = await launchElectron({
+  // 裸启动配方（fix-27 单源 e2e/support/launch.ts launchBareCarrier——038 轮 piped-probe
+  // 实证绿；fix-23 定谳 bug a96e09a5：DSH Desktop 0.13.2 packaged userData 恒
+  // %APPDATA%\dsh-desktop，不下发假隔离 env）。
+  // --remote-debugging-port=0：CDP 附着取证通道（chromium.connectOverCDP——单实例通道）。
+  const launched = await launchBareCarrier({
     executablePath: env.desktopExe,
-    // fix-23 定谳（bug a96e09a5）：DSH Desktop 0.13.2 packaged userData 恒 %APPDATA%\dsh-desktop
-    // （asar configureAppIdentity 硬编码，零 DSH_FORGE_USER_DATA/DSH_HOME 消费——隔离 env 无缝）。
-    // 不下发假隔离 env（曾误判「main 未 spawn harness」：读错 userData，真实 harness.log 恒在
-    // desktop 真实 userData/logs 下）；profile 读面实锚 = {userData}/harness/profiles/web。
+    args: ['--remote-debugging-port=0'],
   })
-  // 宿主进程 stderr 收集（官方 reportSkippedBundles 直落面——forgeBundleAbsenceClues 判据源）
-  // + DevTools ws 端点捕获（electron.launch 注入 --remote-debugging-port=0）
-  const proc = app.process()
-  proc.stderr?.on('data', (chunk: Buffer) => {
-    stderr += String(chunk)
-  })
-  const wsDeadline = Date.now() + 30_000
-  let wsEndpoint: string | undefined
-  while (Date.now() < wsDeadline) {
-    wsEndpoint = stderr.match(/DevTools listening on (ws:\/\/\S+)/)?.[1]
-    if (wsEndpoint !== undefined || proc.exitCode !== null) break
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
-  if (wsEndpoint === undefined) {
-    throw new Error(
-      `desktop carrier 启动失败：DevTools ws 端点未捕获（exit=${String(proc.exitCode)}）——宿主单实例语义下` +
-        `持锁实例在侧即第二实例 exit 0 立即退出（bug 2f897b71 实锚）；复跑前置 = 无外部宿主实例持锁。stderr=${stderr.slice(-600)}`,
-    )
-  }
-  const page = await app.firstWindow({ timeout: 120_000 })
   // client 半侧装载观察面：client bundle 经宿主 client 注入通道取件——响应 URL 收集（行为锚）
-  page.on('response', (res) => {
+  launched.page.on('response', (res) => {
     const url = res.url()
     if (url.includes('@dsh-forge/')) clientUrls.push(url)
   })
-  await waitBootReady(page)
-  return { app, page, wsEndpoint, clientUrls, stderr }
+  await waitBootReady(launched.page)
+  return { ...launched, clientUrls }
 }
 
 /** carrier 在场即复用、缺席即冷启动（worker 重启丢态自愈——案③配套；相位由调用侧保证） */
@@ -237,7 +220,7 @@ async function restartCarrier(env: ReturnType<typeof comboEnv>): Promise<Desktop
 
 async function shutdownCarrier(): Promise<void> {
   if (carrier === undefined) return
-  await closeApp(carrier.app)
+  await closeBareCarrier(carrier)
   carrier = undefined
 }
 
@@ -272,7 +255,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
 
   test.afterAll(async () => {
     // 收尾（projection 隔离——只复位本编排安装条目，不删真实 userData 任何内容）：
-    // carrier 先关释放锁（closeApp = carrier 进程句柄 PID 定点回收），再 best-effort
+    // carrier 先关释放锁（closeBareCarrier = carrier 进程 PID 定点进程树回收），再 best-effort
     // 卸 forge 复位（五件成员条目保留——各自独立安装物，非本编排 forge 残留）。
     await shutdownCarrier()
     await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', FORGE_PKG])
@@ -600,7 +583,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
       expect(launched.clientUrls.some((u) => u.includes(bare)), `残留件 client 取件 ${bare}`).toBe(true)
     }
     // State（反锚）：零真缺席装配（stderr 判据——forgeBundleAbsenceClues fix-8 收窄形态）
-    expect(forgeBundleAbsenceClues(launched.stderr), `零真缺席装配 stderr=${launched.stderr.slice(-600)}`).toEqual([])
+    expect(forgeBundleAbsenceClues(launched.stderrTail(2000)), `零真缺席装配 stderr=${launched.stderrTail(600)}`).toEqual([])
     // State（锚点）：forge-bundle-absent 零真缺席发射（任一残留件缺席告警即红）
     expect(desktopAbsenceEvents(realUd()), 'forge-bundle-absent 零发射（O3 静默缺席反义面：缺席且零诊断才双红）').toEqual([])
   })
