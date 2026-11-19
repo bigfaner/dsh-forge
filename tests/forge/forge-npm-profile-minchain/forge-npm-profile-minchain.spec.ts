@@ -29,6 +29,7 @@ import {
   defaultProjectDb,
   defaultTaskLoopDb,
   findDispatchLogs,
+  forgeInstallSource,
   generationDriftViolations,
   ensureRegistryProfile,
   installedBundles,
