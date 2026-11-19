@@ -14,6 +14,7 @@ import { build } from "esbuild";
 import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import { auditDist } from "./self-containment.mjs";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -100,6 +101,34 @@ const pruneClient = (dir) => {
   }
 };
 pruneClient(resolve(pkgDir, "dist/client"));
+
+// 产物形状守卫（bug cdd5b0f8 判例——占位产物无 apply → 宿主 materialize 后
+// `invalid plugin … received object` 装载失败）：client.js 必须为 cordis 插件形状
+// （module.exports 本体或其 default 为含 apply 方法的对象）。vm 沙箱复放官方
+// __ModuleLoader__ 装载序列截获 factory 返回值——占位/空对象产物构建期即败，禁离手。
+const clientJsPath = resolve(pkgDir, "dist/client.js");
+const clientJs = readFileSync(clientJsPath, "utf8");
+let materialized;
+vm.runInNewContext(
+  clientJs,
+  {
+    window: {
+      __ModuleLoader__: {
+        load: ({ factory }) => {
+          materialized = factory(() => {
+            throw new Error(`bundle-client: bundle 内 require 外置模块（守卫沙箱不解析）`);
+          });
+        },
+      },
+    },
+  },
+  { timeout: 2000 },
+);
+const pluginFace = materialized?.default ?? materialized;
+if (typeof pluginFace?.apply !== "function") {
+  console.error("[bundle-client] 产物形状守卫失败：client bundle 无 apply 装配面（占位产物禁离手——bug cdd5b0f8 判例）");
+  process.exit(1);
+}
 
 // 离手门（门禁序铁律②④）：bundle 末尾自跑自含性断言 + exports 闭包完整性断言——非 0
 // 即败。css 内联断言——ui 半存在 css 源时 client.js 必含样式注入面、独立 css 副产物必须
