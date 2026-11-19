@@ -265,7 +265,7 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词�
       const search = rt.registeredTools.find((t) => t.name === 'knowledge_search')
       // worktree cwd → 解析出 p-wt 注入服务（空知识库零命中，不抛 not bound）
       const result = (await search?.execute({}, { agent: { session: { id: 's', header: { cwd: worktree } } } })) as unknown
-      expect(result).toBeDefined()
+      expect(result).toMatchObject({ hint: expect.any(String), hits: expect.any(Array) })
       expect(JSON.stringify(result)).not.toContain('not bound')
       // 主检出外非 worktree 路径失败口径不变
       await expect(
