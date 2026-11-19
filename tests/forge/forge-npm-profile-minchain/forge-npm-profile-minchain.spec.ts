@@ -11,7 +11,7 @@
 // 最小链交互段（CT-NPM-04 步 5/6）= 真机 agent 会话驱动——收口执行体完成交互后，spec 经
 // FORGE_COMBO_NPM_PROJECT_KEY 指认已注册项目键，机械断言共库双前缀分表与 config 落点。
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
@@ -20,6 +20,7 @@ import { forgeBundleAbsenceClues } from '../../../e2e/support/bundle-absence.js'
 import {
   BARE_BUNDLES,
   FORGE_PKG,
+  bundleResolutionGaps,
   clientBundleFiles,
   comboDbPath,
   comboEnv,
@@ -33,6 +34,7 @@ import {
   installedPkgDir,
   profileNodeModules,
   runDsh,
+  sanitizedCliEnv,
   sqliteTables,
 } from '../../../e2e/support/forge-combo.js'
 
@@ -50,7 +52,7 @@ function killTree(pid: number | undefined, child: ReturnType<typeof spawn>): voi
 /** CLI 宿主冷启动（run-once 观察窗：alive 窗口 + stderr 收集 → 进程树回收） */
 async function bootWindow(dshBin: string, profile: string, dshHome: string, args: readonly string[], windowMs: number): Promise<{ alive: boolean; stderr: string }> {
   const child = spawn(dshBin, ['--profile', profile, ...args], {
-    env: { ...process.env, DSH_HOME: dshHome },
+    env: sanitizedCliEnv(dshHome),
     cwd: mkdtempSync(join(tmpdir(), 'dsh-forge-combo-cli-')),
     stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true,
@@ -173,7 +175,7 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     const { allocatePort } = await import('../../../e2e/support/ports.js')
     const port = allocatePort()
     const child = spawn(env.dshBin, ['--profile', calProfile, '--port', String(port)], {
-      env: { ...process.env, DSH_HOME: env.dshHome },
+      env: sanitizedCliEnv(env.dshHome),
       cwd: mkdtempSync(join(tmpdir(), 'dsh-forge-combo-webloop-')),
       stdio: 'ignore',
       windowsHide: true,
@@ -196,6 +198,43 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     } finally {
       killTree(child.pid, child)
     }
+  })
+
+  test('CT-NPM-05 #B3（server 侧干跑）：config 缺失变体（仓外副本 link:）——五件装载 + patch config 缺席 + 回落前提', async () => {
+    // 安装物变体 = scripts/build-forge-copy-variant.mjs --strip-config 出树的仓外副本
+    // （bug 63a9a2b8 修复面：link: add 不装 link 目标依赖闭包——变体必须物化 Node
+    // 解析闭包后方可安装；构造器保证，本用例先行为锚复核再取证）。
+    // DB 行级锚（双单装库新行 + 共库零新行）归真机收口轮交互段补做（SMOKE-LEDGER §8）。
+    const copyForgeDir = process.env.FORGE_COMBO_COPY_FORGE_DIR
+    test.skip(copyForgeDir === undefined || copyForgeDir === '', 'config 缺失变体（仓外副本）未构造——scripts/build-forge-copy-variant.mjs --strip-config 出树后置 FORGE_COMBO_COPY_FORGE_DIR——SMOKE-LEDGER §8')
+    const copyProfile = 'forge-copy'
+
+    // 前置行为锚（bug 63a9a2b8）：副本五件 entry 自解析基冷启动可达（闭包断裂即停取证）
+    expect(bundleResolutionGaps([copyForgeDir, copyForgeDir.replace(/[\\/]forge$/, '')]), `副本解析闭包在场 copyForgeDir=${copyForgeDir}`).toEqual([])
+
+    await runDsh(env.dshBin, ['plugin', '--profile', copyProfile, 'remove', FORGE_PKG], env.dshHome)
+    const add = await runDsh(env.dshBin, ['plugin', '--profile', copyProfile, 'add', `link:${copyForgeDir}`], env.dshHome)
+    expect(add.code, `变体 add 成功（exit=${String(add.code)}）stderr=${add.stderr.slice(-400)}`).toBe(0)
+    const instForge = join(profileNodeModules(env.dshHome, copyProfile), '@dsh-forge', 'forge')
+
+    // State：patch 五条插行在场；config 段缺席判据锚变体安装物本体（strip 后安装物
+    // patch 文件零 config 行——机械锚）。dump-config 仅作插行在场复核：harness 相邻
+    // 环境（installation-anchor forge 遮蔽——dsh-app-boot resolveBundleDir 安装锚先行）
+    // 可能向 dump 注入携带 config 的装配行，不作为 config 缺席判据面。
+    const dump = await runDsh(env.dshBin, ['--profile', copyProfile, '--dump-config'], env.dshHome)
+    expect(dump.code, `dump-config 成功（exit=${String(dump.code)}）stderr=${dump.stderr.slice(-400)}`).toBe(0)
+    expect(dump.stdout, 'dump-config 含 forge patch 段标记').toContain('# == @dsh-forge/forge')
+    for (const bare of BARE_BUNDLES) {
+      const bareId = bare.slice('@dsh-forge/'.length)
+      expect(dump.stdout, `插行在场 ${bare}`).toMatch(new RegExp(`^- id: ${bareId}$\\r?\\n^  name: '${bare}'$`, 'm'))
+    }
+    const instPatch = readFileSync(join(instForge, 'cordis.patch.yml'), 'utf8')
+    expect(instPatch.includes('config:'), `变体安装物 patch 零 config 段（strip 机械锚）realpath=${realpathSync(instForge)}`).toBe(false)
+
+    // 冷启动装载：五件 bundle 全解析（回落可生效前提）；零真缺席装配
+    const win = await bootWindow(env.dshBin, copyProfile, env.dshHome, [], 20_000)
+    expect(win.alive, '变体宿主冷启动观察窗内存活').toBe(true)
+    expect(forgeBundleAbsenceClues(win.stderr), `零真缺席装配 stderr=${win.stderr.slice(-600)}`).toEqual([])
   })
 
   test('CT-NPM-04 #step-5/#step-6 O1/O2：共库 config 逐项生效——双前缀分表 + 无单装缺省分叉（真机交互后取证）', async () => {

@@ -96,9 +96,22 @@ export interface CliResult {
   readonly stderr: string
 }
 
+/**
+ * CLI 子进程环境消毒（fix-17）：剥离宿主会话可能携带的 dsh profile 定向覆盖变量
+ * （DSH_PROFILE/DSH_PROFILE_DIR——优先级高于 --profile/DSH_HOME，泄漏即子进程全部
+ * 命令读到宿主 profile 而非隔离 home，取证面整轮失真），隔离 home 单点由 DSH_HOME
+ * + --profile 显式承载。
+ */
+export function sanitizedCliEnv(dshHome: string, extraEnv: Record<string, string> = {}): Record<string, string> {
+  const env = { ...process.env, DSH_HOME: dshHome, ...extraEnv } as Record<string, string>
+  delete env.DSH_PROFILE
+  delete env.DSH_PROFILE_DIR
+  return env
+}
+
 /** run-once CLI 执行（DSH_HOME 定向隔离 home；extraEnv 补充 desktop 通道 userData 面等；非零退出码捕获不抛——失败面断言用） */
 export async function runDsh(bin: string, args: readonly string[], dshHome: string, extraEnv: Record<string, string> = {}): Promise<CliResult> {
-  const env = { ...process.env, DSH_HOME: dshHome, ...extraEnv } as Record<string, string>
+  const env = sanitizedCliEnv(dshHome, extraEnv)
   try {
     const { stdout, stderr } = await pexec(bin, [...args], { env, encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024 })
     return { code: 0, stdout, stderr }
@@ -273,6 +286,22 @@ function generationResolutionRoots(nodeModules: string): readonly string[] {
   const nested = join(nodeModules, '@dsh-forge', 'forge', 'node_modules')
   if (existsSync(nested)) roots.push(nested)
   return roots
+}
+
+/**
+ * 仓外副本五件 entry 冷启动解析缺口（bug 63a9a2b8 行为锚——fix-17）：
+ * npm 通道 link: add 不安装 link 目标依赖闭包，五件成员必须自副本解析基经 Node
+ * node_modules 上溯解析可达。判据 = 装载/解析行为面（resolveInstalledPkgDir 同径
+ * 双形态：CJS require.resolve + ESM exports["."] 声明物存在性），不锁物化布局——
+ * 解析基由调用侧给（典型 = [副本 forge 目录, 副本根]；物化在 forge 自身
+ * node_modules 或根级 hoist 均命中）。全基解析缺席逐件回报，调用侧 expect([]) fail-loud。
+ */
+export function bundleResolutionGaps(resolutionRoots: readonly string[], pkgs: readonly string[] = BARE_BUNDLES): readonly string[] {
+  const gaps: string[] = []
+  for (const pkg of pkgs) {
+    if (resolveInstalledPkgDir(resolutionRoots, pkg) === undefined) gaps.push(`${pkg}: 副本解析基冷启动解析缺席（解析基 ${resolutionRoots.join(' | ')} 均不可达——解析闭包断裂）`)
+  }
+  return gaps
 }
 
 /**
