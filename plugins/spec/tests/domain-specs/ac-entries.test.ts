@@ -25,7 +25,7 @@ describe("parseAcEntries（结构校验单点——entities.md §2 五规则）"
   });
 
   it("② 逐项对象拒：条目非对象 → ERR_SPEC_AC_INVALID", () => {
-    expect(() => parseAcEntries(["str"]).length).toBeDefined();
+    expect(() => parseAcEntries(["str"]).length).not.toBeUndefined();
     try {
       parseAcEntries(["str"]);
       throw new Error("should throw");

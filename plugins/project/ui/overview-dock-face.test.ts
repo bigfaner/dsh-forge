@@ -122,7 +122,7 @@ describe('registerOverviewDockFace（裁决 1——project 概览拥有者两段
     expect(diag.registered).toContain(`${SIDEBAR_RIGHT_PANE_TAB_SLOT}:dswf-overview`)
     const body = slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY)
     expect(body?.priority).toBe(0)
-    expect(body?.component).toBeDefined()
+    expect(body?.component).not.toBeUndefined()
   })
 
   it('children 声明表随行（knowledge-dir + AC 进度两子槽宿主单点声明）', () => {
@@ -176,7 +176,7 @@ describe('registerOverviewDockFace（裁决 1——project 概览拥有者两段
     const ctx = fakeCtx()
     registerOverviewDockFace(ctx, slots)
     const bodyEffect = ctx.effects.find(([name]) => name.includes('dock tab body'))
-    expect(bodyEffect).toBeDefined()
+    expect(bodyEffect).not.toBeUndefined()
     bodyEffect?.[1]()?.()
     expect(slots.occupants.filter((e) => e.key === OVERVIEW_KEY)).toEqual([])
   })

@@ -517,7 +517,7 @@ describe("spec_stats（诊断——零新落库面）", () => {
       expect(h.writeCounts()).toBe(before);
       // diag 桩 payload 逐字段断言（onDiag 注入桩——SpecVerbDeps.onDiag 替身位置）
       const diagLine = h.diag.find((d) => d.event === "spec-milestone");
-      expect(diagLine).toBeDefined();
+      expect(diagLine).not.toBeUndefined();
       expect(diagLine!.level).toBe("info");
       expect(diagLine!.projectId).toBe(expectedKey);
       expect(diagLine!.message).toContain(`project=${expectedKey}`);

@@ -27,7 +27,7 @@ describe("双记忆缝同目录性（prepare deriveTaskStoreDir × containerDirO
     for (const ws of WS_CASES) {
       const tasksHome = mkdtempSync(join(tmpdir(), "task-loop-seam-th-"));
       const services = assembleTaskLoopServices(config(tasksHome))!;
-      expect(services.containerDirOf).toBeDefined();
+      expect(services.containerDirOf).not.toBeUndefined();
       const key = services.db.projectKeyOf(ws);
       expect(key).toBe(deriveDirName(ws)); // projectKey 单源 = lib-path deriveDirName
       expect(services.containerDirOf!(key)).toBe(deriveTaskStoreDir(tasksHome, ws));
@@ -64,7 +64,7 @@ describe("双记忆缝同目录性（prepare deriveTaskStoreDir × containerDirO
     const key = services.db.projectKeyOf(ws);
     const expected = services.containerDirOf!(key);
     const recorded = services.forgeEvents!.dirOf("s-seam");
-    expect(recorded, `记忆未落：dirOf("s-seam") 缺席（执行结局=${outcome}）`).toBeDefined();
+    expect(recorded, `记忆未落：dirOf("s-seam") 缺席（执行结局=${outcome}）`).not.toBeUndefined();
     expect(recorded, `目录不等：dirOf=${recorded} ≠ containerDirOf=${expected}`).toBe(expected);
     services.dispose();
   });

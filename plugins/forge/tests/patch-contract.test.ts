@@ -75,7 +75,7 @@ describe("forge patch 插行清单契约", () => {
     );
     for (const [id, name] of EXPECTED_ROWS) {
       const row = rows.find((r) => r.id === id);
-      expect(row, `缺插行：${id}`).toBeDefined();
+      expect(row, `缺插行：${id}`).not.toBeUndefined();
       expect(row!.name, `${id} 插行包名错`).toBe(name);
     }
     // 裸名行形态：name 为包名（loader 组合行识别面）——非路径、非别名。

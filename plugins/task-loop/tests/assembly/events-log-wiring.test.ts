@@ -30,8 +30,8 @@ describe("tasksHome 注入 → forge 事件日志链装配（bug a93c1277 RED �
   it("assembly.forgeEvents 在场；sink.remember + emit → logs/_pool.jsonl 落 {tasksHome}/{projectKey}/logs", async () => {
     const tasksHome = tempRoot();
     const services = assembleTaskLoopServices(config({ tasksHome }));
-    expect(services).toBeDefined();
-    expect(services!.forgeEvents).toBeDefined();
+    expect(services).not.toBeUndefined();
+    expect(services!.forgeEvents).not.toBeUndefined();
     const ws = "Z:\\project\\demo";
     const containerDir = join(tasksHome, deriveDirName(ws));
     services!.forgeEvents!.remember("s-1", containerDir);
@@ -45,7 +45,7 @@ describe("tasksHome 注入 → forge 事件日志链装配（bug a93c1277 RED �
 
   it("tasksHome 缺席（单装缺省形态）→ forgeEvents 零装配（行为零变化——AC4 回归锚）", () => {
     const services = assembleTaskLoopServices(config());
-    expect(services).toBeDefined();
+    expect(services).not.toBeUndefined();
     expect(services!.forgeEvents).toBeUndefined();
     expect(services!.containerDirOf).toBeUndefined();
     services!.dispose();

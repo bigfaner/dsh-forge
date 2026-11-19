@@ -65,7 +65,7 @@ describe("roadmap CRUD", () => {
     const rm = makeRoadmap(h.deps, ["r1"]);
     expect(rm.roadmapStatus).toBe("pending");
     expect(rm.acJson).toEqual([{ id: "r1", criterion: "AC r1" }]);
-    expect(getRoadmapBySlug(h.deps, { projectKey: "demo", slug: rm.slug })).toBeDefined();
+    expect(getRoadmapBySlug(h.deps, { projectKey: "demo", slug: rm.slug })).not.toBeUndefined();
     try {
       createRoadmap(h.deps, { projectKey: "demo", slug: rm.slug, title: "dup" });
       throw new Error("should throw");

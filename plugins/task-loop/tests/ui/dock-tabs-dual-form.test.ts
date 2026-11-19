@@ -107,7 +107,7 @@ function fakeCtx(): {
 /** 取双形态切换级联 disposer（ctx.effect 挂载段——按 name 锚取，非按序末位） */
 function dualFormDisposerOf(ctx: ReturnType<typeof fakeCtx>): (() => void) | undefined {
   const hit = ctx.effects.find(([name]) => name.includes('双形态注册切换'))
-  expect(hit, 'ctx.effect 双形态注册切换挂载段缺席').toBeDefined()
+  expect(hit, 'ctx.effect 双形态注册切换挂载段缺席').not.toBeUndefined()
   return hit?.[1]()
 }
 
@@ -124,7 +124,7 @@ describe('概览 tab 双形态注册切换（裁决 1）', () => {
     const ownBody = slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY && e.priority !== PRIORITY_PROJECT_OVERVIEW_OWNER)
     expect(ownBody).toBeUndefined()
     const ac = slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT && e.key === AC_ENTRY_KEY)
-    expect(ac).toBeDefined()
+    expect(ac).not.toBeUndefined()
     expect(slots.dispatch(SIDEBAR_RIGHT_PANE_TAB_SLOT, OVERVIEW_KEY)).toBe('project-body')
     expect(diag.registered).toContain(`${DSWF_OVERVIEW_AC_PROGRESS_SLOT}:${AC_ENTRY_KEY}`)
   })
@@ -137,7 +137,7 @@ describe('概览 tab 双形态注册切换（裁决 1）', () => {
     const body = slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY)
     expect(body?.priority).toBe(PRIORITY_TASK_LOOP_FALLBACK)
     expect(slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT)).toBeUndefined()
-    expect(slots.dispatch(SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT, OVERVIEW_KEY)).toBeDefined()
+    expect(slots.dispatch(SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT, OVERVIEW_KEY)).not.toBeUndefined()
   })
 
   it('集成形态零页型注册（project 拥有者——官方 registry 同 id 撞车零触发）', () => {
@@ -158,7 +158,7 @@ describe('概览 tab 双形态注册切换（裁决 1）', () => {
     // 页型随切换级联让位（官方 registry 同 id 二次注册抛错——project 拥有者重试落座前提）
     expect(ctx.disposedTypes, '切集成时单装页型已 dispose').toContain(OVERVIEW_KEY)
     expect(slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY && e.priority !== PRIORITY_PROJECT_OVERVIEW_OWNER)).toBeUndefined()
-    expect(slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT && e.key === AC_ENTRY_KEY)).toBeDefined()
+    expect(slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT && e.key === AC_ENTRY_KEY)).not.toBeUndefined()
     expect(slots.dispatch(SIDEBAR_RIGHT_PANE_TAB_SLOT, OVERVIEW_KEY)).toBe('project-body')
   })
 

@@ -159,7 +159,7 @@ describe('assembleRelease（发布树结构 + solo 剥离 + manifest）', () => 
 
   it('zip 产出：非空产物落盘', () => {
     const { zipPath } = assembleRelease({ repoRoot: root, outDir, zip: true })
-    expect(zipPath).toBeDefined()
+    expect(zipPath).not.toBeUndefined()
     expect(statSync(zipPath).size).toBeGreaterThan(0)
   })
 })
