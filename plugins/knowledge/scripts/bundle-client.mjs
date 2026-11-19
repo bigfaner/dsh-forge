@@ -40,6 +40,35 @@ const PLATFORM_MODULES = [
   "@deepseek-ai/dsh-client-ui-primitives",
 ];
 
+// css 内联注入插件（bug a3a9c2f1；project disc-1 同族镜像）：*.css import → JS 模块，
+// 模块体内注入 <style data-plugin="@dsh-forge/knowledge" data-plugin-css="<basename>">
+// （官方 claimStyles 预打标归属面——materialization 时官方机械清点、卸载时
+// removeOwnedStyles 回收）。esbuild 默认把 css 解析为独立副产物 dist/client.css，
+// 而运行期装载面只有 dist/client.js 单一入口 → desktop 通道 UI 全裸样式。
+const cssInjectPlugin = {
+  name: "css-inline-inject",
+  setup(build) {
+    build.onLoad({ filter: /\.css$/ }, (args) => {
+      const css = readFileSync(args.path, "utf8");
+      const key = args.path.replaceAll("\\", "/");
+      return {
+        contents: [
+          `const __cssKey__ = ${JSON.stringify(key)};`,
+          `if (typeof document !== "undefined" && !document.querySelector('style[data-plugin-css="' + __cssKey__ + '"]')) {`,
+          `  const __el__ = document.createElement("style");`,
+          `  __el__.setAttribute("data-plugin", ${JSON.stringify(PLUGIN_ID)});`,
+          `  __el__.setAttribute("data-plugin-css", __cssKey__);`,
+          `  __el__.textContent = ${JSON.stringify(css)};`,
+          `  document.head.appendChild(__el__);`,
+          `}`,
+          "module.exports = {};",
+        ].join("\n"),
+        loader: "js",
+      };
+    });
+  },
+};
+
 await build({
   entryPoints: [clientSrcEntry],
   outfile: resolve(pkgDir, "dist/client.js"),
@@ -52,6 +81,7 @@ await build({
   // fix-13）；显式 automatic + jsx-runtime 外置（PLATFORM_MODULES 种子表单例）。
   jsx: "automatic",
   external: PLATFORM_MODULES,
+  plugins: [cssInjectPlugin],
   banner: {
     js: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PLUGIN_ID)}, factory: (require) => {\nvar module = { exports: {} }; var exports = module.exports;\n/* @dsh-forge-generation:${PLUGIN_ID}@${pkg.version}*/`,
   },
@@ -69,12 +99,20 @@ const pruneClient = (dir) => {
   for (const name of readdirSync(dir, { withFileTypes: true })) {
     const p = resolve(dir, name.name);
     if (name.isDirectory()) pruneClient(p);
-    else if (name.name.endsWith(".js") || name.name.endsWith(".js.map")) rmSync(p);
+    else if (name.name.endsWith(".js") || name.name.endsWith(".css") || name.name.endsWith(".js.map")) rmSync(p);
   }
 };
 pruneClient(resolve(pkgDir, "dist/client"));
 
 // 离手门：bundle 末尾自跑自含性断言 + exports 闭包完整性断言——非 0 即败。
+// bug a3a9c2f1：css 内联断言——client.js 必含样式注入面、独立 css 副产物必须退役（含历史残留清除）。
+const clientJs = readFileSync(resolve(pkgDir, "dist/client.js"), "utf8");
+if (!clientJs.includes('createElement("style")') || !clientJs.includes("data-plugin")) {
+  console.error("[bundle-client] 离手门失败：client bundle 缺样式注入面（css 内联未生效）");
+  process.exit(1);
+}
+rmSync(resolve(pkgDir, "dist/client.css"), { force: true });
+
 const violations = auditDist(pkgDir, { requireDist: true });
 if (violations.length > 0) {
   console.error(`[bundle-client] 离手门失败：dist 自含审计 ${violations.length} 处违规`);
