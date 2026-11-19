@@ -64,7 +64,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'lib/status-machine',
         // lib/ui 公共包（概览槽键族单源——tsconfig refs 实际在位，pin 随合并补记）
         'lib/ui',
-        'lib/util',,
+        'lib/util',
         'packages/contracts',
         'packages/core',
         // plugin-project：project 插件包（1.3 建位——tsc -b 全拓扑入口补记）
