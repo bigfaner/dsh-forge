@@ -55,13 +55,12 @@ import {
   desktopPkgEntryDir,
   desktopProfileDir,
   desktopProfileNodeModules,
-  desktopRuntimeNodeModules,
+  desktopInstallShadowViolations,
   findDispatchLogs,
   generationDriftViolations,
   insertEntryPattern,
   runDsh,
   sqliteTables,
-  staleRuntimeShadowCopies,
   versionPairs,
 } from '../../../e2e/support/forge-combo.js'
 
@@ -117,14 +116,16 @@ function cheapGenerationGate(nodeModules: string): void {
   expect(generationDriftViolations(nodeModules), '五件裸包代际漂移探针全绿（manifest + 服务面标记双校验）').toEqual([])
 }
 
-/** d36710e5 廉价闸：安装宿主 runtime 陈旧副本遮蔽核销——solo add 前逐件核销（539b7413 复发形态） */
+/** d36710e5/21f0e9a7 廉价闸：目标宿主安装树陈旧副本遮蔽核销——solo add 前逐件核销（539b7413 复发形态）。
+ * 锚 = 目标宿主安装产物 exe（FORGE_COMBO_DESKTOP_EXE）派生的安装树两候选层；禁读通道 CLI 上溯树
+ * （harness 本检出 dev 依赖树与 desktop 通道零关——错树锚定误报根因 21f0e9a7）。 */
 function assertNoStaleRuntimeShadow(env: ReturnType<typeof comboEnv>): void {
-  const runtimeNodeModules = desktopRuntimeNodeModules(env.desktopDshBin)
-  const shadows = staleRuntimeShadowCopies(runtimeNodeModules)
+  if (env.desktopExe === undefined) throw new Error('FORGE_COMBO_DESKTOP_EXE 未置位（遮蔽闸锚 = 目标宿主安装产物 exe，必填）')
+  const violations = desktopInstallShadowViolations(env.desktopExe)
   expect(
-    shadows,
-    `安装宿主 runtime 零陈旧副本遮蔽（无 dsh 字段捆绑副本 = 陈旧标记，遮蔽在场即 fail-loud 不静默误判五件层清单）` +
-      `runtime=${runtimeNodeModules} ${JSON.stringify(shadows)}`,
+    violations,
+    `目标宿主安装树零陈旧副本遮蔽（无 dsh 字段捆绑副本 = 陈旧标记，遮蔽在场即 fail-loud 不静默误判五件层清单）` +
+      `installRoot=${env.desktopExe} ${JSON.stringify(violations)}`,
   ).toEqual([])
 }
 

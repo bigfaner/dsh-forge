@@ -389,23 +389,47 @@ export function staleRuntimeShadowCopies(
 }
 
 /**
- * desktop 安装宿主 runtime node_modules 发现面（bug d36710e5 遮蔽闸前置）：自通道
- * CLI bin 上溯寻找首个含 @dsh-forge scope 的 node_modules——安装包 runtime 捆绑副本
- * 所在层。缺席即 throw fail-loud（通道 CLI 配置错/结构漂移不静默）。
+ * desktop 目标宿主安装树发现面（bug 21f0e9a7/d36710e5 遮蔽闸错树锚定修正）：
+ * 自目标宿主安装产物 exe（FORGE_COMBO_DESKTOP_EXE）单源派生安装根与其下两处
+ * 陈旧副本候选层——①resources/runtime/node_modules（runtime 捆绑层）、
+ * ②resources/app.asar.unpacked/node_modules（asar 解包捆绑层）。
+ * 锚定纪律：禁自通道 CLI bin 上溯发现——CLI bin 可解析至 harness 本检出 dev 依赖树
+ * （与 desktop 通道零关——0.30.6 误报根因即错读该树）；候选层缺席 = 目标宿主
+ * 零捆绑副本实态，空段贡献（不 throw）。
  */
-export function desktopRuntimeNodeModules(desktopDshBin: string): string {
-  let dir = dirname(resolve(desktopDshBin))
-  for (let depth = 0; depth < 7; depth++) {
-    const candidate = join(dir, 'node_modules')
-    if (existsSync(join(candidate, '@dsh-forge'))) return candidate
-    const parent = dirname(dir)
-    if (parent === dir) break
-    dir = parent
+export interface DesktopInstallShadowLayers {
+  readonly installRoot: string
+  readonly runtimeNodeModules?: string
+  readonly asarUnpackedNodeModules?: string
+}
+
+export function desktopInstallShadowLayers(desktopExe: string): DesktopInstallShadowLayers {
+  const installRoot = dirname(resolve(desktopExe))
+  const runtimeNodeModules = join(installRoot, 'resources', 'runtime', 'node_modules')
+  const asarUnpackedNodeModules = join(installRoot, 'resources', 'app.asar.unpacked', 'node_modules')
+  return {
+    installRoot,
+    ...(existsSync(join(runtimeNodeModules, '@dsh-forge')) ? { runtimeNodeModules } : {}),
+    ...(existsSync(join(asarUnpackedNodeModules, '@dsh-forge')) ? { asarUnpackedNodeModules } : {}),
   }
-  throw new Error(
-    `desktop runtime node_modules 发现失败：自 CLI bin 上溯七层未见含 @dsh-forge scope 的 node_modules` +
-      `（bin=${desktopDshBin}——FORGE_COMBO_DESKTOP_DSH 指认桌面通道 CLI；bug d36710e5 遮蔽闸前置，缺席不静默）`,
-  )
+}
+
+/**
+ * d36710e5 遮蔽闸（目标宿主安装树锚）：两候选层逐层 staleRuntimeShadowCopies，
+ * 在场层核销陈旧副本（无 dsh 字段 = 陈旧标记）、缺席层零贡献——目标宿主
+ * resources/runtime 目录不存在 + app.asar.unpacked 无 @dsh-forge 捆绑副本的实态下
+ * 恒零违例（GREEN）。
+ */
+export function desktopInstallShadowViolations(
+  desktopExe: string,
+  opts: GenerationDriftOptions = {},
+): readonly RuntimeShadowViolation[] {
+  const layers = desktopInstallShadowLayers(desktopExe)
+  const violations: RuntimeShadowViolation[] = []
+  for (const nodeModules of [layers.runtimeNodeModules, layers.asarUnpackedNodeModules]) {
+    if (nodeModules !== undefined) violations.push(...staleRuntimeShadowCopies(nodeModules, opts))
+  }
+  return violations
 }
 
 

@@ -1,15 +1,23 @@
-// bug d36710e5 陈旧副本遮蔽探针自证——staleRuntimeShadowCopies + desktopRuntimeNodeModules
-// （e2e/support/forge-combo.ts）正反双向验证：
-// - 正向：runtime 无捆绑副本 / 副本带 dsh 字段（现行代）→ 零违例；
+// bug d36710e5/21f0e9a7 陈旧副本遮蔽探针自证——staleRuntimeShadowCopies +
+// desktopInstallShadowLayers/desktopInstallShadowViolations（e2e/support/forge-combo.ts）
+// 正反双向验证：
+// - 正向：安装树候选层缺席（resources/runtime 目录不存在 + app.asar.unpacked 无
+//   @dsh-forge——目标宿主实态形状）/ 副本带 dsh 字段（现行代）→ 零违例；
 // - 反向（539b7413 复发形态）：knowledge 副本 0.30.6 无 dsh 字段 → 违例留痕
 //   （pkg + version + 路径，调用侧 fail-loud 不静默误判五件层清单）；
-// - runtime 发现面：自 CLI bin 上溯命中含 @dsh-forge scope 的 node_modules；缺席 fail-loud。
-// 环境封闭：runtime 侧/源侧均落临时目录夹具（sourcePluginsRoot 注入），零真机依赖。
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+// - 锚定纪律：发现面 = 目标宿主安装产物 exe 派生的安装树两候选层（runtime 捆绑层 +
+//   app.asar.unpacked 捆绑层），缺席层零贡献——禁通道 CLI bin 上溯（harness 本检出
+//   dev 依赖树与 desktop 通道零关，错树锚定 = 0.30.6 误报根因）。
+// 环境封闭：安装树/源侧均落临时目录夹具（sourcePluginsRoot 注入），零真机依赖、零盘符字面。
+import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { desktopRuntimeNodeModules, staleRuntimeShadowCopies } from '../../../e2e/support/forge-combo.js'
+import {
+  desktopInstallShadowLayers,
+  desktopInstallShadowViolations,
+  staleRuntimeShadowCopies,
+} from '../../../e2e/support/forge-combo.js'
 
 const SOURCE_VERSION = '0.34.1'
 
@@ -84,20 +92,50 @@ describe('staleRuntimeShadowCopies（d36710e5 陈旧副本遮蔽探针）', () =
   })
 })
 
-describe('desktopRuntimeNodeModules（d36710e5 runtime 发现面）', () => {
-  it('正向：自 CLI bin 上溯命中含 @dsh-forge scope 的 node_modules', () => {
-    const nm = makeRuntime([{ name: 'knowledge', version: '0.30.6', withDsh: false }])
-    const resources = join(nm, '..', 'resources')
-    mkdirSync(resources, { recursive: true })
-    const bin = join(resources, 'dsh-cli.exe')
-    writeFileSync(bin, '')
-    expect(desktopRuntimeNodeModules(bin)).toBe(nm)
+describe('desktopInstallShadowLayers / desktopInstallShadowViolations（21f0e9a7 安装树锚）', () => {
+  /** 假安装树：<root>/DSH Desktop.exe + resources/——返回 exe 路径 */
+  function makeInstallTree(): string {
+    const root = mkdtempSync(join(tmpdir(), 'shadow-install-'))
+    mkdirSync(join(root, 'resources'), { recursive: true })
+    const exe = join(root, 'DSH Desktop.exe')
+    writeFileSync(exe, '')
+    return exe
+  }
+
+  it('正向：候选层全缺席（目标宿主实态形状——resources/runtime 目录不存在 + app.asar.unpacked 无 @dsh-forge）→ 两层零贡献 + 零违例', () => {
+    const exe = makeInstallTree()
+    const layers = desktopInstallShadowLayers(exe)
+    expect(layers.runtimeNodeModules).toBeUndefined()
+    expect(layers.asarUnpackedNodeModules).toBeUndefined()
+    expect(desktopInstallShadowViolations(exe, { sourcePluginsRoot: makeSourceRoot() })).toEqual([])
   })
 
-  it('反向：上溯七层无 @dsh-forge scope → fail-loud throw（不静默）', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'shadow-noscope-'))
-    const bin = join(dir, 'dsh-cli.exe')
-    writeFileSync(bin, '')
-    expect(() => desktopRuntimeNodeModules(bin)).toThrow(/runtime node_modules 发现失败/)
+  it('正向：runtime 捆绑层在场且副本带 dsh 字段（现行代形态）→ 零违例', () => {
+    const exe = makeInstallTree()
+    const nm = makeRuntime([{ name: 'knowledge', version: SOURCE_VERSION }])
+    mkdirSync(join(exe, '..', 'resources', 'runtime'), { recursive: true })
+    cpSync(nm, join(exe, '..', 'resources', 'runtime', 'node_modules'), { recursive: true })
+    expect(desktopInstallShadowViolations(exe, { sourcePluginsRoot: makeSourceRoot() })).toEqual([])
+  })
+
+  it('反向：runtime 捆绑层陈旧副本（0.30.6 无 dsh 字段）→ 违例留痕（路径含 runtime 层）', () => {
+    const exe = makeInstallTree()
+    const nm = makeRuntime([{ name: 'knowledge', version: '0.30.6', withDsh: false }])
+    mkdirSync(join(exe, '..', 'resources', 'runtime'), { recursive: true })
+    cpSync(nm, join(exe, '..', 'resources', 'runtime', 'node_modules'), { recursive: true })
+    const violations = desktopInstallShadowViolations(exe, { sourcePluginsRoot: makeSourceRoot() })
+    expect(violations.length).toBe(1)
+    expect(violations[0]?.pkg).toBe('@dsh-forge/knowledge')
+    expect(violations[0]?.path).toContain(join('resources', 'runtime', 'node_modules'))
+  })
+
+  it('反向：app.asar.unpacked 捆绑层陈旧副本 → 违例留痕（路径含 asar 解包层）', () => {
+    const exe = makeInstallTree()
+    const nm = makeRuntime([{ name: 'knowledge', version: '0.30.6', withDsh: false }])
+    mkdirSync(join(exe, '..', 'resources', 'app.asar.unpacked'), { recursive: true })
+    cpSync(nm, join(exe, '..', 'resources', 'app.asar.unpacked', 'node_modules'), { recursive: true })
+    const violations = desktopInstallShadowViolations(exe, { sourcePluginsRoot: makeSourceRoot() })
+    expect(violations.length).toBe(1)
+    expect(violations[0]?.path).toContain(join('resources', 'app.asar.unpacked', 'node_modules'))
   })
 })

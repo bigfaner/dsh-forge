@@ -164,11 +164,18 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
 
   test('CT-NPM-03 #step-4（web 校准轮，FORGE_COMBO_WEB_LOOP=1）：client 半侧 HTTP 取件观察', async () => {
     test.skip(process.env.FORGE_COMBO_WEB_LOOP !== '1', 'web 校准轮门未置位（journey 环境锚：校准轮 = dsh --profile web）——SMOKE-LEDGER §8')
+    // 版本门偏斜裁决（bug 3a0467b5/4d1f5038——2026-11-19 npm registry 实态核销）：
+    // @deepseek-ai/dsh-base 与 @deepseek-ai/dsh-web-app dist-tags latest=0.0.1-rc.1
+    // （偏斜陈旧，低于现行 runtime 兼容带——裸 tag add 被版本门拒「installation rejected
+    // … incompatible」）、next=0.2.2-rc.5，0.2.2-rc.2 精确在列。裁决 = spec pin 到
+    // 可用版本：缺省 pin 0.2.2-rc.2（== CLI runtime，版本门兼容带内）；runtime 升级
+    // 经 FORGE_COMBO_WEB_LOOP_PIN 改 pin，latest tag 修复前不回退裸 tag。
+    const pin = process.env.FORGE_COMBO_WEB_LOOP_PIN ?? '0.2.2-rc.2'
     // 校准回路：同一安装物装 web 模板 profile → HTTP 直取五件 client bundle（裸名行 client 注入正门）。
     // 取件路径经 clientBundleFiles 装载链解析（profile 侧 → 链接包自身 node_modules 回落——c26a8c2a）
     const calProfile = 'forge-cal'
-    const addBase = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'], env.dshHome)
-    expect(addBase.code, `web 背板就绪（exit=${String(addBase.code)}）`).toBe(0)
+    const addBase = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', `@deepseek-ai/dsh-base@${pin}`, `@deepseek-ai/dsh-web-app@${pin}`], env.dshHome)
+    expect(addBase.code, `web 背板就绪（exit=${String(addBase.code)}，pin=${pin}）stderr=${addBase.stderr.slice(-400)}`).toBe(0)
     const add = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', `link:${env.forgeDir}`], env.dshHome)
     expect(add.code, `校准 profile add 成功（exit=${String(add.code)}）`).toBe(0)
 
