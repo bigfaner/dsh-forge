@@ -4,13 +4,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   REMOTE_CHANNELS,
-  type ForgeTasksService,
   type ProjectService,
   type ProjectSummary,
   type RemoteProgressSnapshot,
   type TaskCard,
   type TaskStats,
 } from '@dsh-forge/contracts'
+import type { TasksService } from '@dsh-forge/task-loop'
 import {
   REMOTE_HTTP_RPC_PATH,
   authorizeRemoteRpc,
@@ -57,7 +57,7 @@ function fakeRes(): FakeRes {
   return res
 }
 
-const TASKS: Pick<ForgeTasksService, 'listTasks' | 'taskStats'> = {
+const TASKS: Pick<TasksService, 'listTasks' | 'taskStats'> = {
   listTasks: async () => [{ taskId: 't-1', title: 'X', taskStatus: 'in_progress' } as TaskCard],
   taskStats: async () => ({ total: 1, byStatus: { in_progress: 1 } as TaskStats['byStatus'], unmetPending: 0, gatedPending: 0 }),
 }

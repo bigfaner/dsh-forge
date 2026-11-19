@@ -9,8 +9,8 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { defineConfig, type Plugin } from 'vite'
-import { assertClientBundleClassicScript } from './src/build/client-bundle-shape.js'
+import { defineConfig, perEnvironmentPlugin, type Plugin } from 'vite'
+import { assertClientBundleClassicScript, rewriteImportMetaForClassicScript } from './src/build/client-bundle-shape.js'
 import { assertPluginSteeringLine } from './src/build/plugin-manifest.js'
 
 const src = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url))
@@ -30,14 +30,36 @@ function rejectStandaloneServe(): Plugin {
   }
 }
 
+/**
+ * import.meta classic-safe 重写（bug d84fd8e5——client-plugin 图内 MarkdownText → shiki
+ * 语言动态 import → vite preload 助手携带 import.meta，classic script 求值即 SyntaxError）。
+ * 先于形状 pin 运行（插件序），重写后 pin 的 import.meta 零残留断言收口。
+ */
+function rewriteClientBundleImportMeta(): Plugin {
+  return {
+    name: 'dsh-forge-rewrite-client-bundle-import-meta',
+    generateBundle(_options, bundle) {
+      const chunk = Object.values(bundle).find((file) => file.type === 'chunk' && file.name === 'client-plugin')
+      if (chunk === undefined) throw new Error('vite: forge-client 入口产物缺席（rollup input client-plugin 未产出）')
+      chunk.code = rewriteImportMetaForClassicScript(chunk.code).code
+    },
+  }
+}
+
 /** 产品 client 插件形状 pin：classic script（零 import/export 语句）且注册面在场。 */
 function pinClientBundleShape(): Plugin {
   return {
     name: 'dsh-forge-pin-client-bundle-shape',
     generateBundle(_options, bundle) {
-      const chunk = Object.values(bundle).find((file) => file.type === 'chunk' && file.name === 'client-plugin')
+      const files = Object.values(bundle)
+      const chunk = files.find((file) => file.type === 'chunk' && file.name === 'client-plugin')
       if (chunk === undefined) throw new Error('vite: forge-client 入口产物缺席（rollup input client-plugin 未产出）')
-      assertClientBundleClassicScript(chunk.code)
+      assertClientBundleClassicScript({
+        chunkCount: files.filter((file) => file.type === 'chunk').length,
+        externalImports: chunk.imports,
+        exportNames: chunk.exports,
+        code: chunk.code,
+      })
     },
   }
 }
@@ -49,6 +71,8 @@ export const QUOTE_REFERENCE_BUNDLE_FILE = 'quote-reference-client.js'
 export const SUPER_COMPOSER_BUNDLE_FILE = 'super-composer-client.js'
 /** expert-squad 插件 bundle 在壳 dist 的落位名（掌舵 url 文档相对引用同名）。 */
 export const EXPERT_SQUAD_BUNDLE_FILE = 'expert-squad-client.js'
+/** knowledge 插件 bundle 在壳 dist 的落位名（knowledge-plugin-migration 1.4——掌舵 url 文档相对引用同名）。 */
+export const KNOWLEDGE_BUNDLE_FILE = 'knowledge-client.js'
 
 /**
  * 独立插件包 bundle 发射（构建期原样复制 <pkg> dist/client.js 入壳 dist 根——该产物已按
@@ -73,6 +97,10 @@ function emitPluginBundle(pkgName: string, bundleFile: string): Plugin {
       }
       if (!source.includes('window.__ModuleLoader__.load') || !source.includes(`"${pkgName}"`)) {
         throw new Error(`vite: ${pkgName} client bundle 非官方自注册形状（${bundlePath}）`)
+      }
+      // classic 形态 import.meta 零容忍（bug d84fd8e5 同破坏面——官方 bundle 亦以 <script> 装载）
+      if (source.includes('import.meta')) {
+        throw new Error(`vite: ${pkgName} client bundle 含 import.meta——classic script 求值即 SyntaxError（d84fd8e5 形态）`)
       }
       this.emitFile({ type: 'asset', fileName: bundleFile, source })
     },
@@ -118,23 +146,16 @@ const STEERING_BLOCKS = {
   quoteReference: /const quoteReferenceClient: ProductClientEntry = \{([\s\S]*?)\n\}/,
   superComposer: /const superComposerClient: ProductClientEntry = \{([\s\S]*?)\n\}/,
   expertSquad: /const expertSquadClient: ProductClientEntry = \{([\s\S]*?)\n\}/,
+  knowledge: /const knowledgeClient: ProductClientEntry = \{([\s\S]*?)\n\}/,
 } as const
 
-export default defineConfig({
+/**
+ * 构建公共面（两环境共享：base/define/resolve + standalone 拒绝）。
+ */
+const commonConfig = {
   // 相对资产 URL：宿主自定义 scheme 于任意挂载深度服务本 dist，文档相对路由（plugins/…）同源解析
   base: './',
-  plugins: [
-    rejectStandaloneServe(),
-    pinClientBundleShape(),
-    assertPluginManifest('@dsh-forge/input-history', /const inputHistoryClient: ProductClientEntry = \{([\s\S]*?)\n\}/, INPUT_HISTORY_BUNDLE_FILE),
-    assertPluginManifest('@dsh-forge/quote-reference', STEERING_BLOCKS.quoteReference, QUOTE_REFERENCE_BUNDLE_FILE),
-    assertPluginManifest('@dsh-forge/super-composer', STEERING_BLOCKS.superComposer, SUPER_COMPOSER_BUNDLE_FILE),
-    assertPluginManifest('@dsh-forge/expert-squad', STEERING_BLOCKS.expertSquad, EXPERT_SQUAD_BUNDLE_FILE),
-    emitPluginBundle('@dsh-forge/input-history', INPUT_HISTORY_BUNDLE_FILE),
-    emitPluginBundle('@dsh-forge/quote-reference', QUOTE_REFERENCE_BUNDLE_FILE),
-    emitPluginBundle('@dsh-forge/super-composer', SUPER_COMPOSER_BUNDLE_FILE),
-    emitPluginBundle('@dsh-forge/expert-squad', EXPERT_SQUAD_BUNDLE_FILE),
-  ],
+  plugins: [rejectStandaloneServe()],
   define: {
     __DSH_FORGE_BUILD_REV__: JSON.stringify(BUILD_REV),
     // 已发布 cordis-plugin-loader 的 Node 探测替身（母本同款 define 集）
@@ -147,20 +168,75 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
     alias: [{ find: /^node:module$/, replacement: src('./src/node-module-stub.ts') }],
   },
-  build: {
-    target: 'es2022',
-    sourcemap: true,
-    rollupOptions: {
-      input: {
-        index: src('./index.html'),
-        // 独立入口（非 html script）：壳页不引用，产物即 client 插件 bundle（母本 bootstrap 入口同型）
-        'client-plugin': src('./src/client-plugin/index.ts'),
+}
+
+const buildTarget = { target: 'es2022', sourcemap: true }
+
+/**
+ * 双环境收口（fix-14——替代原双入口单构建）：rolldown 自动 chunking 会把双入口共同消费的
+ * 模块（@dsh-forge/project client ui → bug-source 等）拆为共享 chunk，client-plugin 入口
+ * chunk 头部随之产出 `import{n}from"./assets/…"`，classic-shape pin 拦截构建。收口 =
+ * 两段串行环境构建（vite environments API + 显式 buildApp 排序）：先壳页（单入口，共享
+ * 模块照常 ESM 拆分，emptyOutDir 清场），再 client-plugin（单入口——单入口构建零跨入口
+ * 共享，全部依赖内联进 forge-client.js，classic script 形状恒成立；emptyOutDir:false
+ * 不抹掉壳产物）。watch 形态（build --watch）同链路：两环境各挂 watcher，重构建不互删。
+ */
+export default defineConfig({
+  ...commonConfig,
+  builder: {
+    // 显式排序：壳环境先清场落位，client-plugin 环境后补写（默认 buildApp 会连同空输入
+    // 的 ssr 环境一起构建，故自定排序只取本项目两环境）
+    buildApp: async (builder) => {
+      await builder.build(builder.environments.shell!)
+      await builder.build(builder.environments['forgeClient']!)
+    },
+  },
+  environments: {
+    // 段一：壳 dist（index.html + assets/*；掌舵清单断言 + 独立插件 bundle 发射同段落位）
+    shell: {
+      consumer: 'client',
+      build: {
+        ...buildTarget,
+        outDir: 'dist',
+        rollupOptions: {
+          input: { index: src('./index.html') },
+          output: { entryFileNames: 'assets/[name]-[hash].js' },
+        },
       },
-      output: {
-        entryFileNames(chunk) {
-          return chunk.name === 'client-plugin' ? 'forge-client.js' : 'assets/[name]-[hash].js'
+    },
+    // 段二：产品 client 插件 bundle（forge-client.js——单入口自含，classic script 形状）
+    forgeClient: {
+      consumer: 'client',
+      build: {
+        ...buildTarget,
+        outDir: 'dist',
+        emptyOutDir: false,
+        rollupOptions: {
+          input: { 'client-plugin': src('./src/client-plugin/index.ts') },
+          output: { entryFileNames: () => 'forge-client.js', codeSplitting: false },
         },
       },
     },
   },
+  plugins: [
+    ...commonConfig.plugins,
+    // 环境限定：清单断言 + bundle 发射属壳环境（掌舵面）；形状 pin 属 client-plugin 环境
+    perEnvironmentPlugin('dsh-forge-shell-manifest-emit', (env) =>
+      env.name === 'shell'
+        ? [
+            assertPluginManifest('@dsh-forge/input-history', /const inputHistoryClient: ProductClientEntry = \{([\s\S]*?)\n\}/, INPUT_HISTORY_BUNDLE_FILE),
+            assertPluginManifest('@dsh-forge/quote-reference', STEERING_BLOCKS.quoteReference, QUOTE_REFERENCE_BUNDLE_FILE),
+            assertPluginManifest('@dsh-forge/super-composer', STEERING_BLOCKS.superComposer, SUPER_COMPOSER_BUNDLE_FILE),
+            assertPluginManifest('@dsh-forge/expert-squad', STEERING_BLOCKS.expertSquad, EXPERT_SQUAD_BUNDLE_FILE),
+assertPluginManifest('@dsh-forge/knowledge', STEERING_BLOCKS.knowledge, KNOWLEDGE_BUNDLE_FILE),
+            emitPluginBundle('@dsh-forge/input-history', INPUT_HISTORY_BUNDLE_FILE),
+            emitPluginBundle('@dsh-forge/quote-reference', QUOTE_REFERENCE_BUNDLE_FILE),
+            emitPluginBundle('@dsh-forge/super-composer', SUPER_COMPOSER_BUNDLE_FILE),
+            emitPluginBundle('@dsh-forge/expert-squad', EXPERT_SQUAD_BUNDLE_FILE),
+emitPluginBundle('@dsh-forge/knowledge', KNOWLEDGE_BUNDLE_FILE),
+          ]
+        : []),
+    perEnvironmentPlugin('dsh-forge-classic-shape-guard', (env) =>
+      env.name === 'forgeClient' ? [rewriteClientBundleImportMeta(), pinClientBundleShape()] : []),
+  ],
 })

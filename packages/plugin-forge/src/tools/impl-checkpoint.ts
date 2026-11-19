@@ -1,9 +1,9 @@
 // 机械⑥（forge-verification-hardening）：实现检查点 agent 工具面三员——
 // recordImplCheckpoint（落标记行）/ queryImplCheckpoint（时序查 + 标记过滤 + 四项硬指标）/
-// listImplCheckpoints（跨容器清单）。① 检查点域（core createCheckpointsService——
+// listImplCheckpoints（跨容器清单）。① 检查点域（task-loop createCheckpointsService——
 // ctx.forgeCheckpoints）的薄封装：唯一约束 / wave_seq 规则 / append-only 全在域内承载，
-// 本壳只做参数防御收窄 + 路由 + 双友好渲染，零业务规则。跨容器清单 = 提案域 listProposals
-// 枚举容器后逐容器取流水（域查询按 proposal_id 单容器——工具层组合，不复制域逻辑）。
+// 本壳只做参数防御收窄 + 路由 + 双友好渲染，零业务规则。跨容器清单 = 任务域 listTasks
+// 枚举容器后逐容器取流水（域查询按 slug 单容器——工具层组合，不复制域逻辑）。
 // 命名 = 动词+名词；面分治：三员均仅主 agent（worker deny——assemble.ts FORGE_DENY_IN_WORKER）。
 import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
@@ -19,7 +19,7 @@ import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureV
 import { requireProjectId, sessionContextOf } from './session.js'
 import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 
-// ─────────────────────────── 检查点域结构化消费面（core 结构兼容） ───────────────────────────
+// ─────────────────────────── 检查点域结构化消费面（task-loop 结构兼容） ───────────────────────────
 
 /** 标记词库（五类里程碑 + 关系标记 derived-to-child——域 MARKS/DL CHECK 同源镜像） */
 export const CHECKPOINT_MARKS = [
@@ -41,10 +41,11 @@ export interface CheckpointSnapshots {
   readonly evidenceDebtsTotal: number
 }
 
-/** 检查点行 DTO（域 CheckpointRow 结构镜像——wave_seq NULL = 键缺席） */
+/** 检查点行 DTO（域 CheckpointRow 结构镜像——wave_seq NULL = 键缺席；容器锚 = slug 弱引用） */
 export interface CheckpointRow {
-  readonly id: number
-  readonly proposalId: string
+  readonly id: string
+  readonly projectKey: string
+  readonly slug: string
   readonly mark: CheckpointMark
   readonly waveSeq?: number
   readonly createdAt: string
@@ -55,29 +56,30 @@ export interface CheckpointRow {
   readonly evidenceDebtsTotal: number
 }
 
-/** core checkpoints 域服务的插件侧结构化消费面（结构兼容判别——插件禁 import core） */
+/** checkpoints 域服务的插件侧结构化消费面（结构兼容判别——插件禁 import 域实现；容器锚
+ *  proposalId FK 退役 → slug 弱引用（entities.md §3.3），append/ensure 入参 containerSlug、
+ *  list 查询形 projectKey + slug） */
 export interface ForgeCheckpointsToolFace {
   appendCheckpoint(input: {
-    readonly projectId: string
-    readonly proposalId: string
+    readonly projectKey: string
+    readonly containerSlug: string
     readonly mark: CheckpointMark
     readonly waveSeq?: number
     readonly baseCommitHash: string
     readonly snapshots: CheckpointSnapshots
   }): Promise<CheckpointRow>
   listCheckpoints(q: {
-    readonly projectId: string
-    readonly proposalId: string
+    readonly projectKey: string
+    readonly slug: string
     readonly marks?: readonly CheckpointMark[]
   }): Promise<readonly CheckpointRow[]>
   /**
    * lazy 补标记（域侧事务内幂等——标记在场 no-op appended=false / 缺席 append appended=true；
-   * 结构兼容 core ensureCheckpoint 唯一索引背书——插件禁 import core，循环侧 ensure 语义
-   * 由此单点落域，装配直传不经包装）
+   * 唯一约束背书——插件禁 import 域实现，循环侧 ensure 语义由此单点落域，装配直传不经包装）
    */
   ensureCheckpoint(input: {
-    readonly projectId: string
-    readonly proposalId: string
+    readonly projectKey: string
+    readonly containerSlug: string
     readonly mark: CheckpointMark
     readonly waveSeq?: number
     readonly baseCommitHash: string
@@ -125,13 +127,23 @@ function checkpointFailureOf(e: unknown): ForgeToolFailure | undefined {
   return { ok: false, code: code as ForgeToolFailure['code'], message: e instanceof Error ? e.message : String(e), violations: [] }
 }
 
+/** append/ensure 入参快照面组装（解析产物 → 域入参四计数） */
+function snapshotsInputOf(parsed: { snapshots?: Partial<CheckpointSnapshots> }): CheckpointSnapshots {
+  return {
+    tasksTotal: parsed.snapshots?.tasksTotal ?? 0,
+    commitsTotal: parsed.snapshots?.commitsTotal ?? 0,
+    fixesTotal: parsed.snapshots?.fixesTotal ?? 0,
+    evidenceDebtsTotal: parsed.snapshots?.evidenceDebtsTotal ?? 0,
+  }
+}
+
 // ─────────────────────────── record_impl_checkpoint ───────────────────────────
 
 const RECORD_TOOL = 'recordImplCheckpoint'
 
 /** record agent 面参数（四参 AC 形状 + 快照可选——缺省零计数；唯一约束/wave_seq 规则归域校验） */
 export interface RecordImplCheckpointToolArgs {
-  readonly proposal_id: string
+  readonly slug: string
   readonly mark: CheckpointMark
   readonly wave_seq?: number
   readonly base_commit_hash: string
@@ -154,7 +166,7 @@ export function parseRecordImplCheckpointArgs(args: unknown): RecordImplCheckpoi
   const snapshotsRaw = a['snapshots']
   const waveSeq = optionalPositiveInteger(a, 'wave_seq', RECORD_TOOL)
   return {
-    proposal_id: requiredString(a, 'proposal_id', RECORD_TOOL),
+    slug: requiredString(a, 'slug', RECORD_TOOL),
     mark: requiredEnum(a, 'mark', CHECKPOINT_MARKS, RECORD_TOOL),
     ...(waveSeq !== undefined ? { wave_seq: waveSeq } : {}),
     base_commit_hash: requiredString(a, 'base_commit_hash', RECORD_TOOL),
@@ -171,8 +183,9 @@ const RECORD_OUTPUT_SCHEMA = withFailureVariant({
       type: 'object',
       description: 'Appended checkpoint row (domain CheckpointRow shape).',
       properties: {
-        id: { type: 'number' },
-        proposalId: { type: 'string' },
+        id: { type: 'string' },
+        projectKey: { type: 'string' },
+        slug: { type: 'string' },
         mark: { type: 'string' },
         waveSeq: { type: 'number', description: 'review-wave-N wave number (absent on other marks).' },
         createdAt: { type: 'string' },
@@ -182,7 +195,7 @@ const RECORD_OUTPUT_SCHEMA = withFailureVariant({
         fixesTotal: { type: 'number' },
         evidenceDebtsTotal: { type: 'number' },
       },
-      required: ['id', 'proposalId', 'mark', 'createdAt', 'baseCommitHash', 'tasksTotal', 'commitsTotal', 'fixesTotal', 'evidenceDebtsTotal'],
+      required: ['id', 'projectKey', 'slug', 'mark', 'createdAt', 'baseCommitHash', 'tasksTotal', 'commitsTotal', 'fixesTotal', 'evidenceDebtsTotal'],
     },
   },
   required: ['checkpoint'],
@@ -192,7 +205,7 @@ function renderRecordResult(_args: unknown, value: unknown): readonly { type: 't
   if (isForgeToolFailure(value)) return formatFailure(value)
   const { checkpoint } = value as { checkpoint: CheckpointRow }
   const bits = [`- ${checkpoint.mark}${checkpoint.waveSeq !== undefined ? `#${String(checkpoint.waveSeq)}` : ''}`]
-  bits.push(`  proposal: ${checkpoint.proposalId}`)
+  bits.push(`  container: ${checkpoint.slug}`)
   bits.push(`  base commit: ${checkpoint.baseCommitHash}`)
   bits.push(`  snapshots: tasks=${String(checkpoint.tasksTotal)} commits=${String(checkpoint.commitsTotal)} fixes=${String(checkpoint.fixesTotal)} evidenceDebts=${String(checkpoint.evidenceDebtsTotal)}`)
   return formatOk('checkpoint recorded', bits)
@@ -202,36 +215,31 @@ export function createRecordImplCheckpointTool(deps: ForgeToolDeps): ForgeToolDe
   return {
     name: RECORD_TOOL,
     description:
-      'Append an implementation checkpoint mark row for a proposal (main agent only; append-only ledger). Args: proposal_id, mark (first-pass-complete / retro-done / review-wave-N / stabilized / merged / derived-to-child), base_commit_hash (container branch HEAD at mark time), optional wave_seq (review-wave-N only — omit to auto-increment), optional snapshots counters (default zero). Milestone marks are unique per (proposal, mark, wave_seq); duplicates are rejected. Zero business rules here — validation and persistence live in the checkpoints domain.',
+      'Append an implementation checkpoint mark row for a container (main agent only; append-only ledger). Args: slug (container slug), mark (first-pass-complete / retro-done / review-wave-N / stabilized / merged / derived-to-child), base_commit_hash (container branch HEAD at mark time), optional wave_seq (review-wave-N only — omit to auto-increment), optional snapshots counters (default zero). Milestone marks are unique per (container, mark, wave_seq); duplicates are rejected. Zero business rules here — validation and persistence live in the checkpoints domain.',
     parameters: {
       type: 'object',
       properties: {
-        proposal_id: { type: 'string', description: 'Proposal id the checkpoint attaches to (must exist).' },
+        slug: { type: 'string', description: 'Container slug the checkpoint attaches to.' },
         mark: { type: 'string', description: 'Checkpoint mark — one of the five milestone marks plus derived-to-child.' },
         wave_seq: { type: 'number', description: 'Wave number, review-wave-N only (positive integer; omit = auto-increment max+1).' },
         base_commit_hash: { type: 'string', description: 'Container branch HEAD commit hash at mark time.' },
       },
-      required: ['proposal_id', 'mark', 'base_commit_hash'],
+      required: ['slug', 'mark', 'base_commit_hash'],
     },
     output: { schema: RECORD_OUTPUT_SCHEMA, render: renderRecordResult },
     async execute(args: unknown, exec: ToolExecFace): Promise<unknown | ForgeToolFailure> {
       const session = sessionContextOf(exec)
       return callToolFace(async () => {
         const parsed = parseRecordImplCheckpointArgs(args)
-        const projectId = requireProjectId(deps.resolveProjectId, session)
+        const projectKey = requireProjectId(deps.resolveProjectId, session)
         try {
           const checkpoint = await deps.checkpoints.appendCheckpoint({
-            projectId,
-            proposalId: parsed.proposal_id,
+            projectKey,
+            containerSlug: parsed.slug,
             mark: parsed.mark,
             ...(parsed.wave_seq !== undefined ? { waveSeq: parsed.wave_seq } : {}),
             baseCommitHash: parsed.base_commit_hash,
-            snapshots: {
-              tasksTotal: parsed.snapshots?.tasksTotal ?? 0,
-              commitsTotal: parsed.snapshots?.commitsTotal ?? 0,
-              fixesTotal: parsed.snapshots?.fixesTotal ?? 0,
-              evidenceDebtsTotal: parsed.snapshots?.evidenceDebtsTotal ?? 0,
-            },
+            snapshots: snapshotsInputOf(parsed),
           })
           return { checkpoint }
         } catch (e) {
@@ -248,9 +256,9 @@ export function createRecordImplCheckpointTool(deps: ForgeToolDeps): ForgeToolDe
 
 const QUERY_TOOL = 'queryImplCheckpoint'
 
-/** query agent 面参数（proposal_id 必带；marks 词表过滤可选） */
+/** query agent 面参数（slug 必带；marks 词表过滤可选） */
 export interface QueryImplCheckpointToolArgs {
-  readonly proposal_id: string
+  readonly slug: string
   readonly marks?: readonly CheckpointMark[]
 }
 
@@ -271,7 +279,7 @@ export function parseQueryImplCheckpointArgs(args: unknown): QueryImplCheckpoint
   const a = requireArgsObject(args, QUERY_TOOL)
   const marks = optionalMarkArray(a, 'marks', QUERY_TOOL)
   return {
-    proposal_id: requiredString(a, 'proposal_id', QUERY_TOOL),
+    slug: requiredString(a, 'slug', QUERY_TOOL),
     ...(marks !== undefined ? { marks } : {}),
   }
 }
@@ -285,7 +293,7 @@ const QUERY_OUTPUT_SCHEMA = withFailureVariant({
       items: {
         type: 'object',
         properties: {
-          id: { type: 'number' },
+          id: { type: 'string' },
           mark: { type: 'string' },
           waveSeq: { type: 'number' },
           createdAt: { type: 'string' },
@@ -334,24 +342,24 @@ export function createQueryImplCheckpointTool(deps: ForgeToolDeps): ForgeToolDef
   return {
     name: QUERY_TOOL,
     description:
-      'Query one proposal\'s implementation checkpoint timeline in chronological order (main agent only), with optional mark filtering (subset of the six marks) and the four hard metrics computed from the frames: firstPassRate (first-pass tasks / terminal tasks), reworkCommitRatio (post-first-pass commit share), reviewWaveCount (review-wave-N rows), fixDensity (fix tasks / tasks). Metrics items without their required frames are omitted.',
+      'Query one container\'s implementation checkpoint timeline in chronological order (main agent only), with optional mark filtering (subset of the six marks) and the four hard metrics computed from the frames: firstPassRate (first-pass tasks / terminal tasks), reworkCommitRatio (post-first-pass commit share), reviewWaveCount (review-wave-N rows), fixDensity (fix tasks / tasks). Metrics items without their required frames are omitted.',
     parameters: {
       type: 'object',
       properties: {
-        proposal_id: { type: 'string', description: 'Proposal id whose checkpoint timeline to read.' },
+        slug: { type: 'string', description: 'Container slug whose checkpoint timeline to read.' },
         marks: { type: 'array', items: { type: 'string' }, description: 'Mark filter (subset of the six marks); empty or omitted = all.' },
       },
-      required: ['proposal_id'],
+      required: ['slug'],
     },
     output: { schema: QUERY_OUTPUT_SCHEMA, render: renderQueryResult },
     async execute(args: unknown, exec: ToolExecFace): Promise<unknown | ForgeToolFailure> {
       const session = sessionContextOf(exec)
       return callToolFace(async () => {
         const parsed = parseQueryImplCheckpointArgs(args)
-        const projectId = requireProjectId(deps.resolveProjectId, session)
+        const projectKey = requireProjectId(deps.resolveProjectId, session)
         const checkpoints = await deps.checkpoints.listCheckpoints({
-          projectId,
-          proposalId: parsed.proposal_id,
+          projectKey,
+          slug: parsed.slug,
           ...(parsed.marks !== undefined ? { marks: parsed.marks } : {}),
         })
         return { checkpoints, metrics: computeCheckpointMetrics(checkpoints) }
@@ -376,24 +384,20 @@ export function parseListImplCheckpointsArgs(args: unknown): ListImplCheckpoints
   return marks === undefined ? {} : { marks }
 }
 
-/** 跨容器清单行（容器侧注记 slug/title——组合自提案域枚举） */
-export interface CheckpointListEntry extends CheckpointRow {
-  readonly slug: string
-  readonly title: string
-}
+/** 跨容器清单行（域 CheckpointRow 自带容器 slug——投影零扩展） */
+export type CheckpointListEntry = CheckpointRow
 
 const LIST_OUTPUT_SCHEMA = withFailureVariant({
   type: 'object',
   properties: {
     checkpoints: {
       type: 'array',
-      description: 'Checkpoint rows across all proposals (per-proposal chronological), annotated with container slug/title.',
+      description: 'Checkpoint rows across all task containers (per-container chronological), annotated with container slug.',
       items: {
         type: 'object',
         properties: {
-          proposalId: { type: 'string' },
+          projectKey: { type: 'string' },
           slug: { type: 'string' },
-          title: { type: 'string' },
           mark: { type: 'string' },
           waveSeq: { type: 'number' },
           createdAt: { type: 'string' },
@@ -403,7 +407,7 @@ const LIST_OUTPUT_SCHEMA = withFailureVariant({
           fixesTotal: { type: 'number' },
           evidenceDebtsTotal: { type: 'number' },
         },
-        required: ['proposalId', 'slug', 'title', 'mark', 'createdAt', 'baseCommitHash'],
+        required: ['projectKey', 'slug', 'mark', 'createdAt', 'baseCommitHash'],
       },
     },
   },
@@ -427,7 +431,7 @@ export function createListImplCheckpointsTool(deps: ForgeToolDeps): ForgeToolDef
   return {
     name: LIST_TOOL,
     description:
-      'List implementation checkpoints across all proposal containers in the project (main agent only): per-proposal chronological rows annotated with container slug/title. Cross-container survey face — use for trend comparison across features; single-container timeline + metrics go through queryImplCheckpoint.',
+      'List implementation checkpoints across all task containers in the project (main agent only): per-container chronological rows annotated with container slug. Cross-container survey face — use for trend comparison across containers; single-container timeline + metrics go through queryImplCheckpoint.',
     parameters: {
       type: 'object',
       properties: {
@@ -439,17 +443,19 @@ export function createListImplCheckpointsTool(deps: ForgeToolDeps): ForgeToolDef
       const session = sessionContextOf(exec)
       return callToolFace(async () => {
         const parsed = parseListImplCheckpointsArgs(args)
-        const projectId = requireProjectId(deps.resolveProjectId, session)
-        const proposals = await deps.proposals.listProposals({ projectId })
+        const projectKey = requireProjectId(deps.resolveProjectId, session)
+        const cards = await deps.tasks.listTasks({ projectId: projectKey })
+        const slugs = [...new Set(cards.map((t) => t.slug))]
         const grouped = await Promise.all(
-          proposals.map(async (p) => {
-            const rows = await deps.checkpoints.listCheckpoints({
-              projectId,
-              proposalId: p.proposalId,
-              ...(parsed.marks !== undefined ? { marks: parsed.marks } : {}),
-            })
-            return rows.map((r): CheckpointListEntry => ({ ...r, slug: p.slug, title: p.title }))
-          }),
+          slugs.map(async (slug) =>
+            deps.checkpoints
+              .listCheckpoints({
+                projectKey,
+                slug,
+                ...(parsed.marks !== undefined ? { marks: parsed.marks } : {}),
+              })
+              .catch(() => [] as readonly CheckpointRow[]),
+          ),
         )
         return { checkpoints: grouped.flat() }
       }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), LIST_TOOL, failure))

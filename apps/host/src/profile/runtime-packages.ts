@@ -59,17 +59,27 @@ export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = [
   '@dsh-forge/plugin-forge-spec',
   '@dsh-forge/md-mermaid',
   '@dsh-forge/knowledge',
+  '@dsh-forge/project', // 1.17 批二卸旧装新：boot 链静态 import + overlay 注行（接替 git-worktree）
+  '@dsh-forge/spec', // plugin-spec 1.10 docs 域收编：core dist 静态 import（librarySeed——dev 锚树供应面）
 ]
 
-/** 仓库内源目录相对 packages/ 的子路径（默认平铺 packages/<short>；md-mermaid / git-worktree / expert-squad / knowledge 居 packages/plugins/ 子居所）。 */
+/** 仓库内源目录（默认平铺 packages/<short>；值 = packages/ 子居所，md-mermaid 居 packages/plugins/；
+ *  值前导 '/' = 仓库根级树——project 居 plugins/project（plugin-project 1.3 起 plugins/* 根级）；
+ *  expert-squad 批3 / knowledge 迁移批1.3：表值载完整子路径（root 级树，link 直拼表值）。 */
 export const PRODUCT_PLUGIN_PACKAGE_DIRS: Readonly<Record<string, string>> = {
   '@dsh-forge/md-mermaid': 'plugins',
-  '@dsh-forge/git-worktree': 'plugins',
-  '@dsh-forge/expert-squad': 'plugins',
-  '@dsh-forge/knowledge': 'plugins',
+  '@dsh-forge/expert-squad': 'plugins/expert-squad',
+  '@dsh-forge/knowledge': 'plugins/knowledge',
+  '@dsh-forge/project': '/plugins',
+  '@dsh-forge/spec': '/plugins',
 }
 
-/** 包名 → profile.dev link 相对路径（runtime-packages.test / materialize.test 同源 pin）。 */
+/** 包名 → profile.dev link 相对路径（runtime-packages.test / materialize.test 同源 pin）。
+ *  表值含 '/' = 完整子路径直拼（expert-squad 批3 / project 根级树 '/plugins'）；其余维持 packages/<dir>/<short> 推导。 */
 export function productPluginPackageLinkPath(name: string): string {
-  return `packages/${PRODUCT_PLUGIN_PACKAGE_DIRS[name] ? `${PRODUCT_PLUGIN_PACKAGE_DIRS[name]}/` : ''}${name.slice('@dsh-forge/'.length)}`
+  const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[name]
+  const short = name.slice('@dsh-forge/'.length)
+  if (dir !== undefined && dir.startsWith('/')) return `${dir.slice(1)}/${short}` // 根级树前缀（project）
+  if (dir !== undefined && dir.includes('/')) return dir // 完整子路径直拼（expert-squad 批3）
+  return `packages/${dir !== undefined ? `${dir}/` : ''}${short}`
 }

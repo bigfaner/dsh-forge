@@ -5,7 +5,7 @@
 // （host 锚；dsh 0.2.0-rc.2 栈闭包解析版本 = 4.0.4，独立版本线精确 pin——漂移即红）。
 // 我方镜像：packages/core/src/index.ts（forgeProjects provide——knowledge 域已随
 // knowledge-stage1-foundation 1.8 退役，forgeKnowledge 面移除）+
-// packages/plugins/knowledge/src/index.ts（自有 knowledge 服务 provide）。
+// plugins/knowledge/host/index.ts（自有 knowledge 服务 provide）。
 // 同型先例 WorkspaceRegistry 的 Service 基类面已由 pin-04 锚定。
 // Hard Rule：只 pin 上游公开面（cordis 导出 + 服务生命周期契约）+ 我方服务对官方面的
 // 符合性（真实 runtime 装配，非结构化桩模拟——与 2.2/3.4 产品单测的桩面互补）。
@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import corePlugin from '../../packages/core/src/index.js'
-import knowledgePlugin from '../../packages/plugins/knowledge/src/index.js'
+import knowledgePlugin from '../../plugins/knowledge/host/index.js'
 import { importUpstream, norm, readTypes, upstreamPkg } from './pins.js'
 
 /** cordis 版本线（dsh 0.2.0-rc.2 栈闭包解析版本——与 dsh 包版本线分立 pin） */
@@ -146,6 +146,7 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
       await new Promise((r) => setImmediate(r))
       expect(ctx.get('forgeProjects'), '依赖缺席：不加载不注册').toBeUndefined()
       const disposeWs = ctx.reflect.provide('workspaceRegistry', registryStub())
+      ctx.reflect.provide('connection', { fetch: { register: () => () => {} } })
       // 单就绪门：workspaceController 仍缺席（fix-24 ② 双注入——全可用才加载）
       expect(await waitFor(() => ctx.get('forgeProjects') !== undefined), '半依赖不加载').toBe(false)
       const disposeRn = ctx.reflect.provide('workspaceController', renameStub())
@@ -162,6 +163,7 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
     const { ctx } = await bootRuntime()
     try {
       ctx.reflect.provide('workspaceRegistry', registryStub())
+      ctx.reflect.provide('connection', { fetch: { register: () => () => {} } })
       ctx.reflect.provide('workspaceController', renameStub())
       await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
       const projects = ctx.get('forgeProjects') as Record<string, unknown>
@@ -178,9 +180,10 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
     const { ctx, sys, tools } = await bootRuntime()
     try {
       ctx.reflect.provide('workspaceRegistry', registryStub())
+      ctx.reflect.provide('connection', { fetch: { register: () => () => {} } })
       ctx.reflect.provide('workspaceController', renameStub())
       await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
-      await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [], dbFile: dbFile() })
+      await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [], dbFile: dbFile(), knowledgeDir: join(dbFile(), '..', 'knowledge') })
       expect(ctx.get('knowledge'), 'knowledge 插件 provide 自有服务（去 forge 前缀）').toBeDefined()
       expect(tools.registered.map((t) => t.name)).toEqual([
         'knowledge_search',
@@ -209,11 +212,16 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
     const { ctx, sys, tools, disposeTools } = await bootRuntime()
     try {
       const disposeWs = ctx.reflect.provide('workspaceRegistry', registryStub())
+      ctx.reflect.provide('connection', { fetch: { register: () => () => {} } })
       ctx.reflect.provide('workspaceController', renameStub())
-      await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() })
-      await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [], dbFile: dbFile() })
+      const stopCore = await ctx.plugin(corePlugin as unknown as PlugFn, { dbFile: dbFile() }) as unknown as () => void
+      await ctx.plugin(knowledgePlugin as unknown as PlugFn, { projects: [], dbFile: dbFile(), knowledgeDir: join(dbFile(), '..', 'knowledge') })
       expect(ctx.get('forgeProjects')).toBeDefined()
-      disposeWs()
+      // core 卸载模拟改撤 core 自身 disposer（k-m 后 knowledge 硬注入 workspaceRegistry——
+      // 撤共享 registry 会连带卸载 knowledge fiber，SC-2 隔离判据须走 core 专属出口）
+      const coreFiber = stopCore as { dispose(): Promise<void> }
+      if (typeof coreFiber?.dispose === 'function') await coreFiber.dispose()
+      else disposeWs()
       // 官方语义：unregistered (waking dependents)——core fiber 卸载、core 服务注销；
       // knowledge 零 core 依赖（1.7 A2）——独立存活，服务/tool/段不受牵动
       expect(

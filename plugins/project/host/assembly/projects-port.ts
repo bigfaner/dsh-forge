@@ -1,0 +1,139 @@
+// host/assembly · projects 缝常驻 provider 组装面（plugin-project 1.17 五缝合拢）。
+// 定位：装配缝——把 1.10 四件（register / queries / reconcile / registry-adapter）与
+// repositories 组装成 ProjectsServicePort（dto ProjectService 六动词单源形状），零域逻辑
+// （五步补偿链/对账矩阵/查询口径全部归属 host/projects 域本体，此处只做委托组装）。
+import type { Project, ProjectPatch, ProjectService, ProjectSummary, RegisterProjectInput, RegisterResult, ReconcileReport } from '@dsh-forge/lib-api'
+import type { DiagEventPayload } from '@dsh-forge/lib-diag'
+import { archiveLegacyWindowDb, isLegacyWindowDb, openDomainDb, domainDbFileName, type DomainDb } from '../db/connection.js'
+import type { ProjectRow } from '../db/row-types.js'
+import { ProjectsRegisterService } from '../projects/register.js'
+import { ProjectsQueryService } from '../projects/queries.js'
+import { reconcileAtStartup } from '../projects/reconcile.js'
+import { createRegistryAdapter, type OfficialRegistryFace, type ProjectRegistryPort } from '../projects/registry-adapter.js'
+
+type DiagPayload = Omit<DiagEventPayload, 'process'>
+
+export interface ProjectsPortDeps {
+  readonly domainDb: DomainDb
+/**
+ * 官方 workspaceRegistry face（registry-adapter 适配缝）——值或惰性取法。
+ * bug e6351546：官方 web 宿主 face provide 晚于插件装配——装配期快照取法恒缺，
+ * absentRegistry typed 拒绝「registry face 缺席」。修口 = 调用期现查（惰性取法注入，
+ * 检测永不缓存——AGENTS 1.6；knowledge 同宿主消费点现查口径对齐）。
+ */
+readonly registry?: OfficialRegistryFace | (() => OfficialRegistryFace | undefined) | undefined
+  /** tasksHome（三态分类器消费目录；缺席 = 跳过碰撞复检——降级面） */
+  readonly tasksHome?: string | undefined
+  readonly onDiag?: ((payload: DiagPayload) => void) | undefined
+}
+
+/** 行 + main 关系行 → dto Project 投影（组装面唯一映射位——零派生逻辑） */
+function toProject(row: ProjectRow, main: { workspaceId: string; wsPath: string } | undefined): Project {
+  return {
+    id: row.id,
+    workspaceId: main?.workspaceId ?? '',
+    wsPath: main?.wsPath ?? '',
+    name: row.title,
+    forgeDir: row.forgeDir,
+    forgeDirExternal: row.forgeDirExternal,
+    worktreeDir: row.worktreeDir,
+    archived: row.archived,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }
+}
+
+/** ProjectsServicePort 常驻 provider（六动词逐项委托域本体）。 */
+export function createProjectsServicePort(deps: ProjectsPortDeps): ProjectService {
+  const { repos, tables } = deps.domainDb
+  const projects = repos.projects
+  const workspaces = repos.workspaces
+  const absentRegistry: ProjectRegistryPort = {
+    list: async () => [],
+    get: async () => undefined,
+    create: async () => {
+      throw new Error('registry face 缺席（装配降级——注册拒绝零副作用）')
+    },
+    delete: async () => undefined,
+    resolveByPath: async () => undefined,
+  }
+  // face 调用期现查（bug e6351546——惰性取法注入：port 装配早于宿主 face provide 亦可达）
+  const resolveFace = (): OfficialRegistryFace | undefined =>
+    typeof deps.registry === 'function' ? deps.registry() : deps.registry
+  let adapted: ProjectRegistryPort | undefined
+  let adaptedFor: OfficialRegistryFace | undefined
+  const registryPort = (): ProjectRegistryPort => {
+    const face = resolveFace()
+    if (face === undefined) return absentRegistry
+    if (adapted === undefined || adaptedFor !== face) {
+      adapted = createRegistryAdapter(face)
+      adaptedFor = face
+    }
+    return adapted
+  }
+  const registry: ProjectRegistryPort = {
+    list: () => registryPort().list(),
+    get: (workspaceId) => registryPort().get(workspaceId),
+    create: (wsPath, title) => registryPort().create(wsPath, title),
+    delete: (workspaceId) => registryPort().delete(workspaceId),
+    resolveByPath: (wsPath) => registryPort().resolveByPath(wsPath),
+  }
+  const registerService = new ProjectsRegisterService({
+    projects,
+    workspaces,
+    registry,
+    tasksHome: deps.tasksHome,
+    workspacesTable: tables.workspaces,
+    onDiag: deps.onDiag,
+  })
+  const queryService = new ProjectsQueryService({ projects, workspaces, registry, onDiag: deps.onDiag })
+  return {
+    registerProject: (input: RegisterProjectInput): Promise<RegisterResult> => registerService.register(input),
+    listProjects: (): Promise<ProjectSummary[]> => Promise.resolve(queryService.listProjects()),
+    // getProject 委托域本体（bug a99a7293：workspaceId 别名锚单源在 queries——行 id 与
+    // 官方语境 projectId 双形态同源解析，端口面零平行实现）
+    getProject: (id: string): Promise<Project | null> => queryService.getProject(id),
+    updateProject: async (id: string, patch: ProjectPatch): Promise<Project> => {
+      const row = projects.get(id)
+      if (row === undefined) throw new Error(`project 不在册：${id}`)
+      if (patch.name !== undefined) projects.updateTitle(id, patch.name, new Date().toISOString())
+      if (patch.archived !== undefined) projects.setArchived(id, patch.archived, new Date().toISOString())
+      if (patch.worktreeDir !== undefined) projects.updateWorktreeDir(id, patch.worktreeDir, new Date().toISOString())
+      const updated = projects.get(id) ?? row
+      return toProject(updated, workspaces.getMain(id))
+    },
+    reconcileAtStartup: (): Promise<ReconcileReport> => {
+      // face 调用期现查（bug e6351546 同口径——缺席时点对账空转，不缓存装配期快照）
+      if (resolveFace() === undefined) {
+        return Promise.resolve({ repaired: [], orphans: [] })
+      }
+      return reconcileAtStartup({ projects, workspaces, registry: registryPort(), onDiag: deps.onDiag })
+    },
+  }
+}
+
+/**
+ * project.db 打开缝（装配期一次；I4 拒开异常上抛由装配方 fail-soft 退兜底）。
+ * dbFile 显式在场即覆盖缺省派生落点（共库集成形态——forge patch 下发 forge/forge.db，
+ * patch 下发即生效单一路径，bug ad14e904：不再自派生 project.db 分库）。
+ * bug 897ad81a（fix-3）：开库失败且命中 legacy 窗口库签名（本域版本线 0 + 本域表在座
+ * ——指纹不可认领旧世代库）→ 只读归档 + 新库重建再开一次；其余失败（tampered/版本
+ * 超前/IO）原样上抛不吞。归档动作经 onDiag 留痕（装配期诊断缝——AGENTS §7 不静默）。
+ */
+export function openProjectsDomainDb(
+  home: string,
+  dbFile?: string,
+  onDiag?: (line: string) => void,
+): DomainDb {
+  const file = dbFile ?? domainDbFileName(home)
+  try {
+    return openDomainDb(home, { prefix: 'project', file })
+  } catch (cause) {
+    if (!isLegacyWindowDb(file)) throw cause
+    const archived = archiveLegacyWindowDb(file)
+    onDiag?.(
+      `[project-seams] legacy 窗口库指纹不可认领（本域版本线 0）——只读归档 ${archived} 后新库重建（原失败：${String(cause)}）`,
+    )
+    return openDomainDb(home, { prefix: 'project', file })
+  }
+}

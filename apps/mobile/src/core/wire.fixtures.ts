@@ -1,4 +1,4 @@
-﻿/**
+/**
  * T1 钉样本 fixtures：37 类持久事件（wire-samples.md 同源——真实会话 v4 JSONL
  * 提取样本，长字符串截断）+ 录制瞬态判别集（官方类型构造）。
  * 仅保留投影判读所需字段；判别面（type/seq/time/data/surfaceOp/sourceEventSeqs）

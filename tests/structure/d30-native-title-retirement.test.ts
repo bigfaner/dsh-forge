@@ -22,9 +22,9 @@
 // D37 更替（任务 dsh-forge-m3.1-ui-alignment/1.24——断言更替非删除，29 walk 位恒数）：
 //   用户裁决「展开、派发、状态筛选控件等功能直观按钮不要添加 tooltip，全面排查」——
 //   控件自释位（展开族/派发钮/状态筛选 chips 三族/✕ 关闭族/⋯ 行操作族/粘滞条清除·排序）
-//   Tooltip 整体退役 → 5 个零 Tooltip 整迁面（status-chips/ProposalStatusChips/PhaseChips/
+//   Tooltip 整体退役 → 5 个零 Tooltip 整迁面（status-chips/PhaseChips/
 //   DispatchButton/sticky-bar）对位迁入 TOOLTIP_RETIRED_FILES；保留位与退役位同文件的
-//   5 个部分退役面（ov-head/proposal-tab/list-view/drawer/index/transition-dialog）以
+//   5 个部分退役面（ov-head/list-view/drawer/index/transition-dialog）以
 //   TOOLTIP_REMAINING_COUNTS 余额冻结 pin 承接（增量保留位对位冻结——新增 Tooltip 须显式扩记）。
 //   全量 141 位逐位判定台账 = walkthrough/D37-self-evident-tooltip.md。
 // 1.7 更替（任务 md-preview-mermaid/1.7——断言更替非删除）：
@@ -109,7 +109,24 @@ function titleAttrs(file: string): TitleAttr[] {
   return out
 }
 
-const all = tsxFiles(SRC).flatMap((f) => titleAttrs(f))
+// 1.14 UI 迁入：add-project + bug 三件迁 @dsh-forge/project client ui——扫描面随迁
+// （组件本体居 plugins/project/ui/{add-project,bug-refs}，title= 记账面不因迁移漏计）。
+// 1.15 拆迁批收口：worktree-picker/session-badge（WorktreeFaces 拆解件）仍不入本扫描面
+// ——其 title= 位均官方 Modal/RiskConfirmation 标题 prop（EXEMPT_LEDGER 冻结账目边界）
+// 与 chip sealed 提示位，维持现状记账不扩。
+// knowledge-plugin-migration 合并随迁（2026-11-15）：overview/docs 视图族迁
+// plugins/project/ui/dock-tabs、knowledge 视图族迁 plugins/knowledge/ui——扫描面随迁扩根。
+const PROJECT_UI = [
+  join(ROOT, 'plugins/project/ui/add-project'),
+  join(ROOT, 'plugins/project/ui/bug-refs'),
+  join(ROOT, 'plugins/project/ui/dock-tabs'),
+  join(ROOT, 'plugins/project/ui/event-node'),
+  join(ROOT, 'plugins/project/ui/remote-entry'),
+  join(ROOT, 'plugins/project/ui/sidebar'),
+  join(ROOT, 'plugins/knowledge/ui'),
+]
+
+const all = [...tsxFiles(SRC), ...PROJECT_UI.flatMap((d) => tsxFiles(d))].flatMap((f) => titleAttrs(f))
 /** DOM 元素（小写标签）= 原生 tooltip 位；大写标签 = 组件标题 prop（排除清单） */
 const isComponent = (owner: string): boolean => owner[0] === owner[0]?.toUpperCase() && owner[0] !== owner[0]?.toLowerCase()
 const dom = all.filter((a) => !isComponent(a.owner))
@@ -119,48 +136,51 @@ for (const a of all) {
 }
 
 /** D30 迁移面（真悬浮提示位——官方 Tooltip 逐文件采纳锚；全量 portal 逃逸）。
- * D37 更替后余额：概览 tab 零 Tooltip 整迁面 5 件 + 部分退役面 5 件（余额冻结 pin）；
- * 知识详情缘侧拖宽手柄 Tooltip 在场（可拖移 dialog 用户裁决回迁——29 walk 位恒数）。 */
+ * D37 更替后余额：概览 tab 零 Tooltip 整迁面 4 件 + 部分退役面 4 件（余额冻结 pin；
+ * proposal-tab 面已随 plugin-spec proposal 域下线批退役出清单）；
+ * 知识详情缘侧拖宽手柄 Tooltip 在场（可拖移 dialog 用户裁决回迁——27 walk 位恒数）。 */
 const TOOLTIP_FILES = [
   'apps/web/src/components/ModeChip.tsx',
-  'apps/web/src/flows/add-project/DirectoryBrowser.tsx',
-  'apps/web/src/flows/add-project/RegisterForm.tsx',
-  'apps/web/src/views/docs/index.tsx',
-  'apps/web/src/views/knowledge/DomainTree.tsx',
-  'apps/web/src/views/knowledge/EntryDrawer.tsx',
-  'apps/web/src/views/knowledge/KnowledgeToolbar.tsx',
-  'apps/web/src/views/overview/feature-tab.tsx',
-  'apps/web/src/views/overview/feature-tab/DocGroupList.tsx',
-  'apps/web/src/views/overview/ov-head.tsx',
-  'apps/web/src/views/overview/proposal-tab.tsx',
-  'apps/web/src/views/overview/drawer/index.tsx',
-  'apps/web/src/views/overview/drawer/timeline.tsx',
-  'apps/web/src/views/overview/drawer/transition-dialog.tsx',
-  'apps/web/src/views/overview/drawer/type-templates/coding.tsx',
-  'apps/web/src/views/overview/drawer/type-templates/parts.tsx',
-  'apps/web/src/views/overview/task-tab/dag-view.tsx',
-  'apps/web/src/views/overview/task-tab/list-view.tsx',
-  'apps/web/src/views/overview/task-tab/swimlane-view.tsx',
-  'apps/web/src/views/overview/task-tab/task-tab.tsx',
-  'apps/web/src/views/session/DispatchEventsPanel.tsx',
-  'apps/web/src/views/session/RecallTab.tsx',
-  'apps/web/src/views/sidebar/ForgeWorkspacePanel.tsx',
+  'plugins/project/ui/add-project/DirectoryBrowser.tsx',
+  'plugins/project/ui/add-project/RegisterForm.tsx',
+  'plugins/project/ui/dock-tabs/docs/index.tsx',
+  'plugins/knowledge/ui/DomainTree.tsx',
+  'plugins/knowledge/ui/EntryDrawer.tsx',
+  'plugins/knowledge/ui/KnowledgeToolbar.tsx',
+  'plugins/project/ui/dock-tabs/overview/feature-tab.tsx',
+  'plugins/project/ui/dock-tabs/overview/feature-tab/DocGroupList.tsx',
+  'plugins/project/ui/dock-tabs/overview/ov-head.tsx',
+  'plugins/project/ui/dock-tabs/overview/drawer/index.tsx',
+  'plugins/project/ui/dock-tabs/overview/drawer/timeline.tsx',
+  'plugins/project/ui/dock-tabs/overview/drawer/transition-dialog.tsx',
+  'plugins/project/ui/dock-tabs/overview/drawer/type-templates/coding.tsx',
+  'plugins/project/ui/dock-tabs/overview/drawer/type-templates/parts.tsx',
+  'plugins/project/ui/dock-tabs/overview/task-tab/dag-view.tsx',
+  'plugins/project/ui/dock-tabs/overview/task-tab/list-view.tsx',
+  'plugins/project/ui/dock-tabs/overview/task-tab/swimlane-view.tsx',
+  'plugins/project/ui/dock-tabs/overview/task-tab/task-tab.tsx',
+  // 1.13 迁移退役：面板正本迁 @dsh-forge/task-loop（ui/dispatch-events-panel/）——Tooltip 采纳锚改指迁地面
+  'plugins/task-loop/ui/dispatch-events-panel/DispatchEventsPanel.tsx',
+  // disc-2 壳侧死面退役：RecallTab 本体迁 @dsh-forge/knowledge（ui/RecallTab.tsx）——扫描路径随迁
+  'plugins/knowledge/ui/RecallTab.tsx',
+  // 1.6：面板本体迁 @dsh-forge/project（ui/sidebar/）——扫描路径随迁
+  'plugins/project/ui/sidebar/ForgeWorkspacePanel.tsx',
 ] as const
 
 /** 组件标题 prop 排除清单（标题文本 prop 非悬浮提示位——D30 记账；计数冻结） */
 const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
-  // 空态标题（文案标题非 tooltip）×18：feature-tab/proposal-tab/task-tab×2/KnowledgeView/
+  // 空态标题（文案标题非 tooltip）×17：feature-tab/task-tab×2/KnowledgeView/
   // RecallTab/docs/drawer/KnowledgeCardGrid×3/dock-tabs×2/EntryDrawer/ForgeWorkspacePanel +
   // bug 域新面：bug-reference/BugPreview×2、overview/bug-tab/bug-list×1
-  EmptyState: 18,
-  // 对话框标题（Modal 头部标题文本）×13：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
-  // + D45 停止并归档确认）/AddProjectFlow/ModeDialog/VerdictDialog +
+  EmptyState: 17,
+  // 对话框标题（Modal 头部标题文本）×11：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
+  // + D45 停止并归档确认）/AddProjectFlow +
   // remote/ForgeRemoteEntry×2（手机远程 dialog 头 + 1.107 PSK 轮换确认弹窗）+
   // knowledge-review-ui 面×2（KnowledgeToolbar 批量裁决确认 + EntryDrawer SC-G 驳回确认
   // ——知识详情承载改自持可拖移 dialog，自绘头行非 Modal 标题 prop）+
   // stage④ 1.8 召回 tab×3（负反馈说明 + read 快照 + 就地详情——ui/card-design.md 官方
   // Modal 形态；详情就地化后 onOpenEntry 桥缝退役）
-  Modal: 13,
+  Modal: 11,
   // stage④ 1.8：read 快照 dialog 组件标题文本 prop（RecallTab 就地快照呈现——标题文本
   // 非悬浮提示位；Modal 承载计入上行）
   RecallSnapshotDialog: 1,
@@ -169,22 +189,22 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   // 官方 Rows 行标题文本 prop ×2（ForgeWorkspacePanel 项目行名称；ForgeEventEntries
   // 'forge/progress' 折叠行单行摘要 title——标题文本非悬浮提示位；
   // DispatchEventsPanel 任务轨行面已由 ForgeEventEntries 折叠组替代——计数随现状收敛）
-  DisclosureRow: 2,
+  // 1.13 迁移退役：ForgeEventEntries 折叠组随迁 task-loop——DisclosureRow title 位余 ForgeWorkspacePanel 项目行 1 位
+  DisclosureRow: 1,
   // 抽屉分块折叠头标题 ×2（任务内容/时间线——drawer/index）
   DrawerSection: 2,
   // 自绘 dialog 头标题 prop（fix-19 ⑥——标题文本非悬浮提示位）
   RemoteDialogHead: 1,
 }
 
-/** D36 ⑤ + D37 Tooltip 退役锚（采纳锚位 1:1 对位迁移——零 Tooltip 在场；29 walk 位恒数：
- * TOOLTIP_FILES 23 + TOOLTIP_RETIRED_FILES 6） */
+/** D36 ⑤ + D37 Tooltip 退役锚（采纳锚位 1:1 对位迁移——零 Tooltip 在场；27 walk 位恒数：
+ * TOOLTIP_FILES 22 + TOOLTIP_RETIRED_FILES 5） */
 const TOOLTIP_RETIRED_FILES = [
-  'apps/web/src/views/overview/task-tab/ViewDropdown.tsx', // D36 ⑤：视图切换钮控件自释（1.23）
-  'apps/web/src/views/overview/status-chips.tsx', // D37：七态筛选 chips（zh 标签在 chip 面；0 计数淡化自释）
-  'apps/web/src/views/overview/proposal-tab/ProposalStatusChips.tsx', // D37：五态筛选 chips（同族）
-  'apps/web/src/views/overview/feature-tab/PhaseChips.tsx', // D37：阶段筛选 chips（同族）
-  'apps/web/src/views/overview/task-tab/DispatchButton.tsx', // D37：派发钮（「派发」label 自明；置灰深灰实底自释）
-  'apps/web/src/views/overview/sticky-bar.tsx', // D37：✕ 清除钮 + ⇅ 排序 pill（通用惯例 + 当前模式标签直出）
+  'plugins/project/ui/dock-tabs/overview/task-tab/ViewDropdown.tsx', // D36 ⑤：视图切换钮控件自释（1.23）
+  'plugins/project/ui/dock-tabs/overview/status-chips.tsx', // D37：七态筛选 chips（zh 标签在 chip 面；0 计数淡化自释）
+  'plugins/project/ui/dock-tabs/overview/feature-tab/PhaseChips.tsx', // D37：阶段筛选 chips（同族）
+  'plugins/project/ui/dock-tabs/overview/task-tab/DispatchButton.tsx', // D37：派发钮（「派发」label 自明；置灰深灰实底自释）
+  'plugins/project/ui/dock-tabs/overview/sticky-bar.tsx', // D37：✕ 清除钮 + ⇅ 排序 pill（通用惯例 + 当前模式标签直出）
 ] as const
 
 /**
@@ -194,11 +214,10 @@ const TOOLTIP_RETIRED_FILES = [
  * 1.23 ⑥ 行卡增量悬停/边界位 ⟞ 跳转会话与拖宽柄）。
  */
 const TOOLTIP_REMAINING_COUNTS: Readonly<Record<string, number>> = {
-  'apps/web/src/views/overview/ov-head.tsx': 2, // projectName + row.value（截断兜底）
-  'apps/web/src/views/overview/proposal-tab.tsx': 4, // title + 打开新会话（副作用说明）+ slug + createdAt（1.7 裁决：提案文档行 relPath 悬浮退役——无摘要不出路径）
-  'apps/web/src/views/overview/task-tab/list-view.tsx': 4, // key/title/sub（1.23 ⑥ 增量悬停交付面）+ S5 ⟞ 执行子会话钮（图标把手非自释——副作用说明，扩记）
-  'apps/web/src/views/overview/drawer/index.tsx': 6, // 拖宽柄（边界位）+ taskKey + title + 诊断失败说明 + S3 扩记：前置引用编号 chip / 会话 chip / 弹窗头编号 chip（{编号} {title} 全名兜底 ×3 位）
-  'apps/web/src/views/overview/drawer/transition-dialog.tsx': 1, // taskKey（截断兜底）
+  'plugins/project/ui/dock-tabs/overview/ov-head.tsx': 2, // projectName + row.value（截断兜底）
+  'plugins/project/ui/dock-tabs/overview/task-tab/list-view.tsx': 4, // key/title/sub（1.23 ⑥ 增量悬停交付面）+ S5 ⟞ 执行子会话钮（图标把手非自释——副作用说明，扩记）
+  'plugins/project/ui/dock-tabs/overview/drawer/index.tsx': 6, // 拖宽柄（边界位）+ taskKey + title + 诊断失败说明 + S3 扩记：前置引用编号 chip / 会话 chip / 弹窗头编号 chip（{编号} {title} 全名兜底 ×3 位）
+  'plugins/project/ui/dock-tabs/overview/drawer/transition-dialog.tsx': 1, // taskKey（截断兜底）
 }
 
 describe('D30 自绘面原生 title= 清零（官方 Tooltip 件对齐——结构 pin）', () => {
@@ -212,7 +231,7 @@ describe('D30 自绘面原生 title= 清零（官方 Tooltip 件对齐——结�
 
   it.each(TOOLTIP_FILES)('官方 Tooltip 采纳锚：%s（import + portal 逃逸在场）', (rel) => {
     const src = readFileSync(join(ROOT, rel), 'utf8')
-    expect(src, `${rel} 缺 Tooltip import`).toContain(`from '@deepseek-ai/dsh-client-ui-primitives'`)
+    expect(src, `${rel} 缺 Tooltip import`).toMatch(/from ["']@deepseek-ai\/dsh-client-ui-primitives["']/)
     expect(src, `${rel} 缺 Tooltip 采纳`).toContain('Tooltip')
     expect(src, `${rel} 气泡未 portal 逃逸（滚动裁剪/transform/层叠容器统一 portal）`).toContain('portal')
   })

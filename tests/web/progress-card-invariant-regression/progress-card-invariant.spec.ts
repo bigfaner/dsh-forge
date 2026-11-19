@@ -11,7 +11,7 @@
 // 断言-契约溯源：每条断言注 CT-GROUP-xx / INV-x（契约 =
 // .forge/docs/proposals/forge-progress-card-invariant-hardening/testing/
 // progress-card-invariant-regression/contracts/contracts.md，锚已回填实锚）。
-// 断言锚（实锚）：组卡 = [data-dswf-event-entries]（组卡根元素——ForgeEventEntries.tsx）；
+// 断言锚（实锚）：组卡 = [data-dswf-event-entries]（组卡根元素——plugins/project/ui/event-node/ForgeEventEntries.tsx）；
 // 行键 = [data-chat-node-key]（官方 chat 行节点键；组卡行键 = `forge-event-progress-<组末
 // progress seq>`——anchorSeq 物化的 DOM 投影）；人类消息行键 = 播种消息 id；
 // 滚动容器 = [data-conversation-scroll]。不锁文案、不锁 DOM 层级。
@@ -32,6 +32,14 @@ import { registerProject } from '../../../e2e/support/rpc.js'
 import { sessionLogById } from '../../../e2e/support/session-files.js'
 import { refreshSessionProjcache } from '../../../e2e/support/replay/transcript-seed.js'
 import { appendSeedEvents, maxEventSeq, SeedLogBuilder, type TurnSeed } from './progress-seed.js'
+
+// 归属移交（用户裁定 2026-11-15；出处：project-plugin-closure-debts 1.13 范围修订）：
+// forge-event-group 折叠组（conversation-views-face 三段）+ 派发工具行（dispatch-tool-row）
+// 终态归属 task-loop 插件化迁移（挂 combo-rearchitecture 输入清单）。fix-6 定谳：注册面
+// （候选 A 静态 inject 边）已在官方 web 宿主生效，本 spec 红由 dev profile 装载面
+// @deepseek-ai/dsh-session 模块实例分裂所致（第四犯另因，与 inject 链无关——
+// rootcause-eventgroup-inject.md 定谳收口段）。project 内现状冻结，本 spec 随迁移迁移。
+test.skip(true, 'forge-event-group 归属移交 task-loop 迁移（用户裁定 2026-11-15）——spec 随迁，project 内现状冻结')
 
 const CARD = '[data-dswf-event-entries]'
 const SCROLL = '[data-conversation-scroll]'

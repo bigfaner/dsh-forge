@@ -373,13 +373,14 @@ export interface LoopCheckpointRowLite {
 }
 
 /**
- * checkpoints 域服务的循环侧结构化消费面（结构兼容 core createCheckpointsService——插件禁
- * import core）。ensureCheckpoint 幂等语义 = 域侧既有（标记在场 no-op appended=false）。
+ * checkpoints 域服务的循环侧结构化消费面（结构兼容 task-loop createCheckpointsService——插件禁
+ * import 域实现）。ensureCheckpoint 幂等语义 = 域侧既有（标记在场 no-op appended=false）。
+ * slug 化：检查点锚 = projectKey + 容器 slug（proposal_id 归属锚退役）。
  */
 export interface LoopCheckpointsFace {
   ensureCheckpoint(input: {
-    readonly projectId: string
-    readonly proposalId: string
+    readonly projectKey: string
+    readonly containerSlug: string
     readonly mark: 'first-pass-complete' | 'merged'
     readonly baseCommitHash: string
     readonly snapshots: LoopCheckpointSnapshot
@@ -389,15 +390,15 @@ export interface LoopCheckpointsFace {
    * wave_seq 缺省域侧自动递增）
    */
   appendCheckpoint(input: {
-    readonly projectId: string
-    readonly proposalId: string
+    readonly projectKey: string
+    readonly containerSlug: string
     readonly mark: 'review-wave-N'
     readonly baseCommitHash: string
     readonly snapshots: LoopCheckpointSnapshot
   }): Promise<unknown>
   listCheckpoints(q: {
-    readonly projectId: string
-    readonly proposalId: string
+    readonly projectKey: string
+    readonly slug: string
     readonly marks?: readonly string[]
   }): Promise<readonly LoopCheckpointRowLite[]>
 }
@@ -507,11 +508,11 @@ async function headHashOf(loop: ActiveLoop): Promise<string | undefined> {
  */
 async function ensureFirstPassMark(loop: ActiveLoop): Promise<'appended' | 'present' | 'skipped' | 'failed'> {
   const checkpoints = loop.deps.checkpoints
-  if (checkpoints === undefined || loop.proposalId === undefined) return 'skipped'
+  if (checkpoints === undefined) return 'skipped'
   try {
     const rows = await checkpoints.listCheckpoints({
-      projectId: loop.scope.projectId,
-      proposalId: loop.proposalId,
+      projectKey: loop.scope.projectId,
+      slug: loop.record.source.slug,
       marks: ['first-pass-complete'],
     })
     if (rows.some((r) => r.mark === 'first-pass-complete')) return 'present'
@@ -522,8 +523,8 @@ async function ensureFirstPassMark(loop: ActiveLoop): Promise<'appended' | 'pres
     }
     const snapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source)
     const result = await checkpoints.ensureCheckpoint({
-      projectId: loop.scope.projectId,
-      proposalId: loop.proposalId,
+      projectKey: loop.scope.projectId,
+      containerSlug: loop.record.source.slug,
       mark: 'first-pass-complete',
       baseCommitHash: head,
       snapshots,
@@ -547,9 +548,9 @@ async function ensureFirstPassMark(loop: ActiveLoop): Promise<'appended' | 'pres
  */
 async function retroSectionOf(loop: ActiveLoop): Promise<string> {
   const checkpoints = loop.deps.checkpoints
-  if (checkpoints === undefined || loop.proposalId === undefined) return ''
+  if (checkpoints === undefined) return ''
   try {
-    const rows = await checkpoints.listCheckpoints({ projectId: loop.scope.projectId, proposalId: loop.proposalId })
+    const rows = await checkpoints.listCheckpoints({ projectKey: loop.scope.projectId, slug: loop.record.source.slug })
     const threshold = await reviewWaveThresholdOf(loop)
     return renderRetroInstruction(loop.record.source.slug, rows, threshold)
   } catch (cause) {
@@ -571,11 +572,11 @@ async function retroSectionOf(loop: ActiveLoop): Promise<string> {
  */
 async function ensureMergedBackfill(loop: ActiveLoop): Promise<void> {
   const checkpoints = loop.deps.checkpoints
-  if (checkpoints === undefined || loop.proposalId === undefined) return
+  if (checkpoints === undefined) return
   try {
     const rows = await checkpoints.listCheckpoints({
-      projectId: loop.scope.projectId,
-      proposalId: loop.proposalId,
+      projectKey: loop.scope.projectId,
+      slug: loop.record.source.slug,
       marks: ['first-pass-complete', 'retro-done', 'merged'],
     })
     const has = (mark: string): boolean => rows.some((r) => r.mark === mark)
@@ -592,8 +593,8 @@ async function ensureMergedBackfill(loop: ActiveLoop): Promise<void> {
     }
     const snapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source)
     await checkpoints.ensureCheckpoint({
-      projectId: loop.scope.projectId,
-      proposalId: loop.proposalId,
+      projectKey: loop.scope.projectId,
+      containerSlug: loop.record.source.slug,
       mark: 'merged',
       baseCommitHash: head,
       snapshots,
@@ -727,14 +728,9 @@ export interface LoopDriverDeps {
   readonly escalation?: LoopEscalationHook
   /**
    * checkpoints 域服务消费面（机械③——first-pass-complete 标记 / merged 漏标记 lazy 补；
-   * 结构兼容 core createCheckpointsService。缺席 = 机制惰性不判，行为零变化）
+   * 结构兼容 task-loop createCheckpointsService。缺席 = 机制惰性不判，行为零变化）
    */
   readonly checkpoints?: LoopCheckpointsFace
-  /**
-   * 容器 → 提案 id 解析（机械③——检查点 proposal_id 归属锚，装配面经提案谱系注入；
-   * 缺席/未命中 = 机制惰性不判，行为零变化）
-   */
-  readonly resolveProposalId?: (projectId: string, source: ContainerRef) => Promise<string | undefined>
   /**
    * 容器分支 HEAD 解析器（机械③标记时点 base_commit_hash——缺省回落 gitHeadCommit 真解析；
    * 单测注入桩。worktree 缺席或解析故障 = 回落最近一次结算 commit hash，双缺席 = 标记跳过）
@@ -895,8 +891,6 @@ interface ActiveLoop {
   readonly e2eAttributed: Set<string>
   /** 3c 轮数总量计数（生命周期总量——resume 续用不清零；达 maxRounds 即 ⑮ 终局） */
   rounds: number
-  /** 机械③：容器 → 提案 id（start 时解析一次的检查点归属锚；缺席 = 机制惰性不判） */
-  proposalId?: string
   /** 机械③：最近一次 success 结算 commit hash（标记时点 HEAD 的回落锚——worktree 缺席径） */
   lastCommitHash?: string
   /**
@@ -1505,19 +1499,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         return { ok: true, loopId: id }
       }
       emitLoopDiag(loop, 'info', 'loop-start', `任务源 ${source.slug} 派发循环启动`) // bug 33728995④ 启动里程碑
-      // 机械③：容器 → 提案 id 解析（检查点归属锚——fail-soft，缺席 = 机制惰性不判）
-      if (deps.resolveProposalId !== undefined) {
-        try {
-          loop.proposalId = await deps.resolveProposalId(projectId, source)
-        } catch (cause) {
-          emitLoopDiag(
-            loop,
-            'warn',
-            'loop-proposal-id',
-            `forge loop proposal id resolve failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
-          )
-        }
-      }
+      // 机械③：检查点归属锚 = 容器 slug 弱引用（proposal_id 解析面随提案域退役删除）
       // e2e 红灯基线门（改进7/disc-2/bug 006d8bfe 后台化）：基线跑批移入循环 fiber——
       // start 立即返回启动回执（工具调用面零阻塞——长跑/挂死套件曾把 start 卡满全量窗）。
       // runRound 首领任务前 await ensureE2eBaseline（in-flight 去重 + 实例缓存同源——挂起/
@@ -1743,7 +1725,7 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
   try {
     // 机械③：merged 漏标记 lazy 兜底——下个容器循环启动时校验补标记（收口判据见函数注；
     // 机制未装配时零 await 零行为变化——不扰动循环启动时序）
-    if (loop.deps.checkpoints !== undefined && loop.proposalId !== undefined) await ensureMergedBackfill(loop)
+    if (loop.deps.checkpoints !== undefined) await ensureMergedBackfill(loop)
     while (!loop.controller.signal.aborted) {
       // 3c 最大轮次封顶（终止条件全集之一）：达上限按 ⑮ 结束叙述收口（建议重派），不再续领。
       // 计数在 ActiveLoop（生命周期总量——resume 续用不清零，反复挂起/回流不绕过封顶）
@@ -2091,9 +2073,6 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     // 在场时欠账卡才指示「比对 E2E_BASELINE_RED 行」；无红灯/基线未接线 = 兜底文案
     // （不指示真机不存在的简报行）
     ...(baseline !== undefined && baseline.redCases.length > 0 ? { e2eBaselineRedCases: baseline.redCases } : {}),
-    // 机械④（bug 548ea94b 装配断链修复）：提案 id 归属锚随结算输入透传——recordWaveCheckpoint
-    // 的 proposalId 缺席短路恒不触发，此映射是修正波标记的真实结算路径开关
-    ...(loop.proposalId !== undefined ? { proposalId: loop.proposalId } : {}),
   })
   record.inFlight = undefined // 结算已定（success/blocked/killed/失败同径）——在飞清位
   if (signal.aborted) return unwindOutcome(loop) // stop 径终态注销 / pause 径挂起保留登记

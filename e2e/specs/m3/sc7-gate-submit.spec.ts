@@ -13,7 +13,8 @@ import { expect } from '@playwright/test'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
-import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { openTaskLoopDb } from '../../support/sqlite.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-sc7'
 const FEATURE = 'sc7-feat'
@@ -33,24 +34,24 @@ async function rejectMessage(promise: Promise<unknown>): Promise<string> {
 
 test('@web-e2e @m3 SC7·gate 与提交定式：AC 拒含清单 + gate_json 落账 + commit 两态', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
-    const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
     await forgeInvoke(page, 'forge:features/register', { projectId, slug: FEATURE, title: 'SC7 gate 演示' })
     const add = async (title: string, type: string, acceptanceCriteria?: string[]): Promise<{ taskId: string; slug: string; localId: string }> =>
       (await driver.call('forgeTasks', 'addTask', {
-        projectId, source: { kind: 'feature', slug: FEATURE }, title, type, ...(acceptanceCriteria !== undefined ? { acceptanceCriteria } : {}),
+        projectKey, slug: FEATURE, title, type, ...(acceptanceCriteria !== undefined ? { acceptanceCriteria } : {}),
       })) as { taskId: string; slug: string; localId: string }
 
     // ── ① AC 双门：缺测试证据拒（清单逐行）→ 补齐放行 ──
     const AC = ['[AC-1] 断言甲在场（SC7 演示）', '[AC-2] 断言乙含清单呈现（SC7 演示）']
     const acTask = await add('SC7 带验收清单任务', 'doc', AC)
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: acTask.slug, localId: acTask.localId }, sessionId: 'e2e-sc7-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: acTask.slug, localId: acTask.localId }, sessionId: 'e2e-sc7-dispatch' })
     const noEvidence = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: acTask.slug, localId: acTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: acTask.slug, localId: acTask.localId }, result: 'success',
       summary: '缺测试证据的结算（应被拒）', gate: { compile: true, fmt: true, lint: true, test: false },
       sessionId: 'e2e-sc7-executor',
     }))
@@ -59,46 +60,49 @@ test('@web-e2e @m3 SC7·gate 与提交定式：AC 拒含清单 + gate_json 落�
     expect(noEvidence, '错误信息含 AC 清单逐行（乙）').toContain(AC[1] as string)
     const COMMIT_A = '2468ace13579bdf02468ace13579bdf02468ace1'
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: acTask.slug, localId: acTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: acTask.slug, localId: acTask.localId }, result: 'success',
       summary: 'SC7 补齐测试证据结算', gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT_A, sessionId: 'e2e-sc7-executor',
     })
 
     // ── ② gate 任务：缺摘要拒 → 全四门 gate_json 落账 ──
     const gateTask = await add('SC7 gate 摘要任务', 'gate')
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, sessionId: 'e2e-sc7-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, sessionId: 'e2e-sc7-dispatch' })
     const noGate = await rejectMessage(driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, result: 'success',
       summary: '缺 gate 载荷的结算（应被拒）', sessionId: 'e2e-sc7-executor',
     }))
     expect(noGate, 'gate 缺摘要 = ERR_GATE_SUMMARY_REQUIRED 面').toContain('需要 gate 数字摘要')
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: gateTask.slug, localId: gateTask.localId }, result: 'success',
       summary: 'SC7 gate 四门结算', gate: { compile: true, fmt: true, lint: false, test: true },
       sessionId: 'e2e-sc7-executor',
     })
 
-    // ── ③ commit 两态 + gate_json 账本断言 ──
+    // ── ③ commit 两态 + gate 账本断言（task-loop.db task_settlements 域账——域写点单源） ──
     const plainTask = await add('SC7 无 commit 结算任务', 'doc')
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: plainTask.slug, localId: plainTask.localId }, sessionId: 'e2e-sc7-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: plainTask.slug, localId: plainTask.localId }, sessionId: 'e2e-sc7-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: plainTask.slug, localId: plainTask.localId }, result: 'success',
+      projectKey, taskRef: { slug: plainTask.slug, localId: plainTask.localId }, result: 'success',
       summary: 'SC7 无 commit 结算（缺席态）', sessionId: 'e2e-sc7-executor',
     })
-    const db = openForgeDbAt(dir)
+    const db = openTaskLoopDb(udDir)
     try {
-      const acRow = db.prepare<unknown[], { commit_hash: string | null; gate_json: string | null }>(
-        `SELECT commit_hash, gate_json FROM task_records WHERE task_id = ? AND verb = 'submit'`,
+      const acRow = db.prepare<unknown[], { commit_hash: string | null; evidence_json: string | null }>(
+        `SELECT commit_hash, evidence_json FROM task_settlements WHERE task_id = ? ORDER BY id DESC LIMIT 1`,
       ).get(acTask.taskId)
       expect(acRow?.commit_hash, 'commit_hash 落账（携带态）').toBe(COMMIT_A)
-      const gateOf = (taskId: string): Record<string, unknown> | undefined => {
-        const row = db.prepare<unknown[], { gate_json: string | null }>(`SELECT gate_json FROM task_records WHERE task_id = ? AND verb = 'submit'`).get(taskId)
-        return row?.gate_json === null || row?.gate_json === undefined ? undefined : (JSON.parse(row.gate_json) as Record<string, unknown>)
+      const gatesOf = (taskId: string): Record<string, unknown> | undefined => {
+        const row = db.prepare<unknown[], { evidence_json: string | null }>(
+          `SELECT evidence_json FROM task_settlements WHERE task_id = ? ORDER BY id DESC LIMIT 1`,
+        ).get(taskId)
+        const evidence = row?.evidence_json == null ? undefined : (JSON.parse(row.evidence_json) as { gates?: Record<string, unknown> })
+        return evidence?.gates
       }
-      expect(gateOf(acTask.taskId), 'AC 任务 gate_json 四布尔').toMatchObject({ compile: true, fmt: true, lint: true, test: true })
-      expect(gateOf(gateTask.taskId), 'gate 任务 gate_json 结构化（lint=false 如实）').toMatchObject({ compile: true, fmt: true, lint: false, test: true })
+      expect(gatesOf(acTask.taskId), 'AC 任务 gate 四布尔（evidence_json.gates 聚合）').toMatchObject({ compile: true, fmt: true, lint: true, test: true })
+      expect(gatesOf(gateTask.taskId), 'gate 任务 gate 结构化（lint=false 如实）').toMatchObject({ compile: true, fmt: true, lint: false, test: true })
       const plainRow = db.prepare<unknown[], { commit_hash: string | null }>(
-        `SELECT commit_hash FROM task_records WHERE task_id = ? AND verb = 'submit'`,
+        `SELECT commit_hash FROM task_settlements WHERE task_id = ? ORDER BY id DESC LIMIT 1`,
       ).get(plainTask.taskId)
       expect(plainRow?.commit_hash, 'commit 缺席态 = NULL（两态账本）').toBeNull()
     } finally {

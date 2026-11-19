@@ -99,7 +99,7 @@ describe('dev profile 装载行漂移守护（bug bc89637c 类别回归守卫）
 
     // overlay 在场门注行（源码字面量扫描——与 overlay.ts 同源，行改名即红）
     const overlayRows = new Set(pluginLoadRowShorts(read('apps/host/src/boot/overlay.ts')))
-    expect(overlayRows.has('git-worktree'), 'overlay 注行扫描应命中 git-worktree（扫描失效即假绿）').toBe(true)
+    expect(overlayRows.has('project'), 'overlay 注行扫描应命中 project（1.17 批二卸旧装新——装载切换 @dsh-forge/project；扫描失效即假绿）').toBe(true)
 
     const presetNames = new Set(presetCarriedPlugins())
     // 预设通道本体 = presets/*.patch.yml 携带行（overlay 每启消费同一底稿注行，dev 同径）
@@ -111,7 +111,8 @@ describe('dev profile 装载行漂移守护（bug bc89637c 类别回归守卫）
     )
     const stagedNames = new Set(
       Object.entries(PRODUCT_PLUGINS)
-        .filter(([, sw]) => sw.staged !== false)
+        // librarySeed（库形态闭包种子——宿主 dist 静态 import，零装载行）不入装载对账期望集
+        .filter(([, sw]) => sw.staged !== false && sw.librarySeed !== true)
         .map(([name]) => name),
     )
 
@@ -148,7 +149,8 @@ describe('产品 client 插件 bundle 保障链对齐（vite 清单 → dev/buil
     expect(shorts.length).toBeGreaterThan(0)
 
     const { ensurePackages } = await import('../../scripts/dev-ensure-packages.mjs')
-    const devSet = new Set(ensurePackages(ROOT).map((pkg) => pkg.replace(/^(packages\/)?plugins\//, '')))
+    // 批1 ⑦ 双根枚举后条目含 root 级树相对路径（'plugins/expert-squad'）——短名取末段统一
+    const devSet = new Set(ensurePackages(ROOT).map((pkg) => pkg.split('/').pop()))
 
     const rootPkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> }
     const buildScript = rootPkg.scripts['build'] ?? ''
@@ -158,8 +160,9 @@ describe('产品 client 插件 bundle 保障链对齐（vite 清单 → dev/buil
     const missing: string[] = []
     for (const short of shorts) {
       if (!devSet.has(short)) missing.push(`${short}: scripts/dev.mjs ensure 数组缺席`)
-      // 位置感知：'plugins/<short> build' 同时命中 'packages/plugins/<short>' 与根级 'plugins/<short>' 两种 build 链写法
-      if (!buildScript.includes(`plugins/${short} build`)) missing.push(`${short}: 根 build 链缺席`)
+      // 根 build 链 -C 路径：packages/plugins/<short>（子居所）与 plugins/<short>（root 级树——
+      // 批1 ④ expert-squad）两形态均视为在场（'x build' 后缀同席判据）
+      if (!buildScript.includes(`${short} build`)) missing.push(`${short}: 根 build 链缺席`)
       if (!(('@dsh-forge/' + short) in webPkg.dependencies)) missing.push(`${short}: apps/web dependencies 缺席`)
     }
     expect(missing).toEqual([])

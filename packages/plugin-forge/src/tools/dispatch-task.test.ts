@@ -167,7 +167,6 @@ function harness(): Harness {
   }
   const deps: DispatchTaskToolDeps = {
     tasks,
-    proposals: {} as DispatchTaskToolDeps['proposals'],
     bugs: {} as DispatchTaskToolDeps['bugs'],
     checkpoints,
     resolveProjectId: (cwd) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
@@ -253,7 +252,6 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     const base = [
       'aggregateBugs',
       'ask_user_question',
-      'createProposal',
       'create_goal',
       'dispatchTask',
       'get_goal',
@@ -274,8 +272,6 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'stopTaskLoop',
       'subagent_fork',
       'taskStats',
-      'transitionFeature',
-      'transitionProposal',
       'unblockTask',
       'update_goal',
       'updateTask',
@@ -405,14 +401,13 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
   it('bug 989997bd：triage deny 表与真机注册面求交——未注册名（win 域无 bash）不入 deny；注册面缺席 = 全表兼容', () => {
     // 真机 Windows 宿主全局工具面样本（retest-1.13-r2 hostlog 已知名表——无 bash）
     const registered = [
-      'addTask', 'ask_user_question', 'createProposal', 'dispatchTask', 'edit', 'exit_plan_mode',
+      'addTask', 'ask_user_question', 'dispatchTask', 'edit', 'exit_plan_mode',
       'getBug', 'glob', 'grep', 'job_kill', 'job_list', 'job_output', 'listBugs', 'listTasks',
       'present', 'pwsh', 'queryTask', 'read', 'read_image', 'recordBug', 'resolveBug',
       'send_message', 'skill', 'submitTask', 'subagent_fork', 'todo_write', 'updateTask',
       'validateMermaid', 'web_fetch', 'web_search', 'workflow', 'write',
       'stopTaskLoop', 'taskStats', 'list_agents', 'interrupt_agent', 'create_goal', 'get_goal',
       'update_goal', 'recordImplCheckpoint', 'queryImplCheckpoint', 'listImplCheckpoints',
-      'transitionProposal',
     ]
     const filtered = deriveTriageToolFilter(registered)
     expect(filtered.deny).not.toContain('bash') // 真机未注册名——restrict loud 校验必拆 spawn

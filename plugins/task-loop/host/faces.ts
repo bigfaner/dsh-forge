@@ -1,0 +1,953 @@
+// 结构化最小面（定位：业务——插件对 dsh 宿主服务的消费形状锚定；knowledge 同型）。
+// 与 core/index.ts 的 CoreContextFace 同一纪律：插件不依赖 dsh 运行时包
+// （@deepseek-ai/* / cordis），仅以结构化子面消费官方面——真实现
+// （ToolRuntime / SystemPrompt / 真 Context）结构兼容，运行期由 profile 装配注入。
+// 对 core 的唯一依赖 = forgeTasks 服务接口类型（contracts 单一来源），
+// 零实现级 import（可独立发版前提）。参数 schema 面恒取官方 enforced subset 标量形
+// （string/integer/number/boolean + 数组）——嵌套负载（gate/include/vars）在 tool 面
+// 平铺为显式参数（Interface 8 snake_case + 任务定位两显式参口径的延伸）。
+import { dirname } from 'node:path'
+import {
+  DEFAULT_EXPERT_MAPPING,
+  DIAG_EVENT,
+  type DiagLevel,
+  type ForgeSettingsService,
+  type TaskType,
+  workerAgentOptionsOf,
+} from '@dsh-forge/contracts'
+import type { TasksService } from './domain/tasks/service.js'
+import type { CheckpointsService } from './domain/checkpoints/service.js'
+import type { NarrationChannel, NarrationSendOptions } from './notify/index.js'
+import { forgeLoopSource } from './forge-loop-source.js'
+import type { ForgeLoopNarrationMeta } from './forge-loop-source.js'
+
+/** dsh 官方 ContentBlock 的文本块子面（output.render 产物） */
+export interface TextContentBlock {
+  readonly type: 'text'
+  readonly text: string
+}
+
+/**
+ * 参数 schema（注册面消费的编译后 JSON Schema 形状——官方
+ * parameterSchemaSpecToJsonSchema 产物子集；type 固定 object 根）。
+ */
+export interface ToolParametersSchema {
+  readonly type: 'object'
+  readonly properties: Readonly<Record<string, ToolParameterProperty>>
+  readonly required?: readonly string[]
+}
+
+/** 单个参数属性（官方 enforced JSON Schema subset 内的节点——标量与数组，无嵌套 object/enum） */
+export interface ToolParameterProperty {
+  readonly type: 'string' | 'integer' | 'number' | 'boolean' | 'array'
+  /** 数组参数的元素类型（type: 'array' 时）；标量参数无此字段 */
+  readonly items?: { readonly type: 'string' | 'integer' | 'number' | 'boolean' }
+  readonly description: string
+}
+
+/** 会话头（官方 SessionHeader 子面：cwd = 会话创建时的工作目录 = 工作区根；
+ * agentPreset = 会话**出生**预设 id——出生事实，deepFreeze 不随切换更新） */
+export interface ToolSessionHeaderFace {
+  readonly cwd?: string
+  /** 会话创建头携带的 agent 预设 id（上游 SessionHeader.agentPreset 同位；无预设组合 = 缺席）。
+   * 出生快照——预设切换后此值**过期**：当前值 = snapshotEvents 的 'agent-preset/selected'
+   * 事件回放 > 本出生头（上游 agentPreset 投影同径——"never the header alone"） */
+  readonly agentPreset?: string
+}
+
+/** 会话事件（官方 SessionEvent 消费切片——防御读面：type 判别 + data 载荷） */
+export interface ToolSessionEventFace {
+  readonly type?: unknown
+  readonly data?: unknown
+}
+
+/** dsh 会话（官方 Session 子面：id = claim/submit 的执行会话键） */
+export interface ToolSessionFace {
+  readonly id: string
+  /** 官方 sessionCwd 读取位（dsh-tool-fs 同型：exec.agent.session.header.cwd） */
+  readonly header?: ToolSessionHeaderFace
+  /** 兼容位：Session 顶层 cwd（结构面允许双读，真实现只有 header.cwd） */
+  readonly cwd?: string
+  /**
+   * 官方 Session.snapshotEvents 结构同位（事件日志只读快照）。预设切换上游记
+   * 'agent-preset/selected' 事件（出生头冻结不更新）——当前预设 = 事件回放 > 出生头
+   * （dsh-agent-preset-registry agentPreset 投影同径）。缺席（结构漂移/测试窄面）=
+   * 只读出生头。
+   */
+  snapshotEvents?(): readonly ToolSessionEventFace[]
+}
+
+/** dsh agent（官方 Agent 子面：id === session id；session 为其驱动的活会话） */
+export interface ToolAgentFace {
+  readonly session: ToolSessionFace
+  /**
+   * 官方 Agent.status 消费子面（官方 AgentStatus 子集——'idle' | 'running'；bug a098e20c
+   * 在途轮打断判定读位）。缺席（结构漂移/测试窄面）= 视为不在途，零打断。
+   */
+  readonly status?: 'idle' | 'running'
+  /**
+   * 官方 Agent.cancel 消费子面（cause 取 {kind:'user'} 用户径；options.keepInbox 保留
+   * queued/steering 输入——官方 CancelOptions 同名语义）。官方对空闲 agent 为 no-op；
+   * 缺席 = 零打断（fail-soft）。
+   */
+  cancel?(cause: { readonly kind: 'user' }, options?: { readonly keepInbox?: boolean }): void
+}
+
+/** tool 执行上下文（官方 ToolRunContext 子面——会话身份 + 取消信号（3.4 dispatchTask
+ *  spawn 透传；官方执行身份面携带，缺席兜底新建）） */
+export interface ToolExecFace {
+  readonly agent?: ToolAgentFace
+  /** 官方 exec.signal（协作取消——驱动器 spawn 请求必填位的透传源） */
+  readonly signal?: AbortSignal
+}
+
+/** 注册面 tool 定义（官方 ToolDefinition 消费字段子集：name/description/parameters/output/execute） */
+export interface ForgeToolDefinition {
+  readonly name: string
+  readonly description: string
+  readonly parameters: ToolParametersSchema
+  readonly output: {
+    /** 原始 JSON Schema（官方 enforced subset；registry 对成功值强制校验） */
+    readonly schema: unknown
+    /** 已验证规范化值 → 模型可见内容（纯投影） */
+    render(args: unknown, value: unknown): readonly TextContentBlock[]
+  }
+  execute(args: unknown, exec: ToolExecFace): Promise<unknown>
+  /**
+   * 纯同步并发分类器（官方 ToolDefinition.isConcurrencySafe 同名同语义可选位）：
+   * 仅返回 true 选择加入兄弟 tool 调用并行执行组；缺席/异常/非 true 返回 = 保守互斥
+   * （官方运行期默认）。元数据不进模型面；声明 true 的执行不得 mutate 父会话持有状态
+   * （上游 parallel-tool-call 契约）。
+   */
+  isConcurrencySafe?(args: unknown): boolean
+}
+
+/** dsh tools 服务子面（官方 ToolRuntime.register） */
+export interface ToolRegisterFace {
+  /** 注册一枚 tool；返回注销器（Cordis effect disposer 同型） */
+  register(definition: ForgeToolDefinition): () => void
+}
+
+/** dsh systemPrompt 服务子面（官方 SystemPrompt.section / SystemPrompt.variable） */
+export interface SystemPromptSectionFace {
+  /** 注册有序提示词段；返回注销器。text 内 {{var}} 会被插值——段文本禁用裸 {{ */
+  section(section: ForgePromptSection): () => void
+  /**
+   * 注册提示词变量（官方 SystemPrompt.variable——每次组装按 AssembleContext 求值，
+   * 段文本以 {{name}} 严格引用；缺席（结构漂移/测试窄面）= 变量零注册，引用它的段
+   * 会在渲染期抛 unknown variable——装配缺口 fail-loud 不静默）。
+   */
+  variable?(name: string, provider: (context: ForgeAssembleContext) => string | undefined): () => void
+}
+
+/**
+ * 官方 AssembleContext 运行期子面（结构收窄——声明面仅 scope/signal，运行期由
+ * dsh-agent assembleContextFor 携带 agent，agent.id = SessionId）。
+ */
+export interface ForgeAssembleContext {
+  readonly scope?: unknown
+  readonly agent?: {
+    readonly id?: string
+    /** 运行期 live Agent 附带 session（parentCwdOf 同式读取位）——header.origin === 'subagent' 识别子会话装配 */
+    readonly session?: { readonly header?: { readonly origin?: string } }
+  }
+}
+
+/** forge:pipeline 段形状（Interface 8：name/order/text；text 官方函数形态 = 按装配求值） */
+export interface ForgePromptSection {
+  readonly name: string
+  /** 升序拼接；同 order 按名称码序（knowledge 500 → forge:pipeline 510） */
+  readonly order: number
+  /** 静态文本或按装配求值的函数（官方 PromptSection 函数形态）；文本禁用裸 {{ */
+  readonly text: string | ((context: ForgeAssembleContext) => string)
+}
+
+// ─────────────────────────── dsh jobs 注册表收窄面（async-dispatch §7——dispatch 后台形态注入面） ───────────────────────────
+
+/** job 终态（上游 JobOutcome 结构子面——三值 status + detail/result 原样透传） */
+export interface DispatchJobOutcome {
+  /** 结局：finished=completed / cancelled=killed / broke=failed */
+  readonly status: 'completed' | 'killed' | 'failed'
+  /** 终态原因（exit code / kill reason 合并——上游 registry 原样） */
+  readonly detail?: string
+  /** 产出值（结算后首次模型消费读交付一次——上游语义原样） */
+  readonly result?: string
+}
+
+/**
+ * spec.run 回调的收窄执行面（上游 JobHandle 的单通道投影）：appendLog 为唯一写入口——
+ * 适配层单点硬编码 channel:'log'（F4 通道矩阵：默认通道/stdout/stderr/未知名均喂模型，
+ * 唯 log 被模型消费读结构性滤除——观察者专属通道），channel 值调用面不可达，杜绝拼错
+ * 通道静默入模型；默认通道 append / updateProgress 结构性不可达（F5 泄露路径裁剪）。
+ */
+export interface DispatchJobRunHandle {
+  /** 追加一行生产者叙述（人面 = jobs 面板 live 流；模型消费读 renderModelDelta 滤除） */
+  appendLog(line: string): void
+}
+
+/** producer hooks（上游 JobHooks 结构子面——cancel 幂等 + done 终态承诺） */
+export interface DispatchJobHooks {
+  /** 请求终止（同步幂等；reason 透传进终态 detail） */
+  cancel(reason?: string): void
+  /** producer 资源释放后兑现；拒绝由上游运行时转 failed（零转写透传） */
+  readonly done: Promise<DispatchJobOutcome>
+}
+
+/** job 声明（上游 JobSpec 的 forge 消费子面） */
+export interface DispatchJobSpec {
+  /** producer kind（id 前缀 <kind>-N；上游开放字符串命名空间） */
+  readonly kind: string
+  /** 单行模型面标签 */
+  readonly label: string
+  /** 属主会话 id（owner Agent 销毁自动取消其 job；缺席 = 无主 job） */
+  readonly owner?: string
+  /** 预检后启动工作；同步返回 hooks（抛出 = 无注册残留——上游语义原样） */
+  run(handle: DispatchJobRunHandle): DispatchJobHooks
+}
+
+/** jobs 面收窄（上游 JobRegistry.start 的本地结构化投影——start 即回 { jobId }） */
+export interface DispatchJobsFace {
+  /** 注册并启动一个后台 job；返回注册表签发的 job id（<kind>-N） */
+  start(spec: DispatchJobSpec): { jobId: string }
+}
+
+/**
+ * 上游 jobs 注册表消费子面（dsh-jobs JobRegistry.start 的结构兼容形——仅声明适配所需
+ * 字段；真实现结构兼容，运行期经 ctx.reflect.get('jobs') 防御读取注入。零上游 import：
+ * boundaries pin 不动——jobs 面为本地结构化接口）。
+ */
+export interface DispatchJobsRegistryFace {
+  start(spec: {
+    readonly kind: string
+    readonly label: string
+    readonly owner?: string
+    /** 上游 JobHandle 全量面（适配收窄前可见——含默认通道 append/updateProgress） */
+    run(job: { append(text: string, options?: { readonly channel?: string }): void }): DispatchJobHooks
+  }): string
+}
+
+/** 适配层 channel 硬编码点（全仓唯一——F4 观察者专属通道） */
+const LOG_CHANNEL = 'log' as const
+
+/**
+ * 适配层：上游注册表结构面 → 收窄 DispatchJobsFace（channel:'log' 全仓单点硬编码）。
+ * spec.run 收到的句柄只有 appendLog——内部闭包把 line 转投 job.append(line,
+ * { channel: LOG_CHANNEL })；默认通道与 updateProgress 对消费方结构性不可达。
+ */
+export function adaptDispatchJobs(registry: DispatchJobsRegistryFace): DispatchJobsFace {
+  return {
+    start(spec) {
+      const jobId = registry.start({
+        kind: spec.kind,
+        label: spec.label,
+        ...(spec.owner !== undefined ? { owner: spec.owner } : {}),
+        run: (job) =>
+          spec.run({
+            appendLog: (line) => {
+              job.append(line, { channel: LOG_CHANNEL })
+            },
+          }),
+      })
+      return { jobId }
+    },
+  }
+}
+
+/** 插件对宿主 ctx 的结构化消费面（真 Context 结构兼容；容器语义 slug 化——bugs 域
+ *  服务面随退役批移出本包：forgeBugs→project、forgeProjects→project） */
+export interface ForgeContextFace {
+  /** 任务域服务（本插件域内 provide——host/domain/tasks/service.ts；运行期 Cordis inject 具名契约） */
+  forgeTasks: TasksService
+  /** checkpoints 域服务（本插件域内 provide——host/domain/checkpoints/service.ts） */
+  forgeCheckpoints: CheckpointsService
+  /** dsh 官方 reflect 服务子面（3.4——可选服务防御读取：cordis 4.0.4 无 '?' 可选 inject
+   *  后缀，forgeSettings 缺席（settingsFile 未注入）经 reflect.get 降级读取而非 inject 阻载） */
+  readonly reflect?: {
+    get(name: string, strict?: boolean): unknown
+    /** 可选 provide 面（expert-squad-forge 1.2——档案取用面 'forgeExperts' 依赖注入；缺席 = 不提供） */
+    provide?(name: string, service: unknown): void
+    /** 已声明服务名表（bug 04d445f4 反向拉取缝——dirKeys.* 约定名枚举；缺席 = 零第三方键拉取） */
+    readonly props?: Readonly<Record<string, unknown>>
+  }
+  /** dsh 官方 tool 注册面 */
+  tools: ToolRegisterFace
+  /** dsh 官方系统提示词面 */
+  systemPrompt: SystemPromptSectionFace
+  /**
+   * dsh ctx.on 事件注册收窄面：'session/created'/'session/disposed' 生命周期事件
+   * （ForgeSessionLifecycleFace——官方 dsh-session Session 消费子面）。可选：
+   * 缺席 = 挂接面 fail-soft。
+   */
+  readonly on?: ForgeEventRegisterFace
+  /**
+   * dsh 官方事件发射收窄面（Context.emit——diag/log 事件域诊断埋点，expert-resolve 径
+   * 消费）。可选：缺席/发射故障 = 诊断 fail-soft 零埋点（诊断不构成取用正确性依赖）。
+   */
+  readonly emit?: (event: string, payload: Record<string, unknown>) => void
+}
+
+/** 官方 dsh-session Session 公告事件消费子面（header.cwd = 会话工作区根读位） */
+export interface ForgeSessionLifecycleFace {
+  readonly id?: unknown
+  readonly header?: { readonly cwd?: unknown }
+}
+
+/** dsh ctx.on 事件面收窄（官方 Context.on 消费——全局派发监听；agent/pre-step waterfall
+ *  挂接随 bug-mention-prestep 归 project 插件，不在本面） */
+export interface ForgeEventRegisterFace {
+  (
+    event: 'session/created' | 'session/disposed',
+    listener: (session: ForgeSessionLifecycleFace) => void,
+    options?: { readonly global?: boolean },
+  ): () => void
+}
+
+// ─────────────────────────── dsh commands 注册表收窄面（S2——run-tasks-host-command 指令两枚） ───────────────────────────
+
+/**
+ * 指令执行回执（官方 CommandResult 消费子面）：UI command plane 直接渲染（零模型消息——
+ * "The registry itself submits nothing"）；success 的 text 可选、error 恒带 text。
+ */
+export interface ForgeCommandResult {
+  readonly kind: 'success' | 'error'
+  readonly text?: string
+}
+
+/** 指令调用入参（官方 CommandInvocation 消费子面）：敲指令会话身份 + 指令名后原文 + 取消信号 */
+export interface ForgeCommandInvocation {
+  /** 敲指令会话（官方 Agent 结构子面：id = ownerSessionId 锚——decisions #20 stop 作用域键） */
+  readonly agent: ToolAgentFace
+  /** 指令名后原文（<slug> 直通参数；无参 = 空白） */
+  readonly rawInput: string
+  /** 派发 UI 请求的取消信号（官方 invocation.signal——问询透传；缺席 = 无取消通道） */
+  readonly signal?: AbortSignal
+}
+
+/** 指令定义（官方 CommandDefinition 消费子集：name/description/input.hint/handler——零上游 import） */
+export interface ForgeCommandDefinition {
+  /** 小写指令名（无前导斜杠） */
+  readonly name: string
+  /** 发现 UI 的人类可读摘要 */
+  readonly description: string
+  /** 可选自由输入提示（hint 展示于 composer——`[<slug>]`） */
+  readonly input?: { readonly hint: string }
+  /** 对接收 agent 执行、零模型回合（UI command plane 语义） */
+  handler(invocation: ForgeCommandInvocation): ForgeCommandResult | Promise<ForgeCommandResult>
+}
+
+/** dsh commands 注册表收窄面（官方 CommandRuntime.register——返回注销器；S2 经 reflect.get 防御读取） */
+export interface CommandRegisterFace {
+  register(definition: ForgeCommandDefinition): () => void
+}
+
+/** dsh agents 注册表收窄面（官方 AgentRegistry.get——活根解析：叙述通道 + 裁决问询 agent 随载） */
+export interface AgentLookupFace {
+  get(id: string): unknown
+}
+
+/**
+ * dsh sessionController 收窄面（1.19——host SessionController.resolveAgent：未进入会话的
+ * 激活/进入面）。上游契约：解析或 resume 一条普通会话到其活 Agent（并发 resume 去重）——
+ * 即宿主 prompt 径的进入机制（"Admit one prompt after explicitly resuming its Session"）。
+ * 结果 = { agent } | { error }（ApiSessionAgentResult 鸭子最小面：agent 键在场 = 活根；
+ * error 键 = 稳定会话域失败——session/not-found 等）。
+ */
+export interface SessionActivationFace {
+  resolveAgent(id: string): Promise<{ readonly agent?: unknown } | { readonly error?: unknown }>
+}
+
+/** forge notice 生产者名（ContextProducerView.label 裸 kind 兜底渲染——decisions #28 producer 归因） */
+export const FORGE_NOTICE_SOURCE_KIND = 'forge-dispatch'
+
+/** 上游 notice 折叠摘要单行界（CONTEXT_SUMMARY_MAX_CHARS=120 同值——超界省略号截断） */
+const NOTICE_SUMMARY_MAX_CHARS = 120
+
+/** 折叠摘要钳制（≤120 字符——超界省略号截断；预构建摘要同样保底） */
+function clampSummary(text: string): string {
+  return text.length <= NOTICE_SUMMARY_MAX_CHARS ? text : `${text.slice(0, NOTICE_SUMMARY_MAX_CHARS - 1)}…`
+}
+
+/** 叙述文本 → 官方 UserMessage 形状（createUserMessage 语义结构化最小面：id 铸造 + role/content/source）。
+ * headline = 预构建场景单行摘要（可选——传入则 source.summary=headline；缺省回退整段截断，兼容不破坏）。
+ * followup 径（1.18 AD-4 循环哨兵）source.kind='forge-loop'——机器发出的 user-role 消息带类型化
+ * source，消费端按 kind 分派为循环叙述卡而非人工输入蓝气泡；loop 上下文挂结构化字段
+ * {loopKind,runId,task,state}（runId 铸发唯一）。notice 径保持 forge-dispatch 生产者归因不变。 */
+function forgeUserMessage(text: string, form: 'notice' | 'followup', headline?: string, loop?: ForgeLoopNarrationMeta): unknown {
+  const summary = clampSummary(headline !== undefined && headline !== '' ? headline : text)
+  return {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content: [{ type: 'text', text }],
+    source:
+      form === 'notice'
+        ? { kind: FORGE_NOTICE_SOURCE_KIND, form: 'notice', summary }
+        : forgeLoopSource({ ...loop, summary }),
+  }
+}
+
+/**
+ * 指令行消息（S2 producer 显式提交——/plan 先例的 forge 消费形）：known command 经上游
+ * slash 仲裁路由 command plane 执行时注册表本身零转录（"the registry itself submits
+ * nothing"），指令单行的转录承载 = producer 显式提交的 user 消息（1.18 AD-4——source
+ * kind 'forge-loop'：机器发出的指令单行非人工输入，消费端按循环叙述面分派；经
+ * agent.followup 收件开新回合——会话非 blank 化）。
+ */
+export function forgeCommandLineMessage(text: string, loop?: ForgeLoopNarrationMeta): unknown {
+  return {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content: [{ type: 'text', text }],
+    source: forgeLoopSource({ ...loop, summary: clampSummary(text) }),
+  }
+}
+
+/** forge 结算 user message 的 source kind（GUI 对该 source 补投影渲染——回程对 GUI 用户可见） */
+export const FORGE_SETTLED_SOURCE_KIND = 'dispatch-loop-settled'
+
+/** 结算文本 → 持久 user message（settlement 形态——source {kind:'dispatch-loop-settled'}，3b④） */
+function forgeSettleMessage(text: string): unknown {
+  return {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content: [{ type: 'text', text }],
+    source: { kind: FORGE_SETTLED_SOURCE_KIND },
+  }
+}
+
+/** 结算必达告警（会话失活/投递面缺席时落盘——不投死信，降级为任意会话凭 slug 认领处置） */
+function warnSettleUndelivered(diag: ForgeDiagEmitFace | undefined, sessionId: string, text: string, reason: string): void {
+  emitForgeDiag(diag, {
+    level: 'warn',
+    event: 'forge-narration',
+    message: `结算通知未送达（会话 ${sessionId} ${reason}）——挂起/结束处置已降级为任意会话凭容器 slug 认领（dispatchTask）。原文：${text.split('\n')[0] ?? ''}`,
+  })
+}
+
+/** 上游 agent send 把手收窄（官方 Agent.send(message, target, wakeup) 鸭子——结构化最小面，零上游 import） */
+interface SendAgentFace {
+  send?: (message: unknown, target: string, wakeup?: boolean) => void
+}
+
+/** 官方 InboxTarget 承重值（loop-event-delivery——官方 dsh-agent InboxTarget = 'next-turn' |
+ * 'next-step'，真机定罪 bug 8d1a18bd：非法 target 'nextStep' 的 send 永不落 agent/inbox/spliced；
+ * next-step 队列 claim 整批并取）。 */
+const INBOX_TARGET_NEXT_STEP = 'next-step' as const
+
+/**
+ * 未进入态激活缝（bug 8d1a18bd 修复——叙述径与指令径 run-dag-tasks enterLiveRoot 同源）：
+ * host sessionController.resolveAgent 活根解析闭包（装配期经 index.ts enterAgent 惰性
+ * reflect.get 注入）。可选：缺席 = 单参形态向后兼容（registry 把手直用）。
+ */
+export type NarrationActivationFace = (ownerSessionId: string) => Promise<unknown>
+
+/**
+ * 适配层：agents 注册表 → 叙述 send 单出口通道（loop-event-delivery §接口收窄——旧
+ * notice/followup/settle 三方法收敛消失）。全部消息统一 `agent.send(message, 'next-step',
+ * wakeup)`：wakeup=false 持久留痕不唤醒驱动器（①-⑨⑪⑫ 事件径），wakeup=true 即时唤醒
+ * （⑩⑬⑭⑮⑯⑰ 唤醒径 + 结算单点，路由由 narrator 按 SCENARIOS 场景表换算）；消息 source
+ * kind 铸造（forge-dispatch / forge-loop / dispatch-loop-settled）供 GUI 折叠判别。
+ * 激活恒先行（bug 8d1a18bd——真机定罪：注册表可持陈旧把手，send 面在场而运行时内件已死，
+ * 调用静默无效即零落库）：激活缝在场即每 send 调用先解析活根，激活活根为收件目标首选；
+ * registry 把手仅在激活面缺席/失败/返回非活根时兜底。会话无活根（主会话已关闭/删除）或
+ * send 面缺席 = 静默跳过（settle 形态加必达告警——降级为任意会话凭 slug 认领处置）；
+ * narrator fail-soft 包装之外的第二道防线。
+ */
+export function adaptAgentNarrationChannel(agents: AgentLookupFace, activate?: NarrationActivationFace, diag?: ForgeDiagEmitFace): NarrationChannel {
+  return {
+    async send(sessionId: string, text: string, options: NarrationSendOptions = {}): Promise<void> {
+      const form = options.form ?? 'notice'
+      let target: SendAgentFace | undefined
+      let activationFailed = false
+      if (activate !== undefined) {
+        try {
+          const activated = (await activate(sessionId)) as SendAgentFace | undefined
+          if (typeof activated?.send === 'function') target = activated
+          else activationFailed = true
+        } catch (cause) {
+          activationFailed = true
+          emitForgeDiag(diag, {
+            level: 'warn',
+            event: 'forge-narration',
+            message: `forge narration activation failed (${sessionId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+            sessionId,
+          })
+        }
+      }
+      if (target === undefined) {
+        target = agents.get(sessionId) as SendAgentFace | undefined
+        // 激活失败走 registry 兜底：注册表可持陈旧把手（send 面在场而运行时内件已死，
+        // 调用静默无效即零落库——bug 8d1a18bd 同源）——必达告警留痕（激活成功径零日志）。
+        if (activationFailed && typeof target?.send === 'function') {
+          emitForgeDiag(diag, {
+            level: 'warn',
+            event: 'forge-narration',
+            message: `激活失败走 registry 兜底（会话 ${sessionId}）——注册表把手可能陈旧，send 静默无效即零落库。`,
+            sessionId,
+          })
+        }
+      }
+      if (typeof target?.send !== 'function') {
+        if (form === 'settle') warnSettleUndelivered(diag, sessionId, text, '已失活/无活根或 send 面缺席')
+        return
+      }
+      const message =
+        form === 'settle'
+          ? forgeSettleMessage(text)
+          : forgeUserMessage(text, form, options.headline, options.loop)
+      target.send(message, INBOX_TARGET_NEXT_STEP, options.wakeup === true)
+    },
+  }
+}
+
+// ─────────────────────────── 诊断发射面（AGENTS §7——diag/log 事件域类型化 emit 单面） ───────────────────────────
+
+// DIAG_EVENT 单源在 @dsh-forge/contracts（bug 5f7d7ebd——faces.ts 镜像常量已删，
+// 与 core telemetry 消费同一事件域，杜绝双份字面量漂移）。
+
+/** 诊断发射基础载荷（contracts DiagEventPayload 结构子面——process 进程位由发射缝统一补齐） */
+export interface ForgeDiagBase {
+  readonly level: DiagLevel
+  /** 诊断事件类别（功能域前缀命名——forge-narration / job-tree / loop-start 等） */
+  readonly event: string
+  readonly message: string
+  readonly stack?: string
+  readonly projectId?: string
+  readonly sessionId?: string
+}
+
+/** 诊断发射载荷（基础面 + 就地可得扩展字段——index signature 透传） */
+export interface ForgeDiagPayload extends ForgeDiagBase {
+  readonly [key: string]: unknown
+}
+
+/** 注入式诊断发射缝（装配期 createDiagEmitter 产物——ctx.emit 类型化闭包） */
+export type ForgeDiagEmitFace = (payload: ForgeDiagBase) => void
+
+/**
+ * 注入式诊断缝发射（diag-face-consolidation 统一配方——宿主侧全部诊断站点单出口）：
+ * 缝在场 → 透传（process='child' 由缝闭包补齐）；缝缺席或发射失败 → 按级分流 console
+ * 兜底（error→console.error、其余→console.warn——core emitDiagOrFallback 同径，
+ * 诊断不静默）。fire-and-forget：兜底自身永不抛（诊断面零反压业务）。
+ */
+export function emitForgeDiag(diag: ForgeDiagEmitFace | undefined, payload: ForgeDiagBase): void {
+  if (diag !== undefined) {
+    try {
+      diag(payload)
+      return
+    } catch {
+      // 发射失败 → 兜底（诊断不静默）
+    }
+  }
+  const line = `[${payload.event}] ${payload.message}`
+  if (payload.level === 'error') console.error(line)
+  else console.warn(line)
+}
+
+/**
+ * 建装配期诊断发射缝（ctx.emit 可选面收窄；缺席 = undefined——消费侧 emitForgeDiag
+ * 兜底径承担，诊断不静默）。
+ */
+export function createDiagEmitter(emit?: (event: string, payload: Record<string, unknown>) => void): ForgeDiagEmitFace | undefined {
+  if (emit === undefined) return undefined
+  return (payload) => {
+    emit(DIAG_EVENT, { ...payload, process: 'child' })
+  }
+}
+
+// ─────────────────────────── 项目容器目录解析缝（S1c/S4 装配接线收口——incident-log 落盘面） ───────────────────────────
+
+/** 项目域服务收窄面（反向解析缝消费两法：getProject 反查 ws_path + deriveTaskStoreDir 单源派生；
+ *  project 目录事实能力归 project 插件（提案 §一裁决）——结构化子面消费，零类型级依赖） */
+export interface ForgeProjectDirServiceFace {
+  getProject(projectId: string): Promise<{ readonly wsPath: string; readonly forgeDir?: string } | null>
+  deriveTaskStoreDir(input: { readonly workspaceDir: string }): Promise<{ readonly dir: string }>
+}
+
+/** 项目域服务收窄面（incident-log 反向解析缝消费——与 ForgeProjectDirServiceFace 同面单源） */
+export type ProjectDirServiceFace = ForgeProjectDirServiceFace
+
+/**
+ * projectId → 容器库目录记忆（incident-log 的反向解析缝落点——1.11 装配接线收口）。
+ * 解析链：projectId → getProject().ws_path（workspaceDir canonical path）→ deriveTaskStoreDir
+ * （{tasksHome}/{flatten}@{hash8} 单源——插件不复制派生逻辑）。两跳皆异步而事件子文件夹
+ * 落盘为同步径，以记忆化桥接：resolve 只读记忆（未命中触发懒解析并按 fail-soft 返回
+ * undefined——该次详情行省略，后续命中），warm 供装配期逐绑定项目预热。
+ *
+ * 空结果策略（与 ProjectWorkspaceRoots 的缝分叉点）：项目未注册（getProject null）=
+ * delete 记忆、可重试（绑定增量注册后再解析）；派生空（deriveTaskStoreDir 返回
+ * dir === ''）= 解析中占位 '' 永驻——warm 的 has 短路即不再重试。
+ */
+export interface ProjectContainerDirs {
+  /** 记忆读数（同步；未命中/解析中/解析失败 = undefined + 触发懒解析） */
+  resolve(projectId: string): string | undefined
+  /** 预热（fire-and-forget 逐项目解析记忆；已记忆/解析中跳过——幂等） */
+  warm(projectIds: readonly string[]): void
+}
+
+/** 建解析缝（装配单例——装配方闭包持有，incident 仓 resolveContainerDir 消费） */
+export function createProjectContainerDirs(projects: ProjectDirServiceFace): ProjectContainerDirs {
+  const dirs = new Map<string, string>()
+  const warm = (projectId: string): void => {
+    if (dirs.has(projectId)) return
+    dirs.set(projectId, '') // 解析中占位（并发重复触发收敛为单跳；失败即清除重试）
+    void (async () => {
+      const project = await projects.getProject(projectId)
+      if (project === null) {
+        dirs.delete(projectId) // 未注册项目 = 未记忆（后续绑定增量注册后可再解析）
+        return
+      }
+      const derived = await projects.deriveTaskStoreDir({ workspaceDir: project.wsPath })
+      // 派生空不覆盖占位：'' 永驻 Map，后续 warm 的 has 短路——不重试（空结果策略分叉点：
+      // 另一侧 ProjectWorkspaceRoots 空 = delete 可重试）
+      if (derived.dir !== '') dirs.set(projectId, derived.dir)
+    })().catch(() => {
+      dirs.delete(projectId) // fail-soft：解析失败 = 未记忆（下次事件再触发懒解析，零外抛）
+    })
+  }
+  return {
+    resolve(projectId) {
+      const memo = dirs.get(projectId)
+      if (memo !== undefined && memo !== '') return memo
+      warm(projectId)
+      return undefined
+    },
+    warm(projectIds) {
+      for (const id of projectIds) warm(id)
+    },
+  }
+}
+
+// ─────────────────────────── dirKey 锚解析缝（forge-dirs-query-tool §2.1 ctx 装配——唯一带 IO 层） ───────────────────────────
+
+/**
+ * 项目域服务收窄面（锚解析缝消费两法：getProject 反查 forgeDir/wsPath + deriveTaskStoreDir
+ * 单源派生 taskHome——与 ProjectDirServiceFace 同源两法）。
+ */
+export type ForgePathsProjectsFace = ForgeProjectDirServiceFace
+
+/** 解析器族上下文骨架（forge-paths.ForgePathsResolveContext 的锚四键——slug/localId 由工具入参补充） */
+export interface ForgePathsAnchorContext {
+  readonly projectHome?: string
+  readonly taskHome?: string
+  readonly forgeDir?: string
+  readonly docsRoot?: string
+}
+
+/** 锚解析缝（forgeDirs/forgeResolvePath 双工具共消费——projectId → 锚四键一次性解析） */
+export interface ForgePathsAnchors {
+  anchorsOf(projectId: string): Promise<ForgePathsAnchorContext>
+}
+
+/**
+ * 建锚解析缝（装配单例）：forgeDir = getProject().forgeDir（projects 行单源）、taskHome =
+ * deriveTaskStoreDir 单源派生（faces 记忆化缝同链——解析器族保持纯函数）、projectHome =
+ * env `DSH_FORGE_TASKS_HOME`（非空，宿主 paths.ts resolveTasksHome 同键）> dirname(taskHome)
+ * （{tasksHome}/{flatten}@{hash8} 布局倒数一段即派生根）。项目未注册/面缺席 = plain Error
+ * fail-loud（装配缺口不静默——主径 requireProjectId 已先行拦截未绑定会话）。
+ */
+export function createForgePathsAnchors(projects: ForgePathsProjectsFace, env: { readonly DSH_FORGE_TASKS_HOME?: string } = process.env): ForgePathsAnchors {
+  return {
+    async anchorsOf(projectId) {
+      const project = await projects.getProject(projectId)
+      if (project === null || typeof project.forgeDir !== 'string' || project.forgeDir.trim() === '') {
+        throw new Error(`forge-paths: project anchors unavailable (projectId=${projectId}——未注册或 forgeDir 缺席)`)
+      }
+      const derived = await projects.deriveTaskStoreDir({ workspaceDir: project.wsPath })
+      if (derived.dir === '') {
+        throw new Error(`forge-paths: taskHome derivation empty (projectId=${projectId}——tasksHome 未注入 core 装配)`)
+      }
+      const taskHome = derived.dir
+      const projectHome = env.DSH_FORGE_TASKS_HOME !== undefined && env.DSH_FORGE_TASKS_HOME !== '' ? env.DSH_FORGE_TASKS_HOME : dirname(taskHome)
+      return { projectHome, taskHome, forgeDir: project.forgeDir }
+    },
+  }
+}
+
+// ─────────────────── 项目工作区根记忆缝（bug 8b041612——T3 卷宗探测 dir 语义修正） ───────────────────
+
+/** 项目域服务收窄面（工作区根缝消费单法：getProject 反查 ws_path——单法面收窄） */
+export type ProjectWsRootServiceFace = Pick<ForgeProjectDirServiceFace, 'getProject'>
+
+/**
+ * projectId → 项目工作区根（ws_path canonical）记忆（bug 8b041612 修正缝：
+ * modelingReportPresent 卷宗探测的 dir 语义 = 工作区根，非容器库目录——两缝分置）。
+ * 记忆化脚手架与 ProjectContainerDirs 同构（resolve 只读记忆 + warm 预热 + 解析中占位
+ * ''），但空结果策略相反：本缝空（项目未注册 / ws_path 空白）= delete 记忆、下次触发
+ * 可重试；ContainerDirs 派生空 = 占位永驻不重试（分叉点见其接口注释）。分叉为有意保留，
+ * 两缝不预合并——第三缝出现时再抽通用工厂（空结果策略即工厂的参数化差异）。
+ */
+export interface ProjectWorkspaceRoots {
+  /** 记忆读数（同步；未命中/解析中/解析失败 = undefined + 触发懒解析） */
+  resolve(projectId: string): string | undefined
+  /** 预热（fire-and-forget 逐项目解析记忆；已记忆/解析中跳过——幂等） */
+  warm(projectIds: readonly string[]): void
+}
+
+/** 建工作区根记忆缝（装配单例——recurrenceFaces.modelingReportPresent 消费） */
+export function createProjectWorkspaceRoots(projects: ProjectWsRootServiceFace): ProjectWorkspaceRoots {
+  const roots = new Map<string, string>()
+  const warm = (projectId: string): void => {
+    if (roots.has(projectId)) return
+    roots.set(projectId, '') // 解析中占位（并发单跳；失败清除重试）
+    void (async () => {
+      const project = await projects.getProject(projectId)
+      if (project !== null && project.wsPath.trim() !== '') roots.set(projectId, project.wsPath)
+      // 空（未注册 / ws_path 空白）= 未记忆可重试——与 ContainerDirs 派生空永驻相反（分叉点）
+      else roots.delete(projectId)
+    })().catch(() => {
+      roots.delete(projectId) // fail-soft：解析失败 = 未记忆（下次再触发，零外抛）
+    })
+  }
+  return {
+    resolve(projectId) {
+      const memo = roots.get(projectId)
+      if (memo !== undefined && memo !== '') return memo
+      warm(projectId)
+      return undefined
+    },
+    warm(projectIds) {
+      for (const id of projectIds) warm(id)
+    },
+  }
+}
+
+// ─────────────────────────── 专家团装配面（experts 服务可选消费——AGENTS 1.6 配方） ───────────────────────────
+
+// 随包预设专家档案目录（FORGE_EXPERTS_ROOT_DIR）随 expert-squad 收回另立子提案移出本包——
+// registerRoot 装配面不在本包（提案 §一裁决）；experts 消费一律经下方可选消费配方现查。
+
+/** 本包包名（registerRoot 的 pluginName 实参——专家实例 ID 前缀 `插件名#键`，proposal
+ *  expert-squad-default-routing D6 寻址契约；缺席 = expert-squad 侧回落 `plugin` 前缀，
+ *  experts.<实例ID> 配置键结构性不命中）。 */
+export const FORGE_PACKAGE_NAME = '@dsh-forge/task-loop' as const
+
+/**
+ * experts 服务结构最小面（expert-squad registry 收窄——本插件不依赖该包，结构兼容消费；
+ * get 的 fail-loud 错误语义（expert not found / disabled: <key>）由实现侧承担，本面原样透传）。
+ */
+export interface ExpertsServiceFace {
+  /** 按键取档案（不存在/禁用 → 实现侧 fail-loud 抛错，消息含键名）。reasoning = experts
+   *  服务折叠应答档位（①条目 > ②档案 frontmatter > ③defaultAgentOptions——expert-squad
+   *  buildEntry 单源；'low'|'medium'|'high'，缺省 = 不下发 effort）。 */
+  get(key: string): {
+    readonly name: string
+    readonly title?: string
+    readonly personaMd: string
+    readonly tools?: readonly string[]
+    readonly model?: string
+    readonly provider?: string
+    readonly reasoning?: 'low' | 'medium' | 'high'
+  }
+  /** 追加 plugin 内置层 root（只登记不重扫——生效须显式 refresh 一次；pluginName = 实例
+   *  ID 前缀，FORGE_PACKAGE_NAME 单源）。 */
+  registerRoot(ctx: unknown, dir: string, pluginName?: string): void
+  /** 整体重扫（registerRoot 后的显式生效面；结构可选——缺席 = 实现无刷新语义）。 */
+  refresh?(): Promise<void>
+}
+
+/** claim 链消费的专家档案投影（ExpertEntry 收窄——persona 组装所需最小字段集） */
+export interface ForgeExpertProfile {
+  readonly name: string
+  readonly title?: string
+  readonly personaMd: string
+  readonly tools?: readonly string[]
+  readonly model?: string
+  readonly provider?: string
+  /** experts 服务折叠应答档位（①条目 > ②frontmatter > ③defaultAgentOptions；缺省不下发） */
+  readonly reasoning?: 'low' | 'medium' | 'high'
+  /** 取用面注解（bug 17734753）：本次解析最终生效的专家键（变量路由 > settings 覆盖 >
+   *  随包预设映射）；仅 claim 结果带回消费，persona/spawn 组装面不读。 */
+  readonly expertKey?: string
+}
+
+/**
+ * spawn 组装消费的档案工具/模型投影（expert-squad-forge 1.4——ForgeExpertProfile 再收窄：
+ * tools → deriveWorkerToolFilter 的 allow 并集面、model → agentOptions.model 覆盖；
+ * 缺席键 = 对应组装面回落现状）。
+ */
+export interface WorkerDispatchProfile {
+  readonly tools?: readonly string[]
+  readonly model?: string
+  readonly provider?: string
+  /** experts 服务折叠应答档位（spawn 组装 reasoning 三级合成的取数面——缺省不下发） */
+  readonly reasoning?: 'low' | 'medium' | 'high'
+}
+
+/** 档案取用面：按任务类型解析映射键并取档案（core 零 IO 纪律——IO 全在本面闭包内）。
+ *  键解析优先级（expert-squad-forge-2 纳入 4·claim 变量路由）：expertKey（任务变量注入的
+ *  专家键——复盘/知识沉淀等程序单点派生径）> settings experts.mapping 覆盖 > DEFAULT
+ *  _EXPERT_MAPPING 预设；变量在场时零 settings 读取直取（变量单点注入面，优先级压倒一切
+ *  映射）。三段均缺键 = 返回 undefined（expert-squad-forge 1.13——未用类型排除预设，不取
+ *  用不阻断 claim，core 侧 persona 仅程序段形态兼容）。settings 读失败 = 回落预设映射
+ *  （fail-soft 诊断）；有键（变量/用户覆盖/随包预设命中）而档案缺失/禁用 = experts.get 错
+ *  误原样外抛（claim 期 fail-loud——变量键拼错同样阻断派发且消息含键名，任务留 pending）。
+ *  命中档案时生效键以 expertKey 注解随档案带回（bug 17734753——claim 两径合一取回）。 */
+export type ExpertProfileResolver = (taskType: string, expertKey?: string) => Promise<ForgeExpertProfile | undefined>
+
+/** 建档案取用面（装配单例——core claim 链经依赖注入消费；experts 缺席 = undefined 不注入） */
+export function createExpertProfileResolver(deps: {
+  readonly experts: ExpertsServiceFace
+  readonly settings?: Pick<ForgeSettingsService, 'get'>
+  /** 装配期 refresh 完成屏障（expert-squad-forge 1.10——refresh 是 fire-and-forget 触发的
+   *  一次性重扫，未结算前首笔 get 会误触发 not-found fail-loud；resolver 首调先等待本
+   *  promise 结算——已由装配侧吞错归一为 settled-safe，此处零异常路径）。 */
+  readonly ready?: Promise<void>
+  /** 诊断发射缝（diag-face-consolidation——settings 读降级告警走 diag 面；缺席 = console 兜底） */
+  readonly diag?: ForgeDiagEmitFace
+}): ExpertProfileResolver {
+  return async (taskType: string, expertKey?: string): Promise<ForgeExpertProfile | undefined> => {
+    await deps.ready
+    let key: string | undefined = expertKey // 变量路由（expert-squad-forge-2）：在场即压倒两段映射
+    if (key === undefined) {
+      key = DEFAULT_EXPERT_MAPPING[taskType as TaskType]
+      if (deps.settings !== undefined) {
+        try {
+          const settings = await deps.settings.get()
+          key = settings.experts?.mapping?.[taskType as TaskType] ?? key
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause)
+          emitForgeDiag(deps.diag, {
+            level: 'warn',
+            event: 'expert-resolve',
+            message: `forge 专家映射读取降级（fail-soft，回落默认映射）：${taskType}——${message}`,
+          })
+        }
+      }
+    }
+    if (key === undefined) return undefined // 预设缺键且无用户覆盖 = 排除预设，不取用（persona 仅程序段）
+    let entry: ReturnType<ExpertsServiceFace['get']>
+    try {
+      entry = deps.experts.get(key)
+    } catch (cause) {
+      // fail-loud 原样外抛 + 附人格键提示一行（帮助用户把旧类型名误写为映射值的场景自查）
+      const message = cause instanceof Error ? cause.message : String(cause)
+      throw new Error(`${message}\n提示：映射值应为人格键（如 tech-writer）；可用专家经 list_experts 工具列出后自查`, { cause })
+    }
+    return {
+      name: entry.name,
+      ...(entry.title !== undefined ? { title: entry.title } : {}),
+      personaMd: entry.personaMd,
+      ...(entry.tools !== undefined ? { tools: entry.tools } : {}),
+      ...(entry.model !== undefined ? { model: entry.model } : {}),
+      ...(entry.provider !== undefined ? { provider: entry.provider } : {}),
+      ...(entry.reasoning !== undefined ? { reasoning: entry.reasoning } : {}),
+      // 生效键随档案带回（bug 17734753——类型映射径 expertKey 进 ClaimTaskResult 的解析点）
+      ...(key !== undefined ? { expertKey: key } : {}),
+    }
+  }
+}
+
+/**
+ * spawn 组装消费的档案投影缝（专家档案 → WorkerDispatchProfile）：按任务类型现取档案
+ * （resolver 在场即取；缺键 = undefined 形态兼容）后收窄为组装面字段。单源抽出供
+ * 装配方（index.ts）与生产装配路径单测同源消费——投影漂移即红。
+ */
+export function createWorkerProfileProjection(deps: {
+  readonly resolver: ExpertProfileResolver
+}): (taskType: string) => Promise<WorkerDispatchProfile | undefined> {
+  return async (taskType) => {
+    const profile = await deps.resolver(taskType)
+    if (profile === undefined) return undefined // 形态兼容：缺档 = 纯回落面（非空壳对象）
+    return {
+      ...(profile.tools !== undefined ? { tools: profile.tools } : {}),
+      ...(profile.model !== undefined ? { model: profile.model } : {}),
+      ...(profile.provider !== undefined ? { provider: profile.provider } : {}),
+      ...(profile.reasoning !== undefined ? { reasoning: profile.reasoning } : {}),
+    }
+  }
+}
+
+
+// ─────────────────────────── 通用 worker 兜底路由档位（code-design 模块④——同结算门异路由） ───────────────────────────
+
+/** worker agentOptions 路由级（contracts WorkerRouteLevel 同族形态——provider/model 成对 + reasoning 档位） */
+export type WorkerAgentOptions = {
+  readonly provider: string
+  readonly model: string
+  readonly reasoningEffort?: "low" | "medium" | "high"
+}
+
+/** 派发路由档位（模块④）：expert = experts 在场且档案命中；generic = 缺席/未命中兜底档。
+ *  同结算门异路由：settle 核不感知本档位（结构性不变量）。 */
+export interface WorkerRouteProfile {
+  readonly kind: "expert" | "generic"
+  /** generic = 父会话 agentOptions 原样继承（provider/model 同源） */
+  readonly agentOptions?: WorkerAgentOptions
+  /** 工具宽度骨架（allow/deny 矩阵求值在 dispatch-core/assemble deriveWorkerToolFilter） */
+  readonly toolFilter?: { readonly allow?: readonly string[]; readonly deny: readonly string[] }
+  /** 人格（generic = 程序段缺省档——triage 侧 GENERIC_TRIAGE_PERSONA 单源；expert 侧 persona 由既有链组装） */
+  readonly persona?: string
+}
+
+/**
+ * 派发路由档位解析（消费点现查单源——AGENTS 1.6：experts 在场性每次派发调用期求值，
+ * 检测结果永不 memoize；expertsOf 现查缝由装配方闭包注入）。experts 在场且档案命中 →
+ * expert 档位；服务整体缺席或未命中映射 → generic 档位 + emitDiag info 留痕（不静默）；
+ * 专家档案缺席（bug d14b0b6c——官方宿主无 tech-writer 预设等「expert not found: <key>」
+ * 缺席族抛错）→ generic 档位 + emitDiag info 留痕（fail-soft 不停环——三铁律与 experts
+ * 服务缺席同构：现查/fail-soft/emitDiag）；其余档案键坏（registry unavailable 等真实故障）
+ * → 原样外抛（fail-loud 入重试上限，既有判据保留——禁用/服务故障仍 loud 可见）。
+ * ctx 形参保留派发上下文位（现 DispatchCtx 语义并入 deps——签名稳定优先）。
+ */
+export async function resolveWorkerProfile(
+  deps: {
+    /** experts 现查缝：每次调用期求值返回取用面（缺席 = undefined）；禁缓存其结果 */
+    readonly expertsOf: () => ExpertProfileResolver | undefined
+    /** 父会话 agentOptions 现值（generic 档继承源——spawn 请求同源透传） */
+    readonly parentAgentOptions: () => WorkerAgentOptions | undefined
+    /** 诊断发射缝（generic 降级留痕） */
+    readonly diag?: ForgeDiagEmitFace
+  },
+  taskType: string,
+  expertKey?: string,
+): Promise<WorkerRouteProfile> {
+  const experts = deps.expertsOf()
+  if (experts === undefined) {
+    emitForgeDiag(deps.diag, {
+      level: "info",
+      event: "worker-route",
+      message: `experts 服务缺席——${taskType} 走通用 worker 兜底档（agentOptions 父会话继承）`,
+    })
+    return { kind: "generic", agentOptions: deps.parentAgentOptions() }
+  }
+  let profile: Awaited<ReturnType<ExpertProfileResolver>>
+  try {
+    profile = await experts(taskType, expertKey)
+  } catch (cause) {
+    // 档案缺席族（expert not found: <key>——官方宿主无该预设档案；映射指向缺席键同路）
+    // = generic 兜底 fail-soft 不停环（bug d14b0b6c——首行保真键名，诊断可判）；其余故障
+    // 原样外抛（fail-loud 判据保留）
+    const message = cause instanceof Error ? cause.message : String(cause)
+    if (/^expert not found:/m.test(message)) {
+      emitForgeDiag(deps.diag, {
+        level: "info",
+        event: "worker-route",
+        message: `专家档案缺席（${message.split("\n")[0]}）——${taskType} 走通用 worker 兜底档（fail-soft 不停环）`,
+      })
+      return { kind: "generic", agentOptions: deps.parentAgentOptions() }
+    }
+    throw cause
+  }
+  if (profile === undefined) {
+    emitForgeDiag(deps.diag, {
+      level: "info",
+      event: "worker-route",
+      message: `experts 在场但 ${taskType} 无命中档案——走通用 worker 兜底档`,
+    })
+    return { kind: "generic", agentOptions: deps.parentAgentOptions() }
+  }
+  return {
+    kind: "expert",
+    // agentOptions 折叠（workerAgentOptionsOf 四级链——档案级成对整组 a599db30；不成对回落
+    // 父会话继承）：bug 14984d4f 语义保留——档案 provider+model 成对在场时路由对抵达 spawn
+    agentOptions:
+      workerAgentOptionsOf({
+        profile: {
+          ...(profile.provider !== undefined ? { provider: profile.provider } : {}),
+          ...(profile.model !== undefined ? { model: profile.model } : {}),
+          ...(profile.reasoning !== undefined ? { reasoning: profile.reasoning } : {}),
+        },
+      }) ?? deps.parentAgentOptions(),
+    ...(profile.tools !== undefined ? { toolFilter: { allow: [...profile.tools], deny: [] } satisfies WorkerRouteProfile["toolFilter"] } : {}),
+  }
+}

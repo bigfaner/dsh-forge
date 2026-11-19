@@ -1,6 +1,14 @@
-// db/ barrel（定位：基础）——SQLite 句柄唯一落点、schema 迁移、事务助手，零域语义。
-// 边界：禁 import ../forge/（依赖铁律①，oxlint no-restricted-imports；knowledge 域已退役）。
-export { MIGRATIONS, SCHEMA_VERSION, type Migration } from './schema.js'
-export { UnsupportedSchemaVersionError, isUnsupportedSchemaVersionError } from './errors.js'
-export { openDatabase, type OpenDatabaseOptions } from './open.js'
-export { withTransaction } from './transaction.js'
+// core db/ 兼容面（plugin-project 1.7 归并锚）：整套装件（openDatabase/transaction/db errors/
+// schema 迁移）git mv 迁入 @dsh-forge/lib-db，本体在新包 src/ 维护。
+// 本文件为 re-export 兼容面——core 既有 './db/index.js' 内部 import 面零改动；
+// 导出面 = 原六符号全集（零域语义 pin 不变），退役收口另有任务。
+export {
+  MIGRATIONS,
+  SCHEMA_VERSION,
+  UnsupportedSchemaVersionError,
+  isUnsupportedSchemaVersionError,
+  openDatabase,
+  type OpenDatabaseOptions,
+  withTransaction,
+  type Migration,
+} from '@dsh-forge/lib-db'

@@ -18,12 +18,13 @@ import type {
   ForgeBugsService,
   ForgeDocsService,
   ForgeFeaturesService,
-  ForgeProposalsService,
   ForgeSettingsService,
-  ForgeTasksService,
   ProjectServiceM2,
   TasksChangedEvent,
 } from '@dsh-forge/contracts'
+// 1.14 host 改指：tasks 域类型锚改指 task-loop 包出口（forgeTasks 服务 = task-loop 插件
+// provide——core 旧域停供，contracts 旧 tasks face 退役面禁再引用）。
+import type { TasksService } from '@dsh-forge/task-loop'
 import type { BrowseKnowledgeService } from '@dsh-forge/knowledge'
 import {
   APPROVAL_SERVICE_METHODS,
@@ -41,7 +42,6 @@ import {
   KNOWLEDGE_SERVICE_METHODS,
   PROJECT_SERVICE_METHODS,
   PROJECTS_M2_SERVICE_METHODS,
-  PROPOSALS_SERVICE_METHODS,
   rebuildBridgeError,
   BUGS_SERVICE_METHODS,
   SETTINGS_SERVICE_METHODS,
@@ -53,7 +53,8 @@ import {
   type BridgeServiceName,
   type MainToChildMessage,
 } from './bridge.js'
-import { WORKTREE_RPC_METHODS, type WorktreeRpcService } from '../ipc/worktree-rpc.js'
+// 1.17 批二卸旧装新：worktree 域符号重挂 @dsh-forge/project（旧 @dsh-forge/git-worktree 行退役）
+import { WORKTREE_RPC_METHODS, type WorktreeRpcService } from '@dsh-forge/project'
 import { buildBootManifest, tunnelStateOf, type BootManifest } from './manifest.js'
 
 export interface BootDshOptions {
@@ -72,12 +73,9 @@ export interface BootDshOptions {
    *  ——产品裁决 2026-10-09：全局 skill-filesystem 行已废除，标准模式零 forge 技能；
    *  缺席 = 预设技能目录剔除 fail-soft） */
   skillsDir?: string
-  /** plugin-forge-spec skills 物理挂载目录（M3 3.7：预设装配 customSkillDirs[spec]——仅远征
-   *  组合携带；缺席 = spec 技能面降级 fail-soft 不注入） */
+  /** @dsh-forge/spec skills 物理挂载目录（plugin-spec 1.9：预设装配 customSkillDirs[spec]
+   *  ——仅远征组合携带；缺席 = spec 技能面降级 fail-soft 不注入） */
   specSkillsDir?: string
-  /** plugin-forge skills-blitz 突击专属技能挂载目录（预设装配 customSkillDirs[blitz]——仅
-   *  突击组合携带；缺席 = blitz 技能面降级 fail-soft 不注入） */
-  blitzSkillsDir?: string
   /** expert-squad skills 物理挂载目录（预设装配 customSkillDirs[squad]——专家域技能
    *  （roundtable）挂载锚；缺席 = squad 技能面降级 fail-soft 不注入） */
   squadSkillsDir?: string
@@ -102,10 +100,10 @@ export interface DshHostServices {
   /** Interface 2 七法 + browse 聚合第八法（1.7 A2 服务切换：knowledge 插件 provide
    *  'knowledge' 自有服务——去 forge 前缀；类型 = @dsh-forge/knowledge 单一来源） */
   knowledge: BrowseKnowledgeService
-  // ── M2 四域（Interface 1–4；tasksHome 注入时 core provide，缺席 = M2 面降级 undefined） ──
-  forgeTasks: ForgeTasksService
+  // ── M2 tasks 域（@dsh-forge/task-loop 插件 provide——fix-1 域装配；缺席 = 插件行未装载，
+  //    M2 tasks 面降级 undefined）──
+  forgeTasks: TasksService
   forgeFeatures: ForgeFeaturesService
-  forgeProposals: ForgeProposalsService
   forgeDocs: ForgeDocsService
   /** M3 3.8 设置域（Interface 1 M3；settingsFile 注入时 core provide，缺席 = 设置域降级 undefined） */
   forgeSettings: ForgeSettingsService
@@ -487,9 +485,6 @@ export async function bootDshHost(
         : undefined,
       forgeFeatures: ready.services.forgeFeatures
         ? createBridgeProxy<DshHostServices['forgeFeatures']>('forgeFeatures', FEATURES_SERVICE_METHODS, call)
-        : undefined,
-      forgeProposals: ready.services.forgeProposals
-        ? createBridgeProxy<DshHostServices['forgeProposals']>('forgeProposals', PROPOSALS_SERVICE_METHODS, call)
         : undefined,
       forgeDocs: ready.services.forgeDocs
         ? createBridgeProxy<DshHostServices['forgeDocs']>('forgeDocs', DOCS_SERVICE_METHODS, call)

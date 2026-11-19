@@ -5,8 +5,8 @@
 // 面分治：仅主 agent——worker 面 deny（assemble.ts FORGE_DENY_IN_WORKER 承载）。
 // 参照 list-tasks.ts 薄壳模式：参数执行点防御收窄 / callToolFace 路由（typed 错误 → 失败
 // DTO formatErr + tool-error 事件发射）/ formatOk 成功渲染（✓ 计数 + 逐行键值）。
-import type { BugCard, BugStatus, ListBugsQuery } from '@dsh-forge/contracts'
-import { BUG_STATUSES } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, ListBugsQuery } from '@dsh-forge/lib-api'
+import { BUG_STATUSES } from '@dsh-forge/lib-api'
 import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
 import { optionalEnum, optionalNonNegativeInteger, optionalPositiveInteger, optionalString, optionalStringArray, requireArgsObject } from './args.js'

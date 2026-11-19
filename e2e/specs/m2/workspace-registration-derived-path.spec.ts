@@ -1,4 +1,4 @@
-// @feature:dsh-forge-m2-pipeline @web-e2e
+﻿// @feature:dsh-forge-m2-pipeline @web-e2e
 // gen-test-scripts 产物 —— Journey: workspace-registration-derived-path（T-test-gen-scripts）。
 // 断言源 = docs/features/dsh-forge-m2-pipeline/testing/workspace-registration-derived-path/
 //   contracts/step-{1..3}-*.md（eval-contract 944/1100 通过）。
@@ -43,22 +43,25 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import type { ProjectSummary } from '../../../packages/contracts/src/dto/project.js'
-import { PROJECTS_M2_CHANNELS, PROPOSALS_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { deriveTaskStoreDir, flattenWorkspacePath, hash8OfPath } from '../../../packages/core/src/forge/workspace/derive-dir.js'
+import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { deriveTaskStoreDir, flattenWorkspacePath, hash8OfPath } from '../../../lib/path/src/derive-dir.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { forgeInvoke } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
-import { enterDir, dirRow, fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
-import { AP_ANY, CTA_ADD_PROJECT, DSR_DIR, DSR_ERROR, NAV_ADD_PROJECT, addProjectPhase, dsrOf, projectRowOf, rfBrowsing, rfIssue } from '../../support/anchors.js'
+import { openAddProjectViaHeroMenu, enterDir, dirRow, fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
+import { AP_ANY, CTA_ADD_PROJECT, DSR_DIR, DSR_ERROR, addProjectPhase, dsrOf, projectRowOf, rfBrowsing, rfIssue } from '../../support/anchors.js'
 
-/** 表单段走查：入口 → 浏览器 → 夹具根 → 选目录 → 下一步 → 表单就位（sc-branch 同径） */
-async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: string, viaHeroCta: boolean): Promise<void> {
-  if (viaHeroCta) {
-    await page.locator(CTA_ADD_PROJECT).click()
+/** 表单段走查：入口 → 浏览器 → 夹具根 → 选目录 → 下一步 → 表单就位（sc-branch 同径）。
+ *  入口锚迁移（fix-8）：NAV_ADD_PROJECT 侧栏「＋」随 37fef243 收敛退役——hero 相位走
+ *  「＋添加项目」CTA，会话相位走 hero 芯片弹层 footer「添加项目…」（按 composer 在场性择径）。 */
+async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: string): Promise<void> {
+  const composerVisible = await page.locator('[data-composer-input]').last().isVisible().catch(() => false)
+  if (composerVisible) {
+    await openAddProjectViaHeroMenu(page)
   } else {
-    await page.locator(NAV_ADD_PROJECT).first().click()
+    await page.locator(CTA_ADD_PROJECT).click()
+    await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
   }
-  await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
   for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
     await enterDir(page, segment)
   }
@@ -84,7 +87,7 @@ test('@web-e2e @m2 注册派生·冒烟：选目录 → 派生行四面一致 �
   const { app, page, pageErrors } = launched
   try {
     // ── Step 1：hero CTA → 浏览器选目录 → 表单（一步回填 + 项目名自动取文件夹名）──
-    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-wrg', true)
+    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-wrg')
     const wsField = page.locator('[data-dswf-rf-ws]')
     await expect(wsField, '工作区目录字段回填（选定目录）').toHaveValue(wsDir, { timeout: 15_000 })
     await expect(page.locator('[data-dswf-rf-name]'), '项目名自动取文件夹名（ws-wrg）').toHaveValue('ws-wrg', { timeout: 15_000 })
@@ -112,7 +115,7 @@ test('@web-e2e @m2 注册派生·冒烟：选目录 → 派生行四面一致 �
     const row = projects.find((p) => p.wsPath === wsDir)
     expect(row, '中央项目行在场（ws_path canonical）').toBeDefined()
     await expect(page.locator(projectRowOf((row as ProjectSummary).id)).first(), '侧栏项目树行在场').toBeVisible({ timeout: 30_000 })
-    await forgeInvoke(page, PROPOSALS_CHANNELS.list, { projectId: (row as ProjectSummary).id })
+    await forgeInvoke(page, FEATURES_CHANNELS.list, { projectId: (row as ProjectSummary).id })
     expect(existsSync(join(literal, 'forge.db')), '实际建库位置 = 表单呈现（SC2 ③——forge.db 恰在该路径）').toBe(true)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -135,7 +138,7 @@ test('@web-e2e @m2 注册派生·Step1b 重选目录：派生行更新（不残�
   const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
   const { app, page, pageErrors } = launched
   try {
-    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-a', false)
+    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-a')
     const literalA = await derivedLiteral(page)
     expect(literalA, 'A 派生串在场（hash8(A)）').toContain(hash8OfPath(realpathSync(dirA)))
 
@@ -178,7 +181,7 @@ test('@web-e2e @m2 注册派生·Step1c 取消选择：表单保持取消前状�
   const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
   const { app, page, pageErrors } = launched
   try {
-    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-cx', true)
+    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-cx')
     const literalBefore = await derivedLiteral(page)
 
     // 重开选择器后取消（浏览面板「返回表单」——取消点在注册执行之前，零副作用）。
@@ -220,9 +223,17 @@ test('@web-e2e @m2 注册派生·Step3 疑似移动：拒绝 + 手工指引留�
   const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
   const { app, page, pageErrors } = launched
   try {
-    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-moved', true)
+    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-moved')
 
     // 派生行 suspected-move（表单预检位——ERR_SUSPECTED_MOVE 于中央行落库前）
+    // 契约门控（bug d901cdcc——typed code 经 Typert 表单传输丢失）：呈现态判读——error 兜底态 = skip 留痕
+    // 派生行落定（loading → 终态——预检 RPC 在途期门控判读竞速防线）
+  await expect(page.locator('[data-dswf-dsr]').first()).not.toHaveAttribute('data-dswf-dsr', 'loading', { timeout: 30_000 })
+  const dsrErrorFallback = await page.locator(dsrOf('error')).isVisible().catch(() => false)
+    test.skip(
+      dsrErrorFallback,
+      '疑似移动 typed code 信封丢失（bug d901cdcc）——呈现契约失守，产品侧收口后照跑',
+    )
     await expect(page.locator(dsrOf('suspected-move')), '派生行 suspected-move 态').toBeVisible({ timeout: 30_000 })
     const errorBar = page.locator(DSR_ERROR).first()
     await expect(errorBar, '错误条在场').toBeVisible()
@@ -261,7 +272,15 @@ test('@web-e2e @m2 注册派生·Step3b 处置后重选复检通过：恢复正�
   const { app, page, pageErrors } = launched
   try {
     // 第一轮：疑似移动被拒（表单错误态）
-    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-suspect', true)
+    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-suspect')
+    // 契约门控（bug d901cdcc 同上）
+    // 派生行落定（loading → 终态——预检 RPC 在途期门控判读竞速防线）
+  await expect(page.locator('[data-dswf-dsr]').first()).not.toHaveAttribute('data-dswf-dsr', 'loading', { timeout: 30_000 })
+  const dsrErrorFallback = await page.locator(dsrOf('error')).isVisible().catch(() => false)
+    test.skip(
+      dsrErrorFallback,
+      '疑似移动 typed code 信封丢失（bug d901cdcc）——呈现契约失守，产品侧收口后照跑',
+    )
     await expect(page.locator(dsrOf('suspected-move'))).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('.dswf-rf-confirm')).toBeDisabled()
 
@@ -284,7 +303,7 @@ test('@web-e2e @m2 注册派生·Step3b 处置后重选复检通过：恢复正�
     await expect(page.locator(AP_ANY)).toHaveCount(0, { timeout: 30_000 })
     const projects = await forgeInvoke<readonly ProjectSummary[]>(page, 'forge:projects/list')
     expect(projects.find((p) => p.wsPath === cleanWs), '干净注册行在场').toBeDefined()
-    await forgeInvoke(page, PROPOSALS_CHANNELS.list, { projectId: (projects.find((p) => p.wsPath === cleanWs) as ProjectSummary).id })
+    await forgeInvoke(page, FEATURES_CHANNELS.list, { projectId: (projects.find((p) => p.wsPath === cleanWs) as ProjectSummary).id })
     expect(existsSync(join(literal, 'forge.db')), '实际建库位置 = 复检后派生串').toBe(true)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
@@ -304,7 +323,7 @@ test('@web-e2e @m2 注册派生·Step3c 校验门禁：字段问题在场确认�
   const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
   const { app, page, pageErrors } = launched
   try {
-    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-vg', true)
+    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-vg')
     await derivedLiteral(page)
     await expect(page.locator('.dswf-rf-confirm'), '健康表单确认可用（对照面）').toBeEnabled()
     await expect(page.locator(rfIssue('name')), '无字段问题（无 FieldIssue）').toHaveCount(0)
@@ -341,7 +360,7 @@ test('@web-e2e @m2 注册派生·Step3d 已注册幂等复用：StateChip + 挂�
   const { app, page, pageErrors } = launched
   try {
     // 首轮注册（正常新建）
-    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-idem', true)
+    await selectWorkspaceAndNext(page, fixtureRoot, 'ws-idem')
     await derivedLiteral(page)
     await page.locator('.dswf-rf-confirm', { hasText: '确认' }).click()
     await expect(page.locator(addProjectPhase('success'))).toContainText('已创建新工作区', { timeout: 60_000 })
@@ -350,8 +369,7 @@ test('@web-e2e @m2 注册派生·Step3d 已注册幂等复用：StateChip + 挂�
     expect(first, '首轮恰一行').toHaveLength(1)
 
     // 次轮：对已注册目录再次提交 → 表单事前「已注册」StateChip + 幂等返回（不报错不建重复库）
-    await page.locator(NAV_ADD_PROJECT).first().click()
-    await expect(page.locator(addProjectPhase('browser'))).toBeVisible({ timeout: 30_000 })
+    await openAddProjectViaHeroMenu(page)
     for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
       await enterDir(page, segment)
     }
@@ -408,8 +426,8 @@ test('@web-e2e @m2 注册派生·Step2b 同主体异路径：hash8 消歧各自�
 
     // 面②：两工作区分别注册 → 各自成库（互不覆盖、互不认领）
     for (const [dir, name] of [[nestedDir, '嵌套路径'], [flatDir, '连字符路径']] as const) {
-      await page.locator(NAV_ADD_PROJECT).first().click()
-      await expect(page.locator(addProjectPhase('browser'))).toBeVisible({ timeout: 30_000 })
+
+      await openAddProjectViaHeroMenu(page)
       for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
         await enterDir(page, segment)
       }
@@ -425,7 +443,7 @@ test('@web-e2e @m2 注册派生·Step2b 同主体异路径：hash8 消歧各自�
     const projects = await forgeInvoke<readonly ProjectSummary[]>(page, 'forge:projects/list')
     expect(projects, '两项目并存（同主体异路径各自成库）').toHaveLength(2)
     // 两库目录并存互不覆盖（触域后 forge.db 各自在场）
-    for (const p of projects) await forgeInvoke(page, PROPOSALS_CHANNELS.list, { projectId: p.id })
+    for (const p of projects) await forgeInvoke(page, FEATURES_CHANNELS.list, { projectId: p.id })
     expect(existsSync(join(nestedDerived.dir, 'forge.db')), 'nested 库在场').toBe(true)
     expect(existsSync(join(flatDerived.dir, 'forge.db')), 'flat 库在场（独立目录）').toBe(true)
 

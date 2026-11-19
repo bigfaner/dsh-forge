@@ -26,13 +26,16 @@
   ],
   "references": [
     {
+      "path": "../../lib/path"
+    },
+    {
       "path": "../../packages/contracts"
     },
     {
-      "path": "../../packages/plugins/git-worktree"
+      "path": "../../packages/plugins/md-mermaid"
     },
     {
-      "path": "../../packages/plugins/md-mermaid"
+      "path": "../../plugins/project/tsconfig.host.json"
     }
   ]
 }

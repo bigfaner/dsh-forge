@@ -1,0 +1,21 @@
+{
+  "name": "@dsh-forge/lib-status-machine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "公共 status-machine 子包：通用泛型状态机核心逻辑层——defineStateMachine 工厂（构建期 fail-fast）+ Status/StateMachine/TransitionCheck 全类型，边表数据化（humanOnly/noteRequired 元数据），零 db 零运行时依赖（status-machine.md §1）。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

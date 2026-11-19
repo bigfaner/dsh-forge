@@ -29,13 +29,12 @@
 | `ov-head.tsx` | 折叠头（AC1）：默认折叠 = 项目名 + 一行摘要 + ▾；展开 4 行（工作区/文档位置/知识目录/任务清单@hash8）+ ▴ 收起 |
 | `sticky-bar.tsx` | sticky 区（AC2）：三子 tab（role=tablist）+ 搜索行（官方 Input 限宽 240px + 条件清除钮 + Esc 清空）+ 排序 pill 右固定（⇅ 活跃优先 ↔ 最新创建）；IME 安全 = 搜索行稳定子树 |
 | `status-chips.tsx` | 七态 chips（AC5）：contracts TASK_STATUSES 行序 + 中文标签 + 计数 + StateDot 语义映射；0 计数 disabled——过滤接口三视图统一（3.6 消费同组件同状态） |
-| `proposal-tab.tsx` | 提案子 tab（AC4）：父行 ▸ 展开（slug/作者/创建/裁决/谱系——谱系 = feature.proposalSlug 反查）+ proposal.md 文档行（名称 + 状态标签紧贴 + › 行尾） |
 | `feature-tab.tsx` | feature 子 tab（AC4）：父行 ▸ 展开（摘要/来源提案/任务七态分布/文档统计/创建更新）+ 文档行（`FeatureDocumentRow[]` 契约类型 props——不含提案文档；1.7：行悬浮 = summary 官方 Tooltip 自然多行——summary 非空才挂浮层，缺省/空串零浮层不出路径，2026-10-11 裁决·1.6 relPath 回退退役） |
 | `OverviewTab.tsx` | 帧装配：`OverviewFrame`（纯呈现——结构静态可测）+ `OverviewTab`（filter 本地态单一来源 + `useOverviewLoad` 胶水 + `renderTasksTab` 槽 = 3.6 三视图装载位） |
 
 ## 关键口径
 
-- **搜索过滤服务端承载（Hard Rule）**：`searchQueryOf` 只做 trim/空归一，关键词原文经 `fetchOverviewList` 透传 `listProposals`/`listFeatures` 查询参（core `matchesSearch` + `sortByActiveThenCreated` 执行）——本目录零行本地过滤/排序逻辑；chips 同理转 `statusFilterParam` 白名单参（3.6 `listTasks` 消费）。
+- **搜索过滤服务端承载（Hard Rule）**：`searchQueryOf` 只做 trim/空归一，关键词原文经 `fetchOverviewList` 透传 `listFeatures`/`listTasks` 查询参（core `matchesSearch` + `sortByActiveThenCreated` 执行）——本目录零行本地过滤/排序逻辑；chips 同理转 `statusFilterParam` 白名单参（3.6 `listTasks` 消费）。
 - **子 tab 切换清空（AC3）**：`switchSubtab` = 清空搜索 + 清空 chips + 收起全部展开态（ov-head 展开态跨子 tab 保持——路径详情与内容区正交）。
 - **IME 安全（AC2）**：搜索行 = 稳定受控子树——输入值仅回流 input `value` 属性与（非空的）清除钮兄弟位；结构不变式断言（input 前键树前缀等价 + 唯一 input）见 sticky-bar.test。
 - **feature 文档行 = 契约张力裁决**：ui-design 要求文档行，但 Interface 2 读面（`listFeatures → FeatureCard`）仅含 `docCount`、全契约无 feature_documents 列举 API——`FeatureTab.docs` props 携契约类型接口在场，3.5 帧不喂行（展开元数据呈现 `docCount` 统计）；提案子 tab 文档行 = `ProposalCard.relPath` 真数据。

@@ -1,0 +1,206 @@
+// 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
+// 任务子 tab 纯模型（定位：业务——三视图共用投影：副行承重字段/列表分组/计数注记/
+// DAG 可见集/泳道列/状态 tag tone/feature 解析/空态分派）。
+// chips 过滤三视图统一（AC4）的数据面：tasks.list（服务端 statusFilter+search+sort）
+// 结果 = 三视图共同 vis 集单源；DAG 的边集由 taskGraph 补充（graph 查询无过滤参——
+// 全子图拓扑 + vis 集客户端交集，原型 vis 层同语义）。视图本地零 RPC 零 effect。
+import {
+  FEATURE_STATUS_LABELS,
+  TASK_STATUSES,
+  TASK_STATUS_LABELS,
+  type FeatureCard,
+  type TaskCard,
+  type TaskGraph,
+  type TaskGraphEdge,
+  type TaskStatus,
+} from '@dsh-forge/contracts'
+import { activeFeatureSlug } from '../overview-model.js'
+import { formatActualDuration } from '../drawer/detail-model.js'
+import { type TaskContainerOption } from './container-pill.js'
+
+/** 三视图 seg 词汇（列表|DAG|泳道——ui-design UF-1 ov-taskbar） */
+export const TASK_VIEWS = [
+  { value: 'list', label: '列表' },
+  { value: 'dag', label: 'DAG' },
+  { value: 'swim', label: '泳道' },
+] as const
+
+export type TaskViewMode = (typeof TASK_VIEWS)[number]['value']
+
+/** 副行承重字段投影（AC1：类型/优先级/实际耗时[completed]/前置/挂接/fix 源标——缺省逐项省略） */
+export function taskSubRowParts(card: TaskCard): readonly string[] {
+  const parts: string[] = [card.taskType]
+  if (card.priority !== undefined) parts.push(card.priority)
+  if (card.taskStatus === 'completed') {
+    const duration = formatActualDuration(card.actualDurationMs)
+    if (duration !== undefined) parts.push(`实际耗时 ${duration}`)
+  }
+  if (card.prerequisites.length > 0) parts.push(`←${card.prerequisites.length} 前置`)
+  if (card.sessionCount > 0) parts.push(`⟞${card.sessionCount} 挂接`)
+  if (card.sourceTask !== undefined) parts.push(`fix→${card.sourceTask.localId}`)
+  return parts
+}
+
+/** 列表分组（原型列表视图：执行中 = in_progress|blocked 前置组；其余组仅两组均在时标注） */
+export interface TaskListGroup {
+  readonly label: string | undefined
+  readonly tasks: readonly TaskCard[]
+}
+
+export function listGroupsOf(cards: readonly TaskCard[]): readonly TaskListGroup[] {
+  const running = cards.filter((t) => t.taskStatus === 'in_progress' || t.taskStatus === 'blocked')
+  const rest = cards.filter((t) => t.taskStatus !== 'in_progress' && t.taskStatus !== 'blocked')
+  if (running.length === 0) return [{ label: undefined, tasks: rest }]
+  if (rest.length === 0) return [{ label: undefined, tasks: running }]
+  return [
+    { label: `执行中（${running.length}）`, tasks: running },
+    { label: '其余', tasks: rest },
+  ]
+}
+
+/** 计数注记（m3.1 D18：收进容器 pill 悬停——正文零计数注；搜索在场 = 匹配/总数，否则 = N 条） */
+export function taskCountNote(searchActive: boolean, matched: number, total: number): string {
+  return searchActive ? `${matched}/${total}` : `${total} 条`
+}
+
+/**
+ * 任务悬停有意义化（m3.1 D36 ⑥——list 行 key/title/sub 与泳道卡 label 零「可见字面复读」）：
+ * label = face（行/卡面全名——截断位全名兜底语义保留）+ 非可见位增量注。
+ * 增量注字段清单（contracts TaskCard 执行期核对）：状态全称 zh（en）恒在场——行面 tag 仅
+ * 中文名；估时[estimatedTime 在场才带]——行面零承载（仅抽屉）。优先级/实际耗时/类型
+ * 已由副行（taskSubRowParts）可见——零复读不重入；其余缺席字段不硬凑。
+ */
+export function taskHoverLabel(card: TaskCard, face: string): string {
+  const labels = TASK_STATUS_LABELS[card.taskStatus]
+  const notes = [`状态 ${labels.zh}（${labels.en}）`]
+  if (card.estimatedTime !== undefined) notes.push(`估时 ${card.estimatedTime}`)
+  return `${face} · ${notes.join(' · ')}`
+}
+
+/** DAG 可见集（AC4 统一过滤）：节点 = graph.tasks ∩ list 结果（list 序 = 服务端排序序）；边 = 两端均可见 */
+export function dagVisibleSet(
+  cards: readonly TaskCard[],
+  graph: TaskGraph | undefined,
+): { readonly nodes: readonly TaskCard[]; readonly edges: readonly TaskGraphEdge[] } {
+  if (graph === undefined) return { nodes: cards, edges: [] }
+  const visible = new Set(cards.map((t) => t.taskId))
+  const byId = new Map(graph.tasks.map((t) => [t.taskId, t]))
+  const nodes = cards.flatMap((card) => {
+    const enriched = byId.get(card.taskId)
+    // graph.tasks 为 feature 全集（含实际耗时等卡片字段同源）；list 卡缺省回退原卡
+    return enriched === undefined ? [card] : [enriched]
+  })
+  const edges = graph.edges.filter((e) => visible.has(e.taskId) && visible.has(e.prerequisiteId))
+  return { nodes, edges }
+}
+
+/** 泳道列投影（AC3：七态行序——TASK_STATUSES 单源；0 计数列 = 空卡列，折叠归组件） */
+export interface SwimColumn {
+  readonly status: TaskStatus
+  readonly cards: readonly TaskCard[]
+}
+
+export function swimColumnsOf(cards: readonly TaskCard[]): readonly SwimColumn[] {
+  return TASK_STATUSES.map((status) => ({
+    status,
+    cards: cards.filter((t) => t.taskStatus === status),
+  }))
+}
+
+/** 状态 tag 官方 tone 映射（completed=success / blocked·rejected=danger / 其余 neutral） */
+export function taskStatusTagTone(status: TaskStatus): 'success' | 'danger' | 'neutral' {
+  if (status === 'completed') return 'success'
+  if (status === 'blocked' || status === 'rejected') return 'danger'
+  return 'neutral'
+}
+
+/** feature 解析（AC5：显式注入优先——pill 导航载荷；否则活跃 feature 缺省） */
+export function resolveFeatureSlug(features: readonly FeatureCard[], explicit: string | undefined): string | undefined {
+  if (explicit !== undefined) return explicit
+  return activeFeatureSlug(features)
+}
+
+/** 容器选中（受控注入/local 两态同形——taskFocus 聚焦 = feature 容器） */
+export interface TaskContainerSel {
+  readonly kind: 'feature' | 'proposal'
+  readonly slug: string
+}
+
+/** 容器选中键（`feature:slug` / `proposal:slug`——成链降级等同名双轨可辨） */
+export function containerKeyOf(sel: TaskContainerSel): string {
+  return `${sel.kind}:${sel.slug}`
+}
+
+/**
+ * 容器解析（4.6 双轨）：显式注入优先（taskFocus 聚焦 = feature 容器；用户本地切换 =
+ * 任意容器）——命中选项集才生效；否则活跃 feature 缺省（activeSlug = 帧侧头路
+ * activeFeatureSlug 投影——M2 语义沿袭）；零 feature 选项时回落首项（突击直达链
+ * 5.2 e2e 实证：纯 blitz 提案工作区无 feature 行——任务子 tab 不可空转死局，容器
+ * 面向唯一可选项收敛）；零选项 = undefined（容器空态）。
+ */
+export function resolveContainer(
+  options: readonly TaskContainerOption[],
+  explicit: TaskContainerSel | undefined,
+  activeSlug: string | undefined,
+): TaskContainerOption | undefined {
+  if (explicit !== undefined) {
+    const hit = options.find((option) => option.kind === explicit.kind && option.slug === explicit.slug)
+    if (hit !== undefined) return hit
+  }
+  if (activeSlug !== undefined) {
+    const active = options.find((option) => option.kind === 'feature' && option.slug === activeSlug)
+    if (active !== undefined) return active
+  }
+  return options.find((option) => option.kind === 'feature') ?? options[0]
+}
+
+/** feature 完成比 chip 文案（feature 卡 byStatus 聚合——menu 行源；pill 用任务域 stats 单源） */
+export function featureRatioLabel(feature: FeatureCard): string {
+  const total = TASK_STATUSES.reduce((sum, status) => sum + (feature.byStatus[status] ?? 0), 0)
+  const done = feature.byStatus.completed ?? 0
+  return `${FEATURE_STATUS_LABELS[feature.featureStatus].zh} ${done}/${total}`
+}
+
+/** 容器菜单行 chip 文案（feature = 状态完成比[featureRatioLabel 同形]；突击提案 = N 任务） */
+export function containerChipLabel(option: TaskContainerOption, features: readonly FeatureCard[]): string {
+  if (option.kind === 'proposal') return `${option.taskCount} 任务`
+  const card = features.find((f) => f.slug === option.slug)
+  return card === undefined ? `${option.taskCount} 任务` : featureRatioLabel(card)
+}
+
+/** 菜单行 id → 选项（未知 id = undefined 不派发） */
+export function containerMenuSelect(options: readonly TaskContainerOption[], id: string): TaskContainerOption | undefined {
+  return options.find((option) => containerKeyOf(option) === id)
+}
+
+/** 容器 pill chip 文案（feature = 状态 done/total——任务域 stats 单源；突击 = 突击提案·N 任务） */
+export function containerPillChip(option: TaskContainerOption, statsDoneOverTotal: string | undefined): string {
+  if (option.kind === 'feature') {
+    return statsDoneOverTotal ?? `${option.taskCount} 任务`
+  }
+  return `突击提案 · ${option.taskCount} 任务`
+}
+
+/** 空态视图（三分派：容器总数 0 / 搜索无匹配 / 过滤组合空；有卡 = undefined 非空） */
+export interface TasksEmptyInput {
+  readonly cards: readonly TaskCard[]
+  /** 容器任务总数（stats.total——0 = 本容器无任务） */
+  readonly total: number
+  readonly searchActive: boolean
+  readonly search: string
+  readonly hasStatusFilter: boolean
+}
+
+export function tasksEmptyView(input: TasksEmptyInput): { readonly title: string; readonly description?: string } | undefined {
+  if (input.cards.length > 0) return undefined
+  if (input.total === 0) {
+    return { title: '本容器暂无任务', description: '任务由 add_task 产生' }
+  }
+  if (input.searchActive) {
+    return { title: `无匹配「${input.search.trim()}」的任务` }
+  }
+  if (input.hasStatusFilter) {
+    return { title: '当前过滤组合无任务' }
+  }
+  return undefined
+}

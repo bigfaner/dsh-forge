@@ -1,6 +1,7 @@
 // 1.1 AC5 —— XML 标签集五枚封闭 pin（tech-design §Interface 9 标签总表；dual-mode-overhaul
 // 扩 doc-style）。标签集封闭于五枚——新增 = 契约面变更；每类型快照测试断言标签在场 + 块序（core 侧）。
 import { describe, expect, it } from 'vitest'
+import { DOC_STYLE_XML_TAG } from '@dsh-forge/lib-api'
 import { XML_TAGS, XML_TAG_SET } from './xml-tags.js'
 
 describe('AC5 XML 标签集五枚封闭（Interface 9 总表）', () => {
@@ -32,5 +33,9 @@ describe('AC5 XML 标签集五枚封闭（Interface 9 总表）', () => {
       expect(tag).not.toContain('>')
       expect(tag).not.toContain('/')
     }
+  })
+
+  it('docStyle 对检锚：XML_TAGS.docStyle === lib/api DOC_STYLE_XML_TAG（单源对检，漂移即红）', () => {
+    expect(XML_TAGS.docStyle).toBe(DOC_STYLE_XML_TAG)
   })
 })

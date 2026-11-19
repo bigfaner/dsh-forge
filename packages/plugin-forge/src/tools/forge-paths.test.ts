@@ -3,7 +3,7 @@
 // + forgeResolvePath（三目的地/缺参 typed 拒绝/未知 dest 拒绝列法集——schema 即证无锚选择面
 // 无自由路径面）+ declare merge 第三方键经 forgeDirs 全量可见 + deps.paths 缺席 fail-loud。
 import { describe, expect, it } from 'vitest'
-import { createDirKeyRegistry, DIR_KEY_REGISTRY, type DirKeyEntry } from '../forge-paths.js'
+import { createDirKeyRegistry, DIR_KEY_REGISTRY, type DirKeyEntry } from '@dsh-forge/project/host-dirs'
 import type { ForgePathsAnchorContext } from '../faces.js'
 import { createForgeDirsTool, createForgeResolvePathTool, type ForgePathsToolFace } from './forge-paths.js'
 import type { ForgeToolDeps } from './index.js'
@@ -24,7 +24,6 @@ function depsOf(paths?: Partial<ForgePathsToolFace> & { extraKeys?: readonly Dir
   registry.registerDirKeys(paths?.extraKeys ?? [])
   return {
     tasks: {} as ForgeToolDeps['tasks'],
-    proposals: {} as ForgeToolDeps['proposals'],
     bugs: {} as ForgeToolDeps['bugs'],
     checkpoints: {} as ForgeToolDeps['checkpoints'],
     resolveProjectId: () => 'p-1',

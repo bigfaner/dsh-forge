@@ -102,11 +102,11 @@ describe('AC1 插件依赖边界（构建图机械自证——3.4 修订：drive
     expect(src).not.toMatch(/import\(\s*['"]@deepseek-ai\/dsh-session-projection/)
   })
 
-  it('tsconfig references = contracts + path-key（driver = 外部 npm 精确 pin，非工作区工程）', () => {
+  it('tsconfig references = contracts + lib/api + path-key + project host 叶（driver = 外部 npm 精确 pin，非工作区工程；1.7 bug tool 壳消费 lib/api；dirKey 数据缝消费 @dsh-forge/project/host-dirs）', () => {
     const ts = JSON.parse(readFileSync(join(PKG_DIR, 'tsconfig.json'), 'utf8')) as {
       references?: { path: string }[]
     }
     const refs = (ts.references ?? []).map((r) => r.path)
-    expect(refs.sort()).toEqual(['../contracts', '../path-key'])
+    expect(refs.sort()).toEqual(['../../lib/api', '../../plugins/project/tsconfig.host.json', '../contracts', '../path-key'])
   })
 })

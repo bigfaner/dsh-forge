@@ -11,6 +11,7 @@ import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../support/official-stack-gate.js'
 import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
@@ -93,6 +94,11 @@ async function crossBranchDismissed(page: Page): Promise<boolean> {
   return settings?.worktree?.crossBranchRiskDismissed === true
 }
 
+// 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+// 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）。
+test.beforeEach(() => {
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
+})
 test('1.34 UI：点选时点确认 + 确认闩锁静默切换 +「不再提示」持久化静默切换', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
   const { page } = sharedLaunch

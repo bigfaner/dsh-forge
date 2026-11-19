@@ -30,7 +30,7 @@ import {
   type FeatureStatus,
   type ProposalStatus,
 } from '@dsh-forge/contracts'
-import { docsRootOfForgeDir } from './dir-segments.js'
+import { docsRootOfForgeDir } from '@dsh-forge/lib-path'
 import { withTransaction } from '../../db/transaction.js'
 import { emitDiagOrFallback, type DiagEventPayload } from '../../telemetry/diag-events.js'
 import { errMessage } from '../../util.js'
@@ -149,7 +149,7 @@ function readUtf8(absPath: string, debug?: DiscoveryDebug): { ok: true; text: st
 }
 
 /** slug 自然键卫生：禁隐藏前导点/首尾空白/尾点/路径分隔与保留字面/控制字符。
- *  （2.3 起导出共享——listProposalDocs 提案文档区读面同源复用：非法 slug = 空列表守卫） */
+ *  （2.3 起导出共享——提案文档区读面同源复用：非法 slug = 空列表守卫） */
 export function isLegalSlugDirName(name: string): boolean {
   if (name === '' || name.startsWith('.')) return false
   if (name !== name.trim() || name.endsWith('.')) return false
@@ -185,7 +185,7 @@ function stripQuotes(value: string): string {
 /**
  * 薄解析：`---` 分隔块内纯标量键值行（manifest/proposal 实际形态）。无分隔块/未闭合 →
  * { ok: false }（畸形）；非键值行与面外键宽容忽略；空值视为缺省。
- * （2.3 起导出共享——listProposalDocs 文档行 title/status 可选初值同源解析；
+ * （2.3 起导出共享——提案文档行 title/status 可选初值同源解析；
  *  调用方对 ok:false 按容错口径处置：发现面 warn 跳过、读面可选字段缺席。）
  */
 export function parseThinFrontmatter(

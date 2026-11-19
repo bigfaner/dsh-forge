@@ -13,51 +13,53 @@
 //      预领/结算，池快照判词收工）。
 // 「模型」变量的回放代位（B 层边界——工具调用经 forge tool 真执行，工件/提交由计划动作
 // fs-write/git-commit 确定性代位，'$commit' 哨兵把本轮提交哈希代进 submit 载荷）：
-// 断言结构对齐 dogfood-sc-m3.spec.ts（成链三行 / 任务三件 / audit 100% / logs 串联 /
-// 零 manifest / SC3 只读纪律 / UI 全景一致逐条保留；模型面杂项——provider 注入/凭据
-// 播种——不在回放面）。
+// 断言结构对齐 SC-M3 门（任务四件/audit 100%/logs 串联/零 manifest/SC3 只读纪律/UI 全景
+// 一致逐条保留；模型面杂项——provider 注入/凭据播种——不在回放面）。
 // 停止回执断言豁免（DOM 断言面）：循环停止回执走 host 单点证据（会话记录 command/done，
 // 见 stopLoopWithRetry 注释）——官方 pinned chat-view 在「停止打断活跃流式轮」场景 DOM
 // 事件泵自唤醒模型轮起冻结且跨重试窗不恢复（上游 bug 347531a8，fix-24 取证 2026-10-30：
 // 事件落盘完整仅 DOM 缺席）；渲染层属官方包，AGENTS 1.1 改制红线禁改，正确性 host 单点
 // 已保证（AGENTS 1.1）。
+// proposal 域退役迁移（a4664ccb/plugin-spec 1.11——族④B 同批口径）：
+//   · 立项链播种 = 受控初态直种（task-loop.db 域账单源 seedDogfoodTaskRowLoop）——
+//     createProposal/提案 UI 评审成链随域退役；容器 = slug 化终态（task-loop addTask
+//     零容器感知——「容器 slug 化终态·零 goal/spec 感知」），slug 即容器键直通派发；
+//   · 派发入口 = composer `/run-dag-tasks <slug>` 指令面（command plane 直执行——旧概览
+//     UF-3 派发按钮随 task-loop 概览接管退役）；
+//   · 账本断言/受控初态 = task-loop.db 单源（openTaskLoopDbFull + readDogfoodAuditLoop
+//     ——fix-8 族④B 批一/二同口径；submit 载荷自 task_settlements 就近投影）；
+//   · UI 全景尾段 = task-loop 接管版概览锚（OV_PANEL + ovRowOf——旧子 tab/容器 pill/
+//     派发按钮断言面随接管退役）。
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
 import { FEATURES_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { runAllSourceAuditAnchors } from '../../support/audit/anchors.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
-import { closeApp, launchHost, ROOT, type Launched } from '../../support/launch.js'
-import { openOverviewDockWithRetry } from '../../support/fixtures.js'
+import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
-import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { openTaskLoopDbFull } from '../../support/sqlite.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
-import { readDogfoodAudit, seedDogfoodTaskRow, type DogfoodAuditRecord } from '../../support/replay/dogfood-record.js'
+import {
+  readDogfoodAuditLoop,
+  seedDogfoodTaskRowLoop,
+  type DogfoodAuditRecordLoop,
+} from '../../support/replay/dogfood-record.js'
 import { findFixtureSession, waitForSessionEvents } from '../../support/session-files.js'
-import { awaitNoLateModals, awaitPresetHeaderLabel } from '../../support/m3.js'
-import { COMPOSER_INPUT, CONVERSATION_CONTENT, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
+import { awaitNoLateModals, newBlankSession } from '../../support/m3.js'
+import { COMPOSER_INPUT, CONVERSATION_CONTENT, OV_PANEL, ovRowOf } from '../../support/anchors.js'
 import { writeReplayPlan, type ReplayPlan } from '../../../packages/plugin-forge/src/spawn/seam.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
-/** M3.5 真实提案（仓内 Draft——夹具内逐字拷贝；与录制轮同源） */
-const M35_REPO_PROPOSAL = join(ROOT, '.forge', 'docs', 'proposals', 'dsh-forge-m3.5-knowledge-consolidation', 'proposal.md')
-const PROP = 'dsh-forge-m3.5-knowledge-consolidation'
-const PROP_TITLE = 'dsh-forge M3.5 知识沉淀与保鲜（进气端 + 保鲜端）'
-const FEATURE = PROP
+const FEATURE = 'dsh-forge-m3.5-knowledge-consolidation'
 const WS_NAME = 'm35-ws'
 /** worker 无结算死亡的归因锚（事件夹 error.log 断言同源——产品结算核失败消息面） */
 const ABORT_MESSAGE = 'worker run ended without a settlement (replay halt ladder)'
-
-/**
- * 概览 dock 挂载重试（002 复跑实证——阻塞问询 owner 模型轮 + 渲染层连接重试窗内 projects
- * 读失败，概览 body 退化为「未锚定项目」占位、OV_PANEL 不挂载）：走支撑层单源
- * openOverviewDockWithRetry（同语义三处收编——每轮 = 整段 openOverviewDock（reveal/幂等门
- * 自带）；失败后关掉概览 tab 再重开，keyed body 重挂载触发项目锚重解析。瞬态窗对策，
- * 非放宽断言：轮内 30s 挂载门原样保留。e2e-fast-shared-launch/1.17）。
- */
 
 /**
  * 循环停止重试（fix-13 复跑实证——瞬态窗对策，非放宽断言）：blocked → triage 挂起投影 +
@@ -98,6 +100,60 @@ async function stopLoopWithRetry(
     }
   }
   throw lastCause
+}
+
+/** 官方 commands HTTP transport 打开面（fix-2 配方——loop-msg-consol-walk14/sidebar-loop-
+ *  tri-state 同径）：boot manifest → 认证交换（303 + set-cookie）→ POST /api/commands/execute。
+ *  composer 键入径在 blank 期斜杠菜单/焦点窗不稳定，transport 为现役回放面的派发入口。 */
+async function openCommandTransport(page: import('@playwright/test').Page): Promise<{
+  run(line: string, agentId: string): Promise<void>
+}> {
+  const manifest = (await page.evaluate(() => {
+    const forge = (globalThis as unknown as { dshForge?: { getBootManifest(): Promise<{ url: string }> } }).dshForge
+    if (forge === undefined) throw new Error('dshForge preload 面缺席')
+    return forge.getBootManifest()
+  })) as { url: string }
+  const bootUrl = new URL(manifest.url)
+  const boot = await fetch(manifest.url, { redirect: 'manual' })
+  expect(boot.status, '官方认证交换（303 + set-cookie）').toBe(303)
+  const cookie = (boot.headers.get('set-cookie') ?? '').split(';')[0]
+  let rpcSeq = 0
+  return {
+    async run(line, agentId) {
+      rpcSeq += 1
+      const res = await fetch(`${bootUrl.origin}/api/commands/execute`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie } as unknown as HeadersInit,
+        body: JSON.stringify({
+          type: 'client-request',
+          rpcId: `e2e-m35-replay-${rpcSeq}`,
+          method: 'commands/execute',
+          payload: { args: { agentId, line, submittedAttachments: [] } },
+        }),
+      })
+      const body = await res.text()
+      console.log(`[m35-replay] commands/execute（${line} agentId=${agentId}）→ ${res.status} ${body.slice(0, 200)}`)
+      expect(res.status, `commands/execute HTTP 200（${line}；body=${body.slice(0, 300)}）`).toBe(200)
+    },
+  }
+}
+
+/** 活跃会话 commands/execute 派发（agentId = 侧栏会话行 id——walk14/sidebar-loop 同径） */
+async function dispatchViaCommand(
+  page: import('@playwright/test').Page,
+  cmd: { run(line: string, agentId: string): Promise<void> },
+  feature: string,
+): Promise<void> {
+  let agentId = await page.locator('[data-dswf-session]').first().getAttribute('data-dswf-session')
+  if (agentId === null || agentId === '') {
+    agentId = await page.locator(CONVERSATION_CONTENT).first().getAttribute('data-conversation-session')
+  }
+  expect(agentId, '活跃会话身份在场（commands/execute agentId）').toBeTruthy()
+  // 会话行显式激活 + composer 活 agent 门（walk14 配方——命令派发前置）
+  const row = page.locator(`[data-dswf-session="${String(agentId)}"]`).first()
+  await row.click({ timeout: 15_000 }).catch(() => undefined)
+  await expect(page.locator('[data-composer-input]').last(), '会话 composer 可用（活 agent）').toBeEnabled({ timeout: 30_000 })
+  await cmd.run(`/run-dag-tasks ${feature}`, agentId as string)
 }
 
 /** 夹具工作区：git 仓 + 无害四门 justfile（与录制轮同形） */
@@ -173,7 +229,7 @@ function readLogLines(file: string): LogLine[] {
   return out
 }
 
-/** 回放计划装配（四分支行为面——与 dogfood-sc-m3.spec.ts 录制轮 worker 行为逐同构）
+/** 回放计划装配（四分支行为面——与录制轮 worker 行为逐同构）
  *
  * 保持纪律（fix-13）：本计划与产品派发行为同步——fix-4 验收语义起 blocked 结算恒入
  * triage 阶梯，fix-7 起处置代理经同一 spawn 缝真实 spawn（label 后缀「 · 处置分析」
@@ -286,6 +342,10 @@ function makeReplayPlan(ws: string): ReplayPlan {
 }
 
 test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四分支链断言保留）——零真实模型', async () => {
+  // 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+  // 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）——派发/领取链经 GUI
+  // 会话承载，conversation.view 槽位原生崩溃使会话运行时降级（claims 收敛超时）。
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
   test.setTimeout(900_000)
   const startedAt = Date.now()
   const wsRoot = makeWalkthroughWorkspace()
@@ -312,96 +372,37 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       console.error(`[m35-replay] 渲染进程崩溃 +${Math.round((Date.now() - startedAt) / 1000)}s`)
     })
 
-    // ── 立项链：注册 → createProposal（expedition）→ 真实提案文档入树 ──
+    // ── 底座：注册（清洁夹具——发现面零吸收）+ 项目键 + 任务库目录（logs 对账锚）──
     const project = await registerProject(page, ws, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(ws)
     const dir = (
       await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: ws })
     ).dir
-    await driver.call('forgeProposals', 'createProposal', {
-      projectId,
-      slug: PROP,
-      title: PROP_TITLE,
-      relPath: `docs/proposals/${PROP}/proposal.md`,
-      mode: 'expedition',
-    })
-    mkdirSync(join(ws, '.forge', 'docs', 'proposals', PROP), { recursive: true })
-    writeFileSync(join(ws, '.forge', 'docs', 'proposals', PROP, 'proposal.md'), readFileSync(M35_REPO_PROPOSAL, 'utf8'), 'utf8')
 
-    // ── 会话物化前置（fix-3）→ 评审接受（UI 人工裁决）→ 成链原子三行 ──
+    // ── 会话物化前置（fix-3）：侧栏空态「新会话」钮物化 blank 会话并等转录绑定──
     // 官方右栏展开钮以会话为承载（dsh-client-ui-sidebar-right ExpandButton 按
     // bySession[sessionId] 渲染——「暂无会话」空白头恒缺席，bug cb695d4d/850d6a1c 链）。
-    // 首个 openOverviewDock 前经侧栏空态「新会话」钮（文本锚，区别于壳顶引导态钮）物化
-    // blank 会话并等转录绑定——零凭据开户（模型面由回放计划整替，零真实模型调用）。
     await page.getByText('新会话', { exact: true }).first().click({ timeout: 30_000 })
     await expect(
       page.locator(CONVERSATION_CONTENT).first(),
       'blank 会话物化（转录绑上会话）',
     ).toHaveAttribute('data-conversation-session', /.+/, { timeout: 30_000 })
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
-    await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    const propRow = page.locator('[data-dswf-ov-proposals] [data-dswf-ov-parent]', { hasText: PROP_TITLE }).first()
-    await expect(propRow, 'M3.5 提案行在场（真实提案文档吸收面）').toBeVisible({ timeout: 30_000 })
-    await expect(propRow, 'mode chip = 远征（创建时写入）').toContainText('远征')
-    await expect(propRow, '状态 = 草稿').toContainText('草稿')
-    await propRow.locator('[data-dswf-ov-more]').click()
-    const menu = page.locator('[role="menu"]').first()
-    await expect(menu).toBeVisible({ timeout: 15_000 })
-    await menu.locator('button, [role="menuitem"]').filter({ hasText: '评审流转' }).first().click()
-    const verdictDialog = page.locator('[data-dswf-ov-vd]')
-    await expect(verdictDialog).toBeVisible({ timeout: 15_000 })
-    await page.locator('[data-dswf-ov-vd-to]').selectOption('under-review')
-    await page.locator('[data-dswf-ov-vd-reason]').fill('SC-M3 回放走查：M3.5 立项启动（评审进入审议）')
-    await page.locator('[data-dswf-ov-vd-confirm]').click()
-    await expect(verdictDialog).toBeHidden({ timeout: 15_000 })
-    await expect(propRow, '行状态收敛 = 评审中').toContainText('评审中', { timeout: 30_000 })
-    await propRow.locator('[data-dswf-ov-more]').click()
-    await expect(menu).toBeVisible({ timeout: 15_000 })
-    await menu.locator('button, [role="menuitem"]').filter({ hasText: '评审流转' }).first().click()
-    await expect(verdictDialog).toBeVisible({ timeout: 15_000 })
-    await page.locator('[data-dswf-ov-vd-to]').selectOption('accepted')
-    await page.locator('[data-dswf-ov-vd-reason]').fill('SC-M3 回放走查：M3.5 立项启动（评审接受 → 单步成链）')
-    await page.locator('[data-dswf-ov-vd-confirm]').click()
-    await expect(verdictDialog).toBeHidden({ timeout: 15_000 })
-    await expect(propRow, '行状态收敛 = 已接受').toContainText('已接受', { timeout: 30_000 })
 
-    // 成链原子三行（db 断言）
-    let featureId = ''
-    {
-      const db = openForgeDbAt(dir)
-      try {
-        const feature = db
-          .prepare<unknown[], { id: string; feature_status: string }>(
-            'SELECT id, feature_status FROM features WHERE slug = ?',
-          )
-          .get(FEATURE)
-        expect(feature, '成链 feature 行在场（同名 slug）').toBeDefined()
-        featureId = feature?.id ?? ''
-        const proposal = db
-          .prepare<unknown[], { proposal_status: string; mode: string | null }>(
-            'SELECT proposal_status, mode FROM proposals WHERE slug = ?',
-          )
-          .get(PROP)
-        expect(proposal).toMatchObject({ proposal_status: 'accepted', mode: 'expedition' })
-        const lineage = db
-          .prepare<unknown[], { proposal_id: string }>('SELECT proposal_id FROM features WHERE id = ?')
-          .get(featureId)
-        expect(lineage?.proposal_id, '谱系 proposal_id 回指').toBeDefined()
-        const register = db
-          .prepare<unknown[], { verb: string; actor: string }>(
-            'SELECT verb, actor FROM feature_records WHERE feature_id = ? ORDER BY id',
-          )
-          .all(featureId)
-        expect(register, 'feature_records(register) 审计伴随（成链内聚）').toEqual([{ verb: 'register', actor: 'core' }])
-      } finally {
-        db.close()
-      }
-    }
-
-    // ── 规格文档两篇 + 任务三件 db-insert 受控初态 ──
+    // ── 规格文档两篇（upsertDoc RPC——features 域在役面）+ 任务四件受控初态直种
+    //    （task-loop.db 域账单源——proposal 域退役后容器 = slug 化终态，slug 直通派发）──
+    // 登记序纪律：register 显式建 feature 行 → upsertDoc 逐篇登记（存储相位经登记即推进
+    // 单调 prd → design）→ 最后落盘文件。先落盘会被发现面吸收（docKinds 全量在册而存储
+    // 相位未推进 = 相位派生不变量「存储 ≡ 推导」漂移拒绝）。
     const docPrd = `docs/features/${FEATURE}/prd/prd-spec.md`
     const docDesign = `docs/features/${FEATURE}/design/tech-design.md`
+    await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: 'dsh-forge M3.5 知识沉淀与保鲜（进气端 + 保鲜端）' })
+    await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, {
+      projectId, featureSlug: FEATURE, docKind: 'prd-spec', relPath: docPrd, summary: 'M3.5 PRD（走查初稿）',
+    })
+    await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, {
+      projectId, featureSlug: FEATURE, docKind: 'tech-design', relPath: docDesign, summary: 'M3.5 技术设计（走查初稿）',
+    })
     mkdirSync(join(ws, '.forge', 'docs', 'features', FEATURE, 'prd'), { recursive: true })
     mkdirSync(join(ws, '.forge', 'docs', 'features', FEATURE, 'design'), { recursive: true })
     writeFileSync(
@@ -414,16 +415,11 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       '---\ntitle: M3.5 技术设计（走查初稿）\nstatus: Draft\n---\n\n# M3.5 知识沉淀技术设计（SC-M3 走查立项初稿）\n',
       'utf8',
     )
-    await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, {
-      projectId, featureSlug: FEATURE, docKind: 'prd-spec', relPath: docPrd, summary: 'M3.5 PRD（走查初稿）',
-    })
-    await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, {
-      projectId, featureSlug: FEATURE, docKind: 'tech-design', relPath: docDesign, summary: 'M3.5 技术设计（走查初稿）',
-    })
+    let task11Id = ''
     {
-      const db = openForgeDbAt(dir)
+      const db = openTaskLoopDbFull(userData)
       try {
-        seedDogfoodTaskRow(db, FEATURE, '1.1', {
+        task11Id = seedDogfoodTaskRowLoop(db, projectKey, FEATURE, '1.1', {
           title: '创建 docs/knowledge/domains-index.md（知识域索引初稿）并提交',
           taskType: 'doc',
           priority: 'P0',
@@ -434,7 +430,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
             '4) submitTask result=success：summary 简述、files=["docs/knowledge/domains-index.md"]、gate_compile/fmt/lint/test 四布尔全 true、commit_hash 填提交哈希',
           ].join('\n'),
         })
-        seedDogfoodTaskRow(db, FEATURE, '1.2', {
+        seedDogfoodTaskRowLoop(db, projectKey, FEATURE, '1.2', {
           title: '创建 docs/knowledge/entry-template.md（知识条目模板）并提交',
           taskType: 'doc',
           priority: 'P1',
@@ -445,25 +441,21 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
             '4) submitTask result=success：summary 简述、files=["docs/knowledge/entry-template.md"]、gate_compile/fmt/lint/test 四布尔全 true、commit_hash 填提交哈希',
           ].join('\n'),
         })
-        seedDogfoodTaskRow(db, FEATURE, '1.3', {
+        seedDogfoodTaskRowLoop(db, projectKey, FEATURE, '1.3', {
           title: '确保 docs/knowledge/freshness-checklist.md 存在且含一行 marker（缺席时受阻走 fix 链）',
           taskType: 'doc',
           priority: 'P2',
           taskDesc: [
             `目标：docs/knowledge/freshness-checklist.md 在场且内容含一行 marker。`,
-            '1) 若该文件不存在：不要创建它。直接 submitTask result=blocked，reason 填「freshness-checklist.md absent — fix: create docs/knowledge/freshness-checklist.md containing the single line: marker」，随后按 fix 链协议调用 addTask 建修复任务：source_kind="feature"、source_slug="dsh-forge-m3.5-knowledge-consolidation"、title="Fix: create freshness-checklist.md"、type="doc"、source_task_slug="dsh-forge-m3.5-knowledge-consolidation"、source_task_local_id="1.3"、block_source=true、task_desc 简述成因。',
+            '1) 若该文件不存在：不要创建它。直接 submitTask result=blocked，reason 填「freshness-checklist.md absent — fix: create docs/knowledge/freshness-checklist.md containing the single line: marker」。等待处置层按 fix 链协议派生修复任务。',
             '2) 若该文件已存在：确保其中含一行 marker（无则追加），跑四门（just compile/fmt/lint/unit-test），git 提交，submitTask result=success（files=["docs/knowledge/freshness-checklist.md"]、四门布尔、commit_hash）。',
           ].join('\n'),
         })
-        seedDogfoodTaskRow(db, FEATURE, '1.4', {
+        seedDogfoodTaskRowLoop(db, projectKey, FEATURE, '1.4', {
           title: '收官占位（harness 预领——no-task 收工信号驱动）',
           taskType: 'doc',
           taskDesc: '占位任务——由测试 harness 领取与结算，执行器无需处理。',
         })
-        db.prepare(`UPDATE features SET feature_status = 'tasks', updated_at = ? WHERE slug = ?`).run(
-          new Date().toISOString(),
-          FEATURE,
-        )
       } finally {
         db.close()
       }
@@ -474,13 +466,12 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       join(ws, 'justfile'),
       join(ws, 'README.md'),
       join(ws, '.gitignore'),
-      join(ws, '.forge', 'docs', 'proposals', PROP, 'proposal.md'),
       join(ws, '.forge', docPrd),
       join(ws, '.forge', docDesign),
     ]
     const hashBefore = new Map(presetFiles.map((f) => [f, hashFile(f)]))
     await driver.call('forgeTasks', 'claimTask', {
-      projectId,
+      projectKey,
       taskRef: { slug: FEATURE, localId: '1.4' },
       sessionId: 'e2e-harness',
     })
@@ -492,34 +483,25 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       `总纲 SC2/SC7 源码面回归零残留：\n${findings.map((f) => `${f.anchor}: ${f.detail}`).join('\n')}`,
     ).toEqual([])
 
-    // ── 派发会话 A（UF-3 派发入口）→ 回放 abort 阶梯 → halted ──
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    const dispatchOn = page.locator('[data-dswf-tt-dispatch="on"]').first()
-    await expect(dispatchOn, '派发按钮亮起（未终态任务在场）').toBeVisible({ timeout: 30_000 })
-    await dispatchOn.click()
-    await expect(
-      page.locator('[data-conversation-content]').first(),
-      '派发指令单行自动发送（容器标识 = feature slug）',
-    ).toContainText(`/run-dag-tasks ${FEATURE}`, { timeout: 30_000 })
-    await awaitPresetHeaderLabel(page, '远征模式')
+    // ── 派发会话 A（commands/execute transport——真实 dispatchTask 循环）→ 回放 abort 阶梯 → halted ──
+    const cmd = await openCommandTransport(page)
+    await dispatchViaCommand(page, cmd, FEATURE)
     const sessionA = findFixtureSession(dshHome, WS_NAME)
     const sessionAId = sessionA?.sessionId
     expect(sessionAId, '派发会话 A 落盘开户').toBeDefined()
 
-    // ── halted 收敛轮询：1.1 claim 计 ≥3 + 全库零 submit + 宿主存活 ──
+    // ── halted 收敛轮询：1.1 claim 计 ≥3 + 全库零 submit + 宿主存活（task-loop.db 域账直读）──
     const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
     const dbStats = (): { statuses: Map<string, string>; claims11: number; submits: number } => {
-      const db = openForgeDbAt(dir)
+      const db = openTaskLoopDbFull(userData)
       try {
         const rows = db.prepare<unknown[], { local_id: string; task_status: string }>(
-          'SELECT local_id, task_status FROM tasks',
+          'SELECT local_id, task_status FROM task_tasks',
         ).all()
         const claims11 = (
           db
             .prepare<unknown[], { n: number }>(
-              `SELECT COUNT(*) AS n FROM task_records r JOIN tasks t ON t.id = r.task_id
+              `SELECT COUNT(*) AS n FROM task_records r JOIN task_tasks t ON t.id = r.task_id
                WHERE t.local_id = '1.1' AND r.verb = 'claim'`,
             )
             .get() as { n: number }
@@ -562,11 +544,9 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
 
     // ── 挂起投影 + 人工停止收口（worker-abort-over-limit 第三层）──
     // 595eaab7（3b① 挂起改造）起裁决改经 owner 对话面（P3 挂起投影），不再挂 userQuestions
-    // 问询卡——旧「跳过」按钮锚退役（两轮 run-m3 DOM 快照零问询卡实证：b73ce82/529252f5
-    // 同点 not found）。挂起机械信号 = 阶梯冻结：1.1 claim 计钉在 4（零第 5 次重入）+
+    // 问询卡。挂起机械信号 = 阶梯冻结：1.1 claim 计钉在 4（零第 5 次重入）+
     // 全库零 submit + 1.1 保持 in_progress；处置走挂起回执指引的「停止」径——/stop-dag-tasks
-    // （UI command plane 直执行，零模型依赖）终止循环 → 登记表删除 → 独占释放（与旧跳过
-    // 收口同终态语义——会话 B 才能新开循环）。
+    // （UI command plane 直执行，零模型依赖）终止循环 → 登记表删除 → 独占释放。
     const freezeDeadline = Date.now() + 30_000
     for (;;) {
       const s = dbStats()
@@ -588,7 +568,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     // composer 发送键在途禁用；轮内回执门原样保留，失败重发 /stop-dag-tasks 幂等）
     await stopLoopWithRetry(page, dshHome, sessionAId as string, 4)
 
-    // ── halted 阶日志面：worker 异常终止阶梯证据 ──
+    // ── halted 阶日志面：worker 异常终止阶梯证据（taskHome = deriveTaskStoreDir 单源派生）──
     const logFile = join(dir, 'logs', `${FEATURE}.jsonl`)
     const haltLines = readLogLines(logFile)
     const incidentRoot = join(dir, 'logs', FEATURE, '1.1')
@@ -612,17 +592,16 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       'halted 阶段零非独占拒绝 tool-error（异常终止非 spawn 机制故障）',
     ).toEqual([])
 
-    // ── 复位：人工转移（in_progress → pending——人类面 transition） ──
-    const task11Id = `t-${FEATURE}-1.1`
+    // ── 复位：人工转移（in_progress → pending——人类面 transition 通道） ──
     await forgeInvoke(page, TASKS_CHANNELS.transition, {
       projectId, taskId: task11Id, toStatus: 'pending',
-      reason: 'SC-M3 回放走查：halted 复位——人工转移后经派发入口新会话重派',
+      reason: 'SC-M3 回放走查：halted 复位——人工转移后新会话重派',
     })
     {
-      const db = openForgeDbAt(dir)
+      const db = openTaskLoopDbFull(userData)
       try {
         const row = db
-          .prepare<unknown[], { task_status: string }>('SELECT task_status FROM tasks WHERE id = ?')
+          .prepare<unknown[], { task_status: string }>('SELECT task_status FROM task_tasks WHERE id = ?')
           .get(task11Id)
         expect(row?.task_status, '人工转移落账：1.1 → pending').toBe('pending')
         const tr = db
@@ -638,18 +617,13 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       }
     }
 
-    // ── 派发会话 B（冷启动计数器复位——新会话径） ──
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    const dispatchOn2 = page.locator('[data-dswf-tt-dispatch="on"]').first()
-    await expect(dispatchOn2, '派发按钮亮起（1.1 回 pending + 其余未终态）').toBeVisible({ timeout: 30_000 })
-    await dispatchOn2.click()
+    // ── 派发会话 B（冷启动计数器复位——新会话径 + composer 指令面） ──
+    await newBlankSession(page)
     await expect(
-      page.locator('[data-conversation-content]').first(),
-      '会话 B 派发指令自动发送（不重发到 A——新会话转录只含本轮指令）',
-    ).toContainText(`/run-dag-tasks ${FEATURE}`, { timeout: 30_000 })
-    await awaitPresetHeaderLabel(page, '远征模式')
+      page.locator(CONVERSATION_CONTENT).first(),
+      '会话 B 物化（转录绑上会话）',
+    ).toHaveAttribute('data-conversation-session', /.+/, { timeout: 30_000 })
+    await dispatchViaCommand(page, cmd, FEATURE)
     await awaitNoLateModals(page)
 
     // ── 1.3 阻塞处置轮（3b② 无进展硬停挂起 + d5c272c6 派生权收归处置层——harness 代理）──
@@ -669,13 +643,13 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     }
     console.log(`[m35-replay] 1.3 一轮受阻 +${Math.round((Date.now() - startedAt) / 1000)}s（1.1 completed / 1.3 blocked）`)
     await driver.call('forgeTasks', 'addTask', {
-      projectId,
-      source: { kind: 'feature', slug: FEATURE },
+      projectKey,
+      slug: FEATURE,
       title: 'Fix: create freshness-checklist.md',
       type: 'doc',
       sourceTask: { slug: FEATURE, localId: '1.3' },
       blockSource: true,
-      taskDesc: 'freshness-checklist.md 缺席（SC-M3 回放 1.3 一轮受阻）——创建之并含一行 marker。',
+      brief: 'freshness-checklist.md 缺席（SC-M3 回放 1.3 一轮受阻）——创建之并含一行 marker。',
     })
     // 会话 B 定位（新会话径——排除会话 A 同 id 碰撞的 mtime 抖动窗；B 创建即新开户，
     // findFixtureSession 取最新且 ≠ A 才认）
@@ -689,20 +663,12 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     await stopLoopWithRetry(page, dshHome, sessionBId as string, 4)
 
     // ── 派发会话 C（fix 链执行轮——fix-1 → auto-restore → 1.3 二轮）──
-    // dock 挂载重试（002 复跑实证：B 轮 blocked 问询的 owner 模型轮 + 渲染层连接重试窗内
-    // projects 读失败 → 概览 body 退化为「未锚定项目」占位——OV_PANEL 不挂载。重开概览
-    // tab 触发 keyed body 重挂载 + 项目锚重解析，吃掉瞬态窗——非放宽断言，30s/轮 ×3 轮）。
-    await openOverviewDockWithRetry(page, 3)
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    const dispatchOn3 = page.locator('[data-dswf-tt-dispatch="on"]').first()
-    await expect(dispatchOn3, '派发按钮亮起（fix-1 pending 在场）').toBeVisible({ timeout: 30_000 })
-    await dispatchOn3.click()
+    await newBlankSession(page)
     await expect(
       page.locator(CONVERSATION_CONTENT).first(),
-      '会话 C 派发指令自动发送',
-    ).toContainText(`/run-dag-tasks ${FEATURE}`, { timeout: 30_000 })
-    await awaitPresetHeaderLabel(page, '远征模式')
+      '会话 C 物化（转录绑上会话）',
+    ).toHaveAttribute('data-conversation-session', /.+/, { timeout: 30_000 })
+    await dispatchViaCommand(page, cmd, FEATURE)
     await awaitNoLateModals(page)
 
     // ── 全任务终态轮询 + 1.4 收官结算介入（事件门控同原版） ──
@@ -726,7 +692,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       if (othersTerminal && othersTerminalSince === 0) othersTerminalSince = Date.now()
       if (!closerSettled && othersTerminal && (noReadySeen() || Date.now() - othersTerminalSince > 90_000)) {
         await driver.call('forgeTasks', 'submitTask', {
-          projectId,
+          projectKey,
           taskRef: { slug: FEATURE, localId: '1.4' },
           result: 'success',
           summary: 'harness 收官结算 1.4（no-task 收工信号驱动——双 dispatcher 防线占位）',
@@ -759,15 +725,26 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       }
     }
 
-    // ── AC1 断言面：任务/执行记录 100% 入自身 forge.db ──
-    const db = openForgeDbAt(dir)
-    let audit: ReturnType<typeof readDogfoodAudit>
+    // ── 转录尾部留痕（诊断面——审计与 db 为断言真相） ──
+    const transcriptTail =
+      (await page
+        .locator(CONVERSATION_CONTENT)
+        .first()
+        .textContent({ timeout: 10_000 })
+        .catch(() => '<renderer-unavailable>')) ?? ''
+    console.log('[m35-replay] 会话 C 转录尾部：', transcriptTail.slice(-500))
+    test.info().annotations.push({ type: 'm35-transcript-tail', description: transcriptTail.slice(-1200) })
+
+    // ── AC1 断言面：任务/执行记录 100% 入 task-loop.db 域账（rowid 升序 = 追加序真相；
+    //    submit 载荷自 task_settlements 最新结算行就近投影——v1 列面） ──
+    const db = openTaskLoopDbFull(userData)
+    let audit: ReturnType<typeof readDogfoodAuditLoop>
     let statusOf: ReadonlyMap<string, string>
     try {
-      audit = readDogfoodAudit(db)
+      audit = readDogfoodAuditLoop(db)
       statusOf = new Map(
         db
-          .prepare<unknown[], { local_id: string; task_status: string }>('SELECT local_id, task_status FROM tasks')
+          .prepare<unknown[], { local_id: string; task_status: string }>('SELECT local_id, task_status FROM task_tasks')
           .all()
           .map((r) => [r.local_id, r.task_status]),
       )
@@ -780,11 +757,10 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       expect(row, `任务行在场：${localId}`).toBeDefined()
       return row!
     }
-    const recsOf = (localId: string): readonly DogfoodAuditRecord[] => records.filter((r) => r.localId === localId)
+    const recsOf = (localId: string): readonly DogfoodAuditRecordLoop[] => records.filter((r) => r.localId === localId)
     expect(tasks.length, '任务全量 = 四件 + fix 一件').toBe(5)
     for (const t of tasks) {
       expect(statusOf.get(t.localId), `任务 ${t.localId} 终态 completed`).toBe('completed')
-      expect([t.sourceKind, t.mode], `任务 ${t.localId} 容器/模式快照（feature · expedition）`).toEqual(['feature', 'expedition'])
       const rs = recsOf(t.localId)
       expect(rs.some((r) => r.verb === 'claim'), `${t.localId} claim 记录在场`).toBe(true)
       expect(rs.some((r) => r.verb === 'submit' && r.toStatus === 'completed'), `${t.localId} submit·success 记录在场`).toBe(true)
@@ -824,7 +800,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     expect(cBlocked, '1.3 一轮受阻结算在场（reason 必带）').toBeDefined()
     expect(cBlocked?.reason ?? '').toContain('freshness-checklist.md')
     const fixRow = tasks.find((t) => t.sourceTaskId === taskByLocal('1.3').id)
-    expect(fixRow, 'fix 任务行在场（fix-N 前缀）').toBeDefined()
+    expect(fixRow, 'fix 任务行在场（fix_of_task_id 谱系——fix-N 前缀）').toBeDefined()
     expect(fixRow?.localId).toMatch(/^fix-\d+$/)
     const fixAdd = recsOf(fixRow!.localId).find((r) => r.verb === 'add')
     expect(fixAdd, 'fix add 记录在场（处置层派生——harness 代理主会话面，d5c272c6 后 worker 面拒收）').toBeDefined()
@@ -874,35 +850,13 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     const gitStatus = execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' })
     expect(gitStatus, 'SC3 收口：夹具仓干净（一切 worker 产物经 git 提交——管线纪律）').toBe('')
 
-    // ── AC2/AC3 断言面：概览三视图 / 文档 / 提案子 tab 全景一致 ──
+    // ── AC2/AC3 断言面：概览全景一致（task-loop 接管版锚——OV_PANEL + 状态行投影） ──
     await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
-    await expect(propRow, '提案行：已接受 + 远征（评审终态全景）').toContainText('已接受', { timeout: 30_000 })
-    await expect(propRow).toContainText('远征')
-    await page.locator(ovSubtabOf('features')).click()
-    await expect(page.locator(ovSubtabOf('features'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    const featRow = page.locator('[data-dswf-ov-features] [data-dswf-ov-parent]', { hasText: FEATURE }).first()
-    await expect(featRow, 'feature 行在场（成链同名 slug）').toBeVisible({ timeout: 30_000 })
-    await featRow.locator('[data-dswf-ov-parent-toggle]').click()
-    await expect(
-      page.locator(`[data-dswf-ov-doc="${docPrd}"]`),
-      'feature 文档区：PRD 行（分层文档）',
-    ).toBeVisible({ timeout: 15_000 })
-    await expect(page.locator(`[data-dswf-ov-doc="${docDesign}"]`), 'feature 文档区：技术设计行').toBeVisible({ timeout: 15_000 })
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    await expect(
-      page.locator(`[data-dswf-tt-contpill="feature:${FEATURE}"]`),
-      '容器 pill = feature 容器（双轨判别）',
-    ).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(OV_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
     for (const t of tasks) {
-      const row = page.locator(ttItemOf(t.id)).first()
-      await expect(row, `任务行在场：${t.localId}`).toBeVisible({ timeout: 30_000 })
-      await expect(row, `任务行终态全景一致：${t.localId}（UI = db 直读——SC2②）`).toContainText('已完成', { timeout: 15_000 })
+      const row = page.locator(ovRowOf('completed'), { hasText: `${FEATURE}/${t.localId}` }).first()
+      await expect(row, `概览任务行终态全景一致：${t.localId}（UI = db 直读——SC2②）`).toBeVisible({ timeout: 30_000 })
     }
-    const dispatchOff = page.locator('[data-dswf-tt-dispatch="off"]').first()
-    await expect(dispatchOff, '全终态置灰（UF-3 收工态）').toBeVisible({ timeout: 30_000 })
-    await expect(dispatchOff).toBeDisabled()
 
     // ── 收尾 ──
     const bridgeEvents = await driver.events().catch((cause: unknown) => {

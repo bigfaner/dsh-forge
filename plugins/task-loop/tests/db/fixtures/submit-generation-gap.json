@@ -1,0 +1,12 @@
+{
+  "category": "submit-generation-gap",
+  "description": "判例⑥：submit 断代——旧 task_records 的 submit 行（含 ac_json/commit_hash/files_json/gate_json/record_fields_json 镜像列）不搬入新线，结算数据单源 = task_settlements 自本线起记（entities.md §3.4 迁移注记：旧库历史 submit 行不回填——旧容器指标断代明示）。",
+  "expectation": "r-old-1/r-old-2 两行 submit 流水随旧库归档、新线零对应结算行；非 submit 动词行照常搬（note 融合）。",
+  "oldDb": {
+    "task_records": [
+      { "id": "r-old-1", "task_id": "epsilon:4.1", "verb": "submit", "from_status": "in_progress", "to_status": "completed", "reason": null, "summary": "done", "gate_json": "{\"compile\":true,\"test\":true}", "files_json": "[\"x.ts\"]", "record_fields_json": "{\"coverage\":0.9}", "ac_json": "[\"ac one\"]", "commit_hash": "oldc1", "dispatch_digest": null, "loop_sourced": 0, "actor": "plugin-tool", "session_id": "s-20", "created_at": "2026-11-06T10:00:00.000Z", "updated_at": "2026-11-06T10:00:00.000Z" },
+      { "id": "r-old-2", "task_id": "epsilon:4.1", "verb": "submit", "from_status": "in_progress", "to_status": "blocked", "reason": "review rejected", "summary": null, "gate_json": "{\"review\":false}", "files_json": null, "record_fields_json": null, "ac_json": "[\"ac one\"]", "commit_hash": null, "dispatch_digest": null, "loop_sourced": 0, "actor": "core", "session_id": "s-21", "created_at": "2026-11-06T09:00:00.000Z", "updated_at": "2026-11-06T09:00:00.000Z" },
+      { "id": "r-keep-1", "task_id": "epsilon:4.1", "verb": "pause", "from_status": "in_progress", "to_status": "suspended", "reason": "waiting on baseline", "summary": "paused by user", "gate_json": null, "files_json": null, "record_fields_json": null, "ac_json": null, "commit_hash": null, "dispatch_digest": null, "loop_sourced": 0, "actor": "ui", "session_id": null, "created_at": "2026-11-06T08:00:00.000Z", "updated_at": "2026-11-06T08:00:00.000Z" }
+    ]
+  }
+}

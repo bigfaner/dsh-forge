@@ -1,0 +1,17 @@
+{
+  "category": "fix-backfill-reverse-lookup",
+  "description": "判例②：反查回填——source_task_id 空，经 fix-% 前缀 + task_edges 反查命中唯一候选前驱（圆桌处方 4）。",
+  "expectation": "fix-3 行 fix_of_task_id 回填 = alpha:1.2（edges 反查唯一命中），禁任取、唯一候选直判。",
+  "oldDb": {
+    "tasks": [
+      { "id": "beta:1.2", "slug": "beta", "local_id": "1.2", "title": "源任务", "task_type": "coding-feature", "task_status": "blocked", "source_task_id": null, "source_kind": null, "source_id": null, "mode": null, "created_at": "2026-11-02T10:00:00.000Z", "updated_at": "2026-11-02T11:00:00.000Z" },
+      { "id": "beta:fix-3", "slug": "beta", "local_id": "fix-3", "title": "fix: 源任务", "task_type": "coding-fix", "task_status": "completed", "source_task_id": null, "source_kind": null, "source_id": null, "mode": null, "created_at": "2026-11-02T11:05:00.000Z", "updated_at": "2026-11-02T12:00:00.000Z" }
+    ],
+    "task_edges": [
+      { "task_id": "beta:fix-3", "prerequisite_id": "beta:1.2", "origin": "fix-chain", "created_at": "2026-11-02T11:05:00.000Z", "updated_at": "2026-11-02T11:05:00.000Z" }
+    ],
+    "task_records": [
+      { "id": "r-10", "task_id": "beta:1.2", "verb": "submit", "from_status": "in_progress", "to_status": "blocked", "reason": "lint gate red", "summary": null, "gate_json": "{\"lint\":false}", "files_json": null, "record_fields_json": null, "dispatch_digest": null, "loop_sourced": 1, "actor": "core", "session_id": "s-10", "created_at": "2026-11-02T11:00:00.000Z", "updated_at": "2026-11-02T11:00:00.000Z" }
+    ]
+  }
+}

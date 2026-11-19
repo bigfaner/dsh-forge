@@ -10,12 +10,35 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_PACKAGES, PRODUCT_PLUGIN_PACKAGE_DIRS } from '../../apps/host/src/profile/runtime-packages.js'
-import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedProductPackages, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
+import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedManifestParityViolations, stagedProductPackages, stagedPkgShort, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
 import { PRODUCT_PLUGINS } from '../../packages/contracts/src/product-plugins.js'
 import { createElectronBuilderConfig } from '../../electron-builder.config.mjs'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
-const readJson = (p: string) => JSON.parse(readFileSync(join(ROOT, p), 'utf8')) as Record<string, unknown>
+const readJson = (p: string) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'))
+/** 包居所解析（批5 表驱动基座——与 assemble 脚本 packageDirOf 同源单点）：
+ *  contracts PRODUCT_PLUGINS dir 字段优先直取（expert-squad 载 'plugins/expert-squad'
+ *  root 级树）；未声明 dir 的包消费 host 装载表 PRODUCT_PLUGIN_PACKAGE_DIRS 既有形态。 */
+const pkgDirOf = (name: string): string | undefined =>
+  PRODUCT_PLUGINS[name]?.dir ?? PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
+/** staged 短名 + 居所 → 包清单相对路径（lib/ 子居所包名 lib-<目录名>——真名映射；
+ *  dir 含 '/' = 完整子路径（contracts dir 表值 / PRODUCT_PLUGIN_PACKAGE_DIRS 根级 '/plugins' 与
+ *  子居所形态统一——root:plugins/ 前缀键 = 仓库根级 plugins/ 树——project 包居 plugins/project）） */
+const pkgManifestRelPath = (name: string, dir?: string): string => {
+  if (name.startsWith('lib-')) return `lib/${name.slice('lib-'.length)}/package.json`
+  if (dir?.startsWith('root:plugins/')) return `${dir.slice('root:'.length)}/package.json`
+  if (dir?.startsWith('/')) return `${dir.slice(1)}/${name}/package.json` // 根级树（'/plugins' 前缀形态——先于完整子路径判）
+  if (dir !== undefined && dir.includes('/')) return `${dir}/package.json` // contracts dir 表值完整子路径直取
+  return `packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`
+}
+/** staged 键 → [根目录名, 子路径]（与 assemble 脚本 pkgRootOf 同源映射——
+ *  无前缀 'plugins/<name>' 键二义（packages/plugins/ 探测键与 root 级树表值键同形），
+ *  以磁盘在场探测收口，pkgRootOf 同语义） */
+const treeOf = (dir: string): [string, string] => {
+  if (dir.startsWith('root:plugins/')) return ['.', dir.slice('root:'.length)]
+  if (dir.startsWith('plugins/') && existsSync(join(ROOT, dir, 'package.json'))) return ['.', dir]
+  return dir.startsWith('lib/') ? ['lib', dir.slice('lib/'.length)] : ['packages', dir]
+}
 /** 关键文件口径（配置派生——与 stage/--check 运行期同源 PRODUCT_PLUGINS） */
 const KEY_FILES = requiredKeyFiles(PRODUCT_PLUGINS)
 
@@ -135,6 +158,8 @@ describe('AC2 profile.install 安装树清单 = 运行时并集（漂移守卫�
     'gray-matter': '4.0.3',
     'mermaid': '12.1.0', // @dsh-forge/md-mermaid 原生依赖（bug 62211111——staging 闭包只追 @dsh-forge/*，外部依赖经本清单随包物化）
     '@deepseek-ai/schemastery': '3.18.4', // @dsh-forge/expert-squad 原生依赖（bug 62211111 同类——settings schema 校验面）
+    '@deepseek-ai/dsh-typert-protocol': '0.2.2-rc.2', // @dsh-forge/project 原生依赖（bug 62211111 同类——typert 通道面）
+    'zod': '4.6.6', // @dsh-forge/project 原生依赖（bug 62211111 同类——schema 校验面）
   }
   const expectedSorted = Object.keys(expected).sort()
 
@@ -196,14 +221,19 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
       // knowledge 1.9 A5 重开放：用户层全局行 + skills/learn 技能面（customSkillDirs[knowledge]
       // 挂载源——STAGING_EXTRAS 承载）；stage② 1.5 增 skills/distill 整合技能（随包交付面同步）
-      'runtime/node_modules/@dsh-forge/knowledge/dist/index.js',
+      // knowledge 迁移批1.3：root 级 plugins/knowledge 三目录制——dist 入口随
+      // exports/main 重锚 dist/host/index.js（双面包装载范式同 expert-squad）
+      'runtime/node_modules/@dsh-forge/knowledge/dist/host/index.js',
       'runtime/node_modules/@dsh-forge/knowledge/skills/learn/SKILL.md',
       'runtime/node_modules/@dsh-forge/knowledge/skills/distill/SKILL.md',
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
-      'runtime/node_modules/@dsh-forge/plugin-forge/skills/submit-task/SKILL.md',
-      // blitz 专属技能面（plugin-forge 包内 skills-blitz 旁目录——blitz 预设 customSkillDirs
-      // 挂载源；缺席即突击组合技能面静默缺失）
-      'runtime/node_modules/@dsh-forge/plugin-forge/skills-blitz/grilling/SKILL.md',
+      // plugin-spec 1.9 skill 面迁移：plugin-forge 技能全数迁出（grilling/fix-bug/investigate-bug
+      // 迁 spec 包、brainstorm 退役、skills-blitz 随迁清理）——本包 skills/ 仅 README 占位
+      // spec 包技能面（1.9 迁入四技能——customSkillDirs[spec] 挂载源；缺席即远征组合技能面静默缺失）
+      'runtime/node_modules/@dsh-forge/spec/skills/grilling/SKILL.md',
+      'runtime/node_modules/@dsh-forge/spec/skills/fix-bug/SKILL.md',
+      'runtime/node_modules/@dsh-forge/spec/skills/investigate-bug/SKILL.md',
+      'runtime/node_modules/@dsh-forge/spec/skills/loop-blocking/SKILL.md',
       // M3 3.8 packaging 三处同步（TECH-packaging-001）：plugin-forge-spec 新包——漏列 =
       // 打包形态 boot ESM 解析断裂（远征预设行装载失败，TECH-packaging-001 症状面）
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/package.json',
@@ -211,10 +241,18 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       // M3 3.2 规格技能迁移落地：spec skills 入物化清单与关键文件口径（3.8 曾注记
       // 「随 3.2 落地后补列」——缺席即远征组合技能面静默缺失）
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/skills/write-prd/SKILL.md',
-      // 2026-10-18 安装版启动崩 fix：host dist ipc/worktree-rpc 静态 import——缺席即
-      // 打包主进程 ERR_MODULE_NOT_FOUND 启动即崩（staged:true 覆写物化）
-      'runtime/node_modules/@dsh-forge/git-worktree/package.json',
-      'runtime/node_modules/@dsh-forge/git-worktree/dist/index.js',
+      // 1.17 批二卸旧装新：host dist boot 链（child/run/m2-wiring/bindings）静态 import
+      // 本包——缺席即打包主进程 ERR_MODULE_NOT_FOUND 启动即崩（staged:true 覆写物化；
+      // 旧 @dsh-forge/git-worktree 包退役，staged 种子自 plugins/git-worktree 迁 plugins/project）
+      'runtime/node_modules/@dsh-forge/project/package.json',
+      'runtime/node_modules/@dsh-forge/project/dist/host/index.js',
+      // 1.15 退役批：task-loop staging 闭包登记（project 同款——host dist boot 链静态 import；
+      // skills/ = to-tasks 拆解技能 + 自 plugin-forge 迁入的 submit-task 结算技能 + 1.25 迁入更名的 rescue-task-loop 循环救援技能）
+      'runtime/node_modules/@dsh-forge/task-loop/package.json',
+      'runtime/node_modules/@dsh-forge/task-loop/dist/host/index.js',
+      'runtime/node_modules/@dsh-forge/task-loop/skills/to-tasks/SKILL.md',
+      'runtime/node_modules/@dsh-forge/task-loop/skills/submit-task/SKILL.md',
+      'runtime/node_modules/@dsh-forge/task-loop/skills/rescue-task-loop/SKILL.md',
       'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
       'web-dist/index.html',
       'icon.png',
@@ -228,12 +266,12 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
     expect(KEY_FILES, '关键文件口径缺席 mobile-dist/index.html（--check 不可达）').toContain('mobile-dist/index.html')
   })
 
-  it('插件条目配置派生：stagedProductPackages(PRODUCT_PLUGINS) 成员 = KEY_FILES 插件面全集（配置单一源——翻转布尔即两口径同步）', () => {
-    const stagedNames = new Set(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).map((k) => k.split('/').pop()))
+  it('插件条目配置派生：stagedProductPackages(PRODUCT_PLUGINS) 成员 = KEY_FILES 插件面全集（配置单一源——翻转布尔即两口径同步；lib/ 子居所经 stagedPkgShort 真名映射）', () => {
+    const stagedNames = new Set(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).map((k) => stagedPkgShort(k)))
     const keyFileNames = new Set(
       KEY_FILES.flatMap((rel) => {
         const hit = /^runtime\/node_modules\/@dsh-forge\/([^/]+)\//.exec(rel)
-        return hit === null ? [] : [hit[1]]
+        return hit === null ? [] : [hit[1]!]
       }),
     )
     expect([...stagedNames].sort()).toEqual([...keyFileNames].sort())
@@ -245,7 +283,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
   const stagedPackages = new Set(
     KEY_FILES.flatMap((rel) => {
       const hit = /^runtime\/node_modules\/@dsh-forge\/([^/]+)\//.exec(rel)
-      return hit === null ? [] : [hit[1]]
+      return hit === null ? [] : [hit[1]!]
     }),
   )
 
@@ -254,10 +292,15 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // expert-squad 不在预设底稿——用户层全局行装载，见 PRODUCT_PLUGINS expert-squad 行）
     expect(presetCarriedPlugins()).toEqual(['md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
-    // git-worktree = staged:true 覆写种子（2026-10-18 安装版启动崩 fix：host dist 静态 import 面）
+    // project = staged:true 覆写种子（1.17 批二卸旧装新：host dist boot 链静态 import 面——
+    // 自 plugins/git-worktree 种子迁入；旧包退役）
     // knowledge = userLayerRow 种子（1.9 A5 重开放——用户层全局行 + skills/learn 技能面）
+    // lib/* = 闭包成员（plugin-project 1.2/1.6/1.7：core 依赖 lib-util/lib-diag/lib-path/lib-db，
+    // contracts 兼容面依赖 lib-api——lib/ 子居所自动入场）
+    // spec = staged:true 覆写种子（plugin-spec 1.10 docs 域收编：core dist 装配行静态 import
+    // @dsh-forge/spec——forgeDocs factory 改指新包，缺席即 boot ESM 解析断裂）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/knowledge', 'plugins/md-mermaid'].sort(),
+      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/md-mermaid', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
     )
   })
 
@@ -284,7 +327,10 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     const staged = stagedProductPackages(PRODUCT_PLUGINS)
     // 声明面扫描：packages/*/package.json dsh.bundle.patch 指向的文件 ⊆ staging files
     for (const [dir, files] of Object.entries(staged)) {
-      const manifest = JSON.parse(readFileSync(join(ROOT, 'packages', dir, 'package.json'), 'utf8')) as {
+      const [rootName, sub] = treeOf(dir)
+      const manifest = JSON.parse(
+        readFileSync(join(ROOT, rootName, sub, 'package.json'), 'utf8'),
+      ) as {
         dsh?: { bundle?: { patch?: string } }
       }
       const declared = manifest.dsh?.bundle?.patch
@@ -296,17 +342,18 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
         `关键文件口径缺席 runtime/node_modules/@dsh-forge/${dir.split('/').pop()}/${rel}（--check 不可达）`,
       ).toContain(`runtime/node_modules/@dsh-forge/${dir.split('/').pop()}/${rel}`)
     }
-    // 现值锚：expert-squad 是当前唯一声明者（回归锚——声明面丢失即本断言红）
+    // 现值锚：expert-squad 声明者回归锚——声明面丢失即本断言红
     expect(staged['plugins/expert-squad']).toContain('cordis.patch.yml')
   })
 
-  it('bug a2a54922（G5 约定目录结构扫描）：staged 包源目录含约定资源目录（experts/skills/skills-blitz）→ 必在物化 files 集（漏配从人记变机械）', () => {
-    const CONVENTION_DIRS = ['experts', 'skills', 'skills-blitz']
+  it('bug a2a54922（G5 约定目录结构扫描）：staged 包源目录含约定资源目录（experts/skills）→ 必在物化 files 集（漏配从人记变机械；skills-blitz 随 plugin-spec 1.9 退役出宇宙）', () => {
+    const CONVENTION_DIRS = ['experts', 'skills']
     const staged = stagedProductPackages(PRODUCT_PLUGINS)
     const problems: string[] = []
     for (const [dir, files] of Object.entries(staged)) {
+      const [rootName, sub] = treeOf(dir)
       for (const convention of CONVENTION_DIRS) {
-        const sourceDir = join(ROOT, 'packages', dir, convention)
+        const sourceDir = join(ROOT, rootName, sub, convention)
         if (existsSync(sourceDir) && readdirSync(sourceDir).length > 0 && !files.includes(convention)) {
           problems.push(`packages/${dir}/${convention} 在场但未随包物化（STAGING_EXTRAS 漏列）`)
         }
@@ -344,8 +391,8 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     const installDeps = (readJson('apps/host/profile.install/package.json') as { dependencies: Record<string, string> }).dependencies
     const missing: string[] = []
     for (const name of [...stagedPackages].sort()) {
-      const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
-      const manifest = readJson(`packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`) as { dependencies?: Record<string, string> }
+      const dir = pkgDirOf(name)
+      const manifest = readJson(pkgManifestRelPath(name, dir)) as { dependencies?: Record<string, string> }
       for (const [dep, version] of Object.entries(manifest.dependencies ?? {})) {
         if (dep.startsWith('@dsh-forge/')) continue
         if (installDeps[dep] === undefined) missing.push(`${name} → ${dep}@${version}`)
@@ -360,9 +407,9 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // 历史病理 = staging 硬编码清单漏列闭包成员；推导制下本断言守 kill-switch 不误伤。
     const missing: string[] = []
     for (const name of [...stagedPackages].sort()) {
-      // 键可含 packages/ 子路径（md-mermaid 居 packages/plugins/——runtime-packages 同源映射）
-      const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
-      const manifest = readJson(`packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`) as { dependencies?: Record<string, string> }
+      // 键可含 workspace 子路径（md-mermaid 居 packages/plugins/、lib/* 居 lib/——子居所同源映射）
+      const dir = pkgDirOf(name)
+      const manifest = readJson(pkgManifestRelPath(name, dir)) as { dependencies?: Record<string, string> }
       for (const dep of Object.keys(manifest.dependencies ?? {})) {
         if (dep.startsWith('@dsh-forge/') && !stagedPackages.has(dep.slice('@dsh-forge/'.length))) {
           missing.push(`${name} → ${dep}`)
@@ -372,13 +419,17 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     expect(missing, `staging 闭包缺口（staged:false kill-switch 误伤依赖成员？）：${missing.join('; ')}`).toEqual([])
   })
 
-  it('闭包成员物化口径完整：package.json + dist 双件随包（--check 断言可达）', () => {
+  it('闭包成员物化口径完整：package.json + dist 入口双件随包（--check 断言可达；入口路径自各包 manifest main 派生）', () => {
     for (const name of [...stagedPackages].sort()) {
       expect(KEY_FILES, `${name} package.json 口径缺席`).toContain(
         `runtime/node_modules/@dsh-forge/${name}/package.json`,
       )
+      // dist 入口 = manifest main 单源（project 包 = dist/host/index.js；其余 = dist/index.js）
+      const dir = pkgDirOf(name)
+      const manifest = readJson(pkgManifestRelPath(name, dir)) as { main?: string }
+      const entry = (manifest.main ?? 'dist/index.js').replace(/^\.\//, '')
       expect(KEY_FILES, `${name} dist 入口口径缺席`).toContain(
-        `runtime/node_modules/@dsh-forge/${name}/dist/index.js`,
+        `runtime/node_modules/@dsh-forge/${name}/${entry}`,
       )
     }
   })
@@ -391,7 +442,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
   })
 
   it('knowledge 重开放 pin（knowledge-stage1-foundation 1.9 A5：用户层全局行 + staging 种子随包 + skills/learn 技能面口径）', () => {
-    expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为开（userLayerRow:true）').toEqual({ userLayerRow: true })
+    expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为开（userLayerRow:true + dir 居所声明）').toEqual({ userLayerRow: true, dir: 'plugins/knowledge' })
     expect(stagedPackages.has('knowledge'), 'knowledge 应在场 staging（userLayerRow 种子自动推导）').toBe(true)
     expect(KEY_FILES.some((rel) => rel.includes('@dsh-forge/knowledge')), '关键文件口径应含 knowledge 行（技能面 + dist）').toBe(true)
   })
@@ -593,6 +644,107 @@ describe('STAGING_EXTRAS 白名单自动比对守卫（stagingExtrasDrift——s
     const failBranch = source.slice(checkIdx)
     expect(failBranch).toContain('PACKAGING_CHECK_FAILED')
     expect(failBranch).toContain('process.exit(check.status ?? 1)')
+  })
+})
+
+// bug 539b7413 staged 副本 parity 守卫（stagedManifestParityViolations——版本 + dsh.bundle 对照仓内源）。
+// 曾发病理：同名旧壳包（packages/plugins/knowledge 0.30.2 无 dsh 字段）被误物化进安装包 runtime，
+// desktop 通道 solo add 经 resolveBundleDir installation-first 读到无 dsh.bundle 副本判
+// plain dependency 不进 dsh.profile.bundles——守卫把该类缺陷钉在物化/--check 两道缝。
+describe('bug 539b7413 staged 副本 parity 守卫（stagedManifestParityViolations）', () => {
+  /** fixture 根：临时目录 + 空 presets 目录 + staged 副本树挂点 */
+  const makeFixtureRoot = () => {
+    const root = mkdtempSync(join(tmpdir(), 'staging-parity-guard-'))
+    mkdirSync(join(root, 'apps/host/src/profile/presets'), { recursive: true })
+    return root
+  }
+  /** fixture 插件源包（userLayerRow 种子）+ staged 副本（默认同版本同 dsh 形状） */
+  const makeFixture = (root: string, opts: { sourceDshBundle?: boolean; stagedVersion?: string; stagedDshBundle?: boolean; stagedMissing?: boolean }) => {
+    const sourceDir = join(root, 'packages/plugins/fake-plugin')
+    mkdirSync(sourceDir, { recursive: true })
+    const dshShape = (bundle: boolean) => (bundle ? { bundle: { patch: './cordis.patch.yml' } } : undefined)
+    writeFileSync(
+      join(sourceDir, 'package.json'),
+      JSON.stringify({ name: '@dsh-forge/fake-plugin', version: '0.1.0', ...(opts.sourceDshBundle === false ? {} : { dsh: dshShape(true) }) }),
+      'utf8',
+    )
+    if (opts.stagedMissing !== true) {
+      const stagedDir = join(root, 'release/staging/runtime/node_modules/@dsh-forge/fake-plugin')
+      mkdirSync(stagedDir, { recursive: true })
+      const dsh = opts.sourceDshBundle === false ? undefined : dshShape(opts.stagedDshBundle !== false)
+      writeFileSync(
+        join(stagedDir, 'package.json'),
+        JSON.stringify({ name: '@dsh-forge/fake-plugin', version: opts.stagedVersion ?? '0.1.0', ...(dsh === undefined ? {} : { dsh }) }),
+        'utf8',
+      )
+    }
+  }
+  const FIXTURE_PLUGINS = { 'fake-plugin': { userLayerRow: true } }
+  const nmOf = (root: string) => join(root, 'release/staging/runtime/node_modules')
+
+  it('正例：staged 副本与源同版本同 dsh.bundle → 零违例', () => {
+    const root = makeFixtureRoot()
+    try {
+      makeFixture(root, {})
+      expect(stagedManifestParityViolations(FIXTURE_PLUGINS, root, nmOf(root))).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('正例（无 bundle 源）：源不声明 dsh.bundle（纯依赖包如 contracts/core）→ 版本一致即零违例', () => {
+    const root = makeFixtureRoot()
+    try {
+      makeFixture(root, { sourceDshBundle: false })
+      expect(stagedManifestParityViolations(FIXTURE_PLUGINS, root, nmOf(root))).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（版本漂移）：staged 副本版本 ≠ 仓内源 → 违例报出双版本（同名旧包遮蔽病理）', () => {
+    const root = makeFixtureRoot()
+    try {
+      makeFixture(root, { stagedVersion: '0.0.9' })
+      const violations = stagedManifestParityViolations(FIXTURE_PLUGINS, root, nmOf(root))
+      expect(violations.some((p) => p.includes('fake-plugin') && p.includes('0.0.9') && p.includes('0.1.0')), violations.join('; ')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（dsh.bundle 丢失）：源声明 dsh.bundle 而 staged 副本缺字段 → 违例（plain-dependency 遮蔽病理）', () => {
+    const root = makeFixtureRoot()
+    try {
+      makeFixture(root, { stagedDshBundle: false })
+      const violations = stagedManifestParityViolations(FIXTURE_PLUGINS, root, nmOf(root))
+      expect(violations.some((p) => p.includes('fake-plugin') && p.includes('dsh.bundle')), violations.join('; ')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（副本缺席）：staged 副本清单不在场 → 违例报缺席路径', () => {
+    const root = makeFixtureRoot()
+    try {
+      makeFixture(root, { stagedMissing: true })
+      const violations = stagedManifestParityViolations(FIXTURE_PLUGINS, root, nmOf(root))
+      expect(violations.some((p) => p.includes('fake-plugin') && p.includes('缺席')), violations.join('; ')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('接线 fail-loud：stage() 与 --check（check()）均消费 parity 守卫', () => {
+    const source = readFileSync(join(ROOT, 'scripts', 'assemble-installer-resources.mjs'), 'utf8')
+    const first = source.indexOf('assertManifestParity(plugins)')
+    expect(first, 'stage() parity 接线缺席').toBeGreaterThan(-1)
+    const stageCallSite = source.slice(source.indexOf('async function stage()'), first)
+    expect(stageCallSite, 'parity 接线须在 stage() 体内').toContain('async function stage()')
+    expect(
+      source.indexOf('stagedManifestParityViolations(plugins, ROOT, join(root', first + 1),
+      '--check parity 接线缺席',
+    ).toBeGreaterThan(-1)
   })
 })
 

@@ -31,6 +31,12 @@
 //   Step1b hero-switch-off / Step1c settings-toggle-roundtrip………………………………诚实映射
 //   Step2c restart-mid-state / Step3b post-lock-no-switch / Step3c restart-restore…交叉引用 SC1
 //
+// proposal 域退役迁移（a4664ccb/plugin-spec 1.11）：T2（提案绑定入口自动对齐）/T3（提案行
+// mode chip + 容器琥珀点错配对照）的断言面随提案域消费面退役整段退场——提案行 mode chip
+// [data-dswf-mode-chip]、行头「打开新会话」[data-dswf-ov-opensession]、任务容器琥珀点
+// 均为退役提案 UI 锚（plugins/project/ui 官方缝注册面零概览 dock 登记——概览由 task-loop
+// 接管版承载）；hero 预设座位面（T1）在役保留，交叉引用 SC1 不变。
+//
 // 诚实映射 / 交叉引用（无 e2e 通道或已有承载面——不伪造断言）：
 //   - Step1b hero-switch-off + Step1c settings-toggle-roundtrip：ui-settings 行属官方
 //     上游设置域（enabled 开关 + 行所有权让位）——官方设置对话框开启通道在 e2e 无先例锚
@@ -49,12 +55,7 @@
 import { expect, type Page } from '@playwright/test'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
-import { createBridgeDriver } from '../../support/replay/executor.js'
-import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { openOverviewDock } from '../../support/navigation.js'
-import { forgeInvoke } from '../../support/rpc.js'
-import { ovSubtabOf, ttItemOf } from '../../support/anchors.js'
-import { awaitSeatLabel, seatLabel, seatPresent, seatRoot, selectPreset } from '../../support/m3.js'
+import { awaitSeatLabel, seatPresent, seatRoot, selectPreset } from '../../support/m3.js'
 
 const WS_NAME = 'ws-jmsa'
 
@@ -66,31 +67,6 @@ const { test } = createSharedLaunchFixture({
   workspaceName: WS_NAME,
   launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
 })
-
-/** 概览 dock 挂载重试（共享 launch 序列态瞬态窗——上用例会话面沉降窗内中心列拦截子 tab
- *  点击；失败后关掉概览 tab 重开，keyed body 重挂载触发布局重解析——dogfood-sc-m3-replay
- *  openOverviewDockWithRetry 同径。瞬态窗对策，非放宽断言：轮内 30s/15s 门原样保留）。 */
-async function openOverviewSubtab(page: Page, subtab: 'proposals' | 'tasks'): Promise<void> {
-  let lastCause: unknown
-  for (let i = 0; i < 3; i++) {
-    try {
-      await openOverviewDock(page)
-      const tab = page.locator(ovSubtabOf(subtab))
-      await tab.click()
-      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-      return
-    } catch (cause) {
-      lastCause = cause
-      await page
-        .getByRole('tab', { name: /项目概览/ })
-        .getByRole('button', { name: '关闭' })
-        .click()
-        .catch(() => undefined)
-      await new Promise((resolve) => setTimeout(resolve, 3_000))
-    }
-  }
-  throw lastCause
-}
 
 /** 芯片流工作区选定重试（共享 launch 序列态瞬态窗——hero picker 菜单重挂载致行 detached；
  *  整段重开菜单重选幂等。瞬态窗对策，非放宽断言：轮内门原样保留）。 */
@@ -147,130 +123,6 @@ test('@web-e2e @m3 模式选择·T1：座位在场默认突击 + 菜单双入口
     await selectPreset(page, '突击模式')
     const back = await awaitSeatLabel(page)
     expect(back.includes('突击') || back.includes('blitz'), 'blank 期可再切（未锁窗口）').toBe(true)
-
-    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
-  }
-})
-
-test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）+ 无溯源提案不切换（沿 registry 当前选择不重绑 + chip 占位）', async ({ sharedLaunch }) => {
-  test.setTimeout(480_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
-  try {
-    const project = await registerProject(page, wsDir, WS_NAME)
-    const projectId = project.id
-    const driver = createBridgeDriver(app)
-    const blitzProp = (await driver.call('forgeProposals', 'createProposal', {
-      projectId, slug: 'jmsa-blitz', title: 'Jmsa 突击对齐提案', mode: 'blitz',
-    })) as { proposalId: string; slug: string }
-    const unmarked = (await driver.call('forgeProposals', 'createProposal', {
-      projectId, slug: 'jmsa-old', title: 'Jmsa 无溯源提案（扫描吸收形态）',
-    })) as { proposalId: string; slug: string }
-    await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: blitzProp.slug }, title: '对齐演示直挂任务', type: 'doc',
-    })
-
-    // ── Step4：经提案绑定入口创建新会话 → 自动对齐突击（blank 期 select）──
-    await openOverviewSubtab(page, 'proposals')
-    const blitzOpen = page.locator(`[data-dswf-ov-opensession="${blitzProp.slug}"]`).first()
-    await expect(blitzOpen, '突击提案行头「打开新会话」在场').toBeVisible({ timeout: 30_000 })
-    await blitzOpen.click()
-    expect(await seatPresent(page), '新会话预设座位在场（blank 期）').toBe(true)
-    const deadline = Date.now() + 30_000
-    let label = ''
-    while (Date.now() < deadline) {
-      label = await seatLabel(page)
-      if (label.includes('突击') || label.includes('blitz')) break
-      await page.waitForTimeout(1_000)
-    }
-    expect(label.includes('突击') || label.includes('blitz'), `自动对齐 = 突击（label=${label}——无需逐会话手选）`).toBe(true)
-
-    // ── Step4b：无溯源提案（mode NULL）经绑定入口 → 不切换——open-session.ts 机制：
-    // mode 缺席 = agentPreset.select 不调用，座位沿 registry 当前选择（Step4 已立 = 突击；
-    // registry 缺省 = blitz 的净默认世界由 T1 Step1 承载——bug 2ba146d8）。不切换的可观测 =
-    // 座位横跨本动作保持既有选择不变（若误按缺省重绑远征，此处即红）──
-    await openOverviewSubtab(page, 'proposals')
-    const unmarkedRow = page.locator('[data-dswf-ov-parent]', { hasText: 'Jmsa 无溯源提案（扫描吸收形态）' }).first()
-    await expect(unmarkedRow, '无溯源提案行在场').toBeVisible({ timeout: 30_000 })
-    await expect(unmarkedRow.locator('[data-dswf-mode-chip]'), 'mode chip 缺省占位（不伪装成任一模式）').toHaveAttribute('data-dswf-mode-chip', 'unmarked')
-    const unmarkedOpen = page.locator(`[data-dswf-ov-opensession="${unmarked.slug}"]`).first()
-    await expect(unmarkedOpen, '无溯源行头「打开新会话」在场').toBeVisible({ timeout: 15_000 })
-    await unmarkedOpen.click()
-    expect(await seatPresent(page), '第二新会话座位在场（blank 期）').toBe(true)
-    const deadline2 = Date.now() + 30_000
-    let label2 = ''
-    while (Date.now() < deadline2) {
-      label2 = await seatLabel(page)
-      if (label2.includes('突击') || label2.includes('blitz')) break
-      await page.waitForTimeout(1_000)
-    }
-    expect(label2.includes('突击') || label2.includes('blitz'), `无溯源不切换（select 未调用——沿 registry 当前选择突击；label=${label2}）`).toBe(true)
-    // 溯源不变（不伪装成任一模式——库面）
-    const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
-    const db = openForgeDbAt(dir)
-    try {
-      expect(db.prepare<unknown[], { mode: string | null }>(`SELECT mode FROM proposals WHERE id = ?`).get(unmarked.proposalId)?.mode, '无溯源提案 mode NULL（不切换判据的库面）').toBeNull()
-    } finally {
-      db.close()
-    }
-
-    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
-  }
-})
-
-test('@web-e2e @m3 模式选择·T3：错配守卫可读面零阻断（会话组合 vs 内容模式对照 + 下游读溯源字段）', async ({ sharedLaunch }) => {
-  test.setTimeout(480_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
-  try {
-    const project = await registerProject(page, wsDir, WS_NAME)
-    const projectId = project.id
-    const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
-    const driver = createBridgeDriver(app)
-    // Step5b 世界：hero 自由会话（registry 缺省 = blitz——bug 2ba146d8，无提案上下文无切面）+ 带直挂任务的 blitz 提案
-    const blitzProp = (await driver.call('forgeProposals', 'createProposal', {
-      projectId, slug: 'jmsa-guard', title: 'Jmsa 错配守卫演示提案', mode: 'blitz',
-    })) as { proposalId: string; slug: string }
-    const task = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: blitzProp.slug }, title: '错配守卫直挂任务', type: 'doc',
-    })) as { taskId: string; slug: string; localId: string }
-    await selectWorkspaceWithRetry(page, WS_NAME)
-
-    // 会话组合 = 突击（hero 自由——座位标签对照面；registry 缺省 = blitz，bug 2ba146d8——
-    // 会话无显式 mode 溯源时缺省已非远征，旧「远征」口径随 cordis.patch.yml:7 翻正）
-    const seat = await awaitSeatLabel(page)
-    expect(seat.includes('突击') || seat.includes('blitz'), `会话组合 = 突击（label=${seat}——registry 缺省 blitz，bug 2ba146d8）`).toBe(true)
-
-    // 所打开内容模式 = blitz（提案行 mode chip + 任务容器琥珀点——mode chip 对照面）
-    await openOverviewSubtab(page, 'proposals')
-    const propRow = page.locator('[data-dswf-ov-parent]', { hasText: 'Jmsa 错配守卫演示提案' }).first()
-    await expect(propRow, '提案行在场').toBeVisible({ timeout: 30_000 })
-    await expect(propRow.locator('[data-dswf-mode-chip]'), 'mode chip 对照 = 突击（内容模式投影）').toHaveAttribute('data-dswf-mode-chip', 'blitz')
-
-    // 任务子 tab：切突击提案容器（琥珀点）+ 派发入口亮起（守卫零阻断——可继续工作）
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    await page.locator('[data-dswf-tt-contpill]').first().click()
-    const menuItem = page.locator(`[data-dswf-tt-mcont="proposal:${blitzProp.slug}"]`).first()
-    await expect(menuItem, '容器菜单含突击提案容器').toBeVisible({ timeout: 15_000 })
-    await menuItem.click()
-    const pill = page.locator(`[data-dswf-tt-contpill="proposal:${blitzProp.slug}"]`)
-    await expect(pill, '容器 pill 切至突击提案').toBeVisible({ timeout: 15_000 })
-    await expect(pill.locator('.dswf-tt-contdot'), '琥珀点 = blitz 容器标记（内容模式对照面）').toHaveAttribute('data-mode', 'blitz')
-    await expect(page.locator(ttItemOf(task.taskId)).first(), '直挂任务行在场（任务工作可继续）').toBeVisible({ timeout: 30_000 })
-    const dispatchOn = page.locator('[data-dswf-tt-dispatch="on"]').first()
-    await expect(dispatchOn, '派发入口亮起（可见性守卫零阻断）').toBeVisible({ timeout: 15_000 })
-    await expect(dispatchOn, '派发按钮可点（不阻断）').toBeEnabled()
-
-    // 下游读溯源字段不读会话预设（SC3）：任务 mode 快照 = blitz（会话远征不改语义）
-    const db = openForgeDbAt(dir)
-    try {
-      expect(db.prepare<unknown[], { mode: string | null }>(`SELECT mode FROM tasks WHERE id = ?`).get(task.taskId)?.mode, '任务语义按创建时快照（blitz——会话组合零影响）').toBe('blitz')
-    } finally {
-      db.close()
-    }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {

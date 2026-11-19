@@ -1,0 +1,880 @@
+/* 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。 */
+/* 任务详情弹窗样式（定位：业务——m3.1 D21：抽屉形态退役 → 可拖动弹窗；两分块 + 顺滑折叠
+ * [grid 0fr/1fr] + 左右缘拖宽 + 类型模板 + 覆盖率 + 时间线沿用）。结构基准 = 纠正版原型
+ * #m31-tm（proposal.md 六区 D21）；视觉一律官方令牌（令牌唯一：色/字/距/圆角零裸值
+ * ——lint-tokens 机械面）。
+ * dsw-raw 豁免（执行记录注记）：
+ *   - 宽度区间 320/440/760、步长 32、视口因子 0.92、缘手柄 9px/64px、起始位纵向 14% /
+ *     拖移边距 4px / 最大高 76vh = 原型结构刻度（布局尺寸以原型结构为准——styling
+ *     TECH-styling-002；圆角 10px → 最近语义令牌 radius-md 12 映射）；
+ *   - 标题栏高 30px = D43 弹窗顶/底高度收紧新裁决刻度（2026-10-10 用户裁决「顶部和
+ *     底部的高度都小一些」——原 38px 原型标题栏高刻度注释保留对照）；上下内距收一档 =
+ *     整行高令牌之半（calc(/2)——D36 同款收档刻度，令牌派生非裸值）；
+ *   - 过渡时长 .22s/.18s = 原型折叠时长刻度（knowledge.css 同款豁免先例；滑入动画已随
+ *     抽屉形态退役——D21 零在场）；
+ *   - 类型六色：ui-design Design System 六色中 紫/青 无上游语义令牌（ui-theme 无此 hue），
+ *     最近似映射（doc → label-primary-bluish、test → state-business-primary）——令牌唯一
+ *     硬规则优先（SPEC CONTRADICTION 裁决：编码=link/评估=error/验证=warn/质量门=success 精确对齐）。 */
+
+/* ── 弹窗壳：可拖动浮窗（宽/左/上经 style 注入；逐开本地态——关闭即弃回默认起始位） ──
+ * 起始位缺省（style 未注入前）= CSS 居中兜底（水平居中 + 14vh）；壳宿主树
+ * pointer-events:none（ShellHost 舞台）——弹窗本体显式恢复 auto。 */
+.dswf-td-drawer {
+  position: fixed;
+  left: 50%; /* dsw-raw 原型起始位缺省（效应注入 inline left/top 前的居中兜底） */
+  top: 14vh; /* dsw-raw 原型起始位纵向刻度 */
+  transform: translateX(-50%);
+  z-index: var(--dsh-dockkit-float-layer, 60); /* dsw-raw 官方 dockkit 浮层层级令牌（回退 = 缺省 60；转移对话框压上层 80） */
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  max-width: 92vw; /* dsw-raw 窄屏防越（0.92 因子——clampDrawerWidth 同口径） */
+  max-height: 76vh; /* dsw-raw 原型弹窗最大高刻度 */
+  pointer-events: auto; /* 壳宿主舞台零交互——弹窗本体恢复命中 */
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md); /* 原型 10px → 最近语义令牌（md = 12） */
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+/* 拖移中形态（标题栏按住——投影加深一档） */
+.dswf-td-drawer.is-dragging {
+  box-shadow: var(--dsw-elevation-soft);
+}
+
+/* ── 标题栏：全窗拖移手柄（cursor move；按钮命中不劫持——组件面守卫） ── */
+.dswf-td-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-height: 30px; /* dsw-raw 新裁决刻度（D43 弹窗顶/底高度收紧——2026-10-10 用户裁决）——原值 38px（原型标题栏高刻度）对照 */
+  padding-inline: var(--dsw-font-xs-13-line-height);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  cursor: var(--dsh-cursor-move, move); /* 全局光标系统（styles/cursors.css——OS 单色 move 光标纯白缺陷缓解） */
+  user-select: none;
+  touch-action: none;
+}
+
+/* ── 左右缘拖宽手柄（9px 命中区 + 中央拖示条；hover/active 亮 64px）——对侧锚定 ── */
+.dswf-td-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px; /* dsw-raw 原型手柄宽刻度 */
+  z-index: 3;
+  cursor: var(--dsh-cursor-col-resize, col-resize); /* 全局光标系统（styles/cursors.css——D32 同病面收口） */
+  touch-action: none;
+}
+
+.dswf-td-resize[data-dswf-td-resize='left'] {
+  left: -4px; /* dsw-raw 原型手柄外扩命中区 */
+}
+
+.dswf-td-resize[data-dswf-td-resize='right'] {
+  right: -4px; /* dsw-raw 原型手柄外扩命中区 */
+}
+
+.dswf-td-resize::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px; /* dsw-raw 原型拖示条宽 */
+  height: 44px; /* dsw-raw 原型拖示条高 */
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-border-l4);
+  transition: background 0.15s ease, height 0.15s ease; /* dsw-raw 原型快过渡刻度 */
+}
+
+.dswf-td-resize[data-dswf-td-resize='left']::after {
+  left: 3px;
+}
+
+.dswf-td-resize[data-dswf-td-resize='right']::after {
+  right: 3px;
+}
+
+.dswf-td-resize:hover::after,
+.dswf-td-resize:focus-visible::after,
+.dswf-td-resize.is-active::after {
+  background: var(--dsw-alias-link);
+  height: 64px; /* dsw-raw 原型拖示高亮高 */
+}
+
+/* ── 通用区：头部（状态点 + 任务键 + 状态标签 + ✕ 右端）→ 标题 → kv 标签行 ── */
+.dswf-td-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: calc(var(--dsw-font-xs-13-line-height) / 2) var(--dsw-font-s-14-line-height) 0; /* D43 顶距收一档（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)；本规则位与 :44 拖移规则同落标题栏单元素——DOM 归属核对，头部区行距 gap 不动） */
+}
+
+.dswf-td-key {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-td-status {
+  flex: none;
+}
+
+.dswf-td-spacer {
+  flex: 1;
+}
+
+.dswf-td-title {
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) 0;
+  font: var(--dsw-font-s-14-strong);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-td-kvstrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) calc(var(--dsw-font-xs-13-line-height) / 2); /* D43 底距收一档（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
+}
+
+/* kv chip：`{key} : {value}`（v15）——键 tertiary / 值 secondary 500 */
+.dswf-td-kv-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px; /* dsw-raw 原型 chip 内距刻度 */
+  padding: 2px var(--dsw-font-xs-13-line-height); /* dsw-raw 原型 chip 上下内距刻度 */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+}
+
+.dswf-td-kv-k,
+.dswf-td-kv-sep {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-kv-v {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-td-kv-v.is-error {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 类别 chip 值：着族色（--dswf-td-hue 由族类 class 下发） */
+.dswf-td-kv-v.is-code {
+  color: var(--dswf-td-hue, var(--dsw-alias-label-secondary));
+}
+
+/* 类别 chip 族色（Design System 六色——描边/文字同 hue；值用代码体类） */
+.dswf-td-cat-coding {
+  --dswf-td-hue: var(--dsw-alias-link);
+}
+
+.dswf-td-cat-doc {
+  --dswf-td-hue: var(--dsw-alias-label-primary-bluish); /* 紫 → 最近似（无紫语义令牌） */
+}
+
+.dswf-td-cat-test {
+  --dswf-td-hue: var(--dsw-alias-state-business-primary); /* 青 → 最近似（无青语义令牌） */
+}
+
+.dswf-td-cat-eval {
+  --dswf-td-hue: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-td-cat-validation {
+  --dswf-td-hue: var(--dsw-alias-state-warn-primary);
+}
+
+.dswf-td-cat-gate {
+  --dswf-td-hue: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-td-cat-generic {
+  --dswf-td-hue: var(--dsw-alias-label-tertiary);
+}
+
+/* 类别 chip（族类 class 双落抽屉壳与 chip——hue 经 CSS 变量下发） */
+.dswf-td-kv-chip.dswf-td-cat-coding,
+.dswf-td-kv-chip.dswf-td-cat-doc,
+.dswf-td-kv-chip.dswf-td-cat-test,
+.dswf-td-kv-chip.dswf-td-cat-eval,
+.dswf-td-kv-chip.dswf-td-cat-validation,
+.dswf-td-kv-chip.dswf-td-cat-gate,
+.dswf-td-kv-chip.dswf-td-cat-generic {
+  border-color: var(--dswf-td-hue, var(--dsw-alias-border-l2));
+  color: var(--dswf-td-hue, var(--dsw-alias-label-secondary));
+}
+
+/* ── 简要形态（D22：默认 440——概要四行；完整块[分块/kv/时间线]零渲染） ──
+ * 行语言 = 原型 #m31-tm 简要 rows（m31-tm-row/k/v：键列定宽 56 + 值折行） */
+.dswf-td-brief {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+}
+
+.dswf-td-brow {
+  display: flex;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: 2px 0; /* dsw-raw 原型行距刻度 */
+}
+
+.dswf-td-bk {
+  flex: none;
+  width: 56px; /* dsw-raw 原型键列定宽刻度 */
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-bv {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 挂接会话 pill 行（S2：可点 pill——R4 弹性换行，440 宽多会话不挤压） */
+.dswf-td-bv-sess {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dsw-font-xs-13-line-height); /* 令牌间距刻度（沿 .dswf-td-brow 同源） */
+}
+
+.dswf-td-bv-sess .dswf-td-sess {
+  overflow-wrap: anywhere;
+}
+
+/* 所属行值 = 代码体色（原型 t-code 同位） */
+.dswf-td-bv.is-code {
+  color: var(--dsw-alias-link);
+}
+
+/* ── 内容滚动区（两分块独占滚动） ── */
+.dswf-td-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 分块：底色条块头（13/600 主色 + caret）+ grid 0fr/1fr 折叠体（就地更新） ── */
+.dswf-td-sect {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  margin: var(--dsw-font-xs-13-line-height) var(--dsw-font-xs-13-line-height) 0;
+  padding: var(--dsw-font-xs-13-line-height);
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg-hover); /* v12 块头底色条 */
+  cursor: var(--dsh-cursor-pointer, pointer);
+  user-select: none;
+  text-align: start;
+  min-width: 0;
+}
+
+.dswf-td-sect:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.dswf-td-caret {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+  transition: transform 0.22s ease; /* dsw-raw 原型 caret 旋转时长 */
+}
+
+.dswf-td-caret.is-closed {
+  transform: rotate(-90deg);
+}
+
+.dswf-td-sect-title {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-td-sect-hint {
+  margin-left: auto;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 折叠体：grid 0fr/1fr 高度过渡 + opacity（v11 就地更新——块体常驻 DOM）；
+ * 垂直间距用子元素 margin（padding 会成为 0fr 轨道的最小高度地板） */
+.dswf-td-sect-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.22s ease, opacity 0.18s ease; /* dsw-raw 原型折叠时长 */
+}
+
+.dswf-td-sect-body.is-collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.dswf-td-sect-in {
+  min-height: 0;
+  overflow: hidden;
+  padding-inline-start: var(--dsw-font-l-20-line-height); /* v12 块体左缩进刻度 */
+  padding-inline-end: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-td-sect-in > * {
+  margin-block: 0 var(--dsw-font-xs-13-line-height); /* 折叠体子元素 margin（非 padding） */
+}
+
+.dswf-td-sect-in > *:first-child {
+  margin-block-start: var(--dsw-font-xs-13-line-height);
+}
+
+/* ── 层次阶梯（v12/v13）：子标题 tc-k → 组标签 scope-k → 内容行；键标签加粗 ── */
+.dswf-td-tck {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-td-kvrow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-td-kv-k {
+  flex: none;
+  font: var(--dsw-font-xs-strong-13); /* 键标签加粗（tl-verb 600） */
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-kv-v {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-td-code,
+.dswf-td-code.is-link {
+  color: var(--dsw-alias-link);
+}
+
+/* ── 目标/结果对行（v13 上下展示：标签在上、内容在下） ── */
+.dswf-td-gr-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-td-gr-item .dswf-td-tck {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-td-gr-v {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+.dswf-td-gr-v.is-success,
+.dswf-td-gr-v .is-success {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-td-gr-v.is-error {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-td-gr-v.is-warn {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* ── 参考文档 chips（resolved 链接态可点 / 未命中置灰） ── */
+.dswf-td-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-td-ref {
+  display: inline-flex;
+  align-items: center;
+  height: 24px; /* dsw-raw 原型 chip 行刻度 */
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  cursor: default;
+}
+
+.dswf-td-ref.is-link {
+  color: var(--dsw-alias-link);
+  border-color: var(--dsw-alias-link);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-td-ref.is-link:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-td-ref.is-muted {
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0.65;
+}
+
+/* ── 改动范围双列（预期 ↔ 实际 + 差异摘要；文件路径完整展示） ── */
+.dswf-td-scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-td-scope-g {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-td-scope-k {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary); /* 组标签三级色 */
+  letter-spacing: 0.5px; /* dsw-raw 原型组标签字距刻度 */
+}
+
+.dswf-td-file-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dswf-td-file {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal; /* v12 文件路径完整展示——长路径换行不截断 */
+  word-break: break-all;
+  text-align: start;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-link);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: var(--dsw-radius-xs);
+  padding: 2px var(--dsw-font-xs-13-line-height); /* dsw-raw 原型文件行内距刻度 */
+}
+
+.dswf-td-file-badge {
+  flex: none;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-file-badge.is-hit {
+  color: var(--dsw-alias-state-success-primary);
+  border-color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-td-file-badge.is-extra {
+  color: var(--dsw-alias-state-warn-primary);
+  border-color: var(--dsw-alias-state-warn-primary);
+}
+
+.dswf-td-commits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-td-commit {
+  display: inline-flex;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-link);
+}
+
+.dswf-td-scope-sum {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 覆盖率（进度条 + 阈值刻度线 + 判定徽标） ── */
+.dswf-td-cov-line {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-td-cov-bar {
+  position: relative;
+  flex: 1 1 120px; /* dsw-raw 原型进度条弹性刻度 */
+  min-width: 90px; /* dsw-raw 原型进度条最小刻度 */
+  height: 6px; /* dsw-raw 原型进度条高 */
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-td-cov-fill {
+  height: 100%;
+  border-radius: var(--dsw-radius-xs);
+  transition: width 0.18s ease; /* dsw-raw 原型填充过渡刻度 */
+}
+
+.dswf-td-cov-fill.is-pass,
+.dswf-td-cov-actual.is-pass {
+  background: var(--dsw-alias-state-success-primary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-td-cov-fill.is-fail,
+.dswf-td-cov-actual.is-fail {
+  background: var(--dsw-alias-state-warn-primary);
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.dswf-td-cov-fill.is-none {
+  background: var(--dsw-alias-state-idle-primary);
+}
+
+.dswf-td-cov-mark {
+  position: absolute;
+  top: -3px; /* dsw-raw 原型刻度线外扩 */
+  bottom: -3px;
+  width: 2px; /* dsw-raw 原型刻度线宽 */
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-label-primary);
+  opacity: 0.55;
+}
+
+.dswf-td-cov-nums {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-td-cov-badge {
+  flex: none;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-cov-badge.is-pass {
+  color: var(--dsw-alias-state-success-primary);
+  border-color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-td-cov-badge.is-fail {
+  color: var(--dsw-alias-state-warn-primary);
+  border-color: var(--dsw-alias-state-warn-primary);
+}
+
+/* ── 备注（v14 置底警示）与 eval 空态注记 ── */
+.dswf-td-eval-empty {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 时间线：现状条 + 事件流（节点分色：提交绿/领取蓝/阻塞琥珀/恢复绿/人工转移蓝环） ── */
+.dswf-td-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height);
+  padding: var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-td-now-k {
+  flex: none;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-now-item {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+.dswf-td-now-item.is-warn {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.dswf-td-sess {
+  display: inline-flex;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-td-sess.is-link {
+  color: var(--dsw-alias-link);
+  border-color: var(--dsw-alias-link);
+  background: transparent;
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-td-line {
+  display: flex;
+  flex-direction: column;
+}
+
+.dswf-td-ev {
+  position: relative;
+  padding: 0 0 calc(var(--dsw-font-xs-13-line-height) / 2) var(--dsw-font-l-20-line-height); /* D43 事件行底距收一档（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
+}
+
+.dswf-td-ev::before {
+  content: '';
+  position: absolute;
+  left: 3px; /* dsw-raw 原型节点左位刻度 */
+  top: 6px; /* dsw-raw 原型节点顶距刻度 */
+  width: 6px; /* dsw-raw 原型节点径刻度 */
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-idle-primary);
+}
+
+.dswf-td-ev::after {
+  content: '';
+  position: absolute;
+  left: 5.5px; /* dsw-raw 原型连线左位刻度 */
+  top: 15px;
+  bottom: 0;
+  width: 1px; /* dsw-raw 原型连线宽 */
+  background: var(--dsw-alias-border-l2);
+}
+
+.dswf-td-ev:last-child {
+  padding-bottom: 0;
+}
+
+.dswf-td-ev:last-child::after {
+  display: none;
+}
+
+.dswf-td-ev.v-submit::before,
+.dswf-td-ev.v-restore::before {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-td-ev.v-claim::before {
+  background: var(--dsw-alias-link);
+}
+
+.dswf-td-ev.v-block::before {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.dswf-td-ev.v-human::before {
+  background: var(--dsw-alias-link);
+  box-shadow: 0 0 0 2px var(--dsw-alias-state-business-tertiary); /* dsw-raw 原型 v-human 蓝环节点环刻度（事件分色——人工转移环） */
+}
+
+.dswf-td-ev-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-td-ev-verb {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-td-ev-at {
+  margin-left: auto;
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-ev-note {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* ── 收起/展开单源（task-ui-visual-copy-blitz S2——Note/目标/结果/AC 块共用） ── */
+.dswf-td-fold {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: var(--dsh-cursor-pointer, pointer);
+  overflow-wrap: anywhere;
+}
+
+.dswf-td-fold-caret {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-fold-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dswf-td-fold-collapse {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+/* ── submit 结构化面（AC 徽标 / keyDecisions 分列 / 分类字段行） ── */
+.dswf-td-ac-item {
+  display: flex;
+  gap: var(--dsw-font-xs-13-line-height);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dswf-td-ac-item.is-met .dswf-td-ac-mark {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-td-ac-item.is-miss .dswf-td-ac-mark {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-td-ac-ev {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-td-kd-item {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dswf-td-fields {
+  color: var(--dsw-alias-label-tertiary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ── 评分表分值档（≥70 / ≥40 / 其余）── */
+.dswf-td-score.is-pass {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-td-score.is-mid {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.dswf-td-score.is-low {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-td-score-total {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 底部：转移入口 ── */
+.dswf-td-foot {
+  position: relative; /* fix-3① toast 改锚：脚行整宽 = drawer 上下文 toast 的定位宿主 */
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) calc(var(--dsw-font-xs-13-line-height) / 2); /* D43 脚行底距收一档（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)；顶距原样 = diag toast 锚 bottom 耦合位不动） */
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+/* ── 任务失败诊断（4.6 UF-3 v19–v21——仅 blocked/rejected；toast 就近呈现 + 发送路由） ──
+ * fix-3① drawer 上下文 toast 改锚：工具栏形态（right:100% 左伸 + width:max-content，
+ * 失败档行集 ~340px）超出 clamp 最小宽 320px 抽屉的左缘，被 .dswf-td-drawer
+ * overflow:hidden 裁剪——发送钮落裁剪区不可点（e2e T3 run1/run2 实证）。改锚 =
+ * 右缘贴抽屉右内缘·脚行上方 + max-width 收敛行集换行（原型 toastRich 的
+ * maxWidth 收敛同形）；toast 仍随抽屉装载/卸载，v19「就近呈现·5s」语义保持。 */
+.dswf-td-diagwrap {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.dswf-td-foot .dswf-tt-diagtoast {
+  top: auto;
+  right: var(--dsw-font-s-14-line-height); /* 右缘贴抽屉右内缘（= 脚行右内边距同刻度） */
+  bottom: calc(100% - var(--dsw-font-xs-13-line-height)); /* 底缘落动作钮顶一线（垂直贴近） */
+  width: auto;
+  /* 宽度收敛：抽屉内宽为上限（窄抽屉行集换行），全局 340 限宽刻度不放宽 */
+  max-width: min(340px, calc(100% - 2 * var(--dsw-font-s-14-line-height))); /* dsw-raw 原型 toast 限宽刻度（task-tab.css 同源） */
+}
+
+.dswf-td-diag {
+  border-color: var(--dsw-alias-state-error-primary); /* 失败面语义着色（诊断失败动作钮） */
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ── 装载/错误面与骨架 ── */
+.dswf-td-face {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--dsw-font-s-14-line-height);
+}
+
+.dswf-td-error {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-xs-13-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-3);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.dswf-td-retry {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-link);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-td-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: var(--dsw-font-s-14-line-height);
+}
+
+.dswf-td-skeleton-row {
+  height: 24px; /* dsw-raw 对齐 chip 行刻度 */
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-skeleton);
+}

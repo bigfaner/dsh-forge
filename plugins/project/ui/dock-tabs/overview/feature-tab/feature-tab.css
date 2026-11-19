@@ -1,0 +1,262 @@
+/* 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。 */
+/* M3 UF-4 feature 子 tab 组件族（4.3）：阶段 chips 行 + 两列元数据网格 + 分层文档列表。
+ * 令牌纪律（lint-tokens）：色/字/距零裸值——间距取官方排版行高令牌刻度（proposal-tab.css /
+ * overview.css 同法）；chips 形制 = M3.1 D14 彩色胶囊（官方 Tag 999px 刻度同值——
+ * components.css 胶囊先例；矩形 radius-xs 退役；与 4.2 五态 / 七态 chips 同胶囊语言）；
+ * 元数据键值行语言镜像 overview.css dswf-ov-meta 族（键列 56px 对齐）。
+ * dsw-raw 豁免（执行记录注记）：chips 行距 6px / chip 行高 24px / chip 胶囊 999px（官方
+ * Tag 同值）/ 点径 8px = 原型结构刻度；网格列间距 14px = 原型 meta-grid column-gap 同值
+ * 刻度；D44 状态 chip 统一宽（S6 加宽 78→90px）/ 横向 padding 2px / chip 内距 6px =
+ * 用户等长裁决刻度（原 auto 宽 + 整行高令牌对照——行注逐位记账）。 */
+
+/* ── 阶段 chips 行（M3.1 D14 彩色胶囊——原型 m31-st-ph-*；机制沿五态/七态 chips；
+ *    D44：三族状态 chip 固定统一宽 + 内容居中（原 auto 宽退役——dswf-ov-stchip /
+ *    dswf-ov-pschip 同值互指；✕ 重置钮非状态标签不参与等长，auto 宽在 -clear 保持）；
+ *    S6：统一宽 78→90px 加宽（78px 档实测溢出致内部换行——固定统一宽形态保留仅换值）） ── */
+.dswf-ov-phchips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px; /* dsw-raw 原型 chips 行距刻度（dswf-ov-stchips 同值） */
+  /* D36 ① 底距减半（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)） */
+  padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height)
+    calc(var(--dsw-font-xs-13-line-height) / 2);
+}
+
+.dswf-ov-phchip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center; /* D44 固定宽内容居中——3 字 + 点 + 两位计数不截断（三族同值） */
+  gap: 6px; /* D44 chip 内点/字/计距收窄（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)；与行 gap 6px 同刻度） */
+  width: 90px; /* D44 固定统一宽 + S6 加宽（dsw-raw 新裁决刻度——原 auto 宽内容自适应形态退役：3 字 39 + 点 8 + 两位计数 ~15 + chip 内距 gap 12 + 横向 padding 4 + 边框 2 ≈ 80，原 78px 档实测溢出致内部换行，加宽至 90px 档容纳；三族同值零漂移互指：dswf-ov-stchip / dswf-ov-pschip） */
+  height: 24px; /* dsw-raw 原型 chip 行刻度（dswf-ov-pschip 同值） */
+  padding: 0 2px; /* D44 横向收窄档（dsw-raw 新裁决刻度——原值整行高令牌 0 13px 对照：固定宽居中下仅溢出护栏；✕ 重置钮原形制在 -clear 保持） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值（矩形 radius-xs 退役——M3.1 D14） */
+  background: var(--dsw-alias-bg-base);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-ov-phchip:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 激活着色（原型 m31-ph-*）：进行中/设计=蓝 link / 需求/已归档=中性 / 已完成=绿 success /
+ * 任务=紫无官方令牌 → 中性最近语义（M3 记账裁决——同 4.2 superseded 注记）。 */
+.dswf-ov-phchip.is-on {
+  font: var(--dsw-font-xs-strong-13);
+}
+
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='in-progress'],
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='design'] {
+  border-color: var(--dsw-alias-link);
+  color: var(--dsw-alias-link);
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='prd'],
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='archived'] {
+  border-color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='tasks'] {
+  border-color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-ov-phchip.is-on[data-dswf-ov-phchip='completed'] {
+  border-color: var(--dsw-alias-state-success-primary);
+  color: var(--dsw-alias-state-success-primary);
+  background: var(--dsw-alias-state-success-tertiary);
+}
+
+.dswf-ov-phchip.is-zero,
+.dswf-ov-phchip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dswf-ov-phchip-label,
+.dswf-ov-phchip-count {
+  white-space: nowrap; /* S6 防内部换行兜底（固定宽 + flex 收缩下 label/count span 不折行） */
+  flex-shrink: 0;
+}
+
+.dswf-ov-phchip-count {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-ov-phchip-clear {
+  width: auto; /* D44 「✕ 重置」非状态标签——不参与等长（auto 宽保持） */
+  padding: 0 var(--dsw-font-xs-13-line-height); /* D44 钮形制原值保持（base 等长收窄不联动——D38 形态零回归） */
+  border-style: dashed;
+  margin-inline-start: 8px; /* D38 钮前与行内 chip 拉开：行 gap 6px + 本 8px = 视距 14px（dsw-raw 新裁决刻度） */
+}
+
+/* 阶段点色（ui-design M3 令牌映射表未列阶段——原型 PHASE_TAG 最近语义映射：
+ * 进行中/设计 = 蓝（business 活跃语义）、需求/已归档 = 中性（idle）、已完成 = 绿（success）、
+ * 任务 = 原型紫无官方令牌 → 中性三级（同 4.2 superseded 注记） */
+.dswf-ov-phchip-dot {
+  flex: none;
+  width: 8px; /* dsw-raw 原型点径刻度（StateDot size=8 同值） */
+  height: 8px; /* dsw-raw */
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.dswf-ov-phchip-dot[data-phase='in-progress'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.dswf-ov-phchip-dot[data-phase='prd'] {
+  color: var(--dsw-alias-state-idle-primary);
+}
+
+.dswf-ov-phchip-dot[data-phase='design'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.dswf-ov-phchip-dot[data-phase='tasks'] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-ov-phchip-dot[data-phase='completed'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-ov-phchip-dot[data-phase='archived'] {
+  color: var(--dsw-alias-state-idle-primary);
+}
+
+/* ── 两列元数据网格（摘要独行 + 两列——4.6 装配入展开元数据块；M3.1 D13 起随
+ * dswf-ov-meta 灰底卡内段呈现——本层零自带底/缩进（旧 bg-layer-2 盒 + 26px 缩进退役）） ── */
+.dswf-ov-fmeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-ov-fmeta-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-ov-fmeta-row.is-full {
+  width: 100%;
+}
+
+.dswf-ov-fmeta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 14px; /* dsw-raw 原型两列网格列距刻度 */
+  row-gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-ov-fmeta-k {
+  flex: none;
+  width: 56px; /* dsw-raw 原型键列宽刻度（与 dswf-ov-meta-k / ov-info-k 同列对齐） */
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-ov-fmeta-v {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ── 分层文档列表（中文分组标题 + 真实路径文档行——两级层次。M3.1 D17 原型 B 区
+ * m31-doc-row 形态：文档行 file 图标 svg 化（emoji 退役）+ 零文档 is-empty 空态行） ── */
+.dswf-ov-dgroups {
+  display: flex;
+  flex-direction: column;
+  margin-block: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-ov-docs-head {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-ov-dgroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.dswf-ov-dgroup-title {
+  margin-block: var(--dsw-font-xs-13-line-height);
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-ov-drow {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  height: 28px; /* dsw-raw 原型文档行高刻度（dswf-ov-doc 同值） */
+  padding: 0 var(--dsw-font-s-14-line-height);
+  border: none;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  cursor: var(--dsh-cursor-pointer, pointer);
+  min-width: 0;
+}
+
+.dswf-ov-drow:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* 文档行线性图标（M3.1 D17——原型 ico('file',13)：currentColor 随行态着色） */
+.dswf-ov-drow-ic {
+  flex: none;
+  width: 13px; /* dsw-raw 原型 file 图标 13px 结构刻度 */
+  height: 13px; /* dsw-raw 同上 */
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 零文档空态行（原型 m31-doc-row is-empty：非命中面——零悬停底 + 三级弱字） */
+.dswf-ov-drow.is-empty {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.dswf-ov-drow.is-empty:hover {
+  background: transparent;
+}
+
+.dswf-ov-drow.is-empty .dswf-ov-drow-path {
+  color: inherit;
+}
+
+.dswf-ov-drow-path {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-ov-drow-state {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-ov-drow-arrow {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-strong-13);
+}

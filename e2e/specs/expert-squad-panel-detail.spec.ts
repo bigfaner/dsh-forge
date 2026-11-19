@@ -292,7 +292,26 @@ test('@feature expert-squad catalog candidates：读口 200——tools 含内置
       { timeout: 30_000, message: 'candidates 读口目录非空' },
     )
     .toBeTruthy()
-  expect(tools, 'tools 含插件追加工具 delegate_expert').toContain('delegate_expert')
+  // 候选条目形态（bug c19eb719 union catalog 投影）：tools = CandidateEntry[]（{name, source}）——
+  // 断言面取 name 投影（旧 string[] 形态退役）
+  const toolNames = (Array.isArray(tools) ? tools : []).map((entry) =>
+    typeof entry === 'string' ? entry : ((entry as { name?: string })?.name ?? ''),
+  )
+  // 环境前提门控（plugin-spec/fix-8）：delegate_expert 注册依赖官方 subagents 服务面在场；
+  // 单装 e2e 装配态缺席 = 产品 fail-soft 降级契约（host/index.ts「ctx.subagents
+  // absent——delegate_expert 未注册（委派不可用；管理面照常）」）——前提不满足 skip 留痕非红，
+  // registered = 原断言照跑。
+  const delegateState = await page.evaluate(async () => {
+    const res = await fetch('/api/expert-squad/run-state')
+    return (await res.json()) as { delegate?: { status?: string; reason?: string } }
+  })
+  if (delegateState.delegate?.status === 'registered') {
+    expect(toolNames, 'tools 含插件追加工具 delegate_expert').toContain('delegate_expert')
+  } else {
+    console.log(
+      `[catalog-gate] delegate 装配态 = ${JSON.stringify(delegateState.delegate ?? null)}——环境前提（subagents 服务面在场）不满足，delegate_expert 断言 skip 留痕`,
+    )
+  }
   expect(Array.isArray(payload.body.skills), 'skills 字段在场（官方 skill 目录）').toBe(true)
   expect(payload.body.skills?.length ?? 0, 'skills 候选非空').toBeGreaterThanOrEqual(1)
 })
@@ -333,6 +352,13 @@ test('@feature expert-squad dlg step-3 cancel-discard：编辑修改后关闭重
 
 // ── step-4-save-update ──
 
+/** msel 行工具名提取（fix-8 断言面随迁）：行首行 = 工具名，副行 = 来源徽标（「全局」/
+ *  模式名——bug c19eb719 union catalog 两行渲染）。filter hasText 与落盘 regex 均用名，
+ *  不用含换行的全行文本（hasText 查询串不归一化换行——全文本匹配恒不命中）。 */
+function rowToolName(text: string): string {
+  return text.trim().split('\n')[0]!.trim()
+}
+
 test('@feature expert-squad dlg step-4 success：保存落盘——update载荷/换新回查看态/Toast/卡片即时同步', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
   const backup = backupTrackedFile(DEV_PATCH)
@@ -347,8 +373,8 @@ test('@feature expert-squad dlg step-4 success：保存落盘——update载荷/
     const toolRows = page.locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`)
     const selectedTools = ['read', 'grep']
     const toggleTarget = (await toolRows.allInnerTexts())
-      .map((name) => name.trim())
-      .find((name) => !selectedTools.includes(name))
+      .map(rowToolName)
+      .find((name) => name !== '' && !selectedTools.includes(name))
     expect(toggleTarget, '候选清单存在未勾选工具可勾').toBeTruthy()
     await page
       .locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`, { hasText: toggleTarget! })
@@ -467,12 +493,16 @@ test('@feature expert-squad dlg step-4 route-only-save：内置专家纯路由�
     await page.locator(dlgBtn('编辑')).click()
     await page.locator(mselBox('tools')).click()
     const toolRows = page.locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`)
-    const checked = await toolRows
-      .locator('input:checked')
-      .evaluateAll((nodes) => nodes.map((n) => ((n.closest('.dswf-msel-row') as HTMLElement) ?? (n.parentElement as HTMLElement)).innerText.trim()))
+    const checked = (
+      await toolRows
+        .locator('input:checked')
+        .evaluateAll((nodes) =>
+          nodes.map((n) => (((n.closest('.dswf-msel-row') as HTMLElement) ?? (n.parentElement as HTMLElement)).innerText)),
+        )
+    ).map(rowToolName)
     const toggleTarget = (await toolRows.allInnerTexts())
-      .map((name) => name.trim())
-      .find((name) => !checked.includes(name))
+      .map(rowToolName)
+      .find((name) => name !== '' && !checked.includes(name))
     expect(toggleTarget, '候选清单存在未勾选工具可勾（纯路由增量）').toBeTruthy()
     await page
       .locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`, { hasText: toggleTarget! })

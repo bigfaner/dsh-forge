@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { ROOT } from './launch.js'
-import { resolveKnowledgeDbFile } from '../../packages/plugins/knowledge/src/storage/paths.js'
+import { resolveKnowledgeDbFile } from '../../plugins/knowledge/host/storage/paths.js'
 import type { SeedDb } from '../../packages/core/src/testutil/db-seeds.js'
 
 const requireFromCore = createRequire(join(ROOT, 'packages', 'core', 'package.json'))
@@ -94,7 +94,7 @@ export function clearKnowledgeIndexByWsPath(db: SeedDb, wsPath: string): void {
 
 /**
  * 预置自持注册行（v4：knowledge_registry 表——ws_path canonical（realpath）键 + knowledge_dir
- * + project_id 可空列；SQL/键口径镜像 packages/plugins/knowledge/src/storage/registry.ts upsert）。
+ * + project_id 可空列；SQL/键口径镜像 plugins/knowledge/host/storage/registry.ts upsert）。
  * 运行期注册径由服务面承接——e2e 预置通道用于 boot 停机窗落行。
  */
 export function seedKnowledgeRegistryRow(db: SeedDb, wsPath: string, knowledgeDir: string): void {

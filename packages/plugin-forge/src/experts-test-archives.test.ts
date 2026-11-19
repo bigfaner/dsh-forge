@@ -801,13 +801,9 @@ describe("experts/proposal-reviewer.md 档案解析断言（forge-test-pipeline-
     expect(keys.filter((k) => !REQUIRED.includes(k) && !OPTIONAL.includes(k)), "引入了 parser 不认可的未知键").toEqual([]);
   });
 
-  it("委派纪律二则在指挥者段在案（查找依据 + 近似职责择优）；四维核对不归 plugin-forge 承载", () => {
+  it("四维核对不归 plugin-forge 承载（指挥者段已迁 task-loop——plugin-task-loop 1.12）", () => {
     // 2026-11-15 裁决：委派纪律只管查找与委派；专家体系四维核对归 expert-squad 档案写径（工具 description）
-    const commander = readFileSync(resolve(here, "prompt/commander.ts"), "utf-8");
-    expect(commander).toContain("查找专家");
-    expect(commander).toContain("职责近似时选更合适");
-    // 四维核对不在指挥者段、不在评审档案（归 expert-squad 产品面）
-    expect(commander).not.toContain("专家体系影响面核对");
+    // 指挥者段正本 = plugins/task-loop/host/prompt/commander.ts（残本已退役——plugin-spec 1.8）
     expect(content).not.toContain("专家体系影响面核对");
   });
 

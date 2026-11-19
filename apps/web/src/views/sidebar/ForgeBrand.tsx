@@ -5,7 +5,8 @@
 // （product-views.ts）供插件槽位注册。
 import type { ReactNode } from 'react'
 import { FISH_LOGO_PATH } from '@deepseek-ai/dsh-client-ui-primitives'
-import './sidebar.css'
+// 1.6 注记：样式随 sidebar 族迁 @dsh-forge/project（ui/sidebar/sidebar.css——品牌行类
+// dswf-sidebar-brand* 同册），经插件 bundle client.css 生效——壳侧零 css import。
 
 /** 品牌字标形状（上游 SidebarBrandMarkOwnerProps：壳给定方形边长） */
 export interface ForgeBrandMarkProps {

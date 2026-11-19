@@ -1,8 +1,10 @@
 // @dsh-forge/core 插件定义（定位：装配；入口文件 index.ts——fix-35 对称化，
 // contracts/path-key 同惯例）——注册 ctx.forgeProjects（2.2：registerProject
 // 四步补偿链）。M2（2.7）：tasksHome
-// 注入时增注册四域服务 ctx.forgeTasks/forgeFeatures/forgeProposals/forgeDocs（装配壳 +
-// 三小域实现；tasks 动词面 2.2–2.6 接线）——共享 ForgeWorkspaceStore 惰性多句柄 +
+// 注入时增注册域服务 ctx.forgeFeatures/forgeDocs/forgeBugs（装配壳 +
+// 三小域实现；fix-1 装配缝解耦：forgeTasks/forgeCheckpoints 停供——tasksHome 缝移交
+// @dsh-forge/task-loop 插件域 provide；plugin-spec 1.10：forgeDocs 读域收编——实现改指
+// @dsh-forge/spec 包出口，core 只保留 routing 注入装配行）。共享 ForgeWorkspaceStore 惰性多句柄 +
 // 事件发射器装配单例；首建挂点 = 发现面只读扫描（交互二/三）。M3（2.7）：settingsFile
 // 注入时增注册第七服务 ctx.forgeSettings（get/set 单门——UI 与 dispatchTask 同门消费，
 // host 接线 = 3.8）。无逻辑：开句柄 → 注册服务 →
@@ -13,34 +15,23 @@
 // 运行期由 profile 装配注入；reflect.provide 即服务注册官方面（dsh Service 基类同径）。
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { FORGE_LOGS_DIR } from '@dsh-forge/contracts'
 import { openDatabase } from './db/index.js'
 import { createProjectService } from './forge/project-service.js'
 import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registry.js'
 import { createSettingsService } from './forge/settings/service.js'
-import { createDocsService } from './forge/small-domains/docs.js'
+import { createDocsService } from '@dsh-forge/spec'
 import { createBugsService } from './forge/small-domains/bugs.js'
-import { createCheckpointsService } from './forge/small-domains/implementation-checkpoints.js'
-import { createFeaturesService, registerFeatureInTx } from './forge/small-domains/features.js'
-import { createProposalsService } from './forge/small-domains/proposals.js'
-import {
-  readEvidencePointerState,
-  writeEvidenceValidityStamp,
-  type EvidencePointerIo,
-  type EvidenceValidityStamp,
-} from './forge/tasks/evidence-pointer.js'
+import { createFeaturesService } from './forge/small-domains/features.js'
+import type { EvidenceValidityStamp } from './forge/tasks/evidence-pointer.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './forge/tasks/phase-deriver.js'
-import { createTasksService } from './forge/tasks/service.js'
 import { validateFeatureTasks } from './forge/tasks/validate.js'
 import { recordWorkspaceKeyLog } from './forge/workspace/app-key-logs.js'
 import { createDiscoveryFirstCreateHook } from './forge/workspace/discovery.js'
 import { createForgeTaskEvents } from './forge/workspace/events.js'
-import { deriveTaskStoreDir } from './forge/workspace/derive-dir.js'
-import type { ExpertPersonaProfile } from './forge/tasks/prompt/persona.js'
+import { deriveTaskStoreDir } from '@dsh-forge/lib-path'
 import { createProjectRouting } from './forge/workspace/routing.js'
-import { renderWorkerContext } from './forge/workspace/worker-context.js'
 import { createWorkspaceStore, type ForgeWorkspaceStore } from './forge/workspace/store.js'
 import { DIAG_EVENT, type DiagEventPayload } from './telemetry/diag-events.js'
 
@@ -97,13 +88,6 @@ export function currentValidityDomain(checkoutRoot: string | undefined): Evidenc
   }
 }
 
-/** 证据位生产 io（node:fs 适配 EvidencePointerIo 注入缝——UTF-8 文本三法） */
-const evidencePointerIo: EvidencePointerIo = {
-  exists: (path) => existsSync(path),
-  readTextFile: (path) => readFileSync(path, 'utf8'),
-  writeTextFile: (path, data) => writeFileSync(path, data, 'utf8'),
-}
-
 /** 插件配置（profile cordis.patch.yml 行 config；dbFile = state.db 绝对路径，{app-data}/dsh-forge/state.db） */
 export interface CorePluginConfig {
   dbFile: string
@@ -111,7 +95,7 @@ export interface CorePluginConfig {
    * M2 派生根 {dsh-forge-home}（1.4 缝——3.4 注入：env DSH_FORGE_TASKS_HOME > {userData}/
    * forge-workspaces；每工作区任务库 {tasksHome}/{flatten}@{hash8}/forge.db 的根）。
    * 缺席 = M2 面降级缺席（注册碰撞复检 + deriveTaskStoreDir 动词 + 四域服务
-   * forgeTasks/forgeFeatures/forgeProposals/forgeDocs 均不装配），P1 行为零变化。
+   * forgeFeatures/forgeDocs/forgeBugs 均不装配），P1 行为零变化。
    */
   tasksHome?: string
   /**
@@ -179,7 +163,7 @@ const corePlugin: CorePlugin = Object.assign(
     if (settings !== undefined) {
       ctx.reflect.provide('forgeSettings', settings) // Interface 1（M3）设置域两法——单门读写（3.8 host 接线）
     }
-    // M2 四域装配（2.7 provide ×4）：tasksHome 缺席 = 四域整体降级缺席（P1 行为零变化）。
+    // M2 三域装配（2.7 provide，proposals 域已随 plugin-spec 下线批退役）：tasksHome 缺席 = 整体降级缺席
     // 共享单例：中央行路由 + ForgeWorkspaceStore（惰性多句柄；首建挂点 = 发现面只读扫描——
     // 交互二「库文件缺席 → 新建 v1 + 发现面扫描」，P1 存量工作区升级 M2 首次触达补建；
     // 2.5 送校接线：post-ingestion 挂点 → 对新入库 feature 逐个送校 validateFeatureTasks
@@ -221,87 +205,7 @@ const corePlugin: CorePlugin = Object.assign(
       })
       taskStore = store
       // fix-bug 第五小域（bug 台账两写径 + listBugs）：recordBug/resolveBug 工具面 + RPC list 消费。
-      // 提前建单例：loop-recurrence-hardening 生产装配接线消费同源只读聚合（见 forgeTasks deps 注）
       const bugsService = createBugsService({ store, events, resolveWsPath: routing.wsPath })
-      ctx.reflect.provide(
-        'forgeTasks',
-        createTasksService({
-          store,
-          events,
-          resolveWsPath: routing.wsPath, // 十一法全接线（2.6 读面收口）
-          // loop-recurrence-hardening T2 交叉校验生产装配（bug 0db72bcb 断链修复）：台账
-          // recurrence 候选只读 face = bugs 域服务聚合——四域互禁不破（tasks 域零 import
-          // bugs 域，装配层闭包注入消 import 边）。缺席即 T2 警示机制生产静默关停——本注入
-          // 是生产路径交叉校验的装配前提。
-          findRecurrenceCandidates: (projectId, scope) => bugsService.findRecurrenceCandidates(projectId, scope),
-          onDiag, // 降级径诊断缝（AGENTS §7——face 缺席/台账读故障留痕）
-          // worker-exec-evidence-replay 1.3 + disc 效度戳：续跑指针探测 + 效度机械比对（claim
-          // 领取瞬间证据位读取——容器库目录经 tasksHome + routing.wsPath 单源派生；checkoutRoot
-          // = claim 入参检出根（循环/派发会话 worktree），缺席回落注册根，再缺席 = 机制惰性
-          // 不判；fail-soft = 首跑零 <resume> 段；漂移 = stale 规则段强制重跑）
-          resolveEvidencePointer: (projectId, slug, localId, checkoutRoot) => {
-            const containerDir = deriveTaskStoreDir(tasksHome, routing.wsPath(projectId))
-            const state = readEvidencePointerState(
-              evidencePointerIo,
-              containerDir,
-              slug,
-              localId,
-              currentValidityDomain(checkoutRoot ?? routing.wsPath(projectId)),
-            )
-            return state.pointer === undefined ? undefined : { pointer: state.pointer, stale: state.stale }
-          },
-          // disc 效度戳写侧（submit-task 结算面）：resume.md 在盘才写 sidecar（HEAD + 基线签名
-          // 单源取数同上——checkoutRoot = 结算会话检出 = worker 工作区根；fail-soft）
-          stampEvidenceValidity: (input) => {
-            writeEvidenceValidityStamp(
-              evidencePointerIo,
-              deriveTaskStoreDir(tasksHome, routing.wsPath(input.projectId)),
-              input.slug,
-              input.localId,
-              currentValidityDomain(input.checkoutRoot) ?? { head: 'unknown', baseline: 'unknown' },
-            )
-          },
-          // worker-lean-execution 追加轮：任务目录锚点节（容器目录树/logs 双锚——检出根唯一
-          // 权威 = worker 会话 cwd（真根因裁决：WORKSPACE 锚点行砍除，见 worker-context.ts 头注）；
-          // persona 通道 worker 独享；logsRoot = <任务库>/logs 与续跑指针共享 deriveTaskStoreDir
-          // 单源锚，任务日志目录由渲染器派生 logsRoot/<slug>/<localId>；fail-soft）
-          resolveWorkerContext: (projectId, source, localId) =>
-            renderWorkerContext({
-              forgeDir: routing.forgeDir(projectId),
-              logsRoot: join(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), FORGE_LOGS_DIR),
-              localId,
-              source,
-            }),
-          // expert-squad-forge 1.3：专家档案取用面接线（claim 领取瞬间两段组装的档案侧）。
-          // plugin-forge 装配期 provide 的 'forgeExperts' 具名服务（键解析 = settings
-          // experts.mapping 覆盖 → 随包预设映射，缺键 = undefined——1.13 未用类型不阻断）；
-          // IO 全在插件侧闭包，claim 时点 reflect.get 防御读取——懒解析消解插件装配次序
-          // （core 先于 plugin-forge 加载）；服务缺席/异常 = undefined（形态兼容，persona
-          // 仅程序段）；有键而档案缺失/禁用 = 插件侧 fail-loud 抛错原样外抛（claim 一切
-          // 写入之前中断，任务留 pending）。
-          resolveExpertProfile: async (taskType, expertKey) => {
-            let resolver: unknown
-            try {
-              resolver = ctx.reflect.get?.('forgeExperts')
-            } catch {
-              resolver = undefined
-            }
-            if (typeof resolver !== 'function') {
-              // AGENTS §7 可观测性（triage-progress-row fix-3）：resolver 缺席 = experts.mapping
-              // 消费链整体降级（坏键 fail-loud 不可达，persona 回落程序段）——1.8 真机径
-              // 「单测绿真机红」的不可见根因面，warn 留痕不静默；diag 缝缺席 = 零 emit 不抛。
-              diagEmit?.(DIAG_EVENT, {
-                level: 'warn',
-                process: 'child',
-                event: 'forge-expert-resolver',
-                message: `forgeTasks claim 链未取得 expertResolver（reflect 'forgeExperts' 缺席/非函数面）——experts.mapping 坏键 fail-loud 不可达，persona 回落程序段（taskType=${taskType}${expertKey !== undefined ? ` key=${expertKey}` : ''}；核销 forge/expert-squad 插件装配面）`,
-              })
-              return undefined
-            }
-            return (resolver as (taskType: string, expertKey?: string) => Promise<ExpertPersonaProfile | undefined>)(taskType, expertKey)
-          },
-        }),
-      )
       ctx.reflect.provide(
         'forgeFeatures',
         createFeaturesService({
@@ -310,20 +214,10 @@ const corePlugin: CorePlugin = Object.assign(
           phase: { derivePhase: deriveFeaturePhase, assertPhaseInvariant },
         }),
       )
-      ctx.reflect.provide(
-        'forgeProposals',
-        createProposalsService({
-          store,
-          events,
-          resolveForgeDir: routing.forgeDir, // 2.3 文档区扫描基准
-          registerFeatureInTx, // 2.2 成链内聚同事务核心（装配注边——四域互禁 import 消解）
-        }),
-      )
-      ctx.reflect.provide('forgeDocs', createDocsService({ store, resolveForgeDir: routing.forgeDir }))
+      // docs 域装配行（plugin-spec 1.10 收编——factory 源 @dsh-forge/spec 包出口；
+      // 双锚读域：.forge/specs/ 主锚 + .forge/docs/ 只读兼容锚；routing 单注入）
+      ctx.reflect.provide('forgeDocs', createDocsService({ resolveForgeDir: routing.forgeDir }))
       ctx.reflect.provide('forgeBugs', bugsService)
-      // 机械① 第六小域（forge-verification-hardening）：implementation_checkpoints 实现检查点
-      // 流水三法（appendCheckpoint/ensureCheckpoint/listCheckpoints）——M5 标记域装配
-      ctx.reflect.provide('forgeCheckpoints', createCheckpointsService({ store, events }))
     }
     return () => {
       taskStore?.dispose() // 每工作区任务库句柄统一关闭（3.4 接插件 disposer 前的进程内收口）

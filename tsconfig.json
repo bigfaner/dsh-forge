@@ -1,20 +1,77 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/contracts" },
-    { "path": "packages/path-key" },
-    { "path": "packages/core" },
-    { "path": "packages/plugins/knowledge" },
-    { "path": "packages/plugin-forge" },
-    { "path": "packages/plugin-forge-spec" },
-    { "path": "packages/plugins/git-worktree" },
-    { "path": "packages/plugins/md-mermaid" },
-    { "path": "packages/plugins/mobile-bridge" },
-    { "path": "plugins/input-history" },
-    { "path": "packages/plugins/expert-squad" },
-    { "path": "packages/plugins/quote-reference" },
-    { "path": "packages/plugins/super-composer" },
-    { "path": "apps/host" },
-    { "path": "apps/web" }
+    {
+      "path": "lib/api"
+    },
+    {
+      "path": "lib/db"
+    },
+    {
+      "path": "lib/diag"
+    },
+    {
+      "path": "lib/util"
+    },
+    {
+      "path": "lib/path"
+    },
+    {
+      "path": "lib/ui"
+    },
+    {
+      "path": "lib/status-machine"
+    },
+    {
+      "path": "plugins/project"
+    },
+    {
+      "path": "plugins/task-loop"
+    },
+    {
+      "path": "plugins/spec"
+    },
+    {
+      "path": "packages/contracts"
+    },
+    {
+      "path": "packages/path-key"
+    },
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "plugins/knowledge"
+    },
+    {
+      "path": "packages/plugin-forge"
+    },
+    {
+      "path": "packages/plugin-forge-spec"
+    },
+    {
+      "path": "packages/plugins/md-mermaid"
+    },
+    {
+      "path": "packages/plugins/mobile-bridge"
+    },
+    {
+      "path": "plugins/input-history"
+    },
+    {
+      "path": "plugins/expert-squad"
+    },
+    {
+      "path": "packages/plugins/quote-reference"
+    },
+    {
+      "path": "packages/plugins/super-composer"
+    },
+    {
+      "path": "apps/host"
+    },
+    {
+      "path": "apps/web"
+    }
   ]
 }

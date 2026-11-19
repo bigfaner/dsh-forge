@@ -1,0 +1,142 @@
+{
+  "name": "@dsh-forge/project",
+  "version": "0.26.2",
+  "private": true,
+  "type": "module",
+  "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
+  "main": "./dist/host/index.js",
+  "types": "./dist/host/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/host/index.d.ts",
+      "import": "./dist/host/index.js"
+    },
+    "./host-dirs": {
+      "types": "./dist/host/dirs/index.d.ts",
+      "import": "./dist/host/dirs/index.js"
+    },
+    "./host-worktrees": {
+      "types": "./dist/host/worktrees/index.d.ts",
+      "import": "./dist/host/worktrees/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/ui/index.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./typert": {
+      "types": "./dist/typert.host.d.ts",
+      "default": "./dist/typert.host.js"
+    },
+    "./remote": {
+      "types": "./dist/typert.remote-client.d.ts",
+      "default": "./dist/typert.remote-client.js"
+    },
+    "./client-ui": {
+      "types": "./dist/client/ui/index.d.ts",
+      "default": "./ui/index.ts"
+    },
+    "./client-ui/add-project": {
+      "types": "./dist/client/ui/add-project/index.d.ts",
+      "default": "./ui/add-project/index.ts"
+    },
+    "./client-ui/bug-views": {
+      "types": "./dist/client/ui/bug-refs/views.d.ts",
+      "default": "./ui/bug-refs/views.ts"
+    },
+    "./client-ui/bug-model": {
+      "types": "./dist/client/ui/bug-refs/bug-source.d.ts",
+      "default": "./ui/bug-refs/bug-source.ts"
+    },
+    "./client-ui/chip-restore": {
+      "types": "./dist/client/ui/bug-refs/chip-restore.d.ts",
+      "default": "./ui/bug-refs/chip-restore.ts"
+    },
+    "./client-ui/event-tap": {
+      "types": "./dist/client/ui/event-node/progress-log-tap.d.ts",
+      "default": "./ui/event-node/progress-log-tap.ts"
+    },
+    "./client-ui/dock-tabs": {
+      "types": "./dist/client/ui/dock-tabs/index.d.ts",
+      "default": "./ui/dock-tabs/index.ts"
+    },
+    "./client-ui/sidebar": {
+      "types": "./dist/client/ui/sidebar/index.d.ts",
+      "default": "./ui/sidebar/index.ts"
+    },
+    "./client-ui/session-actions": {
+      "types": "./dist/client/ui/session-actions.d.ts",
+      "default": "./ui/session-actions.ts"
+    },
+    "./client-ui/open-session": {
+      "types": "./dist/client/ui/open-session.d.ts",
+      "default": "./ui/open-session.ts"
+    },
+    "./client-ui/worktree-faces": {
+      "types": "./dist/client/ui/index.d.ts",
+      "default": "./ui/index.ts"
+    },
+    "./client-ui/rpc": {
+      "types": "./dist/client/ui/rpc.d.ts",
+      "default": "./ui/rpc.ts"
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "external": [
+        "@deepseek-ai/dsh-api-gateway/client"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "dist/typert.host.js",
+    "dist/typert.host.d.ts",
+    "dist/typert.remote-client.js",
+    "dist/typert.remote-client.d.ts",
+    "dist/typert.remote-client.d.ts.map"
+  ],
+  "scripts": {
+    "build": "node scripts/clean-dist.mjs && node scripts/generate-typert.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
+    "prepack": "node scripts/self-containment.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.4"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-client-connection": "0.2.2-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-typert-generator": "0.2.2-rc.2",
+    "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/core": "workspace:*",
+    "@dsh-forge/lib-api": "workspace:*",
+    "@dsh-forge/lib-db": "workspace:*",
+    "@dsh-forge/lib-diag": "workspace:*",
+    "@dsh-forge/lib-path": "workspace:*",
+    "@dsh-forge/lib-ui": "workspace:*",
+    "@dsh-forge/lib-util": "workspace:*",
+    "@dsh-forge/path-key": "workspace:*",
+    "@types/node": "24.19.0",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.0",
+    "esbuild": "0.24.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-qr-code": "2.2.0",
+    "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.2",
+    "better-sqlite3": "13.0.3",
+    "zod": "4.6.6",
+    "@deepseek-ai/dsh-client-connection": "0.2.2-rc.2"
+  }
+}

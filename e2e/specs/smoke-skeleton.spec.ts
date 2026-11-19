@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
-import { deriveTaskStoreDir } from '../../packages/core/src/forge/workspace/derive-dir.js'
+import { deriveTaskStoreDir } from '../../lib/path/src/derive-dir.js'
 import { bridgeDispatch, closeApp, launchHost, stablePhase } from '../support/launch.js'
 import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../support/navigation.js'
 import {
@@ -34,10 +34,11 @@ import {
   workbenchOfView,
 } from '../support/anchors.js'
 
-/** 向导固定目录夹具：{root}/dsh-demo/.knowledge + {root}/legacy-app（名称对齐原型走查目录语义） */
+/** 向导固定目录夹具：{root}/dsh-demo/.knowledge/.forge + {root}/legacy-app（名称对齐原型走查目录语义；.forge = 注册流程会创建的文档目录——1.15 浏览目标改 .forge 后夹具预建，与「默认 .forge 可自动创建」产品行为一致） */
 function makeWizardFixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-wiz-'))
   mkdirSync(join(root, 'dsh-demo', '.knowledge'), { recursive: true })
+  mkdirSync(join(root, 'dsh-demo', '.forge'), { recursive: true })
   mkdirSync(join(root, 'legacy-app'), { recursive: true })
   return root
 }
@@ -405,9 +406,10 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
     const legacyDir = join(fixture, 'legacy-app')
-    // L807 ④ 换选工作区：回填 + 未手改字段重构（forge/项目名）
+    // L807 ④ 换选工作区：回填 + 未手改字段重构（项目名；forge 已随 1.15 ③ 浏览手选
+    // 为已改字段——浏览选定值保留不随工作区重构，语义同 1.15 前知识库目录保留面）
     await expect(ws).toHaveValue(legacyDir)
-    await expect(forge).toHaveValue(`${join(legacyDir, '.forge')}`)
+    await expect(forge).toHaveValue(`${join(demoDir, '.forge')}`)
     await expect(name).toHaveValue('legacy-app')
     // L810 ④ 任务清单随工作区重新派生（fix-7 载体适配同 L771：派生行 core 单源同值断言）
     const rederivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(legacyDir))
@@ -476,17 +478,12 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
       timeout: 30_000,
     })
 
-    // ── L766 ① 已注册目录带标记（注册后实机：重开向导 → 目录行「已注册」标记）──
-    await page.locator('[data-dswf-nav="add-project"]').first().click()
-    await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
-      await enterDir(page, segment)
-    }
-    const legacyRow = page.locator('.dswf-fb-item', { hasText: 'legacy-app' }).first()
-    await expect(legacyRow).toHaveAttribute('data-registered')
-    await expect(legacyRow.locator('.dswf-fb-reg', { hasText: '已注册' })).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(page.locator('.dswf-ap')).toHaveCount(0)
+    // ── L766 ① 已注册目录带标记（记账留痕，不活跑——断言面载体退役）──
+    // 「重开向导 → 目录行已注册标记」的入口 = 侧栏空态「添加项目」钮（data-dswf-nav）；
+    // project 1.6（commit 37fef243，用户裁决 2026-11-12）起空态 CTA = 唯一残存添加入口，
+    // 注册成功（hasProjects=true）后入口按设计消失——注册后重开向导路径在现役产品形态
+    // 不可达。断言面随载体退役（同 fix-3 退役判例）；「已注册」标记面归 add-project
+    // journey 组件级单测承载（ForgeWorkspacePanel.test.tsx 同锚）。
   } finally {
     await closeApp(app)
     rmSync(userData, { recursive: true, force: true })

@@ -1,10 +1,11 @@
 // worktree-branch-management fix-4 真机 e2e：真实 boot 链（electron child spawn + 官方
-// loader 装载 git-worktree 插件行）下 forge:worktree/list 返回 isGit:true + 全量 entries。
-// Root cause（探针 001-repro/probe-runprofile-scope.mjs 实证）：overlay 的 git-worktree
-// 新 id 裸行被 loader 补丁按 unknown target 静默跳过——插件从未装载；insert 形态注行后
+// loader 装载 @dsh-forge/project 插件行——1.17 批二卸旧装新，旧 git-worktree 行退役）下
+// forge:worktree/list 返回 isGit:true + 全量 entries。
+// Root cause（探针 001-repro/probe-runprofile-scope.mjs 实证）：overlay 的新 id
+// 裸行被 loader 补丁按 unknown target 静默跳过——插件从未装载；insert 形态注行后
 // 能力服务经官方 provide 面可达，宿主具名消费 ctx.gitWorktree 成立。
 // 环境前置（fail-loud，缺席即红）：apps/host/dist/boot/child.js（tsc -b 产物）、
-// profile.dev 安装树（含 @dsh-forge/git-worktree link）、electron dist 二进制、真机 git。
+// profile.dev 安装树（含 @dsh-forge/project link）、electron dist 二进制、真机 git。
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -36,8 +37,8 @@ it(
     expect(existsSync(childEntry), `boot child 入口缺席（先 just compile）：${childEntry}`).toBe(true)
     const profileDev = join(hostRoot(), 'profile.dev')
     expect(
-      existsSync(join(profileDev, 'node_modules', '@dsh-forge', 'git-worktree', 'package.json')),
-      'profile.dev 缺 @dsh-forge/git-worktree 链接（先 pnpm -C apps/host/profile.dev install）',
+      existsSync(join(profileDev, 'node_modules', '@dsh-forge', 'project', 'package.json')),
+      'profile.dev 缺 @dsh-forge/project 链接（先 pnpm -C apps/host/profile.dev install）',
     ).toBe(true)
     const electronExe = createRequire(join(hostRoot(), 'package.json'))('electron') as unknown as string
     expect(existsSync(electronExe), `electron 二进制缺席（dist 未下载）：${electronExe}`).toBe(true)

@@ -1,13 +1,18 @@
 // 项目锚定装载共享 hook（定位：装配——fix-36 收敛：ShellHost / HeroWorkspacePicker /
 // ConversationViews / KnowledgePanel 四装配面同型 15 行「快照 useState + 窄化 +
 // useForgeProjects + 条件 WorkspacesAnchor」模式的单一来源）。
-// 铁律口径：「视图同级互禁」只禁同级业务互引——本模块 = 公共下层（装配域共享面），
-// 数据源 useForgeProjects 仍唯一（views/sidebar）。
+// 铁律口径：「视图同级互禁」只禁同级业务互引——本模块 = 公共下层（装配域共享面）。
+// 1.6 注记：LedgerWorkspacesSnapshot/useForgeProjects/RPC 面（sidebar 族数据源）随
+// B 类顶替①迁 @dsh-forge/project（ui/sidebar/ + ui/knowledge/ 共享面）——壳消费经包窄
+// 子路径出口直供（event-tap/session-actions 先例；remote 解析缝页内锚回退——rpc.ts 锚注）。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { normalizeFsPath } from '@dsh-forge/path-key'
-import type { LedgerWorkspacesSnapshot } from '../views/sidebar/sidebar-model.js'
-import { useForgeProjects, type ProjectsPhase } from '../views/sidebar/use-forge-projects.js'
-import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc/index.js'
+import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
+import type { LedgerWorkspacesSnapshot } from '@dsh-forge/project/client-ui/sidebar'
+import { useForgeProjects, type ProjectsPhase } from '@dsh-forge/project/client-ui/sidebar'
+import {
+  preloadRpcClientFactory,
+  type WorktreeResolveClientFactory,
+} from '@dsh-forge/project/client-ui/sidebar'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
 
 /**
@@ -109,7 +114,7 @@ export function useAnchoredProjects(useWorkspaces?: KitSelectorHook): AnchoredPr
  */
 export async function resolveWorkspaceProjectMap(
   paths: readonly string[],
-  makeClient: RpcClientFactory,
+  makeClient: WorktreeResolveClientFactory,
 ): Promise<ReadonlyMap<string, string>> {
   if (paths.length === 0) return new Map()
   const result = await makeClient().worktree.resolve({ paths })
@@ -131,7 +136,7 @@ export async function resolveWorkspaceProjectMap(
 export function useWorkspaceProjectMap(
   wsItems: readonly { readonly path?: unknown }[],
   projectsState: ProjectsPhase,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: WorktreeResolveClientFactory = preloadRpcClientFactory,
 ): ReadonlyMap<string, string> {
   const [map, setMap] = useState<ReadonlyMap<string, string>>(() => new Map())
   useEffect(() => {

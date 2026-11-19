@@ -4,13 +4,14 @@
 // 选中记忆（内存 Map——fire-and-forget 写、失败仅 warn、进程级共享、重启即空），记忆
 // 与 chip 本地显示分叉即「所见 a 落 b」。根治 = 创建路由改读显示真源：状态挂 window
 // 全局锚（单脚本域单实例——恰匹配「显示真源按窗口」语义；classic script 友好，先例
-// __dshMobileAskBridge），应用侧 WorktreeFaces 经 state/selected-tree-window.ts 写入
+// __dshMobileAskBridge），应用侧 worktree-picker 经 @dsh-forge/project
+// ui/state/selected-tree-window.ts 写入
 // （两侧各自持薄访问器，KEY 契约单源 = src/state/selected-tree-window.ts）。
 //
 // 注意：本模块只读；写面在应用侧（client-plugin 与 app 是两个脚本域，模块实例不共享，
 // 禁止从 client-plugin 直接 import 应用模块——会拆 ESM 共享块破坏 classic 形状 pin）。
 
-/** window 全局锚 KEY 契约（写面正本 = apps/web/src/state/selected-tree-window.ts） */
+/** window 全局锚 KEY 契约（写面正本 = plugins/project/ui/state/selected-tree-window.ts） */
 const KEY = '__dshForgeSelectedTree'
 
 export interface SelectedTreeDisplay {

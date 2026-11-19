@@ -8,6 +8,22 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
 
+// 产品源扫描根（1.45 迁移后产品 UI 双落位：壳 apps/web/src + 插件包 plugins/*/ui——
+// 扫描类 pin 双根遍历，锚路径对位迁移见各断言面）
+const PRODUCT_SRC_ROOTS = ['apps/web/src', 'plugins/project/ui', 'plugins/knowledge/ui'] as const
+
+function* walkAll(roots: readonly string[]): Generator<string> {
+  for (const root of roots) yield* walk(join(ROOT, root))
+}
+
+// MarkdownDoc 包装入口豁免集（壳 components/MarkdownDoc + 两插件 bundle 各自的
+// components-mirror 镜像——包装本体合法直用官方 MarkdownText）
+const MARKDOWN_WRAPPER_FILES = [
+  'apps/web/src/components/MarkdownDoc.tsx',
+  'plugins/project/ui/components-mirror.tsx',
+  'plugins/knowledge/ui/components-mirror.tsx',
+] as const
+
 function* walk(dir: string): Generator<string> {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name)
@@ -105,12 +121,12 @@ describe('fix-25 官方基座降位 pin（main.conversation 影子退役——�
   it('模块面就位：装配族（壳宿主/hero/知识面板/面板模型/桥）+ 页签族 + 字形件；退役面缺席（zones/视图态机/会话面板/自研嵌入配方）', () => {
     for (const f of [
       'apps/web/src/workbench/ShellHost.tsx',
-      'apps/web/src/workbench/HeroPanel.tsx',
-      'apps/web/src/workbench/KnowledgePanel.tsx',
+      // 1.45 迁移：hero 面板本体随 @dsh-forge/project（ui/hero/）、知识面板本体随 @dsh-forge/knowledge（ui/）
+      'plugins/project/ui/hero/HeroPanel.tsx',
+      'plugins/knowledge/ui/KnowledgePanel.tsx',
       'apps/web/src/workbench/panel-model.ts',
       'apps/web/src/workbench/workbench-bridge.ts',
       'apps/web/src/views/session/ConversationViews.tsx',
-      'apps/web/src/views/sidebar/KnowledgeGlyph.tsx',
       'apps/web/src/client-plugin/plugin.ts',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
@@ -125,27 +141,40 @@ describe('fix-25 官方基座降位 pin（main.conversation 影子退役——�
       'apps/web/src/workbench/ChatSurface.tsx',
       'apps/web/src/views/session/SessionPanel.tsx',
       'apps/web/src/views/session/SessionToolbar.tsx',
+      // 知识面板行字形迁 @dsh-forge/knowledge ui/KnowledgeGlyph.tsx——壳侧死面零残留
+      'apps/web/src/views/sidebar/KnowledgeGlyph.tsx',
     ]) {
       expect(existsSync(join(ROOT, retired)), `${retired} 应已退役（fix-25）`).toBe(false)
     }
   })
 
-  it('main.conversation 影子登记缺席（官方头部链白拿的机制面）+ 官方缝登记在场（main roster/panellist/页签 roster/shell.overlay）', () => {
+  it('main.conversation 影子登记缺席（官方头部链白拿的机制面）+ 官方缝登记在场（main roster/panellist/页签 roster/shell.overlay；hero/knowledge 面板注册随 1.45 迁插件 face——双 bundle 正门锚）', () => {
     const plugin = read('apps/web/src/client-plugin/plugin.ts')
     expect(plugin).not.toContain("name: MAIN_CONVERSATION_SLOT")
     expect(plugin).not.toContain("'main.conversation'")
-    expect(plugin).toContain("key: HERO_PANEL_KEY")
-    expect(plugin).toContain("key: KNOWLEDGE_PANEL_KEY")
-    expect(plugin).toContain('name: SIDEBAR_PANELLIST_SLOT')
-    expect(plugin).toContain('name: CONVERSATION_VIEW_SLOT')
+    // 壳侧常驻登记 = shell.overlay（fix-13 注记 1.42/1.44：panellist/conversation.view
+    // 两 slot 登记面随召回/页签族迁 @dsh-forge/knowledge faces 正门）
     expect(plugin).toContain('name: SHELL_OVERLAY_SLOT')
+    expect(knowledgeFaces()).toContain('slot: SIDEBAR_PANELLIST_SLOT')
+    expect(knowledgeFaces()).toContain('slot: CONVERSATION_VIEW_SLOT')
     // 面板 key 字面量同源（plugin 侧 ↔ 壳侧 panel-model——bundle 自含不经 import）
     expect(plugin).toContain("export const KNOWLEDGE_PANEL_KEY = 'dswf-knowledge'")
     expect(plugin).toContain("export const HERO_PANEL_KEY = 'dswf-hero'")
     const model = read('apps/web/src/workbench/panel-model.ts')
     expect(model).toContain("export const KNOWLEDGE_PANEL_KEY = 'dswf-knowledge'")
     expect(model).toContain("export const HERO_PANEL_KEY = 'dswf-hero'")
+    // 面板注册面随迁移落插件 face 正门（hero → @dsh-forge/project；knowledge → @dsh-forge/knowledge）
+    const heroFace = read('plugins/project/ui/hero-panel-face.ts')
+    expect(heroFace).toContain('key: HERO_PANEL_KEY')
+    expect(heroFace).toContain('component: ForgeHeroPanel')
+    expect(knowledgeFaces()).toContain('key: KNOWLEDGE_PANEL_KEY')
+    expect(knowledgeFaces()).toContain('component: ForgeKnowledgePanel')
   })
+
+  /** knowledge faces 正门（faces.ts——双 slot 登记面 + 面板注册锚单读面） */
+  function knowledgeFaces(): string {
+    return read('plugins/knowledge/ui/faces.ts')
+  }
 
   it('知识模式右栏联动 = 装配层官方 sidebarRight 窄面（panel-model.rightbarViewPlan——fix-25 随迁 ShellHost）', () => {
     expect(read('apps/web/src/workbench/panel-model.ts')).toContain('rightbarViewPlan')
@@ -171,15 +200,14 @@ describe('components 基础组件 pin（2.6）', () => {
     }
   })
 
-  it('Hard Rule 渲染纪律：MarkdownText 裸渲染器仅 MarkdownDoc 一处 import（产品内其余禁直用）', () => {
+  it('Hard Rule 渲染纪律：MarkdownText 裸渲染器仅 MarkdownDoc 包装入口 import（产品内其余禁直用）', () => {
     const offenders: string[] = []
-    for (const p of walk(join(ROOT, 'apps/web/src'))) {
+    for (const p of walkAll(PRODUCT_SRC_ROOTS)) {
       if (!/\.(ts|tsx)$/.test(p) || p.endsWith('.test.tsx') || p.endsWith('.test.ts')) continue
       const src = readFileSync(p, 'utf8')
       if (/from '@deepseek-ai\/dsh-client-ui-primitives'/.test(src) && /MarkdownText/.test(src)) {
-        if (!p.replaceAll('\\', '/').endsWith('components/MarkdownDoc.tsx')) {
-          offenders.push(p.replaceAll('\\', '/'))
-        }
+        const rel = p.replaceAll('\\', '/')
+        if (!MARKDOWN_WRAPPER_FILES.some((w) => rel.endsWith(w))) offenders.push(rel)
       }
     }
     expect(offenders, `裸渲染器直用（须改经 MarkdownDoc 包装）: ${offenders.join(', ')}`).toEqual([])
@@ -205,19 +233,22 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
   it('模块面就位：视图占用者族 + 召回数据面 + 派发悬浮面板 + 样式 + barrel；fix-29/m3.1 退役面缺席', () => {
     for (const f of [
       'apps/web/src/views/session/ConversationViews.tsx',
-      'apps/web/src/views/session/RecallTab.tsx',
-      'apps/web/src/views/session/recall-model.ts',
-      // loop-event-delivery 1.8：悬浮进度流面板（派发任务悬浮面板 UI 继任——残面 = worker 解析辅助）
-      'apps/web/src/views/session/DispatchEventsPanel.tsx',
-      'apps/web/src/views/session/dispatch-events-panel.css',
-      'apps/web/src/views/session/DispatchPanel.tsx',
+      // loop-event-delivery 1.8：悬浮进度流面板（派发任务悬浮面板 UI 继任）
+      // 1.13 迁移退役：DispatchEventsPanel.tsx/.css 本体迁 @dsh-forge/task-loop（ui/dispatch-events-panel/）——壳侧存在性 pin 改指迁地面
+      'plugins/task-loop/ui/dispatch-events-panel/DispatchEventsPanel.tsx',
+      'plugins/task-loop/ui/dispatch-events-panel/dispatch-events-panel.css',
+      // fix-13 注记（1.45）：DispatchPanel 出口随 dock tab 族迁 @dsh-forge/project
+      // （plugins/project/ui/dock-tabs/worker-session.ts——概览任务 tab 消费面）
+      'plugins/project/ui/dock-tabs/worker-session.ts',
       'apps/web/src/views/session/session.css',
       'apps/web/src/views/session/index.ts',
+      // 1.13 迁移退役：DispatchEventsPanel.tsx 本体迁 @dsh-forge/task-loop（ui/dispatch-events-panel/）——壳侧存在性 pin 改指迁地面
+      'plugins/task-loop/ui/dispatch-events-panel/DispatchEventsPanel.tsx',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/views/session/index.ts')
-    for (const name of ['ConversationViews', 'RecallTab', 'DispatchEventsPanel', 'DispatchPanel']) {
+    for (const name of ['ConversationViews']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
     // loop-event-delivery 1.8 替代 pin：旧任务面板样式/角标 UI 死代码缺席（替代不并存——
@@ -231,10 +262,12 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
     expect(existsSync(join(ROOT, 'apps/web/src/views/session/SessionTaskPills.tsx'))).toBe(false)
   })
 
-  it('官方 roster 占用 pin：召回视图登记 id + pane 锚保持；fix-29 轨迹零登记（对话/轨迹 = 官方 chat/trajectory 直用）', () => {
-    const views = read('apps/web/src/views/session/ConversationViews.tsx')
+  it('官方 roster 占用 pin：召回视图登记 id + pane 锚（本体归 @dsh-forge/knowledge 插件——壳侧死面退役）；fix-29 轨迹零登记（对话/轨迹 = 官方 chat/trajectory 直用）', () => {
+    const views = read('plugins/knowledge/ui/RecallTab.tsx')
     expect(views).toContain('data-dswf-pane="recall"')
-    expect(views).not.toContain('data-dswf-pane="trajectory"')
+    const shellViews = read('apps/web/src/views/session/ConversationViews.tsx')
+    expect(shellViews).not.toContain('data-dswf-pane') // 壳侧零召回 pane（本体随注册面迁插件域）
+    expect(shellViews).not.toContain('data-dswf-pane="trajectory"')
     const plugin = read('apps/web/src/client-plugin/plugin.ts')
     expect(plugin).not.toContain('TRAJECTORY_VIEW_ID') // fix-29：产品轨迹登记 id 常量退役
     expect(plugin).not.toContain("label: '轨迹'") // 官方 ui-trajectory 行保持——产品零复刻
@@ -258,81 +291,83 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
   })
 
   it('AC4 形态对齐任务/Bug 弹窗 dialog：详情 = 自持可拖移 dialog（用户裁决可移动+可拉伸——拖动机械复用 drawer，视觉一律官方护仗）', () => {
-    const css = read('apps/web/src/views/knowledge/knowledge.css')
+    const css = read('plugins/knowledge/ui/knowledge.css')
     expect(css).toContain('.dswf-kn-dialog {')
     expect(css).toContain('z-index: var(--dsh-dockkit-float-layer, 60)') // 层级 = dockkit 浮层同一级
     expect(css).toContain('box-shadow: var(--dsw-elevation-prominent)') // 抬升面 = 任务/Bug 弹窗同配方
-    expect(css).toContain('max-height: 92vh') // 纵向滚动上限（e188ac6c dialog 高度对齐专家 detail-dialog：auto+320px+92%+resize both）
+    expect(css).toContain('max-height: 92vh') // 纵向滚动上限（内容多不溢出——92% 原型刻度）
     expect(css).toContain('.dswf-kn-dialog-head {') // 拖移头行
     expect(css).toContain('.dswf-kn-dialog-resize {') // 缘侧拖宽手柄
-    const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
+    const drawer = read('plugins/knowledge/ui/EntryDrawer.tsx')
     expect(drawer).toContain('taskDrawerHeadDragProps') // 拖移机械复用 drawer（bug-dialog 同先例——零平行机械）
     expect(drawer).toContain('drawerWidthFromEdgeDrag')
-    expect(drawer).toContain('drawerPositionFromDrag') // 拖移机械三件（useTaskDrawerEscape 已退役——Esc 链改 knowledge 自持 capture，e188ac6c）
+    expect(drawer).toContain('{ capture: true }') // Esc 捕获监听（弹窗先于工具栏清空——capture 同现役序）
   })
 })
 
 describe('views/knowledge 知识浏览 pin（3.6）', () => {
   it('模块面就位：纯模型 + 装载 hook + 三件（工具栏/域树/网格）+ 装配 + 样式 + barrel', () => {
     for (const f of [
-      'apps/web/src/views/knowledge/browse-model.ts',
-      'apps/web/src/views/knowledge/use-knowledge-browse.ts',
-      'apps/web/src/views/knowledge/KnowledgeToolbar.tsx',
-      'apps/web/src/views/knowledge/DomainTree.tsx',
-      'apps/web/src/views/knowledge/KnowledgeCardGrid.tsx',
-      'apps/web/src/views/knowledge/KnowledgeBrowse.tsx',
-      'apps/web/src/views/knowledge/knowledge.css',
-      'apps/web/src/views/knowledge/index.ts',
+      // 1.45 迁移：知识 UI 本体落 plugins/knowledge/ui/（装配缝归插件域）
+      'plugins/knowledge/ui/browse-model.ts',
+      'plugins/knowledge/ui/use-knowledge-browse.ts',
+      'plugins/knowledge/ui/KnowledgeToolbar.tsx',
+      'plugins/knowledge/ui/DomainTree.tsx',
+      'plugins/knowledge/ui/KnowledgeCardGrid.tsx',
+      'plugins/knowledge/ui/KnowledgeBrowse.tsx',
+      'plugins/knowledge/ui/knowledge.css',
+      'plugins/knowledge/ui/KnowledgeView.tsx',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
-    const barrel = read('apps/web/src/views/knowledge/index.ts')
-    for (const name of ['browse-model', 'DomainTree', 'KnowledgeBrowse', 'KnowledgeCardGrid', 'KnowledgeToolbar', 'use-knowledge-browse']) {
-      expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
-    }
+    // 装配 barrel = ui/index.ts（faces 正门）——组合插件对象经 faces.ts 注册三面
+    const barrel = read('plugins/knowledge/ui/index.ts')
+    expect(barrel).toContain("export * from './faces.js'")
+    const faces = read('plugins/knowledge/ui/faces.ts')
+    expect(faces).toContain("from './KnowledgePanel.js'")
+    expect(faces).toContain("from './RecallTab.js'")
   })
 
   it('Hard Rule 域过滤前缀语义：domainPrefix 唯一透传点（entriesQueryOf）——网格/树零客户端过滤逻辑', () => {
-    const model = read('apps/web/src/views/knowledge/browse-model.ts')
+    const model = read('plugins/knowledge/ui/browse-model.ts')
     expect(model).toContain('query.domainPrefix = filter.domain')
-    const grid = read('apps/web/src/views/knowledge/KnowledgeCardGrid.tsx')
+    const grid = read('plugins/knowledge/ui/KnowledgeCardGrid.tsx')
     expect(grid, '网格不得自建过滤语义（cards 服务端结果原样渲染）').not.toMatch(/domainPrefix|\.filter\(/)
-    const tree = read('apps/web/src/views/knowledge/DomainTree.tsx')
+    const tree = read('plugins/knowledge/ui/DomainTree.tsx')
     expect(tree, '域树只投影聚合节点（计数语义归 core aggregateDomainTree）').not.toContain('domainPrefix')
   })
 
-  it('Hard Rule 官方件复用 + 自绘限域：工具栏 = 官方 Input/Pill；卡片热度 = HeatBadge(card.heat 原样)', () => {
-    const toolbar = read('apps/web/src/views/knowledge/KnowledgeToolbar.tsx')
+  it('Hard Rule 官方件复用 + 自绘限域：工具栏 = 官方 Input/Pill；卡片热度 = card.heat 原样（官方缺件自绘火焰——J1 裁决）', () => {
+    const toolbar = read('plugins/knowledge/ui/KnowledgeToolbar.tsx')
     expect(toolbar).toContain("from '@deepseek-ai/dsh-client-ui-primitives'")
     expect(toolbar).toContain('Input')
     expect(toolbar).toContain('Pill')
-    const grid = read('apps/web/src/views/knowledge/KnowledgeCardGrid.tsx')
-    // 热度徽章 = 官方缺件自绘（7f02800c SC-J 卡片终稿：IconFlameFillRegular + 事件计数原样）
-    expect(grid).toContain('IconFlameFillRegular')
-    expect(grid).toContain('String(card.heat)')
-    // 状态 chip 本体 = 中文标签 + 官方 StateDot 色点（StateChip 自绘件退役——7f02800c）
+    const grid = read('plugins/knowledge/ui/KnowledgeCardGrid.tsx')
+    expect(grid).toContain('data-dswf-kn-card-heat')
+    expect(grid).toContain('{String(card.heat)}')
     expect(grid).toContain('StateDot')
     // 自绘面仅限领域组件类（域树行/卡片），吃令牌（knowledge.css 零裸值由 token-lint 机械执行）
-    expect(read('apps/web/src/views/knowledge/knowledge.css')).toContain('.dswf-kn-dom-row')
-    expect(read('apps/web/src/views/knowledge/knowledge.css')).toContain('.dswf-kn-card')
+    expect(read('plugins/knowledge/ui/knowledge.css')).toContain('.dswf-kn-dom-row')
+    expect(read('plugins/knowledge/ui/knowledge.css')).toContain('.dswf-kn-card')
   })
 })
 
 describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc 全量渲染唯一径）', () => {
   it('模块面就位：tab 体 + 样式（1.8 退役清单——分段链五文件零残留）', () => {
-    for (const f of ['apps/web/src/views/docs/index.tsx', 'apps/web/src/views/docs/docs.css']) {
+    const DOCS = 'plugins/project/ui/dock-tabs/docs'
+    for (const f of [`${DOCS}/index.tsx`, `${DOCS}/docs.css`]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     for (const f of [
-      'apps/web/src/views/docs/doc-segments.ts',
-      'apps/web/src/views/docs/doc-segments.test.ts',
-      'apps/web/src/views/docs/mermaid-diagram.tsx',
-      'apps/web/src/views/docs/mermaid-diagram.test.tsx',
-      'apps/web/src/views/docs/mermaid-diagram.retry.test.tsx',
-      'apps/web/src/views/docs/md-segments-body.tsx',
-      'apps/web/src/views/docs/md-segments-body.test.tsx',
-      'apps/web/src/views/docs/md-preview-body.tsx',
-      'apps/web/src/views/docs/md-preview-body.test.tsx',
+      `${DOCS}/doc-segments.ts`,
+      `${DOCS}/doc-segments.test.ts`,
+      `${DOCS}/mermaid-diagram.tsx`,
+      `${DOCS}/mermaid-diagram.test.tsx`,
+      `${DOCS}/mermaid-diagram.retry.test.tsx`,
+      `${DOCS}/md-segments-body.tsx`,
+      `${DOCS}/md-segments-body.test.tsx`,
+      `${DOCS}/md-preview-body.tsx`,
+      `${DOCS}/md-preview-body.test.tsx`,
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 退役残留（1.8 渲染链退役清单）`).toBe(false)
     }
@@ -344,9 +379,9 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
     expect(pkg, 'mermaid 直接依赖退役（全仓唯一引用方 = packages/plugins/md-mermaid）').not.toMatch(/"mermaid"/)
   })
 
-  it('Hard Rule 能力单源：apps/web 产品源零 mermaid 引用（静态/动态 import 均零——引擎径归 @dsh-forge/md-mermaid）', () => {
+  it('Hard Rule 能力单源：产品源零 mermaid 引用（静态/动态 import 均零——引擎径归 @dsh-forge/md-mermaid）', () => {
     const offenders: string[] = []
-    for (const p of walk(join(ROOT, 'apps/web/src'))) {
+    for (const p of walkAll(PRODUCT_SRC_ROOTS)) {
       if (!/\.(ts|tsx)$/.test(p) || p.endsWith('.test.ts') || p.endsWith('.test.tsx')) continue
       const src = readFileSync(p, 'utf8')
       if (/from\s+'mermaid'|import\('mermaid'\)/.test(src)) offenders.push(p.replaceAll('\\', '/'))
@@ -355,7 +390,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
   })
 
   it('docs.css mermaid 样式保留迁移（.dswf-doc-mermaid 族供 DOM 增强器复用——超宽横滚 overflow-x:auto 先例）', () => {
-    const css = read('apps/web/src/views/docs/docs.css')
+    const css = read('plugins/project/ui/dock-tabs/docs/docs.css')
     expect(css, 'svg 自适应：max-width 100% + 居中（Codex 式图即内容）').toMatch(
       /\.dswf-doc-mermaid-canvas svg \{[^}]*max-width: 100%;[^}]*margin: 0 auto/,
     )
@@ -369,7 +404,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
   })
 
   it('渲染纪律 + 数据面：DocBody 正文渲染唯一经 MarkdownDoc 全量渲染（官方渲染唯一包装入口——分段链退役）；数据唯一通道 = docs.read（悬空容忍）+ openExternal 恒经触发即忘包装', () => {
-    const tab = read('apps/web/src/views/docs/index.tsx')
+    const tab = read('plugins/project/ui/dock-tabs/docs/index.tsx')
     expect(tab, '正文全量渲染唯一经 MarkdownDoc').toContain('<MarkdownDoc')
     expect(tab, '裸渲染器禁直用（须经 MarkdownDoc 包装）').not.toContain('MarkdownText')
     expect(tab, '分段链退役（零共享件委托）').not.toContain('MdSegmentsBody')
@@ -380,7 +415,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
   })
 
   it('1.4 dock tab 滚动收口 + 官方同形（1.8 双入口化）：容器 CSS 刻度组 + dock tab 自持滚动 + CodeToolbar labels 递达', () => {
-    const css = read('apps/web/src/views/docs/docs.css')
+    const css = read('plugins/project/ui/dock-tabs/docs/docs.css')
     const group = css.match(/\.dswf-doc-body,\s*\.dswf-kn-md-body \{[^}]*\}/)?.[0] ?? ''
     expect(group, '双入口官方同形容器单源（css$7 同刻度组——dock tab/知识抽屉零各自为政）').not.toBe('')
     expect(group, '官方同形 white-space:normal（pre/pre-wrap 渗透收口）').toContain('white-space: normal')
@@ -394,7 +429,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
     expect(css, 'mermaid 图卡节奏 = 官方块级 16px（双入口同组单源）').toMatch(
       /\.dswf-doc-body \.dswf-doc-mermaid,\s*\.dswf-kn-md-body \.dswf-doc-mermaid \{[^}]*margin: 16px 0/,
     )
-    const doc = read('apps/web/src/views/docs/index.tsx')
+    const doc = read('plugins/project/ui/dock-tabs/docs/index.tsx')
     expect(doc, 'CodeToolbar labels 递达（冻结常量 MD_PREVIEW_MARKDOWN_LABELS 单源）').toContain(
       'labels={MD_PREVIEW_MARKDOWN_LABELS}',
     )
@@ -409,7 +444,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
   })
 
   it('1.6 单行头收敛 pin（对齐官方预览头）：标题行/只读 chip/摘要卡退役 + 官方 PathLabel/图标件 + docs.css 新旧规则对位 + 概览文档行 summary 悬浮数据面', () => {
-    const tab = read('apps/web/src/views/docs/index.tsx')
+    const tab = read('plugins/project/ui/dock-tabs/docs/index.tsx')
     expect(tab, '官方 PathLabel 复用（目录段弱化/渐隐裁剪/悬浮全值官方自带——禁自绘仿制）').toContain('PathLabel')
     expect(tab, '重读钮 = 官方导出图标件（documentpreview reload 同源 face）').toContain('IconRefreshOutlineRegular')
     expect(tab, '编辑器打开钮 = 官方导出图标件').toContain('IconFolderOpenOutlineRegular')
@@ -418,7 +453,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
     expect(tab, '头部标题纯函数随退役（零消费死代码缺席）').not.toContain('docTitle')
     expect(tab, 'emoji 图标零残留（📁）').not.toContain('📁')
     expect(tab, 'emoji 图标零残留（↻）').not.toContain('↻')
-    const css = read('apps/web/src/views/docs/docs.css')
+    const css = read('plugins/project/ui/dock-tabs/docs/docs.css')
     expect(css, '退役规则清理：head 行').not.toMatch(/\.dswf-doc-head \{/)
     expect(css, '退役规则清理：title 行').not.toMatch(/\.dswf-doc-title \{/)
     expect(css, '退役规则清理：path 行（官方 PathLabel 自带——`.dswf-doc-pathbar` 前缀不误伤）').not.toMatch(/\.dswf-doc-path \{/)
@@ -426,7 +461,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
     expect(css, '单行头新规则在场（路径左 + 控件簇右 + 底缘发丝线——官方预览头同形）').toMatch(/\.dswf-doc-pathbar \{[^}]*border-bottom/)
     expect(css, '官方图标钮刻度组（28×28 命中区 + svg 15×15 官方同刻度 dsw-raw 镜像）').toContain('.dswf-doc-iconbtn svg')
     expect(css, '悬空 warn chip 规则保留（单行内可见性）').toContain('.dswf-doc-chip-dangling')
-    const dgl = read('apps/web/src/views/overview/feature-tab/DocGroupList.tsx')
+    const dgl = read('plugins/project/ui/dock-tabs/overview/feature-tab/DocGroupList.tsx')
     expect(dgl, '概览文档行悬浮 summary（1.7 裁决——summary 非空才挂 Tooltip 官方 label；缺省/空串零浮层）').toContain(
       "doc.summary !== undefined && doc.summary !== ''",
     )
@@ -438,15 +473,15 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
 
 describe('views/knowledge 详情抽屉 pin（3.7）', () => {
   it('模块面就位：EntryDrawer（hook + 纯渲染体 + 元数据投影）+ barrel 出口', () => {
-    for (const f of ['apps/web/src/views/knowledge/EntryDrawer.tsx']) {
-      expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
-    }
-    const barrel = read('apps/web/src/views/knowledge/index.ts')
-    expect(barrel, 'EntryDrawer 未出 barrel').toContain("export * from './EntryDrawer.js'")
+    const drawerPath = 'plugins/knowledge/ui/EntryDrawer.tsx'
+    expect(existsSync(join(ROOT, drawerPath)), `${drawerPath} 缺席`).toBe(true)
+    // 消费锚 = KnowledgeView 装配壳（faces 正门注册面——KnowledgePanel → KnowledgeView → EntryDrawer）
+    const view = read('plugins/knowledge/ui/KnowledgeView.tsx')
+    expect(view, "EntryDrawer 未进装配（'./EntryDrawer.js' 导入）").toContain("from './EntryDrawer.js'")
   })
 
   it('Hard Rule 渲染纪律 + 按需读取：正文唯一经 MarkdownDoc 全量渲染（1.8 渲染链退役——官方渲染唯一包装入口）；数据唯一通道 = entryDetail（不预载全库）', () => {
-    const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
+    const drawer = read('plugins/knowledge/ui/EntryDrawer.tsx')
     expect(drawer, '抽屉正文渲染唯一经 MarkdownDoc（全量渲染——mermaid 交 DOM 增强器）').toContain('<MarkdownDoc')
     expect(drawer, '裸渲染器禁直用（须经 MarkdownDoc 包装）').not.toContain('MarkdownText')
     expect(drawer, '分段链退役（零共享件委托）').not.toContain('MdSegmentsBody')
@@ -456,24 +491,25 @@ describe('views/knowledge 详情抽屉 pin（3.7）', () => {
     )
   })
 
-  it('AC3 关闭路径：✕ 锚（头行行尾 aria-label）+ Esc capture 自持链（e188ac6c 双模式改版：Esc 机械归 knowledge 自持——编辑→查看→关闭 escNext 链，弹窗先于工具栏清空）', () => {
-    const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
+  it('AC3 关闭路径：✕ 锚（头行行尾 aria-label）+ Esc 捕获接线（capture 阶段——弹窗先于工具栏清空）', () => {
+    const drawer = read('plugins/knowledge/ui/EntryDrawer.tsx')
     expect(drawer).toContain('data-dswf-kn-dialog-close')
     expect(drawer).toContain('aria-label="关闭弹窗"')
-    expect(drawer).toContain('escNextKn')
-    expect(drawer).toContain("document.addEventListener('keydown', onKeyDown, { capture: true })")
-    expect(drawer, 'capture 阶段 stopPropagation（防串关——弹窗先于工具栏清空）').toContain('event.stopPropagation()')
+    expect(drawer, "Esc 链 capture 监听（'Escape' 判别）").toContain("'Escape'")
+    expect(drawer).toContain('{ capture: true }')
+    const escape = read('plugins/project/ui/dock-tabs/overview/drawer/index.tsx')
+    expect(escape, 'capture 阶段接线（stopPropagation 防串关——机械单源在 drawer）').toContain('stopPropagation')
   })
 
   it('AC4 形态对齐任务/Bug 弹窗 dialog：详情 = 自持可拖移 dialog（用户裁决可移动+可拉伸——拖动机械复用 drawer，视觉一律官方护仗）', () => {
-    const css = read('apps/web/src/views/knowledge/knowledge.css')
+    const css = read('plugins/knowledge/ui/knowledge.css')
     expect(css).toContain('.dswf-kn-dialog {')
     expect(css).toContain('z-index: var(--dsh-dockkit-float-layer, 60)') // 层级 = dockkit 浮层同一级
     expect(css).toContain('box-shadow: var(--dsw-elevation-prominent)') // 抬升面 = 任务/Bug 弹窗同配方
-    expect(css).toContain('max-height: 92vh') // 纵向滚动上限（e188ac6c dialog 高度对齐专家 detail-dialog：auto+320px+92%+resize both）
+    expect(css).toContain('max-height: 92vh') // 纵向滚动上限（内容多不溢出——92% 原型刻度）
     expect(css).toContain('.dswf-kn-dialog-head {') // 拖移头行
     expect(css).toContain('.dswf-kn-dialog-resize {') // 缘侧拖宽手柄
-    const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
+    const drawer = read('plugins/knowledge/ui/EntryDrawer.tsx')
     expect(drawer).toContain('taskDrawerHeadDragProps') // 拖移机械复用 drawer（bug-dialog 同先例——零平行机械）
     expect(drawer).toContain('drawerWidthFromEdgeDrag')
   })
@@ -481,15 +517,15 @@ describe('views/knowledge 详情抽屉 pin（3.7）', () => {
 
 describe('md 文档 body 渲染统一 pin（1.8 渲染链退役——MarkdownDoc 全量渲染唯一径）', () => {
   it('官方渲染唯一径：文档 tab DocBody 与知识抽屉正文区唯一经 MarkdownDoc（labels 冻结常量单源）+ 零分段链残留引用', () => {
-    const tab = read('apps/web/src/views/docs/index.tsx')
+    const tab = read('plugins/project/ui/dock-tabs/docs/index.tsx')
     expect(tab).toContain('variant="body"')
     expect(tab).toContain('labels={MD_PREVIEW_MARKDOWN_LABELS}')
-    const drawer = read('apps/web/src/views/knowledge/EntryDrawer.tsx')
+    const drawer = read('plugins/knowledge/ui/EntryDrawer.tsx')
     expect(drawer).toContain('variant="body"')
     expect(drawer).toContain('labels={MD_PREVIEW_MARKDOWN_LABELS}')
     // 分段链退役：产品源零残留引用（doc-segments / MdSegmentsBody / MdPreviewBody / MermaidDiagram）
     const offenders: string[] = []
-    for (const p of walk(join(ROOT, 'apps/web/src'))) {
+    for (const p of walkAll(PRODUCT_SRC_ROOTS)) {
       if (!/\.(ts|tsx)$/.test(p) || p.endsWith('.test.ts') || p.endsWith('.test.tsx')) continue
       const src = readFileSync(p, 'utf8')
       if (/doc-segments|MdSegmentsBody|MdPreviewBody|MermaidDiagram/.test(src)) offenders.push(p.replaceAll('\\', '/'))
@@ -506,13 +542,15 @@ describe('md 文档 body 渲染统一 pin（1.8 渲染链退役——MarkdownDoc
 })
 
 describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降位形态）', () => {
-  it('模块面就位：壳宿主 + main 面板族 + hero 纯渲染件 + 面板模型 + 桥 + 样式 + barrel', () => {
+  it('模块面就位：壳宿主 + 面板模型 + 桥 + 样式 + barrel；hero/知识面板/dock tab 本体落插件包（1.45 迁移——装配缝归插件域）', () => {
     for (const f of [
       'apps/web/src/workbench/ShellHost.tsx',
-      'apps/web/src/workbench/dock-tabs.tsx',
-      'apps/web/src/workbench/HeroPanel.tsx',
-      'apps/web/src/workbench/HeroEmpty.tsx',
-      'apps/web/src/workbench/KnowledgePanel.tsx',
+      // 1.45 迁移：dock tab 族随 @dsh-forge/project（ui/dock-tabs/）
+      'plugins/project/ui/dock-tabs/dock-tabs.tsx',
+      // hero 两件随 @dsh-forge/project（ui/hero/）；知识面板随 @dsh-forge/knowledge（ui/）
+      'plugins/project/ui/hero/HeroPanel.tsx',
+      'plugins/project/ui/hero/HeroEmpty.tsx',
+      'plugins/knowledge/ui/KnowledgePanel.tsx',
       'apps/web/src/workbench/panel-model.ts',
       'apps/web/src/workbench/workbench-bridge.ts',
       'apps/web/src/workbench/workbench.css',
@@ -521,48 +559,49 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/workbench/index.ts')
-    for (const name of ['ShellHost', 'HeroPanel', 'HeroEmpty', 'KnowledgePanel', 'panel-model', 'workbench-bridge', 'dock-tabs']) {
+    for (const name of ['ShellHost', 'anchored-projects', 'panel-model', 'workbench-bridge']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
     // 3.8：知识视图装配壳 + 召回 tab 数据面（跨视图互禁——跳转经桥）
-    expect(existsSync(join(ROOT, 'apps/web/src/views/knowledge/KnowledgeView.tsx')), 'KnowledgeView 缺席').toBe(true)
-    expect(existsSync(join(ROOT, 'apps/web/src/views/session/RecallTab.tsx')), 'RecallTab 缺席').toBe(true)
-    expect(existsSync(join(ROOT, 'apps/web/src/views/session/recall-model.ts')), 'recall-model 缺席').toBe(true)
+    expect(existsSync(join(ROOT, 'plugins/knowledge/ui/KnowledgeView.tsx')), 'KnowledgeView 缺席').toBe(true)
+    // fix-29 退役 pin：产品轨迹台账/转录投影死代码缺席（轨迹 = 官方 ui-trajectory 直用）
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/TrajectoryLedger.tsx'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/transcript.ts'))).toBe(false)
+    // 1.45 迁移退役面：壳侧 session/knowledge 旧位本体随迁移清退（本体在插件包）
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/RecallTab.tsx'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/recall-model.ts'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/ForgeEventEntries.tsx'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/DispatchToolRow.tsx'))).toBe(false)
+    expect(existsSync(join(ROOT, 'apps/web/src/client-plugin/forge-event-node.ts'))).toBe(false)
   })
 
   it('Hard Rule hero 单一条件：呈现判据唯一落点 sessionZonePhase（正零才 hero），HeroEmpty 零判据零数据源', () => {
     const model = read('apps/web/src/workbench/panel-model.ts')
     expect(model).toContain('export function sessionZonePhase')
     expect(model).toContain('input.lastReadyCount === 0')
-    const hero = read('apps/web/src/workbench/HeroEmpty.tsx')
+    const hero = read('plugins/project/ui/hero/HeroEmpty.tsx')
     expect(hero).not.toMatch(/projects|useForgeProjects|phase/)
     expect(hero).toContain('添加项目')
     // fix-17：CTA 图标位 = 官方 IconProjectAddOutlineRegular（文本前缀 ％＋ 退役）
     expect(hero).toContain('IconProjectAddOutlineRegular')
   })
 
-  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集；fix-29 轨迹视图退役；4.1 dock tab 两 body；m3.1 D5 会话头 pill 发布退役；4.7 设置分区退役；2026-10-09 dispatchTask 工具行）', () => {
+  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（hero/knowledge 面板与 dock tab 族注册面随 1.45 迁插件 bundle——壳发布面零该键；fix-29 轨迹视图退役；m3.1 D5 会话头 pill 发布退役；4.7 设置分区退役；1.6 sidebar.workspaces 退役）', () => {
     const views = read('apps/web/src/product-views.ts')
     for (const name of [
-      'ForgeSidebarSlot',
+      'ForgeBrandMark',
+      'ForgeBrandName',
       'ForgeShellHost',
-      'ForgeHeroPanel',
-      'ForgeKnowledgePanel',
-      'ForgeKnowledgeGlyph',
-      'ForgeRecallView',
-      'ForgeDispatchToolRow',
-      'ForgeOverviewTab',
-      'ForgeDocsTab',
       'createWorkbenchBridge',
     ]) {
       expect(views, `${name} 未发布`).toContain(name)
     }
-    // fix-29 退役 pin：产品轨迹视图不再发布（轨迹 = 官方 ui-trajectory 直用）
-    expect(views).not.toContain('ForgeTrajectoryView')
-    // m3.1 D5 退役 pin：会话头挂接 pill 不再发布（槽位卸载——面板经 ShellHost 直挂）
-    expect(views).not.toContain('ForgeSessionTaskPills')
-    // 4.7 退役 pin：Forge设置 分区（worker 小节）不再发布——配置主权归 expert-squad 配置 tab
-    expect(views).not.toContain('ForgeSettingsSection')
+    // 退役 pin：以下占用者注册面/组件本体已迁插件 bundle——壳发布面零该键
+    // （头注迁移记事含键名叙事——发布键断言只 pin 结构面 interface ForgePublishedViews 域）
+    expect(views).not.toContain('ForgeTrajectoryView') // fix-29：轨迹 = 官方 ui-trajectory 直用
+    expect(views).not.toContain('ForgeSessionTaskPills') // m3.1 D5：会话头挂接 pill 槽位卸载
+    expect(views).not.toContain('ForgeSettingsSection') // 4.7：配置主权归 expert-squad 配置 tab
+    expect(views).not.toContain('ForgeSidebarSlot') // 1.6：sidebar.workspaces 迁 @dsh-forge/project
   })
 
   it('工作台桥键面一致：workbench-bridge（发布侧 + 读取侧同模块）键 __DSH_FORGE_WORKBENCH__；e2e bridgeDispatch 面保持', () => {
@@ -580,7 +619,7 @@ describe('m3.1 D35 按钮风格对齐 pin（toolbar 深灰异类清零——官�
 
   it('机械清零：产品源 Button variant="toolbar" 零在场（官方 dsh 全包 0 用——深灰常驻底片 #54555780 异类）', () => {
     const offenders: string[] = []
-    for (const p of walk(join(ROOT, 'apps/web/src'))) {
+    for (const p of walkAll(PRODUCT_SRC_ROOTS)) {
       if (!/\.(ts|tsx)$/.test(p) || p.endsWith('.test.ts') || p.endsWith('.test.tsx')) continue
       if (readFileSync(p, 'utf8').includes('variant="toolbar"')) offenders.push(p.replaceAll('\\', '/'))
     }
@@ -589,13 +628,14 @@ describe('m3.1 D35 按钮风格对齐 pin（toolbar 深灰异类清零——官�
 
   it('九位对齐 pin：折叠/关闭/搜索清除/展开/行操作图标钮 = 官方 ghost（透明底 + hover interactive-bg-hover——数据锚与 aria 原样）', () => {
     const ghostSites: readonly (readonly [file: string, marker: string, note: string])[] = [
-      ['apps/web/src/views/session/DispatchEventsPanel.tsx', 'data-dswf-dep-collapse', '悬浮进度流面板折叠钮（用户点名面继任——loop-event-delivery 1.8）'],
-      ['apps/web/src/views/knowledge/EntryDrawer.tsx', 'data-dswf-kn-dialog-close', '知识详情弹窗关闭'],
-      ['apps/web/src/views/knowledge/KnowledgeToolbar.tsx', 'dswf-kn-searchclear', '知识搜索清除'],
-      ['apps/web/src/views/overview/sticky-bar.tsx', 'data-dswf-ov-searchclear', '概览搜索清除'],
-      ['apps/web/src/views/overview/drawer/index.tsx', 'data-dswf-td-expand', '任务详情展开'],
-      ['apps/web/src/views/overview/drawer/index.tsx', 'data-dswf-td-close', '任务详情弹窗关闭（三态共锚）'],
-      ['apps/web/src/views/overview/task-tab/list-view.tsx', 'data-dswf-tt-more', '列表行 ⋯ 行操作'],
+      // 1.13 迁移退役：面板正本迁 @dsh-forge/task-loop（ui/dispatch-events-panel/）——ghost 钮 pin 改指迁地面
+      ['plugins/task-loop/ui/dispatch-events-panel/DispatchEventsPanel.tsx', 'data-dswf-dep-collapse', '悬浮进度流面板折叠钮（用户点名面继任——loop-event-delivery 1.8）'],
+      ['plugins/knowledge/ui/EntryDrawer.tsx', 'data-dswf-kn-dialog-close', '知识详情弹窗关闭'],
+      ['plugins/knowledge/ui/KnowledgeToolbar.tsx', 'dswf-kn-searchclear', '知识搜索清除'],
+      ['plugins/project/ui/dock-tabs/overview/sticky-bar.tsx', 'data-dswf-ov-searchclear', '概览搜索清除'],
+      ['plugins/project/ui/dock-tabs/overview/drawer/index.tsx', 'data-dswf-td-expand', '任务详情展开'],
+      ['plugins/project/ui/dock-tabs/overview/drawer/index.tsx', 'data-dswf-td-close', '任务详情弹窗关闭（三态共锚）'],
+      ['plugins/project/ui/dock-tabs/overview/task-tab/list-view.tsx', 'data-dswf-tt-more', '列表行 ⋯ 行操作'],
     ]
     for (const [file, marker, note] of ghostSites) {
       const tag = tagOf(file, marker)

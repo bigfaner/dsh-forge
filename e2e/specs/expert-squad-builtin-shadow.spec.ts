@@ -28,10 +28,10 @@ const PANEL_ROW = 'button[aria-label="专家团"]'
 const PANEL_ROOT = '[data-dswf-expert-panel]'
 const cardOf = (key: string): string => `.dswf-xcard[data-expert-key="${key}"]`
 
-/** 随包内置专家键（packages/plugins/expert-squad/experts/code-reviewer.md——正本事实） */
+/** 随包内置专家键（plugins/expert-squad/experts/code-reviewer.md——正本事实，批1 包归位 root 级树） */
 const BUILTIN_KEY = 'code-reviewer'
 // 包目录以本 spec 文件位置锚定（e2e/specs/ → 仓根两级上），不随 Playwright cwd 漂移
-const PLUGIN_PKG_DIR = fileURLToPath(new URL('../../packages/plugins/expert-squad', import.meta.url))
+const PLUGIN_PKG_DIR = fileURLToPath(new URL('../../plugins/expert-squad', import.meta.url))
 const BUILTIN_SRC = join(PLUGIN_PKG_DIR, 'experts', `${BUILTIN_KEY}.md`)
 
 /** 随包内置档案的 title（遮蔽/回落断言的期望值——以包内正本为期望单源） */

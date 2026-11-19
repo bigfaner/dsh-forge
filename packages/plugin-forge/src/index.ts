@@ -1,7 +1,7 @@
 // @dsh-forge/plugin-forge 插件定义（定位：装配；knowledge index.ts 同型——3.4 物理挂载）。
 // 形态：Cordis Plugin.Function（loader 取 default 导出，与 core/index.ts 同型）：
-//   inject = ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt', 'experts']
-//   —— 对 core 的依赖 = 任务/提案/bug/项目四域服务（Interface 1/3 类型 +
+//   inject = ['forgeTasks', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt', 'experts']
+//   —— 对 core 的依赖 = 任务/bug/项目三域服务（Interface 1 类型 +
 //   ProjectServiceM2.deriveTaskStoreDir——事件日志落位目录单源派生，插件不复制；
 //   forgeBugs = fix-bug bug 域服务——recordBug/resolveBug 两写径）；
 //   experts = expert-squad 顶层服务（bug 0b83e3aa——preset 组内实例跨隔离 realm 消费
@@ -16,22 +16,23 @@
 // 日志监听器挂接（logs/{slug}.jsonl 唯一写者——事件→工作区映射 = 装配方闭包：
 // sink.prepare 在 tool 执行点经 core deriveTaskStoreDir 解析并记忆，监听器
 // resolveContainerDir 消费同一记忆）+ tool 注册（六员——名 = 动词透传；dispatchTask
-// spawn 面 = spawn/in-process-driver.ts 真绑定）+ forge:pipeline 段注册（order 510）；
+// spawn 面 = spawn/in-process-driver.ts 真绑定）；forge:pipeline / forge:doc-style 两段
+// 已迁 plugins/spec（plugin-spec 1.8 提示段迁入——本装配仅保留 forge:dispatch-loop 段）；
 // 交出合并 disposer（fiber 卸载即全注销）。
 // projectId 解析缝 = bindingsFile 机制（Interface 8 cwd 数据缝——host 维护
 // {wsPath,projectId} JSON 经插件 config 进入，生产端 3.4）。
-import { join, dirname } from 'node:path'
-import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import type { AgentPresetsFace, DiagLevel, ForgeSettingsService, ProjectServiceM2, ToolsSchemasReader } from '@dsh-forge/contracts'
 import { createUnionToolNamesProbe } from '@dsh-forge/contracts'
-import { docsRootOfForgeDir, forgeDirOfWorkspace, workspaceDocsRoot } from './forge-paths.js'
+import { forgeDirOfWorkspace, workspaceDocsRoot, FORGE_DOC_STYLE_SECTION_ORDER } from '@dsh-forge/project/host-dirs'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, createProjectWorkspaceRoots, createForgePathsAnchors, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
-import { collectDeclaredDirKeys, createDirKeyRegistry } from './forge-paths.js'
-import type { DirKeyEntry } from './forge-paths.js'
+import { collectDeclaredDirKeys, createDirKeyRegistry } from '@dsh-forge/project/host-dirs'
+import type { DirKeyEntry } from '@dsh-forge/project/host-dirs'
+import { createDirFactsPort } from '@dsh-forge/project/host-dirs'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, ForgeToolDefinition, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
@@ -44,14 +45,12 @@ import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFF
 import { createLoopRegistry } from './loop/registry.js'
 import { createForgeDispatchEventsProjection, createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
-import { commanderSectionText, FORGE_COMMANDER_SECTION_NAME, FORGE_COMMANDER_SECTION_ORDER, FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, forgePipelineSectionText, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
 import { createPlanReplaySpawn, loadReplayPlanFromEnv, takeForgeSpawnOverride } from './spawn/seam.js'
 import { defaultWorkerTreeGuard, setJobTreeDiagSink } from './spawn/job-tree.js'
 import type { SpawnWorker } from './dispatch-core/index.js'
 import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
 import type { ForgeContextFace } from './tools/index.js'
-import type { ForgeFeaturesToolFace } from './tools/index.js'
 import type { ProjectBinding } from './tools/index.js'
 
 /** 模块级本地 expertResolver 单例（bug dfa41a72/ad32e240——弃跨 scope 反射取回）：
@@ -70,8 +69,6 @@ export interface ForgePluginConfig {
   projects?: readonly ProjectBinding[]
   /** 绑定表文件路径（host 装配方维护——tool 执行点惰性读取，条目优先于静态表） */
   bindingsFile?: string
-  /** 管线模式（preset yml plugin-forge 行 config 的 mode 键——expedition/blitz，缺省回退远征） */
-  mode?: string
   /**
    * e2e 红灯基线门开关（用户裁决 2026-10-18 缺省 **false 禁用**——全量套件 >10min 超预算，
    * 每次循环启动白烧超时窗）。true = 循环启动时后台跑全量 e2e 套件建基线（红灯清单随
@@ -95,8 +92,8 @@ function warnReconcileDegraded(diag: ForgeDiagEmitFace | undefined, projectId: s
 /** 函数插件形状（Plugin.Function + inject 元数据） */
 export interface ForgePlugin {
   (ctx: ForgeContextFace, config?: ForgePluginConfig): () => void
-  /** 依赖声明：声明服务齐备才加载（core 面 = forgeTasks + forgeProposals + forgeBugs +
-   *  forgeProjects 四服务 + experts（bug 0b83e3aa——expert-squad 顶层服务跨 realm 正门，
+  /** 依赖声明：声明服务齐备才加载（core 面 = forgeTasks + forgeBugs +
+   *  forgeProjects 服务 + experts（bug 0b83e3aa——expert-squad 顶层服务跨 realm 正门，
    *  cordis inject 服务键；缺席 = 插件不装载——产品组合两者恒同装，无 experts 即无路由
    *  消费面）；forgeSettings 等可选消费不走 inject 声明——缺席不阻载） */
   readonly inject: readonly string[]
@@ -433,6 +430,20 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       // 撞车/反射异常 = 本 scope 已有注册面（双次装配）——本地单例装配不受影响
     }
+    // DirFactsPort seam 常驻 provider 注册（plugin-project 1.12——proposal seam 表 forge.dirFacts，
+    // code-design §6 一 service 多 provider：常驻 = 全量目录事实〔合并注册表 + 锚解析缝〕；
+    // 兜底 = plugins/project host/dirs minimalDirFactsPort 仅内置键集，消费方注入缺席时退兜底）。
+    // 反射面缺席/撞车 = fail-soft 不阻载（同 forgeDirs 服务键配方）。
+    try {
+      ctx.reflect?.provide?.('forge.dirFacts', () =>
+        createDirFactsPort({
+          anchorsOf: (projectId) => forgePathsAnchors.anchorsOf(projectId),
+          dirKeys: () => dirKeyRegistry.entries(),
+        }),
+      )
+    } catch {
+      // 撞车/反射异常 = 同上，fail-soft 不阻载
+    }
     const recurrenceFaces = createRecurrenceFaces({
       bugs: ctx.forgeBugs,
       // bug 8b041612 修正：卷宗探测的 dir 语义 = 项目工作区根（ws_path——与 settle 报告
@@ -453,44 +464,11 @@ const forgePlugin: ForgePlugin = Object.assign(
     // ——启动包装在循环启动时点以 projectId 反解容器库目录直记 sink，logs/<slug>.jsonl
     // 里程碑（task-claimed/tool-error 族）不再整流丢弃。解析未命中 = 不记忆（sink fail-soft
     // 丢行原语义不变）。stop/activeOf 直通原驱动器——落位记忆只属启动径。
-    // 改进 6⑤ 已知容器集读面（wait-external.externalSlug 存在性校验数据源）：feature +
-    // proposal 双轨 slug 并集，逐调用现读（fail-soft：任一读面故障 = 空并集——校验按缺席
-    // 处理见 driver）；forgeFeatures 服务经 reflect 防御读取（同 forgeSettings 配方——
-    // core 装配同块恒提供，缺席形态仅剩降级容错）
-    let knownContainers: ((projectId: string) => Promise<readonly string[]>) | undefined
-    try {
-      const features = ctx.reflect?.get('forgeFeatures') as
-        | { listFeatures?(q: { projectId: string }): Promise<readonly { slug: string }[]> }
-        | undefined
-      if (typeof features?.listFeatures === 'function') {
-        knownContainers = async (projectId) => {
-          const [featureRows, proposalRows] = await Promise.all([
-            features.listFeatures!({ projectId }).catch(() => []),
-            ctx.forgeProposals.listProposals({ projectId }).catch(() => []),
-          ])
-          return [...featureRows.map((r) => r.slug), ...proposalRows.map((r) => r.slug)]
-        }
-      }
-    } catch {
-      knownContainers = undefined
-    }
-    // transitionFeature tool 服务面（implicit-stage-approval §2.3）：forgeFeatures 经 reflect
-    // 防御读取（同 forgeSettings/knownContainers 配方——core 装配同块恒提供）；三方法面齐备
-    // 才注入，缺席 = tool 执行期 fail-loud 拒绝（可选降级模式——其余 tool 零影响）。
-    let featuresFace: ForgeFeaturesToolFace | undefined
-    try {
-      const raw = ctx.reflect?.get('forgeFeatures') as Partial<ForgeFeaturesToolFace> | undefined
-      if (
-        raw !== undefined &&
-        typeof raw.transitionFeature === 'function' &&
-        typeof raw.listFeatures === 'function' &&
-        typeof raw.listFeatureDocs === 'function'
-      ) {
-        featuresFace = raw as ForgeFeaturesToolFace
-      }
-    } catch {
-      featuresFace = undefined
-    }
+    // 改进 6⑤ 已知容器集读面（wait-external.externalSlug 存在性校验数据源）：已知容器集
+    // 数据源 = features/proposals 双域服务（core 装配同块）——两域随远征退役
+    // （plugin-task-loop 1.15），本装配不再消费 forgeFeatures：knownContainers 恒缺席 =
+    // wait-external 存在性校验降级缺席形态（driver 侧 fail-soft——校验按缺席处理，原语义）。
+    const knownContainers: ((projectId: string) => Promise<readonly string[]>) | undefined = undefined
     // 3b 注入面 registry 单例（装配方持有——驱动器 deps 注入共享同一登记表；section 回调
     // 闭包直读同一单例。注入为 registry 纯投影、零影子状态：登记状态变即输出变、登记删除
     // 即零注入——官方 dsh-system-prompt 对空串 section 整体过滤，与「从未注册」逐字节一致）。
@@ -515,25 +493,9 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 专家团服务在场探测（AGENTS 1.6——检测永不缓存，每次消费点调用期现查；bug 0b83e3aa
     // 同款双通道：ctx.experts 注入属性面（跨 realm 可达）+ reflect.get（同 scope 先例面）。
     // 双谓词拆分（bug cf6254ff——单探测面服务两个谓词不同的消费方）：
-    // - expertsServicePresent：服务在场原语义——forge:commander 段条件注入消费，服务
-    //   在场即注入，不核验具体专家键；
     // - loopReviewExpertsPresent：P8 三键核验——LOOP_REVIEW_EXPERT_KEYS 三键同源
     //   （get 对缺席/禁用键 fail-loud 抛错 = 该键缺席；任一键不在场/异常 = false，
     //   fail-soft 回落 P8 回落版），仅供 loop driver deps.expertsPresent 消费。
-    function expertsServicePresent(): boolean {
-      try {
-        const viaInject = (ctx as ForgeContextFace & { readonly experts?: ExpertsServiceFace }).experts
-        if (viaInject !== undefined && typeof viaInject.get === 'function') return true
-      } catch {
-        // 注入服务未就绪 = 降级到 reflect 通道
-      }
-      try {
-        const experts = ctx.reflect?.get('experts') as ExpertsServiceFace | undefined
-        return experts !== undefined && typeof experts.get === 'function'
-      } catch {
-        return false
-      }
-    }
     function expertsKeyPresent(experts: ExpertsServiceFace, key: string): boolean {
       try {
         return experts.get(key) !== undefined
@@ -621,9 +583,8 @@ const forgePlugin: ForgePlugin = Object.assign(
       // 面缺席/发射故障 = emitForgeDiag 按级 console 兜底——process 标签由 diag 缝闭包补齐）
       ...(diag !== undefined ? { diag } : {}),
       // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints 消费面 = ctx.forgeCheckpoints 直传
-      // 域侧（ensureCheckpoint 幂等语义单点落域——事务内唯一索引背书，不经包装）；proposalId
-      // 归属锚 = 提案域按容器 slug 现查；HEAD 解析 = git 真解析。三者缺席时四类标记机制为
-      // 死代码——此注入是生产路径落标记的装配前提。
+      // 域侧（ensureCheckpoint 幂等语义单点落域——唯一约束背书，不经包装）；检查点归属锚 =
+      // 容器 slug 弱引用；HEAD 解析 = git 真解析。
       checkpoints: ctx.forgeCheckpoints,
       // AC7 结算旁挂回收缝（loop-recurrence-hardening §2.4——resolveDir 闭包注入派生：
       // 运行时目录 = deriveTaskStoreDir 单源 + logs/<slug>/<localId>；卷宗根 = wsPath +
@@ -633,14 +594,6 @@ const forgePlugin: ForgePlugin = Object.assign(
       // 缺席即四处机制生产静默关停，本注入是生产路径的装配前提；降级径 diag 留痕见消费点）
       findRecurrenceCandidates: recurrenceFaces.findRecurrenceCandidates,
       modelingReportPresent: recurrenceFaces.modelingReportPresent,
-      resolveProposalId: async (projectId, source) => {
-        try {
-          const rows = await ctx.forgeProposals.listProposals({ projectId })
-          return rows.find((p) => p.slug === source.slug)?.proposalId
-        } catch {
-          return undefined // fail-soft——机制惰性不判
-        }
-      },
       resolveHeadCommit: gitHeadCommit,
       ...(progressAppend !== undefined ? { progress: progressAppend } : {}),
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
@@ -729,10 +682,8 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 机械因 store 零供数恒 no-op，已按 proposal 台账改判移除（bug 99ce9088）。
     const tools = createForgeTools({
       tasks: ctx.forgeTasks,
-      proposals: ctx.forgeProposals,
       bugs: ctx.forgeBugs,
       checkpoints: ctx.forgeCheckpoints,
-      ...(featuresFace !== undefined ? { features: featuresFace } : {}),
       resolveProjectId,
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
@@ -887,117 +838,15 @@ const forgePlugin: ForgePlugin = Object.assign(
       }
       for (const projectId of projectIds) reconcileProject(projectId)
     })()
-    // 1.16 文档位置按会话工作区注入（bug 5adb5960 根治：段此前取 boundProjectIds[0]
-    // 首个绑定项目，多项目宿主下所有会话共享同一（错误项目的）文档根）：段 text 用
-    // 官方 PromptSection 函数形态——每次 system prompt 装配按上下文 agent.id（SessionId）
-    // 查 session/created 预热的 sessionId→forgeDir 缓存求值；缓存缺席（预热未完成/
-    // 项目未注册/面缺席）= 缺省段（省略文档位置，绝不注入其他项目的路径，fail-soft）。
-    // mode 仍由 preset yml plugin-forge 行 config 注入（缺省回退远征）。doc-style
-    // 独立段常量文本双模式共用（一次注册不重注册）。
-    // Root cause: 段是进程级单文本，forgeDir 却是每会话事实——首个绑定项目被当成了全宿主默认。
-    const pipelineMode = modeOf(config.mode)
-    // git 纪律条件注入（探测，不缓存）：项目根 = forgeDir 上一级，`.git` 在场（目录或
-    // worktree 文件）= git 仓库 → pipeline 段总纲追加 git 纪律规则。探测缺席/异常 =
-    // 不追加（fail-soft，非 git 项目零提示词差异）。
-    const isGitRepoOfForgeDir = (forgeDir: string | undefined): boolean => {
-      if (forgeDir === undefined) return false
-      try {
-        return existsSync(join(dirname(forgeDir), '.git'))
-      } catch {
-        return false
-      }
-    }
-    const sessionForgeDirs = new Map<string, string>()
-    const warmSessionForgeDir = (session: { id?: unknown; header?: { cwd?: unknown } }): void => {
-      try {
-        const id = session?.id
-        const cwd = session?.header?.cwd
-        if (typeof id !== 'string' || typeof cwd !== 'string') return
-        const projectId = resolveProjectId(cwd)
-        if (projectId === undefined) return
-        void (async () => {
-          try {
-            const projects = ctx.forgeProjects as Partial<ProjectServiceM2>
-            if (typeof projects.getProject !== 'function') return
-            const project = await projects.getProject(projectId)
-            const forgeDir = project?.forgeDir
-            if (typeof forgeDir === 'string' && forgeDir.trim() !== '') sessionForgeDirs.set(id, forgeDir)
-          } catch {
-            /* 预热失败 = 该会话回落缺省段（fail-soft 零外抛） */
-          }
-        })()
-      } catch {
-        /* 事件面形状异常 = 忽略（fail-soft） */
-      }
-    }
-    if (typeof ctx.on === 'function') {
-      // { global: true }（bug 4e9bf600）：session/* 经 scope carrier 过滤派发，插件装配 ctx
-      // 携带作用域标签时，不带 global 的监听收不到他作用域会话——预热缓存恒空（同插件
-      // prestep 与 dsh-session invariant 同径先例）。
-      ctx.on('session/created', warmSessionForgeDir, { global: true })
-      ctx.on(
-        'session/disposed',
-        (session: { id?: unknown }) => {
-          if (typeof session?.id === 'string') sessionForgeDirs.delete(session.id)
-        },
-        { global: true },
-      )
-    }
-    const disposeDocStyle = ctx.systemPrompt.section({
-      name: FORGE_DOC_STYLE_SECTION_NAME,
-      order: FORGE_DOC_STYLE_SECTION_ORDER,
-      text: renderDocStyleSection(),
-    })
-    // prompt-scoping-and-desc-trim/1.2：pipeline 段按会话角色分流——forgePipelineSectionText
-    // 内经 isSubagentAssembly 单点判据二选一模板（主会话全文 / 子会话裁剪版「Forge 工作
-    // 纪律（子会话）」），与 forge:commander 段同源判据；forgeDir/isGitRepo/mode 仍由
-    // 本装配方解析注入。
-    const disposePipeline = ctx.systemPrompt.section({
-      name: FORGE_SECTION_NAME,
-      order: FORGE_SECTION_ORDER,
-      text: (context) => {
-        const forgeDir = context?.agent?.id === undefined ? undefined : sessionForgeDirs.get(context.agent.id)
-        return forgePipelineSectionText(context, {
-          forgeDir,
-          isGitRepo: isGitRepoOfForgeDir(forgeDir),
-          mode: pipelineMode,
-        })
-      },
-    })
-    // forge-dirs-query-tool（用户裁决）：文档根经官方 {{forge_docs_root}} 模板插值——
-    // 变量每次组装按装配会话求值（同 sessionForgeDirs 预热缓存，dirKey forge.docs_root
-    // 的解析派生 docsRootOfForgeDir 单源）；未绑定会话回退占位说明文本（官方插值器对
-    // 已注册无值引用 fail-loud，故 provider 恒返回字符串）。
-    const disposeDocsRootVariable = ctx.systemPrompt.variable?.('forge_docs_root', (context) => {
-      const forgeDir = context?.agent?.id === undefined ? undefined : sessionForgeDirs.get(context.agent.id)
-      if (typeof forgeDir !== 'string' || forgeDir.trim() === '') {
-        return '（当前会话未绑定 forge 工作区——实际路径经 forgeDirs 工具查询）'
-      }
-      try {
-        return docsRootOfForgeDir(forgeDir.trim().replace(/[\\/]+$/, ''))
-      } catch {
-        return '（当前会话未绑定 forge 工作区——实际路径经 forgeDirs 工具查询）'
-      }
-    })
     // 3b 协作面驻留段（P1 驻留 / 挂起 P3+P9——injection-spec 载体分配：P1/P9 永走系统提示词）。
     // 段 text 每回合现调：agent.id 缺席 = 空串；registry 投影无命中 = 空串（零固定税——
     // 协作外会话提示词与无此插件时逐字节一致）；占位符残留段 fail-soft 跳段（injection.ts 落盘告警）。
+    // forge:pipeline / forge:doc-style 两段已迁 plugins/spec（plugin-spec 1.8 提示段迁入——
+    // 含 presetBinding 注入判据与 forge_docs_root 变量面，本装配不再注册）。
     const disposeDispatchLoop = ctx.systemPrompt.section({
       name: FORGE_DISPATCH_LOOP_SECTION_NAME,
       order: FORGE_DOC_STYLE_SECTION_ORDER + FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, // 512（doc-style 511 之后——forge 段族次序稳定）
       text: (context) => (context?.agent?.id === undefined ? '' : renderInjection(context.agent.id, loopRegistry, diag)),
-    })
-    // expert-squad-forge-2 纳入 10：forge:commander 指挥者段（条件注入——同构
-    // forge:doc-style 等既有三段：段注册无条件，text 运行期求值）。条件 = ctx.experts
-    // 服务在场（探测函数见 loopDriverBase 装配处上方定义，双消费面共用）且装配会话非
-    // subagent 子会话（prompt-scoping-and-desc-trim/1.2 起经 commanderSectionText 消费
-    // isSubagentAssembly 单点谓词——与 forge:pipeline 段同源，指挥者话术只属于主会话，
-    // worker/subagent 提示词零污染）。缺席/异常/非函数面 = 空串（官方对空串 section
-    // 整体过滤，与「从未注册」逐字节一致——非 expert-squad 环境零固定税）。
-    const disposeCommander = ctx.systemPrompt.section({
-      name: FORGE_COMMANDER_SECTION_NAME,
-      order: FORGE_COMMANDER_SECTION_ORDER,
-      text: (context) => commanderSectionText(context, expertsServicePresent),
     })
     // 工具注册 loud 缝（bug 92d642c2 排查衍生——§7 可观测性）：单枚注册抛错不再静默截断
     // （真机实证：submitTask 注册中断 → 其后 forge 动词全缺席 → essentials 守卫连环拆循环，
@@ -1018,9 +867,6 @@ const forgePlugin: ForgePlugin = Object.assign(
       registerToolLoud(tools.addTask),
       registerToolLoud(tools.submitTask),
       registerToolLoud(tools.queryTask),
-      registerToolLoud(tools.createProposal),
-      registerToolLoud(tools.transitionProposal),
-      registerToolLoud(tools.transitionFeature),
       registerToolLoud(tools.dispatchTask),
       registerToolLoud(tools.stopTaskLoop),
       registerToolLoud(tools.updateTask),
@@ -1039,15 +885,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       registerToolLoud(tools.forgeDirs),
       registerToolLoud(tools.forgeResolvePath),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
-      // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
-      // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；
-      // pipeline 段函数形态单次注册（按装配求值，无重注册升级面）；doc-style
-      // 独立段双模式共用（disposeDocStyle 恰一份）。
-      () => disposePipeline(),
-      ...(disposeDocsRootVariable !== undefined ? [disposeDocsRootVariable] : []), // forge_docs_root 提示词变量（variable 面在场时注册——插件卸载级摘除）
       () => disposeDispatchLoop(), // forge:dispatch-loop 段——插件卸载级摘除（section() 返回 Cordis disposer）
-      () => disposeCommander(), // forge:commander 段——插件卸载级摘除（同上）
-      () => disposeDocStyle(),
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
       ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）
       ...(disposePrestep !== undefined ? [disposePrestep] : []), // bug mention pre-step（ctx.on 面在场时）
@@ -1058,24 +896,11 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
   },
   {
-    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'tools', 'systemPrompt', 'experts'] as const,
+    inject: ['forgeTasks', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'tools', 'systemPrompt', 'experts'] as const,
   },
 )
 
 export default forgePlugin
-export {
-  FORGE_COMMANDER_SECTION_NAME,
-  FORGE_COMMANDER_SECTION_ORDER,
-  FORGE_DOC_STYLE_SECTION_NAME,
-  FORGE_DOC_STYLE_SECTION_ORDER,
-  FORGE_SECTION_NAME,
-  FORGE_SECTION_ORDER,
-  modeOf,
-  renderCommanderSection,
-  renderDocStyleSection,
-  renderForgePipelineSection,
-} from './prompt/index.js'
-export type { ForgePipelineMode, ForgePipelineSectionVars } from './prompt/index.js'
 // M3 3.3/3.4：产品自建事件总线 + 日志监听器 + 事件 sink（logs/{slug}.jsonl 唯一写者）——
 // tool 面 emit 点已接线（dispatchTask 五事件 + submitTask task-submitted + 全 tool-error）。
 export { assertForgeEventEnvelope, createForgeEventBus } from './events/bus.js'
@@ -1319,7 +1144,7 @@ export {
   DIR_DESTINATIONS,
   DIR_KEY_REGISTRY,
   resolveDestination,
-} from './forge-paths.js'
+} from '@dsh-forge/project/host-dirs'
 export type {
   DirDestinationEntry,
   DirDestRequire,
@@ -1327,7 +1152,7 @@ export type {
   DirKeyRegistry,
   ForgeDirsServiceFace,
   ForgePathsResolveContext,
-} from './forge-paths.js'
+} from '@dsh-forge/project/host-dirs'
 // 1.17 循环进度事件族（'forge/progress'——declare-module 合并 + append 适配面）。
 export { adaptSessionProgressAppend, FORGE_PROGRESS_EVENT_TYPE, isForgeProgressData } from './progress/index.js'
 export type { ForgeProgressCounts, ForgeProgressEventData, ProgressAppendFace } from './progress/index.js'

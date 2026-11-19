@@ -1,24 +1,24 @@
 // ModeChip —— 模式溯源 chip（定位：基础——M3 UF-1 三态：远征（蓝点+「远征」）/ 突击（琥珀点+
 // 「突击」）/ 未标记（中性不可点 + 悬停「扫描吸收的旧提案无溯源」））。有溯源且回调在场 =
-// 可点快捷入口（同 ⋯ 菜单唯一正门不分叉——打开模式更改对话框 ProposalModeDialog）；
+// 可点快捷入口（同 ⋯ 菜单唯一正门不分叉——打开模式更改对话框）；
 // 回调缺席 = 只读呈现（UF-4 feature 行「恒远征」只读消费面）。官方件无 mode chip 对应件
 // ——自绘（行语言对齐 M2 自绘 chips；点色走 --dsw-alias 语义令牌：蓝 = business-primary /
 // 琥珀 = warn-primary，ui-design M3 令牌映射表）。
 // 纪律：components 零业务语义（tests/structure/web-shell pin：禁 RPC / contracts 引入）
-// ——模式双值与标签本地字面量声明（与 contracts MODES 同词汇，结构兼容直喂 proposals.mode）。
+// ——模式双值与标签本地字面量声明（与 contracts MODES 同词汇）。
 import type { ReactNode } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /** 模式双值（contracts MODES 同词汇——基础层零 contracts 引入 pin 的本地声明面） */
 export type ModeChipMode = 'expedition' | 'blitz'
 
-/** 模式中文标签（mode chip 紧凑面：远征/突击；带说明版选项归 ProposalModeDialog） */
+/** 模式中文标签（mode chip 紧凑面：远征/突击） */
 export const MODE_CHIP_LABELS: Readonly<Record<ModeChipMode, string>> = {
   expedition: '远征',
   blitz: '突击',
 }
 
-/** 未标记缺省占位文案（扫描吸收旧行 = proposals.mode NULL 键缺席） */
+/** 未标记缺省占位文案（扫描吸收旧行 = mode NULL 键缺席） */
 export const MODE_CHIP_UNMARKED_LABEL = '未标记'
 
 /** 未标记悬停说明（ui-design UF-1 States「mode 缺省」行） */

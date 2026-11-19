@@ -1,0 +1,223 @@
+// 生产装配路径单测（bug 14984d4f——「单测桩路径 ≠ 生产装配路径」封口）：既有单测注入
+// 桩 spawn，桩绿不证真机——本文件走**真装配链**：真实 faces 档案取用缝（resolver）→
+// 真实 WorkerDispatchProfile 投影（createWorkerProfileProjection——index.ts 装配同源）→
+// 真实 spawnClaimed 组装（workerAgentOptionsOf + reconcileWorkerReasoning）→ 真实
+// createInProcessDriverSpawn 适配层 → 上游 startInProcessRun 请求捕获。仅上游官方包
+// 边界（外部依赖装配面，正本 docs/conventions/external-dependency-verification.md）以
+// 模块 mock 替身捕获请求——真机端到端取证归 worker-provisioning 旅程（1.13 闭环）。
+// 断言面：档案 provider+model 成对在场时，settings.worker 缺席不拦截——agentOptions
+// 路由对必须抵达上游请求（真机此前整链回退 inherit 的装配丢失位，此测试即红）。
+import { describe, expect, it, vi } from 'vitest'
+import type { ForgePluginEvent } from '@dsh-forge/contracts'
+import type { TasksService } from '../../host/domain/tasks/service.js'
+import type { TaskSnapshot } from '../../host/domain/tasks/types.js'
+import { createExpertProfileResolver, resolveWorkerProfile as resolveWorkerRouteProfile } from '../../host/faces.js'
+import { createInProcessDriverSpawn } from '../../host/spawn/in-process-driver.js'
+import { spawnClaimed } from '../../host/dispatch-core/index.js'
+import type { ClaimedDispatch, DispatchCoreDeps, DispatchCoreExec, DispatchChainScope, SpawnWorkerHandle } from '../../host/dispatch-core/index.js'
+
+// 上游官方包边界替身：捕获 startInProcessRun 请求（断言锚）；run 形状满足本缝消费面
+// （id / localAgent.session.header.createdAt 目录事实 / result / dispose）。
+const upstreamRequests: unknown[] = []
+vi.mock('@deepseek-ai/dsh-subagent-in-process-driver', () => ({
+  startInProcessRun: async (request: unknown): Promise<{
+    id: string
+    localAgent: unknown
+    result: Promise<{ stopReason: string; output: readonly unknown[] }>
+    dispose: () => Promise<void>
+  }> => {
+    upstreamRequests.push(request)
+    return {
+      id: 'child-route-1',
+      localAgent: { session: { header: { createdAt: 1 } } },
+      result: Promise.resolve({ stopReason: 'completed', output: [] }),
+      dispose: async () => {},
+    }
+  },
+}))
+
+function snapshot(): TaskSnapshot {
+  return {
+    taskId: 't-route-1',
+    slug: 'feat-route',
+    localId: '1.1',
+    title: '路由钉住任务',
+    taskType: 'coding-fix',
+    taskStatus: 'pending',
+    brief: '生产装配路径探针',
+    breaking: false,
+    complexity: 'low',
+    createdAt: '2026-10-29T00:00:00.000Z',
+    updatedAt: '2026-10-29T00:00:00.000Z',
+  }
+}
+
+/** 真实装配链构建（模块④ 装配同构：resolver → resolveWorkerProfile 路由档 → spawnClaimed deps.spawn = 真适配层） */
+function buildProductionChain(entries: { provider?: string; model?: string } | undefined, expertsGet?: (key: string) => unknown) {
+  const experts = {
+    get: expertsGet ?? ((key: string) => ({
+      name: key,
+      personaMd: `档案正文：${key}`,
+      tools: ['read'],
+      ...entries,
+    })),
+    registerRoot: () => {},
+  }
+  const resolver = createExpertProfileResolver({ experts })
+  // 模块④ 装配同构关键位：路由档位解析缝（expertsOf 现查缝——缺席 = generic 兜底档）
+  const resolveWorkerProfile = (taskType: string, expertKey?: string) =>
+    resolveWorkerRouteProfile({ expertsOf: () => resolver, parentAgentOptions: () => undefined }, taskType, expertKey)
+  const events: ForgePluginEvent[] = []
+  const tasks = {
+    recordSpawn: async () => {},
+  } as unknown as TasksService
+  const deps: DispatchCoreDeps = {
+    tasks,
+    events: {
+      emit: (e) => events.push(e),
+      prepare: async () => {},
+      dirOf: () => undefined,
+      remember: () => {},
+    },
+    // 装配同构关键位：resolveWorkerProfile 注入（index.ts 同名依赖——漏注入即真机
+    // inherit 丢失位形态，本测试自身曾红证）
+    ...(resolveWorkerProfile !== undefined ? { resolveWorkerProfile } : {}),
+    spawn: createInProcessDriverSpawn(),
+  }
+  const exec: DispatchCoreExec = { attribution: {}, parent: { session: { append: () => {} } }, signal: new AbortController().signal, verb: 'run-dag-tasks' }
+  const scope: DispatchChainScope = { sessionId: 'owner-1', projectId: 'p-1', guardKey: 'loop-1', source: { slug: 'feat-route' } }
+  const claimed: ClaimedDispatch = {
+    kind: 'claimed',
+    task: snapshot(),
+    digest: 'digest-route-1',
+    dispatchPrompt: '派发简报全文',
+    persona: 'PERSONA-MATRIX',
+    reclaimed: false,
+  }
+  return { deps, exec, scope, claimed, events }
+}
+
+/** spawnClaimed → 句柄 result 收口（阻塞至 worker 终态，结算零悬挂） */
+async function runSpawn(deps: DispatchCoreDeps, exec: DispatchCoreExec, scope: DispatchChainScope, claimed: ClaimedDispatch): Promise<SpawnWorkerHandle> {
+  const stage = await spawnClaimed(deps, exec, claimed, { scope })
+  if (!stage.ok) throw new Error(`spawn 失败：${JSON.stringify(stage.failure)}`)
+  return stage.handle
+}
+
+describe('生产装配路径（真实 resolver → 投影 → spawnClaimed → 真适配层 → 上游请求）', () => {
+  it('bug 14984d4f：档案 provider+model 成对在场 + settings.worker 缺席 → 路由对抵达上游 startInProcessRun 请求（不回落 inherit）', async () => {
+    const { deps, exec, scope, claimed } = buildProductionChain({ provider: 'deepseek-official', model: 'deepseek-flash' })
+    const handle = await runSpawn(deps, exec, scope, claimed)
+    expect(handle.workerSessionId).toBe('child-route-1')
+    await handle.dispose()
+    expect(upstreamRequests).toHaveLength(1)
+    const req = upstreamRequests[0] as { agentOptions?: { provider: string; model: string }; persona?: string; prompt: readonly { type: string; text: string }[] }
+    // 定罪面：装配丢失位（真机此前整链 inherit）在真实链上必须携带显式路由对
+    expect(req.agentOptions).toEqual({ provider: 'deepseek-official', model: 'deepseek-flash' })
+    // persona / dispatchPrompt 全文照常抵达（档案本体既有取证面不回退）
+    expect(req.persona).toBe('PERSONA-MATRIX')
+    expect(req.prompt).toEqual([{ type: 'text', text: '派发简报全文' }])
+  })
+
+  it('审计同源：task-spawned 事件 model = 显式路由（非 inherit——循环审计由此可判）', async () => {
+    const { deps, exec, scope, claimed, events } = buildProductionChain({ provider: 'deepseek-official', model: 'deepseek-flash' })
+    const handle = await runSpawn(deps, exec, scope, claimed)
+    await handle.dispose()
+    const spawned = events.find((e) => e.type === 'task-spawned') as { payload: { model: string; workerSessionId: string } }
+    expect(spawned.payload.model).toBe('deepseek-flash')
+    expect(spawned.payload.workerSessionId).toBe('child-route-1')
+  })
+
+  it('档案无路由字段 + settings 缺席 = 形态兼容回退：上游请求零 agentOptions 键（inherit 语义显式可判）', async () => {
+    const { deps, exec, scope, claimed } = buildProductionChain(undefined)
+    const handle = await runSpawn(deps, exec, scope, claimed)
+    await handle.dispose()
+    const req = upstreamRequests[upstreamRequests.length - 1] as { agentOptions?: unknown }
+    expect('agentOptions' in req).toBe(false)
+  })
+
+  it('bug 92d642c2：组装面守卫抛错（essentials 注册缺损）折入 spawnFailed 防线 DTO——不炸 spawnClaimed 调用方', async () => {
+    const { deps, exec, scope, claimed } = buildProductionChain({ provider: 'deepseek-official', model: 'deepseek-flash' })
+    // 父会话工具投影在场但缺管线必备（真机注册缺损形态——plugin-forge 工具注册中断后残留）
+    ;(exec.parent as { ctx?: unknown }).ctx = {
+      tools: { schemas: () => [{ name: 'add_task' }, { name: 'read' }] }, // submit_task 等动词缺席
+    }
+    const upstreamBefore = upstreamRequests.length
+    const stage = await spawnClaimed(deps, exec, claimed, { scope })
+    expect(stage.ok).toBe(false)
+    if (stage.ok) return
+    expect((stage.failure as { code?: string }).code).toBe('ERR_SPAWN_FAILED')
+    expect((stage.failure as { message?: string }).message).toContain('pipeline essential tools not registered')
+    // deps.spawn 未被触达（组装拒绝先于 spawn——零资源留下）
+    expect(upstreamRequests).toHaveLength(upstreamBefore)
+  })
+
+  it('bug 92d642c2 真机定谳：探针为子域投影（缺官方金丝雀 read）= 不可信——不断言不裁剪，spawn 照常（Mac/Win 全新构建双双复现的假阳性根因）', async () => {
+    const { deps, exec, scope, claimed } = buildProductionChain({ provider: 'deepseek-official', model: 'deepseek-flash' })
+    // 真机 child 投影实测形态（循环 halt 问询原文）：仅 9 个 expert 域工具，零官方工具
+    ;(exec.parent as { ctx?: unknown }).ctx = {
+      tools: {
+        schemas: () => [
+          { name: 'delegate_expert' }, { name: 'recruit_expert' }, { name: 'update_expert' },
+          { name: 'rename_expert' }, { name: 'enable_expert' }, { name: 'disable_expert' },
+          { name: 'list_experts' }, { name: 'list_tools' }, { name: 'list_skills' },
+        ],
+      },
+    }
+    const upstreamBefore = upstreamRequests.length
+    const stage = await spawnClaimed(deps, exec, claimed, { scope })
+    // 子域探针不可信 → 回落不裁剪不断言——spawn 正常发起（真链回归 e6669a50 前形态）
+    expect(stage.ok).toBe(true)
+    if (stage.ok) await stage.handle.dispose()
+    expect(upstreamRequests.length).toBeGreaterThan(upstreamBefore)
+  })
+
+  it('bug 92d642c2 根因层：globalToolNames 全局视图在场 = 求交基准优先——受限会话派发也拿正确收窄（essentials 断言过、allow 含管线必备）', async () => {
+    const { deps, exec, scope, claimed } = buildProductionChain({ provider: 'deepseek-official', model: 'deepseek-flash' })
+    // 发起会话被 restrict 收窄为 9 枚 expert 域工具（真机形态）
+    ;(exec.parent as { ctx?: unknown }).ctx = {
+      tools: {
+        schemas: () => [
+          { name: 'delegate_expert' }, { name: 'recruit_expert' }, { name: 'update_expert' },
+          { name: 'rename_expert' }, { name: 'enable_expert' }, { name: 'disable_expert' },
+          { name: 'list_experts' }, { name: 'list_tools' }, { name: 'list_skills' },
+        ],
+      },
+    }
+    // 装配期全局视图（插件 ctx.tools 无作用域面——官方工具 + forge 管线动词全在）
+    ;(deps as { globalToolNames?: () => readonly string[] }).globalToolNames = () => [
+      'read', 'write', 'pwsh', 'todo_write', 'submit_task',
+      'query_task', 'dispatch_task', 'list_tasks_placeholder',
+    ]
+    const upstreamBefore = upstreamRequests.length
+    const stage = await spawnClaimed(deps, exec, claimed, { scope })
+    // 全局视图优先 → essentials 断言以全局视图判定（全在 → 零抛错）+ allow 以全局视图求交
+    // （含 submit_task——worker 结算链保底不再被受限视图剔除）
+    expect(stage.ok).toBe(true)
+    if (!stage.ok) return
+    await stage.handle.dispose()
+    expect(upstreamRequests.length).toBeGreaterThan(upstreamBefore)
+    const req = upstreamRequests[upstreamRequests.length - 1] as { toolFilter: { allow?: readonly string[]; deny: readonly string[] } }
+    expect(req.toolFilter.allow).toContain('submit_task')
+    expect(req.toolFilter.allow).toContain('read') // 档案 tools ∪ essentials ∩ 全局视图
+    expect(req.toolFilter.allow).not.toContain('delegate_expert') // 子域采样未参与求交
+  })
+
+  it('bug d14b0b6c：doc 任务映射 tech-writer 档案缺席（expert not found）→ 真链走 generic 档 spawn 成功（不停环）', async () => {
+    // 官方宿主真实缺档形态：experts.get('tech-writer') 抛 not-found（resolver 原样外抛）
+    const { deps, exec, scope, claimed } = buildProductionChain(undefined, (key: string) => {
+      if (key === 'tech-writer') throw new Error(`expert not found: ${key}`)
+      return { name: key, personaMd: `档案正文：${key}`, tools: ['read'] }
+    })
+    // DEFAULT_EXPERT_MAPPING doc → tech-writer：resolver 经类型映射取档 → 修前 fail-loud 三连败停环
+    const docClaimed: ClaimedDispatch = { ...claimed, task: { ...claimed.task, taskType: 'doc' } }
+    const stage = await spawnClaimed(deps, exec, docClaimed, { scope })
+    expect(stage.ok).toBe(true)
+    if (!stage.ok) return
+    await stage.handle.dispose()
+    expect(upstreamRequests.length).toBeGreaterThan(0)
+    // generic 档：agentOptions 父会话继承（本链 parentAgentOptions = undefined）→ 零 expert 路由对
+    const req = upstreamRequests[upstreamRequests.length - 1] as { agentOptions?: unknown; toolFilter?: { allow?: readonly string[] } }
+    expect('agentOptions' in req).toBe(false)
+  })
+})

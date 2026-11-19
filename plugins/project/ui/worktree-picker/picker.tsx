@@ -1,0 +1,607 @@
+// worktree-picker —— hero 第二 chip 挂载面（WorktreeFaces 主体拆出，1.15 UI 迁入第二批）。
+// 通用层组件本体 = ./hero-worktree-picker.tsx + 三弹窗（create-dialog / delete-dialog /
+// risk-confirm）+ 纯模型 model.ts；本文件只做数据接线与挂载。
+//   · ForgeHeroWorktreeMount——hero 第二 chip（难点 A 落法③产品自增行：由 hero workspace
+//     影子占用者 ForgeHeroWorkspacePicker 在其渲染面就地并列，取证见 walkthrough/
+//     hero-second-chip-decision.md）——选择菜单 + 新建/删除两弹窗 + ahead/behind 懒加载；
+//   · ForgeWorktreeSwitchMarker——切换闸虚线标记（视觉命中锚）。
+// 数据面 = 官方 forgeWorktree/forgeFeatures remote + configForms 偏好
+// （1.38 正典化——../rpc.ts 消费切片 + ../settings-section 偏好面缝；namespace/方法单源 =
+// typert strict 生成贡献——../remote.ts 为生成投影再导出）。
+// 点选 = 纯选中态 + 点选时点跨分支确认（1.19 语义回归）；会话创建唯一时机 = 官方 create
+// 调用点（wrap 改道预铸，create 失败走官方 createFailed toast）；1.34 闩锁与「不再提示」
+// 语义见 ./model.ts。
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { setSelectedTreeDisplay } from '../state/selected-tree-window.js'
+import { openWorkspaceFace, type OpenWorkspaceFace } from '../state/open-workspace-face.js'
+import { beginWorktreeSwitch, isWorktreeSwitchPending, subscribeWorktreeSwitch } from '../state/worktree-switch-gate.js'
+import {
+  CreateWorktreeDialog,
+  type CreateWorktreeRequest,
+} from './create-dialog.js'
+import { DeleteWorktreeDialog } from './delete-dialog.js'
+import { HeroWorktreePicker } from './hero-worktree-picker.js'
+import { StaleSelectionNotice } from '../session-badge/seal-notice.js'
+import { WorktreeRiskConfirmation } from './risk-confirm.js'
+import { collectSlugCandidates, isCrossBranchRisk, joinWorktreePath, type DeleteChecks, type SlugCandidate } from './model.js'
+import type { AheadBehind } from '@dsh-forge/contracts'
+import { EditableCombobox } from './EditableCombobox.js'
+import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'
+import { dismissedOf, dismissedWriteOf, worktreePrefsFaceOf } from '../settings-section/index.js'
+import {
+  riskDialogNeeded,
+  riskDismissedMemoryOf,
+  riskDismissedMemorySync,
+  riskLatchConfirm,
+  riskLatchMemoryOf,
+  riskLatchMemorySync,
+  riskLatchReselect,
+  staleSelectionResetOf,
+  type RiskConfirmLatch,
+} from './model.js'
+// 弹窗卡面/下拉浮层宽度规则（.dswt-create-modal / .dswt-*-menu——域 CSS 随迁）
+import './picker.css'
+
+/**
+ * 分支组合框输入面样式（字体令牌 + mono——盒模型不在此处：宽度/内距/边框由
+ * .dswt-field-control 共享规则承载在官方 Input 外层 .wrap 上，与基准分支触发器同源等宽）
+ */
+const branchInputStyle: React.CSSProperties = {
+  font: 'var(--dsw-font-xs-13)',
+  fontFamily: 'var(--ds-font-family-code, monospace)',
+}
+
+/** list 结果 → 行渲染模型（WorktreeRow 同形——DTO 即行源，零二次派生） */
+const rowsOf = (result: Awaited<ReturnType<WorktreeFacesRpc['worktree']['list']>>) =>
+  result.entries.map((entry) => ({
+    path: entry.path,
+    branch: entry.branch,
+    worktreeName: entry.worktreeName,
+    workspaceId: entry.workspaceId,
+    isMain: entry.isMain,
+    present: entry.present,
+  }))
+
+/** forge:worktree/list 拉取相位（isGit 能力位 + 行集 + 所配目录——能力位条件渲染单源） */
+interface WorktreeListPhase {
+  readonly state: 'loading' | 'ready' | 'error'
+  readonly isGit: boolean
+  readonly rows: ReturnType<typeof rowsOf>
+  readonly worktreeDir?: string
+  /** 行集归属根（bug 70188b91——projectRoot 变更与 list 往返异步竞态：效应以
+   *  phase.root === projectRoot 判「清单与项目配对」，错配帧不消费不回填） */
+  readonly root?: string
+}
+
+const emptyPhase: WorktreeListPhase = { state: 'loading', isGit: false, rows: [] }
+
+/**
+ * hero 默认回填锚定链（纯函数单源）：主行（isMain）当前检出分支
+ * → rows 中检出同分支的行（分支只检出于一个树，分支→worktree 映射唯一；不硬编码
+ * main/主行——主行检出 feature 分支时默认即指向该分支所在树，含主行自身检出场景）。
+ * 锚定失败（主行 branch null / 映射行缺失 / 非 git 不进本函数）= undefined 退回占位现状。
+ */
+export function anchorDefaultWorktreePath(
+  rows: readonly { readonly path: string; readonly branch: string | null; readonly isMain: boolean }[],
+): string | undefined {
+  const mainBranch = rows.find((row) => row.isMain)?.branch
+  if (mainBranch === null || mainBranch === undefined) return undefined
+  return rows.find((row) => row.branch === mainBranch)?.path
+}
+
+/**
+ * 创建成功跟进次序（bug 6593d708 纯编排单源）：清单刷新先于选中态落定。
+ * 选中态落定触发陈旧选中自愈效应——若行集尚未含新树（创建前旧快照），新树被误判
+ * 「盘上失配」：失效 toast + 三层选中态清回主树（含 host 选中记忆，首条消息必绑
+ * 重路由随之回落项目根）。次序契约 = refresh 完成后 onSelectConfirmed。
+ */
+export interface CreateFollowupDeps {
+  readonly refresh: () => Promise<void>
+  readonly onSelectConfirmed: (path: string) => void
+}
+
+export async function createFollowup(createdPath: string, deps: CreateFollowupDeps): Promise<void> {
+  await deps.refresh()
+  deps.onSelectConfirmed(createdPath)
+}
+
+/**
+ * hero 第二 chip 挂载（新建/删除弹窗由本面持有——通用层组件零弹窗自持，装配层挂）。
+ * projectRoot 缺席（无选中项目）= 零注入退回现状；非 git = HeroWorktreePicker 内部
+ * 返回 null（能力位条件渲染——UI 只消费 isGit）。
+ * 选中态在本面闭环（bug 907225f2）：点选 = 纯选中态（chip 回填 + 项目粒度记忆写入 +
+ * pushSelection——host 首条消息必绑重路由单源），零会话副作用。跨分支风险确认在点选时点
+ * （1.19 语义回归——1.31 确认闩锁 + 「不再提示」语义平移，见下）；确认前选中态不变。
+ * 会话创建唯一时机 = 官方 create 调用点（选树零 forge 建会话 RPC——官方 blank 复用
+ * 天然生效，binding-derivation §2.3；缺席回落项目根由首条消息必绑重路由兜底）。
+ */
+export function ForgeHeroWorktreeMount({
+  projectRoot,
+  makeRpc = preloadRpcClientFactory,
+  openWorkspace: injectedOpenWorkspace,
+}: {
+  /** 项目根（ws_path——list/ops 执行 cwd；null = 零注入） */
+  readonly projectRoot: string | null
+  readonly makeRpc?: () => WorktreeFacesRpc
+  /**
+   * 官方 openWorkspace 窄面（B 类顶替②——注册面 inject 递达，官方宿主可达；缺席回退
+   * window 锚 `__dshForgeOpenWorkspace`[壳宿主安装面]）。双源同一契约：显式传参官方
+   * openWorkspace(workspaceId)——官方唯一创建前决策缝。
+   */
+  readonly openWorkspace?: OpenWorkspaceFace
+}): ReactNode {
+  const [phase, setPhase] = useState<WorktreeListPhase>(emptyPhase)
+  const [aheadBehind, setAheadBehind] = useState<ReadonlyMap<string, AheadBehind>>(new Map())
+  const [createOpen, setCreateOpen] = useState(false)
+  const [branches, setBranches] = useState<{ readonly defaultBranch: string; readonly names: readonly string[] }>({ defaultBranch: 'main', names: [] })
+  // 分支下拉 slug 候选（feature slug——features.list RPC；挂载面归一为 {slug, done}）
+  const [slugCandidates, setSlugCandidates] = useState<readonly SlugCandidate[]>([])
+  const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
+  const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
+  // 选中态本地投影（host lastSelection 唯一事实源——本地态只是 host 态的 UI 镜像，挂载
+  // 回填经 forge:worktree/selected 读 host；bug 05c712a4 起本地投影升格为创建路由的
+  // 显示真源镜像——host 记忆仅余显示恢复职责）
+  const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(undefined)
+  // 显示真源镜像（window 全局锚，KEY 契约 = ui/state/selected-tree-window.ts）：本地投影
+  // 每次变化即同步——创建路由（start-session-wrap 无参径）读此态而非 host 选中记忆
+  // （内存态易分叉，bug 05c712a4）
+  useEffect(() => {
+    setSelectedTreeDisplay(localSelectedPath)
+  }, [localSelectedPath])
+  // bug 70188b91：projectRoot 变更（hero 弹层切项目——不经 applySelection）即清本地选中
+  // 投影。残留路径在新项目行集必被陈旧自愈判「盘上失配」：伪失效 notice + 强切主行
+  // （绕过分支锚定链），且 list 异步窗口内 window 锚停留旧项目树路径——startSession
+  // 无参径跨项目错绑（bug 38d80c5b）的触发源。host lastSelection 按 projectRoot 分键
+  // 不受影响；回填效应按新项目 selected/锚定链重新落定（零编排）。
+  useEffect(() => {
+    setLocalSelectedPath(undefined)
+  }, [projectRoot])
+  // 1.30 选中树推送（forge:worktree/select——host 选中记忆单源：建会话通道创建时点
+  // 消费【bug ff324cad 创建即绑选中树】+ 首条消息必绑重路由兜底。fire-and-forget，path
+  // 缺席 = 清除 host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft。
+  const pushSelection = useCallback(
+    (path: string | undefined): void => {
+      if (projectRoot === null) return
+      void makeRpc()
+        .worktree.select({ projectRoot, ...(path !== undefined ? { path } : {}) })
+        .catch((cause: unknown) => {
+          // 选中推送失败留痕（不静默）——host 记忆缺席会使创建显示源裁决回落解析树
+          console.warn(`[dswf-worktree] 选中推送失败（projectRoot=${projectRoot} path=${path}）：${String(cause)}`)
+        })
+    },
+    [projectRoot, makeRpc],
+  )
+
+  // 跨分支确认「不再提示」（1.38 AC③——configForms 自有 namespace `project` 持久化，
+  // 弃 forge:settings RPC）：用户级一票——装载读（快照回填只升不降）+ 勾选确认写
+  // （revisioned 正门）；configForms 缺席 = 记忆面兜底（false 不抑制，fail-soft）。
+  // bug e2a10cd4：组件 useState 被 openWorkspace 重挂清零且写透未及回读（竞态窗）→
+  // 换跨分支目标重弹——落模块级跨重挂记忆（a944424f 同族形态）：初始化惰性读 + 每次变更
+  // 写透（装载回填/勾选置位同一入口），组件态只作记忆镜像。
+  const [riskDismissed, setDismissedState] = useState<boolean>(() => riskDismissedMemoryOf())
+  const setRiskDismissed = useCallback((next: boolean): void => {
+    riskDismissedMemorySync(next)
+    setDismissedState(next)
+  }, [])
+  const [riskDismissChecked, setRiskDismissChecked] = useState(false)
+  useEffect(() => {
+    let alive = true
+    const form = worktreePrefsFaceOf()
+    if (form === undefined) return
+    const mirror = (): boolean => {
+      const snapshot = form.getSnapshot()
+      // 装载回填只升不降（bug e2a10cd4）：记忆 true = 本窗口已有用户勾选——快照 false
+      // （写透竞态窗）不得降级镜像；一票语义无合法「撤销」路径
+      return snapshot.status === 'ready' && dismissedOf(snapshot.value)
+    }
+    if (mirror()) setRiskDismissed(true)
+    const unsubscribe = form.subscribe(() => {
+      if (alive && mirror()) setRiskDismissed(true)
+    })
+    return () => {
+      alive = false
+      unsubscribe()
+    }
+  }, [setRiskDismissed])
+  // 1.34 确认闩锁（bug ccfcc103）：确认后置位——同行重选零重弹；换目标重选清退
+  // （riskLatchReselect，重新判定）。取消 = 本次改选未发生（选中态保持原样）。
+  // bug a944424f：闩锁挂组件 useState 会被 openWorkspace 切主视图的重挂清零——
+  // 闩锁落 model.ts 模块级跨重挂记忆（单窗口单实例 =「按窗口」语义），组件态
+  // 只作记忆镜像：初始化惰性读（重挂即水合）+ 每次变更写透（置位/清退同一入口）。
+  const [riskConfirmedLatch, setLatchState] = useState<RiskConfirmLatch>(() => riskLatchMemoryOf())
+  const setRiskConfirmedLatch = useCallback((resolve: (prev: RiskConfirmLatch) => RiskConfirmLatch): void => {
+    setLatchState((prev) => {
+      const next = resolve(prev)
+      riskLatchMemorySync(next)
+      return next
+    })
+  }, [])
+  // 点选时点跨分支确认待决（1.19 语义回归）：待决期间选中态不变（确认/取消前零改选）
+  const [pendingRiskPath, setPendingRiskPath] = useState<string | null>(null)
+
+  // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + host 选中记忆推送。
+  // workspaceId 在场（行集 DTO 携带）时显式传参官方 openWorkspace——官方语义「选工作区 =
+  // 立即 connectWorkspace 建/复用该树 blank，主视图随之切换」（bug 05c712a4 composer 腿
+  // 收口：显示 = 实际生效状态，AGENTS 3.4）。face 缺席（旧 bundle/漂移）= 仅显示态
+  // （现状降级，warn 一行）。
+  // bug 267dcac1 竞速收口：openWorkspace 异步敛棋前（~1s）composer 仍系旧树 blank，窗口内
+  // 发送即错绑——切换闸 pending 窗口 composer 禁输（ForgeWorktreeSwitchMarker），敛棋
+  // （promise settle）解除；官方 beforeOpen 同窗草稿迁移（face 安装器内建）。
+  // bug 9d2b7e6a 懒物化：行 workspaceId 缺席（树无 workspace 记录——git 手建/流程 A 前
+  // 老树，list resolveByPath 只读不物化）→ 点选时点 ensure-workspace 幂等 find-or-create
+  // 拿 id 再 openWorkspace（同闸盖住窗口）；失败/缺席 = 退显示态不阻断。
+  const applySelection = useCallback(
+    (path: string): void => {
+      // 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 不重弹）
+      setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
+      pushSelection(path)
+      setLocalSelectedPath(path)
+      const workspaceId = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path)?.workspaceId : undefined
+      // openWorkspace 官方面双源（B 类顶替②）：注册面 inject 面优先，window 锚回退
+      // （壳宿主安装面；两源契约同型——缺席 = 仅显示态现状降级）。
+      const open = injectedOpenWorkspace ?? openWorkspaceFace()
+      if (open === undefined) {
+        if (workspaceId !== undefined) {
+          console.warn(`[dswf-worktree] openWorkspace 面缺席——点选仅显示态（旧 bundle/装配漂移）：${path}`)
+        }
+        return
+      }
+      if (workspaceId !== undefined && workspaceId !== '') {
+        const settleSwitch = beginWorktreeSwitch()
+        void Promise.resolve(open(workspaceId)).finally(settleSwitch)
+        return
+      }
+      if (projectRoot === null) return
+      const settleSwitch = beginWorktreeSwitch()
+      void makeRpc()
+        .worktree.ensureWorkspace({ projectRoot, path })
+        .then((result): Promise<void> => {
+          const ensured = result.workspaceId
+          if (ensured === undefined || ensured === '') {
+            console.warn(`[dswf-worktree] workspace 懒物化缺席——点选退显示态：${path}`)
+            return Promise.resolve()
+          }
+          return Promise.resolve(open(ensured))
+        })
+        .catch((cause: unknown) => {
+          console.warn(`[dswf-worktree] workspace 懒物化失败（fail-soft 退显示态）：${String(cause)}`)
+        })
+        .finally(settleSwitch)
+    },
+    [phase, projectRoot, pushSelection, makeRpc, injectedOpenWorkspace],
+  )
+
+  // 建树自动选中（createFollowup）与手动点选共用 applySelection 完整链路（bug 97d3cd9e
+  // 收口——主视图切新树 blank 为官方 openWorkspace 复用语义，显示 = 实际生效状态）。
+
+  // 点选 = 纯选中态：跨分支风险（选中行 branch ≠ 主行 branch）在点选时点确认（1.19）；
+  // 同分支零风险直通。判定源 = 清单行 branch；闩锁/「不再提示」旁路弹框分支。
+  const onSelectConfirmed = useCallback(
+    (path: string): void => {
+      const row = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path) : undefined
+      const mainBranch = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.isMain)?.branch ?? null : null
+      if (
+        row !== undefined &&
+        isCrossBranchRisk(row.branch, mainBranch) &&
+        !riskDismissed &&
+        riskDialogNeeded(path, riskConfirmedLatch)
+      ) {
+        setRiskDismissChecked(false)
+        setPendingRiskPath(path) // 确认框待决——确认/取消前选中态不变
+        return
+      }
+      applySelection(path)
+    },
+    [phase, riskDismissed, riskConfirmedLatch, applySelection],
+  )
+
+  // 1.17 默认回填（展示层回填，零会话副作用）：清单就绪且无用户记忆/显式回填时按
+  // 「host 选中记忆（forge:worktree/selected 读镜像）→ 锚定链」回填。记忆经 RPC 响应式
+  // 读（会话面整域重挂后 projectRoot 到位即补读，跨重挂恢复用户选中意图——host 唯一
+  // 事实源）。回填零编排；会话创建在官方 create 调用点
+  // （host 建会话通道消费选中记忆——创建时点即绑选中树，缺席重路由兜底）。
+  useEffect(() => {
+    if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
+    if (phase.root !== projectRoot) return // bug 70188b91：错配帧（旧项目清单 × 新项目根）不回填
+    let alive = true
+    makeRpc()
+      .worktree.selected({ projectRoot })
+      .then((result) => {
+        if (alive) setLocalSelectedPath((prev) => prev ?? result.path ?? anchorDefaultWorktreePath(phase.rows))
+      })
+      .catch(() => {
+        if (alive) setLocalSelectedPath((prev) => prev ?? anchorDefaultWorktreePath(phase.rows))
+      })
+    return () => {
+      alive = false
+    }
+  }, [phase, projectRoot, makeRpc])
+
+  // 陈旧选中自愈（bug 4a30b193 UI 面）：清单就绪后发现选中行盘上缺席（present=false 或
+  // 行已消失——外部强制删除）→ 两层选中态同清（本地投影 / host 推送清除）+ chip
+  // 跳回主行 + 一次性 notice 告知。host 侧重路由活性探测为正确性兜底（双保险不同层）。
+  const [staleNoticeName, setStaleNoticeName] = useState<string | null>(null)
+  useEffect(() => {
+    if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
+    if (phase.root !== projectRoot) return // bug 70188b91：错配帧不判自愈（旧清单 × 新根必误判）
+    const reset = staleSelectionResetOf(phase.rows, localSelectedPath)
+    if (!reset.stale) return
+    setStaleNoticeName(reset.worktreeName ?? null)
+    if (reset.mainPath !== undefined) {
+      applySelection(reset.mainPath) // 跳回主行：host 推送 + chip 回填（唯一写入口）
+    } else {
+      pushSelection(undefined)
+      setLocalSelectedPath(undefined)
+    }
+  }, [phase, localSelectedPath, projectRoot, applySelection, pushSelection])
+
+  const refresh = useCallback((): Promise<void> => {
+    if (projectRoot === null) return Promise.resolve()
+    return makeRpc()
+      .worktree.list({ projectRoot })
+      .then((result) => {
+        setPhase({
+          state: 'ready',
+          root: projectRoot,
+          isGit: result.isGit,
+          rows: rowsOf(result),
+          worktreeDir: result.worktreeDir,
+        })
+      })
+      .catch(() => {
+        setPhase({ state: 'error', isGit: false, rows: [] })
+      })
+  }, [projectRoot, makeRpc])
+
+  // 挂载期一次 + 弹窗关闭后刷新（新建/删除后清单即新——提案「创建后立即出现在选择列表」）
+  useEffect(() => {
+    void refresh()
+  }, [refresh, createOpen, deleteTarget])
+  useEffect(() => {
+    if (!createOpen || projectRoot === null) return
+    makeRpc()
+      .worktree.branches({ projectRoot })
+      // 弹窗打开即拉取；数据不变时保持旧引用（弹窗 reset effect 以 branches 身份为 dep——
+      // 新对象会在用户输入中途清空表单，1.19 e2e 实证竞态）
+      .then((result) =>
+        setBranches((prev) =>
+          prev.defaultBranch === result.defaultBranch && prev.names.join('\u0000') === result.branches.join('\u0000')
+            ? prev
+            : { defaultBranch: result.defaultBranch, names: result.branches },
+        ),
+      )
+      .catch(() => {})
+    // slug 候选拉取：projects.list 解析 ws_path → projectId（归一比对），features.list 读面——
+    // 终态归一（feature completed/archived = done）
+    const key = (path: string): string => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+    makeRpc()
+      .projects.list()
+      .then((projects) => {
+        const project = projects.find((summary) => key(summary.wsPath) === key(projectRoot))
+        if (project === undefined) return []
+        const isDoneFeature = (status: string): boolean => status === 'completed' || status === 'archived'
+        return makeRpc()
+          .features.list({ projectId: project.id })
+          .then((featureCards) =>
+            collectSlugCandidates(
+              featureCards.map((card) => ({ slug: card.slug, done: isDoneFeature(card.featureStatus) })),
+            ),
+          )
+      })
+      .then((candidates) => setSlugCandidates(candidates))
+      .catch((cause: unknown) => {
+        // 候选拉取失败留痕（不静默——AGENTS §7 诊断纪律）：静默吞会使新建弹窗 slug 候选
+        // 无声退化为空集（bug 8ba8e7d3——陈旧装载物调已下线的提案域服务面即此形态），
+        // 失败可观测才能与「真零候选」区分。
+        console.warn(`[dswf-worktree] slug 候选拉取失败（projectRoot=${projectRoot}）：${String(cause)}`)
+      })
+  }, [createOpen, projectRoot, makeRpc])
+
+  // ahead/behind 懒加载器（组件展开才拉 + 本面缓存共享）
+  const loadAheadBehind = useCallback(
+    (path: string): Promise<AheadBehind> => {
+      if (projectRoot === null) return Promise.resolve({ ahead: 0, behind: 0 })
+      return makeRpc()
+        .worktree.aheadBehind({ projectRoot, path })
+        .then((result) => {
+          const counts = result.counts ?? { ahead: 0, behind: 0 }
+          setAheadBehind((prev) => new Map(prev).set(path, counts))
+          return counts
+        })
+    },
+    [projectRoot, makeRpc],
+  )
+
+  // 新建（封闭写集①）与删除（封闭写集②——确认门 = isDeleteBlocked 由弹窗内部消费 checks）
+  const [createError, setCreateError] = useState<string | undefined>(undefined)
+  // 创建在途闸：git worktree add 秒级耗时——按钮进 submitting（官方 StateDot ongoing
+  // 旋转指示 + 禁用），防「以为没点上」的反复点击撞分支已存在。
+  const [creating, setCreating] = useState(false)
+  const onCreate = useCallback(
+    (request: CreateWorktreeRequest): void => {
+      if (projectRoot === null || creating) return
+      setCreateError(undefined)
+      setCreating(true)
+      // 弹窗产物（baseBranch/branch/worktreeName/customPath）→ create 载荷：
+      // path = 自定义路径优先，否则落所配 worktree 目录（弹窗 worktree 名拼尾段——同名默认；
+      // joinWorktreePath 单点归一反斜杠系统口径——1.21 分隔符归一）
+      const baseDir = phase.worktreeDir ?? ''
+      const path = request.customPath !== undefined && request.customPath !== ''
+        ? request.customPath
+        : joinWorktreePath(baseDir, request.worktreeName)
+      const settle = (): void => setCreating(false)
+      makeRpc()
+        .worktree.create({ projectRoot, branch: request.branch, base: request.baseBranch, path })
+        .then(async (result) => {
+          setCreateOpen(false)
+          // 创建成功 hero 选中态自动切到新 worktree（项目粒度选中记忆写入 + 本地回填 +
+          // host 选中记忆推送）；主树 HEAD 不动（worktree add 新树内检出新分支，零 checkout）。
+          // 选中路径取 create 返回条目的清单正则（entry.path——与 list 行路径同源同格式，
+          // 行匹配 path === selectedPath 用精确等值；本地拼串反斜杠 ≠ 清单正斜杠实证）
+          const createdPath = result.entry?.path ?? path
+          // bug 6593d708：清单刷新先于选中态落定（createFollowup 单源），自愈判定永远
+          // 面对含新树的行集；bug 97d3cd9e：与手动点选同链路（applySelection：openWorkspace
+          // + 切换闸——composer 随创建敛棋系新树，WYSIWYG）。
+          await createFollowup(createdPath, { refresh, onSelectConfirmed: applySelection })
+        })
+        .catch((error: unknown) => {
+          // 失败不静默：表单保持打开（createOpen 不动）+ 错误呈现进弹窗错误行
+          setCreateError(error instanceof Error && error.message !== '' ? `创建失败：${error.message}` : '创建失败：git worktree 创建未成功，请检查分支名与路径')
+        })
+        .finally(settle)
+    },
+    [projectRoot, phase.worktreeDir, makeRpc, refresh, applySelection, creating],
+  )
+  const openDelete = useCallback(
+    (path: string): void => {
+      if (projectRoot === null) return
+      const row = phase.rows.find((candidate) => candidate.path === path)
+      setDeleteTarget({ path, worktreeName: row?.worktreeName ?? path, branch: row?.branch ?? null })
+      setDeleteChecks(null)
+      makeRpc()
+        .worktree.checks({ projectRoot, path })
+        .then((result) =>
+          setDeleteChecks({
+            dirtyCount: result.dirtyCount,
+            aheadCount: result.aheadCount,
+            attachedSessions: result.attachedSessions,
+          }),
+        )
+        .catch(() => {})
+    },
+    [projectRoot, phase.rows, makeRpc],
+  )
+  const onConfirmDelete = useCallback((): void => {
+    if (projectRoot === null || deleteTarget === null) return
+    makeRpc()
+      .worktree.delete({ projectRoot, path: deleteTarget.path })
+      .then(() => {
+        setDeleteTarget(null)
+        refresh()
+      })
+      .catch(() => {})
+  }, [projectRoot, deleteTarget, makeRpc, refresh])
+
+  if (projectRoot === null) return null // 无选中项目：hero 区零注入（退回现状）
+  return (
+    <>
+      {staleNoticeName !== null && (
+        <StaleSelectionNotice worktreeName={staleNoticeName} onClose={() => setStaleNoticeName(null)} />
+      )}
+      <HeroWorktreePicker
+        isGit={phase.isGit}
+        rows={phase.rows}
+        worktreeDir={phase.worktreeDir}
+        selectedPath={localSelectedPath}
+        onSelect={onSelectConfirmed}
+        onCreate={() => {
+          setCreateError(undefined) // 重新打开即清上一轮错误（1.24 失败呈现只在当场留场）
+          setCreateOpen(true)
+        }}
+        onDelete={openDelete}
+        loadAheadBehind={loadAheadBehind}
+        aheadBehind={aheadBehind}
+      />
+      <CreateWorktreeDialog
+        open={createOpen}
+        branches={branches.names}
+        existingWorktreeNames={phase.rows.map((row) => row.worktreeName)}
+        slugCandidates={slugCandidates}
+        defaultBranch={branches.defaultBranch}
+        mainBranch={phase.rows.find((row) => row.isMain)?.branch ?? null}
+        worktreeDir={phase.worktreeDir ?? ''}
+        error={createError}
+        submitting={creating}
+        onClose={() => {
+          setCreateError(undefined)
+          setCreateOpen(false)
+        }}
+        onCreate={onCreate}
+        // 分支行合并形态：通用 EditableCombobox 经 slot 注入（输入即过滤 slug 候选；
+        // 走查锚 data-dswt-branch-input 与等宽基准在本面装配）
+        BranchCombobox={(props) => (
+          <EditableCombobox
+            {...props}
+            inputData={{ 'data-dswt-branch-input': '' }}
+            inputStyle={branchInputStyle}
+            inputWrapClassName="dswt-field-control"
+            listClassName="dswt-branch-slug-menu"
+          />
+        )}
+      />
+      <DeleteWorktreeDialog
+        open={deleteTarget !== null}
+        worktreeName={deleteTarget?.worktreeName ?? ''}
+        branch={deleteTarget?.branch ?? null}
+        path={deleteTarget?.path ?? ''}
+        // A11 破坏性操作 fail-closed：checks 拉取失败/进行中（null）→ 弹窗 block 行 + 确认钮禁用；
+        // 拉到数据才按三清单判定放行（不再全零兜底放行）
+        checks={deleteChecks}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={onConfirmDelete}
+      />
+      {/* 1.19 点选时点跨分支风险确认框（官方 RiskConfirmation 同款）：点选命中跨分支
+          且未闩锁/未「不再提示」时立现；确认前选中态不变（取消 = 本次改选未发生，
+          选中态保持原样）。确认 = 闩锁置位 + 选中态落定（记忆写入 + host 推送）——
+          会话创建不在此处（官方 create 调用点 wrap 改道预铸）。 */}
+      {pendingRiskPath !== null && (
+        <WorktreeRiskConfirmation
+          open
+          targetBranch={phase.rows.find((candidate) => candidate.path === pendingRiskPath)?.branch ?? null}
+          currentBranch={phase.rows.find((candidate) => candidate.isMain)?.branch ?? null}
+          dismissChecked={riskDismissChecked}
+          onDismissChange={setRiskDismissChecked}
+          onCancel={() => {
+            setPendingRiskPath(null)
+            setRiskDismissChecked(false)
+          }}
+          onConfirm={() => {
+            const path = pendingRiskPath
+            setPendingRiskPath(null)
+            // 勾选「不再提示」→ configForms revisioned 持久化（fire-and-forget，拒写
+            // 留痕不阻断——本轮已直通；下轮装载失败 = false 重问，fail-soft）
+            if (riskDismissChecked) {
+              setRiskDismissed(true)
+              const form = worktreePrefsFaceOf()
+              const write = form === undefined ? undefined : dismissedWriteOf(form)
+              void (write?.(true) ?? Promise.resolve(false))
+                .then((accepted) => {
+                  if (!accepted) console.warn('[dswf-worktree] 「不再提示」写未接受——等待下一次修订重写')
+                })
+                .catch((cause: unknown) => {
+                  console.warn(`[dswf-worktree] 「不再提示」写失败（默认重问）：${String(cause)}`)
+                })
+            }
+            setRiskDismissChecked(false)
+            // 1.34 确认闩锁置位：同一次选中意图只弹一次——同行重选零重弹
+            if (path !== null) {
+              setRiskConfirmedLatch((prev) => riskLatchConfirm(prev, path))
+              applySelection(path)
+            }
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+/**
+ * 切换闸虚线标记（bug 267dcac1 评审返工②）：禁输行为全归官方 conversation.blocks 缝
+ * （安装器置位），本件只补**视觉命中锚**——官方 blocked 形态无 dashed 类（dashed 仅
+ * cardWorkspaceTrigger），pending 时在官方 overlay 缝（卡片内 overlayAnchor）落零尺寸
+ * 标记节点 + 官方 cardWorkspaceTrigger 同配方 dashed 规则（:has 上溯命中宿主卡）。
+ * 规则选择器含上游哈希类 uV2eYG_card——上游改版 = dashed 静默消失（fail-soft 视觉降级，
+ * 行为不受影响）。
+ */
+export function ForgeWorktreeSwitchMarker(): ReactNode {
+  const pending = useSyncExternalStore(subscribeWorktreeSwitch, isWorktreeSwitchPending, isWorktreeSwitchPending)
+  if (!pending) return null
+  return (
+    <>
+      <style data-dswt-switch-style="">
+        {'.uV2eYG_card:has([data-dswt-switch-blocked])::after{content:"";box-sizing:border-box;border-radius:var(--dsw-radius-panel);color:var(--dsw-alias-border-l4);pointer-events:none;border:1px dashed;transition:color .1s;position:absolute;inset:0}'}
+      </style>
+      <span data-dswt-switch-blocked="" style={{ display: 'none' }} />
+    </>
+  )
+}

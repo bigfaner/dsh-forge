@@ -1,8 +1,8 @@
 // openWorkspace 官方面安装器（client-plugin 入口专用——plugin.ts uiWorkspace 到手处调用）。
 //
-// KEY 契约 `__dshForgeOpenWorkspace` 双注：读取器 = src/state/open-workspace-face.ts
-// （WorktreeFaces 点选链）。入口与共享组件禁共 import 模块（classic 形状 pin，判例
-// 20be1ba7），故安装器独立成文件、仅入口引用。
+// KEY 契约 `__dshForgeOpenWorkspace` 双注：读取器 = @dsh-forge/project
+// ui/state/open-workspace-face.ts（worktree-picker 点选链）。入口与共享组件禁共 import
+// 模块（classic 形状 pin，判例 20be1ba7），故安装器独立成文件、仅入口引用。
 //
 // 用途（bug 05c712a4 composer 腿收口 + bug 267dcac1 竞速收口）：
 // ① worktree chip 点选 = 显式传参官方 openWorkspace(workspaceId, beforeOpen)——官方唯一
@@ -13,7 +13,9 @@
 //    写入旧 blank 草稿、旧 blank 清空——beforeOpen 时点新旧两态皆在 retain（replaceMain
 //    client.js:971-992：新引用先 retain、旧 main 后 release），迁移窗成立。
 
-import { waitForWorkspacePresent, type OpenSessionWaitOptions } from './open-session.js'
+// fix-13 注记（1.45）：open-session 纯模块迁 @dsh-forge/project（ui/open-session.ts）——
+// waitForWorkspacePresent 改经包窄子路径出口值面直供（plugin.ts 同径）。
+import { waitForWorkspacePresent, type OpenSessionWaitOptions } from '@dsh-forge/project/client-ui/open-session'
 
 const KEY = '__dshForgeOpenWorkspace'
 

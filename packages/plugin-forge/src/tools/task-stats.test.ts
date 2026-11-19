@@ -36,7 +36,6 @@ function toolWithCapture(overrides?: Partial<Omit<Parameters<typeof createTaskSt
   } as unknown as ForgeTasksService
   const deps: ForgeToolDeps = {
     tasks,
-    proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),

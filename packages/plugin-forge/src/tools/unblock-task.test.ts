@@ -4,6 +4,7 @@
 // worker deny 矩阵收口）。
 import { describe, expect, it } from 'vitest'
 import type { ForgeTasksService, UnblockTaskInput } from '@dsh-forge/contracts'
+import { isForgeToolFailure } from '@dsh-forge/lib-api'
 import type { ToolExecFace } from '../faces.js'
 import { createUnblockTaskTool, parseUnblockTaskArgs } from './unblock-task.js'
 import { FORGE_TOOL_NAMES, type ForgeToolDeps } from './index.js'
@@ -21,7 +22,6 @@ function toolWithCapture() {
   } as unknown as ForgeTasksService
   const deps: ForgeToolDeps = {
     tasks,
-    proposals: {} as ForgeToolDeps['proposals'],
     bugs: {} as ForgeToolDeps['bugs'],
     checkpoints: {
       appendCheckpoint: async () => {
@@ -79,9 +79,12 @@ describe('unblockTask tool（成功径 + 回执审计要点）', () => {
     expect(text).toContain('reason: fix-2 completed')
   })
 
-  it('reason 缺席在 core 先证前被工具面拒绝（形状收窄）', async () => {
+  it('reason 缺席在 core 先证前被工具面拒绝（形状收窄——ToolArgsError typed 失败面，plugin-spec 1.4 args 单源升级）', async () => {
     const { tool } = toolWithCapture()
-    await expect(tool.execute({ slug: 'f1', local_id: '1.4' }, EXEC)).rejects.toThrow(/reason/)
+    const result = await tool.execute({ slug: 'f1', local_id: '1.4' }, EXEC)
+    expect(isForgeToolFailure(result)).toBe(true)
+    expect((result as { code: string }).code).toBe('ERR_TOOL_ARGS_INVALID')
+    expect((result as { message: string }).message).toContain('reason')
   })
 })
 

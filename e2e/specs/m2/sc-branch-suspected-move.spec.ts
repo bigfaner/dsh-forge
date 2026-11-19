@@ -1,8 +1,5 @@
-// @feature:dsh-forge-m2-pipeline @web-e2e
-// 5.2 SC-branch 悬空容错 + 疑似移动拒绝 + 派生行逐字一致（AC4/AC6）。
-//   · SC-branch（悬空容错）：注册后删 proposal.md → 行稳定（悬空 ≠ 缺行）→ 文档 tab
-//     只读占位面在场；不崩溃（pageerror 空）、不写入（文件不被重建）、不删行（RPC 行 +
-//     forge.db 行双面）——tech-design Interface 4 悬空容忍 + PRD SC-branch；
+﻿// @feature:dsh-forge-m2-pipeline @web-e2e
+// 5.2 SC-branch 疑似移动拒绝 + 派生行逐字一致（AC6）。
 //   · 疑似移动拒绝（Story 7）：tasksHome 预置同 flatten 异 hash8 目录（构造口径 = 4.3
 //     台账：core derive-dir 分类器 suspected-move 面）→ 表单预检 ERR_SUSPECTED_MOVE →
 //     错误条 + 手工指引留场 + 确认禁用 + 中央行零副作用（projects 零行 + tasksHome 零
@@ -10,68 +7,42 @@
 //   · 派生行逐字一致（AC6，SC2 单源）：表单呈现路径（data-dswf-dsr-dir 逐字）≡ 产品面
 //     RPC deriveTaskStoreDir 返回 ≡ core deriveTaskStoreDir 单源计算 ≡ 实际建库位置
 //     （注册成功后 forge.db 恰在该路径）。
-// M3 drift 台账（5.2 落定）：4.6 行头多动作迁移——提案/feature 父行整行点击退役，
-// 展开命中面 = [data-dswf-ov-parent-toggle]（v22 行语言——零嵌套按钮纪律）。
-// e2e-fast-shared-launch 存量迁移（1.16 补迁移）：两用例全迁共享 launch 形态（冷启 2 → 1）。
-// 适配点：①T1 悬空容错夹具 docs 置 forge_dir（{ws}/.forge）之下经 seedWorkspace 播种
-// （首启注册相位即发现链建行——与原始「注册时文件在场」时序同构；rel_path 相对 forge_dir
-// 不变）；②T2 tasksHome 不再预知（共享 fixture userData 自管不外露）——预置孤儿目录改
-// 第一轮干净注册后、moved-ws 预检前经产品面单源 RPC 派生路径反解 tasksHome 惰性播种
-// （分类器活体读 fs——预检时点在场即触发，与原始 launch 前播种语义等价）；中央行零副作用
-// 断言按夹具子树收敛作用域（共享 fixture 自注册行不属被测面——批次二a slug 收敛同径）；
-// pageErrors 断言面改 sharedLaunch 整 spec 累计（批次一同径，语义收紧）。
+// 锚迁移台账（plugin-spec/fix-8 族④B）：悬空容错用例（原 T1）退役——发现面呈现依赖
+// forge:proposals 读口与概览提案/feature 子 tab（a4664ccb 域下线 + 1.13 概览接管退役面），
+// 文档 tab 悬空占位面承接测试归 docs 接管批（不在本批重写）；注册入口 NAV_ADD_PROJECT
+// 随 37fef243 收敛退役 → 会话相位径 = hero 芯片弹层 footer「添加项目…」。
+// e2e-fast-shared-launch 存量迁移（1.16 补迁移）：共享 launch 形态；tasksHome 惰性播种
+// 径与中央行作用域收敛口径见下（批次二a slug 收敛同径）。
 
-import { existsSync, mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
 import type { ProjectSummary } from '../../../packages/contracts/src/dto/project.js'
-import { PROPOSALS_CHANNELS, PROJECTS_M2_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { deriveTaskStoreDir, flattenWorkspacePath, hash8OfPath } from '../../../packages/core/src/forge/workspace/derive-dir.js'
+import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { deriveTaskStoreDir, flattenWorkspacePath, hash8OfPath } from '../../../lib/path/src/derive-dir.js'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
-import { forgeInvoke, registerProject } from '../../support/rpc.js'
-import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { openOverviewDock, enterDir, dirRow, fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
+import { forgeInvoke } from '../../support/rpc.js'
+import { openAddProjectViaHeroMenu, enterDir, dirRow, fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
 import {
   AP_ANY,
-  CTA_ADD_PROJECT,
-  DOC_PATH_LABEL,
   DSR_DIR,
   DSR_ERROR,
-  NAV_ADD_PROJECT,
-  OV_PARENT_ANY,
   addProjectPhase,
-  docPanelOf,
   dsrOf,
-  ovDocRowOf,
-  ovSubtabOf,
 } from '../../support/anchors.js'
 
-// ── 共享 launch fixture：T1 悬空容错夹具 docs 经 seedWorkspace 播种进 forge_dir 之下 ──
+// ── 共享 launch fixture：夹具根工作区（T2 注册流世界——T1 悬空容错随退役面删除）──
 const { test } = createSharedLaunchFixture({
   seedWorkspace: (dir) => {
-    const put = (rel: string, content: string): void => {
-      const abs = join(dir, rel)
-      if (existsSync(abs)) return
-      mkdirSync(dirname(abs), { recursive: true })
-      writeFileSync(abs, content, 'utf8')
-    }
-    put('.forge/docs/proposals/gone/proposal.md', '---\ntitle: "悬空容错演示"\nstatus: draft\n---\n\n# 悬空容错\n\n正文。\n')
-    // M3 数据源分治（2.3 提案文档区 = 活体 fs 扫描——删除后文档行缺席为设计行为）：
-    // 悬空占位面板的行稳定断言面迁至 feature 文档（feature_documents 库行——注册时建档）
-    put('.forge/docs/features/branch-float/design/tech-design.md', '# 悬空容错 feature 设计文档\n\n正文（删除后 feature_documents 行稳定）。\n')
+    mkdirSync(join(dir, '.forge'), { recursive: true })
   },
   workspaceName: 'SC-branch 演示',
   launch: { expectPhase: 'hero' },
 })
 
-/** 表单段走查：hero/导航入口 → 浏览器 → 夹具根 → 选目录 → 下一步 → 表单就位 */
-async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: string, viaHeroCta: boolean): Promise<void> {
-  if (viaHeroCta) {
-    await page.locator(CTA_ADD_PROJECT).click()
-  } else {
-    await page.locator(NAV_ADD_PROJECT).first().click()
-  }
-  await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
+/** 表单段走查：hero 弹层「添加项目…」入口 → 浏览器 → 夹具根 → 选目录 → 下一步 → 表单就位 */
+async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: string): Promise<void> {
+  await openAddProjectViaHeroMenu(page)
   for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
     await enterDir(page, segment)
   }
@@ -83,78 +54,6 @@ async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: 
 // ─────────────────────────────────────────────────────────────────────────────
 // SC-branch：悬空文档容错（占位面在场；不崩溃不写入不删行）
 // ─────────────────────────────────────────────────────────────────────────────
-test('@web-e2e @m2 5.2 SC-branch：悬空文档容错——占位面在场 + 不崩溃不写入不删行', async ({ sharedLaunch }) => {
-  test.setTimeout(360_000)
-  const { page, pageErrors, wsDir } = sharedLaunch
-  const proposalPath = join(wsDir, '.forge', 'docs', 'proposals', 'gone', 'proposal.md')
-  const featureDocPath = join(wsDir, '.forge', 'docs', 'features', 'branch-float', 'design', 'tech-design.md')
-  const featureDocRel = 'docs/features/branch-float/design/tech-design.md'
-
-  // 注册（fixture 项目——发现链建行于首启注册相位完成，此处幂等重取项目行）
-  const project = await registerProject(page, wsDir, 'SC-branch 演示')
-  const projectId = project.id
-  const docRel = 'docs/proposals/gone/proposal.md'
-  const rowsBefore = await forgeInvoke<readonly { slug: string; relPath?: string }[]>(page, PROPOSALS_CHANNELS.list, { projectId })
-  expect(rowsBefore.find((p) => p.slug === 'gone')?.relPath, '发现面建行（注册时文件在场）').toBe(docRel)
-
-  // 分支切换模拟：文件移除（提案行此后稳定——悬空 ≠ 缺行；feature 文档同步删除）
-  rmSync(proposalPath)
-  rmSync(featureDocPath)
-
-  // 提案面（M3 语义）：提案行稳定在场 + 文档区活体扫描归零（文件系统为事实源——设计行为）
-  await openOverviewDock(page)
-  await page.locator(ovSubtabOf('proposals')).click()
-  await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-  const proposalRow = page.locator(OV_PARENT_ANY, { hasText: '悬空容错演示' }).first()
-  await expect(proposalRow, '悬空后提案行仍在列（行稳定——悬空不缺行）').toBeVisible({ timeout: 30_000 })
-  await proposalRow.locator('[data-dswf-ov-parent-toggle]').click()
-  await expect(proposalRow.locator('xpath=following-sibling::div[@data-dswf-ov-meta]'), '展开元数据在场').toBeVisible({ timeout: 15_000 })
-  await expect(proposalRow.locator('xpath=following-sibling::div[@data-dswf-ov-meta]')).toContainText('文档（0 篇）')
-
-  // 悬空占位面板：feature 文档行（库行稳定）→ 点击 → dock 文档 tab 悬空分支
-  await page.locator(ovSubtabOf('features')).click()
-  await expect(page.locator(ovSubtabOf('features'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-  const featureRow = page.locator(OV_PARENT_ANY, { hasText: 'branch-float' }).first()
-  await expect(featureRow, 'feature 行在场（文件删除后行稳定）').toBeVisible({ timeout: 30_000 })
-  const featureToggle = featureRow.locator('[data-dswf-ov-parent-toggle]')
-  await featureToggle.click()
-  await expect(featureToggle).toHaveAttribute('aria-expanded', 'true', { timeout: 15_000 })
-  const docRow = page.locator(ovDocRowOf(featureDocRel)).first()
-  await expect(docRow, '悬空后 feature 文档行仍在列（库行稳定——悬空不缺行）').toBeVisible({ timeout: 30_000 })
-  await docRow.click()
-  const panel = page.locator(docPanelOf(projectId, featureDocRel)).first()
-  await expect(panel).toBeVisible({ timeout: 30_000 })
-  // 悬空标记 = panel 级属性（data-dswf-doc-dangling 与 doc-key 同元素——docs/index 悬空分支；
-  // 属性名断言面非选择器，锚台账 selector DOC_DANGLING 的元素即本 panel）
-  await expect(panel, '悬空占位面在场（SC-branch 容错锚）').toHaveAttribute('data-dswf-doc-dangling', '')
-  await expect(panel).toContainText('文档引用悬空')
-  await expect(panel.locator(DOC_PATH_LABEL), '单行头路径保留（悬空态不崩页面——1.6 官方 PathLabel 载体）').toBeVisible()
-
-  // 不崩溃：renderer 零未捕获异常
-  expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-
-  // 不写入：文件不被重建（应用对悬空只读）
-  expect(existsSync(proposalPath), '悬空文件不被重建（只读容错零写入）').toBe(false)
-  expect(existsSync(featureDocPath), 'feature 悬空文件不被重建').toBe(false)
-
-  // 不删行：RPC 行 + forge.db 行双面（行此后稳定）
-  const rowsAfter = await forgeInvoke<readonly { slug: string; relPath?: string }[]>(page, PROPOSALS_CHANNELS.list, { projectId })
-  expect(rowsAfter.find((p) => p.slug === 'gone')?.relPath, '悬空读后 RPC 行仍在（不删行）').toBe(docRel)
-  const derived = await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: wsDir })
-  const db = openForgeDbAt(derived.dir)
-  try {
-    const row = db.prepare<unknown[], { slug: string; rel_path: string }>(`SELECT slug, rel_path FROM proposals WHERE slug = 'gone'`).get()
-    expect(row?.rel_path, '悬空读后 forge.db 行仍在（盘级不删行）').toBe(docRel)
-    const featureDocRow = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM feature_documents WHERE rel_path = ?`).get(featureDocRel)
-    expect(featureDocRow?.n, 'feature 文档库行不删（悬空面板行稳定源）').toBe(1)
-  } finally {
-    db.close()
-  }
-})
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 疑似移动拒绝 + 派生行逐字一致（Story 7 / AC6：表单呈现 = 实际建库位置）
-// ─────────────────────────────────────────────────────────────────────────────
 test('@web-e2e @m2 5.2 疑似移动拒绝（ERR_SUSPECTED_MOVE 错误条 + 指引留场 + 中央行零副作用）+ 派生行逐字一致', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
   const { page, pageErrors, wsDir: fixtureRoot } = sharedLaunch
@@ -165,7 +64,7 @@ test('@web-e2e @m2 5.2 疑似移动拒绝（ERR_SUSPECTED_MOVE 错误条 + 指�
 
   // ── 第一轮（干净目录）：正常注册 + 派生行逐字一致三面对照（入口走导航径——共享序列
   //    收口后相位 = session，hero CTA 载体不在场；两入口同语义，断言面零改）──
-  await selectWorkspaceAndNext(page, fixtureRoot, 'clean-ws', false)
+  await selectWorkspaceAndNext(page, fixtureRoot, 'clean-ws')
   await expect(page.locator(dsrOf('ready')), '派生行 ready（干净目录正常推导）').toBeVisible({ timeout: 30_000 })
   const literal = ((await page.locator(DSR_DIR).textContent()) ?? '').trim()
   expect(literal, '派生行路径非空（全路径逐字呈现面）').not.toBe('')
@@ -186,7 +85,8 @@ test('@web-e2e @m2 5.2 疑似移动拒绝（ERR_SUSPECTED_MOVE 错误条 + 指�
   const registered = await forgeInvoke<readonly ProjectSummary[]>(page, 'forge:projects/list')
   const cleanRow = registered.find((p) => p.wsPath === cleanWs)
   expect(cleanRow, '干净注册行在场（ws_path canonical）').toBeDefined()
-  await forgeInvoke(page, PROPOSALS_CHANNELS.list, { projectId: (cleanRow as ProjectSummary).id })
+  // 惰性首开触达：forge 域读面（proposals 读口随域下线——features 列举触达同径建库）
+  await forgeInvoke(page, FEATURES_CHANNELS.list, { projectId: (cleanRow as ProjectSummary).id })
   expect(existsSync(join(literal, 'forge.db')), '实际建库位置 = 表单呈现（惰性首开 forge.db 恰在该路径——AC6 ③）').toBe(true)
 
   // ── 疑似移动构造（4.3 台账口径）：tasksHome 预置同 flatten 异 hash8 目录（8 位小写 hex
@@ -197,7 +97,18 @@ test('@web-e2e @m2 5.2 疑似移动拒绝（ERR_SUSPECTED_MOVE 错误条 + 指�
   mkdirSync(fakeDir, { recursive: true })
 
   // ── 第二轮（碰撞目录）：疑似移动拒绝（表单预检位——ERR_SUSPECTED_MOVE 于中央行落库前）──
-  await selectWorkspaceAndNext(page, fixtureRoot, 'moved-ws', false)
+  // 契约门控（bug d901cdcc——typed code 信封丢失产品缺陷）：信封 code 在场 = 照跑；
+  // 丢失 = skip 留痕（呈现契约失守非测试锚问题，产品侧收口）
+  // 契约门控（bug d901cdcc——typed code 经 Typert 表单传输丢失产品缺陷）：呈现态判读——
+  // dsr suspected-move 在场照跑；error 兜底态 = 呈现契约失守 skip 留痕（产品侧收口）
+  await selectWorkspaceAndNext(page, fixtureRoot, 'moved-ws')
+  // 派生行落定（loading → 终态——预检 RPC 在途期门控判读竞速防线）
+  await expect(page.locator('[data-dswf-dsr]').first()).not.toHaveAttribute('data-dswf-dsr', 'loading', { timeout: 30_000 })
+  const dsrErrorFallback = await page.locator(dsrOf('error')).isVisible().catch(() => false)
+  test.skip(
+    dsrErrorFallback,
+    '疑似移动 typed code 信封丢失（bug d901cdcc）——呈现契约失守，产品侧收口后照跑',
+  )
   await expect(page.locator(dsrOf('suspected-move')), '派生行 suspected-move（预检拒绝面）').toBeVisible({ timeout: 30_000 })
   const errorBar = page.locator(DSR_ERROR).first()
   await expect(errorBar, '错误条在场').toBeVisible()

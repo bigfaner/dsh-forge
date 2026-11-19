@@ -106,7 +106,7 @@ confirmed_at: '2026-11-12T15:44:33.889Z'
 
 ### BIZ-task-012: submitTask AC/测试证据与 gate 摘要双门
 
-**Rule**: 带 AC 任务（ac_json 非空）submit 时 gate.test !== true → 拒绝（ERR_TEST_EVIDENCE_REQUIRED，错误信息逐行含 AC 清单）；type=gate 任务缺数字摘要 → 拒绝（ERR_GATE_SUMMARY_REQUIRED）；通过后转移 + record（gate_json/commit_hash）；提交定式 = submit 记录含 commit_hash 且提交信息符合 Conventional Commits。
+**Rule**: 带 AC 任务（ac_json 非空）submit 时 gate.test !== true → 拒绝（ERR_TEST_EVIDENCE_REQUIRED，错误信息逐行含 AC 清单）；type=gate 任务缺数字摘要 → 拒绝（ERR_GATE_SUMMARY_REQUIRED）；通过后转移 + 结算（evidence_json.gates 摘要 + commit_hash）；提交定式 = submit 记录含 commit_hash 且提交信息符合 Conventional Commits。
 **Context**: 自举开发的每一步都有质检环（db-schema §6-24/§6-31 兑付）。
 **Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-007（prd-spec §Goals SC7·§Flow Description 流程四 6 / tech-design §Interface 1·图 8）
 
@@ -126,6 +126,6 @@ confirmed_at: '2026-11-12T15:44:33.889Z'
 
 ### BIZ-task-015: 派发按 DAG 就绪序——容器绑定认领（source 限定），无单任务直接执行入口
 
-**Rule**: 任务派发只支持按 DAG 依赖顺序领取就绪任务（dispatchTask 就绪选择机械序——含 fix 优先键，见 BIZ-task-004）；**`/run-dag-tasks <任务源 slug>` 绑定容器只派该容器**（宿主派发循环唯一入口——dispatchTask 携带 source_kind+source_slug 成对必填参数——schema 强制缺失即拒绝，claim 限定该容器就绪池 + 会话重入仅同容器 in_progress + 无任务事件归属随 source_slug；用户裁决 2026-10-08 同日改判）；容器内无指定单个任务直接执行的入口（UI 与 tool 面同语义）；停止入口 = `stopTaskLoop` 工具 + `/stop-dag-tasks` 指令（运行中仅 owner 可停、挂起态任意会话可停）。
+**Rule**: 任务派发只支持按 DAG 依赖顺序领取就绪任务（dispatchTask 就绪选择机械序——含 fix 优先键，见 BIZ-task-004）；**`/run-dag-tasks <任务源 slug>` 绑定容器只派该容器**（宿主派发循环唯一入口——dispatchTask 携带 slug 必填参数（容器 = slug 本身）——schema 强制缺失即拒绝，claim 限定该容器就绪池 + 会话重入仅同容器 in_progress + 无任务事件归属随 slug；用户裁决 2026-10-08 同日改判）；容器内无指定单个任务直接执行的入口（UI 与 tool 面同语义）；停止入口 = `stopTaskLoop` 工具 + `/stop-dag-tasks` 指令（运行中仅 owner 可停、挂起态任意会话可停）。
 **Context**: 消灭跳序执行旁路；容器绑定消灭跨容器误领；派发入口两途（GUI 派发按钮 / 会话内 `/run-dag-tasks` 指令）汇入同一宿主派发循环——run-tasks 会话技能已退役（dispatch-loop-hardening 3a），派发循环协议正本 = 本文档（BIZ-task-003 fix 链 / BIZ-task-014 worker 授权）+ 处置注入模板 `packages/plugin-forge/src/triage/prompt.ts`。
 **Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-010（prd-spec §In Scope ②·§Flow Description 流程四 1 / prd-user-stories Story 4A）；改判 = proposal/dispatch-container-scoped-claim（2026-10-08）

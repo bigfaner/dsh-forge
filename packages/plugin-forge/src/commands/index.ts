@@ -10,8 +10,16 @@ import type { ForgeDiagEmitFace } from '../faces.js'
 import type { ProjectIdResolver } from '../tools/index.js'
 import { createRunDagTasksHandler, RUN_DAG_TASKS_NAME } from './run-dag-tasks.js'
 import { createStopDagTasksHandler, STOP_DAG_TASKS_NAME } from './stop-dag-tasks.js'
-import { createForgeDirInitHandler, FORGE_DIR_INIT_NAME } from './forge-dir-init.js'
-import { createForgeDirAuditHandler, FORGE_DIR_AUDIT_NAME } from './forge-dir-audit.js'
+import { emitForgeDiag, forgeCommandLineMessage } from '../faces.js'
+// dir-init / dir-audit 两指令 handler 本体归 plugins/project host/dirs（plugin-project 1.12
+// 目录事实面归拢，提案 §一裁决 3）——此处装配方只做注册壳接线：诊断发射缝 emitForgeDiag
+// 闭包 + 指令行消息 forgeCommandLineMessage（{task:'',state:'dir-audit'} 同原 handler 内联形态）。
+import {
+  createForgeDirAuditHandler,
+  createForgeDirInitHandler,
+  FORGE_DIR_AUDIT_NAME,
+  FORGE_DIR_INIT_NAME,
+} from '@dsh-forge/project/host-dirs'
 
 export { RUN_DAG_TASKS_NAME, nonTerminalSourcesOf } from './run-dag-tasks.js'
 export type { RunDagTasksDeps, SourceCandidate } from './run-dag-tasks.js'
@@ -23,7 +31,7 @@ export {
   GITIGNORE_ENTRIES,
   STORAGE_MAP_DIRS,
   missingGitignoreEntries,
-} from './forge-dir-init.js'
+} from '@dsh-forge/project/host-dirs'
 export {
   createForgeDirAuditHandler,
   FORGE_DIR_AUDIT_NAME,
@@ -31,8 +39,8 @@ export {
   scanDirTree,
   auditFromScan,
   formatAuditPayload,
-} from './forge-dir-audit.js'
-export type { DirAuditDiff, ScanEntry, ForgeDirAuditDeps } from './forge-dir-audit.js'
+} from '@dsh-forge/project/host-dirs'
+export type { DirAuditDiff, ScanEntry, ForgeDirAuditDeps } from '@dsh-forge/project/host-dirs'
 
 /** 注册名集（序 = 注册序——plugin.test pin 锚；S5 GUI DISPATCH_COMMAND_PREFIX 同名锚） */
 export const FORGE_COMMAND_NAMES = [RUN_DAG_TASKS_NAME, STOP_DAG_TASKS_NAME, FORGE_DIR_INIT_NAME, FORGE_DIR_AUDIT_NAME] as const
@@ -83,7 +91,10 @@ export function createForgeCommands(deps: ForgeCommandsDeps): ForgeCommands {
       handler: createForgeDirAuditHandler({
         ...(deps.resolveAgent !== undefined ? { resolveAgent: deps.resolveAgent } : {}),
         ...(deps.enterAgent !== undefined ? { enterAgent: deps.enterAgent } : {}),
-        ...(deps.diag !== undefined ? { diag: deps.diag } : {}),
+        // 诊断发射缝接线（AGENTS §7——宿主侧诊断统一走 emitForgeDiag；缺席 = 零发射）
+        ...(deps.diag !== undefined ? { diag: (p: { level: 'warn'; event: string; message: string; sessionId?: string }) => emitForgeDiag(deps.diag, p) } : {}),
+        // 指令行消息构造缝接线（原 handler 内联形态原样承袭——source 'forge-loop' 转录面）
+        commandMessage: (text) => forgeCommandLineMessage(text, { task: '', state: 'dir-audit' }),
       }),
     },
   }

@@ -8,5 +8,11 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../contracts" }, { "path": "../path-key" }]
+  "references": [
+    { "path": "../contracts" },
+    { "path": "../../lib/db" },
+    { "path": "../../lib/path" },
+    { "path": "../../lib/util" },
+    { "path": "../../lib/diag" }
+  ]
 }

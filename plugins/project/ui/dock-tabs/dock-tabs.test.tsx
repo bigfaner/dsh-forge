@@ -1,0 +1,380 @@
+// 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
+// dock-tabs 单测 —— 4.1 右栏两 dock tab 装配体：地址编解码（去重键）+ tabInfo 钩子形制
+//（TabInfoReader 子件）+ 概览装配体全相位 SSR（无锚空态/三视图接线/弹窗退役记账[m3.1
+// D21/D23——本体迁 ShellHost]）+ 文档 tab body 地址解析。effect 面（事件订阅/详情拉取/
+// 桥订阅驱动）归 e2e（5.2）——renderToStaticMarkup 零 effect 同全仓口径。
+import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement, type ReactNode } from 'react'
+import { describe, expect, it, vi } from 'vitest'
+import type { RpcClientFactory } from './rpc-channels.js'
+import { detailFixture } from './overview/drawer/detail-model.test.js'
+import { TransitionDialog } from './overview/drawer/transition-dialog.js'
+import {
+  DSWF_DOC_ADDRESS_PREFIX,
+  DSWF_OVERVIEW_TAB_KIND,
+  ForgeDocsTab,
+  ForgeOverviewSectionHost,
+  ForgeOverviewTab,
+  OVERVIEW_AC_PROGRESS_ENTRY_KEY,
+  OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY,
+  OVERVIEW_SECTIONS_CHILDREN,
+  OverviewDockAssembly,
+  TabInfoReader,
+  dockDocOpener,
+  forgeDocAddress,
+  nextTaskFocusApply,
+  parseForgeDocAddress,
+  type DockTabActionsMirror,
+  type OverviewSectionSlots,
+  type TransitionTarget,
+  type UseDockTabInfoMirror,
+} from './dock-tabs.js'
+import { AC_PROGRESS_ENTRY_KEY, DSWF_OVERVIEW_AC_PROGRESS_SLOT, DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
+import { KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT } from '../keyed-section.js'
+import {
+  createWorkbenchBridge,
+  initialOverviewContext,
+  type ForgeCenterNav,
+  type WorkbenchBridge,
+} from './bridge-mirror.js'
+
+/** 假 RPC client 构造器（装载在途——SSR 无 effect，恒骨架相位） */
+const pendingClient = vi.fn() as unknown as RpcClientFactory
+
+const NOOP = (): void => {}
+
+const noopNav: ForgeCenterNav = { showKnowledge: () => {}, showSession: () => {} }
+
+/** 建真桥（快照可写回——setOverviewContext 消费面直测） */
+function freshBridge(): WorkbenchBridge {
+  return createWorkbenchBridge(noopNav)
+}
+
+describe('文档 tab 地址编解码（AC3：address(docRel) 去重键）', () => {
+  it('前缀 = dsh-resource://dswf-doc/（资源面 scheme——官方 placeResource 恒要求）', () => {
+    expect(DSWF_DOC_ADDRESS_PREFIX).toBe('dsh-resource://dswf-doc/')
+    expect(forgeDocAddress('p1', 'docs/features/x/proposal.md')).toBe(
+      'dsh-resource://dswf-doc/p1/docs/features/x/proposal.md',
+    )
+  })
+
+  it('roundtrip：encode → parse 还原 projectId + docRel（docRel 含子目录/空格/CJK 原样保持）', () => {
+    expect(parseForgeDocAddress(forgeDocAddress('abc-123', 'docs/a.md'))).toEqual({ projectId: 'abc-123', docRel: 'docs/a.md' })
+    expect(parseForgeDocAddress(forgeDocAddress('p', 'root.md'))).toEqual({ projectId: 'p', docRel: 'root.md' })
+    expect(parseForgeDocAddress(forgeDocAddress('p', 'docs/鲸游 书海/设计.md'))).toEqual({
+      projectId: 'p',
+      docRel: 'docs/鲸游 书海/设计.md',
+    })
+  })
+
+  it('parse 拒绝：异前缀地址 / 缺 projectId / 缺 docRel（持久化布局陈旧地址 → 占位面不炸）', () => {
+    expect(parseForgeDocAddress('sidebar://guide')).toBeNull()
+    expect(parseForgeDocAddress('dsh-resource://dswf-doc/')).toBeNull()
+    expect(parseForgeDocAddress('dsh-resource://dswf-doc/p1/')).toBeNull()
+    expect(parseForgeDocAddress('dsh-resource://dswf-doc/docs/a.md')).toEqual({ projectId: 'docs', docRel: 'a.md' }) // 首段 = projectId（uuid 无斜杠契约）
+  })
+
+  it('同 address 同键（contentId = 地址本身——官方资源面 reveal 去重）；异 docRel 异地址', () => {
+    expect(forgeDocAddress('p1', 'a.md')).toBe(forgeDocAddress('p1', 'a.md'))
+    expect(forgeDocAddress('p1', 'a.md')).not.toBe(forgeDocAddress('p1', 'b.md'))
+    expect(forgeDocAddress('p1', 'a.md')).not.toBe(forgeDocAddress('p2', 'a.md'))
+  })
+})
+
+describe('dockDocOpener 文档开出动作（AC5：文档行 → dock 开文档 tab）', () => {
+  const actions: DockTabActionsMirror = { openResource: vi.fn() }
+
+  it('动作面 + 项目锚齐备 → openResource(地址, {kind:"dswf-doc"})（落本 tab 窗格——官方 tab 自有动作面）', () => {
+    const open = dockDocOpener(actions, 'p1')
+    expect(open).toBeDefined()
+    open!('docs/x/proposal.md')
+    expect(actions.openResource).toHaveBeenCalledWith('dsh-resource://dswf-doc/p1/docs/x/proposal.md', {
+      kind: 'dswf-doc',
+    })
+  })
+
+  it('任一缺席 → undefined（概览文档行/抽屉参考 chip 非交互呈现）；官方动作面异常 fail-soft', () => {
+    expect(dockDocOpener(undefined, 'p1')).toBeUndefined()
+    expect(dockDocOpener(actions, null)).toBeUndefined()
+    const throwing: DockTabActionsMirror = {
+      openResource: () => {
+        throw new Error('no surface')
+      },
+    }
+    expect(() => dockDocOpener(throwing, 'p1')!('a.md')).not.toThrow()
+  })
+})
+
+describe('TabInfoReader 钩子形制（fix-33 ⑤：可选 tabInfo 钩子经子件无条件调用）', () => {
+  it('子件渲染期执行钩子读取并递入 children（渲染递_props）', () => {
+    const seen: string[] = []
+    const hook: UseDockTabInfoMirror = () => {
+      seen.push('read')
+      return { tab: { kind: 'dswf-doc', contentId: 'x' } }
+    }
+    const markup = renderToStaticMarkup(
+      <TabInfoReader hook={hook}>{(info) => <span data-seen={info.tab.contentId} />}</TabInfoReader>,
+    )
+    expect(markup).toContain('data-seen="x"')
+    expect(seen).toHaveLength(1)
+  })
+})
+
+describe('ForgeOverviewSectionHost 项目台插槽节宿主（fix-7 knowledge-dir + 裁决 1 AC 进度：双 keyed 子槽消费）', () => {
+  const renderSlotFixture = (
+    render: (key: string) => ReactNode,
+  ): { readonly renderSlot: OverviewSectionSlots; readonly calls: unknown[] } => {
+    const calls: unknown[] = []
+    const renderSlot: OverviewSectionSlots = (key, owner, opts) => {
+      calls.push([key, owner, opts])
+      return render(key)
+    }
+    return { renderSlot, calls }
+  }
+
+  it('键改引单源（裁决 5）：概览 tab kind = lib-ui DSWF_OVERVIEW_TAB_KEY 同源镜像（包内字面量退役）', () => {
+    expect(DSWF_OVERVIEW_TAB_KIND).toBe(DSWF_OVERVIEW_TAB_KEY)
+    expect(DSWF_OVERVIEW_TAB_KEY).toBe('dswf-overview')
+  })
+
+  it('AC 子槽声明表在座（裁决 1——声明即占有，宿主单点声明缝）', () => {
+    expect(OVERVIEW_SECTIONS_CHILDREN[KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT]).toEqual({ kind: 'keyed', scope: 'root' })
+    expect(OVERVIEW_SECTIONS_CHILDREN[DSWF_OVERVIEW_AC_PROGRESS_SLOT]).toEqual({ kind: 'keyed', scope: 'root' })
+    expect(OVERVIEW_AC_PROGRESS_ENTRY_KEY).toBe('dswf-ac-progress')
+    // 裁决 5 单源：包内导出 = lib-ui AC_PROGRESS_ENTRY_KEY 改引别名（零字面量再声明）
+    expect(OVERVIEW_AC_PROGRESS_ENTRY_KEY).toBe(AC_PROGRESS_ENTRY_KEY)
+  })
+
+  it('renderSlot 在场：knowledge-dir 槽名 + keyed 占用键逐字分发（entryKey = dswf-knowledge-dir），节渲染于概览主体之后', () => {
+    const { renderSlot, calls } = renderSlotFixture((key) =>
+      key === KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT ? <div data-kd-section="y" /> : null,
+    )
+    const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} renderSlot={renderSlot} />)
+    expect(calls).toContainEqual(['project.section.knowledge-dir', {}, { entryKey: OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY }])
+    expect(OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY).toBe('dswf-knowledge-dir')
+    expect(markup).toContain('data-kd-section="y"')
+    expect(markup).toContain('data-dswf-ov-unanchored')
+    expect(markup.indexOf('data-dswf-ov-unanchored')).toBeLessThan(markup.indexOf('data-kd-section'))
+  })
+
+  it('AC 进度子槽消费（裁决 1）：renderSlot 以 DSWF_OVERVIEW_AC_PROGRESS_SLOT + entryKey 分发，AC 段容器渲染于概览主体之后', () => {
+    const { renderSlot, calls } = renderSlotFixture((key) =>
+      key === DSWF_OVERVIEW_AC_PROGRESS_SLOT ? <div data-ac-progress-section="y" /> : null,
+    )
+    const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} renderSlot={renderSlot} />)
+    expect(calls).toContainEqual([DSWF_OVERVIEW_AC_PROGRESS_SLOT, {}, { entryKey: OVERVIEW_AC_PROGRESS_ENTRY_KEY }])
+    expect(DSWF_OVERVIEW_AC_PROGRESS_SLOT).toBe('dswf-overview.ac-progress')
+    expect(markup).toContain('data-ac-progress-section="y"')
+    expect(markup).toContain('data-dswf-ov-unanchored')
+    expect(markup.indexOf('data-dswf-ov-unanchored')).toBeLessThan(markup.indexOf('data-ac-progress-section'))
+  })
+
+  it('双子槽同请求各分发一次（槽名互异、零串扰）', () => {
+    const { renderSlot, calls } = renderSlotFixture((key) =>
+      key === DSWF_OVERVIEW_AC_PROGRESS_SLOT ? (
+        <div data-ac-progress-section="y" />
+      ) : (
+        <div data-kd-section="y" />
+      ),
+    )
+    const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} renderSlot={renderSlot} />)
+    expect(calls).toHaveLength(2)
+    expect(markup).toContain('data-kd-section="y"')
+    expect(markup).toContain('data-ac-progress-section="y"')
+  })
+
+  it('renderSlot 缺席（宿主形状漂移/SSR 面）= 概览主体照常呈现、双子槽零节渲染不炸', () => {
+    const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} />)
+    expect(markup).toContain('data-dswf-ov-unanchored')
+    expect(markup).not.toContain('data-kd-section')
+    expect(markup).not.toContain('data-ac-progress-section')
+  })
+
+  it('槽 roster 空（renderSlot 返回 null）= 零节呈现不悬空', () => {
+    const { renderSlot } = renderSlotFixture(() => null)
+    const markup = renderToStaticMarkup(<ForgeOverviewSectionHost makeClient={pendingClient} renderSlot={renderSlot} />)
+    expect(markup).toContain('data-dswf-ov-unanchored')
+    expect(markup).not.toContain('data-kd-section')
+    expect(markup).not.toContain('data-ac-progress-section')
+  })
+})
+
+describe('OverviewDockAssembly 概览装配体全相位（D23 后：弹窗/对话框退役于本装配体——迁 ShellHost）', () => {
+  const base = {
+    onOpenTask: vi.fn(),
+    onOpenTransition: vi.fn(),
+    makeClient: pendingClient,
+  }
+
+  it('无锚（projectId null）= 诚实空态（不猜首个——多项目无会话同文案）；不渲染概览主体', () => {
+    const markup = renderToStaticMarkup(
+      <OverviewDockAssembly {...base} projectId={null} drawerTaskId={null} />,
+    )
+    expect(markup).toContain('data-dswf-ov-unanchored')
+    expect(markup).toContain('未锚定项目')
+    expect(markup).not.toContain('data-dswf-ov-panel')
+  })
+
+  it('有锚 = 概览主体（ov-panel + 三子 tab 帧在位）呈现——骨架相位（SSR 零 effect；renderTasksTab 槽随任务子 tab 激活装载）', () => {
+    const markup = renderToStaticMarkup(
+      <OverviewDockAssembly {...base} projectId="p1" sessionCount={3} drawerTaskId={null} />,
+    )
+    expect(markup).toContain('data-dswf-ov-panel')
+    expect(markup).toContain('data-dswf-ov-subtab="tasks"') // 任务子 tab 在位（三视图装载入口）
+    expect(markup).not.toContain('data-dswf-ov-unanchored')
+  })
+
+  it('弹窗开（drawerTaskId 在场）= 行高亮源注入 + 弹窗壳零挂载（m3.1 D23：本体迁 ShellHost——装配体仅递达 activeTaskId）', () => {
+    const markup = renderToStaticMarkup(
+      <OverviewDockAssembly {...base} projectId="p1" drawerTaskId="t-1" />,
+    )
+    expect(markup).toContain('data-dswf-ov-panel')
+    expect(markup).not.toContain('data-dswf-td-drawer') // 弹窗退役于 dock 装配体（挂载独立断言归 ShellHost.test/e2e）
+    expect(markup).not.toContain('data-dswf-td-close')
+  })
+})
+
+describe('ForgeOverviewTab 概览 tab body（keyed 占用者）', () => {
+  it('桥订阅读锚定上下文：ShellHost 写回 → 概览主体可见（真桥直驱）', () => {
+    const bridge = freshBridge()
+    bridge.setOverviewContext({ projectId: 'p-anchored', workspaceId: 'w-1', sessionCount: 2 })
+    const markup = renderToStaticMarkup(<ForgeOverviewTab bridge={bridge} makeClient={pendingClient} />)
+    expect(markup).toContain('data-dswf-ov-panel')
+    expect(markup).not.toContain('data-dswf-ov-unanchored')
+  })
+
+  it('桥缺席 / 无锚 = 空态降级（fail-soft——不炸 tab body）', () => {
+    const markup = renderToStaticMarkup(<ForgeOverviewTab makeClient={pendingClient} />)
+    expect(markup).toContain('data-dswf-ov-unanchored')
+  })
+
+  it('useTabInfo 在场（seat inject 生产面）不炸渲染；缺席（非壳载体）同径降级', () => {
+    const hook: UseDockTabInfoMirror = () => ({
+      tab: { kind: 'dswf-overview', contentId: 'sidebar://dswf-overview', actions: { openResource: () => {} } },
+    })
+    expect(renderToStaticMarkup(<ForgeOverviewTab useTabInfo={hook} makeClient={pendingClient} />)).toContain(
+      'data-dswf-ov-unanchored', // 桥缺席 → 无锚（动作面在场不改变锚定来源）
+    )
+  })
+})
+
+describe('ForgeDocsTab 文档 tab body（keyed 占用者）', () => {
+  it('useTabInfo 缺席 = null（非壳载体降级——生产面 seat inject 恒递达）', () => {
+    expect(renderToStaticMarkup(<ForgeDocsTab />)).toBe('')
+  })
+
+  it('合法地址 → DocsTab 呈现（骨架相位——SSR 零 effect）；地址锚 = projectId#docRel', () => {
+    const hook: UseDockTabInfoMirror = () => ({
+      tab: { kind: 'dswf-doc', contentId: forgeDocAddress('p1', 'docs/features/x/proposal.md') },
+    })
+    const markup = renderToStaticMarkup(<ForgeDocsTab useTabInfo={hook} makeClient={pendingClient} />)
+    expect(markup).toContain('data-dswf-doc-panel')
+    expect(markup).toContain('data-dswf-doc-key="p1#docs/features/x/proposal.md"')
+  })
+
+  it('陈旧/非法地址（持久化布局携带）= 占位空态不炸 tab', () => {
+    const hook: UseDockTabInfoMirror = () => ({ tab: { kind: 'dswf-doc', contentId: 'sidebar://guide' } })
+    const markup = renderToStaticMarkup(<ForgeDocsTab useTabInfo={hook} makeClient={pendingClient} />)
+    expect(markup).toContain('data-dswf-doc-invalid')
+    expect(markup).toContain('文档地址无效')
+  })
+})
+
+describe('桥概览上下文缝（与 workbench-bridge.test 互补——装配消费面）', () => {
+  it('initialOverviewContext = 无锚缺省（桥刚创建——概览 tab 首读不猜）', () => {
+    const bridge = freshBridge()
+    expect(bridge.getSnapshot().overview).toEqual(initialOverviewContext())
+  })
+})
+
+describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 → 概览 + 抽屉全链路）', () => {
+  it('nextTaskFocusApply 纯面：未应用 nonce → 应用；已应用/无聚焦 → null（重复点击 nonce 恒新恒应用）', () => {
+    const focus = { taskId: 't-1', featureSlug: 'feat-a', nonce: 3 }
+    expect(nextTaskFocusApply(-1, focus)).toBe(focus)
+    expect(nextTaskFocusApply(3, focus)).toBeNull() // 已应用同 nonce
+    expect(nextTaskFocusApply(3, { ...focus, nonce: 4 })).toEqual({ ...focus, nonce: 4 }) // 重复点击恒新
+    expect(nextTaskFocusApply(-1, null)).toBeNull()
+  })
+
+  it('装配体聚焦注入（静态面）：挂载即带聚焦 = 任务子 tab 激活（OverviewTab 初始态直取 tasks）；弹窗开面归桥 drawerTaskId（ShellHost 消费）', () => {
+    // SSR 零 effect → head 缺席（features 空 → TasksTab feature 空态）——聚焦静态可观测面 =
+    // 初始子 tab = tasks（renderTasksTab 装载 = 空态在场面）；弹窗壳挂载断言迁 ShellHost.test
+    const markup = renderToStaticMarkup(
+      <OverviewDockAssembly
+        {...{
+          onOpenTask: vi.fn(),
+          onOpenTransition: vi.fn(),
+          makeClient: pendingClient,
+        }}
+        projectId="p1"
+        drawerTaskId="t-42"
+        taskFocus={{ taskId: 't-42', featureSlug: 'feat-focused', nonce: 1 }}
+      />,
+    )
+    expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="tasks"') // 聚焦 → 任务子 tab
+    expect(markup).toContain('暂无任务容器') // renderTasksTab 装载在场面（容器空态——SSR 零 effect 头路缺席）
+  })
+
+  it('聚焦缺席 = 任务子 tab 缺省（门关后子 tab 仅 tasks/bugs 且缺省激活 tasks——114d71ba 用户裁定 2026-11-14；初始态不受扰动）', () => {
+    const markup = renderToStaticMarkup(
+      <OverviewDockAssembly
+        {...{
+          onOpenTask: vi.fn(),
+          onOpenTransition: vi.fn(),
+          makeClient: pendingClient,
+        }}
+        projectId="p1"
+        drawerTaskId={null}
+      />,
+    )
+    expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="tasks"')
+    expect(markup).not.toContain('data-dswf-ov-subtab="proposals"') // 提案子 tab 退场
+  })
+
+  it('桥聚焦/弹窗/转移三缝直驱（ForgeOverviewTab 面桥缝）：写回 → 快照递达面在场（effect 应用归 e2e——renderToStaticMarkup 零 effect 同全仓口径）', () => {
+    const bridge = freshBridge()
+    bridge.setOverviewContext({ projectId: 'p-anchored', workspaceId: 'w-1' })
+    bridge.openTaskFocus({ taskId: 't-9', featureSlug: 'feat-9' })
+    bridge.openTaskDrawer('t-9')
+    bridge.openTaskTransition({ taskId: 't-9' })
+    expect(bridge.getSnapshot().taskFocus).toEqual({ taskId: 't-9', featureSlug: 'feat-9', nonce: 1 })
+    expect(bridge.getSnapshot().drawerTaskId).toBe('t-9') // 弹窗受控态（ShellHost 消费面）
+    expect(bridge.getSnapshot().transitionFocus).toEqual({ taskId: 't-9', featureSlug: '', nonce: 1 }) // ⋯ 转移跨树通道
+    expect(bridge.getSnapshot().overview).toEqual({ projectId: 'p-anchored', workspaceId: 'w-1' }) // 三缝独立互不扰动
+    // 概览 body 挂载不炸（taskFocus 经桥订阅递达——消费 effect 归 5.2 e2e）
+    expect(() =>
+      renderToStaticMarkup(<ForgeOverviewTab bridge={bridge} makeClient={pendingClient} />),
+    ).not.toThrow()
+  })
+
+  it('转移预设透传（fix-transition-dialog-preset）：桥缝带 toStatus → 快照递达；TransitionTarget.presetToStatus 直喂对话框 → select 初值 = 预设（非首项）', () => {
+    // 桥缝：⋯ 菜单预设态透传（toStatus 在场 = 递达；缺席 = 形状不变——抽屉径回归口径）
+    const bridge = freshBridge()
+    bridge.openTaskTransition({ taskId: 't-9', toStatus: 'completed' })
+    expect(bridge.getSnapshot().transitionFocus).toEqual({
+      taskId: 't-9', featureSlug: '', nonce: 1, toStatus: 'completed',
+    })
+    // TransitionTarget（ShellHost 构造形）带 presetToStatus 直喂 TransitionDialog → 静态渲染初选 = 预设
+    const target: TransitionTarget = {
+      task: detailFixture({ taskStatus: 'pending', allowedTransitions: ['in_progress', 'completed'] }),
+      allowedTransitions: ['in_progress', 'completed'],
+      presetToStatus: 'completed',
+    }
+    const html = renderToStaticMarkup(
+      createElement(TransitionDialog, {
+        projectId: 'p-1',
+        task: target.task,
+        allowedTransitions: target.allowedTransitions,
+        presetToStatus: target.presetToStatus,
+        onCancel: NOOP,
+        onDone: NOOP,
+        makeClient: pendingClient,
+      }),
+    )
+    expect(html).toContain('data-dswf-td-tr-to')
+    const preset = html.match(/<option[^>]*value="completed"[^>]*>/)?.[0] ?? ''
+    expect(preset).toContain('selected') // 初值 = 预设（非允许集首项 in_progress）
+    const first = html.match(/<option[^>]*value="in_progress"[^>]*>/)?.[0] ?? ''
+    expect(first).not.toContain('selected')
+  })
+})

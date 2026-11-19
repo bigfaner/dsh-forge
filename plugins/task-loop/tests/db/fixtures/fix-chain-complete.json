@@ -1,0 +1,21 @@
+{
+  "category": "fix-chain-complete",
+  "description": "判例①：fix 链完整——source_task_id 全程在册，直搬即可全链可判；结算行 fix_root_id 同挂链首 blocked 结算（entities.md §3.2 fix 链构造详解①）。",
+  "expectation": "fix_of_task_id 三跳直搬；新线结算行 S2/S3 的 fix_root_id 均解析回 T1 首条 blocked 结算行 id。",
+  "oldDb": {
+    "tasks": [
+      { "id": "alpha:1.1", "slug": "alpha", "local_id": "1.1", "title": "根任务", "task_type": "coding-feature", "task_status": "blocked", "source_task_id": null, "source_kind": null, "source_id": null, "mode": null, "created_at": "2026-11-01T10:00:00.000Z", "updated_at": "2026-11-01T12:00:00.000Z" },
+      { "id": "alpha:fix-1", "slug": "alpha", "local_id": "fix-1", "title": "fix: 根任务", "task_type": "coding-fix", "task_status": "completed", "source_task_id": "alpha:1.1", "source_kind": "task", "source_id": "alpha:1.1", "mode": null, "created_at": "2026-11-01T12:05:00.000Z", "updated_at": "2026-11-01T13:00:00.000Z" },
+      { "id": "alpha:fix-2", "slug": "alpha", "local_id": "fix-2", "title": "fix: fix-1", "task_type": "coding-fix", "task_status": "completed", "source_task_id": "alpha:fix-1", "source_kind": "task", "source_id": "alpha:fix-1", "mode": null, "created_at": "2026-11-01T13:05:00.000Z", "updated_at": "2026-11-01T14:00:00.000Z" }
+    ],
+    "task_edges": [
+      { "task_id": "alpha:fix-1", "prerequisite_id": "alpha:1.1", "origin": "fix-chain", "created_at": "2026-11-01T12:05:00.000Z", "updated_at": "2026-11-01T12:05:00.000Z" },
+      { "task_id": "alpha:fix-2", "prerequisite_id": "alpha:fix-1", "origin": "fix-chain", "created_at": "2026-11-01T13:05:00.000Z", "updated_at": "2026-11-01T13:05:00.000Z" }
+    ],
+    "task_records": [
+      { "id": "r-1", "task_id": "alpha:1.1", "verb": "submit", "from_status": "in_progress", "to_status": "blocked", "reason": "test gate red", "summary": null, "gate_json": "{\"test\":false}", "files_json": null, "record_fields_json": null, "dispatch_digest": null, "loop_sourced": 1, "actor": "core", "session_id": "s-1", "created_at": "2026-11-01T12:00:00.000Z", "updated_at": "2026-11-01T12:00:00.000Z" },
+      { "id": "r-2", "task_id": "alpha:fix-1", "verb": "submit", "from_status": "in_progress", "to_status": "completed", "reason": null, "summary": "fixed", "gate_json": "{\"test\":true}", "files_json": "[\"a.ts\"]", "record_fields_json": null, "commit_hash": "c1", "dispatch_digest": null, "loop_sourced": 1, "actor": "core", "session_id": "s-2", "created_at": "2026-11-01T13:00:00.000Z", "updated_at": "2026-11-01T13:00:00.000Z" },
+      { "id": "r-3", "task_id": "alpha:fix-2", "verb": "submit", "from_status": "in_progress", "to_status": "completed", "reason": null, "summary": "fixed again", "gate_json": "{\"test\":true}", "files_json": "[\"b.ts\"]", "record_fields_json": null, "commit_hash": "c2", "dispatch_digest": null, "loop_sourced": 1, "actor": "core", "session_id": "s-3", "created_at": "2026-11-01T14:00:00.000Z", "updated_at": "2026-11-01T14:00:00.000Z" }
+    ]
+  }
+}

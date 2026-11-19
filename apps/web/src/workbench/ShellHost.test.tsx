@@ -10,13 +10,13 @@ import { createElement } from 'react'
 import { ForgeShellHost, PanelInfoAnchor, heroPanelDrive, readActivePanelId } from './ShellHost.js'
 import { HERO_PANEL_KEY } from './panel-model.js'
 import { createWorkbenchBridge, type ForgeCenterNav } from './workbench-bridge.js'
-import type { TaskDrawerProps } from '../views/overview/drawer/index.js'
+import type { TaskDrawerProps } from '@dsh-forge/project/client-ui/dock-tabs'
 
 // S1 装配注入断言面（task-ui-info-density-blitz）：TaskDrawer 捕获包装——记录 ShellHost
 // 递达的 sessionTitleOf 注入后照常渲染真身（其余测试不受扰）。
 const drawerCapture = vi.hoisted(() => ({ sessionTitleOf: undefined as unknown }))
-vi.mock('../views/overview/drawer/index.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../views/overview/drawer/index.js')>()
+vi.mock('@dsh-forge/project/client-ui/dock-tabs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@dsh-forge/project/client-ui/dock-tabs')>()
   return {
     ...actual,
     TaskDrawer: (props: TaskDrawerProps) => {
@@ -114,7 +114,7 @@ describe('派发任务悬浮面板宿主（m3.1 D5/D6：会话视图 + 双锚齐
   it('⟞ 开面 props 在场不炸渲染（装载/几何/DOM 锚定归 e2e——useSessionTaskPills 数据链自持）', () => {
     const bridge = createWorkbenchBridge(noopNav)
     const markup = renderToStaticMarkup(
-      createElement(ForgeShellHost, { bridge, onOpenWorkerSession: () => {} }),
+      createElement(ForgeShellHost, { bridge }),
     )
     expect(markup).toContain('data-dswf-workbench') // 装配面不炸（数据经 hook 效应装载）
   })

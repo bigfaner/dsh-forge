@@ -12,11 +12,12 @@
 //        renderer console（console.error/warn 官方 console-message 事件 → 转发，同文折叠窗
 //          需异文行收口）
 //        child（零凭据 prompt 发送 → child 侧模型错误 → stderr/console + gateway-fold relay）
-//   ③ 链 B 全链 trace_id：**派生失败注入形态**（fix-3 形态修正——零凭据 happy path 无诊断事件
-//     系设计使然，非缺陷）：夹具仓库 checkout --detach → 重路由派生 sessionCreate 抛错
-//     （主树行 detached → 分支解析 null → 预铸 requireNonEmpty 拒绝）→ 拦截层显式拒绝前
-//     emit fail-open 诊断事件（ALS 上下文内——行带链 B trace_id）→ 断言注入窗口内 fail-open
-//     行共享同 trace_id；随后恢复分支重发（happy path）走完发送落盘 + ②d child 证据。
+//   ③ 显式降级注入旅程（1.10 降级值显式化后重锚——旧 fail-open 形态结构性零触发，bug
+//     3b1ed804 断言过时核销）：夹具仓库 checkout --detach → session-bind 推导判定对分支
+//     落空显式降级（binding-derivation §2.1 header.cwd 推导制——不再派生抛错），降级值
+//     落 info 级 session-bind 诊断行（branch=(落空) sealed=false aheadBehind=null，
+//     trace_id=-）→ 断言该显式降级行在场；随后恢复分支重发（happy path）走完发送落盘
+//     + ②d child 证据。
 // 载体纪律：launchHost/closeApp 单源（e2e/support）；隔离 userData（e2e 单实例纪律）；零凭据
 // 发送（Hard Rule 零真实模型——user 消息落账不受模型失败影响，1-29 同口径）。
 import { execFileSync, execSync } from 'node:child_process'
@@ -161,7 +162,7 @@ async function sendUntilLanded(page: Page, userData: string, dirFragment: string
   throw new Error(`发送未落盘（dirFragment=${dirFragment}）——发送链路证据缺席`)
 }
 
-test('观测面 e2e：四路注错落 app-*.jsonl + 派生失败注入全链同 trace_id', async () => {
+test('观测面 e2e：四路注错落 app-*.jsonl + 显式降级注入旅程（session-bind branch=(落空)）', async () => {
   test.setTimeout(420_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-telem-'))
   // 真 git 仓库夹具（链 B prompt 拦截器仅对 git 项目激活——非 git 探针 null 走官方原流
@@ -213,30 +214,27 @@ test('观测面 e2e：四路注错落 app-*.jsonl + 派生失败注入全链同 
     // ── 路②d + ③：prompt 旅程（注册 → 芯片选工作区 → 键入；零凭据形态模型失败可接受
     //    ——user 消息落账不受影响，1-29 同口径） ──
     await registerProject(page, wsDir, 'telem-obs-ws')
-    // ── ③ 派生失败注入：夹具仓库 checkout --detach——必须在芯片点选**之前**（bug 7b9463df
-    //    根因修订：W3 sessions.create wrap 在点选时点预铸采纳会话——detach 晚于点选时预铸
-    //    已带 attach 绑定，judge 读到 binding ≠ null 短路 'pass'，重路由径结构性零触发）。
-    //    detach 前置 → 预铸 sessionCreate 派生失败（分支解析 '' → requireNonEmpty 拒绝）→
-    //    client wrap ④ fail-open 回官方原流（无绑定 blank 会话）→ 发送 → 必绑 judge 'route'
-    //    （git 项目 × blank × 无绑定）→ reroute 派生 sessionCreate 同因抛错 → 拦截层 catch 补
-    //    fail-open 取证 emit（ALS 上下文内——行带链 B trace_id）。发送被拒（composer 错误面）
-    //    属预期——注入旅程不要求落盘，fail-open 行即取证。 ──
+    // ── ③ 显式降级注入：夹具仓库 checkout --detach——必须在芯片点选**之前**（点选时点
+    //    预铸采纳会话）。detach 后 session-bind 推导判定 branch 落空——binding-derivation
+    //    §2.1 header.cwd 推导制对落空分支**显式降级放行**（1.10 降级值显式化——不再派生
+    //    抛错、fail-open 径结构性零触发），降级值落 info 级 session-bind 诊断行即取证锚。 ──
     execFileSync('git', ['checkout', '--detach'], { cwd: wsDir, stdio: 'pipe' })
     await selectWorkspaceViaChip(page, 'telem-obs-ws')
 
-    //    fail-open（ALS 上下文内——行带链 B trace_id）——detach 前置见上方 ③ 注入块；发送 →
-    //    必绑 judge 'route' → reroute 派生失败 → fail-open 行即取证。 ──
+    //    显式降级行等待：session-bind 推导判定（branch=(落空)）——发送旅程内落盘。 ──
     await typeDraft(page, MARK_PROMPT)
     const tInject = Date.now() - 1_000 // 注入发送窗口起点
     await clickSend(page)
     await pollDiagLines(
       userData,
-      (lines) => lines.some((l) => l.event === 'fail-open' && l.trace_id !== '-' && Date.parse(l.timestamp) >= tInject),
+      (lines) =>
+        lines.some(
+          (l) => l.event === 'session-bind' && l.message.includes('branch=(落空)') && Date.parse(l.timestamp) >= t0,
+        ),
       90_000,
     )
 
     // ── 恢复分支（happy path 重发：重路由产物会话落盘 + ②d child 证据） ──
-    const tHealthyStart = Date.now() // 注入窗口终点（其后行归 happy path 窗口）
     execFileSync('git', ['checkout', 'main'], { cwd: wsDir, stdio: 'pipe' })
     await typeDraft(page, `${MARK_PROMPT}-ok`)
     const tSend = Date.now() - 1_000 // 发送窗口起点
@@ -296,20 +294,17 @@ test('观测面 e2e：四路注错落 app-*.jsonl + 派生失败注入全链同 
       '②d child 源：含栈结构化行（relay/gateway-fold）或 child-stdio error 行在场',
     ).toBe(true)
 
-    // ③ 派生失败注入全链同 trace_id：注入窗口内带 trace_id 行在场且共享单值（链 B ALS
-    //    整链包裹——拦截层派生失败 emit 落在 judge/reroute 链内）
-    const injectTraced = lines.filter(
-      (l) => l.trace_id !== '-' && Date.parse(l.timestamp) >= tInject && Date.parse(l.timestamp) < tHealthyStart,
+    // ③ 显式降级注入：session-bind 推导判定行（branch=(落空) 显式降级）在场——info 级 +
+    //    process=child + trace_id=-（推导判定行非链内拦截点，诊断行无 trace 语义）。旧
+    //    fail-open 形态断言（fail-open 行 + 注入窗口全链同 trace_id）随 1.10 降级值显式化
+    //    结构性核销（bug 3b1ed804）。
+    const bindDegrade = lines.find(
+      (l) => l.event === 'session-bind' && l.message.includes('branch=(落空)') && Date.parse(l.timestamp) >= t0,
     )
-    expect(injectTraced.length, '③ 注入窗口带 trace_id 日志行在场（派生失败取证 emit——bug ba763219 修复面）').toBeGreaterThan(0)
-    expect(
-      injectTraced.some((l) => l.event === 'fail-open' && l.process === 'child'),
-      '③ 注入窗口 fail-open 行（process=child——拦截层派生失败 emit）在场',
-    ).toBe(true)
-    expect(
-      [...new Set(injectTraced.map((l) => l.trace_id))],
-      `③ 注入窗口全链同 trace_id（${String(injectTraced.length)} 行）`,
-    ).toHaveLength(1)
+    expect(bindDegrade, '③ session-bind 推导判定行（branch=(落空) 显式降级）在场').toBeDefined()
+    expect(bindDegrade?.level, '③ 降级行 info 级（降级值显式化——非 warn/error）').toBe('info')
+    expect(bindDegrade?.process, '③ 降级行 process=child（session-bind 推导在 child 侧）').toBe('child')
+    expect(bindDegrade?.trace_id, '③ 降级行 trace_id=-').toBe('-')
     // happy path 重发（设计使然零诊断事件）：发送窗口内带 trace 行（如有）共享单值；
     // renderer 行恒不携带链 B trace（console 转发跨链不串味）
     const happyTraced = lines.filter((l) => l.trace_id !== '-' && Date.parse(l.timestamp) >= tSend)

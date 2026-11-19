@@ -74,15 +74,12 @@ const FORBIDDEN_MODULE_NAME_RE = /(watch|backflow|reflux|resync|snapshot[-_]?syn
  *   · boot/child.ts：宿主子进程日志轮转计时器——进程管理面，与 forge 状态无关；
  *   · boot/forge-stream.ts：SSE 心跳 setInterval——传输层 keep-alive ping（判活对齐
  *     mobile sse 引擎 15s 口径），非 forge 状态投影轮询（随连接销毁，无状态重扫）。
- *   · views/session/ForgeEventEntries.tsx：running 进度行实时耗时标签逐秒刷新——纯呈现层
- *     UI 计时器（组件卸载/终态切换即清理，零 RPC 零状态重扫），非 forge 投影回流。
  *   · apps/host/src/telemetry/appender.ts：diag counters 周期自证定时器——诊断计数增量
  *     上报（退订器清理 + unref，零 forge 状态读取），非状态投影轮询。
  */
 const WATCH_RULE_EXEMPT_FILES: readonly string[] = [
   'apps/web/src/views/remote/ForgeRemoteEntry.tsx',
   'apps/web/src/views/remote/ForgeRemoteView.tsx',
-  'apps/web/src/views/session/ForgeEventEntries.tsx',
   'apps/host/src/boot/child.ts',
   'apps/host/src/boot/forge-stream.ts',
   'apps/host/src/telemetry/appender.ts',
@@ -281,14 +278,19 @@ const isSkillName = (s: string): boolean => /^[a-z0-9][a-z0-9-]*$/.test(s)
 export function auditSkillReferencesResolved(root: string = REPO_ROOT): AuditFinding[] {
   const anchor = 'skill-refs-resolved'
   const findings: AuditFinding[] = []
-  const skillsDir = join(root, 'packages/plugin-forge/skills')
-  const mounted = new Set(
-    pathExists(skillsDir)
-      ? readdirSync(skillsDir, { withFileTypes: true })
-          .filter((e) => e.isDirectory())
-          .map((e) => e.name)
-      : [],
-  )
+  // 挂载技能集（fix-8 断言面随迁）：技能挂载面随 1.9/1.10 迁移分域——fix-bug/investigate-bug/
+  // grilling/loop-blocking 物理落位 plugins/spec/skills（specSkillsDir 锚 @dsh-forge/spec），
+  // plugin-forge 本域目录保留为并集成员（现空）。解析集 = 两域并集（引用可解析性判定
+  // 以真实挂载面为准，断言强度不变——悬空引用仍必 findings）。
+  const skillsDirs = ['packages/plugin-forge/skills', 'plugins/spec/skills'] as const
+  const mounted = new Set<string>()
+  for (const dir of skillsDirs) {
+    const absDir = join(root, dir)
+    if (!pathExists(absDir)) continue
+    for (const e of readdirSync(absDir, { withFileTypes: true })) {
+      if (e.isDirectory()) mounted.add(e.name)
+    }
+  }
   const mountedList = [...mounted].sort().join('/') || '空'
   let refCount = 0
   const checkSkillName = (rel: string, line: number, kind: string, name: string): void => {

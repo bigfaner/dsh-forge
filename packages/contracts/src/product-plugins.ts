@@ -28,6 +28,13 @@ export interface ProductPluginSwitch {
   readonly userLayerRow: boolean
   /** staging 覆写（缺席 = 自动推导：被行/预设/闭包引用即发货） */
   readonly staged?: boolean
+  /** 包居所显式声明（workspace 子路径，自仓库根起——expert-squad 载 'plugins/expert-squad'
+   *  root 级树形态；缺席 = assemble 脚本按既有树探测推导）。批1 包归位表驱动面：
+   *  packageDirOf 改读本字段（dir 字段包不再按 packages/plugins/<short> 推导）。 */
+  readonly dir?: string
+  /** 库形态种子（staged 仅作运行时依赖闭包——宿主 dist 静态 import，无装载行）：
+   *  dev 装载行漂移对账豁免（plugin-bundle 守卫）；userLayerRow 恒 false。 */
+  readonly librarySeed?: boolean
 }
 
 /**
@@ -45,11 +52,25 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // @dsh-forge 依赖无闭包径）→ 安装版 runtime 缺包，/api/expert-squad/* 全 404。
   // userLayerRow: true = 全局装载（管理工具面非 forge 管线面，不违标准模式零 forge 裁决），
   // 同时作为 staging 种子随包；experts/ 内置层目录随包由 STAGING_EXTRAS 承担。
-  'expert-squad': { userLayerRow: true },
-  // 打包形态发货覆写（2026-10-18 安装版启动崩 fix）：host dist ipc/worktree-rpc 静态
-  // import 本包——缺席即安装版主进程 ERR_MODULE_NOT_FOUND 启动即崩。三径种子
-  // （userLayerRow/预设/依赖闭包）均不可达（本包零 @dsh-forge 依赖），故 staged:true
-  // 显式入 staging。行装载不走用户层：boot overlay presence 门注行（dev 同径单源）。
-  'git-worktree': { userLayerRow: false, staged: true },
-  knowledge: { userLayerRow: true },
+  // dir（批1 包归位）：包自 packages/plugins/ 迁 root 级 plugins/ 树——assemble 侧
+  // packageDirOf 改读本字段直取居所（键 = 表值 'plugins/expert-squad'）。
+  'expert-squad': { userLayerRow: true, dir: 'plugins/expert-squad' },
+  // 打包形态发货覆写（1.17 批二卸旧装新，自 git-worktree 行接替）：host dist boot 链
+  // （child/run/m2-wiring/bindings）静态 import 本包——缺席即安装版主进程
+  // ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层：boot overlay presence 门注行
+  // （dev 同径单源）。旧 @dsh-forge/git-worktree 域已归并本包，staged 种子随迁。
+  project: { userLayerRow: false, staged: true },
+  // task-loop（plugin-task-loop 1.15 退役批 staging 闭包登记，project 同款）：host dist boot
+  // 链（bridge/run/remote-rpc/tasks-rpc/test-bridge）静态 import 本包（1.14 host 改指）——
+  // 缺席即安装版主进程 ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层（组合装配行 =
+  // plugins/task-loop/cordis.patch.yml，dsh.bundle.patch 声明指向）；skills/（to-tasks 拆解
+  // 技能 + 1.15 自 plugin-forge 迁入的 submit-task 结算技能）随包由 STAGING_EXTRAS 承载。
+  'task-loop': { userLayerRow: false, staged: true, dir: 'plugins/task-loop' },
+  // spec（plugin-spec 1.10 docs 域收编，task-loop 同款 staging 闭包登记）：core dist 装配行
+  // 静态 import 本包（forgeDocs 读域 factory——收编改指 @dsh-forge/spec 出口）——缺席即安装
+  // 版主进程 ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层：M5 组合器接线前为库形态种子
+  // （librarySeed——零装载行，dev 漂移对账豁免）；组合装配行 cordis.patch.yml 随包由
+  // STAGING_EXTRAS 承载（dsh.bundle.patch 声明指向——行接线后 loader 按声明读包内该文件）。
+  spec: { userLayerRow: false, staged: true, dir: 'plugins/spec', librarySeed: true },
+  knowledge: { userLayerRow: true, dir: 'plugins/knowledge' },
 }

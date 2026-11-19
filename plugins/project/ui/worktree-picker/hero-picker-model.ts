@@ -1,0 +1,168 @@
+// hero 项目弹层映射纯函数（B 类顶替②——1.7 自 apps/web 壳侧 views/session/
+// hero-picker-model.ts 平移本包，fix-13 模式：组件与映射面随注册面归插件域）。
+// 口径（fix-24 ① 沿革）：
+//   - items = forge 项目（forgeProjects/list → name；archived 排除——与左栏过滤口径一致）；
+//   - 未绑定项目的工作区天然不出现（行源是项目不是账本）；
+//   - 选中映射：owner selectedId（workspaceId）↔ 行 id（= project.workspaceId）恒等对照，
+//     未绑定/已归档工作区无命中行（零高亮）；
+//   - 空集 + 账面已定 → 「添加」为唯一入口（官方 addIsTheOnlyEntry 语义对齐）。
+import type { ProjectSummary } from '@dsh-forge/contracts'
+
+/** 弹层项目行（id = workspaceId——owner 契约 selectedId/onPick 零变化走官方链；wsPath = 树 ws 判据源） */
+export interface HeroPickerRow {
+  readonly id: string
+  readonly name: string
+  readonly wsPath: string
+}
+
+/** 弹层面（行集 + 入口形态派生——组件消费的唯一计划对象） */
+export interface HeroPickerPlan {
+  /** 项目行（archived 排除；listProjects 顺位保持 created_at 序） */
+  readonly rows: readonly HeroPickerRow[]
+  /** 行集非空 → 添加项入 footer（官方 pinAdd 同义） */
+  readonly pinAdd: boolean
+  /** 行集空且账面已定 → 「添加」唯一入口，弹层直达产品注册流（官方 addIsTheOnlyEntry 同义） */
+  readonly addIsTheOnlyEntry: boolean
+}
+
+/** 弹层行集与入口形态（纯函数：projects + 账面相位 → 计划） */
+export function heroPickerPlan(
+  projects: readonly ProjectSummary[],
+  settled: boolean,
+): HeroPickerPlan {
+  const rows: HeroPickerRow[] = []
+  for (const project of projects) {
+    if (project.archived) continue // 过滤口径：archived 排除（与左栏一致）
+    rows.push({ id: project.workspaceId, name: project.name, wsPath: project.wsPath })
+  }
+  return { rows, pinAdd: rows.length > 0, addIsTheOnlyEntry: settled && rows.length === 0 }
+}
+
+/** workspaceId ↔ 项目映射（owner selectedId 命中行集内项目；undefined = 无命中——未绑定/已归档） */
+export function selectedProjectOf(
+  rows: readonly HeroPickerRow[],
+  selectedId: string | undefined,
+): HeroPickerRow | undefined {
+  if (selectedId === undefined) return undefined
+  return rows.find((row) => row.id === selectedId)
+}
+
+/** 路径归一（跨源比较键：反斜杠→斜杠 + 小写 + 去尾斜杠——worktree 选中记忆键同判） */
+function normRootPath(value: string): string {
+  const slashed = value.replaceAll('\\', '/')
+  const trimmed = slashed.length > 1 && slashed.endsWith('/') ? slashed.slice(0, -1) : slashed
+  return trimmed.toLowerCase()
+}
+
+/**
+ * 官方快照行 path 解析（三态——bug 6fe1675f）：string = path；null = id 在场但 path
+ * 缺失/非 string（**归属事实不可证**——上游形状漂移/未到位行，不得并入「id 不在场」
+ * 回落首项目兜底）；undefined = id 不在快照（判据数据缺席，调用方走各自现状分支）。
+ */
+function workspaceRowPathOf(items: readonly unknown[], selectedId: string): string | null | undefined {
+  for (const row of items) {
+    if (typeof row !== 'object' || row === null) continue
+    if ((row as { workspaceId?: unknown }).workspaceId !== selectedId) continue
+    const path = (row as { path?: unknown }).path
+    return typeof path === 'string' && path !== '' ? path : null
+  }
+  return undefined
+}
+
+/**
+ * hero 默认拾取（bug 2ba146d8——纯函数单源）：选中态缺席/未命中行集（归档会话回 hero、
+ * 冷启、未绑定工作区、已归档项目——归档行不可锚定既有语义）→ 第一个活跃项目行 id；
+ * 已命中或行集空 → undefined（用户显式选中零覆盖 / 零项目直达添加流现状）。消费面
+ * （ForgeHeroWorkspacePicker）经官方 owner onPick 链拾取——与用户点选同行同语义。
+ * bug 9eb9d6cb：A2 后 selectedId 可合法指向树 workspace（官方 selectWorkspace 切树后
+ * sessionWorkspace = 树 ws id，永不命中项目行）——官方快照中该 id 的 path 落在活跃项目
+ * 根之下 = 合法选中，零拾取；数据缺席（快照未到）= 现状行为（d353536f 在场门兜住不盲拾）。
+ */
+export function heroDefaultPickId(
+  rows: readonly HeroPickerRow[],
+  selectedId: string | undefined,
+  workspaceRows?: readonly unknown[],
+): string | undefined {
+  if (selectedProjectOf(rows, selectedId) !== undefined) return undefined
+  if (selectedId !== undefined && workspaceRows !== undefined) {
+    const path = workspaceRowPathOf(workspaceRows, selectedId)
+    if (path === null) return undefined // 行在场但归属不可证 → 不拾取（bug 6fe1675f）
+    if (path !== undefined) {
+      const normalized = normRootPath(path)
+      const underActiveProject = rows.some((row) => {
+        const root = normRootPath(row.wsPath)
+        return normalized === root || normalized.startsWith(`${root}/`)
+      })
+      if (underActiveProject) return undefined // 树 ws 合法选中——零拾取（bug 9eb9d6cb）
+    }
+  }
+  return rows[0]?.id
+}
+
+/**
+ * 默认拾取官方基线在场门（bug d353536f——纯函数单源）：官方 workspaces.list 快照含目标
+ * workspaceId 才放行拾取。刷新后基线流未就位时盲拾取，官方 connectWorkspace 查客户端
+ * 空快照必抛「unknown workspace」（新建会话失败 toast）且拾取闩已记账不再重试——前置
+ * 事实（官方认识该工作区）不可证 = 不拾取，快照就位后由效应重渲染补拾取；真不在场
+ * （未注册/已删工作区）= 永不盲拾取，fail-soft 回「选择工作区」现状（拾取闩口径不变）。
+ */
+export function heroDefaultPickReady(
+  items: readonly { readonly workspaceId?: unknown }[] | null | undefined,
+  defaultPickId: string | undefined,
+): string | undefined {
+  if (defaultPickId === undefined) return undefined
+  if (items === null || items === undefined) return undefined
+  const present = items.some(
+    (row) => typeof row?.workspaceId === 'string' && row.workspaceId === defaultPickId,
+  )
+  return present ? defaultPickId : undefined
+}
+
+/**
+ * worktree 数据根（严格段）：仅 selectedId 严格命中项目行时返回 ws_path；未选中/未命中/
+ * 归档 → null（渲染兜底不消费——禁止兜底泄漏为绑定语义，无绑定工作区会话不得被指到别的
+ * 项目树）。
+ */
+export function selectedProjectRootStrictOf(
+  projects: readonly ProjectSummary[],
+  selectedId: string | undefined,
+): string | null {
+  const byWorkspace =
+    selectedId !== undefined ? projects.find((project) => project.workspaceId === selectedId) : undefined
+  return byWorkspace !== undefined && byWorkspace.archived !== true && byWorkspace.wsPath !== ''
+    ? byWorkspace.wsPath
+    : null
+}
+
+/**
+ * worktree 第二 chip 数据根（纯函数，fix-2 建立 / bug 10833861 修正 / 1.31 A7 分离）：
+ * selectedId 官方语义 = workspaceId（owner 契约）——经 workspaceId 回查项目行取 ws_path；
+ * 未选中/未命中 → 活跃（非归档）首个有 ws_path 的行兜底（**仅渲染消费**——fallback 泄漏
+ * 成绑定语义即跨项目错绑）；全无 → null。
+ * bug 8a316608：selectedId 可合法指向树 workspace，fallback 却取「首个活跃项目」——
+ * 修复：官方快照在场时按树 ws path 归属活跃项目根取所属项目（与 heroDefaultPickId
+ * bug 9eb9d6cb 同守卫同判）；快照缺席/不归属任何活跃项目 = 维持现状兜底。
+ */
+export function selectedProjectRootOf(
+  projects: readonly ProjectSummary[],
+  selectedId: string | undefined,
+  workspaceRows?: readonly unknown[],
+): string | null {
+  const strict = selectedProjectRootStrictOf(projects, selectedId)
+  if (strict !== null) return strict
+  if (selectedId !== undefined && workspaceRows !== undefined) {
+    const path = workspaceRowPathOf(workspaceRows, selectedId)
+    if (path === null) return null // 行在场但归属不可证 → 数据根 null（bug 6fe1675f——不回落首项目）
+    if (path !== undefined) {
+      const normalized = normRootPath(path)
+      const owner = projects.find((p) => {
+        if (p.archived === true) return false
+        const root = normRootPath(p.wsPath ?? '')
+        return root !== '' && (normalized === root || normalized.startsWith(`${root}/`))
+      })
+      if (owner !== undefined) return owner.wsPath
+    }
+  }
+  return projects.find((p) => p.archived !== true && p.wsPath !== undefined && p.wsPath !== '')?.wsPath
+  ?? null
+}

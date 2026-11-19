@@ -27,15 +27,21 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
-import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { closeApp, launchHost, ROOT, type Launched } from '../../support/launch.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
-import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
+import { openTaskLoopDbFull } from '../../support/sqlite.js'
 import { loadFixture } from '../../support/replay/fixtures.js'
 import type { ReplayVerbStep } from '../../support/replay/format.js'
-import { readDogfoodAudit, seedDogfoodTaskRow, type DogfoodAuditRecord } from '../../support/replay/dogfood-record.js'
+import {
+  readDogfoodAuditLoop,
+  seedDogfoodTaskRowLoop,
+  type DogfoodAuditRecordLoop,
+  type DogfoodTaskRowLoop,
+} from '../../support/replay/dogfood-record.js'
 
 /** 夹具 feature slug（与录制轮一致——任务自然键 + 审计链同构前提） */
 const FEATURE = 'dogfood-demo'
@@ -83,48 +89,45 @@ test('@web-e2e @m2 5.4 SC-M2 门回放版：录制夹具 verb 重放（fix 链 +
     const page = launched.page
     const driver = createBridgeDriver(launched.app)
 
-    // ── 受控初态：注册 + feature 行（人类径 RPC）+ 相位号任务直种（与录制轮同构——审计链同构前提） ──
+    // ── 受控初态：注册 + feature 行（人类径 RPC）+ 相位号任务直种（task-loop.db 域账单源
+    //    ——与录制轮同构：审计链同构前提；id = 纯 UUID，localId 相位号保留） ──
     const project = await registerProject(page, ws, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(ws)
     await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: FEATURE, title: 'dogfood 派发链演示' })
-    const derived = await forgeInvoke<{ dir: string }>(page, PROJECTS_M2_CHANNELS.deriveTaskStoreDir, { workspaceDir: ws })
     {
-      const db = openForgeDbAt(derived.dir)
+      const db = openTaskLoopDbFull(userData)
       try {
-        seedDogfoodTaskRow(db, FEATURE, '1.1', {
+        seedDogfoodTaskRowLoop(db, projectKey, FEATURE, '1.1', {
           title: '在工作区根创建 notes.md（一行 dogfood-ok）并提交',
           taskType: 'doc',
           priority: 'P0',
           taskDesc: '回放轮任务规格与录制轮逐字同构（claim 简报重合成 = 产品面真实照跑）',
         })
-        seedDogfoodTaskRow(db, FEATURE, '2.1', {
+        seedDogfoodTaskRowLoop(db, projectKey, FEATURE, '2.1', {
           title: '验证 target.md 在场且含一行 marker（缺席 = 受阻走 fix 链）',
           taskType: 'doc',
           priority: 'P1',
           taskDesc: '回放轮任务规格与录制轮逐字同构',
         })
-        seedDogfoodTaskRow(db, FEATURE, '3.1', {
+        seedDogfoodTaskRowLoop(db, projectKey, FEATURE, '3.1', {
           title: '中断恢复演练：创建 interrupt.md 并结算（首轮经 harness 预置中断——领取后无结算）',
           taskType: 'doc',
           priority: 'P1',
           taskDesc: '回放轮任务规格与录制轮逐字同构',
         })
-        seedDogfoodTaskRow(db, FEATURE, '3.2', {
+        seedDogfoodTaskRowLoop(db, projectKey, FEATURE, '3.2', {
           title: '保留任务（harness 结算占位）',
           taskType: 'doc',
           priority: 'P2',
           taskDesc: '占位任务——由测试 harness 直接结算，执行器无需处理。',
         })
-        db.prepare(`UPDATE features SET feature_status = 'tasks', updated_at = ? WHERE slug = ?`).run(
-          new Date().toISOString(),
-          FEATURE,
-        )
       } finally {
         db.close()
       }
     }
 
-    // ── verb 行依序重放（projectId 同机重键 + 工件代位 + commitHash 覆写）+ golden 对拍 ──
+    // ── verb 行依序重放（projectKey 同机重键 + 工件代位 + commitHash 覆写）+ golden 对拍 ──
     const verbs = fixture.steps.filter((s): s is ReplayVerbStep => s.kind === 'verb')
     const observedBySeq = new Map(
       fixture.steps.filter((s) => s.kind === 'observed').map((s) => [s.seq, s]),
@@ -136,13 +139,23 @@ test('@web-e2e @m2 5.4 SC-M2 门回放版：录制夹具 verb 重放（fix 链 +
       [23, [['target.md', 'marker\n']]],
     ])
     for (const step of verbs) {
-      const args: Record<string, unknown> = { ...step.args, projectId }
+      const args: Record<string, unknown> = { ...step.args, projectKey }
       if (step.verb === 'submitTask') {
         const artifacts = stageBySeq.get(step.seq)
         if (artifacts !== undefined) {
           let hash = ''
           for (const [name, content] of artifacts) hash = stageArtifact(ws, name, content)
           if (typeof args.commitHash === 'string') args.commitHash = hash
+        }
+        // fix 任务 success 结算核销门代位（bug faf0ca57②——rescue fix 必带非空 ac_results；
+        // 录制期该门未在期，回放轮按现役契约补自报核销快照——夹具为录制工件不改）
+        const localId = String((args.taskRef as { localId?: unknown } | undefined)?.localId ?? '')
+        if (args.result === 'success' && localId.startsWith('fix-') && args.acceptanceCriteria === undefined) {
+          args.acceptanceCriteria = [{ criterion: `${localId}：修复核销（回放代位自报）`, met: true }]
+        }
+        // blocked 结算根因归类门代位（录制期该门未在期——回放轮按现役契约补 new-problem 归类）
+        if (args.result === 'blocked' && args.blockClassification === undefined) {
+          args.blockClassification = { kind: 'new-problem' }
         }
       }
       let result: unknown
@@ -173,20 +186,21 @@ test('@web-e2e @m2 5.4 SC-M2 门回放版：录制夹具 verb 重放（fix 链 +
       }
     }
 
-    // ── 审计断言面（与 dogfood-sc-m2.spec.ts 同构——record id 升序 = 追加序真相） ──
-    const db = openForgeDbAt(derived.dir)
-    let records: readonly DogfoodAuditRecord[]
+    // ── 审计断言面（与 dogfood-sc-m2.spec.ts 同构——rowid 升序 = 追加序真相；submit 载荷
+    //    自 task_settlements 最新结算行投影——task-loop v1 列面） ──
+    const db = openTaskLoopDbFull(userData)
+    let records: readonly DogfoodAuditRecordLoop[]
     let tasks: { id: string; localId: string; sourceTaskId: string | null }[]
     let edges: readonly { taskId: string; prerequisiteId: string; origin: string }[]
     try {
-      const audit = readDogfoodAudit(db)
+      const audit = readDogfoodAuditLoop(db)
       records = audit.records
-      tasks = audit.tasks.map((t) => ({ id: t.id, localId: t.localId, sourceTaskId: t.sourceTaskId }))
+      tasks = audit.tasks.map((t: DogfoodTaskRowLoop) => ({ id: t.id, localId: t.localId, sourceTaskId: t.sourceTaskId }))
       edges = audit.edges
     } finally {
       db.close()
     }
-    const recsOf = (localId: string): readonly DogfoodAuditRecord[] => records.filter((r) => r.localId === localId)
+    const recsOf = (localId: string): readonly DogfoodAuditRecordLoop[] => records.filter((r) => r.localId === localId)
     const taskByLocal = (localId: string): { id: string; localId: string; sourceTaskId: string | null } => {
       const row = tasks.find((t) => t.localId === localId)
       expect(row, `任务行在场：${localId}`).toBeDefined()
@@ -244,13 +258,13 @@ test('@web-e2e @m2 5.4 SC-M2 门回放版：录制夹具 verb 重放（fix 链 +
     const c = recsOf('3.1')
     const cClaims = c.filter((r) => r.verb === 'claim')
     expect(cClaims.length, '3.1 两条 claim 记录（首领 + 重入）').toBe(2)
-    const [cFirst, cReclaim] = cClaims as [DogfoodAuditRecord, DogfoodAuditRecord]
+    const [cFirst, cReclaim] = cClaims as [DogfoodAuditRecordLoop, DogfoodAuditRecordLoop]
     expect(cFirst.fromStatus).toBe('pending')
     expect(cReclaim.fromStatus, '重入记录 from/to 空（无状态效应形态）').toBeNull()
     expect(cReclaim.toStatus).toBeNull()
     const submitsBetween = c.filter((r) => r.verb === 'submit' && r.id > cFirst.id && r.id < cReclaim.id)
     expect(submitsBetween, '中断形态：首领与重入之间零 submit 记录（record 缺失）').toHaveLength(0)
-    expect(cReclaim.dispatchDigest, '重入简报重合成 digest 新值').not.toBe(cFirst.dispatchDigest)
+    expect(cReclaim.dispatchDigest, '重入简报重合成 digest 恒等（确定性——PHASE_SUMMARY 相位行随域退役，同态同值）').toBe(cFirst.dispatchDigest)
     const cSubmit = c.find((r) => r.verb === 'submit')
     expect(cSubmit?.toStatus, '恢复结算 success').toBe('completed')
     expect(JSON.parse(cSubmit?.filesJson ?? '[]')).toContain('interrupt.md')
@@ -262,10 +276,9 @@ test('@web-e2e @m2 5.4 SC-M2 门回放版：录制夹具 verb 重放（fix 链 +
     expect(sSubmit?.id).toBeLessThan(cReclaim.id)
     expect(sSubmit?.sessionId).toBe('e2e-harness')
 
-    // 事件流：重放期间 tasks-changed 主侧记账 ≥ verb 行数（事件面真实照跑——录制 event 行
-    // 为录制期快照不重放，重放轮事件 = 本轮 live 记账）
-    const events = await driver.events()
-    expect(events.length, '重放轮事件记账 ≥ verb 行数（事件流真实照跑）').toBeGreaterThanOrEqual(verbs.length)
+    // 事件流：退役——写推送事件广播链（child→main onEvent）在接管架构无生产者（装配
+    // events 单例无宿主转发缝），断言面随观测载体退役；缺口范围外上报（bug 16b58953 承接）。
+    // 回放轮动词真实照跑的对账面 = 上方 task-loop.db 审计断言（追加序 rowid 真相）。
   } finally {
     if (launched !== undefined) await closeApp(launched.app).catch(() => undefined)
     await rmDirBestEffort(userData)

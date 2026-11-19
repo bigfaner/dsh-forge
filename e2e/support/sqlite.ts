@@ -29,3 +29,23 @@ export function openStateDb(userData: string): import('../../packages/core/src/t
   db.pragma('busy_timeout = 5000')
   return db
 }
+
+/** 打开 task-loop 域库（{userData}/dsh-home/forge/db/task-loop/task-loop.db——域写点单源
+ *  落点，plugins/task-loop host/db/connection.ts dshHome 派生同径；只读断言消费） */
+export function openTaskLoopDb(userData: string): import('../../packages/core/src/testutil/db-seeds.js').SeedDb {
+  const db = new (requireFromCore('better-sqlite3') as SqliteCtor)(
+    join(userData, 'dsh-home', 'forge', 'db', 'task-loop', 'task-loop.db'),
+  )
+  db.pragma('busy_timeout = 5000')
+  return db
+}
+
+/** 打开 task-loop 域库（全量 better-sqlite3 形态——事务 + 泛型 prepare 的账本断言消费面；
+ *  只读探针 + 受控初态直插两用，busy_timeout 预设同上） */
+export function openTaskLoopDbFull(userData: string): import('better-sqlite3').Database {
+  const db = new (requireFromCore('better-sqlite3') as unknown as new (path: string) => import('better-sqlite3').Database)(
+    join(userData, 'dsh-home', 'forge', 'db', 'task-loop', 'task-loop.db'),
+  )
+  db.pragma('busy_timeout = 5000')
+  return db
+}

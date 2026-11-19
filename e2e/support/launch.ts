@@ -145,24 +145,72 @@ export async function launchElectron(opts: RawLaunchOptions = {}): Promise<Elect
 
 // ─── 就绪链族 ───
 
-/** 壳 boot 就绪链：就绪门 → 模块系统 live → 产品插件激活标记 */
+/** 全局标记读取形态（page.evaluate 内联判读用） */
+interface ShellGlobals {
+  __DSH_BOOT_READY__?: unknown
+  __ModuleLoader__?: { mode: string }
+  __DSH_FORGE_CLIENT__?: unknown
+}
+
+/** 壳 boot 就绪链：就绪门 → 模块系统 live → CLIENT 就绪（冷启窗口自愈——1.26/002 判例）。
+ *
+ * 冷启等待策略（宿主冷启后 __ModuleLoader__ live 但 __DSH_FORGE_CLIENT__ 就绪存在窗口
+ * ——002 轮 waitShellReady 90s 超时判例，四轮同错家族收口）：
+ *  - ModuleLoader live 后轮询 __DSH_FORGE_CLIENT__ 至就绪，上限放宽至 180s；
+ *  - 就绪前宽限 45s 未就绪 → 整页 reload 一次（冷启装配竞态自愈），reload 后 boot 就绪门
+ *    与模块 live 门按原口径重等（各 60s/90s），再继续 CLIENT 轮询至总上限；
+ *  - reload 至多一次（防无限循环——二次未就绪 = 真阻塞，超时上抛交调用侧归因）。
+ */
 export async function waitShellReady(
   page: Page,
-  timeouts: { readonly bootReady?: number; readonly loaderLive?: number } = {},
+  timeouts: {
+    readonly bootReady?: number
+    readonly loaderLive?: number
+    readonly clientReady?: number
+  } = {},
 ): Promise<void> {
   await page.waitForFunction(
-    () => (globalThis as { __DSH_BOOT_READY__?: unknown }).__DSH_BOOT_READY__ !== undefined,
+    () => (globalThis as unknown as ShellGlobals).__DSH_BOOT_READY__ !== undefined,
     undefined,
     { timeout: timeouts.bootReady ?? 60_000 },
   )
   await page.waitForFunction(
-    () => {
-      const g = globalThis as { __ModuleLoader__?: { mode: string }; __DSH_FORGE_CLIENT__?: unknown }
-      return g.__ModuleLoader__?.mode === 'live' && g.__DSH_FORGE_CLIENT__ !== undefined
-    },
+    () => (globalThis as unknown as ShellGlobals).__ModuleLoader__?.mode === 'live',
     undefined,
     { timeout: timeouts.loaderLive ?? 90_000 },
   )
+  const clientReadyMs = timeouts.clientReady ?? 180_000
+  const deadline = Date.now() + clientReadyMs
+  const graceMs = 45_000
+  const startedAt = Date.now()
+  let reloaded = false
+  for (;;) {
+    const clientReady = await page
+      .evaluate(() => (globalThis as unknown as ShellGlobals).__DSH_FORGE_CLIENT__ !== undefined)
+      .catch(() => false)
+    if (clientReady) return
+    if (Date.now() > deadline) {
+      throw new Error(
+        `waitShellReady：__DSH_FORGE_CLIENT__ 就绪超时（上限 ${String(clientReadyMs / 1000)}s，整页 reload 已试=${String(reloaded)}）`,
+      )
+    }
+    if (!reloaded && Date.now() - startedAt > graceMs) {
+      // 冷启窗口自愈：loader live 而 CLIENT 未就绪的装配竞态——整页 reload 一次重走装配
+      reloaded = true
+      await page.reload().catch(() => undefined)
+      await page.waitForFunction(
+        () => (globalThis as unknown as ShellGlobals).__DSH_BOOT_READY__ !== undefined,
+        undefined,
+        { timeout: timeouts.bootReady ?? 60_000 },
+      ).catch(() => undefined)
+      await page.waitForFunction(
+        () => (globalThis as unknown as ShellGlobals).__ModuleLoader__?.mode === 'live',
+        undefined,
+        { timeout: timeouts.loaderLive ?? 90_000 },
+      ).catch(() => undefined)
+    }
+    await page.waitForTimeout(2_000)
+  }
 }
 
 /** 相位稳定门返回形态 */
@@ -213,12 +261,14 @@ export interface LaunchHostOptions {
   readonly executablePath?: string
   /** 追加 env（TEMP/TMP 重定向等） */
   readonly env?: Record<string, string>
-  /** 就绪链超时（安装形态慢盘 120s；缺省 60/90/60——firstWindow 缺省 playwright 30s：
-   *  bootDshHost（child spawn + profile 装配）先于首窗，内存受限/慢盘环境首窗可越 30s） */
+  /** 就绪链超时（安装形态慢盘 120s；缺省 60/90/180——firstWindow 缺省 playwright 30s：
+   *  bootDshHost（child spawn + profile 装配）先于首窗，内存受限/慢盘环境首窗可越 30s；
+   *  clientReady = 冷启窗口 CLIENT 就绪轮询上限（1.26/002 判例收口）） */
   readonly timeouts?: {
     readonly firstWindow?: number
     readonly bootReady?: number
     readonly loaderLive?: number
+    readonly clientReady?: number
     readonly workbenchVisible?: number
   }
 }

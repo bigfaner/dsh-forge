@@ -12,7 +12,7 @@
 //      原样直通，全程零 forge 建会话 RPC（预铸改道退役）；
 //   ② 显示源路由保留——显示真源（displayedTree：与 chip 本地投影同源的客户端态）权威于
 //      官方内部锚点；workspaceId 解析 = chip 双发数据源（WorktreeEntryDto.workspaceId，
-//      forge:worktree/list）优先，官方 workspaces.list path 匹配回退；
+//      forgeWorktree.list Typert 正典）优先，官方 workspaces.list path 匹配回退；
 //      bug 05c712a4 根治：显示真源 = 客户端本地态（selected-tree-display），不再读 host
 //      选中记忆（内存态易与显示分叉：push 丢失/重启清空/多窗覆写即绑错树）；
 //   ③ fail-open——判定链异常/解析缺席 = 官方原流（warn 一行）。
@@ -42,12 +42,12 @@ export interface StartSessionWrapDeps {
   readonly sessionsList: SessionsListSlice
   /** 官方 workspaces.list（锚点计算 + workspaceId 回退解析源） */
   readonly workspacesList: WorkspacesListSlice
-  /** 树归属门（forge:worktree/resolve 窄面——path → 注册项目根；null = 未注册） */
+  /** 树归属门（forgeWorktree.resolve Typert 正典窄面——path → 注册项目根；null = 未注册） */
   readonly resolveRoot: (path: string) => Promise<string | null>
   /** 显示真源（selected-tree-display——与 chip 本地投影同源；undefined = 未选中，
    *  调用方回落项目根。bug 05c712a4 根治：替代 host 选中记忆读） */
   readonly displayedTree: () => string | undefined
-  /** chip 双发数据源（WorktreeEntryDto.workspaceId——forge:worktree/list 窄面；
+  /** chip 双发数据源（WorktreeEntryDto.workspaceId——forgeWorktree.list Typert 正典窄面；
    *  worktreePath → workspaceId；undefined = 行缺席/形状漂移） */
   readonly worktreeWorkspaceId: (worktreePath: string, projectRoot: string) => Promise<string | undefined>
   /** fail-open 诊断行（缺省 console.warn） */

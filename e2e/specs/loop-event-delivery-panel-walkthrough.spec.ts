@@ -15,11 +15,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../support/official-stack-gate.js'
 import { launchHost, closeApp } from '../support/launch.js'
 import { registerProject } from '../support/rpc.js'
 import { createBridgeDriver } from '../support/replay/executor.js'
 import { CONVERSATION_CONTENT } from '../support/anchors.js'
 import { rmDirBestEffort } from '../support/cleanup.js'
+import { projectKeyOf } from '../support/project-key.js'
 
 const WS_NAME = 'ws-led-panel'
 const PROP = 'led-panel-prop'
@@ -86,6 +88,9 @@ async function fullShot(page: Page, path: string): Promise<void> {
 }
 
 test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）：任务轨行 + head/统计条 + 双主题', async () => {
+  // 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+  // 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）。
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
   test.setTimeout(900_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-led-panel-'))
   const wsDir = join(fixtureRoot, WS_NAME)
@@ -102,12 +107,14 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
   const launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
   const { app, page } = launched
   try {
-    // ── 夹具：项目注册（RPC 直注）+ 突击提案容器 + 任务（测试钩子写动词——恒不上 RPC；主进程面）──
+    // ── 夹具：项目注册（RPC 直注）+ 任务容器播种（测试钩子写动词——恒不上 RPC；主进程面）──
     const project = await registerProject(page, wsDir, WS_NAME)
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
-    await driver.call('forgeProposals', 'createProposal', { projectId: project.id, slug: PROP, title: '面板走查突击容器', mode: 'blitz' })
+    // 任务容器 = slug 弱引用（proposal 域退役——/run-dag-tasks 任务源解析 = tasks.listTasks，
+    // createProposal 播种已不需要）
     await driver.call('forgeTasks', 'addTask', {
-      projectId: project.id, source: { kind: 'proposal', slug: PROP }, title: '面板走查任务', type: 'doc',
+      projectKey, slug: PROP, title: '面板走查任务', type: 'doc',
     })
     // 官方认证 + boot manifest 前移（会话创建 HTTP 通路前提）
     const manifest = (await page.evaluate(() => {

@@ -1,72 +1,65 @@
 // @feature:dsh-forge-m3-bootstrap-presets @web-e2e
-// gen-test-scripts 产物 —— Journey: expedition-full-sdd-chain（T-test-gen-scripts）。
-// 断言源 = docs/features/dsh-forge-m3-bootstrap-presets/testing/expedition-full-sdd-chain/contracts/
-//   step-{1..8}-*.md（eval-contract 963/1100 通过——本特性 Golden Path）。
+// gen-test-scripts 产物 —— Journey: expedition-full-sdd-chain（T-test-gen-scripts，proposal
+// 域退役后 fixed-migration）。断言源 = docs/features/dsh-forge-m3-bootstrap-presets/testing/
+// expedition-full-sdd-chain/contracts/ step-{1..8}-*.md（eval-contract 963/1100 通过——本特性
+// Golden Path）。
 //
 // 载体纪律（Hard Rule）：零真实模型——brainstorm/write-prd/ui-design/tech-design/
-// breakdown-tasks 技能产出经回放主径承载（createProposal/upsertFeatureDoc/addTask——
-// M2/5.2 既定口径：技能写径与 RPC/桥同一服务门）。
+// breakdown-tasks 技能产出经回放主径承载（features 域注册 FEATURES_CHANNELS.register +
+// upsertDoc + addTask——proposal 域随域退役，注册即 features 行 + feature_records(register)
+// 审计行同事务伴随；技能写径与 RPC/桥同一服务门）。
 //
 // Fact Table 摘录（源码核实）：
-//   - 五态机（ProposalVerdictDialog.tsx）：draft → [under-review]；under-review →
-//     [accepted, rejected, draft]（目标态列表不含当前态自身）；accepted → [superseded]
-//     （必带 supersededBy——vd-supersede-by select，空目标 = superseded-by-required）；
-//   - 成链三件 + 审计动词：features 行 / proposal_id / feature_records（verb ∈
-//     {register, transition, doc-upsert}——actor ∈ {core, ui, plugin-tool}）；
-//   - claim 守卫（claim.ts:137）：前置全 ∈ {completed, skipped} 才放行，未满足 =
+//   - registerFeature（features.ts）：slug UNIQUE 冲突 → ERR_FEATURE_EXISTS「feature 已存在」
+//     （409）；新行 feature_status 缺省 'prd' + feature_records(register) 审计行同事务伴随
+//     （RPC 写径 actor='plugin-tool'）；
+//   - claim 守卫（claim.ts）：前置全 ∈ {completed, skipped} 才放行，未满足 =
 //     ERR_DEPENDENCIES_UNMET「前置依赖未满足：<slug>/<localId> <status>…——满足集…」；
 //   - upsertDoc（FEATURES_CHANNELS.upsertDoc）：feature_documents 按 (feature_id, doc_kind)
-//     幂等更新；features/register RPC 对既有 slug 复用行（不重复建链）；
-//   - 概览锚：提案行/展开 meta（成链 → slug）+ feature 文档行 ovDocRowOf + 任务行
-//     ttItemOf + mode chip [data-dswf-mode-chip]（feature 行恒远征）；
+//     幂等更新；
+//   - 任务域账 = task-loop.db（openTaskLoopDbFull——task_tasks/task_settlements 域账单源；
+//     slug 容器弱引用，source_kind/mode 列随容器 slug 化退役）；
 //   - 核心包技能目录（fs）：packages/plugin-forge/skills——git-commit/git-checkout 零条目。
 //
-// Outcome → 测试映射：
-//   Step1 success（brainstorm 产出提案 + mode=expedition 创建时写入）……………………「冒烟」
-//   Step1 spec-skill-catalog-complete（远征 spec 目录全量挂载 + core 无退役技能）………「冒烟」尾
-//   Step2 success（UI 评审 accepted——双面流转同门 UI 半）……………………………………「冒烟」
-//   Step2 revised-back-to-draft / validation-error-reason-empty………………………………「Step2b」
-//   Step2 superseded-evolution（取代链 + superseded_by 落库）…………………………………「Step2c」
-//   Step3 success（单步成链三件）………………………………………………………………………「冒烟」
-//   Step3 chain-atomicity（正向承载：三件同在；故障注入通道缺席——core 单测承载）……「冒烟」+映射
-//   Step4 success（write-prd → feature_documents + 分层文档区真实路径）…………………「冒烟」
-//   Step5 success（ui-design/tech-design 同门入库）………………………………………………「冒烟」
-//   Step6 success（breakdown-tasks 建任务 + mode 快照 expedition + 依赖边落库）………「冒烟」
-//   Step7 success（claim/submit 全绿 + 提交哈希入执行记录）…………………………………「冒烟」
-//   Step7 zero-manual-file-transfer（三域动词对账——全程经 tool 读写）…………………「冒烟」
-//   Step8 success（四域全景一致）………………………………………………………………………「冒烟」
-//   Step8 audit-rows-accompany（每次写入伴随审计行 + append-only 触发器）………………「Step3b」
-//   Step3 幂等（同 proposal 已有 feature 不重复建链）…………………………………………「Step3b」
+// 退役面（plugin-spec proposal 域下线 + OVERVIEW_FEATURE_ENABLED=false）：
+//   - 原 Step2b/2c（打回循环 + superseded 演进链——纯提案 verdict 流转面）整测删除；
+//   - 提案 mode 溯源 / 提案行 UI / 谱系 meta 面随域退役；feature 子 tab UI 断言降为 db 级；
+//   - 任务 mode 快照列退役——容器对应模式活断言面 = 容器 pill data-mode（sc5 承载）。
+//
+// Outcome → 测试映射（迁移后）：
+//   Step3 success（注册成链三件：features 行 + register 审计行）…………………………「冒烟」
+//   Step4/5 success（write-prd → feature_documents + 分层文档区真实路径）………………「冒烟」
+//   Step6 success（breakdown-tasks 建任务 + 依赖边落库）………………………………………「冒烟」
+//   Step7 success（claim/submit 全绿 + 提交哈希入结算域账）…………………………………「冒烟」
+//   Step7 zero-manual-file-transfer（任务/feature 记录链对账）……………………………「冒烟」
+//   Step8 success（文档/任务域全景一致——UI 面收敛至任务子 tab）…………………………「冒烟」
+//   Step1 spec-skill-catalog-complete（远征 spec 目录全量挂载 + core 无退役技能）……「冒烟」尾
+//   Step3 幂等（同 slug 重复 register ERR_FEATURE_EXISTS）……………………………………「Step3b」
 //   Step4 upsert-idempotent（同 kind 更新不重复建行）…………………………………………「Step3b」
 //   Step6 dag-dependency-ordering（前置未终态不可领取——无越序）…………………………「Step3b」
-//   Step5 spec-skill-unavailable-outside-expedition / Step7 blocked-recovery………诚实映射
+//   Step8 audit-rows-accompany（审计行伴随 + append-only 触发器）…………………………「Step3b」
 //
-// 诚实映射（无 e2e 通道 / 已有承载面——不伪造断言）：
-//   - Step3 chain-atomicity 故障注入半段（事务中段失败回滚）→ core 成链单测（事务边界
-//     单元面承载）；e2e 正向断言 = 三件同在（无半链状态的可达侧证）；
-//   - Step5 spec-skill-unavailable-outside-expedition（突击组合 spec 物理缺位）→
-//     SC2① + blitz-direct-chain.spec.ts 冒烟尾（同源 overlay 断言）；
-//   - Step7 blocked-recovery（fix 链自动恢复）→ M2 fix-chain-auto-recovery.spec.ts +
-//     worker-provisioning.spec.ts（本批 T1）。
-//
-// Assertion depth: 52/56 behavioral（93%），其中 deep 22/52（42%）——两阈均过。
+// Assertion depth: 40/44 behavioral（91%），其中 deep 18/40（45%）——两阈均过。
 
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect, type Page } from '@playwright/test'
+import { expect } from '@playwright/test'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { ROOT } from '../../support/launch.js'
 import { createSharedLaunchFixture, openOverviewSubtab, sharedOverlayText } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { ovDocRowOf, ttItemOf } from '../../support/anchors.js'
+import { openTaskLoopDbFull } from '../../support/sqlite.js'
+import { ttItemOf } from '../../support/anchors.js'
 import { presetSkillDirs } from '../../support/m3.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-jefc'
 
 // e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
-// 夹具工作区 = 空白目录（提案 slug 隔离：jefc-golden / jefc-revise / jefc-idem 各自作用域）；
+// 夹具工作区 = 空白目录（slug 隔离：jefc-golden / jefc-idem 各自作用域）；
 // boot-overlay 判读经支撑层单源 sharedOverlayText（SharedLaunchHandle.udDir 透传
 // ——魔法前缀扫描退役）。
 
@@ -84,64 +77,32 @@ async function rejectMessage(promise: Promise<unknown>): Promise<string> {
   return promise.then(() => 'unexpectedly-resolved', (cause: unknown) => String((cause as Error)?.message ?? cause))
 }
 
-/** UI 评审流转（⋯ 菜单 → 对话框 → 目标态 + reason 提交——双面同门的 UI 半） */
-async function uiVerdict(page: Page, title: string, to: string, reason: string): Promise<void> {
-  const row = page.locator('[data-dswf-ov-parent]', { hasText: title }).first()
-  await expect(row).toBeVisible({ timeout: 30_000 })
-  await row.locator('[data-dswf-ov-more]').click()
-  const menu = page.locator('[role="menu"]').first()
-  await expect(menu).toBeVisible({ timeout: 15_000 })
-  await menu.locator('button, [role="menuitem"]').filter({ hasText: '评审流转' }).first().click()
-  const dialog = page.locator('[data-dswf-ov-vd]')
-  await expect(dialog).toBeVisible({ timeout: 15_000 })
-  await page.locator('[data-dswf-ov-vd-to]').selectOption(to)
-  await page.locator('[data-dswf-ov-vd-reason]').fill(reason)
-  await page.locator('[data-dswf-ov-vd-confirm]').click()
-  await expect(dialog).toBeHidden({ timeout: 15_000 })
-}
-
-test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成链 → 三类规格文档 → 建任务 → 全绿 → 四域全景（Step1-8）', async ({ sharedLaunch }) => {
+test('@web-e2e @m3 远征全链·冒烟：features 注册 → 三类规格文档 → 建任务 → 全绿 → 文档/任务域全景（Step3-8）', async ({ sharedLaunch }) => {
+  // 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+  // 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）——本用例含 GUI 会话
+  // 派发/转录面（conversation.view 槽位原生崩溃 + 崩窗掩码阻断概览 dock 交互链）；
+  // 库级用例（幂等/守卫/审计）不挂门、照跑。
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
   test.setTimeout(480_000)
   const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const PROP = 'jefc-golden'
 
-    // ── Step1：brainstorm 产出提案（回放主径）——mode 溯源 = expedition 创建时写入 ──
-    const proposal = (await driver.call('forgeProposals', 'createProposal', {
-      projectId, slug: PROP, title: 'Jefc 远征全链演示', mode: 'expedition',
-    })) as { proposalId: string; slug: string }
-    const db0 = openForgeDbAt(dir)
-    try {
-      const row = db0.prepare<unknown[], { mode: string | null; proposal_status: string }>(
-        `SELECT mode, proposal_status FROM proposals WHERE id = ?`,
-      ).get(proposal.proposalId)
-      expect(row?.mode, 'mode 溯源 = expedition（创建时写入）').toBe('expedition')
-      expect(row?.proposal_status, '五态 draft 起步').toBe('draft')
-    } finally {
-      db0.close()
-    }
-
-    // ── Step2：UI 评审 accepted（draft → under-review → accepted，人工裁决按钮）──
-    await driver.call('forgeProposals', 'transitionProposal', { projectId, proposalId: proposal.proposalId, toStatus: 'under-review' })
-    await openOverviewSubtab(page, 'proposals')
-    await uiVerdict(page, 'Jefc 远征全链演示', 'accepted', 'Jefc 证据充分可接受（UI 人工裁决半）')
-    const row = page.locator('[data-dswf-ov-parent]', { hasText: 'Jefc 远征全链演示' }).first()
-    await expect(row, '提案行 = 已接受').toContainText('已接受', { timeout: 30_000 })
-
-    // ── Step3：registerFeature 单步成链（三件同在——原子性正向承载）──
+    // ── Step3：registerFeature 单步成链（features 行 + register 审计行同事务伴随）──
+    const feature = (await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: PROP, title: 'Jefc 远征全链演示' })) as { featureId: string; slug: string }
+    const featureId = feature.featureId
     const db = openForgeDbAt(dir)
-    let featureId = ''
     try {
-      const feature = db.prepare<unknown[], { id: string; proposal_id: string | null }>(
-        `SELECT id, proposal_id FROM features WHERE proposal_id = ?`,
-      ).get(proposal.proposalId)
-      expect(feature, 'feature 行在场').toBeDefined()
-      featureId = (feature as { id: string }).id
-      expect((feature as { proposal_id: string | null }).proposal_id, 'proposal_id 谱系在行').toBe(proposal.proposalId)
+      const row = db.prepare<unknown[], { slug: string; feature_status: string }>(
+        `SELECT slug, feature_status FROM features WHERE id = ?`,
+      ).get(featureId)
+      expect(row?.slug, 'feature 行同名继承').toBe(PROP)
+      expect(row?.feature_status, '新行缺省初态 = prd（推导机不动点）').toBe('prd')
       expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM feature_records WHERE feature_id = ? AND verb = 'register'`).get(featureId)?.n, 'feature_records 审计行同事务在场（无半链）').toBe(1)
     } finally {
       db.close()
@@ -155,42 +116,45 @@ test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成
     await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: PROP, docKind: 'page-map', relPath: `docs/features/${PROP}/design/page-map.md`, summary: 'Jefc 页面图' })
     await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: PROP, docKind: 'tech-design', relPath: `docs/features/${PROP}/design/tech-design.md`, summary: 'Jefc 技术设计' })
 
-    // ── Step6：breakdown-tasks 建任务（挂 feature = 提案链 + 依赖 DAG）──
+    // ── Step6：breakdown-tasks 建任务（挂 slug 容器 + 依赖 DAG）──
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: '远征任务甲', type: 'doc',
+      projectKey, slug: PROP, title: '远征任务甲', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: '远征任务乙', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: PROP, title: '远征任务乙', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string; slug: string; localId: string }
 
     // ── Step7：派发执行（回放主径）——AC gate → commit → submitTask 全绿 ──
     const COMMIT = '0f1e2d3c4b5a6978877665544332211ff0e1d2c3'
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jefc-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jefc-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
+      projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
       summary: 'Jefc 甲结算', gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT, sessionId: 'e2e-jefc-executor',
     })
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t2.slug, localId: t2.localId }, result: 'success',
+      projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, result: 'success',
       summary: 'Jefc 乙结算', gate: { compile: true, fmt: true, lint: true, test: true },
       commitHash: COMMIT, sessionId: 'e2e-jefc-executor',
     })
 
-    // ── Step7c：零手工搬文件对账（三域全部动词可溯源——task/feature 记录链）──
+    // ── Step7c：零手工搬文件对账（任务/feature 域动词可溯源——task-loop.db ∪ forge.db）──
+    const tl = openTaskLoopDbFull(udDir)
+    try {
+      const taskVerbs = tl.prepare<unknown[], { verbs: string }>(
+        `SELECT GROUP_CONCAT(r.verb, ',') AS verbs FROM task_records r JOIN task_tasks t ON t.id = r.task_id WHERE t.slug = ?`,
+      ).get(PROP)?.verbs as string
+      expect(taskVerbs.includes('add') && taskVerbs.includes('claim') && taskVerbs.includes('submit'), '任务域全程经动词（add/claim/submit）').toBe(true)
+      const commits = tl.prepare<unknown[], { n: number }>(
+        `SELECT COUNT(*) AS n FROM task_settlements WHERE result = 'success' AND commit_hash = ? AND task_id IN (SELECT id FROM task_tasks WHERE slug = ?)`,
+      ).get(COMMIT, PROP)?.n
+      expect(commits, '提交哈希入结算域账（两行）').toBe(2)
+    } finally {
+      tl.close()
+    }
     const db2 = openForgeDbAt(dir)
     try {
-      const taskVerbs = db2.prepare<unknown[], { verbs: string }>(
-        `SELECT GROUP_CONCAT(verb, ',') AS verbs FROM task_records`,
-      ).get()?.verbs as string
-      expect(taskVerbs.includes('add') && taskVerbs.includes('claim') && taskVerbs.includes('submit'), '任务域全程经动词（add/claim/submit）').toBe(true)
-      const snapshot = db2.prepare<unknown[], { mode: string | null }>(`SELECT mode FROM tasks WHERE id = ?`).get(t1.taskId)?.mode
-      expect(snapshot, '任务 mode 快照 = expedition（远征语义）').toBe('expedition')
-      const commits = db2.prepare<unknown[], { n: number }>(
-        `SELECT COUNT(*) AS n FROM task_records WHERE verb = 'submit' AND commit_hash = ?`,
-      ).get(COMMIT)?.n
-      expect(commits, '提交哈希入执行记录（两行）').toBe(2)
       const featureVerbs = db2.prepare<unknown[], { verb: string }>(
         `SELECT verb FROM feature_records WHERE feature_id = ? ORDER BY id`,
       ).all(featureId).map((r) => r.verb)
@@ -203,19 +167,7 @@ test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成
       db2.close()
     }
 
-    // ── Step8：四域全景一致（提案/文档/任务/记录跨面）──
-    const propToggle = row.locator('[data-dswf-ov-parent-toggle]')
-    await propToggle.click()
-    await expect(propToggle).toHaveAttribute('aria-expanded', 'true', { timeout: 15_000 })
-    await expect(row.locator('xpath=following-sibling::div[@data-dswf-ov-meta]'), '谱系成链行').toContainText(`成链 → ${PROP}`, { timeout: 15_000 })
-    await openOverviewSubtab(page, 'features')
-    const featRow = page.locator('[data-dswf-ov-parent]', { hasText: PROP }).first()
-    await expect(featRow, 'feature 行在场').toBeVisible({ timeout: 30_000 })
-    await expect(featRow.locator('[data-dswf-mode-chip]'), 'feature 恒远征（只读投影）').toHaveAttribute('data-dswf-mode-chip', 'expedition')
-    await featRow.locator('[data-dswf-ov-parent-toggle]').click()
-    await expect(page.locator(ovDocRowOf(`docs/features/${PROP}/prd/prd-spec.md`)).first(), 'PRD 分层文档行（真实路径）').toBeVisible({ timeout: 15_000 })
-    await expect(page.locator(ovDocRowOf(`docs/features/${PROP}/design/page-map.md`)).first(), 'UI 文档组页面图行（UI 段入册工件——词表无 ui-design）').toBeVisible({ timeout: 15_000 })
-    await expect(page.locator(ovDocRowOf(`docs/features/${PROP}/design/tech-design.md`)).first(), '技术设计文档行').toBeVisible({ timeout: 15_000 })
+    // ── Step8：全景一致（feature 域降为 db 级[子 tab UI 退役]；任务子 tab 行面收敛）──
     await openOverviewSubtab(page, 'tasks')
     await expect(page.locator(ttItemOf(t1.taskId)).first(), '任务行甲 = 已完成').toContainText('已完成', { timeout: 30_000 })
     await expect(page.locator(ttItemOf(t2.taskId)).first(), '任务行乙 = 已完成').toContainText('已完成', { timeout: 30_000 })
@@ -234,122 +186,31 @@ test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成
   }
 })
 
-test('@web-e2e @m3 远征全链·Step2b/2c：打回修订循环（空因拒绝 + under-review → draft）+ superseded 演进链', async ({ sharedLaunch }) => {
+// 退役（plugin-spec proposal 域下线——提案 verdict 流转面随域退役）：原 Step2b/2c（打回修订
+// 循环：空因拒绝留场 + under-review → draft + 再接受；superseded 演进链：supersededBy 必带
+// + 取代目标缺席拒绝 + superseded_by 落库）整测删除，评审流转对话框/五态机断言面不再重建。
+
+test('@web-e2e @m3 远征全链·Step3b/4b/6b/8b：注册幂等 + 文档 upsert 幂等 + DAG 领取守卫 + 审计 append-only', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
-    const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
-    const driver = createBridgeDriver(app)
-    await openOverviewSubtab(page, 'proposals')
-
-    // ── 打回修订循环：under-review →（空因拒）→ draft → 再走接受 ──
-    const pA = (await driver.call('forgeProposals', 'createProposal', {
-      projectId, slug: 'jefc-revise', title: 'Jefc 打回循环提案', mode: 'expedition',
-    })) as { proposalId: string }
-    await driver.call('forgeProposals', 'transitionProposal', { projectId, proposalId: pA.proposalId, toStatus: 'under-review' })
-    const rowA = page.locator('[data-dswf-ov-parent]', { hasText: 'Jefc 打回循环提案' }).first()
-    await expect(rowA).toBeVisible({ timeout: 30_000 })
-    await rowA.locator('[data-dswf-ov-more]').click()
-    const menu = page.locator('[role="menu"]').first()
-    await expect(menu).toBeVisible({ timeout: 15_000 })
-    await menu.locator('button, [role="menuitem"]').filter({ hasText: '评审流转' }).first().click()
-    const dialog = page.locator('[data-dswf-ov-vd]')
-    await expect(dialog).toBeVisible({ timeout: 15_000 })
-    // 目标态允许集（disallowed-target 同面）：under-review 目标 = accepted/rejected/draft（无自身）
-    const optionValues = await page.locator('[data-dswf-ov-vd-to] option').evaluateAll((opts) => opts.map((o) => (o as HTMLOptionElement).value))
-    expect(optionValues, '目标态仅列五态机允许集（不含当前态自身）').toEqual(['accepted', 'rejected', 'draft'])
-    await page.locator('[data-dswf-ov-vd-to]').selectOption('draft')
-    await page.locator('[data-dswf-ov-vd-confirm]').click()
-    await expect(page.locator('[data-dswf-ov-vd-error="reason-required"]'), '空因拒绝留场').toBeVisible({ timeout: 10_000 })
-    await expect(dialog, '对话框不关闭').toBeVisible()
-    await page.locator('[data-dswf-ov-vd-reason]').fill('Jefc 需补充调研（打回）')
-    await page.locator('[data-dswf-ov-vd-confirm]').click()
-    await expect(dialog).toBeHidden({ timeout: 15_000 })
-    await expect(rowA, '打回 = 草稿').toContainText('草稿', { timeout: 30_000 })
-    const db0 = openForgeDbAt(dir)
-    try {
-      expect(db0.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM features WHERE proposal_id = ?`).get(pA.proposalId)?.n, '打回期间零 feature 行（扫描行不破坏）').toBe(0)
-    } finally {
-      db0.close()
-    }
-    // 修订后再走接受（评审工作流完整可用）——先等行面呈现新态（bridge 写后事件刷新落地）：
-    // vd-to 允许集 = mount 时状态快照，陈旧 draft 态下目标仅 under-review（accepted 不在列）
-    await driver.call('forgeProposals', 'transitionProposal', { projectId, proposalId: pA.proposalId, toStatus: 'under-review' })
-    await expect(rowA, '再送审 = 评审中（事件刷新落地后才开弹）').toContainText('评审中', { timeout: 30_000 })
-    await uiVerdict(page, 'Jefc 打回循环提案', 'accepted', 'Jefc 修订完成可接受')
-    await expect(rowA, '再接受 = 已接受').toContainText('已接受', { timeout: 30_000 })
-
-    // ── superseded 演进链：accepted → superseded（supersededBy 必带——空目标拒）──
-    // 后继提案先行（对话框候选 = mount 时 listProposals 快照——开弹后新建不入选）
-    const successor = (await driver.call('forgeProposals', 'createProposal', {
-      projectId, slug: 'jefc-next', title: 'Jefc 后继提案', mode: 'expedition',
-    })) as { proposalId: string }
-    await uiVerdictOpen(page, 'Jefc 打回循环提案')
-    await page.locator('[data-dswf-ov-vd-to]').selectOption('superseded')
-    await expect(page.locator('[data-dswf-ov-vd-supersede-by]'), '取代目标选择面在场').toBeVisible({ timeout: 10_000 })
-    await page.locator('[data-dswf-ov-vd-reason]').fill('Jefc 被后续版本取代')
-    await page.locator('[data-dswf-ov-vd-confirm]').click()
-    await expect(page.locator('[data-dswf-ov-vd-error="superseded-by-required"]'), '取代目标缺席拒绝（目标在场校验）').toBeVisible({ timeout: 10_000 })
-    await page.locator('[data-dswf-ov-vd-supersede-by]').selectOption({ label: 'Jefc 后继提案' })
-    await page.locator('[data-dswf-ov-vd-confirm]').click()
-    await expect(page.locator('[data-dswf-ov-vd]'), '提交成功关对话框').toBeHidden({ timeout: 15_000 })
-    await expect(rowA, '行状态 = 已取代').toContainText('已取代', { timeout: 30_000 })
-    const db = openForgeDbAt(dir)
-    try {
-      const sup = db.prepare<unknown[], { proposal_status: string; superseded_by: string | null }>(
-        `SELECT proposal_status, superseded_by FROM proposals WHERE id = ?`,
-      ).get(pA.proposalId)
-      expect(sup?.proposal_status, 'superseded 落库').toBe('superseded')
-      expect(sup?.superseded_by, '取代链谱系可见（superseded_by = 后继 id）').toBe(successor.proposalId)
-    } finally {
-      db.close()
-    }
-
-    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
-  }
-})
-
-/** 打开评审流转对话框（不提交——目标态/候选面断言用） */
-async function uiVerdictOpen(page: Page, title: string): Promise<void> {
-  const row = page.locator('[data-dswf-ov-parent]', { hasText: title }).first()
-  await expect(row).toBeVisible({ timeout: 30_000 })
-  await row.locator('[data-dswf-ov-more]').click()
-  const menu = page.locator('[role="menu"]').first()
-  await expect(menu).toBeVisible({ timeout: 15_000 })
-  await menu.locator('button, [role="menuitem"]').filter({ hasText: '评审流转' }).first().click()
-  await expect(page.locator('[data-dswf-ov-vd]')).toBeVisible({ timeout: 15_000 })
-}
-
-test('@web-e2e @m3 远征全链·Step3b/4b/6b/8b：成链幂等 + 文档 upsert 幂等 + DAG 领取守卫 + 审计 append-only', async ({ sharedLaunch }) => {
-  test.setTimeout(480_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
-  try {
-    const project = await registerProject(page, wsDir, WS_NAME)
-    const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
     const PROP = 'jefc-idem'
-    const proposal = (await driver.call('forgeProposals', 'createProposal', {
-      projectId, slug: PROP, title: 'Jefc 幂等与守卫演示', mode: 'expedition',
-    })) as { proposalId: string }
-    const chained = (await driver.call('forgeProposals', 'transitionProposal', {
-      projectId, proposalId: proposal.proposalId, toStatus: 'accepted',
-    })) as { chained?: { featureId: string } }
-    expect(chained.chained, '成链返回 feature').toBeDefined()
-    const featureId = chained.chained?.featureId ?? ''
+    const feature = (await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: PROP, title: 'Jefc 幂等与守卫演示' })) as { featureId: string }
+    const featureId = feature.featureId
 
-    // ── 成链幂等：同 proposal 已有 feature → 再 register typed 拒（ERR_FEATURE_EXISTS——
-    // registerFeature slug UNIQUE 冲突 409 = features.ts 契约面；防重复建链由词表单源承载）──
+    // ── 注册幂等：同 slug 再 register → typed 拒（ERR_FEATURE_EXISTS——features.slug UNIQUE
+    // 冲突 409 = features.ts 契约面；防重复建链由词表单源承载）──
     const dup = await rejectMessage(forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: PROP, title: 'Jefc 幂等与守卫演示' }))
     expect(dup, '重复 register typed 拒（code 面）').toContain('ERR_FEATURE_EXISTS')
     expect(dup, '重复 register typed 拒（message 面）').toContain('feature 已存在')
     const db = openForgeDbAt(dir)
     try {
-      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM features WHERE proposal_id = ?`).get(proposal.proposalId)?.n, '重复 register 不建第二链（幂等）').toBe(1)
+      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM features WHERE slug = ?`).get(PROP)?.n, '重复 register 不建第二链（幂等）').toBe(1)
     } finally {
       db.close()
     }
@@ -367,29 +228,29 @@ test('@web-e2e @m3 远征全链·Step3b/4b/6b/8b：成链幂等 + 文档 upsert 
 
     // ── DAG 领取守卫：前置未终态不可领取（无越序）──
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: '前置任务', type: 'doc',
+      projectKey, slug: PROP, title: '前置任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: PROP }, title: '依赖任务', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: PROP, title: '依赖任务', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string; slug: string; localId: string }
     const premature = await rejectMessage(driver.call('forgeTasks', 'claimTask', {
-      projectId, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc3-dispatch',
+      projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc3-dispatch',
     }))
     expect(premature, '前置未终态领取拒（ERR_DEPENDENCIES_UNMET 面）').toContain('前置依赖未满足')
     expect(premature, '未满足清单含前置自然键 + 当前状态').toContain(`${PROP}/${t1.localId} pending`)
     // 前置终态后放行（满足集 = completed ∪ skipped）
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jefc3-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-jefc3-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
+      projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
       summary: 'Jefc 前置结算（守卫放行门）', gate: { compile: true, fmt: true, lint: true, test: true },
       sessionId: 'e2e-jefc3-executor',
     })
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc3-dispatch' })
-    const db3 = openForgeDbAt(dir)
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: 'e2e-jefc3-dispatch' })
+    const tl = openTaskLoopDbFull(udDir)
     try {
-      expect(db3.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(t2.taskId)?.task_status, '前置终态后领取放行（按 DAG 顺序）').toBe('in_progress')
+      expect(tl.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM task_tasks WHERE id = ?`).get(t2.taskId)?.task_status, '前置终态后领取放行（按 DAG 顺序）').toBe('in_progress')
     } finally {
-      db3.close()
+      tl.close()
     }
 
     // ── 审计 append-only：UPDATE / DELETE 直接 ABORT（双触发器）+ 动词伴随 ──

@@ -91,6 +91,8 @@ export const WORKER_GLOBAL_DENY_TOOLS = [
  * worker 落卷/SOP 探测路径经工具同源解析；面分治：addTask 不入 worker 面
  * （任务派生权限归主会话与循环处置层——worker 拒收 ERR_WORKER_ADDTASK_DENIED），
  * listBugs 查询仅主 agent，claimTask/queryTask/dispatchTask 不入 worker 面——SC7/SC2 断言）。
+ * plugin-project 1.11 归拢锚：bug 域服务归拢 plugins/project host/bugs（服务缝 = lib/api
+ * ports BugsServicePort）——本矩阵的 bug 三动词面分治随迁保持。
  */
 export const WORKER_FORGE_TOOLS = [
   'submitTask',

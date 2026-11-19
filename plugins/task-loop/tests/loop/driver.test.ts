@@ -1,0 +1,4462 @@
+// S1b · 宿主派发循环驱动器单测（run-tasks-host-command/1.4 验收面）：
+// runRound 状态机全链（领取→领取通知→spawn→结算→结果通知→判定→续派）宿主代码驱动、
+// 任意时刻 in-flight ≤1（串行跟踪）、no-task 三态判词（settled 收口/等待 patience/halted）、
+// adopt 逐个恢复重入、blocked 有 fix 机械续领 / 无 fix 处置钩子桩（三动作）、spawn 失败
+// 退避 ×3 halted 粘性、worker 异常终止 bounded 重入超限升级、停止（in-flight 真化
+// interrupted + ⑰ 收口）、v1 单活守卫。spawn/tasks/narrator 通道全桩（真 narrator 渲染 +
+// 录制通道；incident 仓缺目录 = 零 I/O）。
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { BugCard, ForgePluginEvent, TriageDecidedPayload, TriageOutcomePayload } from '@dsh-forge/contracts'
+import { FIX_CHAIN_DEPTH_LIMIT, IMPLEMENTATION_TASK_TYPES } from '@dsh-forge/contracts'
+import type { AddTaskInput } from '../../host/domain/tasks/add.js'
+import type { ClaimTaskInput, ClaimTaskResult } from '../../host/domain/tasks/claim.js'
+import type { ListTasksQuery, TaskStats } from '../../host/domain/tasks/list.js'
+import type { QueryTaskResult } from '../../host/domain/tasks/query.js'
+import type { TasksService } from '../../host/domain/tasks/service.js'
+import type { TaskCard, TaskSnapshot, TaskStatus } from '../../host/domain/tasks/types.js'
+import type { TransitionTaskInput } from '../../host/domain/tasks/transition.js'
+import { backoffDelayMs, createLoopDriver, createLoopRegistry, isRateLimitFailure, isTriageInvalidOutput, LOOP_RESUME_RESTORE_REASON, LOOP_TRIAGE_MAX_ATTEMPTS, testBaselineBriefOf, triageFailureSummary, TRIAGE_FIX_CHAIN_DEPTH_LIMIT } from '../../host/loop/index.js'
+import type { LoopCheckpointsFace, LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageDecisionResult, LoopTriageHook, LoopTriageInput } from '../../host/loop/index.js'
+import type { LoopRecord } from '../../host/loop/index.js'
+import { createNarrator } from '../../host/notify/index.js'
+import type { IncidentStore, NarrationChannel, Narrator } from '../../host/notify/index.js'
+import { FORGE_PROGRESS_SCENARIO as S } from '../../host/progress/index.js'
+import type { ForgeProgressEventData } from '../../host/progress/index.js'
+import type { ForgeEventSink } from '../../host/events/sink.js'
+import { createTriageHook, TriageDecisionInvalidError } from '../../host/triage/index.js'
+import { exclusiveLoopSourceOf, HALTED_REASON, resetExclusiveLoopSources } from '../../host/dispatch-core/index.js'
+import type { SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from '../../host/dispatch-core/index.js'
+import type { CommitLandingVerifier } from '../../host/dispatch-core/index.js'
+
+// ─────────────────────────── 夹具 ───────────────────────────
+
+const OWNER = 'owner-session-1'
+const PROJECT = 'p-1'
+const SOURCE = { slug: 'feat-x' } as const
+
+afterEach(() => {
+  resetExclusiveLoopSources() // S1c 独占登记表 = 模块级状态——跨用例复位
+})
+
+function snapshot(over: Partial<TaskSnapshot> = {}): TaskSnapshot {
+  return {
+    taskId: 't-1',
+    slug: 'feat-x',
+    localId: '2.5',
+
+    title: 'Implement the thing',
+    taskType: 'coding-fix',
+    taskStatus: 'in_progress',
+    breaking: false,
+    complexity: 'high',
+    createdAt: '2026-10-11T00:00:00.000Z',
+    updatedAt: '2026-10-11T00:00:00.000Z',
+    ...over,
+  }
+}
+
+function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number; gatedPending?: number } = {}): TaskStats {
+  const byStatus: Record<TaskStatus, number> = {
+    pending: 0,
+    in_progress: 0,
+    blocked: 0,
+    completed: 0,
+    skipped: 0,
+    rejected: 0,
+    suspended: 0,
+    interrupted: 0,
+    ...over,
+  }
+  return { total: 1, byStatus, unmetPending: over.unmetPending ?? 0, gatedPending: over.gatedPending ?? 0 }
+}
+
+function card(slug: string, localId: string, over: Partial<TaskCard> = {}): TaskCard {
+  return {
+    taskId: `card-${slug}-${localId}`,
+    slug,
+    localId,
+    title: `Task ${localId}`,
+    taskType: 'coding-fix',
+    taskStatus: 'pending',
+    prerequisites: [],
+    sessionCount: 0,
+    ...over,
+  }
+}
+
+const NO_TASK: ClaimTaskResult = { task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false }
+
+/** 永不结算的 spawn 桩（生命周期用例——在飞保持确定性） */
+function parkedSpawn(_n: number): Promise<SpawnWorkerHandle> {
+  return Promise.resolve({
+    workerSessionId: 'worker-parked',
+    result: new Promise(() => {}),
+    dispose: async () => {},
+  })
+}
+
+function claimed(localId = '2.5', digest = 'digestabc123'): ClaimTaskResult {
+  return { task: snapshot({ localId }), dispatchPrompt: 'PERSONA + <task-context>', persona: 'PERSONA-MATRIX', digest, reclaimed: false }
+}
+
+function queryOf(status: TaskStatus, over: Partial<TaskSnapshot> = {}): QueryTaskResult {
+  return {
+    task: snapshot({ taskStatus: status, ...over }),
+    container: { slug: 'feat-x' },
+    records:
+      status === 'completed'
+        ? [{ verb: 'submit', toStatus: 'completed', summary: 'did the thing', commitHash: 'abc1234', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }]
+        : status === 'blocked'
+          ? [{ verb: 'submit', toStatus: 'blocked', reason: 'tests hang on flaky selector', files: ['packages/x/src/changed.ts'], actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }]
+          : [],
+  }
+}
+
+/** 无进展 blocked 的结算记录（零 commit hash 零 files——硬停门直达挂起） */
+function queryOfBlockedNoProgress(): QueryTaskResult {
+  return {
+    task: snapshot({ taskStatus: 'blocked' }),
+    container: { slug: 'feat-x' },
+    records: [{ verb: 'submit', toStatus: 'blocked', reason: 'needs human verdict', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }],
+  }
+}
+
+/** 结算尾延迟句柄（live 并发跟踪——maxLive 断言串行 ≤1 的机械证据） */
+function trackedSpawn(): { spawn: SpawnWorker; requests: SpawnWorkerRequest[]; maxLive: () => number; setBehavior: (b: (n: number) => Promise<SpawnWorkerHandle>) => void } {
+  const requests: SpawnWorkerRequest[] = []
+  let live = 0
+  let max = 0
+  let n = 0
+  let behavior: (n: number) => Promise<SpawnWorkerHandle> = async (seq) => {
+    live += 1
+    max = Math.max(max, live)
+    const result = new Promise<{ stopReason: string; output: string }>((resolve) => {
+      setTimeout(() => {
+        live -= 1
+        resolve({ stopReason: 'completed', output: '' })
+      }, 5)
+    })
+    return { workerSessionId: `worker-${seq}`, result, dispose: async () => {} }
+  }
+  return {
+    requests,
+    maxLive: () => max,
+    setBehavior: (b) => {
+      behavior = b
+    },
+    spawn: async (req) => {
+      requests.push(req)
+      n += 1
+      return behavior(n)
+    },
+  }
+}
+
+/** tasks 服务桩（脚本队列 shift-末项重复；读写全记录） */
+function tasksHarness(options?: { addTaskFailures?: number }) {
+  let addFails = options?.addTaskFailures ?? 0
+  const claimInputs: ClaimTaskInput[] = []
+  const statsInputs: unknown[] = []
+  const listInputs: ListTasksQuery[] = []
+  const addTaskInputs: AddTaskInput[] = []
+  const transitions: TransitionTaskInput[] = []
+  let claimQueue: Array<ClaimTaskResult | Error> = [claimed()]
+  let statsQueue: TaskStats[] = [statsOf({ pending: 1 })]
+  let queryQueue: QueryTaskResult[] = [queryOf('completed')]
+  const reconcileInputs: unknown[] = []
+  let reconcileQueue: Array<{ reconciled: Array<{ slug: string; localId: string }> }> = [{ reconciled: [] }]
+  const lists: Record<'interrupted' | 'in_progress' | 'blocked' | 'created' | 'suspended', TaskCard[]> = {
+    interrupted: [],
+    in_progress: [],
+    blocked: [],
+    created: [],
+    suspended: [], // task-pause-primitive：resume 批量恢复读面（suspended paused 卡桶）
+  }
+  const shift = <T,>(queue: T[]): T => (queue.length > 1 ? (queue.shift() as T) : (queue[0] as T))
+  const tasks = {
+    claimTask: async (input: ClaimTaskInput) => {
+      claimInputs.push(input)
+      // 状态推进模拟：adopt 领取将任务移出 interrupted 集（真实 claimTask 置 in_progress）
+      if (input.adopt !== undefined) {
+        lists.interrupted = lists.interrupted.filter(
+          (c) => !(c.slug === input.adopt?.slug && c.localId === input.adopt?.localId),
+        )
+      }
+      // FAIL-2 径②：claim 阶段 fail-loud（队列首项为 Error 时抛出——档案缺失等 claim 链异常）
+      if (claimQueue[0] instanceof Error) throw claimQueue.shift()
+      return shift(claimQueue)
+    },
+    taskStats: async (input: unknown) => {
+      statsInputs.push(input)
+      return shift(statsQueue)
+    },
+    listTasks: async (q: ListTasksQuery) => {
+      listInputs.push(q)
+      const bucket = q.statusFilter?.[0]
+      if (bucket === 'interrupted') return lists.interrupted
+      if (bucket === 'in_progress') return lists.in_progress
+      if (bucket === 'blocked') return lists.blocked
+      if (bucket === 'suspended') return lists.suspended
+      return lists.created
+    },
+    // 链清单读面桩（bug a587123e 收口后 driver 消费 core readUnsettledChain 动词）：
+    // created 桶同判据投影（I 词表 + fix-/disc- 排除 + 非终态）——T5 夹具语义镜像
+    readUnsettledChain: async () => ({
+      unsettled: lists.created
+        .filter((c) => (IMPLEMENTATION_TASK_TYPES as readonly string[]).includes(c.taskType))
+        .filter((c) => !c.localId.startsWith('fix-') && !c.localId.startsWith('disc-'))
+        .filter((c) => c.taskStatus !== 'completed' && c.taskStatus !== 'skipped')
+        .map((c) => ({ slug: c.slug, localId: c.localId, taskStatus: c.taskStatus })),
+    }),
+    queryTask: async () => {
+      const q = shift(queryQueue)
+      // 结算行读缝数据源镜像（v1 列面——settlements.lastByTask 消费）：query 快照 records
+      // 的末条 submit 行投影 LastSettlementView（与生产 settlement-repo listByTask 末条同源语义）
+      if (q !== undefined && q.task !== undefined) seenQueries.set(q.task.taskId, q)
+      return q
+    },
+    // 1.16 批量结算读面桩（wave 快照数据源——completed created 桶投影，commit/债计数零值）
+    taskSettlements: async () =>
+      lists.created
+        .filter((c) => c.taskStatus === 'completed')
+        .map((c) => ({
+          slug: c.slug,
+          localId: c.localId,
+          taskType: c.taskType,
+          fixDerived: c.sourceTask !== undefined,
+          commitHashes: ['abc1234'], // 同 queryOf('completed') 结算记录 commit——快照口径数据源同值
+          evidenceDebtCount: 0,
+        })),
+    addTask: async (input: AddTaskInput) => {
+      if (addFails > 0) {
+        addFails -= 1
+        throw new Error('add task failed')
+      }
+      addTaskInputs.push(input)
+      // 真实语义镜像：派生任务入池（pending）——在场判定（hasOpen 同构）可观察，防重派误判
+      lists.created.push({
+        taskId: 'fix-uuid',
+        slug: input.slug,
+        localId: 'fix-2',
+        title: input.title,
+        taskType: input.type,
+        taskStatus: 'pending',
+        prerequisites: [],
+        sessionCount: 0,
+      })
+      return { taskId: 'fix-uuid', slug: input.slug, localId: 'fix-2', reused: false }
+    },
+    transitionTask: async (input: TransitionTaskInput) => {
+      transitions.push(input)
+      return snapshot({ taskStatus: input.toStatus })
+    },
+    submitTask: async () => {
+      throw new Error('loop must never submit (workers settle themselves)')
+    },
+    reconcileInterrupted: async (input: unknown) => {
+      // bug 6d98a275 启动对账记录（原桩抛错——「只归装配」假设已被 scoped 径推翻）
+      reconcileInputs.push(input)
+      return shift(reconcileQueue)
+    },
+  } as unknown as TasksService
+  // 结算行读缝桩（v1 列面适配——settleWorkerRun 的 submit 载荷源 = settlements.lastByTask；
+  // 数据从 query 快照 records 投影，与生产 settlement-repo 末条投影同构）
+  const seenQueries = new Map<string, QueryTaskResult>()
+  const settlements = {
+    lastByTask: (taskId: string) => {
+      const view = seenQueries.get(taskId)
+      const rec = view?.records?.filter((r) => r.verb === 'submit').at(-1)
+      if (rec === undefined) return undefined
+      return rec.toStatus === 'blocked'
+        ? {
+            result: 'blocked' as const,
+            ...(rec.commitHash !== undefined ? { commitHash: rec.commitHash } : {}),
+            evidence: { reason: rec.reason ?? '', ...(rec.files !== undefined ? { files: rec.files } : {}) },
+          }
+        : {
+            result: 'success' as const,
+            ...(rec.commitHash !== undefined ? { commitHash: rec.commitHash } : {}),
+            evidence: { summary: rec.summary ?? '', ...(rec.files !== undefined ? { files: rec.files } : {}) },
+          }
+    },
+  }
+  return {
+    tasks,
+    settlements,
+    claimInputs,
+    statsInputs,
+    listInputs,
+    addTaskInputs,
+    transitions,
+    reconcileInputs,
+    lists,
+    setClaim: (q: Array<ClaimTaskResult | Error>) => {
+      claimQueue = q
+    },
+    setReconcile: (q: Array<{ reconciled: Array<{ slug: string; localId: string }> }>) => {
+      reconcileQueue = q
+    },
+    setStats: (q: TaskStats[]) => {
+      statsQueue = q
+    },
+    setQuery: (q: QueryTaskResult[]) => {
+      queryQueue = q
+    },
+  }
+}
+
+type NarrationCall = {
+  readonly method: 'notice' | 'followup' | 'settle'
+  readonly sessionId: string
+  readonly text: string
+  /** loop-event-delivery 投递面：原始 send options 直录（form 铸造形态 + wakeup 路由） */
+  readonly form: 'notice' | 'followup' | 'settle'
+  readonly wakeup: boolean
+  /** 预构建折叠摘要（faces.ts source.summary 源——缺席 = 折叠位回退整段截断） */
+  readonly headline?: string
+}
+
+/** NarrationChannel send 桩（loop-event-delivery 接口收窄——form/wakeup 原样直录，
+ *  method = 兼容换算：settle 形态 → settle / wakeup=true → followup / 其余 → notice） */
+function sendRecordingChannel(calls: NarrationCall[], onSend?: (sessionId: string, text: string) => void): NarrationChannel {
+  return {
+    send: async (sessionId, text, options) => {
+      const form = options?.form ?? 'notice'
+      const wakeup = options?.wakeup === true
+      const method = form === 'settle' ? 'settle' : wakeup ? 'followup' : 'notice'
+      calls.push({ method, sessionId, text, form, wakeup, ...(options?.headline !== undefined ? { headline: options.headline } : {}) })
+      onSend?.(sessionId, text)
+    },
+  }
+}
+
+interface Built {
+  driver: LoopDriver
+  calls: NarrationCall[]
+  events: ForgePluginEvent[]
+  /** 事件日志容器目录直记录制（bug a93c1277——start 即 remember(owner, containerDir)） */
+  remembers: string[]
+  h: ReturnType<typeof tasksHarness>
+  spawn: ReturnType<typeof trackedSpawn>
+  escalations: LoopEscalation[]
+  /** 1.17 进度事件录制面（'forge/progress' append 形状观察） */
+  progressCalls: ForgeProgressEventData[]
+  /** 机械③ checkpoints 域 ensure 调用录制（mark/baseCommitHash/snapshots/appended 形状断言） */
+  cpEnsures: Array<{ projectKey: string; containerSlug: string; mark: string; baseCommitHash: string; snapshots: unknown; appended: boolean }>
+}
+
+function build(options: {
+  claim?: Array<ClaimTaskResult | Error>
+  stats?: TaskStats[]
+  query?: QueryTaskResult[]
+  /** 处置钩子桩（决策返回形状双容：裸决策自动包 `{ decision }`；triage-progress-row 结果形直传） */
+  triage?: (input: LoopTriageInput) => Promise<LoopTriageDecision | LoopTriageDecisionResult>
+  /** 真钩子注册径（1.11 装配接线收口——SC4 端到端）：工厂收到 tasks 桩，装配期建钩子 */
+  triageHook?: (h: ReturnType<typeof tasksHarness>) => LoopTriageHook
+  /** 事件仓桩（blocked 族落盘委派观察——projectId 解析缝载体断言） */
+  incidents?: IncidentStore
+  spawnBehavior?: (h: ReturnType<typeof trackedSpawn>) => void
+  /** 改进 6⑤ 已知容器集读面桩（wait-external.externalSlug 存在性校验） */
+  knownContainers?: (projectId: string) => Promise<readonly string[]>
+  /** 改进 6② 退避基长注入（缺省 1ms——立即重试径的节奏断言用大值区分两径） */
+  backoffBaseMs?: number
+  /** 3c 最大轮次上限注入（缺省 LOOP_MAX_ROUNDS——生产值；测试注入小值触发终局） */
+  limits?: { readonly maxRounds?: number }
+  /** 3c 宽限窗基长注入（缺省 1ms——立即收敛；窗内叫停用例注入大值保持确定性） */
+  quiescenceWindowMs?: number
+  /** 改进7（e2e 取证债）：红灯基线门注入——runSuite 桩返回 reporter 输出；readHead 桩返回 worktree HEAD */
+  e2eBaseline?: {
+    runSuite: () => Promise<string>
+    readHead?: (worktree: string) => Promise<string | undefined>
+    /** bug 006d8bfe 后续：持久化缓存路径缝（{slug, worktree} → 缓存文件；缺席 = 无持久化）——
+     *  形状随 LoopDriverDeps.e2eBaseline.cacheFile（e0c4b6e7 输入形，镜像同步） */
+    cacheFile?: (input: { readonly slug: string; readonly worktree?: string }) => string | undefined
+  }
+  /** 1.18 落点核验器注入（错分支提交场景——settleWorkerRun commitLanding 缝） */
+  commitLanding?: CommitLandingVerifier
+  /** 机械③ checkpoints 域桩（初始行集——ensure 追加进行集模拟域侧幂等） */
+  checkpointRows?: Array<{ mark: string; tasksTotal: number; commitsTotal: number; fixesTotal: number; evidenceDebtsTotal: number }>
+  /** 机械③ 标记落库故障注入（前 N 次 ensureCheckpoint 抛错——append 失败窄窗口模拟） */
+  ensureFailures?: number
+  /** 机械③ addTask 派生故障注入（前 N 次 addTask 抛错——知识补派失败不阻断标记模拟） */
+  addTaskFailures?: number
+  /** 机械③ 容器 → 提案 id 解析桩 */
+  resolveProposalId?: () => Promise<string | undefined>
+  /** 机械③ 容器分支 HEAD 解析桩（worktree 在场时标记 base_commit_hash 来源） */
+  resolveHeadCommit?: (worktree: string) => Promise<string | undefined>
+  /** 诊断埋点桩（AGENTS §7——循环里程碑 diag 录制） */
+  diag?: (payload: { readonly level: 'debug' | 'info' | 'warn' | 'error'; readonly event: string; readonly message: string }) => void
+  /** T3 同缝拦截（loop-recurrence-hardening）：台账 recurrence 候选 face 桩 */
+  findRecurrenceCandidates?: (projectId: string, scope: { readonly slug: string; readonly localId: string; readonly sourceTaskId: string | undefined }) => Promise<unknown[]> | unknown[]
+  /** T3「待建模」解除判据：卷宗建模报告在场桩 */
+  modelingReportPresent?: (input: { readonly projectId: string; readonly slug: string; readonly localId: string; readonly bugIds: readonly string[] }) => boolean
+  /** bug 台账桩（loop-phase-gate 提案⑤——done 径承接检查数据源；open 行清单直录） */
+  bugs?: readonly { bugId: string; summary: string; sourceTaskId?: string }[]
+  /** P8 评审指示单选缝（bug cf6254ff）：deps.expertsPresent 桩——true = 三路措辞 / false|缺席 = subagent 回落 */
+  expertsPresent?: () => boolean
+  /** 事件日志容器目录解析缝（bug a93c1277）：deps.containerDirOf 桩——注入 = start 即直记 */
+  containerDirOf?: (projectId: string) => string
+} = {}): Built {
+  const h = tasksHarness({ addTaskFailures: options.addTaskFailures })
+  if (options.claim !== undefined) h.setClaim(options.claim)
+  if (options.stats !== undefined) h.setStats(options.stats)
+  if (options.query !== undefined) h.setQuery(options.query)
+  const calls: NarrationCall[] = []
+  const channel: NarrationChannel = sendRecordingChannel(calls)
+  const narrator: Narrator = createNarrator({
+    channel,
+    // incident 仓缺目录解析 = 零 I/O fail-soft；显式桩时观察落盘委派
+    ...(options.incidents !== undefined ? { incidents: options.incidents } : {}),
+  })
+  const events: ForgePluginEvent[] = []
+  const remembers: string[] = []
+  const sink: ForgeEventSink = {
+    emit: (e) => events.push(e),
+    prepare: async () => {},
+    dirOf: () => undefined,
+    remember: (id, dir) => remembers.push(`${id}|${dir}`),
+  }
+  const spawn = trackedSpawn()
+  if (options.spawnBehavior !== undefined) options.spawnBehavior(spawn)
+  const escalations: LoopEscalation[] = []
+  // 机械③ checkpoints 域桩（ensure 追加进行集——域侧幂等语义同构：行集已含 mark = no-op）
+  const cpEnsures: Array<{ projectKey: string; containerSlug: string; mark: string; baseCommitHash: string; snapshots: unknown; appended: boolean }> = []
+  const cpRows = [...(options.checkpointRows ?? [])]
+  let ensureFails = options.ensureFailures ?? 0
+  const checkpoints = options.checkpointRows === undefined ? undefined : {
+    ensureCheckpoint: async (input: { projectKey: string; containerSlug: string; mark: string; baseCommitHash: string; snapshots: unknown }) => {
+      if (ensureFails > 0) {
+        ensureFails -= 1
+        throw new Error('checkpoint append failed')
+      }
+      if (cpRows.some((r) => r.mark === input.mark)) {
+        cpEnsures.push({ ...input, appended: false })
+        return { appended: false as const }
+      }
+      cpEnsures.push({ ...input, appended: true })
+      cpRows.push({ mark: input.mark, ...(input.snapshots as { tasksTotal: number; commitsTotal: number; fixesTotal: number; evidenceDebtsTotal: number }) })
+      return { appended: true as const }
+    },
+    appendCheckpoint: async (_input: { projectKey: string; containerSlug: string; mark: string; baseCommitHash: string; snapshots: unknown }) => ({}),
+    listCheckpoints: async (q: { marks?: readonly string[] }) => cpRows.filter((r) => q.marks === undefined || q.marks.includes(r.mark)),
+  } as unknown as LoopCheckpointsFace | undefined
+  // 1.17 进度事件录制（'forge/progress' append 形状——形状/序断言消费）
+  const progressCalls: ForgeProgressEventData[] = []
+  const deps: LoopDriverDeps = {
+    projectId: PROJECT,
+    tasks: h.tasks,
+    spawn: spawn.spawn,
+    narrator,
+    events: sink,
+    settlements: h.settlements,
+    progress: {
+      append: (_sessionId, data) => {
+        progressCalls.push(data)
+      },
+    },
+    ...(options.triage !== undefined
+      ? {
+          triage: {
+            run: async (input: LoopTriageInput): Promise<LoopTriageDecisionResult> => {
+              const out = await options.triage!(input)
+              return typeof out === 'object' && out !== null && 'decision' in out ? (out as LoopTriageDecisionResult) : { decision: out as LoopTriageDecision }
+            },
+          },
+        }
+      : {}),
+    ...(options.triageHook !== undefined ? { triage: options.triageHook(h) } : {}),
+    ...(options.knownContainers !== undefined ? { knownContainers: options.knownContainers } : {}),
+    ...(options.commitLanding !== undefined ? { commitLanding: options.commitLanding } : {}),
+    ...(options.e2eBaseline !== undefined ? { e2eBaseline: options.e2eBaseline } : {}),
+    ...(checkpoints !== undefined ? { checkpoints } : {}),
+    ...(options.resolveProposalId !== undefined ? { resolveProposalId: options.resolveProposalId } : {}),
+    ...(options.resolveHeadCommit !== undefined ? { resolveHeadCommit: options.resolveHeadCommit } : {}),
+    ...(options.diag !== undefined ? { diag: options.diag } : {}),
+    ...(options.findRecurrenceCandidates !== undefined ? { findRecurrenceCandidates: options.findRecurrenceCandidates as LoopDriverDeps['findRecurrenceCandidates'] } : {}),
+    ...(options.modelingReportPresent !== undefined ? { modelingReportPresent: options.modelingReportPresent as LoopDriverDeps['modelingReportPresent'] } : {}),
+    ...(options.bugs !== undefined
+      ? {
+          bugs: {
+            listBugs: async (): Promise<readonly BugCard[]> =>
+              options.bugs!.map((bug): BugCard => ({
+                bugId: bug.bugId,
+                summary: bug.summary,
+                bugDesc: '',
+                triggerDesc: '',
+                expected: '',
+                actual: '',
+                bugStatus: 'open',
+                reporter: '',
+                createdAt: '',
+                updatedAt: '',
+                ...(bug.sourceTaskId !== undefined ? { sourceTaskId: bug.sourceTaskId } : {}),
+              })),
+          },
+        }
+      : {}),
+    ...(options.expertsPresent !== undefined ? { expertsPresent: options.expertsPresent } : {}),
+    ...(options.containerDirOf !== undefined ? { containerDirOf: options.containerDirOf } : {}),
+    escalation: {
+      escalate: async (e) => {
+        escalations.push(e)
+      },
+    },
+    delays: {
+      backoffBaseMs: options.backoffBaseMs ?? 1,
+      patiencePauseMs: 1,
+      quiescenceWindowMs: options.quiescenceWindowMs ?? 1,
+      quiescencePollMs: 1,
+    },
+    ...(options.limits !== undefined ? { limits: options.limits } : {}),
+  }
+  return { driver: createLoopDriver(deps), calls, events, remembers, h, spawn, escalations, progressCalls, cpEnsures }
+}
+
+/** 等待循环终局（登记表注销 = 终态唯一机械信号） */
+async function untilSettled(driver: LoopDriver): Promise<void> {
+  await vi.waitFor(
+    () => {
+      expect(driver.activeOf(OWNER)).toBeUndefined()
+    },
+    { timeout: 2000, interval: 5 },
+  )
+}
+
+/** 等待循环挂起（3b——record.suspended 在场 = 挂起唯一机械信号）；返回挂起载荷供断言 */
+async function untilSuspended(driver: LoopDriver): Promise<NonNullable<LoopRecord['suspended']>> {
+  await vi.waitFor(
+    () => {
+      expect(driver.activeOf(OWNER)?.suspended).toBeDefined()
+    },
+    { timeout: 2000, interval: 5 },
+  )
+  return driver.activeOf(OWNER)!.suspended!
+}
+
+// ─────────────────────────── 每轮流转全链（SC2） ───────────────────────────
+
+describe('runRound 全链（领取→领取通知→spawn→结算→结果通知→判定→续派）', () => {
+  it('两轮流转 + settled 收口：claim 携带 loopSourced/主会话 id/source；叙述四连（①④⑥⑯）；事件三连+no-ready-task；串行 maxLive=1', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读（待执行 1）
+        statsOf({ in_progress: 1 }), // 领取通知读（执行中 1）
+        statsOf({ in_progress: 1 }), // 结算读（settle 核池快照——断言不涉）
+        statsOf({ completed: 1 }), // no-task 池读（done 判词）
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+    })
+    const start = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: { tag: 'parent' } })
+    expect(start).toEqual({ ok: true, loopId: expect.any(String) })
+    await untilSettled(built.driver)
+
+    // claim：主会话真实 id + loopSourced 循环来源标记 + source 对（无 adopt——就绪盲选）；
+    // 次轮 no-task 判词后收口——claim 恰两次（第二轮零 adopt 键）
+    expect(built.h.claimInputs).toHaveLength(2)
+    expect(built.h.claimInputs[0]).toEqual({ projectKey: PROJECT, sessionId: OWNER, source: SOURCE, loopSourced: true, testBaseline: { present: false } })
+    expect(built.h.claimInputs[1]).toEqual({ projectKey: PROJECT, sessionId: OWNER, source: SOURCE, loopSourced: true, testBaseline: { present: false } })
+    // spawn：全文 prompt + label（任务键 · 任务名）+ parent 透传
+    expect(built.spawn.requests).toHaveLength(1)
+    expect(built.spawn.requests[0]).toMatchObject({
+      prompt: 'PERSONA + <task-context>',
+      label: 'feat-x/2.5 · Implement the thing',
+      parent: { tag: 'parent' },
+    })
+    // 消息面单径（loop-message-consolidation）：①④⑥ notice 退出——仅 ⑯ 结算单点（settle·wakeup=true）
+    expect(built.calls.map((c) => c.method)).toEqual(['settle'])
+    expect(built.calls.map((c) => c.form)).toEqual(['settle'])
+    expect(built.calls.map((c) => c.wakeup)).toEqual([true])
+    expect(built.calls[0]?.text).toContain('[forge·循环结束] 任务源: feat-x — 循环结束（全部任务已完成）')
+    expect(built.calls[0]?.text).toContain('完成 1 · 阻塞 0')
+    // 结算概要（驱动侧与 progress 事件同源的起止记录——按 slug 分组：组首行状态计数 +
+    // 任务行 `slug/local-id 标题 — 终态 · 耗时`；用户裁决 2026-10-28）
+    expect(built.calls[0]?.text).toContain('任务概要: feat-x（完成 1 · 阻塞 0）')
+    expect(built.calls[0]?.text).toMatch(/任务概要: feat-x\/2\.5 Implement the thing — 完成 · \d+[sm]/)
+    // 事件透传（logs/<slug>.jsonl 里程碑不断流）
+    expect(built.events.map((e) => e.type)).toEqual(['task-claimed', 'task-spawned', 'task-worker-done', 'no-ready-task'])
+    // 串行机械证据：worker 并发峰值 = 1（v1 严格串行——in-flight ≤1）
+    expect(built.spawn.maxLive()).toBe(1)
+  })
+
+  it('登记表字段完整 + 重启即空：新驱动器实例登记表为空（进程内不持久化——S3 对账判据）', async () => {
+    const fresh = build()
+    expect(fresh.driver.activeOf(OWNER)).toBeUndefined()
+    const running = build({ claim: [claimed(), NO_TASK], stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })] })
+    await running.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(
+      () => {
+        expect(running.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    const record = running.driver.activeOf(OWNER)
+    expect(record).toMatchObject({
+      source: { slug: 'feat-x' },
+      ownerSessionId: OWNER,
+      projectId: PROJECT,
+    })
+    expect(record?.inFlight).toMatchObject({
+      taskRef: { slug: 'feat-x', localId: '2.5' },
+      taskKey: 'feat-x/2.5',
+      taskId: 't-1',
+      workerSessionId: 'worker-1',
+    })
+    await running.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── 改进7 · e2e 红灯基线门 ───────────────────────────
+
+describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
+  // 工厂形制（bug 006d8bfe 测试随迁教训）：claim 队列被 harness shift **原地 mutate**——
+  // 共享常量数组会让「先跑的测试掏空后跑测试的队列」（首消费者之前不能再排测试）。
+  const FULL_FLOW = () => ({
+    claim: [claimed(), NO_TASK],
+    stats: [
+      statsOf({ pending: 1 }),
+      statsOf({ in_progress: 1 }),
+      statsOf({ in_progress: 1 }),
+      statsOf({ completed: 1 }),
+      statsOf({ completed: 1 }),
+    ],
+  })
+
+  it('bug 006d8bfe：基线门后台化——runSuite 挂死不阻塞 start 回执（工具调用面零阻塞）；放行后循环照常领取（红灯入简报 + 归因卡）', async () => {
+    let release!: (output: string) => void
+    const gate = new Promise<string>((resolve) => {
+      release = resolve
+    })
+    const built = build({
+      ...FULL_FLOW(),
+      e2eBaseline: { runSuite: () => gate },
+    })
+    // start 立即返回启动回执（200ms 预算——挂死套件不得拖住工具调用面）
+    const started = built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const raced = await Promise.race([
+      started.then(() => 'started'),
+      new Promise<string>((resolve) => setTimeout(() => resolve('blocked'), 200)),
+    ])
+    expect(raced).toBe('started')
+    expect(built.h.claimInputs).toHaveLength(0) // 基线在途——零领取（简报等基线，红灯语义不破）
+    // 放行套件 → 后台 fiber 续跑：红灯入简报 + 归因卡生成（既有语义零变化）
+    release('FAIL e2e/specs/a.spec.ts > suite')
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs[0]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/a.spec.ts > suite'] })
+    expect(built.h.addTaskInputs).toHaveLength(1)
+  })
+
+  it('基线红灯：启动即生成归因卡（逐红灯 spec 一张 test-run）+ 红灯清单随 claim 简报入参递达', async () => {
+    const built = build({
+      ...FULL_FLOW(),
+      e2eBaseline: {
+        runSuite: async () =>
+          ['FAIL e2e/specs/b.spec.ts', 'FAIL e2e/specs/a.spec.ts', 'PASS e2e/specs/green.spec.ts'].join('\n'),
+      },
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 归因卡：逐红灯用例一张（parseE2eRedCases 字母序——a 先 b 后），type=test-run + 三分流指示
+    expect(built.h.addTaskInputs).toHaveLength(2)
+    expect(built.h.addTaskInputs[0]).toMatchObject({
+      projectKey: PROJECT,
+      slug: 'feat-x',
+      title: 'e2e 基线红灯排查：e2e/specs/a.spec.ts',
+      type: 'test-run',
+      priority: 'P1',
+      context: { BASELINE_SPEC: 'e2e/specs/a.spec.ts' },
+    })
+    expect(built.h.addTaskInputs[0]!.brief).toContain('环境')
+    expect(built.h.addTaskInputs[0]!.brief).toContain('陈旧断言')
+    expect(built.h.addTaskInputs[0]!.brief).toContain('真回归')
+    // 红灯清单随本实例全部 claim 简报入参递达（机械判定载体——首轮 claim + 次轮 no-task 领取尝试同带）
+    expect(built.h.claimInputs).toHaveLength(2)
+    expect(built.h.claimInputs[0]).toMatchObject({
+      e2eBaselineRedCases: ['e2e/specs/a.spec.ts', 'e2e/specs/b.spec.ts'],
+    })
+  })
+
+  it('基线套件执行故障：fail-soft 空清单（零归因卡、简报零基线行）——循环派发不受阻', async () => {
+    const built = build({
+      ...FULL_FLOW(),
+      e2eBaseline: { runSuite: async () => { throw new Error('e2e harness missing') } },
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs).toHaveLength(0)
+    // 工厂化队列（bug 006d8bfe 随迁）：claim + no-task 尝试两径如实计数（旧期望 1 系共享数组
+    // 被前序测试掏空后的伪语义）
+    expect(built.h.claimInputs).toHaveLength(2)
+    expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRedCases')
+    expect(built.h.claimInputs[1]).not.toHaveProperty('e2eBaselineRedCases')
+  })
+
+  it('disc-2 判例回归：fix 中途落地（HEAD 漂移）后简报反映新基线——旧红灯行不再烤死于循环启动时点', async () => {
+    // 时序：start（HEAD c1 · 旧红灯）→ claim1（c1 复用）→ worker1 结算（fix 落地 = c2）
+    // → claim2（c2 漂移重算 · 新红灯）→ claim3（c2 磁盘命中复用）→ no-task 收口。
+    // 套件执行恰 2 次（磁盘为唯一缓存层——稳定 HEAD 零重跑）。
+    const cacheDir = mkdtempSync(join(tmpdir(), 'forge-baseline-cache-'))
+    let head = 'c1'
+    let output = 'FAIL e2e/specs/old.spec.ts'
+    let suiteRuns = 0
+    let headReads = 0
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      e2eBaseline: {
+        runSuite: async () => {
+          suiteRuns += 1
+          return output
+        },
+        readHead: async () => {
+          headReads += 1
+          if (headReads >= 2) {
+            head = 'c2'
+            output = 'FAIL e2e/specs/new.spec.ts'
+          }
+          return head
+        },
+        cacheFile: () => join(cacheDir, '.forge', 'caches', 'feat-x', 'e2e-baseline', 'cache.json'),
+      },
+      // worktree 在场 + completed 提交 → 落点核验触发（1.18）——落点命中桩（本用例零涉核验）
+      commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs).toHaveLength(3)
+    expect(built.h.claimInputs[0]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/old.spec.ts'] })
+    // commit 落地后：简报携带新基线，旧红灯行消失（claim2 起）
+    expect(built.h.claimInputs[1]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/new.spec.ts'] })
+    expect(built.h.claimInputs[2]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/new.spec.ts'] })
+    // 成本约束：磁盘唯一缓存层——稳定 HEAD 零额外套件执行（漂移重算一次后命中复用）
+    expect(suiteRuns).toBe(2)
+    rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  it('bug 006d8bfe 后续：基线缓存持久化跨实例——同 HEAD 重启后套件零重跑（error 形态不落缓存）', async () => {
+    // 真机判例：宿主重启丢 ActiveLoop 实例缓存 → 同 HEAD 全量套件重跑（启动税 24 分钟）。
+    // 修法（用户裁决 2026-10-18）：缓存落各 worktree 自身 .forge/caches/{slug}/e2e-baseline/
+    // （cacheFile 注入缝——随检出走、容器隔离、跨重启复用）。
+    const cacheDir = mkdtempSync(join(tmpdir(), 'forge-baseline-cache-'))
+    const cacheFile = join(cacheDir, '.forge', 'caches', 'feat-x', 'e2e-baseline', 'cache.json')
+    try {
+      let suiteRuns = 0
+      const makeBuild = () =>
+        build({
+          ...FULL_FLOW(),
+          // worktree 在场 → 落点核验触发（1.18）——命中桩（本组用例零涉核验面）
+          commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
+          e2eBaseline: {
+            runSuite: async () => {
+              suiteRuns += 1
+              return 'FAIL e2e/specs/a.spec.ts > suite'
+            },
+            readHead: async () => 'c1',
+            cacheFile: () => cacheFile,
+          },
+        })
+      // 实例 A：首算（套件跑 1 次）+ 缓存落盘（worktree 在场——HEAD 键与持久化键同源）
+      const a = makeBuild()
+      await a.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+      await untilSettled(a.driver)
+      expect(suiteRuns).toBe(1)
+      expect(existsSync(cacheFile)).toBe(true)
+      // 实例 B（模拟重启后新循环）：同 HEAD → 缓存命中，套件零重跑；红灯照常入简报
+      const b = makeBuild()
+      await b.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+      await untilSettled(b.driver)
+      expect(suiteRuns).toBe(1)
+      expect(b.h.claimInputs[0]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/a.spec.ts > suite'] })
+      expect(b.h.addTaskInputs).toHaveLength(1) // 归因卡照常（缓存命中径同样补发）
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true })
+    }
+  })
+
+  it('bug 006d8bfe 后续：error 形态（基线不可得）不落缓存——下实例重跑而非沿用「不可得」', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'forge-baseline-cache-'))
+    const cacheFile = join(cacheDir, '.forge', 'caches', 'feat-x', 'e2e-baseline', 'cache.json')
+    try {
+      let throwing = true
+      const makeBuild = () =>
+        build({
+          ...FULL_FLOW(),
+          commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
+          e2eBaseline: {
+            runSuite: async () => {
+              if (throwing) throw new Error('baseline unavailable')
+              return 'FAIL e2e/specs/a.spec.ts > suite'
+            },
+            readHead: async () => 'c1',
+            cacheFile: () => cacheFile,
+          },
+        })
+      const a = makeBuild()
+      await a.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+      await untilSettled(a.driver)
+      expect(existsSync(cacheFile)).toBe(false) // 不可得 ≠ 全绿——不落缓存（637fcb9e 语义保持）
+      throwing = false
+      const b = makeBuild()
+      await b.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+      await untilSettled(b.driver)
+      expect(b.h.claimInputs[0]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/a.spec.ts > suite'] })
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true })
+    }
+  })
+
+  it('R2-minor⑥：HEAD 漂移重算的新增红灯补生成归因卡（与启动时点行为一致；已发不重发）', async () => {
+    // 同 disc-2 漂移场景：start（c1 · 旧红灯 → 归因卡 old）→ fix 落地（c2）→ claim2 重算
+    // （新红灯 → 归因卡 new 补发）→ claim3（同基线零重复卡）→ no-task 收口。
+    let head = 'c1'
+    let output = 'FAIL e2e/specs/old.spec.ts'
+    let headReads = 0
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      e2eBaseline: {
+        runSuite: async () => output,
+        readHead: async () => {
+          headReads += 1
+          if (headReads >= 3) {
+            head = 'c2'
+            output = 'FAIL e2e/specs/new.spec.ts'
+          }
+          return head
+        },
+      },
+      commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs.map((t) => t.title)).toEqual([
+      'e2e 基线红灯排查：e2e/specs/old.spec.ts', // 启动时点
+      'e2e 基线红灯排查：e2e/specs/new.spec.ts', // 漂移重算新增——补发
+    ])
+    expect(built.h.addTaskInputs[1]).toMatchObject({ type: 'test-run', context: { BASELINE_SPEC: 'e2e/specs/new.spec.ts' } })
+  })
+
+  it('disc-2 fail-soft：readHead 故障（git 不可用）——复用现有缓存，简报基线行保留，循环不阻', async () => {
+    const built = build({
+      ...FULL_FLOW(),
+      e2eBaseline: {
+        runSuite: async () => 'FAIL e2e/specs/a.spec.ts > suite',
+        readHead: async () => {
+          throw new Error('git not available')
+        },
+      },
+      // worktree 在场 + completed 提交 → 落点核验触发（1.18）——落点命中桩（本用例零涉核验）
+      commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    // start 径 readHead 故障 = 基线机制静默关闭（fail-soft 同套件故障形态）
+    expect(built.h.addTaskInputs).toHaveLength(0)
+    expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRedCases')
+  })
+})
+
+// ─────────────────────────── 机械③（forge-verification-hardening） ───────────────────────────
+
+// ensure no-op/append 语义用例落域侧（core implementation-checkpoints.test.ts），此处不再
+// 于插件域复刻包装（ensure 经 LoopCheckpointsFace 直传域面——直传装配由 driver-assembly
+// 生产路径测试覆盖）。
+
+
+// ─────────────────────────── 测试基线文档简报递达（forge-test-boundary-gates 方案2） ───────────────────────────
+
+describe('测试基线文档简报递达（forge-test-boundary-gates 方案2）', () => {
+  const FULL_FLOW = () => ({
+    claim: [claimed(), NO_TASK],
+    stats: [
+      statsOf({ pending: 1 }),
+      statsOf({ in_progress: 1 }),
+      statsOf({ in_progress: 1 }),
+      statsOf({ completed: 1 }),
+      statsOf({ completed: 1 }),
+    ],
+  })
+
+  /** docsRoot 临时目录工厂（withBaseline = 落一份 features/feat-x/test-baseline.md） */
+  function makeDocsRoot(withBaseline: boolean): string {
+    const docsRoot = mkdtempSync(join(tmpdir(), 'forge-test-baseline-'))
+    if (withBaseline) {
+      const dir = join(docsRoot, 'features', 'feat-x')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'test-baseline.md'), '# test baseline\n')
+    }
+    return docsRoot
+  }
+
+  it('在场：claim 入参携文档根锚定绝对路径 + 基线时点（文件 mtime——零内容解析）', async () => {
+    const docsRoot = makeDocsRoot(true)
+    try {
+      const built = build({ ...FULL_FLOW() })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs[0]).toMatchObject({
+        testBaseline: { present: true, path: join(docsRoot, 'features', 'feat-x', 'test-baseline.md'), recordedAt: expect.any(String) },
+      })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('缺席：基线文档不在场 → present:false 兜底形态（循环照常领取零受阻）', async () => {
+    const docsRoot = makeDocsRoot(false)
+    try {
+      const built = build({ ...FULL_FLOW() })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: false } })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('检查故障与缺席同形：锚定路径 stat 异常（docsRoot 为文件——ENOTDIR）→ present:false 兜底、异常不上抛进 claim 链', async () => {
+    const docsRoot = mkdtempSync(join(tmpdir(), 'forge-test-baseline-'))
+    try {
+      const blocker = join(docsRoot, 'blocker.txt')
+      writeFileSync(blocker, 'x') // docsRoot 指向文件——其下 stat 必故障
+      const built = build({ ...FULL_FLOW() })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot: blocker })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs).toHaveLength(2) // claim 链零异常——两轮照常
+      expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: false } })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('每 claim 现查不缓存：文件中途删除 → 次轮 claim 转兜底形态', async () => {
+    const docsRoot = makeDocsRoot(true)
+    try {
+      const baselinePath = join(docsRoot, 'features', 'feat-x', 'test-baseline.md')
+      const built = build({
+        claim: [claimed(), claimed(), NO_TASK],
+        stats: [
+          statsOf({ pending: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ in_progress: 1 }),
+          statsOf({ completed: 2 }),
+          statsOf({ completed: 2 }),
+        ],
+        // 首个 worker spawn 时点删除基线文档——次轮 claim 现查必见缺席
+        spawnBehavior: (s) => {
+          s.setBehavior(async (n) => {
+            if (n === 1) rmSync(baselinePath)
+            return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'completed', output: '' }), dispose: async () => {} }
+          })
+        },
+      })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, docsRoot })
+      await untilSettled(built.driver)
+      expect(built.h.claimInputs).toHaveLength(3)
+      expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: true } })
+      expect(built.h.claimInputs[1]).toMatchObject({ testBaseline: { present: false } })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('docsRoot 缺席（start 未携带）→ present:false 兜底形态（禁裸相对路径——无锚定根即兜底）', async () => {
+    const built = build({ ...FULL_FLOW() })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs[0]).toMatchObject({ testBaseline: { present: false } })
+  })
+
+  it('helper 锚定矩阵：双落点序 proposals 优先、features 次之（同 slug 两目录并存 = proposals 命中）；目录形态（非文件）→ 兜底', async () => {
+    const docsRoot = mkdtempSync(join(tmpdir(), 'forge-test-baseline-'))
+    try {
+      const pDir = join(docsRoot, 'proposals', 'prop-a')
+      mkdirSync(pDir, { recursive: true })
+      writeFileSync(join(pDir, 'test-baseline.md'), '# baseline\n')
+      const fDir = join(docsRoot, 'features', 'both-slug')
+      mkdirSync(fDir, { recursive: true })
+      writeFileSync(join(fDir, 'test-baseline.md'), '# baseline\n')
+      mkdirSync(join(docsRoot, 'proposals', 'both-slug'), { recursive: true }) // proposals 落点目录在、基线文件缺席
+      mkdirSync(join(docsRoot, 'features', 'feat-dir', 'test-baseline.md'), { recursive: true }) // 目录非文件
+      const present = await testBaselineBriefOf(docsRoot, { slug: 'prop-a' })
+      expect(present).toEqual({ present: true, path: join(pDir, 'test-baseline.md'), recordedAt: expect.any(String) })
+      // 双落点序：proposals 优先——proposals 基线缺席时回落 features 命中
+      const fallback = await testBaselineBriefOf(docsRoot, { slug: 'both-slug' })
+      expect(fallback).toEqual({ present: true, path: join(fDir, 'test-baseline.md'), recordedAt: expect.any(String) })
+      const notFile = await testBaselineBriefOf(docsRoot, { slug: 'feat-dir' })
+      expect(notFile).toEqual({ present: false })
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged lazy 补标记', () => {
+  it('first-pass done：落标记一枚（HEAD 回落结算 commit）+ settle 文本含复盘/沉淀直接指示（指标/越阈/learn/retro-done）——零任务派生（bug 4186a70c）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // claim1 领取通知读
+        statsOf({ in_progress: 1 }), // claim1 结算核池读
+        statsOf({ completed: 1 }), // claim1 review-wave 快照计数读（机械④结算点真实触发——装配修复后）
+        statsOf({ completed: 1 }), // 首轮 no-task 池读（first-pass done）
+        statsOf({ completed: 1 }), // 标记快照计数读（completed 1 = first-pass 基线）
+        statsOf({ completed: 1 }), // 静默窗池读
+        statsOf({ completed: 1 }), // 收口 stats 读
+      ],
+      checkpointRows: [],
+      resolveProposalId: async () => 'prop-1',
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // first-pass-complete 标记：恰一次调用、一次 appended；HEAD = 结算 commit 回落锚
+    expect(built.cpEnsures).toHaveLength(1)
+    expect(built.cpEnsures[0]).toMatchObject({
+      projectKey: PROJECT,
+      containerSlug: 'feat-x',
+      mark: 'first-pass-complete',
+      baseCommitHash: 'abc1234',
+      appended: true,
+      snapshots: { tasksTotal: 1 },
+    })
+    // 复盘/知识沉淀不再派生任务卡——收口消息直接指示主 agent（时序倒挂修复：评审 → 复盘 → 沉淀）
+    expect(built.h.addTaskInputs).toHaveLength(0)
+    const settle = built.calls.at(-1)!
+    expect(settle.method).toBe('settle')
+    expect(settle.text).toContain('[forge·循环结束]')
+    expect(settle.text).toContain('【代码评审指示】')
+    expect(settle.text).toContain('【复盘与知识沉淀指示】')
+    expect(settle.text).toContain('交叉评审与结论处理完成后执行')
+    expect(settle.text).toContain('执行顺序硬门')
+    expect(settle.text).toContain('不得跳步、不得并行')
+    expect(settle.text).toContain('复盘三项全部完成后执行')
+    expect(settle.text).not.toContain('代码 review 已收口')
+    expect(settle.text).toContain('一次通过率')
+    expect(settle.text).toContain('返工增量比')
+    expect(settle.text).toContain('修正波次')
+    expect(settle.text).toContain('reviewWaveThreshold')
+    expect(settle.text).toContain('缺席默认值 6')
+    expect(settle.text).toContain('交叉核验')
+    expect(settle.text).toContain('learn')
+    expect(settle.text).toContain('.knowledge/')
+    expect(settle.text).toContain('< 6 → 未越阈')
+    expect(settle.text).toContain('retro-done')
+    expect(settle.text).toContain('recordImplCheckpoint')
+  })
+
+  it('P8 评审指示单选随 deps.expertsPresent 分流（bug cf6254ff 消费链回归）：true = 三路实名措辞 / false = subagent 回落', async () => {
+    const runOnce = async (expertsPresent: (() => boolean) | undefined) => {
+      const built = build({
+        claim: [claimed(), NO_TASK],
+        stats: [
+          statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }),
+          statsOf({ completed: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 }),
+          statsOf({ completed: 1 }), statsOf({ completed: 1 }),
+        ],
+        checkpointRows: [],
+        resolveProposalId: async () => 'prop-1',
+        ...(expertsPresent !== undefined ? { expertsPresent } : {}),
+      })
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+      await untilSettled(built.driver)
+      const settle = built.calls.at(-1)!
+      expect(settle.method).toBe('settle')
+      return settle.text
+    }
+    const withExperts = await runOnce(() => true)
+    expect(withExperts).toContain('三路交叉评审：spec-reviewer')
+    expect(withExperts).toContain('architecture-reviewer')
+    expect(withExperts).toContain('code-reviewer')
+    expect(withExperts).not.toContain('subagent 分域交叉评审')
+    const fallback = await runOnce(() => false)
+    expect(fallback).toContain('subagent 分域交叉评审')
+    expect(fallback).not.toContain('spec-reviewer')
+  })
+
+  it('标记落库失败不收口：本轮 continue 留幂等窗口，次轮补落标记后才 settle（零任务派生）', async () => {
+    const built = build({
+      claim: [NO_TASK, NO_TASK],
+      stats: [
+        statsOf({ completed: 1 }), // 启动读
+        statsOf({ completed: 1 }), // 轮1 no-task 池读（done → 标记 ensure 抛错）
+        statsOf({ completed: 1 }), // 轮1 标记快照计数读
+        statsOf({ completed: 1 }), // 轮2 no-task 池读
+        statsOf({ completed: 1 }), // 轮2 标记快照计数读（补落）
+        statsOf({ completed: 1 }), // 轮2 静默窗池读
+        statsOf({ completed: 1 }), // 收口 stats 读
+      ],
+      checkpointRows: [],
+      ensureFailures: 1,
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-1',
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    // 失败留待重试语义：首轮 ensure 抛错不入 recording，次轮补落恰一次
+    expect(built.cpEnsures).toHaveLength(1)
+    expect(built.cpEnsures[0]).toMatchObject({ mark: 'first-pass-complete', baseCommitHash: 'head-1', appended: true })
+    // 零任务派生；收口恰一次且带复盘/沉淀指示
+    expect(built.h.addTaskInputs).toHaveLength(0)
+    const settles = built.calls.filter((c) => c.method === 'settle')
+    expect(settles).toHaveLength(1)
+    expect(settles[0]!.text).toContain('【复盘与知识沉淀指示】')
+  })
+
+  it('收口指标真值（bug 9c350e5f 口径保持）：首帧以标记快照在场——settle 文本 fix 密度取真值', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 })], // shift-末项重复——池读/标记快照/收口读同值
+      checkpointRows: [{ mark: 'review-wave-N', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 }],
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-9',
+    })
+    // 池中一枚 completed fix 类任务（带 commit 记录）——标记快照 = tasks 1 / commits 1 / fixes 1
+    built.h.lists.created.push({
+      taskId: 'card-feat-x-2.5',
+      slug: 'feat-x',
+      localId: '2.5',
+      title: 'Task 2.5',
+      taskType: 'coding-fix',
+      taskStatus: 'completed',
+      prerequisites: [],
+      sessionCount: 0,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs).toHaveLength(0) // 零任务派生
+    // 真值：first 帧（tasks 1 / fixes 1）= current 帧 → fix 密度 = 1/1；兜底缺陷下恒 0.0%
+    const settle = built.calls.filter((c) => c.method === 'settle').at(-1)!
+    expect(settle.text).toContain('fix 密度 100.0%')
+  })
+
+  it('收口指标真值：merged 帧在场——settle 文本返工增量比取 (current-baseline)/current 真值', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 })],
+      checkpointRows: [
+        { mark: 'merged', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 },
+        { mark: 'review-wave-N', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 },
+      ],
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-9',
+    })
+    built.h.lists.created.push({
+      taskId: 'card-feat-x-2.5',
+      slug: 'feat-x',
+      localId: '2.5',
+      title: 'Task 2.5',
+      taskType: 'coding-fix',
+      taskStatus: 'completed',
+      prerequisites: [],
+      sessionCount: 0,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs).toHaveLength(0) // 零任务派生
+    // 真值：first 基线 commits 1（标记快照）、current = merged 帧 commits 3 → (3-1)/3
+    const settle = built.calls.filter((c) => c.method === 'settle').at(-1)!
+    expect(settle.text).toContain('返工增量比 66.7%')
+  })
+
+  it('收口越阈硬门：修正波次 ≥ 阈值（默认 6）→ settle 文本含改进提案注册硬门（不落任务卡 AC）', async () => {
+    const wave = { mark: 'review-wave-N', tasksTotal: 8, commitsTotal: 12, fixesTotal: 3, evidenceDebtsTotal: 1 }
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+      checkpointRows: [
+        { mark: 'merged', tasksTotal: 8, commitsTotal: 12, fixesTotal: 3, evidenceDebtsTotal: 1 },
+        wave, wave, wave, wave, wave, wave,
+      ],
+      resolveProposalId: async () => 'prop-1',
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs).toHaveLength(0) // 零任务派生——硬门走收口指示文本
+    const settle = built.calls.filter((c) => c.method === 'settle').at(-1)!
+    expect(settle.text).toContain('波次 6 ≥ 6 → 已越阈')
+    expect(settle.text).toContain('已注册改进提案')
+    expect(settle.text).toContain('parent_proposal_id')
+    expect(settle.text).toContain('修正波次 6')
+  })
+
+  it('merged 漏标记 lazy 兜底：循环启动时 first-pass + retro-done 在场、merged 缺席、池全终态 → 补 merged 标记', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 3 }), statsOf({ completed: 3 }), statsOf({ completed: 3 }), statsOf({ completed: 3 })],
+      checkpointRows: [
+        { mark: 'first-pass-complete', tasksTotal: 5, commitsTotal: 8, fixesTotal: 1, evidenceDebtsTotal: 0 },
+        { mark: 'retro-done', tasksTotal: 6, commitsTotal: 9, fixesTotal: 1, evidenceDebtsTotal: 0 },
+      ],
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-9',
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    // 补标记：mark=merged + baseCommitHash = 循环检出 HEAD（解析缝桩）+ 收口时刻计数快照；
+    // 首轮 done：first-pass 已在校 = 域侧幂等 no-op → 零重落
+    expect(built.cpEnsures).toHaveLength(1)
+    const mergedCall = built.cpEnsures.find((c) => c.mark === 'merged')
+    expect(mergedCall).toMatchObject({
+      projectKey: PROJECT,
+      containerSlug: 'feat-x',
+      mark: 'merged',
+      baseCommitHash: 'head-9',
+      appended: true,
+      snapshots: { tasksTotal: 3 },
+    })
+    // 首轮 done：first-pass 已在校 → 零重落；零任务派生（复盘/沉淀走收口指示文本）
+    expect(built.h.addTaskInputs).toHaveLength(0)
+  })
+
+  it('merged lazy 兜底判据不满足：retro-done 缺席（收口前置=复盘已结算）→ 不补标记', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 3 }), statsOf({ completed: 3 }), statsOf({ completed: 3 }), statsOf({ completed: 3 })],
+      checkpointRows: [{ mark: 'first-pass-complete', tasksTotal: 5, commitsTotal: 8, fixesTotal: 1, evidenceDebtsTotal: 0 }],
+      resolveProposalId: async () => 'prop-1',
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.cpEnsures).toHaveLength(0)
+  })
+})
+
+// ─────────────────────────── adopt 逐个恢复 + 启动分类 ───────────────────────────
+
+describe('adopt 重入与启动分类（①②③）', () => {
+  it('interrupted 在场：② 启动接续 + 首轮 adopt 定向领最早中断（claimTask.adopt = 中断序首项）+ ⑤ 领取（恢复中断）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.6'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1, interrupted: 2 }),
+        statsOf({ pending: 1, interrupted: 1, in_progress: 1 }),
+        statsOf({ pending: 1, interrupted: 1, in_progress: 1 }),
+        statsOf({ pending: 1, interrupted: 1, in_progress: 1 }),
+        statsOf({ pending: 1, interrupted: 1, in_progress: 1 }),
+        statsOf({ pending: 0, interrupted: 0, completed: 2 }),
+        statsOf({ pending: 0, interrupted: 0, completed: 2 }),
+      ],
+    })
+    built.h.lists.interrupted = [card('feat-x', '2.5', { taskStatus: 'interrupted' }), card('feat-x', '2.6', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 启动列表读：中断序升序（最早中断优先——S3 数据面）
+    expect(built.h.listInputs[0]).toEqual({ projectKey: PROJECT, slug: 'feat-x', statusFilter: ['interrupted'], sort: 'interrupted' })
+    // 首轮 adopt 定向领取（不经 pending 池）；次轮 adopt 领下一个中断（2.6——逐个恢复）；
+    // 第三轮 adopt 缺席（中断集已清空——就绪盲选径）
+    expect(built.h.claimInputs[0]).toMatchObject({ adopt: { slug: 'feat-x', localId: '2.5' }, loopSourced: true })
+    expect(built.h.claimInputs[1]?.adopt).toEqual({ slug: 'feat-x', localId: '2.6' })
+    expect(built.h.claimInputs[2]?.adopt).toBeUndefined()
+    // ② 启动接续 + ⑤ 领取（恢复中断）——零消息（loop-message-consolidation），进度事件单源投影
+    expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
+    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: S.startupResumeStopped, taskKey: 'feat-x/2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'claim-resume')).toMatchObject({ scenario: S.claimInterrupted, taskKey: 'feat-x/2.5' })
+  })
+
+  it('in_progress 遗留（skill 路线）而无 interrupted：③ 启动接续在飞——claim 无可领 → wait 判词 → patience 耗尽 ⑮ 收口', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ in_progress: 2 }), statsOf({ in_progress: 2 }), statsOf({ in_progress: 2 }), statsOf({ in_progress: 2 }), statsOf({ in_progress: 2, completed: 3 })],
+    })
+    built.h.lists.in_progress = [card('feat-x', '2.7', { taskStatus: 'in_progress' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // ③ 启动接续在飞——零消息（进度事件投影）；⑮ 收口照旧
+    expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
+    expect(built.calls.at(-1)?.text).toContain('结束（等待超时）')
+    expect(built.calls.at(-1)?.text).toContain('提示用户"稍后重新执行 /run-dag-tasks feat-x"')
+    // 1.5 场景码：③ 启动接续在飞 + ⑮ 等待超时（循环级）
+    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: S.startupResumeInflight, taskKey: 'feat-x/2.7', taskTitle: 'Task 2.7' })
+    expect(built.progressCalls.find((e) => e.verb === 'timeout')).toMatchObject({ verb: 'timeout', status: 'blocked', scenario: S.loopTimeout, note: '等待超时' })
+  })
+
+  it('干净任务源：① 启动从头执行（pending 计数）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ pending: 6 }), statsOf({ pending: 6 }), statsOf({ pending: 6 }), statsOf({ pending: 6 })],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // ① 启动从头执行——零消息（进度事件投影；no-task done 收口 settle 恰一次）
+    expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
+    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: S.startupFromScratch })
+  })
+
+  it('bug 6d98a275 启动对账：scoped reconcile 真化孤儿 in_progress + stop 进度事件（owner 会话——面板/卡片同源）+ adopt 重派', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+    })
+    // 装配期对账错过窗口的孤儿（claim↔spawn 窗口死亡/幂等重入遗留）：真化后进中断集
+    built.h.setReconcile([{ reconciled: [{ slug: 'feat-x', localId: '2.5' }] }])
+    built.h.lists.interrupted = [card('feat-x', '2.5', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 对账携带 source 作用域（只扫本容器——他容器活循环在飞任务不被误伤）；
+    // registryEmpty=true 对本源结构成立（S1c 同源独占 + 本实例未领取）
+    expect(built.h.reconcileInputs).toEqual([{ projectKey: PROJECT, registryEmpty: true, source: SOURCE }])
+    // 进度事件追加进 owner 会话（verb stop / status interrupted / 新场景码——面板与进度卡同源投影渲染）
+    expect(built.progressCalls.find((e) => e.verb === 'stop')).toMatchObject({
+      verb: 'stop',
+      status: 'interrupted',
+      scenario: S.loopOrphanReconciled,
+      taskKey: 'feat-x/2.5',
+    })
+    // 回收任务交 ① adopt 径重派（真化即进中断集——启动叙述接续）
+    expect(built.h.claimInputs[0]).toMatchObject({ adopt: { slug: 'feat-x', localId: '2.5' }, loopSourced: true })
+  })
+
+  it('bug 6d98a275 对账故障 fail-soft：reconcileInterrupted 抛错不阻启动（零孤儿回收，循环照常领取）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+    })
+    built.h.tasks.reconcileInterrupted = async () => {
+      throw new Error('store unavailable')
+    }
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 启动与常规领取不受对账故障波及（孤儿留原态——下次启动重试）
+    expect(built.h.claimInputs[0]).toMatchObject({ loopSourced: true })
+  })
+})
+
+// ─────────────────────────── blocked 分支（fix 链机械续领 / 处置钩子桩） ───────────────────────────
+
+describe('blocked 结算分支（图 C）', () => {
+  function blockedScript(built: Built): void {
+    built.h.lists.created = [] // 无 worker 派生 fix（findFixTaskRef 落空 → followUp 缺席）
+  }
+
+  /** 无进展硬停门的结算记录变体（commit/files 两进展信号任选——门判定面） */
+  function queryOfBlocked(over: { commitHash?: string; files?: string[] } = {}): QueryTaskResult {
+    return {
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { slug: 'feat-x' },
+      records: [
+        {
+          verb: 'submit',
+          toStatus: 'blocked',
+          reason: 'tests hang on flaky selector',
+          actor: 'plugin-tool',
+          createdAt: '2026-10-11T01:00:00.000Z',
+          ...(over.commitHash !== undefined ? { commitHash: over.commitHash } : {}),
+          ...(over.files !== undefined ? { files: over.files } : {}),
+        },
+      ],
+    }
+  }
+
+  it('FAIL-2 径①：blocked 无进展结算照常进处置阶梯（noProgress 信号随输入递达；escalate 决策挂起载处置历史）', async () => {
+    const seen: LoopTriageInput[] = []
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOfBlocked()],
+      triage: async (input) => {
+        seen.push(input)
+        return { action: 'escalate' }
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 触发径①钉住：无进展不再跳过阶梯——triage 恰一次被调，noProgress/settlement 随输入递达
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.noProgress).toBe(true)
+    expect(seen[0]?.reason).toBe('tests hang on flaky selector')
+    expect(seen[0]?.settlement).toBeDefined()
+    // 宿主零 addTask（escalate 决策不建 fix）
+    expect(built.h.addTaskInputs).toEqual([])
+    // ⑩ followup 叙述在场（唤醒主 agent 分析——blocked-ask-user 挂起族通道）
+    const ask = built.calls.find((c) => c.method === 'followup')
+    expect(ask?.text).toContain('无法自动处理——已向你发起问询')
+    expect(ask?.form).toBe('followup')
+    expect(ask?.wakeup).toBe(true)
+    // 挂起载荷：blocked-ask-user + 无进展处置历史行（阶梯记录）
+    expect(suspended.escalation).toEqual({
+      kind: 'blocked-ask-user',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      history: [
+        '本次结算无进展信号（无提交、无文件改动）——已纳入处置输入',
+        '第1次处置——决定上浮主会话处置',
+      ],
+    })
+    expect(suspended.since).toEqual(expect.any(Number))
+    expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
+    // 1.5 场景码：⑩ 阻塞（blocked/ask-user）
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedAskUser, taskKey: 'feat-x/2.5', note: 'tests hang on flaky selector' })
+    await built.driver.stop({ ownerSessionId: OWNER }) // 断言后收口
+  })
+
+  it('FAIL-2 径①（决策执行）：blocked 无进展 + triage add-fix → 修复任务创建、循环自续 fix 链（不再硬停问询）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('fix-1'), NO_TASK],
+      stats: [
+        statsOf({ pending: 2 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      query: [queryOfBlocked(), queryOf('completed')],
+      triage: async () => ({ action: 'add-fix', title: 'Fix: flaky selector', note: '修复选择器' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 无进展 + add-fix：修复任务机械创建（阶梯执行面），循环续领 fix 后收口
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.h.addTaskInputs[0]).toMatchObject({ title: 'Fix: flaky selector', type: 'coding-fix', blockSource: true })
+    expect(built.h.claimInputs).toHaveLength(3)
+    // ⑧ 自愈静默（main R-Q4 重构语义）：无用户通知——进度事件 scenario 投影 + incident 落盘承载
+    expect(built.progressCalls.some((e) => e.scenario === S.blockedAutoFixed)).toBe(true)
+    expect(built.calls.filter((c) => c.text.includes('[forge·循环结束]'))).toHaveLength(1)
+  })
+
+  it('FAIL-2 径①（装配降级）：无进展 blocked + 处置钩子缺席 → 保留问询硬停（挂起载降级历史行）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOfBlocked()],
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'blocked-ask-user', reason: 'tests hang on flaky selector' })
+    expect(suspended.escalation.kind === 'blocked-ask-user' ? suspended.escalation.history : undefined).toEqual(['本次阻塞没有任何进展信号（无提交、无文件改动）——处置钩子未装配，按规则直接向你询问'])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('FAIL-2 径②：claim 阶段 fail-loud（专家档案缺失）→ 错误转交处置阶梯（任务经 data.taskRef 解析），循环不异常终止', async () => {
+    const seen: LoopTriageInput[] = []
+    const claimError = Object.assign(new Error('expert not found: ghost-expert'), {
+      data: { phase: 'claim-persona', taskRef: { slug: 'feat-x', localId: '2.5' }, taskTitle: 'Implement the thing' },
+    })
+    const built = build({
+      claim: [claimError, claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读（重领 2.5）
+        statsOf({ in_progress: 1 }), // 结算读
+        statsOf({ completed: 1 }), // no-task 池读（done 判词）
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+      query: [queryOf('completed')], // claim-error 快照解析 + 重领结算读（completed = success 归类）
+      triage: async (input) => {
+        seen.push(input)
+        return { action: 'wait-external', externalSlug: 'feature-b' }
+      },
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 触发径②钉住：fail-loud 不终止循环——triage 收到 claim 阶段错误全文 + 任务身份（快照解析）
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.task).toMatchObject({ slug: 'feat-x', localId: '2.5' })
+    expect(seen[0]?.reason).toContain('claim 阶段 fail-loud：expert not found: ghost-expert')
+    // wait-external 记录等待后循环续领（2.5 被重领并完成）→ 正常收口（⑨ 静默化——进度事件投影）
+    expect(built.progressCalls.some((e) => e.scenario === S.blockedWaitExternal && e.note === '等待 feature-b 先完成')).toBe(true)
+    expect(built.h.claimInputs).toHaveLength(3) // fail-loud 领取 + 重领 2.5 + no-task
+    expect(built.calls.filter((c) => c.text.includes('[forge·循环结束]'))).toHaveLength(1)
+  })
+
+  it('FAIL-2 径②（兜底）：claim fail-loud 且任务身份不可得 → incident 落盘 + 挂起问询（不异常终局）', async () => {
+    const incidents: Array<{ eventType: string; error: string }> = []
+    const built = build({
+      claim: [new Error('claim exploded without task identity'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+      ],
+      query: [queryOf('completed')],
+      incidents: {
+        record: (input: { eventType: string; error: string }) => {
+          incidents.push({ eventType: input.eventType, error: input.error })
+          return undefined
+        },
+      } as unknown as IncidentStore,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(incidents.some((i) => i.eventType === 'claim-failed' && i.error.includes('claim exploded'))).toBe(true)
+    expect(suspended.escalation).toMatchObject({ kind: 'blocked-ask-user', reason: 'claim exploded without task identity' })
+    expect(suspended.escalation.kind === 'blocked-ask-user' ? suspended.escalation.history : undefined).toEqual(['claim 阶段 fail-loud（任务派发前置失败，典型为专家档案缺失/禁用）——错误全文随载荷，待人工处置'])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('无进展门放行：带 commit hash（零 files）的 blocked 结算照常入处置阶梯', async () => {
+    let triageCalls = 0
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 0, blocked: 1 }),
+        statsOf({ pending: 0, blocked: 1 }),
+      ],
+      query: [queryOfBlocked({ commitHash: 'feed1234' })],
+      triage: async () => {
+        triageCalls += 1
+        return { action: 'wait-external', externalSlug: 'feature-b' }
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    // 3b：wait-external 记录等待后续领（NO_TASK）；池 blocked 无 pending → deadlock 挂起待裁决
+    await untilSuspended(built.driver)
+    expect(triageCalls).toBe(1)
+    // ⑨ 自愈阻塞静默（R-Q4）——零消息，进度事件投影
+    expect(built.calls.some((c) => c.text.includes('等待 feature-b 先完成，先执行其它任务'))).toBe(false)
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWaitExternal, taskKey: 'feat-x/2.5' })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('blocked 且结算携带 followUp → ⑦ 静默（R-Q4）+ 机械续领 fix（不升级）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('fix-1'), NO_TASK],
+      stats: [
+        statsOf({ pending: 2 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      query: [queryOf('blocked'), queryOf('completed')],
+    })
+    built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' } })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // ⑦ 自愈阻塞静默（R-Q4）——零消息，进度事件投影（reason 在 note、fix 键在概要注记）
+    expect(built.calls.some((c) => c.text.includes('[forge·阻塞]'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('已自动创建修复任务 fix-1'))).toBe(false)
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWithFix, taskKey: 'feat-x/2.5' })
+    // 续领次序：2.5 → fix-1（fix ready 自然被领——零智能介入）
+    expect(built.h.claimInputs[1]?.source).toEqual(SOURCE)
+    expect(built.spawn.requests[1]?.label).toContain('feat-x/fix-1')
+    // 处置钩子未注入时 blocked-with-fix 不触发（fix 链已在 worker 侧机械闭合）
+    expect(built.calls.some((c) => c.text.includes('[forge·自动处理]'))).toBe(false)
+  })
+
+  it('投递面全景（loop-event-delivery AC）：一次含 ⑦ 自愈阻塞的运行——进行中事件全 send(nextStep, false)，真终局唯一 settle send(nextStep, true)，零 steer 插队', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('fix-1'), NO_TASK],
+      stats: [
+        statsOf({ pending: 2 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      query: [queryOf('blocked'), queryOf('completed')],
+    })
+    built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' } })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 消息面单径（loop-message-consolidation）：进行中事件零消息——唯一唤醒 = 真终局 settle
+    const settles = built.calls.filter((c) => c.method === 'settle')
+    expect(settles).toHaveLength(1)
+    expect(settles[0]?.form).toBe('settle')
+    expect(settles[0]?.wakeup).toBe(true)
+    // 全运行消息 = 终局单点（⑦ 自愈阻塞静默零消息；运行中零 steer 插队）
+    expect(built.calls).toEqual(settles)
+  })
+
+  it('静默边界（改进 1）：后继任务自身 blocked 且无再下级活后继 → 问询恢复上浮（triage ask-user 挂起待裁决）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'escalate' }),
+    })
+    built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'blocked' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 死后继不静默：⑦ 静默径零出现（零自愈消息），blocked-ask-user followup + 挂起在场
+    expect(built.calls.some((c) => c.text.includes('已自动创建修复任务'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+    expect(suspended.escalation.kind).toBe('blocked-ask-user')
+    expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('静默边界（R2-minor④）：interrupted 后继计入活后继——上轮 stop 真化的 fix 不触发问询硬停', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+      query: [queryOf('blocked')],
+    })
+    built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 活后继在场（interrupted 待 adopt 恢复）→ ⑦ 静默（R-Q4 零消息），零问询硬停
+    expect(built.calls.some((c) => c.text.includes('已自动创建修复任务 fix-1'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(false)
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWithFix, taskKey: 'feat-x/2.5' })
+  })
+
+  it('静默边界（改进 1）：后继任务被 rejected → 问询恢复上浮', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'escalate' }),
+    })
+    built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'rejected' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 死后继（rejected）不静默：⑦ 静默径零出现，blocked-ask-user followup + 挂起在场
+    expect(built.calls.some((c) => c.text.includes('已自动创建修复任务'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+    expect(suspended.escalation.kind).toBe('blocked-ask-user')
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('静默边界（改进 1）：后继 blocked 但其自有活后继在场（fix-2 pending）→ 静默 notify（后继键进叙述）+ 零升级', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 2 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 0, blocked: 2 }),
+        statsOf({ pending: 0, blocked: 2 }),
+      ],
+      query: [queryOf('blocked')],
+    })
+    built.h.lists.created = [
+      card('feat-x', 'fix-2', { sourceTask: { slug: 'feat-x', localId: 'fix-1' }, taskStatus: 'pending' }),
+      card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'blocked' }),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    // 3b：静默 notify 后续领（NO_TASK）；池 blocked 无 pending → deadlock 挂起待裁决
+    await untilSuspended(built.driver)
+    // ⑦ 静默（R-Q4）：零消息——reason/后继键只进进度事件 note 与落盘（1.5 场景码断言在下方）
+    expect(built.calls.some((c) => c.text.includes('已自动创建修复任务'))).toBe(false)
+    // 零 blocked-ask-user 挂起（静默径——挂起为 deadlock 族）
+    expect(built.driver.activeOf(OWNER)?.suspended?.escalation.kind).toBe('deadlock')
+    // 1.5 场景码：⑦ 阻塞（已带修复任务——静默 notify 同点）
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWithFix, taskKey: 'feat-x/2.5', taskTitle: 'Implement the thing', workerSessionId: 'worker-1' })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('blocked 无 follow-up + 处置钩子 add-fix：钩子收到任务/reason 全文 → 宿主 addTask（blockSource 链）→ ⑧ 叙述 → 续领', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async (input) => {
+        expect(input.task.localId).toBe('2.5')
+        expect(input.reason).toBe('tests hang on flaky selector')
+        return { action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 宿主忠实执行 add-fix：addTask 带 sourceTask + blockSource（fix 链机械面——源同事务置 blocked）
+    expect(built.h.addTaskInputs).toEqual([
+      expect.objectContaining({
+        projectKey: PROJECT,
+        slug: 'feat-x',
+        title: 'Fix: flaky selector',
+        type: 'coding-fix',
+        sourceTask: { slug: 'feat-x', localId: '2.5' },
+        blockSource: true,
+      }),
+    ])
+    // ⑧ 自愈阻塞静默（R-Q4）——零消息，进度事件投影
+    expect(built.calls.some((c) => c.text.includes('已自动分析原因并创建修复任务'))).toBe(false)
+    // 1.5 场景码：⑧ blocked/auto-fixed
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedAutoFixed, taskKey: 'feat-x/2.5' })
+  })
+
+  it('blocked 无 follow-up + 处置钩子 split-remainder：addTask(blockSource:false) 继任落账 + 源任务保持 blocked + ⑧b 叙述 → 续领', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'split-remainder', title: 'Split: remaining scope', taskDesc: '承接 C/D', note: '已完成 A/B' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // disc-N 机械：blockSource:false——继任承接剩余范围，源任务同事务不置恢复链（保持 blocked）
+    expect(built.h.addTaskInputs).toEqual([
+      expect.objectContaining({
+        projectKey: PROJECT,
+        slug: 'feat-x',
+        title: 'Split: remaining scope',
+        sourceTask: { slug: 'feat-x', localId: '2.5' },
+        blockSource: false,
+      }),
+    ])
+    // 源任务保持 blocked 不恢复：零 pending 方向的状态迁移（不重头开始的结构保证）
+    expect(built.h.transitions.every((t) => t.toStatus !== 'pending')).toBe(true)
+    // ⑧b 分割静默（R-Q4）——零消息，进度事件投影
+    expect(built.calls.some((c) => c.text.includes('已创建继任任务'))).toBe(false)
+    // 循环续领：分割后继续 claim（pending 继任路径在场——池态判词不误报）
+    expect(built.h.claimInputs.length).toBeGreaterThanOrEqual(2)
+    // 1.5 场景码：⑧b blocked/split
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedSplit, taskKey: 'feat-x/2.5' })
+  })
+
+  it('blocked 无 follow-up + 处置钩子 wait-external → ⑨ 叙述 → 续领（后池 blocked → deadlock 挂起，3b）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 0, blocked: 1 }),
+        statsOf({ pending: 0, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'wait-external', externalSlug: 'feature-b' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver)
+    // ⑨ 自愈阻塞静默（R-Q4）——零消息，进度事件投影
+    expect(built.calls.some((c) => c.text.includes('等待 feature-b 先完成，先执行其它任务'))).toBe(false)
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWaitExternal })
+    expect(built.h.claimInputs).toHaveLength(2) // 续领发生过（wait-external → 下一轮）
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('blocked 无 follow-up + 处置钩子 ask-user → ⑩ 叙述 + 挂起待裁决（3b——不再续领）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'escalate' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+    expect(suspended.escalation).toEqual({
+      kind: 'blocked-ask-user',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      history: ['第1次处置——决定上浮主会话处置'],
+    })
+    expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('blocked 无 follow-up 且处置钩子缺席（S1c 前桩位缺省）：仅落盘续领——零 ⑧⑨⑩ 叙述，池态判词受阻收口', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ blocked: 1 }),
+        statsOf({ blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+    })
+    blockedScript(built)
+    built.h.lists.blocked = [card('feat-x', '2.5', { taskStatus: 'blocked' })] // ⑭ 阻塞清单数据源
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 缺席 = 静默续领：零处置叙述（⑧⑨⑩描述的动作未发生——不发）；blocked 无 pending 通路
+    // → 池态判词机械接管 = ⑭ 受阻叙述 + 挂起待裁决（3b）
+    expect(built.calls.some((c) => c.text.includes('[forge·自动处理]'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('没有可执行的任务，且有任务阻塞中'))).toBe(true)
+    expect(suspended.escalation).toEqual({
+      kind: 'deadlock',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      blockedItems: [{ taskKey: '2.5', note: 'Task 2.5' }],
+    })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── S1c/S4 装配接线收口（1.11——真实钩子注册 + 身份载体 + 落盘缝） ───────────────────────────
+
+describe('装配接线收口（SC4 端到端——真实 createTriageHook 注册进驱动器，非钩子注入单测）', () => {
+  function blockedScript(built: Built): void {
+    built.h.lists.created = [] // 无 worker 派生 fix（findFixTaskRef 落空 → followUp 缺席）
+  }
+
+  /** 决策输出的 triage 代理 spawn 桩（真实 createTriageHook 的 in-process spawn 面） */
+  function triageSpawnWith(output: string): ReturnType<typeof trackedSpawn> {
+    const triageSpawn = trackedSpawn()
+    triageSpawn.setBehavior(async () => ({
+      workerSessionId: 'triage-1',
+      result: Promise.resolve({ stopReason: 'completed', output }),
+      dispose: async () => {},
+    }))
+    return triageSpawn
+  }
+
+  it('blocked 无 follow-up → 处置代理真实 spawn（收窄工具面+parent 透传）→ 三动作决策宿主忠实执行（add-fix 链）', async () => {
+    const parent = { agentTag: 'root-agent' }
+    let triageSpawn: ReturnType<typeof trackedSpawn> | undefined
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triageHook: (h) => {
+        triageSpawn = triageSpawnWith('分析过程略。\n{"action":"add-fix","title":"Fix: flaky selector","note":"修选择器等待"}')
+        // 真钩子装配同形（src/index.ts）：tasks/spawn 服务面与驱动器同源
+        return createTriageHook({ tasks: h.tasks, spawn: triageSpawn.spawn })
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent })
+    await untilSettled(built.driver)
+    // 处置代理真实 spawn（第二路 spawn——worker 之外唯一一路）：收窄工具面 + 每循环身份
+    expect(built.spawn.requests).toHaveLength(1) // worker 一路；处置代理在独立 spawn 面
+    expect(triageSpawn?.requests).toHaveLength(1)
+    const req = triageSpawn?.requests[0] as SpawnWorkerRequest
+    expect(req.label).toBe('feat-x/2.5 · 处置分析')
+    expect(req.prompt).toContain('feat-x/2.5 Implement the thing')
+    expect(req.prompt).toContain('tests hang on flaky selector') // reason 全文进处置输入
+    // add_task triage 放行（用户裁决 2026-11-02——处置派生径，与 add-fix 链宿主忠实执行面一致）
+    for (const name of ['bash', 'read', 'write', 'submit_task', 'dispatch_task', 'query_task']) {
+      expect(req.toolFilter.deny).toContain(name)
+    }
+    expect(req.toolFilter.deny).not.toContain('add_task')
+    expect(req.parent).toBe(parent) // 每循环 parent 载体经输入面绑定（非装配期烘焙）
+    expect(req.signal).toBeInstanceOf(AbortSignal)
+    expect(req.signal.aborted).toBe(false)
+    // 三动作决策宿主忠实执行：add-fix → addTask(blockSource 链) → ⑧ 叙述 → 续领
+    expect(built.h.addTaskInputs).toEqual([
+      expect.objectContaining({
+        projectKey: PROJECT,
+        slug: 'feat-x',
+        title: 'Fix: flaky selector',
+        type: 'coding-fix',
+        sourceTask: { slug: 'feat-x', localId: '2.5' },
+        blockSource: true,
+      }),
+    ])
+    expect(built.calls.some((c) => c.text.includes('已自动分析原因并创建修复任务 fix-2（修选择器等待）'))).toBe(false)
+  })
+
+  it('每循环身份载体：ownerSessionId/parent 透传；signal = 循环控制器（stop 即取消在途处置）', async () => {
+    const parent = { agentTag: 'root-agent' }
+    let captured: LoopTriageInput | undefined
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryOf('blocked')],
+      triage: async (input) => {
+        captured = input
+        return new Promise<LoopTriageDecision>(() => {}) // 在途处置——挂起等待停止信号
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent })
+    await vi.waitFor(() => expect(captured).toBeDefined(), { timeout: 2000, interval: 5 })
+    expect(captured?.ownerSessionId).toBe(OWNER)
+    expect(captured?.parent).toBe(parent)
+    expect(captured?.signal).toBeInstanceOf(AbortSignal)
+    expect(captured?.signal.aborted).toBe(false)
+    // 停止 = 循环控制器 abort——在途处置信号随载体被取消
+    await built.driver.stop({ ownerSessionId: OWNER })
+    expect(captured?.signal.aborted).toBe(true)
+  })
+
+  it('blocked 族落盘委派携带 projectId（解析缝载体——事件仓按项目解析容器目录）', async () => {
+    const incidentInputs: unknown[] = []
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      incidents: {
+        record: (input) => {
+          incidentInputs.push(input)
+          return 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-blocked'
+        },
+      },
+      triage: async () => ({ action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(incidentInputs).toEqual([
+      expect.objectContaining({
+        projectId: PROJECT,
+        sourceSlug: SOURCE.slug,
+        taskKey: '2.5',
+        eventType: 'blocked',
+        error: 'tests hang on flaky selector',
+      }),
+    ])
+    // 落盘在仓、消息面静默（loop-message-consolidation——自愈阻塞只投影不叙述）
+    expect(built.calls.some((c) => c.text.includes('详情: D:\\forge-tasks\\logs\\feat-x\\2.5\\001-blocked'))).toBe(false)
+  })
+})
+
+// ─────────────────────────── 第一层机械守卫（spawn 失败退避 / worker 异常终止） ───────────────────────────
+
+describe('第一层机械守卫（decisions #11/#16）', () => {
+  it('spawn 失败：⑪ 退避重试（间隔递增 attempt 1→2）→ 第 3 次失败 guard 粘住 → ⑬ 终局；同实例不复活、新实例 guard 复位', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), claimed()],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+      ],
+    })
+    built.spawn.setBehavior(async () => {
+      throw new Error('subagent factory rejected')
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 三次 spawn 尝试（每轮幂等重入同任务），⑪ ×2 零消息——重试计数进进度事件 note（重入零新通知）
+    expect(built.spawn.requests).toHaveLength(3)
+    const retryEvents = built.progressCalls.filter((e) => e.verb === 'retry')
+    expect(retryEvents).toHaveLength(2)
+    expect(retryEvents[0]?.note).toContain('第 1/3 次')
+    expect(retryEvents[1]?.note).toContain('第 2/3 次')
+    expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
+    const halted = built.calls.find((c) => c.method === 'settle')
+    expect(halted?.text).toContain('启动子代理连续失败 3 次——循环已停止')
+    expect(halted?.text).toContain('阶段: 启动子代理')
+    expect(halted?.text).toMatch(/错误: .+subagent factory rejected/)
+    expect(halted?.wakeup).toBe(true) // ⑬ 结算单点唤醒（AC）
+    expect(halted?.text).toContain('提示用户"环境排查后重新开始 /run-dag-tasks feat-x"，并在问询中决定')
+    // 同实例不自动复活（登记表已删、无定时器存活）；新实例 = 新 guard 计数（可正常跑完）
+    const recovery = build({ claim: [claimed('2.9'), NO_TASK], stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })] })
+    await recovery.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(recovery.driver)
+    expect(recovery.progressCalls.some((e) => e.verb === 'settle' && e.status === 'completed')).toBe(true)
+  })
+
+  it('worker 异常终止（结算失败）：⑫ bounded 立即重入（第 1/3…3/3）→ 超限挂起待裁决（3b）；零防线计数零 tool-error', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), claimed(), claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+    })
+    built.spawn.setBehavior(async (n) => {
+      // live 跟踪语义保持——句柄 result 拒绝 = worker 异常终止（基建面成功、执行面崩溃）
+      return {
+        workerSessionId: `worker-${n}`,
+        result: Promise.reject(new Error('worker crashed mid-run')),
+        dispose: async () => {},
+      }
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 四次运行（3 次 bounded 重入 + 第 4 次触发超限挂起），⑫ ×3 零消息——重试计数进进度事件 note
+    expect(built.spawn.requests).toHaveLength(4)
+    const retryEvents = built.progressCalls.filter((e) => e.verb === 'retry')
+    expect(retryEvents).toHaveLength(3)
+    expect(retryEvents[0]?.note).toContain('第 1/3 次')
+    expect(retryEvents[2]?.note).toContain('第 3/3 次')
+    expect(built.calls.filter((c) => c.method !== 'settle' && c.method !== 'followup')).toEqual([])
+    expect(suspended.escalation).toEqual({
+      kind: 'worker-abort-over-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      taskKey: 'feat-x/2.5',
+      attempts: 4,
+    })
+    // 执行受阻 ≠ spawn 机制故障：零 guard 计数、零 tool-error 留档（循环自有 bounded 阶梯）
+    expect(built.events.some((e) => e.type === 'tool-error')).toBe(false)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── 流控失败分流（bug 63112ab2） ───────────────────────────
+
+describe('流控失败分流（限流零重试——挂起返回主会话择时重派）', () => {
+  it('worker 无结算终态（stopReason: error + 限流输出）：零重试直接挂起 rate-limit，reason 携带限流原文', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      query: [queryOf('in_progress')],
+    })
+    built.spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      result: Promise.resolve({ stopReason: 'error', output: 'provider error: 429 Too Many Requests, rate limit exceeded' }),
+      dispose: async () => {},
+    }))
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 限流窗口内重试必再撞限流——单次 spawn 不重试
+    expect(built.spawn.requests).toHaveLength(1)
+    expect(suspended.escalation).toEqual({
+      kind: 'rate-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      taskKey: 'feat-x/2.5',
+      reason: expect.stringContaining('rate limit exceeded'),
+    })
+    // 不走 ⑪/⑫ 自动重试叙述
+    expect(built.calls.some((c) => c.text.includes('[forge·自动重试]'))).toBe(false)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('spawn 拒绝（限流文案）：零重试零退避，直接挂起 rate-limit', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+    })
+    built.spawn.setBehavior(async () => {
+      throw new Error('provider rejected session start: 429 rate limit exceeded')
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(built.spawn.requests).toHaveLength(1)
+    expect(suspended.escalation).toMatchObject({ kind: 'rate-limit', taskKey: 'feat-x/2.5' })
+    expect(suspended.escalation.kind === 'rate-limit' && suspended.escalation.reason).toContain('429')
+    expect(built.calls.some((c) => c.text.includes('启动子代理失败'))).toBe(false)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('非流控 spawn 失败不误判：照旧走退避重试阶梯至 halted（回归锚）', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+    })
+    built.spawn.setBehavior(async () => {
+      throw new Error('subagent factory rejected')
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 三次尝试 + ⑪ ×2 零消息——原阶梯行为不变（bug 63112ab2 只分流限流径）；重试计数进进度事件
+    expect(built.spawn.requests).toHaveLength(3)
+    expect(built.calls.filter((c) => c.text.includes('启动子代理失败'))).toHaveLength(0)
+    expect(built.progressCalls.filter((e) => e.verb === 'retry' && e.scenario === S.retrySpawnFailed)).toHaveLength(2)
+  })
+})
+
+describe('流控分类器 isRateLimitFailure', () => {
+  it('命中限流族文案（429 / rate limit / throttled / Too Many Requests / 流控 / 限流）', () => {
+    expect(isRateLimitFailure('provider error: 429 Too Many Requests')).toBe(true)
+    expect(isRateLimitFailure('Rate limit exceeded, retry after 60s')).toBe(true)
+    expect(isRateLimitFailure('request throttled by upstream')).toBe(true)
+    expect(isRateLimitFailure('供应商流控触发，请稍后重试')).toBe(true)
+    expect(isRateLimitFailure('触发限流窗口')).toBe(true)
+  })
+
+  it('不命中一般失败文案', () => {
+    expect(isRateLimitFailure('subagent factory rejected')).toBe(false)
+    expect(isRateLimitFailure('worker run ended without a settlement (stopReason: error)')).toBe(false)
+    expect(isRateLimitFailure('')).toBe(false)
+  })
+})
+
+// ─────────────────────────── 静默挂起径补录（⑱-㉑——唤醒 + forge/progress suspend 事件） ───────────────────────────
+
+describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + forge/progress suspend 事件）', () => {
+  /** incident 仓记录桩（落盘委派观察——路径注入供唤醒消息指向断言） */
+  function incidentStub(inputs: unknown[], path: string): IncidentStore {
+    return {
+      record: (input) => {
+        inputs.push(input)
+        return path
+      },
+    }
+  }
+
+  /** 四径共用断言：唤醒一条（form followup·wakeup true·原因摘要 + incident 子文件夹路径）
+   *  + progress suspend 事件一枚（scenario 场景码 + note 携带原因）+ incident 落盘委派 */
+  function expectWakeupAndProgress(
+    built: ReturnType<typeof build>,
+    input: { scenario: string; path: string; reasonPart: string; headlinePart: string },
+  ): void {
+    const wakeup = built.calls.filter((c) => c.form === 'followup' && c.wakeup)
+    expect(wakeup).toHaveLength(1)
+    expect(wakeup[0]?.text).toContain(input.headlinePart)
+    expect(wakeup[0]?.text).toContain(input.path)
+    const suspend = built.progressCalls.find((p) => p.verb === 'suspend')
+    expect(suspend).toMatchObject({
+      verb: 'suspend',
+      status: 'blocked',
+      taskKey: 'feat-x/2.5',
+      scenario: input.scenario,
+    })
+    expect(suspend !== undefined && suspend.note?.includes(input.reasonPart)).toBe(true)
+  }
+
+  it('⑱ spawn-rate-limited：唤醒 + progress suspend（suspend/spawn-rate-limited）+ incident 落盘', async () => {
+    const incidentInputs: unknown[] = []
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      incidents: incidentStub(incidentInputs, 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-spawn-rate-limited'),
+    })
+    built.spawn.setBehavior(async () => {
+      throw new Error('provider rejected session start: 429 rate limit exceeded')
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'rate-limit', taskKey: 'feat-x/2.5' })
+    expectWakeupAndProgress(built, {
+      scenario: S.suspendSpawnRateLimited,
+      path: 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-spawn-rate-limited',
+      reasonPart: '429',
+      headlinePart: '启动被限流',
+    })
+    expect(incidentInputs).toEqual([expect.objectContaining({ eventType: 'spawn-rate-limited', taskKey: '2.5', projectId: PROJECT })])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('⑲ worker-rate-limited：唤醒 + progress suspend（suspend/worker-rate-limited）+ incident 落盘', async () => {
+    const incidentInputs: unknown[] = []
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      query: [queryOf('in_progress')],
+      incidents: incidentStub(incidentInputs, 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-worker-rate-limited'),
+    })
+    built.spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      result: Promise.resolve({ stopReason: 'error', output: 'provider error: 429 Too Many Requests, rate limit exceeded' }),
+      dispose: async () => {},
+    }))
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'rate-limit', taskKey: 'feat-x/2.5' })
+    expectWakeupAndProgress(built, {
+      scenario: S.suspendWorkerRateLimited,
+      path: 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-worker-rate-limited',
+      reasonPart: 'rate limit exceeded',
+      headlinePart: '执行被限流',
+    })
+    expect(incidentInputs).toEqual([expect.objectContaining({ eventType: 'worker-rate-limited', taskKey: '2.5' })])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('⑳ worker-abort-over-limit：唤醒 + progress suspend（suspend/abort-over-limit）+ incident 落盘', async () => {
+    const incidentInputs: unknown[] = []
+    const built = build({
+      claim: [claimed(), claimed(), claimed(), claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      incidents: incidentStub(incidentInputs, 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-abort-over-limit'),
+    })
+    built.spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      result: Promise.reject(new Error('worker crashed mid-run')),
+      dispose: async () => {},
+    }))
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'worker-abort-over-limit', taskKey: 'feat-x/2.5' })
+    expectWakeupAndProgress(built, {
+      scenario: S.suspendAbortOverLimit,
+      path: 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-abort-over-limit',
+      reasonPart: 'worker crashed mid-run',
+      headlinePart: '反复异常退出',
+    })
+    // 既有 worker-aborted 逐次落盘不回归（超限末次也照旧落盘）+ 超限径独立落盘一枚
+    expect(incidentInputs.filter((i) => (i as { eventType: string }).eventType === 'worker-aborted')).toHaveLength(4)
+    expect(incidentInputs.filter((i) => (i as { eventType: string }).eventType === 'worker-abort-over-limit')).toHaveLength(1)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('㉑ settle-landing-rejected：唤醒 + progress suspend（suspend/landing-rejected）+ incident 落盘', async () => {
+    const incidentInputs: unknown[] = []
+    const badLanding: CommitLandingVerifier = async () => ({ ok: false, branch: 'feat-x', commitBranches: ['main'] })
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ interrupted: 1 })],
+      query: [queryOf('completed')],
+      commitLanding: badLanding,
+      incidents: incidentStub(incidentInputs, 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-landing-rejected'),
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt' })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'settle-landing-rejected', taskKey: 'feat-x/2.5' })
+    expectWakeupAndProgress(built, {
+      scenario: S.suspendLandingRejected,
+      path: 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-landing-rejected',
+      reasonPart: '[settle-cwd-pin]',
+      headlinePart: '落点核验',
+    })
+    expect(incidentInputs).toEqual([expect.objectContaining({ eventType: 'settle-landing-rejected', taskKey: '2.5' })])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── no-task 三态判词 ───────────────────────────
+
+describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
+  it('deadlock-suspected：⑭ 受阻叙述 + 挂起待裁决（附阻塞清单，3b）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ blocked: 2 }), statsOf({ blocked: 2 }), statsOf({ blocked: 2, completed: 4 })],
+    })
+    built.h.lists.blocked = [card('feat-x', '3.1', { taskStatus: 'blocked' }), card('feat-x', '4.1', { taskStatus: 'blocked' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    const blocked = built.calls.find((c) => c.method === 'followup')
+    expect(blocked?.text).toContain('没有可执行的任务，且有任务阻塞中')
+    expect(blocked?.text).toContain('3.1（Task 3.1）· 4.1（Task 4.1）')
+    // ⑭ 即时唤醒（AC）：send(nextStep, true)——阻塞清单上下文供主 agent 分析可解除性
+    expect(blocked?.form).toBe('followup')
+    expect(blocked?.wakeup).toBe(true)
+    expect(suspended.escalation).toEqual({
+      kind: 'deadlock',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      blockedItems: [{ taskKey: '3.1', note: 'Task 3.1' }, { taskKey: '4.1', note: 'Task 4.1' }],
+    })
+    expect(built.h.claimInputs).toHaveLength(1)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('bounded patience：连续 wait 判词 3 轮封顶 → ⑮ 收口建议重派（claim 恰 3 次——不无限空转）', async () => {
+    const wait = statsOf({ pending: 2, unmetPending: 2 })
+    const built = build({
+      claim: [NO_TASK],
+      stats: [wait, wait, wait, wait, statsOf({ pending: 2, completed: 4 })],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs).toHaveLength(3) // 三轮等待判词后耐心耗尽
+    const timeout = built.calls.find((c) => c.method === 'settle')
+    expect(timeout?.text).toContain('结束（等待超时）')
+    expect(timeout?.wakeup).toBe(true) // ⑮ 结算单点唤醒（AC）
+    expect(timeout?.text).toContain('完成 4 · 阻塞 0 · 待处理 2')
+    expect(timeout?.text).toContain('提示用户"稍后重新执行 /run-dag-tasks feat-x"')
+  })
+})
+
+describe('CE-1 收工判据（loop-phase-gate）', () => {
+  it('T5 wait 径 gatedPending>0：不计 patience 连击、每轮进度 note；达上限 → phase-gate 挂起（载荷透传 unsettled）', async () => {
+    const gated = statsOf({ pending: 1, gatedPending: 1 })
+    const built = build({
+      claim: [NO_TASK],
+      stats: [gated, gated, gated, gated],
+    })
+    // 容器夹具：I 卡 1.13 已 completed（终态不计）；I 卡 2.1 in_progress（滞留——入 unsettled）；
+    // fix-1 前缀排除；3.1 test-run 是 V 卡本身（不进链集合）
+    built.h.lists.created = [
+      card('feat-x', '1.13', { taskStatus: 'completed' }),
+      card('feat-x', '2.1', { taskStatus: 'in_progress' }),
+      card('feat-x', 'fix-1', { taskStatus: 'pending' }),
+      card('feat-x', '3.1', { taskStatus: 'pending', taskType: 'test-run' }),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 三轮 gate 持有等待（不并入 patience），第三轮达上限 → phase-gate 挂起（非 ⑮ 超时收口）
+    expect(built.h.claimInputs).toHaveLength(3)
+    expect(built.calls.filter((c) => c.method === 'settle')).toEqual([])
+    expect(suspended.escalation).toMatchObject({
+      kind: 'phase-gate',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+    })
+    const phaseGate = suspended.escalation as Extract<LoopEscalation, { kind: 'phase-gate' }>
+    expect(phaseGate.unsettled).toEqual([{ slug: 'feat-x', localId: '2.1', taskStatus: 'in_progress' }])
+    // 每轮进度 note（loop/gate-held 场景）
+    const gateEvents = built.progressCalls.filter((e) => e.scenario === S.loopGateHeld)
+    expect(gateEvents.length).toBeGreaterThanOrEqual(3)
+    expect(gateEvents[0]?.note).toContain('1 张验证卡被实现链阶段门持有')
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('T5 反例：链终态后（gatedPending 归零）正常 done 径收口', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ pending: 1, gatedPending: 1 }), statsOf({ completed: 2 }), statsOf({ completed: 2 }), statsOf({ completed: 2 })],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
+    expect(built.calls.at(-1)?.text).toContain('全部任务已完成')
+  })
+})
+
+describe('done 径承接检查（loop-phase-gate 提案⑤——open bug 无承接修复链不收口）', () => {
+  const doneStats = statsOf({ completed: 1, interrupted: 1 })
+
+  it('T10：open bug ∧ 源任务非终态 ∧ 无活后继 → 不收口转 unclaimed-bugs 挂起（载荷带未承接清单）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [doneStats, doneStats, doneStats, doneStats],
+      bugs: [{ bugId: 'bug-1', summary: 'worker 登记的缺陷', sourceTaskId: 'card-feat-x-2.9' }],
+    })
+    built.h.lists.created = [card('feat-x', '2.9', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(built.calls.filter((c) => c.method === 'settle')).toEqual([])
+    expect(suspended.escalation).toMatchObject({
+      kind: 'unclaimed-bugs',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+    })
+    const unclaimed = suspended.escalation as Extract<LoopEscalation, { kind: 'unclaimed-bugs' }>
+    expect(unclaimed.bugs).toEqual([{ bugId: 'bug-1', summary: 'worker 登记的缺陷', taskKey: 'feat-x/2.9' }])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('T10 反例一：有活后继（interrupted fix 卡）→ 承接在途，正常收口', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [doneStats, doneStats, doneStats, doneStats],
+      bugs: [{ bugId: 'bug-1', summary: 'worker 登记的缺陷', sourceTaskId: 'card-feat-x-2.9' }],
+    })
+    built.h.lists.created = [
+      card('feat-x', '2.9', { taskStatus: 'completed' }),
+      card('feat-x', 'fix-1', { taskStatus: 'interrupted', sourceTask: { slug: 'feat-x', localId: '2.9' } }),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.calls.at(-1)?.text).toContain('全部任务已完成')
+  })
+
+  it('T10 反例二：无 open bug / bugs face 缺席 → 正常收口（机制惰性不判）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [doneStats, doneStats, doneStats, doneStats],
+    })
+    built.h.lists.created = [card('feat-x', '2.9', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.calls.at(-1)?.text).toContain('全部任务已完成')
+  })
+})
+
+// ─────────────────────────── 生命周期入口（start/stop——S2 消费面） ───────────────────────────
+
+describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
+  it('同源独占守卫（2026-10-12 多会话并行裁决）：同源再 start → loop-active 拒绝（附在役归属）；异源异会话并行可启；停止后新实例可启', async () => {
+    const built = build({ claim: [claimed()] })
+    built.spawn.setBehavior(parkedSpawn) // 永不结算——保持在飞（确定性）
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(
+      () => {
+        expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    // 同源他会话再 start → 拒绝（同一任务源不能双派发——3b 起失败分支带 message/guidance/suspended 全形）
+    const same = await built.driver.start({ source: SOURCE, ownerSessionId: 'session-2', parent: {} })
+    expect(same).toEqual({
+      ok: false,
+      code: 'loop-active',
+      activeSource: SOURCE,
+      activeOwnerSessionId: OWNER,
+      suspended: false,
+      message: expect.any(String),
+      guidance: [],
+    })
+    // 异源他会话 start → 并行放行（多会话各跑各源）
+    const parallel = await built.driver.start({ source: { slug: 'other' }, ownerSessionId: 'session-2', parent: {} })
+    expect(parallel).toEqual({ ok: true, loopId: expect.any(String) })
+    expect(built.driver.activeAll()).toHaveLength(2) // 两活循环并行在场
+    await built.driver.stop({ ownerSessionId: 'session-2' })
+    const stopped = await built.driver.stop({ ownerSessionId: OWNER })
+    expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
+    const restarted = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(restarted).toEqual({ ok: true, loopId: expect.any(String) })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('stop：取消 in-flight + 真化 interrupted（S3 transitionTask 面）+ ⑰ 收口叙述 + 登记注销；他会话/无循环 = no-active-loop', async () => {
+    const built = build({ claim: [claimed()], query: [queryOf('in_progress')] })
+    built.spawn.setBehavior(parkedSpawn) // 永不结算
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(
+      () => {
+        expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    // 他会话 stop ≠ 本会话循环（decisions #20——不误停、不暴露归属）
+    expect(await built.driver.stop({ ownerSessionId: 'session-2' })).toEqual({ ok: false, code: 'no-active-loop' })
+    const stopped = await built.driver.stop({ ownerSessionId: OWNER })
+    expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
+    // in-flight 真化 interrupted（S3 面——人类转移通道）
+    expect(built.h.transitions).toEqual([
+      { projectKey: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止', actor: 'core' },
+    ])
+    // ⑰ 停止终局叙述（用户主动停止 = 禁止 agent 再行动——防停止后循环被再次拉起）
+    const stoppedNotice = built.calls.find((c) => c.method === 'settle')
+    expect(stoppedNotice?.text).toContain('[forge·循环停止] 任务源: feat-x — 已按你的指令停止')
+    expect(stoppedNotice?.text).toContain('执行中任务 feat-x/2.5 已标记为中断')
+    expect(stoppedNotice?.text).toContain('下一步动作: 禁止任何行动——不得派发任务、重开循环或执行其它操作')
+    expect(stoppedNotice?.text).not.toContain('/run-dag-tasks')
+    // ⑰ 结算单点唤醒（AC）：send(nextStep, true)
+    expect(stoppedNotice?.form).toBe('settle')
+    expect(stoppedNotice?.wakeup).toBe(true)
+    // ⑰ 双面落会话日志（AC）：forge/progress stopped 事件载 inFlightTaskKey（与结算消息同事实两面）
+    const stopProgress = built.progressCalls.find((e) => e.verb === 'stop')
+    expect(stopProgress).toMatchObject({ verb: 'stop', status: 'interrupted', taskKey: 'feat-x/2.5', scenario: S.loopStopped })
+    // 登记注销 + 再停 = no-op
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+    expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: false, code: 'no-active-loop' })
+    // 停止径 = 主动终态：worker abort 经 killed 分类——零 tool-error（不进防线不发射）
+    expect(built.events.some((e) => e.type === 'tool-error')).toBe(false)
+  })
+
+  it('bug a8fbe860：停止扫描对 terminal（completed）任务零转移——submit 已落账的任务不被扫成 interrupted', async () => {
+    const built = build({ claim: [claimed()], query: [queryOf('completed')] })
+    built.spawn.setBehavior(parkedSpawn) // 永不结算——worker 侧已自行 submitTask completed 的形态
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(
+      () => {
+        expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    const stopped = await built.driver.stop({ ownerSessionId: OWNER })
+    expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
+    // 零转移：completed 终态任务不被停止径扫成 interrupted（结算与证据不受停止影响）
+    expect(built.h.transitions).toEqual([])
+    // 零 stop/interrupted 进度事件（状态迁移点只随真实转移发射）
+    expect(built.progressCalls.find((e) => e.verb === 'stop' && e.status === 'interrupted')).toBeUndefined()
+  })
+
+  it('dispose（fiber 卸载收口）：在飞循环同步终态注销 + 独占摘除 + 零真化零叙述（对账归下次装配 reconcile）+ 零异常 warn', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const built = build({ claim: [claimed()] })
+      built.spawn.setBehavior(parkedSpawn) // 永不结算——两循环均挂在 await worker.result（卸载窗形态）
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+      await built.driver.start({ source: { slug: 'other' }, ownerSessionId: 'session-2', parent: {} })
+      await vi.waitFor(
+        () => {
+          expect(built.driver.activeAll()).toHaveLength(2)
+          expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+        },
+        { timeout: 2000, interval: 5 },
+      )
+      built.driver.dispose()
+      // 同步终态：登记表清空 + S1c 独占注销（新 fiber 可再启）
+      expect(built.driver.activeAll()).toEqual([])
+      expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
+      expect(exclusiveLoopSourceOf({ slug: 'other' })).toBeUndefined()
+      // 静默收口：不真化 in-flight（遗留对账归 reconcileInterrupted）；dispose 后零新增叙述（启动叙述除外）、零异常 warn
+      expect(built.h.transitions).toEqual([])
+      const callsAtDispose = built.calls.length
+      await new Promise((r) => setTimeout(r, 20))
+      expect(built.calls).toHaveLength(callsAtDispose)
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('terminated abnormally'), expect.anything())
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('The database connection is not open'))
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('停止竞态（领取进度读窗被叫停）：stop 面接管真化——循环醒来让渡，零 spawn 零续领', async () => {
+    let stopPromise: Promise<unknown> | undefined
+    const h = tasksHarness()
+    h.setClaim([claimed()])
+    h.setQuery([queryOf('in_progress')])
+    const deps: LoopDriverDeps = {
+      projectId: PROJECT,
+      tasks: h.tasks,
+      spawn: trackedSpawn().spawn,
+      narrator: createNarrator({ channel: sendRecordingChannel([]) }),
+      delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
+    }
+    const driver = createLoopDriver(deps)
+    // 竞态注入点改缝（loop-message-consolidation——claim 通知退出后）：领取进度事件的 stats
+    // 读窗内敲 stop（此时 in-flight 已登记、spawn 未发生——原 claim 通知 await 窗同语义）
+    const rawStats = h.tasks.taskStats.bind(h.tasks)
+    ;(h.tasks as { taskStats: unknown }).taskStats = async (input: unknown) => {
+      const result = await rawStats(input as Parameters<typeof rawStats>[0])
+      if (stopPromise === undefined && h.statsInputs.length >= 2) stopPromise = driver.stop({ ownerSessionId: OWNER })
+      return result
+    }
+    await driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(driver)
+    expect(await stopPromise).toEqual({ ok: true, stopped: true, hadInFlight: true })
+    // 真化归 stop 面（stop 读数晚于 in-flight 登记——接管方）；循环径让渡
+    expect(h.transitions).toEqual([{ projectKey: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止', actor: 'core' }])
+    expect(h.claimInputs).toHaveLength(1) // 零续领
+  })
+})
+
+// ─────────────────────────── S1c · 三层阶梯（第二层处置代理阶梯 + 第三层问询） ───────────────────────────
+
+describe('S1c 退避序列与循环独占（第一层锚 + SC5 守卫）', () => {
+  it('退避间隔递增序列（decisions #11——不立即重试，base×N）', () => {
+    expect([1, 2, 3].map((n) => backoffDelayMs(10_000, n))).toEqual([10_000, 20_000, 30_000])
+  })
+
+  it('循环独占登记：start 即独占（源对在读）→ 终态/停止注销（幂等）', async () => {
+    const built = build({ claim: [claimed(), NO_TASK], stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })] })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(started.ok).toBe(true)
+    const loopId = started.ok ? started.loopId : ''
+    expect(exclusiveLoopSourceOf(SOURCE)).toEqual({ loopId })
+    await untilSettled(built.driver)
+    expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined() // 终态 finally 注销
+  })
+
+  it('停止注销独占登记（stop 面——归属校验同径）', async () => {
+    const built = build({ claim: [claimed()] })
+    built.spawn.setBehavior(parkedSpawn)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(
+      () => {
+        expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    expect(exclusiveLoopSourceOf(SOURCE)).toBeDefined()
+    await built.driver.stop({ ownerSessionId: OWNER })
+    expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
+  })
+})
+
+describe('S1c 第二层处置阶梯（无效/越权计处置失败 + 同任务计数封顶 + 链深到顶）', () => {
+  function blockedScript(built: Built): void {
+    built.h.lists.created = [] // blocked 无 follow-up——处置阶梯径
+  }
+
+  it('处置重试超限：无效输出 ×3 → disposition-over-limit 挂起待裁决（附 reason 全文与处置历史，3b）', async () => {
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryOf('blocked')],
+      triage: () => Promise.reject(new Error('invalid decision shape')),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 同结算内三次重试（处置上限 LOOP_TRIAGE_MAX_ATTEMPTS）——超限即挂起
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(suspended.escalation).toEqual({
+      kind: 'disposition-over-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      attempts: LOOP_TRIAGE_MAX_ATTEMPTS,
+      history: [
+        '第1次处置——分析未得出结论',
+        '第2次处置——分析未得出结论',
+        '第3次处置——分析未得出结论',
+      ],
+    })
+    // ⑩ 叙述（挂起后 owner 对话面处置）
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('处置失败后重试成功：前两次无效、第三次 add-fix → 宿主执行，零升级', async () => {
+    let calls = 0
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: () => {
+        calls += 1
+        if (calls <= 2) return Promise.reject(new Error('越权动作——dispatch'))
+        return Promise.resolve({ action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' })
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(calls).toBe(3)
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.escalations).toEqual([])
+    expect(built.calls.some((c) => c.text.includes('已自动分析原因并创建修复任务 fix-2'))).toBe(false)
+  })
+
+  it('同任务处置计数封顶跨结算：三次处置后，同任务第四次 blocked 不再处置直接升级', async () => {
+    let calls = 0
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.5'), claimed('2.5'), claimed('2.5')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: () => {
+        calls += 1
+        return Promise.resolve({ action: 'add-fix', note: `第${calls}次修复` })
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 三次结算各处置一次（add-fix 续领后同任务再次 blocked）；第四次触簿即封顶——不再调模型
+    expect(calls).toBe(LOOP_TRIAGE_MAX_ATTEMPTS)
+    expect(built.h.claimInputs).toHaveLength(4)
+    expect(suspended.escalation).toEqual({
+      kind: 'disposition-over-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      attempts: LOOP_TRIAGE_MAX_ATTEMPTS,
+      history: [
+        '第1次处置——决定创建修复任务（第1次修复）',
+        '第2次处置——决定创建修复任务（第2次修复）',
+        '第3次处置——决定创建修复任务（第3次修复）',
+      ],
+    })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('fix 链深 ≤6 到顶：addTask ERR_CHAIN_DEPTH_EXCEEDED → fix-chain-over-limit 挂起待裁决（附深度/上限/历史，3b）', async () => {
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryOf('blocked')],
+      triage: () => Promise.resolve({ action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }),
+    })
+    blockedScript(built)
+    built.h.tasks.addTask = async () => {
+      throw Object.assign(new Error('fix 链深超限'), { code: 'ERR_CHAIN_DEPTH_EXCEEDED', data: { depth: 7, limit: 6 } })
+    }
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(suspended.escalation).toEqual({
+      kind: 'fix-chain-over-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      depth: 7,
+      limit: 6,
+      history: ['第1次处置——决定创建修复任务（修选择器等待）', '第1次处置——修复任务创建被拒（修复链已达上限）'],
+    })
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('第三层问询载荷含 reason 原文与处置历史；主会话叙述仅摘要（断言不含全文）', async () => {
+    const fullReason = '第一行构建环境缺失\n第二行机密细节 SHADOW-SECRET-VALUE'
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      // 结算 reason 源 = blocked submit 记录——fixture 直载全文（两行，摘要截断断言用）
+      query: [
+        {
+          task: snapshot({ taskStatus: 'blocked' }),
+          container: { slug: 'feat-x' },
+          records: [
+            { verb: 'submit', toStatus: 'blocked', reason: fullReason, files: ['packages/x/src/changed.ts'], actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
+          ],
+        },
+      ],
+      triage: (input) => {
+        expect(input.reason).toBe(fullReason) // 处置代理输入 = reason 全文
+        return Promise.resolve({ action: 'escalate' })
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 挂起载荷 = reason 原文（含第二行）
+    expect(suspended.escalation).toEqual({
+      kind: 'blocked-ask-user',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: fullReason,
+      history: ['第1次处置——决定上浮主会话处置'],
+    })
+    // 主会话叙述 = 摘要（首行截断）——全文零出现（decisions #24 分级呈现）
+    const notice = built.calls.find((c) => c.text.includes('无法自动处理——已向你发起问询'))
+    expect(notice?.text).toContain('第一行构建环境缺失')
+    expect(notice?.text).not.toContain('SHADOW-SECRET-VALUE')
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+describe('S1c 第三层问询（halted/裁决升级事件的问询投递）', () => {
+  it('spawn 连败 ×3 halted：⑬ 终局 + 第三层问询（reason 原文 = HALTED_REASON）', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), claimed()],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+      ],
+    })
+    built.spawn.setBehavior(async () => {
+      throw new Error('subagent factory rejected')
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.escalations).toEqual([
+      { kind: 'halted', ownerSessionId: OWNER, source: SOURCE, attempts: 3, reason: HALTED_REASON },
+    ])
+    const halted = built.calls.find((c) => c.method === 'settle')
+    expect(halted?.text).toContain('启动子代理连续失败 3 次——循环已停止')
+    expect(halted?.wakeup).toBe(true) // ⑬ 结算单点唤醒（AC）
+    // 1.5 场景码：⑬ loop/halt（循环级进度事件）
+    expect(built.progressCalls.find((e) => e.verb === 'halt')).toMatchObject({ verb: 'halt', status: 'blocked', scenario: S.loopHalt, note: HALTED_REASON })
+  })
+})
+
+// ─────────────────────────── 1.5 发射点全场景覆盖（retry 族场景码） ───────────────────────────
+
+describe('1.5 发射点扩展：retry 族场景码（⑪⑫——自动重试径进度事件）', () => {
+  it('⑪ spawn 失败退避重试：retry/spawn-failed（任务标题 + 失败原因入 note）——退避后重试成功续跑', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    let calls = 0
+    built.spawn.setBehavior(async (n) => {
+      calls += 1
+      if (calls === 1) throw new Error('subagent factory rejected')
+      return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'end_turn', output: 'done' }), dispose: async () => {} }
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.progressCalls.find((e) => e.verb === 'retry')).toMatchObject({
+      verb: 'retry',
+      status: 'blocked',
+      scenario: S.retrySpawnFailed,
+      taskKey: 'feat-x/2.5',
+      taskTitle: 'Implement the thing',
+    })
+    const retryEvt = built.progressCalls.find((e) => e.verb === 'retry')
+    expect(retryEvt !== undefined && retryEvt.note?.includes('subagent factory rejected')).toBe(true)
+  })
+
+  it('⑫ worker 异常退出重入：retry/worker-aborted（worker 会话 id + 原因入 note）——重入后成功收口', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    let calls = 0
+    built.spawn.setBehavior(async (n) => {
+      calls += 1
+      if (calls === 1) return { workerSessionId: `worker-${n}`, result: Promise.reject(new Error('worker crashed mid-run')), dispose: async () => {} }
+      return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'end_turn', output: 'done' }), dispose: async () => {} }
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.progressCalls.find((e) => e.verb === 'retry')).toMatchObject({
+      verb: 'retry',
+      status: 'blocked',
+      scenario: S.retryWorkerAborted,
+      taskKey: 'feat-x/2.5',
+      workerSessionId: 'worker-1',
+    })
+  })
+
+  it('⑫b 跑完未结算分桶（spawn-false-alarm）：diag 冠「跑完未结算」非「异常退出」——重入后成功收口', async () => {
+    const diag: Array<{ level: string; event: string; message: string }> = []
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+      query: [queryOf('in_progress'), queryOf('completed')],
+      diag: (p) => diag.push(p),
+    })
+    let calls = 0
+    built.spawn.setBehavior(async (n) => {
+      calls += 1
+      if (calls === 1) {
+        return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'completed', output: 'fix-4 完成，两 bug 两阶段落库闭环……' }), dispose: async () => {} }
+      }
+      return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'end_turn', output: 'done' }), dispose: async () => {} }
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    const retryDiag = diag.find((d) => d.event === 'loop-retry')
+    expect(retryDiag?.message).toContain('worker 跑完未结算第 1/3 次')
+    expect(retryDiag?.message).toContain('ended-without-settlement')
+    expect(retryDiag?.message).not.toContain('worker 异常退出')
+  })
+})
+
+// ─────────────────────────── S2 面（any-active 读数 + projectId 会话覆盖） ───────────────────────────
+
+describe('S2 面：active() 单活读数与 projectId 覆盖（S2 指令层消费缝）', () => {
+  it('activeAll()：启动后含登记行（任务源/主会话 id）；stop 后空（多会话并行的全量读数面）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+    })
+    expect(built.driver.activeAll()).toEqual([])
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, projectId: PROJECT })
+    const records = built.driver.activeAll()
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({ source: SOURCE, ownerSessionId: OWNER })
+    await built.driver.stop({ ownerSessionId: OWNER })
+    expect(built.driver.activeAll()).toEqual([])
+  })
+
+  it('projectId 覆盖：input.projectId 优先于 deps（claim/list/stats 读携带会话工作区解析结果）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, projectId: 'p-override' })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs[0]).toMatchObject({ projectKey: 'p-override' })
+    for (const q of built.h.listInputs) expect(q.projectKey).toBe('p-override')
+  })
+
+  it('projectId 双缺席（deps 与 input 均无）：start 拒绝（fail-loud——不落不可归属的循环）', async () => {
+    const h = tasksHarness()
+    const channel: NarrationChannel = { send: async () => {} }
+    const driver = createLoopDriver({
+      tasks: h.tasks,
+      spawn: trackedSpawn().spawn,
+      narrator: createNarrator({ channel }),
+      delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
+    })
+    await expect(driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })).rejects.toThrow(/projectId/)
+  })
+})
+
+// ─────────────────────────── 事件日志容器目录直记（bug a93c1277） ───────────────────────────
+
+describe('事件日志容器目录直记（logs/{slug}.jsonl 归属记忆——bug a93c1277 接线）', () => {
+  it('containerDirOf 注入 → start 即 remember(owner, {tasksHome}/{projectKey})（监听器丢行根因收口）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+      containerDirOf: (projectKey) => `T:/forge/projects/${projectKey}`,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(built.remembers).toEqual([`${OWNER}|T:/forge/projects/${PROJECT}`])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('containerDirOf 缺席 → start 零 remember（单装缺省行为零变化——AC 回归锚）', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(built.remembers).toEqual([])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── 1.17 循环进度事件（'forge/progress' 流内交错） ───────────────────────────
+
+describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型面零回合唤醒）', () => {
+  it('全链形状：领取（claim + counts 快照）→ 结算成功（settle·completed）——数据形状五件齐（任务键/动词/状态/计数/时间戳）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读
+        statsOf({ in_progress: 1 }), // 结算读
+        statsOf({ completed: 1 }), // no-task 池读
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+    })
+    const before = Date.now()
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.progressCalls).toHaveLength(6)
+    const [startupEvt, claimEvt, , spawnedEvt, settleEvt] = built.progressCalls
+    // 启动点（1.5——① startup/from-scratch）：循环级事件，零任务键
+    expect(startupEvt).toEqual({
+      sourceSlug: 'feat-x',
+      verb: 'startup',
+      status: 'running',
+      scenario: S.startupFromScratch,
+      at: expect.any(Number),
+    })
+    // 领取点：动词 claim + running + 任务键 + 任务标题 + 计数快照 + 场景码 + 时间戳界内
+    expect(claimEvt).toEqual({
+      sourceSlug: 'feat-x',
+      verb: 'claim',
+      status: 'running',
+      scenario: S.claimNew,
+      taskKey: 'feat-x/2.5',
+      taskTitle: 'Implement the thing',
+      counts: { pending: 0, running: 1, done: 0 },
+      at: expect.any(Number),
+    })
+    expect(claimEvt!.at).toBeGreaterThanOrEqual(before)
+    // 池级 pending 快照（1.16 用户裁决②——claim 后随发，无任务键，counts 承载待执行）
+    expect(built.progressCalls[2]).toEqual({
+      sourceSlug: 'feat-x',
+      verb: 'loop',
+      status: 'running',
+      scenario: S.poolPending,
+      counts: { pending: 0, running: 1, done: 0 },
+      at: expect.any(Number),
+    })
+    // 领取确认点（bug 3bd8b829——spawn 成功回填后补发，载荷带 workerSessionId 直跳锚）
+    expect(spawnedEvt).toEqual({
+      sourceSlug: 'feat-x',
+      verb: 'claim',
+      status: 'running',
+      scenario: S.claimSpawned,
+      taskKey: 'feat-x/2.5',
+      taskTitle: 'Implement the thing',
+      workerSessionId: 'worker-1',
+      at: expect.any(Number),
+    })
+    // 结算点：动词 settle + completed + 任务键 + 任务标题 + worker 会话 id + ⑥ task/complete 场景码
+    expect(settleEvt).toEqual({
+      sourceSlug: 'feat-x',
+      verb: 'settle',
+      status: 'completed',
+      scenario: S.taskComplete,
+      taskKey: 'feat-x/2.5',
+      taskTitle: 'Implement the thing',
+      workerSessionId: 'worker-1',
+      at: expect.any(Number),
+    })
+    // ⑯ 结束（全部完成）——循环级进度事件（1.5）
+    expect(built.progressCalls.find((e) => e.verb === 'finish-all')).toMatchObject({ verb: 'finish-all', status: 'completed', scenario: S.loopFinishAll })
+    // 纯 JSON（Session.append 契约——序列化往返无损）
+    expect(JSON.parse(JSON.stringify(built.progressCalls))).toEqual(built.progressCalls)
+    // claim 未解析出专家键（程序段 persona 形态兼容）→ 全部事件零 expertKey 字段（旧形状零回归）
+    expect(built.progressCalls.every((e) => e.expertKey === undefined)).toBe(true)
+  })
+
+  it('expertKey 填充（loop-card-task-context）：claim 结果带回的专家键随携带任务键的事件发射（claim/claim-spawned/settle 在列）——循环级事件不携带', async () => {
+    const built = build({
+      claim: [{ ...claimed(), expertKey: 'retro-reviewer' }, NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读
+        statsOf({ in_progress: 1 }), // 结算读
+        statsOf({ completed: 1 }), // no-task 池读
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    for (const scenario of [S.claimNew, S.claimSpawned, S.taskComplete]) {
+      const evt = built.progressCalls.find((e) => e.scenario === scenario)
+      expect(evt?.expertKey, scenario).toBe('retro-reviewer')
+    }
+    // 循环级事件（无 taskKey）不填充
+    for (const scenario of [S.startupFromScratch, S.poolPending, S.loopFinishAll]) {
+      expect(built.progressCalls.find((e) => e.scenario === scenario)?.expertKey, scenario).toBeUndefined()
+    }
+  })
+
+  it('expertKey 填充·类型映射径（bug 17734753）：claim 经类型映射解析带回的专家键同样随携带任务键的事件回填；未解析（程序段 persona 形态兼容）= 零字段旧兼容', async () => {
+    // 类型映射径：claim 结果携带解析生效键（变量缺席、映射命中）——事件行回填同径
+    const built = build({
+      claim: [{ ...claimed(), expertKey: 'tech-writer' }, NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    for (const scenario of [S.claimNew, S.claimSpawned, S.taskComplete]) {
+      const evt = built.progressCalls.find((e) => e.scenario === scenario)
+      expect(evt?.expertKey, scenario).toBe('tech-writer')
+    }
+    // 旧兼容：claim 未解析出专家键（无档案程序段 persona 形态）→ 全部事件零 expertKey 字段
+    const bare = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    await bare.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(bare.driver)
+    // 防恒真：先钉事件量非空，再对已知 scenario 逐一断言零 expertKey（与 mapped 侧同构）
+    expect(bare.progressCalls.length).toBeGreaterThan(0)
+    for (const scenario of [S.startupFromScratch, S.claimNew, S.claimSpawned, S.taskComplete, S.poolPending, S.loopFinishAll]) {
+      expect(bare.progressCalls.find((e) => e.scenario === scenario)?.expertKey, scenario).toBeUndefined()
+    }
+    expect(bare.progressCalls.every((e) => e.expertKey === undefined)).toBe(true)
+  })
+
+  it('bug 3bd8b829：spawn 成功后补发领取确认事件（claim/spawned——载荷含 taskKey/taskTitle/workerSessionId；claim 原事件时序语义不变）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读
+        statsOf({ in_progress: 1 }), // 结算读
+        statsOf({ completed: 1 }), // no-task 池读
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 确认事件在 claim 原事件之后、结算事件之前（执行中窗口内面板即可取到跳转锚）
+    const claimIdx = built.progressCalls.findIndex((e) => e.scenario === S.claimNew)
+    const spawnedIdx = built.progressCalls.findIndex((e) => e.scenario === S.claimSpawned)
+    const settleIdx = built.progressCalls.findIndex((e) => e.verb === 'settle')
+    expect(claimIdx).toBeGreaterThanOrEqual(0)
+    expect(spawnedIdx).toBeGreaterThan(claimIdx)
+    expect(spawnedIdx).toBeLessThan(settleIdx)
+    expect(built.progressCalls[spawnedIdx]).toMatchObject({
+      verb: 'claim',
+      status: 'running',
+      scenario: S.claimSpawned,
+      taskKey: 'feat-x/2.5',
+      taskTitle: 'Implement the thing',
+      workerSessionId: 'worker-1',
+    })
+  })
+
+  it('adopt 恢复径：动词 claim-resume（⑤ 领取（恢复中断））', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1, interrupted: 1 }),
+        statsOf({ pending: 0, interrupted: 0, in_progress: 1 }),
+        statsOf({ pending: 0, in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    built.h.lists.interrupted = [card('feat-x', '2.5', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.progressCalls.find((e) => e.verb === 'claim-resume')).toMatchObject({ verb: 'claim-resume', status: 'running', taskKey: 'feat-x/2.5', scenario: S.claimInterrupted, taskTitle: 'Implement the thing' })
+    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ verb: 'startup', status: 'running', scenario: S.startupResumeStopped, taskKey: 'feat-x/2.5', taskTitle: 'Task 2.5' })
+  })
+
+  it('停止真化：stop 面 in-flight → interrupted（状态迁移点——动词 stop + 中断任务键）', async () => {
+    const built = build({ claim: [claimed()], query: [queryOf('in_progress')] })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(
+      () => {
+        expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    await built.driver.stop({ ownerSessionId: OWNER })
+    expect(built.progressCalls.filter((e) => e.verb === 'stop')).toEqual([
+      { sourceSlug: 'feat-x', verb: 'stop', status: 'interrupted', scenario: S.loopStopped, taskKey: 'feat-x/2.5', taskTitle: 'Implement the thing', at: expect.any(Number) },
+    ])
+  })
+
+  it('blocked 无 follow-up 处置径：wait-external 决策 → settle·blocked（状态迁移点）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'wait-external', externalSlug: 'feat-y' }),
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ blocked: 1 }),
+        statsOf({ blocked: 1 }),
+        statsOf({ blocked: 1 }),
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver) // 3b：wait-external 续领后池 blocked → deadlock 挂起
+    expect(built.progressCalls.find((e) => e.verb === 'settle')).toMatchObject({ verb: 'settle', status: 'blocked', taskKey: 'feat-x/2.5', scenario: S.blockedWaitExternal, note: '等待 feat-y 先完成' })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('面缺席 = 零发射 fail-soft（可选依赖——叙述四连零回归）', async () => {
+    const h = tasksHarness()
+    h.setClaim([claimed(), NO_TASK])
+    h.setStats([statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })])
+    const channel: NarrationChannel = { send: async () => {} }
+    const driver = createLoopDriver({
+      projectId: PROJECT,
+      tasks: h.tasks,
+      spawn: trackedSpawn().spawn,
+      narrator: createNarrator({ channel }),
+      delays: { backoffBaseMs: 1, patiencePauseMs: 1, quiescenceWindowMs: 1, quiescencePollMs: 1 },
+      // progress 缺席——零发射不外溢
+    })
+    await driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(driver)
+    expect(driver.activeOf(OWNER)).toBeUndefined()
+  })
+})
+
+// ─────────────────────────── 改进 6 · triage 错误处理信息闭环 ───────────────────────────
+
+describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/链深余量/slug 校验/升级载荷）', () => {
+  function blockedScript(built: Built): void {
+    built.h.lists.created = [] // blocked 无 follow-up——处置阶梯径
+  }
+
+  function queryOfBlocked(): QueryTaskResult {
+    return {
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { slug: 'feat-x' },
+      records: [
+        { verb: 'submit', toStatus: 'blocked', reason: 'tests hang on flaky selector', files: ['packages/x/src/changed.ts'], actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
+      ],
+    }
+  }
+
+  const BASE_STATS = [
+    statsOf({ pending: 1 }),
+    statsOf({ in_progress: 1, blocked: 1 }),
+    statsOf({ in_progress: 1, blocked: 1 }),
+  ]
+
+  it('①失败回灌 + ⑥挂起载荷：无效输出 ×2 后 ask-user——重试输入携 rawSummary，处置历史行含各次输出摘要（3b 挂起）', async () => {
+    const inputs: LoopTriageInput[] = []
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async (input) => {
+        inputs.push(input)
+        if (inputs.length <= 2) throw new TriageDecisionInvalidError('输出不含 JSON 决策（封闭四动作契约）', 'RAW-MODEL-OUTPUT-SNIPPET')
+        return { action: 'escalate' }
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // ① 回灌：第二次处置输入携上次失败摘要
+    expect(inputs[0]?.lastFailure).toBeUndefined()
+    expect(inputs[1]?.lastFailure).toContain('RAW-MODEL-OUTPUT-SNIPPET')
+    // ⑥ 挂起载荷 history 行含各次原始输出摘要
+    const history = (suspended.escalation as { kind: string; history: readonly string[] }).history
+    expect(suspended.escalation.kind).toBe('blocked-ask-user')
+    expect(history[0]).toContain('RAW-MODEL-OUTPUT-SNIPPET')
+    expect(history[1]).toContain('RAW-MODEL-OUTPUT-SNIPPET')
+    expect(history[2]).toContain('决定上浮主会话处置')
+    expect(built.h.claimInputs).toHaveLength(1)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('②错误类别分流（纯函数）：TriageDecisionInvalidError 判无效；摘要取 rawSummary 优先', () => {
+    const invalid = new TriageDecisionInvalidError('决策 JSON 解析失败', 'raw-snippet')
+    expect(isTriageInvalidOutput(invalid)).toBe(true)
+    expect(isTriageInvalidOutput(new Error('spawn boom'))).toBe(false)
+    expect(triageFailureSummary(invalid)).toBe('raw-snippet')
+    expect(triageFailureSummary(new Error('spawn boom'))).toBe('spawn boom')
+    expect(triageFailureSummary('flat')).toBe('flat')
+  })
+
+  it('②模型输出无效 → 立即重试（大退避基长下三连无效快速封顶升级——零 backoff 等待的机械证据）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: () => Promise.reject(new TriageDecisionInvalidError('输出不含 JSON 决策', 'bad output')),
+      backoffBaseMs: 60_000, // 无效径若误走 backoff，本用例将超时——绿 = 立即重试
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'disposition-over-limit', attempts: LOOP_TRIAGE_MAX_ATTEMPTS })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('②基建故障 → spawn 同款 backoff 退避（base×N 间隔——耗时 ≥ 退避序列和的机械证据）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: () => Promise.reject(new Error('subagent factory rejected')),
+      backoffBaseMs: 60,
+    })
+    blockedScript(built)
+    const startedAt = Date.now()
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver)
+    const elapsed = Date.now() - startedAt
+    expect(elapsed).toBeGreaterThanOrEqual(backoffDelayMs(60, 1) + backoffDelayMs(60, 2) + backoffDelayMs(60, 3) - 10)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('③决策缓存重放：add-fix 落库失败首次保缓存——再遇 blocked 重放执行（triage 零二调）不重跑分析', async () => {
+    let triageCalls = 0
+    let addTaskCalls = 0
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOfBlocked()],
+      triage: async () => {
+        triageCalls += 1
+        return { action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }
+      },
+    })
+    blockedScript(built)
+    built.h.tasks.addTask = async (input: AddTaskInput) => {
+      addTaskCalls += 1
+      if (addTaskCalls === 1) throw new Error('db busy') // 首次落库失败——缓存保留
+      return { taskId: 'fix-uuid', slug: input.slug, localId: 'fix-2', reused: false }
+    }
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 分析恰好一次；执行两次（首败 + 重放成功）
+    expect(triageCalls).toBe(1)
+    expect(addTaskCalls).toBe(2)
+    expect(built.calls.some((c) => c.text.includes('已自动分析原因并创建修复任务 fix-2'))).toBe(false)
+    expect(built.escalations).toEqual([])
+  })
+
+  it('③重放再败有界收口：缓存清账 + 挂起待裁决（防无限重放同失败径，3b）', async () => {
+    let triageCalls = 0
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.5')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async () => {
+        triageCalls += 1
+        return { action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }
+      },
+    })
+    blockedScript(built)
+    built.h.tasks.addTask = async () => {
+      throw new Error('db busy')
+    }
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(triageCalls).toBe(1)
+    expect(suspended.escalation).toEqual({
+      kind: 'blocked-ask-user',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      history: [
+        '第1次处置——决定创建修复任务（修选择器等待）',
+        '重放已缓存处置决策（不重跑分析）——执行',
+        '重放执行再次失败——缓存清账，交人工裁决',
+      ],
+    })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('④链深余量入参：triage 输入携带 depth/limit/remaining（沿 sourceTask 链上溯现算）', async () => {
+    let captured: LoopTriageInput | undefined
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ pending: 0, blocked: 1 }), statsOf({ pending: 0, blocked: 1 })],
+      query: [queryOfBlocked()],
+      triage: async (input) => {
+        captured = input
+        return { action: 'wait-external', externalSlug: 'feat-y' }
+      },
+    })
+    built.h.lists.created = [
+      card('feat-x', '2.5', { sourceTask: { slug: 'feat-x', localId: '2.4' } }),
+      card('feat-x', '2.4'),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver) // 3b：wait-external 续领后池 blocked → deadlock 挂起
+    expect(captured?.fixChain).toEqual({ depth: 2, limit: 6, remaining: 4 })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('④余量不足拒 add-fix：宿主前置校验计失败并回灌——不产 add-fix 执行（改选 ask-user 收口）', async () => {
+    const inputs: LoopTriageInput[] = []
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async (input) => {
+        inputs.push(input)
+        if (inputs.length === 1) return { action: 'add-fix', title: 'Fix: flaky selector' }
+        return { action: 'escalate' }
+      },
+    })
+    // 六节点链（2.5→fix-1→…→fix-5）：remaining = 0——add-fix 结构性被拒
+    built.h.lists.created = [
+      card('feat-x', '2.5', { sourceTask: { slug: 'feat-x', localId: 'fix-1' } }),
+      card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: 'fix-2' } }),
+      card('feat-x', 'fix-2', { sourceTask: { slug: 'feat-x', localId: 'fix-3' } }),
+      card('feat-x', 'fix-3', { sourceTask: { slug: 'feat-x', localId: 'fix-4' } }),
+      card('feat-x', 'fix-4', { sourceTask: { slug: 'feat-x', localId: 'fix-5' } }),
+      card('feat-x', 'fix-5'),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(inputs[0]?.fixChain).toEqual({ depth: 6, limit: 6, remaining: 0 })
+    expect(inputs[1]?.lastFailure).toContain('余量不足')
+    expect(built.h.addTaskInputs).toEqual([]) // add-fix 未被执行（宿主拒绝）
+    expect(suspended.escalation.kind).toBe('blocked-ask-user')
+    expect((suspended.escalation as { history: readonly string[] }).history[0]).toContain('余量不足')
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('⑤externalSlug 存在性校验：编造 slug 计处置失败并回灌（有效 slug 照常执行）', async () => {
+    const inputs: LoopTriageInput[] = []
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async (input) => {
+        inputs.push(input)
+        if (inputs.length === 1) return { action: 'wait-external', externalSlug: 'ghost-slug' }
+        return { action: 'wait-external', externalSlug: 'feat-real' }
+      },
+      knownContainers: async () => ['feat-x', 'feat-real', 'prop-b'],
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver) // 3b：wait-external 有效续领后池 blocked → deadlock 挂起
+    expect(inputs[1]?.lastFailure).toContain('ghost-slug')
+    // 编造 slug 零执行；有效 slug 照常执行——两径均静默（R-Q4），进度事件投影
+    expect(built.calls.some((c) => c.text.includes('等待 ghost-slug 先完成'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('等待 feat-real 先完成'))).toBe(false)
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWaitExternal, note: '等待 feat-real 先完成' })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── 3b · 升级点挂起与 re-entry 回落（dispatch-loop-hardening 1.8） ───────────────────────────
+
+describe('3b 挂起改造（suspendForVerdict 写 record.suspended + resume 清挂起回落续跑）', () => {
+  it('升级点挂起：suspended 在场（升级事件全文 + since）、登记/独占保留、runLoop 停驻零续领；resume 清 suspended 从留存点续跑到 settled 收口', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.6'), NO_TASK],
+      stats: [statsOf({ pending: 2 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 2 }), statsOf({ completed: 2 })],
+      query: [queryOfBlockedNoProgress(), queryOf('completed')],
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    const suspended = await untilSuspended(built.driver)
+    // 写点①：挂起即投影挂起——升级事件全文 + 挂起时刻
+    expect(suspended.escalation).toMatchObject({ kind: 'blocked-ask-user', reason: 'needs human verdict' })
+    expect(suspended.since).toEqual(expect.any(Number))
+    expect(built.driver.activeOf(OWNER)).toBeDefined() // 登记保留（挂起 ≠ 终局）
+    expect(exclusiveLoopSourceOf(SOURCE)).toEqual({ loopId }) // S1c 独占保留
+    expect(built.h.claimInputs).toHaveLength(1) // runLoop 停驻——零续领
+    // re-entry（写点②）：清 suspended 回落 active，从留存点续跑
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    expect(built.driver.activeOf(OWNER)?.suspended).toBeUndefined()
+    await untilSettled(built.driver)
+    expect(built.driver.activeOf(OWNER)).toBeUndefined() // 续跑后 settled 终局注销
+    expect(built.h.claimInputs).toHaveLength(3) // 2.5（挂起前）→ 2.6 → no-task
+    // 完成零消息（⑥ 退出消息面）——进度事件投影 + 结算单点收口（2.5 无进展 blocked 挂起，仅 2.6 完成）
+    expect(built.progressCalls.filter((e) => e.verb === 'settle' && e.status === 'completed')).toHaveLength(1)
+    expect(built.calls.at(-1)?.text).toContain('[forge·循环结束]')
+  })
+
+  it('resume 错误径：无活登记 = no-active-loop；未挂起（在飞运行中）= not-suspended；挂起态 stop 走终局径收口，resume 随后 no-active-loop', async () => {
+    // 未挂起（在飞运行中）→ not-suspended
+    const running = build({ claim: [claimed()] })
+    running.spawn.setBehavior(parkedSpawn)
+    const started = await running.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await vi.waitFor(
+      () => {
+        expect(running.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    expect(running.driver.resume({ loopId })).toEqual({ ok: false, code: 'not-suspended' })
+    // 无活登记 → no-active-loop
+    expect(running.driver.resume({ loopId: 'ghost-loop' })).toEqual({ ok: false, code: 'no-active-loop' })
+    await running.driver.stop({ ownerSessionId: OWNER })
+    // 挂起态 stop：终局径收口（登记注销）→ resume no-active-loop
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryOfBlockedNoProgress()],
+    })
+    const started2 = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId2 = started2.ok ? started2.loopId : ''
+    await untilSuspended(built.driver)
+    expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: true, stopped: true, hadInFlight: false })
+    expect(built.driver.resume({ loopId: loopId2 })).toEqual({ ok: false, code: 'no-active-loop' })
+  })
+
+  it('resume 前置判 aborted（R2-minor⑤）：terminateRecord 异步窗口内 resume 拒绝（非误导性 ok:true）', async () => {
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryOfBlockedNoProgress()],
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilSuspended(built.driver)
+    // 不 await stop——terminateRecord 异步窗口：控制器已同步 abort、登记表尚未注销
+    const stopping = built.driver.stop({ ownerSessionId: OWNER })
+    expect(built.driver.resume({ loopId })).toEqual({ ok: false, code: 'aborted' })
+    expect(await stopping).toEqual({ ok: true, stopped: true, hadInFlight: false })
+    // 窗口闭合（登记注销）→ 常规 no-active-loop
+    expect(built.driver.resume({ loopId })).toEqual({ ok: false, code: 'no-active-loop' })
+  })
+})
+
+// ─────────────────────────── 1.18 · 落点核验失败强制处置（错分支提交不静默接受，bug d8029b20） ───────────────────────────
+
+describe('落点核验失败强制处置（settle-cwd-pin——任务真化 interrupted + settle-landing-rejected 挂起）', () => {
+  it('错分支提交闭环：核验失败 → 任务 completed→interrupted 真化 + 挂起升级；不走 worker-abort 阶梯、零续领、不 finished-all', async () => {
+    const badLanding: CommitLandingVerifier = async () => ({ ok: false, branch: 'feat-x', commitBranches: ['main'] })
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ interrupted: 1 })],
+      query: [queryOf('completed')],
+      commitLanding: badLanding,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt' })
+    const suspended = await untilSuspended(built.driver)
+    // 显式处置②：挂起升级（settle-landing-rejected——非 worker-abort-over-limit）
+    expect(suspended.escalation).toMatchObject({ kind: 'settle-landing-rejected', taskKey: 'feat-x/2.5' })
+    expect(suspended.escalation.kind === 'settle-landing-rejected' && suspended.escalation.reason).toContain('[settle-cwd-pin]')
+    // 显式处置①：任务从 completed 真化 interrupted（可恢复态——非 completed 挂死）
+    expect(built.h.transitions).toEqual([
+      { projectKey: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: expect.stringContaining('[settle-cwd-pin]'), actor: 'core' },
+    ])
+    // 不走失败阶梯：零续领（worker-abort 径会立即重入 claim）、循环不终局（登记保留）
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(built.driver.activeOf(OWNER)).toBeDefined()
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── 3b③ 会话单活门控 + stopTaskLoop 定向停止 ───────────────────────────
+
+describe('start 会话级单活门控（3b——用户裁决 2026-10-17：一会话一循环，含挂起中）', () => {
+  /** 预置登记行（门控读数源——不经真实 runLoop） */
+  function loopRecordOf(owner: string, over: Partial<LoopRecord> = {}): LoopRecord {
+    return {
+      id: 'loop-pre',
+      source: { slug: 'feat-x' },
+      ownerSessionId: owner,
+      projectId: PROJECT,
+      takeoverSessions: new Set<string>(),
+      ...over,
+    }
+  }
+
+  /** 预置登记表的驱动器（deps.registry 注入缝——门控读数源，不经真实 runLoop） */
+  function driverWithRegistry(record: LoopRecord): { driver: LoopDriver; registry: ReturnType<typeof createLoopRegistry> } {
+    const registry = createLoopRegistry()
+    registry.register(record)
+    const h = tasksHarness()
+    const calls: NarrationCall[] = []
+    const narrator: Narrator = createNarrator({
+      channel: sendRecordingChannel(calls),
+    })
+    const driver = createLoopDriver({
+      projectId: PROJECT,
+      tasks: h.tasks,
+      spawn: parkedSpawn as unknown as SpawnWorker,
+      narrator,
+      registry,
+      delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
+    })
+    return { driver, registry }
+  }
+
+  it('owner 已有活循环（他源）→ owner-active 拒绝：归属 + suspended=false + 人话/指引随行；登记未增', async () => {
+    const { driver, registry } = driverWithRegistry(loopRecordOf(OWNER))
+    const result = await driver.start({ source: { slug: 'feat-y' }, ownerSessionId: OWNER, parent: {} })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.code).toBe('owner-active')
+      expect(result.activeSource).toEqual({ slug: 'feat-x' })
+      expect(result.suspended).toBe(false)
+      expect(result.message).toContain('one loop per session')
+      expect(result.guidance.some((g) => g.includes('stop_task_loop'))).toBe(true)
+    }
+    expect(registry.all()).toHaveLength(1)
+  })
+
+  it('挂起中的活循环同占会话名额：owner-active 且 suspended=true', async () => {
+    const { driver } = driverWithRegistry(
+      loopRecordOf(OWNER, {
+        suspended: {
+          escalation: { kind: 'deadlock', ownerSessionId: OWNER, source: { slug: 'feat-x' }, blockedItems: [] },
+          since: 0,
+        },
+      }),
+    )
+    const result = await driver.start({ source: { slug: 'feat-y' }, ownerSessionId: OWNER, parent: {} })
+    expect(result.ok).toBe(false)
+    expect(result.ok ? undefined : result.suspended).toBe(true)
+  })
+
+  it('他源他会话并行不受限：owner 无活循环时正常启动（既有语义零回归）', async () => {
+    const { driver } = driverWithRegistry(loopRecordOf('someone-else'))
+    const result = await driver.start({ source: { slug: 'feat-y' }, ownerSessionId: OWNER, parent: {} })
+    expect(result.ok).toBe(true)
+  })
+})
+
+describe('stopLoop 定向停止（3b stopTaskLoop 消费面——双入口同 registry 判活 + 作用域裁决）', () => {
+  it('无活循环 → no-active-loop（ownerSessionId 空形）', async () => {
+    const built = build()
+    expect(await built.driver.stopLoop({ loopId: 'ghost', requesterSessionId: 'x' })).toEqual({
+      ok: false,
+      code: 'no-active-loop',
+      suspended: false,
+      ownerSessionId: '',
+    })
+  })
+
+  it('运行中：owner 可停（统一结束处理同径——真化 interrupted + ⑰ 收口叙述 + 终态注销）；非 owner 被拒', async () => {
+    const built = build({ claim: [claimed()], query: [queryOf('in_progress')] })
+    built.spawn.setBehavior(parkedSpawn)
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await vi.waitFor(
+      () => {
+        expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    // 非 owner → forbidden（owner 随行——自解释文案数据源）
+    const denied = await built.driver.stopLoop({ loopId, requesterSessionId: 'other-session' })
+    expect(denied).toEqual({ ok: false, code: 'forbidden', suspended: false, ownerSessionId: OWNER })
+    // owner → 统一结束处理（stop() 同径单源）
+    const stopped = await built.driver.stopLoop({ loopId, requesterSessionId: OWNER })
+    expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+    expect(built.h.transitions.some((t) => t.toStatus === 'interrupted')).toBe(true)
+    expect(built.calls.some((c) => c.method === 'settle' && c.text.includes('[forge·循环停止] 任务源: feat-x — 已按你的指令停止'))).toBe(true)
+    expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
+  })
+
+  it('挂起态任意会话可停：非 owner 触达挂起循环 → 统一结束处理收口', async () => {
+    /** 无进展 blocked 的结算记录（零 commit hash 零 files——硬停门直达挂起） */
+    const queryBlockedNoProgress = (): QueryTaskResult => ({
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { slug: 'feat-x' },
+      records: [
+        { verb: 'submit', toStatus: 'blocked', reason: 'needs human verdict', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
+      ],
+    })
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryBlockedNoProgress()],
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilSuspended(built.driver)
+    const stopped = await built.driver.stopLoop({ loopId, requesterSessionId: 'takeover-session' })
+    expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: false })
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+    expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
+  })
+})
+
+// ─────────────────────────── 3c · 续派静默窗（宽限窗）与终止条件全集（dispatch-loop-hardening 1.12） ───────────────────────────
+
+describe('3c wait-for-quiescence 宽限窗（done 判词收口前——编排层新派任务窗内自动续派）', () => {
+  it('宽限窗内编排层新派任务（pending 出现）→ 不收口，自动续派领取并完成新任务后才 settled 收口', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK, claimed('2.6'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读（2.5）
+        statsOf({ in_progress: 1 }), // 结算读（2.5）
+        statsOf({ completed: 1 }), // no-task 池读（done 判词）
+        statsOf({ completed: 1 }), // 静默窗 poll #1（窗初——无新任务）
+        statsOf({ pending: 1 }), // 静默窗 poll #2（编排层新派任务在窗内出现）
+        statsOf({ in_progress: 1 }), // 领取通知读（2.6）
+        statsOf({ in_progress: 1 }), // 结算读（2.6）
+        statsOf({ completed: 2 }), // 次轮 no-task 池读（done 判词）
+        statsOf({ completed: 2 }), // 次轮静默窗 poll（窗内无新任务）
+        statsOf({ completed: 2 }), // ⑯ 收口读
+      ],
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(started).toEqual({ ok: true, loopId: expect.any(String) })
+    await untilSettled(built.driver)
+    // 四次领取：2.5 → no-task（宽限窗续派判定）→ 2.6 → no-task（窗内无新任务 → 收口）
+    expect(built.h.claimInputs).toHaveLength(4)
+    // 新任务被自动续派领取并完成（完成零消息——进度事件投影）
+    expect(built.progressCalls.filter((e) => e.verb === 'settle' && e.status === 'completed')).toHaveLength(2)
+    // 收口叙述恰好一次，且发生在新任务完成之后（settle 在 calls 尾部）
+    const ends = built.calls.filter((c) => c.text.includes('[forge·循环结束]'))
+    expect(ends).toHaveLength(1)
+    expect(built.calls.at(-1)?.text).toContain('[forge·循环结束]')
+  })
+
+  it('宽限窗内无新任务 → 窗满照常 ⑯ 收口（现状保持——claim 不多领）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读
+        statsOf({ in_progress: 1 }), // 结算读
+        statsOf({ completed: 1 }), // no-task 池读（done 判词）
+        statsOf({ completed: 1 }), // 静默窗 poll（窗内无新任务）
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs).toHaveLength(2) // 2.5 + no-task（窗内零新领）
+    expect(built.calls.filter((c) => c.text.includes('[forge·循环结束]'))).toHaveLength(1)
+  })
+
+  it('宽限窗内循环被叫停（用户终止窗径）→ 终局收口、零结束叙述（叙述归停止径）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }), // no-task 池读（done 判词）→ 入宽限窗
+        statsOf({ completed: 1 }), // 窗内 poll（大窗驻留，等待被 stop 打断）
+      ],
+      quiescenceWindowMs: 5_000,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    // 等待循环进入宽限窗（no-task 池读已完成 = 窗 poll 即将开始）
+    await vi.waitFor(
+      () => {
+        expect(built.h.statsInputs.length).toBeGreaterThanOrEqual(4)
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: true, stopped: true, hadInFlight: false })
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+    // 窗内叫停：零 ⑯ 结束叙述（收口叙述归停止径 ⑰）
+    expect(built.calls.some((c) => c.text.includes('[forge·循环结束]'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('[forge·循环停止]'))).toBe(true)
+  })
+})
+
+describe('3c 终止条件全集（no-task/用户终止/死锁/超时/最大轮次——各有触发路径）', () => {
+  it('最大轮次：连续成功轮达上限 → ⑮ 结束叙述（达到最大轮次上限），不再续领', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.6'), claimed('2.7'), claimed('2.8'), claimed('2.9')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      limits: { maxRounds: 3 },
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(started).toEqual({ ok: true, loopId: expect.any(String) })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs).toHaveLength(3) // 恰好 maxRounds 轮——不多领
+    const end = built.calls.at(-1)
+    expect(end?.text).toContain('[forge·循环结束]')
+    expect(end?.text).toContain('达到最大轮次上限')
+  })
+
+  it('最大轮次计数为生命周期总量（ActiveLoop——resume 续用不清零）：挂起耗尽末轮，resume 即 ⑮ 收口零续领', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1, blocked: 1 }), // 领取通知读
+        statsOf({ in_progress: 1, blocked: 1 }), // 结算读
+        statsOf({ blocked: 1 }), // resume 径 ⑮ 收口读
+      ],
+      query: [queryOfBlockedNoProgress()],
+      limits: { maxRounds: 1 },
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilSuspended(built.driver) // 第 1 轮（rounds=1）blocked 无进展 → 挂起
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSettled(built.driver)
+    // rounds 保留（resume 不清零）→ 达上限 ⑮ 结束叙述收口，零续领
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(built.calls.at(-1)?.text).toContain('达到最大轮次上限')
+  })
+})
+
+describe('3c 回归：循环生命周期归属会话无关（host registry 独立——现状保持）', () => {
+  it('owner 会话失活后挂起循环照常存活登记，resume（会话无关入口）续接至 settled 收口', async () => {
+    /** 无进展 blocked 的结算记录（零 commit hash 零 files——硬停门直达挂起） */
+    const queryBlockedNoProgress = (): QueryTaskResult => ({
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { slug: 'feat-x' },
+      records: [{ verb: 'submit', toStatus: 'blocked', reason: 'needs human verdict', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }],
+    })
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.6'), NO_TASK],
+      stats: [statsOf({ pending: 2 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 2 })],
+      query: [queryBlockedNoProgress(), queryOf('completed')],
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilSuspended(built.driver)
+    // 会话关闭模拟（进程内无会话生命周期事件——登记与循环体不感知会话存续）：
+    // 登记仍带原 owner 归属，resume 入口不携会话参数即可续接
+    const record = built.driver.activeAll().find((r) => r.id === loopId)
+    expect(record?.ownerSessionId).toBe(OWNER)
+    expect(record?.suspended).toBeDefined()
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSettled(built.driver)
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+    expect(built.calls.at(-1)?.text).toContain('[forge·循环结束]')
+  })
+})
+
+describe('cwd 钉定（1.14 判例修复——worker 会话未钉定 worktree、提交落 main）', () => {
+  const PIN = 'Z:\\project\\dsh\\dsh-forge\\.forge\\worktrees\\feat-x'
+
+  /** 无 commitHash 的 completed 结算读（落点核验无核销对象——收口不触 git） */
+  const queryCompletedNoCommit = (): QueryTaskResult => ({
+    task: snapshot({ taskStatus: 'completed' }),
+    container: { slug: 'feat-x' },
+    records: [{ verb: 'submit', toStatus: 'completed', summary: 'did the thing', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }],
+  })
+
+  it('start 携带 worktree：LoopRecord.worktree 登记 + spawn 请求携带 workspaceCwd（钉定 = 发起循环的检出）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+      query: [queryCompletedNoCommit()],
+    })
+    const start = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: { tag: 'parent' }, worktree: PIN })
+    expect(start).toEqual({ ok: true, loopId: expect.any(String) })
+    await untilSettled(built.driver)
+    expect(built.spawn.requests).toHaveLength(1)
+    expect(built.spawn.requests[0]).toMatchObject({ workspaceCwd: PIN })
+  })
+
+  it('worktree 缺席：登记/spawn 请求均不携带键（行为零变化）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+      query: [queryCompletedNoCommit()],
+    })
+    const start = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(start).toEqual({ ok: true, loopId: expect.any(String) })
+    await untilSettled(built.driver)
+    expect(built.spawn.requests[0]).toMatchObject({ label: 'feat-x/2.5 · Implement the thing' })
+    expect('workspaceCwd' in built.spawn.requests[0]!).toBe(false)
+  })
+})
+
+// ─────────────────────────── pauseTask 原语（task-pause-primitive 1.7） ───────────────────────────
+
+describe('pauseTask 原语（task-pause-primitive）：pause 全链 / 归属守卫三径 / resume 批量恢复', () => {
+  /** 等待在飞登记（pause 调用前置——串行循环 in-flight 恒 ≤1） */
+  async function untilInFlight(driver: LoopDriver): Promise<void> {
+    await vi.waitFor(
+      () => {
+        expect(driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+  }
+
+  /** 可中断 spawn 桩：kill 信号 abort 即 reject handle.result（模拟 worker 硬中断 → 结算 killed） */
+  function abortableSpawnBehavior(s: ReturnType<typeof trackedSpawn>): void {
+    s.setBehavior(async () => {
+      const req = s.requests[s.requests.length - 1]!
+      return {
+        workerSessionId: 'worker-pause',
+        result: new Promise<{ stopReason: string; output: string }>((_, reject) => {
+          req.signal.addEventListener('abort', () => reject(new Error('worker aborted by pause')), { once: true })
+        }),
+        dispose: async () => {},
+      }
+    })
+  }
+
+  const PAUSE_REASON = '规格被裁决取代，需改写简报重派'
+
+  it('TRIAGE_FIX_CHAIN_DEPTH_LIMIT 消费 contracts 单源（= FIX_CHAIN_DEPTH_LIMIT，对齐 core addTask）', () => {
+    expect(TRIAGE_FIX_CHAIN_DEPTH_LIMIT).toBe(FIX_CHAIN_DEPTH_LIMIT)
+    expect(FIX_CHAIN_DEPTH_LIMIT).toBe(6)
+  })
+
+  it('pause 全链：先摘 inFlight 再 abort、任务真化 suspended（reason 必带 + core actor）、循环挂起保留登记', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      spawnBehavior: abortableSpawnBehavior,
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilInFlight(built.driver)
+
+    const paused = await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: PAUSE_REASON })
+    expect(paused).toEqual({ ok: true, paused: true, taskKey: 'feat-x/2.5' })
+    // 任务真化 suspended（1.4 转移服务——reason 必带落时间线 + actor 'core' 自动化归因）
+    expect(built.h.transitions).toContainEqual({
+      projectKey: PROJECT,
+      taskId: 't-1',
+      toStatus: 'suspended',
+      reason: PAUSE_REASON,
+      actor: 'core',
+    })
+    // 竞态收口序消费面：摘牌（inFlight 清位）+ 挂起投影（写点①）+ 登记保留（终局注销不触发）
+    const record = built.driver.activeOf(OWNER)
+    expect(record).toBeDefined()
+    expect(record?.inFlight).toBeUndefined()
+    expect(record?.suspended?.escalation).toMatchObject({
+      kind: 'task-paused',
+      taskKey: 'feat-x/2.5',
+      reason: PAUSE_REASON,
+    })
+    // 进度事件（suspend 动词 + 任务键 + 原因注记）
+    expect(built.progressCalls.some((e) => e.verb === 'suspend' && e.taskKey === 'feat-x/2.5' && e.note === PAUSE_REASON)).toBe(true)
+    // 叙述面（暂停通知——含原因与恢复指引）
+    expect(built.calls.at(-1)?.text).toContain('[forge·暂停]')
+    expect(built.calls.at(-1)?.text).toContain('dispatchTask')
+  })
+
+  it('resume 批量恢复：容器内 suspended paused 卡以 core actor 批量恢复 pending，随后正常续跑收口', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      spawnBehavior: abortableSpawnBehavior,
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilInFlight(built.driver)
+    await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: PAUSE_REASON })
+
+    // resume 序（runRound 前）批量恢复：suspended 卡 → pending（矩阵新边，'core' actor）
+    built.h.lists.suspended = [card('feat-x', '2.5', { taskStatus: 'suspended' })]
+    built.h.setClaim([NO_TASK])
+    built.h.setStats([statsOf({ suspended: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })])
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSettled(built.driver)
+    expect(built.h.transitions).toContainEqual({
+      projectKey: PROJECT,
+      taskId: 'card-feat-x-2.5',
+      toStatus: 'pending',
+      reason: LOOP_RESUME_RESTORE_REASON,
+      actor: 'core',
+    })
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+  })
+
+  it('pause 径唤醒去重（bug 5a245dd1）：pause→resume→pause 同任务同 reason 恰一张唤醒卡；异因新发出新卡', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), claimed()],
+      stats: [statsOf({ pending: 1 })],
+      spawnBehavior: abortableSpawnBehavior,
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilInFlight(built.driver)
+    await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: PAUSE_REASON })
+    // 等 pause 中断的在飞 unwind 落定（killed 结算静默径——避免与 resume 换信号竞态）
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // resume 续跑重领同一任务 → 再次同因 pause
+    built.h.lists.suspended = [card('feat-x', '2.5', { taskStatus: 'suspended' })]
+    built.h.setClaim([claimed()])
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilInFlight(built.driver)
+    await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: PAUSE_REASON })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // 同因去重：两次 pause 恰一张唤醒卡
+    let wakeups = built.calls.filter((c) => c.form === 'followup' && c.wakeup && c.text.includes('[forge·暂停]'))
+    expect(wakeups).toHaveLength(1)
+
+    // 异因新发：不同 reason 的 pause 必出新卡（同任务）
+    built.h.lists.suspended = [card('feat-x', '2.5', { taskStatus: 'suspended' })]
+    built.h.setClaim([claimed()])
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilInFlight(built.driver)
+    await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: '异因换向' })
+    wakeups = built.calls.filter((c) => c.form === 'followup' && c.wakeup && c.text.includes('[forge·暂停]'))
+    expect(wakeups).toHaveLength(2)
+  })
+
+  it('归属守卫三径：运行中非 owner = forbidden；挂起态任意会话可接管（无在途对象 = no-in-progress-task）；无活循环 = no-active-loop；空 reason = reason-required', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      spawnBehavior: abortableSpawnBehavior,
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilInFlight(built.driver)
+
+    // ① 运行中非 owner 调用 → typed 拒绝（与 stopTaskLoop 同权限面）
+    expect(await built.driver.pause({ loopId, requesterSessionId: 'other-session', reason: '越权' })).toEqual({
+      ok: false,
+      code: 'forbidden',
+      suspended: false,
+      ownerSessionId: OWNER,
+    })
+    // ② owner 空 reason → reason-required（pauseTask 必带 reason）
+    expect(await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: '   ' })).toEqual({
+      ok: false,
+      code: 'reason-required',
+      suspended: false,
+      ownerSessionId: OWNER,
+    })
+    // owner pause → 挂起；③ 挂起态任意会话可接管（守卫放行）——无在途对象归 no-in-progress-task
+    await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: PAUSE_REASON })
+    expect(await built.driver.pause({ loopId, requesterSessionId: 'other-session', reason: '接管' })).toEqual({
+      ok: false,
+      code: 'no-in-progress-task',
+      suspended: true,
+      ownerSessionId: OWNER,
+    })
+    // ④ 无活循环
+    expect(await built.driver.pause({ loopId: 'no-such-loop', requesterSessionId: OWNER, reason: 'x' })).toEqual({
+      ok: false,
+      code: 'no-active-loop',
+      suspended: false,
+      ownerSessionId: '',
+    })
+  })
+})
+
+// ─────────────────────────── 异常挂起径唤醒去重 + 处置入口 + diag 埋点（bug 33728995） ───────────────────────────
+
+describe('异常挂起径唤醒去重与处置入口（bug 33728995 ①②）', () => {
+  /** worker 反复异常退出桩（每轮 spawn 成功、结算崩溃——bounded 重入 → 超限挂起径） */
+  function crashingSpawn(spawn: ReturnType<typeof trackedSpawn>): void {
+    spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      result: Promise.reject(new Error('worker crashed mid-run')),
+      dispose: async () => {},
+    }))
+  }
+
+  it('同实例同事件重复挂起恰一张唤醒卡（实例级去重）；唤醒消息含处置入口行（挂起径凭 slug dispatchTask 认领）', async () => {
+    const incidentInputs: unknown[] = []
+    const built = build({
+      claim: [claimed(), claimed(), claimed(), claimed(), claimed(), claimed()],
+      stats: Array.from({ length: 8 }, () => statsOf({ in_progress: 1 })),
+      incidents: {
+        record: (input) => {
+          incidentInputs.push(input)
+          return 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-abort-over-limit'
+        },
+      },
+    })
+    crashingSpawn(built.spawn)
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    // 首挂起（超限）→ 处置回流 resume → 再挂起同一事件 → 再 resume → 第三次挂起
+    await untilSuspended(built.driver)
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSuspended(built.driver)
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSuspended(built.driver)
+    // ① 去重：三次挂起同一事件恰一张唤醒卡；投影/落盘不去重（留痕单源每挂起一条）
+    const wakeups = built.calls.filter((c) => c.form === 'followup' && c.wakeup)
+    expect(wakeups).toHaveLength(1)
+    expect(built.progressCalls.filter((e) => e.verb === 'suspend')).toHaveLength(3)
+    expect(incidentInputs.filter((i) => (i as { eventType: string }).eventType === 'worker-abort-over-limit')).toHaveLength(3)
+    // ② 处置入口行：挂起径语义——任意会话凭容器 slug dispatchTask 认领
+    expect(wakeups[0]!.text).toContain('处置入口: 任意会话凭容器 feat-x dispatchTask 认领挂起循环继续处置')
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('bug 2055da00：同任务异因新发挂起必出新唤醒卡（同 minor 异 reason——键含成因不再实例域终身吞卡）', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), claimed()],
+      stats: Array.from({ length: 8 }, () => statsOf({ in_progress: 1 })),
+      query: [queryOf('in_progress'), queryOf('in_progress')],
+      incidents: { record: () => 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-worker-rate-limited' },
+    })
+    built.spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      // 第一因：429 配额限流；resume 续跑后再挂起为异因（上游 throttle）——同 minor 同任务
+      result: Promise.resolve({
+        stopReason: 'error',
+        output: n === 1 ? 'provider error: 429 quota exceeded' : 'request throttled by upstream gateway',
+      }),
+      dispose: async () => {},
+    }))
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    const first = await untilSuspended(built.driver) // 第一因限流挂起（出第一张卡）
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    const second = await untilSuspended(built.driver) // 异因再挂起（必须出第二张卡）
+    // 异因实证：两次挂起 escalation.reason 全文不同（同 minor 同任务）
+    expect((second.escalation as { reason: string }).reason).not.toBe((first.escalation as { reason: string }).reason)
+    const wakeups = built.calls.filter((c) => c.form === 'followup' && c.wakeup)
+    expect(wakeups).toHaveLength(2)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('bug a058eaee：唤醒 send 携预构建折叠摘要（headline）——重试短语/原因全文/处置入口三要素在摘要内（组卡条目只渲染摘要）', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), claimed(), claimed()],
+      stats: Array.from({ length: 8 }, () => statsOf({ in_progress: 1 })),
+      incidents: { record: () => 'D:\\forge-tasks\\logs\\feat-x\\2.5\\001-abort-over-limit' },
+    })
+    crashingSpawn(built.spawn)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver)
+    const wakeups = built.calls.filter((c) => c.form === 'followup' && c.wakeup)
+    expect(wakeups).toHaveLength(1)
+    const fold = wakeups[0]!.headline ?? ''
+    // 折叠摘要三要素（e2e 径③ infoSet 断言面——组卡条目 textContent 只见摘要）
+    expect(fold).toContain('原因全文：D:\\forge-tasks\\logs\\feat-x\\2.5\\001-abort-over-limit')
+    expect(fold).toMatch(/第 \d+ 次，超过重试上限/)
+    expect(fold).toContain('处置入口: 任意会话凭容器 feat-x dispatchTask 认领挂起循环继续处置')
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+describe('循环里程碑 diag 埋点（bug 33728995 ④——diag/log 落盘可查 loop 行）', () => {
+  it('启动/重试/挂起/结算四类里程碑经 deps.diag 输出（event 前缀 loop-，载荷携 projectId/sessionId）', async () => {
+    const diag: Array<{ level: string; event: string; message: string; projectId?: string; sessionId?: string }> = []
+    const built = build({
+      claim: [claimed(), claimed()],
+      stats: Array.from({ length: 8 }, () => statsOf({ in_progress: 1 })),
+      query: [queryOf('completed')],
+      diag: (p) => diag.push(p),
+    })
+    built.spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      // 前 4 次（bounded 重入 ×3 + 超限第 4 次）结算崩溃挂起；resume 续跑第 5 次成功结算
+      result: n <= 4 ? Promise.reject(new Error('worker crashed mid-run')) : Promise.resolve({ stopReason: 'end_turn', output: 'done' }),
+      dispose: async () => {},
+    }))
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilSuspended(built.driver) // 第一次结算崩溃 → 重试 ×3 → 超限挂起
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSettled(built.driver) // 续跑后同任务结算成功 → 结算里程碑
+    // 里程碑四类齐备
+    expect(diag.some((d) => d.event === 'loop-start' && d.message.includes('feat-x'))).toBe(true)
+    expect(diag.filter((d) => d.event === 'loop-retry')).toHaveLength(3)
+    expect(diag.some((d) => d.event === 'loop-suspend' && d.message.includes('feat-x/2.5'))).toBe(true)
+    expect(diag.some((d) => d.event === 'loop-settle' && d.message.includes('feat-x/2.5'))).toBe(true)
+    // 载荷就地携带可得字段（AGENTS §7 埋点规范）
+    expect(diag[0]).toMatchObject({ projectId: PROJECT, sessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── triage-progress-row · 两发事件与台账发射缝 ───────────────────────────
+
+describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-progress-row）', () => {
+  function blockedScript(built: Built): void {
+    built.h.lists.created = [] // blocked 无 follow-up——处置阶梯径
+  }
+
+  function queryOfBlocked(): QueryTaskResult {
+    return {
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { slug: 'feat-x' },
+      records: [
+        { verb: 'submit', toStatus: 'blocked', reason: 'tests hang on flaky selector', files: ['packages/x/src/changed.ts'], actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
+      ],
+    }
+  }
+
+  const BASE_STATS = [
+    statsOf({ pending: 1 }),
+    statsOf({ in_progress: 1, blocked: 1 }),
+    statsOf({ in_progress: 1, blocked: 1 }),
+  ]
+
+  it('两发时序 + 台账序：running（无 workerSessionId）→ 终态（携 workerSessionId/决策动作）；decided → outcome（add-fix 径携 fixTaskKey）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('fix-1'), NO_TASK],
+      stats: [
+        statsOf({ pending: 2 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      query: [queryOfBlocked(), queryOf('completed')],
+      // 契约定形返回形：决策 + 处置子会话 id（spawn 产物 handle 上浮）
+      triage: async () => ({ decision: { action: 'add-fix', title: 'Fix: flaky selector', note: '修复选择器' }, workerSessionId: 'triage-1' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 两发时序：running 在前（无 workerSessionId）→ 终态在后（携 workerSessionId + 决策动作 note）
+    const triageProgress = built.progressCalls.filter((e) => e.verb === 'triage')
+    expect(triageProgress).toHaveLength(2)
+    const [running, terminal] = triageProgress as [ForgeProgressEventData, ForgeProgressEventData]
+    expect(running).toMatchObject({ status: 'running', scenario: S.loopTriage, taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', attempt: 1 })
+    expect(running.note).toContain('第 1 次')
+    expect(running.workerSessionId).toBeUndefined()
+    expect(terminal).toMatchObject({ status: 'completed', scenario: S.loopTriage, taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', workerSessionId: 'triage-1', attempt: 1 })
+    expect(terminal.note).toContain('决定创建修复任务')
+    // 台账时序因果：decided（执行前）→ outcome（执行尝试后）；scenario 事件 running 先于 decided
+    const types = built.events.filter((e) => e.type === 'triage-decided' || e.type === 'triage-outcome').map((e) => e.type)
+    expect(types).toEqual(['triage-decided', 'triage-outcome'])
+    const decided = built.events.find((e) => e.type === 'triage-decided')!.payload as TriageDecidedPayload
+    expect(decided).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, action: 'add-fix', note: '修复选择器', workerSessionId: 'triage-1', expertKey: 'triage-analyst' })
+    expect(String(decided.inputDigest)).toContain('tests hang on flaky selector')
+    const outcome = built.events.find((e) => e.type === 'triage-outcome')!.payload as TriageOutcomePayload
+    expect(outcome).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'add-fix', workerSessionId: 'triage-1', expertKey: 'triage-analyst', fixTaskKey: 'feat-x/fix-2' })
+    expect(outcome.replayed).toBeUndefined()
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('spawn 失败径：终态事件仍发射且无 workerSessionId；重试失败径必发 outcome（失败原因）；失败散点走 diag（event 前缀 triage）', async () => {
+    const diag: Array<{ level: string; event: string; message: string }> = []
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async () => {
+        throw new Error('subagent factory rejected')
+      },
+      diag: (p) => diag.push(p),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver) // 三次重试到顶 → disposition-over-limit 挂起
+    // 终态事件逐次发射（×3）且 payload 均无 workerSessionId
+    const triageProgress = built.progressCalls.filter((e) => e.verb === 'triage')
+    expect(triageProgress).toHaveLength(6) // running ×3 + 终态 ×3
+    const terminals = triageProgress.filter((e) => e.status !== 'running')
+    expect(terminals).toHaveLength(3)
+    terminals.forEach((t, i) => {
+      expect(t).toMatchObject({ status: 'blocked', scenario: S.loopTriage, taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', attempt: i + 1 })
+      expect(t.workerSessionId).toBeUndefined()
+      expect(t.note).toContain('处置分析失败')
+    })
+    // 重试失败径必发 outcome（失败原因——不只进 escalation history）
+    const outcomes = built.events.filter((e) => e.type === 'triage-outcome')
+    expect(outcomes).toHaveLength(3)
+    for (const o of outcomes) {
+      expect(o.payload).toMatchObject({ taskKey: 'feat-x/2.5', outcome: 'failed', failureReason: 'subagent factory rejected' })
+    }
+    expect(built.events.some((e) => e.type === 'triage-decided')).toBe(false)
+    // 失败散点走 diag 埋点（AGENTS §7——event 前缀 triage）
+    const triageDiag = diag.filter((d) => d.event.startsWith('triage-'))
+    expect(triageDiag).toHaveLength(3)
+    expect(triageDiag[0]).toMatchObject({ level: 'warn', event: 'triage-failed' })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('replayed 径：决策缓存重放不发 decided、每次执行尝试发 outcome（replayed 标记 + 处置会话 id 随缓存回放）', async () => {
+    let triageCalls = 0
+    let addTaskCalls = 0
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOfBlocked()],
+      triage: async () => {
+        triageCalls += 1
+        return { decision: { action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }, workerSessionId: 'triage-9' }
+      },
+    })
+    blockedScript(built)
+    built.h.tasks.addTask = async (input: AddTaskInput) => {
+      addTaskCalls += 1
+      if (addTaskCalls === 1) throw new Error('db busy') // 首次落库失败——缓存保留
+      return { taskId: 'fix-uuid', slug: input.slug, localId: 'fix-2', reused: false }
+    }
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(triageCalls).toBe(1)
+    // 重放径：decided 恰一次（首跑产出点）；outcome 每次执行尝试一枚（首败 + 重放成功）
+    const decideds = built.events.filter((e) => e.type === 'triage-decided')
+    expect(decideds).toHaveLength(1)
+    const outcomes = built.events.filter((e) => e.type === 'triage-outcome')
+    expect(outcomes).toHaveLength(2)
+    const first = outcomes[0]!.payload as TriageOutcomePayload
+    expect(first).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'failed', failureReason: 'db busy' })
+    expect(first.replayed).toBeUndefined()
+    const second = outcomes[1]!.payload as TriageOutcomePayload
+    expect(second).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'add-fix', fixTaskKey: 'feat-x/fix-2', workerSessionId: 'triage-9' })
+    expect(second.replayed).toBe(true)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('escalate 挂起动作：outcome = 上浮动作本身（escalate），decided 在执行前照发；升级载荷随挂起上浮', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async () => ({
+        decision: {
+          action: 'escalate',
+          payload: {
+            classification: '可形式化形态——竞态',
+            disposition: '建议建模排查',
+            delegateTarget: '具备形式化建模能力的专家',
+            evidencePointers: ['bug-root', 'bug-r1'],
+          },
+        },
+        workerSessionId: 'triage-3',
+      }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    const types = built.events.filter((e) => e.type === 'triage-decided' || e.type === 'triage-outcome').map((e) => e.type)
+    expect(types).toEqual(['triage-decided', 'triage-outcome'])
+    expect(built.events.find((e) => e.type === 'triage-decided')!.payload).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, action: 'escalate', workerSessionId: 'triage-3' })
+    const outcome = built.events.find((e) => e.type === 'triage-outcome')!.payload as TriageOutcomePayload
+    expect(outcome).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'escalate', workerSessionId: 'triage-3' })
+    expect(outcome.fixTaskKey).toBeUndefined()
+    expect(outcome.splitTaskKey).toBeUndefined()
+    // 升级载荷四节随挂起载荷上浮（主会话拿到即可决策，无需重做背景调查）
+    expect(suspended.escalation.kind === 'blocked-ask-user' ? suspended.escalation.advice : undefined).toEqual({
+      classification: '可形式化形态——竞态',
+      disposition: '建议建模排查',
+      delegateTarget: '具备形式化建模能力的专家',
+      evidencePointers: ['bug-root', 'bug-r1'],
+    })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── T3 同缝拦截 + 待建模软拒绝（loop-recurrence-hardening） ───────────────────────────
+
+describe('T3 同缝拦截（claim 被拒 → 转 escalation 分支）', () => {
+  // recurrence-signal-tiering 触发公式口径：fullEdgeCount（最长祖先径全边）+ hasOpen（链内有 open 分量）
+  const CHAIN3 = [{ bugId: 'b-r2', summary: '写径拒写复发', chain: ['b-root', 'b-r1', 'b-r2'], fullEdgeCount: 2, hasOpen: true }]
+  const CHAIN2 = [{ bugId: 'b-r1', summary: '首轮复发', chain: ['b-root', 'b-r1'], fullEdgeCount: 1, hasOpen: true }]
+
+  /** fix 链派生任务（coding-fix ∧ fixOfTaskId——盲试 fix 派发判别对象） */
+  function fixClaimed(localId = 'fix-2'): ClaimTaskResult {
+    return {
+      task: snapshot({ localId, fixOfTaskId: 't-0' }),
+      dispatchPrompt: 'PERSONA + <task-context>',
+      persona: 'PERSONA-MATRIX',
+      digest: 'digest-fix01',
+      reclaimed: false,
+    }
+  }
+
+  it('同缝计数 ≥ 2 ∧ 报告不在场 → claim 守卫软拒绝：被拒 fix 行转挂起（零孤儿）+ escalation 载荷 + 唤醒卡；零 spawn', async () => {
+    const built = build({
+      claim: [fixClaimed()],
+      findRecurrenceCandidates: () => CHAIN3,
+      modelingReportPresent: () => false,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 被拒 fix 行不滞留孤儿：任务真化 suspended（'core' actor——resume 序批量恢复 pending 的可恢复态）
+    expect(built.h.transitions).toEqual([
+      expect.objectContaining({ projectKey: PROJECT, taskId: 't-1', toStatus: 'suspended', actor: 'core', reason: expect.stringContaining('同缝拦截') }),
+    ])
+    // 派发未发生：零 spawn、claim 恰一次（挂起停驻零续领）
+    expect(built.spawn.requests).toHaveLength(0)
+    expect(built.h.claimInputs).toHaveLength(1)
+    // escalation 载荷：结构化事实（拒绝全文 + 家族链 + 同缝计数）
+    expect(suspended.escalation).toEqual({
+      kind: 'recurrence-escalation',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      taskKey: 'feat-x/fix-2',
+      reason: expect.stringContaining('同缝拦截'),
+      chain: ['b-root', 'b-r1', 'b-r2'],
+      count: 2,
+    })
+    // 静默挂起径三面补录：唤醒卡 + suspend 进度事件（新场景码）
+    const wakeup = built.calls.find((c) => c.method === 'followup')
+    expect(wakeup?.wakeup).toBe(true)
+    expect(wakeup?.text).toContain('升级排查建模')
+    expect(built.progressCalls.find((e) => e.verb === 'suspend')).toMatchObject({ scenario: 'suspend/recurrence-escalation', taskKey: 'feat-x/fix-2' })
+  })
+
+  it('拒绝 → 报告回收（桩：卷宗报告在场翻转）→ resume 恢复 pending → 守卫放行 → spawn 派发（e2e 链路桩形）', async () => {
+    const model = { reportPresent: false }
+    const built = build({
+      claim: [fixClaimed(), fixClaimed(), NO_TASK],
+      findRecurrenceCandidates: () => CHAIN3,
+      modelingReportPresent: () => model.reportPresent,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver)
+    expect(built.spawn.requests).toHaveLength(0)
+    // 「报告回收」桩：建模报告落卷 → 派生态现算翻转 → resume
+    model.reportPresent = true
+    const resumed = built.driver.resume({ loopId: built.driver.activeOf(OWNER)!.id })
+    expect(resumed).toMatchObject({ ok: true })
+    // 守卫放行：claim 二次领取同一 fix 任务，spawn 派发发生
+    await vi.waitFor(() => { expect(built.spawn.requests).toHaveLength(1) }, { timeout: 2000, interval: 5 })
+    // 零二次升级：报告落卷后 resume 续跑不再出第二张唤醒卡
+    expect(built.calls.filter((c) => c.method === 'followup')).toHaveLength(1)
+    await untilSettled(built.driver)
+  })
+
+  it('同缝计数 < 2（首轮复发）→ 不受影响照常派发', async () => {
+    const built = build({
+      claim: [fixClaimed(), NO_TASK],
+      findRecurrenceCandidates: () => CHAIN2,
+      modelingReportPresent: () => false,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(() => { expect(built.spawn.requests).toHaveLength(1) }, { timeout: 2000, interval: 5 })
+    expect(built.h.transitions).toEqual([]) // 零挂起转移
+    expect(built.escalations).toHaveLength(0)
+    await untilSettled(built.driver)
+  })
+
+  it('add-fix 派生判例事实现查（T0 派生径）：recurrence 链结构化写入任务 context（不落简报）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'add-fix', title: 'Fix: flaky selector', note: '修复选择器' }),
+      findRecurrenceCandidates: () => CHAIN3,
+    })
+    built.h.lists.created = [] // 无 worker 派生 fix（followUp 缺席——阶梯进 add-fix 执行径）
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs[0]).toMatchObject({
+      title: 'Fix: flaky selector',
+      sourceTask: { slug: 'feat-x', localId: '2.5' },
+      blockSource: true,
+      context: { RECURRENCE_CHAIN: 'b-root → b-r1 → b-r2', RECURRENCE_COUNT: '2' },
+    })
+    expect(built.h.addTaskInputs[0]?.brief).toBeUndefined() // 链事实零语义注入——不落简报
+  })
+
+  it('face 缺席 → 两机制降级关闭：无守卫拒绝、add-fix vars 零注入（行为零变化）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'add-fix', title: 'Fix: flaky selector' }),
+    })
+    built.h.lists.created = [] // 无 worker 派生 fix（followUp 缺席——阶梯进 add-fix 执行径）
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.escalations).toHaveLength(0)
+    expect(built.h.addTaskInputs[0]?.context).toBeUndefined()
+  })
+})

@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/path-key",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
-  "description": "工作区路径比对归一键（win32 折大小写 + 反斜杠规整 + 去尾分隔符）——零逻辑纯函数、零依赖；core 注册链与 knowledge 绑定表解析的同源单一来源（fix-30 消口径分裂）。",
+  "description": "【退役待删】工作区路径比对归一键——单源已迁 @dsh-forge/lib-path（plugin-project 1.6），本包为 re-export 兼容面（未迁移消费方过渡用）。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -20,5 +20,8 @@
   },
   "devDependencies": {
     "@types/node": "24.19.0"
+  },
+  "dependencies": {
+    "@dsh-forge/lib-path": "workspace:*"
   }
 }

@@ -1,6 +1,7 @@
 // @feature:dsh-forge-m3-bootstrap-presets @web-e2e
 // M3 5.2 UF-3 派发入口四断言（PRD UF-3 / 图 13 v22 ㊱–㊳ / ui-design v24 ㊵）：
-//   ① 新开 + 自动发送：容器对应模式（feature → 远征 / 突击提案 → 突击）+ 「/run-dag-tasks
+//   ① 新开 + 自动发送：容器对应模式（feature → 远征——突击提案 → 突击轨随 proposal 域退役，
+//      容器 pill 菜单单源 = features 轨投影）+ 「/run-dag-tasks
 //      <标识>」指令单行自动发送（S5 缓切——known command 经上游 slash 仲裁路由至 command
 //      plane 执行宿主派发循环）；
 //   ② 执行中在场跳转不重发：执行中任务有最新派发挂接 → jump（openSession 按会话 id
@@ -14,14 +15,16 @@ import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
 import { archiveActiveProjects, createSharedLaunchFixture, requireInSharedUdRoot, wsSegment as wsSegmentOf } from '../../support/fixtures.js'
-import { PROJECTS_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { FEATURES_CHANNELS, PROJECTS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { findFixtureSession } from '../../support/session-files.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, OV_PANEL, TD_DRAWER, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { awaitNoLateModals, awaitPresetHeaderLabel, newBlankSession } from '../../support/m3.js'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
 import { forgeInvoke } from '../../support/rpc.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-uf3'
 const FEATURE = 'uf3-feat'
@@ -63,6 +66,9 @@ async function anchorConverge(page: Page): Promise<void> {
 }
 
 test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置灰 + 无单任务执行入口', async ({ sharedLaunch }) => {
+  // 会话夹具判据（夹具消息入转录 = 用户消息入转录投影）挂官方栈世代门（族① gate-environment
+  // 先例——input-history-plugin 等 13 spec 同径）：rc.2 世代用户消息不入转录，整代 co-upgrade 后复跑。
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
   test.setTimeout(480_000)
   const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
@@ -72,13 +78,14 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
     await anchorConverge(page)
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
     await forgeInvoke(page, 'forge:features/register', { projectId, slug: FEATURE, title: 'UF-3 派发入口演示' })
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: 'UF-3 演示任务甲', type: 'doc',
+      projectKey, slug: FEATURE, title: 'UF-3 演示任务甲', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'feature', slug: FEATURE }, title: 'UF-3 演示任务乙', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: FEATURE, title: 'UF-3 演示任务乙', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string; slug: string; localId: string }
 
     // ── 跳转目标会话夹具：芯片流 → 夹具消息（会话 A·非 blank）→ 新开 blank（会话 B·hero 面）──
@@ -118,7 +125,7 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
     await expect(drawer).toBeHidden({ timeout: 10_000 })
 
     // ── ② 执行中在场跳转不重发：claim（挂接 = 会话 A）→ 派发 → jump ──
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: jumpSessionId })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: jumpSessionId })
     const dispatchOn = page.locator('[data-dswf-tt-dispatch="on"]').first()
     await expect(dispatchOn, '派发按钮亮起（执行中在场）').toBeVisible({ timeout: 30_000 })
     await dispatchOn.click()
@@ -128,12 +135,12 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
 
     // ── ③ 全终态置灰：结算双任务 → 终态全集 → 深灰实底 + tooltip ──
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
+      projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
       summary: 'UF-3 甲结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: jumpSessionId,
     })
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: jumpSessionId })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, sessionId: jumpSessionId })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t2.slug, localId: t2.localId }, result: 'success',
+      projectKey, taskRef: { slug: t2.slug, localId: t2.localId }, result: 'success',
       summary: 'UF-3 乙结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: jumpSessionId,
     })
     const dispatchOff = page.locator('[data-dswf-tt-dispatch="off"]').first()
@@ -156,38 +163,42 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
   }
 })
 
-test('@web-e2e @m3 UF-3·新开路由：突击提案容器派发 → 突击模式新会话 + /run-dag-tasks 指令单行自动发送', async ({ sharedLaunch }) => {
+test('@web-e2e @m3 UF-3·新开路由：容器派发 → 容器对应模式新会话 + /run-dag-tasks 指令单行自动发送（feature 容器 → 远征——proposal 突击轨随域退役）', async ({ sharedLaunch }) => {
+  // 自动发送指令单行判据（转录含派发指令 = 用户消息入转录投影）挂官方栈世代门（族① 同上）。
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
   test.setTimeout(480_000)
   const { app, page, pageErrors, wsDir } = sharedLaunch
-  const PROP = 'uf3-blitz-prop'
+  const PROP = 'uf3-dispatch-prop'
   try {
     // 同上：注册前归档其余活跃项目（豁免夹具 root 同名行）——chip 锚定收敛
     await anchorConverge(page)
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
-    await driver.call('forgeProposals', 'createProposal', { projectId, slug: PROP, title: 'UF-3 突击容器演示', mode: 'blitz' })
+    // 容器播种（proposal 域退役——容器 pill 菜单单源 = features 轨投影，features 域注册同标识）
+    await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: PROP, title: 'UF-3 派发容器演示' })
     await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: 'UF-3 突击容器任务', type: 'doc',
+      projectKey, slug: PROP, title: 'UF-3 派发容器任务', type: 'doc',
     })
     await selectWorkspaceViaChip(page, WS_NAME)
 
-    // 任务子 tab → 切突击提案容器（琥珀点容器——pill 双轨）
+    // 任务子 tab → 切容器（feature 轨——蓝点容器 pill）
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('tasks')).click()
     await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     await page.locator('[data-dswf-tt-contpill]').first().click()
-    const menuItem = page.locator(`[data-dswf-tt-mcont="proposal:${PROP}"]`).first()
-    await expect(menuItem, '容器菜单含突击提案容器').toBeVisible({ timeout: 15_000 })
+    const menuItem = page.locator(`[data-dswf-tt-mcont="feature:${PROP}"]`).first()
+    await expect(menuItem, '容器菜单含注册容器').toBeVisible({ timeout: 15_000 })
     await menuItem.click()
-    await expect(page.locator(`[data-dswf-tt-contpill="proposal:${PROP}"]`), '容器切换收敛').toBeVisible({ timeout: 15_000 })
+    await expect(page.locator(`[data-dswf-tt-contpill="feature:${PROP}"]`), '容器切换收敛').toBeVisible({ timeout: 15_000 })
 
-    // 派发 → 新开（容器对应模式 = 突击）+ 单行指令自动发送
+    // 派发 → 新开（容器对应模式 = feature → 远征）+ 单行指令自动发送
     const dispatchOn = page.locator('[data-dswf-tt-dispatch="on"]').first()
     await expect(dispatchOn, '派发按钮亮起').toBeVisible({ timeout: 30_000 })
     await dispatchOn.click()
-    await expect(page.locator(CONVERSATION_CONTENT).first(), '自动发送 /run-dag-tasks 指令单行（任务源标识 = 提案 slug）').toContainText(`/run-dag-tasks ${PROP}`, { timeout: 30_000 })
-    await awaitPresetHeaderLabel(page, '突击模式')
+    await expect(page.locator(CONVERSATION_CONTENT).first(), '自动发送 /run-dag-tasks 指令单行（任务源标识 = 容器 slug）').toContainText(`/run-dag-tasks ${PROP}`, { timeout: 30_000 })
+    await awaitPresetHeaderLabel(page, '远征模式')
 
     if (pageErrors.length > 0) console.log(`[uf3b-diagnostic] pageerror（零凭据模型失败面）：${pageErrors.slice(-3).join(' | ')}`)
   } finally {

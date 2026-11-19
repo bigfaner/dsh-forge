@@ -1,6 +1,6 @@
 // M3.1 D38 结构 pin —— 清过滤钮改词「✕ 重置」+ 钮前间距与 chips 行内拉开
 // （任务 dsh-forge-m3.1-ui-alignment/1.25 机械面锚——读文件法 = 本目录 d36 先例；
-//  文案 DOM 断言归三组件测试面 + proposal-tab/feature-tab tab 锚（✕ 重置 + 渲染面
+//  文案 DOM 断言归组件测试面 + feature-tab tab 锚（✕ 重置 + 渲染面
 //  「清过滤」清零）；实机亮/暗双主题走查归证据面——本裁决间距为物理定值，主题令牌
 //  零涉及，双主题同形。）
 // 断言面：
@@ -14,12 +14,11 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
-const OV = 'apps/web/src/views/overview'
+const OV = 'plugins/project/ui/dock-tabs/overview'
 const overviewCss = readFileSync(join(ROOT, `${OV}/overview.css`), 'utf8')
-const proposalCss = readFileSync(join(ROOT, `${OV}/proposal-tab/proposal-tab.css`), 'utf8')
 const featureCss = readFileSync(join(ROOT, `${OV}/feature-tab/feature-tab.css`), 'utf8')
 
-/** 选择器规则块声明集（平铺 CSS——三文件零 @media/@keyframes 嵌套；多命中取并集；
+/** 选择器规则块声明集（平铺 CSS——两文件零 @media/@keyframes 嵌套；多命中取并集；
  * 注释先剥离——规则间头注不入选择器面） */
 function declsOf(css: string, selector: string): string {
   const flat = css.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -32,10 +31,9 @@ function declsOf(css: string, selector: string): string {
 const ROW_GAP_PX = 6 // 原型 chips 行距刻度（dsw-raw 既有——本裁决不动）
 const CLEAR_MARGIN_PX = 8 // D38 新裁决刻度（行 gap 6 + 钮前 8 = 视距 14px）
 
-/** 三族 chips（行容器 + 清过滤钮选择器——三面同形，文案/间距裁决三族同步） */
+/** 两族 chips（行容器 + 清过滤钮选择器——两族同形，文案/间距裁决同步） */
 const families = [
   { face: '七态（任务/概览面）', css: overviewCss, row: 'dswf-ov-stchips', clear: 'dswf-ov-stchip-clear' },
-  { face: '五态（提案面）', css: proposalCss, row: 'dswf-ov-pschips', clear: 'dswf-ov-pschip-clear' },
   { face: '阶段（feature 面）', css: featureCss, row: 'dswf-ov-phchips', clear: 'dswf-ov-phchip-clear' },
 ] as const
 

@@ -24,7 +24,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['apps/web', '@dsh-forge/web'],
     ['packages/contracts', '@dsh-forge/contracts'],
     ['packages/core', '@dsh-forge/core'],
-    ['packages/plugins/knowledge', '@dsh-forge/knowledge'],
+    ['plugins/knowledge', '@dsh-forge/knowledge'],
     ['packages/path-key', '@dsh-forge/path-key'],
     // M2 3.2：第六工件 plugin-forge（tool 半身 + forge:pipeline 系统提示段）
     ['packages/plugin-forge', '@dsh-forge/plugin-forge'],
@@ -36,9 +36,10 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     expect(readJson(join(dir, 'package.json')).name).toBe(name)
   })
 
-  it('contracts 零运行时依赖（fix-33 ⑩ + bug a5b12254 集中化：devDependencies 仅允许 @types/node 与官方包 type-only——dsh-agent-preset-registry，运行期零依赖）', () => {
+  it('contracts 兼容面依赖收敛（plugin-project 1.7：DTO/词汇/错误码/通道常量本体迁 @dsh-forge/lib-api，dependencies 仅允许该兼容面边；devDependencies 仅允许 @types/node 与官方包 type-only——dsh-agent-preset-registry）', () => {
     const pkg = readJson('packages/contracts/package.json')
-    for (const key of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
+    expect(Object.keys((pkg.dependencies as Record<string, unknown>) ?? {})).toEqual(['@dsh-forge/lib-api'])
+    for (const key of ['peerDependencies', 'optionalDependencies']) {
       expect(Object.keys((pkg[key] as Record<string, unknown>) ?? {})).toHaveLength(0)
     }
     expect(
@@ -48,42 +49,65 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ).toBe(true)
   })
 
-  it('根 solution tsconfig references 十五工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；md-mermaid/git-worktree/expert-squad/quote-reference/super-composer/mobile-bridge 先后入 packages/plugins/ 子居所；input-history 迁入根级 plugins/）', () => {
+  it('根 solution tsconfig references 十五工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；plugin-spec 建位 plugins/spec——提示段迁入批；md-mermaid/input-history/expert-squad/quote-reference/super-composer/mobile-bridge 先后入 packages/plugins/ 子居所；1.17 批二 git-worktree 旧包退役）', () => {
     const refs = ((readJson('tsconfig.json').references ?? []) as { path: string }[]).map((r) => rel(r.path))
     expect([...refs].sort()).toEqual(
       [
         'apps/host',
         'apps/web',
+        // lib 公共包群（plugin-project 1.2 建位 + 1.6 path 归并到位）
+        'lib/api',
+        'lib/db',
+        'lib/diag',
+        'lib/path',
+        // plugin-spec-roadmaps 1.1：泛型状态机公共包入拓扑
+        'lib/status-machine',
+        'lib/util',
         'packages/contracts',
         'packages/core',
-        'packages/plugins/knowledge',
+        // plugin-project：project 插件包（1.3 建位——tsc -b 全拓扑入口补记）
+        'plugins/project',
+        // plugin-task-loop 1.5 包骨架入拓扑（引用面随包建位补记——1.13 欠账校正）
+        'plugins/task-loop',
+        // plugin-spec：spec 插件包（提示段迁入批建位——forge:pipeline/forge:doc-style 段归属）
+        'plugins/spec',
+        'plugins/knowledge',
         'packages/path-key',
         'packages/plugin-forge',
         'packages/plugin-forge-spec',
-        'packages/plugins/expert-squad',
-        'packages/plugins/git-worktree',
+        'plugins/expert-squad',
+        'plugins/input-history',
         'packages/plugins/md-mermaid',
         'packages/plugins/mobile-bridge',
         'packages/plugins/quote-reference',
         'packages/plugins/super-composer',
-        'plugins/input-history',
       ].sort(),
     )
   })
 
   it.each([
-    ['packages/contracts', []],
+    // plugin-project 1.7：api/db 归并——contracts 兼容面引 lib/api；core 兼容面引 lib/db
+    ['packages/contracts', ['lib/api']],
     // knowledge-stage1 1.8：core 知识域退役——过渡型 plugins/knowledge 引用随迁收口
-    ['packages/core', ['packages/contracts', 'packages/path-key']],
+    // plugin-project 1.6：path-key 归并 lib/path——core refs 改指 lib/path（path-key 退役待删）
+    ['packages/core', ['lib/db', 'lib/diag', 'lib/path', 'lib/util', 'packages/contracts']],
     // fix-33 ⑯：knowledge ../core 引用删除——build 面零 core import（残留引用无消费）；
     // 测试面 core 源相对引入由 tsconfig.test.json 承载（不经 references）
-    ['packages/plugins/knowledge', ['packages/contracts', 'packages/path-key']],
+    // knowledge 迁移批1.3：root 级 plugins/knowledge 三目录制——references 增 client 面
+    // （tsconfig.client.json，exports["./client"] 类型链）
+    ['plugins/knowledge', ['plugins/knowledge/tsconfig.client.json', 'packages/contracts', 'packages/path-key']],
     // M2 3.2：plugin-forge 同 knowledge 型（deps 仅 contracts + path-key——零 core 边）
-    ['packages/plugin-forge', ['packages/contracts', 'packages/path-key']],
+    // plugin-project 1.7：bug tool 壳消费 lib/api——增 lib/api 引用
+    // typert 迁移 1.3：project tsconfig.json 改双 face solution 壳——composite 消费面直指 host 叶
+    ['packages/plugin-forge', ['lib/api', 'packages/contracts', 'packages/path-key', 'plugins/project/tsconfig.host.json']],
     // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
-    ['apps/host', ['packages/contracts', 'packages/core', 'packages/plugins/knowledge', 'packages/plugins/git-worktree']],
-    ['apps/web', ['packages/contracts', 'packages/plugins/git-worktree', 'packages/plugins/md-mermaid']],
+    // plugin-task-loop 1.14：host tasks 域改指 @dsh-forge/task-loop——plugins/task-loop host 叶入 references
+    ['apps/host', ['packages/contracts', 'packages/core', 'plugins/knowledge', 'plugins/project/tsconfig.host.json', 'plugins/task-loop/tsconfig.host.json']],
+    // 1.6：web normalize/path-key 消费改指 @dsh-forge/lib-path/path-key——增 lib/path 引用
+    // 1.14 UI 迁入：add-project/bug-refs 组件本体消费 @dsh-forge/project client ui
+    // 1.17 批二：git-worktree 旧包退役——web 引用面收 project 单源
+    ['apps/web', ['lib/path', 'packages/contracts', 'packages/plugins/md-mermaid', 'plugins/project/tsconfig.host.json']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
     const ts = readJson(join(dir, 'tsconfig.json')) as {
       compilerOptions?: { composite?: boolean }
@@ -115,9 +139,8 @@ describe('AC2–AC4 G0 规则面（oxlint 三铁律 + SC2 watch 禁令 + 令牌 
       'apps/web/src/rpc/**',
       'apps/web/src/styles/**',
       'packages/core/src/db/**',
-      // 铁律③ 同级业务互禁（web 双视图）
+      // 铁律③ 同级业务互禁（web 双视图——knowledge 视图迁 @dsh-forge/knowledge 后余 session 单侧）
       'apps/web/src/views/session/**',
-      'apps/web/src/views/knowledge/**',
     ]) {
       expect(ox).toContain(scope)
     }
@@ -199,14 +222,14 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
     'apps/web/src/rpc',
     'apps/web/src/styles',
     'apps/web/src/views/session',
-    'apps/web/src/views/knowledge',
-    'apps/web/src/flows/add-project',
+    'plugins/project/ui/add-project',
     'packages/core/src/db',
     'packages/core/src/forge',
-    'packages/plugins/knowledge/src/tools',
-    'packages/plugins/knowledge/src/prompt',
+    'plugins/knowledge/host/tools',
+    'plugins/knowledge/host/prompt',
     'packages/plugin-forge/src/tools',
-    'packages/plugin-forge/src/prompt',
+    // plugin-spec 1.8 提示段迁入——plugin-forge src/prompt 退役，prompt 定位归 plugins/spec/host/prompt
+    'plugins/spec/host/prompt',
     'packages/plugin-forge-spec/src/tools',
     'packages/plugin-forge-spec/src/prompt',
     'packages/contracts/src/dto',
@@ -224,8 +247,9 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
       'apps/web/vite.config.ts',
       'packages/contracts/src/index.ts',
       'packages/core/src/index.ts',
-      'packages/plugins/knowledge/src/index.ts',
+      'plugins/knowledge/host/index.ts',
       'packages/plugin-forge/src/index.ts',
+      'plugins/spec/host/index.ts',
       'packages/plugin-forge-spec/src/index.ts',
     ]) {
       expect(existsSync(join(ROOT, f))).toBe(true)

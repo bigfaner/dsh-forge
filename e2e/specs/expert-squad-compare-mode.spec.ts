@@ -28,7 +28,7 @@ const CMP_TARGET = `${PICK_LIST} [data-cmp-target]`
 const DIALOG_CHIPS = `${DIALOG} [data-cmp-chip]`
 const EXIT_COMPARE = `${DIALOG} button[aria-label="退出对比"]`
 
-const KEY = 'code-reviewer' // 随包内置专家键（packages/plugins/expert-squad/experts/）
+const KEY = 'code-reviewer' // 随包内置专家键（plugins/expert-squad/experts/）
 
 /** project 层覆盖档案（与内置同键 → 聚组 + 被遮蔽 shadow）。 */
 function expertMd(): string {

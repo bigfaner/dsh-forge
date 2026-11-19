@@ -61,7 +61,6 @@ function harness(options: { pauseImpl?: (input: unknown) => unknown } = {}): Har
   }
   const deps: PauseTaskToolDeps = {
     tasks: {} as PauseTaskToolDeps['tasks'],
-    proposals: {} as PauseTaskToolDeps['proposals'],
     bugs: {} as PauseTaskToolDeps['bugs'],
     checkpoints,
     resolveProjectId: () => 'p-1',

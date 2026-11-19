@@ -4,7 +4,7 @@
 // 非桩注入径：face 不经 driver deps 手工注入，而是经插件装配缝（ctx.forgeBugs + projects
 // face 工厂）生产接线后由循环核心真实消费。
 import { describe, expect, it, vi } from 'vitest'
-import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2, TaskSnapshot } from '@dsh-forge/contracts'
+import type { ForgeTasksService, ProjectServiceM2, TaskSnapshot } from '@dsh-forge/contracts'
 import forgePlugin from './index.js'
 import type { ForgeToolDefinition, ForgeToolDeps } from './tools/index.js'
 import { setForgeSpawnOverride } from './spawn/seam.js'
@@ -63,7 +63,6 @@ describe('生产装配径接线（bug 0db72bcb——loopDriver deps 两 face 经
     const registeredTools: ForgeToolDefinition[] = []
     const ctx = {
       forgeTasks: tasks,
-      forgeProposals: {} as ForgeProposalsService,
       forgeBugs: bugs,
       forgeCheckpoints: {} as ForgeToolDeps['checkpoints'],
       forgeProjects: {

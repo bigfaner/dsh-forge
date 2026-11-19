@@ -53,7 +53,6 @@ function harness(options: { stopLoopImpl?: (input: unknown) => unknown } = {}): 
   }
   const deps: StopTaskLoopToolDeps = {
     tasks: {} as StopTaskLoopToolDeps['tasks'],
-    proposals: {} as StopTaskLoopToolDeps['proposals'],
     bugs: {} as StopTaskLoopToolDeps['bugs'],
     checkpoints,
     resolveProjectId: () => 'p-1',

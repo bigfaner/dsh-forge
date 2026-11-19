@@ -16,18 +16,19 @@ import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../support/official-stack-gate.js'
 import { launchHost, closeApp, ROOT } from '../support/launch.js'
 import { registerProject } from '../support/rpc.js'
 import { createBridgeDriver } from '../support/replay/executor.js'
+import { projectKeyOf } from '../support/project-key.js'
 
 /** 真实凭据源（主检出 dev 实例 dsh-home——同文件同字节播种，walk14 先例） */
 const CRED_SRC = join(ROOT, 'apps', 'host', 'userdata.dev', 'dsh-home', '.credentials.yaml')
 
-/** 公共底座（walk14 bootFixture 同款裁剪）：夹具 ws + 隔离 userData → launchHost → 项目 → 提案+任务 → GUI 会话 */
+/** 公共底座（walk14 bootFixture 同款裁剪）：夹具 ws + 隔离 userData → launchHost → 项目 → 任务容器播种 → GUI 会话 */
 async function bootFixture(options: {
   wsName: string
   slug: string
-  proposalTitle: string
   taskTitles: readonly string[]
   forgeSettings?: Record<string, unknown>
   /** 专家档案（用户层 experts root——launch 净化删 DSH_HOME 后宿主 main.ts
@@ -42,7 +43,7 @@ async function bootFixture(options: {
   runLoop: (slug: string, rpcId: string) => Promise<void>
   fixtureRoot: string
 }> {
-  const { wsName, slug, proposalTitle, taskTitles, forgeSettings, extraExperts } = options
+  const { wsName, slug, taskTitles, forgeSettings, extraExperts } = options
   const fixtureRoot = mkdtempSync(join(tmpdir(), `dsh-loopedge-${slug}-ws-`))
   const wsDir = join(fixtureRoot, wsName)
   mkdirSync(wsDir, { recursive: true })
@@ -64,10 +65,12 @@ async function bootFixture(options: {
   const launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
   const { app, page } = launched
   const project = await registerProject(page, wsDir, wsName)
+  const projectKey = projectKeyOf(wsDir)
   const driver = createBridgeDriver(app)
-  await driver.call('forgeProposals', 'createProposal', { projectId: project.id, slug, title: proposalTitle, mode: 'blitz' })
+  // 任务容器 = slug 弱引用（proposal 域退役——/run-dag-tasks 任务源解析 = tasks.listTasks，
+  // createProposal 播种已不需要）
   for (const t of taskTitles) {
-    await driver.call('forgeTasks', 'addTask', { projectId: project.id, source: { kind: 'proposal', slug }, title: t, type: 'doc' })
+    await driver.call('forgeTasks', 'addTask', { projectKey, slug, title: t, type: 'doc' })
   }
   // 会话创建（官方直通——项目行尾新会话钮 startSession(workspaceId)，walk14 同款）
   await page
@@ -114,13 +117,19 @@ async function bootFixture(options: {
 }
 
 // ═══════════════════════ 态① running + 态② terminal（同一容器先后覆盖） ═══════════════════════
+
+// 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+// 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）。
+test.beforeEach(() => {
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
+})
+
 test('@web-e2e @loop-consol-flywheel-improvement fix-1 sidebar 循环标识态①派发循环中 + 态②循环已结束（锚三件套 + aria）', async () => {
   test.setTimeout(1_800_000)
   const PROP = 'loopedge-prop-a'
   const fx = await bootFixture({
     wsName: 'ws-loopedge-a',
     slug: PROP,
-    proposalTitle: 'sidebar 循环标识三态容器甲（running + terminal）',
     taskTitles: [
       'loopedge-任务甲：在 ws 根写 loopedge-a.md 一行内容',
       'loopedge-任务乙：在 ws 根写 loopedge-b.md 一行内容',
@@ -186,7 +195,6 @@ test('@web-e2e @loop-consol-flywheel-improvement fix-1 sidebar 循环标识态�
   const fx = await bootFixture({
     wsName: 'ws-loopedge-b',
     slug: PROP,
-    proposalTitle: 'sidebar 循环标识三态容器乙（suspended）',
     taskTitles: ['loopedge-任务丁：在 ws 根写 loopedge-d.md 一行内容'],
     // 真机环境故障注入（expert-squad-default-routing 后配方）：worker 路由对现走 experts
     // 服务折叠（forgeSettings.worker 机械读取径已退役——triage.ts/core.ts 装配注记）——

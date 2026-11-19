@@ -2,7 +2,7 @@
 // 与 core/index.ts 的 CoreContextFace 同一纪律：插件不依赖 dsh 运行时包
 // （@deepseek-ai/* / cordis），仅以结构化子面消费官方面——真实现
 // （ToolRuntime / SystemPrompt / 真 Context）结构兼容，运行期由 profile 装配注入。
-// 对 core 的唯一依赖 = forgeTasks / forgeProposals 两服务接口类型（contracts 单一来源），
+// 对 core 的唯一依赖 = forgeTasks 服务接口类型（contracts 单一来源），
 // 零实现级 import（可独立发版前提）。参数 schema 面恒取官方 enforced subset 标量形
 // （string/integer/number/boolean + 数组）——嵌套负载（gate/include/vars）在 tool 面
 // 平铺为显式参数（Interface 8 snake_case + 任务定位两显式参口径的延伸）。
@@ -14,7 +14,6 @@ import {
   DIAG_EVENT,
   type DiagLevel,
   type ForgeSettingsService,
-  type ForgeProposalsService,
   type ForgeTasksService,
   type ProjectServiceM2,
   type TaskType,
@@ -259,8 +258,6 @@ export function adaptDispatchJobs(registry: DispatchJobsRegistryFace): DispatchJ
 export interface ForgeContextFace {
   /** core 任务域服务（运行期 Cordis inject 解析——对 core 的依赖之一，类型出自 contracts） */
   forgeTasks: ForgeTasksService
-  /** core 提案域服务（运行期 Cordis inject 解析——写动词 tool 专属面） */
-  forgeProposals: ForgeProposalsService
   /** core 项目域服务（3.4——deriveTaskStoreDir 单源消费：事件日志落位目录派生，插件不复制） */
   forgeProjects: ProjectServiceM2
   /** core bug 域服务（fix-bug——recordBug/resolveBug 两写径的工具面服务源；结构化消费面

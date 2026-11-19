@@ -10,23 +10,51 @@
 // 模块残留)。任一不符 → 清该 dist 全量重建(tsc -b 全图——根 references 含全部构建包;
 // 清 dist 连腐化 tsbuildinfo 一并出局,重建后 watch 沿净状态起步)。
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertExpertSquadCovered, workspacePluginDirs } from './workspace-plugin-dirs.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-/** 守卫面：host + 全部 workspace 构建包（packages/plugins/* 曾游离 tsc -b 图外致 stale
- * dist——2026-10-17 git-worktree 事故；拓扑接入后此处对拍同步覆盖，防同一脱节病） */
+// bundle 产物豁免面（distRoot 顶层，src 无对应——孤儿判定豁免）：exports 运行期 .js
+// 相对 distRoot 的 rel（expert-squad 形态 = ['host/index.js', 'client.js']）。
+function bundleRelsOf(dir) {
+  try {
+    const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+    return Object.values(pkg.exports ?? {})
+      .flatMap((value) => ['import', 'default', 'require'].map((field) => value?.[field]))
+      .filter((target) => typeof target === 'string' && target.startsWith('./dist/') && target.endsWith('.js'))
+      .map((target) => target.slice('./dist/'.length))
+  } catch {
+    return [] // package.json 不可读——交由 pnpm 侧报错
+  }
+}
+
+/** 守卫面：host + 全部 workspace 构建插件包（packages/plugins/* 曾游离 tsc -b 图外致 stale
+ * dist——2026-10-17 git-worktree 事故；拓扑接入后此处对拍同步覆盖，防同一脱节病）。
+ * 批1 包归位 ⑦：双根枚举（workspacePluginDirs 单点——packages/plugins/* + root 级
+ * plugins/*）+ 非零覆盖断言（枚举漏 expert-squad 即红，堵 glob 假绿）。三目录制包
+ * （src 缺席、host/+ui/ 在场）按 host→dist/host、ui→dist/client 双 src 面对拍。 */
 const GUARDS = [
-  { name: 'apps/host', src: join(ROOT, 'apps', 'host', 'src'), dist: join(ROOT, 'apps', 'host', 'dist') },
-  ...readdirSync(join(ROOT, 'packages', 'plugins'), { withFileTypes: true })
-    .filter((row) => row.isDirectory() && existsSync(join(ROOT, 'packages', 'plugins', row.name, 'tsconfig.json')))
-    .map((row) => ({
-      name: `packages/plugins/${row.name}`,
-      src: join(ROOT, 'packages', 'plugins', row.name, 'src'),
-      dist: join(ROOT, 'packages', 'plugins', row.name, 'dist'),
-    })),
+  {
+    name: 'apps/host',
+    distRoot: join(ROOT, 'apps', 'host', 'dist'),
+    bundles: [],
+    pairs: [{ src: join(ROOT, 'apps', 'host', 'src'), dist: join(ROOT, 'apps', 'host', 'dist') }],
+  },
+  ...workspacePluginDirs(ROOT).map(({ name, dir }) => ({
+    name,
+    distRoot: join(dir, 'dist'),
+    bundles: bundleRelsOf(dir),
+    pairs: existsSync(join(dir, 'src'))
+      ? [{ src: join(dir, 'src'), dist: join(dir, 'dist') }]
+      : [
+          ...(existsSync(join(dir, 'host')) ? [{ src: join(dir, 'host'), dist: join(dir, 'dist', 'host') }] : []),
+          ...(existsSync(join(dir, 'ui')) ? [{ src: join(dir, 'ui'), dist: join(dir, 'dist', 'client') }] : []),
+        ],
+  })),
 ]
+assertExpertSquadCovered(workspacePluginDirs(ROOT))
 
 /** 递归收集目录下全部文件的 rel 路径(POSIX 分隔符,跨 Windows)。 */
 function walkRel(dir, base = dir, acc = []) {
@@ -53,29 +81,34 @@ function sourceOf(outRel) {
   return undefined
 }
 
-const stale = [] // { name, dist, reasons[] }
+const stale = [] // { name, distRoot, reasons[] }
 for (const guard of GUARDS) {
   const reasons = []
-  const srcRels = existsSync(guard.src) ? walkRel(guard.src) : []
-  for (const rel of srcRels) {
-    const outRel = outputOf(rel)
-    if (outRel === undefined) continue
-    const outPath = join(guard.dist, outRel)
-    if (!existsSync(outPath)) {
-      reasons.push(`缺输出 ${outRel}`)
-      continue
+  const srcSet = new Set() // 全 src 面并集（孤儿输出判定域）
+  for (const pair of guard.pairs) {
+    const srcRels = existsSync(pair.src) ? walkRel(pair.src) : []
+    for (const rel of srcRels) {
+      const outRel = outputOf(rel)
+      if (outRel === undefined) continue
+      const outPath = join(pair.dist, outRel)
+      if (!existsSync(outPath)) {
+        reasons.push(`缺输出 ${outRel}`)
+        continue
+      }
+      if (statSync(join(pair.src, rel)).mtimeMs > statSync(outPath).mtimeMs) reasons.push(`输出落后 ${rel} → ${outRel}`)
     }
-    if (statSync(join(guard.src, rel)).mtimeMs > statSync(outPath).mtimeMs) reasons.push(`输出落后 ${rel} → ${outRel}`)
+    for (const rel of srcRels) srcSet.add(rel)
   }
-  if (existsSync(guard.dist)) {
-    const srcSet = new Set(srcRels)
-    for (const outRel of walkRel(guard.dist)) {
+  for (const pair of guard.pairs) {
+    if (!existsSync(pair.dist)) continue
+    for (const outRel of walkRel(pair.dist)) {
       const srcRel = sourceOf(outRel)
       if (srcRel === undefined || srcSet.has(srcRel)) continue
+      if (guard.bundles.includes(outRel)) continue // bundle 产物豁免（exports 运行期 .js——src 无对应 ts，非孤儿）
       reasons.push(`孤儿输出 ${outRel}(src 无 ${srcRel})`)
     }
   }
-  if (reasons.length > 0) stale.push({ ...guard, reasons })
+  if (reasons.length > 0) stale.push({ name: guard.name, distRoot: guard.distRoot, reasons })
 }
 if (stale.length === 0) process.exit(0) // 新鲜——零输出零动作
 
@@ -85,7 +118,7 @@ for (const guard of stale) {
   for (const reason of guard.reasons) console.warn(`    - ${reason}`)
   try {
     // maxRetries:electron 持锁输出文件的瞬时 EBUSY 缓冲(dev 重启竞速窗口)
-    rmSync(guard.dist, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    rmSync(guard.distRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   } catch (err) {
     console.error(`[ensure-host-dist] 清 dist 失败(文件被占用?先停 dev/electron):${err.message}`)
     process.exit(1)

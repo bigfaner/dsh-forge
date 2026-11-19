@@ -12,11 +12,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DiagEventPayload } from '../../../packages/contracts/src/index.js'
-import { startSelfHostedStorage } from '../../../packages/plugins/knowledge/src/storage/start.js'
-import { rebuildKnowledgeIndex } from '../../../packages/plugins/knowledge/src/storage/rebuild.js'
-import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/index.js'
-import { createWsPathResolver } from '../../../packages/plugins/knowledge/src/tools/session.js'
-import { canonicalWsPath } from '../../../packages/plugins/knowledge/src/storage/registry.js'
+import { startSelfHostedStorage } from '../../../plugins/knowledge/host/storage/start.js'
+import { rebuildKnowledgeIndex } from '../../../plugins/knowledge/host/storage/rebuild.js'
+import { createKnowledgeService } from '../../../plugins/knowledge/host/service/index.js'
+import { createWsPathResolver } from '../../../plugins/knowledge/host/tools/session.js'
+import { canonicalWsPath } from '../../../plugins/knowledge/host/storage/registry.js'
 
 // ── 夹具 ──
 

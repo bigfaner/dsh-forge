@@ -9,7 +9,7 @@
 //      lint:types / lint:test-types 门红）。
 // 机械断言（type-only 直引两包源码，零依赖边、零运行时装配——两包互不依赖，不加依赖边）。
 import type { ExpertsServiceFace } from '../../packages/plugin-forge/src/faces.js'
-import type { ExpertEntry, ExpertsService } from '../../packages/plugins/expert-squad/src/registry.js'
+import type { ExpertEntry, ExpertsService } from '../../plugins/expert-squad/host/registry.js'
 import { describe, expect, it } from 'vitest'
 
 /** ① 实现面可赋给消费面（漂移即编译错）——表达式位 satisfies（type-alias RHS 位 oxc 不解析） */

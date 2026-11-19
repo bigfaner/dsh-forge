@@ -25,6 +25,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSharedLaunchFixture, wsSegment as wsSegmentOf } from '../support/fixtures.js'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../support/official-stack-gate.js'
 import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
@@ -184,6 +185,11 @@ async function snap(page: Page, name: string): Promise<void> {
 
 const norm = (p: string | undefined): string => (p ?? '').toLowerCase().replaceAll('\\', '/')
 
+// 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+// 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）。
+test.beforeEach(() => {
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
+})
 test('1.29 UI（推导制）：快速切换点选即切换（openWorkspace 显式传参）——发送落所选树（官方复用天然命中）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
   const { page, wsDir, udDir } = sharedLaunch

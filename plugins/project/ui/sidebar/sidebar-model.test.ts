@@ -1,0 +1,948 @@
+// sidebar-model 单测 —— UF-1 项目树/会话列表派生（AC2：项目树读 forge:projects/list、
+// 会话列表实时读 dsh 账本；AC5：空态判据输入）。纯函数面：快照进、视图行出、零持有。
+import { describe, expect, it } from 'vitest'
+import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
+import type { ProjectSummary } from '@dsh-forge/contracts'
+import {
+  buildSidebarTree,
+  FORGE_LOOP_SCENARIO_PHASE,
+  loopPhaseOfEntry,
+  projectSortOrdersPatchOf,
+  relativeTimeLabel,
+  sessionDotState,
+  sessionLoopAriaLabel,
+  sessionLoopBadge,
+  sessionLoopStatusLabel,
+  sessionStatus,
+  SIDEBAR_SESSION_WINDOW_MS,
+  SIDEBAR_VIEW_DEFAULT,
+  sidebarArchivedFilterOf,
+  sidebarFilterOf,
+  sidebarFlatFilterOf,
+  sidebarFlatRowsOf,
+  sidebarProjectReorderOf,
+  sidebarSectionLabelOf,
+  sidebarSessionVisibility,
+  sidebarViewOfPick,
+  type LedgerSessionRow,
+  type LedgerSessionsSnapshot,
+  type LedgerWorkspacesSnapshot,
+  type SidebarProjectNode,
+  type SidebarSessionRow,
+} from './sidebar-model.js'
+
+const MIN = 60_000
+const HOUR = 3_600_000
+const DAY = 86_400_000
+
+function project(id: string, workspaceId: string, overrides: Partial<ProjectSummary> = {}): ProjectSummary {
+  return { id, workspaceId, name: `项目${id}`, wsPath: `Z:/w/${id}`, archived: false, ...overrides }
+}
+
+function ledgerRow(id: string, overrides: Partial<LedgerSessionRow> = {}): LedgerSessionRow {
+  // 默认带持久标题（= displayTitle 同值）——与官方「有标题会话」常态同型；
+  // 未命名/blank 场景由用例显式覆盖（bug 3d26a1be describe）。
+  return { id, title: `会话${id}`, displayTitle: `会话${id}`, updatedAt: Date.now() - 5 * MIN, ...overrides }
+}
+
+function ledger(rows: readonly LedgerSessionRow[], overrides: Partial<LedgerSessionsSnapshot> = {}): LedgerSessionsSnapshot {
+  return {
+    ids: rows.map((r) => r.id),
+    byId: Object.fromEntries(rows.map((r) => [r.id, r])),
+    phase: 'ready',
+    ...overrides,
+  }
+}
+
+function workspaces(
+  items: readonly { workspaceId: string; sessionIds: string[]; path?: string }[],
+  overrides: Partial<LedgerWorkspacesSnapshot> = {},
+): LedgerWorkspacesSnapshot {
+  return { items, ...overrides }
+}
+
+describe('sessionStatus / sessionDotState（状态点四态）', () => {
+  it('优先级：用户注意 > 完成提醒 > 进行中 > 静默', () => {
+    expect(sessionStatus(ledgerRow('a', { pendingInteraction: { kind: 'question' }, running: true }))).toBe('attention')
+    expect(sessionStatus(ledgerRow('b', { completed: true, running: false }))).toBe('done')
+    expect(sessionStatus(ledgerRow('c', { running: true }))).toBe('running')
+    expect(sessionStatus(ledgerRow('d'))).toBe('idle')
+  })
+  it('映射官方 StateDot 语义（warning/done/ongoing/idle）', () => {
+    expect(sessionDotState('attention')).toBe('warning')
+    expect(sessionDotState('done')).toBe('done')
+    expect(sessionDotState('running')).toBe('ongoing')
+    expect(sessionDotState('idle')).toBe('idle')
+  })
+})
+
+describe('relativeTimeLabel（相对时间，官方桶化 + zh 文案）', () => {
+  const now = 1_700_000_000_000
+  it('五桶 + 刚刚', () => {
+    expect(relativeTimeLabel(now - 30_000, now)).toBe('刚刚')
+    expect(relativeTimeLabel(now - 5 * MIN, now)).toBe('5 分钟前')
+    expect(relativeTimeLabel(now - 3 * HOUR, now)).toBe('3 小时前')
+    expect(relativeTimeLabel(now - 2 * DAY, now)).toBe('2 天前')
+    expect(relativeTimeLabel(now - 45 * DAY, now)).toBe('1 个月前')
+    expect(relativeTimeLabel(now - 400 * DAY, now)).toBe('1 年前')
+  })
+})
+
+describe('buildSidebarTree（项目树派生）', () => {
+  it('项目序 = RPC 返回序；会话 = workspace 归属序 ∩ 账本（AC2）', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1'), project('p2', 'w2')],
+      sessions: ledger([
+        ledgerRow('s1', { updatedAt: 1 }),
+        ledgerRow('s2', { updatedAt: 2 }),
+        ledgerRow('s3', { updatedAt: 3 }),
+      ]),
+      workspaces: workspaces([
+        { workspaceId: 'w1', sessionIds: ['s2', 's1'] },
+        { workspaceId: 'w2', sessionIds: ['s3'] },
+      ]),
+    })
+    expect(out.tree.map((n) => n.projectId)).toEqual(['p1', 'p2'])
+    expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s2', 's1'])
+    expect(out.tree[1]!.sessions.map((r) => r.sessionId)).toEqual(['s3'])
+    expect(out.tree[0]!.sessions[0]!.title).toBe('会话s2')
+  })
+
+  it('M3.1 D3：项目节点携带 wsPath（canonical 路径——ProjectSummary 直投影，行悬停提示数据面）', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1', { wsPath: 'Z:/canonical/p1' }), project('p2', 'w2', { wsPath: 'Z:/canonical/p2' })],
+      sessions: ledger([]),
+      workspaces: workspaces([
+        { workspaceId: 'w1', sessionIds: [] },
+        { workspaceId: 'w2', sessionIds: [] },
+      ]),
+    })
+    expect(out.tree.map((n) => n.wsPath)).toEqual(['Z:/canonical/p1', 'Z:/canonical/p2'])
+  })
+
+  it('账本缺行的成员跳过；workspace 缺席 = 空会话项目；未注册 workspace 的会话不入树', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1')],
+      // s-dead 在 workspace 成员表里但账本 byId 无行（缺行跳过）
+      sessions: ledger([ledgerRow('s1'), ledgerRow('orphan')]),
+      workspaces: workspaces([
+        { workspaceId: 'w1', sessionIds: ['s1', 's-dead'] },
+        { workspaceId: 'w-unregistered', sessionIds: ['orphan'] },
+      ]),
+    })
+    expect(out.tree).toHaveLength(1)
+    expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
+  })
+
+  it('bug ef8b3a45：树工作区会话入项目分组——host 裁决映射直读（客户端零仲裁副本）', () => {
+    const treePath = 'Z:/w/p1/.forge/worktrees/test-02'
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+      sessions: ledger([ledgerRow('s-main'), ledgerRow('s-tree')]),
+      workspaces: workspaces([
+        { workspaceId: 'w1', sessionIds: ['s-main'] },
+        // 树会话挂树工作区（1.28 契约强制——主工作区 sessionIds 恒不含它）
+        { workspaceId: 'wt-02', path: treePath, sessionIds: ['s-tree'] },
+      ]),
+      // host resolveProject 裁决结果（forge:worktree/resolve）：归一工作区路径 → 项目 id
+      workspaceProject: new Map([[normalizeFsPath(treePath), 'p1']]),
+    })
+    expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s-main', 's-tree'])
+  })
+
+  it('映射缺席条目不入组（未解析路径——非 git/未注册，fail-closed 零猜测）', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+      sessions: ledger([ledgerRow('s-x')]),
+      workspaces: workspaces([{ workspaceId: 'wt-x', path: 'Z:/elsewhere/wt', sessionIds: ['s-x'] }]),
+      workspaceProject: new Map(), // host 未裁决该路径
+    })
+    expect(out.tree[0]!.sessions).toEqual([])
+  })
+
+  it('子代理行不入顶层；空白会话仅显示被选中者（官方浏览器口径——retainedBy.mainView 锚，bug 51e94b84 修正）', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1')],
+      sessions: ledger([
+        ledgerRow('s1'),
+        ledgerRow('child', { parentId: 's1' }),
+        ledgerRow('blank-a', { blank: true }),
+        // 当前会话正本 = 官方 publishMain 同径：byId 行 retainedBy.mainView > 0
+        ledgerRow('blank-cur', { blank: true, retainedBy: { mainView: 1 } }),
+      ]),
+      workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1', 'child', 'blank-a', 'blank-cur'] }]),
+    })
+    expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1', 'blank-cur'])
+    expect(out.currentSessionId).toBe('blank-cur')
+  })
+
+  // bug 3d26a1be：官方行口径——标题消费持久 title，不消费 displayTitle 的目录名/id 兜底
+  // （官方 sessionTitle：blank → ''、title?.trim() ?? ''）。
+  // bug 9eb9d6cb 后续用户裁决：空 title 回退词统一「新会话」——title 漂移链收敛为
+  // 新会话 → 有意义的名称（「未命名」中间态退役）。
+  describe('会话行标题派生（bug 3d26a1be——不消费 displayTitle 目录名兜底）', () => {
+    it('bug：无持久标题会话显示「新会话」而非 displayTitle 目录名；savedTitle 空串供改名种子', () => {
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1')],
+        sessions: ledger([ledgerRow('s1', { title: undefined, displayTitle: 'dsh-forge' })]),
+        workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1'] }]),
+      })
+      expect(out.tree[0]!.sessions[0]!.title).toBe('新会话')
+      expect(out.tree[0]!.sessions[0]!.savedTitle).toBe('')
+    })
+
+    it('当前选中的空白会话显示「新会话」（官方 blank 行口径）', () => {
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1')],
+        sessions: ledger([
+          ledgerRow('blank-cur', { blank: true, title: undefined, displayTitle: 'dsh-forge', retainedBy: { mainView: 1 } }),
+        ]),
+        workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['blank-cur'] }]),
+      })
+      expect(out.tree[0]!.sessions[0]!.title).toBe('新会话')
+      expect(out.tree[0]!.sessions[0]!.savedTitle).toBe('')
+    })
+
+    it('有持久标题：显示 trim 后标题，savedTitle 同步；空白串标题回退「新会话」（官方 trim 口径）', () => {
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1')],
+        sessions: ledger([
+          ledgerRow('s-titled', { title: '  登录修复  ', displayTitle: '登录修复' }),
+          ledgerRow('s-space', { title: '   ', displayTitle: 'dsh-forge' }),
+        ]),
+        workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s-titled', 's-space'] }]),
+      })
+      expect(out.tree[0]!.sessions[0]!.title).toBe('登录修复')
+      expect(out.tree[0]!.sessions[0]!.savedTitle).toBe('登录修复')
+      expect(out.tree[0]!.sessions[1]!.title).toBe('新会话')
+    })
+  })
+
+  it('统一更新时间排序（主区/树会话不分 worktree 全组倒序；置顶仍领先）', () => {
+    const treePath = 'Z:/w/p1/.forge/worktrees/t'
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+      sessions: ledger([
+        ledgerRow('s-main-old', { updatedAt: 1 }),
+        ledgerRow('s-main-new', { updatedAt: 30 }),
+        ledgerRow('s-tree', { updatedAt: 10 }),
+      ]),
+      workspaces: workspaces([
+        { workspaceId: 'w1', sessionIds: ['s-main-old', 's-main-new'] },
+        { workspaceId: 'wt', path: treePath, sessionIds: ['s-tree'] },
+      ]),
+      workspaceProject: new Map([[normalizeFsPath(treePath), 'p1']]),
+    })
+    // 树会话按 updatedAt 插入全组序（此前 = 树区追加在尾部）
+    expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s-main-new', 's-tree', 's-main-old'])
+  })
+
+  it('phase pending → loading 骨架相位；无 mainView 在留行 → currentSessionId null', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1')],
+      sessions: ledger([], { phase: 'pending' }),
+      workspaces: { items: [] },
+    })
+    expect(out.loading).toBe(true)
+    expect(out.currentSessionId).toBeNull()
+  })
+
+  it('D45：置顶/归档成员位随行（registry 级集合镜像）+ 置顶行项目块内领先（最近置顶在前）', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1')],
+      sessions: ledger([ledgerRow('s1'), ledgerRow('s2'), ledgerRow('s3'), ledgerRow('s4')]),
+      workspaces: workspaces(
+        [{ workspaceId: 'w1', sessionIds: ['s1', 's2', 's3', 's4'] }],
+        // 置顶集 = 最近置顶在前（s3 后置顶 → 领先 s2）；归档集含 s4
+        { pinnedSessionIds: ['s3', 's2'], archivedSessionIds: ['s4'] },
+      ),
+    })
+    const rows = out.tree[0]!.sessions
+    // 置顶领先（置顶集序）；非置顶行保持 workspace 排列序
+    expect(rows.map((r) => r.sessionId)).toEqual(['s3', 's2', 's1', 's4'])
+    expect(rows.map((r) => [r.sessionId, r.pinned, r.archived])).toEqual([
+      ['s3', true, false],
+      ['s2', true, false],
+      ['s1', false, false],
+      ['s4', false, true],
+    ])
+  })
+
+  it('D45：置顶/归档集缺席 = 无标记无重排（面漂移/测试替身缺席容忍——快径原序）', () => {
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1')],
+      sessions: ledger([ledgerRow('s1'), ledgerRow('s2')]),
+      workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1', 's2'] }]),
+    })
+    expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1', 's2'])
+    expect(out.tree[0]!.sessions.every((r) => !r.pinned && !r.archived)).toBe(true)
+  })
+
+  // ── bug 8c7e847f 三件套（家族链 #6——分组归并消费面 INV-L/INV-U/INV-B）──
+  describe('bug 8c7e847f：清单仲裁三件套（INV-L 活性过滤 / INV-U 选主 / INV-B cwd 绑定）', () => {
+    it('INV-B cwd 绑定：会话归属 = cwd 同锚行——成员位滞后跨行残留不造成同会话双组', () => {
+      const treeA = 'Z:/w/p1/.forge/worktrees/wt-a'
+      const treeB = 'Z:/w/p2/.forge/worktrees/wt-b'
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' }), project('p2', 'w2', { wsPath: 'Z:/w/p2' })],
+        sessions: ledger([ledgerRow('s2', { cwd: treeA, updatedAt: 10 })]),
+        workspaces: workspaces([
+          { workspaceId: 'w1', sessionIds: [] },
+          // 成员位滞后：p2 树行残留声明 s2（E1 归档行前置 × 残留行交叉形态）
+          { workspaceId: 'wt-a', path: treeA, sessionIds: ['s2'] },
+          { workspaceId: 'wt-b', path: treeB, sessionIds: ['s2'] },
+        ]),
+        workspaceProject: new Map([
+          [normalizeFsPath(treeA), 'p1'],
+          [normalizeFsPath(treeB), 'p2'],
+        ]),
+      })
+      expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s2'])
+      expect(out.tree[1]!.sessions).toEqual([])
+    })
+
+    it('INV-U 选主：同锚双行声明同会话 → 单组单行（双行声明不再双挂）', () => {
+      const treeA = 'Z:/w/p1/.forge/worktrees/wt-a'
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+        sessions: ledger([ledgerRow('s1', { updatedAt: 10 })]),
+        workspaces: workspaces([
+          { workspaceId: 'w1', sessionIds: [] },
+          // 同锚双行（E1 形态——归档残留行前置 × 现行行）均声明 s1
+          { workspaceId: 'wt-a-old', path: treeA, sessionIds: ['s1'] },
+          { workspaceId: 'wt-a-new', path: treeA, sessionIds: ['s1'] },
+        ]),
+        workspaceProject: new Map([[normalizeFsPath(treeA), 'p1']]),
+      })
+      expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
+    })
+
+    it('INV-L 活性过滤：无 path 残留行不入归并（path 缺席行成员不进命中集）', () => {
+      const treeA = 'Z:/w/p1/.forge/worktrees/wt-a'
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+        sessions: ledger([ledgerRow('s1', { cwd: treeA })]),
+        workspaces: workspaces([
+          { workspaceId: 'w1', sessionIds: [] },
+          { workspaceId: 'wt-a', path: treeA, sessionIds: ['s1'] },
+          // 已删路径残留行（path 空）——成员位仍声明 s1
+          { workspaceId: 'wt-dead', path: '', sessionIds: ['s1'] },
+        ]),
+        workspaceProject: new Map([[normalizeFsPath(treeA), 'p1']]),
+      })
+      expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
+    })
+
+    it('INV-B 退路：cwd 缺席（旧行形状）退成员位径——bug ef8b3a45 场景零回归', () => {
+      const treePath = 'Z:/w/p1/.forge/worktrees/test-02'
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+        sessions: ledger([ledgerRow('s-main'), ledgerRow('s-tree')]),
+        workspaces: workspaces([
+          { workspaceId: 'w1', sessionIds: ['s-main'] },
+          { workspaceId: 'wt-02', path: treePath, sessionIds: ['s-tree'] },
+        ]),
+        workspaceProject: new Map([[normalizeFsPath(treePath), 'p1']]),
+      })
+      expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s-main', 's-tree'])
+    })
+  })
+})
+
+describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原型 renderProjects 同型）', () => {
+  function row(sessionId: string, title: string): SidebarProjectNode['sessions'][number] {
+    return { sessionId, title, savedTitle: title, status: 'idle', updatedAt: 1, pinned: false, archived: false }
+  }
+
+  const tree: SidebarProjectNode[] = [
+    {
+      projectId: 'p1',
+      workspaceId: 'w1',
+      name: '支付网关',
+      wsPath: 'Z:/w/p1',
+      archived: false,
+      sessions: [row('s1', '登录修复'), row('s2', '索引重建')],
+    },
+    {
+      projectId: 'p2',
+      workspaceId: 'w2',
+      name: '知识库',
+      wsPath: 'Z:/w/p2',
+      archived: false,
+      sessions: [row('s3', '文档补全')],
+    },
+  ]
+
+  it('空/纯空白查询 = 不过滤（原树原样引用返回）', () => {
+    expect(sidebarFilterOf('', tree)).toBe(tree)
+    expect(sidebarFilterOf('   ', tree)).toBe(tree)
+  })
+
+  it('项目名前缀命中 → 项目在场，会话行仍按标题过滤（原型同型：非命中会话滤除）', () => {
+    const visible = sidebarFilterOf('支付', tree)
+    expect(visible.map((n) => n.projectId)).toEqual(['p1'])
+    expect(visible[0]!.sessions).toEqual([]) // 会话标题不含「支付」→ 滤除（视图层呈现「无匹配会话」）
+  })
+
+  it('会话标题子串命中 → 项目在场且仅留命中行', () => {
+    const visible = sidebarFilterOf('重建', tree)
+    expect(visible.map((n) => n.projectId)).toEqual(['p1'])
+    expect(visible[0]!.sessions.map((r) => r.sessionId)).toEqual(['s2'])
+  })
+
+  it('项目名与会话全命中 → 节点原样引用（零改写零分配——纯投影）', () => {
+    const full: SidebarProjectNode[] = [
+      { projectId: 'p1', workspaceId: 'w1', name: '修复集', wsPath: 'Z:/w/p1', archived: false, sessions: [row('s1', '登录修复'), row('s2', 'TLS 修复')] },
+    ]
+    expect(sidebarFilterOf('修复', full)[0]).toBe(full[0])
+  })
+
+  it('大小写不敏感（原型 toLowerCase 同型）', () => {
+    const mixed: SidebarProjectNode[] = [
+      { projectId: 'p1', workspaceId: 'w1', name: 'Gateway', wsPath: 'Z:/w/p1', archived: false, sessions: [row('s1', 'TLS handshake')] },
+    ]
+    expect(sidebarFilterOf('gate', mixed).map((n) => n.projectId)).toEqual(['p1'])
+    expect(sidebarFilterOf('HAND', mixed)[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
+  })
+
+  it('全不命中 → 空（视图层呈现行内空提示）', () => {
+    expect(sidebarFilterOf('不存在', tree)).toEqual([])
+  })
+
+  it('选中态不变（PRD UF-1 Validation）：过滤隐藏当前选中会话行不重置锚——currentSessionId 与过滤正交', () => {
+    const built = buildSidebarTree({
+      projects: [project('p1', 'w1', { name: '支付网关' })],
+      sessions: ledger([
+        ledgerRow('s1', { title: '登录修复', displayTitle: '登录修复', retainedBy: { mainView: 1 } }),
+        ledgerRow('s2', { title: '索引重建', displayTitle: '索引重建' }),
+      ]),
+      workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1', 's2'] }]),
+    })
+    const visible = sidebarFilterOf('索引', built.tree)
+    expect(visible[0]!.sessions.map((r) => r.sessionId)).toEqual(['s2']) // 选中行 s1 被滤除
+    expect(built.currentSessionId).toBe('s1') // 锚不重置——清过滤即恢复可见
+  })
+
+  it('零改写纪律：过滤是纯投影，不触碰输入树（Object.freeze 防突变——SC2 直读同型）', () => {
+    const frozen = Object.freeze(
+      tree.map((n) => ({ ...n, sessions: Object.freeze([...n.sessions]) })),
+    )
+    expect(() => sidebarFilterOf('支付', frozen)).not.toThrow()
+    expect(frozen[0]!.sessions).toHaveLength(2) // 原树原样
+  })
+})
+
+// ── fix-42：视图态（官方 ViewOptionsMenu P1 裁剪——groupBy 二值 + archivedFilter 三态） ──
+
+describe('sidebarViewOfPick（视图菜单项 id → 视图态投影）', () => {
+  const view = { groupBy: 'tree', archivedFilter: 'default' } as const
+
+  it('分组项：tree/flat → groupBy 翻转', () => {
+    expect(sidebarViewOfPick(view, 'flat')).toEqual({ groupBy: 'flat', archivedFilter: 'default' })
+    expect(sidebarViewOfPick({ ...view, groupBy: 'flat' }, 'tree')).toEqual({
+      groupBy: 'tree',
+      archivedFilter: 'default',
+    })
+  })
+
+  it('归档项：default/hide/only → archivedFilter 翻转', () => {
+    expect(sidebarViewOfPick(view, 'hide')).toEqual({ groupBy: 'tree', archivedFilter: 'hide' })
+    expect(sidebarViewOfPick(view, 'only')).toEqual({ groupBy: 'tree', archivedFilter: 'only' })
+  })
+
+  it('非选项 id（separator/label/未知）→ 原引用返回（态机层免触发判据）', () => {
+    expect(sidebarViewOfPick(view, 'view-group')).toBe(view)
+    expect(sidebarViewOfPick(view, 'view-archived-separator')).toBe(view)
+    expect(sidebarViewOfPick(view, 'anything')).toBe(view)
+  })
+
+  it('同值重选 → 原引用返回（免重渲染）', () => {
+    expect(sidebarViewOfPick(view, 'tree')).toBe(view)
+    expect(sidebarViewOfPick(view, 'default')).toBe(view)
+  })
+
+  it('D41-① 同迁：hide 态可切回 default/only（三态菜单语义保持）', () => {
+    const hidden = { groupBy: 'tree', archivedFilter: 'hide' } as const
+    expect(sidebarViewOfPick(hidden, 'default')).toEqual({ groupBy: 'tree', archivedFilter: 'default' })
+    expect(sidebarViewOfPick(hidden, 'only')).toEqual({ groupBy: 'tree', archivedFilter: 'only' })
+  })
+})
+
+describe('SIDEBAR_VIEW_DEFAULT（D41-①：归档项目默认隐藏）', () => {
+  it('缺省视图 = 按项目树 + 归档隐藏（archivedFilter = hide——三态菜单可切回 default/only）', () => {
+    expect(SIDEBAR_VIEW_DEFAULT).toEqual({ groupBy: 'tree', archivedFilter: 'hide' })
+  })
+})
+
+describe('sidebarSessionVisibility（D41-② 24h 窗口 + 2026-10-12 至少 10 行下限——recent 默认可见 / older 折叠）', () => {
+  const NOW = 1_700_000_000_000
+  function row(sessionId: string, updatedAt: number, overrides: Partial<SidebarSessionRow> = {}): SidebarSessionRow {
+    return { sessionId, title: `会话${sessionId}`, savedTitle: `会话${sessionId}`, status: 'idle', updatedAt, pinned: false, archived: false, ...overrides }
+  }
+
+  it('窗口内优先（≥10 窗口内非置顶行时封顶取最近的 10 个——窗口规则让位封顶）', () => {
+    const sessions = [
+      row('a', NOW - 25 * 3_600_000), row('b', NOW - 60_000), row('c', NOW - 2 * 86_400_000),
+      ...Array.from({ length: 12 }, (_, i) => row(`w${i}`, NOW - (i + 1) * 60_000)), // w11 最近
+    ]
+    const split = sidebarSessionVisibility(sessions, NOW)
+    // 非置顶封顶 10：取最近的 10 个（b + w0..w8——w9/w11 较旧仍折叠；a/c 更旧折叠）
+    expect(split.recent.map((r) => r.sessionId)).toEqual(['b', ...Array.from({ length: 9 }, (_, i) => `w${i}`)])
+    expect(split.older.map((r) => r.sessionId)).toEqual(['a', 'c', 'w9', 'w10', 'w11'])
+  })
+
+  it('24h 边界值：updatedAt = now−24h 恰在窗口内（≥ 语义）；差 1ms 出窗（不足 10 时按 updatedAt 降序补足）', () => {
+    const edge = sidebarSessionVisibility([
+      row('edge', NOW - SIDEBAR_SESSION_WINDOW_MS),
+      row('out', NOW - SIDEBAR_SESSION_WINDOW_MS - 1),
+      ...Array.from({ length: 8 }, (_, i) => row(`w${i}`, NOW - i)),
+    ], NOW)
+    // 窗口内 9 个（edge + w0..w7）→ 补 1 个最近窗口外行 = out（恰在边界外 1ms）
+    expect(edge.recent.map((r) => r.sessionId)).toEqual(['edge', 'out', ...Array.from({ length: 8 }, (_, i) => `w${i}`)])
+    expect(edge.older).toEqual([])
+  })
+
+  it('空窗（无会话）→ 两组皆空', () => {
+    expect(sidebarSessionVisibility([], NOW)).toEqual({ recent: [], older: [] })
+  })
+
+  it('总数 ≤10（含全旧）→ 全 recent 零折叠（「至少展示 10 个」= 有多少展示多少）', () => {
+    const sessions = [row('a', NOW - 2 * DAY), row('b', NOW - 3 * DAY)]
+    const split = sidebarSessionVisibility(sessions, NOW)
+    expect(split.recent.map((r) => r.sessionId)).toEqual(['a', 'b'])
+    expect(split.older).toEqual([])
+  })
+
+  it('纯投影：全 recent 原引用返回（零派生）；输入冻结不突变（SC2 直读同型）', () => {
+    const sessions = [row('a', NOW), row('b', NOW - MIN)]
+    const split = sidebarSessionVisibility(sessions, NOW)
+    expect(split.recent).toBe(sessions)
+    expect(split.older).toEqual([])
+    const frozen = Object.freeze(sessions.map((r) => ({ ...r })))
+    expect(() => sidebarSessionVisibility(frozen, NOW)).not.toThrow()
+  })
+
+  it('D45：置顶行恒全量可见且不占 10 名额（10 个置顶 + 10 窗口内非置顶 = 20 recent）', () => {
+    const sessions = [
+      ...Array.from({ length: 10 }, (_, i) => row(`p${i}`, NOW - (5 + i) * DAY, { pinned: true })),
+      ...Array.from({ length: 12 }, (_, i) => row(`w${i}`, NOW - (i + 1) * 60_000)),
+    ]
+    const split = sidebarSessionVisibility(sessions, NOW)
+    expect(split.recent.map((r) => r.sessionId)).toEqual([
+      ...Array.from({ length: 10 }, (_, i) => `p${i}`),
+      ...Array.from({ length: 10 }, (_, i) => `w${i}`),
+    ])
+    expect(split.older.map((r) => r.sessionId)).toEqual(['w10', 'w11'])
+  })
+})
+
+describe('sidebarArchivedFilterOf（归档过滤投影——D45 扩面：项目域 + 会话域双口径）', () => {
+  function srow(sessionId: string, archived = false): SidebarSessionRow {
+    return { sessionId, title: `行${sessionId}`, savedTitle: `行${sessionId}`, status: 'idle', updatedAt: 1, pinned: false, archived }
+  }
+  const tree: readonly SidebarProjectNode[] = [
+    { projectId: 'p1', workspaceId: 'w1', name: '活跃', wsPath: 'Z:/w/p1', archived: false, sessions: [] },
+    { projectId: 'p2', workspaceId: 'w2', name: '已归档', wsPath: 'Z:/w/p2', archived: true, sessions: [] },
+  ]
+
+  it('default = 原引用返回（现行行为——全显含归档弱化）', () => {
+    expect(sidebarArchivedFilterOf('default', tree)).toBe(tree)
+  })
+
+  it('hide = 滤除归档项目；only = 仅归档项目', () => {
+    expect(sidebarArchivedFilterOf('hide', tree).map((n) => n.projectId)).toEqual(['p1'])
+    expect(sidebarArchivedFilterOf('only', tree).map((n) => n.projectId)).toEqual(['p2'])
+  })
+
+  it('D45 会话域：hide = 项目内归档会话行滤除（活跃项目混合行差集派生）', () => {
+    const mixed: readonly SidebarProjectNode[] = [
+      {
+        projectId: 'p1',
+        workspaceId: 'w1',
+        name: '活跃',
+        wsPath: 'Z:/w/p1',
+        archived: false,
+        sessions: [srow('s1'), srow('s2', true), srow('s3')],
+      },
+    ]
+    expect(sidebarArchivedFilterOf('hide', mixed)[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1', 's3'])
+    // 全保留 = 节点原样引用（零派生——纯投影快径）
+    expect(sidebarArchivedFilterOf('hide', mixed)[0]).not.toBe(mixed[0])
+    const clean: readonly SidebarProjectNode[] = [
+      { ...mixed[0]!, sessions: [srow('s1'), srow('s3')] },
+    ]
+    expect(sidebarArchivedFilterOf('hide', clean)[0]).toBe(clean[0])
+  })
+
+  it('D45 会话域：only = 项目内仅归档会话行（归档项目 + 归档行同口径）', () => {
+    const withSessions: readonly SidebarProjectNode[] = [
+      {
+        projectId: 'p1',
+        workspaceId: 'w1',
+        name: '活跃',
+        wsPath: 'Z:/w/p1',
+        archived: false,
+        sessions: [srow('s1'), srow('s2', true)],
+      },
+      {
+        projectId: 'p2',
+        workspaceId: 'w2',
+        name: '归档',
+        wsPath: 'Z:/w/p2',
+        archived: true,
+        sessions: [srow('s3'), srow('s4', true)],
+      },
+    ]
+    const only = sidebarArchivedFilterOf('only', withSessions)
+    expect(only.map((n) => n.projectId)).toEqual(['p2'])
+    expect(only[0]!.sessions.map((r) => r.sessionId)).toEqual(['s4'])
+    // hide：活跃项目滤归档行 + 归档项目整块离场
+    const hide = sidebarArchivedFilterOf('hide', withSessions)
+    expect(hide.map((n) => n.projectId)).toEqual(['p1'])
+    expect(hide[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
+  })
+})
+
+describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42）', () => {
+  function frow(sessionId: string, title: string, status: SidebarSessionRow['status'], updatedAt: number, overrides: Partial<SidebarSessionRow> = {}): SidebarSessionRow {
+    return { sessionId, title, savedTitle: title, status, updatedAt, pinned: false, archived: false, ...overrides }
+  }
+  const tree: readonly SidebarProjectNode[] = [
+    {
+      projectId: 'p1',
+      workspaceId: 'w1',
+      name: '支付网关',
+      wsPath: 'Z:/w/p1',
+      archived: false,
+      sessions: [
+        frow('s1', '登录修复', 'attention', 100),
+        frow('s2', '索引重建', 'running', 300),
+      ],
+    },
+    {
+      projectId: 'p2',
+      workspaceId: 'w2',
+      name: '文档站',
+      wsPath: 'Z:/w/p2',
+      archived: false,
+      sessions: [
+        frow('s3', '文档补全', 'done', 200),
+      ],
+    },
+  ]
+
+  it('摊平跨项目 + updatedAt 降序（官方 FlatList updated 序同型）+ projectName 随行', () => {
+    const rows = sidebarFlatRowsOf(tree)
+    expect(rows.map((r) => r.sessionId)).toEqual(['s2', 's3', 's1'])
+    expect(rows[0]).toEqual({
+      projectId: 'p1',
+      projectName: '支付网关',
+      sessionId: 's2',
+      title: '索引重建',
+      savedTitle: '索引重建',
+      status: 'running',
+      updatedAt: 300,
+      pinned: false,
+      archived: false,
+    })
+  })
+
+  it('时序平手 → 稳定序（保留工作区序）', () => {
+    const tie: readonly SidebarProjectNode[] = [
+      {
+        projectId: 'p1',
+        workspaceId: 'w1',
+        name: '甲',
+        wsPath: 'Z:/w/p1',
+        archived: false,
+        sessions: [
+          frow('a1', '行一', 'idle', 5),
+          frow('a2', '行二', 'idle', 5),
+        ],
+      },
+    ]
+    expect(sidebarFlatRowsOf(tie).map((r) => r.sessionId)).toEqual(['a1', 'a2'])
+  })
+
+  it('D45：置顶行跨项目领先（置顶集序 = 最近置顶在前；非置顶行保持 updated 降序）', () => {
+    const pinnedTree: readonly SidebarProjectNode[] = [
+      {
+        projectId: 'p1',
+        workspaceId: 'w1',
+        name: '支付网关',
+        wsPath: 'Z:/w/p1',
+        archived: false,
+        sessions: [
+          frow('s1', '登录修复', 'attention', 100),
+          frow('s2', '索引重建', 'running', 300, { pinned: true }),
+        ],
+      },
+      {
+        projectId: 'p2',
+        workspaceId: 'w2',
+        name: '文档站',
+        wsPath: 'Z:/w/p2',
+        archived: false,
+        sessions: [
+          frow('s3', '文档补全', 'done', 200, { pinned: true }),
+          frow('s4', '新页', 'idle', 400),
+        ],
+      },
+    ]
+    // 置顶两行领先（置顶行间 = 树迭代序——registry 置顶时序不进树，P1 逼近面）；
+    // 非置顶行 updated 降序（s4 > s1）
+    expect(sidebarFlatRowsOf(pinnedTree).map((r) => r.sessionId)).toEqual(['s2', 's3', 's4', 's1'])
+  })
+
+  it('过滤：空查询原引用；标题/项目名命中；全不命中空集', () => {
+    const rows = sidebarFlatRowsOf(tree)
+    expect(sidebarFlatFilterOf('  ', rows)).toBe(rows)
+    expect(sidebarFlatFilterOf('索引', rows).map((r) => r.sessionId)).toEqual(['s2'])
+    expect(sidebarFlatFilterOf('文档站', rows).map((r) => r.sessionId)).toEqual(['s3']) // 项目名命中 → 全行在场
+    expect(sidebarFlatFilterOf('不存在', rows)).toEqual([])
+  })
+})
+
+describe('sidebarSectionLabelOf（段头标签——官方 groupBy 切换同型）', () => {
+  it('tree → 「项目」/ flat → 「会话」', () => {
+    expect(sidebarSectionLabelOf({ groupBy: 'tree', archivedFilter: 'default' })).toBe('项目')
+    expect(sidebarSectionLabelOf({ groupBy: 'flat', archivedFilter: 'default' })).toBe('会话')
+  })
+})
+
+// ─────────────────────────── S7 派发循环会话徽标（§2.4 判据换源：forge-dispatch-events 投影窄读派生三态） ───────────────────────────
+
+describe('sessionLoopBadge（forge-dispatch-events 投影键账本行窄读——三态徽标派生）', () => {
+  /** 账本行构造（projectionValues = 上行宿主投影整值注入位） */
+  function ledgerRow(projectionValues: unknown): LedgerSessionRow {
+    return {
+      id: 's-loop',
+      displayTitle: '派发会话',
+      updatedAt: 1_700_000_000_000,
+      ...(projectionValues !== undefined ? { projectionValues: projectionValues as LedgerSessionRow['projectionValues'] } : {}),
+    }
+  }
+
+  /** 进度条目构造（载荷消费切片——scenario/verb 驱动映射判定） */
+  function entry(overrides: { sourceSlug?: string; verb?: string; status?: string; scenario?: string; at?: number } = {}): unknown {
+    return {
+      sourceSlug: 'feat-x',
+      verb: 'claim',
+      status: 'running',
+      at: 1_700_000_000_000,
+      ...overrides,
+    }
+  }
+
+  it('场景码 → 三态映射表：FORGE_PROGRESS_SCENARIOS 单源镜像全键覆盖（终态族 5 + suspend 族 4 + 其余 running）', () => {
+    const phases = Object.values(FORGE_LOOP_SCENARIO_PHASE)
+    expect(Object.keys(FORGE_LOOP_SCENARIO_PHASE)).toHaveLength(26)
+    expect(phases.filter((p) => p === 'terminal')).toEqual(['terminal', 'terminal', 'terminal', 'terminal', 'terminal'])
+    expect(phases.filter((p) => p === 'suspended')).toHaveLength(4)
+    // 终态族逐值断言（无 "settled"——提案 §2.4 明示）。bug 6d98a275 验证 M2：orphan-reconciled
+    // 是任务级事件（携 taskKey）且循环随即 claim-resume——映射 running 不映射 terminal
+    // （否则最近事件定相位的徽标在回收后到首个 claim 前误显「循环已结束」）
+    expect(FORGE_LOOP_SCENARIO_PHASE['loop/finish-all']).toBe('terminal')
+    expect(FORGE_LOOP_SCENARIO_PHASE['loop/halt']).toBe('terminal')
+    expect(FORGE_LOOP_SCENARIO_PHASE['loop/timeout']).toBe('terminal')
+    expect(FORGE_LOOP_SCENARIO_PHASE['loop/stopped']).toBe('terminal')
+    expect(FORGE_LOOP_SCENARIO_PHASE['loop/orphan-reconciled']).toBe('running')
+    // 越径结算（settle/out-of-band）：补发门① registryEmpty 判——循环确已不在场 → terminal
+    expect(FORGE_LOOP_SCENARIO_PHASE['settle/out-of-band']).toBe('terminal')
+    // suspend 族逐场景断言：四径载荷均携 taskKey（driver suspendWithWakeup）= 非 loop 级，
+    // 但驱动器挂起退出待处置 → 循环级效果映射挂起态
+    expect(FORGE_LOOP_SCENARIO_PHASE['suspend/spawn-rate-limited']).toBe('suspended')
+    expect(FORGE_LOOP_SCENARIO_PHASE['suspend/worker-rate-limited']).toBe('suspended')
+    expect(FORGE_LOOP_SCENARIO_PHASE['suspend/abort-over-limit']).toBe('suspended')
+    expect(FORGE_LOOP_SCENARIO_PHASE['suspend/landing-rejected']).toBe('suspended')
+  })
+
+  /** 投影整值注入（entries/total 包进 forge-dispatch-events 键——账本行 projectionValues 形状） */
+  function view(entries: unknown[]): Record<string, unknown> {
+    return { 'forge-dispatch-events': { entries, total: entries.length } }
+  }
+
+  it('最近事件场景码判定：startup/claim/task/blocked/retry/pool → running；终态族 → terminal', () => {
+    expect(sessionLoopBadge(ledgerRow(view([entry({ scenario: 'startup/from-scratch', verb: 'startup' })])))).toEqual({
+      status: 'running',
+      slug: 'feat-x',
+    })
+    expect(
+      sessionLoopBadge(
+        ledgerRow(view([
+          entry({ scenario: 'startup/from-scratch', verb: 'startup' }),
+          entry({ scenario: 'claim/new', verb: 'claim', at: 2 }),
+        ])),
+      ),
+    ).toEqual({ status: 'running', slug: 'feat-x' })
+    // 终态持续保留（D2）：终态事件即最后一枚 → terminal 徽标在列不消失
+    expect(
+      sessionLoopBadge(
+        ledgerRow(view([
+          entry({ scenario: 'startup/from-scratch', verb: 'startup' }),
+          entry({ scenario: 'loop/finish-all', verb: 'finish-all', status: 'completed', at: 3 }),
+        ])),
+      ),
+    ).toEqual({ status: 'terminal', slug: 'feat-x' })
+  })
+
+  it('suspend 族 → suspended 琥珀静态缘判定（携 taskKey 的挂起径事件）', () => {
+    expect(
+      sessionLoopBadge(
+        ledgerRow({
+          'forge-dispatch-events': {
+            entries: [
+              entry({ scenario: 'startup/from-scratch', verb: 'startup' }),
+              {
+                sourceSlug: 'feat-x',
+                verb: 'suspend',
+                status: 'blocked',
+                scenario: 'suspend/worker-rate-limited',
+                taskKey: 'feat-x/1.2',
+                at: 2,
+              },
+            ],
+            total: 2,
+          },
+        }),
+      ),
+    ).toEqual({ status: 'suspended', slug: 'feat-x' })
+  })
+
+  it('多容器并行按 sourceSlug 归属（slug = 判定事件载荷值）', () => {
+    expect(
+      sessionLoopBadge(
+        ledgerRow({
+          'forge-dispatch-events': {
+            entries: [
+              entry({ sourceSlug: 'feat-a', scenario: 'startup/from-scratch', verb: 'startup' }),
+              entry({ sourceSlug: 'feat-b', scenario: 'loop/halt', verb: 'halt', status: 'blocked', at: 2 }),
+            ],
+            total: 2,
+          },
+        }),
+      ),
+    ).toEqual({ status: 'terminal', slug: 'feat-b' })
+  })
+
+  it('场景码缺席（旧载荷兼容）→ verb 兜底判定', () => {
+    expect(loopPhaseOfEntry({ verb: 'halt' })).toBe('terminal')
+    expect(loopPhaseOfEntry({ verb: 'timeout' })).toBe('terminal')
+    expect(loopPhaseOfEntry({ verb: 'finish-all' })).toBe('terminal')
+    expect(loopPhaseOfEntry({ verb: 'suspend' })).toBe('suspended')
+    expect(loopPhaseOfEntry({ verb: 'claim' })).toBe('running')
+    expect(loopPhaseOfEntry({ verb: 'unknown-legacy', scenario: 'not-in-table' })).toBe('running')
+  })
+
+  it('窗口挤出退化：entries 空 + total > 0 → 零徽标（未知，不误报 running）；total = 0 → 零徽标（从未循环）', () => {
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': { entries: [], total: 37 } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': { entries: [], total: 0 } }))).toBeUndefined()
+  })
+
+  it('键缺席/值形状漂移/它键投影/畸形条目 = 零徽标（防御读——形状漂移不炸面板）', () => {
+    expect(sessionLoopBadge(ledgerRow(undefined))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({}))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ plan: { active: true, pending: false } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow('garbage'))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': 'garbage' }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': { entries: 'x', total: 1 } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': { entries: [], total: 'x' } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': { entries: [42, { verb: 'claim' }], total: 2 } }))).toBeUndefined()
+  })
+
+  it('buildSidebarTree：循环徽标随树行携带（账本 projectionValues → 视图行 loop）', () => {
+    const tree = buildSidebarTree({
+      projects: [{ id: 'p1', workspaceId: 'w1', name: '支付网关', wsPath: 'Z:/w/p1', archived: false } as never],
+      sessions: {
+        ids: ['s-loop'],
+        byId: {
+          's-loop': {
+            id: 's-loop',
+            displayTitle: '派发会话',
+            updatedAt: 1_700_000_000_000,
+            projectionValues: {
+              'forge-dispatch-events': {
+                entries: [entry({ scenario: 'startup/from-scratch', verb: 'startup' })],
+                total: 1,
+              },
+            },
+          },
+        },
+        phase: 'ready',
+      },
+      workspaces: { items: [{ workspaceId: 'w1', sessionIds: ['s-loop'] }] },
+    })
+    expect(tree.tree[0]?.sessions[0]?.loop).toEqual({ status: 'running', slug: 'feat-x' })
+  })
+
+  it('sidebarFlatRowsOf：loop 随平铺行携带（树/平铺同语言——两视图徽标一致）', () => {
+    const node: SidebarProjectNode = {
+      projectId: 'p1',
+      workspaceId: 'w1',
+      name: '支付网关',
+      wsPath: 'Z:/w/p1',
+      archived: false,
+      sessions: [
+        { sessionId: 's1', title: '普通', savedTitle: '普通', status: 'idle', updatedAt: 100, pinned: false, archived: false },
+        {
+          sessionId: 's2',
+          title: '派发会话',
+          savedTitle: '派发会话',
+          status: 'running',
+          updatedAt: 300,
+          pinned: false,
+          archived: false,
+          loop: { status: 'suspended', slug: 'feat-x' },
+        },
+      ],
+    }
+    const rows = sidebarFlatRowsOf([node])
+    expect(rows.find((r) => r.sessionId === 's2')?.loop).toEqual({ status: 'suspended', slug: 'feat-x' })
+    expect(rows.find((r) => r.sessionId === 's1')?.loop).toBeUndefined()
+  })
+
+  it('R2 语义层：状态词三态 + aria-label =「任务源 slug + 状态词」（无 slug 回退状态词——徽标退役词不消失）', () => {
+    expect(sessionLoopStatusLabel('running')).toBe('派发循环中')
+    expect(sessionLoopStatusLabel('suspended')).toBe('循环挂起')
+    expect(sessionLoopStatusLabel('terminal')).toBe('循环已结束')
+    expect(sessionLoopAriaLabel({ status: 'running', slug: 'feat-x' })).toBe(
+      '任务源 feat-x · 状态 派发循环中',
+    )
+    expect(sessionLoopAriaLabel({ status: 'terminal', slug: 'feat-y' })).toBe(
+      '任务源 feat-y · 状态 循环已结束',
+    )
+    expect(sessionLoopAriaLabel({ status: 'suspended', slug: null })).toBe('循环挂起')
+  })
+})
+
+describe('project-manual-order 1.2（sidebarProjectReorderOf / projectSortOrdersPatchOf——拖拽写回纯函数面）', () => {
+  it('上下换位：拖拽行落入目标槽位（目标行及其后整体后移）', () => {
+    expect(sidebarProjectReorderOf(['a', 'b', 'c', 'd'], 'a', 'c')).toEqual(['b', 'a', 'c', 'd'])
+    expect(sidebarProjectReorderOf(['a', 'b', 'c', 'd'], 'd', 'b')).toEqual(['a', 'd', 'b', 'c'])
+  })
+
+  it('零效果面：同行自拖 / 任一 id 不在全序 → null（不产生 update 调用）', () => {
+    expect(sidebarProjectReorderOf(['a', 'b'], 'a', 'a')).toBeNull()
+    expect(sidebarProjectReorderOf(['a', 'b'], 'ghost', 'a')).toBeNull()
+    expect(sidebarProjectReorderOf(['a', 'b'], 'a', 'ghost')).toBeNull()
+  })
+
+  it('P2 保序子列：归档混排全序中拖拽后，hide 过滤视图序 = 全序的子列投影（归档行序位不丢）', () => {
+    // 全序含归档行（arch）——σ 无归档专属分支
+    const full = sidebarProjectReorderOf(['a', 'arch', 'b', 'c'], 'c', 'a')!
+    expect(full).toEqual(['c', 'a', 'arch', 'b'])
+    // hide 视图（滤除归档）= 全序保序子列
+    const hidden = full.filter((id) => id !== 'arch')
+    expect(hidden).toEqual(['c', 'a', 'b'])
+    // 归档行相对位置未受拖拽扰动（hide 切回 default 后序位不丢）
+    expect(full.indexOf('arch')).toBe(2)
+  })
+
+  it('P3 全量重编号负载：值恰为 1..n 无重复；同 σ 重复产出逐位一致（幂等）', () => {
+    const order = ['p3', 'p1', 'p2']
+    const patch = projectSortOrdersPatchOf(order)
+    expect(patch).toEqual({ p3: 1, p1: 2, p2: 3 })
+    expect(Object.values(patch).sort((a, b) => a - b)).toEqual([1, 2, 3])
+    expect(projectSortOrdersPatchOf(order)).toEqual(patch)
+  })
+})

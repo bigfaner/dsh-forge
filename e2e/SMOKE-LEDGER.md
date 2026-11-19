@@ -163,3 +163,20 @@
 - **flywheel dogfood（留痕 skip ×1）**：真实模型凭据缺席口径（§6 4.2 行），零凭据 Hard Rule。
 - **installer-smoke NSIS（留痕 skip ×1）**：安装包未构建（`release/installer/`），§6 归并行口径。
 - 背书对账：全量迁移批（53 spec / 159 用例，workers=2，E2E_TMP_ROOT 短路径态）skip 面 = 上列 2 skip，fixme 面 = 上列 2 fixme，零未背书残留。留痕 `proposals/e2e-known-reds-triage/walkthrough/013-final-batch/`。
+
+## 8. forge-combo 真机收口套件（plugin-forge-combo 1.5——条件 skip 留痕）
+
+- 套件：`tests/forge/forge-desktop-install-minchain/`（CT-DISK-*）、`tests/forge/forge-npm-profile-minchain/`（CT-NPM-*）——desktop-journeys Playwright project（testDir ../tests 既有注册）。
+- **整组 skip 门**：`FORGE_COMBO_E2E=1` 未置位即整组 skip（真机收口轮 1.7 专用——隔离 `FORGE_COMBO_DSH_HOME` + 安装产物 exe `FORGE_COMBO_DESKTOP_EXE`；支撑层环境面正本 = `e2e/support/forge-combo.ts` 头注）。常规跑批恒 skip，非失败态。
+- **段级 skip 门**：①最小链派发（CT-DISK-03 #step-6/#step-7）= 真实模型凭据门（flywheel §6 4.2 口径）；②CT-NPM-03 web 校准轮 = `FORGE_COMBO_WEB_LOOP=1`；③CT-NPM-04 = `FORGE_COMBO_NPM_PROJECT_KEY`（收口执行体完成真机 agent 交互后置位）。
+
+## 9. host-integration-fixes 1.10 旅程套件（条件 skip 留痕）
+- 套件：`tests/web/overview-tab-dual-form/`（CT-OVERVIEW-*）、`tests/project/add-project-wizard-derive-row/`（CT-DERIVE-*，launchHost dev 基座直驱，无总门）、`tests/knowledge/knowledge-backfill-fresh-registry/`（CT-KBACKFILL-*）。Playwright project = desktop-journeys（testDir ../tests 既有注册）。
+- CT-OVERVIEW-1 / CT-DERIVE-1/2/4 / CT-KBACKFILL-5 = 实跑用例；舞台/环境缺席时留痕 skip（官方宿主舞台 = `E2E_OFFICIAL_WEB_URL`，实体包双校 = `E2E_OFFICIAL_DSH_HOME`）。
+- 留痕 skip 清单（通道缺失记账，非退役候选）：
+  - CT-OVERVIEW-2/3/6（后装切换/运行期卸载/重装回切）：官方宿主 plugin-manager 运行期卸载/重装驱动序列未移植（通道名不臆造）。
+  - CT-OVERVIEW-4/5、CT-DERIVE-3（单装组合）：隔离 dsh-home + 单插件安装环境 = 真机收口轮构造。
+  - CT-KBACKFILL-1/2/4（全新 registry 回填/幂等重启/face 缺席 fail-soft）：全新 registry 隔离环境 = 真机收口轮构造；共享舞台 registry 不可清空重置。
+  - CT-KBACKFILL-3（会话中期新注册双态）：②次装载期归舞台管理（宿主 = harness 域外进程——a-faces CT-J2-E5 同判例）。
+  - AN-7/AN-11 diag 日志面取证（CT-DERIVE-2-O1 / CT-KBACKFILL-1-O1 diag 半断言）：emitDiag → main appender 日志定位通道未核销——真机收口轮承载。
+- 锚 divergence 上报（fix/disc 归 fix 链承载，spec 以实锚断言，详见各 spec 头锚核对节）：disc-HIF-A-1/A-2/A-3（AN-2/AN-3/AN-4）、disc-HIF-B-1/B-2（AN-5/AN-6/降级「—」字面）、disc-HIF-C-1/C-2/C-3（AN-9/AN-10/契约文档编码缺陷）。

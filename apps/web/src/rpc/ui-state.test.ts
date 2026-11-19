@@ -48,8 +48,11 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_BUG_SUMMARY_TOO_LONG: 'error-bar',
   ERR_BUG_ALREADY_RESOLVED: 'error-bar',
   ERR_COMMIT_HASH_REQUIRED: 'error-bar',
-  // bug-recurrence-chain（复发链挂链写径）——悬空引用错误条
+  // bug-recurrence-chain（复发链挂链写径）——悬空引用/弱引用格式非法错误条
   ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
+  ERR_BUG_RECURRENCE_INVALID: 'error-bar',
+  // plugin-project 1.11 归拢（host/bugs 行级归属键闸门）——派生失败错误条
+  ERR_BUG_PROJECT_KEY_REQUIRED: 'error-bar',
   // dispatch-loop-hardening 改进 5（addTask caller 身份分流）——worker 拒收错误条
   ERR_WORKER_ADDTASK_DENIED: 'error-bar',
   // session-binding-guarantee W2 / bug 4a30b193——创建入口显式拒绝错误条
@@ -73,6 +76,36 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_PHASE_GATE_UNSETTLED: 'error-bar',
   ERR_BLOCK_SOURCE_IN_PROGRESS: 'error-bar',
   ERR_BLOCK_SOURCE_TERMINAL: 'error-bar',
+  // ── plugin-spec 1.4（spec 域 typed 码池 + tool 入参收窄）──
+  ERR_SPEC_NOT_FOUND: 'empty-state',
+  ERR_SPEC_GOALS_EMPTY: 'error-bar',
+  ERR_SPEC_CRITERION_EMPTY: 'error-bar',
+  ERR_SPEC_TIERS_INVALID: 'error-bar',
+  ERR_SPEC_DUPLICATE_SLUG: 'error-bar',
+  ERR_SPEC_DUPLICATE_DOC_PATH: 'error-bar',
+  ERR_SPEC_PROJECT_KEY_DERIVATION: 'error-bar',
+  ERR_SPEC_ARCHIVED_FROZEN: 'error-bar',
+  ERR_SPEC_ILLEGAL_TRANSITION: 'error-bar',
+  ERR_SPEC_REJECT_NOTE_REQUIRED: 'error-bar',
+  ERR_SPEC_ACTOR_INVALID: 'error-bar',
+  ERR_SPEC_DOC_WRITE: 'error-bar',
+  ERR_TOOL_ARGS_INVALID: 'error-bar',
+  // ── plugin-spec-roadmaps 1.5–1.8（goal 终审/复核 + 生命周期 + roadmap/milestone 服务域）──
+  ERR_SPEC_GOAL_ILLEGAL_TRANSITION: 'error-bar',
+  ERR_SPEC_GOAL_REJECT_NOTE_REQUIRED: 'error-bar',
+  ERR_SPEC_GOAL_NOT_FOUND: 'empty-state',
+  ERR_SPEC_REVIEW_GAP_NOTE_REQUIRED: 'error-bar',
+  ERR_SPEC_REVIEW_GOAL_NOT_REVIEWING: 'error-bar',
+  ERR_SPEC_REVIEW_KIND_INVALID: 'error-bar',
+  ERR_SPEC_ROADMAP_UNKNOWN: 'empty-state',
+  ERR_SPEC_ROADMAP_TERMINAL: 'error-bar',
+  ERR_SPEC_MILESTONE_UNKNOWN: 'empty-state',
+  ERR_SPEC_MILESTONE_PROJECT_MISMATCH: 'error-bar',
+  ERR_SPEC_MOVE_ANCHOR_INVALID: 'error-bar',
+  ERR_SPEC_AC_INVALID: 'error-bar',
+  ERR_SPEC_AC_ADDRESS_UNKNOWN: 'error-bar',
+  ERR_SPEC_CONFIRM_NOT_ACHIEVED: 'error-bar',
+  ERR_SPEC_INCLUDE_UNKNOWN: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

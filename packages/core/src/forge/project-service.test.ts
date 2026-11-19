@@ -9,9 +9,8 @@ import Database from 'better-sqlite3'
 import { openDatabase } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { createProjectService, defaultWorktreeDir, type ProjectServiceDeps, type RegisteredProject } from './project-service.js'
-import { deriveDirName } from './workspace/derive-dir.js'
+import { deriveDirName, normalizeFsPath } from '@dsh-forge/lib-path'
 import { selectMainWorktree, type GitIdentityPort, type WorktreeEntry } from './workspace/identity-anchor.js'
-import { normalizeFsPath } from '@dsh-forge/path-key'
 import { SuspectedMoveError } from './workspace/errors.js'
 import type { WorkspaceRenamePort } from './registry.js'
 // registry 桩（G1 pin 4 语义）——fix-34 收编 testutil 单份（注入面 superset）；
@@ -246,6 +245,8 @@ describe('AC3 ③ 写入失败（模拟）→ ④ 补偿删除，dsh 零孤儿�
     expect(err).toBeInstanceOf(ProjectWriteError)
     const pwe = err as ProjectWriteError
     expect(pwe.code).toBe('ERR_PROJECT_WRITE')
+    // 65e7a104 可见性钉：writeCause 经 data.writeError 过桥保真（桥序列化剥 cause 链——文本入 data）
+    expect(String(pwe.data.writeError).length).toBeGreaterThan(0)
     expect(pwe.data.compensated).toEqual({
       workspaceId: expect.any(String) as string,
       reason: expect.stringContaining('写入失败') as string,
@@ -656,6 +657,18 @@ describe('fix-39 注册链目录自愈（② 前置步）', () => {
     expect(readRows(db)).toEqual([])
   })
 
+  it('forgeDir 空串（未指定）→ 注册全跳成功（65e7a104 真因钉：空串不进 mkdirSync）', async () => {
+    const { db, registry, service } = setup()
+    const r = await service.registerProject({
+      workspaceDir: join(WS_ROOT, 'ws-empty-forge'),
+      name: 'ef',
+      forgeDir: '',
+    })
+    expect(r.attachedToExisting).toBe(false)
+    expect(registry.createCalls).toHaveLength(1) // ② 正常执行——空串 forgeDir 不再前置炸
+    expect(readRows(db)).toHaveLength(1) // ③ 写入成功
+  })
+
   it('forgeDir 建失败（父级为普通文件）→ ProjectWriteError 前置（建失败沿现行六码面，不扩码）', async () => {
     const { db, registry, service } = setup()
     const parentFile = join(WS_ROOT, 'forge-parent-file')
@@ -668,7 +681,13 @@ describe('fix-39 注册链目录自愈（② 前置步）', () => {
       })
       .catch((e) => e)
     expect(err).toBeInstanceOf(ProjectWriteError)
-    expect((err as ProjectWriteError).code).toBe('ERR_PROJECT_WRITE')
+    const pwe = err as ProjectWriteError
+    expect(pwe.code).toBe('ERR_PROJECT_WRITE')
+    // 65e7a104 可见性钉：stage 判别标记 + writeError 进 data（过桥保真——现场直接可诊断）
+    expect(pwe.data.stage).toBe('dirs-ensure')
+    expect(String(pwe.data.writeError).length).toBeGreaterThan(0)
+    expect(pwe.message).toContain('注册目录落盘失败')
+    expect(pwe.message).not.toContain('应用库 projects 行写入失败')
     expect(registry.createCalls).toEqual([]) // ② 前置失败——dsh 侧零副作用、零补偿需要
     expect(readRows(db)).toEqual([])
   })

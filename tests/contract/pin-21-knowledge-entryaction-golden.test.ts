@@ -14,7 +14,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { KNOWLEDGE_CHANNELS } from '../../packages/contracts/src/channels.js'
-import type { BrowseKnowledgeService } from '../../packages/plugins/knowledge/src/service/types.js'
+import type { BrowseKnowledgeService } from '../../plugins/knowledge/host/service/types.js'
 import { ROOT } from './pins.js'
 
 const FIXTURES_DIR = join(ROOT, 'e2e/support/knowledge-golden/fixtures')
@@ -90,7 +90,7 @@ describe('SA-1 七通道 ↔ 服务面方法一一对应（防 Pick 漏扩致通
   })
 
   it('门面方法在位：service/types.ts KnowledgeService 声明行逐法机械审计', () => {
-    const src = readSrc('packages/plugins/knowledge/src/service/types.ts')
+    const src = readSrc('plugins/knowledge/host/service/types.ts')
     for (const methods of Object.values(CHANNEL_FACADE_METHODS)) {
       for (const method of methods) {
         expect(src, `KnowledgeService.${method} 声明行缺席（服务面漏扩）`).toMatch(
@@ -122,7 +122,7 @@ describe('SA-1 七通道 ↔ 服务面方法一一对应（防 Pick 漏扩致通
 })
 
 describe('SA-2 码集 ↔ 夹具一一对应（防删码不删夹具、加码不加样例）', () => {
-  const dtoSrc = readSrc('packages/contracts/src/dto/knowledge.ts')
+  const dtoSrc = readSrc('lib/api/src/dto/knowledge.ts')
   const failureCodes = unionLiterals(dtoSrc, 'EntryActionFailureCode')
   const rejectCodes = unionLiterals(dtoSrc, 'EntryActionRequestRejectCode')
   const allCodes = [...failureCodes, ...rejectCodes].sort()

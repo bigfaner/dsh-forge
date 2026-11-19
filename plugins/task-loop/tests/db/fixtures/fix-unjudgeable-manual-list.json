@@ -1,0 +1,18 @@
+{
+  "category": "fix-unjudgeable-manual-list",
+  "description": "判例③：不可判入人工清单——fix-% 行反查零候选或多候选（禁任取一条），禁自动置 NULL（entities.md §3.1 迁移注记）。",
+  "expectation": "fix-4（多候选）与 fix-5（零候选）两行均入人工清单，fix_of_task_id 保持未定，禁静默截断。",
+  "oldDb": {
+    "tasks": [
+      { "id": "gamma:2.1", "slug": "gamma", "local_id": "2.1", "title": "候选甲", "task_type": "coding-feature", "task_status": "blocked", "source_task_id": null, "source_kind": null, "source_id": null, "mode": null, "created_at": "2026-11-03T10:00:00.000Z", "updated_at": "2026-11-03T11:00:00.000Z" },
+      { "id": "gamma:2.2", "slug": "gamma", "local_id": "2.2", "title": "候选乙", "task_type": "coding-feature", "task_status": "blocked", "source_task_id": null, "source_kind": null, "source_id": null, "mode": null, "created_at": "2026-11-03T10:30:00.000Z", "updated_at": "2026-11-03T11:30:00.000Z" },
+      { "id": "gamma:fix-4", "slug": "gamma", "local_id": "fix-4", "title": "fix: 多候选", "task_type": "coding-fix", "task_status": "completed", "source_task_id": null, "source_kind": null, "source_id": null, "mode": null, "created_at": "2026-11-03T12:00:00.000Z", "updated_at": "2026-11-03T12:30:00.000Z" },
+      { "id": "gamma:fix-5", "slug": "gamma", "local_id": "fix-5", "title": "fix: 零候选", "task_type": "coding-fix", "task_status": "completed", "source_task_id": null, "source_kind": null, "source_id": null, "mode": null, "created_at": "2026-11-03T13:00:00.000Z", "updated_at": "2026-11-03T13:30:00.000Z" }
+    ],
+    "task_edges": [
+      { "task_id": "gamma:fix-4", "prerequisite_id": "gamma:2.1", "origin": "fix-chain", "created_at": "2026-11-03T12:00:00.000Z", "updated_at": "2026-11-03T12:00:00.000Z" },
+      { "task_id": "gamma:fix-4", "prerequisite_id": "gamma:2.2", "origin": "fix-chain", "created_at": "2026-11-03T12:01:00.000Z", "updated_at": "2026-11-03T12:01:00.000Z" }
+    ],
+    "task_records": []
+  }
+}

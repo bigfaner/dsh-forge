@@ -1,0 +1,7 @@
+# @dsh-forge/project 组合层：单行插入本包——host 半 apply 内域装配
+# （projects/worktrees/bugs/dirs 服务 provide + 通道族注册）随迁移任务逐批落位；
+# 浏览器半经 dsh.client.platform=web 由 modules 行扫描装载（./client = 自注册
+# CJS bundle）。
+- insert:
+    - id: project
+      name: '@dsh-forge/project'

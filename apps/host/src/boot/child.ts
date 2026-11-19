@@ -83,17 +83,9 @@ import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from
 import { apiLoopbackGuardListener } from './api-loopback-guard.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import { refreshKnowledgeBindings } from '../ipc/bindings.js'
-import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
-import {
-  createHostWorktreeRpc,
-  type LiveSessionFace,
-  type SessionControllerFace,
-  type SessionPersistenceFace,
-  type WorktreeRpcService,
-} from '../ipc/worktree-rpc.js'
-// fix-4：ctx.gitWorktree 具名消费的类型面（@dsh-forge/git-worktree declare module 扩充
-// @deepseek-ai/cordis Context——本 import 拉入扩充；type-only 官方包裁决同径）
-import type {} from '@dsh-forge/git-worktree'
+// 1.17 批二卸旧装新：worktree 域 host 侧装配段已下沉 @dsh-forge/project
+// host/assembly/host-side.ts——apps/host 只留注册行（装配逻辑零内联，AGENTS 1.3）。
+import { assembleProjectHostSide } from '@dsh-forge/project'
 import { type ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveMobileDistDir } from '../window/web-document.js'
 import { isDevProfile } from '../profile/paths.js'
@@ -103,12 +95,33 @@ import {
   createDiagContextStore,
   emitDiag,
   relayDiagOverBridge,
+  type DiagEventPayload,
 } from '../telemetry/index.js'
 import { attachGatewayFoldDiag, type GatewayFoldFace } from '../telemetry/gateway-fold.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
   get(name: string): unknown
+}
+
+/**
+ * forge-bundle-absent 诊断载荷投影（plugin-forge-combo fix-1 D3——CT-DISK-07 / CT-NPM-06
+ * 意向锚核销）：profile 装载期 skippedBundles 中的 @dsh-forge 裸包行（forge patch 五件插行
+ * 缺席面）逐件投影为诊断事件域载荷——event 'forge-bundle-absent'、message 携带缺席裸包名
+ * 与官方 skip reason。官方 reportSkippedBundles 只落 stderr，web 生境不可见——emitDiag
+ * 留痕为可见面兜底（AGENTS §7 诊断纪律：新增错误源 = 新增 emit 点）。
+ */
+export function forgeBundleAbsentPayloads(
+  skippedBundles: ReadonlyArray<{ packageName: string; reason: string }>,
+): DiagEventPayload[] {
+  return skippedBundles
+    .filter((bundle) => bundle.packageName.startsWith('@dsh-forge/'))
+    .map((bundle) => ({
+      level: 'warn' as const,
+      process: 'child' as const,
+      event: 'forge-bundle-absent',
+      message: `forge bundle absent: ${bundle.packageName} (${bundle.reason})`,
+    }))
 }
 
 /** cordis 可选具名服务惰性取法（AGENTS.md 裁决——具名访问 + 运行期存在性检查承担 fail-soft；
@@ -135,6 +148,43 @@ function toolNamesOf(face: ServiceGetFace): readonly string[] | undefined {
       .schemas()
       .map((s) => (typeof s.name === 'string' ? s.name : ''))
       .filter((name) => name !== '')
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * forge:bugs/* 通道供数缝（fix-20 bug 145b3d3b）：优先插件本地 forge.bugs 缝
+ * （@dsh-forge/project registerProjectSeams 常驻工厂——listBugs 读 project.db，与概览
+ * Bug 行集/写入缝同库）；插件缝缺席/劣形退 core forgeBugs（既有行为不变）。
+ * commitFiles/fileDiff 变更读面归宿主 git 面——插件缝不承载，typed 拒绝保通道注册完整。
+ */
+function forgeBugsServiceOf(face: ServiceGetFace): object | undefined {
+  try {
+    const seam = face.get('forge.bugs') as unknown
+    if (typeof seam === 'function') {
+      const service = (seam as () => unknown)() as
+        | { listBugs?: unknown; commitFiles?: unknown; fileDiff?: unknown }
+        | undefined
+      if (service !== undefined && typeof service.listBugs === 'function') {
+        if (typeof service.commitFiles === 'function' && typeof service.fileDiff === 'function') {
+          return service as object
+        }
+        const unavailable = (method: string) => async (): Promise<never> => {
+          throw new Error(`forge.bugs ${method} unavailable（变更读面归宿主 git 面——插件缝不承载）`)
+        }
+        return {
+          ...service,
+          ...(typeof service.commitFiles !== 'function' ? { commitFiles: unavailable('commitFiles') } : {}),
+          ...(typeof service.fileDiff !== 'function' ? { fileDiff: unavailable('fileDiff') } : {}),
+        }
+      }
+    }
+  } catch {
+    // 插件缝读取/实例化异常（插件行未装载/劣形）——退 core 供数缝
+  }
+  try {
+    return (face.get('forgeBugs') as object | undefined) ?? undefined
   } catch {
     return undefined
   }
@@ -311,9 +361,13 @@ async function main(): Promise<void> {
   const { dshAppBoot, runProfile } = await loadBootChain(options.profileDir)
   const profile = dshAppBoot.loadProfileDirectory('dsh', options.profileDir, options.installAnchor)
   dshAppBoot.reportSkippedBundles('dsh', profile)
+  // fix-1 D3：缺席 @dsh-forge 裸包行载荷在此预铸（ctx 于 runProfile 之后才可用）——
+  // relay 接线后逐件 emitDiag（forge-bundle-absent，诊断留痕可见面兜底）。
+  const forgeAbsentPayloads = forgeBundleAbsentPayloads(profile.skippedBundles)
   // 产品插件行 config 装配期注入（用户层之后应用的 patchFiles 叠层——见 overlay.ts 动机）
-  // M3 3.7 预设装配：四底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
-  // 注行产品工件（customSkillDirs 物化当形态绝对路径）；底稿缺席 fail-soft 不注行。
+  // M3 3.7 预设装配：三底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
+  // 注行产品工件（customSkillDirs 物化当形态绝对路径）；底稿缺席 fail-soft 不注行；
+  // 猎头模式预设自 expert-squad 0.30.0 起随插件包 bundle patch 注行（不在 overlay 面）。
   // 产品裁决（2026-10-09）：skillsDir 仅作预设 customSkillDirs[core] 物化锚——无全局
   // forge 技能行（forge 技能/工具仅预设组合）；用户裁决（2026-11-01）：标准模式放开
   // expert-squad 技能面——基础渲染 skill-filesystem 行仅挂 squadSkillsDir（overlay.ts）。
@@ -324,12 +378,17 @@ async function main(): Promise<void> {
   // 直读文件（core forgeSettings 服务尚未装配——本进程 runProfile 之前唯一读缝）；文件
   // 缺席/畸形 = 未开启（fail-soft 默认回环形制）。
   const remoteExpose = remoteApprovalEnabledOf(options.settingsFile)
-  // 1.7 git-worktree 插件行注行门（overlay 与装配段共用单源——插件在 profile 树才装载+注入）。
+  // 1.17 批二：@dsh-forge/project 插件行注行门（overlay 与装配段共用单源——插件在 profile
+  // 树才装载+注入；旧 @dsh-forge/git-worktree 包已退役，行装载切换至合并后的 project 包）。
   // 2026-10-18 打包启动崩 fix：探测改双形态（dev profile 树 ∪ installAnchor 邻接树——
   // productPackagePresent）。旧口径单探 profileDir/node_modules，而打包形态 profile 目录无
   // node_modules（anchor = {resources}/runtime/package.json 邻接拓扑）→ 包已 staging 也恒
   // false：不注行 + 装配段跳过 = 能力恒 absent，git 项目 W2 fail-closed 双入口拒绝。
-  const gitWorktreeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/git-worktree')
+  const gitWorktreeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/project')
+  // 1.15 退役批：@dsh-forge/task-loop 插件行注行门（gitWorktreeRow 双形态探测同径）——
+  // tasks 域服务 provide + 工具/技能/循环注册随包装载；host dist boot 链静态 import 本包
+  // （1.14 host 改指），staged:true 随包后打包形态恒在场，门仅兜 dev 树形态缺包不注行。
+  const taskLoopRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/task-loop')
   // mobile ask 桥插件行注行门（bug f73315a1——gitWorktreeRow 双形态探测同径）∪ dev 形态
   // 第三位：host 自身 node_modules（loader 进程解析根——dev workspace link 挂点）。
   let mobileBridgeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/mobile-bridge')
@@ -353,7 +412,8 @@ async function main(): Promise<void> {
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
     // 1.7 Q19：knowledge 行 config 注入退役（bindingsFile 缺席——纯 config 静态注入；
     // knowledgeRow 装载位另行上送 ready，不再注 overlay 行）
-    gitWorktreeRow, // 1.7 git-worktree 插件行注行门（dev 树 link 在场才注——打包形态暂不含该插件）
+    gitWorktreeRow, // 1.17 @dsh-forge/project 插件行注行门（dev 树 link 在场才注）
+    taskLoopRow, // 1.15 @dsh-forge/task-loop 插件行注行门（tasks 域随包装载——双形态探测同径）
     mobileBridgeRow, // mobile ask 桥插件行注行门（组合期 answerer 注册）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     remoteExpose, // fix-3 装配期绑定暴露缝（true = webserver 行覆写全卡绑定——重启生效）
@@ -364,7 +424,6 @@ async function main(): Promise<void> {
             ...presetPatches,
             coreSkillsDir: options.skillsDir, // customSkillDirs[core]（plugin-forge skills 同源）
             specSkillsDir: options.specSkillsDir, // customSkillDirs[spec]（缺席 = spec 技能面降级）
-            blitzSkillsDir: options.blitzSkillsDir, // customSkillDirs[blitz]（缺席 = blitz 技能面降级）
             squadSkillsDir: options.squadSkillsDir, // customSkillDirs[squad]（expert-squad——缺席 = squad 技能面降级）
             knowledgeSkillsDir: options.knowledgeSkillsDir, // customSkillDirs[knowledge]（1.9 A5——缺席 = knowledge 技能面降级）
             bindingsFile: options.bindingsFile, // fix-1/drift #9：预设行内产品行 config 物化（与全局行同值单源）
@@ -405,6 +464,15 @@ async function main(): Promise<void> {
   //   ③ fail-open 计数：拦截层降级放行每笔落诊断事件（UI 零呈现——方案 9）。
   const diagAls = createDiagContextStore()
   relayDiagOverBridge(ctx, (line) => send({ type: 'diag', line }), diagAls)
+  // fix-1 D3：装配期缺席诊断补发射（载荷预铸于 loadProfileDirectory 后）——
+  // 经 relay 半边回 main appender 单源落盘；异常不反压 boot 链（红线①同构）。
+  for (const payload of forgeAbsentPayloads) {
+    try {
+      emitDiag(ctx, payload)
+    } catch {
+      // 诊断面异常不反压 boot 链
+    }
+  }
   const failOpenDiag = (line: string): void => {
     diag(line) // 既有 harness.log 链保留（双轨兼容——评审 Note-2）
     try {
@@ -510,157 +578,24 @@ async function main(): Promise<void> {
   }
   // fix-25：cordis 服务解析窄面（/remote/__rpc 端点惰性取 forgeTasks/forgeProjects 只读切片）
   const servicesFace = ctx as unknown as ServiceGetFace
-  // fix-2：worktree RPC 域服务（gitWorktree 行在场时装配段构造——见下方装配块）
-  let worktreeRpcService: WorktreeRpcService | undefined
-  // worktree-branch-management 1.7 扩展点注入装配：插件行在 profile 树时，把归并实现 +
-  // worktree_dir 提供者注入插件缝服务（函数值扩展点不可经 YAML config 承载——cordis ctx
-  // 服务面唯一跨插件缝；插件惰性 reflect.get 消费，激活早于本 provide 不受阻）。
-  // forgeProjects 缺席 / provide 失败 = 零注入 fail-soft（插件退默认实现 = 独立 worktree 模式）。
-  // 1.7 扩展点注入装配（见上）+ fix-2 装配缺口承接（同门单源）：
-  //   ① forgeWorktree 桥服务——worktree RPC 通道域本体（ipc/worktree-rpc 透传插件域 ops
-  //      + 挂靠事件唯一写入口 + 建会话 meta.cwd 注入 + 封存判定快照）；gitWorktree 能力
-  //      服务惰性取法（在场性探测后台收口——provide 晚于本装配段可达）。
-  //   ② 发送拦截——assertSendable 接入 host 消息处理链（sessionController.prompt/
-  //      updateQueue 前置封存校验，封存会话 host 拒绝 + 明确错误提示——「不可发送」硬保证）。
-  //   缺席/失败 = 零装配 fail-soft（通道未注册、拦截不接线——宿主不受影响）。
+  // 1.17 批二装配缝下沉（卸旧装新）：worktree 域 host 侧装配段——①扩展点注入
+  // （forgeWorktreeIdentity provide）②forgeWorktree 桥服务装配（worktree RPC 通道域
+  // 本体 + 发送拦截装配门 + 建会话 meta.cwd 注入 + 封存判定快照）——已整体下沉
+  // @dsh-forge/project host/assembly/host-side.ts；apps/host 只留注册行（知识绑定表
+  // 全量刷新 host 域本体经依赖缝注入——零反向依赖）。缺席/失败 = 零装配 fail-soft
+  // （通道未注册、拦截不接线——宿主不受影响）。
+  let worktreeRpcService: ReturnType<typeof assembleProjectHostSide>['service']
   if (gitWorktreeRow) {
     try {
-      const forgeProjects = servicesFace.get('forgeProjects') as
-        | Pick<ProjectService, 'listProjects' | 'getProject'>
-        | undefined
-      const provide = (
-        ctx as unknown as { reflect?: { provide?: (name: string, value?: unknown) => unknown } }
-      ).reflect?.provide
-      if (forgeProjects !== undefined && typeof provide === 'function') {
-        provide.call(
-          (ctx as unknown as { reflect: object }).reflect,
-          GIT_WORKTREE_IDENTITY_SERVICE,
-          createWorktreeIdentity(forgeProjects, undefined, (line) => diag(line)),
-        )
-      } else {
-        diag('[git-worktree] forgeProjects 缺席或 reflect.provide 不可用——扩展点零注入（插件退独立模式）')
-      }
-    } catch (cause) {
-      diag(`[git-worktree] 扩展点注入失败（插件退独立模式，宿主不受影响）：${String(cause)}`)
-    }
-    try {
-      // fix-4 具名消费（AGENTS.md Cordis 具名服务取法裁决）：gitWorktree 能力服务经模块
-      // 扩充的具名属性取（类型面 = @dsh-forge/git-worktree declare module 扩充——type-only
-      // import 官方包裁决同径）；运行期存在性检查承担 fail-soft（provide 异步晚于本装配段
-      // 可达——惰性取法；具名访问在服务缺席时由 ctx proxy 抛错 → catch 降级独立模式）。
-      let capabilitySeen = false
-      const getGitWorktree = (): unknown => {
-        try {
-          const capability: unknown = ctx.gitWorktree
-          if (capability !== undefined && capability !== null && !capabilitySeen) {
-            capabilitySeen = true
-            diag('[git-worktree] gitWorktree 能力服务已解析（具名消费）')
-          }
-          return capability ?? undefined
-        } catch {
-          return undefined // 服务未 provide（探测未收口/插件未装载）——独立模式面
-        }
-      }
-      // fix-4 解析留痕：装配 8s 后仍缺席 → diag 留痕（harness.log 可见——插件行未装载/
-      // git 缺席/provide 失败三态共因收口，不再静默恒独立模式）
-      setTimeout(() => {
-        if (!capabilitySeen) {
-          diag('[git-worktree] gitWorktree 能力服务未解析（插件未装载/git 缺席/provide 失败）——worktree RPC 恒独立模式')
-        }
-      }, 8_000).unref?.()
-      // worktree-domain-migration 1.2 注入点重构：宿主只做官方服务对象取法（惰性取法闭包
-      // 在插件工厂调用前成立）+ 注入缝传参；deps 组装与发送拦截装配门已核迁插件导出工厂
-      // createHostWorktreeRpc（packages/plugins/git-worktree host-assembly.ts）。
-      const sessionController = servicesFace.get('sessionController') as SessionControllerFace | undefined
-      const sessionPersistence = servicesFace.get('sessionPersistence') as SessionPersistenceFace | undefined
-      // bug 925c96d5：官方 workspaceRegistry 惰性取法（具名 ctx 属性 + 运行期存在性检查
-      // ——AGENTS.md Cordis 可选具名服务取法裁决同径）；缺席 = 零归属面降级（宿主不受影响）。
-      const getWorkspaceRegistry = (): unknown => {
-        try {
-          const registry: unknown = (ctx as unknown as { workspaceRegistry?: unknown }).workspaceRegistry
-          return registry ?? undefined
-        } catch {
-          return undefined // 服务未装载（旧环境/插件行缺席）——零归属面
-        }
-      }
-      const assembled = createHostWorktreeRpc({
-        getGitWorktree: getGitWorktree as never,
-        sessionController,
-        sessionPersistence,
-        getWorkspaceRegistry: getWorkspaceRegistry as never,
-        // 绑定表失效锚（worktree 集合变化——建/删树）：
-        // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
-        // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。
-        // bug 9eb9d6cb 后续性能收口：带 worktreePath 的调用（预铸挂会话——每次新会话点击）
-        // 先查绑定行在册，在册即跳过（省 N×git worktree list + 文件重写，~百 ms/点击）；
-        // 缺席（新树首次使用/建删树无路径）才全量刷新。读失败 = 现状全量刷新（fail-soft）。
-        onWorktreeSetChanged: async (worktreePath?: string) => {
-          let projects: Pick<ProjectService, 'listProjects'> | undefined
-          try {
-            projects = servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects'> | undefined
-          } catch {
-            projects = undefined
-          }
-          if (projects === undefined) return
-          if (worktreePath !== undefined) {
-            try {
-              const { readFileSync } = await import('node:fs')
-              const raw = readFileSync(options.bindingsFile, 'utf8')
-              const parsed = JSON.parse(raw) as { projects?: readonly { wsPath?: unknown }[] }
-              const normalized = worktreePath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
-              const present = (parsed.projects ?? []).some(
-                (row) =>
-                  typeof row.wsPath === 'string' &&
-                  row.wsPath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase() === normalized,
-              )
-              if (present) return // 绑定行已在册——锚目的（首次入表）已达成，零刷新
-            } catch {
-              // 读失败（首建/损坏）→ 落全量刷新现状
-            }
-          }
-          await refreshKnowledgeBindings(projects, options.bindingsFile, (line) => diag(line))
-        },
-        // binding-derivation §2.2：留痕 append 失败诊断 emit 缝（warn 级）
+      const assembled = assembleProjectHostSide(ctx, {
+        bindingsFile: options.bindingsFile,
+        diag: (line) => diag(line),
         bindWarnDiag: sessionBindWarnDiag,
-        // binding-derivation §2.2：session/created 监听装配缝（提案裁决：ctx.on 监听装配留
-        // host——官方事件，fork 亦发布，同径覆盖；进程内 Session.append 直调 = ignorable
-        // 事件直写合法缝）。注册失败 fail-soft（留痕由 seal 漂移校验惰性补写兜底）。
-        onSessionCreated: (handler) => {
-          try {
-            return ctx.on('session/created', (session) => handler(session.id))
-          } catch {
-            return undefined
-          }
-        },
-        // binding-derivation §2.2：活会话解析缝（官方 sessions store——留痕 append 面解析）
-        liveSessions: () => {
-          try {
-            return servicesFace.get('sessions') as { get(id: string): LiveSessionFace | undefined } | undefined
-          } catch {
-            return undefined
-          }
-        },
-        warn: (line) => diag(line),
-        // G7① 拦截层 fail-open 降级诊断缝（方案 9）
         failOpenWarn: failOpenDiag,
-        // binding-derivation 流程 A：workspace 前移创建失败诊断 emit 缝（worktree-create 域）
         createDiag: worktreeCreateDiag,
-        // binding-derivation §2.6：session-bind 推导判定诊断 emit 缝（info 级）
         bindDiag: sessionBindDiag,
-        // binding-derivation §2.6：bind-drift 漂移埋点 emit 缝（info 级——触发与消除）
         bindDriftDiag: bindDriftDiag,
-        // binding-derivation M6：forge/binding-mismatch 漂移推送（ctx.emit → /remote/forge-stream
-        // 镜像目录逐帧推送——mobile banner 消费面）
-        bindingMismatchEmit: (payload) => {
-          try {
-            ;(ctx as unknown as { emit?: (event: string, payload: unknown) => void }).emit?.(
-              'forge/binding-mismatch',
-              payload,
-            )
-          } catch {
-            // 推送失败不反压 seal 判定链（fail-soft）
-          }
-        },
+        refreshKnowledgeBindings,
       })
       worktreeRpcService = assembled.service
       // G7① 发送拦截撤销缝（装配门在工厂内——能力解析后 install，关停链 revoke）
@@ -1212,15 +1147,18 @@ async function main(): Promise<void> {
     // 1.7 A2 服务切换：knowledge 插件 provide 自有 'knowledge' 服务（去 forge 前缀）；
     // 插件行缺席/降级 = undefined，main 侧 forge:knowledge/* 通道不注册
     knowledge: (servicesFace.get('knowledge') as object | undefined) ?? undefined,
-    // M2 四域（Interface 1–4；tasksHome 缺席时 core 不 provide——在场位 false，main 侧降级）
+    // M2 tasks 域（@dsh-forge/task-loop 插件 provide 自有服务——fix-1 域装配；插件行缺席/
+    // 降级 = undefined，main 侧 forge:tasks/* 与 forge:remote/* 通道不注册）
     forgeTasks: (servicesFace.get('forgeTasks') as object | undefined) ?? undefined,
     forgeFeatures: (servicesFace.get('forgeFeatures') as object | undefined) ?? undefined,
-    forgeProposals: (servicesFace.get('forgeProposals') as object | undefined) ?? undefined,
     forgeDocs: (servicesFace.get('forgeDocs') as object | undefined) ?? undefined,
     // M3 3.8 设置域（settingsFile 缺席时 core 不 provide——独立缝降级，六服务形制不动）
     forgeSettings: (servicesFace.get('forgeSettings') as object | undefined) ?? undefined,
-    // fix-bug bug 域（tasksHome 注入时 core provide——缺席 = bugs 面降级）
-    forgeBugs: (servicesFace.get('forgeBugs') as object | undefined) ?? undefined,
+    // fix-20 bug 145b3d3b：forge:bugs/* 通道供数缝优先插件本地 forge.bugs 缝
+    //（plugins/project/host/bugs = project.db——概览 Bug 行集与写入/seed 缝同库闭合；
+    // commitFiles/fileDiff 变更读面归宿主 git 面，插件缝不承载——typed 拒绝保通道注册完整）；
+    // 插件缝缺席/劣形退 core forgeBugs（既有行为不变）。
+    forgeBugs: forgeBugsServiceOf(servicesFace),
     // fix-2 worktree RPC 域（gitWorktree 插件行在场时装配段 provide——缺席 = 通道未注册）
     forgeWorktree: worktreeRpcService ?? undefined,
     // fix-2 审批桥（官方 ctx.approval 在场时 provide 内存中继——缺席 = 审批转发面降级）
@@ -1278,7 +1216,7 @@ async function main(): Promise<void> {
       knowledge: services.knowledge !== undefined,
       forgeTasks: services.forgeTasks !== undefined,
       forgeFeatures: services.forgeFeatures !== undefined,
-      forgeProposals: services.forgeProposals !== undefined,
+      forgeProposals: false, // proposal 域已下线（1.11 整域退役）——BridgeReadyMessage 全名记录类型的恒缺席位
       forgeDocs: services.forgeDocs !== undefined,
       forgeSettings: services.forgeSettings !== undefined,
       forgeBugs: services.forgeBugs !== undefined,

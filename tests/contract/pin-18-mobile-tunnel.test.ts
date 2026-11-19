@@ -82,7 +82,7 @@ describe('pin 18-2 /pair/verify 路由 + 限速常量单源', () => {
   })
 
   it('限速常量零二处定义（PIN_MAX/RATE/LOCKOUT 的 `=` 赋值只出现在 pairing.ts）', () => {
-    const other = hostSrc('boot/child.ts') + webSrc('views/remote/ForgeRemoteEntry.tsx')
+    const other = hostSrc('boot/child.ts') + readFileSync(join(ROOT, 'plugins/project/ui/remote-entry/ForgeRemoteEntry.tsx'), 'utf8')
     for (const name of ['PIN_MAX_FAILURES', 'PIN_RATE_WINDOW_MS', 'PIN_LOCKOUT_MS', 'PIN_TTL_MS']) {
       expect(other, `${name} 在 pairing.ts 外重复定义`).not.toMatch(
         new RegExp(`(const|let|var)\\s+${name}\\s*=`),
@@ -105,14 +105,14 @@ describe('pin 18-2 /pair/verify 路由 + 限速常量单源', () => {
 
 describe('pin 18-3 互联网 tab 非 disabled 占位（testid 在场 + 受控缝）', () => {
   it('tab-internet testid 在场且带 onSelect 缝（1.4 真实启用——非静态占位）', () => {
-    const src = webSrc('views/remote/ForgeRemoteEntry.tsx')
+    const src = readFileSync(join(ROOT, 'plugins/project/ui/remote-entry/ForgeRemoteEntry.tsx'), 'utf8')
     expect(src).toContain('data-testid="dswf-remote-tab-internet"')
     expect(src).toMatch(/data-testid="dswf-remote-tab-internet"[\s\S]{0,400}?onSelect\('internet'\)/)
     expect(src).toContain("onSelect('lan')")
   })
 
   it('双 tab 按钮块零静态 disabled 占位（fix-7 占位不得回潮；fix-18④ 受控防重入锁 = disabled={disabled === true} 在场为合法）', () => {
-    const src = webSrc('views/remote/ForgeRemoteEntry.tsx')
+    const src = readFileSync(join(ROOT, 'plugins/project/ui/remote-entry/ForgeRemoteEntry.tsx'), 'utf8')
     const tabs = src.match(/<div className="dswf-remote-tabs"[\s\S]*?<\/div>\s*\n\s*\)/)
     expect(tabs, 'dswf-remote-tabs 块未找到').toBeTruthy()
     const block = tabs?.[0] ?? ''

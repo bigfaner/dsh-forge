@@ -23,9 +23,9 @@ import {
   type SessionRecallQuery,
 } from '@dsh-forge/contracts'
 // 插件源码相对引入（测试面专用——见文件头注）
-import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../../packages/plugins/knowledge/src/storage/index.js'
-import { createKnowledgeService } from '../../../../packages/plugins/knowledge/src/service/index.js'
-import type { BrowseKnowledgeService } from '../../../../packages/plugins/knowledge/src/service/index.js'
+import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../../plugins/knowledge/host/storage/index.js'
+import { createKnowledgeService } from '../../../../plugins/knowledge/host/service/index.js'
+import type { BrowseKnowledgeService } from '../../../../plugins/knowledge/host/service/index.js'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { registerKnowledgeChannels, type KnowledgeChannelService } from './knowledge-rpc.js'
 

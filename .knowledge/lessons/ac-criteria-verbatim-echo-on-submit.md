@@ -1,11 +1,11 @@
 ---
-title: 结算 ac_criteria 须逐字复制定义侧原文，概括改写即拒
+title: 结算 ac_results 判据须逐字复制定义侧原文，概括改写即拒
 summary: >-
-  submitTask 的结构化 ac_criteria 与任务定义侧逐字交叉比对——worker 结算时概括、缩写或改写判据原文会以
+  submitTask 的结构化 ac_results 与任务定义侧逐字交叉比对（criterion 原文内嵌同位）——worker 结算时概括、缩写或改写判据原文会以
   ERR_AC_CRITERIA_MISMATCH 被拒，每例损失一轮重派；判据原文必须在领取时即原样保存并在结算时逐字回传。
 keywords:
   - 结算
-  - ac_criteria
+  - ac_results
   - ERR_AC_CRITERIA_MISMATCH
   - 逐字比对
   - 门禁
@@ -16,10 +16,10 @@ bug id: 无
 id: ac-criteria-verbatim-echo-on-submit
 status: unconfirmed
 type: pitfalls
-version_ts: '2026-11-05T00:00:00.000Z'
+version_ts: '2026-11-16T00:00:00.000Z'
 ---
 
-# 结算 ac_criteria 须逐字复制定义侧原文，概括改写即拒
+# 结算 ac_results 判据须逐字复制定义侧原文，概括改写即拒
 
 ## 现象
 
@@ -29,12 +29,12 @@ version_ts: '2026-11-05T00:00:00.000Z'
 ## 规避方式
 
 1. 领取任务时把 acceptance_criteria 原文原样存入工作笔记，不凭记忆重构。
-2. 结算时 `ac_criteria` 数组逐项从定义侧原文复制，`ac_met`/`ac_evidence` 按序一一配对；证据过长的落盘只传路径。
+2. 结算时 `ac_results` 单数组逐项 `{criterion, met, evidence?}`——criterion 从定义侧原文逐字复制，met/evidence 按序同位（旧 `ac_criteria`/`ac_met`/`ac_evidence` 三平行数组已退役）；证据过长的落盘只传路径。
 3. 判据确实与实际不符时不改写原文凑对——走 AC 冲突处置（blocked 上报）。
 
 ## 反例边界
 
-- 仅适用于结构化 `ac_criteria` 数组；`summary` 是自由文本，概括无妨。
+- 仅适用于结构化 `ac_results` 判据项的 criterion 文本；`summary` 是自由文本，概括无妨。
 - 机械拒绝信息已自愈闭环（一次重试即过），故单例损耗一轮而非阻塞。
 
 ## 来源锚点

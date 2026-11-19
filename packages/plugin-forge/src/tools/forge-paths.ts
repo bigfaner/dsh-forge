@@ -8,8 +8,8 @@
 // 拒绝并列举法集（ForgeDirPathInvalidError——callToolFace 路由转失败 DTO）。
 import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'
 import type { ForgePathsAnchorContext } from '../faces.js'
-import type { DirKeyEntry } from '../forge-paths.js'
-import { DIR_DESTINATIONS, resolveDestination } from '../forge-paths.js'
+import type { DirKeyEntry } from '@dsh-forge/project/host-dirs'
+import { DIR_DESTINATIONS, resolveDestination } from '@dsh-forge/project/host-dirs'
 import type { ForgeToolDeps } from './index.js'
 import { optionalString, requireArgsObject, requiredString } from './args.js'
 import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'

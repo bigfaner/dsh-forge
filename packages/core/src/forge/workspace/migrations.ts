@@ -313,7 +313,7 @@ BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (de
     // v6（forge-verification-hardening 机械②）：proposals.parent_proposal_id 承接链左列
     // （nullable 自联结 FK——飞轮改进链承接；悬空引用由域服务 FK 校验拒写，列约束兜底）。
     // 守卫式 ALTER（列已在场跳过——v2/v3 谱系先例同构）；idx_proposals_parent =
-    // 承接链递归自联结读面（listDerivedProposals）主径。checkpoints 不承载承接
+    // 承接链递归自联结读面主径。checkpoints 不承载承接
     // （保持纯净，仅 derived-to-child 时序锚）。
     version: 6,
     statements: [

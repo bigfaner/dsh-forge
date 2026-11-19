@@ -14,12 +14,12 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import type { DiagEventPayload } from '../../../packages/contracts/src/index.js'
-import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../packages/plugins/knowledge/src/storage/index.js'
-import { downgradeKnowledgeSchema } from '../../../packages/plugins/knowledge/src/storage/schema.js'
-import { rebuildKnowledgeIndex } from '../../../packages/plugins/knowledge/src/storage/rebuild.js'
-import { createKnowledgeService } from '../../../packages/plugins/knowledge/src/service/service.js'
-import { createScanRegister } from '../../../packages/plugins/knowledge/src/service/scan-register.js'
-import type { BrowseKnowledgeService } from '../../../packages/plugins/knowledge/src/service/types.js'
+import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../plugins/knowledge/host/storage/index.js'
+import { downgradeKnowledgeSchema } from '../../../plugins/knowledge/host/storage/schema.js'
+import { rebuildKnowledgeIndex } from '../../../plugins/knowledge/host/storage/rebuild.js'
+import { createKnowledgeService } from '../../../plugins/knowledge/host/service/service.js'
+import { createScanRegister } from '../../../plugins/knowledge/host/service/scan-register.js'
+import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/types.js'
 
 // ── 夹具 ──
 

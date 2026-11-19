@@ -22,7 +22,7 @@ const PANEL_ROW = 'button[aria-label="专家团"]'
 const PANEL_ROOT = '[data-dswf-expert-panel]'
 const CARD_ANY = '.dswf-card-grid .dswf-xcard'
 
-/** 猎头预设显示名（apps/host/src/profile/presets/headhunter.patch.yml config.name——座位标签文本） */
+/** 猎头预设显示名（plugins/expert-squad/cordis.patch.yml（随包自带 bundle patch） config.name——座位标签文本） */
 const HR_PRESET_LABEL = '猎头模式'
 
 /** project 层夹具专家档案（面板数据态收敛用）。 */

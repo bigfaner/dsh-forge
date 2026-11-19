@@ -1,0 +1,651 @@
+// @dsh-forge/expert-squad —— host 入口（Node，cordis loader 装载面）。
+// 装配缝（本文件只做 wiring，功能面各居其模块——plugin-portability 装配缝归属插件域）：
+//   ① ctx.storage 自有 domain → ExpertSquadState（启停状态持久层，§13 D4）；
+//   ② ctx.connection.fetch 六条精确路由（list/get/update/enable/disable/run-state，
+//      §6 D4；run-state = 面板运行状态读口，bug 767e7580）；
+//   ③ ExpertsRegistry（三层 root：project=请求 workspace 向上解析 project root，
+//      无 .git 祖先时以 workspace 本身为 project root——临时工作区等非 git 目录同径
+//      可用；user/plugin 层按 scan 模块正门解析）+ 服务键 experts provide
+//      （ctx.experts 正门，bug 7b1c9ed4）；
+//   ④ tool 面（fix-10）：registerExpertTools（recruit/update/rename + enable/disable
+//      + list_experts/list_tools/list_skills）+ registerDelegateExpertTool
+//      经官方 ctx.tools.register 正门接线（D1 注册面零改动）。工具面全组合可见可用
+//      （全局单实例注册即全局继承——HR preset 无专行，守卫微件态已撤销）。
+
+import { join, resolve, sep } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import type { Domain } from "@deepseek-ai/dsh-storage-domain";
+import type { AgentPresetRegistry } from "@deepseek-ai/dsh-agent-preset-registry";
+import type { SkillRegistry } from "@deepseek-ai/dsh-skill";
+import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
+import type { Volatile } from "@deepseek-ai/cordis";
+import Schema from "@deepseek-ai/schemastery";
+import { parseExpertFile } from "./store/frontmatter.js";
+import {
+  ExpertsRegistry,
+  ExpertNotFoundError,
+  type DiagEmit,
+  type ExpertAgentOptionsConfig,
+  type ExpertConfigEntry,
+  type ExpertsConfigFace,
+  type ExpertsService,
+} from "./registry.js";
+import { registerExpertSquadRoutes, type ConnectionLike, type DelegateAssemblyState } from "./routes.js";
+import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
+import { ExpertPresetSync, type PresetRegistryFace } from "./preset-rows.js";
+import { EXCLUDED_EXPERT_TOOL_NAMES, EXPERTS_SERVICE_KEY } from "../shared/constants.js";
+import {
+  createKnownToolsProbe,
+  registerExpertTools,
+  serializeExpertMd,
+  unionSkillsCatalog,
+  unionToolsCatalog,
+  type ToolRegisterFace,
+} from "./tools.js";
+import {
+  ExpertRunPanelState,
+  observeSubagentEnd,
+  registerDelegateExpertTool,
+  type SubagentEventsFace,
+} from "./dispatch/dispatch.js";
+import {
+  resolveCwdProjectExpertsRoot,
+  resolvePluginExpertsRoot,
+  resolveProjectRootFor,
+  resolveUserExpertsRoot,
+  type ExpertRoot,
+} from "./store/scan.js";
+import { ExpertWatchManager, makeFsObservedInvalidator, type FsObservedTarget } from "./store/watch.js";
+
+/** 包名（实例 ID 前缀——本包 experts/ 随包档案的实例 ID = `@dsh-forge/expert-squad#键`）。 */
+export const EXPERT_SQUAD_PACKAGE_NAME = '@dsh-forge/expert-squad' as const
+
+// ---------------------------------------------------------------------------
+// cordis Config 二字段（proposal expert-squad-default-routing 承载裁决）：
+// defaultAgentOptions / experts（实例 ID 键控，条目 agentOptions/tools/skills/disabled）。
+// 均 `.volatile()`——存储与持久化归官方（活动 profile 的 Cordis patch，经 dsh-settings
+// 写径）；插件收到 volatile 引用，取用时 `.get()` 现读快照（热刷新零接线生效）。
+// ---------------------------------------------------------------------------
+
+const reasoningSchema = Schema.union([
+  Schema.const('low'),
+  Schema.const('medium'),
+  Schema.const('high'),
+])
+
+// 显式注解（TS2883）：Schema.dict 推断类型引用 cosmokit Dict，声明发射不可移植——
+// 以全局 Schemastery 宽型注解收口（Config 静态位消费，运行期校验不受影响）。
+const expertSquadConfig: Schemastery<any, any, any> = Schema.object({
+  /** 全局默认 Agent 选项（优先级链 ③ 基座；各字段可缺省 = 该层不生效） */
+  defaultAgentOptions: Schema
+    .object({
+      provider: Schema.string(),
+      model: Schema.string(),
+      reasoning: reasoningSchema,
+    })
+    .volatile(),
+  /** 单专家配置映射（键 = 专家实例 ID；各字段可缺省，空壳条目等价无配置） */
+  experts: Schema
+    .dict(
+      Schema.object({
+        agentOptions: Schema.object({
+          provider: Schema.string(),
+          model: Schema.string(),
+          reasoning: reasoningSchema,
+        }),
+        tools: Schema.array(Schema.string()),
+        skills: Schema.array(Schema.string()),
+        disabled: Schema.boolean(),
+      }),
+    )
+    .volatile(),
+})
+
+/** 插件收到的 volatile 配置引用形状（与 expertSquadConfig 输出对齐；官方 Volatile 协议）。 */
+export interface ExpertSquadPluginConfig {
+  defaultAgentOptions?: Volatile<ExpertAgentOptionsConfig>
+  experts?: Volatile<Readonly<Record<string, ExpertConfigEntry>>>
+}
+
+/** storage 服务窄面（官方 ctx.storage.domain.open 正门——state.test 同径）。 */
+interface StorageFace {
+  readonly domain: {
+    open(spec: typeof expertSquadStateDomainSpec): Promise<Domain<typeof expertSquadStateDomainSpec>>;
+  };
+}
+
+/** dsh tools 服务窄面（官方 ToolRuntime.register 正门——D1 注册面零改动）。 */
+interface ExpertSquadToolsFace extends ToolRegisterFace {
+  /** 官方目录视图（ToolRuntime.schemas(scope?)——无 scope 全局视图，携 preset
+   *  scope key = 该 preset 装配面视图；list_tools 全模式并集取数面，bug 6337a936）。 */
+  schemas?(scope?: unknown): readonly { readonly name: string; readonly description?: string }[];
+}
+
+/** 官方 agentPresets 服务窄面（ctx.agentPresets——@deepseek-ai/dsh-agent-preset-registry
+ *  AgentPresetRegistry type-only import Pick 派生（AGENTS 1.5，同 subagents/skills
+ *  先例——官方签名漂移由 tsc 兜底）：list() 枚举全部 preset（委派 presetProbe 名册面，
+ *  broken 行剔除）+ acquireScope() 取每模式 scope 租约（`{key: ScopeKey} & AsyncDisposable`，
+ *  用后 dispose）+ register() 程序化预注册专家 preset 行（fix-1 agentPreset 注入通道，
+ *  官方 definition.d.ts：declaring plugin owns the disposer）；全模式并集枚举缝）。 */
+type ExpertSquadAgentPresetsFace = Pick<AgentPresetRegistry, "list" | "acquireScope" | "register">;
+
+/** 宿主 ctx 窄面（结构同型——本装配缝只消费 storage/connection/tools/subagents/effect/on）。
+ *  subagents = 官方具名正门（bug 5a1e1132：@deepseek-ai/dsh-subagent 经 cordis Context
+ *  模块扩充声明 `subagents: SubagentRuntime` 非可选，宿主恒供 → 静态 inject + 直取；
+ *  AGENTS 1.5——type-only import 保全量类型安全，不再 reflect 字符串键丢类型取法）。 */
+interface ExpertSquadCtx {
+  readonly storage?: StorageFace;
+  readonly connection?: ConnectionLike;
+  readonly tools?: ExpertSquadToolsFace;
+  /** 官方 subagent 服务正门（inject: ["subagents"]——形状校验保留在取用点）。 */
+  readonly subagents?: Pick<SubagentRuntime, "startActivation">;
+  /** 官方 skill 目录正门（inject: ["skills"]——dsh-skill 声明 `skills: SkillRegistry`
+   *  非可选、宿主恒供；形状校验保留在取用点，同 subagents 先例）。 */
+  readonly skills?: Pick<SkillRegistry, "list">;
+  /** 官方 agent preset 目录正门（inject: ["agentPresets"]——dsh-agent-preset-registry
+   *  声明 `agentPresets: AgentPresetRegistry` 非可选、宿主恒供；形状校验保留在取用点，
+   *  同 subagents 先例）。 */
+  readonly agentPresets?: ExpertSquadAgentPresetsFace;
+  /** 宿主事件总线（fs/observed 通道二挂点；缺席 → 通道二降级跳过，通道一照常）。 */
+  on?(event: string, listener: (...args: unknown[]) => unknown): unknown;
+  /** 宿主事件总线 emit 面（diag/log 诊断事件域发射；缺席 → console 兜底）。 */
+  emit?(event: string, ...args: unknown[]): unknown;
+  effect(dispose: () => unknown): unknown;
+}
+
+/** 三层 root（D3/D4 + 本裁决：无 worktree 层——project 层锚项目根）：fetch 路由的
+ *  workspace 参数 = 面板当前选中工作区（可为链接 worktree）；project 层经
+ *  resolveProjectRootFor 解析回项目根（worktree 的 `.git` 文件 → 主检出），档案
+ *  落主检出不随 worktree 生灭；user/plugin 层按 scan 模块正门解析。 */
+function expertRootsFor(workspace: string): ExpertRoot[] {
+  const projectRoot = resolveProjectRootFor(workspace);
+  return [
+    { origin: "project", dir: join(projectRoot, ".dsh", "experts") },
+    { origin: "user", dir: resolveUserExpertsRoot() },
+    { origin: "plugin", dir: resolvePluginExpertsRoot(), pluginName: EXPERT_SQUAD_PACKAGE_NAME },
+  ];
+}
+
+/**
+ * cwd 兜底锚（bug a7bdf03f）：打包/无会话环境下 process.cwd() 可能解析到应用安装
+ * 目录（非项目根）——直挂 project 层会让 watcher 锚定应用目录并爬升监听 Chromium
+ * data（EBUSY 风暴）。cwd 形态走 resolveCwdProjectExpertsRoot 合理性校验（判据
+ * 留档：.git 项目根可解析 + 排除 node_modules 特征段），非法则不产生 project 层
+ * root（user/plugin 层照常）；注册工作区锚（fetch 路由显式 workspace 参数，D4
+ * 钉死为注册项目根）不经此校验，维持直挂语义。
+ */
+function cwdExpertRoots(): ExpertRoot[] {
+  const projectDir = resolveCwdProjectExpertsRoot(process.cwd());
+  return [
+    ...(projectDir !== null ? [{ origin: "project" as const, dir: projectDir }] : []),
+    { origin: "user", dir: resolveUserExpertsRoot() },
+    { origin: "plugin", dir: resolvePluginExpertsRoot(), pluginName: EXPERT_SQUAD_PACKAGE_NAME },
+  ];
+}
+
+/** 可选服务读取（守卫外取法：reflect.get 缺席返 undefined；异常吞为缺席）。
+ *  清扫留档（用户裁决 2026-10-25，具名服务优先）：本函数现仅存 storage/tools 两个
+ *  调用点，均为「官方有具名正门、结构上只能守卫外惰性取」——
+ *  · storage：官方 dsh-storage 声明 `storage: Storage` 正门，但宿主组合不供本服务
+ *    （可选消费），cordis 4.0.4 无 '?' 可选 inject 后缀，静态声明会使 fiber 在缺席
+ *    环境永久 pending（plugin-forge faces.ts forgeSettings 先例同因）；
+ *  · tools：官方 dsh-tools 声明 `tools: ToolRuntime` 正门，但本插件按可选消费
+ *    （缺席 fail-soft 跳过注册），同 fiber-pending 成因。
+ *  subagents / skills 不在此列：官方声明非可选、宿主恒供，均已改具名正门直取
+ *  （inject 边——subagents 见 bug 5a1e1132，skills 同先例）。 */
+function readOptionalService(ctx: ExpertSquadCtx, name: string): unknown {
+  try {
+    return (ctx as { reflect?: { get(name: string): unknown } }).reflect?.get(name);
+  } catch {
+    return undefined;
+  }
+}
+
+/** host face（Plugin.Function apply；async——state 面（可选）就绪后路由族注册）。
+ *  静态 inject：cordis 守卫要求声明注入边方可读 ctx.storage / ctx.connection
+ *  （缺声明 = apply 期 `cannot get property ... without inject`——client 侧同因）。
+ *  inject：connection（宿主组合恒在场）+ subagents（官方具名正门，bug 5a1e1132——
+ *  非可选声明，宿主恒供）+ skills（同先例，candidates 读口）+ agentPresets（同先例，
+ *  list_tools/list_skills 全模式并集枚举缝，bug 6337a936）；storage 宿主组合不供
+ *  （presence 探测降级——registry FMEA：state 缺席 = 启停内存态、重启回全启用，
+ *  §AD2 降级语义）。 */
+async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPluginConfig): Promise<void> {
+  const connection = ctx.connection;
+  if (connection === undefined) throw new Error("expert-squad: ctx.connection absent（宿主形状漂移——路由面无法装配）");
+
+  // 插件 Config 二字段现读面（volatile 引用 .get() 现读快照——registry 每次取用现取，
+  // volatile 变更零接线即热生效；settings 服务/配置缺席 = 字段缺席，取用照常）。
+  const expertsConfigFace: ExpertsConfigFace = {
+    defaultAgentOptions: () => config?.defaultAgentOptions?.get(),
+    // volatile 快照（深 readonly）→ 结构等值面（readonly 数组位拷贝在 registry 叠加点承担）
+    experts: () =>
+      config?.experts?.get() as Readonly<Record<string, ExpertConfigEntry>> | undefined,
+  };
+  // 诊断发射面（AGENTS §7）：悬空键 error 日志走官方 diag/log 事件域（订阅侧零改动）；
+  // 事件总线缺席 → console 兜底（诊断不静默吞掉）。
+  const diag: DiagEmit = (level, event, message) => {
+    if (typeof ctx.emit === "function") {
+      ctx.emit("diag/log", { level, process: "main", event, message });
+    } else if (level === "error") {
+      console.error(`[expert-squad][${event}] ${message}`);
+    } else {
+      console.warn(`[expert-squad][${event}] ${message}`);
+    }
+  };
+
+  let state: ExpertSquadState | undefined;
+  // storage = 可选服务（宿主组合不供）：ctx.storage 属性读被 cordis 守卫拦截
+  // （未声明 inject 即抛），且声明 inject 会让 fiber 永久 pending（服务缺席）——
+  // 可选取法走 ctx.reflect.get（mobile-remote-approval disc-1 先例同径）。
+  const storage = readOptionalService(ctx, "storage") as StorageFace | undefined;
+  if (storage !== undefined) {
+    const domain = await storage.domain.open(expertSquadStateDomainSpec);
+    state = new ExpertSquadState(domain);
+    // effect 回调返回值即 disposer（cordis 语义，web-client webServer.register 同款）。
+    ctx.effect(() => () => state?.close());
+  } else {
+    diag("warn", "expert-squad-storage-absent", "ctx.storage absent——启停状态降级内存态（重启回全启用，FMEA）");
+  }
+
+  // 每工作区一 registry（首用刷新一代快照；启停态经 state 落盘——registry 内存缓存同步读）。
+  // 热刷新双通道（bug 09356510 装配接线）：通道一 = 每工作区 ExpertWatchManager
+  // （chokidar 深度 1，真 FS 增量）；通道二 = ctx.on("fs/observed") 首方失效
+  // （官方 skill-filesystem 同缝）。失效回调经串行链 refresh 整体换代——同代内竞速
+  // 事件合并（watch 层 microtask）+ 重扫互斥（promise 链）。
+  const registries = new Map<string, Promise<ExpertsRegistry>>();
+  /** 共享插件内置层 root（registerRoot 记录面——跨 registry 实例族传播，见 rootsFor 注记）。 */
+  const sharedExtraRoots: ExpertRoot[] = [];
+  /** 注册内置层清单（本包随包 + 第三方 registerRoot——只读硬闸判定面）。 */
+  const builtinRoots = (): string[] => [resolvePluginExpertsRoot(), ...sharedExtraRoots.map((r) => r.dir)];
+  /** 只读硬闸：目标目录落进任一内置层 → fail-loud 拒写（内置层只读由结构保证）。 */
+  const assertNotBuiltinRoot = (dir: string): void => {
+    const target = resolve(dir);
+    for (const root of builtinRoots()) {
+      const base = resolve(root);
+      if (target === base || target.startsWith(base + sep)) {
+        throw new Error(
+          `内置专家层只读，拒绝写入：${target}（编辑内置档案会回落 user 层覆写，键不变）`,
+        );
+      }
+    }
+  };
+  const watchManagers = new Map<string, ExpertWatchManager>();
+  const refreshChains = new Map<string, Promise<void>>();
+  // 专家 preset 行同步钩子（fix-1 agentPreset 通道）：presetSync 建立后挂接——
+  // 每代 refresh 完成即调和（装载期批量预注册 + recruit/update/rename/启停增删
+  // 同步；watch 通道与显式 refresh 双径同敛于本钩子）。
+  let presetSyncHook: (() => void) | undefined;
+  // bug a7bdf03f：workspace 锚 = 进程 cwd（兜底形态）时走 cwdExpertRoots 合理性
+  // 校验；显式注册工作区锚照旧。registry 扫描与 watch manager 同源，roots 一致。
+  const rootsFor = (workspace: string): ExpertRoot[] => {
+    const base =
+      resolve(workspace) === resolve(process.cwd()) ? cwdExpertRoots() : expertRootsFor(workspace);
+    // 共享插件内置层 root（registerRoot 传播面）：服务键实例族（cwd registry）与面板
+    // 路由实例族（workspace registry）是两族实例——外部插件（plugin-forge 等）经
+    // experts.registerRoot 注册的内置目录若只落服务实例，面板永不可见（forge 55 档案
+    // 缺席缺陷）。共享清单随 roots() 每次刷新求值——新 registry 出生即含、既有 registry
+    // 下一次 refresh 生效（registerRoot 侧同时主动触发换代）。
+    return [...base, ...sharedExtraRoots];
+  };
+  const enqueueRefresh = (workspace: string, registry: ExpertsRegistry): void => {
+    const prior = refreshChains.get(workspace) ?? Promise.resolve();
+    const next = prior.then(
+      () => registry.refresh(),
+      () => registry.refresh(), // 上代刷新失败不阻塞换代
+    );
+    refreshChains.set(workspace, next);
+    // 换代完成后调和 preset 行（专家集/内容变更增删同步——失败不阻塞刷新链）
+    void next.then(() => presetSyncHook?.(), () => presetSyncHook?.());
+    next.catch(() => {}); // watch 链 fire-and-forget：刷新失败不落 unhandled rejection（registryFor 侧失败逐出重试）
+  };
+  const registryFor = (workspace: string): Promise<ExpertsRegistry> => {
+    let hit = registries.get(workspace);
+    if (hit === undefined) {
+      const registry = new ExpertsRegistry({
+        roots: () => rootsFor(workspace),
+        state,
+        workspace,
+        config: expertsConfigFace,
+        diag,
+      });
+      hit = registry.refresh().then(() => registry);
+      // Root cause: 首刷 rejected promise 永久缓存 = 五路由恒 400（毒化缓存）——
+      // 失败即逐出条目，下次请求重建 registry 重试（bug f9410209）。
+      hit.catch((error: unknown) => {
+        // 诊断面（bug 44e70a5f）：首刷失败此前静默逐出，host 日志零痕迹——失败原因必须留痕。
+        diag("warn", "expert-squad-registry-refresh-fail", `registry 首刷失败（workspace=${workspace}，已逐出待重试）: ${String((error as Error)?.message ?? error)}`);
+        if (registries.get(workspace) === hit) {
+          registries.delete(workspace);
+          // Root cause: 逐出只删 registries 条目时旧 manager 仅插件卸载才释放——
+          // 持续失败场景同 workspace watcher 无界累积（bug 31a989d2）。失败逐出
+          // 同步 dispose 并摘除，watcher 数与 workspace 一一对应有界；重试由
+          // 下次请求的 registryFor 重建承担。
+          const stale = watchManagers.get(workspace);
+          if (stale !== undefined) {
+            watchManagers.delete(workspace);
+            // 逐出时 start 可能在途/迟到（bug 38f87c0f）——close 拒绝不得成未处理 rejection
+            void stale.dispose().catch(() => {});
+          }
+        }
+      });
+      registries.set(workspace, hit);
+      const manager = new ExpertWatchManager(rootsFor(workspace), {
+        onInvalidated: () => enqueueRefresh(workspace, registry),
+        onWarn: (message) => diag("warn", "expert-squad-watch-degraded", message),
+        // onError = openWatcher 抛异常（watch 通道对 workspace 实际失败，非降级形态）
+        // ——定级 error（diag-milestone-coverage 方案 8：错误径不降 warn）。
+        onError: (error) => diag("error", "expert-squad-watch-error", String(error)),
+      });
+      watchManagers.set(workspace, manager);
+      ctx.effect(() => () => void manager.dispose());
+      void manager.start().catch(() => {}); // openWatcher 内部已上报，start 聚合面兜底
+    }
+    return hit;
+  };
+  // 通道二：首方（模型 edit/write）失效直呼——路径按各工作区 manager 的包含判定路由
+  // （observeHostMutation 对非本工作区路径零操作）；事件面缺席 = 宿主形状降级（仅 warn）。
+  if (ctx.on !== undefined) {
+    const invalidate = makeFsObservedInvalidator({
+      observeHostMutation: (path: string) => {
+        for (const manager of watchManagers.values()) manager.observeHostMutation(path);
+      },
+    });
+    const disposeOn = ctx.on("fs/observed", (target: unknown, observation: unknown, actor: unknown) => {
+      invalidate(target as FsObservedTarget, observation, actor);
+    });
+    // 通道二监听器 disposer 消费（cordis effect 契约：cb 返回值即 disposer——卸载摘除）。
+    if (typeof disposeOn === "function") ctx.effect(() => () => disposeOn());
+  } else {
+    diag("warn", "expert-squad-fs-observed-absent", "ctx.on absent——fs/observed 通道未接线（仅 chokidar 通道承载热刷新）");
+  }
+
+  // 面板运行状态（bug 767e7580 接线）：subagent/end 监听唯一落点（纯 UI，不进会话
+  // 流），经 run-state 读口（路由族第六条）对外取数。监听经 observeSubagentEnd 挂在
+  // 宿主事件总线（ctx.on），disposer 经 effect 消费——fiber 卸载即退订（级联）。
+  const panel = new ExpertRunPanelState();
+  if (ctx.on !== undefined) {
+    const eventsFace: SubagentEventsFace = {
+      on: (event, listener) =>
+        ctx.on!(event, listener as (...args: unknown[]) => unknown) as () => void,
+    };
+    const disposeEnd = observeSubagentEnd(eventsFace, panel);
+    if (typeof disposeEnd === "function") ctx.effect(() => () => disposeEnd());
+  } else {
+    diag("warn", "expert-squad-subagent-end-absent", "ctx.on absent——subagent/end 面板监听未接线（run-state 恒空）");
+  }
+
+  // delegate 装配状态（观测面加固）：apply 尾部委派工具注册/降级结果——经 run-state
+  // 读口透出（面板降级可见），装配降级不再依赖主进程 stdout 可观测。初始 = tools-absent
+  // （tool 面缺席即委派不可用的缺省降级形态），装配尾部按实况改写。
+  let delegateAssembly: DelegateAssemblyState = { status: "degraded", reason: "tools-absent" };
+
+  const routes: Parameters<typeof registerExpertSquadRoutes>[1] = {
+    // 面板 list（1.60 用户裁决）：展示层全层条目（origin + effective 位）——
+    // 聚组数据源；取用/启停面（get/setEnabled/update）零改动。
+    list: async (workspace, includeDisabled) =>
+      (await registryFor(workspace)).listLayered({ includeDisabled }),
+    get: async (workspace, key) => (await registryFor(workspace)).get(key),
+    // 启停（bug 34a284e3）：await registry.setEnabled（键不存在 fail-loud → 400）；
+    // 落盘失败仅降级告警（FMEA 内存态生效），回包 = 换新档案（含新 enabled）。
+    setEnabled: async (workspace, key, enabled) => {
+      const registry = await registryFor(workspace);
+      try {
+        await registry.setEnabled(key, enabled);
+        // 成功里程碑 info 埋点（AGENTS §7——落盘成功此前仅失败 warn，成功径不可见）
+        diag("info", "expert-squad-setenabled", `setEnabled(${key}, ${enabled}) 落盘成功`);
+      } catch (error) {
+        if (error instanceof ExpertNotFoundError) throw error;
+        diag("warn", "expert-squad-setenabled-persist-fail", `setEnabled(${key}, ${enabled}) 落盘失败（内存态生效）: ${String(error)}`);
+      }
+      // 启停状态变更即调和 preset 行（禁用撤行/启用插行——refresh 链不覆盖 state 面）
+      presetSyncHook?.();
+      const fresh = registry
+        .list({ includeDisabled: true })
+        .find((entry) => entry.name === key);
+      if (fresh === undefined) throw new Error(`expert not found: ${key}`);
+      return fresh;
+    },
+    // 档案编辑写面（bug 4ed8549f 装配；来源保持裁决 2026-10-31 见 update 内注记）：
+    // 写路径与 recruit/update_expert tool 同源：serializeExpertMd → parseExpertFile
+    // 全量门（必填/裸 {{/name 不可改——文件名即建档键），不过不落盘；
+    // 写后 refresh 一代换新，回包 = 换新 ExpertEntry。
+    update: async (input) => {
+      const registry = await registryFor(input.workspace);
+      // 来源保持（用户裁决 2026-10-31）：面板编辑只写回生效档案所在层——
+      // · project/user 层 → 原地写（不换层、不新建档案文件）；
+      // · plugin 层（随包只读）→ 回落 user 层覆写内置（键不变，遮蔽语义——仍非新建专家）。
+      // 新专家的唯一创建面 = 召唤链 recruit_expert（恒写 user 层）。
+      const effectiveOrigin = registry
+        .list({ includeDisabled: true })
+        .find((entry) => entry.name === input.name)?.origin;
+      // project → 项目根（worktree 感知——档案落主检出，无 worktree 层）；user → 原地；
+      // plugin（随包只读）→ user 层覆写内置（键不变）
+      const expertsDir =
+        effectiveOrigin === "project"
+          ? join(resolveProjectRootFor(input.workspace), ".dsh", "experts")
+          : resolveUserExpertsRoot();
+      // 只读硬闸（AGENTS 1.2 语义收口）：目标目录解析后落进任一注册内置层（本包随包
+      // experts/ 或第三方 registerRoot 目录）→ fail-loud 拒写。origin 判定即便漂移，
+      // 内置层也不可被写——只读由结构保证而非约定。
+      assertNotBuiltinRoot(expertsDir);
+      const file = join(expertsDir, `${input.name}.md`);
+      const content = serializeExpertMd(
+        {
+          name: input.name,
+          title: input.title,
+          description: input.description,
+          tools: input.tools,
+          skills: input.skills,
+          ...(input.model !== undefined ? { model: input.model } : {}),
+          ...(input.provider !== undefined ? { provider: input.provider } : {}),
+          ...(input.reasoning !== undefined ? { reasoning: input.reasoning } : {}),
+        },
+        input.personaMd ?? "",
+      );
+      const verdict = parseExpertFile(file, content);
+      if (!verdict.ok) throw new Error(verdict.reason);
+      await mkdir(expertsDir, { recursive: true });
+      await writeFile(file, content, "utf8");
+      await registry.refresh();
+      presetSyncHook?.(); // 档案内容变更即调和 preset 行（update 面板写径与 tool 径同敛）
+      const fresh = registry
+        .list({ includeDisabled: true })
+        .find((entry) => entry.name === input.name);
+      if (fresh === undefined) throw new Error(`expert not found after update: ${input.name}`);
+      return fresh;
+    },
+    // 面板读口（bug 767e7580）：subagent/end 换代后的当前快照（纯 UI 数据）。
+    runState: () => panel.list(),
+    // delegate 装配状态读口：读口应答随 delegate 字段透出（观测面-only）。
+    delegateState: () => delegateAssembly,
+    // 候选目录读口（bug c19eb719：Dialog 工具/技能候选 = list_tools/list_skills 同款
+    // 全模式并集条目 {name, source}——共用取数面 unionToolsCatalog/unionSkillsCatalog，
+    // 不另立平行取数点）：tools 并集过滤排除集 EXCLUDED_EXPERT_TOOL_NAMES（7 枚管理/
+    // 取数工具；list_experts/delegate_expert 保留）；skills 同径并集（SkillRegistry
+    // 分层视图，官方源码核销 dsh-skill lib/types/index.d.ts:214-224/263-266）。
+    // 对应官方服务缺席 = 字段缺席（client 回退兜底）。
+    candidates: async () => {
+      // bug 66b588e3：bind 宿主保 this——抽出裸调丢 this，官方 schemas 方法体
+      // this.view 抛错归一 400，client 回退兜底残缺
+      const schemasRead = toolsFace?.schemas?.bind(toolsFace);
+      const tools =
+        schemasRead !== undefined
+          ? (
+              await unionToolsCatalog(
+                (scope?: object) =>
+                  scope === undefined ? schemasRead() : schemasRead(scope),
+                ctx.agentPresets,
+              )
+            )?.entries
+              .filter(
+                (entry) => !(EXCLUDED_EXPERT_TOOL_NAMES as readonly string[]).includes(entry.name),
+              )
+              .map((entry) => ({ name: entry.name, source: entry.source }))
+          : undefined;
+      const skillsFace = ctx.skills;
+      const skills =
+        typeof skillsFace?.list === "function"
+          ? (await unionSkillsCatalog(skillsFace, ctx.agentPresets))?.entries.map((entry) => ({
+              name: entry.name,
+              source: entry.source,
+            }))
+          : undefined;
+      return {
+        ...(tools !== undefined ? { tools } : {}),
+        ...(skills !== undefined ? { skills } : {}),
+      };
+    },
+  };
+  registerExpertSquadRoutes(connection, routes);
+
+  // 服务键 experts provide（bug 7b1c9ed4）：官方 provide 机械（cordis reflect.ts
+  // `provide(name, value)`——经 fiber.effect 注册，服务生命周期归属插件 fiber、卸载
+  // 级联注销；typed 正门 ctx.provide 的 reflect 层同语义入口，core/index.ts 先例同
+  // 径）。registry 取 cwd 工作区一代（dsh-forge 宿主 = 单工作区进程，tool 面同径）；
+  // registerRoot 追加的 extraRoots 下次 refresh 生效。宿主形状缺席（无 reflect 层或
+  // 无 provide 面）→ warn 降级（ctx.experts 正门不可用，路由/tool 面不受影响）。
+  // reflect 层直读（readOptionalService 语义是 reflect.get 取服务，不适用于层本身）。
+  const reflectLayer = (ctx as { reflect?: { provide?(name: string, value: unknown): unknown } })
+    .reflect;
+
+  // tool 面接线（fix-10，AGENTS 1.3 装配缝归属插件域）：tools 面缺席 fail-soft
+  // （warn + 跳过 tool 注册，路由/服务面不受影响——client 侧 slots 缺席同径）。
+  const toolsFace = readOptionalService(ctx, "tools") as ExpertSquadToolsFace | undefined;
+
+  // cwd registry 仅在服务键 provide 或 tool 面需要时构建（懒建：watch manager 惰性
+  // 挂目录的爬升开销不转嫁给纯路由消费方）。首刷失败不阻断装配（registry 逐出重试
+  // 属读路径，f9410209 同因）——降级为未刷新实例（provide 不缺席；get/list 前经
+  // 读路径换代）。
+  let toolRegistry: ExpertsRegistry | undefined;
+  if (reflectLayer?.provide !== undefined || toolsFace !== undefined) {
+    try {
+      toolRegistry = await registryFor(process.cwd());
+    } catch (error) {
+      diag("warn", "expert-squad-cwd-registry-refresh-fail", `cwd registry 首刷失败（provide 降级为未刷新实例）: ${String(error)}`);
+      toolRegistry = new ExpertsRegistry({
+        roots: () => rootsFor(process.cwd()),
+        state,
+        workspace: process.cwd(),
+        config: expertsConfigFace,
+        diag,
+      });
+    }
+  }
+  if (reflectLayer?.provide === undefined) {
+    diag("warn", "expert-squad-experts-provide-absent", "ctx.reflect/provide absent——experts 服务键未 provide（ctx.experts 正门不可用）");
+  } else {
+    // 服务门面（非裸 cwd registry 实例）：get/list/setEnabled 委派 cwd 实例；registerRoot
+    // 除 cwd 实例外还记入共享清单（新 registry 出生即含）并主动换代全部已建 registry
+    // （外部插件注册的内置目录即时对面板/工具/取用三面同可见——断层修复，见 rootsFor 注记）。
+    const expertsService: ExpertsService = {
+      get: (key) => toolRegistry!.get(key),
+      list: (opts) => toolRegistry!.list(opts),
+      setEnabled: (key, enabled) => toolRegistry!.setEnabled(key, enabled),
+      registerRoot: (_ctx: unknown, dir: string, pluginName?: string): void => {
+        const normalized = resolve(dir);
+        if (sharedExtraRoots.some((root) => resolve(root.dir) === normalized)) return; // 幂等短路
+        sharedExtraRoots.push({ origin: "plugin", dir: normalized, pluginName });
+        for (const [workspace, pending] of registries) {
+          void pending
+            .then((registry) => enqueueRefresh(workspace, registry))
+            .catch(() => {});
+        }
+      },
+    };
+    reflectLayer.provide(EXPERTS_SERVICE_KEY, expertsService);
+  }
+  if (toolsFace === undefined) {
+    diag("warn", "expert-squad-tools-absent", "ctx.tools absent——tool 面未注册（管理/委派工具不可用）");
+    return;
+  }
+  // tool 面共享 registry：apply 期无会话工作区锚（preset mount 一次、多 agent 共享），
+  // 以进程 cwd 兜底（dsh-forge 宿主 = 单工作区进程，即注册工作区）；D4 tool 侧
+  // 「调用 agent scope cwd」取值点需 tools.ts 面改造（execute 携 exec），超出接线
+  // 边界——多工作区宿主为残余风险（fix-10 resume 留痕）。
+  const registry = toolRegistry as ExpertsRegistry;
+  // subagents 取法（bug 5a1e1132）：官方具名正门 ctx.subagents 直取（cordis Context
+  // 模块扩充，@deepseek-ai/dsh-subagent lib/types/index.d.ts:62-64——subagents:
+  // SubagentRuntime 非可选，宿主恒供 → inject 声明边即可守卫内直读）。此前
+  // readOptionalService 的 reflect 字符串键取法与具名服务失配，真机 delegate_expert
+  // 不注册。形状校验保留：startContinuable 非函数面同按缺席降级。
+  // 专家 preset 行同步器（fix-1 agentPreset 注入通道——官方正本核销：dsh-subagent
+  // rc.1 README Child presets + agent-preset-registry README/register 正门）：装载期
+  // 批量预注册（每位启用专家一行：dsh-persona persona 段 + expert-restrict 白名单段）
+  // + recruit/update/rename/启停增删同步（presetSyncHook 挂 refresh 完成回调与显式
+  // 同步点）。agentPresets.register 缺席 = warn 降级（委派侧 presetProbe 同缺席——
+  // 请求面恒携 agentPreset，官方启动时对未知 id fail-loud），不阻载插件。
+  const presetsFace = ctx.agentPresets;
+  let presetSync: ExpertPresetSync | undefined;
+  if (typeof presetsFace?.register === "function") {
+    presetSync = new ExpertPresetSync({
+      presets: presetsFace as PresetRegistryFace,
+      knownTools: createKnownToolsProbe(
+        (scope?: object) =>
+          scope === undefined ? toolsFace.schemas?.() : toolsFace.schemas?.(scope),
+        () => ctx.agentPresets,
+      ),
+      diag,
+    });
+    presetSyncHook = () => {
+      if (toolRegistry !== undefined) void presetSync!.syncFrom(toolRegistry);
+    };
+    ctx.effect(() => () => void presetSync!.disposeAll());
+    // 装载期批量预注册（首批启用专家全集；失败仅逐专家 warn，不阻载）
+    presetSyncHook();
+  } else {
+    diag("warn", "expert-squad-agentpresets-register-absent", "ctx.agentPresets.register absent——专家 preset 行未同步（专家委派将诚实降级）");
+  }
+  // 委派 preset 在场探针（可用 preset id 名册，每派发现调禁 memoize——AGENTS 1.6；
+  // broken 行剔除；list 失败 = undefined 无校验直派）。register 缺席 = 探针缺席同径。
+  const presetProbe =
+    presetsFace !== undefined && typeof presetsFace.list === "function"
+      ? async (): Promise<readonly string[] | undefined> => {
+          try {
+            const all = await presetsFace.list();
+            return all.filter((p) => !p.broken).map((p) => p.id);
+          } catch {
+            return undefined;
+          }
+        }
+      : undefined;
+  const subagents = ctx.subagents;
+  if (typeof subagents?.startActivation !== "function") {
+    delegateAssembly = {
+      status: "degraded",
+      reason: subagents === undefined ? "subagents-absent" : "shape-mismatch",
+    };
+    diag("warn", "expert-squad-subagents-absent", "ctx.subagents absent——delegate_expert 未注册（委派不可用；管理面照常）");
+  } else {
+    // registered 落态在注册成功之后：register 抛错时不误报 registered（fail-loud 透传）
+    registerDelegateExpertTool(toolsFace, {
+      registry,
+      subagents,
+      panel,
+      provider: "spawn",
+      presetProbe,
+      diag,
+    });
+    delegateAssembly = { status: "registered" };
+  }
+  registerExpertTools(toolsFace, {
+    registry,
+    userRoot: resolveUserExpertsRoot,
+    // 召唤 target="project" 落点：cwd 项目根（合理性校验同径——应用目录形态返 null，
+    // tool 侧报错引导回落 user 层）
+    projectRoot: () => resolveCwdProjectExpertsRoot(process.cwd()),
+    // list_tools / list_skills 取数面（调用点现查，不 memoize）：tools = ToolRuntime
+    // .schemas(scope?)——无 scope 全局视图、携 preset scope key = 该 preset 装配面视图
+    // （bug 6337a936 全模式并集）；skills = ctx.skills face 每次 execute 现取（缺席
+    // fail-soft）；agentPresets = 官方具名正门（每 preset acquireScope 租约枚举缝）。
+    toolsSchemas: (scope?: object) =>
+      scope === undefined ? toolsFace.schemas?.() : toolsFace.schemas?.(scope),
+    skills: () => ctx.skills,
+    agentPresets: () => ctx.agentPresets,
+  });
+}
+
+expertSquadPlugin.inject = ['connection', 'subagents', 'skills', 'agentPresets'];
+// cordis Config schema（StandardSchemaV1 正门——loader 按此校验并解析 volatile 引用）。
+expertSquadPlugin.Config = expertSquadConfig;
+
+export default expertSquadPlugin;

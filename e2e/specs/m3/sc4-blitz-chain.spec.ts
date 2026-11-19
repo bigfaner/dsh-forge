@@ -1,19 +1,23 @@
 // @feature:dsh-forge-m3-bootstrap-presets @web-e2e
-// M3 5.2 SC4 突击直达链（PRD Goals SC4 / 图 12 上链；用户裁决 2026-10-07：突击无 feature 阶段）：
-//   quick-tasks 产出形态（回放主径承载：createProposal mode=blitz + addTask source=proposal
-//   直挂——Hard Rule 禁真实模型）→ 提案 accepted → **无 feature 行断言**（成链分叉：blitz
-//   不成链——任务直挂提案）→ 任务子 tab 突击提案容器在场（琥珀点 data-mode=blitz）→
-//   claim/submit → 三视图（列表/泳道/DAG）即时刷新（写推送事件驱动——M2 机制）。
+// M3 5.2 SC4 突击直达链（PRD Goals SC4 / 图 12 上链——proposal 域退役后 fixed-migration）：
+//   容器播种经 features 域注册（FEATURES_CHANNELS.register——proposal 域随域退役，容器 pill
+//   菜单单源 = features 轨投影）+ addTask 直挂（slug 弱引用）→ 任务子 tab 容器 pill 切换
+//   （蓝点·mode 恒 expedition）→ claim/submit → 三视图（列表/泳道/DAG）即时刷新
+//   （写推送事件驱动——M2 机制）。
+//
+// 退役面（plugin-spec proposal 域下线——原 accepted-verdict / 零 feature 行断言 /
+// 提案卡 taskCount / 提案子 tab 行状态等提案域断言面随域退役，不再重建）。
 import { expect } from '@playwright/test'
-import { PROPOSALS_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import type { ProposalCard } from '../../../packages/contracts/src/dto/forge.js'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
+import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
-import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
-import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { createBridgeDriver } from '../../support/replay/executor.js'
+import { openTaskLoopDbFull } from '../../support/sqlite.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { ovSubtabOf, ttCardOf, ttColOf, ttItemOf } from '../../support/anchors.js'
 import { switchTaskView } from '../../support/m3.js'
+import { projectKeyOf } from '../../support/project-key.js'
 
 const WS_NAME = 'ws-sc4'
 const PROP = 'sc4-blitz'
@@ -26,62 +30,53 @@ const { test } = createSharedLaunchFixture({
   launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
 })
 
-test('@web-e2e @m3 SC4·突击直达链：accepted 无 feature 行 + 直挂任务 + 三视图即时刷新', async ({ sharedLaunch }) => {
+test('@web-e2e @m3 SC4·突击直达链：容器注册 + 直挂任务 + 容器 pill 切换 + 三视图即时刷新', async ({ sharedLaunch }) => {
+  // 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+  // 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）——同会话 GUI 会话
+  // 打开面挂 conversation.view 槽位原生崩溃（projectUserText 取值落空），崩溃对话框
+  // 掩码阻断概览 dock 交互链。
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
   test.setTimeout(480_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
-    const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
+    const projectKey = projectKeyOf(wsDir)
     const driver = createBridgeDriver(app)
 
-    // ── quick-tasks 产出（回放主径）：突击提案 + 任务清单直挂（mode 溯源 = blitz）──
-    const proposal = (await driver.call('forgeProposals', 'createProposal', {
-      projectId, slug: PROP, title: 'SC4 突击直达链演示', mode: 'blitz',
-    })) as { proposalId: string; slug: string }
+    // ── 容器播种（回放主径）：features 域注册 + 任务清单直挂（slug 容器弱引用）──
+    await forgeInvoke(page, FEATURES_CHANNELS.register, { projectId, slug: PROP, title: 'SC4 突击直达链演示' })
     const t1 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '突击任务甲', type: 'doc',
+      projectKey, slug: PROP, title: '突击任务甲', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
     const t2 = (await driver.call('forgeTasks', 'addTask', {
-      projectId, source: { kind: 'proposal', slug: PROP }, title: '突击任务乙', type: 'doc', dependsOn: [t1.localId],
+      projectKey, slug: PROP, title: '突击任务乙', type: 'doc', dependsOn: [t1.localId],
     })) as { taskId: string; slug: string; localId: string }
-
-    // ── accepted → 无 feature 行（成链分叉：blitz 不成链——任务直挂提案）──
-    const verdict = (await driver.call('forgeProposals', 'transitionProposal', {
-      projectId, proposalId: proposal.proposalId, toStatus: 'accepted',
-    })) as { chained?: unknown }
-    expect(verdict.chained, 'blitz accepted 不成链（chained 键缺席）').toBeUndefined()
-    const db = openForgeDbAt(dir)
+    // 任务账本（task-loop.db 域账单源——slug 容器弱引用两行）
+    const tl0 = openTaskLoopDbFull(udDir)
     try {
-      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM features WHERE proposal_id = ?`).get(proposal.proposalId)?.n, '零 feature 行（突击无 feature 阶段）').toBe(0)
-      const direct = db.prepare<unknown[], { n: number }>(
-        `SELECT COUNT(*) AS n FROM tasks WHERE source_kind = 'proposal' AND source_id = ?`,
-      ).get(proposal.proposalId)?.n
-      expect(direct, '任务直挂提案（source 双列——两行）').toBe(2)
+      expect(tl0.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_tasks WHERE slug = ? AND project_key = ?`).get(PROP, projectKey)?.n, '任务直挂容器（slug 双列——两行）').toBe(2)
     } finally {
-      db.close()
+      tl0.close()
     }
-    // 读面：提案卡 taskCount = 2（容器 pill「有任务的提案」判据）
-    const cards = await refetchOnce<ProposalCard[]>(page, PROPOSALS_CHANNELS.list, { projectId })
-    expect(cards.find((c) => c.slug === PROP)?.taskCount, '提案卡 taskCount = 2（直挂并入同计）').toBe(2)
 
-    // ── 任务子 tab：突击提案容器在场（琥珀点）+ 行加载 ──
+    // ── 任务子 tab：容器 pill 切至注册容器（features 轨——蓝点·恒远征）+ 行加载 ──
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('tasks')).click()
     await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     await page.locator('[data-dswf-tt-contpill]').first().click()
-    const menuItem = page.locator('[data-dswf-tt-mcont="proposal:sc4-blitz"]').first()
-    await expect(menuItem, '容器菜单含突击提案容器').toBeVisible({ timeout: 15_000 })
+    const menuItem = page.locator(`[data-dswf-tt-mcont="feature:${PROP}"]`).first()
+    await expect(menuItem, '容器菜单含注册容器（features 轨投影——proposal 域退役）').toBeVisible({ timeout: 15_000 })
     await menuItem.click()
-    const pill = page.locator('[data-dswf-tt-contpill="proposal:sc4-blitz"]')
-    await expect(pill, '容器 pill 切至突击提案').toBeVisible({ timeout: 15_000 })
-    await expect(pill.locator('.dswf-tt-contdot'), '琥珀点 = blitz 容器标记').toHaveAttribute('data-mode', 'blitz')
+    const pill = page.locator(`[data-dswf-tt-contpill="feature:${PROP}"]`)
+    await expect(pill, '容器 pill 切至注册容器').toBeVisible({ timeout: 15_000 })
+    await expect(pill.locator('.dswf-tt-contdot'), '蓝点 = feature 容器（mode 恒 expedition——container-pill.ts 单源投影）').toHaveAttribute('data-mode', 'expedition')
     await expect(page.locator(ttItemOf(t1.taskId)).first(), '直挂任务行在场（列表视图）').toBeVisible({ timeout: 30_000 })
 
     // ── 派发（回放主径承载）：claim + submit 甲 → 三视图即时刷新 ──
-    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-sc4-dispatch' })
+    await driver.call('forgeTasks', 'claimTask', { projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, sessionId: 'e2e-sc4-dispatch' })
     await driver.call('forgeTasks', 'submitTask', {
-      projectId, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
+      projectKey, taskRef: { slug: t1.slug, localId: t1.localId }, result: 'success',
       summary: 'SC4 突击甲结算（三视图即时刷新断言）', gate: { compile: true, fmt: true, lint: true, test: true },
       sessionId: 'e2e-sc4-executor',
     })
@@ -98,12 +93,6 @@ test('@web-e2e @m3 SC4·突击直达链：accepted 无 feature 行 + 直挂任�
     // 乙保持待处理（依赖未领——池态一致性）
     await expect(page.locator(`[data-dswf-tt-node="${t2.taskId}"]`), '依赖方节点在场（未领取）').toBeVisible()
     await expect(page.locator(`[data-dswf-tt-node="${t2.taskId}"]`)).not.toHaveClass(/is-completed/)
-
-    // 提案子 tab 联动：行状态 tag = 已接受（评审直入任务阶段——无 feature 阶段的提案全景）
-    await page.locator(ovSubtabOf('proposals')).click()
-    const row = page.locator('[data-dswf-ov-parent]', { hasText: 'SC4 突击直达链演示' }).first()
-    await expect(row, '提案行在场（已接受）').toBeVisible({ timeout: 30_000 })
-    await expect(row).toContainText('已接受')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {

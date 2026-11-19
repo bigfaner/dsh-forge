@@ -8,7 +8,7 @@
 //   · 零通道：不进 FORGE_CHANNEL_ALLOWLIST、不经 ForgeIpc 注册——renderer/preload 恒不可达
 //     （preload invoke 守卫 + main 注册面双道 allowlist 均不知晓本钩子）；
 //   · 零痕迹：env 缺席 = 零注册（globalThis 挂点不设），发布构建在场零暴露；
-//   · 面封闭：可达动词恰五枚（回放主径写动词），禁作通用 RPC 旁路（transitionTask 等
+//   · 面封闭：可达动词恰三枚（回放主径写动词），禁作通用 RPC 旁路（transitionTask 等
 //     RPC 面动词与读面一律拒绝——产品面分治不因测试钩子破口）。
 //
 // e2e 消费面 = Playwright electronApp.evaluate（主进程面读 globalThis 挂点——函数不可
@@ -23,13 +23,12 @@ export const TEST_BRIDGE_ENV = 'DSH_FORGE_TEST_BRIDGE'
 /** globalThis 挂点键（主进程面唯一暴露位——e2e evaluate 可达；非 IPC 非 preload） */
 export const TEST_BRIDGE_GLOBAL = '__DSH_FORGE_TEST_BRIDGE__'
 
-/** 钩子可达服务（回放主径两域——写动词所在） */
-export type TestBridgeService = 'forgeTasks' | 'forgeProposals'
+/** 钩子可达服务（回放主径写动词所在域——proposal 域已随 1.11 整域下线退役） */
+export type TestBridgeService = 'forgeTasks'
 
-/** 钩子可达动词面（恰五写动词——恒非 RPC 面；扩面 = 契约面变更须回任务 5.1 裁决） */
+/** 钩子可达动词面（恰三写动词——恒非 RPC 面；扩面 = 契约面变更须回任务 5.1 裁决） */
 export const TEST_BRIDGE_VERBS: Readonly<Record<TestBridgeService, readonly string[]>> = {
   forgeTasks: ['addTask', 'claimTask', 'submitTask'],
-  forgeProposals: ['createProposal', 'transitionProposal'],
 }
 
 /** 事件记账行（fix 链事件流观测面——at = 主进程收讫时刻，e2e ≤500ms 断言基准） */
@@ -79,7 +78,7 @@ export function registerTestBridge(
       }
       const target = host.services[service as TestBridgeService]
       if (target === undefined) {
-        throw new Error(`[test-bridge] ${service} 服务缺席（M2 面降级——tasksHome 未配置/插件行未装载？）——写动词不可达`)
+        throw new Error(`[test-bridge] ${service} 服务缺席（M2 面降级——@dsh-forge/task-loop 插件行未装载？）——写动词不可达`)
       }
       const method = (target as unknown as Record<string, (input: unknown) => Promise<unknown>>)[verb]
       if (typeof method !== 'function') {

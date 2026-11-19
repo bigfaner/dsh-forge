@@ -10,7 +10,7 @@
 - 需要能力时先核销官方同语义机械（ctx 服务键/事件/slot/loader/plugin-manager 等），有则复用；候选机制须读源码弄懂声明方式、生命周期、持久化/失效与并发语义后才能裁定——判定「官方没有」须以穷尽读懂为前提；确需自建须在提案/技术设计记录「官方缺什么、为何不自建进官方」。装配缝合优先走官方缝（cordis inject 服务键、官方 loader、plugin-manager 安装通道），不发明平行注入机制。正本见 `docs/conventions/reuse-official-mechanisms.md`。
 
 ### 1.3 插件可移植性
-- **装配缝归属插件域**：插件包（`packages/plugins/*`，如 git-worktree）的装配缝（编排逻辑、与官方机械的缝合面）属于插件自身——插件面向一切满足 dsh 规范的应用，不只服务 dsh-forge。宿主只做 wiring（通道注册 / service provide / Face 注入）。正本见 `docs/conventions/plugin-portability.md`（目标分层、判据、现状漂移面）。
+- **装配缝归属插件域**：插件包（`packages/plugins/*` 与根级 `plugins/*`，如 git-worktree、task-loop）的装配缝（编排逻辑、与官方机械的缝合面）属于插件自身——插件面向一切满足 dsh 规范的应用，不只服务 dsh-forge。宿主只做 wiring（通道注册 / service provide / Face 注入）。正本见 `docs/conventions/plugin-portability.md`（目标分层、判据、现状漂移面）。
 
 ### 1.4 外部依赖装配面取证
 - **外部依赖装配面结算门 = 真机端到端取证**：子进程/网络/外部文件系统/上游闭源机械的装配代码，fake 契约测试全绿不算交付。正本见 `docs/conventions/external-dependency-verification.md`（适用范围/取证方式/边界）。

@@ -65,8 +65,12 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_BUG_ALREADY_RESOLVED: 'error-bar',
   ERR_COMMIT_HASH_REQUIRED: 'error-bar',
   // ── bug-recurrence-chain（复发链挂链写径）──
-  // 挂链引用悬空 → 错误条（recordBug 语境原地反馈——前驱 bug_id 不存在改参重试）
+  // 挂链引用悬空/弱引用格式非法 → 错误条（recordBug 语境原地反馈——前驱 bug_id 不存在或形制非法改参重试）
   ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
+  ERR_BUG_RECURRENCE_INVALID: 'error-bar',
+  // ── plugin-project 1.11 归拢（host/bugs 行级归属键闸门）──
+  // project_key 派生失败 → 错误条（登记语境原地反馈——项目归属未解析，重试同因）
+  ERR_BUG_PROJECT_KEY_REQUIRED: 'error-bar',
   // ── dispatch-loop-hardening 改进 5（addTask caller 身份分流）──
   // worker 会话 addTask 拒收 → 错误条（自解释文案带正确动作——submitTask result=blocked 如实结算）
   ERR_WORKER_ADDTASK_DENIED: 'error-bar',
@@ -101,6 +105,38 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_PHASE_GATE_UNSETTLED: 'error-bar',
   ERR_BLOCK_SOURCE_IN_PROGRESS: 'error-bar',
   ERR_BLOCK_SOURCE_TERMINAL: 'error-bar',
+  // ── plugin-spec 1.4（spec 域 typed 码池 + tool 入参收窄）──
+  // spec 未命中 → 空态（详情语境无内容可列）；其余 spec 守卫/文档写盘/入参收窄 → 错误条（原地反馈改参重试）
+  ERR_SPEC_NOT_FOUND: 'empty-state',
+  ERR_SPEC_GOALS_EMPTY: 'error-bar',
+  ERR_SPEC_CRITERION_EMPTY: 'error-bar',
+  ERR_SPEC_TIERS_INVALID: 'error-bar',
+  ERR_SPEC_DUPLICATE_SLUG: 'error-bar',
+  ERR_SPEC_DUPLICATE_DOC_PATH: 'error-bar',
+  ERR_SPEC_PROJECT_KEY_DERIVATION: 'error-bar',
+  ERR_SPEC_ARCHIVED_FROZEN: 'error-bar',
+  ERR_SPEC_ILLEGAL_TRANSITION: 'error-bar',
+  ERR_SPEC_REJECT_NOTE_REQUIRED: 'error-bar',
+  ERR_SPEC_ACTOR_INVALID: 'error-bar',
+  ERR_SPEC_DOC_WRITE: 'error-bar',
+  ERR_TOOL_ARGS_INVALID: 'error-bar',
+  // ── plugin-spec-roadmaps 1.5–1.8（goal 终审/复核 + 生命周期 + roadmap/milestone 服务域）──
+  // 目标域守卫/复核/确认拒绝 → 错误条（对话语境原地反馈——human-only 边/前置不满足如实回面）
+  ERR_SPEC_GOAL_ILLEGAL_TRANSITION: 'error-bar',
+  ERR_SPEC_GOAL_REJECT_NOTE_REQUIRED: 'error-bar',
+  ERR_SPEC_GOAL_NOT_FOUND: 'empty-state',
+  ERR_SPEC_REVIEW_GAP_NOTE_REQUIRED: 'error-bar',
+  ERR_SPEC_REVIEW_GOAL_NOT_REVIEWING: 'error-bar',
+  ERR_SPEC_REVIEW_KIND_INVALID: 'error-bar',
+  ERR_SPEC_ROADMAP_UNKNOWN: 'empty-state',
+  ERR_SPEC_ROADMAP_TERMINAL: 'error-bar',
+  ERR_SPEC_MILESTONE_UNKNOWN: 'empty-state',
+  ERR_SPEC_MILESTONE_PROJECT_MISMATCH: 'error-bar',
+  ERR_SPEC_MOVE_ANCHOR_INVALID: 'error-bar',
+  ERR_SPEC_AC_INVALID: 'error-bar',
+  ERR_SPEC_AC_ADDRESS_UNKNOWN: 'error-bar',
+  ERR_SPEC_CONFIRM_NOT_ACHIEVED: 'error-bar',
+  ERR_SPEC_INCLUDE_UNKNOWN: 'error-bar',
 }
 
 /**

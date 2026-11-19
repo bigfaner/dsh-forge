@@ -2,7 +2,7 @@
 // 形状校验、carrier 推导、掌舵入图（追加语义 + 负样例）、宿主插件位发布（bug 2ffb0a82）。
 // DOM/IPC 面由 e2e（web-shell.spec）覆盖。
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bootShell, steerBootGraph, type ProductClientEntry } from './boot.js'
+import { bootReadinessGate, bootShell, steerBootGraph, type ProductClientEntry } from './boot.js'
 import { transportCarrierFor } from './carrier.js'
 import { assertBootManifestShape, type BootManifestPayload, preloadBridge } from './bridge.js'
 
@@ -140,6 +140,18 @@ describe('bootShell 宿主插件位发布（bug 2ffb0a82：manifest.knowledgePlu
     await boot({})
     expect((globalThis as { __DSH_FORGE_HOST_PLUGINS__?: Record<string, boolean> }).__DSH_FORGE_HOST_PLUGINS__).toMatchObject({ knowledge: false })
   })
+  it('boot 失败路径 fail-closed 兜底（bug a7f231c6）：manifest 读取失败 → 缝缺省先发布 false，页内缝恒在场（集成态门控不宽判半挂载）', async () => {
+    ;(globalThis as { dshForge?: unknown }).dshForge = {
+      getBootManifest: () => Promise.reject(new Error('manifest unreachable')),
+    }
+    const gatePromise = bootReadinessGate().promise
+    gatePromise.catch(() => {}) // 就绪门 reject 路径显式接住（防 unhandled rejection 噪声）
+    await expect(bootShell([product()])).rejects.toThrow(/manifest unreachable/)
+    const seam = (globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean; expertSquad: boolean } }).__DSH_FORGE_HOST_PLUGINS__
+    expect(seam).toEqual({ knowledge: false, expertSquad: false })
+    // 缝在 falsy 缺省下，集成态门控读 false——壳缝整体缺席 + 集成态形态不宽判
+    expect(seam).not.toBeUndefined()
+  })
   it('bug 4d55ba98：expert-squad 装载位发布 + 壳掌舵门控（位 true = 掌舵；缺席/false = 不掌舵——显示的状态 = 实际生效的状态）', async () => {
     const boot = (manifestOver: Partial<BootManifestPayload>) => {
       ;(globalThis as { __DSH_BOOT__?: unknown }).__DSH_BOOT__ = { entries: [], batches: [] }
@@ -163,6 +175,34 @@ describe('bootShell 宿主插件位发布（bug 2ffb0a82：manifest.knowledgePlu
       expect(ids()).toEqual(['@dsh-forge/web-client'])
       // 位 false 同口径；其它产品行不受累（web-client 两轮均掌舵）
       expect(warn.some((line) => line.includes('@dsh-forge/expert-squad'))).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+  it('knowledge 装载位掌舵门控（1.4 收口：位 true = 掌舵；缺席/false = 不掌舵——faces 另有 knowledgeGateOf 双门控裁决）', async () => {
+    const knowledge = (): ProductClientEntry => ({
+      id: '@dsh-forge/knowledge',
+      url: 'knowledge-client.js?rev=b1',
+      rev: 'b1',
+    })
+    const boot = (manifestOver: Partial<BootManifestPayload>) => {
+      ;(globalThis as { __DSH_BOOT__?: unknown }).__DSH_BOOT__ = { entries: [], batches: [] }
+      ;(globalThis as { dshForge?: unknown }).dshForge = {
+        getBootManifest: () => Promise.resolve(manifest(manifestOver)),
+      }
+      return bootShell([product(), knowledge()])
+    }
+    const ids = () =>
+      ((globalThis as { __DSH_BOOT__?: { entries: { id: string }[] } }).__DSH_BOOT__?.entries.map((r) => r.id) ?? [])
+    const warn: string[] = []
+    const spy = vi.spyOn(console, 'warn').mockImplementation((line) => void warn.push(String(line)))
+    try {
+      await boot({ knowledgePlugin: true })
+      expect(ids()).toEqual(['@dsh-forge/web-client', '@dsh-forge/knowledge'])
+      // 位缺席（旧宿主 / loader 行关）= 不掌舵——knowledge client 半真不装载（fail-closed）
+      await boot({})
+      expect(ids()).toEqual(['@dsh-forge/web-client'])
+      expect(warn.some((line) => line.includes('@dsh-forge/knowledge'))).toBe(true)
     } finally {
       spy.mockRestore()
     }

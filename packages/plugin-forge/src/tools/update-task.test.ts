@@ -45,7 +45,6 @@ function toolWithCapture(events?: ForgePluginEvent[]) {
   } as unknown as ForgeTasksService
   const deps: ForgeToolDeps = {
     tasks,
-    proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
@@ -118,7 +117,7 @@ describe('updateTask execute（projectId 路由 core updateTask）', () => {
         throw Object.assign(new Error('任务被锁定'), { code: 'ERR_TASK_LOCKED', data: {} })
       },
     } as unknown as ForgeTasksService
-    const tool = createUpdateTaskTool({ tasks, proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'],
+    const tool = createUpdateTaskTool({ tasks, bugs: {} as ForgeToolDeps['bugs'],
   checkpoints, resolveProjectId: () => 'p-1' })
     const out = await tool.execute({ slug: 'f1', local_id: '1.3' }, EXEC)
     expect(out).toEqual({ ok: false, code: 'ERR_TASK_LOCKED', message: '任务被锁定', violations: [] })
@@ -206,7 +205,6 @@ describe('updateTask 事件发射（typed 错误 → tool-error；verb=updateTas
     } as unknown as ForgeTasksService
     const tool = createUpdateTaskTool({
       tasks,
-      proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
       resolveProjectId: () => 'p-1',

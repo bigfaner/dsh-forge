@@ -20,9 +20,8 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
-const OV = 'apps/web/src/views/overview'
+const OV = 'plugins/project/ui/dock-tabs/overview'
 const overviewCss = readFileSync(join(ROOT, `${OV}/overview.css`), 'utf8')
-const proposalCss = readFileSync(join(ROOT, `${OV}/proposal-tab/proposal-tab.css`), 'utf8')
 const featureCss = readFileSync(join(ROOT, `${OV}/feature-tab/feature-tab.css`), 'utf8')
 const taskCss = readFileSync(join(ROOT, `${OV}/task-tab/task-tab.css`), 'utf8')
 
@@ -41,7 +40,6 @@ function declsOf(css: string, selector: string): string {
 
 describe('D36 ① 提案/feature 子 tab：chips 行 → 首卡间距减半', () => {
   it.each([
-    { face: '五态 chips（提案面）', css: proposalCss, cls: 'dswf-ov-pschips' },
     { face: '阶段 chips（feature 面）', css: featureCss, cls: 'dswf-ov-phchips' },
   ])('$face：行底距 = 整行高之半（shorthand 第三位 = 半令牌——原值整行高行注对照）', ({ css, cls }) => {
     expect(declsOf(css, `.${cls}`), `${cls} 底距减半锚`).toContain(
@@ -50,10 +48,8 @@ describe('D36 ① 提案/feature 子 tab：chips 行 → 首卡间距减半', ()
   })
 
   it('页容器 gap = 整行高之半（chips 行 → 首卡间距 = 底距 + gap 同 × 0.5——40px → 20px）', () => {
-    const block = declsOf(overviewCss, '.dswf-ov-proposalpage')
+    const block = declsOf(overviewCss, '.dswf-ov-featurepage')
     expect(block).toContain(`gap: ${HALF}`)
-    // 双页容器共用规则（featurepage 同选择器组——declsOf 多命中并集）
-    expect(declsOf(overviewCss, '.dswf-ov-featurepage')).toContain(`gap: ${HALF}`)
   })
 })
 

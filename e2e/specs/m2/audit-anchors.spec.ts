@@ -1,4 +1,4 @@
-// @feature:dsh-forge-m2-pipeline @web-e2e
+﻿// @feature:dsh-forge-m2-pipeline @web-e2e
 // 5.3 审计四锚（AC2–AC5；Hard Rule：审计锚必须自动化——禁仅人工 checklist）：
 //   ① 源码面（本 spec 首件 + vitest e2e-support 池双落点）：SC2 无 watch/回流/快照同步、
 //      SC8 无迁移工具、SC3 发现面只读文件面 + 单向吸收白名单在场、web 无编排逻辑、
@@ -20,10 +20,11 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { test, expect } from '@playwright/test'
-import { FEATURES_CHANNELS, PROPOSALS_CHANNELS, TASKS_CHANNELS, DOCS_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { FEATURES_CHANNELS, TASKS_CHANNELS, DOCS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { runAllSourceAuditAnchors } from '../../support/audit/anchors.js'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
+import { projectKeyOf } from '../../../e2e/support/project-key.js'
 
 // ───────────────────────── ① 源码面审计锚（无 app——扫描即断言） ─────────────────────────
 
@@ -103,6 +104,7 @@ testShared('@web-e2e @m2 5.3 审计锚（运行面）：SC3 全流程零写入 +
   // ── 全流程：注册（发现面扫描内聚）→ 四域读（features/proposals/docs/tasks）──
   const project = await registerProject(page, wsDir, '旧仓零迁移演示')
   const projectId = project.id
+  const projectKey = projectKeyOf(wsDir)
 
   const features = await forgeInvoke<readonly { slug: string; title: string; docCount: number; proposalSlug?: string }[]>(
     page,
@@ -114,8 +116,8 @@ testShared('@web-e2e @m2 5.3 审计锚（运行面）：SC3 全流程零写入 +
   expect(feature!.title).toBe('遗留演示特性')
   expect(feature!.docCount, '目录约定文档索引（prd-spec + tech-design 两行）').toBe(2)
 
-  const proposals = await forgeInvoke<readonly { slug: string }[]>(page, PROPOSALS_CHANNELS.list, { projectId })
-  expect(proposals.map((p) => p.slug)).toContain('legacy-prop')
+  // 提案发现面断言：退役——forge:proposals 域随 a4664ccb 整域下线（提案发现/登记面退役，
+  // SC8 白名单口径收敛为 features/docs/tasks 三域）。
 
   const doc = await forgeInvoke<{ content: string; dangling: boolean }>(page, DOCS_CHANNELS.read, {
     projectId,
@@ -125,8 +127,8 @@ testShared('@web-e2e @m2 5.3 审计锚（运行面）：SC3 全流程零写入 +
   expect(doc.dangling).toBe(false)
 
   const tasks = await forgeInvoke<readonly { localId: string }[]>(page, TASKS_CHANNELS.list, {
-    projectId,
-    source: { kind: 'feature', slug: 'legacy-demo' },
+    projectKey,
+    slug: 'legacy-demo',
   })
   expect(tasks, 'SC8 零迁移：旧仓任务文件零吸收为任务行（发现面白名单无 tasks 面）').toEqual([])
 

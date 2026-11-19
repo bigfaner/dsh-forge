@@ -1,0 +1,362 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`M4a 目标域五端点契约快照（真服务 + 工具面动词复用） > goalBoard：徽标面（isTerminal/availableTransitions）+ 最新复核 + 台账尾帧——形状契约快照 1`] = `
+{
+  "goals": [
+    {
+      "badge": {
+        "availableTransitions": [
+          "in_progress",
+        ],
+        "isTerminal": false,
+      },
+      "brief": "首个目标",
+      "goalId": "<goalId>",
+      "goalSeq": 1,
+      "goalStatus": "pending",
+      "latestReview": {
+        "createdAt": "<createdAt>",
+        "verdict": "passed",
+      },
+      "title": "G1",
+    },
+    {
+      "badge": {
+        "availableTransitions": [
+          "in_progress",
+        ],
+        "isTerminal": false,
+      },
+      "goalId": "<goalId>",
+      "goalSeq": 2,
+      "goalStatus": "pending",
+      "title": "G2",
+    },
+  ],
+  "spec": {
+    "createdAt": "<createdAt>",
+    "id": "<id>",
+    "milestoneId": null,
+    "projectKey": "<projectKey>",
+    "slug": "alpha",
+    "specStatus": "awaiting_approval",
+    "tiers": [
+      "api",
+    ],
+    "title": "Alpha Spec",
+    "updatedAt": "<updatedAt>",
+  },
+  "transitions": [],
+}
+`;
+
+exports[`M4a 目标域五端点契约快照（真服务 + 工具面动词复用） > goalReviewMutate：驳回 note 必填守卫 + finalize 终审确认（actor='ui'）——形状契约快照 1`] = `
+[
+  {
+    "brief": null,
+    "createdAt": "<createdAt>",
+    "goalStatus": "completed",
+    "id": "<id>",
+    "sortKey": 2,
+    "specId": "<specId>",
+    "title": "G2",
+    "updatedAt": "<updatedAt>",
+  },
+]
+`;
+
+exports[`M4a 目标域五端点契约快照（真服务 + 工具面动词复用） > roadmapDetail：本体 + milestones 下钻 + 达成派生——形状契约快照 1`] = `
+{
+  "achievement": {
+    "completed": false,
+    "perMilestone": [
+      {
+        "allCompleted": false,
+        "milestoneId": "<milestoneId>",
+        "milestoneStatus": "in_progress",
+        "seq": 1,
+        "specCount": 0,
+        "title": "M1",
+      },
+    ],
+    "roadmap": {
+      "acJson": [
+        {
+          "criterion": "RM AC one",
+          "id": "<id>",
+        },
+      ],
+      "brief": null,
+      "createdAt": "<createdAt>",
+      "id": "<id>",
+      "projectKey": "<projectKey>",
+      "roadmapStatus": "in_progress",
+      "slug": "rm-1",
+      "title": "Roadmap One",
+      "updatedAt": "<updatedAt>",
+    },
+    "warns": [],
+  },
+  "milestones": [
+    {
+      "acJson": [
+        {
+          "address": "<address>",
+          "criterion": "M1 AC",
+          "id": "<id>",
+        },
+      ],
+      "brief": null,
+      "createdAt": "<createdAt>",
+      "id": "<id>",
+      "milestoneStatus": "in_progress",
+      "roadmapId": "<roadmapId>",
+      "seq": 1,
+      "title": "M1",
+      "updatedAt": "<updatedAt>",
+    },
+  ],
+  "roadmap": {
+    "acJson": [
+      {
+        "criterion": "RM AC one",
+        "id": "<id>",
+      },
+    ],
+    "brief": null,
+    "createdAt": "<createdAt>",
+    "id": "<id>",
+    "projectKey": "<projectKey>",
+    "roadmapStatus": "in_progress",
+    "slug": "rm-1",
+    "title": "Roadmap One",
+    "updatedAt": "<updatedAt>",
+  },
+}
+`;
+
+exports[`M4a 目标域五端点契约快照（真服务 + 工具面动词复用） > roadmapMutate create/update：快照直投——形状契约快照 1`] = `
+[
+  {
+    "acJson": [
+      {
+        "criterion": "RM2 AC",
+        "id": "<id>",
+      },
+    ],
+    "brief": null,
+    "createdAt": "<createdAt>",
+    "id": "<id>",
+    "projectKey": "<projectKey>",
+    "roadmapStatus": "pending",
+    "slug": "rm-2",
+    "title": "Roadmap Two",
+    "updatedAt": "<updatedAt>",
+  },
+]
+`;
+
+exports[`M4a 目标域五端点契约快照（真服务 + 工具面动词复用） > roadmapMutate moveMilestone：全量新序透传——形状契约快照 1`] = `
+[
+  {
+    "assignments": [
+      {
+        "id": "<id>",
+        "seq": 1,
+      },
+      {
+        "id": "<id>",
+        "seq": 2,
+      },
+    ],
+    "startedWrites": [
+      {
+        "entityId": "<entityId>",
+        "from": "pending",
+        "kind": "milestone",
+        "to": "in_progress",
+      },
+    ],
+  },
+]
+`;
+
+exports[`M4a 目标域五端点契约快照（真服务 + 工具面动词复用） > roadmaps：roadmap 清单（listing 序）——形状契约快照 1`] = `
+[
+  {
+    "acJson": [
+      {
+        "criterion": "RM AC one",
+        "id": "<id>",
+      },
+    ],
+    "brief": null,
+    "createdAt": "<createdAt>",
+    "id": "<id>",
+    "projectKey": "<projectKey>",
+    "roadmapStatus": "in_progress",
+    "slug": "rm-1",
+    "title": "Roadmap One",
+    "updatedAt": "<updatedAt>",
+  },
+]
+`;
+
+exports[`forgeSpecs 端点族契约快照（M3 六端点——真服务 + 假 identity） > detail：父链全量 + transitions 台账 + doc 悬空态现算——形状契约快照 1`] = `
+[
+  {
+    "acCount": 3,
+    "doc": {
+      "dangling": false,
+      "relPath": ".forge/specs/alpha/spec.md",
+    },
+    "goalCount": 2,
+    "goals": [
+      {
+        "acs": [
+          {
+            "criterion": "AC one",
+          },
+          {
+            "criterion": "AC two",
+          },
+        ],
+        "brief": "首个目标",
+        "title": "G1",
+      },
+      {
+        "acs": [
+          {
+            "criterion": "AC three",
+          },
+        ],
+        "title": "G2",
+      },
+    ],
+    "slug": "alpha",
+    "specStatus": "draft",
+    "tiers": [
+      "api",
+    ],
+    "title": "Alpha Spec",
+    "transitions": [],
+    "updatedAt": "<updatedAt>",
+  },
+]
+`;
+
+exports[`forgeSpecs 端点族契约快照（M3 六端点——真服务 + 假 identity） > list：卡片清单（listing 序 + goalCount/acCount host 半水化）——形状契约快照 1`] = `
+[
+  {
+    "acCount": 3,
+    "goalCount": 2,
+    "slug": "alpha",
+    "specStatus": "draft",
+    "tiers": [
+      "api",
+    ],
+    "title": "Alpha Spec",
+    "updatedAt": "<updatedAt>",
+  },
+  {
+    "acCount": 1,
+    "goalCount": 1,
+    "slug": "beta",
+    "specStatus": "draft",
+    "tiers": [],
+    "title": "Beta Spec",
+    "updatedAt": "<updatedAt>",
+  },
+]
+`;
+
+exports[`forgeSpecs 端点族契约快照（M3 六端点——真服务 + 假 identity） > projection：缺席缝 → 全 AC no-task-data——形状契约快照 1`] = `
+[
+  {
+    "goals": [
+      {
+        "acs": [
+          {
+            "criterion": "AC one",
+            "state": "no-task-data",
+          },
+          {
+            "criterion": "AC two",
+            "state": "no-task-data",
+          },
+        ],
+        "title": "G1",
+      },
+      {
+        "acs": [
+          {
+            "criterion": "AC three",
+            "state": "no-task-data",
+          },
+        ],
+        "title": "G2",
+      },
+    ],
+  },
+]
+`;
+
+exports[`forgeSpecs 端点族契约快照（M3 六端点——真服务 + 假 identity） > query：include 四节门控（默认全节；projection 关 = 零投影节）——形状契约快照 1`] = `
+[
+  {
+    "acProjection": [
+      {
+        "criterion": "AC one",
+        "state": "no-task-data",
+      },
+      {
+        "criterion": "AC two",
+        "state": "no-task-data",
+      },
+      {
+        "criterion": "AC three",
+        "state": "no-task-data",
+      },
+    ],
+    "doc": {
+      "relPath": ".forge/specs/alpha/spec.md",
+    },
+    "goals": [
+      {
+        "acs": [
+          {
+            "criterion": "AC one",
+          },
+          {
+            "criterion": "AC two",
+          },
+        ],
+        "brief": "首个目标",
+        "title": "G1",
+      },
+      {
+        "acs": [
+          {
+            "criterion": "AC three",
+          },
+        ],
+        "title": "G2",
+      },
+    ],
+    "spec": {
+      "createdAt": "<createdAt>",
+      "id": "<id>",
+      "milestoneId": null,
+      "projectKey": "<projectKey>",
+      "slug": "alpha",
+      "specStatus": "draft",
+      "tiers": [
+        "api",
+      ],
+      "title": "Alpha Spec",
+      "updatedAt": "<updatedAt>",
+    },
+    "transitions": [],
+  },
+]
+`;

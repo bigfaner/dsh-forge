@@ -75,7 +75,7 @@ dsh-forge 不是「仿 dsh 的自研界面」，而是**官方壳的另一个占
 | 5 | `main` | keyed · key `'dswf-knowledge'` | ForgeKnowledgePanel | `bridge`（抽屉目标缝——subscribe/getSnapshot/setDrawerEntry） |
 | 6 | `sidebar.panellist` | list · id `'dswf-knowledge'` · order 20 · label 知识库 | ForgeKnowledgeGlyph | ——（官方 PanelRow 行语言；点击 = 官方 `layout.selectPanel`） |
 | 7 | `conversation.view` | list · id `'dswf-recall'` · order 20 · label 知识召回 | ForgeRecallView | `openKnowledgeEntry`（→ 桥跳转：进知识面板 + 开抽屉） |
-| 8 | `conversation.hero.workspace` | single · -100 影子（fix-24①） | ForgeHeroWorkspacePicker | ——（owner 契约面 open/anchorRef/selectedId/onPick/onClose 零变化；**不声明 children**） |
+| 8 | `conversation.hero.workspace` | single · -100 影子（1.7 B 类顶替②——注册面迁 project bundle `ui/hero-picker-face.ts`） | ForgeHeroWorkspacePicker（plugins/project/ui/worktree-picker/） | `workspaces.list` 快照源 + `openWorkspace`（官方面：基线在场门 + 草稿迁移；owner 契约面 open/anchorRef/selectedId/onPick/onClose 零变化；**不声明 children**） |
 | 9 | `shell.overlay` | list · id `'dswf-host'` | ForgeShellHost | `selectPanel`（官方面板选择窄面）+ `rightbar`（官方右栏收展窄面） |
 
 配套机制（同文件）：
@@ -105,7 +105,7 @@ dsh-forge 不是「仿 dsh 的自研界面」，而是**官方壳的另一个占
  ├─ 'dswf-knowledge' → KnowledgePanel（workbench/）
  │   ├─ 项目锚推导（projectAnchorOf——root 作用域无会话锚，恒走唯一项目兜底）
  │   ├─ 抽屉目标（useSyncExternalStore 订工作台桥；桥缺席 = 本地自持降级）
- │   └─ KnowledgeView（views/knowledge/）→ §7
+ │   └─ KnowledgeView（plugins/knowledge/ui/）→ §7
  └─ null（缺省）= 官方会话面板（ConversationRoot → §3）
 
 shell.overlay → ForgeShellHost（workbench/ShellHost.tsx——常驻不随面板互换卸载）
@@ -154,7 +154,7 @@ hero 工作区控件（新会话输入框上方）：`conversation.hero.workspac
      fix-25 迁入；点击 = 官方 layout.selectPanel）
 ```
 
-## 7. 知识视图（views/knowledge/）
+## 7. 知识视图（plugins/knowledge/ui/）
 
 ```
 KnowledgeView（装配壳：projectId null → 无锚引导 EmptyState；否则——）

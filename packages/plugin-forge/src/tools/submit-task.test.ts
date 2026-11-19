@@ -29,7 +29,6 @@ function toolWithCapture() {
   } as unknown as ForgeTasksService
   const deps: ForgeToolDeps = {
     tasks,
-    proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
@@ -138,7 +137,6 @@ describe('submitTask execute（路由 + 映射）', () => {
     } as unknown as ForgeTasksService
     const deps: ForgeToolDeps = {
       tasks,
-      proposals: {} as ForgeToolDeps['proposals'],
       bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
       resolveProjectId: () => 'p-1',
@@ -311,7 +309,6 @@ describe('submitTask execute（路由 + 映射）', () => {
     } as unknown as ForgeTasksService
     const deps: ForgeToolDeps = {
       tasks,
-      proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
       resolveProjectId: () => 'p-1',
@@ -388,7 +385,6 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
     } as unknown as ForgeTasksService
     const tool = createSubmitTaskTool({
       tasks,
-      proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
       resolveProjectId: () => 'p-1',
@@ -411,7 +407,6 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
     } as unknown as ForgeTasksService
     const tool = createSubmitTaskTool({
       tasks,
-      proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
       resolveProjectId: () => 'p-1',
@@ -434,21 +429,21 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
         submitTask: async () => ({ taskId: 't-1', status: 'completed', restored: [] }),
       }) as unknown as ForgeTasksService
     // success → completed
-    const t1 = createSubmitTaskTool({ tasks: base(), proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1', submitSettleDisplay: display })
+    const t1 = createSubmitTaskTool({ tasks: base(), bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1', submitSettleDisplay: display })
     await t1.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 's' }, EXEC)
     // blocked → blocked
-    const t2 = createSubmitTaskTool({ tasks: base(), proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1', submitSettleDisplay: display })
+    const t2 = createSubmitTaskTool({ tasks: base(), bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1', submitSettleDisplay: display })
     await t2.execute({ slug: 'f1', local_id: '2.4', result: 'blocked', reason: 'x' }, EXEC)
     expect(calls).toEqual([
       { slug: 'f1', localId: '3.2', result: 'completed' },
       { slug: 'f1', localId: '2.4', result: 'blocked' },
     ])
     // face 故障不外溢（结算返回面照常）
-    const t3 = createSubmitTaskTool({ tasks: base(), proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1', submitSettleDisplay: throwing })
+    const t3 = createSubmitTaskTool({ tasks: base(), bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1', submitSettleDisplay: throwing })
     const out = await t3.execute({ slug: 'f1', local_id: '1.1', result: 'success', summary: 's' }, EXEC)
     expect(out).toMatchObject({ taskId: 't-1' })
     // face 缺席 = 零影响
-    const t4 = createSubmitTaskTool({ tasks: base(), proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1' })
+    const t4 = createSubmitTaskTool({ tasks: base(), bugs: {} as ForgeToolDeps['bugs'], checkpoints, resolveProjectId: () => 'p-1' })
     const out4 = await t4.execute({ slug: 'f1', local_id: '1.2', result: 'success', summary: 's' }, EXEC)
     expect(out4).toMatchObject({ taskId: 't-1' })
   })
@@ -465,7 +460,6 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
     } as unknown as ForgeTasksService
     const tool = createSubmitTaskTool({
       tasks,
-      proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
       resolveProjectId: () => 'p-1',
@@ -483,7 +477,6 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
     } as unknown as ForgeTasksService
     const tool = createSubmitTaskTool({
       tasks,
-      proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
   checkpoints,
       resolveProjectId: () => 'p-1',

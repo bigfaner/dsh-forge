@@ -30,7 +30,7 @@ const cardOf = (key: string): string => `.dswf-xcard[data-expert-key="${key}"]`
 const KEY = 'test-reviewer'
 const OTHER_KEY = 'data-miner'
 // 包目录以本 spec 文件位置锚定（e2e/specs/ → 仓根两级上），不随 Playwright cwd 漂移
-const PLUGIN_PKG_DIR = fileURLToPath(new URL('../../packages/plugins/expert-squad', import.meta.url))
+const PLUGIN_PKG_DIR = fileURLToPath(new URL('../../plugins/expert-squad', import.meta.url))
 
 /** 上层业务词汇表（service-key-access step-5 契约——基础能力而非某应用专属） */
 const FORBIDDEN_VOCAB = /\b(forge|expedition|proposal|worktree|dispatch-loop|task-delegation)\b/i
@@ -200,15 +200,16 @@ test('@feature expert-squad svc-key step-5 audit：随包样例档案与 schema 
     if (FORBIDDEN_VOCAB.test(content)) offenders.push(`experts/${name}`)
   }
   expect(offenders, `样例档案零业务词汇（违例：${offenders.join(', ')}）`).toEqual([])
-  // schema 面：routes.ts 载荷门（注释剥离后检索——zod 描述与错误消息无业务词汇）
-  const routesSrc = readFileSync(join(PLUGIN_PKG_DIR, 'src', 'routes.ts'), 'utf8')
+  // schema 面：routes.ts 载荷门（注释剥离后检索——zod 描述与错误消息无业务词汇；
+  // 三目录制 host/ 即源码 host 面——批1 包归位 src/ → host/）
+  const routesSrc = readFileSync(join(PLUGIN_PKG_DIR, 'host', 'routes.ts'), 'utf8')
     .split('\n')
     .map((line) => line.replace(/\/\/.*$/, ''))
     .join('\n')
   const schemaHit = FORBIDDEN_VOCAB.exec(routesSrc.replace(LOG_NAMESPACE, '').replace(PRODUCT_IDENTITY, ''))
   expect(schemaHit, `schema 面零业务词汇${schemaHit ? `（命中：${schemaHit[0]}）` : ''}`).toBeNull()
-  // 源码面：src/src-client 全量（注释与 log 命名空间标签显式排除——留痕于文件头注记）
-  const srcDirs = [join(PLUGIN_PKG_DIR, 'src'), join(PLUGIN_PKG_DIR, 'src-client')]
+  // 源码面：host/ui 全量（三目录制——批1 包归位 src/ → host/、src-client/ → ui/）
+  const srcDirs = [join(PLUGIN_PKG_DIR, 'host'), join(PLUGIN_PKG_DIR, 'ui')]
   const srcOffenders: string[] = []
   const walk = (dir: string): void => {
     for (const dirent of readdirSync(dir, { withFileTypes: true })) {

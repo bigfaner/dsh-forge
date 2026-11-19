@@ -21,8 +21,7 @@ export async function forgeInvoke<T>(page: Page, channel: string, payload?: unkn
 }
 
 /** heat 通道专用（Map 经 Playwright 通道退化为普通对象——页内先转 entries，Node 侧重建） */
-export async function invokeHeat(page: Page, projectId: string): Promise<Map<number, number>> {
-  const entries = await page.evaluate(async (id) => {
+export async function invokeHeat(page: Page, projectId: string): Promise<Map<number, number>> {  const entries = await page.evaluate(async (id) => {
     const forge = (globalThis as { dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: unknown; message?: string }> } }).dshForge
     const envelope = await forge!.invoke('forge:knowledge/heat', { projectId: id })
     if (!envelope.ok) throw new Error(`forge RPC heat 失败：${JSON.stringify(envelope)}`)
@@ -30,6 +29,24 @@ export async function invokeHeat(page: Page, projectId: string): Promise<Map<num
     return heat instanceof Map ? [...heat.entries()] : Object.entries(heat as Record<string, number>).map(([k, v]) => [Number(k), v] as [number, number])
   }, projectId)
   return new Map(entries as readonly [number, number][])
+}
+
+/**
+ * deriveTaskStoreDir typed-code 探针（疑似移动族契约门控——信封 error code 原样读出不解包）。
+ * 返回 resolved(dir) / rejected(code)；code 缺席 = typed 信封丢失（产品侧缺陷探针）。
+ */
+export async function deriveTypedCode(
+  page: Page,
+  workspaceDir: string,
+): Promise<{ state: 'resolved'; dir: string } | { state: 'rejected'; code: string | null }> {
+  return page.evaluate(async (ws) => {
+    const forge = (globalThis as { dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: { dir: string }; error?: { code?: string } }> } }).dshForge
+    if (forge === undefined) return { state: 'rejected' as const, code: null }
+    const envelope = await forge.invoke('forge:projects/deriveTaskStoreDir', { workspaceDir: ws })
+    return envelope.ok
+      ? { state: 'resolved' as const, dir: envelope.data!.dir }
+      : { state: 'rejected' as const, code: envelope.error?.code ?? null }
+  }, workspaceDir)
 }
 
 /** 注册负载（输入同表单面——workspaceDir canonical 化由注册链承接） */

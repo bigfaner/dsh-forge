@@ -1,0 +1,31 @@
+{
+  "name": "@dsh-forge/lib-path",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "公共 path 子包：路径比对归一键（path-key 归并迁入）+ normalize 单源（web normalizeDirPath 与 core normalizeDirSpelling 收敛）+ derive-dir 派生（{flatten}@{hash8} 与注册碰撞三态分类器）+ forge 目录段派生（dir-segments 下沉）。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./path-key": {
+      "types": "./dist/path-key.d.ts",
+      "import": "./dist/path-key.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@dsh-forge/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0"
+  }
+}

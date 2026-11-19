@@ -58,11 +58,15 @@ export interface BootOverlayInput {
   /** 真 home 凭据文档桥（fix-26：在场即给 credentials 行注 config.path——官方
    *  resolveSpec 显式 path 优先于 home 拼接；缺席 = e2e/测试隔离态不桥） */
   readonly credentialsPath?: string
-  /** worktree-branch-management 1.7：git-worktree 插件行注行门（在场判定 = 双形态两探针
-   *  productPackagePresent——dev 形态 profile 树 link 在场 / 打包形态 anchor 邻接树
-   *  runtime/node_modules，2026-10-18 启动崩 fix 起 staged 随包）；true = 注 loader
-   *  行（插件装载面；扩展点注入不经 config——函数值走 ctx 服务缝，见 ipc/worktree-identity.ts） */
+  /** worktree 域插件行注行门（1.17 批二卸旧装新：装载 @dsh-forge/project——旧
+   *  @dsh-forge/git-worktree 行退役；在场判定 = 双形态两探针 productPackagePresent——
+   *  dev 形态 profile 树 link 在场 / 打包形态 anchor 邻接树 runtime/node_modules，
+   *  2026-10-18 启动崩 fix 起 staged 随包）；true = 注 loader 行（插件装载面；
+   *  扩展点注入不经 config——函数值走 ctx 服务缝，见 @dsh-forge/project
+   *  host/assembly/host-side.ts） */
   readonly gitWorktreeRow?: boolean
+  /** task-loop 域插件行注行门（1.15——包在 profile 树/安装锚邻接树在场才注；child 双形态探测） */
+  readonly taskLoopRow?: boolean
   /** mobile ask 桥插件行（bug f73315a1——缺席不注行 = 零挂接语义）。 */
   readonly mobileBridgeRow?: boolean
   /** M3 预设装配（3.7）：四底稿 + 技能目录物化锚（缺席 = 预设面整体不注行 fail-soft） */
@@ -80,12 +84,9 @@ export interface BootOverlayInput {
 export interface PresetOverlayInput extends PresetPatches {
   /** plugin-forge skills 当形态绝对路径（customSkillDirs[core]；缺席 = 剔除该目录行） */
   readonly coreSkillsDir?: string
-  /** plugin-forge-spec skills 当形态绝对路径（customSkillDirs[spec]；缺席 = 剔除
+  /** @dsh-forge/spec skills 当形态绝对路径（customSkillDirs[spec]；缺席 = 剔除
    *  ——spec 技能面降级 fail-soft，突击/blitz 本就物理不含） */
   readonly specSkillsDir?: string
-  /** plugin-forge skills-blitz 突击专属技能当形态绝对路径（customSkillDirs[blitz]；缺席 =
-   *  剔除——blitz 技能面降级 fail-soft，远征本就物理不含） */
-  readonly blitzSkillsDir?: string
   /** expert-squad skills 当形态绝对路径（customSkillDirs[squad]；缺席 = 剔除——squad
    *  技能面降级 fail-soft） */
   readonly squadSkillsDir?: string
@@ -101,7 +102,6 @@ export interface PresetOverlayInput extends PresetPatches {
 const PRESET_SKILL_DIR_TOKENS = {
   core: '{{plugin-forge-skills}}',
   spec: '{{plugin-forge-spec-skills}}',
-  blitz: '{{plugin-forge-blitz-skills}}',
   squad: '{{expert-squad-skills}}',
   knowledge: '{{knowledge-skills}}',
 } as const
@@ -118,7 +118,7 @@ const PRESET_BINDINGS_LINE_TOKEN = 'bindingsFile: "{{plugin-forge-bindings}}"'
  * ——customSkillDirs 仅 squad 占位符（经预设物化链既有 squad 分支解析为当形态绝对路径；
  * forge 技能仍零——2026-10-09 裁决对 forge 部分不变）。行形态 = patch 按 row id 补 config
  * （上游 standard 预设自带 skill-filesystem 裸行——presets.test.ts 镜像 pin，零插件行
- * 注册/insert）。expert-squad 工具面为全局单实例注册（hr.patch.yml 注记 +
+ * 注册/insert）。expert-squad 工具面为全局单实例注册（猎头预设随包自带注记 +
  * delegate-visibility-smoke pin——各组合统一继承），本缝只挂技能目录。
  * squadSkillsDir 缺席 = 整行剔除 fail-soft（无占位符残留）。
  */
@@ -148,17 +148,12 @@ function materializePresetLines(patch: string, input: PresetOverlayInput): strin
     const trimmed = line.trim()
     const coreToken = `- "${PRESET_SKILL_DIR_TOKENS.core}"`
     const specToken = `- "${PRESET_SKILL_DIR_TOKENS.spec}"`
-    const blitzToken = `- "${PRESET_SKILL_DIR_TOKENS.blitz}"`
     if (trimmed === coreToken) {
       if (input.coreSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.coreSkillsDir)}`)
       continue
     }
     if (trimmed === specToken) {
       if (input.specSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.specSkillsDir)}`)
-      continue
-    }
-    if (trimmed === blitzToken) {
-      if (input.blitzSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.blitzSkillsDir)}`)
       continue
     }
     const squadToken = `- "${PRESET_SKILL_DIR_TOKENS.squad}"`
@@ -242,12 +237,20 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     ...(input.presets?.squadSkillsDir !== undefined
       ? materializePresetPatch(STANDARD_SQUAD_SKILL_ROWS, input.presets).split('\n')
       : []),
-    // worktree-branch-management 1.7：git-worktree 插件行（门控注行——插件独立/集成双态，
-    // 扩展点注入走 ctx 服务缝非 config；git 缺席 fail-soft 不生效语义归插件启动检测）
+    // worktree 域插件行（1.17 批二卸旧装新：装载切换 @dsh-forge/project——五缝注册 +
+    // worktree 域插件（gitWorktree 能力服务）同包组合，旧 dsh-forge-git-worktree 行退役；
+    // 门控注行——插件独立/集成双态，扩展点注入走 ctx 服务缝非 config；git 缺席 fail-soft
+    // 不生效语义归插件启动检测）
     // fix-4（Root cause：新 id 裸行被 loader 补丁按 unknown target 静默跳过——插件从未装载，
     // RPC 恒独立模式）：须以 insert 形态注行（用户层 cordis.patch.yml 同款语义）。
     ...(input.gitWorktreeRow === true
-      ? ['- insert:', '    - id: dsh-forge-git-worktree', "      name: '@dsh-forge/git-worktree'"]
+      ? ['- insert:', '    - id: dsh-forge-project', "      name: '@dsh-forge/project'"]
+      : []),
+    // tasks 域插件行（plugin-task-loop 1.15 staging 闭包登记随批：@dsh-forge/task-loop
+    // forgeTasks/forgeCheckpoints 服务 provide + 工具/技能/循环调度注册——1.14 host 改指后
+    // host dist boot 链静态 import 本包，staged:true 随包；门控注行同 project 形态，缺包不注）
+    ...(input.taskLoopRow === true
+      ? ['- insert:', '    - id: dsh-forge-task-loop', "      name: '@dsh-forge/task-loop'"]
       : []),
     // mobile-ui ask 桥（bug f73315a1）：mobile-bridge 插件行（组合期 answerer 注册——
     // 先于 api-remotes 捕获监听；桥本体经全局锚注入）。insert 形态（fix-4 同径）。
@@ -274,15 +277,15 @@ export function renderBootOverlay(input: BootOverlayInput): string {
           '    compressionThresholdBytes: 1024',
         ]
       : []),
-    // M3 预设装配（3.7）：registry 覆写 + 远征/突击/HR 三预设行——每启注行产品工件
-    //（customSkillDirs 已物化当形态绝对路径；HR 组合零 forge 行——expert-squad 管理面）
+    // M3 预设装配（3.7）：registry 覆写 + 远征/突击双预设行——每启注行产品工件
+    //（customSkillDirs 已物化当形态绝对路径；猎头模式预设自 expert-squad 0.30.0 起
+    // 随插件包 bundle patch 注行——不在本 overlay 面）
     ...(input.presets !== undefined
       ? [
           '# ── M3 预设装配（3.7）：registry default 覆写 + 预设行族（boot overlay 每启注行）──',
           ...materializePresetPatch(input.presets.cordis, input.presets).split('\n'),
           ...materializePresetPatch(input.presets.expedition, input.presets).split('\n'),
           ...materializePresetPatch(input.presets.blitz, input.presets).split('\n'),
-          ...materializePresetPatch(input.presets.hr, input.presets).split('\n'),
         ]
       : []),
     '',
