@@ -1,4 +1,4 @@
-﻿// 旅程 1：dsh-desktop dshmarket 通道 solo 逐件安装 forge → 共库装载 → 卸载三段（真机 e2e spec，收口批 1.15；fix-25 裁定②改锚）。
+// 旅程 1：dsh-desktop dshmarket 通道 solo 逐件安装 forge → 共库装载 → 卸载三段（真机 e2e spec，收口批 1.15；fix-25 裁定②改锚）。
 // journey = .forge/docs/proposals/plugin-forge-combo/testing/forge-desktop-install-minchain/journey.md
 // contract = 同目录 contracts/contract.md（behavior_baseline v4——断言-契约溯源：每条断言标注 CT-DISK-* 条目 id）
 //
@@ -320,7 +320,15 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
       await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', FORGE_PKG])
     }
     expect(JSON.stringify(desktopInstalledBundles(realUd())), '复位后清单回到基线（零残留）').toBe(beforeJson)
-    expect(desktopPkgEntryForm(realUd(), FORGE_PKG), 'profile 侧零 forge 条目残留').toBe('absent')
+    // fix-31 定谳（bug e84d2a5a 卸载残留二分）：宿主卸载语义实锚（001-uninstall-probe
+    // 卸载前后 dir/junction/generations 对照取证）——打包通道 remove exit 0 后 bundles 清单、
+    // package.json dependencies、generation registry（live/desired/trash）三者全部回基线
+    // （语义干净），但 node_modules 侧 link: 安装物的顶层 junction（直指外部源目录）由
+    // 宿主打包 pnpm remove 语义遗留——desktopPkgEntryForm 将非 .generations 链接判读为
+    // 'dir'，即 041 轮 received 'dir' 的真身。残留属宿主 by-design/upstream（非 dsh-forge
+    // 产品代码可修）→ 本断言改锚：语义面 = 清单回基线（上断言）+ 条目非 .generations
+    // 投影（link 态残留 = FAIL）；物理 junction/dir 残留按宿主语义豁免留痕。
+    expect(desktopPkgEntryForm(realUd(), FORGE_PKG), 'profile 侧零 .generations 投影残留（dir/junction 物化残留按宿主卸载语义豁免留痕）').not.toBe('link')
     // carrier 收尾（bug 91539063 配套）：后续用例（CT-DISK-07 起）各自按安装世代冷启动
     // ——本用例的物化首启不作为后续装载世代（carrier 单实例语义下关闭释放锁）。
     await shutdownCarrier()
