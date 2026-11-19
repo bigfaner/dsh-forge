@@ -1,4 +1,4 @@
-// 旅程 1：dsh-desktop dshmarket 通道 solo 逐件安装 forge → 共库装载 → 卸载三段（真机 e2e spec，收口批 1.15；fix-25 裁定②改锚）。
+﻿// 旅程 1：dsh-desktop dshmarket 通道 solo 逐件安装 forge → 共库装载 → 卸载三段（真机 e2e spec，收口批 1.15；fix-25 裁定②改锚）。
 // journey = .forge/docs/proposals/plugin-forge-combo/testing/forge-desktop-install-minchain/journey.md
 // contract = 同目录 contracts/contract.md（behavior_baseline v4——断言-契约溯源：每条断言标注 CT-DISK-* 条目 id）
 //
@@ -151,6 +151,17 @@ async function waitBootReady(page: Page): Promise<void> {
   )
 }
 
+
+/** desktop carrier 工作台锚（fix-30 定谳改锚——stale-anchor 三律）：[data-dswf-workbench] 为
+ * dsh-forge 自有壳（apps/web ShellHost）锚，仅 dsh-forge dev host 装载面存在；desktop carrier
+ * 装载面 = 官方 DSH Desktop + dsh-desktop://harness 官方 dsh-web-app UI（@dsh-forge 插件经
+ * client bundle 注入官方缝，产品壳不进装载面）→ 该锚结构性恒缺席（cdp/wf30 定谳探针实锚：
+ * workbenchCount=0、全 DOM 零 data-dswf-*、官方 UI 完整渲染在场）。改锚 = 主窗 URL 门
+ * （dsh-desktop:// harness 面）+ 官方 slot 装配面 [data-slot]（实机库存 159 处，官方机械锚）。 */
+async function expectDesktopWorkbenchVisible(page: Page): Promise<void> {
+  await expect(page).toHaveURL(/dsh-desktop:\/\//, { timeout: 30_000 })
+  await expect(page.locator('[data-slot]').first()).toBeVisible({ timeout: 120_000 })
+}
 /** 版本双校验 + M-3 五件代际漂移探针（AGENTS 1.8 取证顺序纪律——大取证前廉价校验，不符即停） */
 function cheapGenerationGate(nodeModules: string): void {
   for (const { pkg, installed, source } of versionPairs(nodeModules)) {
@@ -331,7 +342,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
     // carrier 首启（boot 就绪门在 startCarrier 内；worker 重启后本用例自带安装构造可重建相位）
     const launched = await ensureCarrier(env)
     // Output（CT-DISK-07）：宿主正常启动（降级不扩散——O2 回归面：任一在场件不装载即红）
-    await expect(launched.page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 120_000 })
+    await expectDesktopWorkbenchVisible(launched.page)
     // State：在场四件 client 半侧取件；缺席件（knowledge）零取件（负向精确——禁 OR 稀释）
     for (const bare of four) {
       expect(launched.clientUrls.some((u) => u.includes(bare)), `在场件 client 取件 ${bare}`).toBe(true)
@@ -430,7 +441,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
     // 冷启动复锚（装载世代切换——CT-DISK-01 新装六件经冷启动生效，案②形态）
     const launched = await restartCarrier(env)
     // Output（CT-DISK-02）：宿主启动成功——boot 就绪（startCarrier 内）+ 产品工作台可见
-    await expect(launched.page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 120_000 })
+    await expectDesktopWorkbenchVisible(launched.page)
     // State 观察点 B：五件 client bundle 被宿主 client 注入通道实际取件（行为证据，非仅文件在场）
     for (const bare of BARE_BUNDLES) {
       expect(launched.clientUrls.some((u) => u.includes(bare)), `client 注入通道实际取件 ${bare}`).toBe(true)
@@ -585,7 +596,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
     // Input：冷启动宿主（无额外参数——卸 forge 后装载世代切换，冷启动复锚）
     const launched = await restartCarrier(env)
     // Output：宿主正常启动（O2 残留件被拖垮 = 红）
-    await expect(launched.page.locator('[data-dswf-workbench]').first()).toBeVisible({ timeout: 120_000 })
+    await expectDesktopWorkbenchVisible(launched.page)
     // State（锚点）：五件残留条目服务/client 双查——client 半侧逐件实际取件
     for (const bare of BARE_BUNDLES) {
       expect(launched.clientUrls.some((u) => u.includes(bare)), `残留件 client 取件 ${bare}`).toBe(true)
