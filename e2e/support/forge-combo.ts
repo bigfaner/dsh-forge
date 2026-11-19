@@ -24,11 +24,12 @@
 //                                 为保留名，npm CLI 拒管（CT-NPM-02）；desktop 通道经
 //                                 Desktop 内置命令环境执行，旅程 1 契约 Input 同形）
 import { execFile } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import Database from 'better-sqlite3'
+import { PROFILE_ALLOW_BUILDS, allowBuildsYamlLine } from '../../apps/host/src/profile/template.js'
 
 const pexec = promisify(execFile)
 
@@ -106,6 +107,18 @@ export function sanitizedCliEnv(dshHome: string, extraEnv: Record<string, string
   const env = { ...process.env, DSH_HOME: dshHome, ...extraEnv } as Record<string, string>
   delete env.DSH_PROFILE
   delete env.DSH_PROFILE_DIR
+  // 子进程解析面隔离（fix-20 单变量实证）：
+  // ①NODE_PATH（playwright worker 注入宿主检出 .pnpm 模块根）——dsh CLI 模块解析泄漏进
+  //   宿主依赖树（0.2.0-rc.2 世代混入安装闭包），dsh 版本门即拒装（allow-version 洪泛）；
+  // ②INIT_CWD（npm exec 注入宿主检出路径）——pnpm 把宿主检出当执行工作区；
+  // ③npm_config_registry（npm exec 自用户 .npmrc 注入镜像源）——registry 与 spec pin 非同源。
+  // 三者剥离，安装闭包与 registry spec pin 单源同径、零宿主漂移。
+  delete env.NODE_PATH
+  delete env.INIT_CWD
+  delete env.npm_config_registry
+  // ④ELECTRON_RUN_AS_NODE（harness 宿主 electron 注入）——定向 dsh 宿主 electron 即纯
+  //   node 形态运行，web 宿主永不上线（fix-20 Run 9 实证「web 校准宿主上线」红）。
+  delete env.ELECTRON_RUN_AS_NODE
   return env
 }
 
@@ -542,6 +555,123 @@ export function findDispatchLogs(dshHome: string): readonly string[] {
 
 /** forge-bundle-absent 诊断事件名（fix-1 实锚——CT-DISK-07/CT-NPM-06 意向锚回填形态） */
 export const FORGE_BUNDLE_ABSENT_EVENT = 'forge-bundle-absent'
+
+// ── 构建脚本批准面固化（bug a85b6816 / 台账留痕 dff389f6 —— fix-20）──────────────────
+//
+// registry 通道 add 新初始化 profile（dsh CLI init 落 pnpm-workspace.yaml，allowBuilds
+// 全占位值 `set this to true or false` = 未批准）→ pnpm 11 拦截构建脚本 exit 1
+//（ERR_PNPM_IGNORED_BUILDS，026-webloop 与 fix-20/001-repro 双轮同签名）。修复 =
+// 消费侧批准面固化：安装前把单源批准表（apps/host template.ts PROFILE_ALLOW_BUILDS）
+// 逐键写 true——dsh init 对已存在文件零触碰（fix-20/001-repro Round B 实证），add
+// 即 exit 0，零临场交互。
+
+/** profile pnpm-workspace.yaml 路径 */
+export function profileWorkspaceFile(dshHome: string, profile: string): string {
+  return join(dshHome, 'profiles', profile, 'pnpm-workspace.yaml')
+}
+
+/**
+ * 批准面缺口读面：单源批准表逐键核对 profile pnpm-workspace.yaml `allowBuilds` 块——
+ * 文件缺席 / allowBuilds 块缺席 / 键缺席 / 值非 true（含 dsh init 占位值）逐条回报。
+ * 调用侧 expect([]) fail-loud；ensureProfileBuildApprovals 后恒零缺口。
+ */
+export function profileBuildApprovalGaps(dshHome: string, profile: string): readonly string[] {
+  const file = profileWorkspaceFile(dshHome, profile)
+  if (!existsSync(file)) {
+    return Object.keys(PROFILE_ALLOW_BUILDS).map((pkg) => `${pkg}: pnpm-workspace.yaml 缺席 ${file}`)
+  }
+  const text = readFileSync(file, 'utf8')
+  const block = text.match(/^allowBuilds:\r?\n((?:[ \t]+.*\r?\n?)*)/m)?.[1] ?? ''
+  return Object.entries(PROFILE_ALLOW_BUILDS).flatMap(([pkg, allowed]) => {
+    const line = block.match(new RegExp(`^[ \\t]+'?${pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'?:[ \\t]*(.+)$`, 'm'))?.[1]?.trim()
+    if (line === undefined) return [`${pkg}: allowBuilds 键缺席`]
+    if (line !== String(allowed)) return [`${pkg}: allowBuilds 值 '${line}' ≠ '${String(allowed)}'（未批准/漂移）`]
+    return []
+  })
+}
+
+/** 最小 profile workspace yaml（单源批准表全键 true——round B 实证形态） */
+function minimalWorkspaceYaml(): string {
+  return [
+    'packages:',
+    '  - .',
+    '',
+    'nodeLinker: hoisted',
+    'autoInstallPeers: false',
+    'allowBuilds:',
+    ...Object.entries(PROFILE_ALLOW_BUILDS).map(([pkg, allowed]) => allowBuildsYamlLine(pkg, allowed)),
+    '',
+  ].join('\n')
+}
+
+/**
+ * 批准面固化（消费侧写入）：profile pnpm-workspace.yaml 缺席 → 写最小 yaml（单源
+ * 全键 true）；在场 → 缺口键就地补齐（缺 allowBuilds 块补块、缺键/占位值/漂移值改
+ * true，其余行零触碰）。dsh init 对已存在文件零触碰（001-repro Round B 实证）——
+ * add 前调用即固化，registry 通道安装零临场交互。
+ */
+export function ensureProfileBuildApprovals(dshHome: string, profile: string): void {
+  const file = profileWorkspaceFile(dshHome, profile)
+  if (!existsSync(file)) {
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, minimalWorkspaceYaml(), 'utf8')
+    return
+  }
+  const text = readFileSync(file, 'utf8')
+  let next = text
+  const approved = Object.entries(PROFILE_ALLOW_BUILDS)
+    .map(([pkg, allowed]) => allowBuildsYamlLine(pkg, allowed))
+    .join('\n')
+  if (/^allowBuilds:\r?$/m.test(next)) {
+    for (const [pkg, allowed] of Object.entries(PROFILE_ALLOW_BUILDS)) {
+      const escaped = pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const linePattern = new RegExp(`^([ \\t]+'?${escaped}'?:)[ \\t]*(.*)$`, 'm')
+      const hit = next.match(linePattern)
+      if (hit === null || hit[2]!.trim() !== String(allowed)) {
+        next = hit === null
+          ? next.replace(/^allowBuilds:\r?$/m, `allowBuilds:\n${allowBuildsYamlLine(pkg, allowed)}`)
+          : next.replace(linePattern, `$1 ${String(allowed)}`)
+      }
+    }
+  } else {
+    next = next.replace(/\r?\n?$/, `\nallowBuilds:\n${approved}\n`)
+  }
+  if (next !== text) writeFileSync(file, next, 'utf8')
+}
+
+/**
+ * registry 校准 profile 固化（消费侧预物化，bug a85b6816 / dff389f6 fix-20 闭环面）：
+ * dsh CLI 对 package.json 缺席的 profile 走 initProfile 默认背板（按 CLI 安装世代 pin
+ * 基座包——与 registry spec pin 混代即触发 dsh 版本门「installation rejected …
+ * incompatible / allow-version --accept-risk」，fix-20 真机 Round C 实证）；package.json
+ * 在场则 init 整体跳过（dsh-app-boot `!existsSync(package.json)` 门——Round D 实证
+ * exit 0）。本面在 add 前预物化：
+ * ①package.json（spec pins 直挂 dependencies + dsh.profile.bundles——已存在零触碰）；
+ * ②pnpm-workspace.yaml 构建脚本批准面（ensureProfileBuildApprovals 单源全键 true）。
+ * registry 通道 add 即零临场交互 exit 0。
+ */
+export function ensureRegistryProfile(dshHome: string, profile: string, specs: readonly string[]): void {
+  const dir = join(dshHome, 'profiles', profile)
+  const pkgFile = join(dir, 'package.json')
+  if (!existsSync(pkgFile)) {
+    const deps: Record<string, string> = {}
+    for (const spec of specs) {
+      const at = spec.lastIndexOf('@')
+      if (at <= 0) throw new Error(`registry spec 形状超封闭枚举（须 name@version）：${spec}`)
+      deps[spec.slice(0, at)] = spec.slice(at + 1)
+    }
+    const pkg = {
+      name: `dsh-profile-${profile}`,
+      private: true,
+      version: '0.0.0',
+      dependencies: deps,
+      dsh: { profile: { bundles: Object.keys(deps) } },
+    }
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(pkgFile, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8')
+  }
+  ensureProfileBuildApprovals(dshHome, profile)
+}
 
 // ── desktop 通道实锚读面（G3 核销 + host-wiring logsDir——1.15 收口批扩面） ──────────
 

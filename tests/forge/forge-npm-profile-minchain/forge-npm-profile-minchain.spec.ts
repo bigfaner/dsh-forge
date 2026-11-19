@@ -30,8 +30,10 @@ import {
   defaultTaskLoopDb,
   findDispatchLogs,
   generationDriftViolations,
+  ensureRegistryProfile,
   installedBundles,
   installedPkgDir,
+  profileBuildApprovalGaps,
   profileNodeModules,
   runDsh,
   sanitizedCliEnv,
@@ -171,11 +173,21 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     // 可用版本：缺省 pin 0.2.2-rc.2（== CLI runtime，版本门兼容带内）；runtime 升级
     // 经 FORGE_COMBO_WEB_LOOP_PIN 改 pin，latest tag 修复前不回退裸 tag。
     const pin = process.env.FORGE_COMBO_WEB_LOOP_PIN ?? '0.2.2-rc.2'
+    const calProfile = 'forge-cal'
+    const registrySpecs = [`@deepseek-ai/dsh-base@${pin}`, `@deepseek-ai/dsh-web-app@${pin}`]
+    // 校准 profile 固化（bug a85b6816 / 台账留痕 dff389f6——fix-20，消费侧配置单源）：
+    // ①package.json 预物化（spec pins 直挂）——dsh CLI 对缺席 profile 走 initProfile 默认
+    //   背板（CLI 安装世代 pin），与 registry pin 混代即触发版本门 reject（Round C 实证）；
+    //   package.json 在场 init 整体跳过（Round D 实证 exit 0）。
+    // ②构建脚本批准面（PROFILE_ALLOW_BUILDS 单源全键 true）——dsh init 落占位值（未批准）
+    //   时 pnpm 11 拦截构建脚本 exit 1（ERR_PNPM_IGNORED_BUILDS，两轮同签名 026-webloop +
+    //   fix-20/001-repro Round A）。两者 add 前写入，registry 通道零临场交互。
+    ensureRegistryProfile(env.dshHome, calProfile, registrySpecs)
     // 校准回路：同一安装物装 web 模板 profile → HTTP 直取五件 client bundle（裸名行 client 注入正门）。
     // 取件路径经 clientBundleFiles 装载链解析（profile 侧 → 链接包自身 node_modules 回落——c26a8c2a）
-    const calProfile = 'forge-cal'
-    const addBase = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', `@deepseek-ai/dsh-base@${pin}`, `@deepseek-ai/dsh-web-app@${pin}`], env.dshHome)
+    const addBase = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', ...registrySpecs], env.dshHome)
     expect(addBase.code, `web 背板就绪（exit=${String(addBase.code)}，pin=${pin}）stderr=${addBase.stderr.slice(-400)}`).toBe(0)
+    expect(profileBuildApprovalGaps(env.dshHome, calProfile), '构建脚本批准面固化（单源全键批准，安装后零缺口）').toEqual([])
     const add = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', `link:${env.forgeDir}`], env.dshHome)
     expect(add.code, `校准 profile add 成功（exit=${String(add.code)}）`).toBe(0)
 

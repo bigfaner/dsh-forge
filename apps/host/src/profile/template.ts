@@ -44,6 +44,28 @@ export const UI_SETTINGS_PRESET_ROW: string = [
   '    enabled: true',
 ].join('\n')
 
+/**
+ * 构建脚本批准面（fix-20 单源）：pnpm 11 默认拦截依赖安装脚本（ERR_PNPM_IGNORED_BUILDS）
+ * ——dsh profile 的 pnpm-workspace.yaml `allowBuilds` 键为消费侧批准面（dsh CLI 转译给
+ * pnpm；占位值 `set this to true or false` = 未批准，安装 exit 1）。本表为唯一事实源：
+ * 产品 profile 模板（下方 yaml 逐键派生）与 e2e 校准 profile 批准面固化
+ * （e2e/support/forge-combo.ts ensureProfileBuildApprovals——dsh CLI 初始化的新 profile
+ * 只落占位值，不经过本模板）同源引用；上游运行时闭包换代新增原生包时只翻本表。
+ */
+export const PROFILE_ALLOW_BUILDS: Readonly<Record<string, boolean>> = {
+  '@deepseek-ai/dsh-subprocess-local': true,
+  '@google/genai': true,
+  'better-sqlite3': true,
+  koffi: true,
+  'node-pty': true,
+  protobufjs: true,
+}
+
+/** allowBuilds yaml 行形制：简单键裸写、含 / @ 等特殊字符的 scope 键加引号（历史字节形状保持） */
+export function allowBuildsYamlLine(pkg: string, allowed: boolean): string {
+  return /^[\w-]+$/.test(pkg) ? `  ${pkg}: ${String(allowed)}` : `  '${pkg}': ${String(allowed)}`
+}
+
 /** profile 目录引导文件名（cordis.yml 为 boot 拥有：runProfile 每启重写，此处仅首启兜底） */
 export const PROFILE_TEMPLATE_FILES: Readonly<Record<string, string>> = {
   'package.json': JSON.stringify(
@@ -113,12 +135,7 @@ export const PROFILE_TEMPLATE_FILES: Readonly<Record<string, string>> = {
     'nodeLinker: hoisted',
     'autoInstallPeers: false',
     'allowBuilds:',
-    "  '@deepseek-ai/dsh-subprocess-local': true",
-    "  '@google/genai': true",
-    '  better-sqlite3: true',
-    '  koffi: true',
-    '  node-pty: true',
-    '  protobufjs: true',
+    ...Object.entries(PROFILE_ALLOW_BUILDS).map(([pkg, allowed]) => allowBuildsYamlLine(pkg, allowed)),
     '',
   ].join('\n'),
 }
