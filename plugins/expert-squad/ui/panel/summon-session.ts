@@ -17,7 +17,7 @@
 // bundle 自含纪律：零运行时 import——上游服务面以结构同型窄接口承载（open-session.ts
 // 同法）；服务解析（ctx.reflect 惰性取法）归装配壳（ui/index.ts，调用期解析）。
 
-/** 猎头模式预设 id（对齐部署侧 preset-headhunter 底稿 config.id——apps/host presets/headhunter.patch.yml）。 */
+/** 猎头模式预设 id（对齐部署侧 preset-headhunter 底稿 config.id——plugins/expert-squad/cordis.patch.yml（随包自带））。 */
 export const HEADHUNTER_PRESET_ID = "headhunter";
 
 /** 官方 WorkspaceView 消费切片（workspace-controller client store 快照行窄面）。 */
