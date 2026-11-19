@@ -53,6 +53,7 @@ import {
   desktopAbsenceEvents,
   desktopInstalledBundles,
   desktopPkgEntryDir,
+  desktopProfileDir,
   desktopProfileNodeModules,
   desktopRuntimeNodeModules,
   findDispatchLogs,
