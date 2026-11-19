@@ -417,6 +417,17 @@ export interface DesktopInstallShadowLayers {
 }
 
 export function desktopInstallShadowLayers(desktopExe: string): DesktopInstallShadowLayers {
+  // 第三读路径关断（033 轮遮蔽读点核销——fix-21）：dsh-forge.exe 为 harness 本体旧打包
+  // 安装树（其 resources/runtime 捆绑 @dsh-forge 0.30.6 无 dsh 字段副本——033 轮「遮蔽
+  // 未消」误报实读源，真机核销：目标宿主 'DSH Desktop' 安装树两候选层零 @dsh-forge），
+  // 与目标 desktop 宿主零关。锚到该树 = 结构性错树，fail-loud 拒读（不静默产出遮蔽判读）。
+  if (basename(desktopExe).toLowerCase() === 'dsh-forge.exe') {
+    throw new Error(
+      `遮蔽闸错锚（第三读路径关断）：${desktopExe} 为 dsh-forge harness 本体安装树` +
+        '（resources/runtime 捆绑 @dsh-forge 0.30.6 陈旧副本，033 轮遮蔽误报实读源），非目标 desktop 宿主安装产物' +
+        "——FORGE_COMBO_DESKTOP_EXE 须锚目标宿主 exe（'DSH Desktop.exe' 形）",
+    )
+  }
   const installRoot = dirname(resolve(desktopExe))
   const runtimeNodeModules = join(installRoot, 'resources', 'runtime', 'node_modules')
   const asarUnpackedNodeModules = join(installRoot, 'resources', 'app.asar.unpacked', 'node_modules')

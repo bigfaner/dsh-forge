@@ -39,6 +39,7 @@ import {
   sanitizedCliEnv,
   sqliteTables,
 } from '../../../e2e/support/forge-combo.js'
+import { establishWebAuthSession, extractBootToken, sessionReady } from '../../../e2e/support/web-boot-auth.js'
 
 test.skip(!comboGateOn(), 'FORGE_COMBO_E2E=1 真机收口轮专用套件（e2e/SMOKE-LEDGER.md §8 留痕）——常规跑批跳过')
 
@@ -193,25 +194,48 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
 
     const { allocatePort } = await import('../../../e2e/support/ports.js')
     const port = allocatePort()
+    // web 校准宿主启动（stdio 收 stdout——boot token 认证门形态，ledger 192d4631）：
+    // 宿主上线即打印 `dsh web: http://127.0.0.1:<port>/?token=…`（AGENTS 1.8 boot token
+    // 既有语义），认证证据单源 = boot stdout。
+    let bootStdout = ''
     const child = spawn(env.dshBin, ['--profile', calProfile, '--port', String(port)], {
       env: sanitizedCliEnv(env.dshHome),
       cwd: mkdtempSync(join(tmpdir(), 'dsh-forge-combo-webloop-')),
-      stdio: 'ignore',
+      stdio: ['ignore', 'pipe', 'ignore'],
       windowsHide: true,
     })
+    child.stdout?.on('data', (chunk: Buffer) => {
+      bootStdout += String(chunk)
+    })
     try {
-      // 就绪轮询（HTTP 200 门——web 宿主上线下限）
+      // 就绪轮询（认证形态——stale probe 退役留痕：旧判据 fetch('/') 无 token 恒 401，
+      // 031-webloop curl 精查实锚；新判据 = token 提取 → cookie 会话 → 会话 GET / ok）。
+      // 031 轮执行级放宽实证：add + boot 流程超缺省 timeout，执行面须 --timeout ≥ 300s。
+      let session: Awaited<ReturnType<typeof establishWebAuthSession>>
       let up = false
       for (let i = 0; i < 60 && !up; i++) {
         await new Promise((r) => setTimeout(r, 2_000))
-        up = await fetch(`http://127.0.0.1:${String(port)}/`).then((r) => r.ok).catch(() => false)
+        if (child.exitCode !== null) break
+        const token = extractBootToken(bootStdout, port)
+        if (token === undefined) continue
+        session ??= await establishWebAuthSession(`http://127.0.0.1:${String(port)}`, token)
+        if (session !== undefined) up = await sessionReady(`http://127.0.0.1:${String(port)}`, session.cookie)
       }
-      expect(up, 'web 校准宿主上线').toBe(true)
-      // State 观察点 B（CT-NPM-03）：五件 client bundle 经 client 注入通道可访问（HTTP 200）
+      // fail-loud 分流：进程提前退出 = 启动失败面（携 stdout 尾），非认证门红
+      expect(child.exitCode, `web 校准宿主进程存活（提前退出 = 启动失败）stdout=${bootStdout.slice(-400)}`).toBeNull()
+      const token = extractBootToken(bootStdout, port)
+      expect(token, 'boot token 自宿主 stdout 提取（`dsh web: …?token=…` 行，端口定向）').toBeTruthy()
+      session ??= await establishWebAuthSession(`http://127.0.0.1:${String(port)}`, token as string)
+      expect(session, 'token → cookie 会话建立（token query 303 + Set-Cookie；零 Set-Cookie = 认证面漂移即停）').toBeTruthy()
+      expect(up, 'web 校准宿主上线（认证会话 GET / ok——192d4631 新判据）').toBe(true)
+      // State 观察点 B（CT-NPM-03）：五件 client bundle 经 client 注入通道可访问（HTTP 200）。
+      // 静态面走 cookie 会话语义（token query 直取 → 404，031 curl 实锚）——携会话 Cookie 头取件。
       const nodeModules = profileNodeModules(env.dshHome, calProfile)
       for (const { pkg, file } of clientBundleFiles(nodeModules)) {
         const rel = file.slice(nodeModules.length + 1).replaceAll('\\', '/')
-        const res = await fetch(`http://127.0.0.1:${String(port)}/node_modules/${rel}`)
+        const res = await fetch(`http://127.0.0.1:${String(port)}/node_modules/${rel}`, {
+          headers: { cookie: (session as { cookie: string }).cookie },
+        })
         expect(res.ok, `client bundle HTTP 可达 ${pkg}（${rel}）`).toBe(true)
       }
     } finally {

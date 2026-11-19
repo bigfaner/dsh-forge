@@ -138,4 +138,23 @@ describe('desktopInstallShadowLayers / desktopInstallShadowViolations（21f0e9a7
     expect(violations.length).toBe(1)
     expect(violations[0]?.path).toContain(join('resources', 'app.asar.unpacked', 'node_modules'))
   })
+
+  it('反向（第三读路径关断——fix-21/033 轮核销）：锚 dsh-forge.exe（harness 本体旧安装树）→ fail-loud 拒读', () => {
+    const root = mkdtempSync(join(tmpdir(), 'shadow-legacy-'))
+    mkdirSync(join(root, 'resources'), { recursive: true })
+    const exe = join(root, 'dsh-forge.exe')
+    writeFileSync(exe, '')
+    expect(() => desktopInstallShadowLayers(exe)).toThrow(/错锚/)
+    expect(() => desktopInstallShadowViolations(exe, { sourcePluginsRoot: makeSourceRoot() })).toThrow(/错锚/)
+  })
+
+  it('正向：目标宿主名形态大小写不敏感（DSH DESKTOP.EXE）→ 正常分层判读', () => {
+    const root = mkdtempSync(join(tmpdir(), 'shadow-upper-'))
+    mkdirSync(join(root, 'resources'), { recursive: true })
+    const exe = join(root, 'DSH DESKTOP.EXE')
+    writeFileSync(exe, '')
+    const layers = desktopInstallShadowLayers(exe)
+    expect(layers.runtimeNodeModules).toBeUndefined()
+    expect(desktopInstallShadowViolations(exe, { sourcePluginsRoot: makeSourceRoot() })).toEqual([])
+  })
 })
