@@ -26,7 +26,7 @@
 //                                 为保留名，npm CLI 拒管（CT-NPM-02）；desktop 通道经
 //                                 Desktop 内置命令环境执行，旅程 1 契约 Input 同形）
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -792,6 +792,27 @@ export function desktopInstalledBundles(userData: string): readonly string[] {
 /** desktop profile 侧包条目目录（@dsh-forge/<short> 形） */
 export function desktopPkgEntryDir(userData: string, pkg: string): string {
   return join(desktopProfileNodeModules(userData), '@dsh-forge', pkg.slice('@dsh-forge/'.length))
+}
+
+/** desktop generation registry（`.generations` projection——0.13.2 asar 实锚：generation 物化目录 + desired 清单落此） */
+export function desktopGenerationsDir(userData: string): string {
+  return join(userData, 'harness', 'profiles', '.generations')
+}
+
+/** desktop profile 侧包条目物化形态（CT-DISK-01/10 两态锚——禁止第三态）：link = `.generations` 投影符号链接；dir = 共享树直装；absent = 条目缺席 */
+export type DesktopPkgEntryForm = 'link' | 'dir' | 'absent'
+
+/** 条目物化形态读面（asar 判据 `target.includes('.generations')`——链接指 .generations 外目标归 dir 域外，不作 link） */
+export function desktopPkgEntryForm(userData: string, pkg: string): DesktopPkgEntryForm {
+  const entry = desktopPkgEntryDir(userData, pkg)
+  const st = lstatSync(entry, { throwIfNoEntry: false })
+  if (st === undefined) return 'absent'
+  try {
+    if (readlinkSync(entry).includes('.generations')) return 'link'
+  } catch {
+    // 非链接条目（真实目录）——dir 态
+  }
+  return 'dir'
 }
 
 /** desktop 诊断事件行（host-wiring logsDir = {userData}/logs app-YYYYMMDD.jsonl——非 JSON 行容忍跳过） */

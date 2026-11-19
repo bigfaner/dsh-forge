@@ -3,18 +3,20 @@
 // （0.13.2 asar 实锚——G3 {userData}/profile 旧锚已废）、desktop 已装清单读面、诊断事件解析
 // （app-YYYYMMDD.jsonl / 非 JSON 行容忍 / forge-bundle-absent 过滤）、dump-config
 // insert 条目断言字面（fix-7 序列化形状正例 + 三反例红面）。
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   BARE_BUNDLES,
   FORGE_BUNDLE_ABSENT_EVENT,
   desktopAbsenceEvents,
   desktopDiagEvents,
+  desktopGenerationsDir,
   desktopHarnessHome,
   desktopInstalledBundles,
   desktopPkgEntryDir,
+  desktopPkgEntryForm,
   desktopProfileDir,
   desktopProfileNodeModules,
   desktopRealUserData,
@@ -129,5 +131,43 @@ describe('insertEntryPattern（dump-config fix-7 序列化形状）', () => {
       if (bare === '@dsh-forge/project') continue
       expect(sample, `错位裸名不匹配 ${bare}`).not.toMatch(insertEntryPattern(bare))
     }
+  })
+})
+
+describe('desktopGenerationsDir / desktopPkgEntryForm（fix-25 裁定②——.generations projection 两态锚）', () => {
+  it('desktopGenerationsDir 落点形状：{userData}/harness/profiles/.generations（asar generation registry 实锚）', () => {
+    expect(desktopGenerationsDir('C:\\ud')).toBe(join('C:\\ud', 'harness', 'profiles', '.generations'))
+  })
+
+  it('dir 态：真实目录条目 → dir（非链接归 dir，不作 link）', () => {
+    const ud = makeUserData()
+    const entry = join(desktopProfileDir(ud), 'node_modules', '@dsh-forge', 'forge')
+    mkdirSync(entry, { recursive: true })
+    expect(desktopPkgEntryForm(ud, '@dsh-forge/forge')).toBe('dir')
+  })
+
+  it('absent 态：条目缺席 → absent（CT-DISK-01 第三态判据面）', () => {
+    const ud = makeUserData()
+    expect(desktopPkgEntryForm(ud, '@dsh-forge/forge')).toBe('absent')
+  })
+
+  it('link 态反例注入证明（断言可红性）：伪造指 .generations 外目标的链接不判 link——读面判据可红', () => {
+    const ud = makeUserData()
+    const entry = join(desktopProfileDir(ud), 'node_modules', '@dsh-forge', 'forge')
+    mkdirSync(dirname(entry), { recursive: true })
+    const target = join(ud, 'elsewhere')
+    mkdirSync(target, { recursive: true })
+    symlinkSync(target, entry, 'junction')
+    expect(desktopPkgEntryForm(ud, '@dsh-forge/forge'), '`.generations` 外目标链接 ≠ link').toBe('dir')
+  })
+
+  it('link 态正例：指 `.generations` 段目标的链接 → link（asar 判据 target.includes(.generations)）', () => {
+    const ud = makeUserData()
+    const entry = join(desktopProfileDir(ud), 'node_modules', '@dsh-forge', 'forge')
+    mkdirSync(dirname(entry), { recursive: true })
+    const genTarget = join(desktopGenerationsDir(ud), 'forge@0.1.3')
+    mkdirSync(genTarget, { recursive: true })
+    symlinkSync(genTarget, entry, 'junction')
+    expect(desktopPkgEntryForm(ud, '@dsh-forge/forge')).toBe('link')
   })
 })
