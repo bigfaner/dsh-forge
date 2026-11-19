@@ -365,8 +365,9 @@ async function main(): Promise<void> {
   // relay 接线后逐件 emitDiag（forge-bundle-absent，诊断留痕可见面兜底）。
   const forgeAbsentPayloads = forgeBundleAbsentPayloads(profile.skippedBundles)
   // 产品插件行 config 装配期注入（用户层之后应用的 patchFiles 叠层——见 overlay.ts 动机）
-  // M3 3.7 预设装配：四底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
-  // 注行产品工件（customSkillDirs 物化当形态绝对路径）；底稿缺席 fail-soft 不注行。
+  // M3 3.7 预设装配：三底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
+  // 注行产品工件（customSkillDirs 物化当形态绝对路径）；底稿缺席 fail-soft 不注行；
+  // 猎头模式预设自 expert-squad 0.30.0 起随插件包 bundle patch 注行（不在 overlay 面）。
   // 产品裁决（2026-10-09）：skillsDir 仅作预设 customSkillDirs[core] 物化锚——无全局
   // forge 技能行（forge 技能/工具仅预设组合）；用户裁决（2026-11-01）：标准模式放开
   // expert-squad 技能面——基础渲染 skill-filesystem 行仅挂 squadSkillsDir（overlay.ts）。

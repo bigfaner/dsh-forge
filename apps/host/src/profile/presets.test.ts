@@ -1,6 +1,8 @@
-// M3 3.7 预设底稿契约 pin（AC1/AC4）：四底稿落面 + 镜像行 ↔ 上游 standard.patch.yml
+// M3 3.7 预设底稿契约 pin（AC1/AC4）：三底稿落面 + 镜像行 ↔ 上游 standard.patch.yml
 // 机械 diff 一致 + 镜像行 config 全集（spike S5 教训：缺必填 config = 行 schema 拒 →
 // 整预设 broken 不上菜单）+ 装载面（双锚解析/all-or-nothing fail-soft）。
+// 猎头模式预设自 expert-squad 0.30.0 起随插件包自带（bundle patch 注行）——其契约 pin
+// 仍在本文件（上游镜像漂移对照依赖 profile.dev 物化树，宜留宿主侧）。
 // 上游读取 = profile.dev 物化树（runtime-packages 语境——RUNTIME_PACKAGES 同源供应面，
 // 与 welcome ack/凭据桥 vendored pin 同惯例：existsSync 前置 = 环境缺口即红）。
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -207,8 +209,8 @@ for (const preset of ['expedition', 'blitz'] as const) {
   })
 }
 
-describe('headhunter.patch.yml 底稿（expert-squad 1.23：猎头模式预设装配——原 HR · 专家管理 2026-11-01 改名，插件零感知）', () => {
-  const text = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.hr), 'utf8')
+describe('headhunter 预设（expert-squad 0.30.0 起随包自带：plugins/expert-squad/cordis.patch.yml bundle patch 注行——原宿主底稿 headhunter.patch.yml 迁入）', () => {
+  const text = readFileSync(join(hostRoot(), '..', '..', 'plugins', 'expert-squad', 'cordis.patch.yml'), 'utf8')
   const rows = pluginRowBlocks(text)
   /** 猎头产品增量行（上游没有——机械 diff 豁免面；expert-squad 不落组合专行，
    *  全工具走全局单实例注册全组合继承） */
@@ -277,13 +279,12 @@ describe('headhunter.patch.yml 底稿（expert-squad 1.23：猎头模式预设�
 })
 
 describe('底稿装载（presets.ts）', () => {
-  it('src 同邻目录四件齐装载（vitest 语境——cordis/expedition/blitz/hr 全文在手）', () => {
+  it('src 同邻目录三件齐装载（vitest 语境——cordis/expedition/blitz 全文在手；猎头预设随插件包不在本面）', () => {
     const patches = loadPresetPatches()
     expect(patches).toBeDefined()
     expect(patches!.cordis).toContain('- id: agent-preset-registry')
     expect(patches!.expedition).toContain('    - id: preset-expedition')
     expect(patches!.blitz).toContain('    - id: preset-blitz')
-    expect(patches!.hr).toContain('    - id: preset-headhunter')
   })
 
   it('模块同邻锚：sibling presets/ 命中即取（不落 repo 回退）', () => {

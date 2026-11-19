@@ -56,7 +56,7 @@ const CARD_ANY = '.dswf-card-grid .dswf-xcard'
 // 字面量不可对齐——重锚结构锚 .dswf-summon-btn（expert-panel.tsx 事实表），行为断言零放松。
 const SUMMON_BTN = 'button.dswf-summon-btn'
 const SUMMON_NOTICE = '[data-dswf-summon-notice]'
-/** 猎头预设显示名（apps/host/src/profile/presets/headhunter.patch.yml config.name——座位标签文本） */
+/** 猎头预设显示名（plugins/expert-squad/cordis.patch.yml（随包自带 bundle patch） config.name——座位标签文本） */
 const HEADHUNTER_PRESET_LABEL = '猎头模式'
 /** 猎头预设座位标签（官方 conversation.hero.agentPreset 槽座位——healthy 显显示名） */
 const HEADHUNTER_SEAT_LABEL = `${SEAT_ROOT} button:has-text("${HEADHUNTER_PRESET_LABEL}")`

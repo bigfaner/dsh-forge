@@ -237,7 +237,7 @@ describe('凭据桥官方缝 pin（fix-26）', () => {
 
 describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
   const base = { stateDb: '/x/s.db' }
-  // 真实四底稿（src 同邻装载——presets.test.ts 另 pin 底稿契约面）
+  // 真实三底稿（src 同邻装载——presets.test.ts 另 pin 底稿契约面；猎头预设随 expert-squad 包不在本面）
   const patches = loadPresetPatches()!
   const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string; squadSkillsDir?: string; knowledgeSkillsDir?: string } = {}) => ({
     ...base,
@@ -252,7 +252,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     },
   })
 
-  it('三预设上场（AC6 形制）：registry default = 突击覆写（bug 2ba146d8）+ 预设声明行（中文 name 直出·order 1/2/3）', () => {
+  it('双预设上场（AC6 形制）：registry default = 突击覆写（bug 2ba146d8）+ 预设声明行（中文 name 直出·order 1/2；猎头预设随 expert-squad 包 bundle patch 注行，不在本 overlay）', () => {
     const text = renderBootOverlay(withPresets())
     expect(text).toContain('- id: agent-preset-registry\n  config:\n    default: blitz')
     expect(text).toContain("    - id: preset-expedition\n      name: '@deepseek-ai/dsh-agent-preset'")
@@ -261,12 +261,9 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(text).toContain("    - id: preset-blitz\n      name: '@deepseek-ai/dsh-agent-preset'")
     expect(text).toContain('        id: blitz\n        name: 突击模式')
     expect(text).toContain('        order: 2')
-    expect(text).toContain("    - id: preset-headhunter\n      name: '@deepseek-ai/dsh-agent-preset'")
-    expect(text).toContain('        id: headhunter\n        name: 猎头模式')
-    expect(text).toContain('        order: 3')
+    expect(text).not.toContain('preset-headhunter')
     // 预设顺序 = 声明序（registry 菜单 order 排序数据面）
     expect(text.indexOf('preset-expedition')).toBeLessThan(text.indexOf('preset-blitz'))
-    expect(text.indexOf('preset-blitz')).toBeLessThan(text.indexOf('preset-headhunter'))
   })
 
   it('物化绝对路径（AC2）：customSkillDirs 占位符 → 当形态绝对路径双引号标量——远征 [core,spec] / 突击 [core]（1.9 skills-blitz 退役——突击零专属技能目录）', () => {

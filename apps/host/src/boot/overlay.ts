@@ -118,7 +118,7 @@ const PRESET_BINDINGS_LINE_TOKEN = 'bindingsFile: "{{plugin-forge-bindings}}"'
  * ——customSkillDirs 仅 squad 占位符（经预设物化链既有 squad 分支解析为当形态绝对路径；
  * forge 技能仍零——2026-10-09 裁决对 forge 部分不变）。行形态 = patch 按 row id 补 config
  * （上游 standard 预设自带 skill-filesystem 裸行——presets.test.ts 镜像 pin，零插件行
- * 注册/insert）。expert-squad 工具面为全局单实例注册（hr.patch.yml 注记 +
+ * 注册/insert）。expert-squad 工具面为全局单实例注册（猎头预设随包自带注记 +
  * delegate-visibility-smoke pin——各组合统一继承），本缝只挂技能目录。
  * squadSkillsDir 缺席 = 整行剔除 fail-soft（无占位符残留）。
  */
@@ -277,15 +277,15 @@ export function renderBootOverlay(input: BootOverlayInput): string {
           '    compressionThresholdBytes: 1024',
         ]
       : []),
-    // M3 预设装配（3.7）：registry 覆写 + 远征/突击/HR 三预设行——每启注行产品工件
-    //（customSkillDirs 已物化当形态绝对路径；HR 组合零 forge 行——expert-squad 管理面）
+    // M3 预设装配（3.7）：registry 覆写 + 远征/突击双预设行——每启注行产品工件
+    //（customSkillDirs 已物化当形态绝对路径；猎头模式预设自 expert-squad 0.30.0 起
+    // 随插件包 bundle patch 注行——不在本 overlay 面）
     ...(input.presets !== undefined
       ? [
           '# ── M3 预设装配（3.7）：registry default 覆写 + 预设行族（boot overlay 每启注行）──',
           ...materializePresetPatch(input.presets.cordis, input.presets).split('\n'),
           ...materializePresetPatch(input.presets.expedition, input.presets).split('\n'),
           ...materializePresetPatch(input.presets.blitz, input.presets).split('\n'),
-          ...materializePresetPatch(input.presets.hr, input.presets).split('\n'),
         ]
       : []),
     '',
