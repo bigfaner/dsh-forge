@@ -56,7 +56,7 @@
       "path": "packages/plugins/mobile-bridge"
     },
     {
-      "path": "packages/plugins/input-history"
+      "path": "plugins/input-history"
     },
     {
       "path": "plugins/expert-squad"
