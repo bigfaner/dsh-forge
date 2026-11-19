@@ -83,7 +83,7 @@ const ALLOWLIST: Record<string, number> = {
   'packages/plugins/expert-squad/tests/tools.test.ts': 1,
   'packages/plugins/git-worktree/src/session-attach.test.ts': 2,
   'packages/plugins/git-worktree/src/worktree-ops.test.ts': 1,
-  'packages/plugins/input-history/tests/event-source.test.ts': 1,
+  'plugins/input-history/tests/event-source.test.ts': 1,
   'packages/plugins/knowledge/src/integration-selfhosted.test.ts': 1,
   'packages/plugins/knowledge/src/plugin.test.ts': 2,
   'packages/plugins/knowledge/src/service/bm25-search.test.ts': 1,

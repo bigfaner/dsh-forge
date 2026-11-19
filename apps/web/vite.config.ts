@@ -67,7 +67,9 @@ function emitPluginBundle(pkgName: string, bundleFile: string): Plugin {
       try {
         source = readFileSync(bundlePath, 'utf8')
       } catch {
-        throw new Error(`vite: ${pkgName} client bundle 缺席（${bundlePath}）——先 pnpm -C packages/plugins/${pkgName.split('/')[1]!} build`)
+        // 位置感知指路：由产物路径反推包根目录（dist 的上级），不硬编码目录位置
+        const pkgDir = resolve(dirname(bundlePath), '..')
+        throw new Error(`vite: ${pkgName} client bundle 缺席（${bundlePath}）——先 pnpm -C ${pkgDir} build`)
       }
       if (!source.includes('window.__ModuleLoader__.load') || !source.includes(`"${pkgName}"`)) {
         throw new Error(`vite: ${pkgName} client bundle 非官方自注册形状（${bundlePath}）`)
