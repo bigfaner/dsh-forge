@@ -1,5 +1,6 @@
-// desktop 通道实锚读面单测（1.15 收口批——forge-combo.ts 扩面）。
-// 覆盖：{userData}/profile 落点锚（G3）、desktop 已装清单读面、诊断事件解析
+// desktop 通道实锚读面单测（1.15 收口批扩面——fix-23 定谳改锚 0.13.2 asar 实锚）。
+// 覆盖：真实 userData / harness home / {userData}/harness/profiles/web profile 落点锚
+// （0.13.2 asar 实锚——G3 {userData}/profile 旧锚已废）、desktop 已装清单读面、诊断事件解析
 // （app-YYYYMMDD.jsonl / 非 JSON 行容忍 / forge-bundle-absent 过滤）、dump-config
 // insert 条目断言字面（fix-7 序列化形状正例 + 三反例红面）。
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'
@@ -11,27 +12,52 @@ import {
   FORGE_BUNDLE_ABSENT_EVENT,
   desktopAbsenceEvents,
   desktopDiagEvents,
+  desktopHarnessHome,
   desktopInstalledBundles,
   desktopPkgEntryDir,
   desktopProfileDir,
   desktopProfileNodeModules,
+  desktopRealUserData,
   insertEntryPattern,
 } from '../../../e2e/support/forge-combo.js'
 
+/** desktop 真实 userData 形态夹具（只测读面形状——不触真机盘面） */
 function makeUserData(): string {
   const ud = mkdtempSync(join(tmpdir(), 'dsh-forge-combo-udtest-'))
-  mkdirSync(join(ud, 'profile'), { recursive: true })
+  mkdirSync(join(ud, 'harness', 'profiles', 'web'), { recursive: true })
   return ud
 }
 
-describe('desktop 通道实锚读面（G3——{userData}/profile）', () => {
-  it('desktopProfileDir/NodeModules/PkgEntryDir 落点形状（paths.ts resolveHostPaths 实锚）', () => {
-    expect(desktopProfileDir('C:\\ud')).toBe(join('C:\\ud', 'profile'))
-    expect(desktopProfileNodeModules('C:\\ud')).toBe(join('C:\\ud', 'profile', 'node_modules'))
-    expect(desktopPkgEntryDir('C:\\ud', '@dsh-forge/forge')).toBe(join('C:\\ud', 'profile', 'node_modules', '@dsh-forge', 'forge'))
+describe('desktop 通道实锚读面（fix-23 定谳——0.13.2 {userData}/harness/profiles/web）', () => {
+  it('desktopRealUserData 派生：%APPDATA% + dsh-desktop（asar configureAppIdentity 实锚）', () => {
+    const prior = process.env.APPDATA
+    process.env.APPDATA = 'C:\\Users\\x\\AppData\\Roaming'
+    try {
+      expect(desktopRealUserData()).toBe(join('C:\\Users\\x\\AppData\\Roaming', 'dsh-desktop'))
+    } finally {
+      if (prior === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = prior
+    }
   })
 
-  it('desktopInstalledBundles 读 dsh.profile.bundles（缺席文件 = 空清单）', () => {
+  it('desktopRealUserData：APPDATA 缺席 fail-loud（不静默派生）', () => {
+    const prior = process.env.APPDATA
+    delete process.env.APPDATA
+    try {
+      expect(() => desktopRealUserData()).toThrow(/APPDATA/)
+    } finally {
+      if (prior !== undefined) process.env.APPDATA = prior
+    }
+  })
+
+  it('desktopHarnessHome / desktopProfileDir / NodeModules / PkgEntryDir 落点形状（0.13.2 asar 实锚）', () => {
+    expect(desktopHarnessHome('C:\\ud')).toBe(join('C:\\ud', 'harness'))
+    expect(desktopProfileDir('C:\\ud')).toBe(join('C:\\ud', 'harness', 'profiles', 'web'))
+    expect(desktopProfileNodeModules('C:\\ud')).toBe(join('C:\\ud', 'harness', 'profiles', 'web', 'node_modules'))
+    expect(desktopPkgEntryDir('C:\\ud', '@dsh-forge/forge')).toBe(join('C:\\ud', 'harness', 'profiles', 'web', 'node_modules', '@dsh-forge', 'forge'))
+  })
+
+  it('desktopInstalledBundles 读 harness/profiles/web/package.json dsh.profile.bundles（缺席文件 = 空清单）', () => {
     const ud = makeUserData()
     expect(desktopInstalledBundles(ud), 'profile package.json 缺席 = 空清单').toEqual([])
     writeFileSync(

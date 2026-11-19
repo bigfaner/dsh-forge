@@ -684,11 +684,30 @@ export function ensureRegistryProfile(dshHome: string, profile: string, specs: r
   ensureProfileBuildApprovals(dshHome, profile)
 }
 
-// ── desktop 通道实锚读面（G3 核销 + host-wiring logsDir——1.15 收口批扩面） ──────────
+// ── desktop 通道实锚读面（fix-23 定谳改锚——0.13.2 asar 实锚；bug a96e09a5） ──────────
+// 定谳（asar 反读 D:/software/DSH Desktop/resources/app.asar out/main/index.js 实锚）：
+// 0.13.2 packaged 形态 userData 恒 = %APPDATA%\dsh-desktop（configureAppIdentity 硬编码
+// app.setPath，全 main 零 DSH_FORGE_USER_DATA/DSH_HOME 消费——隔离 env 无缝，app 永不读
+// 临时目录）；profile 实锚 = {userData}/harness/profiles/web（web profile + .generations
+// projection；G3 旧锚 {userData}/profile 为 0.12.x 世代残留，0.13.2 无 "desktop" reserved
+// profile，boots "launch requested (web profile)"）。本组读面入参语义同步改锚：
+// userData = desktop 真实 userData（desktopRealUserData() 单源派生），禁传临时目录。
 
-/** desktop profile 落点实锚（G3：packaged profileDir = {userData}/profile——paths.ts resolveHostPaths） */
+/** desktop 真实 userData（asar 实锚单源：%APPDATA%\dsh-desktop——0.13.2 packaged 恒读此路径） */
+export function desktopRealUserData(): string {
+  const appData = process.env.APPDATA
+  if (appData === undefined || appData === '') throw new Error('APPDATA 未置位（desktop 真实 userData 派生必填）')
+  return join(appData, 'dsh-desktop')
+}
+
+/** desktop harness home（{userData}/harness——desktop main dshHome 实锚，harness spawn env DSH_HOME 即此值） */
+export function desktopHarnessHome(userData: string): string {
+  return join(userData, 'harness')
+}
+
+/** desktop profile 落点实锚（0.13.2：{userData}/harness/profiles/web——bootstrap DesktopStorageManager + profile maintenance 实锚） */
 export function desktopProfileDir(userData: string): string {
-  return join(userData, 'profile')
+  return join(userData, 'harness', 'profiles', 'web')
 }
 
 export function desktopProfileNodeModules(userData: string): string {
