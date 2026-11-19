@@ -148,7 +148,7 @@ describe('产品 client 插件 bundle 保障链对齐（vite 清单 → dev/buil
     expect(shorts.length).toBeGreaterThan(0)
 
     const { ensurePackages } = await import('../../scripts/dev-ensure-packages.mjs')
-    const devSet = new Set(ensurePackages(ROOT).map((pkg) => pkg.replace('packages/plugins/', '')))
+    const devSet = new Set(ensurePackages(ROOT).map((pkg) => pkg.replace(/^(packages\/)?plugins\//, '')))
 
     const rootPkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> }
     const buildScript = rootPkg.scripts['build'] ?? ''
@@ -158,7 +158,8 @@ describe('产品 client 插件 bundle 保障链对齐（vite 清单 → dev/buil
     const missing: string[] = []
     for (const short of shorts) {
       if (!devSet.has(short)) missing.push(`${short}: scripts/dev.mjs ensure 数组缺席`)
-      if (!buildScript.includes(`packages/plugins/${short} build`)) missing.push(`${short}: 根 build 链缺席`)
+      // 位置感知：'plugins/<short> build' 同时命中 'packages/plugins/<short>' 与根级 'plugins/<short>' 两种 build 链写法
+      if (!buildScript.includes(`plugins/${short} build`)) missing.push(`${short}: 根 build 链缺席`)
       if (!(('@dsh-forge/' + short) in webPkg.dependencies)) missing.push(`${short}: apps/web dependencies 缺席`)
     }
     expect(missing).toEqual([])
