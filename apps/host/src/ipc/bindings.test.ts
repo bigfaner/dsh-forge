@@ -273,6 +273,17 @@ describe('withKnowledgeRegistryRow（1.15 注册链进表径）', () => {
     expect(getProject).toHaveBeenCalledOnce()
     expect(knowledge.registerProject).not.toHaveBeenCalled()
   })
+
+  it('双径覆盖幂等（fix-36 bug 97ddbeaa——子侧装配 + main IPC 包装同注册重复落行无害）', async () => {
+    const { service, registerProject } = registryService()
+    const knowledge = { registerProject: vi.fn().mockResolvedValue(undefined) }
+    // main 预装 + 子侧装配嵌套两层包装（真实双径形态）——单次注册两次落表
+    const wrapped = withKnowledgeRegistryRow(withKnowledgeRegistryRow(service, knowledge), knowledge)
+    await expect(wrapped.registerProject({ workspaceDir: 'C:\\ws\\new', name: 'new', forgeDir: 'C:\\ws\\new\\.forge' })).resolves.toBe(result)
+    expect(registerProject).toHaveBeenCalledOnce()
+    expect(knowledge.registerProject).toHaveBeenCalledTimes(2)
+    expect(knowledge.registerProject).toHaveBeenNthCalledWith(2, { wsPath: 'C:\\ws\\new', projectId: result.projectId })
+  })
 })
 
 // ── boot 回填径：启动对既有项目补齐 knowledge 注册行（bug 5e5592dc——注册行唯一写径

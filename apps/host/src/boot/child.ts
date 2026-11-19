@@ -82,7 +82,7 @@ import { createUserQuestionsBridge } from './user-questions-bridge.js'
 import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from './proxy-channels.js'
 import { apiLoopbackGuardListener } from './api-loopback-guard.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
-import { refreshKnowledgeBindings } from '../ipc/bindings.js'
+import { refreshKnowledgeBindings, withKnowledgeRegistryRow } from '../ipc/bindings.js'
 // 1.17 批二卸旧装新：worktree 域 host 侧装配段已下沉 @dsh-forge/project
 // host/assembly/host-side.ts——apps/host 只留注册行（装配逻辑零内联，AGENTS 1.3）。
 import { assembleProjectHostSide } from '@dsh-forge/project'
@@ -1176,6 +1176,42 @@ async function main(): Promise<void> {
         return { configured: true, ...pskTrioOf(rotated.shape), pinConfigured: true, pinDurable: pinIssuer.isDurable() }
       },
     },
+  }
+  // fix-36 bug 97ddbeaa：注册链全运输面覆盖——Typert remote face（官方 webserver/bridge
+  // dispatch）注册径此前绕过 main 侧 forge:projects/register IPC 通道的
+  // withKnowledgeRegistryRow 包装（knowledge 注册行唯一产品写径漏挂），knowledge_registry
+  // 零项目行 → 向导注册后知识浏览恒「项目不存在」。core 服务对象为三运输面（webserver
+  // remote face / bridge dispatchRpc / main IPC proxy）同源单点——在此做 registerProject
+  // 方法 wrap（AGENTS 1.1 合法缝；幂等 upsert，main IPC 径重复落行无害）。fail-soft：
+  // 任一服务缺席/劣形 = 不包装（行为回退现状，注册链不受阻）。
+  {
+    const forgeProjects = servicesFace.get('forgeProjects') as
+      | (ProjectService & { registerProject: ProjectService['registerProject'] })
+      | undefined
+    const knowledge = servicesFace.get('knowledge') as
+      | { registerProject?: unknown }
+      | undefined
+    if (
+      forgeProjects !== undefined &&
+      typeof forgeProjects.registerProject === 'function' &&
+      knowledge !== undefined &&
+      typeof knowledge.registerProject === 'function'
+    ) {
+      const originalRegister = forgeProjects.registerProject.bind(forgeProjects)
+      const knowledgeRow = knowledge as Parameters<typeof withKnowledgeRegistryRow>[1] & object
+      forgeProjects.registerProject = async (input: Parameters<ProjectService['registerProject']>[0]) => {
+        const result = await originalRegister(input)
+        try {
+          const project = await forgeProjects.getProject(result.projectId)
+          if (project !== null) {
+            await knowledgeRow.registerProject({ wsPath: project.wsPath, projectId: result.projectId })
+          }
+        } catch (cause) {
+          diag(`[host:boot] [host] knowledge 注册行落表失败（该项目知识面降级至无注册行）：${String(cause)}`)
+        }
+        return result
+      }
+    }
   }
   // 已注册 tool 名清单（3.4 冒烟观测面）：官方 ToolRuntime.schemas() 全局视图投影 name。
   // 读取失败 = 观测降级（tools 缺席），boot 本体不受阻——断言面由冒烟承载。
