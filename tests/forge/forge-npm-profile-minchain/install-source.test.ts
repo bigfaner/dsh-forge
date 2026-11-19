@@ -1,11 +1,12 @@
-// fix-24 单测：安装通道单源（forgeInstallSource）+ 陈旧 CAS 副本守卫
-// （staleVirtualStoreCopies）——纯 fs 夹具自证，判据正反双向（新鲜副本零违例 +
-// 陈旧副本违例逐条）。
+// fix-24 单测 + bug 8c4b8e35 修复面：安装通道单源（forgeInstallSource 三态）+
+// 陈旧 CAS 副本守卫（staleVirtualStoreCopies）——纯 fs 夹具自证，判据正反双向。
 // 契约锚 = proposals/plugin-forge-combo/issues/fix-24/findings.md（037 轮②定谳：
-// pnpm file: 虚拟 store CAS 键按源路径编码，worktree 稳定路径逐代命中同键陈旧副本）。
+// pnpm file: 虚拟 store CAS 键按源路径编码，worktree 稳定路径逐代命中同键陈旧副本）
+// + bug 8c4b8e35（039 轮定谳：link: add 不装 link 目标依赖闭包——发布树聚合源在
+// profile 侧五件零物化，npm 通道安装源必须为闭包物化副本）。
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { forgeInstallSource, staleVirtualStoreCopies } from '../../../e2e/support/forge-combo.js'
 
@@ -37,8 +38,27 @@ function makeStoreEntry(nodeModules: string, bare: string, opts: { withEntry: bo
   return storeDir
 }
 
-describe('forgeInstallSource（fix-24 安装通道单源）', () => {
-  it('发布树置位且 <tree>/forge/package.json 在场 → 返回发布树 forge（发布树优先）', () => {
+describe('forgeInstallSource（fix-24 安装通道单源 + bug 8c4b8e35 闭包物化源优先）', () => {
+  /** 造 forge 目录夹具（package.json 在场） */
+  function makeForgeDir(label: string): string {
+    const dir = tmpDir()
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: '@dsh-forge/forge', label }))
+    return dir
+  }
+
+  it('闭包物化源置位且 forge/package.json 在场 → 返回该源（优先于发布树——bug 8c4b8e35）', () => {
+    const closure = makeForgeDir('closure')
+    const treeForge = makeForgeDir('tree')
+    expect(forgeInstallSource({ forgeDir: 'X:\\worktree\\plugins\\forge', releaseTree: dirname(treeForge), npmSourceDir: closure })).toBe(closure)
+  })
+
+  it('闭包物化源置位但 forge/package.json 缺席 → fail-loud（8c4b8e35 形漂移不静默回落）', () => {
+    const empty = tmpDir()
+    expect(() => forgeInstallSource({ forgeDir: 'X:\\worktree\\plugins\\forge', npmSourceDir: empty })).toThrow(/闭包物化安装源 forge 目录缺席/)
+  })
+
+  it('闭包物化源缺席 → 发布树优先（fix-24 原三态回归面不变）', () => {
     const tree = tmpDir()
     mkdirSync(join(tree, 'forge'), { recursive: true })
     writeFileSync(join(tree, 'forge', 'package.json'), '{"name":"@dsh-forge/forge"}')

@@ -47,7 +47,9 @@
 // 裁决留痕：per-test 显式重置形态被否——安装链幂等重建成本高且与 CT-DISK-06 幂等断言冲突。
 //
 // 环境面（e2e/support/forge-combo.ts 头注正本）：FORGE_COMBO_E2E=1 + FORGE_COMBO_DSH_HOME
-// + FORGE_COMBO_DESKTOP_EXE + FORGE_COMBO_RELEASE_TREE（1.12 发布树）+ FORGE_COMBO_DESKTOP_DSH。
+// + FORGE_COMBO_DESKTOP_EXE + FORGE_COMBO_RELEASE_TREE（1.12 发布树）。desktop 通道 CLI =
+// 官方 packaged invocation 单源（bug 643a40df/e65b24c8 根修——FORGE_COMBO_DESKTOP_DSH 直跑
+// 形态退役：GUI 二进制 no-op 假成功 + PATH pnpm v10/v11 store 错锚拒装）。
 // 执行序纪律（AGENTS 1.8）：先廉价校验装载版本/代际（版本双校验 + M-3 代际探针）再做大取证。
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp；宿主单实例（carrier 形态，禁第二实例 launch）；
 // 共享树保护面零触碰；teardown 按 PID 定点回收。
@@ -83,7 +85,8 @@ import {
   findDispatchLogs,
   generationDriftViolations,
   insertEntryPattern,
-  runDsh,
+  desktopCliChannel,
+  runDesktopChannelCli,
   sqliteTables,
   versionPairs,
 } from '../../../e2e/support/forge-combo.js'
@@ -107,9 +110,14 @@ function harnessHome(): string {
   return desktopHarnessHome(realUd())
 }
 
-/** dshmarket 通道 CLI 执行（dshHome = {userData}/harness——与 app 消费面同 home 同 profile；零假隔离 env） */
+/** desktop 通道 CLI 执行（dshHome = {userData}/harness——与 app 消费面同 home 同 profile；零假隔离 env）。
+ * bug 643a40df/e65b24c8 根修：直跑通道 CLI bin 为错锚形态（GUI 二进制 no-op 假成功 +
+ * PATH pnpm store 错锚拒装）——现行执行面 = 官方 packaged invocation 单源
+ * （e2e/support/forge-combo.ts runDesktopChannelCli：electron exe + harness-node-entry +
+ * app.asar CLI entry + 打包 pnpm 注入），锚 FORGE_COMBO_DESKTOP_EXE（必填 fail-loud）。 */
 function runDesktopDsh(env: ReturnType<typeof comboEnv>, args: readonly string[]) {
-  return runDsh(env.desktopDshBin, args, harnessHome())
+  if (env.desktopExe === undefined) throw new Error('FORGE_COMBO_DESKTOP_EXE 未置位（desktop 通道 CLI = 官方 packaged invocation，锚 exe 必填——bug 643a40df/e65b24c8 修复面）')
+  return runDesktopChannelCli(desktopCliChannel(env.desktopExe), args, harnessHome())
 }
 
 /** 只读计数（共库/单装库域表行数——WAL 并发读口径，用后即闭） */

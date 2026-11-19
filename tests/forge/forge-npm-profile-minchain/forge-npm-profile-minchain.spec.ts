@@ -31,6 +31,7 @@ import {
   findDispatchLogs,
   forgeInstallSource,
   generationDriftViolations,
+  ensureProfileBuildApprovals,
   ensureRegistryProfile,
   installedBundles,
   installedPkgDir,
@@ -95,8 +96,12 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     const desktopBundlesBefore = JSON.stringify(installedBundles(env.dshHome, 'desktop'))
 
     await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'remove', FORGE_PKG], env.dshHome)
-    // Input（CT-NPM-01）：npm CLI 自定义 profile add
-    const add = await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'add', `link:${forgeInstallSource(env)}`], env.dshHome)
+    // 构建脚本批准面（fix-20 单源）——file: 闭包物化安装引入 better-sqlite3 构建脚本，
+    // dsh init 占位批准值下 pnpm 拦截 exit 1（ERR_PNPM_IGNORED_BUILDS，029 探针实锚）
+    ensureProfileBuildApprovals(env.dshHome, 'forge')
+    // Input（CT-NPM-01）：npm CLI 自定义 profile add——file: 协议（bug 8c4b8e35 修复面：
+    // link: 不装 link 目标依赖闭包，file: 物化五件装载闭包进 profile 侧）
+    const add = await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'add', `file:${forgeInstallSource(env)}`], env.dshHome)
     expect(add.code, `add 成功退出（exit=${String(add.code)}）stderr=${add.stderr.slice(-400)}`).toBe(0)
 
     // State（CT-NPM-01）：profile 目录创建 + forge 组合器条目直挂物化（add 目标，
@@ -133,7 +138,7 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
   test('CT-NPM-02 #B1 O1：desktop 保留名拒绝——npm CLI 非零退出 + desktop 零写入', async () => {
     const before = JSON.stringify(installedBundles(env.dshHome, 'desktop'))
     // Input（CT-NPM-02）：npm CLI 对保留 profile 名 desktop 执行插件管理命令
-    const res = await runDsh(env.dshBin, ['plugin', '--profile', 'desktop', 'add', `link:${forgeInstallSource(env)}`], env.dshHome)
+    const res = await runDsh(env.dshBin, ['plugin', '--profile', 'desktop', 'add', `file:${forgeInstallSource(env)}`], env.dshHome)
 
     // Output（CT-NPM-02 O1）：CLI 拒绝——非零退出 + 可读错误（不锁文案字面）
     expect(res.code, 'npm CLI 拒绝 desktop 保留 profile（非零退出）').not.toBe(0)
@@ -182,7 +187,8 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     const source = forgeInstallSource(env)
     for (const round of ['重装#1', '重装#2'] as const) {
       await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'remove', FORGE_PKG], env.dshHome)
-      const add = await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'add', `link:${source}`], env.dshHome)
+      ensureProfileBuildApprovals(env.dshHome, 'forge')
+      const add = await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'add', `file:${source}`], env.dshHome)
       expect(add.code, `${round} add 成功（exit=${String(add.code)}）stderr=${add.stderr.slice(-400)}`).toBe(0)
       const forgeEntry = installedPkgDir(nodeModules, FORGE_PKG)
       expect(existsSync(forgeEntry) && readdirSync(forgeEntry).length > 0, `${round} 组合器条目物化在场且非空`).toBe(true)
@@ -214,7 +220,7 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     const addBase = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', ...registrySpecs], env.dshHome)
     expect(addBase.code, `web 背板就绪（exit=${String(addBase.code)}，pin=${pin}）stderr=${addBase.stderr.slice(-400)}`).toBe(0)
     expect(profileBuildApprovalGaps(env.dshHome, calProfile), '构建脚本批准面固化（单源全键批准，安装后零缺口）').toEqual([])
-    const add = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', `link:${forgeInstallSource(env)}`], env.dshHome)
+    const add = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', `file:${forgeInstallSource(env)}`], env.dshHome)
     expect(add.code, `校准 profile add 成功（exit=${String(add.code)}）`).toBe(0)
 
     const { allocatePort } = await import('../../../e2e/support/ports.js')
@@ -254,14 +260,15 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
       expect(session, 'token → cookie 会话建立（token query 303 + Set-Cookie；零 Set-Cookie = 认证面漂移即停）').toBeTruthy()
       expect(up, 'web 校准宿主上线（认证会话 GET / ok——192d4631 新判据）').toBe(true)
       // State 观察点 B（CT-NPM-03）：五件 client bundle 经 client 注入通道可访问（HTTP 200）。
-      // 静态面走 cookie 会话语义（token query 直取 → 404，031 curl 实锚）——携会话 Cookie 头取件。
+      // 取件 URL = `/node_modules/<pkg>/<platform>`（官方 client 注入通道按 platform
+      // 字面量路由——clientBundleFiles urlSeg 面）；静态面走 cookie 会话语义（token query
+      // 直取 → 404，031 curl 实锚）——携会话 Cookie 头取件。
       const nodeModules = profileNodeModules(env.dshHome, calProfile)
-      for (const { pkg, file } of clientBundleFiles(nodeModules)) {
-        const rel = file.slice(nodeModules.length + 1).replaceAll('\\', '/')
-        const res = await fetch(`http://127.0.0.1:${String(port)}/node_modules/${rel}`, {
+      for (const { pkg, urlSeg } of clientBundleFiles(nodeModules)) {
+        const res = await fetch(`http://127.0.0.1:${String(port)}/node_modules/${urlSeg}`, {
           headers: { cookie: (session as { cookie: string }).cookie },
         })
-        expect(res.ok, `client bundle HTTP 可达 ${pkg}（${rel}）`).toBe(true)
+        expect(res.ok, `client bundle HTTP 可达 ${pkg}（${urlSeg}）`).toBe(true)
       }
     } finally {
       killTree(child.pid, child)

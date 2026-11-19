@@ -22,9 +22,14 @@
 //                                 fix-24：npm 通道安装源同锚（forgeInstallSource 单源——发布树 forge
 //                                 优先，worktree 稳定路径 file: 虚拟 store CAS 陈旧副本规避）
 //   FORGE_COMBO_DESKTOP_EXE=<exe> desktop 宿主安装产物 exe（旅程 1）
-//   FORGE_COMBO_DESKTOP_DSH=<bin> desktop 通道 CLI（缺省 'dsh'——desktop profile
-//                                 为保留名，npm CLI 拒管（CT-NPM-02）；desktop 通道经
-//                                 Desktop 内置命令环境执行，旅程 1 契约 Input 同形）
+//   FORGE_COMBO_DESKTOP_DSH=<bin> desktop 通道 CLI（直跑形态——040 轮定谳为错锚形态
+//                                 退役：643a40df GUI no-op + e65b24c8 store 错锚；现行
+//                                 desktop 通道 CLI = 官方 packaged invocation（runDesktopChannelCli，
+//                                 锚 FORGE_COMBO_DESKTOP_EXE））
+//   FORGE_COMBO_NPM_SOURCE_DIR=<dir> npm 通道闭包物化安装源（bug 8c4b8e35 修复面——
+//                                 build-forge-copy-variant.mjs 无 --strip-config 出树
+//                                 forge 条目；link: add 不装依赖闭包，聚合源必须为
+//                                 pnpm install 物化五件解析闭包的仓外副本）
 import { execFile } from 'node:child_process'
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -73,6 +78,9 @@ export interface ComboEnv {
   readonly desktopDshBin: string
   /** 1.12 发布树（desktop solo 通道安装物——CT-DISK-09 路 C；收口轮置位） */
   readonly releaseTree?: string
+  /** bug 8c4b8e35 修复面：npm 通道闭包物化安装源（build-forge-copy-variant.mjs 无
+   * --strip-config 出树 forge 条目——聚合形态 + pnpm install 物化五件解析闭包） */
+  readonly npmSourceDir?: string
 }
 
 /** 隔离环境面（总门开启后必填项缺失 = 配置错误 fail-loud，不静默 skip） */
@@ -83,6 +91,7 @@ export function comboEnv(): ComboEnv {
   const desktopExe = process.env.FORGE_COMBO_DESKTOP_EXE
   if (dshHome === undefined || dshHome === '') throw new Error('FORGE_COMBO_DSH_HOME 未置位（隔离 dsh home 必填）')
   const releaseTree = process.env.FORGE_COMBO_RELEASE_TREE
+  const npmSourceDir = process.env.FORGE_COMBO_NPM_SOURCE_DIR
   return {
     dshHome,
     dshBin: process.env.FORGE_COMBO_DSH_BIN ?? 'dsh',
@@ -90,14 +99,27 @@ export function comboEnv(): ComboEnv {
     ...(desktopExe === undefined ? {} : { desktopExe }),
     desktopDshBin: process.env.FORGE_COMBO_DESKTOP_DSH ?? 'dsh',
     ...(releaseTree === undefined || releaseTree === '' ? {} : { releaseTree }),
+    ...(npmSourceDir === undefined || npmSourceDir === '' ? {} : { npmSourceDir }),
   }
 }
 
 /**
- * fix-24 安装通道单源：npm 通道 link: add 的安装物源目录（CT-NPM-01/02/03 与 web
- * 校准轮 add 共用本函数取源——安装通道配方单源化，禁 spec 各自带路径）。
+ * fix-24 安装通道单源 + bug 8c4b8e35 修复面：npm 通道 `file:` add 的安装物源目录
+ * （CT-NPM-01/02/03 与 web 校准轮 add 共用本函数取源——安装通道配方单源化，禁 spec
+ * 各自带路径；协议 = file: 而非 link:——link: 不装 link 目标依赖闭包，file: 把五件
+ * 装载闭包物化进 profile 侧）。
  *
- * 发布树优先：FORGE_COMBO_RELEASE_TREE 置位且 <tree>/forge/package.json 在场 →
+ * 闭包物化源优先：FORGE_COMBO_NPM_SOURCE_DIR 置位且 <dir>/forge/package.json 在场 →
+ * 返回该目录（build-forge-copy-variant.mjs 出树的仓外闭包物化副本——聚合 forge +
+ * pnpm install 物化五件解析闭包）。根因（bug 8c4b8e35 定谳）：npm 通道 `link:` add
+ * 不安装 link 目标的依赖闭包（63a9a2b8 同一机械——fix-17 已实证），发布树聚合 forge
+ * 的五条相对 file: 兄弟依赖在 profile 侧完全零物化（039 轮实锚：profile 侧仅 forge
+ * junction、.pnpm 空）→ 五件冷启动解析缺席。fix-24 的发布树源只解决 CAS 陈旧副本
+ * （键按源路径编码），不解决 link: 闭包零物化——闭包物化面补齐 = 安装源改仓外闭包
+ * 物化副本（junction 指向副本，Node 解析经 junction 达副本内 node_modules——CT-NPM-05
+ * GREEN 同配方）。置位但 forge 缺席 = 配置形漂移，fail-loud。
+ *
+ * 发布树次优：FORGE_COMBO_RELEASE_TREE 置位且 <tree>/forge/package.json 在场 →
  * 返回 <tree>/forge（聚合形态，五条相对 file: 兄弟依赖指向同代发布树成员）。
  * 根因（issues/fix-24/findings.md 定谳）：pnpm file: 依赖虚拟 store CAS 键按依赖
  * 源路径编码（store v11 顶层 `file+<相对路径编码>_<hash>` 键目录实测），worktree
@@ -106,11 +128,16 @@ export function comboEnv(): ComboEnv {
  * 一次性目录（package-release 每代新出树），路径逐代不同 → CAS 键天然逐代不同，
  * 陈旧副本不可达。
  *
- * 发布树缺席回落 env.forgeDir（worktree 形——CAS 陈旧风险回归，仅存开发自跑形态；
- * 真机收口轮必须置位 FORGE_COMBO_RELEASE_TREE）。置位但 forge 目录缺席 = 配置形
- * 漂移，fail-loud（不静默回落——静默回落即陈旧通道复活）。
+ * 双源均缺席回落 env.forgeDir（worktree 形——CAS 陈旧风险回归 + 闭包零物化回归，
+ * 仅存开发自跑形态；真机收口轮必须置位 FORGE_COMBO_NPM_SOURCE_DIR）。
  */
-export function forgeInstallSource(env: Pick<ComboEnv, 'forgeDir' | 'releaseTree'>): string {
+export function forgeInstallSource(env: Pick<ComboEnv, 'forgeDir' | 'releaseTree' | 'npmSourceDir'>): string {
+  if (env.npmSourceDir !== undefined && env.npmSourceDir !== '') {
+    if (!existsSync(join(env.npmSourceDir, 'package.json'))) {
+      throw new Error(`npm 通道闭包物化安装源 forge 目录缺席（${env.npmSourceDir}）——FORGE_COMBO_NPM_SOURCE_DIR 形漂移 fail-loud（bug 8c4b8e35）`)
+    }
+    return env.npmSourceDir
+  }
   if (env.releaseTree !== undefined && env.releaseTree !== '') {
     const releaseForge = join(env.releaseTree, 'forge')
     if (!existsSync(join(releaseForge, 'package.json'))) {
@@ -171,7 +198,7 @@ export interface CliResult {
  * + --profile 显式承载。
  */
 export function sanitizedCliEnv(dshHome: string, extraEnv: Record<string, string> = {}): Record<string, string> {
-  const env = { ...process.env, DSH_HOME: dshHome, ...extraEnv } as Record<string, string>
+  const env = { ...process.env, DSH_HOME: dshHome } as Record<string, string>
   delete env.DSH_PROFILE
   delete env.DSH_PROFILE_DIR
   // 子进程解析面隔离（fix-20 单变量实证）：
@@ -183,10 +210,15 @@ export function sanitizedCliEnv(dshHome: string, extraEnv: Record<string, string
   delete env.NODE_PATH
   delete env.INIT_CWD
   delete env.npm_config_registry
-  // ④ELECTRON_RUN_AS_NODE（harness 宿主 electron 注入）——定向 dsh 宿主 electron 即纯
-  //   node 形态运行，web 宿主永不上线（fix-20 Run 9 实证「web 校准宿主上线」红）。
+  // ④ELECTRON_RUN_AS_NODE（harness 宿主 electron 注入）——缺省剥离：定向 dsh 宿主
+  //   electron 即纯 node 形态运行，web 宿主永不上线（fix-20 Run 9 实证「web 校准宿主
+  //   上线」红）。
   delete env.ELECTRON_RUN_AS_NODE
-  return env
+  // extraEnv 在消毒删除之后合并（bug 643a40df/e65b24c8 修复面）——显式注入对冲消毒
+  // 语义：desktop 通道官方 packaged invocation 需复注入 ELECTRON_RUN_AS_NODE=1 +
+  // DSH_DESKTOP_PNPM_ENTRY/RUNNER（harness-node-entry.mjs 官方缝），调用侧显式传参
+  // 即定向覆盖，缺省形态仍全量剥离。
+  return Object.assign(env, extraEnv)
 }
 
 /** run-once CLI 执行（DSH_HOME 定向隔离 home；extraEnv 补充 desktop 通道 userData 面等；非零退出码捕获不抛——失败面断言用） */
@@ -544,22 +576,38 @@ export function closureGaps(nodeModules: string): readonly string[] {
 }
 
 /**
- * dsh.client.platform 指向物（client 半侧装载文件锚——CT-DISK-02/CT-NPM-03）。
+ * client 半侧装载锚（CT-DISK-02/CT-NPM-03 step-4）双面：
+ * - file = manifest exports["./client"] 声明物（default/import 条件——物理 face 文件，
+ *   与 generationDriftViolations clientFaceRel 同一契约锚；存在性断言面）；
+ * - urlSeg = `<pkg 短名>/<dsh.client.platform>`（HTTP 取件 URL 段——官方 client 注入
+ *   通道按 platform 字面量路由，`/node_modules/<urlSeg>` 取件；platform = 'web'
+ *   字面量为官方 resolveMeta 等值判定键，非文件路径）。
  * 解析随装载链（bug c26a8c2a fix-4：不锁单一物化布局）——先查 profile 侧
- * node_modules，缺席则回落链接包自身 node_modules（pnpm 11.x link: 依赖物化位）。
+ * node_modules，缺席则回落链接包自身 node_modules。
  */
-export function clientBundleFiles(nodeModules: string): readonly { pkg: string; file: string; exists: boolean }[] {
+export function clientBundleFiles(nodeModules: string): readonly { pkg: string; urlSeg: string; file: string; exists: boolean }[] {
   const fallbackRoot = join(installedPkgDir(nodeModules, FORGE_PKG), 'node_modules')
   return BARE_BUNDLES.map((pkg) => {
+    const short = pkg.slice('@dsh-forge/'.length)
     const roots = [nodeModules, fallbackRoot]
-    const declared = roots.map((root) => {
+    let urlSeg = `${short}/web`
+    const face = roots.map((root) => {
       const dir = installedPkgDir(root, pkg)
-      return existsSync(join(dir, 'package.json')) ? (readPkgJson(dir).dsh?.client?.platform ?? undefined) : undefined
+      if (!existsSync(join(dir, 'package.json'))) return undefined
+      const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+        exports?: Record<string, string | { default?: string; import?: string }>
+        dsh?: { client?: { platform?: string } }
+      }
+      const platform = manifest.dsh?.client?.platform
+      if (typeof platform === 'string' && platform !== '') urlSeg = `${short}/${platform}`
+      const e = manifest.exports?.['./client']
+      const rel = typeof e === 'string' ? e : e?.default ?? e?.import
+      return typeof rel === 'string' && rel !== '' ? rel : undefined
     }).find((p) => p !== undefined)
-    if (declared === undefined) return { pkg, file: '(未声明)', exists: false }
-    const root = roots.find((r) => existsSync(join(installedPkgDir(r, pkg), declared))) ?? roots[0]
-    const file = join(installedPkgDir(root, pkg), declared)
-    return { pkg, file, exists: existsSync(file) }
+    if (face === undefined) return { pkg, urlSeg, file: '(未声明)', exists: false }
+    const root = roots.find((r) => existsSync(join(installedPkgDir(r, pkg), ...face.replace(/^\.\//, '').split('/')))) ?? roots[0]
+    const file = join(installedPkgDir(root, pkg), ...face.replace(/^\.\//, '').split('/'))
+    return { pkg, urlSeg, file, exists: existsSync(file) }
   })
 }
 
@@ -770,6 +818,84 @@ export function desktopRealUserData(): string {
 /** desktop harness home（{userData}/harness——desktop main dshHome 实锚，harness spawn env DSH_HOME 即此值） */
 export function desktopHarnessHome(userData: string): string {
   return join(userData, 'harness')
+}
+
+// ── desktop 通道 CLI = 官方 packaged invocation（bug 643a40df/e65b24c8 修复面）─────────
+// 定谳（039 轮实锚 + DSH Desktop resources 官方源核销）：
+// ①643a40df GUI no-op：直跑 Electron GUI 二进制（dsh-desktop.exe 形）作 CLI——子进程走
+//   GUI 形态：`plugin add` 秒退 exit 0、零安装、零输出（假成功；GUI 动作链断点 = CLI
+//   参数不被安装动作链消费）。GUI 二进制不承载 CLI 执行形态，直跑即错锚。
+// ②e65b24c8 store 错锚：CLI 直跑形态（dsh-cli.exe）下 plugin-manager 走 PATH `pnpm`
+//   （11.7 → 全局 v11 store），而消费面 profile 由 desktop app 官方链以打包 pnpm 10.9
+//   物化（v10 store）→ ERR_PNPM_UNEXPECTED_STORE 拒装。DSH_DESKTOP_PNPM_ENTRY/RUNNER
+//   env 直置 CLI 进程不被采纳——官方采纳点 = harness-node-entry.mjs（读 env →
+//   buildPackagedPnpmInvocation → runCli({ packageManager })），直跑 CLI 自执行
+//   runCli() 不带 packageManager（官方 packaged-pnpm-invocation.mjs 注释实锚）。
+// 根修 = 复用官方缝（reuse-first）：desktop 通道 CLI 一律经官方 packaged invocation
+// 执行——electron 二进制 + ELECTRON_RUN_AS_NODE=1 + harness-node-entry.mjs + app.asar
+// 内 CLI entry（desktop main HarnessRuntime 同参形态）+ DSH_DESKTOP_PNPM_ENTRY/RUNNER
+// 注入 → 打包 pnpm 10.9 + v10 store 对齐，add 真安装（拒装消除 + 假成功消除）。
+
+export interface DesktopCliChannel {
+  /** desktop 宿主安装产物 exe（electron 二进制——ELECTRON_RUN_AS_NODE=1 下作 node 运行面） */
+  readonly electronBin: string
+  /** resources/harness-node-entry.mjs（官方 node 入口缝） */
+  readonly nodeEntry: string
+  /** app.asar 内 dsh CLI entry（@deepseek-ai/dsh/lib/bin.js——desktop main dshEntryPath 同参） */
+  readonly cliEntry: string
+  /** app.asar 内打包 pnpm entry（pnpm/bin/pnpm.cjs——DSH_DESKTOP_PNPM_ENTRY 值） */
+  readonly pnpmEntry: string
+  /** app.asar 内 lock-recovery runner（pnpm-runner.mjs——DSH_DESKTOP_PNPM_RUNNER 值） */
+  readonly pnpmRunner: string
+}
+
+/**
+ * desktop 通道 CLI 通道发现面：自目标宿主安装产物 exe 单源派生官方 packaged invocation
+ * 全参（desktop main HarnessRuntime 构造同径——dshEntryPath/bundledPnpmEntryPath/
+ * harnessNodeEntryPath 实锚）。结构性锚 = exe 在场 + resources/harness-node-entry.mjs
+ * 在场 + resources/app.asar 在场；cliEntry/pnpmEntry/pnpmRunner 为 asar 内路径（纯 node
+ * fs 不可探测），运行期自证（[harness-node] stdout 标记 + 安装行为断言）。
+ */
+export function desktopCliChannel(desktopExe: string): DesktopCliChannel {
+  const installRoot = dirname(resolve(desktopExe))
+  const resources = join(installRoot, 'resources')
+  const nodeEntry = join(resources, 'harness-node-entry.mjs')
+  const appAsar = join(resources, 'app.asar')
+  const asarRoot = join(appAsar, 'node_modules')
+  if (!existsSync(desktopExe)) throw new Error(`desktop 宿主 exe 缺席：${desktopExe}（desktop 通道锚必填——643a40df）`)
+  if (!existsSync(nodeEntry)) throw new Error(`harness-node-entry.mjs 缺席：${nodeEntry}（官方 packaged invocation 结构锚——非 desktop 宿主安装树即错锚）`)
+  if (!existsSync(appAsar)) throw new Error(`app.asar 缺席：${appAsar}（CLI entry/pnpm entry 承载面——错锚 fail-loud）`)
+  return {
+    electronBin: resolve(desktopExe),
+    nodeEntry,
+    cliEntry: join(asarRoot, '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+    pnpmEntry: join(asarRoot, 'pnpm', 'bin', 'pnpm.cjs'),
+    pnpmRunner: join(asarRoot, 'dsh-desktop-market-installer', 'pnpm-runner.mjs'),
+  }
+}
+
+/**
+ * desktop 通道 CLI 执行环境：官方 packaged invocation 注入面——ELECTRON_RUN_AS_NODE=1
+ * （electron 二进制以 node 形态运行 harness-node-entry 及其 CLI/pnpm 子进程链——官方
+ * buildPackagedPnpmInvocation 语义）+ DSH_DESKTOP_PNPM_ENTRY/RUNNER（harness-node-entry
+ * 读取 → runCli({ packageManager }) → 打包 pnpm 10.9 → 消费面 v10 store 对齐——e65b24c8
+ * 拒装消除）。经 sanitizedCliEnv(extraEnv) 消毒后合并（显式注入对冲缺省剥离）。
+ */
+export function desktopCliChannelEnv(channel: DesktopCliChannel): Record<string, string> {
+  return {
+    ELECTRON_RUN_AS_NODE: '1',
+    DSH_DESKTOP_PNPM_ENTRY: channel.pnpmEntry,
+    DSH_DESKTOP_PNPM_RUNNER: channel.pnpmRunner,
+  }
+}
+
+/**
+ * desktop 通道 CLI run-once 执行：electron 二进制 [nodeEntry, cliEntry, ...args] +
+ * desktopCliChannelEnv 注入（官方 packaged invocation 全形）。非零退出码捕获不抛
+ * （runDsh 同径——失败面断言用）。
+ */
+export async function runDesktopChannelCli(channel: DesktopCliChannel, args: readonly string[], dshHome: string): Promise<CliResult> {
+  return runDsh(channel.electronBin, [channel.nodeEntry, channel.cliEntry, ...args], dshHome, desktopCliChannelEnv(channel))
 }
 
 /** desktop profile 落点实锚（0.13.2：{userData}/harness/profiles/web——bootstrap DesktopStorageManager + profile maintenance 实锚） */
