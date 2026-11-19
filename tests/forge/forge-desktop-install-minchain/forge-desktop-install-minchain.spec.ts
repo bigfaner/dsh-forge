@@ -19,10 +19,12 @@
 // dsh-base/dsh-web-app 零触碰；真实 userData 用户自有会话/凭据/偏好零改动）+ 按 PID
 // teardown（round8 实证配方：前置独占窗 Get-Process 'DSH Desktop' 零命中；本编排自拉
 // 实例按 PID 定点回收、回收前回显核对，禁按名通配/裸名 Stop-Process）。
-// 安装形态（CT-DISK-09 三路裁定）：desktop 通道唯一可行形态 = 路 C solo 逐件——
+// 安装形态（CT-DISK-09 三路裁定 + fix-34 根修改锚）：desktop 通道唯一可行形态 = 路 C solo 逐件——
 // 五件逐件 solo add + forge solo 变体（零 file: 兄弟依赖，1.12 发布树 <tree>/solo/forge）
-// add；安装源 = 发布树（fix-24 单源衔接——发布树路径逐代不同，pnpm file: CAS 键逐代
-// 不同，陈旧虚拟 store 副本结构性不可达）；原样包（聚合 file: 依赖）add 本代成功进层
+// add；安装源 = 发布树成员 npm pack tarball 的 file: 装（fix-34——bug d22957df 根修：
+// link: add 不装 link 目标依赖闭包 → required entry import 失败 → harness 启动失败 →
+// client 注入面零取件族 B 全红；file: tarball = 闭包物化正道，源身份仍锚发布树逐代路径）；
+// 原样包（聚合 file: 依赖）add 本代成功进层
 // （bug 5213c7e8 实锚修订——1.11 世代 staging 断裂为历史判例留痕，不作现行预期）。
 // CT-DISK-07 缺席降级构造（solo 形态适配）：缺件不装（knowledge 不逐件 add）而 forge
 // patch 插行仍声明 knowledge → 装载缺席——缺席诊断留痕（forge-bundle-absent，fix-1 实锚；
@@ -53,7 +55,7 @@
 // 执行序纪律（AGENTS 1.8）：先廉价校验装载版本/代际（版本双校验 + M-3 代际探针）再做大取证。
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp；宿主单实例（carrier 形态，禁第二实例 launch）；
 // 共享树保护面零触碰；teardown 按 PID 定点回收。
-import { type ChildProcess } from 'node:child_process'
+import { type ChildProcess, spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -220,6 +222,14 @@ async function startCarrier(env: ReturnType<typeof comboEnv>): Promise<DesktopCa
     if (url.includes('@dsh-forge/')) clientUrls.push(url)
   })
   await waitBootReady(launched.page)
+  // boot 就绪 ≠ 注入面取件完成（fix-34 观察面时序锚）：client 组合批在 harness 后端
+  // 附着（webserver 绑定）后才拉取——后端绑定晚于 __DSH_BOOT_READY__。等待首条
+  // @dsh-forge 取件落地（上限 60s）再交断言面；真缺席（CT-DISK-07 负向锚）由断言侧
+  // 「其余在场件取件成立而缺席件恒零」承载，不受此等待影响。
+  const pickupDeadline = Date.now() + 60_000
+  while (clientUrls.length === 0 && Date.now() < pickupDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+  }
   return { ...launched, clientUrls }
 }
 
@@ -272,6 +282,29 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
   const soloForgeDir = (): string => join(requireTree(), 'solo', 'forge')
   const memberDir = (bare: string): string => join(requireTree(), bare.slice('@dsh-forge/'.length))
 
+  // d22957df 根修（fix-34）：desktop 通道安装源 link: → file: tarball。
+  // 定谳（task_logs fix-34/001 判别探针 + 官方 host-module-fallback.mjs 源码核销）：link: add
+  // 不装 link 目标的依赖闭包（npm 通道 8c4b8e35 同判例先例），Node 从 junction realpath
+  // （发布树成员目录——无 node_modules）解析插件 import → ERR_MODULE_NOT_FOUND（required
+  // entry）→ auditStartupEntries throw → 「Harness entry failed during startup」→ harness
+  // 后端不附着 → /plugins 全路由 503「Harness unavailable」→ client 注入面零取件 +
+  // dshForge preload 面缺席 + 共库惰性首开零触发的族 B 全红级联。file: tarball = pnpm
+  // 闭包物化正道（nodeLinker hoisted 落 profile 根；desktop packaged pnpm 对 file:<dir>
+  // 盘符路径有 scandir 错锚 → 打 tarball 后按 file:<tgz> 传装）。
+  let packStaging: string | undefined
+  const packTarball = (dir: string): string => {
+    if (packStaging === undefined) packStaging = mkdtempSync(join(tmpdir(), 'dsh-forge-combo-pack-'))
+    // shell:true 承载 PATH 解析（Node ≥22 spawnSync 对 .cmd/.bat 无 shell 直接 EINVAL）
+    const res = spawnSync('npm', ['pack', '--pack-destination', packStaging], { cwd: dir, encoding: 'utf8', windowsHide: true, shell: process.platform === 'win32' })
+    if (res.status !== 0) throw new Error(`npm pack 失败（${dir}）：${String(res.error ?? res.stderr).slice(-400)}`)
+    const line = (res.stdout ?? '').split(/\r?\n/).filter(Boolean).at(-1) ?? ''
+    const tgz = join(packStaging, line.trim())
+    expect(existsSync(tgz), `打包产物在盘 ${tgz}`).toBe(true)
+    return tgz
+  }
+  const memberTarball = (bare: string): string => packTarball(memberDir(bare))
+  const soloForgeTarball = (): string => packTarball(soloForgeDir())
+
   test.afterAll(async () => {
     // 收尾（projection 隔离——只复位本编排安装条目，不删真实 userData 任何内容）：
     // carrier 先关释放锁（closeBareCarrier = carrier 进程 PID 定点进程树回收），再 best-effort
@@ -307,8 +340,13 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
 
     // 对照（原样包·bug 5213c7e8 实锚修订）：本代 generation-install 已按依赖闭包拷贝，
     // staging 断裂（ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND，1.11 世代历史判例留痕）不再复现——
-    // 现行预期 = exit 0 且 forge 进层
-    const aggregate = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${join(tree, 'forge')}`])
+    // 现行预期 = exit 0 且 forge 进层。承载形态 = 仓外 tmp 副本 link:（fix-34：link: 通道
+    // 的宿主 remove/重装语义会穿透 junction 删除目标目录内容——发布树正本零触碰，
+    // 删除面由 tmp 副本承担，用后即弃）
+    const aggregateStaging = mkdtempSync(join(tmpdir(), 'dsh-forge-combo-aggregate-'))
+    const aggregateCopy = join(aggregateStaging, 'forge')
+    cpSync(join(tree, 'forge'), aggregateCopy, { recursive: true })
+    const aggregate = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${aggregateCopy}`])
     expect(aggregate.code, `原样包 add 本代成功（exit=${String(aggregate.code)}）stderr=${aggregate.stderr.slice(-400)}`).toBe(0)
     expect(desktopInstalledBundles(realUd()), '原样包 add forge 进层（已装清单含 forge 条目）').toContain(FORGE_PKG)
     expect(desktopPkgEntryForm(realUd(), FORGE_PKG), 'profile 侧 forge 条目物化在场（link/dir 两态，禁止 absent 第三态）').not.toBe('absent')
@@ -341,10 +379,10 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
     // 构造（CT-DISK-07 Preconditions，solo 形态适配）：knowledge 不逐件 add、forge solo 变体
     // patch 插行仍声明 knowledge——装载缺席可观察构造（旅程 3 #B2 同判据 desktop 通道承载）
     for (const bare of four) {
-      const add = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${memberDir(bare)}`])
+      const add = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `file:${memberTarball(bare)}`])
       expect(add.code, `四件逐件 solo add 成功 ${bare}（exit=${String(add.code)}）`).toBe(0)
     }
-    const addForge = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${soloForgeDir()}`])
+    const addForge = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `file:${soloForgeTarball()}`])
     expect(addForge.code, `forge solo 变体 add 成功（exit=${String(addForge.code)}）`).toBe(0)
 
     // carrier 首启（boot 就绪门在 startCarrier 内；worker 重启后本用例自带安装构造可重建相位）
@@ -373,9 +411,9 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
     assertNoStaleRuntimeShadow(env)
     const forgePkgBefore = readFileSync(join(soloForgeDir(), 'package.json'))
     // Input（CT-DISK-01，路 C 终态安装形态，dshmarket 通道）：knowledge 补装 → 五件齐 → forge solo 变体 add
-    const addKn = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${memberDir(KNOWLEDGE)}`])
+    const addKn = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `file:${memberTarball(KNOWLEDGE)}`])
     expect(addKn.code, `knowledge 逐件 solo add 成功（exit=${String(addKn.code)}）`).toBe(0)
-    const addForge = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${soloForgeDir()}`])
+    const addForge = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `file:${soloForgeTarball()}`])
     expect(addForge.code, `forge solo 变体 add 成功（exit=${String(addForge.code)}）stderr=${addForge.stderr.slice(-400)}`).toBe(0)
 
     // State（CT-DISK-01 机械锚·两态）：消费面 profile（{userData}/harness/profiles/web）侧
@@ -424,7 +462,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
   test('CT-DISK-06 #B3 O1/O2：重复 add 幂等或显式冲突——清单唯一，禁止第三态', async () => {
     const bundlesBefore = desktopInstalledBundles(realUd())
     // Input（CT-DISK-06）：再次执行同一 add（dshmarket 通道）
-    const again = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${soloForgeDir()}`])
+    const again = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `file:${soloForgeTarball()}`])
     if (again.code === 0) {
       // O1（幂等）：exit 0 且清单仍唯一
       expect(again.code, 'O1 幂等成功（exit 0）').toBe(0)
@@ -544,7 +582,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
     // Input（CT-DISK-08）：dshmarket 通道换装对照变体后添加项目
     const remove = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', FORGE_PKG])
     expect(remove.code, `卸 forge（exit=${String(remove.code)}）`).toBe(0)
-    const addVariant = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${variantForge}`])
+    const addVariant = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `file:${packTarball(variantForge)}`])
     expect(addVariant.code, `对照变体 add 成功（exit=${String(addVariant.code)}）stderr=${addVariant.stderr.slice(-400)}`).toBe(0)
     // 冷启动复锚（对照变体生效——装载世代切换，案②形态）
     await restartCarrier(env)
@@ -567,7 +605,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
     // 复位：卸对照变体 → 重装 solo 正本（后续卸载三段 Preconditions 恢复）
     const removeVariant = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', FORGE_PKG])
     expect(removeVariant.code, `卸对照变体（exit=${String(removeVariant.code)}）`).toBe(0)
-    const addSolo = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `link:${soloForgeDir()}`])
+    const addSolo = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `file:${soloForgeTarball()}`])
     expect(addSolo.code, `重装 solo 正本（exit=${String(addSolo.code)}）`).toBe(0)
     rmSync(variant, { recursive: true, force: true })
   })

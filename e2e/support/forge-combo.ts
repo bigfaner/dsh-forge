@@ -579,9 +579,10 @@ export function closureGaps(nodeModules: string): readonly string[] {
  * client 半侧装载锚（CT-DISK-02/CT-NPM-03 step-4）双面：
  * - file = manifest exports["./client"] 声明物（default/import 条件——物理 face 文件，
  *   与 generationDriftViolations clientFaceRel 同一契约锚；存在性断言面）；
- * - urlSeg = `<pkg 短名>/<dsh.client.platform>`（HTTP 取件 URL 段——官方 client 注入
- *   通道按 platform 字面量路由，`/node_modules/<urlSeg>` 取件；platform = 'web'
- *   字面量为官方 resolveMeta 等值判定键，非文件路径）。
+ * - urlSeg = `<pkg 短名>/<dsh.client.platform>`（历史观察段——HTTP 取件路由经 fix-34
+ *   根修改锚（bug d22957df）：官方 client-modules 组合 URL `plugins/??<pkg>/client.js,…&rev=`，
+ *   `/node_modules/<urlSeg>` 非官方路由恒 404；urlSeg 仅存留作 platform 字面量观察面。
+ *   platform = 'web' 字面量为官方 resolveMeta 等值判定键，非文件路径）。
  * 解析随装载链（bug c26a8c2a fix-4：不锁单一物化布局）——先查 profile 侧
  * node_modules，缺席则回落链接包自身 node_modules。
  */

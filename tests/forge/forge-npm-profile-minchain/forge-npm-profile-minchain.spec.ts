@@ -259,16 +259,26 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
       session ??= await establishWebAuthSession(`http://127.0.0.1:${String(port)}`, token as string)
       expect(session, 'token → cookie 会话建立（token query 303 + Set-Cookie；零 Set-Cookie = 认证面漂移即停）').toBeTruthy()
       expect(up, 'web 校准宿主上线（认证会话 GET / ok——192d4631 新判据）').toBe(true)
-      // State 观察点 B（CT-NPM-03）：五件 client bundle 经 client 注入通道可访问（HTTP 200）。
-      // 取件 URL = `/node_modules/<pkg>/<platform>`（官方 client 注入通道按 platform
-      // 字面量路由——clientBundleFiles urlSeg 面）；静态面走 cookie 会话语义（token query
-      // 直取 → 404，031 curl 实锚）——携会话 Cookie 头取件。
+      // State 观察点 B（CT-NPM-03）：五件 client bundle 经官方 client 注入通道可访问（HTTP 200）。
+      // 取件锚（fix-32 官方核销正本 + fix-34 根修改锚——bug d22957df）：官方 client-modules
+      // 组合 URL = `plugins/??<pkg>/client.js,…&rev=<rev>`（文档相对形态，boot 注入面下发）；
+      // 旧判据 `/node_modules/<pkg>/<platform>` 非官方路由恒 404（stale-anchor 改锚）。
+      // 断言面 = ①boot 注入面（GET / 文档）含五件 @dsh-forge 组合行 ②组合 URL 携会话
+      // Cookie 取件可达。file: 安装闭包物化后 registry 扫描（dsh.client.platform=web +
+      // exports["./client"]）应把五件组进 __DSH_BOOT__ graph——缺席即注入链断裂留痕。
+      const doc = await fetch(`http://127.0.0.1:${String(port)}/`, {
+        headers: { cookie: (session as { cookie: string }).cookie },
+      }).then((r) => r.text())
+      const comboUrls = [...doc.matchAll(/plugins\/\?\?[^"'\s<>]+/g)].map((m) => m[0])
+      expect(comboUrls.length, 'boot 注入面含 client 组合 URL（client-modules graph 已组）').toBeGreaterThan(0)
       const nodeModules = profileNodeModules(env.dshHome, calProfile)
-      for (const { pkg, urlSeg } of clientBundleFiles(nodeModules)) {
-        const res = await fetch(`http://127.0.0.1:${String(port)}/node_modules/${urlSeg}`, {
+      for (const { pkg } of clientBundleFiles(nodeModules)) {
+        const combo = comboUrls.find((u) => u.includes(`${pkg}/client.js`))
+        expect(combo, `boot 注入面含 ${pkg} 组合行（graph 行在场）`).toBeTruthy()
+        const res = await fetch(`http://127.0.0.1:${String(port)}/${combo as string}`, {
           headers: { cookie: (session as { cookie: string }).cookie },
         })
-        expect(res.ok, `client bundle HTTP 可达 ${pkg}（${urlSeg}）`).toBe(true)
+        expect(res.ok, `client bundle HTTP 可达 ${pkg}（官方组合通道）`).toBe(true)
       }
     } finally {
       killTree(child.pid, child)
