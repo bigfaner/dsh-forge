@@ -38,6 +38,7 @@ import {
   runDsh,
   sanitizedCliEnv,
   sqliteTables,
+  staleVirtualStoreCopies,
 } from '../../../e2e/support/forge-combo.js'
 import { establishWebAuthSession, extractBootToken, sessionReady } from '../../../e2e/support/web-boot-auth.js'
 
@@ -94,7 +95,7 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
 
     await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'remove', FORGE_PKG], env.dshHome)
     // Input（CT-NPM-01）：npm CLI 自定义 profile add
-    const add = await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'add', `link:${env.forgeDir}`], env.dshHome)
+    const add = await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'add', `link:${forgeInstallSource(env)}`], env.dshHome)
     expect(add.code, `add 成功退出（exit=${String(add.code)}）stderr=${add.stderr.slice(-400)}`).toBe(0)
 
     // State（CT-NPM-01）：profile 目录创建 + forge 组合器条目直挂物化（add 目标，
@@ -131,7 +132,7 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
   test('CT-NPM-02 #B1 O1：desktop 保留名拒绝——npm CLI 非零退出 + desktop 零写入', async () => {
     const before = JSON.stringify(installedBundles(env.dshHome, 'desktop'))
     // Input（CT-NPM-02）：npm CLI 对保留 profile 名 desktop 执行插件管理命令
-    const res = await runDsh(env.dshBin, ['plugin', '--profile', 'desktop', 'add', `link:${env.forgeDir}`], env.dshHome)
+    const res = await runDsh(env.dshBin, ['plugin', '--profile', 'desktop', 'add', `link:${forgeInstallSource(env)}`], env.dshHome)
 
     // Output（CT-NPM-02 O1）：CLI 拒绝——非零退出 + 可读错误（不锁文案字面）
     expect(res.code, 'npm CLI 拒绝 desktop 保留 profile（非零退出）').not.toBe(0)
@@ -150,6 +151,9 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     // 五件裸包代际漂移探针（M-3——AGENTS 1.8 程序化锚）：逐件 manifest 版本 + 服务面
     // 代际标记双校验，任一件代际陈旧即 fail-loud（1.8 轮 stale bundle 误测教训固化）
     expect(generationDriftViolations(nodeModules), '五件裸包代际漂移探针全绿（manifest + 服务面标记双校验）').toEqual([])
+    // fix-24 陈旧 CAS 副本守卫（037 轮②定谳面）：虚拟 store 零「无 dist」陈旧副本——
+    // 断言锚装载行为的前置机械锚（entry 指向物缺席 = 036 轮断裂实锚签名）
+    expect(staleVirtualStoreCopies(nodeModules), '虚拟 store 零陈旧 CAS 副本（fix-24 守卫）').toEqual([])
 
     // Input（CT-NPM-03）：`dsh --profile forge` 冷启动——观察窗内存活（装载链无崩溃退出）。
     // 五件 bundle 全解析装载 = 运行期可观测行为锚（c26a8c2a 复跑取证形态：冷启动五件
@@ -163,6 +167,26 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     // 判据实现与正反双向自证 = e2e/support/bundle-absence.ts + tests/forge/.../bundle-absence 单测；
     // 反锚面 CT-DISK-07/CT-NPM-06 forge-bundle-absent 不变）
     expect(forgeBundleAbsenceClues(win.stderr), `零真缺席装配（合法 pending 除外）stderr=${win.stderr.slice(-600)}`).toEqual([])
+  })
+
+  test('CT-NPM-03 #step-3b（fix-24）：删装重装幂等——发布树源重装不命中陈旧 CAS', async () => {
+    // 根因定谳面（037 轮② / issues/fix-24/findings.md）：pnpm file: 依赖虚拟 store
+    // CAS 键按依赖源路径编码，worktree 稳定路径逐代复用同键陈旧副本（036 轮实证
+    // 删 .pnpm 副本重装仍复现）。修复面 = 安装通道改发布树源（forgeInstallSource
+    // 单源——一次性目录路径逐代不同，CAS 键天然逐代不同）。
+    // 本用例锚行为幂等：删 forge → 重装 → 再重装，每轮虚拟 store 零陈旧副本 +
+    // 组合器条目在场（装载闭包不随重装轮次退化）。断言锚装载行为（stale-anchor
+    // 三律）——不锁 .pnpm 目录布局，只锚 entry 指向物在场的装载契约面。
+    const nodeModules = profileNodeModules(env.dshHome, 'forge')
+    const source = forgeInstallSource(env)
+    for (const round of ['重装#1', '重装#2'] as const) {
+      await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'remove', FORGE_PKG], env.dshHome)
+      const add = await runDsh(env.dshBin, ['plugin', '--profile', 'forge', 'add', `link:${source}`], env.dshHome)
+      expect(add.code, `${round} add 成功（exit=${String(add.code)}）stderr=${add.stderr.slice(-400)}`).toBe(0)
+      const forgeEntry = installedPkgDir(nodeModules, FORGE_PKG)
+      expect(existsSync(forgeEntry) && readdirSync(forgeEntry).length > 0, `${round} 组合器条目物化在场且非空`).toBe(true)
+      expect(staleVirtualStoreCopies(nodeModules), `${round} 虚拟 store 零陈旧 CAS 副本（幂等——CAS 不命中陈旧）`).toEqual([])
+    }
   })
 
   test('CT-NPM-03 #step-4（web 校准轮，FORGE_COMBO_WEB_LOOP=1）：client 半侧 HTTP 取件观察', async () => {
@@ -189,7 +213,7 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     const addBase = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', ...registrySpecs], env.dshHome)
     expect(addBase.code, `web 背板就绪（exit=${String(addBase.code)}，pin=${pin}）stderr=${addBase.stderr.slice(-400)}`).toBe(0)
     expect(profileBuildApprovalGaps(env.dshHome, calProfile), '构建脚本批准面固化（单源全键批准，安装后零缺口）').toEqual([])
-    const add = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', `link:${env.forgeDir}`], env.dshHome)
+    const add = await runDsh(env.dshBin, ['plugin', '--profile', calProfile, 'add', `link:${forgeInstallSource(env)}`], env.dshHome)
     expect(add.code, `校准 profile add 成功（exit=${String(add.code)}）`).toBe(0)
 
     const { allocatePort } = await import('../../../e2e/support/ports.js')

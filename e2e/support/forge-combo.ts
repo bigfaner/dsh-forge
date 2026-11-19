@@ -19,6 +19,8 @@
 //   FORGE_COMBO_DSH_HOME=<dir>    隔离 dsh home（profiles/* 与 forge/db 落此）
 //   FORGE_COMBO_FORGE_DIR=<dir>   forge 目录（缺省 <repo>/plugins/forge）
 //   FORGE_COMBO_RELEASE_TREE=<dir> 1.12 发布树（desktop solo 通道——CT-DISK-09 路 C 安装物）
+//                                 fix-24：npm 通道安装源同锚（forgeInstallSource 单源——发布树 forge
+//                                 优先，worktree 稳定路径 file: 虚拟 store CAS 陈旧副本规避）
 //   FORGE_COMBO_DESKTOP_EXE=<exe> desktop 宿主安装产物 exe（旅程 1）
 //   FORGE_COMBO_DESKTOP_DSH=<bin> desktop 通道 CLI（缺省 'dsh'——desktop profile
 //                                 为保留名，npm CLI 拒管（CT-NPM-02）；desktop 通道经
@@ -91,6 +93,71 @@ export function comboEnv(): ComboEnv {
   }
 }
 
+/**
+ * fix-24 安装通道单源：npm 通道 link: add 的安装物源目录（CT-NPM-01/02/03 与 web
+ * 校准轮 add 共用本函数取源——安装通道配方单源化，禁 spec 各自带路径）。
+ *
+ * 发布树优先：FORGE_COMBO_RELEASE_TREE 置位且 <tree>/forge/package.json 在场 →
+ * 返回 <tree>/forge（聚合形态，五条相对 file: 兄弟依赖指向同代发布树成员）。
+ * 根因（issues/fix-24/findings.md 定谳）：pnpm file: 依赖虚拟 store CAS 键按依赖
+ * 源路径编码（store v11 顶层 `file+<相对路径编码>_<hash>` 键目录实测），worktree
+ * 稳定路径逐代复用同键 CAS 副本——036 轮实证「先 install 后 build」固化无 dist
+ * 陈旧副本后，删 .pnpm 副本重装仍命中（CAS 不刷新），装载闭包断裂。发布树为
+ * 一次性目录（package-release 每代新出树），路径逐代不同 → CAS 键天然逐代不同，
+ * 陈旧副本不可达。
+ *
+ * 发布树缺席回落 env.forgeDir（worktree 形——CAS 陈旧风险回归，仅存开发自跑形态；
+ * 真机收口轮必须置位 FORGE_COMBO_RELEASE_TREE）。置位但 forge 目录缺席 = 配置形
+ * 漂移，fail-loud（不静默回落——静默回落即陈旧通道复活）。
+ */
+export function forgeInstallSource(env: Pick<ComboEnv, 'forgeDir' | 'releaseTree'>): string {
+  if (env.releaseTree !== undefined && env.releaseTree !== '') {
+    const releaseForge = join(env.releaseTree, 'forge')
+    if (!existsSync(join(releaseForge, 'package.json'))) {
+      throw new Error(`发布树 forge 目录缺席（${releaseForge}）——FORGE_COMBO_RELEASE_TREE 形漂移 fail-loud（fix-24）`)
+    }
+    return releaseForge
+  }
+  return env.forgeDir
+}
+export interface VirtualStoreStaleViolation {
+  readonly pkg: string
+  readonly storeDir: string
+  readonly detail: string
+}
+
+/**
+ * fix-24 陈旧 CAS 副本守卫：扫描 profile 侧 pnpm 虚拟 store（node_modules/.pnpm）
+ * 中 @dsh-forge 的 file: 依赖副本（目录名 `@dsh-forge+<bare>@file+<hash>` 形，
+ * pnpm 11 观测截断为 `@fil_<hash>`），按各副本 manifest exports 解析 entry 指向物——
+ * 指向物缺席 = 「先 install 后 build」固化无 dist 的陈旧 CAS 副本签名（036 轮
+ * project/task-loop/expert-squad 装载闭包断裂实锚），返回违例清单供 expect 逐条断言。
+ * store 根缺席（未安装/布局漂移）零贡献；无 exports 声明的副本不判（非 entry 契约面）。
+ */
+export function staleVirtualStoreCopies(profileNodeModules: string): readonly VirtualStoreStaleViolation[] {
+  const storeRoot = join(profileNodeModules, '.pnpm')
+  if (!existsSync(storeRoot)) return []
+  const violations: VirtualStoreStaleViolation[] = []
+  for (const entry of readdirSync(storeRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith('@dsh-forge+') || !entry.name.includes('@fil')) continue
+    const bare = entry.name.slice('@dsh-forge+'.length).split('@')[0]
+    const storeDir = join(storeRoot, entry.name)
+    const pkgDir = join(storeDir, 'node_modules', '@dsh-forge', bare)
+    const pkgFile = join(pkgDir, 'package.json')
+    if (!existsSync(pkgFile)) {
+      violations.push({ pkg: `@dsh-forge/${bare}`, storeDir, detail: '虚拟 store 副本 manifest 缺席' })
+      continue
+    }
+    const manifest = JSON.parse(readFileSync(pkgFile, 'utf8')) as { exports?: Record<string, string | { import?: string; default?: string }> }
+    const e = manifest.exports?.['.']
+    const rel = typeof e === 'string' ? e : e?.import ?? e?.default
+    if (rel === undefined) continue
+    if (!existsSync(join(pkgDir, rel))) {
+      violations.push({ pkg: `@dsh-forge/${bare}`, storeDir, detail: `entry 指向物缺席 ${rel}（无 dist 陈旧 CAS 副本签名——fix-24）` })
+    }
+  }
+  return violations
+}
 export interface CliResult {
   readonly code: number
   readonly stdout: string
