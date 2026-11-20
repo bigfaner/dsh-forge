@@ -158,5 +158,3 @@
             name: '@dsh-forge/plugin-forge'
             config:
               bindingsFile: "{{plugin-forge-bindings}}"
-          - id: md-mermaid
-            name: '@dsh-forge/md-mermaid'

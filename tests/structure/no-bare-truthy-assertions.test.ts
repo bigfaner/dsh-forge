@@ -89,7 +89,7 @@ const ALLOWLIST: Record<string, number> = {
   'packages/plugin-forge/src/tools/submit-task.test.ts': 1,
   'packages/plugin-forge/src/triage/triage.test.ts': 1,
   'plugins/input-history/tests/event-source.test.ts': 1,
-  'packages/plugins/md-mermaid/src/index.test.ts': 1,
+  'plugins/md-mermaid/tests/host/index.test.ts': 1,
   'packages/plugins/quote-reference/tests/client-face.test.ts': 1,
   'packages/plugins/quote-reference/tests/client-scope.test.ts': 2,
   'packages/plugins/quote-reference/tests/selection-menu.test.tsx': 2,
@@ -156,6 +156,7 @@ const ALLOWLIST: Record<string, number> = {
   'tests/mobile/pairing-entry-mobile-view/pairing-entry-mobile-view.test.ts': 1,
   'tests/structure/experts-face-alignment.test.ts': 1,
   'tests/structure/knowledge-plugin-migration.test.ts': 6,
+  'tests/structure/plugin-home-paths.test.ts': 1,
 }
 
 const EXCLUDED_DIRS = new Set(['node_modules', 'dist', '.forge', '.git', 'coverage', 'fixtures', 'userdata.dev'])

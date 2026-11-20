@@ -376,7 +376,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
   it('1.8 依赖切换：apps/web 依赖 @dsh-forge/md-mermaid（workspace:*）+ mermaid 直接依赖退役（零 mermaid 行）', () => {
     const pkg = read('apps/web/package.json')
     expect(pkg).toContain('"@dsh-forge/md-mermaid": "workspace:*"')
-    expect(pkg, 'mermaid 直接依赖退役（全仓唯一引用方 = packages/plugins/md-mermaid）').not.toMatch(/"mermaid"/)
+    expect(pkg, 'mermaid 直接依赖退役（全仓唯一引用方 = plugins/md-mermaid）').not.toMatch(/"mermaid"/)
   })
 
   it('Hard Rule 能力单源：产品源零 mermaid 引用（静态/动态 import 均零——引擎径归 @dsh-forge/md-mermaid）', () => {

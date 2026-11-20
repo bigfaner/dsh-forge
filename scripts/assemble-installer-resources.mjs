@@ -85,6 +85,10 @@ const STAGING_EXTRAS = {
   // 按声明读包内该文件触发 apply 注册，缺席即 ENOENT，bug a1f13abf 同径；knowledge
   // 迁 root plugins/knowledge 后同前缀包位登记面随迁）
   knowledge: { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/learn/SKILL.md', 'skills/distill/SKILL.md', 'cordis.patch.yml'] },
+  // md-mermaid（迁居批 1.2，knowledge/expert-squad 同构）：组合装配行本体 cordis.patch.yml
+  // （package.json dsh.bundle.patch 声明指向——loader 按声明读包内该文件触发 apply 注册，
+  // 缺席即 ENOENT，bug a1f13abf 同径；in-preset 双组合行退役转全局行）
+  'md-mermaid': { files: ['cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] },
   // project（1.17 批二卸旧装新，自 git-worktree staged 种子接替）：组合装配行本体
   // cordis.patch.yml（package.json dsh.bundle.patch 声明指向——loader 按声明读包内该文件
   // 触发 apply 注册，缺席即 ENOENT，bug a1f13abf 同径）+ skills 约定目录占位（.gitkeep）

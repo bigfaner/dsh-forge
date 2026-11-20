@@ -2,8 +2,9 @@
 // 配置表只承载**意图开关**，不列举闭包成员：
 //   · userLayerRow：该插件是否进打包 profile 模板（apps/host/src/profile/template.ts）
 //     cordis.patch.yml 用户层 insert 行（首启落地 → 全局装载）。预设组合携带的插件
-//     （plugin-forge/-spec/md-mermaid——行在预设底稿内，boot overlay 注行）不进
-//     用户层（产品裁决 2026-10-09：标准模式零 forge 面），故不在本表。
+//     （plugin-forge/-spec——行在预设底稿内，boot overlay 注行）不进用户层
+//     （产品裁决 2026-10-09：标准模式零 forge 面）。md-mermaid 迁居批 1.2 起 in-preset
+//     行退役转用户层全局行（knowledge/expert-squad 同构）。
 //   · staged（可选覆写）：false = 强制不随安装包发货（kill-switch——即使被引用/
 //     被依赖也不物化）；true = 强制发货；缺席 = 自动推导。
 // staging 集合自动推导（scripts/assemble-installer-resources.mjs
@@ -55,6 +56,12 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // dir（批1 包归位）：包自 packages/plugins/ 迁 root 级 plugins/ 树——assemble 侧
   // packageDirOf 改读本字段直取居所（键 = 表值 'plugins/expert-squad'）。
   'expert-squad': { userLayerRow: true, dir: 'plugins/expert-squad' },
+  // md-mermaid（迁居批 1.2，knowledge 同构装载通道切换）：in-preset 双组合行退役——
+  // 转挂包内 cordis.patch.yml 全局注册行（dsh.bundle.patch 声明指向，loader 按声明读
+  // 包内该文件），validateMermaid 全组合在场（行为语义变化已提案认账）。userLayerRow
+  // = 打包模板全局行 + staging 种子随包。ui 半不经 client 束装载（apps 构建期 import
+  // './web' 出口），零 client bundle 声明。
+  'md-mermaid': { userLayerRow: true, dir: 'plugins/md-mermaid' },
   // 打包形态发货覆写（1.17 批二卸旧装新，自 git-worktree 行接替）：host dist boot 链
   // （child/run/m2-wiring/bindings）静态 import 本包——缺席即安装版主进程
   // ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层：boot overlay presence 门注行

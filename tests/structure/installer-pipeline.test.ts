@@ -289,9 +289,9 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
   )
 
   it('staging 集合自动推导：种子（行插件 + 预设携带 + staged:true）∪ @dsh-forge/* 依赖闭包——contracts/path-key 闭包成员自动入场，新增产品包零配置', () => {
-    // 预设携带面真源 = 底稿文件扫描（plugin-forge/-spec/md-mermaid——远征/突击组合行；
-    // expert-squad 不在预设底稿——用户层全局行装载，见 PRODUCT_PLUGINS expert-squad 行）
-    expect(presetCarriedPlugins()).toEqual(['md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
+    // 预设携带面真源 = 底稿文件扫描（plugin-forge/-spec——远征/突击组合行；md-mermaid
+    // 迁居批 1.2 起 in-preset 行退役转用户层全局行——expert-squad/knowledge 同径）
+    expect(presetCarriedPlugins()).toEqual(['plugin-forge', 'plugin-forge-spec'])
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
     // project = staged:true 覆写种子（1.17 批二卸旧装新：host dist boot 链静态 import 面——
     // 自 plugins/git-worktree 种子迁入；旧包退役）
@@ -408,7 +408,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // 历史病理 = staging 硬编码清单漏列闭包成员；推导制下本断言守 kill-switch 不误伤。
     const missing: string[] = []
     for (const name of [...stagedPackages].sort()) {
-      // 键可含 workspace 子路径（md-mermaid 居 packages/plugins/、lib/* 居 lib/——子居所同源映射）
+      // 键可含 workspace 子路径（md-mermaid 居 root 级 plugins/、lib/* 居 lib/——子居所同源映射）
       const dir = pkgDirOf(name)
       const manifest = readJson(pkgManifestRelPath(name, dir)) as { dependencies?: Record<string, string> }
       for (const dep of Object.keys(manifest.dependencies ?? {})) {

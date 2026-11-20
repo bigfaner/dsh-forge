@@ -62,5 +62,8 @@ describe('产品插件闭包（3.4 M2）', () => {
     expect(devPkg.dependencies['@dsh-forge/expert-squad'], 'profile.dev 缺链接行 @dsh-forge/expert-squad').toBe(
       'link:../../../plugins/expert-squad',
     )
+    // md-mermaid 迁居批 1.2（root 级 plugins/ 树前缀 '/plugins'——project 先例同型）：
+    // 推导锁 'plugins/md-mermaid'（防表值回退静默放过——link 行推导单源）
+    expect(productPluginPackageLinkPath('@dsh-forge/md-mermaid')).toBe('plugins/md-mermaid')
   })
 })
