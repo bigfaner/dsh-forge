@@ -999,6 +999,32 @@ export function insertEntryPattern(bare: string): RegExp {
   const bareId = bare.slice('@dsh-forge/'.length)
   return new RegExp(`^- id: ${bareId}$\\r?\\n^  name: '${bare}'$`, 'm')
 }
+/**
+ * forge 下发面残留判据（CT-DISK-04 归属语义改锚 · fix-40）：卸 forge 后 dump-config
+ * 中插行的归属二分——
+ * - **forge 下发面**（应清零）：forge 组合器 patch（`plugins/forge/cordis.patch.yml`）
+ *   五条带 config 的组合插行——其 config 只经 forge patch 进入组合实况，特征标记 =
+ *   共库 `forge/db/forge/forge.db` dbFile 表达式 + `tasksHome` DSH_HOME 表达式；
+ * - **五件自有行**（卸 forge 合法存留）：project/spec/task-loop/expert-squad/knowledge
+ *   五件各自自带 `cordis.patch.yml` 裸插行（`- id: <bareId>` + `name:`，零 config 段），
+ *   forge 卸载后随各自 solo 条目继续生效——非孤儿（patch 同名行整体替换语义下 forge
+ *   patch 只管装态组合，卸载只收 forge patch 自身下发面）。
+ *
+ * 返回非空 = forge 下发面残留（红面）；空数组 = forge 源行/config 清零（正判半边）。
+ * 五件自有行在场半边由调用方配 `insertEntryPattern` 正锚逐件断言（双判）。
+ * 反例注入自证 = `tests/forge/forge-desktop-install-minchain/desktop-anchors.test.ts`
+ * forgePatchResidueClues describe 块。
+ */
+export function forgePatchResidueClues(dumpStdout: string): string[] {
+  const clues: string[] = []
+  if (dumpStdout.includes('forge/db/forge/forge.db')) {
+    clues.push("forge/db/forge/forge.db dbFile 表达式在场（forge patch config 残留——卸 forge 后应清零）")
+  }
+  if (/tasksHome: !!js process\.env\.DSH_HOME/.test(dumpStdout)) {
+    clues.push('tasksHome DSH_HOME 表达式在场（forge patch config 残留——卸 forge 后应清零）')
+  }
+  return clues
+}
 
 // ── desktop 官方 Typert remote face（fix-38——window.dshForge 错锚退役面）────────────
 // window.dshForge = dsh-forge dev host（apps/host）Electron preload 暴露面，desktop

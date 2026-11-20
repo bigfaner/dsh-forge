@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   BARE_BUNDLES,
+  forgePatchResidueClues,
   FORGE_BUNDLE_ABSENT_EVENT,
   desktopAbsenceEvents,
   desktopDiagEvents,
@@ -169,5 +170,52 @@ describe('desktopGenerationsDir / desktopPkgEntryForm（fix-25 裁定②——.g
     mkdirSync(genTarget, { recursive: true })
     symlinkSync(genTarget, entry, 'junction')
     expect(desktopPkgEntryForm(ud, '@dsh-forge/forge')).toBe('link')
+  })
+})
+
+describe('forgePatchResidueClues（CT-DISK-04 归属语义改锚 · fix-40——forge 下发面 vs 五件自有行双判）', () => {
+  // 合法存留态样本：卸 forge 后五件各自 cordis.patch.yml 自带裸插行（- id: + name:，零 config 段）
+  const uninstalledDump = [
+    'plugins:',
+    '- id: project',
+    "  name: '@dsh-forge/project'",
+    '- id: spec',
+    "  name: '@dsh-forge/spec'",
+    '- id: task-loop',
+    "  name: '@dsh-forge/task-loop'",
+    '- id: expert-squad',
+    "  name: '@dsh-forge/expert-squad'",
+    '- id: knowledge',
+    "  name: '@dsh-forge/knowledge'",
+  ].join('\r\n')
+
+  it('正例：五件自有裸插行在场 + forge 下发面零残留（双判正半边全绿）', () => {
+    expect(forgePatchResidueClues(uninstalledDump), 'forge 源行/config 零残留').toEqual([])
+    for (const bare of BARE_BUNDLES) {
+      expect(uninstalledDump, `五件自有行在场 ${bare}`).toMatch(insertEntryPattern(bare))
+    }
+  })
+
+  it('反例一（红面可红）：共库 dbFile 表达式在场 → forge 下发面残留非空', () => {
+    const residual = uninstalledDump + `
+- id: project
+  name: '@dsh-forge/project'
+    config:
+      dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')`
+    expect(forgePatchResidueClues(residual).some((c) => c.includes('forge/db/forge/forge.db'))).toBe(true)
+  })
+
+  it('反例二（红面可红）：tasksHome DSH_HOME 表达式在场 → 残留非空', () => {
+    const residual = uninstalledDump + `
+    config:
+      tasksHome: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/projects')`
+    expect(forgePatchResidueClues(residual).length).toBeGreaterThan(0)
+  })
+
+  it('反例三（防误伤）：五件自有行的合法 config 面（spec customSkillDirs）不触发残留判据', () => {
+    const legit = uninstalledDump + `
+      customSkillDirs:
+        - !!js process.getBuiltinModule('node:path').join(process.cwd(), 'skills')`
+    expect(forgePatchResidueClues(legit)).toEqual([])
   })
 })

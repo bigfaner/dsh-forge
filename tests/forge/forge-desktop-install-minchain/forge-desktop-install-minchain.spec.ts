@@ -89,6 +89,7 @@ import {
   desktopProfileDir,
   desktopProfileNodeModules,
   desktopInstallShadowViolations,
+  forgePatchResidueClues,
   desktopRealUserData,
   findDispatchLogs,
   generationDriftViolations,
@@ -876,13 +877,19 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
     expect(fileStat(comboDb), '共库文件快照零变化（size + mtime——只读保留）').toEqual(comboStatBefore)
     expect(scalarCount(comboDb, 'SELECT COUNT(*) AS n FROM project_projects'), '共库行数零变化').toBe(comboRowsBefore)
 
-    // State（锚点）：卸载后对账无 forge 条目、无孤儿 patch 行（dump-config 零 forge insert 条目——消费面同 home 同 profile）
+    // State（锚点）：卸载后对账无 forge 条目（清单面）
     const bundles = desktopInstalledBundles(realUd())
     expect(bundles, '已装清单无 forge 条目（对账零残留）').not.toContain(FORGE_PKG)
+    // State（双判改锚 · fix-40 归属语义契约核销）：dump-config 插行二分——
+    // forge 下发面（带 config 的组合插行：共库 dbFile / tasksHome DSH_HOME 表达式）应清零（反判红面）；
+    // 五件各自 cordis.patch.yml 自带裸插行（- id: + name:，零 config）卸 forge 合法存留（正判锚——
+    // 契约归属裁定：patch 同名行整体替换语义下 forge patch 只管装态组合，卸载只收 forge 自身下发面，
+    // 五件自有行随各自 solo 条目继续生效，非孤儿）。旧「零 insert 条目」断言把插件自有行误判残行，废除。
     const dump = await runDesktopDsh(env, ['--profile', 'web', '--dump-config'])
     expect(dump.code, `dump-config 组合实况成功（exit=${String(dump.code)}）`).toBe(0)
+    expect(forgePatchResidueClues(dump.stdout), `forge 下发面残留（插行/config 应清零）${JSON.stringify(forgePatchResidueClues(dump.stdout))}`).toEqual([])
     for (const bare of BARE_BUNDLES) {
-      expect(dump.stdout, `无孤儿 patch insert 条目 ${bare}（组合器卸载零残留）`).not.toMatch(insertEntryPattern(bare))
+      expect(dump.stdout, `五件自有 patch 行在场（卸 forge 合法存留）${bare}`).toMatch(insertEntryPattern(bare))
     }
   })
 })
