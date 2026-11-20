@@ -34,10 +34,10 @@ allowBuilds:
   electron-winstaller: false
 
 overrides:
-  # dsh 0.2.2-rc.5 系声明 cordis peer ~4.1.0——本仓 cordis pin 4.0.4 不动，override 强制单副本，
-  # 消除双 cordis 实例类型分裂（apps/host boot/child Context 双版本错位）
-  '@deepseek-ai/cordis': 4.0.4
-  # cordis 4.0.4 自身 peer 期望 include ~1.0.9 / loader ~1.0.5——统一到同栈版本，
+  # 全仓 cordis pin 统一 4.1.0（bug 1103261e：override 滞留 4.0.4 曾致 lock importer 段脱钩 manifest）——
+  # override 强制单副本，消除双 cordis 实例类型分裂（apps/host boot/child Context 双版本错位）
+  '@deepseek-ai/cordis': 4.1.0
+  # cordis 自身 peer 期望 include ~1.0.9 / loader ~1.0.5——统一到同栈版本，
   # 折叠多 cordis 物理实例（include/loader 1.1.0 变体会派生第二个 cordis 副本）
   '@deepseek-ai/cordis-plugin-include': 1.0.9
   '@deepseek-ai/cordis-plugin-loader': 1.0.5
