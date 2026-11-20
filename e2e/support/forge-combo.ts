@@ -31,8 +31,10 @@
 //                                 forge 条目；link: add 不装依赖闭包，聚合源必须为
 //                                 pnpm install 物化五件解析闭包的仓外副本）
 import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import Database from 'better-sqlite3'
@@ -887,6 +889,13 @@ export function desktopCliChannelEnv(channel: DesktopCliChannel): Record<string,
     ELECTRON_RUN_AS_NODE: '1',
     DSH_DESKTOP_PNPM_ENTRY: channel.pnpmEntry,
     DSH_DESKTOP_PNPM_RUNNER: channel.pnpmRunner,
+    // fix-38 裂脑根修（bug 6b9789ee 因④）：e2e 全局 TMP 隔离链把 USERPROFILE 重定向
+    // .e2e-tmp（global-setup → sanitizedLaunchEnv 同族）——desktop 官方 packaged invocation
+    // 的 pnpm 子进程链在重定向 env 下 remove 语义断裂（add 可过/remove exit 1 实录，
+    // 044/045/003 轮同构）；desktop 通道 = single-user real 档案（fix-23 定谳锚），显式
+    // 回传真实 APPDATA/USERPROFILE 对齐官方装载面。
+    APPDATA: process.env.APPDATA ?? '',
+    USERPROFILE: homedir(),
   }
 }
 
@@ -988,4 +997,68 @@ export function desktopAbsenceEvents(userData: string): readonly DesktopDiagEven
 export function insertEntryPattern(bare: string): RegExp {
   const bareId = bare.slice('@dsh-forge/'.length)
   return new RegExp(`^- id: ${bareId}$\\r?\\n^  name: '${bare}'$`, 'm')
+}
+
+// ── desktop 官方 Typert remote face（fix-38——window.dshForge 错锚退役面）────────────
+// window.dshForge = dsh-forge dev host（apps/host）Electron preload 暴露面，desktop
+// 官方宿主装载面结构性恒缺席（fix-30 [data-dswf-workbench] 锚同族）。desktop 载体的
+// forge RPC 正门 = harness Typert remote face：POST /api/<endpoint> + boot token 交换
+// cookie（harness.log `dsh web:` 行单源；真机实证 forgeProjects/register → ok:true，
+// task_logs fix-38/002-typert-verify）。
+
+/** boot token URL 读面（harness.log 最新 `dsh web: http...?token=` 行——载体首启即落盘） */
+export function desktopLatestBootTokenUrl(userData: string): string {
+  const log = join(userData, 'logs', 'harness.log')
+  if (!existsSync(log)) throw new Error(`harness.log 缺席：${log}（desktop carrier 未曾首启——boot token 读面必填）`)
+  const line = readFileSync(log, 'utf8').split(/\r?\n/).filter((l) => l.includes('dsh web: http')).at(-1)
+  const url = line?.match(/dsh web: (\S+)/)?.[1]
+  if (url === undefined) throw new Error(`harness.log 无 boot token 行（harness 未附着）：${log}`)
+  return url
+}
+
+/** Typert remote 单次调用（cookie 交换 → POST /api/<endpoint>；信封 {ok,value|error} 解包） */
+export async function desktopTypertInvoke<T>(userData: string, endpoint: string, args: Record<string, unknown>): Promise<T> {
+  const tokenUrl = desktopLatestBootTokenUrl(userData)
+  const exchange = await fetch(tokenUrl, { redirect: 'manual' })
+  if (exchange.status !== 303) throw new Error(`boot token 交换失败 HTTP ${String(exchange.status)}（${tokenUrl}）`)
+  const cookie = exchange.headers.get('set-cookie')?.split(';', 1)[0]
+  const origin = new URL(tokenUrl).origin
+  const res = await fetch(`${origin}/api/${endpoint}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(cookie === undefined ? {} : { cookie }) },
+    body: JSON.stringify({ type: 'client-request', rpcId: `e2e-${randomUUID()}`, method: endpoint, payload: { args } }),
+  })
+  const body = await res.json() as { result?: { ok?: boolean; value?: T; error?: { code?: string; message?: string } } }
+  const result = body.result
+  if (result?.ok !== true) throw new Error(`typert ${endpoint} 失败：${JSON.stringify(result?.error ?? body).slice(-400)}`)
+  return result.value as T
+}
+
+/** Typert 注册返回面（RegisterResult 骨架——projectId 断言面） */
+export interface DesktopRegisterResult {
+  readonly projectId: string
+  readonly workspaceId: string
+  readonly attachedToExisting: boolean
+}
+
+/**
+ * desktop 载体项目注册（官方 Typert face——fix-38 根修：CT-DISK-03/04 弃 window.dshForge
+ * 错锚）。注册 + 清单收敛轮询（registered 行入列——与 rpc.registerProject 收敛语义同型）。
+ */
+export async function registerProjectDesktop(
+  userData: string,
+  dir: string,
+  name: string,
+  timeoutMs = 30_000,
+): Promise<DesktopRegisterResult> {
+  const registered = await desktopTypertInvoke<DesktopRegisterResult>(userData, 'forgeProjects/register', {
+    input: { workspaceDir: dir, name, forgeDir: join(dir, '.forge') },
+  })
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const projects = await desktopTypertInvoke<readonly { id: string }[]>(userData, 'forgeProjects/list', {})
+    if (projects.some((p) => p.id === registered.projectId)) return registered
+    if (Date.now() > deadline) throw new Error(`注册行未入列（typert 收敛超时）：${registered.projectId}`)
+    await new Promise((resolve) => setTimeout(resolve, 2_000))
+  }
 }

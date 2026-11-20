@@ -214,7 +214,21 @@ export async function launchBareCarrier(opts: BareCarrierOptions): Promise<BareC
         `stderr=${stderr.slice(-600)}`,
     )
   }
+  // 单实例移交 fail-loud（fix-38——静默错锚根修）：desktop 宿主单实例语义下，外部实例
+  // 在侧时本 spawn 秒退（exit 0）且其 DevTools 短暂可见——ws 已捕获但进程已退 = 取证面
+  // 挂到旧实例（旧装载世代 boot 图），client 取件等观察面全部错锚。进程已退即抛。
+  if (proc.exitCode !== null) {
+    throw new Error(
+      `裸启动 carrier 失败：ws 已捕获但进程已退（exit=${String(proc.exitCode)}）——desktop 单实例移交形态，` +
+        `外部宿主实例在侧（复跑前置：Get-Process 零命中），零静默错锚`,
+    )
+  }
   const browser = await chromium.connectOverCDP(wsEndpoint)
+  // CDP 附着后二次核验（fix-38）：附着窗口期内进程退出（单实例移交竞态）= 取证面已错锚
+  if (proc.exitCode !== null) {
+    await browser.close().catch(() => undefined)
+    throw new Error(`裸启动 carrier 失败：CDP 附着后进程已退（exit=${String(proc.exitCode)}）——单实例移交，外部实例在侧`)
+  }
   const ctx = browser.contexts()[0]
   if (ctx === undefined) {
     await browser.close().catch(() => undefined)
