@@ -261,9 +261,10 @@ function readPkgJson(dir: string): { version?: string; dsh?: { client?: { platfo
   return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { version?: string; dsh?: { client?: { platform?: string } } }
 }
 
-/** 版本双校验（AGENTS 1.8 前置——安装 manifest 版本 == 仓内源版本；不符调用侧即停取证） */
-export function versionPairs(nodeModules: string): readonly { pkg: string; installed: string; source: string }[] {
-  return SIX_PKGS.map((pkg) => {
+/** 版本双校验（AGENTS 1.8 前置——安装 manifest 版本 == 仓内源版本；不符调用侧即停取证）。
+ * pkgs 可选收窄（fix-39：卸载段相位只校验残留件——已卸条目物理缺席为契约预期非回归） */
+export function versionPairs(nodeModules: string, pkgs?: readonly string[]): readonly { pkg: string; installed: string; source: string }[] {
+  return (pkgs ?? SIX_PKGS).map((pkg) => {
     const installed = readPkgJson(installedPkgDir(nodeModules, pkg)).version ?? '(缺)'
     const source = readPkgJson(sourcePkgDir(pkg)).version ?? '(缺)'
     return { pkg, installed, source }
