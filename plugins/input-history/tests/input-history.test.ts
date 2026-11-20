@@ -56,6 +56,48 @@ class TrackedFeed extends FakeFeed {
 // --- 历史源 -----------------------------------------------------------------------
 
 describe('historyEntriesOf / isSentUserMessageEvent / userMessageTextOf', () => {
+  /** rc.5 世代收件箱拼入事件假件（用户消息经 agent/inbox/spliced 进入 durable 事件窗） */
+  function inboxSpliced(seq: number, texts: { text: string; kind?: string; outcome?: string }[]): HistorySessionEvent {
+    return {
+      type: 'agent/inbox/spliced',
+      seq,
+      data: {
+        target: 'next-turn',
+        start: 0,
+        ...(texts[0]?.outcome === undefined ? {} : { outcome: texts[0]!.outcome }),
+        inserted: texts.map((t) => ({ source: { kind: t.kind ?? 'user' }, content: [{ type: 'text', text: t.text }] })),
+      },
+    }
+  }
+
+  it('rc.5 收件箱拼入径：agent/inbox/spliced 的 inserted 人工消息按 seq 提取文本', () => {
+    const entries = historyEntriesOf([
+      { type: 'permission/preset', seq: 1 },
+      inboxSpliced(2, [{ text: '甲' }]),
+      { type: 'turn/start', seq: 3 },
+      inboxSpliced(4, [{ text: '乙' }]),
+    ])
+    expect(entries.map((e) => e.text)).toEqual(['甲', '乙'])
+    expect(entries.map((e) => e.seq)).toEqual([2, 4])
+  })
+
+  it('收件箱拼入过滤面：非人工 source / 空文本段 / canceled outcome 不入历史', () => {
+    const entries = historyEntriesOf([
+      inboxSpliced(1, [{ text: '模型来源', kind: 'model' }]),
+      inboxSpliced(2, [{ text: '', outcome: 'canceled' }]),
+      inboxSpliced(3, [{ text: '真消息' }]),
+    ])
+    expect(entries.map((e) => e.text)).toEqual(['真消息'])
+  })
+
+  it('两世代并存：user/message 与 agent/inbox/spliced 同窗按 seq 合并', () => {
+    const entries = historyEntriesOf([
+      userMessage(1, '旧世代'),
+      inboxSpliced(2, [{ text: '新世代' }]),
+    ])
+    expect(entries.map((e) => e.text)).toEqual(['旧世代', '新世代'])
+  })
+
   it('只收人工发送的 user/message，按 seq 发送序提取文本', () => {
     const events = [
       userMessage(1, '第一条'),

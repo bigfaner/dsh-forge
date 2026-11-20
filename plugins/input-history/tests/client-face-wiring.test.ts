@@ -182,6 +182,22 @@ describe('wireInputHistoryClient（组合接线面）', () => {
     face.dispose()
   })
 
+  it('世代换绑重挂：session id 不变、binding 换新世代（eventSource 窗口后到）→ 翻阅读新世代 feed', () => {
+    // Root cause（bug 2924eaf6）：真机 attach 时新会话 eventSource 窗口为空；UI 开会话
+    // 装载历史落在换绑后的新世代 eventSource 上——旧世代孤儿 feed 恒空，翻阅恒不拦截。
+    const world = fakeWorld()
+    const disposes: { count: number }[] = []
+    worldWithSession(world, 's1', [], disposes) // 首世代：空窗口（会话尚未 open 装载历史）
+    const face = wireInputHistoryClient(world.ctx as never)
+    expect(face.history?.attachedSession()).toBe('s1')
+    // 消息发送 + UI 装载历史发生在换绑后的新世代 binding 上（同 session id，新对象）
+    world.bindings.set('s1', { sessionId: 's1', ctx: { sessionId: 's1' }, eventSource: fakeEventSource([{ seq: 1, text: '新世代消息' }], disposes) })
+    for (const cb of world.listListeners) cb()
+    world.doc.dispatch('ArrowUp', editableTarget())
+    expect(world.drafts.get('s1'), 'ArrowUp 翻出新世代 feed 的已发送消息').toBe('新世代消息')
+    face.dispose()
+  })
+
   it('dispose 后键源退订：方向键不再触发置稿', () => {
     const world = fakeWorld()
     worldWithSession(world, 's1', [{ seq: 1, text: '消息' }])

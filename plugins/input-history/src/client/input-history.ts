@@ -29,21 +29,48 @@ interface UserMessageDataSlice {
   readonly content?: readonly { readonly type?: string; readonly text?: string }[]
 }
 
-/** 人工发送的 user/message 判定（append-origin 人工消息） */
-export function isSentUserMessageEvent(event: HistorySessionEvent): boolean {
-  if (event.type !== 'user/message') return false
-  const data = event.data as UserMessageDataSlice | undefined
-  return data?.source?.kind === 'user'
+/** 收件箱拼入事件切片（rc.5 世代 durable 事件窗——data.inserted: UserMessage[]） */
+interface InboxSplicedDataSlice {
+  readonly outcome?: string
+  readonly inserted?: readonly UserMessageDataSlice[]
 }
 
-/** user/message 事件文本提取（多段 text 拼接；无文本段 = undefined） */
-export function userMessageTextOf(event: HistorySessionEvent): string | undefined {
-  const data = event.data as UserMessageDataSlice | undefined
+/** 官方人工消息文本提取（多段 text 拼接；无文本段 = undefined） */
+function messageTextOf(data: UserMessageDataSlice | undefined): string | undefined {
   const parts = (data?.content ?? [])
     .filter((part) => part.type === 'text' && typeof part.text === 'string')
     .map((part) => part.text as string)
   if (parts.length === 0) return undefined
   return parts.join('')
+}
+
+/** 人工发送的 user/message 判定（append-origin 人工消息） */
+export function isSentUserMessageEvent(event: HistorySessionEvent): boolean {
+  if (event.type !== 'user/message') return false
+  return (event.data as UserMessageDataSlice | undefined)?.source?.kind === 'user'
+}
+
+/** user/message 事件文本提取（多段 text 拼接；无文本段 = undefined） */
+export function userMessageTextOf(event: HistorySessionEvent): string | undefined {
+  return messageTextOf(event.data as UserMessageDataSlice | undefined)
+}
+
+/**
+ * 收件箱拼入事件的人工消息文本（rc.5 世代：用户消息经 agent/inbox/spliced 进入
+ * durable 事件窗，data.inserted 携带 UserMessage[]）。只收 source.kind==='user' 且
+ * 有文本段的 inserted；outcome==='canceled'（拼入被取消）不入历史。
+ */
+function inboxSplicedUserTextsOf(event: HistorySessionEvent): string[] {
+  if (event.type !== 'agent/inbox/spliced') return []
+  const data = event.data as InboxSplicedDataSlice | undefined
+  if (data?.outcome === 'canceled') return []
+  const texts: string[] = []
+  for (const message of data?.inserted ?? []) {
+    if (message?.source?.kind !== 'user') continue
+    const text = messageTextOf(message)
+    if (text !== undefined) texts.push(text)
+  }
+  return texts
 }
 
 /** 历史条目（seq = 发送序锚） */
@@ -56,9 +83,12 @@ export interface HistoryEntry {
 export function historyEntriesOf(events: readonly HistorySessionEvent[]): HistoryEntry[] {
   const entries: HistoryEntry[] = []
   for (const event of events) {
-    if (!isSentUserMessageEvent(event)) continue
-    const text = userMessageTextOf(event)
-    if (text !== undefined) entries.push({ seq: event.seq, text })
+    if (isSentUserMessageEvent(event)) {
+      const text = userMessageTextOf(event)
+      if (text !== undefined) entries.push({ seq: event.seq, text })
+      continue
+    }
+    for (const text of inboxSplicedUserTextsOf(event)) entries.push({ seq: event.seq, text })
   }
   return entries
 }

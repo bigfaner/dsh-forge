@@ -148,16 +148,25 @@ function wireSessions(ctx: Context, sessions: ISessions): InputHistoryClientFace
     const history = createInputHistory()
     const doc = (globalThis as { document?: ForgeComposerMenuDocument & ForgeComposerEventTarget }).document
     const activeIdOf = (): string => activeSessionIdOf(sessions.list) ?? ''
-    // 历史源（binding.eventSource 解包——binding 对未保留代返回 undefined = 不 attach）
+    // 历史源（binding.eventSource 解包——binding 对未保留代返回 undefined = 不 attach）。
+    // Root cause（bug 2924eaf6）：初挂时新会话 eventSource 窗口为空（历史尚未装载）；
+    // UI 开会话装载历史落在换绑后的新世代 binding 上——同 session id 换新对象。只按
+    // session id 判重会持有旧世代孤儿 feed 恒空，翻阅恒不拦截。故以 binding 对象同一性
+    // 判重：id 不变但 binding 换代（或首挂）即重挂，读新世代窗口。
+    let lastBinding: unknown
     const attachHistory = (sessionId: string): boolean => {
+      let binding: unknown
       let feed
       try {
-        feed = historyFeedOf((sessions as unknown as { binding?: (id: string) => unknown }).binding?.(sessionId))
+        binding = (sessions as unknown as { binding?: (id: string) => unknown }).binding?.(sessionId)
+        feed = historyFeedOf(binding)
       } catch {
         return false
       }
       if (feed === undefined) return false
+      if (history.attachedSession() === sessionId && lastBinding === binding) return true
       history.attach(sessionId, feed)
+      lastBinding = binding
       return true
     }
     // 真实按键接线 + 草稿缝（有 document 才接——Node/无 DOM 环境 = 跳过，单测可注入）
@@ -197,7 +206,7 @@ function wireSessions(ctx: Context, sessions: ISessions): InputHistoryClientFace
     let disposeList: (() => void) | undefined
     const followActive = (): void => {
       const active = activeSessionIdOf(sessions.list)
-      if (active !== undefined && history.attachedSession() !== active) attachHistory(active)
+      if (active !== undefined) attachHistory(active)
     }
     try {
       const list = sessions.list as { subscribe?: (cb: () => void) => () => void }
