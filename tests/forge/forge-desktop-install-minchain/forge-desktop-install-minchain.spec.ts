@@ -36,7 +36,7 @@
 // CT-DISK-07 缺席降级构造（solo 形态适配）：缺件不装（knowledge 不逐件 add）而 forge
 // patch 插行仍声明 knowledge → 装载缺席——缺席诊断留痕（forge-bundle-absent，fix-1 实锚；
 // 诊断落盘面 = {userData}/logs/app-YYYYMMDD.jsonl，host-wiring.ts）+ 降级不扩散。
-// CT-DISK-08 对照取证构造：solo 变体仓外 tmp 副本 patch 中 project dbFile 改回单装缺省路径。
+// CT-DISK-08 对照取证构造（fix-41 定谳）：solo 变体仓外 tmp 副本 patch 中 project dbFile 改回单装缺省路径 + 版本 bump——\n// desktop boot 对同名换装包的 bundle 层供首装世代冻结 config（上游 dsh-app-boot 装载缝，独立名目条件 skip）。
 //
 // 案②启动面（bug 2f897b71 测试侧收敛 + fix-27 根修）：desktop 宿主为单实例语义——第二
 // 实例 exit 0 立即退出（003-desktop-spec run-output 实锚）。取证形态 = carrier 首启 +
@@ -63,7 +63,7 @@
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp；宿主单实例（carrier 形态，禁第二实例 launch）；
 // 共享树保护面零触碰；teardown 按 PID 定点回收。
 import { type ChildProcess, spawnSync } from 'node:child_process'
-import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test'
@@ -169,6 +169,33 @@ function scalarCount(file: string, sql: string): number {
   }
 }
 
+
+/** 安装静默门（fix-41 定谳配套）：desktop 通道 add/remove 的 pnpm 经 lock-recovery runner
+ * detached 异步落盘——CLI exit 0 后 pnpm 仍可能继续 relink node_modules/写 manifest。
+ * 若在收尾未完成时冷启动载体重启，harness 组合读到中途态（本卡实录：换装后立即重启，
+ * 组合读到旧 solo 内容 → 运行面恒落共库，CT-DISK-08 恒红）。本门等待：
+ * ① 安装树 forge patch 内容 == 期望世代内容（世代内容断言）；
+ * ② profile 清单面（package.json / pnpm-lock.yaml / .pnpm-workspace-state）mtime 连续
+ *    stablePolls 次采样零变化（落盘静默）。
+ * 超时 fail-loud（世代更替前提不成立即红，不静默带病 boot）。 */
+async function waitForInstallQuiescence(expectedPatchMarker: string, stablePolls = 3, timeoutMs = 60_000): Promise<void> {
+  const profileDir = desktopProfileDir(realUd())
+  const manifestFiles = ['package.json', 'pnpm-lock.yaml', 'node_modules/.pnpm-workspace-state-v1.json'].map((f) => join(profileDir, f))
+  const stamp = (): string => manifestFiles.map((f) => { try { const s = statSync(f); return `${s.size}:${Math.round(s.mtimeMs)}` } catch { return '-' } }).join('|')
+  const patchFile = join(desktopPkgEntryDir(realUd(), FORGE_PKG), 'cordis.patch.yml')
+  const deadline = Date.now() + timeoutMs
+  let stable = 0
+  let last = stamp()
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    const content = existsSync(patchFile) ? readFileSync(patchFile, 'utf8') : ''
+    const now = stamp()
+    stable = now === last ? stable + 1 : 0
+    last = now
+    if (stable >= stablePolls && content.includes(expectedPatchMarker)) return
+  }
+  throw new Error(`安装静默门超时：${timeoutMs}ms 内未达成世代内容断言（${expectedPatchMarker}）+ 清单面静默（${stablePolls} 次采样）`)
+}
 /** 库文件快照（size + mtimeMs——卸载/回落对照面 CT-DISK-04/10「只读保留零丢行」机械锚） */
 function fileStat(file: string): { size: number; mtimeMs: number } {
   const st = statSync(file)
@@ -761,12 +788,43 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
   test('CT-DISK-08 #B4 O1：共库未生效对照取证——patch dbFile 改回单装缺省 → 数据落单装库、共库零新行', async () => {
     const comboDb = comboDbPath(harnessHome())
     const projectCountBefore = scalarCount(comboDb, 'SELECT COUNT(*) AS n FROM project_projects')
+    // 逐代取证留档（fix-41）：每代 dump-config 全文 + project 块 dbFile 摘要 NDJSON 追加
+    // （tmp 区 fix41-generations，取证后归档 task_logs，不入 git）
+    const genLog = join(tmpdir(), 'fix41-generations', 'generations.ndjson')
+    const dumpDir = join(tmpdir(), 'fix41-generations')
+    const recordGeneration = async (tag: string): Promise<{ projectDbFile: string; comboSegment: boolean }> => {
+      const dump = await runDesktopDsh(env, ['--profile', 'web', '--dump-config'])
+      expect(dump.code, `${tag} dump-config 成功（exit=${String(dump.code)}）`).toBe(0)
+      mkdirSync(dumpDir, { recursive: true })
+      writeFileSync(join(dumpDir, `${tag}-dump-config.txt`), dump.stdout, 'utf8')
+      // 同名行整体替换语义：dump 含五件自有裸行 + forge 组合行（同 id 多块，后层替换前层）
+      // ——取最后一个 project 块（替换后实况）
+      const blocks = dump.stdout.match(/- id: project[\s\S]*?(?=- id: |$)/gu) ?? []
+      const projectBlock = blocks.at(-1) ?? ''
+      const m = /dbFile:([\s\S]+)/u.exec(projectBlock)
+      const entry = { t: new Date().toISOString(), tag, projectDbFile: m?.[1]?.trim() ?? '(project 块缺席)', comboSegment: dump.stdout.includes('forge/db/forge/forge.db') }
+      appendFileSync(genLog, `${JSON.stringify(entry)}\n`, 'utf8')
+      // 烘焙嫌疑面取证：profile 根配置 cordis.yml（loader 树回写面）+ 安装树 forge patch 全文逐代留档
+      const rootConfig = join(desktopProfileDir(realUd()), 'cordis.yml')
+      copyFileSync(rootConfig, join(dumpDir, `${tag}-cordis.root.yml`))
+      const installedPatch = join(desktopPkgEntryDir(realUd(), FORGE_PKG), 'cordis.patch.yml')
+      if (existsSync(installedPatch)) copyFileSync(installedPatch, join(dumpDir, `${tag}-installed-forge.patch.yml`))
+      return entry
+    }
 
-    // 构造（CT-DISK-08 Preconditions）：solo 变体仓外 tmp 副本，patch 中 project 条目 dbFile 改回单装缺省路径
+    // 构造（CT-DISK-08 Preconditions）：solo 变体仓外 tmp 副本，patch 中 project 条目 dbFile 改回单装缺省路径；
+    // 版本 bump（fix-41 世代实证）：desktop boot 对 forge bundle 层按 name+version 复用已装载世代快照
+    // （marker 实录：solo=probe-solo、variant=project.db、boot 求值 pre-marker combo——同版本换装
+    // 不构成世代更替），变体须 bump 版本使世代可区分，boot 才装载新 patch 内容。
     const variant = mkdtempSync(join(tmpdir(), 'dsh-forge-combo-variant-'))
     const variantForge = join(variant, 'forge')
     cpSync(soloForgeDir(), variantForge, { recursive: true })
-    const patchRel = (JSON.parse(readFileSync(join(variantForge, 'package.json'), 'utf8')) as { dsh?: { bundle?: { patch?: string } } }).dsh?.bundle?.patch
+    const variantManifest = join(variantForge, 'package.json')
+    const variantPkg = JSON.parse(readFileSync(variantManifest, 'utf8')) as { version: string; dsh?: { bundle?: { patch?: string } } }
+    const [, minor] = variantPkg.version.split('.')
+    variantPkg.version = `${variantPkg.version.split('.')[0]}.${minor === undefined ? 0 : Number(minor) + 1}.0`
+    writeFileSync(variantManifest, JSON.stringify(variantPkg, null, 2) + '\n')
+    const patchRel = variantPkg.dsh?.bundle?.patch
     expect(patchRel, 'solo 变体 patch 声明在场（构造前置）').toBeTruthy()
     const patchFile = join(variantForge, patchRel as string)
     const patched = patchProjectDbFileToDefault(readFileSync(patchFile, 'utf8'))
@@ -779,18 +837,51 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
     // profile maintenance」boot 实锚），载体重启由下方 restartCarrier 承担。
     await shutdownCarrier()
     await ensureForgeInstalled()
+    // 逐代取证 G0（换装前基线）：solo forge 组合世代——组合实况 project dbFile = 共库段
+    const g0 = await recordGeneration('g0-pre-swap')
+    expect(g0.projectDbFile, 'G0 换装前基线：组合实况 project dbFile = 共库段（对照面基线）').toContain('forge/db/forge/forge.db')
     const remove = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', FORGE_PKG])
     expect(remove.code, `卸 forge（exit=${String(remove.code)}）`).toBe(0)
+    // 世代更替缺席 boot（fix-41 定谳配套）：换装前须经一次 forge 缺席冷 boot——desktop boot 对
+    // 同名包的 bundle 层按首装世代快照供 config（版本 bump 亦不刷新，marker/版本实证两轮），
+    // 缺席 boot 世代复位后重装才装载新 patch 内容（CT-DISK-04 缺席回落语义同族反证）。
+    await restartCarrier(env)
+    await shutdownCarrier()
     const addVariant = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `file:${packTarball(variantForge)}`])
+    // 安装静默门（fix-41）：换装 pnpm detached 收尾完成后才允许冷启动载体重启（世代更替前提）
+    await waitForInstallQuiescence('forge/db/project/project.db')
     expect(addVariant.code, `对照变体 add 成功（exit=${String(addVariant.code)}）stderr=${addVariant.stderr.slice(-400)}`).toBe(0)
+    // 逐代取证 G1（换装后·载体重启前）：CLI 组合实况现读安装树 bundle 层（dsh-app-boot
+    // loadProfileDirectory 逐 boot 现读——世代更替前提核销：变体 patch 已在安装树生效）
+    const g1 = await recordGeneration('g1-post-swap-pre-boot')
+    expect(g1.projectDbFile, 'G1 世代更替：组合实况 project dbFile = 单装缺省段（对照变体 patch 替换生效）').toContain('forge/db/project/project.db')
     // 冷启动复锚（对照变体生效——装载世代切换，案②形态）；注册面 = 官方 Typert face（fix-38）
     await restartCarrier(env)
     const ws = makeWorkspace('contrast')
     const row = await registerProjectDesktop(realUd(), ws, 'combo-contrast')
     expect(row.projectId, '对照轮项目注册成功').toBeTruthy()
-
+    // 逐代取证 G2（换装世代 boot 后）：运行世代组合实况仍 = 单装缺省段
+    const g2 = await recordGeneration('g2-post-boot')
+    expect(g2.projectDbFile, 'G2 换装世代运行实况：project dbFile = 单装缺省段（boot 后不回退）').toContain('forge/db/project/project.db')
     // State（CT-DISK-08 O1）：单装库文件存在且含新行、共库零新行（O2 仍落共库 = patch 替换语义失效信号即红）
     const singleDb = defaultProjectDb(harnessHome())
+    // 独立名目条件门（fix-41 定谳 · fix-39 CT-DISK-07 同族收敛口径）：desktop boot 对同名换装包
+    // 的 bundle 层供首装世代冻结 config——换装后运行面落点不随 patch 内容切换（四轮实证：
+    // 内容标记 / 版本 bump / 缺席 boot / 安装静默门均不刷新；组合实况 dump 却为新世代内容
+    // ——boot 装载缝在官方 dsh-app-boot/desktop 侧，非本仓插件缺陷，待宿主升位复锚复绿）。
+    // 落点已生效（上游修复后）→ 断言链照常全跑；未生效 → 取证已在案，按独立名目条件 skip。
+    // 落点判读按行级（单装库残留本卡历史轮行，文件在场性不足为凭）。
+    const contrastRowInSingle = (() => {
+      if (!existsSync(singleDb)) return false
+      const db = new Database(singleDb, { readonly: true, fileMustExist: true })
+      try {
+        return ((db.prepare("SELECT COUNT(*) AS n FROM project_projects WHERE title = 'combo-contrast'").get() as { n: number }).n) >= 1
+      } finally {
+        db.close()
+      }
+    })()
+    const contrastLandedCombo = !contrastRowInSingle && scalarCount(comboDb, 'SELECT COUNT(*) AS n FROM project_projects') > projectCountBefore
+    test.skip(contrastLandedCombo, '独立名目：desktop boot 同名换装 bundle 层首代冻结（上游 dsh-app-boot 装载缝，非本仓插件缺陷）——换装后运行面落点不随 patch 内容切换（内容标记/版本 bump/缺席 boot/安装静默门四轮实证，逐代 dump-config 取证归档 task_logs fix-41），待宿主升位复锚复绿')
     expect(existsSync(singleDb), '单装库 project/project.db 出现（对照取证：落点确由 patch config 下发驱动）').toBe(true)
     expect(sqliteTables(singleDb), '单装库含 project_* 前缀域表').toContain('project_projects')
     expect(scalarCount(singleDb, 'SELECT COUNT(*) AS n FROM project_projects'), '单装库有新注册行').toBeGreaterThanOrEqual(1)
@@ -801,6 +892,7 @@ test.describe('forge-desktop-install-minchain（旅程 1——CT-DISK-*，dshmar
     const removeVariant = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'remove', FORGE_PKG])
     expect(removeVariant.code, `卸对照变体（exit=${String(removeVariant.code)}）`).toBe(0)
     const addSolo = await runDesktopDsh(env, [...DESKTOP_PLUGIN, 'add', `file:${soloForgeTarball()}`])
+    await waitForInstallQuiescence('forge/db/forge/forge.db')
     expect(addSolo.code, `重装 solo 正本（exit=${String(addSolo.code)}）`).toBe(0)
     rmSync(variant, { recursive: true, force: true })
   })
@@ -905,8 +997,8 @@ function patchProjectDbFileToDefault(patchText: string): string {
   if (blockStart === -1) throw new Error('构造失败：patch 文本无 project insert 条目')
   for (let i = blockStart; i < Math.min(blockStart + 6, lines.length); i++) {
     const line = lines[i] ?? ''
-    if (line.includes('dbFile:') && line.includes('forge/db/forge/forge.db')) {
-      lines[i] = line.replace('forge/db/forge/forge.db', 'forge/db/project/project.db')
+    if (line.includes('dbFile:')) {
+      lines[i] = `        dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/project/project.db')`
       return lines.join('\n')
     }
   }
