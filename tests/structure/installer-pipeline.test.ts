@@ -153,13 +153,13 @@ describe('AC2 profile.install 安装树清单 = 运行时并集（漂移守卫�
     '@deepseek-ai/dsh-base': '0.2.0-rc.2', // profile 模板 bundles（tech-design「profile 组装与插件分发」）
     '@deepseek-ai/dsh-web-app': '0.2.0-rc.2',
     '@deepseek-ai/dsh-session': '0.2.0-rc.2', // @dsh-forge/plugin-forge 原生依赖（bug 62211111 同类——progress/dist 静态 import 面）
-    '@deepseek-ai/dsh-client-connection': '0.2.2-rc.2', // @dsh-forge/knowledge + project 原生依赖（a2277668 conn 0.2.2-rc.2 对齐——plugin 声明 0.2.2-rc.2，安装树同版即零漂移）
+    '@deepseek-ai/dsh-client-connection': '0.2.2-rc.5', // @dsh-forge/knowledge + project 原生依赖（053f3215 dsh 系统一 rc.5 升位——plugin 声明 0.2.2-rc.5，安装树同版即零漂移）
     'better-sqlite3': '13.0.3', // @dsh-forge/core 原生依赖（prebuilds 随包分发）
     'chokidar': '5.0.0', // @dsh-forge/expert-squad 原生依赖（bug 62211111 同类——档案热刷新 watch 面）
     'gray-matter': '4.0.3',
     'mermaid': '12.1.0', // @dsh-forge/md-mermaid 原生依赖（bug 62211111——staging 闭包只追 @dsh-forge/*，外部依赖经本清单随包物化）
     '@deepseek-ai/schemastery': '3.18.4', // @dsh-forge/expert-squad 原生依赖（bug 62211111 同类——settings schema 校验面）
-    '@deepseek-ai/dsh-typert-protocol': '0.2.2-rc.2', // @dsh-forge/project 原生依赖（bug 62211111 同类——typert 通道面）
+    '@deepseek-ai/dsh-typert-protocol': '0.2.2-rc.5', // @dsh-forge/project 原生依赖（bug 62211111 同类——typert 通道面；053f3215 dsh 系统一 rc.5 升位同版）
     'zod': '4.6.6', // @dsh-forge/project 原生依赖（bug 62211111 同类——schema 校验面）
   }
   const expectedSorted = Object.keys(expected).sort()

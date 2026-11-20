@@ -209,6 +209,21 @@ for (const preset of ['expedition', 'blitz'] as const) {
   })
 }
 
+describe('组合后注册表恰含一次 md-mermaid（迁居批 1.3 集成断言：组合层 patch 解析 + insert——防双注册可红）', () => {
+  const presetTexts = (['expedition', 'blitz'] as const).map((p) =>
+    readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES[p]), 'utf8'),
+  )
+  // dev 形态全局行源 = profile.dev/cordis.patch.yml（打包形态同源模板另经 materialize.test 语义一致 pin）
+  const globalPatch = readFileSync(join(hostRoot(), 'profile.dev', 'cordis.patch.yml'), 'utf8')
+  const mdMermaidRow = (text: string) =>
+    [...text.matchAll(/^ {2,}- id: \S+\n {4,}name: ['"]@dsh-forge\/md-mermaid['"]\s*$/gm)].length
+
+  it('in-preset 行 ×2 退役 + 全局行恰一 = 组合后注册表恰含一次 md-mermaid', () => {
+    for (const text of presetTexts) expect(mdMermaidRow(text), '预设底稿残留 md-mermaid 行').toBe(0)
+    expect(mdMermaidRow(globalPatch), '全局行非恰一').toBe(1)
+  })
+})
+
 describe('headhunter 预设（expert-squad 0.30.0 起随包自带：plugins/expert-squad/cordis.patch.yml bundle patch 注行——原宿主底稿 headhunter.patch.yml 迁入）', () => {
   const text = readFileSync(join(hostRoot(), '..', '..', 'plugins', 'expert-squad', 'cordis.patch.yml'), 'utf8')
   const rows = pluginRowBlocks(text)

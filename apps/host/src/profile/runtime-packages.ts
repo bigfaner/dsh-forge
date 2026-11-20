@@ -36,10 +36,10 @@ export const RUNTIME_PACKAGES: Readonly<Record<string, string>> = {
   '@deepseek-ai/dsh-workflow': '0.2.2-rc.5',
   '@deepseek-ai/dsh-workspace': '0.2.2-rc.5',
   // —— Cordis 运行时（Loader 树加载机制四件）——
-  '@deepseek-ai/cordis': '4.0.4',
-  '@deepseek-ai/cordis-plugin-group': '1.0.4',
-  '@deepseek-ai/cordis-plugin-include': '1.0.9',
-  '@deepseek-ai/cordis-plugin-loader': '1.0.5',
+  '@deepseek-ai/cordis': '4.1.0',
+  '@deepseek-ai/cordis-plugin-group': '1.1.0',
+  '@deepseek-ai/cordis-plugin-include': '1.1.0',
+  '@deepseek-ai/cordis-plugin-loader': '1.1.0',
 }
 
 /**
