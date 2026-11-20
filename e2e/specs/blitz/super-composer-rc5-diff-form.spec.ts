@@ -1,0 +1,374 @@
+// @proposal:super-composer-migration @web-e2e @blitz
+// rc.5 re-copy 差异面 e2e（super-composer-migration/1.7 脚本落盘）：
+//   测试 1 = J1 替身形态对照（SC-C1/SC-C2/SC-C4）：chip 原子渲染（bug 51849f72
+//     消解观察点）、发送钮图标形态（bug 493c4fef 消解观察点 / 漂移清单 D2）、
+//     chip 边界编辑存活、长引用收窄、连续发送间 re-copy 形态不劣化（J1-B3）。
+//   测试 2 = J2 sending 相替身 mention 冻结（SC-C5/SC-C6）：`phase='sending'`
+//     期 `trackGuardOf('sending')→'frozen'`（ui/data-face.ts）——mention '@' 不放行、
+//     普通文本不入草稿；非 sending 期 mention 行为零漂移、冻结不残留。
+// 旅程与契约正本 = .forge/docs/proposals/super-composer-migration/testing/journey.md；
+// 漂移判据 = 同目录 inputbar-semantic-drift.md（D1/D2/D16）。
+//
+// 契约锚实锚核销（1.7 源码逐点验证，plugins/super-composer/ui/）：
+//   [data-testid="dscf-root"]                       mini-composer.tsx:426
+//   [data-dscf-official-input]                      official-input/surrogate-composer.tsx:569
+//   [data-composer-input] + data-phase              official-input/input/editor/DraftEditor.tsx:43
+//   [data-composer-chip="quote"]                    official-input/input/editor/chip-node.tsx:123
+//                                                   （source='quote' surrogate-composer.tsx:56）
+//   [data-testid="dscf-mention"]                    mini-composer.tsx:576（journey §5「待校准」
+//                                                   锚已核实为实锚——存量 walkthrough 同款在用）
+//   button[aria-busy] / [data-sending] / spinner svg official-input/skeleton/InputBar.tsx:567-581
+// SC-C3（ContextMeter 锚定位）不上本 spec：替身 useProjection 恒 undefined
+// （surrogate-composer.tsx:517 桩）→ ContextMeter 恒不渲染（官方降级路径，漂移 D5 同源）
+// ——契约前提「触发元素可见」与实现不一致，fix/disc 上报（归因契约），禁止脚本内调和。
+//
+// 驱动链：launchHost → forgeInvoke projects/register → selectWorkspaceViaChip →
+// 首条消息（转录 = 划选源）→ 全屏标记注入（draft-bidirectional 同款 DOM 兜底 tracker
+// 标记面）→ 划选 → 菜单「添加到对话」→ chip 落替身。
+// Hard Rules：零产品源码改动；夹具 = 仓外 tmp；零真实模型凭据。
+
+import { mkdirSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { test, expect, type Page } from '@playwright/test'
+import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
+
+// 族① gate-environment（plugin-spec/fix-7，bug eb786e62）：官方 0.2.2 世代 web 栈收敛前
+// 挂环境前提门控（skip 留痕非红；整代 co-upgrade 落地后自动复跑）。
+test.beforeEach(() => {
+  test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
+})
+import { closeApp, launchHost } from '../../support/launch.js'
+import { CONVERSATION_CONTENT } from '../../support/anchors.js'
+import { ensureNoBlockingDialog } from '../../support/modals.js'
+import { rmDirBestEffort } from '../../support/cleanup.js'
+import { selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
+
+/** SC-C1 短锚句（chip 呈现/并存判据——同入一条消息文本）。 */
+const NEEDLE_A = '引用原子渲染判据甲乙丙丁'
+const NEEDLE_B = '双 chip 并存判据子丑寅卯'
+/** J1-B2 长锚句（原子性/收窄判据——原文明文不得整句出现在 chip/草稿）。 */
+const NEEDLE_LONG = '超长引用收窄判据——选区映射为稳定描述符且精确前缀加引用文本加精确后缀三段拼合'
+const BOOT_MSG = `rc.5 形态对照锚首条消息。${NEEDLE_A}。${NEEDLE_B}。${NEEDLE_LONG}。`
+const SEND_TAIL = '形态对照发送样本'
+const J2_DRAFT = '冻结窗口样本'
+
+interface Rc5Sample {
+  readonly phase: string
+  readonly busy: string
+  readonly dataSending: boolean
+  readonly btnSvg: boolean
+  readonly menuCount: number
+  readonly draft: string
+}
+interface Rc5Recorder {
+  readonly samples: Rc5Sample[]
+  sendingSeen: boolean
+  stop(): void
+}
+interface SurrogateFace {
+  readonly phase: string
+  readonly editable: boolean
+}
+
+function mainInputOf(page: Page): ReturnType<Page['locator']> {
+  return page.locator('[data-composer-input]:not([data-testid="dscf-root"] [data-composer-input])').last()
+}
+function surrogateInputOf(page: Page): ReturnType<Page['locator']> {
+  return page.locator('[data-testid="dscf-root"] [data-dscf-official-input] [data-composer-input]')
+}
+function surrogateChipsOf(page: Page): ReturnType<Page['locator']> {
+  return page.locator('[data-testid="dscf-root"] [data-dscf-official-input] [data-composer-chip="quote"]')
+}
+function surrogateFaceOf(page: Page): Promise<SurrogateFace> {
+  return page.evaluate(() => {
+    const input = document.querySelector('[data-testid="dscf-root"] [data-dscf-official-input] [data-composer-input]') as HTMLElement | null
+    return { phase: input?.getAttribute('data-phase') ?? '', editable: input?.isContentEditable ?? false }
+  })
+}
+
+/** 替身草稿直读（textContent——Lexical contenteditable）。 */
+function surrogateDraftText(page: Page): Promise<string> {
+  return page.evaluate(() =>
+    document.querySelector('[data-testid="dscf-root"] [data-dscf-official-input] [data-composer-input]')?.textContent ?? '',
+  )
+}
+
+/** 有界轮询（订阅扇出异步径——非即时）：条件不满足直至上界即抛。 */
+async function pollUntil(page: Page, check: () => Promise<boolean>, message: string, timeoutMs = 15_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    if (await check()) return
+    if (Date.now() > deadline) throw new Error(`轮询超时：${message}`)
+    await page.waitForTimeout(300)
+  }
+}
+
+/** 在容器内选含目标文本的 range 并派发 document mouseup（划选菜单触发径——插件监听 document mouseup）。 */
+async function selectTextAndMouseup(page: Page, containerSelector: string, needle: string): Promise<boolean> {
+  return page.evaluate(({ containerSelector, needle }) => {
+    const root = document.querySelector(containerSelector)
+    if (root === null) return false
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    let node: Node | null
+    while ((node = walker.nextNode()) !== null) {
+      const idx = (node.textContent ?? '').indexOf(needle)
+      if (idx >= 0) {
+        const range = document.createRange()
+        range.setStart(node, idx)
+        range.setEnd(node, idx + needle.length)
+        const sel = window.getSelection()
+        sel?.removeAllRanges()
+        sel?.addRange(range)
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: 300, clientY: 300 }))
+        return true
+      }
+    }
+    return false
+  }, { containerSelector, needle })
+}
+
+/** 划选 → 浮出菜单 → 「添加到对话」（以菜单行 role=menuitem 为准——menu root 常挂 portal 空壳 isVisible 恒误报）。 */
+async function selectAndAddToChat(page: Page, needle: string): Promise<void> {
+  expect(await selectTextAndMouseup(page, CONVERSATION_CONTENT, needle), `划选命中（${needle.slice(0, 6)}…）`).toBe(true)
+  const addBtn = page.getByRole('menuitem', { name: '添加到对话' }).first()
+  await expect(addBtn).toBeVisible({ timeout: 10_000 })
+  await addBtn.click()
+  await page.waitForTimeout(600)
+}
+
+/**
+ * sending/形态采样记录器（SC-C4 I2「发送钮全程图标形态」+ SC-C5 冻结窗口捕获）：
+ * dscf-root 子树 MutationObserver 即时捕获 data-phase 切换（sendingSeen 硬门）+
+ * 10ms 间隔采样（phase / aria-busy / data-sending / 发送钮 svg 子元素 / mention 菜单
+ * 行数 / 草稿快照）。必须在点发送前安装（监听先于被监听动作——弱断言禁令）。
+ */
+async function installRc5Recorder(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __rc5?: Rc5Recorder }
+    if (w.__rc5 !== undefined) w.__rc5.stop()
+    const root = () => document.querySelector('[data-testid="dscf-root"]')
+    const input = () => root()?.querySelector('[data-composer-input]')
+    const sendBtn = () => root()?.querySelector('button[aria-busy]')
+    const obs: MutationObserver = new MutationObserver(() => {
+      if ((input()?.getAttribute('data-phase') ?? '') === 'sending') rec.sendingSeen = true
+    })
+    const rec: Rc5Recorder = {
+      samples: [],
+      sendingSeen: false,
+      stop() {
+        window.clearInterval(timer)
+        obs.disconnect()
+      },
+    }
+    const sample = (): Rc5Sample => ({
+      phase: input()?.getAttribute('data-phase') ?? '',
+      busy: sendBtn()?.getAttribute('aria-busy') ?? '',
+      dataSending: sendBtn()?.hasAttribute('data-sending') ?? false,
+      btnSvg: (sendBtn()?.querySelector('svg') ?? null) !== null,
+      menuCount: document.querySelectorAll('[data-testid="dscf-mention"]').length,
+      draft: input()?.textContent ?? '',
+    })
+    const r = root()
+    if (r !== null) obs.observe(r, { attributes: true, subtree: true, childList: true })
+    const timer = setInterval(() => {
+      const s = sample()
+      rec.samples.push(s)
+      if (s.phase === 'sending') rec.sendingSeen = true
+    }, 10)
+    w.__rc5 = rec
+  })
+}
+
+async function rc5RecorderOf(page: Page): Promise<Rc5Recorder> {
+  const rec = await page.evaluate(() => (window as unknown as { __rc5?: Rc5Recorder }).__rc5)
+  expect(rec, '采样记录器在场（先装后驱）').toBeDefined()
+  return rec!
+}
+
+/** 会话装配 + 全屏替身挂载（两测试共用前置；返回夹具目录供 finally 清理）。 */
+async function setupSurrogate(page: Page, tag: string): Promise<{ userData: string; fixtureRoot: string }> {
+  const userData = mkdtempSync(join(tmpdir(), `dsh-forge-e2e-sc-rc5-${tag}-ud-`))
+  const fixtureRoot = mkdtempSync(join(tmpdir(), `dsh-forge-e2e-sc-rc5-${tag}-ws-`))
+  const wsDir = join(fixtureRoot, 'sc-ws')
+  mkdirSync(wsDir, { recursive: true })
+  await forgeInvoke(page, 'forge:projects/register', {
+    workspaceDir: wsDir, name: `sc-rc5-${tag}-ws`, forgeDir: wsDir,
+  })
+  await selectWorkspaceViaChip(page, `sc-rc5-${tag}-ws`)
+  await ensureNoBlockingDialog(page)
+  const composer = mainInputOf(page)
+  await composer.click()
+  await page.keyboard.insertText(BOOT_MSG)
+  await page.keyboard.press('Enter')
+  await expect(page.locator(CONVERSATION_CONTENT).first(), '首条消息入转录（划选源在场）').toContainText(NEEDLE_A, { timeout: 60_000 })
+  // 全屏标记注入（DOM 兜底 tracker 同款标记面）→ 替身挂载；ball 态先点球恢复
+  await page.evaluate(() => {
+    const pane = document.createElement('div')
+    pane.setAttribute('data-dockkit-pane', '')
+    const fullscreen = document.createElement('div')
+    fullscreen.setAttribute('data-sidebar-right-panel', 'fullscreen')
+    fullscreen.appendChild(pane)
+    document.body.appendChild(fullscreen)
+  })
+  await expect(page.locator('[data-testid="dscf-root"]'), '全屏标记注入后替身挂载').toHaveCount(1, { timeout: 15_000 })
+  const ball = page.locator('[data-testid="dscf-ball"]')
+  if (await ball.isVisible().catch(() => false)) {
+    await ball.click()
+  }
+  await expect(surrogateInputOf(page), '替身复制件输入锚在场').toBeVisible({ timeout: 15_000 })
+  return { userData, fixtureRoot }
+}
+
+test('@web-e2e @blitz super-composer rc.5 差异面 J1：替身形态对照——chip 原子渲染 / 发送钮图标形态 / 边界编辑存活 / 长引用收窄 / 二次发送形态不劣化', async () => {
+  test.setTimeout(900_000)
+  const launched = await launchHost({ userData: mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-sc-rc5-j1-launch-ud-')), expectPhase: 'hero', env: { DSH_FORGE_WINDOW_HIDDEN: '0' } })
+  const { app, page, pageErrors } = launched
+  let dirs: { userData: string; fixtureRoot: string } | null = null
+  try {
+    dirs = await setupSurrogate(page, 'j1')
+    // ── SC-C1 / J1-S1：划选短锚句 A → chip 原子呈现 ──
+    await selectAndAddToChat(page, NEEDLE_A)
+    await expect(surrogateChipsOf(page), 'SC-C1：替身草稿出现引用 chip（[data-composer-chip="quote"]）').toHaveCount(1, { timeout: 15_000 })
+    const atomicA = await page.evaluate(() => {
+      const input = document.querySelector('[data-testid="dscf-root"] [data-dscf-official-input] [data-composer-input]')
+      const chip = input?.querySelector('[data-composer-chip="quote"]')
+      return { chipEditable: chip?.getAttribute('contenteditable'), chipText: chip?.textContent ?? '', editorText: input?.textContent ?? '' }
+    })
+    expect(atomicA.chipEditable, 'SC-C1：chip 为原子节点（contenteditable=false）').toBe('false')
+    expect(atomicA.editorText.includes(NEEDLE_A), 'SC-C1/I1：chip 内无引用原文明文（整句不落草稿）').toBe(false)
+    // ── SC-C1 / J1-S2：第二锚句 → 两 chip 并存 ──
+    await selectAndAddToChat(page, NEEDLE_B)
+    await expect(surrogateChipsOf(page), 'J1-S2：两 chip 并存').toHaveCount(2, { timeout: 15_000 })
+    // ── SC-C2 / J1-S3+B1：chip 边界编辑存活（尾插两字 → Backspace 两删），chip 计数不变 ──
+    const surrogate = surrogateInputOf(page)
+    await surrogate.click()
+    await page.keyboard.press('End')
+    await page.keyboard.insertText('尾巴')
+    await pollUntil(page, async () => (await surrogateDraftText(page)).includes('尾巴'), 'SC-C2：chip 后文本编辑生效')
+    expect(await surrogateChipsOf(page).count(), 'SC-C2：文本编辑不摧毁 chip').toBe(2)
+    await page.keyboard.press('Backspace')
+    await page.keyboard.press('Backspace')
+    await pollUntil(page, async () => !(await surrogateDraftText(page)).includes('尾巴'), 'SC-C2：Backspace 只删文本字符')
+    expect(await surrogateChipsOf(page).count(), 'SC-C2/B1：贴边界删字 chip 存活（chip 计数不因纯文本编辑变化）').toBe(2)
+    // ── SC-C4 / J1-S5：发送——转录含引用序列化块 + 草稿清空 + I2 发送钮全程图标形态 ──
+    await surrogate.click()
+    await page.keyboard.insertText(SEND_TAIL)
+    await installRc5Recorder(page)
+    await surrogate.press('Enter')
+    const transcript = page.locator(CONVERSATION_CONTENT).first()
+    await expect(transcript, 'SC-C4：消息入转录').toContainText(SEND_TAIL, { timeout: 60_000 })
+    await expect(transcript, 'SC-C4：引用序列化块入转录（〔引用：label〕 wire 形状）').toContainText('〔引用：', { timeout: 60_000 })
+    await pollUntil(page, async () => (await surrogateDraftText(page)) === '' && (await surrogateChipsOf(page).count()) === 0, 'SC-C4：发送后替身草稿清空（chip 随稿清零）')
+    const rec1 = await rc5RecorderOf(page)
+    expect(rec1.sendingSeen, 'SC-C5 前置：sending 相窗口被捕获（data-phase=sending / [data-sending] 在场）').toBe(true)
+    const duringSending = rec1.samples.filter((s) => s.phase === 'sending' || s.dataSending)
+    expect(duringSending.length, 'sending 相采样非空').toBeGreaterThan(0)
+    for (const s of duringSending) {
+      expect(s.btnSvg, 'I2/D2：sending 相发送钮仍为 svg 图标形态（spinner 替换箭头——非黑方块/未样式化矩形，bug 493c4fef 消解观察点）').toBe(true)
+      expect(s.busy, 'D2：sending 相发送钮 aria-busy=true').toBe('true')
+    }
+    const idleSamples = rec1.samples.filter((s) => s.phase !== 'sending' && !s.dataSending && s.draft.length > 0)
+    expect(idleSamples.length, '非 sending 相采样非空').toBeGreaterThan(0)
+    for (const s of idleSamples) {
+      expect(s.btnSvg, 'I2：非 sending 相发送钮恒 svg 图标形态').toBe(true)
+    }
+    rec1.stop()
+    // ── J1-B3：二次发送间快速再划选——re-copy 形态与首轮一致 ──
+    await selectAndAddToChat(page, NEEDLE_A)
+    await expect(surrogateChipsOf(page), 'J1-B3：第二轮 chip 呈现（回 idle 后 re-copy 形态不劣化）').toHaveCount(1, { timeout: 15_000 })
+    // ── J1-B2：长引用收窄——原文明文不溢出输入区 ──
+    await selectAndAddToChat(page, NEEDLE_LONG)
+    const longFace = await page.evaluate((needle) => {
+      const input = document.querySelector('[data-testid="dscf-root"] [data-dscf-official-input] [data-composer-input]') as HTMLElement | null
+      const chip = input?.querySelector('[data-composer-chip="quote"]') as HTMLElement | null
+      return {
+        chipText: chip?.textContent ?? '',
+        editorText: input?.textContent ?? '',
+        chipWidth: chip?.getBoundingClientRect().width ?? -1,
+        inputWidth: input?.getBoundingClientRect().width ?? -1,
+        needleLen: needle.length,
+      }
+    }, NEEDLE_LONG)
+    expect(longFace.chipText.length, 'J1-B2：chip 收窄——长引用 chip 投影短于原文整句').toBeLessThan(longFace.needleLen)
+    expect(longFace.editorText.includes(NEEDLE_LONG), 'J1-B2/I1：长引用原文明文不溢出输入区').toBe(false)
+    expect(longFace.chipWidth, 'J1-B2：chip 宽度不超输入区宽（收窄不横向溢出）').toBeLessThanOrEqual(longFace.inputWidth)
+    // ── 全程干净面 ──
+    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
+  } finally {
+    await closeApp(app)
+    if (dirs !== null) {
+      rmDirBestEffort(dirs.userData)
+      rmDirBestEffort(dirs.fixtureRoot)
+    }
+  }
+})
+
+test('@web-e2e @blitz super-composer rc.5 差异面 J2：sending 相替身 mention 冻结（trackGuardOf frozen）与非 sending 期零漂移', async () => {
+  test.setTimeout(900_000)
+  const launched = await launchHost({ userData: mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-sc-rc5-j2-launch-ud-')), expectPhase: 'hero', env: { DSH_FORGE_WINDOW_HIDDEN: '0' } })
+  const { app, page, pageErrors } = launched
+  let dirs: { userData: string; fixtureRoot: string } | null = null
+  try {
+    dirs = await setupSurrogate(page, 'j2')
+    const surrogate = surrogateInputOf(page)
+    // ── SC-C6 / J2-S1+S2：空闲态 mention 正向基线（菜单弹出，I6 零漂移锚）──
+    let mentionVisible = false
+    for (let attempt = 0; attempt < 4 && !mentionVisible; attempt++) {
+      await surrogate.click()
+      await surrogate.fill('')
+      await page.keyboard.insertText('@')
+      mentionVisible = await page.locator('[data-testid="dscf-mention"]')
+        .waitFor({ state: 'visible', timeout: 2_500 }).then(() => true).catch(() => false)
+    }
+    expect(mentionVisible, 'SC-C6/J2-S1：空闲态 @ 触发 mention 菜单（I6 正向基线）').toBe(true)
+    await page.keyboard.press('Escape')
+    await surrogate.fill(J2_DRAFT)
+    // ── SC-C5 / J2-B1+B3：发送后 sending 相内键入 '@' 与普通文本——零放行 ──
+    await installRc5Recorder(page)
+    await surrogate.press('Enter')
+    // 冻结窗口内快速驱动：有界循环（每轮 '@' + 普通文本各一发），phase 离开 sending 即停
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const face = await surrogateFaceOf(page)
+      if (face.phase !== 'sending') break
+      await page.keyboard.insertText('@甲')
+      await page.waitForTimeout(20)
+    }
+    const transcript = page.locator(CONVERSATION_CONTENT).first()
+    await expect(transcript, 'J2 前置：消息入转录（发送链完成）').toContainText(J2_DRAFT, { timeout: 60_000 })
+    const rec2 = await rc5RecorderOf(page)
+    expect(rec2.sendingSeen, 'SC-C5：sending 相窗口被捕获（journey SC-C5 进入判据——未捕获即红，不硬凑）').toBe(true)
+    const sendingSamples = rec2.samples.filter((s) => s.phase === 'sending')
+    expect(sendingSamples.length, 'sending 相采样非空').toBeGreaterThan(0)
+    for (const s of sendingSamples) {
+      expect(s.menuCount, 'SC-C5/I5/J2-B1：sending 相 mention 菜单不弹出').toBe(0)
+    }
+    const draftAtSending = sendingSamples[0]!.draft
+    for (const s of sendingSamples) {
+      expect(s.draft, 'SC-C5/J2-B3：sending 相草稿零变更（普通文本不入草稿——官方全冻结口径）').toBe(draftAtSending)
+    }
+    rec2.stop()
+    await pollUntil(page, async () => {
+      const face = await surrogateFaceOf(page)
+      return face.phase !== 'sending' && face.editable
+    }, 'J2-B2 前置：sending 相结束、编辑器恢复可编辑')
+    // ── SC-C6 / J2-B2：冻结不残留——恢复可编辑后菜单复弹 ──
+    let restoredVisible = false
+    for (let attempt = 0; attempt < 4 && !restoredVisible; attempt++) {
+      await surrogate.click()
+      await page.keyboard.insertText('@')
+      restoredVisible = await page.locator('[data-testid="dscf-mention"]')
+        .waitFor({ state: 'visible', timeout: 2_500 }).then(() => true).catch(() => false)
+      if (!restoredVisible) await page.keyboard.press('Escape')
+    }
+    expect(restoredVisible, 'SC-C6/J2-B2：sending 相结束菜单恢复弹出（冻结只作用于 sending 相）').toBe(true)
+    // ── 全程干净面 ──
+    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
+  } finally {
+    await closeApp(app)
+    if (dirs !== null) {
+      rmDirBestEffort(dirs.userData)
+      rmDirBestEffort(dirs.fixtureRoot)
+    }
+  }
+})

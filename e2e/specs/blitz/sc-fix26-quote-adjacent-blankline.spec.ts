@@ -31,10 +31,9 @@ const EVIDENCE_DIR =
 const MARKER = 'fix26三引用相邻前置文本'
 const NEEDLES = ['文档选段甲-引用相邻一', '文档选段乙-引用相邻二', '文档选段丙-引用相邻三'] as const
 
-/** 会话日志事件（本 spec 消费面——user/message content 文本） */
-interface UserMsgEvent {
-  readonly type: string
-  readonly data?: { readonly content?: readonly { readonly type?: string; readonly text?: string }[] }
+/** user/message 事件 data 消费面（本 spec 只读 content 文本——运行期 wire 形状窄化） */
+interface UserMsgData {
+  readonly content?: readonly { readonly type?: string; readonly text?: string }[]
 }
 
 function composerOf(page: Page): ReturnType<Page['locator']> {
@@ -53,8 +52,8 @@ function userMessages(dshHome: string, sessionId: string): readonly string[] {
   const file = sessionLogById(dshHome, sessionId)
   if (file === undefined) return []
   return decodeSessionFile(file)
-    .filter((e): e is UserMsgEvent & { type: 'user/message' } => e.type === 'user/message')
-    .flatMap((e) => (e.data?.content ?? []).map((c) => c.text ?? ''))
+    .filter((e) => e.type === 'user/message')
+    .flatMap((e) => (((e.data ?? {}) as UserMsgData).content ?? []).map((c) => c.text ?? ''))
 }
 
 /** 轮询等待含目标标记 ∧ 三 quote 块的用户消息落盘（发送成功唯一证据面） */
