@@ -258,7 +258,9 @@ export interface InputState {
   readonly attachmentIds: readonly DraftAttachmentId[]
   /** Monotonic editor revision (span CAS compares against this). */
   readonly draftRev: number
-  readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
+  // rc.5 新增 'sending'：消息等待 Host 接受的冻结相（InputBar machineBusy 含 sending——
+  // 替身官方 phase 透传经 data-face，形态随官方）。
+  readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting' | 'sending'
   /** Present exactly while claimed/submitting (claim snapshot during flight; submit closure withheld). */
   readonly claim?: { readonly name: string; readonly token: string; readonly hint?: string; readonly attachments?: boolean }
   /** Reference occurrence view of the editor's chips, sorted by offset. */

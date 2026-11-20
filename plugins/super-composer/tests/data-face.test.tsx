@@ -331,6 +331,8 @@ describe("mention 菜单（官方 controller 同壳）", () => {
     expect(trackGuardOf("adjudicating")).toBe("claimed");
     expect(trackGuardOf("claimed")).toBe("claimed");
     expect(trackGuardOf("submitting")).toBe("frozen");
+    // rc.5 'sending' 相：Host 接受前官方编辑器全冻结——替身 mention 同口径冻结
+    expect(trackGuardOf("sending")).toBe("frozen");
     const world = makeWorld();
     harness = mountWithFace(world);
     harness.face.trackMention("/he", 3);

@@ -267,9 +267,9 @@ export class SurrogateComposerModel {
   readonly subscribeStore = (listener: () => void): (() => void) => this.store.subscribe(listener)
   readonly getInputState = (): InputState => this.store.getSnapshot()
 
-  /** 会话事实投影（streaming → running；promptError/subagent/removed 替身不可达 = 零值）。 */
+  /** 会话事实投影（streaming → running；promptError/subagent/removed/openState/pendingSubmissions 替身不可达 = 零值）。 */
   sessionFacts(): SessionFacts {
-    return { promptError: null, running: this.running, subagent: null, removed: false }
+    return { promptError: null, running: this.running, openState: null, pendingSubmissions: [], subagent: null, removed: false }
   }
 
   setRunning(running: boolean): void {
@@ -524,8 +524,14 @@ export function SurrogateComposer(props: {
     removeAttachment: undefined,
     resolveDraftAttachments: undefined,
     retryFileUpload: undefined,
+    // rc.5 InputBar 挂载期注册文档级 paste 路由——替身无附件域，给空路由桩
+    //（零注册零撤销，路由选举永不命中替身）。
+    registerFileIntake: () => () => undefined,
     toggleCommandMenu: undefined,
     stop: undefined,
+    // rc.5 retry 主钮（对失败 turn 重发）——替身无 retry 域 = undefined
+    //（InputBar 官方降级路径：primaryRetries 恒 false，不出现 Continue 形态）。
+    retry: undefined,
     hooks: {
       stopShortcut: stubStopShortcut,
       busyEnter,
@@ -535,6 +541,9 @@ export function SurrogateComposer(props: {
       menuLauncher: stubMenuLauncher,
     },
     renderSlot: () => null,
+    // rc.5 权限读取——替身无权限域，恒 undefined（InputBar 口径：undefined = 不拒绝，
+    // Send/Stop/文件入口不因权限缺席而禁用）。
+    useAccess: () => undefined,
     useProjection,
     useBusyEnter: bindSnapshot(busyEnter),
     useFileUploads: bindSnapshot(stubFileUploads),
@@ -545,6 +554,7 @@ export function SurrogateComposer(props: {
     t: surrogateTranslate,
     sessionId: undefined,
     variant: 'composer',
+    occurrence: 'main',
     disabled: false,
     blocked: undefined,
     workspacePickerOpen: false,

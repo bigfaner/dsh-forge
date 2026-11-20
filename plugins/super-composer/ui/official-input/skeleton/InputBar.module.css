@@ -1,4 +1,4 @@
-/* // PROVENANCE: 复制自官方 dsh 源码 ui-conversation/src/client/skeleton/InputBar.module.css @ deepseek-harness f059f01ce367748392d8f665c0705fb4302a626b（0.2.0-rc.2，2026-10-22）；升级需人工 re-copy，漂移自担。 */
+/* // PROVENANCE: 复制自官方 dsh-client-ui-conversation@0.2.2-rc.5 npm pack src/client/skeleton/InputBar.module.css（对照 deepseek-harness 2c990f0b14fbe870cd6a083c1708b35fd22a7172，2026-11 任务 1.4）；升级需人工 re-copy，漂移自担。 */
 
 .root {
   display: flex;
@@ -18,6 +18,15 @@
   gap: 12px;
   max-width: 100%;
   padding-top: 4px;
+}
+
+/* The docked composer reserves one statistics row before its readings
+   arrive, so the projections landing never change the composer height. The
+   row height matches the readings: a 20px secondary line plus 1px block
+   padding (ui-chat StatsPills `.pill`, ContextMeter `.trigger`). A minimum,
+   not a fixed height, so taller readings still size the row. */
+.root:not(.hero) > .dock {
+  min-height: calc(22px + var(--dsh-content-font-delta-secondary, 0px));
 }
 
 .hero .dock:empty {
@@ -77,6 +86,12 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+@media (pointer: coarse) {
+  .card {
+    font-size: max(16px, var(--dsh-content-font-size, 14px));
+  }
+}
+
 /* No-workspace trigger state: an inset 1px dashed outline marks the card as a
    workspace picker rather than a live composer. Keeping the complete stroke
    inside the rounded box prevents clipped corner pixels from reading heavier. */
@@ -104,8 +119,10 @@
   pointer-events: none;
 }
 
-.cardWorkspaceTrigger:hover::after {
-  color: var(--dsw-alias-state-business-primary);
+@media (hover: hover) {
+  .cardWorkspaceTrigger:hover::after {
+    color: var(--dsw-alias-state-business-primary);
+  }
 }
 
 .accessory {
@@ -201,6 +218,11 @@
 
 .input[data-composer-composing] p:last-child::after {
   content: none;
+}
+
+/* A selected command chip stands in for the caret until the next key. */
+.input[data-composer-chip-selected] {
+  caret-color: transparent;
 }
 
 .input[data-composer-composing] + .placeholder {
@@ -326,8 +348,10 @@
   cursor: pointer;
 }
 
-.add:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
+@media (hover: hover) {
+  .add:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+  }
 }
 
 .add:disabled {
@@ -358,8 +382,10 @@
   appearance: none;
 }
 
-.select:hover:not(:disabled) {
-  background-color: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .select:hover:not(:disabled) {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .select:disabled {
@@ -380,9 +406,9 @@
   border-radius: 999px;
   corner-shape: round;
   background: var(--dsw-alias-button-info-fill);
-  /* Static white, not the foreground token: the arrow stays white on the blue
+  /* On-color ink, not the foreground token: the arrow stays white on the blue
      fill in both themes (design 34:10465). */
-  color: #fff;
+  color: var(--dsw-alias-label-on-color);
   cursor: pointer;
   transition: background-color 100ms ease;
   /* Opts out of the row's 2px downward shift (.row top pad): the send circle
@@ -391,13 +417,41 @@
   transform: translateY(-2px);
 }
 
-.primary:hover:not(:disabled) {
-  background: var(--dsw-alias-button-info-hover);
+/* Solid artwork uses a smaller footprint than the thin send arrow. */
+.continueIcon {
+  transform: scale(1.5);
+}
+
+@media (hover: hover) {
+  .primary:hover:not(:disabled) {
+    background: var(--dsw-alias-button-info-hover);
+  }
 }
 
 .primary:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* Sending: the message waits for the Host to accept it. The circle keeps its
+   full fill rather than the disabled fade, and an arc turns where the arrow was. */
+.primary[data-sending]:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+.sendingSpinner {
+  animation: input-sending 800ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sendingSpinner {
+    animation-duration: 2400ms;
+  }
+}
+
+@keyframes input-sending {
+  to { transform: rotate(360deg); }
 }
 
 .retry {

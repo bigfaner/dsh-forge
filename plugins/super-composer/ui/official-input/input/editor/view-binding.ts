@@ -1,12 +1,36 @@
-// PROVENANCE: 复制自官方 dsh 源码 ui-conversation/src/client/input/editor/view-binding.ts @ deepseek-harness f059f01ce367748392d8f665c0705fb4302a626b（0.2.0-rc.2，2026-10-22）；升级需人工 re-copy，漂移自担。
+// PROVENANCE: 复制自官方 dsh-client-ui-conversation@0.2.2-rc.5 npm pack src/client/input/editor/view-binding.ts（对照 deepseek-harness 2c990f0b14fbe870cd6a083c1708b35fd22a7172，2026-11 任务 1.4）；升级需人工 re-copy，漂移自担。
 /** DOM and keymap bindings installed by the InputBar's existing effects. */
 import type { MouseEvent, MutableRefObject, RefObject } from 'react'
 import type { LexicalEditor } from 'lexical'
+import { $getRoot } from 'lexical'
+import { focusWithoutRing, isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ComposerKeyboard } from '../../contract/draft-editor.js'
-import type { ComposerBarProps } from '../../contract/composer-bar.js'
 import type { BusyEnterBehavior } from '../../contract/composer-submission.js'
 import { resolveSubmitMode } from '../submission-policy.js'
 import { registerComposerKeymap } from './keymap.js'
+// PROVENANCE 适配：官方此处 import { DRAFT_SUBMITTED_TAG } from './runtime.ts'——
+// 本地 runtime.ts 为本包自建 DraftEditorRuntime（提交径不走 editor tag），无该导出；
+// 以同值常量镜像承载（替身 submit 不打此 tag，installDraftKeyboardDismissal 在替身
+// 内恒为惰性路径，仅保官方形态）。
+const DRAFT_SUBMITTED_TAG = 'dsh-draft-submitted'
+
+/**
+ * Transfer mobile editor focus after a submission empties the draft.
+ * A control the user already focused retains focus.
+ * @param editor - the Session-owned editor.
+ * @param destination - stable, focusable non-text element that retains the composer's keyboard position.
+ * @returns the update-listener cleanup.
+ */
+export function installDraftKeyboardDismissal(editor: LexicalEditor, destination: RefObject<HTMLElement>): () => void {
+  return editor.registerUpdateListener(({ editorState, tags }) => {
+    if (!tags.has(DRAFT_SUBMITTED_TAG) || !isMobileDevice()) return
+    const input = editor.getRootElement()
+    if (input === null || input.ownerDocument.activeElement !== input) return
+    if (editorState.read(() => $getRoot().getTextContentSize() === 0) && destination.current !== null) {
+      focusWithoutRing(destination.current, { preventScroll: true })
+    }
+  })
+}
 
 interface DraftViewGate {
   locked: boolean
@@ -17,8 +41,9 @@ interface DraftViewGate {
   busyEnter: BusyEnterBehavior
   intakeFiles: (files: readonly File[], directories?: ReadonlySet<File>) => void
   uploadsPending: boolean
+  /** Toast text explaining why pending uploads hold the send. */
+  uploadsHeldText: string
   showToast: (text: string) => void
-  t: ComposerBarProps['t']
   canAcceptDrop: boolean
 }
 
@@ -92,7 +117,7 @@ export function installDraftFilePicker(
   fileInputRef: RefObject<HTMLInputElement>,
 ): () => void {
   return keyboard.bindFilePicker({
-    available: () => gate.current.canAcceptDrop && fileInputRef.current !== null,
+    available: () => gate.current.canAcceptDrop && fileInputRef.current !== null && !fileInputRef.current.disabled,
     open: () => { fileInputRef.current?.click() },
   })
 }
@@ -127,7 +152,7 @@ export function installDraftKeymap(
         return
       }
       if (g.uploadsPending) {
-        g.showToast(g.t('file.stillUploading'))
+        g.showToast(g.uploadsHeldText)
         return
       }
       keyboard.submit(resolveSubmitMode(

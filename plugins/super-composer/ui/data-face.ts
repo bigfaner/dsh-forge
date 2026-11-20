@@ -39,7 +39,7 @@ export interface SnapshotStoreMirror<T> {
 export interface InputStateMirror {
   readonly draft: string
   readonly draftRev: number
-  readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
+  readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting' | 'sending'
   readonly occurrences?: readonly unknown[]
   readonly queue?: readonly unknown[]
 }
@@ -244,6 +244,9 @@ export function projectEventWindow(window: { readonly entries?: readonly EventEn
 /** InputState.phase → 官方 TriggerGuard tier（claimed: '/' 抑制 '@' 活；frozen: 全停）。 */
 export function trackGuardOf(phase: InputStateMirror['phase']): 'plain' | 'claimed' | 'frozen' {
   if (phase === 'submitting') return 'frozen'
+  // rc.5 'sending'：消息等待 Host 接受期官方编辑器全冻结——替身 mention 同口径
+  //（dep-audit §3 行为微漂移消解落点）。
+  if (phase === 'sending') return 'frozen'
   if (phase === 'plain') return 'plain'
   return 'claimed'
 }
