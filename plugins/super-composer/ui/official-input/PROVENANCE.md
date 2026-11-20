@@ -14,14 +14,22 @@
 | 复制日期 | 2026-10-22 |
 | 复制目标 | `plugins/super-composer/ui/official-input/` |
 
+## rc.5 re-copy 锚（2026-11，任务 1.3）
+
+| 项 | 值 |
+|---|---|
+| 源 | `dsh-client-ui-conversation@0.2.2-rc.5` npm pack `src/client/skeleton/ContextMeter.*`（对照 deepseek-harness `2c990f0b14fbe870cd6a083c1708b35fd22a7172`） |
+| re-copy 范围 | 仅 `skeleton/ContextMeter.tsx` + `skeleton/ContextMeter.module.css`（官方 rc.5 改 CSS anchor positioning，primitives 0.2.2-rc.5 已删 `useAnchoredPosition`） |
+| 适配 | tsx：imports 重写（UseProjection → `contract/composer-bar.js` 本地镜像、相对 import 去 `.ts` 后缀）；css：原样 |
+
 ## 复制清单（逐文件头注同锚）
 
 | 源位（ui-conversation/src 下） | 复制位 | 适配 |
 |---|---|---|
 | `client/skeleton/InputBar.tsx` | `skeleton/InputBar.tsx` | imports 重写（见下） |
 | `client/skeleton/InputBar.module.css` | `skeleton/InputBar.module.css` | 原样（构建期作用域化注入） |
-| `client/skeleton/ContextMeter.tsx` | `skeleton/ContextMeter.tsx` | imports 重写 |
-| `client/skeleton/ContextMeter.module.css` | `skeleton/ContextMeter.module.css` | 原样 |
+| `client/skeleton/ContextMeter.tsx` | `skeleton/ContextMeter.tsx` | imports 重写（rc.5 re-copy 锚见上节） |
+| `client/skeleton/ContextMeter.module.css` | `skeleton/ContextMeter.module.css` | 原样（rc.5 re-copy 锚见上节） |
 | `client/skeleton/control-row-layout.ts` | `skeleton/control-row-layout.ts` | 原样 |
 | `client/input/submission-policy.ts` | `input/submission-policy.ts` | store/settings 镜像 |
 | `client/input/decorations.ts` | `input/decorations.ts` | 原样 |
