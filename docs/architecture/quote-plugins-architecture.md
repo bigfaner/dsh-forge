@@ -1,6 +1,6 @@
 ﻿# quote-reference 与 super-composer 插件架构
 
-> 位置：docs/architecture/quote-plugins-architecture.md · 对象：`packages/plugins/quote-reference`、`packages/plugins/super-composer`
+> 位置：docs/architecture/quote-plugins-architecture.md · 对象：`packages/plugins/quote-reference`、`plugins/super-composer`
 > 本文回答三个问题：两个插件包怎么构建与装载？各自内部模块怎么组织？与宿主（官方 cordis 组合树 + 产品 web 壳）通过哪些接口点交互？
 > 约定：代码标识符保留英文，首次出现给一句解释；文内相对路径除标注外均相对 `packages/plugins/`。
 
@@ -19,7 +19,7 @@
 
 - `cordis.patch.yml`：`insert` 单行 `{id, name}` 把包插进组合层注册清单（两包各一份，同构）。
 - `package.json` 的 `dsh.client.inject` 清单声明装配期注入边：quote-reference = session-controller + ui-conversation + ui-input-trigger 三项（`quote-reference/package.json:23-30`）；super-composer 额外 + ui-sidebar-right 四项（`super-composer/package.json:23-31`）。装载序落在所列官方插件之后，`ctx.sessions` 等服务运行期可达。
-- 版本锚（`PROVENANCE.md`）：quote-reference 0.1.1、super-composer 0.2.6；super-composer 的 `src/client/official-input/PROVENANCE.md` 记录复制件版本锚——官方 `packages/client/ui-conversation/src/client/**` @ 0.2.0-rc.2，commit `f059f01ce367748392d8f665c0705fb4302a626b`（2026-10-22 授权复制，漂移责任自担、升级人工 re-copy）。
+- 版本锚（`PROVENANCE.md`）：quote-reference 0.1.1、super-composer 0.2.6；super-composer 的 `ui/official-input/PROVENANCE.md` 记录复制件版本锚——官方 `packages/client/ui-conversation/src/client/**` @ 0.2.0-rc.2，commit `f059f01ce367748392d8f665c0705fb4302a626b`（2026-10-22 授权复制，漂移责任自担、升级人工 re-copy）。
 
 ### 1.2 client bundle 构建（`scripts/bundle-client.mjs`，两包同构）
 

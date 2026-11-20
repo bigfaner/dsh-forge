@@ -151,7 +151,7 @@ async function mirrorCssModules(fromDir, toDir) {
     }
   }
 }
-await mirrorCssModules(resolve(pkgDir, "src/client"), resolve(pkgDir, "dist/client"));
+await mirrorCssModules(resolve(pkgDir, "ui"), resolve(pkgDir, "dist/client"));
 
 await build({
   entryPoints: [resolve(pkgDir, "dist/client/index.js")],

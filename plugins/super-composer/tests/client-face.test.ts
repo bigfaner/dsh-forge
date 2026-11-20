@@ -4,8 +4,8 @@ import {
   apply,
   superComposerClient,
   wireSuperComposerClient,
-} from "../src/client/index.js";
-import { createFullscreenTracker } from "../src/client/fullscreen.js";
+} from "../ui/index.js";
+import { createFullscreenTracker } from "../ui/fullscreen.js";
 
 /**
  * client face 组装单测：组合 apply 契约（返回值铁律 + fail-soft）+ 接线本体

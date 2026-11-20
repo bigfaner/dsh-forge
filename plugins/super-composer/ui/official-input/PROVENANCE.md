@@ -12,7 +12,7 @@
 | 官方版本 | 0.2.0-rc.2 |
 | 版本锚 commit | `f059f01ce367748392d8f665c0705fb4302a626b` |
 | 复制日期 | 2026-10-22 |
-| 复制目标 | `packages/plugins/super-composer/src/client/official-input/` |
+| 复制目标 | `plugins/super-composer/ui/official-input/` |
 
 ## 复制清单（逐文件头注同锚）
 

@@ -12,12 +12,12 @@
 // 覆盖域替换 chip（$replaceDetectSpanWithNodes）、insert-text bail 按 detect span 插文本。
 import { describe, expect, it, vi } from "vitest";
 import { $getRoot, $getSelection, $isRangeSelection, $isTextNode } from "lexical";
-import { createSuperComposerDataFace, tailSpanOf, type DataFaceServices } from "../src/client/data-face.js";import {
+import { createSuperComposerDataFace, tailSpanOf, type DataFaceServices } from "../ui/data-face.js";import {
   SurrogateComposerModel,
   insertDeltaOf,
   detectOffsetAtClipboardOffset,
   type DraftSyncFace,
-} from "../src/client/official-input/surrogate-composer.js";
+} from "../ui/official-input/surrogate-composer.js";
 
 // ─────────────────────────── fake 官方草稿机（官方语义） ───────────────────────────
 

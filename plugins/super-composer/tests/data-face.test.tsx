@@ -10,7 +10,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MiniComposerCard, type MiniComposerProps } from "../src/client/mini-composer.js";
+import { MiniComposerCard, type MiniComposerProps } from "../ui/mini-composer.js";
 import {
   activeSessionIdOf,
   createSuperComposerDataFace,
@@ -22,7 +22,7 @@ import {
   type DataFaceServices,
   type EventEntryMirror,
   type ReferenceInsertMirror,
-} from "../src/client/data-face.js";
+} from "../ui/data-face.js";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "types": [],
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "outDir": "dist/client",
+    "rootDir": "ui",
+    "tsBuildInfoFile": "dist/.tsbuildinfo-client"
+  },
+  "include": ["ui"],
+  "exclude": ["**/*.test.ts", "**/*.test.tsx"]
+}

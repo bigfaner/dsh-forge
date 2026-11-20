@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   createDocumentActivityTracker,
   documentActivityFromDocument,
-} from "../src/client/document-activity.js";
-import { superComposerClient } from "../src/client/index.js";
+} from "../ui/document-activity.js";
+import { superComposerClient } from "../ui/index.js";
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 

@@ -13,7 +13,7 @@ import {
   installFactoryBridge,
   type FactoryBridgeEntryProps,
   type RenderFactorySlotFace,
-} from "../src/client/factory-bridge.js";
+} from "../ui/factory-bridge.js";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 

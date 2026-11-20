@@ -15,10 +15,10 @@ import {
   splitQuoteSegments,
   type MiniComposerMessage,
   type MiniComposerProps,
-} from "../src/client/mini-composer.js";
-import { SUPER_COMPOSER_CSS } from "../src/client/styles.js";
-import type { SuperComposerDataFace } from "../src/client/data-face.js";
-import type { InputStateMirror } from "../src/client/data-face.js";
+} from "../ui/mini-composer.js";
+import { SUPER_COMPOSER_CSS } from "../ui/styles.js";
+import type { SuperComposerDataFace } from "../ui/data-face.js";
+import type { InputStateMirror } from "../ui/data-face.js";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 

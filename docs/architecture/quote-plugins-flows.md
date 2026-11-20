@@ -2,7 +2,7 @@
 
 > 位置：docs/architecture/quote-plugins-flows.md · 基准：2026-10（super-composer 分支 HEAD）
 > 维护约定：**插件交互流程、序列化格式、构建装载链或验收分层变化时同步本文档**；通用测试策略正本见 [docs/conventions/testing/core.md](../conventions/testing/core.md)。
-> 源码：`packages/plugins/quote-reference/`（v0.1.2）、`packages/plugins/super-composer/`（v0.2.7）。
+> 源码：`packages/plugins/quote-reference/`（v0.1.2）、`plugins/super-composer/`（v0.2.7）。
 
 两个插件构成「划选引用 → 替身呈现 → 发送」一条链：
 

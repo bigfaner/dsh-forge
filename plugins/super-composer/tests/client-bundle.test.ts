@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { OFFICIAL_INPUT_STYLE_MARKER, SUPER_COMPOSER_STYLE_MARKER } from "../src/client/styles.js";
+import { OFFICIAL_INPUT_STYLE_MARKER, SUPER_COMPOSER_STYLE_MARKER } from "../ui/styles.js";
 
 /**
  * 浏览器半装载契约守卫（dsh-client-modules，官方 clientBundle 生成形状——

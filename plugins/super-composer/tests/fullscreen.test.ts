@@ -5,7 +5,7 @@ import {
   fullscreenFromDocument,
   fullscreenFromTabInfo,
   type FullscreenDom,
-} from "../src/client/fullscreen.js";
+} from "../ui/fullscreen.js";
 
 /**
  * 全屏呈现感知纯逻辑单测（proposal §3 包二 fullscreen.ts）：

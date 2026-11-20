@@ -242,7 +242,7 @@ importers:
         version: link:../../packages/plugins/quote-reference
       '@dsh-forge/super-composer':
         specifier: workspace:*
-        version: link:../../packages/plugins/super-composer
+        version: link:../../plugins/super-composer
       react-qr-code:
         specifier: 2.2.0
         version: 2.2.0(react@18.3.1)
@@ -595,66 +595,6 @@ importers:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
 
-  packages/plugins/super-composer:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: 4.1.0
-        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.0.9)(@deepseek-ai/cordis-plugin-loader@1.0.5)
-      '@deepseek-ai/dsh-api-session-controller':
-        specifier: 0.2.2-rc.5
-        version: 0.2.2-rc.5(c30f97a3ebfc80b3c110376debbff9e0)
-      '@deepseek-ai/dsh-client-ui-conversation':
-        specifier: 0.2.2-rc.5
-        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
-      '@deepseek-ai/dsh-client-ui-input-trigger':
-        specifier: 0.2.2-rc.5
-        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
-      '@deepseek-ai/dsh-client-ui-primitives':
-        specifier: 0.2.2-rc.5
-        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
-      '@deepseek-ai/dsh-client-ui-sidebar-right':
-        specifier: 0.2.2-rc.5
-        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
-      '@lexical/history':
-        specifier: 0.49.0
-        version: 0.49.0(typescript@7.0.2)
-      '@lexical/plain-text':
-        specifier: 0.49.0
-        version: 0.49.0(typescript@7.0.2)
-      '@lexical/text':
-        specifier: 0.49.0
-        version: 0.49.0(typescript@7.0.2)
-      '@lexical/utils':
-        specifier: 0.49.0
-        version: 0.49.0(typescript@7.0.2)
-      '@types/node':
-        specifier: 24.19.0
-        version: 24.19.0
-      '@types/react':
-        specifier: 18.3.12
-        version: 18.3.12
-      '@types/react-dom':
-        specifier: ~18.3.0
-        version: 18.3.0
-      clsx:
-        specifier: 2.1.1
-        version: 2.1.1
-      esbuild:
-        specifier: 0.24.2
-        version: 0.24.2
-      happy-dom:
-        specifier: ^20.0.0
-        version: 20.14.6
-      lexical:
-        specifier: 0.49.0
-        version: 0.49.0(typescript@7.0.2)
-      react:
-        specifier: 18.3.1
-        version: 18.3.1
-      react-dom:
-        specifier: 18.3.1
-        version: 18.3.1(react@18.3.1)
-
   plugins/expert-squad:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -946,6 +886,66 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+
+  plugins/super-composer:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.1.0
+        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.0.9)(@deepseek-ai/cordis-plugin-loader@1.0.5)
+      '@deepseek-ai/dsh-api-session-controller':
+        specifier: 0.2.2-rc.5
+        version: 0.2.2-rc.5(c30f97a3ebfc80b3c110376debbff9e0)
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: 0.2.2-rc.5
+        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
+      '@deepseek-ai/dsh-client-ui-input-trigger':
+        specifier: 0.2.2-rc.5
+        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: 0.2.2-rc.5
+        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
+      '@deepseek-ai/dsh-client-ui-sidebar-right':
+        specifier: 0.2.2-rc.5
+        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
+      '@lexical/history':
+        specifier: 0.49.0
+        version: 0.49.0(typescript@7.0.2)
+      '@lexical/plain-text':
+        specifier: 0.49.0
+        version: 0.49.0(typescript@7.0.2)
+      '@lexical/text':
+        specifier: 0.49.0
+        version: 0.49.0(typescript@7.0.2)
+      '@lexical/utils':
+        specifier: 0.49.0
+        version: 0.49.0(typescript@7.0.2)
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
+      '@types/react':
+        specifier: 18.3.12
+        version: 18.3.12
+      '@types/react-dom':
+        specifier: ~18.3.0
+        version: 18.3.0
+      clsx:
+        specifier: 2.1.1
+        version: 2.1.1
+      esbuild:
+        specifier: 0.24.2
+        version: 0.24.2
+      happy-dom:
+        specifier: ^20.0.0
+        version: 20.14.6
+      lexical:
+        specifier: 0.49.0
+        version: 0.49.0(typescript@7.0.2)
+      react:
+        specifier: 18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: 18.3.1
+        version: 18.3.1(react@18.3.1)
 
   plugins/task-loop:
     dependencies:

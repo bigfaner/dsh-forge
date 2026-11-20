@@ -3,7 +3,7 @@
 // 互斥、不同时出现——全屏态落 chip 聚焦替身、非全屏聚焦主 composer）。
 // 溯源：bug 9c3635a9（全屏替身语义回落三档）/ bug 1ab2f4e6（全屏聚焦缝接线）。
 // 语义单测正本 = packages/plugins/quote-reference/tests/selection-menu.test.tsx（布尔回落）
-// + packages/plugins/super-composer/tests/mini-composer-mount.test.ts；本 spec = git 内
+// + plugins/super-composer/tests/mini-composer-mount.test.ts；本 spec = git 内
 // 真机 e2e 锚（过程件 walkthrough 探针不进 git，驱动逻辑在此收编）。
 // chip 落地断言投影链联动：真因 = 订阅闩锁 1d1e07af（fixed@073c107b），前置登记
 // 74a341e8 已回填 fixed、85ca6ba5 终态 unresolved 由 74a341e8 销账——真机 1 passed 实证投影存活；

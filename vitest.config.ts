@@ -185,7 +185,7 @@ export default defineConfig({
       {
         test: {
           name: 'super-composer',
-          include: ['packages/plugins/super-composer/tests/**/*.test.{ts,tsx}'],
+          include: ['plugins/super-composer/tests/**/*.test.{ts,tsx}'],
           server: {
             deps: {
               inline: ['@deepseek-ai/dsh-client-ui-primitives'],

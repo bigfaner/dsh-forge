@@ -65,7 +65,7 @@
       "path": "packages/plugins/quote-reference"
     },
     {
-      "path": "packages/plugins/super-composer"
+      "path": "plugins/super-composer"
     },
     {
       "path": "apps/host"

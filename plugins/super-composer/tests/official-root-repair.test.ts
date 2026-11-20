@@ -6,7 +6,7 @@
 // 修复缝 = 替身组合层检测「shell editor root 为 null ∧ 主 composer editable 在场」
 // 时重绑（官方 Lexical setRootElement 正门，语义同官方绑定 effect）。
 import { describe, expect, it } from "vitest";
-import { rebindMainComposerRoot, type EditorRootFace } from "../src/client/index.js";
+import { rebindMainComposerRoot, type EditorRootFace } from "../ui/index.js";
 
 function freshDoc(): Document {
   return document.implementation.createHTMLDocument("fix-21");

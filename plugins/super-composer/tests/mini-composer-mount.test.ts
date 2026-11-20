@@ -4,7 +4,7 @@
 // ⑤ inputTriggers 接线 / ④ ⧉ exitFullscreen 官方径。
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Context } from "@deepseek-ai/cordis";
-import { superComposerClient } from "../src/client/index.js";
+import { superComposerClient } from "../ui/index.js";
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -390,7 +390,7 @@ describe("1.47 引用自动展开（surfaceOnReference——收起态直展卡�
     setFullscreenMarker(false);
     const trackerStub = { isFullscreen: () => false, subscribe: () => () => undefined, dispose: () => undefined };
     const activityStub = { isActive: () => false, subscribe: () => () => undefined, dispose: () => undefined };
-    const { mountMiniComposer } = await import("../src/client/index.js");
+    const { mountMiniComposer } = await import("../ui/index.js");
     const ctx = ctxWithReflect();
     const dispose = mountMiniComposer(document, ctx, {
       tracker: trackerStub as never,
@@ -431,22 +431,22 @@ describe("fix-20: 现身门通用合取判定（surfaceGateOk——全屏呈现 
     ({ isActive: () => active, subscribe: () => () => undefined, dispose: () => undefined }) as never;
 
   it("activity 缺席（undefined）= 判据未知 → 不现身（不得降级恒真误现身）", async () => {
-    const { surfaceGateOk } = await import("../src/client/index.js");
+    const { surfaceGateOk } = await import("../ui/index.js");
     expect(surfaceGateOk(tracker(true), undefined)).toBe(false);
   });
 
   it("tracker 缺席（undefined）= 判据未知 → 不现身（不得降级恒真误现身）", async () => {
-    const { surfaceGateOk } = await import("../src/client/index.js");
+    const { surfaceGateOk } = await import("../ui/index.js");
     expect(surfaceGateOk(undefined, activity(true))).toBe(false);
   });
 
   it("非全屏 ∧ 文档活动 → 不现身（chip 落正式 composer 场景 = 零现身反馈）", async () => {
-    const { surfaceGateOk } = await import("../src/client/index.js");
+    const { surfaceGateOk } = await import("../ui/index.js");
     expect(surfaceGateOk(tracker(false), activity(true))).toBe(false);
   });
 
   it("全屏 ∧ 文档活动 → 现身（1.50 替身自动展开反馈语义不回归）", async () => {
-    const { surfaceGateOk } = await import("../src/client/index.js");
+    const { surfaceGateOk } = await import("../ui/index.js");
     expect(surfaceGateOk(tracker(true), activity(true))).toBe(true);
   });
 });
