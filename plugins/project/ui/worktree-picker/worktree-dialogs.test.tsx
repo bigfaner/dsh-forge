@@ -1,9 +1,11 @@
+// @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // CreateWorktreeDialog / DeleteWorktreeDialog 单测 —— 原型第五/六卡逐位对照：
 // 表单体（CreateWorktreeFields）与状态清单体（DeleteChecksList）Modal 外提直测
 // （官方 Modal 门户壳 SSR 不可达——apps/web AddProjectFlow.test 头注同口径惯例）；
 // 弹窗壳闭态 + 拦截/派生纯函数同源覆盖。
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   CreateWorktreeFields,
@@ -89,7 +91,7 @@ describe('CreateWorktreeFields（原型「新建 worktree」卡三字段）', ()
   })
 
   it('说明行悬浮全文 = 官方 Tooltip（portal）+ PathLabel 退役（源面结构锚——读文件法，静态标记零气泡）', () => {
-    const src = readFileSync(new URL('./create-dialog.tsx', import.meta.url), 'utf8')
+    const src = readFileSync(join(import.meta.dirname, 'create-dialog.tsx'), 'utf8')
     expect(src).toContain('<Tooltip')
     expect(src).toContain('portal')
     expect(src).not.toContain('<PathLabel')

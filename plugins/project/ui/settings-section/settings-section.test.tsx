@@ -84,19 +84,23 @@ const ctxFake = (services: Record<string, unknown>) => ({ ...services });
 
 // ── 注册装配（双缝） ──────────────────────────────────────────────
 
-/** localStorage 桩（node 环境降级面 ready/writable 前提——worktreePrefsFaceOf 同法） */
+/** localStorage 桩（node 环境降级面 ready/writable 前提——worktreePrefsFaceOf 同法；
+ *  project-ui 池 1.25 起默认 happy-dom——globalThis.localStorage 为 getter-only，桩走 defineProperty） */
 function withLocalStorage(run: () => void): void {
   const prior = (globalThis as { localStorage?: unknown }).localStorage;
   const backing = new Map<string, string>();
-  (globalThis as { localStorage?: unknown }).localStorage = {
-    getItem: (k: string) => backing.get(k) ?? null,
-    setItem: (k: string, v: string) => void backing.set(k, v),
-    removeItem: (k: string) => void backing.delete(k),
-  };
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: {
+      getItem: (k: string) => backing.get(k) ?? null,
+      setItem: (k: string, v: string) => void backing.set(k, v),
+      removeItem: (k: string) => void backing.delete(k),
+    },
+    configurable: true,
+  });
   try {
     run();
   } finally {
-    (globalThis as { localStorage?: unknown }).localStorage = prior;
+    Object.defineProperty(globalThis, 'localStorage', { value: prior, configurable: true });
   }
 }
 
@@ -326,13 +330,13 @@ describe("registerSettingsSection（plugins.bundle.config / detail.section 双�
       removeItem: (k: string) => backing.delete(k),
     };
     const prior = (globalThis as { localStorage?: unknown }).localStorage;
-    (globalThis as { localStorage?: unknown }).localStorage = stub;
+    Object.defineProperty(globalThis, "localStorage", { value: stub, configurable: true });
     try {
       const face = worktreePrefsFaceOf();
       expect(face).toBeDefined();
       expect(face!.getSnapshot().status).toBe("ready");
     } finally {
-      (globalThis as { localStorage?: unknown }).localStorage = prior;
+      Object.defineProperty(globalThis, "localStorage", { value: prior, configurable: true });
     }
   });
 

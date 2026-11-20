@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // 视图下拉单测 —— AC1：当前视图直出 + ▾ + aria（锚钮静态面）；选项 列表|DAG|泳道
 // （当前项 ✓ 与外点关闭 = 官方 Menu selection='check'/onClose 内聚——MenuSurface 携

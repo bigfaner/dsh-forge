@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // EditableCombobox 单测 —— SSR 静态面（闭态）；交互语义（键盘/回填/失焦）在 combobox-model
 // 纯函数面直测（无 jsdom——仓内惯例同 apps/web AddProjectFlow.test 头注口径）。
 import { describe, expect, it } from 'vitest'

@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // ForgeWorkspacePanel 单测 —— UF-1 面板相位与行语言（AC5 空态引导 + 会话行渲染）。
 // renderToStaticMarkup 纯渲染面（同 2.6 组件测法）；交互接线（onSessionActivate →
 // 动作绑定）在 sidebar-actions.test。fix-25：知识入口迁官方 sidebar.panellist 行——

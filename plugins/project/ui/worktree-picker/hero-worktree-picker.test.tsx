@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // HeroWorktreePicker 单测 —— 原型「新会话」卡逐位对照：
 // 行面纯函数 heroWorktreeRows 直测（一行一 worktree、来源标记 DSH、失配行、徽标）+
 // 组件闭态渲染面（官方 Menu 开弹层门户面 SSR 不可达——apps/web HeroWorkspacePicker.test

@@ -2,7 +2,7 @@
 // stdio:['ipc'] 沿 P1 boot 链（fix-1 child 形态，官方 Desktop 同款）。单用例贯通四装配缝：
 //   · AC5 tool 面（产品裁决 2026-10-09 反转）：默认组合（= 标准模式同栈）零 forge 工具
 //     ——FORGE_TOOL_NAMES 全体缺席（plugin-forge 移出用户层/overlay 全局行，仅远征/突击
-//     预设组合携带——预设会话装配面由 e2e m3 池承载）；inject forgeTasks/forgeProposals
+//     预设组合携带——预设会话装配面由 e2e m3 池承载）；inject forgeTasks
 //     解析 = tasksHome 注入链 + core 四域 provide 的联证（服务面不随 forge 面收窄变化）
 //   · AC3 tasksHome：env DSH_FORGE_TASKS_HOME 生效 + deriveTaskStoreDir 单源（{tasksHome}/
 //     {flatten}@{hash8}）+ listTasks 惰性开工作区库（forge.db 落 tasksHome）
@@ -97,9 +97,10 @@ it(
       for (const name of FORGE_TOOL_NAMES) {
         expect(host.toolNames, `标准组合零 forge 面：${name} 不应注册（全局行泄漏回归——产品裁决 2026-10-09）`).not.toContain(name)
       }
-      // M2 四域 + P1 双服务 + M3 设置域全在场（tasksHome/settingsFile 注入 → core provide 联证）
+      // M2 四域 + P1 双服务 + M3 设置域全在场（tasksHome/settingsFile 注入 → core provide 联证；
+      // forgeProposals 随 plugin-spec/1.11 提案域下线零注册——不在场清单）
       for (const service of [
-        'forgeProjects', 'knowledge', 'forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings',
+        'forgeProjects', 'knowledge', 'forgeTasks', 'forgeFeatures', 'forgeDocs', 'forgeSettings',
       ] as const) {
         expect(host.services[service], `${service} 服务缺席（装配链断裂）`).toBeDefined()
       }

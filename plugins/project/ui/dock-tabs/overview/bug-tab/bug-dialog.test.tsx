@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // bug-dialog 单测（fix-bug Bug 详情弹框）—— 结构线框（状态行/summary/五字段 kv/证据区/
 // 未修原因/人员/来源）+ 证据区·未修原因显隐 + 会话 pill 两态（命中 title 可点击 / 缺席
@@ -7,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error —— web tsconfig types 仅 vite/client；node:fs 仅测试内读取样式表源文
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BugCard, BugStatus } from '@dsh-forge/contracts'
 import { DRAWER_DRAG_MARGIN, DRAWER_DRAG_TOP_FLOOR, drawerPositionFromDrag } from '../drawer/collapse.js'
@@ -303,7 +305,7 @@ describe('BugDialog 链时间线（bug-recurrence-chain 1.7——mockup ②区�
   })
 
   it('末节点无轨（css：rail ::after 末节点 display:none）+ 节点间 2px 竖轨', () => {
-    const css = readFileSync(new URL('./bug-dialog.css', import.meta.url), 'utf8')
+    const css = readFileSync(join(import.meta.dirname, 'bug-dialog.css'), 'utf8')
     expect(css).toMatch(/\.dswf-ov-bdialog-rail::after\s*\{[^}]*width:\s*2px/)
     expect(css).toMatch(/\.dswf-ov-bdialog-chain-node:last-child \.dswf-ov-bdialog-rail::after\s*\{[^}]*display:\s*none/)
     expect(css).toMatch(/\.dswf-ov-bdialog-chain-node\.is-cur \.dswf-ov-bdialog-nodebody\s*\{[^}]*background:\s*var\(/)

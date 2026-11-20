@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // 任务子 tab 组装单测 —— 4.6 UF-3（AC3/AC5/AC6）：ov-taskbar v22 布局（容器 pill 双轨 +
 // 视图下拉 + 右簇 [诊断]+[派发] 固定最右端同行不换行）+ chips 统一过滤 + 三视图分派 +

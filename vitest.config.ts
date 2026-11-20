@@ -150,7 +150,10 @@ export default defineConfig({
         },
       },
       // project 域代码池（plugin-project 1.8：git-worktree 域平移——host/worktrees + ui 随迁单测；
-      // ui 消费官方 primitives——css 副产物走 vite 转换管道（inline，git-worktree 判例同构））
+      // ui 消费官方 primitives——css 副产物走 vite 转换管道（inline，git-worktree 判例同构））。
+      // ui 面测试凡 SSR 渲染官方 Menu 者（rc.5 装载期即触 DOM——useMenuSubmenu）以文件级
+      // @vitest-environment happy-dom 声明（池整体保持 node——非 DOM 测试的 import.meta.url/
+      // 模块单例语义依赖 node 形态，池级 happy-dom 实测破坏面更大）
       {
         test: {
           name: 'project-domain',

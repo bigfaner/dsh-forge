@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // 列表视图单测 —— AC1 两行布局：主行（ID[localId] + 标题 + 中文状态 tag + ⋯）+ 副行
 // （类型/优先级/实际耗时[completed]/前置/挂接/fix 源标）；分组标签（执行中/其余）；

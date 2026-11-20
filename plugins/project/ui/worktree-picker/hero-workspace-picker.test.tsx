@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // ForgeHeroWorkspacePicker 单测（fix-24 ①；1.7 B 类顶替②自 apps/web 壳侧平移本包）——
 // 占用者接线层静态面。官方 Menu 门户面（open 弹层经 createPortal(document.body)）静态
 // 渲染不可达（node 无 DOM，官方 Modal 壳同口径——AddProjectFlow.test 头注惯例）：
@@ -30,7 +31,7 @@ describe('ForgeHeroWorkspacePicker（conversation.hero.workspace 占用者——
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('anchorRef 缺席不炸（闭态渲染零锚依赖——getAnchorRect 短路 null）', () => {
+  it('anchorRef 缺席不炸（闭态渲染零锚依赖——Menu anchorRef 短路 undefined）', () => {
     const markup = renderPicker({ open: false, anchorRef: undefined })
     expect(markup).not.toContain('role="menu"')
   })

@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // ForgeSidebarSlot 单测 —— 槽位接线层（AC1/AC2）：快照源经 useSyncExternalStore 直读
 // （getServerSnapshot 第三参——SSR 面同源直读，零中间持有层）；owner share wide 透传。
 // 项目 RPC 在 SSR 不跑 effect → 恒骨架相位；就绪树派生 = sidebar-model.test、面板相位 =
