@@ -138,6 +138,9 @@ const STANDARD_SQUAD_SKILL_ROWS = [
 const PLATFORM_GATE_ROWS: ReadonlyArray<{ readonly match: string; readonly value: () => string }> = [
   { match: "disabled: !!js process.platform === 'win32'", value: () => String(process.platform === 'win32') },
   { match: "disabled: !!js process.platform !== 'win32'", value: () => String(process.platform !== 'win32') },
+  // rc.5 上游新增行（tool-plugin-manager）——disabled = 无 profileContext。本产品 profile
+  // 恒经官方 loadProfileDirectory 引导（profileContext 恒由 rc.5 运行时提供）→ 恒 false
+  { match: `disabled: !!js "!ctx.get('profileContext')"`, value: () => 'false' },
 ]
 
 /** 底稿行物化：占位符目录行 → 绝对路径（缺席剔除）；平台门行 → 具体布尔 */

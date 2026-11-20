@@ -1,12 +1,12 @@
 // 选区浮出菜单缝合（super-composer 提案 §2.2 + §2.3 插入路径）：
 // document mouseup → scope 过滤（scope.ts 纯模型）→ primitives Menu 同构弹层
-//（portal 到 body + getAnchorRect = 选区 DOMRect，视口下方装不下翻上）→ 单行
+//（portal 到 body + anchorPoint = 选区 DOMRect 锚点，视口下方装不下翻上）→ 单行
 //「添加到对话」→ insertReferenceAtTail 同径落 quote chip（state 快照 → tail span-CAS
 // → bail slash/input-insert-reference + 漂移症状级复核，bug 2d5434d1 判例）→
 // 自动聚焦 composer 输入区（全屏聚焦替身 / 常规聚焦主 composer——对应面）。
 //
 // 复用核销（proposal 复用核销表）：官方无选区专用浮出件——弹层容器复用
-// @deepseek-ai/dsh-client-ui-primitives 的 Menu（portal + getAnchorRect），不改制；
+// @deepseek-ai/dsh-client-ui-primitives 的 Menu（portal + anchorPoint），不改制；
 // contextmenu 默认行为不劫持（零 contextmenu 监听）。划选进行中不抢焦点：mouseup
 // 打开菜单路径零 focus 调用，聚焦只在菜单项点击成功后发生。
 //
@@ -15,7 +15,7 @@
 // createRoot/flushSync 触达宿主 react 单例，无第二 dispatcher）；primitives 的
 // *.module.css 副产物由打包脚本以 empty loader 丢弃——真机页面壳层已装载同一
 // primitives 样式（类名同源），弹层 portal 到 body 直接命中既有规则。
-import { useCallback, createElement, useMemo } from 'react'
+import { createElement, useMemo } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { flushSync } from 'react-dom'
 import { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -28,7 +28,7 @@ import { quoteReferenceInsertOf, type QuoteReferenceInsert, type QuoteReferenceS
 export interface SelectionExtraction extends SelectionProbe {
   /** 选区明文（摘要/快照 text 单源） */
   readonly text: string
-  /** 选区 DOMRect（弹层 getAnchorRect 锚定量；不可得 = null） */
+  /** 选区 DOMRect（弹层 anchorPoint 锚定量；不可得 = null） */
   readonly rect: DOMRect | null
   /** 选区起点容器（source 语义解析锚点；不可得 = null） */
   readonly anchor: Node | null
@@ -302,19 +302,21 @@ interface SelectionMenuProps {
 }
 
 /**
- * primitives Menu 同构弹层（portal + getAnchorRect = 选区 DOMRect；单行「添加到对话」；
+ * primitives Menu 同构弹层（portal + anchorPoint = 选区矩形锚点；单行「添加到对话」；
  * autoFocus=false——划选进行中不抢焦点）。
  */
 function SelectionMenu({ open, rect, side, onAdd, onClose }: SelectionMenuProps): JSX.Element {
-  const getAnchorRect = useCallback(() => rect, [rect])
   const items = useMemo(() => [{ id: 'add-to-chat', label: '添加到对话' }], [])
+  const anchorPoint = rect !== null
+    ? { x: rect.left, y: side === 'bottom' ? rect.bottom : rect.top }
+    : undefined
   return createElement(Menu, {
     open,
     autoFocus: false,
     portal: true,
     side,
     items,
-    getAnchorRect,
+    anchorPoint,
     onSelect: onAdd,
     onClose,
     listClassName: 'dshf-quote-selection-menu',

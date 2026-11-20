@@ -5,11 +5,11 @@
  * Renders nothing until a provider reports both pressure and a route
  * capacity. */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 // PROVENANCE 适配（imports 重写）：UseProjection / token-meter key-merge 以本地结构
 // 镜像承载（contract/composer-bar.ts）。
-import { Tooltip, useAnchoredPosition, useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Tooltip, useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ComposerBarProps, UseProjection } from '../contract/composer-bar.js'
 import { contextOccupancy } from '../context-occupancy.js'
 import css from './ContextMeter.module.css'
@@ -24,6 +24,36 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS
  * order (`45% of context used` / `上下文已用 45%`).
  */
 const READING_SLOT = '\u0000'
+
+// rc.5 primitives 移除 useAnchoredPosition——本地同语义微实现：面板固定定位在锚
+// （触发环）上方，gap 8 / 视口边距 12 与原 hook 形参一致；开合沿才重算，不动其余面。
+const PANEL_GAP = 8
+const VIEWPORT_MARGIN = 12
+
+function useAnchoredPanelPosition(
+  open: boolean,
+  anchorRef: RefObject<HTMLElement | null>,
+  panelRef: RefObject<HTMLElement | null>,
+): CSSProperties | null {
+  const [position, setPosition] = useState<CSSProperties | null>(null)
+  useEffect(() => {
+    if (!open) {
+      setPosition(null)
+      return
+    }
+    const anchor = anchorRef.current
+    if (anchor === null) return
+    const anchorRect = anchor.getBoundingClientRect()
+    const panel = panelRef.current
+    const left = Math.min(
+      Math.max(VIEWPORT_MARGIN, anchorRect.left + anchorRect.width / 2 - (panel?.offsetWidth ?? 0) / 2),
+      window.innerWidth - VIEWPORT_MARGIN,
+    )
+    const top = anchorRect.top - PANEL_GAP - (panel?.offsetHeight ?? 0)
+    setPosition({ position: 'fixed', left, top: Math.max(VIEWPORT_MARGIN, top) })
+  }, [open, anchorRef, panelRef])
+  return position
+}
 
 /** Panel legend rows, in bar-segment order; each color class carries the shared swatch/segment tint. */
 const ROWS = [
@@ -61,14 +91,7 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
   const panelRef = useRef<HTMLDivElement | null>(null)
   const context = contextOccupancy(pressure)
   const available = context !== null
-  const position = useAnchoredPosition({
-    open: open && available,
-    anchorRef: rootRef,
-    panelRef,
-    side: 'top',
-    gap: 8,
-    margin: 12,
-  })
+  const position = useAnchoredPanelPosition(open && available, rootRef, panelRef)
   useDismissOnOutsidePointer(rootRef, open && available, setOpen, panelRef)
 
   // A model switch can temporarily remove capacity while this component stays

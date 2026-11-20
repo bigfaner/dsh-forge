@@ -655,7 +655,7 @@ async function main(): Promise<void> {
   // ready 恒发临时面——重启后 issuer 虽回读文件恢复长效 grant，manifest 长效位仍恒 false
   // + remotePinExpiresAt = 假 TTL，UI 重启/重开恒未勾选 = 用户视角「长效被取消」）。
   pinDurable = pinIssuer.isDurable()
-  const pairPort = ctx.webServer.port
+  const pairPort = ctx.webServer.port! // rc.5 类型面：port 在 listen 前为 undefined——boot ready 前提下已绑定
   const pairGrant = issuer.current()
   // fix-17 ③：PIN 签发读数（与 token 同刻度 5min——ready/轮换随 manifest 透传 UI PIN 卡）
   const pinGrant = pinIssuer.current()
@@ -950,7 +950,7 @@ async function main(): Promise<void> {
               // renderIndex：tapIndex 弹射（dswf cookie → location.replace('/remote/')）
               // 对移动面自身是自跳环（探针 netLog ⇄ nav 实证），弹射终点 = 本页，跳过。
               const out = isIndex
-                ? renderIndexInjections(body.toString('utf8'), ctx.webServer.collectIndexInjections())
+                ? renderIndexInjections(body.toString('utf8'), ctx.webServer.collectIndexInjections(ctx.connection.browserPeer))
                 : body
               // mobile-ui 1.11 静态资源签名头（tunnel-psk v3.1 §4.5——X-Forge-Sig 覆盖
               // path‖body，mobile 动态资源验签后才执行；PSK 未配置 = 钥未生成 → 头缺席）
@@ -1122,7 +1122,7 @@ async function main(): Promise<void> {
     }
   }
   const remotePairExpiresAt = remotePairUrl !== undefined ? pairGrant.expiresAt : undefined
-  const injections = ctx.webServer.collectIndexInjections()
+  const injections = ctx.webServer.collectIndexInjections(ctx.connection.browserPeer)
   // mobile-remote-approval fix-2：官方审批桥 worker 侧（ctx.approval 在场才建中继——
   // 运行期存在性检查承担 fail-soft；缺席 = approval ready 位 false，main 侧转发器不接线，
   // forge:remote/approval 保持 fail-soft unavailable）。fail-open 语义（用户裁决

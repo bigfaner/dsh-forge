@@ -18,7 +18,7 @@
 // 数据面注记：壳侧 useAnchoredProjects（KitSelectorHook 形制）随迁退役——快照源改经
 // 注册面 inject 递达（SnapshotSource 直读，ForgeSidebarSlot 同制），useSyncExternalStore
 // 闭包绑定（dsh 快照源 = 类方法——裸引用脱离 this 即崩）。
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { openAddProjectFlow } from '../add-project/flow-open.js'
 import { useForgeProjects } from '../sidebar/use-forge-projects.js'
@@ -44,8 +44,8 @@ const ADD_LABEL = '添加项目…'
 export interface ForgeHeroWorkspacePickerProps {
   /** 弹层开合（owner 态——chip 点击翻转） */
   readonly open: boolean
-  /** chip 触发器锚（官方 pickerAnchor——portal 定位源；缺席 = 不定位，menu 不可见面） */
-  readonly anchorRef?: { readonly current: { getBoundingClientRect(): DOMRect } | null }
+  /** chip 触发器锚（官方 pickerAnchor——portal CSS anchor 定位源；缺席 = 不定位，menu 不可见面） */
+  readonly anchorRef?: RefObject<HTMLElement | null>
   /** 当前选中工作区 id（= workspaceId；pendingWorkspace ?? sessionWorkspace——映射入行集） */
   readonly selectedId?: string
   /** 拾取项目（id = project.workspaceId——官方 selectWorkspace 链，owner 契约零变化） */
@@ -161,11 +161,6 @@ export function ForgeHeroWorkspacePicker({
     [openAdd, onPick, workspacesSnap],
   )
 
-  const getAnchorRect = useCallback(
-    () => anchorRef?.current?.getBoundingClientRect() ?? null,
-    [anchorRef],
-  )
-
   const addEntry = {
     id: ADD_PROJECT,
     label: ADD_LABEL,
@@ -190,7 +185,7 @@ export function ForgeHeroWorkspacePicker({
         onClose={onClose}
         portal
         side="bottom"
-        getAnchorRect={getAnchorRect}
+        anchorRef={anchorRef}
         footer={plan.pinAdd ? [addEntry] : undefined}
         listClassName="dswf-hero-picker-list"
       />

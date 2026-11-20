@@ -44,7 +44,7 @@ import { createExpertComposer } from "./compose.js";
 // ---------------------------------------------------------------------------
 
 /** 派发 parent（官方 SubagentStartRequest.parent——exec.agent 同型）。 */
-export type ParentAgent = SubagentActivationSpec["request"]["parent"];
+export type ParentAgent = SubagentActivationSpec["parent"];
 
 /** 停止原因子面（end 事件载荷内字段）。 */
 export type SubagentStopReason = SubagentRunEndInfo["stopReason"];
@@ -230,12 +230,10 @@ export function createDelegateExpertTool(deps: DelegateToolDeps): ExpertToolDefi
       const spec: SubagentActivationSpec = {
         provider: deps.provider,
         label: delegateLabel(task),
-        request: {
-          parent,
-          prompt: request.prompt as [TextContentBlock],
-          ...(presetApplied ? { agentPreset: request.agentPreset } : {}),
-          ...(request.agentOptions !== undefined ? { agentOptions: request.agentOptions } : {}),
-        },
+        parent,
+        prompt: request.prompt as [TextContentBlock],
+        ...(presetApplied ? { agentPreset: request.agentPreset } : {}),
+        ...(request.agentOptions !== undefined ? { agentOptions: request.agentOptions } : {}),
         signal,
         delivery: "parent",
       };

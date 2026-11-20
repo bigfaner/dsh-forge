@@ -167,13 +167,13 @@ describe("delegate_expert 派发", () => {
     expect(spec.label).toBe("评审 dispatch.ts");
     expect(spec.signal).toBe(signal);
     expect(spec.delivery).toBe("parent"); // 结算通知回父会话（模型可见）
-    expect(spec.request.parent).toBe(parentAgent);
-    expect(spec.request.agentPreset).toBe("expert-code-reviewer");
-    expect(spec.request.agentOptions).toEqual({ provider: "anthropic", model: "sonnet" });
-    expect(spec.request.prompt).toEqual([{ type: "text", text: "评审 dispatch.ts" }]);
-    // 请求面零 persona/toolFilter 键（rc.1 字段集已移除——承载面唯一 = preset 行）
-    expect("persona" in spec.request).toBe(false);
-    expect("toolFilter" in spec.request).toBe(false);
+    expect(spec.parent).toBe(parentAgent);
+    expect(spec.agentPreset).toBe("expert-code-reviewer");
+    expect(spec.agentOptions).toEqual({ provider: "anthropic", model: "sonnet" });
+    expect(spec.prompt).toEqual([{ type: "text", text: "评审 dispatch.ts" }]);
+    // 请求面零 persona/toolFilter 键（rc.5 字段集已移除——承载面唯一 = preset 行）
+    expect("persona" in spec).toBe(false);
+    expect("toolFilter" in spec).toBe(false);
     // 派发点写入面板 dispatched 行
     expect(panel.list()).toEqual([
       { childId: "child-1", expert: "code-reviewer", messageId: "msg-1" },
@@ -183,7 +183,7 @@ describe("delegate_expert 派发", () => {
   it("model 缺省不携带 agentOptions 键", async () => {
     const { tool, subagents } = makeTool();
     await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
-    expect("agentOptions" in subagents.specs[0]!.request).toBe(false);
+    expect("agentOptions" in subagents.specs[0]!).toBe(false);
   });
 
   it("preset 在场探针含本专家 preset id = 正常携带 agentPreset", async () => {
@@ -191,7 +191,7 @@ describe("delegate_expert 派发", () => {
       presetProbe: async () => ["preset-headhunter", "expert-code-reviewer"],
     });
     await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
-    expect(subagents.specs[0]!.request.agentPreset).toBe("expert-code-reviewer");
+    expect(subagents.specs[0]!.agentPreset).toBe("expert-code-reviewer");
   });
 
   it("非法参数 fail-loud（ExpertToolError 语义——消息含原因）", async () => {
@@ -226,7 +226,7 @@ describe("delegate_expert preset 缺席诚实降级", () => {
     )) as { dispatched: boolean; degradedNote?: string };
     expect(result.dispatched).toBe(true);
     expect(result.degradedNote).toContain("expert-code-reviewer");
-    expect("agentPreset" in subagents.specs[0]!.request).toBe(false);
+    expect("agentPreset" in subagents.specs[0]!).toBe(false);
     expect(diag).toHaveBeenCalledWith(
       "warn",
       expect.stringContaining("expert-squad-preset"),
@@ -239,13 +239,13 @@ describe("delegate_expert preset 缺席诚实降级", () => {
       presetProbe: async () => undefined,
     });
     await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
-    expect(subagents.specs[0]!.request.agentPreset).toBe("expert-code-reviewer");
+    expect(subagents.specs[0]!.agentPreset).toBe("expert-code-reviewer");
   });
 
   it("无探针（deps 未接）= 同直派（兼容非宿主调用方）", async () => {
     const { tool, subagents } = makeTool();
     await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
-    expect(subagents.specs[0]!.request.agentPreset).toBe("expert-code-reviewer");
+    expect(subagents.specs[0]!.agentPreset).toBe("expert-code-reviewer");
   });
 });
 
