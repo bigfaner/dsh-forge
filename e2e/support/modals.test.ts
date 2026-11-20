@@ -2,7 +2,7 @@
 // ②1.7 墙钟治理——收起后模态不再复挂 = 即退（旧行为每次缺席都重开全窗盲等，全量套件
 // 每 boot 白付 ~30s，152/164 用例实测）。
 // 纯 Node 面：Page 以桩承载（locator 按选择器分流——就绪锚与收起按钮各持 isVisible 脚本化
-// 在场队列；click 改写在场 + 真实短窗）。
+// 在场队列；click 改写在场 + 真实短窗；or 链 = 收起按钮并集面直通）。
 import { describe, expect, it, vi } from 'vitest'
 import type { Page } from '@playwright/test'
 import { dismissOnboardingModals } from './modals.js'
@@ -11,8 +11,8 @@ import { dismissOnboardingModals } from './modals.js'
 function stubLocator(presentScript: boolean[], onClick?: () => void): { isVisible: () => Promise<boolean>; click: () => Promise<void> } {
   let index = 0
   return {
-    isVisible: vi.fn(() => {
-      const value = presentScript[Math.min(index, presentScript.length - 1)]
+    isVisible: vi.fn((): Promise<boolean> => {
+      const value = presentScript[Math.min(index, presentScript.length - 1)] ?? false
       index++
       return Promise.resolve(value)
     }),
@@ -23,7 +23,7 @@ function stubLocator(presentScript: boolean[], onClick?: () => void): { isVisibl
   }
 }
 
-/** Page 桩：选择器分流——含 data-dswf-phase 的是就绪锚，其余视为收起按钮 */
+/** Page 桩：选择器分流——含 data-dswf-phase 的是就绪锚，其余视为收起按钮（or 链直通） */
 function stubPage(buttonScript: boolean[], readyScript: boolean[]): { page: Page; clicks: () => number } {
   let clicks = 0
   const button = stubLocator(buttonScript, () => {
@@ -32,9 +32,10 @@ function stubPage(buttonScript: boolean[], readyScript: boolean[]): { page: Page
   })
   const ready = stubLocator(readyScript)
   const page = {
-    locator: vi.fn((selector: string) => ({
-      first: () => (selector.includes('data-dswf-phase') ? ready : button),
-    })) as unknown as Page,
+    locator: vi.fn((selector: string) => {
+      const base = selector.includes('data-dswf-phase') ? ready : button
+      return { or: () => ({ first: () => base }), first: () => base }
+    }),
     waitForTimeout: vi.fn(() => new Promise((r) => setTimeout(r, 20))),
   } as unknown as Page
   return { page, clicks: () => clicks }

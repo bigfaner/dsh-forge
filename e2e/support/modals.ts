@@ -13,19 +13,35 @@
 // 「无 API Key onboarding」（provider 叠层预免/凭据在场的确定形态）——留痕返回
 // （console 记账，不臆造失败：叠层预免链路 modal 恒不挂载属预期态）。
 // 「预览版说明」预免 = 产品 boot overlay 内置（fix-12），本面只收 API Key onboarding。
+//
+// 新首启模态「开始使用」（fix-1 探针定谳，walkthrough/fix-1-rerun-ac4/）：官方新世代
+// 零凭据首启挂 `role=dialog aria-label="开始使用"` 模态——按钮形态 = 「添加 API Key」/
+// 「登录」+ 头部「关闭」，无「稍后配置/继续」形态；mask（_mask_1ytzq_18）恒拦后续点击。
+// 收起面 = 该 dialog 的头部 `button[aria-label="关闭"]`（与旧形态收起面并集轮询）。
 import type { Page } from '@playwright/test'
 
 /** 就绪锚（B1 就绪信号单源；F8 相位就绪锚知识单源——launch.ts stablePhase 同消费）：主界面 phase 收敛二态任一在场 = 相位收敛起点 */
 export const READY_ANCHOR = '[data-dswf-workbench][data-dswf-phase="hero"], [data-dswf-workbench][data-dswf-phase="session"]'
 
-/** 运行期模态收起（API Key onboarding「稍后配置」本地收起；B1 双模：就绪锚 + 晚挂载观测窗）*/
+/**
+ * 模态收起按钮并集（单源——dismissOnboardingModals / ensureNoBlockingDialog 同消费）：
+ * 旧形态「稍后配置/继续」∪ 新首启「开始使用」dialog 头部「关闭」。
+ */
+function dismissButtonOf(page: Page) {
+  return page
+    .locator('[role="dialog"] button', { hasText: /^稍后配置$|^继续$/ })
+    .or(page.locator('[role="dialog"][aria-label="开始使用"] button[aria-label="关闭"]'))
+    .first()
+}
+
+/** 运行期模态收起（API Key onboarding「稍后配置」/新首启「开始使用」收起；B1 双模：就绪锚 + 晚挂载观测窗）*/
 export async function dismissOnboardingModals(
   page: Page,
   windowMs = 30_000,
   readyTimeoutMs = 15_000,
   readyGraceMs = 5_000,
 ): Promise<void> {
-  const dismissButton = page.locator('[role="dialog"] button', { hasText: /^稍后配置$/ }).first()
+  const dismissButton = dismissButtonOf(page)
   const readyAnchor = page.locator(READY_ANCHOR).first()
   const startedAt = Date.now()
   let dismissed = 0
@@ -75,7 +91,7 @@ export async function dismissOnboardingModals(
 /** UI 走查前置防复发：模态若在收起后再度挂载（晚到），点掉再走（点击面防拦截） */
 export async function ensureNoBlockingDialog(page: Page): Promise<void> {
   for (let i = 0; i < 3; i++) {
-    const dismissButton = page.locator('[role="dialog"] button', { hasText: /^稍后配置$|^继续$/ }).first()
+    const dismissButton = dismissButtonOf(page)
     if (!(await dismissButton.isVisible().catch(() => false))) return
     await dismissButton.click({ timeout: 10_000 })
     await page.waitForTimeout(1_000)
