@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/input-history",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "input-history cordis 插件（纯 client 包）：composer 方向键输入历史——双面包装载范式首建（client bundle 自注册 CJS + dsh.client 清单 + dsh.bundle patch，后续 edit-resend 插件复用）。",
@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",
-    "@deepseek-ai/dsh-api-session-controller": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-api-session-controller": "0.2.2-rc.5",
     "@types/node": "24.19.0",
     "@types/react": "18.3.12",
     "esbuild": "0.24.2",

@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/expert-squad",
-  "version": "0.30.0",
+  "version": "0.30.1",
   "private": true,
   "type": "module",
   "description": "expert-squad cordis 插件（双面包装载范式）：专家档案三层扫描/注册取用、通道一委派（delegate_expert）与双通道热刷新（chokidar + fs/observed）。",
@@ -51,20 +51,20 @@
   "devDependencies": {
     "@dsh-forge/contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.4",
-    "@deepseek-ai/dsh-agent-preset-registry": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-skill": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-storage": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-subagent": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-storage-domain": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-storage-json": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-workspace": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-agent-preset-registry": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-skill": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-storage": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-subagent": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-storage-domain": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-storage-json": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-workspace": "0.2.2-rc.5",
     "@types/node": "24.19.0",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.0",
     "esbuild": "0.24.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "zod": "4.4.3"
+    "zod": "4.6.6"
   }
 }

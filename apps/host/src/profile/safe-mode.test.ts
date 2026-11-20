@@ -35,8 +35,8 @@ describe('safeModeProfileFiles 三件套内容（官方逐字 pin）', () => {
     expect(manifest.private).toBe(true)
     expect(manifest.dsh?.profile?.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
     expect(Object.keys(manifest.dependencies ?? []).sort()).toEqual([...SAFE_MODE_BUNDLES].sort())
-    // 版本 pin 与产品模板单源：全部为 DSH_STACK_VERSION（0.2.0-rc.2 pin）
-    for (const version of Object.values(manifest.dependencies ?? {})) expect(version).toBe('0.2.0-rc.2')
+    // 版本 pin 与产品模板单源：全部为 DSH_STACK_VERSION（0.2.2-rc.5 pin）
+    for (const version of Object.values(manifest.dependencies ?? {})) expect(version).toBe('0.2.2-rc.5')
   })
 
   it('cordis.patch.yml = 空 patch []（用户层/第三方行零注入——官方 SAFE_MODE_PATCH 逐字）', () => {

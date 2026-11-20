@@ -9,8 +9,8 @@
 // materialize.test.ts 同步 pin 机械对齐）。
 import { PRODUCT_PLUGINS } from '@dsh-forge/contracts'
 
-/** 上游 dsh 公开栈精确 pin（tech-design Dependencies：P1 期不开升级窗口） */
-export const DSH_STACK_VERSION = '0.2.0-rc.2'
+/** 上游 dsh 公开栈精确 pin（1.25 用户指令 2026-11 统一 0.2.2-rc.5） */
+export const DSH_STACK_VERSION = '0.2.2-rc.5'
 
 /**
  * 打包用户层 insert 行成员（PRODUCT_PLUGINS userLayerRow 门派生——配置化单一源；
