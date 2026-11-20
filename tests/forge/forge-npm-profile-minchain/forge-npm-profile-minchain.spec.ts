@@ -55,6 +55,11 @@ function killTree(pid: number | undefined, child: ReturnType<typeof spawn>): voi
   }
 }
 
+/** HTML entity 解码（boot 注入面 doc 的组合 URL 可携 &amp; 等转义形——宿主呈现自由，取件前归一） */
+function decodeHtmlEntities(url: string): string {
+  return url.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'")
+}
+
 /** CLI 宿主冷启动（run-once 观察窗：alive 窗口 + stderr 收集 → 进程树回收） */
 async function bootWindow(dshBin: string, profile: string, dshHome: string, args: readonly string[], windowMs: number): Promise<{ alive: boolean; stderr: string }> {
   const child = spawn(dshBin, ['--profile', profile, ...args], {
@@ -264,12 +269,18 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
       // 组合 URL = `plugins/??<pkg>/client.js,…&rev=<rev>`（文档相对形态，boot 注入面下发）；
       // 旧判据 `/node_modules/<pkg>/<platform>` 非官方路由恒 404（stale-anchor 改锚）。
       // 断言面 = ①boot 注入面（GET / 文档）含五件 @dsh-forge 组合行 ②组合 URL 携会话
-      // Cookie 取件可达。file: 安装闭包物化后 registry 扫描（dsh.client.platform=web +
-      // exports["./client"]）应把五件组进 __DSH_BOOT__ graph——缺席即注入链断裂留痕。
+      // Cookie 取件可达。断言锚「解码后可达」，不锁 doc 序列化形态（1.26 债务 / fix-37）：
+      // doc 中 combo URL 可为 HTML 转义形（`…client.js&amp;rev=…`，含多包聚合行）——
+      // 转义与否属宿主呈现自由，捕获后先 entity 解码再 fetch。实锚 = task_logs
+      // plugin-forge-combo/1.26/002-e2e-fix24-r16/：webloop-probe2.txt（project 专属行
+      // 未转义 `&rev=b0ac297ba083` 实测 200、聚合行解码后 200）+ doc-forms.txt
+      // （转义/未转义并存、转义形逐字 fetch 实测 404）。file: 安装闭包物化后 registry
+      // 扫描（dsh.client.platform=web + exports["./client"]）应把五件组进 __DSH_BOOT__
+      // graph——缺席即注入链断裂留痕。
       const doc = await fetch(`http://127.0.0.1:${String(port)}/`, {
         headers: { cookie: (session as { cookie: string }).cookie },
       }).then((r) => r.text())
-      const comboUrls = [...doc.matchAll(/plugins\/\?\?[^"'\s<>]+/g)].map((m) => m[0])
+      const comboUrls = [...doc.matchAll(/plugins\/\?\?[^"'\s<>]+/g)].map((m) => decodeHtmlEntities(m[0]))
       expect(comboUrls.length, 'boot 注入面含 client 组合 URL（client-modules graph 已组）').toBeGreaterThan(0)
       const nodeModules = profileNodeModules(env.dshHome, calProfile)
       for (const { pkg } of clientBundleFiles(nodeModules)) {
@@ -278,7 +289,7 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
         const res = await fetch(`http://127.0.0.1:${String(port)}/${combo as string}`, {
           headers: { cookie: (session as { cookie: string }).cookie },
         })
-        expect(res.ok, `client bundle HTTP 可达 ${pkg}（官方组合通道）`).toBe(true)
+        expect(res.ok, `client bundle HTTP 可达 ${pkg}（官方组合通道，entity 解码后）`).toBe(true)
       }
     } finally {
       killTree(child.pid, child)
