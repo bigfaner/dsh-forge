@@ -102,10 +102,10 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(insertBlock?.[2]).toBe("@dsh-forge/task-loop");
   });
 
-  it("peer DSH 版本精确 pin（无范围符号）——cordis 4.0.4 版本线", () => {
+  it("peer DSH 版本精确 pin（无范围符号）——cordis 4.1.0 版本线", () => {
     const peers = pkg.peerDependencies ?? {};
     expect(Object.keys(peers)).toContain("@deepseek-ai/cordis");
-    expect(peers["@deepseek-ai/cordis"]).toBe("4.0.4");
+    expect(peers["@deepseek-ai/cordis"]).toBe("4.1.0");
     for (const range of Object.values(peers)) {
       expect(range).toMatch(/^[0-9]/);
       expect(range).not.toMatch(/[~^><*]/);
@@ -119,14 +119,14 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     }
   });
 
-  it("lib 五子包 devDeps 接线 + 本包触面 @deepseek-ai/* pin 升 0.2.2-rc.1（typert generator 0.2.2-rc.2 版本线）", () => {
+  it("lib 五子包 devDeps 接线 + 本包触面 @deepseek-ai/* pin 升 0.2.2-rc.5 版本线", () => {
     const devDeps = pkg.devDependencies ?? {};
     for (const lib of ["lib-api", "lib-db", "lib-diag", "lib-path", "lib-util"]) {
       expect(Object.keys(devDeps)).toContain(`@dsh-forge/${lib}`);
     }
-    expect(devDeps["@deepseek-ai/dsh-client-ui-primitives"]).toBe("0.2.2-rc.1");
-    expect(devDeps["@deepseek-ai/dsh-typert-generator"]).toBe("0.2.2-rc.2");
-    expect(devDeps["@deepseek-ai/cordis"]).toBe("4.0.4");
+    expect(devDeps["@deepseek-ai/dsh-client-ui-primitives"]).toBe("0.2.2-rc.5");
+    expect(devDeps["@deepseek-ai/dsh-typert-generator"]).toBe("0.2.2-rc.5");
+    expect(devDeps["@deepseek-ai/cordis"]).toBe("4.1.0");
   });
 
   it("运行期依赖归位（fix-12 bug 2523f72c——dist/host 运行期 import 的 driver 误挂 devDeps，tgz 独立安装断链）：driver 在 dependencies 且零 devDeps 残留；dsh-session 不入 dependencies（host 单例解析——dependencies 形态会在 profile node_modules 落第二副本，被 plugin-manager 扫成 profile plugin row 与宿主运行时版本线撞车，启动期整环禁用判例 2026-11-16）", () => {
@@ -136,11 +136,11 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/dsh-subagent-in-process-driver"], "driver devDeps 残留").toBeUndefined();
     expect(deps["@deepseek-ai/dsh-subagent-in-process-driver"]).toBe("0.2.0-rc.2");
     expect(deps["@deepseek-ai/dsh-session"], "dsh-session 不得入 dependencies（官方单例 + plugin row 撞车）").toBeUndefined();
-    expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.1");
+    expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.5");
   });
 
-  it("版本 bump 0.18.2（plugin-forge-combo/1.14 patch——收口批 LOW 清理 M-2/④；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.18.2");
+  it("版本 bump 0.18.5（plugin-forge-combo/1.29 cordis 4.1.0 升位 patch；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.18.5");
   });
 });
 

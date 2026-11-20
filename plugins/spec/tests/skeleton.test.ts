@@ -70,9 +70,9 @@ describe("包骨架（三目录制 + scripts 五件 + build 链）", () => {
 });
 
 describe("包 manifest（plugin-spec 1.2 验收面）", () => {
-  it("名称与版本：@dsh-forge/spec 0.19.3（fix-35 client 束 apply 守卫 patch bump）", () => {
+  it("名称与版本：@dsh-forge/spec 0.19.5（plugin-forge-combo/1.29 cordis 4.1.0 升位 patch bump）", () => {
     expect(pkg.name).toBe("@dsh-forge/spec");
-    expect(pkg.version).toBe("0.19.3");
+    expect(pkg.version).toBe("0.19.5");
   });
 
   it("exports 四键：. + ./client + ./typert + ./remote（typert 双键预留）", () => {
@@ -90,9 +90,9 @@ describe("包 manifest（plugin-spec 1.2 验收面）", () => {
   });
 
   it("依赖位次（判例 0acab78c）：typert-protocol + zod 落 dependencies、typert-generator 落 devDependencies", () => {
-    expect(pkg.dependencies?.["@deepseek-ai/dsh-typert-protocol"]).toBe("0.2.2-rc.2");
+    expect(pkg.dependencies?.["@deepseek-ai/dsh-typert-protocol"]).toBe("0.2.2-rc.5");
     expect(pkg.dependencies?.zod).toBe("4.6.6");
-    expect(pkg.devDependencies?.["@deepseek-ai/dsh-typert-generator"]).toBe("0.2.2-rc.2");
+    expect(pkg.devDependencies?.["@deepseek-ai/dsh-typert-generator"]).toBe("0.2.2-rc.5");
   });
 
   it("dependencies 零 workspace/file 协议且零 @dsh-forge/*（独立安装自含）", () => {

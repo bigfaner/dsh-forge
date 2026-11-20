@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/quote-reference",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "type": "module",
   "description": "quote-reference cordis 插件（选段引用：划选菜单 + 原生 quote chip + 发送期展开）——双面包装载范式（input-history 判例同构）：host 空载 + client bundle 自注册 CJS + dsh.client 清单 + dsh.bundle patch。",
@@ -37,7 +37,7 @@
     "build": "tsc -b && node scripts/bundle-client.mjs"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-api-session-controller": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-input-trigger": "0.2.2-rc.5",

@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/web",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "前端：自有 vite 入口 + dsh-client-web 壳内核；三区工作台 + 产品 client 插件（只调 RPC 不含写逻辑，禁 import core/knowledge）。",
@@ -21,8 +21,8 @@
     "react-qr-code": "2.2.0"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.4",
-    "@deepseek-ai/cordis-plugin-loader": "1.0.5",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/cordis-plugin-loader": "1.1.0",
     "@deepseek-ai/dsh-client-store": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-dockkit": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-primitives": "0.2.2-rc.5",

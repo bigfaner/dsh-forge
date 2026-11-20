@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/plugin-forge",
-  "version": "0.28.1",
+  "version": "0.28.2",
   "private": true,
   "type": "module",
   "description": "dsh 插件：forge 管线 tool 半身（动词透传 + 派发循环驱动器 + forge:dispatch-loop 提示段——forge:pipeline/forge:doc-style 段已迁 plugins/spec）。",
@@ -23,7 +23,7 @@
     "@deepseek-ai/dsh-subagent-in-process-driver": "0.2.0-rc.2"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
     "@deepseek-ai/dsh-session-projection": "0.2.0-rc.2",
     "@dsh-forge/contracts": "workspace:*",

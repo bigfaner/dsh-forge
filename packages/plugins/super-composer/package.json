@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/super-composer",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "private": true,
   "type": "module",
   "description": "super-composer cordis 插件（全屏简易 chat view 替身：全屏感知 + 底部一体卡替身）——双面包装载范式（input-history 判例同构）：host 空载 + client bundle 自注册 CJS + dsh.client 清单 + dsh.bundle patch。",
@@ -38,7 +38,7 @@
     "build": "tsc -b && node scripts/bundle-client.mjs"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-api-session-controller": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.5",
     "@deepseek-ai/dsh-client-ui-input-trigger": "0.2.2-rc.5",
