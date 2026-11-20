@@ -35,6 +35,8 @@
       name: '@dsh-forge/core'
     - id: dsh-forge-knowledge
       name: '@dsh-forge/knowledge'
+    - id: dsh-forge-md-mermaid
+      name: '@dsh-forge/md-mermaid'
 - id: llm-pi-ai
   name: "@deepseek-ai/dsh-llm-pi-ai"
   config:

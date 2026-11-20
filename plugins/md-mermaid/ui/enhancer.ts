@@ -9,7 +9,7 @@
 //
 // DOM 面收敛为结构化窄接口（EnhancerElement/EnhancerDocument/MutationObserverLike）：
 // 浏览器原生 DOM 即合法实现；测试以最小 DOM 替身驱动（仓内零 jsdom）。
-import { detectFormat } from '../validate/index.js'
+import { detectFormat } from '../host/validate/index.js'
 import { loadMermaidEngine, nextMermaidId, renderMermaidDiagram, type MermaidEngine } from './mermaid-diagram.js'
 
 /** 增强标记（原块上：值 = 已渲染源 hash——幂等去重锚） */

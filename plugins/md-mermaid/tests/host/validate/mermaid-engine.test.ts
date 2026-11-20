@@ -16,7 +16,7 @@ vi.mock('mermaid', () => {
   }
 })
 
-import { loadMermaidEngine, parseMermaidSource } from './mermaid-engine.js'
+import { loadMermaidEngine, parseMermaidSource } from '../../../host/validate/mermaid-engine.js'
 
 describe('懒加载纪律', () => {
   beforeEach(() => {

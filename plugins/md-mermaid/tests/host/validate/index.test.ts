@@ -7,7 +7,7 @@ import {
   detectFormat,
   validateDocFences,
   validateSource,
-} from './index.js'
+} from '../../../host/validate/index.js'
 
 // ---- 实证非法源（chatview-mermaid 评审四处 + 未引号括号第五例）----
 const ILLEGAL_SOURCES = {

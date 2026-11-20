@@ -1,0 +1,6 @@
+# @dsh-forge/md-mermaid 组合层：单行插入本包——host 半 validateMermaid tool 全组合
+# 全局注册（knowledge/expert-squad 同构装载通道；ui 半不经 client 束装载——React DOM
+# 增强器只经 apps 构建期 import './web' 出口挂载，防 enhancer 双挂载重复接管 fence DOM）。
+- insert:
+    - id: md-mermaid
+      name: '@dsh-forge/md-mermaid'

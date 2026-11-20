@@ -50,7 +50,7 @@
       "path": "packages/plugin-forge-spec"
     },
     {
-      "path": "packages/plugins/md-mermaid"
+      "path": "plugins/md-mermaid"
     },
     {
       "path": "packages/plugins/mobile-bridge"

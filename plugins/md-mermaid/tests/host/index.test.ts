@@ -7,9 +7,9 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import mdMermaidPlugin, { MD_MERMAID_PLUGIN_NAME } from './index.js'
-import { MERMAID_TOOL_NAME, ValidateMermaidError, isValidateMermaidError } from './tools/validate-mermaid.js'
-import type { MermaidToolDefinition } from './faces.js'
+import mdMermaidPlugin, { MD_MERMAID_PLUGIN_NAME } from '../../host/index.js'
+import { MERMAID_TOOL_NAME, ValidateMermaidError, isValidateMermaidError } from '../../host/tools/validate-mermaid.js'
+import type { MermaidToolDefinition } from '../../host/faces.js'
 
 /** 临时 runtime：注册捕获 + disposer 记账（plugin-forge-spec TempRuntime 同型裁剪——本插件只消费 tools 面） */
 class TempRuntime {
@@ -40,7 +40,7 @@ describe('AC2 faces 结构化窄类型（零 dsh 运行时依赖）', () => {
   })
 
   it('package.json 零 @deepseek-ai 行（faces.ts 结构化消费的依赖面锚）', () => {
-    const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as {
+    const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8')) as {
       dependencies?: Record<string, string>
       devDependencies?: Record<string, string>
       peerDependencies?: Record<string, string>

@@ -39,8 +39,8 @@ importers:
         specifier: link:../../../plugins/knowledge
         version: link:../../../plugins/knowledge
       '@dsh-forge/md-mermaid':
-        specifier: link:../../../packages/plugins/md-mermaid
-        version: link:../../../packages/plugins/md-mermaid
+        specifier: link:../../../plugins/md-mermaid
+        version: link:../../../plugins/md-mermaid
       '@dsh-forge/plugin-forge':
         specifier: link:../../../packages/plugin-forge
         version: link:../../../packages/plugin-forge

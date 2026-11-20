@@ -1,7 +1,10 @@
 // @dsh-forge/md-mermaid/validate —— 校验面（零 React 纯逻辑）。
 // 引擎注册表 Record<format, adapter>（机械分派不经 LLM）+ fence 提取正则单源 +
-// auto 首行头词探测 + 裁决归一形状（source / docRel 双模）。
+// auto 首行头词探测（门控头词表单源 = ./head-words.js）+ 裁决归一形状（source / docRel 双模）。
 import { parseMermaidSource, type EngineParseResult } from './mermaid-engine.js'
+import { detectFormat, headWordInfo } from './head-words.js'
+
+export { MERMAID_HEAD_WORDS, detectFormat, headWordInfo } from './head-words.js'
 
 export type { EngineParseResult }
 
@@ -18,59 +21,6 @@ export const ENGINE_REGISTRY: Record<string, EngineAdapter> = {
 
 /** fence 提取正则单源（随能力入包） */
 export const MD_MERMAID_VALIDATE_FENCE_RE = /```mermaid\r?\n([\s\S]*?)```/g
-
-/** mermaid 头词表（首行图型关键字，小写比对；覆盖提案附录 C 门控表） */
-const MERMAID_HEAD_WORDS = new Set([
-  'flowchart',
-  'graph',
-  'sequencediagram',
-  'classdiagram',
-  'statediagram',
-  'statediagram-v2',
-  'erdiagram',
-  'journey',
-  'gantt',
-  'pie',
-  'mindmap',
-  'gitgraph',
-  'timeline',
-  'quadrantchart',
-  'sankey-beta',
-  'xychart-beta',
-  'block-beta',
-  'architecture-beta',
-  'packet-beta',
-  'kanban',
-  'radar-beta',
-  'requirementdiagram',
-  'c4context',
-  'c4container',
-])
-
-/** 头词所在行（1-based）——unsupported 裁决的行号依据 */
-function headWordInfo(source: string): { word: string; line: number } {
-  const lines = source.split(/\r?\n/)
-  let i = 0
-  if (lines[0]?.trim() === '---') {
-    i = 1
-    while (i < lines.length && lines[i]?.trim() !== '---') i++
-    i++ // 越过闭合 ---
-  }
-  while (i < lines.length && lines[i]?.trim() === '') i++
-  const word = lines[i]?.trim().split(/\s+/)[0] ?? ''
-  return { word, line: i + 1 }
-}
-
-/**
- * auto 探测：首行头词 → 引擎 format（'mermaid'）| null（未知头词，显式 unsupported）。
- * 跳过 YAML frontmatter（--- 界定）与空行，取首个非空词。
- */
-export function detectFormat(source: string): string | null {
-  const { word } = headWordInfo(source)
-  const head = word.toLowerCase()
-  if (!head) return null
-  return MERMAID_HEAD_WORDS.has(head) ? 'mermaid' : null
-}
 
 export interface SourceVerdict {
   ok: boolean

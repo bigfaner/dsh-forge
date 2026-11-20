@@ -13,7 +13,7 @@
     "@dsh-forge/contracts": "link:../../../packages/contracts",
     "@dsh-forge/core": "link:../../../packages/core",
     "@dsh-forge/knowledge": "link:../../../plugins/knowledge",
-    "@dsh-forge/md-mermaid": "link:../../../packages/plugins/md-mermaid",
+    "@dsh-forge/md-mermaid": "link:../../../plugins/md-mermaid",
     "@dsh-forge/plugin-forge": "link:../../../packages/plugin-forge",
     "@dsh-forge/expert-squad": "link:../../../plugins/expert-squad",
     "better-sqlite3": "13.0.3",

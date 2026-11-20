@@ -3,11 +3,11 @@
 // 桩引擎注入 {ok:false, message}（引擎装载失败形态：无 line）驱动 verdictToVerdictShape。
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('./mermaid-engine.js', () => ({
+vi.mock('../../../host/validate/mermaid-engine.js', () => ({
   parseMermaidSource: vi.fn(async () => ({ ok: false as const, message: 'mermaid 引擎装载失败：ERR_MODULE_NOT_FOUND' })),
 }))
 
-import { validateSource } from './index.js'
+import { validateSource } from '../../../host/validate/index.js'
 
 /** harness lossless JSON 同口径： Own 键值不得为 undefined */
 function assertLossless(value: unknown, path: string): void {
