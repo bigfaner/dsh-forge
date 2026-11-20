@@ -37,10 +37,10 @@ overrides:
   # 全仓 cordis pin 统一 4.1.0（bug 1103261e：override 滞留 4.0.4 曾致 lock importer 段脱钩 manifest）——
   # override 强制单副本，消除双 cordis 实例类型分裂（apps/host boot/child Context 双版本错位）
   '@deepseek-ai/cordis': 4.1.0
-  # cordis 自身 peer 期望 include ~1.0.9 / loader ~1.0.5——统一到同栈版本，
-  # 折叠多 cordis 物理实例（include/loader 1.1.0 变体会派生第二个 cordis 副本）
-  '@deepseek-ai/cordis-plugin-include': 1.0.9
-  '@deepseek-ai/cordis-plugin-loader': 1.0.5
+  # cordis 4.1.0 官方 peer 期望 include ~1.1.0 / loader ~1.1.0——按 peer 核销统一升位，
+  # 单 cordis 副本不变（cordis 本身已被 override 钉 4.1.0 单实例）；include 同 peer 面随批对齐
+  '@deepseek-ai/cordis-plugin-include': 1.1.0
+  '@deepseek-ai/cordis-plugin-loader': 1.1.0
   # 4.1 electron-builder：app-builder-lib 26.17 代码需 ElectronDownloadCacheMode（@electron/get
   # >=3.1 面），其 ^3.0.0 声明被解析到 3.0.0（运行期 resolveCacheMode 崩）——scoped 强制 3.1.0
   'app-builder-lib>@electron/get': 3.1.0
