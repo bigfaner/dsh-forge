@@ -21,7 +21,8 @@ import {
   KEY_ESCAPE_COMMAND, KEY_SPACE_COMMAND, KEY_TAB_COMMAND, PASTE_COMMAND,
 } from 'lexical'
 import { mergeRegister } from '@lexical/utils'
-import type { ArbitrateKey, ArbitrateOutcome } from '../../contract/draft-editor.js'
+// 有官方公开承载位 → 直连（任务 1.5 镜像退役；draft-editor 薄片仅留未导出切片）。
+import type { ArbitrateKey, ArbitrateOutcome } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 /** The bar-supplied behavior behind each intercepted gesture. */
 export interface ComposerKeymapHandlers {

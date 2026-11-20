@@ -1,30 +1,16 @@
-// PROVENANCE: 复制自官方 dsh 源码 ui-conversation/src/client/contract/draft-editor.ts @ deepseek-harness f059f01ce367748392d8f665c0705fb4302a626b（0.2.0-rc.2，2026-10-22）；升级需人工 re-copy，漂移自担。
+// 本地薄片（退役留切片）。PROVENANCE：主体退役自官方镜像 ui-conversation/src/client/contract/draft-editor.ts
+// @ deepseek-harness f059f01ce367748392d8f665c0705fb4302a626b（0.2.0-rc.2，2026-10-22）。
+//
+// 退役核销（任务 1.5，type-mirror-retirement.md）：
+// - TokenSpan / ReferenceInsert / ArbitrateKey / ArbitrateOutcome 已进官方 client
+//   公开导出面 → 有承载位，消费点直连 @deepseek-ai/dsh-client-ui-conversation/client；
+// - ComposerKeyboard / EditSelection / Occurrence 在官方源内但未进导出面 → 无公开
+//   承载位，本片保留（与官方 0.2.2-rc.5 同型，2c990f0b14fbe870cd6a083c1708b35fd22a7172）。
 /** Editor-facing ranges, reference projections, and the composer keyboard interface. */
 import type { LexicalEditor } from 'lexical'
+import type { ArbitrateKey, ArbitrateOutcome, ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InputState } from './input.js'
 import type { InputSubmitMode } from './composer-submission.js'
-
-/** Pick-time draft span guarded by the input revision. */
-export interface TokenSpan {
-  readonly start: number
-  readonly end: number
-  readonly draftRev: number
-}
-
-/** Structured reference inserted by an input-trigger source. */
-export interface ReferenceInsert {
-  readonly source: string
-  readonly ref: string
-  readonly label: string
-  readonly appearance?: 'session' | 'file' | 'folder'
-  readonly clipboardText: string
-}
-
-/** Keyboard keys intercepted by an open trigger menu. */
-export type ArbitrateKey = 'up' | 'down' | 'enter' | 'escape' | 'tab' | 'tabBack'
-
-/** Trigger-menu keyboard routing result. */
-export type ArbitrateOutcome = 'consumed' | 'pick-highlighted' | 'pass'
 
 /**
  * The InputBar-exclusive keyboard/DOM command face: synchronous

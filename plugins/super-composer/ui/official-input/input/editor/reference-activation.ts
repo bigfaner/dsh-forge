@@ -5,7 +5,8 @@ import {
   CLICK_COMMAND, COMMAND_PRIORITY_LOW,
 } from 'lexical'
 import type { LexicalEditor } from 'lexical'
-import type { ReferenceInsert } from '../../contract/draft-editor.js'
+// 有官方公开承载位 → 直连（任务 1.5 镜像退役）。
+import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { $isReferenceChipNode } from './chip-node.js'
 import { TextRefNode } from './text-ref.js'
 

@@ -898,6 +898,9 @@ importers:
       '@deepseek-ai/dsh-api-session-controller':
         specifier: 0.2.2-rc.5
         version: 0.2.2-rc.5(c30f97a3ebfc80b3c110376debbff9e0)
+      '@deepseek-ai/dsh-client-store':
+        specifier: 0.2.2-rc.5
+        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
       '@deepseek-ai/dsh-client-ui-conversation':
         specifier: 0.2.2-rc.5
         version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)

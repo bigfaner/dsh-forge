@@ -10,7 +10,9 @@ import {
 import { registerPlainText } from '@lexical/plain-text'
 import { createEmptyHistoryState, registerHistory } from '@lexical/history'
 import { mergeRegister } from '@lexical/utils'
-import type { Occurrence, ReferenceInsert } from '../../contract/draft-editor.js'
+// Occurrence 未进官方导出面 → 留 draft-editor 薄片；ReferenceInsert 有公开承载位 → 直连（任务 1.5 镜像退役）。
+import type { Occurrence } from '../../contract/draft-editor.js'
+import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { registerReferenceActivation } from './reference-activation.js'
 import { ReferenceChipNode, $createReferenceChipNode } from './chip-node.js'
 import { refreshClaimDecoration, registerClaimDecoration } from './claim-decor.js'

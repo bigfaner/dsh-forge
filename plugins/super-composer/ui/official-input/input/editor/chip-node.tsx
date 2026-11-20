@@ -13,7 +13,8 @@ import type {
   EditorConfig, LexicalNode, NodeKey, SerializedLexicalNode, Spread,
 } from 'lexical'
 import { DecoratorNode } from 'lexical'
-import type { ReferenceInsert } from '../../contract/draft-editor.js'
+// 有官方公开承载位 → 直连（任务 1.5 镜像退役）。
+import type { ReferenceInsert } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ReferenceChip } from './ReferenceChip.js'
 
 /** JSON form of one chip (Lexical node serialization contract). */

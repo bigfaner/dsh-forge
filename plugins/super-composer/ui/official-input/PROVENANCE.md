@@ -40,19 +40,19 @@
 | `client/input/decorations.ts` | `input/decorations.ts` | 原样 |
 | `client/service.ts`（仅 `isImageMediaType`，rc.5 InputBar 闭环新增） | `service.ts` | 结构同型镜像（官方整模块不入复制件——ConversationController 域面替身不可达） |
 | `client/input/editor/*`（15 文件：DraftEditor、runtime、keymap、view-binding（1.4 re-copy rc.5）、projection、span-map、chip-node、ReferenceChip(.module.css)、claim-decor、text-ref、reference-activation、ComposerContentEditable、DecoratorPortals、composer-editor.module.css） | `input/editor/*` | view-binding：imports 重写 + DRAFT_SUBMITTED_TAG 镜像（rc.5 锚见上节）；其余原样 |
-| `client/contract/draft-editor.ts` | `contract/draft-editor.ts` | 原样 |
-| `client/contract/input.ts` | `contract/input.ts` | InboxState/Branded/store 镜像 |
-| `client/contract/composer-submission.ts` | `contract/composer-submission.ts` | dsh-session/types SessionId→string |
+| `client/contract/draft-editor.ts` | `contract/draft-editor.ts` | 1.5 退役留薄片：TokenSpan/ReferenceInsert/ArbitrateKey/ArbitrateOutcome 有官方 client 导出承载位 → 消费点直连官方；薄片仅留未导出的 ComposerKeyboard/EditSelection/Occurrence |
+| `client/contract/input.ts` | `contract/input.ts` | 1.5 退役留薄片：机器/事件/触发器/cordis 模块扩增面全量退役（消费点零引用或官方直连）；薄片仅留替身降级域切片（DraftAttachmentId 去 brand、InputState.queue 放宽 unknown、InputActions 无 insertQuote/persistDraft 子集） |
+| `client/contract/composer-submission.ts` | `contract/composer-submission.ts` | 1.5 退役留薄片：整契约不在官方导出面；MessageSubmission/MessageSubmissionState 退役（SessionId→string 切片随之消失），薄片仅留 BusyEnterBehavior re-export + InputSubmitMode + ComposerSubmitGesture |
 | `client/contract/composer-blocks.ts` | `contract/composer-blocks.ts` | 原样（类型备用） |
 | `client/context-occupancy.ts` | `context-occupancy.ts` | token-meter 类型镜像 |
 | `client/image-labels.ts` | `image-labels.ts` | 类型镜像 |
 | `src/submission-settings.ts` | `submission-settings.ts` | schemastery 面剔除、ConfigForm 镜像 |
 
-本包自建（非复制，服务镜像/对接 contract）：`store.ts`（dsh-client-store 结构镜像）、`contract/composer-bar.ts`（slots.ts ComposerBarProps 消费子集结构同型）、`contract/translate.ts`（dsh-client-ui-slots Translate 镜像）、`locale.ts`（conversation 命名空间替换身所需键，取自官方 `client/locales.ts` zh 词典）、`surrogate-composer.tsx`（替身装配层——本包胶水）。
+本包自建（非复制，服务镜像/对接 contract）：`store.ts`（ObservableSnapshot 改指 @deepseek-ai/dsh-client-store 公开包本体——1.5 镜像退役；SnapshotStore set 薄片 + createSnapshotStore 本地运行实现保留）、`contract/composer-bar.ts`（slots.ts ComposerBarProps 消费子集结构同型）、`contract/translate.ts`（dsh-client-ui-slots Translate 镜像）、`locale.ts`（conversation 命名空间替换身所需键，取自官方 `client/locales.ts` zh 词典）、`surrogate-composer.tsx`（替身装配层——本包胶水）。
 
 ## imports 适配政策
 
-- **公开 npm 包直依赖**：`@deepseek-ai/dsh-client-ui-primitives`（0.2.0-rc.2 精确 pin）、`clsx`（2.1.1）。
+- **公开 npm 包直依赖**：`@deepseek-ai/dsh-client-ui-primitives`（0.2.0-rc.2 精确 pin）、`clsx`（2.1.1）、`@deepseek-ai/dsh-client-store`（0.2.2-rc.5——1.5 起类型面直连，运行实现仍本地自持）。
 - **lexical / @lexical/\* 外置**：`lexical`、`@lexical/{plain-text,history,utils,text}` 0.49.0 在 bundle external 表（与官方壳层同款版本——防第二份 Lexical 实例，Invalid hook call 判例红线）；react 家族维持既有 external。
 - **不可达内部服务面以结构同型镜像承载**：dsh-client-store → `store.ts`、ConfigForm → `submission-settings.ts`、token-meter/slots/attachment 类型 → 本地镜像。跨边界官方面（InputState store、SessionInput、InputTriggerController）一律结构读取，不经镜像类型通道。
 - **接口对齐**：`ComposerBarProps` 消费子集见 `contract/composer-bar.ts`；`renderSlot` 由替身装配层给空实现（不申请官方槽位授权）。
