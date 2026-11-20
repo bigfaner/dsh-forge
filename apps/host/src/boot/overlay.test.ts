@@ -192,7 +192,9 @@ describe('welcome ack 常量 pin（fix-12——上游升级窗口机械核查）
       'client.js',
     )
     expect(existsSync(vendored)).toBe(true) // 前置：profile.dev 未安装 = 环境缺口（paths.test 同依赖）
-    const match = readFileSync(vendored, 'utf8').match(/WELCOME_NOTICE_VERSION = "([^"]+)"/)
+    // rc.5 压缩形态：`WELCOME_NOTICE_VERSION=`2026-09-28.1``（模板字面量引号，零空格）——
+    // 引号形不 pin 值 pin：双引号/反引号均可（上游 bump 即红）
+    const match = readFileSync(vendored, 'utf8').match(/WELCOME_NOTICE_VERSION\s*=\s*["'`]([^"'`]+)["'`]/)
     expect(match).not.toBeNull()
     expect(match?.[1]).toBe(WELCOME_NOTICE_ACK_VERSION)
   })
@@ -391,7 +393,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     const text = renderBootOverlay(withPresets())
     expect(text).not.toMatch(/^# dsh-forge 预设底稿/m)
     expect(text).toContain('                  section: |')
-    expect(text).toContain('                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds')
+    expect(text).toContain('                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode')
     // section 内空行保真（段落分隔——物化只动占位符/平台门/注释行，plan-mode 六段结构零损耗）
     expect(text).toMatch(/submit it through exit_plan_mode\.\n\n {20}Explore first\./)
   })

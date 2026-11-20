@@ -35,6 +35,10 @@
             name: '@deepseek-ai/dsh-agent-instructions'
             config:
               maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-schedule
+            name: '@deepseek-ai/dsh-tool-schedule'
           - id: compaction
             name: cordis:group
             group: true
@@ -63,3 +67,8 @@
             config:
               fetch: true
               searchTimeoutMs: 60000
+          - id: tool-office
+            name: '@deepseek-ai/dsh-tool-office'
+          - id: tool-plugin-market
+            name: '@deepseek-ai/dsh-plugin-market/tools'
+            disabled: true
