@@ -17,12 +17,11 @@ test.beforeEach(() => {
   test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
 })
 import { closeApp, launchHost } from '../../support/launch.js'
-import { CONVERSATION_CONTENT, PROJECT_ROW_ANY, docPanelOf, ovDocRowOf, ovSubtabOf } from '../../support/anchors.js'
+import { CONVERSATION_CONTENT, PROJECT_ROW_ANY } from '../../support/anchors.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
-import { openOverviewDock } from '../../support/navigation.js'
-import { OV_PARENT_ANY } from '../../support/anchors.js'
+import { DOCKKIT_DOC_FIXTURE, injectDockkitDocFixture } from '../../support/dockkit-fixture.js'
 
 const WALKTHROUGH = join(fileURLToPath(new URL('../../../.forge/docs/proposals/super-composer/walkthrough', import.meta.url)))
 
@@ -92,7 +91,6 @@ test('@web-e2e @probe super-composer 真机取证走查（AC1/2/6/7 可达面 + 
   const docDir = join(wsDir, 'docs', 'features', 'sc-feat', 'design')
   mkdirSync(docDir, { recursive: true })
   const DOC_BODY = '锚定与重定位：选区映射为稳定描述符，精确前缀加引用文本加精确后缀三段拼合。'
-  const docRel = 'docs/features/sc-feat/design/tech-design.md'
   const { writeFileSync } = await import('node:fs')
   writeFileSync(join(docDir, 'tech-design.md'), `# tech-design\n\n${DOC_BODY}\n`, 'utf8')
   const consoleAll: string[] = []
@@ -114,6 +112,7 @@ test('@web-e2e @probe super-composer 真机取证走查（AC1/2/6/7 可达面 + 
     }))
     console.log('[walkthrough] styleFace', JSON.stringify(styleFace))
     console.log('[walkthrough] WALKTHROUGH dir =', WALKTHROUGH)
+    mkdirSync(WALKTHROUGH, { recursive: true }) // 写前置目录（bug aa1a5ab2：缺席即 ENOENT）
     const { writeFileSync: wf } = await import('node:fs')
     wf(join(WALKTHROUGH, '110-styleface.json'), JSON.stringify(styleFace, null, 2), 'utf8')
     await page.screenshot({ path: join(WALKTHROUGH, '110-00-boot.png'), fullPage: false }).catch(() => undefined)
@@ -219,26 +218,17 @@ test('@web-e2e @probe super-composer 真机取证走查（AC1/2/6/7 可达面 + 
     console.log('[walkthrough] AC7 quote-block files', JSON.stringify(found))
     console.log('[walkthrough] AC7 RESULT', found.length > 0 ? 'quote-block-in-log' : 'no-quote-block')
 
-    // ── AC2：dockkit 文档内划选 → 同径 chip ──
-    // 注册面：发现链以 forge_dir 为 docs/ 根扫描（document-browsing 判例同载——注册已在会话装配段完成）。
-    const projList = await forgeInvoke<readonly { id: string }[]>(page, 'forge:projects/list')
-    const projId = projList[0]!.id
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('features')).first().click()
-    await expect(page.locator(ovSubtabOf('features'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    const docRow = page.locator(ovDocRowOf(docRel)).first()
-    if ((await docRow.isVisible().catch(() => false)) === false) {
-      await page.locator(OV_PARENT_ANY, { hasText: 'sc-feat' }).first().locator('[data-dswf-ov-parent-toggle]').click()
-    }
-    await expect(docRow, 'feature 文档行在场').toBeVisible({ timeout: 30_000 })
-    await docRow.click()
-    const panel = page.locator(docPanelOf(projId, docRel)).first()
+    // ── AC2：dockkit 文档面划选 → 同径 chip ──
+    // anchor-sync：概览 feature 子 tab 随 OVERVIEW_FEATURE_ENABLED=false 退役
+    //（plugins/project/ui/dock-tabs/overview/overview-model.ts:30-36 用户裁定 2026-11-14）——
+    // 划选源改 dockkit 文档夹具注入（真机取证同款标记面；仅文档活动门、零全屏标记）。
+    await injectDockkitDocFixture(page, { fullscreen: false, text: '三段拼合' })
+    const panel = page.locator(DOCKKIT_DOC_FIXTURE).first()
     await expect(panel).toBeVisible({ timeout: 30_000 })
-    await expect(panel.locator('[data-dswf-doc-body]')).toContainText('三段拼合', { timeout: 30_000 })
     const inPane = await panel.evaluate((el) => (el.closest('[data-dockkit-pane]') !== null ? 'pane' : (el.closest('[data-dockkit-float]') !== null ? 'float' : 'none')))
     console.log('[walkthrough] AC2 doc panel scope ancestor', inPane)
     await page.screenshot({ path: join(WALKTHROUGH, '110-04-ac2-doc.png'), fullPage: false }).catch(() => undefined)
-    const pickedDoc = await selectTextAndMouseup(page, docPanelOf(projId, docRel), '三段拼合')
+    const pickedDoc = await selectTextAndMouseup(page, DOCKKIT_DOC_FIXTURE, '三段拼合')
     await page.waitForTimeout(500)
     const diag = await page.evaluate(() => {
       const sel = window.getSelection()
@@ -366,7 +356,7 @@ test('@web-e2e @probe super-composer 真机取证走查（AC1/2/6/7 可达面 + 
     await dscfInput.fill('')
 
     // chip 行：文档划选加 chip（若 AC2 菜单径可达）→ 替身 chip 行投影
-    const pickedChip = await selectTextAndMouseup(page, docPanelOf(projId, docRel), '三段拼合')
+    const pickedChip = await selectTextAndMouseup(page, DOCKKIT_DOC_FIXTURE, '三段拼合')
     await page.waitForTimeout(500)
     if (await menu.first().isVisible().catch(() => false)) {
       await page.getByRole('menuitem', { name: '添加到对话' }).first().click()

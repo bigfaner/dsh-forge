@@ -7,7 +7,8 @@
 // 按序共存）；方向 C：替身 Enter 发送 → 主转录出现消息 + 两草稿清空。
 // 驱动链：launchHost → forgeInvoke projects/register → selectWorkspaceViaChip →
 // 会话首条消息（composer 在场）→ 全屏标记注入（DOM 兜底 tracker 同款标记面：
-// [data-dockkit-pane] + [data-sidebar-right-panel=fullscreen]；ball 态先点球恢复卡片）
+// [data-dockkit-pane] + 全屏标记 + [data-dswf-doc-panel] 文档活动面（真机取证同款
+// dockkit 夹具——e2e/support/dockkit-fixture.ts）；ball 态先点球恢复卡片）
 // → 方向 A/B 键盘 insertText 到对应锚（主 = 非 dscf-root 内 [data-composer-input]；
 // 替身 = [data-testid=dscf-root] [data-dscf-official-input] [data-composer-input]）
 // → 方向 C 替身 Enter（inputTriggers 官方发送径）。
@@ -29,6 +30,7 @@ import { CONVERSATION_CONTENT } from '../../support/anchors.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
+import { injectDockkitDocFixture } from '../../support/dockkit-fixture.js'
 
 const MSG_A = '主侧键入-A方向锚文本'
 const MSG_B = '替身键入-B方向锚文本'
@@ -83,15 +85,8 @@ test('@web-e2e @blitz 主↔替身草稿双向互通：A 主键入替身读 / B 
     await page.keyboard.press('Enter')
     await expect(page.locator(CONVERSATION_CONTENT).first()).toContainText(BOOT_MSG, { timeout: 60_000 })
 
-    // ── 全屏标记注入（DOM 兜底 tracker 标记面）→ 替身挂载；ball 态先点球恢复 ──
-    await page.evaluate(() => {
-      const pane = document.createElement('div')
-      pane.setAttribute('data-dockkit-pane', '')
-      const fullscreen = document.createElement('div')
-      fullscreen.setAttribute('data-sidebar-right-panel', 'fullscreen')
-      fullscreen.appendChild(pane)
-      document.body.appendChild(fullscreen)
-    })
+    // ── dockkit 全屏文档夹具注入（真机取证同款标记面）→ 替身挂载；ball 态先点球恢复 ──
+    await injectDockkitDocFixture(page, { fullscreen: true })
     await expect(page.locator('[data-testid="dscf-root"]'), '全屏标记注入后替身挂载').toHaveCount(1, { timeout: 15_000 })
     const ball = page.locator('[data-testid="dscf-ball"]')
     if (await ball.isVisible().catch(() => false)) {
@@ -100,18 +95,30 @@ test('@web-e2e @blitz 主↔替身草稿双向互通：A 主键入替身读 / B 
     await expect(surrogateInputOf(page), '替身复制件输入锚在场').toBeVisible({ timeout: 15_000 })
 
     // ── 方向 A：主键入 → 替身读同步（同一官方 InputState 单源）──
-    // 替身卡浮于主输入上方拦截 pointer——聚焦走 JS focus（CDP 探针同径）
-    await page.evaluate(() => {
-      const el = document.querySelector('[data-composer-input]:not([data-testid="dscf-root"] [data-composer-input])') as HTMLElement | null
-      if (el === null) throw new Error('主输入锚缺席')
-      el.focus()
-    })
-    await page.keyboard.insertText(MSG_A)
-    await pollUntil(
-      page,
-      async () => (await readDrafts(page)).surrogate.includes(MSG_A),
-      '方向 A：主键入同步到替身草稿',
-    )
+    // 替身卡浮于主输入上方拦截 pointer——聚焦走 JS focus（CDP 探针同径）；
+    // 双径有界重试（focus 径插错位零提示——未同步即回落真实 click 径重插）
+    for (let attempt = 0; ; attempt++) {
+      await page.evaluate(() => {
+        const el = document.querySelector('[data-composer-input]:not([data-testid="dscf-root"] [data-composer-input])') as HTMLElement | null
+        if (el === null) throw new Error('主输入锚缺席')
+        el.focus()
+      })
+      await page.keyboard.insertText(MSG_A)
+      try {
+        await pollUntil(
+          page,
+          async () => (await readDrafts(page)).surrogate.includes(MSG_A),
+          '方向 A：主键入同步到替身草稿',
+          6_000,
+        )
+        break
+      } catch (error) {
+        if (attempt >= 2) throw error
+        const main = mainInputOf(page)
+        await main.click({ force: true }).catch(() => undefined)
+        await page.keyboard.insertText(MSG_A)
+      }
+    }
 
     // ── 方向 B：替身键入 → 主读同步；双向内容在同一草稿流按序共存（A 先 B 后）──
     const surrogate = surrogateInputOf(page)

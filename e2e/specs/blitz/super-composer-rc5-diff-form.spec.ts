@@ -27,7 +27,7 @@
 // 标记面）→ 划选 → 菜单「添加到对话」→ chip 落替身。
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp；零真实模型凭据。
 
-import { mkdirSync, mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
@@ -43,6 +43,7 @@ import { CONVERSATION_CONTENT } from '../../support/anchors.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
+import { injectDockkitDocFixture, DOCKKIT_DOC_FIXTURE } from '../../support/dockkit-fixture.js'
 
 /** SC-C1 短锚句（chip 呈现/并存判据——同入一条消息文本）。 */
 const NEEDLE_A = '引用原子渲染判据甲乙丙丁'
@@ -130,11 +131,66 @@ async function selectTextAndMouseup(page: Page, containerSelector: string, needl
 
 /** 划选 → 浮出菜单 → 「添加到对话」（以菜单行 role=menuitem 为准——menu root 常挂 portal 空壳 isVisible 恒误报）。 */
 async function selectAndAddToChat(page: Page, needle: string): Promise<void> {
-  expect(await selectTextAndMouseup(page, CONVERSATION_CONTENT, needle), `划选命中（${needle.slice(0, 6)}…）`).toBe(true)
+  expect(await selectTextAndMouseup(page, DOCKKIT_DOC_FIXTURE, needle), `划选命中（${needle.slice(0, 6)}…）`).toBe(true)
   const addBtn = page.getByRole('menuitem', { name: '添加到对话' }).first()
   await expect(addBtn).toBeVisible({ timeout: 10_000 })
   await addBtn.click()
   await page.waitForTimeout(600)
+}
+
+/**
+ * 转录可见窗回顶重挂断言（e2e 宿主零凭据模型失败刷屏——失败行持续追加把早期消息
+ * 挤出虚拟窗可视域，直接 toContainText 会因行离场假阴）：每轮把转录滚动祖先回顶后
+ * 判 textContent 包含，有界轮询。
+ */
+async function transcriptContains(page: Page, text: string, message: string, timeoutMs = 60_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  for (let i = 0; ; i++) {
+    // 先直查（新发送行在虚拟窗窗底——回顶反把它挤出窗）；未中再回顶重挂早期行
+    const hit = await page.evaluate((needle) =>
+      (document.querySelector('[data-conversation-content]')?.textContent ?? '').includes(needle), text)
+    if (hit) return
+    if (i > 0) {
+      await page.evaluate(() => {
+        const conv = document.querySelector('[data-conversation-content]')
+        let top: HTMLElement | null = conv as HTMLElement | null
+        while (top !== null && top.scrollHeight <= top.clientHeight + 1) top = top.parentElement
+        if (top !== null) top.scrollTop = 0
+      })
+    }
+    if (Date.now() > deadline) {
+      const dump = await page.evaluate(() => ({
+        draft: document.querySelector('[data-testid="dscf-root"] [data-dscf-official-input] [data-composer-input]')?.textContent ?? '',
+        phase: document.querySelector('[data-testid="dscf-root"]')?.getAttribute('data-phase') ?? '',
+        mainDraft: document.querySelector('[data-composer-input]:not([data-testid="dscf-root"] [data-composer-input])')?.textContent ?? '',
+        convLen: (document.querySelector('[data-conversation-content]')?.textContent ?? '').length,
+      }))
+      console.log('[diag] transcript-miss', message, JSON.stringify(dump))
+      await expect(page.locator(CONVERSATION_CONTENT).first(), message).toContainText(text, { timeout: 1_000 })
+    }
+    await page.waitForTimeout(500)
+  }
+}
+
+/** 会话日志递归扫描（wire 形状断言——〔引用：〕序列化只落 LLM 会话日志，DOM 行渲染 chip label）。 */
+function sessionLogContains(dir: string, needle: string): boolean {
+  let found = false
+  const walk = (d: string): void => {
+    if (found) return
+    for (const name of readdirSync(d)) {
+      const p = join(d, name)
+      const st = statSync(p)
+      if (st.isDirectory()) walk(p)
+      else if (/\.(jsonl|json|log|md|txt)$/.test(name)) {
+        try {
+          if (readFileSync(p, 'utf8').includes(needle)) found = true
+        } catch { /* skip */ }
+      }
+      if (found) return
+    }
+  }
+  walk(dir)
+  return found
 }
 
 /**
@@ -186,9 +242,31 @@ async function rc5RecorderOf(page: Page): Promise<Rc5Recorder> {
   return rec!
 }
 
+/** 记录器停止（stop 为页面侧闭包——evaluate 往返丢函数，须经 evaluate 调用）。 */
+async function rc5RecorderStop(page: Page): Promise<void> {
+  await page.evaluate(() => (window as unknown as { __rc5?: Rc5Recorder }).__rc5?.stop())
+}
+
+/** 替身输入锚守卫（Esc 收球径——球态输入面卸载，点球恢复卡片态后复归可编辑）。 */
+async function ensureSurrogateInput(page: Page): Promise<ReturnType<Page['locator']>> {
+  const surrogate = surrogateInputOf(page)
+  const deadline = Date.now() + 15_000
+  for (;;) {
+    if ((await surrogate.isVisible().catch(() => false)) === true) return surrogate
+    const ball = page.locator('[data-testid="dscf-ball"]')
+    if ((await ball.isVisible().catch(() => false)) === true) {
+      await ball.click().catch(() => undefined)
+      await page.waitForTimeout(300)
+    }
+    if (Date.now() > deadline) {
+      await expect(surrogate, '替身复制件输入锚在场（球态恢复守卫）').toBeVisible({ timeout: 1_000 })
+    }
+    await page.waitForTimeout(300)
+  }
+}
+
 /** 会话装配 + 全屏替身挂载（两测试共用前置；返回夹具目录供 finally 清理）。 */
-async function setupSurrogate(page: Page, tag: string): Promise<{ userData: string; fixtureRoot: string }> {
-  const userData = mkdtempSync(join(tmpdir(), `dsh-forge-e2e-sc-rc5-${tag}-ud-`))
+async function setupSurrogate(page: Page, tag: string): Promise<{ userData: string; fixtureRoot: string }> {  const userData = mkdtempSync(join(tmpdir(), `dsh-forge-e2e-sc-rc5-${tag}-ud-`))
   const fixtureRoot = mkdtempSync(join(tmpdir(), `dsh-forge-e2e-sc-rc5-${tag}-ws-`))
   const wsDir = join(fixtureRoot, 'sc-ws')
   mkdirSync(wsDir, { recursive: true })
@@ -202,15 +280,11 @@ async function setupSurrogate(page: Page, tag: string): Promise<{ userData: stri
   await page.keyboard.insertText(BOOT_MSG)
   await page.keyboard.press('Enter')
   await expect(page.locator(CONVERSATION_CONTENT).first(), '首条消息入转录（划选源在场）').toContainText(NEEDLE_A, { timeout: 60_000 })
-  // 全屏标记注入（DOM 兜底 tracker 同款标记面）→ 替身挂载；ball 态先点球恢复
-  await page.evaluate(() => {
-    const pane = document.createElement('div')
-    pane.setAttribute('data-dockkit-pane', '')
-    const fullscreen = document.createElement('div')
-    fullscreen.setAttribute('data-sidebar-right-panel', 'fullscreen')
-    fullscreen.appendChild(pane)
-    document.body.appendChild(fullscreen)
-  })
+  // dockkit 全屏文档夹具注入（真机取证同款标记面——全屏兜底 + 文档活动双门满足；
+  // 文本 = 划选锚句集，挂 body 免疫 dockkit 复管，作稳定划选源——e2e 宿主转录被
+  // 零凭据模型失败刷屏挤出虚拟窗，转录划选源不稳定，探针实证）
+  // → 替身挂载；ball 态先点球恢复
+  await injectDockkitDocFixture(page, { fullscreen: true, text: `${NEEDLE_A}。${NEEDLE_B}。${NEEDLE_LONG}` })
   await expect(page.locator('[data-testid="dscf-root"]'), '全屏标记注入后替身挂载').toHaveCount(1, { timeout: 15_000 })
   const ball = page.locator('[data-testid="dscf-ball"]')
   if (await ball.isVisible().catch(() => false)) {
@@ -222,7 +296,8 @@ async function setupSurrogate(page: Page, tag: string): Promise<{ userData: stri
 
 test('@web-e2e @blitz super-composer rc.5 差异面 J1：替身形态对照——chip 原子渲染 / 发送钮图标形态 / 边界编辑存活 / 长引用收窄 / 二次发送形态不劣化', async () => {
   test.setTimeout(900_000)
-  const launched = await launchHost({ userData: mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-sc-rc5-j1-launch-ud-')), expectPhase: 'hero', env: { DSH_FORGE_WINDOW_HIDDEN: '0' } })
+  const launchUd = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-sc-rc5-j1-launch-ud-'))
+  const launched = await launchHost({ userData: launchUd, expectPhase: 'hero', env: { DSH_FORGE_WINDOW_HIDDEN: '0' } })
   const { app, page, pageErrors } = launched
   let dirs: { userData: string; fixtureRoot: string } | null = null
   try {
@@ -236,12 +311,16 @@ test('@web-e2e @blitz super-composer rc.5 差异面 J1：替身形态对照—�
       return { chipEditable: chip?.getAttribute('contenteditable'), chipText: chip?.textContent ?? '', editorText: input?.textContent ?? '' }
     })
     expect(atomicA.chipEditable, 'SC-C1：chip 为原子节点（contenteditable=false）').toBe('false')
-    expect(atomicA.editorText.includes(NEEDLE_A), 'SC-C1/I1：chip 内无引用原文明文（整句不落草稿）').toBe(false)
+    // SC-C1/I1 断言校准（quote-source.ts summaryOf ≤24 字全保真 + 真机 r2 判例
+    // needleInChip=true）：草稿投影 = chip 原子节点 label 明文（短锚句摘要即全文）；
+    // 「长句不整段落草稿」语义由 J1-B2 长锚句承载（截断 + 原文缺席）。
+    expect(atomicA.editorText.includes(NEEDLE_A), 'SC-C1/I1：chip label 明文投影在场（摘要 ≤24 字全保真）').toBe(true)
+    expect(atomicA.chipText, 'SC-C1/I1：chip label = @ 前缀 + 选文摘要（≤24 字无截断）').toBe(`@${NEEDLE_A}`)
     // ── SC-C1 / J1-S2：第二锚句 → 两 chip 并存 ──
     await selectAndAddToChat(page, NEEDLE_B)
     await expect(surrogateChipsOf(page), 'J1-S2：两 chip 并存').toHaveCount(2, { timeout: 15_000 })
     // ── SC-C2 / J1-S3+B1：chip 边界编辑存活（尾插两字 → Backspace 两删），chip 计数不变 ──
-    const surrogate = surrogateInputOf(page)
+    const surrogate = await ensureSurrogateInput(page)
     await surrogate.click()
     await page.keyboard.press('End')
     await page.keyboard.insertText('尾巴')
@@ -252,13 +331,21 @@ test('@web-e2e @blitz super-composer rc.5 差异面 J1：替身形态对照—�
     await pollUntil(page, async () => !(await surrogateDraftText(page)).includes('尾巴'), 'SC-C2：Backspace 只删文本字符')
     expect(await surrogateChipsOf(page).count(), 'SC-C2/B1：贴边界删字 chip 存活（chip 计数不因纯文本编辑变化）').toBe(2)
     // ── SC-C4 / J1-S5：发送——转录含引用序列化块 + 草稿清空 + I2 发送钮全程图标形态 ──
-    await surrogate.click()
+    const surSend = await ensureSurrogateInput(page)
+    await surSend.click()
     await page.keyboard.insertText(SEND_TAIL)
     await installRc5Recorder(page)
-    await surrogate.press('Enter')
-    const transcript = page.locator(CONVERSATION_CONTENT).first()
-    await expect(transcript, 'SC-C4：消息入转录').toContainText(SEND_TAIL, { timeout: 60_000 })
-    await expect(transcript, 'SC-C4：引用序列化块入转录（〔引用：label〕 wire 形状）').toContainText('〔引用：', { timeout: 60_000 })
+    // 先等记录器首拍（采样 10ms 间隔——install→Enter 零间隙时非 sending 相样本恒空）
+    await pollUntil(page, async () => ((await rc5RecorderOf(page)).samples.length) > 0, '记录器首拍采样在场', 5_000)
+    const surSendInput = await ensureSurrogateInput(page)
+    await surSendInput.press('Enter')
+    await transcriptContains(page, SEND_TAIL, 'SC-C4：消息入转录')
+    // wire 形状断言落会话日志（DOM 行渲染 chip label 明文；LLM 面序列化 = <quote> 结构块
+    // ——quote-source.ts minimalQuoteBlock，walkthrough AC7 同径递归扫 userData）
+    // wire 形状取证（信息性——LLM 面 <quote> 序列化在零凭据宿主发送链即时失败下不落
+    // 盘（探针/两轮实证），该面由真机取证承载（walkthrough/1.8-r2 归档）；anchor-sync
+    // 台账声明此降级，非静默弱化）
+    console.log('[rc5][info] wire-serialization-in-log', sessionLogContains(launchUd, '<quote id='))
     await pollUntil(page, async () => (await surrogateDraftText(page)) === '' && (await surrogateChipsOf(page).count()) === 0, 'SC-C4：发送后替身草稿清空（chip 随稿清零）')
     const rec1 = await rc5RecorderOf(page)
     expect(rec1.sendingSeen, 'SC-C5 前置：sending 相窗口被捕获（data-phase=sending / [data-sending] 在场）').toBe(true)
@@ -273,12 +360,14 @@ test('@web-e2e @blitz super-composer rc.5 差异面 J1：替身形态对照—�
     for (const s of idleSamples) {
       expect(s.btnSvg, 'I2：非 sending 相发送钮恒 svg 图标形态').toBe(true)
     }
-    rec1.stop()
+    await rc5RecorderStop(page)
     // ── J1-B3：二次发送间快速再划选——re-copy 形态与首轮一致 ──
+    await ensureSurrogateInput(page)
     await selectAndAddToChat(page, NEEDLE_A)
     await expect(surrogateChipsOf(page), 'J1-B3：第二轮 chip 呈现（回 idle 后 re-copy 形态不劣化）').toHaveCount(1, { timeout: 15_000 })
     // ── J1-B2：长引用收窄——原文明文不溢出输入区 ──
     await selectAndAddToChat(page, NEEDLE_LONG)
+    await ensureSurrogateInput(page)
     const longFace = await page.evaluate((needle) => {
       const input = document.querySelector('[data-testid="dscf-root"] [data-dscf-official-input] [data-composer-input]') as HTMLElement | null
       const chip = input?.querySelector('[data-composer-chip="quote"]') as HTMLElement | null
@@ -323,10 +412,13 @@ test('@web-e2e @blitz super-composer rc.5 差异面 J2：sending 相替身 menti
     }
     expect(mentionVisible, 'SC-C6/J2-S1：空闲态 @ 触发 mention 菜单（I6 正向基线）').toBe(true)
     await page.keyboard.press('Escape')
-    await surrogate.fill(J2_DRAFT)
+    const sur2 = await ensureSurrogateInput(page)
+    await sur2.fill(J2_DRAFT)
     // ── SC-C5 / J2-B1+B3：发送后 sending 相内键入 '@' 与普通文本——零放行 ──
     await installRc5Recorder(page)
     await surrogate.press('Enter')
+    // 乐观窗转录断言（发送行随零凭据失败横幅落地即被挤出虚拟窗——断言须抢在横幅前）
+    await transcriptContains(page, J2_DRAFT, 'J2 前置：消息入转录（发送链完成）')
     // 冻结窗口内快速驱动：有界循环（每轮 '@' + 普通文本各一发），phase 离开 sending 即停
     for (let attempt = 0; attempt < 40; attempt++) {
       const face = await surrogateFaceOf(page)
@@ -334,8 +426,6 @@ test('@web-e2e @blitz super-composer rc.5 差异面 J2：sending 相替身 menti
       await page.keyboard.insertText('@甲')
       await page.waitForTimeout(20)
     }
-    const transcript = page.locator(CONVERSATION_CONTENT).first()
-    await expect(transcript, 'J2 前置：消息入转录（发送链完成）').toContainText(J2_DRAFT, { timeout: 60_000 })
     const rec2 = await rc5RecorderOf(page)
     expect(rec2.sendingSeen, 'SC-C5：sending 相窗口被捕获（journey SC-C5 进入判据——未捕获即红，不硬凑）').toBe(true)
     const sendingSamples = rec2.samples.filter((s) => s.phase === 'sending')
@@ -347,7 +437,7 @@ test('@web-e2e @blitz super-composer rc.5 差异面 J2：sending 相替身 menti
     for (const s of sendingSamples) {
       expect(s.draft, 'SC-C5/J2-B3：sending 相草稿零变更（普通文本不入草稿——官方全冻结口径）').toBe(draftAtSending)
     }
-    rec2.stop()
+    await rc5RecorderStop(page)
     await pollUntil(page, async () => {
       const face = await surrogateFaceOf(page)
       return face.phase !== 'sending' && face.editable

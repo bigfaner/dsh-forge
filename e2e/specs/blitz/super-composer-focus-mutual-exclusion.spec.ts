@@ -27,8 +27,9 @@ test.beforeEach(() => {
   test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
 })
 import { closeApp, launchHost } from '../../support/launch.js'
-import { CONVERSATION_CONTENT, docPanelOf, ovDocRowOf, ovSubtabOf, OV_PARENT_ANY } from '../../support/anchors.js'
-import { openOverviewDock } from '../../support/navigation.js'
+import { CONVERSATION_CONTENT } from '../../support/anchors.js'
+import { DOCKKIT_DOC_FIXTURE, injectDockkitDocFixture } from '../../support/dockkit-fixture.js'
+import { revealRightbar } from '../../support/navigation.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
@@ -80,7 +81,6 @@ test('@web-e2e @blitz 互斥聚焦两态：全屏落 chip 聚焦替身输入 / �
   const wsDir = join(fixtureRoot, 'sc-ws')
   const docDir = join(wsDir, 'docs', 'features', 'sc-feat', 'design')
   mkdirSync(docDir, { recursive: true })
-  const docRel = 'docs/features/sc-feat/design/tech-design.md'
   writeFileSync(join(docDir, 'tech-design.md'), `# tech-design\n\n${DOC_BODY}\n`, 'utf8')
   const launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_WINDOW_HIDDEN: '0' } })
   const { app, page, pageErrors } = launched
@@ -98,21 +98,12 @@ test('@web-e2e @blitz 互斥聚焦两态：全屏落 chip 聚焦替身输入 / �
     await page.keyboard.press('Enter')
     await expect(page.locator(CONVERSATION_CONTENT).first()).toContainText(MSG, { timeout: 60_000 })
 
-    // ── dockkit 文档打开（划选源 = 真实 dockkit pane 内容区）──
-    const projList = await forgeInvoke<readonly { id: string }[]>(page, 'forge:projects/list')
-    const projId = projList[0]!.id
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('features')).first().click()
-    await expect(page.locator(ovSubtabOf('features'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-    const docRow = page.locator(ovDocRowOf(docRel)).first()
-    if ((await docRow.isVisible().catch(() => false)) === false) {
-      await page.locator(OV_PARENT_ANY, { hasText: 'sc-feat' }).first().locator('[data-dswf-ov-parent-toggle]').click()
-    }
-    await expect(docRow, 'feature 文档行在场').toBeVisible({ timeout: 30_000 })
-    await docRow.click()
-    const docPanelSel = docPanelOf(projId, docRel)
-    await expect(page.locator(docPanelSel).first()).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator(docPanelSel).locator('[data-dswf-doc-body]')).toContainText(DOC_NEEDLE, { timeout: 30_000 })
+    // ── 划选源 dockkit 文档面（夹具注入——真机取证同款标记面，仅文档活动门、零全屏标记）──
+    // anchor-sync：概览 feature 子 tab 随 OVERVIEW_FEATURE_ENABLED=false 退役
+    //（plugins/project/ui/dock-tabs/overview/overview-model.ts:30-36 用户裁定 2026-11-14
+    // 「项目概览暂时不要接入 feature」）——overview features 文档行开文档径不复存在，
+    // 划选源改 dockkit 文档夹具（产品全屏按钮/退全屏/互斥断言全部保持真实径）。
+    await injectDockkitDocFixture(page, { fullscreen: false, text: DOC_BODY })
 
     // ── U1 非全屏基线门控：markers=0 → 替身不挂载（互斥基线）──
     const baseline = await page.evaluate(() => ({
@@ -123,11 +114,14 @@ test('@web-e2e @blitz 互斥聚焦两态：全屏落 chip 聚焦替身输入 / �
     expect(baseline.dscfMounted, '互斥基线：非全屏替身不常驻挂载').toBe(0)
 
     // ── U2 全屏态：官方 chrome「全屏」按钮进入（官方 layout.mode 真值）→ 替身浮现 ──
+    // 右栏 reveal（全屏钮 = 会话头 corner 注入件——旧 overview 开文档径曾隐式承载
+    // reveal，随 ③ 驱动径替换需显式补走，bug 4af56ed4 同族时序）。
+    await revealRightbar(page)
     await page.getByRole('button', { name: '全屏', exact: true }).first().click()
     await expect(page.locator('[data-sidebar-right-panel="fullscreen"]').first(), '全屏标记在场').toBeVisible({ timeout: 10_000 })
     await expect(page.locator('[data-testid="dscf-root"]'), '全屏态替身挂载').toHaveCount(1, { timeout: 10_000 })
 
-    await selectAndAddToChat(page, docPanelSel)
+    await selectAndAddToChat(page, DOCKKIT_DOC_FIXTURE)
     // 观察腿现状对齐（1.24 chip 明文形状改判 + 1.30 官方复制件输入面 + 1.47 现身展开）：
     // 替身输入 = [data-dscf-official-input] 内官方复制件 contenteditable [data-composer-input]
     // （旧 data-dscf-composer-input 属性 / dscf-chips 计数行已退役）；chip 明文形状随官方
@@ -149,7 +143,7 @@ test('@web-e2e @blitz 互斥聚焦两态：全屏落 chip 聚焦替身输入 / �
     expect(markersAfterExit, '退全屏后官方 fullscreen markers 归零').toBe(0)
 
     // ── U4 非全屏重复：划选 → 落 chip → activeElement=主 composer 输入锚 ──
-    await selectAndAddToChat(page, docPanelSel)
+    await selectAndAddToChat(page, DOCKKIT_DOC_FIXTURE)
     const stateNormal = await page.evaluate(() => ({
       activeInMainComposer: (document.activeElement?.closest('[data-composer-input]') ?? null) !== null,
       activeIsDscf: document.activeElement?.closest('[data-testid="dscf-root"]') !== null,
