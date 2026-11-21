@@ -13,7 +13,7 @@
 // 与 tsc -b（类型链/.d.ts emit，emitDeclarationOnly——tsc 永不覆写 bundle .js，门禁序
 // 铁律①：tsc -b 仅 build 第一步）解耦。Run once per build；run-once, no watch。
 import { build } from "esbuild";
-import { readFileSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -118,6 +118,11 @@ const prune = (dir) => {
   }
 };
 prune(resolve(pkgDir, "dist/host"));
+
+// 内联官方件（dsh-subagent-in-process-driver）可能动态自读 './package.json'——
+// esbuild 静态不可见：随构建拷贝 package.json 至 dist/host/ 供位（预防同族，
+// bug 链 bf4f3851 后继；desktop enable "Cannot find module './package.json'" 实证）。
+copyFileSync(join(pkgDir, "package.json"), join(pkgDir, "dist", "host", "package.json"));
 
 // 离手门（门禁序铁律②④）：bundle 脚本末尾自跑自含性断言 + exports 闭包完整性断言——
 // 非 0 即败，自含性是产物性质，不是构建时点性质（bug eed9583b 判例）。

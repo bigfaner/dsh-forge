@@ -9,7 +9,7 @@
 // freshness 自动编译门（自 deep-build.mjs 迁入——plugins/forge/scripts/freshness.mjs）
 // 在 assembleRelease 入口前置：出树前逐件 run-once 自动编译五件 + forge + 代际双校验。
 // run-once CLI：node scripts/package-release.mjs [--root <dir>] [--out <dir>] [--no-zip]
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -207,6 +207,23 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     join(bundleDir, 'pnpm-workspace.yaml'),
     `# 生成文件（scripts/package-release.mjs）——交付目录 pnpm 构建批准表：13.0.3 零安装\n# 脚本（prebuilds/ 随包分发），此表仅消 ignored-builds 门，无编译动作。\nallowBuilds:\n${Object.entries(BUNDLE_ALLOW_BUILDS).map(([name, allow]) => `  '${name}': ${allow}`).join('\n')}\n`,
   )
+  // 交付目录 patch 增补五行顶层 skills 行（bug：bundle 通道成员 patch 不装载——
+  // 「谁带谁自持」仅在 solo/发布树成立；bundle 通道技能行必须由 forge patch 携带。
+  // providerName 互异 + 自锚 members 内 skills（generation node_modules 有五件兄弟包）。
+  const memberNames = packages.slice(1).map((entry) => entry.name.slice('@dsh-forge/'.length))
+  const skillRows = memberNames.flatMap((name) => {
+    const anchor = `process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/${name}/package.json')`
+    const joinExpr = `process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(${anchor}), 'skills')`
+    return [
+      `- id: skill-filesystem-${name}`,
+      `  name: '@deepseek-ai/dsh-skill-filesystem'`,
+      `  config:`,
+      `    providerName: filesystem-${name}`,
+      `    customSkillDirs:`,
+      `      - !!js ${anchor} && ${joinExpr}`,
+    ]
+  })
+  appendFileSync(join(bundleDir, 'cordis.patch.yml'), `\n${skillRows.join('\n')}\n`)
   // manifest 版本清单
   const manifest = {
     generator: 'scripts/package-release.mjs',
@@ -412,6 +429,13 @@ export function verifyBundleClosure(bundleDir, { repoRoot = REPO_ROOT } = {}) {
   const actualOverrides = forgePkg.pnpm?.overrides
   if (JSON.stringify(actualOverrides) !== JSON.stringify(BUNDLE_OVERRIDES)) {
     violations.push(`bundle: pnpm.overrides 生成断言漂移（期望 ${JSON.stringify(BUNDLE_OVERRIDES)}，实际 ${JSON.stringify(actualOverrides ?? null)}）`)
+  }
+  // 交付 patch 五行 skills 行断言（bundle 通道成员 patch 不装载——技能行必须由 forge patch 携带）
+  const bundlePatchText = readFileSync(join(bundleDir, 'cordis.patch.yml'), 'utf8')
+  for (const short of packages.slice(1).map((entry) => entry.name.slice('@dsh-forge/'.length))) {
+    if (!bundlePatchText.includes(`- id: skill-filesystem-${short}`) || !bundlePatchText.includes(`providerName: filesystem-${short}`)) {
+      violations.push(`bundle: 交付 patch 缺 skills 行 skill-filesystem-${short}（providerName filesystem-${short}）`)
+    }
   }
   const wsPath = join(bundleDir, 'pnpm-workspace.yaml')
   if (!existsSync(wsPath)) {

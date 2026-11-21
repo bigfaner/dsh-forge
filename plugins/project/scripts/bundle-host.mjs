@@ -14,7 +14,7 @@
 // Run once per build；run-once, no watch。
 import { build } from "esbuild";
 import { createRequire } from "node:module";
-import { readFileSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { auditDist, exportsDistPaths } from "./self-containment.mjs";
@@ -116,6 +116,12 @@ const prune = (dir) => {
   }
 };
 prune(resolve(pkgDir, "dist/host"));
+
+// 内联官方件（dsh-client-connection）内部动态自读 './package.json'（版本面——
+// createRequire 形态，esbuild 静态不可见、离手门文本扫描亦不可见）：随构建拷贝
+// package.json 至 dist/host/ 供位（desktop enable "Cannot find module
+// './package.json'" 实证，bug 链 bf4f3851 后继）。
+copyFileSync(join(pkgDir, "package.json"), join(pkgDir, "dist", "host", "package.json"));
 
 // 离手门（fix-6）：bundle 末尾自跑自含性断言 + exports 闭包完整性断言——非 0 即败，
 // 自含性是产物性质，不是构建时点性质（bug eed9583b 判例）。
