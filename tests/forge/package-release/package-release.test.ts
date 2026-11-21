@@ -133,7 +133,7 @@ describe('assembleRelease（bundle 发布树结构 + solo 剥离 + manifest）',
     const manifest = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'))
     expect(manifest.packages['@dsh-forge/alpha']).toEqual({ version: '0.26.1', dir: 'alpha' })
     expect(manifest.packages['@dsh-forge/forge'].version).toBe('0.1.3')
-    expect(manifest.channels.bundle).toEqual({ dir: 'bundle/forge', deps: { '@dsh-forge/alpha': 'file:./members/alpha', '@dsh-forge/beta': 'file:./members/beta' } })
+    expect(manifest.channels.bundle).toEqual({ dir: 'bundle/forge', deps: { '@dsh-forge/alpha': 'file:./members/alpha', '@dsh-forge/beta': 'file:./members/beta' }, overrides: { 'better-sqlite3': '13.0.3' } })
     expect(manifest.channels.deep).toBeUndefined()
   })
 
@@ -251,6 +251,42 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     const manifest = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'))
     expect(manifest.channels.bundle.dir).toBe('bundle/forge')
     expect(manifest.channels.solo.dir).toBe('solo/forge')
+  })
+
+  it('bundle 生成版 package.json 注入 pnpm.overrides 归一 better-sqlite3@13.0.3（旧代际 node-gyp 根除）', () => {
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    const forge = JSON.parse(readFileSync(join(outDir, 'bundle/forge/package.json'), 'utf8'))
+    expect(forge.pnpm?.overrides).toEqual({ 'better-sqlite3': '13.0.3' })
+    const manifest = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'))
+    expect(manifest.channels.bundle.overrides).toEqual({ 'better-sqlite3': '13.0.3' })
+  })
+
+  it('bundle 目录补发 pnpm-workspace.yaml（allowBuilds 消 ignored-builds 门——pnpm 11 exit 0）', () => {
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    const wsText = readFileSync(join(outDir, 'bundle/forge/pnpm-workspace.yaml'), 'utf8')
+    expect(wsText).toMatch(/^allowBuilds:/m)
+    expect(wsText).toMatch(/^ {2}'?better-sqlite3'?: true$/m)
+    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })).toEqual([])
+  })
+
+  it('反例·pnpm-workspace.yaml 缺席/批准项漂移：闭包机检红', () => {
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    rmSync(join(outDir, 'bundle/forge/pnpm-workspace.yaml'))
+    let violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    expect(violations.some((v) => v.includes('pnpm-workspace.yaml 缺席'))).toBe(true)
+    writeFileSync(join(outDir, 'bundle/forge/pnpm-workspace.yaml'), 'allowBuilds:\n  esbuild: true\n')
+    violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    expect(violations.some((v) => v.includes('allowBuilds 缺批准项 better-sqlite3'))).toBe(true)
+  })
+
+  it('反例·overrides 键漂移：闭包机检红（生成断言——键缺席/值漂移皆红）', () => {
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    const forgePath = join(outDir, 'bundle/forge/package.json')
+    const forge = JSON.parse(readFileSync(forgePath, 'utf8'))
+    delete forge.pnpm
+    writeFileSync(forgePath, JSON.stringify(forge, null, 2))
+    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    expect(violations.some((v) => v.includes('bundle') && v.includes('overrides'))).toBe(true)
   })
 
   it('成员自带插行随包收录（members 侧 solo 语义不回归）', () => {
