@@ -230,7 +230,6 @@ function captureRoot(): {
 } {
   const mounted: { name: string; scope: unknown }[] = [];
   const face: TypertAssemblyCtxFace = {
-    root: undefined,
     plugin(options: { name: string; apply: (scope: unknown) => void }) {
       const scope = new Context();
       mounted.push({ name: options.name, scope });
@@ -295,6 +294,23 @@ describe("registerForgeTasksRemote（根 ctx plugin 装配）", () => {
     expect(result.degraded).toEqual(["forgeTasks"]);
     expect(mounted).toHaveLength(0);
     expect(diag).toHaveBeenCalledWith(expect.stringContaining("注册完成"));
+  });
+
+  it("根 ctx 取法走符号键（Symbol.for(\"cordis.root\")）——ctx 属性取根在 cordis 1.1.0 inject 门控下抛错（bug 2801eeeb 同族复发，eefcedd8 先例同型）", () => {
+    const mounted: { name: string; scope: unknown }[] = [];
+    const rootFace: TypertAssemblyCtxFace = {
+      plugin(options: { name: string; apply: (scope: unknown) => void }) {
+        const scope = new Context();
+        mounted.push({ name: options.name, scope });
+        options.apply(scope);
+        return scope;
+      },
+    } as TypertAssemblyCtxFace;
+    // 子 ctx 形入参：plugin 只在根 ctx 符号键指向的 rootFace 上（属性取法拿不到 → 红基线）
+    const face = { [Symbol.for("cordis.root")]: rootFace };
+    const result = registerForgeTasksRemote(face as TypertAssemblyCtxFace, { tasks: () => ({}) as TasksServiceFace });
+    expect(result.registered).toEqual(["forgeTasks"]);
+    expect(mounted.map((m) => m.name)).toEqual(["task-loop-typert-forgeTasks"]);
   });
 
   it("ctx.plugin 缺席（非 cordis 宿主）→ assembly 降级 + 诊断留痕", () => {

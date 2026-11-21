@@ -122,6 +122,22 @@ describe("registerSpecTypertRemotes（根 ctx plugin 注册三态可观测）", 
     expect(diag).toHaveBeenCalledWith(expect.stringContaining("注册完成"));
   });
 
+  it("根 ctx 取法走符号键（Symbol.for(\"cordis.root\")）——ctx 属性取根在 cordis 1.1.0 inject 门控下抛错（bug 2801eeeb 同族复发）", () => {
+    const mounted: { name: string; scope: Context }[] = [];
+    const rootFace: TypertAssemblyCtxFace = {
+      plugin(options: { name: string; apply: (scope: Context) => void }) {
+        const scope = new Context();
+        mounted.push({ name: options.name, scope });
+        options.apply(scope);
+        return scope;
+      },
+    } as TypertAssemblyCtxFace;
+    const face = { [Symbol.for("cordis.root")]: rootFace };
+    const result = registerSpecTypertRemotes(face as TypertAssemblyCtxFace, { specs: () => ({}) as never });
+    expect(result.registered).toEqual(["forgeSpecs"]);
+    expect(mounted.map((m) => m.name)).toEqual(["spec-typert-forgeSpecs"]);
+  });
+
   it("ctx.plugin 缺席（非 cordis 宿主）→ assembly 降级 + 诊断留痕", () => {
     const diag = vi.fn();
     const result = registerSpecTypertRemotes({}, { diag });

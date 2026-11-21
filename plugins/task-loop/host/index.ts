@@ -18,6 +18,7 @@ import { consoleDiagFallback, type DiagLevel } from "@dsh-forge/lib-diag";
 // + fail-soft 承担，装载期零耦合）。
 import type { Peer } from "@deepseek-ai/dsh-client-connection";
 import { FORGE_CHECKPOINTS_SERVICE_KEY, FORGE_TASKS_SERVICE_KEY } from "../shared/contract-constants.js";
+import { rootCtxOf } from "./assembly/cordis-root.js";
 import {
   assembleTaskLoopServices,
   type TaskLoopAssembly,
@@ -134,7 +135,9 @@ export function selfProbeOf(
   ctx: unknown,
   deps?: { readonly peerLoader?: () => Promise<OwnerPeerCtor | undefined> },
 ): ForgeTasksRemoteDeps["selfProbe"] {
-  const root = ((ctx as { root?: unknown }).root ?? ctx) as {
+  // 根 ctx 取法走符号键 rootCtxOf（bug 2801eeeb 同族复发——ctx.root 属性访问触发
+  // cordis 1.1.0 inject 门控；非 ctx 形入参退自身）
+  const root = (rootCtxOf(ctx) ?? ctx) as {
     get?: (name: string) => unknown;
   };
   const peerLoader = deps?.peerLoader ?? loadOwnerPeerCtor;

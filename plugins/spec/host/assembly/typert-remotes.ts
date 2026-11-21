@@ -21,6 +21,7 @@
 // 快照族（list/follow）空集诚实降级 / detail·query·projection·transition 族 typed 拒绝。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
+import { rootCtxOf } from "./cordis-root.js";
 import type { WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -891,9 +892,8 @@ export function forgeProjectsIdentityOf(
 
 // ── 装配（根 ctx plugin 注册——gateway SRC 发现面 = 根 ctx reflect.props）──
 
-/** 插件 ctx 窄面（root 取法——cordis 子 ctx.root 指根；缺席宿主退 ctx 自身） */
+/** 插件 ctx 窄面（根 ctx 取法走符号键 rootCtxOf——bug 2801eeeb 同族复发：ctx.root 属性访问触发 cordis 1.1.0 inject 门控；非 ctx 形入参退自身） */
 export interface TypertAssemblyCtxFace {
-  readonly root?: unknown;
   plugin?(options: { name: string; apply: (scope: Context) => void }): unknown;
   /** cordis inject 生命周期缝（官方机械——服务在场激活、后到补绑、撤回随 fiber 退） */
   inject?(deps: readonly string[], cb: (scope: Record<string, unknown>) => void): unknown;
@@ -923,7 +923,7 @@ export function registerSpecTypertRemotes(
   deps: ForgeSpecRemoteDeps,
 ): SpecTypertRegistration {
   const diag = deps.diag;
-  const host = (face.root ?? face) as TypertAssemblyCtxFace;
+  const host = (rootCtxOf(face) ?? face) as TypertAssemblyCtxFace;
   const registered: string[] = [];
   const degraded: string[] = [];
   const pending: string[] = [];

@@ -34,6 +34,18 @@ describe('selfProbeOf（owner Peer 直探缝）', () => {
     await vi.waitFor(() => expect(req.peer.signal.aborted).toBe(true))
   })
 
+  it('根 ctx 取法走符号键（Symbol.for("cordis.root")——bug 2801eeeb 同族复发：ctx.root 属性取法触发 cordis 1.1.0 inject 门控）', async () => {
+    class GatewayStub {
+      async invoke(request: unknown) {
+        return { ok: true, request }
+      }
+    }
+    const rootCtx = new Context()
+    rootCtx.provide('typertGateway', new GatewayStub() as never)
+    const probe = selfProbeOf({ [Symbol.for('cordis.root')]: rootCtx })
+    await expect(probe('forgeTasks', 'list', { projectId: '' })).resolves.toEqual({ ok: true, request: expect.anything() })
+  })
+
   it('gateway 缺席 → 缺席错误', async () => {
     const probe = selfProbeOf(new Context())
     await expect(probe('forgeTasks', 'list')).rejects.toThrow('typertGateway 服务缺席')

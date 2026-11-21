@@ -26,7 +26,8 @@ import {
   forgeProjectsIdentityOf,
   registerSpecTypertRemotes,
   type TypertAssemblyCtxFace,
-} from "./assembly/typert-remotes.js";
+} from "./assembly/typert-remotes.js"
+import { CORDIS_ROOT } from "./assembly/cordis-root.js";
 import type { TransitionActor } from "./db/row-types.js";
 import { createForgeToolServices } from "./domain/specs/tool-service.js";
 import type { SpecContextFace } from "./faces.js";
@@ -147,9 +148,12 @@ function registerSpecTypertFromCordis(
       onDiag: (payload) => diag(`[${payload.event}] ${payload.message}`, payload.level),
     });
   try {
-    const source = ctx as { root?: unknown; plugin?: unknown; inject?: unknown }
+    // 根 ctx 取法走符号键（bug 2801eeeb 同族复发——source.root 属性访问触发 cordis 1.1.0
+    // inject 门控；face 携符号键指向树根，typert-remotes 侧 rootCtxOf 同键消费）
+    const source = ctx as { plugin?: unknown; inject?: unknown }
+    const rootValue = (ctx as Record<PropertyKey, unknown>)[CORDIS_ROOT]
     const face: TypertAssemblyCtxFace = {
-      ...(source.root !== undefined ? { root: source.root } : {}),
+      ...(rootValue !== undefined ? { [CORDIS_ROOT]: rootValue } : {}),
       ...(typeof source.plugin === "function"
         ? { plugin: source.plugin as TypertAssemblyCtxFace["plugin"] }
         : {}),

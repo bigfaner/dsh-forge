@@ -16,6 +16,7 @@
 // 非 root 子路径——官方边界门要求，根出口不在白名单）。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
+import { rootCtxOf } from "./cordis-root.js";
 import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/contracts";
 import { FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
 import { deriveProjectKey } from "../db/repositories/project-key.js";
@@ -490,9 +491,8 @@ export class ForgeTasksRemote extends TypertRemoteService {
 
 // ── 装配（根 ctx plugin 注册——gateway SRC 发现面 = 根 ctx reflect.props）──
 
-/** 插件 ctx 窄面（root 取法——cordis 子 ctx.root 指根；缺席宿主退 ctx 自身） */
+/** 插件 ctx 窄面（根 ctx 取法走符号键 rootCtxOf——bug 2801eeeb 同族复发：ctx.root 属性访问触发 cordis 1.1.0 inject 门控；非 ctx 形入参退自身） */
 export interface TypertAssemblyCtxFace {
-  readonly root?: unknown;
   plugin?(options: { name: string; apply: (scope: unknown) => void }): unknown;
   /** cordis inject 生命周期缝（官方机械——deps 在场激活 cb、后到补激活、撤回随 fiber 退） */
   inject?(deps: readonly string[], cb: (scope: Record<string, unknown>) => void): unknown;
@@ -532,7 +532,7 @@ export function registerForgeTasksRemote(
   deps: ForgeTasksRemoteDeps,
 ): ForgeTasksRegistration {
   const diag = deps.diag;
-  const host = (ctx.root ?? ctx) as TypertAssemblyCtxFace;
+  const host = (rootCtxOf(ctx) ?? ctx) as TypertAssemblyCtxFace;
   const registered: string[] = [];
   const degraded: string[] = [];
   const pending: string[] = [];
