@@ -33,9 +33,10 @@
     }
   },
   "files": [
+    "cordis.patch.yml",
     "dist",
     "experts",
-    "cordis.patch.yml"
+    "skills"
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
