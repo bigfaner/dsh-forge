@@ -16,12 +16,14 @@ import { FORGE_COMBO_SERVICE_KEY, PRESENCE_SERVICE_KEYS, type ComposedKey, type 
 
 export const name = "@dsh-forge/forge"; // loader ID 校验 = 包名（产物契约）
 
-/** 宿主 ctx 窄面（cordis Context 结构子集——reflect/provide 现查 + diag emit） */
+/** 宿主 ctx 窄面（cordis Context 结构子集——reflect 现查/根 registry provide + diag emit） */
 interface HostCtx {
-  /** 服务反射面（在场守卫消费点现查——可选具名服务官方面取法） */
-  reflect?: { get?(name: string): unknown };
-  /** 服务 provide 面（组合标记下发——成员侧守卫现查消费点） */
-  provide?(name: string, value: unknown): unknown;
+  /**
+   * 服务反射面（在场守卫消费点现查——可选具名服务官方面取法）。provide = 根 registry
+   * 供服（knowledge dirKeys.knowledge 先例——ctx.provide 是插件 fiber 局部域，兄弟行
+   * fiber 不可达；跨插件判据单源必须走 reflect.provide 根供服）。
+   */
+  reflect?: { get?(name: string): unknown; provide?(name: string, value: unknown): unknown };
   /** 诊断发射面（diag/log 事件域——emitDiag 消费面） */
   emit(event: string, payload: unknown): unknown;
 }
@@ -67,9 +69,11 @@ export function apply(ctx: HostCtx, _config: ForgeConfig = {}): void {
         `forge 聚合 bundle 不得越装——请卸载 solo 包或改用 solo 通道`,
     );
   }
-  // 组合标记下发（成员 apply 守卫现查消费点——标记仅是激活事实单点，检测仍逐点现查）。
+  // 组合标记根 registry 供服（成员 apply 守卫现查消费点——ctx.provide 是插件 fiber
+  // 局部域、兄弟行不可达，跨插件判据必须 reflect.provide 根供服——knowledge dirKeys
+  // 先例同径）。标记仅是激活事实单点，检测仍逐点现查。
   try {
-    ctx.provide?.(FORGE_COMBO_SERVICE_KEY, { channel: "forge-bundle" });
+    ctx.reflect?.provide?.(FORGE_COMBO_SERVICE_KEY, { channel: "forge-bundle" });
   } catch {
     // provide 失败不阻载 forge 自身激活（成员侧守卫将视缺席放行——越装防护仍由
     // forge 侧在场守卫承接，不因标记下发失败产生静默面）。

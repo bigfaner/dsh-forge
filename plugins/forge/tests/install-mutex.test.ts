@@ -12,12 +12,13 @@ const FORGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WORKTREE_ROOT = resolve(FORGE_ROOT, "..", "..");
 const FIVE = ["project", "spec", "task-loop", "expert-squad", "knowledge"] as const;
 
-/** fake ctx（diag emit 捕获 + provide spy + reflect 可编程现查） */
+/** fake ctx（diag emit 捕获 + reflect 根 registry provide spy + 可编程现查） */
 function makeCtx(opts: { memberPresent?: boolean } = {}) {
-  const diag: Array<{ event: string; level?: string }> = [];
+  const diag: Array<{ event: string; level?: string }> = []
   const provide = vi.fn();
   const ctx = {
     reflect: {
+      provide,
       get: (name: string) => {
         if (name === FORGE_COMBO_SERVICE_KEY) return undefined;
         return opts.memberPresent && Object.values(PRESENCE_SERVICE_KEYS).includes(name as never)
@@ -25,7 +26,6 @@ function makeCtx(opts: { memberPresent?: boolean } = {}) {
           : undefined;
       },
     },
-    provide,
     emit: (event: string, payload: { event?: string; level?: string }) => {
       diag.push({ event: payload.event ?? event, level: payload.level });
       return payload;
