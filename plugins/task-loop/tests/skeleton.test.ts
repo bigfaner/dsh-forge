@@ -139,8 +139,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.5");
   });
 
-  it("版本 bump 0.18.5（plugin-forge-combo/1.29 cordis 4.1.0 升位 patch；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.18.5");
+  it("版本 bump 0.19.0（forge-aggregate-bundle/1.4 skills 自持行 minor bump；pin 随批校正）", () => {
+    expect(pkg.version).toBe("0.19.0");
   });
 });
 

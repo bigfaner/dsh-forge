@@ -1,0 +1,140 @@
+// 五件 skills 自持行契约（forge-aggregate-bundle 1.4——探针④分支 A 物化，圆桌合流
+// 三谓词 + 负断言）：
+//   · fefd5149 判例：顶层行与官方 base 行同 id（skill-filesystem）即被 dsh-web-app
+//     的定点 disable 命中（patch per-key 覆写只作用该行，provider 根本不注册）——
+//     id 必改异，仅补 providerName 无效；
+//   · skill-filesystem provider 注册名默认 'filesystem'，同层重名注册 loud-fail
+//     （五实例同落 global layer）——providerName 必互异且 ≠ 默认名；
+//   · 每行 customSkillDirs 自锚本包 skills/（!!js baseUrl 表达式，&& 短路兜底）；
+//   · 自锚前提 = 四件 ./package.json 出口（spec 既有先例，ERR_PACKAGE_PATH_NOT_EXPORTED）。
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+const FIVE = ["spec", "project", "task-loop", "expert-squad", "knowledge"] as const;
+type Five = (typeof FIVE)[number];
+
+const PKG_NAME: Record<Five, string> = {
+  spec: "@dsh-forge/spec",
+  project: "@dsh-forge/project",
+  "task-loop": "@dsh-forge/task-loop",
+  "expert-squad": "@dsh-forge/expert-squad",
+  knowledge: "@dsh-forge/knowledge",
+};
+
+const EXPECTED_ID: Record<Five, string> = {
+  spec: "skill-filesystem-spec",
+  project: "skill-filesystem-project",
+  "task-loop": "skill-filesystem-task-loop",
+  "expert-squad": "skill-filesystem-expert-squad",
+  knowledge: "skill-filesystem-knowledge",
+};
+
+const BASE_ROW_ID = "skill-filesystem";
+const DEFAULT_PROVIDER_NAME = "filesystem";
+const SKILL_FS_PACKAGE = "@deepseek-ai/dsh-skill-filesystem";
+
+const patchText: Record<Five, string> = Object.fromEntries(
+  FIVE.map((p) => [p, readFileSync(resolve(REPO_ROOT, "plugins", p, "cordis.patch.yml"), "utf8")]),
+) as Record<Five, string>;
+
+/** 顶层 patch 行切分：col 0 `- id:` 开新行，至下一个 col 0 非注释行止。 */
+function topLevelRows(text: string): { id: string; body: string }[] {
+  const rows: { id: string; body: string }[] = [];
+  let current: { id: string; body: string[] } | undefined;
+  for (const line of text.split(/\r?\n/)) {
+    const newTop = /^- id: (.+)$/.exec(line);
+    if (newTop) {
+      if (current) rows.push({ id: current.id, body: current.body.join("\n") });
+      current = { id: newTop[1]!.trim(), body: [] };
+    } else if (/^\S/.test(line) && !line.startsWith("#")) {
+      if (current) rows.push({ id: current.id, body: current.body.join("\n") });
+      current = undefined;
+    } else if (current) {
+      current.body.push(line);
+    }
+  }
+  if (current) rows.push({ id: current.id, body: current.body.join("\n") });
+  return rows;
+}
+
+/** 各件 patch 内的顶层 skills provider 行（id 以 skill-filesystem 起头——preset 行内
+ * 嵌套实例不属顶层 provider 行，不纳入本契约面）。 */
+function skillsRows(pkg: Five): { id: string; body: string }[] {
+  return topLevelRows(patchText[pkg]).filter((r) => r.id.startsWith("skill-filesystem"));
+}
+
+const allSkillsRows = FIVE.flatMap(skillsRows);
+
+describe("三谓词（五件 skills 自持行——id 互异 ∩ ≠ base id ∩ providerName 互异 ≠ 默认名）", () => {
+  it("每件恰一条顶层 skills 行，id = skill-filesystem-<pkg>（spec 既有行连 id 一起改异）", () => {
+    for (const pkg of FIVE) {
+      const rows = skillsRows(pkg);
+      expect(rows, `${pkg} 顶层 skills 行数`).toHaveLength(1);
+      expect(rows[0]!.id, `${pkg} skills 行 id`).toBe(EXPECTED_ID[pkg]);
+      expect(rows[0]!.body, `${pkg} 行 name`).toContain(`name: '${SKILL_FS_PACKAGE}'`);
+    }
+  });
+
+  it("五行 id 互异且 ≠ base id skill-filesystem（fefd5149：同 id 被官方定点 disable 命中）", () => {
+    const ids = allSkillsRows.map((r) => r.id);
+    expect(new Set(ids).size, "id 互异").toBe(ids.length);
+    expect(ids).not.toContain(BASE_ROW_ID);
+    for (const pkg of FIVE) {
+      expect(topLevelRows(patchText[pkg]).map((r) => r.id)).not.toContain(BASE_ROW_ID);
+    }
+  });
+
+  it("五行 providerName 互异且 ≠ 默认名 filesystem（同层重名注册 loud-fail——探针④新发现阻碍）", () => {
+    const names = allSkillsRows.map((r) => /^\s*providerName:\s*(\S+)/m.exec(r.body)?.[1]);
+    for (const pkg of FIVE) {
+      const rows = skillsRows(pkg);
+      const name = /^\s*providerName:\s*(\S+)/m.exec(rows[0]!.body)?.[1];
+      expect(name, `${pkg} providerName 在场`).toBeDefined();
+      expect(name, `${pkg} providerName`).toBe(`filesystem-${pkg}`);
+    }
+    expect(new Set(names).size, "providerName 互异").toBe(names.length);
+    for (const name of names) {
+      expect(name).not.toBe(DEFAULT_PROVIDER_NAME);
+    }
+  });
+});
+
+describe("自锚面（customSkillDirs 本包锚 + && 短路兜底 + ./package.json 出口前提）", () => {
+  it("四件新增行 customSkillDirs 表达式自锚本包 skills/，且携 && 短路兜底（防锚解析异常冒泡打断行激活；spec 既有行表达式不动）", () => {
+    for (const pkg of FIVE) {
+      if (pkg === "spec") continue;
+      const expr = /!!js\s+(.+)$/m.exec(skillsRows(pkg)[0]!.body)?.[1];
+      expect(expr, `${pkg} !!js 锚表达式在场`).toBeDefined();
+      expect(expr).toContain(`resolve('${PKG_NAME[pkg]}/package.json')`);
+      expect(expr, `${pkg} 锚定 skills/`).toMatch(/,\s*'skills'\)/);
+      expect(expr, `${pkg} && 短路兜底`).toContain("&&");
+    }
+    const specExpr = /!!js\s+(.+)$/m.exec(skillsRows("spec")[0]!.body)?.[1];
+    expect(specExpr, "spec 锚表达式在场").toBeDefined();
+    expect(specExpr).toContain(`resolve('${PKG_NAME.spec}/package.json')`);
+    expect(specExpr, "spec 锚定 skills/").toMatch(/,\s*'skills'\)/);
+  });
+
+  it("四件 package.json 补 ./package.json exports 键（spec 既有先例形态）", () => {
+    for (const pkg of ["project", "task-loop", "expert-squad", "knowledge"] as const) {
+      const manifest = JSON.parse(readFileSync(resolve(REPO_ROOT, "plugins", pkg, "package.json"), "utf8")) as {
+        exports?: Record<string, string>;
+      };
+      expect(manifest.exports?.["./package.json"], `${pkg} ./package.json 出口`).toBe("./package.json");
+    }
+  });
+});
+
+describe("负断言（禁无 providerName 的裸 filesystem 行）", () => {
+  it("五件 patch 顶层 skills 行一律显式携带 providerName，零裸行", () => {
+    for (const pkg of FIVE) {
+      for (const row of skillsRows(pkg)) {
+        expect(row.body, `${pkg} 行 ${row.id} 缺 providerName`).toMatch(/^\s*providerName:/m);
+      }
+    }
+  });
+});

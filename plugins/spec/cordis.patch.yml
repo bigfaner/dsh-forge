@@ -1,6 +1,10 @@
 # skill-filesystem 挂载 + preset-standard 覆写（bug fefd5149 缝③）。
 # 单装形态 skills 挂载 = config 载体（research/official-verification.md §2）：
-# ① dsh-web-app 将顶层 skill-filesystem 行 disabled（预设会话由预设行内实例供服）——
+# ① 顶层行 id: skill-filesystem-spec（≠ 官方 base id）+ providerName: filesystem-spec
+#    ——同 id 即被 dsh-web-app 对 base 行的定点 disable 命中（fefd5149：provider
+#    根本不注册，仅补 providerName 无效）；provider 名默认 'filesystem'，同层重名
+#    注册 loud-fail，故显式互异命名（forge-aggregate-bundle 1.4）。
+# ② dsh-web-app 将顶层 skill-filesystem 行 disabled（预设会话由预设行内实例供服）——
 #    故标准预设会话的挂载唯一正径 = 按 row id 覆写 preset-standard 行 config
 #    （Web 编辑器同款机制：config 整体替换非合并），skill-filesystem 补
 #    customSkillDirs 锚包内 skills/ 的安装后绝对路径（!!js baseUrl 表达式，官方
@@ -10,9 +14,10 @@
 - insert:
     - id: spec
       name: '@dsh-forge/spec'
-- id: skill-filesystem
+- id: skill-filesystem-spec
   name: '@deepseek-ai/dsh-skill-filesystem'
   config:
+    providerName: filesystem-spec
     customSkillDirs:
       - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/spec/package.json')), 'skills')
 - id: preset-standard

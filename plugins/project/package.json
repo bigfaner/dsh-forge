@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.26.4",
+  "version": "0.27.0",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -11,6 +11,7 @@
       "types": "./dist/host/index.d.ts",
       "import": "./dist/host/index.js"
     },
+    "./package.json": "./package.json",
     "./host-dirs": {
       "types": "./dist/host/dirs/index.d.ts",
       "import": "./dist/host/dirs/index.js"

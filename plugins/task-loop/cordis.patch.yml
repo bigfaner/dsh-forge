@@ -5,3 +5,13 @@
 - insert:
     - id: task-loop
       name: '@dsh-forge/task-loop'
+# skills 自持行（forge-aggregate-bundle 1.4——探针④分支 A）：异 id 绕开官方对顶层
+# base 行 skill-filesystem 的定点 disable（fefd5149：同 id 即命中、provider 不注册）；
+# providerName 显式互异（默认 'filesystem' 同层重名注册 loud-fail）。customSkillDirs
+# 自锚本包 skills/，!!js 表达式 && 短路兜底（防锚解析异常冒泡打断行激活）。
+- id: skill-filesystem-task-loop
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    providerName: filesystem-task-loop
+    customSkillDirs:
+      - !!js process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/task-loop/package.json') && process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/task-loop/package.json')), 'skills')
