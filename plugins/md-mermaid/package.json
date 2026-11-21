@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/md-mermaid",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "dsh 插件：md-mermaid——mermaid 渲染与图源校验能力单源（mermaid 依赖全仓唯一引用方；host 半 = validateMermaid tool + 引擎适配，ui 半 = React DOM 渐进增强器）",
@@ -25,7 +25,7 @@
     "cordis.patch.yml"
   ],
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
+    "build": "node scripts/clean-dist.mjs && tsc -b && node scripts/sync-version.mjs && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
     "prepack": "node scripts/self-containment.mjs"
   },
   "dependencies": {

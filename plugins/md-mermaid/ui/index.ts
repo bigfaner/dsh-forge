@@ -23,4 +23,9 @@ export {
   type MermaidEnhancerOptions,
 } from './enhancer.js'
 
-export const MD_MERMAID_WEB_VERSION = '0.1.0' as const
+/**
+ * 版本常量（单一事实源 = package.json version）：源中为占位字面量，构建期由
+ * scripts/sync-version.mjs 以 package.json version 回填 dist/ui 运行期面（F3/N6
+ * ——禁手改本字面量，双源漂移在源头消除；tests/client-bundle-dom pin 在场守卫）。
+ */
+export const MD_MERMAID_WEB_VERSION: string = '__MD_MERMAID_WEB_VERSION__'

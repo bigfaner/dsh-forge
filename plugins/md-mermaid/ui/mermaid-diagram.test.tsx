@@ -1,18 +1,14 @@
 // MermaidDiagram 单测 —— AC1/AC2/AC3：懒加载（动态 import mock——mermaid 模块仅经
 // loadMermaidEngine 动态 import 装载，securityLevel='strict' 单次 initialize）、
 // 渲染管线（erDiagram 验收锚 + 全图型同库：源原样入 engine.render 零分支）、
-// 失败回退（render/import/形状非法三路归一 fail，异常不外溢）+ 回退占位卡呈现。
-// 自 apps/web/src/views/docs/mermaid-diagram.test.tsx 随迁（vi.mock('mermaid') 替身模式照搬）。
+// 失败回退（render/import/形状非法三路归一 fail，异常不外溢）。
+// S1 裁剪：MermaidDiagram/MermaidFigure/MermaidFallbackCard 组件为死导出（产品源
+// 零消费——web-shell 结构 pin 强制），其静态呈现测试随死导出面裁剪。
 import { describe, expect, it, vi } from 'vitest'
-import { renderToStaticMarkup } from 'react-dom/server'
-import type { ReactNode } from 'react'
 import mermaidDefault from 'mermaid'
 import { MERMAID_THEME_VARIABLES } from './theme.js'
 import {
   loadMermaidEngine,
-  MermaidDiagram,
-  MermaidFallbackCard,
-  MermaidFigure,
   nextMermaidId,
   renderMermaidDiagram,
   type MermaidEngine,
@@ -153,40 +149,6 @@ describe('renderMermaidDiagram（渲染管线——loader 注入）', () => {
       ok: false,
       reason: expect.stringContaining('svg'),
     })
-  })
-})
-
-describe('MermaidDiagram 组件（静态首渲染面）', () => {
-  it('effect 不跑（renderToStaticMarkup）= 在途占位卡锚——动态 import 仅挂载后经 effect 触发；在途面同走内联无头形态（1.8 标题条退役）', () => {
-    const markup = renderToStaticMarkup(<MermaidDiagram source={ER_SOURCE} />) as ReactNode as string
-    expect(markup).toContain('data-dswf-doc-mermaid-pending')
-    expect(markup).toContain('图渲染中')
-    expect(markup, '1.8 标题条退役（「Mermaid 图」caption 不再出现）').not.toContain('Mermaid 图')
-    expect(markup, '在途面零卡头类（图直接落文档流）').not.toContain('dswf-doc-mermaid-head')
-    expect(markup).not.toContain('data-dswf-doc-mermaid-svg')
-    expect(markup).not.toContain('data-dswf-doc-mermaid-fallback')
-  })
-})
-
-describe('MermaidFigure（内联呈现——1.8 方案 A 图即内容）', () => {
-  it('SVG 直接落 figure 文档流：svg 锚数据面在位、零标题条零卡头', () => {
-    const markup = renderToStaticMarkup(<MermaidFigure svg={'<svg data-anchor="er"></svg>'} />) as ReactNode as string
-    expect(markup).toContain('data-dswf-doc-mermaid-svg')
-    expect(markup).toContain('dswf-doc-mermaid-canvas')
-    expect(markup).toContain('data-anchor="er"')
-    expect(markup, '「Mermaid 图」标题条退役').not.toContain('Mermaid 图')
-    expect(markup).not.toContain('dswf-doc-mermaid-head')
-    expect(markup, '回退面数据锚零串扰').not.toContain('data-dswf-doc-mermaid-fallback')
-  })
-})
-
-describe('MermaidFallbackCard（回退占位卡——AC3）', () => {
-  it('源码 + 回退注记在场（fail 态纯呈现面；源内引号经 HTML 转义）', () => {
-    const markup = renderToStaticMarkup(<MermaidFallbackCard source={ER_SOURCE} />)
-    expect(markup).toContain('data-dswf-doc-mermaid-fallback')
-    expect(markup).toContain(ER_SOURCE.replaceAll('"', '&quot;'))
-    expect(markup).toContain('已回退为源码展示')
-    expect(markup).toContain('异常不外溢')
   })
 })
 

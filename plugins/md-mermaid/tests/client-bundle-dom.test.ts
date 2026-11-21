@@ -70,8 +70,8 @@ describe("client bundle 装载契约（官方 clientBundle 配方断言）", () 
     )(seedRequire);
     // 外置守卫：factory 物化期任何 require 都必须落在种子表内（seedRequire 对表外
     // 规格抛错）——react 实现被内联成第二副本会使 shell 渲染树组件 hooks 读到
-    // 另一副本的 dispatcher（Invalid hook call）。
-    expect(Array.isArray(requested)).toBe(true);
+    // 另一副本的 dispatcher（Invalid hook call）。物化期恰好只请求 react 族种子。
+    expect([...new Set(requested)].sort()).toEqual(["react", "react/jsx-runtime"]);
     expect(exports.apply, "exports 顶层缺 apply（装载器不识别嵌套面）").toBeTypeOf("function");
   });
 
@@ -104,5 +104,25 @@ describe("client bundle 装载契约（官方 clientBundle 配方断言）", () 
   it("产物携带安装世代标记（PLUGIN_ID@版本——真机双校验 face2 锚）", () => {
     const code = readFileSync(bundlePath, "utf8");
     expect(code.includes(`@dsh-forge-generation:${PLUGIN_ID}@`), "产物缺世代标记注释").toBe(true);
+  });
+});
+
+describe("版本单源 pin（F3/N6——MD_MERMAID_WEB_VERSION 双真相源漂移守卫）", () => {
+  const pkg = JSON.parse(readFileSync(resolve(pkgDir, "package.json"), "utf8")) as { version: string };
+
+  it("世代标记版本 = package.json version（bundle 期注入，无第二版本真相源）", () => {
+    const code = readFileSync(bundlePath, "utf8");
+    expect(code).toContain(`@dsh-forge-generation:${PLUGIN_ID}@${pkg.version}`);
+  });
+
+  it("ui 运行期面版本常量已回填为 package.json version（构建期 sync-version 单源回填）", () => {
+    const uiIndexDist = readFileSync(resolve(pkgDir, "dist/ui/index.js"), "utf8");
+    expect(uiIndexDist).toContain(`MD_MERMAID_WEB_VERSION = ${JSON.stringify(pkg.version)}`);
+    expect(uiIndexDist, "占位字面量残留（回填未执行）").not.toContain("__MD_MERMAID_WEB_VERSION__");
+  });
+
+  it("ui 源面零硬编码版本（占位字面量在场——手改即漂移，回填唯径）", () => {
+    const src = readFileSync(resolve(pkgDir, "ui/index.ts"), "utf8");
+    expect(src).toContain(`'__MD_MERMAID_WEB_VERSION__'`);
   });
 });

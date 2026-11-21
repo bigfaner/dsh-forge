@@ -9,12 +9,14 @@
 // 先到先得、后到 fail-soft，恒单实例（提案 md-mermaid-client-bundle 承重设计点）。
 // 全缝 fail-soft：document 缺席 / 启动异常只降本面（console 留痕供真机判读，
 // client 束 console 豁免面），不外溢炸宿主组合。
-import { createMermaidEnhancer } from './enhancer.js'
+import { createMermaidEnhancer, type MermaidEnhancerOptions } from './enhancer.js'
 
 /** client face 激活产物（组合 apply 接线面） */
 export interface MermaidClientFace {
   /** 已启动的增强器 disposer（stop + 哨兵释放；幂等） */
   readonly dispose: () => void
+  /** 显式全量扫描（测试与诊断取用面——无 mutation 时也可触发门控判定与失败诊断） */
+  readonly scan: () => Promise<void>
 }
 
 /** cordis ctx 最小面（effect 卸载缝——Context extends Pick<Fiber,'effect'>） */
@@ -23,15 +25,29 @@ interface MermaidClientContextFace {
 }
 
 /** 启动 DOM 增强器（测试与诊断显式取用面；apply 的 try 体外置归由外层缝承担） */
-export function mountMermaidClient(ctx?: MermaidClientContextFace): MermaidClientFace {
-  const enhancer = createMermaidEnhancer()
+export function mountMermaidClient(
+  ctx?: MermaidClientContextFace,
+  opts: Partial<MermaidEnhancerOptions> = {},
+): MermaidClientFace {
+  const enhancer = createMermaidEnhancer({
+    ...opts,
+    // bug 6e9639cc：接线 fix-1 落的 onRenderFail 诊断缝（与宿主径同缝同语义——
+    // MermaidRenderOutcome 归一 reason 回调）。缺省发射 = client 束 console 豁免面
+    // 诊断（[dsh-forge/md-mermaid] 前缀），安装形态渲染失败可观察，不再静默零出图；
+    // 显式注入（测试替身/诊断面）直透优先。
+    onRenderFail:
+      opts.onRenderFail ??
+      (({ reason }) => {
+        console.error('[dsh-forge/md-mermaid] render fail', reason)
+      }),
+  })
   enhancer.start()
   const dispose = (): void => {
     enhancer.stop()
   }
   const effect = ctx?.effect
   if (typeof effect === 'function') effect.call(ctx, () => dispose)
-  return { dispose }
+  return { dispose, scan: () => enhancer.scan() }
 }
 
 /** 组合 apply 插件对象（非 DI 库件——装载器物化后由 cordis 组合调用 apply） */
