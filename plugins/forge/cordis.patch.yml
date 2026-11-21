@@ -1,10 +1,11 @@
-# @dsh-forge/forge 资产挂载 patch（forge-deep-pack 1.6——scripts/aggregate-assets.mjs 生成产物，勿手改）：
+# @dsh-forge/forge 资产挂载 patch（forge-deep-pack 1.14——scripts/aggregate-assets.mjs 生成产物，勿手改）：
 # ① forge 单行自插（1.4 裁定沿袭）：五件零插行，一律经 host apply 组合激活；
 #    config 行 = { home } 唯一键（延伸常量同源物化——assembly.ts 静态双检锚）。
 # ② skills 挂载 = preset-standard 覆写行 customSkillDirs config 锚（判例：非插行
 #    扫描；dsh-web-app 将顶层 skill-filesystem 行 disabled，预设会话由预设行内实例
 #    供服）。customSkillDirs 五条全自锚（resolve('@dsh-forge/forge/package.json')
-#    单表达式——跨包锚三硬前提根除，三档通吃），聚合面 = forge/skills/<member>/。
+#    单表达式——跨包锚三硬前提根除，三档通吃），聚合面 = forge/dist/skills/<member>/
+#    （构建期物化生成物，不进 git——每次构建从五件源包最新产物重新复制）。
 # ③ preset-standard 子树逐字保留 spec 面生成产物（官方底稿生成链单源），仅在嵌套
 #    skill-filesystem 行追加五条自锚；重生成 = 先跑 spec 生成脚本再跑本脚本。
 - insert:
@@ -16,11 +17,11 @@
   name: '@deepseek-ai/dsh-skill-filesystem'
   config:
     customSkillDirs:
-      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'skills', 'project')
-      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'skills', 'spec')
-      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'skills', 'task-loop')
-      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'skills', 'expert-squad')
-      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'skills', 'knowledge')
+      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', 'project')
+      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', 'spec')
+      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', 'task-loop')
+      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', 'expert-squad')
+      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', 'knowledge')
 - id: preset-standard
   name: '@deepseek-ai/dsh-agent-preset'
   config:
@@ -61,11 +62,11 @@
         config:
           customSkillDirs:
             - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')
-            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'skills', 'project')
-            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'skills', 'spec')
-            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'skills', 'task-loop')
-            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'skills', 'expert-squad')
-            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'skills', 'knowledge')
+            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', 'project')
+            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', 'spec')
+            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', 'task-loop')
+            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', 'expert-squad')
+            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', 'knowledge')
       - id: tool-skill
         name: '@deepseek-ai/dsh-tool-skill'
       - id: command-goal

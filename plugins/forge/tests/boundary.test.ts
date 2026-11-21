@@ -9,7 +9,8 @@ import { describe, expect, it } from "vitest";
 const FORGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** 递归枚举包内文件（排除 node_modules 与 tests/——边界门对象 = 源码与声明面）。
- * skills/ experts/ 资产聚合子树不在枚举面（生成产物——tests/forge/asset-aggregation.test.ts 守卫）。 */
+ * dist/（含构建期物化 dist/skills）与 experts/ 生成物子树不在枚举面
+ * （tests/forge/asset-aggregation.test.ts 守卫）。 */
 function listSourceFiles(dir: string, root = dir): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
@@ -139,13 +140,13 @@ describe("forge 声明面守卫（package.json 骨架期全量）", () => {
     expect(pkg.dsh?.client?.platform).toBe("web");
   });
 
-  it("files 恰四件（dist + cordis.patch.yml + experts + skills——1.6 资产聚合随包分发）", () => {
-    expect(pkg.files).toEqual(["dist", "cordis.patch.yml", "experts", "skills"]);
+  it("files 恰三件（dist + cordis.patch.yml + experts——1.14 返工：skills 随 dist 构建期物化不再单列；experts 生成物不进 git 但 tgz 发布面需要）", () => {
+    expect(pkg.files).toEqual(["dist", "cordis.patch.yml", "experts"]);
   });
 
-  it("scripts：build = clean-dist → tsc -b → bundle-host → bundle-client（run-once 禁 watch）+ prepack self-containment", () => {
+  it("scripts：build = clean-dist → tsc -b → bundle-host → bundle-client → aggregate-assets（run-once 禁 watch）+ prepack self-containment", () => {
     expect(pkg.scripts?.build).toBe(
-      "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
+      "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs && node scripts/aggregate-assets.mjs",
     );
     expect(pkg.scripts?.prepack).toBe("node scripts/self-containment.mjs");
     for (const script of Object.values(pkg.scripts ?? {})) {

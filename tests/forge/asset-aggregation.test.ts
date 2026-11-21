@@ -1,9 +1,13 @@
-// forge 资产/工件聚合契约（forge-deep-pack 1.6——三面聚合回归清单，层序 e2e 前置层）：
+// forge 资产/工件聚合契约（forge-deep-pack 1.6；1.14 返工——skills 改构建期物化进
+// dist/skills/<member>/ 生成物不进 git，experts 落包根 .gitignore 同等地位。三面聚合
+// 回归清单，层序 e2e 前置层）：
 //   ① typert 手工缝（P0 #3）：装载期三件工件 import 面 + manifest 所有权静态守卫；
-//   ② skills 处方 C（P0 #5）：五件聚合 forge/skills/<member>/ 文件集同源 + patch
-//      customSkillDirs 五条全自锚（跨包锚三硬前提根除——缺席包 MODULE_NOT_FOUND 无
-//      fail-soft / ./package.json 出口缺失 / 层序覆盖脆弱）+ package.json 出口/files；
-//   ③ experts 布局同构重定位（P0 #4）：聚合至 forge 包根，dist/host → ../../experts/
+//   ② skills 处方 C（P0 #5）：五件聚合 forge/dist/skills/<member>/（构建生成物）
+//      文件集同源 + patch customSkillDirs 五条全自锚（跨包锚三硬前提根除——缺席包
+//      MODULE_NOT_FOUND 无 fail-soft / ./package.json 出口缺失 / 层序覆盖脆弱）
+//      + package.json 出口/files；
+//   ③ experts 布局同构重定位（P0 #4）：聚合至 forge 包根（生成物不进 git——
+//      scan.ts ../../experts/ 锚定约束不可挪 dist），dist/host → ../../experts/
 //      层级同构使 expert-squad 原 import.meta.url 表达式零改写成立 + 构建闭包守卫
 //      （断言无下游内联五件 host 入口时 experts 同构在位——漂移 = ENOENT 静默空返回）。
 // 真机层（skills 可发现可调 / typert RPC 往返）归 e2e 旅程（deep-tgz-install-full-chain
@@ -49,19 +53,19 @@ function skillDirEntries(indent: string): string[] {
   return out;
 }
 
-describe("skills 处方 C：五件聚合 forge/skills/<member>/（P0 #5）", () => {
-  it("聚合体文件集 = 五件源包 skills/ 文件集逐件全等（.gitkeep 占位除外——生成脚本产物不漂移）", () => {
+describe("skills 处方 C：五件聚合 forge/dist/skills/<member>/（P0 #5；1.14 构建期物化）", () => {
+  it("聚合体文件集 = 五件源包 skills/ 文件集逐件全等（.gitkeep 占位除外——构建生成物不漂移）", () => {
     for (const member of SKILL_MEMBER_DIRS) {
       const src = walkRel(join(REPO_ROOT, "plugins", member, "skills")).filter((f) => f !== ".gitkeep");
-      const dest = walkRel(join(FORGE_ROOT, "skills", member)).filter((f) => f !== ".gitkeep");
-      expect(dest, `skills/${member} 聚合漂移——重跑 plugins/forge/scripts/aggregate-assets.mjs`).toEqual(src);
+      const dest = walkRel(join(FORGE_ROOT, "dist", "skills", member)).filter((f) => f !== ".gitkeep");
+      expect(dest, `dist/skills/${member} 聚合漂移——重跑 plugins/forge/scripts/aggregate-assets.mjs（build 链末步）`).toEqual(src);
     }
   });
 
   it("skills 可发现性前置层：每件含技能的聚合目录逐目录 SKILL.md 在场（skill-filesystem 扫描形状）", () => {
     let skillCount = 0;
     for (const member of SKILL_MEMBER_DIRS) {
-      const memberRoot = join(FORGE_ROOT, "skills", member);
+      const memberRoot = join(FORGE_ROOT, "dist", "skills", member);
       for (const name of readdirSync(memberRoot)) {
         const dir = join(memberRoot, name);
         if (!statSync(dir).isDirectory()) continue;
@@ -89,20 +93,20 @@ describe("skills 处方 C：五件聚合 forge/skills/<member>/（P0 #5）", () 
     }
   });
 
-  it("package.json 出口/files 补口：./package.json 出口（自锚 resolve 面）+ files 含 skills 与 experts", () => {
+  it("package.json 出口/files 补口：./package.json 出口（自锚 resolve 面）+ files 含 experts、零 skills 键（skills 随 dist 分发——1.14 返工）", () => {
     const pkg = JSON.parse(readFileSync(join(FORGE_ROOT, "package.json"), "utf8")) as {
       exports?: Record<string, string>;
       files?: string[];
     };
     expect(pkg.exports?.["./package.json"]).toBe("./package.json");
-    expect(pkg.files).toContain("skills");
+    expect(pkg.files).not.toContain("skills");
     expect(pkg.files).toContain("experts");
     expect(FORGE_PKG_SPECIFIER).toBe("@dsh-forge/forge");
   });
 });
 
-describe("experts 布局同构重定位（P0 #4）", () => {
-  it("experts 聚合至 forge 包根：文件集 = expert-squad/experts 全等（生成脚本产物不漂移）", () => {
+describe("experts 布局同构重定位（P0 #4；1.14 返工——生成物 .gitignore 不进 git）", () => {
+  it("experts 聚合至 forge 包根：文件集 = expert-squad/experts 全等（构建生成物不漂移）", () => {
     const src = walkRel(join(REPO_ROOT, "plugins", "expert-squad", "experts"));
     const dest = walkRel(join(FORGE_ROOT, "experts"));
     expect(dest).toEqual(src);
