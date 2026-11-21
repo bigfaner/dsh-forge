@@ -14,6 +14,7 @@
 // /.d.ts emit，emitDeclarationOnly——tsc 永不覆写 bundle .js，门禁序错位根治）解耦。
 // Run once per build；run-once, no watch。
 import { build } from "esbuild";
+import { createRequire } from "node:module";
 import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +28,17 @@ const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 // 永不内联——require 落 pnpm 侧 prebuild 单例）。node 内建经 platform:"node"
 // 自动外置。@dsh-forge/* 一律不外置（含 contracts/path-key）——独立安装形态不存在其解析路径。
 const EXTERNAL = ["@deepseek-ai/*", "better-sqlite3", "gray-matter"];
+
+// bug bf4f3851 内联例外（插件 onResolve 优先于 external 表）：dsh-client-connection
+// 定死绝对路径强制打包（profile 遮蔽判例见上方说明）。
+const inlineOfficialConnection = {
+  name: "inline-dsh-client-connection",
+  setup(build) {
+    build.onResolve({ filter: /^@deepseek-ai\/dsh-client-connection(\/.*)?$/ }, (args) => ({
+      path: createRequire(join(pkgDir, "package.json")).resolve(args.path),
+    }));
+  },
+};
 
 // 内联入口 = package.json exports 全部 dist/host 运行期入口镜像回 TS 源（单一事实源
 // ——dist/host/x.js ↔ host/x.ts 同形镜像，exports 改面入口自动随动）。
@@ -47,6 +59,7 @@ await build({
   platform: "node",
   target: "node20",
   external: EXTERNAL,
+  plugins: [inlineOfficialConnection],
   allowOverwrite: true,
   minify: false,
   sourcemap: false,

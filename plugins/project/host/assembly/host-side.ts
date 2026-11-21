@@ -21,6 +21,7 @@ import {
   type WorktreeRpcService,
 } from '../worktrees/index.js'
 import { createWorktreeIdentity } from './worktree-identity.js'
+import { rootCtxOf } from './cordis-root.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
@@ -134,7 +135,7 @@ export function assembleProjectHostSide(
     // 官方服务取法 root 锚定优先（sessionPersistence/sessionController provide 于根 ctx；
     // 插件 ctx 属性访问在无 inject 声明宿主可能拒绝/缺席——root ?? ctx 双探针惰性取法，
     // AGENTS 1.6 检测永不缓存同径）。
-    const rootFace = (((rawCtx as { root?: unknown }).root ?? rawCtx) as unknown) as ServiceGetFace
+    const rootFace = (rootCtxOf(rawCtx) as unknown) as ServiceGetFace
     const safeGet = (face: ServiceGetFace, name: string): unknown => {
       try {
         const value = face.get(name)

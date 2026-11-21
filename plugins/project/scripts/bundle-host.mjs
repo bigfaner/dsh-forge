@@ -59,6 +59,17 @@ const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 // 残留裸 import 即 ERR_MODULE_NOT_FOUND）。
 const EXTERNAL = ["@deepseek-ai/*", "better-sqlite3"];
 
+// bug bf4f3851 内联例外（插件 onResolve 优先于 external 表）：dsh-client-connection
+// 定死绝对路径强制打包（profile 遮蔽判例见上方说明）。
+const inlineOfficialConnection = {
+  name: "inline-dsh-client-connection",
+  setup(build) {
+    build.onResolve({ filter: /^@deepseek-ai\/dsh-client-connection(\/.*)?$/ }, (args) => ({
+      path: createRequire(join(pkgDir, "package.json")).resolve(args.path),
+    }));
+  },
+};
+
 // 内联入口 = package.json exports 全部 dist/host 运行期入口镜像回 TS 源（fix-6：
 // 单一事实源——dist/host/x.js ↔ host/x.ts 同形镜像，exports 改面入口自动随动）。
 const HOST_RUNTIME_ENTRIES = exportsDistPaths(pkg).filter(
@@ -78,7 +89,7 @@ await build({
   platform: "node",
   target: "node20",
   external: EXTERNAL,
-  plugins: [dshDecoratorsPlugin],
+  plugins: [dshDecoratorsPlugin, inlineOfficialConnection],
   allowOverwrite: true,
   minify: false,
   sourcemap: false,

@@ -278,8 +278,8 @@ describe('registerForgeTypertRemotes（根 ctx plugin 装配）', () => {
       'project-typert-forgeFeatures',
       'project-typert-forgeDirs',
     ])
-    // 根 ctx 取法：face.root 在场 = 挂 root 而非插件子 ctx 自身
-    const rootFace: TypertAssemblyCtxFace = { root: face, plugin: face.plugin }
+    // 根 ctx 取法：符号键（Symbol.for("cordis.root")——cordis 1.1.0 inject 门控正规取法，bug bf4f3851）
+    const rootFace: TypertAssemblyCtxFace = { [Symbol.for("cordis.root")]: face, plugin: face.plugin } as unknown as TypertAssemblyCtxFace
     const nested = registerForgeTypertRemotes(rootFace, deps)
     expect(nested.registered).toHaveLength(6)
   })
@@ -356,7 +356,7 @@ describe('selfProbeOf（bug a99a7293——官方 gateway 2.x invoke 必携 owner
     }
     const ctx = new Context()
     ctx.provide('typertGateway', new GatewayStub() as never)
-    const probe = selfProbeOf({ root: ctx })
+    const probe = selfProbeOf({ [Symbol.for("cordis.root")]: ctx })
     await expect(probe('forgeProjects', 'list')).resolves.toEqual({ ok: true })
     expect(requests).toHaveLength(1)
     const req = requests[0] as { namespace: string; method: string; args: Record<string, never>; peer: { principal: { kind: string }; signal: AbortSignal; dispose(): Promise<void> } }
@@ -370,7 +370,7 @@ describe('selfProbeOf（bug a99a7293——官方 gateway 2.x invoke 必携 owner
   })
 
   it('gateway 缺席 → 缺席错误（fail-soft 语义由注册面诊断承担，本缝只如实抛错）', async () => {
-    const probe = selfProbeOf({ root: new Context() })
+    const probe = selfProbeOf({ [Symbol.for("cordis.root")]: new Context() })
     await expect(probe('forgeProjects', 'list')).rejects.toThrow('typertGateway 服务缺席')
   })
 })

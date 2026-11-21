@@ -24,6 +24,7 @@ import {
   type SeamDiag,
 } from "./assembly/seams.js";
 import { createProjectsServicePort, openProjectsDomainDb } from "./assembly/projects-port.js";
+import { rootCtxOf } from "./assembly/cordis-root.js";
 import { createWorktreeIdentity, type ForgeProjectsIdentityFace } from "./assembly/worktree-identity.js";
 import { createBugsService } from "./bugs/service.js";
 import { createProjectKeyResolver } from "./assembly/project-key.js";
@@ -340,9 +341,9 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
 
 // ── 装配段 helper（模块级纯函数——插件工厂内零内联） ──
 
-/** sessionPersistence root 锚定取法（root ?? face 双探针；缺席/异常 = undefined fail-soft） */
+/** sessionPersistence root 锚定取法（符号键根 ?? face 双探针；缺席/异常 = undefined fail-soft——bug bf4f3851：ctx.root 属性取法触发 cordis 1.1.0 inject 门控） */
 function rootServiceOf(face: ProjectPluginCtx): (name: string) => unknown {
-  const typertRootFace = ((face as { root?: unknown }).root ?? face) as { get?: (name: string) => unknown };
+  const typertRootFace = rootCtxOf(face) as { get?: (name: string) => unknown };
   return (name: string): unknown => {
     try {
       const value = typertRootFace.get?.(name);

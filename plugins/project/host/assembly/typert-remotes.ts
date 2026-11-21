@@ -19,6 +19,7 @@
 //
 // 范围边界：forge:settings 族归 configForms 自有 namespace（偏好值不经本面——AC③）。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
+import { rootCtxOf } from "./cordis-root.js";
 import { Peer } from "@deepseek-ai/dsh-client-connection";
 import type { Context } from "@deepseek-ai/cordis";
 import type {
@@ -515,9 +516,8 @@ export class ForgeFeaturesRemote extends TypertRemoteService {
 
 // ── 装配（根 ctx plugin 注册——gateway SRC 发现面 = 根 ctx reflect.props）──
 
-/** 插件 ctx 窄面（root 取法——cordis 子 ctx.root 指根；缺席宿主退 ctx 自身） */
+/** 插件 ctx 窄面（根 ctx 取法走符号键 rootCtxOf——bug bf4f3851：ctx.root 属性访问触发 cordis 1.1.0 inject 门控；非 ctx 形入参退自身） */
 export interface TypertAssemblyCtxFace {
-  readonly root?: unknown;
   plugin?(options: { name: string; apply: (scope: Context) => void }): unknown;
   /** cordis inject 生命周期缝（官方机械——deps 在场激活 cb、后到补激活、撤回随 fiber 退） */
   inject?(deps: readonly string[], cb: (scope: Record<string, unknown>) => void): unknown;
@@ -550,7 +550,7 @@ export function registerForgeTypertRemotes(
   deps: ForgeTypertDeps,
 ): ForgeTypertRegistration {
   const diag = deps.diag;
-  const host = (ctx.root ?? ctx) as TypertAssemblyCtxFace;
+  const host = (rootCtxOf(ctx) ?? ctx) as TypertAssemblyCtxFace;
   const registered: string[] = [];
   const degraded: string[] = [];
   const pending: string[] = [];
@@ -629,7 +629,7 @@ export function registerForgeTypertRemotes(
  * 探针结算即 dispose（scope fiber 随 root ctx 生命周期兜底回收，零悬空 Peer）。
  */
 export function selfProbeOf(face: TypertAssemblyCtxFace): NonNullable<ForgeTypertDeps["selfProbe"]> {
-  const root = (face.root ?? face) as Context & { get?: (name: string) => unknown };
+  const root = (rootCtxOf(face) ?? face) as Context & { get?: (name: string) => unknown };
   return async (namespace, method) => {
     let gateway: unknown;
     try {
