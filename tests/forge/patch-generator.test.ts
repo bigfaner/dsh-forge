@@ -4,7 +4,8 @@
 //   · 派发映射快照：!!js 表达式求值 ≡ host/assembly.ts derivePluginConfigs 缺省派生
 //     分支（动态同源双检）+ 延伸常量静态同源（漂移红）；
 //   · 生成器不变量：全部派发表达式自带 && 短路兜底；
-//   · 五件顶层 skills 行三谓词 + 负断言（fefd5149/探针④判例）；
+//   · 跨 patch 零重名负断言：forge patch 与五件 patch 间顶层 id/providerName 零交集
+//     （skills 行唯一正本 = 各件自己 patch——bundle 六 patch 同载防重名 loud-fail）；
 //   · preset-forge 形状：order 定值 pin（官方仓 preset 底稿核销后定值 2）+ 行内
 //     skill-filesystem-forge 实例五锚；
 //   · 产物零漂移：再生成幂等（跑两遍字节全等 + 仓内文件即生成器输出）。
@@ -54,7 +55,7 @@ function evalWithEnv(expr: string, dshHome: string | undefined): string | undefi
 
 describe("六行形状（forge 自插 + 五件插行——成员清单单源驱动）", () => {
   it("insert 块 id 序 = forge + 五件（单源序），name = @dsh-forge/<id>", () => {
-    const insertBody = patchYaml.slice(patchYaml.indexOf("- insert:"), patchYaml.indexOf("\n- id: skill-filesystem-"));
+    const insertBody = patchYaml.slice(patchYaml.indexOf("- insert:"), patchYaml.indexOf("\n- id: preset-forge"));
     const ids = [...insertBody.matchAll(/^    - id: (.+)$/gm)].map((m) => m[1]!);
     expect(ids).toEqual(["forge", ...MEMBERS]);
     for (const id of ["forge", ...MEMBERS]) {
@@ -114,35 +115,51 @@ describe("生成器不变量：全部派发表达式自带 && 短路兜底", () 
   });
 });
 
-describe("五件顶层 skills 行（探针④分支 A——三谓词 + 负断言）", () => {
-  const rows = MEMBERS.map((member) => {
-    const rowAt = patchYaml.indexOf(`- id: skill-filesystem-${member}\n`);
-    expect(rowAt, `${member} skills 行在场`).toBeGreaterThanOrEqual(0);
-    return { member, body: patchYaml.slice(rowAt, patchYaml.indexOf("\n- id:", rowAt + 1) + 1 || patchYaml.length) };
+describe("跨 patch 零重名（谁带谁自持——skills 行唯一正本在各件 patch，forge patch 不复制）", () => {
+  /** patch 顶层行 id（`- id: x` 行首）与 providerName 值抽取。 */
+  function topLevelIds(yaml: string): string[] {
+    return [...yaml.matchAll(/^- id: (.+)$/gm)].map((m) => m[1]!);
+  }
+  function providerNames(yaml: string): string[] {
+    return [...yaml.matchAll(/^\s+providerName: (\S+)$/gm)].map((m) => m[1]!);
+  }
+  const forgeIds = topLevelIds(patchYaml);
+  const forgeProviderNames = providerNames(patchYaml);
+
+  it("forge patch 零顶层 skills 行（唯一 skill-filesystem = preset-forge 行内 forge 实例）", () => {
+    expect(forgeIds.filter((id) => id.startsWith("skill-filesystem"))).toEqual([]);
+    expect(patchYaml).not.toMatch(/^- id: skill-filesystem\S*$/m);
+    expect(patchYaml).toContain("- id: skill-filesystem-forge\n");
   });
 
-  it("id 互异 ∩ ≠ base id skill-filesystem（fefd5149：同 id 被官方定点 disable 命中）", () => {
-    const ids = rows.map((r) => `skill-filesystem-${r.member}`);
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).not.toContain("skill-filesystem");
-    expect(patchYaml).not.toMatch(/^- id: skill-filesystem$/m);
-  });
-
-  it("providerName 互异且 ≠ 默认名 filesystem（同层重名注册 loud-fail）", () => {
-    const names = rows.map((r) => /^    providerName: (\S+)$/m.exec(r.body)?.[1]);
-    expect(names).toEqual(MEMBERS.map((m) => `filesystem-${m}`));
-    expect(new Set(names).size).toBe(names.length);
-    expect(names).not.toContain("filesystem");
-  });
-
-  it("customSkillDirs 自锚本包 skills/ 且 && 短路兜底（每件只依赖自己）", () => {
-    for (const { member, body } of rows) {
-      const expr = /- !!js (.+)$/m.exec(body)?.[1];
-      expect(expr, `${member} 锚表达式在场`).toBeDefined();
-      expect(expr).toContain(`resolve('@dsh-forge/${member}/package.json')`);
-      expect(expr, `${member} 锚定 skills/`).toMatch(/,\s*'skills'\)/);
-      expect(expr, `${member} && 短路兜底`).toContain("&&");
+  it("forge patch 顶层 id 与五件 patch 顶层 id 零交集（同层重名注册 loud-fail——fefd5149/probe-1 判例）", () => {
+    for (const member of MEMBERS) {
+      const memberYaml = readFileSync(join(REPO_ROOT, "plugins", member, "cordis.patch.yml"), "utf8");
+      const overlap = topLevelIds(memberYaml).filter((id) => forgeIds.includes(id));
+      expect(overlap, `forge patch 与 ${member} patch 顶层 id 交集`).toEqual([]);
     }
+  });
+
+  it("forge patch providerName 与五件 patch providerName 零交集（bundle 六 patch 同载防重名）", () => {
+    for (const member of MEMBERS) {
+      const memberYaml = readFileSync(join(REPO_ROOT, "plugins", member, "cordis.patch.yml"), "utf8");
+      const overlap = providerNames(memberYaml).filter((name) => forgeProviderNames.includes(name));
+      expect(overlap, `forge patch 与 ${member} patch providerName 交集`).toEqual([]);
+    }
+  });
+
+  it("preset-forge 行内 skill-filesystem-forge 实例：五锚自锚各件 skills/ 且 && 短路兜底", () => {
+    const presetBody = patchYaml.slice(patchYaml.indexOf("- id: preset-forge\n"));
+    const anchors = presetBody
+      .split("\n")
+      .filter((line) => line.startsWith("            - !!js "))
+      .map((line) => line.slice("            - !!js ".length));
+    expect(anchors).toHaveLength(MEMBERS.length);
+    anchors.forEach((expr, i) => {
+      expect(expr).toContain(`resolve('@dsh-forge/${MEMBERS[i]}/package.json')`);
+      expect(expr).toMatch(/,\s*'skills'\)/);
+      expect(expr).toContain("&&");
+    });
   });
 });
 

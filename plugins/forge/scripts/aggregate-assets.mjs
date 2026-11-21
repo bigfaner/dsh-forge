@@ -11,15 +11,15 @@
 //   ① 六插行：forge 自插行（{ home } 唯一键——Workbench 生长面，§2.2）+ 五件插行
 //      各携带派发 config !!js 行——派发映射消费 host/assembly.ts derivePluginConfigs
 //      单源（bundle 档唯一输入 = DSH_HOME 缺省派生分支；静态双检防漂移）；
-//   ② 五件顶层 skills 行（探针④分支 A）：异 id（≠ 官方 base 行——fefd5149 定点
-//      disable）+ 互异 providerName（默认名同层重名 loud-fail）+ customSkillDirs
-//      自锚本包 skills/；
-//   ③ preset-forge 行（§2.1）：persona 前缀（forge 流水线作业 SOP）+ 官方工具集
+//   ② preset-forge 行（§2.1）：persona 前缀（forge 流水线作业 SOP）+ 官方工具集
 //      standard 同构裁剪（base skill-filesystem 行由行内 forge 实例替换）+ 行内
 //      skill-filesystem-forge 实例（五条已装包锚）；order 定值 = 官方仓 preset 底稿
 //      核销当前 order 全集（packages/bundle/web-app/presets/：standard=1、ptc=2、
 //      minimal=3、cordis=4）后定值 2，官方升级随真机批次复校——漂移可发现而非被
 //      吸收（圆桌裁决 2026-11-21）。
+// 五件顶层 skills 行不属本生成器产出（谁带谁自持——唯一正本在各件自己
+// cordis.patch.yml，bundle 六 patch 同载时同层 providerName 重名注册 loud-fail）；
+// forge 侧唯一 skill-filesystem = preset-forge 行内实例 skill-filesystem-forge。
 // 生成器不变量：全部派发表达式自带 && 短路兜底（防裸表达式异常冒泡打断行激活——
 // 圆桌裁定），写入前自检断言、契约测试 pin。
 import { readFileSync, writeFileSync } from "node:fs";
@@ -37,7 +37,7 @@ if (generationDrift.length > 0) {
   process.exit(1);
 }
 
-// ── 成员清单单源（六插行/五 skills 行/preset 五锚全部由本清单驱动）──────────
+// ── 成员清单单源（六插行/preset 五锚全部由本清单驱动）──────────────────────
 const MEMBERS = ["project", "spec", "task-loop", "expert-squad", "knowledge"];
 
 // ── 延伸常量（与 host/assembly.ts 同源——静态双检钉死，.mjs 不 import .ts）──
@@ -229,15 +229,15 @@ function selfCheck(patchYaml) {
   const dispatchExprs = [HOME_EXPR, DB_EXPR, TASKS_EXPR, PROJECT_HOME_EXPR, ...MEMBERS.map(memberSkillAnchorExpr)];
   const unguarded = dispatchExprs.filter((p) => !p.includes("&&"));
   if (unguarded.length > 0) violations.push(`派发表达式缺 && 短路兜底：${JSON.stringify(unguarded)}`);
-  // 五 skills 行三谓词：id 互异 ∩ ≠ base id ∩ providerName 互异 ≠ 默认名
-  const skillIds = MEMBERS.map((m) => `skill-filesystem-${m}`);
-  if (new Set(skillIds).size !== MEMBERS.length) violations.push("skills 行 id 非互异");
-  if (skillIds.includes("skill-filesystem")) violations.push("skills 行 id 撞官方 base id");
-  const providerNames = MEMBERS.map((m) => `filesystem-${m}`);
-  if (new Set(providerNames).size !== MEMBERS.length) violations.push("providerName 非互异");
-  if (providerNames.includes("filesystem")) violations.push("providerName 撞默认名");
-  // 负断言：零裸 filesystem 行（顶层 skills 行一律显式 providerName）
-  const bareRows = [...patchYaml.matchAll(/^- id: (skill-filesystem\S*)$/gm)]
+  // 跨 patch 零重名（谁带谁自持）：forge patch 零顶层 skills 行——唯一 skill-filesystem
+  // = preset-forge 行内实例 skill-filesystem-forge（跨 patch id/providerName 零交集由
+  // tests/forge/patch-generator.test.ts 契约断言逐件核销）。
+  const topLevelRows = [...patchYaml.matchAll(/^- id: (\S+)$/gm)].map((m) => m[1]);
+  if (topLevelRows.some((id) => id.startsWith("skill-filesystem"))) {
+    violations.push("forge patch 出现顶层 skills 行（唯一正本在各件自己 patch——谁带谁自持）");
+  }
+  // 负断言：零裸 filesystem 行（行内 skills 实例一律显式 providerName）
+  const bareRows = [...patchYaml.matchAll(/^(- id: skill-filesystem\S*)$/gm)]
     .map((m) => m[1])
     .filter((id) => id === "skill-filesystem");
   if (bareRows.length > 0) violations.push("patch 出现官方 base id 裸 filesystem 行");
@@ -270,29 +270,20 @@ const insertBlock = [
   }),
 ];
 
-const skillsBlock = MEMBERS.flatMap((m) => [
-  `- id: skill-filesystem-${m}`,
-  "  name: '@deepseek-ai/dsh-skill-filesystem'",
-  "  config:",
-  `    providerName: filesystem-${m}`,
-  "    customSkillDirs:",
-  `      - !!js ${memberSkillAnchorExpr(m)}`,
-]);
-
 const header = [
   "# @dsh-forge/forge bundle 档 patch（forge-aggregate-bundle 1.5——scripts/aggregate-assets.mjs 生成产物，勿手改）：",
   "# ① 六插行：forge 自插行（{ home } 唯一键——Workbench 生长面）+ 五件插行各携带派发",
   "#    config !!js 行（映射 host/assembly.ts derivePluginConfigs 单源——bundle 档唯一",
   "#    输入 = DSH_HOME 缺省派生分支；静态双检 tests/forge/patch-generator.test.ts）。",
-  "# ② 五件顶层 skills 行：异 id（≠ 官方 base 行——fefd5149 定点 disable 判例）+ 互异",
-  "#    providerName（默认名同层重名注册 loud-fail）+ customSkillDirs 自锚本包 skills/。",
-  "# ③ preset-forge：persona 前缀（forge 流水线作业 SOP）+ 官方工具集 standard 同构裁剪",
+  "# ② preset-forge：persona 前缀（forge 流水线作业 SOP）+ 官方工具集 standard 同构裁剪",
   "#    + 行内 skill-filesystem-forge 实例（五条已装包锚）；order 定值 2（官方仓 preset",
   "#    底稿核销当前 order 全集后定值 + 契约断言 pin——官方升级随真机批次复校）。",
+  "# 五件顶层 skills 行不属本 patch（谁带谁自持——唯一正本在各件自己 cordis.patch.yml，",
+  "# bundle 六 patch 同载防同层 providerName 重名注册 loud-fail）。",
   "# 全部派发表达式自带 && 短路兜底（生成器不变量——防裸表达式异常冒泡打断行激活）。",
 ];
 
-const patchYaml = [...header, ...insertBlock, ...skillsBlock, ...presetForgeBlock].join("\n") + "\n";
+const patchYaml = [...header, ...insertBlock, ...presetForgeBlock].join("\n") + "\n";
 selfCheck(patchYaml);
 const target = join(FORGE_ROOT, "cordis.patch.yml");
 const previous = readFileSync(target, "utf8");
@@ -300,5 +291,5 @@ if (previous === patchYaml) {
   console.log("[aggregate] cordis.patch.yml 已是最新（零漂移——再生成幂等）");
 } else {
   writeFileSync(target, patchYaml, "utf8");
-  console.log("[aggregate] cordis.patch.yml 再生成（六插行 + 五件派发 + 五 skills 行 + preset-forge）");
+  console.log("[aggregate] cordis.patch.yml 再生成（六插行 + 五件派发 + preset-forge）");
 }

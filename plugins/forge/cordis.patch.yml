@@ -2,11 +2,11 @@
 # ① 六插行：forge 自插行（{ home } 唯一键——Workbench 生长面）+ 五件插行各携带派发
 #    config !!js 行（映射 host/assembly.ts derivePluginConfigs 单源——bundle 档唯一
 #    输入 = DSH_HOME 缺省派生分支；静态双检 tests/forge/patch-generator.test.ts）。
-# ② 五件顶层 skills 行：异 id（≠ 官方 base 行——fefd5149 定点 disable 判例）+ 互异
-#    providerName（默认名同层重名注册 loud-fail）+ customSkillDirs 自锚本包 skills/。
-# ③ preset-forge：persona 前缀（forge 流水线作业 SOP）+ 官方工具集 standard 同构裁剪
+# ② preset-forge：persona 前缀（forge 流水线作业 SOP）+ 官方工具集 standard 同构裁剪
 #    + 行内 skill-filesystem-forge 实例（五条已装包锚）；order 定值 2（官方仓 preset
 #    底稿核销当前 order 全集后定值 + 契约断言 pin——官方升级随真机批次复校）。
+# 五件顶层 skills 行不属本 patch（谁带谁自持——唯一正本在各件自己 cordis.patch.yml，
+# bundle 六 patch 同载防同层 providerName 重名注册 loud-fail）。
 # 全部派发表达式自带 && 短路兜底（生成器不变量——防裸表达式异常冒泡打断行激活）。
 - insert:
     - id: forge
@@ -33,36 +33,6 @@
       name: '@dsh-forge/knowledge'
       config:
         dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
-- id: skill-filesystem-project
-  name: '@deepseek-ai/dsh-skill-filesystem'
-  config:
-    providerName: filesystem-project
-    customSkillDirs:
-      - !!js process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/project/package.json') && process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/project/package.json')), 'skills')
-- id: skill-filesystem-spec
-  name: '@deepseek-ai/dsh-skill-filesystem'
-  config:
-    providerName: filesystem-spec
-    customSkillDirs:
-      - !!js process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/spec/package.json') && process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/spec/package.json')), 'skills')
-- id: skill-filesystem-task-loop
-  name: '@deepseek-ai/dsh-skill-filesystem'
-  config:
-    providerName: filesystem-task-loop
-    customSkillDirs:
-      - !!js process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/task-loop/package.json') && process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/task-loop/package.json')), 'skills')
-- id: skill-filesystem-expert-squad
-  name: '@deepseek-ai/dsh-skill-filesystem'
-  config:
-    providerName: filesystem-expert-squad
-    customSkillDirs:
-      - !!js process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/expert-squad/package.json') && process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/expert-squad/package.json')), 'skills')
-- id: skill-filesystem-knowledge
-  name: '@deepseek-ai/dsh-skill-filesystem'
-  config:
-    providerName: filesystem-knowledge
-    customSkillDirs:
-      - !!js process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/knowledge/package.json') && process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/knowledge/package.json')), 'skills')
 - id: preset-forge
   name: '@deepseek-ai/dsh-agent-preset'
   config:
