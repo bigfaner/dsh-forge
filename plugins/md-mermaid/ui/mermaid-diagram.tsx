@@ -56,28 +56,41 @@ export function loadMermaidEngine(): Promise<MermaidEngine> {
   return enginePromise
 }
 
-/** 渲染结果（ok = SVG 在场；fail = 回退占位） */
-export type MermaidRenderOutcome = { readonly ok: true; readonly svg: string } | { readonly ok: false }
+/** 渲染结果（ok = SVG 在场；fail = 回退占位 + reason 归一引擎/装载错误——bug a1cf5d03 失败不再静默） */
+export type MermaidRenderOutcome = { readonly ok: true; readonly svg: string } | { readonly ok: false; readonly reason: string }
+
+/** 错误消息首行归一（jison/装载错误多行栈——诊断面取单行） */
+function firstLine(err: unknown): string {
+  return String((err as { message?: string })?.message ?? err).split('\n')[0] ?? String(err)
+}
 
 /**
  * 渲染管线（纯异步面——loader 注入：真身 loadMermaidEngine / 测试替身）。
- * 失败一律归一 { ok: false }（异常不外溢——import 失败/render 抛错/形状非法同路回退）。
+ * 失败一律归一 { ok: false, reason }（异常不外溢——import 失败/render 抛错/形状非法同路回退，
+ * reason 承载错误首行供诊断面消费）。
  */
 export async function renderMermaidDiagram(
   load: () => Promise<MermaidEngine>,
   source: string,
   id: string,
 ): Promise<MermaidRenderOutcome> {
+  let engine: MermaidEngine
   try {
-    const engine = await load()
+    engine = await load()
+  } catch (err) {
+    return { ok: false, reason: `mermaid 引擎装载失败：${firstLine(err)}` }
+  }
+  try {
     const { svg } = await engine.render(id, source)
-    if (typeof svg !== 'string' || svg.length === 0) return { ok: false }
+    if (typeof svg !== 'string' || svg.length === 0) {
+      return { ok: false, reason: 'mermaid 渲染失败：render 返回空 svg' }
+    }
     // 1.14 管线单点收口：SVG 后处理（箭头开放化）后再返回——React 件与 DOM 增强器两消费
     // 面均经本函数，自动继承。零命中（上游改几何）原样返回——安全回归实心箭头。
     // 生产面 marker id 经 nextMermaidId 每渲染唯一，无同文档 -open 后缀去重需求（预览页双拷贝工件，注记即可）。
     return { ok: true, svg: applyOpenArrowheads(svg) }
-  } catch {
-    return { ok: false }
+  } catch (err) {
+    return { ok: false, reason: `mermaid 渲染失败：${firstLine(err)}` }
   }
 }
 

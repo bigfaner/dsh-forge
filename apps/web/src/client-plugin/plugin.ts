@@ -875,7 +875,14 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // bundle 发布面递达——凡 .md-code-block 全 DOM 扫描增强，门控 + parse 确认 +
         // 失败安全降级）；stop 归 overlay 洞 dispose 与 apply catch 两径（插件 fiber
         // 卸载级联回收）。
-        const mermaidEnhancer = views.createMermaidEnhancer()
+        const mermaidEnhancer = views.createMermaidEnhancer({
+          // 渲染路径失败诊断缝（bug a1cf5d03）：门控放行后引擎装载/render 失败不再静默
+          // 零出图——client 束 console 豁免（diagnostic-emit-discipline）。
+          onRenderFail: (info: { reason?: unknown }) => {
+            const reason = typeof info.reason === 'string' ? info.reason : String(info.reason)
+            console.warn(`[md-mermaid] DOM 增强渲染失败：${reason}`)
+          },
+        })
         mermaidEnhancer.start()
         const revokeBase = revokeBridgeAndLocale
         revokeBridgeAndLocale = (): void => {

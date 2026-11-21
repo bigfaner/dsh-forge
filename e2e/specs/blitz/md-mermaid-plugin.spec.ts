@@ -102,8 +102,9 @@ const WIDE_DOC = [
 
 /**
  * 新图代表型三 fence（J1-G2/G3/G4，契约 O1 成功出图分支）：
- * venn-beta / c4dynamic / flowchart-elk——12.1.0 门控词表补齐代表样本，源均真引擎 parse
- * ok:true（fence-probe.mjs 预校验，task_logs/001-gate-sampling-probe）。
+ * venn-beta / c4dynamic / flowchart-elk——12.1.0 门控词表补齐代表样本。源均 parse+render
+ * 双预校验（浏览器真机探针 task_logs/001-c4-render-probe：c4dynamic 必须声明 Rel 两端
+ * shape——裸 Rel(a,b) parse 过但 render 抛 unknown shape，门控 parse 判据不判渲染合法性）。
  */
 const NEW_TYPES_DOC = [
   '# 新图代表型出图',
@@ -119,6 +120,9 @@ const NEW_TYPES_DOC = [
   '',
   '```mermaid',
   'C4Dynamic',
+  '  title 动态',
+  '  System(a, "A")',
+  '  System(b, "B")',
   '  Rel(a, b, "x")',
   '```',
   '',

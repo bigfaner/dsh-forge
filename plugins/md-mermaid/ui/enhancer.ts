@@ -68,6 +68,13 @@ export interface MermaidEnhancerOptions {
   createObserver: (cb: () => void) => MutationObserverLike
   /** 观察根（缺省 doc.body ?? doc.documentElement） */
   root: EnhancerElement
+  /**
+   * 渲染路径失败诊断缝（bug a1cf5d03）：引擎装载/render 失败（门控已放行）时携带归一
+   * reason 回调——装配面接线诊断发射（client 束 console 豁免），不再静默零出图。
+   * parse 确认失败（流式残源高频噪声面）不触发——门控拒/残源与引擎渲染失败双信号
+   * 分辨判据仍在 validateMermaid 判决面（契约 §1 O3）。
+   */
+  onRenderFail?: (info: { readonly reason: string }) => void
 }
 
 /** FNV-1a 32 位源 hash（幂等去重锚——内容判据，非节点身份） */
@@ -130,6 +137,7 @@ export function createMermaidEnhancer(opts: Partial<MermaidEnhancerOptions> = {}
   const schedule = opts.schedule ?? defaultSchedule()
   const createObserver = opts.createObserver ?? defaultCreateObserver()
   const root = opts.root ?? doc.body ?? doc.documentElement
+  const onRenderFail = opts.onRenderFail
 
   /**
    * 增强单块：门控 → parse 确认 → render → 旁插/更新 figure + 隐藏原块 + 打标记。
@@ -145,7 +153,13 @@ export function createMermaidEnhancer(opts: Partial<MermaidEnhancerOptions> = {}
     if (block.getAttribute(MD_MERMAID_BLOCK_FLAG) === hash) return false
 
     // parse 确认（流式残源在此回退；引擎装载亦在此首次触发）
-    const engine: MermaidEngineLike = await load()
+    let engine: MermaidEngineLike
+    try {
+      engine = await load()
+    } catch (err) {
+      onRenderFail?.({ reason: `mermaid 引擎装载失败：${String((err as { message?: string })?.message ?? err).split('\n')[0] ?? String(err)}` })
+      return false
+    }
     if (typeof engine.parse === 'function') {
       try {
         await engine.parse(source)
@@ -154,7 +168,10 @@ export function createMermaidEnhancer(opts: Partial<MermaidEnhancerOptions> = {}
       }
     }
     const outcome = await renderMermaidDiagram(load, source, nextMermaidId())
-    if (!outcome.ok) return false
+    if (!outcome.ok) {
+      onRenderFail?.({ reason: outcome.reason })
+      return false
+    }
 
     // 旁插图容器（源变化复用既有 figure 更新，不叠插）
     const next = block.nextElementSibling

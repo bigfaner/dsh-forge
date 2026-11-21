@@ -120,29 +120,39 @@ describe('renderMermaidDiagram（渲染管线——loader 注入）', () => {
     expect(render).toHaveBeenNthCalledWith(2, 'id-2', FLOW_SOURCE)
   })
 
-  it('渲染失败（engine.render 抛错/非法源）→ 归一 fail，异常不外溢', async () => {
+  it('渲染失败（engine.render 抛错/非法源）→ 归一 fail + reason 承载引擎错误（bug a1cf5d03：失败不再静默）', async () => {
     render.mockRejectedValueOnce(new Error('Parse error'))
     const engine: MermaidEngine = mermaidDefault as MermaidEngine
-    await expect(renderMermaidDiagram(async () => engine, 'not a valid diagram @@@', 'id-3')).resolves.toEqual({ ok: false })
-  })
-
-  it('装载失败（import 径 reject）→ 归一 fail，异常不外溢', async () => {
-    await expect(renderMermaidDiagram(() => Promise.reject(new Error('chunk load failed')), ER_SOURCE, 'id-4')).resolves.toEqual({
+    await expect(renderMermaidDiagram(async () => engine, 'not a valid diagram @@@', 'id-3')).resolves.toEqual({
       ok: false,
+      reason: expect.stringContaining('Parse error'),
     })
   })
 
-  it('形状非法（svg 非字符串/空串）→ 归一 fail（不注入非 SVG 面）', async () => {
+  it('装载失败（import 径 reject）→ 归一 fail + reason 承载装载错误', async () => {
+    await expect(renderMermaidDiagram(() => Promise.reject(new Error('chunk load failed')), ER_SOURCE, 'id-4')).resolves.toEqual({
+      ok: false,
+      reason: expect.stringContaining('chunk load failed'),
+    })
+  })
+
+  it('形状非法（svg 非字符串/空串）→ 归一 fail + reason 注明空 svg（不注入非 SVG 面）', async () => {
     const bad: MermaidEngine = {
       initialize: () => undefined,
       render: vi.fn().mockResolvedValue({ svg: 42 } as unknown as { svg: string }),
     }
-    await expect(renderMermaidDiagram(async () => bad, ER_SOURCE, 'id-5')).resolves.toEqual({ ok: false })
+    await expect(renderMermaidDiagram(async () => bad, ER_SOURCE, 'id-5')).resolves.toEqual({
+      ok: false,
+      reason: expect.stringContaining('svg'),
+    })
     const empty: MermaidEngine = {
       initialize: () => undefined,
       render: vi.fn().mockResolvedValue({ svg: '' }),
     }
-    await expect(renderMermaidDiagram(async () => empty, ER_SOURCE, 'id-6')).resolves.toEqual({ ok: false })
+    await expect(renderMermaidDiagram(async () => empty, ER_SOURCE, 'id-6')).resolves.toEqual({
+      ok: false,
+      reason: expect.stringContaining('svg'),
+    })
   })
 })
 

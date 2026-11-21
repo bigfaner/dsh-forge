@@ -400,6 +400,45 @@ describe('安全降级（官方代码块现状，无未捕获异常）', () => {
     expect(block.style.display).toBeUndefined()
   })
 
+  it('render 失败 + onRenderFail 钩子：reason 归一在案（bug a1cf5d03：渲染失败不再静默零出图）；门控拒零钩子调用（双信号可分辨）', async () => {
+    const doc = new StubDoc()
+    const harness = makeEngine({ renderFail: true })
+    const scheduler = makeScheduler()
+    const block = makeCodeBlock(doc, VALID)
+    const gateRejectBlock = makeCodeBlock(doc, 'notadiagram\n    x')
+    const fails: Array<{ reason: string }> = []
+    const observerCbs: Array<() => void> = []
+    const enhancer = createMermaidEnhancer({
+      doc,
+      load: harness.load,
+      schedule: scheduler.schedule,
+      createObserver: (cb) => {
+        observerCbs.push(cb)
+        return { observe: vi.fn(), disconnect: vi.fn() }
+      },
+      debounceMs: 50,
+      onRenderFail: (info) => fails.push(info),
+    })
+
+    await expect(enhancer.scan()).resolves.toBeUndefined()
+    expect(fails, 'render 失败恰好一条诊断').toHaveLength(1)
+    expect(fails[0]?.reason).toContain('render boom')
+    expect(doc.documentElement.querySelectorAll(`[${MD_MERMAID_FIGURE_FLAG}]`)).toHaveLength(0)
+    expect(block.style.display).toBeUndefined()
+    expect(gateRejectBlock.hasAttribute(MD_MERMAID_BLOCK_FLAG), '门控拒不走渲染失败诊断面').toBe(false)
+  })
+
+  it('缺省（无钩子）：render 失败照旧安全降级不外溢', async () => {
+    const doc = new StubDoc()
+    const harness = makeEngine({ renderFail: true })
+    const scheduler = makeScheduler()
+    makeCodeBlock(doc, VALID)
+    const { enhancer } = makeEnhancer(doc, harness, scheduler)
+
+    await expect(enhancer.scan()).resolves.toBeUndefined()
+    expect(doc.documentElement.querySelectorAll(`[${MD_MERMAID_FIGURE_FLAG}]`)).toHaveLength(0)
+  })
+
   it('探测锚缺席（DOM 形变，无 [data-code-block-content]）= 跳过该块', async () => {
     const doc = new StubDoc()
     const harness = makeEngine()
