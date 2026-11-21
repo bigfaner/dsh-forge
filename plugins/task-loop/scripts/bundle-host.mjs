@@ -13,7 +13,7 @@
 // 与 tsc -b（类型链/.d.ts emit，emitDeclarationOnly——tsc 永不覆写 bundle .js，门禁序
 // 铁律①：tsc -b 仅 build 第一步）解耦。Run once per build；run-once, no watch。
 import { build } from "esbuild";
-import { readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -79,6 +79,35 @@ const inlineOfficial = {
   },
 };
 
+// 内联官方件的 package.json 版本自读改写（desktop enable "Cannot find module
+// '../package.json'" 实证：desktop 重定位钩子改写解析路径，运行期相对自读落空）——
+// 构建期读源包真实版本注入字面量（{ version: "x.y.z" }），运行时零路径解析。
+const officialSelfReadVersion = {
+  name: "official-self-read-version",
+  setup(build) {
+    build.onLoad({ filter: /node_modules[\\/].*\.js$/ }, (args) => {
+      let s;
+      try { s = readFileSync(args.path, "utf8"); } catch { return undefined; }
+      if (!s.includes("package.json")) return undefined;
+      let dir = dirname(args.path);
+      let version = "";
+      for (;;) {
+        const pj = join(dir, "package.json");
+        if (existsSync(pj)) {
+          try { version = JSON.parse(readFileSync(pj, "utf8")).version ?? ""; } catch {}
+          break;
+        }
+        const parent = dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+      }
+      const next = s.replace(/createRequire\([^)]{0,80}\)\("\.{1,2}\/package\.json"\)/g, `{ version: ${JSON.stringify(version)} }`);
+      if (next === s) return undefined;
+      return { contents: next, loader: "js" };
+    });
+  },
+};
+
 // 内联入口 = package.json exports 全部 dist/host 运行期入口镜像回 TS 源（单一事实源——
 // dist/host/x.js ↔ host/x.ts 同形镜像，exports 改面入口自动随动）。
 const HOST_RUNTIME_ENTRIES = exportsDistPaths(pkg).filter(
@@ -98,7 +127,7 @@ await build({
   platform: "node",
   target: "node20",
   external: EXTERNAL,
-  plugins: [dshDecoratorsPlugin, inlineOfficial],
+  plugins: [dshDecoratorsPlugin, inlineOfficial, officialSelfReadVersion],
   allowOverwrite: true,
   minify: false,
   sourcemap: false,
