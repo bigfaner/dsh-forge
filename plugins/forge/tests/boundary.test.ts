@@ -37,7 +37,6 @@ describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
       "host/assembly.ts",
       "host/index.ts",
       "package.json",
-      "scripts/aggregate-assets.mjs",
       "scripts/bundle-client.mjs",
       "scripts/bundle-host.mjs",
       "scripts/clean-dist.mjs",
@@ -143,9 +142,9 @@ describe("forge 声明面守卫（package.json 骨架期全量）", () => {
     expect(pkg.files).toEqual(["dist", "cordis.patch.yml", "experts"]);
   });
 
-  it("scripts：build = clean-dist → tsc -b → bundle-host → bundle-client → aggregate-assets（run-once 禁 watch）+ prepack self-containment", () => {
+  it("scripts：build = clean-dist → tsc -b → bundle-host → bundle-client（run-once 禁 watch）+ prepack self-containment", () => {
     expect(pkg.scripts?.build).toBe(
-      "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs && node scripts/aggregate-assets.mjs",
+      "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
     );
     expect(pkg.scripts?.prepack).toBe("node scripts/self-containment.mjs");
     for (const script of Object.values(pkg.scripts ?? {})) {

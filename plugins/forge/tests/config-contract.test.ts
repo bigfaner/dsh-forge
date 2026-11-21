@@ -1,4 +1,4 @@
-// forge 契约测试②：单行自插 config 行物化面——!!js 表达式与 assembly 派发单源同源
+// forge 契约测试②：单行自插 config 行物化面——!!js 表达式与 assembly 延伸常量同源
 // （静态双检：patch home 表达式由 host/assembly.ts 延伸常量同源拼出，漂移即红）。
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -32,7 +32,7 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
     expect(extractHomeExpr()).toBe(HOME_EXPR);
   });
 
-  it("物化语义 = {DSH_HOME}/forge（forge home 缺省派生——resolveForgeLayout 同径）", () => {
+  it("物化语义 = {DSH_HOME}/forge（forge home 缺省派生——直写正本缺省分支）", () => {
     expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "Z:\\mock-dsh-home" })).toBe("Z:\\mock-dsh-home/forge");
     expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "/data/dsh" })).toBe("/data/dsh/forge");
   });
@@ -42,17 +42,17 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
     expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "" })).toBeFalsy();
   });
 
-  it("占位符物化面封闭：!!js 求值点 = forge 行 home 表达式 + 五件自锚表达式 ×2（顶层 skills 行 + preset 嵌套行——自锚本包 skills/，bundle 介质）+ 官方 preset 底稿平台/禁用表达式，无 {projectDir}/{homeDir} 模板", () => {
+  it("占位符物化面封闭：!!js 求值点 = forge 行 home 表达式 + 五件插行派发表达式 + preset 行内五件自锚表达式（skill-filesystem-forge 实例——自锚各件 skills/，bundle 介质）+ 官方 preset 底稿平台/禁用表达式，无 {projectDir}/{homeDir} 模板", () => {
     expect(patchYaml).not.toContain("{projectDir}");
     expect(patchYaml).not.toContain("{homeDir}");
     const jsPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!);
     expect(jsPoints[0]).toBe(HOME_EXPR);
-    // 自锚点 = 五件 <pkg>/package.json resolve 表达式 ×（顶层行 + preset 嵌套行）= 10。
+    // 自锚点 = preset 行内 skill-filesystem-forge 实例五条（顶层 skills 行不属本 patch——1.11 谁带谁自持）。
     const anchorPoints = jsPoints.slice(1).filter((p) => p.includes("/package.json"));
-    expect(anchorPoints).toHaveLength(10);
+    expect(anchorPoints).toHaveLength(5);
     const otherPoints = jsPoints.slice(1).filter((p) => !p.includes("/package.json"));
-    // 非自锚点 = 五件插行派发 config 表达式 ×6（home/dbFile/tasksHome——bundle 档派发
-    // 映射双检归 tests/forge/patch-generator.test.ts）+ 官方 preset 底稿 platform 禁用
+    // 非自锚点 = 五件插行派发 config 表达式 ×6（home/dbFile/tasksHome——静态直检归
+    // tests/forge/skills-rows-contract.test.ts）+ 官方 preset 底稿 platform 禁用
     // 表达式 ×2 + plugin-manager profileContext ×1。
     expect(otherPoints).toHaveLength(9);
     expect(otherPoints.filter((p) => p.startsWith("process.platform"))).toHaveLength(2);

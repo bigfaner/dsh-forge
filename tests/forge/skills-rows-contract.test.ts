@@ -1,5 +1,6 @@
 // 五件 skills 自持行契约（forge-aggregate-bundle 1.4——探针④分支 A 物化，圆桌合流
-// 三谓词 + 负断言）：
+// 三谓词 + 负断言；1.13 起兼载 forge bundle 档 patch 静态直检——六插行 + 跨 patch
+// 零交集负断言 + preset-forge order pin，生成器退役后直写正本唯一守卫载体）：
 //   · fefd5149 判例：顶层行与官方 base 行同 id（skill-filesystem）即被 dsh-web-app
 //     的定点 disable 命中（patch per-key 覆写只作用该行，provider 根本不注册）——
 //     id 必改异，仅补 providerName 无效；
@@ -136,5 +137,101 @@ describe("负断言（禁无 providerName 的裸 filesystem 行）", () => {
         expect(row.body, `${pkg} 行 ${row.id} 缺 providerName`).toMatch(/^\s*providerName:/m);
       }
     }
+  });
+});
+
+// ── forge bundle 档 patch 静态直检（forge-aggregate-bundle 1.13——patch 直写化，
+//    生成器退役；原 patch-generator.test.ts 守卫语义保留，载体改为直写文件静态校验）──
+const FORGE_PATCH = readFileSync(resolve(REPO_ROOT, "plugins", "forge", "cordis.patch.yml"), "utf8");
+const MEMBERS = ["project", "spec", "task-loop", "expert-squad", "knowledge"] as const;
+
+function topLevelIds(yaml: string): string[] {
+  return [...yaml.matchAll(/^- id: (.+)$/gm)].map((m) => m[1]!);
+}
+function providerNames(yaml: string): string[] {
+  return [...yaml.matchAll(/^\s+providerName: (\S+)$/gm)].map((m) => m[1]!);
+}
+
+describe("forge patch 六插行（静态直检——直写正本）", () => {
+  it("insert 块 id 序 = forge + 五件，name = @dsh-forge/<id>", () => {
+    const insertBody = FORGE_PATCH.slice(FORGE_PATCH.indexOf("- insert:"), FORGE_PATCH.indexOf("\n- id: preset-forge"));
+    const ids = [...insertBody.matchAll(/^    - id: (.+)$/gm)].map((m) => m[1]!);
+    expect(ids).toEqual(["forge", ...MEMBERS]);
+    for (const id of ["forge", ...MEMBERS]) {
+      expect(insertBody).toContain(`- id: ${id}\n      name: '@dsh-forge/${id}'`);
+    }
+  });
+
+  it("派发表达式 && 短路兜底（直写不变量——防裸表达式异常冒泡打断行激活；expert-squad 空对象豁免）", () => {
+    for (const member of MEMBERS) {
+      const rowAt = FORGE_PATCH.indexOf(`    - id: ${member}\n`);
+      expect(rowAt, `${member} 插行在场`).toBeGreaterThanOrEqual(0);
+      const nextRowAt = FORGE_PATCH.indexOf("\n    - id: ", rowAt + 1);
+      const presetAt = FORGE_PATCH.indexOf("\n- id: preset-forge");
+      const rowEnd = nextRowAt === -1 || presetAt < nextRowAt ? presetAt : nextRowAt;
+      const exprs = [...FORGE_PATCH.slice(rowAt, rowEnd).matchAll(/^        (\w+): !!js (.+)$/gm)].map(
+        (m) => [m[1]!, m[2]!] as const,
+      );
+      if (member === "expert-squad") {
+        expect(exprs, "expert-squad 空对象豁免").toHaveLength(0);
+        continue;
+      }
+      expect(exprs.length, `${member} 派发表达式非空`).toBeGreaterThan(0);
+      for (const [key, expr] of exprs) {
+        expect(expr, `${member}.${key} && 兜底`).toContain("&&");
+      }
+    }
+  });
+
+  it("forge patch 零顶层 skills 行（唯一 skill-filesystem = preset-forge 行内 forge 实例）", () => {
+    expect(topLevelIds(FORGE_PATCH).filter((id) => id.startsWith("skill-filesystem"))).toEqual([]);
+    expect(FORGE_PATCH).not.toMatch(/^- id: skill-filesystem\S*$/m);
+    expect(FORGE_PATCH).toContain("- id: skill-filesystem-forge\n");
+  });
+});
+
+describe("跨 patch 零交集负断言（谁带谁自持——bundle 六 patch 同载防重名 loud-fail）", () => {
+  const forgeIds = topLevelIds(FORGE_PATCH);
+  const forgeProviderNames = providerNames(FORGE_PATCH);
+
+  it("forge patch 顶层 id 与五件 patch 顶层 id 零交集（同层重名注册 loud-fail——fefd5149/probe-1 判例）", () => {
+    for (const member of MEMBERS) {
+      const memberYaml = readFileSync(resolve(REPO_ROOT, "plugins", member, "cordis.patch.yml"), "utf8");
+      const overlap = topLevelIds(memberYaml).filter((id) => forgeIds.includes(id));
+      expect(overlap, `forge patch 与 ${member} patch 顶层 id 交集`).toEqual([]);
+    }
+  });
+
+  it("forge patch providerName 与五件 patch providerName 零交集（bundle 六 patch 同载防重名）", () => {
+    for (const member of MEMBERS) {
+      const memberYaml = readFileSync(resolve(REPO_ROOT, "plugins", member, "cordis.patch.yml"), "utf8");
+      const overlap = providerNames(memberYaml).filter((name) => forgeProviderNames.includes(name));
+      expect(overlap, `forge patch 与 ${member} patch providerName 交集`).toEqual([]);
+    }
+  });
+});
+
+describe("preset-forge 静态直检（直写正本）", () => {
+  const presetBody = FORGE_PATCH.slice(FORGE_PATCH.indexOf("- id: preset-forge\n"));
+
+  it("order 定值 pin = 2（官方仓 preset 底稿核销当前 order 全集后定值——standard=1/ptc=2/minimal=3/cordis=4；漂移红）", () => {
+    expect(presetBody).toMatch(/^    order: 2$/m);
+  });
+
+  it("行内 skill-filesystem-forge 实例：providerName: filesystem-forge + customSkillDirs 五锚自锚各件 skills/ 且 && 短路兜底", () => {
+    expect(presetBody).toContain("providerName: filesystem-forge");
+    const dirsAt = presetBody.indexOf("          customSkillDirs:\n");
+    expect(dirsAt).toBeGreaterThanOrEqual(0);
+    const anchors = presetBody
+      .slice(dirsAt)
+      .split("\n")
+      .filter((line) => line.startsWith("            - !!js "))
+      .map((line) => line.slice("            - !!js ".length));
+    expect(anchors).toHaveLength(MEMBERS.length);
+    anchors.forEach((expr, i) => {
+      expect(expr).toContain(`resolve('@dsh-forge/${MEMBERS[i]}/package.json')`);
+      expect(expr).toMatch(/,\s*'skills'\)/);
+      expect(expr).toContain("&&");
+    });
   });
 });

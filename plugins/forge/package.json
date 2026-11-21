@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/forge",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
-  "description": "forge 聚合 Bundle 壳（防双激活守卫薄 host + 自有 client 视图入口 + 六插行 patch 生成器单源 assembly + 双链打包——forge-aggregate-bundle 形态）。",
+  "description": "forge 聚合 Bundle 壳（防双激活守卫薄 host + 自有 client 视图入口 + 六插行直写 patch + 双链打包——forge-aggregate-bundle 形态）。",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
   "exports": {
@@ -37,7 +37,7 @@
     "experts"
   ],
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs && node scripts/aggregate-assets.mjs",
+    "build": "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
     "prepack": "node scripts/self-containment.mjs"
   },
   "peerDependencies": {

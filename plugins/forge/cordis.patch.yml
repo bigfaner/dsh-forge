@@ -1,13 +1,13 @@
-# @dsh-forge/forge bundle 档 patch（forge-aggregate-bundle 1.5——scripts/aggregate-assets.mjs 生成产物，勿手改）：
+# @dsh-forge/forge bundle 档 patch（forge-aggregate-bundle 1.13——直写正本，人工核字维护；生成器已退役）：
 # ① 六插行：forge 自插行（{ home } 唯一键——Workbench 生长面）+ 五件插行各携带派发
-#    config !!js 行（映射 host/assembly.ts derivePluginConfigs 单源——bundle 档唯一
-#    输入 = DSH_HOME 缺省派生分支；静态双检 tests/forge/patch-generator.test.ts）。
+#    config !!js 行（bundle 档唯一输入 = DSH_HOME 缺省派生分支；静态守卫
+#    tests/forge/skills-rows-contract.test.ts + plugins/forge/tests/config-contract.test.ts）。
 # ② preset-forge：persona 前缀（forge 流水线作业 SOP）+ 官方工具集 standard 同构裁剪
 #    + 行内 skill-filesystem-forge 实例（五条已装包锚）；order 定值 2（官方仓 preset
 #    底稿核销当前 order 全集后定值 + 契约断言 pin——官方升级随真机批次复校）。
 # 五件顶层 skills 行不属本 patch（谁带谁自持——唯一正本在各件自己 cordis.patch.yml，
 # bundle 六 patch 同载防同层 providerName 重名注册 loud-fail）。
-# 全部派发表达式自带 && 短路兜底（生成器不变量——防裸表达式异常冒泡打断行激活）。
+# 全部派发表达式自带 && 短路兜底（直写不变量——防裸表达式异常冒泡打断行激活）。
 - insert:
     - id: forge
       name: '@dsh-forge/forge'

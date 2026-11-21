@@ -3,9 +3,9 @@
 //      experts/ 副本 / dist-deep/ 产物 / .gitignore 条目 / package-release deep 分支
 //      ——任一回流即红（git 历史即封存，结构面零回潮）；
 //   ② freshness 门在打包链生效断言（归属守卫 + 门禁功能）：freshness 模块在位、
-//      package-release assembleRelease 入口前置 runFreshnessGate、aggregate-assets
-//      入口前置代际守卫 + 自动编译/代际双校验语义在场 + 门禁功能反例红（合成包
-//      代际标记漂移即 fail）。
+//      package-release assembleRelease 入口前置 runFreshnessGate + 门禁功能反例红
+//      （合成包代际标记漂移即 fail）。1.13 起 aggregate-assets/patch-generator 随
+//      patch 直写化退役入 ① 删除清单。
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -16,13 +16,14 @@ import { generationViolations, runFreshnessGate, SKIP_REBUILD_ENV } from "../../
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FORGE_ROOT = join(REPO_ROOT, "plugins", "forge");
 const pkgReleaseSrc = readFileSync(join(REPO_ROOT, "scripts", "package-release.mjs"), "utf8");
-const aggregateSrc = readFileSync(join(FORGE_ROOT, "scripts", "aggregate-assets.mjs"), "utf8");
 const freshnessSrc = readFileSync(join(FORGE_ROOT, "scripts", "freshness.mjs"), "utf8");
 const gitignoreSrc = readFileSync(join(REPO_ROOT, ".gitignore"), "utf8");
 
 describe("结构 pin ①——deep 退役删除清单路径不存在", () => {
   const ABSENT_PATHS = [
     "plugins/forge/scripts/deep-build.mjs",
+    "plugins/forge/scripts/aggregate-assets.mjs",
+    "tests/forge/patch-generator.test.ts",
     "plugins/forge/host/typert-seam.ts",
     "plugins/forge/tests/typert-seam.test.ts",
     "plugins/forge/tests/compose.test.ts",
@@ -48,10 +49,9 @@ describe("结构 pin ①——deep 退役删除清单路径不存在", () => {
     expect(pkgReleaseSrc).not.toMatch(/buildDeepVariant|forge-deep|channels\.deep|no-deep|DEEP_REL|deep: true|deep \? |join\([^)]*deep-build/);
   });
 
-  it("freshness 逻辑不再残留退役宿主（deep-build.mjs 缺席即深源断绝——①已断言，此处断言迁移面唯一）", () => {
+  it("freshness 逻辑唯一宿主（deep-build/aggregate-assets 缺席即深源断绝——①已断言，此处断言迁移面唯一）", () => {
     // 迁移唯一宿主 = freshness.mjs；打包链只经模块引用消费，不内联复制门禁语义
     expect(pkgReleaseSrc.match(/runFreshnessGate/g)?.length).toBe(2); // import + 调用
-    expect(aggregateSrc.match(/generationViolations/g)?.length).toBe(2); // import + 调用
   });
 });
 
@@ -63,14 +63,6 @@ describe("结构 pin ②——freshness 门在 bundle 打包链生效（归属�
     expect(gateIdx, "assembleRelease 入口缺 runFreshnessGate 前置").toBeGreaterThan(-1);
     const rebuildIdx = pkgReleaseSrc.indexOf("rmSync(outDir", assembleIdx);
     expect(rebuildIdx, "outDir 重建先于 freshness 门——前置失位").toBeGreaterThan(gateIdx);
-  });
-
-  it("归属守卫：aggregate-assets 入口前置代际守卫（fail-loud exit(1)——dist 陈旧不产 patch）", () => {
-    const gateIdx = aggregateSrc.indexOf("generationDrift");
-    const selfCheckIdx = aggregateSrc.indexOf("selfCheck(");
-    expect(gateIdx).toBeGreaterThan(-1);
-    expect(aggregateSrc).toContain("process.exit(1)");
-    expect(selfCheckIdx).toBeGreaterThan(gateIdx);
   });
 
   it("freshness 模块语义在场：run-once 自动编译 + 代际标记双校验 + skip flag 只跳编译不跳校验", () => {

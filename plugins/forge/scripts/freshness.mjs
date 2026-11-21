@@ -8,9 +8,8 @@
 //   ② 代际双校验：产物代际标记（dist/client.js `@dsh-forge-generation:pkg@ver`）==
 //      源 package.json version——陈旧即 fail（反例实证：project 源 0.26.4 vs dist
 //      0.26.3；自动编译根治 + 代际校验防中途改源）。
-// 消费面：scripts/package-release.mjs assembleRelease 入口前置（runFreshnessGate）；
-// scripts/aggregate-assets.mjs 入口前置（verifyGeneration 单查——forge build 链末步，
-// dist 刚产出，只做代际守卫不再递归编译）。
+// 消费面：scripts/package-release.mjs assembleRelease 入口前置（runFreshnessGate——
+// patch 直写化后 aggregate-assets.mjs 已退役，本门为 freshness 语义唯一宿主）。
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";

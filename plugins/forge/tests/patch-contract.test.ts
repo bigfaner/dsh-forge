@@ -1,7 +1,7 @@
 // forge 契约测试①：patch 形态（forge-aggregate-bundle——聚合 bundle 六插行介质）。
 // 顶层行 = 六插行（forge 自插 + 五件插行各携派发 config !!js 行——插行激活官方默认
 // 路径）+ 五件 skills 行（异 id + 互异 providerName 自锚本包 skills/）+ preset-forge。
-// 派发映射/自锚逐字符断言归 tests/forge/{patch-generator,skills-rows-contract}.test.ts
+// 派发映射/自锚逐字符断言归 tests/forge/skills-rows-contract.test.ts
 // 与 plugins/forge/tests/config-contract.test.ts；本文件为行形态速查 pin。
 // （对齐 plugins/project skeleton.test.ts 先例：patch 面文本结构机检。）
 import { readFileSync } from "node:fs";
@@ -65,12 +65,8 @@ describe("forge patch 六插行契约", () => {
     expect(patchYaml).toContain("- insert:");
   });
 
-  it("顶层行恰十二条 = 六插行 + 五件 skills 行 + preset-forge（序 pin——六插行激活官方默认路径）", () => {
-    expect(rows.map((r) => r.id)).toEqual([
-      ...SIX_ROW_IDS,
-      ...FIVE.map((m) => `skill-filesystem-${m}`),
-      "preset-forge",
-    ]);
+  it("顶层行恰七条 = 六插行 + preset-forge（序 pin——六插行激活官方默认路径；五件顶层 skills 行不属本 patch，唯一正本在各件自己 patch——1.11 谁带谁自持）", () => {
+    expect(rows.map((r) => r.id)).toEqual([...SIX_ROW_IDS, "preset-forge"]);
   });
 
   it("forge 自插行 name + config 恰 { home } 单键（forge 统一 schema——Workbench 生长面；db/tasksHome 不设覆写键恒延伸）", () => {
@@ -84,12 +80,9 @@ describe("forge patch 六插行契约", () => {
     }
   });
 
-  it("五件 skills 行：name = 官方 skill-filesystem 包 + config 携 providerName + customSkillDirs（自锚逐字符断言归 tests/forge/skills-rows-contract.test.ts 与 patch-generator 双检）", () => {
+  it("负断言：五件顶层 skills 行不在本 patch（唯一正本在各件自己 cordis.patch.yml——跨 patch 零交集断言归 tests/forge/skills-rows-contract.test.ts）", () => {
     for (const member of FIVE) {
-      const row = rows.find((r) => r.id === `skill-filesystem-${member}`)!;
-      expect(row.name).toBe("@deepseek-ai/dsh-skill-filesystem");
-      expect(row.configKeys).toContain("providerName");
-      expect(row.configKeys).toContain("customSkillDirs");
+      expect(rows.find((r) => r.id === `skill-filesystem-${member}`), `skill-filesystem-${member} 不在本 patch`).toBeUndefined();
     }
   });
 

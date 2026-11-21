@@ -1,7 +1,7 @@
 // @dsh-forge/forge host 入口（forge-aggregate-bundle 1.6 薄化）：
 // 聚合 Bundle 主通道下五件经 patch 六插行激活（官方默认路径——依赖落盘后插行激活
 // 天然成立），COMPOSED 组合段与 typert 手工缝解引用退役（组合/派发归 patch !!js 行，
-// assembly.ts 保留为生成器单源；文件删除归 1.7）。apply 薄形态保留两职责：
+// assembly.ts 只余在场守卫具名服务键与 config 类型；patch 直写化归 1.13）。apply 薄形态保留两职责：
 //   ① 防双激活守卫——solo 场景 forge 与五件并存时（任一件在场标记服务已在）跳过留痕
 //      （同 id 双激活 = loader throw，守卫前置让位）；
 //   ② 生命周期诊断 emitDiag（forge-bundle-apply / forge-bundle-skip——AGENTS §7 禁 console）。

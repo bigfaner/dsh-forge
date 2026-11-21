@@ -43,8 +43,8 @@ import {
 } from '../../../e2e/support/forge-combo.js'
 import { establishWebAuthSession, extractBootToken, sessionReady } from '../../../e2e/support/web-boot-auth.js'
 
-// ── 常量（生成器单源 plugins/forge/scripts/aggregate-assets.mjs 同值——漂移即红） ──────
-/** 五件成员裸名（aggregate-assets.mjs MEMBERS 同序） */
+// ── 常量（cordis.patch.yml 直写正本同值——漂移即红） ──────
+/** 五件成员裸名（cordis.patch.yml 六插行同序） */
 export const MEMBERS = ['project', 'spec', 'task-loop', 'expert-squad', 'knowledge'] as const
 export type Member = (typeof MEMBERS)[number]
 /** 五件 skills 行 id（异 id——≠ 官方 base id `skill-filesystem`） */

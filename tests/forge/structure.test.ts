@@ -29,7 +29,6 @@ describe("骨架三目录（阶段一最小化——零占位空模块）", () =
       "scripts/bundle-host.mjs",
       "scripts/bundle-client.mjs",
       "scripts/self-containment.mjs",
-      "scripts/aggregate-assets.mjs",
       "scripts/freshness.mjs",
       "cordis.patch.yml",
     ]) {
