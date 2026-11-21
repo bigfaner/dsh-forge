@@ -135,10 +135,17 @@ describe("dsh 依赖单一版本集（六件统一契约）", () => {
   // 判例 fc07cd8d（forge-aggregate-bundle 1.20）：dependencies 里的 @deepseek-ai/* 是
   // bundle 通道污染源——desktop staging autoInstallPeers 沿其 peer 族整树拉入对应代际
   // 官方件（driver@0.2.0-rc.2 → 旧代际六件 + better-sqlite3@11.x node-gyp → ELIFECYCLE 1）。
-  // 官方内部件一律「内联进 dist + 声明迁 devDependencies」；白名单仅当前代际类型面单件
-  // dsh-typert-protocol（无 peer 族、无 install 脚本——非污染源）。
-  it("六件 dependencies 禁 @deepseek-ai/*（bundle 通道污染源根除——白名单 dsh-typert-protocol）", () => {
-    const whitelist = new Set(["@deepseek-ai/dsh-typert-protocol"]);
+  // 官方内部件一律「内联进 dist + 声明迁 devDependencies」；白名单：
+  // - dsh-typert-protocol（无 peer 族、无 install 脚本——非污染源）
+  // - 组合目标插件（1.26 用户裁定+官方 forge-bundle 同款范式）：dsh-agent-preset /
+  //   dsh-skill-filesystem 以 dependencies 声明进 generation 安装闭包（patch 行引用、
+  //   非 import 消费、无遮蔽面——desktop dump-config "entry not found" 实证必须声明）
+  it("六件 dependencies 禁 @deepseek-ai/*（bundle 通道污染源根除——白名单 typert-protocol + 组合目标两件）", () => {
+    const whitelist = new Set([
+      "@deepseek-ai/dsh-typert-protocol",
+      "@deepseek-ai/dsh-agent-preset",
+      "@deepseek-ai/dsh-skill-filesystem",
+    ]);
     const offenders: string[] = [];
     for (const rel of SIX_PACKAGES) {
       for (const [name] of Object.entries(loadPkg(rel).dependencies ?? {})) {

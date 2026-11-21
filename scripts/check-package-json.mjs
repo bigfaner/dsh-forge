@@ -8,9 +8,12 @@
 // 依赖——官方内部件 runtime 声明经 file:/staging 闭包污染 profile（官方件遮蔽
 // bf4f3851、同族 2801eeeb、desktop staging 旧代际 better-sqlite3 node-gyp，三度实证）。
 // 正道：内联进 dist + 声明迁 devDependencies/peerDependencies（cordis peer + 构建期类型合法）。
+// 豁免（用户裁定 2026-11-22，官方 forge-bundle 同款范式）：组合目标插件（patch 行
+// 引用、非 import 消费、无遮蔽面）——@deepseek-ai/dsh-agent-preset、
+// @deepseek-ai/dsh-skill-filesystem 必须以 dependencies 声明才能进 generation
+// 安装闭包（否则 patch 行 entry not found 被丢弃）。
 import { readFileSync } from 'node:fs';
 import { enumerateRepoPackageJsons, expectValidPackageJson, ROOT } from './lib/check-package-json.mjs';
-
 const PLUGINS_INTERNAL_SIX = [
 	'plugins/forge',
 	'plugins/project',
@@ -19,6 +22,13 @@ const PLUGINS_INTERNAL_SIX = [
 	'plugins/expert-squad',
 	'plugins/knowledge',
 ];
+
+// 组合目标豁免（forge patch 行引用的官方插件——「声明进 dependencies 以进安装
+// 闭包」与「import 遮蔽」是两类语义，后者才是禁令对象）
+const COMPOSITION_TARGET_DEPS = new Set([
+	'@deepseek-ai/dsh-agent-preset',
+	'@deepseek-ai/dsh-skill-filesystem',
+]);
 
 function checkInternalSixDependencies() {
 	const violations = [];
@@ -33,7 +43,7 @@ function checkInternalSixDependencies() {
 		}
 		const deps = manifest.dependencies ?? {};
 		for (const [name] of Object.entries(deps)) {
-			if (name.startsWith('@deepseek-ai/')) {
+			if (name.startsWith('@deepseek-ai/') && !COMPOSITION_TARGET_DEPS.has(name)) {
 				violations.push(
 					`${rel}: dependencies 含 @deepseek-ai/* 依赖「${name}」——官方内部件一律「内联进 dist + 声明迁 devDeps」，`
 					+ 'runtime 声明经 file:/staging 闭包污染 profile（判例 bf4f3851 / 2801eeeb / desktop staging 旧代际三度实证）',
