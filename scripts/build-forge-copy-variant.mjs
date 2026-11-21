@@ -71,7 +71,7 @@ export function stripPatchConfig(patchText) {
  */
 export function assembleCopyVariant({ repoRoot = REPO_ROOT, outDir, stripPatchConfig: strip = false, install = true } = {}) {
   if (outDir === undefined) throw new Error('assembleCopyVariant：outDir 必填（仓外副本目标目录）')
-  const { treeDir } = assembleRelease({ repoRoot, outDir, zip: false })
+  const { treeDir } = assembleRelease({ repoRoot, outDir, zip: false, deep: false }) // deep tgz 非副本变体面（npm 通道发布树/solo 语义）
   const packages = discoverPackages(repoRoot)
   const memberIds = packages.slice(1).map((p) => p.name.slice('@dsh-forge/'.length))
   writeFileSync(

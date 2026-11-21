@@ -3,9 +3,11 @@
 // 重写 forge 依赖为相对 file: → manifest 版本清单 + 一致性机检 → 发布树字段自检
 // （R3-dsh-dev②：对发布树副本逐包 patch 路径解析 + dsh.client 文件存在性检查，
 // 出树前堵拷贝遗漏）→ zip。solo 变体（CT-DISK-09 路 C 终态安装物）：剥离五条相对
-// file: 依赖 + 保留 cordis.patch.yml 裸名插行原文（逐件通道：五件先装、forge solo 收口）。
-// 聚合/solo 双通道交付物齐备（desktop staging 单目录拷贝裁定——contract.md 修订留痕）。
-// run-once CLI：node scripts/package-release.mjs [--root <dir>] [--out <dir>] [--no-zip]
+// file: 依赖（五插行语义在五件侧——各件自带插行随包收录，forge 侧 = 单行自插）。
+// deep 变体（forge-deep-pack 1.9）：调用 plugins/forge/scripts/deep-build.mjs 同源
+// 产出单文件 tgz（freshness 门自动编译/内联/审计全部由 deep-build 承担——零重复
+// 实现），产物落 <outDir>/deep/。三通道并存：发布树 / solo / deep tgz。
+// run-once CLI：node scripts/package-release.mjs [--root <dir>] [--out <dir>] [--no-zip] [--no-deep]
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
@@ -15,6 +17,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DEFAULT_OUT = join(REPO_ROOT, 'release', 'forge-combo')
 const FORGE_DIR_REL = join('plugins', 'forge')
 const SOLO_REL = join('solo', 'forge')
+const DEEP_REL = join('deep')
 const SEMVER = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/
 
 export function readJson(file) {
@@ -24,6 +27,26 @@ export function readJson(file) {
 /** cordis.patch.yml 裸名插行清单（insert 条目 name: 值——契约锚，零 YAML 依赖正则面） */
 export function patchInsertNames(patchText) {
   return [...patchText.matchAll(/^\s*name:\s*['"]([^'"]+)['"]\s*$/gm)].map((m) => m[1])
+}
+
+/**
+ * cordis.patch.yml 顶层 `- insert:` 块内的插行清单（单行自插断言用）：从 `- insert:`
+ * 行起收集至下一顶层条目（非缩进行）止——块外 name: 行（skill-filesystem/preset 等
+ * 非插行条目）不计入。
+ */
+export function patchInsertEntryNames(patchText) {
+  const out = []
+  let inBlock = false
+  for (const line of patchText.split(/\r?\n/)) {
+    if (!inBlock) {
+      if (/^- insert:\s*$/.test(line)) inBlock = true
+      continue
+    }
+    if (/^\S/.test(line)) break
+    const m = line.match(/^\s*name:\s*['"]([^'"]+)['"]\s*$/)
+    if (m !== null) out.push(m[1])
+  }
+  return out
 }
 
 /** 六包发现：forge package.json dependencies 的相对 file: 条目（字段驱动，零硬编码清单） */
@@ -77,7 +100,7 @@ function copyPackageToTree(sourceDir, treePkgDir, { deps } = {}) {
   return manifest
 }
 
-/** solo 变体 dependencies：五条 file: 依赖全剥离（裸名插行激活面不变） */
+/** solo 变体 dependencies：五条 file: 依赖全剥离（五插行语义在五件侧，forge 侧单行自插激活不变） */
 export function soloDependencies(forgeManifest) {
   const deps = { ...forgeManifest.dependencies }
   for (const [name, spec] of Object.entries(deps)) {
@@ -92,10 +115,28 @@ export function relativeFileDep(fromDir, toDir) {
 }
 
 /**
- * 聚合发布树组装：outDir 清空重建 → 六包共置拷贝（forge deps 重写为相对 file:）→
- * solo 变体产出 → manifest 落盘 → zip。返回 { treeDir, manifestPath, zipPath, warnings }。
+ * deep 变体产出：调用 deep-build 同源产物（forge-deep-pack 1.9——freshness 门自动
+ * 编译 / 五件 inline / tgz 组装与审计全部由 deep-build 承担，零重复实现）。run-once
+ * 子进程（禁 watch），产物 = <outDir>/deep/{package, forge-deep-<version>.tgz}。
  */
-export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zip = true } = {}) {
+export function buildDeepVariant({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT } = {}) {
+  const script = join(repoRoot, 'plugins', 'forge', 'scripts', 'deep-build.mjs')
+  if (!existsSync(script)) throw new Error(`deep-build 脚本缺席：${script}`)
+  const deepDir = join(outDir, DEEP_REL)
+  const r = spawnSync(process.execPath, [script, '--out', deepDir], { cwd: repoRoot, encoding: 'utf8', windowsHide: true })
+  if (r.status !== 0) throw new Error(`deep-build 产出失败（exit ${r.status}）：${String(r.stderr ?? '').trim()}`)
+  const pkg = readJson(join(repoRoot, FORGE_DIR_REL, 'package.json'))
+  const tgzRel = join(DEEP_REL, `forge-deep-${pkg.version}.tgz`)
+  if (!existsSync(join(outDir, tgzRel))) throw new Error(`deep tgz 产物缺席：${tgzRel}`)
+  return { dir: DEEP_REL.replaceAll(sep, '/'), staging: join(DEEP_REL, 'package').replaceAll(sep, '/'), tgz: tgzRel.replaceAll(sep, '/'), version: pkg.version }
+}
+
+/**
+ * 聚合发布树组装：outDir 清空重建 → 六包共置拷贝（forge deps 重写为相对 file:）→
+ * solo 变体产出 → deep 变体产出（deep:true 时调 deep-build 同源产物）→ manifest 落盘
+ * → zip。返回 { treeDir, manifestPath, zipPath, deep, warnings }。
+ */
+export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zip = true, deep = true } = {}) {
   const packages = discoverPackages(repoRoot)
   rmSync(outDir, { recursive: true, force: true })
   mkdirSync(outDir, { recursive: true })
@@ -125,11 +166,13 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
   const versions = Object.fromEntries(
     Object.entries(treeDirs).map(([name, dir]) => [name, readJson(join(dir, 'package.json')).version]),
   )
-  // solo 变体：forge 树副本 + 五条 file: 依赖剥离（patch 裸名行原样保留）
+  // solo 变体：forge 树副本 + 五条 file: 依赖剥离（五插行语义在五件侧，forge patch 单行自插原样）
   const soloDir = join(outDir, SOLO_REL)
   const soloManifest = { ...forgeManifest, dependencies: soloDependencies(forgeManifest) }
   cpSync(forgeTreeDir, soloDir, { recursive: true })
   writeFileSync(join(soloDir, 'package.json'), `${JSON.stringify(soloManifest, null, 2)}\n`)
+  // deep 变体：单文件 tgz 主通道（deep-build 同源产物——freshness 门自动编译在 deep-build 内置）
+  const deepChannel = deep ? buildDeepVariant({ repoRoot, outDir }) : undefined
   // manifest 版本清单
   const manifest = {
     generator: 'scripts/package-release.mjs',
@@ -137,6 +180,7 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     channels: {
       aggregate: { dir: 'forge', deps: forgeManifest.dependencies },
       solo: { dir: SOLO_REL.replaceAll(sep, '/'), deps: soloManifest.dependencies },
+      ...(deepChannel === undefined ? {} : { deep: deepChannel }),
     },
     packages: Object.fromEntries(
       Object.entries(treeDirs).map(([name, dir]) => [name, { version: versions[name], dir: relative(outDir, dir).replaceAll(sep, '/') }]),
@@ -149,7 +193,7 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     zipPath = `${outDir}.zip`
     buildZip(outDir, zipPath)
   }
-  return { treeDir: outDir, manifestPath, zipPath, warnings }
+  return { treeDir: outDir, manifestPath, zipPath, deep: deepChannel, warnings }
 }
 
 /** 发布树字段自检（R3-dsh-dev②）：单包 patch 路径解析 + dsh.client bundle 文件存在性 */
@@ -179,9 +223,11 @@ export function verifyPackageFields(pkgDir, label) {
 
 /**
  * 发布树整树机检：逐包字段自检 + manifest 版本一致性 + files 拷贝完整性 +
- * forge 依赖相对 file: 形态与插行对应 + solo 变体 file: 剥离与裸名插行保留。
+ * forge patch 单行自插断言（五件零插行——组合缝激活）+ 五件各件自带插行断言
+ * （solo 语义在五件侧）+ solo 变体 file: 剥离与单行自插正本一致 + deep 通道齐备
+ * （deep:true 时）。
  */
-export function verifyReleaseTree(treeDir, { repoRoot = REPO_ROOT } = {}) {
+export function verifyReleaseTree(treeDir, { repoRoot = REPO_ROOT, deep = true } = {}) {
   const violations = []
   const packages = discoverPackages(repoRoot)
   const manifestPath = join(treeDir, 'manifest.json')
@@ -201,6 +247,15 @@ export function verifyReleaseTree(treeDir, { repoRoot = REPO_ROOT } = {}) {
     for (const rel of sourceFileEntries(entry.sourceDir, srcPkg)) {
       if (!existsSync(join(dir, rel))) violations.push(`${entry.name}: files 条目拷贝遗漏：${rel}`)
     }
+    // 五件各件自带插行断言（solo 语义在五件侧——plain dependency 不进层，五件单装
+    // 靠自带插行激活；forge 单行自插后成员 patch 不得被误剥）
+    if (entry !== packages[0]) {
+      const memberPatchRel = srcPkg.dsh?.bundle?.patch
+      if (typeof memberPatchRel === 'string' && existsSync(join(dir, memberPatchRel))) {
+        const memberInserts = patchInsertEntryNames(readFileSync(join(dir, memberPatchRel), 'utf8'))
+        if (!memberInserts.includes(entry.name)) violations.push(`${entry.name}: 自带插行缺席（成员 patch 须含本包 name 插行）`)
+      }
+    }
   }
   // manifest 版本一致性机检（清单 vs 树内实读逐包比对）
   for (const [name, meta] of Object.entries(manifest.packages ?? {})) {
@@ -215,24 +270,23 @@ export function verifyReleaseTree(treeDir, { repoRoot = REPO_ROOT } = {}) {
   for (const entry of packages) {
     if (manifest.packages?.[entry.name] === undefined) violations.push(`${entry.name}: manifest 版本清单缺条目`)
   }
-  // forge 聚合依赖：相对 file: 兄弟形态 + 与 patch 裸名插行一一对应
+  // forge 单行自插断言（1.4 裁定：五件零插行、一律经 host apply 组合激活——
+  // 原「插行↔file: 对应」机检随单行自插退役；file: 兄弟形态检查保留为树完整性锚）
   const forgeTreeDir = join(treeDir, 'forge')
   const forgePkg = readJson(join(forgeTreeDir, 'package.json'))
   const patchRel = forgePkg.dsh?.bundle?.patch
   if (typeof patchRel !== 'string' || !existsSync(join(forgeTreeDir, patchRel))) {
     violations.push('forge: dsh.bundle.patch 缺声明或文件缺席')
   } else {
-    const bareNames = patchInsertNames(readFileSync(join(forgeTreeDir, patchRel), 'utf8'))
-    const fileDeps = Object.entries(forgePkg.dependencies ?? {}).filter(([, spec]) => spec.startsWith('file:'))
-    for (const bare of bareNames) {
-      if (!fileDeps.some(([depName]) => depName === bare)) violations.push(`forge: file: 依赖缺裸名插行对应项 ${bare}`)
+    const bareNames = patchInsertEntryNames(readFileSync(join(forgeTreeDir, patchRel), 'utf8'))
+    if (bareNames.length !== 1 || bareNames[0] !== forgePkg.name) {
+      violations.push(`forge: patch 非单行自插（期望恰 ['${forgePkg.name}']，实际 [${bareNames.join(', ')}]）——五件零插行（组合缝激活）`)
     }
-    for (const [depName, spec] of fileDeps) {
-      if (!spec.startsWith('file:../')) violations.push(`forge: 依赖非发布树相对 file: 形态 ${depName} "${spec}"`)
-      if (!bareNames.includes(depName)) violations.push(`forge: file: 依赖无插行对应 ${depName}`)
+    for (const [depName, spec] of Object.entries(forgePkg.dependencies ?? {})) {
+      if (spec.startsWith('file:') && !spec.startsWith('file:../')) violations.push(`forge: 依赖非发布树相对 file: 形态 ${depName} "${spec}"`)
     }
   }
-  // solo 变体：五条 file: 全剥离 + patch 裸名行与源正本一致 + 字段自检
+  // solo 变体：五条 file: 全剥离 + forge patch 单行自插（与源正本一致）+ 字段自检
   const soloDir = join(treeDir, 'solo', 'forge')
   if (!existsSync(join(soloDir, 'package.json'))) {
     violations.push('solo 变体缺席（solo/forge）')
@@ -244,18 +298,48 @@ export function verifyReleaseTree(treeDir, { repoRoot = REPO_ROOT } = {}) {
     if (typeof soloPatchRel !== 'string' || !existsSync(join(soloDir, soloPatchRel))) {
       violations.push('solo: dsh.bundle.patch 缺声明或文件缺席')
     } else {
-      const sourceForgeDir = sourceByName.get(forgePkg.name)
-      const sourceForgePkg = sourceForgeDir !== undefined ? readJson(join(sourceForgeDir, 'package.json')) : undefined
-      const sourcePatchRel = sourceForgePkg?.dsh?.bundle?.patch
-      if (typeof sourcePatchRel === 'string') {
-        const sourceText = readFileSync(join(sourceForgeDir, sourcePatchRel), 'utf8')
-        const soloText = readFileSync(join(soloDir, soloPatchRel), 'utf8')
-        if (patchInsertNames(sourceText).join('|') !== patchInsertNames(soloText).join('|')) {
-          violations.push('solo: 裸名插行清单与源正本漂移')
+      const soloNames = patchInsertEntryNames(readFileSync(join(soloDir, soloPatchRel), 'utf8'))
+      if (soloNames.length !== 1 || soloNames[0] !== soloPkg.name) {
+        violations.push(`solo: forge patch 非单行自插（期望恰 ['${soloPkg.name}']，实际 [${soloNames.join(', ')}]）——裸名行形态退役`)
+      } else {
+        const sourceForgeDir = sourceByName.get(forgePkg.name)
+        const sourceForgePkg = sourceForgeDir !== undefined ? readJson(join(sourceForgeDir, 'package.json')) : undefined
+        const sourcePatchRel = sourceForgePkg?.dsh?.bundle?.patch
+        if (typeof sourcePatchRel === 'string') {
+          const sourceText = readFileSync(join(sourceForgeDir, sourcePatchRel), 'utf8')
+          const soloText = readFileSync(join(soloDir, soloPatchRel), 'utf8')
+          if (patchInsertEntryNames(sourceText).join('|') !== patchInsertEntryNames(soloText).join('|')) {
+            violations.push('solo: 单行自插清单与源正本漂移')
+          }
         }
       }
     }
     violations.push(...verifyPackageFields(soloDir, 'solo/forge'))
+  }
+  // deep 通道（deep:true 时齐备性机检——staging 依赖面零 file:/零 @dsh-forge/*，
+  // 详审由 deep-build 内置审计承担，此处只做通道齐备与依赖面轻检）
+  if (deep) {
+    const deepDir = join(treeDir, DEEP_REL)
+    const deepMeta = manifest.channels?.deep
+    if (deepMeta === undefined) {
+      violations.push('deep: manifest channels.deep 缺席（tgz 主通道未声明）')
+    } else if (!existsSync(join(treeDir, deepMeta.tgz ?? ''))) {
+      violations.push(`deep: tgz 产物缺席（${deepMeta.tgz}）`)
+    }
+    const stagingPkgPath = join(deepDir, 'package', 'package.json')
+    if (!existsSync(stagingPkgPath)) {
+      violations.push('deep: staging package.json 缺席（deep-build 产物未收录）')
+    } else {
+      const stagingPkg = readJson(stagingPkgPath)
+      if (stagingPkg.version !== forgePkg.version) violations.push(`deep: 版本漂移 staging=${stagingPkg.version} vs forge=${forgePkg.version}`)
+      for (const [name, spec] of Object.entries(stagingPkg.dependencies ?? {})) {
+        if (spec.startsWith('file:')) violations.push(`deep: staging 残留 file: 依赖 ${name} "${spec}"`)
+        if (name.startsWith('@dsh-forge/')) violations.push(`deep: staging 残留 @dsh-forge/* 依赖 ${name}（组合缝激活——plain dependency 不进层）`)
+      }
+      for (const rel of ['dist/host/index.js', 'dist/client.js', 'cordis.patch.yml']) {
+        if (!existsSync(join(deepDir, 'package', rel))) violations.push(`deep: staging 文件缺席 ${rel}`)
+      }
+    }
   }
   return violations
 }
@@ -279,10 +363,11 @@ function main(argv) {
   const rootFlag = flag('--root')
   const outFlag = flag('--out')
   const zip = !argv.includes('--no-zip')
+  const deep = !argv.includes('--no-deep')
   const repoRoot = rootFlag !== undefined ? resolve(rootFlag) : REPO_ROOT
   const outDir = outFlag !== undefined ? resolve(outFlag) : DEFAULT_OUT
-  const { treeDir, manifestPath, zipPath } = assembleRelease({ repoRoot, outDir, zip })
-  const violations = verifyReleaseTree(treeDir, { repoRoot })
+  const { treeDir, manifestPath, zipPath } = assembleRelease({ repoRoot, outDir, zip, deep })
+  const violations = verifyReleaseTree(treeDir, { repoRoot, deep })
   if (violations.length > 0) {
     console.error(`[package-release] 发布树机检 ${violations.length} 处违规：`)
     for (const v of violations) console.error(`  - ${v}`)
