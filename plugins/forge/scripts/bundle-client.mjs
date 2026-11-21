@@ -1,14 +1,13 @@
 // Bundle the client half into the official client-modules registration shape.
 //
 // 装载契约（官方 clientBundle 配方；五件样板同构）：宿主把 exports["./client"] 产物按
-// classic <script> 原样装载，产物必须自注册 window.__ModuleLoader__.load({ id, factory })
-// （cjs 体 + 注册头/module-var intro + return footer）。format:"esm" 产物带顶层
+// classic <script> 原样装载，产物自注册 window.__ModuleLoader__.load({ id, factory })
+// （cjs 体 + 注册头/module-var intro + return footer），且 factory 返回的 module.exports
+// 必须为 cordis 插件面（携带 apply——官方 client-ui-* 件同款；缺 apply → rc.5 registry
+// `invalid plugin … received object`，bug 95c1fed6 判例）。format:"esm" 产物带顶层
 // export/import.meta → classic script 语法错误 → 「loaded without registering」。
 //
 // 入口取 TS 源（ui/index.ts，由 exports["./client"].types 镜像推导——单一事实源）。
-// client 合并形态（forge-deep-pack 1.5 / 提案 §二.2，P0 #6 定谳 A 形态）：入口 import
-// 五件 dist/client.js 自注册 bundle（消费产物非源码）——五件注册全发生、序 = import
-// 拼接序、单外层求值内收敛（守卫三件套归 bundle-client 构建期自检）。
 //
 // 五件 client 并集声明（评审修订 6 / R3·N7）：forge dsh.client 的 external ∪ inject
 // 并集由本脚本从五件 package.json 的 dsh.client 字段驱动聚合——esbuild external 面 =
@@ -17,6 +16,7 @@
 // Run once per build；run-once, no watch。
 import { build } from "esbuild";
 import { readFileSync, readdirSync, rmSync } from "node:fs";
+import vm from "node:vm";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { auditDist, COMPOSED_MEMBERS } from "./self-containment.mjs";
@@ -101,6 +101,33 @@ const pruneClient = (dir) => {
 pruneClient(resolve(pkgDir, "dist/client"));
 rmSync(resolve(pkgDir, "dist/client.css"), { force: true });
 
+// 产物形状守卫（bug 95c1fed6 判例——占位产物无 apply → rc.5 registry materialize 后
+// `invalid plugin … received object` 装载失败）：client.js 必须为 cordis 插件形状
+// （module.exports 本体或其 default 为含 apply 方法的对象）。vm 沙箱复放官方
+// __ModuleLoader__ 装载序列截获 factory 返回值——占位/空对象产物构建期即败，禁离手。
+const clientJs = readFileSync(resolve(pkgDir, "dist/client.js"), "utf8");
+let materialized;
+vm.runInNewContext(
+  clientJs,
+  {
+    window: {
+      __ModuleLoader__: {
+        load: ({ factory }) => {
+          materialized = factory(() => {
+            throw new Error(`bundle-client: bundle 内 require 外置模块（守卫沙箱不解析）`);
+          });
+        },
+      },
+    },
+  },
+  { timeout: 2000 },
+);
+const pluginFace = materialized?.default ?? materialized;
+if (typeof pluginFace?.apply !== "function") {
+  console.error("[bundle-client] 产物形状守卫失败：client bundle 无 apply 装配面（占位产物禁离手——bug 95c1fed6 判例）");
+  process.exit(1);
+}
+
 // 离手门：bundle 末尾自跑自含性断言 + exports 闭包完整性断言——非 0 即败。
 // client bundle 零 @dsh-forge/* 裸名（合并自注册内联形态）；allowPrivate = external
 // 档五件白名单（dist/host 组合段 import 五件——运行期宿主 node_modules 解析），
@@ -112,5 +139,5 @@ if (violations.length > 0) {
   process.exit(1);
 }
 console.log(
-  `[bundle-client] 离手门通过（client 合并自注册形状 + 五件并集 external=${JSON.stringify(externalUnion)} inject=${JSON.stringify(injectUnion)} + dist 全量自含）`,
+  `[bundle-client] 离手门通过（client apply 面插件形状 + 五件并集 external=${JSON.stringify(externalUnion)} inject=${JSON.stringify(injectUnion)} + dist 全量自含）`,
 );
