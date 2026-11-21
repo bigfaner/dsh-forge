@@ -99,10 +99,12 @@ test('@web-e2e @blitz 互斥聚焦两态：全屏落 chip 聚焦替身输入 / �
     await expect(page.locator(CONVERSATION_CONTENT).first()).toContainText(MSG, { timeout: 60_000 })
 
     // ── 划选源 dockkit 文档面（夹具注入——真机取证同款标记面，仅文档活动门、零全屏标记）──
-    // anchor-sync：概览 feature 子 tab 随 OVERVIEW_FEATURE_ENABLED=false 退役
-    //（plugins/project/ui/dock-tabs/overview/overview-model.ts:30-36 用户裁定 2026-11-14
-    // 「项目概览暂时不要接入 feature」）——overview features 文档行开文档径不复存在，
-    // 划选源改 dockkit 文档夹具（产品全屏按钮/退全屏/互斥断言全部保持真实径）。
+    // anchor-sync 台账（testing/anchor-sync.md，bug b4745a71 归因收口）：概览 feature
+    // 子 tab 随 OVERVIEW_FEATURE_ENABLED=false 退役（plugins/project/ui/dock-tabs/
+    // overview/overview-model.ts:30-36 用户裁定 2026-11-14「项目概览暂时不要接入
+    // feature」）——overview features 文档行开文档径属产品裁定退役、非测试侧规避；
+    // 划选源改 dockkit 文档夹具（产品全屏按钮/退全屏/互斥断言全部保持真实径），
+    // surface 卸载跟随语义由真机取证补位（walkthrough/1.11-surface/，§1.4）。
     await injectDockkitDocFixture(page, { fullscreen: false, text: DOC_BODY })
 
     // ── U1 非全屏基线门控：markers=0 → 替身不挂载（互斥基线）──
@@ -133,7 +135,7 @@ test('@web-e2e @blitz 互斥聚焦两态：全屏落 chip 聚焦替身输入 / �
         .includes(needle),
     }), DOC_NEEDLE)
     expect(stateFullscreen.dscfMounted, '全屏态替身在挂（互斥：替身为唯一合法输入面）').toBe(1)
-    expect(stateFullscreen.chipLanded, '全屏态：chip 落替身草稿').toBe(true)
+    expect(stateFullscreen.chipLanded, '全屏态：chip 落替身草稿（SC-C1 终态投影——契约=journey §4/SC-C1，bug 1ea97ffc 钉稳）').toBe(true)
     expect(stateFullscreen.activeIsDscf, '互斥硬规则：全屏态落 chip 后 activeElement=替身输入锚').toBe(true)
 
     // ── U3 ⧉ 退全屏（官方 ISidebarRight.toggleFullscreen 同径）→ 替身卸载、markers 归零 ──

@@ -54,11 +54,20 @@ const BOOT_MSG = `rc.5 形态对照锚首条消息。${NEEDLE_A}。${NEEDLE_B}�
 const SEND_TAIL = '形态对照发送样本'
 const J2_DRAFT = '冻结窗口样本'
 
+// SC-C1 契约投影复算（journey §4/SC-C1 终态，bug 1ea97ffc 钉稳）：与 quote-reference
+// selection-menu.tsx summaryOf 同义（空白折叠 + ≤24 字全保真 / 超长截取前 24 字加 …）。
+const SUMMARY_MAX = 24
+function expectLabelOf(text: string): string {
+  const compact = text.replace(/\s+/g, ' ').trim()
+  return compact.length > SUMMARY_MAX ? `${compact.slice(0, SUMMARY_MAX)}…` : compact
+}
+
 interface Rc5Sample {
   readonly phase: string
   readonly busy: string
   readonly dataSending: boolean
   readonly btnSvg: boolean
+  readonly btnSvgBox: { readonly w: number; readonly h: number }
   readonly menuCount: number
   readonly draft: string
 }
@@ -222,6 +231,11 @@ async function installRc5Recorder(page: Page): Promise<void> {
       busy: sendBtn()?.getAttribute('aria-busy') ?? '',
       dataSending: sendBtn()?.hasAttribute('data-sending') ?? false,
       btnSvg: (sendBtn()?.querySelector('svg') ?? null) !== null,
+      btnSvgBox: (() => {
+        const svg = sendBtn()?.querySelector('svg')
+        const r = svg?.getBoundingClientRect()
+        return { w: r?.width ?? -1, h: r?.height ?? -1 }
+      })(),
       menuCount: document.querySelectorAll('[data-testid="dscf-mention"]').length,
       draft: input()?.textContent ?? '',
     })
@@ -311,11 +325,12 @@ test('@web-e2e @blitz super-composer rc.5 差异面 J1：替身形态对照—�
       return { chipEditable: chip?.getAttribute('contenteditable'), chipText: chip?.textContent ?? '', editorText: input?.textContent ?? '' }
     })
     expect(atomicA.chipEditable, 'SC-C1：chip 为原子节点（contenteditable=false）').toBe('false')
-    // SC-C1/I1 断言校准（quote-source.ts summaryOf ≤24 字全保真 + 真机 r2 判例
-    // needleInChip=true）：草稿投影 = chip 原子节点 label 明文（短锚句摘要即全文）；
-    // 「长句不整段落草稿」语义由 J1-B2 长锚句承载（截断 + 原文缺席）。
-    expect(atomicA.editorText.includes(NEEDLE_A), 'SC-C1/I1：chip label 明文投影在场（摘要 ≤24 字全保真）').toBe(true)
-    expect(atomicA.chipText, 'SC-C1/I1：chip label = @ 前缀 + 选文摘要（≤24 字无截断）').toBe(`@${NEEDLE_A}`)
+    // SC-C1 断言-契约溯源（journey §4/SC-C1 终态，bug 1ea97ffc 钉稳）：chip label =
+    // @ + summaryOf 选文摘要投影（quote-reference selection-menu.tsx SUMMARY_MAX=24，
+    // ≤24 字全保真 / 超长截断加 …）——短锚句 ≤24 字即原文逐字投影；「长句截断」
+    // 语义由 J1-B2 长锚句承载。
+    expect(atomicA.editorText.includes(NEEDLE_A), 'SC-C1[I1]（契约=journey §4/SC-C1）：chip label 明文投影在场（短锚句 ≤24 字全保真）').toBe(true)
+    expect(atomicA.chipText, 'SC-C1[I1]（契约=journey §4/SC-C1）：chip label = @ + summaryOf 投影（短锚句逐字全保真）').toBe(`@${expectLabelOf(NEEDLE_A)}`)
     // ── SC-C1 / J1-S2：第二锚句 → 两 chip 并存 ──
     await selectAndAddToChat(page, NEEDLE_B)
     await expect(surrogateChipsOf(page), 'J1-S2：两 chip 并存').toHaveCount(2, { timeout: 15_000 })
@@ -353,12 +368,14 @@ test('@web-e2e @blitz super-composer rc.5 差异面 J1：替身形态对照—�
     expect(duringSending.length, 'sending 相采样非空').toBeGreaterThan(0)
     for (const s of duringSending) {
       expect(s.btnSvg, 'I2/D2：sending 相发送钮仍为 svg 图标形态（spinner 替换箭头——非黑方块/未样式化矩形，bug 493c4fef 消解观察点）').toBe(true)
+      expect(s.btnSvgBox.w > 2 && s.btnSvgBox.h > 2, 'I2/D2（反例可红）：svg 实际渲染非退化尺寸（0×0 未样式化方块即红）').toBe(true)
       expect(s.busy, 'D2：sending 相发送钮 aria-busy=true').toBe('true')
     }
     const idleSamples = rec1.samples.filter((s) => s.phase !== 'sending' && !s.dataSending && s.draft.length > 0)
     expect(idleSamples.length, '非 sending 相采样非空').toBeGreaterThan(0)
     for (const s of idleSamples) {
       expect(s.btnSvg, 'I2：非 sending 相发送钮恒 svg 图标形态').toBe(true)
+      expect(s.btnSvgBox.w > 2 && s.btnSvgBox.h > 2, 'I2（反例可红）：svg 实际渲染非退化尺寸').toBe(true)
     }
     await rc5RecorderStop(page)
     // ── J1-B3：二次发送间快速再划选——re-copy 形态与首轮一致 ──
@@ -370,18 +387,28 @@ test('@web-e2e @blitz super-composer rc.5 差异面 J1：替身形态对照—�
     await ensureSurrogateInput(page)
     const longFace = await page.evaluate((needle) => {
       const input = document.querySelector('[data-testid="dscf-root"] [data-dscf-official-input] [data-composer-input]') as HTMLElement | null
-      const chip = input?.querySelector('[data-composer-chip="quote"]') as HTMLElement | null
+      // 目标 = 最近添加的 chip（J1-B3 轮次残留 chip 在前——首轮实证取首 chip 会错位到旧锚句）
+      const chip = [...(input?.querySelectorAll('[data-composer-chip="quote"]') ?? [])].pop() as HTMLElement | null
+      const label = [...(chip?.querySelectorAll('span') ?? [])].filter((s) => s.textContent !== '@').pop() ?? null
       return {
         chipText: chip?.textContent ?? '',
         editorText: input?.textContent ?? '',
         chipWidth: chip?.getBoundingClientRect().width ?? -1,
         inputWidth: input?.getBoundingClientRect().width ?? -1,
+        labelScrollWidth: label?.scrollWidth ?? -1,
+        labelClientWidth: label?.clientWidth ?? -1,
         needleLen: needle.length,
       }
     }, NEEDLE_LONG)
-    expect(longFace.chipText.length, 'J1-B2：chip 收窄——长引用 chip 投影短于原文整句').toBeLessThan(longFace.needleLen)
+    // SC-C1 契约（journey §4/SC-C1 终态）：超长选文 label = 精确截断投影（前 24 字 + …）
+    // ——反例可红：截断契约回归（全文溢出）时精确形状断言即红。
+    expect(longFace.chipText, 'J1-B2[I1]（契约=journey §4/SC-C1）：chip label = @ + summaryOf 截断投影（前 24 字 + …）').toBe(`@${expectLabelOf(NEEDLE_LONG)}`)
     expect(longFace.editorText.includes(NEEDLE_LONG), 'J1-B2/I1：长引用原文明文不溢出输入区').toBe(false)
-    expect(longFace.chipWidth, 'J1-B2：chip 宽度不超输入区宽（收窄不横向溢出）').toBeLessThanOrEqual(longFace.inputWidth)
+    // 反例可红（收窄判据）：ellipsis 未生效（overflow 样式漂移/label 不裁剪）时
+    // scrollWidth == clientWidth 即红；chip 实宽恒小于未裁剪内容宽（收窄真发生）。
+    expect(longFace.labelScrollWidth, 'J1-B2：label 裁剪面在场（锚命中）').toBeGreaterThan(0)
+    expect(longFace.labelScrollWidth, 'J1-B2：label 内容宽超可视宽（ellipsis 截断样式生效——样式漂移不裁剪即红）').toBeGreaterThan(longFace.labelClientWidth)
+    expect(longFace.chipWidth, 'J1-B2：chip 收窄——chip 实宽小于未裁剪内容宽（收窄不横向溢出）').toBeLessThan(longFace.labelScrollWidth)
     // ── 全程干净面 ──
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
