@@ -642,12 +642,6 @@ importers:
       '@deepseek-ai/cordis':
         specifier: 4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
-      '@deepseek-ai/dsh-agent-preset':
-        specifier: 0.2.2-rc.5
-        version: 0.2.2-rc.5(@deepseek-ai/cordis-plugin-loader@1.1.0)(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-agent-preset-registry@0.2.2-rc.5(4ca796925ecc7f170acb84d46177350a))
-      '@deepseek-ai/dsh-skill-filesystem':
-        specifier: 0.2.2-rc.5
-        version: 0.2.2-rc.5(747b7417cb68b636ef5d407c09f32638)
       '@dsh-forge/expert-squad':
         specifier: file:../expert-squad
         version: link:../expert-squad

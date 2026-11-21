@@ -210,9 +210,12 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     join(bundleDir, 'pnpm-workspace.yaml'),
     `# 生成文件（scripts/package-release.mjs）——交付目录 pnpm 构建批准表：13.0.3 零安装\n# 脚本（prebuilds/ 随包分发），此表仅消 ignored-builds 门，无编译动作。\nallowBuilds:\n${Object.entries(BUNDLE_ALLOW_BUILDS).map(([name, allow]) => `  '${name}': ${allow}`).join('\n')}\n`,
   )
-  // 交付目录 patch 增补五行顶层 skills 行（bug：bundle 通道成员 patch 不装载——
-  // 「谁带谁自持」仅在 solo/发布树成立；bundle 通道技能行必须由 forge patch 携带。
-  // providerName 互异 + 自锚 members 内 skills（generation node_modules 有五件兄弟包）。
+  // 交付目录 patch 增补段（bug：bundle 通道成员 patch 不装载——「谁带谁自持」仅
+  // solo/发布树成立；bundle 通道技能行/预设行必须由 forge patch 携带）。
+  // 行形态铁律（architect P1#2 定谳 + CLI dump-config 实验）：全部行必须 insert 块
+  // 包裹——顶层非 insert 行被 loader 按 entry 解析 → entry not found 静默跳过
+  // （官方形态 = expert-squad preset-headhunter 第二 insert 块）。组合目标插件
+  // （agent-preset/skill-filesystem）由宿主运行时供服，无需 profile 安装。
   const memberNames = packages.slice(1).map((entry) => entry.name.slice('@dsh-forge/'.length))
   const skillRows = memberNames.flatMap((name) => {
     const anchor = `process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/${name}/package.json')`
@@ -226,7 +229,16 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
       `      - !!js ${anchor} && ${joinExpr}`,
     ]
   })
-  appendFileSync(join(bundleDir, 'cordis.patch.yml'), `\n${skillRows.join('\n')}\n`)
+  // preset-headhunter 行块搬移（expert-squad patch 第二 insert 块逐字——bundle 通道
+  // 成员 patch 非插行语义的唯一等价承载，猎头模式预设恢复）
+  const headhunterPatch = readFileSync(join(repoRoot, 'plugins', 'expert-squad', 'cordis.patch.yml'), 'utf8')
+  const hl = headhunterPatch.split('\n')
+  const insertStarts = []
+  hl.forEach((l, idx) => { if (l.trim() === '- insert:') insertStarts.push(idx) })
+  const hhStart = insertStarts[1]
+  if (hhStart === undefined) throw new Error('交付增补失败：expert-squad patch 第二 insert 块（preset-headhunter）缺席')
+  const headhunterBlock = hl.slice(hhStart).filter((l) => l.trim() !== '').join('\n')
+  appendFileSync(join(bundleDir, 'cordis.patch.yml'), `\n${['- insert:', ...skillRows.map((l) => '  ' + l)].join('\n')}\n${headhunterBlock}\n`)
   // manifest 版本清单
   const manifest = {
     generator: 'scripts/package-release.mjs',
@@ -334,9 +346,10 @@ export function verifyReleaseTree(treeDir, { repoRoot = REPO_ROOT } = {}) {
   } else {
     const bundleInserts = patchInsertEntryNames(readFileSync(join(forgeTreeDir, patchRel), 'utf8'))
     const expectedInserts = packages.map((p) => p.name)
-    // 集合比较（行序非语义——装配序由 COMPOSED 表定，成员清单序为发现序）
-    if (JSON.stringify([...bundleInserts].sort()) !== JSON.stringify([...expectedInserts].sort())) {
-      violations.push(`forge: bundle 插行清单漂移（期望恰 ${JSON.stringify(expectedInserts)}，实际 ${JSON.stringify(bundleInserts)}）`)
+    // 成员包含性断言（preset/skills 行同入 insert 块——额外条目合法，成员缺席即红）
+    const missing = expectedInserts.filter((name) => !bundleInserts.includes(name))
+    if (missing.length > 0) {
+      violations.push(`forge: bundle 插行清单漂移（成员缺席 ${JSON.stringify(missing)}，实际 ${JSON.stringify(bundleInserts.slice(0, 12))}…）`)
     }
     for (const [depName, spec] of Object.entries(forgePkg.dependencies ?? {})) {
       if (!spec.startsWith('file:')) continue

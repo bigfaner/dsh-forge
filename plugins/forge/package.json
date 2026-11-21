@@ -49,8 +49,6 @@
     "typescript": "6.0.3"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-agent-preset": "0.2.2-rc.5",
-    "@deepseek-ai/dsh-skill-filesystem": "0.2.2-rc.5",
     "@dsh-forge/expert-squad": "file:../expert-squad",
     "@dsh-forge/knowledge": "file:../knowledge",
     "@dsh-forge/project": "file:../project",
