@@ -366,6 +366,13 @@ export function sharedHostStdout(env: ComboEnv): string {
   return text.replace(/^# stdout\r?\n/, '').split(/\r?\n# stderr\r?\n/)[0] ?? ''
 }
 
+/** boot 取证全文读面（stdout + stderr——INV-3 loud-fail 断言切片源；激活失败落 stderr） */
+export function sharedHostBootForensics(env: ComboEnv): string {
+  const record = readSharedState(env).host
+  if (record === null || !existsSync(record.stdoutFile)) return ''
+  return readFileSync(record.stdoutFile, 'utf8')
+}
+
 
 /**
  * bundle 正装共享建成（幂等单次：purge → plugin add → 廉价代际门；已建成且状态复验
