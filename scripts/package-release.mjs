@@ -230,14 +230,22 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     ]
   })
   // preset-headhunter 行块搬移（expert-squad patch 第二 insert 块逐字——bundle 通道
-  // 成员 patch 非插行语义的唯一等价承载，猎头模式预设恢复）
-  const headhunterPatch = readFileSync(join(repoRoot, 'plugins', 'expert-squad', 'cordis.patch.yml'), 'utf8')
-  const hl = headhunterPatch.split('\n')
-  const insertStarts = []
-  hl.forEach((l, idx) => { if (l.trim() === '- insert:') insertStarts.push(idx) })
-  const hhStart = insertStarts[1]
-  if (hhStart === undefined) throw new Error('交付增补失败：expert-squad patch 第二 insert 块（preset-headhunter）缺席')
-  const headhunterBlock = hl.slice(hhStart).filter((l) => l.trim() !== '').join('\n')
+  // 成员 patch 非插行语义的唯一等价承载，猎头模式预设恢复）。字段驱动：expert-squad
+  // 为成员时才搬移（源 patch 经成员 sourceDir + dsh.bundle.patch 声明定位）；非成员
+  // （合成仓 fixture）跳过——块承载语义随成员在场性走。
+  const squadEntry = packages.find((entry) => entry.name === '@dsh-forge/expert-squad')
+  let headhunterBlock = ''
+  if (squadEntry !== undefined) {
+    const squadPkg = readJson(join(squadEntry.sourceDir, 'package.json'))
+    const squadPatchRel = squadPkg.dsh?.bundle?.patch
+    if (typeof squadPatchRel !== 'string') throw new Error('交付增补失败：expert-squad dsh.bundle.patch 声明缺席')
+    const hl = readFileSync(join(squadEntry.sourceDir, squadPatchRel), 'utf8').split('\n')
+    const insertStarts = []
+    hl.forEach((l, idx) => { if (l.trim() === '- insert:') insertStarts.push(idx) })
+    const hhStart = insertStarts[1]
+    if (hhStart === undefined) throw new Error('交付增补失败：expert-squad patch 第二 insert 块（preset-headhunter）缺席')
+    headhunterBlock = hl.slice(hhStart).filter((l) => l.trim() !== '').join('\n')
+  }
   appendFileSync(join(bundleDir, 'cordis.patch.yml'), `\n${['- insert:', ...skillRows.map((l) => '  ' + l)].join('\n')}\n${headhunterBlock}\n`)
   // manifest 版本清单
   const manifest = {

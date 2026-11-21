@@ -170,11 +170,15 @@ describe('assembleRelease（bundle 发布树结构 + solo 剥离 + manifest）',
     expect(verifyReleaseTree(outDir, { repoRoot: root }).some((v) => v.includes('@dsh-forge/alpha') && v.includes('版本不一致'))).toBe(true)
   })
 
-  it('反例·bundle 插行清单漂移：机检红（六插行断言——多插/漏插皆红）', () => {
+  it('反例·bundle 插行清单漂移：机检红（成员缺席即红；额外条目合法——preset/skills 行同入 insert 块）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     const forgePatchPath = join(outDir, 'forge', 'cordis.patch.yml')
+    // 额外条目合法：ghost 行同入 insert 块不判红（成员包含性断言语义）
     writeFileSync(forgePatchPath, `${readFileSync(forgePatchPath, 'utf8')}    - id: ghost\n      name: '@dsh-forge/ghost'\n`)
-    expect(verifyReleaseTree(outDir, { repoRoot: root }).some((v) => v.includes('forge') && v.includes('bundle 插行清单漂移'))).toBe(true)
+    expect(verifyReleaseTree(outDir, { repoRoot: root }).some((v) => v.includes('bundle 插行清单漂移'))).toBe(false)
+    // 成员缺席即红：漏插 alpha 行 → 机检红
+    writeFileSync(forgePatchPath, readFileSync(forgePatchPath, 'utf8').replace(`    - id: alpha\n      name: '@dsh-forge/alpha'\n`, ''))
+    expect(verifyReleaseTree(outDir, { repoRoot: root }).some((v) => v.includes('bundle 插行清单漂移'))).toBe(true)
   })
 
   it('反例·file: 依赖指称悬空：快层契约断言红（file: 孤立风险快层落测）', () => {
