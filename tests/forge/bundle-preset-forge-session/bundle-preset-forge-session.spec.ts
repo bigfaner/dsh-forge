@@ -9,24 +9,23 @@ import { expect, test } from '@playwright/test'
 import {
   PRESET_FORGE_ORDER,
   PRESET_FORGE_PROVIDER,
-  cheapGenerationGate,
-  FORGE_PKG,
   comboEnv,
   comboGateOn,
   dumpConfig,
+  ensureHostShared,
+  ensureInstalledShared,
   expectFiveGlobalSkillRows,
   expectPresetForgeOrderPin,
-  launchWebHost,
-  nodeModulesOf,
+  FORGE_PKG,
+  invalidateInstalledShared,
   openForgeDetail,
   overrideDisabled,
-  pluginAdd,
   pluginRemove,
-  purgeBaseline,
+  preflightCommitCharge,
   presetOrderOf,
   readProfilePatch,
-  requireBundleSource,
   skillRows,
+  stopHostShared,
   toggleRowSwitch,
   type WebHost,
 } from '../bundle/support.js'
@@ -35,28 +34,21 @@ test.skip(!comboGateOn(), 'FORGE_COMBO_E2E=1 真机收口轮专用套件（e2e/S
 
 const PROFILE = 'web'
 const env = comboEnv()
-let host: WebHost | undefined
-const ensureHost = async (): Promise<WebHost> => {
-  const h = host ?? (host = await launchWebHost(env, 19_680))
-  return h
-}
-const stopHost = async (): Promise<void> => {
-  if (host !== undefined) {
-    await host.close()
-    host = undefined
-  }
-}
+// 基建夹具共享（持久态文件——与 bundle-install-fullchain 共用一次正装与宿主拉起；
+// 拉起/存活失败 → fail-fast 闩秒级中止整套）
+const ensureHost = (): Promise<WebHost> => ensureHostShared(env, 19_680)
+const stopHost = (): Promise<void> => stopHostShared(env)
 
 test.beforeAll(async () => {
-  await purgeBaseline(env, PROFILE)
-  const add = await pluginAdd(env, requireBundleSource(env), PROFILE)
-  expect(add.code, `bundle 正装前置（exit=${String(add.code)}）`).toBe(0)
-  cheapGenerationGate(nodeModulesOf(env, PROFILE))
+  // 跑批前置预检（commit charge ≥90% fail-loud 拒跑）+ 正装共享建成（已装且状态复验通过即跳过）
+  preflightCommitCharge()
+  await ensureInstalledShared(env, PROFILE)
 })
 test.afterEach(stopHost)
 test.afterAll(async () => {
   await stopHost()
   await pluginRemove(env, FORGE_PKG, PROFILE)
+  invalidateInstalledShared(env)
 })
 
 test('CT-BPf-G1 #O-G1-1：预设选择器 Forge模式在场 + order=2 pin（真机合并实况）', async () => {

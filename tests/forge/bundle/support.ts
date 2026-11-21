@@ -19,7 +19,7 @@
 //   `providerName: filesystem-<member>`（五异 id/互异 providerName，fefd5149 双改行）；
 // - order pin = dump-config 中 forge 预设行 `order: 2` 定值（CT-BPf-B3 反例注入载体）。
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, expect, type Locator, type Page } from '@playwright/test'
@@ -58,6 +58,7 @@ export const PRESET_FORGE_ORDER = 2
 export const SIX_ROW_IDS = ['forge', ...MEMBERS] as const
 
 export { BARE_BUNDLES, COMBO_DB_REL, FORGE_PKG, SIX_PKGS, comboDbPath, comboEnv, comboGateOn, forgeInstallSource }
+export type { ComboEnv }
 
 /** 真机总门（FORGE_COMBO_E2E=1——缺省整组 skip，SMOKE-LEDGER 留痕口径同 minchain 套件） */
 export const requireGate = (): ComboEnv => {
@@ -244,10 +245,190 @@ function killTree(child: ChildProcess): void {
   }
 }
 
+// ── 跑批前置预检：commit charge（windows-commit-exhaustion 判例配方） ────────────────
+/** commit charge 占比拒跑阈值（默认 90%——判例正本 ≥95% 判耗尽，90% 预留跑批余量） */
+export const COMMIT_CHARGE_LIMIT_RATIO = 0.9
+
+/**
+ * 跑批前置预检（fail-loud）：commit charge ≥ 阈值即抛出拒跑——环境级资源耗尽时症状
+ * 随机落进程（判例 2026-10-16），先拒跑防把环境卡顿误判为测试回归。诊断指引就地输出
+ * （正本 docs/conventions/windows-commit-exhaustion.md）。非 Windows 零操作。
+ */
+export function preflightCommitCharge(limitRatio: number = COMMIT_CHARGE_LIMIT_RATIO): void {
+  if (process.platform !== 'win32') return
+  const res = spawnSync(
+    'powershell',
+    ['-NoProfile', '-NonInteractive', '-Command', '$os = Get-CimInstance Win32_OperatingSystem; "$($os.TotalVirtualMemorySize) $($os.FreeVirtualMemory)"'],
+    { encoding: 'utf8', windowsHide: true, timeout: 30_000 },
+  )
+  const nums = (res.stdout ?? '').trim().split(/\s+/).map(Number).filter((n) => Number.isFinite(n) && n > 0)
+  if (res.status !== 0 || nums.length < 2) {
+    throw new Error(`commit charge 预检失败（无法读取，exit=${String(res.status)} stderr=${String(res.stderr).slice(-300)}）——按 docs/conventions/windows-commit-exhaustion.md 手工核查后再跑批`)
+  }
+  const [totalKb, freeKb] = [nums[0]!, nums[1]!]
+  const usedMb = Math.round((totalKb - freeKb) / 1024)
+  const limitMb = Math.round(totalKb / 1024)
+  const ratio = (totalKb - freeKb) / totalKb
+  if (ratio >= limitRatio) {
+    throw new Error(
+      `commit charge ${usedMb} MB / ${limitMb} MB（${Math.round(ratio * 100)}% ≥ ${Math.round(limitRatio * 100)}%）——环境级资源耗尽风险，拒跑。` +
+      `诊断指引（windows-commit-exhaustion 判例）：先清理孤儿 --watch 子进程 ` +
+      `(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match '--watch' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force })，` +
+      `症状族（exit 3221226505 / heap OOM / 0x800705AF）在此状态下落进程纯看运气，非测试回归`,
+    )
+  }
+}
+
+// ── 宿主失败取证指针（fail-fast 失败信号携带 boot stdout/stderr 落盘路径） ─────────────
+/** 取证落盘根（可用 FORGE_BUNDLE_E2E_FORENSICS_DIR 定向到任务日志目录） */
+const forensicsDir = (): string =>
+  process.env.FORGE_BUNDLE_E2E_FORENSICS_DIR ?? join(tmpdir(), 'dsh-forge-bundle-host-forensics')
+
+/** boot stdout/stderr 落盘取证，返回指针路径（启动失败/中途死亡时供失败信号携带） */
+export function writeBootForensics(port: number, stdout: string, stderr: string): string {
+  const dir = forensicsDir()
+  mkdirSync(dir, { recursive: true })
+  const file = join(dir, `boot-${port}-${new Date().toISOString().replace(/[:.]/g, '-')}.log`)
+  writeFileSync(file, `# stdout\n${stdout}\n# stderr\n${stderr}\n`, 'utf8')
+  return file
+}
+
+// ── 基建夹具共享（跨用例/跨套件持久态——两套件共用一次正装与一次宿主拉起） ───────────────
+/**
+ * 共享夹具状态以状态文件承载（落点 = 隔离 home，共享域 = FORGE_COMBO_DSH_HOME）。
+ * 判例实证（1.15 第 003–005 轮探针）：本仓 Playwright 1.63 形态每用例独立进程/模块/
+ * globalThis——worker fixture 亦逐用例重建，跨用例共享唯一可行缝 = 持久状态文件。
+ * - installed：bundle 正装已建成（复用前状态复验：六包在场 + 代际门）
+ * - host：共享宿主进程档案（pid/port/token/boot stdout 落盘）——存活即免 boot 附着复用；
+ *   主动 stop 清档案；非主动死亡 → fatal
+ * - fatal：fail-fast 闩——宿主拉起/存活失败置位，后续 ensureHost 秒级抛出整套中止
+ *   （不再逐例吃 30–60s 断言超时）；仅成功拉起新宿主或共享正装重建时清除
+ */
+interface SharedHostRecord {
+  readonly pid: number
+  readonly port: number
+  readonly token: string
+  /** boot stdout 取证文件路径（附着侧 hostStdout 读面源） */
+  readonly stdoutFile: string
+}
+interface SharedFixtureFile {
+  fatal: string | null
+  installed: boolean
+  host: SharedHostRecord | null
+}
+
+const sharedStateFile = (env: ComboEnv): string => join(env.dshHome, '.forge-bundle-e2e-shared.json')
+
+function readSharedState(env: ComboEnv): SharedFixtureFile {
+  const file = sharedStateFile(env)
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as SharedFixtureFile
+  } catch {
+    return { fatal: null, installed: false, host: null }
+  }
+}
+
+function writeSharedState(env: ComboEnv, patch: Partial<SharedFixtureFile>): void {
+  const next = { ...readSharedState(env), ...patch }
+  writeFileSync(sharedStateFile(env), JSON.stringify(next), 'utf8')
+}
+
+/** pid 存活探测（零子进程——process.kill 0 号信号探测） */
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function killByPid(pid: number): void {
+  if (process.platform === 'win32') {
+    spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })
+  } else {
+    try {
+      process.kill(pid, 'SIGKILL')
+    } catch {
+      // 已退出——幂等
+    }
+  }
+}
+
+/** boot stdout 读面（取证文件 stdout 段——G6 forge-bundle-apply 切片源；spec hostStdout 面） */
+export function sharedHostStdout(env: ComboEnv): string {
+  const record = readSharedState(env).host
+  if (record === null || !existsSync(record.stdoutFile)) return ''
+  const text = readFileSync(record.stdoutFile, 'utf8')
+  return text.replace(/^# stdout\r?\n/, '').split(/\r?\n# stderr\r?\n/)[0] ?? ''
+}
+
+
+/**
+ * bundle 正装共享建成（幂等单次：purge → plugin add → 廉价代际门；已建成且状态复验
+ * 通过即跳过——套件间状态隔离边界不破坏：卸载方 afterAll 须 invalidateInstalledShared；
+ * 共享正装重建 = 新跑批基线，顺带清除 fail-fast 闩）。
+ */
+export async function ensureInstalledShared(env: ComboEnv, profile = 'web'): Promise<void> {
+  const state = readSharedState(env)
+  if (state.installed) {
+    const nm = nodeModulesOf(env, profile)
+    let intact = true
+    try {
+      expectSixPkgsPresent(nm)
+      cheapGenerationGate(nm)
+    } catch {
+      intact = false
+    }
+    if (intact) return
+  }
+  await purgeBaseline(env, profile)
+  const add = await pluginAdd(env, requireBundleSource(env), profile)
+  expect(add.code, `bundle 正装（共享夹具单次建成，exit=${String(add.code)}）stderr=${add.stderr.slice(-400)}`).toBe(0)
+  cheapGenerationGate(nodeModulesOf(env, profile))
+  writeSharedState(env, { installed: true, fatal: null })
+}
+
+/** 正装共享态失效（卸载方 afterAll 调用——下一套件重建，零陈旧复用） */
+export function invalidateInstalledShared(env: ComboEnv): void {
+  writeSharedState(env, { installed: false })
+}
+
+/** 共享宿主取用（存活即免 boot 附着复用；fail-fast 闩置位即秒级抛出；拉起成功清闩） */
+export async function ensureHostShared(env: ComboEnv, port: number): Promise<WebHost> {
+  const state = readSharedState(env)
+  if (state.fatal !== null) throw new Error(state.fatal)
+  if (state.host !== null) {
+    const record = state.host
+    if (!pidAlive(record.pid)) {
+      // 非主动 stop 的中途死亡 = 宿主环境级失败 → fail-fast 整套中止（取证指针就地落盘）
+      writeSharedState(env, { host: null, fatal: `共享宿主进程中途退出（pid=${String(record.pid)}）——fail-fast 整套中止，boot stdout 见 ${record.stdoutFile}` })
+      throw new Error(readSharedState(env).fatal!)
+    }
+    return attachWebHost(env, record)
+  }
+  try {
+    const host = await launchWebHost(env, port)
+    writeSharedState(env, { fatal: null })
+    return host
+  } catch (e) {
+    writeSharedState(env, { fatal: e instanceof Error ? e.message : String(e) })
+    throw e
+  }
+}
+
+/** 共享宿主主动停用（B3 类重启边界与 afterAll 回收——清档案不清闩，闩由成功拉起清除） */
+export async function stopHostShared(env: ComboEnv): Promise<void> {
+  const record = readSharedState(env).host
+  writeSharedState(env, { host: null })
+  if (record !== null) killByPid(record.pid)
+}
+
 /**
  * 拉起官方 web 宿主（`dsh --profile web --no-open --port <port>`）+ Playwright chromium
  * 附着（boot stdout 提取 token URL → 303 cookie 会话 → 上线）。boot 就绪锚 = 官方 slot
- * 装配面 `[data-slot]`（官方机械锚——desktop 走查 precedent 同径）。
+ * 装配面 `[data-slot]`（官方机械锚——desktop 走查 precedent 同径）。成功即写共享宿主档案
+ * （pid/port/token/boot stdout 取证落盘）——后续 ensureHostShared 免 boot 附着复用。
  */
 export async function launchWebHost(env: ComboEnv, port: number): Promise<WebHost> {
   const child = spawn(env.dshBin, ['--profile', 'web', '--no-open', '--port', String(port)], {
@@ -255,6 +436,8 @@ export async function launchWebHost(env: ComboEnv, port: number): Promise<WebHos
     cwd: mkdtempSync(join(tmpdir(), 'dsh-forge-bundle-host-')),
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
+    // shell:true 承载 PATH 解析（Node ≥22 spawn 对 .cmd shim 无 shell 直接 EINVAL——packTarball 同径判例）
+    shell: process.platform === 'win32',
   })
   let stdout = ''
   let stderr = ''
@@ -264,10 +447,16 @@ export async function launchWebHost(env: ComboEnv, port: number): Promise<WebHos
   let token: string | undefined
   while (token === undefined && Date.now() < deadline) {
     token = extractBootToken(stdout, port)
-    if (child.exitCode !== null) throw new Error(`web 宿主提前退出（exit=${String(child.exitCode)}）stderr=${stderr.slice(-600)}`)
+    if (child.exitCode !== null) {
+      const pointer = writeBootForensics(port, stdout, stderr)
+      throw new Error(`web 宿主提前退出（exit=${String(child.exitCode)}）stderr 尾部=${stderr.slice(-600)}——fail-fast 取证指针=${pointer}`)
+    }
     await new Promise((r) => setTimeout(r, 1_000))
   }
-  if (token === undefined) throw new Error(`boot token 未出现（120s）stdout 尾部=${stdout.slice(-600)}`)
+  if (token === undefined) {
+    const pointer = writeBootForensics(port, stdout, stderr)
+    throw new Error(`boot token 未出现（120s）stdout 尾部=${stdout.slice(-600)}——fail-fast 取证指针=${pointer}`)
+  }
   const baseUrl = `http://127.0.0.1:${port}`
   const session = await establishWebAuthSession(baseUrl, token)
   expect(session, 'boot token → cookie 会话建立（零 Set-Cookie 即 fail-loud）').toBeDefined()
@@ -282,6 +471,11 @@ export async function launchWebHost(env: ComboEnv, port: number): Promise<WebHos
   })
   await page.goto(`${baseUrl}/?token=${encodeURIComponent(token)}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await expect(page.locator('[data-slot]').first()).toBeVisible({ timeout: 120_000 })
+  // 共享宿主档案（pid/port/token + boot stdout 取证落盘——附着侧免 boot 复用）
+  const stdoutFile = writeBootForensics(port, stdout, stderr)
+  writeSharedState(env, {
+    host: { pid: child.pid!, port, token, stdoutFile },
+  })
   return {
     child,
     page,
@@ -295,6 +489,45 @@ export async function launchWebHost(env: ComboEnv, port: number): Promise<WebHos
         if (child.exitCode !== null) resolve()
         else child.once('exit', () => resolve())
       })
+    },
+  }
+}
+
+/**
+ * 附着既有共享宿主（免 boot 复用——pid/token 档案命中）：cookie 会话 + chromium 附着，
+ * 与 launchWebHost 同构（同一 slot 就绪锚）；child 以 pid 存活探测的轻量替身承载
+ * （exitCode 惰性求值——G5/G8 宿主存活断言语义不变）。
+ */
+async function attachWebHost(env: ComboEnv, record: SharedHostRecord): Promise<WebHost> {
+  const baseUrl = `http://127.0.0.1:${record.port}`
+  const session = await establishWebAuthSession(baseUrl, record.token)
+  expect(session, '共享宿主附着：boot token → cookie 会话建立').toBeDefined()
+  expect(await sessionReady(baseUrl, session!.cookie), '共享宿主附着：cookie 会话 GET / ok = 宿主上线').toBe(true)
+  const browser = await chromium.launch()
+  const page = await browser.newPage()
+  const clientUrls: string[] = []
+  page.on('response', (res) => {
+    const url = res.url()
+    if (url.includes('/node_modules/@dsh-forge/')) clientUrls.push(url)
+  })
+  await page.goto(`${baseUrl}/?token=${encodeURIComponent(record.token)}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await expect(page.locator('[data-slot]').first()).toBeVisible({ timeout: 120_000 })
+  const child = {
+    pid: record.pid,
+    get exitCode(): number | null {
+      return pidAlive(record.pid) ? null : 1
+    },
+  } as unknown as ChildProcess
+  return {
+    child,
+    page,
+    baseUrl,
+    clientUrls,
+    get stdout() { return sharedHostStdout(env) },
+    close: async () => {
+      await browser.close().catch(() => undefined)
+      writeSharedState(env, { host: null })
+      killByPid(record.pid)
     },
   }
 }

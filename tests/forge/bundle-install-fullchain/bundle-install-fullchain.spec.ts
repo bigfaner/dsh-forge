@@ -29,13 +29,15 @@ import {
   comboEnv,
   comboGateOn,
   dumpConfig,
+  ensureHostShared,
+  ensureInstalledShared,
   expectFiveGlobalSkillRows,
   expectPresetForgeOrderPin,
   expectSharedDbDispatch,
   expectSixInsertEntries,
   expectSixPkgsPresent,
   generationFrozen,
-  launchWebHost,
+  invalidateInstalledShared,
   memberSkillId,
   nodeModulesOf,
   openForgeDetail,
@@ -45,11 +47,13 @@ import {
   pluginAdd,
   pluginRemove,
   pluginCard,
-  purgeBaseline,
+  preflightCommitCharge,
   readForgeDiagEvents,
   readProfilePatch,
   requireBundleSource,
+  sharedHostStdout,
   skillRows,
+  stopHostShared,
   toggleRowSwitch,
   type WebHost,
 } from '../bundle/support.js'
@@ -58,23 +62,11 @@ test.skip(!comboGateOn(), 'FORGE_COMBO_E2E=1 真机收口轮专用套件（e2e/S
 
 const PROFILE = 'web'
 const env = comboEnv()
-let host: WebHost | undefined
-let hostStdout = (): string => host?.stdout ?? ''
-
-async function ensureHost(): Promise<WebHost> {
-  if (host === undefined) {
-    host = await launchWebHost(env, 19_650)
-    // CT-BIF-G6 服务面 bundle 特有标记：forge-bundle-apply（薄 apply emitDiag——diag jsonl 或 boot stdout 任一在场）
-  }
-  return host
-}
-
-async function stopHost(): Promise<void> {
-  if (host !== undefined) {
-    await host.close()
-    host = undefined
-  }
-}
+const hostStdout = (): string => sharedHostStdout(env)
+// 基建夹具共享（持久态文件——隔离 home 承载，跨用例/跨套件）：宿主存活即免 boot 附着
+// 复用；拉起/存活失败 → fail-fast 闩秒级中止整套
+const ensureHost = (): Promise<WebHost> => ensureHostShared(env, 19_650)
+const stopHost = (): Promise<void> => stopHostShared(env)
 
 test.afterEach(async () => {
   // 用例边界回收宿主（自拉实例按 PID 进程树定点回收——零残留进程；AGENTS §1.8 侵入边界）
@@ -83,15 +75,19 @@ test.afterEach(async () => {
 
 test.afterAll(async () => {
   await stopHost()
-  // 卸载收尾（幂等 best-effort——隔离 home）
+  // 卸载收尾（幂等 best-effort——隔离 home）+ 正装共享态失效（边界归属本套件）
   await pluginRemove(env, FORGE_PKG, PROFILE)
+  invalidateInstalledShared(env)
   rmSync(join(tmpdir(), 'dsh-forge-bundle-pack-'), { recursive: true, force: true })
 })
 
 // CT-BIF-B8：世代冻结判据命中 → 整旅程条件 skip，SMOKE-LEDGER 留痕（不作失败亦不作正向取证）。
 test.beforeAll(async () => {
+  // 跑批前置预检（commit charge ≥90% fail-loud 拒跑——windows-commit-exhaustion 判例配方）
+  preflightCommitCharge()
   test.skip(generationFrozen(env, PROFILE), '世代冻结判据命中（0b5230e1 判据族）——整旅程条件 skip，SMOKE-LEDGER 留痕')
-  await purgeBaseline(env, PROFILE)
+  // bundle 正装共享建成（purge → add → 廉价代际门，已建成且复验通过即跳过——G1 复装幂等，断言面零变更）
+  await ensureInstalledShared(env, PROFILE)
 })
 
 test('CT-BIF-G1 #O-G1-1：一条命令六包全装（exit 0 + profile node_modules 六包齐备）', async () => {
