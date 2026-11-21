@@ -9,7 +9,7 @@
 // freshness 自动编译门（自 deep-build.mjs 迁入——plugins/forge/scripts/freshness.mjs）
 // 在 assembleRelease 入口前置：出树前逐件 run-once 自动编译五件 + forge + 代际双校验。
 // run-once CLI：node scripts/package-release.mjs [--root <dir>] [--out <dir>] [--no-zip]
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +19,11 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DEFAULT_OUT = join(REPO_ROOT, 'release', 'forge-combo')
 const FORGE_DIR_REL = join('plugins', 'forge')
 const SOLO_REL = join('solo', 'forge')
+// 自包含 bundle 交付目录（forge-aggregate-bundle 1.16——staging 孤立根除）：forge 壳 +
+// members/<pkg> 五件全闭包内嵌，forge 依赖改 file:./members/<pkg>（in-tree 相对路径随目录
+// 走）→ 交付目录任意复制/搬移/install 均 self-contained。发布树六包共置形态继续作为
+// monorepo 开发态通道，两者并存机检分开。
+const BUNDLE_REL = join('bundle', 'forge')
 const SEMVER = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/
 
 export function readJson(file) {
@@ -81,6 +86,17 @@ export function sourceFileEntries(sourceDir, pkg) {
   return (pkg.files ?? []).filter((entry) => existsSync(join(sourceDir, entry)))
 }
 
+/** 目录下全文件相对路径清单（递归——bundle members 闭包逐文件完整性核销基准） */
+function listFilesRel(baseDir, rel = '') {
+  const out = []
+  for (const name of readdirSync(join(baseDir, rel), { withFileTypes: true })) {
+    const child = rel === '' ? name.name : `${rel}/${name.name}`
+    if (name.isDirectory()) out.push(...listFilesRel(baseDir, child))
+    else out.push(child)
+  }
+  return out
+}
+
 function copyPackageToTree(sourceDir, treePkgDir, { deps } = {}) {
   const pkg = readJson(join(sourceDir, 'package.json'))
   // 发布树安装物 manifest：剥离 devDependencies（workspace:/link: 指向检出树，安装期
@@ -113,6 +129,16 @@ export function soloDependencies(forgeManifest) {
 /** 相对 file: 重写：发布树兄弟布局下的跨包依赖归一（正斜杠 POSIX 形态） */
 export function relativeFileDep(fromDir, toDir) {
   return `file:${relative(fromDir, toDir).replaceAll(sep, '/') || '.'}`
+}
+
+/** bundle 依赖重写：file: 依赖 → file:./members/<short>（自包含交付目录内嵌成员） */
+export function bundleDependencies(forgeManifest) {
+  return Object.fromEntries(
+    Object.entries(forgeManifest.dependencies ?? {}).map(([name, spec]) => [
+      name,
+      spec.startsWith('file:') ? `file:./members/${name.slice('@dsh-forge/'.length)}` : spec,
+    ]),
+  )
 }
 
 /**
@@ -157,12 +183,21 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
   const soloManifest = { ...forgeManifest, dependencies: soloDependencies(forgeManifest) }
   cpSync(forgeTreeDir, soloDir, { recursive: true })
   writeFileSync(join(soloDir, 'package.json'), `${JSON.stringify(soloManifest, null, 2)}\n`)
+  // 自包含 bundle 交付目录：forge 壳 + members/<pkg> 五件全闭包拷贝 + 依赖改指 file:./members/<pkg>
+  const bundleDir = join(outDir, BUNDLE_REL)
+  copyPackageToTree(forgeEntry.sourceDir, bundleDir)
+  for (const entry of packages.slice(1)) {
+    copyPackageToTree(entry.sourceDir, join(bundleDir, 'members', entry.name.slice('@dsh-forge/'.length)))
+  }
+  const bundleManifest = readJson(join(bundleDir, 'package.json'))
+  bundleManifest.dependencies = bundleDependencies(forgeManifest)
+  writeFileSync(join(bundleDir, 'package.json'), `${JSON.stringify(bundleManifest, null, 2)}\n`)
   // manifest 版本清单
   const manifest = {
     generator: 'scripts/package-release.mjs',
     generatedAt: new Date().toISOString(),
     channels: {
-      bundle: { dir: 'forge', deps: forgeManifest.dependencies },
+      bundle: { dir: BUNDLE_REL.replaceAll(sep, '/'), deps: bundleManifest.dependencies },
       solo: { dir: SOLO_REL.replaceAll(sep, '/'), deps: soloManifest.dependencies },
     },
     packages: Object.fromEntries(
@@ -176,7 +211,7 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     zipPath = `${outDir}.zip`
     buildZip(outDir, zipPath)
   }
-  return { treeDir: outDir, manifestPath, zipPath, warnings }
+  return { treeDir: outDir, bundleDir, manifestPath, zipPath, warnings }
 }
 
 /** 发布树字段自检（R3-dsh-dev②）：单包 patch 路径解析 + dsh.client bundle 文件存在性 */
@@ -310,6 +345,57 @@ export function verifyReleaseTree(treeDir, { repoRoot = REPO_ROOT } = {}) {
   return violations
 }
 
+/**
+ * 自包含 bundle 交付目录机检（闭包完整性断言）：forge 壳在场 + members/<pkg> 五件逐件
+ * 在场（package.json + files[] 拷贝完整 + 字段自检 + 自带插行随包）+ forge file: 依赖
+ * 全部 in-tree（恰 file:./members/<short> 形态、指称在场、包名吻合、零目录外指称）。
+ */
+export function verifyBundleClosure(bundleDir, { repoRoot = REPO_ROOT } = {}) {
+  const violations = []
+  const packages = discoverPackages(repoRoot)
+  const forgePkgPath = join(bundleDir, 'package.json')
+  if (!existsSync(forgePkgPath)) return [`bundle: forge 壳 package.json 缺席 ${bundleDir}`]
+  const forgePkg = readJson(forgePkgPath)
+  violations.push(...verifyPackageFields(bundleDir, 'bundle/forge'))
+  for (const entry of packages.slice(1)) {
+    const short = entry.name.slice('@dsh-forge/'.length)
+    const dir = join(bundleDir, 'members', short)
+    if (!existsSync(join(dir, 'package.json'))) {
+      violations.push(`bundle: members/${short} 缺席（package.json）`)
+      continue
+    }
+    violations.push(...verifyPackageFields(dir, `bundle/members/${short}`))
+    const srcPkg = readJson(join(entry.sourceDir, 'package.json'))
+    for (const relFile of listFilesRel(entry.sourceDir).filter((f) => (srcPkg.files ?? []).some((e) => f === e || f.startsWith(`${e}/`)))) {
+      if (!existsSync(join(dir, relFile))) violations.push(`bundle: members/${short} 闭包拷贝遗漏：${relFile}`)
+    }
+    const memberPatchRel = srcPkg.dsh?.bundle?.patch
+    if (typeof memberPatchRel === 'string' && existsSync(join(dir, memberPatchRel))) {
+      const inserts = patchInsertEntryNames(readFileSync(join(dir, memberPatchRel), 'utf8'))
+      if (!inserts.includes(entry.name)) violations.push(`bundle: members/${short} 自带插行缺席（solo 语义随包）`)
+    }
+  }
+  const declared = new Set()
+  for (const [depName, spec] of Object.entries(forgePkg.dependencies ?? {})) {
+    if (!spec.startsWith('file:')) continue
+    declared.add(depName)
+    const short = depName.slice('@dsh-forge/'.length)
+    if (spec !== `file:./members/${short}`) violations.push(`bundle: 依赖非 in-tree file:./members/ 形态 ${depName} "${spec}"`)
+    const depDir = resolve(bundleDir, spec.slice('file:'.length))
+    if (!depDir.startsWith(bundleDir + sep)) violations.push(`bundle: file: 依赖指向交付目录外 ${depName} "${spec}"`)
+    const depPkgPath = join(depDir, 'package.json')
+    if (!existsSync(depPkgPath)) {
+      violations.push(`bundle: file: 依赖指称悬空 ${depName} "${spec}"（members/${short}/package.json 缺席）`)
+    } else if (readJson(depPkgPath).name !== depName) {
+      violations.push(`bundle: file: 依赖指称包名不吻合 ${depName} → "${spec}"（实际 ${readJson(depPkgPath).name}）`)
+    }
+  }
+  for (const entry of packages.slice(1)) {
+    if (!declared.has(entry.name)) violations.push(`bundle: forge 依赖缺成员条目 ${entry.name}`)
+  }
+  return violations
+}
+
 /** zip 产出（bsdtar -a 按扩展名定 zip 形态——run-once，只收发布树目录本体） */
 export function buildZip(treeDir, zipPath) {
   const r = spawnSync('tar', ['-a', '-c', '-f', zipPath, '-C', dirname(treeDir), basename(treeDir)], {
@@ -331,8 +417,8 @@ function main(argv) {
   const zip = !argv.includes('--no-zip')
   const repoRoot = rootFlag !== undefined ? resolve(rootFlag) : REPO_ROOT
   const outDir = outFlag !== undefined ? resolve(outFlag) : DEFAULT_OUT
-  const { treeDir, manifestPath, zipPath } = assembleRelease({ repoRoot, outDir, zip })
-  const violations = verifyReleaseTree(treeDir, { repoRoot })
+  const { treeDir, bundleDir, manifestPath, zipPath } = assembleRelease({ repoRoot, outDir, zip })
+  const violations = [...verifyReleaseTree(treeDir, { repoRoot }), ...verifyBundleClosure(bundleDir, { repoRoot })]
   if (violations.length > 0) {
     console.error(`[package-release] 发布树机检 ${violations.length} 处违规：`)
     for (const v of violations) console.error(`  - ${v}`)
