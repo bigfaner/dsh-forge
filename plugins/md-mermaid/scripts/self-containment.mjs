@@ -51,7 +51,7 @@ export function exportsDistPaths(pkg) {
  * 全量审计 dist（相对 pkgDir）。requireDist=false 时 dist 缺席返回空（纯 src 测试树
  * 跳过语义）；离手门调用恒传 true——产物缺席即违规。
  */
-export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./dist"] } = {}) {
+export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./dist"], bareHeuristicExempt = [] } = {}) {
   const distDir = join(pkgDir, "dist");
   const violations = [];
   if (!existsSync(distDir)) {
@@ -86,6 +86,10 @@ export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./d
       } else if (spec.startsWith("bun:") || isAbsolute(spec)) {
         violations.push(`${file}: 非法模块说明符 "${spec}"`);
       } else if (!PLATFORM_BARE.test(spec) && !runtimeDeps.has(spec)) {
+        // 裸名启发式豁免面（client bundle：内联 vendor 体带 guarded require("util")、
+        // __name(fn,"x") 等形态在此假阳；其真实外置面由 bundle-client 专用 require
+        // 面断言只认平台种子表承担）。
+        if (bareHeuristicExempt.includes(file)) continue;
         violations.push(`${file}: 裸模块引用 "${spec}" 不在 dependencies/peerDependencies（独立安装形态断链）`);
       }
     }
@@ -105,7 +109,11 @@ export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./d
 const isCli = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isCli) {
   const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const violations = auditDist(pkgDir, { requireDist: true });
+  const clientJs = join(pkgDir, "dist/client.js");
+  const violations = auditDist(pkgDir, {
+    requireDist: true,
+    bareHeuristicExempt: existsSync(clientJs) ? [clientJs] : [],
+  });
   if (violations.length > 0) {
     console.error(`[self-containment] dist 自含审计 ${violations.length} 处违规：`);
     for (const v of violations) console.error(`  - ${v}`);

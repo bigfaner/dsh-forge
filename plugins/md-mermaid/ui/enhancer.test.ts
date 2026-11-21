@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   MD_MERMAID_BLOCK_FLAG,
   MD_MERMAID_FIGURE_FLAG,
+  MD_MERMAID_MOUNT_SENTINEL,
   createMermaidEnhancer,
   type EnhancerElement,
   type MermaidEngineLike,
@@ -67,6 +68,10 @@ class StubEl {
 
   setAttribute(name: string, value: string): void {
     this.attrs.set(name, value)
+  }
+
+  removeAttribute(name: string): void {
+    this.attrs.delete(name)
   }
 
   appendChild(child: StubEl | StubTextNode): StubEl | StubTextNode {
@@ -538,6 +543,87 @@ describe('MutationObserver 防抖 + 启停', () => {
     expect(observers[0]?.disconnect).toHaveBeenCalledTimes(1)
     scheduler.flushDebounce()
     expect(harness.loadCount()).toBe(0)
+  })
+})
+
+// ---- 双挂载互斥（全局哨兵）----
+// 壳构建期挂载与安装 bundle 装载可能同时在场面：enhancer 全局哨兵（document 侧
+// 单例键）先到先得、后到 fail-soft 跳过——恒单实例（提案 md-mermaid-client-bundle §二）。
+
+describe('双挂载互斥哨兵（document 侧单例键）', () => {
+  /** 同 doc 造两个独立增强器（模拟壳挂载面与安装 bundle 装载面） */
+  function makePair(doc: StubDoc, harness: ReturnType<typeof makeEngine>, scheduler: ReturnType<typeof makeScheduler>) {
+    const observersA: Array<{ observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; cb: () => void }> = []
+    const observersB: Array<{ observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; cb: () => void }> = []
+    const mk = (bag: typeof observersA) =>
+      createMermaidEnhancer({
+        doc,
+        load: harness.load,
+        schedule: scheduler.schedule,
+        createObserver: (cb) => {
+          const o = { observe: vi.fn(), disconnect: vi.fn(), cb }
+          bag.push(o)
+          return o
+        },
+        debounceMs: 50,
+      })
+    return { a: mk(observersA), b: mk(observersB), observersA, observersB }
+  }
+
+  it('先挂后装不重复：壳挂载 A 持哨兵，安装装载 B fail-soft 跳过（零 observer 零扫描）', async () => {
+    const doc = new StubDoc()
+    const harness = makeEngine()
+    const scheduler = makeScheduler()
+    makeCodeBlock(doc, VALID)
+    const { a, b, observersB } = makePair(doc, harness, scheduler)
+
+    a.start()
+    await a.scan()
+    expect(doc.documentElement.querySelectorAll(`[${MD_MERMAID_FIGURE_FLAG}]`)).toHaveLength(1)
+    expect(doc.documentElement.getAttribute(MD_MERMAID_MOUNT_SENTINEL)).not.toBeNull()
+
+    b.start() // 后到 fail-soft
+    expect(observersB).toHaveLength(0)
+    await b.scan() // 跳过态零扫描效果
+    expect(doc.documentElement.querySelectorAll(`[${MD_MERMAID_FIGURE_FLAG}]`)).toHaveLength(1)
+    expect(harness.renderCount()).toBe(1)
+
+    a.stop()
+  })
+
+  it('装后壳挂不重复：安装装载 B 先到持哨兵，壳挂载 A 跳过', async () => {
+    const doc = new StubDoc()
+    const harness = makeEngine()
+    const scheduler = makeScheduler()
+    makeCodeBlock(doc, VALID)
+    const { a, b, observersA } = makePair(doc, harness, scheduler)
+
+    b.start()
+    await b.scan()
+    a.start() // 后到 fail-soft
+    expect(observersA).toHaveLength(0)
+    expect(doc.documentElement.querySelectorAll(`[${MD_MERMAID_FIGURE_FLAG}]`)).toHaveLength(1)
+    expect(harness.renderCount()).toBe(1)
+
+    b.stop()
+  })
+
+  it('先到方 stop 释放哨兵——后到方 start 可接管（生命周期平衡）', async () => {
+    const doc = new StubDoc()
+    const harness = makeEngine()
+    const scheduler = makeScheduler()
+    makeCodeBlock(doc, VALID)
+    const { a, b, observersB } = makePair(doc, harness, scheduler)
+
+    a.start()
+    expect(doc.documentElement.getAttribute(MD_MERMAID_MOUNT_SENTINEL)).not.toBeNull()
+    a.stop()
+    expect(doc.documentElement.getAttribute(MD_MERMAID_MOUNT_SENTINEL)).toBeNull()
+
+    b.start() // 释放后可接管
+    expect(observersB).toHaveLength(1)
+    b.stop()
+    expect(doc.documentElement.getAttribute(MD_MERMAID_MOUNT_SENTINEL)).toBeNull()
   })
 })
 

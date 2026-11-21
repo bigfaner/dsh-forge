@@ -17,6 +17,14 @@ export const MD_MERMAID_BLOCK_FLAG = 'data-dswf-md-mermaid-enhanced'
 /** 图容器标记（旁插 figure 上：值 = 对应源 hash） */
 export const MD_MERMAID_FIGURE_FLAG = 'data-dswf-md-mermaid'
 
+/**
+ * 双挂载互斥哨兵（document.documentElement 单例键）：壳构建期挂载与安装 client
+ * bundle 装载可能同时在场面（两路是 enhancer 模块的两份独立实例——模块级状态不可见），
+ * 先到先得持键、后到 fail-soft 跳过——恒单实例。哨兵随 start 持有、stop 释放
+ * （生命周期平衡）；既有逐 fence 标记（BLOCK_FLAG/FIGURE_FLAG）不变。
+ */
+export const MD_MERMAID_MOUNT_SENTINEL = 'data-dswf-md-mermaid-mounted'
+
 const BLOCK_SELECTOR = '.md-code-block'
 const CONTENT_ANCHOR = '[data-code-block-content]'
 const CANVAS_SELECTOR = '.dswf-doc-mermaid-canvas'
@@ -26,6 +34,7 @@ export interface EnhancerElement {
   getAttribute(name: string): string | null
   hasAttribute(name: string): boolean
   setAttribute(name: string, value: string): void
+  removeAttribute(name: string): void
   querySelector(selectors: string): EnhancerElement | null
   readonly parentElement: EnhancerElement | null
   readonly nextElementSibling: EnhancerElement | null
@@ -215,6 +224,26 @@ export function createMermaidEnhancer(opts: Partial<MermaidEnhancerOptions> = {}
 
   let cancelScheduled: (() => void) | null = null
   let observer: MutationObserverLike | null = null
+  let sentinelClaimed = false
+
+  /** 哨兵持有（先到先得；已持有 = true；键被他人持有 = false → fail-soft 跳过） */
+  function claimSentinel(): boolean {
+    if (sentinelClaimed) return true
+    const anchor = doc.documentElement ?? doc.body
+    if (anchor === null) return true // 无锚环境（最小替身）退化为不设防
+    if (anchor.getAttribute(MD_MERMAID_MOUNT_SENTINEL) !== null) return false
+    anchor.setAttribute(MD_MERMAID_MOUNT_SENTINEL, '1')
+    sentinelClaimed = true
+    return true
+  }
+
+  /** 哨兵释放（生命周期平衡——先到方 stop 后后到方可接管） */
+  function releaseSentinel(): void {
+    if (!sentinelClaimed) return
+    sentinelClaimed = false
+    const anchor = doc.documentElement ?? doc.body
+    anchor?.removeAttribute(MD_MERMAID_MOUNT_SENTINEL)
+  }
 
   function requestScan(): void {
     cancelScheduled?.()
@@ -228,6 +257,7 @@ export function createMermaidEnhancer(opts: Partial<MermaidEnhancerOptions> = {}
     scan,
     start() {
       if (observer !== null) return
+      if (!claimSentinel()) return // 后到 fail-soft 跳过——恒单实例
       observer = createObserver(requestScan)
       observer.observe(root, { childList: true, subtree: true })
     },
@@ -236,6 +266,7 @@ export function createMermaidEnhancer(opts: Partial<MermaidEnhancerOptions> = {}
       observer = null
       cancelScheduled?.()
       cancelScheduled = null
+      releaseSentinel()
     },
   }
 }

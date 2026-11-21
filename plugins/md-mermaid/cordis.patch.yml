@@ -1,6 +1,8 @@
 # @dsh-forge/md-mermaid 组合层：单行插入本包——host 半 validateMermaid tool 全组合
-# 全局注册（knowledge/expert-squad 同构装载通道；ui 半不经 client 束装载——React DOM
-# 增强器只经 apps 构建期 import './web' 出口挂载，防 enhancer 双挂载重复接管 fence DOM）。
+# 全局注册 + ui 半经浏览器半场 modules 行扫描装载（dsh.client.platform=web +
+# exports["./client"] 自注册 CJS bundle；knowledge/input-history 同构装载通道）。
+# 双挂载互斥：ui enhancer 全局哨兵（document 侧单例键）——壳构建期挂载与安装
+# bundle 装载先到先得、后到 fail-soft 跳过，恒单实例（提案 md-mermaid-client-bundle）。
 - insert:
     - id: md-mermaid
       name: '@dsh-forge/md-mermaid'
