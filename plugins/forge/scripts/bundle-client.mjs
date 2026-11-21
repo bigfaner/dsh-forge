@@ -8,7 +8,7 @@
 // 入口取 TS 源（ui/index.ts，由 exports["./client"].types 镜像推导——单一事实源）。
 // client 合并形态（forge-deep-pack 1.5 / 提案 §二.2，P0 #6 定谳 A 形态）：入口 import
 // 五件 dist/client.js 自注册 bundle（消费产物非源码）——五件注册全发生、序 = import
-// 拼接序、单外层求值内收敛（守卫三件套 = tests/forge/client-merge.test.ts）。
+// 拼接序、单外层求值内收敛（守卫三件套归 bundle-client 构建期自检）。
 //
 // 五件 client 并集声明（评审修订 6 / R3·N7）：forge dsh.client 的 external ∪ inject
 // 并集由本脚本从五件 package.json 的 dsh.client 字段驱动聚合——esbuild external 面 =

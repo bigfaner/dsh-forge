@@ -64,7 +64,7 @@ export const SKILL_MEMBER_DIRS = ['project', 'spec', 'task-loop', 'expert-squad'
  * 跨包锚三硬前提（缺席包 MODULE_NOT_FOUND 无 fail-soft、./package.json 出口缺失、
  * 层序覆盖脆弱）由「只依赖 forge 自己」单表达式根除——P0 #5 处方 C 定谳。
  * 生成脚本 scripts/aggregate-assets.mjs 由本函数同源物化 patch customSkillDirs 行
- * （静态双检锚 tests/forge/asset-aggregation.test.ts，漂移红）。
+ * （静态双检锚 tests/forge/derive-configs.test.ts，漂移红）。
  */
 export function skillDirSelfAnchorExpr(member: string): string {
   return `process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('${FORGE_PKG_SPECIFIER}/package.json')), 'dist', 'skills', '${member}')`

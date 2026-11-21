@@ -5,5 +5,5 @@
 // 阶段一零视图（最小自有入口）：Workbench 三面视图归 forge-workbench 期在此生长
 // （视图模块随包构建自动并入 bundle-client 产物，六插行与 file: 依赖零变化）。
 // bundle-client 构建面保留：产物经 scripts/bundle-client.mjs 包装为 classic script
-// 自注册单注册（id = @dsh-forge/forge——装载契约守卫 tests/forge/client-merge.test.ts）。
+// 自注册单注册（id = @dsh-forge/forge——结构 pin：tests/forge/deep-retirement-pin.test.ts）。
 export const FORGE_VIEW_ID = "@dsh-forge/forge";

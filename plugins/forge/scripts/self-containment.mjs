@@ -11,8 +11,8 @@
 //
 // external 档分档门（forge-deep-pack 评审修订 5）：allowPrivate 白名单**限五件名 ∧
 // file: 依赖**——名单内包名必须同时是 dependencies 中的相对 file: 声明（发布树/solo
-// 通道运行期由宿主 node_modules 解析已装五件）；名单外或依赖声明缺失即违规。
-// inline/tgz 档零豁免沿用现门（deep-build 不传 allowPrivate）。
+// 通道运行期由宿主 node_modules 解析已装五件）；名单外或依赖声明缺失即违规
+// （deep 单文件 inline/tgz 档已随 deep 通道退役删除——forge-aggregate-bundle 1.7）。
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";

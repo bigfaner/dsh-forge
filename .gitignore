@@ -138,8 +138,3 @@ cdp/
 # hard guard replacing "never git-added" convention; see .dsh/experts/)
 .dsh/
 
-# forge æ„å»ºæœŸç‰©åŒ–ç”Ÿæˆç‰©ï¼ˆaggregate-assets.mjs æ¯æ¬¡ build ä»æºåŒ…é‡æ–°å¤åˆ¶â€”â€”ä¸ dist åŒç­‰åœ°ä½ï¼‰
-plugins/forge/experts/
-
-# deep-build tgz ²úÎï£¨forge-deep-pack 1.7¡ª¡ª¹¹½¨Éú³ÉÎïÓë dist Í¬µÈµØÎ»£©
-plugins/forge/dist-deep/

@@ -1,8 +1,11 @@
 // aggregate-assets.mjs — bundle 档单一生成器（forge-aggregate-bundle 1.5——提案 §二
 // patch 面定谳形态）：唯一产物 = cordis.patch.yml，由成员清单（MEMBERS）单源驱动再
 // 生成（run-once、幂等可重跑；提交面正本，漂移由 tests/forge/patch-generator.test.ts
-// 守卫红）。deep 单行自插/资产聚合（dist/skills、experts 重定位）逻辑退役出本脚本
-// ——退役删除归 1.7，本任务先不删文件只不再引用。
+// 守卫红）。deep 单行自插/资产聚合面随 deep 通道退役删除（forge-aggregate-bundle 1.7）。
+//
+// freshness 代际守卫入口前置（forge-aggregate-bundle 1.7——freshness 门自 deep-build
+// 迁入 bundle 打包链）：本脚本是 forge build 链末步，dist 刚由前置步产出——入口只做
+// 代际双校验（不再递归编译；全量自动编译门归 package-release assembleRelease 前置）。
 //
 // patch 面（提案 §二.2/§2.3）：
 //   ① 六插行：forge 自插行（{ home } 唯一键——Workbench 生长面，§2.2）+ 五件插行
@@ -22,8 +25,17 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { generationViolations } from "./freshness.mjs";
 
 const FORGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+// ── freshness 代际守卫入口前置（fail-loud——dist 陈旧即中止，不产漂移 patch）──
+const generationDrift = generationViolations("@dsh-forge/forge", FORGE_ROOT);
+if (generationDrift.length > 0) {
+  console.error("[aggregate] freshness 代际守卫违规：");
+  for (const v of generationDrift) console.error(`  - ${v}`);
+  process.exit(1);
+}
 
 // ── 成员清单单源（六插行/五 skills 行/preset 五锚全部由本清单驱动）──────────
 const MEMBERS = ["project", "spec", "task-loop", "expert-squad", "knowledge"];

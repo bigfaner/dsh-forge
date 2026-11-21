@@ -1,7 +1,7 @@
-// forge 骨架结构 pin（forge-deep-pack 1.8 汇总层——逐面正本归 plugins/forge/tests/
-// 三契约 + tests/forge/{derive-configs,client-merge,asset-aggregation}.test.ts，
-// 本文件为结构速查 pin：三目录 / exports 双键 / 零 typert 工件键 / files 与版本规则 /
-// 静态四查汇总——任一漂移即红，防骨架面静默变形）。
+// forge 骨架结构 pin（forge-deep-pack 1.8 汇总层；forge-aggregate-bundle 1.7 随 deep
+// 退役改形——逐面正本归 plugins/forge/tests/ 三契约 + tests/forge/{derive-configs,
+// deep-retirement-pin}.test.ts，本文件为结构速查 pin：三目录 / exports 双键 /
+// 零 typert 工件键 / files 与版本规则 / 静态四查汇总——任一漂移即红，防骨架面静默变形）。
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,20 +17,20 @@ const pkg = JSON.parse(readFileSync(join(FORGE_ROOT, "package.json"), "utf8")) a
 };
 
 describe("骨架三目录（阶段一最小化——零占位空模块）", () => {
-  it("host/ui/scripts 三目录在位且工件齐备（host 组合段 + 派发单源 + typert 手工缝；ui 合并入口；五脚本）", () => {
+  it("host/ui/scripts 三目录在位且工件齐备（host 薄 apply + 派发单源；ui 自有视图入口；六脚本含 freshness 门）", () => {
     expect(existsSync(join(FORGE_ROOT, "host"))).toBe(true);
     expect(existsSync(join(FORGE_ROOT, "ui"))).toBe(true);
     expect(existsSync(join(FORGE_ROOT, "scripts"))).toBe(true);
     for (const f of [
       "host/index.ts",
       "host/assembly.ts",
-      "host/typert-seam.ts",
       "ui/index.ts",
       "scripts/clean-dist.mjs",
       "scripts/bundle-host.mjs",
       "scripts/bundle-client.mjs",
       "scripts/self-containment.mjs",
       "scripts/aggregate-assets.mjs",
+      "scripts/freshness.mjs",
       "cordis.patch.yml",
     ]) {
       expect(existsSync(join(FORGE_ROOT, f)), `缺骨架工件：${f}`).toBe(true);
