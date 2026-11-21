@@ -59,7 +59,7 @@ export interface TokenSpanMirror {
   readonly draftRev: number
 }
 
-/** SessionInput 消费切片（contract/input.d.ts:163-194——同一草稿机操作面） */
+/** SessionInput 消费切片（dsh-client-ui-conversation contract/input.d.ts:172-210——同一草稿机操作面） */
 export interface SessionInputFaceMirror {
   setDraft(text: string): void
   submit(mode?: unknown, source?: 'click' | 'enter'): void

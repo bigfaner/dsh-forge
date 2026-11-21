@@ -52,9 +52,9 @@
 
 ## imports 适配政策
 
-- **公开 npm 包直依赖**：`@deepseek-ai/dsh-client-ui-primitives`（0.2.0-rc.2 精确 pin）、`clsx`（2.1.1）、`@deepseek-ai/dsh-client-store`（0.2.2-rc.5——1.5 起类型面直连，运行实现仍本地自持）。
+- **公开 npm 包直依赖**：`@deepseek-ai/dsh-client-ui-primitives`（0.2.2-rc.5 精确 pin）、`clsx`（2.1.1）、`@deepseek-ai/dsh-client-store`（0.2.2-rc.5——1.5 起类型面直连，运行实现仍本地自持）。
 - **lexical / @lexical/\* 外置**：`lexical`、`@lexical/{plain-text,history,utils,text}` 0.49.0 在 bundle external 表（与官方壳层同款版本——防第二份 Lexical 实例，Invalid hook call 判例红线）；react 家族维持既有 external。
-- **不可达内部服务面以结构同型镜像承载**：dsh-client-store → `store.ts`、ConfigForm → `submission-settings.ts`、token-meter/slots/attachment 类型 → 本地镜像。跨边界官方面（InputState store、SessionInput、InputTriggerController）一律结构读取，不经镜像类型通道。
+- **不可达内部服务面以结构同型镜像承载**：ConfigForm → `submission-settings.ts`、token-meter/slots/attachment 类型 → 本地镜像。dsh-client-store 自 1.5 起改指公开包本体——`store.ts` 仅留 `ObservableSnapshot` re-export + SnapshotStore set 薄片 + 本地 `createSnapshotStore` 运行实现，不再作镜像通道。跨边界官方面（InputState store、SessionInput、InputTriggerController）一律结构读取，不经镜像类型通道。
 - **接口对齐**：`ComposerBarProps` 消费子集见 `contract/composer-bar.ts`；`renderSlot` 由替身装配层给空实现（不申请官方槽位授权）。
 
 ## 漂移看护
@@ -62,3 +62,7 @@
 - 复制件与官方版本锚 commit 写死；官方升级 = **人工 re-copy**（重新对照本清单逐文件复制 + 重放 imports 适配），不做自动同步。
 - 逐文件头注携带源位相对路径 + 锚 commit + 日期；复制件内部相对 imports 保持官方目录形状（`skeleton/`、`input/editor/`、`contract/`），re-copy 时可直接覆盖。
 - 适配改动一律以 `PROVENANCE 适配` 注释就地标记，re-copy 时据此重放。
+
+## 夹带留痕（8996f62b）
+
+提交 `8996f62b`（ContextMeter rc.5 re-copy）混入 18 件 md-mermaid 目录 rename（`packages/plugins/md-mermaid` → 根级 `plugins/md-mermaid`）——并发 worker 同 worktree 提交夹带，与本清单内容无关；历史不重写，事实留痕于此。

@@ -313,8 +313,6 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     for (const listener of menuStore.listeners) listener();
     await new Promise((resolve) => setTimeout(resolve, 120)); // React 并发调度 flush（Scheduler macrotask）
     await tick();
-    console.log("DBG open", menuStore.getSnapshot().open, "sessionOfCalls", sessionOfSpy.mock.calls.length,
-      "rootHtml", document.querySelector('[data-testid="dscf-root"]')?.innerHTML.length);
     expect(document.querySelector('[data-testid="dscf-mention"]')).not.toBeNull();
   });
 });
