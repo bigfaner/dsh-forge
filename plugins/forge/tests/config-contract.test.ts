@@ -42,11 +42,19 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
     expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "" })).toBeFalsy();
   });
 
-  it("占位符物化面封闭：!!js 求值点恰一条（单行自插——零五插行表达式），全部为 DSH_HOME 表达式，无 {projectDir}/{homeDir} 模板", () => {
+  it("占位符物化面封闭：!!js 求值点 = home 表达式 + 五条 skills 自锚 ×2（顶层 skill-filesystem 行 + preset 嵌套行，1.6）+ 官方 preset 底稿平台/禁用表达式，无 {projectDir}/{homeDir} 模板", () => {
     expect(patchYaml).not.toContain("{projectDir}");
     expect(patchYaml).not.toContain("{homeDir}");
     const jsPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!);
-    expect(jsPoints).toEqual([HOME_EXPR]);
+    expect(jsPoints[0]).toBe(HOME_EXPR);
+    const anchorPoints = jsPoints.slice(1).filter((p) => p.includes("@dsh-forge/forge/package.json"));
+    expect(anchorPoints).toHaveLength(10); // 五条 ×（顶层行 + preset 嵌套行）
+    const otherPoints = jsPoints.slice(1).filter((p) => !p.includes("@dsh-forge/forge/package.json"));
+    // 官方 preset 底稿逐字保留面：platform 禁用表达式 ×2 + plugin-manager profileContext + 官方 dsh-agent-preset skills 锚（宿主壳层恒在场——非跨插件包）。
+    expect(otherPoints).toHaveLength(4);
+    expect(otherPoints.filter((p) => p.startsWith("process.platform"))).toHaveLength(2);
+    expect(otherPoints.filter((p) => p.includes("profileContext"))).toHaveLength(1);
+    expect(otherPoints.filter((p) => p.includes("dsh-agent-preset/package.json"))).toHaveLength(1);
     for (const point of jsPoints) {
       expect(point).not.toMatch(/\{[^}]+\}/);
     }

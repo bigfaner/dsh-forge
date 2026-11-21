@@ -8,11 +8,12 @@ import { describe, expect, it } from "vitest";
 
 const FORGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** 递归枚举包内文件（排除 node_modules 与 tests/——边界门对象 = 源码与声明面）。 */
+/** 递归枚举包内文件（排除 node_modules 与 tests/——边界门对象 = 源码与声明面）。
+ * skills/ experts/ 资产聚合子树不在枚举面（生成产物——tests/forge/asset-aggregation.test.ts 守卫）。 */
 function listSourceFiles(dir: string, root = dir): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === "dist") continue;
+    if (entry === "node_modules" || entry === "dist" || entry === "skills" || entry === "experts") continue;
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
       if (relative(resolve(root), resolve(full)) === "tests") continue;
@@ -29,13 +30,15 @@ const readText = (f: string) => readFileSync(join(FORGE_ROOT, f), "utf8");
 const texts = new Map(sourceFiles.map((f) => [f, readText(f)]));
 
 describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
-  it("包内容面恰十三件骨架工件（声明面 + 双 tsconfig + 四脚本 + host 组合段/派发单源 + ui 入口——零 read/orchestrate/shared 占位目录）", () => {
+  it("包内容面恰十五件骨架工件（声明面 + 双 tsconfig + 五脚本 + host 组合段/派发单源/typert 手工缝 + ui 入口——零 read/orchestrate/shared 占位目录；skills/experts 资产子树另行守卫）", () => {
     expect(sourceFiles).toEqual([
       "README.md",
       "cordis.patch.yml",
       "host/assembly.ts",
       "host/index.ts",
+      "host/typert-seam.ts",
       "package.json",
+      "scripts/aggregate-assets.mjs",
       "scripts/bundle-client.mjs",
       "scripts/bundle-host.mjs",
       "scripts/clean-dist.mjs",
@@ -47,9 +50,9 @@ describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
     ]);
   });
 
-  it("四查① import 白名单：host/ui 源码 import 仅允许五件名（含 /client 子出口——ui 合并自注册单元，1.5）/lib-diag/cordis/相对/node:（禁 db、禁其它跨插件 import）", () => {
+  it("四查① import 白名单：host/ui 源码 import 仅允许五件名（含 /client 子出口——ui 合并自注册单元，1.5；含 /typert 工件子出口——typert 手工缝装载期 import 面，1.6）/lib-diag/cordis/相对/node:（禁 db、禁其它跨插件 import）", () => {
     const ALLOWED = [
-      /^@dsh-forge\/(?:project|spec|task-loop|expert-squad|knowledge)(?:\/client)?$/,
+      /^@dsh-forge\/(?:project|spec|task-loop|expert-squad|knowledge)(?:\/(?:client|typert))?$/,
       /^@dsh-forge\/lib-diag$/,
       /^@deepseek-ai\/cordis$/,
       /^\./,
@@ -117,8 +120,9 @@ describe("forge 声明面守卫（package.json 骨架期全量）", () => {
     expect(pkg.types).toBe("./dist/host/index.d.ts");
   });
 
-  it("exports 恰双键（. + ./client）且零 typert 工件键（圆桌共识 2——聚合方法长在五件，forge 纯消费）", () => {
-    expect(Object.keys(pkg.exports ?? {})).toEqual([".", "./client"]);
+  it("exports 恰三键（./package.json + . + ./client）且零 typert 工件键（圆桌共识 2——聚合方法长在五件，forge 纯消费；./package.json 出口 = skills 自锚 resolve 面——P0 #5 处方 C）", () => {
+    expect(Object.keys(pkg.exports ?? {})).toEqual(["./package.json", ".", "./client"]);
+    expect(pkg.exports?.["./package.json"]).toBe("./package.json");
     expect(pkg.exports?.["."]).toEqual({
       types: "./dist/host/index.d.ts",
       import: "./dist/host/index.js",
@@ -135,8 +139,8 @@ describe("forge 声明面守卫（package.json 骨架期全量）", () => {
     expect(pkg.dsh?.client?.platform).toBe("web");
   });
 
-  it("files 恰两件（dist + cordis.patch.yml）", () => {
-    expect(pkg.files).toEqual(["dist", "cordis.patch.yml"]);
+  it("files 恰四件（dist + cordis.patch.yml + experts + skills——1.6 资产聚合随包分发）", () => {
+    expect(pkg.files).toEqual(["dist", "cordis.patch.yml", "experts", "skills"]);
   });
 
   it("scripts：build = clean-dist → tsc -b → bundle-host → bundle-client（run-once 禁 watch）+ prepack self-containment", () => {

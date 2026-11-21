@@ -18,8 +18,10 @@ import { auditDist, COMPOSED_MEMBERS, exportsDistPaths } from "./self-containmen
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 
-// 外置表：官方机械与 peer（内联第二副本会分裂官方单例语义）+ external 档五件。
-const EXTERNAL = ["@deepseek-ai/*", ...COMPOSED_MEMBERS];
+// 外置表：官方机械与 peer（内联第二副本会分裂官方单例语义）+ external 档五件
+// （含 ./typert 工件子路径——1.6 typert 手工缝装载期 import 面，同样外置由宿主
+// node_modules 解析；inline 档归 deep-build）。
+const EXTERNAL = ["@deepseek-ai/*", ...COMPOSED_MEMBERS, ...COMPOSED_MEMBERS.map((m) => `${m}/typert`)];
 
 // 内联入口 = package.json exports 全部 dist/host 运行期入口镜像回 TS 源（单一事实源
 // ——dist/host/x.js ↔ host/x.ts 同形镜像，exports 改面入口自动随动）。

@@ -2,6 +2,7 @@
 //   COMPOSED 组合清单单源（序即激活序）+ 在场守卫（消费点现查，P0 #7 三铁律）+
 //   组合调用 = ctx.plugin(module, config) 官方缝（P0 #1 定谳——直调 module.apply
 //   绕过 cordis inject 装配机械必抛，禁用）+ 诊断全经 emitDiag（AGENTS §7 禁 console）。
+// 1.6 增补：typert 手工缝（P0 #3 定谳——装载期 import 三件工件 + register，见 typert-seam.ts）。
 import * as project from "@dsh-forge/project";
 import * as spec from "@dsh-forge/spec";
 import * as taskLoop from "@dsh-forge/task-loop";
@@ -14,6 +15,7 @@ import {
   type ComposedKey,
   type ForgeConfig,
 } from "./assembly.js";
+import { registerTypertManifests } from "./typert-seam.js";
 
 export const name = "@dsh-forge/forge"; // loader ID 校验 = 包名（产物契约）
 
@@ -23,6 +25,8 @@ interface ComposeCtx {
   plugin?(module: unknown, config?: unknown): unknown;
   /** 服务反射面（在场守卫消费点现查——可选具名服务官方面取法） */
   reflect?: { get?(name: string): unknown };
+  /** typert registry 服务（手工缝注册面——非 typert 宿主缺席即零注册） */
+  typert?: { register?(manifest: unknown): unknown };
   /** 诊断发射面（diag/log 事件域——emitDiag 消费面） */
   emit(event: string, payload: unknown): unknown;
 }
@@ -62,8 +66,10 @@ function isMemberActive(ctx: ComposeCtx, key: ComposedKey): boolean {
  * ctx.plugin(module, config) 官方缝统一派发激活。cordis provide 不幂等
  * （P0 #7——二次 provide throw）：组合调用 throw 捕获后静默让位，emitDiag
  * warn 留痕不阻载（守卫两分支必经留痕——forge-compose-skip / forge-compose-apply）。
+ * 1.6 增补：组合后执行 typert 手工缝注册（P0 #3——非 typert 宿主零注册零固定税），
+ * 注册成功的卸载 disposer 交还宿主生命周期（apply 返回值 = cordis 卸载回收面）。
  */
-export function apply(ctx: ComposeCtx, config: ForgeConfig = {}): void {
+export function apply(ctx: ComposeCtx, config: ForgeConfig = {}): (() => void) | undefined {
   if (typeof ctx.plugin !== "function") {
     // 非 cordis 宿主（组合缝缺席）——零组合不阻载，warn 留痕（禁静默）。
     emitDiag(ctx, {
@@ -114,4 +120,7 @@ export function apply(ctx: ComposeCtx, config: ForgeConfig = {}): void {
       message: `执行五件组合激活：${applied.join(",")}`,
     });
   }
+  // typert 手工缝（P0 #3——loader 扫不到嵌套包，唯一正门）：组合完成后注册三件工件
+  // manifest（所有权不变），disposer 聚合交还宿主生命周期（卸载即撤注册）。
+  return registerTypertManifests(ctx);
 }

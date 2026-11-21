@@ -1,12 +1,13 @@
 {
   "name": "@dsh-forge/forge",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "forge 组合器包（组合段 COMPOSED + 在场守卫 + 配置派发单源 assembly + client 合并 + 打包链——forge-deep-pack 骨架）。",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
   "exports": {
+    "./package.json": "./package.json",
     ".": {
       "types": "./dist/host/index.d.ts",
       "import": "./dist/host/index.js"
@@ -32,7 +33,9 @@
   },
   "files": [
     "dist",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "experts",
+    "skills"
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",

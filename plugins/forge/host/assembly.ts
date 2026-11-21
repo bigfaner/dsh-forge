@@ -51,6 +51,24 @@ export const PRESENCE_SERVICE_KEYS = {
 
 export type ComposedKey = keyof typeof PRESENCE_SERVICE_KEYS
 
+// ── skills 自锚（P0 核销 #5 处方 C——forge-deep-pack 1.6）──────────────────
+/** forge 包说明符（skills 自锚 resolve 锚——只依赖 forge 自己，三档通吃） */
+export const FORGE_PKG_SPECIFIER = '@dsh-forge/forge'
+/** 五件 skills 聚合子目录名（= COMPOSED key——聚合面 forge/skills/<member>/） */
+export const SKILL_MEMBER_DIRS = ['project', 'spec', 'task-loop', 'expert-squad', 'knowledge'] as const
+
+/**
+ * skills 自锚单表达式（!!js 方言——official userPatchesSchema 核销同款 baseUrl 形态）：
+ * resolve('@dsh-forge/forge/package.json') → 包根 → join('skills', '<member>')。
+ * 跨包锚三硬前提（缺席包 MODULE_NOT_FOUND 无 fail-soft、./package.json 出口缺失、
+ * 层序覆盖脆弱）由「只依赖 forge 自己」单表达式根除——P0 #5 处方 C 定谳。
+ * 生成脚本 scripts/aggregate-assets.mjs 由本函数同源物化 patch customSkillDirs 行
+ * （静态双检锚 tests/forge/asset-aggregation.test.ts，漂移红）。
+ */
+export function skillDirSelfAnchorExpr(member: string): string {
+  return `process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('${FORGE_PKG_SPECIFIER}/package.json')), 'skills', '${member}')`
+}
+
 const nonEmpty = (value: string | undefined): string | undefined => {
   const trimmed = value?.trim()
   return trimmed ? trimmed : undefined
