@@ -29,14 +29,21 @@ const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 // 自动外置。@dsh-forge/* 一律不外置（含 contracts/path-key）——独立安装形态不存在其解析路径。
 const EXTERNAL = ["@deepseek-ai/*", "better-sqlite3", "gray-matter"];
 
-// bug bf4f3851 内联例外（插件 onResolve 优先于 external 表）：dsh-client-connection
-// 定死绝对路径强制打包（profile 遮蔽判例见上方说明）。
-const inlineOfficialConnection = {
-  name: "inline-dsh-client-connection",
+// 内联例外（插件 onResolve 优先于 external 表；bug c48f2b6b——原窄表只覆盖 connection，
+// 已内联件的传递依赖以外部 import 面残留，profile @deepseek-ai 为空即 MODULE_NOT_FOUND）：
+// @deepseek-ai/* 一律内联，唯 cordis 豁免（Service/Context 值导入保持外置——内联第二副本
+// 分裂官方单例语义，依赖宿主 peer providers 注入单例）。importer 侧解析：内联件的传递依赖
+// （connection→schemastery/dsh-credentials/dsh-scope 等）不在本包声明链内，以 importer
+// 所在包解析才命中。
+const INLINE_OFFICIAL_FILTER = /^@deepseek-ai\//;
+const INLINE_EXEMPT = /^@deepseek-ai\/cordis(?:\/|$)/;
+const inlineOfficial = {
+  name: "inline-dsh-official",
   setup(build) {
-    build.onResolve({ filter: /^@deepseek-ai\/dsh-client-connection(\/.*)?$/ }, (args) => ({
-      path: createRequire(join(pkgDir, "package.json")).resolve(args.path),
-    }));
+    build.onResolve({ filter: INLINE_OFFICIAL_FILTER }, (args) => {
+      if (INLINE_EXEMPT.test(args.path)) return undefined; // cordis peer 外置，落回默认解析
+      return { path: createRequire(args.importer || join(pkgDir, "package.json")).resolve(args.path) };
+    });
   },
 };
 
@@ -59,7 +66,7 @@ await build({
   platform: "node",
   target: "node20",
   external: EXTERNAL,
-  plugins: [inlineOfficialConnection],
+  plugins: [inlineOfficial],
   allowOverwrite: true,
   minify: false,
   sourcemap: false,
@@ -86,6 +93,27 @@ const violations = auditDist(pkgDir, { requireDist: true, exportsPrefixes: ["./d
 if (violations.length > 0) {
   console.error(`[bundle-host] 离手门失败：dist 自含审计 ${violations.length} 处违规`);
   for (const v of violations) console.error(`  - ${v}`);
+  process.exit(1);
+}
+
+// 离手门补强（bug c48f2b6b）：dist/host 外部 @deepseek-ai import 面收敛断言——仅允许
+// cordis peer。声明面 lint 迁移若再漏内联，构建即红（防复发联动门）。
+const EXTERNAL_SPEC = /(?:from\s*|import\s*\(\s*|require\s*\(\s*)["'](@deepseek-ai\/[^"']+)["']/g;
+const residualSpecs = new Set();
+const scanImports = (dir) => {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = resolve(dir, e.name);
+    if (e.isDirectory()) scanImports(p);
+    else if (e.name.endsWith(".js")) {
+      for (const g of readFileSync(p, "utf8").matchAll(EXTERNAL_SPEC)) residualSpecs.add(g[1]);
+    }
+  }
+};
+scanImports(resolve(pkgDir, "dist/host"));
+const nonPeer = [...residualSpecs].filter((s) => !s.startsWith("@deepseek-ai/cordis"));
+if (nonPeer.length > 0) {
+  console.error(`[bundle-host] 离手门失败：dist/host 外部 @deepseek-ai import 面仅允许 cordis peer，残留 ${nonPeer.length} 处`);
+  for (const s of nonPeer.sort()) console.error(`  - ${s}`);
   process.exit(1);
 }
 console.log(`[bundle-host] 离手门通过（${HOST_RUNTIME_ENTRIES.length} 入口全内联 + dist/host 全量自含）`);

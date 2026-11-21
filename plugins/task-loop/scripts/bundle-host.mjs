@@ -60,23 +60,22 @@ const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 // workspace:* devDeps，残留裸 import 即 ERR_MODULE_NOT_FOUND）。
 const EXTERNAL = ["@deepseek-ai/*", "better-sqlite3"];
 
-// 内联例外（onResolve 优先于 external 表，bf4f3851 connection 同范式）：driver 声明面
-// 迁 devDependencies（desktop staging autoInstallPeers 会沿 dependencies 把 driver 的
-// 旧代际 peer 族 dsh-llm/dsh-agent/dsh-tools/dsh-session/dsh-subagent/dsh-system-prompt
-// @0.2.0-rc.2 整树拉入——better-sqlite3@11.x node-gyp 混入即 ELIFECYCLE 1），运行期实现
-// 改吃内联副本——dispatchTask spawn 通道动态 import 的 startInProcessRun 打包进 dist；
-// driver 唯一直连依赖 dsh-brand 同径内联（若外置，独立安装形态无解析路径即断链）。
-// 例外表精确两包名——driver 的 peer 族仍外置（宿主壳层单例解析）。
-const INLINE_OFFICIAL_FILTER =
-  /^@deepseek-ai\/(?:dsh-subagent-in-process-driver|dsh-brand)(?:\/.*)?$/;
-const inlineOfficialDriver = {
-  name: "inline-dsh-subagent-in-process-driver",
+// 内联例外（onResolve 优先于 external 表；bug c48f2b6b——原 driver/dsh-brand 窄表范式下，
+// driver 的 peer 族与源码直连件以外部 import 面残留，profile @deepseek-ai 为空即
+// MODULE_NOT_FOUND）：@deepseek-ai/* 一律内联，唯 cordis 豁免（宿主 peer providers 注入
+// 单例，内联第二副本分裂官方单例语义）。importer 侧解析：内联件的传递依赖（driver→
+// dsh-brand、connection→schemastery/dsh-credentials 等）不在本包声明链内，以 importer
+// 所在包解析才命中。driver 声明面维持 devDependencies（desktop staging autoInstallPeers
+// 旧代际 peer 族整树拉入判例不变）。
+const INLINE_OFFICIAL_FILTER = /^@deepseek-ai\//;
+const INLINE_EXEMPT = /^@deepseek-ai\/cordis(?:\/|$)/;
+const inlineOfficial = {
+  name: "inline-dsh-official",
   setup(build) {
-    build.onResolve({ filter: INLINE_OFFICIAL_FILTER }, (args) => ({
-      // 从 importer 侧解析：driver→dsh-brand 属 driver 自身依赖链（dsh-brand 非本包
-      // 声明依赖，不入本包 node_modules 链）——以 importer 所在包解析才命中。
-      path: createRequire(args.importer || join(pkgDir, "package.json")).resolve(args.path),
-    }));
+    build.onResolve({ filter: INLINE_OFFICIAL_FILTER }, (args) => {
+      if (INLINE_EXEMPT.test(args.path)) return undefined; // cordis peer 外置，落回默认解析
+      return { path: createRequire(args.importer || join(pkgDir, "package.json")).resolve(args.path) };
+    });
   },
 };
 
@@ -99,7 +98,7 @@ await build({
   platform: "node",
   target: "node20",
   external: EXTERNAL,
-  plugins: [dshDecoratorsPlugin, inlineOfficialDriver],
+  plugins: [dshDecoratorsPlugin, inlineOfficial],
   allowOverwrite: true,
   minify: false,
   sourcemap: false,
@@ -126,6 +125,27 @@ const violations = auditDist(pkgDir, { requireDist: true, exportsPrefixes: ["./d
 if (violations.length > 0) {
   console.error(`[bundle-host] 离手门失败：dist 自含审计 ${violations.length} 处违规`);
   for (const v of violations) console.error(`  - ${v}`);
+  process.exit(1);
+}
+
+// 离手门补强（bug c48f2b6b）：dist/host 外部 @deepseek-ai import 面收敛断言——仅允许
+// cordis peer。声明面 lint 迁移若再漏内联，构建即红（防复发联动门）。
+const EXTERNAL_SPEC = /(?:from\s*|import\s*\(\s*|require\s*\(\s*)["'](@deepseek-ai\/[^"']+)["']/g;
+const residualSpecs = new Set();
+const scanImports = (dir) => {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = resolve(dir, e.name);
+    if (e.isDirectory()) scanImports(p);
+    else if (e.name.endsWith(".js")) {
+      for (const g of readFileSync(p, "utf8").matchAll(EXTERNAL_SPEC)) residualSpecs.add(g[1]);
+    }
+  }
+};
+scanImports(resolve(pkgDir, "dist/host"));
+const nonPeer = [...residualSpecs].filter((s) => !s.startsWith("@deepseek-ai/cordis"));
+if (nonPeer.length > 0) {
+  console.error(`[bundle-host] 离手门失败：dist/host 外部 @deepseek-ai import 面仅允许 cordis peer，残留 ${nonPeer.length} 处`);
+  for (const s of nonPeer.sort()) console.error(`  - ${s}`);
   process.exit(1);
 }
 console.log(`[bundle-host] 离手门通过（${HOST_RUNTIME_ENTRIES.length} 入口全内联 + dist 全量自含）`);

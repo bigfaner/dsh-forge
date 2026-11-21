@@ -44,6 +44,57 @@ function checkInternalSixDependencies() {
 	return violations;
 }
 
+// 联动断言（bug c48f2b6b）：声明面 lint 迁移（@deepseek-ai/* 迁 devDeps/peer）必须与
+// bundle-host 内联例外表同步——凡该件 @deepseek-ai 声明依赖（非 cordis peer）必须命中
+// 其 bundle-host 的 INLINE_OFFICIAL_FILTER，且 cordis 必须被 INLINE_EXEMPT 豁免（peer
+// 单例由宿主注入，禁内联）。覆盖面：本轮收敛三件（project/task-loop/knowledge）；
+// forge/spec/expert-squad 同族残留另卡处理，不在此断言。
+const INLINE_LINKED_THREE = ['plugins/project', 'plugins/task-loop', 'plugins/knowledge'];
+
+function extractRegexLiteral(src, constName) {
+	const m = src.match(new RegExp(`const ${constName} = (\\/(?:[^/\\\\]|\\\\.)+\\/[a-z]*)`));
+	if (!m) return null;
+	const literal = m[1];
+	const flags = literal.slice(literal.lastIndexOf('/') + 1);
+	return new RegExp(literal.slice(1, literal.lastIndexOf('/')), flags);
+}
+
+function checkInlineFilterLinkage() {
+	const violations = [];
+	for (const rel of INLINE_LINKED_THREE) {
+		let manifest;
+		try {
+			manifest = JSON.parse(readFileSync(`${ROOT}/${rel}/package.json`, 'utf-8'));
+		} catch (err) {
+			violations.push(`${rel}: 清单不可解析（${(err).message}）`);
+			continue;
+		}
+		const src = readFileSync(`${ROOT}/${rel}/scripts/bundle-host.mjs`, 'utf-8');
+		const filter = extractRegexLiteral(src, 'INLINE_OFFICIAL_FILTER');
+		const exempt = extractRegexLiteral(src, 'INLINE_EXEMPT');
+		if (!filter || !exempt) {
+			violations.push(`${rel}: scripts/bundle-host.mjs 缺 INLINE_OFFICIAL_FILTER/INLINE_EXEMPT 内联例外表——lint 联动断言无法核销`);
+			continue;
+		}
+		const declared = [
+			...Object.keys(manifest.devDependencies ?? {}),
+			...Object.keys(manifest.peerDependencies ?? {}),
+		].filter((name) => name.startsWith('@deepseek-ai/'));
+		for (const name of declared) {
+			if (exempt.test(name)) continue; // cordis peer 外置
+			if (!filter.test(name)) {
+				violations.push(
+					`${rel}: 官方件声明「${name}」未命中 bundle-host 内联例外表——lint 迁移未同步内联闭包（bug c48f2b6b 同族）`,
+				);
+			}
+		}
+		if (!exempt.test('@deepseek-ai/cordis')) {
+			violations.push(`${rel}: 内联例外表未豁免 @deepseek-ai/cordis peer——单例语义由宿主注入，禁止内联`);
+		}
+	}
+	return violations;
+}
+
 const bad = [];
 for (const rel of enumerateRepoPackageJsons()) {
 	try {
@@ -53,6 +104,7 @@ for (const rel of enumerateRepoPackageJsons()) {
 	}
 }
 bad.push(...checkInternalSixDependencies());
+bad.push(...checkInlineFilterLinkage());
 if (bad.length > 0) {
 	console.error(`[check:manifests] 包清单机检不通过（${bad.length} 条）:`);
 	for (const line of bad) console.error(`  - ${line}`);
