@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/forge",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
-  "description": "forge 组合器包（组合段 COMPOSED + 在场守卫 + 配置派发单源 assembly + client 合并 + 打包链——forge-deep-pack 骨架）。",
+  "description": "forge 聚合 Bundle 壳（防双激活守卫薄 host + 自有 client 视图入口 + 六插行 patch 生成器单源 assembly + 双链打包——forge-aggregate-bundle 形态）。",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
   "exports": {

@@ -1,22 +1,13 @@
-// forge 组合段单测（1.4）：COMPOSED 键序 pin（序即激活序）+ 在场守卫三铁律行为
-// （消费点现查 / 零 memoize / 捕获 throw 静默让位）+ 守卫两分支 emitDiag 留痕 +
-// ctx.plugin(module, config) 官方缝调用形态（P0 #1——config 派发单源注入断言）。
-import * as project from "@dsh-forge/project";
-import * as spec from "@dsh-forge/spec";
-import * as taskLoop from "@dsh-forge/task-loop";
-import * as expertSquad from "@dsh-forge/expert-squad";
-import * as knowledge from "@dsh-forge/knowledge";
+// forge apply 薄形态单测（forge-aggregate-bundle 1.6）：防双激活守卫（消费点现查 /
+// 零 memoize / 任一件在场即让位）+ 两事件 emitDiag 留痕（forge-bundle-apply /
+// forge-bundle-skip）+ 零诊断直落 console（AGENTS §7）。组合段/typert 缝已退役
+// （bundle 六插行官方默认路径），行为单测面随薄形态收敛。
 import { describe, expect, it } from "vitest";
-import { apply, COMPOSED_KEYS, name } from "../host/index.js";
-import { derivePluginConfigs, type ForgeConfig } from "../host/assembly.js";
+import { apply, name } from "../host/index.js";
+import { PRESENCE_SERVICE_KEYS } from "../host/assembly.js";
 
-/** 五件模块身份表（组合段 import * 同源——fake ctx 按 module 身份记录） */
-const MEMBERS = { project, spec, "task-loop": taskLoop, "expert-squad": expertSquad, knowledge };
-const MEMBER_LIST = [project, spec, taskLoop, expertSquad, knowledge];
-
-/** fake ctx：plugin/reflect.get/emit 记录面（真 Context 结构兼容子集）。 */
-function fakeCtx(options: { present?: string[]; throwFor?: unknown } = {}) {
-  const plugins: Array<{ module: unknown; config: unknown }> = [];
+/** fake ctx：reflect.get / emit 记录面（真 Context 结构兼容子集）。 */
+function fakeCtx(options: { present?: string[] } = {}) {
   const events: Array<{ event: string; payload: { event: string; level: string; message: string } }> = [];
   const ctx = {
     reflect: {
@@ -24,94 +15,88 @@ function fakeCtx(options: { present?: string[]; throwFor?: unknown } = {}) {
         return options.present?.includes(serviceName) ? { marker: serviceName } : undefined;
       },
     },
-    plugin(module: unknown, config?: unknown): unknown {
-      if (options.throwFor !== undefined && module === options.throwFor) {
-        throw new Error("duplicate registration");
-      }
-      plugins.push({ module, config });
-      return undefined;
-    },
     emit(event: string, payload: unknown): unknown {
       events.push({ event, payload: payload as { event: string; level: string; message: string } });
       return undefined;
     },
   };
-  return { ctx, plugins, events };
+  return { ctx, events };
 }
 
-describe("forge 组合段", () => {
+describe("forge apply 薄形态", () => {
   it("包名导出 = loader ID 校验锚（产物契约）", () => {
     expect(name).toBe("@dsh-forge/forge");
   });
 
-  it("COMPOSED 键序 pin：project → spec → task-loop → expert-squad → knowledge（序即激活序，漂移红）", () => {
-    expect(COMPOSED_KEYS).toEqual(["project", "spec", "task-loop", "expert-squad", "knowledge"]);
+  it("bundle 通道正常形态：五件全缺席 → forge-bundle-apply info 留痕（单事件）", () => {
+    const { ctx, events } = fakeCtx();
+    apply(ctx, {});
+    expect(events).toHaveLength(1);
+    expect(events[0]!.payload.event).toBe("forge-bundle-apply");
+    expect(events[0]!.payload.level).toBe("info");
   });
 
-  it("常规组合：五件全经 ctx.plugin(module, config) 官方缝 + 派发单源 config 注入（P0 #1——禁直调 module.apply）", () => {
-    const config: ForgeConfig = { home: "D:/data/forge" };
-    const { ctx, plugins, events } = fakeCtx();
-    apply(ctx, config);
-    expect(plugins.map((p) => p.module)).toEqual(MEMBER_LIST);
-    expect(plugins.map((p) => p.config)).toEqual(Object.values(derivePluginConfigs(config)));
-    expect(events.map((e) => e.payload.event)).toEqual(["forge-compose-apply"]);
+  it("全量 solo 并存：五件全在场 → forge-bundle-skip warn 留痕零 apply（防双激活让位）", () => {
+    const { ctx, events } = fakeCtx({
+      present: Object.values(PRESENCE_SERVICE_KEYS),
+    });
+    apply(ctx, {});
+    expect(events).toHaveLength(1);
+    expect(events[0]!.payload.event).toBe("forge-bundle-skip");
+    expect(events[0]!.payload.level).toBe("warn");
+    for (const key of Object.keys(PRESENCE_SERVICE_KEYS)) {
+      expect(events[0]!.payload.message).toContain(key);
+    }
+  });
+
+  it("部分并存：任一件在场即让位（skip 分支，消息点名在场件）", () => {
+    const { ctx, events } = fakeCtx({ present: [PRESENCE_SERVICE_KEYS.project, PRESENCE_SERVICE_KEYS.spec] });
+    apply(ctx, {});
+    expect(events.map((e) => e.payload.event)).toEqual(["forge-bundle-skip"]);
     expect(events[0]!.payload.message).toContain("project");
+    expect(events[0]!.payload.message).toContain("spec");
   });
 
-  it("solo 在场守卫：已激活件消费点现查跳过（skip 分支 emitDiag forge-compose-skip），未在场件照常组合", () => {
-    const { ctx, plugins, events } = fakeCtx({
-      present: ["forge.projects", "forgeSpecs"], // project + spec 已独立激活
-    });
+  it("在场检测消费点现查零 memoize：同一 ctx 状态变化逐次 apply 结果随动", () => {
+    const present = new Set<string>();
+    const events: Array<{ payload: { event: string } }> = [];
+    const ctx = {
+      reflect: { get: (name: string) => (present.has(name) ? { marker: name } : undefined) },
+      emit(event: string, payload: unknown): unknown {
+        events.push({ event, payload: payload as { event: string } });
+        return undefined;
+      },
+    };
     apply(ctx, {});
-    expect(plugins.map((p) => p.module)).toEqual([taskLoop, expertSquad, knowledge]);
-    const skip = events.filter((e) => e.payload.event === "forge-compose-skip");
-    expect(skip.length).toBeGreaterThanOrEqual(1);
-    expect(skip.some((e) => e.payload.message.includes("project") && e.payload.message.includes("spec"))).toBe(true);
-    expect(events.some((e) => e.payload.event === "forge-compose-apply")).toBe(true);
-  });
-
-  it("提供侧让位：cordis 二次激活 throw 捕获静默让位（不阻载后续件 + warn 留痕）", () => {
-    const { ctx, plugins, events } = fakeCtx({ throwFor: taskLoop });
+    expect(events.at(-1)!.payload.event).toBe("forge-bundle-apply");
+    present.add(PRESENCE_SERVICE_KEYS.knowledge);
     apply(ctx, {});
-    expect(plugins.map((p) => p.module)).toEqual([project, spec, expertSquad, knowledge]); // task-loop 让位，其余照常
-    const skip = events.filter((e) => e.payload.event === "forge-compose-skip" && e.payload.level === "warn");
-    expect(skip.some((e) => e.payload.message.includes("task-loop") && e.payload.message.includes("duplicate"))).toBe(true);
-  });
-
-  it("全量 solo：五件全在场 → 零组合 + skip 留痕零 apply", () => {
-    const { ctx, plugins, events } = fakeCtx({
-      present: ["forge.projects", "forgeSpecs", "forgeTasks", "experts", "knowledge"],
-    });
+    expect(events.at(-1)!.payload.event).toBe("forge-bundle-skip");
+    present.clear();
     apply(ctx, {});
-    expect(plugins).toHaveLength(0);
-    expect(events.some((e) => e.payload.event === "forge-compose-apply")).toBe(false);
-    expect(events.some((e) => e.payload.event === "forge-compose-skip")).toBe(true);
+    expect(events.at(-1)!.payload.event).toBe("forge-bundle-apply");
   });
 
-  it("组合缝缺席（非 cordis 宿主）：零组合 warn 留痕不阻载", () => {
-    const events: Array<{ event: string; payload: { event: string; level: string } }> = [];
+  it("反射异常视同缺席（fail-soft——守卫不阻载 forge 自身激活留痕）", () => {
+    const events: Array<{ payload: { event: string } }> = [];
     apply(
       {
-        reflect: undefined,
+        reflect: {
+          get(): never {
+            throw new Error("reflect unavailable");
+          },
+        },
         emit(event: string, payload: unknown): unknown {
-          events.push({ event, payload: payload as { event: string; level: string } });
+          events.push({ event, payload: payload as { event: string } });
           return undefined;
         },
       },
       {},
     );
-    expect(events).toHaveLength(1);
-    expect(events[0]!.payload.event).toBe("forge-compose-skip");
-    expect(events[0]!.payload.level).toBe("warn");
+    expect(events.map((e) => e.payload.event)).toEqual(["forge-bundle-apply"]);
   });
 
   it("零诊断直落 console：诊断全部经 ctx.emit（AGENTS §7——ctx.emit 缺席时 emitDiag 抛错即测试红）", () => {
-    // emitDiag 直呼 ctx.emit——ctx.emit 缺席即抛（本用例 ctx 零 emit 面），
-    // 证明 apply 内诊断点无一绕道 console。
     expect(() => apply({ reflect: undefined } as never, {})).toThrow();
-  });
-
-  it("MEMBERS 身份表覆盖恰五件（防测试替身与组合段 import 漂移）", () => {
-    expect(Object.keys(MEMBERS).sort()).toEqual(["expert-squad", "knowledge", "project", "spec", "task-loop"].sort());
   });
 });

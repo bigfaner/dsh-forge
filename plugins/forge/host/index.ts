@@ -1,47 +1,24 @@
-// forge host 组合入口（forge-deep-pack 1.4——提案 §二.2 组合段定谳形态照抄）：
-//   COMPOSED 组合清单单源（序即激活序）+ 在场守卫（消费点现查，P0 #7 三铁律）+
-//   组合调用 = ctx.plugin(module, config) 官方缝（P0 #1 定谳——直调 module.apply
-//   绕过 cordis inject 装配机械必抛，禁用）+ 诊断全经 emitDiag（AGENTS §7 禁 console）。
-// 1.6 增补：typert 手工缝（P0 #3 定谳——装载期 import 三件工件 + register，见 typert-seam.ts）。
-import * as project from "@dsh-forge/project";
-import * as spec from "@dsh-forge/spec";
-import * as taskLoop from "@dsh-forge/task-loop";
-import * as expertSquad from "@dsh-forge/expert-squad";
-import * as knowledge from "@dsh-forge/knowledge";
+// @dsh-forge/forge host 入口（forge-aggregate-bundle 1.6 薄化）：
+// 聚合 Bundle 主通道下五件经 patch 六插行激活（官方默认路径——依赖落盘后插行激活
+// 天然成立），COMPOSED 组合段与 typert 手工缝解引用退役（组合/派发归 patch !!js 行，
+// assembly.ts 保留为生成器单源；文件删除归 1.7）。apply 薄形态保留两职责：
+//   ① 防双激活守卫——solo 场景 forge 与五件并存时（任一件在场标记服务已在）跳过留痕
+//      （同 id 双激活 = loader throw，守卫前置让位）；
+//   ② 生命周期诊断 emitDiag（forge-bundle-apply / forge-bundle-skip——AGENTS §7 禁 console）。
+// Workbench 生长点：forge-workbench 期 read/orchestrate 目录、内部 RPC 与自有 host
+// 逻辑在此随包构建自动并入——六插行与 file: 依赖零变化。
 import { emitDiag } from "@dsh-forge/lib-diag";
-import {
-  derivePluginConfigs,
-  PRESENCE_SERVICE_KEYS,
-  type ComposedKey,
-  type ForgeConfig,
-} from "./assembly.js";
-import { registerTypertManifests } from "./typert-seam.js";
+import { PRESENCE_SERVICE_KEYS, type ComposedKey, type ForgeConfig } from "./assembly.js";
 
 export const name = "@dsh-forge/forge"; // loader ID 校验 = 包名（产物契约）
 
-/** 组合宿主 ctx 窄面（cordis Context 结构子集——plugin 组合缝 + reflect 现查 + diag emit） */
-interface ComposeCtx {
-  /** 官方组合缝（cordis plugin(plugin, config)——P0 #1 定谳正门） */
-  plugin?(module: unknown, config?: unknown): unknown;
+/** 宿主 ctx 窄面（cordis Context 结构子集——reflect 现查 + diag emit） */
+interface HostCtx {
   /** 服务反射面（在场守卫消费点现查——可选具名服务官方面取法） */
   reflect?: { get?(name: string): unknown };
-  /** typert registry 服务（手工缝注册面——非 typert 宿主缺席即零注册） */
-  typert?: { register?(manifest: unknown): unknown };
   /** 诊断发射面（diag/log 事件域——emitDiag 消费面） */
   emit(event: string, payload: unknown): unknown;
 }
-
-// 组合清单单源：顺序即激活序（cordis apply 次序事实源）；派发/pin/patch 生成共用此表
-const COMPOSED = [
-  { key: "project", module: project },
-  { key: "spec", module: spec },
-  { key: "task-loop", module: taskLoop },
-  { key: "expert-squad", module: expertSquad },
-  { key: "knowledge", module: knowledge },
-] as const satisfies readonly { key: ComposedKey; module: unknown }[];
-
-/** COMPOSED 键序导出（序即激活序 pin 锚——tests/forge/derive-configs.test.ts） */
-export const COMPOSED_KEYS = COMPOSED.map((entry) => entry.key);
 
 /**
  * 在场守卫单件现查（AGENTS §1.6——检测永不缓存，每个消费点调用期求值）。
@@ -49,78 +26,42 @@ export const COMPOSED_KEYS = COMPOSED.map((entry) => entry.key);
  * 【reflect 静态禁令豁免落款（AGENTS §1.6 / 提案评审 N3/N4 + P0 #7）】此处
  * `ctx.reflect.get` 为新代码非默认配方的局部成因例外：守卫对象 = 五件「是否已
  * 独立激活」，可选项天然无类型化消费面（type-only import 只保五件模块类型，
- * 不保跨件服务类型）；具体服务类型化消费已归各消费件自身（spec/task-loop inject
- * 声明）。守卫现查 + try/catch 吞异常为缺席 + 结果零 memoize——三铁律逐条满足。
+ * 不保跨件服务类型）；具体服务类型化消费已归各消费件自身。守卫现查 + try/catch
+ * 吞异常视同缺席 + 结果零 memoize——三铁律逐条满足。
  */
-function isMemberActive(ctx: ComposeCtx, key: ComposedKey): boolean {
+function isMemberActive(ctx: HostCtx, key: ComposedKey): boolean {
   try {
     return ctx.reflect?.get?.(PRESENCE_SERVICE_KEYS[key]) != null;
   } catch {
-    return false; // 反射异常视同缺席（fail-soft——组合照常尝试，二次激活由 catch 让位承接）
+    return false; // 反射异常视同缺席（fail-soft——检测不阻载 forge 自身激活）
   }
 }
 
 /**
- * forge apply（两通道通用——单行自插后五件不经插行，一律经组合激活）：
- * 逐件在场现查（solo 场景五件已独立激活 → 跳过该件组合）→ 未在场件经
- * ctx.plugin(module, config) 官方缝统一派发激活。cordis provide 不幂等
- * （P0 #7——二次 provide throw）：组合调用 throw 捕获后静默让位，emitDiag
- * warn 留痕不阻载（守卫两分支必经留痕——forge-compose-skip / forge-compose-apply）。
- * 1.6 增补：组合后执行 typert 手工缝注册（P0 #3——非 typert 宿主零注册零固定税），
- * 注册成功的卸载 disposer 交还宿主生命周期（apply 返回值 = cordis 卸载回收面）。
+ * forge apply（薄形态——聚合 Bundle/solo 双场景通用）：
+ * 逐件在场现查（消费点调用期求值，零缓存）→ 任一件已独立激活（solo 并存场景，
+ * 双激活 = loader throw）即 forge-bundle-skip warn 留痕让位；五件全缺席
+ * （bundle 通道正常形态）即 forge-bundle-apply info 留痕确认激活。
+ * config 参数为 Workbench 生长点保留（{ home } 唯一键同源——当前零消费，
+ * forge-workbench 期 host 逻辑在此取用）。
  */
-export function apply(ctx: ComposeCtx, config: ForgeConfig = {}): (() => void) | undefined {
-  if (typeof ctx.plugin !== "function") {
-    // 非 cordis 宿主（组合缝缺席）——零组合不阻载，warn 留痕（禁静默）。
+export function apply(ctx: HostCtx, _config: ForgeConfig = {}): void {
+  const keys = Object.keys(PRESENCE_SERVICE_KEYS) as ComposedKey[];
+  const present = keys.filter((key) => isMemberActive(ctx, key));
+  if (present.length > 0) {
+    // solo 并存守卫：任一件在场即让位（不阻载 forge 自身插行激活——留痕不静默）。
     emitDiag(ctx, {
-      event: "forge-compose-skip",
+      event: "forge-bundle-skip",
       level: "warn",
       process: "main",
-      message: "ctx.plugin 组合缝缺席（非 cordis 宿主）——零组合，五件回落单装语义",
+      message: `五件已独立激活（solo 并存场景），forge 薄形态让位跳过：${present.join(",")}`,
     });
     return;
   }
-  const pluginConfigs = derivePluginConfigs(config); // home 唯一键延伸 → 五件 config 派发（单源）
-  const skipped: string[] = [];
-  const applied: string[] = [];
-  for (const { key, module } of COMPOSED) {
-    if (isMemberActive(ctx, key)) {
-      skipped.push(key); // 消费点现查跳过（solo 场景）——结果零缓存
-      continue;
-    }
-    try {
-      // 官方缝组合（P0 #1 定谳）：inject 经 Inject.resolve + Fiber 拦截面完整消费。
-      ctx.plugin.call(ctx, module, pluginConfigs[key]);
-      applied.push(key);
-    } catch (cause) {
-      // cordis 二次注册/provide 不幂等 throw——静默让位（不阻载 forge 自身），
-      // warn 留痕不吞（AGENTS §7 诊断不静默）。
-      skipped.push(key);
-      emitDiag(ctx, {
-        event: "forge-compose-skip",
-        level: "warn",
-        process: "main",
-        message: `${key} 组合让位（cordis 二次激活 throw——捕获静默让位）：${String(cause)}`,
-      });
-    }
-  }
-  if (skipped.length > 0) {
-    emitDiag(ctx, {
-      event: "forge-compose-skip",
-      level: "info",
-      process: "main",
-      message: `五件已独立激活（solo 场景），跳过组合：${skipped.join(",")}`,
-    });
-  }
-  if (applied.length > 0) {
-    emitDiag(ctx, {
-      event: "forge-compose-apply",
-      level: "info",
-      process: "main",
-      message: `执行五件组合激活：${applied.join(",")}`,
-    });
-  }
-  // typert 手工缝（P0 #3——loader 扫不到嵌套包，唯一正门）：组合完成后注册三件工件
-  // manifest（所有权不变），disposer 聚合交还宿主生命周期（卸载即撤注册）。
-  return registerTypertManifests(ctx);
+  emitDiag(ctx, {
+    event: "forge-bundle-apply",
+    level: "info",
+    process: "main",
+    message: "forge host 薄形态激活（五件经 bundle 六插行官方默认路径在场）",
+  });
 }
