@@ -1,158 +1,292 @@
-// aggregate-assets.mjs — forge 资产/工件构建期物化脚本（forge-deep-pack 1.14 返工裁定；
-// build 链末步自动执行，全部 run-once、幂等可重跑）：
-//   ① 五件 skills/ 构建期复制 → forge/dist/skills/<member>/（生成物随 dist，不进 git
-//      ——每次构建从五件源包最新产物重新物化，freshness 门天然覆盖）；
-//   ② experts/ 布局同构重定位 → forge 包根 experts/（P0 #4——expert-squad 内联五件
-//      host 入口时 dist/host → ../../experts/ 层级恰好同构，原 import.meta.url 表达式
-//      零改写成立；漂移 = ENOENT 静默空返回。落点受 scan.ts 锚定约束不可挪 dist；
-//      生成物不进 git——.gitignore 与 dist 同等地位，package.json files 白名单收录
-//      保 tgz 发布面）；
-//   ③ cordis.patch.yml preset-standard 覆写行同源再生成（customSkillDirs 五条全自锚
-//      ——判例：skills 挂载 = preset-standard 覆写行 config 锚，非插行扫描）；
-//   ④ 构建闭包守卫：断言当前 dist 无下游内联五件 host 入口（external 档现状），
-//      且一旦出现内联痕迹（../../experts/ 字面量）experts 聚合必须已同构在位。
-// 聚合产物（dist/skills/ experts/）为构建生成物不进 git；cordis.patch.yml 为提交面
-// 正本（脚本再生成，漂移由 tests/forge/asset-aggregation.test.ts 守卫红）。
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+// aggregate-assets.mjs — bundle 档单一生成器（forge-aggregate-bundle 1.5——提案 §二
+// patch 面定谳形态）：唯一产物 = cordis.patch.yml，由成员清单（MEMBERS）单源驱动再
+// 生成（run-once、幂等可重跑；提交面正本，漂移由 tests/forge/patch-generator.test.ts
+// 守卫红）。deep 单行自插/资产聚合（dist/skills、experts 重定位）逻辑退役出本脚本
+// ——退役删除归 1.7，本任务先不删文件只不再引用。
+//
+// patch 面（提案 §二.2/§2.3）：
+//   ① 六插行：forge 自插行（{ home } 唯一键——Workbench 生长面，§2.2）+ 五件插行
+//      各携带派发 config !!js 行——派发映射消费 host/assembly.ts derivePluginConfigs
+//      单源（bundle 档唯一输入 = DSH_HOME 缺省派生分支；静态双检防漂移）；
+//   ② 五件顶层 skills 行（探针④分支 A）：异 id（≠ 官方 base 行——fefd5149 定点
+//      disable）+ 互异 providerName（默认名同层重名 loud-fail）+ customSkillDirs
+//      自锚本包 skills/；
+//   ③ preset-forge 行（§2.1）：persona 前缀（forge 流水线作业 SOP）+ 官方工具集
+//      standard 同构裁剪（base skill-filesystem 行由行内 forge 实例替换）+ 行内
+//      skill-filesystem-forge 实例（五条已装包锚）；order 定值 = 官方仓 preset 底稿
+//      核销当前 order 全集（packages/bundle/web-app/presets/：standard=1、ptc=2、
+//      minimal=3、cordis=4）后定值 2，官方升级随真机批次复校——漂移可发现而非被
+//      吸收（圆桌裁决 2026-11-21）。
+// 生成器不变量：全部派发表达式自带 && 短路兜底（防裸表达式异常冒泡打断行激活——
+// 圆桌裁定），写入前自检断言、契约测试 pin。
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const FORGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const REPO_ROOT = resolve(FORGE_ROOT, "..", "..");
+
+// ── 成员清单单源（六插行/五 skills 行/preset 五锚全部由本清单驱动）──────────
 const MEMBERS = ["project", "spec", "task-loop", "expert-squad", "knowledge"];
 
-// skills 自锚表达式（与 host/assembly.ts skillDirSelfAnchorExpr 同源——静态双检
-// tests/forge/asset-aggregation.test.ts 逐字符比对，漂移即红；.mjs 不 import .ts，
-// 双写由双检钉死）。聚合落点 = 包内 dist/skills/<member>/（构建生成物）。
-const anchorExpr = (member) =>
-  `process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/forge/package.json')), 'dist', 'skills', '${member}')`;
+// ── 延伸常量（与 host/assembly.ts 同源——静态双检钉死，.mjs 不 import .ts）──
+const DSH_HOME_ENV = "DSH_HOME";
+const FORGE_HOME_SUFFIX = "/forge";
+const DB_RELATIVE = "/db/forge/forge.db";
+const TASKS_RELATIVE = "/projects";
 
-// home 表达式（与 host/assembly.ts DSH_HOME_ENV/FORGE_HOME_SUFFIX 同源——derive-configs
-// 静态双检钉死）。
-const HOME_EXPR = `process.env.DSH_HOME && (process.env.DSH_HOME + '/forge')`;
+// order 定值（官方仓 preset 底稿核销后定值——契约断言 pin，漂移红）
+const PRESET_FORGE_ORDER = 2;
 
-/** 递归枚举相对文件集（资产一致性比对用）。 */
-function walkRel(dir, root = dir) {
-  const out = [];
-  if (!existsSync(dir)) return out;
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) out.push(...walkRel(full, root));
-    else out.push(resolve(full).slice(resolve(root).length + 1).replaceAll("\\", "/"));
+const DSH = `process.env.${DSH_HOME_ENV}`;
+const HOME_EXPR = `${DSH} && (${DSH} + '${FORGE_HOME_SUFFIX}')`;
+const DB_EXPR = `${DSH} && (${DSH} + '${FORGE_HOME_SUFFIX}${DB_RELATIVE}')`;
+const TASKS_EXPR = `${DSH} && (${DSH} + '${FORGE_HOME_SUFFIX}${TASKS_RELATIVE}')`;
+const PROJECT_HOME_EXPR = `${DSH} && ${DSH}`;
+
+// 五件 skills 自锚表达式（自锚本包 skills/——每件只依赖自己，&& 短路兜底；与
+// plugins/expert-squad/cordis.patch.yml 1.4 落定形态同构）。
+const memberSkillAnchorExpr = (member) =>
+  `process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/${member}/package.json') && process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/${member}/package.json')), 'skills')`;
+
+// 五件派发 config（镜像 assembly.ts derivePluginConfigs({} , env) 缺省派生分支：
+// db → 四持库件统一 dbFile、tasksHome 透传 task-loop、expert-squad 空对象豁免）。
+const DISPATCH_CONFIGS = {
+  project: { home: PROJECT_HOME_EXPR, dbFile: DB_EXPR },
+  spec: { dbFile: DB_EXPR },
+  "task-loop": { dbFile: DB_EXPR, tasksHome: TASKS_EXPR },
+  "expert-squad": {},
+  knowledge: { dbFile: DB_EXPR },
+};
+
+// ── preset-forge 行（persona SOP + standard 同构裁剪 + 行内 forge 技能实例）──
+const PRESET_FORGE_PERSONA = `You are a coding agent powered by the {{model}} model.
+你是 forge 流水线作业模式（Forge模式）：按任务规格交付的资深全栈工程师。
+作业纪律：动手前先读任务规格与锚点文档，拆成待办清单逐项推进；以 TDD 小步快跑——先从验收标准提取测试要求，再最小实现到交付；规格是唯一事实源，不扩大改动面、不顺带重构。
+一切跑批与证据产物统一落盘存档，先落盘再继续；收口前逐项核对验收标准并如实上报，门禁与测试证据零伪造、红就是红。
+遇歧义：低风险假设声明后继续，重大歧义停下上报，不原地等待；遇失败先分类归因，同一失败方案不反复重试。`;
+
+const presetForgeBlock = [
+  "- id: preset-forge",
+  "  name: '@deepseek-ai/dsh-agent-preset'",
+  "  config:",
+  `    id: forge`,
+  `    name: Forge模式`,
+  `    description: "forge 流水线作业预设：任务规格驱动的全栈交付模式（拆解/TDD/落盘取证/门禁收口）。"`,
+  `    order: ${PRESET_FORGE_ORDER}`,
+  "    plugins:",
+  "      - id: persona",
+  "        name: '@deepseek-ai/dsh-persona'",
+  "        config:",
+  "          prefix: >-",
+  ...PRESET_FORGE_PERSONA.split("\n").map((line) => `            ${line}`),
+  // ── 官方工具集 standard 同构裁剪（plugins/spec/cordis.patch.yml preset-standard
+  //    子树逐字形态；base skill-filesystem 行由行内 skill-filesystem-forge 实例替换）──
+  "      - id: agent-instructions",
+  "        name: '@deepseek-ai/dsh-agent-instructions'",
+  "        config:",
+  "          maxBytes: 65536",
+  "      - id: time-context",
+  "        name: '@deepseek-ai/dsh-time-context'",
+  "      - id: tool-bash",
+  "        name: '@deepseek-ai/dsh-tool-bash'",
+  "        disabled: !!js process.platform === 'win32'",
+  "      - id: tool-pwsh",
+  "        name: '@deepseek-ai/dsh-tool-pwsh'",
+  "        disabled: !!js process.platform !== 'win32'",
+  "      - id: tool-fs",
+  "        name: '@deepseek-ai/dsh-tool-fs'",
+  "        config:",
+  "          # Set false to drop the apply_patch tool beside edit.",
+  "          applyPatch: false",
+  "      - id: tool-fs-search",
+  "        name: '@deepseek-ai/dsh-tool-fs-search'",
+  "        config:",
+  "          sampleOverCapGlobResults: false",
+  "      - id: tool-jobs",
+  "        name: '@deepseek-ai/dsh-tool-jobs'",
+  "      - id: tool-schedule",
+  "        name: '@deepseek-ai/dsh-tool-schedule'",
+  "      - id: skill-filesystem-forge",
+  "        name: '@deepseek-ai/dsh-skill-filesystem'",
+  "        config:",
+  "          providerName: filesystem-forge",
+  "          customSkillDirs:",
+  ...MEMBERS.map((m) => `            - !!js ${memberSkillAnchorExpr(m)}`),
+  "      - id: tool-skill",
+  "        name: '@deepseek-ai/dsh-tool-skill'",
+  "      - id: command-goal",
+  "        name: '@deepseek-ai/dsh-command-goal'",
+  "      - id: tool-goal",
+  "        name: '@deepseek-ai/dsh-tool-goal'",
+  "      - id: planning",
+  "        name: cordis:group",
+  "        group: true",
+  "        isolate:",
+  "          planMode: true",
+  "        config:",
+  "          - id: plan-mode",
+  "            name: '@deepseek-ai/dsh-plan-mode'",
+  "            config:",
+  "              section: |",
+  ...[
+    "You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.",
+    "Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.",
+    "The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.",
+    "Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.",
+    "Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.",
+    "When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.",
+  ].map((line) => `                ${line}`),
+  "      - id: compaction",
+  "        name: cordis:group",
+  "        group: true",
+  "        isolate:",
+  "          compaction: true",
+  "          toolResultPruner: true",
+  "        config:",
+  "          - id: compaction-basic",
+  "            name: '@deepseek-ai/dsh-compaction-basic'",
+  "          - id: command-compact",
+  "            name: '@deepseek-ai/dsh-command-compact'",
+  "          - id: tool-result-pruner",
+  "            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'",
+  "            config:",
+  "              thresholdChars: 8192",
+  "              headChars: 4096",
+  "              tailChars: 1024",
+  "      - id: delegation",
+  "        name: cordis:group",
+  "        group: true",
+  "        isolate:",
+  "          workflowEngine: true",
+  "        config:",
+  "          - id: tool-subagent-control",
+  "            name: '@deepseek-ai/dsh-tool-subagent-control'",
+  "            config:",
+  "              interrupt: false",
+  "          - id: tool-subagent",
+  "            name: '@deepseek-ai/dsh-tool-subagent'",
+  "            config:",
+  "              provider: spawn",
+  "              toolName: subagent",
+  "              modelSelection: true",
+  "              modelDiscovery: true",
+  "          - id: tool-subagent-fork",
+  "            name: '@deepseek-ai/dsh-tool-subagent'",
+  "            config:",
+  "              provider: fork",
+  "              toolName: subagent_fork",
+  "          - id: workflow-ptc",
+  "            name: '@deepseek-ai/dsh-workflow-ptc'",
+  "            config:",
+  "              provider: spawn",
+  "          - id: tool-workflow",
+  "            name: '@deepseek-ai/dsh-tool-workflow'",
+  "      - id: tool-ask-user",
+  "        name: '@deepseek-ai/dsh-tool-ask-user'",
+  "      - id: tool-todo",
+  "        name: '@deepseek-ai/dsh-tool-todo'",
+  "        config:",
+  "          allowParallelInProgress: true",
+  "      - id: tool-web",
+  "        name: '@deepseek-ai/dsh-tool-web'",
+  "        config:",
+  "          fetch: true",
+  "          searchTimeoutMs: 60000",
+  "      - id: present",
+  "        name: '@deepseek-ai/dsh-tool-present'",
+  "      - id: tool-office",
+  "        name: '@deepseek-ai/dsh-tool-office'",
+  "      - id: tool-plugin-manager",
+  "        name: '@deepseek-ai/dsh-plugin-manager/tools'",
+  "        disabled: !!js \"!ctx.get('profileContext')\"",
+  "      - id: tool-plugin-market",
+  "        name: '@deepseek-ai/dsh-plugin-market/tools'",
+  "        disabled: true",
+];
+
+// ── 生成器自检断言（不变量写入前自证——违规 fail-loud 不产文件）────────────
+function selfCheck(patchYaml) {
+  const violations = [];
+  // 六插行：id 序 = forge + 五件（成员清单单源序）
+  const insertIds = [...patchYaml.matchAll(/^    - id: (.+)$/gm)].map((m) => m[1]);
+  const expectedInsertIds = ["forge", ...MEMBERS];
+  if (JSON.stringify(insertIds) !== JSON.stringify(expectedInsertIds)) {
+    violations.push(`六插行 id 序漂移：${JSON.stringify(insertIds)} ≠ ${JSON.stringify(expectedInsertIds)}`);
   }
-  return out.sort();
+  // 全部派发/锚定表达式 && 短路兜底（生成器不变量——preset 官方底稿表达式不属派发面）
+  const dispatchExprs = [HOME_EXPR, DB_EXPR, TASKS_EXPR, PROJECT_HOME_EXPR, ...MEMBERS.map(memberSkillAnchorExpr)];
+  const unguarded = dispatchExprs.filter((p) => !p.includes("&&"));
+  if (unguarded.length > 0) violations.push(`派发表达式缺 && 短路兜底：${JSON.stringify(unguarded)}`);
+  // 五 skills 行三谓词：id 互异 ∩ ≠ base id ∩ providerName 互异 ≠ 默认名
+  const skillIds = MEMBERS.map((m) => `skill-filesystem-${m}`);
+  if (new Set(skillIds).size !== MEMBERS.length) violations.push("skills 行 id 非互异");
+  if (skillIds.includes("skill-filesystem")) violations.push("skills 行 id 撞官方 base id");
+  const providerNames = MEMBERS.map((m) => `filesystem-${m}`);
+  if (new Set(providerNames).size !== MEMBERS.length) violations.push("providerName 非互异");
+  if (providerNames.includes("filesystem")) violations.push("providerName 撞默认名");
+  // 负断言：零裸 filesystem 行（顶层 skills 行一律显式 providerName）
+  const bareRows = [...patchYaml.matchAll(/^- id: (skill-filesystem\S*)$/gm)]
+    .map((m) => m[1])
+    .filter((id) => id === "skill-filesystem");
+  if (bareRows.length > 0) violations.push("patch 出现官方 base id 裸 filesystem 行");
+  // order pin
+  if (!patchYaml.includes(`    order: ${PRESET_FORGE_ORDER}`)) {
+    violations.push(`preset-forge order ≠ 定值 ${PRESET_FORGE_ORDER}`);
+  }
+  if (violations.length > 0) {
+    console.error(`[aggregate] 自检断言 ${violations.length} 处违规：`);
+    for (const v of violations) console.error(`  - ${v}`);
+    process.exit(1);
+  }
 }
 
-// ── ① 五件 skills 构建期复制 → forge/dist/skills/<member>/ ──────────────────
-const skillsRoot = join(FORGE_ROOT, "dist", "skills");
-rmSync(skillsRoot, { recursive: true, force: true });
-for (const member of MEMBERS) {
-  const source = join(REPO_ROOT, "plugins", member, "skills");
-  const dest = join(skillsRoot, member);
-  mkdirSync(dest, { recursive: true });
-  if (existsSync(source)) cpSync(source, dest, { recursive: true });
-  console.log(`[aggregate] dist/skills/${member}: ${walkRel(dest).length} 件`);
-}
-
-// ── ② experts 布局同构重定位 → forge 包根 experts/（生成物不进 git）─────────
-const expertsRoot = join(FORGE_ROOT, "experts");
-rmSync(expertsRoot, { recursive: true, force: true });
-cpSync(join(REPO_ROOT, "plugins", "expert-squad", "experts"), expertsRoot, { recursive: true });
-console.log(`[aggregate] experts: ${walkRel(expertsRoot).length} 件`);
-
-// ── ③ cordis.patch.yml 再生成（forge 单行自插 + skill-filesystem + preset-standard）──
-// preset-standard 覆写子树源锚 = spec 包既有生成产物（plugins/spec/cordis.patch.yml
-// ——由 spec/scripts/gen-preset-standard-overlay.mjs 从官方 dsh-web-app 底稿生成）。
-// 官方底稿更新后先重跑 spec 生成脚本，再重跑本脚本——forge 面不直接锚官方安装树，
-// 生成链单源不双轨。
-const specPatch = readFileSync(join(REPO_ROOT, "plugins", "spec", "cordis.patch.yml"), "utf8").replaceAll("\r\n", "\n");
-const presetAt = specPatch.indexOf("- id: preset-standard");
-if (presetAt < 0) throw new Error("aggregate-assets: spec cordis.patch.yml 缺 preset-standard 块——生成链漂移");
-// 幂等 + 三档通吃：剥掉全部 @dsh-forge/* 跨包锚（上次 forge 自锚行 + spec 面遗留的
-// spec 包锚——deep tgz 档五件包不可解析，MODULE_NOT_FOUND 无 fail-soft，正是 P0 #5
-// 三硬前提要根除的面），再按序补五条 forge 自锚。官方 dsh-agent-preset 锚保留（宿主
-// 壳层恒在场，非跨插件包）。
-const presetBlock = specPatch
-  .slice(presetAt)
-  .replace(/\n+$/, "")
-  .split("\n")
-  .filter((line) => !line.includes("resolve('@dsh-forge/"))
-  .join("\n");
-// 嵌套 skill-filesystem 行的 customSkillDirs 列表尾追加五条自锚（缩进 12 列 '- '）。
-const presetLines = presetBlock.split("\n");
-const dirsAt = presetLines.findIndex((line) => line === "          customSkillDirs:");
-if (dirsAt < 0) throw new Error("aggregate-assets: preset 块缺嵌套 customSkillDirs 行——官方底稿形状漂移");
-let insertAt = dirsAt + 1;
-while (insertAt < presetLines.length && presetLines[insertAt].startsWith("            - ")) insertAt += 1;
-presetLines.splice(insertAt, 0, ...MEMBERS.map((m) => `            - !!js ${anchorExpr(m)}`));
-
-const anchorLines = MEMBERS.map((m) => `      - !!js ${anchorExpr(m)}`);
-const patchYaml = [
-  "# @dsh-forge/forge 资产挂载 patch（forge-deep-pack 1.14——scripts/aggregate-assets.mjs 生成产物，勿手改）：",
-  "# ① forge 单行自插（1.4 裁定沿袭）：五件零插行，一律经 host apply 组合激活；",
-  "#    config 行 = { home } 唯一键（延伸常量同源物化——assembly.ts 静态双检锚）。",
-  "# ② skills 挂载 = preset-standard 覆写行 customSkillDirs config 锚（判例：非插行",
-  "#    扫描；dsh-web-app 将顶层 skill-filesystem 行 disabled，预设会话由预设行内实例",
-  "#    供服）。customSkillDirs 五条全自锚（resolve('@dsh-forge/forge/package.json')",
-  "#    单表达式——跨包锚三硬前提根除，三档通吃），聚合面 = forge/dist/skills/<member>/",
-  "#    （构建期物化生成物，不进 git——每次构建从五件源包最新产物重新复制）。",
-  "# ③ preset-standard 子树逐字保留 spec 面生成产物（官方底稿生成链单源），仅在嵌套",
-  "#    skill-filesystem 行追加五条自锚；重生成 = 先跑 spec 生成脚本再跑本脚本。",
+// ── 组装 + 写盘 ────────────────────────────────────────────────────────────
+const insertBlock = [
   "- insert:",
   "    - id: forge",
   "      name: '@dsh-forge/forge'",
   "      config:",
   `        home: !!js ${HOME_EXPR}`,
-  "- id: skill-filesystem",
+  ...MEMBERS.flatMap((m) => {
+    const config = DISPATCH_CONFIGS[m];
+    const lines = [`    - id: ${m}`, `      name: '@dsh-forge/${m}'`];
+    if (Object.keys(config).length > 0) {
+      lines.push("      config:");
+      for (const [key, expr] of Object.entries(config)) lines.push(`        ${key}: !!js ${expr}`);
+    }
+    return lines;
+  }),
+];
+
+const skillsBlock = MEMBERS.flatMap((m) => [
+  `- id: skill-filesystem-${m}`,
   "  name: '@deepseek-ai/dsh-skill-filesystem'",
   "  config:",
+  `    providerName: filesystem-${m}`,
   "    customSkillDirs:",
-  ...anchorLines,
-  ...presetLines,
-].join("\n");
-writeFileSync(join(FORGE_ROOT, "cordis.patch.yml"), patchYaml + "\n", "utf8");
-console.log(`[aggregate] cordis.patch.yml 再生成（forge 自插 + skill-filesystem 五自锚 + preset-standard 覆写）`);
+  `      - !!js ${memberSkillAnchorExpr(m)}`,
+]);
 
-// ── ④ 构建闭包守卫（P0 #4）─────────────────────────────────────────────────
-const violations = [];
-if (!existsSync(expertsRoot)) violations.push("experts/ 聚合缺席——内联档 ../../experts/ 将 ENOENT 静默空返回");
-// 布局同构锚（路径数学断言）：dist/host/*.js 的 import.meta.url → ../../experts/ 恰落 forge 包根。
-const distHost = join(FORGE_ROOT, "dist", "host");
-const expectedExperts = resolve(distHost, "..", "..", "experts");
-if (resolve(expertsRoot) !== expectedExperts) violations.push(`experts 布局不同构：${expertsRoot} ≠ ${expectedExperts}`);
-// 资产新鲜度守卫：聚合体文件集 ≠ 五件源 → 漂移（须重跑本脚本——build 链末步自动重物化）。
-for (const member of MEMBERS) {
-  const source = join(REPO_ROOT, "plugins", member, "skills");
-  const dest = join(skillsRoot, member);
-  const srcSet = walkRel(source).filter((f) => f !== ".gitkeep");
-  const destSet = walkRel(dest).filter((f) => f !== ".gitkeep");
-  if (JSON.stringify(srcSet) !== JSON.stringify(destSet)) {
-    violations.push(`dist/skills/${member} 聚合漂移（源 ${srcSet.length} 件 vs 聚合 ${destSet.length} 件）——重跑本脚本`);
-  }
+const header = [
+  "# @dsh-forge/forge bundle 档 patch（forge-aggregate-bundle 1.5——scripts/aggregate-assets.mjs 生成产物，勿手改）：",
+  "# ① 六插行：forge 自插行（{ home } 唯一键——Workbench 生长面）+ 五件插行各携带派发",
+  "#    config !!js 行（映射 host/assembly.ts derivePluginConfigs 单源——bundle 档唯一",
+  "#    输入 = DSH_HOME 缺省派生分支；静态双检 tests/forge/patch-generator.test.ts）。",
+  "# ② 五件顶层 skills 行：异 id（≠ 官方 base 行——fefd5149 定点 disable 判例）+ 互异",
+  "#    providerName（默认名同层重名注册 loud-fail）+ customSkillDirs 自锚本包 skills/。",
+  "# ③ preset-forge：persona 前缀（forge 流水线作业 SOP）+ 官方工具集 standard 同构裁剪",
+  "#    + 行内 skill-filesystem-forge 实例（五条已装包锚）；order 定值 2（官方仓 preset",
+  "#    底稿核销当前 order 全集后定值 + 契约断言 pin——官方升级随真机批次复校）。",
+  "# 全部派发表达式自带 && 短路兜底（生成器不变量——防裸表达式异常冒泡打断行激活）。",
+];
+
+const patchYaml = [...header, ...insertBlock, ...skillsBlock, ...presetForgeBlock].join("\n") + "\n";
+selfCheck(patchYaml);
+const target = join(FORGE_ROOT, "cordis.patch.yml");
+const previous = readFileSync(target, "utf8");
+if (previous === patchYaml) {
+  console.log("[aggregate] cordis.patch.yml 已是最新（零漂移——再生成幂等）");
+} else {
+  writeFileSync(target, patchYaml, "utf8");
+  console.log("[aggregate] cordis.patch.yml 再生成（六插行 + 五件派发 + 五 skills 行 + preset-forge）");
 }
-const expertSrc = join(REPO_ROOT, "plugins", "expert-squad", "experts");
-if (JSON.stringify(walkRel(expertSrc)) !== JSON.stringify(walkRel(expertsRoot))) {
-  violations.push("experts 聚合漂移（≠ expert-squad/experts）——重跑本脚本");
-}
-// 下游内联痕迹扫描：dist/host 出现 expert-squad 内联代码特征（../../experts/ 字面量）
-// 时，experts 聚合必须同构在位（否则漂移静默丢失——P0 #4 反例）；当前 external 档
-// 应零内联（五件 host 入口由宿主 node_modules 解析）。
-if (existsSync(distHost)) {
-  let inlineHit = false;
-  for (const name of readdirSync(distHost)) {
-    if (!name.endsWith(".js")) continue;
-    const text = readFileSync(join(distHost, name), "utf8");
-    if (text.includes('"../../experts/"') || text.includes("'../../experts/'")) inlineHit = true;
-  }
-  if (inlineHit) {
-    console.log("[aggregate] dist/host 检出五件内联痕迹（inline 档）——experts 同构在位断言已满足");
-  } else {
-    console.log("[aggregate] dist/host 零内联痕迹（external 档现状守卫通过——无下游内联五件 host 入口）");
-  }
-}
-if (violations.length > 0) {
-  console.error(`[aggregate] 闭包守卫 ${violations.length} 处违规：`);
-  for (const v of violations) console.error(`  - ${v}`);
-  process.exit(1);
-}
-console.log("[aggregate] 全部完成（dist/skills 五件 + experts 同构 + patch 再生成 + 闭包守卫通过）");

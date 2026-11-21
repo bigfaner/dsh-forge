@@ -82,10 +82,9 @@ describe("derivePluginConfigs 派发映射快照 pin（提案 §二.2 示例逐�
 });
 
 describe("patch config 行同源双检（静态——与 derivePluginConfigs 同源常量）", () => {
-  it("home 表达式 = 延伸常量同源拼装（{DSH_HOME}/forge——FORGE_HOME_SUFFIX 漂移即红；1.6 增五条 skills 自锚 ×2——逐字符断言归 tests/forge/asset-aggregation.test.ts）", () => {
+  it("home 表达式 = 延伸常量同源拼装（{DSH_HOME}/forge——FORGE_HOME_SUFFIX 漂移即红；bundle 档派发映射双检归 tests/forge/patch-generator.test.ts）", () => {
     const homeExpr = `process.env.${DSH_HOME_ENV} && (process.env.${DSH_HOME_ENV} + '${FORGE_HOME_SUFFIX}')`;
     const jsPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!);
     expect(jsPoints[0]).toBe(homeExpr);
-    expect(jsPoints.filter((p) => p.includes("@dsh-forge/forge/package.json"))).toHaveLength(10);
   });
 });
