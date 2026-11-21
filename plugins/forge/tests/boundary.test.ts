@@ -14,7 +14,7 @@ const FORGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 function listSourceFiles(dir: string, root = dir): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === "dist" || entry === "skills" || entry === "experts") continue;
+    if (entry === "node_modules" || entry === "dist" || entry === "dist-deep" || entry === "skills" || entry === "experts") continue;
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
       if (relative(resolve(root), resolve(full)) === "tests") continue;
@@ -31,7 +31,7 @@ const readText = (f: string) => readFileSync(join(FORGE_ROOT, f), "utf8");
 const texts = new Map(sourceFiles.map((f) => [f, readText(f)]));
 
 describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
-  it("包内容面恰十五件骨架工件（声明面 + 双 tsconfig + 五脚本 + host 组合段/派发单源/typert 手工缝 + ui 入口——零 read/orchestrate/shared 占位目录；skills/experts 资产子树另行守卫）", () => {
+  it("包内容面恰十六件骨架工件（声明面 + 双 tsconfig + 六脚本 + host 组合段/派发单源/typert 手工缝 + ui 入口——零 read/orchestrate/shared 占位目录；skills/experts 资产子树另行守卫）", () => {
     expect(sourceFiles).toEqual([
       "README.md",
       "cordis.patch.yml",
@@ -43,6 +43,7 @@ describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
       "scripts/bundle-client.mjs",
       "scripts/bundle-host.mjs",
       "scripts/clean-dist.mjs",
+      "scripts/deep-build.mjs",
       "scripts/self-containment.mjs",
       "tsconfig.client.json",
       "tsconfig.host.json",
