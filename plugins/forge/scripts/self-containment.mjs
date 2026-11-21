@@ -33,6 +33,16 @@ const PRIVATE_NAMESPACE = "@dsh-forge/";
 //   - node: 前缀内建。
 const PLATFORM_BARE = /^(?:react|react-dom)(?:\/[A-Za-z0-9-]+)?$/;
 
+// external 档白名单（组合成员单源——bundle-host/bundle-client/CLI 三处离手门共用）：
+// 限五件名 ∧ dependencies 相对 file: 声明双条件（auditDist 白名单分支内联核验）。
+export const COMPOSED_MEMBERS = [
+  "@dsh-forge/project",
+  "@dsh-forge/spec",
+  "@dsh-forge/task-loop",
+  "@dsh-forge/expert-squad",
+  "@dsh-forge/knowledge",
+];
+
 export function walkJs(dir) {
   const out = [];
   if (!existsSync(dir)) return out;
@@ -208,7 +218,12 @@ if (isCli) {
   const tarballPath = tarballFlag !== -1 ? argv[tarballFlag + 1] : undefined;
   let failed = false;
   const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const violations = auditDist(pkgDir, { requireDist: !tarballPath });
+  const violations = auditDist(pkgDir, {
+    requireDist: !tarballPath,
+    // external 档分档门（评审修订 5）：白名单限五件名 ∧ file: 依赖——dist/host 组合段
+    // import 五件为 external 档合法形态（运行期宿主 node_modules 解析已装五件）。
+    allowPrivate: COMPOSED_MEMBERS,
+  });
   if (violations.length > 0) {
     failed = true;
     console.error(`[self-containment] dist 自含审计 ${violations.length} 处违规：`);

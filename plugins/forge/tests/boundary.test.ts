@@ -29,10 +29,11 @@ const readText = (f: string) => readFileSync(join(FORGE_ROOT, f), "utf8");
 const texts = new Map(sourceFiles.map((f) => [f, readText(f)]));
 
 describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
-  it("包内容面恰十二件骨架工件（声明面 + 双 tsconfig + 四脚本 + host/ui 占位入口——零 read/orchestrate/shared 占位目录）", () => {
+  it("包内容面恰十三件骨架工件（声明面 + 双 tsconfig + 四脚本 + host 组合段/派发单源 + ui 入口——零 read/orchestrate/shared 占位目录）", () => {
     expect(sourceFiles).toEqual([
       "README.md",
       "cordis.patch.yml",
+      "host/assembly.ts",
       "host/index.ts",
       "package.json",
       "scripts/bundle-client.mjs",
@@ -46,9 +47,10 @@ describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
     ]);
   });
 
-  it("四查① import 白名单：host/ui 源码 import 仅允许五件名/cordis/相对/node:（禁 db、禁其它跨插件 import；阶段一占位入口实际零 import）", () => {
+  it("四查① import 白名单：host/ui 源码 import 仅允许五件名/lib-diag/cordis/相对/node:（禁 db、禁其它跨插件 import）", () => {
     const ALLOWED = [
       /^@dsh-forge\/(?:project|spec|task-loop|expert-squad|knowledge)$/,
+      /^@dsh-forge\/lib-diag$/,
       /^@deepseek-ai\/cordis$/,
       /^\./,
       /^node:/,
@@ -66,10 +68,18 @@ describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
     }
   });
 
-  it("四查② ctx.reflect.get 静态全禁（可选服务消费走类型化 import + 在场性现查——AGENTS §1.6）", () => {
+  it("四查② ctx.reflect.get 静态禁令 + 在场守卫豁免落款（默认配方 = 类型化 import + 在场性现查——AGENTS §1.6；豁免唯一落款点 = host/index.ts 在场守卫 isMemberActive，提案评审 N3/N4 + P0 #7：守卫对象 = 五件是否已独立激活，可选项无类型化消费面，现查 + 零 memoize 三铁律逐条满足）", () => {
+    // 豁免落款（唯一）：host/index.ts 守卫现查点。名单外任一出现即红。
+    const REFLECT_EXEMPT = new Set(["host/index.ts"]);
     for (const file of sourceFiles.filter((f) => /\.(?:[cm]?[jt]sx?)$/.test(f))) {
-      expect(texts.get(file), `${file} 出现 ctx.reflect.get`).not.toMatch(/reflect\s*\.\s*get\s*\(/);
+      const text = texts.get(file)!;
+      if (!REFLECT_EXEMPT.has(file)) {
+        expect(text, `${file} 出现 ctx.reflect.get（非豁免落款点）`).not.toMatch(/reflect\s*\.\s*get\s*\(/);
+      }
     }
+    // 豁免点用量上界：守卫现查恰一处（防豁免面漫灌）。
+    const guardHits = [...texts.get("host/index.ts")!.matchAll(/reflect\s*\?*\.\s*get\s*(?:\??\.\s*)?\(/g)].length;
+    expect(guardHits, "host/index.ts reflect.get 现查点超豁免上界（恰 1 处——isMemberActive）").toBe(1);
   });
 
   it("四查③④ 零 db 句柄 + host/ui 零文件系统写入（按目录禁写——dist 产物写面归 scripts/ 构建链）", () => {
@@ -141,7 +151,9 @@ describe("forge 声明面守卫（package.json 骨架期全量）", () => {
 
   it("依赖面：peerDeps cordis 4.1.0 + devDeps 限构建期内联 + dependencies 恰五件相对 file: 依赖", () => {
     expect(pkg.peerDependencies).toEqual({ "@deepseek-ai/cordis": "4.1.0" });
-    expect(Object.keys(pkg.devDependencies ?? {}).sort()).toEqual(["@types/node", "esbuild", "typescript"].sort());
+    expect(Object.keys(pkg.devDependencies ?? {}).sort()).toEqual(
+      ["@dsh-forge/lib-diag", "@types/node", "esbuild", "typescript"].sort(),
+    );
     const deps = Object.keys(pkg.dependencies ?? {});
     expect(deps).toEqual([
       "@dsh-forge/project",

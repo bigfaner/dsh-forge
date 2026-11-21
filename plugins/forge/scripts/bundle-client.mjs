@@ -12,7 +12,7 @@ import { build } from "esbuild";
 import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { auditDist } from "./self-containment.mjs";
+import { auditDist, COMPOSED_MEMBERS } from "./self-containment.mjs";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_ID = "@dsh-forge/forge";
@@ -67,9 +67,10 @@ pruneClient(resolve(pkgDir, "dist/client"));
 rmSync(resolve(pkgDir, "dist/client.css"), { force: true });
 
 // 离手门：bundle 末尾自跑自含性断言 + exports 闭包完整性断言——非 0 即败。
-// client 面零 allowPrivate（合并自注册归 1.4 后亦为内联形态——五件 client 代码并入
-// 本 bundle，不留 @dsh-forge/* 裸名引用）。
-const violations = auditDist(pkgDir, { requireDist: true });
+// client bundle 零 @dsh-forge/* 裸名（合并自注册内联形态）；allowPrivate = external
+// 档五件白名单（dist/host 组合段 import 五件——运行期宿主 node_modules 解析），
+// file: 依赖双条件由 auditDist 白名单分支核验。
+const violations = auditDist(pkgDir, { requireDist: true, allowPrivate: COMPOSED_MEMBERS });
 if (violations.length > 0) {
   console.error(`[bundle-client] 离手门失败：dist 自含审计 ${violations.length} 处违规`);
   for (const v of violations) console.error(`  - ${v}`);

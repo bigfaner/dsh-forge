@@ -13,21 +13,10 @@ import { build } from "esbuild";
 import { readFileSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { auditDist, exportsDistPaths } from "./self-containment.mjs";
+import { auditDist, COMPOSED_MEMBERS, exportsDistPaths } from "./self-containment.mjs";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
-
-// external 档白名单（限五件名 ∧ file: 依赖——评审修订 5 分档门）：
-// 五件在独立安装形态由宿主 node_modules 解析（dependencies file: 声明承重），
-// 其余 @dsh-forge/* 裸名仍一律违规。
-const COMPOSED_MEMBERS = [
-  "@dsh-forge/project",
-  "@dsh-forge/spec",
-  "@dsh-forge/task-loop",
-  "@dsh-forge/expert-squad",
-  "@dsh-forge/knowledge",
-];
 
 // 外置表：官方机械与 peer（内联第二副本会分裂官方单例语义）+ external 档五件。
 const EXTERNAL = ["@deepseek-ai/*", ...COMPOSED_MEMBERS];
