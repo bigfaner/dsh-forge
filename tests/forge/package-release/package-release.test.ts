@@ -289,6 +289,34 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     expect(violations.some((v) => v.includes('bundle') && v.includes('overrides'))).toBe(true)
   })
 
+  it('bundle 交付 patch 增补 skills 行（bundle 通道成员 patch 不装载——id/providerName 互异 + 自锚 members/<pkg>/skills）', () => {
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    const bundlePatch = readFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), 'utf8')
+    for (const short of ['alpha', 'beta']) {
+      expect(bundlePatch, `id 行 skill-filesystem-${short}`).toContain(`- id: skill-filesystem-${short}`)
+      expect(bundlePatch, `providerName 互异 filesystem-${short}`).toContain(`providerName: filesystem-${short}`)
+      expect(bundlePatch, `自锚 @dsh-forge/${short}/package.json（baseUrl 相对交付目录 forge 解析）`).toContain(
+        `resolve('@dsh-forge/${short}/package.json')`,
+      )
+      expect(bundlePatch, `!!js 短路表达式`).toContain(`!!js `)
+      expect(bundlePatch, `skills 目录锚`).toContain(`, 'skills')`)
+    }
+    // 发布树/solo 通道零回归：源码 patch 与 solo 副本零 skills 行（「谁带谁自持」语义不变）
+    expect(bundlePatch).not.toMatch(/- id: skill-filesystem$/m)
+    const sourcePatch = readFileSync(join(root, 'plugins/forge/cordis.patch.yml'), 'utf8')
+    expect(sourcePatch).not.toContain('skill-filesystem-alpha')
+    const soloPatch = readFileSync(join(outDir, 'solo/forge/cordis.patch.yml'), 'utf8')
+    expect(soloPatch).not.toContain('skill-filesystem-')
+  })
+
+  it('反例·交付 patch 缺 skills 行：闭包机检红（缺行即红）', () => {
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    const patchPath = join(outDir, 'bundle/forge/cordis.patch.yml')
+    writeFileSync(patchPath, readFileSync(patchPath, 'utf8').replace(`- id: skill-filesystem-alpha\n`, ''))
+    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    expect(violations.some((v) => v.includes('交付 patch 缺 skills 行 skill-filesystem-alpha'))).toBe(true)
+  })
+
   it('成员自带插行随包收录（members 侧 solo 语义不回归）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     const alphaPatch = readFileSync(join(outDir, 'bundle/forge/members/alpha/cordis.patch.yml'), 'utf8')
