@@ -253,8 +253,8 @@ async function expectEnhancedTriples(preview: ReturnType<import('@playwright/tes
   }
   await expect(enhanced.first(), `[O1/${label}] 原块打标记且隐藏（display:none）`).toBeHidden({ timeout: 30_000 })
   // figure 值 = enhanced 标记值（同源 hash——值相等断言，禁裸真值；契约 O1 判定面）
-  const figureValues = await figures.evaluateAll((els) => els.map((e) => e.getAttribute(FIGURE_VALUE_ATTR)))
-  const markerValues = await enhanced.evaluateAll((els) => els.map((e) => e.getAttribute(MARKER_VALUE_ATTR)))
+  const figureValues = await figures.evaluateAll((els, attr) => els.map((e) => e.getAttribute(attr)), FIGURE_VALUE_ATTR)
+  const markerValues = await enhanced.evaluateAll((els, attr) => els.map((e) => e.getAttribute(attr)), MARKER_VALUE_ATTR)
   expect(figureValues.every((v) => typeof v === 'string' && v.length > 0), `[O1/${label}] figure 值逐个非空（禁裸真值面）`).toBe(true)
   expect(figureValues, `[O1/${label}] figure 值 = enhanced 标记值（同源 hash 逐位相等）`).toEqual(markerValues)
 }
@@ -460,8 +460,8 @@ test('@web-e2e @blitz md-mermaid enhancer 单实例不变量：多 fence 混合�
       await expect(enhanced, `[INV-A/${label}] enhanced 标记总数 = 2（恰一份接管）`).toHaveCount(2)
       await expect(preview.locator(DOC_CODE_BLOCK), `[INV-C/${label}] 代码块总数 = 4（零吞块）`).toHaveCount(4)
       // 逐 fence 值同源配对（INV-A 三件套判据——figure 值 = 标记值，逐位相等非裸真值）
-      const figureValues = await preview.locator(MD_MERMAID_FIGURE).evaluateAll((els) => els.map((e) => e.getAttribute(FIGURE_VALUE_ATTR)))
-      const markerValues = await enhanced.evaluateAll((els) => els.map((e) => e.getAttribute(MARKER_VALUE_ATTR)))
+      const figureValues = await preview.locator(MD_MERMAID_FIGURE).evaluateAll((els, attr) => els.map((e) => e.getAttribute(attr)), FIGURE_VALUE_ATTR)
+      const markerValues = await enhanced.evaluateAll((els, attr) => els.map((e) => e.getAttribute(attr)), MARKER_VALUE_ATTR)
       expect(figureValues.every((v) => typeof v === 'string' && v.length > 0), `[INV-A/${label}] figure 值逐个非空`).toBe(true)
       expect(figureValues, `[INV-A/${label}] figure 值 = 标记值（同源 hash 逐位配对）`).toEqual(markerValues)
       // INV-C 降级块零痕迹：两枚降级原块保留可见（门控拒 zenuml / 引擎败 flowchart 非法源）
