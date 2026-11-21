@@ -6,6 +6,9 @@
 #    行随迁移改键（旧键残留会落回官方服务行语义，禁留））+ { home } 唯一键——Workbench 生长面）+ 五件插行各携带派发
 #    config !!js 行（bundle 档唯一输入 = DSH_HOME 缺省派生分支；静态守卫
 #    tests/forge/skills-rows-contract.test.ts + plugins/forge/tests/config-contract.test.ts）。
+#    INV-3 安装互斥守卫判据（bug ef3e92ea）：五件插行各携 comboMark: true（组合装载
+#    标记——solo patch 行同 id 键合并越装缺此键，成员 apply 守卫现查 forgeCombo 组合
+#    标记服务 + comboMark 缺席即 loud-fail）。
 # ② preset-forge：persona 前缀（forge 流水线作业 SOP）+ 官方工具集 standard 同构裁剪
 #    + 行内 skill-filesystem-forge 实例（五条已装包锚）；order 定值 2（官方仓 preset
 #    底稿核销当前 order 全集后定值 + 契约断言 pin——官方升级随真机批次复校）。
@@ -22,22 +25,28 @@
     - id: project
       name: '@dsh-forge/project'
       config:
+        comboMark: true
         home: !!js (process.env.DSH_HOME || false) && process.env.DSH_HOME
         dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
     - id: spec
       name: '@dsh-forge/spec'
       config:
+        comboMark: true
         dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
     - id: task-loop
       name: '@dsh-forge/task-loop'
       config:
+        comboMark: true
         dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
         tasksHome: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/projects')
     - id: expert-squad
       name: '@dsh-forge/expert-squad'
+      config:
+        comboMark: true
     - id: knowledge
       name: '@dsh-forge/knowledge'
       config:
+        comboMark: true
         dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
     - id: preset-forge
       name: '@deepseek-ai/dsh-agent-preset'

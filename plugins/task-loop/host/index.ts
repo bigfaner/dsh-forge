@@ -35,10 +35,14 @@ import { createDiagEmitter, emitForgeDiag } from "./faces.js";
 import { withSessionIdentity } from "./tools/faces.js";
 import type { TasksService } from "./domain/tasks/service.js";
 
+import { assertInstallMutex } from "./install-mutex.js";
+
 /** host 装配 config（全部可选——缺省面 = DSH_HOME + 缺省 db 落点 + git 查找降级）。 */
 export interface TaskLoopHostConfig extends TaskLoopAssemblyConfig {
   /** 诊断缝（缺省 console 按级分流兜底——diag-emit 纪律 console 豁免面同插件先例）。 */
   readonly diag?: (line: string, level?: DiagLevel) => void;
+  /** INV-3 组合装载标记（forge patch 成员行下发 comboMark: true——solo patch 行越装缺此键）。 */
+  readonly comboMark?: boolean;
 }
 
 /** cordis 插件装载形态（loader 只认 default 导出函数）。 */
@@ -233,6 +237,8 @@ export function registerToolFamily(
 }
 
 const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig = {}): (() => void) => {
+  // INV-3 安装互斥 loud-fail 守卫（bug ef3e92ea）——任何装配副作用之前首查。
+  assertInstallMutex(ctx, config, "@dsh-forge/task-loop");
   const diag = config.diag ?? consoleDiagFallback;
   // 单装缺省装配（三件单源——home 缺席/db 打开失败 = 整体降级零 provide）
   const services = assembleTaskLoopServices(config, diag);

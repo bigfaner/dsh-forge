@@ -44,10 +44,14 @@ import {
 export { createDocsService, type DocsServiceDeps } from "./docs/index.js"
 export { DocPathInvalidError, type DocPathInvalidData } from "./docs/errors.js"
 
+import { assertInstallMutex } from "./install-mutex.js"
+
 /** spec 插件装配入参（spec 行 config；presetBinding 缺省 = 无条件注入） */
 export interface SpecPluginConfig {
   /** forge 组合器（M5）经 config 约定缝下发的预设绑定值；缺省 = 无条件注入 */
   readonly presetBinding?: string
+  /** INV-3 组合装载标记（forge patch 成员行下发 comboMark: true——solo patch 行越装缺此键） */
+  readonly comboMark?: boolean
 }
 
 /** host 装配 config（全部可选——缺省面 = DSH_HOME + 缺省 db 落点；同 task-loop 形态）。 */
@@ -232,6 +236,8 @@ export { assembleSpecToolFamily, acSettlementsFaceOf } from "./assembly/tool-fam
 export type { SpecAssembly, SpecAssemblyConfig } from "./assembly/default-assembly.js"
 
 const specCordisPlugin: SpecCordisPlugin = (ctx: unknown, config: SpecHostConfig = {}): (() => void) => {
+  // INV-3 安装互斥 loud-fail 守卫（bug ef3e92ea）——任何装配副作用之前首查。
+  assertInstallMutex(ctx, config, "@dsh-forge/spec")
   const diag = config.diag ?? consoleDiagFallback
   // 提示段注册恒在（A1 自含——1.8 面零变化；段注册无条件、text 运行期按装配求值）
   const disposePromptSections = registerSpecPromptSectionsFromCordis(ctx, config)

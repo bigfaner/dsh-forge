@@ -101,10 +101,14 @@ const expertSquadConfig: Schemastery<any, any, any> = Schema.object({
     .volatile(),
 })
 
+import { assertInstallMutex } from "./install-mutex.js";
+
 /** 插件收到的 volatile 配置引用形状（与 expertSquadConfig 输出对齐；官方 Volatile 协议）。 */
 export interface ExpertSquadPluginConfig {
   defaultAgentOptions?: Volatile<ExpertAgentOptionsConfig>
   experts?: Volatile<Readonly<Record<string, ExpertConfigEntry>>>
+  /** INV-3 组合装载标记（forge patch 成员行下发 comboMark: true——solo patch 行越装缺此键）。 */
+  comboMark?: boolean
 }
 
 /** storage 服务窄面（官方 ctx.storage.domain.open 正门——state.test 同径）。 */
@@ -210,6 +214,8 @@ function readOptionalService(ctx: ExpertSquadCtx, name: string): unknown {
  *  （presence 探测降级——registry FMEA：state 缺席 = 启停内存态、重启回全启用，
  *  §AD2 降级语义）。 */
 async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPluginConfig): Promise<void> {
+  // INV-3 安装互斥 loud-fail 守卫（bug ef3e92ea）——任何装配副作用之前首查。
+  assertInstallMutex(ctx, config, "@dsh-forge/expert-squad");
   const connection = ctx.connection;
   if (connection === undefined) throw new Error("expert-squad: ctx.connection absent（宿主形状漂移——路由面无法装配）");
 

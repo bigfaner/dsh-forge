@@ -2,20 +2,26 @@
 // 聚合 Bundle 主通道下五件经 patch 六插行激活（官方默认路径——依赖落盘后插行激活
 // 天然成立），COMPOSED 组合段与 typert 手工缝解引用退役（组合/派发归 patch !!js 行，
 // assembly.ts 只余在场守卫具名服务键与 config 类型；patch 直写化归 1.13）。apply 薄形态保留两职责：
-//   ① 防双激活守卫——solo 场景 forge 与五件并存时（任一件在场标记服务已在）跳过留痕
-//      （同 id 双激活 = loader throw，守卫前置让位）；
-//   ② 生命周期诊断 emitDiag（forge-bundle-apply / forge-bundle-skip——AGENTS §7 禁 console）。
+//   ① 安装互斥双向守卫（INV-3——bug ef3e92ea）：solo 成员已独立激活（任一件在场标记
+//      服务已在）即 forge-bundle-conflict error 留痕 + throw loud-fail（1.32 前此分支为
+//      warn 让位——静默共存即 bug 本体）；五件全缺席（正常形态）即 provide 组合标记
+//      （FORGE_COMBO_SERVICE_KEY——成员 apply 守卫判据单源）+ forge-bundle-apply info 留痕；
+//   ② 生命周期诊断 emitDiag（forge-bundle-apply / forge-bundle-conflict——AGENTS §7 禁 console）。
+// 成员侧守卫 = 各件 host/install-mutex.ts（comboMark 组合装载标记判据——同 id 行键合并
+// 越装可区分；两侧行激活序无论先后，后激活一侧必然现查到对侧在场并 loud-fail）。
 // Workbench 生长点：forge-workbench 期 read/orchestrate 目录、内部 RPC 与自有 host
 // 逻辑在此随包构建自动并入——六插行与 file: 依赖零变化。
 import { emitDiag } from "@dsh-forge/lib-diag";
-import { PRESENCE_SERVICE_KEYS, type ComposedKey, type ForgeConfig } from "./assembly.js";
+import { FORGE_COMBO_SERVICE_KEY, PRESENCE_SERVICE_KEYS, type ComposedKey, type ForgeConfig } from "./assembly.js";
 
 export const name = "@dsh-forge/forge"; // loader ID 校验 = 包名（产物契约）
 
-/** 宿主 ctx 窄面（cordis Context 结构子集——reflect 现查 + diag emit） */
+/** 宿主 ctx 窄面（cordis Context 结构子集——reflect/provide 现查 + diag emit） */
 interface HostCtx {
   /** 服务反射面（在场守卫消费点现查——可选具名服务官方面取法） */
   reflect?: { get?(name: string): unknown };
+  /** 服务 provide 面（组合标记下发——成员侧守卫现查消费点） */
+  provide?(name: string, value: unknown): unknown;
   /** 诊断发射面（diag/log 事件域——emitDiag 消费面） */
   emit(event: string, payload: unknown): unknown;
 }
@@ -39,24 +45,34 @@ function isMemberActive(ctx: HostCtx, key: ComposedKey): boolean {
 
 /**
  * forge apply（薄形态——聚合 Bundle/solo 双场景通用）：
- * 逐件在场现查（消费点调用期求值，零缓存）→ 任一件已独立激活（solo 并存场景，
- * 双激活 = loader throw）即 forge-bundle-skip warn 留痕让位；五件全缺席
- * （bundle 通道正常形态）即 forge-bundle-apply info 留痕确认激活。
- * config 参数为 Workbench 生长点保留（{ home } 唯一键同源——当前零消费，
- * forge-workbench 期 host 逻辑在此取用）。
+ * 逐件在场现查（消费点调用期求值，零缓存）→ 任一件已独立激活（solo 越装场景）
+ * 即 forge-bundle-conflict error 留痕 + throw loud-fail（INV-3——不静默共存）；
+ * 五件全缺席（bundle 通道正常形态）即 provide 组合标记 + forge-bundle-apply info
+ * 留痕确认激活。config 参数为 Workbench 生长点保留（{ home } 唯一键同源——当前
+ * 零消费，forge-workbench 期 host 逻辑在此取用）。
  */
 export function apply(ctx: HostCtx, _config: ForgeConfig = {}): void {
   const keys = Object.keys(PRESENCE_SERVICE_KEYS) as ComposedKey[];
   const present = keys.filter((key) => isMemberActive(ctx, key));
   if (present.length > 0) {
-    // solo 并存守卫：任一件在场即让位（不阻载 forge 自身插行激活——留痕不静默）。
+    // INV-3 安装互斥（bug ef3e92ea）：solo 成员越装场景——loud-fail 拒载，不静默让位。
     emitDiag(ctx, {
-      event: "forge-bundle-skip",
-      level: "warn",
+      event: "forge-bundle-conflict",
+      level: "error",
       process: "main",
-      message: `五件已独立激活（solo 并存场景），forge 薄形态让位跳过：${present.join(",")}`,
+      message: `INV-3 安装互斥冲突：五件已独立激活（solo 越装场景），forge 聚合 bundle 拒绝激活：${present.join(",")}`,
     });
-    return;
+    throw new Error(
+      `[INV-3] 安装互斥冲突：solo 成员已独立激活（${present.join(",")}），` +
+        `forge 聚合 bundle 不得越装——请卸载 solo 包或改用 solo 通道`,
+    );
+  }
+  // 组合标记下发（成员 apply 守卫现查消费点——标记仅是激活事实单点，检测仍逐点现查）。
+  try {
+    ctx.provide?.(FORGE_COMBO_SERVICE_KEY, { channel: "forge-bundle" });
+  } catch {
+    // provide 失败不阻载 forge 自身激活（成员侧守卫将视缺席放行——越装防护仍由
+    // forge 侧在场守卫承接，不因标记下发失败产生静默面）。
   }
   emitDiag(ctx, {
     event: "forge-bundle-apply",

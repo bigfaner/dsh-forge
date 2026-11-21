@@ -29,6 +29,17 @@ export const PRESENCE_SERVICE_KEYS = {
 
 export type ComposedKey = keyof typeof PRESENCE_SERVICE_KEYS
 
+// ── INV-3 安装互斥守卫判据单源（bug ef3e92ea——forge-aggregate-bundle 1.32）──
+/**
+ * forge 组合标记服务键（forge apply 激活期 provide——成员 apply 守卫消费点现查）：
+ * bundle 正常装载路径成员行先经 forge apply（六插行序 = dshforge 首）拿到标记；
+ * solo 越装行（无 comboMark）现查到标记即 loud-fail。成员包零 import 本常量
+ * （no-cross-plugin-imports 红线）——同值字面量对账 pin 归 tests/install-mutex.test.ts。
+ */
+export const FORGE_COMBO_SERVICE_KEY = 'forgeCombo'
+/** bundle 六插行组合装载标记 config 键（成员行下发 comboMark: true——solo patch 行缺此键） */
+export const COMBO_MARK_CONFIG_KEY = 'comboMark'
+
 // ── skills 自锚（P0 核销 #5 处方 C——forge-deep-pack 1.6；1.14 返工落点 dist）──
 /** forge 包说明符（skills 自锚 resolve 锚——只依赖 forge 自己，三档通吃） */
 export const FORGE_PKG_SPECIFIER = '@dsh-forge/forge'

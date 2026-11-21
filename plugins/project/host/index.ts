@@ -61,6 +61,7 @@ import {
 } from "./assembly/typert-remotes.js";
 import { isGitWorktreeServiceFace, createWorktreesResident, type WorktreesRegistryFace } from "./assembly/worktrees-port.js";
 import { consoleDiagFallback, DIAG_EVENT, emitDiagOrFallback, type DiagEventPayload } from "@dsh-forge/lib-diag";
+import { assertInstallMutex } from "./install-mutex.js";
 
 /** cordis 插件装载形态（loader 只认 default 导出函数）。 */
 interface ProjectPlugin {
@@ -116,9 +117,13 @@ export interface ProjectHostConfig {
   };
   /** 诊断缝（缺省 console 兜底——diag-emit 纪律 console 豁免面同插件先例） */
   readonly diag?: SeamDiag;
+  /** INV-3 组合装载标记（forge patch 成员行下发 comboMark: true——solo patch 行越装缺此键） */
+  readonly comboMark?: boolean;
 }
 
 const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = {}): (() => void) => {
+  // INV-3 安装互斥 loud-fail 守卫（bug ef3e92ea）——任何装配副作用之前首查。
+  assertInstallMutex(ctx, config, "@dsh-forge/project");
   const face = ctx as ProjectPluginCtx;
   // 诊断兜底按级分流（clean-code-review P1-5——对齐 worktrees/index.ts consoleDiagFallback 正典，
   // bug 7ba48c55 判例：error → console.error、其余 → console.warn；禁直落 console 单行兜底）

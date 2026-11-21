@@ -44,6 +44,8 @@ import {
 import type { BackflowConfig } from './service/types.js'
 import type { KnowledgeContextFace } from './tools/index.js'
 
+import { assertInstallMutex } from './install-mutex.js'
+
 /** 插件配置（profile cordis.patch.yml 行 config；应用装配期路径经 boot overlay 注入） */
 export interface KnowledgePluginConfig {
   /**
@@ -75,6 +77,8 @@ export interface KnowledgePluginConfig {
    * host/knowledge-dir.ts）。
    */
   knowledgeDir?: KnowledgeDirSetting
+  /** INV-3 组合装载标记（forge patch 成员行下发 comboMark: true——solo patch 行越装缺此键） */
+  comboMark?: boolean
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -142,6 +146,8 @@ function declareKnowledgeRootDirKey(ctx: KnowledgeContextFace): () => void {
 
 const knowledgePlugin: KnowledgePlugin = Object.assign(
   (ctx: KnowledgeContextFace, config: KnowledgePluginConfig = {}): (() => void) => {
+    // INV-3 安装互斥 loud-fail 守卫（bug ef3e92ea）——任何装配副作用之前首查。
+    assertInstallMutex(ctx, config, "@dsh-forge/knowledge")
     // 诊断发射面（埋点经装配期注入——DIAG_EVENT 类型化 emit，host main 进程位）
     const diagEmit =
       typeof ctx.emit === 'function'
