@@ -11,32 +11,34 @@
 #    底稿核销当前 order 全集后定值 + 契约断言 pin——官方升级随真机批次复校）。
 # 五件顶层 skills 行不属本 patch（谁带谁自持——唯一正本在各件自己 cordis.patch.yml，
 # bundle 六 patch 同载防同层 providerName 重名注册 loud-fail）。
-# 全部派发表达式自带 && 短路兜底（直写不变量——防裸表达式异常冒泡打断行激活）。
+# 全部派发表达式自带 && 短路兜底（直写不变量——防裸表达式异常冒泡打断行激活）；
+# DSH_HOME 缺席兜底 false 非 undefined（survey#4：`(env || false) &&` 形态——undefined
+# 在 yaml 物化面等价 null 键，false 才是契约测试钉住的缺省派生零值）。
 - insert:
     - id: dshforge
       name: '@dsh-forge/forge'
       config:
-        home: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge')
+        home: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge')
     - id: project
       name: '@dsh-forge/project'
       config:
-        home: !!js process.env.DSH_HOME && process.env.DSH_HOME
-        dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        home: !!js (process.env.DSH_HOME || false) && process.env.DSH_HOME
+        dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
     - id: spec
       name: '@dsh-forge/spec'
       config:
-        dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
     - id: task-loop
       name: '@dsh-forge/task-loop'
       config:
-        dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
-        tasksHome: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/projects')
+        dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        tasksHome: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/projects')
     - id: expert-squad
       name: '@dsh-forge/expert-squad'
     - id: knowledge
       name: '@dsh-forge/knowledge'
       config:
-        dbFile: !!js process.env.DSH_HOME && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
     - id: preset-forge
       name: '@deepseek-ai/dsh-agent-preset'
       config:

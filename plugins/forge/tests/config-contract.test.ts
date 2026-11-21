@@ -12,8 +12,9 @@ import {
 const FORGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const patchYaml = readFileSync(resolve(FORGE_ROOT, "cordis.patch.yml"), "utf8");
 
-/** 派发单源同源期望式（静态双检正本——assembly 常量拼装，非字面量复制） */
-const HOME_EXPR = `process.env.${DSH_HOME_ENV} && (process.env.${DSH_HOME_ENV} + '${FORGE_HOME_SUFFIX}')`;
+/** 派发单源同源期望式（静态双检正本——assembly 常量拼装，非字面量复制；
+ * DSH_HOME 缺席兜底 false 非 undefined——survey#4 形态修正）。 */
+const HOME_EXPR = `(process.env.${DSH_HOME_ENV} || false) && (process.env.${DSH_HOME_ENV} + '${FORGE_HOME_SUFFIX}')`;
 
 /** 抽取 forge 行 home 键的 !!js 表达式（id = dshforge 异 id——bug 1102d9d8；缺失 = undefined）。 */
 function extractHomeExpr(): string | undefined {
@@ -37,9 +38,19 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
     expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "/data/dsh" })).toBe("/data/dsh/forge");
   });
 
-  it("DSH_HOME 缺席 → home falsy（fail-soft 不阻载——forge apply 零配置派发，五件回落单装缺省）", () => {
-    expect(evalExpr(extractHomeExpr()!, {})).toBeFalsy();
-    expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "" })).toBeFalsy();
+  it("DSH_HOME 缺席 → home = false（fail-soft 不阻载——缺省派生零值钉 false，非 undefined；survey#4 形态修正回归）", () => {
+    expect(evalExpr(extractHomeExpr()!, {})).toBe(false);
+    expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "" })).toBe(false);
+  });
+
+  it("全 patch 派发表达式缺省派生零值封闭：DSH_HOME 派生点缺席一律兜底 false（undefined 漂移即红——survey#4）", () => {
+    const envPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!).filter((p) => p.includes("process.env.DSH_HOME"));
+    expect(envPoints.length).toBeGreaterThanOrEqual(6);
+    for (const expr of envPoints) {
+      expect(expr, `缺省派生零值形态：${expr}`).toMatch(/^\(process\.env\.DSH_HOME \|\| false\) && /);
+      expect(evalExpr(expr, {})).toBe(false);
+      expect(evalExpr(expr, { DSH_HOME: "" })).toBe(false);
+    }
   });
 
   it("占位符物化面封闭：!!js 求值点 = forge 行 home 表达式 + 五件插行派发表达式 + preset 行内五件自锚表达式（skill-filesystem-forge 实例——自锚各件 skills/，bundle 介质）+ 官方 preset 底稿平台/禁用表达式，无 {projectDir}/{homeDir} 模板", () => {
