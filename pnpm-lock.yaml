@@ -639,6 +639,9 @@ importers:
 
   plugins/forge:
     dependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.1.0
+        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
       '@dsh-forge/expert-squad':
         specifier: file:../expert-squad
         version: link:../expert-squad
@@ -654,6 +657,16 @@ importers:
       '@dsh-forge/task-loop':
         specifier: file:../task-loop
         version: file:plugins/task-loop(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-agent@0.2.0-rc.2(fcc02da2f7fcce594c7a12dae31a3f6d))(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-session@0.2.0-rc.2(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-scope@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-subagent@0.2.0-rc.2(7e883cc63385b087a7f927e4bcfc81db))(@deepseek-ai/dsh-system-prompt@0.2.0-rc.2(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-tools@0.2.0-rc.2(b25309b464a2026b60d80bdbdb17d407))
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
+      esbuild:
+        specifier: 0.24.2
+        version: 0.24.2
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
 
   plugins/input-history:
     devDependencies:

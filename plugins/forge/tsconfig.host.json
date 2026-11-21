@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "types": ["node"],
+    "outDir": "dist",
+    "rootDir": ".",
+    "emitDeclarationOnly": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["host"],
+  "exclude": ["**/*.test.ts", "**/*.test.tsx"],
+  "references": [
+    { "path": "./tsconfig.client.json" }
+  ]
+}

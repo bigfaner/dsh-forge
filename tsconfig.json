@@ -50,6 +50,9 @@
       "path": "packages/plugin-forge-spec"
     },
     {
+      "path": "plugins/forge"
+    },
+    {
       "path": "plugins/md-mermaid"
     },
     {

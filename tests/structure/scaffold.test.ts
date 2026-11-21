@@ -77,6 +77,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'packages/path-key',
         'packages/plugin-forge',
         'packages/plugin-forge-spec',
+        // forge-deep-pack 1.3：forge 组合器包骨架建位（双链构建链随批入拓扑）
+        'plugins/forge',
         'plugins/expert-squad',
         'plugins/input-history',
         'plugins/md-mermaid',

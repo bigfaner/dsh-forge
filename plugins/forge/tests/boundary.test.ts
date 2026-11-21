@@ -1,6 +1,6 @@
-// forge 边界门机检：纯声明物化器硬边界——零域逻辑、零 db 句柄、零自有域数据。
-// 机制 = 源码 import 扫描 + 包内容面枚举（组合器零源码即边界的最强形态：声明面
-// 只剩 cordis.patch.yml / package.json / README.md，任何域逻辑物理上无处落位）。
+// forge 边界门机检（forge-deep-pack 1.3 骨架批随提案 §三改写：纯声明守卫 → 静态四查
+// + 声明面守卫）。阶段一最小化：包面 = 组合 + 派发 + 合并 client + 打包，零占位空模块
+// （read/orchestrate/shared 归 forge-workbench 期按需增目录）。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,7 @@ const FORGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 function listSourceFiles(dir: string, root = dir): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules") continue;
+    if (entry === "node_modules" || entry === "dist") continue;
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
       if (relative(resolve(root), resolve(full)) === "tests") continue;
@@ -25,54 +25,123 @@ function listSourceFiles(dir: string, root = dir): string[] {
 }
 
 const sourceFiles = listSourceFiles(FORGE_ROOT);
-const texts = new Map(
-  sourceFiles.map((f) => [f, readFileSync(join(FORGE_ROOT, f), "utf8")]),
-);
+const readText = (f: string) => readFileSync(join(FORGE_ROOT, f), "utf8");
+const texts = new Map(sourceFiles.map((f) => [f, readText(f)]));
 
-describe("forge 边界门（零域逻辑 / 零 db 句柄 / 零自有域数据）", () => {
-  it("包内容面恰三件声明物：cordis.patch.yml + package.json + README.md（零 .ts/.js/.mjs 源码——域逻辑无处落位）", () => {
-    expect(sourceFiles).toEqual(["README.md", "cordis.patch.yml", "package.json"]);
-    const hasCode = sourceFiles.some((f) => /\.(?:[cm]?[jt]sx?|node|wasm)$/i.test(f));
-    expect(hasCode, "组合器出现源码文件即越界").toBe(false);
+describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
+  it("包内容面恰十二件骨架工件（声明面 + 双 tsconfig + 四脚本 + host/ui 占位入口——零 read/orchestrate/shared 占位目录）", () => {
+    expect(sourceFiles).toEqual([
+      "README.md",
+      "cordis.patch.yml",
+      "host/index.ts",
+      "package.json",
+      "scripts/bundle-client.mjs",
+      "scripts/bundle-host.mjs",
+      "scripts/clean-dist.mjs",
+      "scripts/self-containment.mjs",
+      "tsconfig.client.json",
+      "tsconfig.host.json",
+      "tsconfig.json",
+      "ui/index.ts",
+    ]);
   });
 
-  it("零 db 句柄：better-sqlite3 / openDatabase / new Database 机检零命中（源码 import 扫描）", () => {
-    for (const [file, text] of texts) {
+  it("四查① import 白名单：host/ui 源码 import 仅允许五件名/cordis/相对/node:（禁 db、禁其它跨插件 import；阶段一占位入口实际零 import）", () => {
+    const ALLOWED = [
+      /^@dsh-forge\/(?:project|spec|task-loop|expert-squad|knowledge)$/,
+      /^@deepseek-ai\/cordis$/,
+      /^\./,
+      /^node:/,
+    ];
+    for (const file of sourceFiles.filter((f) => /^(?:host|ui)\//.test(f))) {
+      const text = texts.get(file)!;
+      for (const match of text.matchAll(/(?:\bfrom\s*|\bimport\s*|\bimport\(\s*)["']([^"']+)["']/g)) {
+        const spec = match[1]!;
+        expect(
+          ALLOWED.some((re) => re.test(spec)),
+          `${file} 出现白名单外 import："${spec}"`,
+        ).toBe(true);
+      }
       expect(text, `${file} 出现 better-sqlite3 依赖痕迹`).not.toMatch(/better-sqlite3/);
+    }
+  });
+
+  it("四查② ctx.reflect.get 静态全禁（可选服务消费走类型化 import + 在场性现查——AGENTS §1.6）", () => {
+    for (const file of sourceFiles.filter((f) => /\.(?:[cm]?[jt]sx?)$/.test(f))) {
+      expect(texts.get(file), `${file} 出现 ctx.reflect.get`).not.toMatch(/reflect\s*\.\s*get\s*\(/);
+    }
+  });
+
+  it("四查③④ 零 db 句柄 + host/ui 零文件系统写入（按目录禁写——dist 产物写面归 scripts/ 构建链）", () => {
+    for (const file of sourceFiles.filter((f) => /^(?:host|ui)\//.test(f))) {
+      const text = texts.get(file)!;
       expect(text, `${file} 出现 openDatabase 调用/导入`).not.toMatch(/\bopenDatabase\b/);
       expect(text, `${file} 出现 Database 句柄构造`).not.toMatch(/new\s+Database\s*\(/);
+      expect(text, `${file} 出现 CREATE TABLE 建表语句`).not.toMatch(/CREATE\s+TABLE/i);
+      expect(text, `${file} 出现 fs 写入面（writeFileSync/mkdir/rm）`).not.toMatch(/(?:writeFileSync|mkdirSync|rmSync|mkdtempSync)\s*\(/);
+    }
+  });
+});
+
+describe("forge 声明面守卫（package.json 骨架期全量）", () => {
+  const pkg = JSON.parse(readText("package.json")) as {
+    name?: string;
+    version?: string;
+    main?: string;
+    types?: string;
+    exports?: Record<string, Record<string, string>>;
+    dsh?: { bundle?: { patch?: string }; client?: { platform?: string } };
+    files?: string[];
+    scripts?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+  };
+
+  it("name/version/main/types：包名 @dsh-forge/forge + files 含 dist ⇒ version ≥ 0.2.0（minor 跳位机检 pin）+ 双链 main/types 指 dist/host", () => {
+    expect(pkg.name).toBe("@dsh-forge/forge");
+    expect(pkg.files).toContain("dist");
+    const [major, minor, patch] = (pkg.version ?? "0.0.0").split(".").map(Number);
+    expect(major! * 1_000_000 + minor! * 1_000 + patch!).toBeGreaterThanOrEqual(2_000);
+    expect(pkg.main).toBe("./dist/host/index.js");
+    expect(pkg.types).toBe("./dist/host/index.d.ts");
+  });
+
+  it("exports 恰双键（. + ./client）且零 typert 工件键（圆桌共识 2——聚合方法长在五件，forge 纯消费）", () => {
+    expect(Object.keys(pkg.exports ?? {})).toEqual([".", "./client"]);
+    expect(pkg.exports?.["."]).toEqual({
+      types: "./dist/host/index.d.ts",
+      import: "./dist/host/index.js",
+    });
+    expect(pkg.exports?.["./client"]).toEqual({
+      types: "./dist/client/ui/index.d.ts",
+      default: "./dist/client.js",
+    });
+    expect(Object.keys(pkg.exports ?? {}).some((k) => k.includes("typert"))).toBe(false);
+  });
+
+  it("dsh 声明：bundle.patch 单行自插指向 + client.platform web", () => {
+    expect(pkg.dsh?.bundle?.patch).toBe("./cordis.patch.yml");
+    expect(pkg.dsh?.client?.platform).toBe("web");
+  });
+
+  it("files 恰两件（dist + cordis.patch.yml）", () => {
+    expect(pkg.files).toEqual(["dist", "cordis.patch.yml"]);
+  });
+
+  it("scripts：build = clean-dist → tsc -b → bundle-host → bundle-client（run-once 禁 watch）+ prepack self-containment", () => {
+    expect(pkg.scripts?.build).toBe(
+      "node scripts/clean-dist.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
+    );
+    expect(pkg.scripts?.prepack).toBe("node scripts/self-containment.mjs");
+    for (const script of Object.values(pkg.scripts ?? {})) {
+      expect(script, "SC2 watch 回流禁令").not.toMatch(/--watch/);
     }
   });
 
-  it("零域逻辑：源码 import/require 语句零命中（纯声明物化器不做领域推导、不开子进程、不持运行态）", () => {
-    for (const [file, text] of texts) {
-      expect(text, `${file} 出现 import 语句`).not.toMatch(/^\s*import\s[\s\S]*from\s+['"]/m);
-      expect(text, `${file} 出现 require 调用`).not.toMatch(/\brequire\s*\(\s*['"]/);
-    }
-  });
-
-  it("零自有域数据：无建表语句、无自有 .db 产物声明（dbFile 引用仅指五件共库下发路径）", () => {
-    for (const [file, text] of texts) {
-      expect(text, `${file} 出现建表语句`).not.toMatch(/CREATE\s+TABLE/i);
-      // 自有库形态禁令：单装缺省落点（project/spec/task-loop/knowledge 自有 db）
-      // 不得出现在 forge 声明面——forge 只下发共库 forge.db。
-      expect(text, `${file} 出现自有域 db 落点`).not.toMatch(/forge\/db\/(?:project|spec|task-loop|knowledge)\//);
-    }
-    // dbFile 引用恰四条（project/spec/task-loop/knowledge 共库下发）+ project home 引用恰一条
-    // （bug 3c17010a / ad14e904——config 键各随对端契约消费键；patch-contract 快照锁定表达式，
-    // 此处做面级复核）。
-    const dbFileRefs = [...(texts.get("cordis.patch.yml") ?? "").matchAll(/dbFile:/g)];
-    expect(dbFileRefs).toHaveLength(4);
-    const homeRefs = [...(texts.get("cordis.patch.yml") ?? "").matchAll(/^\s+home:\s*!!js/gm)];
-    expect(homeRefs).toHaveLength(1);
-    expect(texts.get("cordis.patch.yml")).toContain("forge/db/forge/forge.db");
-  });
-
-  it("依赖面零运行时库：dependencies 恰五件 @dsh-forge/* file: 依赖（无 sqlite/无第三方运行时）", () => {
-    const pkg = JSON.parse(readFileSync(join(FORGE_ROOT, "package.json"), "utf8")) as {
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
+  it("依赖面：peerDeps cordis 4.1.0 + devDeps 限构建期内联 + dependencies 恰五件相对 file: 依赖", () => {
+    expect(pkg.peerDependencies).toEqual({ "@deepseek-ai/cordis": "4.1.0" });
+    expect(Object.keys(pkg.devDependencies ?? {}).sort()).toEqual(["@types/node", "esbuild", "typescript"].sort());
     const deps = Object.keys(pkg.dependencies ?? {});
     expect(deps).toEqual([
       "@dsh-forge/project",
@@ -84,6 +153,5 @@ describe("forge 边界门（零域逻辑 / 零 db 句柄 / 零自有域数据）
     for (const [name, range] of Object.entries(pkg.dependencies ?? {})) {
       expect(range, `${name} 须为相对 file: 声明`).toMatch(/^file:\.\.\//);
     }
-    expect(pkg.devDependencies ?? {}).toEqual({});
   });
 });
