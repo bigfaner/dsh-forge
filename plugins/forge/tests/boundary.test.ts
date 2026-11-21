@@ -47,9 +47,9 @@ describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
     ]);
   });
 
-  it("四查① import 白名单：host/ui 源码 import 仅允许五件名/lib-diag/cordis/相对/node:（禁 db、禁其它跨插件 import）", () => {
+  it("四查① import 白名单：host/ui 源码 import 仅允许五件名（含 /client 子出口——ui 合并自注册单元，1.5）/lib-diag/cordis/相对/node:（禁 db、禁其它跨插件 import）", () => {
     const ALLOWED = [
-      /^@dsh-forge\/(?:project|spec|task-loop|expert-squad|knowledge)$/,
+      /^@dsh-forge\/(?:project|spec|task-loop|expert-squad|knowledge)(?:\/client)?$/,
       /^@dsh-forge\/lib-diag$/,
       /^@deepseek-ai\/cordis$/,
       /^\./,

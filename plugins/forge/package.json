@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/forge",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "forge 组合器包（组合段 COMPOSED + 在场守卫 + 配置派发单源 assembly + client 合并 + 打包链——forge-deep-pack 骨架）。",
@@ -21,7 +21,13 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "platform": "web"
+      "platform": "web",
+      "external": [
+        "@deepseek-ai/dsh-api-gateway/client"
+      ],
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
     }
   },
   "files": [
