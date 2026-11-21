@@ -31,6 +31,7 @@ const WHITELIST_MARKERS = [
   'apps/web/src/views/docs/README.md',
   'apps/host/src/profile/template.ts',
   'packages/plugin-forge/src/dispatch-core/assemble.ts',
+  'plugins/super-composer/ui/official-input/PROVENANCE.md',
 ]
 
 function* walk(dir: string): Generator<string> {
