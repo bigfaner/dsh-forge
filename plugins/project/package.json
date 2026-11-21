@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.27.5",
+  "version": "0.27.6",
   "private": true,
   "type": "module",
   "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
@@ -99,7 +99,8 @@
     "dist/typert.host.d.ts",
     "dist/typert.remote-client.js",
     "dist/typert.remote-client.d.ts",
-    "dist/typert.remote-client.d.ts.map"
+    "dist/typert.remote-client.d.ts.map",
+    "skills"
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && node scripts/generate-typert.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",

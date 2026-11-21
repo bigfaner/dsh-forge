@@ -334,6 +334,52 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     expect(violations.some((v) => v.includes('members/alpha') && v.includes('闭包拷贝遗漏'))).toBe(true)
   })
 
+  it('反例·files 声明条目源缺席：双向对账红（缺失条目被 sourceFileEntries 静默过滤——判例 50bfbcec skills 静默丢弃）', () => {
+    const betaPkgPath = join(root, 'plugins', 'beta', 'package.json')
+    const beta = JSON.parse(readFileSync(betaPkgPath, 'utf8'))
+    beta.files.push('missing-dir')
+    writeFileSync(betaPkgPath, JSON.stringify(beta, null, 2))
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    const bundleViolations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    expect(bundleViolations.some((v) => v.includes('members/beta') && v.includes('files 声明条目源缺席'))).toBe(true)
+    const treeViolations = verifyReleaseTree(outDir, { repoRoot: root })
+    expect(treeViolations.some((v) => v.includes('@dsh-forge/beta') && v.includes('files 声明条目源缺席'))).toBe(true)
+  })
+
+  it('反例·members skills 锚目录缺席：闭包机检红（交付 patch skills 行自锚落空）', () => {
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    rmSync(join(outDir, 'bundle/forge/members/alpha/skills'), { recursive: true, force: true })
+    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    expect(violations.some((v) => v.includes('members/alpha') && v.includes('skills 锚目录缺席'))).toBe(true)
+  })
+
+  it('反例·成员非插行未随交付 patch 携带：闭包机检红（preset-headhunter 形态第二 insert 块承带对账）', () => {
+    // beta patch 增第二 insert 块（expert-squad preset-headhunter 同构）——交付 patch 未携该行即红
+    writeFileSync(join(root, 'plugins', 'beta', 'cordis.patch.yml'), [
+      "- insert:",
+      "    - id: demo",
+      "      name: '@dsh-forge/beta'",
+      "- insert:",
+      "    - id: preset-bonus",
+      "      name: '@deepseek-ai/dsh-agent-preset'",
+      "- id: preset-standard",
+      "  name: '@deepseek-ai/dsh-agent-preset'",
+      "- id: skill-filesystem-beta",
+      "  name: '@deepseek-ai/dsh-skill-filesystem'",
+      '',
+    ].join('\n'))
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    expect(violations.some((v) => v.includes('members/beta') && v.includes('成员非插行未随交付 patch 携带') && v.includes('preset-bonus'))).toBe(true)
+    // 豁免表：preset-standard 不上提（留档裁定——官方预设宿主运行时供服），不判红
+    expect(violations.some((v) => v.includes('preset-standard'))).toBe(false)
+  })
+
+  it('反例·交付增补基座断裂：assembleRelease 前置断言抛错（appendFileSync 静默造孤儿 patch 出树前堵截）', () => {
+    rmSync(join(root, 'plugins', 'forge', 'cordis.patch.yml'))
+    expect(() => assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })).toThrow(/交付增补前置断言/)
+  })
+
   it('反例·依赖指称树外：file: 指向 members 外目录即红（staging 孤立复发构造）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     const forgePath = join(outDir, 'bundle/forge/package.json')
@@ -358,6 +404,21 @@ describe('纯函数面', () => {
     ].join('\n')
     expect(patchInsertEntryNames(text)).toEqual(['@dsh-forge/forge'])
   })
+  it('patchOutsideFirstInsertIds 只取首个 insert 块之外的 id（成员非插行对账锚）', async () => {
+    const { patchOutsideFirstInsertIds } = await import('../../../scripts/package-release.mjs')
+    const text = [
+      "# 注释\n- insert:",
+      "    - id: demo",
+      "      name: '@dsh-forge/beta'",
+      "- insert:",
+      "    - id: preset-bonus",
+      "      name: '@deepseek-ai/dsh-agent-preset'",
+      "- id: skill-filesystem-beta",
+      "  name: '@deepseek-ai/dsh-skill-filesystem'",
+    ].join('\n')
+    expect(patchOutsideFirstInsertIds(text)).toEqual(['preset-bonus', 'skill-filesystem-beta'])
+  })
+
   it('soloDependencies 剥离 file: 保留 registry 依赖', () => {
     expect(soloDependencies({ dependencies: { a: 'file:../a', b: 'zod' } })).toEqual({ b: 'zod' })
   })

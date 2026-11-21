@@ -31,6 +31,10 @@ const BUNDLE_OVERRIDES = { 'better-sqlite3': '13.0.3' }
 // bundle 目录 pnpm 构建批准表（pnpm 11 ignored-builds 门消音——13.0.3 零安装脚本，
 // prebuilds/ 随包分发；同主仓 pnpm-workspace.yaml allowBuilds 语义，仅消门无编译动作）
 const BUNDLE_ALLOW_BUILDS = { 'better-sqlite3': true }
+// 成员非插行对账豁免表（留档裁定 2026-11-22——walkthrough/fix-7-bundle-hardening）：
+// preset-standard 不上提——官方预设由宿主运行时供服，spec 的 standard 覆写行不进
+// bundle 交付 patch（bundle 通道预设会话由 preset-forge/preset-headhunter 供服）。
+const NON_CARRY_EXEMPT = new Set(['preset-standard'])
 const SEMVER = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/
 
 export function readJson(file) {
@@ -60,6 +64,26 @@ export function patchInsertEntryNames(patchText) {
     if (m !== null) out.push(m[1])
   }
   return out
+}
+
+/**
+ * cordis.patch.yml 首个 insert 块之外的 id 清单（成员非插行对账基准）：首个
+ * `- insert:` 块内行不计（成员自插行——bundle forge patch 六插行已承载），第二
+ * insert 块（preset-headhunter 形态）与顶层行（skills 自持行）逐条计入。
+ */
+export function patchOutsideFirstInsertIds(patchText) {
+  const ids = []
+  let state = 'before'
+  for (const line of patchText.split(/\r?\n/)) {
+    if (/^- insert:\s*$/.test(line)) {
+      state = state === 'before' ? 'first' : 'after'
+      continue
+    }
+    if (state === 'first' && /^(?!#)\S/.test(line)) state = 'after'
+    const m = state === 'after' ? line.match(/^\s*-\s+id:\s*(\S+)/) : undefined
+    if (m !== null && m !== undefined) ids.push(m[1])
+  }
+  return ids
 }
 
 /** 六包发现：forge package.json dependencies 的相对 file: 条目（字段驱动，零硬编码清单）。
@@ -217,6 +241,11 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
   // （官方形态 = expert-squad preset-headhunter 第二 insert 块）。组合目标插件
   // （agent-preset/skill-filesystem）由宿主运行时供服，无需 profile 安装。
   const memberNames = packages.slice(1).map((entry) => entry.name.slice('@dsh-forge/'.length))
+  // 交付增补前置断言（append 前置——基座断裂时 appendFileSync 会静默造出无 insert
+  // 块的孤儿 patch，行全部落空）：基座文件在场 + 含 insert 块。
+  const bundlePatchPath = join(bundleDir, 'cordis.patch.yml')
+  if (!existsSync(bundlePatchPath)) throw new Error('交付增补前置断言失败：bundle 交付 patch 基座缺席（forge dsh.bundle.patch 拷贝断裂）')
+  if (!/^- insert:/m.test(readFileSync(bundlePatchPath, 'utf8'))) throw new Error('交付增补前置断言失败：bundle 交付 patch 基座无 insert 块')
   const skillRows = memberNames.flatMap((name) => {
     const anchor = `process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/${name}/package.json')`
     const joinExpr = `process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(${anchor}), 'skills')`
@@ -246,7 +275,7 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     if (hhStart === undefined) throw new Error('交付增补失败：expert-squad patch 第二 insert 块（preset-headhunter）缺席')
     headhunterBlock = hl.slice(hhStart).filter((l) => l.trim() !== '').join('\n')
   }
-  appendFileSync(join(bundleDir, 'cordis.patch.yml'), `\n${['- insert:', ...skillRows.map((l) => '  ' + l)].join('\n')}\n${headhunterBlock}\n`)
+  appendFileSync(bundlePatchPath, `\n${['- insert:', ...skillRows.map((l) => '  ' + l)].join('\n')}\n${headhunterBlock}\n`)
   // manifest 版本清单
   const manifest = {
     generator: 'scripts/package-release.mjs',
@@ -315,8 +344,13 @@ export function verifyReleaseTree(treeDir, { repoRoot = REPO_ROOT } = {}) {
       continue
     }
     violations.push(...verifyPackageFields(dir, entry.name))
-    // 拷贝完整性：源 files[] 在场条目逐项落树
+    // 拷贝完整性双向对账：①声明侧——源 files[] 逐项在场（缺失条目被
+    // sourceFileEntries 静默过滤 = 拷贝遗漏隐患，判例 50bfbcec skills 静默丢弃）；
+    // ②物侧——在场条目逐项落树
     const srcPkg = readJson(join(entry.sourceDir, 'package.json'))
+    for (const rel of srcPkg.files ?? []) {
+      if (!existsSync(join(entry.sourceDir, rel))) violations.push(`${entry.name}: files 声明条目源缺席（拷贝静默遗漏）：${rel}`)
+    }
     for (const rel of sourceFileEntries(entry.sourceDir, srcPkg)) {
       if (!existsSync(join(dir, rel))) violations.push(`${entry.name}: files 条目拷贝遗漏：${rel}`)
     }
@@ -422,7 +456,13 @@ export function verifyBundleClosure(bundleDir, { repoRoot = REPO_ROOT } = {}) {
       continue
     }
     violations.push(...verifyPackageFields(dir, `bundle/members/${short}`))
+    // 拷贝完整性双向对账①声明侧（源 files[] 逐项在场——缺失条目静默过滤即隐患）
     const srcPkg = readJson(join(entry.sourceDir, 'package.json'))
+    for (const rel of srcPkg.files ?? []) {
+      if (!existsSync(join(entry.sourceDir, rel))) violations.push(`bundle: members/${short} files 声明条目源缺席（拷贝静默遗漏）：${rel}`)
+    }
+    // skills 锚目录在场（交付 patch skills 行 customSkillDirs 自锚 members/<pkg>/skills——目录缺席锚落空）
+    if (!existsSync(join(dir, 'skills'))) violations.push(`bundle: members/${short} skills 锚目录缺席（交付 patch skills 行自锚落空）`)
     for (const relFile of listFilesRel(entry.sourceDir).filter((f) => (srcPkg.files ?? []).some((e) => f === e || f.startsWith(`${e}/`)))) {
       if (!existsSync(join(dir, relFile))) violations.push(`bundle: members/${short} 闭包拷贝遗漏：${relFile}`)
     }
@@ -456,10 +496,26 @@ export function verifyBundleClosure(bundleDir, { repoRoot = REPO_ROOT } = {}) {
     violations.push(`bundle: pnpm.overrides 生成断言漂移（期望 ${JSON.stringify(BUNDLE_OVERRIDES)}，实际 ${JSON.stringify(actualOverrides ?? null)}）`)
   }
   // 交付 patch 五行 skills 行断言（bundle 通道成员 patch 不装载——技能行必须由 forge patch 携带）
-  const bundlePatchText = readFileSync(join(bundleDir, 'cordis.patch.yml'), 'utf8')
+  const bundlePatchPath = join(bundleDir, 'cordis.patch.yml')
+  if (!existsSync(bundlePatchPath)) return [...violations, 'bundle: 交付 patch cordis.patch.yml 缺席']
+  const bundlePatchText = readFileSync(bundlePatchPath, 'utf8')
   for (const short of packages.slice(1).map((entry) => entry.name.slice('@dsh-forge/'.length))) {
     if (!bundlePatchText.includes(`- id: skill-filesystem-${short}`) || !bundlePatchText.includes(`providerName: filesystem-${short}`)) {
       violations.push(`bundle: 交付 patch 缺 skills 行 skill-filesystem-${short}（providerName filesystem-${short}）`)
+    }
+  }
+  // 成员非插行对账（bundle 通道「谁带谁自持」失效面收口）：成员 patch 首个 insert
+  // 块之外的语义行（第二 insert 块 preset-headhunter + 顶层 skills 自持行）必须由
+  // 交付 patch 承带——id 不在场即红（architect P1#2：非承载行 entry not found 静默跳过）。
+  for (const entry of packages.slice(1)) {
+    const short = entry.name.slice('@dsh-forge/'.length)
+    const memberDir = join(bundleDir, 'members', short)
+    const memberPatchRel = readJson(join(entry.sourceDir, 'package.json')).dsh?.bundle?.patch
+    if (typeof memberPatchRel !== 'string' || !existsSync(join(memberDir, memberPatchRel))) continue
+    for (const id of patchOutsideFirstInsertIds(readFileSync(join(memberDir, memberPatchRel), 'utf8')).filter((id) => !NON_CARRY_EXEMPT.has(id))) {
+      if (!bundlePatchText.includes(`- id: ${id}`)) {
+        violations.push(`bundle: 成员非插行未随交付 patch 携带 members/${short} 行 ${id}（entry not found 静默跳过面）`)
+      }
     }
   }
   const wsPath = join(bundleDir, 'pnpm-workspace.yaml')

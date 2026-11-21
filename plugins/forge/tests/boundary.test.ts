@@ -138,8 +138,8 @@ describe("forge 声明面守卫（package.json 骨架期全量）", () => {
     expect(pkg.dsh?.client?.platform).toBe("web");
   });
 
-  it("files 恰三件（dist + cordis.patch.yml + experts——1.14 返工：skills 随 dist 构建期物化不再单列；experts 生成物不进 git 但 tgz 发布面需要）", () => {
-    expect(pkg.files).toEqual(["dist", "cordis.patch.yml", "experts"]);
+  it("files 恰两件（dist + cordis.patch.yml——1.14 返工：skills 随 dist 构建期物化不再单列；50bfbcec experts 僵尸条目清除）", () => {
+    expect(pkg.files).toEqual(["dist", "cordis.patch.yml"]);
   });
 
   it("scripts：build = clean-dist → tsc -b → bundle-host → bundle-client（run-once 禁 watch）+ prepack self-containment", () => {
@@ -158,13 +158,13 @@ describe("forge 声明面守卫（package.json 骨架期全量）", () => {
       ["@dsh-forge/lib-diag", "@types/node", "esbuild", "typescript"].sort(),
     );
     const deps = Object.keys(pkg.dependencies ?? {});
-    expect(deps).toEqual([
+    expect([...deps].sort()).toEqual([
       "@dsh-forge/project",
       "@dsh-forge/spec",
       "@dsh-forge/task-loop",
       "@dsh-forge/expert-squad",
       "@dsh-forge/knowledge",
-    ]);
+    ].sort());
     for (const [name, range] of Object.entries(pkg.dependencies ?? {})) {
       expect(range, `${name} 须为相对 file: 声明`).toMatch(/^file:\.\.\//);
     }
