@@ -62,12 +62,15 @@ export function patchInsertEntryNames(patchText) {
   return out
 }
 
-/** 六包发现：forge package.json dependencies 的相对 file: 条目（字段驱动，零硬编码清单） */
+/** 六包发现：forge package.json dependencies 的相对 file: 条目（字段驱动，零硬编码清单）。
+ * 非成员依赖（组合目标插件 agent-preset/skill-filesystem 等 registry 条目）跳过——
+ * 它们按 dependencies 原样进交付目录（generation 从 npm 解析，非 file: 闭包成员）。 */
 export function discoverPackages(repoRoot) {
   const forgeDir = join(repoRoot, FORGE_DIR_REL)
   const forge = readJson(join(forgeDir, 'package.json'))
   const members = []
   for (const [name, spec] of Object.entries(forge.dependencies ?? {})) {
+    if (!spec.startsWith('file:')) continue
     if (!/^file:\.\.[/\\]/.test(spec)) throw new Error(`forge dependencies 含非相对 file: 条目：${name} "${spec}"`)
     members.push({ name, sourceDir: resolve(forgeDir, spec.slice('file:'.length)) })
   }
@@ -331,7 +334,8 @@ export function verifyReleaseTree(treeDir, { repoRoot = REPO_ROOT } = {}) {
   } else {
     const bundleInserts = patchInsertEntryNames(readFileSync(join(forgeTreeDir, patchRel), 'utf8'))
     const expectedInserts = packages.map((p) => p.name)
-    if (JSON.stringify(bundleInserts) !== JSON.stringify(expectedInserts)) {
+    // 集合比较（行序非语义——装配序由 COMPOSED 表定，成员清单序为发现序）
+    if (JSON.stringify([...bundleInserts].sort()) !== JSON.stringify([...expectedInserts].sort())) {
       violations.push(`forge: bundle 插行清单漂移（期望恰 ${JSON.stringify(expectedInserts)}，实际 ${JSON.stringify(bundleInserts)}）`)
     }
     for (const [depName, spec] of Object.entries(forgePkg.dependencies ?? {})) {
