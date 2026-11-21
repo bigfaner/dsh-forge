@@ -21,7 +21,7 @@ import {
   type WorktreeRpcService,
 } from '../worktrees/index.js'
 import { createWorktreeIdentity } from './worktree-identity.js'
-import { rootCtxOf } from './cordis-root.js'
+import { rootCtxOf } from '@dsh-forge/lib-util'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {

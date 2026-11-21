@@ -19,7 +19,7 @@
 //
 // 范围边界：forge:settings 族归 configForms 自有 namespace（偏好值不经本面——AC③）。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
-import { rootCtxOf } from "./cordis-root.js";
+import { rootCtxOf } from "@dsh-forge/lib-util";
 import { Peer } from "@deepseek-ai/dsh-client-connection";
 import type { Context } from "@deepseek-ai/cordis";
 import type {

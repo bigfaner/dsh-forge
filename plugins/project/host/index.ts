@@ -24,7 +24,7 @@ import {
   type SeamDiag,
 } from "./assembly/seams.js";
 import { createProjectsServicePort, openProjectsDomainDb } from "./assembly/projects-port.js";
-import { rootCtxOf } from "./assembly/cordis-root.js";
+import { rootCtxOf } from "@dsh-forge/lib-util";
 import { createWorktreeIdentity, type ForgeProjectsIdentityFace } from "./assembly/worktree-identity.js";
 import { createBugsService } from "./bugs/service.js";
 import { createProjectKeyResolver } from "./assembly/project-key.js";

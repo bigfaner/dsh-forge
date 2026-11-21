@@ -16,7 +16,7 @@
 // 非 root 子路径——官方边界门要求，根出口不在白名单）。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
-import { rootCtxOf } from "./cordis-root.js";
+import { rootCtxOf } from "@dsh-forge/lib-util";
 import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/contracts";
 import { FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
 import { deriveProjectKey } from "../db/repositories/project-key.js";

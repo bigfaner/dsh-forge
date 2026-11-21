@@ -21,7 +21,7 @@
 // 快照族（list/follow）空集诚实降级 / detail·query·projection·transition 族 typed 拒绝。
 import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
-import { rootCtxOf } from "./cordis-root.js";
+import { rootCtxOf } from "@dsh-forge/lib-util";
 import type { WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import { existsSync } from "node:fs";
 import { join } from "node:path";

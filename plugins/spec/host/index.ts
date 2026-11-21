@@ -27,7 +27,7 @@ import {
   registerSpecTypertRemotes,
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js"
-import { CORDIS_ROOT } from "./assembly/cordis-root.js";
+import { CORDIS_ROOT } from "@dsh-forge/lib-util";
 import type { TransitionActor } from "./db/row-types.js";
 import { createForgeToolServices } from "./domain/specs/tool-service.js";
 import type { SpecContextFace } from "./faces.js";

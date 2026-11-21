@@ -18,7 +18,7 @@ import { consoleDiagFallback, type DiagLevel } from "@dsh-forge/lib-diag";
 // + fail-soft 承担，装载期零耦合）。
 import type { Peer } from "@deepseek-ai/dsh-client-connection";
 import { FORGE_CHECKPOINTS_SERVICE_KEY, FORGE_TASKS_SERVICE_KEY } from "../shared/contract-constants.js";
-import { rootCtxOf } from "./assembly/cordis-root.js";
+import { rootCtxOf } from "@dsh-forge/lib-util";
 import {
   assembleTaskLoopServices,
   type TaskLoopAssembly,
