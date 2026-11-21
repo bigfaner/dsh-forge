@@ -218,8 +218,9 @@ export function sanitizedCliEnv(dshHome: string, extraEnv: Record<string, string
   delete env.ELECTRON_RUN_AS_NODE
   // extraEnv 在消毒删除之后合并（bug 643a40df/e65b24c8 修复面）——显式注入对冲消毒
   // 语义：desktop 通道官方 packaged invocation 需复注入 ELECTRON_RUN_AS_NODE=1 +
-  // DSH_DESKTOP_PNPM_ENTRY/RUNNER（harness-node-entry.mjs 官方缝），调用侧显式传参
-  // 即定向覆盖，缺省形态仍全量剥离。
+  // DSH_DESKTOP_PNPM_ENTRY/RUNNER（resources/packaged-pnpm-invocation.mjs 契约常量
+  // PACKAGED_PNPM_ENTRY_ENV/PACKAGED_PNPM_RUNNER_ENV——0.14.0 实树核销），调用侧显式
+  // 传参即定向覆盖，缺省形态仍全量剥离。
   return Object.assign(env, extraEnv)
 }
 
@@ -227,7 +228,7 @@ export function sanitizedCliEnv(dshHome: string, extraEnv: Record<string, string
 export async function runDsh(bin: string, args: readonly string[], dshHome: string, extraEnv: Record<string, string> = {}): Promise<CliResult> {
   const env = sanitizedCliEnv(dshHome, extraEnv)
   try {
-    const { stdout, stderr } = await pexec(bin, [...args], { env, encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024 })
+    const { stdout, stderr } = await pexec(bin, [...args], { env, encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024, shell: process.platform === 'win32' })
     return { code: 0, stdout, stderr }
   } catch (err) {
     const e = err as { code?: number; stdout?: string; stderr?: string }
@@ -824,30 +825,45 @@ export function desktopHarnessHome(userData: string): string {
   return join(userData, 'harness')
 }
 
-// ── desktop 通道 CLI = 官方 packaged invocation（bug 643a40df/e65b24c8 修复面）─────────
-// 定谳（039 轮实锚 + DSH Desktop resources 官方源核销）：
-// ①643a40df GUI no-op：直跑 Electron GUI 二进制（dsh-desktop.exe 形）作 CLI——子进程走
-//   GUI 形态：`plugin add` 秒退 exit 0、零安装、零输出（假成功；GUI 动作链断点 = CLI
-//   参数不被安装动作链消费）。GUI 二进制不承载 CLI 执行形态，直跑即错锚。
-// ②e65b24c8 store 错锚：CLI 直跑形态（dsh-cli.exe）下 plugin-manager 走 PATH `pnpm`
-//   （11.7 → 全局 v11 store），而消费面 profile 由 desktop app 官方链以打包 pnpm 10.9
-//   物化（v10 store）→ ERR_PNPM_UNEXPECTED_STORE 拒装。DSH_DESKTOP_PNPM_ENTRY/RUNNER
-//   env 直置 CLI 进程不被采纳——官方采纳点 = harness-node-entry.mjs（读 env →
-//   buildPackagedPnpmInvocation → runCli({ packageManager })），直跑 CLI 自执行
-//   runCli() 不带 packageManager（官方 packaged-pnpm-invocation.mjs 注释实锚）。
+// ── desktop 通道 CLI = 官方 packaged invocation（bug 643a40df/e65b24c8 修复面；1.23
+// 0.14.0 实树真锚改锚）─────────────────────────────────────────────────────────────
+// 核销纪律留痕（AGENTS 1.1——承重假设到官方包源码核销；本机 0.14.0 实树取证）：
+// ①643a40df GUI no-op：直跑 Electron GUI 二进制（DSH Desktop.exe 形）作 CLI——子进程走
+//   GUI 形态：`plugin add` 秒退 exit 0、零安装、零输出（假成功）。GUI 二进制不承载 CLI
+//   执行形态，直跑即错锚。
+// ②e65b24c8 store 错锚：CLI 直跑形态下 plugin-manager 走 PATH `pnpm`（v11 全局 store），
+//   而消费面 profile 由 desktop app 官方链以打包 pnpm 10.9 物化（v10 store）→
+//   ERR_PNPM_UNEXPECTED_STORE 拒装。官方采纳点 = DSH_DESKTOP_PNPM_ENTRY/RUNNER env
+//   契约（resources/packaged-pnpm-invocation.mjs buildPackagedPnpmInvocation 实锚：
+//   读 env → { command: execPath, args:[runner?, entry], env:{ELECTRON_RUN_AS_NODE:'1'} }
+//   → runCli({ packageManager })）。
+// ③checkout 桌面源码落后于已装版——harness-node-entry.mjs 为臆造锚（官方 checkout
+//   d593e52 全树零匹配 + 本机 0.14.0 实树 resources/ 无该文件），已删除；锚以实树为准。
+// 0.14.0 实树真锚三件套（asar 反读 out/main/index.js + out/main/host.js 核销）：
+// - resources/packaged-pnpm-invocation.mjs（官方 packaged invocation 契约面——env 常量
+//   与 buildPackagedPnpmInvocation 定义体，实文件 fail-loud 可探测）；
+// - app.asar 内 node_modules/@deepseek-ai/dsh/lib/bin.js（CLI entry——host.js
+//   registerOfficeEngineResolution 同径实锚；asar 内路径纯 node fs 不可探测，运行期自证）；
+// - ELECTRON_RUN_AS_NODE=1 注入面（desktop main desktopNodeEnvironment + host.js
+//   packageManager.env + .desktop-bin pnpm.cmd shim 三处同锚——electron 二进制以 node
+//   形态运行 CLI/pnpm 子进程链）。
+// 配套实锚：打包 pnpm entry = app.asar.unpacked/node_modules/pnpm/bin/pnpm.cjs
+// （asar.unpacked 实文件，主进程 pnpmEntryPath() 同径——fail-loud 可探测）；lock-recovery
+// runner = app.asar 内 dsh-desktop-market-installer/pnpm-runner.mjs（主进程
+// pluginPnpmRunnerPath() 同径，运行期自证）。
 // 根修 = 复用官方缝（reuse-first）：desktop 通道 CLI 一律经官方 packaged invocation
-// 执行——electron 二进制 + ELECTRON_RUN_AS_NODE=1 + harness-node-entry.mjs + app.asar
-// 内 CLI entry（desktop main HarnessRuntime 同参形态）+ DSH_DESKTOP_PNPM_ENTRY/RUNNER
-// 注入 → 打包 pnpm 10.9 + v10 store 对齐，add 真安装（拒装消除 + 假成功消除）。
+// 形态执行——electron 二进制 + ELECTRON_RUN_AS_NODE=1 + app.asar 内 CLI entry +
+// DSH_DESKTOP_PNPM_ENTRY/RUNNER 注入 → 打包 pnpm 10.9 + v10 store 对齐，add 真安装
+// （拒装消除 + 假成功消除）。
 
 export interface DesktopCliChannel {
   /** desktop 宿主安装产物 exe（electron 二进制——ELECTRON_RUN_AS_NODE=1 下作 node 运行面） */
   readonly electronBin: string
-  /** resources/harness-node-entry.mjs（官方 node 入口缝） */
-  readonly nodeEntry: string
-  /** app.asar 内 dsh CLI entry（@deepseek-ai/dsh/lib/bin.js——desktop main dshEntryPath 同参） */
+  /** resources/packaged-pnpm-invocation.mjs（官方 packaged invocation 契约面——0.14.0 实树真锚） */
+  readonly invocationModule: string
+  /** app.asar 内 dsh CLI entry（@deepseek-ai/dsh/lib/bin.js——host.js installAnchor 同径） */
   readonly cliEntry: string
-  /** app.asar 内打包 pnpm entry（pnpm/bin/pnpm.cjs——DSH_DESKTOP_PNPM_ENTRY 值） */
+  /** app.asar.unpacked 内打包 pnpm entry（pnpm/bin/pnpm.cjs——DSH_DESKTOP_PNPM_ENTRY 值） */
   readonly pnpmEntry: string
   /** app.asar 内 lock-recovery runner（pnpm-runner.mjs——DSH_DESKTOP_PNPM_RUNNER 值） */
   readonly pnpmRunner: string
@@ -855,35 +871,41 @@ export interface DesktopCliChannel {
 
 /**
  * desktop 通道 CLI 通道发现面：自目标宿主安装产物 exe 单源派生官方 packaged invocation
- * 全参（desktop main HarnessRuntime 构造同径——dshEntryPath/bundledPnpmEntryPath/
- * harnessNodeEntryPath 实锚）。结构性锚 = exe 在场 + resources/harness-node-entry.mjs
- * 在场 + resources/app.asar 在场；cliEntry/pnpmEntry/pnpmRunner 为 asar 内路径（纯 node
- * fs 不可探测），运行期自证（[harness-node] stdout 标记 + 安装行为断言）。
+ * 全参（0.14.0 实树真锚——desktop main pnpmEntryPath/pluginPnpmRunnerPath 同径）。
+ * 结构性锚（实文件逐条 fail-loud）= exe 在场 + resources/packaged-pnpm-invocation.mjs
+ * 在场 + resources/app.asar 在场 + app.asar.unpacked 打包 pnpm entry 在场；
+ * cliEntry/pnpmRunner 为 asar 内路径（纯 node fs 不可探测），运行期自证（CLI 版本输出
+ * + 安装行为断言）。
  */
 export function desktopCliChannel(desktopExe: string): DesktopCliChannel {
   const installRoot = dirname(resolve(desktopExe))
   const resources = join(installRoot, 'resources')
-  const nodeEntry = join(resources, 'harness-node-entry.mjs')
+  const invocationModule = join(resources, 'packaged-pnpm-invocation.mjs')
   const appAsar = join(resources, 'app.asar')
   const asarRoot = join(appAsar, 'node_modules')
+  const unpackedRoot = join(resources, 'app.asar.unpacked', 'node_modules')
   if (!existsSync(desktopExe)) throw new Error(`desktop 宿主 exe 缺席：${desktopExe}（desktop 通道锚必填——643a40df）`)
-  if (!existsSync(nodeEntry)) throw new Error(`harness-node-entry.mjs 缺席：${nodeEntry}（官方 packaged invocation 结构锚——非 desktop 宿主安装树即错锚）`)
-  if (!existsSync(appAsar)) throw new Error(`app.asar 缺席：${appAsar}（CLI entry/pnpm entry 承载面——错锚 fail-loud）`)
+  if (!existsSync(invocationModule)) throw new Error(`packaged-pnpm-invocation.mjs 缺席：${invocationModule}（官方 packaged invocation 契约面——0.14.0 实树结构锚，非 desktop 宿主安装树即错锚）`)
+  if (!existsSync(appAsar)) throw new Error(`app.asar 缺席：${appAsar}（CLI entry/pnpm runner 承载面——错锚 fail-loud）`)
+  const pnpmEntry = join(unpackedRoot, 'pnpm', 'bin', 'pnpm.cjs')
+  if (!existsSync(pnpmEntry)) throw new Error(`打包 pnpm entry 缺席：${pnpmEntry}（app.asar.unpacked 实文件——desktop main pnpmEntryPath 同径实锚，非 desktop 宿主安装树即错锚）`)
   return {
     electronBin: resolve(desktopExe),
-    nodeEntry,
+    invocationModule,
     cliEntry: join(asarRoot, '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
-    pnpmEntry: join(asarRoot, 'pnpm', 'bin', 'pnpm.cjs'),
+    pnpmEntry,
     pnpmRunner: join(asarRoot, 'dsh-desktop-market-installer', 'pnpm-runner.mjs'),
   }
 }
 
 /**
  * desktop 通道 CLI 执行环境：官方 packaged invocation 注入面——ELECTRON_RUN_AS_NODE=1
- * （electron 二进制以 node 形态运行 harness-node-entry 及其 CLI/pnpm 子进程链——官方
- * buildPackagedPnpmInvocation 语义）+ DSH_DESKTOP_PNPM_ENTRY/RUNNER（harness-node-entry
- * 读取 → runCli({ packageManager }) → 打包 pnpm 10.9 → 消费面 v10 store 对齐——e65b24c8
- * 拒装消除）。经 sanitizedCliEnv(extraEnv) 消毒后合并（显式注入对冲缺省剥离）。
+ * （electron 二进制以 node 形态运行 CLI 及其 pnpm 子进程链——0.14.0 host.js
+ * packageManager.env + desktop main desktopNodeEnvironment 同锚语义）+
+ * DSH_DESKTOP_PNPM_ENTRY/RUNNER（resources/packaged-pnpm-invocation.mjs 契约常量——
+ * buildPackagedPnpmInvocation 读入 → runCli({ packageManager }) → 打包 pnpm 10.9 →
+ * 消费面 v10 store 对齐——e65b24c8 拒装消除）。经 sanitizedCliEnv(extraEnv) 消毒后
+ * 合并（显式注入对冲缺省剥离）。
  */
 export function desktopCliChannelEnv(channel: DesktopCliChannel): Record<string, string> {
   return {
@@ -901,12 +923,13 @@ export function desktopCliChannelEnv(channel: DesktopCliChannel): Record<string,
 }
 
 /**
- * desktop 通道 CLI run-once 执行：electron 二进制 [nodeEntry, cliEntry, ...args] +
+ * desktop 通道 CLI run-once 执行：electron 二进制 [cliEntry, ...args]（ELECTRON_RUN_AS_NODE=1
+ * 注入面——0.14.0 实树无 harness-node-entry.mjs 中间缝，CLI entry 直跑即官方 node 形态）+
  * desktopCliChannelEnv 注入（官方 packaged invocation 全形）。非零退出码捕获不抛
  * （runDsh 同径——失败面断言用）。
  */
 export async function runDesktopChannelCli(channel: DesktopCliChannel, args: readonly string[], dshHome: string): Promise<CliResult> {
-  return runDsh(channel.electronBin, [channel.nodeEntry, channel.cliEntry, ...args], dshHome, desktopCliChannelEnv(channel))
+  return runDsh(channel.electronBin, [channel.cliEntry, ...args], dshHome, desktopCliChannelEnv(channel))
 }
 
 /** desktop profile 落点实锚（0.13.2：{userData}/harness/profiles/web——bootstrap DesktopStorageManager + profile maintenance 实锚） */

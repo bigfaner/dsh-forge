@@ -149,9 +149,11 @@ function writeSnapshot(event: string): void {
 
 /** desktop 通道 CLI 执行（dshHome = {userData}/harness——与 app 消费面同 home 同 profile；零假隔离 env）。
  * bug 643a40df/e65b24c8 根修：直跑通道 CLI bin 为错锚形态（GUI 二进制 no-op 假成功 +
- * PATH pnpm store 错锚拒装）——现行执行面 = 官方 packaged invocation 单源
- * （e2e/support/forge-combo.ts runDesktopChannelCli：electron exe + harness-node-entry +
- * app.asar CLI entry + 打包 pnpm 注入），锚 FORGE_COMBO_DESKTOP_EXE（必填 fail-loud）。 */
+ * PATH pnpm store 错锚拒装）——现行执行面 = 官方 packaged invocation 单源（0.14.0 实树
+ * 真锚：e2e/support/forge-combo.ts runDesktopChannelCli——electron exe + ELECTRON_RUN_AS_NODE=1
+ * + resources/packaged-pnpm-invocation.mjs 契约面 + app.asar 内 CLI entry + 打包 pnpm 注入；
+ * checkout 桌面源码落后于已装版，锚以实树为准），锚 FORGE_COMBO_DESKTOP_EXE（必填
+ * fail-loud）。 */
 async function runDesktopDsh(env: ReturnType<typeof comboEnv>, args: readonly string[]) {
   if (env.desktopExe === undefined) throw new Error('FORGE_COMBO_DESKTOP_EXE 未置位（desktop 通道 CLI = 官方 packaged invocation，锚 exe 必填——bug 643a40df/e65b24c8 修复面）')
   const res = await runDesktopChannelCli(desktopCliChannel(env.desktopExe), args, harnessHome())
