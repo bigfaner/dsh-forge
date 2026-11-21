@@ -60,6 +60,15 @@ export const FORGE_PKG = '@dsh-forge/forge'
 /** 六包 = forge + 五件闭包（CT-DISK-01 State——六目录非空判据） */
 export const SIX_PKGS: readonly string[] = [FORGE_PKG, ...BARE_BUNDLES]
 
+/** bundle patch 顶层 forge 行 id（异 id——bug 1102d9d8：≠ 官方 experimental-forge-bundle
+ *  服务行 id `forge`，同 id 行合并整行替换官方服务行 → 官方 forge/forgeSession 缺席 → StartupError） */
+export const FORGE_ROW_ID = 'dshforge'
+
+/** 包名 → dump-config 插行行 id（forge 壳行 id = FORGE_ROW_ID 异 id，五件 = 裸名同值） */
+export function rowIdForPkg(bare: string): string {
+  return bare === FORGE_PKG ? FORGE_ROW_ID : bare.slice('@dsh-forge/'.length)
+}
+
 /** patch 下发共库目标（{DSH_HOME} 占位符物化后的相对段——契约 CT-DISK-03/CT-NPM-04 锚值） */
 export const COMBO_DB_REL = join('forge', 'db', 'forge', 'forge.db')
 
@@ -1019,8 +1028,8 @@ export function desktopAbsenceEvents(userData: string): readonly DesktopDiagEven
  * 实锚样本 = task_logs 1.6/007-fcombo16c/dump-config.txt L373-400）。
  */
 export function insertEntryPattern(bare: string): RegExp {
-  const bareId = bare.slice('@dsh-forge/'.length)
-  return new RegExp(`^- id: ${bareId}$\\r?\\n^  name: '${bare}'$`, 'm')
+  const rowId = rowIdForPkg(bare)
+  return new RegExp(`^- id: ${rowId}$\\r?\\n^  name: '${bare}'$`, 'm')
 }
 /**
  * forge 下发面残留判据（CT-DISK-04 归属语义改锚 · fix-40）：卸 forge 后 dump-config

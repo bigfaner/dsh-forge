@@ -153,13 +153,33 @@ function providerNames(yaml: string): string[] {
 }
 
 describe("forge patch 六插行（静态直检——直写正本）", () => {
-  it("insert 块 id 序 = forge + 五件，name = @dsh-forge/<id>", () => {
-    const insertBody = FORGE_PATCH.slice(FORGE_PATCH.indexOf("- insert:"), FORGE_PATCH.indexOf("\n- id: preset-forge"));
+  /** forge 自插行 id（异 id——bug 1102d9d8：≠ 官方 experimental-forge-bundle 服务行 id） */
+  const FORGE_ROW_ID = "dshforge";
+  it("insert 块 id 序 = dshforge（forge 壳异 id——bug 1102d9d8）+ 五件，name = @dsh-forge/<pkg>", () => {
+    const insertBody = FORGE_PATCH.slice(FORGE_PATCH.indexOf("- insert:"), FORGE_PATCH.indexOf("\n    - id: preset-forge"));
     const ids = [...insertBody.matchAll(/^    - id: (.+)$/gm)].map((m) => m[1]!);
-    expect(ids).toEqual(["forge", ...MEMBERS]);
-    for (const id of ["forge", ...MEMBERS]) {
+    expect(ids).toEqual([FORGE_ROW_ID, ...MEMBERS]);
+    expect(insertBody).toContain(`- id: ${FORGE_ROW_ID}\n      name: '@dsh-forge/forge'`);
+    for (const id of MEMBERS) {
       expect(insertBody).toContain(`- id: ${id}\n      name: '@dsh-forge/${id}'`);
     }
+  });
+
+  it("交付 patch 插行 id 与官方 @deepseek-ai/dsh-experimental-forge-bundle 服务行 id 零交集（bug 1102d9d8——同 id 行合并整行替换官方服务行 → 官方 forge/forgeSession 缺席 → forge-session/forge-panel pending → StartupError；官方 id 集自 app.asar 官方 patch 提取件 pin，缺断言即红）", () => {
+    const officialServiceRowIds = [
+      "worktree",
+      "tool-worktree",
+      "forge",
+      "forge-github",
+      "forge-session",
+      "optional-forge-panel",
+    ];
+    const insertBody = FORGE_PATCH.slice(FORGE_PATCH.indexOf("- insert:"), FORGE_PATCH.indexOf("\n    - id: preset-forge"));
+    const insertIds = [...insertBody.matchAll(/^    - id: (.+)$/gm)].map((m) => m[1]!);
+    const collide = officialServiceRowIds.filter((id) => insertIds.includes(id));
+    expect(collide, `插行 id 与官方服务行 id 撞车集`).toEqual([]);
+    expect(insertIds, "forge 壳行异 id 在场（≠ forge）").toContain("dshforge");
+    expect(insertIds, "旧撞车 id forge 不再作为插行 id").not.toContain("forge");
   });
 
   it("派发表达式 && 短路兜底（直写不变量——防裸表达式异常冒泡打断行激活；expert-squad 空对象豁免）", () => {
@@ -167,7 +187,7 @@ describe("forge patch 六插行（静态直检——直写正本）", () => {
       const rowAt = FORGE_PATCH.indexOf(`    - id: ${member}\n`);
       expect(rowAt, `${member} 插行在场`).toBeGreaterThanOrEqual(0);
       const nextRowAt = FORGE_PATCH.indexOf("\n    - id: ", rowAt + 1);
-      const presetAt = FORGE_PATCH.indexOf("\n- id: preset-forge");
+      const presetAt = FORGE_PATCH.indexOf("\n    - id: preset-forge");
       const rowEnd = nextRowAt === -1 || presetAt < nextRowAt ? presetAt : nextRowAt;
       const exprs = [...FORGE_PATCH.slice(rowAt, rowEnd).matchAll(/^        (\w+): !!js (.+)$/gm)].map(
         (m) => [m[1]!, m[2]!] as const,
@@ -212,21 +232,21 @@ describe("跨 patch 零交集负断言（谁带谁自持——bundle 六 patch �
 });
 
 describe("preset-forge 静态直检（直写正本）", () => {
-  const presetBody = FORGE_PATCH.slice(FORGE_PATCH.indexOf("- id: preset-forge\n"));
+  const presetBody = FORGE_PATCH.slice(FORGE_PATCH.indexOf("\n    - id: preset-forge"));
 
   it("order 定值 pin = 2（官方仓 preset 底稿核销当前 order 全集后定值——standard=1/ptc=2/minimal=3/cordis=4；漂移红）", () => {
-    expect(presetBody).toMatch(/^    order: 2$/m);
+    expect(presetBody).toMatch(/^        order: 2$/m);
   });
 
   it("行内 skill-filesystem-forge 实例：providerName: filesystem-forge + customSkillDirs 五锚自锚各件 skills/ 且 && 短路兜底", () => {
     expect(presetBody).toContain("providerName: filesystem-forge");
-    const dirsAt = presetBody.indexOf("          customSkillDirs:\n");
+    const dirsAt = presetBody.indexOf("              customSkillDirs:\n");
     expect(dirsAt).toBeGreaterThanOrEqual(0);
     const anchors = presetBody
       .slice(dirsAt)
       .split("\n")
-      .filter((line) => line.startsWith("            - !!js "))
-      .map((line) => line.slice("            - !!js ".length));
+      .filter((line) => line.startsWith("                - !!js "))
+      .map((line) => line.slice("                - !!js ".length));
     expect(anchors).toHaveLength(MEMBERS.length);
     anchors.forEach((expr, i) => {
       expect(expr).toContain(`resolve('@dsh-forge/${MEMBERS[i]}/package.json')`);

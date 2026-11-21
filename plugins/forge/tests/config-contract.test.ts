@@ -15,9 +15,9 @@ const patchYaml = readFileSync(resolve(FORGE_ROOT, "cordis.patch.yml"), "utf8");
 /** 派发单源同源期望式（静态双检正本——assembly 常量拼装，非字面量复制） */
 const HOME_EXPR = `process.env.${DSH_HOME_ENV} && (process.env.${DSH_HOME_ENV} + '${FORGE_HOME_SUFFIX}')`;
 
-/** 抽取 forge 行 home 键的 !!js 表达式（缺失 = undefined）。 */
+/** 抽取 forge 行 home 键的 !!js 表达式（id = dshforge 异 id——bug 1102d9d8；缺失 = undefined）。 */
 function extractHomeExpr(): string | undefined {
-  const block = patchYaml.match(/-\s+id:\s*forge\b[\s\S]*$/);
+  const block = patchYaml.match(/-\s+id:\s*dshforge\b[\s\S]*$/);
   return block?.[0]?.match(/^\s+home:\s*!!js\s+(.+)$/m)?.[1];
 }
 

@@ -36,6 +36,7 @@ import {
   expectSharedDbDispatch,
   expectSixInsertEntries,
   expectSixPkgsPresent,
+  FORGE_ROW_ID,
   generationFrozen,
   invalidateInstalledShared,
   memberSkillId,
@@ -136,10 +137,10 @@ test('CT-BIF-G4 #O-G4-1：行级启停语义往返（project 行关→开；状�
 test('CT-BIF-G5 #O-G5-1：bundle 级整包启停往返（forge 条目关→开；终态 = 开启）', async () => {
   const h = await ensureHost()
   const detail = await openForgeDetail(h.page)
-  await toggleRowSwitch(detail, 'forge', false)
-  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'forge'), { timeout: 60_000 }).toBe(true)
-  await toggleRowSwitch(detail, 'forge', true)
-  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'forge'), { timeout: 60_000 }).toBe(false)
+  await toggleRowSwitch(detail, FORGE_ROW_ID, false)
+  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), { timeout: 60_000 }).toBe(true)
+  await toggleRowSwitch(detail, FORGE_ROW_ID, true)
+  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), { timeout: 60_000 }).toBe(false)
 })
 
 test('CT-BIF-G6 #O-G6-1：五件服务与 UI 全量在场（服务面代际戳 + forge-bundle-apply 标记 + client 注入通道取件）', async () => {
@@ -225,16 +226,16 @@ test('CT-BIF-B2 #O-B2-1：重复安装幂等（重装成功 + 从正源刷新 + 
 test('CT-BIF-B3 #O-B3-1：forge 壳行自身启停跨重启不漂（停用 → 宿主重启 → 停用态保持）', async () => {
   const h = await ensureHost()
   const detail = await openForgeDetail(h.page)
-  await toggleRowSwitch(detail, 'forge', false)
-  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'forge'), { timeout: 60_000 }).toBe(true)
+  await toggleRowSwitch(detail, FORGE_ROW_ID, false)
+  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), { timeout: 60_000 }).toBe(true)
   // 宿主重启（自拉实例——close 后复启，单实例语义下冷启动复锚）
   await stopHost()
   await ensureHost()
-  expect(overrideDisabled(readProfilePatch(env, PROFILE), 'forge'), '停用态跨重启持久（零态漂）').toBe(true)
+  expect(overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), '停用态跨重启持久（零态漂）').toBe(true)
   // 复原：开启态回收（后续用例基线）
   const detail2 = await openForgeDetail((await ensureHost()).page)
-  await toggleRowSwitch(detail2, 'forge', true)
-  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'forge'), { timeout: 60_000 }).toBe(false)
+  await toggleRowSwitch(detail2, FORGE_ROW_ID, true)
+  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), { timeout: 60_000 }).toBe(false)
 })
 
 test('CT-BIF-B4 #O-B4-1：行级启停后组合实况一致性（被关闭件 disabled、其余在件原样——INV-1 config face）', async () => {
@@ -270,17 +271,17 @@ test('CT-BIF-B6 #O-B6-1：整包停用态下行级操作零半激活（停用面
   const h = await ensureHost()
   const detail = await openForgeDetail(h.page)
   // 整包停用
-  await toggleRowSwitch(detail, 'forge', false)
-  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'forge'), { timeout: 60_000 }).toBe(true)
+  await toggleRowSwitch(detail, FORGE_ROW_ID, false)
+  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), { timeout: 60_000 }).toBe(true)
   // 停用态下行级操作尝试 → 停用面一致（零半激活：任一件单独 disabled override 不得新增激活语义）
   const patch = readProfilePatch(env, PROFILE)
   for (const bare of SIX_ROW_IDS) {
-    if (bare === 'forge') continue
+    if (bare === FORGE_ROW_ID) continue
     expect(overrideDisabled(patch, bare) ? 'disabled' : 'inherited', `整包停用态下 ${bare} 停用面一致（禁半激活）`).not.toBe('enabled-only')
   }
   // 整包恢复（基线回收）
-  await toggleRowSwitch(detail, 'forge', true)
-  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'forge'), { timeout: 60_000 }).toBe(false)
+  await toggleRowSwitch(detail, FORGE_ROW_ID, true)
+  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), { timeout: 60_000 }).toBe(false)
 })
 
 test('CT-BIF-B7 #O-B7-1：版本双校验失败立即停（守卫反例注入——doctored manifest → 抛出 → 复原 → 绿）', async () => {

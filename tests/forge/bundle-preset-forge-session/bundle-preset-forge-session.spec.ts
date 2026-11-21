@@ -17,6 +17,7 @@ import {
   expectFiveGlobalSkillRows,
   expectPresetForgeOrderPin,
   FORGE_PKG,
+  FORGE_ROW_ID,
   invalidateInstalledShared,
   openForgeDetail,
   overrideDisabled,
@@ -83,13 +84,13 @@ test('CT-BPf-G4 #O-G4-1：两层 skills 合并可见（preset 层 filesystem-for
 test('CT-BPf-B2 #O-B2-1：bundle 停用后 forge 预设缺席、standard 不受影响；重开恢复', async () => {
   const h = await ensureHost()
   const detail = await openForgeDetail(h.page)
-  await toggleRowSwitch(detail, 'forge', false)
-  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'forge'), { timeout: 60_000 }).toBe(true)
+  await toggleRowSwitch(detail, FORGE_ROW_ID, false)
+  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), { timeout: 60_000 }).toBe(true)
   const off = await dumpConfig(env, PROFILE)
   expect(off.includes('skill-filesystem-forge'), '停用期 forge 预设行缺席').toBe(false)
   expect(off.includes('- id: headhunter') || off.includes('order: 1'), 'standard 官方预设不受影响').toBe(true)
-  await toggleRowSwitch(detail, 'forge', true)
-  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'forge'), { timeout: 60_000 }).toBe(false)
+  await toggleRowSwitch(detail, FORGE_ROW_ID, true)
+  await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), { timeout: 60_000 }).toBe(false)
   expect((await dumpConfig(env, PROFILE)).includes('skill-filesystem-forge'), '重开后 forge 预设恢复').toBe(true)
 })
 
