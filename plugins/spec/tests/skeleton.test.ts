@@ -72,7 +72,7 @@ describe("包骨架（三目录制 + scripts 五件 + build 链）", () => {
 describe("包 manifest（plugin-spec 1.2 验收面）", () => {
   it("名称与版本：@dsh-forge/spec 0.19.6（forge-aggregate-bundle/1.4 skills 行 id+providerName 双改 patch bump）", () => {
     expect(pkg.name).toBe("@dsh-forge/spec");
-    expect(pkg.version).toBe("0.19.6");
+    expect(pkg.version).toBe("0.19.9");
   });
 
   it("exports 四键：. + ./client + ./typert + ./remote（typert 双键预留）", () => {
@@ -89,8 +89,9 @@ describe("包 manifest（plugin-spec 1.2 验收面）", () => {
     });
   });
 
-  it("依赖位次（判例 0acab78c）：typert-protocol + zod 落 dependencies、typert-generator 落 devDependencies", () => {
-    expect(pkg.dependencies?.["@deepseek-ai/dsh-typert-protocol"]).toBe("0.2.2-rc.5");
+  it("依赖位次：typert-protocol 内联进 dist、声明落 devDependencies（禁入 dependencies——@deepseek-ai/* 机检判例）；zod 落 dependencies、typert-generator 落 devDependencies", () => {
+    expect(pkg.devDependencies?.["@deepseek-ai/dsh-typert-protocol"]).toBe("0.2.2-rc.5");
+    expect(pkg.dependencies?.["@deepseek-ai/dsh-typert-protocol"]).toBeUndefined();
     expect(pkg.dependencies?.zod).toBe("4.6.6");
     expect(pkg.devDependencies?.["@deepseek-ai/dsh-typert-generator"]).toBe("0.2.2-rc.5");
   });

@@ -138,8 +138,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.5");
   });
 
-  it("版本 bump 0.19.3（forge-aggregate-bundle/1.20 driver 迁 devDeps patch bump）", () => {
-    expect(pkg.version).toBe("0.19.3");
+  it("版本 bump 0.19.4（forge-aggregate-bundle/1.21 typert-protocol 迁 devDeps patch bump）", () => {
+    expect(pkg.version).toBe("0.19.4");
   });
 });
 
