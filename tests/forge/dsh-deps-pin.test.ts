@@ -131,4 +131,22 @@ describe("dsh 依赖单一版本集（六件统一契约）", () => {
     }
     expect(offPin, `cordis peer 面:\n${offPin.join("\n")}`).toEqual([]);
   });
+
+  // 判例 fc07cd8d（forge-aggregate-bundle 1.20）：dependencies 里的 @deepseek-ai/* 是
+  // bundle 通道污染源——desktop staging autoInstallPeers 沿其 peer 族整树拉入对应代际
+  // 官方件（driver@0.2.0-rc.2 → 旧代际六件 + better-sqlite3@11.x node-gyp → ELIFECYCLE 1）。
+  // 官方内部件一律「内联进 dist + 声明迁 devDependencies」；白名单仅当前代际类型面单件
+  // dsh-typert-protocol（无 peer 族、无 install 脚本——非污染源）。
+  it("六件 dependencies 禁 @deepseek-ai/*（bundle 通道污染源根除——白名单 dsh-typert-protocol）", () => {
+    const whitelist = new Set(["@deepseek-ai/dsh-typert-protocol"]);
+    const offenders: string[] = [];
+    for (const rel of SIX_PACKAGES) {
+      for (const [name] of Object.entries(loadPkg(rel).dependencies ?? {})) {
+        if (name.startsWith("@deepseek-ai/") && !whitelist.has(name)) {
+          offenders.push(`${rel}: dependencies 含 ${name}`);
+        }
+      }
+    }
+    expect(offenders, `dependencies 官方件残留:\n${offenders.join("\n")}`).toEqual([]);
+  });
 });

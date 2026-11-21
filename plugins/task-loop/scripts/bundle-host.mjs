@@ -60,6 +60,26 @@ const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 // workspace:* devDeps，残留裸 import 即 ERR_MODULE_NOT_FOUND）。
 const EXTERNAL = ["@deepseek-ai/*", "better-sqlite3"];
 
+// 内联例外（onResolve 优先于 external 表，bf4f3851 connection 同范式）：driver 声明面
+// 迁 devDependencies（desktop staging autoInstallPeers 会沿 dependencies 把 driver 的
+// 旧代际 peer 族 dsh-llm/dsh-agent/dsh-tools/dsh-session/dsh-subagent/dsh-system-prompt
+// @0.2.0-rc.2 整树拉入——better-sqlite3@11.x node-gyp 混入即 ELIFECYCLE 1），运行期实现
+// 改吃内联副本——dispatchTask spawn 通道动态 import 的 startInProcessRun 打包进 dist；
+// driver 唯一直连依赖 dsh-brand 同径内联（若外置，独立安装形态无解析路径即断链）。
+// 例外表精确两包名——driver 的 peer 族仍外置（宿主壳层单例解析）。
+const INLINE_OFFICIAL_FILTER =
+  /^@deepseek-ai\/(?:dsh-subagent-in-process-driver|dsh-brand)(?:\/.*)?$/;
+const inlineOfficialDriver = {
+  name: "inline-dsh-subagent-in-process-driver",
+  setup(build) {
+    build.onResolve({ filter: INLINE_OFFICIAL_FILTER }, (args) => ({
+      // 从 importer 侧解析：driver→dsh-brand 属 driver 自身依赖链（dsh-brand 非本包
+      // 声明依赖，不入本包 node_modules 链）——以 importer 所在包解析才命中。
+      path: createRequire(args.importer || join(pkgDir, "package.json")).resolve(args.path),
+    }));
+  },
+};
+
 // 内联入口 = package.json exports 全部 dist/host 运行期入口镜像回 TS 源（单一事实源——
 // dist/host/x.js ↔ host/x.ts 同形镜像，exports 改面入口自动随动）。
 const HOST_RUNTIME_ENTRIES = exportsDistPaths(pkg).filter(
@@ -79,7 +99,7 @@ await build({
   platform: "node",
   target: "node20",
   external: EXTERNAL,
-  plugins: [dshDecoratorsPlugin],
+  plugins: [dshDecoratorsPlugin, inlineOfficialDriver],
   allowOverwrite: true,
   minify: false,
   sourcemap: false,

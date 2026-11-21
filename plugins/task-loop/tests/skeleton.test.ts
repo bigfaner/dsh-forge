@@ -129,18 +129,17 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/cordis"]).toBe("4.1.0");
   });
 
-  it("运行期依赖归位（fix-12 bug 2523f72c——dist/host 运行期 import 的 driver 误挂 devDeps，tgz 独立安装断链）：driver 在 dependencies 且零 devDeps 残留；dsh-session 不入 dependencies（host 单例解析——dependencies 形态会在 profile node_modules 落第二副本，被 plugin-manager 扫成 profile plugin row 与宿主运行时版本线撞车，启动期整环禁用判例 2026-11-16）", () => {
+  it("运行期依赖归位（1.20 desktop staging 判例——driver 挂 dependencies 时 autoInstallPeers 沿其旧代际 peer 族整树拉入 dsh-llm/dsh-agent/dsh-tools/dsh-session/dsh-subagent/dsh-system-prompt@0.2.0-rc.2，better-sqlite3@11.x node-gyp 混入即 ELIFECYCLE 1）：driver 迁 devDependencies（bundle-host onResolve 内联进 dist，Peer/selfProbe 运行时消费吃内联副本）+ 零 dependencies 残留；dsh-session 不入 dependencies（host 单例解析——dependencies 形态会在 profile node_modules 落第二副本，被 plugin-manager 扫成 profile plugin row 与宿主运行时版本线撞车，启动期整环禁用判例 2026-11-16）", () => {
     const deps = pkg.dependencies ?? {};
     const devDeps = pkg.devDependencies ?? {};
-    expect(deps["@deepseek-ai/dsh-subagent-in-process-driver"], "driver 须在 dependencies（tgz 独立安装运行期装载——spawn 动态 import 自包内解析）").toBeDefined();
-    expect(devDeps["@deepseek-ai/dsh-subagent-in-process-driver"], "driver devDeps 残留").toBeUndefined();
-    expect(deps["@deepseek-ai/dsh-subagent-in-process-driver"]).toBe("0.2.0-rc.2");
+    expect(deps["@deepseek-ai/dsh-subagent-in-process-driver"], "driver 不得入 dependencies（autoInstallPeers 沿 peer 族整树拉入老代际件——staging 污染源）").toBeUndefined();
+    expect(devDeps["@deepseek-ai/dsh-subagent-in-process-driver"], "driver 须在 devDependencies（构建期解析 + bundle 内联）").toBe("0.2.0-rc.2");
     expect(deps["@deepseek-ai/dsh-session"], "dsh-session 不得入 dependencies（官方单例 + plugin row 撞车）").toBeUndefined();
     expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.5");
   });
 
-  it("版本 bump 0.19.0（forge-aggregate-bundle/1.4 skills 自持行 minor bump；pin 随批校正）", () => {
-    expect(pkg.version).toBe("0.19.0");
+  it("版本 bump 0.19.3（forge-aggregate-bundle/1.20 driver 迁 devDeps patch bump）", () => {
+    expect(pkg.version).toBe("0.19.3");
   });
 });
 
@@ -208,23 +207,29 @@ describe("bundle 管线产物 self-containment", () => {
     expect(bundled).toContain("errMessage"); // lib-util 内联锚（host/index.ts 消费点）
   });
 
-  it.skipIf(!existsSync(HOST_DIST_ENTRY))("host bundle 运行期 @deepseek-ai/* import 面对账：driver 类非插件单例须在 dependencies；dsh-session 豁免（host 壳单例解析 + plugin row 撞车禁入 dependencies——fix-12 判例）", () => {
+  it.skipIf(!existsSync(HOST_DIST_ENTRY))("host bundle 运行期 @deepseek-ai/* import 面对账：driver 内联生效（bundle 零 driver 字面量 import）+ 宿主壳单例豁免（dsh-session/dsh-client-connection——host 壳单例解析 + plugin row 撞车禁入 dependencies——fix-12 判例）+ peer 族零 dependencies 拉入（1.20 判例——autoInstallPeers 污染源根除）", () => {
     const bundled = readFileSync(HOST_DIST_ENTRY, "utf8");
     const deps = pkg.dependencies ?? {};
     // 宿主壳单例豁免面：静态 import 经宿主解析路径成功（010-final 轮 boot 实证），
     // 且该包自带 cordis plugin manifest——入 dependencies 即 profile plugin row 撞车。
     const hostSingleton = new Set(["@deepseek-ai/dsh-session", "@deepseek-ai/dsh-client-connection"]);
+    // dependencies 合法面白名单：当前代际类型面单件（无 peer 族、无 install 脚本——非 staging 污染源）。
+    const registrySingleton = new Set(["@deepseek-ai/dsh-typert-protocol"]);
     const specs = new Set<string>();
     for (const m of bundled.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)["'](@deepseek-ai\/[^"']+)["']/g)) {
       specs.add(m[1]!.split("/").slice(0, 2).join("/"));
     }
     expect(specs.size, "host bundle 零官方包运行期 import（对账面漂移——判据失效）").toBeGreaterThan(0);
+    expect(specs.has("@deepseek-ai/dsh-subagent-in-process-driver"), "driver 内联未生效（bundle 残留字面量 import——运行时回退 node_modules 解析即污染回归）").toBe(false);
     for (const spec of specs) {
-      if (hostSingleton.has(spec)) {
-        expect(deps[spec], `${spec} 豁免面漂移：不得入 dependencies（plugin row 撞车）`).toBeUndefined();
+      if (hostSingleton.has(spec) || registrySingleton.has(spec)) {
+        expect(
+          hostSingleton.has(spec) ? deps[spec] : undefined,
+          `${spec} 豁免面漂移：不得入 dependencies（plugin row 撞车）`,
+        ).toBeUndefined();
         continue;
       }
-      expect(deps[spec], `${spec} 运行期 import 未在 dependencies（tgz 独立安装断链）`).toBeDefined();
+      expect(deps[spec], `${spec} 运行期 import 落 dependencies（autoInstallPeers 沿 peer 族整树拉入——1.20 staging 污染源，须内联进 dist + 声明迁 devDeps）`).toBeUndefined();
     }
   });
 
