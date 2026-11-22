@@ -29,7 +29,7 @@ describe('t-ac7 五件 host 源零 @dsh-forge/expert-squad import（机械自证
         else if (ent.name.endsWith('.ts') && !ent.name.endsWith('.test.ts')) files.push(p)
       }
     }
-    walk(join(PKG_DIR[name], 'host'))
+    walk(join(PKG_DIR[name]!, 'host'))
     expect(files.length, `${name} host 源非空`).toBeGreaterThan(0)
     // import 语句面（静态 import / export-from / 动态 import / require——完整包说明符匹配）
     const importRe = /^\s*(?:import|export)[^;\n]*from\s*['"]@dsh-forge\/expert-squad(?:\/[^'"]*)?['"]/m
