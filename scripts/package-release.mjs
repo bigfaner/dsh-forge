@@ -16,7 +16,6 @@ import { fileURLToPath } from 'node:url'
 import { runFreshnessGate } from '../plugins/forge/scripts/freshness.mjs'
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const DEFAULT_OUT = join(REPO_ROOT, 'release', 'forge-combo')
 const FORGE_DIR_REL = join('plugins', 'forge')
 const SOLO_REL = join('solo', 'forge')
 // 自包含 bundle 交付目录（forge-aggregate-bundle 1.16——staging 孤立根除）：forge 壳 +
@@ -160,7 +159,9 @@ export function bundleDependencies(forgeManifest) {
  * 拷贝（forge deps 重写为相对 file:）→ solo 变体产出 → manifest 落盘 → zip。
  * 返回 { treeDir, manifestPath, zipPath, warnings }。
  */
-export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zip = true, freshness = true } = {}) {
+export function assembleRelease({ repoRoot = REPO_ROOT, outDir, zip = true, freshness = true } = {}) {
+  // 缺省输出 = release/forge-bundle/{version}（版本取 forge 包 version——版本化目录随版本累积）
+  outDir = outDir ?? join(repoRoot, 'release', 'forge-bundle', readJson(join(repoRoot, FORGE_DIR_REL, 'package.json')).version)
   if (freshness) runFreshnessGate({ repoRoot, forgeDir: join(repoRoot, FORGE_DIR_REL) })
   const packages = discoverPackages(repoRoot)
   rmSync(outDir, { recursive: true, force: true })
@@ -518,7 +519,11 @@ function main(argv) {
   const outFlag = flag('--out')
   const zip = !argv.includes('--no-zip')
   const repoRoot = rootFlag !== undefined ? resolve(rootFlag) : REPO_ROOT
-  const outDir = outFlag !== undefined ? resolve(outFlag) : DEFAULT_OUT
+  // 缺省输出 = release/forge-bundle/{version}（版本取 forge 包 version——用户裁定 2026-11-22：
+  // 版本化目录随版本自然累积，显式 --out 仍可覆盖）。
+  const outDir = outFlag !== undefined
+    ? resolve(outFlag)
+    : join(REPO_ROOT, 'release', 'forge-bundle', readJson(join(REPO_ROOT, FORGE_DIR_REL, 'package.json')).version)
   const { treeDir, bundleDir, manifestPath, zipPath } = assembleRelease({ repoRoot, outDir, zip })
   const violations = [...verifyReleaseTree(treeDir, { repoRoot }), ...verifyBundleClosure(bundleDir, { repoRoot })]
   if (violations.length > 0) {
