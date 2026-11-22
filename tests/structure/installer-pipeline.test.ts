@@ -231,11 +231,11 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
       // plugin-spec 1.9 skill 面迁移：plugin-forge 技能全数迁出（grilling/fix-bug/investigate-bug
       // 迁 spec 包、brainstorm 退役、skills-blitz 随迁清理）——本包 skills/ 仅 README 占位
-      // spec 包技能面（1.9 迁入四技能——customSkillDirs[spec] 挂载源；缺席即远征组合技能面静默缺失）
+      // spec 包技能面（1.9 迁入三技能——customSkillDirs[spec] 挂载源；缺席即远征组合技能面静默缺失；
+      // loop-blocking 已退役——task-loop 域 rescue-task-loop 单入口承载）
       'runtime/node_modules/@dsh-forge/spec/skills/grilling/SKILL.md',
       'runtime/node_modules/@dsh-forge/spec/skills/fix-bug/SKILL.md',
       'runtime/node_modules/@dsh-forge/spec/skills/investigate-bug/SKILL.md',
-      'runtime/node_modules/@dsh-forge/spec/skills/loop-blocking/SKILL.md',
       // M3 3.8 packaging 三处同步（TECH-packaging-001）：plugin-forge-spec 新包——漏列 =
       // 打包形态 boot ESM 解析断裂（远征预设行装载失败，TECH-packaging-001 症状面）
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/package.json',

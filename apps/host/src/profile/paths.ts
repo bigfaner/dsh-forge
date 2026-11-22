@@ -59,7 +59,8 @@ export interface HostPaths {
    *  邻接树。解析失败 = undefined 不注入（预设技能目录剔除 fail-soft——不抛断启动） */
   skillsDir?: string
   /** @dsh-forge/spec skills 物理挂载目录（plugin-spec 1.9：预设装配 customSkillDirs[spec]
-   *  ——grilling/fix-bug/investigate-bug/loop-blocking 随 spec 包分发；dev = workspace 链接、
+   *  ——grilling/fix-bug/investigate-bug 随 spec 包分发（loop-blocking 已退役，循环阻塞
+   *  处置由 task-loop 域 rescue-task-loop 承载）；dev = workspace 链接、
    *  packaged = runtime/node_modules 邻接。解析失败 = undefined 不注入（spec 技能面降级
    *  fail-soft；突击/blitz 本就物理不含） */
   specSkillsDir?: string

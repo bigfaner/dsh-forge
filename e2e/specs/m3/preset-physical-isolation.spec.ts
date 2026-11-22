@@ -12,7 +12,7 @@
 //     零 spec 占位符（契约 pin 单源 = presets.test.ts）；
 //   - 技能目录（fs）：packages/plugin-forge/skills = README 占位（plugin-forge 技能
 //     全数迁出——1.9 迁移收口）；spec 锚 = @dsh-forge/spec（plugins/spec/skills——
-//     fix-bug/grilling/investigate-bug/loop-blocking 随包分发）。
+//     fix-bug/grilling/investigate-bug 随包分发）。
 //
 // 退役断言面（plugin-spec 1.9——规格作者技能族随提案域退役）：
 //   退役（plugin-spec 1.9 提案域退役——「远征含 spec 七规格技能目录（规格全集物理
@@ -84,9 +84,10 @@ test('@web-e2e @m3 预设物理隔离·T1：突击组合 spec 物理缺席 + 远
   expect(coreEntries, '核心包技能目录零技能残留（1.9 迁移收口）').toEqual([])
   // spec 锚包成员全集（plugins/spec/skills——迁移技能族随包分发）
   const specEntries = readdirSync(join(ROOT, 'plugins', 'spec', 'skills')).filter((e) => e !== 'README.md')
-  for (const skill of ['fix-bug', 'grilling', 'investigate-bug', 'loop-blocking']) {
+  for (const skill of ['fix-bug', 'grilling', 'investigate-bug']) {
     expect(specEntries, `spec 包技能在盘（${skill}——迁移技能族物理前提）`).toContain(skill)
   }
+  expect(specEntries, 'spec 包零 loop-blocking 残留（退役——rescue-task-loop 单入口）').not.toContain('loop-blocking')
   expect(specEntries, 'spec 包零 brainstorm 残留（1.9 技能退役断言）').not.toContain('brainstorm')
 
   // ── Step3：customSkillDirs 恒物化绝对路径（!!js 表达式形态零在场）──

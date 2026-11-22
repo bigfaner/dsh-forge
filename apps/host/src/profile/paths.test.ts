@@ -77,13 +77,13 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     expect(paths.skillsDir).toBeDefined()
     expect(paths.skillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]plugin-forge[/\\]skills$/)
     expect(existsSync(paths.skillsDir!)).toBe(true) // junction 透传（workspace 链接树）
-    // spec 技能面（plugin-spec 1.9 迁移：grilling/fix-bug/investigate-bug/loop-blocking 随 spec 包分发）
+    // spec 技能面（plugin-spec 1.9 迁移：grilling/fix-bug/investigate-bug 随 spec 包分发）
     expect(paths.specSkillsDir).toBeDefined()
     expect(paths.specSkillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]spec[/\\]skills$/)
     expect(existsSync(join(paths.specSkillsDir!, 'grilling', 'SKILL.md'))).toBe(true)
     expect(existsSync(join(paths.specSkillsDir!, 'fix-bug', 'SKILL.md'))).toBe(true)
     expect(existsSync(join(paths.specSkillsDir!, 'investigate-bug', 'SKILL.md'))).toBe(true)
-    expect(existsSync(join(paths.specSkillsDir!, 'loop-blocking', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(paths.specSkillsDir!, 'loop-blocking', 'SKILL.md'))).toBe(false) // 退役（rescue-task-loop 替代）
     // skills-blitz 退役（1.9——grilling 迁 spec）：blitzSkillsDir 锚随迁移除
     expect((paths as Record<string, unknown>).blitzSkillsDir).toBeUndefined()
     // knowledge 技能面由下方 fixture 驱动专项覆盖（dev 树 pnpm 虚拟仓库不 hoist knowledge 链接——

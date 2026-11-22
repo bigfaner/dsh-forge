@@ -97,11 +97,12 @@ const STAGING_EXTRAS = {
   // （package.json dsh.bundle.patch 声明指向）+ skills 技能面（to-tasks 拆解技能 + 自
   // plugin-forge 迁入的 submit-task 结算技能——customSkillDirs 挂载源）
   'task-loop': { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/to-tasks/SKILL.md', 'skills/submit-task/SKILL.md', 'skills/rescue-task-loop/SKILL.md', 'cordis.patch.yml'] },
-  // spec（plugin-spec 1.9 skill 面迁移——grilling/fix-bug/investigate-bug/loop-blocking 随包）：
+  // spec（plugin-spec 1.9 skill 面迁移——grilling/fix-bug/investigate-bug 随包；loop-blocking
+  // 已退役——1.25 起由 task-loop 域 rescue-task-loop 单入口承载）：
   // 组合装配行本体 cordis.patch.yml（package.json dsh.bundle.patch 声明指向——M5 组合器
   // 行接线后 loader 按声明读包内该文件，缺席即 ENOENT，bug a1f13abf 同径）
   // + skills 技能面（customSkillDirs[spec] 挂载源——1.9 自 plugin-forge 迁入）
-  spec: { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/grilling/SKILL.md', 'skills/fix-bug/SKILL.md', 'skills/investigate-bug/SKILL.md', 'skills/loop-blocking/SKILL.md', 'cordis.patch.yml'] },
+  spec: { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/grilling/SKILL.md', 'skills/fix-bug/SKILL.md', 'skills/investigate-bug/SKILL.md', 'cordis.patch.yml'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙；

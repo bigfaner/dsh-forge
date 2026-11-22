@@ -98,9 +98,10 @@ m3Test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化
     expect(coreEntries, '核心包无 git-checkout 条目（未迁断言）').not.toContain('git-checkout')
     const specEntries = readdirSync(SPEC_SKILLS).filter((e) => e !== 'README.md')
     // spec 锚包成员全集（@dsh-forge/spec——plugins/spec；清单随技能退役随动）
-    for (const skill of ['fix-bug', 'grilling', 'investigate-bug', 'loop-blocking']) {
+    for (const skill of ['fix-bug', 'grilling', 'investigate-bug']) {
       expect(specEntries, `spec 包技能在盘（${skill}——远征挂载的物理前提）`).toContain(skill)
     }
+    expect(specEntries, 'spec 包零 loop-blocking 残留（退役——rescue-task-loop 单入口）').not.toContain('loop-blocking')
     expect(specEntries, 'spec 包零 brainstorm 残留（1.9 技能退役断言）').not.toContain('brainstorm')
     expect(specEntries, 'spec 包无 git-commit（拆包后移除断言）').not.toContain('git-commit')
 

@@ -61,7 +61,7 @@ describe("grilling SKILL.md 快照契约", () => {
 
 describe("迁移技能注册面结构 pin（skills 目录文件清单）", () => {
   it("spec 包 skills 目录 = 迁移清单四技能，逐一 SKILL.md 在场且 frontmatter name 与目录名一致", () => {
-    const expected = ["fix-bug", "grilling", "investigate-bug", "loop-blocking"];
+    const expected = ["fix-bug", "grilling", "investigate-bug"];
     expect(readdirSync(SKILLS_DIR).sort()).toEqual([...expected].sort());
     for (const name of expected) {
       const skill = readFileSync(join(SKILLS_DIR, name, "SKILL.md"), "utf8");

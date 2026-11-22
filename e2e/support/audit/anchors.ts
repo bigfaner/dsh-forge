@@ -279,7 +279,8 @@ export function auditSkillReferencesResolved(root: string = REPO_ROOT): AuditFin
   const anchor = 'skill-refs-resolved'
   const findings: AuditFinding[] = []
   // 挂载技能集（fix-8 断言面随迁）：技能挂载面随 1.9/1.10 迁移分域——fix-bug/investigate-bug/
-  // grilling/loop-blocking 物理落位 plugins/spec/skills（specSkillsDir 锚 @dsh-forge/spec），
+  // grilling 物理落位 plugins/spec/skills（specSkillsDir 锚 @dsh-forge/spec；fix-bug/investigate-bug
+  // 同居；loop-blocking 已退役——循环阻塞处置迁 task-loop 域 rescue-task-loop），
   // plugin-forge 本域目录保留为并集成员（现空）。解析集 = 两域并集（引用可解析性判定
   // 以真实挂载面为准，断言强度不变——悬空引用仍必 findings）。
   const skillsDirs = ['packages/plugin-forge/skills', 'plugins/spec/skills'] as const

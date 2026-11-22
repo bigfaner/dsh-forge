@@ -4,12 +4,12 @@
 
 迁出后技能面归属：
 
-- `plugins/spec/skills/`——grilling（Spec 共识探索）/ fix-bug（TDD 修缺陷）/ investigate-bug（bug 深挖）/ loop-blocking（循环阻塞处置——域归属 task-loop，按提案迁移清单落 spec）。
+- `plugins/spec/skills/`——grilling（Spec 共识探索）/ fix-bug（TDD 修缺陷）/ investigate-bug（bug 深挖）。
 - `plugins/task-loop/skills/`——to-tasks 拆解 / submit-task 结算 / rescue-task-loop 循环救援。
 - `plugins/expert-squad/skills/`——roundtable 专家圆桌。
 - `packages/plugin-forge-spec/skills/`——旧规格技能六份（write-prd 等——随 core 解散批退役，不在本批）。
 
-已移除（历史）：`git-commit/`、`run-tasks/`、`review-proposal/`、`run-tests/`、`submit-task/`（迁 task-loop）、`quick-tasks/`（to-tasks 替代退役）、循环阻塞 SOP（1.25 迁 task-loop 为 rescue-task-loop；1.9 loop-blocking 新建落 spec）、`brainstorm/`（1.9 退役）、`grilling/`（1.9 迁 spec 改写）、`fix-bug/`、`investigate-bug/`（1.9 迁 spec）。
+已移除（历史）：`git-commit/`、`run-tasks/`、`review-proposal/`、`run-tests/`、`submit-task/`（迁 task-loop）、`quick-tasks/`（to-tasks 替代退役）、循环阻塞 SOP（1.25 迁 task-loop 为 rescue-task-loop；1.9 loop-blocking 新建落 spec，后随 rescue-task-loop 成熟退役收敛单入口）、`brainstorm/`（1.9 退役）、`grilling/`（1.9 迁 spec 改写）、`fix-bug/`、`investigate-bug/`（1.9 迁 spec）。
 
 ## 物理挂载
 
