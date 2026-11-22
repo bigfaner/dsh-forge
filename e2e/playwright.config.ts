@@ -20,6 +20,13 @@ const E2E_MAX_CONCURRENCY = Math.max(
   Math.min(2, Number.parseInt(process.env.E2E_MAX_CONCURRENCY ?? '', 10) || 2),
 )
 
+// 环境独占型 e2e 串行硬规则（forge-aggregate-bundle 1.33——用户裁定 2026-11-22）：
+// tests/forge/bundle-* 四套件（共享隔离 home/profile 正装/宿主拉起独占态）不进本配置的
+// 并行分派——专属串行配置 e2e/playwright.bundle-serial.config.ts（workers:1 +
+// fullyParallel:false）+ `pnpm test:e2e:bundle` 唯一合法入口；spec 侧套件互斥锁为
+// 跨配置双跑第二道防线（tests/forge/bundle/support.ts）。
+const ENV_EXCLUSIVE_TEST_IGNORE = /tests[\\/]forge[\\/]bundle-[^\\/]+[\\/].+\.spec\.ts$/
+
 export default defineConfig({
   testDir: '.',
   fullyParallel: false,
@@ -39,7 +46,7 @@ export default defineConfig({
     { name: 'desktop', testMatch: /specs[\\/].+\.spec\.ts$/ },
     // desktop-journeys 旅程含 plugin-manager 真机安装 beforeAll（轮询上界 ~6 分钟）——
     // project 级预算固化 300s（beforeAll hook 超时取 project.timeout），去 CLI --timeout 依赖。
-    { name: 'desktop-journeys', testDir: '../tests', testMatch: /tests[\\/].+\.spec\.ts$/, timeout: 300_000 },
+    { name: 'desktop-journeys', testDir: '../tests', testMatch: /tests[\\/].+\.spec\.ts$/, testIgnore: ENV_EXCLUSIVE_TEST_IGNORE, timeout: 300_000 },
     {
       name: 'mobile',
       testMatch: /mobile[\\/].+\.spec\.ts$/,

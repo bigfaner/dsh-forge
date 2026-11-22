@@ -1,4 +1,4 @@
-// e2e 旅程 spec：卸载回落六包尽出（bundle-uninstall-fallback——forge-aggregate-bundle 1.8）。
+﻿// e2e 旅程 spec：卸载回落六包尽出（bundle-uninstall-fallback——forge-aggregate-bundle 1.8）。
 // journey = .forge/docs/proposals/forge-aggregate-bundle/testing/bundle-uninstall-fallback/journey.md
 // contract = 同目录 contracts/bundle-uninstall.md（断言标注 CT-BUn-*；卸载链口径按任务 1.3
 // probe-uninstall 源码核销校准：机制段 = 取消选择→停插件→pnpm remove→发布 resolution；
@@ -6,12 +6,14 @@
 // 不清理、按合并语义判定（patch.ts:17）——重装后 bundle 层给 enabled ⇒ 残留被吸收）。
 // 真机纪律与前置 = 主旅程（bundle-install-fullchain）同口径：隔离 home、版本双校验前置、
 // 自拉实例按 PID 回收。FORGE_COMBO_E2E=1 缺省 skip（SMOKE-LEDGER 留痕）。
+// Workers=2 并行互扰修复：beforeAll 取套件互斥锁与 bundle 其余三套件跨文件串行化。
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import {
   BARE_BUNDLES,
   FORGE_PKG,
+  acquireSuiteLock,
   cheapGenerationGate,
   comboEnv,
   comboGateOn,
@@ -28,6 +30,8 @@ import {
   pluginRemove,
   purgeBaseline,
   readProfilePatch,
+  releaseSuiteLock,
+  SUITE_HOOK_TIMEOUT_MS,
   requireBundleSource,
   toggleRowSwitch,
   type WebHost,
@@ -57,10 +61,15 @@ async function expectUninstallSettled(): Promise<void> {
   }, { timeout: 60_000 }).toBe(true)
 }
 
+test.beforeAll(async () => {
+  // Workers=2 并行互扰修复：bundle 四套件对隔离 home/profile 独占敏感——跨套件互斥锁串行化
+  await acquireSuiteLock(env, 'bundle-uninstall-fallback')
+}, SUITE_HOOK_TIMEOUT_MS)
 test.afterEach(stopHost)
 test.afterAll(async () => {
   await stopHost()
   await pluginRemove(env, FORGE_PKG, PROFILE)
+  releaseSuiteLock(env, 'bundle-uninstall-fallback')
 })
 
 test('CT-BUn-G1 #O-G1-1：user 层启停残留制造（project 行关闭生效）', async () => {

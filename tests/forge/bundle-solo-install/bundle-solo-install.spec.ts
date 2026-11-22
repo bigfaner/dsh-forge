@@ -1,14 +1,16 @@
-// e2e 旅程 spec：solo 单装零 forge 依赖（bundle-solo-install——forge-aggregate-bundle 1.8）。
+﻿// e2e 旅程 spec：solo 单装零 forge 依赖（bundle-solo-install——forge-aggregate-bundle 1.8）。
 // journey = .forge/docs/proposals/forge-aggregate-bundle/testing/bundle-solo-install/journey.md
 // contract = 同目录 contracts/bundle-solo.md（断言标注 CT-BSo-*；五件逐一单装串行成例——
 // 每件成例前回落干净 profile；spec 双改行（skill-filesystem-spec/filesystem-spec，fefd5149
 // 回归面）在 B1 点名）。真机纪律与前置同主旅程；FORGE_COMBO_E2E=1 缺省 skip。
+// Workers=2 并行互扰修复：beforeAll 取套件互斥锁与 bundle 其余三套件跨文件串行化。
 import { existsSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 import {
   BARE_BUNDLES,
   FORGE_PKG,
   MEMBERS,
+  acquireSuiteLock,
   cheapGenerationGate,
   comboEnv,
   comboGateOn,
@@ -22,6 +24,8 @@ import {
   pluginCard,
   pluginRemove,
   purgeBaseline,
+  releaseSuiteLock,
+  SUITE_HOOK_TIMEOUT_MS,
   requireBundleSource,
   skillRows,
 } from '../bundle/support.js'
@@ -32,6 +36,14 @@ test.skip(!comboGateOn(), 'FORGE_COMBO_E2E=1 真机收口轮专用套件（e2e/S
 const PROFILE = 'web'
 const env = comboEnv()
 const memberTarball = (member: string): string => packTarball(join(requireBundleSource(env), '..', member))
+
+test.beforeAll(async () => {
+  // Workers=2 并行互扰修复：bundle 四套件对隔离 home/profile 独占敏感——跨套件互斥锁串行化
+  await acquireSuiteLock(env, 'bundle-solo-install')
+}, SUITE_HOOK_TIMEOUT_MS)
+test.afterAll(() => {
+  releaseSuiteLock(env, 'bundle-solo-install')
+})
 
 /** 单件成例骨架（CT-BSo-G1–G5 + B1 双改点名——五件逐一串行复用） */
 async function soloCase(member: (typeof MEMBERS)[number]): Promise<void> {
