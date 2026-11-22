@@ -4,7 +4,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { afterEach, describe, expect, it } from 'vitest'
 import { openKnowledgeDatabase } from '../../host/storage/open.js'
 import { downgradeKnowledgeSchema } from '../../host/storage/schema.js'

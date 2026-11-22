@@ -4,7 +4,7 @@
 // （分组归集：调用方父链解析出 (kind,id) 集 → 逐 kind 索引序出 → 应用层归并）。
 // v1 spec 径（append/listBySpec，TransitionRow.specId 形态）保留为统一台账薄委托——
 // M3 现役消费面零改。台账 UPDATE/DELETE 由双触发器 ABORT 兜底（entities.md §4）。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import type { SpecDbTables } from "../migrations/version-1.js";
 import type { EntityKind, EntityTransitionRow, SpecStatus, TransitionRow } from "../row-types.js";
 

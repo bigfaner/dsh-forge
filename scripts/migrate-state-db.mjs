@@ -69,23 +69,12 @@ import {
   appendFileSync,
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { createRequire } from 'node:module'
 import { dirname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import Database from '@dsh-forge/lib-db'
 
-// ── better-sqlite3 解析（根 node_modules → packages/core 闭包——pnpm 非提升兜底） ──
-function loadBetterSqlite3() {
-  const require = createRequire(import.meta.url)
-  const candidates = ['better-sqlite3', resolve('packages/core/node_modules/better-sqlite3')]
-  for (const c of candidates) {
-    try {
-      return require(c)
-    } catch {
-      /* 下一个候选 */
-    }
-  }
-  throw new Error('better-sqlite3 无法解析（根与 packages/core 均缺席）')
-}
+// ── SQLite 驱动（1.40：better-sqlite3 退役——node:sqlite 适配层 @dsh-forge/lib-db
+//    Database，transaction/readonly/fileMustExist 形状兼容，零原生模块） ──
 
 // ── 归属键派生（单源锚 = lib/path/src/derive-dir.ts deriveDirName——flatten@hash8 逐字同算法） ──
 function normalizeDirSpelling(path) {
@@ -1142,13 +1131,11 @@ function relocateWorkspaces(args, db, nowIso) {
 
 /** 排他打开（写面目标被占用 → 抛错中止）。 */
 function openExclusive(file) {
-  const Database = loadBetterSqlite3()
   return new Database(file) // 被占用时 open 即抛
 }
 
 /** 旧库只读打开（WAL 只读快照——零写零改名零替换，与持句柄进程共存）。 */
 function openReadonly(file) {
-  const Database = loadBetterSqlite3()
   return new Database(file, { readonly: true, fileMustExist: true })
 }
 

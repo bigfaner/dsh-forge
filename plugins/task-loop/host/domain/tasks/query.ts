@@ -5,7 +5,7 @@
 // include 四节（prerequisites/waitingOnMe/records/sessions）按门控呈现。
 // 容器语义 slug 化退役面：hydrateTaskContainer 双轨水化退役（无容器主表——容器摘要 =
 // slug 本身）；resolvePhaseGuardFeature 随相位域一并退役（新线零 features 表）。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import {
   taskFilesUnion,
 } from "./files.js";

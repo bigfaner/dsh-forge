@@ -2,7 +2,7 @@
 // · withImmediateTransaction：BEGIN IMMEDIATE 立即取写锁的短事务（同步窗口铁律——
 //   better-sqlite3 单连接，fn 内不得 await；与 core db/transaction.ts 同纪律）；
 // · createSingleFlightMutex：进程内互斥（rebuild 单飞——同键临界区串行，跨键互不阻塞）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { BUSY_TIMEOUT_MS } from '@dsh-forge/lib-db'
 
 /** busy_timeout 毫秒（lib/db open.ts 同源常量 re-export——open.ts PRAGMA 已归 openDatabase 承担，F5 配方归口） */

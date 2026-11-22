@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import Database from "better-sqlite3";
+import Database from "@dsh-forge/lib-db";
 import { openKnowledgeDatabase } from "../../host/storage/open.js";
 import { KNOWLEDGE_DB_SCHEMA_DOMAIN, STORAGE_SCHEMA_VERSION } from "../../host/storage/schema.js";
 

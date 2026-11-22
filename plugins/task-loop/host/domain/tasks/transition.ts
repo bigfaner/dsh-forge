@@ -30,7 +30,7 @@ interface WaiterTaskRow {
  * blocked 且前置全 ∈ 满足集 → blocked→pending + auto-restore 记录（actor='core'）并返回其
  * TaskRef；否则 null。边不删（满足 = 读时派生）。调用方保证：事务内执行。
  */
-export function restoreBlockedWaiter(db: import("better-sqlite3").Database, waiterId: string, now: string): TaskRef | null {
+export function restoreBlockedWaiter(db: import("@dsh-forge/lib-db").Database, waiterId: string, now: string): TaskRef | null {
   const waiter = db
     .prepare<unknown[], WaiterTaskRow>(`SELECT id, slug, local_id, task_status FROM task_tasks WHERE id = ?`)
     .get(waiterId);
@@ -56,7 +56,7 @@ export function restoreBlockedWaiter(db: import("better-sqlite3").Database, wait
  * 恢复钩子（C3：与 submitTask 钩子同族——submit.ts 复用本导出，单一实现）。语义：反查
  * 后继 → 逐个走 restoreBlockedWaiter 判定。调用方保证：事务内执行 + 满足集终态已落库。
  */
-export function runRestoreHook(db: import("better-sqlite3").Database, input: { satisfiedTaskId: string; now: string }): TaskRef[] {
+export function runRestoreHook(db: import("@dsh-forge/lib-db").Database, input: { satisfiedTaskId: string; now: string }): TaskRef[] {
   const waiterIds = db
     .prepare<unknown[], WaiterEdgeRow>(`SELECT task_id FROM task_edges WHERE prerequisite_id = ? ORDER BY task_id`)
     .all(input.satisfiedTaskId);

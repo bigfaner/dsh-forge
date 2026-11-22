@@ -41,7 +41,6 @@
     "@deepseek-ai/dsh-workflow": "0.2.2-rc.5",
     "@deepseek-ai/dsh-workspace": "0.2.2-rc.5",
     "@deepseek-ai/schemastery": "3.18.4",
-    "better-sqlite3": "13.0.3",
     "chokidar": "5.0.0",
     "gray-matter": "4.0.3",
     "mermaid": "12.1.0",

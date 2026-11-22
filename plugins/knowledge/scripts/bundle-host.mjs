@@ -27,7 +27,7 @@ const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 // （registry 可装，留在 dependencies 由 pnpm 解析；better-sqlite3 原生 binding
 // 永不内联——require 落 pnpm 侧 prebuild 单例）。node 内建经 platform:"node"
 // 自动外置。@dsh-forge/* 一律不外置（含 contracts/path-key）——独立安装形态不存在其解析路径。
-const EXTERNAL = ["@deepseek-ai/*", "better-sqlite3", "gray-matter"];
+const EXTERNAL = ["@deepseek-ai/*", "gray-matter"];
 
 // 内联例外（插件 onResolve 优先于 external 表；bug c48f2b6b——原窄表只覆盖 connection，
 // 已内联件的传递依赖以外部 import 面残留，profile @deepseek-ai 为空即 MODULE_NOT_FOUND）：

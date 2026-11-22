@@ -10,7 +10,7 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, type Stats } from 'node
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import matter from 'gray-matter'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { canonicalWsPath, createKnowledgeRegistry } from '../storage/registry.js'
 import { scanKnowledgeDir } from '../storage/scan.js'
 import { parseKnowledgeFile } from '../storage/parser.js'

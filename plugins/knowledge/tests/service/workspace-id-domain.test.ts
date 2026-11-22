@@ -16,7 +16,7 @@ import type { BrowseKnowledgeService } from '../../host/service/types.js'
 let home: string
 let wsDir: string
 let knowledgeDir: string
-let db: import('better-sqlite3').Database
+let db: import('@dsh-forge/lib-db').Database
 
 function md(title: string, id: string, keywords: readonly string[], summary: string): string {
   return `---\ntitle: ${title}\nid: ${id}\nstatus: confirmed\nsummary: ${summary}\nkeywords: [${keywords.join(', ')}]\n---\n正文`

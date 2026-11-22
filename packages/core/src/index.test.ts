@@ -12,7 +12,7 @@ import { StubRegistry } from './testutil/registry-stub.js'
 import { seedProjectRow } from './testutil/db-seeds.js'
 import corePlugin, { type CoreContextFace } from './index.js'
 import { openDatabase } from './db/index.js'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 
 const dirs: string[] = []
 const dbs: Database.Database[] = []

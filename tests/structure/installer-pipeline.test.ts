@@ -154,7 +154,6 @@ describe('AC2 profile.install 安装树清单 = 运行时并集（漂移守卫�
     '@deepseek-ai/dsh-web-app': '0.2.0-rc.2',
     '@deepseek-ai/dsh-session': '0.2.0-rc.2', // @dsh-forge/plugin-forge 原生依赖（bug 62211111 同类——progress/dist 静态 import 面）
     '@deepseek-ai/dsh-client-connection': '0.2.2-rc.5', // @dsh-forge/knowledge + project 原生依赖（053f3215 dsh 系统一 rc.5 升位——plugin 声明 0.2.2-rc.5，安装树同版即零漂移）
-    'better-sqlite3': '13.0.3', // @dsh-forge/core 原生依赖（prebuilds 随包分发）
     'chokidar': '5.0.0', // @dsh-forge/expert-squad 原生依赖（bug 62211111 同类——档案热刷新 watch 面）
     'gray-matter': '4.0.3',
     'mermaid': '12.1.0', // @dsh-forge/md-mermaid 原生依赖（bug 62211111——staging 闭包只追 @dsh-forge/*，外部依赖经本清单随包物化）
@@ -254,7 +253,6 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/task-loop/skills/to-tasks/SKILL.md',
       'runtime/node_modules/@dsh-forge/task-loop/skills/submit-task/SKILL.md',
       'runtime/node_modules/@dsh-forge/task-loop/skills/rescue-task-loop/SKILL.md',
-      'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
       'web-dist/index.html',
       'icon.png',
       'app/main.js',

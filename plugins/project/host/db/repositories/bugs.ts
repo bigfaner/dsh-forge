@@ -1,7 +1,7 @@
 // BugsRepo——project_bugs 行级读写门（plugin-project 1.9）。裸 SQL 白名单位；
 // 弱引用列（source_task_id / recurrence_of / container_slug）零 FK，行级归属键 project_key
 // NOT NULL（I5 派生失败拒写在 DDL 层兜底）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type { ProjectDbTables } from '../migrations.js'
 import type { BugRow, BugStatus } from '../row-types.js'
 

@@ -14,7 +14,7 @@
 // 写动词闭包尾部 emitTasksChanged(projectKey)（tasks 域 emit 模式同构）。id 纯 UUID 写入点
 // 生成；一切 SQL prepared statements；typed 判据（处方②禁 message 字符串判据）。
 import { randomUUID } from "node:crypto";
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import type { TaskEvents } from "../tasks/types.js";
 
 /** 五类里程碑标记（唯一约束作用域——关系标记 derived-to-child 豁免） */

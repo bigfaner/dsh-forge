@@ -16,7 +16,7 @@ afterAll(() => rmSync(tmpRoot, { recursive: true, force: true }))
 const CLEAN_MANIFEST = {
   name: '@dsh-forge/project',
   version: '0.15.2',
-  dependencies: { 'better-sqlite3': '13.0.3', '@deepseek-ai/dsh-typert-protocol': '0.2.0-rc.2' },
+  dependencies: { 'gray-matter': '4.0.3', '@deepseek-ai/dsh-typert-protocol': '0.2.0-rc.2' },
   peerDependencies: { '@deepseek-ai/cordis': '4.0.4' },
 }
 

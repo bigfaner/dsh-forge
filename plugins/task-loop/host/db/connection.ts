@@ -4,7 +4,7 @@
 // 独立版本线（task-loop.db 新线 v1 单事务落地，entities.md §3 DDL 单源直落）+
 // task_ 前缀域装配（六表名单源）+ project_key 派生注入（归属键 DAO 单点——调用方零裸 SQL）。
 import { join } from "node:path";
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import { openDatabase } from "@dsh-forge/lib-db";
 import {
   TASK_LOOP_DB_SCHEMA_DOMAIN,

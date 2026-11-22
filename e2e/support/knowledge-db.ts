@@ -35,7 +35,7 @@ export function openKnowledgeDb(userData: string): SeedDb {
       DSH_HOME: join(userData, 'dsh-home'),
     },
   )
-  const db = new (requireFromCore('better-sqlite3') as SqliteCtor)(file)
+  const db = new (requireFromCore('@dsh-forge/lib-db') as SqliteCtor)(file)
   db.pragma('busy_timeout = 5000')
   return db
 }

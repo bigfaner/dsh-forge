@@ -2,7 +2,7 @@
 // 纪律：仅记关键一致性事件（异常/失败/自动修复/孤儿发现），成功路径一律不记；
 // 单事件单条——处置结果并入同条 data_json，不记过程流水。2.2 定义 scope=compensation 用法，
 // reconcile（2.3）/ index / recall（3.x）同面复用。SQLite 写仅经 db/ 句柄（单写路径）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 
 /** 仅关键级别（无 info 流水；ER CHECK level IN ('warn','error')) */
 export type KeyLogLevel = 'warn' | 'error'

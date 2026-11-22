@@ -17,7 +17,7 @@ import type { BrowseKnowledgeService } from '../../host/service/types.js'
 
 let home: string
 let service: BrowseKnowledgeService
-let db: import('better-sqlite3').Database
+let db: import('@dsh-forge/lib-db').Database
 let wsDir: string
 let knowledgeDir: string
 const diag: DiagEventPayload[] = []

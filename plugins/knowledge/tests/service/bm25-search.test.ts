@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../host/storage/index.js'
 import { createKnowledgeService } from '../../host/service/service.js'
-import { bm25Norm, composeSearchScore, heatBonusOf, keywordDirectHit, keywordDirectHitCount, rankBonusOf, rankFactorOf } from '../../host/service/internal.js'
+import { bm25Norm, composeSearchScore, heatBonusOf, keywordDirectHit, keywordDirectHitCount, rankBonusOf } from '../../host/service/internal.js'
 import type { BrowseKnowledgeService } from '../../host/service/types.js'
 
 let home: string
@@ -16,7 +16,7 @@ let knowledgeDir: string
 let ws3: string
 let dir3: string
 let service: BrowseKnowledgeService
-let db: import('better-sqlite3').Database
+let db: import('@dsh-forge/lib-db').Database
 const projectId = 'p-bm25'
 
 function md(title: string, id: string, keywords: readonly string[], summary: string, status = 'unconfirmed'): string {

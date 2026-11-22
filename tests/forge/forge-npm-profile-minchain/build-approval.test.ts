@@ -49,11 +49,11 @@ const DSH_INIT_PLACEHOLDER = [
 ].join('\n')
 
 describe('PROFILE_ALLOW_BUILDS 单源（bug dff389f6 失败签名覆盖）', () => {
-  it('覆盖 ERR_PNPM_IGNORED_BUILDS 五包 + 产品闭包 better-sqlite3（全 true）', () => {
+  it('覆盖 ERR_PNPM_IGNORED_BUILDS 五包（全 true；1.40 better-sqlite3 条目退役——node:sqlite 零安装脚本）', () => {
     for (const pkg of ['@deepseek-ai/dsh-subprocess-local', '@google/genai', 'koffi', 'node-pty', 'protobufjs']) {
       expect(PROFILE_ALLOW_BUILDS[pkg], `单源含 ${pkg}`).toBe(true)
     }
-    expect(PROFILE_ALLOW_BUILDS['better-sqlite3']).toBe(true)
+    expect(PROFILE_ALLOW_BUILDS['better-sqlite3']).toBeUndefined()
   })
 
   it('产品模板 yaml 与单源逐键一致（单源派生不漂移）', () => {

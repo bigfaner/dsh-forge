@@ -3,7 +3,7 @@
 // 单装落点 {DSH_HOME}/forge/db/spec/spec.db；归属键谓词 DAO 单点注入
 //（三 repo 在此装配，调用方零裸 SQL）。
 import { join } from "node:path";
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import { openDatabase } from "@dsh-forge/lib-db";
 import {
   SPEC_DB_SCHEMA_DOMAIN,

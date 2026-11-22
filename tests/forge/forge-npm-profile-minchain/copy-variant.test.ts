@@ -48,11 +48,11 @@ describe('build-forge-copy-variant: copyVariantRootDeps（union 闭包物化清�
   it('六包 dependencies/devDependencies/peerDependencies 全量 union', () => {
     const root = tmpRoot()
     seedMiniRepo(root, {
-      project: { dependencies: { 'better-sqlite3': '13.0.3', zod: '4.6.6' }, devDependencies: { '@deepseek-ai/dsh-session': '0.2.2-rc.1' }, peerDependencies: { '@deepseek-ai/cordis': '4.0.4' } },
+      project: { dependencies: { 'gray-matter': '4.0.3', zod: '4.6.6' }, devDependencies: { '@deepseek-ai/dsh-session': '0.2.2-rc.1' }, peerDependencies: { '@deepseek-ai/cordis': '4.0.4' } },
       'expert-squad': { dependencies: { chokidar: '5.0.0' }, devDependencies: { '@deepseek-ai/dsh-storage-domain': '0.2.2-rc.1' } },
     })
     const deps = copyVariantRootDeps(root)
-    expect(deps['better-sqlite3']).toBe('13.0.3')
+    expect(deps['gray-matter']).toBe('4.0.3')
     expect(deps['@deepseek-ai/dsh-session']).toBe('0.2.2-rc.1')
     expect(deps['@deepseek-ai/dsh-storage-domain']).toBe('0.2.2-rc.1')
     expect(deps['@deepseek-ai/cordis']).toBe('4.0.4')

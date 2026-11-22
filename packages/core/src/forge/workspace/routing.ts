@@ -6,7 +6,7 @@
 // projectId 未命中中央行 = 调用方数据面错误（RPC 恒显式带 projectId——UI 自带/tool 由 cwd
 // 解析后传入，正常流不可能未命中）→ fail-loud 普通 Error（非六码 typed 面，与
 // updateProject 未命中同口径；RPC 边界原样上抛）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 
 /** 中央行路由面（ws_path 落库口径 = registry canonical——派生目录同基准） */
 export interface CentralProjectRouting {

@@ -92,7 +92,7 @@ function findKnowledgeDb(root: string, depth: number): string | undefined {
 function registryRows(dshHome: string): readonly { ws_path: string; scope: string }[] | undefined {
   const dbFile = findKnowledgeDb(dshHome, 0)
   if (dbFile === undefined) return undefined
-  const Db = requireFromCore('better-sqlite3') as new (path: string) => KnowledgeDb
+  const Db = requireFromCore('@dsh-forge/lib-db') as new (path: string) => KnowledgeDb
   const db = new Db(dbFile)
   try {
     return db.prepare('SELECT ws_path, scope FROM knowledge_registry').all() as readonly {

@@ -36,7 +36,7 @@
 //   - AN-7 diag 日志面取证（CT-DERIVE-2-O1 diag 半断言）：emitDiag → main appender
 //     日志文件 = 宿主进程域面，本 harness 无已核销日志定位通道——真机收口轮承载。
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync, type Dirent } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
@@ -47,22 +47,6 @@ import { CTA_ADD_PROJECT, DSR_DIR, addProjectPhase } from '../../../e2e/support/
 import { flattenWorkspacePath, hash8OfPath } from '../../../lib/path/src/derive-dir.js'
 
 // ─── 失败注入目录面（tasksHome = env 显式注入 boot.tasksHome——fixture 自管零探针）
-
-/** 有界深搜目录名（注册产物在盘面——显示=实际判定） */
-function dirExistsByBasename(root: string, base: string, depth: number): boolean {
-  if (depth > 5) return false
-  let names: Dirent[]
-  try {
-    names = readdirSync(root, { withFileTypes: true })
-  } catch {
-    return false
-  }
-  if (names.some((e) => e.isDirectory() && e.name === base)) return true
-  for (const e of names) {
-    if (e.isDirectory() && dirExistsByBasename(join(root, e.name), base, depth + 1)) return true
-  }
-  return false
-}
 
 function makeGitFixture(root: string, name: string): string {
   const dir = join(root, name)

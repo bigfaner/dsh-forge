@@ -273,8 +273,8 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dependencies['@dsh-forge/md-mermaid']).toBe('link:../../../plugins/md-mermaid')
     // expert-squad 批1 包归位（root 级 plugins/ 树）——host 装载表值直拼（批3 pin 姊妹面）
     expect(dev.dependencies['@dsh-forge/expert-squad']).toBe('link:../../../plugins/expert-squad')
-    // core 运行期原生依赖（prebuilds 随包分发；兜底供非 realpath 解析路径）
-    expect(dev.dependencies['better-sqlite3']).toBe('13.0.3')
+    // 1.40 持久层 node:sqlite 迁移：dev profile 零原生依赖兜底（better-sqlite3 退役）
+    expect(dev.dependencies['better-sqlite3']).toBeUndefined()
     expect(dev.dependencies['gray-matter']).toBe('4.0.3')
   })
   it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + core 产品行启用——4.2 转正；产品裁决 2026-10-09：plugin-forge 移出用户层；knowledge 1.9 A5 重开放——dev 与打包模板同含行）', () => {

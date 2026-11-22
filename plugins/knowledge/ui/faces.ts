@@ -54,11 +54,6 @@ interface HostPluginsSeam {
   readonly knowledge?: boolean
 }
 
-/** 集成态壳发布面标记（壳 main.ts 求值期发布——boot 缝缺席时的形态判别锚） */
-interface ShellViewsSeam {
-  readonly __DSH_FORGE_VIEWS__?: unknown
-}
-
 /** 门控读入的全局面（boot 缝 + 壳发布面两页内缝——纯读不缓存） */
 export interface KnowledgeGateGlobal {
   readonly __DSH_FORGE_HOST_PLUGINS__?: HostPluginsSeam

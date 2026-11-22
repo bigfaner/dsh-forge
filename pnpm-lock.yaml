@@ -14,18 +14,15 @@ importers:
 
   .:
     devDependencies:
+      '@dsh-forge/lib-db':
+        specifier: workspace:*
+        version: link:lib/db
       '@playwright/test':
         specifier: 1.63.0
         version: 1.63.0
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
       '@vitest/coverage-v8':
         specifier: 5.0.3
         version: 5.0.3(vitest@5.0.3)
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
       electron-builder:
         specifier: 26.17.0
         version: 26.17.0(electron-builder-squirrel-windows@26.17.0)
@@ -376,13 +373,7 @@ importers:
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
     devDependencies:
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
@@ -454,13 +445,10 @@ importers:
       '@dsh-forge/spec':
         specifier: workspace:*
         version: link:../../plugins/spec
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
     devDependencies:
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
 
   packages/path-key:
     dependencies:
@@ -496,6 +484,9 @@ importers:
       '@dsh-forge/lib-api':
         specifier: workspace:*
         version: link:../../lib/api
+      '@dsh-forge/lib-db':
+        specifier: workspace:*
+        version: link:../../lib/db
       '@dsh-forge/path-key':
         specifier: workspace:*
         version: link:../path-key
@@ -508,9 +499,6 @@ importers:
       ajv:
         specifier: 8.20.0
         version: 8.20.0
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
       esbuild:
         specifier: 0.24.2
         version: 0.24.2
@@ -697,9 +685,6 @@ importers:
       '@deepseek-ai/cordis':
         specifier: 4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
       gray-matter:
         specifier: 4.0.3
         version: 4.0.3
@@ -722,9 +707,6 @@ importers:
       '@dsh-forge/path-key':
         specifier: workspace:*
         version: link:../../packages/path-key
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
@@ -771,9 +753,6 @@ importers:
 
   plugins/project:
     dependencies:
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
       zod:
         specifier: 4.6.6
         version: 4.6.6
@@ -856,9 +835,6 @@ importers:
 
   plugins/spec:
     dependencies:
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
       zod:
         specifier: 4.6.6
         version: 4.6.6
@@ -896,9 +872,6 @@ importers:
       '@dsh-forge/lib-util':
         specifier: workspace:*
         version: link:../../lib/util
-      '@types/better-sqlite3':
-        specifier: 9.6.0
-        version: 9.6.0
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
@@ -974,9 +947,6 @@ importers:
 
   plugins/task-loop:
     dependencies:
-      better-sqlite3:
-        specifier: 13.0.3
-        version: 13.0.3
       zod:
         specifier: 4.6.6
         version: 4.6.6
@@ -5791,9 +5761,6 @@ packages:
   '@tanstack/virtual-core@3.19.11':
     resolution: {integrity: sha512-/5iHb0RHBvj8Di59FDs4ESNm45jls33aZAi4zccVXZjc/6ZvwQP6nzEYeT6weXjTf9E6/vrp2JhYWRyO+ZP13A==}
 
-  '@types/better-sqlite3@9.6.0':
-    resolution: {integrity: sha512-ZEEwBSgMu7GYJOynoagg5X9JbxfL6dTJDsgViJIqh67jV44kyOr9RXfmFjLK5rzC4MWssP06t9hu/JwGDnUbCg==}
-
   '@types/cacheable-request@6.0.3':
     resolution: {integrity: sha512-IQ3EbTzGxIigb1I3qPZc1rWJnH0BmSKv5QYTalEwweFvyBDLSAe24zP0le/hyi7ecGfZVlIVAg4BZqb8WBwKqw==}
 
@@ -6293,10 +6260,6 @@ packages:
 
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
-
-  better-sqlite3@13.0.3:
-    resolution: {integrity: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==}
-    engines: {node: '>=22'}
 
   bignumber.js@9.0.0:
     resolution: {integrity: sha512-t/OYhhJ2SD+YGBQcjY8GzzDHEk9f3nerxjtfa6tlMXfe7frs/WozhvCNoGvpM0P3bNf3Gq5ZRMlGr5f3r4/N8A==}
@@ -7744,10 +7707,6 @@ packages:
   node-addon-api@7.1.0:
     resolution: {integrity: sha512-mNcltoe1R8o7STTegSOHdnJNN7s5EUvhoS7ShnTHDyOSd+8H+UdWODq6qSv67PjC8Zc5JRT8+oLAMCr0SIXw7g==}
     engines: {node: ^16 || ^18 || >= 20}
-
-  node-addon-api@8.9.2:
-    resolution: {integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==}
-    engines: {node: ^18 || ^20 || >= 21}
 
   node-addon-native-custom-loader@0.1.9:
     resolution: {integrity: sha512-Zh87aubSc1UF8CzZsRws1KtSwXiPDH0tbcg8V/2OA8Tcq9yGJRESFcEOC5NGLFama5IGfC3aJhubZbrj9Un2qA==}
@@ -14928,10 +14887,6 @@ snapshots:
 
   '@tanstack/virtual-core@3.19.11': {}
 
-  '@types/better-sqlite3@9.6.0':
-    dependencies:
-      '@types/node': 24.19.0
-
   '@types/cacheable-request@6.0.3':
     dependencies:
       '@types/http-cache-semantics': 4.2.0
@@ -15419,10 +15374,6 @@ snapshots:
   balanced-match@4.0.4: {}
 
   base64-js@1.5.1: {}
-
-  better-sqlite3@13.0.3:
-    dependencies:
-      node-addon-api: 8.9.2
 
   bignumber.js@9.0.0: {}
 
@@ -17212,8 +17163,6 @@ snapshots:
       semver: 7.8.5
 
   node-addon-api@7.1.0: {}
-
-  node-addon-api@8.9.2: {}
 
   node-addon-native-custom-loader@0.1.9: {}
 

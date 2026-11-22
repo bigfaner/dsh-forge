@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import matter from 'gray-matter'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { joinDirSegment } from '@dsh-forge/path-key'
 import type {
   DomainNode,

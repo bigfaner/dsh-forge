@@ -33,7 +33,7 @@
 // 相位推导机经 deps 注入（2.1 单源纯函数——四域互禁 import 彼此，故不直 import
 // forge/tasks/phase-deriver，装配层（index.ts）注入同函数引用，零第二实现）。
 import { randomUUID } from 'node:crypto'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import {
   FEATURE_STATUSES,
   TASK_STATUSES,

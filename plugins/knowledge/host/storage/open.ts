@@ -5,7 +5,7 @@
 // 自持库行为零变化）。短事务纪律由 concurrency.ts withImmediateTransaction 承载（写入面单点）。
 import { chmodSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { openDatabase } from '@dsh-forge/lib-db'
 import { KNOWLEDGE_DB_SCHEMA_DOMAIN, STORAGE_MIGRATIONS, STORAGE_SCHEMA_VERSION } from './schema.js'
 

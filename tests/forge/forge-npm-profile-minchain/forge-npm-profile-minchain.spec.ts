@@ -15,7 +15,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 import { forgeBundleAbsenceClues } from '../../../e2e/support/bundle-absence.js'
 import {
   BARE_BUNDLES,

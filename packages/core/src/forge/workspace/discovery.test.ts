@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, 
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { DOC_KINDS, type DocKind } from '@dsh-forge/contracts'
 import { openDatabase } from '../../db/index.js'
 import { createDiscoveryFirstCreateHook, DOC_KIND_FILES, runDiscoveryScan } from './discovery.js'

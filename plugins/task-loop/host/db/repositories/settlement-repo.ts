@@ -10,7 +10,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import { isFixTask } from "../../domain/tasks/fix-predicate.js";
 import type { TaskAcResult } from "../../domain/tasks/types.js";
 

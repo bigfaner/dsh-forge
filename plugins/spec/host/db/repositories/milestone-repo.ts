@@ -2,7 +2,7 @@
 // insertMilestone（seq 链内 max+1 赋序 + roadmap 终态守卫——settlement-repo nextSeq 同径）/
 // updateFields / reassignSeq（重排两步法：全量临时负值区 → 目标值，避开 uq_spec_milestones_order，
 // 调用方事务闭包内两步同事务）/ listByRoadmap（uq 前缀 seq 序）/ findById。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import { SpecError } from "../../domain/specs/errors.js";
 import type { SpecDbTables } from "../migrations/version-1.js";
 import type { AcEntry, MilestoneInsert, MilestoneRow } from "../row-types.js";

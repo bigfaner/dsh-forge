@@ -13,7 +13,7 @@
 //   · refs 水化：taskDesc/vars 声明锚点（正斜杠相对路径 token）→ feature_documents ∪
 //     proposals docRel 匹配——命中 = 链接态（title = proposals.title ∣ feature_documents.
 //     summary），未命中 = 置灰（resolved=false——文档移除/改名后的诚实呈现）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type { TaskDetail, TaskDetailQuery, TaskDocRef, TaskPrerequisiteSummary } from '@dsh-forge/contracts'
 import { taskFilesUnion } from './files.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'

@@ -45,7 +45,7 @@ interface ProjectDb {
 function openProjectDb(dshHome: string): ProjectDb | undefined {
   const file = join(dshHome, 'forge', 'db', 'project', 'project.db')
   if (!existsSync(file)) return undefined
-  const Db = requireFromCore('better-sqlite3') as new (path: string) => ProjectDb
+  const Db = requireFromCore('@dsh-forge/lib-db') as new (path: string) => ProjectDb
   return new Db(file)
 }
 

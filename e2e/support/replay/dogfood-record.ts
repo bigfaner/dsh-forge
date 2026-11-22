@@ -19,7 +19,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type { TaskPriority } from '../../../packages/contracts/src/dto/forge.js'
 import type { TaskType } from '../../../packages/contracts/src/labels.js'
 import type { SessionEvent } from '../session-files.js'

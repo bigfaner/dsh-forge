@@ -1,6 +1,6 @@
 // ProjectsRepo——project_projects 行级读写门（plugin-project 1.9）。裸 SQL 白名单位（唯一 SQL 持有处）；
 // 归属键谓词（getByKey）与 R2 随动 DAO（updateMainPath 同事务重算 project_key = f(新 main 路径)）单点。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { deriveDirName } from '@dsh-forge/lib-path'
 import type { ProjectDbTables } from '../migrations.js'
 import type { ProjectRow } from '../row-types.js'

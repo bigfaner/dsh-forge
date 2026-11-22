@@ -41,7 +41,7 @@ interface ProjectDb {
 function workspaceRowFor(dshHome: string, wsPath: string): { member_role: string } | undefined {
   const file = join(dshHome, 'forge', 'db', 'project', 'project.db')
   if (!existsSync(file)) return undefined
-  const db = new (requireFromCore('better-sqlite3') as new (path: string) => ProjectDb)(file)
+  const db = new (requireFromCore('@dsh-forge/lib-db') as new (path: string) => ProjectDb)(file)
   try {
     return db.prepare('SELECT member_role FROM project_workspaces WHERE ws_path = ?').get(wsPath) as
       | { member_role: string }

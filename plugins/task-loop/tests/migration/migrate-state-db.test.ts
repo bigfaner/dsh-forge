@@ -4,11 +4,11 @@
 // entities.md 迁移映射终态；判例链抽样门 / 断代 / fix 判别三段 / checkpoints slug 回填 /
 // 幂等 + 新线版本门 / copy-out 只读旧库零触碰 + 幂等 + 新线版本门逐项覆盖。
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import Database from "@dsh-forge/lib-db";
 import { deriveDirName } from "@dsh-forge/lib-path";
 import { TASK_LOOP_MIGRATIONS } from "../../host/db/migrations/version-1.js";
 
@@ -29,7 +29,7 @@ const runMigration = mod[RUN] as (args: unknown, map: Map<string, string>, nowIs
 const v1Statements = mod[STATEMENTS_KEY] as string[];
 const columnMap = mod[COLUMN_MAP_KEY] as Record<string, any>;
 
-const Database = createRequire(join(repoRoot, "package.json"))("better-sqlite3");
+// 1.40：better-sqlite3 CJS require 退役——lib-db ESM default import（node:sqlite 适配层）。
 
 interface LegacyRow {
   [k: string]: unknown;

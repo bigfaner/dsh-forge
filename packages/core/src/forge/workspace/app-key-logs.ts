@@ -4,7 +4,7 @@
 // 纪律沿袭（TECH-error-002）：仅记关键一致性事件（异常/失败/自动修复），成功路径一律不记；
 // 单事件单条——处置结果并入同条 data_json，不记过程流水；一律 prepared statements；
 // 写仅经 store 产出的工作区句柄（openDatabase 参数化——db/ 句柄唯一落点）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 
 /** 仅关键级别（无 info 流水；工作区表 ck_wkl_level） */
 export type WorkspaceKeyLogLevel = 'warn' | 'error'

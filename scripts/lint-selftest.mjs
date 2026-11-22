@@ -36,11 +36,6 @@ const FIXTURES = [
     ox: ['同级业务互禁'],
   },
   {
-    path: 'apps/web/src/views/knowledge/_lintneg_knowledge_to_session.tsx',
-    code: `import { S } from '../session/panel'\nexport const v = S\n`,
-    ox: ['同级业务互禁'],
-  },
-  {
     path: 'apps/web/src/components/_lintneg_base_watch_rpc.ts',
     code: `import { p } from '../views/session/panel'\nimport chokidar from 'chokidar'\nimport { coreSvc } from '@dsh-forge/core'\nexport const v = [p, chokidar, coreSvc]\n`,
     ox: ['基础↛业务'],

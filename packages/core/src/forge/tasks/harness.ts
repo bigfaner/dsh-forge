@@ -6,7 +6,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type { TaskEdgeOrigin, TasksChangedEvent, TaskStatus, TaskType } from '@dsh-forge/contracts'
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import { createWorkspaceStore, type ForgeWorkspaceStore } from '../workspace/store.js'

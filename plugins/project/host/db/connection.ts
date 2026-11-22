@@ -4,7 +4,7 @@
 // 归属键谓词 DAO 单点注入（三 repositories 在此装配，调用方零裸 SQL）。
 import { chmodSync, existsSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { openDatabase, openReadonlyDatabase } from '@dsh-forge/lib-db'
 import { makeProjectMigrations, PROJECT_DB_SCHEMA_DOMAIN, PROJECT_DB_SCHEMA_VERSION, projectTableNames, type ProjectDbTables } from './migrations.js'
 import { BugsRepo, ProjectsRepo, WorkspacesRepo } from './repositories/index.js'

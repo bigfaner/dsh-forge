@@ -1,7 +1,7 @@
 // WorkspacesRepo——project↔workspace 关系表行级读写门（plugin-project 1.9）。裸 SQL 白名单位；
 // R4 先行 DAO（insertProjectWithMain 同事务双行）与归属键谓词 DAO（findByWsPath /
 // getKeyByMainPath）单点——调用方零裸 SQL。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type { ProjectDbTables } from '../migrations.js'
 import type { ProjectRow, WorkspaceRow, WorkspaceMemberRole } from '../row-types.js'
 

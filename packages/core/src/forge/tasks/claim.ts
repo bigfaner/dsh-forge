@@ -31,7 +31,7 @@
 // 与 fresh-claim 直取径守卫双落点接入 GATE_SQL——验证类卡（V ∧ feature 容器）就绪/可领
 // ⇔ 容器实现链终态合取；分支延续优先不越过门（validation 族出局①落②全局池）；
 // adopt 定向恢复径与幂等重入径豁免（adopt 豁免附带目标态断言 ∈ {in_progress, interrupted}）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type {
   ClaimTaskInput,
   ClaimTaskResult,

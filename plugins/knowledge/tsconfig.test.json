@@ -5,6 +5,7 @@
     "noEmit": true,
     "declaration": false,
     "declarationMap": false,
+    "emitDeclarationOnly": false,
     "sourceMap": false,
     "incremental": false,
     "rootDir": "../../"

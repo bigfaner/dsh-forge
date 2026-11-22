@@ -1,7 +1,7 @@
 // forge 域两测试（project-service / reconcile-queries）共享行读取（fix-35 收编：
 // readRows/keyLogs/ProjectRow 两份同构拷贝单源——与 fix-34 registry-stub 同目录同口径，
 // 本目录不进任何生产 import 图）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 
 /** projects 全列行（snake_case 存储形状——断言直接对存储态） */
 export interface ProjectRow {

@@ -37,7 +37,7 @@ import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 import { PROFILE_ALLOW_BUILDS, allowBuildsYamlLine } from '../../apps/host/src/profile/template.js'
 
 const pexec = promisify(execFile)

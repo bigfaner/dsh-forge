@@ -1,6 +1,6 @@
 // spec-repo（plugin-spec 1.3）——specs/goals/acs 三表 DAO 单源（行级唯一 SQL 落点）。
 // 排序锚纪律：读面 ORDER BY created_at/sort_key 索引序，禁 ORDER BY id 单锚。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import type { SpecDbTables } from "../migrations/version-1.js";
 import type { AcRow, GoalRow, GoalStatus, SpecRow, SpecStatus } from "../row-types.js";
 

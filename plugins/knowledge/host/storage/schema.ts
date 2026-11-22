@@ -5,7 +5,7 @@
 // 旧形状全局 schema_meta DDL 死语句已清（F1 配方清理）；
 // entries/recall_logs 等表由后续任务按 v2+ 追加（轻量种子迁移任务承接）。
 // 独立版本线：与 core state.db 的 MIGRATIONS 无关（零 core 依赖——SC-2 铁律）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 // v2（轻量种子迁移任务）：entries 索引缓存 + recall_logs 召回轨迹 + seed_migration
 // 幂等标记表——entries/recall_logs 零 FK（裁决：不建 FK 重映射机械；recall_logs 的
 // project_id 为旧 core id 快照列，行集等价口径，不作 join 键）。

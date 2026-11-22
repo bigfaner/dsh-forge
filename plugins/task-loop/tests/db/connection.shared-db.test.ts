@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import Database from "better-sqlite3";
+import Database from "@dsh-forge/lib-db";
 import { openDomainDb } from "../../host/db/connection.js";
 import { TASK_LOOP_DB_SCHEMA_DOMAIN, TASK_LOOP_DB_SCHEMA_VERSION } from "../../host/db/migrations/version-1.js";
 

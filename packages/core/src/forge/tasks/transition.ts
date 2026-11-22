@@ -12,7 +12,7 @@
 // 单源——UI 菜单与服务端同一纯函数零漂移）→ 写前相位增量断言 → 转移 UPDATE → transition
 // 记录 → 恢复钩子（→completed/skipped 同挂——C3 与 submitTask 钩子同族，2.4 复用本导出）→
 // 相位重算；闭包尾部（提交后）emitTasksChanged。一律 prepared statements。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type { TaskRef, TaskSnapshot, TaskStatus, TransitionTaskInput } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'

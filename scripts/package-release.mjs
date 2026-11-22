@@ -24,13 +24,11 @@ const SOLO_REL = join('solo', 'forge')
 // 走）→ 交付目录任意复制/搬移/install 均 self-contained。发布树六包共置形态继续作为
 // monorepo 开发态通道，两者并存机检分开。
 const BUNDLE_REL = join('bundle', 'forge')
-// bundle 交付目录依赖归一 overrides（forge-aggregate-bundle 1.19——旧代际 node-gyp 根除）：
-// task-loop 老依赖树传递拖入旧代际 better-sqlite3@11.x（带 node-gyp install 脚本），staging
-// 安装即崩；pnpm 全树强制单版本 13.0.3（自带 prebuilds 无安装脚本），node-gyp 路径消失。
-const BUNDLE_OVERRIDES = { 'better-sqlite3': '13.0.3' }
-// bundle 目录 pnpm 构建批准表（pnpm 11 ignored-builds 门消音——13.0.3 零安装脚本，
-// prebuilds/ 随包分发；同主仓 pnpm-workspace.yaml allowBuilds 语义，仅消门无编译动作）
-const BUNDLE_ALLOW_BUILDS = { 'better-sqlite3': true }
+// bundle 交付目录依赖归一 overrides 退役（forge-aggregate-bundle 1.40——better-sqlite3
+// 依赖零残留）：持久层已迁 node:sqlite（内置模块，零原生依赖、零 node-gyp），旧代际
+// node-gyp 传递根因消失，overrides 与构建批准条目一并退役。
+// 交付目录仍补发 pnpm-workspace.yaml（allowBuilds 空批准表）——独立目录无 workspace 上游，
+// 保留 ignored-builds 门消音壳（闭包内零安装脚本即空表通过）。
 // WYSIWYG 铁律（用户裁定 2026-11-22）：交付 cordis.patch.yml = forge 正本逐字节原样，
 // 打包脚本零改写。正本自含 bundle 全量内容（六插行 + preset-forge + preset-headhunter
 // + 双 preset 子树技能实例），本脚本对 patch 只做只读恒等校验；preset-headhunter 搬移、
@@ -206,14 +204,12 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
   }
   const bundleManifest = readJson(join(bundleDir, 'package.json'))
   bundleManifest.dependencies = bundleDependencies(forgeManifest)
-  // node JSON 往返注入 overrides（package.json 变更唯一正道）
-  bundleManifest.pnpm = { ...bundleManifest.pnpm, overrides: { ...BUNDLE_OVERRIDES } }
   writeFileSync(join(bundleDir, 'package.json'), `${JSON.stringify(bundleManifest, null, 2)}\n`)
-  // pnpm 构建批准表随交付目录补发（独立目录无 workspace 上游——无此文件 pnpm 11
-  // ignored-builds 门以 exit 1 判安装失败）
+  // pnpm 构建批准表随交付目录补发（独立目录无 workspace 上游）——空批准表消
+  // ignored-builds 门（闭包零安装脚本，1.40 起 better-sqlite3 条目退役）
   writeFileSync(
     join(bundleDir, 'pnpm-workspace.yaml'),
-    `# 生成文件（scripts/package-release.mjs）——交付目录 pnpm 构建批准表：13.0.3 零安装\n# 脚本（prebuilds/ 随包分发），此表仅消 ignored-builds 门，无编译动作。\nallowBuilds:\n${Object.entries(BUNDLE_ALLOW_BUILDS).map(([name, allow]) => `  '${name}': ${allow}`).join('\n')}\n`,
+    '# 生成文件（scripts/package-release.mjs）——交付目录 pnpm 构建批准表：闭包零安装脚本（持久层 node:sqlite 内置模块），空表仅消 ignored-builds 门。\nallowBuilds: {}\n',
   )
   // WYSIWYG 只读恒等校验（正本自含化——交付 patch = forge 正本逐字节原样，零改写）：
   // 正本自含 bundle 全量（六插行 + preset-forge + preset-headhunter + 双 preset 子树
@@ -234,7 +230,7 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     generator: 'scripts/package-release.mjs',
     generatedAt: new Date().toISOString(),
     channels: {
-      bundle: { dir: BUNDLE_REL.replaceAll(sep, '/'), deps: bundleManifest.dependencies, overrides: bundleManifest.pnpm?.overrides },
+      bundle: { dir: BUNDLE_REL.replaceAll(sep, '/'), deps: bundleManifest.dependencies },
       solo: { dir: SOLO_REL.replaceAll(sep, '/'), deps: soloManifest.dependencies },
     },
     packages: Object.fromEntries(
@@ -443,10 +439,9 @@ export function verifyBundleClosure(bundleDir, { repoRoot = REPO_ROOT } = {}) {
   for (const entry of packages.slice(1)) {
     if (!declared.has(entry.name)) violations.push(`bundle: forge 依赖缺成员条目 ${entry.name}`)
   }
-  // overrides 生成断言（闭包机检长期把守——依赖代际错配家族复发即红）
-  const actualOverrides = forgePkg.pnpm?.overrides
-  if (JSON.stringify(actualOverrides) !== JSON.stringify(BUNDLE_OVERRIDES)) {
-    violations.push(`bundle: pnpm.overrides 生成断言漂移（期望 ${JSON.stringify(BUNDLE_OVERRIDES)}，实际 ${JSON.stringify(actualOverrides ?? null)}）`)
+  // overrides 退役（1.40——better-sqlite3 依赖零残留，发布树 pnpm.overrides 不复存在）
+  if (forgePkg.pnpm?.overrides !== undefined) {
+    violations.push(`bundle: pnpm.overrides 已退役仍残留（1.40 node:sqlite 迁移——期望无 overrides，实际 ${JSON.stringify(forgePkg.pnpm.overrides)}）`)
   }
   // 交付 patch 顶层禁承带 skills 行（forge-aggregate-bundle 1.34 技能预设独占收敛——
   // 五件顶层 skills 行退役为设计，标准模式零成员技能；技能走 preset 子树实例。判定区分
@@ -499,11 +494,6 @@ export function verifyBundleClosure(bundleDir, { repoRoot = REPO_ROOT } = {}) {
   } else {
     const wsText = readFileSync(wsPath, 'utf8')
     if (!/^allowBuilds:/m.test(wsText)) violations.push('bundle: pnpm-workspace.yaml 缺 allowBuilds 段')
-    for (const [name, allow] of Object.entries(BUNDLE_ALLOW_BUILDS)) {
-      if (!new RegExp(`^\\s{2}'?${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'?:\\s*${allow}\\s*$`, 'm').test(wsText)) {
-        violations.push(`bundle: pnpm-workspace.yaml allowBuilds 缺批准项 ${name}: ${allow}`)
-      }
-    }
   }
   return violations
 }

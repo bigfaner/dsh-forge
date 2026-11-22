@@ -17,7 +17,7 @@
 // 自 D 沿既有出边可达性 DFS 找 S，§6-14）→ 相位漂移增量断言（先于写）→ 写入（M3：source 双列
 // + mode 快照 + ac_json）→ 相位重算（单调只进推导机单源）。
 import { randomUUID } from 'node:crypto'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type {
   AddTaskInput,
   AddTaskResult,

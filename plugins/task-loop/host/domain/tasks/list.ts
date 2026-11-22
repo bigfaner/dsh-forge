@@ -4,7 +4,7 @@
 // 任务源判别面 source{kind,slug} → containerSlug（run-dag 判别词退役）；taskSettlements
 // 读源 = task_settlements（success 结算 commit_hash——settlements 单源化前向兼容）。
 // search = 服务端过滤（中英双语）；sort：active 活跃度权重序 / created 创建降序。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import { TASK_STATUSES, TASK_STATUS_LABELS, TASK_TYPE_LABELS, type TaskStatus } from "@dsh-forge/contracts";
 import { TASK_COLUMNS, type TaskStorageRow } from "./query.js";
 import { countGatedPending } from "./phase-gate.js";

@@ -5,7 +5,7 @@
 // 依赖注入形态：SpecVerbDeps（db 动词零裸开；writeSpecDoc 文件写缝——装配面注真实现、
 // 测试注桩）；归属键 = cwd 纯函数派生（lib/path deriveDirName 单源，派生失败拒写）。
 import { randomUUID } from "node:crypto";
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import { deriveDirName } from "@dsh-forge/lib-path";
 import { withTransaction } from "@dsh-forge/lib-db";
 import type { DocsRepo } from "../../db/repositories/docs-repo.js";

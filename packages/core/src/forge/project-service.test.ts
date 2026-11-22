@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 import { openDatabase } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { createProjectService, defaultWorktreeDir, type ProjectServiceDeps, type RegisteredProject } from './project-service.js'

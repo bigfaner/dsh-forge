@@ -10,7 +10,7 @@
 //     small-domains/proposals.test 私有函数同构）。
 // 活写兼容：busy_timeout = 5000（WAL——app 在场并发开库同口径，openStateDb 先例）。
 import { join } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { openDatabase } from '../../../packages/core/src/db/index.js'
 import { deriveTaskStoreDir } from '../../../lib/path/src/derive-dir.js'
 import { FORGE_DB_SCHEMA_VERSION, WORKSPACE_MIGRATIONS } from '../../../packages/core/src/forge/workspace/migrations.js'

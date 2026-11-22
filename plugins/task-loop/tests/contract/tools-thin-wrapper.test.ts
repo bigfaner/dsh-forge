@@ -27,8 +27,9 @@ describe("tool = 薄封装机检（host/tools/）", () => {
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/^[ \t]*\/\/.*$/gm, "");
 
-      it("零 better-sqlite3 直触", () => {
+      it("零数据库驱动直触（better-sqlite3 / lib-db——连接只属 db/connection.ts + domain 动词层）", () => {
         expect(src).not.toContain("better-sqlite3");
+        expect(src).not.toContain("@dsh-forge/lib-db");
       });
 
       it("零 SQL 语句字面量（域 SQL 单点在 domain/db 层）", () => {

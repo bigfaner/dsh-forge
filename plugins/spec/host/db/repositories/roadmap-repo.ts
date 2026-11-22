@@ -2,7 +2,7 @@
 // （行级唯一 SQL 落点）：insertRoadmap / updateRoadmapFields / updateStatus（状态流转唯一径，
 // 含验收确认——调用方事务闭包内与统一台账两写）/ getBySlug（uq 点查）/ listByProject
 // （idx_spec_roadmaps_listing 索引序）。排序锚纪律：ORDER BY created_at 决定性锚。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import type { SpecDbTables } from "../migrations/version-1.js";
 import type { AcEntry, ObjectiveStatus, RoadmapRow } from "../row-types.js";
 

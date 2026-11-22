@@ -7,7 +7,7 @@
 // M3 2.1 增补：三动词 feature_records 审计伴随（每动词一行 + 全成全败 + actor 通道推断）
 // + derive 闭包 source_kind 过滤（律四——proposal 容器任务不入相位域）。
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { FEATURE_RECORD_VERBS, type FeatureCard, type TaskStatus } from '@dsh-forge/contracts'
 import { PhaseInvariantViolationError } from '../tasks/phase-deriver.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from '../tasks/phase-deriver.js'

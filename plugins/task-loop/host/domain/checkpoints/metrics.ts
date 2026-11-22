@@ -8,7 +8,7 @@
 // - reviewWaves：task_checkpoints mark='review-wave-N' 的 max(wave_seq)（无波 = 0）。
 // - fixDensity：fix_root_id 链去重计链数，每链取最新 success 的 commit_hash 去重，
 //   ÷ 已结算任务数（FIX_DENSITY_FORMULA pin——shared/contract-constants.ts 单源）。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import { FIX_DENSITY_FORMULA } from "../../../shared/contract-constants.js";
 
 /** 四指标计算结果（全部 0–1 比率，reviewWaves 除外——波数自然数）。 */

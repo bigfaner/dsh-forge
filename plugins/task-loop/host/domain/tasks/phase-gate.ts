@@ -8,7 +8,7 @@
 // （completed/skipped）。slug 化退役面：② proposal 容器豁免支退役（容器无 kind 判别——
 // 门对所有 slug 容器同构生效）；③ e2e_attribution 豁免支退役（v1 列面零该列——归因标记
 // 随列退役）。守卫时点语义：守卫运行在事务外纯读段，判定以守卫时点快照为准。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import { IMPLEMENTATION_TASK_TYPES, VALIDATION_TASK_TYPES } from "@dsh-forge/contracts";
 import { PhaseGateUnsettledError } from "./errors.js";
 import type { TaskStorageRow } from "./query.js";

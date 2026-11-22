@@ -80,7 +80,7 @@ export function assembleCopyVariant({ repoRoot = REPO_ROOT, outDir, stripPatchCo
   )
   writeFileSync(
     join(treeDir, 'package.json'),
-    `${JSON.stringify({ name: 'forge-copy-variant', private: true, dependencies: copyVariantRootDeps(repoRoot), pnpm: { onlyBuiltDependencies: ['better-sqlite3'] } }, null, 2)}\n`,
+    `${JSON.stringify({ name: 'forge-copy-variant', private: true, dependencies: copyVariantRootDeps(repoRoot) }, null, 2)}\n`,
   )
   if (strip) {
     const patchPath = join(treeDir, 'forge', 'cordis.patch.yml')
@@ -90,13 +90,10 @@ export function assembleCopyVariant({ repoRoot = REPO_ROOT, outDir, stripPatchCo
   if (install) {
     const run = spawnSync('pnpm install', { cwd: treeDir, encoding: 'utf8', windowsHide: true, shell: process.platform === 'win32' })
     const stderr = `${run.stdout ?? ''}\n${run.stderr ?? ''}`
-    // IGNORED_BUILDS 非净收容忍：better-sqlite3 走 in-package prebuilds（win32/darwin/
-    // linux 全平台在场），构建脚本缺席不影响运行期装载（fix-17/001-repro GREEN 取证同径）。
-    const ignoredBuilds = /ERR_PNPM_IGNORED_BUILDS|Ignored build scripts/.test(stderr)
-    if (run.status !== 0 && !ignoredBuilds) {
+    if (run.status !== 0) {
       installStatus = { exitCode: run.status, stderr: stderr.slice(-800) }
     } else {
-      installStatus = { exitCode: 0, stderr: ignoredBuilds ? 'ignored-builds tolerated (prebuilds in package)' : '' }
+      installStatus = { exitCode: 0, stderr: '' }
     }
   }
   return { copyDir: treeDir, forgeDir: join(treeDir, 'forge'), manifestPath: join(treeDir, 'manifest.json'), installStatus }

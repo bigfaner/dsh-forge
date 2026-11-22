@@ -12,7 +12,7 @@
 import { copyFileSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 
 // v1 终态列清单（蓝本 packages/core/src/forge/workspace/migrations.ts——只列补齐面，
 // 建库径不在本脚本职责内：库文件缺席直接跳过，交给应用惰性新建 v1）

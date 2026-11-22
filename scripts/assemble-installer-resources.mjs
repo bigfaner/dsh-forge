@@ -308,8 +308,6 @@ export function requiredKeyFiles(plugins, root = ROOT) {
     'runtime/node_modules/@deepseek-ai/dsh/package.json',
     'runtime/node_modules/@deepseek-ai/dsh-base/package.json',
     'runtime/node_modules/@deepseek-ai/dsh-web-app/package.json',
-    'runtime/node_modules/better-sqlite3/package.json',
-    'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
   ]
   for (const [dir] of Object.entries(stagedProductPackages(plugins))) {
     const short = stagedPkgShort(dir)
@@ -410,7 +408,6 @@ function assertPreconditions(plugins) {
     [join(INSTALL_NM, '@deepseek-ai/dsh/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-base/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-web-app/package.json'), 'pnpm -C apps/host/profile.install install'],
-    [join(INSTALL_NM, 'better-sqlite3/prebuilds/win32-x64.node'), 'pnpm -C apps/host/profile.install install（prebuilds 随包分发，缺席即包损坏）'],
     [join(ROOT, 'build', 'icon.png'), 'node tmp-ui-review/gen-whale-brand-v3.mjs --emit icon（fix-45 应用图标——窗口图标打包形态随包）'],
   ]
   for (const [key, files] of Object.entries(stagedProductPackages(plugins))) {
@@ -538,7 +535,6 @@ async function stage() {
   const manifest = {
     generatedAt: new Date().toISOString(),
     sections,
-    sqlitePrebuild: statFileSync(join(RUNTIME, 'node_modules/better-sqlite3/prebuilds/win32-x64.node')),
     keyFilesOk: problems.length === 0,
   }
   writeFileSync(join(STAGING, 'staging-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
@@ -549,12 +545,6 @@ async function stage() {
     sections.runtimeNodeModules.files + sections.hostDist.files + sections.webDist.files
     + sections.mobileDist.files + sections.appLoader.files + sections.icon.files
   console.log(`STAGE_OK files=${totalFiles} manifest=release/staging/staging-manifest.json`)
-}
-
-function statFileSync(path) {
-  if (!existsSync(path)) return { present: false }
-  const stat = statSync(path)
-  return { present: true, bytes: stat.size }
 }
 
 /** --check：对 staging（或安装后 resources 目录，经位置参数传入）断言关键文件。
@@ -587,7 +577,7 @@ async function check(root = STAGING, appDistRoot = join(ROOT, 'release', 'app'))
       console.error('CHECK FAILED: staging-manifest.json 记录 keyFilesOk != true')
       process.exit(1)
     }
-    console.log(`STAGING_CHECK_OK generatedAt=${saved.generatedAt} sqlitePrebuild=${saved.sqlitePrebuild.bytes}B`)
+    console.log(`STAGING_CHECK_OK generatedAt=${saved.generatedAt}`)
     return
   }
   console.log('STAGING_CHECK_OK (no manifest — external resources root)')

@@ -8,7 +8,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../host/storage/index.js'
 import { createKnowledgeService } from '../../host/service/service.js'

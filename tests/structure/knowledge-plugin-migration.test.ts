@@ -53,7 +53,8 @@ describe('验收1 结构门——plugins/knowledge 三目录制齐备', () => {
     expect(pkg.peerDependencies?.['@deepseek-ai/cordis'], 'cordis peerDep 补齐').toBeDefined()
     expect(pkg.devDependencies?.['@dsh-forge/contracts'], 'contracts devDeps（构建期内联）').toBeDefined()
     expect(pkg.devDependencies?.['@dsh-forge/path-key'], 'path-key devDeps（构建期内联）').toBeDefined()
-    expect(pkg.dependencies?.['better-sqlite3'], 'better-sqlite3 保持 dependencies').toBeDefined()
+    expect(pkg.dependencies?.['better-sqlite3'], 'better-sqlite3 依赖零残留（1.40 node:sqlite 迁移）').toBeUndefined()
+    expect(pkg.devDependencies?.['@dsh-forge/lib-db'], 'lib-db 持久层保持 devDependencies（bundle 内联闭包）').toBeDefined()
   })
 
   it('双 tsconfig 在场（tsconfig.json + tsconfig.client.json）', () => {

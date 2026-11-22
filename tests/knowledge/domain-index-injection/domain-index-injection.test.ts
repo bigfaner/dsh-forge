@@ -64,7 +64,7 @@ interface World {
   root: string
   wsP: string
   wsR: string
-  db: import('better-sqlite3').Database
+  db: import('@dsh-forge/lib-db').Database
   service: BrowseKnowledgeService
   projectIdP: string
   projectIdR: string

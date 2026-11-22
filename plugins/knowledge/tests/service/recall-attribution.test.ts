@@ -15,7 +15,7 @@ let service: BrowseKnowledgeService
 let projectId: string
 let wsDir: string
 let knowledgeDir: string
-let db: import('better-sqlite3').Database
+let db: import('@dsh-forge/lib-db').Database
 let apiEntryId: number
 
 const rowsOf = (where = ''): Record<string, unknown>[] =>

@@ -2,7 +2,7 @@
 // 宿主数据域锚在场），开库 + 建注册表 + 首启轻量种子迁移（migrate.ts——旧库只读、幂等、
 // 失败不阻载）。开库失败 fail-soft 降级（不阻载插件）；迁移埋点经装配期注入的诊断发射面
 // （diag.ts——AGENTS §7 禁直落 console）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { openKnowledgeDatabase } from './open.js'
 import { autoStartDbFile, type KnowledgeStorageConfig, type KnowledgeStorageEnv } from './paths.js'
 import { createKnowledgeRegistry, type KnowledgeRegistry } from './registry.js'

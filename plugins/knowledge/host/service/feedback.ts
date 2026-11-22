@@ -8,7 +8,7 @@
 //   同 call 全行批更不覆盖已 👍 行（J3-CT-03 硬语义）；批撤销只清批内已 👎 行
 //   （行级独立 👍 不受牵连——J3-CT-03 O3）；callId 未命中 = results 空数组（非错误）。
 // · 全动作 diag（含撤销；note 原文不入 diag——只记 notePresent）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { withImmediateTransaction } from '../storage/concurrency.js'
 import { KNOWLEDGE_FEEDBACK_EVENT, emitStorageDiag, storageDiag, type DiagEmitter } from '../storage/diag.js'
 import type { RecallFeedbackOutcome, RecallFeedbackRequest, RecallFeedbackResult } from './types.js'

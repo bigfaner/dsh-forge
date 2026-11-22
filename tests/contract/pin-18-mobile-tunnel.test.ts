@@ -21,7 +21,6 @@ import {
 import { ROOT } from './pins.js'
 
 const hostSrc = (rel: string): string => readFileSync(join(ROOT, 'apps/host/src', rel), 'utf8')
-const webSrc = (rel: string): string => readFileSync(join(ROOT, 'apps/web/src', rel), 'utf8')
 const tunnelFiles = ['tunnel/index.ts', 'tunnel/cloudflared.ts', 'tunnel/pinggy.ts'] as const
 const tunnelTestFiles = [
   'apps/host/src/tunnel/tunnel.test.ts',

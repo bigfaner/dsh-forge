@@ -6,7 +6,7 @@
 // 读写径（种子迁移任务自此承接 core projects.knowledge_dir）。
 import { mkdirSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { withImmediateTransaction } from './concurrency.js'
 import { KNOWLEDGE_REGISTER_EVENT, emitStorageDiag, storageDiag, type DiagEmitter } from './diag.js'
 

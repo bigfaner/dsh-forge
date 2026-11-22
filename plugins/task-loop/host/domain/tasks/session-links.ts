@@ -5,7 +5,7 @@ import type { SessionTaskLinkCard, TasksVerbDeps } from "./types.js";
 
 /** 读面装配依赖 */
 export interface SessionLinksDeps {
-  readonly db: import("better-sqlite3").Database;
+  readonly db: import("@dsh-forge/lib-db").Database;
 }
 
 /** EQP 锚 ③：会话挂接查询（session_id 定位 → idx_task_tsl_session）；加性读列 claimedAt */

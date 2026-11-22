@@ -239,7 +239,7 @@ function buildEvidence(input: SubmitTaskInput): SettlementEvidence {
  * = 域不变量违例 fail-loud 拒写（环由 addTask 写点预检保证，防御性检测兜底）。
  */
 export function resolveFixRoot(
-  db: import("better-sqlite3").Database,
+  db: import("@dsh-forge/lib-db").Database,
   repo: SettlementRepo,
   task: Pick<TaskStorageRow, "id" | "fix_of_task_id">,
 ): string | null {

@@ -11,7 +11,7 @@ domains: [rpc, contracts, channel, sqlite, service-injection, event, settings]
 
 ### TECH-rpc-001: SQLite 句柄落点与单写路径
 
-**Requirement**: `better-sqlite3` 仅在 `packages/core`（`db/` 子模块 = 句柄唯一落点，无域语义——中央 state.db 单句柄；M2 起每工作区 forge.db 多句柄经 `forge/workspace` store 惰性持有，openDatabase 参数化传入工作区迁移序列，独立版本线）；SQLite 写只经 core 服务（UI 与 plugin 同门，单一写入路径——M2 扩展为「每工作区库写只经 core 服务」）；打开时设 `journal_mode = WAL` + `foreign_keys = ON`；schema 经 `schema_meta` 前向迁移（单事务原子应用 DDL + 版本行，任一步失败整体回滚；旧应用打开新 schema 拒绝）；SQL 一律 prepared statements。
+**Requirement**: SQLite 引擎 = Node 内置 `node:sqlite`（DatabaseSync，零原生模块依赖——1.40 自 better-sqlite3 迁移退役，better-sqlite3 形状兼容适配层在 `lib/db/src/sqlite.ts`），句柄唯一落点 = `@dsh-forge/lib-db`（`openDatabase` 单创建口，无域语义——中央 state.db 单句柄；M2 起每工作区 forge.db 多句柄经 `forge/workspace` store 惰性持有，openDatabase 参数化传入工作区迁移序列，独立版本线）；SQLite 写只经 core 服务（UI 与 plugin 同门，单一写入路径——M2 扩展为「每工作区库写只经 core 服务」）；打开时设 `journal_mode = WAL` + `foreign_keys = ON`；schema 经 `schema_meta` 前向迁移（单事务原子应用 DDL + 版本行，任一步失败整体回滚；旧应用打开新 schema 拒绝）；SQL 一律 prepared statements。
 **Source**: feature/dsh-forge-p1-mvp TECH-005（tech-design §Architecture / packages/core/src/db/{open,schema,transaction}.ts）+ feature/dsh-forge-m2-pipeline（tech-design §forge/workspace 子模块，drift 修订：单句柄 → 中央单句柄 + 每工作区惰性多句柄）
 
 ### TECH-rpc-006: 每工作区库惰性首开 + 失败隔离

@@ -70,9 +70,9 @@ describe("包骨架（三目录制 + scripts 五件 + build 链）", () => {
 });
 
 describe("包 manifest（plugin-spec 1.2 验收面）", () => {
-  it("名称与版本：@dsh-forge/spec 0.19.10（forge-aggregate-bundle/1.32 INV-3 安装互斥守卫 patch bump）", () => {
+  it("名称与版本：@dsh-forge/spec 0.19.11（forge-aggregate-bundle/1.40 持久层 node:sqlite 迁移 patch bump）", () => {
     expect(pkg.name).toBe("@dsh-forge/spec");
-    expect(pkg.version).toBe("0.19.10");
+    expect(pkg.version).toBe("0.19.11");
   });
 
   it("exports 四键：. + ./client + ./typert + ./remote（typert 双键预留）", () => {

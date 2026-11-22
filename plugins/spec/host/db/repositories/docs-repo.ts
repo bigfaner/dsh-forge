@@ -1,7 +1,7 @@
 // docs-repo（plugin-spec 1.3）——spec_docs 1:1 登记行 DAO（spec_id 自然键 PK，零代理 id）。
 // 悬空态不在本表表达（读时 fs 现算，entities.md §4 分界）；rel_path 跨 spec 重复守卫
 // 查询面 relPathTaken（服务层单点消费——本表无 project_key，经 specs JOIN 圈定归属）。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import type { SpecDbTables } from "../migrations/version-1.js";
 import type { DocRow } from "../row-types.js";
 

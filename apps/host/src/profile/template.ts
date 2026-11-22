@@ -55,7 +55,6 @@ export const UI_SETTINGS_PRESET_ROW: string = [
 export const PROFILE_ALLOW_BUILDS: Readonly<Record<string, boolean>> = {
   '@deepseek-ai/dsh-subprocess-local': true,
   '@google/genai': true,
-  'better-sqlite3': true,
   koffi: true,
   'node-pty': true,
   protobufjs: true,

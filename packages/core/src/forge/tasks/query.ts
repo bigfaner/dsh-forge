@@ -6,7 +6,7 @@
 //
 // sessions = links ∪ records.session_id 双源分型（SC6③ 双数据源——link = 派发会话挂接 /
 // record = 执行会话挂接，同会话双侧参与则两卡并存——分型呈现不做合并解释，§6-24④ 诚实审计）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type {
   FeatureStatus,
   QueryTaskInput,

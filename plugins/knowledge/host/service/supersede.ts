@@ -24,7 +24,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import matter from 'gray-matter'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { withImmediateTransaction } from '../storage/concurrency.js'
 import { deriveEffectiveRank, type EntryStatus } from '../storage/rebuild.js'
 import { KNOWLEDGE_SUPERSEDE_EVENT, emitStorageDiag, storageDiag, type DiagEmitter } from '../storage/diag.js'

@@ -130,7 +130,7 @@ export type TaskRecordJsonValue = string | number | boolean | null | readonly Ta
  */
 export interface TasksVerbDeps {
   /** task-loop.db 连接（openDomainDb().db——WAL/FK 三参数由连接工厂保证） */
-  readonly db: import("better-sqlite3").Database;
+  readonly db: import("@dsh-forge/lib-db").Database;
   /** 写后事件发射器（装配单例——写动词闭包尾部 emitTasksChanged） */
   readonly events: TaskEvents;
   /**

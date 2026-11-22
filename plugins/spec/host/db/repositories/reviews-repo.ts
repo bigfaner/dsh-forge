@@ -2,7 +2,7 @@
 // appendReview（四级统一——entity_kind/entity_id）唯一写径（INSERT；append-only 双触发器
 // UPDATE/DELETE ABORT 兜底，repo 零改删路径）+ latestByEntity（idx_spec_reviews_entity
 // 前缀 + created_at 尾列逆序取首）。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import type { SpecDbTables } from "../migrations/version-1.js";
 import type { ReviewRow } from "../row-types.js";
 

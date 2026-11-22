@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/plugin-forge",
-  "version": "0.28.2",
+  "version": "0.28.3",
   "private": true,
   "type": "module",
   "description": "dsh 插件：forge 管线 tool 半身（动词透传 + 派发循环驱动器 + forge:dispatch-loop 提示段——forge:pipeline/forge:doc-style 段已迁 plugins/spec）。",
@@ -32,7 +32,7 @@
     "@dsh-forge/project": "workspace:*",
     "@types/node": "24.19.0",
     "ajv": "8.20.0",
-    "better-sqlite3": "13.0.3",
-    "esbuild": "0.24.2"
+    "esbuild": "0.24.2",
+    "@dsh-forge/lib-db": "workspace:*"
   }
 }

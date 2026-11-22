@@ -57,7 +57,7 @@ const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 // platform:"node" 自动外置。@dsh-forge/* 一律不外置（含 lib 子包）——独立安装形态
 // 不存在其解析路径（fix-5 判例：dsh-desktop pnpm runner 丢弃 workspace:* devDeps，
 // 残留裸 import 即 ERR_MODULE_NOT_FOUND）。
-const EXTERNAL = ["@deepseek-ai/*", "better-sqlite3"];
+const EXTERNAL = ["@deepseek-ai/*"];
 
 // 内联例外（插件 onResolve 优先于 external 表；bug c48f2b6b——原窄表只覆盖 connection，
 // 已内联件的传递依赖与源码直连件以外部 import 面残留，profile @deepseek-ai 为空即

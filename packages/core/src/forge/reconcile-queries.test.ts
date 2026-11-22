@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { openDatabase } from '../db/index.js'
 import { createProjectService, type ProjectServiceDeps } from './project-service.js'
 // registry 桩（G1 pin 4 语义 + get 同步查表）——fix-34 收编 testutil 单份（注入面 superset）；

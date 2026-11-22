@@ -20,7 +20,7 @@
 // 句柄生命周期 = 进程内常驻；store.dispose 统一关闭（3.4 接插件 disposer host 侧收口）。
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { openDatabase } from '../../db/index.js'
 import { emitDiagOrFallback, type DiagEventPayload } from '../../telemetry/diag-events.js'
 import { errMessage } from '../../util.js'

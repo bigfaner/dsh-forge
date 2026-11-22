@@ -22,7 +22,7 @@
 // SQL_TASKS_BY_CONTAINER（→ idx_tasks_source_status·M3 2.5 kind 参数化双轨泛化）/
 // SQL_STATS_BY_CONTAINER（chips 七态分布同索引）/ RECORDS_BY_TASK_SQL（query.ts →
 // idx_records_task）/ LINKS_BY_SESSION_SQL（session-links.ts → idx_tsl_session）。
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import {
   TASK_STATUSES,
   TASK_STATUS_LABELS,

@@ -8,7 +8,7 @@
 // · 时序 = proposal §2.2：start → 注册行里程碑 → recall（best-effort）→ cutover。
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { openReadonlyDatabase } from '@dsh-forge/lib-db'
 import { withImmediateTransaction } from './concurrency.js'
 import { canonicalWsPath } from './registry.js'

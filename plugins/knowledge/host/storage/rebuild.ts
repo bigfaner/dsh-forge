@@ -8,7 +8,7 @@
 // （unconfirmed=info / confirmed 与 superseded=warn——已审知识意外丢失应被看见），
 // 无孤儿中间态。id 缺席的存量文件不入实体表（skipped 计数——存量收编任务补发 id 后入表）。
 import { existsSync, readFileSync } from 'node:fs'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import { withImmediateTransaction } from './concurrency.js'
 import { parseKnowledgeFile } from './parser.js'
 import { scanKnowledgeDir } from './scan.js'

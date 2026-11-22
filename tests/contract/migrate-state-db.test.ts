@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 import { afterEach, describe, expect, it } from 'vitest'
 import { deriveDirName } from '../../lib/path/src/index.js'
 

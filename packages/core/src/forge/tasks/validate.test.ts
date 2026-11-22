@@ -9,7 +9,7 @@
 // 同容器边（task_edges 两端 source_id 相等·不变量 2 泛化，判据 = source_id 相等非子图
 // 成员资格）——构造漂移样本可抓。
 import { describe, expect, it } from 'vitest'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type { TaskStatus } from '@dsh-forge/contracts'
 import { createTasksHarness, seedEdge, seedFeature, seedRecord, seedTask } from './harness.js'
 import { TasksFeatureNotFoundError } from './errors.js'

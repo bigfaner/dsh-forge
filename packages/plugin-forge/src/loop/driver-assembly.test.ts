@@ -24,7 +24,7 @@ import type {
   TaskStats,
   TaskStatus,
 } from '@dsh-forge/contracts'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 import { createLoopDriver } from './driver.js'
 import type { LoopCheckpointRowLite, LoopCheckpointSnapshot, LoopCheckpointsFace } from './driver.js'
 import type { LoopDriverDeps } from './driver.js'

@@ -4,7 +4,7 @@
 // 载荷构成：TaskCard 全量 + records 时间线 / waitingOnMe / sessions 双源分型 / actualFiles
 // （submit 记录 payload files 级联 → commit git 查找 → 双缺省 []）/ allowedTransitions /
 // refs（声明锚点提取——docs 域退役后注册面空，命中恒置灰）。
-import type Database from "better-sqlite3";
+import type Database from "@dsh-forge/lib-db";
 import { taskFilesUnion } from "./files.js";
 import { listCommitFiles, type GitExecFile } from "./git-lookup.js";
 import { hydrateTaskCards } from "./list.js";

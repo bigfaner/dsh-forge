@@ -34,7 +34,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, relative, sep } from 'node:path'
-import type Database from 'better-sqlite3'
+import type Database from '@dsh-forge/lib-db'
 import type {
   DeriveTaskStoreDirRequest,
   DeriveTaskStoreDirResult,

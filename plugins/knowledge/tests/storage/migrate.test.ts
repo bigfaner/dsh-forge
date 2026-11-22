@@ -3,7 +3,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 import { afterEach, describe, expect, it } from 'vitest'
 import { openKnowledgeDatabase } from '../../host/storage/open.js'
 import { runSeedMigration } from '../../host/storage/migrate.js'

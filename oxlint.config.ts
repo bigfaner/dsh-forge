@@ -25,6 +25,7 @@ export default defineConfig({
     'spikes/**',
     'docs/**',
     '.forge/**',
+    '.forge-tmp/**',
     '.claude/**',
     'coverage/**',
     'test-results/**',

@@ -4,15 +4,32 @@
     "composite": true,
     "outDir": "dist",
     "rootDir": "src",
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src"],
-  "exclude": ["src/**/*.test.ts"],
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
+  ],
   "references": [
-    { "path": "../contracts" },
-    { "path": "../../lib/db" },
-    { "path": "../../lib/path" },
-    { "path": "../../lib/util" },
-    { "path": "../../lib/diag" }
+    {
+      "path": "../contracts"
+    },
+    {
+      "path": "../../lib/db"
+    },
+    {
+      "path": "../../lib/path"
+    },
+    {
+      "path": "../../lib/util"
+    },
+    {
+      "path": "../../lib/diag"
+    }
   ]
 }

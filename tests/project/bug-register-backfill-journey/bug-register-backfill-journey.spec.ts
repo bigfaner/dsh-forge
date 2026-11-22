@@ -51,7 +51,7 @@ function dbFile(dshHome: string): string {
 }
 
 function seedBugRow(dshHome: string, bugId: string, projectKey: string, summary: string): void {
-  const db = new (requireFromCore('better-sqlite3') as new (path: string) => Db)(dbFile(dshHome))
+  const db = new (requireFromCore('@dsh-forge/lib-db') as new (path: string) => Db)(dbFile(dshHome))
   try {
     db.prepare(
       `INSERT INTO project_bugs (id, project_key, summary, bug_desc, trigger_desc, expected, actual, suspected, error_type, bug_status, reporter, created_at, updated_at)
@@ -76,7 +76,7 @@ function seedBugRow(dshHome: string, bugId: string, projectKey: string, summary:
 }
 
 function resolveBugRow(dshHome: string, bugId: string, commitHash: string): void {
-  const db = new (requireFromCore('better-sqlite3') as new (path: string) => Db)(dbFile(dshHome))
+  const db = new (requireFromCore('@dsh-forge/lib-db') as new (path: string) => Db)(dbFile(dshHome))
   try {
     db.prepare(
       `UPDATE project_bugs SET bug_status = 'fixed', commit_hash = ?, fix_approach = ?, updated_at = ? WHERE id = ?`,
@@ -87,7 +87,7 @@ function resolveBugRow(dshHome: string, bugId: string, commitHash: string): void
 }
 
 function deleteBugRow(dshHome: string, bugId: string): void {
-  const db = new (requireFromCore('better-sqlite3') as new (path: string) => Db)(dbFile(dshHome))
+  const db = new (requireFromCore('@dsh-forge/lib-db') as new (path: string) => Db)(dbFile(dshHome))
   try {
     db.prepare('DELETE FROM project_bugs WHERE id = ?').run(bugId)
   } finally {

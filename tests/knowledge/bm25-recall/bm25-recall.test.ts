@@ -77,7 +77,7 @@ function entryText(f: CorpusFile): string {
 interface World {
   readonly root: string
   readonly ws: string
-  readonly db: import('better-sqlite3').Database
+  readonly db: import('@dsh-forge/lib-db').Database
   readonly service: BrowseKnowledgeService
   readonly projectId: string
   readonly events: DiagEventPayload[]

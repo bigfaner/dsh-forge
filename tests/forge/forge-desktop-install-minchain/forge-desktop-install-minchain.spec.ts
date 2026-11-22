@@ -67,7 +67,7 @@ import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSyn
 import { homedir, tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 import { closeBareCarrier, launchBareCarrier, type BareCarrier } from '../../../e2e/support/launch.js'
 import { realCredentials, seedDshHome } from '../../../e2e/support/dogfood.js'
 import { COMPOSER_INPUT } from '../../../e2e/support/anchors.js'
