@@ -10,8 +10,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const EXPERT_FILE = resolve(here, "../experts/code-reviewer.md");
-const CODE_MASTER_FILE = resolve(here, "../experts/code-master.md");
+// expert-builtin-redistribution：内置专家档案按插件域重组——code-reviewer 归 task-loop、
+// code-master 归 forge（档案内容原样迁入，断言随迁改指新家）。
+const EXPERT_FILE = resolve(here, "../../../plugins/task-loop/experts/code-reviewer.md");
+const CODE_MASTER_FILE = resolve(here, "../../../plugins/forge/experts/code-master.md");
 
 /** 与 expert-squad parseExpertFile 同构的最小校验（单源锚见文件头）。 */
 function parseExpertFileLike(filePath: string, content: string): { ok: true } | { ok: false; reason: string } {

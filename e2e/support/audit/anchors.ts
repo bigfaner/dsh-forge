@@ -259,7 +259,12 @@ export function auditWebNoOrchestration(root: string = REPO_ROOT): AuditFinding[
  * 72b20463 处置链），引用以裸名「X 技能」形态落在档案域——哨兵意图「产品文本技能引用
  * 可解析」不变，扫描域随之迁移（旧 core prompt/plugin src 扫描域退役）。
  */
-const SKILL_REF_SCAN_DIRS = ['packages/plugin-forge/experts'] as const
+const SKILL_REF_SCAN_DIRS = [
+  'plugins/task-loop/experts',
+  'plugins/spec/experts',
+  'plugins/knowledge/experts',
+  'plugins/forge/experts',
+] as const
 
 /** frontmatter skills 标签行提取（档案 .md 头部 `---` 块内 `skills: [a, b]` 形） */
 const SKILL_TAG_LINE_RE = /^skills:\s*\[([^\]]*)\]\s*$/

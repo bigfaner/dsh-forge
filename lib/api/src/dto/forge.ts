@@ -1277,7 +1277,7 @@ export interface FlywheelSettings {
 /**
  * 任务类型 → 专家档案键默认映射（expert-squad-forge §3 纳入 6 + 档案人格化改名 + 1.12/1.13
  * 裁决收窄 + 1.2 裁决 validation-ux 进默认映射）：17 键非恒等映射——值 = 随包预设专家
- * 档案的人格键（plugin-forge experts/ 目录 <人格键>.md；键 = 任务类型）。3 个任务类型
+ * 档案的人格键（task-loop 包 experts/ 目录 <人格键>.md——内置专家档案按插件域重组；键 = 任务类型）。3 个任务类型
  * （validation-code/eval-contract/eval-journey）不携带预设档案——
  * 两段缺键 → resolver 返回 undefined（persona 仅程序段形态兼容）。用户可在 settings 的
  * experts.mapping 分节改指向自己的专家键（值同样指人格键；缺键 = 默认映射生效）。

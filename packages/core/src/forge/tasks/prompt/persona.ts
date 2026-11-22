@@ -1,6 +1,7 @@
 // worker persona 组成模块（提案 expert-squad-forge 1.3 合成点改造；前身为
 // worker-lean-execution S2a 组成矩阵）。PERSONA_VARIANTS 类型级人格内容（title/creed/
-// gate 指引/workflow 叙述）已迁出至专家档案（packages/plugin-forge/experts/，迁移留痕见
+// gate 指引/workflow 叙述）已迁出至专家档案（内置档案现按插件域重组于各插件包
+// experts/ 目录——task-loop/spec/knowledge/forge；迁移留痕见
 // .forge/docs/proposals/expert-squad-forge/persona-migration-audit.md）；本文件只保留
 // forge 程序段：恒定核心段（结算纪律/失败处理/产物落盘/提交纪律/歧义处置）、反搅动锚 ×6、
 // Coding/Testing Strategy 共享段（9 类共用程序内容——不逐档案复制）、复杂度分级保底门。

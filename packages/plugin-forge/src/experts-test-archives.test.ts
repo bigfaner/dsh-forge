@@ -11,7 +11,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const EXPERT_FILE = resolve(here, "../experts/test-script-author.md");
+// expert-builtin-redistribution：内置专家档案按插件域重组——test-* 作者/runner、
+// code-reviewer 等归 task-loop，test-master 归 spec，code-master 归 forge（内容原样迁入）。
+const EXPERTS_TASK_LOOP = resolve(here, "../../../plugins/task-loop/experts");
+const EXPERTS_SPEC = resolve(here, "../../../plugins/spec/experts");
+const EXPERTS_FORGE = resolve(here, "../../../plugins/forge/experts");
+const EXPERT_FILE = resolve(EXPERTS_TASK_LOOP, "test-script-author.md");
 
 /** 与 expert-squad parseExpertFile 同构的最小校验（单源锚见文件头）。 */
 function parseExpertFileLike(filePath: string, content: string): { ok: true } | { ok: false; reason: string } {
@@ -225,7 +230,7 @@ describe("experts/test-script-author.md 档案解析断言（forge-test-discipli
 });
 
 describe("experts/test-runner.md 档案解析断言（forge-test-discipline-layering 1.6）", () => {
-  const RUNNER_FILE = resolve(here, "../experts/test-runner.md");
+  const RUNNER_FILE = resolve(EXPERTS_TASK_LOOP, "test-runner.md");
   const content = readFileSync(RUNNER_FILE, "utf-8");
 
   it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
@@ -405,7 +410,7 @@ describe("experts/test-runner.md 档案解析断言（forge-test-discipline-laye
 });
 
 describe("experts/test-contract-author.md 档案解析断言（forge-test-discipline-layering 1.4）", () => {
-  const CONTRACT_FILE = resolve(here, "../experts/test-contract-author.md");
+  const CONTRACT_FILE = resolve(EXPERTS_TASK_LOOP, "test-contract-author.md");
   const content = readFileSync(CONTRACT_FILE, "utf-8");
 
   it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
@@ -443,7 +448,7 @@ describe("experts/test-contract-author.md 档案解析断言（forge-test-discip
 });
 
 describe("experts/test-journey-author.md 档案解析断言（forge-test-discipline-layering 1.3）", () => {
-  const JOURNEY_FILE = resolve(here, "../experts/test-journey-author.md");
+  const JOURNEY_FILE = resolve(EXPERTS_TASK_LOOP, "test-journey-author.md");
   const content = readFileSync(JOURNEY_FILE, "utf-8");
 
   it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
@@ -553,7 +558,7 @@ describe("experts/test-journey-author.md 档案解析断言（forge-test-discipl
 });
 
 describe("experts/test-master.md 档案解析断言（forge-test-discipline-layering 1.16）", () => {
-  const MASTER_FILE = resolve(here, "../experts/test-master.md");
+  const MASTER_FILE = resolve(EXPERTS_SPEC, "test-master.md");
   const content = readFileSync(MASTER_FILE, "utf-8");
 
   it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
@@ -619,7 +624,7 @@ describe("experts/test-master.md 档案解析断言（forge-test-discipline-laye
 
 describe("test-* 四专家简介消歧断言（forge-test-discipline-layering 1.15）", () => {
   function fmDescription(file: string): string {
-    const c = readFileSync(resolve(here, "../experts", file), "utf-8");
+    const c = readFileSync(resolve(EXPERTS_TASK_LOOP, file), "utf-8");
     const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(c);
     expect(m, `frontmatter 缺失：${file}`).not.toBeNull();
     const line = m![1]!.split(/\r?\n/).find((l) => l.startsWith("description:"));
@@ -672,8 +677,8 @@ describe("test-* 四专家简介消歧断言（forge-test-discipline-layering 1.
 
   it("四简介经 parseExpertFile 同构校验通过（frontmatter 合法）", () => {
     for (const file of ["test-contract-author.md", "test-journey-author.md", "test-script-author.md", "test-runner.md"]) {
-      const c = readFileSync(resolve(here, "../experts", file), "utf-8");
-      expect(parseExpertFileLike(resolve(here, "../experts", file), c)).toEqual({ ok: true });
+      const c = readFileSync(resolve(EXPERTS_TASK_LOOP, file), "utf-8");
+      expect(parseExpertFileLike(resolve(EXPERTS_TASK_LOOP, file), c)).toEqual({ ok: true });
       expect(c.includes("{{"), `${file} 含裸 {{`).toBe(false);
     }
   });
@@ -681,7 +686,7 @@ describe("test-* 四专家简介消歧断言（forge-test-discipline-layering 1.
 // forge-test-discipline-layering 1.15 简介消歧断言结束
 
 describe("test-* 三 author 档案收口断言（forge-test-discipline-layering 1.20）", () => {
-  const EXPERTS = resolve(here, "../experts");
+  const EXPERTS = EXPERTS_TASK_LOOP;
   const read = (file: string) => readFileSync(resolve(EXPERTS, file), "utf-8");
   const descOf = (file: string) => read(file).match(/^description:\s*(.+)$/m)![1]!;
 
@@ -742,7 +747,7 @@ describe("test-* 三 author 档案收口断言（forge-test-discipline-layering 
 // forge-test-discipline-layering 1.20 三 author 档案收口断言结束
 
 describe("experts/code-master.md 档案解析断言（forge-test-discipline-layering 1.21——对称上抛 + 自写测试同标 + 范围声明）", () => {
-  const FILE = resolve(here, "../experts/code-master.md");
+  const FILE = resolve(EXPERTS_FORGE, "code-master.md");
   const content = readFileSync(FILE, "utf-8");
 
   it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
@@ -778,52 +783,16 @@ describe("experts/code-master.md 档案解析断言（forge-test-discipline-laye
 });
 // forge-test-discipline-layering 1.21 code-master 收口断言结束
 
-describe("experts/proposal-reviewer.md 档案解析断言（forge-test-pipeline-hardening 1.1——专家体系影响面四维条件组）", () => {
-  const FILE = resolve(here, "../experts/proposal-reviewer.md");
-  const content = readFileSync(FILE, "utf-8");
-
-  it("经 parseExpertFile 同构校验通过（必填 name/title/description/tools、字段类型、正文在场）", () => {
-    expect(parseExpertFileLike(FILE, content)).toEqual({ ok: true });
-  });
-
-  it("无裸 {{ 字面量（全文任意位置）", () => {
-    expect(content.includes("{{")).toBe(false);
-  });
-
-  it("frontmatter 键与既有档案键集一致（不引入新键）", () => {
-    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)![1]!;
-    const keys = fm.split(/\r?\n/).filter((l) => /^[A-Za-z]/.test(l)).map((l) => l.split(":")[0]!);
-    const REQUIRED = ["description", "name", "skills", "title", "tools"];
-    const OPTIONAL = ["model", "provider", "reasoning"];
-    for (const key of REQUIRED) {
-      expect(keys, `必填键缺失：${key}`).toContain(key);
-    }
-    expect(keys.filter((k) => !REQUIRED.includes(k) && !OPTIONAL.includes(k)), "引入了 parser 不认可的未知键").toEqual([]);
-  });
-
-  it("四维核对不归 plugin-forge 承载（指挥者段已迁 task-loop——plugin-task-loop 1.12）", () => {
-    // 2026-11-15 裁决：委派纪律只管查找与委派；专家体系四维核对归 expert-squad 档案写径（工具 description）
-    // 指挥者段正本 = plugins/task-loop/host/prompt/commander.ts（残本已退役——plugin-spec 1.8）
-    expect(content).not.toContain("专家体系影响面核对");
-  });
-
-  it("档案正文零仓内路径引用（grep 机检）", () => {
-    expect(content.indexOf("\n---", 4), "frontmatter 结束锚缺失").toBeGreaterThan(-1);
-    const body = content.slice(content.indexOf("\n---", 4) + 4);
-    const BANNED = ["AGENTS", "docs/conventions", "docs/", "packages/", "判例 20", ".forge", "src/"];
-    for (const token of BANNED) {
-      expect(body, `档案正文含禁用引用词：${token}`).not.toContain(token);
-    }
-  });
-});
-// forge-test-pipeline-hardening 1.1 proposal-reviewer 四维条件组断言结束
+// forge-test-pipeline-hardening 1.1 proposal-reviewer 四维条件组断言已随档案退役拆除
+// （expert-builtin-redistribution：proposal-reviewer 与 prd-reviewer/requirements-analyst
+// 三专家档案删档退役，评审职责由 spec-reviewer（task-loop 内置）承担）。
 
 describe("跨档案一致性 pin（forge-test-pipeline-hardening 1.4——弱断言四形态逐字 + 替身口径高漂移对）", () => {
-  const script = readFileSync(resolve(here, "../experts/test-script-author.md"), "utf-8");
-  const journey = readFileSync(resolve(here, "../experts/test-journey-author.md"), "utf-8");
-  const master = readFileSync(resolve(here, "../experts/test-master.md"), "utf-8");
-  const code = readFileSync(resolve(here, "../experts/code-master.md"), "utf-8");
-  const reviewer = readFileSync(resolve(here, "../experts/code-reviewer.md"), "utf-8");
+  const script = readFileSync(resolve(here, EXPERTS_TASK_LOOP + "/test-script-author.md"), "utf-8");
+  const journey = readFileSync(resolve(EXPERTS_TASK_LOOP, "test-journey-author.md"), "utf-8");
+  const master = readFileSync(resolve(EXPERTS_SPEC, "test-master.md"), "utf-8");
+  const code = readFileSync(resolve(EXPERTS_FORGE, "code-master.md"), "utf-8");
+  const reviewer = readFileSync(resolve(here, "../../../plugins/task-loop/experts/code-reviewer.md"), "utf-8");
   const injection = readFileSync(resolve(here, "loop/injection.ts"), "utf-8");
 
   const WEAK_ASSERTION_FORMS = [

@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { describe, beforeEach, expect, it, vi } from 'vitest'
 import type { ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import forgePlugin, { _resetExpertResolverSingletonForTests } from './index.js'
-import { createExpertProfileResolver, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
+import { createExpertProfileResolver } from './faces.js'
 import type { ExpertProfileResolver } from './faces.js'
 import { FORGE_COMMAND_NAMES } from './commands/index.js'
 import type { ForgeCommandDefinition } from './faces.js'
@@ -668,7 +668,7 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
     }
   }
 
-  it('experts 面在场：registerRoot(随包 experts 目录) + refresh 恰一次 + 档案取用面经 provide 注入（fail-soft 装配零波及）', async () => {
+  it('experts 面在场：plugin-forge 不再注册随包 root（零内置档案）+ 零 refresh 触发，档案取用面经 provide 注入（fail-soft 装配零波及）', async () => {
     const rt = new TempRuntime()
     const { face, calls } = expertsFace()
     const { provided, face: reflect } = reflectWith({ experts: face, forgeSettings: { get: async () => ({}) } })
@@ -676,12 +676,13 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
     const resolver = provided.get('forgeExperts') as ExpertProfileResolver
     expect(typeof resolver).toBe('function')
     expect(rt.registeredTools).toHaveLength(20) // 装配面 additive——远征三 tool 退役后 20（plugin-task-loop 1.15）
-    // 接线（registerRoot + refresh 恰一次）发生在首调时点（调用期现查——装配期不触服务面）
+    // expert-builtin-redistribution：随包 experts 目录已迁出四插件包，plugin-forge 对
+    // experts 服务只取用不注册——registerRoot/refresh 恒不发生（root 注册归归属插件 host）。
     await expect(resolver('gate')).resolves.toMatchObject({ name: 'gate-keeper', personaMd: 'md:gate-keeper' })
-    expect(calls.root).toBe(FORGE_EXPERTS_ROOT_DIR)
-    expect(calls.refresh).toBe(1) // registerRoot 只追加 root 不重扫——注册后须显式 refresh 一次
+    expect(calls.root).toBeUndefined() // 零 registerRoot 调用
+    expect(calls.refresh).toBe(0) // 零 refresh 触发
     await expect(resolver('doc')).resolves.toMatchObject({ name: 'tech-writer' })
-    expect(calls.refresh).toBe(1) // 后续调用零重接线（每面实例一次性接线）
+    expect(calls.refresh).toBe(0)
     dispose()
   })
 
@@ -972,9 +973,10 @@ describe('expert-squad-forge-2：claim 变量路由 + provider 投影（faces re
     }
     const dispose = forgePlugin(ctxWithoutReflectExperts as never)
     expect(rt.registeredTools).toHaveLength(20)
-    expect(calls.root).toBe(FORGE_EXPERTS_ROOT_DIR) // registerRoot 装配副作用在场
-    expect(calls.rootPluginName).toBe(FORGE_PACKAGE_NAME) // 实例 ID 前缀 = 包名（experts.<实例ID> 配置键寻址契约——D6）
-    expect(calls.refresh).toBe(1)
+    // expert-builtin-redistribution：plugin-forge 零随包 root——registerRoot/refresh 恒零调用
+    expect(calls.root).toBeUndefined()
+    expect(calls.rootPluginName).toBeUndefined()
+    expect(calls.refresh).toBe(0)
     const resolver = provided.get('forgeExperts') as ExpertProfileResolver
     expect(typeof resolver).toBe('function')
     await expect(resolver('doc')).resolves.toMatchObject({ name: 'tech-writer' }) // 取用面可达（doc→默认映射路由——worker 路由消费前提）

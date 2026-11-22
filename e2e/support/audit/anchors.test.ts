@@ -124,19 +124,19 @@ describe('5.3 审计锚②：规则自证（负样例种植 → 拦截断言—�
     writeFileSync(join(root, 'packages/plugin-forge/skills/fix-bug/SKILL.md'), '# fix-bug\n', 'utf8')
     write('docs/conventions/testing/core.md', '# testing core\n')
     write(
-      'packages/plugin-forge/experts/ok-ref.md',
+      'plugins/task-loop/experts/ok-ref.md',
       ['---', 'name: ok-ref', 'title: 合格样例', 'description: x', 'tools: [read]', 'skills: [fix-bug, docs/conventions/testing/core.md]', '---', '', '正文委托 fix-bug 技能走 TDD 流程。'].join('\n'),
     )
     write(
-      'packages/plugin-forge/experts/ghost-tag.md',
+      'plugins/task-loop/experts/ghost-tag.md',
       ['---', 'name: ghost-tag', 'title: 标签悬空', 'description: x', 'tools: [read]', 'skills: [ghost-skill]', '---', '', '正文。'].join('\n'),
     )
     write(
-      'packages/plugin-forge/experts/ghost-body.md',
+      'plugins/task-loop/experts/ghost-body.md',
       ['---', 'name: ghost-body', 'title: 正文悬空', 'description: x', 'tools: [read]', 'skills: []', '---', '', '委托 ghost-skill 技能执行。'].join('\n'),
     )
     write(
-      'packages/plugin-forge/experts/ghost-doc.md',
+      'plugins/task-loop/experts/ghost-doc.md',
       ['---', 'name: ghost-doc', 'title: 文档悬空', 'description: x', 'tools: [read]', 'skills: [docs/conventions/no-such-doc.md]', '---', '', '正文。'].join('\n'),
     )
     const findings = auditSkillReferencesResolved(root)

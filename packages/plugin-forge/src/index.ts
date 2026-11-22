@@ -29,7 +29,7 @@ import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
-import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, createProjectWorkspaceRoots, createForgePathsAnchors, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, createProjectWorkspaceRoots, createForgePathsAnchors, emitForgeDiag } from './faces.js'
 import { collectDeclaredDirKeys, createDirKeyRegistry } from '@dsh-forge/project/host-dirs'
 import type { DirKeyEntry } from '@dsh-forge/project/host-dirs'
 import { createDirFactsPort } from '@dsh-forge/project/host-dirs'
@@ -168,47 +168,10 @@ const forgePlugin: ForgePlugin = Object.assign(
     const emitResolverDiag = (payload: { event: string; level: DiagLevel; message: string } & Record<string, unknown>): void => {
       emitForgeDiag(diag, payload)
     }
-    // registerRoot/refresh 是幂等副作用面（只登记不重扫/整树重扫）——按 experts face 实例
-    // 身份做一次性接线记忆（服务对象本身零缓存：热换代即新实例新接线；presence 判定每调
-    // 现查）。pluginName = 实例 ID 前缀（bug 0b83e3aa 链——缺席时 expert-squad 回落 `plugin`
-    // 前缀，experts.`@dsh-forge/plugin-forge#键` 配置键结构性不命中，D6 寻址契约破）。
-    // refresh 完成屏障（expert-squad-forge 1.10）：refresh 是 fire-and-forget 的重扫——
-    // 未结算前首笔档案取用会误触发 not-found fail-loud（自愈但语义误报）。promise 记账
-    // 供 resolver 首调 await；错误在此吞掉归一为 settled-safe（fail-soft 诊断不变）。
-    let wiredExperts: ExpertsServiceFace | undefined
-    let expertsReady: Promise<void> = Promise.resolve()
-    const wireExperts = (experts: ExpertsServiceFace): void => {
-      if (wiredExperts === experts) return
-      try {
-        experts.registerRoot(ctx, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME)
-      } catch (cause) {
-        const message = cause instanceof Error ? cause.message : String(cause)
-        emitForgeDiag(diag, {
-          level: 'warn',
-          event: 'forge-experts',
-          message: `forge 预设专家目录 registerRoot 失败（fail-soft，随包预设层缺席）：${message}`,
-        })
-      }
-      expertsReady =
-        typeof experts.refresh === 'function'
-          ? experts.refresh
-              .call(experts)
-              .catch((cause: unknown) => {
-                const message = cause instanceof Error ? cause.message : String(cause)
-                emitForgeDiag(diag, {
-                  level: 'warn',
-                  event: 'forge-experts',
-                  message: `forge 预设专家目录 refresh 失败（fail-soft，watch 失效回调后续重扫）：${message}`,
-                })
-              })
-              .then(() => undefined)
-          : Promise.resolve()
-      wiredExperts = experts
-    }
-    // 装配期可选 eager 接线（experts 面已在场 = 立即 registerRoot/refresh——跨 realm 正门
-    // 场景装配即生效；晚到/热换代由 resolver 调用期现查 + wireExperts 幂等接线兜底）。
-    const expertsAtAssembly = readExpertsFace()
-    if (expertsAtAssembly !== undefined) wireExperts(expertsAtAssembly)
+    // registerRoot/refresh 接线已随内置专家档案退役拆除（expert-builtin-redistribution）：
+    // plugin-forge 零内置专家档案，随包 root 注册归 task-loop/spec/knowledge/forge 四插件
+    // 包各自的 host 装配面；本插件仅消费 experts 服务做路由取用（get/档位折叠），不注册
+    // 任何 root、不触发 refresh。
     // Root cause（bug 链 763de653→d327323b→dfa41a72/ad32e240）：cordis 父子 scope 下
     // 探测/取回双向不互见，任何跨 scope 反射形态（探测守卫、撞车后 reflect 取回）恒败。
     // 修复 = 放弃跨 scope 反射面，改模块级本地 resolver 单例（expertResolverSingleton）：
@@ -235,11 +198,9 @@ const forgePlugin: ForgePlugin = Object.assign(
           })
           return undefined
         }
-        wireExperts(experts)
         try {
           return await createExpertProfileResolver({
             experts,
-            ready: expertsReady,
             ...(settingsService !== undefined ? { settings: settingsService } : {}),
             ...(diag !== undefined ? { diag } : {}),
           })(taskType, expertKey)
@@ -1113,7 +1074,6 @@ export {
   createForgePathsAnchors,
   createProjectContainerDirs,
   createProjectWorkspaceRoots,
-  FORGE_EXPERTS_ROOT_DIR,
   FORGE_NOTICE_SOURCE_KIND,
 } from './faces.js'
 export type {

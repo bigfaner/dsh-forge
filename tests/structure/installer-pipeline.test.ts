@@ -361,8 +361,12 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
       }
     }
     expect(problems, problems.join('\n')).toEqual([])
-    // 现值锚：plugin-forge experts/（34 份内置专家档案——bug a2a54922 病理面）
-    expect(staged['plugin-forge']).toContain('experts')
+    // 现值锚：内置专家档案按插件域重组（expert-builtin-redistribution）——task-loop 22 档
+    // 承接 a2a54922 病理面；plugin-forge 零内置档案（experts 物化随迁出拆除）
+    const taskLoopKey = Object.keys(staged).find((k) => k.endsWith('/task-loop') || k === 'task-loop')
+    expect(taskLoopKey, 'task-loop 未入 staging 闭包').toBeDefined()
+    expect(staged[taskLoopKey!]).toContain('experts')
+    expect(staged['plugin-forge'] ?? []).not.toContain('experts')
   })
 
   it('bug: host dist 静态 @dsh-forge/* import 面 ⊆ staging 闭包（打包形态主进程 ESM 上溯 runtime/node_modules——漏包即 ERR_MODULE_NOT_FOUND 启动崩，2026-10-18 安装版实证 git-worktree）', () => {

@@ -6,9 +6,7 @@
 // 零实现级 import（可独立发版前提）。参数 schema 面恒取官方 enforced subset 标量形
 // （string/integer/number/boolean + 数组）——嵌套负载（gate/include/vars）在 tool 面
 // 平铺为显式参数（Interface 8 snake_case + 任务定位两显式参口径的延伸）。
-import { join } from 'node:path'
 import { dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import {
   DEFAULT_EXPERT_MAPPING,
   DIAG_EVENT,
@@ -718,14 +716,9 @@ export function createProjectWorkspaceRoots(projects: ProjectWsRootServiceFace):
 
 // ─────────────────────────── 专家团装配面（expert-squad-forge 1.2——experts 服务接入 + settings 映射表） ───────────────────────────
 
-/** 随包预设专家档案目录（packages/plugin-forge/experts——registerRoot 的 plugin 内置层 root；
- *  以本模块编译产物 dist/faces.js 为基一句径派生，与包布局绑定） */
-export const FORGE_EXPERTS_ROOT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'experts')
-
-/** 本包包名（registerRoot 的 pluginName 实参——专家实例 ID 前缀 `插件名#键`，proposal
- *  expert-squad-default-routing D6 寻址契约；缺席 = expert-squad 侧回落 `plugin` 前缀，
- *  experts.<实例ID> 配置键（如 `@dsh-forge/plugin-forge#tech-writer`）结构性不命中）。 */
-export const FORGE_PACKAGE_NAME = '@dsh-forge/plugin-forge' as const
+/** 随包预设专家档案已按插件域重组迁出（expert-builtin-redistribution——plugin-forge 零内置
+ *  专家档案，task-loop/spec/knowledge/forge 四插件包各自持有 experts/ 并经 host 装配面
+ *  registerRoot 注册；本插件仅消费 experts 服务做路由取用，不再注册任何 root）。 */
 
 /**
  * experts 服务结构最小面（expert-squad registry 收窄——本插件不依赖该包，结构兼容消费；
@@ -745,7 +738,7 @@ export interface ExpertsServiceFace {
     readonly reasoning?: 'low' | 'medium' | 'high'
   }
   /** 追加 plugin 内置层 root（只登记不重扫——生效须显式 refresh 一次；pluginName = 实例
-   *  ID 前缀，FORGE_PACKAGE_NAME 单源）。 */
+   *  ID 前缀；本插件不再调用——root 注册归各档案归属插件包的 host 装配面）。 */
   registerRoot(ctx: unknown, dir: string, pluginName?: string): void
   /** 整体重扫（registerRoot 后的显式生效面；结构可选——缺席 = 实现无刷新语义）。 */
   refresh?(): Promise<void>
