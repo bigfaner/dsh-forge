@@ -32,7 +32,7 @@ export type ComposedKey = keyof typeof PRESENCE_SERVICE_KEYS
 // ── INV-3 安装互斥守卫判据单源（bug ef3e92ea——forge-aggregate-bundle 1.32）──
 /**
  * forge 组合标记服务键（forge apply 激活期 provide——成员 apply 守卫消费点现查）：
- * bundle 正常装载路径成员行先经 forge apply（六插行序 = dshforge 首）拿到标记；
+ * bundle 正常装载路径成员行先经 forge apply（六插行序 = forge-bundle 首）拿到标记；
  * solo 越装行（无 comboMark）现查到标记即 loud-fail。成员包零 import 本常量
  * （no-cross-plugin-imports 红线）——同值字面量对账 pin 归 tests/install-mutex.test.ts。
  */

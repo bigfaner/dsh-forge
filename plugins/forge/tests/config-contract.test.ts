@@ -17,9 +17,9 @@ const patchYaml = readFileSync(resolve(FORGE_ROOT, "cordis.patch.yml"), "utf8");
  * 消费端 `??` 缺省（project.db 收到 boolean 崩溃），undefined 才能触发缺省腿）。 */
 const HOME_EXPR = `(process.env.${DSH_HOME_ENV} || undefined) && (process.env.${DSH_HOME_ENV} + '${FORGE_HOME_SUFFIX}')`;
 
-/** 抽取 forge 行 home 键的 !!js 表达式（id = dshforge 异 id——bug 1102d9d8；缺失 = undefined）。 */
+/** 抽取 forge 行 home 键的 !!js 表达式（id = forge-bundle 异 id——bug 1102d9d8；缺失 = undefined）。 */
 function extractHomeExpr(): string | undefined {
-  const block = patchYaml.match(/-\s+id:\s*dshforge\b[\s\S]*$/);
+  const block = patchYaml.match(/-\s+id:\s*forge-bundle\b[\s\S]*$/);
   return block?.[0]?.match(/^\s+home:\s*!!js\s+(.+)$/m)?.[1];
 }
 

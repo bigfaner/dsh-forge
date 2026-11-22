@@ -1,5 +1,6 @@
 # @dsh-forge/forge bundle 档 patch（forge-aggregate-bundle 1.13——直写正本，人工核字维护；生成器已退役）：
-# ① 六插行：forge 自插行（id = dshforge 异 id——bug 1102d9d8：desktop 官方预装
+# ① 六插行：forge 自插行（id = forge-bundle 异 id——用户裁定 2026-11-22 自 dshforge
+#    改名，官方同款构词；bug 1102d9d8：desktop 官方预装
 #    @deepseek-ai/dsh-experimental-forge-bundle 服务行同 id `forge`，id 键合并会整行
 #    替换官方服务行 → 官方 forge/forgeSession 服务缺席 → forge-session/forge-panel
 #    pending → StartupError。改 id 后 user 层既有启停 override 以旧 id `forge` 键的
@@ -35,7 +36,7 @@
 # `??` 缺省致 project.db 收到 boolean 崩溃；`(env || undefined) &&` 形——undefined
 # 在 cordis config 面即键缺省语义，消费端 `??` 缺省腿恢复生效）。
 - insert:
-    - id: dshforge
+    - id: forge-bundle
       name: '@dsh-forge/forge'
       config:
         home: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge')

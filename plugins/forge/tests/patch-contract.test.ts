@@ -49,10 +49,11 @@ function parseInsertRows(yaml: string): InsertRow[] {
   return rows;
 }
 
-/** 六插行 id 序（forge 自插 id = dshforge 异 id——bug 1102d9d8：≠ 官方
+/** 六插行 id 序（forge 自插 id = forge-bundle 异 id——用户裁定 2026-11-22 自 dshforge
+ *  改名；bug 1102d9d8：≠ 官方
  *  @deepseek-ai/dsh-experimental-forge-bundle 服务行 id `forge`，防 id 键合并整行替换
  *  官方服务行 → StartupError + 五件插行——bundle 档唯一插行面）。 */
-const SIX_ROW_IDS = ["dshforge", "project", "spec", "task-loop", "expert-squad", "knowledge"];
+const SIX_ROW_IDS = ["forge-bundle", "project", "spec", "task-loop", "expert-squad", "knowledge"];
 const FIVE = ["project", "spec", "task-loop", "expert-squad", "knowledge"] as const;
 
 describe("forge patch 六插行契约", () => {
@@ -72,8 +73,8 @@ describe("forge patch 六插行契约", () => {
     expect(rows.map((r) => r.id)).toEqual([...SIX_ROW_IDS, "preset-forge", "preset-headhunter"]);
   });
 
-  it("forge 自插行（id = dshforge 异 id——bug 1102d9d8）name + config 恰 { home } 单键（forge 统一 schema——Workbench 生长面；db/tasksHome 不设覆写键恒延伸）", () => {
-    expect(rows.find((r) => r.id === "dshforge")!.name).toBe("@dsh-forge/forge");
+  it("forge 自插行（id = forge-bundle 异 id——bug 1102d9d8）name + config 恰 { home } 单键（forge 统一 schema——Workbench 生长面；db/tasksHome 不设覆写键恒延伸）", () => {
+    expect(rows.find((r) => r.id === "forge-bundle")!.name).toBe("@dsh-forge/forge");
     expect(rows[0]!.configKeys).toEqual(["home"]);
   });
 
