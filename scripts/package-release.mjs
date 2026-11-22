@@ -31,10 +31,21 @@ const BUNDLE_OVERRIDES = { 'better-sqlite3': '13.0.3' }
 // bundle 目录 pnpm 构建批准表（pnpm 11 ignored-builds 门消音——13.0.3 零安装脚本，
 // prebuilds/ 随包分发；同主仓 pnpm-workspace.yaml allowBuilds 语义，仅消门无编译动作）
 const BUNDLE_ALLOW_BUILDS = { 'better-sqlite3': true }
-// 成员非插行对账豁免表（留档裁定 2026-11-22——walkthrough/fix-7-bundle-hardening）：
-// preset-standard 不上提——官方预设由宿主运行时供服，spec 的 standard 覆写行不进
-// bundle 交付 patch（bundle 通道预设会话由 preset-forge/preset-headhunter 供服）。
-const NON_CARRY_EXEMPT = new Set(['preset-standard'])
+// 成员非插行对账豁免表：
+// - preset-standard 不上提（留档裁定 2026-11-22——walkthrough/fix-7-bundle-hardening）：
+//   官方预设由宿主运行时供服，spec 的 standard 覆写行不进 bundle 交付 patch（bundle
+//   通道预设会话由 preset-forge/preset-headhunter 供服）。
+// - skill-filesystem-<member> 五件顶层 skills 行退役为设计（forge-aggregate-bundle 1.34
+//   技能预设独占收敛——技能走 preset-forge/preset-headhunter 子树实例，bundle patch 顶层
+//   禁承带），solo 通道成员 patch 顶层自持行不对账进 bundle 交付 patch。
+const NON_CARRY_EXEMPT = new Set([
+  'preset-standard',
+  'skill-filesystem-project',
+  'skill-filesystem-spec',
+  'skill-filesystem-task-loop',
+  'skill-filesystem-expert-squad',
+  'skill-filesystem-knowledge',
+])
 const SEMVER = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/
 
 export function readJson(file) {
@@ -248,34 +259,22 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     join(bundleDir, 'pnpm-workspace.yaml'),
     `# 生成文件（scripts/package-release.mjs）——交付目录 pnpm 构建批准表：13.0.3 零安装\n# 脚本（prebuilds/ 随包分发），此表仅消 ignored-builds 门，无编译动作。\nallowBuilds:\n${Object.entries(BUNDLE_ALLOW_BUILDS).map(([name, allow]) => `  '${name}': ${allow}`).join('\n')}\n`,
   )
-  // 交付目录 patch 增补段（bug：bundle 通道成员 patch 不装载——「谁带谁自持」仅
-  // solo/发布树成立；bundle 通道技能行/预设行必须由 forge patch 携带）。
+  // 交付目录 patch 增补段（技能预设独占收敛 forge-aggregate-bundle 1.34：bundle patch
+  // 顶层五件 skills 行增补退役——技能走 forge patch preset-forge 子树实例 + expert-squad
+  // patch preset-headhunter 子树实例，机检见 verifyBundleClosure 顶层禁承带断言）。
   // 行形态铁律（architect P1#2 定谳 + CLI dump-config 实验）：全部行必须 insert 块
   // 包裹——顶层非 insert 行被 loader 按 entry 解析 → entry not found 静默跳过
   // （官方形态 = expert-squad preset-headhunter 第二 insert 块）。组合目标插件
   // （agent-preset/skill-filesystem）由宿主运行时供服，无需 profile 安装。
-  const memberNames = packages.slice(1).map((entry) => entry.name.slice('@dsh-forge/'.length))
+  // preset-headhunter 行块搬移（expert-squad patch 第二 insert 块逐字——bundle 通道
+  // 成员 patch 非插行语义的唯一等价承载，猎头模式预设恢复；B 迁移后 skills 实例嵌套在
+  // 块内随块承带）。字段驱动：expert-squad 为成员时才搬移（源 patch 经成员 sourceDir +
+  // dsh.bundle.patch 声明定位）；非成员（合成仓 fixture）跳过——块承载语义随成员在场性走。
   // 交付增补前置断言（append 前置——基座断裂时 appendFileSync 会静默造出无 insert
   // 块的孤儿 patch，行全部落空）：基座文件在场 + 含 insert 块。
   const bundlePatchPath = join(bundleDir, 'cordis.patch.yml')
   if (!existsSync(bundlePatchPath)) throw new Error('交付增补前置断言失败：bundle 交付 patch 基座缺席（forge dsh.bundle.patch 拷贝断裂）')
   if (!/^- insert:/m.test(readFileSync(bundlePatchPath, 'utf8'))) throw new Error('交付增补前置断言失败：bundle 交付 patch 基座无 insert 块')
-  const skillRows = memberNames.flatMap((name) => {
-    const anchor = `process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/${name}/package.json')`
-    const joinExpr = `process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(${anchor}), 'skills')`
-    return [
-      `- id: skill-filesystem-${name}`,
-      `  name: '@deepseek-ai/dsh-skill-filesystem'`,
-      `  config:`,
-      `    providerName: filesystem-${name}`,
-      `    customSkillDirs:`,
-      `      - !!js ${anchor} && ${joinExpr}`,
-    ]
-  })
-  // preset-headhunter 行块搬移（expert-squad patch 第二 insert 块逐字——bundle 通道
-  // 成员 patch 非插行语义的唯一等价承载，猎头模式预设恢复）。字段驱动：expert-squad
-  // 为成员时才搬移（源 patch 经成员 sourceDir + dsh.bundle.patch 声明定位）；非成员
-  // （合成仓 fixture）跳过——块承载语义随成员在场性走。
   const squadEntry = packages.find((entry) => entry.name === '@dsh-forge/expert-squad')
   let headhunterBlock = ''
   if (squadEntry !== undefined) {
@@ -288,8 +287,11 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     const hhStart = insertStarts[1]
     if (hhStart === undefined) throw new Error('交付增补失败：expert-squad patch 第二 insert 块（preset-headhunter）缺席')
     headhunterBlock = hl.slice(hhStart).filter((l) => l.trim() !== '').join('\n')
+    if (!headhunterBlock.includes('- id: skill-filesystem-expert-squad')) {
+      throw new Error('交付增补失败：preset-headhunter 搬移块 skills 实例缺席（skill-filesystem-expert-squad 随块承带断裂）')
+    }
   }
-  appendFileSync(bundlePatchPath, `\n${['- insert:', ...skillRows.map((l) => '  ' + l)].join('\n')}\n${headhunterBlock}\n`)
+  if (headhunterBlock !== '') appendFileSync(bundlePatchPath, `\n${headhunterBlock}\n`)
   // manifest 版本清单
   const manifest = {
     generator: 'scripts/package-release.mjs',
@@ -509,13 +511,28 @@ export function verifyBundleClosure(bundleDir, { repoRoot = REPO_ROOT } = {}) {
   if (JSON.stringify(actualOverrides) !== JSON.stringify(BUNDLE_OVERRIDES)) {
     violations.push(`bundle: pnpm.overrides 生成断言漂移（期望 ${JSON.stringify(BUNDLE_OVERRIDES)}，实际 ${JSON.stringify(actualOverrides ?? null)}）`)
   }
-  // 交付 patch 五行 skills 行断言（bundle 通道成员 patch 不装载——技能行必须由 forge patch 携带）
+  // 交付 patch 顶层禁承带 skills 行（forge-aggregate-bundle 1.34 技能预设独占收敛——
+  // 五件顶层 skills 行退役为设计，标准模式零成员技能；技能走 preset 子树实例。判定区分
+  // 顶层与子树嵌套：insert 块直接子行（缩进 ≤4）出现 `- id: skill-filesystem-<short>`
+  // 即红，preset 子树嵌套实例（缩进 ≥6）不误伤）。
   const bundlePatchPath = join(bundleDir, 'cordis.patch.yml')
   if (!existsSync(bundlePatchPath)) return [...violations, 'bundle: 交付 patch cordis.patch.yml 缺席']
   const bundlePatchText = readFileSync(bundlePatchPath, 'utf8')
-  for (const short of packages.slice(1).map((entry) => entry.name.slice('@dsh-forge/'.length))) {
-    if (!bundlePatchText.includes(`- id: skill-filesystem-${short}`) || !bundlePatchText.includes(`providerName: filesystem-${short}`)) {
-      violations.push(`bundle: 交付 patch 缺 skills 行 skill-filesystem-${short}（providerName filesystem-${short}）`)
+  for (const m of bundlePatchText.matchAll(/^(\s*)- id: (skill-filesystem-\S+)\s*$/gm)) {
+    if (m[1].length <= 4) violations.push(`bundle: 交付 patch 顶层禁承带 skills 行（技能预设独占——preset 子树实例承载）：${m[2]}`)
+  }
+  // preset-forge 子树 skills 实例在场（forge 正本随交付 patch 承带——缺席即 Forge 预设
+  // 技能落空；五成员锚 + 互异 providerName）
+  if (bundlePatchText.includes('- id: preset-forge')) {
+    if (!bundlePatchText.includes('- id: skill-filesystem-forge') || !bundlePatchText.includes('providerName: filesystem-forge')) {
+      violations.push('bundle: preset-forge 子树 skills 实例缺席（skill-filesystem-forge / providerName filesystem-forge）')
+    }
+  }
+  // preset-headhunter 搬移块 skills 实例在场（B 迁移后随块承带不丢失——expert-squad
+  // patch 顶层退役行以子树实例形态进交付 patch）
+  if (packages.some((entry) => entry.name === '@dsh-forge/expert-squad')) {
+    if (!bundlePatchText.includes('- id: skill-filesystem-expert-squad') || !bundlePatchText.includes('providerName: filesystem-expert-squad')) {
+      violations.push('bundle: preset-headhunter 搬移块 skills 实例缺席（skill-filesystem-expert-squad / providerName filesystem-expert-squad）')
     }
   }
   // 成员非插行对账（bundle 通道「谁带谁自持」失效面收口）：成员 patch 首个 insert
