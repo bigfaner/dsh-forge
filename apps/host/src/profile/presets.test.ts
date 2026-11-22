@@ -29,7 +29,7 @@ function pluginRowBlocks(text: string): Map<string, string> {
   const blocks = new Map<string, string[]>()
   let current: { id: string; buf: string[] } | undefined
   for (const line of text.split('\n')) {
-    const match = /^ {10}- id: (\S+)\s*$/.exec(line)
+    const match = /^ {10}- id: (\S+)(?:\s+#.*)?\s*$/.exec(line)
     if (match !== null) {
       if (current !== undefined) blocks.set(current.id, current.buf)
       current = { id: match[1]!, buf: [line] }
@@ -234,8 +234,10 @@ describe('headhunter 预设（expert-squad 0.30.0 起随包自带：plugins/expe
   const rows = pluginRowBlocks(text)
   /** 猎头产品增量行（上游没有——机械 diff 豁免面；expert-squad 不落组合专行，
    *  全工具走全局单实例注册全组合继承；1.34 技能预设独占收敛——skill-filesystem-
-   *  expert-squad 实例自顶层行迁入 preset 子树，随块成行） */
-  const HR_PRODUCT_ROWS = new Set([...PRODUCT_ROWS, 'skill-filesystem-expert-squad'])
+   *  expert-squad 实例自顶层行迁入 preset 子树，随块成行；skill-office /
+   *  office-to-pdf disabled 行随包自带——office 能力对猎头组合显式关闭，
+   *  plugin-market 行同批镜像） */
+  const HR_PRODUCT_ROWS = new Set([...PRODUCT_ROWS, 'skill-filesystem-expert-squad', 'skill-office', 'office-to-pdf'])
 
   it('预设声明行：agent-preset 包名 + id headhunter / name 猎头模式 / description / order 3（远征·突击之后）', () => {
     expect(text).toContain('    - id: preset-headhunter')
@@ -258,7 +260,8 @@ describe('headhunter 预设（expert-squad 0.30.0 起随包自带：plugins/expe
 
   it('persona 分叉：猎头招聘/管理 SOP（角色锚 + 猎头作风 + 简历官视角 + 只荐不管派边界；零编码纪律句）', () => {
     const persona = rows.get('persona')!
-    expect(persona).toContain('              suffix: Your working directory is {{cwd}}.')
+    // suffix 已退役（commit 0657f50d）——persona 不再携带 cwd 后缀行
+    expect(persona).not.toContain('suffix:')
     expect(persona).toContain('              prefix: >-')
     expect(persona).toContain('                You are a coding agent powered by the {{model}} model.')
     expect(persona).toContain('专家团猎头')
