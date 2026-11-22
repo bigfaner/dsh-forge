@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 import mdMermaidPlugin, { MD_MERMAID_PLUGIN_NAME } from '../../host/index.js'
 import { MERMAID_TOOL_NAME, ValidateMermaidError, isValidateMermaidError } from '../../host/tools/validate-mermaid.js'
 import { CONVERT_TOOL_NAME } from '../../host/tools/convert-document.js'
+import { GET_MD_OUTLINE } from '../../host/tools/get-outline.js'
 import type { MermaidToolDefinition } from '../../host/faces.js'
 
 /** 临时 runtime：注册捕获 + disposer 记账（plugin-forge-spec TempRuntime 同型裁剪——本插件只消费 tools 面） */
@@ -55,15 +56,16 @@ describe('AC2 faces 结构化窄类型（零 dsh 运行时依赖）', () => {
   })
 })
 
-describe('AC1/AC3 注册面 pin：恰两 tool（validateMermaid + convertDocument 字面量单源）', () => {
-  it('apply 内恰两注册且名 = 字面量单源（validateMermaid + convertDocument 各一）', () => {
+describe('AC1/AC3 注册面 pin：恰三 tool（validateMermaid + convertDocument + getOutline 字面量单源）', () => {
+  it('apply 内恰三注册且名 = 字面量单源（validateMermaid + convertDocument + getOutline 各一）', () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
-    expect(rt.registeredTools.map((t) => t.name)).toEqual([MERMAID_TOOL_NAME, CONVERT_TOOL_NAME])
+    expect(rt.registeredTools.map((t) => t.name)).toEqual([MERMAID_TOOL_NAME, CONVERT_TOOL_NAME, GET_MD_OUTLINE])
     expect(MERMAID_TOOL_NAME).toBe('validateMermaid')
     expect(CONVERT_TOOL_NAME).toBe('convertDocument')
+    expect(GET_MD_OUTLINE).toBe('getOutline')
     dispose()
-    expect(rt.disposedCount()).toBe(2)
+    expect(rt.disposedCount()).toBe(3)
   })
 
   it('validateMermaid 形状不变：description / object 根 parameters / output schema+render / execute', () => {
