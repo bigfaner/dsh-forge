@@ -58,7 +58,7 @@ describe('ForgeSidebarSlot（槽位接线层）', () => {
     }
   })
 
-  it('「＋ 添加项目」入口不在列表内（用户裁决 2026-11-12——宽态头部/rail 轨内零入口；唯一残存位 = 无项目空态 CTA，归 phaseBody/面板测试）', () => {
+  it('「＋ 添加项目」列表内行入口不在座（头部图标钮归面板段头——data-dswf-add-project；空态 CTA 归 phaseBody/面板测试）', () => {
     Date.now = () => NOW
     try {
       expect(renderSlot(ledger([]), true)).not.toContain('data-dswf-nav="add-project"')

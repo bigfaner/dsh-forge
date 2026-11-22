@@ -199,7 +199,7 @@ describe('项目行语言对齐原生（fix-42：整行翻转 + 行尾 hover 动
 })
 
 describe('相位（UF-1 States）', () => {
-  it('空项目（ready 且空）→ 空态引导 + 「添加项目」CTA（AC5；唯一残存添加入口——2026-11-12 裁决）', () => {
+  it('空项目（ready 且空）→ 空态引导 + 「添加项目」CTA（AC5；头部图标钮之外的兜底入口）', () => {
     const markup = panel({ tree: [], hasProjects: false, onAddProject: () => {} })
     expect(markup).toContain('data-dswf-empty')
     expect(markup).toContain('尚未注册项目')
@@ -266,19 +266,26 @@ describe('收起态 rail（fix-42 空轨道退役：搜索钮在轨——项目 
   })
 })
 
-describe('头部三件 + 过滤（fix-6 + fix-42 段头内嵌搜索槽——官方 searchSlot 形态）', () => {
-  it('头部三件齐且顺序对齐原型：label + 搜索钮 → 视图选项钮（「＋」随 2026-11-12 裁决退役）', () => {
+describe('头部四件 + 过滤（fix-6 + fix-42 段头内嵌搜索槽——官方 searchSlot 形态）', () => {
+  it('头部四件齐且顺序对齐：label + 搜索钮 → 视图选项钮 → 添加项目钮（2026-11-22 裁决恢复头部图标入口）', () => {
     const markup = panel({ onAddProject: () => {} })
     expect(markup).toContain('dswf-sidebar-sectionlabel')
     expect(markup).toContain('>项目</div>') // 段头标签（tree 缺省）
     const searchBtn = markup.indexOf('data-dswf-search-toggle')
     const viewBtn = markup.indexOf('data-dswf-view-menu')
+    const addBtn = markup.indexOf('data-dswf-add-project')
     expect(searchBtn).toBeGreaterThanOrEqual(0)
     expect(viewBtn).toBeGreaterThanOrEqual(0)
+    expect(addBtn).toBeGreaterThanOrEqual(0)
     expect(searchBtn).toBeLessThan(viewBtn) // 原型序：搜索 → 视图
+    expect(viewBtn).toBeLessThan(addBtn) // 视图 → 添加项目
     expect(markup).toContain('aria-label="搜索项目与会话"')
     expect(markup).toContain('aria-label="视图选项"')
-    expect(markup).not.toContain('data-dswf-nav="add-project"')
+    expect(markup).toContain('aria-label="添加项目"')
+  })
+
+  it('onAddProject 缺席 → 头部零添加钮（fail-soft——钮不呈现）', () => {
+    expect(panel()).not.toContain('data-dswf-add-project')
   })
 
   it('过滤行缺省收起（默认渲染不含 searchrow / 空提示）——收起态四件齐', () => {

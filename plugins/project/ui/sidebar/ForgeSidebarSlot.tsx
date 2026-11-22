@@ -12,8 +12,8 @@
 // 导航/变更动作经 sidebarActions 绑定（openSession/startSession/会话行动作 = dsh 面；
 // 改名/归档切换 = forge:projects/update RPC 面——name patch 的 workspace 标题对齐归
 // core 侧 fix-33 ⑪）。
-// 「＋」入口收口（用户裁决 2026-11-12）：「＋ 添加项目」入口不在项目列表内——列表头部/
-// rail 轨内零入口；唯一残存入口 = 无项目空态 CTA（onAddProject 经 phaseBody 空态消费）。
+// 「＋」入口收口（用户裁决 2026-11-12）已被 2026-11-22 裁决接替：宽态头部恢复「添加项目」
+// 图标钮（data-dswf-add-project，面板段头内）；空态 CTA 与 hero picker「添加项目…」保留。
 // 1.8 D 类接线：流程宿主（AddProjectFlow）随本槽位件常驻挂载——官方宿主无壳装配期，
 // 页内缝 __DSH_FORGE_ADD_PROJECT_FLOW__ 由本面发布，空态 CTA 与 hero CTA 两入口直达。
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'

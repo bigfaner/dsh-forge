@@ -153,8 +153,9 @@ export * from './bug-refs/dock-tab-mirrors.js'
 // 切片——壳侧 rpc 发布面零参与）──
 export * from './rpc.js'
 
-// ── 手机远程入口（1.40 注册面自壳侧迁入——状态模型/组件/注册面整族；详见 remote-entry-face.ts）──
-export * from './remote-entry-face.js'
+// ── 手机远程状态模型（1.40 自壳侧迁入）：底行入口注册面已退役（用户裁决 2026-11-22——
+// 官方宿主底行已有同形手机入口，产品行 'dswf-remote' 不再注册；组件族留 remote-entry/
+// 供未来重锚，host 侧 forge:remote/* 缝零改动）──
 export * from './remote-entry/remote-status.js'
 
 // ── 对话面注册面（1.13 迁移退役：dispatchTask 工具行 + 事件折叠组三段迁 @dsh-forge/task-loop
@@ -184,14 +185,11 @@ import { installWorktreePrefsFace, type ConfigFormsFace } from './settings-secti
 import { registerSettingsSection } from './settings-section/index.js'
 import { registerWorktreeDetailSection } from './detail-section/index.js'
 import {
-  registerProjectLocale,
-  registerRemoteEntryFace,
-} from './remote-entry-face.js'
-import { registerConversationToolFaces } from './conversation-views-face.js'
+  registerConversationToolFaces,
+} from './conversation-views-face.js'
 import { registerSidebarFace } from './sidebar-face.js'
 import { registerHeroPickerFace } from './hero-picker-face.js'
 import { registerHeroPanelFace } from './hero-panel-face.js'
-import type { LocaleServiceFace } from './locale.js'
 
 // ── keyed section 扩展点 + 配置节双缝（1.16：tab keyed 占用者模式泛化 + settings 节
 // bundle.config/detail.section 双缝——configForms revisioned 写径；详见各模块头注）──
@@ -332,21 +330,6 @@ export const projectClient = {
     } catch (error) {
       revokeOfficialSeamGlobals()
       console.warn('[dsh-forge/project] official seam faces registration interrupted', error)
-    }
-    // 手机远程入口（1.40 迁入——官方 sidebar.footer.action list 行 'dswf-remote'）：词典
-    // 登记 + 行注册逐面 fail-soft（locale 服务缺席/词典被拒 = 行 label 回退 ns 键名呈现，
-    // 注册本身不阻断；slots 劣形 = registerKeyedSection 内收口不注册）。
-    try {
-      const locale = (rec?.['locale'] as LocaleServiceFace | undefined) ?? undefined
-      if (locale !== undefined && typeof locale.register === 'function' && typeof locale.bind === 'function') {
-        registerProjectLocale(locale)
-        const registered = registerRemoteEntryFace(slots, locale)
-        console.info(`[dsh-forge/project] remote entry face registered=${registered}`)
-      } else {
-        console.warn('[dsh-forge/project] ctx.locale absent; remote entry not mounted')
-      }
-    } catch (error) {
-      console.warn('[dsh-forge/project] remote entry registration failed——降级不注册', error)
     }
     // 对话面工具行 + 事件折叠组三段（1.41 迁入——dispatchTask keyed 行 + 组卡渲染链；
     // uiConversation = 静态 inject 边保证（bug 2dde7c9e 候选 A），缺席宿主 entry 级挂起

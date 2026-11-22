@@ -53,6 +53,7 @@ import {
   IconNewChatOutlineRegular,
   IconPinFillRegular,
   IconPinOutlineRegular,
+  IconProjectAddOutlineRegular,
   IconQueueOutlineRegular,
   IconSearchOutlineRegular,
   IconSlidersTwoOutlineRegular,
@@ -992,9 +993,9 @@ export function phaseBody(input: SidebarZonePhaseInput): ReactNode {
 }
 
 /**
- * 项目区本体（受控展示件）：头部三件（label + 搜索钮 + 视图选项钮；「＋」入口随
- * 2026-11-12 用户裁决退役——搜索展开 =
- * 官方 searchSlot 形态——label/头部动作让位、过滤行占位）+ 相位主体（phaseBody 纯函数）。
+ * 项目区本体（受控展示件）：头部四件（label + 搜索钮 + 视图选项钮 + 添加项目钮——
+ * 2026-11-22 用户裁决恢复头部图标入口，官方 IconProjectAddOutlineRegular 件 +
+ * onAddProject 槽位缝复用；缺席 = 钮不呈现）+ 相位主体（phaseBody 纯函数）。
  * 项目块展开态是本件内部纯视图微观态（缺省全展开——与过滤态互不触碰，清过滤即恢复可见）。
  */
 export function SidebarProjectsZone({
@@ -1135,6 +1136,20 @@ export function SidebarProjectsZone({
                 </Tooltip>
               }
             />
+            {onAddProject !== undefined && (
+              <Tooltip label="添加项目" portal>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="dswf-sidebar-headbtn"
+                  data-dswf-add-project=""
+                  aria-label="添加项目"
+                  onClick={onAddProject}
+                >
+                  <IconProjectAddOutlineRegular size={14} />
+                </Button>
+              </Tooltip>
+            )}
           </>
         )}
       </div>
