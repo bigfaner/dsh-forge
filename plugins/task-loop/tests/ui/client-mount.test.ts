@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { FORGE_TASKS_REMOTE_CONTRIBUTION, } from "../../ui/remote.js";
 import { FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY } from "../../ui/rpc.js";
 import { installForgeTasksFace, forgeTasksFaceOf } from "../../ui/tasks-rpc.js";
+import { selfAnchorSourceOf } from "../../ui/self-anchor.js";
 import { taskLoopClient } from "../../ui/index.js";
 import type { SectionSlotsFace } from "../../ui/keyed-section.js";
 import type { LocaleServiceFace } from "../../ui/locale.js";
@@ -121,5 +122,35 @@ describe("taskLoopClient remote.$mount 装载契约（fix-6 bug b0569de6）", ()
     taskLoopClient.apply(ctx);
     expect(forgeTasksFaceOf()).toBe(nsFace);
     installForgeTasksFace(() => undefined);
+  });
+
+  it("apply：另开 sessions/workspaces 子 fiber（self-anchor 正门——跨 realm reflect 拿不到顶层实现），激活即装持有位", () => {
+    resetAnchor();
+    const fiberCtxs: unknown[] = [];
+    const depsSeen: string[] = [];
+    const sessions = { list: { getSnapshot: () => ({ byId: {} }) } };
+    const { remote } = fakeRemote(() => Promise.resolve());
+    const ctx = {
+      slots: fakeSlots(),
+      locale: fakeLocale(),
+      remote,
+      inject: (deps: readonly string[], mixin: (c: unknown) => unknown) => {
+        depsSeen.push(deps.join("+"));
+        if (deps.includes("sessions")) {
+          const fiber = { sessions, workspaces: undefined };
+          fiberCtxs.push(fiber);
+          mixin(fiber);
+        } else {
+          mixin({ remote: undefined });
+        }
+        return () => {};
+      },
+    };
+    taskLoopClient.apply(ctx);
+    expect(depsSeen).toContain("sessions+workspaces");
+    expect(fiberCtxs).toHaveLength(1);
+    // 持有位已装 → selfAnchorSourceOf 正门优先（self-anchor.test.ts 门测双通道语义）
+    expect(selfAnchorSourceOf("sessions", "fallback")).toBe(sessions);
+    expect(selfAnchorSourceOf("workspaces", "fallback")).toBe("fallback");
   });
 });

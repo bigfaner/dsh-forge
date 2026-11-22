@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest'
 import {
   activeSessionIdOf,
   anchorWorkspacePathOf,
+  installSelfAnchorFiber,
   resolveSelfAnchor,
+  selfAnchorSourceOf,
   type SelfAnchorServices,
 } from '../../ui/self-anchor.js'
 
@@ -82,5 +84,31 @@ describe('概览锚自解析（fix-10）', () => {
         },
       }),
     ).rejects.toThrow('resolver down')
+  })
+})
+
+describe('sessions/workspaces 服务缝双通道取法（inject 正门 + reflect 回退）', () => {
+  it('未装持有位 = reflect 回退值直通（缺席宿主语义不变）', () => {
+    installSelfAnchorFiber(undefined)
+    expect(selfAnchorSourceOf('sessions', 'fallback-a')).toBe('fallback-a')
+    expect(selfAnchorSourceOf('workspaces', undefined)).toBeUndefined()
+  })
+
+  it('装载持有位后正门优先；持有位缺席键仍取回退', () => {
+    const sessions = { list: { getSnapshot: () => SESSIONS } }
+    installSelfAnchorFiber({ sessions })
+    expect(selfAnchorSourceOf('sessions', 'fallback-a')).toBe(sessions)
+    expect(selfAnchorSourceOf('workspaces', 'fallback-b')).toBe('fallback-b')
+  })
+
+  it('持有位属性读取抛错（fiber 撤销后门控拒绝）= 退回退通道不外抛', () => {
+    const dead = {
+      get sessions(): unknown {
+        throw new Error('cannot get property without inject')
+      },
+    }
+    installSelfAnchorFiber(dead)
+    expect(selfAnchorSourceOf('sessions', 'fallback-a')).toBe('fallback-a')
+    installSelfAnchorFiber(undefined)
   })
 })

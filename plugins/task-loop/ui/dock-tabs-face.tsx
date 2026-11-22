@@ -29,7 +29,7 @@ import { createForgeTasksClient, type ForgeTasksClientFactory } from "./tasks-rp
 import { DSWF_DOC_ADDRESS_PREFIX, DSWF_DOC_TAB_KIND, docTabTitle, ForgeDocsTab } from "./dock-tabs/docs-tab.js";
 import { typertRpcClientFactory } from "./dock-tabs/typert-transport.js";
 import { SIDEBAR_RIGHT_PANE_TAB_SLOT, SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT, reflectGet, type OfficialSeamCtx } from "./official-seams.js";
-import { defaultSelfAnchorResolver, useSelfAnchorProjectId, type SelfAnchorServices } from "./self-anchor.js";
+import { defaultSelfAnchorResolver, selfAnchorSourceOf, useSelfAnchorProjectId, type SelfAnchorServices } from "./self-anchor.js";
 import { registerKeyedSection, type SectionSlotsFace } from "./keyed-section.js";
 import { FORGE_TASK_LOOP_LOCALE_NS, type LocaleServiceFace } from "./locale.js";
 
@@ -205,10 +205,11 @@ export function registerDockTabsFace(
       ...(bridge !== undefined ? { bridge } : {}),
       // 数据通道真身（forgeTasks Typert namespace——face 缺席调用期诚实降级）
       makeClient: createForgeTasksClient as ForgeTasksClientFactory,
-      // 自解析补位缝（桥缺席宿主的身份水化门——服务惰性现查闭包，apply 点零实例缓存）
+      // 自解析补位缝（桥缺席宿主的身份水化门——sessions/workspaces 双通道取法：
+      // inject 子 fiber 正门持有位优先，reflect 回退；服务惰性现查闭包，apply 点零实例缓存）
       selfAnchor: {
-        sessionsList: () => reflectGet(ctx, "sessions", false),
-        workspacesList: () => reflectGet(ctx, "workspaces", false),
+        sessionsList: () => selfAnchorSourceOf("sessions", reflectGet(ctx, "sessions", false)),
+        workspacesList: () => selfAnchorSourceOf("workspaces", reflectGet(ctx, "workspaces", false)),
         resolveProjectId: defaultSelfAnchorResolver(),
       } satisfies SelfAnchorServices,
     };

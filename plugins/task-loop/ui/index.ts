@@ -32,6 +32,7 @@ import { FORGE_TASK_LOOP_LOCALE_DICTS, FORGE_TASK_LOOP_LOCALE_NS, type LocaleSer
 import { asRecord, type OfficialSeamCtx } from "./official-seams.js";
 import { FORGE_TASKS_REMOTE_CONTRIBUTION } from "./remote.js";
 import { installForgeTasksFace, type ForgeTasksNamespaceFace } from "./tasks-rpc.js";
+import { installSelfAnchorFiber } from "./self-anchor.js";
 import { forgeFaceOf, installForgeRemoteFace, markForgeRemoteMountSettled } from "./rpc.js";
 import type { SectionSlotsFace } from "./keyed-section.js";
 
@@ -114,6 +115,14 @@ export const taskLoopClient: TaskLoopClientPlugin = {
           // dock tab 族数据通道解析缝（forgeProjects/forgeDocs 等六族——dir-rows/docs tab
           // 消费面；face 六族齐备才落座，单装缺席 = 调用期 typed 降级）。
           installForgeRemoteFace(() => forgeFaceOf(fiberCtx), (line) => console.warn(`[dsh-forge/task-loop] ${line}`));
+          return undefined;
+        });
+        // 概览自解析缝正门（sessions/workspaces 具名服务边——project 正典同型：跨 realm
+        // reflect 拿不到顶层实现形态下，reflect 回退恒 undefined → self-anchor 恒未解析；
+        // 子 fiber 激活即装持有位，消费点双通道现查（self-anchor.ts 收口）。缺席宿主 =
+        // 子 fiber 停驻，reflect 回退语义不变）。
+        injectFn.call(rec, ["sessions", "workspaces"], (fiberCtx: unknown) => {
+          installSelfAnchorFiber(fiberCtx);
           return undefined;
         });
       } else {

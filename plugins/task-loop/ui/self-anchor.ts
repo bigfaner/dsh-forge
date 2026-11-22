@@ -6,8 +6,36 @@
 // 归属裁决 → 项目 uuid 直投 forgeTasks（host 半解析归属键——9407ff29 修型契约）。
 // 解析链纯异步函数，唯一数据源 = 注入缝；任一环缺席/漂移/抛错 = undefined
 // （消费方维持「无任务数据」降级呈现不报错）；服务逐调用现查不缓存（AGENTS 1.6）。
+// sessions/workspaces 双通道取法（对齐 project 正典）：apply 期 ctx.inject 子 fiber
+// 声明具名服务边（正门——跨 realm reflect 拿不到顶层实现判例），fiber 激活时装本缝；
+// reflect 通道保留为回退（子 fiber 停驻/宿主无 inject 缝形态）。
 import { useEffect, useState } from "react";
 import { createForgeRpcClient } from "./rpc.js";
+
+// ── sessions/workspaces 服务缝持有位（apply 期 inject 子 fiber 安装；读取点现查） ──
+
+/** 子 fiber ctx 窄面（sessions/workspaces 具名服务属性——inject 声明边内可读） */
+type SelfAnchorFiberCtx = { readonly sessions?: unknown; readonly workspaces?: unknown };
+
+/** 已激活子 fiber 的服务快照持有位（模块级单例——本插件每宿主一 fiber；fiber 撤销 = 置空） */
+let fiberServices: SelfAnchorFiberCtx | undefined;
+
+/** inject 子纤维激活回调产物安装（apply 期调用一次——持有 fiber ctx 引用，属性读取
+ *  延后到消费点并带 try/catch；fiber 撤销后的读取抛错由 selfAnchorSourceOf 收口） */
+export function installSelfAnchorFiber(fiberCtx: unknown): void {
+  fiberServices = fiberCtx as SelfAnchorFiberCtx;
+}
+
+/** 服务取用双通道归一：inject 正门持有位优先，reflect 回退（调用点现查不缓存） */
+export function selfAnchorSourceOf(name: "sessions" | "workspaces", fallback: unknown): unknown {
+  try {
+    const primary = fiberServices?.[name];
+    if (primary !== undefined && primary !== null) return primary;
+  } catch {
+    // fiber 撤销后属性读取抛错 = 退回退通道
+  }
+  return fallback;
+}
 
 /** 缺省归属解析缝（project anchor-resolver 正典同型）：工作区原路径 → forgeWorktree.resolve
  *  批量通路（单路径调用，宿主半归一裁决）→ 归属项目 uuid；未注册 = undefined。 */
