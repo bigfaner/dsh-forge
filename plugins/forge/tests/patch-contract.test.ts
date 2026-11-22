@@ -69,13 +69,13 @@ describe("forge patch 六插行契约", () => {
     expect(patchYaml).toContain("- insert:");
   });
 
-  it("顶层行恰八条 = 六插行 + preset-forge + preset-headhunter（序 pin——六插行激活官方默认路径；五件顶层 skills 行不属本 patch，唯一正本在各件自己 patch——1.11 谁带谁自持；preset-headhunter 正本自含承带——WYSIWYG 铁律）", () => {
-    expect(rows.map((r) => r.id)).toEqual([...SIX_ROW_IDS, "preset-forge", "preset-headhunter"]);
+  it("顶层行恰九条 = registry default 覆写行（默认预设 = Forge模式——dsh-forge host presets/cordis.patch.yml 同款形态）+ 六插行 + preset-forge + preset-headhunter（序 pin——六插行激活官方默认路径；preset-headhunter 正本自含承带——WYSIWYG 铁律）", () => {
+    expect(rows.map((r) => r.id)).toEqual(["agent-preset-registry", ...SIX_ROW_IDS, "preset-forge", "preset-headhunter"]);
   });
 
   it("forge 自插行（id = forge-bundle 异 id——bug 1102d9d8）name + config 恰 { home } 单键（forge 统一 schema——Workbench 生长面；db/tasksHome 不设覆写键恒延伸）", () => {
     expect(rows.find((r) => r.id === "forge-bundle")!.name).toBe("@dsh-forge/forge");
-    expect(rows[0]!.configKeys).toEqual(["home"]);
+    expect(rows.find((r) => r.id === "forge-bundle")!.configKeys).toEqual(["home"]);
   });
 
   it("五件插行 name 锚各件包名（插行激活 = 依赖落盘后官方默认路径——零组合缝）", () => {

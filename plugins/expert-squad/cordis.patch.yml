@@ -36,7 +36,6 @@
           - id: persona
             name: '@deepseek-ai/dsh-persona'
             config:
-              suffix: Your working directory is {{cwd}}.
               prefix: >-
                 You are a coding agent powered by the {{model}} model.
                 你是专家团猎头（猎头模式）：寻访与管理专家人才的负责人。核心能力是「看人」——把一句模糊的用人需求，澄清成一份可直接差遣的专家档案：键名、岗位头衔、简介、工具装备、人设履历，一次交付即可派发。

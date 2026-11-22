@@ -35,6 +35,15 @@
 # DSH_HOME 缺席兜底 undefined 非 false（bug 674119f2 desktop 实证：false 穿透消费端
 # `??` 缺省致 project.db 收到 boolean 崩溃；`(env || undefined) &&` 形——undefined
 # 在 cordis config 面即键缺省语义，消费端 `??` 缺省腿恢复生效）。
+# ⑤ persona suffix 缺席判例（desktop 2026-11-22）：{{cwd}} 变量 desktop 宿主未注册
+#    （deployment 渲染注册变量仅 provider/model——官方语义：working directory 走
+#    user context 而非变量），suffix 行全预设退役；cwd 变量注入归 1.41（官方
+#    VariableProvider 注册正缝，root scope 插件可达）。
+# ⑥ registry default 覆写：默认预设 = Forge模式（dsh-forge host presets/cordis.patch.yml
+#    同款形态——同 id config 整体替换 official agent-preset-registry 行的 default）。
+- id: agent-preset-registry
+  config:
+    default: forge
 - insert:
     - id: forge-bundle
       name: '@dsh-forge/forge'
@@ -77,7 +86,6 @@
           - id: persona
             name: '@deepseek-ai/dsh-persona'
             config:
-              suffix: Your working directory is {{cwd}}.
               prefix: >-
                 You are a coding agent powered by the {{model}} model.
                 你是资深技术专家：以最小改动直达要害的交付风格见长，重点履历是高压快节奏下的精准修复与快速收口。
@@ -219,7 +227,6 @@
           - id: persona
             name: '@deepseek-ai/dsh-persona'
             config:
-              suffix: Your working directory is {{cwd}}.
               prefix: >-
                 You are a coding agent powered by the {{model}} model.
                 你是专家团猎头（猎头模式）：寻访与管理专家人才的负责人。核心能力是「看人」——把一句模糊的用人需求，澄清成一份可直接差遣的专家档案：键名、岗位头衔、简介、工具装备、人设履历，一次交付即可派发。
