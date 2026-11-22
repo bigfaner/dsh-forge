@@ -15,6 +15,8 @@
 #    never started/解析失败 → preset broken → UI !broken 过滤整行缺席——desktop 判例 2026-11-22：
 #    preset 子树按 profile 根解析，@dsh-forge/* 成员包不可达致 Forge 预设下拉缺席。技能不走 preset
 #    子树——五件顶层 skills 行（谁带谁自持，见下）已全局覆盖，preset 内零 skill-filesystem 实例）。
+#    tool-office 同判例出子树（desktop 组合 never started → audit broken——猎头预设同案实锤；
+#    office 能力由宿主全局行提供）。
 # 五件顶层 skills 行不属本 patch（谁带谁自持——唯一正本在各件自己 cordis.patch.yml，
 # bundle 六 patch 同载防同层 providerName 重名注册 loud-fail）。
 # 全部派发表达式自带 && 短路兜底（直写不变量——防裸表达式异常冒泡打断行激活）；
@@ -174,8 +176,6 @@
               searchTimeoutMs: 60000
           - id: present
             name: '@deepseek-ai/dsh-tool-present'
-          - id: tool-office
-            name: '@deepseek-ai/dsh-tool-office'
           - id: tool-plugin-manager
             name: '@deepseek-ai/dsh-plugin-manager/tools'
             disabled: !!js "!ctx.get('profileContext')"

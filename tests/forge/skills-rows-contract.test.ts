@@ -239,8 +239,9 @@ describe("preset-forge 静态直检（直写正本）", () => {
     expect(presetBody).toMatch(/^        order: 2$/m);
   });
 
-  it("preset 子树零 @dsh-forge 引用（registry 挂载审计 broken 判例 desktop 2026-11-22——子树解析基点回退 profile 根，成员包不可达；成员能力经顶层插行装载）", () => {
+  it("preset 子树零 @dsh-forge 引用 + 零 desktop never-started 行（registry 挂载审计 broken 判例 desktop 2026-11-22——子树解析基点回退 profile 根，成员包不可达；tool-office 在 desktop 组合 never started；成员能力经顶层插行装载）", () => {
     expect(presetBody).not.toContain("@dsh-forge/");
     expect(presetBody).not.toContain("customSkillDirs");
+    expect(presetBody, "tool-office 不入 preset 子树（desktop never started → broken）").not.toContain("tool-office");
   });
 });
