@@ -4,7 +4,7 @@
 
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { Context } from "@deepseek-ai/cordis";
 import { ExpertsRegistry } from "../host/registry.js";
@@ -269,14 +269,15 @@ describe("热刷新：索引整体换代后 get 立即可见新内容", () => {
   });
 });
 
-describe("plugin 内置层自证（随包 experts/）", () => {
-  it("resolvePluginExpertsRoot 指向包内 experts 目录且 code-reviewer 样例可扫描", async () => {
-    const reg = new ExpertsRegistry({
-      roots: () => [{ origin: "plugin", dir: resolvePluginExpertsRoot() }],
-    });
+describe("plugin 层解析（零内置——experts/ 目录已撤）", () => {
+  it("resolvePluginExpertsRoot 解析为包内 experts 路径；目录缺席静默空层，registry 无内置专家", async () => {
+    const dir = resolvePluginExpertsRoot();
+    expect(basename(dir)).toBe("experts");
+    expect(dir).toContain("expert-squad");
+
+    // 不存在的 root 静默视为空（scan 语义）——零内置下 plugin 层恒空
+    const reg = new ExpertsRegistry({ roots: () => [{ origin: "plugin", dir }] });
     await reg.refresh();
-    const record = reg.get("code-reviewer");
-    expect(record.origin).toBe("plugin");
-    expect(record.personaMd.length).toBeGreaterThan(0);
+    expect(reg.list()).toEqual([]);
   });
 });

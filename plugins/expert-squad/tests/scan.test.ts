@@ -2,9 +2,8 @@
 // root 不可读降级、root 解析（project = cwd 向上至 git 根；user = $DSH_HOME；plugin 随包）。
 
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   findProjectRoot,
@@ -99,10 +98,10 @@ describe("root 解析（D3 三层物理位置）", () => {
     expect(resolveUserExpertsRoot({}).endsWith(join(".dsh", "experts"))).toBe(true);
   });
 
-  it("resolvePluginExpertsRoot：随包 experts/ 目录真实存在（默认取 scan.ts 自身模块位）", () => {
+  it("resolvePluginExpertsRoot：解析为包内 experts/ 路径（零内置——目录可缺席）", () => {
     const dir = resolvePluginExpertsRoot();
-    expect(existsSync(dir)).toBe(true);
-    expect(existsSync(join(dir, "code-reviewer.md"))).toBe(true);
+    expect(basename(dir)).toBe("experts");
+    expect(dir).toContain("expert-squad");
   });
 
   // bug a7bdf03f：打包/无会话环境 process.cwd() 兜底解析到应用安装目录（非项目根）。

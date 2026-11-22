@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -55,14 +55,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(insertBlock?.[2]).toBe("@dsh-forge/expert-squad");
   });
 
-  it("随包 experts/ 目录含 ≥1 样例档案（root 注册缝自证）", () => {
-    const experts = readdirSync(resolve(pkgDir, "experts")).filter((f) => f.endsWith(".md"));
-    expect(experts.length).toBeGreaterThanOrEqual(1);
-    for (const file of experts) {
-      const md = readFileSync(resolve(pkgDir, "experts", file), "utf8");
-      expect(md.startsWith("---"), `${file} 缺 frontmatter`).toBe(true);
-      expect(md).toMatch(/^name:\s*\S+/m);
-    }
+  it("零内置专家：包内无 experts/ 目录（builtin root 缺席即空层）", () => {
+    expect(existsSync(resolve(pkgDir, "experts")), "包内不得再随包内置 experts/ 档案").toBe(false);
   });
 
   it("host 半 default 导出为 Plugin.Function（loader 只认 default 导出）", () => {
