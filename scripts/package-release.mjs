@@ -70,18 +70,32 @@ export function patchInsertEntryNames(patchText) {
  * cordis.patch.yml 首个 insert 块之外的 id 清单（成员非插行对账基准）：首个
  * `- insert:` 块内行不计（成员自插行——bundle forge patch 六插行已承载），第二
  * insert 块（preset-headhunter 形态）与顶层行（skills 自持行）逐条计入。
+ * 豁免行（NON_CARRY_EXEMPT——preset-standard 不上提）整棵子树不计：其嵌套行 id
+ * （tool-office 等）属官方预设覆写行内部结构，不承担独立承载语义。
  */
 export function patchOutsideFirstInsertIds(patchText) {
   const ids = []
   let state = 'before'
+  let exemptIndent = -1
   for (const line of patchText.split(/\r?\n/)) {
     if (/^- insert:\s*$/.test(line)) {
       state = state === 'before' ? 'first' : 'after'
       continue
     }
     if (state === 'first' && /^(?!#)\S/.test(line)) state = 'after'
-    const m = state === 'after' ? line.match(/^\s*-\s+id:\s*(\S+)/) : undefined
-    if (m !== null && m !== undefined) ids.push(m[1])
+    if (state !== 'after') continue
+    const m = line.match(/^(\s*)-\s+id:\s*(\S+)/)
+    if (m === null || m === undefined) continue
+    const indent = m[1].length
+    if (exemptIndent !== -1) {
+      if (indent > exemptIndent) continue
+      exemptIndent = -1
+    }
+    if (NON_CARRY_EXEMPT.has(m[2])) {
+      exemptIndent = indent
+      continue
+    }
+    ids.push(m[2])
   }
   return ids
 }
