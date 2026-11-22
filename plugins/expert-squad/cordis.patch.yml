@@ -16,6 +16,12 @@
 # junction 可解析）+ DSH_HOME generation 探测兜底腿（bundle 通道 desktop profile 根
 # baseUrl 必失败落兜底），零 throw 冒泡）。expert-squad 5 管理工具 + delegate_expert
 # 为全局单实例注册，本 patch 零组合级工具声明。
+# office 族排除件（1.37 预设级排除路线）：preset 子树行 config.deny = office 全族
+# 候选名单（正本常量 OFFICE_TOOL_DENY_CANDIDATES——本包 host/tools-exclude.ts），
+# apply 期 preset scope 落官方 ctx.tools.restrict deny 掩码（与宿主实注册名求交
+# fail-soft，expert-restrict 未知名判例零 throw 面）。行名 = 本包裸名子路径导出
+#（preset 子树行导入基点 = profile 根——web/solo 通道 @dsh-forge/expert-squad 可解析；
+# bundle 通道经 package-release.mjs 搬移块行名重写指 @dsh-forge/forge 副本——机检 pin）。
 - insert:
     - id: expert-squad
       name: '@dsh-forge/expert-squad'
@@ -84,3 +90,20 @@
               providerName: filesystem-expert-squad
               customSkillDirs:
                 - !!js (()=>{try{return process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/expert-squad/package.json')),'skills')}catch(e){const home=process.env.DSH_HOME;if(!home)return undefined;const fs=process.getBuiltinModule('node:fs');const path=process.getBuiltinModule('node:path');const live=home+'/profiles/.generations/live';let gens=[];try{gens=fs.readdirSync(live).filter((n)=>n.startsWith('dsh-forge+forge+')).sort()}catch(e2){return undefined}const latest=gens.at(-1);return latest===undefined?undefined:path.join(live,latest,'node_modules/@dsh-forge/expert-squad/skills')}})()
+          - id: tool-exclude-office
+            name: '@dsh-forge/expert-squad/tools-exclude'
+            config:
+              deny:
+                - office_template
+                - office_template_write
+                - ppt_get_template_pages
+                - ppt_get_template_reference
+                - ppt_list_templates
+                - ppt_template_create_project
+                - pptd_add_asset
+                - pptd_check
+                - pptd_import
+                - pptd_list_files
+                - pptd_read_file
+                - pptd_render
+                - pptd_write_file
