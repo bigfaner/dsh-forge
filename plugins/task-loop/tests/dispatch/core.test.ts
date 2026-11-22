@@ -5,7 +5,7 @@
 // LoopInstanceId，两消费者互不污染）+ 后台 dispatched 回执与 job 内防线回灌。
 // spawn 面全桩（SpawnWorker 缝）；工具壳侧行为由 tools 套件守护。
 // slug 化锚：source = { slug }；claim/taskStats 入参 projectKey；submit 载荷经 settlements
-// 读缝（v1 列面——records 行纯轨迹）；模块④：路由档位（generic 兜底 allow = 管线必备）。
+// 读缝（v1 列面——records 行纯轨迹）；模块④：路由档位（generic 兜底 allow = 管线必备 ∪ 执行基础集）。
 import { describe, expect, it } from "vitest";
 import type { ForgePluginEvent } from "@dsh-forge/contracts";
 import type { TaskSnapshot } from "../../host/domain/tasks/types.js";
@@ -14,6 +14,13 @@ import type { ClaimTaskResult } from "../../host/domain/tasks/claim.js";
 import type { QueryTaskResult } from "../../host/domain/tasks/query.js";
 import type { TasksService } from "../../host/domain/tasks/service.js";
 import { dispatchCore } from "../../host/dispatch-core/core.js";
+import { WORKER_GENERIC_EXECUTION_TOOLS, WORKER_PIPELINE_ESSENTIAL_TOOLS } from "../../host/dispatch-core/assemble.js";
+
+/** core 链携 process.platform 求交：shell 双候选解析为平台在场者（win32=pwsh） */
+const EXPECTED_GENERIC_ALLOW = [
+  ...WORKER_PIPELINE_ESSENTIAL_TOOLS,
+  ...WORKER_GENERIC_EXECUTION_TOOLS.filter((name) => name !== (process.platform === "win32" ? "bash" : "pwsh")),
+];
 import type { DispatchCoreArgs, DispatchCoreDeps, DispatchCoreExec } from "../../host/dispatch-core/core.js";
 import type { LastSettlementView } from "../../host/dispatch-core/settle.js";
 import type { ForgeEventSink } from "../../host/events/sink.js";
@@ -291,8 +298,8 @@ describe("dispatchCore 主链（claim→组装→spawn→事件发射）", () =>
     expect(req.prompt).not.toContain(req.persona!)
     expect(req.parent).toBe(parent)
     expect(req.signal).toBeInstanceOf(AbortSignal)
-    // 模块④：路由档位解析面缺席 = generic 兜底档——allow = 管线必备（submit_task/todo_write）
-    expect(req.toolFilter.allow).toEqual(["submit_task", "todo_write"])
+    // 模块④：路由档位解析面缺席 = generic 兜底档——allow = 管线必备 ∪ 执行基础集（shell 平台解析）
+    expect(req.toolFilter.allow).toEqual(EXPECTED_GENERIC_ALLOW)
     expect(req.toolFilter.deny).toEqual(expect.arrayContaining(["ask_user_question", "subagent_fork", "query_task", "dispatch_task"]))
     // spawn 审计（执行会话事实诞生即入库——fail-soft 前的单调用断言）
     expect(h.calls.spawnRecord).toBe(1)
@@ -606,21 +613,21 @@ describe("路由档位 spawn 组装消费（模块④——resolveWorkerProfile�
     expect(spawned.payload.model).toBe("expert-model");
   });
 
-  it("generic 档（experts 缺席兜底）：allow = 管线必备宽度（keep-only 启用）；agentOptions 父继承", async () => {
+  it("generic 档（experts 缺席兜底）：allow = 管线必备 ∪ 执行基础集（keep-only 启用）；agentOptions 父继承", async () => {
     const h = harness({
       resolveWorkerProfile: async () => ({ kind: "generic", agentOptions: { provider: "deepseek", model: "expert-chat" } }) as WorkerRouteProfile,
     });
     await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { slug: "feat-x" } }));
     const req = h.spawnRequests[0]!;
-    expect(req.toolFilter.allow).toEqual(["submit_task", "todo_write"]); // bug 三动词剔除（bugsPresent 缺席）
+    expect(req.toolFilter.allow).toEqual(EXPECTED_GENERIC_ALLOW); // bug 三动词剔除（bugsPresent 缺席）
     expect(req.agentOptions).toEqual({ provider: "deepseek", model: "expert-chat" });
   });
 
-  it("取用面缺席 = 装配降级：generic 兜底档直落（allow = 管线必备、agentOptions 父继承 = undefined）", async () => {
+  it("取用面缺席 = 装配降级：generic 兜底档直落（allow = 管线必备 ∪ 执行基础集、agentOptions 父继承 = undefined）", async () => {
     const h = harness();
     await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { slug: "feat-x" } }));
     const req = h.spawnRequests[0]!;
-    expect(req.toolFilter.allow).toEqual(["submit_task", "todo_write"]);
+    expect(req.toolFilter.allow).toEqual(EXPECTED_GENERIC_ALLOW);
     expect(req.toolFilter.deny).toContain("query_task");
     expect(req.agentOptions).toBeUndefined();
   });

@@ -1,6 +1,6 @@
 // worker 路由装配接线测试（bug dc0f9de3——首轮 spawn worker 工具面装配不一致根因层）：
 // 生产装配方（assembleTaskLoopToolFamily）此前零 resolveWorkerProfile 注入——循环驱动器
-// 恒走 generic 兜底档（allow keep-only = 管线必备两员），worker 永无档案 tools（写/执行族
+// 恒走 generic 兜底档（allow keep-only = 管线必备 ∪ 执行基础集），worker 永无档案 tools（写/执行族
 // 全滤除，真机判例 fix-12 010-final-web：a1 worker 仅 submit_task/todo_write 两员）。
 // 本文件钉两面：① experts 服务面双通道现查（inject 具名属性 + reflect 先例面，AGENTS 1.6
 // 检测永不缓存）；② 装配行把 resolveWorkerProfile 注入 createLoopDriver（结构 pin）。

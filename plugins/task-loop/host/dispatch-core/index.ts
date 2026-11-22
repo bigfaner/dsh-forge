@@ -16,7 +16,7 @@ export type {
   SpawnStageResult,
 } from "./core.js";
 // 模块④（code-design）：管线必备用具集 / bug 三动词跨域必备集单点导出
-export { WORKER_PIPELINE_ESSENTIAL_TOOLS, WORKER_BUG_ESSENTIAL_TOOLS, WORKER_EXPERT_RELEASABLE_DENY } from "./assemble.js";
+export { WORKER_PIPELINE_ESSENTIAL_TOOLS, WORKER_BUG_ESSENTIAL_TOOLS, WORKER_EXPERT_RELEASABLE_DENY, WORKER_GENERIC_EXECUTION_TOOLS } from "./assemble.js";
 export type { DeriveWorkerToolFilterOptions } from "./assemble.js";
 export { deriveTriageToolFilter, deriveWorkerToolFilter, globalToolNamesOfToolsFace, intersectAllowNames, probeIsSubdomain, reconcileWorkerReasoning, registeredToolNamesOf, workerAgentOptionsOf } from "./assemble.js";
 // worker 来源任务注册表（fix-bug——recordBug 工具面 source_task_id 注入源；spawn 登记结算注销）

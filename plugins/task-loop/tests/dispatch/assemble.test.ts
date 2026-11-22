@@ -110,6 +110,7 @@ import {
   WORKER_PIPELINE_ESSENTIAL_TOOLS,
   WORKER_BUG_ESSENTIAL_TOOLS,
   WORKER_EXPERT_RELEASABLE_DENY,
+  WORKER_GENERIC_EXECUTION_TOOLS,
 } from "../../host/dispatch-core/assemble.js";
 
 const TASK_TYPE = "coding-fix" as TaskType;
@@ -120,12 +121,14 @@ const expertRoute = (tools?: readonly string[]): WorkerRouteProfile => ({
 });
 
 describe("deriveWorkerToolFilter：路由档位收敛注入（模块④）", () => {
-  it("generic 档：allow = 管线必备用具集（submit_task + todo_write）；bug 三动词缺席剔除 + diag warn 留痕", () => {
+  it("generic 档：allow = 管线必备 ∪ 执行基础集（专家缺席宿主 worker 仍具备文件/shell 能力）；bug 三动词缺席剔除 + diag warn 留痕", () => {
     const diags: { level: string; event: string; message: string }[] = [];
     const out = deriveWorkerToolFilter(TASK_TYPE, { kind: "generic" }, undefined, undefined, {
       diag: (d) => diags.push({ level: d.level, event: d.event, message: d.message }),
     });
-    expect(out.allow).toEqual([...WORKER_PIPELINE_ESSENTIAL_TOOLS]);
+    expect(out.allow).toEqual([...WORKER_PIPELINE_ESSENTIAL_TOOLS, ...WORKER_GENERIC_EXECUTION_TOOLS]);
+    expect(out.allow).toContain("read");
+    expect(out.allow).toContain("pwsh");
     expect(out.allow).not.toContain("add_task");
     expect(out.deny).toContain("query_task");
     expect(out.deny).toContain("dispatch_task");
@@ -140,7 +143,11 @@ describe("deriveWorkerToolFilter：路由档位收敛注入（模块④）", () 
       bugsPresent: () => true,
       diag: (d) => diags.push(d),
     });
-    expect(out.allow).toEqual([...WORKER_PIPELINE_ESSENTIAL_TOOLS, ...WORKER_BUG_ESSENTIAL_TOOLS]);
+    expect(out.allow).toEqual([
+      ...WORKER_PIPELINE_ESSENTIAL_TOOLS,
+      ...WORKER_BUG_ESSENTIAL_TOOLS,
+      ...WORKER_GENERIC_EXECUTION_TOOLS,
+    ]);
     expect(diags).toHaveLength(0);
   });
 

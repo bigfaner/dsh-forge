@@ -6,7 +6,8 @@
 // 模块④（code-design）签名收敛注入：deriveWorkerToolFilter(taskType, route, registeredTools?,
 // platform?, options?)——路由档位单参承载（expert = experts 在场且档案命中；generic =
 // 缺席/未命中兜底档）。expert 档位：allow = 档案 tools ∪ 管线必备用具集（并集公式原样）；
-// generic 档位：allow = 管线必备用具集（管线必备宽度）。bug 三动词（recordBug/resolveBug/
+// generic 档位：allow = 管线必备用具集 ∪ 执行基础集（见 WORKER_GENERIC_EXECUTION_TOOLS）。
+// bug 三动词（recordBug/resolveBug/
 // getBug）为跨域条件段：project bugs 服务在场现查（调用期求值，检测结果不缓存——AGENTS 1.6）
 // 在场才并入 essentials；缺席 = warn 留痕 + 剔除 + emitDiag。deny 矩阵两档位同构。
 import type { TaskType, WorkerToolFamily } from "@dsh-forge/contracts";
@@ -125,6 +126,21 @@ export function forgetWorkerSourceTask(workerSessionId: string): void {
 export const WORKER_PIPELINE_ESSENTIAL_TOOLS: readonly string[] = ["submit_task", "todo_write"]
 
 /**
+ * generic 档执行基础集（真机判例 expert-builtin-redistribution t-ac2 四轮阻塞定谳）：
+ * 原宽度（管线必备两员）建立在「专家路由恒在场」假设上——专家缺席宿主（experts 服务
+ * 未装载 / 档案未命中 / experts 服务 cwd 锚在桌面宿主解析失效）下 generic 档是常态，
+ * keep-only 两员把写/执行族全滤除，worker 结构性瘫痪（todo_write 建单后零执行能力，
+ * 只能如实 blocked）。保底并入选集 = fs 五员 + shell 同族双候选（pwsh/bash——求交层按
+ * 平台解析在场候选者，contracts intersectToolNames shell 同族语义）；两族在收窄矩阵
+ * 对全部四类任务族恒放行（WORKER_TOOL_MATRIX fs/shell 列全 true），并入不翻任何
+ * 类型族意图。jobs/read-image/web 仍随矩阵按类型收窄（不并入）。expert 档不并入：
+ * 档案 tools 自带执行面，宽度差 = 档案白名单在场的意义。
+ */
+export const WORKER_GENERIC_EXECUTION_TOOLS: readonly string[] = [
+  "read", "write", "edit", "glob", "grep", "pwsh", "bash",
+]
+
+/**
  * bug 三动词必备集（模块④跨域条件段——WORKER_FORGE_TOOLS bug 域子集锚，字面量对齐）：
  * recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径。bug 域服务归拢 plugins/project
  * host/bugs——本插件不依赖该包，三动词是否入 allow = project bugs 服务在场现查
@@ -154,8 +170,8 @@ export interface DeriveWorkerToolFilterOptions {
  * 路由档位（WorkerRouteProfile）：
  * - expert：allow = 档案 tools（route.toolFilter.allow）∪ 管线必备用具集（并集保底公式
  *   原样——管线必备恒可见）；档案可放行面（followups #2）随档案 tools 白名单兑现。
- * - generic：allow = 管线必备用具集（管线必备宽度——keep-only 启用，杜绝旧「纯 deny 面」
- *   形态把结算链必备滤除）。
+ * - generic：allow = 管线必备用具集 ∪ 执行基础集（keep-only 启用，杜绝旧「纯 deny 面」
+ *   形态把结算链必备滤除——执行基础集保 worker 在专家缺席宿主仍具备文件/shell 能力）。
  * bug 三动词跨域条件段：project bugs 服务在场现查（options.bugsPresent 调用期求值）——
  * 在场 = 三动词并入管线必备；缺席 = 三动词剔除 + diag warn 留痕（fix 链写径对本次派发
  * 不可用，可观测不静默）。
@@ -224,10 +240,16 @@ export function deriveWorkerToolFilter(
       )
     }
   }
-  // allow 并集公式（两档位同构——宽度差 = 档案 tools 键在缺席）：expert = 档案 tools ∪
-  // 管线必备；generic = 管线必备。
+  // allow 并集公式（两档位同构——宽度差 = 档案 tools 键在缺席 + generic 执行基础集）：
+  // expert = 档案 tools ∪ 管线必备；generic = 管线必备 ∪ 执行基础集。
   const allow = intersectToolNames(
-    [...new Set<string>([...(routeTools ?? []), ...essentials])],
+    [
+      ...new Set<string>([
+        ...(routeTools ?? []),
+        ...essentials,
+        ...(route.kind === "generic" ? WORKER_GENERIC_EXECUTION_TOOLS : []),
+      ]),
+    ],
     registeredTools,
     ...(platform !== undefined ? [{ platform }] : []),
   )
