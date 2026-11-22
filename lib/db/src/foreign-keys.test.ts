@@ -23,7 +23,7 @@ function stubDb(fkReadback: number) {
 type Stub = ReturnType<typeof stubDb>
 let seeded: Stub | undefined
 
-vi.mock('better-sqlite3', () => {
+vi.mock('./sqlite.js', () => {
   const DatabaseCtor = function () {
     if (!seeded) throw new Error('stub db not seeded')
     return seeded

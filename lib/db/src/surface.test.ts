@@ -8,10 +8,12 @@ describe('AC4 db/ 导出面零域语义', () => {
   it('导出键集 = 机制能力全集（无业务符号）', () => {
     expect(Object.keys(dbModule).sort()).toEqual([
       'BUSY_TIMEOUT_MS',
+      'Database',
       'ForeignKeysUnavailableError',
       'MIGRATIONS',
       'SCHEMA_VERSION',
       'UnsupportedSchemaVersionError',
+      'default',
       'isForeignKeysUnavailableError',
       'isUnsupportedSchemaVersionError',
       'openDatabase',

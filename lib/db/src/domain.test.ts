@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 import { openDatabase, type Migration } from './open.js'
 
 let dir: string

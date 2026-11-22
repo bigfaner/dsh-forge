@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 import { openDatabase } from './index.js'
 import { MIGRATIONS, SCHEMA_VERSION, WORKTREE_DIR_BACKFILL_SQL } from './schema.js'
 

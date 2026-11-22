@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import Database from 'better-sqlite3'
+import Database from '@dsh-forge/lib-db'
 import { isMigrationTamperedError, MigrationTamperedError, UnsupportedSchemaVersionError, isUnsupportedSchemaVersionError } from './errors.js'
 import { openDatabase } from './open.js'
 import { MIGRATIONS, SCHEMA_VERSION } from './schema.js'

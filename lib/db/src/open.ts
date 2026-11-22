@@ -8,7 +8,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { dirname } from 'node:path'
-import Database from 'better-sqlite3'
+import Database from './sqlite.js'
 import { ForeignKeysUnavailableError, MigrationTamperedError, UnsupportedSchemaVersionError } from './errors.js'
 import { MIGRATIONS, SCHEMA_VERSION, type GuardedStatement, type Migration } from './schema.js'
 

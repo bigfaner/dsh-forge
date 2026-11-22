@@ -11,3 +11,4 @@ export {
 } from './errors.js'
 export { BUSY_TIMEOUT_MS, openDatabase, openReadonlyDatabase, type OpenDatabaseOptions } from './open.js'
 export { withTransaction } from './transaction.js'
+export { Database, default, type RunResult, type Statement } from './sqlite.js'
