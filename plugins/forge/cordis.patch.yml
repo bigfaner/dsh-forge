@@ -15,8 +15,9 @@
 # 五件顶层 skills 行不属本 patch（谁带谁自持——唯一正本在各件自己 cordis.patch.yml，
 # bundle 六 patch 同载防同层 providerName 重名注册 loud-fail）。
 # 全部派发表达式自带 && 短路兜底（直写不变量——防裸表达式异常冒泡打断行激活）；
-# DSH_HOME 缺席兜底 false 非 undefined（survey#4：`(env || false) &&` 形态——undefined
-# 在 yaml 物化面等价 null 键，false 才是契约测试钉住的缺省派生零值）。
+# DSH_HOME 缺席兜底 undefined 非 false（bug 674119f2 desktop 实证：false 穿透消费端
+# `??` 缺省致 project.db 收到 boolean 崩溃；`(env || undefined) &&` 形——undefined
+# 在 cordis config 面即键缺省语义，消费端 `??` 缺省腿恢复生效）。
 - insert:
     - id: dshforge
       name: '@dsh-forge/forge'
