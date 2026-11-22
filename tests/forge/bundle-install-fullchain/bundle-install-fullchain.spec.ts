@@ -11,6 +11,8 @@
 //   即停，CT-BIF-B7 语义落地），先廉价校验装载版本再做大取证；
 // - 侵入操作（卸载/重装/宿主重启）只作用于本套件自建隔离 home（FORGE_COMBO_DSH_HOME）内
 //   的自拉实例（按 PID 定点回收，零按名通配）；世代冻结判据命中 → 条件 skip 留痕 SMOKE-LEDGER。
+// - Workers=2 并行互扰修复：bundle 四套件共享隔离 home/profile 独占态——beforeAll 取套件
+//   互斥锁跨文件串行化（acquireSuiteLock/releaseSuiteLock）。
 //
 // 环境前置（真机收口轮置位）：FORGE_COMBO_E2E=1 + FORGE_COMBO_DSH_HOME + 
 // FORGE_COMBO_RELEASE_TREE（bundle 变体发布树；闭包物化副本经 FORGE_COMBO_NPM_SOURCE_DIR
@@ -22,9 +24,10 @@ import { expect, test } from '@playwright/test'
 import {
   BARE_BUNDLES,
   FORGE_PKG,
-  PRESET_FORGE_PROVIDER,
   SIX_ROW_IDS,
+  acquireSuiteLock,
   cheapGenerationGate,
+  clientFaceFile,
   comboDbPath,
   comboEnv,
   comboGateOn,
@@ -51,9 +54,10 @@ import {
   preflightCommitCharge,
   readForgeDiagEvents,
   readProfilePatch,
+  releaseSuiteLock,
+  SUITE_HOOK_TIMEOUT_MS,
   requireBundleSource,
   sharedHostStdout,
-  skillRows,
   stopHostShared,
   toggleRowSwitch,
   type WebHost,
@@ -76,20 +80,22 @@ test.afterEach(async () => {
 
 test.afterAll(async () => {
   await stopHost()
-  // 卸载收尾（幂等 best-effort——隔离 home）+ 正装共享态失效（边界归属本套件）
+  // 卸载收尾（幂等 best-effort——隔离 home）+ 正装共享态失效（边界归属本套件）+ 放套件锁
   await pluginRemove(env, FORGE_PKG, PROFILE)
   invalidateInstalledShared(env)
-  rmSync(join(tmpdir(), 'dsh-forge-bundle-pack-'), { recursive: true, force: true })
+  releaseSuiteLock(env, 'bundle-install-fullchain')
 })
 
 // CT-BIF-B8：世代冻结判据命中 → 整旅程条件 skip，SMOKE-LEDGER 留痕（不作失败亦不作正向取证）。
 test.beforeAll(async () => {
   // 跑批前置预检（commit charge ≥90% fail-loud 拒跑——windows-commit-exhaustion 判例配方）
   preflightCommitCharge()
+  // Workers=2 并行互扰修复：bundle 四套件对宿主/profile 独占敏感——跨套件互斥锁串行化
+  await acquireSuiteLock(env, 'bundle-install-fullchain')
   test.skip(generationFrozen(env, PROFILE), '世代冻结判据命中（0b5230e1 判据族）——整旅程条件 skip，SMOKE-LEDGER 留痕')
   // bundle 正装共享建成（purge → add → 廉价代际门，已建成且复验通过即跳过——G1 复装幂等，断言面零变更）
   await ensureInstalledShared(env, PROFILE)
-})
+}, SUITE_HOOK_TIMEOUT_MS)
 
 test('CT-BIF-G1 #O-G1-1：一条命令六包全装（exit 0 + profile node_modules 六包齐备）', async () => {
   const source = requireBundleSource(env)
@@ -181,26 +187,53 @@ test('CT-BIF-G8 #O-G8-1：standard 会话 skills 五实例可见（dump-config �
   }
 })
 
-test('CT-BIF-G9 #O-G9-1：Forge模式预设两层合并可见（order=2 定值 pin + preset 层 filesystem-forge + global 五实例）', async () => {
+test('CT-BIF-G9 #O-G9-1：Forge模式预设可见性收缩面（order=2 定值 pin + preset 子树零 @dsh-forge/零 preset 层 skill 实例——desktop 挂载审计 broken 判例 2026-11-22 + global 五实例仍全局覆盖）', async () => {
   const dump = await dumpConfig(env, PROFILE)
   expectPresetForgeOrderPin(dump)
-  const rows = skillRows(dump)
-  const presetRow = rows.find((r) => r.providerName === PRESET_FORGE_PROVIDER)
-  expect(presetRow, `preset 层实例可见（providerName ${PRESET_FORGE_PROVIDER}）`).toBeDefined()
-  expect(rows.filter((r) => r.id === 'skill-filesystem-forge'), 'preset 层行 id = skill-filesystem-forge').toHaveLength(1)
+  const forgeStart = dump.indexOf('- id: preset-forge')
+  expect(forgeStart, 'preset-forge 段在场').toBeGreaterThanOrEqual(0)
+  const forgeEnd = dump.indexOf('\n- id: ', forgeStart + 1)
+  const forgePresetBlock = dump.slice(forgeStart, forgeEnd < 0 ? dump.length : forgeEnd)
+  expect(forgePresetBlock, 'preset 子树零 @dsh-forge 引用（子树按 profile 根解析——成员包不可达即 broken）').not.toContain('@dsh-forge/')
+  expect(dump.includes("providerName: filesystem-forge"), 'preset 层 filesystem-forge 实例零残留（收缩后技能只走 global 层）').toBe(false)
   expectFiveGlobalSkillRows(dump)
 })
 
-test('CT-BIF-G10 #O-G10-1：已装副本独立存活（profile 内 require 五件往返 + 源目录零参与零触碰）', async () => {
-  const { spawnSync } = await import('node:child_process')
+test('CT-BIF-G10 #O-G10-1：已装副本独立存活（profile 内 client apply 面装载五件往返 + 源目录零参与零触碰）', async () => {
+  const vm = await import('node:vm')
   const nm = nodeModulesOf(env, PROFILE)
   const source = requireBundleSource(env)
   const srcBefore = statSync(join(source, 'package.json')).mtimeMs
+  // 1.31 client apply 化新形态：五件 client bundle = 浏览器 face IIFE（自注册
+  // window.__ModuleLoader__.load({ id, factory })——官方 client-modules registry 装载序列）。
+  // 装载往返 = vm 沙箱复放 __ModuleLoader__ 装载序列（构建期产物形状守卫同径——
+  // plugins/*/scripts/bundle-client.mjs bug 95c1fed6 判例），截获 factory 返回值断言
+  // cordis apply 面导出在场。factory require 参数 = 浏览器 face 外部依赖缝（react/
+  // react-dom/manifest dsh.client.external——宿主页面运行时提供），复放以自返 stub
+  // 供缝（原型链挂载——esbuild __toESM 克隆原型，stub 缺席即红）。
+  const stubNs = new Proxy({}, { get: () => stubFn })
+  const stubFn = function stubRequireResult () { return stubFn }
+  Object.setPrototypeOf(stubFn, stubNs)
   for (const bare of BARE_BUNDLES) {
-    const script = `const p=require.resolve('${bare}');const assert=require('node:assert');assert(p.startsWith(${JSON.stringify(nm)}),p);require('${bare}');console.log(p)`
-    const res = spawnSync(process.execPath, ['-e', script], { cwd: mkdtempSync(join(tmpdir(), 'dsh-forge-bundle-req-')), encoding: 'utf8', windowsHide: true })
-    expect(res.status, `profile 内 require 往返 ${bare}（exit=${String(res.status)}）stderr=${String(res.stderr).slice(-300)}`).toBe(0)
-    expect(res.stdout, `解析自 profile 副本（源目录零参与）${bare}`).toContain(nm)
+    const face = clientFaceFile(nm, bare)
+    const clientJs = readFileSync(face, 'utf8')
+    let materialized: unknown
+    vm.runInNewContext(
+      clientJs,
+      {
+        window: {
+          __ModuleLoader__: {
+            load: ({ factory }: { factory: (req: (id: string) => unknown) => unknown }) => {
+              materialized = factory(() => stubFn)
+            },
+          },
+        },
+      },
+      { timeout: 2000 },
+    )
+    const faceObj = (materialized as { default?: unknown } | undefined)?.default ?? materialized
+    expect(typeof (faceObj as { apply?: unknown } | undefined)?.apply, `client apply 面装载往返（vm 复放 + apply 导出在场）${bare}`).toBe('function')
+    expect(face.startsWith(nm), `解析自 profile 副本（源目录零参与）${bare}`).toBe(true)
   }
   expect(statSync(join(source, 'package.json')).mtimeMs, '源目录零触碰（mtime 不变——非破坏性验证）').toBe(srcBefore)
 })

@@ -19,7 +19,7 @@
 //   `providerName: filesystem-<member>`（五异 id/互异 providerName，fefd5149 双改行）；
 // - order pin = dump-config 中 forge 预设行 `order: 2` 定值（CT-BPf-B3 反例注入载体）。
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, expect, type Locator, type Page } from '@playwright/test'
@@ -49,10 +49,9 @@ export const MEMBERS = ['project', 'spec', 'task-loop', 'expert-squad', 'knowled
 export type Member = (typeof MEMBERS)[number]
 /** 五件 skills 行 id（异 id——≠ 官方 base id `skill-filesystem`） */
 export const memberSkillId = (member: Member): string => `skill-filesystem-${member}`
-/** 五件 providerName（互异——≠ 默认名 `filesystem`；preset 层 = `filesystem-forge`） */
+/** 五件 providerName（互异——≠ 默认名 `filesystem`） */
 export const memberProvider = (member: Member): string => `filesystem-${member}`
-/** preset-forge providerName + 预设序位定值 pin（官方仓 preset 底稿核销 standard=1/forge=2） */
-export const PRESET_FORGE_PROVIDER = 'filesystem-forge'
+/** 预设序位定值 pin（官方仓 preset 底稿核销 standard=1/forge=2） */
 export const PRESET_FORGE_ORDER = 2
 /** bundle patch 顶层 forge 行 id（异 id——bug 1102d9d8：≠ 官方 experimental-forge-bundle
  *  服务行 id `forge`，同 id 行合并整行替换官方服务行 → StartupError） */
@@ -149,17 +148,21 @@ export interface SkillRowFace {
   readonly customSkillDirsAnchored: boolean
 }
 
-/** 提取 dump-config 中的 skills 行（`- id: skill-filesystem*` 块：id + providerName + customSkillDirs 锚） */
+/** 提取 dump-config 中的 skills 行（`- id: skill-filesystem*` 块：id + providerName + customSkillDirs 锚）。
+ * 形态适配（真机收口轮实锚）：现行 dsh 世代 dump-config 的 skills 行随所属块缩进嵌套
+ * （preset 行 6–8 空格 + providerName 在 config: 下）——行块按「下一个 `- id: ` 行」界定，
+ * 不锁缩进字面。 */
 export function skillRows(dump: string): readonly SkillRowFace[] {
+  const lines = dump.split(/\r?\n/)
   const rows: SkillRowFace[] = []
-  for (const m of dump.matchAll(/^- id: (skill-filesystem\S*)$\r?\n(?:^  .*$\r?\n)*?^    providerName: (\S+)$/gm)) {
-    const blockStart = m.index ?? 0
-    const block = dump.slice(blockStart, blockStart + 800)
-    rows.push({
-      id: m[1]!,
-      providerName: m[2]!,
-      customSkillDirsAnchored: /customSkillDirs:.*dist['",\s]+'skills'/.test(block) || block.includes("dist', 'skills'") || block.includes(`'skills', '`),
-    })
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i]!.match(/^\s*- id: (skill-filesystem\S*)\s*$/)
+    if (m === null) continue
+    const blockLines: string[] = []
+    for (let j = i + 1; j < lines.length && !/^\s*- id: /.test(lines[j]!); j++) blockLines.push(lines[j]!)
+    const block = blockLines.join('\n')
+    const pm = block.match(/^[ \t]+providerName: (\S+)\s*$/m)
+    rows.push({ id: m[1]!, providerName: pm?.[1] ?? '(缺)', customSkillDirsAnchored: block.includes('customSkillDirs') })
   }
   return rows
 }
@@ -194,10 +197,17 @@ export function expectSharedDbDispatch(dump: string): void {
   expect(hits, `共库 dbFile 派发表达式 ≥4 处（project/spec/task-loop/knowledge）实际 ${hits}`).toBeGreaterThanOrEqual(4)
 }
 
-/** order pin 判定（CT-BPf-G1/G9 pin 载体；CT-BPf-B3 反例注入的断言函数本体） */
-export function presetOrderOf(dump: string): number | undefined {
-  const m = dump.match(/- id: persona$\r?\n(?:^  .*$\r?\n)*?^    order: (\d+)$/m)
-  return m === null ? undefined : Number(m[1])
+/** order pin 判定（CT-BPf-G1/G9 pin 载体；CT-BPf-B3 反例注入的断言函数本体）。
+ * 形态适配（真机收口轮实锚）：现行 dsh 世代 dump-config 预设行 id = `preset-<id>`
+ * （preset-standard/preset-forge），order 落在行块 config: 下——按预设行 id 定位行块
+ * （至下一个顶层 `- id: `），不锁 persona 行字面。 */
+export function presetOrderOf(dump: string, presetId = 'preset-forge'): number | undefined {
+  const start = dump.indexOf(`- id: ${presetId}`)
+  if (start < 0) return undefined
+  let end = dump.indexOf('\n- id: ', start + 1)
+  if (end < 0) end = dump.length
+  const order = Number(dump.slice(start, end).match(/^ {4}order: (\d+)$/m)?.[1])
+  return Number.isFinite(order) ? order : undefined
 }
 export function expectPresetForgeOrderPin(dump: string): void {
   const order = presetOrderOf(dump)
@@ -294,6 +304,61 @@ export function writeBootForensics(port: number, stdout: string, stderr: string)
   const file = join(dir, `boot-${port}-${new Date().toISOString().replace(/[:.]/g, '-')}.log`)
   writeFileSync(file, `# stdout\n${stdout}\n# stderr\n${stderr}\n`, 'utf8')
   return file
+}
+
+// ── 套件互斥锁（Workers=2 并行互扰修复——bundle 四套件共享隔离 home/profile 独占态，
+// spec 文件按 workers 并行分派时共享夹具状态文件与正装互踩；跨文件串行化 = 隔离 home
+// 级互斥锁承载，beforeAll 取锁 / afterAll 放锁） ─────────────────────────────────────
+const SUITE_LOCK_POLL_MS = 1_000
+/** 锁等待上界（FORGE_BUNDLE_E2E_LOCK_TIMEOUT_MS 可覆盖；缺省 45min——四套件串行全长余量） */
+export const SUITE_LOCK_TIMEOUT_MS =
+  Number.parseInt(process.env.FORGE_BUNDLE_E2E_LOCK_TIMEOUT_MS ?? '', 10) || 45 * 60_000
+
+/** beforeAll 钩子上界（套件互斥锁等待 + 正装建成余量——锁等待可长达整套件时长） */
+export const SUITE_HOOK_TIMEOUT_MS = SUITE_LOCK_TIMEOUT_MS + 120_000
+
+const suiteLockFile = (env: ComboEnv): string => join(env.dshHome, '.forge-bundle-e2e-suite.lock')
+
+function readSuiteLock(env: ComboEnv): string | null {
+  try {
+    const row = JSON.parse(readFileSync(suiteLockFile(env), 'utf8')) as { token?: string }
+    return typeof row.token === 'string' && row.token !== '' ? row.token : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 套件互斥锁获取（beforeAll 调用）：token = `${suiteId}@${pid}@${ts}`。在场锁持有进程
+ * 已死（crash 泄漏）→ 陈旧锁强夺自愈；获取 = 写后复验自身 token（锁文件非原子读写——
+ * 双写竞态时后写者复验失配退避重试）；超时 fail-loud。
+ */
+export async function acquireSuiteLock(env: ComboEnv, suiteId: string, timeoutMs: number = SUITE_LOCK_TIMEOUT_MS): Promise<void> {
+  mkdirSync(env.dshHome, { recursive: true })
+  const token = `${suiteId}@${process.pid}@${Date.now()}`
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const holder = readSuiteLock(env)
+    const holderAlive = holder !== null && pidAlive(Number(holder.split('@')[1] ?? Number.NaN))
+    if (holder === null || !holderAlive) {
+      writeFileSync(suiteLockFile(env), JSON.stringify({ token }), 'utf8')
+      if (readSuiteLock(env) === token) return
+    }
+    await new Promise((r) => setTimeout(r, SUITE_LOCK_POLL_MS))
+  }
+  throw new Error(`套件互斥锁获取超时（${String(timeoutMs)}ms）——当前持有者 ${String(readSuiteLock(env))}，锁文件 ${suiteLockFile(env)}`)
+}
+
+/** 套件互斥锁释放（afterAll 调用——仅持有者本人 suiteId 命中才删，防误删后继持有者） */
+export function releaseSuiteLock(env: ComboEnv, suiteId: string): void {
+  const holder = readSuiteLock(env)
+  if (holder !== null && holder.startsWith(`${suiteId}@`)) {
+    try {
+      rmSync(suiteLockFile(env), { force: true })
+    } catch {
+      // 幂等（并发释放竞态零危害——后继持有者 token 不匹配即不删）
+    }
+  }
 }
 
 // ── 基建夹具共享（跨用例/跨套件持久态——两套件共用一次正装与一次宿主拉起） ───────────────
@@ -415,7 +480,14 @@ export async function ensureHostShared(env: ComboEnv, port: number): Promise<Web
       writeSharedState(env, { host: null, fatal: `共享宿主进程中途退出（pid=${String(record.pid)}）——fail-fast 整套中止，boot stdout 见 ${record.stdoutFile}` })
       throw new Error(readSharedState(env).fatal!)
     }
-    return attachWebHost(env, record)
+    try {
+      return await attachWebHost(env, record)
+    } catch {
+      // 附着失败（宿主 hang / WS 断连 / 共享态 pid 记录失配）→ 重试策略：定点回收旧
+      // 实例 + 清档案 + 冷重建（不 fail-fast——pid 活但宿主不可服务属可恢复瞬态）
+      killByPid(record.pid)
+      writeSharedState(env, { host: null })
+    }
   }
   try {
     const host = await launchWebHost(env, port)
@@ -427,18 +499,87 @@ export async function ensureHostShared(env: ComboEnv, port: number): Promise<Web
   }
 }
 
-/** 共享宿主主动停用（B3 类重启边界与 afterAll 回收——清档案不清闩，闩由成功拉起清除） */
+// ── chromium face 回收登记（套件侧泄漏修复——1.33 002 轮定谳） ────────────────────────
+// stopHostShared 原只杀宿主进程不关 chromium：每个用例的浏览器 face（launchWebHost/
+// attachWebHost 各一棵）逐用例泄漏——14 用例连跑后整机 commit charge 91% 触发
+// preflightCommitCharge 拒跑（整套件环境级拒绝）+ WS 稳定性劣化。宿主 face 在创建时
+// 登记于此，stopHostShared 统一回收（幂等：close 后 dispose 再关一次零危害）。
+interface WebFaceHandle { dispose(): Promise<void> }
+const liveWebFaces = new Set<WebFaceHandle>()
+
+function registerWebFace(dispose: () => Promise<void>): void {
+  const face: WebFaceHandle = {
+    dispose: async () => {
+      await dispose()
+      liveWebFaces.delete(face)
+    },
+  }
+  liveWebFaces.add(face)
+}
+
+/** 共享宿主主动停用（B3 类重启边界与 afterAll 回收——清档案不清闩，闩由成功拉起清除；
+ * 附带回收全部在册 chromium face——零浏览器进程泄漏） */
 export async function stopHostShared(env: ComboEnv): Promise<void> {
+  for (const face of Array.from(liveWebFaces)) {
+    await face.dispose().catch(() => undefined)
+  }
   const record = readSharedState(env).host
   writeSharedState(env, { host: null })
   if (record !== null) killByPid(record.pid)
 }
 
 /**
+ * web 页面上线锚等待（[data-slot]）——WS Reconnecting 卡滞死锁修复：bounded 重载重试
+ * （3 次 × 45s，含 page.reload 连接面瞬态恢复；不无限等待、不弱化就绪锚语义），
+ * 终败 fail-loud 携最后错误。
+ */
+// 预算收敛（1.33：重试预算必须落在 project 级 300s 测试超时内——预算超界时 Playwright
+// 以裸 Test timeout 掩盖 fail-loud 信号，失败归因不可读）：2 次含重载重试，单次锚等待
+// 30s，含 goto 全预算 ≤ ~2min——WS 卡滞宿主在测试超时前给出明确失败信号。
+const SLOT_READY_ATTEMPTS = 2
+const SLOT_READY_TIMEOUT_MS = 30_000
+
+/** 首轮引导弹层关闭（官方 0.2 首轮「开始使用」登录门 / 「预览版说明」弹层——不关闭则
+ * 页面交互面整体被遮挡）。缺席（非首轮附着）短窗探测即返回；在场则逐个经
+ * 关闭/继续/跳过 按钮关闭（bounded，不无限等待）。 */
+async function dismissFirstRunDialog(page: Page): Promise<void> {
+  const dialogCount = async (): Promise<number> => await page.locator('[role="dialog"], dialog').count()
+  if ((await dialogCount()) === 0) {
+    await page.waitForSelector('[role="dialog"], dialog', { timeout: 5_000 }).catch(() => undefined)
+  }
+  const deadline = Date.now() + 20_000
+  while ((await dialogCount()) > 0 && Date.now() < deadline) {
+    const dialog = page.locator('[role="dialog"], dialog').first()
+    const btn = dialog.getByRole('button', { name: /继续|关闭|跳过/ }).first()
+    if ((await btn.count()) === 0) break
+    await btn.click({ timeout: 3_000 }).catch(() => undefined)
+    await new Promise((r) => setTimeout(r, 400))
+  }
+}
+async function gotoSlotReady(page: Page, baseUrl: string, token: string): Promise<void> {
+  let lastError = ''
+  for (let attempt = 1; attempt <= SLOT_READY_ATTEMPTS; attempt++) {
+    try {
+      await page.goto(`${baseUrl}/?token=${encodeURIComponent(token)}`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+      await expect(page.locator('[data-slot]').first()).toBeVisible({ timeout: SLOT_READY_TIMEOUT_MS })
+      await dismissFirstRunDialog(page)
+      return
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e)
+      await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => undefined)
+    }
+  }
+  throw new Error(
+    `web 页面上线锚未就绪（[data-slot] ×${SLOT_READY_ATTEMPTS} 次含重载重试均超时——WS Reconnecting 卡滞/宿主未上线）：${lastError.slice(-400)}`,
+  )
+}
+
+/**
  * 拉起官方 web 宿主（`dsh --profile web --no-open --port <port>`）+ Playwright chromium
  * 附着（boot stdout 提取 token URL → 303 cookie 会话 → 上线）。boot 就绪锚 = 官方 slot
- * 装配面 `[data-slot]`（官方机械锚——desktop 走查 precedent 同径）。成功即写共享宿主档案
- * （pid/port/token/boot stdout 取证落盘）——后续 ensureHostShared 免 boot 附着复用。
+ * 装配面 `[data-slot]`（官方机械锚——desktop 走查 precedent 同径；WS 卡滞经 gotoSlotReady
+ * bounded 重载重试恢复）。成功即写共享宿主档案（pid/port/token/boot stdout 取证落盘）——
+ * 后续 ensureHostShared 免 boot 附着复用。
  */
 export async function launchWebHost(env: ComboEnv, port: number): Promise<WebHost> {
   const child = spawn(env.dshBin, ['--profile', 'web', '--no-open', '--port', String(port)], {
@@ -473,14 +614,14 @@ export async function launchWebHost(env: ComboEnv, port: number): Promise<WebHos
   expect(await sessionReady(baseUrl, session!.cookie), 'cookie 会话 GET / ok = web 宿主上线').toBe(true)
 
   const browser = await chromium.launch()
-  const page = await browser.newPage()
+  const page = await browser.newContext({ locale: 'zh-CN' }).then((ctx) => ctx.newPage())
   const clientUrls: string[] = []
   page.on('response', (res) => {
     const url = res.url()
     if (url.includes('/node_modules/@dsh-forge/')) clientUrls.push(url)
   })
-  await page.goto(`${baseUrl}/?token=${encodeURIComponent(token)}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-  await expect(page.locator('[data-slot]').first()).toBeVisible({ timeout: 120_000 })
+  registerWebFace(async () => { await browser.close().catch(() => undefined) })
+  await gotoSlotReady(page, baseUrl, token)
   // 共享宿主档案（pid/port/token + boot stdout 取证落盘——附着侧免 boot 复用）
   const stdoutFile = writeBootForensics(port, stdout, stderr)
   writeSharedState(env, {
@@ -505,8 +646,8 @@ export async function launchWebHost(env: ComboEnv, port: number): Promise<WebHos
 
 /**
  * 附着既有共享宿主（免 boot 复用——pid/token 档案命中）：cookie 会话 + chromium 附着，
- * 与 launchWebHost 同构（同一 slot 就绪锚）；child 以 pid 存活探测的轻量替身承载
- * （exitCode 惰性求值——G5/G8 宿主存活断言语义不变）。
+ * 与 launchWebHost 同构（同一 slot 就绪锚 + WS 卡滞 bounded 重载重试）；child 以 pid
+ * 存活探测的轻量替身承载（exitCode 惰性求值——G5/G8 宿主存活断言语义不变）。
  */
 async function attachWebHost(env: ComboEnv, record: SharedHostRecord): Promise<WebHost> {
   const baseUrl = `http://127.0.0.1:${record.port}`
@@ -514,14 +655,14 @@ async function attachWebHost(env: ComboEnv, record: SharedHostRecord): Promise<W
   expect(session, '共享宿主附着：boot token → cookie 会话建立').toBeDefined()
   expect(await sessionReady(baseUrl, session!.cookie), '共享宿主附着：cookie 会话 GET / ok = 宿主上线').toBe(true)
   const browser = await chromium.launch()
-  const page = await browser.newPage()
+  const page = await browser.newContext({ locale: 'zh-CN' }).then((ctx) => ctx.newPage())
   const clientUrls: string[] = []
   page.on('response', (res) => {
     const url = res.url()
     if (url.includes('/node_modules/@dsh-forge/')) clientUrls.push(url)
   })
-  await page.goto(`${baseUrl}/?token=${encodeURIComponent(record.token)}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-  await expect(page.locator('[data-slot]').first()).toBeVisible({ timeout: 120_000 })
+  registerWebFace(async () => { await browser.close().catch(() => undefined) })
+  await gotoSlotReady(page, baseUrl, record.token)
   const child = {
     pid: record.pid,
     get exitCode(): number | null {
@@ -591,4 +732,21 @@ export async function purgeBaseline(env: ComboEnv, profile = 'web'): Promise<voi
   await pluginRemove(env, FORGE_PKG, profile)
   for (const bare of BARE_BUNDLES) await pluginRemove(env, bare, profile)
   ensureProfileBuildApprovals(env.dshHome, profile)
+}
+
+// ── client apply 面（1.31 apply 化新形态锚——G10 装载往返判定面） ─────────────────────
+/**
+ * 安装副本 client face 入口文件（exports["./client"].default 声明物——1.31 client apply
+ * 化后的装载面契约锚；声明缺席/指向物缺席 fail-loud）。
+ */
+export function clientFaceFile(nodeModules: string, pkg: string): string {
+  const dir = join(nodeModules, '@dsh-forge', pkg.slice('@dsh-forge/'.length))
+  const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+    exports?: Record<string, { default?: string }>
+  }
+  const rel = manifest.exports?.['./client']?.default
+  expect(rel, `client face 入口声明在场（exports["./client"].default）${pkg}`).toBeTruthy()
+  const file = join(dir, ...rel!.replace(/^\.\//, '').split('/'))
+  expect(existsSync(file), `client face bundle 在盘 ${file}`).toBe(true)
+  return file
 }

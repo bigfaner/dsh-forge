@@ -203,10 +203,11 @@ describe("forge patch 六插行（静态直检——直写正本）", () => {
     }
   });
 
-  it("forge patch 零顶层 skills 行（唯一 skill-filesystem = preset-forge 行内 forge 实例）", () => {
+  it("forge patch 零顶层 skills 行且零 preset 内 skill-filesystem 实例（desktop preset 子树按 profile 根解析——@dsh-forge/* 不可达即 preset broken 被过滤；技能由五件 patch 谁带谁自持全局覆盖）", () => {
     expect(topLevelIds(FORGE_PATCH).filter((id) => id.startsWith("skill-filesystem"))).toEqual([]);
     expect(FORGE_PATCH).not.toMatch(/^- id: skill-filesystem\S*$/m);
-    expect(FORGE_PATCH).toContain("- id: skill-filesystem-forge\n");
+    const codeLines = FORGE_PATCH.split("\n").filter((line) => !line.trim().startsWith("#")).join("\n");
+    expect(codeLines, "零 skill-filesystem 实例行（注释提及不算）").not.toContain("skill-filesystem");
   });
 });
 
@@ -238,20 +239,8 @@ describe("preset-forge 静态直检（直写正本）", () => {
     expect(presetBody).toMatch(/^        order: 2$/m);
   });
 
-  it("行内 skill-filesystem-forge 实例：providerName: filesystem-forge + customSkillDirs 五锚自锚各件 skills/ 且 && 短路兜底", () => {
-    expect(presetBody).toContain("providerName: filesystem-forge");
-    const dirsAt = presetBody.indexOf("              customSkillDirs:\n");
-    expect(dirsAt).toBeGreaterThanOrEqual(0);
-    const anchors = presetBody
-      .slice(dirsAt)
-      .split("\n")
-      .filter((line) => line.startsWith("                - !!js "))
-      .map((line) => line.slice("                - !!js ".length));
-    expect(anchors).toHaveLength(MEMBERS.length);
-    anchors.forEach((expr, i) => {
-      expect(expr).toContain(`resolve('@dsh-forge/${MEMBERS[i]}/package.json')`);
-      expect(expr).toMatch(/,\s*'skills'\)/);
-      expect(expr).toContain("&&");
-    });
+  it("preset 子树零 @dsh-forge 引用（registry 挂载审计 broken 判例 desktop 2026-11-22——子树解析基点回退 profile 根，成员包不可达；成员能力经顶层插行装载）", () => {
+    expect(presetBody).not.toContain("@dsh-forge/");
+    expect(presetBody).not.toContain("customSkillDirs");
   });
 });

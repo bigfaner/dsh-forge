@@ -54,15 +54,15 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
     }
   });
 
-  it("占位符物化面封闭：!!js 求值点 = forge 行 home 表达式 + 五件插行派发表达式 + preset 行内五件自锚表达式（skill-filesystem-forge 实例——自锚各件 skills/，bundle 介质）+ 官方 preset 底稿平台/禁用表达式，无 {projectDir}/{homeDir} 模板", () => {
+  it("占位符物化面封闭：!!js 求值点 = forge 行 home 表达式 + 五件插行派发表达式 + 官方 preset 底稿平台/禁用表达式，无 {projectDir}/{homeDir} 模板，preset 子树零成员包自锚（desktop preset 子树按 profile 根解析——@dsh-forge/* 不可达即 broken，判例 2026-11-22）", () => {
     expect(patchYaml).not.toContain("{projectDir}");
     expect(patchYaml).not.toContain("{homeDir}");
     const jsPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!);
     expect(jsPoints[0]).toBe(HOME_EXPR);
-    // 自锚点 = preset 行内 skill-filesystem-forge 实例五条（顶层 skills 行不属本 patch——1.11 谁带谁自持）。
-    const anchorPoints = jsPoints.slice(1).filter((p) => p.includes("/package.json"));
-    expect(anchorPoints).toHaveLength(5);
-    const otherPoints = jsPoints.slice(1).filter((p) => !p.includes("/package.json"));
+    // preset 子树零成员包自锚（判例 2026-11-22：子树解析基点回退 profile 根，
+    // @dsh-forge/* 不可达 → preset broken → UI 过滤；技能由五件 patch 顶层 skills 行全局覆盖）。
+    expect(jsPoints.filter((p) => p.includes("/package.json"))).toHaveLength(0);
+    const otherPoints = jsPoints.slice(1);
     // 非自锚点 = 五件插行派发 config 表达式 ×6（home/dbFile/tasksHome——静态直检归
     // tests/forge/skills-rows-contract.test.ts）+ 官方 preset 底稿 platform 禁用
     // 表达式 ×2 + plugin-manager profileContext ×1。
