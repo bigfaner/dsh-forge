@@ -1,4 +1,4 @@
-// @dsh-forge/md-mermaid —— client face（浏览器半；官方宿主 client bundle 装载入口）。
+// @dsh-forge/markdown-kit —— client face（浏览器半；官方宿主 client bundle 装载入口）。
 // scripts/bundle-client.mjs 按官方 clientBundle 配方产 dist/client.js，经
 // exports["./client"] 以 classic <script> 装载——materialize 后的 module.exports 本身
 // 为 cordis 插件面（function 或含 apply 的对象；input-history 判例同型，嵌套不识别）。

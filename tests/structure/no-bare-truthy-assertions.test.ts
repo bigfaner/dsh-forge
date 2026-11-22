@@ -89,7 +89,7 @@ const ALLOWLIST: Record<string, number> = {
   'packages/plugin-forge/src/tools/submit-task.test.ts': 1,
   'packages/plugin-forge/src/triage/triage.test.ts': 1,
   'plugins/input-history/tests/event-source.test.ts': 1,
-  'plugins/md-mermaid/tests/host/index.test.ts': 1,
+  'plugins/markdown-kit/tests/host/index.test.ts': 1,
   'packages/plugins/quote-reference/tests/client-face.test.ts': 1,
   'packages/plugins/quote-reference/tests/client-scope.test.ts': 2,
   'packages/plugins/quote-reference/tests/selection-menu.test.tsx': 2,

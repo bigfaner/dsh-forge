@@ -85,10 +85,10 @@ const STAGING_EXTRAS = {
   // 按声明读包内该文件触发 apply 注册，缺席即 ENOENT，bug a1f13abf 同径；knowledge
   // 迁 root plugins/knowledge 后同前缀包位登记面随迁）
   knowledge: { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/learn/SKILL.md', 'skills/distill/SKILL.md', 'cordis.patch.yml'] },
-  // md-mermaid（迁居批 1.2，knowledge/expert-squad 同构）：组合装配行本体 cordis.patch.yml
+  // markdown-kit（md-mermaid 迁居批 1.2 改名，knowledge/expert-squad 同构）：组合装配行本体 cordis.patch.yml
   // （package.json dsh.bundle.patch 声明指向——loader 按声明读包内该文件触发 apply 注册，
   // 缺席即 ENOENT，bug a1f13abf 同径；in-preset 双组合行退役转全局行）
-  'md-mermaid': { files: ['cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] },
+  'markdown-kit': { files: ['cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] },
   // project（1.17 批二卸旧装新，自 git-worktree staged 种子接替）：组合装配行本体
   // cordis.patch.yml（package.json dsh.bundle.patch 声明指向——loader 按声明读包内该文件
   // 触发 apply 注册，缺席即 ENOENT，bug a1f13abf 同径）+ skills 约定目录占位（.gitkeep）
@@ -111,7 +111,7 @@ const CONVENTION_DIRS = ['skills', 'experts']
 /** 包短名 → workspace 子路径。批1 包归位表驱动面：PRODUCT_PLUGINS 声明 dir 字段的包
  *  直取表值（expert-squad 载 'plugins/expert-squad' root 级树——不再按 packages/plugins/<short>
  *  推导）；未声明 dir 的包维持既有树探测（packages/<short> 平铺优先；plugins/ 子居所——
- *  md-mermaid 先例；root:plugins/ 前缀 = 仓库根级 plugins/ 树——project 包；lib/ 子居所——
+ *  markdown-kit 先例；root:plugins/ 前缀 = 仓库根级 plugins/ 树——project 包；lib/ 子居所——
  *  lib 公共包群探测）。表外（无处可探测）返回 undefined——调用侧 fail-loud。 */
 function packageDirOf(root, short, dir) {
   if (dir !== undefined) return dir
@@ -464,7 +464,7 @@ async function stage() {
   const installManifest = readJson(join(ROOT, 'apps/host/profile.install/package.json'), 'profile.install manifest')
   const productVersions = {}
   for (const name of Object.keys(productPackages)) {
-    // 键可含 workspace 子路径（plugins/md-mermaid、lib/path）——版本键取包真名短名（stagedPkgShort）
+    // 键可含 workspace 子路径（plugins/markdown-kit、lib/path）——版本键取包真名短名（stagedPkgShort）
     const short = stagedPkgShort(name)
     const manifest = readJson(join(ROOT, ...pkgRootOf(ROOT, name), 'package.json'), `${name} manifest`)
     productVersions[`@dsh-forge/${short}`] = manifest.version ?? '0.0.0'

@@ -81,7 +81,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'plugins/forge',
         'plugins/expert-squad',
         'plugins/input-history',
-        'plugins/md-mermaid',
+        'plugins/markdown-kit',
         'packages/plugins/mobile-bridge',
         'packages/plugins/quote-reference',
         'plugins/super-composer',
@@ -111,7 +111,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     // 1.6：web normalize/path-key 消费改指 @dsh-forge/lib-path/path-key——增 lib/path 引用
     // 1.14 UI 迁入：add-project/bug-refs 组件本体消费 @dsh-forge/project client ui
     // 1.17 批二：git-worktree 旧包退役——web 引用面收 project 单源
-    ['apps/web', ['lib/path', 'packages/contracts', 'plugins/md-mermaid', 'plugins/project/tsconfig.host.json']],
+    ['apps/web', ['lib/path', 'packages/contracts', 'plugins/markdown-kit', 'plugins/project/tsconfig.host.json']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
     const ts = readJson(join(dir, 'tsconfig.json')) as {
       compilerOptions?: { composite?: boolean }

@@ -104,12 +104,12 @@ export default defineConfig({
       { test: { name: 'plugin-forge-e2e', include: ['packages/plugin-forge/e2e/**/*.test.ts'] } },
       // M3 3.1：第八工件 plugin-forge-spec（spec 三 tool + forge:spec 段）
       { test: { name: 'plugin-forge-spec', include: ['packages/plugin-forge-spec/src/**/*.test.ts'] } },
-      // md-mermaid 插件包（校验面单测 + 真引擎 headless parse 集成；迁居批 1.2 新代形态
+      // markdown-kit 插件包（校验面单测 + 真引擎 headless parse 集成；迁居批 1.2 新代形态
       // ——tests/ 域池 + ui/ 半随伴单测，knowledge 池同构）
       {
         test: {
-          name: 'md-mermaid',
-          include: ['plugins/md-mermaid/tests/**/*.test.{ts,tsx}', 'plugins/md-mermaid/ui/**/*.test.{ts,tsx}'],
+          name: 'markdown-kit',
+          include: ['plugins/markdown-kit/tests/**/*.test.{ts,tsx}', 'plugins/markdown-kit/ui/**/*.test.{ts,tsx}'],
         },
       },
       // input-history 插件包（纯 client 包——client bundle 装载契约四断言守卫）

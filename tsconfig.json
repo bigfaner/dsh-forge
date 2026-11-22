@@ -53,7 +53,7 @@
       "path": "plugins/forge"
     },
     {
-      "path": "plugins/md-mermaid"
+      "path": "plugins/markdown-kit"
     },
     {
       "path": "packages/plugins/mobile-bridge"

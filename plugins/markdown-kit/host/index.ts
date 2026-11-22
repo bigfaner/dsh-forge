@@ -1,4 +1,4 @@
-// @dsh-forge/md-mermaid —— 插件入口（Node，cordis loader 装载面）。
+// @dsh-forge/markdown-kit —— 插件入口（Node，cordis loader 装载面）。
 // 形态：Cordis Plugin.Function（loader 只认 default 导出，core/index.ts 同型）：
 //   inject = ['tools'] —— 唯一消费面为 dsh 官方 tool 注册面（结构化窄类型见 ./faces.ts，
 //   零 dsh 运行时依赖——plugin-forge-spec 同法）。装配：validateMermaid tool 恰一注册
@@ -6,7 +6,7 @@
 import type { MermaidPluginContextFace } from './faces.js'
 import { createValidateMermaidTool, type ValidateMermaidToolDeps } from './tools/validate-mermaid.js'
 
-export const MD_MERMAID_PLUGIN_NAME = 'md-mermaid' as const
+export const MD_MERMAID_PLUGIN_NAME = 'markdown-kit' as const
 
 /** 插件配置（本期无配置项——读取缝等依赖经工厂注入，预留 config 位） */
 export interface MdMermaidPluginConfig extends ValidateMermaidToolDeps {}

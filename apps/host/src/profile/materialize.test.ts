@@ -135,7 +135,7 @@ describe('AC2 幂等：重复启动不重写', () => {
     const hasRowDir = join(dir, 'has-product-row')
     mkdirSync(hasRowDir, { recursive: true })
     const withRow =
-      '# user layer\n- id: ui-settings\n  config:\n    enabled: true\n- insert:\n    - id: dsh-forge-core\n      name: \'@dsh-forge/core\'\n    - id: dsh-forge-knowledge\n      name: \'@dsh-forge/knowledge\'\n    - id: dsh-forge-expert-squad\n      name: \'@dsh-forge/expert-squad\'\n    - id: dsh-forge-md-mermaid\n      name: \'@dsh-forge/md-mermaid\'\n'
+      '# user layer\n- id: ui-settings\n  config:\n    enabled: true\n- insert:\n    - id: dsh-forge-core\n      name: \'@dsh-forge/core\'\n    - id: dsh-forge-knowledge\n      name: \'@dsh-forge/knowledge\'\n    - id: dsh-forge-expert-squad\n      name: \'@dsh-forge/expert-squad\'\n    - id: dsh-forge-markdown-kit\n      name: \'@dsh-forge/markdown-kit\'\n'
     writeFileSync(join(hasRowDir, 'cordis.patch.yml'), withRow, 'utf8')
     const result = ensureProfileMaterialized(hasRowDir)
     expect(result.patched).toEqual([])
@@ -270,7 +270,7 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     // M3 3.7：远征组合 in-preset plugin-forge-spec 行的 loader 解析锚（预设装配 dev 供应面）
     expect(dev.dependencies['@dsh-forge/plugin-forge-spec']).toBe('link:../../../packages/plugin-forge-spec')
     // md-mermaid 迁居批 1.2：root 级 plugins/ 树 link（'/plugins' 前缀推导——project 同型）
-    expect(dev.dependencies['@dsh-forge/md-mermaid']).toBe('link:../../../plugins/md-mermaid')
+    expect(dev.dependencies['@dsh-forge/markdown-kit']).toBe('link:../../../plugins/markdown-kit')
     // expert-squad 批1 包归位（root 级 plugins/ 树）——host 装载表值直拼（批3 pin 姊妹面）
     expect(dev.dependencies['@dsh-forge/expert-squad']).toBe('link:../../../plugins/expert-squad')
     // 1.40 持久层 node:sqlite 迁移：dev profile 零原生依赖兜底（better-sqlite3 退役）

@@ -193,8 +193,10 @@ for (const preset of ['expedition', 'blitz'] as const) {
       else expect(text).not.toContain('@dsh-forge/plugin-forge-spec')
     })
 
-    it('md-mermaid in-preset 行退役（迁居批 1.2：装载通道转 cordis.patch.yml 全局行——预设底稿零残留，防双注册）', () => {
+    it('markdown-kit in-preset 行退役（迁居批 1.2：装载通道转 cordis.patch.yml 全局行——预设底稿零残留，防双注册）', () => {
+      expect(rows.has('markdown-kit')).toBe(false)
       expect(rows.has('md-mermaid')).toBe(false)
+      expect(text).not.toContain('@dsh-forge/markdown-kit')
       expect(text).not.toContain('@dsh-forge/md-mermaid')
     })
 
@@ -212,17 +214,17 @@ for (const preset of ['expedition', 'blitz'] as const) {
   })
 }
 
-describe('组合后注册表恰含一次 md-mermaid（迁居批 1.3 集成断言：组合层 patch 解析 + insert——防双注册可红）', () => {
+describe('组合后注册表恰含一次 markdown-kit（迁居批 1.3 集成断言：组合层 patch 解析 + insert——防双注册可红）', () => {
   const presetTexts = (['expedition', 'blitz'] as const).map((p) =>
     readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES[p]), 'utf8'),
   )
   // dev 形态全局行源 = profile.dev/cordis.patch.yml（打包形态同源模板另经 materialize.test 语义一致 pin）
   const globalPatch = readFileSync(join(hostRoot(), 'profile.dev', 'cordis.patch.yml'), 'utf8')
   const mdMermaidRow = (text: string) =>
-    [...text.matchAll(/^ {2,}- id: \S+\n {4,}name: ['"]@dsh-forge\/md-mermaid['"]\s*$/gm)].length
+    [...text.matchAll(/^ {2,}- id: \S+\n {4,}name: ['"]@dsh-forge\/markdown-kit['"]\s*$/gm)].length
 
-  it('in-preset 行 ×2 退役 + 全局行恰一 = 组合后注册表恰含一次 md-mermaid', () => {
-    for (const text of presetTexts) expect(mdMermaidRow(text), '预设底稿残留 md-mermaid 行').toBe(0)
+  it('in-preset 行 ×2 退役 + 全局行恰一 = 组合后注册表恰含一次 markdown-kit', () => {
+    for (const text of presetTexts) expect(mdMermaidRow(text), '预设底稿残留 markdown-kit 行').toBe(0)
     expect(mdMermaidRow(globalPatch), '全局行非恰一').toBe(1)
   })
 })
@@ -285,9 +287,10 @@ describe('headhunter 预设（expert-squad 0.30.0 起随包自带：plugins/expe
     expect(text).not.toMatch(/- id: tool-exclude-office/m)
   })
 
-  it('零 forge 面（产品裁决 2026-10-09 同径）：物理无 plugin-forge[+spec]/md-mermaid/skill 目录占位符', () => {
+  it('零 forge 面（产品裁决 2026-10-09 同径）：物理无 plugin-forge[+spec]/markdown-kit/skill 目录占位符', () => {
     expect(rows.has('plugin-forge')).toBe(false)
     expect(rows.has('plugin-forge-spec')).toBe(false)
+    expect(rows.has('markdown-kit')).toBe(false)
     expect(rows.has('md-mermaid')).toBe(false)
     expect(text).not.toContain('@dsh-forge/plugin-forge')
     expect(text).not.toContain('{{plugin-forge')

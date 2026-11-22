@@ -12,7 +12,11 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 // 旧路径字面量分段拼装——本守卫文件自身不含旧路径完整字面（自命中豁免面归零）
 const OLD_PATH = ['packages', 'plugins', 'md-mermaid'].join('/')
-const NEW_PATH = 'plugins/md-mermaid'
+const NEW_PATH = 'plugins/markdown-kit'
+// 改名批旧包名禁入（md-mermaid → markdown-kit 改名全链 1.2）：旧居所路径字面双形禁入
+// ——packages/plugins/ 历史子居所 + root 级 plugins/ 前身路径；历史提案文档指称白名单
+// 豁免语义不变（注释/文档叙事不构成解析面）。本文件不含旧路径完整字面（分段拼装——自命中豁免面归零）。
+const LEGACY_PATHS = [OLD_PATH, ['plugins', 'md-mermaid'].join('/')]
 
 // 注释与文档指称白名单（圆桌裁决 2026-11-19）：历史叙事/对照指称不构成解析面——
 // 命中文件按行过滤后剩余命中才算违规。
@@ -36,24 +40,24 @@ const WHITELIST_MARKERS = [
 
 function* walk(dir: string): Generator<string> {
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'dist' || name === '.git' || name === '.forge') continue
+    if (name === 'node_modules' || name === 'dist' || name === 'release' || name.startsWith('.') || name === '.git' || name === '.forge') continue
     const p = join(dir, name)
     if (statSync(p).isDirectory()) yield* walk(p)
     else yield p
   }
 }
 
-describe('md-mermaid 包居所拓扑守卫（迁居批 1.2）', () => {
-  it(`旧居所禁入：${OLD_PATH} 代码/配置/锁文件零命中（白名单指称豁免）`, () => {
+describe('markdown-kit 包居所拓扑守卫（md-mermaid 迁居批 1.2 + 改名全链）', () => {
+  it(`旧包名禁入：${LEGACY_PATHS.join(' / ')} 代码/配置/锁文件零命中（白名单指称豁免——历史文档语义不变）`, () => {
     const offenders: string[] = []
     for (const file of walk(ROOT)) {
       if (!/\.(ts|tsx|mjs|cjs|js|json|ya?ml|md)$/.test(file)) continue
       const rel = file.slice(ROOT.length + 1).replaceAll('\\', '/')
       if (WHITELIST_MARKERS.some((m) => rel === m || rel.startsWith(m))) continue
       const text = readFileSync(file, 'utf8')
-      if (text.includes(OLD_PATH)) offenders.push(rel)
+      if (LEGACY_PATHS.some((p) => text.includes(p))) offenders.push(rel)
     }
-    expect(offenders, `旧包居所残留（迁居批 1.2 应零命中）: ${offenders.join(', ')}`).toEqual([])
+    expect(offenders, `旧包居所残留（改名全链应零命中）: ${offenders.join(', ')}`).toEqual([])
   })
 
   it('新居所在场：solution/web tsconfig reference + vitest include + profile.dev link 指新路径', () => {

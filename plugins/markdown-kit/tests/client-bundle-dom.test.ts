@@ -20,7 +20,7 @@ import * as jsxRuntime from "react/jsx-runtime";
  */
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const bundlePath = resolve(pkgDir, "dist/client.js");
-const PLUGIN_ID = "@dsh-forge/md-mermaid";
+const PLUGIN_ID = "@dsh-forge/markdown-kit";
 
 interface Registration {
   id?: unknown;
@@ -49,7 +49,7 @@ function evalBundleAsClassicScript(): Registration[] {
 }
 
 describe("client bundle 装载契约（官方 clientBundle 配方断言）", () => {
-  it("classic script 求值注册唯一工厂（id=@dsh-forge/md-mermaid）", () => {
+  it("classic script 求值注册唯一工厂（id=@dsh-forge/markdown-kit）", () => {
     const registrations = evalBundleAsClassicScript();
     expect(registrations.length, "装载后无 __ModuleLoader__.load 注册").toBe(1);
     expect(registrations[0]!.id).toBe(PLUGIN_ID);

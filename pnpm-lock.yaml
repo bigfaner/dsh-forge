@@ -158,9 +158,9 @@ importers:
       '@dsh-forge/knowledge':
         specifier: workspace:*
         version: link:../../plugins/knowledge
-      '@dsh-forge/md-mermaid':
+      '@dsh-forge/markdown-kit':
         specifier: workspace:*
-        version: link:../../plugins/md-mermaid
+        version: link:../../plugins/markdown-kit
       '@dsh-forge/mobile-bridge':
         specifier: workspace:*
         version: link:../../packages/plugins/mobile-bridge
@@ -198,9 +198,9 @@ importers:
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@dsh-forge/md-mermaid':
+      '@dsh-forge/markdown-kit':
         specifier: workspace:*
-        version: link:../../plugins/md-mermaid
+        version: link:../../plugins/markdown-kit
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
@@ -228,9 +228,9 @@ importers:
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path
-      '@dsh-forge/md-mermaid':
+      '@dsh-forge/markdown-kit':
         specifier: workspace:*
-        version: link:../../plugins/md-mermaid
+        version: link:../../plugins/markdown-kit
       '@dsh-forge/project':
         specifier: workspace:*
         version: link:../../plugins/project
@@ -726,7 +726,7 @@ importers:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
 
-  plugins/md-mermaid:
+  plugins/markdown-kit:
     dependencies:
       mermaid:
         specifier: 12.1.0
@@ -6556,10 +6556,6 @@ packages:
     resolution: {integrity: sha512-kAaaHLFebBYwgi5cYBXAI8vKrQFMCD2MEswj2QuPKKbdU1wYLc8WXtS7O8F/b6POCIe3gJjY6hkDstHi1yMETQ==}
     engines: {node: '>=12'}
 
-  d3-format@3.1.2:
-    resolution: {integrity: sha512-AJDdYOdnyRDV5b6ArilzCPPwc1ejkHcoyFarqlPqT7zRYjhavcT3uSrqcMvsgh2CgoPbK3RCwyHaVyxYcP2Arg==}
-    engines: {node: '>=12'}
-
   d3-format@3.1.3:
     resolution: {integrity: sha512-+F+/49swqmGuQJmSKnVMIDH/QkEFV5li9QRj0xm/KhyAUBv099O5PrvpQFxBp24PYph17Mnvt9mjKQV0ii0nMA==}
     engines: {node: '>=12'}
@@ -6606,10 +6602,6 @@ packages:
     resolution: {integrity: sha512-66cWobCNzcMvlfoaDHCxuIv9TBUWG1BLOWdv9kHHFuCr1JdqAWPvTmsaEYDD5NRMyWZ5+7u0GqiCDfMXMqh3hg==}
     engines: {node: '>=12'}
 
-  d3-selection@3.0.0:
-    resolution: {integrity: sha512-fmTRWbNMmsmWq6xJV8D19U/gw/bwrHfNXxrIN+HfZgnzqTHp9jOmKMhsTUjXOJnZOdZY9Q28y4yebKzqDKlxlQ==}
-    engines: {node: '>=12'}
-
   d3-selection@3.0.1:
     resolution: {integrity: sha512-ODSf35vqCrlCfp7hrm0eZjvOosSXSYLjqvIlhMBV9q9VOx7EBJG6pc+uXBswEZNJgCGJ+qnKYcWutbZDIxe/Xg==}
     engines: {node: '>=12'}
@@ -6632,12 +6624,6 @@ packages:
   d3-timer@3.0.2:
     resolution: {integrity: sha512-1Il1aliroVSErrv5aulRBxAY+7+DnaoLIWGd1C6SsBTWDeobWiP/V69vwb8vT6abR1kKwaNe1196pmaQ1fK90A==}
     engines: {node: '>=12'}
-
-  d3-transition@3.0.1:
-    resolution: {integrity: sha512-ApKvfjsSR6tg06xrL434C0WydLr7JewBB3V+/39RMHsaXTOG0zmt/OAXeng5M5LBm0ojmxJrpomQVZ1aPvBL4w==}
-    engines: {node: '>=12'}
-    peerDependencies:
-      d3-selection: 2 - 3
 
   d3-transition@3.0.2:
     resolution: {integrity: sha512-RcjCsdFgyFoDB+QXLC5m60ZkTN0k9zH+ovoLlTdJnDS1AbfbcuowiM4pCKSTOclNibS4f4J4cbv2m7O7y8NTOQ==}
@@ -15159,8 +15145,8 @@ snapshots:
 
   '@upsetjs/venn.js@2.0.0':
     optionalDependencies:
-      d3-selection: 3.0.0
-      d3-transition: 3.0.1(d3-selection@3.0.0)
+      d3-selection: 3.0.1
+      d3-transition: 3.0.2(d3-selection@3.0.1)
 
   '@vitest/coverage-v8@5.0.3(vitest@5.0.3)':
     dependencies:
@@ -15676,8 +15662,6 @@ snapshots:
       d3-quadtree: 3.0.2
       d3-timer: 3.0.2
 
-  d3-format@3.1.2: {}
-
   d3-format@3.1.3: {}
 
   d3-geo@3.1.2:
@@ -15714,13 +15698,10 @@ snapshots:
   d3-scale@4.0.3:
     dependencies:
       d3-array: 3.2.5
-      d3-format: 3.1.2
+      d3-format: 3.1.3
       d3-interpolate: 3.0.2
       d3-time: 3.1.1
       d3-time-format: 4.1.1
-
-  d3-selection@3.0.0:
-    optional: true
 
   d3-selection@3.0.1: {}
 
@@ -15741,16 +15722,6 @@ snapshots:
       d3-array: 3.2.5
 
   d3-timer@3.0.2: {}
-
-  d3-transition@3.0.1(d3-selection@3.0.0):
-    dependencies:
-      d3-color: 3.1.1
-      d3-dispatch: 3.0.2
-      d3-ease: 3.0.2
-      d3-interpolate: 3.0.2
-      d3-selection: 3.0.0
-      d3-timer: 3.0.2
-    optional: true
 
   d3-transition@3.0.2(d3-selection@3.0.1):
     dependencies:

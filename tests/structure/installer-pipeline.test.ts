@@ -156,7 +156,7 @@ describe('AC2 profile.install 安装树清单 = 运行时并集（漂移守卫�
     '@deepseek-ai/dsh-client-connection': '0.2.2-rc.5', // @dsh-forge/knowledge + project 原生依赖（053f3215 dsh 系统一 rc.5 升位——plugin 声明 0.2.2-rc.5，安装树同版即零漂移）
     'chokidar': '5.0.0', // @dsh-forge/expert-squad 原生依赖（bug 62211111 同类——档案热刷新 watch 面）
     'gray-matter': '4.0.3',
-    'mermaid': '12.1.0', // @dsh-forge/md-mermaid 原生依赖（bug 62211111——staging 闭包只追 @dsh-forge/*，外部依赖经本清单随包物化）
+    'mermaid': '12.1.0', // @dsh-forge/markdown-kit 原生依赖（bug 62211111——staging 闭包只追 @dsh-forge/*，外部依赖经本清单随包物化）
     '@deepseek-ai/schemastery': '3.18.4', // @dsh-forge/expert-squad 原生依赖（bug 62211111 同类——settings schema 校验面）
     '@deepseek-ai/dsh-typert-protocol': '0.2.2-rc.5', // @dsh-forge/project 原生依赖（bug 62211111 同类——typert 通道面；053f3215 dsh 系统一 rc.5 升位同版）
     'zod': '4.6.6', // @dsh-forge/project 原生依赖（bug 62211111 同类——schema 校验面）
@@ -299,7 +299,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // spec = staged:true 覆写种子（plugin-spec 1.10 docs 域收编：core dist 装配行静态 import
     // @dsh-forge/spec——forgeDocs factory 改指新包，缺席即 boot ESM 解析断裂）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/md-mermaid', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
+      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/markdown-kit', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
     )
   })
 
@@ -406,7 +406,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // 历史病理 = staging 硬编码清单漏列闭包成员；推导制下本断言守 kill-switch 不误伤。
     const missing: string[] = []
     for (const name of [...stagedPackages].sort()) {
-      // 键可含 workspace 子路径（md-mermaid 居 root 级 plugins/、lib/* 居 lib/——子居所同源映射）
+      // 键可含 workspace 子路径（markdown-kit 居 root 级 plugins/、lib/* 居 lib/——子居所同源映射）
       const dir = pkgDirOf(name)
       const manifest = readJson(pkgManifestRelPath(name, dir)) as { dependencies?: Record<string, string> }
       for (const dep of Object.keys(manifest.dependencies ?? {})) {

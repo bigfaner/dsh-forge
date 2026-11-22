@@ -1,4 +1,4 @@
-// @dsh-forge/md-mermaid/validate —— mermaid 引擎适配器（Node DOM shim + 懒加载 + parse 归一）。
+// @dsh-forge/markdown-kit/validate —— mermaid 引擎适配器（Node DOM shim + 懒加载 + parse 归一）。
 // 校验面专用：securityLevel 'loose'（与渲染面 'strict' 只差标签净化，语法门同一条 parse 抛错路径）。
 
 export type EngineParseResult =

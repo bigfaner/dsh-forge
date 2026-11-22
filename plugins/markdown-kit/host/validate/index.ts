@@ -1,4 +1,4 @@
-// @dsh-forge/md-mermaid/validate —— 校验面（零 React 纯逻辑）。
+// @dsh-forge/markdown-kit/validate —— 校验面（零 React 纯逻辑）。
 // 引擎注册表 Record<format, adapter>（机械分派不经 LLM）+ fence 提取正则单源 +
 // auto 首行头词探测（门控头词表单源 = ./head-words.js）+ 裁决归一形状（source / docRel 双模）。
 import { parseMermaidSource, type EngineParseResult } from './mermaid-engine.js'

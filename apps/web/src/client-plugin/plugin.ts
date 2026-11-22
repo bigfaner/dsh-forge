@@ -378,7 +378,7 @@ export interface ForgeLocaleService {
 }
 
 /**
- * md-mermaid DOM 增强器窄面（@dsh-forge/md-mermaid ./web 出口 enhancer 启停 API 结构
+ * markdown-kit DOM 增强器窄面（@dsh-forge/markdown-kit ./web 出口 enhancer 启停 API 结构
  * 同型镜像——bundle 自含禁跨 chunk import，真身经发布面递达）。1.9 挂接：apply 期
  * start（凡 .md-code-block 全 DOM 扫描增强——门控 + parse 确认 + 失败安全降级），
  * stop 随插件 fiber 卸载级联回收（overlay 洞 dispose + apply catch 两径，同 dock tab
@@ -436,7 +436,7 @@ export interface ForgeViewsGlobal {
       closeTaskDrawer(): void
       openTaskTransition(payload: { taskId: string; toStatus?: string }): void
     }
-    /** md-mermaid DOM 增强器工厂（@dsh-forge/md-mermaid ./web——壳 bundle 单源发布） */
+    /** markdown-kit DOM 增强器工厂（@dsh-forge/markdown-kit ./web——壳 bundle 单源发布） */
     createMermaidEnhancer: (options?: Record<string, unknown>) => ForgeMermaidEnhancer
   }
 }
@@ -871,7 +871,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
 
         // dock tab 族两段注册（概览/文档两键）已迁 @dsh-forge/project bundle（fix-13，
         // 1.45——ui/dock-tabs-face.ts）——壳零登记零撤销面。
-        // 1.9 DOM 增强器挂接：apply 期启动（@dsh-forge/md-mermaid ./web enhancer 经壳
+        // 1.9 DOM 增强器挂接：apply 期启动（@dsh-forge/markdown-kit ./web enhancer 经壳
         // bundle 发布面递达——凡 .md-code-block 全 DOM 扫描增强，门控 + parse 确认 +
         // 失败安全降级）；stop 归 overlay 洞 dispose 与 apply catch 两径（插件 fiber
         // 卸载级联回收）。

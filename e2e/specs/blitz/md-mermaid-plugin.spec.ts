@@ -20,7 +20,7 @@
 //   - 官方 files 面锚与文档预览 chrome 锚经 anchors.ts 单源（guideEntryOf/FILES_BODY/
 //     FILES_FILE_ROW/DOCKKIT_STRIP_TAB/documentPreviewOf/DOC_PREVIEW_ANY/
 //     DOC_BUILTIN_MARKDOWN[_ID]）。
-//   - 双信号判决面（契约 J1-CT-02）：validateDocFences（@dsh-forge/md-mermaid host 校验
+//   - 双信号判决面（契约 J1-CT-02）：validateDocFences（@dsh-forge/markdown-kit host 校验
 //     单源）——门控拒 fence 判 ok:false + unsupported:true（键在场），引擎败 fence 判
 //     ok:false 且 unsupported 键缺席；DOM 黑盒面两分支同形不分辨（契约 §1 O2/O3 声明）。
 //
@@ -51,7 +51,7 @@ import {
   guideEntryOf,
 } from '../../support/anchors.js'
 // 双信号判决面单源（契约 §1 O2/O3 判据）：包 dist 经 pnpm build 产出（test-run 环境前置构建）
-import { validateDocFences } from '../../../plugins/md-mermaid/dist/host/validate/index.js'
+import { validateDocFences } from '../../../plugins/markdown-kit/dist/host/validate/index.js'
 
 /** 合法 erDiagram 源文档（断言①——增强出图，单径判定面） */
 const ER_DOC = [

@@ -14,7 +14,7 @@
     "@dsh-forge/input-history": "workspace:*",
     "@dsh-forge/knowledge": "workspace:*",
     "@dsh-forge/lib-path": "workspace:*",
-    "@dsh-forge/md-mermaid": "workspace:*",
+    "@dsh-forge/markdown-kit": "workspace:*",
     "@dsh-forge/project": "workspace:*",
     "@dsh-forge/quote-reference": "workspace:*",
     "@dsh-forge/super-composer": "workspace:*",

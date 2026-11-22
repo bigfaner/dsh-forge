@@ -1,4 +1,4 @@
-// 结构化最小面（定位：业务——md-mermaid 对 dsh 宿主服务的消费形状锚定；
+// 结构化最小面（定位：业务——markdown-kit 对 dsh 宿主服务的消费形状锚定；
 // plugin-forge-spec faces.ts 同法——零 dsh 运行时依赖（@deepseek-ai/* / cordis），
 // 仅以结构化子面消费官方面——真实现（ToolRuntime.register）结构兼容，
 // 运行期由 profile 装配注入。本插件只消费 tool 注册面子面。）

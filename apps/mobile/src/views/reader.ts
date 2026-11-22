@@ -4,7 +4,7 @@
  * 五类识别（F8）：md / csv / html 默认渲染可切纯文本；txt 恒纯文本（无胶囊）；
  * 链接走内置浏览器（window.open）。csv/md 表格居中（样式令牌）。
  * md 渲染 = 轻量 rich md 函数（官方 markdown() 语义照搬：标签白名单/块级结构/inline 规则，
- * 样式以原型 DESIGN.md 令牌为准）+ mermaid DOM 增强器动态 import（@dsh-forge/md-mermaid/web
+ * 样式以原型 DESIGN.md 令牌为准）+ mermaid DOM 增强器动态 import（@dsh-forge/markdown-kit/web
  * ——懒加载纪律：无 mermaid fence 零引擎装载）。
  * 数据通道 = forge:proxy/file（loadProxyFileText：manifest + 逐块 base64）。
  */
@@ -230,7 +230,7 @@ export function renderRichMarkdown(text: string): RichMarkdown {
 
 /** mermaid 增强器缺省实现：动态 import（引擎懒加载唯一径）+ 单次 scan（安全降级不外溢）。 */
 async function defaultEnhanceMermaid(container: HTMLElement): Promise<void> {
-  const web = (await import('@dsh-forge/md-mermaid/web')) as {
+  const web = (await import('@dsh-forge/markdown-kit/web')) as {
     createMermaidEnhancer: (opts?: { root?: unknown }) => { scan(): Promise<void> }
   }
   const enhancer = web.createMermaidEnhancer({ root: container })
@@ -241,7 +241,7 @@ export interface ReaderDeps {
   readonly path: string
   readonly rpc: RemoteRpc
   readonly onExit: () => void
-  /** mermaid 增强（缺省 = @dsh-forge/md-mermaid/web 动态 import + scan）。 */
+  /** mermaid 增强（缺省 = @dsh-forge/markdown-kit/web 动态 import + scan）。 */
   readonly enhanceMermaid?: (container: HTMLElement) => Promise<void>
   /** 文本装载（缺省 = forge:proxy/file；测试注入）。 */
   readonly load?: (path: string) => Promise<{ readonly text: string; readonly size: number }>

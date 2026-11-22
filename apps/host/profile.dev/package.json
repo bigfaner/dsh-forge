@@ -2,7 +2,7 @@
   "name": "dsh-forge-profile-dev",
   "private": true,
   "version": "0.0.0",
-  "description": "dsh-forge dev profile (dev 形态：链 workspace 构建产物——官方 web bundles 精确 pin + 产品插件 @dsh-forge/{contracts,core,project,knowledge,md-mermaid,plugin-forge,plugin-forge-spec} link 七件 + 原生依赖兜底；DSH_FORGE_DEV_PROFILE=dev 消费)。node_modules 由 pnpm 安装（cordis.yml 由每次启动重写）。",
+  "description": "dsh-forge dev profile (dev 形态：链 workspace 构建产物——官方 web bundles 精确 pin + 产品插件 @dsh-forge/{contracts,core,project,knowledge,markdown-kit,plugin-forge,plugin-forge-spec} link 七件 + 原生依赖兜底；DSH_FORGE_DEV_PROFILE=dev 消费)。node_modules 由 pnpm 安装（cordis.yml 由每次启动重写）。",
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "~1.0.4",
     "@deepseek-ai/dsh": "0.2.2-rc.5",
@@ -13,7 +13,7 @@
     "@dsh-forge/contracts": "link:../../../packages/contracts",
     "@dsh-forge/core": "link:../../../packages/core",
     "@dsh-forge/knowledge": "link:../../../plugins/knowledge",
-    "@dsh-forge/md-mermaid": "link:../../../plugins/md-mermaid",
+    "@dsh-forge/markdown-kit": "link:../../../plugins/markdown-kit",
     "@dsh-forge/plugin-forge": "link:../../../packages/plugin-forge",
     "@dsh-forge/expert-squad": "link:../../../plugins/expert-squad",
     "gray-matter": "4.0.3",

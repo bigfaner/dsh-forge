@@ -32,7 +32,7 @@
       "path": "../../packages/contracts"
     },
     {
-      "path": "../../plugins/md-mermaid"
+      "path": "../../plugins/markdown-kit"
     },
     {
       "path": "../../plugins/project/tsconfig.host.json"

@@ -1,4 +1,4 @@
-// @dsh-forge/md-mermaid/web —— 渲染面（React peer；引擎懒加载唯一径 + 主题 + 组件 + DOM 渐进增强）。
+// @dsh-forge/markdown-kit/web —— 渲染面（React peer；引擎懒加载唯一径 + 主题 + 组件 + DOM 渐进增强）。
 export { MERMAID_THEME_VARIABLES } from './theme.js'
 export {
   type MermaidEngine,

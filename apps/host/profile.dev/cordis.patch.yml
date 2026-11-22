@@ -35,8 +35,8 @@
       name: '@dsh-forge/core'
     - id: dsh-forge-knowledge
       name: '@dsh-forge/knowledge'
-    - id: dsh-forge-md-mermaid
-      name: '@dsh-forge/md-mermaid'
+    - id: dsh-forge-markdown-kit
+      name: '@dsh-forge/markdown-kit'
 - id: llm-pi-ai
   name: "@deepseek-ai/dsh-llm-pi-ai"
   config:

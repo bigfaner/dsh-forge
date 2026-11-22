@@ -86,7 +86,7 @@ describe('AC1/AC3 注册面 pin：恰一 tool（validateMermaid 字面量单源�
   })
 
   it('插件名导出与默认导出函数形状（cordis loader 只认 default + inject 元数据）', () => {
-    expect(MD_MERMAID_PLUGIN_NAME).toBe('md-mermaid')
+    expect(MD_MERMAID_PLUGIN_NAME).toBe('markdown-kit')
     expect(typeof mdMermaidPlugin).toBe('function')
   })
 })

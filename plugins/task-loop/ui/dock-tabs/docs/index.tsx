@@ -13,7 +13,7 @@
 // 不删行；重读照常（切回含文件分支后恢复）。
 // 边界：禁 import ../session/ ../knowledge/ ../overview/（依赖铁律③ 同级业务互禁）；
 // 正文渲染唯一经 MarkdownDoc（官方渲染唯一包装入口——结构 pin）；mermaid 渲染零产品引用
-// （唯一引用方 = @dsh-forge/md-mermaid）；openExternal 触发即忘（失败吞——不炸 tab）；
+// （唯一引用方 = @dsh-forge/markdown-kit）；openExternal 触发即忘（失败吞——不炸 tab）；
 // 官方件零改写（PathLabel/图标消费原样）。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { DocContent } from "@dsh-forge/contracts";

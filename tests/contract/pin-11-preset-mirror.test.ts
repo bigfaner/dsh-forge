@@ -87,22 +87,24 @@ for (const preset of ['expedition', 'blitz'] as const) {
       expect(rows.has('plugin-forge-spec')).toBe(preset === 'expedition')
     })
 
-    it('md-mermaid in-preset 行零残留（迁居批 1.3：装载通道转全局行——组合后注册表恰含一次的集成断言另立）', () => {
+    it('markdown-kit in-preset 行零残留（迁居批 1.3：装载通道转全局行——组合后注册表恰含一次的集成断言另立）', () => {
+      expect(rows.has('markdown-kit')).toBe(false)
       expect(rows.has('md-mermaid')).toBe(false)
+      expect(text).not.toContain('@dsh-forge/markdown-kit')
       expect(text).not.toContain('@dsh-forge/md-mermaid')
     })
   })
 }
 
-describe('pin ⑲ 组合后注册表恰含一次 md-mermaid（组合层 patch 解析 + insert——防双注册可红）', () => {
+describe('pin ⑲ 组合后注册表恰含一次 markdown-kit（组合层 patch 解析 + insert——防双注册可红）', () => {
   const DEV_PATCH = join(ROOT, 'apps/host/profile.dev/cordis.patch.yml')
   const mdMermaidRow = (text: string) =>
-    [...text.matchAll(/^ {2,}- id: \S+\n {4,}name: ['"]@dsh-forge\/md-mermaid['"]\s*$/gm)].length
+    [...text.matchAll(/^ {2,}- id: \S+\n {4,}name: ['"]@dsh-forge\/markdown-kit['"]\s*$/gm)].length
 
-  it('双预设底稿行退役 + 全局行恰一 = 组合后注册表恰含一次 md-mermaid', () => {
+  it('双预设底稿行退役 + 全局行恰一 = 组合后注册表恰含一次 markdown-kit', () => {
     for (const preset of ['expedition', 'blitz'] as const) {
       const text = readFileSync(join(PRESETS_DIR, `${preset}.patch.yml`), 'utf8')
-      expect(mdMermaidRow(text), `${preset} 预设底稿残留 md-mermaid 行`).toBe(0)
+      expect(mdMermaidRow(text), `${preset} 预设底稿残留 markdown-kit 行`).toBe(0)
     }
     expect(mdMermaidRow(readFileSync(DEV_PATCH, 'utf8')), '全局行非恰一').toBe(1)
   })

@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { auditDist } from "./self-containment.mjs";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const PLUGIN_ID = "@dsh-forge/md-mermaid";
+const PLUGIN_ID = "@dsh-forge/markdown-kit";
 const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 
 const clientExport = pkg.exports?.["./client"];

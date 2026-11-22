@@ -835,7 +835,7 @@ describe('fix-33 ⑥ 缝族对称性（桥/词典/标记的发布与撤销）', 
 })
 
 describe('DOM 增强器挂接（1.9：md-mermaid enhancer apply 期启动 + 卸载级联回收）', () => {
-  it('apply 期 start 恰一（@dsh-forge/md-mermaid ./web enhancer 经发布面递达——凡 .md-code-block 全 DOM 扫描增强）', () => {
+  it('apply 期 start 恰一（@dsh-forge/markdown-kit ./web enhancer 经发布面递达——凡 .md-code-block 全 DOM 扫描增强）', () => {
     publishFakeViews()
     const { ctx } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)

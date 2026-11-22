@@ -1,9 +1,9 @@
 {
-  "name": "@dsh-forge/md-mermaid",
-  "version": "0.3.1",
+  "name": "@dsh-forge/markdown-kit",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "dsh 插件：md-mermaid——mermaid 渲染与图源校验能力单源（mermaid 依赖全仓唯一引用方；host 半 = validateMermaid tool + 引擎适配，ui 半 = React DOM 渐进增强器）",
+  "description": "dsh 插件：markdown-kit——mermaid 渲染与图源校验能力单源（mermaid 依赖全仓唯一引用方；host 半 = validateMermaid tool + 引擎适配，ui 半 = React DOM 渐进增强器）",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
   "exports": {

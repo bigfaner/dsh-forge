@@ -38,7 +38,7 @@ export {
  * FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS（单测同步守护）——十三员全集中
  * worker 可见 = 四动词，其余九员 deny（updateTask/taskStats/listTasks/listBugs 等仅主
  * agent 面——listBugs 台账查询面分治主 agent）。
- * validateMermaid = md-mermaid 插件工具单源锚（packages/plugins/md-mermaid/src/
+ * validateMermaid = markdown-kit 插件工具单源锚（plugins/markdown-kit/host/
  * tools/validate-mermaid.ts 导出 MERMAID_TOOL_NAME = 'validateMermaid'——工具面仅主 agent，
  * 附录 F deny 约束；本包不反依赖插件包，字面量 + 锚注释对齐）。plugin-forge-spec 三动词不入本 deny：其注册面
  * 预设相依（突击组合物理缺席），driver 的 toolFilter 对未知名 loud 校验会拆 spawn——
@@ -59,7 +59,7 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'listImplCheckpoints',
   'pauseTask', // task-pause-primitive——单任务暂停入口仅主 agent 面（worker 拒）
   'unblockTask', // blocked-verdict-restore-primitive——blocked→pending 出口仅主 agent 面（worker 拒）
-  'validateMermaid', // md-mermaid 插件工具（MERMAID_TOOL_NAME 单源锚，见上注）
+  'validateMermaid', // markdown-kit 插件工具（MERMAID_TOOL_NAME 单源锚，见上注）
   // knowledge 归并双 tool（knowledge-stage2-followups #2——用户裁决 2026-11-05「入 deny +
   // distill 专属专家放行」：归并是裁决动词，不随默认面放行——对一切 spawn worker 默认禁；
   // 唯一放行径 = 专家档案 tools 白名单（见 WORKER_EXPERT_RELEASABLE_DENY）或主会话。
