@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/knowledge",
-  "version": "0.35.4",
+  "version": "0.35.5",
   "private": true,
   "type": "module",
-  "description": "dsh 插件：knowledge_search / knowledge_read_abstract tool + forge:knowledge 系统提示词知识段 + 自持知识库存储与八法服务面（provide knowledge 服务——注册表/schema 版本线/并发纪律/两级解析）",
+  "description": "知识库：沉淀项目的约定、决策与踩坑经验，会话中按域检索随时查阅。",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
   "exports": {
@@ -27,7 +27,6 @@
     "prepack": "node scripts/self-containment.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "13.0.3",
     "gray-matter": "4.0.3"
   },
   "peerDependencies": {
@@ -40,7 +39,6 @@
     "@dsh-forge/lib-db": "workspace:*",
     "@dsh-forge/lib-path": "workspace:*",
     "@dsh-forge/path-key": "workspace:*",
-    "@types/better-sqlite3": "9.6.0",
     "@types/node": "24.19.0",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.0",

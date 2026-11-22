@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/spec",
-  "version": "0.19.10",
+  "version": "0.19.11",
   "private": true,
   "type": "module",
-  "description": "dsh 插件：Spec/Goal/AC 共识域——forge:pipeline 系统提示段（Spec 词汇唯一模式 + presetBinding 注入判据）与 forge:doc-style 段注册。A1 自含形态：单行 patch、skills 随包、提示段注册恒在，包本体零预设知识。",
+  "description": "规格与共识：把想法澄清成提案、目标与验收标准，为交付流水线提供唯一事实源。",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
   "exports": {
@@ -56,7 +56,6 @@
     "@dsh-forge/lib-path": "workspace:*",
     "@dsh-forge/lib-status-machine": "workspace:*",
     "@dsh-forge/lib-util": "workspace:*",
-    "@types/better-sqlite3": "9.6.0",
     "@types/node": "24.19.0",
     "esbuild": "0.24.2",
     "typescript": "6.0.3",
@@ -74,7 +73,6 @@
     }
   },
   "dependencies": {
-    "better-sqlite3": "13.0.3",
     "zod": "4.6.6"
   }
 }

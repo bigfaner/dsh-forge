@@ -3,7 +3,7 @@
   "version": "0.31.8",
   "private": true,
   "type": "module",
-  "description": "expert-squad cordis 插件（双面包装载范式）：专家档案三层扫描/注册取用、通道一委派（delegate_expert）与双通道热刷新（chokidar + fs/observed）。",
+  "description": "专家团：把一句用人需求澄清成可直接差遣的专家档案——招募、修改、启停、查询专家，一键委派任务给专家执行。",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
   "exports": {

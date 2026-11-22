@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.27.7",
+  "version": "0.27.8",
   "private": true,
   "type": "module",
-  "description": "项目台（project）插件：项目与 worktree 域、bugs 台账、目录事实面与添加项目流程（包骨架阶段——域代码随迁移任务逐批落位）。",
+  "description": "项目台：管理项目与工作树，提供项目台账、目录事实与工作区选择。",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
   "exports": {
@@ -137,7 +137,6 @@
     "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.5"
   },
   "dependencies": {
-    "better-sqlite3": "13.0.3",
     "zod": "4.6.6"
   }
 }

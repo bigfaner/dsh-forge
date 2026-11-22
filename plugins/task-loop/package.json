@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/task-loop",
-  "version": "0.19.6",
+  "version": "0.19.7",
   "private": true,
   "type": "module",
-  "description": "任务环（task-loop）插件：任务域（addTask/拆解/循环调度/结算）+ AC 结算单源 + checkpoints 域内现算（包骨架阶段——域代码随迁移任务逐批落位）。",
+  "description": "任务环：把提案拆解成任务清单，自动派发执行、结算验收，全程留痕可追踪。",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
   "exports": {
@@ -81,7 +81,6 @@
     "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.5"
   },
   "dependencies": {
-    "better-sqlite3": "13.0.3",
     "zod": "4.6.6"
   }
 }

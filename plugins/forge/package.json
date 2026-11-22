@@ -3,7 +3,7 @@
   "version": "0.7.14",
   "private": true,
   "type": "module",
-  "description": "forge 聚合 Bundle 壳（防双激活守卫薄 host + 自有 client 视图入口 + 六插行直写 patch + 双链打包——forge-aggregate-bundle 形态）。",
+  "description": "forge 全家桶：一次安装获得完整交付流水线——任务规格、任务循环、专家团、知识库与 Forge/猎头双预设模式。",
   "main": "./dist/host/index.js",
   "types": "./dist/host/index.d.ts",
   "exports": {
