@@ -337,6 +337,44 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     expect(bundlePatch).toContain('providerName: filesystem-forge')
   })
 
+  it('preset-headhunter 搬移块 office 排除件行名重写（1.37 双通道兼容——expert-squad 行名 → forge 副本，残留即红）', () => {
+    // 合成 expert-squad 成员：第二 insert 块 = preset-headhunter 同构（skills 实例 + exclude 行 expert-squad 行名）
+    writeMember(root, 'expert-squad', '0.31.5')
+    writeFileSync(join(root, 'plugins', 'expert-squad', 'cordis.patch.yml'), [
+      '- insert:',
+      "    - id: expert-squad",
+      "      name: '@dsh-forge/expert-squad'",
+      '- insert:',
+      "    - id: preset-headhunter",
+      "      name: '@deepseek-ai/dsh-agent-preset'",
+      "      config:",
+      "        order: 3",
+      "        plugins:",
+      "          - id: skill-filesystem-expert-squad",
+      "            name: '@deepseek-ai/dsh-skill-filesystem'",
+      "            config:",
+      "              providerName: filesystem-expert-squad",
+      "          - id: tool-exclude-office",
+      "            name: '@dsh-forge/expert-squad/tools-exclude'",
+      "            config:",
+      "              deny:",
+      "                - office_template",
+      '',
+    ].join('\n'))
+    const forgeDeps = JSON.parse(readFileSync(join(root, 'plugins', 'forge', 'package.json'), 'utf8'))
+    forgeDeps.dependencies['@dsh-forge/expert-squad'] = 'file:../expert-squad'
+    writeFileSync(join(root, 'plugins', 'forge', 'package.json'), JSON.stringify(forgeDeps, null, 2))
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    const bundlePatch = readFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), 'utf8')
+    expect(bundlePatch).toContain("name: '@dsh-forge/forge/tools-exclude'")
+    expect(bundlePatch).not.toContain('@dsh-forge/expert-squad/tools-exclude')
+    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })).toEqual([])
+    // 反例·交付 patch 残留 expert-squad 排除件行名：闭包机检红
+    writeFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), bundlePatch.replace("name: '@dsh-forge/forge/tools-exclude'", "name: '@dsh-forge/expert-squad/tools-exclude'"))
+    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    expect(violations.some((v) => v.includes('expert-squad 排除件行名'))).toBe(true)
+  })
+
   it('反例·交付 patch 顶层承带 skills 行：闭包机检红（顶层禁承带——preset 子树嵌套实例不误伤）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     const patchPath = join(outDir, 'bundle/forge/cordis.patch.yml')

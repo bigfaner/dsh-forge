@@ -290,6 +290,18 @@ export function assembleRelease({ repoRoot = REPO_ROOT, outDir = DEFAULT_OUT, zi
     if (!headhunterBlock.includes('- id: skill-filesystem-expert-squad')) {
       throw new Error('交付增补失败：preset-headhunter 搬移块 skills 实例缺席（skill-filesystem-expert-squad 随块承带断裂）')
     }
+    // office 排除件行名重写（1.37 双通道兼容）：搬移块行名 @dsh-forge/expert-squad/*
+    // 在 bundle 通道不可解析（成员 esbuild 内联，profile 根仅 @dsh-forge/forge 已安装）
+    // ——重写指 forge 同源副本（host/tools-exclude.ts 逐字节一致·契约双 pin）。
+    if (headhunterBlock.includes("name: '@dsh-forge/expert-squad/tools-exclude'")) {
+      headhunterBlock = headhunterBlock.replaceAll("name: '@dsh-forge/expert-squad/tools-exclude'", "name: '@dsh-forge/forge/tools-exclude'")
+    }
+    if (!headhunterBlock.includes('- id: tool-exclude-office') || !headhunterBlock.includes("name: '@dsh-forge/forge/tools-exclude'")) {
+      throw new Error('交付增补失败：preset-headhunter 搬移块 office 排除件缺席或行名未重写（tool-exclude-office → @dsh-forge/forge/tools-exclude）')
+    }
+    if (headhunterBlock.includes('@dsh-forge/expert-squad/tools-exclude')) {
+      throw new Error('交付增补失败：preset-headhunter 搬移块残留 expert-squad 排除件行名（bundle 通道不可解析——预设 broken 判例）')
+    }
   }
   if (headhunterBlock !== '') appendFileSync(bundlePatchPath, `\n${headhunterBlock}\n`)
   // manifest 版本清单
@@ -533,6 +545,14 @@ export function verifyBundleClosure(bundleDir, { repoRoot = REPO_ROOT } = {}) {
   if (packages.some((entry) => entry.name === '@dsh-forge/expert-squad')) {
     if (!bundlePatchText.includes('- id: skill-filesystem-expert-squad') || !bundlePatchText.includes('providerName: filesystem-expert-squad')) {
       violations.push('bundle: preset-headhunter 搬移块 skills 实例缺席（skill-filesystem-expert-squad / providerName filesystem-expert-squad）')
+    }
+    // office 排除件行名重写机检（1.37 双通道兼容——bundle 通道 @dsh-forge/expert-squad
+    // 不可解析，搬移块必须指 forge 副本）
+    if (!bundlePatchText.includes('- id: tool-exclude-office') || !bundlePatchText.includes("name: '@dsh-forge/forge/tools-exclude'")) {
+      violations.push('bundle: preset-headhunter 搬移块 office 排除件缺席或行名未重写（tool-exclude-office → @dsh-forge/forge/tools-exclude）')
+    }
+    if (bundlePatchText.includes('@dsh-forge/expert-squad/tools-exclude')) {
+      violations.push('bundle: preset-headhunter 搬移块残留 expert-squad 排除件行名（bundle 通道不可解析——预设 broken 判例）')
     }
   }
   // 成员非插行对账（bundle 通道「谁带谁自持」失效面收口）：成员 patch 首个 insert
