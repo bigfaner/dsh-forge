@@ -255,6 +255,12 @@ export const SPEC_PACKAGE_NAME = "@dsh-forge/spec" as const;
  * reflect.get('experts') + try/catch 现查、检测结果零缓存；expert-squad 缺席 =
  * fail-soft + warn 留痕（不阻载本插件）。registerRoot 侧已主动触发全部已建 registry
  * 换代（plugins/expert-squad host/index.ts registerRoot 注记）——本面零 refresh 调用。
+ * 承重假设：expert-squad 装载序先于本插件（builtin-redistribution 裁决②显式声明）：
+ * 本注册只在 apply 期一次性求值，无迟到补偿（消费期补注册/服务上场事件监听均未建
+ * ——AGENTS 1.6 禁 memoize + 最小改动纪律）；expert-squad 晚装载即永久零注册
+ * （仅本 warn 留痕，不静默失联）。当前两形态装载序已核实：dev 形态 expert-squad
+ * 经 dsh.profile.bundles bundle 层装载（一切用户层 patch 之前）；打包形态经用户层
+ * insert 行 + 本包行经预设组合/装载表后置（一切均在 expert-squad 行之后）。
  */
 export function registerBuiltinExpertsRoot(
   ctx: unknown,

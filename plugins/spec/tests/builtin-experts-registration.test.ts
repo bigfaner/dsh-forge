@@ -1,7 +1,7 @@
 // 随包内置专家档案注册行（experts.registerRoot 装配面——builtin-redistribution）：
 // 在场注册（真实随包 experts/ 目录 + 本包包名）/ 服务缺席 fail-soft / 反射抛错 fail-soft。
 import { describe, expect, it } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { registerBuiltinExpertsRoot, SPEC_PACKAGE_NAME } from "../host/index.js";
 
@@ -61,5 +61,11 @@ describe("registerBuiltinExpertsRoot（experts.registerRoot 装配行）", () =>
 
   it("reflect 面整体缺席：fail-soft 不抛", () => {
     expect(() => registerBuiltinExpertsRoot({}, () => {})).not.toThrow();
+  });
+
+  it("承重假设显式声明锚定（裁决②）：注册面注释写明 expert-squad 装载序先于本插件 + 无迟到补偿", () => {
+    const source = readFileSync(fileURLToPath(new URL("../host/index.ts", import.meta.url)), "utf8");
+    expect(source).toContain("承重假设：expert-squad 装载序先于本插件");
+    expect(source).toContain("无迟到补偿");
   });
 });

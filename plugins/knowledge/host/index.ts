@@ -165,6 +165,12 @@ export const KNOWLEDGE_PACKAGE_NAME = '@dsh-forge/knowledge' as const
  * fail-soft + warn 留痕（不阻载本插件）。registerRoot 侧已主动触发全部已建 registry
  * 换代（plugins/expert-squad host/index.ts registerRoot 注记）——本面零 refresh 调用。
  * SC-2 零依赖红线：knowledge 只注册档案不消费 experts 服务（inject 名单零增）。
+ * 承重假设：expert-squad 装载序先于本插件（builtin-redistribution 裁决②显式声明）：
+ * 本注册只在 apply 期一次性求值，无迟到补偿（消费期补注册/服务上场事件监听均未建
+ * ——AGENTS 1.6 禁 memoize + 最小改动纪律）；expert-squad 晚装载即永久零注册
+ * （仅本 warn 留痕，不静默失联）。当前两形态装载序已核实：dev 形态 expert-squad
+ * 经 dsh.profile.bundles bundle 层装载（一切用户层 patch 之前）；打包形态经用户层
+ * insert 行（PRODUCT_PLUGINS 键序 core → expert-squad → … → knowledge，先于本包行）。
  */
 export function registerBuiltinExpertsRoot(
   ctx: KnowledgeContextFace,
