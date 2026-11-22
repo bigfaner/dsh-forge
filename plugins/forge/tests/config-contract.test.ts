@@ -13,8 +13,9 @@ const FORGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const patchYaml = readFileSync(resolve(FORGE_ROOT, "cordis.patch.yml"), "utf8");
 
 /** 派发单源同源期望式（静态双检正本——assembly 常量拼装，非字面量复制；
- * DSH_HOME 缺席兜底 false 非 undefined——survey#4 形态修正）。 */
-const HOME_EXPR = `(process.env.${DSH_HOME_ENV} || false) && (process.env.${DSH_HOME_ENV} + '${FORGE_HOME_SUFFIX}')`;
+ * DSH_HOME 缺席兜底 undefined 非 false——bug 674119f2 desktop 实证：false 穿透
+ * 消费端 `??` 缺省（project.db 收到 boolean 崩溃），undefined 才能触发缺省腿）。 */
+const HOME_EXPR = `(process.env.${DSH_HOME_ENV} || undefined) && (process.env.${DSH_HOME_ENV} + '${FORGE_HOME_SUFFIX}')`;
 
 /** 抽取 forge 行 home 键的 !!js 表达式（id = dshforge 异 id——bug 1102d9d8；缺失 = undefined）。 */
 function extractHomeExpr(): string | undefined {
@@ -38,18 +39,18 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
     expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "/data/dsh" })).toBe("/data/dsh/forge");
   });
 
-  it("DSH_HOME 缺席 → home = false（fail-soft 不阻载——缺省派生零值钉 false，非 undefined；survey#4 形态修正回归）", () => {
-    expect(evalExpr(extractHomeExpr()!, {})).toBe(false);
-    expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "" })).toBe(false);
+  it("DSH_HOME 缺席 → home = undefined（消费端 `??` 缺省腿恢复生效——bug 674119f2：false 穿透 `??` 致 project.db 收到 boolean 崩溃，undefined 才触发缺省）", () => {
+    expect(evalExpr(extractHomeExpr()!, {})).toBeUndefined();
+    expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "" })).toBeUndefined();
   });
 
-  it("全 patch 派发表达式缺省派生零值封闭：DSH_HOME 派生点缺席一律兜底 false（undefined 漂移即红——survey#4）", () => {
+  it("全 patch 派发表达式缺省派生封闭：DSH_HOME 派生点缺席一律产 undefined（false 漂移即红——bug 674119f2）", () => {
     const envPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!).filter((p) => p.includes("process.env.DSH_HOME"));
     expect(envPoints.length).toBeGreaterThanOrEqual(6);
     for (const expr of envPoints) {
-      expect(expr, `缺省派生零值形态：${expr}`).toMatch(/^\(process\.env\.DSH_HOME \|\| false\) && /);
-      expect(evalExpr(expr, {})).toBe(false);
-      expect(evalExpr(expr, { DSH_HOME: "" })).toBe(false);
+      expect(expr, `缺省派生 undefined 形态：${expr}`).toMatch(/^\(process\.env\.DSH_HOME \|\| undefined\) && /);
+      expect(evalExpr(expr, {})).toBeUndefined();
+      expect(evalExpr(expr, { DSH_HOME: "" })).toBeUndefined();
     }
   });
 

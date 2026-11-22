@@ -21,24 +21,24 @@
     - id: dshforge
       name: '@dsh-forge/forge'
       config:
-        home: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge')
+        home: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge')
     - id: project
       name: '@dsh-forge/project'
       config:
         comboMark: true
-        home: !!js (process.env.DSH_HOME || false) && process.env.DSH_HOME
-        dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        home: !!js (process.env.DSH_HOME || undefined) && process.env.DSH_HOME
+        dbFile: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
     - id: spec
       name: '@dsh-forge/spec'
       config:
         comboMark: true
-        dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        dbFile: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
     - id: task-loop
       name: '@dsh-forge/task-loop'
       config:
         comboMark: true
-        dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
-        tasksHome: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/projects')
+        dbFile: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        tasksHome: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/projects')
     - id: expert-squad
       name: '@dsh-forge/expert-squad'
       config:
@@ -47,7 +47,7 @@
       name: '@dsh-forge/knowledge'
       config:
         comboMark: true
-        dbFile: !!js (process.env.DSH_HOME || false) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        dbFile: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
     - id: preset-forge
       name: '@deepseek-ai/dsh-agent-preset'
       config:
