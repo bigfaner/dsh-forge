@@ -783,10 +783,6 @@ describe("experts/code-master.md 档案解析断言（forge-test-discipline-laye
 });
 // forge-test-discipline-layering 1.21 code-master 收口断言结束
 
-// forge-test-pipeline-hardening 1.1 proposal-reviewer 四维条件组断言已随档案退役拆除
-// （expert-builtin-redistribution：proposal-reviewer 与 prd-reviewer/requirements-analyst
-// 三专家档案删档退役，评审职责由 spec-reviewer（task-loop 内置）承担）。
-
 describe("跨档案一致性 pin（forge-test-pipeline-hardening 1.4——弱断言四形态逐字 + 替身口径高漂移对）", () => {
   const script = readFileSync(resolve(here, EXPERTS_TASK_LOOP + "/test-script-author.md"), "utf-8");
   const journey = readFileSync(resolve(EXPERTS_TASK_LOOP, "test-journey-author.md"), "utf-8");
