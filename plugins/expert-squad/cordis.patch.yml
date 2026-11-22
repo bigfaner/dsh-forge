@@ -6,7 +6,11 @@
 # 猎头模式预设行（expert-squad 0.30.0 起随包自带——原 apps/host 预设底稿
 # headhunter.patch.yml 迁入；形态 = 上游 dsh-web-app standard.patch.yml 镜像裁剪版，
 # 工程面行（命令/进程/文件/技能/计划/委派/目标/present）整体移除，行集契约 pin 见
-# apps/host presets.test.ts 猎头段；persona prefix = 招聘/管理 SOP）。expert-squad
+# apps/host presets.test.ts 猎头段；persona prefix = 招聘/管理 SOP）。preset 子树
+# 只收宿主全组合可解析可启动的官方件（registry auditRows 挂载审计：子树内任一行
+# never started/解析失败 → preset broken → UI !broken 过滤整行缺席——desktop 判例
+# 2026-11-22：tool-office 在 desktop 组合 never started 致猎头预设下拉缺席，故
+# office 行不入 preset 子树，office 能力由宿主全局行提供）。expert-squad
 # 5 管理工具 + delegate_expert 为全局单实例注册，本 patch 零组合级工具声明。
 - insert:
     - id: expert-squad
@@ -67,8 +71,6 @@
             config:
               fetch: true
               searchTimeoutMs: 60000
-          - id: tool-office
-            name: '@deepseek-ai/dsh-tool-office'
           - id: tool-plugin-market
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
