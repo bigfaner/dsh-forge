@@ -20,6 +20,12 @@
 #    根必失败落兜底），零 throw 冒泡）。
 #    tool-office 同判例出子树（desktop 组合 never started → audit broken——猎头预设同案实锤；
 #    office 能力由宿主全局行提供）。
+#    office 族排除件（1.37 预设级排除路线）：preset 子树行 config.deny = office 全族候选
+#    名单（正本常量 OFFICE_TOOL_DENY_CANDIDATES——本包 host/tools-exclude.ts，与
+#    expert-squad 副本逐字节一致·契约双 pin），apply 期 preset scope 落官方
+#    ctx.tools.restrict deny 掩码（与宿主实注册名求交 fail-soft——expert-restrict 未知名
+#    判例零 throw 面）。行名 = 本包裸名子路径导出（preset 子树行导入基点 = profile 根——
+#    web/desktop bundle 档 @dsh-forge/forge 均已安装可解析；solo 档 forge patch 不在场景）。
 # 五件顶层 skills 行不属本 patch（谁带谁自持，见下；bundle 通道顶层禁承带——技能预设独占
 # 走 preset-forge 子树实例，scripts/package-release.mjs 机检守卫）。
 # 全部派发表达式自带 && 短路兜底（直写不变量——防裸表达式异常冒泡打断行激活）；
@@ -195,3 +201,20 @@
                 - !!js (()=>{try{return process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/task-loop/package.json')),'skills')}catch(e){const home=process.env.DSH_HOME;if(!home)return undefined;const fs=process.getBuiltinModule('node:fs');const path=process.getBuiltinModule('node:path');const live=home+'/profiles/.generations/live';let gens=[];try{gens=fs.readdirSync(live).filter((n)=>n.startsWith('dsh-forge+forge+')).sort()}catch(e2){return undefined}const latest=gens.at(-1);return latest===undefined?undefined:path.join(live,latest,'node_modules/@dsh-forge/task-loop/skills')}})()
                 - !!js (()=>{try{return process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/expert-squad/package.json')),'skills')}catch(e){const home=process.env.DSH_HOME;if(!home)return undefined;const fs=process.getBuiltinModule('node:fs');const path=process.getBuiltinModule('node:path');const live=home+'/profiles/.generations/live';let gens=[];try{gens=fs.readdirSync(live).filter((n)=>n.startsWith('dsh-forge+forge+')).sort()}catch(e2){return undefined}const latest=gens.at(-1);return latest===undefined?undefined:path.join(live,latest,'node_modules/@dsh-forge/expert-squad/skills')}})()
                 - !!js (()=>{try{return process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/knowledge/package.json')),'skills')}catch(e){const home=process.env.DSH_HOME;if(!home)return undefined;const fs=process.getBuiltinModule('node:fs');const path=process.getBuiltinModule('node:path');const live=home+'/profiles/.generations/live';let gens=[];try{gens=fs.readdirSync(live).filter((n)=>n.startsWith('dsh-forge+forge+')).sort()}catch(e2){return undefined}const latest=gens.at(-1);return latest===undefined?undefined:path.join(live,latest,'node_modules/@dsh-forge/knowledge/skills')}})()
+          - id: tool-exclude-office
+            name: '@dsh-forge/forge/tools-exclude'
+            config:
+              deny:
+                - office_template
+                - office_template_write
+                - ppt_get_template_pages
+                - ppt_get_template_reference
+                - ppt_list_templates
+                - ppt_template_create_project
+                - pptd_add_asset
+                - pptd_check
+                - pptd_import
+                - pptd_list_files
+                - pptd_read_file
+                - pptd_render
+                - pptd_write_file
