@@ -12,6 +12,8 @@
 //   ② bundle 管线验证锚：消费 @dsh-forge/lib-* devDependencies（scripts/bundle-host.mjs
 //     构建期内联进 dist——产物自含，dist 零 @dsh-forge/lib-* 裸 import）。
 import { errMessage } from "@dsh-forge/lib-util";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { consoleDiagFallback, type DiagLevel } from "@dsh-forge/lib-diag";
 // owner Peer 类型侧引入（AGENTS 1.6 配方——bug e4aa1a5f：静态具名导入经宿主解析面落到
 // 无 Peer 导出的旧版本时整 entry 拒激活；runtime ctor 由 loadOwnerPeerCtor 惰性动态加载
@@ -31,7 +33,7 @@ import {
   type ForgeTasksRemoteDeps,
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
-import { createDiagEmitter, emitForgeDiag } from "./faces.js";
+import { createDiagEmitter, emitForgeDiag, FORGE_PACKAGE_NAME } from "./faces.js";
 import { withSessionIdentity } from "./tools/faces.js";
 import type { TasksService } from "./domain/tasks/service.js";
 
@@ -236,10 +238,58 @@ export function registerToolFamily(
   };
 }
 
+/** 随包 experts/ 目录解析（源 host/index.ts 深包根 1 级、dist bundle dist/host/index.js 深
+ * 2 级——双候选取在场目录；均缺席 = undefined 由注册面 warn 留痕）。 */
+function bundledExpertsRoot(moduleUrl: string = import.meta.url): string | undefined {
+  for (const rel of ["../../experts/", "../experts/"] as const) {
+    const dir = fileURLToPath(new URL(rel, moduleUrl));
+    if (existsSync(dir)) return dir;
+  }
+  return undefined;
+}
+
+/**
+ * 随包内置专家档案注册（experts.registerRoot 装配行——AGENTS 1.6 配方）：惰性
+ * reflect.get('experts') + try/catch 现查、检测结果零缓存；expert-squad 缺席 =
+ * fail-soft + warn 留痕（不阻载本插件）。registerRoot 侧已主动触发全部已建 registry
+ * 换代（plugins/expert-squad host/index.ts registerRoot 注记）——本面零 refresh 调用。
+ * pluginName = 本包包名（实例 ID 前缀 `@dsh-forge/task-loop#键`，faces.FORGE_PACKAGE_NAME 单源）。
+ */
+export function registerBuiltinExpertsRoot(
+  ctx: unknown,
+  diag: (line: string, level?: DiagLevel) => void,
+): void {
+  let experts: unknown;
+  try {
+    experts = (ctx as TaskLoopPluginCtx).reflect?.get?.("experts");
+  } catch {
+    experts = undefined; // 反射异常视同缺席（fail-soft）
+  }
+  const register = (experts as { registerRoot?: unknown } | undefined)?.registerRoot;
+  if (typeof register !== "function") {
+    diag("[task-loop] experts 服务缺席（expert-squad 未装/未供）——随包专家档案零注册（fail-soft 不阻载）", "warn");
+    return;
+  }
+  const dir = bundledExpertsRoot();
+  if (dir === undefined) {
+    diag("[task-loop] 随包 experts/ 目录解析缺席——内置专家档案零注册（fail-soft 不阻载）", "warn");
+    return;
+  }
+  try {
+    register.call(experts, ctx, dir, FORGE_PACKAGE_NAME);
+    diag(`[task-loop] 随包内置专家档案注册完成：${dir}（experts.registerRoot——换代由 expert-squad 侧承担）`, "info");
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    diag(`[task-loop] experts.registerRoot 调用失败——随包专家档案零注册（fail-soft 不阻载）：${message}`, "warn");
+  }
+}
+
 const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig = {}): (() => void) => {
   // INV-3 安装互斥 loud-fail 守卫（bug ef3e92ea）——任何装配副作用之前首查。
   assertInstallMutex(ctx, config, "@dsh-forge/task-loop");
   const diag = config.diag ?? consoleDiagFallback;
+  // 随包内置专家档案注册（experts.registerRoot 装配行——experts 缺席 fail-soft 不阻载）
+  registerBuiltinExpertsRoot(ctx, diag);
   // 单装缺省装配（三件单源——home 缺席/db 打开失败 = 整体降级零 provide）
   const services = assembleTaskLoopServices(config, diag);
   // 单装工具族注册（官方 tools 缝——apply 期注册、unmount 撤回；域服务缺席 = 零注册降级）

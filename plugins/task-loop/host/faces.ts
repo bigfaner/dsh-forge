@@ -713,8 +713,9 @@ export function createProjectWorkspaceRoots(projects: ProjectWsRootServiceFace):
 
 // ─────────────────────────── 专家团装配面（experts 服务可选消费——AGENTS 1.6 配方） ───────────────────────────
 
-// 随包预设专家档案目录（FORGE_EXPERTS_ROOT_DIR）随 expert-squad 收回另立子提案移出本包——
-// registerRoot 装配面不在本包（提案 §一裁决）；experts 消费一律经下方可选消费配方现查。
+// 随包预设专家档案目录（FORGE_EXPERTS_ROOT_DIR）随 expert-squad 收回另立子提案移出本包；
+// experts 消费一律经下方可选消费配方现查（AGENTS 1.6）；随包 experts/ 的 registerRoot
+// 注册行归 host/index.ts 装配面（builtin-redistribution）。
 
 /** 本包包名（registerRoot 的 pluginName 实参——专家实例 ID 前缀 `插件名#键`，proposal
  *  expert-squad-default-routing D6 寻址契约；缺席 = expert-squad 侧回落 `plugin` 前缀，

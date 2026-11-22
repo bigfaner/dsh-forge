@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/spec",
-  "version": "0.19.12",
+  "version": "0.20.0",
   "private": true,
   "type": "module",
   "description": "规格与共识：把想法澄清成提案、目标与验收标准，为交付流水线提供唯一事实源。",
@@ -36,7 +36,8 @@
     "dist/typert.host.d.ts",
     "dist/typert.remote-client.js",
     "dist/typert.remote-client.d.ts",
-    "dist/typert.remote-client.d.ts.map"
+    "dist/typert.remote-client.d.ts.map",
+    "experts/"
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && node scripts/generate-typert.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",

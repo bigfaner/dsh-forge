@@ -12,9 +12,76 @@
 // Workbench 生长点：forge-workbench 期 read/orchestrate 目录、内部 RPC 与自有 host
 // 逻辑在此随包构建自动并入——六插行与 file: 依赖零变化。
 import { emitDiag } from "@dsh-forge/lib-diag";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { FORGE_COMBO_SERVICE_KEY, PRESENCE_SERVICE_KEYS, type ComposedKey, type ForgeConfig } from "./assembly.js";
 
 export const name = "@dsh-forge/forge"; // loader ID 校验 = 包名（产物契约）
+
+/** 本包包名（experts.registerRoot 的 pluginName 实参——专家实例 ID 前缀 `@dsh-forge/forge#键`）。 */
+export const FORGE_BUNDLE_PACKAGE_NAME = "@dsh-forge/forge" as const;
+
+/** 随包 experts/ 目录解析（源 host/index.ts 深包根 1 级、dist bundle dist/host/index.js 深
+ * 2 级——双候选取在场目录；均缺席 = undefined 由注册面 warn 留痕）。 */
+function bundledExpertsRoot(moduleUrl: string = import.meta.url): string | undefined {
+  for (const rel of ["../../experts/", "../experts/"] as const) {
+    const dir = fileURLToPath(new URL(rel, moduleUrl));
+    if (existsSync(dir)) return dir;
+  }
+  return undefined;
+}
+
+/**
+ * 随包内置专家档案注册（experts.registerRoot 装配行——AGENTS 1.6 配方）：惰性
+ * experts 服务 reflect 现查 + try/catch、检测结果零缓存；expert-squad 缺席 =
+ * fail-soft + warn 留痕（不阻载 forge 激活）。registerRoot 侧已主动触发全部已建
+ * registry 换代（plugins/expert-squad host/index.ts registerRoot 注记）——本面零
+ * refresh 调用。
+ */
+export function registerBuiltinExpertsRoot(ctx: HostCtx): void {
+  let experts: unknown;
+  try {
+    experts = ctx.reflect?.get?.("experts");
+  } catch {
+    experts = undefined; // 反射异常视同缺席（fail-soft）
+  }
+  const register = (experts as { registerRoot?: unknown } | undefined)?.registerRoot;
+  if (typeof register !== "function") {
+    emitDiag(ctx, {
+      event: "forge-experts-register",
+      level: "warn",
+      process: "main",
+      message: "专家池静置：experts 服务缺席（expert-squad 未装/未供）——随包专家档案零注册（fail-soft 不阻载）",
+    });
+    return;
+  }
+  const dir = bundledExpertsRoot();
+  if (dir === undefined) {
+    emitDiag(ctx, {
+      event: "forge-experts-register",
+      level: "warn",
+      process: "main",
+      message: "随包 experts/ 目录解析缺席——内置专家档案零注册（fail-soft 不阻载）",
+    });
+    return;
+  }
+  try {
+    register.call(experts, ctx, dir, FORGE_BUNDLE_PACKAGE_NAME);
+    emitDiag(ctx, {
+      event: "forge-experts-register",
+      level: "info",
+      process: "main",
+      message: `随包内置专家档案注册完成：${dir}（experts.registerRoot——换代由 expert-squad 侧承担）`,
+    });
+  } catch (cause) {
+    emitDiag(ctx, {
+      event: "forge-experts-register",
+      level: "warn",
+      process: "main",
+      message: `experts.registerRoot 调用失败——随包专家档案零注册（fail-soft 不阻载）：${String(cause)}`,
+    });
+  }
+}
 
 /** 宿主 ctx 窄面（cordis Context 结构子集——reflect 现查/根 registry provide + diag emit） */
 interface HostCtx {
@@ -78,6 +145,8 @@ export function apply(ctx: HostCtx, _config: ForgeConfig = {}): void {
     // provide 失败不阻载 forge 自身激活（成员侧守卫将视缺席放行——越装防护仍由
     // forge 侧在场守卫承接，不因标记下发失败产生静默面）。
   }
+  // 随包内置专家档案注册（experts.registerRoot 装配行——experts 缺席 fail-soft 不阻载）。
+  registerBuiltinExpertsRoot(ctx);
   emitDiag(ctx, {
     event: "forge-bundle-apply",
     level: "info",

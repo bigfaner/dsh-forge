@@ -64,7 +64,15 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
       expect(expr, `${member} DSH_HOME generation 探测兜底腿`).toContain("process.env.DSH_HOME");
       expect(expr, `${member} 零裸 throw`).not.toContain("throw ");
       // 形态可求值（真实 process——合法 JS 语法面）：DSH_HOME 缺席兜底腿 → undefined
-      expect(new Function(`"use strict"; return (${expr});`)(), `${member} 兜底腿求值 undefined（DSH_HOME 缺席）`).toBeUndefined();
+      // （hermetic：开发机 shell 常携 DSH_HOME（DSH Desktop 会话环境）——求值窗内摘除锚定缺席态）
+      const prevHome = process.env.DSH_HOME
+      delete process.env.DSH_HOME
+      try {
+        expect(new Function(`"use strict"; return (${expr});`)(), `${member} 兜底腿求值 undefined（DSH_HOME 缺席）`).toBeUndefined()
+      } finally {
+        if (prevHome === undefined) delete process.env.DSH_HOME
+        else process.env.DSH_HOME = prevHome
+      };
     }
   });
 

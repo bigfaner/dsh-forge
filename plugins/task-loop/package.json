@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/task-loop",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "private": true,
   "type": "module",
   "description": "任务环：把提案拆解成任务清单，自动派发执行、结算验收，全程留痕可追踪。",
@@ -47,7 +47,8 @@
     "dist/typert.host.d.ts",
     "dist/typert.remote-client.js",
     "dist/typert.remote-client.d.ts",
-    "dist/typert.remote-client.d.ts.map"
+    "dist/typert.remote-client.d.ts.map",
+    "experts/"
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && node scripts/generate-typert.mjs && tsc -b && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",

@@ -71,8 +71,8 @@ describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
     }
   });
 
-  it("四查② ctx.reflect.get 静态禁令 + 在场守卫豁免落款（默认配方 = 类型化 import + 在场性现查——AGENTS §1.6；豁免唯一落款点 = host/index.ts 在场守卫 isMemberActive，提案评审 N3/N4 + P0 #7：守卫对象 = 五件是否已独立激活，可选项无类型化消费面，现查 + 零 memoize 三铁律逐条满足）", () => {
-    // 豁免落款（唯一）：host/index.ts 守卫现查点。名单外任一出现即红。
+  it("四查② ctx.reflect.get 静态禁令 + 豁免落款（默认配方 = 类型化 import + 在场性现查——AGENTS §1.6；豁免落款点 = host/index.ts 在场守卫 isMemberActive（提案评审 N3/N4 + P0 #7）+ host/index.ts registerBuiltinExpertsRoot（builtin-redistribution：experts 可选服务无类型化消费面，现查 + 零 memoize 三铁律逐条满足））", () => {
+    // 豁免落款（唯一文件）：host/index.ts。名单外任一出现即红。
     const REFLECT_EXEMPT = new Set(["host/index.ts"]);
     for (const file of sourceFiles.filter((f) => /\.(?:[cm]?[jt]sx?)$/.test(f))) {
       const text = texts.get(file)!;
@@ -80,9 +80,9 @@ describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
         expect(text, `${file} 出现 ctx.reflect.get（非豁免落款点）`).not.toMatch(/reflect\s*\.\s*get\s*\(/);
       }
     }
-    // 豁免点用量上界：守卫现查恰一处（防豁免面漫灌）。
+    // 豁免点用量上界（防豁免面漫灌）：isMemberActive 守卫 + registerBuiltinExpertsRoot 注册现查。
     const guardHits = [...texts.get("host/index.ts")!.matchAll(/reflect\s*\?*\.\s*get\s*(?:\??\.\s*)?\(/g)].length;
-    expect(guardHits, "host/index.ts reflect.get 现查点超豁免上界（恰 1 处——isMemberActive）").toBe(1);
+    expect(guardHits, "host/index.ts reflect.get 现查点超豁免上界（恰 2 处——isMemberActive + registerBuiltinExpertsRoot）").toBe(2);
   });
 
   it("四查③④ 零 db 句柄 + host/ui 零文件系统写入（按目录禁写——dist 产物写面归 scripts/ 构建链）", () => {
@@ -139,8 +139,8 @@ describe("forge 声明面守卫（package.json 骨架期全量）", () => {
     expect(pkg.dsh?.client?.platform).toBe("web");
   });
 
-  it("files 恰两件（dist + cordis.patch.yml——1.14 返工：skills 随 dist 构建期物化不再单列；50bfbcec experts 僵尸条目清除）", () => {
-    expect(pkg.files).toEqual(["dist", "cordis.patch.yml"]);
+  it("files 三件（dist + cordis.patch.yml + experts/——builtin-redistribution：随包内置专家档案随产物分发；skills 随 dist 构建期物化不再单列）", () => {
+    expect(pkg.files).toEqual(["dist", "cordis.patch.yml", "experts/"]);
   });
 
   it("scripts：build = clean-dist → tsc -b → bundle-host → bundle-client（run-once 禁 watch）+ prepack self-containment", () => {

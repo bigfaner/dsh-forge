@@ -12,6 +12,8 @@
 //      注册三态可观测——完成/缺席降级/注销三径诊断留痕）；
 //   ④ AC 投影现查缝：task-loop forgeTasks 每次调用期防御读取（AGENTS 1.6 不缓存）。
 import { consoleDiagFallback, type DiagLevel } from "@dsh-forge/lib-diag";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { FORGE_SPECS_SERVICE_KEY } from "../shared/contract-constants.js";
 import {
   assembleSpecServices,
@@ -235,10 +237,60 @@ export { assembleSpecServices, createSpecDocWriter, resolveSpecHome } from "./as
 export { assembleSpecToolFamily, acSettlementsFaceOf } from "./assembly/tool-family.js"
 export type { SpecAssembly, SpecAssemblyConfig } from "./assembly/default-assembly.js"
 
+/** 随包 experts/ 目录解析（源 host/index.ts 深包根 1 级、dist bundle dist/host/index.js 深
+ * 2 级——双候选取在场目录；均缺席 = undefined 由注册面 warn 留痕）。 */
+function bundledExpertsRoot(moduleUrl: string = import.meta.url): string | undefined {
+  for (const rel of ["../../experts/", "../experts/"] as const) {
+    const dir = fileURLToPath(new URL(rel, moduleUrl));
+    if (existsSync(dir)) return dir;
+  }
+  return undefined;
+}
+
+/** 本包包名（experts.registerRoot 的 pluginName 实参——专家实例 ID 前缀 `@dsh-forge/spec#键`）。 */
+export const SPEC_PACKAGE_NAME = "@dsh-forge/spec" as const;
+
+/**
+ * 随包内置专家档案注册（experts.registerRoot 装配行——AGENTS 1.6 配方）：惰性
+ * reflect.get('experts') + try/catch 现查、检测结果零缓存；expert-squad 缺席 =
+ * fail-soft + warn 留痕（不阻载本插件）。registerRoot 侧已主动触发全部已建 registry
+ * 换代（plugins/expert-squad host/index.ts registerRoot 注记）——本面零 refresh 调用。
+ */
+export function registerBuiltinExpertsRoot(
+  ctx: unknown,
+  diag: (line: string, level?: DiagLevel) => void,
+): void {
+  let experts: unknown;
+  try {
+    experts = (ctx as SpecPluginCtx).reflect?.get?.("experts");
+  } catch {
+    experts = undefined; // 反射异常视同缺席（fail-soft）
+  }
+  const register = (experts as { registerRoot?: unknown } | undefined)?.registerRoot;
+  if (typeof register !== "function") {
+    diag("[spec] experts 服务缺席（expert-squad 未装/未供）——随包专家档案零注册（fail-soft 不阻载）", "warn");
+    return;
+  }
+  const dir = bundledExpertsRoot();
+  if (dir === undefined) {
+    diag("[spec] 随包 experts/ 目录解析缺席——内置专家档案零注册（fail-soft 不阻载）", "warn");
+    return;
+  }
+  try {
+    register.call(experts, ctx, dir, SPEC_PACKAGE_NAME);
+    diag(`[spec] 随包内置专家档案注册完成：${dir}（experts.registerRoot——换代由 expert-squad 侧承担）`, "info");
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    diag(`[spec] experts.registerRoot 调用失败——随包专家档案零注册（fail-soft 不阻载）：${message}`, "warn");
+  }
+}
+
 const specCordisPlugin: SpecCordisPlugin = (ctx: unknown, config: SpecHostConfig = {}): (() => void) => {
   // INV-3 安装互斥 loud-fail 守卫（bug ef3e92ea）——任何装配副作用之前首查。
   assertInstallMutex(ctx, config, "@dsh-forge/spec")
   const diag = config.diag ?? consoleDiagFallback
+  // 随包内置专家档案注册（experts.registerRoot 装配行——experts 缺席 fail-soft 不阻载）
+  registerBuiltinExpertsRoot(ctx, diag)
   // 提示段注册恒在（A1 自含——1.8 面零变化；段注册无条件、text 运行期按装配求值）
   const disposePromptSections = registerSpecPromptSectionsFromCordis(ctx, config)
   // 单装缺省装配（home 缺席/db 打开失败 = 整体降级零 provide）

@@ -45,6 +45,8 @@ import type { BackflowConfig } from './service/types.js'
 import type { KnowledgeContextFace } from './tools/index.js'
 
 import { assertInstallMutex } from './install-mutex.js'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 /** 插件配置（profile cordis.patch.yml 行 config；应用装配期路径经 boot overlay 注入） */
 export interface KnowledgePluginConfig {
@@ -144,6 +146,62 @@ function declareKnowledgeRootDirKey(ctx: KnowledgeContextFace): () => void {
   }
 }
 
+/** 随包 experts/ 目录解析（源 host/index.ts 深包根 1 级、dist bundle dist/host/index.js 深
+ * 2 级——双候选取在场目录；均缺席 = undefined 由注册面 warn 留痕）。 */
+function bundledExpertsRoot(moduleUrl: string = import.meta.url): string | undefined {
+  for (const rel of ['../../experts/', '../experts/'] as const) {
+    const dir = fileURLToPath(new URL(rel, moduleUrl))
+    if (existsSync(dir)) return dir
+  }
+  return undefined
+}
+
+/** 本包包名（experts.registerRoot 的 pluginName 实参——专家实例 ID 前缀 `@dsh-forge/knowledge#键`）。 */
+export const KNOWLEDGE_PACKAGE_NAME = '@dsh-forge/knowledge' as const
+
+/**
+ * 随包内置专家档案注册（experts.registerRoot 装配行——AGENTS 1.6 配方）：惰性
+ * reflect.get('experts') + try/catch 现查、检测结果零缓存；expert-squad 缺席 =
+ * fail-soft + warn 留痕（不阻载本插件）。registerRoot 侧已主动触发全部已建 registry
+ * 换代（plugins/expert-squad host/index.ts registerRoot 注记）——本面零 refresh 调用。
+ * SC-2 零依赖红线：knowledge 只注册档案不消费 experts 服务（inject 名单零增）。
+ */
+export function registerBuiltinExpertsRoot(
+  ctx: KnowledgeContextFace,
+  emit?: (payload: DiagEventPayload) => void,
+): void {
+  let experts: unknown
+  try {
+    experts = (ctx as unknown as { reflect?: { get?(name: string): unknown } }).reflect?.get?.('experts')
+  } catch {
+    experts = undefined // 反射异常视同缺席（fail-soft）
+  }
+  const warn = (message: string): void => {
+    emit?.({ event: 'knowledge-experts-register', level: 'warn', message, process: 'main' })
+  }
+  const register = (experts as { registerRoot?: unknown } | undefined)?.registerRoot
+  if (typeof register !== 'function') {
+    warn('experts 服务缺席（expert-squad 未装/未供）——随包专家档案零注册（fail-soft 不阻载）')
+    return
+  }
+  const dir = bundledExpertsRoot()
+  if (dir === undefined) {
+    warn('随包 experts/ 目录解析缺席——内置专家档案零注册（fail-soft 不阻载）')
+    return
+  }
+  try {
+    register.call(experts, ctx, dir, KNOWLEDGE_PACKAGE_NAME)
+    emit?.({
+      event: 'knowledge-experts-register',
+      level: 'info',
+      message: `随包内置专家档案注册完成：${dir}（experts.registerRoot——换代由 expert-squad 侧承担）`,
+      process: 'main',
+    })
+  } catch (cause) {
+    warn(`experts.registerRoot 调用失败——随包专家档案零注册（fail-soft 不阻载）：${String(cause)}`)
+  }
+}
+
 const knowledgePlugin: KnowledgePlugin = Object.assign(
   (ctx: KnowledgeContextFace, config: KnowledgePluginConfig = {}): (() => void) => {
     // INV-3 安装互斥 loud-fail 守卫（bug ef3e92ea）——任何装配副作用之前首查。
@@ -153,6 +211,9 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       typeof ctx.emit === 'function'
         ? (payload: DiagEventPayload) => ctx.emit!(DIAG_EVENT, { ...payload, process: 'main' })
         : undefined
+    // 随包内置专家档案注册（experts.registerRoot 装配行——experts 缺席 fail-soft 不阻载；
+    // 先于自持存储装配：存储降级早退不吞注册）
+    registerBuiltinExpertsRoot(ctx, diagEmit)
     // 自持存储自启 + 首启轻量种子迁移（开库失败 fail-soft 降级零注册——锚缺席（裸环境）
     // 不自启，不向 ~/.dsh 静默落盘）
     const storage = startSelfHostedStorage(

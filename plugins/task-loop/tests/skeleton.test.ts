@@ -138,8 +138,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.5");
   });
 
-  it("版本 bump 0.19.7（forge-aggregate-bundle/1.40 持久层 node:sqlite 迁移 patch bump）", () => {
-    expect(pkg.version).toBe("0.19.7");
+  it("版本 bump 0.21.0（expert-builtin-redistribution 随包 experts/ 迁移 minor bump）", () => {
+    expect(pkg.version).toBe("0.21.0");
   });
 });
 
