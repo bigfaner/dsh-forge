@@ -5,13 +5,17 @@
 #
 # 猎头模式预设行（expert-squad 0.30.0 起随包自带——原 apps/host 预设底稿
 # headhunter.patch.yml 迁入；形态 = 上游 dsh-web-app standard.patch.yml 镜像裁剪版，
-# 工程面行（命令/进程/文件/技能/计划/委派/目标/present）整体移除，行集契约 pin 见
+# 工程面行（命令/进程/文件/计划/委派/目标/present）整体移除，行集契约 pin 见
 # apps/host presets.test.ts 猎头段；persona prefix = 招聘/管理 SOP）。preset 子树
-# 只收宿主全组合可解析可启动的官方件（registry auditRows 挂载审计：子树内任一行
-# never started/解析失败 → preset broken → UI !broken 过滤整行缺席——desktop 判例
-# 2026-11-22：tool-office 在 desktop 组合 never started 致猎头预设下拉缺席，故
-# office 行不入 preset 子树，office 能力由宿主全局行提供）。expert-squad
-# 5 管理工具 + delegate_expert 为全局单实例注册，本 patch 零组合级工具声明。
+# 只收宿主全组合可解析可启动的官方件 + 技能预设独占实例（registry auditRows 挂载审计：
+# 子树内任一行 never started/解析失败 → preset broken → UI !broken 过滤整行缺席——
+# desktop 判例 2026-11-22：tool-office 在 desktop 组合 never started 致猎头预设下拉缺席，
+# 故 office 行不入 preset 子树，office 能力由宿主全局行提供；2026-11-22 技能预设独占
+# 收敛：顶层 skill-filesystem-expert-squad 行退役（标准模式零技能），本包 skills 实例
+# 迁入本子树——混合锚 IIFE try/catch 双腿形：baseUrl 腿（solo 通道 profile node_modules
+# junction 可解析）+ DSH_HOME generation 探测兜底腿（bundle 通道 desktop profile 根
+# baseUrl 必失败落兜底），零 throw 冒泡）。expert-squad 5 管理工具 + delegate_expert
+# 为全局单实例注册，本 patch 零组合级工具声明。
 - insert:
     - id: expert-squad
       name: '@dsh-forge/expert-squad'
@@ -74,13 +78,9 @@
           - id: tool-plugin-market
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
-# skills 自持行（forge-aggregate-bundle 1.4——探针④分支 A）：异 id 绕开官方对顶层
-# base 行 skill-filesystem 的定点 disable（fefd5149：同 id 即命中、provider 不注册）；
-# providerName 显式互异（默认 'filesystem' 同层重名注册 loud-fail）。customSkillDirs
-# 自锚本包 skills/，!!js 表达式 && 短路兜底（防锚解析异常冒泡打断行激活）。
-- id: skill-filesystem-expert-squad
-  name: '@deepseek-ai/dsh-skill-filesystem'
-  config:
-    providerName: filesystem-expert-squad
-    customSkillDirs:
-      - !!js process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/expert-squad/package.json') && process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/expert-squad/package.json')), 'skills')
+          - id: skill-filesystem-expert-squad
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              providerName: filesystem-expert-squad
+              customSkillDirs:
+                - !!js (()=>{try{return process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@dsh-forge/expert-squad/package.json')),'skills')}catch(e){const home=process.env.DSH_HOME;if(!home)return undefined;const fs=process.getBuiltinModule('node:fs');const path=process.getBuiltinModule('node:path');const live=home+'/profiles/.generations/live';let gens=[];try{gens=fs.readdirSync(live).filter((n)=>n.startsWith('dsh-forge+forge+')).sort()}catch(e2){return undefined}const latest=gens.at(-1);return latest===undefined?undefined:path.join(live,latest,'node_modules/@dsh-forge/expert-squad/skills')}})()
