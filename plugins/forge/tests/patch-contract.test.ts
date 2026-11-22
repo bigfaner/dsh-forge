@@ -68,8 +68,8 @@ describe("forge patch 六插行契约", () => {
     expect(patchYaml).toContain("- insert:");
   });
 
-  it("顶层行恰七条 = 六插行 + preset-forge（序 pin——六插行激活官方默认路径；五件顶层 skills 行不属本 patch，唯一正本在各件自己 patch——1.11 谁带谁自持）", () => {
-    expect(rows.map((r) => r.id)).toEqual([...SIX_ROW_IDS, "preset-forge"]);
+  it("顶层行恰八条 = 六插行 + preset-forge + preset-headhunter（序 pin——六插行激活官方默认路径；五件顶层 skills 行不属本 patch，唯一正本在各件自己 patch——1.11 谁带谁自持；preset-headhunter 正本自含承带——WYSIWYG 铁律）", () => {
+    expect(rows.map((r) => r.id)).toEqual([...SIX_ROW_IDS, "preset-forge", "preset-headhunter"]);
   });
 
   it("forge 自插行（id = dshforge 异 id——bug 1102d9d8）name + config 恰 { home } 单键（forge 统一 schema——Workbench 生长面；db/tasksHome 不设覆写键恒延伸）", () => {

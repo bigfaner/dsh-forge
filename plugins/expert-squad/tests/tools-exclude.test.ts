@@ -122,12 +122,8 @@ describe("OFFICE_TOOL_DENY_CANDIDATES 名单正本契约", () => {
     expect(forge).toBe(self);
   });
 
-  it("本包 patch preset-headhunter 子树 exclude 行：行名 = 本包 tools-exclude + deny 名单同序全族", () => {
+  it("正本 patch 零 exclude 行（exclude 行 bundle/solo 双通道统一退役——bug bfd37960；preset-headhunter 块为 solo 通道自持副本，bundle 通道由 forge 正本自含同构块承带）", () => {
     const patch = readFileSync(join(PKG_ROOT, "cordis.patch.yml"), "utf8");
-    expect(patch).toContain("- id: tool-exclude-office");
-    expect(patch).toContain("name: '@dsh-forge/expert-squad/tools-exclude'");
-    const denyBlock = patch.match(/- id: tool-exclude-office[\s\S]*$/)?.[0] ?? "";
-    const denyNames = denyBlock.match(/^ {16}- (\S+)\s*$/gm)?.map((l) => l.trim().slice(2)) ?? [];
-    expect(denyNames).toEqual([...OFFICE_TOOL_DENY_CANDIDATES]);
+    expect(patch).not.toMatch(/- id: tool-exclude-office/m);
   });
 });

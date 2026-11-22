@@ -190,8 +190,10 @@ const MEMBERS = ["project", "spec", "task-loop", "expert-squad", "knowledge"] as
 function topLevelIds(yaml: string): string[] {
   return [...yaml.matchAll(/^- id: (.+)$/gm)].map((m) => m[1]!);
 }
+/** 插行顶层 providerName（缩进 ≤4——preset 子树嵌套技能实例不入交集面：bundle 通道
+ * 单载 forge patch、solo 通道单载成员 patch，双正本 preset 子树同构实例永不 co-load）。 */
 function providerNames(yaml: string): string[] {
-  return [...yaml.matchAll(/^\s+providerName: (\S+)$/gm)].map((m) => m[1]!);
+  return [...yaml.matchAll(/^ {1,4}providerName: (\S+)$/gm)].map((m) => m[1]!);
 }
 
 describe("forge patch 六插行（静态直检——直写正本）", () => {
@@ -297,5 +299,40 @@ describe("preset-forge 静态直检（直写正本）", () => {
 
   it("preset 子树零 desktop never-started 官方件行（registry 挂载审计 broken 判例 desktop 2026-11-22——tool-office 在 desktop 组合 never started；技能实例混合锚兼容 desktop profile 根求值基点——baseUrl 腿失败落 DSH_HOME generation 探测兜底）", () => {
     expect(presetBody, "tool-office 不入 preset 子树（desktop never started → broken）").not.toContain("tool-office");
+  });
+});
+
+// ── WYSIWYG 正本自含性（回归修复 bfd37960 + 用户铁律 2026-11-22：正本 = 交付唯一事实源，
+//    打包脚本零改写——只读恒等校验归 package-release 机检）──
+describe("forge patch 正本自含性（WYSIWYG——bundle 全量在正本）", () => {
+  it("preset-headhunter 块在场（第二 insert 块——猎头模式预设随正本承带，order 3 pin）", () => {
+    expect(FORGE_PATCH).toContain("- insert:");
+    expect(FORGE_PATCH).toContain("    - id: preset-headhunter");
+    expect(FORGE_PATCH).toContain("        id: headhunter");
+    expect(FORGE_PATCH).toContain("        name: 猎头模式");
+    expect(FORGE_PATCH).toContain("        order: 3");
+  });
+
+  it("双 preset 子树技能实例在场（preset-forge 子树 skill-filesystem-forge + preset-headhunter 子树 skill-filesystem-expert-squad，providerName 互异）", () => {
+    expect(FORGE_PATCH).toContain("- id: skill-filesystem-forge");
+    expect(FORGE_PATCH).toContain("providerName: filesystem-forge");
+    expect(FORGE_PATCH).toContain("- id: skill-filesystem-expert-squad");
+    expect(FORGE_PATCH).toContain("providerName: filesystem-expert-squad");
+  });
+
+  it("零 tool-exclude-office 行 + preset 子树零 @dsh-forge/ 子路径 name（bug bfd37960 回归根因——profile 根解析封锁双预设 broken；office 排除归 1.35 宿主债务）", () => {
+    expect(FORGE_PATCH).not.toMatch(/- id: tool-exclude-office/m);
+    expect(FORGE_PATCH).not.toMatch(/name: '@dsh-forge\/[^']*tools-exclude'/);
+    const presetScoped = FORGE_PATCH.slice(FORGE_PATCH.indexOf("    - id: preset-forge"));
+    const subpathNames = [...presetScoped.matchAll(/^\s+name: ['"](@dsh-forge\/[^'"]+)['"]\s*$/gm)].map((m) => m[1]!);
+    expect(subpathNames, "preset 子树零 @dsh-forge/ 子路径 name").toEqual([]);
+  });
+
+  it("expert-squad 正本 exclude 行同退役（双通道统一——正本对账一致性）", () => {
+    const squadYaml = readFileSync(resolve(REPO_ROOT, "plugins", "expert-squad", "cordis.patch.yml"), "utf8");
+    expect(squadYaml).not.toMatch(/- id: tool-exclude-office/m);
+    // solo 通道自持副本仍携 preset-headhunter 块（bundle 通道由 forge 正本自含同构块承带）
+    expect(squadYaml).toContain("- id: preset-headhunter");
+    expect(squadYaml).toContain("        order: 3");
   });
 });

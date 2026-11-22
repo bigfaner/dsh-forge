@@ -12,7 +12,6 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { loadPresetPatches, PRESET_PATCH_FILE_NAMES, resolvePresetPatchDir } from './presets.js'
 import { hostRoot } from './paths.js'
-import { OFFICE_TOOL_DENY_CANDIDATES } from '../../../../plugins/expert-squad/host/tools-exclude.js'
 
 const PRESETS_DIR = join(import.meta.dirname, 'presets')
 const UPSTREAM = join(
@@ -234,7 +233,7 @@ describe('headhunter 预设（expert-squad 0.30.0 起随包自带：plugins/expe
   /** 猎头产品增量行（上游没有——机械 diff 豁免面；expert-squad 不落组合专行，
    *  全工具走全局单实例注册全组合继承；1.34 技能预设独占收敛——skill-filesystem-
    *  expert-squad 实例自顶层行迁入 preset 子树，随块成行） */
-  const HR_PRODUCT_ROWS = new Set([...PRODUCT_ROWS, 'skill-filesystem-expert-squad', 'tool-exclude-office'])
+  const HR_PRODUCT_ROWS = new Set([...PRODUCT_ROWS, 'skill-filesystem-expert-squad'])
 
   it('预设声明行：agent-preset 包名 + id headhunter / name 猎头模式 / description / order 3（远征·突击之后）', () => {
     expect(text).toContain('    - id: preset-headhunter')
@@ -281,12 +280,9 @@ describe('headhunter 预设（expert-squad 0.30.0 起随包自带：plugins/expe
     expect(text).not.toContain('expert_dispatch')
   })
 
-  it('office 族排除件（1.37 预设级排除）：tool-exclude-office 行挂本包 tools-exclude 副本 + deny 名单 = OFFICE_TOOL_DENY_CANDIDATES 全族 13 名', () => {
-    const block = rows.get('tool-exclude-office')!
-    expect(block).toContain("name: '@dsh-forge/expert-squad/tools-exclude'")
-    const denyNames = block.match(/^ {16}- (\S+)\s*$/gm)?.map((l) => l.trim().replace('- ', '')) ?? []
-    // 名单正本 = 插件包常量（16 空格缩进 deny 列表项——与 tools-exclude.ts OFFICE_TOOL_DENY_CANDIDATES 同序）
-    expect(denyNames).toEqual(OFFICE_TOOL_DENY_CANDIDATES)
+  it('exclude 行退役（bug bfd37960——preset 级排除 bundle 通道不可交付：tool-exclude-office 行全通道退役，office 排除归 1.35 宿主债务口径）', () => {
+    expect(rows.has('tool-exclude-office')).toBe(false)
+    expect(text).not.toMatch(/- id: tool-exclude-office/m)
   })
 
   it('零 forge 面（产品裁决 2026-10-09 同径）：物理无 plugin-forge[+spec]/md-mermaid/skill 目录占位符', () => {

@@ -304,8 +304,8 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     expect(soloPatch).not.toContain('skill-filesystem-')
   })
 
-  it('preset-forge 子树 skills 实例随正本承带 + preset-headhunter 搬移块 skills 实例不丢失（机检实例在场断言）', () => {
-    // fixture forge patch 注入 preset-forge 子树嵌套实例（真仓正本同构最小形）
+  it('preset-forge 子树 skills 实例随正本承带 + preset-headhunter 块 skills 实例在场（正本自含——机检实例在场断言）', () => {
+    // fixture forge patch 注入 preset-forge + preset-headhunter 双块（真仓正本同构最小形）
     const forgePatchPath = join(root, 'plugins/forge/cordis.patch.yml')
     writeFileSync(forgePatchPath, [
       '- insert:',
@@ -328,22 +328,6 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
       "              providerName: filesystem-forge",
       "              customSkillDirs:",
       "                - !!js (()=>{try{return baseUrl}catch(e){return undefined}})()",
-      '',
-    ].join('\n'))
-    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })).toEqual([])
-    const bundlePatch = readFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), 'utf8')
-    expect(bundlePatch).toContain('- id: skill-filesystem-forge')
-    expect(bundlePatch).toContain('providerName: filesystem-forge')
-  })
-
-  it('preset-headhunter 搬移块 office 排除件行名重写（1.37 双通道兼容——expert-squad 行名 → forge 副本，残留即红）', () => {
-    // 合成 expert-squad 成员：第二 insert 块 = preset-headhunter 同构（skills 实例 + exclude 行 expert-squad 行名）
-    writeMember(root, 'expert-squad', '0.31.5')
-    writeFileSync(join(root, 'plugins', 'expert-squad', 'cordis.patch.yml'), [
-      '- insert:',
-      "    - id: expert-squad",
-      "      name: '@dsh-forge/expert-squad'",
       '- insert:',
       "    - id: preset-headhunter",
       "      name: '@deepseek-ai/dsh-agent-preset'",
@@ -354,25 +338,25 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
       "            name: '@deepseek-ai/dsh-skill-filesystem'",
       "            config:",
       "              providerName: filesystem-expert-squad",
-      "          - id: tool-exclude-office",
-      "            name: '@dsh-forge/expert-squad/tools-exclude'",
-      "            config:",
-      "              deny:",
-      "                - office_template",
       '',
     ].join('\n'))
-    const forgeDeps = JSON.parse(readFileSync(join(root, 'plugins', 'forge', 'package.json'), 'utf8'))
-    forgeDeps.dependencies['@dsh-forge/expert-squad'] = 'file:../expert-squad'
-    writeFileSync(join(root, 'plugins', 'forge', 'package.json'), JSON.stringify(forgeDeps, null, 2))
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })).toEqual([])
+    const bundlePatch = readFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), 'utf8')
+    expect(bundlePatch).toContain('- id: skill-filesystem-forge')
+    expect(bundlePatch).toContain('providerName: filesystem-forge')
+  })
+
+  it('WYSIWYG 恒等：交付 bundle patch ≡ forge 正本逐字节一致 + 零改写（打包脚本零 patch 改写面）', () => {
+    const forgePatchPath = join(root, 'plugins/forge/cordis.patch.yml')
+    const sourcePatch = readFileSync(forgePatchPath, 'utf8')
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     const bundlePatch = readFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), 'utf8')
-    expect(bundlePatch).toContain("name: '@dsh-forge/forge/tools-exclude'")
-    expect(bundlePatch).not.toContain('@dsh-forge/expert-squad/tools-exclude')
-    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })).toEqual([])
-    // 反例·交付 patch 残留 expert-squad 排除件行名：闭包机检红
-    writeFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), bundlePatch.replace("name: '@dsh-forge/forge/tools-exclude'", "name: '@dsh-forge/expert-squad/tools-exclude'"))
+    expect(bundlePatch).toBe(sourcePatch)
+    // 反例·交付 patch 被改写（≠ 正本）：闭包机检红
+    writeFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), `${bundlePatch}# tampered\n`)
     const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
-    expect(violations.some((v) => v.includes('expert-squad 排除件行名'))).toBe(true)
+    expect(violations.some((v) => v.includes('交付 patch ≢ forge 正本'))).toBe(true)
   })
 
   it('反例·交付 patch 顶层承带 skills 行：闭包机检红（顶层禁承带——preset 子树嵌套实例不误伤）', () => {
@@ -418,33 +402,6 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     expect(violations.some((v) => v.includes('members/alpha') && v.includes('skills 锚目录缺席'))).toBe(true)
   })
 
-  it('反例·成员非插行未随交付 patch 携带：闭包机检红（preset-headhunter 形态第二 insert 块承带对账）', () => {
-    // beta patch 增第二 insert 块（expert-squad preset-headhunter 同构）——交付 patch 未携该行即红
-    writeFileSync(join(root, 'plugins', 'beta', 'cordis.patch.yml'), [
-      "- insert:",
-      "    - id: demo",
-      "      name: '@dsh-forge/beta'",
-      "- insert:",
-      "    - id: preset-bonus",
-      "      name: '@deepseek-ai/dsh-agent-preset'",
-      "- id: preset-standard",
-      "  name: '@deepseek-ai/dsh-agent-preset'",
-      "- id: skill-filesystem-beta",
-      "  name: '@deepseek-ai/dsh-skill-filesystem'",
-      '',
-    ].join('\n'))
-    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
-    expect(violations.some((v) => v.includes('members/beta') && v.includes('成员非插行未随交付 patch 携带') && v.includes('preset-bonus'))).toBe(true)
-    // 豁免表：preset-standard 不上提（留档裁定——官方预设宿主运行时供服），不判红
-    expect(violations.some((v) => v.includes('preset-standard'))).toBe(false)
-  })
-
-  it('反例·交付增补基座断裂：assembleRelease 前置断言抛错（appendFileSync 静默造孤儿 patch 出树前堵截）', () => {
-    rmSync(join(root, 'plugins', 'forge', 'cordis.patch.yml'))
-    expect(() => assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })).toThrow(/交付增补前置断言/)
-  })
-
   it('反例·依赖指称树外：file: 指向 members 外目录即红（staging 孤立复发构造）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     const forgePath = join(outDir, 'bundle/forge/package.json')
@@ -469,21 +426,6 @@ describe('纯函数面', () => {
     ].join('\n')
     expect(patchInsertEntryNames(text)).toEqual(['@dsh-forge/forge'])
   })
-  it('patchOutsideFirstInsertIds 只取首个 insert 块之外的 id（成员非插行对账锚）', async () => {
-    const { patchOutsideFirstInsertIds } = await import('../../../scripts/package-release.mjs')
-    const text = [
-      "# 注释\n- insert:",
-      "    - id: demo",
-      "      name: '@dsh-forge/beta'",
-      "- insert:",
-      "    - id: preset-bonus",
-      "      name: '@deepseek-ai/dsh-agent-preset'",
-      "- id: skill-filesystem-beta",
-      "  name: '@deepseek-ai/dsh-skill-filesystem'",
-    ].join('\n')
-    expect(patchOutsideFirstInsertIds(text)).toEqual(['preset-bonus', 'skill-filesystem-beta'])
-  })
-
   it('soloDependencies 剥离 file: 保留 registry 依赖', () => {
     expect(soloDependencies({ dependencies: { a: 'file:../a', b: 'zod' } })).toEqual({ b: 'zod' })
   })

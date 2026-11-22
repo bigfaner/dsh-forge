@@ -56,7 +56,7 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
 
   it("preset 子树技能混合锚封闭：五成员锚 IIFE try/catch 双腿形（baseUrl 解析优先 + DSH_HOME generation 探测兜底，desktop profile 根 baseUrl 必失败落兜底），零 throw 冒泡（1.34 技能预设独占收敛）", () => {
     const anchorPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(\(\(\)=>\{.*\}\)\(\))$/gm)].map((m) => m[1]!);
-    expect(anchorPoints, "五成员混合锚逐件在场").toHaveLength(5);
+    expect(anchorPoints, "五成员混合锚逐件在场（preset-forge ×5 + preset-headhunter expert-squad ×1）").toHaveLength(6);
     for (const member of ["project", "spec", "task-loop", "expert-squad", "knowledge"] as const) {
       const expr = anchorPoints.find((p) => p.includes(`'@dsh-forge/${member}/package.json'`));
       expect(expr, `${member} 锚在场`).toBeDefined();
@@ -68,14 +68,14 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
     }
   });
 
-  it("占位符物化面封闭：!!js 求值点 = forge 行 home 表达式 + 五件插行派发表达式 + 官方 preset 底稿平台/禁用表达式 + preset 子树技能混合锚 ×5，无 {projectDir}/{homeDir} 模板", () => {
+  it("占位符物化面封闭：!!js 求值点 = forge 行 home 表达式 + 五件插行派发表达式 + 官方 preset 底稿平台/禁用表达式 + preset 子树技能混合锚 ×6（preset-forge ×5 + preset-headhunter ×1），无 {projectDir}/{homeDir} 模板", () => {
     expect(patchYaml).not.toContain("{projectDir}");
     expect(patchYaml).not.toContain("{homeDir}");
     const jsPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!);
     expect(jsPoints[0]).toBe(HOME_EXPR);
     // preset 子树技能混合锚（IIFE 双腿形——形态断言归本文件混合锚封闭 + skills-rows-contract）
     const skillAnchors = jsPoints.filter((p) => p.startsWith("(()=>{"));
-    expect(skillAnchors).toHaveLength(5);
+    expect(skillAnchors).toHaveLength(6);
     const otherPoints = jsPoints.slice(1).filter((p) => !p.startsWith("(()=>{"));
     // 非自锚点 = 五件插行派发 config 表达式 ×6（home/dbFile/tasksHome——静态直检归
     // tests/forge/skills-rows-contract.test.ts）+ 官方 preset 底稿 platform 禁用
