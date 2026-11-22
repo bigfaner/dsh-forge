@@ -83,8 +83,10 @@
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
           - id: skill-office      # agent 侧技能提供方（office-docx/pptx/xlsx）
+            name: '@deepseek-ai/dsh-skill-office'
             disabled: true
           - id: office-to-pdf     # host 侧 Office→PDF 转换提供方（连带文档预览转换面）
+            name: '@deepseek-ai/dsh-office-to-pdf'
             disabled: true
           - id: skill-filesystem-expert-squad
             name: '@deepseek-ai/dsh-skill-filesystem'
