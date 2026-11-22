@@ -43,7 +43,7 @@
 #    同款形态——同 id config 整体替换 official agent-preset-registry 行的 default）。
 - id: agent-preset-registry
   config:
-    default: forge
+    default: Forge
 - insert:
     - id: forge-bundle
       name: '@dsh-forge/forge'
@@ -78,9 +78,9 @@
     - id: preset-forge
       name: '@deepseek-ai/dsh-agent-preset'
       config:
-        id: forge
+        id: Forge
         name: Forge模式
-        description: "forge 流水线作业预设：任务规格驱动的全栈交付模式（拆解/TDD/落盘取证/门禁收口）。"
+        description: 'forge 流水线作业预设：任务规格驱动的全栈交付模式（拆解/TDD/落盘取证/门禁收口）。'
         order: 2
         plugins:
           - id: persona
@@ -205,9 +205,11 @@
           - id: tool-plugin-market
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
-          - id: skill-office      # agent 侧技能提供方（office-docx/pptx/xlsx）
+          - id: skill-office # agent 侧技能提供方（office-docx/pptx/xlsx）
+            name: '@deepseek-ai/dsh-skill-office'
             disabled: true
-          - id: office-to-pdf     # host 侧 Office→PDF 转换提供方（连带文档预览转换面）
+          - id: office-to-pdf # host 侧 Office→PDF 转换提供方（连带文档预览转换面）
+            name: '@deepseek-ai/dsh-office-to-pdf'
             disabled: true
           - id: skill-filesystem-forge
             name: '@deepseek-ai/dsh-skill-filesystem'
@@ -225,7 +227,7 @@
       config:
         id: headhunter
         name: 猎头模式
-        description: "专家团猎头：对话式招聘与管理专家档案（招募/修改/启停/查询），不含委派。"
+        description: '专家团猎头：对话式招聘与管理专家档案（招募/修改/启停/查询），不含委派。'
         order: 3
         plugins:
           - id: persona
@@ -277,9 +279,11 @@
           - id: tool-plugin-market
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
-          - id: skill-office      # agent 侧技能提供方（office-docx/pptx/xlsx）
+          - id: skill-office # agent 侧技能提供方（office-docx/pptx/xlsx）
+            name: '@deepseek-ai/dsh-skill-office'
             disabled: true
-          - id: office-to-pdf     # host 侧 Office→PDF 转换提供方（连带文档预览转换面）
+          - id: office-to-pdf # host 侧 Office→PDF 转换提供方（连带文档预览转换面）
+            name: '@deepseek-ai/dsh-office-to-pdf'
             disabled: true
           - id: skill-filesystem-expert-squad
             name: '@deepseek-ai/dsh-skill-filesystem'
