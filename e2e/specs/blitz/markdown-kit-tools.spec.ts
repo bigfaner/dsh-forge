@@ -356,8 +356,8 @@ test('@web-e2e @blitz markdown-kit getOutline 宿主真调：嵌套树/行号锚
     await expectToolError(
       outline.execute({ docRel: 'missing-outline.md' }, execIn(wsDir)),
       isGetOutlineError,
-      'ERR_INVALID_ARGS',
-      'getOutline 样本缺席',
+      'ERR_IO',
+      'getOutline 样本缺席（错误码统一口径：读盘失败 = IO 域，与 convertDocument 同码）',
       /cannot read document/,
     )
     await expectToolError(

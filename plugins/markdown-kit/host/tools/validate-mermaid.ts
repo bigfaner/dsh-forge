@@ -4,15 +4,20 @@
 // docRel 文件读取缝（注入缺省 node:fs）与裁决值透传。typed error 统一
 // ValidateMermaidError（code 承载，plugin-forge format.ts errorCodeOf 同径——
 // code ∈ 本包错误码闭集；dsh tool 面捕获 typed 错误即 tool-error 语义）。
+// bug e6787e6e 收口：docRel 读取锚 = session.cwd（exec.agent.session.header.cwd，
+// convertDocument/getOutline 同构取数位，缺席即 ERR_IO 拒绝）+ 路径穿越守卫
+// （workspace.ts 单源 assertRelUnderRoot——F-2 DRY 收口），四面反例拒绝先于任何 IO。
 import { readFileSync } from 'node:fs'
-import type { MermaidToolDefinition, TextContentBlock } from '../faces.js'
+import { resolve } from 'node:path'
+import type { MermaidToolDefinition, TextContentBlock, ToolExecFace } from '../faces.js'
 import { validateDocFences, validateSource, type DocVerdict, type SourceVerdict } from '../validate/index.js'
+import { assertRelUnderRoot, isRelPathError, sessionCwdOf } from './workspace.js'
 
 /** 工具名（字面量单源导出——后续 deny 名单/技能文案引用点同源） */
 export const MERMAID_TOOL_NAME = 'validateMermaid' as const
 
-/** 本包 tool 面 typed 错误码闭集 */
-export type MermaidToolErrorCode = 'ERR_INVALID_ARGS' | 'ERR_MERMAID_ENGINE'
+/** 本包 tool 面 typed 错误码闭集（错误码统一口径：读盘/锚位失败 = ERR_IO；ERR_INVALID_ARGS 保留给参数形状） */
+export type MermaidToolErrorCode = 'ERR_INVALID_ARGS' | 'ERR_MERMAID_ENGINE' | 'ERR_IO'
 
 /** typed error（code 承载——tool-error 语义的判别锚） */
 export class ValidateMermaidError extends Error {
@@ -143,9 +148,9 @@ const VALIDATE_MERMAID_OUTPUT_SCHEMA = {
   ],
 } as const
 
-/** docRel 文件读取缝（注入点——单测替身；缺省 = node:fs 同步读） */
+/** docRel 文件读取缝（注入点——单测替身；缺省 = node:fs 同步读；入参 = 守卫解析后的 workspace 根下绝对路径） */
 export interface ValidateMermaidToolDeps {
-  readonly readDocFile?: (docRel: string) => string
+  readonly readDocFile?: (docAbs: string) => string
 }
 
 /** tool 定义工厂 */
@@ -167,24 +172,41 @@ export function createValidateMermaidTool(deps: ValidateMermaidToolDeps = {}): M
       },
     },
     output: { schema: VALIDATE_MERMAID_OUTPUT_SCHEMA, render: (_args, value) => renderVerdict(value as SourceVerdict | DocVerdict) },
-    async execute(args: unknown): Promise<SourceVerdict | DocVerdict> {
+    async execute(args: unknown, exec?: ToolExecFace): Promise<SourceVerdict | DocVerdict> {
       const parsed = parseValidateMermaidArgs(args)
       try {
         if (parsed.source !== undefined) {
           return await validateSource(parsed.source, { format: parsed.format })
         }
         const docRel = parsed.docRel as string
+        // bug e6787e6e：docRel 读取锚 = session.cwd（convertDocument/getOutline 同构取数位）
+        const cwd = sessionCwdOf(exec)
+        if (cwd === undefined || cwd.trim() === '') {
+          throw new ValidateMermaidError(
+            'ERR_IO',
+            `${MERMAID_TOOL_NAME}: no session workspace in this call context — the document path cannot be anchored to a workspace root`,
+          )
+        }
+        // 路径穿越守卫（workspace.ts 单源——拒绝先于任何 IO；RelPathError → 自家 typed 转译）
+        let abs: string
+        try {
+          abs = assertRelUnderRoot(resolve(cwd), docRel, { tool: MERMAID_TOOL_NAME, field: 'docRel' })
+        } catch (e) {
+          if (isRelPathError(e)) throw new ValidateMermaidError('ERR_IO', e.message)
+          throw e
+        }
         let doc: string
         try {
-          doc = readDocFile(docRel)
+          doc = readDocFile(abs)
         } catch (e) {
+          if (isRelPathError(e)) throw new ValidateMermaidError('ERR_IO', e.message)
           // Root cause: 读取失败（文件缺席/权限拒绝——macOS 700 目录现场 errno 形态不定，
           // ENOENT 不必然意味着不存在）此前与引擎错同兜底裸抛或断言「文件不存在」；
           // 不按 errno 猜在性，统一如实报不可读并附 errno，由调用方核对路径与目录权限。
           const errno = (e as NodeJS.ErrnoException).code
           if (errno === 'ENOENT' || errno === 'EACCES' || errno === 'EPERM') {
             throw new ValidateMermaidError(
-              'ERR_INVALID_ARGS',
+              'ERR_IO',
               `${MERMAID_TOOL_NAME}: cannot read document: ${docRel} — not found or not readable (check the path relative to the workspace root and directory permissions; errno ${errno})`,
             )
           }

@@ -13,6 +13,10 @@ import {
 } from '../convert/index.js'
 import { ConvertDocumentError, isConvertDocumentError, type ConvertToolErrorCode } from '../convert/errors.js'
 import { DOC_CONVERT_EVENT, DOC_CONVERT_FAIL_EVENT, emitConvertDiag, type DiagEmitter } from '../convert/diag.js'
+import { sessionCwdOf } from './workspace.js'
+
+// session.cwd 锚解析单源在 tools/workspace.ts（F-2 DRY 收口）——此处 re-export 保持既有取数路径
+export { sessionCwdOf }
 
 /** 工具名（字面量单源导出） */
 export const CONVERT_TOOL_NAME = 'convertDocument' as const
@@ -107,13 +111,6 @@ export interface ConvertDocumentToolDeps {
 /** 可选键 undefined 剔除（lossless JSON 整值边界——判例 223ba5b3 同径） */
 function stripUndefined(value: ConvertDocumentSummary): ConvertDocumentSummary {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as unknown as ConvertDocumentSummary
-}
-
-/** session.cwd 锚解析（knowledge sessionContextOf 同构裁剪——cwd 兼容位双读） */
-export function sessionCwdOf(exec: ToolExecFace | undefined): string | undefined {
-  const session = exec?.agent?.session
-  if (session === undefined) return undefined
-  return session.header?.cwd ?? session.cwd
 }
 
 /** tool 定义工厂 */

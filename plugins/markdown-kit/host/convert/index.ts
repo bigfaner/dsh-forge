@@ -8,7 +8,8 @@
 //   - 落盘边界：session.cwd 锚（cwd 由壳从会话上下文解析后传入）+ 注入 fs 缝 +
 //     穿越守卫（绝对路径 / `..` 段 / 解析后越界一律 ERR_IO，拒绝先于任何 IO）。
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, extname, isAbsolute, join, resolve, sep } from 'node:path'
+import { dirname, extname, join, resolve } from 'node:path'
+import { assertRelUnderRoot as assertWorkspaceRelPath, isRelPathError } from '../tools/workspace.js'
 import { ConvertDocumentError, isConvertDocumentError } from './errors.js'
 import { convertDocxToMarkdown, type ConvertImageStrategy } from './docx.js'
 import { convertPdfToMarkdown } from './pdf.js'
@@ -52,29 +53,19 @@ export interface ConvertDocumentSummary {
   readonly pages?: number
 }
 
-const ABSOLUTE_PATH_PATTERN = /^(?:[A-Za-z]:[\\/]|\\\\|\/)/
-
 /**
- * 路径穿越守卫（拒绝先于任何 IO——CD-5 可红锚）：空串/绝对路径/`..` 段/解析后
- * 越出根一律 ERR_IO；合法相对路径返回 workspace 根下解析绝对路径。
+ * 路径穿越守卫（拒绝先于任何 IO——CD-5 可红锚）：守卫逻辑单源在
+ * tools/workspace.ts assertRelUnderRoot（F-2 DRY 收口——三 tool 同源），此处仅
+ * RelPathError → ConvertDocumentError(ERR_IO) 转译；合法相对路径返回 workspace
+ * 根下解析绝对路径。
  */
 export function assertRelUnderRoot(rootAbs: string, rel: string, field: string): string {
-  const tool = 'convertDocument'
-  if (typeof rel !== 'string' || rel.trim() === '') {
-    throw new ConvertDocumentError('ERR_IO', `${tool}: ${field} must be a non-empty relative path (workspace-root anchored)`)
+  try {
+    return assertWorkspaceRelPath(rootAbs, rel, { tool: 'convertDocument', field })
+  } catch (e) {
+    if (isRelPathError(e)) throw new ConvertDocumentError('ERR_IO', e.message)
+    throw e
   }
-  if (isAbsolute(rel) || ABSOLUTE_PATH_PATTERN.test(rel)) {
-    throw new ConvertDocumentError('ERR_IO', `${tool}: ${field} must be relative to the workspace root — absolute paths are rejected: ${rel}`)
-  }
-  if (rel.split(/[\\/]+/).includes('..')) {
-    throw new ConvertDocumentError('ERR_IO', `${tool}: ${field} must stay inside the workspace root — ".." path traversal is rejected: ${rel}`)
-  }
-  const abs = resolve(rootAbs, rel)
-  const normRoot = rootAbs.endsWith(sep) ? rootAbs.slice(0, -1) : rootAbs
-  if (abs !== normRoot && !abs.startsWith(normRoot + sep)) {
-    throw new ConvertDocumentError('ERR_IO', `${tool}: ${field} resolves outside the workspace root: ${rel}`)
-  }
-  return abs
 }
 
 /** 扩展名 → 引擎机械分派表（auto 口径——不经 LLM） */

@@ -155,11 +155,11 @@ describe('getOutline 壳（schema 收窄 + cwd 锚 + fs 缝 + typed error + diag
     expect(mem.files.get(wsFile('a.md'))?.toString()).toBe('# H\n')
   })
 
-  it('文件不可读 → ERR_INVALID_ARGS + cannot read document 语义（validateMermaid 既有口径）', async () => {
+  it('文件不可读 → ERR_IO + cannot read document 语义（错误码统一口径裁定：读盘失败 = IO 域，三 tool 同码——ERR_INVALID_ARGS 保留给参数形状）', async () => {
     const tool = createGetOutlineTool({ fs: createMemoryFs().fs })
     const err = await tool.execute({ docRel: 'missing.md' }, execWithCwd(WS)).catch((e: unknown) => e)
     expect(isGetOutlineError(err)).toBe(true)
-    expect((err as GetOutlineError).code).toBe('ERR_INVALID_ARGS')
+    expect((err as GetOutlineError).code).toBe('ERR_IO')
     expect((err as GetOutlineError).message).toContain('cannot read document')
   })
 
@@ -171,7 +171,10 @@ describe('getOutline 壳（schema 收窄 + cwd 锚 + fs 缝 + typed error + diag
     const okTool = createGetOutlineTool({ fs: createMemoryFs({ [wsFile('a.md')]: Buffer.from('# H\n') }).fs, emit })
     await okTool.execute({ docRel: 'a.md' }, execWithCwd(WS))
     const failTool = createGetOutlineTool({ fs: createMemoryFs().fs, emit })
-    await expect(failTool.execute({ docRel: 'nope.md' }, execWithCwd(WS))).rejects.toBeTruthy()
+    // m3 占位断言收口：拒绝面精确到 typed error code（非裸 truthy）
+    await expect(failTool.execute({ docRel: 'nope.md' }, execWithCwd(WS))).rejects.toSatisfy(
+      (e: unknown) => isGetOutlineError(e) && e.code === 'ERR_IO',
+    )
     expect(diag.map((d) => d.event)).toEqual([MD_OUTLINE_EVENT, MD_OUTLINE_FAIL_EVENT])
     expect(diag[0].level).toBe('info')
     expect(diag[1].level).toBe('error')

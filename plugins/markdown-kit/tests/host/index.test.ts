@@ -5,6 +5,7 @@
 // - AC3：工具名 validateMermaid 字面量单源导出
 // - AC4：source/docRel 入参经形状校验路由到 ./validate 裁决（壳零业务逻辑 + typed error 归一）
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import mdMermaidPlugin, { MD_MERMAID_PLUGIN_NAME } from '../../host/index.js'
@@ -105,6 +106,9 @@ describe('AC1/AC3 注册面 pin：恰三 tool（validateMermaid + convertDocumen
 })
 
 describe('AC4 入参形状校验（双模互斥）与 typed error 归一', () => {
+  /** session cwd 锚替身（execute 第二参——docRel 模式守卫取数位） */
+  const EXEC_WS = { agent: { session: { header: { cwd: 'Z:\\ws' } } } } as const
+
   it('source + docRel 同给 → typed error ERR_INVALID_ARGS（双模互斥）', async () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
@@ -159,30 +163,30 @@ describe('AC4 入参形状校验（双模互斥）与 typed error 归一', () =>
       },
     })
     const tool = rt.registeredTools[0]
-    const verdict = (await tool?.execute({ docRel: 'docs/a.md' })) as { fences: { line: number; ok: boolean }[] }
-    expect(readPath).toBe('docs/a.md')
+    const verdict = (await tool?.execute({ docRel: 'docs/a.md' }, EXEC_WS)) as { fences: { line: number; ok: boolean }[] }
+    expect(readPath).toBe(resolve('Z:\\ws', 'docs/a.md'))
     expect(verdict.fences).toEqual([{ line: 3, format: 'mermaid', ok: true }])
     dispose()
   })
 
-  it('bug: docRel 读取失败（不存在/权限拒绝）→ ERR_INVALID_ARGS「cannot read document」附 errno，不断言在性', async () => {
+  it('bug: docRel 读取失败（不存在/权限拒绝）→ ERR_IO「cannot read document」附 errno，不断言在性（错误码统一口径：读盘失败 = IO 域，ERR_INVALID_ARGS 保留给参数形状）', async () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
     const tool = rt.registeredTools[0]
     // 真实 node:fs：文件确实不存在（ENOENT）——文案不得断言「不存在」（权限拒绝同冒 ENOENT，macOS 700 目录现场）
     await expect(
-      tool?.execute({ docRel: '.forge/docs/probes/__nonexistent-dir__/probe.md' }),
+      tool?.execute({ docRel: '.forge/docs/probes/__nonexistent-dir__/probe.md' }, EXEC_WS),
     ).rejects.toSatisfy(
       (e: unknown) =>
         isValidateMermaidError(e) &&
-        e.code === 'ERR_INVALID_ARGS' &&
+        e.code === 'ERR_IO' &&
         /cannot read document: \.forge\/docs\/probes\/__nonexistent-dir__\/probe\.md/.test(e.message) &&
         /errno ENOENT/.test(e.message),
     )
     dispose()
   })
 
-  it('bug: 权限拒绝（EACCES，macOS 700 目录现场）→ ERR_INVALID_ARGS「cannot read document」而非 ERR_MERMAID_ENGINE', async () => {
+  it('bug: 权限拒绝（EACCES，macOS 700 目录现场）→ ERR_IO「cannot read document」而非 ERR_MERMAID_ENGINE', async () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx(), {
       readDocFile: () => {
@@ -190,12 +194,42 @@ describe('AC4 入参形状校验（双模互斥）与 typed error 归一', () =>
       },
     })
     const tool = rt.registeredTools[0]
-    await expect(tool?.execute({ docRel: '.forge/docs/probes/param-edit-direct-command/probe.md' })).rejects.toSatisfy(
+    await expect(tool?.execute({ docRel: '.forge/docs/probes/param-edit-direct-command/probe.md' }, EXEC_WS)).rejects.toSatisfy(
       (e: unknown) =>
         isValidateMermaidError(e) &&
-        e.code === 'ERR_INVALID_ARGS' &&
+        e.code === 'ERR_IO' &&
         /cannot read document: \.forge\/docs\/probes\/param-edit-direct-command\/probe\.md/.test(e.message) &&
         /errno EACCES/.test(e.message),
+    )
+    dispose()
+  })
+
+  it('bug e6787e6e: docRel 路径穿越四面拒绝（../ 段 / 盘符绝对 / UNC / POSIX 绝对）→ ERR_IO，守卫与 convertDocument/getOutline 同构单源', async () => {
+    const rt = new TempRuntime()
+    let readAttempts = 0
+    const dispose = mdMermaidPlugin(rt.ctx(), {
+      readDocFile: () => {
+        readAttempts += 1
+        return ''
+      },
+    })
+    const tool = rt.registeredTools[0]
+    for (const bad of ['../escape.md', 'C:\\abs.md', '\\\\server\\share\\x.md', '/etc/passwd']) {
+      await expect(tool?.execute({ docRel: bad }, EXEC_WS)).rejects.toSatisfy(
+        (e: unknown) => isValidateMermaidError(e) && e.code === 'ERR_IO',
+      )
+    }
+    // 拒绝先于任何 IO：四面反例零读取消耗
+    expect(readAttempts).toBe(0)
+    dispose()
+  })
+
+  it('bug e6787e6e: session.cwd 缺席 → ERR_IO 拒绝（不猜测根、零读取；convertDocument/getOutline 同构）', async () => {
+    const rt = new TempRuntime()
+    const dispose = mdMermaidPlugin(rt.ctx())
+    const tool = rt.registeredTools[0]
+    await expect(tool?.execute({ docRel: 'a.md' })).rejects.toSatisfy(
+      (e: unknown) => isValidateMermaidError(e) && e.code === 'ERR_IO' && /no session workspace/.test(e.message),
     )
     dispose()
   })
@@ -208,7 +242,7 @@ describe('AC4 入参形状校验（双模互斥）与 typed error 归一', () =>
       },
     })
     const tool = rt.registeredTools[0]
-    await expect(tool?.execute({ docRel: 'x.md' })).rejects.toSatisfy(
+    await expect(tool?.execute({ docRel: 'x.md' }, EXEC_WS)).rejects.toSatisfy(
       (e: unknown) => isValidateMermaidError(e) && e.code === 'ERR_MERMAID_ENGINE' && /disk exploded/.test(e.message),
     )
     dispose()

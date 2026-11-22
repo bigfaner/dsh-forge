@@ -1,16 +1,17 @@
 // getOutline tool 壳（定位：装配——schema 收窄（docRel 必填 + depth? 截断层级）+
 // 路由到 ./outline 纯逻辑单源 + typed error 归一 + 成功/失败 emitDiag（md-outline
 // 前缀，零静默）。壳零业务逻辑：ATX 解析/围栏跳过/setext 标注/depth 截断全在
-// ./outline 单源。读取锚 = session.cwd（exec.agent.session.header.cwd——
-// convertDocument 同构取数位，缺席即 ERR_IO 拒绝）+ 注入 fs 缝（缺省 node:fs）；
-// 读取失败沿 validateMermaid 既有口径映射 ERR_INVALID_ARGS + cannot read document
-// 语义（只读工具不设独立 ERR_IO 分支，cwd 缺席/路径穿越除外）。可选键 undefined
-// 剔除后整值返回（lossless JSON 整值边界——判例 223ba5b3 径）。
-import { isAbsolute, resolve, sep } from 'node:path'
+// ./outline 单源。读取锚 = session.cwd（workspace.ts sessionCwdOf 单源——
+// convertDocument/validateMermaid 同构取数位，缺席即 ERR_IO 拒绝）+ 注入 fs 缝
+// （缺省 node:fs）；读取失败按错误码统一口径映射 ERR_IO + cannot read document
+// 语义（读盘失败 = IO 域——三 tool 同码裁定，ERR_INVALID_ARGS 保留给参数形状）。
+// 可选键 undefined 剔除后整值返回（lossless JSON 整值边界——判例 223ba5b3 径）。
+import { resolve } from 'node:path'
 import type { MermaidToolDefinition, TextContentBlock, ToolExecFace } from '../faces.js'
 import { parseMarkdownOutline, renderOutlineTree, type OutlineNode, type OutlineResult } from '../outline/index.js'
 import { defaultConvertFs, type ConvertFsSeam } from '../convert/index.js'
 import { emitConvertDiag, type DiagEmitter } from '../convert/diag.js'
+import { assertRelUnderRoot, isRelPathError, sessionCwdOf } from './workspace.js'
 
 /** 工具名（字面量单源导出——MERMAID_TOOL_NAME 同法） */
 export const GET_MD_OUTLINE = 'getOutline' as const
@@ -118,28 +119,14 @@ function stripUndefined(value: OutlineResult): OutlineResult {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as unknown as OutlineResult
 }
 
-/** session.cwd 锚解析（convertDocument sessionCwdOf 同构——cwd 兼容位双读） */
-function sessionCwdOf(exec: ToolExecFace | undefined): string | undefined {
-  const session = exec?.agent?.session
-  if (session === undefined) return undefined
-  return session.header?.cwd ?? session.cwd
-}
-
-/** 路径穿越守卫（拒绝先于任何 IO——convertDocument assertRelUnderRoot 同构） */
-function assertRelUnderRoot(rootAbs: string, rel: string): string {
-  const tool = GET_MD_OUTLINE
-  if (isAbsolute(rel) || /^(?:\\\\|\/)/.test(rel) || /^[A-Za-z]:[\\/]/.test(rel)) {
-    throw new GetOutlineError('ERR_IO', `${tool}: docRel must be relative to the workspace root — absolute paths are rejected: ${rel}`)
+/** 路径穿越守卫（workspace.ts 单源——RelPathError → GetOutlineError(ERR_IO) 转译） */
+function assertRelUnderRootOf(rootAbs: string, rel: string): string {
+  try {
+    return assertRelUnderRoot(rootAbs, rel, { tool: GET_MD_OUTLINE, field: 'docRel' })
+  } catch (e) {
+    if (isRelPathError(e)) throw new GetOutlineError('ERR_IO', e.message)
+    throw e
   }
-  if (rel.split(/[\\/]+/).includes('..')) {
-    throw new GetOutlineError('ERR_IO', `${tool}: docRel must stay inside the workspace root — ".." path traversal is rejected: ${rel}`)
-  }
-  const abs = resolve(rootAbs, rel)
-  const normRoot = rootAbs.endsWith(sep) ? rootAbs.slice(0, -1) : rootAbs
-  if (abs !== normRoot && !abs.startsWith(normRoot + sep)) {
-    throw new GetOutlineError('ERR_IO', `${tool}: docRel resolves outside the workspace root: ${rel}`)
-  }
-  return abs
 }
 
 /** tool 定义工厂 */
@@ -173,15 +160,16 @@ export function createGetOutlineTool(deps: GetOutlineToolDeps = {}): MermaidTool
       }
       try {
         const fs = deps.fs ?? defaultConvertFs
-        const abs = assertRelUnderRoot(resolve(cwd), parsed.docRel)
+        const abs = assertRelUnderRootOf(resolve(cwd), parsed.docRel)
         let doc: string
         try {
           doc = fs.readFile(abs).toString('utf8')
         } catch (e) {
-          // 读取失败不按 errno 猜在性（validateMermaid 同径）——如实报不可读并附 errno
+          // 读取失败不按 errno 猜在性（三 tool 同径）——如实报不可读并附 errno；
+          // 错误码统一口径：读盘失败 = ERR_IO（ERR_INVALID_ARGS 保留给参数形状）
           const errno = (e as NodeJS.ErrnoException).code
           throw new GetOutlineError(
-            'ERR_INVALID_ARGS',
+            'ERR_IO',
             `${GET_MD_OUTLINE}: cannot read document: ${parsed.docRel} — not found or not readable (check the path relative to the workspace root${errno !== undefined ? `; errno ${errno}` : ''})`,
           )
         }
