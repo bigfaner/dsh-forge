@@ -55,8 +55,9 @@ export const memberProvider = (member: Member): string => `filesystem-${member}`
 /** 预设序位定值 pin（官方仓 preset 底稿核销 standard=1/forge=2） */
 export const PRESET_FORGE_ORDER = 2
 /** bundle patch 顶层 forge 行 id（异 id——bug 1102d9d8：≠ 官方 experimental-forge-bundle
- *  服务行 id `forge`，同 id 行合并整行替换官方服务行 → StartupError） */
-export const FORGE_ROW_ID = 'dshforge'
+ *  服务行 id `forge`，同 id 行合并整行替换官方服务行 → StartupError；
+ *  用户裁定 2026-11-22 自 dshforge 改名 forge-bundle——官方同款构词） */
+export const FORGE_ROW_ID = 'forge-bundle'
 /** 六插行裸 id（forge 壳（id = FORGE_ROW_ID）+ 五件——dump-config insert 条目与详情页 RowsSection 同清单） */
 export const SIX_ROW_IDS = [FORGE_ROW_ID, ...MEMBERS] as const
 

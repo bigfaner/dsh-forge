@@ -62,7 +62,7 @@ export const SIX_PKGS: readonly string[] = [FORGE_PKG, ...BARE_BUNDLES]
 
 /** bundle patch 顶层 forge 行 id（异 id——bug 1102d9d8：≠ 官方 experimental-forge-bundle
  *  服务行 id `forge`，同 id 行合并整行替换官方服务行 → 官方 forge/forgeSession 缺席 → StartupError） */
-export const FORGE_ROW_ID = 'dshforge'
+export const FORGE_ROW_ID = 'forge-bundle'
 
 /** 包名 → dump-config 插行行 id（forge 壳行 id = FORGE_ROW_ID 异 id，五件 = 裸名同值） */
 export function rowIdForPkg(bare: string): string {

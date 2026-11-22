@@ -197,9 +197,10 @@ function providerNames(yaml: string): string[] {
 }
 
 describe("forge patch 六插行（静态直检——直写正本）", () => {
-  /** forge 自插行 id（异 id——bug 1102d9d8：≠ 官方 experimental-forge-bundle 服务行 id） */
-  const FORGE_ROW_ID = "dshforge";
-  it("insert 块 id 序 = dshforge（forge 壳异 id——bug 1102d9d8）+ 五件，name = @dsh-forge/<pkg>", () => {
+  /** forge 自插行 id（异 id——bug 1102d9d8：≠ 官方 experimental-forge-bundle 服务行 id；
+   * 用户裁定 2026-11-22 自 dshforge 改名 forge-bundle——官方同款构词） */
+  const FORGE_ROW_ID = "forge-bundle";
+  it("insert 块 id 序 = forge-bundle（forge 壳异 id——bug 1102d9d8）+ 五件，name = @dsh-forge/<pkg>", () => {
     const insertBody = FORGE_PATCH.slice(FORGE_PATCH.indexOf("- insert:"), FORGE_PATCH.indexOf("\n    - id: preset-forge"));
     const ids = [...insertBody.matchAll(/^    - id: (.+)$/gm)].map((m) => m[1]!);
     expect(ids).toEqual([FORGE_ROW_ID, ...MEMBERS]);
@@ -222,7 +223,7 @@ describe("forge patch 六插行（静态直检——直写正本）", () => {
     const insertIds = [...insertBody.matchAll(/^    - id: (.+)$/gm)].map((m) => m[1]!);
     const collide = officialServiceRowIds.filter((id) => insertIds.includes(id));
     expect(collide, `插行 id 与官方服务行 id 撞车集`).toEqual([]);
-    expect(insertIds, "forge 壳行异 id 在场（≠ forge）").toContain("dshforge");
+    expect(insertIds, "forge 壳行异 id 在场（≠ forge）").toContain("forge-bundle");
     expect(insertIds, "旧撞车 id forge 不再作为插行 id").not.toContain("forge");
   });
 

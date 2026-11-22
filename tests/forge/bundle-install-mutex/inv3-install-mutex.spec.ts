@@ -46,7 +46,7 @@ async function compositionEvidence(): Promise<string> {
   } catch {
     bundles = 'profile manifest 读失败'
   }
-  const forgeRows = dump.match(/- id: (?:dshforge|project|spec|task-loop|expert-squad|knowledge)\b/g)?.join(',') ?? '零 forge 插行'
+  const forgeRows = dump.match(/- id: (?:forge-bundle|project|spec|task-loop|expert-squad|knowledge)\b/g)?.join(',') ?? '零 forge 插行'
   const comboMark = dump.includes('comboMark') ? 'comboMark 在场' : 'comboMark 缺席'
   return `bundles=${bundles}；forgeRows=${forgeRows}；${comboMark}`
 }
