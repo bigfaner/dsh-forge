@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import mdMermaidPlugin, { MD_MERMAID_PLUGIN_NAME } from '../../host/index.js'
 import { MERMAID_TOOL_NAME, ValidateMermaidError, isValidateMermaidError } from '../../host/tools/validate-mermaid.js'
+import { CONVERT_TOOL_NAME } from '../../host/tools/convert-document.js'
 import type { MermaidToolDefinition } from '../../host/faces.js'
 
 /** 临时 runtime：注册捕获 + disposer 记账（plugin-forge-spec TempRuntime 同型裁剪——本插件只消费 tools 面） */
@@ -54,21 +55,21 @@ describe('AC2 faces 结构化窄类型（零 dsh 运行时依赖）', () => {
   })
 })
 
-describe('AC1/AC3 注册面 pin：恰一 tool（validateMermaid 字面量单源）', () => {
-  it('apply 内恰一注册且名 = MERMAID_TOOL_NAME 单源（字面量 \'validateMermaid\'）', () => {
+describe('AC1/AC3 注册面 pin：恰两 tool（validateMermaid + convertDocument 字面量单源）', () => {
+  it('apply 内恰两注册且名 = 字面量单源（validateMermaid + convertDocument 各一）', () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
-    expect(rt.registeredTools).toHaveLength(1)
-    expect(rt.registeredTools[0]?.name).toBe(MERMAID_TOOL_NAME)
+    expect(rt.registeredTools.map((t) => t.name)).toEqual([MERMAID_TOOL_NAME, CONVERT_TOOL_NAME])
     expect(MERMAID_TOOL_NAME).toBe('validateMermaid')
+    expect(CONVERT_TOOL_NAME).toBe('convertDocument')
     dispose()
-    expect(rt.disposedCount()).toBe(1)
+    expect(rt.disposedCount()).toBe(2)
   })
 
-  it('tool 形状齐备：description / object 根 parameters / output schema+render / execute', () => {
+  it('validateMermaid 形状不变：description / object 根 parameters / output schema+render / execute', () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
-    const tool = rt.registeredTools[0]
+    const tool = rt.registeredTools.find((t) => t.name === MERMAID_TOOL_NAME)
     expect(tool?.description.length).toBeGreaterThan(20)
     expect(tool?.parameters.type).toBe('object')
     expect(Object.keys(tool?.parameters.properties ?? {}).sort()).toEqual(['docRel', 'format', 'source'])
@@ -78,10 +79,20 @@ describe('AC1/AC3 注册面 pin：恰一 tool（validateMermaid 字面量单源�
     dispose()
   })
 
+  it('convertDocument 形状齐备：params required docRel + output schema+render', () => {
+    const rt = new TempRuntime()
+    const dispose = mdMermaidPlugin(rt.ctx())
+    const tool = rt.registeredTools.find((t) => t.name === CONVERT_TOOL_NAME)
+    expect(tool?.parameters.required).toEqual(['docRel'])
+    expect(Object.keys(tool?.parameters.properties ?? {}).sort()).toEqual(['docRel', 'format', 'images', 'outRel'])
+    expect(tool?.output.schema).toBeDefined()
+    dispose()
+  })
+
   it('tool 名形 pin（OpenAI 兼容端点强校验名形）', () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
-    expect(rt.registeredTools[0]?.name).toMatch(/^[a-zA-Z0-9_-]+$/)
+    for (const tool of rt.registeredTools) expect(tool.name).toMatch(/^[a-zA-Z0-9_-]+$/)
     dispose()
   })
 

@@ -22,7 +22,7 @@ const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
 
 // 外置表：真实外部依赖（registry 可装，留 dependencies）；node 内建经 platform:"node"
 // 自动外置；react 族（peer，apps 壳层单例）自动外置由 PLATFORM_BARE 审计白名单承担。
-const EXTERNAL = ["mermaid"];
+const EXTERNAL = ["mermaid", "mammoth", "pdfjs-dist"];
 
 // 内联入口 = package.json exports 全部 dist/host 运行期入口镜像回 TS 源（单一事实源
 // ——dist/host/x.js ↔ host/x.ts 同形镜像，exports 改面入口自动随动）。

@@ -1,15 +1,16 @@
 // @dsh-forge/markdown-kit —— 插件入口（Node，cordis loader 装载面）。
 // 形态：Cordis Plugin.Function（loader 只认 default 导出，core/index.ts 同型）：
 //   inject = ['tools'] —— 唯一消费面为 dsh 官方 tool 注册面（结构化窄类型见 ./faces.ts，
-//   零 dsh 运行时依赖——plugin-forge-spec 同法）。装配：validateMermaid tool 恰一注册
-//   （tools.register），交出合并 disposer（fiber 卸载即全注销）。
+//   零 dsh 运行时依赖——plugin-forge-spec 同法）。装配：validateMermaid + convertDocument
+//   两 tool 恰各一注册（tools.register），交出合并 disposer（fiber 卸载即全注销）。
 import type { MermaidPluginContextFace } from './faces.js'
 import { createValidateMermaidTool, type ValidateMermaidToolDeps } from './tools/validate-mermaid.js'
+import { createConvertDocumentTool, type ConvertDocumentToolDeps } from './tools/convert-document.js'
 
 export const MD_MERMAID_PLUGIN_NAME = 'markdown-kit' as const
 
-/** 插件配置（本期无配置项——读取缝等依赖经工厂注入，预留 config 位） */
-export interface MdMermaidPluginConfig extends ValidateMermaidToolDeps {}
+/** 插件配置（读取缝/fs 缝等依赖经工厂注入） */
+export interface MdMermaidPluginConfig extends ValidateMermaidToolDeps, ConvertDocumentToolDeps {}
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
 export interface MdMermaidPlugin {
@@ -20,9 +21,17 @@ export interface MdMermaidPlugin {
 
 const mdMermaidPlugin: MdMermaidPlugin = Object.assign(
   (ctx: MermaidPluginContextFace, config: MdMermaidPluginConfig = {}): (() => void) => {
-    const disposeTool = ctx.tools.register(createValidateMermaidTool(config))
+    // 诊断发射面（埋点经装配期注入——DIAG_EVENT 类型化 emit，host main 进程位；
+    // 缺席 = 工具面 console 按级兜底，禁静默）
+    const diagEmit =
+      typeof ctx.emit === 'function'
+        ? (payload: Parameters<NonNullable<MermaidPluginContextFace['emit']>>[1]) => ctx.emit!('diag/log', payload)
+        : undefined
+    const disposeValidate = ctx.tools.register(createValidateMermaidTool(config))
+    const disposeConvert = ctx.tools.register(createConvertDocumentTool({ fs: config.fs, emit: diagEmit }))
     return () => {
-      disposeTool()
+      disposeValidate()
+      disposeConvert()
     }
   },
   { inject: ['tools'] as const },
@@ -31,4 +40,22 @@ const mdMermaidPlugin: MdMermaidPlugin = Object.assign(
 export default mdMermaidPlugin
 export { MERMAID_TOOL_NAME, createValidateMermaidTool, ValidateMermaidError, isValidateMermaidError } from './tools/validate-mermaid.js'
 export type { ValidateMermaidToolArgs, ValidateMermaidToolDeps, MermaidToolErrorCode } from './tools/validate-mermaid.js'
-export type { MermaidPluginContextFace, MermaidToolDefinition, ToolRegisterFace } from './faces.js'
+export {
+  CONVERT_TOOL_NAME,
+  createConvertDocumentTool,
+  ConvertDocumentError,
+  isConvertDocumentError,
+  parseConvertDocumentArgs,
+  renderConvertSummary,
+  sessionCwdOf,
+} from './tools/convert-document.js'
+export type { ConvertDocumentToolArgs, ConvertDocumentToolDeps, ConvertDocumentToolErrorCode } from './tools/convert-document.js'
+export { convertDocumentWorkspaceFile, defaultOutRelOf, assertRelUnderRoot, defaultConvertFs } from './convert/index.js'
+export type { ConvertDocumentInput, ConvertDocumentSummary, ConvertDocumentDeps, ConvertFsSeam } from './convert/index.js'
+export { convertDocxToMarkdown } from './convert/docx.js'
+export type { ConvertImageStrategy, DocxConvertOptions, DocxConvertOutcome } from './convert/docx.js'
+export { convertPdfToMarkdown } from './convert/pdf.js'
+export type { PdfConvertOutcome } from './convert/pdf.js'
+export { DOC_CONVERT_EVENT, DOC_CONVERT_FAIL_EVENT, emitConvertDiag } from './convert/diag.js'
+export type { ConvertDiagPayload, DiagEmitFace, DiagEmitter } from './convert/diag.js'
+export type { MermaidPluginContextFace, MermaidToolDefinition, ToolRegisterFace, ToolExecFace, ToolSessionFace } from './faces.js'
