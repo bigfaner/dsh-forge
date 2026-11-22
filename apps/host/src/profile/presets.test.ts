@@ -64,7 +64,9 @@ const blitzPersona = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.blit
 /** 产品分叉行（镜像 diff 豁免——差集断言另立）与产品增量行（上游没有） */
 const FORKED_ROWS = new Set(['persona', 'skill-filesystem'])
 const PRODUCT_ROWS = new Set(['plugin-forge', 'plugin-forge-spec'])
-/** 猎头工程面移除集（纯对话配置——命令/进程/文件/技能/计划/委派/目标/present 整体移除） */
+/** 猎头工程面移除集（纯对话配置——命令/进程/文件/技能/计划/委派/目标/present 整体移除；
+ *  tool-office desktop 组合 never started → preset broken 判例 2026-11-22——office 行不入
+ *  preset 子树，office 能力由宿主全局行提供） */
 const HEADHUNTER_REMOVED_ROWS = new Set([
   'tool-bash',
   'tool-pwsh',
@@ -79,6 +81,7 @@ const HEADHUNTER_REMOVED_ROWS = new Set([
   'delegation',
   'present',
   'tool-plugin-manager',
+  'tool-office',
 ])
 
 describe('底稿前置（环境门）', () => {
@@ -228,8 +231,9 @@ describe('headhunter 预设（expert-squad 0.30.0 起随包自带：plugins/expe
   const text = readFileSync(join(hostRoot(), '..', '..', 'plugins', 'expert-squad', 'cordis.patch.yml'), 'utf8')
   const rows = pluginRowBlocks(text)
   /** 猎头产品增量行（上游没有——机械 diff 豁免面；expert-squad 不落组合专行，
-   *  全工具走全局单实例注册全组合继承） */
-  const HR_PRODUCT_ROWS = new Set(PRODUCT_ROWS)
+   *  全工具走全局单实例注册全组合继承；1.34 技能预设独占收敛——skill-filesystem-
+   *  expert-squad 实例自顶层行迁入 preset 子树，随块成行） */
+  const HR_PRODUCT_ROWS = new Set([...PRODUCT_ROWS, 'skill-filesystem-expert-squad'])
 
   it('预设声明行：agent-preset 包名 + id headhunter / name 猎头模式 / description / order 3（远征·突击之后）', () => {
     expect(text).toContain('    - id: preset-headhunter')
@@ -241,8 +245,8 @@ describe('headhunter 预设（expert-squad 0.30.0 起随包自带：plugins/expe
   })
 
   it('行集 = 上游全量镜像 − 猎头工程面移除集（纯对话配置：命令/进程/文件/技能/计划/委派/目标/present 整体移除）', () => {
-    expect([...rows.keys()].filter((id) => HR_PRODUCT_ROWS.has(id))).toEqual([])
-    const expected = [...upstreamRows.keys()].filter((id) => !HEADHUNTER_REMOVED_ROWS.has(id)).sort()
+    expect([...rows.keys()].filter((id) => HR_PRODUCT_ROWS.has(id) && PRODUCT_ROWS.has(id))).toEqual([])
+    const expected = [...upstreamRows.keys()].filter((id) => !HEADHUNTER_REMOVED_ROWS.has(id)).concat([...HR_PRODUCT_ROWS].filter((id) => !PRODUCT_ROWS.has(id))).sort()
     expect([...rows.keys()].sort()).toEqual(expected)
     for (const [id, block] of upstreamRows) {
       if (FORKED_ROWS.has(id) || HEADHUNTER_REMOVED_ROWS.has(id)) continue

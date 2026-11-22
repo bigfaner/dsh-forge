@@ -34,15 +34,14 @@ import {
   dumpConfig,
   ensureHostShared,
   ensureInstalledShared,
-  expectFiveGlobalSkillRows,
   expectPresetForgeOrderPin,
+  expectPresetSkillInstances,
   expectSharedDbDispatch,
   expectSixInsertEntries,
   expectSixPkgsPresent,
   FORGE_ROW_ID,
   generationFrozen,
   invalidateInstalledShared,
-  memberSkillId,
   nodeModulesOf,
   openForgeDetail,
   openPluginManager,
@@ -176,10 +175,10 @@ test('CT-BIF-G7 #O-G7-1：共库 db 落点单源（四持库件 dbFile = {home}/
   expect(existsSync(join(env.dshHome, 'forge', 'db', 'project', 'project.db')), '零 project 单装私有库（负断言）').toBe(false)
 })
 
-test('CT-BIF-G8 #O-G8-1：standard 会话 skills 五实例可见（dump-config 合并实况——五异 id + 互异 providerName + 零装载 throw）', async () => {
+test('CT-BIF-G8 #O-G8-1：标准模式零成员技能 + preset 子树技能实例在场（dump-config 合并实况——1.34 技能预设独占收敛：顶层零五件 skills 行，双 preset 子树实例齐备 + 零装载 throw）', async () => {
   const h = await ensureHost()
   const dump = await dumpConfig(env, PROFILE)
-  expectFiveGlobalSkillRows(dump)
+  expectPresetSkillInstances(dump)
   // INV-4 零 throw：宿主存活 + boot/运行日志零装载异常（模块解析失败/未处理拒绝）
   expect(h.child.exitCode, '宿主进程存活（零装载 throw 的进程面证据）').toBeNull()
   for (const clue of ['ERR_MODULE_NOT_FOUND', 'UnhandledPromiseRejection', 'providerName 同层重名']) {
@@ -187,16 +186,16 @@ test('CT-BIF-G8 #O-G8-1：standard 会话 skills 五实例可见（dump-config �
   }
 })
 
-test('CT-BIF-G9 #O-G9-1：Forge模式预设可见性收缩面（order=2 定值 pin + preset 子树零 @dsh-forge/零 preset 层 skill 实例——desktop 挂载审计 broken 判例 2026-11-22 + global 五实例仍全局覆盖）', async () => {
+test('CT-BIF-G9 #O-G9-1：Forge模式预设可见性（order=2 定值 pin + preset 子树 skills 混合锚实例在场——1.34 技能预设独占：实例随子树嵌套，desktop profile 根求值经 DSH_HOME generation 探测兜底兼容）', async () => {
   const dump = await dumpConfig(env, PROFILE)
   expectPresetForgeOrderPin(dump)
   const forgeStart = dump.indexOf('- id: preset-forge')
   expect(forgeStart, 'preset-forge 段在场').toBeGreaterThanOrEqual(0)
   const forgeEnd = dump.indexOf('\n- id: ', forgeStart + 1)
   const forgePresetBlock = dump.slice(forgeStart, forgeEnd < 0 ? dump.length : forgeEnd)
-  expect(forgePresetBlock, 'preset 子树零 @dsh-forge 引用（子树按 profile 根解析——成员包不可达即 broken）').not.toContain('@dsh-forge/')
-  expect(dump.includes("providerName: filesystem-forge"), 'preset 层 filesystem-forge 实例零残留（收缩后技能只走 global 层）').toBe(false)
-  expectFiveGlobalSkillRows(dump)
+  expect(forgePresetBlock, 'preset 子树 skills 实例在场（filesystem-forge）').toContain('providerName: filesystem-forge')
+  expect(forgePresetBlock, 'preset 子树 skills 混合锚（customSkillDirs）').toContain('customSkillDirs')
+  expectPresetSkillInstances(dump)
 })
 
 test('CT-BIF-G10 #O-G10-1：已装副本独立存活（profile 内 client apply 面装载五件往返 + 源目录零参与零触碰）', async () => {
@@ -284,18 +283,16 @@ test('CT-BIF-B4 #O-B4-1：行级启停后组合实况一致性（被关闭件 di
   await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'project'), { timeout: 60_000 }).toBe(false)
 })
 
-test('CT-BIF-B5 #O-B5-1：五实例共存零 throw + 单件卸除余四件 skills 不受牵连（INV-4）', async () => {
+test('CT-BIF-B5 #O-B5-1：preset 子树技能实例共存零 throw + 单件停用不牵连（INV-4——实例锚独立于成员插行启停）', async () => {
   const h = await ensureHost()
-  expectFiveGlobalSkillRows(await dumpConfig(env, PROFILE))
+  expectPresetSkillInstances(await dumpConfig(env, PROFILE))
   expect(h.child.exitCode, '全量装载零 throw（进程面）').toBeNull()
   const detail = await openForgeDetail(h.page)
   await toggleRowSwitch(detail, 'knowledge', false)
   await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'knowledge'), { timeout: 60_000 }).toBe(true)
   const dump = await dumpConfig(env, PROFILE)
-  const remaining = ['project', 'spec', 'task-loop', 'expert-squad'] as const
-  for (const member of remaining) {
-    expect(dump, `卸除 knowledge 后余件 skills 行原样 ${memberSkillId(member)}`).toContain(`- id: ${memberSkillId(member)}`)
-  }
+  expect(dump, '停用 knowledge 后 preset-forge skills 实例原样（子树实例锚独立）').toContain('- id: skill-filesystem-forge')
+  expect(dump, '停用 knowledge 后 preset-headhunter skills 实例原样').toContain('- id: skill-filesystem-expert-squad')
   await toggleRowSwitch(detail, 'knowledge', true)
   await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'knowledge'), { timeout: 60_000 }).toBe(false)
 })

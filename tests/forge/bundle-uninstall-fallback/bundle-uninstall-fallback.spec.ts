@@ -1,4 +1,4 @@
-﻿// e2e 旅程 spec：卸载回落六包尽出（bundle-uninstall-fallback——forge-aggregate-bundle 1.8）。
+// e2e 旅程 spec：卸载回落六包尽出（bundle-uninstall-fallback——forge-aggregate-bundle 1.8）。
 // journey = .forge/docs/proposals/forge-aggregate-bundle/testing/bundle-uninstall-fallback/journey.md
 // contract = 同目录 contracts/bundle-uninstall.md（断言标注 CT-BUn-*；卸载链口径按任务 1.3
 // probe-uninstall 源码核销校准：机制段 = 取消选择→停插件→pnpm remove→发布 resolution；
@@ -18,7 +18,7 @@ import {
   comboEnv,
   comboGateOn,
   dumpConfig,
-  expectFiveGlobalSkillRows,
+  expectPresetSkillInstances,
   forgeInstallSource,
   launchWebHost,
   nodeModulesOf,
@@ -111,19 +111,19 @@ test('CT-BUn-B1 #O-B1-1：磁盘残层核验（lockfile 零六包悬空引用）
   }
 })
 
-test('CT-BUn-G4 #O-G4-1：重装默认激活态（无残留污染——project 行回激活 + 五件 skills 面恢复）', async () => {
+test('CT-BUn-G4 #O-G4-1：重装默认激活态（无残留污染——project 行回激活 + preset 子树技能实例恢复）', async () => {
   const add = await pluginAdd(env, forgeInstallSource(env), PROFILE)
   expect(add.code, `重装成功（exit=${String(add.code)}）`).toBe(0)
   cheapGenerationGate(nodeModulesOf(env, PROFILE))
   // user 层残留被吸收（patch.ts:17 合并语义——bundle 层 enabled ⇒ 孤立 override 删除）
   await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), 'project'), { timeout: 60_000 }).toBe(false)
-  expectFiveGlobalSkillRows(await dumpConfig(env, PROFILE))
+  expectPresetSkillInstances(await dumpConfig(env, PROFILE))
 })
 
-test('CT-BUn-B4 #O-B4-1：卸后重装 skills 端到端零 throw（宿主存活 + 五实例齐备）', async () => {
+test('CT-BUn-B4 #O-B4-1：卸后重装 skills 端到端零 throw（宿主存活 + 双 preset 子树实例齐备）', async () => {
   const h = await ensureHost()
   expect(h.child.exitCode, '宿主进程存活（零装载 throw 进程面）').toBeNull()
-  expectFiveGlobalSkillRows(await dumpConfig(env, PROFILE))
+  expectPresetSkillInstances(await dumpConfig(env, PROFILE))
 })
 
 test('CT-BUn-B2 #O-B2-1：重复卸载幂等（六包尽出后再次卸载零破坏性错误）', async () => {

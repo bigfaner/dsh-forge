@@ -68,16 +68,46 @@ function skillsRows(pkg: Five): { id: string; body: string }[] {
   return topLevelRows(patchText[pkg]).filter((r) => r.id.startsWith("skill-filesystem"));
 }
 
-const allSkillsRows = FIVE.flatMap(skillsRows);
+/** 顶层退役成员（1.34 技能预设独占收敛——skills 实例迁入 preset 子树，零顶层行）。 */
+const PRESET_NESTED = ["expert-squad"] as const;
+const PRESET_OF: Record<(typeof PRESET_NESTED)[number], string> = { "expert-squad": "preset-headhunter" };
+
+const allSkillsRows = FIVE.map((p) => ({
+  pkg: p,
+  id: EXPECTED_ID[p],
+  body: (PRESET_NESTED as readonly string[]).includes(p)
+    ? presetNestedSkillRow(patchText[p], EXPECTED_ID[p])
+    : skillsRows(p)[0]!.body,
+}));
+
+/** preset 子树嵌套 skills 实例行块（id 行起至下一个 `- id:` 行止——preset-headhunter
+ * 子树内嵌套实例提取；1.34 技能预设独占收敛——expert-squad 顶层行退役迁入子树）。 */
+function presetNestedSkillRow(yaml: string, id: string): string {
+  const lineMatch = yaml.match(new RegExp(`^[ \\t]*- id: ${id}[ \\t]*$`, "m"));
+  expect(lineMatch, `${id} 嵌套实例在场`).not.toBeNull();
+  const start = yaml.indexOf(lineMatch![0]);
+  const body: string[] = [yaml.slice(start).split(/\r?\n/)[0]!];
+  for (const line of yaml.slice(start).split(/\r?\n/).slice(1)) {
+    if (/^\s*- id: /.test(line)) break;
+    body.push(line);
+  }
+  return body.join("\n");
+}
 
 describe("三谓词（五件 skills 自持行——id 互异 ∩ ≠ base id ∩ providerName 互异 ≠ 默认名）", () => {
-  it("每件恰一条顶层 skills 行，id = skill-filesystem-<pkg>（spec 既有行连 id 一起改异）", () => {
+  it("四件恰一条顶层 skills 行 id = skill-filesystem-<pkg>；expert-squad 顶层行退役（preset-headhunter 子树实例承载）", () => {
     for (const pkg of FIVE) {
       const rows = skillsRows(pkg);
+      if ((PRESET_NESTED as readonly string[]).includes(pkg)) {
+        expect(rows, `${pkg} 顶层 skills 行退役（子树实例承载）`).toHaveLength(0);
+        continue;
+      }
       expect(rows, `${pkg} 顶层 skills 行数`).toHaveLength(1);
       expect(rows[0]!.id, `${pkg} skills 行 id`).toBe(EXPECTED_ID[pkg]);
       expect(rows[0]!.body, `${pkg} 行 name`).toContain(`name: '${SKILL_FS_PACKAGE}'`);
     }
+    const squadBody = presetNestedSkillRow(patchText["expert-squad"], EXPECTED_ID["expert-squad"]);
+    expect(squadBody, "expert-squad 子树实例 name").toContain(`name: '${SKILL_FS_PACKAGE}'`);
   });
 
   it("五行 id 互异且 ≠ base id skill-filesystem（fefd5149：同 id 被官方定点 disable 命中）", () => {
@@ -91,11 +121,10 @@ describe("三谓词（五件 skills 自持行——id 互异 ∩ ≠ base id ∩
 
   it("五行 providerName 互异且 ≠ 默认名 filesystem（同层重名注册 loud-fail——探针④新发现阻碍）", () => {
     const names = allSkillsRows.map((r) => /^\s*providerName:\s*(\S+)/m.exec(r.body)?.[1]);
-    for (const pkg of FIVE) {
-      const rows = skillsRows(pkg);
-      const name = /^\s*providerName:\s*(\S+)/m.exec(rows[0]!.body)?.[1];
-      expect(name, `${pkg} providerName 在场`).toBeDefined();
-      expect(name, `${pkg} providerName`).toBe(`filesystem-${pkg}`);
+    for (const row of allSkillsRows) {
+      const name = /^\s*providerName:\s*(\S+)/m.exec(row.body)?.[1];
+      expect(name, `${row.pkg} providerName 在场`).toBeDefined();
+      expect(name, `${row.pkg} providerName`).toBe(`filesystem-${row.pkg}`);
     }
     expect(new Set(names).size, "providerName 互异").toBe(names.length);
     for (const name of names) {
@@ -107,7 +136,7 @@ describe("三谓词（五件 skills 自持行——id 互异 ∩ ≠ base id ∩
 describe("自锚面（customSkillDirs 本包锚 + && 短路兜底 + ./package.json 出口前提）", () => {
   it("四件新增行 customSkillDirs 表达式自锚本包 skills/，且携 && 短路兜底（防锚解析异常冒泡打断行激活；spec 既有行表达式不动）", () => {
     for (const pkg of FIVE) {
-      if (pkg === "spec") continue;
+      if (pkg === "spec" || (PRESET_NESTED as readonly string[]).includes(pkg)) continue;
       const expr = /!!js\s+(.+)$/m.exec(skillsRows(pkg)[0]!.body)?.[1];
       expect(expr, `${pkg} !!js 锚表达式在场`).toBeDefined();
       expect(expr).toContain(`resolve('${PKG_NAME[pkg]}/package.json')`);
@@ -118,6 +147,21 @@ describe("自锚面（customSkillDirs 本包锚 + && 短路兜底 + ./package.js
     expect(specExpr, "spec 锚表达式在场").toBeDefined();
     expect(specExpr).toContain(`resolve('${PKG_NAME.spec}/package.json')`);
     expect(specExpr, "spec 锚定 skills/").toMatch(/,\s*'skills'\)/);
+  });
+
+  it("preset 子树嵌套实例混合锚形态（1.34 技能预设独占收敛——expert-squad preset-headhunter 子树：IIFE try/catch 双腿形，baseUrl 解析优先 + DSH_HOME generation 探测兜底，零 throw 冒泡）", () => {
+    for (const pkg of PRESET_NESTED) {
+      const body = presetNestedSkillRow(patchText[pkg], EXPECTED_ID[pkg]);
+      const expr = /!!js\s+(.+)$/m.exec(body)?.[1];
+      expect(expr, `${pkg} !!js 混合锚表达式在场`).toBeDefined();
+      expect(expr, `${pkg} IIFE try/catch 形`).toMatch(/^\(\(\)=>\{try\{return /);
+      expect(expr, `${pkg} baseUrl 腿（resolve 本包 package.json）`).toContain(`createRequire(baseUrl).resolve('${PKG_NAME[pkg]}/package.json')`);
+      expect(expr, `${pkg} DSH_HOME generation 探测兜底腿`).toContain("process.env.DSH_HOME");
+      expect(expr, `${pkg} generation 目录前缀探测`).toContain("dsh-forge+forge+");
+      expect(expr, `${pkg} fs/path 经 process.getBuiltinModule`).toContain("process.getBuiltinModule('node:fs')");
+      expect(expr, `${pkg} 零裸 throw`).not.toContain("throw ");
+      expect(body, `${pkg} 实例在 ${PRESET_OF[pkg]} 子树内（深层缩进嵌套）`).toMatch(/^ {6,}- id:/m);
+    }
   });
 
   it("四件 package.json 补 ./package.json exports 键（spec 既有先例形态）", () => {
@@ -131,11 +175,9 @@ describe("自锚面（customSkillDirs 本包锚 + && 短路兜底 + ./package.js
 });
 
 describe("负断言（禁无 providerName 的裸 filesystem 行）", () => {
-  it("五件 patch 顶层 skills 行一律显式携带 providerName，零裸行", () => {
-    for (const pkg of FIVE) {
-      for (const row of skillsRows(pkg)) {
-        expect(row.body, `${pkg} 行 ${row.id} 缺 providerName`).toMatch(/^\s*providerName:/m);
-      }
+  it("五件 patch skills 行（顶层 + preset 子树嵌套）一律显式携带 providerName，零裸行", () => {
+    for (const row of allSkillsRows) {
+      expect(row.body, `${row.pkg} 行 ${row.id} 缺 providerName`).toMatch(/^\s*providerName:/m);
     }
   });
 });
@@ -203,11 +245,25 @@ describe("forge patch 六插行（静态直检——直写正本）", () => {
     }
   });
 
-  it("forge patch 零顶层 skills 行且零 preset 内 skill-filesystem 实例（desktop preset 子树按 profile 根解析——@dsh-forge/* 不可达即 preset broken 被过滤；技能由五件 patch 谁带谁自持全局覆盖）", () => {
+  it("forge patch 零顶层 skills 行 + preset-forge 子树 skill-filesystem-forge 实例混合锚（1.34 技能预设独占收敛——标准模式零成员技能，技能走 preset 子树实例；顶层禁承带由 package-release 机检守卫）", () => {
     expect(topLevelIds(FORGE_PATCH).filter((id) => id.startsWith("skill-filesystem"))).toEqual([]);
-    expect(FORGE_PATCH).not.toMatch(/^- id: skill-filesystem\S*$/m);
-    const codeLines = FORGE_PATCH.split("\n").filter((line) => !line.trim().startsWith("#")).join("\n");
-    expect(codeLines, "零 skill-filesystem 实例行（注释提及不算）").not.toContain("skill-filesystem");
+    expect(FORGE_PATCH).not.toMatch(/^ {0,4}- id: skill-filesystem\S*$/m);
+    // preset-forge 子树实例在场（嵌套形——零顶层承带）
+    expect(FORGE_PATCH).toContain("- id: skill-filesystem-forge");
+    expect(FORGE_PATCH).toContain("providerName: filesystem-forge");
+    const anchorStart = FORGE_PATCH.indexOf("- id: skill-filesystem-forge");
+    const instanceBody = FORGE_PATCH.slice(anchorStart);
+    // 混合锚形态：五成员锚逐件 IIFE try/catch 双腿形（baseUrl 解析优先 + DSH_HOME
+    // generation 探测兜底，desktop profile 根 baseUrl 必失败落兜底），零裸 throw
+    for (const member of MEMBERS) {
+      const expr = instanceBody.split("\n").find((l) => l.includes(`'@dsh-forge/${member}/package.json'`));
+      expect(expr, `${member} 锚行在场`).toBeDefined();
+      expect(expr, `${member} IIFE try/catch 形`).toMatch(/\(\(\)=>\{try\{return .+catch\(e\)\{/);
+      expect(expr, `${member} baseUrl 腿`).toContain(`createRequire(baseUrl).resolve('@dsh-forge/${member}/package.json')`);
+      expect(expr, `${member} DSH_HOME generation 探测兜底腿`).toContain("process.env.DSH_HOME");
+      expect(expr, `${member} generation 目录前缀探测`).toContain("dsh-forge+forge+");
+      expect(expr, `${member} 零裸 throw`).not.toContain("throw ");
+    }
   });
 });
 
@@ -239,9 +295,7 @@ describe("preset-forge 静态直检（直写正本）", () => {
     expect(presetBody).toMatch(/^        order: 2$/m);
   });
 
-  it("preset 子树零 @dsh-forge 引用 + 零 desktop never-started 行（registry 挂载审计 broken 判例 desktop 2026-11-22——子树解析基点回退 profile 根，成员包不可达；tool-office 在 desktop 组合 never started；成员能力经顶层插行装载）", () => {
-    expect(presetBody).not.toContain("@dsh-forge/");
-    expect(presetBody).not.toContain("customSkillDirs");
+  it("preset 子树零 desktop never-started 官方件行（registry 挂载审计 broken 判例 desktop 2026-11-22——tool-office 在 desktop 组合 never started；技能实例混合锚兼容 desktop profile 根求值基点——baseUrl 腿失败落 DSH_HOME generation 探测兜底）", () => {
     expect(presetBody, "tool-office 不入 preset 子树（desktop never started → broken）").not.toContain("tool-office");
   });
 });

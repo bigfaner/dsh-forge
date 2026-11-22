@@ -15,8 +15,8 @@ import {
   dumpConfig,
   ensureHostShared,
   ensureInstalledShared,
-  expectFiveGlobalSkillRows,
   expectPresetForgeOrderPin,
+  expectPresetSkillInstances,
   FORGE_PKG,
   FORGE_ROW_ID,
   invalidateInstalledShared,
@@ -64,25 +64,30 @@ test('CT-BPf-G1 #O-G1-1：预设选择器 Forge模式在场 + order=2 pin（真�
 test('CT-BPf-G2 #O-G2-1：官方 standard 预设原样（order=1 + 零 forge 覆写）', async () => {
   const dump = await dumpConfig(env, PROFILE)
   expect(presetOrderOf(dump, 'preset-standard'), 'standard 预设 order=1（官方底稿核销值）').toBe(1)
-  // INV-1：standard 段零 preset-forge 注入痕迹（收缩面 2026-11-22——preset 层 filesystem-forge 实例全 dump 零残留）
-  expect(dump.includes("providerName: filesystem-forge"), 'preset 层实例零残留（技能只走 global 层）').toBe(false)
+  // INV-1：standard 段零 preset-forge 注入痕迹（1.34 收敛——skills 实例归 preset-forge/
+  // preset-headhunter 子树，standard 段零 filesystem-forge 残留）
+  const stdStart = dump.indexOf('- id: preset-standard')
+  expect(stdStart, 'standard 预设段在场').toBeGreaterThanOrEqual(0)
+  const stdEnd = dump.indexOf('\n- id: ', stdStart + 1)
+  const stdBlock = dump.slice(stdStart, stdEnd < 0 ? dump.length : stdEnd)
+  expect(stdBlock, 'standard 段零 skills 实例注入（技能预设独占——实例归 forge/headhunter 子树）').not.toContain('filesystem-forge')
 })
 
-test('CT-BPf-G3 #O-G3-1：Forge模式插行成套生效（persona 行 + 收缩子树零 @dsh-forge + 裁剪工具集非空）', async () => {
+test('CT-BPf-G3 #O-G3-1：Forge模式插行成套生效（persona 行 + preset 子树 skills 混合锚实例 + 裁剪工具集非空）', async () => {
   const dump = await dumpConfig(env, PROFILE)
   // 行为语义判定：persona 行在 forge 预设内成套（零字面锁定——演进友好）
   const forgeStart = dump.indexOf('- id: preset-forge')
   const forgeEnd = dump.indexOf('\n- id: ', forgeStart + 1)
   const forgePresetBlock = dump.slice(forgeStart, forgeEnd < 0 ? dump.length : forgeEnd)
   expect(forgePresetBlock, 'persona 行成套在场（@deepseek-ai/dsh-persona）').toContain("- name: '@deepseek-ai/dsh-persona'")
-  expect(forgePresetBlock, 'preset 子树零 @dsh-forge 引用（desktop 挂载审计 broken 判例 2026-11-22）').not.toContain('@dsh-forge/')
+  expect(forgePresetBlock, 'preset 子树 skills 混合锚实例在场（1.34 技能预设独占——filesystem-forge）').toContain('providerName: filesystem-forge')
+  expect(forgePresetBlock, 'preset 子树 skills 混合锚（customSkillDirs）').toContain('customSkillDirs')
   expect(forgePresetBlock, '裁剪工具集行成套在场（tool-bash/tool-pwsh/tool-fs 插行——standard 同构裁剪新形态）').toContain('- id: tool-fs')
 })
 
-test('CT-BPf-G4 #O-G4-1：skills 单层 global 可见（五实例标识互异零 throw + preset 层实例零残留）', async () => {
+test('CT-BPf-G4 #O-G4-1：skills 预设独占判定（双 preset 子树实例齐备 + 标准模式零顶层成员技能 + 零 throw）', async () => {
   const dump = await dumpConfig(env, PROFILE)
-  expect(dump.includes("providerName: filesystem-forge"), 'preset 层 filesystem-forge 实例零残留').toBe(false)
-  expectFiveGlobalSkillRows(dump)
+  expectPresetSkillInstances(dump)
 })
 
 test('CT-BPf-B2 #O-B2-1：bundle 停用后 forge 预设缺席、standard 不受影响；重开恢复', async () => {
@@ -92,6 +97,8 @@ test('CT-BPf-B2 #O-B2-1：bundle 停用后 forge 预设缺席、standard 不受�
   await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), { timeout: 60_000 }).toBe(true)
   const off = await dumpConfig(env, PROFILE)
   expect(off.includes('- id: preset-forge'), '停用期 forge 预设行缺席').toBe(false)
+  expect(off.includes('- id: skill-filesystem-forge'), '停用期 preset 子树 skills 实例随行缺席').toBe(false)
+  expect(off.includes('- id: skill-filesystem-expert-squad'), '停用期 headhunter 子树实例不受牵连').toBe(true)
   expect(off.includes('- id: headhunter') || off.includes('order: 1'), 'standard 官方预设不受影响').toBe(true)
   await toggleRowSwitch(detail, FORGE_ROW_ID, true)
   await expect.poll(() => overrideDisabled(readProfilePatch(env, PROFILE), FORGE_ROW_ID), { timeout: 60_000 }).toBe(false)

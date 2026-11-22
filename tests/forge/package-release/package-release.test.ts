@@ -293,19 +293,10 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     expect(violations.some((v) => v.includes('bundle') && v.includes('overrides'))).toBe(true)
   })
 
-  it('bundle 交付 patch 增补 skills 行（bundle 通道成员 patch 不装载——id/providerName 互异 + 自锚 members/<pkg>/skills）', () => {
+  it('bundle 交付 patch 顶层零 skills 行（forge-aggregate-bundle 1.34 技能预设独占收敛——顶层增补退役为设计，标准模式零成员技能；源码/solo 通道零回归）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     const bundlePatch = readFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), 'utf8')
-    for (const short of ['alpha', 'beta']) {
-      expect(bundlePatch, `id 行 skill-filesystem-${short}`).toContain(`- id: skill-filesystem-${short}`)
-      expect(bundlePatch, `providerName 互异 filesystem-${short}`).toContain(`providerName: filesystem-${short}`)
-      expect(bundlePatch, `自锚 @dsh-forge/${short}/package.json（baseUrl 相对交付目录 forge 解析）`).toContain(
-        `resolve('@dsh-forge/${short}/package.json')`,
-      )
-      expect(bundlePatch, `!!js 短路表达式`).toContain(`!!js `)
-      expect(bundlePatch, `skills 目录锚`).toContain(`, 'skills')`)
-    }
-    // 发布树/solo 通道零回归：源码 patch 与 solo 副本零 skills 行（「谁带谁自持」语义不变）
+    expect(bundlePatch).not.toMatch(/^ {0,4}- id: skill-filesystem-\S+$/m)
     expect(bundlePatch).not.toMatch(/- id: skill-filesystem$/m)
     const sourcePatch = readFileSync(join(root, 'plugins/forge/cordis.patch.yml'), 'utf8')
     expect(sourcePatch).not.toContain('skill-filesystem-alpha')
@@ -313,12 +304,48 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     expect(soloPatch).not.toContain('skill-filesystem-')
   })
 
-  it('反例·交付 patch 缺 skills 行：闭包机检红（缺行即红）', () => {
+  it('preset-forge 子树 skills 实例随正本承带 + preset-headhunter 搬移块 skills 实例不丢失（机检实例在场断言）', () => {
+    // fixture forge patch 注入 preset-forge 子树嵌套实例（真仓正本同构最小形）
+    const forgePatchPath = join(root, 'plugins/forge/cordis.patch.yml')
+    writeFileSync(forgePatchPath, [
+      '- insert:',
+      "    - id: forge",
+      "      name: '@dsh-forge/forge'",
+      "      config:",
+      "        home: 'demo'",
+      "    - id: alpha",
+      "      name: '@dsh-forge/alpha'",
+      "    - id: beta",
+      "      name: '@dsh-forge/beta'",
+      "    - id: preset-forge",
+      "      name: '@deepseek-ai/dsh-agent-preset'",
+      "      config:",
+      "        order: 2",
+      "        plugins:",
+      "          - id: skill-filesystem-forge",
+      "            name: '@deepseek-ai/dsh-skill-filesystem'",
+      "            config:",
+      "              providerName: filesystem-forge",
+      "              customSkillDirs:",
+      "                - !!js (()=>{try{return baseUrl}catch(e){return undefined}})()",
+      '',
+    ].join('\n'))
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })).toEqual([])
+    const bundlePatch = readFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), 'utf8')
+    expect(bundlePatch).toContain('- id: skill-filesystem-forge')
+    expect(bundlePatch).toContain('providerName: filesystem-forge')
+  })
+
+  it('反例·交付 patch 顶层承带 skills 行：闭包机检红（顶层禁承带——preset 子树嵌套实例不误伤）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     const patchPath = join(outDir, 'bundle/forge/cordis.patch.yml')
-    writeFileSync(patchPath, readFileSync(patchPath, 'utf8').replace(`- id: skill-filesystem-alpha\n`, ''))
+    writeFileSync(patchPath, `${readFileSync(patchPath, 'utf8')}- insert:\n  - id: skill-filesystem-alpha\n    name: '@deepseek-ai/dsh-skill-filesystem'\n`)
     const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
-    expect(violations.some((v) => v.includes('交付 patch 缺 skills 行 skill-filesystem-alpha'))).toBe(true)
+    expect(violations.some((v) => v.includes('顶层禁承带 skills 行') && v.includes('skill-filesystem-alpha'))).toBe(true)
+    // 子树嵌套形不误伤：深层缩进实例零新增违规
+    writeFileSync(patchPath, `${readFileSync(patchPath, 'utf8')}          - id: skill-filesystem-nested\n            name: '@deepseek-ai/dsh-skill-filesystem'\n`)
+    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root }).some((v) => v.includes('skill-filesystem-nested'))).toBe(false)
   })
 
   it('成员自带插行随包收录（members 侧 solo 语义不回归）', () => {

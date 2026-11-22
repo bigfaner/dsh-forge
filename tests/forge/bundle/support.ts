@@ -15,8 +15,9 @@
 // - 服务面 bundle 特有标记 = 六包 client 产物 banner 代际戳
 //   `@dsh-forge-generation:<pkg>@<version>`（generationMarker——generationDriftViolations
 //   manifest+服务面双校验）+ host `forge-bundle-apply` diag 事件（1.6 薄 apply emitDiag）；
-// - skills 行锚 = `--dump-config` 合并实况 `- id: skill-filesystem-<member>` +
-//   `providerName: filesystem-<member>`（五异 id/互异 providerName，fefd5149 双改行）；
+// - skills 行锚 = `--dump-config` 合并实况 preset 子树嵌套实例 `- id: skill-filesystem-forge`
+//   （preset-forge 子树）+ `- id: skill-filesystem-expert-squad`（preset-headhunter 子树）+
+//   `providerName: filesystem-<…>`（1.34 技能预设独占收敛——顶层零成员 skills 行）；
 // - order pin = dump-config 中 forge 预设行 `order: 2` 定值（CT-BPf-B3 反例注入载体）。
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -141,14 +142,16 @@ export function expectSixPkgsAbsent(nodeModules: string): void {
   }
 }
 
-// ── dump-config faces（skills 行 / 六插行 / 预设 / db 派发） ─────────────────────────
+// ── dump-config faces（skills 实例 / 六插行 / 预设 / db 派发） ─────────────────────────
 export interface SkillRowFace {
   readonly id: string
   readonly providerName: string
   readonly customSkillDirsAnchored: boolean
+  /** 行缩进列数（顶层承带行 ≤4、preset 子树嵌套实例 ≥6——1.34 技能预设独占判定锚） */
+  readonly indent: number
 }
 
-/** 提取 dump-config 中的 skills 行（`- id: skill-filesystem*` 块：id + providerName + customSkillDirs 锚）。
+/** 提取 dump-config 中的 skills 行（`- id: skill-filesystem*` 块：id + providerName + customSkillDirs 锚 + 缩进）。
  * 形态适配（真机收口轮实锚）：现行 dsh 世代 dump-config 的 skills 行随所属块缩进嵌套
  * （preset 行 6–8 空格 + providerName 在 config: 下）——行块按「下一个 `- id: ` 行」界定，
  * 不锁缩进字面。 */
@@ -156,31 +159,43 @@ export function skillRows(dump: string): readonly SkillRowFace[] {
   const lines = dump.split(/\r?\n/)
   const rows: SkillRowFace[] = []
   for (let i = 0; i < lines.length; i++) {
-    const m = lines[i]!.match(/^\s*- id: (skill-filesystem\S*)\s*$/)
+    const m = lines[i]!.match(/^(\s*)- id: (skill-filesystem\S*)\s*$/)
     if (m === null) continue
     const blockLines: string[] = []
     for (let j = i + 1; j < lines.length && !/^\s*- id: /.test(lines[j]!); j++) blockLines.push(lines[j]!)
     const block = blockLines.join('\n')
     const pm = block.match(/^[ \t]+providerName: (\S+)\s*$/m)
-    rows.push({ id: m[1]!, providerName: pm?.[1] ?? '(缺)', customSkillDirsAnchored: block.includes('customSkillDirs') })
+    rows.push({
+      id: m[2]!,
+      providerName: pm?.[1] ?? '(缺)',
+      customSkillDirsAnchored: block.includes('customSkillDirs'),
+      indent: m[1]!.length,
+    })
   }
   return rows
 }
 
-/** 五件 global 层 skills 行三谓词 + 负断言（CT-BIF-G8 / CT-BSo-G3 同源判定） */
-export function expectFiveGlobalSkillRows(dump: string): void {
+/** 技能预设独占判定（1.34 收敛——CT-BIF-G8/G9 / CT-BPf-G4 / CT-BUn 同源判定）：
+ * preset-forge 子树 skill-filesystem-forge 实例 + preset-headhunter 子树
+ * skill-filesystem-expert-squad 实例在场（providerName + customSkillDirs 锚齐备）；
+ * 标准模式（global 顶层）零成员 skills 行。 */
+export function expectPresetSkillInstances(dump: string): void {
   const rows = skillRows(dump)
-  for (const member of MEMBERS) {
-    const hit = rows.find((r) => r.id === memberSkillId(member))
-    expect(hit, `skills 行在场 ${memberSkillId(member)}`).toBeDefined()
-    expect(hit!.providerName, `providerName 互异值 ${memberProvider(member)}`).toBe(memberProvider(member))
-    expect(hit!.customSkillDirsAnchored, `customSkillDirs 自锚本包 dist/skills/${member}`).toBe(true)
+  for (const [id, provider] of [
+    ['skill-filesystem-forge', 'filesystem-forge'],
+    ['skill-filesystem-expert-squad', 'filesystem-expert-squad'],
+  ] as const) {
+    const hit = rows.find((r) => r.id === id)
+    expect(hit, `preset 子树 skills 实例在场 ${id}`).toBeDefined()
+    expect(hit!.providerName, `providerName ${provider}`).toBe(provider)
+    expect(hit!.customSkillDirsAnchored, `customSkillDirs 混合锚在场 ${id}`).toBe(true)
+    expect(hit!.indent, `实例随 preset 子树嵌套（非顶层承带）${id}`).toBeGreaterThanOrEqual(6)
   }
-  const ids = rows.map((r) => r.id)
-  expect(new Set(ids).size, '五异 id（互异可判）').toBe(ids.length)
-  expect(ids, '零官方 base id 行（fefd5149 双改负断言）').not.toContain('skill-filesystem')
+  const globals = rows.filter((r) => r.indent <= 4)
+  expect(globals.map((r) => r.id), '标准模式零顶层成员 skills 行（技能预设独占收敛）').toEqual([])
+  expect(rows.map((r) => r.id), '零官方 base id 行（fefd5149 双改负断言）').not.toContain('skill-filesystem')
   const providers = rows.map((r) => r.providerName)
-  expect(new Set(providers).size, 'providerName 五实例互异（INV-4）').toBe(providers.length)
+  expect(new Set(providers).size, 'providerName 互异（INV-4）').toBe(providers.length)
   expect(providers, '零默认名 providerName').not.toContain('filesystem')
 }
 
