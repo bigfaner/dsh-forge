@@ -1,6 +1,7 @@
 // forge 契约测试①：patch 形态（forge-aggregate-bundle——聚合 bundle 六插行介质）。
 // 顶层行 = 六插行（forge 自插 + 五件插行各携派发 config !!js 行——插行激活官方默认
-// 路径）+ 五件 skills 行（异 id + 互异 providerName 自锚本包 skills/）+ preset-forge。
+// 路径）+ preset-forge（1.34 技能预设独占收敛——skills 实例嵌套在 preset 子树内，
+// 零顶层 skills 行，标准模式零成员技能）。
 // 派发映射/自锚逐字符断言归 tests/forge/skills-rows-contract.test.ts
 // 与 plugins/forge/tests/config-contract.test.ts；本文件为行形态速查 pin。
 // （对齐 plugins/project skeleton.test.ts 先例：patch 面文本结构机检。）

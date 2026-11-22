@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/forge",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "private": true,
   "type": "module",
   "description": "forge 聚合 Bundle 壳（防双激活守卫薄 host + 自有 client 视图入口 + 六插行直写 patch + 双链打包——forge-aggregate-bundle 形态）。",

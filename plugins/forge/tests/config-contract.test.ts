@@ -44,8 +44,8 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
     expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "" })).toBeUndefined();
   });
 
-  it("全 patch 派发表达式缺省派生封闭：DSH_HOME 派生点缺席一律产 undefined（false 漂移即红——bug 674119f2）", () => {
-    const envPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!).filter((p) => p.includes("process.env.DSH_HOME"));
+  it("全 patch 派发表达式缺省派生封闭：DSH_HOME 派生点缺席一律产 undefined（false 漂移即红——bug 674119f2；preset 子树技能混合锚 IIFE 双腿形单列——兜底腿含 DSH_HOME 但形态为 try/catch 探测，非 `|| undefined &&` 派生面）", () => {
+    const envPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!).filter((p) => p.includes("process.env.DSH_HOME") && !p.startsWith("(()=>{"));
     expect(envPoints.length).toBeGreaterThanOrEqual(6);
     for (const expr of envPoints) {
       expect(expr, `缺省派生 undefined 形态：${expr}`).toMatch(/^\(process\.env\.DSH_HOME \|\| undefined\) && /);
@@ -54,22 +54,37 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
     }
   });
 
-  it("占位符物化面封闭：!!js 求值点 = forge 行 home 表达式 + 五件插行派发表达式 + 官方 preset 底稿平台/禁用表达式，无 {projectDir}/{homeDir} 模板，preset 子树零成员包自锚（desktop preset 子树按 profile 根解析——@dsh-forge/* 不可达即 broken，判例 2026-11-22）", () => {
+  it("preset 子树技能混合锚封闭：五成员锚 IIFE try/catch 双腿形（baseUrl 解析优先 + DSH_HOME generation 探测兜底，desktop profile 根 baseUrl 必失败落兜底），零 throw 冒泡（1.34 技能预设独占收敛）", () => {
+    const anchorPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(\(\(\)=>\{.*\}\)\(\))$/gm)].map((m) => m[1]!);
+    expect(anchorPoints, "五成员混合锚逐件在场").toHaveLength(5);
+    for (const member of ["project", "spec", "task-loop", "expert-squad", "knowledge"] as const) {
+      const expr = anchorPoints.find((p) => p.includes(`'@dsh-forge/${member}/package.json'`));
+      expect(expr, `${member} 锚在场`).toBeDefined();
+      expect(expr, `${member} baseUrl 腿`).toContain(`createRequire(baseUrl).resolve('@dsh-forge/${member}/package.json')`);
+      expect(expr, `${member} DSH_HOME generation 探测兜底腿`).toContain("process.env.DSH_HOME");
+      expect(expr, `${member} 零裸 throw`).not.toContain("throw ");
+      // 形态可求值（真实 process——合法 JS 语法面）：DSH_HOME 缺席兜底腿 → undefined
+      expect(new Function(`"use strict"; return (${expr});`)(), `${member} 兜底腿求值 undefined（DSH_HOME 缺席）`).toBeUndefined();
+    }
+  });
+
+  it("占位符物化面封闭：!!js 求值点 = forge 行 home 表达式 + 五件插行派发表达式 + 官方 preset 底稿平台/禁用表达式 + preset 子树技能混合锚 ×5，无 {projectDir}/{homeDir} 模板", () => {
     expect(patchYaml).not.toContain("{projectDir}");
     expect(patchYaml).not.toContain("{homeDir}");
     const jsPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!);
     expect(jsPoints[0]).toBe(HOME_EXPR);
-    // preset 子树零成员包自锚（判例 2026-11-22：子树解析基点回退 profile 根，
-    // @dsh-forge/* 不可达 → preset broken → UI 过滤；技能由五件 patch 顶层 skills 行全局覆盖）。
-    expect(jsPoints.filter((p) => p.includes("/package.json"))).toHaveLength(0);
-    const otherPoints = jsPoints.slice(1);
+    // preset 子树技能混合锚（IIFE 双腿形——形态断言归本文件混合锚封闭 + skills-rows-contract）
+    const skillAnchors = jsPoints.filter((p) => p.startsWith("(()=>{"));
+    expect(skillAnchors).toHaveLength(5);
+    const otherPoints = jsPoints.slice(1).filter((p) => !p.startsWith("(()=>{"));
     // 非自锚点 = 五件插行派发 config 表达式 ×6（home/dbFile/tasksHome——静态直检归
     // tests/forge/skills-rows-contract.test.ts）+ 官方 preset 底稿 platform 禁用
     // 表达式 ×2 + plugin-manager profileContext ×1。
     expect(otherPoints).toHaveLength(9);
     expect(otherPoints.filter((p) => p.startsWith("process.platform"))).toHaveLength(2);
     expect(otherPoints.filter((p) => p.includes("profileContext"))).toHaveLength(1);
-    for (const point of jsPoints) {
+    // 模板占位符负断言（锚点 IIFE 形自带函数体花括号——非模板语义，不纳入）
+    for (const point of otherPoints) {
       expect(point).not.toMatch(/\{[^}]+\}/);
     }
   });
