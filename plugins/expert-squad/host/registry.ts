@@ -10,6 +10,7 @@
 
 import type { Context } from "@deepseek-ai/cordis";
 import {
+  INSTANCE_ID_PLUGIN_FALLBACK,
   ORIGIN_PRIORITY,
   scanExpertRoots,
   type ExpertOrigin,
@@ -164,7 +165,7 @@ export class ExpertsRegistry implements ExpertsService {
 
   /** 索引整体换代：重扫全部 root + 重载启停态（watch 失效回调的落点）。 */
   async refresh(): Promise<void> {
-    const roots = [...this.options.roots(), ...this.extraRoots];
+    const roots = orderScanRoots([...this.options.roots(), ...this.extraRoots]);
     const snapshot = await scanExpertRoots(roots);
     const workspace = this.options.workspace;
     if (this.options.state !== undefined && workspace !== undefined) {
@@ -293,6 +294,35 @@ export class ExpertsRegistry implements ExpertsService {
 /** 启停可见性单点谓词：禁用默认不可见，includeDisabled 显式开启才含。 */
 function visible(disabled: boolean, includeDisabled?: boolean): boolean {
   return !disabled || includeDisabled === true;
+}
+
+/**
+ * 跨插件同键定序（ORDER_RULE）：多插件内置层（plugin origin root）同键冲突时按
+ * 插件名稳定字典序取后者——与 root 注册/装配序无关。落点在本层（refresh 进
+ * scanExpertRoots 前）：scan 层同层同键先扫者胜出（后者跳过并 warning），故把
+ * plugin root 按插件名降序排列——字典序大者先扫即胜出，排序总序使结果与装配序
+ * 无关。无名 plugin root 回退 `plugin` 前缀参与定序（与实例 ID 同源）；同插件名
+ * 多 root 保持注册相对序（退化形态，先注册胜出）。project/user root 不参与本
+ * 排序（比较器返 0，相对序稳定；层间定序仍由 scan 层 ORIGIN_PRIORITY 承担）。
+ */
+function orderScanRoots(roots: readonly ExpertRoot[]): ExpertRoot[] {
+  // 全序比较器（跨源对返 0 会使 sort 结果未定义——plugin root 前置 + 原始下标兜底，
+  // 保证与 scan 层 ORIGIN_PRIORITY 稳定排序组合后语义确定）。
+  return [...roots]
+    .map((root, index) => ({ root, index }))
+    .sort((a, b) => {
+      const aPlugin = a.root.origin === "plugin" ? 0 : 1;
+      const bPlugin = b.root.origin === "plugin" ? 0 : 1;
+      if (aPlugin !== bPlugin) return aPlugin - bPlugin; // plugin root 前置，其余保持相对序
+      if (aPlugin === 0) {
+        const an = a.root.pluginName ?? INSTANCE_ID_PLUGIN_FALLBACK;
+        const bn = b.root.pluginName ?? INSTANCE_ID_PLUGIN_FALLBACK;
+        if (bn < an) return -1; // 降序：字典序后者（大者）先扫胜出
+        if (bn > an) return 1;
+      }
+      return a.index - b.index; // 同插件名（或非 plugin root）退化：注册序
+    })
+    .map((item) => item.root);
 }
 
 /**

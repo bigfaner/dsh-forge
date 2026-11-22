@@ -340,8 +340,8 @@ describe("悬空键：emitDiag error 日志（点名键，无 UI 面）", () => 
   });
 });
 
-describe("同层同键多份：root 注册序先者优先（V1-EX2 稳定契约）", () => {
-  it("两个 plugin root 注册同键 → 先注册的胜出，后者跳过并 warning", async () => {
+describe("同层同键多份：插件名稳定字典序取后者（ORDER_RULE，取代 V1-EX2 注册序先者契约）", () => {
+  it("两个 plugin root 注册同键 → 插件名字典序后者胜出（与注册序无关），败者跳过并 warning", async () => {
     const first = join(dir, "first");
     const second = join(dir, "second");
     await mkdir(first);
@@ -353,8 +353,8 @@ describe("同层同键多份：root 注册序先者优先（V1-EX2 稳定契约�
       { origin: "plugin", dir: second, pluginName: "@b/second" },
     ];
     const reg = await makeRegistry();
-    expect(reg.get("code-reviewer").title).toBe("先注册版");
-    expect(reg.get("code-reviewer").instanceId).toBe("@a/first#code-reviewer");
+    expect(reg.get("code-reviewer").title).toBe("后注册版");
+    expect(reg.get("code-reviewer").instanceId).toBe("@b/second#code-reviewer");
     expect(reg.warnings.some((w) => w.includes("code-reviewer"))).toBe(true);
   });
 });
