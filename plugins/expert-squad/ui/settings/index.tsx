@@ -3,8 +3,8 @@
 // client.js:3749-3752（`plugins.detail.section` kind: list/scope: root），消费
 // client.js:2534（PackageDetail「包含的组件」RowsSection 之后 renderSlot(
 // "plugins.detail.section", { subject })——面板落在「包含的组件」下方）；组件按
-// subject 门控（subject.kind === "bundle" && subject.pkg.name === 本包名），非本包
-// 详情页 render null；官方声明形态 = settings-* 族同族先例
+// subject 自锚门控（本包 bundle 详情页 ∨ pkg.rows 声明了本包 moduleName 行的承载
+// bundle 详情页——bundle 聚合安装形态，聚合包名零感知），其余 subject render null；
 // （slots.inject(slot, () => slots.register({name, id}, Component))，id =
 // expert-squad-default-agent-options，README「Detail page extension points」同型）。
 // 读写正门 = 官方 configForms 服务（dsh-client-ui-settings
@@ -239,21 +239,29 @@ export function expertsConfigWriteOf(
 }
 
 /**
- * detail.section 缝消费组件（list slot 渲染入口）：subject 门控——仅本包 bundle 详情页
+ * detail.section 缝消费组件（list slot 渲染入口）：subject 门控——本包 bundle 详情页
  * 「包含的组件」下方渲染面板（bug 83fe1393：item 详情页表单归 plugins.item page 缝单源，
- * item subject 不再渲染——双缝同页重复收口）；其余 subject（row/item 他者/缺席）render null；
+ * item subject 不再渲染——双缝同页重复收口）；扩：承载 bundle 详情页（bundle 聚合安装
+ * 形态——subject.pkg.rows 声明了本包 moduleName 行即出面板，判定键只有本包名，聚合包
+ * 零感知）；其余 subject（row/item 他者/缺席）render null；
  * inject 面（form/modelCatalogLoader）由官方 slot runtime 与 ownerProps（subject）并合透传，
  * 读写径原样复用 DefaultAgentOptionsTab。
  */
 export function DefaultAgentOptionsSection(props: {
-  readonly subject?: { kind?: unknown; id?: unknown; pkg?: { name?: unknown } };
+  readonly subject?: { kind?: unknown; id?: unknown; pkg?: { name?: unknown; rows?: unknown } };
   readonly form?: ConfigFormMirror;
   readonly modelCatalogLoader?: ModelCatalogLoader;
 }): ReactNode {
   const subject = props.subject;
-  if (subject === undefined || subject.kind !== "bundle" || (subject.pkg as { name?: unknown } | undefined)?.name !== EXPERT_SQUAD_PKG) {
-    return null;
-  }
+  if (subject === undefined || subject.kind !== "bundle") return null;
+  const pkg = subject.pkg;
+  if (pkg === undefined) return null;
+  // 门控（自锚双腿）：① 本包自己的 bundle 详情页（solo 安装形态）；
+  // ② 承载 bundle 详情页——pkg.rows（官方 PluginPackageRef 契约：该 bundle 声明的行集）
+  //    含 moduleName = 本包名的行（bundle 聚合安装形态；rowId = 行 id、moduleName = 行名模块）。
+  const declaresSelf =
+    Array.isArray(pkg.rows) && pkg.rows.some((row) => asRecord(row)?.["moduleName"] === EXPERT_SQUAD_PKG);
+  if (pkg.name !== EXPERT_SQUAD_PKG && !declaresSelf) return null;
   return <DefaultAgentOptionsTab form={props.form} modelCatalogLoader={props.modelCatalogLoader} />;
 }
 

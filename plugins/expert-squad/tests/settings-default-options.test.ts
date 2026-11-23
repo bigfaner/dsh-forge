@@ -260,11 +260,24 @@ describe("DefaultAgentOptionsSection（subject 门控）", () => {
     expect(renderSection({ kind: "item", id: "expert-squad" })).toBe("");
   });
 
-  it("他包 bundle / row / item 他者 / subject 缺席：render null（非本包详情页零输出）", () => {
+  it("他包 bundle（rows 未声明本包）/ row / item 他者 / subject 缺席：render null（非本包详情页零输出）", () => {
     expect(renderSection({ kind: "bundle", pkg: { name: "@dsh-forge/other" } })).toBe("");
+    expect(renderSection({ kind: "bundle", pkg: { name: "@dsh-forge/other", rows: [{ rowId: "x", moduleName: "@dsh-forge/other" }] } })).toBe("");
     expect(renderSection({ kind: "row", pkg: { name: "@dsh-forge/expert-squad" }, row: {} })).toBe("");
     expect(renderSection({ kind: "item", id: "x" })).toBe("");
     expect(renderSection(undefined)).toBe("");
+  });
+
+  it("承载 bundle 详情页（bundle 聚合安装形态）：pkg.rows 声明了本包 moduleName 行 = 渲染面板（自锚判定——聚合包名零感知）", () => {
+    const html = renderSection({
+      kind: "bundle",
+      pkg: {
+        name: "@dsh-forge/some-aggregate",
+        rows: [{ rowId: "expert-squad", moduleName: "@dsh-forge/expert-squad", enabled: true }],
+      },
+    });
+    expect(html).toContain("默认 Agent 选项");
+    expect(html).toContain('data-cfg-field="provider"');
   });
 });
 

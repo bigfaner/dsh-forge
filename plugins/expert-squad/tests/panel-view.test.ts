@@ -350,17 +350,56 @@ describe("openPluginConfigTab 导航序列", () => {
   });
 });
 
-// ── 「⚙ 配置」跳转官方导航缝（pluginNavigation——bundle 详情页正门）──
+// ── 「⚙ 配置」跳转官方导航缝（pluginNavigation openBundle 正门 + 承载 bundle 自锚探测）──
 describe("pluginConfigJumpOf 官方导航缝", () => {
-  it("openBundle 在场：跳转闭包即 openBundle(@dsh-forge/expert-squad)——直达本包详情页", async () => {
+  let calls: string[] = [];
+
+  /** 组装 ctx：pluginNavigation 在场 + remote.pluginManager.listBundles 应答 bundles。 */
+  const makeCtx = (bundles: unknown, opts?: { remoteAbsent?: boolean; throwOnList?: boolean }) => ({
+    reflect: {
+      get: (n: string): unknown => {
+        if (n === "pluginNavigation") return { openBundle: (pkg: string) => { calls.push(pkg); } };
+        if (n === "remote.pluginManager") {
+          if (opts?.remoteAbsent) return undefined;
+          return { listBundles: opts?.throwOnList ? () => Promise.reject(new Error("remote down")) : () => Promise.resolve(bundles) };
+        }
+        return undefined;
+      },
+    },
+  });
+
+  it("solo 形态：本包自己是安装卡 → openBundle(@dsh-forge/expert-squad) 直达本包详情页", async () => {
     const { pluginConfigJumpOf } = await import("../ui/panel/config-jump.js");
-    const calls: string[] = [];
-    const resolve = pluginConfigJumpOf(
-      { reflect: { get: (n: string) => (n === "pluginNavigation" ? { openBundle: (pkg: string) => { calls.push(pkg); } } : undefined) } },
-    );
-    const jump = resolve();
+    calls = [];
+    const jump = pluginConfigJumpOf(makeCtx([{ name: "@dsh-forge/expert-squad", rows: [{ moduleName: "@dsh-forge/expert-squad" }] }]))();
     expect(typeof jump).toBe("function");
-    jump!();
+    await jump!();
+    expect(calls).toEqual(["@dsh-forge/expert-squad"]);
+  });
+
+  it("bundle 聚合形态：本包非安装卡、承载包 rows 声明本包 moduleName 行 → openBundle(承载包名)——聚合包名零感知", async () => {
+    const { pluginConfigJumpOf } = await import("../ui/panel/config-jump.js");
+    calls = [];
+    const jump = pluginConfigJumpOf(
+      makeCtx([
+        { name: "@dsh-forge/forge", rows: [{ rowId: "project", moduleName: "@dsh-forge/project" }, { rowId: "expert-squad", moduleName: "@dsh-forge/expert-squad" }] },
+        { name: "@dsh-forge/other", rows: [] },
+      ]),
+    )();
+    await jump!();
+    expect(calls).toEqual(["@dsh-forge/forge"]);
+  });
+
+  it("remote 缺席 / listBundles 拒绝 / 应答非数组：兜底 openBundle(本包名)——与旧行为一致不比现状差", async () => {
+    const { pluginConfigJumpOf } = await import("../ui/panel/config-jump.js");
+    calls = [];
+    await pluginConfigJumpOf(makeCtx(undefined, { remoteAbsent: true }))()!();
+    expect(calls).toEqual(["@dsh-forge/expert-squad"]);
+    calls = [];
+    await pluginConfigJumpOf(makeCtx(undefined, { throwOnList: true }))()!();
+    expect(calls).toEqual(["@dsh-forge/expert-squad"]);
+    calls = [];
+    await pluginConfigJumpOf(makeCtx("not-an-array"))()!();
     expect(calls).toEqual(["@dsh-forge/expert-squad"]);
   });
 
