@@ -62,14 +62,15 @@ describe("query_task slug 必填 + 读面走通", () => {
 });
 
 describe("list_tasks slug 可选过滤 + statusFilter 词表收窄", () => {
-  it("slug 缺省全库 / 指定 slug 单容器过滤", async () => {
+  it("slug 缺省全库 / 指定 slug 单容器过滤（返回 {cards} 匹配 output schema——bug: 裸数组被 host 校验拒）", async () => {
     seedTask(h, "alpha", "1");
     seedTask(h, "beta", "2");
-    const all = (await toolOf("list").execute({}, {})) as { slug: string }[];
-    expect(all).toHaveLength(2);
-    const scoped = (await toolOf("list").execute({ slug: "alpha" }, {})) as { slug: string }[];
-    expect(scoped).toHaveLength(1);
-    expect(scoped[0].slug).toBe("alpha");
+    const all = (await toolOf("list").execute({}, {})) as { cards: { slug: string }[] };
+    expect(Array.isArray(all)).toBe(false); // 必须是对象而非裸数组（output schema type: "object"）
+    expect(all.cards).toHaveLength(2);
+    const scoped = (await toolOf("list").execute({ slug: "alpha" }, {})) as { cards: { slug: string }[] };
+    expect(scoped.cards).toHaveLength(1);
+    expect(scoped.cards[0].slug).toBe("alpha");
   });
 
   it("statusFilter 词表外元素拒", async () => {

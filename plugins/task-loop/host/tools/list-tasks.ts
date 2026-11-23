@@ -36,7 +36,9 @@ const LIST_TASKS_PARAMETERS: TaskToolParametersSchema = {
 
 /** TaskCard[] → 模型可见文本（✓ 首行计数 + 逐卡键值行——前置投影 localId 数组，照旧） */
 function renderListResult(_args: unknown, value: unknown): readonly { readonly type: "text"; readonly text: string }[] {
-  const cards = value as TaskCard[];
+  // Root cause: execute 返回值须与声明 output schema（{cards: [...]}, type: "object"）一致，
+  // 裸数组会被 host schema 校验以 "value must be an object" 拒绝。
+  const cards = (value as { cards: TaskCard[] }).cards;
   const lines =
     cards.length === 0
       ? ["(no matching tasks)"]
@@ -72,19 +74,20 @@ export function createListTasksTool(deps: {
       },
       render: renderListResult,
     },
-    async execute(args: unknown, exec: TaskToolExecFace): Promise<TaskCard[]> {
+    async execute(args: unknown, exec: TaskToolExecFace): Promise<{ cards: TaskCard[] }> {
       const a = requireArgsObject(args, TOOL);
       const slug = optionalString(a, "slug", TOOL);
       const search = optionalString(a, "search", TOOL);
       const statusFilter = optionalStatusArray(a, "statusFilter", TOOL);
       const sort = optionalEnum(a, "sort", SORTS, TOOL);
-      return listTasks(deps.verbDeps, {
+      const cards = await listTasks(deps.verbDeps, {
         projectKey: deps.resolveProjectKey(exec),
         ...(slug !== undefined ? { slug } : {}),
         ...(search !== undefined ? { search } : {}),
         ...(statusFilter !== undefined ? { statusFilter } : {}),
         ...(sort !== undefined ? { sort } : {}),
       });
+      return { cards };
     },
   };
 }
