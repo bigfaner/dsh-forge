@@ -3,13 +3,16 @@
 //   ② 锚级查询（缺省全量 + 单 key 解析——anchors.ts 注册表单源）；
 //   ③ declare merge 第三方键经 forgeDirs 全量可见（与本体键去重不双列）；
 //   ④ 装配期同名守卫（现查 tools 面已存同名定义即跳过 + diag warn 先在者胜）；
-//   ⑤ 缝缺席降级（register 缺席 = 零注册 warn no-op disposer）。
+//   ⑤ 缝缺席降级（register 缺席 = 零注册 warn no-op disposer）；
+//   ⑥ createForgePathsToolFace 装配闭包（P2-c 顺带）：reflectOf 惰性现查不缓存 +
+//      onDeclareDiag 桥接（降级径 warn 透传）。
 import { describe, expect, it, vi } from "vitest";
-import type { DirKeyEntry } from "../dirs/anchors.js";
+import type { DirKeyEntry, ReflectDeclarePullFace } from "../dirs/anchors.js";
 import { DIR_KEY_REGISTRY } from "../dirs/anchors.js";
 import {
   ForgeDirPathInvalidError,
   createForgeDirsTool,
+  createForgePathsToolFace,
   createForgeResolvePathTool,
   registerForgePathsTools,
   type ForgePathsToolFace,
@@ -154,5 +157,45 @@ describe("注册缝（官方 tools 缝——同名守卫先在者胜）", () => 
     expect(handle.dispose).toBeTypeOf("function");
     expect(() => handle.dispose()).not.toThrow();
     expect(diag).toHaveBeenCalledWith(expect.stringContaining("ctx.tools.register 缺席"), "warn");
+  });
+});
+
+describe("createForgePathsToolFace（装配闭包——P2-c 顺带）", () => {
+  /** reflect 替身（props 名表 + get 现取） */
+  function reflectOf(entries: readonly DirKeyEntry[]): ReflectDeclarePullFace {
+    return {
+      props: { "dirKeys.knowledge": entries },
+      get: (name: string) => (name === "dirKeys.knowledge" ? entries : undefined),
+    };
+  }
+
+  it("reflectOf 惰性现查：构造期零调用，declaredDirKeys() 逐调用现取（检测不缓存）", () => {
+    const reflect = vi.fn(() => reflectOf([knowledgeRoot]));
+    const face = createForgePathsToolFace({ anchorsOf: async () => ANCHORS, reflectOf: reflect });
+    expect(reflect).not.toHaveBeenCalled(); // 构造期零现查
+    expect(face.declaredDirKeys?.()).toEqual([knowledgeRoot]);
+    expect(face.declaredDirKeys?.()).toEqual([knowledgeRoot]);
+    expect(reflect).toHaveBeenCalledTimes(2); // 逐调用现查——结果不缓存
+  });
+
+  it("onDeclareDiag 桥接：拉取缝降级径（reflect 在场 props 缺席）warn 经桥透传", () => {
+    const onDeclareDiag = vi.fn();
+    const face = createForgePathsToolFace({
+      anchorsOf: async () => ANCHORS,
+      reflectOf: () => ({ get: () => undefined }) as ReflectDeclarePullFace, // props 缺席 → 降级径
+      onDeclareDiag,
+    });
+    expect(face.declaredDirKeys?.()).toEqual([]);
+    expect(onDeclareDiag).toHaveBeenCalledWith(
+      expect.objectContaining({ level: "warn", event: "forge-dirs-declare" }),
+    );
+  });
+
+  it("reflect 缺席 = declare 缝零贡献零抛（onDeclareDiag 不发射——非降级径）", () => {
+    const onDeclareDiag = vi.fn();
+    const face = createForgePathsToolFace({ anchorsOf: async () => ANCHORS, reflectOf: () => undefined, onDeclareDiag });
+    expect(face.declaredDirKeys?.()).toEqual([]);
+    expect(onDeclareDiag).not.toHaveBeenCalled();
+    expect(face.dirKeys()).toEqual(DIR_KEY_REGISTRY);
   });
 });
