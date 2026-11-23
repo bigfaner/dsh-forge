@@ -7,6 +7,7 @@
 //   时 Typert fail-soft 回落——原语义不动）。
 import { BUGS_CHANNELS } from '@dsh-forge/contracts'
 import { createForgeRpcClient, preloadTransport, type ForgeRpcClient, type ForgeTransport } from '../rpc-channels.js'
+import { createForgeRpcClient as createTypertForgeRpcClient, type ForgeSpecsRpc } from '../../rpc.js'
 import { typertTransport } from '../typert-transport.js'
 
 /** 概览 transport（头路 = Typert 单通路；bugs 列路 = 本地 forgeBugs 缝 + Typert fail-soft 回落） */
@@ -28,4 +29,13 @@ export function overviewTransport(): ForgeTransport {
 /** 概览 RPC client（概览 dock tab 族 makeClient 缺省真身——头路 Typert + bugs 本地读缝） */
 export function overviewRpcClientFactory(): ForgeRpcClient {
   return createForgeRpcClient(overviewTransport())
+}
+
+/**
+ * 概览 spec 列路数据源（G3 spec 子 tab——forgeSpecs Typert namespace 单门，rpc.ts createForgeRpcClient
+ * specs 切片）。失败两支分叉归消费面（spec-tab）：spec 插件缺席 = typed 拒绝（RpcClientError）→
+ * 错误条；projectId 身份未解析（host 半 ws null）= ok([]) → 静默空态。
+ */
+export function overviewSpecsRpcFactory(): ForgeSpecsRpc {
+  return createTypertForgeRpcClient().specs
 }

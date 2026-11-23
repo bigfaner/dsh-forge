@@ -119,7 +119,8 @@ describe('OverviewFrame 面板骨架（AC1/AC2）', () => {
   })
 
   it('头路在途（head 缺席）= ov-head 不渲染，sticky 与内容区保持', () => {
-    const markup = frame({ head: undefined, phase: 'loading' })
+    // 列路骨架腿 = bugs 子 tab（spec 子 tab G3 起自承载装载面——骨架归列路分派）
+    const markup = frame({ head: undefined, phase: 'loading', filter: { ...initialOverviewFilter(), subtab: 'bugs' as const } })
     expect(markup).not.toContain('data-dswf-ov-head')
     expect(markup).toContain('data-dswf-ov-sticky')
     expect(markup).toContain('data-dswf-ov-skeleton') // 首装骨架
@@ -136,9 +137,9 @@ describe('OverviewFrame 子 tab 结构（spec | 任务 | Bug 有序三枚）', (
     expect(markup).not.toContain('data-dswf-ov-subtab="features"')
   })
 
-  it('spec 子 tab：列路 null → 占位骨架（本体归 G3——零 features/提案渲染面）', () => {
+  it('spec 子 tab：G3 本体自承载装载面（specpage 锚 + 静态装载中——零 features/提案渲染面）', () => {
     const markup = frame({})
-    expect(markup).toContain('data-dswf-ov-skeleton')
+    expect(markup).toContain('data-dswf-ov-specpage')
     expect(markup).not.toContain('data-dswf-ov-features')
     expect(markup).not.toContain('data-dswf-ov-phchips')
   })
@@ -276,7 +277,8 @@ describe('OverviewFrame 错误三态', () => {
   })
 
   it('error-bar（首装失败无旧内容）= 内容区错误条 + 重试', () => {
-    const markup = frame({ list: undefined, phase: 'error', error: { message: '传输失败', uiState: 'error-bar' } })
+    // 列路错误条腿 = bugs 子 tab（spec 子 tab G3 起自承载错误相位——错误条归 SpecTab）
+    const markup = frame({ filter: { ...initialOverviewFilter(), subtab: 'bugs' as const }, list: undefined, phase: 'error', error: { message: '传输失败', uiState: 'error-bar' } })
     expect(markup).toContain('data-dswf-ov-error')
     expect(markup).toContain('概览装载失败')
   })

@@ -19,6 +19,7 @@ const SEG_NAMESPACE: Readonly<Record<string, keyof ForgeRemoteFace>> = {
   worktree: 'forgeWorktree',
   features: 'forgeFeatures',
   dirs: 'forgeDirs',
+  specs: 'forgeSpecs', // G3 spec 子 tab（spec 插件缺席 = namespace 缺席 → typed 拒绝信封，可选边）
 }
 
 /** 通道字符串解析（forge:<seg>/<method>——形状漂移 = null 调用方 typed 降级） */

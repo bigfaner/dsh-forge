@@ -41,6 +41,7 @@ import { docsRootOf, type SessionOpenRequest } from './message-format.js'
 import { OverviewHead } from './ov-head.js'
 import { StickyBar } from './sticky-bar.js'
 import { StatusChips } from './status-chips.js'
+import { SpecTab } from './spec-tab.js'
 import { BugList, bugChainGroups } from './bug-tab/bug-list.js'
 import { BugDialog } from './bug-tab/index.js'
 import './overview.css'
@@ -129,9 +130,11 @@ export function OverviewFrame({
   onRetry,
   onOpenBug,
   onAddBugToSession,
+  onOpenDoc,
+  onStartSession,
+  now,
   renderTasksTab,
-  // onToggleRow/now 保留 props 装配传参兼容（行展开与时间基准——spec 子 tab 本体
-  // 归 G3 接线消费；feature 子 tab 退役后帧面暂零消费，故不解构入参）
+  // 行展开与时间基准由 spec 子 tab（G3 本体）消费——feature 子 tab 退役后其余帧面零消费
 }: OverviewFrameProps): ReactNode {
   const searchActive = searchQueryOf(filter.search) !== undefined
   // @ 锚文档根（数据驱动）：head 在场 = 项目行（workspaceDir/forgeDir）推导；缺席 = 不注入
@@ -160,6 +163,20 @@ export function OverviewFrame({
       ) : (
         <StatusChips counts={head?.stats.byStatus ?? emptyCounts()} active={filter.activeStatuses} onToggle={onToggleStatus} onClear={onClearStatuses} />
       )
+  } else if (filter.subtab === 'spec') {
+    // spec 子 tab 本体（G3——chips 行 + 列表行 + 展开元数据）：自装载数据路
+    // （forgeSpecs Typert——进入 tab 拉取/搜索/手动刷新；typed 拒绝 = 错误条、
+    // 空清单 = 静默空态，两支归 SpecTab 内部分叉；列路概览对 spec 短路 null，
+    // 故先于 list-undefined 骨架/错误条分派）
+    content = (
+      <SpecTab
+        projectId={projectId}
+        search={filter.search}
+        {...(onOpenDoc !== undefined ? { onOpenDoc } : {})}
+        {...(onStartSession !== undefined ? { onStartSession } : {})}
+        {...(now !== undefined ? { now } : {})}
+      />
+    )
   } else if (list === undefined && phase !== 'error') {
     content = <SkeletonRows className="dswf-ov-skeleton" rowClassName="dswf-ov-skeleton-row" rows={6} anchor="data-dswf-ov-skeleton" />
   } else if (list === undefined) {
@@ -182,10 +199,6 @@ export function OverviewFrame({
         />
       </>
     )
-  } else {
-    // spec 子 tab：本体（chips 行 + 列表行 + 展开元数据）由 G3 任务交付——本任务只归一
-    // 子 tab 结构，占位骨架零通道调用（列路 spec 短路 null → 骨架自然承接）
-    content = <SkeletonRows className="dswf-ov-skeleton" rowClassName="dswf-ov-skeleton-row" rows={6} anchor="data-dswf-ov-skeleton" />
   }
 
   return (

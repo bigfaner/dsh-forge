@@ -71,6 +71,9 @@ export interface ForgeRemoteFace {
   readonly forgeWorktree: ForgeRemoteNamespaceFace
   readonly forgeFeatures: ForgeRemoteNamespaceFace
   readonly forgeDirs?: ForgeRemoteNamespaceFace
+  /** spec 子 tab 消费族（G3——可选边：spec 插件缺席 = namespace 缺席 → typed 拒绝信封，
+   *  不进 FORGE_REMOTE_NAMESPACES 必选集（缺席不得拖垮其余五族 face 解析——forgeDirs 同款）） */
+  readonly forgeSpecs?: ForgeRemoteNamespaceFace
 }
 
 /** 降级诊断钩子（apply 期可选安装——缺席 console 兜底，client 束豁免面） */
@@ -268,6 +271,18 @@ function remoteFaceMethodOf(
   return fn as (...args: unknown[]) => unknown
 }
 
+/**
+ * 客户端束诊断发射面（G3 spec 子 tab——emitDiag 面消费径，禁直落 console 语义）：
+ * 复用 apply 期 installForgeRemoteFace 注入的诊断缝（host 侧桥接 cordis diag/log 事件域
+ * emitDiag——ui/index.ts 装配同缝），缝缺席 = console.warn 按级兜底（client 束豁免面——
+ * remoteFaceMethodOf 降级块同径先例，诊断不静默）。
+ */
+export function forgeDiagEmit(line: string): void {
+  const diag = faceSeamOf().diag ?? rpcDiag
+  if (diag !== undefined) diag(line)
+  else console.warn(`[forge-rpc-diag] ${line}`)
+}
+
 /** typert 调用（一元——位置参直透 + RemoteResult 信封投影 + typed error 抛出） */
 async function invokeRemote<T>(
   namespace: keyof ForgeRemoteFace,
@@ -345,6 +360,40 @@ export interface ForgeFeaturesListRpc {
   list(q: ListFeaturesQuery): Promise<FeatureCard[]>
 }
 
+// ── forgeSpecs 窄面 wire 形（G3 spec 子 tab——DTO 单点水化消费切片，零 client 拼装）──
+// 形状权威 = plugins/spec host/assembly/typert-remotes.ts（SpecCardDto/SpecDetailDto——
+// host 半聚合水化）；跨插件零 import 纪律（AGENTS §1.3）→ 本面窄镜像只取 UI 消费字段，
+// mode/谱系/作者无等价物不映射（spec 裁定留痕）。缺席边降级语义：spec 插件缺席 = typed
+// 拒绝（unavailable 信封 → RpcClientError，消费面错误条）；身份未解析（ws null）= host
+// 半 ok([]) 静默空态——两支分叉由消费面（spec-tab）分别承接。
+
+/** Spec 卡片（清单行——host 半水化出参直投镜像） */
+export interface SpecCardDto {
+  readonly slug: string
+  readonly title: string
+  readonly specStatus: string
+  readonly tiers: readonly string[]
+  readonly goalCount: number
+  readonly acCount: number
+  readonly updatedAt: string
+}
+
+/** Spec 详情（展开元数据消费切片——goals + 文档登记悬空态；transitions 台账不在消费面） */
+export interface SpecDetailDto extends SpecCardDto {
+  readonly goals: readonly {
+    readonly title: string
+    readonly brief?: string
+    readonly acs: readonly { readonly criterion: string }[]
+  }[]
+  readonly doc?: { readonly relPath: string; readonly dangling: boolean }
+}
+
+/** forgeSpecs/* 面方法集（spec 子 tab 读面——list 清单 + detail 展开元数据；写动词不上 UI 面） */
+export interface ForgeSpecsRpc {
+  list(q: { readonly projectId: string; readonly search?: string }): Promise<readonly SpecCardDto[]>
+  detail(q: { readonly projectId: string; readonly slug: string }): Promise<SpecDetailDto>
+}
+
 /**
  * worktree UI 两目录（worktree-picker + session-badge）makeRpc 消费切片（窄面——挂载面
  * props 类型；测试替身按本形状给值。ForgeRpcClient 结构满足本切片）。settings 族退役
@@ -366,6 +415,7 @@ export interface ForgeRpcClient {
   readonly worktree: ForgeWorktreeRpc
   readonly features: ForgeFeaturesListRpc
   readonly dirs: ForgeDirsRpc
+  readonly specs: ForgeSpecsRpc
 }
 
 export function createForgeRpcClient(): ForgeRpcClient {
@@ -402,6 +452,10 @@ export function createForgeRpcClient(): ForgeRpcClient {
     },
     dirs: {
       facts: (projectId) => invokeRemote<DirFactRow[]>('forgeDirs', 'facts', [{ projectId }]),
+    },
+    specs: {
+      list: (q) => invokeRemote<readonly SpecCardDto[]>('forgeSpecs', 'list', [q]),
+      detail: (q) => invokeRemote<SpecDetailDto>('forgeSpecs', 'detail', [q]),
     },
   }
 }
