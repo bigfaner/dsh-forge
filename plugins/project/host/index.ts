@@ -60,6 +60,7 @@ import {
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
 import { isGitWorktreeServiceFace, createWorktreesResident, type WorktreesRegistryFace } from "./assembly/worktrees-port.js";
+import { registerBugTools } from "./tools/register.js";
 import { consoleDiagFallback, DIAG_EVENT, emitDiagOrFallback, type DiagEventPayload } from "@dsh-forge/lib-diag";
 import { assertInstallMutex } from "./install-mutex.js";
 
@@ -278,6 +279,14 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   diag(
     `[project-seams] 五缝注册完成：registered=[${registration.registered.join(", ")}] degraded=[${registration.degraded.join(", ")}]`,
   );
+  // bug 工具族注册（官方 tools 缝——fix-bug 写径挂载；db 缺席 = bugs 缝降级态，零注册）。
+  // 注册名 snake_case 四员（record_bug/resolve_bug/get_bug/list_bugs——task-loop worker
+  // allowlist WORKER_BUG_ESSENTIAL_TOOLS 三名词的本面兑现）。
+  const bugsProvider = deps.bugs;
+  const disposeBugTools =
+    domainDb !== undefined && typeof bugsProvider === "function"
+      ? registerBugTools(face, { db: domainDb, bugs: bugsProvider, coreProjects: coreProjectsOf }, (line, level) => diag(line, level)).dispose
+      : undefined;
   // Typert 遥控器注册（官方 UI 数据第一等通道——控制器注册进根 ctx；诊断 emit 面
   // 装配桥接：ctx.emit 在场即 typed emit，缺席 emitDiagOrFallback console 兜底。插件域
   // 进程位恒 main——errors.ts 既有先例同径）。
@@ -340,6 +349,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   const disposeWorktrees = worktreePlugin(ctx, { diag: (line) => diag(line) });
   return () => {
     disposeWorktrees();
+    disposeBugTools?.();
     // provider 生命周期归 scope（cordis provide 注销面由宿主管辖——本插件零自持资源）
   };
 };
@@ -416,7 +426,8 @@ function worktreesSvcOnceOf(resident: () => WorktreeServicePort): () => Worktree
 
 // fix-8：workspaceRegistry 具名服务 inject 声明（cordis 门内取法前置——AGENTS 1.6
 // 具名服务裁决）；五缝仍经 reflect 缝注册，gitWorktree 能力缝走防御读取（异步 provide 面）。
-projectPlugin.inject = ["workspaceRegistry"] as const;
+// "tools" = 官方 dsh tools 注册缝（bug 工具族挂载正门——task-loop 同名单先例）。
+projectPlugin.inject = ["workspaceRegistry", "tools"] as const;
 
 /**
  * 装配失败诊断投影（bundle 管线验证锚——lib-util errMessage 消费点）。
