@@ -8,7 +8,7 @@
 //   3. exports 闭包完整性：package.json exports 每个 ./dist 路径必须存在于 dist。
 // 官方单例（@deepseek-ai/*，宿主壳层提供）与 dependencies 内 registry 依赖外置合法；
 // 其余裸名一律违规。Run once per gate；run-once, no watch。
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -106,6 +106,109 @@ export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./d
   return violations;
 }
 
+/**
+ * bundledDependencies 内联闭包审计（bug d211bc24 物化层换层——pnpm reused 全量复用快径下
+ * file: tarball 升级装不物化新增依赖，纯传递链落 .pnpm 隐藏仓越出 generation 判定集合 →
+ * 拒装；修复 = 传递链全内联进插件目录，内联闭包成为产物性质，离手门机检）：
+ *   1. 每个 bundled 声明必须落 dependencies（可安装面）且 node_modules 下存在真实目录
+ *      ——symlink/junction（pnpm store 链接）打包即断链，违规；
+ *   2. 内联闭包完整性：bundled 树内每包（含嵌套 node_modules）manifest 可读，全部运行期
+ *      .js 相对引用命中树内真实文件（丢 chunk 结构性拦截，同 dist 断言语义）；
+ *   3. ESM/CJS exports 解析验证：每包入口经 exports（import/default 条目或 string 简写）
+ *      或 main（缺席按 index.js 约定）解析命中真实文件。
+ */
+export function auditBundledClosure(pkgDir, pkg) {
+  const violations = [];
+  const declared = new Set([
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.peerDependencies ?? {}),
+  ]);
+  const bundledRaw = pkg.bundledDependencies ?? pkg.bundleDependencies ?? [];
+  const bundled = Array.isArray(bundledRaw) ? bundledRaw : Object.keys(bundledRaw);
+  if (bundled.length === 0) return violations;
+  for (const name of bundled) {
+    if (!declared.has(name)) {
+      violations.push(`bundledDependencies 声明 "${name}" 未落 dependencies/peerDependencies（不可安装面）`);
+      continue;
+    }
+    const root = join(pkgDir, "node_modules", name);
+    if (!existsSync(root)) {
+      violations.push(`bundled 内联根缺席：${name}（${root}）——node_modules 未随包物化`);
+      continue;
+    }
+    if (lstatSync(root).isSymbolicLink()) {
+      violations.push(`bundled 内联根为链接：${name}（store/junction 链接打包即断链——必须真实目录）`);
+    }
+    auditInlineTree(root, violations);
+  }
+  return violations;
+}
+
+/** 单个内联包目录：manifest 可读 + 入口解析 + 自身 .js 相对引用闭合；递归嵌套 node_modules。 */
+function auditInlineTree(dir, violations) {
+  const manifestPath = join(dir, "package.json");
+  if (!existsSync(manifestPath)) {
+    violations.push(`内联包 manifest 缺席：${dir}（闭包破损——非完整随包拷贝）`);
+    return;
+  }
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  } catch {
+    violations.push(`内联包 manifest 不可解析：${manifestPath}`);
+    return;
+  }
+  resolveEntry(dir, manifest, violations);
+  for (const file of walkJs(dir)) {
+    const source = readFileSync(file, "utf8");
+    for (const match of source.matchAll(SPECIFIER)) {
+      const spec = match[1];
+      if (/[\s"']/.test(spec) || !spec.startsWith(".")) continue;
+      const base = resolve(dirname(file), spec);
+      const candidates = [base, `${base}.js`, `${base}.mjs`, `${base}.cjs`, join(base, "index.js"), join(base, "index.mjs")];
+      if (!candidates.some(existsSync)) {
+        violations.push(`${file}: 相对引用悬空 "${spec}"（内联树内无目标文件）`);
+      }
+    }
+  }
+  const nested = join(dir, "node_modules");
+  if (existsSync(nested)) {
+    for (const entry of readdirSync(nested, { withFileTypes: true })) {
+      if (entry.name.startsWith("@") && entry.isDirectory()) {
+        for (const child of readdirSync(join(nested, entry.name), { withFileTypes: true })) {
+          if (child.isDirectory()) auditInlineTree(join(nested, entry.name, child.name), violations);
+        }
+      } else if (entry.isDirectory()) {
+        auditInlineTree(join(nested, entry.name), violations);
+      }
+    }
+  }
+}
+
+/** ESM/CJS 入口解析：exports（string 简写或 import/default 条目）优先，main 兜底，index.js 约定末位。 */
+function resolveEntry(dir, manifest, violations) {
+  const exp = manifest.exports;
+  const targets = [];
+  if (typeof exp === "string") targets.push(exp);
+  else if (exp && typeof exp === "object") {
+    const root = exp["."];
+    if (typeof root === "string") targets.push(root);
+    else if (root && typeof root === "object") {
+      for (const field of ["import", "default", "require"]) {
+        if (typeof root[field] === "string") targets.push(root[field]);
+      }
+    }
+  }
+  if (targets.length === 0 && typeof manifest.main === "string") targets.push(manifest.main);
+  if (targets.length === 0) targets.push("./index.js");
+  for (const rel of targets) {
+    const base = resolve(dir, rel);
+    const candidates = [base, `${base}.js`, `${base}.mjs`, `${base}.cjs`, join(base, "index.js"), join(base, "index.mjs")];
+    if (candidates.some((c) => existsSync(c) && lstatSync(c).isFile())) continue;
+    violations.push(`内联包入口解析失败：${manifest.name ?? dir} — "${rel}"（${dir} 内无目标文件）`);
+  }
+}
+
 const isCli = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isCli) {
   const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -114,10 +217,13 @@ if (isCli) {
     requireDist: true,
     bareHeuristicExempt: existsSync(clientJs) ? [clientJs] : [],
   });
+  // bundledDependencies 内联闭包审计（bug d211bc24 物化层换层）。
+  const pkgForBundled = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
+  violations.push(...auditBundledClosure(pkgDir, pkgForBundled));
   if (violations.length > 0) {
     console.error(`[self-containment] dist 自含审计 ${violations.length} 处违规：`);
     for (const v of violations) console.error(`  - ${v}`);
     process.exit(1);
   }
-  console.log(`[self-containment] dist 全量 .js 自含审计通过（逐文件扫描 + exports 闭包）`);
+  console.log(`[self-containment] dist 全量 .js 自含审计通过（逐文件扫描 + exports 闭包 + bundled 内联闭包）`);
 }

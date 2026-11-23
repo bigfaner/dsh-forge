@@ -159,7 +159,6 @@ describe('AC2 profile.install 安装树清单 = 运行时并集（漂移守卫�
     'mammoth': '1.13.0', // @dsh-forge/markdown-kit 原生依赖（bug 62211111 径——convertDocument docx 引擎）
     'mermaid': '12.1.0', // @dsh-forge/markdown-kit 原生依赖（bug 62211111——staging 闭包只追 @dsh-forge/*，外部依赖经本清单随包物化）
     'pdfjs-dist': '4.10.38', // @dsh-forge/markdown-kit 原生依赖（bug 62211111 径——convertDocument pdf 文本提取引擎；4.x 线 node>=20 与宿主基线一致）
-    'string_decoder': '1.1.1', // @dsh-forge/markdown-kit 原生依赖（bug ff55faad 径——mammoth→readable-stream@2 传递链闭包：hoisted 去重冲突态下纯传递链被挤出可见树，显式 pin 保安装代内解析）
     '@deepseek-ai/schemastery': '3.18.4', // @dsh-forge/expert-squad 原生依赖（bug 62211111 同类——settings schema 校验面）
     '@deepseek-ai/dsh-typert-protocol': '0.2.2-rc.5', // @dsh-forge/project 原生依赖（bug 62211111 同类——typert 通道面；053f3215 dsh 系统一 rc.5 升位同版）
     'zod': '4.6.6', // @dsh-forge/project 原生依赖（bug 62211111 同类——schema 校验面）
