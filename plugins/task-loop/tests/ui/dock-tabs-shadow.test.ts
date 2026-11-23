@@ -6,7 +6,7 @@
 // 假体机械语义（同键同 priority 拒收 + 升序分发）与集成/单装两端形态。
 import { describe, expect, it } from 'vitest'
 import { registerDockTabsFace } from '../../ui/dock-tabs-face.js'
-import { DSWF_OVERVIEW_AC_PROGRESS_SLOT, PRIORITY_PROJECT_OVERVIEW_OWNER, PRIORITY_TASK_LOOP_FALLBACK } from '@dsh-forge/lib-ui'
+import { PRIORITY_PROJECT_OVERVIEW_OWNER, PRIORITY_TASK_LOOP_FALLBACK } from '@dsh-forge/lib-ui'
 import { registerKeyedSection, type SectionSlotsFace, type SlotEntryProjection } from '../../ui/keyed-section.js'
 import type { LocaleServiceFace } from '../../ui/locale.js'
 
@@ -22,7 +22,7 @@ function officialishSlots(occupied: readonly { name: string; key: string; priori
   occupants: Occupant[]
   dispatch(name: string, key: string): unknown
 } {
-  const declared = new Set(['sidebar.right.pane.tab', 'sidebar.right.pane.tab.title', DSWF_OVERVIEW_AC_PROGRESS_SLOT])
+  const declared = new Set(['sidebar.right.pane.tab', 'sidebar.right.pane.tab.title'])
   const occupants: Occupant[] = occupied.map((o) => ({ name: o.name, key: o.key, priority: o.priority ?? 0, component: 'project-body' }))
   const slots: SectionSlotsFace & { occupants: Occupant[]; dispatch(name: string, key: string): unknown } = {
     occupants,
@@ -75,7 +75,7 @@ function fakeCtx(taken: readonly string[] = []): { get(name: string): unknown } 
 }
 
 describe('dock tab 键控注册（fix-10 bug 400b3952 + 裁决 1 双形态收口）', () => {
-  it('集成形态：project 同键 priority 0 在场 → task-loop 零自身 body entry，AC 段按子槽键落座', () => {
+  it('集成形态：project 同键 priority 0 在场 → task-loop 零自身 body entry（AC 段注入面已退役）', () => {
     const slots = officialishSlots([
       { name: 'sidebar.right.pane.tab', key: 'dswf-overview', priority: PRIORITY_PROJECT_OVERVIEW_OWNER },
       { name: 'sidebar.right.pane.tab', key: 'dswf-doc', priority: PRIORITY_PROJECT_OVERVIEW_OWNER },
@@ -85,7 +85,7 @@ describe('dock tab 键控注册（fix-10 bug 400b3952 + 裁决 1 双形态收口
     const ownBody = slots.occupants.find((e) => e.name === 'sidebar.right.pane.tab' && e.key === 'dswf-overview' && e.priority !== PRIORITY_PROJECT_OVERVIEW_OWNER)
     expect(ownBody).toBeUndefined()
     expect(slots.dispatch('sidebar.right.pane.tab', 'dswf-overview')).toBe('project-body')
-    expect(slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT)).toBeDefined()
+    expect(slots.occupants.filter((e) => e.name === 'sidebar.right.pane.tab' && e.key === 'dswf-overview')).toHaveLength(1)
   })
 
   it('集成形态：chip 标题段让位 project（零 task-loop 题写注册）', () => {

@@ -5,7 +5,8 @@
 //     order 0 排最前）；
 //   第二段 = `sidebar.right.pane.tab` keyed body（host-integration-fixes 裁决 1 双形态）：
 //     apply 期槽 ledger 现查 project registrant 在座性——
-//       在场（集成形态）→ 不注册自身 body/title，AC 进度段按子槽键落座注入 project 概览；
+//       在场（集成形态）→ 不注册自身 body/title，概览主体归 project（AC 进度段注入面
+//         已随概览 AC 段拔除退役——overview-dockkit-alignment G4）；
 //       缺席（单装形态）→ priority -10 注册独立任务概览 body + chip 标题段。
 //     slots.subscribe 订阅该槽：project 后到注册通知 → dispose 自身 body 切集成；
 //     project 卸载通知 → 重注册切单装。订阅与各代注册 disposer wire 进 ctx.effect
@@ -18,8 +19,6 @@
 // 逐面 try/catch fail-soft（单面异常只降本面，console.warn 留痕不炸装配）。
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  AC_PROGRESS_ENTRY_KEY,
-  DSWF_OVERVIEW_AC_PROGRESS_SLOT,
   DSWF_OVERVIEW_TAB_KEY,
   PRIORITY_PROJECT_OVERVIEW_OWNER,
   PRIORITY_TASK_LOOP_FALLBACK,
@@ -40,13 +39,7 @@ import { FORGE_TASK_LOOP_LOCALE_NS, type LocaleServiceFace } from "./locale.js";
 export const DSWF_OVERVIEW_TAB_KIND = DSWF_OVERVIEW_TAB_KEY;
 
 /**
- * AC 进度子槽 keyed 占用键（单源 = @dsh-forge/lib-ui AC_PROGRESS_ENTRY_KEY——裁决 5
- * 改引，包内字面量退役；project 概览 renderSlot 以本键 entryKey 分发）。
- */
-export const OVERVIEW_AC_PROGRESS_ENTRY_KEY = AC_PROGRESS_ENTRY_KEY;
-
-/**
- * 双形态注册形态（诊断/e2e 锚——集成 = project 拥有概览主体 + AC 段注入；
+ * 双形态注册形态（诊断/e2e 锚——集成 = project 拥有概览主体、task-loop 零注册；
  * 单装 = 独立任务概览 body 兜底）。
  */
 export type DockTabsFormMode = "integrated" | "standalone";
@@ -95,7 +88,7 @@ export function bridgeProjectIdOf(bridge: WorkbenchBridgeMirror | undefined): st
   return typeof projectId === "string" && projectId !== "" ? projectId : undefined;
 }
 
-/** 概览 seat 组件（keyed body/AC 进度段共用——projectId 双源解析：桥缝优先[壳宿主]，缺席
+/** 概览 seat 组件（keyed body——projectId 双源解析：桥缝优先[壳宿主]，缺席
  *  宿主 = self-anchor 自解析补位[官方宿主——sessions/workspaces 快照 + forgeWorktree 归属
  *  裁决]，双缺 = 「无任务数据」降级呈现不报错） */
 export function OverviewSeat(props: {
@@ -219,21 +212,10 @@ export function registerDockTabsFace(
   let disposerType: (() => void) | undefined;
   let disposerBody: (() => void) | undefined;
   let disposerTitle: (() => void) | undefined;
-  let disposerAc: (() => void) | undefined;
   let mode: DockTabsFormMode | undefined;
 
-  /** 集成形态：AC 进度段按子槽键落座注入 project 概览（自身 body/title 零注册）。 */
-  const registerIntegrated = (): void => {
-    face(`${DSWF_OVERVIEW_AC_PROGRESS_SLOT}:${OVERVIEW_AC_PROGRESS_ENTRY_KEY}`, () => {
-      disposerAc = registerKeyedSection(slots, {
-        slot: DSWF_OVERVIEW_AC_PROGRESS_SLOT,
-        key: OVERVIEW_AC_PROGRESS_ENTRY_KEY,
-        inject: overviewInject,
-        component: OverviewSeat,
-      });
-      if (disposerAc === undefined) throw new Error("slots face unavailable");
-    });
-  };
+  /** 集成形态：概览主体归 project，自身 body/title 零注册（AC 进度段注入面已退役）。 */
+  const registerIntegrated = (): void => {};
 
   /** 单装形态：页型 + priority -10 独立任务概览 body + chip 标题段（project 缺席兜底）。 */
   const registerStandalone = (): void => {
@@ -267,11 +249,9 @@ export function registerDockTabsFace(
     disposerType?.();
     disposerBody?.();
     disposerTitle?.();
-    disposerAc?.();
     disposerType = undefined;
     disposerBody = undefined;
     disposerTitle = undefined;
-    disposerAc = undefined;
   };
 
   /** 在场驱动重绑：现查裁决 → 形态不变零动作；切换 = dispose 当前代 + 落座新形态。 */

@@ -1,19 +1,18 @@
-// 概览 tab 双形态注册切换契约（host-integration-fixes 裁决 1）：
+// 概览 tab 双形态注册切换契约（host-integration-fixes 裁决 1 + AC 段注入面退役）：
 //   · 集成形态：project（priority 0 拥有者）在场 → task-loop 零自身 body entry，
-//     AC 进度段按子槽键落座注入 project 概览；
+//     概览主体归 project（AC 进度段注入面已随概览 AC 段拔除退役）；
 //   · 单装形态：project 缺席 → priority -10 独立任务概览 body 兜底；
 //   · 后装/卸载：slots.subscribe 通知驱动 dispose/重注册切换（装载顺序无关）；
 //   · subscribe 订阅与当前代注册 disposer wire 进 ctx.effect（卸载级联清理）。
 // 官方 slots 机械核销正本：.forge/docs/probes/host-integration-fixes/slots-keyed-probe.md。
 import { describe, expect, it } from 'vitest'
 import { registerDockTabsFace } from '../../ui/dock-tabs-face.js'
-import { DSWF_OVERVIEW_AC_PROGRESS_SLOT, PRIORITY_PROJECT_OVERVIEW_OWNER, PRIORITY_TASK_LOOP_FALLBACK } from '@dsh-forge/lib-ui'
+import { PRIORITY_PROJECT_OVERVIEW_OWNER, PRIORITY_TASK_LOOP_FALLBACK } from '@dsh-forge/lib-ui'
 import { SIDEBAR_RIGHT_PANE_TAB_SLOT, SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT } from '../../ui/official-seams.js'
 import type { SectionSlotsFace, SlotEntryProjection } from '../../ui/keyed-section.js'
 import type { LocaleServiceFace } from '../../ui/locale.js'
 
 const OVERVIEW_KEY = 'dswf-overview'
-const AC_ENTRY_KEY = 'dswf-ac-progress'
 
 interface Occupant {
   readonly name: string
@@ -28,7 +27,7 @@ function dualSlots(occupied: readonly { name: string; key?: string; priority?: n
   notify(): void
   dispatch(name: string, key: string): unknown
 } {
-  const declared = new Set([SIDEBAR_RIGHT_PANE_TAB_SLOT, SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT, DSWF_OVERVIEW_AC_PROGRESS_SLOT])
+  const declared = new Set([SIDEBAR_RIGHT_PANE_TAB_SLOT, SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT])
   const occupants: Occupant[] = occupied.map((o) => ({ name: o.name, key: o.key, priority: o.priority ?? PRIORITY_PROJECT_OVERVIEW_OWNER, component: 'project-body' }))
   const listeners = new Set<() => void>()
   const slots: SectionSlotsFace & { occupants: Occupant[]; notify(): void; dispatch(name: string, key: string): unknown } = {
@@ -117,16 +116,15 @@ function seatProject(slots: ReturnType<typeof dualSlots>): () => void {
 }
 
 describe('概览 tab 双形态注册切换（裁决 1）', () => {
-  it('集成形态：project 在场 → 零自身 body entry + AC 进度段按子槽键落座', () => {
+  it('集成形态：project 在场 → 零自身 body entry + 零 AC 段注册（注入面已退役）', () => {
     const slots = dualSlots([{ name: SIDEBAR_RIGHT_PANE_TAB_SLOT, key: OVERVIEW_KEY, priority: PRIORITY_PROJECT_OVERVIEW_OWNER }])
     const diag = registerDockTabsFace(fakeCtx() as never, slots, fakeLocale())
     expect(diag.mode).toBe('integrated')
     const ownBody = slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY && e.priority !== PRIORITY_PROJECT_OVERVIEW_OWNER)
     expect(ownBody).toBeUndefined()
-    const ac = slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT && e.key === AC_ENTRY_KEY)
-    expect(ac).not.toBeUndefined()
+    expect(diag.registered.every((n) => !n.includes('dswf-ac-progress')), 'AC 段注入面退役——零 AC 注册').toBe(true)
+    expect(diag.registered, '文档 tab 两段注册不受形态影响').toContain('dswf-doc')
     expect(slots.dispatch(SIDEBAR_RIGHT_PANE_TAB_SLOT, OVERVIEW_KEY)).toBe('project-body')
-    expect(diag.registered).toContain(`${DSWF_OVERVIEW_AC_PROGRESS_SLOT}:${AC_ENTRY_KEY}`)
   })
 
   it('单装形态：project 缺席 → 页型 + priority -10 独立 body + chip 标题段，AC 段零注册', () => {
@@ -136,7 +134,6 @@ describe('概览 tab 双形态注册切换（裁决 1）', () => {
     expect(diag.registered, '单装形态页型兜底注册（guide 入口卡载体）').toContain('dswf-overview: dock tab type')
     const body = slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY)
     expect(body?.priority).toBe(PRIORITY_TASK_LOOP_FALLBACK)
-    expect(slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT)).toBeUndefined()
     expect(slots.dispatch(SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT, OVERVIEW_KEY)).not.toBeUndefined()
   })
 
@@ -158,7 +155,6 @@ describe('概览 tab 双形态注册切换（裁决 1）', () => {
     // 页型随切换级联让位（官方 registry 同 id 二次注册抛错——project 拥有者重试落座前提）
     expect(ctx.disposedTypes, '切集成时单装页型已 dispose').toContain(OVERVIEW_KEY)
     expect(slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY && e.priority !== PRIORITY_PROJECT_OVERVIEW_OWNER)).toBeUndefined()
-    expect(slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT && e.key === AC_ENTRY_KEY)).not.toBeUndefined()
     expect(slots.dispatch(SIDEBAR_RIGHT_PANE_TAB_SLOT, OVERVIEW_KEY)).toBe('project-body')
   })
 
@@ -173,7 +169,6 @@ describe('概览 tab 双形态注册切换（裁决 1）', () => {
     expect(diag.mode).toBe('standalone')
     const body = slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY)
     expect(body?.priority).toBe(PRIORITY_TASK_LOOP_FALLBACK)
-    expect(slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT)).toBeUndefined()
   })
 
   it('subscribe 订阅与当前代 disposer wire 进 ctx.effect：级联清理后通知零重绑、占用零残留', () => {
@@ -188,7 +183,7 @@ describe('概览 tab 双形态注册切换（裁决 1）', () => {
     // 订阅已撤销——project 后到通知不再驱动重绑
     seatProject(slots)
     slots.notify()
-    expect(slots.occupants.find((e) => e.name === DSWF_OVERVIEW_AC_PROGRESS_SLOT)).toBeUndefined()
+    expect(slots.occupants.find((e) => e.name === SIDEBAR_RIGHT_PANE_TAB_SLOT && e.key === OVERVIEW_KEY && e.priority !== PRIORITY_PROJECT_OVERVIEW_OWNER)).toBeUndefined()
   })
 
   it('越权哨兵：单装 body 恒以 -10 落座（同 key 同 priority 0 注册被官方拒收的形态零触发）', () => {

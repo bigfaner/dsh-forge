@@ -133,9 +133,8 @@ describe('pin ⑯-5 产品镜像面（插件注册键与上游口径一致）', 
     expect(DOC_ADDRESS_PREFIX).toBe(`${'dsh-resource://'}${DOC_TAB_KIND}/`)
   })
 
-  it('裁决 5 单源残余收口：AC entryKey / 右栏槽名生产代码零字面量双持（bug 749335ab）', () => {
-    // 单源本体：lib/ui 持 'dswf-ac-progress' 与右栏槽名字面（唯一合法持有点）
-    expect(LIB_UI_SEAMS_SRC).toContain("export const AC_PROGRESS_ENTRY_KEY = 'dswf-ac-progress'")
+  it('裁决 5 单源收口：右栏槽名生产代码零字面量双持（bug 749335ab；AC entryKey 单源已随 AC 段退役——overview-dockkit-alignment G4）', () => {
+    // 单源本体：lib/ui 持右栏槽名字面（唯一合法持有点）
     expect(LIB_UI_SEAMS_SRC).toContain("export const SIDEBAR_RIGHT_PANE_TAB_SLOT = 'sidebar.right.pane.tab'")
     expect(LIB_UI_SEAMS_SRC).toContain(
       "export const SIDEBAR_RIGHT_PANE_TAB_TITLE_SLOT = 'sidebar.right.pane.tab.title'",
@@ -148,8 +147,6 @@ describe('pin ⑯-5 产品镜像面（插件注册键与上游口径一致）', 
       expect(src.includes("'dswf-ac-progress'"), `${name} 残留 'dswf-ac-progress' 字面量`).toBe(false)
       expect(src.includes('"dswf-ac-progress"'), `${name} 残留 "dswf-ac-progress" 字面量`).toBe(false)
     }
-    expect(PROJECT_DOCK_TABS_SRC).toContain('OVERVIEW_AC_PROGRESS_ENTRY_KEY = AC_PROGRESS_ENTRY_KEY')
-    expect(TASK_LOOP_DOCK_TABS_SRC).toContain('OVERVIEW_AC_PROGRESS_ENTRY_KEY = AC_PROGRESS_ENTRY_KEY')
     // 槽名单源到底：两插件 official-seams.ts 本地再声明退役——改引 lib/ui 透传
     for (const [name, src] of [
       ['project official-seams', PROJECT_OFFICIAL_SEAMS_SRC],
