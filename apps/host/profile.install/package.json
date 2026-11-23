@@ -43,9 +43,6 @@
     "@deepseek-ai/schemastery": "3.18.4",
     "chokidar": "5.0.0",
     "gray-matter": "4.0.3",
-    "mammoth": "1.13.0",
-    "mermaid": "12.1.0",
-    "pdfjs-dist": "4.10.38",
     "zod": "4.6.6"
   }
 }

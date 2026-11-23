@@ -15,7 +15,7 @@ import { build } from "esbuild";
 import { readFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { auditDist } from "./self-containment.mjs";
+import { auditDist, BUILD_TIME_EXTERNALS } from "./self-containment.mjs";
 
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_ID = "@dsh-forge/markdown-kit";
@@ -77,12 +77,13 @@ if (/^import[\s("']/m.test(clientJs) || /^export\b/m.test(clientJs) || clientJs.
   console.error("[bundle-client] 离手门失败：产物带顶层 ESM 语句/import.meta——classic script 语法不兼容");
   process.exit(1);
 }
-// 其余审计面（相对引用悬空 / @dsh-forge/* / exports 闭包）照跑——client.js 裸名启发式
-// 假阳豁免（真实外置面由上方专用 require 断言承担）。
+// 其余审计面（相对引用悬空 / @dsh-forge/* / exports 闭包）照跑——裸名假阳由
+// self-containment 说明符级证伪面（块注释剥离 + 说明符字符形态 + node 内建白名单）
+// 收敛承担，零整文件豁免（bug d00302ef 豁免面收敛）。
 const violations = auditDist(pkgDir, {
   requireDist: true,
   exportsPrefixes: ["./dist/client.js"],
-  bareHeuristicExempt: [clientJsPath],
+  buildTimeExternals: BUILD_TIME_EXTERNALS,
 });
 if (violations.length > 0) {
   console.error(`[bundle-client] 离手门失败：dist 自含审计 ${violations.length} 处违规`);

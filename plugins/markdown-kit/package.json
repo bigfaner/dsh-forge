@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/markdown-kit",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "description": "dsh 插件：markdown-kit——mermaid 渲染与图源校验 + 文档转换枢纽（mermaid 依赖全仓唯一引用方；host 半 = validateMermaid/convertDocument tool + 引擎适配，ui 半 = React DOM 渐进增强器）",
@@ -28,14 +28,6 @@
     "build": "node scripts/clean-dist.mjs && tsc -b && node scripts/sync-version.mjs && node scripts/bundle-host.mjs && node scripts/bundle-client.mjs",
     "prepack": "node scripts/self-containment.mjs"
   },
-  "dependencies": {
-    "mammoth": "1.13.0",
-    "mermaid": "12.1.0",
-    "pdfjs-dist": "4.10.38"
-  },
-  "bundledDependencies": [
-    "mammoth"
-  ],
   "peerDependencies": {
     "react": "^18.0.0"
   },
@@ -45,6 +37,9 @@
     }
   },
   "devDependencies": {
+    "mammoth": "1.13.0",
+    "mermaid": "12.1.0",
+    "pdfjs-dist": "4.10.38",
     "@types/node": "24.19.0",
     "@types/react": "18.3.12",
     "@types/react-dom": "~18.3.0",

@@ -2,7 +2,7 @@
 // 升级装不物化新增依赖，传递链落 .pnpm 隐藏仓越出判定集合 → 拒装；修法换层 = 物化层内联）。
 // 断言面：①内联闭包完整性（bundled 根为真实目录、树内每包 manifest 可读、相对引用闭合）
 // ②ESM/CJS exports 解析验证（每包入口经 exports/main 解析命中真实文件）。
-import { mkdirSync, rmSync, symlinkSync, writeFileSync, mkdirSync as md } from "node:fs";
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { auditBundledClosure } from "../../scripts/self-containment.mjs";
@@ -11,11 +11,11 @@ let root: string;
 
 function pkgDir(name: string, manifest: object, files: Record<string, string> = {}) {
   const dir = join(root, "node_modules", name);
-  md(dir, { recursive: true });
+  mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "package.json"), JSON.stringify(manifest));
   for (const [rel, body] of Object.entries(files)) {
     const p = join(dir, rel);
-    md(join(p, ".."), { recursive: true });
+    mkdirSync(join(p, ".."), { recursive: true });
     writeFileSync(p, body);
   }
   return dir;

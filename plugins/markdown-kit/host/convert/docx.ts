@@ -5,7 +5,7 @@
 //   assets（缺省）——mammoth images.imgElement 逐图回调，字节经注入 writeAsset 落
 //     输出旁 assets/ 并改写引用为相对路径（非 base64、非 docx 内部路径）；
 //   discard——同回调恒返空 src，转换后剥除空图引用（零图片落盘）。
-import mammoth from 'mammoth'
+import * as mammothModule from 'mammoth'
 import { ConvertDocumentError, isConvertDocumentError } from './errors.js'
 
 /** mammoth 最小消费面（结构化窄面——真实现结构兼容，库类型漂移不外溢） */
@@ -27,7 +27,10 @@ interface MammothLike {
   }
 }
 
-const mammothLike = mammoth as unknown as MammothLike
+// CJS 互操作鲁棒形态：mammoth 为 CJS 包——esbuild bundle（esm）与 vite/ Node 直载的
+// default 形态不同（bundle 态 default=module.exports、部分加载器 default 缺名）；
+// namespace + default 兜底双态收敛，加载器差异不再外溢到消费面。
+const mammothLike = ((mammothModule as { default?: unknown }).default ?? mammothModule) as unknown as MammothLike
 
 /** content-type → 图片扩展名（assets 命名面；未知类型归 .png 兜底——mammoth 侧原样字节） */
 function extOfContentType(contentType: string | undefined): string {

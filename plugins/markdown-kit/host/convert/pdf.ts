@@ -34,9 +34,8 @@ interface PdfjsModule {
   }): { promise: Promise<PdfDocument> }
 }
 
-// pdfjs legacy build 入口（pdfjs-dist/exports 固定子路径；变量说明符动态 import
-// ——esbuild external + 运行期 registry 解析，依赖随包物化清单保证在场）。
-const PDFJS_LEGACY_SPECIFIER = 'pdfjs-dist/legacy/build/pdf.mjs'
+// pdfjs legacy build 入口（pdfjs-dist/legacy 固定子路径；字面量说明符动态 import
+// ——esbuild bundle 期全内联进 dist，零 registry 解析径——零运行时依赖终态）。
 
 export interface PdfConvertOutcome {
   readonly markdown: string
@@ -47,7 +46,7 @@ export interface PdfConvertOutcome {
 export async function convertPdfToMarkdown(buffer: Buffer): Promise<PdfConvertOutcome> {
   let doc: PdfDocument
   try {
-    const pdfjs = (await import(/* @vite-ignore */ PDFJS_LEGACY_SPECIFIER)) as unknown as PdfjsModule
+    const pdfjs = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as unknown as PdfjsModule
     doc = await pdfjs.getDocument({
       data: new Uint8Array(buffer),
       useWorkerFetch: false,

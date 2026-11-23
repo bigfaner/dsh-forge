@@ -9,6 +9,7 @@
 // 官方单例（@deepseek-ai/*，宿主壳层提供）与 dependencies 内 registry 依赖外置合法；
 // 其余裸名一律违规。Run once per gate；run-once, no watch。
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
+import { builtinModules } from "node:module";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,6 +24,29 @@ const PRIVATE_NAMESPACE = "@dsh-forge/";
 // 平台外置白名单（合法外置面）：@deepseek-ai/* 官方单例（宿主壳层提供解析路径）；
 // react 族（client bundle 平台基线——shell 冻结种子表单例，react 永不内联）；node: 内建。
 const PLATFORM_BARE = /^(?:react|react-dom)(?:\/[A-Za-z0-9-]+)?$/;
+
+// node 内建裸名（零 node: 前缀旧形态）——内联 vendor 体（lodash/d3）的 guarded
+// require("util") 等检测分支，Node 运行时恒可解析，合法外置。
+const NODE_BUILTINS = new Set(builtinModules);
+
+// 真实模块说明符形态过滤（bug d00302ef 假阳豁免收敛——以说明符级证伪替代整文件豁免）：
+// 合法说明符只含 [A-Za-z0-9@_./:-]——字符串/模板字面量内容（","、"${url}" 等）在此
+// 证伪，不是运行期引用。
+const PLAUSIBLE_SPECIFIER = /^[A-Za-z0-9@_./:-]+$/;
+
+/** 剥离块注释（内联 vendor 的 JSDoc 文档字符串含 from "x" 字样——非运行期引用）。 */
+function stripBlockComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, " ");
+}
+
+// 构建期外置声明面（bug d00302ef 豁免面收敛——单一事实源，bundle-host 离手门与
+// prepack CLI 共用）：ui 半（./web 出口）与 ui 闭包保留的 dist/host/validate tsc
+// 中间体由 apps 构建期打包器消费，mermaid 自 workspace devDependencies 解析；
+// 运行期装载面（dist/host/index.js bundle + client.js）零豁免。
+export const BUILD_TIME_EXTERNALS = {
+  specifiers: ["mermaid"],
+  prefixes: ["./dist/ui", "./dist/host/validate"],
+};
 
 export function walkJs(dir) {
   const out = [];
@@ -50,8 +74,13 @@ export function exportsDistPaths(pkg) {
 /**
  * 全量审计 dist（相对 pkgDir）。requireDist=false 时 dist 缺席返回空（纯 src 测试树
  * 跳过语义）；离手门调用恒传 true——产物缺席即违规。
+ *
+ * buildTimeExternals（bug d00302ef 豁免面收敛——显式声明制替代整文件启发式豁免）：
+ * 构建期消费面（ui 半 ./web 出口 + ui 闭包保留的 tsc 中间体，由 apps 构建期打包器
+ * 解析）可声明的合法裸名外置 { specifiers, prefixes }——file 落 prefixes 且 spec 落
+ * specifiers 即合法；声明面之外零豁免。
  */
-export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./dist"], bareHeuristicExempt = [] } = {}) {
+export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./dist"], buildTimeExternals = null } = {}) {
   const distDir = join(pkgDir, "dist");
   const violations = [];
   if (!existsSync(distDir)) {
@@ -65,11 +94,12 @@ export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./d
   ]);
 
   for (const file of walkJs(distDir)) {
-    const source = readFileSync(file, "utf8");
+    const source = stripBlockComments(readFileSync(file, "utf8"));
     for (const match of source.matchAll(SPECIFIER)) {
       const spec = match[1];
-      // 说明符形态过滤：模块名不含空白/引号——数据表字符串字面量不是运行期引用。
-      if (/[\s"']/.test(spec)) continue;
+      // 说明符形态过滤：模块名不含空白/引号且只含合法说明符字符——数据表字符串
+      // 字面量/模板插值不是运行期引用。
+      if (/[\s"']/.test(spec) || !PLAUSIBLE_SPECIFIER.test(spec)) continue;
       if (spec.startsWith(".")) {
         // 相对引用必须命中 dist 内存在文件（丢 chunk 结构性拦截）。
         const base = resolve(dirname(file), spec);
@@ -79,17 +109,19 @@ export function auditDist(pkgDir, { requireDist = false, exportsPrefixes = ["./d
         }
       } else if (spec.startsWith(PRIVATE_NAMESPACE)) {
         violations.push(`${file}: @dsh-forge/* 模块引用 "${spec}"（private 包不可 registry 安装——必须内联归零）`);
-      } else if (spec.startsWith(NODE_PREFIX)) {
-        // node 内建合法。
+      } else if (spec.startsWith(NODE_PREFIX) || NODE_BUILTINS.has(spec)) {
+        // node 内建合法（node: 前缀新形态 + 零前缀旧形态）。
       } else if (spec.startsWith(OFFICIAL_SINGLETON)) {
         // 官方单例外置合法（宿主壳层提供解析路径）。
       } else if (spec.startsWith("bun:") || isAbsolute(spec)) {
         violations.push(`${file}: 非法模块说明符 "${spec}"`);
+      } else if (
+        buildTimeExternals !== null &&
+        buildTimeExternals.specifiers.includes(spec) &&
+        buildTimeExternals.prefixes.some((prefix) => `./${file.slice(pkgDir.length + 1).replace(/\\/g, "/")}`.startsWith(prefix))
+      ) {
+        // 声明制构建期外置面（ui 半构建期消费——apps 打包器解析，运行期不经插件 dist 装载）。
       } else if (!PLATFORM_BARE.test(spec) && !runtimeDeps.has(spec)) {
-        // 裸名启发式豁免面（client bundle：内联 vendor 体带 guarded require("util")、
-        // __name(fn,"x") 等形态在此假阳；其真实外置面由 bundle-client 专用 require
-        // 面断言只认平台种子表承担）。
-        if (bareHeuristicExempt.includes(file)) continue;
         violations.push(`${file}: 裸模块引用 "${spec}" 不在 dependencies/peerDependencies（独立安装形态断链）`);
       }
     }
@@ -212,12 +244,15 @@ function resolveEntry(dir, manifest, violations) {
 const isCli = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isCli) {
   const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const clientJs = join(pkgDir, "dist/client.js");
+  // 构建期外置声明面（bug d00302ef 收敛——显式声明制）：ui 半（./web 出口）与 ui 闭包
+  // 保留的 dist/host/validate tsc 中间体由 apps 构建期打包器消费，mermaid 自 workspace
+  // devDependencies 解析；运行期装载面（dist/host/index.js bundle + client.js）零豁免。
   const violations = auditDist(pkgDir, {
     requireDist: true,
-    bareHeuristicExempt: existsSync(clientJs) ? [clientJs] : [],
+    buildTimeExternals: BUILD_TIME_EXTERNALS,
   });
-  // bundledDependencies 内联闭包审计（bug d211bc24 物化层换层）。
+  // bundledDependencies 内联闭包审计（bug d211bc24 物化层机检——零运行时依赖形态下
+  // 声明集为空即零开销保留，防未来再引入 bundled 面时机检缺席）。
   const pkgForBundled = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
   violations.push(...auditBundledClosure(pkgDir, pkgForBundled));
   if (violations.length > 0) {
