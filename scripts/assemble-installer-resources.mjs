@@ -71,12 +71,12 @@ const STAGING_EXTRAS = {
   // （plugin-spec 1.9 技能全数迁出；README 占位保持目录声明面）
   'plugin-forge': { files: ['skills'], keyFiles: [] },
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
-  // expert-squad 内置专家层目录（scan.ts resolvePluginExpertsRoot 相对 dist 的
-  // ../../experts 解析；bundle-structure 测试钉「随包 ≥1 档案」——缺席即内置层静默缺失）
-  // + 技能面 skills/roundtable（customSkillDirs[squad] 挂载源——fix-1 迁入）
+  // expert-squad（零内置专家——expert-builtin-redistribution 删除随包 experts/ 档案，
+  // c6f8f1dc；内置层归各归属插件 host registerRoot）+ 技能面 skills/roundtable
+  // （customSkillDirs[squad] 挂载源——fix-1 迁入）
   // + 组合装配行本体 cordis.patch.yml（package.json dsh.bundle.patch 声明指向——loader
   // 按声明读包内该文件触发 apply 注册，缺席即 ENOENT，bug a1f13abf）
-  'expert-squad': { files: ['experts', 'skills', 'cordis.patch.yml'], keyFiles: ['experts/code-reviewer.md', 'skills/roundtable/SKILL.md', 'cordis.patch.yml'] },
+  'expert-squad': { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/roundtable/SKILL.md', 'cordis.patch.yml'] },
   // knowledge 技能面（knowledge-stage1 1.9 A5 挂载源；stage② 1.5 增 skills/distill
   // 整合技能——learn（写入径）+ distill（存量整合）双技能面；缺席即预设组合
   // knowledge 技能面静默缺失）

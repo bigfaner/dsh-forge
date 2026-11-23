@@ -52,7 +52,8 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // 组合专行——hr.patch 钉死「全局单实例注册、各组合统一继承」；无 userLayerRow；零
   // @dsh-forge 依赖无闭包径）→ 安装版 runtime 缺包，/api/expert-squad/* 全 404。
   // userLayerRow: true = 全局装载（管理工具面非 forge 管线面，不违标准模式零 forge 裁决），
-  // 同时作为 staging 种子随包；experts/ 内置层目录随包由 STAGING_EXTRAS 承担。
+  // 同时作为 staging 种子随包（零内置专家——随包 experts/ 档案已删，
+  // expert-builtin-redistribution；技能面/装配行由 STAGING_EXTRAS 承担）。
   // dir（批1 包归位）：包自 packages/plugins/ 迁 root 级 plugins/ 树——assemble 侧
   // packageDirOf 改读本字段直取居所（键 = 表值 'plugins/expert-squad'）。
   'expert-squad': { userLayerRow: true, dir: 'plugins/expert-squad' },
