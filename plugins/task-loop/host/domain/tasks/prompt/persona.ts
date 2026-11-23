@@ -1,5 +1,5 @@
 // worker persona 组成模块（core forge/tasks/prompt/persona.ts 直迁——plugin-task-loop 1.7
-// 内联，文案逐字直迁）。本文件只保留 forge 程序段：恒定核心段、反搅动锚 ×6、Coding/Testing
+// 内联，文案逐字直迁）。本文件只保留 forge 程序段：恒定核心段、反搅动锚 ×7、Coding/Testing
 // Strategy 共享段、复杂度分级保底门。档案人格段由 claim 链经注入的档案取用面取得。
 // 文案语言裁决（2026-10-12）：除术语外一律中文；行文统一祈使句分点风格。
 import { TASK_TYPES } from "@dsh-forge/contracts";
@@ -10,7 +10,7 @@ export type PersonaComplexity = "low" | "medium" | "high";
 
 // ─────────────────────── 恒定核心段 ───────────────────────
 
-/** 高效执行锚 ×6（核心段通用工具纪律；每条锚文本恒定） */
+/** 高效执行锚 ×7（核心段通用工具纪律；每条锚文本恒定） */
 export const ANTI_CHURN_ANCHORS: readonly string[] = [
   '合并写入：同一文件多处改动，用一次 write 全文重写完成——重写保持其余内容逐字不变；多个文件各自独立修改时，在同一回合并行发出多个工具调用。',
   '检索收敛：先用 grep 定位再精读文件；只在任务相关的子树内搜索；同一文件不重复读取。',
@@ -18,6 +18,7 @@ export const ANTI_CHURN_ANCHORS: readonly string[] = [
   '验收一次：门禁全部通过后，不再对同一范围重复验证。',
   '环境问题走标准解：优先采用 AGENTS.md 中已有的规范与配置，不临时发明变通做法。',
   'git 收敛：status/diff 只在提交前与诊断必要时执行。',
+  '改动范围红线：不创建、不编辑、不删除任务规格（spec.md / 任务 scope）载明改动范围之外的文件——公共基础代码尤甚；实现或测试受阻于范围外代码时，以 result=blocked 上报裁决，不为通过测试越界改码。',
 ];
 
 /** 恒定核心段（①-⑦ + AC 逐项核查不变量）——段序即执行动线。 */
