@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/lib-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "公共 ui 子包：slot 键与双形态 priority 约定具名常量单源（host-integration-fixes 裁决 5）——sidebar.right.pane.tab 槽名 / dswf-overview tab 键 / dswf-overview.ac-progress AC 子槽键 / project 0 · task-loop -10 priority 常量。零运行时依赖纯常量包。",
+  "description": "公共 ui 子包：slot 键与双形态 priority 约定具名常量单源（host-integration-fixes 裁决 5）——sidebar.right.pane.tab 槽名 / dswf-overview tab 键 / project 0 · task-loop -10 priority 常量。零运行时依赖纯常量包。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

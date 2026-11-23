@@ -5,8 +5,6 @@
 // project 0（拥有者）与 task-loop -10（单装兜底）为该语义下的约定值。
 import { describe, expect, it } from 'vitest'
 import {
-  AC_PROGRESS_ENTRY_KEY,
-  DSWF_OVERVIEW_AC_PROGRESS_SLOT,
   DSWF_OVERVIEW_TAB_KEY,
   PRIORITY_PROJECT_OVERVIEW_OWNER,
   PRIORITY_TASK_LOOP_FALLBACK,
@@ -20,14 +18,6 @@ describe('slot/tab 键具名常量（单源字面值 pin）', () => {
 
   it('dswf-overview tab 键 = 双形态共用概览 tab kind', () => {
     expect(DSWF_OVERVIEW_TAB_KEY).toBe('dswf-overview')
-  })
-
-  it('dswf-overview.ac-progress AC 子槽键 = 集成形态 AC 进度段落座缝', () => {
-    expect(DSWF_OVERVIEW_AC_PROGRESS_SLOT).toBe('dswf-overview.ac-progress')
-  })
-
-  it('dswf-ac-progress AC 进度段占用键 = project renderSlot entryKey 分发 / task-loop 落座键', () => {
-    expect(AC_PROGRESS_ENTRY_KEY).toBe('dswf-ac-progress')
   })
 })
 
