@@ -18,7 +18,6 @@ import {
   initialOverviewFilter,
   isChipDisabled,
   nextSort,
-  overviewHeadSummary,
   searchPlaceholderOf,
   searchQueryOf,
   statusFilterParam,
@@ -156,15 +155,8 @@ describe('父行展开（AC4 多开并存）', () => {
   })
 })
 
-describe('ov-head 摘要合成', () => {
-  it('「feature · N 会话 · N 完成」；活跃 feature 缺席 = —；会话计数缺席 = 省略段', () => {
-    expect(overviewHeadSummary({ activeFeature: 'm2-pipeline', sessionCount: 2, completedCount: 7 })).toBe(
-      'm2-pipeline · 2 会话 · 7 完成',
-    )
-    expect(overviewHeadSummary({ completedCount: 3 })).toBe('— · 3 完成')
-  })
-
-  it('activeFeatureSlug：非终态（completed/archived 之外）优先，否则首行；空集 = undefined', () => {
+describe('activeFeatureSlug（task-tab feature pill 单源——头摘要已随 T1-head 裁决退役）', () => {
+  it('非终态（completed/archived 之外）优先，否则首行；空集 = undefined', () => {
     const card = (slug: string, featureStatus: 'prd' | 'completed' | 'archived') => ({
       featureId: `id-${slug}`,
       slug,

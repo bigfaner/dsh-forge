@@ -1,6 +1,7 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
-// 概览折叠头（定位：业务——UF-1 ov-head：默认折叠 = 项目名 + 一行状态摘要；展开路径详情
-// 4 行[工作区/文档位置/知识目录/任务清单@hash8]）。M3.1 D20（原型十一轮）：展开/收起 =
+// 概览折叠头（定位：业务——UF-1 ov-head：默认折叠 = 项目名；展开路径详情 = forgeDirs
+// 五行目录事实[工作区根/.forge 目录/文档位置/项目运行产物/Worktree根目录]——用户裁决
+// 2026-11-23 头无会话统计，状态摘要行已退役）。M3.1 D20（原型十一轮）：展开/收起 =
 // 名称行内同一枚按钮同位翻转（官方 ChevronDown 旋转 + 展开↔收起文案 + aria-expanded）——
 // 行内 ghost ▾/▴ 字符钮与底部右对齐收起钮退役。官方件复用：折叠钮 = 官方 Button（ghost/sm）
 // + 官方 IconChevronDownOutlineRegular；信息行自绘（官方无对应件）全令牌。
@@ -18,9 +19,7 @@ export interface OverviewHeadRow {
 export interface OverviewHeadProps {
   /** 项目名（projects.get name） */
   readonly projectName: string
-  /** 一行状态摘要（overviewHeadSummary 合成——「feature · N 会话 · N 完成」） */
-  readonly summary: string
-  /** 展开路径详情 4 行（overviewHeadRows 合成） */
+  /** 展开路径详情 5 行（overviewHeadRows 合成——forgeDirs 五行目录事实） */
   readonly rows: readonly OverviewHeadRow[]
   /** 展开态（默认折叠——受控） */
   readonly open: boolean
@@ -29,7 +28,7 @@ export interface OverviewHeadProps {
 }
 
 /** 概览折叠头（M3.1 D20：同一枚按钮同位翻转——ChevronDown 旋转 + 展开↔收起文案） */
-export function OverviewHead({ projectName, summary, rows, open, onToggle }: OverviewHeadProps): ReactNode {
+export function OverviewHead({ projectName, rows, open, onToggle }: OverviewHeadProps): ReactNode {
   return (
     <div className="dswf-ov-head" data-dswf-ov-head="">
       <div className="dswf-ov-head-line">
@@ -37,7 +36,6 @@ export function OverviewHead({ projectName, summary, rows, open, onToggle }: Ove
         <Tooltip label={projectName} portal>
           <span className="dswf-ov-name">{projectName}</span>
         </Tooltip>
-        <span className="dswf-ov-summary">{summary}</span>
         {/* D37：控件自释零 Tooltip——钮面「展开↔收起」文案 + aria-expanded 已承载两态
             （「展开/收起位置详情」气泡随 D37 退役；aria-label = 可达名保留非气泡位） */}
         <Button

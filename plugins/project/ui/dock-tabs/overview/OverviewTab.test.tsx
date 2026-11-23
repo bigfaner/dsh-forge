@@ -77,7 +77,6 @@ const frame = (over: {
   list?: OverviewListData
   phase?: 'loading' | 'ready' | 'error'
   error?: { message: string; uiState: 'error-bar' | 'banner' | 'empty-state' }
-  sessionCount?: number
   renderTasksTab?: (ctx: unknown) => ReactNode
   onOpenBug?: (bugId: string) => void
 }) =>
@@ -94,7 +93,6 @@ const frame = (over: {
       now={NOW}
       {...handlers}
       {...(over.renderTasksTab === undefined ? {} : { renderTasksTab: over.renderTasksTab as never })}
-      {...(over.sessionCount === undefined ? {} : { sessionCount: over.sessionCount })}
       {...(over.onOpenBug === undefined ? {} : { onOpenBug: over.onOpenBug })}
     />,
   )
@@ -110,9 +108,11 @@ describe('OverviewFrame 面板骨架（AC1/AC2）', () => {
     expect(markup).toContain('data-dswf-ov-sort')
   })
 
-  it('ov-head 摘要合成：活跃 feature + 完成数（head bundle 单源）；会话计数注入位', () => {
-    expect(frame({})).toContain('m2-pipeline · 3 完成')
-    expect(frame({ sessionCount: 2 })).toContain('m2-pipeline · 2 会话 · 3 完成')
+  it('ov-head 头内容（T1-head 裁决 2026-11-23）：项目名在场；无会话统计摘要行', () => {
+    const markup = frame({})
+    expect(markup).toContain('demo')
+    expect(markup).not.toContain('dswf-ov-summary')
+    expect(markup).not.toContain('会话 ·')
   })
 
   it('头路在途（head 缺席）= ov-head 不渲染，sticky 与内容区保持', () => {

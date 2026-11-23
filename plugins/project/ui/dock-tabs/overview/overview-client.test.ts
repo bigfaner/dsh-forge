@@ -1,17 +1,19 @@
-// 概览行集读缝自洽化测试钉：
+// 概览数据路测试钉：
 //   fix-19（bug 24311b78）：bugs 读缝自 core forge:bugs/* preload 退役；
 //   fix-20（bug 145b3d3b）：bugs 行集/计数 chips 数据源 = 插件本地 forgeBugs
 //   （plugins/project/host/bugs = project.db）经本地 preload 通道（window.dshForge.invoke）
 //   投影——宿主 forge:bugs/list 供数缝自本版起改接插件 forge.bugs 缝（child.ts wiring）；
-//   Typert/forge remote 消费在该行集路径归零为数据源（本地缝不可达时 fail-soft 加速回落，
-//   不作数据源）。测试钉：
-//   ① 无 forge remote 面环境行集投影成立：face 缺席 + 本地通道由插件本地服务供数——
+//   T1-head（overview-dockkit-alignment）：头路（projects/stats/features）= Typert 单通路
+//   （forgeProjects namespace——官方宿主零依赖 preload transport；window.dshForge.invoke
+//   官方宿主构造期即抛）。测试钉：
+//   ① 无 forge remote 面环境 bugs 行集投影成立：face 缺席 + 本地通道由插件本地服务供数——
 //     seed → 行集/计数可见（RED→GREEN 锚）；
-//   ② 本地通道在席时 Typert face 零消费（本地读缝单源——face 缺席仍解析）；
+//   ② 本地通道在席时 bugs 通道 Typert face 零消费（本地读缝单源——face 缺席仍解析）；
 //   ③ 本地通道失败 → Typert 回落解析（fail-soft 加速——本地缝正常时零回落）；
-//   ④ 非 bugs 通道路由不变：projects.list 仍走 preload 通道（window.dshForge.invoke）。
+//   ④ 头路 Typert 单通路（T1-head）：projects.list 走 forgeProjects namespace——preload
+//     通道零调用（window.dshForge 缺席环境解析成立）。
 import { afterEach, describe, expect, it } from 'vitest'
-import { BUGS_CHANNELS, PROJECTS_CHANNELS, type ListBugsQuery } from '@dsh-forge/contracts'
+import { BUGS_CHANNELS, type ListBugsQuery } from '@dsh-forge/contracts'
 import { openDomainDb, PROJECT_DB_PREFIX, type DomainDb } from '../../../host/db/connection.js'
 import { createBugsService } from '../../../host/bugs/service.js'
 import { installForgeRemoteFace } from '../../rpc.js'
@@ -115,17 +117,20 @@ describe('概览行集读缝自洽化（fix-20 bug 145b3d3b——本地 forgeBug
     await expect(client.bugs.list({ projectId: 'p-1' })).resolves.toEqual([])
   })
 
-  it('④ 非 bugs 通道路由不变：projects.list 仍走 preload 通道（window.dshForge.invoke）', async () => {
-    const channels: string[] = []
-    ;(globalThis as Record<string, unknown>).dshForge = {
-      invoke: async (channel: string) => {
-        channels.push(channel)
-        return { ok: true, data: [] }
+  it('④ 头路 Typert 单通路（T1-head）：projects.list 走 forgeProjects namespace——preload 通道零调用', async () => {
+    // window.dshForge 缺席（官方宿主形态）——preload transport 构造期即抛
+    delete (globalThis as { dshForge?: unknown }).dshForge
+    const calls: string[] = []
+    installForgeRemoteFace(() => ({
+      forgeProjects: {
+        list: async () => {
+          calls.push('forgeProjects.list')
+          return { ok: true, value: [{ id: 'p-1', name: 'demo' }] }
+        },
       },
-    }
+    }) as never)
     const client: ForgeRpcClient = overviewRpcClientFactory()
-    await client.projects.list()
-    expect(channels).toEqual([PROJECTS_CHANNELS.list])
-    expect(channels).not.toContain(BUGS_CHANNELS.list)
+    await expect(client.projects.list()).resolves.not.toThrow()
+    expect(calls).toEqual(['forgeProjects.list'])
   })
 })

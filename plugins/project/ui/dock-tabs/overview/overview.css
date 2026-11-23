@@ -57,16 +57,6 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.dswf-ov-summary {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-tertiary);
-}
-
 /* M3.1 D20 同位翻转钮 caret：官方 ChevronDown（ghost Button 内）——展开态旋转 180°
  * （↓↔↑ 几何翻转，替代退役的 ▾/▴ 字符形态）；文案 展开↔收起 两字等宽保三次几何同位 */
 .dswf-ov-head-caret {

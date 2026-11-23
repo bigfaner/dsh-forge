@@ -13,11 +13,12 @@
 // 经 rpcUiState 三态映射）。effect 仅编排胶水（Node 测面外，归 4.1 装配 + e2e）。
 import { useEffect, useRef, useState } from 'react'
 import type { BugCard, BugStatus, DirFactRow, FeatureCard, FeatureDocumentRow, TaskStats } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../rpc-channels.js'
+import { subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../rpc-channels.js'
+import { typertRpcClientFactory } from '../typert-transport.js'
 import { overviewRpcClientFactory } from './overview-client.js'
 import { RpcClientError } from '../rpc-channels.js'
 import { rpcUiState, type RpcUiStateKind } from '../rpc-channels.js'
-import { DIR_FACTS_ROW_KEYS, dirFactRowLabel, type DirFactRowKey } from './dir-rows.js'
+import { DIR_FACTS_ROW_KEYS, dirHeadRows } from './dir-rows.js'
 import { bugStatusCounts, OVERVIEW_FEATURE_ENABLED, searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
 import { docsRootOf } from './message-format.js'
 
@@ -56,18 +57,19 @@ export interface OverviewHeadBundle {
 /**
  * 概览 ov-head 基本信息区五行（用户裁定 2026-11-13：工作区根 / .forge 目录 / 文档位置 /
  * 任务清单 / 派发工作树区——数据源 = host 侧锚注册表解析经 forgeDirs Typert 下发的
- * dirRows，UI 只渲染零拼接）。dirRows 缺席行 = 「—」；workspaceRoot/forgeDir 两行以
- * projects.get 项目行回退（同为 host 下发事实，非 UI 拼接）。
+ * dirRows，UI 只渲染零拼接）。投影单源 = dirHeadRows（dir-rows.ts——T1-head 双实现归一），
+ * 本函数只叠加项目行回退：dirRows 缺席行以 projects.get 项目行回退（workspaceRoot/forgeDir
+ * 两键——同为 host 下发事实，非 UI 拼接），其余行缺席 = 「—」。
  */
 export function overviewHeadRows(
   head: OverviewHeadBundle,
   dirRows?: readonly DirFactRow[],
 ): readonly { readonly label: string; readonly value: string }[] {
-  return DIR_FACTS_ROW_KEYS.map((dirKey: DirFactRowKey) => {
-    const remote = dirRows?.find((row) => row.dirKey === dirKey)?.dir
+  return dirHeadRows(dirRows).map((row, index) => {
+    const dirKey = DIR_FACTS_ROW_KEYS[index]
     const fallback =
       dirKey === 'workspaceRoot' ? head.workspaceDir : dirKey === 'forgeDir' ? head.forgeDir : undefined
-    return { label: dirFactRowLabel(dirKey), value: remote ?? fallback ?? '—' }
+    return { label: row.label, value: row.value !== '—' || fallback === undefined || fallback === '' ? row.value : fallback }
   })
 }
 
@@ -194,11 +196,12 @@ export async function fetchOverviewList(
  * 失败/项目缺席/无锚 = undefined 不阻断（消费方 pathLine 回退 `docs` 缺省锚）。
  * 抽屉诊断通道独立于概览头路（TaskDrawer 在 OverviewTab 之外渲染——装配体自装载）。
  * @param projectId - 当前项目（null = 无锚不拉取）
- * @param makeClient - RPC client 构造器（缺省 preload 真身；注入 = 测试面）
+ * @param makeClient - RPC client 构造器（缺省 Typert 真身——官方宿主可达，T1-head preload
+ *   残面收口；注入 = 测试面）
  */
 export function useProjectDocsRoot(
   projectId: string | null,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = typertRpcClientFactory,
 ): string | undefined {
   const [docsRoot, setDocsRoot] = useState<string | undefined>(undefined)
   useEffect(() => {

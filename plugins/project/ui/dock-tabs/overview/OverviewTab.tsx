@@ -14,14 +14,12 @@ import { overviewRpcClientFactory } from './overview-client.js'
 import { useDirFactRows } from './dir-rows.js'
 import { ErrorBar, SkeletonRows } from '../../components.js'
 import {
-  activeFeatureSlug,
   bugStatusFilterParam,
   clearBugStatusFilter,
   clearPhaseFilter,
   clearStatusFilter,
   initialOverviewFilter,
   nextSort,
-  overviewHeadSummary,
   searchQueryOf,
   statusFilterParam,
   switchSubtab,
@@ -86,8 +84,6 @@ export interface OverviewFrameProps {
   readonly dirRows?: readonly DirFactRow[]
   /** 视图本地态（受控注入——OverviewTab 单一来源） */
   readonly filter: OverviewFilterState
-  /** ov-head 摘要会话计数（4.1 装配注入——sessions/workspaces 账本快照；缺席省略段） */
-  readonly sessionCount?: number
   readonly onSubtabChange: (subtab: OverviewSubtab) => void
   readonly onSearchChange: (search: string) => void
   readonly onSortToggle: () => void
@@ -127,7 +123,6 @@ export function OverviewFrame({
   error,
   dirRows,
   filter,
-  sessionCount,
   onSubtabChange,
   onSearchChange,
   onSortToggle,
@@ -236,11 +231,6 @@ export function OverviewFrame({
         {head === undefined ? null : (
           <OverviewHead
             projectName={head.projectName}
-            summary={overviewHeadSummary({
-              activeFeature: activeFeatureSlug(head.features),
-              sessionCount,
-              completedCount: head.stats.byStatus.completed ?? 0,
-            })}
             rows={overviewHeadRows(head, dirRows)}
             open={filter.headOpen}
             onToggle={onToggleHead}
@@ -342,7 +332,8 @@ export interface OverviewTabProps {
   readonly projectId: string
   /** RPC client 构造器（缺省 preload 真身；注入 = 测试面——rpc 经 mock 注入） */
   readonly makeClient?: RpcClientFactory
-  /** ov-head 摘要会话计数（4.1 装配注入） */
+  /** 已退役（用户裁决 2026-11-23：头无会话统计——头摘要行随 T1-head 退役）。保留 props 形
+   *  兼容既有装配传参（apps/web ShellHost 在 spec 改动范围外），消费归零。 */
   readonly sessionCount?: number
   /** 文档行点击（dock 开 tab——4.1 接线） */
   readonly onOpenDoc?: (docRel: string) => void
@@ -366,7 +357,6 @@ export interface OverviewTabProps {
 export function OverviewTab({
   projectId,
   makeClient = overviewRpcClientFactory,
-  sessionCount,
   onOpenDoc,
   renderTasksTab,
   focusTasksNonce,
@@ -451,7 +441,6 @@ export function OverviewTab({
         error={load.error}
         dirRows={dirRows}
         filter={filter}
-        sessionCount={sessionCount}
         onSubtabChange={handleSubtabChange}
         onSearchChange={handleSearchChange}
         onSortToggle={handleSortToggle}

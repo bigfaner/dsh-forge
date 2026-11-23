@@ -204,21 +204,13 @@ export function toggleHead(state: OverviewFilterState): OverviewFilterState {
   return { ...state, headOpen: !state.headOpen }
 }
 
-/** 活跃 feature 判据（非终态优先，否则首行；空集 = undefined）——ov-head 摘要首位 */
+/** 活跃 feature 判据（非终态优先，否则首行；空集 = undefined）——task-tab feature pill 单源 */
 export function activeFeatureSlug(features: readonly FeatureCard[]): string | undefined {
   const active = features.find((f) => f.featureStatus !== 'completed' && f.featureStatus !== 'archived')
   if (active !== undefined) return active.slug
   return features[0]?.slug
 }
 
-/** ov-head 状态摘要行（ui-design：「feature · N 会话 · N 完成」；会话计数 = 4.1 装配注入位） */
-export function overviewHeadSummary(input: {
-  readonly activeFeature?: string
-  readonly sessionCount?: number
-  readonly completedCount: number
-}): string {
-  const parts: string[] = [input.activeFeature ?? '—']
-  if (input.sessionCount !== undefined) parts.push(`${input.sessionCount} 会话`)
-  parts.push(`${input.completedCount} 完成`)
-  return parts.join(' · ')
-}
+// 头摘要（overviewHeadSummary——「feature · N 会话 · N 完成」合成）已随 T1-head 裁决退役
+//（用户裁决 2026-11-23：头内容 = 项目名称 + forgeDirs 5 行目录信息，无会话统计；
+// status-chips/tasks 子 tab 的 stats 数据源保留不受影响）。
