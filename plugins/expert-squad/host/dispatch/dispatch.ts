@@ -227,16 +227,26 @@ export function createDelegateExpertTool(deps: DelegateToolDeps): ExpertToolDefi
           `delegate_expert 诚实降级：${degradedNote}（expert=${expert}）`,
         );
       }
-      const spec: SubagentActivationSpec = {
-        provider: deps.provider,
-        label: delegateLabel(task),
-        parent,
+      // Root cause: 官方 dsh-subagent 0.2.2-rc.1（DSH Desktop 宿主装载正本）的
+      // SubagentActivationSpec 要求嵌套 request 字段——扁平 spec 使 startActivation
+      // 首行 assertSubagentMaxDepth(spec.request.maxDepth) 读 undefined 即 TypeError；
+      // 0.2.2-rc.5 类型面又回到扁平。双形态并载：顶层字段喂 rc.5 线宿主、嵌套 request
+      // 喂 rc.1 线宿主（两线运行期均为结构读取，多余键互不干扰）。类型锚 = 本仓 rc.5
+      // 声明（无 request 键），故嵌套键经一次显式断言并载。
+      const activationRequest = {
         prompt: request.prompt as [TextContentBlock],
+        parent,
         ...(presetApplied ? { agentPreset: request.agentPreset } : {}),
         ...(request.agentOptions !== undefined ? { agentOptions: request.agentOptions } : {}),
+      };
+      const spec = {
+        provider: deps.provider,
+        label: delegateLabel(task),
         signal,
         delivery: "parent",
-      };
+        ...activationRequest,
+        request: activationRequest,
+      } as SubagentActivationSpec;
       const start = await deps.subagents.startActivation(spec); // 发布点即结算
       deps.panel.markDispatched(start.childId, expert, start.messageId ?? "");
       const result = delegateResult.parse({

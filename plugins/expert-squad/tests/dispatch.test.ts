@@ -186,6 +186,20 @@ describe("delegate_expert 派发", () => {
     expect("agentOptions" in subagents.specs[0]!).toBe(false);
   });
 
+  it("bug: spec 携带嵌套 request 字段（官方 0.2.2-rc.1 宿主正本形状——扁平 spec 使 startActivation 首行读 spec.request.maxDepth 即 TypeError）", async () => {
+    const entry: ExpertEntry = { ...baseEntry, provider: "anthropic", model: "sonnet" };
+    const { tool, subagents } = makeTool([entry]);
+    await tool.execute({ expert: "code-reviewer", task: "嵌套形态" }, makeExec());
+    const spec = subagents.specs[0]! as SubagentActivationSpec & {
+      request?: { parent?: unknown; agentPreset?: string; agentOptions?: unknown; prompt?: unknown };
+    };
+    expect(spec.request).toBeDefined();
+    expect(spec.request!.parent).toBe(parentAgent);
+    expect(spec.request!.agentPreset).toBe("expert-code-reviewer");
+    expect(spec.request!.agentOptions).toEqual({ provider: "anthropic", model: "sonnet" });
+    expect(spec.request!.prompt).toEqual([{ type: "text", text: "嵌套形态" }]);
+  });
+
   it("preset 在场探针含本专家 preset id = 正常携带 agentPreset", async () => {
     const { tool, subagents } = makeTool([baseEntry], {
       presetProbe: async () => ["preset-headhunter", "expert-code-reviewer"],
