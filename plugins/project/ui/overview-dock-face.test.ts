@@ -21,7 +21,7 @@ function officialishSlots(): SectionSlotsFace & {
   notify(): void
   listeners: Set<() => void>
 } {
-  const declared = new Set([SIDEBAR_RIGHT_PANE_TAB_SLOT, 'project.section.knowledge-dir', 'dswf-overview.ac-progress'])
+  const declared = new Set([SIDEBAR_RIGHT_PANE_TAB_SLOT, 'project.section.knowledge-dir'])
   const occupants: Occupant[] = []
   const listeners = new Set<() => void>()
   const slots = {
