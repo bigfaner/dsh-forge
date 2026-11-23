@@ -46,6 +46,7 @@
     "mammoth": "1.13.0",
     "mermaid": "12.1.0",
     "pdfjs-dist": "4.10.38",
+    "string_decoder": "1.1.1",
     "zod": "4.6.6"
   }
 }
