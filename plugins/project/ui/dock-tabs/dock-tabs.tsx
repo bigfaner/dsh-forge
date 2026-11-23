@@ -19,7 +19,7 @@
 // 组合多域读——编排归 core）。
 import { useCallback, useEffect, Fragment, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { TaskStatus } from '@dsh-forge/contracts'
-import { AC_PROGRESS_ENTRY_KEY, DSWF_OVERVIEW_AC_PROGRESS_SLOT, DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
+import { DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
 import { EmptyState } from '../components.js'
 import type { RpcClientFactory } from './rpc-channels.js'
 import { anchorProjectResolver } from './anchor-resolver.js'
@@ -374,17 +374,13 @@ export function ForgeOverviewTab(props: ForgeOverviewTabProps): ReactNode {
 /** 知识库目录节 keyed 占用键（knowledge 侧 KNOWLEDGE_DIR_SECTION_KEY 同源字面——跨 bundle 契约）。 */
 export const OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY = 'dswf-knowledge-dir'
 
-/** AC 进度子槽 keyed 占用键（单源 = @dsh-forge/lib-ui AC_PROGRESS_ENTRY_KEY——裁决 5 改引，包内字面量退役）。 */
-export const OVERVIEW_AC_PROGRESS_ENTRY_KEY = AC_PROGRESS_ENTRY_KEY
-
 /**
- * 概览 tab 子槽声明表（宿主单点声明缝——settings-unification 圆桌裁定 + 裁决 1 AC 进度
- * 承接）：knowledge / task-loop 等消费方 apply 期经 slots.inject(slot) 声明缝现查本声明
- * 落座（官方 SlotCore.register children 协议——声明即占有，本登记卸载级联收拢子槽）。
+ * 概览 tab 子槽声明表（宿主单点声明缝——settings-unification 圆桌裁定）：knowledge 等
+ * 消费方 apply 期经 slots.inject(slot) 声明缝现查本声明落座（官方 SlotCore.register
+ * children 协议——声明即占有，本登记卸载级联收拢子槽）。
  */
 export const OVERVIEW_SECTIONS_CHILDREN: Record<string, { readonly kind: string; readonly scope: string }> = {
   [KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT]: { kind: 'keyed', scope: 'root' },
-  [DSWF_OVERVIEW_AC_PROGRESS_SLOT]: { kind: 'keyed', scope: 'root' },
 }
 
 /** 官方 renderSlot 消费窄面（PropsRenderSlots 非 chain 键签名——结构同型镜像）。 */
@@ -402,19 +398,15 @@ export interface ForgeOverviewSectionHostProps extends ForgeOverviewTabProps {
 
 /**
  * 概览 tab 插槽节宿主（`sidebar.right.pane.tab` keyed 概览 tab 键占用者——fix-7
- * knowledge-dir + 裁决 1 AC 进度）：概览主体原样呈现后，经 renderSlot 消费两 keyed 槽
- * roster——project.section.knowledge-dir（entryKey 分发 = 知识库目录节占用键）与概览
- * AC 进度子槽（entryKey 分发 = AC 进度段占用键；段本体由 task-loop 落座）。renderSlot
+ * knowledge-dir）：概览主体原样呈现后，经 renderSlot 消费 keyed 槽 roster——
+ * project.section.knowledge-dir（entryKey 分发 = 知识库目录节占用键）。renderSlot
  * 缺席（宿主形状漂移/SSR 面）或槽 roster 空（占用键无落座/节组件退 null）= 零节呈现，
  * 概览主体不悬空不炸。
  */
 export function ForgeOverviewSectionHost({ renderSlot, ...tabProps }: ForgeOverviewSectionHostProps): ReactNode {
   const sections =
     typeof renderSlot === 'function'
-      ? [
-          renderSlot(KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT, {}, { entryKey: OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY }),
-          renderSlot(DSWF_OVERVIEW_AC_PROGRESS_SLOT, {}, { entryKey: OVERVIEW_AC_PROGRESS_ENTRY_KEY }),
-        ]
+      ? [renderSlot(KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT, {}, { entryKey: OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY })]
       : []
   return (
     <>
