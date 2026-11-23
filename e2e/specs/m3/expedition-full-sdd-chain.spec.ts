@@ -21,7 +21,7 @@
 //     slug 容器弱引用，source_kind/mode 列随容器 slug 化退役）；
 //   - 核心包技能目录（fs）：packages/plugin-forge/skills——git-commit/git-checkout 零条目。
 //
-// 退役面（plugin-spec proposal 域下线 + OVERVIEW_FEATURE_ENABLED=false）：
+// 退役面（plugin-spec proposal 域下线 + 概览 feature 消费门关闭）：
 //   - 原 Step2b/2c（打回循环 + superseded 演进链——纯提案 verdict 流转面）整测删除；
 //   - 提案 mode 溯源 / 提案行 UI / 谱系 meta 面随域退役；feature 子 tab UI 断言降为 db 级；
 //   - 任务 mode 快照列退役——容器对应模式活断言面 = 容器 pill data-mode（sc5 承载）。

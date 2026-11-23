@@ -136,8 +136,8 @@ for (const a of all) {
 }
 
 /** D30 迁移面（真悬浮提示位——官方 Tooltip 逐文件采纳锚；全量 portal 逃逸）。
- * D37 更替后余额：概览 tab 零 Tooltip 整迁面 4 件 + 部分退役面 4 件（余额冻结 pin；
- * proposal-tab 面已随 plugin-spec proposal 域下线批退役出清单）；
+ * D37 更替后余额：概览 tab 零 Tooltip 整迁面 + 部分退役面（余额冻结 pin；
+ * proposal-tab/feature-tab 面已随 proposal 域下线 + feature 子 tab 退役批出清单）；
  * 知识详情缘侧拖宽手柄 Tooltip 在场（可拖移 dialog 用户裁决回迁——27 walk 位恒数）。 */
 const TOOLTIP_FILES = [
   'apps/web/src/components/ModeChip.tsx',
@@ -147,8 +147,6 @@ const TOOLTIP_FILES = [
   'plugins/knowledge/ui/DomainTree.tsx',
   'plugins/knowledge/ui/EntryDrawer.tsx',
   'plugins/knowledge/ui/KnowledgeToolbar.tsx',
-  'plugins/project/ui/dock-tabs/overview/feature-tab.tsx',
-  'plugins/project/ui/dock-tabs/overview/feature-tab/DocGroupList.tsx',
   'plugins/project/ui/dock-tabs/overview/ov-head.tsx',
   'plugins/project/ui/dock-tabs/overview/drawer/index.tsx',
   'plugins/project/ui/dock-tabs/overview/drawer/timeline.tsx',
@@ -169,10 +167,11 @@ const TOOLTIP_FILES = [
 
 /** 组件标题 prop 排除清单（标题文本 prop 非悬浮提示位——D30 记账；计数冻结） */
 const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
-  // 空态标题（文案标题非 tooltip）×17：feature-tab/task-tab×2/KnowledgeView/
+  // 空态标题（文案标题非 tooltip）×16：task-tab×2/KnowledgeView/
   // RecallTab/docs/drawer/KnowledgeCardGrid×3/dock-tabs×2/EntryDrawer/ForgeWorkspacePanel +
   // bug 域新面：bug-reference/BugPreview×2、overview/bug-tab/bug-list×1
-  EmptyState: 17,
+  //（feature-tab 位已随 feature 子 tab 退役出清单）
+  EmptyState: 16,
   // 对话框标题（Modal 头部标题文本）×11：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
   // + D45 停止并归档确认）/AddProjectFlow +
   // remote/ForgeRemoteEntry×2（手机远程 dialog 头 + 1.107 PSK 轮换确认弹窗）+
@@ -198,11 +197,11 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
 }
 
 /** D36 ⑤ + D37 Tooltip 退役锚（采纳锚位 1:1 对位迁移——零 Tooltip 在场；27 walk 位恒数：
- * TOOLTIP_FILES 22 + TOOLTIP_RETIRED_FILES 5） */
+ * TOOLTIP_FILES 20 + TOOLTIP_RETIRED_FILES 4；feature-tab 两位采纳锚 + PhaseChips
+ * 退役锚随 feature 子 tab 退役批出清单） */
 const TOOLTIP_RETIRED_FILES = [
   'plugins/project/ui/dock-tabs/overview/task-tab/ViewDropdown.tsx', // D36 ⑤：视图切换钮控件自释（1.23）
   'plugins/project/ui/dock-tabs/overview/status-chips.tsx', // D37：七态筛选 chips（zh 标签在 chip 面；0 计数淡化自释）
-  'plugins/project/ui/dock-tabs/overview/feature-tab/PhaseChips.tsx', // D37：阶段筛选 chips（同族）
   'plugins/project/ui/dock-tabs/overview/task-tab/DispatchButton.tsx', // D37：派发钮（「派发」label 自明；置灰深灰实底自释）
   'plugins/project/ui/dock-tabs/overview/sticky-bar.tsx', // D37：✕ 清除钮 + ⇅ 排序 pill（通用惯例 + 当前模式标签直出）
 ] as const

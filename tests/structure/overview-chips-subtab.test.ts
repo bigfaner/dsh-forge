@@ -13,7 +13,6 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 const OV = 'plugins/project/ui/dock-tabs/overview'
 const overviewCss = readFileSync(join(ROOT, `${OV}/overview.css`), 'utf8')
-const featureCss = readFileSync(join(ROOT, `${OV}/feature-tab/feature-tab.css`), 'utf8')
 
 /** 选择器规则块声明集（平铺 CSS——三文件零 @media/@keyframes 嵌套；多命中取并集；
  * 注释先剥离——规则间头注不入选择器面） */
@@ -25,35 +24,12 @@ function declsOf(css: string, selector: string): string {
     .join('\n')
 }
 
-/** 芯片各族激活分色选择器（按钮 data 属性 = 状态钩子——TSX 既有锚） */
-const onBlock = (css: string, cls: string, state: string): string =>
-  declsOf(css, `.${cls}.is-on[data-${cls}='${state}']`)
-
 describe('D14 状态 chips = 彩色胶囊（矩形 radius-xs 退役）', () => {
-  const families = [
-    { face: '阶段（feature 面）', css: featureCss, cls: 'dswf-ov-phchip' },
-    { face: '七态（任务面）', css: overviewCss, cls: 'dswf-ov-stchip' },
-  ] as const
-
-  it.each(families)('$face：胶囊 999px + bg-base 承载（radius-xs 退役）', ({ css, cls }) => {
-    const block = declsOf(css, `.${cls}`)
-    expect(block, `${cls} 胶囊半径`).toContain('border-radius: 999px')
-    expect(block, `${cls} 灰底承载面`).toContain('background: var(--dsw-alias-bg-base)')
-    expect(block, `${cls} 矩形半径退役`).not.toContain('var(--dsw-radius-xs)')
-  })
-
-  it('阶段激活分色（同胶囊语言）：进行中/设计=蓝 / 需求/已归档=中性 / 任务=紫→中性 / 已完成=绿', () => {
-    const cases: ReadonlyArray<[phase: string, border: string]> = [
-      ['in-progress', 'var(--dsw-alias-link)'],
-      ['design', 'var(--dsw-alias-link)'],
-      ['prd', 'var(--dsw-alias-label-tertiary)'],
-      ['tasks', 'var(--dsw-alias-label-secondary)'],
-      ['completed', 'var(--dsw-alias-state-success-primary)'],
-      ['archived', 'var(--dsw-alias-label-tertiary)'],
-    ]
-    for (const [phase, border] of cases) {
-      expect(onBlock(featureCss, 'dswf-ov-phchip', phase), phase).toContain(`border-color: ${border}`)
-    }
+  it('七态（任务面）：胶囊 999px + bg-base 承载（radius-xs 退役）', () => {
+    const block = declsOf(overviewCss, '.dswf-ov-stchip')
+    expect(block, 'dswf-ov-stchip 胶囊半径').toContain('border-radius: 999px')
+    expect(block, 'dswf-ov-stchip 灰底承载面').toContain('background: var(--dsw-alias-bg-base)')
+    expect(block, 'dswf-ov-stchip 矩形半径退役').not.toContain('var(--dsw-radius-xs)')
   })
 
   it('七态激活 = 单强调色蓝（原型 m31-tchip.on——状态差异由 StateDot 点承载）', () => {

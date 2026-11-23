@@ -38,18 +38,24 @@ const HEAD: OverviewHeadBundle = {
   },
 }
 
-const FEATURES_LIST: OverviewListData = {
-  kind: 'features',
-  features: HEAD.features,
-  docs: [
+const BUGS_LIST: OverviewListData = {
+  kind: 'bugs',
+  bugs: [
     {
-      featureId: 'fid-1',
-      docKind: 'tech-design',
-      relPath: 'docs/features/m2-pipeline/design/tech-design.md',
+      bugId: 'b1',
+      summary: '登录接口 500',
+      bugDesc: 'd',
+      triggerDesc: 't',
+      expected: 'e',
+      actual: 'a',
+      errorType: 'api',
+      bugStatus: 'open',
+      reporter: 'faner',
       createdAt: CREATED,
       updatedAt: CREATED,
     },
   ],
+  counts: { open: 3, fixed: 12, unresolved: 0 },
 }
 
 const handlers = {
@@ -58,8 +64,6 @@ const handlers = {
   onSortToggle: () => {},
   onToggleStatus: () => {},
   onClearStatuses: () => {},
-  onTogglePhase: () => {},
-  onClearPhases: () => {},
   onToggleBugStatus: () => {},
   onClearBugStatuses: () => {},
   onToggleRow: () => {},
@@ -67,9 +71,8 @@ const handlers = {
   onRetry: () => {},
 }
 
-// 帧渲染分派路径测试缺省腿 = feature 子 tab（门关期仍保持可渲染——恢复接入判据位；
-// 用户裁定 2026-11-14 只退消费入口，渲染面不拆）
-const DEFAULT_FRAME_FILTER: OverviewFilterState = { ...initialOverviewFilter(), subtab: 'features' }
+// 帧渲染分派路径测试缺省腿 = spec 子 tab（G3 前列路短路 null → 占位骨架）
+const DEFAULT_FRAME_FILTER: OverviewFilterState = { ...initialOverviewFilter(), subtab: 'spec' }
 
 const frame = (over: {
   filter?: OverviewFilterState
@@ -123,22 +126,21 @@ describe('OverviewFrame 面板骨架（AC1/AC2）', () => {
   })
 })
 
-describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 子 tab 接线）', () => {
-  it('features 子 tab：阶段 chips（列表之上）+ feature 父行 + 展开分层文档（list.docs 接线）', () => {
-    const filter = { ...initialOverviewFilter(), subtab: 'features' as const, openRows: new Set(['feat:m2-pipeline']) }
-    const markup = frame({ filter, list: FEATURES_LIST })
-    expect(markup).toContain('data-dswf-ov-features')
-    expect(markup).toContain('m2-pipeline')
-    expect(markup).toContain('data-dswf-ov-phchips=""') // 阶段 chips 行
-    // fix-2 装配注入：帧透传 list.docs → DocGroupList 文档行（data-dswf-ov-doc = relPath 锚）
-    expect(markup).toContain('data-dswf-ov-doc="docs/features/m2-pipeline/design/tech-design.md"')
+describe('OverviewFrame 子 tab 结构（spec | 任务 | Bug 有序三枚）', () => {
+  it('sticky 行 = spec → 任务 → Bug 有序三枚（data-dswf-ov-subtab 锚升序）', () => {
+    const markup = frame({})
+    const positions = ['spec', 'tasks', 'bugs'].map((v) => markup.indexOf(`data-dswf-ov-subtab="${v}"`))
+    expect(positions.every((p) => p >= 0)).toBe(true)
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions)
+    expect(markup).not.toContain('data-dswf-ov-subtab="proposals"')
+    expect(markup).not.toContain('data-dswf-ov-subtab="features"')
   })
 
-  it('搜索在场 + 空结果 = 无匹配空态（服务端过滤——空标题由帧侧注入）', () => {
-    const filter = { ...DEFAULT_FRAME_FILTER, search: '不存在' }
-    const empty: OverviewListData = { kind: 'features', features: [], docs: [] }
-    const markup = frame({ filter, list: empty })
-    expect(markup).toContain('无匹配「不存在」的 feature')
+  it('spec 子 tab：列路 null → 占位骨架（本体归 G3——零 features/提案渲染面）', () => {
+    const markup = frame({})
+    expect(markup).toContain('data-dswf-ov-skeleton')
+    expect(markup).not.toContain('data-dswf-ov-features')
+    expect(markup).not.toContain('data-dswf-ov-phchips')
   })
 
   it('列路在途（busy）= aria-busy 内容区标注（旧行保持）', () => {
@@ -146,18 +148,18 @@ describe('OverviewFrame 子 tab 内容分派（AC4 + 4.6 子 tab 接线）', () 
       <OverviewFrame
         projectId="p-1"
         head={HEAD}
-        list={FEATURES_LIST}
+        list={BUGS_LIST}
         phase="ready"
         busy={true}
         error={undefined}
-        filter={DEFAULT_FRAME_FILTER}
+        filter={{ ...initialOverviewFilter(), subtab: 'bugs' as const }}
         onOpenDoc={() => {}}
         now={NOW}
         {...handlers}
       />,
     )
     expect(markup).toContain('aria-busy="true"')
-    expect(markup).toContain('data-dswf-ov-features') // 旧内容不掏空
+    expect(markup).toContain('data-dswf-ov-bugpage') // 旧内容不掏空
   })
 })
 
@@ -221,28 +223,8 @@ describe('OverviewFrame 任务子 tab（AC5——chips 过滤接口）', () => {
   })
 })
 
-describe('OverviewFrame Bug 子 tab（fix-bug 第 4 子 tab——列表视图）', () => {
-  const BUGS_LIST: OverviewListData = {
-    kind: 'bugs',
-    bugs: [
-      {
-        bugId: 'b1',
-        summary: '登录接口 500',
-        bugDesc: 'd',
-        triggerDesc: 't',
-        expected: 'e',
-        actual: 'a',
-        errorType: 'api',
-        bugStatus: 'open',
-        reporter: 'faner',
-        createdAt: CREATED,
-        updatedAt: CREATED,
-      },
-    ],
-    counts: { open: 3, fixed: 12, unresolved: 0 },
-  }
-
-  it('bugs 子 tab：三态 chips（列表之上）+ Bug 行（提案行同构：summary 左 + 错误类型 chip 右；无状态文字/无时间）', () => {
+describe('OverviewFrame Bug 子 tab（fix-bug——列表视图）', () => {
+  it('bugs 子 tab：三态 chips（列表之上）+ Bug 行（summary 左 + 错误类型 chip 右；无状态文字/无时间）', () => {
     const filter = { ...initialOverviewFilter(), subtab: 'bugs' as const }
     const markup = frame({ filter, list: BUGS_LIST })
     expect(markup).toContain('data-dswf-ov-bugpage')
@@ -300,9 +282,9 @@ describe('OverviewFrame 错误三态', () => {
   })
 
   it('error-bar（列路失败旧行在场）= 错误条 + 旧列表同现', () => {
-    const markup = frame({ list: FEATURES_LIST, error: { message: '列表失败', uiState: 'error-bar' } })
+    const markup = frame({ filter: { ...initialOverviewFilter(), subtab: 'bugs' as const }, list: BUGS_LIST, error: { message: '列表失败', uiState: 'error-bar' } })
     expect(markup).toContain('列表装载失败')
-    expect(markup).toContain('data-dswf-ov-features')
+    expect(markup).toContain('data-dswf-ov-bugpage')
   })
 })
 
@@ -314,7 +296,9 @@ describe('OverviewTab（状态 + 装载胶水——静态首装面）', () => {
     expect(markup).toContain('data-dswf-ov-panel')
     expect(markup).toContain('data-dswf-ov-sticky')
     expect(markup).toContain('data-dswf-ov-subtab="tasks"')
+    expect(markup).toContain('data-dswf-ov-subtab="spec"')
     expect(markup).not.toContain('data-dswf-ov-subtab="proposals"')
+    expect(markup).not.toContain('data-dswf-ov-subtab="features"')
     expect(markup).not.toContain('data-dswf-ov-head')
     // fix-bug 收尾：BugDialog 挂载位在场但首装无选中 = 不渲染（零弹框锚）
     expect(markup).not.toContain('data-dswf-ov-bdialog')
@@ -336,19 +320,19 @@ describe('BugDialog 挂载接线（fix-bug 收尾——onOpenBug → 开合 → 
     createdAt: CREATED,
     updatedAt: CREATED,
   }
-  const BUGS_LIST: OverviewListData = { kind: 'bugs', bugs: [BUG_B1], counts: { open: 1, fixed: 0, unresolved: 0 } }
+  const BUGS_LIST_B1: OverviewListData = { kind: 'bugs', bugs: [BUG_B1], counts: { open: 1, fixed: 0, unresolved: 0 } }
 
   it('openBugCardOf 开合投影：bugs 列表命中 bugId → 卡片；无选中/列表缺席/非 bugs 列表 → undefined（onClose 复位 = 无选中不渲染）', () => {
-    expect(openBugCardOf(BUGS_LIST, 'b1')?.bugId).toBe('b1')
-    expect(openBugCardOf(BUGS_LIST, null)).toBeUndefined()
-    expect(openBugCardOf(BUGS_LIST, 'miss')).toBeUndefined()
+    expect(openBugCardOf(BUGS_LIST_B1, 'b1')?.bugId).toBe('b1')
+    expect(openBugCardOf(BUGS_LIST_B1, null)).toBeUndefined()
+    expect(openBugCardOf(BUGS_LIST_B1, 'miss')).toBeUndefined()
     expect(openBugCardOf(undefined, 'b1')).toBeUndefined()
-    expect(openBugCardOf(FEATURES_LIST, 'b1')).toBeUndefined()
+    expect(openBugCardOf(BUGS_LIST, 'b2')).toBeUndefined()
   })
 
   it('选中即开：OverviewBugDialogMount 渲染 BugDialog（bdialog 锚 + bugId 标注）', () => {
     const markup = renderToStaticMarkup(
-      <OverviewBugDialogMount list={BUGS_LIST} openBugId="b1" onClose={() => {}} />,
+      <OverviewBugDialogMount list={BUGS_LIST_B1} openBugId="b1" onClose={() => {}} />,
     )
     expect(markup).toContain('data-dswf-ov-bdialog=""')
     expect(markup).toContain('data-dswf-ov-bdialog-id="b1"')
@@ -357,7 +341,7 @@ describe('BugDialog 挂载接线（fix-bug 收尾——onOpenBug → 开合 → 
   it('注入面（ShellHost 递达——任务抽屉同缝）：sessionTitleOf 命中 + onOpenSession = 会话 pill 可点击（会话名呈现）', () => {
     const markup = renderToStaticMarkup(
       <OverviewBugDialogMount
-        list={BUGS_LIST}
+        list={BUGS_LIST_B1}
         openBugId="b1"
         onClose={() => {}}
         onOpenSession={() => {}}
@@ -370,7 +354,7 @@ describe('BugDialog 挂载接线（fix-bug 收尾——onOpenBug → 开合 → 
 
   it('注入面缺席 = 键缺席不递达（fail-soft——BugDialog 侧回退非交互）', () => {
     const markup = renderToStaticMarkup(
-      <OverviewBugDialogMount list={BUGS_LIST} openBugId="b1" onClose={() => {}} />,
+      <OverviewBugDialogMount list={BUGS_LIST_B1} openBugId="b1" onClose={() => {}} />,
     )
     expect(markup).toContain('sess-r') // pill 仍呈现（文本形态）
     expect(markup).not.toContain('data-dswf-ov-bsess="') // 非 pill 呈现——sessionTitleOf/onOpenSession 键缺席

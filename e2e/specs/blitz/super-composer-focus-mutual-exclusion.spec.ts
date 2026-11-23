@@ -100,8 +100,7 @@ test('@web-e2e @blitz 互斥聚焦两态：全屏落 chip 聚焦替身输入 / �
 
     // ── 划选源 dockkit 文档面（夹具注入——真机取证同款标记面，仅文档活动门、零全屏标记）──
     // anchor-sync 台账（testing/anchor-sync.md，bug b4745a71 归因收口）：概览 feature
-    // 子 tab 随 OVERVIEW_FEATURE_ENABLED=false 退役（plugins/project/ui/dock-tabs/
-    // overview/overview-model.ts:30-36 用户裁定 2026-11-14「项目概览暂时不要接入
+    // 子 tab 已退役（消费门关闭，用户裁定 2026-11-14「项目概览暂时不要接入
     // feature」）——overview features 文档行开文档径属产品裁定退役、非测试侧规避；
     // 划选源改 dockkit 文档夹具（产品全屏按钮/退全屏/互斥断言全部保持真实径），
     // surface 卸载跟随语义由真机取证补位（walkthrough/1.11-surface/，§1.4）。

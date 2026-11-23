@@ -1,6 +1,6 @@
 // M3.1 D38 结构 pin —— 清过滤钮改词「✕ 重置」+ 钮前间距与 chips 行内拉开
 // （任务 dsh-forge-m3.1-ui-alignment/1.25 机械面锚——读文件法 = 本目录 d36 先例；
-//  文案 DOM 断言归组件测试面 + feature-tab tab 锚（✕ 重置 + 渲染面
+//  文案 DOM 断言归组件测试面（✕ 重置 + 渲染面
 //  「清过滤」清零）；实机亮/暗双主题走查归证据面——本裁决间距为物理定值，主题令牌
 //  零涉及，双主题同形。）
 // 断言面：
@@ -16,7 +16,6 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 const OV = 'plugins/project/ui/dock-tabs/overview'
 const overviewCss = readFileSync(join(ROOT, `${OV}/overview.css`), 'utf8')
-const featureCss = readFileSync(join(ROOT, `${OV}/feature-tab/feature-tab.css`), 'utf8')
 
 /** 选择器规则块声明集（平铺 CSS——两文件零 @media/@keyframes 嵌套；多命中取并集；
  * 注释先剥离——规则间头注不入选择器面） */
@@ -31,10 +30,9 @@ function declsOf(css: string, selector: string): string {
 const ROW_GAP_PX = 6 // 原型 chips 行距刻度（dsw-raw 既有——本裁决不动）
 const CLEAR_MARGIN_PX = 8 // D38 新裁决刻度（行 gap 6 + 钮前 8 = 视距 14px）
 
-/** 两族 chips（行容器 + 清过滤钮选择器——两族同形，文案/间距裁决同步） */
+/** 七态 chips（行容器 + 清过滤钮——阶段族随 feature 子 tab 退役出本 pin 面） */
 const families = [
   { face: '七态（任务/概览面）', css: overviewCss, row: 'dswf-ov-stchips', clear: 'dswf-ov-stchip-clear' },
-  { face: '阶段（feature 面）', css: featureCss, row: 'dswf-ov-phchips', clear: 'dswf-ov-phchip-clear' },
 ] as const
 
 describe('D38 清过滤钮：钮前间距与 chips 行内拉开（行 gap 6px 不动 + 钮前 margin）', () => {

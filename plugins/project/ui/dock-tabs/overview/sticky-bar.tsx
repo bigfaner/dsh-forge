@@ -1,5 +1,5 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
-// 概览 sticky 区（定位：业务——UF-1：三子 tab（用户定向顺序 提案|feature|任务）+
+// 概览 sticky 区（定位：业务——UF-1：三子 tab（spec | 任务 | Bug 有序三枚）+
 // 搜索行（限宽 + 清除钮；IME 安全）+ 排序 pill（⇅ 活跃优先 ↔ 最新创建，右固定））。
 // Hard Rule「搜索过滤服务端承载」：本组件只上抛关键词原文，过滤归数据层查询参。
 // IME 安全（AC2）：搜索行 = 稳定受控子树——输入值变更仅回流 input value 属性与
@@ -9,7 +9,7 @@ import type { ReactNode } from 'react'
 import { Button, IconCloseFillRegular, IconSearchOutlineRegular, Input, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   OVERVIEW_SORT_LABELS,
-  visibleOverviewSubtabs,
+  OVERVIEW_SUBTABS,
   searchPlaceholderOf,
   type OverviewSort,
   type OverviewSubtab,
@@ -43,7 +43,7 @@ export function StickyBar({
   return (
     <div className="dswf-ov-sticky" data-dswf-ov-sticky="">
       <div className="dswf-ov-subtabs" role="tablist" aria-label="概览子视图">
-        {visibleOverviewSubtabs().map((tab) => (
+        {OVERVIEW_SUBTABS.map((tab) => (
           <button
             key={tab.value}
             type="button"

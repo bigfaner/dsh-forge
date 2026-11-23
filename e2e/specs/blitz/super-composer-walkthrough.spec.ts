@@ -219,8 +219,7 @@ test('@web-e2e @probe super-composer 真机取证走查（AC1/2/6/7 可达面 + 
     console.log('[walkthrough] AC7 RESULT', found.length > 0 ? 'quote-block-in-log' : 'no-quote-block')
 
     // ── AC2：dockkit 文档面划选 → 同径 chip ──
-    // anchor-sync：概览 feature 子 tab 随 OVERVIEW_FEATURE_ENABLED=false 退役
-    //（plugins/project/ui/dock-tabs/overview/overview-model.ts:30-36 用户裁定 2026-11-14）——
+    // anchor-sync：概览 feature 子 tab 已退役（消费门关闭，用户裁定 2026-11-14）——
     // 划选源改 dockkit 文档夹具注入（真机取证同款标记面；仅文档活动门、零全屏标记）。
     await injectDockkitDocFixture(page, { fullscreen: false, text: '三段拼合' })
     const panel = page.locator(DOCKKIT_DOC_FIXTURE).first()

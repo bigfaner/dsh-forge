@@ -1,25 +1,25 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // 概览数据装载（定位：业务——UF-1 概览 tab 框架的 forge:{projects,features,tasks,bugs}/* 消费面）。
-// Hard Rule「搜索过滤服务端承载」：search/sort 一律作为 listFeatures/listBugs 查询参
+// Hard Rule「搜索过滤服务端承载」：search/sort 一律作为 listBugs 查询参
 // 透传（core 侧 matchesSearch + sortByActiveThenCreated），前端禁全量拉取本地过滤——
 // 本文件零行本地过滤逻辑。装载拆两路（口径沿 use-knowledge-browse 先例）：
 //   - 头路（mount/projectId/重试）：projects.get（项目名 + 三个目录位）∥ features.list（无参
-//     ——ov-head 摘要活跃 feature 查找源，不随搜索漂移）∥ tasks.stats（chips 计数 + 完成数）
-//   - 列路（subtab/search/sort/重试）：features 子 tab = features.list(search,sort)
-//     ∥ features.listDocs（fix-2：feature_documents 列举——文档行数据源，无 search 面）；
+//     ——task-tab feature pill 数据源，不随搜索漂移）∥ tasks.stats（chips 计数 + 完成数）
+//   - 列路（subtab/search/sort/重试）：
 //     tasks 子 tab = 3.5 无列装载（chips 消费头路 stats；三视图装载归 3.6）
+//     spec 子 tab = 无列装载（spec 列数据源与呈现归 G3 交付）
 //     bugs 子 tab = bugs.list(search,sort,status) ∥ bugs.list（无参——三态计数）
 // 竞态守卫 = 序号递增（快速连续键入不串台）；相位机 loading → ready | error（typed error
 // 经 rpcUiState 三态映射）。effect 仅编排胶水（Node 测面外，归 4.1 装配 + e2e）。
 import { useEffect, useRef, useState } from 'react'
-import type { BugCard, BugStatus, DirFactRow, FeatureCard, FeatureDocumentRow, TaskStats } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, DirFactRow, FeatureCard, TaskStats } from '@dsh-forge/contracts'
 import { subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../rpc-channels.js'
 import { typertRpcClientFactory } from '../typert-transport.js'
 import { overviewRpcClientFactory } from './overview-client.js'
 import { RpcClientError } from '../rpc-channels.js'
 import { rpcUiState, type RpcUiStateKind } from '../rpc-channels.js'
 import { DIR_FACTS_ROW_KEYS, dirHeadRows } from './dir-rows.js'
-import { bugStatusCounts, OVERVIEW_FEATURE_ENABLED, searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
+import { bugStatusCounts, searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
 import { docsRootOf } from './message-format.js'
 
 /** 错误附载（message = 信封 message 原样；uiState = rpcUiState(code) 三态映射） */
@@ -48,7 +48,7 @@ export interface OverviewHeadBundle {
   readonly workspaceDir: string
   /** 本工作区 .forge 目录（forgeDir 行回退源——同上） */
   readonly forgeDir: string
-  /** 无搜索全量 feature 卡（ov-head 摘要活跃 feature 查找源） */
+  /** 无搜索全量 feature 卡（task-tab feature pill 数据源） */
   readonly features: readonly FeatureCard[]
   /** 七态计数（chips 计数与摘要完成数单源） */
   readonly stats: TaskStats
@@ -104,11 +104,9 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
           return rows.find((row) => row.id === projectId) ?? null
         }),
       Promise.all([
-        // feature 行集消费门（用户裁定 2026-11-14）：门关 = 通道零调用（空增强值直落
-        // head——degraded warn 噪音随之消失；数据面 forgeFeatures 不动）
-        OVERVIEW_FEATURE_ENABLED
-          ? client.features.list({ projectId }).catch(() => [] as Awaited<ReturnType<typeof client.features.list>>)
-          : Promise.resolve<FeatureCard[]>([]),
+        // feature 行集（task-tab feature pill 数据源——feature 子 tab 已退役，头路无参
+        // 全量保持 degraded fail-soft：typed 失败 = 空增强值落 head）
+        client.features.list({ projectId }).catch(() => [] as Awaited<ReturnType<typeof client.features.list>>),
         client.tasks.stats({ projectId }).catch(() => ZERO_TASK_STATS),
       ]),
     ])
@@ -131,15 +129,8 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
   }
 }
 
-/** 子 tab 列数据（tagged——features 行含文档行列举源） */
+/** 子 tab 列数据（tagged——Bug 子 tab 行集 + 三态计数） */
 export type OverviewListData =
-  | {
-      readonly kind: 'features'
-      readonly features: readonly FeatureCard[]
-      /** feature 文档行（fix-2：feature_documents 列举——FeaturesTab 文档行数据源，
-       *  featureId 归属过滤归呈现层） */
-      readonly docs: readonly FeatureDocumentRow[]
-    }
   | {
       /** Bug 子 tab（fix-bug）：listBugs 服务端搜索/状态过滤/排序后行集 + 无参全量计数 */
       readonly kind: 'bugs'
@@ -164,28 +155,21 @@ export async function fetchOverviewList(
   },
 ): Promise<OverviewFetch<OverviewListData> | null> {
   const search = searchQueryOf(q.search)
-  if (q.subtab === 'tasks') return null
-  // 消费门（用户裁定 2026-11-14）：门关 = feature 子 tab 短路 null（零通道调用）
-  if (!OVERVIEW_FEATURE_ENABLED && q.subtab === 'features') return null
+  // tasks = 3.5 无列装载（chips 消费头路 stats）；spec = 列装载归 G3 交付——
+  // 非 bugs 子 tab 一律短路 null（零通道调用）
+  if (q.subtab !== 'bugs') return null
   try {
-    if (q.subtab === 'bugs') {
-      const status = q.status ?? []
-      const [bugs, all] = await Promise.all([
-        client.bugs.list({
-          projectId: q.projectId,
-          search,
-          sort: q.sort,
-          ...(status.length > 0 ? { status: [...status] } : {}),
-        }),
-        client.bugs.list({ projectId: q.projectId }),
-      ])
-      return { ok: true, data: { kind: 'bugs', bugs, counts: bugStatusCounts(all) } }
-    }
-    const [features, docs] = await Promise.all([
-      client.features.list({ projectId: q.projectId, search, sort: q.sort }),
-      client.features.listDocs({ projectId: q.projectId }),
+    const status = q.status ?? []
+    const [bugs, all] = await Promise.all([
+      client.bugs.list({
+        projectId: q.projectId,
+        search,
+        sort: q.sort,
+        ...(status.length > 0 ? { status: [...status] } : {}),
+      }),
+      client.bugs.list({ projectId: q.projectId }),
     ])
-    return { ok: true, data: { kind: 'features', features, docs } }
+    return { ok: true, data: { kind: 'bugs', bugs, counts: bugStatusCounts(all) } }
   } catch (error) {
     return { ok: false, error: mapOverviewError(error) }
   }

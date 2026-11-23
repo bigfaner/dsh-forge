@@ -8,7 +8,7 @@
 // 排序/过滤为视图本地态（任务子 tab 三视图 = renderTasksTab 槽——3.6 注入；缺省呈现
 // chips 过滤接口）；文档行点击经 props 回调上抛（dock 开 tab——4.1 接线）。
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { BugCard, BugStatus, DirFactRow, FeatureCard, FeatureStatus, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { BugCard, BugStatus, DirFactRow, FeatureCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import { type RpcClientFactory } from '../rpc-channels.js'
 import { overviewRpcClientFactory } from './overview-client.js'
 import { useDirFactRows } from './dir-rows.js'
@@ -16,7 +16,6 @@ import { ErrorBar, SkeletonRows } from '../../components.js'
 import {
   bugStatusFilterParam,
   clearBugStatusFilter,
-  clearPhaseFilter,
   clearStatusFilter,
   initialOverviewFilter,
   nextSort,
@@ -25,7 +24,6 @@ import {
   switchSubtab,
   toggleHead,
   toggleOpenRow,
-  togglePhaseFilter,
   toggleBugStatusFilter,
   toggleStatusFilter,
   type OverviewFilterState,
@@ -40,13 +38,11 @@ import {
   type OverviewListData,
 } from './overview-data.js'
 import { docsRootOf, type SessionOpenRequest } from './message-format.js'
-import { phaseCounts } from './feature-tab/PhaseChips.js'
 import { OverviewHead } from './ov-head.js'
 import { StickyBar } from './sticky-bar.js'
 import { StatusChips } from './status-chips.js'
 import { BugList, bugChainGroups } from './bug-tab/bug-list.js'
 import { BugDialog } from './bug-tab/index.js'
-import { FeaturesTab } from './feature-tab.js'
 import './overview.css'
 
 /** 任务子 tab 装载槽上下文（3.6 三视图消费——过滤接口三视图统一） */
@@ -89,9 +85,6 @@ export interface OverviewFrameProps {
   readonly onSortToggle: () => void
   readonly onToggleStatus: (status: TaskStatus) => void
   readonly onClearStatuses: () => void
-  /** feature 阶段 chips toggle/清空（4.6 UF-4——受控归帧侧模型） */
-  readonly onTogglePhase: (phase: FeatureStatus) => void
-  readonly onClearPhases: () => void
   /** Bug 三态 chips toggle/清空（fix-bug——受控归帧侧模型） */
   readonly onToggleBugStatus: (status: BugStatus) => void
   readonly onClearBugStatuses: () => void
@@ -103,11 +96,13 @@ export interface OverviewFrameProps {
   readonly onOpenBug?: (bugId: string) => void
   /** Bug 行「添加到会话中」（composer-bug-reference 1.4——装配注入；缺席 = 按钮不呈现，行语言零变化） */
   readonly onAddBugToSession?: (bug: BugCard) => void
-  /** 文档行点击（dock 开 tab——4.1 接线；缺席 = 无动作面） */
+  /** 文档行点击（dock 开 tab——装配传参兼容保留；feature 子 tab 退役后消费面归零，
+   *  spec 子 tab 打开入口归 G3 接线） */
   readonly onOpenDoc?: (docRel: string) => void
   /** 任务子 tab 三视图装载槽（3.6 注入；缺省 = chips 过滤接口独占呈现） */
   readonly renderTasksTab?: (ctx: OverviewTasksContext) => ReactNode
-  /** 打开新会话通道（4.6：提案/feature 行头预填——装配注入 openSessionWithPreset；缺席 = 按钮不呈现） */
+  /** 打开新会话通道（装配注入 openSessionWithPreset——feature 子 tab 退役后消费面归零；
+   *  spec 行头预填归 G3 接线；缺席 = 按钮不呈现） */
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** 相对时间基准（缺省 Date.now()——测试注入固定值） */
   readonly now?: number
@@ -128,21 +123,16 @@ export function OverviewFrame({
   onSortToggle,
   onToggleStatus,
   onClearStatuses,
-  onTogglePhase,
-  onClearPhases,
   onToggleBugStatus,
   onClearBugStatuses,
-  onToggleRow,
   onToggleHead,
   onRetry,
   onOpenBug,
   onAddBugToSession,
-  onOpenDoc,
   renderTasksTab,
-  onStartSession,
-  now,
+  // onToggleRow/now 保留 props 装配传参兼容（行展开与时间基准——spec 子 tab 本体
+  // 归 G3 接线消费；feature 子 tab 退役后帧面暂零消费，故不解构入参）
 }: OverviewFrameProps): ReactNode {
-  const openDoc = onOpenDoc ?? (() => {})
   const searchActive = searchQueryOf(filter.search) !== undefined
   // @ 锚文档根（数据驱动）：head 在场 = 项目行（workspaceDir/forgeDir）推导；缺席 = 不注入
   //（四通道消费方回退 `docs` 缺省锚——首装在途不误锚）
@@ -193,26 +183,9 @@ export function OverviewFrame({
       </>
     )
   } else {
-    content = (
-      <>
-        {listErrorBar(error, onRetry)}
-        <FeaturesTab
-          features={list.kind === 'features' ? list.features : []}
-          docs={list.kind === 'features' ? list.docs : undefined}
-          counts={head === undefined ? emptyPhaseCounts() : phaseCounts(head.features)}
-          activePhases={filter.activePhases}
-          onTogglePhase={onTogglePhase}
-          {...(onClearPhases !== undefined ? { onClearPhases } : {})}
-          openRows={filter.openRows}
-          onToggleRow={onToggleRow}
-          onOpenDoc={openDoc}
-          {...(onStartSession !== undefined ? { onStartSession } : {})}
-          {...(docsRoot !== undefined ? { docsRoot } : {})}
-          emptyTitle={searchActive ? `无匹配「${filter.search.trim()}」的 feature` : undefined}
-          now={now}
-        />
-      </>
-    )
+    // spec 子 tab：本体（chips 行 + 列表行 + 展开元数据）由 G3 任务交付——本任务只归一
+    // 子 tab 结构，占位骨架零通道调用（列路 spec 短路 null → 骨架自然承接）
+    content = <SkeletonRows className="dswf-ov-skeleton" rowClassName="dswf-ov-skeleton-row" rows={6} anchor="data-dswf-ov-skeleton" />
   }
 
   return (
@@ -250,11 +223,6 @@ export function OverviewFrame({
       </div>
     </div>
   )
-}
-
-/** 空阶段计数（同口径） */
-function emptyPhaseCounts(): Record<FeatureStatus, number> {
-  return { 'in-progress': 0, prd: 0, design: 0, tasks: 0, completed: 0, archived: 0 }
 }
 
 /** 列路错误条（非横幅错误且旧行在场——失败可重试，内容保持） */
@@ -341,7 +309,7 @@ export interface OverviewTabProps {
   readonly renderTasksTab?: (ctx: OverviewTasksContext) => ReactNode
   /** 任务聚焦 nonce（4.2 pill 点击——变更即切任务子 tab；switchSubtab 语义 = 清搜索/清 chips/收展开） */
   readonly focusTasksNonce?: number
-  /** 打开新会话通道（4.6：提案/feature 行头预填——装配注入 openSessionWithPreset；缺席 = 按钮不呈现） */
+  /** 打开新会话通道（装配注入 openSessionWithPreset——spec 行头预填归 G3 接线；缺席 = 按钮不呈现） */
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** 会话 pill 跳转（ShellHost 递达面——任务抽屉同缝；缺席 = Bug 弹框 pill 非交互） */
   readonly onOpenSession?: (sessionId: string) => void
@@ -367,7 +335,7 @@ export function OverviewTab({
   now,
 }: OverviewTabProps): ReactNode {
   // 初始态（4.2）：挂载即带任务聚焦（pill 点击 → dock 首开概览 tab）= 任务子 tab 起步；
-  // 否则 feature 子 tab 缺省（用户定向顺序首位）
+  // 否则缺省子 tab = 任务（initialOverviewFilter 单源）
   const [filter, setFilter] = useState<OverviewFilterState>(() =>
     focusTasksNonce === undefined ? initialOverviewFilter() : switchSubtab(initialOverviewFilter(), 'tasks'),
   )
@@ -408,12 +376,6 @@ export function OverviewTab({
   const handleClearStatuses = useCallback((): void => {
     setFilter((prev) => clearStatusFilter(prev))
   }, [])
-  const handleTogglePhase = useCallback((phase: FeatureStatus): void => {
-    setFilter((prev) => togglePhaseFilter(prev, phase))
-  }, [])
-  const handleClearPhases = useCallback((): void => {
-    setFilter((prev) => clearPhaseFilter(prev))
-  }, [])
   const handleToggleBugStatus = useCallback((status: BugStatus): void => {
     setFilter((prev) => toggleBugStatusFilter(prev, status))
   }, [])
@@ -446,8 +408,6 @@ export function OverviewTab({
         onSortToggle={handleSortToggle}
         onToggleStatus={handleToggleStatus}
         onClearStatuses={handleClearStatuses}
-        onTogglePhase={handleTogglePhase}
-        onClearPhases={handleClearPhases}
         onToggleBugStatus={handleToggleBugStatus}
         onClearBugStatuses={handleClearBugStatuses}
         onToggleRow={handleToggleRow}

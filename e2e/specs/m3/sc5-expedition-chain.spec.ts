@@ -7,12 +7,12 @@
 //   双门承载）→ 任务（addTask slug 容器直挂）→ 派发入口（UF-3 新开路由联动断言：远征
 //   模式 + /run-dag-tasks 指令单行自动发送）→ 文档/任务/记录域全景一致。
 //
-// 退役/降局面（plugin-spec proposal 域下线 + OVERVIEW_FEATURE_ENABLED=false 用户裁定
+// 退役/降局面（plugin-spec proposal 域下线 + 概览 feature 消费门关闭，用户裁定
 // 2026-11-14）：
 //   - proposal 成链三行（proposal_id 谱系）/ 提案子 tab 行与展开 meta 面——随 proposal
 //     域退役整面摘除；
 //   - feature 子 tab UI 断言面（feature 行 / mode chip / 文档行）——features 子 tab 随
-//     OVERVIEW_FEATURE_ENABLED=false 退役，降为 db 级断言（工作区 forge.db features /
+//     feature 消费门关闭退役，降为 db 级断言（工作区 forge.db features /
 //     feature_documents 直读）；
 //   - 任务 mode 快照列（source_kind/source_id/mode）随容器 slug 化退役——容器对应模式
 //     的活断言面 = 容器 pill data-mode（features 轨恒 expedition，container-pill.ts 单源）。
@@ -107,7 +107,7 @@ test('@web-e2e @m3 SC5·远征全链：features 注册 → 规格文档 → 任�
     await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     await expect(page.locator(ttItemOf(t1.taskId)).first(), '任务行甲在场').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ttItemOf(t2.taskId)).first(), '任务行乙在场').toBeVisible({ timeout: 15_000 })
-    // ① feature 域（db 级——features 子 tab UI 随 OVERVIEW_FEATURE_ENABLED=false 退役）
+    // ① feature 域（db 级——features 子 tab UI 已随 feature 消费门关闭退役）
     const db2 = openForgeDbAt(dir)
     try {
       const docs = db2.prepare<unknown[], { doc_kind: string }>(`SELECT doc_kind FROM feature_documents WHERE feature_id = ? ORDER BY doc_kind`).all(featureId)

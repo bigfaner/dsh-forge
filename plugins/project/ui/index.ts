@@ -169,7 +169,7 @@ export * from './components.js'
 
 // ── dock tab 族（1.13 迁移退役：overview/doc 两键注册面随六组件迁批迁 @dsh-forge/task-loop
 //    （ui/dock-tabs-face.ts——组件族本体留本包：TaskDrawer/文档数据面壳侧仍消费；
-//    bug-tab + proposal-tab/feature-tab 归 project 域）。编排面 = ./session-actions.ts +
+//    bug-tab 归 project 域）。编排面 = ./session-actions.ts +
 //    ./open-session.ts；壳侧消费面经 client-ui/dock-tabs、client-ui/session-actions、
 //    client-ui/open-session 窄子路径出口。open-session 不经本出口 star-export——
 //    bug-refs/reference-mirrors 同名镜像面（ComposerInputFace/TokenSpanMirror 等）会

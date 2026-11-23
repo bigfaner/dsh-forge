@@ -26,22 +26,24 @@ function assertAscending(haystack: string, needles: readonly string[]): void {
   expect([...positions].sort((a, b) => a - b)).toEqual(positions)
 }
 
-describe('StickyBar 子 tab 行（消费门关——任务 | Bug 两 tab）', () => {
-  it('门关（用户裁定 2026-11-14）：子 tab = 任务 → Bug；aria-selected 标注当前态；提案/feature 退场', () => {
+describe('StickyBar 子 tab 行（spec | 任务 | Bug 有序三枚）', () => {
+  it('子 tab = spec → 任务 → Bug 有序三枚；aria-selected 标注当前态；提案/feature 锚退役零在场', () => {
     const markup = renderToStaticMarkup(<StickyBar {...base} subtab="tasks" search="" sort="active" />)
     expect(markup).toContain('role="tablist"')
     assertAscending(
       markup,
-      ['tasks', 'bugs'].map((v) => `data-dswf-ov-subtab="${v}"`),
+      ['spec', 'tasks', 'bugs'].map((v) => `data-dswf-ov-subtab="${v}"`),
     )
     expect(markup).toContain('aria-selected="true"')
     expect(markup).toContain('aria-selected="false"')
+    expect(markup).toContain('data-dswf-ov-subtab="spec"')
     expect(markup).not.toContain('data-dswf-ov-subtab="proposals"')
     expect(markup).not.toContain('data-dswf-ov-subtab="features"')
   })
 
-  it('子 tab 按钮标签中文口径（任务/Bug）', () => {
+  it('子 tab 按钮标签中文口径（spec/任务/Bug）', () => {
     const markup = renderToStaticMarkup(<StickyBar {...base} subtab="tasks" search="" sort="active" />)
+    expect(markup).toContain('>spec</button>')
     expect(markup).toContain('>任务</button>')
     expect(markup).toContain('>Bug</button>')
   })
@@ -49,10 +51,10 @@ describe('StickyBar 子 tab 行（消费门关——任务 | Bug 两 tab）', ()
 
 describe('StickyBar 搜索行（AC2 搜索 + 清除按钮 + IME 安全）', () => {
   it('官方 Input 受控件：value 原样承载 + 概览搜索 aria-label + 逐子 tab 占位文案', () => {
-    const markup = renderToStaticMarkup(<StickyBar {...base} subtab="features" search="管线" sort="active" />)
-    expect(markup).toContain('value="管线"')
+    const markup = renderToStaticMarkup(<StickyBar {...base} subtab="spec" search="网关" sort="active" />)
+    expect(markup).toContain('value="网关"')
     expect(markup).toContain('aria-label="概览搜索"')
-    expect(markup).toContain('placeholder="搜索 feature/文档…"')
+    expect(markup).toContain('placeholder="搜索 spec…"')
   })
 
   it('清除按钮条件呈现：空关键词缺席；非空在场（aria-label 清除搜索）', () => {

@@ -29,7 +29,6 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 const OV = 'plugins/project/ui/dock-tabs/overview'
 const overviewCss = readFileSync(join(ROOT, `${OV}/overview.css`), 'utf8')
-const featureCss = readFileSync(join(ROOT, `${OV}/feature-tab/feature-tab.css`), 'utf8')
 
 /** D44 执行期定值 + S6 加宽：三族状态 chip 固定统一宽（渲染总宽 96px） */
 const CHIP_WIDTH_PX = 90
@@ -48,7 +47,7 @@ function blockOf(css: string, selector: string): string {
 const declsOfBlock = (block: string): string =>
   block.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').trim()
 
-/** 三族状态 chip（base 规则 + 清过滤钮——D44 等长族与豁免族同载；peers = 互指注记对象） */
+/** 七态状态 chip（base 规则 + 清过滤钮——阶段族随 feature 子 tab 退役出本 pin 面） */
 const families = [
   {
     face: '七态（任务/概览面）',
@@ -56,13 +55,6 @@ const families = [
     chip: 'dswf-ov-stchip',
     clear: 'dswf-ov-stchip-clear',
     peers: ['dswf-ov-phchip'],
-  },
-  {
-    face: '阶段（feature 面）',
-    css: featureCss,
-    chip: 'dswf-ov-phchip',
-    clear: 'dswf-ov-phchip-clear',
-    peers: ['dswf-ov-stchip'],
   },
 ] as const
 

@@ -22,7 +22,6 @@ import { describe, expect, it } from 'vitest'
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')
 const OV = 'plugins/project/ui/dock-tabs/overview'
 const overviewCss = readFileSync(join(ROOT, `${OV}/overview.css`), 'utf8')
-const featureCss = readFileSync(join(ROOT, `${OV}/feature-tab/feature-tab.css`), 'utf8')
 const taskCss = readFileSync(join(ROOT, `${OV}/task-tab/task-tab.css`), 'utf8')
 
 /** 整行高令牌之半（D36 ×0.5 裁决刻度——CSS 值断言锚） */
@@ -38,15 +37,7 @@ function declsOf(css: string, selector: string): string {
     .join('\n')
 }
 
-describe('D36 ① 提案/feature 子 tab：chips 行 → 首卡间距减半', () => {
-  it.each([
-    { face: '阶段 chips（feature 面）', css: featureCss, cls: 'dswf-ov-phchips' },
-  ])('$face：行底距 = 整行高之半（shorthand 第三位 = 半令牌——原值整行高行注对照）', ({ css, cls }) => {
-    expect(declsOf(css, `.${cls}`), `${cls} 底距减半锚`).toContain(
-      `padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) ${HALF}`,
-    )
-  })
-
+describe('D36 ① 概览页：chips 行 → 首卡间距减半（feature 阶段 chips 族随子 tab 退役出本 pin 面）', () => {
   it('页容器 gap = 整行高之半（chips 行 → 首卡间距 = 底距 + gap 同 × 0.5——40px → 20px）', () => {
     const block = declsOf(overviewCss, '.dswf-ov-featurepage')
     expect(block).toContain(`gap: ${HALF}`)

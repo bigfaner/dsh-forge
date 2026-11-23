@@ -24,7 +24,7 @@
 //       「registrant + DOM 锚双证」的 e2e 可达半面；registrant 直读面归单元层
 //       dock-tabs-dual-form.test 持有）。
 //   [fix-6 锚调和 2026-11-18] 主体代理锚 data-dswf-ov-featurepage 退役——
-//       OVERVIEW_FEATURE_ENABLED=false（overview-model.ts 单测钉死，2026-11-14
+//       feature 消费门已退役（overview-model.ts 单测钉死，2026-11-14
 //       用户裁定消费面退场，默认子 tab = tasks，FeaturesTab 不再默认渲染）。
 //       AN-4 DOM 代理半面改锚 data-dswf-ov-sticky（project OverviewFrame sticky 条——
 //       project 唯一承载，task-loop 单装 seat 零此锚）；契约 last_anchor_sync 同步。
@@ -96,7 +96,7 @@ test.beforeAll(async () => {
  *  serial 模式下首测失败即全组不出——装配失败态如实上抛。 */
 let stageReady = false
 /** 步骤计时包装（装配序列耗时取证——setup-log.txt 逐秒可考） */
-async function timedStep(name: string, fn: () => Promise<void>): Promise<void> {
+async function timedStep(name: string, fn: () => Promise<unknown>): Promise<void> {
   const started = Date.now()
   try {
     await fn()

@@ -443,7 +443,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
     expect(plugin, '零预览槽注入').not.toContain("'sidebar.right.tab.document'")
   })
 
-  it('1.6 单行头收敛 pin（对齐官方预览头）：标题行/只读 chip/摘要卡退役 + 官方 PathLabel/图标件 + docs.css 新旧规则对位 + 概览文档行 summary 悬浮数据面', () => {
+  it('1.6 单行头收敛 pin（对齐官方预览头）：标题行/只读 chip/摘要卡退役 + 官方 PathLabel/图标件 + docs.css 新旧规则对位', () => {
     const tab = read('plugins/project/ui/dock-tabs/docs/index.tsx')
     expect(tab, '官方 PathLabel 复用（目录段弱化/渐隐裁剪/悬浮全值官方自带——禁自绘仿制）').toContain('PathLabel')
     expect(tab, '重读钮 = 官方导出图标件（documentpreview reload 同源 face）').toContain('IconRefreshOutlineRegular')
@@ -461,13 +461,8 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
     expect(css, '单行头新规则在场（路径左 + 控件簇右 + 底缘发丝线——官方预览头同形）').toMatch(/\.dswf-doc-pathbar \{[^}]*border-bottom/)
     expect(css, '官方图标钮刻度组（28×28 命中区 + svg 15×15 官方同刻度 dsw-raw 镜像）').toContain('.dswf-doc-iconbtn svg')
     expect(css, '悬空 warn chip 规则保留（单行内可见性）').toContain('.dswf-doc-chip-dangling')
-    const dgl = read('plugins/project/ui/dock-tabs/overview/feature-tab/DocGroupList.tsx')
-    expect(dgl, '概览文档行悬浮 summary（1.7 裁决——summary 非空才挂 Tooltip 官方 label；缺省/空串零浮层）').toContain(
-      "doc.summary !== undefined && doc.summary !== ''",
-    )
-    expect(dgl, 'docRowTipLabel 退役（relPath 回退违背 2026-10-11 裁决——不出路径）').not.toContain('docRowTipLabel')
-    expect(dgl, 'relPath 不作悬浮 label（裁决：不要展示文档路径）').not.toContain('label={doc.relPath}')
-    expect(dgl, 'DocGroupDoc 携 summary 透传（FeatureDocumentRow DTO 已有——零契约改动）').toContain('summary?: string')
+    // 概览文档行 summary 悬浮面随 feature 子 tab 退役批移除（DocGroupList 整树退役——
+    // 摘要悬浮承载面归零；docs tab 单行头断言面保持）
   })
 })
 

@@ -112,7 +112,7 @@ function featureDocRow(docKind: 'prd-spec' | 'tech-design' = 'tech-design'): Fea
 }
 
 describe('loadOverviewHead（头路并发——projects 单点 + features/stats 增强）', () => {
-  it('门关（用户裁定 2026-11-14）：features 通道零调用——head 空增强值照常落束', async () => {
+  it('头路 features 通道在调（task-tab feature pill 数据源）：无参全量落 head.features', async () => {
     const { client, calls } = headOkClient()
     const out = await loadOverviewHead(client, 'p-1')
     expect(out).toEqual({
@@ -121,11 +121,11 @@ describe('loadOverviewHead（头路并发——projects 单点 + features/stats 
         projectName: 'demo',
         workspaceDir: 'Z:/ws/demo',
         forgeDir: 'Z:/ws/demo/.forge',
-        features: [],
+        features: [featureCard('m2-pipeline')],
         stats: STATS,
       },
     })
-    expect(calls.find((c) => c.channel === FEATURES_CHANNELS.list)).toBeUndefined()
+    expect(calls.find((c) => c.channel === FEATURES_CHANNELS.list)).toBeDefined()
   })
 
   it('基本信息区五行：dirRows 键投影；workspaceRoot/forgeDir 项目行回退；其余缺席 = 「—」', async () => {
@@ -202,12 +202,13 @@ describe('loadOverviewHead（头路并发——projects 单点 + features/stats 
 })
 
 describe('fetchOverviewList（AC6 搜索传参——服务端过滤调用断言）', () => {
-  it('门关：features 子 tab 短路 null——features.list/listDocs 零调用', async () => {
+  it('spec 子 tab 短路 null（列装载归 G3）——features/bugs 通道零调用', async () => {
     const { client, calls } = headOkClient()
-    const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'features', search: 'pipeline', sort: 'active' })
+    const out = await fetchOverviewList(client, { projectId: 'p-1', subtab: 'spec', search: 'pipeline', sort: 'active' })
     expect(out).toBeNull()
     expect(calls.find((c) => c.channel === FEATURES_CHANNELS.list)).toBeUndefined()
     expect(calls.find((c) => c.channel === FEATURES_CHANNELS.listDocs)).toBeUndefined()
+    expect(calls.find((c) => c.channel === BUGS_CHANNELS.list)).toBeUndefined()
   })
 
   it('tasks 子 tab = null（3.5 无列装载——三视图归 3.6，chips 消费头路 stats）', async () => {
@@ -321,19 +322,19 @@ describe('落点纯函数', () => {
   it('overviewListPlan：键变 = 重拉；子 tab/项目切换 = 清场（同键 = 零装载）', () => {
     // 同键 = 不重拉（重渲染零装载）
     expect(
-      overviewListPlan({ listKey: 'k', lastListKey: 'k', subtab: 'features', lastSubtab: 'features', projectId: 'p', lastProjectId: 'p' }),
+      overviewListPlan({ listKey: 'k', lastListKey: 'k', subtab: 'bugs', lastSubtab: 'bugs', projectId: 'p', lastProjectId: 'p' }),
     ).toEqual({ isFetch: false, mustClear: false })
     // 搜索键入 = 重拉不清场（旧行保持——IME 安全配套：内容区在途更新非重建）
     expect(
-      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'features', lastSubtab: 'features', projectId: 'p', lastProjectId: 'p' }),
+      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'bugs', lastSubtab: 'bugs', projectId: 'p', lastProjectId: 'p' }),
     ).toEqual({ isFetch: true, mustClear: false })
     // 子 tab 切换 = 重拉 + 清场（旧子 tab 内容不残留）
     expect(
-      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'tasks', lastSubtab: 'features', projectId: 'p', lastProjectId: 'p' }),
+      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'tasks', lastSubtab: 'bugs', projectId: 'p', lastProjectId: 'p' }),
     ).toEqual({ isFetch: true, mustClear: true })
     // 项目切换 = 重拉 + 清场（跨项目旧内容不残留）
     expect(
-      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'features', lastSubtab: 'features', projectId: 'p2', lastProjectId: 'p' }),
+      overviewListPlan({ listKey: 'k2', lastListKey: 'k', subtab: 'bugs', lastSubtab: 'bugs', projectId: 'p2', lastProjectId: 'p' }),
     ).toEqual({ isFetch: true, mustClear: true })
   })
 })

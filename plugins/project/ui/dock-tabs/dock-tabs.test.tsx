@@ -328,7 +328,7 @@ describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 �
       />,
     )
     expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="tasks"')
-    expect(markup).not.toContain('data-dswf-ov-subtab="proposals"') // 提案子 tab 退场
+    expect(markup).toContain('data-dswf-ov-subtab="spec"') // spec | 任务 | Bug 有序三枚（spec 锚在调）
   })
 
   it('桥聚焦/弹窗/转移三缝直驱（ForgeOverviewTab 面桥缝）：写回 → 快照递达面在场（effect 应用归 e2e——renderToStaticMarkup 零 effect 同全仓口径）', () => {
