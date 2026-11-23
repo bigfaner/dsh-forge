@@ -37,57 +37,75 @@ function bundledExpertsRoot(moduleUrl: string = import.meta.url): string | undef
  * fail-soft + warn 留痕（不阻载 forge 激活）。registerRoot 侧已主动触发全部已建
  * registry 换代（plugins/expert-squad host/index.ts registerRoot 注记）——本面零
  * refresh 调用。
- * 承重假设：expert-squad 装载序先于本插件（builtin-redistribution 裁决②显式声明）：
- * 本注册只在 apply 期一次性求值，无迟到补偿（消费期补注册/服务上场事件监听均未建
- * ——AGENTS 1.6 禁 memoize + 最小改动纪律）；expert-squad 晚装载即永久零注册
- * （仅本 warn 留痕，不静默失联）。当前两形态装载序已核实：dev 形态 expert-squad
- * 经 dsh.profile.bundles bundle 层装载（一切用户层 patch 之前）；打包形态经用户层
- * insert 行（PRODUCT_PLUGINS 键序 core → expert-squad → … → knowledge，先于一切
- * 消费插件行）。
+ * 迟到补偿（builtin-redistribution 裁决①，修复 t-1.2 真机证伪的静默零注册）：
+ * apply 期 experts 缺席时挂接官方 cordis 内建 `internal/service` 事件（官方同语义机械
+ * 核销——cordis src/events.ts Events 声明「service events observe dependency
+ * registration」；src/reflect.ts `notify()` 在 provide/ACTIVE 换代时 emit；零新机械），
+ * experts 服务上场即幂等补注册一次。补偿态（已注册/已终止布尔）是装配事实可缓存；
+ * experts 服务引用永不 memoize——每次补触发现查 reflect.get（AGENTS 1.6）。
+ * 另有裁决②装配序修正（forge 聚合 patch insert 行 expert-squad 提前）治当前形态，
+ * 本补偿治一切未来序漂移（含 expert-squad async apply 晚 provide——knowledge 同案）。
  */
 export function registerBuiltinExpertsRoot(ctx: HostCtx): void {
-  let experts: unknown;
-  try {
-    experts = ctx.reflect?.get?.("experts");
-  } catch {
-    experts = undefined; // 反射异常视同缺席（fail-soft）
-  }
-  const register = (experts as { registerRoot?: unknown } | undefined)?.registerRoot;
-  if (typeof register !== "function") {
-    emitDiag(ctx, {
-      event: "forge-experts-register",
-      level: "warn",
-      process: "main",
-      message: "专家池静置：experts 服务缺席（expert-squad 未装/未供）——随包专家档案零注册（fail-soft 不阻载）",
-    });
+  // 补偿态 = 装配事实（已注册/已终止即不再补触发）；experts 服务引用每次现查。
+  let settled = false;
+  const attempt = (phase: "在场" | "迟到补偿"): boolean => {
+    let experts: unknown;
+    try {
+      experts = ctx.reflect?.get?.("experts");
+    } catch {
+      experts = undefined; // 反射异常视同缺席（fail-soft）
+    }
+    const register = (experts as { registerRoot?: unknown } | undefined)?.registerRoot;
+    if (typeof register !== "function") return false;
+    const dir = bundledExpertsRoot();
+    if (dir === undefined) {
+      emitDiag(ctx, {
+        event: "forge-experts-register",
+        level: "warn",
+        process: "main",
+        message: "随包 experts/ 目录解析缺席——内置专家档案零注册（fail-soft 不阻载）",
+      });
+      return true; // 目录缺席与序无关，终止补偿
+    }
+    try {
+      register.call(experts, ctx, dir, FORGE_BUNDLE_PACKAGE_NAME);
+      emitDiag(ctx, {
+        event: "forge-experts-register",
+        level: "info",
+        process: "main",
+        message: `随包内置专家档案注册完成（${phase}）：${dir}（experts.registerRoot——换代由 expert-squad 侧承担）`,
+      });
+    } catch (cause) {
+      emitDiag(ctx, {
+        event: "forge-experts-register",
+        level: "warn",
+        process: "main",
+        message: `experts.registerRoot 调用失败——随包专家档案零注册（fail-soft 不阻载）：${String(cause)}`,
+      });
+    }
+    return true; // 已注册或已确认失败——均终止补偿（同输入重试幂等失败无意义）
+  };
+  if (attempt("在场")) {
+    settled = true;
     return;
   }
-  const dir = bundledExpertsRoot();
-  if (dir === undefined) {
-    emitDiag(ctx, {
-      event: "forge-experts-register",
-      level: "warn",
-      process: "main",
-      message: "随包 experts/ 目录解析缺席——内置专家档案零注册（fail-soft 不阻载）",
-    });
-    return;
-  }
-  try {
-    register.call(experts, ctx, dir, FORGE_BUNDLE_PACKAGE_NAME);
-    emitDiag(ctx, {
-      event: "forge-experts-register",
-      level: "info",
-      process: "main",
-      message: `随包内置专家档案注册完成：${dir}（experts.registerRoot——换代由 expert-squad 侧承担）`,
-    });
-  } catch (cause) {
-    emitDiag(ctx, {
-      event: "forge-experts-register",
-      level: "warn",
-      process: "main",
-      message: `experts.registerRoot 调用失败——随包专家档案零注册（fail-soft 不阻载）：${String(cause)}`,
-    });
-  }
+  emitDiag(ctx, {
+    event: "forge-experts-register",
+    level: "warn",
+    process: "main",
+    message: "专家池静置：experts 服务缺席（expert-squad 未装/未供或晚于本件上场）——随包专家档案暂零注册（fail-soft 不阻载；internal/service 迟到补偿已挂接）",
+  });
+  if (typeof ctx.on !== "function") return; // 事件总线缺席 = 补偿通道不可用（warn 已留痕）
+  let off: (() => unknown) | undefined;
+  off = ctx.on("internal/service", (name: unknown) => {
+    if (settled || name !== "experts") return;
+    if (attempt("迟到补偿")) {
+      settled = true;
+      if (typeof off === "function") off(); // 补偿完成摘除监听（一次性装配事实）
+    }
+  });
+  if (typeof ctx.effect === "function") ctx.effect(() => () => off?.());
 }
 
 /** 宿主 ctx 窄面（cordis Context 结构子集——reflect 现查/根 registry provide + diag emit） */
@@ -100,6 +118,10 @@ interface HostCtx {
   reflect?: { get?(name: string): unknown; provide?(name: string, value: unknown): unknown };
   /** 诊断发射面（diag/log 事件域——emitDiag 消费面） */
   emit(event: string, payload: unknown): unknown;
+  /** 宿主事件总线订阅面（internal/service 迟到补偿挂点；缺席 = 补偿通道降级跳过） */
+  on?(event: string, listener: (...args: unknown[]) => unknown): () => unknown;
+  /** 宿主 effect 面（补偿监听 disposer 消费——cordis effect 契约，卸载级联摘除） */
+  effect?(dispose: () => unknown): unknown;
 }
 
 /**

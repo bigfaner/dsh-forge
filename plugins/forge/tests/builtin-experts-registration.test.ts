@@ -53,16 +53,71 @@ describe("registerBuiltinExpertsRoot（experts.registerRoot 装配行）", () =>
     expect(calls[0]!.dir).toBe(expertsDir);
   });
 
-  it("experts 服务缺席（reflect.get 返回 undefined）：fail-soft 不抛 + emitDiag「专家池静置」warn 不静默", () => {
+  it("experts 服务缺席：fail-soft 不抛 + emitDiag warn + internal/service 迟到补偿挂接", () => {
     const diag: DiagCall[] = [];
-    expect(() =>
-      registerBuiltinExpertsRoot({ ...makeDiag(diag), reflect: { get: () => undefined } }),
-    ).not.toThrow();
+    const listeners: Array<(...args: unknown[]) => unknown> = [];
+    const disposers: Array<() => void> = [];
+    registerBuiltinExpertsRoot({
+      ...makeDiag(diag),
+      reflect: { get: () => undefined },
+      on: (_event, listener) => {
+        listeners.push(listener);
+        return () => {
+          disposers.push(() => {});
+        };
+      },
+      effect: (dispose) => {
+        disposers.push(dispose as () => void);
+      },
+    });
     expect(diag).toHaveLength(1);
     expect(diag[0]!.level).toBe("warn");
     expect(diag[0]!.event).toBe("forge-experts-register");
     expect(diag[0]!.message).toContain("专家池静置");
     expect(diag[0]!.message).toContain("fail-soft 不阻载");
+    // 补偿监听已挂接 + effect 承接 disposer
+    expect(listeners).toHaveLength(1);
+    expect(disposers).toHaveLength(1);
+  });
+
+  it("迟到补偿：experts 服务上场（internal/service 事件）→ 幂等补注册一次 + 监听摘除", () => {
+    const calls: Registration[] = [];
+    const diag: DiagCall[] = [];
+    let listener: ((...args: unknown[]) => unknown) | undefined;
+    let expertsOnline = false;
+    const ctx = {
+      emit: (_event: string, payload: unknown) => diag.push(payload as DiagCall),
+      reflect: {
+        get(name: string): unknown {
+          if (name !== "experts" || !expertsOnline) return undefined;
+          return {
+            registerRoot(_c: unknown, dir: string, pluginName?: string): void {
+              calls.push({ dir, pluginName });
+            },
+          };
+        },
+      },
+      on: (_event: string, cb: (...args: unknown[]) => unknown) => {
+        listener = cb;
+        return () => {
+          listener = undefined;
+        };
+      },
+      effect: () => {},
+    };
+    registerBuiltinExpertsRoot(ctx as Parameters<typeof registerBuiltinExpertsRoot>[0]);
+    expect(calls).toHaveLength(0); // apply 期缺席零注册
+    expertsOnline = true;
+    listener?.("experts"); // 服务上场事件
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.pluginName).toBe(FORGE_BUNDLE_PACKAGE_NAME);
+    expect(existsSync(calls[0]!.dir)).toBe(true);
+    listener?.("experts"); // 二次事件零重复注册（幂等）
+    listener?.("other-service"); // 非 experts 服务零动作
+    expect(calls).toHaveLength(1);
+    expect(listener).toBeUndefined(); // 补偿完成监听已摘除
+    // 诊断面：warn 留痕 + 补偿注册 info 里程碑（AGENTS §7）
+    expect(diag.some((d) => d.level === "info" && d.message.includes("迟到补偿"))).toBe(true);
   });
 
   it("reflect.get 抛错：fail-soft 不抛、零注册 + 专家池静置 warn", () => {
@@ -90,9 +145,9 @@ describe("registerBuiltinExpertsRoot（experts.registerRoot 装配行）", () =>
     expect(() => registerBuiltinExpertsRoot({ emit: () => {} })).not.toThrow();
   });
 
-  it("承重假设显式声明锚定（裁决②）：注册面注释写明 expert-squad 装载序先于本插件 + 无迟到补偿", () => {
+  it("迟到补偿机械 pin（裁决①）：官方 cordis internal/service 事件核销落款在注册面注释", () => {
     const source = readFileSync(fileURLToPath(new URL("../host/index.ts", import.meta.url)), "utf8");
-    expect(source).toContain("承重假设：expert-squad 装载序先于本插件");
-    expect(source).toContain("无迟到补偿");
+    expect(source).toContain("internal/service");
+    expect(source).toContain("补偿态（已注册/已终止布尔）是装配事实可缓存");
   });
 });

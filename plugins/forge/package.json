@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/forge",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "type": "module",
   "description": "forge 全家桶：一次安装获得完整交付流水线——任务规格、任务循环、专家团、知识库与 Forge/猎头双预设模式。",

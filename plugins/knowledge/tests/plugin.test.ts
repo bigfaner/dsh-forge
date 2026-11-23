@@ -11,6 +11,7 @@ import knowledgePlugin, { KNOWLEDGE_SERVICE_NAME } from '../host/index.js'
 import { projectKeyOf } from '../host/project-key.js'
 import type { KnowledgePromptSection, KnowledgeToolDefinition, ScopedAgentFace } from '../host/tools/index.js'
 import type { BrowseKnowledgeService } from '../host/service/index.js'
+import type { DiagEventPayload } from '@dsh-forge/contracts'
 
 // 自持存储自启的宿主环境锚摘除（hermetic）：本文件全部装配走显式 config.dbFile——
 // 开发机 shell 携带 DSH_HOME/DSH_FORGE_TASKS_HOME 时避免缺省锚落盘真数据域。
@@ -61,7 +62,10 @@ class TempRuntime {
           }
         },
       },
-      on: (_event: 'agent/created', handler: (payload: { agent: ScopedAgentFace }) => unknown) => {
+      on: (event: string, handler: (payload: { agent: ScopedAgentFace }) => unknown) => {
+        // 仅记账 agent/created 订阅（internal/service 等其它事件域订阅——如
+        // registerBuiltinExpertsRoot 迟到补偿挂点——不属本 fake 的记账面）。
+        if (event !== 'agent/created') return () => {}
         this.agentHandlers.push(handler)
         return () => {
           this.disposed.listeners += 1
@@ -82,8 +86,8 @@ class TempRuntime {
       // fix-9：官方 workspaceRegistry 具名服务替身（inject 声明边；官方宿主 projects 投影源）
       workspaceRegistry: this.workspaceRegistry,
       // 诊断发射面捕获（host/index diagEmit 消费——fail-soft 留痕断言）
-      emit: (_event: string, payload: Record<string, unknown>) => {
-        this.diag.push(payload)
+      emit: (_event: 'diag/log', payload: DiagEventPayload) => {
+        this.diag.push(payload as unknown as Record<string, unknown>)
       },
     }
   }
@@ -178,7 +182,7 @@ describe('AC3 inject 面（零 core 依赖——A2 服务切换后仅 dsh 官方
     const bareRt = freshRt()
     const bareCtx = bareRt.ctx() as Record<string, unknown>
     delete bareCtx['workspaceRegistry']
-    const bareDispose = knowledgePlugin(bareCtx, { dbFile: bareRt.dbFile() })
+    const bareDispose = knowledgePlugin(bareCtx as unknown as Parameters<typeof knowledgePlugin>[0], { dbFile: bareRt.dbFile() })
     const bareCall = async (endpoint: string): Promise<Record<string, unknown>> => {
       const route = bareRt.connectionRpc.routes.get(`/api/${endpoint}`)!
       return await (await route({ json: async () => ({ type: 'client-request', rpcId: 't2', method: endpoint, payload: {} }), signal: AbortSignal.abort() })).json() as Record<string, unknown>
@@ -443,7 +447,7 @@ describe('装载期项目行回填（提案裁决 6——bug d927e8dc：官方�
     const rt = freshRt()
     const ctx = rt.ctx() as Record<string, unknown>
     delete ctx['workspaceRegistry']
-    const dispose = knowledgePlugin(ctx, { dbFile: rt.dbFile() })
+    const dispose = knowledgePlugin(ctx as unknown as Parameters<typeof knowledgePlugin>[0], { dbFile: rt.dbFile() })
     expect(rt.registeredTools).toHaveLength(7) // 不阻载
     expect(rt.provided.has(KNOWLEDGE_SERVICE_NAME)).toBe(true)
     await settle()

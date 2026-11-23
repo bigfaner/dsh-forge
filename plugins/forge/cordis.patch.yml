@@ -45,6 +45,13 @@
   config:
     default: Forge
 - insert:
+    # 装配序修正（builtin-redistribution 裁决②）：expert-squad 行提到一切消费件之前
+    # ——spec/knowledge/forge 的 apply 期 experts.registerRoot 现查依赖 experts 服务
+    # （迟到补偿裁决①兜底一切序漂移，本序修正治当前形态）。
+    - id: expert-squad
+      name: '@dsh-forge/expert-squad'
+      config:
+        comboMark: true
     - id: forge-bundle
       name: '@dsh-forge/forge'
       config:
@@ -66,10 +73,6 @@
         comboMark: true
         dbFile: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
         tasksHome: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/projects')
-    - id: expert-squad
-      name: '@dsh-forge/expert-squad'
-      config:
-        comboMark: true
     - id: knowledge
       name: '@dsh-forge/knowledge'
       config:

@@ -52,8 +52,11 @@ function parseInsertRows(yaml: string): InsertRow[] {
 /** 六插行 id 序（forge 自插 id = forge-bundle 异 id——用户裁定 2026-11-22 自 dshforge
  *  改名；bug 1102d9d8：≠ 官方
  *  @deepseek-ai/dsh-experimental-forge-bundle 服务行 id `forge`，防 id 键合并整行替换
- *  官方服务行 → StartupError + 五件插行——bundle 档唯一插行面）。 */
-const SIX_ROW_IDS = ["forge-bundle", "project", "spec", "task-loop", "expert-squad", "knowledge"];
+ *  官方服务行 → StartupError + 五件插行——bundle 档唯一插行面）。
+ *  装配序（builtin-redistribution 裁决②）：expert-squad 提前到一切消费件之前——
+ *  spec/knowledge/forge 的 apply 期 experts.registerRoot 现查依赖 experts 服务；
+ *  迟到补偿（裁决①）兜底一切序漂移，本序修正治当前形态。 */
+const SIX_ROW_IDS = ["expert-squad", "forge-bundle", "project", "spec", "task-loop", "knowledge"];
 const FIVE = ["project", "spec", "task-loop", "expert-squad", "knowledge"] as const;
 
 describe("forge patch 六插行契约", () => {

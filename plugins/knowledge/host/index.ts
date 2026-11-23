@@ -165,47 +165,73 @@ export const KNOWLEDGE_PACKAGE_NAME = '@dsh-forge/knowledge' as const
  * fail-soft + warn 留痕（不阻载本插件）。registerRoot 侧已主动触发全部已建 registry
  * 换代（plugins/expert-squad host/index.ts registerRoot 注记）——本面零 refresh 调用。
  * SC-2 零依赖红线：knowledge 只注册档案不消费 experts 服务（inject 名单零增）。
- * 承重假设：expert-squad 装载序先于本插件（builtin-redistribution 裁决②显式声明）：
- * 本注册只在 apply 期一次性求值，无迟到补偿（消费期补注册/服务上场事件监听均未建
- * ——AGENTS 1.6 禁 memoize + 最小改动纪律）；expert-squad 晚装载即永久零注册
- * （仅本 warn 留痕，不静默失联）。当前两形态装载序已核实：dev 形态 expert-squad
- * 经 dsh.profile.bundles bundle 层装载（一切用户层 patch 之前）；打包形态经用户层
- * insert 行（PRODUCT_PLUGINS 键序 core → expert-squad → … → knowledge，先于本包行）。
+ * 迟到补偿（builtin-redistribution 裁决①，修复 t-1.2 真机证伪的静默零注册）：
+ * apply 期 experts 缺席时挂接官方 cordis 内建 `internal/service` 事件（官方同语义机械
+ * 核销——cordis src/events.ts Events 声明「service events observe dependency
+ * registration」；src/reflect.ts `notify()` 在 provide/ACTIVE 换代时 emit；零新机械），
+ * experts 服务上场即幂等补注册一次。补偿态（已注册/已终止布尔）是装配事实可缓存；
+ * experts 服务引用永不 memoize——每次补触发现查 reflect.get（AGENTS 1.6）。
+ * 本案承重事实（t-1.2 真机证伪 + 源码定谳）：expert-squad apply 为 async——storage
+ * 可选服务 open 完成后才 provide('experts')（expert-squad host/index.ts 尾段），
+ * cordis 对兄弟 fiber 的 async apply 不构成装载序阻塞，故本包 insert 序在后仍先于
+ * provide 执行——现查缺席即落补偿，上场事件兜底注册。另有裁决②装配序修正治当前形态。
  */
 export function registerBuiltinExpertsRoot(
   ctx: KnowledgeContextFace,
   emit?: (payload: DiagEventPayload) => void,
 ): void {
-  let experts: unknown
-  try {
-    experts = (ctx as unknown as { reflect?: { get?(name: string): unknown } }).reflect?.get?.('experts')
-  } catch {
-    experts = undefined // 反射异常视同缺席（fail-soft）
-  }
   const warn = (message: string): void => {
     emit?.({ event: 'knowledge-experts-register', level: 'warn', message, process: 'main' })
   }
-  const register = (experts as { registerRoot?: unknown } | undefined)?.registerRoot
-  if (typeof register !== 'function') {
-    warn('experts 服务缺席（expert-squad 未装/未供）——随包专家档案零注册（fail-soft 不阻载）')
+  const face = ctx as unknown as {
+    reflect?: { get?(name: string): unknown }
+    on?(event: string, listener: (...args: unknown[]) => unknown): () => unknown
+    effect?(dispose: () => unknown): unknown
+  }
+  // 补偿态 = 装配事实（已注册/已终止即不再补触发）；experts 服务引用每次现查。
+  let settled = false
+  const attempt = (phase: '在场' | '迟到补偿'): boolean => {
+    let experts: unknown
+    try {
+      experts = face.reflect?.get?.('experts')
+    } catch {
+      experts = undefined // 反射异常视同缺席（fail-soft）
+    }
+    const register = (experts as { registerRoot?: unknown } | undefined)?.registerRoot
+    if (typeof register !== 'function') return false
+    const dir = bundledExpertsRoot()
+    if (dir === undefined) {
+      warn('随包 experts/ 目录解析缺席——内置专家档案零注册（fail-soft 不阻载）')
+      return true // 目录缺席与序无关，终止补偿
+    }
+    try {
+      register.call(experts, ctx, dir, KNOWLEDGE_PACKAGE_NAME)
+      emit?.({
+        event: 'knowledge-experts-register',
+        level: 'info',
+        message: `随包内置专家档案注册完成（${phase}）：${dir}（experts.registerRoot——换代由 expert-squad 侧承担）`,
+        process: 'main',
+      })
+    } catch (cause) {
+      warn(`experts.registerRoot 调用失败——随包专家档案零注册（fail-soft 不阻载）：${String(cause)}`)
+    }
+    return true // 已注册或已确认失败——均终止补偿
+  }
+  if (attempt('在场')) {
+    settled = true
     return
   }
-  const dir = bundledExpertsRoot()
-  if (dir === undefined) {
-    warn('随包 experts/ 目录解析缺席——内置专家档案零注册（fail-soft 不阻载）')
-    return
-  }
-  try {
-    register.call(experts, ctx, dir, KNOWLEDGE_PACKAGE_NAME)
-    emit?.({
-      event: 'knowledge-experts-register',
-      level: 'info',
-      message: `随包内置专家档案注册完成：${dir}（experts.registerRoot——换代由 expert-squad 侧承担）`,
-      process: 'main',
-    })
-  } catch (cause) {
-    warn(`experts.registerRoot 调用失败——随包专家档案零注册（fail-soft 不阻载）：${String(cause)}`)
-  }
+  warn('experts 服务缺席（expert-squad 未装/未供或晚于本件上场）——随包专家档案暂零注册（fail-soft 不阻载；internal/service 迟到补偿已挂接）')
+  if (typeof face.on !== 'function') return // 事件总线缺席 = 补偿通道不可用（warn 已留痕）
+  let off: (() => unknown) | undefined
+  off = face.on('internal/service', (name: unknown) => {
+    if (settled || name !== 'experts') return
+    if (attempt('迟到补偿')) {
+      settled = true
+      if (typeof off === 'function') off() // 补偿完成摘除监听（一次性装配事实）
+    }
+  })
+  if (typeof face.effect === 'function') face.effect(() => () => off?.())
 }
 
 const knowledgePlugin: KnowledgePlugin = Object.assign(
