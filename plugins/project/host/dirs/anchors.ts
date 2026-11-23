@@ -8,8 +8,8 @@
 // → 目的地）。带 IO 的只有装配层（faces.createForgePathsAnchors——经既有 projects 服务
 // getProject/deriveTaskStoreDir 解析注入，本模块零涉及）。
 // declare merge（§2.2）：第三方插件经 cordis 服务键 forgeDirs 的 registerDirKeys 注册面
-// 声明自己的目录键，forge 合并进注册表、forgeDirs/forgeResolvePath 全量可见；forge.* 前缀
-// 保留给 forge 本体（第三方占用即拒），同名互撞 fail-loud 点名两方，前缀归属由声明方自选。
+// 声明自己的目录键，合并进注册表、forgeDirs/forgeResolvePath 全量可见；forge.* 前缀保留——
+// 目录事实注册表权威 = plugin-project（第三方占用即拒），同名互撞 fail-loud 点名两方，前缀归属由声明方自选。
 // 受控面拒绝（未知 dirKey/dest、目的地 requires 缺参）的工具面 typed 承载 =
 // ERR_DIR_PATH_INVALID（contracts errors.ts——tools/forge-paths.ts）。
 // §2.8 散点收编：段名与平台独立连接单源 = contracts forge-dir-segments（本模块消费）；
@@ -42,7 +42,7 @@ export interface DirKeyEntry {
   readonly description: string
   /** 同构解析器（纯函数零 IO——同入参同出参） */
   resolve(ctx: ForgePathsResolveContext): string
-  /** 声明方标识（forge 本体 = 'plugin-forge'；第三方 = 插件名——同名互撞点名两方用） */
+  /** 声明方标识（本体 = 'plugin-project'——目录事实注册表权威；第三方 = 插件名——同名互撞点名两方用） */
   readonly declaredBy?: string
 }
 
@@ -75,7 +75,7 @@ function requireAnchor(ctx: ForgePathsResolveContext, key: 'projectHome' | 'task
 }
 
 /**
- * 锚键注册表（forge 本体五键——只收稳定锚：无参、即查即得；带参派生路径不设键，
+ * 锚键注册表（本体五键——只收稳定锚：无参、即查即得；带参派生路径不设键，
  * 经 DIR_DESTINATIONS 目的地解析）。派生链单向无环：
  * projectHome → taskHome；forgeDir → docsRoot/tmp/worktrees。
  * dirKey 命名格式（用户裁决）：forge.{snake_case}——点前缀 = 命名空间，段内蛇形。
@@ -85,31 +85,31 @@ export const DIR_KEY_REGISTRY: readonly DirKeyEntry[] = [
     dirKey: 'forge.project_home',
     description: '宿主任务库派生根（env DSH_FORGE_TASKS_HOME > userData/forge-workspaces，随宿主形态解析）',
     resolve: (ctx) => requireAnchor(ctx, 'projectHome'),
-    declaredBy: 'plugin-forge',
+    declaredBy: 'plugin-project',
   },
   {
     dirKey: 'forge.task_home',
     description: '本工作区任务管线状态库（forge.db 四域状态与任务运行日志所在；deriveTaskStoreDir 产物）',
     resolve: (ctx) => requireAnchor(ctx, 'taskHome'),
-    declaredBy: 'plugin-forge',
+    declaredBy: 'plugin-project',
   },
   {
     dirKey: 'forge.docs_root',
     description: '本工作区 forge 文档根（提案/探针/圆桌纪要/特性阶段文档树之父）',
     resolve: (ctx) => (ctx.docsRoot !== undefined && ctx.docsRoot !== '' ? ctx.docsRoot : joinDirSegment(requireAnchor(ctx, 'forgeDir'), 'docs')),
-    declaredBy: 'plugin-forge',
+    declaredBy: 'plugin-project',
   },
   {
     dirKey: 'forge.tmp',
     description: '临时文件统一区（用完即清，不入 git）',
     resolve: (ctx) => joinDirSegment(requireAnchor(ctx, 'forgeDir'), 'tmp'),
-    declaredBy: 'plugin-forge',
+    declaredBy: 'plugin-project',
   },
   {
     dirKey: 'forge.worktrees',
     description: '派发工作树区（任务终态后回收）',
     resolve: (ctx) => joinDirSegment(requireAnchor(ctx, 'forgeDir'), 'worktrees'),
-    declaredBy: 'plugin-forge',
+    declaredBy: 'plugin-project',
   },
 ]
 
@@ -230,7 +230,7 @@ function validateDeclareEntry(entry: DirKeyEntry, index: number): void {
   }
   if (entry.dirKey.startsWith('forge.')) {
     throw new Error(
-      `forgeDirs registerDirKeys: dirKey '${entry.dirKey}' rejected — the 'forge.*' namespace is reserved for plugin-forge itself; declare your own plugin prefix instead`,
+      `forgeDirs registerDirKeys: dirKey '${entry.dirKey}' rejected — the 'forge.*' namespace is reserved: the directory fact registry authority is plugin-project; declare your own plugin prefix instead`,
     )
   }
   const prefix = entry.dirKey.split('.')[0]

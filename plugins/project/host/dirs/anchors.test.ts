@@ -60,7 +60,7 @@ describe('锚键注册表（AC1：5 键全量——每项纯函数解析 + descr
   it('description 与注册表同源（每键一句话语义在场——工具输出零二次维护）', () => {
     for (const e of DIR_KEY_REGISTRY) {
       expect(e.description.length).toBeGreaterThan(0)
-      expect(e.declaredBy).toBe('plugin-forge')
+      expect(e.declaredBy).toBe('plugin-project')
     }
   })
 })
@@ -102,11 +102,11 @@ describe('declare merge 注册面（AC1a 四断言）', () => {
     expect(keys).toEqual([...DIR_KEY_REGISTRY.map((e) => e.dirKey), 'knowledge.root'])
   })
 
-  it('forge.* 前缀第三方声明拒绝（本体命名空间保留）', () => {
+  it('forge.* 前缀第三方声明拒绝（目录事实注册表权威 = plugin-project——保留命名空间）', () => {
     const registry = createDirKeyRegistry()
     expect(() =>
       registry.registerDirKeys([{ ...knowledgeRoot, dirKey: 'forge.custom', declaredBy: 'knowledge' }]),
-    ).toThrow(/reserved for plugin-forge/)
+    ).toThrow(/registry authority is plugin-project/)
   })
 
   it('无插件前缀（无点分隔）拒绝；description/resolve 缺席拒绝（fail-loud 形状校验）', () => {

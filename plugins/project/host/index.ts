@@ -60,7 +60,9 @@ import {
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
 import { isGitWorktreeServiceFace, createWorktreesResident, type WorktreesRegistryFace } from "./assembly/worktrees-port.js";
-import { registerBugTools } from "./tools/register.js";
+import { registerBugTools, createBugProjectIdResolver } from "./tools/register.js";
+import { createForgePathsToolFace, registerForgePathsTools } from "./tools/forge-paths.js";
+import type { ReflectDeclarePullFace } from "./dirs/anchors.js";
 import { consoleDiagFallback, DIAG_EVENT, emitDiagOrFallback, type DiagEventPayload } from "@dsh-forge/lib-diag";
 import { assertInstallMutex } from "./install-mutex.js";
 
@@ -290,13 +292,16 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   // Typert 遥控器注册（官方 UI 数据第一等通道——控制器注册进根 ctx；诊断 emit 面
   // 装配桥接：ctx.emit 在场即 typed emit，缺席 emitDiagOrFallback console 兜底。插件域
   // 进程位恒 main——errors.ts 既有先例同径）。
+  // 诊断 emit 桥接（ctx.emit 在场即 typed emit，缺席 emitDiagOrFallback console 兜底）——
+  // Typert 遥控器与 forge-paths 双工具（declare 拉取缝降级 warn）共消费。插件域
+  // 进程位恒 main——errors.ts 既有先例同径。
+  const faceEmit = (face as { emit?: unknown }).emit;
+  const diagEmit =
+    typeof faceEmit === "function"
+      ? (payload: Omit<DiagEventPayload, "process">): void =>
+          emitDiagOrFallback((p) => (faceEmit as (e: string, p: unknown) => unknown).call(face, DIAG_EVENT, { ...p, process: "main" }), payload)
+      : undefined;
   try {
-    const faceEmit = (face as { emit?: unknown }).emit;
-    const diagEmit =
-      typeof faceEmit === "function"
-        ? (payload: Omit<DiagEventPayload, "process">): void =>
-            emitDiagOrFallback((p) => (faceEmit as (e: string, p: unknown) => unknown).call(face, DIAG_EVENT, { ...p, process: "main" }), payload)
-        : undefined;
     const typertDeps: ForgeTypertDeps = {
       projects: deps.projects,
       bugs: deps.bugs,
@@ -345,11 +350,30 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   } catch (cause) {
     diag(`[project-typert] Typert 遥控器装配异常（fail-soft 不阻载）：${String(cause)}`);
   }
+  // forgeDirs/forgeResolvePath 双 agent 只读工具注册（官方 tools 缝——目录事实查询面；
+  // 数据源 = dirs/anchors.ts 注册表单源 + dirKeys.* 反向拉取 declare merge 现查）。
+  // 装配期同名守卫：tools 面已存同名定义即跳过 + diag warn（先在者胜，不缓存）。
+  const disposePathTools = registerForgePathsTools(
+    face,
+    {
+      face: createForgePathsToolFace({
+        anchorsOf,
+        reflectOf: () => face.reflect as unknown as ReflectDeclarePullFace | undefined,
+        onDeclareDiag: (p) => {
+          diag(`[project-forge-paths] ${p.message}`, p.level);
+          diagEmit?.({ event: p.event, level: p.level, message: p.message });
+        },
+      }),
+      resolveProjectId: createBugProjectIdResolver({ db: domainDb, coreProjects: coreProjectsOf }),
+    },
+    (line, level) => diag(line, level),
+  ).dispose;
   // worktree 域插件组合装载（诊断缝透传——装配失败/能力缺席语义归插件自身 fail-soft 面）
   const disposeWorktrees = worktreePlugin(ctx, { diag: (line) => diag(line) });
   return () => {
     disposeWorktrees();
     disposeBugTools?.();
+    disposePathTools?.();
     // provider 生命周期归 scope（cordis provide 注销面由宿主管辖——本插件零自持资源）
   };
 };
