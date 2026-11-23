@@ -42,6 +42,30 @@
 //      原目录改名保留 + 同卷断言（staged 与目标同卷 → rename 原子）。
 //   ④ 观察项：dsh-forge-dev / dsh-forge 进程在场清单留痕（不阻断执行——copy-out 与持句柄进程共存）。
 //
+// ── bundle 搬行段（forge-aggregate-bundle 1.43——旧 dsh-forge home → forge-bundle 桌面 home，
+//    --bundle 门控启用，与①-④旧路径互斥）──
+//   目标 = {home}/forge/db/forge/forge.db（forge-bundle 现行全局库）；源 = --source 旧 home
+//   （缺省 %APPDATA%\dsh-forge）的 post-migration 布局：
+//   ⑤ bugs：{source}/forge/db/project/project.db project_bugs → forge.db project_bugs
+//      （两库列同构直迁；project_key 不在目标 project_projects → 隔离区留档）。
+//   ⑥ tasks：{source}/forge/db/task-loop/task-loop.db task_tasks（schema 与目标同构 v1）+
+//      task_edges/task_records/task_session_links/task_settlements → forge.db 同名表：
+//      · feature 容器任务剔除（用户裁定 2026-11-22：不迁跟 features 关联的任务——
+//        容器 slug 集 = 源各工作区库 features 表 slug 全集）；
+//      · project_key 不在目标 project_projects → 剔除留档（annotutor 等）；
+//      · fix_of_task_id 前驱不在迁移全集 → 置 NULL + 人工清单（禁悬空）；
+//      · edges 双端点须都在迁移全集（缺端 → 人工清单）；records/tsl/settlements 随迁移集
+//        同迁，剔除容器关联行计数留痕（用户裁定的整体剔除面，非静默丢弃）。
+//   ⑦ proposals → specs（用户裁定 2026-11-22：proposal 转 spec；rejected/superseded 不迁移）：
+//      {source}/forge/workspaces/<dir>/forge.db proposals → forge.db spec_specs +
+//      spec_docs（rel_path 非空 1:1）+ spec_transitions（draft→映射态留痕行，note 携
+//      proposal_status/mode/superseded_by/author 降档信息，created_at=decided_at）。
+//      状态映射：draft→draft / under-review→awaiting_approval / accepted→approved；
+//      project_key 无目标项目行或 slug 冲突 → 人工清单跳过。
+//   bundle 段纪律同①-④：staged VACUUM INTO 快照搬行 → 复验 → 原子替换（原库改名保留
+//   回滚点）；bundle_migrate_state 标记表逐步 fingerprint 幂等；行级 NOT EXISTS 守卫；
+//   目标库排他打开兜底（desktop 宿主在场时 open 即抛——迁移前须关闭 dsh desktop）。
+//
 // 幂等（dba 处方「staged 临时 + NOT EXISTS + 原子改名」）：
 //   · project.db 写入全程走 staged 快照（VACUUM INTO）→ 单事务搬行 → 计数/判例链复验 →
 //     原子替换（原库先改名保留，WAL 侧车随旧文件清除）；
@@ -103,6 +127,11 @@ function parseArgs(argv) {
     skipTaskLoop: false,
     skipWorkspaces: false,
     skipProcessCheck: false,
+    bundle: false,
+    source: null,
+    skipBundleBugs: false,
+    skipBundleTasks: false,
+    skipBundleSpecs: false,
   }
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i]
@@ -113,13 +142,24 @@ function parseArgs(argv) {
     else if (a === '--skip-task-loop') args.skipTaskLoop = true
     else if (a === '--skip-workspaces') args.skipWorkspaces = true
     else if (a === '--skip-process-check') args.skipProcessCheck = true
+    else if (a === '--bundle') args.bundle = true
+    else if (a === '--source') args.source = resolve(argv[++i])
+    else if (a === '--skip-bundle-bugs') args.skipBundleBugs = true
+    else if (a === '--skip-bundle-tasks') args.skipBundleTasks = true
+    else if (a === '--skip-bundle-specs') args.skipBundleSpecs = true
     else throw new Error(`未知参数：${a}`)
   }
+  args.source = args.source ?? join(homedir(), 'AppData', 'Roaming', 'dsh-forge')
   args.stateDb = join(args.home, 'state.db')
   args.projectDbDir = join(args.home, 'forge', 'db', 'project')
   args.projectDb = join(args.projectDbDir, 'project.db')
   args.workspacesFrom = join(args.home, 'forge-workspaces')
   args.workspacesTo = args.workspacesTo ?? join(args.home, 'forge', 'workspaces')
+  // bundle 段路径（目标 = forge-bundle 现行全局库；源 = 旧 home post-migration 布局）
+  args.bundleDb = join(args.home, 'forge', 'db', 'forge', 'forge.db')
+  args.sourceProjectDb = join(args.source, 'forge', 'db', 'project', 'project.db')
+  args.sourceTaskLoopDb = join(args.source, 'forge', 'db', 'task-loop', 'task-loop.db')
+  args.sourceWorkspaces = join(args.source, 'forge', 'workspaces')
   return args
 }
 
@@ -1143,6 +1183,7 @@ function openReadonly(file) {
 export function main(argv) {
   const args = parseArgs(argv)
   const nowIso = new Date().toISOString()
+  if (args.bundle) return runBundleMigration(args, nowIso)
   mkdirSync(args.projectDbDir, { recursive: true })
   diagFile = join(args.projectDbDir, 'migrate-state-db-diag.log')
   emitDiag('info', 'project-migrate', `迁移开始：home=${args.home}`)
@@ -1265,6 +1306,383 @@ export function main(argv) {
     bugs: summary.bugs?.skipped ? 'skipped' : `${summary.bugs.moved?.length ?? 0} 行搬入（隔离区 ${summary.bugs.quarantined?.length ?? 0}，人工清单 ${summary.bugs.manualList?.length ?? 0}）`,
     taskLoop: summary.taskLoop === undefined || summary.taskLoop?.skipped ? 'skipped' : `tasks=${summary.taskLoop.moved.tasks} records=${summary.taskLoop.moved.records}（submit 断代 ${summary.taskLoop.submitArchived}）cp=${summary.taskLoop.moved.checkpoints}`,
     workspaces: summary.workspaces?.skipped ? 'skipped' : `${summary.workspaces.fileCount} 文件 / ${summary.workspaces.totalBytes} 字节`,
+  })}`)
+  return summary
+}
+
+// ════════ bundle 搬行段（forge-aggregate-bundle 1.43——旧 home → forge-bundle 桌面 forge.db） ════════
+
+/** bundle 段标记表（目标 forge.db 内——逐 step fingerprint 幂等，纪律同 project_migrate_state）。 */
+function ensureBundleStateTable(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS bundle_migrate_state (
+    step          TEXT PRIMARY KEY,
+    fingerprint   TEXT NOT NULL,
+    done_at       TEXT NOT NULL,
+    summary_json  TEXT NOT NULL
+  )`)
+  // 隔离区（目标库首见时补建——桌面新库无此表，形状同①段 project.db 隔离区）
+  db.exec(`CREATE TABLE IF NOT EXISTS project_bugs_quarantine (
+    id            TEXT PRIMARY KEY,
+    reason        TEXT NOT NULL,
+    source_db     TEXT NOT NULL,
+    row_json      TEXT NOT NULL,
+    quarantined_at TEXT NOT NULL
+  )`)
+}
+function bundleStateGet(db, step) {
+  return db.prepare(`SELECT fingerprint FROM bundle_migrate_state WHERE step = ?`).get(step)
+}
+function bundleStatePut(db, step, fingerprint, nowIso, summaryJson) {
+  db.prepare(`INSERT OR REPLACE INTO bundle_migrate_state (step, fingerprint, done_at, summary_json) VALUES (?, ?, ?, ?)`)
+    .run(step, fingerprint, nowIso, summaryJson)
+}
+function fileFingerprint(file) {
+  return existsSync(file) ? `${statSync(file).size}:${statSync(file).mtimeMs}` : 'absent'
+}
+/** bundle 段人工清单（追加去重——同键不重写，重跑安全；口径同 migrateBugs 人工清单）。 */
+function appendBundleManualList(manualPath, entries) {
+  if (entries.length === 0) return 0
+  let existing = ''
+  try {
+    existing = readFileSync(manualPath, 'utf8')
+  } catch {
+    /* 首次创建 */
+  }
+  let appended = 0
+  for (const m of entries) {
+    const line = `- [ ] ${m.key} = ${JSON.stringify(m.value)} —— ${m.reason}\n`
+    if (existing.includes(line)) continue
+    appendFileSync(manualPath, line, 'utf8')
+    appended += 1
+  }
+  return appended
+}
+
+// ── ⑤ bugs 搬行：源 project.db → 目标 forge.db project_bugs（同构直迁 + 项目行守卫） ──
+function bundleMigrateBugs(db, args, nowIso) {
+  const step = 'bundle:bugs'
+  const fp = fileFingerprint(args.sourceProjectDb)
+  const done = bundleStateGet(db, step)
+  if (done !== undefined && done.fingerprint === fp) {
+    emitDiag('info', 'bundle-migrate', `bugs 搬行已完成且源未变（fingerprint 同）——跳过`)
+    return { skipped: true }
+  }
+  if (!existsSync(args.sourceProjectDb)) {
+    emitDiag('warn', 'bundle-migrate', `源 project.db 缺席（${args.sourceProjectDb}）——bugs 搬行跳过`)
+    return { skipped: true, absent: true }
+  }
+  const targetProjects = new Set(db.prepare(`SELECT project_key FROM project_projects`).all().map((r) => r.project_key))
+  const src = openReadonly(args.sourceProjectDb)
+  const rows = src.prepare(`SELECT * FROM project_bugs ORDER BY created_at ASC, id ASC`).all()
+  src.close()
+  const manualPath = join(dirname(args.bundleDb), 'bundle-migrate-manual-review.md')
+  const manualList = []
+  let moved = 0
+  let quarantined = 0
+  const apply = db.transaction(() => {
+    for (const r of rows) {
+      if (db.prepare(`SELECT 1 FROM project_bugs WHERE id = ?`).get(r.id) !== undefined) continue
+      if (!targetProjects.has(r.project_key)) {
+        db.prepare(`INSERT OR IGNORE INTO project_bugs_quarantine (id, reason, source_db, row_json, quarantined_at) VALUES (?, ?, ?, ?, ?)`)
+          .run(r.id, 'project-key-absent-in-target', args.sourceProjectDb, JSON.stringify(r), nowIso)
+        quarantined += 1
+        continue
+      }
+      if (r.recurrence_of !== null && r.recurrence_of !== '') {
+        const universe = new Set(rows.map((x) => x.id))
+        if (!universe.has(r.recurrence_of)) {
+          manualList.push({ key: `bug ${r.id} (recurrence_of)`, value: r.recurrence_of, reason: '复发链前驱不在迁移全集——人工核验（原值照搬，禁置 NULL）' })
+        }
+      }
+      db.prepare(
+        `INSERT INTO project_bugs (id, project_key, summary, bug_desc, trigger_desc, expected, actual, suspected, error_type,
+         bug_status, commit_hash, worktree, branch, unresolved_reason, fix_approach, source_task_id, recurrence_of,
+         container_slug, report_session_id, fix_session_id, fixer, reporter, created_at, updated_at)
+         VALUES (@id, @project_key, @summary, @bug_desc, @trigger_desc, @expected, @actual, @suspected, @error_type,
+         @bug_status, @commit_hash, @worktree, @branch, @unresolved_reason, @fix_approach, @source_task_id, @recurrence_of,
+         @container_slug, @report_session_id, @fix_session_id, @fixer, @reporter, @created_at, @updated_at)`,
+      ).run({
+        id: null, project_key: null, summary: null, bug_desc: null, trigger_desc: null, expected: null, actual: null,
+        suspected: null, error_type: null, bug_status: null, commit_hash: null, worktree: null, branch: null,
+        unresolved_reason: null, fix_approach: null, source_task_id: null, recurrence_of: null, container_slug: null,
+        report_session_id: null, fix_session_id: null, fixer: null, reporter: null, created_at: null, updated_at: null,
+        ...r,
+      })
+      moved += 1
+    }
+  })
+  apply()
+  const appended = appendBundleManualList(manualPath, manualList)
+  if (appended > 0) emitDiag('warn', 'bundle-migrate', `人工清单 ${appended} 条（recurrence_of 断链）：${manualPath}`)
+  bundleStatePut(db, step, fp, nowIso, JSON.stringify({ moved, quarantined, manual: manualList.length }))
+  return { skipped: false, moved, quarantined, manual: manualList.length }
+}
+
+// ── ⑥ tasks 搬行：源 task-loop.db → 目标 forge.db（feature 容器剔除 + 项目行守卫 + 同迁四表） ──
+const TASK_COMPANION_TABLES = ['task_edges', 'task_records', 'task_session_links', 'task_settlements']
+
+/** 源 feature 容器 slug 全集（源各工作区库 features 表——用户裁定：关联任务不迁移）。 */
+function sourceFeatureSlugs(args) {
+  const slugs = new Set()
+  if (!existsSync(args.sourceWorkspaces)) return slugs
+  for (const e of readdirSync(args.sourceWorkspaces, { withFileTypes: true })) {
+    if (!e.isDirectory()) continue
+    const f = join(args.sourceWorkspaces, e.name, 'forge.db')
+    if (!existsSync(f)) continue
+    const w = openReadonly(f)
+    try {
+      if (hasTable(w, 'features')) {
+        for (const r of w.prepare(`SELECT slug FROM features`).all()) slugs.add(r.slug)
+      }
+    } finally {
+      w.close()
+    }
+  }
+  return slugs
+}
+
+function bundleMigrateTasks(db, args, nowIso) {
+  const step = 'bundle:tasks'
+  const fp = fileFingerprint(args.sourceTaskLoopDb)
+  const done = bundleStateGet(db, step)
+  if (done !== undefined && done.fingerprint === fp) {
+    emitDiag('info', 'bundle-migrate', `tasks 搬行已完成且源未变（fingerprint 同）——跳过`)
+    return { skipped: true }
+  }
+  if (!existsSync(args.sourceTaskLoopDb)) {
+    emitDiag('warn', 'bundle-migrate', `源 task-loop.db 缺席（${args.sourceTaskLoopDb}）——tasks 搬行跳过`)
+    return { skipped: true, absent: true }
+  }
+  const targetProjects = new Set(db.prepare(`SELECT project_key FROM project_projects`).all().map((r) => r.project_key))
+  const featureSlugs = sourceFeatureSlugs(args)
+  const src = openReadonly(args.sourceTaskLoopDb)
+  const TASK_COLS = ['id', 'slug', 'local_id', 'title', 'task_type', 'task_status', 'brief', 'ac_json', 'priority',
+    'estimated_time', 'scope_json', 'context_json', 'fix_of_task_id', 'breaking', 'coverage_threshold', 'complexity',
+    'project_key', 'created_at', 'updated_at']
+  const taskColsSql = TASK_COLS.join(', ')
+  const srcTasks = src.prepare(`SELECT ${taskColsSql} FROM task_tasks ORDER BY created_at ASC, id ASC`).all()
+  const manualPath = join(dirname(args.bundleDb), 'bundle-migrate-manual-review.md')
+  const manualList = []
+  const migratedIds = new Set()
+  let moved = 0
+  let skippedFeature = 0
+  let skippedProject = 0
+  let skippedDuplicate = 0
+  // 阶段一：迁移集划定（剔除 + 去重判据，零写入）
+  for (const r of srcTasks) {
+    if (featureSlugs.has(r.slug)) {
+      skippedFeature += 1
+      continue
+    }
+    if (!targetProjects.has(r.project_key)) {
+      skippedProject += 1
+      continue
+    }
+    if (db.prepare(`SELECT 1 FROM task_tasks WHERE project_key = ? AND slug = ? AND local_id = ?`)
+      .get(r.project_key, r.slug, r.local_id) !== undefined) {
+      skippedDuplicate += 1
+      continue
+    }
+    migratedIds.add(r.id)
+  }
+  const apply = db.transaction(() => {
+    // 阶段二：按迁移集插行——fix_of_task_id 前驱必须在迁移集内（FK 闭合；缺前驱 → 置 NULL + 人工清单）
+    for (const r of srcTasks) {
+      if (!migratedIds.has(r.id)) continue
+      let fixOf = r.fix_of_task_id
+      if (fixOf !== null && fixOf !== '') {
+        if (!migratedIds.has(fixOf)) {
+          manualList.push({ key: `task ${r.id} (fix_of_task_id)`, value: fixOf, reason: 'fix 前驱不在迁移全集（feature/无项目剔除）——已置 NULL，原值留档人工核验' })
+          fixOf = null
+        }
+      }
+      db.prepare(
+        `INSERT INTO task_tasks (${taskColsSql}) VALUES (${TASK_COLS.map((c) => `@${c}`).join(', ')})`,
+      ).run({ ...r, fix_of_task_id: fixOf })
+      moved += 1
+    }
+    // 四张伴表：随迁移集同迁（fix_of_task_id 引用闭合由上一段保证）；edges 缺端 → 人工清单
+    for (const table of TASK_COMPANION_TABLES) {
+      if (!hasTable(src, table) || !hasTable(db, table)) continue
+      const cols = [...tableColumns(src, table)]
+      const colsSql = cols.join(', ')
+      let dropped = 0
+      for (const row of src.prepare(`SELECT ${colsSql} FROM ${table}`).all()) {
+        if (!migratedIds.has(row.task_id)) {
+          dropped += 1
+          continue
+        }
+        if (table === 'task_edges') {
+          // edges 无 id 列（复合键表）——存在判据按 (task_id, prerequisite_id, origin)
+          if (db.prepare(`SELECT 1 FROM task_edges WHERE task_id = ? AND prerequisite_id = ? AND origin IS ?`)
+            .get(row.task_id, row.prerequisite_id, row.origin ?? null) !== undefined) continue
+          if (!migratedIds.has(row.prerequisite_id)) {
+            manualList.push({ key: `edge ${row.task_id}→${row.prerequisite_id}`, value: row.prerequisite_id, reason: '前驱端点不在迁移全集（feature/无项目剔除）——人工核验' })
+            continue
+          }
+        } else if (db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(row.id) !== undefined) continue
+        db.prepare(`INSERT INTO ${table} (${colsSql}) VALUES (${cols.map((c) => `@${c}`).join(', ')})`).run(row)
+      }
+      if (dropped > 0) emitDiag('info', 'bundle-migrate', `${table}：${dropped} 行随剔除容器不迁（计数留痕——用户裁定整体剔除面）`)
+    }
+  })
+  apply()
+  src.close()
+  const appended = appendBundleManualList(manualPath, manualList)
+  if (appended > 0) emitDiag('warn', 'bundle-migrate', `人工清单 ${appended} 条（fix 前驱/edge 端点）：${manualPath}`)
+  // 覆盖率复验：源 tasks 每行 ∈ 目标迁移集 ∪ 三类剔除计数（行数硬判据）
+  const total = moved + skippedFeature + skippedProject + skippedDuplicate
+  if (total !== srcTasks.length) throw new Error(`tasks 搬行复验失败：源 ${srcTasks.length} 行 ≠ 迁移 ${moved} + 剔除 ${skippedFeature}/${skippedProject} + 去重 ${skippedDuplicate}`)
+  bundleStatePut(db, step, fp, nowIso, JSON.stringify({ moved, skippedFeature, skippedProject, skippedDuplicate, manual: manualList.length }))
+  return { skipped: false, moved, skippedFeature, skippedProject, skippedDuplicate, manual: manualList.length }
+}
+
+// ── ⑦ proposals → specs（rejected/superseded 不迁移；状态映射 + transition 留痕） ──
+const PROPOSAL_STATUS_TO_SPEC = {
+  draft: 'draft',
+  'under-review': 'awaiting_approval',
+  accepted: 'approved',
+}
+const PROPOSAL_STATUS_SKIP = new Set(['rejected', 'superseded'])
+
+function bundleMigrateProposals(db, args, nowIso) {
+  const step = 'bundle:specs'
+  const dirs = existsSync(args.sourceWorkspaces)
+    ? readdirSync(args.sourceWorkspaces, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort()
+    : []
+  const fp = dirs.map((d) => fileFingerprint(join(args.sourceWorkspaces, d, 'forge.db'))).join(',')
+  const done = bundleStateGet(db, step)
+  if (done !== undefined && done.fingerprint === fp) {
+    emitDiag('info', 'bundle-migrate', `proposals→specs 搬行已完成且源未变（fingerprint 同）——跳过`)
+    return { skipped: true }
+  }
+  if (dirs.length === 0) {
+    emitDiag('warn', 'bundle-migrate', `源 workspaces 缺席（${args.sourceWorkspaces}）——proposals→specs 跳过`)
+    return { skipped: true, absent: true }
+  }
+  const targetProjects = new Set(db.prepare(`SELECT project_key FROM project_projects`).all().map((r) => r.project_key))
+  const manualPath = join(dirname(args.bundleDb), 'bundle-migrate-manual-review.md')
+  const manualList = []
+  let moved = 0
+  let skippedTerminal = 0
+  let skippedProject = 0
+  let skippedConflict = 0
+  const apply = db.transaction(() => {
+    for (const dirName of dirs) {
+      const forgeDb = join(args.sourceWorkspaces, dirName, 'forge.db')
+      if (!existsSync(forgeDb)) continue
+      const legacy = openReadonly(forgeDb)
+      try {
+        if (!hasTable(legacy, 'proposals')) continue
+        // project_key：孤目录名 `{flatten}@{hash8}` 自证（DIR_NAME_RE 同①段判据）
+        if (!DIR_NAME_RE.test(dirName)) continue
+        const projectKey = dirName
+        for (const p of legacy.prepare(`SELECT * FROM proposals ORDER BY created_at ASC, id ASC`).all()) {
+          if (PROPOSAL_STATUS_SKIP.has(p.proposal_status)) {
+            skippedTerminal += 1
+            continue
+          }
+          const toStatus = PROPOSAL_STATUS_TO_SPEC[p.proposal_status]
+          if (toStatus === undefined) {
+            manualList.push({ key: `proposal ${p.id} (${p.slug})`, value: p.proposal_status, reason: '未知 proposal_status——状态映射缺席，人工裁决' })
+            continue
+          }
+          if (!targetProjects.has(projectKey)) {
+            skippedProject += 1
+            continue
+          }
+          if (db.prepare(`SELECT 1 FROM spec_specs WHERE project_key = ? AND slug = ?`).get(projectKey, p.slug) !== undefined) {
+            skippedConflict += 1
+            continue
+          }
+          db.prepare(
+            `INSERT INTO spec_specs (id, slug, title, spec_status, tiers_json, project_key, milestone_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, '[]', ?, NULL, ?, ?)`,
+          ).run(p.id, p.slug, p.title, toStatus, projectKey, p.created_at, p.updated_at)
+          // spec_docs（1:1 PK spec_id——rel_path 非空才挂）
+          if (p.rel_path !== null && p.rel_path !== '') {
+            db.prepare(`INSERT OR IGNORE INTO spec_docs (spec_id, rel_path, created_at, updated_at) VALUES (?, ?, ?, ?)`)
+              .run(p.id, p.rel_path, p.created_at, nowIso)
+          }
+          // transition 留痕行（降档信息 note 全量携带——mode/superseded_by/author 无承载列）
+          const noteBits = [`legacy proposal 迁移：proposal_status=${p.proposal_status}`]
+          if (p.mode !== null && p.mode !== undefined) noteBits.push(`mode=${p.mode}`)
+          if (p.superseded_by !== null && p.superseded_by !== undefined && p.superseded_by !== '') noteBits.push(`superseded_by=${p.superseded_by}`)
+          if (p.author !== null && p.author !== undefined && p.author !== '') noteBits.push(`author=${p.author}`)
+          db.prepare(
+            `INSERT INTO spec_transitions (id, entity_kind, entity_id, from_status, to_status, note, actor, created_at)
+             VALUES (?, 'spec', ?, 'draft', ?, ?, 'plugin-tool', ?)`,
+          ).run(randomUUID(), p.id, toStatus, noteBits.join('; '), p.decided_at ?? p.updated_at)
+          moved += 1
+        }
+      } finally {
+        legacy.close()
+      }
+    }
+  })
+  apply()
+  const appended = appendBundleManualList(manualPath, manualList)
+  if (appended > 0) emitDiag('warn', 'bundle-migrate', `人工清单 ${appended} 条：${manualPath}`)
+  bundleStatePut(db, step, fp, nowIso, JSON.stringify({ moved, skippedTerminal, skippedProject, skippedConflict, manual: manualList.length }))
+  return { skipped: false, moved, skippedTerminal, skippedProject, skippedConflict, manual: manualList.length }
+}
+
+// ── bundle 段主流程（staged 快照 → 三步搬行 → 复验 → 原子替换） ──
+export function runBundleMigration(args, nowIso) {
+  if (!existsSync(args.bundleDb)) throw new Error(`目标 forge.db 缺席（${args.bundleDb}）——先在 dsh desktop 安装并启动一次 forge-bundle 再迁移`)
+  const dbDir = dirname(args.bundleDb)
+  mkdirSync(dbDir, { recursive: true })
+  diagFile = join(dbDir, 'migrate-bundle-diag.log')
+  emitDiag('info', 'bundle-migrate', `bundle 迁移开始：target=${args.bundleDb} source=${args.source}`)
+  if (!args.skipProcessCheck) observeHostProcesses()
+  // 目标库排他打开兜底（desktop 宿主在场持句柄 → open 即抛——迁移前须关闭 dsh desktop）
+  openExclusive(args.bundleDb).close()
+
+  // staged 快照（VACUUM INTO——一致快照 + 零 WAL 侧车）
+  const stagedDb = `${args.bundleDb}.staged-bundle-migrate`
+  for (const suffix of ['', '-wal', '-shm']) {
+    const p = `${stagedDb}${suffix}`
+    if (existsSync(p)) rmSync(p, { force: true })
+  }
+  {
+    const srcConn = openExclusive(args.bundleDb)
+    try {
+      srcConn.pragma('wal_checkpoint(TRUNCATE)')
+      srcConn.exec(`VACUUM INTO '${stagedDb.replaceAll("'", "''")}'`)
+    } finally {
+      srcConn.close()
+    }
+  }
+  const summary = {}
+  {
+    const db = openExclusive(stagedDb)
+    try {
+      ensureBundleStateTable(db)
+      summary.bugs = args.skipBundleBugs ? { skipped: true } : bundleMigrateBugs(db, args, nowIso)
+      summary.tasks = args.skipBundleTasks ? { skipped: true } : bundleMigrateTasks(db, args, nowIso)
+      summary.specs = args.skipBundleSpecs ? { skipped: true } : bundleMigrateProposals(db, args, nowIso)
+    } finally {
+      db.close()
+    }
+    // 原子替换（原库改名保留为回滚点；WAL 侧车随旧文件清除——staged 无 WAL）
+    const keepDb = `${args.bundleDb}.pre-bundle-migrate-${nowIso.replace(/[:.]/g, '-')}`
+    renameSync(args.bundleDb, keepDb)
+    for (const suffix of ['-wal', '-shm']) {
+      const p = `${args.bundleDb}${suffix}`
+      if (existsSync(p)) unlinkSync(p)
+    }
+    try {
+      renameSync(stagedDb, args.bundleDb)
+    } catch (cause) {
+      renameSync(keepDb, args.bundleDb)
+      throw new Error(`staged forge.db 换回失败（已回滚）：${cause.message}`)
+    }
+    emitDiag('info', 'bundle-migrate', `forge.db 原子替换完成（原库改名保留 ${keepDb}）`)
+  }
+  emitDiag('info', 'bundle-migrate', `bundle 迁移完成：${JSON.stringify({
+    bugs: summary.bugs?.skipped ? 'skipped' : `moved=${summary.bugs.moved} quarantined=${summary.bugs.quarantined}`,
+    tasks: summary.tasks?.skipped ? 'skipped' : `moved=${summary.tasks.moved} feature=${summary.tasks.skippedFeature} project=${summary.tasks.skippedProject} dup=${summary.tasks.skippedDuplicate}`,
+    specs: summary.specs?.skipped ? 'skipped' : `moved=${summary.specs.moved} terminal=${summary.specs.skippedTerminal} project=${summary.specs.skippedProject} conflict=${summary.specs.skippedConflict}`,
   })}`)
   return summary
 }
