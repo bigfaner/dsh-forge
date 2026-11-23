@@ -64,8 +64,9 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
  * （PRODUCT_PLUGINS userLayerRow: true），skills/learn 技能面由 STAGING_EXTRAS 承载。
  * 守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段。
  */
-/** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件） */
-const STAGING_EXTRAS = {
+/** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件。
+ *  export = 精确集钉死断言（installer-pipeline 声明集 pin——评审 1.17 Minor-1）消费面 */
+export const STAGING_EXTRAS = {
   // plugin-forge 内置专家档案已按插件域重组迁出（expert-builtin-redistribution——随包
   // root 注册归各归属插件 host，plugin-forge 零内置档案）；skills/ = 约定目录占位
   // （plugin-spec 1.9 技能全数迁出；README 占位保持目录声明面）

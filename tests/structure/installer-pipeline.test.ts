@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_PACKAGES, PRODUCT_PLUGIN_PACKAGE_DIRS } from '../../apps/host/src/profile/runtime-packages.js'
-import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedManifestParityViolations, stagedProductPackages, stagedPkgShort, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
+import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedManifestParityViolations, stagedProductPackages, stagedPkgShort, STAGING_EXTRAS, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
 import { PRODUCT_PLUGINS } from '../../packages/contracts/src/product-plugins.js'
 import { createElectronBuilderConfig } from '../../electron-builder.config.mjs'
 
@@ -618,6 +618,13 @@ describe('STAGING_EXTRAS 白名单自动比对守卫（stagingExtrasDrift——s
 
   it('现值绿锚：真实仓 staged 集零漂移（stagedProductPackages × STAGING_EXTRAS 现值自洽）', () => {
     expect(stagingExtrasDrift(PRODUCT_PLUGINS)).toEqual([])
+  })
+
+  it('Minor-1 钉死断言：STAGING_EXTRAS 声明集精确 pin（键集 + 代表插件 files/keyFiles 全集）——增删即红（评审 1.17）', () => {
+    expect(Object.keys(STAGING_EXTRAS).sort(), 'STAGING_EXTRAS 键集漂移（新增/移除带技能面插件须同步本 pin）').toEqual(['expert-squad', 'knowledge', 'markdown-kit', 'plugin-forge', 'plugin-forge-spec', 'project', 'spec', 'task-loop'])
+    expect([...STAGING_EXTRAS['expert-squad'].files].sort(), 'expert-squad files 精确集漂移（experts 内置层已迁出——expert-builtin-redistribution）').toEqual(['cordis.patch.yml', 'skills'])
+    expect([...STAGING_EXTRAS['expert-squad'].keyFiles].sort(), 'expert-squad keyFiles 精确集漂移').toEqual(['cordis.patch.yml', 'skills/roundtable/SKILL.md'])
+    expect(STAGING_EXTRAS['markdown-kit'], 'markdown-kit 精确集漂移（md-mermaid 迁居批 1.2 改名随迁）').toEqual({ files: ['cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] })
   })
 
   it('接线 fail-loud：stage()（assertPreconditions）与 --check（check()）均消费守卫', () => {
