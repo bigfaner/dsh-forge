@@ -75,6 +75,9 @@
 // 用法：
 //   node scripts/migrate-state-db.mjs [--home <DSH_HOME>] [--registry <snapshot.json>]
 //        [--workspaces-to <dir>] [--skip-db] [--skip-task-loop] [--skip-workspaces] [--skip-process-check]
+//        [--bundle] [--source <旧home>] [--home <桌面home>] [--skip-bundle-bugs] [--skip-bundle-tasks] [--skip-bundle-specs]
+//   bundle 一参速用（缺省目标 = %APPDATA%\dsh-desktop\harness，缺省源 = %APPDATA%\dsh-forge）：
+//   node scripts/migrate-state-db.mjs --bundle
 // 诊断：JSONL 追加 {home}/forge/db/project/migrate-state-db-diag.log（emitDiag 等价面——
 // 脚本态无 cordis ctx，落盘 JSONL + stdout；字段与 DIAG_EVENT 同形）。
 import { spawnSync } from 'node:child_process'
@@ -129,13 +132,14 @@ function parseArgs(argv) {
     skipProcessCheck: false,
     bundle: false,
     source: null,
+    homeExplicit: false,
     skipBundleBugs: false,
     skipBundleTasks: false,
     skipBundleSpecs: false,
   }
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i]
-    if (a === '--home') args.home = resolve(argv[++i])
+    if (a === '--home') { args.home = resolve(argv[++i]); args.homeExplicit = true }
     else if (a === '--registry') args.registry = resolve(argv[++i])
     else if (a === '--workspaces-to') args.workspacesTo = resolve(argv[++i])
     else if (a === '--skip-db') args.skipDb = true
@@ -150,6 +154,8 @@ function parseArgs(argv) {
     else throw new Error(`未知参数：${a}`)
   }
   args.source = args.source ?? join(homedir(), 'AppData', 'Roaming', 'dsh-forge')
+  // bundle 段缺省目标 = forge-bundle 桌面 home（--bundle 一参即可跑；①-④旧段缺省语义不变）
+  if (args.bundle && !args.homeExplicit) args.home = join(homedir(), 'AppData', 'Roaming', 'dsh-desktop', 'harness')
   args.stateDb = join(args.home, 'state.db')
   args.projectDbDir = join(args.home, 'forge', 'db', 'project')
   args.projectDb = join(args.projectDbDir, 'project.db')
