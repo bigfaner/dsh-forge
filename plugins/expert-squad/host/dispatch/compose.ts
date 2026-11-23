@@ -10,7 +10,7 @@
 // README），经 host/preset-rows.ts 装载期批量预注册 + 增删同步；rc.1
 // SubagentStartRequest 字段集（cwd/agentPreset/label/prompt/parent/signal/
 // agentOptions/outputSchema/maxDepth）已无 persona/toolFilter。故本内核产出：
-// - agentPreset = expert-<档案键>（本插件预注册的 preset 行 id）；
+// - agentPreset = 档案键原样（本插件预注册的 preset 行 id——用户裁定 2026-11-24 移除 expert- 前缀）；
 // - model → agentOptions（缺省不携带键，回落使用方默认派发模型）；
 // - task → prompt 单 text 块。
 // 白名单平台求交语义（resolveToolAllow）原位保留：消费方迁往 preset 行构造期
@@ -37,20 +37,16 @@ export interface TextContentBlock {
   readonly text: string;
 }
 
-/** 专家 preset 行 id 前缀（expert-<档案键>——预注册行与委派请求的双端锚）。 */
-export const EXPERT_PRESET_ID_PREFIX = "expert-" as const;
-
-/** 专家 preset 行 id：expert-<档案键>（键即档案创建时点校验的合法段）。 */
-export function expertPresetId(key: string): string {
-  return `${EXPERT_PRESET_ID_PREFIX}${key}`;
-}
+/** 专家 preset 行 id = 档案键原样（用户裁定 2026-11-24：移除 expert- 前缀；
+ *  行 id 与档案键同字。撞名面 = agentPresets 全局表，与官方/他插件 preset
+ *  重名时 register fail-loud → presetSync diag warn 跳过该专家，不阻载）。 */
 
 /**
  * startActivation request 组装半结构子面：本内核产出的全部字段。下游通道一
  * delegate_expert 补 parent/signal/delivery 后即完整官方请求；通道二使用方等价组装。
  */
 export interface ExpertSubagentRequest {
-  /** 本插件预注册的专家 preset 行 id（persona + 工具白名单承载面）。 */
+  /** 本插件预注册的专家 preset 行 id（persona + 工具白名单承载面）= 档案键。 */
   readonly agentPreset: string;
   /** 派发 provider+model 偏好（档案两字段成对在场才携带——官方语义：同给同缺，任一缺席整组省略回落继承）。 */
   readonly agentOptions?: { readonly provider: string; readonly model: string };
@@ -73,7 +69,7 @@ export function createExpertComposer(
   return async (key, task) => {
     const entry = experts.get(key); // 不存在/禁用在此 fail-loud（AD1）
     return {
-      agentPreset: expertPresetId(key),
+      agentPreset: key,
       ...(entry.provider !== undefined && entry.model !== undefined
         ? { agentOptions: { provider: entry.provider, model: entry.model } }
         : {}),

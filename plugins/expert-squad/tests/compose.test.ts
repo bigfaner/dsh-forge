@@ -1,13 +1,13 @@
 // 组装内核单元测试（fix-1 agentPreset 通道重设计）：
-// compose(key, task) 产出 startActivation 请求组装半——agentPreset = expert-<key>
-// （persona/白名单承载面迁入 preset 行，见 preset-rows.test.ts）、model → agentOptions、
-// task → prompt text 块；禁用/不存在专家 fail-loud（业务错原样上抛，消息含键名）。
+// compose(key, task) 产出 startActivation 请求组装半——agentPreset = 档案键原样
+// （用户裁定 2026-11-24 移除 expert- 前缀；persona/白名单承载面迁入 preset 行，
+// 见 preset-rows.test.ts）、model → agentOptions、task → prompt text 块；
+// 禁用/不存在专家 fail-loud（业务错原样上抛，消息含键名）。
 // 白名单平台求交语义（resolveToolAllow）保留原位——消费方迁往 ExpertPresetSync。
 
 import { describe, expect, it } from "vitest";
 import {
   createExpertComposer,
-  expertPresetId,
   resolveToolAllow,
   type ExpertSubagentRequest,
 } from "../host/dispatch/compose.js";
@@ -49,10 +49,10 @@ const baseEntry: ExpertEntry = {
 };
 
 describe("compose 组装内核（agentPreset 通道）", () => {
-  it("agentPreset = expert-<key>（官方 Child presets 注入通道承载专家身份）", async () => {
+  it("agentPreset = 档案键原样（官方 Child presets 注入通道承载专家身份）", async () => {
     const compose = createExpertComposer(makeService([baseEntry]));
     const request: ExpertSubagentRequest = await compose("code-reviewer", "评审 src/dispatch/compose.ts");
-    expect(request.agentPreset).toBe("expert-code-reviewer");
+    expect(request.agentPreset).toBe("code-reviewer");
   });
 
   it("请求组装半不含 persona/toolFilter 键（rc.1 SubagentStartRequest 字段集已移除——承载面唯一 = preset 行）", async () => {
@@ -101,13 +101,6 @@ describe("compose 组装内核（agentPreset 通道）", () => {
       makeService([{ ...baseEntry, name: "disabled-one", enabled: false }]),
     );
     await expect(compose("disabled-one", "t")).rejects.toThrowError(new ExpertDisabledError("disabled-one"));
-  });
-});
-
-describe("expertPresetId", () => {
-  it("前缀 expert- + 档案键（键即档案创建时点校验的合法段）", () => {
-    expect(expertPresetId("code-reviewer")).toBe("expert-code-reviewer");
-    expect(expertPresetId("merge-planner")).toBe("expert-merge-planner");
   });
 });
 

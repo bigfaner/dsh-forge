@@ -4,7 +4,7 @@
 // skills 声明式组合，agent-preset-registry README）。程序化注册正门 =
 // AgentPresetRegistry.register(PresetDefinition)（definition.d.ts——declaring plugin
 // owns the disposer）。本面钉住：
-//   ① preset 行构造：id = expert-<key>；persona = dsh-persona 行 prefix（人设全文
+//   ① preset 行构造：id = 档案键原样（用户裁定 2026-11-24 移除 expert- 前缀）；persona = dsh-persona 行 prefix（人设全文
 //      合成，与旧 SubagentStartRequest.persona 语义逐字等价）；白名单 = expert-restrict
 //      行 config.allow（ctx.tools.restrict fail-closed 平台落地）。
 //   ② 装载期批量预注册 + 增删同步（ExpertPresetSync）：同指纹跳过、内容变更换代
@@ -90,9 +90,9 @@ function makeSync(overrides?: Partial<{ knownTools: () => readonly string[] }>) 
 // ---------------------------------------------------------------------------
 
 describe("buildExpertPresetDefinition", () => {
-  it("id = expert-<key>；name = title；description 透出", () => {
+  it("id = 档案键原样；name = title；description 透出", () => {
     const def = buildExpertPresetDefinition(baseEntry, ["read", "grep"]);
-    expect(def.id).toBe("expert-code-reviewer");
+    expect(def.id).toBe("code-reviewer");
     expect(def.name).toBe("资深评审");
     expect(def.description).toBe("Runs code review on diffs and files.");
   });
@@ -129,7 +129,7 @@ describe("buildExpertPresetDefinition", () => {
 // ---------------------------------------------------------------------------
 
 describe("ExpertPresetSync.syncFrom", () => {
-  it("装载期批量预注册：每位启用专家一行（register 按 expert-<key> 幂等位）", async () => {
+  it("装载期批量预注册：每位启用专家一行（register 按档案键幂等位）", async () => {
     const { sync, presets } = makeSync();
     const registry = makeService([
       baseEntry,
@@ -137,8 +137,8 @@ describe("ExpertPresetSync.syncFrom", () => {
     ]);
     await sync.syncFrom(registry);
     expect(presets.registered.map((d) => d.id).sort()).toEqual([
-      "expert-code-reviewer",
-      "expert-merge-planner",
+      "code-reviewer",
+      "merge-planner",
     ]);
   });
 
@@ -156,7 +156,7 @@ describe("ExpertPresetSync.syncFrom", () => {
     await sync.syncFrom(registry);
     registry.get("code-reviewer").title = "首席评审";
     await sync.syncFrom(registry);
-    expect(presets.disposed).toEqual(["expert-code-reviewer"]);
+    expect(presets.disposed).toEqual(["code-reviewer"]);
     expect(presets.registered).toHaveLength(2);
     expect(presets.registered[1]!.name).toBe("首席评审");
   });
@@ -168,14 +168,14 @@ describe("ExpertPresetSync.syncFrom", () => {
     await sync.syncFrom(registry);
     entries.splice(0, 1, { ...baseEntry, enabled: false });
     await sync.syncFrom(registry);
-    expect(presets.disposed).toEqual(["expert-code-reviewer"]);
+    expect(presets.disposed).toEqual(["code-reviewer"]);
     expect(presets.registered).toHaveLength(1);
   });
 
   it("注册失败 = diag warn + 不炸同步（后续专家照常注册、不阻载）", async () => {
     diag.mockClear();
     const { sync, presets } = makeSync();
-    presets.fail("expert-code-reviewer", new Error("mount failed"));
+    presets.fail("code-reviewer", new Error("mount failed"));
     const registry = makeService([
       baseEntry,
       { ...baseEntry, name: "merge-planner", title: "合并规划" },
@@ -186,7 +186,7 @@ describe("ExpertPresetSync.syncFrom", () => {
       expect.stringContaining("expert-squad-preset"),
       expect.stringContaining("code-reviewer"),
     );
-    expect(presets.registered.map((d) => d.id)).toContain("expert-merge-planner");
+    expect(presets.registered.map((d) => d.id)).toContain("merge-planner");
   });
 
   it("白名单求交：可信探针剔除未知名；解析空集 = warn 跳过不注册（不注册空白名单行）", async () => {
@@ -197,9 +197,9 @@ describe("ExpertPresetSync.syncFrom", () => {
       { ...baseEntry, name: "no-tools", tools: ["missing-a", "missing-b"] },
     ]);
     await sync.syncFrom(registry);
-    const def = presets.registered.find((d) => d.id === "expert-code-reviewer");
+    const def = presets.registered.find((d) => d.id === "code-reviewer");
     expect((def!.plugins[1]!.config as { allow: string[] }).allow).toEqual(["read"]);
-    expect(presets.registered.some((d) => d.id === "expert-no-tools")).toBe(false);
+    expect(presets.registered.some((d) => d.id === "no-tools")).toBe(false);
     expect(diag).toHaveBeenCalledWith(
       "warn",
       expect.anything(),
@@ -211,7 +211,7 @@ describe("ExpertPresetSync.syncFrom", () => {
     const { sync, presets } = makeSync();
     await sync.syncFrom(makeService([baseEntry]));
     await sync.disposeAll();
-    expect(presets.disposed).toEqual(["expert-code-reviewer"]);
+    expect(presets.disposed).toEqual(["code-reviewer"]);
     // 再同步 = 重注册（disposeAll 后台账已清）
     await sync.syncFrom(makeService([baseEntry]));
     expect(presets.registered).toHaveLength(2);

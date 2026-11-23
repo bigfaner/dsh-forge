@@ -8,7 +8,7 @@
 // rename/启停增删同步（ExpertPresetSync.syncFrom 幂等调和）。
 //
 // 行构造（buildExpertPresetDefinition）：
-// - id = expert-<档案键>（与委派请求 request.agentPreset 双端锚）；
+// - id = 档案键原样（与委派请求 request.agentPreset 双端锚——用户裁定 2026-11-24 移除 expert- 前缀）；
 // - persona = @deepseek-ai/dsh-persona 行 config.prefix 承载人设全文合成（身份头 +
 //   人设原文，与旧 SubagentStartRequest.persona 语义逐字等价——preset 挂载时
 //   shadow 部署 persona，dsh-persona README）；
@@ -21,7 +21,7 @@ import type { PresetDefinition } from "@deepseek-ai/dsh-agent-preset-registry";
 import { composePersonaText } from "@dsh-forge/contracts";
 import type { ExpertEntry, ExpertsService } from "./registry.js";
 import type { DiagEmit } from "./registry.js";
-import { resolveToolAllow, expertPresetId, type KnownToolsProbe } from "./dispatch/compose.js";
+import { resolveToolAllow, type KnownToolsProbe } from "./dispatch/compose.js";
 
 /** persona 段行名（官方 composable persona row——preset 挂载 shadow 部署 persona）。 */
 export const EXPERT_PERSONA_ROW_NAME = "@deepseek-ai/dsh-persona" as const;
@@ -45,7 +45,7 @@ export function buildExpertPresetDefinition(
   allow: readonly string[],
 ): PresetDefinition {
   return {
-    id: expertPresetId(entry.name),
+    id: entry.name, // 用户裁定 2026-11-24：preset 行 id = 档案键原样（无前缀）
     name: entry.title,
     description: entry.description,
     plugins: [
