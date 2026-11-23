@@ -3,7 +3,8 @@
 // client.js:3749-3752（`plugins.detail.section` kind: list/scope: root），消费
 // client.js:2534（PackageDetail「包含的组件」RowsSection 之后 renderSlot(
 // "plugins.detail.section", { subject })——面板落在「包含的组件」下方）；组件按
-// subject 门控（subject.kind === "bundle" && subject.pkg.name === 本包名），非本包
+// subject 门控（subject.kind 为 bundle/row 且 subject.pkg.name === 本包名：bundle 页
+// = 单独安装形态；row 页 = forge-bundle 等组合包成员安装形态的唯一入口），非本包
 // 详情页 render null；官方声明形态 = settings-* 族同族先例
 // （slots.inject(slot, () => slots.register({name, id}, Component))，id =
 // expert-squad-default-agent-options，README「Detail page extension points」同型）。
@@ -240,11 +241,13 @@ export function expertsConfigWriteOf(
 }
 
 /**
- * detail.section 缝消费组件（list slot 渲染入口）：subject 门控——仅本包 bundle 详情页
- * 「包含的组件」下方渲染面板（bug 83fe1393：item 详情页表单归 plugins.item page 缝单源，
- * item subject 不再渲染——双缝同页重复收口）；其余 subject（row/item 他者/缺席）render null；
- * inject 面（form/modelCatalogLoader）由官方 slot runtime 与 ownerProps（subject）并合透传，
- * 读写径原样复用 DefaultAgentOptionsTab。
+ * detail.section 缝消费组件（list slot 渲染入口）：subject 门控——本包的 bundle 详情页
+ * 「包含的组件」下方与本包行页（{kind:'row', pkg.name=本包}）均渲染面板（Root cause:
+ * 原门控只认 bundle 页；经 forge-bundle 等组合包安装时唯一可挂本面板的详情页 = 本包
+ * 行页，门控误杀导致组合包形态面板缺席）；item subject 不渲染（bug 83fe1393：item
+ * 详情页表单归 plugins.item page 缝单源，双缝同页重复收口）；其余 subject（item 他者/
+ * 缺席）render null；inject 面（form/modelCatalogLoader）由官方 slot runtime 与
+ * ownerProps（subject）并合透传，读写径原样复用 DefaultAgentOptionsTab。
  */
 export function DefaultAgentOptionsSection(props: {
   readonly subject?: { kind?: unknown; id?: unknown; pkg?: { name?: unknown } };
@@ -252,7 +255,11 @@ export function DefaultAgentOptionsSection(props: {
   readonly modelCatalogLoader?: ModelCatalogLoader;
 }): ReactNode {
   const subject = props.subject;
-  if (subject === undefined || subject.kind !== "bundle" || (subject.pkg as { name?: unknown } | undefined)?.name !== EXPERT_SQUAD_PKG) {
+  const isThisPkgPage =
+    subject !== undefined &&
+    (subject.kind === "bundle" || subject.kind === "row") &&
+    (subject.pkg as { name?: unknown } | undefined)?.name === EXPERT_SQUAD_PKG;
+  if (!isThisPkgPage) {
     return null;
   }
   return <DefaultAgentOptionsTab form={props.form} modelCatalogLoader={props.modelCatalogLoader} />;

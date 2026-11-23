@@ -260,9 +260,17 @@ describe("DefaultAgentOptionsSection（subject 门控）", () => {
     expect(renderSection({ kind: "item", id: "expert-squad" })).toBe("");
   });
 
+  // forge-bundle 形态：本包作为组合包成员被安装时，唯一可挂本面板的详情页 = 本包行页
+  //（subject {kind:'row', pkg.name=本包}）——行页必须同 bundle 页一样渲染面板。
+  it("本包 row subject：渲染面板（forge-bundle 成员安装形态的单入口）", () => {
+    const html = renderSection({ kind: "row", pkg: { name: "@dsh-forge/expert-squad" }, row: {} });
+    expect(html).toContain("默认 Agent 选项");
+    expect(html).toContain('data-cfg-field="provider"');
+  });
+
   it("他包 bundle / row / item 他者 / subject 缺席：render null（非本包详情页零输出）", () => {
     expect(renderSection({ kind: "bundle", pkg: { name: "@dsh-forge/other" } })).toBe("");
-    expect(renderSection({ kind: "row", pkg: { name: "@dsh-forge/expert-squad" }, row: {} })).toBe("");
+    expect(renderSection({ kind: "row", pkg: { name: "@dsh-forge/other" }, row: {} })).toBe("");
     expect(renderSection({ kind: "item", id: "x" })).toBe("");
     expect(renderSection(undefined)).toBe("");
   });
