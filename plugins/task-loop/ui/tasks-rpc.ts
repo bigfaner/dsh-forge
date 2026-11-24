@@ -94,7 +94,13 @@ export function installForgeTasksFace(
   if (onDiag !== undefined) tasksDiag = onDiag;
 }
 
-/** forgeTasks namespace 现查（本地缝优先；缺席 = undefined——调用方诚实降级） */
+/**
+ * forgeTasks namespace 现查（本地缝优先；缺席 = undefined——调用方诚实降级）。
+ * 2.9 竞态修口（overview-dockkit-alignment/2.9）：inject 子纤维先于 $mount 落座激活时
+ * 本地缝一次性装到空 ctx（激活回调只跑一次、永不重装）——回退路径经 forgeRemoteFaceOf
+ * 页内锚现查 live fiberCtx：forgeFaceOf 归一面已把 forgeTasks 纳入可选族（在场并入、
+ * 不被任何外族门控），namespaceFaceOf 三形态回退直取。逐调用现查不缓存（AGENTS 1.6）。
+ */
 export function forgeTasksFaceOf(): ForgeTasksNamespaceFace | undefined {
   const local = forgeTasksResolver?.();
   if (local !== undefined) return local;

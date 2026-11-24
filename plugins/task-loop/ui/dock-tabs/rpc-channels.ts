@@ -278,12 +278,8 @@ export function subscribeTasksChanged(
 // 新族（Forge设置 读写——forgeSettings 服务单门）；恒不在面的写动词收窄为 addTask/submitTask
 // （claimTask 退役并入 dispatchTask——仅存 core 服务 API）。
 import {
-  BUGS_CHANNELS,
   DOCS_CHANNELS,
-  FEATURES_CHANNELS,
-  FS_CHANNELS,
   KNOWLEDGE_CHANNELS,
-  PROJECTS_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
   WORKTREE_CHANNELS,
@@ -307,41 +303,21 @@ import {
   type WorktreeResolveRequest,
   type WorktreeResolveResult,
   type WorktreeSealResult,
-  type DirListing,
   type DomainNode,
   type EntryDetail,
   type EntryActionReceipt,
   type EntryActionRequest,
   type EntryDetailQuery,
-  type BugCard,
-  type BugCommitFile,
-  type BugCommitFilesQuery,
-  type BugFileDiffQuery,
-  type FeatureCard,
-  type FeatureDocumentRow,
-  type FeatureRow,
   type ForgeSettings,
-  type GetProjectRequest,
   type KnowledgeCard,
-  type ListDirRequest,
-  type ListBugsQuery,
-  type ListFeatureDocsQuery,
   type ListEntriesQuery,
-  type ListFeaturesQuery,
   type ListTasksQuery,
-  type Project,
-  type ProjectPatch,
-  type ProjectSummary,
   type QueryTaskInput,
   type QueryTaskResult,
   type ReadDocRequest,
   type RecallFeedbackOutcome,
   type RecallFeedbackRequest,
   type RecallGroup,
-  type RegisterFeatureInput,
-  type RegisterProjectInput,
-  type RegisterResult,
-  type ReconcileReport,
   type RpcResult,
   type SessionLinksQuery,
   type SessionRecallQuery,
@@ -355,10 +331,7 @@ import {
   type TaskSnapshot,
   type TaskStats,
   type TaskStatsQuery,
-  type TransitionFeatureInput,
   type TransitionTaskInput,
-  type UpdateProjectRequest,
-  type UpsertFeatureDocInput,
   type ValidateFeatureTasksInput,
   type ValidateReport,
   type DocContent,
@@ -374,21 +347,6 @@ async function invokeRpc<T>(transport: ForgeTransport, channel: string, payload?
   const result = raw as RpcResult<T>
   if (result.ok) return result.data
   throw new RpcClientError(result.error)
-}
-
-/** forge:projects/* 面方法集（Interface 1 服务面 + Interface 5 M2 派生行扩族的通道同构镜像） */
-export interface ForgeProjectsRpc {
-  register(input: RegisterProjectInput): Promise<RegisterResult>
-  list(): Promise<ProjectSummary[]>
-  get(id: string): Promise<Project | null>
-  update(id: string, patch: ProjectPatch): Promise<Project>
-  reconcile(): Promise<ReconcileReport>
-}
-
-/** forge:fs/* 面方法集（宿主文件系统浏览面——只读目录列举，renderer 不开 Node fs 通道） */
-export interface ForgeFsRpc {
-  /** dirPath 缺省 = 用户主目录（浏览器起始态） */
-  listDir(dirPath?: string): Promise<DirListing>
 }
 
 /**
@@ -436,27 +394,12 @@ export interface ForgeTasksRpc {
   sessionLinks(q: SessionLinksQuery): Promise<SessionTaskLinkCard[]>
 }
 
-/** forge:features/* 面方法集（Interface 7 五通道——UI 直调；键 = FEATURES_CHANNELS 键） */
-export interface ForgeFeaturesRpc {
-  register(input: RegisterFeatureInput): Promise<FeatureRow>
-  transition(input: TransitionFeatureInput): Promise<FeatureRow>
-  upsertDoc(input: UpsertFeatureDocInput): Promise<FeatureDocumentRow>
-  list(q: ListFeaturesQuery): Promise<FeatureCard[]>
-  /** feature_documents 列举读面（fix-2：概览 feature 子 tab 文档行数据源） */
-  listDocs(q: ListFeatureDocsQuery): Promise<FeatureDocumentRow[]>
-}
+/** forge:features/* 与 forge:bugs/* 面已随 2.9 死依赖拔除移除（task-loop ui 侧零消费
+ *  ——用户裁决 2026-11-25：feature/proposal 已移除；bug 台账读面消费方在 project 包侧）。
+ */
 
 /**
- * forge:bugs/* 面方法集（fix-bug：list 列表读面 + commitFiles/fileDiff 变更内容读面——
- * fixed 证据的文件清单与单文件 diff；recordBug/resolveBug 写动词 = agent tool 专属，恒不上 RPC）。
- */
-export interface ForgeBugsRpc {
-  list(q: ListBugsQuery): Promise<BugCard[]>
-  commitFiles(q: BugCommitFilesQuery): Promise<BugCommitFile[]>
-  fileDiff(q: BugFileDiffQuery): Promise<{ diff: string }>
-}
-
-/** forge:docs/* 面方法集（Interface 7 两通道——read 工作区文档读 / openExternal main 侧执行） */
+ * forge:docs/* 面方法集（Interface 7 两通道——read 工作区文档读 / openExternal main 侧执行） */
 export interface ForgeDocsRpc {
   read(q: ReadDocRequest): Promise<DocContent>
   /** 外部打开（📁 编辑器入口；触发即忘——失败经 RpcErr 信封抛 RpcClientError） */
@@ -493,12 +436,8 @@ export interface ForgeWorktreeRpc {
 
 /** forge RPC client（transport 注入：preloadTransport() 真身 / 测试替身） */
 export interface ForgeRpcClient {
-  readonly projects: ForgeProjectsRpc
-  readonly fs: ForgeFsRpc
   readonly knowledge: ForgeKnowledgeRpc
   readonly tasks: ForgeTasksRpc
-  readonly features: ForgeFeaturesRpc
-  readonly bugs: ForgeBugsRpc
   readonly docs: ForgeDocsRpc
   readonly settings: ForgeSettingsRpc
   readonly worktree: ForgeWorktreeRpc
@@ -506,22 +445,6 @@ export interface ForgeRpcClient {
 
 export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient {
   return {
-    projects: {
-      register: (input) => invokeRpc(transport, PROJECTS_CHANNELS.register, input),
-      list: () => invokeRpc<ProjectSummary[]>(transport, PROJECTS_CHANNELS.list),
-      get: (id) =>
-        invokeRpc<Project | null>(transport, PROJECTS_CHANNELS.get, { id } satisfies GetProjectRequest),
-      update: (id, patch) =>
-        invokeRpc<Project>(transport, PROJECTS_CHANNELS.update, {
-          id,
-          patch,
-        } satisfies UpdateProjectRequest),
-      reconcile: () => invokeRpc<ReconcileReport>(transport, PROJECTS_CHANNELS.reconcile),
-    },
-    fs: {
-      listDir: (dirPath) =>
-        invokeRpc<DirListing>(transport, FS_CHANNELS.listDir, { dirPath } satisfies ListDirRequest),
-    },
     knowledge: {
       browse: (projectId) =>
         invokeRpc<DomainNode[]>(transport, KNOWLEDGE_CHANNELS.browse, { projectId }),
@@ -543,18 +466,6 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       graph: (q) => invokeRpc<TaskGraph>(transport, TASKS_CHANNELS.graph, q),
       detail: (q) => invokeRpc<TaskDetail>(transport, TASKS_CHANNELS.detail, q),
       sessionLinks: (q) => invokeRpc<SessionTaskLinkCard[]>(transport, TASKS_CHANNELS.sessionLinks, q),
-    },
-    features: {
-      register: (input) => invokeRpc<FeatureRow>(transport, FEATURES_CHANNELS.register, input),
-      transition: (input) => invokeRpc<FeatureRow>(transport, FEATURES_CHANNELS.transition, input),
-      upsertDoc: (input) => invokeRpc<FeatureDocumentRow>(transport, FEATURES_CHANNELS.upsertDoc, input),
-      list: (q) => invokeRpc<FeatureCard[]>(transport, FEATURES_CHANNELS.list, q),
-      listDocs: (q) => invokeRpc<FeatureDocumentRow[]>(transport, FEATURES_CHANNELS.listDocs, q),
-    },
-    bugs: {
-      list: (q) => invokeRpc<BugCard[]>(transport, BUGS_CHANNELS.list, q),
-      commitFiles: (q) => invokeRpc<BugCommitFile[]>(transport, BUGS_CHANNELS.commitFiles, q),
-      fileDiff: (q) => invokeRpc<{ diff: string }>(transport, BUGS_CHANNELS.fileDiff, q),
     },
     docs: {
       read: (q) => invokeRpc<DocContent>(transport, DOCS_CHANNELS.read, q),

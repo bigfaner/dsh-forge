@@ -112,8 +112,8 @@ export const taskLoopClient: TaskLoopClientPlugin = {
       if (typeof injectFn === "function") {
         injectFn.call(rec, ["remote", "remote.forgeTasks"], (fiberCtx: unknown) => {
           installForgeTasksFace(() => forgeTasksFaceFromFiber(fiberCtx), (line) => console.warn(`[dsh-forge/task-loop] ${line}`));
-          // dock tab 族数据通道解析缝（forgeProjects/forgeDocs 等六族——dir-rows/docs tab
-          // 消费面；face 六族齐备才落座，单装缺席 = 调用期 typed 降级）。
+          // dock tab 族数据通道解析缝（必选族 + 可选族归一——forgeTasks 自供族入归一面、
+          // 在场并入缺席不门控；docs tab 等消费面缺席族 = 调用期 typed 降级）。
           installForgeRemoteFace(() => forgeFaceOf(fiberCtx), (line) => console.warn(`[dsh-forge/task-loop] ${line}`));
           return undefined;
         });

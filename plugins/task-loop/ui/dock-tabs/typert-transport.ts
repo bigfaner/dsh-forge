@@ -9,13 +9,11 @@
 import { createForgeRpcClient, type ForgeTransport } from "./rpc-channels.js";
 import { forgeRemoteFaceOf, namespaceFaceOf, type ForgeRemoteFace } from "../rpc.js";
 
-/** 通道 seg → Typert namespace（在场集 + 可选族；contracts channels 常量的 seg 单源映射） */
+/** 通道 seg → Typert namespace（可选族集；contracts channels 常量的 seg 单源映射）。
+ *  2.9 死依赖拔除：projects/fs/bugs/features 行移除——task-loop ui 侧零消费（逐族核销
+ *  去向列任务结算；消费方在 project 包侧副本），通道命中即 typed 降级不阻断其余族。 */
 const SEG_NAMESPACE: Readonly<Record<string, keyof ForgeRemoteFace>> = {
-  projects: "forgeProjects",
-  fs: "forgeFs",
-  bugs: "forgeBugs",
   worktree: "forgeWorktree",
-  features: "forgeFeatures",
   dirs: "forgeDirs",
   tasks: "forgeTasks",
   docs: "forgeDocs",
