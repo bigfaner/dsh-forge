@@ -19,6 +19,16 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     readonly details: object
   }
 
+  /**
+   * 官方 Remote 失败类（gateway rpcFailure 对其保真折叠 code/message/details 过 wire）——
+   * host 半 typed 失败抛出用（结构 marker isDSHRemoteError 由实现自带）。
+   */
+  export declare class RemoteError extends Error {
+    readonly code: string
+    readonly details: object
+    constructor(code: string, message: string, details?: object, options?: ErrorOptions)
+  }
+
   export type RemoteResult<T> =
     | { readonly ok: true; readonly value: T }
     | { readonly ok: false; readonly error: RemoteFailure }

@@ -31,6 +31,18 @@ function endpointsOf(service: object): string[] {
   );
 }
 
+/** typed 失败断言（信封去 Result 化——端点 typed 失败抛 RemoteError，code 保真可断言） */
+async function failureOf(run: () => Promise<unknown>): Promise<{ code: string; message?: string }> {
+  try {
+    await run();
+  } catch (cause) {
+    const err = cause as { code?: string; message?: string };
+    if (typeof err.code !== "string") throw new Error(`期望 typed RemoteError（code 保真），实得：${String(cause)}`);
+    return { code: err.code, message: err.message };
+  }
+  throw new Error("期望 typed 失败抛出，实得成功返回");
+}
+
 function fakeCtx(): Context {
   // 真实 cordis ctx（TypertRemoteService 构造期 super(ctx, key) 走 reflect.provide）
   return new Context() as unknown as Context;
@@ -290,88 +302,68 @@ function remote(): ForgeSpecsRemote {
 describe("forgeSpecs 端点族契约快照（M3 六端点——真服务 + 假 identity）", () => {
 
   it("list：卡片清单（listing 序 + goalCount/acCount host 半水化）——形状契约快照", async () => {
-    const result = await remote().list({ projectId: "proj-1" });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.map((c) => c.slug)).toEqual(["alpha", "beta"]);
-    expect(normalize(result.value)).toMatchSnapshot();
+    const cards = await remote().list({ projectId: "proj-1" });
+    expect(cards.map((c) => c.slug)).toEqual(["alpha", "beta"]);
+    expect(normalize(cards)).toMatchSnapshot();
   });
 
   it("list search/statusFilter 过滤", async () => {
     const bySearch = await remote().list({ projectId: "proj-1", search: "alp" });
-    expect(bySearch.ok && bySearch.value.map((c) => c.slug)).toEqual(["alpha"]);
+    expect(bySearch.map((c) => c.slug)).toEqual(["alpha"]);
     const byStatus = await remote().list({ projectId: "proj-1", statusFilter: "approved" });
-    expect(byStatus.ok && byStatus.value).toEqual([]);
+    expect(byStatus).toEqual([]);
   });
 
   it("detail：父链全量 + transitions 台账 + doc 悬空态现算——形状契约快照", async () => {
     const alpha = await remote().detail({ projectId: "proj-1", slug: "alpha" });
-    expect(alpha.ok).toBe(true);
-    if (alpha.ok) expect(normalize([alpha.value])).toMatchSnapshot();
-    expect(alpha.ok && alpha.value.doc).toEqual({ relPath: ".forge/specs/alpha/spec.md", dangling: false });
+    expect(normalize([alpha])).toMatchSnapshot();
+    expect(alpha.doc).toEqual({ relPath: ".forge/specs/alpha/spec.md", dangling: false });
     const beta = await remote().detail({ projectId: "proj-1", slug: "beta" });
-    expect(beta.ok && beta.value.doc?.dangling).toBe(true);
+    expect(beta.doc?.dangling).toBe(true);
   });
 
-  it("detail 未命中 → typed NOT_FOUND（Result error 分支，非抛错折叠）", async () => {
-    const result = await remote().detail({ projectId: "proj-1", slug: "missing" });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("ERR_SPEC_NOT_FOUND");
+  it("detail 未命中 → typed NOT_FOUND（RemoteError 抛出，code 保真）", async () => {
+    const failure = await failureOf(() => remote().detail({ projectId: "proj-1", slug: "missing" }));
+    expect(failure.code).toBe("ERR_SPEC_NOT_FOUND");
   });
 
   it("query：include 四节门控（默认全节；projection 关 = 零投影节）——形状契约快照", async () => {
     const full = await remote().query({ projectId: "proj-1", slug: "alpha" });
-    expect(full.ok).toBe(true);
-    if (full.ok) {
-      expect(full.ok && Object.keys(full.value).sort()).toEqual(
-        ["acProjection", "doc", "goals", "spec", "transitions"],
-      );
-      expect(normalize([full.value])).toMatchSnapshot();
-    }
+    expect(Object.keys(full).sort()).toEqual(["acProjection", "doc", "goals", "spec", "transitions"]);
+    expect(normalize([full])).toMatchSnapshot();
     const gated = await remote().query({
       projectId: "proj-1",
       slug: "alpha",
       include: { goals: false, projection: false },
     });
-    expect(gated.ok && Object.keys(gated.value).sort()).toEqual(["doc", "spec", "transitions"]);
+    expect(Object.keys(gated).sort()).toEqual(["doc", "spec", "transitions"]);
   });
 
   it("projection：缺席缝 → 全 AC no-task-data——形状契约快照", async () => {
-    const result = await remote().projection({ projectId: "proj-1", slug: "alpha" });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(normalize([result.value])).toMatchSnapshot();
-    const states = result.ok ? result.value.goals.flatMap((g) => g.acs.map((a) => a.state)) : [];
-    expect(states).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
+    const value = await remote().projection({ projectId: "proj-1", slug: "alpha" });
+    expect(normalize([value])).toMatchSnapshot();
+    expect(value.goals.flatMap((g) => g.acs.map((a) => a.state))).toEqual(["no-task-data", "no-task-data", "no-task-data"]);
   });
 
   it("transition：写面透传（actor 缺省 ui）+ 台账 append；非法边 → typed code", async () => {
-    const result = await remote().transition({
+    const row = await remote().transition({
       projectId: "proj-1",
       slug: "alpha",
       to: "awaiting_approval",
     });
-    expect(result.ok).toBe(true);
-    expect(result.ok && result.value.specStatus).toBe("awaiting_approval");
+    expect(row.specStatus).toBe("awaiting_approval");
     // 驳回支：note 必填（域状态机守卫 typed code 直透）
-    const rejectNoNote = await remote().transition({
-      projectId: "proj-1",
-      slug: "alpha",
-      to: "draft",
-      actor: "ui",
-    });
-    expect(rejectNoNote.ok).toBe(false);
-    if (!rejectNoNote.ok) expect(rejectNoNote.error.code).toBe("ERR_SPEC_REJECT_NOTE_REQUIRED");
+    const rejectNoNote = await failureOf(() =>
+      remote().transition({ projectId: "proj-1", slug: "alpha", to: "draft", actor: "ui" }),
+    );
+    expect(rejectNoNote.code).toBe("ERR_SPEC_REJECT_NOTE_REQUIRED");
     // 非法跳级边：draft → approved 拒（typed code 直透）
-    const illegal = await remote().transition({
-      projectId: "proj-1",
-      slug: "beta",
-      to: "approved",
-      actor: "ui",
-    });
-    expect(illegal.ok).toBe(false);
-    if (!illegal.ok) expect(illegal.error.code).toBe("ERR_SPEC_ILLEGAL_TRANSITION");
+    const illegal = await failureOf(() =>
+      remote().transition({ projectId: "proj-1", slug: "beta", to: "approved", actor: "ui" }),
+    );
+    expect(illegal.code).toBe("ERR_SPEC_ILLEGAL_TRANSITION");
     const ledger = await remote().detail({ projectId: "proj-1", slug: "alpha" });
-    expect(ledger.ok && ledger.value.transitions).toHaveLength(1);
+    expect(ledger.transitions).toHaveLength(1);
   });
 
   it("follow：首帧 seq=1 全量快照（cards + stats）+ abort 出循环", async () => {
@@ -388,44 +380,41 @@ describe("forgeSpecs 端点族契约快照（M3 六端点——真服务 + 假 i
     expect(first.snapshot.cards).toHaveLength(2);
   });
 
-  it("projectId 未解析分层：list 空集 ok / detail·query·projection·transition typed 诚实拒绝", async () => {
+  it("projectId 未解析分层：list 空集裸值 / detail·query·projection·transition typed 诚实拒绝", async () => {
     const r = remote();
     const listing = await r.list({ projectId: "unknown" });
-    expect(listing.ok && listing.value).toEqual([]);
+    expect(listing).toEqual([]);
     for (const call of [
       () => r.detail({ projectId: "unknown", slug: "alpha" }),
       () => r.query({ projectId: "unknown", slug: "alpha" }),
       () => r.projection({ projectId: "unknown", slug: "alpha" }),
       () => r.transition({ projectId: "unknown", slug: "alpha", to: "awaiting_approval" }),
     ]) {
-      const result = await call();
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("ERR_SPEC_IDENTITY_UNRESOLVED");
+      const failure = await failureOf(call);
+      expect(failure.code).toBe("ERR_SPEC_IDENTITY_UNRESOLVED");
     }
   });
 });
 
 describe("族缺席降级（specs 服务缝 typed unavailable）", () => {
   const svc = new ForgeSpecsRemote(fakeCtx(), {});
-  it("五读写端点 Result error（诚实降级非抛错）", async () => {
-    expect(await svc.list({ projectId: "p" })).toEqual({
-      ok: false,
-      error: { code: "ERR_SPEC_UNAVAILABLE", message: unavailableMessage("list", "specs") },
+  it("五读写端点 RemoteError 抛出（typed unavailable，code+message 保真）", async () => {
+    await expect(svc.list({ projectId: "p" })).rejects.toMatchObject({
+      code: "ERR_SPEC_UNAVAILABLE",
+      message: unavailableMessage("list", "specs"),
     });
-    const detail = await svc.detail({ projectId: "p", slug: "s" });
-    expect(detail.ok).toBe(false);
-    const query = await svc.query({ projectId: "p", slug: "s" });
-    expect(query.ok).toBe(false);
-    const projection = await svc.projection({ projectId: "p", slug: "s" });
-    expect(projection.ok).toBe(false);
-    const transition = await svc.transition({ projectId: "p", slug: "s", to: "draft" });
-    expect(transition.ok).toBe(false);
+    // detail/query/projection：身份未解析先行（旧 Result 形态同码——行为不回归）；
+    // transition：specs 窄取先行缺席 → 旧形态同码 ERR_SPEC_REMOTE_FAILED 归一
+    await expect(svc.detail({ projectId: "p", slug: "s" })).rejects.toMatchObject({ code: "ERR_SPEC_IDENTITY_UNRESOLVED" });
+    await expect(svc.query({ projectId: "p", slug: "s" })).rejects.toMatchObject({ code: "ERR_SPEC_IDENTITY_UNRESOLVED" });
+    await expect(svc.projection({ projectId: "p", slug: "s" })).rejects.toMatchObject({ code: "ERR_SPEC_IDENTITY_UNRESOLVED" });
+    await expect(svc.transition({ projectId: "p", slug: "s", to: "draft" })).rejects.toMatchObject({ code: "ERR_SPEC_REMOTE_FAILED" });
   });
 
-  it("族缺席降级：M4a 五端点 Result error（诚实降级非抛错）", async () => {
-    expect(await svc.roadmaps({ projectId: "p" })).toEqual({
-      ok: false,
-      error: { code: "ERR_SPEC_UNAVAILABLE", message: unavailableMessage("roadmaps", "specs") },
+  it("族缺席降级：M4a 五端点 RemoteError 抛出（typed unavailable）", async () => {
+    await expect(svc.roadmaps({ projectId: "p" })).rejects.toMatchObject({
+      code: "ERR_SPEC_UNAVAILABLE",
+      message: unavailableMessage("roadmaps", "specs"),
     });
     for (const call of [
       () => svc.roadmapDetail({ projectId: "p", slug: "s" }),
@@ -433,16 +422,15 @@ describe("族缺席降级（specs 服务缝 typed unavailable）", () => {
       () => svc.goalBoard({ projectId: "p", specSlug: "s" }),
       () => svc.goalReviewMutate({ projectId: "p", specSlug: "s", goalSeq: 1, action: "finalize" }),
     ]) {
-      const result = await call();
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe("ERR_SPEC_UNAVAILABLE");
+      const failure = await failureOf(call);
+      expect(failure.code).toBe("ERR_SPEC_UNAVAILABLE");
     }
   });
 
-  it("follow 族缺席 → 调用期诚实抛（AsyncIterable 不可回 Result）", async () => {
+  it("follow 族缺席 → 调用期 typed unavailable 抛（AsyncIterable 启动期 RemoteError）", async () => {
     await expect(async () => {
       for await (const frame of svc.follow({ projectId: "p" })) void frame;
-    }).rejects.toThrow(unavailableMessage("follow", "specs"));
+    }).rejects.toMatchObject({ code: "ERR_SPEC_UNAVAILABLE", message: unavailableMessage("follow", "specs") });
   });
 });
 
@@ -583,31 +571,27 @@ describe("M4a 目标域五端点契约快照（真服务 + 工具面动词复用
   }
 
   it("roadmaps：roadmap 清单（listing 序）——形状契约快照", async () => {
-    const result = await remote().roadmaps({ projectId: "proj-1" });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.map((r) => r.slug)).toEqual(["rm-1"]);
-    expect(normalizeIds(result.value)).toMatchSnapshot();
+    const rows = await remote().roadmaps({ projectId: "proj-1" });
+    expect(rows.map((r) => r.slug)).toEqual(["rm-1"]);
+    expect(normalizeIds(rows)).toMatchSnapshot();
   });
 
   it("roadmaps：projectId 未解析 → 空集诚实降级（清单族同 list 判型）", async () => {
-    const result = await remote().roadmaps({ projectId: "unknown" });
-    expect(result.ok && result.value).toEqual([]);
+    const rows = await remote().roadmaps({ projectId: "unknown" });
+    expect(rows).toEqual([]);
   });
 
   it("roadmapDetail：本体 + milestones 下钻 + 达成派生——形状契约快照", async () => {
-    const result = await remote().roadmapDetail({ projectId: "proj-1", slug: "rm-1" });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.milestones.map((m) => m.title)).toEqual(["M1"]);
-    expect(result.value.achievement.completed).toBe(false);
-    expect(result.value.achievement.perMilestone).toHaveLength(1);
-    expect(normalizeIds(result.value)).toMatchSnapshot();
+    const value = await remote().roadmapDetail({ projectId: "proj-1", slug: "rm-1" });
+    expect(value.milestones.map((m) => m.title)).toEqual(["M1"]);
+    expect(value.achievement.completed).toBe(false);
+    expect(value.achievement.perMilestone).toHaveLength(1);
+    expect(normalizeIds(value)).toMatchSnapshot();
   });
 
   it("roadmapDetail 未命中 → typed NOT_FOUND", async () => {
-    const result = await remote().roadmapDetail({ projectId: "proj-1", slug: "missing" });
-    expect(!result.ok && result.error.code).toBe("ERR_SPEC_ROADMAP_UNKNOWN");
+    const failure = await failureOf(() => remote().roadmapDetail({ projectId: "proj-1", slug: "missing" }));
+    expect(failure.code).toBe("ERR_SPEC_ROADMAP_UNKNOWN");
   });
 
   it("roadmapMutate create/update：快照直投——形状契约快照", async () => {
@@ -618,10 +602,9 @@ describe("M4a 目标域五端点契约快照（真服务 + 工具面动词复用
       title: "Roadmap Two",
       acEntries: [{ criterion: "RM2 AC" }],
     });
-    expect(created.ok).toBe(true);
-    if (created.ok && !Array.isArray(created.value)) {
-      expect(created.value.slug).toBe("rm-2");
-      expect(normalizeIds([created.value])).toMatchSnapshot();
+    if (!Array.isArray(created)) {
+      expect(created.slug).toBe("rm-2");
+      expect(normalizeIds([created])).toMatchSnapshot();
     }
     const updated = await remote().roadmapMutate({
       projectId: "proj-1",
@@ -629,7 +612,7 @@ describe("M4a 目标域五端点契约快照（真服务 + 工具面动词复用
       slug: "rm-2",
       title: "Roadmap Two Renamed",
     });
-    expect(updated.ok && !Array.isArray(updated.value) && updated.value.title).toBe("Roadmap Two Renamed");
+    expect(!Array.isArray(updated) && updated.title).toBe("Roadmap Two Renamed");
   });
 
   it("roadmapMutate moveMilestone：全量新序透传——形状契约快照", async () => {
@@ -642,46 +625,39 @@ describe("M4a 目标域五端点契约快照（真服务 + 工具面动词复用
       milestoneId: m2.id,
       before: (seed.listMilestones({ cwd: lazy().cwd, roadmapSlug: "rm-1" }))[0]!.id,
     });
-    expect(moved.ok).toBe(true);
-    if (moved.ok && "assignments" in moved.value) {
-      expect(moved.value.assignments.map((a) => a.seq).sort()).toEqual([1, 2]);
-      expect(normalizeIds([moved.value])).toMatchSnapshot();
+    if ("assignments" in moved) {
+      expect(moved.assignments.map((a) => a.seq).sort()).toEqual([1, 2]);
+      expect(normalizeIds([moved])).toMatchSnapshot();
     }
     // 互斥违例 → typed INVALID_INPUT
-    const bad = await remote().roadmapMutate({
-      projectId: "proj-1",
-      action: "moveMilestone",
-      slug: "rm-1",
-      milestoneId: m2.id,
-    });
-    expect(!bad.ok && bad.error.code).toBe("ERR_SPEC_REMOTE_INVALID_INPUT");
+    const bad = await failureOf(() =>
+      remote().roadmapMutate({ projectId: "proj-1", action: "moveMilestone", slug: "rm-1", milestoneId: m2.id }),
+    );
+    expect(bad.code).toBe("ERR_SPEC_REMOTE_INVALID_INPUT");
   });
 
   it("roadmapMutate confirm：human-only 边走 actor='ui' 实例——非待验收现值 typed 拒", async () => {
-    const result = await remote().roadmapMutate({ projectId: "proj-1", action: "confirm", slug: "rm-1" });
+    const failure = await failureOf(() => remote().roadmapMutate({ projectId: "proj-1", action: "confirm", slug: "rm-1" }));
     // rm-1 现值 pending：pending→completed 非法边（typed code 直透——域状态机守卫）
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("ERR_SPEC_ILLEGAL_TRANSITION");
+    expect(failure.code).toBe("ERR_SPEC_ILLEGAL_TRANSITION");
   });
 
   it("goalBoard：徽标面（isTerminal/availableTransitions）+ 最新复核 + 台账尾帧——形状契约快照", async () => {
-    const result = await remote().goalBoard({ projectId: "proj-1", specSlug: "alpha" });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.goals.map((g) => g.goalSeq)).toEqual([1, 2]);
-    for (const entry of result.value.goals) {
+    const value = await remote().goalBoard({ projectId: "proj-1", specSlug: "alpha" });
+    expect(value.goals.map((g) => g.goalSeq)).toEqual([1, 2]);
+    for (const entry of value.goals) {
       expect(entry.badge.isTerminal).toBe(false);
       expect(entry.badge.availableTransitions).toEqual(["in_progress"]);
     }
-    expect(result.value.goals[0]!.latestReview).toEqual({ verdict: "passed", createdAt: "2026-01-01T00:00:00.000Z" });
-    expect(normalizeIds(result.value)).toMatchSnapshot();
+    expect(value.goals[0]!.latestReview).toEqual({ verdict: "passed", createdAt: "2026-01-01T00:00:00.000Z" });
+    expect(normalizeIds(value)).toMatchSnapshot();
   });
 
   it("goalBoard 未命中 → typed NOT_FOUND；projectId 未解析 → typed 拒", async () => {
-    const miss = await remote().goalBoard({ projectId: "proj-1", specSlug: "missing" });
-    expect(!miss.ok && miss.error.code).toBe("ERR_SPEC_NOT_FOUND");
-    const unresolved = await remote().goalBoard({ projectId: "unknown", specSlug: "alpha" });
-    expect(!unresolved.ok && unresolved.error.code).toBe("ERR_SPEC_IDENTITY_UNRESOLVED");
+    const miss = await failureOf(() => remote().goalBoard({ projectId: "proj-1", specSlug: "missing" }));
+    expect(miss.code).toBe("ERR_SPEC_NOT_FOUND");
+    const unresolved = await failureOf(() => remote().goalBoard({ projectId: "unknown", specSlug: "alpha" }));
+    expect(unresolved.code).toBe("ERR_SPEC_IDENTITY_UNRESOLVED");
   });
 
   it("goalReviewMutate：驳回 note 必填守卫 + finalize 终审确认（actor='ui'）——形状契约快照", async () => {
@@ -690,24 +666,18 @@ describe("M4a 目标域五端点契约快照（真服务 + 工具面动词复用
     const goal = services.db.repos.specs.listGoalsBySpec(alphaSpec.id)[1]!;
     // 现值推至 awaiting_confirmation（写面直设——终审边前置态）
     services.db.repos.specs.updateGoalStatus(goal.id, "awaiting_confirmation", "2026-01-02T00:00:00.000Z");
-    const rejectNoNote = await remote().goalReviewMutate({
-      projectId: "proj-1",
-      specSlug: "alpha",
-      goalSeq: goal.sortKey,
-      action: "reject",
-    });
-    expect(!rejectNoNote.ok && rejectNoNote.error.code).toBe("ERR_SPEC_GOAL_REJECT_NOTE_REQUIRED");
-    const finalize = await remote().goalReviewMutate({
+    const rejectNoNote = await failureOf(() =>
+      remote().goalReviewMutate({ projectId: "proj-1", specSlug: "alpha", goalSeq: goal.sortKey, action: "reject" }),
+    );
+    expect(rejectNoNote.code).toBe("ERR_SPEC_GOAL_REJECT_NOTE_REQUIRED");
+    const goalRow = await remote().goalReviewMutate({
       projectId: "proj-1",
       specSlug: "alpha",
       goalSeq: goal.sortKey,
       action: "finalize",
     });
-    expect(finalize.ok).toBe(true);
-    if (finalize.ok) {
-      expect(finalize.value.goalStatus).toBe("completed");
-      expect(normalizeIds([finalize.value])).toMatchSnapshot();
-    }
+    expect(goalRow.goalStatus).toBe("completed");
+    expect(normalizeIds([goalRow])).toMatchSnapshot();
     // 台账 actor 审计锚 = ui
     const ledger = services.db.repos.transitions.listByEntity("goal", goal.id);
     expect(ledger.at(-1)?.actor).toBe("ui");
@@ -715,13 +685,10 @@ describe("M4a 目标域五端点契约快照（真服务 + 工具面动词复用
   });
 
   it("goalReviewMutate：projectId 未解析 → typed 拒", async () => {
-    const result = await remote().goalReviewMutate({
-      projectId: "unknown",
-      specSlug: "alpha",
-      goalSeq: 1,
-      action: "finalize",
-    });
-    expect(!result.ok && result.error.code).toBe("ERR_SPEC_IDENTITY_UNRESOLVED");
+    const failure = await failureOf(() =>
+      remote().goalReviewMutate({ projectId: "unknown", specSlug: "alpha", goalSeq: 1, action: "finalize" }),
+    );
+    expect(failure.code).toBe("ERR_SPEC_IDENTITY_UNRESOLVED");
   });
 });
 
@@ -789,11 +756,9 @@ describe("键族聚合（2026-11-24 方案 A——spec 快照族多键合并）"
   }
 
   it("list：主根 + worktree 两键卡片合并（slug 去重、主根先行）", async () => {
-    const result = await familyRemote().list({ projectId: "proj-1" });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.map((c) => c.slug)).toEqual(["alpha", "beta", "wt-spec"]);
-    expect(result.value.map((c) => c.title)).toContain("Worktree Spec");
+    const cards = await familyRemote().list({ projectId: "proj-1" });
+    expect(cards.map((c) => c.slug)).toEqual(["alpha", "beta", "wt-spec"]);
+    expect(cards.map((c) => c.title)).toContain("Worktree Spec");
   });
 
   it("follow：baseline 帧按键族聚合（cards 并集）", async () => {
@@ -814,15 +779,15 @@ describe("键族聚合（2026-11-24 方案 A——spec 快照族多键合并）"
 
   it("键族缝缺席（forge.worktrees 未装配）→ 快照族回退单键现状 + 诊断留痕", async () => {
     const diag = vi.fn();
-    const result = await familyRemote({ worktrees: undefined, diag }).list({ projectId: "proj-1" });
-    expect(result.ok && result.value.map((c) => c.slug)).toEqual(["alpha", "beta"]);
+    const cards = await familyRemote({ worktrees: undefined, diag }).list({ projectId: "proj-1" });
+    expect(cards.map((c) => c.slug)).toEqual(["alpha", "beta"]);
     expect(diag).toHaveBeenCalledWith(expect.stringContaining("键族缝缺席"));
   });
 
   it("键族清单抛错 → fail-soft 回退单键 + 诊断留痕（不炸读面）", async () => {
     const diag = vi.fn();
-    const result = await familyRemote({ worktrees: { list: async () => { throw new Error("seam broke"); } }, diag }).list({ projectId: "proj-1" });
-    expect(result.ok && result.value.map((c) => c.slug)).toEqual(["alpha", "beta"]);
+    const cards = await familyRemote({ worktrees: { list: async () => { throw new Error("seam broke"); } }, diag }).list({ projectId: "proj-1" });
+    expect(cards.map((c) => c.slug)).toEqual(["alpha", "beta"]);
     expect(diag).toHaveBeenCalledWith(expect.stringContaining("键族清单失败"));
   });
 
@@ -853,12 +818,11 @@ describe("键族聚合（2026-11-24 方案 A——spec 快照族多键合并）"
       }),
       gitPorcelain: () => porcelain,
     });
-    const result = await rollupRemote.list({ projectId: "proj-1" });
-    expect(result.ok).toBe(true);
+    const cards = await rollupRemote.list({ projectId: "proj-1" });
     // 归拢生效：forge.worktrees 注册面消费主检出根（非注册行 worktree 路径原样）
     expect(listRoots).toEqual(["Z:/ws/proj"]);
     // 族 = 主根键（无 spec 文档空读）+ worktree 行键（无 spec 文档空读）→ 空卡集（键族证据在 listRoots）
-    expect(result.ok && result.value).toEqual([]);
+    expect(cards).toEqual([]);
   });
 
   it("主根归拢 fail-soft：git 探针抛错 → 回退注册行键（list projectRoot 原样）+ 诊断留痕", async () => {
@@ -880,8 +844,7 @@ describe("键族聚合（2026-11-24 方案 A——spec 快照族多键合并）"
       },
       diag,
     });
-    const result = await rollupRemote.list({ projectId: "proj-1" });
-    expect(result.ok).toBe(true);
+    await rollupRemote.list({ projectId: "proj-1" });
     expect(listRoots).toEqual([wtPath]);
     expect(diag).toHaveBeenCalledWith(expect.stringContaining("主根归拢 fail-soft"));
   });
@@ -944,34 +907,28 @@ describe("detail/query/transition 键族兼容读（审计 M4——列表有卡�
   it("detail：主根键 spec（dangling=false 不回归）+ 存量 worktree 键 spec（经族内 worktree 纯键命中）", async () => {
     const r = markerFamilyRemote();
     const alpha = await r.detail({ projectId: "proj-1", slug: "alpha" });
-    expect(alpha.ok).toBe(true);
-    if (alpha.ok) expect(alpha.value.doc?.dangling).toBe(false);
+    expect(alpha.doc?.dangling).toBe(false);
     const wtSpec = await r.detail({ projectId: "proj-1", slug: "wt-spec" });
-    expect(wtSpec.ok).toBe(true);
-    if (wtSpec.ok) expect(wtSpec.value.title).toBe("Worktree Spec");
+    expect(wtSpec.title).toBe("Worktree Spec");
   });
 
   it("query：存量 worktree 键 spec 经纯键通道可达（include 门控不回归）", async () => {
     const r = markerFamilyRemote();
-    const result = await r.query({ projectId: "proj-1", slug: "wt-spec" });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.spec.title).toBe("Worktree Spec");
-      expect(result.value.goals?.[0]?.acs[0]?.criterion).toBe("AC wt one");
-    }
+    const value = await r.query({ projectId: "proj-1", slug: "wt-spec" });
+    expect(value.spec.title).toBe("Worktree Spec");
+    expect(value.goals?.[0]?.acs[0]?.criterion).toBe("AC wt one");
   });
 
   it("transition：存量 worktree 键 spec 经键族纯键寻径流转成功（写面不 NOT_FOUND）", async () => {
     const r = markerFamilyRemote();
-    const result = await r.transition({ projectId: "proj-1", slug: "wt-spec", to: "awaiting_approval" });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.specStatus).toBe("awaiting_approval");
+    const row = await r.transition({ projectId: "proj-1", slug: "wt-spec", to: "awaiting_approval" });
+    expect(row.specStatus).toBe("awaiting_approval");
   });
 
   it("键族全键未命中 → typed NOT_FOUND（错误面不变）", async () => {
     const r = markerFamilyRemote();
-    const result = await r.detail({ projectId: "proj-1", slug: "missing" });
-    expect(!result.ok && result.error.code).toBe("ERR_SPEC_NOT_FOUND");
+    const failure = await failureOf(() => r.detail({ projectId: "proj-1", slug: "missing" }));
+    expect(failure.code).toBe("ERR_SPEC_NOT_FOUND");
   });
 });
 
@@ -1037,11 +994,10 @@ describe("AC 投影键同步（审计 M5——结算查归拢主根键，进度�
         },
       }),
     });
-    const result = await r.projection({ projectId: "proj-1", slug: "rolled-spec" });
-    expect(result.ok).toBe(true);
+    const value = await r.projection({ projectId: "proj-1", slug: "rolled-spec" });
     // 投影键 = 归拢主根键（task-loop 结算行落点）——非行键（worktree 键）
     expect(settledKeys).toEqual([deriveProjectKey("Z:\\ws\\rollup-proj")]);
-    if (result.ok) expect(result.value.goals[0]?.acs[0]?.state).toBe("met");
+    expect(value.goals[0]?.acs[0]?.state).toBe("met");
   });
 
   it("普通项目（非 worktree）：投影键 = 行键（现状不回归）", async () => {
@@ -1056,8 +1012,44 @@ describe("AC 投影键同步（审计 M5——结算查归拢主根键，进度�
         },
       }),
     });
-    const result = await r.projection({ projectId: "proj-1", slug: "alpha" });
-    expect(result.ok).toBe(true);
+    await r.projection({ projectId: "proj-1", slug: "alpha" });
     expect(settledKeys).toEqual([deriveProjectKey(cwd)]);
+  });
+});
+
+// ── 生产形状回归钉（真机双层信封根因——双层不可再发）──
+
+describe("生产形状双层不可再发（host 裸值 → serve 单层 → client 解得数组）", () => {
+  /** 官方 gateway serve 层 ok 路径单层包（rpcFailure/ok 单层——index.js 实况复刻） */
+  function serveWrap(value: unknown): { ok: true; value: unknown } {
+    return { ok: true, value };
+  }
+
+  /** client remoteResultOf + invokeEnvelope 投影（plugins/project ui/rpc.ts 失败分支同形） */
+  function clientUnwrap(raw: unknown): unknown {
+    if (raw === null || typeof raw !== "object" || !("ok" in raw)) {
+      throw new Error(`响应形状非法——期望 RemoteResult 信封，实得 ${raw === null ? "null" : typeof raw}`);
+    }
+    const result = raw as { ok: boolean; value?: unknown; error?: { code?: unknown; message?: unknown; details?: unknown } };
+    if (result.ok) return result.value;
+    throw new Error(`rpc failure: ${String(result.error?.code)}`);
+  }
+
+  it("host 返裸数组 → serve 单层信封 → client 解得数组（单层、零内层 Result）", async () => {
+    const cards = await remote().list({ projectId: "proj-1" });
+    // 反例钉：host 端点不得自返 Result 信封（双层即 specStatusCounts 崩、任务 tab 恒空根因）
+    expect(Array.isArray(cards)).toBe(true);
+    expect(cards.every((c) => !("ok" in c))).toBe(true);
+    const raw = serveWrap(cards);
+    const unwrapped = clientUnwrap(raw);
+    expect(Array.isArray(unwrapped)).toBe(true);
+    expect((unwrapped as { slug: string }[]).map((c) => c.slug)).toEqual(["alpha", "beta"]);
+  });
+
+  it("typed 失败过 wire：RemoteError → serve rpcFailure 折叠 {ok:false,error{code}} → client failure 分支承接", async () => {
+    // gateway rpcFailure 复刻（RemoteError 保真折叠 code；gateway-index.js 实况同形）
+    const failure = await failureOf(() => remote().detail({ projectId: "proj-1", slug: "missing" }));
+    const wire = { ok: false, error: { code: failure.code, message: failure.message ?? "", details: {} } };
+    expect(() => clientUnwrap(wire)).toThrow(`rpc failure: ERR_SPEC_NOT_FOUND`);
   });
 });

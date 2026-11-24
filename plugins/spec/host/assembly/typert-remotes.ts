@@ -8,8 +8,10 @@
 //
 // DTO 单点收口（M5 UI 数据面——禁 client 拼装）：host 半聚合水化，只读消费 forgeSpecs
 // 域服务（域逻辑唯一事实源）+ AC 投影现查缝（AGENTS 1.6 每次调用期求值禁缓存）。
-// Result/Envelope 沿 shared/result 单源基型（快照方法族返回 Result、follow 流帧携
-// Envelope——typed unavailable 诚实降级非抛错折叠；follow 流调用期抛错语义同 project
+// 信封纪律（2026-11-24 真机双层信封根因修口——对齐 project 五族形态）：@Remote 端点
+// 成功返裸值，官方 gateway serve 层单层包传输信封；typed 失败/身份未解析/unavailable
+// 抛 RemoteError（code 保真过 wire——client remoteResultOf failure 分支承接）；follow
+// 流帧携 Envelope（流帧不经 Result 信封——typed unavailable 调用期抛错折叠，同 project
 // followSeal 先例）。
 //
 // 发现面铁律（project 判例同径）：gateway 只遍历根 ctx reflect.props——控制器经根 ctx
@@ -19,7 +21,8 @@
 // projectId 的生态正源，getProject 别名锚单源在 project 侧 queries；本插件零 project 依赖，
 // 结构性窄面现查 + workspaceRegistry 回落覆盖纯官方 workspaceId 语境）。未解析分层：
 // 快照族（list/follow）空集诚实降级 / detail·query·projection·transition 族 typed 拒绝。
-import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
+import { Remote, RemoteError, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
+import type { RemoteErrorCode } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
 import { rootCtxOf } from "@dsh-forge/lib-util";
 import type { WorkspaceId } from "@deepseek-ai/dsh-workspace";
@@ -58,8 +61,8 @@ import {
   spawnGitWorktreePorcelain,
   type GitPorcelainRunner,
 } from "@dsh-forge/lib-path/project-root";
-import { err, ok, type Envelope, type Result } from "../../shared/result.js";
 import { FORGE_SPECS_SERVICE_KEY } from "../../shared/contract-constants.js";
+import type { Envelope } from "../../shared/result.js";
 
 /** worktree 检出形态触发 marker（主根归拢廉价预检——零 git 调用省费，task-loop 同径） */
 const WORKTREE_MARKER = /[\\/]\.forge[\\/]worktrees[\\/]/;
@@ -157,14 +160,21 @@ const NOT_FOUND_CODE = "ERR_SPEC_NOT_FOUND";
 const FAILED_CODE = "ERR_SPEC_REMOTE_FAILED";
 const INVALID_INPUT_CODE = "ERR_SPEC_REMOTE_INVALID_INPUT";
 
-function resultError(code: string, message: string): Result<never> {
-  return err({ code, message });
+/** typed 失败抛出（信封去 Result 化——gateway rpcFailure 对 RemoteError 保真折叠 code/message/details，
+ *  client remoteResultOf failure 分支承接） */
+type FailureCode = RemoteErrorCode;
+function typedFailure(code: FailureCode, message: string): never {
+  throw new RemoteError(code, message, {});
 }
 
-/** 未知抛错归一（Result error 分支——域 SpecError code 直透） */
-function errorOf(cause: unknown): Result<never> {
-  if (isSpecError(cause)) return resultError(cause.code, cause.message);
-  return resultError(FAILED_CODE, cause instanceof Error ? cause.message : String(cause));
+/** 未知抛错归一（typed 失败——RemoteError 直透非再包；域 SpecError code 直透，码族同
+ *  remote-error-codes.d.ts 增量；其余归一 FAILED_CODE） */
+function failureOf(cause: unknown): never {
+  if (typeof cause === "object" && cause !== null && (cause as { isDSHRemoteError?: boolean }).isDSHRemoteError === true) {
+    throw cause;
+  }
+  if (isSpecError(cause)) typedFailure(cause.code, cause.message);
+  typedFailure(FAILED_CODE, cause instanceof Error ? cause.message : String(cause));
 }
 
 /** 入参封闭枚举/必填违例（typed code——wire 面显式失败非魔法值） */
@@ -367,9 +377,9 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     return repos;
   }
 
-  /** 族缺席 Result 归一（快照方法族——诚实降级非抛错折叠） */
-  private unavailableResult<T>(method: string): Result<T> {
-    return resultError(UNAVAILABLE_CODE, unavailableMessage(method, "specs"));
+  /** 族缺席 typed unavailable（信封去 Result 化——调用期抛 RemoteError，gateway 保真折叠） */
+  private unavailableFailure(method: string): never {
+    typedFailure(UNAVAILABLE_CODE, unavailableMessage(method, "specs"));
   }
 
   /** 身份解析（未解析/缝抛错 = null——分层降级判定基点） */
@@ -496,12 +506,12 @@ export class ForgeSpecsRemote extends TypertRemoteService {
   /** Spec 卡片清单（listing 索引序——UI 台账数据源；f5 键族聚合——主根 + worktree 键逐键
    *  取卡合并，slug 去重保首见序主根先行） */
   @Remote
-  async list(q: { readonly projectId: string; readonly statusFilter?: SpecStatus; readonly search?: string }, signal?: AbortSignal): Promise<Result<readonly SpecCardDto[]>> {
+  async list(q: { readonly projectId: string; readonly statusFilter?: SpecStatus; readonly search?: string }, signal?: AbortSignal): Promise<readonly SpecCardDto[]> {
     signal?.throwIfAborted();
     try {
       const svc = this.specs();
       const family = await this.resolveIdentityFamily(q.projectId);
-      if (family.length === 0) return ok<readonly SpecCardDto[]>([]);
+      if (family.length === 0) return [];
       const seen = new Set<string>();
       const cards: SpecCardDto[] = [];
       for (const ws of family) {
@@ -518,28 +528,29 @@ export class ForgeSpecsRemote extends TypertRemoteService {
       const filtered = search !== undefined && search !== ""
         ? cards.filter((c) => c.slug.toLowerCase().includes(search) || c.title.toLowerCase().includes(search))
         : cards;
-      return ok(filtered);
+      return filtered;
     } catch (cause) {
-      // 族缺席 → unavailable；其余（身份缝抛错等）→ errorOf 归一
-      return this.specsOf() === undefined ? this.unavailableResult("list") : errorOf(cause);
+      // 族缺席 → unavailable；其余（身份缝抛错等）→ failureOf 归一
+      if (this.specsOf() === undefined) this.unavailableFailure("list");
+      failureOf(cause);
     }
   }
 
   /** Spec 详情（父链全量 + doc 悬空态现算 + transitions 台账；键族兼容读——命中键即
    *  悬空判定锚 wsPath，存量 worktree 文档对 worktree 键不恒 dangling） */
   @Remote
-  async detail(q: { readonly projectId: string; readonly slug: string }, signal?: AbortSignal): Promise<Result<SpecDetailDto>> {
+  async detail(q: { readonly projectId: string; readonly slug: string }, signal?: AbortSignal): Promise<SpecDetailDto> {
     signal?.throwIfAborted();
     try {
       const located = await this.locateInFamily(q.projectId, q.slug);
-      if (located.kind === "unresolved") return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
-      if (located.kind === "missing") return resultError(NOT_FOUND_CODE, `spec 不存在：${q.slug}`);
+      if (located.kind === "unresolved") typedFailure(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
+      if (located.kind === "missing") typedFailure(NOT_FOUND_CODE, `spec 不存在：${q.slug}`);
       const { ws, chain } = located;
       const card = this.cardOf(chain);
       const doc = chain.doc === undefined
         ? undefined
         : { relPath: chain.doc.relPath, dangling: !existsSync(join(ws.wsPath, chain.doc.relPath)) };
-      return ok({
+      return {
         ...card,
         goals: chain.goals.map(({ goal, acs }) => ({
           title: goal.title,
@@ -548,9 +559,9 @@ export class ForgeSpecsRemote extends TypertRemoteService {
         })),
         ...(doc !== undefined ? { doc } : {}),
         transitions: chain.transitions,
-      });
+      };
     } catch (cause) {
-      return errorOf(cause);
+      failureOf(cause);
     }
   }
 
@@ -559,12 +570,12 @@ export class ForgeSpecsRemote extends TypertRemoteService {
   async query(
     input: { readonly projectId: string; readonly slug: string; readonly include?: SpecQueryInclude },
     signal?: AbortSignal,
-  ): Promise<Result<SpecQueryResultDto>> {
+  ): Promise<SpecQueryResultDto> {
     signal?.throwIfAborted();
     try {
       const located = await this.locateInFamily(input.projectId, input.slug);
-      if (located.kind === "unresolved") return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
-      if (located.kind === "missing") return resultError(NOT_FOUND_CODE, `spec 不存在：${input.slug}`);
+      if (located.kind === "unresolved") typedFailure(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
+      if (located.kind === "missing") typedFailure(NOT_FOUND_CODE, `spec 不存在：${input.slug}`);
       const { chain, mainKey } = located;
       const include = input.include ?? {};
       const hydratedGoals = chain.goals.map(({ goal, acs }) => ({
@@ -578,37 +589,35 @@ export class ForgeSpecsRemote extends TypertRemoteService {
         // 结算（存量 worktree 键 spec 行亦命中，进度不再恒 0）
         acProjection = (await this.projectOf(mainKey, hydratedGoals)).goals.flatMap((g) => g.acs);
       }
-      return ok({
+      return {
         spec: chain.spec,
         ...(include.goals === false ? {} : { goals: hydratedGoals }),
         ...(chain.doc !== undefined ? { doc: { relPath: chain.doc.relPath } } : {}),
         ...(include.transitions === false ? {} : { transitions: chain.transitions }),
         ...(acProjection !== undefined ? { acProjection } : {}),
-      });
+      };
     } catch (cause) {
-      return errorOf(cause);
+      failureOf(cause);
     }
   }
 
   /** AC 投影聚合端点（模块③投影流水复用；键族兼容读 + M5 投影键同步——结算查主根键） */
   @Remote
-  async projection(q: { readonly projectId: string; readonly slug: string }, signal?: AbortSignal): Promise<Result<AcProjectionDto>> {
+  async projection(q: { readonly projectId: string; readonly slug: string }, signal?: AbortSignal): Promise<AcProjectionDto> {
     signal?.throwIfAborted();
     try {
       const located = await this.locateInFamily(q.projectId, q.slug);
-      if (located.kind === "unresolved") return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
-      if (located.kind === "missing") return resultError(NOT_FOUND_CODE, `spec 不存在：${q.slug}`);
-      return ok(
-        await this.projectOf(
-          located.mainKey,
-          located.chain.goals.map(({ goal, acs }) => ({
-            title: goal.title,
-            acs: acs.map((ac) => ({ criterion: ac.criterion })),
-          })),
-        ),
+      if (located.kind === "unresolved") typedFailure(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
+      if (located.kind === "missing") typedFailure(NOT_FOUND_CODE, `spec 不存在：${q.slug}`);
+      return await this.projectOf(
+        located.mainKey,
+        located.chain.goals.map(({ goal, acs }) => ({
+          title: goal.title,
+          acs: acs.map((ac) => ({ criterion: ac.criterion })),
+        })),
       );
     } catch (cause) {
-      return errorOf(cause);
+      failureOf(cause);
     }
   }
 
@@ -617,13 +626,13 @@ export class ForgeSpecsRemote extends TypertRemoteService {
   async transition(
     input: { readonly projectId: string; readonly slug: string; readonly to: SpecStatus; readonly note?: string; readonly actor?: TransitionActor },
     signal?: AbortSignal,
-  ): Promise<Result<SpecSnapshot>> {
+  ): Promise<SpecSnapshot> {
     signal?.throwIfAborted();
     try {
       const svc = this.specs();
       const located = await this.locateInFamily(input.projectId, input.slug);
-      if (located.kind === "unresolved") return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
-      if (located.kind === "missing") return resultError(NOT_FOUND_CODE, `spec 不存在：${input.slug}`);
+      if (located.kind === "unresolved") typedFailure(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
+      if (located.kind === "missing") typedFailure(NOT_FOUND_CODE, `spec 不存在：${input.slug}`);
       const row = svc.transitionSpecByKey({
         projectKey: located.ws.projectKey,
         slug: input.slug,
@@ -631,9 +640,9 @@ export class ForgeSpecsRemote extends TypertRemoteService {
         ...(input.note !== undefined ? { note: input.note } : {}),
         actor: input.actor ?? "ui",
       });
-      return ok(row);
+      return row;
     } catch (cause) {
-      return errorOf(cause);
+      failureOf(cause);
     }
   }
 
@@ -641,34 +650,36 @@ export class ForgeSpecsRemote extends TypertRemoteService {
 
   /** roadmap 清单（listing 索引序——身份未解析 = 空集诚实降级，清单族同 list 判型） */
   @Remote
-  async roadmaps(q: { readonly projectId: string }, signal?: AbortSignal): Promise<Result<readonly RoadmapRow[]>> {
+  async roadmaps(q: { readonly projectId: string }, signal?: AbortSignal): Promise<readonly RoadmapRow[]> {
     signal?.throwIfAborted();
     try {
       const tools = this.requireTools("roadmaps");
       const ws = await this.resolveIdentity(q.projectId);
-      if (ws === null) return ok<readonly RoadmapRow[]>([]);
-      return ok(tools.listRoadmaps({ cwd: ws.wsPath }));
+      if (ws === null) return [];
+      return tools.listRoadmaps({ cwd: ws.wsPath });
     } catch (cause) {
-      return this.toolsOf() === undefined ? this.unavailableResult("roadmaps") : errorOf(cause);
+      if (this.toolsOf() === undefined) this.unavailableFailure("roadmaps");
+      failureOf(cause);
     }
   }
 
   /** roadmap 详情（queryRoadmap 动词直投——milestones 下钻 + 达成派生 + warns） */
   @Remote
-  async roadmapDetail(q: { readonly projectId: string; readonly slug: string }, signal?: AbortSignal): Promise<Result<RoadmapDetailDto>> {
+  async roadmapDetail(q: { readonly projectId: string; readonly slug: string }, signal?: AbortSignal): Promise<RoadmapDetailDto> {
     signal?.throwIfAborted();
     try {
       const tools = this.requireTools("roadmapDetail");
       const ws = await this.resolveIdentity(q.projectId);
-      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
+      if (ws === null) typedFailure(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
       const detail = tools.queryRoadmap({ cwd: ws.wsPath, slug: q.slug, include: ["achievement"] });
-      return ok({
+      return {
         roadmap: detail.roadmap,
         milestones: detail.milestones,
         achievement: detail.achievement ?? { roadmap: detail.roadmap, completed: false, perMilestone: [], warns: [] },
-      });
+      };
     } catch (cause) {
-      return this.toolsOf() === undefined ? this.unavailableResult("roadmapDetail") : errorOf(cause);
+      if (this.toolsOf() === undefined) this.unavailableFailure("roadmapDetail");
+      failureOf(cause);
     }
   }
 
@@ -693,12 +704,12 @@ export class ForgeSpecsRemote extends TypertRemoteService {
       readonly note?: string;
     },
     signal?: AbortSignal,
-  ): Promise<Result<RoadmapMutateSnapshot>> {
+  ): Promise<RoadmapMutateSnapshot> {
     signal?.throwIfAborted();
     try {
       const tools = this.requireTools("roadmapMutate");
       const ws = await this.resolveIdentity(input.projectId);
-      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
+      if (ws === null) typedFailure(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
       if (input.action !== "create" && input.action !== "update" && input.action !== "moveMilestone" && input.action !== "confirm") {
         throw invalidInput(`未知 action：${String(input.action)}`);
       }
@@ -706,29 +717,25 @@ export class ForgeSpecsRemote extends TypertRemoteService {
         if (input.slug === undefined || input.slug === "" || input.title === undefined || input.title === "") {
           throw invalidInput("create 动作必填 slug + title");
         }
-        return ok(
-          tools.createRoadmap({
-            cwd: ws.wsPath,
-            slug: input.slug,
-            title: input.title,
-            ...(input.brief !== undefined ? { brief: input.brief } : {}),
-            ...(input.acEntries !== undefined ? { acEntries: input.acEntries } : {}),
-          }),
-        );
+        return tools.createRoadmap({
+          cwd: ws.wsPath,
+          slug: input.slug,
+          title: input.title,
+          ...(input.brief !== undefined ? { brief: input.brief } : {}),
+          ...(input.acEntries !== undefined ? { acEntries: input.acEntries } : {}),
+        });
       }
       if (input.action === "update") {
         if (input.slug === undefined || input.slug === "") {
           throw invalidInput("update 动作必填 slug");
         }
-        return ok(
-          tools.updateRoadmap({
-            cwd: ws.wsPath,
-            slug: input.slug,
-            ...(input.title !== undefined ? { title: input.title } : {}),
-            ...(input.brief !== undefined ? { brief: input.brief } : {}),
-            ...(input.acEntries !== undefined ? { acEntries: input.acEntries } : {}),
-          }),
-        );
+        return tools.updateRoadmap({
+          cwd: ws.wsPath,
+          slug: input.slug,
+          ...(input.title !== undefined ? { title: input.title } : {}),
+          ...(input.brief !== undefined ? { brief: input.brief } : {}),
+          ...(input.acEntries !== undefined ? { acEntries: input.acEntries } : {}),
+        });
       }
       if (input.action === "moveMilestone") {
         if (input.slug === undefined || input.slug === "" || input.milestoneId === undefined) {
@@ -737,31 +744,28 @@ export class ForgeSpecsRemote extends TypertRemoteService {
         if ((input.before === undefined) === (input.after === undefined)) {
           throw invalidInput("moveMilestone 动作 before/after 互斥二选一");
         }
-        return ok(
-          tools.moveMilestone({
-            cwd: ws.wsPath,
-            roadmapSlug: input.slug,
-            milestoneId: input.milestoneId,
-            ...(input.before !== undefined ? { before: input.before } : {}),
-            ...(input.after !== undefined ? { after: input.after } : {}),
-          }),
-        );
+        return tools.moveMilestone({
+          cwd: ws.wsPath,
+          roadmapSlug: input.slug,
+          milestoneId: input.milestoneId,
+          ...(input.before !== undefined ? { before: input.before } : {}),
+          ...(input.after !== undefined ? { after: input.after } : {}),
+        });
       }
       // confirm：human-only 验收确认边——actor='ui' 实例透传（UI 径审计锚）
       if (input.slug === undefined || input.slug === "") {
         throw invalidInput("confirm 动作必填 slug");
       }
       const ui = this.requireUiTools("roadmapMutate");
-      return ok(
-        ui.transitionRoadmap({
-          cwd: ws.wsPath,
-          roadmapSlug: input.slug,
-          to: "completed",
-          ...(input.note !== undefined ? { note: input.note } : {}),
-        }),
-      );
+      return ui.transitionRoadmap({
+        cwd: ws.wsPath,
+        roadmapSlug: input.slug,
+        to: "completed",
+        ...(input.note !== undefined ? { note: input.note } : {}),
+      });
     } catch (cause) {
-      return this.toolsOf() === undefined ? this.unavailableResult("roadmapMutate") : errorOf(cause);
+      if (this.toolsOf() === undefined) this.unavailableFailure("roadmapMutate");
+      failureOf(cause);
     }
   }
 
@@ -771,15 +775,15 @@ export class ForgeSpecsRemote extends TypertRemoteService {
    * goal 台账尾帧（统一台账 entity_kind='goal'，尾 TRANSITION_TAIL 条）。
    */
   @Remote
-  async goalBoard(q: { readonly projectId: string; readonly specSlug: string }, signal?: AbortSignal): Promise<Result<GoalBoardDto>> {
+  async goalBoard(q: { readonly projectId: string; readonly specSlug: string }, signal?: AbortSignal): Promise<GoalBoardDto> {
     signal?.throwIfAborted();
     try {
       const repos = this.requireRepos("goalBoard");
       const ws = await this.resolveIdentity(q.projectId);
-      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
+      if (ws === null) typedFailure(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
       const spec = repos.specs.getBySlug(ws.projectKey, q.specSlug);
       if (spec === undefined) {
-        return resultError(NOT_FOUND_CODE, `spec 不存在：${q.specSlug}`);
+        typedFailure(NOT_FOUND_CODE, `spec 不存在：${q.specSlug}`);
       }
       const goals = repos.specs.listGoalsBySpec(spec.id);
       const entries: GoalBoardEntryDto[] = goals.map((goal) => {
@@ -807,9 +811,10 @@ export class ForgeSpecsRemote extends TypertRemoteService {
         .flatMap((goal) => repos.transitions.listByEntity("goal", goal.id))
         .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1))
         .slice(-TRANSITION_TAIL);
-      return ok({ spec, goals: entries, transitions });
+      return { spec, goals: entries, transitions };
     } catch (cause) {
-      return this.reposOf() === undefined ? this.unavailableResult("goalBoard") : errorOf(cause);
+      if (this.reposOf() === undefined) this.unavailableFailure("goalBoard");
+      failureOf(cause);
     }
   }
 
@@ -828,12 +833,12 @@ export class ForgeSpecsRemote extends TypertRemoteService {
       readonly note?: string;
     },
     signal?: AbortSignal,
-  ): Promise<Result<GoalSnapshot>> {
+  ): Promise<GoalSnapshot> {
     signal?.throwIfAborted();
     try {
       const ui = this.requireUiTools("goalReviewMutate");
       const ws = await this.resolveIdentity(input.projectId);
-      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
+      if (ws === null) typedFailure(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
       if (input.action !== "finalize" && input.action !== "reject") {
         throw invalidInput(`未知 action：${String(input.action)}`);
       }
@@ -844,9 +849,10 @@ export class ForgeSpecsRemote extends TypertRemoteService {
         decision: input.action === "finalize" ? "completed" : "rejected",
         ...(input.note !== undefined ? { note: input.note } : {}),
       });
-      return ok(result.goal);
+      return result.goal;
     } catch (cause) {
-      return this.uiToolsOf() === undefined ? this.unavailableResult("goalReviewMutate") : errorOf(cause);
+      if (this.uiToolsOf() === undefined) this.unavailableFailure("goalReviewMutate");
+      failureOf(cause);
     }
   }
 
@@ -858,7 +864,7 @@ export class ForgeSpecsRemote extends TypertRemoteService {
   @Remote({ mode: "stream" })
   async *follow(q: { readonly projectId: string }, signal?: AbortSignal): AsyncIterable<Envelope<SpecBoardDto>> {
     const svc = this.specsOf() === undefined ? undefined : this.specsOf();
-    if (svc === undefined) throw new Error(unavailableMessage("follow", "specs"));
+    if (svc === undefined) typedFailure(UNAVAILABLE_CODE, unavailableMessage("follow", "specs"));
     let seq = 0;
     let last = "";
     let first = true;

@@ -5,7 +5,7 @@
 //   参数面、codec 全 src-json，端点 = `forgeTasks/<method>`；`signal` 尾参 = cancellation。
 //   键名沿用 ForgeTasksRpc 读面八方法（apps/web/src/rpc/client.ts TASKS_CHANNELS 清单——
 //   transport 改型，键不漂移）；写面 transition 若域服务 face 在场则透传、缺席 typed
-//   unavailable（Result error 分支诚实降级，与 project unavailableMessage 形态一致）。
+//   unavailable（RemoteError 抛出——gateway 保真折叠，与 project unavailableMessage 形态一致）。
 //   键族聚合（2026-11-24 用户方案 A——f5）：快照族 list/stats/graph/follow 按键族聚合
 //   （keyFamilyOf = 主根键兜底 + forge.worktrees 注册面 worktree 键增量补充——写侧
 //   已按 worktree 形态确定性归拢主根键，注册缝缺席 = 回退主根兜底单键）；非快照操作面维持单键 keyOf。
@@ -13,17 +13,18 @@
 // 发现面铁律（project 侦察定谳同径）：gateway 只遍历根 ctx reflect.props——控制器经
 // rootCtx.plugin 注册进根 ctx；生命周期归插件 fiber（dispose 级联拆卸）。
 //
-// 泛型基型：方法签名经 shared/result.ts Result<T>/Envelope<T> 单点实例化——快照方法族
-// 返回 Result<DTO>（ok 携值 / error 携 typed unavailable），follow 流帧 = Envelope 全量
-// 快照信封（baseline 帧 seq=0）。边界类型公共出口 = host/types.ts（exports['./types']
-// 非 root 子路径——官方边界门要求，根出口不在白名单）。
-import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
+// 泛型基型：信封纪律（2026-11-24 真机双层信封根因修口——对齐 project 五族形态）：
+// @Remote 端点成功返裸值（官方 gateway serve 层单层包传输信封），typed 失败/身份未解析/
+// unavailable 抛 RemoteError（code 保真过 wire——client failure 分支承接）；follow 流帧 =
+// Envelope 全量快照信封（baseline 帧 seq=0——流帧不经 Result 信封）。边界类型公共出口 =
+// host/types.ts（exports['./types'] 非 root 子路径——官方边界门要求，根出口不在白名单）。
+import { Remote, RemoteError, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
 import { rootCtxOf } from "@dsh-forge/lib-util";
 import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/contracts";
 import { FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
 import { deriveProjectKey } from "../db/repositories/project-key.js";
-import { err, ok, type Envelope, type Result } from "../../shared/result.js";
+import type { Envelope } from "../../shared/result.js";
 import type { SessionTaskLinkCard, TaskCard, TaskSnapshot } from "../domain/tasks/types.js";
 import type { QueryTaskResult } from "../domain/tasks/query.js";
 import type { TaskDetail, TaskDetailQuery } from "../domain/tasks/detail.js";
@@ -260,9 +261,9 @@ export function unavailableMessage(method: string): string {
   return `forge.tasks ${method} unavailable（本宿主缺 tasks 域服务面）`;
 }
 
-/** typed unavailable（族服务缺席——调用期诚实拒绝，Result error 分支非抛错折叠） */
-function unavailableResult<T>(method: string): Result<T> {
-  return err<T>({ code: "ERR_FORGE_TASKS_UNAVAILABLE", message: unavailableMessage(method) });
+/** typed unavailable 抛出（信封去 Result 化——gateway rpcFailure 保真折叠 code 过 wire） */
+function unavailableFailure(method: string): never {
+  throw new RemoteError("ERR_FORGE_TASKS_UNAVAILABLE", unavailableMessage(method), {});
 }
 
 /** 域服务惰性现查（缺席返回 undefined——本面各方法统一转 typed unavailable） */
@@ -360,9 +361,9 @@ function sumStats(list: readonly TaskStats[]): TaskStats {
   return { total, byStatus, unmetPending, gatedPending };
 }
 
-/** 项目身份未解析 typed Result（row/write 面——非快照族，诚实拒绝不空集） */
-function unresolvedResult<T>(projectId: string): Result<T> {
-  return err<T>({ code: "ERR_FORGE_TASKS_PROJECT_UNRESOLVED", message: projectUnresolvedMessage(projectId) });
+/** 项目身份未解析 typed 抛出（row/write 面——非快照族，诚实拒绝不空集） */
+function unresolvedFailure(projectId: string): never {
+  throw new RemoteError("ERR_FORGE_TASKS_PROJECT_UNRESOLVED", projectUnresolvedMessage(projectId), {});
 }
 
 /** follow 流节拍（abort 感知 sleep——取消即出循环，不悬空 fiber；project 同型） */
@@ -461,12 +462,12 @@ export class ForgeTasksRemote extends TypertRemoteService {
 
   /** 任务清单（键族聚合——search 中英过滤 + sort + AC 进度批水化；taskId 去重合并） */
   @Remote
-  async list(q: TasksRemoteListQuery, signal?: AbortSignal): Promise<Result<TaskCardDto[]>> {
+  async list(q: TasksRemoteListQuery, signal?: AbortSignal): Promise<TaskCardDto[]> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
-    if (svc === undefined) return unavailableResult<TaskCardDto[]>("list");
+    if (svc === undefined) unavailableFailure("list");
     const keys = await this.keyFamilyOf(q.projectId);
-    if (keys.length === 0) return ok<TaskCardDto[]>([]);
+    if (keys.length === 0) return [];
     const lists: TaskCardDto[][] = [];
     for (const key of keys) {
       lists.push(
@@ -483,32 +484,32 @@ export class ForgeTasksRemote extends TypertRemoteService {
         ),
       );
     }
-    return ok(mergeCards(lists));
+    return mergeCards(lists);
   }
 
   /** 八态计数（键族聚合——total + byStatus + unmetPending + gatedPending 逐键求和） */
   @Remote
-  async stats(q: TasksRemoteStatsQuery, signal?: AbortSignal): Promise<Result<TaskStats>> {
+  async stats(q: TasksRemoteStatsQuery, signal?: AbortSignal): Promise<TaskStats> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
-    if (svc === undefined) return unavailableResult<TaskStats>("stats");
+    if (svc === undefined) unavailableFailure("stats");
     const keys = await this.keyFamilyOf(q.projectId);
-    if (keys.length === 0) return ok(zeroStats());
+    if (keys.length === 0) return zeroStats();
     const rows: TaskStats[] = [];
     for (const key of keys) {
       rows.push(await svc.taskStats({ projectKey: key, ...(q.slug !== undefined ? { slug: q.slug } : {}) }));
     }
-    return ok(sumStats(rows));
+    return sumStats(rows);
   }
 
   /** 容器任务图（键族聚合——DAG/泳道渲染源：tasks 并集去重 + edges 三元组并集去重，cards 全量水化） */
   @Remote
-  async graph(q: TasksRemoteGraphQuery, signal?: AbortSignal): Promise<Result<TaskGraphDto>> {
+  async graph(q: TasksRemoteGraphQuery, signal?: AbortSignal): Promise<TaskGraphDto> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
-    if (svc === undefined) return unavailableResult<TaskGraphDto>("graph");
+    if (svc === undefined) unavailableFailure("graph");
     const keys = await this.keyFamilyOf(q.projectId);
-    if (keys.length === 0) return ok({ tasks: [], edges: [] });
+    if (keys.length === 0) return { tasks: [], edges: [] };
     const tasks: TaskCardDto[][] = [];
     const edges: TaskGraphEdge[] = [];
     for (const key of keys) {
@@ -516,76 +517,76 @@ export class ForgeTasksRemote extends TypertRemoteService {
       tasks.push(await hydrateCards(svc, key, graph.tasks));
       edges.push(...graph.edges);
     }
-    return ok({ tasks: mergeCards(tasks), edges: mergeEdges([edges]) });
+    return { tasks: mergeCards(tasks), edges: mergeEdges([edges]) };
   }
 
   /** 任务详情（records/waitingOnMe/sessions/actualFiles/refs 全量水化 + AC 进度） */
   @Remote
-  async detail(q: TasksRemoteDetailQuery, signal?: AbortSignal): Promise<Result<TaskDetailDto>> {
+  async detail(q: TasksRemoteDetailQuery, signal?: AbortSignal): Promise<TaskDetailDto> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
-    if (svc === undefined) return unavailableResult<TaskDetailDto>("detail");
+    if (svc === undefined) unavailableFailure("detail");
     const projectKey = await this.keyOf(q.projectId);
-    if (projectKey === undefined) return unresolvedResult<TaskDetailDto>(q.projectId);
+    if (projectKey === undefined) unresolvedFailure(q.projectId);
     const detail = await svc.taskDetail({ ...q, projectKey });
     const rows = await svc.latestSettlementsByTask(projectKey, [detail.slug]);
     const progress = acProgressOf(rows.find((r) => r.taskId === detail.taskId));
-    return ok(progress === undefined ? detail : { ...detail, acProgress: progress });
+    return progress === undefined ? detail : { ...detail, acProgress: progress };
   }
 
   /** 查询（四节按 include 门控——agent 面同法的 RPC 读面复用） */
   @Remote
-  async query(input: TasksRemoteQueryRequest, signal?: AbortSignal): Promise<Result<QueryTaskResult>> {
+  async query(input: TasksRemoteQueryRequest, signal?: AbortSignal): Promise<QueryTaskResult> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
-    if (svc === undefined) return unavailableResult<QueryTaskResult>("query");
+    if (svc === undefined) unavailableFailure("query");
     const projectKey = await this.keyOf(input.projectId);
-    if (projectKey === undefined) return unresolvedResult<QueryTaskResult>(input.projectId);
-    return ok(await svc.queryTask({ ...input, projectKey }));
+    if (projectKey === undefined) unresolvedFailure(input.projectId);
+    return svc.queryTask({ ...input, projectKey });
   }
 
   /** 挂接双源分型卡（会话头 pill 数据源） */
   @Remote
-  async sessionLinks(q: TasksRemoteSessionLinksQuery, signal?: AbortSignal): Promise<Result<SessionTaskLinkCard[]>> {
+  async sessionLinks(q: TasksRemoteSessionLinksQuery, signal?: AbortSignal): Promise<SessionTaskLinkCard[]> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
-    if (svc === undefined) return unavailableResult<SessionTaskLinkCard[]>("sessionLinks");
+    if (svc === undefined) unavailableFailure("sessionLinks");
     const projectKey = await this.keyOf(q.projectId);
-    if (projectKey === undefined) return unresolvedResult<SessionTaskLinkCard[]>(q.projectId);
-    return ok(await svc.sessionLinks({ ...q, projectKey }));
+    if (projectKey === undefined) unresolvedFailure(q.projectId);
+    return svc.sessionLinks({ ...q, projectKey });
   }
 
   /** 只读校验（单 feature 子图五类检查） */
   @Remote
-  async validateFeatureTasks(input: TasksRemoteValidateInput, signal?: AbortSignal): Promise<Result<ValidateReport>> {
+  async validateFeatureTasks(input: TasksRemoteValidateInput, signal?: AbortSignal): Promise<ValidateReport> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
-    if (svc === undefined) return unavailableResult<ValidateReport>("validateFeatureTasks");
+    if (svc === undefined) unavailableFailure("validateFeatureTasks");
     const projectKey = await this.keyOf(input.projectId);
-    if (projectKey === undefined) return unresolvedResult<ValidateReport>(input.projectId);
-    return ok(await svc.validateFeatureTasks({ ...input, projectKey }));
+    if (projectKey === undefined) unresolvedFailure(input.projectId);
+    return svc.validateFeatureTasks({ ...input, projectKey });
   }
 
   /** 人类纠偏转移（写面透传——域服务 face 在场才可调用；缺席 typed unavailable） */
   @Remote
-  async transition(input: TasksRemoteTransitionInput, signal?: AbortSignal): Promise<Result<TaskSnapshot>> {
+  async transition(input: TasksRemoteTransitionInput, signal?: AbortSignal): Promise<TaskSnapshot> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
-    if (svc === undefined) return unavailableResult<TaskSnapshot>("transition");
+    if (svc === undefined) unavailableFailure("transition");
     const projectKey = await this.keyOf(input.projectId);
-    if (projectKey === undefined) return unresolvedResult<TaskSnapshot>(input.projectId);
-    return ok(await svc.transitionTask({ ...input, projectKey }));
+    if (projectKey === undefined) unresolvedFailure(input.projectId);
+    return svc.transitionTask({ ...input, projectKey });
   }
 
   /** AC 结算聚合（判据文本清单进、聚合 DTO 出——criterion/met/evidence?/taskRefs[]/unmatched） */
   @Remote
-  async acSettlements(q: TasksRemoteAcSettlementsRequest, signal?: AbortSignal): Promise<Result<AcSettlementsAggregate>> {
+  async acSettlements(q: TasksRemoteAcSettlementsRequest, signal?: AbortSignal): Promise<AcSettlementsAggregate> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
-    if (svc === undefined) return unavailableResult<AcSettlementsAggregate>("acSettlements");
+    if (svc === undefined) unavailableFailure("acSettlements");
     const projectKey = await this.keyOf(q.projectId);
-    if (projectKey === undefined) return unresolvedResult<AcSettlementsAggregate>(q.projectId);
-    return ok(await svc.matchAcSettlements(projectKey, q.criteria));
+    if (projectKey === undefined) unresolvedFailure(q.projectId);
+    return svc.matchAcSettlements(projectKey, q.criteria);
   }
 
   /**
