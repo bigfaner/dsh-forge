@@ -71,6 +71,13 @@ describe('OverviewHead（M3.1 D20 同位翻转钮）', () => {
     }
   })
 
+  it('钮右对齐（apps/web ov-head 同形——名称行内项目名左、钮右）：toggle 携 is-tail 右对齐锚类', () => {
+    for (const open of [false, true]) {
+      const markup = renderToStaticMarkup(<OverviewHead {...base} open={open} />)
+      expect(markup).toContain('dswf-ov-head-toggle is-tail')
+    }
+  })
+
   it('行内 ghost ▾/▴ 字符形态退役（否定断言——M3.1 D20 裁决）', () => {
     const collapsed = renderToStaticMarkup(<OverviewHead {...base} open={false} />)
     const expanded = renderToStaticMarkup(<OverviewHead {...base} open={true} />)

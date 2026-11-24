@@ -49,12 +49,20 @@
 
 .dswf-ov-name {
   flex: none;
-  max-width: 40%;
+  max-width: 60%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-label-primary);
+}
+
+/* 同位翻转钮（展开/收起）右对齐锚：名称行内项目名左、钮右（apps/web ov-head 同形
+ * ——用户裁决 2026-11-24 真机截图红注「收起 右对齐」；margin-inline-start auto
+ * = flex 右贴标准锚，钮不再与展开信息行 label 列重叠） */
+.dswf-ov-head-toggle.is-tail {
+  flex: none;
+  margin-inline-start: auto;
 }
 
 /* M3.1 D20 同位翻转钮 caret：官方 ChevronDown（ghost Button 内）——展开态旋转 180°

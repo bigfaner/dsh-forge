@@ -41,7 +41,7 @@ export function OverviewHead({ projectName, rows, open, onToggle }: OverviewHead
         <Button
           variant="ghost"
           size="sm"
-          className="dswf-ov-head-toggle"
+          className="dswf-ov-head-toggle is-tail" /* is-tail = 右对齐锚（apps/web ov-head 同形——名称行内项目名左、钮右） */
           aria-expanded={open}
           aria-label={open ? '收起位置详情' : '展开位置详情'}
           data-dswf-ov-head-toggle=""
