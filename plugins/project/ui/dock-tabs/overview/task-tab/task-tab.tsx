@@ -256,7 +256,7 @@ export function TasksTabBody({
       <EmptyState
         className="dswf-tt-empty"
         title="暂无任务容器"
-        description="feature 与有任务的突击提案在此列出——feature 目录经注册发现面扫描建行"
+        description="项目任务容器在此列出——循环派发与手动建容器均可"
       />
     )
   }

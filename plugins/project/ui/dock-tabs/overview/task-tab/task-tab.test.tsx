@@ -235,6 +235,7 @@ describe('TasksTabBody · 三态面与空态', () => {
   it('零容器 = 容器空态（无 taskbar）', () => {
     const html = render({ options: [], features: [], container: undefined })
     expect(html).toContain('暂无任务容器')
+    expect(html).toContain('项目任务容器在此列出——循环派发与手动建容器均可')
     expect(html).not.toContain('data-dswf-tt-taskbar')
   })
 })

@@ -292,6 +292,7 @@ describe('任务聚焦消费（4.2 UF-3 流程 7 右栏半段——pill 点击 �
     )
     expect(markup).toContain('aria-selected="true" class="dswf-ov-subtab is-active" data-dswf-ov-subtab="tasks"') // 聚焦 → 任务子 tab
     expect(markup).toContain('暂无任务容器') // renderTasksTab 装载在场面（容器空态——SSR 零 effect 头路缺席）
+    expect(markup).toContain('项目任务容器在此列出——循环派发与手动建容器均可')
   })
 
   it('聚焦缺席 = 任务子 tab 缺省（门关后子 tab 仅 tasks/bugs 且缺省激活 tasks——114d71ba 用户裁定 2026-11-14；初始态不受扰动）', () => {
