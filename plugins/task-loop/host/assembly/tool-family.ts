@@ -3,24 +3,14 @@
 // 定位 = 装配缝合零域逻辑：工具薄封装消费本插件两域服务（tasks/checkpoints）；循环内核
 // 依赖按 AGENTS 1.6 可选消费现查（agents 注册表缺席 = 叙述通道 no-op 降级，循环正确性
 // 只依赖宿主事件）。返回注册清单 + 循环卸载收口（driver.dispose——活循环同步终态注销）。
-import { deriveProjectKey } from "../db/repositories/project-key.js";
+import { deriveProjectKeyRolledUpGit } from "./worktree-rollup.js";
 
 /**
- * worktree 归拢确定性键派生（2026-11-24 用户裁决：worktree 归拢到项目根——f5 键族缝
- * 回退主根单键时任务 tab 空数据真因修口，诊断留痕 .forge/task-logs/001-task-tab-empty/）：
- * cwd 呈 `{root}\.forge\worktrees\<name>` 形态（分隔符 / 或 \）→ 直接路径推导**主根键**
- * `deriveProjectKey(root)` 作为键族兜底成员——不依赖 forge.worktrees 注册缝在场，缝缺席
- * ≠ 归拢失效；注册面（keyFamilyOf）降级为增量补充（存量 worktree 键行仍经缝可见）。
- * 推导规则与边界（留痕）：①非 worktree 形态不推导（原样 deriveProjectKey）；
- * ②marker `.forge`+`worktrees` 两段逐字匹配（大小写敏感——project_key 拼写敏感设计
- * 同口径，`.Forge`/`Worktrees` 变体不推导）；③嵌套形态（worktree 内再嵌 worktree）
- * 取最外层主根（非贪婪首段）；④marker 段前须有根段（根不能为空串）。
- * 纯字符串推导零 fs 依赖；空 cwd 的派生拒绝由 deriveProjectKey 原样承担。
+ * worktree 归拢主根推导（2026-11-24 用户裁决：git 命令现查，禁自造路径剥取规则——
+ * f5 键族缝回退主根单键时任务 tab 空数据真因修口，诊断留痕 .forge/task-logs/）：
+ * marker 段仅作触发条件，主根 = `git worktree list --porcelain` 现查首条目（worktree-rollup
+ * 单源）。git 缺席/命令失败/cwd 不属清单 = fail-soft 回退 cwd 键 + 回退原因留痕（不静默）。
  */
-export function deriveProjectKeyRolledUp(cwd: string): string {
-  const match = /^(.+?)[\\/]\.forge[\\/]worktrees[\\/]/.exec(cwd);
-  return deriveProjectKey(match === null ? cwd : match[1]!);
-}
 
 import type { TaskLoopAssembly } from "./default-assembly.js";
 import { createLoopDriver } from "../loop/driver.js";
@@ -125,21 +115,27 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
   );
 
   // ── projectKey 路由缝（cwd → 本地派生；缺席 = typed 拒绝自解释）。
-  //    worktree 归拢确定性化（2026-11-24 用户裁决：worktree 归拢到项目根）——cwd 呈
-  //    {root}\.forge\worktrees\<name> 形态 → 直接路径推导主根键（不依赖 forge.worktrees
-  //    注册缝在场；缝缺席 ≠ 归拢失效）。归拢发生 = 诊断留痕（event: task-cwd-rollup）。
+  //    worktree 归拢 git 现查版（2026-11-24 用户裁决：主根由 git worktree list --porcelain
+  //    推导，注册缝与 git 推导双通道并集——缝缺席 ≠ 归拢失效）。归拢发生 = 诊断留痕
+  //    （event: task-cwd-rollup）；fail-soft 回退 = warn 留痕（event: task-cwd-rollup-fallback）。
   const resolveProjectKey = (exec: TaskToolExecFace): string => {
     const session = sessionContextOf(exec as ToolExecFace);
     if (session.cwd === undefined) throw new WorkspaceNotRegisteredError({});
-    const key = deriveProjectKeyRolledUp(session.cwd);
-    if (key !== deriveProjectKey(session.cwd)) {
+    const rollup = deriveProjectKeyRolledUpGit(session.cwd);
+    if (rollup.rolledUp) {
       emitForgeDiag(diagEmit, {
         level: "info",
         event: "task-cwd-rollup",
-        message: `worktree cwd 归拢主根键（确定性路径推导，注册缝无关）：cwd=${session.cwd}`,
+        message: `worktree cwd 归拢主根键（git porcelain 现查）：cwd=${session.cwd} mainRoot=${rollup.mainRoot ?? ""}`,
+      });
+    } else if (rollup.fallbackReason !== undefined) {
+      emitForgeDiag(diagEmit, {
+        level: "warn",
+        event: "task-cwd-rollup-fallback",
+        message: `worktree 归拢 fail-soft 回退 cwd 键：cwd=${session.cwd}：${rollup.fallbackReason}`,
       });
     }
-    return key;
+    return rollup.key;
   };
 
   const verbDeps = { db: services.db.db, events: services.events };

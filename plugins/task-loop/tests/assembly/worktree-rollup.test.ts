@@ -1,55 +1,119 @@
-// worktree 归拢确定性键派生 pin（2026-11-24 用户裁决——worktree 归拢到项目根）：
-// 任务子 tab 空数据真因（键族缝回退主根单键 + 任务键落 worktree 键）修口钉——
-// 写侧 {root}\.forge\worktrees\<name> 形态 cwd 确定性推导主根键，不依赖 forge.worktrees
-// 注册缝在场；非 worktree 形态不推导。诊断留痕 .forge/task-logs/001-task-tab-empty/。
-import { mkdtempSync } from "node:fs";
+// worktree 归拢主根推导 pin（2026-11-24 用户裁决二修：git 命令现查，禁自造路径剥取规则）：
+// 任务子 tab 空数据真因（键族缝回退主根单键 + 任务键落 worktree 键）修口钉——marker 段仅作
+// 触发条件，主根 = git worktree list --porcelain 现查首条目；git 失败/非本仓 = fail-soft
+// 回退 cwd 键。诊断留痕 .forge/task-logs/001-task-tab-empty/ 与 002-git-rollup/。
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { deriveProjectKeyRolledUp } from "../../host/assembly/tool-family.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  deriveProjectKeyRolledUpGit,
+  MARKER_PATTERN,
+  parseWorktreePaths,
+  spawnGitPorcelain,
+  type GitPorcelainRunner,
+} from "../../host/assembly/worktree-rollup.js";
 import { deriveProjectKey } from "../../host/db/repositories/project-key.js";
 import taskLoopPlugin from "../../host/index.js";
 
-const ROOT = "Z:\\ws\\proj";
-const WT = `${ROOT}\\.forge\\worktrees\\plugins`;
+describe("deriveProjectKeyRolledUpGit（git 现查归拢——runner 注入桩）", () => {
+  const ROOT = "Z:\\ws\\proj";
+  const WT = `${ROOT}\\.forge\\worktrees\\plugins`;
+  const porcelain = [
+    "worktree Z:/ws/proj",
+    "HEAD abc",
+    "branch refs/heads/main",
+    "",
+    "worktree Z:/ws/proj/.forge/worktrees/plugins",
+    "HEAD def",
+    "branch refs/heads/b1",
+    "",
+  ].join("\n");
+  const runner: GitPorcelainRunner = () => porcelain;
 
-describe("deriveProjectKeyRolledUp（worktree 形态确定性归拢主根键）", () => {
-  it("worktree 形态（\\ 分隔）→ 主根键，且与 deriveProjectKey(root) 全等", () => {
-    expect(deriveProjectKeyRolledUp(WT)).toBe(deriveProjectKey(ROOT));
+  it("marker 命中 + porcelain 现查 → 主根键 = porcelain 首条目派生（非路径剥取，分隔符随 cwd 拼写）", () => {
+    const result = deriveProjectKeyRolledUpGit(WT, runner);
+    expect(result.rolledUp).toBe(true);
+    expect(result.mainRoot).toBe(ROOT);
+    expect(result.key).toBe(deriveProjectKey(ROOT));
   });
 
-  it("worktree 形态（/ 分隔）→ 主根键", () => {
-    expect(deriveProjectKeyRolledUp("Z:/ws/proj/.forge/worktrees/plugins")).toBe(deriveProjectKey("Z:/ws/proj"));
+  it("worktree 树内子路径 cwd 同样归拢主根键", () => {
+    const result = deriveProjectKeyRolledUpGit(`${WT}\\host\\src`, runner);
+    expect(result.rolledUp).toBe(true);
+    expect(result.key).toBe(deriveProjectKey(ROOT));
   });
 
-  it("嵌套 worktree 形态 → 最外层主根键", () => {
-    expect(deriveProjectKeyRolledUp(`${WT}\\.forge\\worktrees\\inner`)).toBe(deriveProjectKey(ROOT));
+  it("非 worktree 形态 → 零 git 调用（runner 不触）+ 原样派生", () => {
+    const spy = vi.fn<GitPorcelainRunner>(runner);
+    expect(deriveProjectKeyRolledUpGit(ROOT, spy).key).toBe(deriveProjectKey(ROOT));
+    expect(spy).not.toHaveBeenCalled();
+    // 仅 .forge 一段 / worktrees 单段 / 大小写变体均不触发
+    for (const cwd of [`${ROOT}\\.forge\\tmp`, `${ROOT}\\worktrees\\plugins`, `${ROOT}\\.Forge\\Worktrees\\plugins`]) {
+      expect(MARKER_PATTERN.test(cwd)).toBe(false);
+    }
   });
 
-  it("边界：非 worktree 形态不推导（原样派生）", () => {
-    expect(deriveProjectKeyRolledUp(ROOT)).toBe(deriveProjectKey(ROOT));
-    // 仅 .forge 一段（无 worktrees 段）不推导
-    expect(deriveProjectKeyRolledUp(`${ROOT}\\.forge\\tmp`)).toBe(deriveProjectKey(`${ROOT}\\.forge\\tmp`));
-    // worktrees 单段无 .forge 前缀不推导
-    expect(deriveProjectKeyRolledUp(`${ROOT}\\worktrees\\plugins`)).toBe(deriveProjectKey(`${ROOT}\\worktrees\\plugins`));
-    // marker 大小写变体不推导（project_key 拼写敏感同口径）
-    expect(deriveProjectKeyRolledUp(`${ROOT}\\.Forge\\Worktrees\\plugins`)).toBe(deriveProjectKey(`${ROOT}\\.Forge\\Worktrees\\plugins`));
-    // 末段非 worktree 树内子路径（worktree 内部 cwd）→ 仍归拢最外层主根
-    expect(deriveProjectKeyRolledUp(`${WT}\\host\\src`)).toBe(deriveProjectKey(ROOT));
+  it("git 探针抛错 → fail-soft 回退 cwd 键 + 回退原因留痕字段", () => {
+    const failing: GitPorcelainRunner = () => {
+      throw new Error("git not found");
+    };
+    const result = deriveProjectKeyRolledUpGit(WT, failing);
+    expect(result.rolledUp).toBe(false);
+    expect(result.key).toBe(deriveProjectKey(WT));
+    expect(result.fallbackReason).toContain("git not found");
+  });
+
+  it("porcelain 清单不含 cwd → 回退 cwd 键（非本仓 worktree）", () => {
+    const result = deriveProjectKeyRolledUpGit(WT, () => "worktree Z:/other/repo\n");
+    expect(result.rolledUp).toBe(false);
+    expect(result.key).toBe(deriveProjectKey(WT));
+    expect(result.fallbackReason).toContain("非本仓 worktree");
   });
 
   it("空 cwd → 派生拒绝原样上抛（ProjectKeyDerivationError）", () => {
-    expect(() => deriveProjectKeyRolledUp("")).toThrowError(/ERR_PROJECT_KEY_DERIVATION/);
+    expect(() => deriveProjectKeyRolledUpGit("")).toThrowError(/ERR_PROJECT_KEY_DERIVATION/);
+  });
+
+  it("porcelain 纯解析：只取 worktree 路径行", () => {
+    expect(parseWorktreePaths(porcelain)).toEqual(["Z:/ws/proj", "Z:/ws/proj/.forge/worktrees/plugins"]);
   });
 });
 
-describe("归拢端到端（装配级——forge.worktrees 缝缺席 ≠ 归拢失效）", () => {
+describe("归拢端到端（真 git 仓装配级——spawnGitPorcelain 真探针）", () => {
+  const tempRoots: string[] = [];
+  afterEach(() => {
+    for (const root of tempRoots.splice(0)) {
+      try {
+        rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+      } catch {
+        // tmp 目录清理 best-effort（Windows 句柄延迟释放 EPERM 不炸测试）
+      }
+    }
+  });
+
+  function initRepoWithWorktree(): { root: string; wt: string } {
+    const root = mkdtempSync(join(tmpdir(), "task-loop-rollup-git-"));
+    tempRoots.push(root);
+    const git = (args: string[], cwd: string) => execFileSync("git", args, { cwd, encoding: "utf8" });
+    git(["init", "-b", "main"], root);
+    git(["config", "user.email", "t@t"], root);
+    git(["config", "user.name", "t"], root);
+    git(["commit", "--allow-empty", "-m", "init"], root);
+    const wt = join(root, ".forge", "worktrees", "plugins");
+    git(["worktree", "add", "-b", "b1", wt, "main"], root);
+    return { root, wt };
+  }
+
   function execOf(cwd: string): unknown {
     return { agent: { session: { id: "s1", header: { cwd } } } };
   }
 
-  it("worktree cwd 写入 add_task → 主根 cwd 的 list_tasks 可见（无缝、零注册面）", async () => {
-    const home = mkdtempSync(join(tmpdir(), "task-loop-rollup-"));
+  it("真 git 仓 worktree cwd 写入 add_task → 主根 cwd 的 list_tasks 可见（真 porcelain 现查）", async () => {
+    const { root, wt } = initRepoWithWorktree();
+    const home = mkdtempSync(join(tmpdir(), "task-loop-rollup-home-"));
+    tempRoots.push(home);
     const registered: { name: string; execute: (a: unknown, e: unknown) => Promise<unknown> }[] = [];
     const ctx = {
       reflect: { provide: () => {}, get: () => undefined },
@@ -65,9 +129,9 @@ describe("归拢端到端（装配级——forge.worktrees 缝缺席 ≠ 归拢�
       const byName = new Map(registered.map((t) => [t.name, t]));
       await byName.get("add_task")!.execute(
         { slug: "rollup-pin", title: "rollup pin", type: "coding-fix" },
-        execOf(WT),
+        execOf(wt),
       );
-      const listed = (await byName.get("list_tasks")!.execute({ slug: "rollup-pin" }, execOf(ROOT))) as {
+      const listed = (await byName.get("list_tasks")!.execute({}, execOf(root))) as {
         cards: { slug: string }[];
       };
       expect(listed.cards.some((c) => c.slug === "rollup-pin")).toBe(true);
@@ -75,4 +139,13 @@ describe("归拢端到端（装配级——forge.worktrees 缝缺席 ≠ 归拢�
       dispose();
     }
   });
+
+  it("spawnGitPorcelain 真探针：git 仓内返回含主根清单（口径冒烟）", () => {
+    const { root } = initRepoWithWorktree();
+    const paths = parseWorktreePaths(spawnGitPorcelain(root));
+    expect(paths.length).toBeGreaterThanOrEqual(2);
+    expect(normalize(paths[0]!)).toBe(normalize(root));
+  });
 });
+
+const normalize = (p: string): string => p.replaceAll("\\", "/").replace(/\/+$/, "");
