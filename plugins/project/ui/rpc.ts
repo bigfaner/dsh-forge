@@ -194,13 +194,21 @@ export const FORGE_REMOTE_NAMESPACES = [
 ] as const
 
 /**
+ * 可选族 forge:* namespace 键单源（forgeSpecs = G3 spec 子 tab、forgeDirs = G1 目录行）：
+ * 在场即并入 forgeFaceOf 归一面、缺席不参与五族门控不阻断硬族解析（可选边降级语义）。
+ * 注意 forgeSpecs 不得入 ui/index.ts apply 期 inject 边声明（外插件缺席 = 子 fiber 挂死红线）。
+ */
+export const FORGE_REMOTE_OPTIONAL_NAMESPACES = ['forgeDirs', 'forgeSpecs'] as const
+
+/**
  * 五族 forge remote face 归一解析（apply 期 inject 子 fiber 解析缝消费——bug 145b3d3b
  * 真根因修口）：官方 gateway client 半 rc.2 形态 = ClientRemoteService，namespace 面
  * 物化为 remote.namespaces Map（entry {service}）+ remote.<ns> 平铺 cordis 服务，
  * ctx.remote 顶层无五族属性——旧顶层五属性校验恒 false → face 恒 undefined（fiber
  * 已激活、锚已发布、resolver 恒 undefined）。归一取法复用 namespaceFaceOf 三形态
  * 回退（Map → namespaces 对象 → 顶层属性），官方 web 舞台顶层形态与 electron dev
- * Map 形态两界同源解析；缺一族 = undefined 诚实降级。
+ * Map 形态两界同源解析；缺一族 = undefined 诚实降级。可选族（FORGE_REMOTE_OPTIONAL_
+ * NAMESPACES：forgeDirs/forgeSpecs）在场即并入归一面、缺席不参与门控——可选边降级。
  */
 export function forgeFaceOf(fiberCtx: unknown): ForgeRemoteFace | undefined {
   try {
@@ -211,6 +219,10 @@ export function forgeFaceOf(fiberCtx: unknown): ForgeRemoteFace | undefined {
       const nsFace = namespaceFaceOf(face as ForgeRemoteFace, ns)
       if (nsFace === undefined) return undefined
       normalized[ns] = nsFace
+    }
+    for (const ns of FORGE_REMOTE_OPTIONAL_NAMESPACES) {
+      const nsFace = namespaceFaceOf(face as ForgeRemoteFace, ns)
+      if (nsFace !== undefined) normalized[ns] = nsFace
     }
     return normalized as unknown as ForgeRemoteFace
   } catch {

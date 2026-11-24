@@ -231,7 +231,9 @@ export {
 // uiConversation（bug 2dde7c9e 候选 A——entry fiber 依赖表 Loader 级等待 + 后到补激活，
 // 官方 ui-secret-mask/ui-workflow-run 同配方先例；缺席宿主 entry 挂起 = fail-loud 形态，
 // reconcile failures 可见诊断）。六族 namespace 键与形状校验单源 = ui/rpc.ts（FORGE_REMOTE_
-// NAMESPACES + forgeFaceOf——bug 145b3d3b 归一修口所在，本文件零副本）。
+// NAMESPACES + FORGE_REMOTE_OPTIONAL_NAMESPACES + forgeFaceOf——bug 145b3d3b 归一修口所在，
+// 本文件零副本）。inject 子 fiber 边只声明五硬族 + remote.forgeDirs；remote.forgeSpecs
+// 禁入 inject 边（spec 外插件缺席 = 子 fiber 挂死红线），其归一走 forgeFaceOf 可选族。
 
 export const projectClient = {
   // 'remote' 边声明（官方 client-ui-forge 同型——mount.ts inject = ['remote', ...]；
