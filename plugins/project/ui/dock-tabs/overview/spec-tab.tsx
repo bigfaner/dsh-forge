@@ -15,9 +15,10 @@
 // 其余条目逐行呈现（文件行：文件名 + 格式 tag + 查看入口；子目录行：目录 tag、无查看入口
 // ——listDir 契约扩展后混合入列，经 DirEntry.kind 分流）。数据源 = forgeDirs.facts workspaceRoot
 // 锚定 + forgeFs.listDir 列 relPath 所在目录（既有 @Remote 零新端点）；列举失败 = fail-soft
-// 单行降级 + diag 留痕（不阻断元数据区渲染）。查看通道按格式分流（overview-model
-// specFileFormatOf）：markdown/html/文本 → dock 文档 tab（onOpenDoc 现状——DocsTab 内按
-// 扩展名分流渲染）；二进制/未知 → openExternal 降级（触发即忘）。
+// 单行降级 + diag 留痕（不阻断元数据区渲染）。查看通道官方唯一径（2.8 用户裁决
+// 2026-11-24：文档打开沿用官方渠道）：文档行/目录列举文件点击 = onOpenDoc → 官方
+// documentpreview（ctx.sidebarRight.openResource + sessionFileAddress——内置 markdown/
+// html/文本/图片/pdf/office 渲染）；二进制/未知 → openExternal 降级（触发即忘）。
 // ⚠ forgeFs 键归属与 f5 联动声明（判定留痕）：目录锚定用 forgeDirs.facts 的 workspaceRoot
 // ——主根项目形态下 .forge/specs 归主根；worktree 检出形态的同构错位（主根 vs worktree
 // .forge 归属）归 f5-task-key-family 聚合修口，本任务只做联动声明不重复修。

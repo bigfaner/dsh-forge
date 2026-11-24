@@ -143,7 +143,9 @@ const TOOLTIP_FILES = [
   'apps/web/src/components/ModeChip.tsx',
   'plugins/project/ui/add-project/DirectoryBrowser.tsx',
   'plugins/project/ui/add-project/RegisterForm.tsx',
-  'plugins/project/ui/dock-tabs/docs/index.tsx',
+  // 2.8 退役：plugins/project/ui/dock-tabs/docs/index.tsx（DocsTab 自绘预览 Tooltip 两位）
+  // 随 forge:docs/read 文档 tab 读取用途退役整文件删除——文档预览唯一径 = 官方
+  // documentpreview（对位迁移语义同 TOOLTIP_RETIRED_FILES；锚位不迁移——官方宿主面零产品代码）
   'plugins/knowledge/ui/DomainTree.tsx',
   'plugins/knowledge/ui/EntryDrawer.tsx',
   'plugins/knowledge/ui/KnowledgeToolbar.tsx',
@@ -171,7 +173,8 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   // RecallTab/docs/drawer/KnowledgeCardGrid×3/dock-tabs×2/EntryDrawer/ForgeWorkspacePanel +
   // bug 域新面：bug-reference/BugPreview×2、overview/bug-tab/bug-list×1
   //（feature-tab 位已随 feature 子 tab 退役出清单）
-  EmptyState: 16,
+  // 2.8 减一位：docs/index.tsx DocsTab 悬空占位 EmptyState 随自绘预览退役（文件删除）
+  EmptyState: 15,
   // 对话框标题（Modal 头部标题文本）×11：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
   // + D45 停止并归档确认）/AddProjectFlow +
   // remote/ForgeRemoteEntry×2（手机远程 dialog 头 + 1.107 PSK 轮换确认弹窗）+

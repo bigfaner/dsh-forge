@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.32.8",
+  "version": "0.33.0",
   "private": true,
   "type": "module",
   "description": "项目台：管理项目与工作树，提供项目台账、目录事实与工作区选择。",
@@ -117,6 +117,8 @@
     "@deepseek-ai/dsh-session": "0.2.2-rc.5",
     "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.2-rc.5",
     "@deepseek-ai/dsh-typert-generator": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-util-workspace-path": "0.2.2-rc.5",
     "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/core": "workspace:*",
     "@dsh-forge/lib-api": "workspace:*",
@@ -133,8 +135,7 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-qr-code": "2.2.0",
-    "typescript": "6.0.3",
-    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.5"
+    "typescript": "6.0.3"
   },
   "dependencies": {
     "zod": "4.6.6"

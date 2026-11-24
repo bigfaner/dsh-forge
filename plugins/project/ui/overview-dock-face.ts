@@ -146,8 +146,39 @@ export function registerOverviewDockFace(
     if (sessions === undefined || workspaces === undefined) {
       console.warn('[dsh-forge/project] sessions/workspaces absent at slot seating——概览自解析缝不开（无锚空态保持）')
     }
-    const inject = (): Record<string, unknown> =>
-      sessions === undefined || workspaces === undefined ? {} : { selfAnchor: { sessions, workspaces } }
+    // 官方右栏导航服务缝（2.8 文档开出改走官方 documentpreview 渠道——ctx.sidebarRight
+    // 具名服务窄面：openResource + 在屏会话快照；缺席 = 文档行非交互 fail-soft 降级）
+    const sidebarRightRaw = ctx.get('sidebarRight') as
+      | { openResource?: unknown; mounted?: { getSnapshot?: () => unknown } }
+      | undefined
+    const sidebarRight =
+      sidebarRightRaw !== undefined && typeof sidebarRightRaw.openResource === 'function'
+        ? {
+            openResource: (address: string, options?: { readonly kind?: string }): void => {
+              ;(sidebarRightRaw.openResource as (a: string, o?: { readonly kind?: string }) => void)(address, options)
+            },
+            ...(sidebarRightRaw.mounted !== undefined &&
+            typeof sidebarRightRaw.mounted.getSnapshot === 'function'
+              ? {
+                  mounted: {
+                    getSnapshot: (): string | undefined => {
+                      const id = sidebarRightRaw.mounted!.getSnapshot!()
+                      return typeof id === 'string' ? id : undefined
+                    },
+                  },
+                }
+              : {}),
+          }
+        : undefined
+    if (sidebarRight === undefined) {
+      console.warn('[dsh-forge/project] ctx.sidebarRight.openResource absent——文档开出缝不开（文档行非交互降级）')
+    }
+    const inject = (): Record<string, unknown> => ({
+      ...(sessions !== undefined && workspaces !== undefined
+        ? { selfAnchor: { sessions, workspaces } }
+        : {}),
+      ...(sidebarRight !== undefined ? { sidebarRight } : {}),
+    })
     const dispose = registerKeyedSection(slots, {
       slot: SIDEBAR_RIGHT_PANE_TAB_SLOT,
       key: DSWF_OVERVIEW_TAB_KIND,

@@ -352,12 +352,15 @@ describe('views/knowledge 知识浏览 pin（3.6）', () => {
   })
 })
 
-describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc 全量渲染唯一径）', () => {
-  it('模块面就位：tab 体 + 样式（1.8 退役清单——分段链五文件零残留）', () => {
+describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役 + 2.8 官方查看器退役 DocsTab 自绘预览）', () => {
+  it('模块面就位：样式单源保留（2.8 退役清单——DocsTab 自绘体随 forge:docs/read 读取用途退役，去官方 documentpreview）', () => {
     const DOCS = 'plugins/project/ui/dock-tabs/docs'
-    for (const f of [`${DOCS}/index.tsx`, `${DOCS}/docs.css`]) {
-      expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
-    }
+    // 2.8：docs/index.tsx（DocsTab 自绘预览本体）退役删除——css 刻度组单源（知识抽屉共享）保留
+    expect(existsSync(join(ROOT, `${DOCS}/index.tsx`)), `${DOCS}/index.tsx 已随 2.8 退役删除`).toBe(false)
+    expect(existsSync(join(ROOT, `${DOCS}/docs.css`)), `${DOCS}/docs.css 缺席`).toBe(true)
+    // 官方渠道缝在场：dock-tabs.tsx sessionFileAddress + kind 'text'（结构钉主面在 dock-tabs.test.tsx）
+    const dock = read('plugins/project/ui/dock-tabs/dock-tabs.tsx')
+    expect(dock, '文档开出官方渠道（sessionFileAddress 构造器单源）').toContain('sessionFileAddress')
     for (const f of [
       `${DOCS}/doc-segments.ts`,
       `${DOCS}/doc-segments.test.ts`,
@@ -403,34 +406,31 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
     )
   })
 
-  it('渲染纪律 + 数据面：DocBody 正文渲染唯一经 MarkdownDoc 全量渲染（官方渲染唯一包装入口——分段链退役）；数据唯一通道 = docs.read（悬空容忍）+ openExternal 恒经触发即忘包装', () => {
-    const tab = read('plugins/project/ui/dock-tabs/docs/index.tsx')
-    expect(tab, '正文全量渲染唯一经 MarkdownDoc').toContain('<MarkdownDoc')
-    expect(tab, '裸渲染器禁直用（须经 MarkdownDoc 包装）').not.toContain('MarkdownText')
-    expect(tab, '分段链退役（零共享件委托）').not.toContain('MdSegmentsBody')
-    expect(tab).toContain('client.docs.read')
-    // openExternal 触发即忘：组件回调恒经 openDocExternal 包装（失败吞不炸 tab）
-    expect(tab).toContain('export async function openDocExternal')
-    expect(tab).toContain('void openDocExternal(makeClient()')
+  it('2.8 数据面退役：forge:docs/read 文档 tab 读取用途退役（DocsTab 自绘预览删除——读取唯一径 = 官方 documentpreview host 内部），openExternal 触发即忘保留', () => {
+    // 官方渠道开出缝（dock-tabs.tsx 结构钉主面 = dock-tabs.test.tsx「结构钉」describe）
+    const dock = read('plugins/project/ui/dock-tabs/dock-tabs.tsx')
+    expect(dock, '开出 = 官方 openResource 具名服务缝').toContain('sidebarRight.openResource')
   })
 
-  it('1.4 dock tab 滚动收口 + 官方同形（1.8 双入口化）：容器 CSS 刻度组 + dock tab 自持滚动 + CodeToolbar labels 递达', () => {
+  it('1.4 dock tab 滚动收口 + 官方同形（1.8 双入口化）：容器 CSS 刻度组（知识抽屉共享单源——css 侧 pin 随 2.8 保持）', () => {
     const css = read('plugins/project/ui/dock-tabs/docs/docs.css')
     const group = css.match(/\.dswf-doc-body,\s*\.dswf-kn-md-body \{[^}]*\}/)?.[0] ?? ''
-    expect(group, '双入口官方同形容器单源（css$7 同刻度组——dock tab/知识抽屉零各自为政）').not.toBe('')
+    expect(group, '双入口官方同形容器单源（css$7 同刻度组——知识抽屉零各自为政）').not.toBe('')
     expect(group, '官方同形 white-space:normal（pre/pre-wrap 渗透收口）').toContain('white-space: normal')
     expect(group).toContain('font-family: var(--dsw-font, inherit)')
     expect(group, '官方 css$7 inset 同刻度').toContain('padding: 10px 12px')
     const bodyRule = css.match(/\.dswf-doc-body \{[^}]*\}/)?.[0] ?? ''
-    expect(bodyRule, '滚动所有权自持（dock 宿主不滚——同宿主 overview 先例同构）').toContain('overflow-y: auto')
+    expect(bodyRule, '滚动所有权自持（容器不滚——同宿主 overview 先例同构）').toContain('overflow-y: auto')
     expect(bodyRule).toContain('flex: 1')
     expect(bodyRule).toContain('min-height: 0')
     expect(bodyRule, '产品自创 margin 22/20 + flex gap 刻度退役').not.toMatch(/\b(margin|gap):/)
     expect(css, 'mermaid 图卡节奏 = 官方块级 16px（双入口同组单源）').toMatch(
       /\.dswf-doc-body \.dswf-doc-mermaid,\s*\.dswf-kn-md-body \.dswf-doc-mermaid \{[^}]*margin: 16px 0/,
     )
-    const doc = read('plugins/project/ui/dock-tabs/docs/index.tsx')
-    expect(doc, 'CodeToolbar labels 递达（冻结常量 MD_PREVIEW_MARKDOWN_LABELS 单源）').toContain(
+    // 2.8：CodeToolbar labels 递达面（docs/index.tsx）随自绘预览退役——labels 递达 pin 归
+    // 知识抽屉（EntryDrawer 内 MarkdownDoc labels 消费面零改动）
+    const drawer = read('plugins/knowledge/ui/EntryDrawer.tsx')
+    expect(drawer, 'CodeToolbar labels 递达（冻结常量 MD_PREVIEW_MARKDOWN_LABELS 单源）').toContain(
       'labels={MD_PREVIEW_MARKDOWN_LABELS}',
     )
   })
@@ -443,16 +443,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
     expect(plugin, '零预览槽注入').not.toContain("'sidebar.right.tab.document'")
   })
 
-  it('1.6 单行头收敛 pin（对齐官方预览头）：标题行/只读 chip/摘要卡退役 + 官方 PathLabel/图标件 + docs.css 新旧规则对位', () => {
-    const tab = read('plugins/project/ui/dock-tabs/docs/index.tsx')
-    expect(tab, '官方 PathLabel 复用（目录段弱化/渐隐裁剪/悬浮全值官方自带——禁自绘仿制）').toContain('PathLabel')
-    expect(tab, '重读钮 = 官方导出图标件（documentpreview reload 同源 face）').toContain('IconRefreshOutlineRegular')
-    expect(tab, '编辑器打开钮 = 官方导出图标件').toContain('IconFolderOpenOutlineRegular')
-    expect(tab, '标题行退役（标题归 tab 页签）').not.toContain('dswf-doc-head')
-    expect(tab, '摘要卡退役（摘要供给改经概览文档行悬浮）').not.toContain('dswf-doc-summary')
-    expect(tab, '头部标题纯函数随退役（零消费死代码缺席）').not.toContain('docTitle')
-    expect(tab, 'emoji 图标零残留（📁）').not.toContain('📁')
-    expect(tab, 'emoji 图标零残留（↻）').not.toContain('↻')
+  it('2.8 自绘预览头退役对位（1.6 单行头随 DocsTab 整体退役）：docs.css 退役规则清理保持 + 官方渠道在航', () => {
     const css = read('plugins/project/ui/dock-tabs/docs/docs.css')
     expect(css, '退役规则清理：head 行').not.toMatch(/\.dswf-doc-head \{/)
     expect(css, '退役规则清理：title 行').not.toMatch(/\.dswf-doc-title \{/)
@@ -462,7 +453,7 @@ describe('views/docs 文档 tab pin（3.9——1.8 渲染链退役：MarkdownDoc
     expect(css, '官方图标钮刻度组（28×28 命中区 + svg 15×15 官方同刻度 dsw-raw 镜像）').toContain('.dswf-doc-iconbtn svg')
     expect(css, '悬空 warn chip 规则保留（单行内可见性）').toContain('.dswf-doc-chip-dangling')
     // 概览文档行 summary 悬浮面随 feature 子 tab 退役批移除（DocGroupList 整树退役——
-    // 摘要悬浮承载面归零；docs tab 单行头断言面保持）
+    // 摘要悬浮承载面归零）
   })
 })
 
@@ -511,10 +502,7 @@ describe('views/knowledge 详情抽屉 pin（3.7）', () => {
 })
 
 describe('md 文档 body 渲染统一 pin（1.8 渲染链退役——MarkdownDoc 全量渲染唯一径）', () => {
-  it('官方渲染唯一径：文档 tab DocBody 与知识抽屉正文区唯一经 MarkdownDoc（labels 冻结常量单源）+ 零分段链残留引用', () => {
-    const tab = read('plugins/project/ui/dock-tabs/docs/index.tsx')
-    expect(tab).toContain('variant="body"')
-    expect(tab).toContain('labels={MD_PREVIEW_MARKDOWN_LABELS}')
+  it('官方渲染唯一径：知识抽屉正文区唯一经 MarkdownDoc（labels 冻结常量单源）+ 零分段链残留引用（2.8：文档 tab DocBody 随自绘预览退役——官方 documentpreview 唯一文档渲染径）', () => {
     const drawer = read('plugins/knowledge/ui/EntryDrawer.tsx')
     expect(drawer).toContain('variant="body"')
     expect(drawer).toContain('labels={MD_PREVIEW_MARKDOWN_LABELS}')

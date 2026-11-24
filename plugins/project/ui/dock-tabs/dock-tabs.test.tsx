@@ -1,32 +1,40 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
-// dock-tabs 单测 —— 4.1 右栏两 dock tab 装配体：地址编解码（去重键）+ tabInfo 钩子形制
-//（TabInfoReader 子件）+ 概览装配体全相位 SSR（无锚空态/三视图接线/弹窗退役记账[m3.1
-// D21/D23——本体迁 ShellHost]）+ 文档 tab body 地址解析。effect 面（事件订阅/详情拉取/
-// 桥订阅驱动）归 e2e（5.2）——renderToStaticMarkup 零 effect 同全仓口径。
+// dock-tabs 单测 —— 4.1 右栏 dock tab 装配体：legacy 地址编解码（自宿主壳兼容面）+
+// 官方渠道文档开出（2.8——openResource + sessionFileAddress）+ 概览装配体全相位 SSR
+//（无锚空态/三视图接线/弹窗退役记账[m3.1 D21/D23——本体迁 ShellHost]）。
+// effect 面（事件订阅/详情拉取/桥订阅驱动）归 e2e（5.2）——renderToStaticMarkup 零 effect
+// 同全仓口径。
+// 2.8 退役测试随迁留痕（不静默删）：原 docs/index.test.tsx（DocsTab 自绘预览/格式分流
+// docFormatOf/fetchDocContent/DocsTab 装载胶水用例）与 dock-tabs.test 原 ForgeDocsTab
+// describe 随 forge:docs/read 文档 tab 读取用途退役——去向 = 官方
+// @deepseek-ai/dsh-client-ui-sidebar-documentpreview（kind 'text'）内置渲染；本文件
+// 「结构钉」describe 承接退役后的结构面（DSWF_DOC_TAB_KIND 零注册/打开路径）。
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement, type ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import type { RpcClientFactory } from './rpc-channels.js'
 import { detailFixture } from './overview/drawer/detail-model.test.js'
 import { TransitionDialog } from './overview/drawer/transition-dialog.js'
 import {
   DSWF_DOC_ADDRESS_PREFIX,
   DSWF_OVERVIEW_TAB_KIND,
-  ForgeDocsTab,
   ForgeOverviewSectionHost,
   ForgeOverviewTab,
   OVERVIEW_KNOWLEDGE_DIR_ENTRY_KEY,
   OVERVIEW_SECTIONS_CHILDREN,
   OverviewDockAssembly,
-  TabInfoReader,
   dockDocOpener,
   forgeDocAddress,
+  forgeDocFileAddress,
+  joinForgeDocPath,
   nextTaskFocusApply,
   parseForgeDocAddress,
-  type DockTabActionsMirror,
+  type DockSidebarRightMirror,
   type OverviewSectionSlots,
   type TransitionTarget,
-  type UseDockTabInfoMirror,
 } from './dock-tabs.js'
 import { DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
 import { KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT } from '../keyed-section.js'
@@ -49,8 +57,8 @@ function freshBridge(): WorkbenchBridge {
   return createWorkbenchBridge(noopNav)
 }
 
-describe('文档 tab 地址编解码（AC3：address(docRel) 去重键）', () => {
-  it('前缀 = dsh-resource://dswf-doc/（资源面 scheme——官方 placeResource 恒要求）', () => {
+describe('文档 tab legacy 地址编解码（自宿主壳兼容面——官方宿主零打开径）', () => {
+  it('前缀 = dsh-resource://dswf-doc/（资源面 scheme——legacy 壳侧同源 pin 保持）', () => {
     expect(DSWF_DOC_ADDRESS_PREFIX).toBe('dsh-resource://dswf-doc/')
     expect(forgeDocAddress('p1', 'docs/features/x/proposal.md')).toBe(
       'dsh-resource://dswf-doc/p1/docs/features/x/proposal.md',
@@ -80,42 +88,87 @@ describe('文档 tab 地址编解码（AC3：address(docRel) 去重键）', () =
   })
 })
 
-describe('dockDocOpener 文档开出动作（AC5：文档行 → dock 开文档 tab）', () => {
-  const actions: DockTabActionsMirror = { openResource: vi.fn() }
+describe('官方渠道文档开出（2.8——ctx.sidebarRight.openResource + 官方 sessionFileAddress）', () => {
+  const forgeDirFixture = 'Z:/proj/.forge'
+  const makeClientOf = (forgeDir: string | null): RpcClientFactory =>
+    (() => ({
+      projects: {
+        get: async () => (forgeDir === null ? null : { id: 'p1', forgeDir }),
+      },
+    })) as unknown as RpcClientFactory
+  const makeSidebarRight = (): { readonly mirror: DockSidebarRightMirror; readonly openResource: ReturnType<typeof vi.fn> } => {
+    const openResource = vi.fn()
+    return {
+      openResource,
+      mirror: { openResource, mounted: { getSnapshot: () => 'sess-1' } },
+    }
+  }
 
-  it('动作面 + 项目锚齐备 → openResource(地址, {kind:"dswf-doc"})（落本 tab 窗格——官方 tab 自有动作面）', () => {
-    const open = dockDocOpener(actions, 'p1')
+  it('文档行点击 → openResource(官方 dsh-resource://file/session 地址, {kind:"text"})——地址 = 官方 sessionFileAddress 真实产物（禁手拼）', async () => {
+    const { mirror, openResource } = makeSidebarRight()
+    const open = dockDocOpener(mirror, 'p1', makeClientOf(forgeDirFixture))
     expect(open).toBeDefined()
     open!('docs/x/proposal.md')
-    expect(actions.openResource).toHaveBeenCalledWith('dsh-resource://dswf-doc/p1/docs/x/proposal.md', {
-      kind: 'dswf-doc',
-    })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(openResource).toHaveBeenCalledTimes(1)
+    // 期望地址 = 官方构造器真实产物形状（sessionId 内嵌 + forgeDir/docRel join 绝对路径）
+    expect(openResource).toHaveBeenCalledWith(
+      sessionFileAddress('sess-1', joinForgeDocPath(forgeDirFixture, 'docs/x/proposal.md')),
+      { kind: 'text' },
+    )
+    expect(openResource.mock.calls[0]?.[0]).toMatch(/^dsh-resource:\/\/file\/session\//)
+    expect(openResource.mock.calls[0]?.[0]).toBe(
+      'dsh-resource://file/session/sess-1/Z:/proj/.forge/docs/x/proposal.md',
+    )
   })
 
-  it('任一缺席 → undefined（概览文档行/抽屉参考 chip 非交互呈现）；官方动作面异常 fail-soft', () => {
-    expect(dockDocOpener(undefined, 'p1')).toBeUndefined()
-    expect(dockDocOpener(actions, null)).toBeUndefined()
-    const throwing: DockTabActionsMirror = {
+  it('forgeDocFileAddress/joinForgeDocPath 纯面：win 反斜杠归一 + 尾分隔符收口 + 空格/CJK 逐段编码', () => {
+    expect(joinForgeDocPath('Z:/proj/.forge/', 'docs\\a b\\设计.md')).toBe('Z:/proj/.forge/docs/a b/设计.md')
+    const address = forgeDocFileAddress('sess 1', 'Z:\\proj\\.forge', 'docs/a.md')
+    expect(address).toBe(sessionFileAddress('sess 1', 'Z:/proj/.forge/docs/a.md'))
+    expect(address).toMatch(/^dsh-resource:\/\/file\/session\/sess%201\/Z:\/proj\/\.forge\/docs\/a\.md$/)
+    expect(joinForgeDocPath('Z:/w', '')).toBe('Z:/w')
+  })
+
+  it('任一缺席 → undefined（服务/项目锚）；sessionId 缺席或 forgeDir 解析缺席 → 不开出 fail-soft', async () => {
+    expect(dockDocOpener(undefined, 'p1', makeClientOf(forgeDirFixture))).toBeUndefined()
+    expect(dockDocOpener(makeSidebarRight().mirror, null, makeClientOf(forgeDirFixture))).toBeUndefined()
+    const noSession = makeSidebarRight()
+    ;(noSession.mirror.mounted as { getSnapshot: () => string | undefined }).getSnapshot = () => undefined
+    dockDocOpener(noSession.mirror, 'p1', makeClientOf(forgeDirFixture))!('a.md')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(noSession.openResource).not.toHaveBeenCalled()
+    const noForgeDir = makeSidebarRight()
+    dockDocOpener(noForgeDir.mirror, 'p1', makeClientOf(null))!('a.md')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(noForgeDir.openResource).not.toHaveBeenCalled()
+  })
+
+  it('官方 openResource 抛错（无在场面）= fail-soft 不外溢', () => {
+    const throwing: DockSidebarRightMirror = {
       openResource: () => {
-        throw new Error('no surface')
+        throw new Error('no session surface is mounted')
       },
+      mounted: { getSnapshot: () => 'sess-1' },
     }
-    expect(() => dockDocOpener(throwing, 'p1')!('a.md')).not.toThrow()
+    expect(() => dockDocOpener(throwing, 'p1', makeClientOf(forgeDirFixture))!('a.md')).not.toThrow()
   })
 })
 
-describe('TabInfoReader 钩子形制（fix-33 ⑤：可选 tabInfo 钩子经子件无条件调用）', () => {
-  it('子件渲染期执行钩子读取并递入 children（渲染递_props）', () => {
-    const seen: string[] = []
-    const hook: UseDockTabInfoMirror = () => {
-      seen.push('read')
-      return { tab: { kind: 'dswf-doc', contentId: 'x' } }
-    }
-    const markup = renderToStaticMarkup(
-      <TabInfoReader hook={hook}>{(info) => <span data-seen={info.tab.contentId} />}</TabInfoReader>,
-    )
-    expect(markup).toContain('data-seen="x"')
-    expect(seen).toHaveLength(1)
+describe('结构钉（2.8 AC②）：project ui 源码零 DSWF_DOC_TAB_KIND 注册/打开路径', () => {
+  const src = readFileSync(fileURLToPath(new URL('./dock-tabs.tsx', import.meta.url)), 'utf8')
+  it('零自绘 kind 打开径（openResource(forgeDocAddress)/kind: DSWF_DOC_TAB_KIND）+ 零 DocsTab 依赖 + 零文档 tab body', () => {
+    expect(src).not.toMatch(/openResource\(forgeDocAddress/)
+    expect(src).not.toMatch(/kind:\s*DSWF_DOC_TAB_KIND/)
+    expect(src, '零 DocsTab import/渲染（自绘预览退役——注释指称豁免）').not.toMatch(/import \{ DocsTab|<DocsTab/)
+    expect(src, '零 docs/index 依赖').not.toMatch(/from '\.\/docs\/index\.js'/)
+    expect(src, '零 ForgeDocsTab 导出（文档 tab body 退役）').not.toMatch(/export (function|interface) ForgeDocsTab/)
+    // 官方渠道缝在场（sessionFileAddress 官方构造器单源 + kind 'text'）
+    expect(src).toContain('sessionFileAddress')
+    expect(src).toContain("{ kind: 'text' }")
   })
 })
 
@@ -227,35 +280,20 @@ describe('ForgeOverviewTab 概览 tab body（keyed 占用者）', () => {
     expect(markup).toContain('data-dswf-ov-unanchored')
   })
 
-  it('useTabInfo 在场（seat inject 生产面）不炸渲染；缺席（非壳载体）同径降级', () => {
-    const hook: UseDockTabInfoMirror = () => ({
-      tab: { kind: 'dswf-overview', contentId: 'sidebar://dswf-overview', actions: { openResource: () => {} } },
-    })
-    expect(renderToStaticMarkup(<ForgeOverviewTab useTabInfo={hook} makeClient={pendingClient} />)).toContain(
-      'data-dswf-ov-unanchored', // 桥缺席 → 无锚（动作面在场不改变锚定来源）
+  it('useTabInfo 缺席（2.8 已退役）与 sidebarRight 缺席（inject 缝缺席）= 概览主体照常呈现（文档行非交互降级）', () => {
+    expect(renderToStaticMarkup(<ForgeOverviewTab makeClient={pendingClient} />)).toContain(
+      'data-dswf-ov-unanchored',
     )
   })
-})
 
-describe('ForgeDocsTab 文档 tab body（keyed 占用者）', () => {
-  it('useTabInfo 缺席 = null（非壳载体降级——生产面 seat inject 恒递达）', () => {
-    expect(renderToStaticMarkup(<ForgeDocsTab />)).toBe('')
-  })
-
-  it('合法地址 → DocsTab 呈现（骨架相位——SSR 零 effect）；地址锚 = projectId#docRel', () => {
-    const hook: UseDockTabInfoMirror = () => ({
-      tab: { kind: 'dswf-doc', contentId: forgeDocAddress('p1', 'docs/features/x/proposal.md') },
-    })
-    const markup = renderToStaticMarkup(<ForgeDocsTab useTabInfo={hook} makeClient={pendingClient} />)
-    expect(markup).toContain('data-dswf-doc-panel')
-    expect(markup).toContain('data-dswf-doc-key="p1#docs/features/x/proposal.md"')
-  })
-
-  it('陈旧/非法地址（持久化布局携带）= 占位空态不炸 tab', () => {
-    const hook: UseDockTabInfoMirror = () => ({ tab: { kind: 'dswf-doc', contentId: 'sidebar://guide' } })
-    const markup = renderToStaticMarkup(<ForgeDocsTab useTabInfo={hook} makeClient={pendingClient} />)
-    expect(markup).toContain('data-dswf-doc-invalid')
-    expect(markup).toContain('文档地址无效')
+  it('sidebarRight 注入缝在场不炸渲染（文档开出走具名服务缝——SSR 静态面）', () => {
+    const sidebarRight: DockSidebarRightMirror = {
+      openResource: () => {},
+      mounted: { getSnapshot: () => 'sess-1' },
+    }
+    expect(() =>
+      renderToStaticMarkup(<ForgeOverviewTab sidebarRight={sidebarRight} makeClient={pendingClient} />),
+    ).not.toThrow()
   })
 })
 

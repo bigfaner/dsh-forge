@@ -3,13 +3,21 @@
 // keyed 槽两占用者（概览 tab 键 / 文档 tab 键——键族单源 @dsh-forge/lib-ui[裁决 5]；
 // 注册面在 client-plugin/plugin.ts 两段：
 // sidebarRightTabs.register 类型定义 + 本模块组件经 product-views 发布为 keyed body）。
-// 官方缝口径（上游 ui-sidebar-right 0.2.0-rc.2 源码核实）：
-//   - 槽声明 inject `{ hooks: { tabInfo } }` → 占用者 props 恒收 `useTabInfo`（读取 pane/
-//     tab 记录与 tab 自有动作面）；本模块经 TabInfoReader 子件消费（fix-33 ⑤ 钩子形制：
-//     可选钩子经子件无条件调用）；
-//   - 文档开出 = 概览 tab 自有动作 `tab.actions.openResource(address, {kind})`——落在
-//     概览 tab 所在窗格（「dock 开文档 tab」ui-design 流程 5）；地址 = 去重键（同地址
-//     reveal 既有 tab、异地址新开——`multiple` 类型行为）。
+// 官方缝口径（上游 ui-sidebar-right 源码核实）：
+//   - 概览 tab 占用者经 `sidebar.right.pane.tab` keyed 槽装载（inject 自解析缝——
+//     overview-dock-face.ts 装配）；文档开出经具名服务缝（见 dockDocOpener 头注）。
+// 2.8 文档开出退役自绘渠道（用户裁决 2026-11-24：文档打开沿用官方渠道，AGENTS 1.2 复用
+// 优先）：概览/Spec 文档行点击 = `ctx.sidebarRight.openResource(地址, { kind: 'text' })`
+// ——官方 documentpreview（@deepseek-ai/dsh-client-ui-sidebar-documentpreview，kind
+// 'text'，patterns `dsh-resource://file/**` + canOpen session scope，内置 markdown/html/
+// 文本/图片/pdf/office 渲染）；地址 = 官方 sessionFileAddress(sessionId, join(forgeDir,
+// docRel))（@deepseek-ai/dsh-util-workspace-path 构造器单源，禁手拼字符串）；openResource
+// 内部 require() 自取当前挂载会话动作面（概览 tab 在会话面板内则必成功），sessionId 取
+// 服务 `mounted` 在屏会话快照。forgeDir = forge:projects/get 行 forge_dir 键（overview-data
+// 同源——点击时现查非缓存）。ForgeDocsTab 文档 tab body 与 DSWF_DOC_TAB_KIND 注册/打开
+// 路径退役（forge:docs/read 文档 tab 读取用途随之退役）；DSWF_DOC_ADDRESS_PREFIX/
+// forgeDocAddress/parseForgeDocAddress 保留 = 自宿主 legacy 壳（apps/web ShellHost
+// openDocResource 路径 + 壳侧同源 pin）兼容面，官方宿主零打开径。
 // 跨树缝：概览项目上下文经工作台桥（ShellHost 锚定写回 ← knowledge-anchor 裁决）；
 // 抽屉（3.7）/转移对话框（3.8）/三视图（3.6）在本装配体内全链接通。
 // 4.2 任务聚焦消费：桥 taskFocus（会话头挂接 pill 点击 → 插件 inject face 写回）→
@@ -19,11 +27,13 @@
 // 组合多域读——编排归 core）。
 import { useCallback, useEffect, Fragment, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { TaskStatus } from '@dsh-forge/contracts'
+import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
 import { EmptyState } from '../components.js'
-import type { RpcClientFactory } from './rpc-channels.js'
+import { preloadRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
 import { anchorProjectResolver } from './anchor-resolver.js'
 import { KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT } from '../keyed-section.js'
+import './docs/docs.css'
 
 // 概览锚归属解析缝（模块级单例——引用稳定，useSelfAnchor effect deps 不逐帧重挂）
 const SELF_ANCHOR_PROJECT_RESOLVER = anchorProjectResolver()
@@ -33,7 +43,6 @@ import type { OpenSessionOrchestrator } from '../open-session.js'
 import type { BugQuickAddFn } from '../session-actions.js'
 import { TasksTab } from './overview/task-tab/task-tab.js'
 import type { TransitionTaskView } from './overview/drawer/transition-dialog.js'
-import { DocsTab } from './docs/index.js'
 import {
   initialOverviewContext,
   type ForgeOverviewContext,
@@ -42,19 +51,20 @@ import {
 } from './bridge-mirror.js'
 import { useSelfAnchor, type SelfAnchorServices } from './self-anchor.js'
 
-/** 文档 tab 类型 kind（plugin.ts DOC_TAB_KIND 结构同型镜像——plugin.test 字面量同源 pin） */
+/** 文档 tab 类型 kind（legacy 自宿主壳兼容镜像——apps/web 壳侧同源 pin 消费；官方宿主
+ * 零注册/零打开径：文档开出改走官方 documentpreview，见 dockDocOpener 头注） */
 export const DSWF_DOC_TAB_KIND = 'dswf-doc'
 /** 概览 tab 类型 kind（裁决 5 键族单源改引——lib/ui DSWF_OVERVIEW_TAB_KEY 同源镜像，包内字面量退役） */
 export const DSWF_OVERVIEW_TAB_KIND = DSWF_OVERVIEW_TAB_KEY
-/** 文档 tab 资源地址前缀（dsh-resource:// 资源面——plugin.ts DOC_ADDRESS_PREFIX 同源镜像） */
+/** 文档 tab 资源地址前缀（legacy 自绘地址 scheme——同上，官方宿主零打开径） */
 export const DSWF_DOC_ADDRESS_PREFIX = `dsh-resource://${DSWF_DOC_TAB_KIND}/`
 
-/** 文档 tab 地址（= 去重键 contentId：同 projectId+docRel 同 tab、异地址新开） */
+/** 文档 tab 地址（legacy 自宿主壳 = 去重键 contentId：同 projectId+docRel 同 tab、异地址新开） */
 export function forgeDocAddress(projectId: string, docRel: string): string {
   return `${DSWF_DOC_ADDRESS_PREFIX}${projectId}/${docRel}`
 }
 
-/** 文档 tab 地址解析（纯函数）：前缀 + `<projectId>/<docRel>`；形状非法 → null（占位面） */
+/** 文档 tab 地址解析（legacy 纯函数）：前缀 + `<projectId>/<docRel>`；形状非法 → null */
 export function parseForgeDocAddress(
   address: string,
 ): { readonly projectId: string; readonly docRel: string } | null {
@@ -65,55 +75,51 @@ export function parseForgeDocAddress(
   return { projectId: rest.slice(0, slash), docRel: rest.slice(slash + 1) }
 }
 
-/** 官方 tab 记录动作面窄面（SidebarRightTabActions 消费切片——结构同型镜像） */
-export interface DockTabActionsMirror {
-  /** 从本 tab 开资源（dock 开文档 tab——落在本 tab 所在窗格；kind 具名开） */
+/** 官方右栏导航服务窄面（ctx.sidebarRight ISidebarRight 消费切片——openResource +
+ *  在屏会话快照 `mounted`） */
+export interface DockSidebarRightMirror {
   openResource(address: string, options?: { readonly kind?: string }): void
+  readonly mounted?: { readonly getSnapshot: () => string | undefined }
 }
 
-/** 官方 tab 记录窄面（TabRecord 消费切片——contentId = 资源地址） */
-export interface DockTabRecordMirror {
-  readonly kind: string
-  readonly contentId: string
-  readonly actions?: DockTabActionsMirror
+/** forge 目录 × 文档相对键 → 绝对路径（docRel 相对 forge_dir；win 反斜杠归一、尾分隔符收口） */
+export function joinForgeDocPath(forgeDir: string, docRel: string): string {
+  const base = forgeDir.replaceAll('\\', '/').replace(/\/+$/, '')
+  const rel = docRel.replaceAll('\\', '/').replace(/^\/+/, '')
+  return rel === '' ? base : `${base}/${rel}`
 }
 
-/** useTabInfo 钩子窄面（UseSidebarRightTabInfo 消费切片——seat inject 递达物） */
-export interface UseDockTabInfoMirror {
-  (): { readonly tab: DockTabRecordMirror }
-}
-
-/**
- * tabInfo 读取子件（fix-33 ⑤ 钩子形制：可选 tabInfo 钩子经子件无条件调用——在场性
- * 中途变化不漂移；渲染面 = children 渲染递_props）。导出面 = 单测。
- */
-export function TabInfoReader({
-  hook,
-  children,
-}: {
-  readonly hook: UseDockTabInfoMirror
-  readonly children: (info: { readonly tab: DockTabRecordMirror }) => ReactNode
-}): ReactNode {
-  const info = hook()
-  return children(info)
+/** 官方文档资源地址（sessionFileAddress 官方构造器单源——禁手拼字符串；查看器只认
+ *  session 作用域地址，故 sessionId 内嵌于地址） */
+export function forgeDocFileAddress(sessionId: string, forgeDir: string, docRel: string): string {
+  return sessionFileAddress(sessionId, joinForgeDocPath(forgeDir, docRel))
 }
 
 /**
- * 文档开出动作推导（纯函数面）：tab 动作面与项目锚齐备 → `(docRel) => openResource(
- * forgeDocAddress, {kind})`（同地址去重 reveal、异地址新开——官方资源面缺省）；任一
- * 缺席 → undefined（概览文档行/抽屉参考 chip 非交互呈现）。官方动作面异常 fail-soft。
+ * 文档开出动作推导（官方渠道缝）：右栏导航服务与项目锚齐备 → `(docRel) => openResource(
+ * forgeDocFileAddress(...), { kind: 'text' })`——官方 documentpreview（kind 'text'，
+ * session 作用域）打开。sessionId = 服务 `mounted` 在屏会话快照（点击时点现取）；forgeDir
+ * = forge:projects/get 行 forge_dir 键（overview-data 同源，点击时现查非缓存）。任一缺席
+ * → undefined（概览文档行/抽屉参考 chip 非交互呈现）。解析/开出异常 fail-soft（warn 留痕
+ * ——client bundle 诊断豁免面，同 official-seams 口径），不外溢。
  */
 export function dockDocOpener(
-  tabActions: DockTabActionsMirror | undefined,
+  sidebarRight: DockSidebarRightMirror | undefined,
   projectId: string | null,
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
 ): ((docRel: string) => void) | undefined {
-  if (tabActions === undefined || projectId === null) return undefined
+  if (sidebarRight === undefined || projectId === null) return undefined
   return (docRel: string): void => {
-    try {
-      tabActions.openResource(forgeDocAddress(projectId, docRel), { kind: DSWF_DOC_TAB_KIND })
-    } catch {
-      // fail-soft：无在场面（会话卸载瞬态）——官方 openResource 抛错不外溢
-    }
+    void (async (): Promise<void> => {
+      const sessionId = sidebarRight.mounted?.getSnapshot() ?? ''
+      if (sessionId === '') throw new Error('sidebarRight.mounted 缺席——无在屏会话')
+      const project = await makeClient().projects.get(projectId)
+      const forgeDir = project === null ? '' : project.forgeDir
+      if (forgeDir === '') throw new Error(`项目 forgeDir 解析缺席（projectId=${projectId}）`)
+      sidebarRight.openResource(forgeDocFileAddress(sessionId, forgeDir, docRel), { kind: 'text' })
+    })().catch((error: unknown) => {
+      console.warn(`[dsh-forge/project] 文档开出失败（官方 documentpreview 渠道 fail-soft，projectId=${projectId}）`, error)
+    })
   }
 }
 
@@ -246,8 +252,8 @@ export interface OverviewDockBodyProps {
   readonly onOpenTask?: (taskId: string) => void
   /** ⋯ 转移预设 → 对话框（桥 openTaskTransition 写面——toStatus = 预设初选透传；缺席 = 菜单无转移项） */
   readonly onOpenTransition?: (taskId: string, toStatus?: TaskStatus) => void
-  /** 本 tab 动作面（TabInfoReader 递达；缺席 = 文档行非交互） */
-  readonly tabActions?: DockTabActionsMirror
+  /** 官方右栏导航服务（插件 inject face——文档开出缝；缺席 = 文档行非交互） */
+  readonly sidebarRight?: DockSidebarRightMirror
   /** 挂接会话 pill 跳会话（插件 inject face——uiWorkspace.openSession 闭包；缺席 = 非交互） */
   readonly onOpenSession?: (sessionId: string) => void
   /** ⟞ 打开 worker 执行子会话（S5 列表行——插件 inject face；缺席 = 按钮不呈现） */
@@ -266,7 +272,7 @@ export function OverviewDockBody({
   drawerTaskId,
   onOpenTask,
   onOpenTransition,
-  tabActions,
+  sidebarRight,
   onOpenSession,
   onOpenWorkerSession,
   openSession,
@@ -313,7 +319,7 @@ export function OverviewDockBody({
     [addBugToSession, overview.workspaceId],
   )
 
-  const onOpenDoc = dockDocOpener(tabActions, overview.projectId)
+  const onOpenDoc = dockDocOpener(sidebarRight, overview.projectId, makeClient)
 
   return (
     <OverviewDockAssembly
@@ -336,15 +342,14 @@ export function OverviewDockBody({
 
 /**
  * 概览 tab body（`sidebar.right.pane.tab` keyed 概览 tab 键占用者——product-views
- * 发布件）：tabInfo 钩子（seat inject 恒递达）经 TabInfoReader 解出动作面 → 桥订阅锚定
- * 上下文（ShellHost 写回）→ OverviewDockBody。useTabInfo 缺席（非壳载体/SSR 单测）=
- * 动作面降级（文档行非交互），概览主体照常呈现。
+ * 发布件）：桥订阅锚定上下文（ShellHost 写回）→ OverviewDockBody。官方右栏导航服务
+ * 缺席（inject 缝缺席/SSR 单测）= 文档开出降级（文档行非交互），概览主体照常呈现。
  */
 export interface ForgeOverviewTabProps {
-  /** 官方 tabInfo 钩子（seat inject `{hooks:{tabInfo}}` 递达——生产面恒在场） */
-  readonly useTabInfo?: UseDockTabInfoMirror
   /** 工作台桥（插件 inject face——锚定上下文订阅源 + 弹窗/对话框写面；缺席 = 无锚空态） */
   readonly bridge?: Pick<WorkbenchBridge, 'subscribe' | 'getSnapshot' | 'openTaskDrawer' | 'openTaskTransition'>
+  /** 官方右栏导航服务（插件 inject face——文档开出缝；缺席 = 文档行非交互呈现） */
+  readonly sidebarRight?: DockSidebarRightMirror
   /** 挂接会话 pill 跳会话（插件 inject face；缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string) => void
   /** ⟞ 打开 worker 执行子会话（S5 列表行——插件 inject face；缺席 = 按钮不呈现） */
@@ -360,13 +365,7 @@ export interface ForgeOverviewTabProps {
 }
 
 export function ForgeOverviewTab(props: ForgeOverviewTabProps): ReactNode {
-  return props.useTabInfo === undefined ? (
-    <OverviewTabWithBridge {...props} tabActions={undefined} />
-  ) : (
-    <TabInfoReader hook={props.useTabInfo}>
-      {(info) => <OverviewTabWithBridge {...props} tabActions={info.tab.actions} />}
-    </TabInfoReader>
-  )
+  return <OverviewTabWithBridge {...props} />
 }
 
 // ── 项目台插槽节宿主（fix-7——project.section.knowledge-dir 渲染消费面） ──
@@ -419,9 +418,7 @@ export function ForgeOverviewSectionHost({ renderSlot, ...tabProps }: ForgeOverv
 }
 /** 概览 tab body 桥订阅层（useSyncExternalStore 读锚定上下文 + 任务聚焦 + 弹窗受控态
  *  ——ShellHost/pill 点击写回驱动；任务行 → 弹窗/对话框经桥写面[D23 跨树通道]） */
-function OverviewTabWithBridge(
-  props: ForgeOverviewTabProps & { readonly tabActions?: DockTabActionsMirror },
-): ReactNode {
+function OverviewTabWithBridge(props: ForgeOverviewTabProps): ReactNode {
   const bridge = props.bridge
   const subscribe = useCallback(
     (onChange: () => void): (() => void) => (bridge === undefined ? () => {} : bridge.subscribe(onChange)),
@@ -462,7 +459,7 @@ function OverviewTabWithBridge(
       drawerTaskId={snapshot?.drawerTaskId ?? null}
       onOpenTask={openTask}
       onOpenTransition={openTransition}
-      tabActions={props.tabActions}
+      sidebarRight={props.sidebarRight}
       onOpenSession={props.onOpenSession}
       onOpenWorkerSession={props.onOpenWorkerSession}
       openSession={props.openSession}
@@ -472,37 +469,3 @@ function OverviewTabWithBridge(
   )
 }
 
-/**
- * 文档 tab body（`sidebar.right.pane.tab` keyed 'dswf-doc' 占用者）：tabInfo 读取
- * contentId（= 开出地址）→ 解析 `<projectId>/<docRel>` → DocsTab（3.9 本体）；地址
- * 形状非法（持久化布局携带陈旧地址等）= 占位空态不炸 tab。useTabInfo 缺席（非壳载体）
- * = null（生产面 seat inject 恒递达）。
- */
-export interface ForgeDocsTabProps {
-  /** 官方 tabInfo 钩子（seat inject 递达——contentId 读取源） */
-  readonly useTabInfo?: UseDockTabInfoMirror
-  /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
-  readonly makeClient?: RpcClientFactory
-}
-
-export function ForgeDocsTab({ useTabInfo, makeClient }: ForgeDocsTabProps): ReactNode {
-  if (useTabInfo === undefined) return null
-  return (
-    <TabInfoReader hook={useTabInfo}>
-      {(info) => {
-        const parsed = parseForgeDocAddress(info.tab.contentId)
-        return parsed === null ? (
-          <div data-dswf-doc-invalid="">
-            <EmptyState
-              className="dswf-ov-dock-empty"
-              title="文档地址无效"
-              description="该 tab 携带的文档地址无法解析——关闭后从概览重新打开。"
-            />
-          </div>
-        ) : (
-          <DocsTab projectId={parsed.projectId} docRel={parsed.docRel} makeClient={makeClient} />
-        )
-      }}
-    </TabInfoReader>
-  )
-}
