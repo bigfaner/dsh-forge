@@ -65,7 +65,12 @@ async function hostBundlePkgOf(ctx: NavLazyCtx): Promise<string | undefined> {
       | PluginManagerNs
       | undefined;
     if (ns === undefined || typeof ns.listBundles !== "function") return undefined;
-    const bundles = asBundles(await ns.listBundles());
+    // RemoteResult 信封解包（官方 manager-store 同判：listBundles 应答 = {ok, value}——
+    // bundles.ok / bundles.value.map，model-catalog modelCatalogOfEnvelope 同族）；非信封
+    // 裸数组兼容留作防御，他形 = 空清单（兜底开本包）。
+    const result = asRecord(await ns.listBundles());
+    const raw = result !== undefined && result["ok"] === true ? result["value"] : result;
+    const bundles = Array.isArray(raw) ? (raw as readonly BundleEntry[]) : [];
     const carrier = bundles.find(
       (bundle) =>
         bundle.name === EXPERT_SQUAD_PKG ||
@@ -81,9 +86,4 @@ async function hostBundlePkgOf(ctx: NavLazyCtx): Promise<string | undefined> {
 /** unknown → 对象窄化（缺席/非对象 = undefined）。 */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
-}
-
-/** listBundles 应答 → bundle 条目窄化（非数组 = 空——探针失败语义归调用方兜底）。 */
-function asBundles(value: unknown): readonly BundleEntry[] {
-  return Array.isArray(value) ? (value as readonly BundleEntry[]) : [];
 }

@@ -371,7 +371,10 @@ describe("pluginConfigJumpOf 官方导航缝", () => {
   it("solo 形态：本包自己是安装卡 → openBundle(@dsh-forge/expert-squad) 直达本包详情页", async () => {
     const { pluginConfigJumpOf } = await import("../ui/panel/config-jump.js");
     calls = [];
-    const jump = pluginConfigJumpOf(makeCtx([{ name: "@dsh-forge/expert-squad", rows: [{ moduleName: "@dsh-forge/expert-squad" }] }]))();
+    // listBundles 应答 = RemoteResult 信封 {ok, value}（官方 manager-store bundles.value 同判）
+    const jump = pluginConfigJumpOf(
+      makeCtx({ ok: true, value: [{ name: "@dsh-forge/expert-squad", rows: [{ moduleName: "@dsh-forge/expert-squad" }] }] }),
+    )();
     expect(typeof jump).toBe("function");
     await jump!();
     expect(calls).toEqual(["@dsh-forge/expert-squad"]);
@@ -381,13 +384,28 @@ describe("pluginConfigJumpOf 官方导航缝", () => {
     const { pluginConfigJumpOf } = await import("../ui/panel/config-jump.js");
     calls = [];
     const jump = pluginConfigJumpOf(
-      makeCtx([
-        { name: "@dsh-forge/forge", rows: [{ rowId: "project", moduleName: "@dsh-forge/project" }, { rowId: "expert-squad", moduleName: "@dsh-forge/expert-squad" }] },
-        { name: "@dsh-forge/other", rows: [] },
-      ]),
+      makeCtx({
+        ok: true,
+        value: [
+          { name: "@dsh-forge/forge", rows: [{ rowId: "project", moduleName: "@dsh-forge/project" }, { rowId: "expert-squad", moduleName: "@dsh-forge/expert-squad" }] },
+          { name: "@dsh-forge/other", rows: [] },
+        ],
+      }),
     )();
     await jump!();
     expect(calls).toEqual(["@dsh-forge/forge"]);
+  });
+
+  it("信封 !ok / 非信封裸数组兼容：数组形应答仍探测（防御）；!ok = 兜底开本包", async () => {
+    const { pluginConfigJumpOf } = await import("../ui/panel/config-jump.js");
+    calls = [];
+    // 裸数组防御形
+    await pluginConfigJumpOf(makeCtx([{ name: "@dsh-forge/forge", rows: [{ moduleName: "@dsh-forge/expert-squad" }] }]))()!();
+    expect(calls).toEqual(["@dsh-forge/forge"]);
+    calls = [];
+    // !ok 信封 = 空清单 → 兜底
+    await pluginConfigJumpOf(makeCtx({ ok: false, value: [] }))()!();
+    expect(calls).toEqual(["@dsh-forge/expert-squad"]);
   });
 
   it("remote 缺席 / listBundles 拒绝 / 应答非数组：兜底 openBundle(本包名)——与旧行为一致不比现状差", async () => {
