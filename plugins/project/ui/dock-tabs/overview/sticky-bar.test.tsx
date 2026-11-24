@@ -41,9 +41,9 @@ describe('StickyBar 子 tab 行（spec | 任务 | Bug 有序三枚）', () => {
     expect(markup).not.toContain('data-dswf-ov-subtab="features"')
   })
 
-  it('子 tab 按钮标签中文口径（spec/任务/Bug）', () => {
+  it('子 tab 按钮标签口径（1.2 spec 位显示名 = Spec；任务/Bug 中文）', () => {
     const markup = renderToStaticMarkup(<StickyBar {...base} subtab="tasks" search="" sort="active" />)
-    expect(markup).toContain('>spec</button>')
+    expect(markup).toContain('>Spec</button>')
     expect(markup).toContain('>任务</button>')
     expect(markup).toContain('>Bug</button>')
   })

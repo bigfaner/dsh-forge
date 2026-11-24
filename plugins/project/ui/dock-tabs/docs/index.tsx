@@ -15,6 +15,10 @@
 // 正文渲染唯一经 MarkdownDoc（官方渲染唯一包装入口——结构 pin）；mermaid 渲染零产品引用
 // （唯一引用方 = @dsh-forge/markdown-kit）；openExternal 触发即忘（失败吞——不炸 tab）；
 // 官方件零改写（PathLabel/图标消费原样）。
+// 1.2 增强（overview-dockkit-alignment）：格式分流渲染——docs.read 通道零改动，read 返回后
+// 按扩展名分流：markdown → MarkdownDoc 现状；html → sandbox iframe srcDoc（sandbox="" =
+// 全限制含脚本禁用语义）；文本 → 纯文本 pre；二进制/未知 → openExternal 降级入口
+// （触发即忘）。分流判据 = docRel 扩展名（docFormatOf 纯函数——锚 data-dswf-doc-* 机读可测）。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { DocContent } from '@dsh-forge/contracts'
 import { EmptyState, ErrorBar, SkeletonRows, StateChip } from '../../components.js'
@@ -29,6 +33,29 @@ import './docs.css'
 export interface DocsErrorInfo {
   readonly message: string
   readonly uiState: RpcUiStateKind
+}
+
+// ── 格式分流（1.2——扩展名单判据，docs.read 通道零改动）──
+
+/** 文档格式分流值域（markdown = MarkdownDoc 现状；html = sandbox iframe；text = 纯文本；
+ *  binary = openExternal 降级入口） */
+export type DocFormat = 'markdown' | 'html' | 'text' | 'binary'
+
+/** 文本格式扩展名白名单（小写、无点；白名单外含扩展名 = binary） */
+const DOC_TEXT_EXTS = new Set([
+  'txt', 'json', 'yaml', 'yml', 'css', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'sh', 'py', 'toml', 'xml', 'csv', 'log', 'ini', 'conf',
+])
+
+/** docRel 扩展名 → 格式分流（纯函数——basename 单判据） */
+export function docFormatOf(docRel: string): DocFormat {
+  const base = docRel.replaceAll('\\', '/').split('/').pop() ?? ''
+  const dot = base.lastIndexOf('.')
+  if (dot <= 0) return 'binary'
+  const ext = base.slice(dot + 1).toLowerCase()
+  if (ext === 'md' || ext === 'markdown') return 'markdown'
+  if (ext === 'html' || ext === 'htm') return 'html'
+  if (DOC_TEXT_EXTS.has(ext)) return 'text'
+  return 'binary'
 }
 
 /** 读取结果（ok/error 归一——永不 reject） */
@@ -174,13 +201,40 @@ export function DocsFrame({ projectId, docRel, phase, doc, busy, error, onReread
     )
   }
 
+  // 格式分流正文（1.2——docRel 扩展名判据；markdown = DocBody 现状唯一径不动）
+  const format = docFormatOf(docRel)
+  let body: ReactNode
+  if (format === 'html') {
+    // html 原型：sandbox iframe srcDoc（sandbox="" = 全限制——脚本禁用语义；应用零脚本注入）
+    body = <iframe className="dswf-doc-html" data-dswf-doc-html="" sandbox="" srcDoc={doc.content} title={docRel} />
+  } else if (format === 'text') {
+    // 文本格式：纯文本 pre（零 markdown 解析——只读原样呈现）
+    body = <pre className="dswf-doc-text" data-dswf-doc-text="">{doc.content}</pre>
+  } else if (format === 'binary') {
+    // 二进制/未知格式：内嵌预览降级——openExternal 入口（触发即忘现状）
+    body = (
+      <div className="dswf-doc-binary" data-dswf-doc-binary="">
+        <EmptyState
+          className="dswf-doc-dangling"
+          title="二进制/未知格式文档"
+          description="该格式不支持内嵌预览——在编辑器中打开查看。"
+        />
+        <button type="button" className="dswf-doc-iconbtn" data-dswf-doc-binary-open="" aria-label="在编辑器中打开" onClick={onOpenExternal}>
+          <IconFolderOpenOutlineRegular />
+        </button>
+      </div>
+    )
+  } else {
+    body = <DocBody content={doc.content} />
+  }
+
   return (
     <div className="dswf-doc-panel" data-dswf-doc-panel="" data-dswf-doc-key={`${projectId}#${docRel}`} aria-busy={busy}>
       {error !== undefined ? (
         <ErrorBar className="dswf-doc-error" message={`重读失败：${error.message}`} retryClassName="dswf-doc-retry" onRetry={onReread} anchor="data-dswf-doc-error" retryAnchor="data-dswf-doc-retry" />
       ) : null}
       {pathbar}
-      <DocBody content={doc.content} />
+      {body}
     </div>
   )
 }

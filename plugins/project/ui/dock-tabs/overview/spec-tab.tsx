@@ -11,12 +11,31 @@
 // rpc-channels 订阅面）→ spec 数据变更无推送重取，以手动刷新按钮兜底（声明注释即本段）。
 // chips 过滤 = 客户端承载（forgeSpecs/list statusFilter 为单值参，多选并集不可表达——
 // 提案域同款差异，非漂移）；搜索 = 服务端承载（list search 参透传——Hard Rule）。
+// 1.2 增强（overview-dockkit-alignment）：文档区目录列举——spec.md 本体行保留既有文档入口，
+// 其余文件逐行呈现（文件名 + 格式 tag + 查看入口）。数据源 = forgeDirs.facts workspaceRoot
+// 锚定 + forgeFs.listDir 列 relPath 所在目录（既有 @Remote 零新端点）；列举失败 = fail-soft
+// 单行降级 + diag 留痕（不阻断元数据区渲染）。查看通道按格式分流（overview-model
+// specFileFormatOf）：markdown/html/文本 → dock 文档 tab（onOpenDoc 现状——DocsTab 内按
+// 扩展名分流渲染）；二进制/未知 → openExternal 降级（触发即忘）。
+// ⚠ forgeFs 键归属与 f5 联动声明（判定留痕）：目录锚定用 forgeDirs.facts 的 workspaceRoot
+// ——主根项目形态下 .forge/specs 归主根；worktree 检出形态的同构错位（主根 vs worktree
+// .forge 归属）归 f5-task-key-family 聚合修口，本任务只做联动声明不重复修。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { DirListing } from '@dsh-forge/contracts'
 import { Tag, Tooltip, StateDot, type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, isoTimeLabelZh } from '../../components.js'
-import { forgeDiagEmit, type SpecCardDto, type SpecDetailDto } from '../../rpc.js'
-import { overviewSpecsRpcFactory } from './overview-client.js'
-import { hasActiveStatusFilter, isChipDisabled, searchQueryOf } from './overview-model.js'
+import { createForgeRpcClient, forgeDiagEmit, type ForgeRpcClient, type SpecCardDto, type SpecDetailDto } from '../../rpc.js'
+import { overviewRpcClientFactory, overviewSpecsRpcFactory } from './overview-client.js'
+import {
+  SPEC_FILE_FORMAT_LABELS,
+  absSpecDirOf,
+  hasActiveStatusFilter,
+  isChipDisabled,
+  joinSpecFileRel,
+  searchQueryOf,
+  specDocDirOf,
+  specFileFormatOf,
+} from './overview-model.js'
 import type { SessionOpenRequest } from './message-format.js'
 import './overview.css'
 
@@ -170,15 +189,25 @@ export interface SpecTabProps {
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** forgeSpecs 消费切片（缺省 overviewSpecsRpcFactory 真身；注入 = 测试面） */
   readonly makeSpecsClient?: typeof overviewSpecsRpcFactory
+  /** 目录列举/根锚定消费切片（forgeFs.listDir + forgeDirs.facts——缺省 ui rpc 真身；注入 = 测试面） */
+  readonly makeRpc?: () => Pick<ForgeRpcClient, 'fs' | 'dirs'>
+  /** openExternal 降级入口（缺省 = dock 通道触发即忘；注入 = 测试面） */
+  readonly onOpenExternal?: (docRel: string) => void
   /** 相对时间基准（缺省 Date.now()——测试注入固定值） */
   readonly now?: number
 }
+
+/** spec 目录列举态（单文件区——fail-soft 三支：在途/降级/条目集） */
+type SpecDirListState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'ok'; readonly entries: readonly { readonly name: string; readonly rel: string }[] }
 
 /**
  * spec 子 tab（进入 tab 拉取——本组件仅 spec 子 tab 激活期挂载，子 tab 切换卸载即清态；
  * 搜索/手动刷新 = nonce 重取；详情按行展开按需装载并按 slug 缓存）。
  */
-export function SpecTab({ projectId, search, onOpenDoc, onStartSession, makeSpecsClient = overviewSpecsRpcFactory, now }: SpecTabProps): ReactNode {
+export function SpecTab({ projectId, search, onOpenDoc, onStartSession, makeSpecsClient = overviewSpecsRpcFactory, makeRpc = () => createForgeRpcClient(), onOpenExternal, now }: SpecTabProps): ReactNode {
   const at = now ?? Date.now()
   const [load, setLoad] = useState<{ kind: 'loading' } | { kind: 'ready'; cards: readonly SpecCardDto[] } | { kind: 'error'; message: string }>({ kind: 'loading' })
   const [busy, setBusy] = useState(false)
@@ -186,7 +215,15 @@ export function SpecTab({ projectId, search, onOpenDoc, onStartSession, makeSpec
   const [activeStatuses, setActiveStatuses] = useState<ReadonlySet<SpecStatus>>(new Set())
   const [openRows, setOpenRows] = useState<ReadonlySet<string>>(new Set())
   const [details, setDetails] = useState<ReadonlyMap<string, SpecDetailDto>>(new Map())
+  const [dirLists, setDirLists] = useState<ReadonlyMap<string, SpecDirListState>>(new Map())
   const seqRef = useRef(0)
+
+  // openExternal 降级入口（缺省 = dock 通道触发即忘——失败吞不炸 tab）
+  const openExternalDoc = onOpenExternal ?? ((docRel: string): void => {
+    void overviewRpcClientFactory().docs.openExternal({ projectId, docRel }).catch(() => {
+      // 触发即忘（rpc 面口径）——不外溢
+    })
+  })
 
   // 列路：mount / projectId / search / 手动刷新 nonce（序号守卫——快速切换不串台）
   useEffect(() => {
@@ -253,6 +290,37 @@ export function SpecTab({ projectId, search, onOpenDoc, onStartSession, makeSpec
         })
     }
   }, [load, openRows, details, projectId, makeSpecsClient])
+
+  // 文档区目录列举（1.2——detail.doc 在场且非悬空触发；forgeDirs.facts workspaceRoot 锚定 +
+  // forgeFs.listDir 列 relPath 所在目录；失败 fail-soft 单行降级 + diag 留痕，不阻断元数据区）
+  useEffect(() => {
+    if (load.kind !== 'ready') return
+    const client = makeRpc()
+    for (const slug of openRows) {
+      const doc = details.get(slug)?.doc
+      if (doc === undefined || doc.dangling || dirLists.has(slug)) continue
+      setDirLists((prev) => new Map(prev).set(slug, { kind: 'loading' as const }))
+      const dirRel = specDocDirOf(doc.relPath)
+      void (async () => {
+        const facts = await client.dirs.facts(projectId)
+        const root = facts.find((row) => row.dirKey === 'workspaceRoot')?.dir ?? null
+        if (root === null) throw new Error('workspaceRoot 解析缺席')
+        return await client.fs.listDir(absSpecDirOf(root, dirRel))
+      })()
+        .then((listing: DirListing) => {
+          const docBase = doc.relPath.replaceAll('\\', '/').split('/').pop() ?? ''
+          const entries = listing.entries
+            .filter((entry) => entry.name !== docBase && entry.name !== 'spec.md')
+            .map((entry) => ({ name: entry.name, rel: joinSpecFileRel(dirRel, entry.name) }))
+          setDirLists((prev) => new Map(prev).set(slug, { kind: 'ok' as const, entries }))
+        })
+        .catch((cause: unknown) => {
+          const message = cause instanceof Error ? cause.message : String(cause)
+          forgeDiagEmit(`[spec-tab] spec 目录列举失败（slug=${slug}）——单行降级：${message}`)
+          setDirLists((prev) => new Map(prev).set(slug, { kind: 'error' as const, message }))
+        })
+    }
+  }, [load, openRows, details, dirLists, projectId, makeRpc])
 
   if (load.kind === 'error') {
     return (
@@ -364,6 +432,52 @@ export function SpecTab({ projectId, search, onOpenDoc, onStartSession, makeSpec
                         </button>
                       )}
                     </div>
+                    {/* 其余文件逐行呈现（1.2——spec.md 本体行保留既有入口不重复；格式分流查看通道） */}
+                    {detail?.doc !== undefined && !detail.doc.dangling && dirLists.has(card.slug) ? (
+                      <div className="dswf-ov-meta-row" data-dswf-ov-spec-files={card.slug}>
+                        <span className="dswf-ov-meta-k">文件</span>
+                        <span className="dswf-ov-meta-v" data-dswf-ov-spec-files-list="">
+                          {(() => {
+                            const files = dirLists.get(card.slug)!
+                            if (files.kind === 'loading') return '…'
+                            if (files.kind === 'error') return '目录列举失败（降级呈现）'
+                            if (files.entries.length === 0) return '—'
+                            return files.entries.map((entry) => {
+                              const fmt = specFileFormatOf(entry.name)
+                              return (
+                                <span className="dswf-ov-spec-file" key={entry.rel} data-dswf-ov-spec-file={entry.rel}>
+                                  <span className="dswf-ov-spec-file-name">{entry.name}</span>
+                                  <Tag tone="neutral">{SPEC_FILE_FORMAT_LABELS[fmt]}</Tag>
+                                  {fmt === 'binary' ? (
+                                    <button
+                                      type="button"
+                                      className="dswf-ov-act"
+                                      data-dswf-ov-spec-file-external={entry.rel}
+                                      onClick={() => {
+                                        openExternalDoc(entry.rel)
+                                      }}
+                                    >
+                                      在编辑器中打开
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="dswf-ov-act"
+                                      data-dswf-ov-spec-file-open={entry.rel}
+                                      onClick={() => {
+                                        onOpenDoc?.(entry.rel)
+                                      }}
+                                    >
+                                      查看
+                                    </button>
+                                  )}
+                                </span>
+                              )
+                            })
+                          })()}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

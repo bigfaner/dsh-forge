@@ -19,7 +19,7 @@ import {
 /** 三子 tab（对齐 apps/web：spec | 任务 | Bug 有序三枚；feature 子 tab 已退役，
  *  spec 子 tab 本体由 G3 任务交付） */
 export const OVERVIEW_SUBTABS = [
-  { value: 'spec', label: 'spec' },
+  { value: 'spec', label: 'Spec' },
   { value: 'tasks', label: '任务' },
   { value: 'bugs', label: 'Bug' },
 ] as const
@@ -176,3 +176,53 @@ export function activeFeatureSlug(features: readonly FeatureCard[]): string | un
 // 头摘要（overviewHeadSummary——「feature · N 会话 · N 完成」合成）已随 T1-head 裁决退役
 //（用户裁决 2026-11-23：头内容 = 项目名称 + forgeDirs 5 行目录信息，无会话统计；
 // status-chips/tasks 子 tab 的 stats 数据源保留不受影响）。
+
+// ── spec 文档区目录列举（overview-dockkit-alignment 1.2——格式分流纯投影）──
+// spec 展开文档区除 spec.md 外逐行呈现目录其余文件（文件名 + 格式 tag + 查看入口）；
+// 查看通道按格式分流：markdown/html/文本 → dock 文档 tab（DocsTab 内按扩展名分流渲染），
+// 二进制/未知 → openExternal 降级入口（触发即忘）。
+
+/** spec 目录文件格式（分流值域——docs.read 通道零改动，read 后按扩展名分流渲染） */
+export type SpecFileFormat = 'markdown' | 'html' | 'text' | 'binary'
+
+/** 文本格式扩展名白名单（小写、无点；白名单外含扩展名 = binary 降级） */
+const SPEC_TEXT_EXTS = new Set([
+  'txt', 'json', 'yaml', 'yml', 'css', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'sh', 'py', 'toml', 'xml', 'csv', 'log', 'ini', 'conf',
+])
+
+/** 扩展名 → 格式分流（纯投影；无扩展名/白名单外 = binary） */
+export function specFileFormatOf(name: string): SpecFileFormat {
+  const dot = name.lastIndexOf('.')
+  if (dot <= 0) return 'binary'
+  const ext = name.slice(dot + 1).toLowerCase()
+  if (ext === 'md' || ext === 'markdown') return 'markdown'
+  if (ext === 'html' || ext === 'htm') return 'html'
+  if (SPEC_TEXT_EXTS.has(ext)) return 'text'
+  return 'binary'
+}
+
+/** 格式中文名（格式 tag 显示单源） */
+export const SPEC_FILE_FORMAT_LABELS: Readonly<Record<SpecFileFormat, string>> = {
+  markdown: 'Markdown',
+  html: 'HTML',
+  text: '文本',
+  binary: '二进制',
+}
+
+/** doc.relPath → 所在目录 rel（posix 归一；无目录段 = ''） */
+export function specDocDirOf(relPath: string): string {
+  const norm = relPath.replaceAll('\\', '/')
+  const at = norm.lastIndexOf('/')
+  return at === -1 ? '' : norm.slice(0, at)
+}
+
+/** 目录 rel + 文件名 → 文件 rel（docs.read / openExternal 同 rel 语义） */
+export function joinSpecFileRel(dirRel: string, name: string): string {
+  return dirRel === '' ? name : `${dirRel}/${name}`
+}
+
+/** 工作区根（host 绝对）+ 目录 rel → forgeFs.listDir 绝对入参（posix 归一） */
+export function absSpecDirOf(workspaceRoot: string, dirRel: string): string {
+  const root = workspaceRoot.replaceAll('\\', '/').replace(/\/+$/, '')
+  return dirRel === '' ? root : `${root}/${dirRel}`
+}

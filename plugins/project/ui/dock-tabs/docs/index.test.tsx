@@ -18,6 +18,7 @@ import {
   DocBody,
   DocsFrame,
   DocsTab,
+  docFormatOf,
   fetchDocContent,
   initialDocViewState,
   mapDocsError,
@@ -244,6 +245,58 @@ describe('DocBody（MarkdownDoc 全量渲染——1.8 渲染链退役）', () =>
     expect(markup, '块级 wrap 钮在场（toolbarLabels 递达 = CodeToolbar 臂）').toContain('aria-label="换行"')
     expect(markup).toContain('aria-label="复制"')
     expect(markup, '未知语言回退 codeLabel 文案（官方语言名槽位）').toContain('代码')
+  })
+})
+
+describe('docFormatOf（1.2 格式分流判据——扩展名纯函数）', () => {
+  it('扩展名分流：markdown/html/文本白名单/二进制降级', () => {
+    expect(docFormatOf('docs/x.md')).toBe('markdown')
+    expect(docFormatOf('docs/x.markdown')).toBe('markdown')
+    expect(docFormatOf('specs/a/prototype.html')).toBe('html')
+    expect(docFormatOf('specs/a/page.htm')).toBe('html')
+    expect(docFormatOf('docs/notes.txt')).toBe('text')
+    expect(docFormatOf('docs/data.json')).toBe('text')
+    expect(docFormatOf('docs/cfg.yaml')).toBe('text')
+    expect(docFormatOf('docs/theme.css')).toBe('text')
+    expect(docFormatOf('docs/logo.bin')).toBe('binary')
+    expect(docFormatOf('docs/Makefile')).toBe('binary')
+    expect(docFormatOf('specs\\a\\x.md')).toBe('markdown') // win 反斜杠归一
+  })
+})
+
+describe('DocsFrame 格式分流渲染（1.2——docs.read 通道零改动，read 后按扩展名分流）', () => {
+  it('html → sandbox iframe srcdoc（sandbox="" = 脚本禁用全限制语义）', () => {
+    const markup = render(<DocsFrame {...baseFrame} docRel="specs/a/prototype.html" phase="ready" doc={{ ...PLAIN_DOC, canonicalPath: 'Z:/ws/specs/a/prototype.html', content: '<html><body><p>原型</p></body></html>' }} busy={false} />)
+    expect(markup).toContain('data-dswf-doc-html')
+    expect(markup).toContain('sandbox=""')
+    expect(markup).toContain('srcDoc=')
+    expect(markup).not.toContain('data-dswf-markdown') // 零 markdown 渲染径
+    expect(markup).toContain('data-dswf-doc-pathbar') // 单行头保留
+  })
+
+  it('文本格式 → 纯文本 pre（零 markdown 解析，只读原样）', () => {
+    const markup = render(<DocsFrame {...baseFrame} docRel="specs/a/notes.txt" phase="ready" doc={{ ...PLAIN_DOC, canonicalPath: 'Z:/ws/specs/a/notes.txt' }} busy={false} />)
+    expect(markup).toContain('data-dswf-doc-text')
+    expect(markup).toContain('纯文')
+    expect(markup).not.toContain('data-dswf-markdown')
+    expect(markup).not.toContain('<iframe')
+  })
+
+  it('二进制/未知 → openExternal 降级入口（零正文渲染）', () => {
+    const onOpenExternal = vi.fn()
+    const markup = render(<DocsFrame {...baseFrame} docRel="specs/a/logo.bin" phase="ready" doc={{ ...PLAIN_DOC, canonicalPath: 'Z:/ws/specs/a/logo.bin' }} busy={false} onOpenExternal={onOpenExternal} />)
+    expect(markup).toContain('data-dswf-doc-binary')
+    expect(markup).toContain('data-dswf-doc-binary-open')
+    expect(markup).toContain('在编辑器中打开')
+    expect(markup).not.toContain('data-dswf-markdown')
+    expect(markup).not.toContain('<iframe')
+  })
+
+  it('markdown 现状不动：.md 仍走 MarkdownDoc 唯一径（分流零回归）', () => {
+    const markup = render(<DocsFrame {...baseFrame} phase="ready" doc={READY_DOC} busy={false} />)
+    expect(markup).toContain('data-dswf-markdown')
+    expect(markup).not.toContain('<iframe')
+    expect(markup).not.toContain('data-dswf-doc-binary')
   })
 })
 

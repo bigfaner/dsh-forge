@@ -13,9 +13,14 @@ import {
   hasActiveStatusFilter,
   initialOverviewFilter,
   isChipDisabled,
+  joinSpecFileRel,
   nextSort,
+  SPEC_FILE_FORMAT_LABELS,
+  absSpecDirOf,
   searchPlaceholderOf,
   searchQueryOf,
+  specDocDirOf,
+  specFileFormatOf,
   statusFilterParam,
   switchSubtab,
   toggleHead,
@@ -30,7 +35,38 @@ const ALL_STATUS = new Set<TaskStatus>(TASK_STATUSES)
 describe('OVERVIEW_SUBTABS（spec | 任务 | Bug 有序三枚——对齐 apps/web）', () => {
   it('恰为 spec | 任务 | Bug 有序三枚；feature/提案子 tab 退役零在场', () => {
     expect(OVERVIEW_SUBTABS.map((t) => t.value)).toEqual(['spec', 'tasks', 'bugs'])
-    expect(OVERVIEW_SUBTABS.map((t) => t.label)).toEqual(['spec', '任务', 'Bug'])
+    expect(OVERVIEW_SUBTABS.map((t) => t.label)).toEqual(['Spec', '任务', 'Bug'])
+  })
+})
+
+describe('spec 文档区目录列举纯投影（1.2——格式分流 + rel 拼装）', () => {
+  it('specFileFormatOf：扩展名分流（md/html/文本白名单/二进制降级）', () => {
+    expect(specFileFormatOf('spec.md')).toBe('markdown')
+    expect(specFileFormatOf('prototype.HTML')).toBe('html')
+    expect(specFileFormatOf('page.htm')).toBe('html')
+    expect(specFileFormatOf('notes.txt')).toBe('text')
+    expect(specFileFormatOf('data.json')).toBe('text')
+    expect(specFileFormatOf('theme.css')).toBe('text')
+    expect(specFileFormatOf('cfg.yaml')).toBe('text')
+    expect(specFileFormatOf('logo.bin')).toBe('binary')
+    expect(specFileFormatOf('archive.tar.gz')).toBe('binary')
+    expect(specFileFormatOf('Makefile')).toBe('binary')
+  })
+
+  it('SPEC_FILE_FORMAT_LABELS：四键封闭 + 中文词汇', () => {
+    expect(Object.keys(SPEC_FILE_FORMAT_LABELS)).toEqual(['markdown', 'html', 'text', 'binary'])
+    expect(SPEC_FILE_FORMAT_LABELS.text).toBe('文本')
+    expect(SPEC_FILE_FORMAT_LABELS.binary).toBe('二进制')
+  })
+
+  it('specDocDirOf / joinSpecFileRel / absSpecDirOf：rel 与绝对入参拼装（posix 归一）', () => {
+    expect(specDocDirOf('.forge/specs/spec-a/spec.md')).toBe('.forge/specs/spec-a')
+    expect(specDocDirOf('spec.md')).toBe('')
+    expect(specDocDirOf('.forge\\specs\\spec-a\\spec.md')).toBe('.forge/specs/spec-a')
+    expect(joinSpecFileRel('.forge/specs/spec-a', 'proto.html')).toBe('.forge/specs/spec-a/proto.html')
+    expect(joinSpecFileRel('', 'x.txt')).toBe('x.txt')
+    expect(absSpecDirOf('Z:\\ws\\demo', '.forge/specs/spec-a')).toBe('Z:/ws/demo/.forge/specs/spec-a')
+    expect(absSpecDirOf('Z:/ws/', '')).toBe('Z:/ws')
   })
 })
 

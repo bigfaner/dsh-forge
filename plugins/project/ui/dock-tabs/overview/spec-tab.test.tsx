@@ -9,7 +9,8 @@ import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act } from 'react'
 import { installForgeRemoteFace } from '../../rpc.js'
-import type { SpecCardDto, SpecDetailDto } from '../../rpc.js'
+import type { ForgeRpcClient, SpecCardDto, SpecDetailDto } from '../../rpc.js'
+import type { DirListing } from '@dsh-forge/contracts'
 import {
   SPEC_STATUSES,
   SPEC_STATUS_LABELS,
@@ -21,6 +22,21 @@ import {
   specStatusCounts,
 } from './spec-tab.js'
 import { overviewSpecsRpcFactory } from './overview-client.js'
+
+/** 目录列举/根锚定消费切片替身（forgeFs.listDir + forgeDirs.facts——ui rpc 消费切片同型） */
+function rpcStubOf(opts: { root?: string | null; entries?: DirListing['entries']; failListDir?: boolean }): () => Pick<ForgeRpcClient, 'fs' | 'dirs'> {
+  return () => ({
+    fs: {
+      listDir: () =>
+        opts.failListDir === true
+          ? Promise.reject(new Error('目录不可达：Z:/ws/.forge/specs/spec-a（ENOENT）'))
+          : Promise.resolve<DirListing>({ path: 'Z:/ws/.forge/specs/spec-a', parentPath: 'Z:/ws/.forge/specs', entries: opts.entries ?? [] }),
+    },
+    dirs: {
+      facts: () => Promise.resolve([{ dirKey: 'workspaceRoot', dir: opts.root === undefined ? 'Z:/ws' : opts.root, description: '项目工作区根' }]),
+    },
+  })
+}
 
 function card(partial: Partial<SpecCardDto> & { slug: string }): SpecCardDto {
   return {
@@ -222,6 +238,127 @@ describe('SpecTab（数据路 + 失败两支分开 + 行形态）', () => {
     })
     expect(host.querySelector('[data-dswf-ov-specs]')).not.toBeNull()
     expect(seen[0]).toMatchObject({ projectId: 'p1', search: 'demo' })
+  })
+
+  describe('文档区目录列举（1.2——forgeFs.listDir + 格式分流查看通道）', () => {
+    const DOC_DETAIL: SpecDetailDto = {
+      ...CARDS[0]!,
+      goals: [],
+      doc: { relPath: '.forge/specs/spec-a/spec.md', dangling: false },
+    }
+
+    async function renderWithFiles(opts: { entries?: DirListing['entries']; root?: string | null; failListDir?: boolean } = {}): Promise<HTMLElement> {
+      const host = await renderSpecTab({
+        makeSpecsClient: specsClientOf(async () => CARDS, async () => DOC_DETAIL),
+        makeRpc: rpcStubOf(opts),
+        onOpenDoc: () => {},
+      })
+      const toggle = host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-toggle="spec-a"]')
+      await act(async () => {
+        toggle!.click()
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+      return host
+    }
+
+    it('展开行列举目录其余文件（spec.md 本体过滤）+ 格式 tag 逐行呈现', async () => {
+      const host = await renderWithFiles({
+        entries: [
+          { name: 'spec.md', path: 'Z:/ws/.forge/specs/spec-a/spec.md' },
+          { name: 'prototype.html', path: 'Z:/ws/.forge/specs/spec-a/prototype.html' },
+          { name: 'notes.txt', path: 'Z:/ws/.forge/specs/spec-a/notes.txt' },
+          { name: 'logo.bin', path: 'Z:/ws/.forge/specs/spec-a/logo.bin' },
+        ],
+      })
+      const files = host.querySelector('[data-dswf-ov-spec-files="spec-a"]')
+      expect(files).not.toBeNull()
+      expect(files!.textContent).not.toContain('spec.md') // 本体行保留既有文档入口，不重复列举
+      expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/prototype.html"]')?.textContent).toContain('HTML')
+      expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/notes.txt"]')?.textContent).toContain('文本')
+      expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/logo.bin"]')?.textContent).toContain('二进制')
+    })
+
+    it('查看通道分流：html/文本 → onOpenDoc（dock 文档 tab 现状）；二进制 → openExternal 降级', async () => {
+      const onOpenDoc = vi.fn()
+      const onOpenExternal = vi.fn()
+      const host = await renderSpecTab({
+        makeSpecsClient: specsClientOf(async () => CARDS, async () => DOC_DETAIL),
+        makeRpc: rpcStubOf({
+          entries: [
+            { name: 'prototype.html', path: 'Z:/ws/.forge/specs/spec-a/prototype.html' },
+            { name: 'logo.bin', path: 'Z:/ws/.forge/specs/spec-a/logo.bin' },
+          ],
+        }),
+        onOpenDoc,
+        onOpenExternal,
+      })
+      const toggle = host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-toggle="spec-a"]')
+      await act(async () => {
+        toggle!.click()
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-file-open=".forge/specs/spec-a/prototype.html"]')!.click()
+      })
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-file-external=".forge/specs/spec-a/logo.bin"]')!.click()
+      })
+      expect(onOpenDoc).toHaveBeenCalledTimes(1)
+      expect(onOpenDoc).toHaveBeenCalledWith('.forge/specs/spec-a/prototype.html')
+      expect(onOpenExternal).toHaveBeenCalledTimes(1)
+      expect(onOpenExternal).toHaveBeenCalledWith('.forge/specs/spec-a/logo.bin')
+    })
+
+    it('目录列举失败 = fail-soft 单行降级 + diag 留痕（元数据区不阻断）', async () => {
+      const diags: string[] = []
+      installForgeRemoteFace(() => undefined, (line) => diags.push(line))
+      const host = await renderWithFiles({ failListDir: true })
+      expect(host.querySelector('[data-dswf-ov-spec-files="spec-a"]')?.textContent).toContain('目录列举失败')
+      expect(host.querySelector('[data-dswf-ov-spec-meta="spec-a"]')).not.toBeNull() // 元数据区照常
+      expect(diags.some((line) => line.includes('spec 目录列举失败'))).toBe(true)
+    })
+
+    it('workspaceRoot 解析缺席（facts null）= 同 fail-soft 单行降级', async () => {
+      const host = await renderWithFiles({ root: null })
+      expect(host.querySelector('[data-dswf-ov-spec-files="spec-a"]')?.textContent).toContain('目录列举失败')
+    })
+
+    it('悬空 doc = 零目录列举（本体行悬空态现状不动）', async () => {
+      const DANGLING: SpecDetailDto = { ...CARDS[0]!, goals: [], doc: { relPath: '.forge/specs/spec-a/spec.md', dangling: true } }
+      let listDirCalls = 0
+      const host = await renderSpecTab({
+        makeSpecsClient: specsClientOf(async () => CARDS, async () => DANGLING),
+        makeRpc: () => ({
+          fs: { listDir: () => { listDirCalls += 1; return Promise.resolve({ path: '', parentPath: null, entries: [] }) } },
+          dirs: { facts: () => Promise.resolve([{ dirKey: 'workspaceRoot', dir: 'Z:/ws', description: '' }]) },
+        }),
+        onOpenDoc: () => {},
+      })
+      const toggle = host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-toggle="spec-a"]')
+      await act(async () => {
+        toggle!.click()
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(host.querySelector('[data-dswf-ov-spec-files="spec-a"]')).toBeNull()
+      expect(listDirCalls).toBe(0)
+    })
+  })
+
+  it('子 tab 显示名（1.2）：OVERVIEW_SUBTABS spec 位 label = “Spec”（键与锚不变）', async () => {
+    const { OVERVIEW_SUBTABS } = await import('./overview-model.js')
+    expect(OVERVIEW_SUBTABS.find((t) => t.value === 'spec')?.label).toBe('Spec')
   })
 })
 
