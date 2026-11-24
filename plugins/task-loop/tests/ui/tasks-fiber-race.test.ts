@@ -5,10 +5,15 @@
 //      （页内锚 resolver() 返回五族 face 无 forgeTasks），tasks-rpc fallback 永不可达；
 //   B) inject 子纤维先于 $mount 落座激活、激活回调一次性装缝——本地缝装到空 ctx 后
 //      只能靠锚回退，而锚归一面又把 forgeTasks 剥掉 → 竞态性永久空。
-// 本文件钉两组时序：
+// 本文件钉三组时序：
 //   ① 子纤维先激活（空 ctx）、forgeTasks 后物化进页内锚持有的 live ctx → forgeTasksFaceOf
 //      现查可达（修前：forgeFaceOf 五族门控 + 归一剥 forgeTasks → 恒 undefined = RED）；
-//   ② 仅 forgeTasks 在场、其余族全缺 → forgeTasksFaceOf 不被任何外族门控（AC②）。
+//   ② 仅 forgeTasks 在场、其余族全缺（含必选族 forgeWorktree 与死族 forgeFeatures）
+//      → forgeTasksFaceOf 不被任何外族门控（AC②）；
+//   ③ forgeFeatures 缺席不得门控（用户裁决 2026-11-25：feature/proposal 已退役，
+//      forgeFeatures 是零消费死 namespace）——ctx 持有 forgeTasks + forgeWorktree、
+//      不含 forgeFeatures → forgeTasksFaceOf 仍可达（变异验收：forgeFeatures 加回
+//      FORGE_REMOTE_NAMESPACES 必选族并门控时本用例必红）。
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { installForgeTasksFace, forgeTasksFaceOf } from "../../ui/tasks-rpc.js";
 import { forgeFaceOf, installForgeRemoteFace, FORGE_REMOTE_FACE_ANCHOR_KEY } from "../../ui/rpc.js";
@@ -52,6 +57,14 @@ function resetSeams(): void {
   installForgeTasksFace(() => undefined);
 }
 
+/** 断言 forgeTasksFaceOf 可达且 list/stats 读面为 function */
+function expectTasksFaceReachable(): void {
+  const face = forgeTasksFaceOf();
+  expect(face).toBeDefined();
+  expect(face?.list).toBeTypeOf("function");
+  expect(face?.stats).toBeTypeOf("function");
+}
+
 describe("forgeTasks 解析缝竞态（子纤维先激活、remote.forgeTasks 后物化）", () => {
   beforeEach(resetSeams);
   afterEach(resetSeams);
@@ -71,7 +84,7 @@ describe("forgeTasks 解析缝竞态（子纤维先激活、remote.forgeTasks �
     });
     expect(forgeTasksFaceOf()).toBeUndefined(); // 物化前诚实缺席
 
-    // 后物化：live ctx 持有 forgeWorktree + forgeTasks（真机锚 face 五族在场的同型持有位）
+    // 后物化：live ctx 持有 forgeWorktree + forgeTasks（真机锚 face 在场的同型持有位）
     const tasksFace = tasksNsFace();
     const liveCtx = {
       remote: {
@@ -82,20 +95,31 @@ describe("forgeTasks 解析缝竞态（子纤维先激活、remote.forgeTasks �
       },
     };
     installForgeRemoteFace(() => forgeFaceOf(liveCtx));
-    const face = forgeTasksFaceOf();
-    expect(face).toBeDefined();
-    expect(face?.list).toBeTypeOf("function");
-    expect(face?.stats).toBeTypeOf("function");
+    expectTasksFaceReachable();
   });
 
-  it("②仅 forgeTasks 在场、其余族全缺：forgeTasksFaceOf 不被任何外族门控（AC②）", () => {
+  it("②仅 forgeTasks 在场、其余族全缺（必选族 forgeWorktree 亦缺）：不被任何外族门控（AC②）", () => {
     const tasksFace = tasksNsFace();
     installForgeRemoteFace(() =>
       forgeFaceOf({ remote: { namespaces: new Map([["forgeTasks", { service: tasksFace }]]) } }),
     );
-    const face = forgeTasksFaceOf();
-    expect(face).toBeDefined();
-    expect(face?.list).toBeTypeOf("function");
-    expect(face?.stats).toBeTypeOf("function");
+    expectTasksFaceReachable();
+  });
+
+  it("③forgeFeatures 缺席不得门控：含 forgeTasks + forgeWorktree、不含 forgeFeatures → 可达", () => {
+    // 用户裁决 2026-11-25：feature/proposal 已退役，forgeFeatures 零消费死 namespace
+    // 不得成为任何 task-loop 读路径的门控条件（变异实验捕获的守护缺口）。
+    const tasksFace = tasksNsFace();
+    installForgeRemoteFace(() =>
+      forgeFaceOf({
+        remote: {
+          namespaces: new Map([
+            ["forgeWorktree", { service: { list: () => undefined } }],
+            ["forgeTasks", { service: tasksFace }],
+          ]),
+        },
+      }),
+    );
+    expectTasksFaceReachable();
   });
 });
