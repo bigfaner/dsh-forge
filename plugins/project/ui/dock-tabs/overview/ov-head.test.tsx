@@ -78,6 +78,14 @@ describe('OverviewHead（M3.1 D20 同位翻转钮）', () => {
     }
   })
 
+  it('目录行块 = 名称行正下方左对齐（用户红注 2026-11-24——DOM 序：名称行在前、信息块随后；信息块零右贴锚 is-tail）', () => {
+    const markup = renderToStaticMarkup(<OverviewHead {...base} open={true} />)
+    expect(markup.indexOf('dswf-ov-head-line')).toBeLessThan(markup.indexOf('dswf-ov-info'))
+    expect(markup.indexOf('dswf-ov-name')).toBeLessThan(markup.indexOf('dswf-ov-info'))
+    const infoChunk = markup.slice(markup.indexOf('dswf-ov-info'))
+    expect(infoChunk).not.toContain('is-tail') // is-tail 右贴锚只归名称行 toggle（1.3 不回归）
+  })
+
   it('行内 ghost ▾/▴ 字符形态退役（否定断言——M3.1 D20 裁决）', () => {
     const collapsed = renderToStaticMarkup(<OverviewHead {...base} open={false} />)
     const expanded = renderToStaticMarkup(<OverviewHead {...base} open={true} />)

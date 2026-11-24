@@ -81,7 +81,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--dsw-font-xs-13-line-height);
-  margin-top: var(--dsw-font-xs-13-line-height);
+  margin-top: calc(var(--dsw-font-xs-13-line-height) / 2); /* 名称行→目录行间距收紧（用户红注「间隔小一点」2026-11-24——dsw-raw 新裁决刻度：整行高令牌对照之半，同 dswf-ov-featurepage gap 减半先例；信息块左对齐紧贴名称行正下方，无右贴锚） */
 }
 
 .dswf-ov-info-row {
