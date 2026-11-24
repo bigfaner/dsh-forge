@@ -6,6 +6,7 @@
 import { updateTask, type UpdateTaskInput } from "../domain/tasks/update.js";
 import type { TaskSnapshot, TasksVerbDeps } from "../domain/tasks/types.js";
 import { parseContextEntries } from "./batch-add-tasks.js";
+import { TASK_TYPE_ENUM } from "./faces.js";
 import { optionalEnum, optionalFraction, optionalString, optionalStringArray, requireArgsObject, requiredString } from "./args.js";
 import type { TaskToolDefinition, TaskToolExecFace, TaskToolParametersSchema } from "./faces.js";
 
@@ -20,7 +21,7 @@ const UPDATE_TASK_PARAMETERS: TaskToolParametersSchema = {
     slug: { type: "string", description: "Container slug of the task being updated (feature directory name or proposal slug)." },
     local_id: { type: "string", description: "Local id of the task being updated." },
     title: { type: "string", description: "New short title." },
-    type: { type: "string", description: "New task type (see queryTask help for the vocabulary)." },
+    type: { type: "string", enum: TASK_TYPE_ENUM, description: "New task type — exact value from TASK_TYPES (family names like 'coding' are invalid)." },
     priority: { type: "string", description: "New priority, one of: P0, P1, P2." },
     estimated_time: { type: "string", description: 'Rough estimate such as "1-2h".' },
     complexity: { type: "string", description: "One of: low, medium, high." },

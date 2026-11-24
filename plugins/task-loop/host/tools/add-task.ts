@@ -5,6 +5,7 @@
 // （域层 typed 错误消息自带修正指引，零静默兼容）。
 import { addTask as domainAddTask, type AddTaskResult } from "../domain/tasks/add.js";
 import type { TaskScope, TaskType, TasksVerbDeps } from "../domain/tasks/types.js";
+import { TASK_TYPE_ENUM } from "./faces.js";
 import { parseContextEntries } from "./batch-add-tasks.js";
 import type { TaskToolDefinition, TaskToolExecFace, TaskToolParametersSchema } from "./faces.js";
 
@@ -13,7 +14,7 @@ const ADD_TASK_PARAMETERS: TaskToolParametersSchema = {
   properties: {
     slug: { type: "string", description: "Container slug (the container itself)." },
     title: { type: "string", description: "Required non-empty task title." },
-    type: { type: "string", description: "Task type (see queryTask help for the vocabulary)." },
+    type: { type: "string", enum: TASK_TYPE_ENUM, description: "Task type — exact value from TASK_TYPES (family names like 'coding' are invalid)." },
     brief: { type: "string", description: "Task brief body shown to the worker." },
     acceptance_criteria: { type: "array", items: { type: "string" }, description: "Acceptance criterion list (verbatim criterion text when decomposing from a spec)." },
     priority: { type: "string", description: "P0 | P1 | P2." },

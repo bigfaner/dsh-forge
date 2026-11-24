@@ -3,16 +3,24 @@
 // knowledge/host/tools/faces.ts 同构先例）。
 
 /** 参数 schema（注册面消费的编译后 JSON Schema 形状子集；type 固定 object 根） */
+import { TASK_TYPES } from "@dsh-forge/contracts";
+
+/** 任务 type 封闭词表 enum 单源（schema 层校验面共用——add_task/update_task 参数与
+ *  测试 pin 同消费本常量，禁各处展开复制 [...TASK_TYPES]） */
+export const TASK_TYPE_ENUM: readonly string[] = [...TASK_TYPES];
+
 export interface TaskToolParametersSchema {
   readonly type: "object";
   readonly properties: Readonly<Record<string, TaskToolParameterProperty>>;
   readonly required?: readonly string[];
 }
 
-/** 单个参数属性（官方 enforced JSON Schema subset 内的节点） */
+/** 单个参数属性（官方 enforced JSON Schema subset 内的节点；enum = 封闭词表面——
+ *  官方 harness 侧 enum 关键字大量在用，词表校验优先落 schema 层而非执行点硬检查） */
 export interface TaskToolParameterProperty {
   readonly type: "string" | "integer" | "number" | "boolean" | "array" | "object";
   readonly items?: { readonly type: "string" | "integer" | "number" | "boolean" };
+  readonly enum?: readonly string[];
   readonly description: string;
 }
 

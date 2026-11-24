@@ -228,7 +228,7 @@ const BATCH_PARAMETERS: TaskToolParametersSchema = {
     tasks: {
       type: "array",
       description:
-        "Task items. Each item: local_id (unique in batch), title, type, plus optional brief, acceptance_criteria (VERBATIM criterion text), priority (P0|P1|P2), estimated_time, scope ({\"created\",\"modified\",\"removed\"} arrays of relative paths), context (KEY=VALUE string array, keys unique), depends_on / before (local ids, in-batch or same-slug existing), source_task_slug + source_task_local_id + block_source (fix chain), breaking, coverage_threshold (0-1), complexity (low|medium|high).",
+        "Task items. Each item: local_id (unique in batch), title, type, plus optional brief, acceptance_criteria (VERBATIM criterion text), priority (P0|P1|P2), estimated_time, scope ({\"created\",\"modified\",\"removed\"} arrays of relative paths), context (KEY=VALUE string array, keys unique), depends_on / before (local ids, in-batch or same-slug existing), source_task_slug + source_task_local_id + block_source (fix chain), breaking, coverage_threshold (0-1), complexity (low|medium|high). type must be an exact TASK_TYPES value (e.g. coding-feature / coding-enhancement / coding-fix / doc / test-run — full set in queryTask help); family names like 'coding' are invalid and fail at dispatch.",
       items: { type: "string" },
     },
   },

@@ -22,7 +22,7 @@ description: 把共识终态（spec / 用户直接拆解）转化为任务容器
 
 - 粒度：一任务 = agent 一次可独立收口的委派粒度；逐 AC 映射承担——每条 AC 判据原文落到恰好一个任务的 `acceptance_criteria`（一格一 AC）。
 - 依赖排序：拆解产出按执行序排列；`depends_on` / `before` 用批内 `local_id` 表达（批内互引合法）。
-- 类型映射：按任务性质选 `type`（coding / doc / test / validation / gate / eval 族，词汇表见 query_task 帮助）。
+- 类型映射：按任务性质选 `type` 的**精确值**（如 coding-feature / coding-enhancement / coding-fix / doc / test-run——完整封闭词表见 query_task 帮助）。族名（coding / doc / test…）不是合法 type 值，照抄即派发期 fail-loud。
 - facets 提示：spec 在场时，把交付档位期望面（档位→面映射：ui / api / pure-logic / docs）经 `context` 的 `facets` 键逗号分隔预填进任务定义（如 `facets=ui,api`）——纯文本随 acceptance_criteria 走，task 侧零 spec 感知；worker 结算自报 facets ≠ 该提示时 submit_task 仅 warn 提示（不拒写）。无 spec 或无面可判时省略该键。
 - 其余格填空：`brief` 写清任务目标正文（spec 缺席时它是 worker 的唯一定义源）；`scope` 用结构化三键（created/modified/removed，相对项目根路径）；`context` 用 KEY=VALUE 数组（键唯一）。
 
