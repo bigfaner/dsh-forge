@@ -82,7 +82,7 @@ export function ForgeDocsTab({ useTabInfo, makeClient = typertRpcClientFactory }
         return parsed === null ? (
           <div data-dswf-doc-invalid="">
             <EmptyState
-              className="dswf-ov-dock-empty"
+              className="dswl-dock-empty"
               title="文档地址无效"
               description="该 tab 携带的文档地址无法解析——关闭后从概览重新打开。"
             />

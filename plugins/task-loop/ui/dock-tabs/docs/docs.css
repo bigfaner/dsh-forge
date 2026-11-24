@@ -13,6 +13,10 @@
  * 同刻度镜像（1.3 对齐官方）；图标钮 28×28 命中区 + svg 15×15 = 官方预览头 css$8
  * .tool 同刻度镜像（1.6 对齐官方——主题无间距标尺令牌）。 */
 
+/* ── dock tab 无效地址占位空态布局类：.dswl-dock-empty——仓内无对应 CSS 声明（与
+ * 迁移源 project .dswf-ov-dock-empty 同态：仅 className 标记，空态视觉由 EmptyState
+ * 基础类 dswf-empty 自持——零行为变更，样式声明刻意缺席）。 ── */
+
 /* ── 面板骨架：单行头 + 正文。滚动所有权 = 正文自持——dock 宿主不滚
  * （dockkit 内容容器零 overflow 滚动规则：lib/index.js 全量核查唯一注记 = strip 刻意
  * 裁剪防滚动容器 L2236；data-dockkit-content L3087 仅 id 属性），同宿主先例 = overview
