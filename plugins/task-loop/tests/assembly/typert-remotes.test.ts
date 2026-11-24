@@ -489,6 +489,57 @@ describe("键族聚合（2026-11-24 方案 A——快照族多键合并）", () 
     });
   }
 
+  /** 双键同形替身服务（stub——同一 taskId 在主根/worktree 两键各自域库同现的真实形态：
+   *  单 :memory: 库 task_tasks.id 主键不可同 id 双行，故以键无关注入替身模拟双键同现） */
+  function stubSvc(o: {
+    listTasks?: () => unknown[];
+    taskGraph?: () => { tasks: never[]; edges: unknown[] };
+  }): TasksService {
+    return {
+      listTasks: async () => o.listTasks?.() ?? [],
+      taskGraph: async () => o.taskGraph?.() ?? { tasks: [], edges: [] },
+      latestSettlementsByTask: async () => [],
+    } as unknown as TasksService;
+  }
+
+  /** TaskCard 最小卡（stub 注入形——域卡列面真值字段） */
+  function stubCard(taskId: string, title: string) {
+    return {
+      taskId,
+      slug: "alpha",
+      localId: "1",
+      title,
+      taskType: "coding-feature",
+      taskStatus: "pending",
+      prerequisites: [],
+      sessionCount: 0,
+      containerSlug: "alpha",
+    };
+  }
+
+  it("graph：同 taskId 双键 edge 行不双计（三元组去重键显式化——删 mergeEdges 去重此测必红）", async () => {
+    // worktree 检出含同 .forge 常态：主根键与 wt 键各自域库持同一 taskId 的同一条边行
+    const svc = stubSvc({
+      taskGraph: () => ({ tasks: [], edges: [{ taskId: "t-alpha-1", prerequisiteId: "t-alpha-1", origin: "manual" }] }),
+    });
+    const remote = familyRemote(svc);
+    const graph = await remote.graph({ projectId: "uuid-1", slug: "alpha" });
+    expect(graph.ok).toBe(true);
+    if (!graph.ok) return;
+    expect(graph.value.edges).toEqual([{ taskId: "t-alpha-1", prerequisiteId: "t-alpha-1", origin: "manual" }]);
+  });
+
+  it("list：同 taskId 双键卡片去重保首见序（主根键先行——删 mergeCards 去重此测必红）", async () => {
+    const svc = stubSvc({
+      listTasks: () => [stubCard("t-alpha-1", "主根卡")],
+    });
+    const remote = familyRemote(svc);
+    const result = await remote.list({ projectId: "uuid-1" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual([expect.objectContaining({ taskId: "t-alpha-1", title: "主根卡" })]);
+  });
+
   it("list：主根 + worktree 两键卡片合并（去重保序）", async () => {
     const svc = buildService();
     seedTask(h, "alpha", "1", { status: "pending" });

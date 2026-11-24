@@ -303,6 +303,23 @@ async function estimateBoard(svc: TasksServiceFace, keys: readonly string[], slu
   return { projectKey: keys[0] ?? "", cards: mergeCards(cards), stats: sumStats(statsRows) };
 }
 
+/** 键族边合并（graph 同径聚合——(taskId, prerequisiteId, origin) 三元组显式去重键、保首见序：
+ *  同 slug 双键（worktree 检出含同 .forge 属常态）下同一 taskId 的边行两键同现，不去重即
+ *  DAG/泳道渲染边双计——该去重分支被 tests/assembly/typert-remotes.test.ts 双键反例钉死可失败） */
+function mergeEdges(lists: readonly (readonly TaskGraphEdge[])[]): TaskGraphEdge[] {
+  const seen = new Set<string>();
+  const merged: TaskGraphEdge[] = [];
+  for (const list of lists) {
+    for (const edge of list) {
+      const dedupeKey = `${edge.taskId}\u0000${edge.prerequisiteId}\u0000${edge.origin}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      merged.push(edge);
+    }
+  }
+  return merged;
+}
+
 /** 零任务统计（解析失败 fail-soft 降级形态——八态含 0 键，域统计同形） */
 function zeroStats(): {
   total: number;
@@ -482,7 +499,7 @@ export class ForgeTasksRemote extends TypertRemoteService {
     return ok(sumStats(rows));
   }
 
-  /** 容器任务图（键族聚合——DAG/泳道渲染源：tasks 并集去重 + edges 并集，cards 全量水化） */
+  /** 容器任务图（键族聚合——DAG/泳道渲染源：tasks 并集去重 + edges 三元组并集去重，cards 全量水化） */
   @Remote
   async graph(q: TasksRemoteGraphQuery, signal?: AbortSignal): Promise<Result<TaskGraphDto>> {
     signal?.throwIfAborted();
@@ -497,7 +514,7 @@ export class ForgeTasksRemote extends TypertRemoteService {
       tasks.push(await hydrateCards(svc, key, graph.tasks));
       edges.push(...graph.edges);
     }
-    return ok({ tasks: mergeCards(tasks), edges });
+    return ok({ tasks: mergeCards(tasks), edges: mergeEdges([edges]) });
   }
 
   /** 任务详情（records/waitingOnMe/sessions/actualFiles/refs 全量水化 + AC 进度） */

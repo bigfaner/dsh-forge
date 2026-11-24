@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/task-loop",
-  "version": "0.23.3",
+  "version": "0.23.4",
   "private": true,
   "type": "module",
   "description": "任务环：把提案拆解成任务清单，自动派发执行、结算验收，全程留痕可追踪。",
