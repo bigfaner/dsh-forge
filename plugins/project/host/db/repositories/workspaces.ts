@@ -1,6 +1,12 @@
 // WorkspacesRepo——project↔workspace 关系表行级读写门（plugin-project 1.9）。裸 SQL 白名单位；
 // R4 先行 DAO（insertProjectWithMain 同事务双行）与归属键谓词 DAO（findByWsPath /
 // getKeyByMainPath）单点——调用方零裸 SQL。
+// 审计 M7 事实核查：member_role='worktree' 成员行生产从未写入——生产写径唯一 =
+// insertProjectWithMain（projects/register.ts 步 4，恒 main 行）；`insert()` 无生产调用方。
+// 依赖成员行在场的面：findByWsPath / getKeyByMainPath / getMain / getMainByWorkspaceId /
+// listByProject——全部按现库形态退化为 main 行专用读。结论：不补写 worktree 成员行——
+// worktree 身份归属已由 lib-path project-root porcelain 单源现查承担（M6 归拢同径），
+// 补写反而引入双真源漂移；`member_role` 词表保留 'worktree' 仅为 DAO toRole 防御口径。
 import type Database from '@dsh-forge/lib-db'
 import type { ProjectDbTables } from '../migrations.js'
 import type { ProjectRow, WorkspaceRow, WorkspaceMemberRole } from '../row-types.js'
