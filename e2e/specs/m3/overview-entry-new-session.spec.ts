@@ -15,7 +15,7 @@
 //
 // Fact Table 摘录（源码核实，仅 T1 断言面）：
 //   - 概览 dock = task-loop 任务概览（接管版）：tab = 任务概览，body = AC 核销板
-//     （[data-dswf-ov-panel]）；子 tab 栏零渲染（proposals 等随域退役/接管退役）；
+//     （[data-dswl-ov-panel]）；子 tab 栏零渲染（proposals 等随域退役/接管退役）；
 //   - worktree-picker 新建弹窗：[data-dswt-hero-trigger] → 「新建 worktree…」菜单项 →
 //     [data-dswt-branch-input] 分支组合框；slug 候选浮层 .dswt-branch-slug-menu
 //     （projects.list → features.list 往返异步装载，输入即过滤）——候选 = features 域单源；
@@ -87,7 +87,7 @@ test('@web-e2e @m3 概览入口·T1：概览子 tab 族（默认=任务、propos
     // proposals——proposal 域整域下线；接管版主指标 = AC 核销进度）──
     await openOverviewDock(page)
     await expect(page.locator(DOCKKIT_STRIP_TAB).filter({ hasText: '任务概览' }).first(), '概览 dock tab = 任务概览（任务域接管）').toBeVisible()
-    await expect(page.locator('[data-dswf-ov-panel]').first(), '任务概览 body 挂载（AC 核销板）').toBeVisible()
+    await expect(page.locator('[data-dswl-ov-panel]').first(), '任务概览 body 挂载（AC 核销板）').toBeVisible()
     await expect(page.locator('[data-dswf-ov-subtab]'), '子 tab 栏零渲染（proposals 等子 tab 随域退役/接管退役）').toHaveCount(0)
 
     // ── worktree-picker 新建弹窗：slug 候选 = features 域单源（唯一候选 = joe-feat）──

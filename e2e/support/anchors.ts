@@ -167,13 +167,15 @@ export const FB_ERROR = '[data-dswf-fb-error]'
 
 // ── M2 forge 管线（UF-1 概览 / UF-2 文档 / UF-3 挂接 pill / UF-4 派生行——5.2 台账） ──
 
-/** 概览 dock tab 面板（dswf-overview body 根——task-loop 1.13 接管版同锚直挂） */
+/** 概览 dock tab 面板（project 版 body 根——task-loop 单装版已前缀隔离 dswl-ov-*，见 OV_TASK_PANEL） */
 export const OV_PANEL = '[data-dswf-ov-panel]'
+/** task-loop 单装版概览面板（dswl-ov- 前缀隔离——2026-11-24 方案 A，禁与 project 的 dswf-ov-* 撞名） */
+export const OV_TASK_PANEL = '[data-dswl-ov-panel]'
 /** 概览子 tab（1.13 接管退役面——proposals|features|tasks 三签随接管版整面摘除，恒零命中；
  *  留守仅作负向断言锚） */
 export const ovSubtabOf = (subtab: string): string => `[data-dswf-ov-subtab="${subtab}"]`
-/** 接管版概览任务行（值 = taskStatus 八态；行文本 = slug/localId + title + 状态） */
-export const ovRowOf = (status: string): string => `[data-dswf-ov-row="${status}"]`
+/** 接管版概览任务行（task-loop 单装版专属锚 dswl-ov-row——值 = taskStatus 八态；行文本 = slug/localId + title + 状态） */
+export const ovRowOf = (status: string): string => `[data-dswl-ov-row="${status}"]`
 /** 概览文档行（值 = rel_path——提案/feature 子 tab 共用行语言） */
 export const ovDocRowOf = (docRel: string): string => `[data-dswf-ov-doc="${docRel}"]`
 /** 概览父行（提案/feature 展开钮——值 = 行键） */

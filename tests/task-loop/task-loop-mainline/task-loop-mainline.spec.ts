@@ -30,10 +30,10 @@
 // projectKey 口径（任务域归属键单源）：lib-path deriveDirName(ws)——与 task-loop.db
 // project_key 写点同源（db/repositories/project-key.ts 单源函数）；seed/写/读三方同锚。
 //
-// 断言锚（实锚，overview-tab.tsx R2 回填）：`data-dswf-ov-wrap/-panel/-head`、
-// `data-dswf-ov-ac`（文本 = `AC 核销 done/total（N%）`）、`data-dswf-ov-row={taskStatus}`
-// （行内文本含 slug/localId 与 done/total，未结算 = 「—」）、`data-dswf-ov-empty`、
-// `data-dswf-ov-error/-retry`。不断视觉坐标、不锁 DOM 层级。
+// 断言锚（实锚，overview-tab.tsx R2 回填）：`data-dswl-ov-wrap/-panel/-head`、
+// `data-dswl-ov-ac`（文本 = `AC 核销 done/total（N%）`）、`data-dswl-ov-row={taskStatus}`
+// （行内文本含 slug/localId 与 done/total，未结算 = 「—」）、`data-dswl-ov-empty`、
+// `data-dswl-ov-error/-retry`。不断视觉坐标、不锁 DOM 层级。
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -159,7 +159,7 @@ async function taskStats(page: Page, projectKey: string): Promise<TaskStatsView>
 
 // ── task-loop 概览 dock tab 导航（kind = dswf-overview，title locale『任务概览』——
 //    既有 openOverviewDock 面向 plugin-project『项目概览』tab，两 tab 并存不混用） ──
-const OV_BODY = '[data-dswf-ov-wrap]'
+const OV_BODY = '[data-dswl-ov-wrap]'
 
 async function openTaskOverview(page: Page): Promise<void> {
   if ((await page.locator(OV_BODY).first().isVisible().catch(() => false)) === true) return
@@ -181,7 +181,7 @@ async function openTaskOverview(page: Page): Promise<void> {
   } else {
     await entry.click()
   }
-  await expect(page.locator(OV_BODY).first(), 'task-loop 概览 tab body 挂载（dswf-ov-wrap）').toBeVisible({ timeout: 30_000 })
+  await expect(page.locator(OV_BODY).first(), 'task-loop 概览 tab body 挂载（dswl-ov-wrap）').toBeVisible({ timeout: 30_000 })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -212,12 +212,12 @@ test('@task-loop-e2e @task-loop-mainline 主线全链：建卡→依赖边→领
 
     // ── CT-MAINLINE-B4.O1（前置态）：看板只读呈现——未结算行「—」+ 零迁移 affordance ──
     await openTaskOverview(page)
-    const rowA0 = page.locator('[data-dswf-ov-row="pending"]').filter({ hasText: `${SLUG}/${a.localId}` })
+    const rowA0 = page.locator('[data-dswl-ov-row="pending"]').filter({ hasText: `${SLUG}/${a.localId}` })
     await expect(rowA0, 'B4.O1/CT-05.O3 前置：未结算任务行呈现（pending）').toBeVisible({ timeout: 30_000 })
     await expect(rowA0, '未结算行 AC 列「—」占位（CT-05.O3 计数口径）').toContainText('—')
     // B4.O1 零迁移 affordance 否定断言（Hard Rule：概览零拖拽/零 completed 直迁控件）
-    await expect(page.locator('[data-dswf-ov-rows] button'), 'B4.O1：行列表零按钮（零迁移 affordance）').toHaveCount(0)
-    await expect(page.locator('[data-dswf-ov-rows] [draggable]'), 'B4.O1：行列表零拖拽载体').toHaveCount(0)
+    await expect(page.locator('[data-dswl-ov-rows] button'), 'B4.O1：行列表零按钮（零迁移 affordance）').toHaveCount(0)
+    await expect(page.locator('[data-dswl-ov-rows] [draggable]'), 'B4.O1：行列表零拖拽载体').toHaveCount(0)
     const statsBefore = await taskStats(page, projectKey)
     // 纯读投影（bug 9543f496 修型——比对锚 = CT-02.O2 打开看板前快照，非跨 claim/submit）
     expect(statsBefore, 'B4.O1 纯读投影：打开看板前后任务域计数零变化').toEqual(stats)
@@ -245,14 +245,14 @@ test('@task-loop-e2e @task-loop-mainline 主线全链：建卡→依赖边→领
     expect(afterSettle.find((c) => c.localId === a.localId)?.taskStatus, 'list-tasks 呈现 completed 终态').toBe('completed')
 
     // ── CT-MAINLINE-05.O1：看板主指标计数 = 结算水化聚合（AN-2 计数口径） ──
-    const acLabel = page.locator('[data-dswf-ov-ac]')
+    const acLabel = page.locator('[data-dswl-ov-ac]')
     await expect(
       acLabel,
       'CT-MAINLINE-05.O1：主指标 = AC 核销 1/1（100%）——sum(done)/sum(total) 单结算行',
     ).toHaveText('AC 核销 1/1（100%）', { timeout: 15_000 })
-    const rowA = page.locator('[data-dswf-ov-row="completed"]').filter({ hasText: `${SLUG}/${a.localId}` })
+    const rowA = page.locator('[data-dswl-ov-row="completed"]').filter({ hasText: `${SLUG}/${a.localId}` })
     await expect(rowA, '已结算行行内 done/total = 最新结算行 acProgress').toContainText('1/1')
-    const rowB = page.locator('[data-dswf-ov-row="pending"]').filter({ hasText: `${SLUG}/${b.localId}` })
+    const rowB = page.locator('[data-dswl-ov-row="pending"]').filter({ hasText: `${SLUG}/${b.localId}` })
     await expect(rowB, 'CT-MAINLINE-05.O3：未结算行「—」与已结算行并存可辨').toContainText('—')
 
     // ── CT-MAINLINE-B4.O1 后效 + O2：结算门只封绕道不封正道——正道结算后看板反映终态 ──
@@ -266,9 +266,9 @@ test('@task-loop-e2e @task-loop-mainline 主线全链：建卡→依赖边→领
 
     // ── CT-MAINLINE-B5.O1/O2：spec 缺席独立收口（全程零 spec = M2 必然态） ──
     expect(await listCards(page, projectKey), 'B5.O1：任务域零 spec 相关错误信封（全链各步信封均成）').toHaveLength(2)
-    await expect(page.locator('[data-dswf-ov-empty]'), 'B5.O2：有结算数据时零「无任务数据」误降级').toHaveCount(0)
+    await expect(page.locator('[data-dswl-ov-empty]'), 'B5.O2：有结算数据时零「无任务数据」误降级').toHaveCount(0)
     await expect(
-      page.locator('[data-dswf-ov-error]'),
+      page.locator('[data-dswl-ov-error]'),
       '零错误相位（B5 任务域零报错照常收口）',
     ).toHaveCount(0)
     expect(pageErrors, 'B5：全程零 renderer 未捕获异常').toEqual([])
@@ -295,10 +295,10 @@ test('@task-loop-e2e @task-loop-mainline CT-04.O2：blocked 结算——reason �
     // O2 判定面：结算证据含非空 reason——可观察呈现 = 最新结算行零核销计数（blocked 行
     // acResults 空 → acProgress 缺席 → 行内「—」），终态 blocked（AN-2 计数口径）
     await openTaskOverview(page)
-    const row = page.locator('[data-dswf-ov-row="blocked"]').filter({ hasText: `${SLUG}/${a.localId}` })
+    const row = page.locator('[data-dswl-ov-row="blocked"]').filter({ hasText: `${SLUG}/${a.localId}` })
     await expect(row, 'blocked 行呈现终态').toBeVisible({ timeout: 30_000 })
     await expect(row, 'blocked 结算零核销计数（历史不入 done 分母）').toContainText('—')
-    await expect(page.locator('[data-dswf-ov-ac]'), '零 met 判据 = 无核销数据呈现').toHaveText('无核销数据', { timeout: 15_000 })
+    await expect(page.locator('[data-dswl-ov-ac]'), '零 met 判据 = 无核销数据呈现').toHaveText('无核销数据', { timeout: 15_000 })
   } finally {
     await closeApp(env.app)
   }
@@ -329,9 +329,9 @@ test('@task-loop-e2e @task-loop-mainline CT-04.O3：双 warn 契约——判据�
     // 事件捕获缝缺席 → 留痕 skip 同文件尾 B6.O3 口径，发射由 domain-tasks/verbs.test.ts 注入桩 pin）
     const db = openTaskLoopDb(userData)
     try {
-      const row = db.prepare<unknown[], { ac_results_json: string }>(
+      const row = db.prepare(
         `SELECT ac_results_json FROM task_settlements WHERE task_id = ? ORDER BY id DESC LIMIT 1`,
-      ).get(a.taskId)
+      ).get(a.taskId) as { ac_results_json?: string } | undefined
       const acResults = JSON.parse(row?.ac_results_json ?? '[]') as readonly { criterion: string }[]
       expect(acResults.map((r) => r.criterion), 'ac_results 携漂移判据原文（warn 不拒写——原文在账）').toEqual([DRIFTED])
     } finally {
@@ -374,7 +374,7 @@ test('@task-loop-e2e @task-loop-mainline CT-05.O2：多次结算取最新行—�
       blockClassification: { kind: 'new-problem' },
     })
     await openTaskOverview(page)
-    await expect(page.locator('[data-dswf-ov-ac]'), 'blocked 后：历史零核销计数（行「—」/无核销数据）').toHaveText(
+    await expect(page.locator('[data-dswl-ov-ac]'), 'blocked 后：历史零核销计数（行「—」/无核销数据）').toHaveText(
       '无核销数据',
       { timeout: 15_000 },
     )
@@ -387,10 +387,10 @@ test('@task-loop-e2e @task-loop-mainline CT-05.O2：多次结算取最新行—�
     })
     expect(settled.status, 'blocked→completed 直达终态').toBe('completed')
     await expect(
-      page.locator('[data-dswf-ov-ac]'),
+      page.locator('[data-dswl-ov-ac]'),
       'CT-05.O2：呈现只反映最新行（done/total = 最新 acProgress）',
     ).toHaveText('AC 核销 1/1（100%）', { timeout: 15_000 })
-    const row = page.locator('[data-dswf-ov-row="completed"]').filter({ hasText: `${SLUG}/${a.localId}` })
+    const row = page.locator('[data-dswl-ov-row="completed"]').filter({ hasText: `${SLUG}/${a.localId}` })
     await expect(row, '最新行计数呈现、blocked 态历史计数不残留').toContainText('1/1')
   } finally {
     await closeApp(env.app)
@@ -404,9 +404,9 @@ test('@task-loop-e2e @task-loop-mainline B6：零数据降级呈现「无任务�
   try {
     // B6.O1：投影消费面零任务数据 → 降级容器锚在场、计数占位、零错误弹层
     await openTaskOverview(page)
-    await expect(page.locator('[data-dswf-ov-empty]'), 'B6.O1：降级容器锚「无任务数据」在场').toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('[data-dswf-ov-ac]'), 'B6.O1：计数占位呈现').toHaveText('无核销数据')
-    await expect(page.locator('[data-dswf-ov-error]'), 'B6.O1：零错误相位（不报错）').toHaveCount(0)
+    await expect(page.locator('[data-dswl-ov-empty]'), 'B6.O1：降级容器锚「无任务数据」在场').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('[data-dswl-ov-ac]'), 'B6.O1：计数占位呈现').toHaveText('无核销数据')
+    await expect(page.locator('[data-dswl-ov-error]'), 'B6.O1：零错误相位（不报错）').toHaveCount(0)
     expect(pageErrors, 'B6.O1：零未处理异常（不崩）').toEqual([])
     // B6.O2：结算到达（复用桥三枚链）→ 降级态消失、AC 进度计数正常
     const a = await addCard(env, '降级恢复任务', [AC_A])
@@ -421,9 +421,9 @@ test('@task-loop-e2e @task-loop-mainline B6：零数据降级呈现「无任务�
     // 重开 tab（keyed body 非激活即卸载——切离再切回 = 真实重挂载）
     await openOverviewDock(page)
     await openTaskOverview(page)
-    await expect(page.locator('[data-dswf-ov-empty]'), 'B6.O2：降级锚离场（不锁存）').toHaveCount(0, { timeout: 15_000 })
+    await expect(page.locator('[data-dswl-ov-empty]'), 'B6.O2：降级锚离场（不锁存）').toHaveCount(0, { timeout: 15_000 })
     await expect(
-      page.locator('[data-dswf-ov-ac]'),
+      page.locator('[data-dswl-ov-ac]'),
       'B6.O2：AC 进度计数正常呈现（CT-05.O1 口径）',
     ).toHaveText('AC 核销 1/1（100%）', { timeout: 15_000 })
   } finally {

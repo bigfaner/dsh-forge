@@ -81,54 +81,54 @@ export function OverviewFrame({
   const acLabel =
     ac.cards === 0 ? "无核销数据" : ac.total === 0 ? "AC 核销 0/0" : `AC 核销 ${ac.done}/${ac.total}（${Math.round((ac.done / ac.total) * 100)}%）`;
   return (
-    <div className="dswf-ov-wrap" data-dswf-ov-wrap="">
-      <div className="dswf-ov-panel" data-dswf-ov-panel="">
-        <div className="dswf-ov-head" data-dswf-ov-head="">
-          <span className="dswf-ov-title" data-dswf-ov-title="">
+    <div className="dswl-ov-wrap" data-dswl-ov-wrap="">
+      <div className="dswl-ov-panel" data-dswl-ov-panel="">
+        <div className="dswl-ov-head" data-dswl-ov-head="">
+          <span className="dswl-ov-title" data-dswl-ov-title="">
             {projectId ?? "任务概览"}
           </span>
-          <span className="dswf-ov-ac" data-dswf-ov-ac="">
+          <span className="dswl-ov-ac" data-dswl-ov-ac="">
             {acLabel}
           </span>
         </div>
         {phase === "loading" ? (
-          <div className="dswf-ov-skeleton" data-dswf-ov-skeleton="" />
+          <div className="dswl-ov-skeleton" data-dswl-ov-skeleton="" />
         ) : phase === "error" ? (
-          <div className="dswf-ov-error" data-dswf-ov-error="">
+          <div className="dswl-ov-error" data-dswl-ov-error="">
             <span>概览装载失败：{error ?? ""}</span>
-            <button className="dswf-ov-retry" data-dswf-ov-retry="" onClick={onRetry}>
+            <button className="dswl-ov-retry" data-dswl-ov-retry="" onClick={onRetry}>
               重试
             </button>
           </div>
         ) : board === undefined || board.cards.length === 0 ? (
-          <div className="dswf-ov-empty" data-dswf-ov-empty="">
+          <div className="dswl-ov-empty" data-dswl-ov-empty="">
             无任务数据
           </div>
         ) : (
           <>
-            <div className="dswf-ov-chips" data-dswf-ov-chips="">
+            <div className="dswl-ov-chips" data-dswl-ov-chips="">
               {STATUS_ORDER.map((status) => (
                 <button
                   key={status}
                   className={
-                    "dswf-ov-chip" + (activeStatuses.has(status) ? " dswf-ov-chip-active" : "") + (counts[status] === 0 ? " dswf-ov-chip-zero" : "")
+                    "dswl-ov-chip" + (activeStatuses.has(status) ? " dswl-ov-chip-active" : "") + (counts[status] === 0 ? " dswl-ov-chip-zero" : "")
                   }
-                  data-dswf-ov-chip={status}
+                  data-dswl-ov-chip={status}
                   onClick={() => (activeStatuses.has(status) ? onClearStatuses() : onToggleStatus(status))}
                 >
                   {status} · {counts[status]}
                 </button>
               ))}
             </div>
-            <ul className="dswf-ov-rows" data-dswf-ov-rows="">
+            <ul className="dswl-ov-rows" data-dswl-ov-rows="">
               {cards.map((card) => (
-                <li key={card.taskId} className="dswf-ov-row" data-dswf-ov-row={card.taskStatus}>
-                  <span className="dswf-ov-row-key">
+                <li key={card.taskId} className="dswl-ov-row" data-dswl-ov-row={card.taskStatus}>
+                  <span className="dswl-ov-row-key">
                     {card.slug}/{card.localId}
                   </span>
-                  <span className="dswf-ov-row-title">{card.title}</span>
-                  <span className="dswf-ov-row-status">{card.taskStatus}</span>
-                  <span className="dswf-ov-row-ac">{card.acProgress === undefined ? "—" : `${card.acProgress.done}/${card.acProgress.total}`}</span>
+                  <span className="dswl-ov-row-title">{card.title}</span>
+                  <span className="dswl-ov-row-status">{card.taskStatus}</span>
+                  <span className="dswl-ov-row-ac">{card.acProgress === undefined ? "—" : `${card.acProgress.done}/${card.acProgress.total}`}</span>
                 </li>
               ))}
             </ul>

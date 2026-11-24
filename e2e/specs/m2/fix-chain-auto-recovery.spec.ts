@@ -14,7 +14,7 @@
 //   - 两级去重（add.ts）：任务级 = 同源同型未终态复用（reused=true 纯读零变更）；
 //   - 环守卫：ERR_CYCLE_DETECTED「检测到依赖环：<环路径>」（B.5-1 同构）；链深守卫：
 //     ERR_CHAIN_DEPTH_EXCEEDED「fix 链深超限：新任务将处第 N 级（上限 6）」（C6 裁决）；
-//   - 概览（Step 5）：task-loop 接管版行 [data-dswf-ov-row="<status>"]（旧三视图/
+//   - 概览（Step 5）：task-loop 接管版行 [data-dswl-ov-row="<status>"]（旧三视图/
 //     子 tab 族随接管退役——视图切换/泳道/DAG 断言面退役，接管版承接测试不在本批重写）。
 //   - rescue fix 结算核销门（submit.ts bug faf0ca57②）：fix 任务 success 必带非空
 //     ac_results（[{criterion, met}]）——零核销拒写。
@@ -46,7 +46,7 @@ import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openTaskLoopDbFull } from '../../support/sqlite.js'
-import { OV_PANEL, ovRowOf } from '../../support/anchors.js'
+import { OV_TASK_PANEL, ovRowOf } from '../../support/anchors.js'
 import { openOverviewDock } from '../../support/navigation.js'
 
 // ── 共享 launch fixture（各用例独立 feature slug 隔离账本面；.forge 任务账本跨用例存续
@@ -162,7 +162,7 @@ test('@web-e2e @m2 fix链·冒烟：受阻→建链→修复→恢复→三视�
     // ── Step 5：概览即时反映（task-loop 接管版锚——旧三视图/子 tab 族随接管退役，
     //    视图切换/泳道/DAG 断言面退役，接管版承接测试不在本批重写）──
     await openOverviewDock(page)
-    await expect(page.locator(OV_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(OV_TASK_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ovRowOf('pending'), { hasText: `${FEATURE}/` }).first(), '列表：源任务行在场（恢复后 pending）').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ovRowOf('completed'), { hasText: '修复任务 F' }).first(), '列表：fix 任务行在场（completed）').toBeVisible({ timeout: 30_000 })
     // 读面即时（写入返回后单次重取即见——Step 5 Output）

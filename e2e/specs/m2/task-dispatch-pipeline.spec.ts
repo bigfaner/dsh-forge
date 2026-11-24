@@ -1,4 +1,4 @@
-﻿// @feature:dsh-forge-m2-pipeline @web-e2e
+// @feature:dsh-forge-m2-pipeline @web-e2e
 // gen-test-scripts 产物 —— Journey: task-dispatch-pipeline（T-test-gen-scripts）。
 // 断言源 = docs/features/dsh-forge-m2-pipeline/testing/task-dispatch-pipeline/contracts/
 //   step-{1..6}-*.md（eval-contract 991/1100 通过——七旅程最高分）。
@@ -13,8 +13,8 @@
 //   · 事件面 = driver.events()（主进程 tasks-changed 记账）。
 //
 // Fact Table 摘录（源码核实）：
-//   - 概览面（Step 6）：task-loop 接管版 [data-dswf-ov-panel]（task-loop ui/overview/
-//     overview-tab.tsx）+ 行 [data-dswf-ov-row="<status>"]（slug/localId 行键文本）——
+//   - 概览面（Step 6）：task-loop 接管版 [data-dswl-ov-panel]（task-loop ui/overview/
+//     overview-tab.tsx）+ 行 [data-dswl-ov-row="<status>"]（slug/localId 行键文本）——
 //     旧概览子 tab 族（proposals/features/tasks）随 1.13 接管退役，锚随迁接管版；
 //   - dispatchPrompt 表格单源（compose.ts）：元数据表格（| 键 | 值 |——TASK_ID 行
 //     `| TASK_ID | <slug>/<localId> |`）+ `# {title}` 正文首行 + 三段正文 + `<resume>` 尾段
@@ -57,7 +57,7 @@ import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../supp
 import { projectKeyOf } from '../../../e2e/support/project-key.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openTaskLoopDbFull } from '../../support/sqlite.js'
-import { OV_PANEL, ovRowOf } from '../../support/anchors.js'
+import { OV_TASK_PANEL, ovRowOf } from '../../support/anchors.js'
 import { openOverviewDock } from '../../support/navigation.js'
 
 // ── 共享 launch fixture（各用例独立 feature slug 隔离账本面；.forge 任务账本跨用例存续
@@ -71,7 +71,7 @@ const { test } = createSharedLaunchFixture({
 /** 派发/执行会话 id（审计双源相异可判——S8：混存两形态，断言用等值非前缀判型） */
 const DISP_SESSION = 'e2e-tdp-dispatch-s1'
 const EXEC_SESSION = 'e2e-tdp-executor-x1'
-/** 任务行状态值锚（task-loop 接管版概览行投影原始态值——data-dswf-ov-row 值域） */
+/** 任务行状态值锚（task-loop 接管版概览行投影原始态值——data-dswl-ov-row 值域） */
 const DONE_STATUS = 'completed'
 const BLOCKED_STATUS = 'blocked'
 const PENDING_STATUS = 'pending'
@@ -182,13 +182,13 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
 
     // ── Step 6（概览即时）：dock 开概览（task-loop 接管版——旧子 tab 族退役）→ 行呈新状态 ──
     await openOverviewDock(page)
-    await expect(page.locator(OV_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(OV_TASK_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
     const row = page.locator(ovRowOf(DONE_STATUS), { hasText: `${added.slug}/` }).first()
     await expect(row, '概览任务行在场（写入后浏览即见）').toBeVisible({ timeout: 30_000 })
     // 即时判据（读面）：写入返回后单次重取即见 completed——无 watch 无同步延迟
     const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE })
     expect(cards.find((c) => c.taskId === added.taskId)?.taskStatus, '概览列表单发重取即见 completed').toBe('completed')
-    await expect(page.locator(OV_PANEL).first(), '概览面板持续在场（读路径活跃无阻塞）').toBeVisible()
+    await expect(page.locator(OV_TASK_PANEL).first(), '概览面板持续在场（读路径活跃无阻塞）').toBeVisible()
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
 })
@@ -406,7 +406,7 @@ test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入�
 
     // 概览即时见 blocked（UI 面 + 读面单发——task-loop 接管版锚）
     await openOverviewDock(page)
-    await expect(page.locator(OV_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(OV_TASK_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
     const row = page.locator(ovRowOf(BLOCKED_STATUS), { hasText: `${added.slug}/` }).first()
     await expect(row, '概览任务行在场').toBeVisible({ timeout: 30_000 })
     const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectKey, slug: FEATURE })
@@ -472,7 +472,7 @@ test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期�
 
     // 前置：概览页签打开且读路径活跃（用户正在浏览——task-loop 接管版锚）
     await openOverviewDock(page)
-    await expect(page.locator(OV_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(OV_TASK_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ovRowOf(PENDING_STATUS), { hasText: `${added.slug}/` }).first(), '浏览态：pending 行在场').toBeVisible({ timeout: 30_000 })
 
     // 浏览进行中执行写动词（claim → submit）——WAL 读写并发，UI 不冻结不阻塞
@@ -487,7 +487,7 @@ test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期�
     expect(endCards.find((c) => c.taskId === added.taskId)?.taskStatus, 'submit 写入返回后单发重取即见 completed（不丢更新）').toBe('completed')
 
     // UI 读路径仍活跃（未冻结）：面板在场 + 行状态事件驱动收敛
-    await expect(page.locator(OV_PANEL).first(), '概览面板持续在场（互不阻塞）').toBeVisible()
+    await expect(page.locator(OV_TASK_PANEL).first(), '概览面板持续在场（互不阻塞）').toBeVisible()
     await expect(page.locator(ovRowOf(DONE_STATUS), { hasText: `${added.slug}/` }).first(), '行状态收敛为新值', ).toBeVisible({ timeout: 30_000 })
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])

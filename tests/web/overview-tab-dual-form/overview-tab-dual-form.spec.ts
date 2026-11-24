@@ -11,11 +11,11 @@
 //   [实锚吻合] AN-1 = 官方 dockkit strip tab 机械锚（e2e/support/anchors.ts
 //       DOCKKIT_STRIP_TAB 同源——a-faces-direct-mount dockStripTab 同词汇）。
 //   [disc-HIF-A-1] AN-2 意向锚 data-dswf-overview-ac-progress 未实现——AC 进度段实锚 =
-//       data-dswf-ov-ac（task-loop OverviewSeat AC 统计段根，
+//       data-dswl-ov-ac（task-loop OverviewSeat AC 统计段根，
 //       plugins/task-loop/ui/overview/overview-tab.tsx:90）。coding 锚义务未核销，
 //       义务履行归 fix/disc 链；本 spec 以实锚承载同语义断言。
 //   [disc-HIF-A-2] AN-3 意向锚 data-dswf-taskloop-overview-body 未实现——单装 body
-//       实锚 = data-dswf-ov-wrap（overview-tab.tsx:84 OverviewSeat 根）。且集成形态
+//       实锚 = data-dswl-ov-wrap（overview-tab.tsx:84 OverviewSeat 根）。且集成形态
 //       AC 段复用同一 OverviewSeat 组件渲染，wrap 锚两形态均在座——形态判定经
 //       「project 概览主体锚在座 = project 拥有 body」组合承载（AN-4 占用者归属的
 //       DOM 双证面）。
@@ -36,11 +36,11 @@
 //       sticky/AN-2 双缺席；project 单装 = sticky 在座 + task-loop 专属残段锚（AN-2/chip/row）缺席。
 //       （wrap 两形态均在座——独立 body 消失断言以 sticky 唯一承载，同 INV-A2 口径。）
 //   [fix-9 残段判据判别性 2026-11-18] bug d8dac1f3 修口——project 单装「task-loop 残段」
-//       判据弃共用锚 data-dswf-ov-wrap（task-loop overview-tab.tsx:84 与 project
+//       判据弃共用锚 data-dswl-ov-wrap（task-loop overview-tab.tsx:84 与 project
 //       OverviewTab.tsx:224 均渲染；project 单装 wrap=1 属 project 自有概览根，作判据即假红，
 //       1.13/007 轮 r1 定谳 + cdp/w113-ct56-wrapforensic.mjs 归属取证）。改锚 task-loop
-//       专属残段标记缺席：AN-2 data-dswf-ov-ac、题写 chip data-dswf-ov-chip、行列表
-//       data-dswf-ov-row（均仅 task-loop OverviewFrame 渲染，project 零此词汇）；
+//       专属残段标记缺席：AN-2 data-dswl-ov-ac、题写 chip data-dswl-ov-chip、行列表
+//       data-dswl-ov-row（均仅 task-loop OverviewFrame 渲染，project 零此词汇）；
 //       project 自有锚 sticky 仍作正面断言保留。契约 last_anchor_sync 同步。
 //
 // 驱动面（fix-8 移植——通道实锚词汇，不臆造）：
@@ -303,8 +303,8 @@ async function assertIntegratedForm(page: Page, label: string): Promise<void> {
     `${label}：默认子 tab = tasks（feature 消费面退役形态）`,
   ).toBeVisible({ timeout: 10_000 })
   await expect(
-    page.locator('[data-dswf-ov-ac]').first(),
-    `${label}：AC 进度段在座（dswf-overview.ac-progress 子槽落座——AN-2 实锚 data-dswf-ov-ac）`,
+    page.locator('[data-dswl-ov-ac]').first(),
+    `${label}：AC 进度段在座（dswf-overview.ac-progress 子槽落座——AN-2 实锚 data-dswl-ov-ac）`,
   ).toBeVisible({ timeout: 30_000 })
   expect(await overviewFamilyTabs(page).count(), `${label}：概览族 tab 数 = 1（400b3952 回归锚）`).toBe(1)
   expect(await page.locator('[data-dswf-ov-sticky]').count(), `${label}：渲染主体唯一（无叠加——INV-A2）`).toBe(1)
@@ -312,14 +312,14 @@ async function assertIntegratedForm(page: Page, label: string): Promise<void> {
 }
 
 /** task-loop 单装形态断言面（CT-3-O1/CT-4-O1 同语义复用）。
- *  fix-8 锚调和：AN-2 意向锚语义 = project AC 进度段，实锚 data-dswf-ov-ac = task-loop
+ *  fix-8 锚调和：AN-2 意向锚语义 = project AC 进度段，实锚 data-dswl-ov-ac = task-loop
  *  OverviewSeat AC 统计段根（overview-tab.tsx:90）——task-loop 单装形态下该段随 seat 合法
  *  在座（disc-HIF-A-1 实锚两形态同席），「AN-2 零残留」不可经此锚承载；project 段零残留
  *  以 sticky 缺席唯一承载（project 唯一锚，同 INV-A2 口径）。 */
 async function assertTaskLoopOnlyForm(page: Page, label: string): Promise<void> {
   await expect(
-    page.locator('[data-dswf-ov-wrap]').first(),
-    `${label}：task-loop 单装 body 在座（AN-3 实锚 data-dswf-ov-wrap）`,
+    page.locator('[data-dswl-ov-wrap]').first(),
+    `${label}：task-loop 单装 body 在座（AN-3 实锚 data-dswl-ov-wrap）`,
   ).toBeVisible({ timeout: 30_000 })
   expect(await page.locator('[data-dswf-ov-sticky]').count(), `${label}：project 概览主体零残留（回切单装——sticky 为 project 唯一承载锚）`).toBe(0)
   await expect(overviewFamilyTabs(page).first(), `${label}：概览 tab 在座（INV-A1——零空壳）`).toBeVisible({ timeout: 30_000 })
@@ -332,9 +332,9 @@ async function assertProjectOnlyForm(page: Page, label: string): Promise<void> {
   const unanchored = page.locator('[data-dswf-ov-unanchored]').first()
   if (!projectRegistered && (await unanchored.count()) > 0) {
     await expect(unanchored, `${label}：project 概览 body 在座（未锚定空态锚——project 独占 tab）`).toBeVisible({ timeout: 30_000 })
-    expect(await page.locator('[data-dswf-ov-ac]').count(), `${label}：AN-2 AC 段零在座（task-loop 缺席）`).toBe(0)
-    expect(await page.locator('[data-dswf-ov-chip]').count(), `${label}：task-loop 题写 chip 零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
-    expect(await page.locator('[data-dswf-ov-row]').count(), `${label}：task-loop 行列表零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
+    expect(await page.locator('[data-dswl-ov-ac]').count(), `${label}：AN-2 AC 段零在座（task-loop 缺席）`).toBe(0)
+    expect(await page.locator('[data-dswl-ov-chip]').count(), `${label}：task-loop 题写 chip 零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
+    expect(await page.locator('[data-dswl-ov-row]').count(), `${label}：task-loop 行列表零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
     await expect(overviewTab(page), `${label}：概览 tab 在座（INV-A1）`).toBeVisible({ timeout: 30_000 })
     expect(await overviewFamilyTabs(page).count(), `${label}：概览族 tab 数 = 1`).toBe(1)
     expect(harness.consoleErrors.filter((e) => e.startsWith('pageerror')), `${label}：零未捕获异常（INV-A4）`).toEqual([])
@@ -344,9 +344,9 @@ async function assertProjectOnlyForm(page: Page, label: string): Promise<void> {
     page.locator('[data-dswf-ov-sticky]').first(),
     `${label}：project 概览主体在座（project 独占 tab）`,
   ).toBeVisible({ timeout: 30_000 })
-  expect(await page.locator('[data-dswf-ov-ac]').count(), `${label}：AN-2 AC 段零在座（task-loop 缺席）`).toBe(0)
-  expect(await page.locator('[data-dswf-ov-chip]').count(), `${label}：task-loop 题写 chip 零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
-  expect(await page.locator('[data-dswf-ov-row]').count(), `${label}：task-loop 行列表零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
+  expect(await page.locator('[data-dswl-ov-ac]').count(), `${label}：AN-2 AC 段零在座（task-loop 缺席）`).toBe(0)
+  expect(await page.locator('[data-dswl-ov-chip]').count(), `${label}：task-loop 题写 chip 零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
+  expect(await page.locator('[data-dswl-ov-row]').count(), `${label}：task-loop 行列表零在座（fix-9 判别性残段锚——仅 task-loop 渲染）`).toBe(0)
   await expect(overviewTab(page), `${label}：概览 tab 在座（INV-A1）`).toBeVisible({ timeout: 30_000 })
   expect(await overviewFamilyTabs(page).count(), `${label}：概览族 tab 数 = 1`).toBe(1)
   expect(harness.consoleErrors.filter((e) => e.startsWith('pageerror')), `${label}：零未捕获异常（INV-A4）`).toEqual([])

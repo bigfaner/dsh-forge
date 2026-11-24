@@ -28,7 +28,7 @@
 //     UF-3 派发按钮随 task-loop 概览接管退役）；
 //   · 账本断言/受控初态 = task-loop.db 单源（openTaskLoopDbFull + readDogfoodAuditLoop
 //     ——fix-8 族④B 批一/二同口径；submit 载荷自 task_settlements 就近投影）；
-//   · UI 全景尾段 = task-loop 接管版概览锚（OV_PANEL + ovRowOf——旧子 tab/容器 pill/
+//   · UI 全景尾段 = task-loop 接管版概览锚（OV_TASK_PANEL + ovRowOf——旧子 tab/容器 pill/
 //     派发按钮断言面随接管退役）。
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -52,7 +52,7 @@ import {
 } from '../../support/replay/dogfood-record.js'
 import { findFixtureSession, waitForSessionEvents } from '../../support/session-files.js'
 import { awaitNoLateModals, newBlankSession } from '../../support/m3.js'
-import { COMPOSER_INPUT, CONVERSATION_CONTENT, OV_PANEL, ovRowOf } from '../../support/anchors.js'
+import { COMPOSER_INPUT, CONVERSATION_CONTENT, OV_TASK_PANEL, ovRowOf } from '../../support/anchors.js'
 import { writeReplayPlan, type ReplayPlan } from '../../../packages/plugin-forge/src/spawn/seam.js'
 import { projectKeyOf } from '../../support/project-key.js'
 
@@ -850,9 +850,9 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     const gitStatus = execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' })
     expect(gitStatus, 'SC3 收口：夹具仓干净（一切 worker 产物经 git 提交——管线纪律）').toBe('')
 
-    // ── AC2/AC3 断言面：概览全景一致（task-loop 接管版锚——OV_PANEL + 状态行投影） ──
+    // ── AC2/AC3 断言面：概览全景一致（task-loop 接管版锚——OV_TASK_PANEL + 状态行投影） ──
     await openOverviewDock(page)
-    await expect(page.locator(OV_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(OV_TASK_PANEL).first(), '接管版概览面板在场').toBeVisible({ timeout: 30_000 })
     for (const t of tasks) {
       const row = page.locator(ovRowOf('completed'), { hasText: `${FEATURE}/${t.localId}` }).first()
       await expect(row, `概览任务行终态全景一致：${t.localId}（UI = db 直读——SC2②）`).toBeVisible({ timeout: 30_000 })
