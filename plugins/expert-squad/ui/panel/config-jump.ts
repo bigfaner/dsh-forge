@@ -10,7 +10,7 @@
 // （判定键只有本包名——装进任何聚合 bundle 自动生效）。探针缺席/失败 = 兜底仍开
 // openBundle(本包名)（与旧行为一致，不比现状差）。
 
-import { remoteValueOf } from "@dsh-forge/lib-util";
+import { remoteValueOf } from "./remote-envelope.js";
 
 /** 本插件包名（插件详情页定位键——detail.section subject.pkg.name 门控同源）。 */
 export const EXPERT_SQUAD_PKG = "@dsh-forge/expert-squad";
@@ -67,8 +67,8 @@ async function hostBundlePkgOf(ctx: NavLazyCtx): Promise<string | undefined> {
       | PluginManagerNs
       | undefined;
     if (ns === undefined || typeof ns.listBundles !== "function") return undefined;
-    // RemoteResult 信封解包（跨插件单源 lib-util remoteValueOf——官方 manager-store 同判：
-    // listBundles 应答 = {ok, value}；!ok/非信封 = undefined → 空清单兜底开本包）。
+    // RemoteResult 信封解包（客户端本地纯函数副本 remote-envelope——语义同 lib-util
+    // 单源正本：listBundles 应答 = {ok, value}；!ok/非信封 = undefined → 空清单兜底开本包）。
     const raw = remoteValueOf(await ns.listBundles());
     const bundles = Array.isArray(raw) ? (raw as readonly BundleEntry[]) : [];
     const carrier = bundles.find(

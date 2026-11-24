@@ -1,11 +1,12 @@
 // panel/model-catalog —— 「设置>模型」目录读缝（provider/model 选项值源）：
 // 惰性 ctx.reflect.get('remote.session')（'remote' 嵌套双径）→ modelCatalog() 解信封
-// → [{provider, models}]（信封解包 = lib-util remoteValueOf 跨插件单源——client 半
+// → [{provider, models}]（信封解包 = 客户端本地纯函数副本 remote-envelope——语义同
+// lib-util 单源正本，client 半零 node 依赖；
 // remote 消费点族先例）。apps/web client-plugin reflectServiceGet 同径先例（惰性
 // fail-soft 取法——inputTriggers 注册面同径）；缺席/调用拒绝/信封失败 = undefined，
 // 组件面回退纯文本输入语义（FilterSelect box 显当前值），不炸 Dialog。
 
-import { remoteValueOf } from "@dsh-forge/lib-util";
+import { remoteValueOf } from "./remote-envelope.js";
 
 /** 目录条目（官方 ModelCatalog groups 切片——bundle 自持禁跨包 import）。 */
 export interface ModelCatalogEntry {
