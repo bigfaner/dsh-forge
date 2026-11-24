@@ -24,7 +24,7 @@ import {
 } from '../../../scripts/package-release.mjs'
 
 /** 最小合成成员包（dist + skills + patch + client bundle 声明面与真仓同构；自带插行=solo 语义在五件侧） */
-function writeMember(root, short, version) {
+function writeMember(root: string, short: string, version: string) {
   const dir = join(root, 'plugins', short)
   mkdirSync(join(dir, 'dist', 'host'), { recursive: true })
   mkdirSync(join(dir, 'skills'), { recursive: true })
@@ -98,7 +98,7 @@ describe('discoverPackages（字段驱动六包发现）', () => {
 })
 
 describe('assembleRelease（bundle 发布树结构 + solo 剥离 + manifest）', () => {
-  let root, outDir
+  let root: string, outDir: string
   beforeEach(() => {
     root = writeFixtureRepo()
     outDir = join(mkdtempSync(join(tmpdir(), 'dshf-pkgrel-out-')), 'tree')
@@ -107,7 +107,7 @@ describe('assembleRelease（bundle 发布树结构 + solo 剥离 + manifest）',
     rmSync(root, { recursive: true, force: true })
     rmSync(dirnameOf(outDir), { recursive: true, force: true })
   })
-  const dirnameOf = (p) => p.replace(/[\\/][^\\/]+$/, '')
+  const dirnameOf = (p: string): string => p.replace(/[\\/][^\\/]+$/, '')
 
   it('发布树结构：六包共置 + files 条目拷贝完整 + forge 依赖重写相对 file: + devDeps/scripts 剥离', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
@@ -133,7 +133,7 @@ describe('assembleRelease（bundle 发布树结构 + solo 剥离 + manifest）',
     const manifest = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'))
     expect(manifest.packages['@dsh-forge/alpha']).toEqual({ version: '0.26.1', dir: 'alpha' })
     expect(manifest.packages['@dsh-forge/forge'].version).toBe('0.1.3')
-    expect(manifest.channels.bundle).toEqual({ dir: 'bundle/forge', deps: { '@dsh-forge/alpha': 'file:./members/alpha', '@dsh-forge/beta': 'file:./members/beta' } })
+    expect(manifest.channels.bundle).toEqual({ dir: 'bundle', deps: { '@dsh-forge/alpha': 'file:./members/alpha', '@dsh-forge/beta': 'file:./members/beta' } })
     expect(manifest.channels.deep).toBeUndefined()
   })
 
@@ -209,12 +209,12 @@ describe('assembleRelease（bundle 发布树结构 + solo 剥离 + manifest）',
   it('zip 产出：非空产物落盘', () => {
     const { zipPath } = assembleRelease({ repoRoot: root, outDir, zip: true, freshness: false })
     expect(zipPath).not.toBeUndefined()
-    expect(statSync(zipPath).size).toBeGreaterThan(0)
+    expect(statSync(zipPath!).size).toBeGreaterThan(0)
   })
 })
 
 describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——staging 孤立根除）', () => {
-  let root, outDir
+  let root: string, outDir: string
   beforeEach(() => {
     root = writeFixtureRepo()
     outDir = join(mkdtempSync(join(tmpdir(), 'dshf-pkgrel-out-')), 'tree')
@@ -223,43 +223,43 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     rmSync(root, { recursive: true, force: true })
     rmSync(dirnameOf(outDir), { recursive: true, force: true })
   })
-  const dirnameOf = (p) => p.replace(/[\\/][^\\/]+$/, '')
+  const dirnameOf = (p: string): string => p.replace(/[\\/][^\\/]+$/, '')
 
   it('bundle 结构：forge 壳 + members/<pkg> 全闭包（files 条目齐备）+ 依赖改指 file:./members/<pkg>', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     for (const rel of [
-      'bundle/forge/package.json',
-      'bundle/forge/cordis.patch.yml',
-      'bundle/forge/members/alpha/package.json',
-      'bundle/forge/members/alpha/dist/client.js',
-      'bundle/forge/members/alpha/dist/host/index.js',
-      'bundle/forge/members/alpha/skills/demo.md',
-      'bundle/forge/members/alpha/cordis.patch.yml',
-      'bundle/forge/members/beta/package.json',
-      'bundle/forge/members/beta/dist/client.js',
+      'bundle/package.json',
+      'bundle/cordis.patch.yml',
+      'bundle/members/alpha/package.json',
+      'bundle/members/alpha/dist/client.js',
+      'bundle/members/alpha/dist/host/index.js',
+      'bundle/members/alpha/skills/demo.md',
+      'bundle/members/alpha/cordis.patch.yml',
+      'bundle/members/beta/package.json',
+      'bundle/members/beta/dist/client.js',
     ]) {
       expect(existsSync(join(outDir, rel)), rel).toBe(true)
     }
-    const forge = JSON.parse(readFileSync(join(outDir, 'bundle/forge/package.json'), 'utf8'))
+    const forge = JSON.parse(readFileSync(join(outDir, 'bundle/package.json'), 'utf8'))
     expect(forge.dependencies).toEqual({ '@dsh-forge/alpha': 'file:./members/alpha', '@dsh-forge/beta': 'file:./members/beta' })
-    const alpha = JSON.parse(readFileSync(join(outDir, 'bundle/forge/members/alpha/package.json'), 'utf8'))
+    const alpha = JSON.parse(readFileSync(join(outDir, 'bundle/members/alpha/package.json'), 'utf8'))
     expect(alpha.devDependencies).toBeUndefined()
     expect(alpha.scripts).toBeUndefined()
   })
 
   it('机检全绿 + manifest channels.bundle 指自包含目录（发布树兄弟通道语义不变）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })).toEqual([])
+    expect(verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })).toEqual([])
     const forge = JSON.parse(readFileSync(join(outDir, 'forge/package.json'), 'utf8'))
     expect(forge.dependencies).toEqual({ '@dsh-forge/alpha': 'file:../alpha', '@dsh-forge/beta': 'file:../beta' })
     const manifest = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'))
-    expect(manifest.channels.bundle.dir).toBe('bundle/forge')
+    expect(manifest.channels.bundle.dir).toBe('bundle')
     expect(manifest.channels.solo.dir).toBe('solo/forge')
   })
 
   it('bundle 生成版 package.json pnpm.overrides 退役（1.40 node:sqlite 迁移——better-sqlite3 依赖零残留）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    const forge = JSON.parse(readFileSync(join(outDir, 'bundle/forge/package.json'), 'utf8'))
+    const forge = JSON.parse(readFileSync(join(outDir, 'bundle/package.json'), 'utf8'))
     expect(forge.pnpm?.overrides).toBeUndefined()
     const manifest = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'))
     expect(manifest.channels.bundle.overrides).toBeUndefined()
@@ -267,31 +267,31 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
 
   it('bundle 目录补发 pnpm-workspace.yaml（allowBuilds 空批准表消 ignored-builds 门）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    const wsText = readFileSync(join(outDir, 'bundle/forge/pnpm-workspace.yaml'), 'utf8')
+    const wsText = readFileSync(join(outDir, 'bundle/pnpm-workspace.yaml'), 'utf8')
     expect(wsText).toMatch(/^allowBuilds:/m)
-    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })).toEqual([])
+    expect(verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })).toEqual([])
   })
 
   it('反例·pnpm-workspace.yaml 缺席：闭包机检红', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    rmSync(join(outDir, 'bundle/forge/pnpm-workspace.yaml'))
-    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    rmSync(join(outDir, 'bundle/pnpm-workspace.yaml'))
+    const violations = verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })
     expect(violations.some((v) => v.includes('pnpm-workspace.yaml 缺席'))).toBe(true)
   })
 
   it('反例·overrides 键残留：闭包机检红（1.40 退役断言——overrides 在场即红）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    const forgePath = join(outDir, 'bundle/forge/package.json')
+    const forgePath = join(outDir, 'bundle/package.json')
     const forge = JSON.parse(readFileSync(forgePath, 'utf8'))
     forge.pnpm = { overrides: { 'better-sqlite3': '13.0.3' } }
     writeFileSync(forgePath, JSON.stringify(forge, null, 2))
-    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    const violations = verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })
     expect(violations.some((v) => v.includes('bundle') && v.includes('overrides'))).toBe(true)
   })
 
   it('bundle 交付 patch 顶层零 skills 行（forge-aggregate-bundle 1.34 技能预设独占收敛——顶层增补退役为设计，标准模式零成员技能；源码/solo 通道零回归）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    const bundlePatch = readFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), 'utf8')
+    const bundlePatch = readFileSync(join(outDir, 'bundle/cordis.patch.yml'), 'utf8')
     expect(bundlePatch).not.toMatch(/^ {0,4}- id: skill-filesystem-\S+$/m)
     expect(bundlePatch).not.toMatch(/- id: skill-filesystem$/m)
     const sourcePatch = readFileSync(join(root, 'plugins/forge/cordis.patch.yml'), 'utf8')
@@ -337,8 +337,8 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
       '',
     ].join('\n'))
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })).toEqual([])
-    const bundlePatch = readFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), 'utf8')
+    expect(verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })).toEqual([])
+    const bundlePatch = readFileSync(join(outDir, 'bundle/cordis.patch.yml'), 'utf8')
     expect(bundlePatch).toContain('- id: skill-filesystem-forge')
     expect(bundlePatch).toContain('providerName: filesystem-forge')
   })
@@ -347,35 +347,35 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     const forgePatchPath = join(root, 'plugins/forge/cordis.patch.yml')
     const sourcePatch = readFileSync(forgePatchPath, 'utf8')
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    const bundlePatch = readFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), 'utf8')
+    const bundlePatch = readFileSync(join(outDir, 'bundle/cordis.patch.yml'), 'utf8')
     expect(bundlePatch).toBe(sourcePatch)
     // 反例·交付 patch 被改写（≠ 正本）：闭包机检红
-    writeFileSync(join(outDir, 'bundle/forge/cordis.patch.yml'), `${bundlePatch}# tampered\n`)
-    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    writeFileSync(join(outDir, 'bundle/cordis.patch.yml'), `${bundlePatch}# tampered\n`)
+    const violations = verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })
     expect(violations.some((v) => v.includes('交付 patch ≢ forge 正本'))).toBe(true)
   })
 
   it('反例·交付 patch 顶层承带 skills 行：闭包机检红（顶层禁承带——preset 子树嵌套实例不误伤）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    const patchPath = join(outDir, 'bundle/forge/cordis.patch.yml')
+    const patchPath = join(outDir, 'bundle/cordis.patch.yml')
     writeFileSync(patchPath, `${readFileSync(patchPath, 'utf8')}- insert:\n  - id: skill-filesystem-alpha\n    name: '@deepseek-ai/dsh-skill-filesystem'\n`)
-    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    const violations = verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })
     expect(violations.some((v) => v.includes('顶层禁承带 skills 行') && v.includes('skill-filesystem-alpha'))).toBe(true)
     // 子树嵌套形不误伤：深层缩进实例零新增违规
     writeFileSync(patchPath, `${readFileSync(patchPath, 'utf8')}          - id: skill-filesystem-nested\n            name: '@deepseek-ai/dsh-skill-filesystem'\n`)
-    expect(verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root }).some((v) => v.includes('skill-filesystem-nested'))).toBe(false)
+    expect(verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root }).some((v) => v.includes('skill-filesystem-nested'))).toBe(false)
   })
 
   it('成员自带插行随包收录（members 侧 solo 语义不回归）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    const alphaPatch = readFileSync(join(outDir, 'bundle/forge/members/alpha/cordis.patch.yml'), 'utf8')
+    const alphaPatch = readFileSync(join(outDir, 'bundle/members/alpha/cordis.patch.yml'), 'utf8')
     expect(patchInsertEntryNames(alphaPatch)).toEqual(['@dsh-forge/alpha'])
   })
 
   it('反例·闭包拷贝遗漏：members dist 缺席即红', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    rmSync(join(outDir, 'bundle/forge/members/alpha/dist/client.js'))
-    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    rmSync(join(outDir, 'bundle/members/alpha/dist/client.js'))
+    const violations = verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })
     expect(violations.some((v) => v.includes('members/alpha') && v.includes('闭包拷贝遗漏'))).toBe(true)
   })
 
@@ -385,7 +385,7 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     beta.files.push('missing-dir')
     writeFileSync(betaPkgPath, JSON.stringify(beta, null, 2))
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    const bundleViolations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    const bundleViolations = verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })
     expect(bundleViolations.some((v) => v.includes('members/beta') && v.includes('files 声明条目源缺席'))).toBe(true)
     const treeViolations = verifyReleaseTree(outDir, { repoRoot: root })
     expect(treeViolations.some((v) => v.includes('@dsh-forge/beta') && v.includes('files 声明条目源缺席'))).toBe(true)
@@ -393,18 +393,18 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
 
   it('反例·members skills 锚目录缺席：闭包机检红（交付 patch skills 行自锚落空）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    rmSync(join(outDir, 'bundle/forge/members/alpha/skills'), { recursive: true, force: true })
-    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    rmSync(join(outDir, 'bundle/members/alpha/skills'), { recursive: true, force: true })
+    const violations = verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })
     expect(violations.some((v) => v.includes('members/alpha') && v.includes('skills 锚目录缺席'))).toBe(true)
   })
 
   it('反例·依赖指称树外：file: 指向 members 外目录即红（staging 孤立复发构造）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
-    const forgePath = join(outDir, 'bundle/forge/package.json')
+    const forgePath = join(outDir, 'bundle/package.json')
     const forge = JSON.parse(readFileSync(forgePath, 'utf8'))
     forge.dependencies['@dsh-forge/alpha'] = 'file:../alpha'
     writeFileSync(forgePath, JSON.stringify(forge, null, 2))
-    const violations = verifyBundleClosure(join(outDir, 'bundle', 'forge'), { repoRoot: root })
+    const violations = verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })
     expect(violations.some((v) => v.includes('@dsh-forge/alpha') && (v.includes('in-tree') || v.includes('指称悬空') || v.includes('目录外')))).toBe(true)
   })
 })

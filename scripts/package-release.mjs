@@ -22,7 +22,9 @@ const SOLO_REL = join('solo', 'forge')
 // members/<pkg> 五件全闭包内嵌，forge 依赖改 file:./members/<pkg>（in-tree 相对路径随目录
 // 走）→ 交付目录任意复制/搬移/install 均 self-contained。发布树六包共置形态继续作为
 // monorepo 开发态通道，两者并存机检分开。
-const BUNDLE_REL = join('bundle', 'forge')
+// bundle 目录直铺（用户裁定 2026-11-24）：交付目录 = release/forge-bundle/{version}/bundle/
+// 本体——forge 壳落在 bundle/ 根，不再多套 bundle/forge/ 子目录。
+const BUNDLE_REL = join('bundle')
 // bundle 交付目录依赖归一 overrides 退役（forge-aggregate-bundle 1.40——better-sqlite3
 // 依赖零残留）：持久层已迁 node:sqlite（内置模块，零原生依赖、零 node-gyp），旧代际
 // node-gyp 传递根因消失，overrides 与构建批准条目一并退役。
@@ -158,6 +160,8 @@ export function bundleDependencies(forgeManifest) {
  * 代际双校验——圆桌裁定迁移与删除同提交，freshness 门自 1.7 起归属本链）→ outDir 清空重建 → 六包共置
  * 拷贝（forge deps 重写为相对 file:）→ solo 变体产出 → manifest 落盘 → zip。
  * 返回 { treeDir, manifestPath, zipPath, warnings }。
+ * @param {{ repoRoot?: string, outDir?: string, zip?: boolean, freshness?: boolean }} [opts]
+ * @returns {{ treeDir: string, bundleDir: string, manifestPath: string, zipPath: string | undefined, warnings: string[] }}
  */
 export function assembleRelease({ repoRoot = REPO_ROOT, outDir, zip = true, freshness = true } = {}) {
   // 缺省输出 = release/forge-bundle/{version}（版本取 forge 包 version——版本化目录随版本累积）
@@ -397,7 +401,7 @@ export function verifyBundleClosure(bundleDir, { repoRoot = REPO_ROOT } = {}) {
   const forgePkgPath = join(bundleDir, 'package.json')
   if (!existsSync(forgePkgPath)) return [`bundle: forge 壳 package.json 缺席 ${bundleDir}`]
   const forgePkg = readJson(forgePkgPath)
-  violations.push(...verifyPackageFields(bundleDir, 'bundle/forge'))
+  violations.push(...verifyPackageFields(bundleDir, 'bundle'))
   for (const entry of packages.slice(1)) {
     const short = entry.name.slice('@dsh-forge/'.length)
     const dir = join(bundleDir, 'members', short)
