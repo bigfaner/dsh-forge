@@ -66,6 +66,12 @@ export interface SpecIdentityResolution {
 /** projectId 身份缝（惰性现查——装配面注 forgeProjectsIdentityOf 真实现，测试注桩） */
 export type SpecIdentityFace = (projectId: string) => Promise<SpecIdentityResolution | null>;
 
+/** forge.worktrees 注册面结构窄面（f5 键族同径——plugins/project 五缝 forge.worktrees 同键
+ *  结构消费：list({projectRoot}) → entries[].path；本面零包依赖，task-loop 同形最小面） */
+export interface ForgeWorktreesFamilyFace {
+  list(q: { readonly projectRoot: string }): Promise<{ readonly entries: readonly { readonly path: string }[] }>;
+}
+
 /** forgeSpecs 控制器依赖缝（全惰性现查——族缺席 = typed unavailable 诚实降级） */
 export interface ForgeSpecRemoteDeps {
   /** forgeSpecs 域服务缝（域逻辑唯一事实源只读消费——缺席宿主全族 typed unavailable） */
@@ -82,6 +88,8 @@ export interface ForgeSpecRemoteDeps {
   readonly acSettlementsOf?: () => AcSettlementsFace | undefined;
   /** projectId 身份缝（forge.projects 缝——缺席/未解析分层降级） */
   readonly identity?: SpecIdentityFace;
+  /** forge.worktrees 注册面缝（f5 键族同径——list 快照族聚合清单源；缺席/抛错 = 回退单键） */
+  readonly worktrees?: () => ForgeWorktreesFamilyFace | undefined;
   /** follow 重估间隔 ms（缺省 SPEC_FOLLOW_INTERVAL_MS——单测注入收敛节拍） */
   readonly followIntervalMs?: number;
   /** 诊断缝（装配/降级留痕——缺席静默不阻载） */
@@ -268,6 +276,8 @@ export class ForgeSpecsRemote extends TypertRemoteService {
   private readonly reposOf: () => SpecDomainDb["repos"] | undefined;
   private readonly acSettlementsOf: () => AcSettlementsFace | undefined;
   private readonly identityOf: SpecIdentityFace | undefined;
+  private readonly worktreesOf: () => ForgeWorktreesFamilyFace | undefined;
+  private readonly diagLine: ((line: string) => void) | undefined;
   private readonly intervalMs: number;
 
   constructor(ctx: Context, deps: ForgeSpecRemoteDeps) {
@@ -278,6 +288,8 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     this.reposOf = deps.repos ?? (() => undefined);
     this.acSettlementsOf = deps.acSettlementsOf ?? (() => undefined);
     this.identityOf = deps.identity;
+    this.worktreesOf = deps.worktrees ?? (() => undefined);
+    this.diagLine = deps.diag;
     this.intervalMs = deps.followIntervalMs ?? SPEC_FOLLOW_INTERVAL_MS;
   }
 
@@ -377,20 +389,51 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     };
   }
 
-  /** Spec 卡片清单（listing 索引序——UI 台账数据源） */
+  /**
+   * 身份键族解析（2026-11-24 用户方案 A——f5 同径聚合）：主根身份 + forge.worktrees 注册面
+   * 下该根的全部 worktree 身份（list entries[].path 逐 path 派生）。注册缝缺席/list 抛错 =
+   * 回退单键现状（降级显式诊断留痕，不静默）。仅快照读族（list）消费——写面/详情面单键不动。
+   */
+  private async resolveIdentityFamily(projectId: string): Promise<SpecIdentityResolution[]> {
+    const main = await this.resolveIdentity(projectId);
+    if (main === null) return [];
+    const worktrees = this.worktreesOf();
+    if (worktrees === undefined) {
+      this.diagLine?.(`[spec-typert] 键族缝缺席（forge.worktrees）——快照族回退单键：projectId=${projectId}`);
+      return [main];
+    }
+    try {
+      const result = await worktrees.list({ projectRoot: main.wsPath });
+      const family = [main, ...result.entries.map((entry) => ({ wsPath: entry.path, projectKey: deriveProjectKey(entry.path) }))];
+      const seen = new Set<string>();
+      return family.filter((row) => (seen.has(row.projectKey) ? false : (seen.add(row.projectKey), true)));
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      this.diagLine?.(`[spec-typert] 键族清单失败（forge.worktrees list 抛错 fail-soft）——快照族回退单键：projectId=${projectId}：${message}`);
+      return [main];
+    }
+  }
+
+  /** Spec 卡片清单（listing 索引序——UI 台账数据源；f5 键族聚合——主根 + worktree 键逐键
+   *  取卡合并，slug 去重保首见序主根先行） */
   @Remote
   async list(q: { readonly projectId: string; readonly statusFilter?: SpecStatus; readonly search?: string }, signal?: AbortSignal): Promise<Result<readonly SpecCardDto[]>> {
     signal?.throwIfAborted();
     try {
       const svc = this.specs();
-      const ws = await this.resolveIdentity(q.projectId);
-      if (ws === null) return ok<readonly SpecCardDto[]>([]);
-      const rows = svc.listSpecs({ cwd: ws.wsPath, statusFilter: q.statusFilter });
+      const family = await this.resolveIdentityFamily(q.projectId);
+      if (family.length === 0) return ok<readonly SpecCardDto[]>([]);
+      const seen = new Set<string>();
       const cards: SpecCardDto[] = [];
-      for (const row of rows) {
-        const chain = svc.getSpec({ cwd: ws.wsPath, slug: row.slug });
-        if (chain === undefined) continue;
-        cards.push(this.cardOf(chain));
+      for (const ws of family) {
+        const rows = svc.listSpecs({ cwd: ws.wsPath, statusFilter: q.statusFilter });
+        for (const row of rows) {
+          if (seen.has(row.slug)) continue;
+          const chain = svc.getSpec({ cwd: ws.wsPath, slug: row.slug });
+          if (chain === undefined) continue;
+          seen.add(row.slug);
+          cards.push(this.cardOf(chain));
+        }
       }
       const search = q.search?.trim().toLowerCase();
       const filtered = search !== undefined && search !== ""
@@ -760,15 +803,20 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     }
   }
 
-  /** follow 流卡片装配（list 读面共用——身份未解析 = 空集快照诚实降级） */
+  /** follow 流卡片装配（list 读面共用——f5 键族同径聚合，slug 去重保首见序主根先行；
+   *  身份未解析 = 空集快照诚实降级） */
   private async listCards(svc: ForgeSpecsService, projectId: string): Promise<readonly SpecCardDto[]> {
-    const ws = await this.resolveIdentity(projectId);
-    if (ws === null) return [];
+    const family = await this.resolveIdentityFamily(projectId);
+    const seen = new Set<string>();
     const cards: SpecCardDto[] = [];
-    for (const row of svc.listSpecs({ cwd: ws.wsPath })) {
-      const chain = svc.getSpec({ cwd: ws.wsPath, slug: row.slug });
-      if (chain === undefined) continue;
-      cards.push(this.cardOf(chain));
+    for (const ws of family) {
+      for (const row of svc.listSpecs({ cwd: ws.wsPath })) {
+        if (seen.has(row.slug)) continue;
+        const chain = svc.getSpec({ cwd: ws.wsPath, slug: row.slug });
+        if (chain === undefined) continue;
+        seen.add(row.slug);
+        cards.push(this.cardOf(chain));
+      }
     }
     return cards;
   }

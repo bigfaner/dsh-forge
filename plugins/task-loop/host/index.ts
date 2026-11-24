@@ -30,6 +30,7 @@ import { assembleTaskLoopToolFamily } from "./assembly/tool-family.js";
 import {
   registerForgeTasksRemote,
   type ForgeProjectsIdentityFace,
+  type ForgeWorktreesFamilyFace,
   type ForgeTasksRemoteDeps,
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
@@ -110,6 +111,27 @@ function lazyProjectsFace(ctx: unknown): ForgeTasksRemoteDeps["projects"] {
       if (face === null || face === undefined || typeof face !== "object") return undefined;
       const candidate = face as { getProject?: unknown };
       return typeof candidate.getProject === "function" ? (candidate as ForgeProjectsIdentityFace) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+}
+
+/**
+ * forge.worktrees 键族缝（f5 键族聚合——快照族 worktree 键清单源）：plugins/project 五缝
+ * forge.worktrees 结构消费（PROJECT_SEAM_KEYS.worktrees 同键——seam 为惰性工厂 provide，
+ * 工厂调用产出 WorktreeServicePort；本面只取 list 清单窄面 entries[].path）。现查永不
+ * 缓存（AGENTS 1.6）；缝缺席/劣形/抛错 = undefined——remote 面回退单键降级承担。
+ */
+function lazyWorktreesFace(ctx: unknown): ForgeTasksRemoteDeps["worktrees"] {
+  return () => {
+    try {
+      const factory = (ctx as TaskLoopPluginCtx).reflect?.get?.("forge.worktrees");
+      if (typeof factory !== "function") return undefined;
+      const face = (factory as () => unknown)();
+      if (face === null || face === undefined || typeof face !== "object") return undefined;
+      const candidate = face as { list?: unknown };
+      return typeof candidate.list === "function" ? (candidate as ForgeWorktreesFamilyFace) : undefined;
     } catch {
       return undefined;
     }
@@ -319,6 +341,7 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
   const remoteDeps: ForgeTasksRemoteDeps = {
     tasks: lazyTasksFace(ctx),
     projects: lazyProjectsFace(ctx),
+    worktrees: lazyWorktreesFace(ctx),
     diag: (line) => {
       diag(line, "info");
       emitForgeDiag(diagEmit, { event: "task-loop-typert", level: "info", message: line });

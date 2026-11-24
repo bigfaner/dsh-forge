@@ -22,6 +22,8 @@ import {
   type TypertAssemblyCtxFace,
 } from "../../host/assembly/typert-remotes.js";
 import { createTasksHarness, seedTask, type TasksHarness } from "../domain-tasks/harness.js";
+import { deriveProjectKey } from "../../host/db/repositories/project-key.js";
+import type { ForgeWorktreesFamilyFace } from "../../host/assembly/typert-remotes.js";
 
 let h: TasksHarness;
 beforeEach(() => {
@@ -464,5 +466,131 @@ describe("入参身份 host 半解析（projectId → project_key）", () => {
     const listed = await remote.list({ projectId: "boom" });
     expect(listed.ok && listed.value).toEqual([]);
     expect(diag).toHaveBeenCalledWith(expect.stringContaining("身份解析失败"));
+  });
+});
+
+// ── 键族聚合（f5——worktree 任务主根概览可见：快照族按键族合并，写面单键不外溢） ──
+
+const WT_PATH = "Z:\\ws\\domain-tasks\\.forge\\worktrees\\plugins";
+const WT_KEY = deriveProjectKey(WT_PATH);
+
+/** forge.worktrees 键族缝替身（list entries[].path——主根 wsPath 下单 worktree 行） */
+function worktreesFaceOf(pathsOf: (projectRoot: string) => readonly string[]): ForgeWorktreesFamilyFace {
+  return { list: async ({ projectRoot }) => ({ entries: pathsOf(projectRoot).map((path) => ({ path })) }) };
+}
+
+describe("键族聚合（2026-11-24 方案 A——快照族多键合并）", () => {
+  function familyRemote(svc: TasksService, opts: { worktrees?: ForgeWorktreesFamilyFace; diag?: (line: string) => void } = {}): ForgeTasksRemote {
+    return new ForgeTasksRemote(fakeCtx(), {
+      tasks: () => svc,
+      projects: () => projectsFaceOf("Z:\\ws\\domain-tasks"),
+      worktrees: opts.worktrees === undefined ? () => worktreesFaceOf((root) => [`${root}\\.forge\\worktrees\\plugins`]) : () => opts.worktrees,
+      ...(opts.diag !== undefined ? { diag: opts.diag } : {}),
+    });
+  }
+
+  it("list：主根 + worktree 两键卡片合并（去重保序）", async () => {
+    const svc = buildService();
+    seedTask(h, "alpha", "1", { status: "pending" });
+    await addTask(h.verbDeps, { projectKey: WT_KEY, slug: "alpha", title: "WT", type: "coding-feature" });
+    const remote = familyRemote(svc);
+    const result = await remote.list({ projectId: "uuid-1" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.map((c) => c.title).sort()).toEqual(["WT", "任务 1"]);
+  });
+
+  it("stats：键族逐键求和（total/byStatus 累加）", async () => {
+    const svc = buildService();
+    seedTask(h, "alpha", "1", { status: "pending" });
+    seedTask(h, "alpha", "2", { status: "in_progress" });
+    await addTask(h.verbDeps, { projectKey: WT_KEY, slug: "alpha", title: "WT", type: "coding-feature" });
+    const remote = familyRemote(svc);
+    const stats = await remote.stats({ projectId: "uuid-1" });
+    expect(stats.ok && stats.value.total).toBe(3);
+    if (stats.ok) {
+      expect(stats.value.byStatus.pending).toBe(2);
+      expect(stats.value.byStatus.in_progress).toBe(1);
+    }
+  });
+
+  it("graph：键族 tasks 并集去重 + edges 并集", async () => {
+    const svc = buildService();
+    const mainId = seedTask(h, "alpha", "1", { status: "pending" });
+    const wtTaskId = (await addTask(h.verbDeps, { projectKey: WT_KEY, slug: "alpha", title: "WT", type: "coding-feature" })).taskId;
+    // wt 键边行（worktree 键子图——并集判据：主键边集为空、wt 键边恰一条）
+    await h.db.prepare(`INSERT INTO task_edges (task_id, prerequisite_id, origin, created_at, updated_at) VALUES (?, ?, 'manual', ?, ?)`).run(wtTaskId, wtTaskId, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
+    const remote = familyRemote(svc);
+    const graph = await remote.graph({ projectId: "uuid-1", slug: "alpha" });
+    expect(graph.ok).toBe(true);
+    if (!graph.ok) return;
+    expect(graph.value.tasks.map((t) => t.taskId).sort()).toEqual([mainId, wtTaskId].sort());
+    expect(graph.value.edges).toHaveLength(1);
+  });
+
+  it("follow：baseline 帧按键族聚合（cards 合并 + stats 求和）", async () => {
+    const svc = buildService();
+    seedTask(h, "alpha", "1", { status: "pending" });
+    await addTask(h.verbDeps, { projectKey: WT_KEY, slug: "alpha", title: "WT", type: "coding-feature" });
+    const remote = new ForgeTasksRemote(fakeCtx(), {
+      tasks: () => svc,
+      projects: () => projectsFaceOf("Z:\\ws\\domain-tasks"),
+      worktrees: () => worktreesFaceOf((root) => [`${root}\\.forge\\worktrees\\plugins`]),
+      followIntervalMs: 0,
+    });
+    const controller = new AbortController();
+    const frames: unknown[] = [];
+    for await (const frame of remote.follow({ projectId: "uuid-1" }, controller.signal)) {
+      frames.push(frame);
+      controller.abort();
+    }
+    expect(frames).toHaveLength(1);
+    const snapshot = (frames[0] as { snapshot: { cards: unknown[]; stats: { total: number } } }).snapshot;
+    expect(snapshot.cards).toHaveLength(2);
+    expect(snapshot.stats.total).toBe(2);
+  });
+
+  it("键族缝缺席（forge.worktrees 未装配）→ 快照族回退单键现状 + 诊断留痕", async () => {
+    const svc = buildService();
+    seedTask(h, "alpha", "1", { status: "pending" });
+    await addTask(h.verbDeps, { projectKey: WT_KEY, slug: "alpha", title: "WT", type: "coding-feature" });
+    const diag = vi.fn();
+    const remote = new ForgeTasksRemote(fakeCtx(), {
+      tasks: () => svc,
+      projects: () => projectsFaceOf("Z:\\ws\\domain-tasks"),
+      diag,
+    });
+    const listed = await remote.list({ projectId: "uuid-1" });
+    expect(listed.ok && listed.value).toHaveLength(1); // 仅主根键
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining("键族缝缺席"));
+  });
+
+  it("键族清单抛错 → fail-soft 回退单键 + 诊断留痕（不炸读面）", async () => {
+    const svc = buildService();
+    seedTask(h, "alpha", "1", { status: "pending" });
+    const diag = vi.fn();
+    const remote = new ForgeTasksRemote(fakeCtx(), {
+      tasks: () => svc,
+      projects: () => projectsFaceOf("Z:\\ws\\domain-tasks"),
+      worktrees: () => ({ list: async () => { throw new Error("seam broke"); } }),
+      diag,
+    });
+    const listed = await remote.list({ projectId: "uuid-1" });
+    expect(listed.ok && listed.value).toHaveLength(1);
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining("键族清单失败"));
+  });
+
+  it("非快照操作面维持单键 keyOf（聚合不外溢写路径）：detail 主根键照常解析、族键不参与", async () => {
+    const svc = buildService();
+    seedTask(h, "alpha", "1", { status: "pending" });
+    await addTask(h.verbDeps, { projectKey: WT_KEY, slug: "alpha", title: "WT", type: "coding-feature" });
+    const remote = familyRemote(svc);
+    // 快照族：两键卡片均可见
+    const listed = await remote.list({ projectId: "uuid-1" });
+    expect(listed.ok && listed.value).toHaveLength(2);
+    // detail（单键 keyOf）：主根键行照常命中——族键合并未外溢到 row 面
+    const detail = await remote.detail({ projectId: "uuid-1", taskId: "t-alpha-1" });
+    expect(detail.ok).toBe(true);
+    if (detail.ok) expect(detail.value.taskId).toBe("t-alpha-1");
   });
 });

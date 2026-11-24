@@ -6,6 +6,9 @@
 //   键名沿用 ForgeTasksRpc 读面八方法（apps/web/src/rpc/client.ts TASKS_CHANNELS 清单——
 //   transport 改型，键不漂移）；写面 transition 若域服务 face 在场则透传、缺席 typed
 //   unavailable（Result error 分支诚实降级，与 project unavailableMessage 形态一致）。
+//   键族聚合（2026-11-24 用户方案 A——f5）：快照族 list/stats/graph/follow 按键族聚合
+//   （keyFamilyOf = 主根键 + forge.worktrees 注册面 worktree 键——任务落 worktree 键、
+//   概览选主根项目时多键查询合并；注册缝缺席回退单键）；非快照操作面维持单键 keyOf。
 //
 // 发现面铁律（project 侦察定谳同径）：gateway 只遍历根 ctx reflect.props——控制器经
 // rootCtx.plugin 注册进根 ctx；生命周期归插件 fiber（dispose 级联拆卸）。
@@ -165,6 +168,13 @@ export interface TasksRemoteAcSettlementsRequest extends Omit<AcSettlementsReque
   readonly projectId: string;
 }
 
+/** forge.worktrees 注册面结构窄面（worktree 键族清单——plugins/project 五缝 forge.worktrees
+ *  同键结构消费：list({projectRoot}) → entries[].path（WorktreeEntryDto.path 窄面）；
+ *  本面零包依赖，结构兼容最小面——同 ForgeProjectsIdentityFace 形态） */
+export interface ForgeWorktreesFamilyFace {
+  list(q: { readonly projectRoot: string }): Promise<{ readonly entries: readonly { readonly path: string }[] }>;
+}
+
 /** 项目身份未解析 typed message（钉单源——实现与测试同引本函数） */
 export function projectUnresolvedMessage(projectId: string): string {
   return `forge.tasks project 未解析（forge.projects 缝缺席或 projectId 未命中）：projectId=${projectId}`;
@@ -196,6 +206,12 @@ export interface ForgeTasksRemoteDeps {
    * 缝生命周期绑由 host/index.ts inject 名单显式声明承担，本面零缓存。
    */
   readonly projects?: () => ForgeProjectsIdentityFace | undefined;
+  /**
+   * forge.worktrees 注册面缝（惰性现查——每个消费点调用期求值，AGENTS 1.6）：键族解析
+   * 依据（主根 wsPath → 注册面 worktree 清单 → 各 path 派生 worktree 键）；缺席/抛错 =
+   * 快照族回退单键现状（worktrees 注册缝缺席降级），诊断留痕不静默。
+   */
+  readonly worktrees?: () => ForgeWorktreesFamilyFace | undefined;
   /**
    * 注册后自探针缝（boot 竞速根治——project 实况同径）：typertGateway invoke 直探 =
    * serve 层认领自证（零副作用读面；注册完成行后时点即装配序判据——先于 client mount
@@ -251,11 +267,16 @@ async function hydrateCards(svc: TasksServiceFace, projectKey: string, cards: re
   });
 }
 
-/** 任务板快照重估（follow 单帧取数——cards 批水化 + stats 现查一次取齐） */
-async function estimateBoard(svc: TasksServiceFace, q: TasksFollowQuery): Promise<TaskBoardDto> {
-  const cards = await hydrateCards(svc, q.projectKey, await svc.listTasks({ projectKey: q.projectKey, ...(q.slug !== undefined ? { slug: q.slug } : {}), sort: "created" }));
-  const stats = await svc.taskStats({ projectKey: q.projectKey, ...(q.slug !== undefined ? { slug: q.slug } : {}) });
-  return { projectKey: q.projectKey, cards, stats };
+/** 任务板快照重估（follow 单帧取数——键族逐键 cards 批水化 + stats 求和一次取齐） */
+async function estimateBoard(svc: TasksServiceFace, keys: readonly string[], slug?: string): Promise<TaskBoardDto> {
+  const cards: TaskCardDto[][] = [];
+  const statsRows: TaskStats[] = [];
+  for (const key of keys) {
+    const slugQuery = slug !== undefined ? { slug } : {};
+    cards.push(await hydrateCards(svc, key, await svc.listTasks({ projectKey: key, ...slugQuery, sort: "created" })));
+    statsRows.push(await svc.taskStats({ projectKey: key, ...slugQuery }));
+  }
+  return { projectKey: keys[0] ?? "", cards: mergeCards(cards), stats: sumStats(statsRows) };
 }
 
 /** 零任务统计（解析失败 fail-soft 降级形态——八态含 0 键，域统计同形） */
@@ -267,6 +288,35 @@ function zeroStats(): {
 } {
   const byStatus = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>;
   return { total: 0, byStatus, unmetPending: 0, gatedPending: 0 };
+}
+
+/** 键族卡片合并（list/graph/follow 同径聚合——taskId 去重保首见序，主根键先行） */
+function mergeCards(lists: readonly (readonly TaskCardDto[])[]): TaskCardDto[] {
+  const seen = new Set<string>();
+  const merged: TaskCardDto[] = [];
+  for (const list of lists) {
+    for (const card of list) {
+      if (seen.has(card.taskId)) continue;
+      seen.add(card.taskId);
+      merged.push(card);
+    }
+  }
+  return merged;
+}
+
+/** 键族统计求和（八态逐键累加——byStatus 全键并集含 0 键） */
+function sumStats(list: readonly TaskStats[]): TaskStats {
+  const byStatus = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>;
+  let total = 0;
+  let unmetPending = 0;
+  let gatedPending = 0;
+  for (const s of list) {
+    total += s.total;
+    unmetPending += s.unmetPending;
+    gatedPending += s.gatedPending;
+    for (const k of TASK_STATUSES) byStatus[k] += s.byStatus[k] ?? 0;
+  }
+  return { total, byStatus, unmetPending, gatedPending };
 }
 
 /** 项目身份未解析 typed Result（row/write 面——非快照族，诚实拒绝不空集） */
@@ -312,11 +362,11 @@ export class ForgeTasksRemote extends TypertRemoteService {
   }
 
   /**
-   * 项目身份解析（host 半单点——projectId → project_key）：forge.projects 缝现查
+   * 项目身份解析（host 半单点——projectId → {wsPath, project_key}）：forge.projects 缝现查
    * getProject().wsPath → deriveProjectKey 本地派生（lib-path 单源）；缝缺席/未命中/
    * 抛错 = 诊断留痕（不静默）返回 undefined——快照族调用方降级「无任务数据」。
    */
-  private async keyOf(projectId: string): Promise<string | undefined> {
+  private async resolveProject(projectId: string): Promise<{ readonly wsPath: string; readonly key: string } | undefined> {
     const projects = this.deps.projects?.();
     if (projects === undefined) {
       this.deps.diag?.(`[forgeTasks] 身份解析缝缺席（forge.projects）——快照族降级无任务数据：projectId=${projectId}`);
@@ -325,7 +375,7 @@ export class ForgeTasksRemote extends TypertRemoteService {
     try {
       const project = await projects.getProject(projectId);
       if (project !== null && project !== undefined && typeof project.wsPath === "string" && project.wsPath !== "") {
-        return deriveProjectKey(project.wsPath);
+        return { wsPath: project.wsPath, key: deriveProjectKey(project.wsPath) };
       }
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
@@ -336,55 +386,94 @@ export class ForgeTasksRemote extends TypertRemoteService {
     return undefined;
   }
 
-  /** 任务清单（search 中英过滤 + sort + AC 进度批水化） */
+  /** 单键身份解析（非快照操作面 detail/query/sessionLinks/validate/transition/acSettlements 维持现状） */
+  private async keyOf(projectId: string): Promise<string | undefined> {
+    return (await this.resolveProject(projectId))?.key;
+  }
+
+  /**
+   * 键族解析（2026-11-24 用户方案 A——快照族按键族聚合）：主根键 + forge.worktrees 注册面
+   * 下该根的全部 worktree 键（list entries[].path 逐 path 派生——任务落 worktree 键、概览
+   * 选主根项目时多键查询合并，写面不外溢）。注册缝缺席/list 抛错 = 回退单键现状（降级
+   * 显式诊断留痕，不静默）。
+   */
+  private async keyFamilyOf(projectId: string): Promise<string[]> {
+    const main = await this.resolveProject(projectId);
+    if (main === undefined) return [];
+    const worktrees = this.deps.worktrees?.();
+    if (worktrees === undefined) {
+      this.deps.diag?.(`[forgeTasks] 键族缝缺席（forge.worktrees）——快照族回退单键：projectId=${projectId}`);
+      return [main.key];
+    }
+    try {
+      const result = await worktrees.list({ projectRoot: main.wsPath });
+      const keys = [main.key, ...result.entries.map((entry) => deriveProjectKey(entry.path))];
+      return [...new Set(keys)];
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      this.deps.diag?.(`[forgeTasks] 键族清单失败（forge.worktrees list 抛错 fail-soft）——快照族回退单键：projectId=${projectId}：${message}`);
+      return [main.key];
+    }
+  }
+
+  /** 任务清单（键族聚合——search 中英过滤 + sort + AC 进度批水化；taskId 去重合并） */
   @Remote
   async list(q: TasksRemoteListQuery, signal?: AbortSignal): Promise<Result<TaskCardDto[]>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<TaskCardDto[]>("list");
-    const projectKey = await this.keyOf(q.projectId);
-    if (projectKey === undefined) return ok<TaskCardDto[]>([]);
-    return ok(
-      await hydrateCards(
-        svc,
-        projectKey,
-        await svc.listTasks({
-          projectKey,
-          ...(q.slug !== undefined ? { slug: q.slug } : {}),
-          ...(q.statusFilter !== undefined ? { statusFilter: q.statusFilter } : {}),
-          ...(q.search !== undefined ? { search: q.search } : {}),
-          ...(q.sort !== undefined ? { sort: q.sort } : {}),
-        }),
-      ),
-    );
+    const keys = await this.keyFamilyOf(q.projectId);
+    if (keys.length === 0) return ok<TaskCardDto[]>([]);
+    const lists: TaskCardDto[][] = [];
+    for (const key of keys) {
+      lists.push(
+        await hydrateCards(
+          svc,
+          key,
+          await svc.listTasks({
+            projectKey: key,
+            ...(q.slug !== undefined ? { slug: q.slug } : {}),
+            ...(q.statusFilter !== undefined ? { statusFilter: q.statusFilter } : {}),
+            ...(q.search !== undefined ? { search: q.search } : {}),
+            ...(q.sort !== undefined ? { sort: q.sort } : {}),
+          }),
+        ),
+      );
+    }
+    return ok(mergeCards(lists));
   }
 
-  /** 八态计数（total + byStatus + unmetPending + gatedPending） */
+  /** 八态计数（键族聚合——total + byStatus + unmetPending + gatedPending 逐键求和） */
   @Remote
   async stats(q: TasksRemoteStatsQuery, signal?: AbortSignal): Promise<Result<TaskStats>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<TaskStats>("stats");
-    const projectKey = await this.keyOf(q.projectId);
-    if (projectKey === undefined) return ok(zeroStats());
-    return ok(
-      await svc.taskStats({
-        projectKey,
-        ...(q.slug !== undefined ? { slug: q.slug } : {}),
-      }),
-    );
+    const keys = await this.keyFamilyOf(q.projectId);
+    if (keys.length === 0) return ok(zeroStats());
+    const rows: TaskStats[] = [];
+    for (const key of keys) {
+      rows.push(await svc.taskStats({ projectKey: key, ...(q.slug !== undefined ? { slug: q.slug } : {}) }));
+    }
+    return ok(sumStats(rows));
   }
 
-  /** 容器任务图（DAG/泳道渲染源——cards 全量 AC 进度水化） */
+  /** 容器任务图（键族聚合——DAG/泳道渲染源：tasks 并集去重 + edges 并集，cards 全量水化） */
   @Remote
   async graph(q: TasksRemoteGraphQuery, signal?: AbortSignal): Promise<Result<TaskGraphDto>> {
     signal?.throwIfAborted();
     const svc = resolveService(this.deps);
     if (svc === undefined) return unavailableResult<TaskGraphDto>("graph");
-    const projectKey = await this.keyOf(q.projectId);
-    if (projectKey === undefined) return ok({ tasks: [], edges: [] });
-    const graph = await svc.taskGraph({ projectKey, slug: q.slug });
-    return ok({ tasks: await hydrateCards(svc, projectKey, graph.tasks), edges: graph.edges });
+    const keys = await this.keyFamilyOf(q.projectId);
+    if (keys.length === 0) return ok({ tasks: [], edges: [] });
+    const tasks: TaskCardDto[][] = [];
+    const edges: TaskGraphEdge[] = [];
+    for (const key of keys) {
+      const graph = await svc.taskGraph({ projectKey: key, slug: q.slug });
+      tasks.push(await hydrateCards(svc, key, graph.tasks));
+      edges.push(...graph.edges);
+    }
+    return ok({ tasks: mergeCards(tasks), edges });
   }
 
   /** 任务详情（records/waitingOnMe/sessions/actualFiles/refs 全量水化 + AC 进度） */
@@ -469,14 +558,14 @@ export class ForgeTasksRemote extends TypertRemoteService {
     let first = true;
     while (first || signal?.aborted !== true) {
       first = false;
-      const projectKey = await this.keyOf(q.projectId);
-      if (projectKey === undefined) {
-        // 解析失败 fail-soft：单帧「无任务数据」baseline 后收流（每帧诊断已由 keyOf 留痕，
+      const keys = await this.keyFamilyOf(q.projectId);
+      if (keys.length === 0) {
+        // 解析失败 fail-soft：单帧「无任务数据」baseline 后收流（每帧诊断已由 keyFamilyOf 留痕，
         // 不静默空转——客户端呈「无任务数据」终态，缝到场由客户端重订阅承接）
         yield { seq, snapshot: { projectKey: "", cards: [], stats: zeroStats() } };
         return;
       }
-      const snapshot = await estimateBoard(svc, { projectKey, ...(q.slug !== undefined ? { slug: q.slug } : {}) });
+      const snapshot = await estimateBoard(svc, keys, q.slug);
       const json = JSON.stringify(snapshot);
       if (json !== last) {
         last = json;

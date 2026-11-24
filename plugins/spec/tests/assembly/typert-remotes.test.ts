@@ -16,6 +16,7 @@ import {
   registerSpecTypertRemotes,
   unavailableMessage,
   type ForgeSpecRemoteDeps,
+  type ForgeWorktreesFamilyFace,
   type TypertAssemblyCtxFace,
 } from "../../host/assembly/typert-remotes.js";
 import { assembleSpecServices, type SpecAssembly } from "../../host/assembly/default-assembly.js";
@@ -751,3 +752,77 @@ function normalizeIds<T>(value: readonly T[]): unknown[] {
     }),
   );
 }
+
+// ── 键族聚合（f5——worktree spec 主根概览可见：list/follow 快照族按键族合并） ──
+
+/** worktree 检出种子（tempRoot 下 sibling 目录——主根身份 + worktree 键 spec 各一行） */
+function worktreeFixture(): { wt: string; worktrees: ForgeWorktreesFamilyFace } {
+  const { cwd } = lazy();
+  const wt = join(cwd, "..", "ws-wt");
+  mkdirSync(wt, { recursive: true });
+  if (services.db.repos.specs.getBySlug(deriveProjectKey(wt), "wt-spec") === undefined) {
+    services.specs.createSpec({
+      cwd: wt,
+      slug: "wt-spec",
+      title: "Worktree Spec",
+      tiers: ["ui"],
+      goals: [{ title: "G1", acs: ["AC wt one"] }],
+      docRelPath: ".forge/specs/wt-spec/spec.md",
+      docContent: "# wt-spec\n",
+    });
+  }
+  return {
+    wt,
+    worktrees: { list: async ({ projectRoot }) => ({ entries: [{ path: join(projectRoot, "..", "ws-wt") }] }) },
+  };
+}
+
+describe("键族聚合（2026-11-24 方案 A——spec 快照族多键合并）", () => {
+  function familyRemote(opts: { worktrees?: ForgeWorktreesFamilyFace; diag?: (line: string) => void } = {}): ForgeSpecsRemote {
+    const { deps } = lazy();
+    const wtFix = worktreeFixture();
+    return new ForgeSpecsRemote(fakeCtx(), {
+      ...deps,
+      worktrees: "worktrees" in opts ? () => opts.worktrees : () => wtFix.worktrees,
+      ...(opts.diag !== undefined ? { diag: opts.diag } : {}),
+    });
+  }
+
+  it("list：主根 + worktree 两键卡片合并（slug 去重、主根先行）", async () => {
+    const result = await familyRemote().list({ projectId: "proj-1" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.map((c) => c.slug)).toEqual(["alpha", "beta", "wt-spec"]);
+    expect(result.value.map((c) => c.title)).toContain("Worktree Spec");
+  });
+
+  it("follow：baseline 帧按键族聚合（cards 并集）", async () => {
+    const svc = lazy().deps.specs!();
+    if (svc === undefined) throw new Error("specs 服务缺席");
+    const controller = new AbortController();
+    const frames: unknown[] = [];
+    for await (const frame of familyRemote().follow({ projectId: "proj-1" }, controller.signal)) {
+      frames.push(frame);
+      controller.abort();
+    }
+    expect(frames).toHaveLength(1);
+    const snapshot = (frames[0] as { snapshot: { cards: { slug: string }[] } }).snapshot;
+    expect(snapshot.cards.map((c) => c.slug)).toContain("wt-spec");
+    expect(snapshot.cards).toHaveLength(3);
+    void svc;
+  });
+
+  it("键族缝缺席（forge.worktrees 未装配）→ 快照族回退单键现状 + 诊断留痕", async () => {
+    const diag = vi.fn();
+    const result = await familyRemote({ worktrees: undefined, diag }).list({ projectId: "proj-1" });
+    expect(result.ok && result.value.map((c) => c.slug)).toEqual(["alpha", "beta"]);
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining("键族缝缺席"));
+  });
+
+  it("键族清单抛错 → fail-soft 回退单键 + 诊断留痕（不炸读面）", async () => {
+    const diag = vi.fn();
+    const result = await familyRemote({ worktrees: { list: async () => { throw new Error("seam broke"); } }, diag }).list({ projectId: "proj-1" });
+    expect(result.ok && result.value.map((c) => c.slug)).toEqual(["alpha", "beta"]);
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining("键族清单失败"));
+  });
+});
