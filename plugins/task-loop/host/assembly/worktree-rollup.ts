@@ -51,9 +51,10 @@ export function deriveProjectKeyRolledUpGit(cwd: string, runner: GitPorcelainRun
   if (!isInWorktreeTree(probe.entries, cwd)) {
     return { key: deriveProjectKey(cwd), rolledUp: false, fallbackReason: "porcelain 清单不含 cwd（非本仓 worktree）——回退 cwd 键" };
   }
-  // git 输出恒正斜杠；project_key 拼写敏感（deriveDirName canonical path 原样入参）——主根
-  // 改写为 cwd 同分隔符拼写，保证写（worktree cwd）读（主根 cwd）两侧键全等（lib 单源
-  // matchPathSpelling）。
+  // git 输出恒正斜杠；键派生经 normalizeDirSpelling 归一（分隔符方向/尾分隔符不敏感、
+  // 大小写仍敏感）——正斜杠主根与反斜杠 cwd 派生键本已全等；主根仍经 lib 单源
+  // matchPathSpelling 改写为 cwd 同分隔符拼写，保证写（worktree cwd）读（主根 cwd）两侧
+  // 键字面同形（mainRoot 诊断留痕/回退比对可直读，键全等双保险）。
   const canonicalRoot = matchPathSpelling(cwd, probe.entries[0]!.path);
   return { key: deriveProjectKey(canonicalRoot), rolledUp: true, mainRoot: canonicalRoot };
 }

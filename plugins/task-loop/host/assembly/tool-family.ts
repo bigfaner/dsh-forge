@@ -10,6 +10,10 @@ import { deriveProjectKeyRolledUpGit } from "./worktree-rollup.js";
  * f5 键族缝回退主根单键时任务 tab 空数据真因修口，诊断留痕 .forge/task-logs/）：
  * marker 段仅作触发条件，主根 = `git worktree list --porcelain` 现查首条目（worktree-rollup
  * 单源）。git 缺席/命令失败/cwd 不属清单 = fail-soft 回退 cwd 键 + 回退原因留痕（不静默）。
+ * G-F3 收口门口径限定留痕：43f92e1b 收口门「porcelain spawn/parse 复本全仓 grep 零命中」
+ * **限于归拢/清单面**（本模块与 spec/project 的归拢消费点，均走 lib-path/project-root
+ * 单源）；plugins/project bugs service resolveFixEvidence 的内联 porcelain 解析为先在面、
+ * 用途不同（fixed 证据 HEAD==hash 锚定反查，非键归拢/清单判定），不在该口径内、不收敛。
  */
 
 import type { TaskLoopAssembly } from "./default-assembly.js";

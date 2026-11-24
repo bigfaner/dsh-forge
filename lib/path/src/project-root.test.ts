@@ -11,7 +11,8 @@ import {
   type GitPorcelainRunner,
 } from './project-root.js'
 
-/** 真实 git worktree list --porcelain 输出形状夹具（主检出 + detached + bare + 附属树） */
+/** 真实 git worktree list --porcelain 输出形状夹具（主检出 + detached + bare + 附属树）。
+ * bare 形态随真实 git 输出（G-F5 修正）：bare 行独立成行、worktree 路径无 `(bare)` 后缀 */
 const PORCELAIN = [
   'worktree C:/repo',
   'HEAD abc123',
@@ -25,7 +26,7 @@ const PORCELAIN = [
   'HEAD 789abc',
   'detached',
   '',
-  'worktree C:/bare-repo (bare)',
+  'worktree C:/bare-repo',
   'bare',
   '',
 ].join('\n')
@@ -41,7 +42,7 @@ describe('parseWorktreePorcelain（porcelain 解析边界 pin）', () => {
   it('detached / bare 条目（branch 缺席）', () => {
     const entries = parseWorktreePorcelain(PORCELAIN)
     expect(entries[2]).toEqual({ path: 'C:/elsewhere/detached', head: '789abc', detached: true, bare: false })
-    expect(entries[3]).toEqual({ path: 'C:/bare-repo (bare)', head: '', detached: false, bare: true })
+    expect(entries[3]).toEqual({ path: 'C:/bare-repo', head: '', detached: false, bare: true })
   })
 
   it('空输出 / 纯空白 → 空清单', () => {

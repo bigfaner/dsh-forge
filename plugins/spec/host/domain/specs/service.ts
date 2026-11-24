@@ -182,8 +182,9 @@ export interface ProjectKeyRollupResult {
  * worktree 归拢主根推导（M3 写侧归拢单点——lib-path project-root 单源消费，task-loop
  * tool-family 同形）：① marker 不命中 → 零 git 调用，原样 deriveProjectKey(cwd)；
  * ② marker 命中 → lib 单源 porcelain 现查；cwd 归属清单任一条目子树 → 主根 = 首条目
- * （git 主行恒先列）→ deriveProjectKey(主根)（拼写随 cwd 风格改写——键派生拼写敏感，
- * 写读两侧键全等）；③ git 失败/空清单/非本仓清单 = fail-soft 回退 cwd 键 + 回退原因
+ * （git 主行恒先列）→ deriveProjectKey(主根)。键拼写语义（G-F2 改述）：键派生经
+ * normalizeDirSpelling 归一——分隔符方向/尾分隔符不敏感、大小写仍敏感；主根经
+ * matchPathSpelling 同形改写为 cwd 分隔符风格，写读两侧键字面全等双保险；③ git 失败/空清单/非本仓清单 = fail-soft 回退 cwd 键 + 回退原因
  * （调用方经诊断面留痕）。空 cwd 派生拒绝由 deriveProjectKey 原样上抛（marker 不命中径）。
  */
 export function deriveProjectKeyRolledUp(cwd: string, runner: GitPorcelainRunner = spawnGitWorktreePorcelain): ProjectKeyRollupResult {
