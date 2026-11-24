@@ -3,10 +3,18 @@
 // updateSpec 守卫族（必含 Goal / 归档冻结 / rel_path 跨 spec 重复）、transitionSpec
 // 状态机两写（现值 UPDATE + 台账 append 同事务）。
 // 依赖注入形态：SpecVerbDeps（db 动词零裸开；writeSpecDoc 文件写缝——装配面注真实现、
-// 测试注桩）；归属键 = cwd 纯函数派生（lib/path deriveDirName 单源，派生失败拒写）。
+// 测试注桩）；归属键 = cwd 派生 + worktree 归拢主根键（deriveProjectKeyRolledUp 单点，
+// 写读动词全量经此——marker 不命中零 git 调用，派生失败拒写）。
 import { randomUUID } from "node:crypto";
 import type Database from "@dsh-forge/lib-db";
 import { deriveDirName } from "@dsh-forge/lib-path";
+import {
+  isInWorktreeTree,
+  matchPathSpelling,
+  resolveMainCheckoutRoot,
+  spawnGitWorktreePorcelain,
+  type GitPorcelainRunner,
+} from "@dsh-forge/lib-path/project-root";
 import { withTransaction } from "@dsh-forge/lib-db";
 import type { DocsRepo } from "../../db/repositories/docs-repo.js";
 import type { MilestoneRepo } from "../../db/repositories/milestone-repo.js";
@@ -88,6 +96,10 @@ export interface SpecVerbDeps {
   now?: () => string;
   /** M4 专家门挂缝（guards.ts seam 单源） */
   transitionGuards?: SpecTransitionGuard[];
+  /** git porcelain 探针缝（写侧主根归拢 lib 单源消费——测试注桩；缺省 = lib 真探针） */
+  gitPorcelain?: GitPorcelainRunner;
+  /** 诊断缝（归属键归拢/回退留痕——缺席静默不阻载） */
+  diag?: (line: string) => void;
 }
 
 export interface ForgeSpecsService {
@@ -133,6 +145,41 @@ export function deriveProjectKey(cwd: string): string {
   return key;
 }
 
+/** worktree 检出形态触发 marker（主根归拢廉价预检——零 git 调用省费，task-loop 同径） */
+const WORKTREE_MARKER = /[\\/]\.forge[\\/]worktrees[\\/]/;
+
+/** worktree 归拢结果（rolledUp = git 推导成功；fallbackReason = fail-soft 回退原因） */
+export interface ProjectKeyRollupResult {
+  readonly key: string;
+  readonly rolledUp: boolean;
+  /** git 现查推导出的主检出根（rolledUp = true 时在场，deriveProjectKey 原文口径） */
+  readonly mainRoot?: string;
+  readonly fallbackReason?: string;
+}
+
+/**
+ * worktree 归拢主根推导（M3 写侧归拢单点——lib-path project-root 单源消费，task-loop
+ * tool-family 同形）：① marker 不命中 → 零 git 调用，原样 deriveProjectKey(cwd)；
+ * ② marker 命中 → lib 单源 porcelain 现查；cwd 归属清单任一条目子树 → 主根 = 首条目
+ * （git 主行恒先列）→ deriveProjectKey(主根)（拼写随 cwd 风格改写——键派生拼写敏感，
+ * 写读两侧键全等）；③ git 失败/空清单/非本仓清单 = fail-soft 回退 cwd 键 + 回退原因
+ * （调用方经诊断面留痕）。空 cwd 派生拒绝由 deriveProjectKey 原样上抛（marker 不命中径）。
+ */
+export function deriveProjectKeyRolledUp(cwd: string, runner: GitPorcelainRunner = spawnGitWorktreePorcelain): ProjectKeyRollupResult {
+  if (!WORKTREE_MARKER.test(cwd)) {
+    return { key: deriveProjectKey(cwd), rolledUp: false };
+  }
+  const probe = resolveMainCheckoutRoot(cwd, runner);
+  if (probe.entries === undefined) {
+    return { key: deriveProjectKey(cwd), rolledUp: false, fallbackReason: probe.reason };
+  }
+  if (!isInWorktreeTree(probe.entries, cwd)) {
+    return { key: deriveProjectKey(cwd), rolledUp: false, fallbackReason: "porcelain 清单不含 cwd（非本仓 worktree）——回退 cwd 键" };
+  }
+  const canonicalRoot = matchPathSpelling(cwd, probe.entries[0]!.path);
+  return { key: deriveProjectKey(canonicalRoot), rolledUp: true, mainRoot: canonicalRoot };
+}
+
 function assertGoalsValid(goals: GoalInput[]): void {
   if (!Array.isArray(goals) || goals.length < 1) {
     throw new SpecError("ERR_SPEC_GOALS_EMPTY", "Spec 必含至少一个 Goal", { goals });
@@ -169,7 +216,21 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     generateId = () => randomUUID(),
     now = () => new Date().toISOString(),
     transitionGuards = [],
+    gitPorcelain,
+    diag,
   } = deps;
+
+  // 归属键派生单点（M3 写侧归拢——写读动词全量经此，worktree cwd 归拢主根键；
+  // 归拢发生/回退经诊断面留痕，零 git 调用常态零噪声）
+  const keyOf = (cwd: string): string => {
+    const rollup = deriveProjectKeyRolledUp(cwd, gitPorcelain);
+    if (rollup.rolledUp) {
+      diag?.(`[spec] 归属键归拢：worktree cwd 归拢主根键 cwd=${cwd} key=${rollup.key}`);
+    } else if (rollup.fallbackReason !== undefined) {
+      diag?.(`[spec] 归属键归拢 fail-soft 回退 cwd 键：${rollup.fallbackReason}（cwd=${cwd}）`);
+    }
+    return rollup.key;
+  };
 
   function locate(projectKey: string, slug: string): SpecRow {
     const spec = repos.specs.getBySlug(projectKey, slug);
@@ -217,7 +278,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
   return {
     createSpec(input) {
       // ① 校验门（事务外，零落库拒收）
-      const projectKey = deriveProjectKey(input.cwd);
+      const projectKey = keyOf(input.cwd);
       assertGoalsValid(input.goals);
       const tiers = assertTiersValid(input.tiers);
       if (repos.specs.getBySlug(projectKey, input.slug)) {
@@ -267,7 +328,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     },
 
     updateSpec(input) {
-      const projectKey = deriveProjectKey(input.cwd);
+      const projectKey = keyOf(input.cwd);
       const spec = locate(projectKey, input.slug);
       guardNotCompleted(spec);
       const tiers =
@@ -307,7 +368,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     },
 
     replaceGoals({ cwd, slug, goals }) {
-      const projectKey = deriveProjectKey(cwd);
+      const projectKey = keyOf(cwd);
       const spec = locate(projectKey, slug);
       guardNotCompleted(spec);
       assertGoalsValid(goals); // 必含 Goal 不变式：删至零行拒写（服务层单点守卫）
@@ -328,7 +389,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
           actor: input.actor,
         });
       }
-      const projectKey = deriveProjectKey(input.cwd);
+      const projectKey = keyOf(input.cwd);
       const spec = locate(projectKey, input.slug);
       // 迁移判定单源 specMachine（status-machine.md §4 条目 3）——非法边转 SpecError（错误码保留）
       try {
@@ -368,12 +429,12 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     },
 
     listSpecs({ cwd, statusFilter }) {
-      const projectKey = deriveProjectKey(cwd);
+      const projectKey = keyOf(cwd);
       return repos.specs.list(projectKey, statusFilter);
     },
 
     getSpec({ cwd, slug }) {
-      const projectKey = deriveProjectKey(cwd);
+      const projectKey = keyOf(cwd);
       const chain = repos.specs.parentChain(projectKey, slug);
       if (!chain) return undefined;
       const doc = repos.docs.getBySpec(chain.spec.id);

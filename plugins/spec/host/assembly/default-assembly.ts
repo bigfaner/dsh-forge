@@ -8,7 +8,7 @@ import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { openSpecDb, specDbFileName, type SpecDomainDb } from "../db/connection.js";
 import { SpecError } from "../domain/specs/errors.js";
-import { createForgeSpecsService, deriveProjectKey, type ForgeSpecsService } from "../domain/specs/service.js";
+import { createForgeSpecsService, deriveProjectKeyRolledUp, type ForgeSpecsService } from "../domain/specs/service.js";
 
 export { specDbFileName };
 
@@ -20,6 +20,8 @@ export interface SpecAssemblyConfig {
   readonly dbFile?: string;
   /** projectKey → 项目检出根（Spec 文档落盘根锚；缺席 = 诊断留痕 + 写缝拒绝不落半态） */
   readonly resolveWsPath?: (projectKey: string) => string;
+  /** git porcelain 探针缝（缺省写缝主根归拢 lib 单源消费——测试注桩；缺省 = lib 真探针） */
+  readonly gitPorcelain?: import("@dsh-forge/lib-path/project-root").GitPorcelainRunner;
 }
 
 type AssemblyDiag = (line: string, level?: "info" | "warn" | "error") => void;
@@ -83,12 +85,19 @@ export function assembleSpecServices(config: SpecAssemblyConfig = {}, diag?: Ass
   const specs = createForgeSpecsService({
     db: db.db,
     repos: db.repos,
+    ...(config.gitPorcelain !== undefined ? { gitPorcelain: config.gitPorcelain } : {}),
     writeSpecDoc: (relPath, content, projectKey, cwd) => {
-      // 检出根解析缝（bug fefd5149 缝②）：config.resolveWsPath 显式注入优先（组合器/测试
-      // 缝）；缺席 = 缺省缝按调用 cwd 直写——cwd 即会话检出根时 deriveProjectKey 同键守卫
-      // 命中（单装缺省装配的正径），键不匹配（跨项目 cwd）= 拒绝 fail-loud 不猜。
+      // 检出根解析缝（bug fefd5149 缝② + M3 写侧归拢双锚）：config.resolveWsPath 显式
+      // 注入优先（组合器/测试缝）；缺席 = 缺省缝按调用 cwd 归拢解析——cwd 落 worktree
+      // 检出（marker 触发）时归属键已归拢主根键，文档落盘同步解析主检出根（键 → 主根
+      // 写入——「主根可见」终态）；非 worktree cwd 主根缺席 = 直写 cwd（键 === cwd 键
+      // 守卫命中，单装缺省装配的正径）。键不匹配（跨项目 cwd）= 拒绝 fail-loud 不猜。
       const write = createSpecDocWriter(
-        config.resolveWsPath ?? ((key) => (cwd !== "" && key === deriveProjectKey(cwd) ? cwd : undefined)),
+        config.resolveWsPath ?? ((key) => {
+          if (cwd === "") return undefined;
+          const rollup = deriveProjectKeyRolledUp(cwd, config.gitPorcelain);
+          return key === rollup.key ? (rollup.mainRoot ?? cwd) : undefined;
+        }),
       );
       return write(relPath, content, projectKey);
     },

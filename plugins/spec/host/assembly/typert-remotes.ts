@@ -469,6 +469,29 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     return { wsPath: rootPath, projectKey: deriveProjectKey(rootPath) };
   }
 
+  /**
+   * 单 spec 键族寻径（M4 收口——detail/query/projection/transition 单键面改键族兼容读）：
+   * 沿 resolveIdentityFamily 逐键 getSpec，首见命中即返回（主根先行——归拢后新写入行
+   * 恒主根键首见，存量 worktree 键行经族内 worktree 键兼容读命中）；族全键未命中 =
+   * missing（typed NOT_FOUND），身份未解析 = unresolved（typed 拒绝）。
+   */
+  private async locateInFamily(projectId: string, slug: string): Promise<
+    | { kind: "unresolved" }
+    | { kind: "missing" }
+    | { kind: "found"; ws: SpecIdentityResolution; chain: NonNullable<ReturnType<ForgeSpecsService["getSpec"]>>; mainKey: string }
+  > {
+    const family = await this.resolveIdentityFamily(projectId);
+    if (family.length === 0) return { kind: "unresolved" };
+    const svc = this.specs();
+    for (const ws of family) {
+      const chain = svc.getSpec({ cwd: ws.wsPath, slug });
+      if (chain !== undefined) {
+        return { kind: "found", ws, chain, mainKey: family[0]!.projectKey };
+      }
+    }
+    return { kind: "missing" };
+  }
+
   /** Spec 卡片清单（listing 索引序——UI 台账数据源；f5 键族聚合——主根 + worktree 键逐键
    *  取卡合并，slug 去重保首见序主根先行） */
   @Remote
@@ -501,18 +524,16 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     }
   }
 
-  /** Spec 详情（父链全量 + doc 悬空态现算 + transitions 台账） */
+  /** Spec 详情（父链全量 + doc 悬空态现算 + transitions 台账；键族兼容读——命中键即
+   *  悬空判定锚 wsPath，存量 worktree 文档对 worktree 键不恒 dangling） */
   @Remote
   async detail(q: { readonly projectId: string; readonly slug: string }, signal?: AbortSignal): Promise<Result<SpecDetailDto>> {
     signal?.throwIfAborted();
     try {
-      const svc = this.specs();
-      const ws = await this.resolveIdentity(q.projectId);
-      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
-      const chain = svc.getSpec({ cwd: ws.wsPath, slug: q.slug });
-      if (chain === undefined) {
-        return resultError(NOT_FOUND_CODE, `spec 不存在：${q.slug}`);
-      }
+      const located = await this.locateInFamily(q.projectId, q.slug);
+      if (located.kind === "unresolved") return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
+      if (located.kind === "missing") return resultError(NOT_FOUND_CODE, `spec 不存在：${q.slug}`);
+      const { ws, chain } = located;
       const card = this.cardOf(chain);
       const doc = chain.doc === undefined
         ? undefined
@@ -540,13 +561,10 @@ export class ForgeSpecsRemote extends TypertRemoteService {
   ): Promise<Result<SpecQueryResultDto>> {
     signal?.throwIfAborted();
     try {
-      const svc = this.specs();
-      const ws = await this.resolveIdentity(input.projectId);
-      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
-      const chain = svc.getSpec({ cwd: ws.wsPath, slug: input.slug });
-      if (chain === undefined) {
-        return resultError(NOT_FOUND_CODE, `spec 不存在：${input.slug}`);
-      }
+      const located = await this.locateInFamily(input.projectId, input.slug);
+      if (located.kind === "unresolved") return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
+      if (located.kind === "missing") return resultError(NOT_FOUND_CODE, `spec 不存在：${input.slug}`);
+      const { chain, mainKey } = located;
       const include = input.include ?? {};
       const hydratedGoals = chain.goals.map(({ goal, acs }) => ({
         title: goal.title,
@@ -555,7 +573,9 @@ export class ForgeSpecsRemote extends TypertRemoteService {
       }));
       let acProjection: readonly AcProjectionRow[] | undefined;
       if (include.projection !== false) {
-        acProjection = (await this.projectOf(chain.spec.projectKey, hydratedGoals)).goals.flatMap((g) => g.acs);
+        // M5 投影键同步：task-loop 结算行自写侧归拢起恒落主根键——投影按键族主根键查
+        // 结算（存量 worktree 键 spec 行亦命中，进度不再恒 0）
+        acProjection = (await this.projectOf(mainKey, hydratedGoals)).goals.flatMap((g) => g.acs);
       }
       return ok({
         spec: chain.spec,
@@ -569,22 +589,18 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     }
   }
 
-  /** AC 投影聚合端点（模块③投影流水复用） */
+  /** AC 投影聚合端点（模块③投影流水复用；键族兼容读 + M5 投影键同步——结算查主根键） */
   @Remote
   async projection(q: { readonly projectId: string; readonly slug: string }, signal?: AbortSignal): Promise<Result<AcProjectionDto>> {
     signal?.throwIfAborted();
     try {
-      const svc = this.specs();
-      const ws = await this.resolveIdentity(q.projectId);
-      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
-      const chain = svc.getSpec({ cwd: ws.wsPath, slug: q.slug });
-      if (chain === undefined) {
-        return resultError(NOT_FOUND_CODE, `spec 不存在：${q.slug}`);
-      }
+      const located = await this.locateInFamily(q.projectId, q.slug);
+      if (located.kind === "unresolved") return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${q.projectId}`);
+      if (located.kind === "missing") return resultError(NOT_FOUND_CODE, `spec 不存在：${q.slug}`);
       return ok(
         await this.projectOf(
-          chain.spec.projectKey,
-          chain.goals.map(({ goal, acs }) => ({
+          located.mainKey,
+          located.chain.goals.map(({ goal, acs }) => ({
             title: goal.title,
             acs: acs.map((ac) => ({ criterion: ac.criterion })),
           })),
@@ -604,10 +620,11 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     signal?.throwIfAborted();
     try {
       const svc = this.specs();
-      const ws = await this.resolveIdentity(input.projectId);
-      if (ws === null) return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
+      const located = await this.locateInFamily(input.projectId, input.slug);
+      if (located.kind === "unresolved") return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
+      if (located.kind === "missing") return resultError(NOT_FOUND_CODE, `spec 不存在：${input.slug}`);
       const row = svc.transitionSpec({
-        cwd: ws.wsPath,
+        cwd: located.ws.wsPath,
         slug: input.slug,
         to: input.to,
         ...(input.note !== undefined ? { note: input.note } : {}),
