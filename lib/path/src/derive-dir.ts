@@ -9,10 +9,13 @@
 //   · flatten：`/`、`\` → `-`、盘符冒号去除（`Z:\project\dsh` → `Z-project-dsh`；UNC 双前导/
 //     POSIX 前导 → 前导 `-`）——与 apps/web form-model 原型 deriveTaskStore 同口径（4.3 起
 //     前端自算废除，本文件即唯一源）；
-//   · hash8 = 原路径 sha-256 前 8 hex 小写；输入 = canonical path 字符串本机原样，不二次
-//     规范化。拼写敏感是有意设计（S10：js realpath 已收敛大小写/junction/subst/8.3 全形态，
-//     真实移动/改名即换 hash——「疑似移动」信号面）；调用方（注册闭包/表单预检动词）必须先
-//     canonicalizeDir 再入本模块，两侧同基准 → 单源一致。
+//   · hash8 = 归一拼写输入的 sha-256 前 8 hex 小写；输入先经 normalizeDirSpelling canonical
+//     化（`/` → `\` + 去尾分隔符——键拼写归一，key-audit M2 修口）：同一物理路径不同分隔符/
+//     尾分隔符拼写派生同键（`Z:\a` ≡ `Z:/a` ≡ `Z:\a\`）——键族（git worktree list 正斜杠
+//     输出派生）对存量行（会话 cwd 反斜杠派生键）有效。大小写仍拼写敏感（归一不折叠大小写，
+//     S10：js realpath 已收敛大小写/junction/subst/8.3 全形态，真实移动/改名即换 hash——
+//     「疑似移动」信号面保留）；调用方（注册闭包/表单预检动词）仍须先 canonicalizeDir 再入
+//     本模块，两侧同基准 → 单源一致。
 //
 // 注册碰撞三态（§6-33/34；Interface 5「表单预检位（deriveTaskStoreDir 动词）+ 注册闭包复检」
 // 共用的纯分类器——中央 ws_path 精确确认归注册闭包，分类器只看 tasksHome 目录面）：
@@ -32,9 +35,13 @@ export function flattenWorkspacePath(workspaceDir: string): string {
   return deColonized.replaceAll('\\', '-')
 }
 
-/** hash8：原路径 sha-256 前 8 hex 小写（输入本机原样不二次规范化——§6-34；拼写敏感见头注） */
+/**
+ * hash8：归一拼写输入的 sha-256 前 8 hex 小写（key-audit M2 键拼写归一：输入先经
+ * normalizeDirSpelling canonical 化——同物理路径不同正字法派生同键；大小写不折叠，
+ * 「疑似移动」信号面保留）。
+ */
 export function hash8OfPath(workspaceDir: string): string {
-  return createHash('sha256').update(workspaceDir, 'utf8').digest('hex').slice(0, 8)
+  return createHash('sha256').update(normalizeDirSpelling(workspaceDir), 'utf8').digest('hex').slice(0, 8)
 }
 
 /** 工作区库目录名单源：`{flatten}@{hash8}`（O(1) 目录名自证——同工作区判定看尾段即知） */

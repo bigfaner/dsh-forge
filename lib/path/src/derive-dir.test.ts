@@ -49,24 +49,40 @@ describe('AC1 flatten 规则（原型 deriveTaskStore 同口径——与 apps/we
   })
 })
 
-describe('AC1 hash8（sha-256 前 8 hex 小写；输入 = 路径字符串本机原样，不二次规范化——§6-34）', () => {
-  it('逐字 pin（独立预计算字面量）：Z:\\project\\dsh → 9d2471be', () => {
+describe('AC1 hash8（sha-256 前 8 hex 小写；输入先 normalizeDirSpelling canonical 化——key-audit M2 键拼写归一）', () => {
+  it('逐字 pin（独立预计算字面量）：Z:\\project\\dsh → 9d2471be（存量反斜杠派生键不变——兼容读成立）', () => {
     expect(hash8OfPath('Z:\\project\\dsh')).toBe('9d2471be')
     expect(hash8OfPath('C:\\a\\b')).toBe('53577944')
     expect(hash8OfPath('C:\\a-b')).toBe('3d0f0b95')
-    expect(hash8OfPath('/home/user')).toBe('b98d692c')
   })
 
-  it('拼写敏感（有意设计）：分隔符/尾分隔符变体 → 异 hash8——调用方必须先 canonical 化（S10：realpath 收敛全形态）', () => {
-    expect(hash8OfPath('Z:/project/dsh')).toBe('23ba5fc1')
-    expect(hash8OfPath('Z:/project/dsh')).not.toBe(hash8OfPath('Z:\\project\\dsh'))
-    expect(hash8OfPath('Z:\\project\\dsh\\')).toBe('c6d28ce3')
+  it('拼写归一（key-audit M2）：分隔符/尾分隔符变体 → 同 hash8（同物理路径同键）', () => {
+    expect(hash8OfPath('Z:/project/dsh')).toBe('9d2471be')
+    expect(hash8OfPath('Z:/project/dsh')).toBe(hash8OfPath('Z:\\project\\dsh'))
+    expect(hash8OfPath('Z:\\project\\dsh\\')).toBe('9d2471be')
+    expect(hash8OfPath('C:/a/b')).toBe('53577944')
+  })
+
+  it('大小写仍拼写敏感（归一不折叠大小写——junction/改名「疑似移动」信号面保留）', () => {
+    expect(hash8OfPath('z:\\PROJECT\\dsh')).toBe('98423268')
+    expect(hash8OfPath('z:\\PROJECT\\dsh')).not.toBe(hash8OfPath('Z:\\project\\dsh'))
+    expect(hash8OfPath('Z:\\project\\dsh-junction')).toBe('34078aa9')
   })
 
   it('flatten 碰撞对（C:\\a\\b vs C:\\a-b → 同 C-a-b）hash8 结构性消歧（§6-34①）', () => {
     expect(flattenWorkspacePath('C:\\a\\b')).toBe('C-a-b')
     expect(flattenWorkspacePath('C:\\a-b')).toBe('C-a-b')
     expect(hash8OfPath('C:\\a\\b')).not.toBe(hash8OfPath('C:\\a-b'))
+  })
+})
+
+describe('AC1 存量键兼容读（key-audit M2 评估留痕）：反斜杠 cwd 存量行键 = 新派生键', () => {
+  it('存量（会话 cwd 反斜杠派生）键与正斜杠 worktree 输出派生键同键——键族对存量行有效', () => {
+    // 存量形态：harness 反斜杠 cwd 直入 hash8（归一前原样哈希 = 归一后同串）→ 存量键值不变
+    expect(hash8OfPath('Z:\\project\\dsh')).toBe('9d2471be') // 归一前 pin 字面量同值
+    // 键族形态：git worktree list 正斜杠输出 → 同键（M2 断裂收口）
+    expect(deriveDirName('Z:/project/dsh')).toBe(deriveDirName('Z:\\project\\dsh'))
+    expect(deriveTaskStoreDir('Z:\\forge-home', 'Z:/project/dsh')).toBe(deriveTaskStoreDir('Z:\\forge-home', 'Z:\\project\\dsh'))
   })
 })
 
@@ -109,16 +125,16 @@ describe('projectKey 五步派生 golden 参数化（canonical → normalizeDirS
       dirName: 'z-PROJECT-dsh@98423268',
     },
     {
-      name: '分隔符变体（正斜杠——canonical 化后不应出现，出现即异 hash8）',
+      name: '分隔符变体（正斜杠 worktree 输出——M2 键拼写归一后与反斜杠基线同键）',
       canonical: 'Z:/project/dsh',
       flattened: 'Z-project-dsh',
-      hash8: '23ba5fc1',
-      dirName: 'Z-project-dsh@23ba5fc1',
+      hash8: '9d2471be',
+      dirName: 'Z-project-dsh@9d2471be',
     },
   ] as const)('$name：五步逐位锚值', ({ canonical, flattened, hash8, dirName }) => {
     // ① canonical（调用方 realpath 产出入参）→ ② normalizeDirSpelling → ③ flatten
     expect(flattenWorkspacePath(canonical)).toBe(flattened)
-    // ④ hash8（输入 = canonical 本机原样，不二次规范化）
+    // ④ hash8（输入 normalizeDirSpelling canonical 化——M2 键拼写归一）
     expect(hash8OfPath(canonical)).toBe(hash8)
     // ⑤ 拼接：{tasksHome}/{flatten}@{hash8}（tasksHome 前缀参数 + 模板——防抖动锚）
     expect(deriveDirName(canonical)).toBe(dirName)
