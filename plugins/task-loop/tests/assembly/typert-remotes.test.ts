@@ -4,7 +4,7 @@
 // ④ follow baseline+增量快照钩（abort 出循环）；⑤ 注册装配（根 ctx plugin 捕获 + inject
 // 生命周期绑 + 缺席降级 + 诊断留痕）；⑥ typed unavailable 诚实拒绝。
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { remoteMethods } from "@deepseek-ai/dsh-typert-protocol";
+import { remoteErrorOf, remoteMethods } from "@deepseek-ai/dsh-typert-protocol";
 import { Context } from "@deepseek-ai/cordis";
 import { addTask } from "../../host/domain/tasks/add.js";
 import { claimTask } from "../../host/domain/tasks/claim.js";
@@ -56,14 +56,20 @@ function methodParameterNames(fn: (...args: unknown[]) => unknown): string[] {
     .filter((name) => name !== "");
 }
 
-/** typed 失败断言（信封去 Result 化——端点 typed 失败抛 RemoteError，code 保真可断言） */
+/**
+ * typed 失败断言（官方 remoteErrorOf 结构判据钉——isDSHRemoteError === true + code string，
+ * 与 gateway rpcFailure 折叠判据同源）。typedFailure 退化为普通 Error 带 code 属性时在此必红
+ * （真机 gateway 只对标记命中折叠 code，其余折 gateway/internal——结构标记不可再失守）。
+ */
 async function failureOf(run: () => Promise<unknown>): Promise<{ code: string; message?: string }> {
   try {
     await run();
   } catch (cause) {
-    const err = cause as { code?: string; message?: string };
-    if (typeof err.code !== "string") throw new Error(`期望 typed RemoteError（code 保真），实得：${String(cause)}`);
-    return { code: err.code, message: err.message };
+    const failure = remoteErrorOf(cause);
+    if (failure === undefined) {
+      throw new Error(`期望官方 isDSHRemoteError 结构标记的 RemoteError，实得：${String(cause)}`);
+    }
+    return { code: failure.code, message: failure.message };
   }
   throw new Error("期望 typed 失败抛出，实得成功返回");
 }
@@ -630,9 +636,9 @@ describe("键族聚合（2026-11-24 方案 A——快照族多键合并）", () 
   });
 });
 
-// ── 生产形状回归钉（真机双层信封根因——双层不可再发）──
+// ── 生产形状回归钉（真机双层信封根因——双层不可再发，全部一元端点扩面）──
 
-describe("生产形状双层不可再发（host 裸值 → serve 单层 → client 解得数组）", () => {
+describe("生产形状双层不可再发（host 裸值 → serve 单层 → client 解得——九个一元端点全钉）", () => {
   /** 官方 gateway serve 层 ok 路径单层包（rpcFailure/ok 单层——gateway 实况复刻） */
   function serveWrap(value: unknown): { ok: true; value: unknown } {
     return { ok: true, value };
@@ -648,20 +654,68 @@ describe("生产形状双层不可再发（host 裸值 → serve 单层 → clie
     throw new Error(`rpc failure: ${String(result.error?.code)}`);
   }
 
-  it("host 返裸数组 → serve 单层信封 → client 解得数组（单层、零内层 Result）", async () => {
+  /** host 端点返回值裸值钉（任一端点改回自返 Result 信封此处必红——双层不可再发） */
+  function expectBareValue(name: string, value: unknown): void {
+    expect(
+      value === null || typeof value !== "object" || !("ok" in value),
+      `端点 ${name} 不得自返 Result 信封（双层即真机形状回归根因）`,
+    ).toBe(true);
+    // serve 单层信封 → client 解得原值（单层、零内层 Result）
+    expect(clientUnwrap(serveWrap(value)), `端点 ${name} wire 往返`).toEqual(value);
+  }
+
+  it("九个一元端点 host 裸值逐点钉（每端点一次真实调用，非单点 list 抽样）+ acSettlements 成功路径直接断言", async () => {
     const svc = buildService();
-    seedTask(h, "alpha", "1", { status: "pending" });
+    const settled = await addTask(h.verbDeps, {
+      projectKey: h.projectKey,
+      slug: "alpha",
+      title: "T",
+      type: "coding-feature",
+      acceptanceCriteria: ["判据 A"],
+    });
+    await claimTask(h.verbDeps, { projectKey: h.projectKey, sessionId: "s-submit", source: { slug: "alpha" } });
+    await submitTask(h.verbDeps, {
+      projectKey: h.projectKey,
+      taskRef: { slug: "alpha", localId: settled.localId },
+      result: "success",
+      summary: "收口",
+      gate: { compile: true, fmt: true, lint: true, test: true },
+      acceptanceCriteria: [{ criterion: "判据 A", met: true, evidence: "绿" }],
+    });
+    const pending = await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "alpha", title: "T2", type: "coding-feature" });
     const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, projects: () => projectsFaceOf("Z:\\ws\\domain-tasks") });
-    const cards = await remote.list({ projectId: h.projectKey });
-    // 反例钉：host 端点不得自返 Result 信封（双层即任务 tab 恒空根因）
-    expect(Array.isArray(cards)).toBe(true);
-    expect(cards.every((c) => !("ok" in c))).toBe(true);
-    const unwrapped = clientUnwrap(serveWrap(cards));
-    expect(Array.isArray(unwrapped)).toBe(true);
-    expect((unwrapped as { title: string }[])).toHaveLength(1);
+    const values: Record<string, unknown> = {
+      list: await remote.list({ projectId: h.projectKey }),
+      stats: await remote.stats({ projectId: h.projectKey }),
+      graph: await remote.graph({ projectId: h.projectKey, slug: "alpha" }),
+      detail: await remote.detail({ projectId: h.projectKey, taskId: settled.taskId }),
+      query: await remote.query({ projectId: h.projectKey, taskRef: { slug: "alpha", localId: settled.localId } }),
+      sessionLinks: await remote.sessionLinks({ projectId: h.projectKey }),
+      validateFeatureTasks: await remote.validateFeatureTasks({ projectId: h.projectKey, slug: "alpha" }),
+      transition: await remote.transition({ projectId: h.projectKey, taskId: pending.taskId, toStatus: "in_progress", reason: "r" }),
+      acSettlements: await remote.acSettlements({ projectId: h.projectKey, criteria: ["判据 A"] }),
+    };
+    expect(Object.keys(values).sort()).toEqual([
+      "acSettlements",
+      "detail",
+      "graph",
+      "list",
+      "query",
+      "sessionLinks",
+      "stats",
+      "transition",
+      "validateFeatureTasks",
+    ]);
+    for (const [name, value] of Object.entries(values)) expectBareValue(name, value);
+    // acSettlements 成功路径直接断言（评审 K 缺口——聚合 DTO 形状，非仅失败路径）
+    const aggregate = values.acSettlements as { matches: { criterion: string; met: boolean; evidence?: string }[]; unmatched: string[] };
+    expect(aggregate.matches).toHaveLength(1);
+    expect(aggregate.matches[0]).toMatchObject({ criterion: "判据 A", met: true, evidence: "绿" });
+    expect(aggregate.unmatched).toEqual([]);
   });
 
   it("typed 失败过 wire：RemoteError → serve rpcFailure 折叠 {ok:false,error{code}} → client failure 分支承接", async () => {
+    // failureOf 已钉官方 isDSHRemoteError 结构标记（typedFailure 退化 new Error 必红）
     const remote = new ForgeTasksRemote(fakeCtx(), {});
     const failure = await failureOf(() => remote.list({ projectId: "p" }));
     const wire = { ok: false, error: { code: failure.code, message: failure.message ?? "", details: {} } };

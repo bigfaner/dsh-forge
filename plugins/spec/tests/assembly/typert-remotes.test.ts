@@ -4,7 +4,7 @@
 // ③ typed unavailable 降级分层（族缺席 / projectId 未解析——快照族空集、detail·write 族
 //    诚实拒绝）；④ 端点族 DTO 形状契约快照（真 in-memory db 服务端到端水化）。
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { remoteMethods } from "@deepseek-ai/dsh-typert-protocol";
+import { remoteErrorOf, remoteMethods } from "@deepseek-ai/dsh-typert-protocol";
 import { Context } from "@deepseek-ai/cordis";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,14 +31,20 @@ function endpointsOf(service: object): string[] {
   );
 }
 
-/** typed 失败断言（信封去 Result 化——端点 typed 失败抛 RemoteError，code 保真可断言） */
+/**
+ * typed 失败断言（官方 remoteErrorOf 结构判据钉——isDSHRemoteError === true + code string，
+ * 与 gateway rpcFailure 折叠判据同源）。typedFailure 退化为普通 Error 带 code 属性时在此必红
+ * （真机 gateway 只对标记命中折叠 code，其余折 gateway/internal——结构标记不可再失守）。
+ */
 async function failureOf(run: () => Promise<unknown>): Promise<{ code: string; message?: string }> {
   try {
     await run();
   } catch (cause) {
-    const err = cause as { code?: string; message?: string };
-    if (typeof err.code !== "string") throw new Error(`期望 typed RemoteError（code 保真），实得：${String(cause)}`);
-    return { code: err.code, message: err.message };
+    const failure = remoteErrorOf(cause);
+    if (failure === undefined) {
+      throw new Error(`期望官方 isDSHRemoteError 结构标记的 RemoteError，实得：${String(cause)}`);
+    }
+    return { code: failure.code, message: failure.message };
   }
   throw new Error("期望 typed 失败抛出，实得成功返回");
 }
@@ -1017,9 +1023,9 @@ describe("AC 投影键同步（审计 M5——结算查归拢主根键，进度�
   });
 });
 
-// ── 生产形状回归钉（真机双层信封根因——双层不可再发）──
+// ── 生产形状回归钉（真机双层信封根因——双层不可再发，全部一元端点扩面）──
 
-describe("生产形状双层不可再发（host 裸值 → serve 单层 → client 解得数组）", () => {
+describe("生产形状双层不可再发（host 裸值 → serve 单层 → client 解得——十个一元端点全钉）", () => {
   /** 官方 gateway serve 层 ok 路径单层包（rpcFailure/ok 单层——index.js 实况复刻） */
   function serveWrap(value: unknown): { ok: true; value: unknown } {
     return { ok: true, value };
@@ -1035,19 +1041,54 @@ describe("生产形状双层不可再发（host 裸值 → serve 单层 → clie
     throw new Error(`rpc failure: ${String(result.error?.code)}`);
   }
 
-  it("host 返裸数组 → serve 单层信封 → client 解得数组（单层、零内层 Result）", async () => {
-    const cards = await remote().list({ projectId: "proj-1" });
-    // 反例钉：host 端点不得自返 Result 信封（双层即 specStatusCounts 崩、任务 tab 恒空根因）
-    expect(Array.isArray(cards)).toBe(true);
-    expect(cards.every((c) => !("ok" in c))).toBe(true);
-    const raw = serveWrap(cards);
-    const unwrapped = clientUnwrap(raw);
-    expect(Array.isArray(unwrapped)).toBe(true);
-    expect((unwrapped as { slug: string }[]).map((c) => c.slug)).toEqual(["alpha", "beta"]);
+  /** host 端点返回值裸值钉（任一端点改回自返 Result 信封此处必红——双层不可再发） */
+  function expectBareValue(name: string, value: unknown): void {
+    expect(
+      value === null || typeof value !== "object" || !("ok" in value),
+      `端点 ${name} 不得自返 Result 信封（双层即真机形状回归根因）`,
+    ).toBe(true);
+    // serve 单层信封 → client 解得原值（单层、零内层 Result）
+    expect(clientUnwrap(serveWrap(value)), `端点 ${name} wire 往返`).toEqual(value);
+  }
+
+  it("十个一元端点 host 裸值逐点钉（每端点一次真实调用，非单点 list 抽样）", async () => {
+    const r = remote();
+    const values: Record<string, unknown> = {
+      list: await r.list({ projectId: "proj-1" }),
+      detail: await r.detail({ projectId: "proj-1", slug: "alpha" }),
+      query: await r.query({ projectId: "proj-1", slug: "alpha" }),
+      projection: await r.projection({ projectId: "proj-1", slug: "alpha" }),
+      transition: await r.transition({ projectId: "proj-1", slug: "beta", to: "awaiting_approval" }),
+      roadmaps: await r.roadmaps({ projectId: "proj-1" }),
+      roadmapDetail: await r.roadmapDetail({ projectId: "proj-1", slug: "rm-1" }),
+      roadmapMutate: await r.roadmapMutate({ projectId: "proj-1", action: "update", slug: "rm-1", title: "Roadmap One" }),
+      goalBoard: await r.goalBoard({ projectId: "proj-1", specSlug: "alpha" }),
+      goalReviewMutate: await (async () => {
+        // 写面端点：goal 现值直推 awaiting_confirmation 后 finalize（成功路径取值）
+        const alphaSpec = services.db.repos.specs.getBySlug(deriveProjectKey(lazy().cwd), "alpha")!;
+        const goal = services.db.repos.specs.listGoalsBySpec(alphaSpec.id)[0]!;
+        services.db.repos.specs.updateGoalStatus(goal.id, "awaiting_confirmation", "2026-01-03T00:00:00.000Z");
+        return r.goalReviewMutate({ projectId: "proj-1", specSlug: "alpha", goalSeq: goal.sortKey, action: "finalize" });
+      })(),
+    };
+    expect(Object.keys(values).sort()).toEqual([
+      "detail",
+      "goalBoard",
+      "goalReviewMutate",
+      "list",
+      "projection",
+      "query",
+      "roadmapDetail",
+      "roadmapMutate",
+      "roadmaps",
+      "transition",
+    ]);
+    for (const [name, value] of Object.entries(values)) expectBareValue(name, value);
   });
 
   it("typed 失败过 wire：RemoteError → serve rpcFailure 折叠 {ok:false,error{code}} → client failure 分支承接", async () => {
-    // gateway rpcFailure 复刻（RemoteError 保真折叠 code；gateway-index.js 实况同形）
+    // gateway rpcFailure 复刻（RemoteError 保真折叠 code；gateway-index.js 实况同形）——
+    // failureOf 已钉官方 isDSHRemoteError 结构标记（typedFailure 退化 new Error 必红）
     const failure = await failureOf(() => remote().detail({ projectId: "proj-1", slug: "missing" }));
     const wire = { ok: false, error: { code: failure.code, message: failure.message ?? "", details: {} } };
     expect(() => clientUnwrap(wire)).toThrow(`rpc failure: ERR_SPEC_NOT_FOUND`);
