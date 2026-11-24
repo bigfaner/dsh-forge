@@ -7,12 +7,18 @@ export interface ListDirRequest {
   dirPath?: string
 }
 
-/** 目录条目（仅真实子目录——符号链接目录不入列（P1 口径）；文件不入列） */
+/** 目录条目（真实子目录 + 纯文件混合入列——符号链接目录不入列（P1 口径）） */
 export interface DirEntry {
   /** 目录名（不含路径） */
   name: string
   /** 绝对路径（canonical 化） */
   path: string
+  /**
+   * 条目类型（dir = 子目录 / file = 纯文件）。
+   * 可选 + 缺席按 dir 解释——向后兼容：既有消费面（目录浏览器等）零改动不破坏；
+   * host 侧 listDir 实现恒携带本字段（新消费面按 kind 分流）。
+   */
+  kind?: "dir" | "file"
 }
 
 /** forge:fs/listDir 响应（只读列举，零写入面） */
@@ -21,6 +27,6 @@ export interface DirListing {
   path: string
   /** 上一级目录（盘符根 / UNC 根 = null——「上一级」禁用判据） */
   parentPath: string | null
-  /** 子目录条目（名称序） */
+  /** 条目（子目录 + 文件混合——名称序；类型经 DirEntry.kind 区分） */
   entries: DirEntry[]
 }

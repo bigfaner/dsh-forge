@@ -196,10 +196,14 @@ export function DirectoryBrowserView({
             rows={SKELETON_ROWS}
             anchor="data-dswf-fb-skeleton"
           />
-        ) : phase.phase === 'ready' && phase.listing.entries.length === 0 ? (
+        ) : phase.phase === 'ready' && phase.listing.entries.every((entry) => entry.kind === 'file') ? (
           <div className="dswf-fb-empty">空文件夹</div>
         ) : phase.phase === 'ready' ? (
-          phase.listing.entries.map((entry) => (
+          // listDir 契约扩展（子目录+文件混合入列）——目录浏览器只导航目录，文件条目过滤
+          //（kind 缺席按 dir 解释，向后兼容既有契约产出）
+          phase.listing.entries
+            .filter((entry) => entry.kind !== 'file')
+            .map((entry) => (
             <DirRow
               key={entry.path}
               name={entry.name}

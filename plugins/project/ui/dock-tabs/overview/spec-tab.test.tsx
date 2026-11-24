@@ -283,6 +283,27 @@ describe('SpecTab（数据路 + 失败两支分开 + 行形态）', () => {
       expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/logo.bin"]')?.textContent).toContain('二进制')
     })
 
+    it('混合目录形态：文件行 + 子目录行各自呈现、类型 tag 正确（子目录无查看入口）', async () => {
+      const host = await renderWithFiles({
+        entries: [
+          { name: 'design', path: 'Z:/ws/.forge/specs/spec-a/design', kind: 'dir' },
+          { name: 'notes.md', path: 'Z:/ws/.forge/specs/spec-a/notes.md', kind: 'file' },
+        ],
+      })
+      const dirRow = host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/design"]')
+      expect(dirRow).not.toBeNull()
+      expect(dirRow!.textContent).toContain('目录')
+      expect(dirRow!.querySelector('[data-dswf-ov-spec-file-open]')).toBeNull()
+      expect(dirRow!.querySelector('[data-dswf-ov-spec-file-external]')).toBeNull()
+      const fileRow = host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/notes.md"]')
+      expect(fileRow).not.toBeNull()
+      expect(fileRow!.textContent).toContain('Markdown')
+      expect(fileRow!.querySelector('[data-dswf-ov-spec-file-open]')).not.toBeNull()
+    })
+
+    // 读取路径闭环锚（评审 D 观察②）：文件 rel 由 listDir 所列同一 dirRel 派生
+    //（joinSpecFileRel），onOpenDoc 收到的 rel 与 spec-tab 文档行 doc.relPath 同一
+    // relPath 空间——docs.read 按该 rel 解析（canonical(forge_dir) 派生同源，见 spec-tab.tsx 判定留痕）。
     it('查看通道分流：html/文本 → onOpenDoc（dock 文档 tab 现状）；二进制 → openExternal 降级', async () => {
       const onOpenDoc = vi.fn()
       const onOpenExternal = vi.fn()

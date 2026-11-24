@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/project",
-  "version": "0.32.1",
+  "version": "0.32.2",
   "private": true,
   "type": "module",
   "description": "项目台：管理项目与工作树，提供项目台账、目录事实与工作区选择。",

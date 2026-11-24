@@ -257,7 +257,8 @@ export class ForgeBugsRemote extends TypertRemoteService {
 
 /**
  * 列举目录（canonical 化 = path.resolve——调用方以此为对账基准）。
- * 仅真实子目录入列（符号链接目录/文件不入列，P1 口径）；名称序。
+ * 子目录 + 纯文件混合入列（DirEntry.kind 类型区分——符号链接目录不入列，P1 口径）；
+ * 名称序（混合统一按名排序——子目录相对次序与既有契约一致）。
  * @param dirPath - 缺省 = 用户主目录（浏览器起始态）
  */
 export async function listDir(dirPath: string | undefined, signal?: AbortSignal): Promise<DirListing> {
@@ -271,8 +272,12 @@ export async function listDir(dirPath: string | undefined, signal?: AbortSignal)
     throw new Error(`目录不可达：${target}（${messageOf(cause)}）`);
   }
   const entries = dirents
-    .filter((dirent) => dirent.isDirectory())
-    .map((dirent) => ({ name: dirent.name, path: resolve(target, dirent.name) }))
+    .filter((dirent) => dirent.isDirectory() || dirent.isFile())
+    .map((dirent) => ({
+      name: dirent.name,
+      path: resolve(target, dirent.name),
+      kind: dirent.isDirectory() ? ("dir" as const) : ("file" as const),
+    }))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const parent = dirname(target);
   return { path: target, parentPath: parent === target ? null : parent, entries };
@@ -283,7 +288,7 @@ export class ForgeFsRemote extends TypertRemoteService {
     super(ctx, "forgeFsController", { namespace: "forgeFs" });
   }
 
-  /** 目录列举（add-project 浏览器数据源——只读） */
+  /** 目录列举（add-project 浏览器 + spec-tab 文档列举数据源——只读，混合入列） */
   @Remote
   async listDir(dirPath: string | undefined, signal?: AbortSignal): Promise<DirListing> {
     return await listDir(dirPath, signal);

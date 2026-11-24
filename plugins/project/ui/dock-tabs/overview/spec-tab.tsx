@@ -12,7 +12,8 @@
 // chips 过滤 = 客户端承载（forgeSpecs/list statusFilter 为单值参，多选并集不可表达——
 // 提案域同款差异，非漂移）；搜索 = 服务端承载（list search 参透传——Hard Rule）。
 // 1.2 增强（overview-dockkit-alignment）：文档区目录列举——spec.md 本体行保留既有文档入口，
-// 其余文件逐行呈现（文件名 + 格式 tag + 查看入口）。数据源 = forgeDirs.facts workspaceRoot
+// 其余条目逐行呈现（文件行：文件名 + 格式 tag + 查看入口；子目录行：目录 tag、无查看入口
+// ——listDir 契约扩展后混合入列，经 DirEntry.kind 分流）。数据源 = forgeDirs.facts workspaceRoot
 // 锚定 + forgeFs.listDir 列 relPath 所在目录（既有 @Remote 零新端点）；列举失败 = fail-soft
 // 单行降级 + diag 留痕（不阻断元数据区渲染）。查看通道按格式分流（overview-model
 // specFileFormatOf）：markdown/html/文本 → dock 文档 tab（onOpenDoc 现状——DocsTab 内按
@@ -201,7 +202,7 @@ export interface SpecTabProps {
 type SpecDirListState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ok'; readonly entries: readonly { readonly name: string; readonly rel: string }[] }
+  | { readonly kind: 'ok'; readonly entries: readonly { readonly name: string; readonly rel: string; readonly kind?: 'dir' | 'file' }[] }
 
 /**
  * spec 子 tab（进入 tab 拉取——本组件仅 spec 子 tab 激活期挂载，子 tab 切换卸载即清态；
@@ -293,6 +294,12 @@ export function SpecTab({ projectId, search, onOpenDoc, onStartSession, makeSpec
 
   // 文档区目录列举（1.2——detail.doc 在场且非悬空触发；forgeDirs.facts workspaceRoot 锚定 +
   // forgeFs.listDir 列 relPath 所在目录；失败 fail-soft 单行降级 + diag 留痕，不阻断元数据区）
+  // 读取路径闭环（评审 D 观察②判定留痕）：列举与读取同源——forgeDirs.facts workspaceRoot 是
+  // forgeDir（= workspaceRoot/.forge）派生单源（host self-anchors joinDirSegment 链），
+  // docs.read 守卫基准 canonical(forge_dir)（可达 realpath / 不可达词法 resolve）与
+  // listDir 入参 resolve(workspaceRoot)/… 在 worktree 检出形态（真实目录、零 junction）
+  // 下逐点重合：读 = resolve(canonical(forge_dir), docRel)，列 = resolve(workspaceRoot, dirRel)
+  // 同一 .forge 子树——读写同源成立。dev junction 形态（realpath ≠ 词法）不在取证范围。
   useEffect(() => {
     if (load.kind !== 'ready') return
     const client = makeRpc()
@@ -311,7 +318,7 @@ export function SpecTab({ projectId, search, onOpenDoc, onStartSession, makeSpec
           const docBase = doc.relPath.replaceAll('\\', '/').split('/').pop() ?? ''
           const entries = listing.entries
             .filter((entry) => entry.name !== docBase && entry.name !== 'spec.md')
-            .map((entry) => ({ name: entry.name, rel: joinSpecFileRel(dirRel, entry.name) }))
+            .map((entry) => ({ name: entry.name, rel: joinSpecFileRel(dirRel, entry.name), kind: entry.kind }))
           setDirLists((prev) => new Map(prev).set(slug, { kind: 'ok' as const, entries }))
         })
         .catch((cause: unknown) => {
@@ -443,12 +450,18 @@ export function SpecTab({ projectId, search, onOpenDoc, onStartSession, makeSpec
                             if (files.kind === 'error') return '目录列举失败（降级呈现）'
                             if (files.entries.length === 0) return '—'
                             return files.entries.map((entry) => {
+                              const isDir = entry.kind === 'dir'
                               const fmt = specFileFormatOf(entry.name)
                               return (
                                 <span className="dswf-ov-spec-file" key={entry.rel} data-dswf-ov-spec-file={entry.rel}>
                                   <span className="dswf-ov-spec-file-name">{entry.name}</span>
-                                  <Tag tone="neutral">{SPEC_FILE_FORMAT_LABELS[fmt]}</Tag>
-                                  {fmt === 'binary' ? (
+                                  {/* 类型 tag：文件 = 格式 tag（既有口径）；子目录 = 目录 tag（无查看入口） */}
+                                  {isDir ? (
+                                    <Tag tone="neutral">目录</Tag>
+                                  ) : (
+                                    <Tag tone="neutral">{SPEC_FILE_FORMAT_LABELS[fmt]}</Tag>
+                                  )}
+                                  {isDir ? null : fmt === 'binary' ? (
                                     <button
                                       type="button"
                                       className="dswf-ov-act"

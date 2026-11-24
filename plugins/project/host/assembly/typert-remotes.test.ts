@@ -547,7 +547,7 @@ describe('typed unavailable 与 fs listDir（诚实降级面）', () => {
     await expect(new ForgeFeaturesRemote(fakeCtx(), {}).list({})).rejects.toThrow(unavailableMessage('list', 'features'))
   })
 
-  it('listDir：真实目录只读列举（子目录名序 + canonical path；文件不入列）', async () => {
+  it('listDir：真实目录只读列举（子目录+文件混合入列 kind 区分 + 名称序 + canonical path）', async () => {
     const root = await mkdtemp(join(tmpdir(), 'forge-typert-fs-'))
     try {
       await mkdir(join(root, 'b-dir'))
@@ -556,8 +556,14 @@ describe('typed unavailable 与 fs listDir（诚实降级面）', () => {
       const listing = await listDir(root)
       expect(listing.path).toBe(root)
       expect(listing.parentPath).not.toBeNull()
-      expect(listing.entries.map((e) => e.name)).toEqual(['a-dir', 'b-dir'])
+      // 混合名称序（目录相对次序不变）+ kind 类型区分
+      expect(listing.entries.map((e) => [e.name, e.kind])).toEqual([
+        ['a-dir', 'dir'],
+        ['b-dir', 'dir'],
+        ['file.txt', 'file'],
+      ])
       expect(listing.entries[0]?.path).toBe(join(root, 'a-dir'))
+      expect(listing.entries[2]?.path).toBe(join(root, 'file.txt'))
     } finally {
       await rm(root, { recursive: true, force: true })
     }
