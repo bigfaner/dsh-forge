@@ -12,7 +12,10 @@
 // import）——describe/revision/stale 拒写/schema 校验归官方，写落活动 profile 的
 // cordis.patch.yml（id 定向条目），volatile 通知 → 快照换代 → 面板热刷新（无重启生效）。
 // 降级：configForms 缺席（宿主未组 settings 域）= 不注册本面板（console.warn 留痕）；
-// namespace 未被服务 = whileServed 在场门不注册；快照 unavailable = 面板降级提示。
+// namespace unserved/stub（含 whileServed 回调不即时触发的挂起态——bug 55c24319 同族，
+// project settings-section 同款四态门）= 降级挂载 unavailable 快照（面板渲染「配置服务
+// 不可用」提示行，warn 留痕——不造假持久化，见 unavailableFormMirror 注记）；
+// serve 表命中 = 官方正门（快照 unavailable = 面板降级提示）。
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { FilterSelect } from "../panel/filter-select.js";
 import {
@@ -120,11 +123,56 @@ function safeRegister(
 }
 
 /**
+ * 降级态 ConfigForm 镜像（unavailable 快照——面板渲染既有「配置服务不可用」提示行，
+ * 诚实可见不造假持久化：defaultAgentOptions 消费链读 host Config volatile，本地写
+ * 接不进路由链，plugin-owned localStorage 持久化在此字段语义上是假 UI，不做）。
+ */
+function unavailableFormMirror(): ConfigFormMirror {
+  return {
+    getSnapshot: () => ({ status: "unavailable" as const, value: undefined, revision: undefined, writable: false }),
+    subscribe: () => () => undefined,
+    set: async () => false,
+    unset: async () => false,
+  };
+}
+
+/**
+ * serve 表可用性现查（bug 55c24319 同族——project fix-11 缺陷 B 先判：configForms
+ * 在场 ≠ namespace 被服务；get(ns) 可调但返回 unserved stub/不可用快照形态逐候选
+ * 现查，AGENTS 1.6 不缓存）。loading = 服务中（面板自身快照换代热刷新收敛）——仅
+ * unavailable/stub/抛错/缺席判 unserved。
+ */
+function servedFormOf(forms: ConfigFormsFace): { namespace: string } | undefined {
+  for (const ns of NAMESPACE_CANDIDATES) {
+    let form: ConfigFormMirror | undefined;
+    try {
+      form = forms.get(ns);
+    } catch {
+      form = undefined;
+    }
+    let status: unknown;
+    try {
+      status = asRecord(form?.getSnapshot())?.["status"];
+    } catch {
+      status = undefined;
+    }
+    if (form !== undefined && status !== "unavailable") return { namespace: ns };
+  }
+  return undefined;
+}
+
+/**
  * 注册「默认 Agent 选项」面板（plugins.detail.section list slot；返回联合释放器）。
  * id = DETAIL_SECTION_ID（list slot 判同键）；渲染组件 DefaultAgentOptionsSection 按
- * subject 门控（本包 bundle 详情页才出面板，他页 render null）；configForms
- * 缺席 = 降级不注册（宿主未组 settings 域——配置写径不存在，UI 不悬空）；
- * whileServed 在场 = 经官方在场门（namespace 未被服务即拆卸），否则直注册。
+ * subject 门控（本包 bundle 详情页 ∨ 承载 bundle 详情页，他页 render null）。
+ * 四态门（bug 55c24319 同族——project settings-section 先判配方）：
+ *   ① configForms/slots 缺席 = 不注册（warn 留痕）；
+ *   ② serve 表命中可用 = 官方正门（namespace 候选现查解析——读写同源）；
+ *   ③ configForms 在场但 namespace unserved/stub = 降级挂载（unavailable 快照——面板
+ *      渲染「配置服务不可用」提示行；warn 留痕 §7——bundle 聚合形态真机实锚：旧形态
+ *      whileServed 回调不触发 = 静默零挂载，排障无从下手）；
+ *   ④ whileServed 回调不即时触发（unserved 挂起态）= !gated 现查择门兜底；serve 态
+ *      变化时回调先撤现挂再换门（零双挂）。
  */
 export function registerDefaultAgentOptionsSection(
   ctx: {
@@ -143,8 +191,10 @@ export function registerDefaultAgentOptionsSection(
     console.warn("[dsh-forge/expert-squad] ctx.configForms/slots absent; bundle config panel not mounted");
     return undefined;
   }
-  // 实际 namespace（注册时点从 served 集解析——候选命中序即优先序；读写同源单点）
+  // 实际 namespace（serve 表命中时点解析——候选命中序即优先序；读写同源单点）
   let namespace: string = SETTINGS_NAMESPACE;
+  // 降级旗标（inject 面渲染时点现读——降级 = 注入 unavailable 镜像，官方 = 注入真 form）
+  let degraded = false;
   // bug 9577a867 伴生面：slots 面是 cordis 代理原型方法（this.ctx 绑调用接收者）——
   // 禁解构裸调，必须 slots.inject(...) 方法调用（解构 = this.ctx undefined 实测崩溃）。
   const mount = (): (() => void) | undefined =>
@@ -155,7 +205,7 @@ export function registerDefaultAgentOptionsSection(
           name: DETAIL_SECTION_SLOT,
           id: DETAIL_SECTION_ID,
           inject: () => ({
-            form: forms.get(namespace),
+            form: degraded ? unavailableFormMirror() : forms.get(namespace),
             // 「设置>模型」目录装载器（provider/model 下拉候选源——detail-dialog 同径；
             // 惰性现查 remote.session，目录缺席 = 仅继承空选项，fail-soft 不炸面板）
             modelCatalogLoader: modelCatalogLoaderOf(ctx),
@@ -164,19 +214,47 @@ export function registerDefaultAgentOptionsSection(
         DefaultAgentOptionsSection,
       ),
     );
+  // 择门单源：serve 表命中 = 官方正门（degraded 复位 + namespace 解析）；unserved/stub
+  // = 降级挂载（warn 留痕不静默——AGENTS §7）。
+  const choose = (): (() => void) | undefined => {
+    const served = servedFormOf(forms);
+    if (served !== undefined) {
+      degraded = false;
+      namespace = served.namespace;
+      return mount();
+    }
+    degraded = true;
+    console.warn("[dsh-forge/expert-squad] configForms namespace unserved/stub; default agent options panel mounted degraded (unavailable hint)");
+    return mount();
+  };
   if (typeof forms.whileServed === "function") {
     // 官方 settings-* 族同型：whileServed 经 ctx.effect 挂调用者 fiber（卸载级联）。
+    // serve 态变化时回调先撤现挂再换门（project 同款零双挂形）。
     const watch = (): (() => void) | undefined => {
-      const disposer = forms.whileServed!(NAMESPACE_CANDIDATES, (served) => {
-        namespace = NAMESPACE_CANDIDATES.find((candidate) => served.has(candidate)) ?? SETTINGS_NAMESPACE;
-        const registered = mount();
-        return () => registered?.();
+      let mounted: (() => void) | undefined;
+      let gated = false; // whileServed 回调已触发旗标（触发后挂载机会由回调独占）
+      const disposer = forms.whileServed!(NAMESPACE_CANDIDATES, (_served) => {
+        gated = true;
+        mounted?.();
+        mounted = undefined;
+        mounted = choose();
+        return () => {
+          mounted?.();
+          mounted = undefined;
+        };
       });
-      return () => disposer();
+      // bug 55c24319 同族（bundle 聚合形态真机实锚——project settings-section 同款兜底）：
+      // whileServed 回调不即时触发 = unserved 挂起态，挂载机会零——消费点现查择门。
+      if (!gated) mounted = choose();
+      return () => {
+        disposer();
+        mounted?.();
+        mounted = undefined;
+      };
     };
     return typeof ctx.effect === "function" ? ctx.effect(watch, "expert-squad: settings tab watch") : watch();
   }
-  return mount();
+  return choose();
 }
 
 /**

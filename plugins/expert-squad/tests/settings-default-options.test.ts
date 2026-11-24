@@ -183,7 +183,7 @@ describe("registerDefaultAgentOptionsSection（注册装配）", () => {
     expect(typeof disposer).toBe("function");
   });
 
-  it("namespace 解析随服务换代：短名在服务时改用短名（解析跟随 served 集现取）", () => {
+  it("namespace 解析随服务换代：serve 表现查命中短名（初始直挂 + 回调换门，读写同源现取）", () => {
     const slots = slotsFake();
     const form = formMirrorOf(undefined);
     let registerRef: ((served: ReadonlySet<string>) => () => void) | undefined;
@@ -195,10 +195,84 @@ describe("registerDefaultAgentOptionsSection（注册装配）", () => {
       ctxFake({ configForms: { whileServed, get: (ns: string) => (ns === "expert-squad" ? form : undefined) } }) as never,
       slots as never,
     );
-    registerRef?.(new Set(["expert-squad"]));
+    // 初始：!gated 现查命中短名 → 官方直挂（不等待 whileServed 回调）
     expect(slots.registered).toHaveLength(1);
-    const options = slots.registered[0]!.options;
-    expect((options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    expect((slots.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    // 回调触发（serve 态变化）→ 撤现挂换门 → 仍官方（现查同源）
+    registerRef?.(new Set(["expert-squad"]));
+    expect(slots.registered).toHaveLength(2);
+    expect((slots.registered[1]!.options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+  });
+
+  // bug 55c24319 同族（bundle 聚合形态真机实锚——project settings-section 四态门同款）：
+  // whileServed 回调不即时触发（unserved 挂起态）= 旧形态零挂载零日志静默缺席。
+  it("unserved 挂起态（whileServed 回调不触发）：!gated 现查兜底降级挂载 + warn 留痕（inject 面 = unavailable 快照）", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const slots = slotsFake();
+    const whileServed = vi.fn(
+      (_namespaces: readonly string[], _register: (served: ReadonlySet<string>) => () => void) => () => undefined,
+    );
+    const disposer = registerDefaultAgentOptionsSection(
+      ctxFake({ configForms: { whileServed, get: () => undefined } }) as never,
+      slots as never,
+    );
+    expect(slots.injects).toEqual([DETAIL_SECTION_SLOT]);
+    expect(slots.registered).toHaveLength(1);
+    const injected = (slots.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form;
+    expect(injected.getSnapshot().status).toBe("unavailable");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("configForms namespace unserved/stub"));
+    expect(typeof disposer).toBe("function");
+    warn.mockRestore();
+  });
+
+  // project fix-11 缺陷 B 同族：get(ns) 可调但返回 unavailable stub = 降级（形状在场 ≠ 可用）。
+  it("serve 表 stub（get 命中但快照 unavailable）：降级挂载 + warn 留痕", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const slots = slotsFake();
+    const stub = formMirrorOf(undefined, "unavailable");
+    const disposer = registerDefaultAgentOptionsSection(
+      ctxFake({ configForms: configFormsFake(stub) }) as never,
+      slots as never,
+    );
+    expect(slots.registered).toHaveLength(1);
+    const injected = (slots.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form;
+    expect(injected.getSnapshot().status).toBe("unavailable");
+    expect(injected).not.toBe(stub); // 注入降级镜像，不透传 stub
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("configForms namespace unserved/stub"));
+    expect(typeof disposer).toBe("function");
+    warn.mockRestore();
+  });
+
+  // serve 态变化换门：初始 unserved（get 全缺席）降级挂载；ns 被服务（回调触发）→
+  // 撤降级挂载换官方正门（inject 面 form 由 unavailable 镜像翻转为官方 form）。
+  it("serve 态变化换门：unserved 降级挂载 → ns 被服务回调触发 → 官方 form 接管", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const slots = slotsFake();
+    const form = formMirrorOf(undefined);
+    let serving = false;
+    let registerRef: ((served: ReadonlySet<string>) => () => void) | undefined;
+    const whileServed = vi.fn((_namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void) => {
+      registerRef = register;
+      return () => undefined;
+    });
+    registerDefaultAgentOptionsSection(
+      ctxFake({
+        configForms: {
+          whileServed,
+          get: (ns: string) => (serving && ns === "expert-squad" ? form : undefined),
+        },
+      }) as never,
+      slots as never,
+    );
+    // 初始：unserved 挂起态降级挂载（inject 面 = unavailable 镜像）
+    expect(slots.registered).toHaveLength(1);
+    expect((slots.registered[0]!.options.inject as () => { form: ConfigFormMirror })().form.getSnapshot().status).toBe("unavailable");
+    // ns 被服务：回调触发 → 换门官方正门
+    serving = true;
+    registerRef?.(new Set(["expert-squad"]));
+    expect(slots.registered).toHaveLength(2);
+    expect((slots.registered[1]!.options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    warn.mockRestore();
   });
 
   it("configForms 缺席 = 降级不注册（console.warn 留痕，不炸组合）", () => {
