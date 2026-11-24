@@ -825,4 +825,64 @@ describe("键族聚合（2026-11-24 方案 A——spec 快照族多键合并）"
     expect(result.ok && result.value.map((c) => c.slug)).toEqual(["alpha", "beta"]);
     expect(diag).toHaveBeenCalledWith(expect.stringContaining("键族清单失败"));
   });
+
+  // ── 主根归拢（2026-11-24 同日裁决：归拢推导抽 lib-path project-root 单源三插件共享） ──
+
+  it("主根归拢（lib 单源消费）：注册行落 worktree 检出（marker 触发）→ porcelain 现查归拢主检出根（list projectRoot = 主根）", async () => {
+    const { deps } = lazy();
+    const wtPath = "Z:/ws/proj/.forge/worktrees/plugins";
+    const porcelain = [
+      "worktree Z:/ws/proj",
+      "HEAD abc",
+      "branch refs/heads/main",
+      "",
+      "worktree Z:/ws/proj/.forge/worktrees/plugins",
+      "HEAD def",
+      "branch refs/heads/b1",
+      "",
+    ].join("\n");
+    const listRoots: string[] = [];
+    const rollupRemote = new ForgeSpecsRemote(fakeCtx(), {
+      ...deps,
+      identity: async (id) => (id === "proj-1" ? { projectKey: deriveProjectKey(wtPath), wsPath: wtPath } : null),
+      worktrees: () => ({
+        list: async (q) => {
+          listRoots.push(q.projectRoot);
+          return { entries: [{ path: wtPath }] };
+        },
+      }),
+      gitPorcelain: () => porcelain,
+    });
+    const result = await rollupRemote.list({ projectId: "proj-1" });
+    expect(result.ok).toBe(true);
+    // 归拢生效：forge.worktrees 注册面消费主检出根（非注册行 worktree 路径原样）
+    expect(listRoots).toEqual(["Z:/ws/proj"]);
+    // 族 = 主根键（无 spec 文档空读）+ worktree 行键（无 spec 文档空读）→ 空卡集（键族证据在 listRoots）
+    expect(result.ok && result.value).toEqual([]);
+  });
+
+  it("主根归拢 fail-soft：git 探针抛错 → 回退注册行键（list projectRoot 原样）+ 诊断留痕", async () => {
+    const { deps } = lazy();
+    const wtPath = "Z:/ws/proj/.forge/worktrees/plugins";
+    const diag = vi.fn();
+    const listRoots: string[] = [];
+    const rollupRemote = new ForgeSpecsRemote(fakeCtx(), {
+      ...deps,
+      identity: async (id) => (id === "proj-1" ? { projectKey: deriveProjectKey(wtPath), wsPath: wtPath } : null),
+      worktrees: () => ({
+        list: async (q) => {
+          listRoots.push(q.projectRoot);
+          return { entries: [{ path: wtPath }] };
+        },
+      }),
+      gitPorcelain: () => {
+        throw new Error("git not found");
+      },
+      diag,
+    });
+    const result = await rollupRemote.list({ projectId: "proj-1" });
+    expect(result.ok).toBe(true);
+    expect(listRoots).toEqual([wtPath]);
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining("主根归拢 fail-soft"));
+  });
 });

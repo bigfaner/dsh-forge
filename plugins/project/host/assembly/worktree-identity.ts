@@ -13,18 +13,19 @@
 // 装配方 = assembly/host-side.ts（runProfile 后 ctx.reflect.provide('forgeWorktreeIdentity', …)）；
 // 插件侧惰性 reflect.get 消费（激活早于 provide 不受阻），缺席 = 插件退默认实现
 //（独立 worktree 模式）。结构化类型本地声明——零反向依赖。
-// identity 依赖 @dsh-forge/core（git 归并锚）+ @dsh-forge/path-key（路径归一）——项目包
+// identity 依赖 @dsh-forge/core（git 归并锚）+ @dsh-forge/path-key（路径归一）+ 
+// @dsh-forge/lib-path project-root（主检出根归拢单源——2026-11-24 用户裁决：porcelain 现查
+// 归拢推导抽 lib 三插件共享，本域附属 worktree 身份归属面消费单源零本地复本）——项目包
 // devDependencies 承载（bundle-host.mjs 构建期内联进 dist——产物自含，EXTERNAL 仅 @deepseek-ai/*）。
 import { join } from 'node:path'
 import { createGitIdentityPort } from '@dsh-forge/core'
 import { normalizeFsPath } from '@dsh-forge/path-key'
+import { resolveMainCheckoutRoot, spawnGitWorktreePorcelain, type GitPorcelainRunner } from '@dsh-forge/lib-path/project-root'
 import type { Project, ProjectService, ProjectSummary } from '@dsh-forge/contracts'
 
-/** core GitIdentityPort 归并键窄面（结构化本地声明——锚查询 + worktree 清单，零包类型依赖） */
+/** core GitIdentityPort 归并键窄面（结构化本地声明——锚查询，零包类型依赖） */
 interface GitAnchorFace {
   commonDirAnchor(dir: string): Promise<string | null>
-  /** 在场 worktree 清单（缺席 = 旧桩形状——git 域成员核验退主树判据单径） */
-  worktrees?(dir: string): Promise<readonly { readonly path: string }[] | null>
 }
 
 /** 路径归属解析结果（= ProjectResolution 同形 + 项目名——工作区命名继承源） */
@@ -58,6 +59,7 @@ export function createWorktreeIdentity(
   projects: ForgeProjectsIdentityFace,
   git: GitAnchorFace = createGitIdentityPort(),
   log: (message: string) => void = console.warn,
+  porcelainRun: GitPorcelainRunner = spawnGitWorktreePorcelain,
 ): WorktreeIdentityAssembly {
   // worktree_dir 列快照（normalizeFsPath(ws_path) → worktree_dir；同步提供者的取数缓存）
   let dirSnapshot = new Map<string, string>()
@@ -86,16 +88,21 @@ export function createWorktreeIdentity(
    * 收口面）：git rev-parse 向上行走，非 git 目录落任一祖先 git 仓库内即得非空锚——锚
    * 命中不等于该目录受本仓库治理。判据（两条任一成立 = 该行 ws_path 是真 git 工作树）：
    *   ① 主树判据（本函数下方同款）：锚（realpath git-common-dir）坐落在行 ws_path 内；
-   *   ② 附属 worktree 根：行 ws_path 在本仓 worktree 清单内（git worktree list 现读）。
+   *   ② 附属 worktree 根（lib-path project-root 单源——2026-11-24 用户裁决三插件共享）：
+   *      行 ws_path 在本仓 worktree 清单内（git worktree list --porcelain 现查解析，
+   *      porcelainRun 缝注入——单测注桩，生产 = lib spawn 真探针）。
    * 两者皆不成立（祖先仓清单不含该行）= 非 git 目录误判 → 拒绝归属（能力位 false）。
-   * worktrees 探针缺席（旧桩）= 退主树判据单径。
+   * git 缺席/探针失败/空清单 = fail-soft false（lib reason 错误面——不静默，log 留痕）。
    */
   const isGenuineGitRoot = async (rowPath: string, anchorKey: string): Promise<boolean> => {
     if (anchorKey.startsWith(`${normalizeFsPath(rowPath)}/`)) return true
-    const list = await git.worktrees?.(rowPath).catch(() => null)
-    if (list === null || list === undefined) return false
+    const probe = resolveMainCheckoutRoot(rowPath, porcelainRun)
+    if (probe.entries === undefined) {
+      log(`[git-worktree] worktree 清单探针 fail-soft（判非本仓成员）：${rowPath}：${probe.reason ?? 'unknown'}`)
+      return false
+    }
     const rowKey = normalizeFsPath(rowPath)
-    return list.some((entry) => normalizeFsPath(entry.path) === rowKey)
+    return probe.entries.some((entry) => normalizeFsPath(entry.path) === rowKey)
   }
 
   const resolveProject = async (cwd: string): Promise<WorktreeProjectResolution | null> => {

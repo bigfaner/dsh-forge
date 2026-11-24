@@ -51,8 +51,18 @@ import {
   type AcProjectionRow,
   type AcSettlementsFace,
 } from "../tools/projection.js";
+import {
+  isInWorktreeTree,
+  matchPathSpelling,
+  resolveMainCheckoutRoot,
+  spawnGitWorktreePorcelain,
+  type GitPorcelainRunner,
+} from "@dsh-forge/lib-path/project-root";
 import { err, ok, type Envelope, type Result } from "../../shared/result.js";
 import { FORGE_SPECS_SERVICE_KEY } from "../../shared/contract-constants.js";
+
+/** worktree 检出形态触发 marker（主根归拢廉价预检——零 git 调用省费，task-loop 同径） */
+const WORKTREE_MARKER = /[\\/]\.forge[\\/]worktrees[\\/]/;
 
 /** 封存 follow 流重估间隔 ms（盘面/db 无跨进程事件源，轮询收敛为快照推送） */
 export const SPEC_FOLLOW_INTERVAL_MS = 3_000;
@@ -114,6 +124,8 @@ export interface ForgeSpecRemoteDeps {
   readonly identity?: SpecIdentityFace;
   /** forge.worktrees 注册面缝（f5 键族同径——list 快照族聚合清单源；缺席/抛错 = 回退单键） */
   readonly worktrees?: () => ForgeWorktreesFamilyFace | undefined;
+  /** git porcelain 探针缝（主根归拢 lib 单源消费——测试注桩；缺省 = lib spawnGitWorktreePorcelain 真探针） */
+  readonly gitPorcelain?: GitPorcelainRunner;
   /** follow 重估间隔 ms（缺省 SPEC_FOLLOW_INTERVAL_MS——单测注入收敛节拍） */
   readonly followIntervalMs?: number;
   /** 诊断缝（装配/降级留痕——缺席静默不阻载） */
@@ -301,6 +313,7 @@ export class ForgeSpecsRemote extends TypertRemoteService {
   private readonly acSettlementsOf: () => AcSettlementsFace | undefined;
   private readonly identityOf: SpecIdentityFace | undefined;
   private readonly worktreesOf: () => ForgeWorktreesFamilyFace | undefined;
+  private readonly gitPorcelain: GitPorcelainRunner;
   private readonly diagLine: ((line: string) => void) | undefined;
   private readonly intervalMs: number;
 
@@ -313,6 +326,7 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     this.acSettlementsOf = deps.acSettlementsOf ?? (() => undefined);
     this.identityOf = deps.identity;
     this.worktreesOf = deps.worktrees ?? (() => undefined);
+    this.gitPorcelain = deps.gitPorcelain ?? spawnGitWorktreePorcelain;
     this.diagLine = deps.diag;
     this.intervalMs = deps.followIntervalMs ?? SPEC_FOLLOW_INTERVAL_MS;
   }
@@ -417,25 +431,42 @@ export class ForgeSpecsRemote extends TypertRemoteService {
    * 身份键族解析（2026-11-24 用户方案 A——f5 同径聚合）：主根身份 + forge.worktrees 注册面
    * 下该根的全部 worktree 身份（list entries[].path 逐 path 派生）。注册缝缺席/list 抛错 =
    * 回退单键现状（降级显式诊断留痕，不静默）。仅快照读族（list）消费——写面/详情面单键不动。
+   * 主根归拢（2026-11-24 同日裁决——归拢推导抽 lib 单源三插件共享）：注册行本身落 worktree
+   * 检出（marker 触发）时经 lib-path project-root 单源现查归拢主检出根再入族（主根拼写随
+   * 注册行风格改写——键派生拼写敏感）；git 缺席/失败/非本仓清单 = fail-soft 原样注册行
+   * （显式留痕，普通目录零 git 调用零噪声）。
    */
   private async resolveIdentityFamily(projectId: string): Promise<SpecIdentityResolution[]> {
     const main = await this.resolveIdentity(projectId);
     if (main === null) return [];
+    const root = this.rollupMainRoot(main);
     const worktrees = this.worktreesOf();
     if (worktrees === undefined) {
       this.diagLine?.(`[spec-typert] 键族缝缺席（forge.worktrees）——快照族回退单键：projectId=${projectId}`);
-      return [main];
+      return [root];
     }
     try {
-      const result = await worktrees.list({ projectRoot: main.wsPath });
-      const family = [main, ...result.entries.map((entry) => ({ wsPath: entry.path, projectKey: deriveProjectKey(entry.path) }))];
+      const result = await worktrees.list({ projectRoot: root.wsPath });
+      const family = [root, ...result.entries.map((entry) => ({ wsPath: entry.path, projectKey: deriveProjectKey(entry.path) }))];
       const seen = new Set<string>();
       return family.filter((row) => (seen.has(row.projectKey) ? false : (seen.add(row.projectKey), true)));
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       this.diagLine?.(`[spec-typert] 键族清单失败（forge.worktrees list 抛错 fail-soft）——快照族回退单键：projectId=${projectId}：${message}`);
-      return [main];
+      return [root];
     }
+  }
+
+  /** 主根归拢消费面（lib-path project-root 单源——marker 触发 + fail-soft 原样 + 留痕） */
+  private rollupMainRoot(main: SpecIdentityResolution): SpecIdentityResolution {
+    if (!WORKTREE_MARKER.test(main.wsPath)) return main;
+    const probe = resolveMainCheckoutRoot(main.wsPath, this.gitPorcelain);
+    if (probe.entries === undefined || !isInWorktreeTree(probe.entries, main.wsPath)) {
+      this.diagLine?.(`[spec-typert] 主根归拢 fail-soft（lib porcelain 现查未命中）——快照族回退注册行键：wsPath=${main.wsPath}${probe.reason !== undefined ? `：${probe.reason}` : ""}`);
+      return main;
+    }
+    const rootPath = matchPathSpelling(main.wsPath, probe.root!);
+    return { wsPath: rootPath, projectKey: deriveProjectKey(rootPath) };
   }
 
   /** Spec 卡片清单（listing 索引序——UI 台账数据源；f5 键族聚合——主根 + worktree 键逐键

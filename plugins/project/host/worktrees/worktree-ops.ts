@@ -4,6 +4,7 @@
 // 删除拦截数据（未提交变更/挂靠会话）由本域 status/list 提供、调用方持拦截语义。
 import { existsSync, readdirSync } from 'node:fs'
 import type { AheadBehind } from '@dsh-forge/contracts'
+import { parseWorktreePorcelain } from '@dsh-forge/lib-path/project-root'
 import { GitCommandError, runGit, type GitRunner } from './git-anchor.js'
 
 export type { AheadBehind }
@@ -28,35 +29,16 @@ export interface WorktreeStatus {
   readonly dirtyCount: number
 }
 
-/** 解析 `git worktree list --porcelain` 输出 */
+/** 解析 `git worktree list --porcelain` 输出（2026-11-24 收敛：porcelain 解析归
+ *  @dsh-forge/lib-path/project-root 单源——本面 = 清单域消费映射（branch 短名剥离），零本地复本） */
 export function parseWorktreeListPorcelain(output: string): WorktreeEntry[] {
-  const entries: WorktreeEntry[] = []
-  let current: { path: string; head: string; branch: string | null; detached: boolean; bare: boolean } | null = null
-  const flush = () => {
-    if (current) entries.push(current)
-    current = null
-  }
-  for (const line of output.split('\n')) {
-    const trimmed = line.trim()
-    if (trimmed === '') {
-      flush()
-      continue
-    }
-    const sep = trimmed.indexOf(' ')
-    const key = sep === -1 ? trimmed : trimmed.slice(0, sep)
-    const value = sep === -1 ? '' : trimmed.slice(sep + 1)
-    if (key === 'worktree') {
-      flush()
-      current = { path: value, head: '', branch: null, detached: false, bare: false }
-    } else if (current) {
-      if (key === 'HEAD') current.head = value
-      else if (key === 'branch') current.branch = value.replace(/^refs\/heads\//, '')
-      else if (key === 'detached') current.detached = true
-      else if (key === 'bare') current.bare = true
-    }
-  }
-  flush()
-  return entries
+  return parseWorktreePorcelain(output).map((entry) => ({
+    path: entry.path,
+    head: entry.head,
+    branch: entry.branch !== undefined ? entry.branch.replace(/^refs\/heads\//, '') : null,
+    detached: entry.detached,
+    bare: entry.bare,
+  }))
 }
 
 /** worktree 全量清单（含手工建；path/branch/detached/bare） */

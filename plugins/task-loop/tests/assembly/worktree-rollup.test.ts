@@ -1,7 +1,8 @@
-// worktree 归拢主根推导 pin（2026-11-24 用户裁决二修：git 命令现查，禁自造路径剥取规则）：
-// 任务子 tab 空数据真因（键族缝回退主根单键 + 任务键落 worktree 键）修口钉——marker 段仅作
-// 触发条件，主根 = git worktree list --porcelain 现查首条目；git 失败/非本仓 = fail-soft
-// 回退 cwd 键。诊断留痕 .forge/task-logs/001-task-tab-empty/ 与 002-git-rollup/。
+// worktree 归拢主根推导 pin（2026-11-24 用户裁决二修：git 命令现查，禁自造路径剥取规则；
+// 1.6 收敛：porcelain 解析/主检出判定/fail-soft 归 @dsh-forge/lib-path/project-root 单源，
+// 本面 = task-loop 键族消费面 pin——marker 触发 + 主根键派生 + fail-soft 回退语义不变）：
+// 任务子 tab 空数据真因（键族缝回退主根单键 + 任务键落 worktree 键）修口钉。诊断留痕
+// .forge/task-logs/001-task-tab-empty/ 与 002-git-rollup/。
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,7 +11,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   deriveProjectKeyRolledUpGit,
   MARKER_PATTERN,
-  parseWorktreePaths,
   spawnGitPorcelain,
   type GitPorcelainRunner,
 } from "../../host/assembly/worktree-rollup.js";
@@ -75,10 +75,6 @@ describe("deriveProjectKeyRolledUpGit（git 现查归拢——runner 注入桩�
   it("空 cwd → 派生拒绝原样上抛（ProjectKeyDerivationError）", () => {
     expect(() => deriveProjectKeyRolledUpGit("")).toThrowError(/ERR_PROJECT_KEY_DERIVATION/);
   });
-
-  it("porcelain 纯解析：只取 worktree 路径行", () => {
-    expect(parseWorktreePaths(porcelain)).toEqual(["Z:/ws/proj", "Z:/ws/proj/.forge/worktrees/plugins"]);
-  });
 });
 
 describe("归拢端到端（真 git 仓装配级——spawnGitPorcelain 真探针）", () => {
@@ -140,11 +136,12 @@ describe("归拢端到端（真 git 仓装配级——spawnGitPorcelain 真探�
     }
   });
 
-  it("spawnGitPorcelain 真探针：git 仓内返回含主根清单（口径冒烟）", () => {
+  it("spawnGitPorcelain 真探针：git 仓内返回含主根清单（口径冒烟——lib 单源 parseWorktreePorcelain 首条目）", async () => {
     const { root } = initRepoWithWorktree();
-    const paths = parseWorktreePaths(spawnGitPorcelain(root));
-    expect(paths.length).toBeGreaterThanOrEqual(2);
-    expect(normalize(paths[0]!)).toBe(normalize(root));
+    const { parseWorktreePorcelain } = await import("@dsh-forge/lib-path/project-root");
+    const entries = parseWorktreePorcelain(spawnGitPorcelain(root));
+    expect(entries.length).toBeGreaterThanOrEqual(2);
+    expect(normalize(entries[0]!.path)).toBe(normalize(root));
   });
 });
 
