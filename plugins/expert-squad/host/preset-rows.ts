@@ -13,7 +13,9 @@
 //   人设原文，与旧 SubagentStartRequest.persona 语义逐字等价——preset 挂载时
 //   shadow 部署 persona，dsh-persona README）；
 // - 白名单 = 本包 expert-restrict 行 config.allow（官方 ctx.tools.restrict
-//   fail-closed 平台语义：allow 外工具从子会话消失且拒绝执行）。
+//   fail-closed 平台语义：allow 外工具从子会话消失且拒绝执行；行 apply 期与
+//   global 实注册名再求交——restrict 对未知名硬抛错，preset scope 层名不透传，
+//   见 expert-restrict 判例 2026-11-24）。
 // 同步语义：同指纹跳过（幂等短路）；内容变更换代（dispose 旧 + register 新）；
 // 禁用/移除撤行；注册/求交失败 = diag warn 跳过该专家，不炸同步、不阻载插件。
 
