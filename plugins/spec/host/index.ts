@@ -26,9 +26,8 @@ import {
 } from "./assembly/tool-family.js";
 import {
   forgeProjectsIdentityOf,
+  lazyWorktreesFace,
   registerSpecTypertRemotes,
-  type ForgeSpecRemoteDeps,
-  type ForgeWorktreesFamilyFace,
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js"
 import { CORDIS_ROOT } from "@dsh-forge/lib-util";
@@ -140,26 +139,6 @@ function toolsFaceOf(ctx: unknown): SpecPluginCtx["tools"] | undefined {
   }
 }
 
-/**
- * forge.worktrees 键族缝（f5 键族同径——list/follow 快照族 worktree 身份清单源）：
- * plugins/project 五缝 forge.worktrees 结构消费（ctxReflectGet 点分键同 task-loop 形态——
- * 缝为惰性工厂 provide，工厂调用产 face；本面只取 list 清单窄面 entries[].path）。现查
- * 永不缓存（AGENTS 1.6）；缝缺席/劣形/抛错 = undefined——remote 面回退单键降级承担。
- */
-function lazyWorktreesFace(ctx: unknown): ForgeSpecRemoteDeps["worktrees"] {
-  return () => {
-    try {
-      const factory = (ctx as SpecPluginCtx).reflect?.get?.("forge.worktrees");
-      if (typeof factory !== "function") return undefined;
-      const face = (factory as () => unknown)();
-      if (face === null || face === undefined || typeof face !== "object") return undefined;
-      const candidate = face as { list?: unknown };
-      return typeof candidate.list === "function" ? (candidate as ForgeWorktreesFamilyFace) : undefined;
-    } catch {
-      return undefined;
-    }
-  };
-}
 
 /**
  * Typert 遥控器装配缝（plugin-spec 1.5——forgeSpecs host 半根 ctx plugin 注册，三态

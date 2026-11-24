@@ -28,9 +28,9 @@ import {
 } from "./assembly/default-assembly.js";
 import { assembleTaskLoopToolFamily } from "./assembly/tool-family.js";
 import {
+  lazyWorktreesFace,
   registerForgeTasksRemote,
   type ForgeProjectsIdentityFace,
-  type ForgeWorktreesFamilyFace,
   type ForgeTasksRemoteDeps,
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
@@ -117,26 +117,6 @@ function lazyProjectsFace(ctx: unknown): ForgeTasksRemoteDeps["projects"] {
   };
 }
 
-/**
- * forge.worktrees 键族缝（f5 键族聚合——快照族 worktree 键清单源）：plugins/project 五缝
- * forge.worktrees 结构消费（PROJECT_SEAM_KEYS.worktrees 同键——seam 为惰性工厂 provide，
- * 工厂调用产出 WorktreeServicePort；本面只取 list 清单窄面 entries[].path）。现查永不
- * 缓存（AGENTS 1.6）；缝缺席/劣形/抛错 = undefined——remote 面回退单键降级承担。
- */
-function lazyWorktreesFace(ctx: unknown): ForgeTasksRemoteDeps["worktrees"] {
-  return () => {
-    try {
-      const factory = (ctx as TaskLoopPluginCtx).reflect?.get?.("forge.worktrees");
-      if (typeof factory !== "function") return undefined;
-      const face = (factory as () => unknown)();
-      if (face === null || face === undefined || typeof face !== "object") return undefined;
-      const candidate = face as { list?: unknown };
-      return typeof candidate.list === "function" ? (candidate as ForgeWorktreesFamilyFace) : undefined;
-    } catch {
-      return undefined;
-    }
-  };
-}
 
 /** Typert 注册后自探针缝（gateway invoke 直探——serve 层认领自证；缺席/失败由注册面诊断）。
  *  bug a99a7293 同族修型：官方 gateway 2.x `invoke` 请求必携 Peer（assertPeerLive 读

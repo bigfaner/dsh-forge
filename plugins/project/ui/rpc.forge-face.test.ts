@@ -87,6 +87,16 @@ describe('forgeFaceOf 形状归一（bug 145b3d3b）', () => {
     expect(typeof namespaceFaceOf(face, 'forgeSpecs')?.list).toBe('function')
     expect(typeof namespaceFaceOf(face, 'forgeProjects')?.probe).toBe('function')
   })
+  it('可选族顶层属性形态（官方 web 舞台可选族语境——评审 E②回归钉）→ 并入归一面且 namespaceFaceOf 可达', () => {
+    const remote = topLevelFace()
+    remote.forgeDirs = { facts: () => ({ ok: true, value: [{ dir: 'docs' }] }) }
+    remote.forgeSpecs = { list: () => ({ ok: true, value: [{ slug: 'a' }] }) }
+    const face = forgeFaceOf({ remote }) as ForgeRemoteFace
+    expect(face).toBeDefined()
+    expect(typeof namespaceFaceOf(face, 'forgeDirs')?.facts).toBe('function')
+    expect(typeof namespaceFaceOf(face, 'forgeSpecs')?.list).toBe('function')
+    expect(typeof namespaceFaceOf(face, 'forgeProjects')?.probe).toBe('function')
+  })
 })
 
 describe('生产装配形状全链回归（forgeFaceOf → installForgeRemoteFace → createForgeRpcClient）', () => {

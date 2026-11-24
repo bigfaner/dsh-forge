@@ -174,6 +174,30 @@ export interface TasksRemoteAcSettlementsRequest extends Omit<AcSettlementsReque
 export interface ForgeWorktreesFamilyFace {
   list(q: { readonly projectRoot: string }): Promise<{ readonly entries: readonly { readonly path: string }[] }>;
 }
+/**
+ * forge.worktrees 键族缝组合根取法（f5 键族聚合——快照族 worktree 键清单源单源）：
+ * plugins/project 五缝 forge.worktrees 结构消费（PROJECT_SEAM_KEYS.worktrees 同键——
+ * 缝为惰性工厂 provide，工厂调用产 face；本面只取 list 清单窄面 entries[].path）。
+ * 现查永不缓存（AGENTS 1.6）；三级劣形收窄：reflect.get 产出非函数（劣形①）→ 工厂
+ * 调用产出 null/原始值（劣形②）→ face.list 非函数（劣形③），均 undefined——remote
+ * 面回退单键降级承担；取法恒走 "forge.worktrees" 点分键（ctxReflectGet 同 project 缝）。
+ * 留痕（评审 E①）：本取法与 plugins/spec 同型复制、未收敛跨插件单源——收敛需新建
+ * 共享包（超出本任务影响范围）；形状漂移由两侧组合根 pin（worktrees-face-pin）对锁。
+ */
+export function lazyWorktreesFace(ctx: unknown): () => ForgeWorktreesFamilyFace | undefined {
+  return () => {
+    try {
+      const factory = (ctx as { reflect?: { get?(name: string): unknown } }).reflect?.get?.("forge.worktrees");
+      if (typeof factory !== "function") return undefined;
+      const face = (factory as () => unknown)();
+      if (face === null || face === undefined || typeof face !== "object") return undefined;
+      const candidate = face as { list?: unknown };
+      return typeof candidate.list === "function" ? (candidate as ForgeWorktreesFamilyFace) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+}
 
 /** 项目身份未解析 typed message（钉单源——实现与测试同引本函数） */
 export function projectUnresolvedMessage(projectId: string): string {

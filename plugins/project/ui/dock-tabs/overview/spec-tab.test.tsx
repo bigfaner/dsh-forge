@@ -282,6 +282,13 @@ describe('SpecTab（数据路 + 失败两支分开 + 行形态）', () => {
       expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/notes.txt"]')?.textContent).toContain('文本')
       expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/logo.bin"]')?.textContent).toContain('二进制')
     })
+    it('目录空支（entries: [] → files 区 「—」占位——rpcStubOf 缺省 entries 零成本补，评审 E③）', async () => {
+      const host = await renderWithFiles({})
+      const files = host.querySelector('[data-dswf-ov-spec-files="spec-a"]')
+      expect(files).not.toBeNull()
+      expect(files!.querySelector('[data-dswf-ov-spec-files-list]')?.textContent).toBe('—')
+      expect(host.querySelector('[data-dswf-ov-spec-file]')).toBeNull()
+    })
 
     it('混合目录形态：文件行 + 子目录行各自呈现、类型 tag 正确（子目录无查看入口）', async () => {
       const host = await renderWithFiles({
