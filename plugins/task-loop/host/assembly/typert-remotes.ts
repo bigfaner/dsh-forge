@@ -7,8 +7,8 @@
 //   transport 改型，键不漂移）；写面 transition 若域服务 face 在场则透传、缺席 typed
 //   unavailable（Result error 分支诚实降级，与 project unavailableMessage 形态一致）。
 //   键族聚合（2026-11-24 用户方案 A——f5）：快照族 list/stats/graph/follow 按键族聚合
-//   （keyFamilyOf = 主根键 + forge.worktrees 注册面 worktree 键——任务落 worktree 键、
-//   概览选主根项目时多键查询合并；注册缝缺席回退单键）；非快照操作面维持单键 keyOf。
+//   （keyFamilyOf = 主根键兜底 + forge.worktrees 注册面 worktree 键增量补充——写侧
+//   已按 worktree 形态确定性归拢主根键，注册缝缺席 = 回退主根兜底单键）；非快照操作面维持单键 keyOf。
 //
 // 发现面铁律（project 侦察定谳同径）：gateway 只遍历根 ctx reflect.props——控制器经
 // rootCtx.plugin 注册进根 ctx；生命周期归插件 fiber（dispose 级联拆卸）。
@@ -433,17 +433,19 @@ export class ForgeTasksRemote extends TypertRemoteService {
   }
 
   /**
-   * 键族解析（2026-11-24 用户方案 A——快照族按键族聚合）：主根键 + forge.worktrees 注册面
-   * 下该根的全部 worktree 键（list entries[].path 逐 path 派生——任务落 worktree 键、概览
-   * 选主根项目时多键查询合并，写面不外溢）。注册缝缺席/list 抛错 = 回退单键现状（降级
-   * 显式诊断留痕，不静默）。
+   * 键族解析（2026-11-24 用户方案 A——快照族按键族聚合；同日用户裁决——worktree 归拢
+   * 确定性化）：主根键恒为键族**兜底成员**（写侧 tool-family resolveProjectKey 已按
+   * `{root}\.forge\worktrees\<name>` 形态确定性归拢主根键——不依赖本缝在场，缝缺席
+   * ≠ 归拢失效）；forge.worktrees 注册缝降级为**增量补充**（存量 worktree 键行仍经
+   * `list entries[].path` 逐 path 派生可见——写面不外溢）。缝缺席/list 抛错 = 回退
+   * 主根兜底单键（降级显式诊断留痕，不静默）。
    */
   private async keyFamilyOf(projectId: string): Promise<string[]> {
     const main = await this.resolveProject(projectId);
     if (main === undefined) return [];
     const worktrees = this.deps.worktrees?.();
     if (worktrees === undefined) {
-      this.deps.diag?.(`[forgeTasks] 键族缝缺席（forge.worktrees）——快照族回退单键：projectId=${projectId}`);
+      this.deps.diag?.(`[forgeTasks] 键族缝缺席（forge.worktrees）——快照族回退主根兜底单键（写侧已确定性归拢）：projectId=${projectId}`);
       return [main.key];
     }
     try {
