@@ -396,15 +396,15 @@ describe("pluginConfigJumpOf 官方导航缝", () => {
     expect(calls).toEqual(["@dsh-forge/forge"]);
   });
 
-  it("信封 !ok / 非信封裸数组兼容：数组形应答仍探测（防御）；!ok = 兜底开本包", async () => {
+  it("信封 !ok：= undefined → 空清单兜底开本包（lib-util remoteValueOf 单源语义——非信封不透传）", async () => {
     const { pluginConfigJumpOf } = await import("../ui/panel/config-jump.js");
-    calls = [];
-    // 裸数组防御形
-    await pluginConfigJumpOf(makeCtx([{ name: "@dsh-forge/forge", rows: [{ moduleName: "@dsh-forge/expert-squad" }] }]))()!();
-    expect(calls).toEqual(["@dsh-forge/forge"]);
     calls = [];
     // !ok 信封 = 空清单 → 兜底
     await pluginConfigJumpOf(makeCtx({ ok: false, value: [] }))()!();
+    expect(calls).toEqual(["@dsh-forge/expert-squad"]);
+    calls = [];
+    // 裸数组（非信封）= undefined → 兜底（官方 remote 恒信封形，不承担裸值透传）
+    await pluginConfigJumpOf(makeCtx([{ name: "@dsh-forge/forge", rows: [{ moduleName: "@dsh-forge/expert-squad" }] }]))()!();
     expect(calls).toEqual(["@dsh-forge/expert-squad"]);
   });
 

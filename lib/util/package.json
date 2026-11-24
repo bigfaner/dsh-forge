@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/lib-util",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "公共 util 子包：跨域零语义小件（errMessage / atomicWriteJson / ensureDirReadable）——公共代码归拢第一批自 core util.ts / fs-ensure.ts / settings 原子写迁入。",

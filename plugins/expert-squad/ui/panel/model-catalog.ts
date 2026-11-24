@@ -1,8 +1,11 @@
 // panel/model-catalog —— 「设置>模型」目录读缝（provider/model 选项值源）：
 // 惰性 ctx.reflect.get('remote.session')（'remote' 嵌套双径）→ modelCatalog() 解信封
-// → [{provider, models}]。apps/web client-plugin reflectServiceGet 同径先例（惰性
+// → [{provider, models}]（信封解包 = lib-util remoteValueOf 跨插件单源——client 半
+// remote 消费点族先例）。apps/web client-plugin reflectServiceGet 同径先例（惰性
 // fail-soft 取法——inputTriggers 注册面同径）；缺席/调用拒绝/信封失败 = undefined，
 // 组件面回退纯文本输入语义（FilterSelect box 显当前值），不炸 Dialog。
+
+import { remoteValueOf } from "@dsh-forge/lib-util";
 
 /** 目录条目（官方 ModelCatalog groups 切片——bundle 自持禁跨包 import）。 */
 export interface ModelCatalogEntry {
@@ -21,13 +24,11 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * RemoteResult 信封解包：`{ok:true, value:{groups:[{id, models:[{id}]}]}}`
- * → `[{provider, models}]`；他形（!ok / 缺 groups）= undefined。
+ * RemoteResult 信封解包 + groups 投影：`{ok:true, value:{groups:[{id, models:[{id}]}]}}`
+ * → `[{provider, models}]`；他形（!ok / 缺 groups / 畸形）= undefined。
  */
 export function modelCatalogOfEnvelope(envelope: unknown): readonly ModelCatalogEntry[] | undefined {
-  const result = asRecord(envelope);
-  if (result === undefined || result["ok"] !== true) return undefined;
-  const groups = asRecord(result["value"])?.["groups"];
+  const groups = asRecord(remoteValueOf(envelope))?.["groups"];
   if (!Array.isArray(groups)) return undefined;
   const entries: ModelCatalogEntry[] = [];
   for (const group of groups) {
