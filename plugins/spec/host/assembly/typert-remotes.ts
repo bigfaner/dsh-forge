@@ -471,8 +471,9 @@ export class ForgeSpecsRemote extends TypertRemoteService {
 
   /**
    * 单 spec 键族寻径（M4 收口——detail/query/projection/transition 单键面改键族兼容读）：
-   * 沿 resolveIdentityFamily 逐键 getSpec，首见命中即返回（主根先行——归拢后新写入行
-   * 恒主根键首见，存量 worktree 键行经族内 worktree 键兼容读命中）；族全键未命中 =
+   * 沿 resolveIdentityFamily 以 family[i].projectKey 经不归拢纯键通道（getSpecByKey）
+   * 逐键直查 repo，首见命中即返回——族成员查询键不被 svc keyOf 主根归拢自我中和
+   * （评审 H-P1：存量 worktree 键行经族内 worktree 键兼容读可达）；族全键未命中 =
    * missing（typed NOT_FOUND），身份未解析 = unresolved（typed 拒绝）。
    */
   private async locateInFamily(projectId: string, slug: string): Promise<
@@ -484,7 +485,7 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     if (family.length === 0) return { kind: "unresolved" };
     const svc = this.specs();
     for (const ws of family) {
-      const chain = svc.getSpec({ cwd: ws.wsPath, slug });
+      const chain = svc.getSpecByKey({ projectKey: ws.projectKey, slug });
       if (chain !== undefined) {
         return { kind: "found", ws, chain, mainKey: family[0]!.projectKey };
       }
@@ -623,8 +624,8 @@ export class ForgeSpecsRemote extends TypertRemoteService {
       const located = await this.locateInFamily(input.projectId, input.slug);
       if (located.kind === "unresolved") return resultError(IDENTITY_UNRESOLVED_CODE, `projectId 未解析：${input.projectId}`);
       if (located.kind === "missing") return resultError(NOT_FOUND_CODE, `spec 不存在：${input.slug}`);
-      const row = svc.transitionSpec({
-        cwd: located.ws.wsPath,
+      const row = svc.transitionSpecByKey({
+        projectKey: located.ws.projectKey,
         slug: input.slug,
         to: input.to,
         ...(input.note !== undefined ? { note: input.note } : {}),

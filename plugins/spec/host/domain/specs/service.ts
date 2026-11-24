@@ -118,6 +118,27 @@ export interface ForgeSpecsService {
         transitions: ReturnType<TransitionsRepo["listBySpec"]>;
       }
     | undefined;
+  /**
+   * 不归拢纯键读通道（键族兼容读专用——projectKey 直查 repo，零 keyOf）：族成员查询以
+   * family[i].projectKey 精确键寻径——worktree 成员查询键不再被 keyOf 主根归拢自我中和
+   * （评审 H-P1：存量 worktree 键行 detail/query 可达）。
+   */
+  getSpecByKey(input: { projectKey: string; slug: string }):
+    | {
+        spec: SpecRow;
+        goals: Array<{ goal: GoalRow; acs: Array<{ id: string; criterion: string; sortKey: number }> }>;
+        doc: { relPath: string } | undefined;
+        transitions: ReturnType<TransitionsRepo["listBySpec"]>;
+      }
+    | undefined;
+  /** 不归拢纯键写通道（键族寻径命中后的流转——projectKey 直查，写面不再 NOT_FOUND） */
+  transitionSpecByKey(input: {
+    projectKey: string;
+    slug: string;
+    to: SpecStatus;
+    note?: string;
+    actor: TransitionActor;
+  }): SpecRow;
 }
 
 /** tiers 封闭四值校验（应用层单点——DDL CHECK 无法对 JSON 数组成员做封闭集判定）。 */
@@ -275,6 +296,72 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     }
   }
 
+  /** 父链追溯 + 文档登记水化（cwd 动词与纯键通道共用流水） */
+  function hydrateChain(projectKey: string, slug: string): ReturnType<ForgeSpecsService["getSpec"]> {
+    const chain = repos.specs.parentChain(projectKey, slug);
+    if (!chain) return undefined;
+    const doc = repos.docs.getBySpec(chain.spec.id);
+    return {
+      spec: chain.spec,
+      goals: chain.goals.map(({ goal, acs }) => ({
+        goal,
+        acs: acs.map((a) => ({ id: a.id, criterion: a.criterion, sortKey: a.sortKey })),
+      })),
+      doc: doc ? { relPath: doc.relPath } : undefined,
+      transitions: repos.transitions.listBySpec(chain.spec.id),
+    };
+  }
+
+  /** 状态机两写单源（现值 UPDATE + 台账 append 同事务——cwd 动词与纯键通道共用） */
+  function transitionByKey(
+    projectKey: string,
+    slug: string,
+    input: { to: SpecStatus; note?: string; actor: TransitionActor },
+  ): SpecRow {
+    // actor 值域守卫：仅用户动作通道（plugin-tool / ui）——completed human-only 纪律锚
+    if (input.actor !== "plugin-tool" && input.actor !== "ui") {
+      throw new SpecError("ERR_SPEC_ACTOR_INVALID", `非法动作者通道：${input.actor}`, {
+        actor: input.actor,
+      });
+    }
+    const spec = locate(projectKey, slug);
+    // 迁移判定单源 specMachine（status-machine.md §4 条目 3）——非法边转 SpecError（错误码保留）
+    try {
+      specMachine.assertTransition(spec.specStatus, input.to);
+    } catch {
+      throw new SpecError(
+        "ERR_SPEC_ILLEGAL_TRANSITION",
+        `非法状态流转：${spec.specStatus} → ${input.to}`,
+        { fromStatus: spec.specStatus, toStatus: input.to },
+      );
+    }
+    // note 必填守卫单点 = edgeMeta(...).noteRequired（条目 7——驳回/退回边数据化，错误码保留）
+    if (specMachine.edgeMeta(spec.specStatus, input.to)?.noteRequired === true
+      && (!input.note || !input.note.trim())) {
+      throw new SpecError("ERR_SPEC_REJECT_NOTE_REQUIRED", "驳回/退回必须附理由（note 必填）", {
+        slug,
+      });
+    }
+    for (const guard of transitionGuards) {
+      guard({ fromStatus: spec.specStatus, toStatus: input.to, actor: input.actor, note: input.note });
+    }
+    const ts = now();
+    // 两写同事务：现值 UPDATE + 台账 append（台账 append-only 由双触发器兜底）
+    return withTransaction(db, () => {
+      repos.specs.updateStatus(spec.id, input.to, ts);
+      repos.transitions.append({
+        id: generateId(),
+        specId: spec.id,
+        fromStatus: spec.specStatus,
+        toStatus: input.to,
+        note: input.note ?? null,
+        actor: input.actor,
+        createdAt: ts,
+      });
+      return locate(projectKey, slug);
+    });
+  }
+
   return {
     createSpec(input) {
       // ① 校验门（事务外，零落库拒收）
@@ -383,48 +470,19 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     },
 
     transitionSpec(input) {
-      // actor 值域守卫：仅用户动作通道（plugin-tool / ui）——completed human-only 纪律锚
-      if (input.actor !== "plugin-tool" && input.actor !== "ui") {
-        throw new SpecError("ERR_SPEC_ACTOR_INVALID", `非法动作者通道：${input.actor}`, {
-          actor: input.actor,
-        });
-      }
       const projectKey = keyOf(input.cwd);
-      const spec = locate(projectKey, input.slug);
-      // 迁移判定单源 specMachine（status-machine.md §4 条目 3）——非法边转 SpecError（错误码保留）
-      try {
-        specMachine.assertTransition(spec.specStatus, input.to);
-      } catch {
-        throw new SpecError(
-          "ERR_SPEC_ILLEGAL_TRANSITION",
-          `非法状态流转：${spec.specStatus} → ${input.to}`,
-          { fromStatus: spec.specStatus, toStatus: input.to },
-        );
-      }
-      // note 必填守卫单点 = edgeMeta(...).noteRequired（条目 7——驳回/退回边数据化，错误码保留）
-      if (specMachine.edgeMeta(spec.specStatus, input.to)?.noteRequired === true
-        && (!input.note || !input.note.trim())) {
-        throw new SpecError("ERR_SPEC_REJECT_NOTE_REQUIRED", "驳回/退回必须附理由（note 必填）", {
-          slug: input.slug,
-        });
-      }
-      for (const guard of transitionGuards) {
-        guard({ fromStatus: spec.specStatus, toStatus: input.to, actor: input.actor, note: input.note });
-      }
-      const ts = now();
-      // 两写同事务：现值 UPDATE + 台账 append（台账 append-only 由双触发器兜底）
-      return withTransaction(db, () => {
-        repos.specs.updateStatus(spec.id, input.to, ts);
-        repos.transitions.append({
-          id: generateId(),
-          specId: spec.id,
-          fromStatus: spec.specStatus,
-          toStatus: input.to,
-          note: input.note ?? null,
-          actor: input.actor,
-          createdAt: ts,
-        });
-        return locate(projectKey, input.slug);
+      return transitionByKey(projectKey, input.slug, {
+        to: input.to,
+        ...(input.note !== undefined ? { note: input.note } : {}),
+        actor: input.actor,
+      });
+    },
+
+    transitionSpecByKey({ projectKey, slug, to, note, actor }) {
+      return transitionByKey(projectKey, slug, {
+        to,
+        ...(note !== undefined ? { note } : {}),
+        actor,
       });
     },
 
@@ -434,19 +492,11 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
     },
 
     getSpec({ cwd, slug }) {
-      const projectKey = keyOf(cwd);
-      const chain = repos.specs.parentChain(projectKey, slug);
-      if (!chain) return undefined;
-      const doc = repos.docs.getBySpec(chain.spec.id);
-      return {
-        spec: chain.spec,
-        goals: chain.goals.map(({ goal, acs }) => ({
-          goal,
-          acs: acs.map((a) => ({ id: a.id, criterion: a.criterion, sortKey: a.sortKey })),
-        })),
-        doc: doc ? { relPath: doc.relPath } : undefined,
-        transitions: repos.transitions.listBySpec(chain.spec.id),
-      };
+      return hydrateChain(keyOf(cwd), slug);
+    },
+
+    getSpecByKey({ projectKey, slug }) {
+      return hydrateChain(projectKey, slug);
     },
   };
 }

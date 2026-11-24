@@ -35,7 +35,9 @@ const specClient = {
           return undefined;
         }
       };
-      const remote = (readReflect("remote") ?? rec?.["remote"]) as
+      // remote 取法 = reflect 单径（生产归一口——cordis ctx.remote 注入亦经 reflect 同源；
+      // 回退径删除——非 cordis 形状由外层 try/catch fail-soft 承担）
+      const remote = readReflect("remote") as
         | { $mount?: (contribution: unknown) => Promise<unknown> }
         | undefined;
       if (remote !== undefined && typeof remote.$mount === "function") {

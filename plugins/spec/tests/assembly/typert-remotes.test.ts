@@ -887,13 +887,62 @@ describe("键族聚合（2026-11-24 方案 A——spec 快照族多键合并）"
   });
 });
 
-// ── M4 单键面键族兼容读 + M5 AC 投影键同步（overview-dockkit-alignment/1.8）──
+// ── M4 单键面键族兼容读 + M5 AC 投影键同步（overview-dockkit-alignment/1.8 / 2.1）──
 
 describe("detail/query/transition 键族兼容读（审计 M4——列表有卡点开不 404）", () => {
-  it("detail：主根键 spec（dangling=false 不回归）+ 存量 worktree 键 spec（经族内 worktree 键命中）", async () => {
-    const { deps } = lazy();
-    const wtFix = worktreeFixture();
-    const r = new ForgeSpecsRemote(fakeCtx(), { ...deps, worktrees: () => wtFix.worktrees });
+  /**
+   * 贴形 fixture（评审 H-P1 反假绿口径——替身形状复刻生产组合根）：worktree wsPath 含
+   * `.forge/worktrees/` marker（非兄弟目录假绿形态）。存量行种子 = legacy 服务实例注桩
+   * git fail-soft（行键 = worktree 键——归拢前 create 落点）；remote 注 rolled specs 服务
+   * （porcelain 桩含主根 + worktree → keyOf 归拢生效——修口前族成员经 svc.getSpec 的查询键
+   * 被归拢中和恒等主根键 → 本组用例必红；修口后 getSpecByKey 纯键直查 → 命中）。
+   */
+  function markerFamilyRemote(): ForgeSpecsRemote {
+    const { deps, cwd } = lazy();
+    const wt = join(cwd, ".forge", "worktrees", "wt");
+    const porcelain = [
+      `worktree ${cwd.replaceAll("\\", "/")}`,
+      "HEAD abc",
+      "branch refs/heads/main",
+      "",
+      `worktree ${wt.replaceAll("\\", "/")}`,
+      "HEAD def",
+      "branch refs/heads/b1",
+      "",
+    ].join("\n");
+    const legacySvc = createForgeSpecsService({
+      db: services.db.db,
+      repos: services.db.repos,
+      writeSpecDoc: () => {},
+      gitPorcelain: () => {
+        throw new Error("git not found");
+      },
+    });
+    if (services.db.repos.specs.getBySlug(deriveProjectKey(wt), "wt-spec") === undefined) {
+      legacySvc.createSpec({
+        cwd: wt,
+        slug: "wt-spec",
+        title: "Worktree Spec",
+        tiers: [],
+        goals: [{ title: "G1", acs: ["AC wt one"] }],
+        docRelPath: ".forge/specs/wt-spec/spec.md",
+      });
+    }
+    const rolledSvc = createForgeSpecsService({
+      db: services.db.db,
+      repos: services.db.repos,
+      writeSpecDoc: () => {},
+      gitPorcelain: () => porcelain,
+    });
+    return new ForgeSpecsRemote(fakeCtx(), {
+      ...deps,
+      specs: () => rolledSvc,
+      worktrees: () => ({ list: async () => ({ entries: [{ path: wt }] }) }),
+    });
+  }
+
+  it("detail：主根键 spec（dangling=false 不回归）+ 存量 worktree 键 spec（经族内 worktree 纯键命中）", async () => {
+    const r = markerFamilyRemote();
     const alpha = await r.detail({ projectId: "proj-1", slug: "alpha" });
     expect(alpha.ok).toBe(true);
     if (alpha.ok) expect(alpha.value.doc?.dangling).toBe(false);
@@ -902,19 +951,25 @@ describe("detail/query/transition 键族兼容读（审计 M4——列表有卡�
     if (wtSpec.ok) expect(wtSpec.value.title).toBe("Worktree Spec");
   });
 
-  it("transition：存量 worktree 键 spec 经键族寻径流转成功（写面不 404）", async () => {
-    const { deps } = lazy();
-    const wtFix = worktreeFixture();
-    const r = new ForgeSpecsRemote(fakeCtx(), { ...deps, worktrees: () => wtFix.worktrees });
+  it("query：存量 worktree 键 spec 经纯键通道可达（include 门控不回归）", async () => {
+    const r = markerFamilyRemote();
+    const result = await r.query({ projectId: "proj-1", slug: "wt-spec" });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.spec.title).toBe("Worktree Spec");
+      expect(result.value.goals?.[0]?.acs[0]?.criterion).toBe("AC wt one");
+    }
+  });
+
+  it("transition：存量 worktree 键 spec 经键族纯键寻径流转成功（写面不 NOT_FOUND）", async () => {
+    const r = markerFamilyRemote();
     const result = await r.transition({ projectId: "proj-1", slug: "wt-spec", to: "awaiting_approval" });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.specStatus).toBe("awaiting_approval");
   });
 
   it("键族全键未命中 → typed NOT_FOUND（错误面不变）", async () => {
-    const { deps } = lazy();
-    const wtFix = worktreeFixture();
-    const r = new ForgeSpecsRemote(fakeCtx(), { ...deps, worktrees: () => wtFix.worktrees });
+    const r = markerFamilyRemote();
     const result = await r.detail({ projectId: "proj-1", slug: "missing" });
     expect(!result.ok && result.error.code).toBe("ERR_SPEC_NOT_FOUND");
   });
@@ -936,12 +991,16 @@ describe("AC 投影键同步（审计 M5——结算查归拢主根键，进度�
       "branch refs/heads/b1",
       "",
     ].join("\n");
-    // 存量形态种子：行键 = worktree 键（修口前 create 落点——同一 db 独立服务实例注桩 git）
+    // 存量形态种子（评审 H-P2 贴形——真存量 worktree 键行）：行键 = worktree 键。legacy
+    // 服务实例注桩 git fail-soft（marker 命中但现查失败 → 回退 cwd 键）——归拢前 create
+    // 落点恒 worktree 键，非归拢主根键。
     const legacySvc = createForgeSpecsService({
       db: services.db.db,
       repos: services.db.repos,
       writeSpecDoc: () => {},
-      gitPorcelain: () => porcelain,
+      gitPorcelain: () => {
+        throw new Error("git not found");
+      },
     });
     if (services.db.repos.specs.getBySlug(deriveProjectKey("Z:\\ws\\rollup-proj"), "rolled-spec") === undefined) {
       legacySvc.createSpec({
@@ -956,6 +1015,15 @@ describe("AC 投影键同步（审计 M5——结算查归拢主根键，进度�
     const settledKeys: string[] = [];
     const r = new ForgeSpecsRemote(fakeCtx(), {
       ...deps,
+      // 键族寻径面注 rolled specs 服务（porcelain 桩含主根 + worktree → keyOf 归拢生效——
+      // 修口前族成员 svc.getSpec 查询键被归拢中和恒等主根键 → NOT_FOUND 必红；修口后
+      // getSpecByKey 纯键直查 → worktree 键行命中）
+      specs: () => createForgeSpecsService({
+        db: services.db.db,
+        repos: services.db.repos,
+        writeSpecDoc: () => {},
+        gitPorcelain: () => porcelain,
+      }),
       identity: async (id) => (id === "proj-1" ? { projectKey: deriveProjectKey(wtPath), wsPath: wtPath } : null),
       worktrees: () => ({ list: async () => ({ entries: [{ path: wtPath }] }) }),
       gitPorcelain: () => porcelain,
