@@ -5,7 +5,9 @@
 //   参数面、codec 全 src-json，端点 = `forgeTasks/<method>`；`signal` 尾参 = cancellation。
 //   键名沿用 ForgeTasksRpc 读面八方法（apps/web/src/rpc/client.ts TASKS_CHANNELS 清单——
 //   transport 改型，键不漂移）；写面 transition 若域服务 face 在场则透传、缺席 typed
-//   unavailable（RemoteError 抛出——gateway 保真折叠，与 project unavailableMessage 形态一致）。
+//   unavailable（typed RemoteError 抛出——code 保真过 wire，gateway 保真折叠。注意：
+//   project 的 unavailable 抛普通 new Error、gateway 折 gateway/internal，本插件为
+//   更强的 typed 形态，不与其「形态一致」）。
 //   键族聚合（2026-11-24 用户方案 A——f5）：快照族 list/stats/graph/follow 按键族聚合
 //   （keyFamilyOf = 主根键兜底 + forge.worktrees 注册面 worktree 键增量补充——写侧
 //   已按 worktree 形态确定性归拢主根键，注册缝缺席 = 回退主根兜底单键）；非快照操作面维持单键 keyOf。

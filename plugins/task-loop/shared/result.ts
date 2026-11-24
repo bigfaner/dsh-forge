@@ -3,6 +3,9 @@
 // （RemoteResult）属 typert 协议壳面、不承载业务 DTO——本文件为包内单源，实例化点收口于
 // host/assembly/typert-remotes.ts（禁重复手写具体形态、禁 any/unknown 退路）。
 
+// ok/err 运行期构造函数已删（终轮核清：信封去 Result 化后运行期消费面为 0——Result/
+// Envelope/RemoteMethodError 类型经 host/types.ts 再导出保留，Envelope 仍被 follow 流消费）。
+
 /** 方法族结构化拒绝载荷（typed unavailable——code 封闭码集、message 前置修单源 pin） */
 export interface RemoteMethodError {
   readonly code: string;
@@ -18,14 +21,4 @@ export type Result<T> =
 export interface Envelope<T> {
   readonly seq: number;
   readonly snapshot: T;
-}
-
-/** Result ok 分支构造（单点收口——方法体禁手写分支字面量） */
-export function ok<T>(value: T): Result<T> {
-  return { ok: true, value };
-}
-
-/** Result error 分支构造（单点收口） */
-export function err<T>(error: RemoteMethodError): Result<T> {
-  return { ok: false, error };
 }

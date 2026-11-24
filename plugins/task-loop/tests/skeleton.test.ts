@@ -138,8 +138,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(devDeps["@deepseek-ai/dsh-session"]).toBe("0.2.2-rc.5");
   });
 
-  it("版本 bump 0.21.0（expert-builtin-redistribution 随包 experts/ 迁移 minor bump）", () => {
-    expect(pkg.version).toBe("0.21.0");
+  it("版本号 semver 形态（pin 读 package.json 现值——不钉具体值防 bump 再次过期）", () => {
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
 

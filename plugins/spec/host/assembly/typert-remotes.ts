@@ -8,11 +8,12 @@
 //
 // DTO 单点收口（M5 UI 数据面——禁 client 拼装）：host 半聚合水化，只读消费 forgeSpecs
 // 域服务（域逻辑唯一事实源）+ AC 投影现查缝（AGENTS 1.6 每次调用期求值禁缓存）。
-// 信封纪律（2026-11-24 真机双层信封根因修口——对齐 project 五族形态）：@Remote 端点
-// 成功返裸值，官方 gateway serve 层单层包传输信封；typed 失败/身份未解析/unavailable
-// 抛 RemoteError（code 保真过 wire——client remoteResultOf failure 分支承接）；follow
-// 流帧携 Envelope（流帧不经 Result 信封——typed unavailable 调用期抛错折叠，同 project
-// followSeal 先例）。
+// 信封纪律（2026-11-24 真机双层信封根因修口）：@Remote 端点成功返裸值，官方 gateway
+// serve 层单层包传输信封；typed 失败/身份未解析/unavailable 抛 typed RemoteError（code
+// 保真过 wire——client remoteResultOf failure 分支承接）。注意：project 的 unavailable
+// 抛普通 new Error（gateway 折 gateway/internal），本插件为更强的 typed 形态，不与其
+// 「形态一致」；follow 流帧携 Envelope（流帧不经 Result 信封——typed unavailable 调用期
+// 抛错折叠）。
 //
 // 发现面铁律（project 判例同径）：gateway 只遍历根 ctx reflect.props——控制器经根 ctx
 // plugin 注册进根 ctx；生命周期归插件 fiber（dispose 级联拆卸）。
