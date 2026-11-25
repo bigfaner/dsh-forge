@@ -56,6 +56,9 @@ export function topoOrder(repoRoot, members = COMPOSED_MEMBERS) {
 /**
  * 代际双校验：dist/client.js 代际标记 == 源 package.json version + dist/host/index.js
  * 在场。陈旧/漂移即 throw（返回违规消息清单的形态留给测试逐条断言——throw 承载 fail-loud）。
+ * @param {string} label
+ * @param {string} dir
+ * @returns {string[]}
  */
 export function generationViolations(label, dir) {
   const violations = [];
@@ -80,6 +83,8 @@ export function generationViolations(label, dir) {
 /**
  * freshness 门主体：五件拓扑序 + forge 本体逐件自动编译（run-once，禁 watch——AGENTS §2），
  * 随后代际双校验。违规聚合后一次性 fail-loud。返回编译件数（供调用方日志）。
+ * @param {{ repoRoot?: string, forgeDir?: string, members?: string[], log?: (m: string) => void }} [opts]
+ * @returns {number}
  */
 export function runFreshnessGate({ repoRoot, forgeDir, members = COMPOSED_MEMBERS, log = (m) => console.log(`[freshness] ${m}`) } = {}) {
   if (forgeDir === undefined) throw new Error("runFreshnessGate：forgeDir 缺参（forge 包目录）");
