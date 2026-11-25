@@ -24,7 +24,7 @@ import {
 } from './bug-refs/bug-source.js'
 import { ForgeSessionWorktreeChip } from './session-badge/chip.js'
 import { ForgeWorktreeSealOverlay } from './session-badge/seal-notice.js'
-import { preloadRpcClientFactory, type ForgeRpcClient } from './rpc.js'
+import { createForgeRpcClient, type ForgeRpcClient } from './rpc.js'
 import {
   registerKeyedSection,
   type SectionSlotsFace,
@@ -169,7 +169,7 @@ export function bugProjectIdOf(
 /** Bug source 接线依赖（注入面——测试替身/生产缺省两径） */
 export interface BugSourceWiringDeps {
   readonly workspaces: WorkspacesServiceMirror
-  /** forge RPC 工厂（Typert face——缺省 preloadRpcClientFactory，缺席 = 各调用点 reject fail-soft） */
+  /** forge RPC 工厂（Typert face——缺省 createForgeRpcClient，缺席 = 各调用点 reject fail-soft） */
   readonly makeRpc?: () => ForgeRpcClient | undefined
   /** 候选行图标件（ForgeBugGlyph 本体——IconProps 组件；缺席 = 行零 icon 键） */
   readonly bugIcon?: unknown
@@ -197,7 +197,7 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
   const rpcOf = (): ForgeRpcClient | undefined => {
     if (deps.makeRpc !== undefined) return deps.makeRpc()
     try {
-      return preloadRpcClientFactory()
+    return createForgeRpcClient()
     } catch {
       return undefined
     }

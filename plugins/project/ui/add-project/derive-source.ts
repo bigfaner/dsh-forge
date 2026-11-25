@@ -10,7 +10,7 @@
 //     （tech-design Propagation「未映射码 → 通用错误条」——message 归一，永无裸 code
 //     泄漏；非阻断确认位——注册闭包复检恒权威）。
 import type { DeriveTaskStoreDirResult, SuspectedMoveData } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory, RpcClientError } from '../rpc.js'
+import { createForgeRpcClient, RpcClientError } from '../rpc.js'
 import type { DerivedTaskStorePhase } from './derived-store-row.js'
 
 /** 派生数据源（注入面：RPC 真身 rpcDeriveSource() / 测试桩） */
@@ -21,7 +21,7 @@ export type DeriveSource = (workspaceDir: string) => Promise<DeriveTaskStoreDirR
  * 延迟到调用点——preload 缺席（非 Electron 载体）由 fetchDerivePhase 收敛为 error 相位。
  */
 export function rpcDeriveSource(): DeriveSource {
-  return (workspaceDir) => preloadRpcClientFactory().projects.deriveTaskStoreDir(workspaceDir)
+  return (workspaceDir) => createForgeRpcClient().projects.deriveTaskStoreDir(workspaceDir)
 }
 
 /**

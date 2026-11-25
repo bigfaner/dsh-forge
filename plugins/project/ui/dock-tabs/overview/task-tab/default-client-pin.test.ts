@@ -80,4 +80,24 @@ describe('任务子 tab 数据装载缺省 client 工厂（生产默认值——
       expect(m?.[1], 'projects.list 消费点缺省 = Typert 切片工厂').toBe('createForgeRpcClient')
     })
   })
+
+  // ── 2.15 添加项目向导/Bug 引用/侧栏改名组扩面（用户裁决 2026-11-25：preload 通道消费点
+  //    全量换官方宿主可达 Typert 工厂）——同读源码口径，零替身注入，任一文件退回 preload 即红。──
+  describe('添加项目向导/Bug 引用/侧栏改名组缺省 client 工厂扩面（生产默认值——零替身注入面）', () => {
+    const files = [
+      '../../../add-project/AddProjectFlow.tsx',
+      '../../../add-project/derive-source.ts',
+      '../../../add-project/dir-source.ts',
+      '../../../add-project/flow-actions.ts',
+      '../../../official-seams.ts',
+      '../../../sidebar/ForgeSidebarSlot.tsx',
+    ]
+    it('本组 6 文件零 preloadRpcClientFactory 字面量，缺省消费点 = createForgeRpcClient（ui/rpc Typert 切片）', () => {
+      for (const rel of files) {
+        const s = src(rel)
+        expect(s, `${rel} 零 preload 工厂引用`).not.toMatch(/\bpreloadRpcClientFactory\b/)
+        expect(s, `${rel} 数据通路 = Typert 切片工厂`).toContain('createForgeRpcClient')
+      }
+    })
+  })
 })

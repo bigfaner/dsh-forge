@@ -24,7 +24,7 @@ import {
   TextShimmer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ProjectSummary, RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory } from '../rpc.js'
+import { createForgeRpcClient } from '../rpc.js'
 import { registeredPathsOf, type BrowserSelection } from './browser-model.js'
 import { DirectoryBrowser } from './DirectoryBrowser.js'
 import { EMPTY_REGISTERED, resolveNativePickSource, type NativePickSource } from './dir-picker.js'
@@ -62,7 +62,7 @@ export async function loadRegisteredPaths(source: RegisteredPathsSource): Promis
 
 /** 缺省已注册源真身：preload RPC 面（forge:projects/list）——构造延迟到调用点（fail-soft 由 loadRegisteredPaths 收敛） */
 export function rpcRegisteredPathsSource(): RegisteredPathsSource {
-  return () => preloadRpcClientFactory().projects.list()
+  return () => createForgeRpcClient().projects.list()
 }
 
 const REPICK_HINT =

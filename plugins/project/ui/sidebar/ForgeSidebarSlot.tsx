@@ -19,7 +19,7 @@
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
 import { AddProjectFlow, openAddProjectFlow } from '../add-project/index.js'
 import { useWorkspaceProjectMap } from '../anchored-projects.js'
-import { preloadRpcClientFactory } from '../rpc.js'
+import { createForgeRpcClient } from '../rpc.js'
 import { ForgeWorkspacePanel } from './ForgeWorkspacePanel.js'
 import { sidebarActions } from './sidebar-actions.js'
 import { useForgeProjects } from './use-forge-projects.js'
@@ -105,11 +105,11 @@ export function ForgeSidebarSlot({
   const wsItems = workspacesSnap.items
   // 归属归并数据源显式传 Typert 工厂（ui/rpc face——worktree.resolve 正典通道；
   // knowledge/rpc-channels 缺省工厂 = 旧 channels face，官方宿主静默不可达不作数据源）
-  const workspaceProject = useWorkspaceProjectMap(wsItems, projectsState, preloadRpcClientFactory)
+  const workspaceProject = useWorkspaceProjectMap(wsItems, projectsState, createForgeRpcClient)
   const actions = sidebarActions({
     openSession,
     startSession,
-    updateProject: (id, patch) => preloadRpcClientFactory().projects.update(id, patch),
+    updateProject: (id, patch) => createForgeRpcClient().projects.update(id, patch),
     onProjectsMutated: silentRefreshProjects,
     // D45 会话行动作官方面（…菜单/归档/置顶——inject face 注入；逐位缺席 = 对应项不呈现）
     pinSession,
