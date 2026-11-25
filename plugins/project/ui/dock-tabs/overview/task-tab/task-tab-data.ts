@@ -9,13 +9,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ContainerRef, TaskCard, TaskGraph, TaskStatus, TaskStats } from '@dsh-forge/contracts'
 import {
-  preloadRpcClientFactory,
   subscribeTasksChanged,
   type ForgeRpcClient,
   type RpcClientFactory,
 } from '../../rpc-channels.js'
 import { RpcClientError } from '../../rpc-channels.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc-channels.js'
+import { overviewRpcClientFactory } from '../overview-client.js'
 import { searchQueryOf, type OverviewSort } from '../overview-model.js'
 import { containerKeyOf, type TaskViewMode } from './task-tab-model.js'
 
@@ -152,7 +152,7 @@ export function useTasksTabLoad(
   statusFilter: readonly TaskStatus[],
   search: string,
   sort: OverviewSort,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = overviewRpcClientFactory,
 ): readonly [TasksTabLoadState, { readonly retry: () => void }] {
   const [state, setState] = useState<TasksTabLoadState>(initialTasksTabLoadState)
   const [nonce, setNonce] = useState(0)
@@ -201,7 +201,7 @@ export function useTasksTabLoad(
  */
 export function useTaskContainerCards(
   projectId: string,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = overviewRpcClientFactory,
 ): readonly [TaskContainersState, { readonly retry: () => void }] {
   const [state, setState] = useState<TaskContainersState>({ cards: undefined, error: undefined })
   const [nonce, setNonce] = useState(0)

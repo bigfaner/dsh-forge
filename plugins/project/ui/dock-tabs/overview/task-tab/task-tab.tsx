@@ -21,7 +21,8 @@ import {
 } from '@dsh-forge/contracts'
 import { Menu, Pill, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, SkeletonRows } from '../../../components.js'
-import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc-channels.js'
+import { type ForgeRpcClient, type RpcClientFactory } from '../../rpc-channels.js'
+import { overviewRpcClientFactory } from '../overview-client.js'
 import { hasActiveStatusFilter, searchQueryOf, type OverviewSort } from '../overview-model.js'
 import { formatDiagMessage, type MessageContainer, type SessionOpenRequest } from '../message-format.js'
 import { StatusChips } from '../status-chips.js'
@@ -484,7 +485,7 @@ export function TasksTab({
   onOpenSession,
   onOpenWorkerSession,
   docsRoot,
-  makeClient = preloadRpcClientFactory,
+  makeClient = overviewRpcClientFactory,
 }: TasksTabProps): ReactNode {
   // 容器选项源 = 任务数据自身（池全域 list 按 slug 聚合——判例 2026-11-25：features/提案
   // 域容器模型退役后唯一行源；在途骨架、真真空空态、失败错误条三分派）
