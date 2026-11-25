@@ -3,10 +3,24 @@
 // 行面纯函数 heroWorktreeRows 直测（一行一 worktree、来源标记 DSH、失配行、徽标）+
 // 组件闭态渲染面（官方 Menu 开弹层门户面 SSR 不可达——apps/web HeroWorkspacePicker.test
 // 头注同口径；开弹层交互归 e2e）。
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { createRoot } from 'react-dom/client'
+import { act } from 'react'
 import { HeroWorktreePicker, heroWorktreeRows, pickerRowDisabled } from './hero-worktree-picker.js'
+import { ForgeHeroWorkspacePicker } from './hero-workspace-picker.js'
 import { pendingAheadBehindPaths, type WorktreeRow } from './model.js'
+import {
+  FORGE_REMOTE_FACE_ANCHOR_KEY,
+  FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY,
+  FORGE_REMOTE_MOUNT_WAITERS_KEY,
+  markForgeRemoteMountSettled,
+  type ForgeRpcClient,
+} from '../rpc.js'
+import { openAddProjectFlow } from '../add-project/flow-open.js'
+import type { ProjectSummary } from '@dsh-forge/contracts'
+
+vi.mock('../add-project/flow-open.js', () => ({ openAddProjectFlow: vi.fn() }))
 
 const ROWS: WorktreeRow[] = [
   { path: 'Z:/proj', branch: 'main', worktreeName: 'dsh-forge（主 worktree）', isMain: true, present: true },
@@ -95,5 +109,80 @@ describe('ahead/behind 懒加载待拉判定（懒加载纪律同源——model 
     const cache = new Map([[ROWS[1]!.path, { ahead: 2, behind: 1 }]])
     expect(pendingAheadBehindPaths(true, ROWS, cache)).toEqual(['Z:/proj', 'D:/scratch/ui-lab'])
     expect(pendingAheadBehindPaths(false, ROWS, new Map())).toEqual([])
+  })
+})
+
+// ── 评审 L 粘滞降级收口：缝未装首拉失败 → 零行 + mount 未落座不判「仅剩添加」，落座后重取 ──
+
+const project: ProjectSummary = {
+  workspaceId: 'ws-1',
+  name: 'P1',
+  wsPath: 'C:/proj',
+  archived: false,
+} as ProjectSummary
+
+/** 时序替身：forgeProjects/list 首次 = 面缺席 throw（mount 前竞速窗口）；其后 = 单行 */
+function listAbsentThenOkRpc(): () => ForgeRpcClient {
+  let calls = 0
+  return () => ({
+    projects: {
+      list: async () => {
+        calls++
+        if (calls === 1) throw new Error('官方 forge remote 面缺席（forgeProjects.list）——通道不可用（诚实降级）')
+        return [project]
+      },
+    },
+    worktree: { list: async () => ({ worktrees: [] }) },
+  }) as unknown as ForgeRpcClient
+}
+
+/** 页内 mount 锚清理（用例隔离——锚/waiters 是 globalThis 页内单例） */
+function resetMountAnchors(): void {
+  const scope = globalThis as Record<string, unknown>
+  delete scope[FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY]
+  delete scope[FORGE_REMOTE_FACE_ANCHOR_KEY]
+  delete scope[FORGE_REMOTE_MOUNT_WAITERS_KEY]
+}
+
+describe('ForgeHeroWorkspacePicker mount 等待重取（评审 L 粘滞降级收口——修前必红）', () => {
+  beforeEach(() => {
+    resetMountAnchors()
+    vi.mocked(openAddProjectFlow).mockClear()
+  })
+  afterEach(() => {
+    document.body.replaceChildren()
+    resetMountAnchors()
+    vi.restoreAllMocks()
+  })
+
+  async function renderPicker(makeRpc: () => ForgeRpcClient): Promise<HTMLElement> {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    await act(async () => {
+      root.render(
+        <ForgeHeroWorkspacePicker open onPick={() => {}} onClose={() => {}} makeRpc={makeRpc} />,
+      )
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    return host
+  }
+
+  it('首拉面缺席（mount 未落座）→ 点开零行不得直弹「添加项目」；mark 落座后重取一次 → 行集就位', async () => {
+    await renderPicker(listAbsentThenOkRpc())
+    expect(openAddProjectFlow, 'mount 未落座零行不得直弹添加项目').not.toHaveBeenCalled()
+    await act(async () => {
+      markForgeRemoteMountSettled()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(openAddProjectFlow, '落座重取后行集就位仍不弹添加项目').not.toHaveBeenCalled()
+    expect(document.querySelector('.dswf-hero-picker-list'), '落座重取后弹层行集应呈现（Menu portal 面在 document）').not.toBeNull()
   })
 })

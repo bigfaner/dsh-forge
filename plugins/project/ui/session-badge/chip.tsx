@@ -9,7 +9,7 @@ import { aheadBehindInline, aheadBehindSegments } from '../worktree-picker/model
 import type { AheadBehind } from '@dsh-forge/contracts'
 import { IconBranchOutlineRegular } from '../icons.js'
 import { useWorktreeSeal } from './seal-notice.js'
-import { createForgeRpcClient, type WorktreeFacesRpc } from '../rpc.js'
+import { createForgeRpcClient, forgeRemoteMountSettled, waitForRemoteMountSettled, type WorktreeFacesRpc } from '../rpc.js'
 
 const mono = { fontFamily: 'var(--ds-font-family-code, monospace)' } satisfies React.CSSProperties
 
@@ -208,24 +208,35 @@ export function ForgeSessionWorktreeChip({
     if (sessionId === undefined || phase.branch === null || phase.sealed) return
     // 传输构造 throw-safe（fix-13——官方 web 无 preload 桥：构造即抛，effect 同步抛 =
     // 渲染树崩溃；降级 = 跳过 ahead/behind 拉取，chip 本体不受累）。
+    let alive = true
     let rpc: WorktreeFacesRpc
     try {
       rpc = makeRpc()
     } catch {
       return
     }
-    rpc
-      .worktree.seal({ sessionId })
-      .then((result) => {
-        if (result.projectRoot !== undefined && result.binding !== null) {
-          setInfo({ worktreePath: result.binding.worktreePath, projectRoot: result.projectRoot })
-        }
-        if (result.projectRoot === undefined || result.binding === null) return
-        return rpc
-          .worktree.aheadBehind({ projectRoot: result.projectRoot, path: result.binding.worktreePath })
-          .then((counts) => setAheadBehind(counts.counts ?? undefined))
+    const pullInfo = async (): Promise<void> => {
+      const result = await rpc.worktree.seal({ sessionId })
+      if (!alive) return
+      if (result.projectRoot !== undefined && result.binding !== null) {
+        setInfo({ worktreePath: result.binding.worktreePath, projectRoot: result.projectRoot })
+      }
+      if (result.projectRoot === undefined || result.binding === null) return
+      const counts = await rpc.worktree.aheadBehind({ projectRoot: result.projectRoot, path: result.binding.worktreePath })
+      if (alive) setAheadBehind(counts.counts ?? undefined)
+    }
+    void pullInfo().catch(() => {
+      // 首拉失败且 mount 未落座（评审 L 粘滞降级缝——info/aheadBehind 整会话不出现）＝
+      // 装配时序竞速窗口：等 mount 落座后重取一次（waitForRemoteMountSettled——订阅页内
+      // mount 终态锚，禁自造轮询）；落座后的失败保持静默降级（chip 本体不受累）。
+      if (!alive || forgeRemoteMountSettled()) return
+      void waitForRemoteMountSettled().then(() => {
+        if (alive) void pullInfo().catch(() => {})
       })
-      .catch(() => {})
+    })
+    return () => {
+      alive = false
+    }
   }, [sessionId, phase.branch, phase.sealed, makeRpc])
   if (sessionId === undefined || !phase.isGit || phase.branch === null || phase.worktreeName === null) return null
   return (

@@ -98,9 +98,49 @@ export const FORGE_REMOTE_FACE_ANCHOR_KEY = '__dshForgeRemoteFace'
  */
 export const FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY = '__dshForgeRemoteMountSettled'
 
-/** mount 终态发布（projectClient.apply 的 $mount settle 三分支各调用一次——页内全局单点） */
+/** mount 终态发布（projectClient.apply 的 $mount settle 三分支各调用一次——页内全局单点；
+ *  发布同时逐份唤醒 waitForRemoteMountSettled 等待者并清空——订阅页内 mount 终态锚，零轮询） */
 export function markForgeRemoteMountSettled(): void {
   globalScopeOf()[FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY] = true
+  const waiters = globalScopeOf()[FORGE_REMOTE_MOUNT_WAITERS_KEY]
+  if (waiters instanceof Set) {
+    for (const wake of waiters) (wake as () => void)()
+    waiters.clear()
+  }
+}
+
+/** 页内 mount 等待者锚键（写读双注：mark 侧逐份唤醒——跨 bundle 副本共享同一 Set） */
+export const FORGE_REMOTE_MOUNT_WAITERS_KEY = '__dshForgeRemoteMountWaiters'
+
+/**
+ * mount 终态现查（导出面——useWorktreeSeal/ForgeSessionWorktreeChip/ForgeHeroWorkspacePicker
+ * 消费：面缺席首拉失败后判「是否时序竞速窗口」——未落座才值得等落座重取，落座后的真缺席
+ * 保持诚实降级不重试）。
+ */
+export function forgeRemoteMountSettled(): boolean {
+  return remoteMountSettled()
+}
+
+/**
+ * 等 mount 终态（评审 L 粘滞降级收口原语——订阅页内 mount 终态锚，禁自造轮询/定时器）：
+ * 已落座 = 即刻 resolve；未落座 = 挂起至下一次 markForgeRemoteMountSettled 发布（跨 bundle
+ * 副本经页内等待者锚同源唤醒）。调用方语义 = 「面缺席且 mount 未落座时，等落座后重取一次」。
+ */
+export function waitForRemoteMountSettled(): Promise<void> {
+  if (remoteMountSettled()) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const scope = globalScopeOf()
+    let waiters = scope[FORGE_REMOTE_MOUNT_WAITERS_KEY]
+    if (!(waiters instanceof Set)) {
+      waiters = new Set<() => void>()
+      scope[FORGE_REMOTE_MOUNT_WAITERS_KEY] = waiters
+    }
+    const wake = (): void => {
+      ;(waiters as Set<() => void>).delete(wake)
+      resolve()
+    }
+    ;(waiters as Set<() => void>).add(wake)
+  })
 }
 
 /** mount 终态现查（纯锚读——零模块级缓存，页内全部副本同源判定；face 解析缝锚在场 =

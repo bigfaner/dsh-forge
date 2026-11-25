@@ -22,7 +22,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { openAddProjectFlow } from '../add-project/flow-open.js'
 import { useForgeProjects } from '../sidebar/use-forge-projects.js'
-import { createForgeRpcClient, type RpcClientFactory } from '../rpc.js'
+import { createForgeRpcClient, forgeRemoteMountSettled, waitForRemoteMountSettled, type RpcClientFactory } from '../rpc.js'
 import type { LedgerWorkspacesSnapshot, SnapshotSource } from '../sidebar/sidebar-model.js'
 import { ForgeHeroWorktreeMount } from './picker.js'
 import { openWorkspaceFace, type OpenWorkspaceFace } from '../state/open-workspace-face.js'
@@ -91,7 +91,11 @@ export function ForgeHeroWorkspacePicker({
   const [projectsState, , silentRefresh] = useForgeProjects(workspacesSnap, makeRpc)
 
   const projects = projectsState.phase === 'ready' ? projectsState.projects : []
-  const plan = heroPickerPlan(projects, projectsState.phase !== 'loading')
+  // 账面已定判定带 mount 在场门（评审 L 粘滞降级缝——installForgeRemoteFace 子纤维激活前
+  // 首拉必失败：错误相位零行若径直判「已定」→ addIsTheOnlyEntry=true → 点 hero 直弹「添加
+  // 项目」）：零行且 mount 未落座 = 时序竞速窗口，不判「仅剩添加」（弹层正常呈现，等落座
+  // 重取）；mount 已落座后的错误相位 = 真不可用，诚实降级维持 addIsTheOnlyEntry 语义。
+  const plan = heroPickerPlan(projects, projectsState.phase === 'ready' || forgeRemoteMountSettled())
   const selectedRow = selectedProjectOf(plan.rows, selectedId)
 
   // bug 2ba146d8 默认拾取（hero 默认选中第一个活跃项目）：选中态缺席/未命中行集（归档
@@ -130,6 +134,20 @@ export function ForgeHeroWorkspacePicker({
   useEffect(() => {
     if (open) silentRefresh()
   }, [open, silentRefresh])
+
+  // 缝未装首拉失败（评审 L 粘滞降级收口——错误相位 + mount 未落座）：等 mount 落座后重取
+  // 一次（waitForRemoteMountSettled——订阅页内 mount 终态锚，禁自造轮询）；落座后的错误
+  // 相位 = 真不可用，不重试（诚实降级由错误条/添加入口承接）。
+  useEffect(() => {
+    if (projectsState.phase !== 'error' || forgeRemoteMountSettled()) return
+    let alive = true
+    void waitForRemoteMountSettled().then(() => {
+      if (alive) silentRefresh()
+    })
+    return () => {
+      alive = false
+    }
+  }, [projectsState.phase, silentRefresh])
 
   // worktree 第二 select 数据锚：选中项目的 ws_path（纯函数 selectedProjectRootOf——
   // bug 10833861/8a316608 修正在 model 层）。

@@ -10,7 +10,12 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { WorktreeSealResult } from '@dsh-forge/contracts'
 import { IconWarningTriangleOutlineRegular } from '../icons.js'
-import { createForgeRpcClient, type WorktreeFacesRpc } from '../rpc.js'
+import {
+  createForgeRpcClient,
+  forgeRemoteMountSettled,
+  waitForRemoteMountSettled,
+  type WorktreeFacesRpc,
+} from '../rpc.js'
 
 export interface SealNoticeProps {
   /** 被删 worktree 名（banner 引述） */
@@ -252,37 +257,52 @@ export function useWorktreeSeal(sessionId: string | undefined, makeRpc: () => Wo
       return
     }
     void (async (): Promise<void> => {
-      const follow = client.worktree.followSeal
-      if (follow === undefined) {
-        // 壳侧 legacy transport 面（followSeal 缺席）——退 unary seal 快照单帧（现状语义）
+      // 单次消费（首帧 baseline + 增量帧；返回 true = 已投影或已到终态，false = 首帧前失败）
+      const consume = async (): Promise<boolean> => {
+        const follow = client.worktree.followSeal
+        if (follow === undefined) {
+          // 壳侧 legacy transport 面（followSeal 缺席）——退 unary seal 快照单帧（现状语义）
+          try {
+            const frame = await client.worktree.seal({ sessionId })
+            if (alive) setPhase(phaseOf(frame))
+            return true
+          } catch {
+            if (alive) setPhase(sealError)
+            return false
+          }
+        }
         try {
-          const frame = await client.worktree.seal({ sessionId })
-          if (alive) setPhase(phaseOf(frame))
-        } catch {
-          if (alive) setPhase(sealError)
-        }
-        return
-      }
-      try {
-        for await (const frame of follow.call(client.worktree, { sessionId })) {
-          if (!alive) return
-          seen = true
-          setPhase(phaseOf(frame))
-        }
-        // 流自然终止（host 侧撤销/停机）——保投影标 live:false，不静默
-        if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
-      } catch (cause) {
-        // 贡献卸载 abort 分类（isContributionUnloadAbort——非通道故障）：静默终态不告警。
-        // 已投影 = 保投影标 live:false（同流自然终止刻度）；首帧前 = 挂起不消（卸载竞速
-        // 不落 error 相位不落 warn/error）。
-        if (isContributionUnloadAbort(cause)) {
+          for await (const frame of follow.call(client.worktree, { sessionId })) {
+            if (!alive) return true
+            seen = true
+            setPhase(phaseOf(frame))
+          }
+          // 流自然终止（host 侧撤销/停机）——保投影标 live:false，不静默
           if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
-          return
+          return true
+        } catch (cause) {
+          // 贡献卸载 abort 分类（isContributionUnloadAbort——非通道故障）：静默终态不告警。
+          // 已投影 = 保投影标 live:false（同流自然终止刻度）；首帧前 = 挂起不消（卸载竞速
+          // 不落 error 相位不落 warn/error）。
+          if (isContributionUnloadAbort(cause)) {
+            if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
+            return true
+          }
+          // 首帧前失败 = 通道不可用（error 相位）；已投影 = 保投影（fail-soft 不丢态）
+          console.warn('[dsh-forge/project] followSeal stream failed', cause)
+          if (alive && !seen) setPhase(sealError)
+          if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
+          return seen
         }
-        // 首帧前失败 = 通道不可用（error 相位）；已投影 = 保投影（fail-soft 不丢态）
-        console.warn('[dsh-forge/project] followSeal stream failed', cause)
-        if (alive && !seen) setPhase(sealError)
-        if (alive && seen) setPhase((prev) => (prev.state === 'ready' ? { ...prev, live: false } : prev))
+      }
+      const projected = await consume()
+      // 首帧前失败且 mount 未落座（评审 L 粘滞降级缝——installForgeRemoteFace 子纤维激活前
+      // 的首拉必失败且 effect 依赖不含 mount 状态）＝装配时序竞速窗口，非真缺席：等 mount
+      // 落座后重取一次（waitForRemoteMountSettled——订阅页内 mount 终态锚，禁自造轮询）。
+      // 落座后的失败保持原降级语义（error 相位），不无限重试。
+      if (alive && !projected && !forgeRemoteMountSettled()) {
+        await waitForRemoteMountSettled()
+        if (alive) await consume()
       }
     })()
     return () => {
