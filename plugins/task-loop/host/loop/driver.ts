@@ -576,7 +576,8 @@ export interface LoopDriverDeps {
   readonly modelingReportPresent?: DispatchCoreDeps["modelingReportPresent"];
   /**
    * 结算旁挂回收缝（success 结算后置：运行时任务目录
-   * 顶层 .md 报告复制进容器卷宗 issues/<localId>/；resolveDir 闭包注入，fail-soft。
+   * 顶层 .md 报告复制进 specs 卷宗 issues/<localId>/（.forge/specs/<slug>/——
+   * proposals 旧轨已退役）；resolveDir 闭包注入，fail-soft。
    * 透传 loop.core 结算核；缺席 = 机制惰性不判，行为零变化）
    */
   readonly reportRecovery?: DispatchCoreDeps["reportRecovery"];

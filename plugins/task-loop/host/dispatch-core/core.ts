@@ -150,7 +150,8 @@ export interface DispatchCoreDeps {
   readonly modelingReportPresent?: ModelingReportPresentFace
   /**
    * AC7 结算旁挂回收缝（loop-recurrence-hardening §2.4——success 结算后置钩子：运行时任务
-   * 目录顶层 .md 报告复制进卷宗 issues/<localId>/；resolveDir 闭包注入，fail-soft。
+   * 目录顶层 .md 报告复制进 specs 卷宗 issues/<localId>/（.forge/specs/<slug>/——
+   * proposals 旧轨已退役）；resolveDir 闭包注入，fail-soft。
    * 缺席 = 机制惰性不判，行为零变化）
    */
   readonly reportRecovery?: SettleReportRecoveryDeps

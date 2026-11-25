@@ -216,8 +216,10 @@ export async function disposeQuietly(handle: SpawnWorkerHandle): Promise<void> {
 
 // ─────────────────────────── AC7 · 结算旁挂回收钩子（loop-recurrence-hardening 提案 §2.4） ───────────────────────────
 // 结算返回前同步后置钩子（结算事务外 fail-soft）：settleWorkerRun 内 await 同步执行，探测运行时任务目录 logs/<slug>/<localId>/ 顶层 .md 报告文件（非
-// 递归——incident 等子目录不扫，零清单配置）复制进卷宗 .forge/docs/proposals/<slug>/
-// issues/<localId>/。硬规则：不进结算事务（纯文件 IO 旁挂，先例 recordWaveCheckpoint
+// 递归——incident 等子目录不扫，零清单配置）复制进 specs 卷宗 <ws>/.forge/specs/<slug>/
+// issues/<localId>/（与 Spec 文档 .forge/specs/{slug}/spec.md 同根——proposals 旧轨已随
+// proposal 域退役，specs 替代 proposals，用户裁定 2026-11-25；不碰 <slug>/ 下既有文件）。
+// 硬规则：不进结算事务（纯文件 IO 旁挂，先例 recordWaveCheckpoint
 // / stampEvidenceValidity 后置模式）、不新建状态机态、零清单配置；目录空/复制失败 fail-soft
 // + emitDiag 诊断日志（AGENTS §7），不影响任务结算态。
 
@@ -232,8 +234,8 @@ export interface SettleReportRecoveryDeps {
     readonly slug: string
     readonly localId: string
   }): Promise<string | undefined>;
-  /** projectId/slug/localId → 卷宗 issues 目录绝对路径（缺席 = 惰性跳过） */
-  resolveProposalIssuesDir(input: {
+  /** projectId/slug/localId → specs 卷宗 issues 目录绝对路径（缺席 = 惰性跳过） */
+  resolveSpecsIssuesDir(input: {
     readonly projectId: string
     readonly slug: string
     readonly localId: string
@@ -241,18 +243,19 @@ export interface SettleReportRecoveryDeps {
 }
 
 /**
- * 生产装配工厂：运行时目录 = deriveTaskStoreDir 单源 + logs/<slug>/<localId>；卷宗路径根 =
- * getProject().wsPath + proposals/<slug>/issues/<localId>。路径派生经注入面消费
- * （@dsh-forge/project/host-dirs 消费门——运行期取值走 deps 注入，宿主迟到面）。两跳解析
- * 失败/项目未注册/派生缝缺席 = undefined（fail-soft，该次回收惰性跳过）。
+ * 生产装配工厂：运行时目录 = deriveTaskStoreDir 单源 + logs/<slug>/<localId>；specs 卷宗
+ * 路径根 = forgeDirOfWorkspace(wsPath)/specs/<slug>/issues/<localId>（@dsh-forge/lib-path
+ * forgeDirOfWorkspace 单源派生 .forge 根——specs 替代 proposals）。路径派生经注入面消费
+ * （运行期取值走 deps 注入，宿主迟到面）。两跳解析失败/项目未注册/派生缝缺席 = undefined
+ * （fail-soft，该次回收惰性跳过）。
  */
 export function createSettleReportRecovery(deps: {
   readonly projects: ProjectDirServiceFace
   readonly diag?: ForgeDiagEmitFace
   /** 运行时任务日志目录派生注入（taskLogsDirOf 同形——缺席 = 该径惰性跳过） */
   readonly taskLogsDir?: (workspaceDir: string, slug: string, localId: string) => string
-  /** 卷宗 issues 目录派生注入（dossierIssuesDirOf 同形——缺席 = 该径惰性跳过） */
-  readonly dossierIssuesDir?: (workspaceDir: string, slug: string, localId: string) => string
+  /** specs 卷宗 issues 目录派生注入（specsIssuesDirOf 同形——缺席 = 该径惰性跳过） */
+  readonly specsIssuesDir?: (workspaceDir: string, slug: string, localId: string) => string
 }): SettleReportRecoveryDeps {
   const workspaceOf = async (projectId: string): Promise<string | undefined> => {
     try {
@@ -274,11 +277,11 @@ export function createSettleReportRecovery(deps: {
         return undefined;
       }
     },
-    async resolveProposalIssuesDir({ projectId, slug, localId }) {
-      if (deps.dossierIssuesDir === undefined) return undefined;
+    async resolveSpecsIssuesDir({ projectId, slug, localId }) {
+      if (deps.specsIssuesDir === undefined) return undefined;
       try {
         const ws = await workspaceOf(projectId);
-        return ws !== undefined ? deps.dossierIssuesDir(ws, slug, localId) : undefined;
+        return ws !== undefined ? deps.specsIssuesDir(ws, slug, localId) : undefined;
       } catch {
         return undefined;
       }
@@ -301,7 +304,7 @@ export async function recoverSettleReports(
       slug: ctx.task.slug,
       localId: ctx.task.localId,
     });
-    const issuesDir = await deps.recovery.resolveProposalIssuesDir({
+    const issuesDir = await deps.recovery.resolveSpecsIssuesDir({
       projectId: ctx.projectId,
       slug: ctx.task.slug,
       localId: ctx.task.localId,
@@ -646,7 +649,7 @@ export async function settleWorkerRun(
     },
   );
   // AC7 旁挂回收（结算成功后置——不进结算事务）：success 结算回收运行时目录顶层 .md 报告
-  // 进卷宗 issues；fail-soft（内部全路径诊断留痕），结算态零影响
+  // 进 specs 卷宗 issues；fail-soft（内部全路径诊断留痕），结算态零影响
   if (outcome === "success" && deps.reportRecovery !== undefined && ctx.proposalId !== undefined) {
     await recoverSettleReports(
       { recovery: deps.reportRecovery, diag: deps.diag },

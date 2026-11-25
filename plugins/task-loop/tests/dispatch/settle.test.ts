@@ -6,6 +6,7 @@
 import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { forgeDirOfWorkspace } from "@dsh-forge/lib-path";
 import { describe, expect, it } from "vitest";
 import type { TaskSnapshot } from "../../host/domain/tasks/types.js";
 import type { TaskCard, TaskSettlementRow, TaskStats, TaskStatus } from "../../host/domain/tasks/list.js";
@@ -340,7 +341,7 @@ function recordingRecovery(runtimeDir: string, issuesDir: string): {
         runtimeCalls.push(input);
         return runtimeDir;
       },
-      resolveProposalIssuesDir: async (input) => {
+      resolveSpecsIssuesDir: async (input) => {
         issuesCalls.push(input);
         return issuesDir;
       },
@@ -360,7 +361,7 @@ describe("AC7 · 结算旁挂回收钩子（settleWorkerRun）", () => {
   it("成功结算探测运行时目录顶层 .md 复制进卷宗——非递归（incident 子目录不扫）且非 .md 不收", async () => {
     const home = mkdtempSync(join(tmpdir(), "forge-recover-"));
     const runtimeDir = join(home, "logs", PROPOSAL_SLUG, "2.4");
-    const issuesDir = join(home, "docs", "proposals", PROPOSAL_SLUG, "issues", "2.4");
+    const issuesDir = join(home, ".forge", "specs", PROPOSAL_SLUG, "issues", "2.4");
     mkdirSync(runtimeDir, { recursive: true });
     mkdirSync(join(runtimeDir, "incident"), { recursive: true });
     writeFileSync(join(runtimeDir, "verification-report.md"), "# 判别实验清单\n\n- exp1", "utf8");
@@ -454,10 +455,12 @@ describe("AC7 · 结算旁挂回收钩子（settleWorkerRun）", () => {
 
 describe("createSettleReportRecovery 工厂（resolveDir 闭包派生 + 路径派生注入面）", () => {
   const taskLogsDir = (ws: string, slug: string, localId: string): string => join(ws, "logs", slug, localId);
-  const dossierIssuesDir = (ws: string, slug: string, localId: string): string =>
-    join(ws, ".forge", "docs", "proposals", slug, "issues", localId);
+  const specsIssuesDir = (ws: string, slug: string, localId: string): string =>
+    // 生产派生同形：forgeDirOfWorkspace 单源 .forge 根（<ws>/.forge/specs/<slug>/issues/<localId>）
+    // ——落点改回 proposals（.forge/docs/proposals/…）该断言即红
+    join(forgeDirOfWorkspace(ws), "specs", slug, "issues", localId);
 
-  it("运行时目录 = deriveTaskStoreDir 单源 + logs/<slug>/<localId>；卷宗根 = wsPath/.forge/docs/proposals/<slug>/issues/<localId>", async () => {
+  it("运行时目录 = deriveTaskStoreDir 单源 + logs/<slug>/<localId>；specs 卷宗根 = wsPath/.forge/specs/<slug>/issues/<localId>", async () => {
     const ws = mkdtempSync(join(tmpdir(), "forge-factory-"));
     const containerDir = join(ws, "tasks-home", "c@deadbeef");
     const { createSettleReportRecovery } = await import("../../host/dispatch-core/settle.js");
@@ -467,14 +470,14 @@ describe("createSettleReportRecovery 工厂（resolveDir 闭包派生 + 路径�
         deriveTaskStoreDir: async () => ({ dir: containerDir }),
       },
       taskLogsDir,
-      dossierIssuesDir,
+      specsIssuesDir,
     });
     await expect(recovery.resolveRuntimeTaskDir({ projectId: "p-1", slug: PROPOSAL_SLUG, localId: "2.4" })).resolves.toBe(
       join(containerDir, "logs", PROPOSAL_SLUG, "2.4"),
     );
     await expect(
-      recovery.resolveProposalIssuesDir({ projectId: "p-1", slug: PROPOSAL_SLUG, localId: "2.4" }),
-    ).resolves.toBe(join(ws, ".forge", "docs", "proposals", PROPOSAL_SLUG, "issues", "2.4"));
+      recovery.resolveSpecsIssuesDir({ projectId: "p-1", slug: PROPOSAL_SLUG, localId: "2.4" }),
+    ).resolves.toBe(join(forgeDirOfWorkspace(ws), "specs", PROPOSAL_SLUG, "issues", "2.4"));
   });
 
   it("解析失败 = undefined（fail-soft，不外抛）；派生缝缺席 = undefined（惰性跳过）", async () => {
@@ -485,13 +488,13 @@ describe("createSettleReportRecovery 工厂（resolveDir 闭包派生 + 路径�
         deriveTaskStoreDir: async () => ({ dir: "Z:\\x" }),
       },
       taskLogsDir,
-      dossierIssuesDir,
+      specsIssuesDir,
     });
     await expect(recovery.resolveRuntimeTaskDir({ projectId: "p-x", slug: "s", localId: "1" })).resolves.toBeUndefined();
     await expect(
-      recovery.resolveProposalIssuesDir({ projectId: "p-x", slug: "s", localId: "1" }),
+      recovery.resolveSpecsIssuesDir({ projectId: "p-x", slug: "s", localId: "1" }),
     ).resolves.toBeUndefined();
-    // 派生缝缺席（未注入 taskLogsDir/dossierIssuesDir）= 该径惰性跳过
+    // 派生缝缺席（未注入 taskLogsDir/specsIssuesDir）= 该径惰性跳过
     const bare = createSettleReportRecovery({
       projects: {
         getProject: async () => ({ wsPath: "Z:\\ws" }),
@@ -499,6 +502,6 @@ describe("createSettleReportRecovery 工厂（resolveDir 闭包派生 + 路径�
       },
     });
     await expect(bare.resolveRuntimeTaskDir({ projectId: "p-1", slug: "s", localId: "1" })).resolves.toBeUndefined();
-    await expect(bare.resolveProposalIssuesDir({ projectId: "p-1", slug: "s", localId: "1" })).resolves.toBeUndefined();
+    await expect(bare.resolveSpecsIssuesDir({ projectId: "p-1", slug: "s", localId: "1" })).resolves.toBeUndefined();
   });
 });

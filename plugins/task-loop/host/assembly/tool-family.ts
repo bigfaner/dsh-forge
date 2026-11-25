@@ -25,7 +25,9 @@ import { createInProcessDriverSpawn } from "../spawn/in-process-driver.js";
 import { defaultWorkerTreeGuard } from "../spawn/job-tree.js";
 import { createTriageHook } from "../triage/triage.js";
 import { createRecurrenceFaces, type RecurrenceBugsFace } from "../dispatch-core/recurrence-faces.js";
-import { workspaceDocsRoot } from "@dsh-forge/lib-path";
+import { forgeDirOfWorkspace, workspaceDocsRoot } from "@dsh-forge/lib-path";
+import { join } from "node:path";
+import { createSettleReportRecovery } from "../dispatch-core/settle.js";
 import { createUnionToolNamesProbe, type AgentPresetsFace, type ToolsSchemasReader } from "@dsh-forge/contracts";
 import {
   adaptAgentNarrationChannel,
@@ -242,6 +244,31 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     },
     workspaceDocsRoot: (ws) => workspaceDocsRoot(ws),
   });
+  // AC7 结算报告回收钩子生产接线（bug 8dcbe845——哑钩子收口）：运行时目录 = 容器库目录
+  //（containerDirOf ≡ deriveTaskStoreDir 单源，dual-memory-seam 同目录性锚）+ logs/<slug>/
+  //<localId>；specs 卷宗落点 = forgeDirOfWorkspace(wsPath)/specs/<slug>/issues/<localId>
+  //（= <ws>/.forge/specs/<slug>/issues/<localId>——@dsh-forge/lib-path forgeDirOfWorkspace
+  //.forge 根单源派生，与 Spec 文档 .forge/specs/{slug}/spec.md 同根；specs 替代 proposals，
+  //用户裁定 2026-11-25。不碰 <slug>/ 下既有 spec.md——回收只写 issues/<localId>/ 子目录）。
+  //tasksHome 未注入（单装缺省
+  // 形态，containerDirOf 缺席）= 钩子不装配（机制惰性不判，行为零变化）。
+  const reportRecovery =
+    services.containerDirOf !== undefined
+      ? createSettleReportRecovery({
+          projects: {
+            getProject: async (projectId) => {
+              const ws = services.resolveWsPath(projectId);
+              return ws === "" ? null : { wsPath: ws };
+            },
+            deriveTaskStoreDir: async ({ workspaceDir }) => ({
+              dir: services.containerDirOf!(services.db.projectKeyOf(workspaceDir)),
+            }),
+          },
+          ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
+          taskLogsDir: (containerDir, slug, localId) => join(containerDir, "logs", slug, localId),
+          specsIssuesDir: (ws, slug, localId) => join(forgeDirOfWorkspace(ws), "specs", slug, "issues", localId),
+        })
+      : undefined;
   const narrator = createNarrator({ channel: narrationChannel });
   const triage = createTriageHook({
     tasks: services.tasks,
@@ -264,6 +291,8 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     // T2/T3 复发拦截两 face（生产路径的装配前提——缺席即机制静默关停）
     findRecurrenceCandidates: recurrenceFaces.findRecurrenceCandidates,
     modelingReportPresent: recurrenceFaces.modelingReportPresent,
+    // AC7 结算旁挂回收缝（specs 卷宗落点生产接线——缺席 = 机制惰性不判）
+    ...(reportRecovery !== undefined ? { reportRecovery } : {}),
     // 事件日志链透传（bug a93c1277）：tasksHome 注入时 forgeEvents（sink）+ containerDirOf
     // 同注——循环里程碑/台账经 bus→监听器落盘 logs/{slug}.jsonl；缺席 = 零透传零行为变化。
     ...(services.forgeEvents !== undefined ? { events: services.forgeEvents } : {}),
