@@ -1,6 +1,9 @@
 // SessionWorktreeChip / SealNotice 单测 —— 会话头一体 chip（SSR 面）：
-// 样式对齐官方 AgentPresetLabel（icon + radius-xs pill）、点击展示完整信息卡
-// （交互态 SSR 不可达——卡片为导出呈现面单测直测）、封存三通道、非 git 零注入。
+// 样式对齐官方 AgentPresetLabel（icon + radius-xs pill）、完整信息卡经官方 HoverCard
+// 承载（悬停/键盘聚焦展开，portal 到 body——SSR 初始收起；卡片为导出呈现面单测直测）、
+// 封存三通道、非 git 零注入。
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { SessionWorktreeChip, SessionWorktreeInfoCard } from './chip.js'
@@ -24,15 +27,25 @@ describe('SessionWorktreeChip（会话头 actions 槽一体 chip）', () => {
     expect(markup).not.toContain('·')
   })
 
-  it('样式对齐官方模式标签：button 触发面 + 分支图标（一体化展示）+ 完整信息卡触发语义', () => {
+  it('悬停目标面：可聚焦锚点（键盘可开）+ 分支图标（一体化展示）+ 官方标签同款底色；非按钮（点击非开合控件）', () => {
     const markup = chip({ worktreePath: 'Z:/repo/.forge/worktrees/wt-api', projectRoot: 'Z:/repo' })
-    expect(markup).toContain('<button')
-    expect(markup).toContain('aria-haspopup="dialog"')
-    expect(markup).toContain('aria-expanded="false"')
     expect(markup).toContain('<svg') // 官方 IconBranchOutlineRegular（icon 一体）
     expect(markup).toContain('var(--dsw-alias-fill-tsp-secondary)') // 官方标签同款底色
-    // 初始收起：完整信息卡不在初始 markup（交互态）
+    expect(markup).toMatch(/<span[^>]*data-dswt-session-chip="live"[^>]*tabindex="0"/) // 键盘聚焦可开（HoverCard inline）
+    expect(markup).not.toContain('<button') // 不再是点击开合控件
+    expect(markup).not.toContain('aria-haspopup')
+    expect(markup).not.toContain('aria-expanded')
+    // 初始收起：完整信息卡不在初始 markup（HoverCard 展开态才 portal）
     expect(markup).not.toContain('data-dswt-session-chip-popover')
+  })
+
+  it('根因钉：卡片经官方 HoverCard portal 承载——chip.tsx 零自定位卡片（absolute 卡片被官方头容器 overflow:clip 裁成一条线）', () => {
+    const src = readFileSync(join(import.meta.dirname, 'chip.tsx'), 'utf8')
+    expect(src).toContain("import { HoverCard } from '@deepseek-ai/dsh-client-ui-primitives'")
+    expect(src, '信息卡不得自定位（position absolute/top/left/zIndex 壳退役）').not.toMatch(/position:\s*'absolute'/)
+    expect(src, '官方头容器裁剪判例：卡片不得挂 zIndex 壳').not.toMatch(/zIndex:\s*30\b/)
+    const card = renderToStaticMarkup(<SessionWorktreeInfoCard branch="b" worktreeName="w" />)
+    expect(card).not.toContain('position:absolute')
   })
 
   it('ahead/behind 次级小字：↑2 ↓1（低频展示，不进消息流）', () => {
@@ -45,11 +58,10 @@ describe('SessionWorktreeChip（会话头 actions 槽一体 chip）', () => {
     expect(chip()).not.toContain('data-dswt-chip-ab')
   })
 
-  it('封存态：失效变体（警示色 + 删除线 + tooltip「worktree 已被删除」）', () => {
+  it('封存态：失效变体（警示色 + 删除线）', () => {
     const markup = chip({ sealed: true })
     expect(markup).toContain('data-dswt-session-chip="sealed"')
     expect(markup).toContain('line-through')
-    expect(markup).toContain('worktree 已被删除')
   })
 
   it('非 git 项目：零注入（会话头 actions 槽不出现 chip）', () => {
@@ -57,7 +69,7 @@ describe('SessionWorktreeChip（会话头 actions 槽一体 chip）', () => {
   })
 })
 
-describe('SessionWorktreeInfoCard（点击展示的完整信息卡）', () => {
+describe('SessionWorktreeInfoCard（HoverCard 承载的完整信息卡）', () => {
   const card = (over: Partial<Parameters<typeof SessionWorktreeInfoCard>[0]> = {}): string =>
     renderToStaticMarkup(
       <SessionWorktreeInfoCard
@@ -84,8 +96,7 @@ describe('SessionWorktreeInfoCard（点击展示的完整信息卡）', () => {
     expect(markup.indexOf('分支')).toBeLessThan(markup.indexOf('worktree'))
     expect(markup.indexOf('worktree')).toBeLessThan(markup.indexOf('项目'))
     expect(markup.indexOf('项目')).toBeLessThan(markup.indexOf('工作区'))
-    expect(markup).toContain('max-content') // 卡片随内容加宽——路径不换行
-    expect(markup).toContain('nowrap')
+    expect(markup).toContain('nowrap') // 路径行不换行（宽度贴合内容由 HoverCard fitContent 承担）
   })
 
   it('封存警示行：worktree 已删除 + 不可发送提示', () => {

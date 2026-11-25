@@ -267,8 +267,8 @@ test('hero-chip UI（推导制）：chip 实时分支 + 内联 ahead/behind + §
     const bodyText = await page.locator('body').innerText()
     expect(bodyText, '独立「领先/落后」行已移除').not.toContain('领先/落后')
     // 信息卡：行序 分支 → worktree → 项目 → 工作区；「路径」label 更名「工作区」；
-    // 内联 `1↓ 1↑`（落后在前）于分支名旁
-    await sessionChip(page).first().click()
+    // 内联 `1↓ 1↑`（落后在前）于分支名旁。卡片经官方 HoverCard 承载——悬停展开（点击收起）
+    await sessionChip(page).first().hover()
     const card = page.locator('[data-dswt-session-chip-popover]')
     await expect(card).toBeVisible()
     const cardText = await card.innerText()

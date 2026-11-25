@@ -108,8 +108,8 @@ test('@project-e2e @a-faces CT-J2-G1 worktree chip 直挂：绑定会话呈现�
   // CT-J2-G1 Invariants：chip 变体 ∈ {live, sealed}（零占位形态——O-ghost 反向锚域）
   const variant = await chip.getAttribute('data-dswt-session-chip')
   expect(['live', 'sealed'], `CT-J2-G1：chip 变体合法（${String(variant)}）`).toContain(variant)
-  // CT-J2-G1 信息卡：点开 chip → popover 归属信息呈现（归属标识与会话归属一致面）
-  await chip.click()
+  // CT-J2-G1 信息卡：悬停 chip → HoverCard portal 卡片归属信息呈现（归属标识与会话归属一致面）
+  await chip.hover()
   await expect(page.locator('[data-dswt-session-chip-popover]').first(), 'CT-J2-G1：chip 信息卡呈现（归属标识面）').toBeVisible({ timeout: 10_000 })
 })
 

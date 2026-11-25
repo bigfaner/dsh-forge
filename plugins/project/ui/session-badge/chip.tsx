@@ -1,17 +1,23 @@
 // session-badge —— 会话头 actions 槽只读一体 chip（绑定展示 + ahead/behind 次级小字 +
 // sealed 失效变体）与挂载面 ForgeSessionWorktreeChip（WorktreeFaces 尾段拆出）。
 // 样式对齐官方 AgentPresetLabel（模式标签）一体形态——radius-xs pill + fill-tsp-secondary
-// 底 + 14px 分支图标（opacity .7）+ 12px 文本。点击展示完整信息卡（分支/worktree 名/
-// 完整路径/项目根/ahead-behind/封存警示），失焦 1 秒后自动消失（焦点出入卡片内部不断开）。
+// 底 + 14px 分支图标（opacity .7）+ 12px 文本。完整信息卡（分支/worktree 名/
+// 完整路径/项目根/ahead-behind/封存警示）经官方 HoverCard（inline + fitContent）呈现：
+// 悬停或键盘聚焦展开，卡片 portal 到 body（官方头容器 overflow:clip 不再裁切——原自绘
+// absolute 卡片整张落在裁剪区外只剩边线），指针可停驻卡片阅读选中，Escape/失焦收起。
 // 封存态 = 失效变体（警示色 + 删除线）；非 git 项目零注入。
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { aheadBehindInline, aheadBehindSegments } from '../worktree-picker/model.js'
 import type { AheadBehind } from '@dsh-forge/contracts'
 import { IconBranchOutlineRegular } from '../icons.js'
+import { HoverCard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useWorktreeSeal } from './seal-notice.js'
 import { createForgeRpcClient, forgeRemoteMountSettled, waitForRemoteMountSettled, type WorktreeFacesRpc } from '../rpc.js'
 
 const mono = { fontFamily: 'var(--ds-font-family-code, monospace)' } satisfies React.CSSProperties
+
+/** 悬停展开延时（官方缺省 500ms 偏迟——chip 为高频查看面；点击锚点会收起，短延时让卡片先于点击出现） */
+const CHIP_OPEN_DELAY_MS = 150
 
 export interface SessionWorktreeChipProps {
   /** 能力位（身份归并层产出）——非 git = 零注入 */
@@ -28,7 +34,7 @@ export interface SessionWorktreeChipProps {
   readonly sealed?: boolean | undefined
 }
 
-/** 完整信息卡（受控呈现面导出 = 单测直测；SSR 面不可达的交互态由本面锁定） */
+/** 完整信息卡（受控呈现面导出 = 单测直测；壳 = 官方 HoverCard 卡面，本面只承载行内容——不自定位） */
 export function SessionWorktreeInfoCard({
   branch,
   worktreeName,
@@ -48,23 +54,7 @@ export function SessionWorktreeInfoCard({
   return (
     <div
       data-dswt-session-chip-popover=""
-      style={{
-        position: 'absolute',
-        top: 'calc(100% + 6px)',
-        left: 0,
-        zIndex: 30,
-        width: 'max-content',
-        maxWidth: 'min(640px, 72vw)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
-        padding: 12,
-        borderRadius: 'var(--dsw-radius-sm)',
-        border: '0.5px solid var(--dsw-alias-border-l2)',
-        background: 'var(--dsw-alias-bg-layer-1)',
-        boxShadow: 'var(--dsw-alias-shadow-menu, 0 4px 16px rgba(0,0,0,.08))',
-        textAlign: 'left',
-      }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'left' }}
     >
       {sealed && (
         <div style={{ color: 'var(--dsw-alias-state-error-primary)', fontSize: 12 }}>
@@ -92,8 +82,9 @@ export function SessionWorktreeInfoCard({
 /**
  * 会话头只读一体 chip（注入 `conversation.session.header.actions` 槽——官方动作带，
  * 样式基准 = 官方 AgentPresetLabel 模式标签）。同名去重（branch ≡ worktree 名 = 单段
- * 展示，hero chip 同口径）。点击展示完整信息卡；光标离开 chip/卡片即消失，失焦 1 秒
- * 兜底（焦点导航路径）。data 锚：data-dswt-session-chip / data-dswt-session-chip-popover。
+ * 展示，hero chip 同口径）。完整信息卡经官方 HoverCard 承载：悬停/键盘聚焦展开、
+ * portal 到 body、指针可停驻卡片；点击锚点收起（HoverCard 固有语义）。
+ * data 锚：data-dswt-session-chip / data-dswt-session-chip-popover。
  */
 export function SessionWorktreeChip({
   isGit,
@@ -104,77 +95,49 @@ export function SessionWorktreeChip({
   aheadBehind,
   sealed = false,
 }: SessionWorktreeChipProps): ReactNode {
-  const [open, setOpen] = useState(false)
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const wrapRef = useRef<HTMLSpanElement | null>(null)
   if (!isGit) return null // 非 git 项目：会话头 actions 槽零注入
   const segments = aheadBehind !== undefined && !sealed ? aheadBehindSegments(aheadBehind) : null
   const errorColor = 'var(--dsw-alias-state-error-primary)'
   const deduped = branch === worktreeName // 同名去重（hero chip 同口径——默认派生名恒等）
-  const cancelClose = (): void => {
-    if (closeTimer.current !== undefined) {
-      clearTimeout(closeTimer.current)
-      closeTimer.current = undefined
-    }
-  }
   return (
-    <span
-      ref={wrapRef}
-      style={{ position: 'relative', display: 'inline-flex' }}
-      onMouseLeave={() => {
-        cancelClose()
-        setOpen(false)
-      }}
-      onFocusCapture={cancelClose}
-      onBlurCapture={(event) => {
-        // 焦点移入 chip/卡片内部（React onBlur 冒泡）不断开；真失焦 → 1 秒后自动消失
-        const next = event.relatedTarget
-        if (next instanceof Node && wrapRef.current?.contains(next)) return
-        cancelClose()
-        closeTimer.current = setTimeout(() => setOpen(false), 1_000)
-      }}
-    >
-      <button
-        type="button"
-        data-dswt-session-chip={sealed ? 'sealed' : 'live'}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={sealed ? 'worktree 已被删除' : undefined}
-        onClick={() => {
-          cancelClose()
-          setOpen((prev) => !prev)
-        }}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 4,
-          height: 22,
-          padding: '0 2px 0 0',
-          borderRadius: 'var(--dsw-radius-xs)',
-          border: 'none',
-          fontSize: 12,
-          lineHeight: '22px',
-          color: sealed ? errorColor : 'var(--dsw-alias-label-tertiary)',
-          background: 'var(--dsw-alias-fill-tsp-secondary)',
-          whiteSpace: 'nowrap',
-          cursor: 'pointer',
-          maxWidth: 260,
-          overflow: 'hidden',
-        }}
-      >
-        <span style={{ opacity: 0.7, flex: 'none', display: 'inline-flex', color: sealed ? errorColor : 'var(--dsw-alias-label-primary)' }}>
-          <IconBranchOutlineRegular size={14} />
-        </span>
-        <span style={{ ...mono, color: sealed ? errorColor : 'var(--dsw-alias-label-primary)', textDecoration: sealed ? 'line-through' : undefined }}>
-          {deduped ? branch : `${branch} · ${worktreeName}`}
-        </span>
-        {segments !== null && (segments.ahead !== null || segments.behind !== null) && (
-          <span data-dswt-chip-ab="" style={{ fontSize: 11, color: 'var(--dsw-alias-label-caption)' }}>
-            {[segments.ahead, segments.behind].filter(Boolean).join(' ')}
+    <HoverCard
+      inline
+      fitContent
+      openDelayMs={CHIP_OPEN_DELAY_MS}
+      anchor={
+        <span
+          data-dswt-session-chip={sealed ? 'sealed' : 'live'}
+          tabIndex={0}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            height: 22,
+            padding: '0 2px 0 0',
+            borderRadius: 'var(--dsw-radius-xs)',
+            fontSize: 12,
+            lineHeight: '22px',
+            color: sealed ? errorColor : 'var(--dsw-alias-label-tertiary)',
+            background: 'var(--dsw-alias-fill-tsp-secondary)',
+            whiteSpace: 'nowrap',
+            maxWidth: 260,
+            overflow: 'hidden',
+          }}
+        >
+          <span style={{ opacity: 0.7, flex: 'none', display: 'inline-flex', color: sealed ? errorColor : 'var(--dsw-alias-label-primary)' }}>
+            <IconBranchOutlineRegular size={14} />
           </span>
-        )}
-      </button>
-      {open && (
+          <span style={{ ...mono, color: sealed ? errorColor : 'var(--dsw-alias-label-primary)', textDecoration: sealed ? 'line-through' : undefined }}>
+            {deduped ? branch : `${branch} · ${worktreeName}`}
+          </span>
+          {segments !== null && (segments.ahead !== null || segments.behind !== null) && (
+            <span data-dswt-chip-ab="" style={{ fontSize: 11, color: 'var(--dsw-alias-label-caption)' }}>
+              {[segments.ahead, segments.behind].filter(Boolean).join(' ')}
+            </span>
+          )}
+        </span>
+      }
+      content={
         <SessionWorktreeInfoCard
           branch={branch}
           worktreeName={worktreeName}
@@ -183,8 +146,8 @@ export function SessionWorktreeChip({
           aheadBehind={aheadBehind}
           sealed={sealed}
         />
-      )}
-    </span>
+      }
+    />
   )
 }
 
