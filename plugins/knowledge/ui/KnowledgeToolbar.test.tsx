@@ -3,6 +3,7 @@
 // Hard Rule 官方件复用断言面：输入 = 官方 Input（受控件——value 原样承载）。
 // 事件胶水（onChange/onKeyDown/onClick 转发闭包）不在静态渲染测面——语义纯函数
 // （scopeLabel / isEscapeKey）直测 + 转发事件形状经 browseActions 单测（use-knowledge-browse）。
+// @vitest-environment happy-dom（官方 Menu 渲染链读 document.activeElement——纯 node 环境无 DOM）
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {

@@ -8,7 +8,9 @@
     "emitDeclarationOnly": false,
     "sourceMap": false,
     "incremental": false,
-    "rootDir": "../../"
+    "rootDir": "../../",
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
   "include": ["host", "tests", "ui"],
   "exclude": []
