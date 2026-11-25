@@ -15,7 +15,7 @@ import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
 import type { WorktreeResolveRequest, WorktreeResolveResult } from '@dsh-forge/contracts'
 import type { LedgerWorkspacesSnapshot } from './sidebar/sidebar-model.js'
 import { useForgeProjects, type ProjectsPhase } from './sidebar/use-forge-projects.js'
-import { preloadRpcClientFactory } from './rpc.js'
+import { createForgeRpcClient } from './rpc.js'
 
 /** kit 选择器钩子（官方 kit hook 形状——root 标准 props 递达面；可选 = 降级；knowledge shared/kit-types 镜像同型） */
 export type KitSelectorHook = (selector: (state: never) => unknown) => unknown
@@ -150,7 +150,7 @@ export async function resolveWorkspaceProjectMap(
 export function useWorkspaceProjectMap(
   wsItems: readonly { readonly path?: unknown }[],
   projectsState: ProjectsPhase,
-  makeClient: WorktreeResolveClientFactory = preloadRpcClientFactory,
+  makeClient: WorktreeResolveClientFactory = createForgeRpcClient,
 ): ReadonlyMap<string, string> {
   const [map, setMap] = useState<ReadonlyMap<string, string>>(() => new Map())
   useEffect(() => {

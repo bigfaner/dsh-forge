@@ -7,7 +7,7 @@
 // 判据——客户端零拼接）；并发行拉取 Promise.allSettled——单失败不拖垮整树。
 import { useCallback, useEffect, useState } from 'react'
 import type { WorktreeListResult } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../rpc.js'
+import { createForgeRpcClient, type ForgeRpcClient, type RpcClientFactory } from '../rpc.js'
 import { projectWorktreeTreeOf, type ProjectWorktreeNode } from './projection.js'
 
 export type { ProjectWorktreeNode } from './projection.js'
@@ -57,7 +57,7 @@ export async function fetchProjectTreePhase(makeClient: RpcClientFactory): Promi
  */
 export function useProjectWorktreeTree(
   refreshKey: unknown,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = createForgeRpcClient,
 ): readonly [ProjectTreePhase, () => void, () => void] {
   const [state, setState] = useState<ProjectTreePhase>({ phase: 'loading' })
   const [nonce, setNonce] = useState(0)

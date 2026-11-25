@@ -23,7 +23,8 @@ import { Button, IconCloseFillRegular, StateDot, Tag, Tooltip } from '@deepseek-
 import { EmptyState, ErrorBar, SkeletonRows } from '../../../components.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc-channels.js'
 import { RpcClientError } from '../../rpc-channels.js'
-import { preloadRpcClientFactory, subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../../rpc-channels.js'
+import { subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../../rpc-channels.js'
+import { overviewRpcClientFactory } from '../overview-client.js'
 import { STATUS_DOT_STATE } from '../status-chips.js'
 import { formatDiagMessage, type SessionOpenRequest, type TaskFailureDiagInput } from '../message-format.js'
 import { DiagToast, taskFailureDiagToast, type DiagToastResult, type DiagToastSendPayload } from '../task-tab/DiagToast.js'
@@ -716,7 +717,7 @@ export function initialTaskDrawerLoadState(): TaskDrawerLoadState {
 export function useTaskDetail(
   projectId: string,
   taskId: string | null,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = overviewRpcClientFactory,
 ): readonly [TaskDrawerLoadState, { readonly retry: () => void; readonly refresh: () => void }] {
   const [state, setState] = useState<TaskDrawerLoadState>(initialTaskDrawerLoadState)
   const [nonce, setNonce] = useState(0)

@@ -11,7 +11,8 @@ import { TASK_STATUS_LABELS, type TaskSnapshot, type TaskStatus, type Transition
 import { Button, StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc-channels.js'
 import { RpcClientError } from '../../rpc-channels.js'
-import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc-channels.js'
+import { type ForgeRpcClient, type RpcClientFactory } from '../../rpc-channels.js'
+import { overviewRpcClientFactory } from '../overview-client.js'
 import { STATUS_DOT_STATE } from '../status-chips.js'
 import { isTerminalStatus, taskKeyLabel } from './detail-model.js'
 import './transition-dialog.css'
@@ -310,7 +311,7 @@ export interface TransitionDialogProps {
   readonly onCancel: () => void
   /** 提交成功（快照回传——4.1 关闭对话框 + 提示；失败留场归本组件错误条） */
   readonly onDone: (snapshot: TaskSnapshot) => void
-  /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
+  /** RPC client 构造器（缺省 overviewRpcClientFactory Typert 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
 
@@ -324,7 +325,7 @@ export function TransitionDialog({
   presetToStatus,
   onCancel,
   onDone,
-  makeClient = preloadRpcClientFactory,
+  makeClient = overviewRpcClientFactory,
 }: TransitionDialogProps): ReactNode {
   useTransitionDialogEscape(onCancel)
   const options = useMemo(

@@ -4,12 +4,12 @@
 // 错误条相位由面板呈现——profile 中 core 行未启用期即此相位）。
 // 刷新锚 = workspace 归属快照身份变化（注册/删除 workspace 会改变快照对象身份）——挂项目
 // 后自动对齐；projects 为应用侧数据（SC2 零副本纪律只约 dsh 账本面）。
-// 数据源注记（1.6）：makeClient 缺省 = 本包 ui/rpc.ts preloadRpcClientFactory（官方 Typert
+// 数据源注记（1.6）：makeClient 缺省 = 本包 ui/rpc.ts createForgeRpcClient（官方 Typert
 // remote face——forgeProjects/list 正典通道；旧自造 channels face 于官方宿主静默不可达，
 // 1.38 正典化口径），官方宿主/壳宿主双态同一通路。
 import { useCallback, useEffect, useState } from 'react'
 import type { ProjectSummary } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc.js'
+import { createForgeRpcClient, type RpcClientFactory } from '../rpc.js'
 
 /** 项目列表相位 */
 export type ProjectsPhase =
@@ -37,7 +37,7 @@ export async function fetchProjectsPhase(makeClient: RpcClientFactory): Promise<
  */
 export function useForgeProjects(
   refreshKey: unknown,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = createForgeRpcClient,
 ): readonly [ProjectsPhase, () => void, () => void] {
   const [state, setState] = useState<ProjectsPhase>({ phase: 'loading' })
   const [nonce, setNonce] = useState(0)

@@ -40,4 +40,44 @@ describe('任务子 tab 数据装载缺省 client 工厂（生产默认值——
     expect(preloadUses, 'preload 仅 bugs.list 一处消费且带回落').toBe(1)
     expect(s).toMatch(/if \(channel !== BUGS_CHANNELS\.list\) return typert\(channel, payload\)/)
   })
+
+  // ── 2.14 侧栏/树/抽屉组扩面（用户裁决 2026-11-25：preload 通道消费点全量换官方宿主可达
+  //    Typert 工厂）——同读源码口径，零替身注入，任一文件退回 preload 即红。──
+  describe('侧栏/树/抽屉组缺省 client 工厂扩面（生产默认值——零替身注入面）', () => {
+    const typertPin = (rel: string, label: string): void => {
+      const s = src(rel)
+      expect(s, `${label} 零 preload 工厂引用`).not.toMatch(/\bpreloadRpcClientFactory\b/)
+      return s
+    }
+
+    it('anchored-projects.tsx：useWorkspaceProjectMap 缺省 = createForgeRpcClient（ui/rpc Typert 切片）', () => {
+      const s = typertPin('../../../anchored-projects.tsx', 'anchored-projects')
+      const m = s.match(/makeClient:\s*WorktreeResolveClientFactory\s*=\s*(\w+)/)
+      expect(m?.[1], 'worktree.resolve 消费点缺省 = Typert 切片工厂').toBe('createForgeRpcClient')
+    })
+
+    it('drawer/index.tsx：useTaskDetail 缺省 = overviewRpcClientFactory（tasks.detail/graph Typert）', () => {
+      const s = typertPin('../drawer/index.tsx', 'task drawer')
+      const m = s.match(/makeClient:\s*RpcClientFactory\s*=\s*(\w+)/)
+      expect(m?.[1], 'tasks.detail 消费点缺省 = 概览 Typert 工厂').toBe('overviewRpcClientFactory')
+    })
+
+    it('drawer/transition-dialog.tsx：TransitionDialog 缺省 = overviewRpcClientFactory（tasks.transition Typert）', () => {
+      const s = typertPin('../drawer/transition-dialog.tsx', 'transition dialog')
+      const m = s.match(/makeClient\s*=\s*(\w+),\s*\}:\s*TransitionDialogProps/)
+      expect(m?.[1], 'tasks.transition 消费点缺省 = 概览 Typert 工厂').toBe('overviewRpcClientFactory')
+    })
+
+    it('project-tree/use-project-tree.ts：useProjectWorktreeTree 缺省 = createForgeRpcClient（worktree.list+projects.list Typert）', () => {
+      const s = typertPin('../../../project-tree/use-project-tree.ts', 'project tree')
+      const m = s.match(/makeClient:\s*RpcClientFactory\s*=\s*(\w+)/)
+      expect(m?.[1], 'projects.list+worktree.list 消费点缺省 = Typert 切片工厂').toBe('createForgeRpcClient')
+    })
+
+    it('sidebar/use-forge-projects.ts：useForgeProjects 缺省 = createForgeRpcClient（projects.list Typert）', () => {
+      const s = typertPin('../../../sidebar/use-forge-projects.ts', 'sidebar projects')
+      const m = s.match(/makeClient:\s*RpcClientFactory\s*=\s*(\w+)/)
+      expect(m?.[1], 'projects.list 消费点缺省 = Typert 切片工厂').toBe('createForgeRpcClient')
+    })
+  })
 })
