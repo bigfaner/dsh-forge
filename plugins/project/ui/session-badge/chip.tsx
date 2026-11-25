@@ -9,7 +9,7 @@ import { aheadBehindInline, aheadBehindSegments } from '../worktree-picker/model
 import type { AheadBehind } from '@dsh-forge/contracts'
 import { IconBranchOutlineRegular } from '../icons.js'
 import { useWorktreeSeal } from './seal-notice.js'
-import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'
+import { createForgeRpcClient, type WorktreeFacesRpc } from '../rpc.js'
 
 const mono = { fontFamily: 'var(--ds-font-family-code, monospace)' } satisfies React.CSSProperties
 
@@ -196,7 +196,7 @@ export function SessionWorktreeChip({
  */
 export function ForgeSessionWorktreeChip({
   sessionId,
-  makeRpc = preloadRpcClientFactory,
+  makeRpc = createForgeRpcClient,
 }: {
   readonly sessionId?: string | undefined
   readonly makeRpc?: () => WorktreeFacesRpc

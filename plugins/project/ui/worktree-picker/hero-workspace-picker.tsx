@@ -22,7 +22,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { openAddProjectFlow } from '../add-project/flow-open.js'
 import { useForgeProjects } from '../sidebar/use-forge-projects.js'
-import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc.js'
+import { createForgeRpcClient, type RpcClientFactory } from '../rpc.js'
 import type { LedgerWorkspacesSnapshot, SnapshotSource } from '../sidebar/sidebar-model.js'
 import { ForgeHeroWorktreeMount } from './picker.js'
 import { openWorkspaceFace, type OpenWorkspaceFace } from '../state/open-workspace-face.js'
@@ -74,7 +74,7 @@ export function ForgeHeroWorkspacePicker({
   onClose,
   workspaces,
   openWorkspace: injectedOpenWorkspace,
-  makeRpc = preloadRpcClientFactory,
+  makeRpc = createForgeRpcClient,
 }: ForgeHeroWorkspacePickerProps): ReactNode {
   // workspace 归属快照直读（闭包绑定——类方法裸引用脱离 this 即崩，ForgeSidebarSlot 同制）。
   const subscribeWorkspaces = useCallback(

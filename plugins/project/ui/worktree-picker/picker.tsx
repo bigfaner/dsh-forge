@@ -23,10 +23,10 @@ import { DeleteWorktreeDialog } from './delete-dialog.js'
 import { HeroWorktreePicker } from './hero-worktree-picker.js'
 import { StaleSelectionNotice } from '../session-badge/seal-notice.js'
 import { WorktreeRiskConfirmation } from './risk-confirm.js'
-import { collectSlugCandidates, isCrossBranchRisk, joinWorktreePath, type DeleteChecks, type SlugCandidate } from './model.js'
+import { isCrossBranchRisk, joinWorktreePath, type DeleteChecks } from './model.js'
 import type { AheadBehind } from '@dsh-forge/contracts'
 import { EditableCombobox } from './EditableCombobox.js'
-import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'
+import { createForgeRpcClient, type WorktreeFacesRpc } from '../rpc.js'
 import { dismissedOf, dismissedWriteOf, worktreePrefsFaceOf } from '../settings-section/index.js'
 import {
   riskDialogNeeded,
@@ -117,7 +117,7 @@ export async function createFollowup(createdPath: string, deps: CreateFollowupDe
  */
 export function ForgeHeroWorktreeMount({
   projectRoot,
-  makeRpc = preloadRpcClientFactory,
+  makeRpc = createForgeRpcClient,
   openWorkspace: injectedOpenWorkspace,
 }: {
   /** 项目根（ws_path——list/ops 执行 cwd；null = 零注入） */
@@ -134,8 +134,6 @@ export function ForgeHeroWorktreeMount({
   const [aheadBehind, setAheadBehind] = useState<ReadonlyMap<string, AheadBehind>>(new Map())
   const [createOpen, setCreateOpen] = useState(false)
   const [branches, setBranches] = useState<{ readonly defaultBranch: string; readonly names: readonly string[] }>({ defaultBranch: 'main', names: [] })
-  // 分支下拉 slug 候选（feature slug——features.list RPC；挂载面归一为 {slug, done}）
-  const [slugCandidates, setSlugCandidates] = useState<readonly SlugCandidate[]>([])
   const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
   // 选中态本地投影（host lastSelection 唯一事实源——本地态只是 host 态的 UI 镜像，挂载
@@ -371,30 +369,8 @@ export function ForgeHeroWorktreeMount({
         ),
       )
       .catch(() => {})
-    // slug 候选拉取：projects.list 解析 ws_path → projectId（归一比对），features.list 读面——
-    // 终态归一（feature completed/archived = done）
-    const key = (path: string): string => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
-    makeRpc()
-      .projects.list()
-      .then((projects) => {
-        const project = projects.find((summary) => key(summary.wsPath) === key(projectRoot))
-        if (project === undefined) return []
-        const isDoneFeature = (status: string): boolean => status === 'completed' || status === 'archived'
-        return makeRpc()
-          .features.list({ projectId: project.id })
-          .then((featureCards) =>
-            collectSlugCandidates(
-              featureCards.map((card) => ({ slug: card.slug, done: isDoneFeature(card.featureStatus) })),
-            ),
-          )
-      })
-      .then((candidates) => setSlugCandidates(candidates))
-      .catch((cause: unknown) => {
-        // 候选拉取失败留痕（不静默——AGENTS §7 诊断纪律）：静默吞会使新建弹窗 slug 候选
-        // 无声退化为空集（bug 8ba8e7d3——陈旧装载物调已下线的提案域服务面即此形态），
-        // 失败可观测才能与「真零候选」区分。
-        console.warn(`[dswf-worktree] slug 候选拉取失败（projectRoot=${projectRoot}）：${String(cause)}`)
-      })
+    // slug 候选拉取退役（2.16——feature 域已随 G2 退役：清单通道不可达，候选
+    // 恒空集 = 死分支拔除；create-dialog slugCandidates 注入面保留，弹窗缺省 = 空集）
   }, [createOpen, projectRoot, makeRpc])
 
   // ahead/behind 懒加载器（组件展开才拉 + 本面缓存共享）
@@ -506,7 +482,6 @@ export function ForgeHeroWorktreeMount({
         open={createOpen}
         branches={branches.names}
         existingWorktreeNames={phase.rows.map((row) => row.worktreeName)}
-        slugCandidates={slugCandidates}
         defaultBranch={branches.defaultBranch}
         mainBranch={phase.rows.find((row) => row.isMain)?.branch ?? null}
         worktreeDir={phase.worktreeDir ?? ''}

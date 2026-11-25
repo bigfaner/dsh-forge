@@ -100,4 +100,29 @@ describe('任务子 tab 数据装载缺省 client 工厂（生产默认值——
       }
     })
   })
+
+  // ── 2.16 会话徽章/worktree 选择器组扩面（用户裁决 2026-11-25 收尾组）——同读源码口径，
+  //    零替身注入，任一文件退回 preload 即红。渲染期构造安全性：createForgeRpcClient 构造
+  //    期不抛（face 缺席 = 调用期诚实降级），chip/seal-notice 均在 effect 内 try/catch 消费。──
+  describe('会话徽章/worktree 选择器组缺省 client 工厂扩面（生产默认值——零替身注入面）', () => {
+    const files = [
+      '../../../session-badge/chip.tsx',
+      '../../../session-badge/seal-notice.tsx',
+      '../../../worktree-picker/hero-workspace-picker.tsx',
+      '../../../worktree-picker/picker.tsx',
+    ]
+    it('本组 4 文件零 preloadRpcClientFactory 字面量，缺省消费点 = createForgeRpcClient（ui/rpc Typert 切片）', () => {
+      for (const rel of files) {
+        const s = src(rel)
+        expect(s, `${rel} 零 preload 工厂引用`).not.toMatch(/\bpreloadRpcClientFactory\b/)
+        expect(s, `${rel} 数据通路 = Typert 切片工厂`).toContain('createForgeRpcClient')
+      }
+    })
+
+    it('picker.tsx：features.list 死通道零残留（feature 域已随 G2 退役——2.16 遗留处置钉）', () => {
+      const s = src('../../../worktree-picker/picker.tsx')
+      expect(s, 'features.list 消费零残留').not.toMatch(/\bfeatures\.list\b/)
+      expect(s, 'slug 候选拉取死分支已拔除').not.toContain('collectSlugCandidates')
+    })
+  })
 })

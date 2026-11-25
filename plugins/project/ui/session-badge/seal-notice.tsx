@@ -10,7 +10,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { WorktreeSealResult } from '@dsh-forge/contracts'
 import { IconWarningTriangleOutlineRegular } from '../icons.js'
-import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'
+import { createForgeRpcClient, type WorktreeFacesRpc } from '../rpc.js'
 
 export interface SealNoticeProps {
   /** 被删 worktree 名（banner 引述） */
@@ -334,7 +334,7 @@ function ChatFlowTop({ children }: { readonly children: ReactNode }): ReactNode 
  */
 export function ForgeWorktreeSealOverlay({
   sessionId,
-  makeRpc = preloadRpcClientFactory,
+  makeRpc = createForgeRpcClient,
 }: {
   readonly sessionId?: string | undefined
   readonly makeRpc?: () => WorktreeFacesRpc
