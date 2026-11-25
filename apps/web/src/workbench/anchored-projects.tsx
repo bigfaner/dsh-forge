@@ -10,7 +10,7 @@ import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
 import type { LedgerWorkspacesSnapshot } from '@dsh-forge/project/client-ui/sidebar'
 import { useForgeProjects, type ProjectsPhase } from '@dsh-forge/project/client-ui/sidebar'
 import {
-  preloadRpcClientFactory,
+  createTypertRpcClient,
   type WorktreeResolveClientFactory,
 } from '@dsh-forge/project/client-ui/sidebar'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
@@ -136,7 +136,7 @@ export async function resolveWorkspaceProjectMap(
 export function useWorkspaceProjectMap(
   wsItems: readonly { readonly path?: unknown }[],
   projectsState: ProjectsPhase,
-  makeClient: WorktreeResolveClientFactory = preloadRpcClientFactory,
+  makeClient: WorktreeResolveClientFactory = createTypertRpcClient,
 ): ReadonlyMap<string, string> {
   const [map, setMap] = useState<ReadonlyMap<string, string>>(() => new Map())
   useEffect(() => {

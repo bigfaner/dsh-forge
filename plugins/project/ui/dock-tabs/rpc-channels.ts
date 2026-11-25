@@ -619,11 +619,3 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
  */
 export type RpcClientFactory = () => ForgeRpcClient
 
-/**
- * 缺省构造：preload 传输真身。缺席（非 Electron 载体/preload 未接）在构造期抛——由各
- * 消费面错误归一收敛为错误相位/错误条，不炸壳（fetchProjectsPhase / mapBrowseError /
- * mapRecallError / fetchDirListing 同口径）。
- */
-export function preloadRpcClientFactory(): ForgeRpcClient {
-  return createForgeRpcClient(preloadTransport())
-}

@@ -476,6 +476,6 @@ export function createForgeRpcClient(): ForgeRpcClient {
 export type RpcClientFactory = () => ForgeRpcClient
 
 /** 缺省构造：官方 Typert remote 真身（face 缺席构造期不抛——调用期诚实降级） */
-export function preloadRpcClientFactory(): ForgeRpcClient {
+export function createTypertRpcClient(): ForgeRpcClient {
   return createForgeRpcClient()
 }
