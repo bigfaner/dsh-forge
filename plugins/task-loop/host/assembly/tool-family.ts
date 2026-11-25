@@ -73,6 +73,8 @@ export interface ToolFamilyAssembly {
   readonly tools: readonly TaskToolDefinition[];
   /** 循环内核卸载收口（driver.dispose——活循环同步终态注销；插件 disposer 组成员） */
   readonly disposeLoop: () => void;
+  /** 循环内核驱动器（测试观测面——经 driver 驱动把守 reportRecovery 透传链；运行时消费仍走工具族） */
+  readonly driver: LoopDriver;
   /**
    * AC7 结算报告回收钩子（bug a31b96a2 回归锚观测面）：tasksHome 注入形态下的生产回收缝
    * （specsIssuesDir/taskLogsDir 注入单源）。装配回归锚经真实结算核消费它断言落点；
@@ -345,5 +347,5 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     event: "task-loop-tools",
     message: `单装工具族装配完成：${String(tools.length)} 员（10 任务动词 + batch_add_tasks + impl_checkpoint 三员 + dispatch/stop）`,
   });
-  return { tools, disposeLoop: () => driver.dispose(), reportRecovery };
+  return { tools, driver, disposeLoop: () => driver.dispose(), reportRecovery };
 }

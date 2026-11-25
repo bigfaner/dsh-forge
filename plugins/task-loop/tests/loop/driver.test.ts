@@ -383,8 +383,6 @@ function build(options: {
   ensureFailures?: number
   /** 机械③ addTask 派生故障注入（前 N 次 addTask 抛错——知识补派失败不阻断标记模拟） */
   addTaskFailures?: number
-  /** 机械③ 容器 → 提案 id 解析桩 */
-  resolveProposalId?: () => Promise<string | undefined>
   /** 机械③ 容器分支 HEAD 解析桩（worktree 在场时标记 base_commit_hash 来源） */
   resolveHeadCommit?: (worktree: string) => Promise<string | undefined>
   /** 诊断埋点桩（AGENTS §7——循环里程碑 diag 录制） */
@@ -472,7 +470,6 @@ function build(options: {
     ...(options.commitLanding !== undefined ? { commitLanding: options.commitLanding } : {}),
     ...(options.e2eBaseline !== undefined ? { e2eBaseline: options.e2eBaseline } : {}),
     ...(checkpoints !== undefined ? { checkpoints } : {}),
-    ...(options.resolveProposalId !== undefined ? { resolveProposalId: options.resolveProposalId } : {}),
     ...(options.resolveHeadCommit !== undefined ? { resolveHeadCommit: options.resolveHeadCommit } : {}),
     ...(options.diag !== undefined ? { diag: options.diag } : {}),
     ...(options.findRecurrenceCandidates !== undefined ? { findRecurrenceCandidates: options.findRecurrenceCandidates as LoopDriverDeps['findRecurrenceCandidates'] } : {}),
@@ -1027,7 +1024,6 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
         statsOf({ completed: 1 }), // 收口 stats 读
       ],
       checkpointRows: [],
-      resolveProposalId: async () => 'prop-1',
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
@@ -1076,8 +1072,7 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
           statsOf({ completed: 1 }), statsOf({ completed: 1 }),
         ],
         checkpointRows: [],
-        resolveProposalId: async () => 'prop-1',
-        ...(expertsPresent !== undefined ? { expertsPresent } : {}),
+          ...(expertsPresent !== undefined ? { expertsPresent } : {}),
       })
       await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
       await untilSettled(built.driver)
@@ -1109,7 +1104,6 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
       ],
       checkpointRows: [],
       ensureFailures: 1,
-      resolveProposalId: async () => 'prop-1',
       resolveHeadCommit: async () => 'head-1',
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
@@ -1129,7 +1123,6 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
       claim: [NO_TASK],
       stats: [statsOf({ completed: 1 })], // shift-末项重复——池读/标记快照/收口读同值
       checkpointRows: [{ mark: 'review-wave-N', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 }],
-      resolveProposalId: async () => 'prop-1',
       resolveHeadCommit: async () => 'head-9',
     })
     // 池中一枚 completed fix 类任务（带 commit 记录）——标记快照 = tasks 1 / commits 1 / fixes 1
@@ -1159,7 +1152,6 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
         { mark: 'merged', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 },
         { mark: 'review-wave-N', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 },
       ],
-      resolveProposalId: async () => 'prop-1',
       resolveHeadCommit: async () => 'head-9',
     })
     built.h.lists.created.push({
@@ -1197,7 +1189,6 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
         { mark: 'merged', tasksTotal: 8, commitsTotal: 12, fixesTotal: 3, evidenceDebtsTotal: 1 },
         wave, wave, wave, wave, wave, wave,
       ],
-      resolveProposalId: async () => 'prop-1',
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
@@ -1219,7 +1210,6 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
         { mark: 'first-pass-complete', tasksTotal: 5, commitsTotal: 8, fixesTotal: 1, evidenceDebtsTotal: 0 },
         { mark: 'retro-done', tasksTotal: 6, commitsTotal: 9, fixesTotal: 1, evidenceDebtsTotal: 0 },
       ],
-      resolveProposalId: async () => 'prop-1',
       resolveHeadCommit: async () => 'head-9',
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
@@ -1245,7 +1235,6 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
       claim: [NO_TASK],
       stats: [statsOf({ completed: 3 }), statsOf({ completed: 3 }), statsOf({ completed: 3 }), statsOf({ completed: 3 })],
       checkpointRows: [{ mark: 'first-pass-complete', tasksTotal: 5, commitsTotal: 8, fixesTotal: 1, evidenceDebtsTotal: 0 }],
-      resolveProposalId: async () => 'prop-1',
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)

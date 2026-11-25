@@ -6,7 +6,7 @@
 import { mkdtempSync, rmSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Context } from "@deepseek-ai/cordis";
 import taskLoopPlugin from "../../host/index.js";
 import { WORKER_BUG_ESSENTIAL_TOOLS } from "../../host/dispatch-core/assemble.js";
@@ -24,6 +24,24 @@ import type { SpawnWorkerHandle } from "../../host/dispatch-core/spawn.js";
 import { TASK_LOOP_DB_DEFAULT_DIR, TASK_LOOP_DB_FILENAME } from "../../shared/contract-constants.js";
 
 const dirs: string[] = [];
+
+/** 经 driver 驱动用例的 worker spawn 替身（in-process 真绑定模块级 mock——请求录制 + submit 后 end_turn 终态） */
+const fakeSpawnState = vi.hoisted(() => ({
+  requests: [] as Array<{ label?: string }>,
+  submit: undefined as undefined | (() => Promise<unknown>),
+}));
+vi.mock("../../host/spawn/in-process-driver.js", () => ({
+  createInProcessDriverSpawn: () => async (request: { label?: string }) => {
+    fakeSpawnState.requests.push(request);
+    const result = (async () => {
+      // 结算读 = worker 自行 submitTask 落账（settle 核只读终态）——替身先落 success 再终态
+      await fakeSpawnState.submit?.();
+      return { stopReason: "end_turn" as const, output: "done" };
+    })();
+    return { workerSessionId: "worker-1", result, dispose: async () => {} };
+  },
+}));
+
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
@@ -344,11 +362,57 @@ describe("结算报告回收装配回归锚（bug a31b96a2——proposalId 门�
       expect(readFileSync(join(issuesDir, "settle-report.md"), "utf8")).toBe("# 结算回收证明\n");
       // 既有 Spec 文档不被覆盖
       expect(readFileSync(specMd, "utf8")).toBe("# 既有 Spec 正本\n");
-      // 运行时原件不动（复制非移动）
-      expect(existsSync(join(runtimeDir, "settle-report.md"))).toBe(true);
+      // 运行时原件不动且内容不变（复制非移动——copyFile 变异为 rename 则本断言红）
+      expect(readFileSync(join(runtimeDir, "settle-report.md"), "utf8")).toBe("# 结算回收证明\n");
     } finally {
       family.disposeLoop();
       services.dispose();
     }
   });
+
+  it("经 driver 驱动：reportRecovery 透传链把守（tool-family 注入 createLoopDriver deps → driver.ts 透传结算核）——任一环被删即红", async () => {
+    const ws = tmpHome();
+    const tasksHome = tmpHome();
+    const { services, family } = assembleWithRecovery(ws, tasksHome, []);
+    try {
+      const derivedKey = services.db.projectKeyOf(ws);
+      mkdirSync(join(ws, ".forge", "specs", "alpha"), { recursive: true });
+      // 真实任务域：add（不预领——由循环驱动器自己 claim）
+      await services.tasks.addTask({ projectKey: PROJECT_KEY, slug: "alpha", title: "T", type: "doc" });
+      const cards = await services.tasks.listTasks({ projectKey: PROJECT_KEY, slug: "alpha" });
+      const localId = cards[0]!.localId;
+      // 预置运行时回收源（结算前落 .md 报告——localId 随真实任务编号）
+      const runtimeDir = join(tasksHome, derivedKey, "logs", "alpha", localId);
+      mkdirSync(runtimeDir, { recursive: true });
+      writeFileSync(join(runtimeDir, "settle-report.md"), "# driver 透传回收证明\n", "utf8");
+      fakeSpawnState.submit = () =>
+        services.tasks.submitTask({
+          projectKey: PROJECT_KEY,
+          taskRef: { slug: "alpha", localId },
+          result: "success",
+          summary: "done",
+        });
+
+      // 经装配产物 family.driver 全链驱动：claim → spawn（替身）→ 结算核 settle
+      const start = await family.driver.start({ source: { slug: "alpha" }, ownerSessionId: "s-1", parent: {}, projectId: PROJECT_KEY });
+      expect(start).toEqual({ ok: true, loopId: expect.any(String) });
+
+      // 结算回收经 driver 透传链落盘：tool-family 注入行 / driver.ts 透传行任一被删 → 本断言红
+      // （回收发生在结算核 settle 期——文件在场即透传链已走通；随后 stop 收口不等静默窗）
+      await vi.waitFor(
+        () => {
+          expect(existsSync(join(ws, ".forge", "specs", "alpha", "issues", localId, "settle-report.md"))).toBe(true);
+        },
+        { timeout: 15_000, interval: 10 },
+      );
+      expect(
+        readFileSync(join(ws, ".forge", "specs", "alpha", "issues", localId, "settle-report.md"), "utf8"),
+      ).toBe("# driver 透传回收证明\n");
+      expect(fakeSpawnState.requests).toHaveLength(1);
+      await family.driver.stop({ ownerSessionId: "s-1" });
+    } finally {
+      family.disposeLoop();
+      services.dispose();
+    }
+  }, 30_000);
 });

@@ -92,7 +92,15 @@ describe('runE2eBaseline（基线跑批）', () => {
 
 describe('createE2eBaselineFace（宿主装配面——真子进程）', () => {
   const dir = mkdtempSync(join(tmpdir(), 'forge-e2e-baseline-'))
-  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  // 临时目录收尾（best-effort + 非静默留痕）：真子进程句柄释放呈秒级迟滞——rmSync 重试
+  // 耗尽后 EPERM 残留不作为测试失败（临时目录机器级可弃），但清理失败必须留痕不静默吞掉。
+  afterAll(() => {
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+    } catch (error) {
+      console.warn(`[e2e-baseline] 临时目录清理失败（子进程句柄迟滞残留，可弃）：${dir} — ${String(error)}`)
+    }
+  })
 
   it('runSuite：真子进程 reporter 输出 → 红灯清单（非零退出输出照常解析）', async () => {
     const face = createE2eBaselineFace({
