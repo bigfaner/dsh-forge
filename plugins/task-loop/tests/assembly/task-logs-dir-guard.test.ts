@@ -51,10 +51,10 @@ describe("worker 简报锚点与钩子运行时目录同径（bug 26dff330 AC）
     services.dispose();
   });
 
-  it("createDefaultResolveWorkerContext：调用即建目录（mkdirRecursive 在盘）+ 锚点含同径绝对路径", () => {
+  it("createDefaultResolveWorkerContext：调用即建目录（mkdirRecursive 在盘）+ 锚点含同径绝对路径", async () => {
     const container = mkdtempSync(join(tmpdir(), "task-loop-logs-guard-ctx"));
     const resolve = createDefaultResolveWorkerContext({ containerDirOf: () => container, resolveWsPath: () => "" });
-    const text = resolve("proj-key", { slug: "feat-x" }, "3.0");
+    const text = await resolve("proj-key", { slug: "feat-x" }, "3.0");
     const dir = taskLogsDirOf(container, "feat-x", "3.0");
     expect(existsSync(dir) && isDir(dir)).toBe(true);
     expect(text).toContain(`${dir}\\`);

@@ -32,6 +32,13 @@ export interface TaskLoopAssemblyConfig {
   /** projectKey → 项目检出根（taskDetail git 只读查找 cwd；缺席 = 空串降级——actualFiles 走 payload files 面） */
   readonly resolveWsPath?: (projectKey: string) => string;
   /**
+   * projectKey → 项目工作区根（异步缝——bug 9b3c9a9b 生产装配接线：host/index.ts 接
+   * forge.projects 面 getProject().wsPath，项目未注册/面缺席 = undefined）。在场即优先于
+   * 同步 resolveWsPath 消费（worker 锚点节 forgeDir 派生 + 结算回收钩子 getProject）；
+   * 缺席 = 同步缝形态兼容不变。
+   */
+  readonly resolveWsPathAsync?: (projectKey: string) => Promise<string | undefined>;
+  /**
    * 任务目录派生根（bug a93c1277——组合器 patch config 下发 {DSH_HOME}/forge/projects，
    * 对齐主提案产物树「以 slug 为单位管理运行产物」）：forge 事件日志链装配门——
    * 在场（非空白）= bus→sink→监听器三件装配 + logs/{slug}.jsonl 落盘启用；
@@ -69,9 +76,10 @@ type AssemblyDiag = (line: string, level?: DiagLevel) => void;
 export function createDefaultResolveWorkerContext(deps: {
   readonly containerDirOf: (projectKey: string) => string;
   readonly resolveWsPath: (projectKey: string) => string;
+  readonly resolveWsPathAsync?: (projectKey: string) => Promise<string | undefined>;
   readonly diag?: AssemblyDiag;
 }): NonNullable<TasksVerbDeps["resolveWorkerContext"]> {
-  return (projectKey, source, localId) => {
+  return async (projectKey, source, localId) => {
     const containerDir = deps.containerDirOf(projectKey);
     const taskLogsDir = taskLogsDirOf(containerDir, source.slug, localId);
     try {
@@ -80,7 +88,8 @@ export function createDefaultResolveWorkerContext(deps: {
       const message = cause instanceof Error ? cause.message : String(cause);
       deps.diag?.(`[task-loop] 任务日志目录创建失败（fail-soft 不阻载）：${taskLogsDir}——${message}`, "warn");
     }
-    const ws = deps.resolveWsPath(projectKey);
+    // ws 根解析：异步缝在场即优先（生产 forge.projects 接线——bug 9b3c9a9b），缺席退同步缝
+    const ws = deps.resolveWsPathAsync !== undefined ? ((await deps.resolveWsPathAsync(projectKey)) ?? "") : deps.resolveWsPath(projectKey);
     return renderWorkerContext({
       forgeDir: ws === "" ? "" : forgeDirOfWorkspace(ws),
       containerDir,
@@ -124,6 +133,8 @@ export interface TaskLoopAssembly {
    * 与 git 查找同源同值。
    */
   readonly resolveWsPath: (projectKey: string) => string;
+  /** projectKey → 项目工作区根（异步缝——bug 9b3c9a9b 生产接线；缺席 = 未接线形态）。 */
+  readonly resolveWsPathAsync?: (projectKey: string) => Promise<string | undefined>;
   /**
    * forge 事件发射器（bug a93c1277——tasksHome 注入时装配，emit 直通 bus；监听器唯一写者
    * 落盘 logs/{slug}.jsonl）。缺席 = 事件链零装配（单装缺省形态，行为零变化）。
@@ -183,7 +194,14 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     ...(config.resolveWorkerContext !== undefined
       ? { resolveWorkerContext: config.resolveWorkerContext }
       : containerDirDefaultOf !== undefined
-        ? { resolveWorkerContext: createDefaultResolveWorkerContext({ containerDirOf: containerDirDefaultOf, resolveWsPath, diag }) }
+        ? {
+            resolveWorkerContext: createDefaultResolveWorkerContext({
+              containerDirOf: containerDirDefaultOf,
+              resolveWsPath,
+              ...(config.resolveWsPathAsync !== undefined ? { resolveWsPathAsync: config.resolveWsPathAsync } : {}),
+              diag,
+            }),
+          }
         : {}),
   });
   const checkpoints = createCheckpointsService({ db: db.db, events });
@@ -205,6 +223,7 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     checkpoints,
     events,
     resolveWsPath,
+    ...(config.resolveWsPathAsync !== undefined ? { resolveWsPathAsync: config.resolveWsPathAsync } : {}),
     ...(forgeEvents !== undefined ? { forgeEvents } : {}),
     ...(containerDirDefaultOf !== undefined ? { containerDirOf: containerDirDefaultOf } : {}),
     async reconcile(): Promise<void> {

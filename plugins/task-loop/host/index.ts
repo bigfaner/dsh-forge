@@ -116,6 +116,26 @@ function lazyProjectsFace(ctx: unknown): ForgeTasksRemoteDeps["projects"] {
     }
   };
 }
+/**
+ * projectKey → 项目工作区根异步解析缝（bug 9b3c9a9b 生产接线真身）：forge.projects 面
+ * 现查（lazyProjectsFace 同配方——惰性现查 + try/catch，检测结果零缓存）→ getProject()
+ * .wsPath；项目未注册 / 面缺席 / 抛错 = undefined（fail-soft 不抛）。经装配 config
+ * resolveWsPathAsync 下发（worker 锚点节 forgeDir 派生 + 结算回收钩子两链消费）。
+ */
+function resolveWsPathAsyncOf(ctx: unknown): (projectKey: string) => Promise<string | undefined> {
+  return async (projectKey) => {
+    const projects = lazyProjectsFace(ctx)?.();
+    if (projects === undefined) return undefined;
+    try {
+      const project = await projects.getProject(projectKey);
+      if (project === null) return undefined;
+      const ws = project.wsPath;
+      return typeof ws === "string" && ws.trim() !== "" ? ws : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+}
 
 
 /** Typert 注册后自探针缝（gateway invoke 直探——serve 层认领自证；缺席/失败由注册面诊断）。
@@ -329,7 +349,13 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
   const profileResolver = resolveExpertProfile();
   // 单装缺省装配（三件单源——home 缺席/db 打开失败 = 整体降级零 provide）
   const services = assembleTaskLoopServices(
-    { ...config, ...(profileResolver !== undefined ? { resolveExpertProfile: profileResolver } : {}) },
+    {
+      ...config,
+      // bug 9b3c9a9b——resolveWsPath 生产真身接线（forge.projects 缝异步解析；显式 config
+      // 注入优先，缺省即接缝——生产不再恒空串，回收钩子/worker 锚点节恢复可解析）
+      resolveWsPathAsync: config.resolveWsPathAsync ?? resolveWsPathAsyncOf(ctx),
+      ...(profileResolver !== undefined ? { resolveExpertProfile: profileResolver } : {}),
+    },
     diag,
   );
   // 单装工具族注册（官方 tools 缝——apply 期注册、unmount 撤回；域服务缺席 = 零注册降级）

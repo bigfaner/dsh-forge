@@ -17,6 +17,7 @@ import {
   resolveTaskLoopHome,
 } from "../../host/assembly/default-assembly.js";
 import { listDistinctProjectKeys } from "../../host/domain/tasks/query.js";
+import { deriveDirName } from "@dsh-forge/lib-path";
 import { settleWorkerRun } from "../../host/dispatch-core/settle.js";
 import { assembleTaskLoopToolFamily } from "../../host/assembly/tool-family.js";
 import type { TaskSnapshot } from "../../host/domain/tasks/types.js";
@@ -41,6 +42,19 @@ vi.mock("../../host/spawn/in-process-driver.js", () => ({
     return { workerSessionId: "worker-1", result, dispose: async () => {} };
   },
 }));
+
+/** tool-family 装配捕获（生产装配形态测试——经 taskLoopPlugin 正式入口驱动后取同一 services 产物装 family） */
+const familyServicesCapture = vi.hoisted(() => ({ services: undefined as unknown }));
+vi.mock("../../host/assembly/tool-family.js", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("../../host/assembly/tool-family.js")>();
+  return {
+    ...mod,
+    assembleTaskLoopToolFamily: (input: Parameters<typeof mod.assembleTaskLoopToolFamily>[0]) => {
+      familyServicesCapture.services = input.services;
+      return mod.assembleTaskLoopToolFamily(input);
+    },
+  };
+});
 
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
@@ -415,4 +429,69 @@ describe("结算报告回收装配回归锚（bug a31b96a2——proposalId 门�
       services.dispose();
     }
   }, 30_000);
+});
+
+describe("生产装配 resolveWsPath 接缝（bug 9b3c9a9b——零 config 注入、只给 tasksHome）", () => {
+  it("经 taskLoopPlugin 正式入口：回收钩子把 projectId 解析出 wsPath 与运行时任务目录；worker 简报任务日志目录 ≡ 钩子解析目录；未注册项目 = undefined 不抛", async () => {
+    const ws = tmpHome();
+    // projectKey = deriveDirName(ws) 同名制（dual-memory-seam 单源——生产任务键派生同径）
+    const PROJECT_KEY = deriveDirName(ws);
+    const tasksHome = tmpHome();
+    // specs 卷宗锚在盘（forge 根锚点节 fail-soft 探测的前置）
+    mkdirSync(join(ws, ".forge", "specs", "alpha"), { recursive: true });
+    writeFileSync(join(ws, ".forge", "specs", "alpha", "spec.md"), "# 既有 Spec 正本\n", "utf8");
+    const { ctx, services } = stubCtx();
+    let projectRegistered = true;
+    // forge.projects 缝替身（plugins/project 五缝同形——惰性工厂产 ProjectsServicePort 窄面）
+    services["forge.projects"] = () => ({
+      getProject: async (id: string) => (id === PROJECT_KEY && projectRegistered ? { wsPath: ws } : null),
+    });
+    const prev = process.env.DSH_HOME;
+    process.env.DSH_HOME = tmpHome(); // 零 config 注入：home 走 env DSH_HOME
+    // 官方 tools 缝替身（插件内 family 装配前置——reportRecovery 装配在 family 侧）
+    (ctx as { tools?: unknown }).tools = { register: (_definition: unknown) => () => {} };
+    const dispose = taskLoopPlugin(ctx, { tasksHome });
+    try {
+      const tasks = services.forgeTasks as import("../../host/domain/tasks/service.js").TasksService;
+      await tasks.addTask({ projectKey: PROJECT_KEY, slug: "alpha", title: "T", type: "doc" });
+      const claimed = await tasks.claimTask({ projectKey: PROJECT_KEY, sessionId: "s-1", source: { slug: "alpha" } });
+      const task = claimed.task as TaskSnapshot;
+      // ① worker 简报任务日志目录字符串（经 resolveWorkerContext 产物 = persona 尾部锚点节取）
+      const seg = claimed.persona.slice(claimed.persona.indexOf("forge.task_logs_dir——"));
+      const briefDir = /`([^`]+)`/.exec(seg.slice(seg.indexOf("`")))?.[1] ?? "";
+      const expectedDir = join(tasksHome, PROJECT_KEY, "logs", "alpha", task.localId);
+      expect(briefDir).toBe(`${expectedDir}\\`);
+      // ② worker 简报 forge 根锚点（specs 卷宗目录从 wsPath 派生 <ws>/.forge/specs/<slug>——不缺席）
+      expect(claimed.persona).toContain(join(ws, ".forge", "specs", "alpha"));
+
+      // ③ 回收钩子（生产装配产物 family）把 projectId 解析出运行时任务目录，与 worker 简报直接比较相等
+      const family = assembleTaskLoopToolFamily({
+        services: familyServicesCapture.services as Parameters<typeof assembleTaskLoopToolFamily>[0]["services"],
+        ctx,
+        diag: () => {},
+      });
+      const runtimeDir = await family.reportRecovery!.resolveRuntimeTaskDir({
+        projectId: PROJECT_KEY,
+        slug: "alpha",
+        localId: task.localId,
+      });
+      expect(runtimeDir).toBe(expectedDir);
+      const issuesDir = await family.reportRecovery!.resolveSpecsIssuesDir({
+        projectId: PROJECT_KEY,
+        slug: "alpha",
+        localId: task.localId,
+      });
+      expect(issuesDir).toBe(join(ws, ".forge", "specs", "alpha", "issues", task.localId));
+
+      // ④ 项目未注册 → undefined 不抛（fail-soft 惰性跳过语义）
+      projectRegistered = false;
+      expect(
+        await family.reportRecovery!.resolveRuntimeTaskDir({ projectId: PROJECT_KEY, slug: "alpha", localId: task.localId }),
+      ).toBeUndefined();
+      family.disposeLoop();
+    } finally {
+      dispose();
+      process.env.DSH_HOME = prev;
+    }
+  });
 });

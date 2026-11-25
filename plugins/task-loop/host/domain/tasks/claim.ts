@@ -289,7 +289,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       profile === undefined
         ? composePersona(target.task_type, complexity)
         : composePersonaWithProfile(profile, target.task_type, complexity);
-    const workerContext = deps.resolveWorkerContext?.(input.projectKey, { slug: target.slug }, target.local_id);
+    const workerContext = await deps.resolveWorkerContext?.(input.projectKey, { slug: target.slug }, target.local_id);
     personaWithAnchors = workerContext !== undefined && workerContext !== "" ? `${persona}\n\n${workerContext}` : persona;
     assertNoBareInterpolation(personaWithAnchors, "claim:personaWithAnchors");
   } catch (cause) {

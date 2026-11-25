@@ -266,7 +266,11 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
       ? createSettleReportRecovery({
           projects: {
             getProject: async (projectId) => {
-              const ws = services.resolveWsPath(projectId);
+              // bug 9b3c9a9b——异步缝在场即优先（生产 forge.projects 接线），缺席退同步缝
+              const ws =
+                services.resolveWsPathAsync !== undefined
+                  ? ((await services.resolveWsPathAsync(projectId)) ?? "")
+                  : services.resolveWsPath(projectId);
               return ws === "" ? null : { wsPath: ws };
             },
             deriveTaskStoreDir: async ({ workspaceDir }) => ({

@@ -144,7 +144,7 @@ export interface TasksVerbDeps {
     checkoutRoot?: string,
   ) => { pointer: string; stale: boolean } | undefined;
   /** worker 任务目录锚点节渲染（缺席/空串 = persona 零追加，形态兼容）。 */
-  readonly resolveWorkerContext?: (projectKey: string, source: ContainerRef, localId: string) => string;
+  readonly resolveWorkerContext?: (projectKey: string, source: ContainerRef, localId: string) => string | Promise<string>;
   /** 专家档案取用面（缺席 = persona 仅程序段；档案缺失/禁用 = 实现侧 fail-loud）。 */
   readonly resolveExpertProfile?: (
     taskType: string,

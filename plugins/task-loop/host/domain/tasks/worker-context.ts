@@ -2,7 +2,7 @@
 // 1.7 内联 + slug 容器化改造）。经 TasksVerbDeps 注入 claim（核心动词零 IO 纪律），claim
 // 合成 persona 后追加——persona 通道 worker 独享。fail-soft：容器目录缺席/读失败 → 省该锚点段
 // （logs 双锚恒出）。slug 化改造面：source_kind 判别词退役——容器文档锚点 = features 目录在盘
-// 优先，否则 proposals 目录（fail-soft 探测序）；检出根唯一权威 = worker 会话 cwd。
+// 优先，否则 specs 卷宗目录（fail-soft 探测序）；检出根唯一权威 = worker 会话 cwd。
 import { readdirSync, type Dirent } from "node:fs";
 import { join, sep } from "node:path";
 import { docsRootOfForgeDir } from "@dsh-forge/lib-path";
@@ -16,7 +16,7 @@ const TREE_ENTRY_CAP = 60;
 
 /** 锚点介绍行文本 */
 const DIR_ROLE_NOTES: Readonly<Record<string, string>> = {
-  proposal_dir: "提案文档目录：本任务的提案出处（proposal.md 及配套）。",
+  "forge.specs_dir": "Spec 卷宗目录：本任务的 Spec 正本（spec.md）与 issues 回收卷宗（<ws>/.forge/specs/<slug>/issues/<localId>）所在。",
   feature_dir: "特性文档目录：prd/（需求与用户故事）、design/（技术设计）、test/（测试规划）。",
   "forge.project_logs_dir":
     "forge 运行日志目录：任务日志存放的根目录（位于工作区仓库之外，属 dsh-forge 运行数据——不进 git）。",
@@ -74,7 +74,7 @@ function scanLines(abs: string, prefix: string, depth: number, lines: string[]):
 
 /**
  * worker 任务目录锚点节（fail-soft 纯读）：logs 双锚恒出；容器文档锚点（slug 容器化——
- * features 目录在盘优先，否则 proposals 目录）在盘才出。任务库容器目录 containerDir =
+ * features 目录在盘优先，否则 specs 卷宗目录）在盘才出。任务库容器目录 containerDir =
  * {tasksHome}/{projectKey}（containerDirOf 单源）；任务日志目录 = taskLogsDirOf
  * （containerDir/logs/<slug>/<localId>——bug 26dff330 三处口径同源单点）。
  */
@@ -90,9 +90,10 @@ export function renderWorkerContext(input: {
   // 任务日志目录派生单点（bug 26dff330——三处口径同源：worker 锚点 / 回收钩子 / 事故台账）
   const logsRoot = join(containerDir, "logs");
   const taskLogsDir = taskLogsDirOf(containerDir, source.slug, localId);
-  // slug 容器化：features 目录在盘优先（远征血统），否则 proposals 目录——fail-soft 探测序
+  // slug 容器化：features 目录在盘优先（远征血统），否则 specs 卷宗目录（specs 替代
+  // proposals——用户裁定 2026-11-25；proposal_dir 命名退役，bug 9b3c9a9b 同批收口）
   const featureDir = join(docsRoot, "features", source.slug);
-  const proposalDir = join(docsRoot, "proposals", source.slug);
+  const specsDir = join(forgeDir, "specs", source.slug);
   let featureInDisk = false;
   try {
     readdirSync(featureDir);
@@ -102,7 +103,7 @@ export function renderWorkerContext(input: {
   }
   const main = featureInDisk
     ? renderDirBlock("feature_dir", featureDir, DIR_ROLE_NOTES.feature_dir!)
-    : renderDirBlock("proposal_dir", proposalDir, DIR_ROLE_NOTES.proposal_dir!);
+    : renderDirBlock("forge.specs_dir", specsDir, DIR_ROLE_NOTES["forge.specs_dir"]!);
   if (main !== undefined) blocks.push(main);
   blocks.push(renderLogsRootBlock(logsRoot), renderTaskLogsBlock(taskLogsDir));
   return [
