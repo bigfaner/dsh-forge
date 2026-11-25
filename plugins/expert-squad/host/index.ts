@@ -33,6 +33,7 @@ import {
 import { registerExpertSquadRoutes, type ConnectionLike, type DelegateAssemblyState } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
 import { ExpertPresetSync, type PresetRegistryFace } from "./preset-rows.js";
+import { applyExpertToolWhitelist } from "./tool-whitelist.js";
 import { EXCLUDED_EXPERT_TOOL_NAMES, EXPERTS_SERVICE_KEY } from "../shared/constants.js";
 import {
   createKnownToolsProbe,
@@ -575,11 +576,11 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
   // readOptionalService 的 reflect 字符串键取法与具名服务失配，真机 delegate_expert
   // 不注册。形状校验保留：startContinuable 非函数面同按缺席降级。
   // 专家 preset 行同步器（fix-1 agentPreset 注入通道——官方正本核销：dsh-subagent
-  // rc.1 README Child presets + agent-preset-registry README/register 正门）：装载期
-  // 批量预注册（每位启用专家一行：dsh-persona persona 段 + expert-restrict 白名单段）
-  // + recruit/update/rename/启停增删同步（presetSyncHook 挂 refresh 完成回调与显式
-  // 同步点）。agentPresets.register 缺席 = warn 降级（委派侧 presetProbe 同缺席——
-  // 请求面恒携 agentPreset，官方启动时对未知 id fail-loud），不阻载插件。
+  // Child presets 段 + agent-preset-registry README/register 正门）：装载期批量预注册
+  // （每位启用专家：dsh-persona persona 段 + 模型工具行全集）+ recruit/update/rename/
+  // 启停增删同步（presetSyncHook 挂 refresh 完成回调与显式同步点）。agentPresets.register
+  // 缺席 = warn 降级（委派侧 presetProbe 同缺席——请求面恒携 agentPreset，官方启动时
+  // 对未知 id fail-loud），不阻载插件。
   const presetsFace = ctx.agentPresets;
   let presetSync: ExpertPresetSync | undefined;
   if (typeof presetsFace?.register === "function") {
@@ -600,6 +601,34 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     presetSyncHook();
   } else {
     diag("warn", "expert-squad-agentpresets-register-absent", "ctx.agentPresets.register absent——专家 preset 行未同步（专家委派将诚实降级）");
+  }
+
+  // 专家子会话工具白名单（agent/created 通道——2026-11-25 真机定谳）：
+  //   preset scope 内 restrict 掩不到同层工具行（own 层豁免——dsh-tools view()），故白名单
+  //   不在 preset 内落；子 agent scope 的父链指向专家 preset scope，preset 层工具对其为
+  //   inherited → 可掩（真机：挂行不落 restrict = 80 个工具，落后 = 3 个）。本处对每个新建
+  //   agent 判别「是否专家子会话」（header.agentPreset ∈ 台账），是则把台账 allow（reconcile
+  //   已求交）落到该 agent 自己的 scope，随其生命周期回收。
+  //   判据只认台账键：主会话 / task worker / 官方 subagent 的 agentPreset 是 Forge/
+  //   headhunter 等非专家键 → 不在台账 → 零动作（非介入面零行为差异）。
+  //   硬约束（2026-11-25 宿主崩溃判例）：agent/created 由官方 announce() 串行 await，监听器
+  //   抛错 = agent 创建事务回滚 = 宿主 fatal；返回 rejected Promise 走 unhandled rejection
+  //   同样 fatal。故本段：① 全同步（不返回 Promise）；② 整体 try/catch 零外抛，异常仅
+  //   diag warn 留痕；③ 服务经 agent.ctx.tools（Agent 对象本体不挂服务——误用即 undefined）；
+  //   ④ 逐层可选链 + 存在性现查。
+  //   这是创建期的可见性声明（工具从模型可见面消失），非调用期拦截——与 2026-11-05
+  //   「工具可见性边界=预设组合行进出，不靠运行期拦截」裁决同旨：包粒度（行只能整包装载）
+  //   内做不到工具级区分，restrict 是该缺口的官方可见性机制。
+  {
+    const disposeWhitelist = ctx.on?.("agent/created", (payload: unknown) => {
+      // 同步监听器：applyExpertToolWhitelist 永不抛、永不返回 Promise（见其头注硬约束）
+      applyExpertToolWhitelist(
+        payload,
+        (key) => presetSync?.allowOf(key),
+        (event, message) => diag("warn", event, message),
+      );
+    });
+    if (typeof disposeWhitelist === "function") ctx.effect(() => () => disposeWhitelist());
   }
   // 委派 preset 在场探针（可用 preset id 名册，每派发现调禁 memoize——AGENTS 1.6；
   // broken 行剔除；list 失败 = undefined 无校验直派）。register 缺席 = 探针缺席同径。

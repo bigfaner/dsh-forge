@@ -11,7 +11,8 @@
 // 工具随即返回「已派发 + childId + 追问指引」，不等待子会话 turn——成果经官方
 // 子会话记录可见（delivery: "parent" = 结算通知回父会话模型面）、追问经
 // dsh-tool-subagent-control send_message（回复回会话流）。白名单 fail-closed 语义
-// 不在本层复刻：由 preset 行内 expert-restrict 行经官方 ctx.tools.restrict 落地。
+// 不在本层复刻：由 host/index.ts 的 agent/created 监听器把台账 allow 经官方
+// ctx.tools.restrict 落到子 agent scope（preset 层工具对其为 inherited，可掩）。
 //
 // 诚实降级：presetProbe 名册（可用 preset id 集）不含本专家 preset id = 该专家
 // preset 行缺席/装载失败——emitDiag warn + 请求面不携 agentPreset（回落父组合）

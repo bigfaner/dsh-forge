@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/expert-squad",
-  "version": "0.32.9",
+  "version": "0.33.0",
   "private": true,
   "type": "module",
   "description": "专家团：把一句用人需求澄清成可直接差遣的专家档案——招募、修改、启停、查询专家，一键委派任务给专家执行。",
@@ -15,10 +15,6 @@
     "./client": {
       "types": "./dist/client/ui/index.d.ts",
       "default": "./dist/client.js"
-    },
-    "./expert-restrict": {
-      "types": "./dist/host/expert-restrict.d.ts",
-      "import": "./dist/host/expert-restrict.js"
     },
     "./tools-exclude": {
       "types": "./dist/host/tools-exclude.d.ts",

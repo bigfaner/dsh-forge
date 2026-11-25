@@ -81,7 +81,7 @@ export function createExpertComposer(
 /**
  * 白名单平台求交（薄壳——bug a5b12254 集中化：求交核心单源 contracts
  * intersectToolNames，本包注入排除集与 ExpertToolError 空集异常，行为等价）。
- * 消费方 = host/preset-rows.ts（preset 行 expert-restrict 段构造期求交）。
+ * 消费方 = host/preset-rows.ts（reconcile 期求交存台账，供 agent/created 监听器消费）。
  * - 排除集（bug c19eb719，EXCLUDED_EXPERT_TOOL_NAMES 单点）：档案写了管理/取数 7 枚
  *   → fail-soft 剔除（同未知名口径，不炸；list_experts/delegate_expert 保留）；
  * - 未知名且属 shell 候选族 → 解析为候选中在场的同族者（档案写 pwsh 落 Mac 得 bash）；
