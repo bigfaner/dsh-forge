@@ -1,14 +1,20 @@
 // host/dirs · /forge-dir-init 指令 handler（workspace-artifact-governance §2.5）：
-// 纯机械 command plane 直执行零模型消息（/stop-dag-tasks 先例形态）——按产物存储地图
-// （§2.1.1）在工作区初始化分区目录（已存在跳过，幂等）；git 仓库则按地图把缺的忽略条目
-// 去重追加到 .gitignore（已有条目零重复），执行回执列出新建目录与追加条目。
+// 纯机械 command plane 直执行零模型消息（/stop-dag-tasks 先例形态）——按 ForgeDirs 键表
+// 派生的工作区分区（workspacePartitionsOf——与 forge_dirs/dirFacts/audit 同一声明拉取与
+// 解析单源，无独立目录清单常量）在工作区初始化分区目录（已存在跳过，幂等）；git 仓库则
+// 把分区内「git 外分区」的忽略条目去重追加到 .gitignore（docs 文档树可提交，不设条目），
+// 执行回执列出新建目录与追加条目。声明拉取/键解析缺席 = warn 诊断（注入缝，不直落 console）。
 // 零模型消息、零任务循环改动（§2.6——gitignore 环境边界兜底，任务流程零感知）。
-// 落位：plugin-project 1.12 目录事实面归拢 host/dirs（提案 §一裁决 3；自 plugin-forge
-// commands/forge-dir-init.ts git mv 迁入——指令面类型以本地窄面承载，零上游 import）。
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { FORGE_DIR_SEGMENT, FORGE_LOGS_DIR } from '@dsh-forge/contracts'
-import { forgeDirOfWorkspace } from './anchors.js'
+import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
+import {
+  collectDeclaredDirKeys,
+  mergeDeclarations,
+  workspacePartitionsOf,
+  type DirKeysPullDiagFace,
+  type ReflectDeclarePullFace,
+} from './anchors.js'
 
 /** 指令调用入参（官方 CommandInvocation 消费子面——结构窄面：敲指令会话身份 + 指令名后原文） */
 export interface DirCommandInvocation {
@@ -36,23 +42,29 @@ export interface DirCommandResult {
 /** 指令名（无 input 描述符——无参指令，composer 不展示占位） */
 export const FORGE_DIR_INIT_NAME = 'forge-dir-init'
 
-/** 存储地图分区目录（forgeDir 相对——提案 §2.1.1：docs 四类 + 三 git 外分区） */
-export const STORAGE_MAP_DIRS = [
-  'docs/proposals',
-  'docs/probes',
-  'docs/roundtables',
-  'docs/features',
-  'worktrees',
-  'tmp',
-  FORGE_LOGS_DIR,
-] as const
+/** init/audit 共用声明缝（同一声明拉取——reflect 现查 + 降级 warn；缺席 = 仅本体键集） */
+export interface ForgeDirsCommandDeps {
+  /** reflect 现查取法（缺席 = 声明拉取缝零贡献——仅本体十条） */
+  readonly reflectOf?: () => ReflectDeclarePullFace | undefined
+  /** 降级诊断发射缝（声明拉取/键解析降级 warn——缺席零发射，不直落 console） */
+  readonly onDiag?: DirKeysPullDiagFace
+}
 
-/**
- * 存储地图 gitignore 忽略条目（提案 §2.6.1 gitignore 硬边界——git 外分区散落产物
- * 天然进不了 git）。docs 侧仅 probes/ 为「永不进 git」的过程域；proposals/features/roundtables
- * 的 `.md` 台账类按 AGENTS 5.2 属文档可提交，不设条目。
- */
-export const GITIGNORE_ENTRIES = [`${FORGE_DIR_SEGMENT}/worktrees/`, `${FORGE_DIR_SEGMENT}/logs/`, `${FORGE_DIR_SEGMENT}/tmp/`, `${FORGE_DIR_SEGMENT}/docs/probes/`] as const
+/** 声明集现查（init/audit/查询同一拉取——每次现算不缓存） */
+export function declaredDeclarationsOf(deps: ForgeDirsCommandDeps): readonly import('@dsh-forge/lib-path').ForgeDirDeclaration[] {
+  return mergeDeclarations(collectDeclaredDirKeys(deps.reflectOf?.(), deps.onDiag))
+}
+
+/** 分区内 git 外判定：docs 文档树可提交（.md 台账类按 AGENTS 5.2 属文档），其余分区 git 外 */
+function isGitExternalPartition(partition: string): boolean {
+  const rel = partition.slice(`${FORGE_DIR_SEGMENT}/`.length)
+  return rel !== 'docs' && !rel.startsWith('docs/')
+}
+
+/** gitignore 忽略条目派生（键表分区单源——git 外分区才设条目） */
+export function gitignoreEntriesOf(partitions: readonly string[]): readonly string[] {
+  return partitions.filter(isGitExternalPartition).map((partition) => `${partition}/`)
+}
 
 /** gitignore 追加段注释（标注来源——人工可辨归属） */
 const GITIGNORE_SECTION_HEADER = '# forge storage map (/forge-dir-init)'
@@ -85,31 +97,32 @@ export function missingGitignoreEntries(existingContent: string, entries: readon
 }
 
 /** handler（DirCommandDefinition.handler 形状——UI command plane 直执行，零模型消息） */
-export function createForgeDirInitHandler(): (invocation: DirCommandInvocation) => Promise<DirCommandResult> {
+export function createForgeDirInitHandler(deps: ForgeDirsCommandDeps = {}): (invocation: DirCommandInvocation) => Promise<DirCommandResult> {
   return async (invocation: DirCommandInvocation): Promise<DirCommandResult> => {
     // 工作区根 = 敲指令会话的工作目录（header.cwd 正读位；顶层 cwd 兼容位——faces 同径）
     const root = invocation.agent.session.header?.cwd ?? invocation.agent.session.cwd
     if (root === undefined || root.trim() === '') {
       return { kind: 'error', text: '无法解析会话工作区根（header.cwd 缺席），目录初始化未执行' }
     }
-    const forgeDir = forgeDirOfWorkspace(root)
 
-    // ① 分区目录初始化（已存在跳过，幂等；mkdirSync recursive 天然覆盖嵌套 docs 层）
+    // ① 分区目录初始化（键表派生单源——已存在跳过，幂等）
+    const partitions = workspacePartitionsOf(root, declaredDeclarationsOf(deps), deps.onDiag)
     const created: string[] = []
-    for (const dir of STORAGE_MAP_DIRS) {
-      const target = join(forgeDir, ...dir.split('/'))
+    for (const partition of partitions) {
+      const target = join(root, ...partition.split('/'))
       if (!existsSync(target)) {
         mkdirSync(target, { recursive: true })
-        created.push(`${dir}/`)
+        created.push(`${partition}/`)
       }
     }
 
-    // ② gitignore 去重追加（非 git 仓库跳过——地图条目无承载面）
+    // ② gitignore 去重追加（git 外分区派生条目；非 git 仓库跳过——地图条目无承载面）
+    const gitignoreEntries = gitignoreEntriesOf(partitions)
     const appended: string[] = []
     const gitignorePath = join(root, '.gitignore')
     if (existsSync(join(root, '.git'))) {
       const existing = existsSync(gitignorePath) ? readFileSync(gitignorePath, 'utf8') : ''
-      const missing = missingGitignoreEntries(existing, GITIGNORE_ENTRIES)
+      const missing = missingGitignoreEntries(existing, gitignoreEntries)
       if (missing.length > 0) {
         const section = ['', GITIGNORE_SECTION_HEADER, ...missing].join('\n')
         const next = existing.endsWith('\n') || existing === '' ? `${existing}${section}\n` : `${existing}\n${section}\n`

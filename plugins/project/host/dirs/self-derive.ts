@@ -1,10 +1,10 @@
 // host/dirs · self-derive——deriveTaskStoreDir 单装态自 derivation 兜底缝（plugin-task-loop/1.32②）：
 // core forgeProjects face 缺席的宿主（dsh desktop 单装态）添加项目向导派生行恒 typed unavailable
-// ——本缝在插件内承接同语义动词：tasksHome 三级解析（config.tasksHome > env DSH_FORGE_TASKS_HOME
-// > 宿主 home 约定 {home}/forge-workspaces——self-anchors 同径）+ lib-path 单源算法
-//（deriveTaskStoreDir/classifyRegistrationCollision——core 同链同语义，零复制）+ 碰撞三态
-// 同收口（suspected-move → ERR_SUSPECTED_MOVE typed 拒绝；在册项目任务库消歧——core verb
-// registeredStoreDirs 同语义，行源 = 插件 project.db）。
+// ——本缝在插件内承接同语义动词：tasksHome 两级解析（config.tasksHome > forge 根派生
+// {forgeHome}/projects——§2.4 forge 根单点，env DSH_FORGE_TASKS_HOME 与 {home}/forge-workspaces
+// 分支已删）+ lib-path 单源算法（deriveTaskStoreDir/classifyRegistrationCollision——core 同链
+// 同语义，零复制）+ 碰撞三态同收口（suspected-move → ERR_SUSPECTED_MOVE typed 拒绝；在册项目
+// 任务库消歧——core verb registeredStoreDirs 同语义，行源 = 插件 project.db）。
 // 优先级纪律（bug 8de6b903 教训——不遮蔽真失败）：core face 在场恒委托 core，本缝只在
 // face 缺席（单装态）被装配侧消费——集成态派生根与注册闭包永不分叉。
 import { realpath } from "node:fs/promises";
@@ -28,14 +28,12 @@ class SelfSuspectedMoveError extends Error {
   }
 }
 
-/** 自 derivation 依赖缝（全部可选——缺席面按解析链降级，三级双缺 = fail-loud 普通错误） */
+/** 自 derivation 依赖缝（tasksHome 双缺 = fail-loud 普通错误） */
 export interface SelfDeriveDeps {
-  /** tasksHome（config.tasksHome——注册闭包碰撞分类器同源，首优先） */
+  /** tasksHome（config.tasksHome——patch 下发 {forge}/projects，首优先） */
   readonly tasksHome?: string;
-  /** 宿主 home（末级派生根 {home}/forge-workspaces——self-anchors 同径） */
-  readonly home?: string;
-  /** env 注入缝（缺省 process.env——单测注入收敛） */
-  readonly env?: { readonly DSH_FORGE_TASKS_HOME?: string };
+  /** forge 根（resolveForgeHome 产物——缺席 tasksHome 时派生 {forgeHome}/projects） */
+  readonly forgeHome?: string;
   /** 中央在册 ws_path 清单（疑似移动消歧——core registeredStoreDirs 同语义；缺席 = 空集） */
   readonly registeredWsPaths?: () => readonly string[] | Promise<readonly string[]>;
   /** 诊断缝（realpath fail-soft 回退留痕——缺席零发射） */
@@ -58,25 +56,20 @@ async function canonicalizeDir(p: string, onDiag: SelfDeriveDeps["onDiag"]): Pro
   }
 }
 
+const nonEmpty = (v: string | undefined): string | undefined =>
+  typeof v === "string" && v.trim() !== "" ? v : undefined;
+
 /**
- * 建自 derivation 动词（装配单例——typert-remotes 兜底消费）。tasksHome 三级解析与
+ * 建自 derivation 动词（装配单例——typert-remotes 兜底消费）。tasksHome 两级解析与
  * 碰撞三态收口语义 = core deriveTaskStoreDirVerb 镜像（算法/分类器 lib-path 单源，
  * 本缝零复制零重推）。
  */
 export function createSelfDeriveOf(deps: SelfDeriveDeps): SelfDeriveVerb {
   return async (workspaceDir) => {
-    const env = deps.env ?? process.env;
-    const envRoot = env.DSH_FORGE_TASKS_HOME;
-    const tasksHome =
-      typeof deps.tasksHome === "string" && deps.tasksHome.trim() !== ""
-        ? deps.tasksHome
-        : envRoot !== undefined && envRoot.trim() !== ""
-          ? envRoot
-          : typeof deps.home === "string" && deps.home.trim() !== ""
-            ? join(deps.home, "forge-workspaces")
-            : undefined;
+    const forgeHome = nonEmpty(deps.forgeHome);
+    const tasksHome = nonEmpty(deps.tasksHome) ?? (forgeHome !== undefined ? join(forgeHome, "projects") : undefined);
     if (tasksHome === undefined) {
-      throw new Error("deriveTaskStoreDir 不可用：tasksHome 未注入（config.tasksHome / DSH_FORGE_TASKS_HOME / 宿主 home 三级双缺）");
+      throw new Error("deriveTaskStoreDir 不可用：tasksHome 未注入（config.tasksHome / forge 根双缺）");
     }
     const canonical = await canonicalizeDir(workspaceDir, deps.onDiag);
     const collision = classifyRegistrationCollision(tasksHome, canonical);

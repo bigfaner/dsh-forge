@@ -29,7 +29,7 @@ import { createWorktreeIdentity, type ForgeProjectsIdentityFace } from "./assemb
 import { createBugsService } from "./bugs/service.js";
 import { createProjectKeyResolver } from "./assembly/project-key.js";
 import { minimalDirFactsPort } from "./dirs/dir-facts.js";
-import { createSelfAnchorsOf } from "./dirs/self-anchors.js";
+import { createSelfAnchorsOf, resolveForgeHome } from "./dirs/self-anchors.js";
 import { createSelfDeriveOf } from "./dirs/self-derive.js";
 // 单行装载 = 五缝注册 + worktree 域插件（gitWorktree 能力服务 provide）——能力面在此
 // 组合保持外部行为不变（git 缺席 fail-soft 不生效语义归插件启动检测）。
@@ -94,8 +94,13 @@ export interface BugsResidentDeps {
 
 /** host 装配 config（全部可选——缺席面 = 对应缝退兜底，fail-soft 不阻载） */
 export interface ProjectHostConfig {
-  /** DSH home（自锚派生与兜底根；缺席 = projects/bugs 退兜底） */
+  /** DSH home（projects/bugs 兜底根；缺席 = projects/bugs 退兜底） */
   readonly home?: string;
+  /**
+   * forge 根（官方 dshHomePath('forge') 下发——forge patch 成员行注入；缺席 = tasksHome
+   * dirname 派生 > 运行期现查官方 dshHomePath 服务 > 降级 ~/.dsh/forge + warn 诊断）。
+   */
+  readonly forgeHome?: string;
   /**
    * 库文件覆盖（共库集成形态——forge patch 下发 {DSH_HOME}/forge/db/forge/forge.db，
    * project_ 前缀分表；bug ad14e904：patch 下发即生效，不再自派生
@@ -131,6 +136,41 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   // 诊断兜底按级分流（clean-code-review P1-5——对齐 worktrees/index.ts consoleDiagFallback 正典，
   // bug 7ba48c55 判例：error → console.error、其余 → console.warn；禁直落 console 单行兜底）
   const diag: SeamDiag = config.diag ?? consoleDiagFallback;
+
+  // 诊断 emit 桥接（ctx.emit 在场即 typed emit，缺席 emitDiagOrFallback console 兜底）——
+  // forge 根降级 warn、Typert 遥控器与 forge-paths 双工具（声明拉取缝降级 warn）共消费。
+  // 插件域进程位恒 main——errors.ts 既有先例同径。
+  const faceEmit = (face as { emit?: unknown }).emit;
+  const diagEmit =
+    typeof faceEmit === "function"
+      ? (payload: Omit<DiagEventPayload, "process">): void =>
+          emitDiagOrFallback((p) => (faceEmit as (e: string, p: unknown) => unknown).call(face, DIAG_EVENT, { ...p, process: "main" }), payload)
+      : undefined;
+  // forge 根解析（§2.4 单点）：patch 下发 config.forgeHome > tasksHome dirname > 运行期
+  // 现查官方 dshHomePath 服务（防御读取，AGENTS 1.6）> 降级 ~/.dsh/forge + warn（含
+  // 「dshHomePath 缺席」字样，经诊断发射面——不直落 console）。
+  const dshHomePathOf = (): string | undefined => {
+    try {
+      const svc: unknown = face.reflect?.get?.("dshHomePath");
+      if (typeof svc !== "function") return undefined;
+      const p = (svc as (segment: string) => unknown).call(svc, "forge");
+      return typeof p === "string" ? p : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const forgeHome = resolveForgeHome(
+    { forgeHome: config.forgeHome, tasksHome: config.tasksHome, dshHomePathOf },
+    (message) => {
+      diag(message, "warn");
+      diagEmit?.({ event: "forge-home-fallback", level: "warn", message });
+    },
+  );
+  // 声明拉取降级诊断（forge-paths 双工具与 dirFacts 声明缝共消费同一桥接）
+  const declareDiag = (p: { readonly level: "warn"; readonly event: string; readonly message: string }): void => {
+    diag(`[project-forge-paths] ${p.message}`, p.level);
+    diagEmit?.({ event: p.event, level: p.level, message: p.message });
+  };
 
   // project.db 打开（装配期一次；I4 拒开/文件异常 = fail-soft 退兜底——设计 §6 劣形②同径）。
   // 显式 config > 缺省值两级解析——home 缺省 = env DSH_HOME（官方宿主注行无 config 时
@@ -205,9 +245,9 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     onDiag: diag,
   });
 
-  // 锚解析自装配（fix-1 用户裁定 2026-11-13①②③——概览基本信息数据面零 core 消费）：
-  // workspaceRoot 经官方宿主工作区面（插件 project.db main 行 + workspaceRegistry 直探），
-  // forgeDir/docsRoot/taskHome 插件内派生（self-anchors 单源，镜像 core 同链语义）。
+  // 三运行时事实自装配（forge-dirs-unification §2.4/§2.6）：workspaceRoot 经官方宿主工作区面
+  //（插件 project.db main 行 + workspaceRegistry 直探），forgeHome = resolveForgeHome 单点
+  //（§2.4），projectRoot = lib/path resolveProjectKey 归拢的项目主检出（规范化后）。
   const wsPathOf = async (projectId: string): Promise<string | null> => {
     const main = domainDb?.repos.workspaces.getMain(projectId)?.wsPath;
     if (typeof main === "string" && main !== "") return main;
@@ -218,7 +258,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       return null;
     }
   };
-  const anchorsOf = createSelfAnchorsOf({ wsPathOf, home, env: process.env });
+  const anchorsOf = createSelfAnchorsOf({ wsPathOf, forgeHome });
 
   // 五缝注册（常驻 + 兜底 + 覆写位择优——零域逻辑，全部委托域本体/组装面）
   const deps: ProjectSeamDeps = (() => {
@@ -226,7 +266,14 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     const base = {
       ...(config.dirFacts !== undefined
         ? { dirFacts: config.dirFacts }
-        : { dirFacts: () => minimalDirFactsPort({ anchorsOf }) }),
+        : {
+            dirFacts: () =>
+              minimalDirFactsPort({
+                sourcesOf: anchorsOf,
+                reflectOf: () => face.reflect as unknown as ReflectDeclarePullFace | undefined,
+                onDeclareDiag: declareDiag,
+              }),
+          }),
       worktrees: worktreesResident,
       // projects 常驻真源现查（bug 33aec906）：core 服务在场（宿主集成态）即委托——
       // registration 运营真源单源；自建库投影退路（单装态 db 在场）；双缺 = undefined
@@ -289,18 +336,8 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
     domainDb !== undefined && typeof bugsProvider === "function"
       ? registerBugTools(face, { db: domainDb, bugs: bugsProvider, coreProjects: coreProjectsOf }, (line, level) => diag(line, level)).dispose
       : undefined;
-  // Typert 遥控器注册（官方 UI 数据第一等通道——控制器注册进根 ctx；诊断 emit 面
-  // 装配桥接：ctx.emit 在场即 typed emit，缺席 emitDiagOrFallback console 兜底。插件域
-  // 进程位恒 main——errors.ts 既有先例同径）。
-  // 诊断 emit 桥接（ctx.emit 在场即 typed emit，缺席 emitDiagOrFallback console 兜底）——
-  // Typert 遥控器与 forge-paths 双工具（declare 拉取缝降级 warn）共消费。插件域
-  // 进程位恒 main——errors.ts 既有先例同径。
-  const faceEmit = (face as { emit?: unknown }).emit;
-  const diagEmit =
-    typeof faceEmit === "function"
-      ? (payload: Omit<DiagEventPayload, "process">): void =>
-          emitDiagOrFallback((p) => (faceEmit as (e: string, p: unknown) => unknown).call(face, DIAG_EVENT, { ...p, process: "main" }), payload)
-      : undefined;
+  // Typert 遥控器注册（官方 UI 数据第一等通道——控制器注册进根 ctx；诊断 emit 桥接
+  // diagEmit 已在装配前段构建——forge 根降级/声明拉取降级/Typert 共消费）。
   try {
     const typertDeps: ForgeTypertDeps = {
       projects: deps.projects,
@@ -311,13 +348,13 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       // selfDerive 兜底；检测永不缓存，调用期求值——AGENTS §1.6 同先例形制）
       deriveTaskStoreDir: () => face.reflect?.get?.("forgeProjects"),
       // 1.32②：单装态派生行兜底（dsh desktop 添加项目向导不再恒 unavailable）——
-      // self-derive 缝：config.tasksHome > env > home 三级根 + lib-path 单源算法 + 碰撞
-      // 三态同收口（行源 = 插件 project.db 在册 ws_path——core registeredStoreDirs 同语义）。
+      // self-derive 缝：config.tasksHome > forge 根派生 {forgeHome}/projects 两级根 +
+      // lib-path 单源算法 + 碰撞三态同收口（行源 = 插件 project.db 在册 ws_path——core
+      // registeredStoreDirs 同语义）。
       selfDerive: () =>
         createSelfDeriveOf({
           tasksHome: config.tasksHome,
-          home,
-          env: process.env,
+          forgeHome,
           registeredWsPaths: () => {
             const db = domainDb;
             if (db === undefined) return [];
@@ -359,10 +396,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       face: createForgePathsToolFace({
         anchorsOf,
         reflectOf: () => face.reflect as unknown as ReflectDeclarePullFace | undefined,
-        onDeclareDiag: (p) => {
-          diag(`[project-forge-paths] ${p.message}`, p.level);
-          diagEmit?.({ event: p.event, level: p.level, message: p.message });
-        },
+        onDeclareDiag: declareDiag,
       }),
       resolveProjectId: createBugProjectIdResolver({ db: domainDb, coreProjects: coreProjectsOf }),
     },

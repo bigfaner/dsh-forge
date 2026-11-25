@@ -1,23 +1,19 @@
 // host/dirs · /forge-dir-audit 指令 handler（workspace-artifact-governance §2.5）：
 // 主职责 = 目录结构审计——command plane 机械扫描现实目录树（深度上限 3 层禁无限递归；
-// 跳过 node_modules 等已知重目录；符号链接/junction 条目在场但不深入），与产物存储地图
-// （§2.1.1——STORAGE_MAP_DIRS 单源复用 host/dirs/init）逐分区比对产出差异载荷三类：
-// 缺失分区 / 越位目录 / 游离散件。次职责 = 产物归位核对（过程文档是否落在地图分区、
-// 临时文件是否散落——散件/临时后缀文件归类即核对产物）。差异载荷经 followup 同径
-// （/run-dag-tasks commitDispatchLine 先例）提交敲指令会话 agent 恰一个分析回合，agent
-// 按公约只出建议清单（纯消息文本）呈报用户——audit 自身只读不写（零删除/零创建）、
-// 不建任何派发面；清理建议统一出口归 forge-artifact-lifecycle（提案 §2.4）。
-// 落位：plugin-project 1.12 目录事实面归拢 host/dirs（提案 §一裁决 3；自 plugin-forge
-// commands/forge-dir-audit.ts git mv 迁入）——诊断发射与指令行消息构造改装配期注入缝
-// （零上游 import；plugin-forge commands 装配方以 emitForgeDiag / forgeCommandLineMessage 接线）。
+// 跳过 node_modules 等已知重目录；符号链接/junction 条目在场但不深入），与 ForgeDirs 键表
+// 派生的工作区分区允许集（workspacePartitionsOf——与 init/forge_dirs 同一声明拉取与解析
+// 单源，无独立目录清单常量）逐分区比对产出差异载荷三类：缺失分区 / 越位目录 / 游离散件。
+// 次职责 = 产物归位核对（过程文档是否落在地图分区、临时文件是否散落——散件/临时后缀文件
+// 归类即核对产物）。差异载荷经 followup 同径（/run-dag-tasks commitDispatchLine 先例）提交
+// 敲指令会话 agent 恰一个分析回合，agent 按公约只出建议清单（纯消息文本）呈报用户——audit
+// 自身只读不写（零删除/零创建）、不建任何派发面；清理建议统一出口归 forge-artifact-lifecycle。
+// 诊断发射与声明拉取降级均经装配期注入缝（零上游 import、不直落 console）。
 import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
-import { STORAGE_MAP_DIRS } from './init.js'
-import type { DirCommandInvocation, DirCommandResult } from './init.js'
-
-/** 地图分区单源再导出（单测/消费面同一入口——避免 init/audit 双 import 键漂移） */
-export { STORAGE_MAP_DIRS }
+import type { ForgeDirDeclaration } from '@dsh-forge/lib-path'
+import { workspacePartitionsOf, type DirKeysPullDiagFace } from './anchors.js'
+import { declaredDeclarationsOf, type DirCommandInvocation, type DirCommandResult, type ForgeDirsCommandDeps } from './init.js'
 
 /** 指令名（无 input 描述符——无参指令，composer 不展示占位） */
 export const FORGE_DIR_AUDIT_NAME = 'forge-dir-audit'
@@ -47,13 +43,16 @@ const TEMP_FILE_EXTENSIONS: ReadonlySet<string> = new Set(['.log', '.tmp', '.bak
 /** .forge 前缀相对路径（段名单源 contracts——地图比对/差异格式化统一口径） */
 const FORGE_REL = `${FORGE_DIR_SEGMENT}/`
 
-/** 地图分区允许集（.forge 前缀相对路径——含分区前缀目录 docs 与 legacy 备份命名空间（提案 §2.2）） */
-const MAP_ALLOWED_DIRS: ReadonlySet<string> = new Set([
-  FORGE_DIR_SEGMENT,
-  `${FORGE_DIR_SEGMENT}/docs`,
-  `${FORGE_DIR_SEGMENT}/docs/legacy`,
-  ...STORAGE_MAP_DIRS.map((dir) => `${FORGE_REL}${dir}`),
-])
+/** 键表分区允许集（.forge 本身 + 分区 + 分区中间前缀——全部由键表机械派生，无清单常量） */
+export function allowedDirsOf(partitions: readonly string[]): ReadonlySet<string> {
+  const allowed = new Set<string>([FORGE_DIR_SEGMENT])
+  for (const partition of partitions) {
+    allowed.add(partition)
+    const segments = partition.split('/')
+    for (let i = 1; i < segments.length; i += 1) allowed.add(segments.slice(0, i).join('/'))
+  }
+  return allowed
+}
 
 /** 扫描条目（rel = '/' 分隔的根相对路径；kind = dir|file|symlink） */
 export interface ScanEntry {
@@ -96,25 +95,26 @@ export function scanDirTree(root: string): readonly ScanEntry[] {
 
 /** 审计差异载荷（提案 §2.5 三类——地图比对产物，纯读派生零副作用） */
 export interface DirAuditDiff {
-  /** 缺失分区：地图分区目录不在场（.forge 相对路径） */
+  /** 缺失分区：键表派生分区目录不在场（.forge 相对路径） */
   readonly missingPartitions: readonly string[]
-  /** 越位目录：.forge 域内不在地图允许集的目录（含 .forge/docs 下非地图子目录） */
+  /** 越位目录：.forge 域内不在分区允许集的目录（含 .forge/docs 下非分区子目录） */
   readonly misplacedDirs: readonly string[]
   /** 游离散件：.forge 直下散落文件 + 根目录临时后缀文件（临时文件散落核对产物） */
   readonly strayFiles: readonly string[]
 }
 
 /**
- * 目录树与存储地图比对（纯函数形态——输入扫描条目 + 根存在性探针，零副作用）：
- * ①缺失分区 = 地图分区 rel 不在扫描 dir 集；②越位目录 = '.forge/' 前缀 dir 条目中
- * 不在 MAP_ALLOWED_DIRS 者（过程文档归位核对——docs 下非地图子目录即越位）；
+ * 目录树与键表分区比对（纯函数形态——输入扫描条目 + 分区派生集，零副作用）：
+ * ①缺失分区 = 分区 rel 不在扫描 dir 集；②越位目录 = '.forge/' 前缀 dir 条目中
+ * 不在允许集者（过程文档归位核对——docs 下非分区子目录即越位）；
  * ③游离散件 = '.forge' 直下 file 条目 + 根级临时后缀 file 条目。
  */
-export function auditFromScan(entries: readonly ScanEntry[]): DirAuditDiff {
+export function auditFromScan(entries: readonly ScanEntry[], partitions: readonly string[]): DirAuditDiff {
   const dirSet = new Set(entries.filter((entry) => entry.kind === 'dir').map((entry) => entry.rel))
-  const missingPartitions = STORAGE_MAP_DIRS.filter((dir) => !dirSet.has(`${FORGE_REL}${dir}`)).map((dir) => dir)
+  const allowed = allowedDirsOf(partitions)
+  const missingPartitions = partitions.filter((partition) => !dirSet.has(partition))
   const misplacedDirs = entries
-    .filter((entry) => entry.kind === 'dir' && entry.rel.startsWith(FORGE_REL) && !MAP_ALLOWED_DIRS.has(entry.rel))
+    .filter((entry) => entry.kind === 'dir' && entry.rel.startsWith(FORGE_REL) && !allowed.has(entry.rel))
     .map((entry) => entry.rel)
   const strayFiles = entries
     .filter((entry) => {
@@ -126,9 +126,9 @@ export function auditFromScan(entries: readonly ScanEntry[]): DirAuditDiff {
   return { missingPartitions, misplacedDirs, strayFiles }
 }
 
-/** 便捷组合：扫描 + 比对（handler 消费） */
-export function auditDirTree(root: string): DirAuditDiff {
-  return auditFromScan(scanDirTree(root))
+/** 便捷组合：扫描 + 比对（handler / DirFactsPort.audit 消费） */
+export function auditDirTree(root: string, partitions: readonly string[]): DirAuditDiff {
+  return auditFromScan(scanDirTree(root), partitions)
 }
 
 /** 差异是否为空（零差异 = 不提交 agent 分析回合——无内容可分析） */
@@ -143,10 +143,10 @@ export function formatAuditPayload(diff: DirAuditDiff): string {
     '请按产物存储地图公约分析，只输出目录处理建议清单（纯文本消息呈报用户）——只建议不执行：不删除、不创建、不移动任何文件，不创建任何任务或派发。',
   ]
   if (diff.missingPartitions.length > 0) {
-    lines.push(`缺失分区（应在 .forge 下而缺席）：${diff.missingPartitions.map((dir) => `${FORGE_REL}${dir}`).join('、')}`)
+    lines.push(`缺失分区（应在 .forge 下而缺席）：${diff.missingPartitions.join('、')}`)
   }
   if (diff.misplacedDirs.length > 0) {
-    lines.push(`越位目录（.forge 域内不在地图允许集）：${diff.misplacedDirs.join('、')}`)
+    lines.push(`越位目录（.forge 域内不在分区允许集）：${diff.misplacedDirs.join('、')}`)
   }
   if (diff.strayFiles.length > 0) {
     lines.push(`游离散件（.forge 直下散落文件 / 根目录临时文件）：${diff.strayFiles.join('、')}`)
@@ -154,8 +154,8 @@ export function formatAuditPayload(diff: DirAuditDiff): string {
   return lines.join('\n')
 }
 
-/** handler 依赖（followup 目标解析三段——激活活根 / registry / ctx.parent fallback，/run-dag-tasks 同径装配） */
-export interface ForgeDirAuditDeps {
+/** handler 依赖（followup 目标解析三段 + 声明缝——/run-dag-tasks 同径装配） */
+export interface ForgeDirAuditDeps extends ForgeDirsCommandDeps {
   /** agentsRegistry 活根解析（缺席 = 退回 ctx.parent fallback） */
   readonly resolveAgent?: (ownerSessionId: string) => unknown
   /** 未进入会话激活面（host sessionController.resolveAgent——缺席 = 跳过激活步） */
@@ -180,14 +180,17 @@ function defaultCommandMessage(text: string): unknown {
 export function createForgeDirAuditHandler(
   deps: ForgeDirAuditDeps = {},
 ): (invocation: DirCommandInvocation) => Promise<DirCommandResult> {
+  const declarationsOf = (): readonly ForgeDirDeclaration[] => declaredDeclarationsOf(deps)
+  const onDiag: DirKeysPullDiagFace | undefined = deps.onDiag
   return async ({ agent }: DirCommandInvocation): Promise<DirCommandResult> => {
     const root = agent.session.header?.cwd ?? agent.session.cwd
     if (root === undefined || root.trim() === '') {
       return { kind: 'error', text: '无法解析会话工作区根（header.cwd 缺席），目录审计未执行' }
     }
 
-    // ① 机械扫描 + 地图比对（纯读——零写入面）
-    const diff = auditDirTree(root)
+    // ① 机械扫描 + 键表分区比对（纯读——零写入面；分区与 init 同一声明拉取派生）
+    const partitions = workspacePartitionsOf(root, declarationsOf(), onDiag)
+    const diff = auditDirTree(root, partitions)
     if (isDiffEmpty(diff)) {
       return { kind: 'success', text: '目录结构审计完成：与产物存储地图零差异，无需分析回合' }
     }

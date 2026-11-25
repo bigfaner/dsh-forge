@@ -9,18 +9,18 @@
 // 探针形态来源：proposals/forge-dirs-query-tool/walkthrough/fix1-forgeDirs/cordis-repro2.mjs。
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Context, type Context as CordisContext, type Plugin } from '@deepseek-ai/cordis'
-import { collectDeclaredDirKeys, DIR_KEY_REGISTRY, type DirKeyEntry, type ReflectDeclarePullFace } from './anchors.js'
+import { collectDeclaredDirKeys, type ReflectDeclarePullFace } from './anchors.js'
 
 /** 内联插件函数的 config 面（cordis 4.0.4 plugin 泛型推断需显式 config 型——{name} 行否则 TS 拒） */
 type NamedPlugin = Plugin.Function<{ name?: string }>
 
-const entry: DirKeyEntry = {
-  dirKey: 'knowledge.root',
+/** knowledge.root 条目对象（声明合并新形态 = Record<目录键, ForgeDirEntry>） */
+const entry = {
   description: '工作区知识库根（.knowledge/）',
-  resolve: (ctx) => `${ctx.forgeDir ?? ''}\\..\\.knowledge`,
-  declaredBy: 'knowledge',
+  deps: ['workspaceRoot'],
+  resolve: (deps: { workspaceRoot: string }) => `${deps.workspaceRoot}\\.knowledge`,
 }
-const BUILTIN_KEYS = DIR_KEY_REGISTRY.map((e) => e.dirKey)
+const DECLARATION = { 'knowledge.root': entry }
 
 let ctx: CordisContext
 /** a) 用例的根 scope 声明注销器（c) 用例清场用——声明块级闭包提升到模块级） */
@@ -39,7 +39,7 @@ describe('a) 跨 scope 反向拉取可达性（拉取缝主缝钉）', () => {
   it('根 scope provide dirKeys.* 后，隔离 scope 内 props 含该名 + get 可取 + 拉取合并生效', async () => {
     let isolatedReflect: ReflectDeclarePullFace | undefined
     await ctx.plugin(((c: CordisContext) => {
-      disposeDeclarer = c.reflect.provide('dirKeys.contract-test', [entry]) as () => Promise<void>
+      disposeDeclarer = c.reflect.provide('dirKeys.contract-test', DECLARATION) as () => Promise<void>
     }) as NamedPlugin, { name: 'declarer-root' })
     await ctx.plugin((async (c: CordisContext) => {
       const scoped = c.isolate('forgeDirs') // 每调用独立隔离 scope（label 缺省 = 唯一 symbol）
@@ -49,9 +49,9 @@ describe('a) 跨 scope 反向拉取可达性（拉取缝主缝钉）', () => {
     }) as unknown as NamedPlugin, { name: 'session-runtime' })
     expect(isolatedReflect).toBeDefined()
     expect(Object.keys(isolatedReflect!.props ?? {})).toContain('dirKeys.contract-test')
-    expect(isolatedReflect!.get('dirKeys.contract-test')).toEqual([entry])
+    expect(isolatedReflect!.get('dirKeys.contract-test')).toEqual(DECLARATION)
     // 拉取合并（collectDeclaredDirKeys 同形态消费——跨 scope 第三方键唯一可达径）
-    expect(collectDeclaredDirKeys(isolatedReflect, BUILTIN_KEYS).map((e) => e.dirKey)).toEqual(['knowledge.root'])
+    expect(collectDeclaredDirKeys(isolatedReflect).map((d) => Object.keys(d.entries))).toEqual([['knowledge.root']])
   })
 })
 
@@ -76,16 +76,16 @@ describe('c) provide 注销后残名脆弱面（拉取零贡献 fail-soft 钉）
     let reflect: ReflectDeclarePullFace | undefined
     let disposeProvider: (() => Promise<void>) | undefined
     await ctx.plugin(((c: CordisContext) => {
-      disposeProvider = c.reflect.provide('dirKeys.contract-test-2', [entry]) as () => Promise<void>
+      disposeProvider = c.reflect.provide('dirKeys.contract-test-2', DECLARATION) as () => Promise<void>
       reflect = c.reflect as ReflectDeclarePullFace
     }) as NamedPlugin, { name: 'declarer-dispose' })
-    expect(collectDeclaredDirKeys(reflect, BUILTIN_KEYS).map((e) => e.dirKey)).toContain('knowledge.root')
+    expect(collectDeclaredDirKeys(reflect).some((d) => 'knowledge.root' in d.entries)).toBe(true)
     await disposeDeclarer?.() // 清场：a) 的根 scope 声明先注销，本用例只留待测名
     await disposeProvider?.()
     // 脆弱面：props 名表残留约定名（注销器只删 store 不删 props）
     expect(Object.keys(reflect!.props ?? {})).toContain('dirKeys.contract-test-2')
     // get 归 undefined（store 已删）→ 拉取缝零贡献不抛
     expect(reflect!.get('dirKeys.contract-test-2')).toBeUndefined()
-    expect(collectDeclaredDirKeys(reflect, BUILTIN_KEYS)).toEqual([])
+    expect(collectDeclaredDirKeys(reflect)).toEqual([])
   })
 })

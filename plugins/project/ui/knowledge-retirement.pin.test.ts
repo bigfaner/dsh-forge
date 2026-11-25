@@ -24,6 +24,7 @@ const WHITELIST: readonly { readonly pattern: RegExp; readonly reason: string }[
   { pattern: /KnowledgeBindings|knowledge-bindings/, reason: 'host 绑定表刷新缝（ipc/bindings 域本体留宿主——依赖缝注入方向合法）' },
   { pattern: /declaredBy: 'knowledge'|already declared by knowledge/, reason: 'forgeDirs 第三方声明测试 fixture（knowledge.root 样张——declaredBy 归属键，host 注册机制测试）' },
   { pattern: /knowledge\.root/, reason: 'forgeDirs 第三方 dirKey（knowledge 插件声明键——host 侧注册/错误文案举例）' },
+  { pattern: /knowledge\\.root/, reason: 'forge-dirs 声明合并测试正则字面（knowledge.root 拒绝断言的 toThrow 正则——host 注册机制测试，非域引用）' },
   { pattern: /deriveKnowledgeDir/, reason: '白名单条目·已处置——本体下沉 @dsh-forge/lib-path/path-key（1.4），本位 re-export 消费面' },
   { pattern: /knowledgeDir/, reason: '项目行 knowledge_dir 列退役后只读投影（host ipc/host 面字段——非域逻辑）' },
   { pattern: /packages\/knowledge/, reason: 'timeline 测试 fixture 字面（任意示例路径——非域引用）' },

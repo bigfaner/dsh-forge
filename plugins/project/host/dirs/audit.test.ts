@@ -1,23 +1,25 @@
 // workspace-artifact-governance §2.5 —— /forge-dir-audit handler 单测：
 // command plane 机械扫描（深度上限 3 层 / 跳过 node_modules 等重目录 / 符号链接不深入）
-// 与标准地图比对产差异载荷（缺失分区/越位目录/游离散件）；差异经 followup 同径提交会话
-// agent 一个分析回合（agent 只出建议清单——零文件系统变更、零清理执行、零派发面）。
+// 与键表派生分区允许集比对产差异载荷（缺失分区/越位目录/游离散件）；差异经 followup 同径
+// 提交会话 agent 一个分析回合（agent 只出建议清单——零文件系统变更、零清理执行、零派发面）。
 // 真实临时目录承载（node:fs IO 面——handler 即 IO 语义本体，纯桩无意义）。
-// 落位：plugin-project 1.12 目录事实面归拢——随本体迁 plugins/project host/dirs。
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  allowedDirsOf,
   auditDirTree,
   createForgeDirAuditHandler,
   FORGE_DIR_AUDIT_NAME,
   scanDirTree,
-  STORAGE_MAP_DIRS,
   type DirCommandInvocation,
 } from './audit.js'
 
 const createdDirs: string[] = []
+
+/** 键表派生分区（docs/tmp/worktrees——与 init/workspacePartitionsOf 同源基准） */
+const PARTITIONS = ['.forge/docs', '.forge/tmp', '.forge/worktrees'] as const
 
 function workspaceOf(label: string): string {
   const dir = mkdtempSync(join(tmpdir(), `forge-dir-audit-${label}-`))
@@ -46,6 +48,11 @@ function invocationOf(root: string, followup?: (message: unknown) => void, agent
   }
 }
 
+/** 分区目录就位（键表派生分区全建——handler 对齐基准） */
+function makePartitions(root: string): void {
+  for (const partition of PARTITIONS) mkdirSync(join(root, ...partition.split('/')), { recursive: true })
+}
+
 /** 全树快照（相对路径有序集——audit 零文件系统变更取证面） */
 function treeSnapshot(root: string): string[] {
   const out: string[] = []
@@ -64,6 +71,13 @@ function treeSnapshot(root: string): string[] {
 describe('forge-dir-audit 机械扫描（workspace-artifact-governance §2.5）', () => {
   it(`指令名 pin：${FORGE_DIR_AUDIT_NAME}（无 input 描述符——无参指令）`, () => {
     expect(FORGE_DIR_AUDIT_NAME).toBe('forge-dir-audit')
+  })
+
+  it('允许集由键表分区机械派生（分区 + 中间前缀 + .forge 本身）', () => {
+    const allowed = allowedDirsOf(PARTITIONS)
+    expect(allowed.has('.forge')).toBe(true)
+    for (const partition of PARTITIONS) expect(allowed.has(partition)).toBe(true)
+    expect(allowed.has('.forge/docs/legacy')).toBe(false) // 非分区子目录越位
   })
 
   it('扫描深度上限 3 层：3 段路径条目在场、4 段以深不触达（禁无限递归）', () => {
@@ -102,30 +116,29 @@ describe('forge-dir-audit 机械扫描（workspace-artifact-governance §2.5）'
     expect(entries.map((entry) => entry.rel)).not.toContain('pkg/link/inside.txt')
   })
 
-  it('差异三类命中：缺失分区 / 越位目录 / 游离散件', () => {
+  it('差异三类命中：缺失分区 / 越位目录 / 游离散件（分区 = 键表派生集）', () => {
     const root = workspaceOf('diff')
-    // 初始化全部地图分区后删掉一个 → 缺失分区
-    for (const dir of STORAGE_MAP_DIRS) mkdirSync(join(root, '.forge', ...dir.split('/')), { recursive: true })
-    rmSync(join(root, '.forge', 'logs'), { recursive: true, force: true })
-    // 越位目录：.forge 下非地图分区 + .forge/docs 下非地图分区
+    makePartitions(root)
+    rmSync(join(root, '.forge', 'tmp'), { recursive: true, force: true }) // 删一个 → 缺失分区
+    // 越位目录：.forge 下非分区 + .forge/docs 下非分区子目录
     mkdirSync(join(root, '.forge', 'extra-dir'), { recursive: true })
     mkdirSync(join(root, '.forge', 'docs', 'stray-docs'), { recursive: true })
     // 游离散件：.forge 直下散落文件 + 根目录临时文件
     writeFileSync(join(root, '.forge', 'loose.txt'), 'x')
     writeFileSync(join(root, 'debug.log'), 'x')
-    const diff = auditDirTree(root)
-    expect(diff.missingPartitions).toEqual(['logs'])
+    const diff = auditDirTree(root, PARTITIONS)
+    expect(diff.missingPartitions).toEqual(['.forge/tmp'])
     expect(diff.misplacedDirs).toContain('.forge/extra-dir')
     expect(diff.misplacedDirs).toContain('.forge/docs/stray-docs')
     expect(diff.strayFiles).toContain('.forge/loose.txt')
     expect(diff.strayFiles).toContain('debug.log')
   })
 
-  it('对齐工作区零差异：地图分区齐备 + 无越位无散件 → 三类皆空', () => {
+  it('对齐工作区零差异：键表分区齐备 + 无越位无散件 → 三类皆空', () => {
     const root = workspaceOf('clean')
-    for (const dir of STORAGE_MAP_DIRS) mkdirSync(join(root, '.forge', ...dir.split('/')), { recursive: true })
+    makePartitions(root)
     mkdirSync(join(root, 'src'), { recursive: true }) // git 内交付树——零差异
-    const diff = auditDirTree(root)
+    const diff = auditDirTree(root, PARTITIONS)
     expect(diff.missingPartitions).toEqual([])
     expect(diff.misplacedDirs).toEqual([])
     expect(diff.strayFiles).toEqual([])
@@ -135,7 +148,7 @@ describe('forge-dir-audit 机械扫描（workspace-artifact-governance §2.5）'
 describe('forge-dir-audit handler（followup 同径——只建议不执行）', () => {
   it('差异在场：提交会话 agent 恰一个分析回合，载荷含三类差异与「只建议不执行」约束', async () => {
     const root = workspaceOf('handler')
-    for (const dir of STORAGE_MAP_DIRS) mkdirSync(join(root, '.forge', ...dir.split('/')), { recursive: true })
+    makePartitions(root)
     rmSync(join(root, '.forge', 'tmp'), { recursive: true, force: true })
     writeFileSync(join(root, '.forge', 'loose.txt'), 'x')
     const followups: unknown[] = []
@@ -151,7 +164,7 @@ describe('forge-dir-audit handler（followup 同径——只建议不执行）',
 
   it('bug 25ecb14d：followup 为类方法（依赖绑定 this）——接收者绑定调用收件，不抛 undefined.send', async () => {
     const root = workspaceOf('bound-this')
-    for (const dir of STORAGE_MAP_DIRS) mkdirSync(join(root, '.forge', ...dir.split('/')), { recursive: true })
+    makePartitions(root)
     writeFileSync(join(root, 'debug.log'), 'x')
     const followups: unknown[] = []
     // 真机形态模拟（run-dag-tasks 1.21 定罪同源）：followup 是依赖 this 内件的方法——
@@ -172,7 +185,7 @@ describe('forge-dir-audit handler（followup 同径——只建议不执行）',
 
   it('audit 零文件系统变更：handler 前后全树快照逐位一致（不删除/不创建、零派发面）', async () => {
     const root = workspaceOf('readonly')
-    for (const dir of STORAGE_MAP_DIRS) mkdirSync(join(root, '.forge', ...dir.split('/')), { recursive: true })
+    makePartitions(root)
     writeFileSync(join(root, 'debug.log'), 'x')
     const before = treeSnapshot(root)
     const followups: unknown[] = []
@@ -184,7 +197,7 @@ describe('forge-dir-audit handler（followup 同径——只建议不执行）',
 
   it('零差异：不提交分析回合（零 followup），回执明示零差异', async () => {
     const root = workspaceOf('nodiff')
-    for (const dir of STORAGE_MAP_DIRS) mkdirSync(join(root, '.forge', ...dir.split('/')), { recursive: true })
+    makePartitions(root)
     const followups: unknown[] = []
     const handler = createForgeDirAuditHandler()
     const out = (await handler(invocationOf(root, (message) => followups.push(message)))) as { kind: string; text: string }

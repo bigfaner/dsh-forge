@@ -296,11 +296,8 @@ export class ForgeFsRemote extends TypertRemoteService {
 }
 
 // ── forge:dirs 族（基本信息区 2026-11-13——forge 相关目录行 host 侧解析后 Typert 下发，
-//    UI 面只渲染零拼接；数据源 = host/dirs 锚注册表 DIR_KEY_REGISTRY 单源）──
-
-/** 基本信息区列示键（有序——workspaceRoot/forgeDir 项目行 + 注册表三键；forge.tmp 与
- *  forge.project_home 不列示，永不越过本面下发） */
-const DIR_FACTS_PRESENTED_KEYS = ["forge.docs_root", "forge.task_home", "forge.worktrees"] as const;
+//    UI 面只渲染零拼接；数据源 = dirFacts 缝全量键表（ForgeDirs 声明派生——host 面零写死
+//    键清单，展示/隐藏规则归界面层））──
 
 export class ForgeDirsRemote extends TypertRemoteService {
   private readonly wsRoot: LazyDomainService;
@@ -324,24 +321,10 @@ export class ForgeDirsRemote extends TypertRemoteService {
     }
   }
 
-  /** 单键锚事实（fail-soft——缺席/解析失败 = null 行，UI 呈现「—」不阻断其余行） */
-  private async anchorRow(projectId: string, dirKey: string): Promise<DirFactRow> {
-    const port = this.dirFacts();
-    if (port === undefined) return { dirKey, dir: null, description: "" };
-    try {
-      const fact = (await port.listAnchors(projectId, dirKey))[0];
-      return fact === undefined
-        ? { dirKey, dir: null, description: "" }
-        : { dirKey, dir: fact.dir, description: fact.description };
-    } catch {
-      return { dirKey, dir: null, description: "" };
-    }
-  }
-
   /**
-   * 基本信息区五行目录事实（fix-1 插件自装配——workspaceRoot 经插件工作区面，
-   * forgeDir = workspaceRoot/.forge 插件内 joinDirSegment 派生，零 core face；
-   * 逐键 fail-soft，项目行缺席 = null）。
+   * 基本信息区目录事实行（fix-1 插件自装配——workspaceRoot 经插件工作区面，
+   * forgeDir = workspaceRoot/.forge 插件内 joinDirSegment 派生；键表行 = dirFacts 缝
+   * 全量键表（声明派生零写死清单）。逐行 fail-soft，项目行缺席 = null。
    */
   @Remote
   async facts(query: DirFactsQuery, signal?: AbortSignal): Promise<DirFactRow[]> {
@@ -356,8 +339,14 @@ export class ForgeDirsRemote extends TypertRemoteService {
       { dirKey: "workspaceRoot", dir: wsPath, description: "项目工作区根" },
       { dirKey: "forgeDir", dir: forgeDir, description: "本工作区 .forge 目录" },
     ];
-    for (const dirKey of DIR_FACTS_PRESENTED_KEYS) {
-      rows.push(await this.anchorRow(query.projectId, dirKey));
+    if (dirFactsPort !== undefined) {
+      // 键表全量行（声明派生）——查询失败 = 该段 fail-soft 留空，不阻断项目行
+      try {
+        const facts = await dirFactsPort.listAnchors(query.projectId);
+        for (const fact of facts) rows.push({ dirKey: fact.dirKey, dir: fact.dir, description: fact.description });
+      } catch {
+        // 键表解析缺席/失败（依赖键缺席等）= 键表段零行，UI 呈项目行
+      }
     }
     return rows;
   }

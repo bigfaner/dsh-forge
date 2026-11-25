@@ -1,266 +1,184 @@
-// dirKey 数据源单测（forge-dirs-query-tool §2.1/§2.2 + 验收 AC1/AC1a）：
-// 锚键注册表 5 键（纯函数零 IO——ctx 构造即测）+ 目的地注册表 3 目的地（requires 校验 +
-// 锚绑定单点）+ declare merge 注册面四断言（第三方键合并可见 / forge.* 占用拒绝 / 同名
-// 互撞 fail-loud 点名两方 / forge 缺席环境零生效零抛）。（锚解析缝与 projects 服务现值
-// 同源断言留 plugin-forge faces 测试面——createForgePathsAnchors 属装配层。）
+// dirKey 声明缝单测（forge-dirs-unification §2.2/§2.5）：基座声明直通 lib/path 单源、
+// dirKeys.* 反向拉取缝（形状校验 fail-soft）、工作区分区键表派生、注册表解析器四类
+// 报错用例（撞名/缺依赖/成环/参数不合法——同一组注入事实驱动注册表与解析器逐键相同）。
 import { describe, expect, it } from 'vitest'
-import { join } from 'node:path'
+import { deriveDirName, resolveForgeDirs, type ForgeDirDeclaration, type ForgeDirSources } from '@dsh-forge/lib-path'
 import {
+  DECLARED_DIR_KEYS_PREFIX,
+  FORGE_DIRS_BASE_DECLARATION,
+  FORGE_DIR_KEYS,
   collectDeclaredDirKeys,
-  createDirKeyRegistry,
-  declareDirKeys,
-  DIR_DESTINATIONS,
-  DIR_KEY_REGISTRY,
-  dossierIssuesDirOf,
-  docsRootOfForgeDir,
-  forgeDirOfWorkspace,
-  resolveDestination,
-  taskLogsDirOf,
-  workspaceDocsRoot,
-  type DirKeyEntry,
+  declaredDirKeys,
+  declaredEntryOf,
+  mergeDeclarations,
+  workspacePartitionsOf,
+  type DirKeysPullDiagFace,
+  type ReflectDeclarePullFace,
 } from './anchors.js'
 
-const WS = 'Z:\\project\\dsh\\demo'
-const CTX = {
-  projectHome: 'D:\\software\\dsh-forge\\data\\forge-workspaces',
-  taskHome: 'D:\\software\\dsh-forge\\data\\forge-workspaces\\Z-project-dsh-demo@deadbeef',
-  forgeDir: `${WS}\\.forge`,
+const WS = 'Z:\\ws\\proj'
+const SOURCES: ForgeDirSources = { dshHome: 'X:\\dsh-home', projectRoot: 'Z:\\ws\\proj-main', workspaceRoot: WS }
+
+/** knowledge.root 第三方条目（deps workspaceRoot——声明合并用例标准件） */
+const knowledgeRootEntry = {
+  description: '项目知识库根（.knowledge/）',
+  deps: ['workspaceRoot'] as const,
+  resolve: (deps: { workspaceRoot: string }) => `${deps.workspaceRoot}\\.knowledge`,
+}
+const knowledgeDeclaration: ForgeDirDeclaration = { source: 'dirKeys.knowledge', entries: { 'knowledge.root': knowledgeRootEntry } }
+
+/** warn 收集桩（DirKeysPullDiagFace 同形） */
+function diagSpy(): { calls: { level: string; event: string; message: string }[]; messages: () => readonly string[] } & DirKeysPullDiagFace {
+  const calls: { level: string; event: string; message: string }[] = []
+  const face = (payload: { readonly level: 'warn'; readonly event: string; readonly message: string }): void => {
+    calls.push(payload)
+  }
+  return Object.assign(face, {
+    calls,
+    messages: (): readonly string[] => calls.map((c) => c.message),
+  }) as never
 }
 
-describe('锚键注册表（AC1：5 键全量——每项纯函数解析 + description 在场）', () => {
-  it('恰 5 锚键，dirKey 集合 = 提案 §2.1 锚键表', () => {
-    expect(DIR_KEY_REGISTRY.map((e) => e.dirKey)).toEqual([
-      'forge.project_home',
-      'forge.task_home',
+describe('基座声明（lib/path 单源直通）', () => {
+  it('本体十条键序 pin（FORGE_DIR_KEYS 单源——含 forge.project_runtime_dir/forge.task_runtime_dir 改名）', () => {
+    expect(FORGE_DIR_KEYS).toEqual([
+      'forge.home',
+      'forge.db',
+      'forge.project_runtime_dir',
+      'forge.task_runtime_dir',
       'forge.docs_root',
       'forge.tmp',
       'forge.worktrees',
+      'forge.spec_dir',
+      'forge.dossier_dir',
+      'forge.task_logs_dir',
     ])
+    expect(FORGE_DIRS_BASE_DECLARATION.source).toContain('forge')
   })
 
-  it('同构解析器（纯函数零 IO——同入参同出参；docsRoot/tmp/worktrees 由 forgeDir 派生）', () => {
-    expect(DIR_KEY_REGISTRY.map((e) => e.resolve(CTX))).toEqual([
-      'D:\\software\\dsh-forge\\data\\forge-workspaces',
-      'D:\\software\\dsh-forge\\data\\forge-workspaces\\Z-project-dsh-demo@deadbeef',
-      `${WS}\\.forge\\docs`,
-      `${WS}\\.forge\\tmp`,
-      `${WS}\\.forge\\worktrees`,
-    ])
-    // 纯函数可重放（同入参同出参）
-    for (const e of DIR_KEY_REGISTRY) expect(e.resolve(CTX)).toBe(e.resolve({ ...CTX }))
+  it('同一组注入事实驱动注册表与解析器：逐键输出相同（AC 单测同源判据）', () => {
+    const declarations = mergeDeclarations([knowledgeDeclaration])
+    const resolved = resolveForgeDirs(declarations, SOURCES)
+    // 无参条目 = 本体七个无参键 + 第三方键（带参条目参数缺席跳过——无参形态）
+    const parameterless = ['forge.home', 'forge.db', 'forge.project_runtime_dir', 'forge.task_runtime_dir', 'forge.docs_root', 'forge.tmp', 'forge.worktrees', 'knowledge.root']
+    expect(Object.keys(resolved)).toEqual(parameterless)
+    const taskRuntime = `${SOURCES.dshHome}\\forge\\projects\\${deriveDirName(SOURCES.projectRoot)}`
+    expect(resolved['forge.home']).toBe('X:\\dsh-home\\forge')
+    expect(resolved['forge.db']).toBe('X:\\dsh-home\\forge\\db')
+    expect(resolved['forge.project_runtime_dir']).toBe('X:\\dsh-home\\forge\\projects')
+    expect(resolved['forge.task_runtime_dir']).toBe(taskRuntime)
+    expect(resolved['forge.docs_root']).toBe(`${WS}\\.forge\\docs`)
+    expect(resolved['forge.tmp']).toBe(`${WS}\\.forge\\tmp`)
+    expect(resolved['forge.worktrees']).toBe(`${WS}\\.forge\\worktrees`)
+    expect(resolved['forge.spec_dir']).toBeUndefined() // 带参条目参数缺席跳过（无参形态）
+    // declaredDirKeys/declaredEntryOf 与解析器同源同键序
+    expect(declaredDirKeys(declarations)).toEqual([...FORGE_DIR_KEYS, 'knowledge.root'])
+    expect(declaredEntryOf(declarations, 'knowledge.root')!.description).toBe(knowledgeRootEntry.description)
+    expect(declaredEntryOf(declarations, 'forge.nope')).toBeUndefined()
   })
 
-  it('docsRoot 显式注入优先（ctx 装配层可覆盖派生缺省）；锚前提缺席 = fail-loud 不静默', () => {
-    const docsRoot = DIR_KEY_REGISTRY.find((e) => e.dirKey === 'forge.docs_root')!
-    expect(docsRoot.resolve({ ...CTX, docsRoot: 'W:\\ext\\docs' })).toBe('W:\\ext\\docs')
-    expect(() => docsRoot.resolve({})).toThrow('forgeDir')
-    expect(() => DIR_KEY_REGISTRY[0]!.resolve({})).toThrow('projectHome')
-  })
-
-  it('description 与注册表同源（每键一句话语义在场——工具输出零二次维护）', () => {
-    for (const e of DIR_KEY_REGISTRY) {
-      expect(e.description.length).toBeGreaterThan(0)
-      expect(e.declaredBy).toBe('plugin-project')
+  it('解析器四类报错：撞名点名两方 / 缺依赖点名缺席键 / 成环点名环上键 / 参数不合法点名参数', () => {
+    const dup: ForgeDirDeclaration = { source: 'dirKeys.other', entries: { 'knowledge.root': knowledgeRootEntry } }
+    expect(() => resolveForgeDirs([knowledgeDeclaration, dup], SOURCES)).toThrow(/撞名.*knowledge\.root/)
+    const orphan: ForgeDirDeclaration = {
+      source: 'dirKeys.orphan',
+      entries: { 'orphan.key': { description: 'x', deps: ['forge.home', 'missing.dep'] as never, resolve: () => 'x' } },
     }
+    expect(() => resolveForgeDirs([FORGE_DIRS_BASE_DECLARATION, orphan], SOURCES)).toThrow(/依赖缺席.*missing\.dep/)
+    const cycle = (name: string, deps: readonly string[]): ForgeDirDeclaration => ({
+      source: name,
+      entries: { [name]: { description: 'x', deps: deps as never, resolve: () => 'x' } },
+    })
+    expect(() => resolveForgeDirs([cycle('a.key', ['b.key']), cycle('b.key', ['a.key'])], SOURCES)).toThrow(/依赖成环/)
+    expect(() => resolveForgeDirs([FORGE_DIRS_BASE_DECLARATION], SOURCES, { slug: '../evil' })).toThrow(/slug/)
   })
 })
 
-describe('目的地注册表（AC1：3 目的地受控枚举 + requires + 锚绑定单点）', () => {
-  it('恰 3 目的地——锚与模板与提案 §2.1 表逐行一致', () => {
-    expect(DIR_DESTINATIONS.map((d) => [d.dest, d.anchor, d.template, ...d.requires])).toEqual([
-      ['dossier', 'forge.docs_root', 'proposals/{slug}/issues/{localId}', 'slug', 'localId'],
-      ['taskLogs', 'forge.task_home', 'logs/{slug}/{localId}', 'slug', 'localId'],
-      ['proposalDir', 'forge.docs_root', 'proposals/{slug}', 'slug'],
-    ])
+describe('dirKeys.* 反向拉取缝（collectDeclaredDirKeys——消费点现查）', () => {
+  const reflectOf = (props: Record<string, unknown>, get?: (name: string) => unknown): ReflectDeclarePullFace => ({
+    props,
+    get: get ?? ((name: string) => props[name]),
   })
 
-  it('解析 = 锚 + 模板占位替换（§2.6 判例样张：dossier/proposalDir 锚 docsRoot、taskLogs 锚 taskHome）', () => {
-    const params = { slug: 'prompt-scoping-and-desc-trim', localId: 'fix-1' }
-    expect(resolveDestination(DIR_DESTINATIONS[0]!, CTX, params)).toBe(
-      `${WS}\\.forge\\docs\\proposals\\prompt-scoping-and-desc-trim\\issues\\fix-1`,
+  it('对象形态声明收集为 ForgeDirDeclaration（source = 约定名，条目原样）', () => {
+    const pulled = collectDeclaredDirKeys(reflectOf({ 'dirKeys.knowledge': { 'knowledge.root': knowledgeRootEntry } }))
+    expect(pulled).toEqual([knowledgeDeclaration])
+  })
+
+  it('reflect 缺席 = 零贡献零抛零发射（非降级径）', () => {
+    const onDiag = diagSpy()
+    expect(collectDeclaredDirKeys(undefined, onDiag)).toEqual([])
+    expect(onDiag.calls).toHaveLength(0)
+  })
+
+  it('reflect 在场 props 缺席 = 降级 warn', () => {
+    const onDiag = diagSpy()
+    expect(collectDeclaredDirKeys({ get: () => undefined }, onDiag)).toEqual([])
+    expect(onDiag.messages().some((m) => m.includes('props 名表缺席'))).toBe(true)
+  })
+
+  it('malformed 条目跳过 + warn；forge.* 保留名跳过 + warn；合格条目照常收集', () => {
+    const onDiag = diagSpy()
+    const pulled = collectDeclaredDirKeys(
+      reflectOf({
+        'dirKeys.knowledge': {
+          'forge.custom': knowledgeRootEntry, // 保留名
+          'nodot': knowledgeRootEntry, // 无前缀
+          'bad.resolve': { ...knowledgeRootEntry, resolve: 42 }, // resolve 非函数
+          'knowledge.store': { description: '库文件所在目录', deps: ['forge.db'], resolve: () => 'X:\\store' },
+        },
+      }),
+      onDiag,
     )
-    expect(resolveDestination(DIR_DESTINATIONS[1]!, CTX, params)).toBe(
-      'D:\\software\\dsh-forge\\data\\forge-workspaces\\Z-project-dsh-demo@deadbeef\\logs\\prompt-scoping-and-desc-trim\\fix-1',
+    expect(Object.keys(pulled[0]!.entries)).toEqual(['knowledge.store'])
+    expect(onDiag.messages().filter((m) => m.includes('保留命名空间'))).toHaveLength(1)
+    expect(onDiag.messages().filter((m) => m.includes('malformed'))).toHaveLength(3) // 保留名 warn 亦经 malformed 包装
+  })
+
+  it('取值抛 = 该名零贡献 + warn；零产出约定名留痕', () => {
+    const onDiag = diagSpy()
+    const pulled = collectDeclaredDirKeys(
+      reflectOf({ 'dirKeys.throw': { 'knowledge.root': knowledgeRootEntry } }, () => {
+        throw new Error('cannot get property')
+      }),
+      onDiag,
     )
-    expect(resolveDestination(DIR_DESTINATIONS[2]!, CTX, { slug: 'demo' })).toBe(`${WS}\\.forge\\docs\\proposals\\demo`)
+    expect(pulled).toEqual([])
+    expect(onDiag.messages().some((m) => m.includes('cannot get property'))).toBe(true)
+  })
+
+  it('撞名键跨声明方去重：先到者胜出 + warn（fail-soft 合并面，硬失败留给查询期）', () => {
+    const onDiag = diagSpy()
+    const reflect = reflectOf({
+      'dirKeys.first': { 'knowledge.root': knowledgeRootEntry },
+      'dirKeys.second': { 'knowledge.root': knowledgeRootEntry },
+    })
+    const pulled = collectDeclaredDirKeys(reflect, onDiag)
+    expect(pulled.map((d) => d.source)).toEqual(['dirKeys.first'])
+    expect(onDiag.messages().some((m) => m.includes('撞名') && m.includes('dirKeys.first'))).toBe(true)
+  })
+
+  it('约定名前缀常量 pin（跨插件装配契约）', () => {
+    expect(DECLARED_DIR_KEYS_PREFIX).toBe('dirKeys.')
   })
 })
 
-/** 第三方声明样张（knowledge.root 同形——推式注册与反向拉取双缝共消费） */
-const knowledgeRoot: DirKeyEntry = {
-  dirKey: 'knowledge.root',
-  description: '工作区知识库根（.knowledge/）',
-  resolve: (ctx) => `${ctx.forgeDir ?? ''}\\..\\.knowledge`,
-  declaredBy: 'knowledge',
-}
-
-describe('declare merge 注册面（AC1a 四断言）', () => {
-  it('第三方键注册后全量可见（forge 本体五键在前 + knowledge.root 追加）', () => {
-    const registry = createDirKeyRegistry()
-    registry.registerDirKeys([knowledgeRoot])
-    const keys = registry.entries().map((e) => e.dirKey)
-    expect(keys).toEqual([...DIR_KEY_REGISTRY.map((e) => e.dirKey), 'knowledge.root'])
+describe('工作区分区派生（workspacePartitionsOf——init/audit 键表单源）', () => {
+  it('.forge 下的键入分区（声明序）；docs/tmp/worktrees 三员；工作区外键不入（knowledge.root）', () => {
+    const onDiag = diagSpy()
+    const partitions = workspacePartitionsOf(WS, mergeDeclarations([knowledgeDeclaration]), onDiag)
+    expect(partitions).toEqual(['.forge/docs', '.forge/tmp', '.forge/worktrees'])
+    expect(onDiag.calls).toHaveLength(0)
   })
 
-  it('forge.* 前缀第三方声明拒绝（目录事实注册表权威 = plugin-project——保留命名空间）', () => {
-    const registry = createDirKeyRegistry()
-    expect(() =>
-      registry.registerDirKeys([{ ...knowledgeRoot, dirKey: 'forge.custom', declaredBy: 'knowledge' }]),
-    ).toThrow(/registry authority is plugin-project/)
-  })
-
-  it('无插件前缀（无点分隔）拒绝；description/resolve 缺席拒绝（fail-loud 形状校验）', () => {
-    const registry = createDirKeyRegistry()
-    expect(() => registry.registerDirKeys([{ ...knowledgeRoot, dirKey: 'orphankey' }])).toThrow(/plugin prefix/)
-    expect(() => registry.registerDirKeys([{ ...knowledgeRoot, description: '' }])).toThrow(/description/)
-    expect(() => registry.registerDirKeys([{ ...knowledgeRoot, resolve: undefined as unknown as DirKeyEntry['resolve'] }])).toThrow(/resolve/)
-  })
-
-  it('同名互撞 fail-loud 点名两方（不遮蔽不覆盖——原键保持）', () => {
-    const registry = createDirKeyRegistry()
-    registry.registerDirKeys([knowledgeRoot])
-    expect(() => registry.registerDirKeys([{ ...knowledgeRoot, declaredBy: 'another-plugin' }])).toThrow(
-      /'knowledge\.root' already declared by knowledge.*another-plugin rejected/,
-    )
-    expect(registry.entries().filter((e) => e.dirKey === 'knowledge.root')).toHaveLength(1)
-  })
-
-  it('forge 服务缺席环境第三方声明零生效零抛（declareDirKeys fail-soft——AGENTS 1.6 现查）', () => {
-    let registered: readonly DirKeyEntry[] | undefined
-    expect(() => declareDirKeys(() => undefined, [knowledgeRoot])).not.toThrow()
-    expect(() => declareDirKeys(() => { throw new Error('cannot get property') }, [knowledgeRoot])).not.toThrow()
-    expect(() => declareDirKeys(() => ({}), [knowledgeRoot])).not.toThrow()
-    expect(registered).toBeUndefined()
-    // 在场且面齐备 = 声明生效（读取闭包现查，不缓存）
-    declareDirKeys(() => ({ registerDirKeys: (e: readonly DirKeyEntry[]) => { registered = e } }), [knowledgeRoot])
-    expect(registered).toEqual([knowledgeRoot])
-  })
-})
-
-describe('反向拉取缝（bug 04d445f4——collectDeclaredDirKeys 消费点现查）', () => {
-  /** reflect 桩：props（约定名表）+ get（按名取值）——枚举与取值分离同构 cordis ReflectService */
-  function makeReflect(services: Record<string, unknown>, opts: { getThrows?: readonly string[] } = {}) {
-    return {
-      props: Object.fromEntries(Object.keys(services).map((k) => [k, {}])),
-      get: (name: string) => {
-        if (opts.getThrows?.includes(name)) throw new Error('inactive fiber')
-        return services[name]
-      },
+  it('解析失败 = warn 降级本体键集（分区仍派生，不炸消费面）', () => {
+    const broken: ForgeDirDeclaration = {
+      source: 'dirKeys.broken',
+      entries: { 'broken.key': { description: 'x', deps: ['missing.dep'] as never, resolve: () => 'x' } },
     }
-  }
-  const builtinKeys = DIR_KEY_REGISTRY.map((e) => e.dirKey)
-
-  it('枚举 dirKeys.* 约定名现取声明数组（非约定名/非数组值零贡献）', () => {
-    const reflect = makeReflect({
-      'dirKeys.knowledge': [knowledgeRoot],
-      'dirKeys.other': [knowledgeRoot],
-      unrelated: [knowledgeRoot],
-      'dirKeys.notArray': knowledgeRoot,
-    })
-    const pulled = collectDeclaredDirKeys(reflect, builtinKeys)
-    expect(pulled.map((e) => e.dirKey)).toEqual(['knowledge.root'])
-  })
-
-  it('与既有键集去重（推式注册键胜出，拉取同键跳过；拉取内部同键亦去重）', () => {
-    const reflect = makeReflect({
-      'dirKeys.knowledge': [knowledgeRoot],
-      'dirKeys.other': [knowledgeRoot],
-    })
-    const pulled = collectDeclaredDirKeys(reflect, [...builtinKeys, 'knowledge.root'])
-    expect(pulled).toHaveLength(0)
-    const pulled2 = collectDeclaredDirKeys(reflect, builtinKeys)
-    expect(pulled2).toHaveLength(1)
-  })
-
-  it('malformed 声明跳过不抛（forge.* 占用/缺字段——查询面 fail-soft）', () => {
-    const reflect = makeReflect({
-      'dirKeys.bad': [
-        { ...knowledgeRoot, dirKey: 'forge.hijack' },
-        { ...knowledgeRoot, description: '' },
-        knowledgeRoot,
-      ],
-    })
-    const pulled = collectDeclaredDirKeys(reflect, builtinKeys)
-    expect(pulled.map((e) => e.dirKey)).toEqual(['knowledge.root'])
-  })
-
-  it('reflect 缺席 / props 缺席 / get 抛 = 零贡献零抛（fail-soft）', () => {
-    expect(collectDeclaredDirKeys(undefined, builtinKeys)).toEqual([])
-    expect(collectDeclaredDirKeys({ get: () => [knowledgeRoot] }, builtinKeys)).toEqual([])
-    const reflect = makeReflect({ 'dirKeys.knowledge': [knowledgeRoot] }, { getThrows: ['dirKeys.knowledge'] })
-    expect(collectDeclaredDirKeys(reflect, builtinKeys)).toEqual([])
-  })
-
-  // ─────────────────── 拉取缝可观测（bug 0520cbaf——降级径不再静默，warn 三分支） ───────────────────
-
-  it('props 缺席（reflect 在场）→ warn 一条；reflect 整体缺席 → 零 warn（缺服务非降级）', () => {
-    const warns: string[] = []
-    const onDiag = (p: { level: string; event: string; message: string }) => warns.push(`${p.level}:${p.event}:${p.message}`)
-    collectDeclaredDirKeys({ get: () => undefined }, builtinKeys, onDiag)
-    expect(warns).toHaveLength(1)
-    expect(warns[0]).toMatch(/props 名表缺席/)
-    warns.length = 0
-    collectDeclaredDirKeys(undefined, builtinKeys, onDiag)
-    expect(warns).toHaveLength(0)
-  })
-
-  it('存在 dirKeys.* 约定名但拉取零产出 → warn 一条（零产出可观测）', () => {
-    const warns: string[] = []
-    const onDiag = (p: { level: string; message: string }) => warns.push(p.message)
-    // 取值 undefined（provide 注销后残名形态）+ 值非数组
-    collectDeclaredDirKeys({ props: { 'dirKeys.knowledge': {} }, get: () => undefined }, builtinKeys, onDiag)
-    collectDeclaredDirKeys({ props: { 'dirKeys.other': {}, unrelated: {} }, get: () => knowledgeRoot }, builtinKeys, onDiag)
-    expect(warns).toHaveLength(2)
-    expect(warns[0]).toMatch(/零产出.*dirKeys\.\* 约定名/)
-    expect(warns[1]).toMatch(/零产出/)
-    // 既有键去重导致零产出 = 正常合并语义，同样留痕一条（可观测不区分成因）
-    warns.length = 0
-    const reflect = makeReflect({ 'dirKeys.knowledge': [knowledgeRoot] })
-    collectDeclaredDirKeys(reflect, [...builtinKeys, 'knowledge.root'], onDiag)
-    expect(warns).toHaveLength(1)
-    expect(collectDeclaredDirKeys(makeReflect({ 'dirKeys.knowledge': [knowledgeRoot] }), builtinKeys, onDiag)).toHaveLength(1)
-  })
-
-  it('get 抛 → 该名 warn 一条 + 零贡献；malformed 跳过 → 每条 warn 一条', () => {
-    const warns: string[] = []
-    const onDiag = (p: { level: string; message: string }) => warns.push(p.message)
-    const reflect = makeReflect({ 'dirKeys.knowledge': [knowledgeRoot] }, { getThrows: ['dirKeys.knowledge'] })
-    expect(collectDeclaredDirKeys(reflect, builtinKeys, onDiag)).toEqual([])
-    expect(warns).toHaveLength(2) // 取值抛 + 尾部零产出
-    expect(warns[0]).toMatch(/取值抛/)
-
-    const bad = makeReflect({
-      'dirKeys.bad': [
-        { ...knowledgeRoot, dirKey: 'forge.hijack' },
-        { ...knowledgeRoot, description: '' },
-      ],
-    })
-    warns.length = 0
-    const pulled = collectDeclaredDirKeys(bad, builtinKeys, onDiag)
-    expect(pulled).toHaveLength(0)
-    expect(warns).toHaveLength(3) // 两条 malformed + 一条零产出
-    expect(warns[0]).toMatch(/malformed/)
-    expect(warns[1]).toMatch(/malformed/)
-    // onDiag 缺席 = 零发射零抛（fail-soft 行为不变）
-    expect(() => collectDeclaredDirKeys(bad, builtinKeys)).not.toThrow()
-  })
-})
-
-describe('§2.8 散点收编派生导出（AC2 逐字节等价——每收编点一条等价断言，平台原生拼写）', () => {
-  it('dossierIssuesDirOf === join(ws, .forge, docs, proposals, slug, issues, localId)（settle 回收 + recurrence 探测双探测位单点收口）', () => {
-    expect(dossierIssuesDirOf(WS, 'feat-x', '2.1')).toBe(join(WS, '.forge', 'docs', 'proposals', 'feat-x', 'issues', '2.1'))
-    expect(dossierIssuesDirOf('C:\\ws\\proj', 'a-slug', 'fix-1')).toBe(join('C:\\ws\\proj', '.forge', 'docs', 'proposals', 'a-slug', 'issues', 'fix-1'))
-  })
-
-  it('taskLogsDirOf === join(taskHome, logs, slug, localId)（运行时任务目录同径）', () => {
-    expect(taskLogsDirOf(CTX.taskHome, 'feat-x', '2.1')).toBe(join(CTX.taskHome, 'logs', 'feat-x', '2.1'))
-  })
-
-  it('contracts 派生导出等价：forgeDirOfWorkspace / workspaceDocsRoot / docsRootOfForgeDir（与 node join 及 prompt 旧实现逐字节等价）', () => {
-    expect(forgeDirOfWorkspace(WS)).toBe(join(WS, '.forge'))
-    expect(workspaceDocsRoot(WS)).toBe(join(WS, '.forge', 'docs'))
-    // prompt docsRootOfForgeDir 旧实现口径（平台独立单段连接）
-    const sep = /^[A-Za-z]:[\\/]/.test(WS) || WS.startsWith('\\\\') ? '\\' : '/'
-    expect(docsRootOfForgeDir(`${WS}\\.forge`)).toBe(`${WS}\\.forge${sep}docs`)
+    const onDiag = diagSpy()
+    const partitions = workspacePartitionsOf(WS, [FORGE_DIRS_BASE_DECLARATION, broken], onDiag)
+    expect(partitions).toEqual(['.forge/docs', '.forge/tmp', '.forge/worktrees'])
+    expect(onDiag.messages().some((m) => m.includes('解析降级'))).toBe(true)
   })
 })

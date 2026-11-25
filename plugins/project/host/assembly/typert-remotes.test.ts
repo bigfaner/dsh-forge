@@ -107,17 +107,20 @@ describe('ForgeDirsRemote.facts（fix-1——core 缺席插件自装配：worksp
       dirsWorkspaceRoot: wsRootOf(WS),
       dirFacts: () =>
         ({
-          listAnchors: async (_id: string, dirKey?: string) => [{ dirKey: dirKey ?? '', dir: `dir:${dirKey}`, description: 'd' }],
+          listAnchors: async () => [
+            { dirKey: 'forge.docs_root', dir: 'dir:forge.docs_root', description: 'd' },
+            { dirKey: 'forge.worktrees', dir: 'dir:forge.worktrees', description: 'd' },
+          ],
         }) as never,
     })
     const rows = await svc.facts({ projectId: 'p-1' })
-    expect(rows.map((r) => r.dirKey)).toEqual(['workspaceRoot', 'forgeDir', 'forge.docs_root', 'forge.task_home', 'forge.worktrees'])
+    expect(rows.map((r) => r.dirKey)).toEqual(['workspaceRoot', 'forgeDir', 'forge.docs_root', 'forge.worktrees'])
     expect(rows[0]).toEqual({ dirKey: 'workspaceRoot', dir: WS, description: '项目工作区根' })
     expect(rows[1]).toEqual({ dirKey: 'forgeDir', dir: `${WS}\\.forge`, description: '本工作区 .forge 目录' })
     expect(rows[2]).toEqual({ dirKey: 'forge.docs_root', dir: 'dir:forge.docs_root', description: 'd' })
   })
 
-  it('逐键 fail-soft：锚解析抛 / dirFacts 缺席 / 工作区根缺席 = 该行 dir null，不阻断其余行不抛', async () => {
+  it('键表行 = dirFacts 全量下发（零写死键清单）；键表解析抛 = 键表段 fail-soft 留空不阻断项目行', async () => {
     const svc = new ForgeDirsRemote(fakeCtx(), {
       dirsWorkspaceRoot: wsRootOf(null),
       dirFacts: () =>
@@ -129,10 +132,10 @@ describe('ForgeDirsRemote.facts（fix-1——core 缺席插件自装配：worksp
     })
     const rows = await svc.facts({ projectId: 'p-x' })
     expect(rows.every((r) => r.dir === null)).toBe(true)
-    expect(rows.map((r) => r.dirKey)).toHaveLength(5)
+    expect(rows.map((r) => r.dirKey)).toEqual(['workspaceRoot', 'forgeDir'])
     const noFacts = new ForgeDirsRemote(fakeCtx(), { dirsWorkspaceRoot: wsRootOf(WS) })
     const bare = await noFacts.facts({ projectId: 'p-1' })
-    expect(bare.slice(2).every((r) => r.dir === null)).toBe(true)
+    expect(bare.map((r) => r.dirKey)).toEqual(['workspaceRoot', 'forgeDir'])
     expect(bare[0]?.dir).toBe(WS)
     const throws = new ForgeDirsRemote(fakeCtx(), {
       dirsWorkspaceRoot: () =>
@@ -148,6 +151,7 @@ describe('ForgeDirsRemote.facts（fix-1——core 缺席插件自装配：worksp
     })
     const safe = await throws.facts({ projectId: 'p-1' })
     expect(safe.slice(0, 2).every((r) => r.dir === null)).toBe(true)
+    expect(safe).toHaveLength(2)
   })
 
   it('双面全缺 → typed unavailable（诚实拒绝）', async () => {
