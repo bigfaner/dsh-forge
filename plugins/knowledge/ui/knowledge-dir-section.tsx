@@ -7,7 +7,7 @@
 // archived 项目充锚（project detail-section 同型——零/多项目/拉取失败不猜锚 fail-soft）。
 import { useEffect, useState, type ReactNode } from 'react'
 import { deriveKnowledgeDir } from '@dsh-forge/lib-path/path-key'
-import { preloadRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
+import { currentDefaultRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
 
 /** 节 keyed 占用键（官方 SlotCore keyed 槽判同键；e2e/排障锚） */
 export const KNOWLEDGE_DIR_SECTION_KEY = 'dswf-knowledge-dir'
@@ -59,7 +59,7 @@ export function KnowledgeDirSectionView(props: { readonly knowledgeDir: string }
 
 /** 节组件本体（槽 runtime 消费——锚相位装载，absent = render null 不悬空） */
 export function KnowledgeDirSection(props: { readonly makeClient?: RpcClientFactory } = {}): ReactNode {
-  const makeClient = props.makeClient ?? preloadRpcClientFactory
+  const makeClient = props.makeClient ?? currentDefaultRpcClientFactory()
   const [phase, setPhase] = useState<KnowledgeDirAnchorPhase>({ state: 'loading' })
   useEffect(() => {
     let alive = true

@@ -27,7 +27,10 @@ import { Button, IconCloseFillRegular, Modal, Pill, Tag, Tooltip } from '@deepse
 import type { EntryDetail } from '@dsh-forge/contracts'
 import { EmptyState, ErrorBar, StateChip } from './components.js'
 import { MD_PREVIEW_MARKDOWN_LABELS, MarkdownDoc } from './components-mirror.js'
-import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from './rpc-channels.js'
+import { currentDefaultRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from './rpc-channels.js'
+
+/** 缺省工厂（页内缺省缝——apply 期装配分流安装；模块级常量保引用稳定——hook deps 安全） */
+const defaultClientFactory: RpcClientFactory = () => currentDefaultRpcClientFactory()()
 import { mapBrowseError, type BrowseErrorInfo } from './use-knowledge-browse.js'
 import { entryActionFailureText } from './browse-model.js'
 import {
@@ -263,7 +266,7 @@ export async function fetchEntryDetail(
 export function useEntryDetail(
   projectId: string,
   entryId: number | null,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = defaultClientFactory,
 ): readonly [EntryDrawerState, { retry(): void }] {
   const [state, setState] = useState<EntryDrawerState>(initialDrawerState)
   const [nonce, setNonce] = useState(0)
@@ -945,7 +948,7 @@ export interface EntryDrawerProps {
   readonly entryId: number | null
   /** 关闭（Esc / ✕）——浏览上下文归装配方持有（本件不触碰过滤态） */
   readonly onClose: () => void
-  /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
+  /** RPC client 构造器（缺省 = 页内缺省缝工厂 currentDefaultRpcClientFactory——apply 期装配分流选定面；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
   /** 元数据时间标签基准（缺省当次渲染时刻） */
   readonly now?: number
@@ -970,7 +973,7 @@ interface KnDragSession {
  * SC-G（1.8）：双模式 controller（Esc 链 编辑→查看→关闭，capture 同现役序）+
  * head-actions 右置描边钮组 + 驳回官方 Modal 叠层 + toast 面。
  */
-export function EntryDrawer({ projectId, entryId, onClose, makeClient = preloadRpcClientFactory, now, onMutated }: EntryDrawerProps): ReactNode {
+export function EntryDrawer({ projectId, entryId, onClose, makeClient = defaultClientFactory, now, onMutated }: EntryDrawerProps): ReactNode {
   const [state, { retry }] = useEntryDetail(projectId, entryId, makeClient)
   const controller = useKnDialogController({
     projectId,

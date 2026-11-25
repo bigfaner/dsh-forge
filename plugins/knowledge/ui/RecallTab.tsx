@@ -47,13 +47,16 @@ import {
 import { EmptyState, ErrorBar, SkeletonRows, StateChip } from './components.js'
 import { MarkdownDoc, MD_PREVIEW_MARKDOWN_LABELS } from './components-mirror.js'
 import {
-  preloadRpcClientFactory,
+  currentDefaultRpcClientFactory,
   rpcUiState,
   RpcClientError,
   type ForgeRpcClient,
   type RpcClientFactory,
   type RpcUiStateKind,
 } from './rpc-channels.js'
+
+/** 缺省工厂（页内缺省缝——apply 期装配分流安装；模块级常量保引用稳定——hook deps 安全） */
+const defaultClientFactory: RpcClientFactory = () => currentDefaultRpcClientFactory()()
 import {
   recallCallHead,
   recallDatetimeLabel,
@@ -171,7 +174,7 @@ export function applyRecallOutcome(_prev: RecallLoadState, outcome: RecallLoadOu
  */
 export function useSessionRecall(
   input: { projectId: string | null; sessionId: string | null },
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = defaultClientFactory,
 ): readonly [RecallLoadState, { retry(): void }] {
   const [state, setState] = useState<RecallLoadState>(initialRecallState)
   const [nonce, setNonce] = useState(0)
@@ -288,7 +291,7 @@ export async function fetchRecallEntryDetail(
 export function useRecallEntryDetail(
   projectId: string | null,
   entryId: number | null,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = defaultClientFactory,
 ): readonly [RecallEntryState, { retry(): void }] {
   const [state, setState] = useState<RecallEntryState>(initialRecallEntryState)
   const [nonce, setNonce] = useState(0)
@@ -855,7 +858,7 @@ export interface RecallTabBodyProps {
  * 负反馈说明 Modal）+ read 快照/就地详情双 dialog。展开态 = tab 体局部真源（反馈动作
  * 零收起——更新反馈 map 不触碰展开集）；反馈失败 = 错误条留面 + 回显回滚。
  */
-export function RecallTabBody({ state, retry, projectId, makeClient = preloadRpcClientFactory }: RecallTabBodyProps): ReactNode {
+export function RecallTabBody({ state, retry, projectId, makeClient = defaultClientFactory }: RecallTabBodyProps): ReactNode {
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
   const [feedback, setFeedback] = useState<RecallFeedbackState>(initialRecallFeedback)
   const [rejectTarget, setRejectTarget] = useState<RecallRejectTarget | null>(null)

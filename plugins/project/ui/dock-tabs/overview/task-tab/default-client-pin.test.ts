@@ -235,4 +235,22 @@ describe('任务子 tab 数据装载缺省 client 工厂（生产默认值——
       }
     })
   })
+
+  // ── 2.21 事件面收口钉（同病收口——preloadTasksChangedSubscribe 官方宿主缺席路径）：
+  //    drawer 任务变化自动刷新须接 forgeTasks.follow Typert 流缝（typertTasksChangedSubscribe
+  //    按项目构造），preload 全局事件面只作 dsh-forge 集成态回落。──
+  describe('事件面收口钉（drawer 任务变化订阅 = Typert follow 流缝）', () => {
+    it('drawer/index.tsx：subscribeTasksChanged 传 typertTasksChangedSubscribe(projectId) 底层', () => {
+      const s = src('../drawer/index.tsx')
+      expect(s, 'drawer 事件订阅须接 Typert follow 流缝').toMatch(
+        /subscribeTasksChanged\(\s*\(payload\)[\s\S]*?typertTasksChangedSubscribe\(projectId\)\s*\)/,
+      )
+    })
+
+    it('dock-tabs/rpc-channels.ts：typertTasksChangedSubscribe 在场且经 forgeTasks namespace follow 方法解析', () => {
+      const s = src('../../rpc-channels.ts')
+      expect(s, 'Typert follow 底层订阅须定义').toMatch(/export function typertTasksChangedSubscribe\(projectId: string\)/)
+      expect(s, 'face 解析须走 forgeTasks namespace follow').toMatch(/namespaceFaceOf\(face, 'forgeTasks'\)/)
+    })
+  })
 })

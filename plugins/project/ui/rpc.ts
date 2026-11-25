@@ -74,6 +74,10 @@ export interface ForgeRemoteFace {
   /** spec 子 tab 消费族（G3——可选边：spec 插件缺席 = namespace 缺席 → typed 拒绝信封，
    *  不进 FORGE_REMOTE_NAMESPACES 必选集（缺席不得拖垮其余五族 face 解析——forgeDirs 同款）） */
   readonly forgeSpecs?: ForgeRemoteNamespaceFace
+  /** 任务变更事件缝（overview drawer 任务变化自动刷新——forgeTasks.follow 流，可选边：
+   *  task-loop 插件 Typert 贡献经官方 gateway 下发，缺席宿主 = namespace 缺席 → 静默降级
+   *  no-op 订阅，不进 FORGE_REMOTE_NAMESPACES 必选集不阻断硬族解析） */
+  readonly forgeTasks?: ForgeRemoteNamespaceFace
 }
 
 /** 降级诊断钩子（apply 期可选安装——缺席 console 兜底，client 束豁免面） */
@@ -234,11 +238,12 @@ export const FORGE_REMOTE_NAMESPACES = [
 ] as const
 
 /**
- * 可选族 forge:* namespace 键单源（forgeSpecs = G3 spec 子 tab、forgeDirs = G1 目录行）：
+ * 可选族 forge:* namespace 键单源（forgeSpecs = G3 spec 子 tab、forgeDirs = G1 目录行、
+ * forgeTasks = 任务变更 follow 流缝——overview drawer 事件面）：
  * 在场即并入 forgeFaceOf 归一面、缺席不参与五族门控不阻断硬族解析（可选边降级语义）。
  * 注意 forgeSpecs 不得入 ui/index.ts apply 期 inject 边声明（外插件缺席 = 子 fiber 挂死红线）。
  */
-export const FORGE_REMOTE_OPTIONAL_NAMESPACES = ['forgeDirs', 'forgeSpecs'] as const
+export const FORGE_REMOTE_OPTIONAL_NAMESPACES = ['forgeDirs', 'forgeSpecs', 'forgeTasks'] as const
 
 /**
  * 五族 forge remote face 归一解析（apply 期 inject 子 fiber 解析缝消费——bug 145b3d3b
@@ -248,7 +253,7 @@ export const FORGE_REMOTE_OPTIONAL_NAMESPACES = ['forgeDirs', 'forgeSpecs'] as c
  * 已激活、锚已发布、resolver 恒 undefined）。归一取法复用 namespaceFaceOf 三形态
  * 回退（Map → namespaces 对象 → 顶层属性），官方 web 舞台顶层形态与 electron dev
  * Map 形态两界同源解析；缺一族 = undefined 诚实降级。可选族（FORGE_REMOTE_OPTIONAL_
- * NAMESPACES：forgeDirs/forgeSpecs）在场即并入归一面、缺席不参与门控——可选边降级。
+ * NAMESPACES：forgeDirs/forgeSpecs/forgeTasks）在场即并入归一面、缺席不参与门控——可选边降级。
  */
 export function forgeFaceOf(fiberCtx: unknown): ForgeRemoteFace | undefined {
   try {

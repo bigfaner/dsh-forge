@@ -33,6 +33,7 @@ export function preloadTransport(): ForgeTransport {
 // main 侧 serializeRpcError 序列化 { code, message, data } → 本类还原为可捕获 typed error：
 // UI 消费约定 = catch RpcClientError → rpcUiState(code) 选状态组件（见 ui-state 与 README）。
 import type { ErrorCode, RpcErrorPayload, TasksChangedEvent } from '@dsh-forge/contracts'
+import { forgeRemoteFaceOf, namespaceFaceOf } from '../rpc.js'
 
 /** typed error 的 renderer 侧形态（code ∈ contracts 六码；data = 结构化附载原样保真） */
 export class RpcClientError extends Error {
@@ -221,6 +222,56 @@ export function preloadTasksChangedSubscribe(): TasksChangedSubscribe | undefine
   return typeof bridge?.onForgeTasksChanged === 'function' ? bridge.onForgeTasksChanged : undefined
 }
 
+// ── Typert follow 流底层订阅（2.21 官方宿主事件缝——fix 同族 preloadTasksChangedSubscribe 收口）──
+// 官方宿主无 preload 事件面 → preloadTasksChangedSubscribe() = undefined → 任务变化事件
+// 永不触发。官方正缝 = forgeTasks.follow（task-loop 插件 Typert 贡献 @Remote mode:'stream'
+// 经官方 gateway 下发——task-loop ui/tasks-rpc.ts 同源核销）：按项目 follow 流，帧 = 全量
+// 快照（周期重估 3s 节拍），快照 cards 无变化帧不投递（重估 ≠ 变更）；namespace 缺席
+// （task-loop 未安装）= undefined → 订阅入口静默降级 no-op（交互重取兜底，与 preload
+// 缺席同口径）。face 解析缝 import 同包 ui/rpc.js（自含纪律只约束跨插件包 import）。
+
+/** forgeTasks follow 流帧窄形（Envelope<TaskBoardDto> 结构切片——client 束零 task-loop import） */
+interface TasksFollowFrame {
+  readonly snapshot?: { readonly cards?: unknown }
+}
+
+/**
+ * Typert follow 流底层订阅（按项目——官方宿主事件正缝）：face/namespace/follow 方法缺席
+ * = undefined（订阅入口静默降级）；在场 = 帧驱动订阅（退订 = abort 流迭代）。
+ */
+export function typertTasksChangedSubscribe(projectId: string): TasksChangedSubscribe | undefined {
+  let follow: unknown
+  try {
+    const face = forgeRemoteFaceOf()
+    const ns = face === undefined ? undefined : namespaceFaceOf(face, 'forgeTasks')
+    follow = ns?.['follow']
+  } catch {
+    return undefined
+  }
+  if (typeof follow !== 'function') return undefined
+  return (cb) => {
+    const controller = new AbortController()
+    let lastCards = ''
+    void (async () => {
+      try {
+        const stream = (follow as (q: unknown, signal?: AbortSignal) => AsyncIterable<TasksFollowFrame>)(
+          { projectId },
+          controller.signal,
+        )
+        for await (const frame of stream) {
+          const mark = JSON.stringify(frame?.snapshot?.cards ?? null)
+          if (mark === lastCards) continue // 周期重估帧零变化——不触发重取
+          lastCards = mark
+          cb({ projectId })
+        }
+      } catch {
+        // 流中断/不可达 = 静默降级终态（交互重取兜底——正确性 host 单点，降级不锁存）
+      }
+    })()
+    return () => controller.abort()
+  }
+}
+
 /** 订阅中枢面（subscribe = 入层退订器；flush = 测试面——立即结算合并窗） */
 export interface TasksChangedHub {
   subscribe(listener: TasksChangedListener): () => void
@@ -287,13 +338,18 @@ let sharedHub: TasksChangedHub | undefined
 
 /**
  * 订阅入口（视图消费面）：概览/文档 tab/会话头 pill 重取活跃查询。
- * preload 面缺席 = 静默降级 no-op 退订器（交互重取兜底）。
+ * @param underlying - 底层订阅（2.21：官方宿主 = typertTasksChangedSubscribe(projectId)
+ * follow 流缝——调用方按项目显式构造；缺省 = preload 全局事件面（dsh-forge 集成态），
+ * 共享单例中枢合并语义保留）。缺席 = 静默降级 no-op 退订器（交互重取兜底）。
  */
-export function subscribeTasksChanged(listener: TasksChangedListener): () => void {
-  const underlying = preloadTasksChangedSubscribe()
-  if (underlying === undefined) return () => {}
-  sharedHub ??= createTasksChangedHub(underlying)
-  return sharedHub.subscribe(listener)
+export function subscribeTasksChanged(listener: TasksChangedListener, underlying?: TasksChangedSubscribe): () => void {
+  if (underlying === undefined) {
+    const preload = preloadTasksChangedSubscribe()
+    if (preload === undefined) return () => {}
+    sharedHub ??= createTasksChangedHub(preload)
+    return sharedHub.subscribe(listener)
+  }
+  return createTasksChangedHub(underlying).subscribe(listener)
 }
 
 // ───────────────── client.ts 镜像 ─────────────────

@@ -23,7 +23,7 @@ import { Button, IconCloseFillRegular, StateDot, Tag, Tooltip } from '@deepseek-
 import { EmptyState, ErrorBar, SkeletonRows } from '../../../components.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc-channels.js'
 import { RpcClientError } from '../../rpc-channels.js'
-import { subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../../rpc-channels.js'
+import { subscribeTasksChanged, typertTasksChangedSubscribe, type ForgeRpcClient, type RpcClientFactory } from '../../rpc-channels.js'
 import { overviewRpcClientFactory } from '../overview-client.js'
 import { STATUS_DOT_STATE } from '../status-chips.js'
 import { formatDiagMessage, type SessionOpenRequest, type TaskFailureDiagInput } from '../message-format.js'
@@ -746,12 +746,13 @@ export function useTaskDetail(
     }
   }, [projectId, taskId, nonce, refreshNonce, makeClient])
 
-  // 写推送事件（forge:events/tasks-changed）→ 同任务静默重取（50ms 合并归订阅层）
+  // 写推送事件（2.21 官方宿主正缝 = forgeTasks.follow Typert 流按项目订阅；dsh-forge
+  // 集成态回落 preload 全局事件面）→ 同任务静默重取（50ms 合并归订阅层）
   useEffect(() => {
     if (taskId === null) return () => {}
     return subscribeTasksChanged((payload) => {
       if (payload.projectId === projectId) setRefreshNonce((n) => n + 1)
-    })
+    }, typertTasksChangedSubscribe(projectId))
   }, [projectId, taskId])
 
   const retry = useCallback(() => {

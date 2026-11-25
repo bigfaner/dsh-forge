@@ -16,7 +16,10 @@
 // use-forge-projects 先例，归 3.8 装配 + e2e）。
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { DomainNode, EntryActionReceipt, EntryActionRequest, KnowledgeCard } from '@dsh-forge/contracts'
-import { preloadRpcClientFactory, rpcUiState, RpcClientError, type ForgeRpcClient, type RpcClientFactory, type RpcUiStateKind } from './rpc-channels.js'
+import { currentDefaultRpcClientFactory, rpcUiState, RpcClientError, type ForgeRpcClient, type RpcClientFactory, type RpcUiStateKind } from './rpc-channels.js'
+
+/** 缺省工厂（页内缺省缝——apply 期装配分流安装；模块级常量保引用稳定——hook deps 安全） */
+const defaultClientFactory: RpcClientFactory = () => currentDefaultRpcClientFactory()()
 import { deriveKnowledgeDir } from '@dsh-forge/lib-path/path-key'
 import {
   EMPTY_FILTER,
@@ -464,12 +467,12 @@ export function multiSelectActions(
  * 激活翻转（false→true）即全量重拉（epoch 递增 → fullKey 变更 → bundle 三路并发——
  * 热度等使用事件计数随激活刷新，卡片缓存先行不闪骨架）。
  * @param projectId - 当前项目（视图态注入——3.8 装配接线）
- * @param makeClient - RPC client 构造器（缺省 preload 真身；注入 = 测试面）
+ * @param makeClient - RPC client 构造器（缺省 = 页内缺省缝工厂 currentDefaultRpcClientFactory；注入 = 测试面）
  * @param active - 视图激活态（缺省 true = 无激活机制面——单测/常挂载直载）
  */
 export function useKnowledgeBrowse(
   projectId: string,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = defaultClientFactory,
   active = true,
 ): readonly [KnowledgeBrowseState, KnowledgeBrowseActions, KnowledgeMultiSelectActions, KnowledgeTreeActions] {
   const [filter, dispatchFilter] = useReducer(browseFilterReducer, EMPTY_FILTER)

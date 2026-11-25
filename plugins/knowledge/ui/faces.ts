@@ -32,7 +32,10 @@ import { ForgeKnowledgePanel } from './KnowledgePanel.js'
 import { ForgeRecallView } from './RecallTab.js'
 import { KnowledgeDirSection, KNOWLEDGE_DIR_SECTION_KEY, KNOWLEDGE_DIR_SECTION_LABEL } from './knowledge-dir-section.js'
 import type { WorkbenchBridgeMirror } from '../shared/workbench-bridge.js'
-import { installDefaultRpcClientFactory, preloadRpcClientFactory, resolveRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
+import { currentDefaultRpcClientFactory, installDefaultRpcClientFactory, resolveRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
+
+/** 缺省工厂（页内缺省缝——apply 期装配分流安装；模块级常量保引用稳定） */
+const defaultClientFactory: RpcClientFactory = () => currentDefaultRpcClientFactory()()
 
 /** 官方 main 面板 keyed 槽名（ui-layout AppFrame root——官方全局面板径） */
 export const MAIN_SLOT = 'main'
@@ -101,7 +104,7 @@ export function registerKnowledgeFaces(
   slots: SectionSlotsFace,
   locale: LocaleServiceFace,
   globalObject: KnowledgeGateGlobal = globalThis as never,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = defaultClientFactory,
 ): KnowledgeFacesDiagnostics {
   const registered: string[] = []
   const knowledgeEnabled = knowledgeGateOf(globalObject)
@@ -168,7 +171,7 @@ export function registerKnowledgeFaces(
 export function registerKnowledgeDirSection(
   slots: SectionSlotsFace,
   globalObject: KnowledgeGateGlobal = globalThis as never,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  makeClient: RpcClientFactory = defaultClientFactory,
 ): { registered: boolean; knowledgeEnabled: boolean } {
   const knowledgeEnabled = knowledgeGateOf(globalObject)
   if (!knowledgeEnabled) {
