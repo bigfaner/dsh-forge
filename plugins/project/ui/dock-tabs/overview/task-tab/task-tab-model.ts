@@ -5,16 +5,13 @@
 // 结果 = 三视图共同 vis 集单源；DAG 的边集由 taskGraph 补充（graph 查询无过滤参——
 // 全子图拓扑 + vis 集客户端交集，原型 vis 层同语义）。视图本地零 RPC 零 effect。
 import {
-  FEATURE_STATUS_LABELS,
-  TASK_STATUSES,
   TASK_STATUS_LABELS,
-  type FeatureCard,
+  TASK_STATUSES,
   type TaskCard,
   type TaskGraph,
   type TaskGraphEdge,
   type TaskStatus,
 } from '@dsh-forge/contracts'
-import { activeFeatureSlug } from '../overview-model.js'
 import { formatActualDuration } from '../drawer/detail-model.js'
 import { type TaskContainerOption } from './container-pill.js'
 
@@ -114,13 +111,7 @@ export function taskStatusTagTone(status: TaskStatus): 'success' | 'danger' | 'n
   return 'neutral'
 }
 
-/** feature 解析（AC5：显式注入优先——pill 导航载荷；否则活跃 feature 缺省） */
-export function resolveFeatureSlug(features: readonly FeatureCard[], explicit: string | undefined): string | undefined {
-  if (explicit !== undefined) return explicit
-  return activeFeatureSlug(features)
-}
-
-/** 容器选中（受控注入/local 两态同形——taskFocus 聚焦 = feature 容器） */
+/** 容器选中（受控注入/local 两态同形——taskFocus 聚焦 / 用户菜单切换；kind = tasks.source_kind 双轨词汇） */
 export interface TaskContainerSel {
   readonly kind: 'feature' | 'proposal'
   readonly slug: string
@@ -132,40 +123,19 @@ export function containerKeyOf(sel: TaskContainerSel): string {
 }
 
 /**
- * 容器解析（4.6 双轨）：显式注入优先（taskFocus 聚焦 = feature 容器；用户本地切换 =
- * 任意容器）——命中选项集才生效；否则活跃 feature 缺省（activeSlug = 帧侧头路
- * activeFeatureSlug 投影——M2 语义沿袭）；零 feature 选项时回落首项（突击直达链
- * 5.2 e2e 实证：纯 blitz 提案工作区无 feature 行——任务子 tab 不可空转死局，容器
- * 面向唯一可选项收敛）；零选项 = undefined（容器空态）。
+ * 容器解析：显式注入优先（taskFocus 聚焦 / 用户本地切换）——命中选项集才生效；
+ * 未命中/缺省回落首项（选项集 = slug 聚合稳定排序——缺省选中确定可复现）；
+ * 零选项 = undefined（真真空容器空态——任务列表空唯一判据）。
  */
 export function resolveContainer(
   options: readonly TaskContainerOption[],
   explicit: TaskContainerSel | undefined,
-  activeSlug: string | undefined,
 ): TaskContainerOption | undefined {
   if (explicit !== undefined) {
     const hit = options.find((option) => option.kind === explicit.kind && option.slug === explicit.slug)
     if (hit !== undefined) return hit
   }
-  if (activeSlug !== undefined) {
-    const active = options.find((option) => option.kind === 'feature' && option.slug === activeSlug)
-    if (active !== undefined) return active
-  }
-  return options.find((option) => option.kind === 'feature') ?? options[0]
-}
-
-/** feature 完成比 chip 文案（feature 卡 byStatus 聚合——menu 行源；pill 用任务域 stats 单源） */
-export function featureRatioLabel(feature: FeatureCard): string {
-  const total = TASK_STATUSES.reduce((sum, status) => sum + (feature.byStatus[status] ?? 0), 0)
-  const done = feature.byStatus.completed ?? 0
-  return `${FEATURE_STATUS_LABELS[feature.featureStatus].zh} ${done}/${total}`
-}
-
-/** 容器菜单行 chip 文案（feature = 状态完成比[featureRatioLabel 同形]；突击提案 = N 任务） */
-export function containerChipLabel(option: TaskContainerOption, features: readonly FeatureCard[]): string {
-  if (option.kind === 'proposal') return `${option.taskCount} 任务`
-  const card = features.find((f) => f.slug === option.slug)
-  return card === undefined ? `${option.taskCount} 任务` : featureRatioLabel(card)
+  return options[0]
 }
 
 /** 菜单行 id → 选项（未知 id = undefined 不派发） */

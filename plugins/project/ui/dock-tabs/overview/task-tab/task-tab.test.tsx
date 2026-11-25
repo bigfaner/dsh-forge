@@ -1,21 +1,22 @@
 // @vitest-environment happy-dom -- rc.5 Menu 装载期即触 DOM（useMenuSubmenu）——闭态 SSR 渲染需 document 在场
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
-// 任务子 tab 组装单测 —— 4.6 UF-3（AC3/AC5/AC6）：ov-taskbar v22 布局（容器 pill 双轨 +
-// 视图下拉 + 右簇 [诊断]+[派发] 固定最右端同行不换行）+ chips 统一过滤 + 三视图分派 +
-// 三态面 + 无单任务执行入口断言（v22 ㊳ Hard Rule）+ runDispatchRoute 双路由执行
-// （mock client：jump / new / RPC 失败回退 new）。装载壳 effect 面 = 4.1/5.2；
-// 纯渲染体 TasksTabBody 全相位静态可测；containerMenuItems/Select 菜单映射纯函数直测。
-import { describe, expect, it } from 'vitest'
+// 任务子 tab 组装单测 —— 4.6 UF-3：容器来源 = 任务数据自身（slug 聚合——features/提案域
+// 容器模型退役）+ ov-taskbar 布局（容器 pill + 视图下拉 + 右簇 [诊断]+[派发]）+ chips 统一
+// 过滤 + 三视图分派 + 三态面（容器真空空态 / 装载骨架分派）+ 装载壳 effect 面
+// （createRoot+act——容器聚合装载 → 缺省首容器 → 任务卡渲染 → 多容器显式路由）。
+import { describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { FeatureCard, TaskGraph, TaskStatus, TaskStats } from '@dsh-forge/contracts'
-import { TasksTabBody, containerMenuItems, runDispatchRoute, subgraphDiagContainer } from './task-tab.js'
+import type { TaskCard, TaskGraph, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import { TasksTabBody, TasksTab, containerMenuItems, runDispatchRoute, subgraphDiagContainer } from './task-tab.js'
 import { formatDiagMessage } from '../message-format.js'
 import { docsRootOf } from '../message-format.js'
 import type { TaskContainerOption } from './container-pill.js'
 import { containerMenuSelect, containerPillChip, resolveContainer } from './task-tab-model.js'
-import { taskContainerOptions } from './container-pill.js'
+import { taskContainerOptionsFromCards } from './container-pill.js'
 import type { TasksTabLoadState } from './task-tab-data.js'
 import type { DiagToastResult } from './DiagToast.js'
 import { cardFixture } from './task-tab-model.test.js'
@@ -30,27 +31,13 @@ function menuRowLabel(items: readonly MenuEntry[], index: number): ReactNode {
   return entry.label
 }
 
-const FEATURES: readonly FeatureCard[] = [
-  {
-    featureId: 'f-1',
-    slug: 'm2-pipeline',
-    title: 'M2 管线',
-    featureStatus: 'in-progress',
-    createdAt: '2026-10-01T00:00:00.000Z',
-    updatedAt: '2026-10-01T00:00:00.000Z',
-    byStatus: { pending: 1, in_progress: 0, completed: 1, blocked: 0, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 },
-    docCount: 4,
-  },
+/** 容器聚合卡夹具：feature 容器两卡 + blitz 提案容器两卡（source 恒填——服务不变量） */
+const AGG_CARDS: readonly TaskCard[] = [
+  cardFixture({ taskId: 't-1', slug: 'm2-pipeline', taskStatus: 'completed', source: { kind: 'feature', slug: 'm2-pipeline' } }),
+  cardFixture({ taskId: 't-2', slug: 'm2-pipeline', taskStatus: 'pending', source: { kind: 'feature', slug: 'm2-pipeline' } }),
+  cardFixture({ taskId: 't-3', slug: 'legacy-eval-retire', taskStatus: 'pending', source: { kind: 'proposal', slug: 'legacy-eval-retire' } }),
+  cardFixture({ taskId: 't-4', slug: 'legacy-eval-retire', taskStatus: 'completed', source: { kind: 'proposal', slug: 'legacy-eval-retire' } }),
 ]
-
-/** 突击容器选项（呈现面钉——kind='proposal' 仍在役；不再由 taskContainerOptions 产出） */
-const BLITZ_CONTAINER: TaskContainerOption = {
-  kind: 'proposal',
-  slug: 'legacy-eval-retire',
-  title: '旧线 eval 退役',
-  mode: 'blitz',
-  taskCount: 2,
-}
 
 const STATS: TaskStats = {
   total: 2,
@@ -60,8 +47,9 @@ const STATS: TaskStats = {
 
 const GRAPH: TaskGraph = { tasks: [cardFixture()], edges: [] }
 
-const OPTIONS = taskContainerOptions(FEATURES)
-const FEATURE_CONTAINER = OPTIONS[0] as TaskContainerOption
+const OPTIONS = taskContainerOptionsFromCards(AGG_CARDS)
+const FEATURE_CONTAINER = OPTIONS.find((o) => o.slug === 'm2-pipeline') as TaskContainerOption
+const BLITZ_CONTAINER = OPTIONS.find((o) => o.slug === 'legacy-eval-retire') as TaskContainerOption
 
 function load(over: Partial<TasksTabLoadState> = {}): TasksTabLoadState {
   return {
@@ -81,7 +69,6 @@ const base = {
   onToggleStatus: NOOP,
   onClearStatuses: NOOP,
   options: OPTIONS,
-  features: FEATURES,
   container: FEATURE_CONTAINER,
   view: 'list' as const,
   containerMenuOpen: false,
@@ -102,13 +89,13 @@ const base = {
 const render = (over: Partial<Parameters<typeof TasksTabBody>[0]> = {}): string =>
   renderToStaticMarkup(<TasksTabBody {...base} load={load()} onOpenTask={NOOP} {...over} />)
 
-describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言）', () => {
+describe('TasksTabBody · ov-taskbar 布局（插入点断言）', () => {
   it('工具栏 = 容器 pill（双轨点 + chip）+ 视图下拉（pill 右侧）+ 右簇 [诊断][派发] 最右端（DOM 序）', () => {
     const html = render()
     expect(html).toContain('data-dswf-tt-taskbar=""')
     expect(html).toContain('data-dswf-tt-contpill="feature:m2-pipeline"')
     expect(html).toContain('class="dswf-tt-contdot" data-mode="expedition"')
-    expect(html).toContain('进行中 1/2')
+    expect(html).toContain('1/2')
     const pillAt = html.indexOf('data-dswf-tt-contpill')
     const viewAt = html.indexOf('data-dswf-tt-viewbtn="list"')
     const diagAt = html.indexOf('data-dswf-tt-diag=""')
@@ -119,14 +106,13 @@ describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言�
     expect(html).toContain('data-dswf-tt-rightbar') // 右簇容器
   })
 
-  it('突击提案容器：琥珀点 + 「突击提案」chip + 计数注收进 pill 悬停（正文零计数注——m3.1 D18）+ 无「诊断」按钮 + 零过程注释（D26）', () => {
+  it('突击提案容器：琥珀点 + 「突击提案」chip + 无「诊断」按钮 + 零过程注释', () => {
     const html = render({ container: BLITZ_CONTAINER })
     expect(html).toContain('data-dswf-tt-contpill="proposal:legacy-eval-retire"')
     expect(html).toContain('class="dswf-tt-contdot" data-mode="blitz"')
     expect(html).toContain('突击提案 · 2 任务')
-    expect(html).not.toContain('title=') // D30：计数注「· 2 条」悬停承载改官方 Tooltip label（m3.1 D18 形态保持）
-    expect(html).not.toContain('data-dswf-tt-count') // 正文零计数注（m3.1 D18——注不再占工具栏正文）
-    // m3.1 D26：突击容器「无 feature 阶段」计数注零在场（字符串级断言）
+    expect(html).not.toContain('title=') // 计数注归官方 Tooltip label
+    expect(html).not.toContain('data-dswf-tt-count') // 正文零计数注
     expect(html).not.toContain('无 feature 阶段')
     expect(html).not.toContain('data-dswf-tt-diag') // validateFeatureTasks 为 feature 域校验
     expect(html).toContain('data-dswf-tt-dispatch=') // 派发按钮仍可用面
@@ -139,25 +125,25 @@ describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言�
     expect(html).toContain('>派发</button>')
   })
 
-  it('视图下拉锚钮 = 当前视图直出 + ▾（M2 三视图语义不变·控件形态为下拉）', () => {
+  it('视图下拉锚钮 = 当前视图直出 + ▾（三视图语义不变·控件形态为下拉）', () => {
     expect(render()).toContain('视图：列表')
     expect(render({ view: 'dag', load: load({ graph: GRAPH }) })).toContain('视图：DAG')
     expect(render({ view: 'swim' })).toContain('视图：泳道')
   })
 
-  it('搜索在场计数 = 匹配/总数（收进 pill 官方 Tooltip label——正文零计数注，m3.1 D18 + D30）', () => {
+  it('搜索在场计数 = 匹配/总数（收进 pill 官方 Tooltip label——正文零计数注）', () => {
     const html = render({ search: '评估' })
-    expect(html).not.toContain('title=') // D30：计数注「· 1/2」归官方 Tooltip label
+    expect(html).not.toContain('title=')
     expect(html).not.toContain('data-dswf-tt-count')
   })
 
-  it('无单任务执行入口（v22 ㊳ Hard Rule）：任务行/工具栏零「执行」动作', () => {
+  it('无单任务执行入口（Hard Rule）：任务行/工具栏零「执行」动作', () => {
     const html = render()
     expect(html).not.toContain('>执行<')
     expect(html).not.toContain('data-dswf-tt-exec')
   })
 
-  it('S5 列表行 ⟞ 门控仅列表视图（task-ui-info-density-blitz）：workerSessionTaskId 在场 = 列表行呈现；泳道/DAG 视图不动', () => {
+  it('S5 列表行 ⟞ 门控仅列表视图：workerSessionTaskId 在场 = 列表行呈现；泳道/DAG 视图不动', () => {
     const list = render({ view: 'list', workerSessionTaskId: 't-1', onOpenWorkerSession: NOOP })
     expect(list).toContain('data-dswf-tt-worker="t-1"')
     const swim = render({ view: 'swim', workerSessionTaskId: 't-1', onOpenWorkerSession: NOOP })
@@ -165,13 +151,12 @@ describe('TasksTabBody · ov-taskbar v22 布局（AC3/AC6——插入点断言�
   })
 })
 
-describe('TasksTabBody · chips 统一过滤（AC4 沿袭）', () => {
-  it('七态 chips（StatusChips 复用）次行独占（taskbar 行外——m3.1 D18）+ 计数 = 容器域 stats 单源', () => {
+describe('TasksTabBody · chips 统一过滤（沿袭）', () => {
+  it('七态 chips（StatusChips 复用）次行独占 + 计数 = 容器域 stats 单源', () => {
     const html = render()
     expect(html).toContain('data-dswf-ov-stchips=""')
     expect(html).toContain('data-dswf-ov-stchip="completed"')
     expect(html).toContain('data-dswf-ov-stchip="pending"')
-    // 次行独占：chips 非工具栏行内控件——taskbar 开标签在前、chips 在其后（DOM 序）
     expect(html.indexOf('data-dswf-ov-stchips')).toBeGreaterThan(html.indexOf('data-dswf-tt-taskbar'))
   })
 
@@ -181,7 +166,7 @@ describe('TasksTabBody · chips 统一过滤（AC4 沿袭）', () => {
   })
 })
 
-describe('TasksTabBody · 三视图分派（AC1/AC2/AC3 沿袭）', () => {
+describe('TasksTabBody · 三视图分派（沿袭）', () => {
   it('list（缺省）：两行布局列表', () => {
     const html = render({ view: 'list' })
     expect(html).toContain('data-dswf-tt-list=""')
@@ -232,47 +217,54 @@ describe('TasksTabBody · 三态面与空态', () => {
     expect(render({ activeStatuses: new Set<TaskStatus>(['blocked']), load: load({ cards: [] }) })).toContain('当前过滤组合无任务')
   })
 
-  it('零容器 = 容器空态（无 taskbar）', () => {
-    const html = render({ options: [], features: [], container: undefined })
+  it('容器真空（任务列表空·装载完成）= 容器空态（无 taskbar）', () => {
+    const html = render({ options: [], container: undefined })
     expect(html).toContain('暂无任务容器')
     expect(html).toContain('项目任务容器在此列出——循环派发与手动建容器均可')
     expect(html).not.toContain('data-dswf-tt-taskbar')
   })
+
+  it('容器装载中 = 骨架而非容器空态（AC③——有任务数据前不谎报真空）', () => {
+    const html = render({ options: [], container: undefined, containersLoading: true })
+    expect(html).toContain('data-dswf-tt-skeleton')
+    expect(html).not.toContain('暂无任务容器')
+  })
 })
 
-describe('容器菜单与解析纯函数（AC5）', () => {
-  it('containerMenuItems：行集——feature 完成比 + 突击（突击提案）标记 + N 任务', () => {
-    const items = containerMenuItems([...OPTIONS, BLITZ_CONTAINER], FEATURES)
-    expect(items.map((entry) => entry.id)).toEqual(['feature:m2-pipeline', 'proposal:legacy-eval-retire'])
-    const first = renderToStaticMarkup(menuRowLabel(items, 0))
-    expect(first).toContain('m2-pipeline')
-    expect(first).toContain('进行中 1/2')
-    const second = renderToStaticMarkup(menuRowLabel(items, 1))
-    expect(second).toContain('legacy-eval-retire（突击提案）')
-    expect(second).toContain('2 任务')
+describe('容器菜单与解析纯函数', () => {
+  it('containerMenuItems：行集 = slug + 突击标记 + N 任务（计数即选项自身聚合——features 查找退役）', () => {
+    const items = containerMenuItems(OPTIONS)
+    expect(items.map((entry) => entry.id)).toEqual(['proposal:legacy-eval-retire', 'feature:m2-pipeline'])
+    const blitzRow = renderToStaticMarkup(menuRowLabel(items, 0))
+    expect(blitzRow).toContain('legacy-eval-retire（突击提案）')
+    expect(blitzRow).toContain('2 任务')
+    const featureRow = renderToStaticMarkup(menuRowLabel(items, 1))
+    expect(featureRow).toContain('m2-pipeline')
+    expect(featureRow).toContain('2 任务')
   })
 
   it('containerMenuSelect：id → 选项；未知 id = undefined', () => {
-    expect(containerMenuSelect([...OPTIONS, BLITZ_CONTAINER], 'proposal:legacy-eval-retire')?.slug).toBe('legacy-eval-retire')
+    expect(containerMenuSelect(OPTIONS, 'proposal:legacy-eval-retire')?.slug).toBe('legacy-eval-retire')
     expect(containerMenuSelect(OPTIONS, 'ghost')).toBeUndefined()
   })
 
-  it('containerPillChip：feature stats 单源优先；突击 = 突击提案·N 任务（计数注后缀已废——D26）', () => {
+  it('containerPillChip：stats 单源优先；突击 = 突击提案·N 任务', () => {
     expect(containerPillChip(FEATURE_CONTAINER, '1/2')).toBe('1/2')
     expect(containerPillChip(FEATURE_CONTAINER, undefined)).toBe('2 任务')
     expect(containerPillChip(BLITZ_CONTAINER, '1/2')).toBe('突击提案 · 2 任务')
   })
 
-  it('resolveContainer：显式命中优先；未命中回退活跃 feature；零选项 = undefined', () => {
-    expect(resolveContainer([...OPTIONS, BLITZ_CONTAINER], { kind: 'proposal', slug: 'legacy-eval-retire' }, 'm2-pipeline')?.slug).toBe('legacy-eval-retire')
-    expect(resolveContainer(OPTIONS, { kind: 'feature', slug: 'ghost' }, 'm2-pipeline')?.slug).toBe('m2-pipeline')
-    expect(resolveContainer(OPTIONS, undefined, 'm2-pipeline')?.slug).toBe('m2-pipeline')
-    expect(resolveContainer(OPTIONS, undefined, undefined)?.slug).toBe('m2-pipeline') // 首 feature 缺省
-    expect(resolveContainer([], undefined, undefined)).toBeUndefined()
+  it('resolveContainer：显式命中优先；未命中回退首项（稳定序）；零选项 = undefined', () => {
+    expect(resolveContainer(OPTIONS, { kind: 'proposal', slug: 'legacy-eval-retire' })?.slug).toBe('legacy-eval-retire')
+    expect(resolveContainer(OPTIONS, { kind: 'feature', slug: 'ghost' })?.slug).toBe('legacy-eval-retire') // 首项
+    expect(resolveContainer(OPTIONS, undefined)?.slug).toBe('legacy-eval-retire')
+    expect(resolveContainer([], undefined)).toBeUndefined()
   })
 })
 
-// ─────────────────────────── 派发双路由执行（AC3——runDispatchRoute） ───────────────────────────
+// ─────────────────────────── 派发双路由执行（runDispatchRoute） ───────────────────────────
+
+type TaskCard_lazy = ReturnType<typeof cardFixture>
 
 function dispatchClient(impl: {
   readonly list: TaskCard_lazy[]
@@ -297,11 +289,9 @@ function dispatchClient(impl: {
   } as unknown as ForgeRpcClient
 }
 
-type TaskCard_lazy = ReturnType<typeof cardFixture>
-
 const RUNNING = { ...cardFixture(), taskId: 't-run', taskStatus: 'in_progress' as const }
 
-describe('runDispatchRoute（AC3 双路由执行——图 13）', () => {
+describe('runDispatchRoute（双路由执行）', () => {
   it('执行中在场 + link 源挂接 → jump（sessionId + 任务自然键；不新建不重发）', async () => {
     const seen: string[] = []
     await runDispatchRoute(
@@ -318,7 +308,7 @@ describe('runDispatchRoute（AC3 双路由执行——图 13）', () => {
     expect(seen).toEqual(['jump:s-dispatch:m2-pipeline/2.4'])
   })
 
-  it('无执行中任务 → new（容器对应模式 + /run-dag-tasks 指令单行·S5 缓切宿主指令入口）', async () => {
+  it('无执行中任务 → new（容器对应模式 + /run-dag-tasks 指令单行）', async () => {
     const seen: string[] = []
     await runDispatchRoute(
       { projectId: 'p-1', container: BLITZ_CONTAINER, client: dispatchClient({ list: [cardFixture()] }) },
@@ -356,28 +346,122 @@ describe('runDispatchRoute（AC3 双路由执行——图 13）', () => {
 })
 
 describe('subgraphDiagContainer（子图诊断容器水化——@ 锚数据驱动）', () => {
+  const CONTAINER: TaskContainerOption = {
+    ...FEATURE_CONTAINER,
+    slug: 'm2-pipeline',
+    title: 'm2-pipeline',
+  }
+
   it('docsRoot 在场（项目行推导 <ws>/.forge）→ container.docsRoot 透传 → formatDiagMessage 首行 `@.forge/docs/features/<slug>/`', () => {
     const docsRoot = docsRootOf('Z:\\project\\dsh', 'Z:\\project\\dsh\\.forge')
-    const container = subgraphDiagContainer(FEATURE_CONTAINER, FEATURES, docsRoot)
+    const container = subgraphDiagContainer(CONTAINER, docsRoot)
     expect(container.docsRoot).toBe('.forge/docs')
     expect(formatDiagMessage({ kind: 'subgraph', container, violations: [] }).split('\n')[0]).toBe(
       '@.forge/docs/features/m2-pipeline/',
     )
   })
 
-  it('docsRoot 缺席 = 键缺席（回退 @docs 缺省锚）；feature 卡缺席回退 resolved 标题', () => {
-    const container = subgraphDiagContainer(FEATURE_CONTAINER, [], undefined)
+  it('docsRoot 缺席 = 键缺席（回退 @docs 缺省锚）；标题 = resolved 标题', () => {
+    const container = subgraphDiagContainer(CONTAINER, undefined)
     expect('docsRoot' in container).toBe(false)
-    expect(container.title).toBe('M2 管线') // resolved.title 回退
+    expect(container.title).toBe('m2-pipeline')
     expect(formatDiagMessage({ kind: 'subgraph', container, violations: [] }).split('\n')[0]).toBe(
       '@docs/features/m2-pipeline/',
     )
   })
 })
 
-describe('TasksTab 装载壳（静态首帧——effect 未跑）', () => {
-  it('首帧 = taskbar 壳 + 骨架（拉取不阻塞结构呈现；活跃 feature 缺省解析）', async () => {
-    const { TasksTab } = await import('./task-tab.js')
+// ─────────────────────────── 装载壳（effect 面——createRoot + act） ───────────────────────────
+
+/** 装载壳 client 桩：tasks.list 按有无 source 路由（池全域聚合 / 容器过滤）+ stats/graph */
+function shellClient(): {
+  readonly client: ForgeRpcClient
+  readonly listCalls: { source: { kind: string; slug: string } | undefined }[]
+} {
+  const listCalls: { source: { kind: string; slug: string } | undefined }[] = []
+  const fail = (): Promise<never> => Promise.reject(new Error('不应调用'))
+  const client = {
+    tasks: {
+      list: async (q: { projectId: string; source?: { kind: string; slug: string } }) => {
+        listCalls.push({ source: q.source })
+        if (q.source === undefined) return [...AGG_CARDS] as never
+        return (AGG_CARDS.filter((c) => c.source?.kind === q.source?.kind && c.source?.slug === q.source?.slug) as never)
+      },
+      stats: async () => STATS,
+      graph: async () => GRAPH,
+      detail: fail,
+      transition: fail,
+      query: fail,
+      validateFeatureTasks: fail,
+      sessionLinks: fail,
+    },
+    projects: { register: fail, list: fail, get: fail, update: fail, reconcile: fail },
+    fs: { listDir: fail },
+    knowledge: { browse: fail, listEntries: fail, entryDetail: fail, heat: fail, sessionRecall: fail },
+    features: { register: fail, transition: fail, upsertDoc: fail, list: fail, listDocs: fail },
+    docs: { read: fail, openExternal: fail },
+    settings: { get: fail, set: fail },
+  } as unknown as ForgeRpcClient
+  return { client, listCalls }
+}
+
+async function mountTasksTab(client: ForgeRpcClient, props: Record<string, unknown> = {}): Promise<{
+  html: () => string
+  cleanup: () => Promise<void>
+}> {
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const root = createRoot(host)
+  await act(async () => {
+    root.render(
+      <TasksTab
+        projectId="p-1"
+        search=""
+        sort="active"
+        activeStatuses={new Set<TaskStatus>()}
+        statusFilter={[]}
+        onToggleStatus={NOOP}
+        onClearStatuses={NOOP}
+        makeClient={() => client}
+        {...props}
+      />,
+    )
+  })
+  return {
+    html: () => host.innerHTML,
+    cleanup: () =>
+      act(async () => {
+        root.unmount()
+        host.remove()
+      }),
+  }
+}
+
+describe('TasksTab 装载壳（容器来源 = 任务数据聚合——AC①②④）', () => {
+  it('AC① 有任务卡（多容器）→ 缺省首容器解析有值 + pill + 任务卡渲染（修前：features 空即恒空态·必红）', async () => {
+    const { client, listCalls } = shellClient()
+    const view = await mountTasksTab(client)
+    const html = view.html()
+    expect(html).toContain('data-dswf-tt-contpill') // 容器 pill 在场（非「暂无任务容器」）
+    expect(html).not.toContain('暂无任务容器')
+    expect(html).toContain('data-dswf-tt-item=') // 任务卡渲染
+    // 缺省容器 = 首项（稳定排序）；容器装载 = 池全域 list（无 source 参）
+    expect(listCalls[0]).toEqual({ source: undefined })
+    const containerCall = listCalls.find((c) => c.source !== undefined)
+    expect(containerCall?.source).toEqual({ kind: 'proposal', slug: 'legacy-eval-retire' })
+    await view.cleanup()
+  })
+
+  it('AC② 任务列表真空 → 「暂无任务容器」空态', async () => {
+    const { client } = shellClient()
+    vi.spyOn(client.tasks, 'list').mockResolvedValue([] as never)
+    const view = await mountTasksTab(client)
+    expect(view.html()).toContain('暂无任务容器')
+    await view.cleanup()
+  })
+
+  it('AC③ 容器装载在途 = 骨架而非空态（SSR 首帧同口径）', () => {
+    const { client } = shellClient()
     const html = renderToStaticMarkup(
       <TasksTab
         projectId="p-1"
@@ -385,13 +469,23 @@ describe('TasksTab 装载壳（静态首帧——effect 未跑）', () => {
         sort="active"
         activeStatuses={new Set<TaskStatus>()}
         statusFilter={[]}
-        features={FEATURES}
         onToggleStatus={NOOP}
         onClearStatuses={NOOP}
+        makeClient={() => client}
       />,
     )
-    expect(html).toContain('data-dswf-tt-taskbar')
     expect(html).toContain('data-dswf-tt-skeleton')
-    expect(html).toContain('data-dswf-tt-contpill="feature:m2-pipeline"') // 活跃容器缺省解析
+    expect(html).not.toContain('暂无任务容器')
+  })
+
+  it('AC④ 多容器显式路由：taskFocus slug 命中 blitz 容器 → 按所选 slug 拉取（source 语义保留）', async () => {
+    const { client, listCalls } = shellClient()
+    const view = await mountTasksTab(client, { featureSlug: 'legacy-eval-retire' })
+    const html = view.html()
+    expect(html).toContain('data-dswf-tt-contpill="proposal:legacy-eval-retire"')
+    expect(html).toContain('data-dswf-tt-item="t-3"') // blitz 容器任务卡
+    const containerCall = listCalls.find((c) => c.source !== undefined)
+    expect(containerCall?.source).toEqual({ kind: 'proposal', slug: 'legacy-eval-retire' })
+    await view.cleanup()
   })
 })

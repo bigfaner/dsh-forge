@@ -1,8 +1,8 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // 任务子 tab 组装（定位：业务——4.6 交付面：OverviewFrame renderTasksTab 槽注入体）。
-// 工具栏 v22 布局（ui-design ㉟–㊵）：容器 pill（双轨——features 远征点 ∪ 有任务突击提案
-// 琥珀点[container-pill 4.4]）+ 视图下拉（ViewDropdown 4.4——pill 右侧）+ 右簇 [诊断]+[派发]
-// 固定最右端同行不换行 + 七态 chips（StatusChips 复用）+ 三视图分派 + 三态面。
+// 工具栏布局：容器 pill（选项 = 任务数据自身 slug 聚合——taskContainerOptionsFromCards，
+// 判例 2026-11-25：features/提案域容器模型随 G2 退役）+ 视图下拉（ViewDropdown——pill 右侧）
+// + 右簇 [诊断]+[派发] 固定最右端同行不换行 + 七态 chips（StatusChips 复用）+ 三视图分派 + 三态面。
 // 诊断两路之一（feature 子图）：「诊断」按钮（仅 feature 容器——validateFeatureTasks 为
 // feature 域校验）→ RPC 只读校验 → DiagToast 双档（成功 1s/失败 5s + 发送给 agent →
 // formatDiagMessage 自动发送·远征）。任务失败诊断（blocked/rejected）= 抽屉内「诊断失败」
@@ -14,7 +14,6 @@
 // useTasksTabLoad（source 容器参数路由——AC5）。
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  FEATURE_STATUS_LABELS,
   type FeatureCard,
   type Mode,
   type SessionTaskLinkCard,
@@ -23,13 +22,12 @@ import {
 import { Menu, Pill, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, SkeletonRows } from '../../../components.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc-channels.js'
-import { activeFeatureSlug, hasActiveStatusFilter, searchQueryOf, type OverviewSort } from '../overview-model.js'
+import { hasActiveStatusFilter, searchQueryOf, type OverviewSort } from '../overview-model.js'
 import { formatDiagMessage, type MessageContainer, type SessionOpenRequest } from '../message-format.js'
 import { StatusChips } from '../status-chips.js'
 import { fetchWorkerSession } from '../../worker-session.js'
-import { useTasksTabLoad, type TasksTabLoadState } from './task-tab-data.js'
+import { useTasksTabLoad, useTaskContainerCards, type TasksTabLoadState } from './task-tab-data.js'
 import {
-  featureRatioLabel,
   resolveContainer,
   containerKeyOf,
   containerMenuSelect,
@@ -42,7 +40,7 @@ import {
 import {
   containerHasSubgraphDiag,
   containerMenuMark,
-  taskContainerOptions,
+  taskContainerOptionsFromCards,
   type TaskContainerOption,
 } from './container-pill.js'
 import { ListView } from './list-view.js'
@@ -76,44 +74,32 @@ function emptyTaskCounts(): Record<TaskStatus, number> {
 }
 
 /**
- * 子图诊断容器水化（handleDiagnose 消费——纯面单测锚）：feature 卡查找补全
- * （title/summary/phase，卡缺席回退 resolved 标题）+ @ 锚文档根注入（docsRootOf
+ * 子图诊断容器水化（handleDiagSend 消费面——纯面单测锚）：标题 = resolved 容器标题
+ * （slug 聚合容器——feature 卡水化面随 features 域退役）+ @ 锚文档根注入（docsRootOf
  * 项目行推导；缺席 = 键缺席 → pathLine 回退 `docs` 缺省锚）。
  */
 export function subgraphDiagContainer(
   resolved: { readonly slug: string; readonly title: string },
-  features: readonly FeatureCard[],
   docsRoot?: string,
 ): MessageContainer {
-  const card = features.find((f) => f.slug === resolved.slug)
   return {
     kind: 'feature',
     slug: resolved.slug,
-    title: card?.title ?? resolved.title,
-    ...(card?.summary !== undefined ? { summary: card.summary } : {}),
-    ...(card !== undefined ? { phase: card.featureStatus } : {}),
+    title: resolved.title,
     ...(docsRoot !== undefined ? { docsRoot } : {}),
   }
 }
 
-/** 容器菜单行集（双轨：slug + 突击标记（突击提案）+ chip——feature 完成比 / 突击任务数） */
+/** 容器菜单行集：slug + 突击标记（突击提案）+ N 任务（计数 = 选项自身聚合单源） */
 export function containerMenuItems(
   options: readonly TaskContainerOption[],
-  features: readonly FeatureCard[],
 ): readonly MenuEntry[] {
   return options.map((option) => ({
     id: containerKeyOf(option),
     label: (
       <span className="dswf-tt-mrow" data-dswf-tt-mcont={containerKeyOf(option)}>
         <span className="dswf-tt-mkey">{`${option.slug}${containerMenuMark(option)}`}</span>
-        <span className="dswf-tt-mchip">
-          {option.kind === 'feature'
-            ? (() => {
-                const card = features.find((f) => f.slug === option.slug)
-                return card === undefined ? `${option.taskCount} 任务` : featureRatioLabel(card)
-              })()
-            : `${option.taskCount} 任务`}
-        </span>
+        <span className="dswf-tt-mchip">{`${option.taskCount} 任务`}</span>
       </span>
     ),
   }))
@@ -173,10 +159,10 @@ export interface TasksTabBodyProps {
   // ── 概览帧 ctx 消费面（4.1 renderTasksTab 闭包注入——过滤/搜索态帧侧单一来源） ──
   readonly search: string
   readonly activeStatuses: ReadonlySet<TaskStatus>
-  /** 容器选项集（taskContainerOptions(features) 投影） */
+  /** 容器选项集（taskContainerOptionsFromCards——任务数据 slug 聚合投影） */
   readonly options: readonly TaskContainerOption[]
-  /** 无参 feature 列（菜单 chip 完成比查找源——不随搜索漂移） */
-  readonly features: readonly FeatureCard[]
+  /** 容器选项源装载中（undefined 容器 + 在途 = 骨架而非空态——真真空才空态） */
+  readonly containersLoading?: boolean
   readonly onToggleStatus: (status: TaskStatus) => void
   readonly onClearStatuses: () => void
   // ── task-tab 本地态（装载壳注入——受控面） ──
@@ -221,7 +207,7 @@ export function TasksTabBody({
   search,
   activeStatuses,
   options,
-  features,
+  containersLoading,
   onToggleStatus,
   onClearStatuses,
   container,
@@ -250,8 +236,20 @@ export function TasksTabBody({
   const searchActive = searchQueryOf(search) !== undefined
   const hasStatusFilter = hasActiveStatusFilter(activeStatuses)
 
-  // 无容器：容器空态（无 taskbar——feature ∪ 有任务突击提案两域无行可选）
+  // 容器三分派：选项源在途 = 骨架（真真空未定谳不谎报空态）；真真空 = 容器空态
   if (container === undefined) {
+    if (containersLoading === true) {
+      return (
+        <div className="dswf-tt" data-dswf-tt="">
+          <SkeletonRows
+            className="dswf-tt-skeleton"
+            rowClassName="dswf-tt-skeleton-row"
+            rows={6}
+            anchor="data-dswf-tt-skeleton"
+          />
+        </div>
+      )
+    }
     return (
       <EmptyState
         className="dswf-tt-empty"
@@ -263,12 +261,9 @@ export function TasksTabBody({
 
   const cards = load.cards
   const stats = load.stats
-  const featureCard = container.kind === 'feature' ? features.find((f) => f.slug === container.slug) : undefined
   const pillChip = containerPillChip(
     container,
-    stats === undefined
-      ? undefined
-      : `${featureCard === undefined ? '' : `${FEATURE_STATUS_LABELS[featureCard.featureStatus].zh} `}${stats.byStatus.completed ?? 0}/${stats.total}`,
+    stats === undefined ? undefined : `${stats.byStatus.completed ?? 0}/${stats.total}`,
   )
   // 计数注 = 帧侧 taskCountNote 原值（m3.1 D18：收进容器 pill 悬停——正文零计数注；
   // D26「无 feature 阶段」过程注废除沿袭）
@@ -342,7 +337,7 @@ export function TasksTabBody({
           open={containerMenuOpen}
           portal
           side="bottom"
-          items={containerMenuItems(options, features)}
+          items={containerMenuItems(options)}
           selectedId={containerKeyOf(container)}
           selection="fill"
           listClassName="dswf-tt-menu"
@@ -438,7 +433,10 @@ export interface TasksTabProps {
   readonly activeStatuses: ReadonlySet<TaskStatus>
   /** statusFilter 白名单参（帧侧 statusFilterParam——装载查询参） */
   readonly statusFilter: readonly TaskStatus[]
-  readonly features: readonly FeatureCard[]
+  /** 已退役（2026-11-25 容器模型改口）：features 曾为容器唯一行源（taskContainerOptions）；
+   *  容器来源改任务数据自身聚合后本参消费归零——保留可选形兼容既有装配传参（dock-tabs
+   *  ctx 透传），非门控零行为。 */
+  readonly features?: readonly FeatureCard[]
   readonly onToggleStatus: (status: TaskStatus) => void
   readonly onClearStatuses: () => void
   // ── 装配注入（4.1 接线） ──
@@ -475,7 +473,6 @@ export function TasksTab({
   sort,
   activeStatuses,
   statusFilter,
-  features,
   onToggleStatus,
   onClearStatuses,
   featureSlug: controlledFeature,
@@ -489,7 +486,10 @@ export function TasksTab({
   docsRoot,
   makeClient = preloadRpcClientFactory,
 }: TasksTabProps): ReactNode {
-  const options = useMemo(() => taskContainerOptions(features), [features])
+  // 容器选项源 = 任务数据自身（池全域 list 按 slug 聚合——判例 2026-11-25：features/提案
+  // 域容器模型退役后唯一行源；在途骨架、真真空空态、失败错误条三分派）
+  const [containers, { retry: retryContainers }] = useTaskContainerCards(projectId, makeClient)
+  const options = useMemo(() => taskContainerOptionsFromCards(containers.cards ?? []), [containers.cards])
   const [localContainer, setLocalContainer] = useState<TaskContainerSel | undefined>(undefined)
   const [view, setView] = useState<TaskViewMode>('list')
   const [containerMenuOpen, setContainerMenuOpen] = useState(false)
@@ -499,7 +499,6 @@ export function TasksTab({
   const resolved = resolveContainer(
     options,
     localContainer ?? (controlledFeature !== undefined ? { kind: 'feature', slug: controlledFeature } : undefined),
-    activeFeatureSlug(features),
   )
   const source = resolved === undefined ? undefined : { kind: resolved.kind, slug: resolved.slug }
   const [load, { retry }] = useTasksTabLoad(projectId, source, view, statusFilter, search, sort, makeClient)
@@ -524,11 +523,11 @@ export function TasksTab({
         setDiagResult(subgraphDiagOk())
         return
       }
-      setDiagResult(subgraphDiagFail(subgraphDiagContainer(resolved, features, docsRoot), report.violations))
+      setDiagResult(subgraphDiagFail(subgraphDiagContainer(resolved, docsRoot), report.violations))
     } catch (error) {
       setDiagResult(diagServiceError(error instanceof Error ? error.message : String(error)))
     }
-  }, [resolved, features, projectId, makeClient, docsRoot])
+  }, [resolved, projectId, makeClient, docsRoot])
   const handleDiagDismiss = useCallback((): void => {
     setDiagResult(undefined)
   }, [])
@@ -603,12 +602,28 @@ export function TasksTab({
     [onOpenWorkerSession, projectId, makeClient],
   )
 
+  // 容器选项源失败 = 错误条 + 重试（fail-soft 呈现——不谎报真空空态）
+  if (containers.cards === undefined && containers.error !== undefined) {
+    return (
+      <div className="dswf-tt" data-dswf-tt="">
+        <ErrorBar
+          className="dswf-tt-error"
+          message={`容器装载失败：${containers.error.message}`}
+          retryClassName="dswf-tt-retry"
+          onRetry={retryContainers}
+          anchor="data-dswf-tt-error"
+          retryAnchor="data-dswf-tt-retry"
+        />
+      </div>
+    )
+  }
+
   return (
     <TasksTabBody
       search={search}
       activeStatuses={activeStatuses}
       options={options}
-      features={features}
+      containersLoading={containers.cards === undefined && containers.error === undefined}
       onToggleStatus={onToggleStatus}
       onClearStatuses={onClearStatuses}
       container={resolved}

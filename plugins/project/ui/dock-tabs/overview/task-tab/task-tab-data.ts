@@ -25,6 +25,12 @@ export interface TasksTabError {
   readonly uiState: RpcUiStateKind
 }
 
+/** 容器选项源装载态（全项目任务卡——undefined = 在途；error fail-soft） */
+export interface TaskContainersState {
+  readonly cards: readonly TaskCard[] | undefined
+  readonly error: TasksTabError | undefined
+}
+
 /** 拉取结果（ok/error 归一——永不 reject） */
 export type TasksTabFetch =
   | { readonly ok: true; readonly cards: TaskCard[]; readonly stats: TaskStats; readonly graph?: TaskGraph }
@@ -179,6 +185,46 @@ export function useTasksTabLoad(
     })
   }, [projectId, source])
 
+  const retry = useCallback(() => {
+    setNonce((n) => n + 1)
+  }, [])
+  return [state, { retry }] as const
+}
+
+/**
+ * 全项目任务卡装载（容器选项源——容器 = 任务数据自身聚合，判例 2026-11-25）：
+ * tasks.list({projectId}) 池全域单查询（无 source 参——聚合按卡 source{kind,slug} 归
+ * container-pill taskContainerOptionsFromCards）；写推送事件同项目静默重取（新容器即见）。
+ * @param projectId - 当前项目
+ * @param makeClient - RPC client 构造器（缺省 preload 真身；注入 = 测试面）
+ * @returns [装载态, { retry }]（cards undefined = 在途；error fail-soft 归一——呈现面骨架/错误条分派）
+ */
+export function useTaskContainerCards(
+  projectId: string,
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
+): readonly [TaskContainersState, { readonly retry: () => void }] {
+  const [state, setState] = useState<TaskContainersState>({ cards: undefined, error: undefined })
+  const [nonce, setNonce] = useState(0)
+  const seqRef = useRef(0)
+  useEffect(() => {
+    const seq = ++seqRef.current
+    const client = makeClient()
+    void client.tasks
+      .list({ projectId, sort: 'active' })
+      .then((cards) => {
+        if (seq !== seqRef.current) return
+        setState({ cards, error: undefined })
+      })
+      .catch((error: unknown) => {
+        if (seq !== seqRef.current) return
+        setState({ cards: undefined, error: mapTasksTabError(error) })
+      })
+  }, [projectId, nonce, makeClient])
+  useEffect(() => {
+    return subscribeTasksChanged((payload) => {
+      if (payload.projectId === projectId) setNonce((n) => n + 1)
+    })
+  }, [projectId])
   const retry = useCallback(() => {
     setNonce((n) => n + 1)
   }, [])

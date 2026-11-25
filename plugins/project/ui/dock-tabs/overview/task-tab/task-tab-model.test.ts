@@ -3,13 +3,12 @@
 // chips 计数单源 / AC5 视图词汇与空态分派 / AC6 feature 解析与 DAG 可见集（chips 过滤
 // 三视图统一的数据面——list 结果 = vis 集单源，graph 供边）。
 import { describe, expect, it } from 'vitest'
-import type { FeatureCard, TaskCard, TaskGraph } from '@dsh-forge/contracts'
+import type { TaskCard, TaskGraph } from '@dsh-forge/contracts'
 import {
   TASK_VIEWS,
   dagVisibleSet,
   listGroupsOf,
   resolveContainer,
-  resolveFeatureSlug,
   swimColumnsOf,
   taskCountNote,
   taskHoverLabel,
@@ -37,29 +36,6 @@ export function cardFixture(over: Partial<TaskCard> = {}): TaskCard {
     ...over,
   }
 }
-
-const FEATURES: readonly FeatureCard[] = [
-  {
-    featureId: 'f-2',
-    slug: 'old-thing',
-    title: '旧 feature',
-    featureStatus: 'completed',
-    createdAt: '2026-09-01T00:00:00.000Z',
-    updatedAt: '2026-09-01T00:00:00.000Z',
-    byStatus: { pending: 0, in_progress: 0, completed: 1, blocked: 0, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 },
-    docCount: 1,
-  },
-  {
-    featureId: 'f-1',
-    slug: 'm2-pipeline',
-    title: 'M2 管线',
-    featureStatus: 'in-progress',
-    createdAt: '2026-10-01T00:00:00.000Z',
-    updatedAt: '2026-10-01T00:00:00.000Z',
-    byStatus: { pending: 2, in_progress: 1, completed: 3, blocked: 1, suspended: 0, interrupted: 0, skipped: 0, rejected: 0 },
-    docCount: 4,
-  },
-]
 
 describe('TASK_VIEWS（三视图 seg 词汇）', () => {
   it('列表|DAG|泳道 三值（AC5 seg）', () => {
@@ -210,37 +186,22 @@ describe('taskStatusTagTone（状态 tag 官方 tone 映射）', () => {
   })
 })
 
-describe('resolveFeatureSlug（AC5 feature pill 解析）', () => {
-  it('显式注入优先；否则活跃 feature（非终态优先，否则首行）', () => {
-    expect(resolveFeatureSlug(FEATURES, 'old-thing')).toBe('old-thing')
-    expect(resolveFeatureSlug(FEATURES, undefined)).toBe('m2-pipeline')
-  })
-
-  it('空 feature 列 = undefined', () => {
-    expect(resolveFeatureSlug([], 'x')).toBe('x')
-    expect(resolveFeatureSlug([], undefined)).toBeUndefined()
-  })
-})
-
-describe('resolveContainer（容器选中解析——4.6 双轨 + 纯 blitz 回落）', () => {
-  const feature = { kind: 'feature', slug: 'feat-a', title: 'A', mode: 'expedition', taskCount: 3 } as const
-  const proposal = { kind: 'proposal', slug: 'blitz-p', title: 'P', mode: 'blitz', taskCount: 2 } as const
-
-  it('feature 优先：双轨在场缺省 = feature（活跃缺 → 首 feature）', () => {
-    expect(resolveContainer([feature, proposal], undefined, undefined)?.slug).toBe('feat-a')
-    expect(resolveContainer([feature, proposal], undefined, 'feat-a')?.slug).toBe('feat-a')
-  })
+describe('resolveContainer（容器选中解析——显式命中优先，缺省首项·稳定序）', () => {
+  const feature = { kind: 'feature', slug: 'feat-a', title: 'A', mode: 'expedition', taskCount: 3, statusCounts: {} } as const
+  const proposal = { kind: 'proposal', slug: 'blitz-p', title: 'P', mode: 'blitz', taskCount: 2, statusCounts: {} } as const
 
   it('显式注入优先（任意容器——taskFocus 聚焦/用户本地切换）', () => {
-    expect(resolveContainer([feature, proposal], { kind: 'proposal', slug: 'blitz-p' }, 'feat-a')?.slug).toBe('blitz-p')
+    expect(resolveContainer([feature, proposal], { kind: 'proposal', slug: 'blitz-p' })?.slug).toBe('blitz-p')
   })
 
-  it('零 feature 选项 = 回落首项（纯 blitz 提案工作区不空转——5.2 e2e 实证处置）', () => {
-    expect(resolveContainer([proposal], undefined, undefined)?.slug).toBe('blitz-p')
+  it('显式未命中 = 回落首项（稳定排序——slug 聚合序）', () => {
+    expect(resolveContainer([feature, proposal], { kind: 'feature', slug: 'ghost' })?.slug).toBe('feat-a')
+    expect(resolveContainer([feature, proposal], undefined)?.slug).toBe('feat-a')
+    expect(resolveContainer([proposal], undefined)?.slug).toBe('blitz-p')
   })
 
-  it('零选项 = undefined（容器空态）', () => {
-    expect(resolveContainer([], undefined, undefined)).toBeUndefined()
+  it('零选项 = undefined（真真空容器空态）', () => {
+    expect(resolveContainer([], undefined)).toBeUndefined()
   })
 })
 
