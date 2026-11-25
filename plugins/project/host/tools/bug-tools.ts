@@ -155,8 +155,9 @@ const RESOLVE_BUG_OUTPUT_SCHEMA = {
 } as const;
 
 function renderResolveBug(_args: unknown, value: unknown): readonly { type: "text"; text: string }[] {
-  const v = value as BugCard;
-  return [{ type: "text", text: [`✓ Bug backfilled (${v.bugStatus}) — ${v.summary}`, ...cardLinesOf(v)].join("\n") }];
+  const v = value as { card: BugCard };
+  const card = v.card;
+  return [{ type: "text", text: [`✓ Bug backfilled (${card.bugStatus}) — ${card.summary}`, ...cardLinesOf(card)].join("\n") }];
 }
 
 function createResolveBugTool(deps: BugToolsDeps): BugToolDefinition {
@@ -176,7 +177,7 @@ function createResolveBugTool(deps: BugToolsDeps): BugToolDefinition {
       required: ["bug_id", "outcome"],
     },
     output: { schema: RESOLVE_BUG_OUTPUT_SCHEMA, render: renderResolveBug },
-    async execute(args: unknown, exec: BugToolExecFace): Promise<BugCard> {
+    async execute(args: unknown, exec: BugToolExecFace): Promise<{ card: BugCard }> {
       const a = requireArgsObject(args, "resolve_bug");
       const session = sessionContextOf(exec);
       const projectId = await requireProjectId(deps.resolveProjectId, session);
@@ -188,7 +189,7 @@ function createResolveBugTool(deps: BugToolsDeps): BugToolDefinition {
       const unresolvedReason = optionalString(a, "unresolved_reason", "resolve_bug");
       const fixApproach = optionalString(a, "fix_approach", "resolve_bug");
       const sessionId = optionalSessionId(session);
-      return bugsOf(deps).resolveBug({
+      return { card: await bugsOf(deps).resolveBug({
         projectId,
         bugId: requiredString(a, "bug_id", "resolve_bug"),
         outcome,
@@ -196,7 +197,7 @@ function createResolveBugTool(deps: BugToolsDeps): BugToolDefinition {
         ...(unresolvedReason !== undefined ? { unresolvedReason } : {}),
         ...(fixApproach !== undefined ? { fixApproach } : {}),
         ...(sessionId !== undefined ? { fixSessionId: sessionId } : {}),
-      });
+      }) };
     },
   };
 }

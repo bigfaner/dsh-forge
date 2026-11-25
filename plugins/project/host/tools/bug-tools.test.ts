@@ -100,6 +100,13 @@ describe("resolve_bug", () => {
     expect(stub.resolveBug).toHaveBeenLastCalledWith(expect.objectContaining({ outcome: "unresolved", unresolvedReason: "cannot repro" }));
   });
 
+  it("output 形状 = {card} 对象包装（bug aac1a701：裸 card 与 output schema 漂移）", async () => {
+    const { tools, exec } = harness();
+    const r = (await tools["resolve_bug"].execute({ bug_id: "b1", outcome: "fixed", commit_hash: "abc1234" }, exec())) as { card?: BugCard };
+    expect("card" in r).toBe(true);
+    expect(r.card?.bugStatus).toBe("fixed");
+  });
+
   it("outcome 词表外拒", async () => {
     const { tools, exec } = harness();
     await expect(tools["resolve_bug"].execute({ bug_id: "b1", outcome: "wontfix" }, exec())).rejects.toThrow(/outcome/);
