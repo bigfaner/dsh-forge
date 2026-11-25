@@ -5,7 +5,9 @@
 //   （first-pass-complete / retro-done / review-wave-N / stabilized / merged）受唯一约束
 //   (project_key, slug, mark, wave_seq)（DDL partial unique index——关系标记 derived-to-child
 //   豁免）；review-wave-N 缺 wave_seq 自动递增（max+1，首波 = 1，按 (project_key, slug, mark)
-//   圈定）——多波标记不要求调用方记序数。
+//   圈定）——多波标记不要求调用方记序数。行语义 = 一波一行（bug fe8d5cb5）：按波聚合的写入时
+//   去重在结算侧（dispatch-core settle——同 loop 实例后续波点不新增），本域每 append 即新波；
+//   metrics/driver 读数口径 = review-wave-N 行数（波数），不再用 max(wave_seq)。
 // - ensureCheckpoint：lazy 补标记（merged/stabilized 漏打兜底）：标记已在场幂等 no-op
 //   （appended=false），缺席才落行。唯一预检按 (project_key, slug, mark) 圈定。
 // - listCheckpoints：按容器时序查询（created_at 升序，同刻 id 稳定）+ 标记过滤。

@@ -5,7 +5,8 @@
 //   排序锚 created_at, seq——禁 ORDER BY id，UUID 无序）。
 // - reworkRatio：非 fix 链产生的返工结算行数（fix_root_id IS NULL ∧ result='blocked'——根
 //   任务 blocked 结算行） / 结算总行数（一任务多结算全计——rework 全史保留口径）。
-// - reviewWaves：task_checkpoints mark='review-wave-N' 的 max(wave_seq)（无波 = 0）。
+// - reviewWaves：task_checkpoints mark='review-wave-N' 的行数（无波 = 0；按波聚合一波一行——
+//   bug fe8d5cb5 口径统一：与 driver waveCount = 行数同口径，弃 max(wave_seq) 旧口径）。
 // - fixDensity：fix_root_id 链去重计链数，每链取最新 success 的 commit_hash 去重，
 //   ÷ 已结算任务数（FIX_DENSITY_FORMULA pin——shared/contract-constants.ts 单源）。
 import type Database from "@dsh-forge/lib-db";
@@ -91,10 +92,10 @@ export function computeMetrics(db: Database.Database, q: MetricsQuery): Containe
   // 分子 = 每链最新 success commit_hash 去重后的链数（同 commit 跨链合并计数）。
   const fixChainCount = new Set(latestCommitByChain.values()).size;
 
-  // reviewWaves：容器内 review-wave-N 的 max(wave_seq)（无波 = 0）。
+  // reviewWaves：容器内 review-wave-N 行数（一波一行；与 driver waveCount 行数口径一致——bug fe8d5cb5）。
   const waves = db
-    .prepare<unknown[], { max_seq: number | null }>(
-      `SELECT MAX(wave_seq) AS max_seq FROM task_checkpoints
+    .prepare<unknown[], { total: number }>(
+      `SELECT COUNT(*) AS total FROM task_checkpoints
        WHERE project_key = ? AND slug = ? AND mark = 'review-wave-N'${sinceClause ? " AND created_at >= ?" : ""}`,
     )
     .get(q.projectKey, q.slug, ...sinceArgs);
@@ -106,7 +107,7 @@ export function computeMetrics(db: Database.Database, q: MetricsQuery): Containe
   return {
     firstPassRate: settledTasks === 0 ? 0 : firstPass / settledTasks,
     reworkRatio: totalSettleRows === 0 ? 0 : rootBlocked / totalSettleRows,
-    reviewWaves: waves?.max_seq ?? 0,
+    reviewWaves: waves?.total ?? 0,
     fixDensity: settledTasks === 0 ? 0 : fixChainCount / settledTasks,
   };
 }

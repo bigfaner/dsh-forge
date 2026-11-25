@@ -11,7 +11,8 @@ import { describe, expect, it } from "vitest";
 import type { TaskSnapshot } from "../../host/domain/tasks/types.js";
 import type { TaskCard, TaskSettlementRow, TaskStats, TaskStatus } from "../../host/domain/tasks/list.js";
 import type { TasksService } from "../../host/domain/tasks/service.js";
-import { settleWorkerRun } from "../../host/dispatch-core/settle.js";
+import { settleWorkerRun, resetReviewWaveDedup } from "../../host/dispatch-core/settle.js";
+import { setExclusiveLoopSource, clearExclusiveLoopSource } from "../../host/dispatch-core/exclusivity.js";
 import type { LastSettlementView, SettleCheckpointsFace, SettleReportRecoveryDeps, WaveSnapshot } from "../../host/dispatch-core/settle.js";
 import type { ForgeDiagEmitFace } from "../../host/faces.js";
 import type { SpawnWorkerHandle } from "../../host/dispatch-core/spawn.js";
@@ -262,6 +263,54 @@ describe("机械④ · review-wave-N 修正波标记（settleWorkerRun）", () =
     // proposalId 门退役：无任何提案映射，checkpoints 面在场即落标记（base commit 经 worktree 解析）
     await settleWorkerRun({ tasks, settlements: settlementsStub().settlements, checkpoints: face, resolveHeadCommit: async () => "head-4" }, { ...RUN, worktreeCwd: "C:\\wt" });
     expect(calls).toHaveLength(1);
+  });
+
+  it("按波聚合（bug fe8d5cb5）：同轮走查（同 loop 实例）返 N 个 fix 任务 = 1 波只落 1 行；换 loop = 新波", async () => {
+    resetReviewWaveDedup();
+    const { face, calls } = recordingCheckpoints();
+    const tasks = waveHarness({ settledStatus: "completed", cards: [{ localId: "0", taskType: "coding-fix" }] });
+    const deps = { tasks, settlements: settlementsStub().settlements, checkpoints: face, resolveHeadCommit: async () => "head-1" };
+    const ctx = { ...RUN, worktreeCwd: "C:\\wt" };
+    setExclusiveLoopSource({ slug: "feat-x" }, "loop-A");
+    try {
+      // 同轮走查返 3 个 fix 任务（同 loop 实例独占源现查命中）→ 1 波 1 行
+      await settleWorkerRun(deps, ctx);
+      await settleWorkerRun(deps, ctx);
+      await settleWorkerRun(deps, ctx);
+      expect(calls).toHaveLength(1);
+      // 聚合去重后新波：换 loop 实例（上一轮已收口、新一轮评审返单）→ 再落 1 行
+      clearExclusiveLoopSource({ slug: "feat-x" }, "loop-A");
+      setExclusiveLoopSource({ slug: "feat-x" }, "loop-B");
+      await settleWorkerRun(deps, ctx);
+      expect(calls).toHaveLength(2);
+      // 循环外零散派发（无独占源）= 单任务单波——每次结算各落 1 行（落行条件不变）
+      clearExclusiveLoopSource({ slug: "feat-x" }, "loop-B");
+      await settleWorkerRun(deps, ctx);
+      await settleWorkerRun(deps, ctx);
+      expect(calls).toHaveLength(4);
+    } finally {
+      clearExclusiveLoopSource({ slug: "feat-x" }, "loop-A");
+      clearExclusiveLoopSource({ slug: "feat-x" }, "loop-B");
+      resetReviewWaveDedup();
+    }
+  });
+
+  it("无 base commit 跳过降级为 info（bug fe8d5cb5——常态降级不刷 warn）", async () => {
+    const diagCalls: Array<Record<string, unknown>> = [];
+    const tasks = waveHarness({ settledStatus: "completed", cards: [{ localId: "0", taskType: "coding-fix" }] });
+    const settlement = await settleWorkerRun(
+      {
+        tasks,
+        settlements: settlementsStub().settlements,
+        checkpoints: recordingCheckpoints().face,
+        diag: ((payload: Record<string, unknown>) => diagCalls.push(payload)) as never,
+      },
+      { ...RUN },
+    );
+    expect(settlement.case).toBe("settled");
+    const skip = diagCalls.find((d) => String(d.message).includes("review-wave mark skipped"));
+    expect(skip).toBeDefined();
+    expect(skip?.level).toBe("info");
   });
 
   it("标记失败 fail-soft：appendCheckpoint 抛出不回滚已定结算", async () => {

@@ -121,7 +121,7 @@ export const TRIAGE_EXPERT_KEY = "triage-analyst";
 export const LOOP_STOP_TRANSITION_REASON = "派发循环停止";
 
 /** 结束（全部完成）的「下一步动作」指示（notification-samples 逐字口径——无 slug 参数位） */
-export const LOOP_INSTRUCTION_ALL_DONE = "若想派发其它容器（proposal/feature）的任务，执行 /run-dag-tasks";
+export const LOOP_INSTRUCTION_ALL_DONE = "若想派发其它容器的任务，执行 /run-dag-tasks";
 
 /** 终局叙述的「下一步动作」指示文本（notification-samples 逐字口径的 slug 参数化） */
 export function loopInstructionOf(kind: "halted" | "timeout", slug: string): string {
@@ -242,8 +242,10 @@ export interface LoopCheckpointRowLite {
  */
 export type LoopCheckpointsFace = Pick<CheckpointsService, "ensureCheckpoint" | "appendCheckpoint" | "listCheckpoints">;
 
-/** 越阈硬门（收口复盘指示文本——修正波次 ≥ 阈值时须注册改进提案方可视为收口） */
-const RETRO_PROPOSAL_GATE = "已注册改进提案（parent_proposal_id 指向本提案）并在记录中登记派生提案 id 清单，未注册不得视为收口";
+/** 越阈硬门（收口复盘指示文本——修正波次 ≥ 阈值时须完成复盘沉淀与 specs 卷宗登记方可视为收口；
+ *  bug fe8d5cb5：提案/parent_proposal_id 口径随 proposal 域下线退役，改 specs 域口径） */
+const RETRO_HARD_GATE =
+  "须完成复盘与知识沉淀（三类沉淀落 .knowledge/），并将越阈归因与改进项登记进 specs 卷宗（.forge/specs/<slug>/），经用户确认后方可视为收口";
 
 /** 任务终态集（state-machine TERMINAL 口径镜像——completed/skipped/rejected；
  *  消费面：停止径 transition 扫描的终态过滤） */
@@ -255,7 +257,7 @@ export interface FlywheelMetrics {
   readonly passRate: number;
   /** 返工增量比 = first-pass 后 commit 增量 / 全量 commit（无 merged 帧 = 0） */
   readonly reworkRatio: number;
-  /** 修正波次 = review-wave-N 标记计数 */
+  /** 修正波次 = review-wave-N 标记行数（按波聚合一波一行——bug fe8d5cb5 行数口径） */
   readonly waveCount: number;
   /** fix 密度 = fix 任务数 / 任务总数（当前帧） */
   readonly fixDensity: number;
@@ -287,7 +289,7 @@ export function flywheelMetricsOf(rows: readonly LoopCheckpointRowLite[], thresh
  * 直接执行——顺序：评审 → 复盘 → 沉淀，且段内带顺序硬门（复盘三项全部完成后才进入知识沉淀，
  * 知识沉淀完成后才落收口标记）。注入飞轮硬指标计算值与越阈判定规则（阈值取
  * settings 键）、多 agent 交叉核验要求、learn 技能调用要求与 retro-done 收口标记要求；
- * 越阈时硬门要求已注册改进提案。纯函数（指标由 rows 直算），零状态。
+ * 越阈时硬门要求完成复盘沉淀与 specs 卷宗登记（bug fe8d5cb5——提案口径已退役）。纯函数（指标由 rows 直算），零状态。
  */
 export function renderRetroInstruction(slug: string, rows: readonly LoopCheckpointRowLite[], threshold: number): string {
   const m = flywheelMetricsOf(rows, threshold);
@@ -301,7 +303,7 @@ export function renderRetroInstruction(slug: string, rows: readonly LoopCheckpoi
       `返工增量比 ${pct(m.reworkRatio)}；修正波次 ${String(m.waveCount)}；fix 密度 ${pct(m.fixDensity)}。`,
     `2. 越阈判定与处置（阈值 = settings flywheel.reviewWaveThreshold，缺席默认值 ${String(FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT)}）：` +
       (m.overThreshold
-        ? `当前修正波次 ${String(m.waveCount)} ≥ ${String(threshold)} → 已越阈——硬门：${RETRO_PROPOSAL_GATE}。`
+        ? `当前修正波次 ${String(m.waveCount)} ≥ ${String(threshold)} → 已越阈——硬门：${RETRO_HARD_GATE}。`
         : `当前修正波次 ${String(m.waveCount)} < ${String(threshold)} → 未越阈——无注册硬门，仍须完成复盘。`),
     "3. 多 agent 交叉核验：各 agent 独立提取本容器验收经验/判例/翻车点，交叉比对后取共识入沉淀，" +
       "分歧记录待裁决——单视角结论不直接入库。",
@@ -310,7 +312,7 @@ export function renderRetroInstruction(slug: string, rows: readonly LoopCheckpoi
     "- 三类沉淀（conventions/lessons/examples）全量经 learn 技能提取，落 .knowledge/ 对应目录" +
       "（markdown 同构字段 title/summary/keywords/domainPath + 溯源字段：来源容器 slug / 来源任务 / bug id）；" +
       "交叉核验取到的共识为沉淀输入。",
-    "- 提炼态 conventions 晋升 docs/conventions 正本仍走提案管线裁决，不直改技能检查项。",
+    "- 提炼态 conventions 晋升 docs/conventions 正本仍走独立裁决流程，不直改技能检查项。",
     "- 测试判例三类沉淀：flaky 史（用例 + 环境 + 复发轮次）、测试退役理由（被测物变更 → 用例去向）、" +
       "覆盖真空（评审发现的缺席面）——评审发现的测试判例/翻车点按此三类归类沉淀，不漏判例。",
     "",

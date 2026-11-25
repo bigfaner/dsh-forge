@@ -1180,7 +1180,7 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
     expect(settle.text).toContain('返工增量比 66.7%')
   })
 
-  it('收口越阈硬门：修正波次 ≥ 阈值（默认 6）→ settle 文本含改进提案注册硬门（不落任务卡 AC）', async () => {
+  it('收口越阈硬门：修正波次 ≥ 阈值（默认 6）→ settle 文本含 specs 口径硬门（不落任务卡 AC）', async () => {
     const wave = { mark: 'review-wave-N', tasksTotal: 8, commitsTotal: 12, fixesTotal: 3, evidenceDebtsTotal: 1 }
     const built = build({
       claim: [claimed(), NO_TASK],
@@ -1204,8 +1204,10 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
     expect(built.h.addTaskInputs).toHaveLength(0) // 零任务派生——硬门走收口指示文本
     const settle = built.calls.filter((c) => c.method === 'settle').at(-1)!
     expect(settle.text).toContain('波次 6 ≥ 6 → 已越阈')
-    expect(settle.text).toContain('已注册改进提案')
-    expect(settle.text).toContain('parent_proposal_id')
+    // 文案契约（bug fe8d5cb5）：越阈硬门改 specs 域口径——提案/present_id 字样清零，硬门与用户动作语气保持
+    expect(settle.text).toContain('复盘与知识沉淀')
+    expect(settle.text).toContain('.forge/specs/')
+    expect(settle.text).not.toMatch(/提案|proposal/i)
     expect(settle.text).toContain('修正波次 6')
   })
 

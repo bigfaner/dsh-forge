@@ -20,6 +20,7 @@ import type { ContainerRef, TaskRef, TaskSnapshot } from "../domain/tasks/types.
 import type { AppendCheckpointInput } from "../domain/checkpoints/service.js";
 import type { SettlementEvidence } from "../db/repositories/settlement-repo.js";
 import { forgetWorkerSourceTask } from "./assemble.js";
+import { exclusiveLoopSourceOf } from "./exclusivity.js";
 import type { SpawnWorkerHandle } from "./spawn.js";
 import { poolOf, type PoolSnapshot } from "./pool.js";
 import type { DispatchSpawnedResult } from "./result.js";
@@ -28,7 +29,22 @@ import type { DispatchSpawnedResult } from "./result.js";
 // 提案 forge-verification-hardening M5「标记体系」：每轮 review/走查修正波结算落
 // review-wave-N 检查点（Blocker 返工批 / fix 链收口），附标记时刻四列累计计数快照
 // （tasks_total / commits_total / fixes_total / evidence_debts_total——提案统计口径）。
+// 按波聚合（bug fe8d5cb5 用户裁定）：一波 = 一轮评审/走查返出的全部修正任务。波的边界锚 =
+// 派发循环实例 id（LoopInstanceId，经 exclusivity 独占源登记现查——消费点现查不缓存，
+// AGENTS §1.6）：同一循环运行内的全部波点（blocked 结算 + 循环内 fix 链收口）计 1 波；
+// 循环收口后主 agent 交叉评审返单重派 = 新循环实例 = 新波；循环外零散 dispatch_task 无
+// 循环上下文 = 单任务单波（落行条件不变）。同一波内的后续波点命中已落 wave 行则不新增
+// （写入时去重，不事后清洗）；波与循环实例同生命周期（循环不跨进程）——去重登记为进程内
+// map，宿主重启后 resume 的同 id 循环视为延续波之外的新波（可接受边界，注释即契约）。
 // fail-soft：标记失败 diag 告警留痕，不回滚已定结算；依赖缺席（checkpoints 面）= 机制惰性不判，行为零变化。
+
+/** 按波去重登记（进程内——键 = projectKey \0 slug \0 loopId；wave 与循环实例同生命周期） */
+const WAVE_DEDUP_KEYS = new Set<string>();
+
+/** 测试缝：清空按波去重登记（生产零消费——登记随进程生命周期） */
+export function resetReviewWaveDedup(): void {
+  WAVE_DEDUP_KEYS.clear();
+}
 
 /** checkpoints 域服务的结算侧消费面（AppendCheckpointInput 同形单源——插件内结构兼容注入） */
 export interface SettleCheckpointsFace {
@@ -129,19 +145,27 @@ async function recordWaveCheckpoint(
       (ctx.worktreeCwd !== undefined ? await (deps.resolveHeadCommit ?? gitHeadCommit)(ctx.worktreeCwd) : undefined) ??
       ctx.submitCommitHash;
     if (headCommit === undefined) {
+      // 常态降级（无检出路径且无提交 = 无波锚可用）——info 级留痕即可，不刷 warn（bug fe8d5cb5）
       emitForgeDiag(deps.diag, {
-        level: "warn",
+        level: "info",
         event: "forge-settle",
         message: `forge settle: review-wave mark skipped (no base commit) for ${ctx.task.slug}/${ctx.task.localId}`,
         projectId: ctx.projectId,
       });
       return;
     }
+    // 按波去重（写入时）：同 loop 实例（= 同一轮评审/走查）内后续波点命中已落 wave 行则不新增
+    const loopSource = exclusiveLoopSourceOf({ slug: ctx.task.slug });
+    if (loopSource !== undefined) {
+      const dedupKey = `${ctx.projectId}\u0000${ctx.task.slug}\u0000${loopSource.loopId}`;
+      if (WAVE_DEDUP_KEYS.has(dedupKey)) return;
+      WAVE_DEDUP_KEYS.add(dedupKey);
+    }
     const snapshots = await computeWaveSnapshot(deps.tasks, ctx.projectId, { slug: ctx.task.slug });
     await deps.checkpoints.appendCheckpoint({
       projectKey: ctx.projectId,
       containerSlug: ctx.task.slug, // 容器 slug 弱引用锚（proposalId → containerSlug 改锚终态）
-      mark: "review-wave-N", // wave_seq 缺省自动递增（检查点域 max+1——多波标记免记序数）
+      mark: "review-wave-N", // 一波一行（按波聚合去重后每次 append = 新波）；wave_seq 缺省域侧自动递增（免记序数）
       baseCommitHash: headCommit,
       snapshots,
     });
