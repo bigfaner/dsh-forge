@@ -1,6 +1,7 @@
 // bug 四 tool 单测（plugin-project bug 工具面）：参数防御收窄 + cwd→projectId 路由
 // （typed ERR_WORKSPACE_NOT_REGISTERED）+ 服务缝透传（session 键注入/缺席降级）+ 返回面
-// 形状（{cards} 对象包装——bug d8374afd 同族教训：裸数组被 output schema 拒）。
+// 形状（{cards}/{card} 对象包装——bug d8374afd/aac1a701 同族教训：裸值被 output schema 拒）
+// + render 面投影文本。
 import { describe, expect, it, vi } from "vitest";
 import { normalizeFsPath } from "@dsh-forge/lib-path";
 import { createBugTools, type BugToolDefinition } from "./bug-tools.js";
@@ -143,5 +144,12 @@ describe("render 面", () => {
     expect(list[0].text).toContain("(no matching bugs)");
     const rec = tools["record_bug"].output.render({}, { card: cardOf("b1"), errorTypeSuggestions: [] });
     expect(rec[0].text).toContain("✓ Bug registered (open)");
+  });
+
+  it("resolve_bug render 读 {card} 包装（bug b8d896ab）——投影 fixed 状态与 summary", () => {
+    const { tools } = harness();
+    const out = tools["resolve_bug"].output.render({}, { card: cardOf("b1", { bugStatus: "fixed", summary: "guard rejects stale junction" }) });
+    expect(out[0].text).toContain("✓ Bug backfilled (fixed)");
+    expect(out[0].text).toContain("guard rejects stale junction");
   });
 });
