@@ -16,6 +16,8 @@ import { createElement, type ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import type { RpcClientFactory } from './rpc-channels.js'
+import { FORGE_REMOTE_FACE_ANCHOR_KEY, forgeRemoteFaceOf, installForgeRemoteFace } from '../rpc.js'
+import type { DirFactsClientFactory } from './overview/dir-rows.js'
 import { detailFixture } from './overview/drawer/detail-model.test.js'
 import { TransitionDialog } from './overview/drawer/transition-dialog.js'
 import {
@@ -88,14 +90,14 @@ describe('文档 tab legacy 地址编解码（自宿主壳兼容面——官方�
   })
 })
 
-describe('官方渠道文档开出（2.8——ctx.sidebarRight.openResource + 官方 sessionFileAddress）', () => {
+describe('官方渠道文档开出（2.8 openResource + 2.13 数据路 forgeDirs.facts——官方 sessionFileAddress）', () => {
   const forgeDirFixture = 'Z:/proj/.forge'
-  const makeClientOf = (forgeDir: string | null): RpcClientFactory =>
+  /** forgeDirs facts 消费切片替身（DirFactsClientFactory 同型——数据路注入 = 测试面） */
+  const makeDirFactsOf = (forgeDir: string | null): DirFactsClientFactory =>
     (() => ({
-      projects: {
-        get: async () => (forgeDir === null ? null : { id: 'p1', forgeDir }),
-      },
-    })) as unknown as RpcClientFactory
+      facts: async () =>
+        forgeDir === null ? [] : [{ dirKey: 'forgeDir', dir: forgeDir, description: '' }],
+    })) as unknown as DirFactsClientFactory
   const makeSidebarRight = (): { readonly mirror: DockSidebarRightMirror; readonly openResource: ReturnType<typeof vi.fn> } => {
     const openResource = vi.fn()
     return {
@@ -106,7 +108,7 @@ describe('官方渠道文档开出（2.8——ctx.sidebarRight.openResource + �
 
   it('文档行点击 → openResource(官方 dsh-resource://file/session 地址, {kind:"text"})——地址 = 官方 sessionFileAddress 真实产物（禁手拼）', async () => {
     const { mirror, openResource } = makeSidebarRight()
-    const open = dockDocOpener(mirror, 'p1', makeClientOf(forgeDirFixture))
+    const open = dockDocOpener(mirror, 'p1', undefined, makeDirFactsOf(forgeDirFixture))
     expect(open).toBeDefined()
     open!('docs/x/proposal.md')
     await Promise.resolve()
@@ -123,6 +125,57 @@ describe('官方渠道文档开出（2.8——ctx.sidebarRight.openResource + �
     )
   })
 
+  it('生产默认值路径（2.13 零替身）：官方 gateway 面形状 forgeDirs.facts 为唯一数据源装配 → openResource 官方地址', async () => {
+    // 官方 gateway 真机装配形态（rpc.forge-face.test 同构）：namespaces Map + forgeDirs.service.facts
+    const namespaces = new Map([
+      [
+        'forgeDirs',
+        {
+          service: {
+            facts: () =>
+              Promise.resolve({ ok: true, value: [{ dirKey: 'forgeDir', dir: forgeDirFixture, description: '' }] }),
+          },
+        },
+      ],
+    ])
+    installForgeRemoteFace(() => ({ namespaces }) as unknown as ReturnType<typeof forgeRemoteFaceOf>)
+    try {
+      const { mirror, openResource } = makeSidebarRight()
+      // 第三/第四参零注入——走缺省 forgeDirs Typert 真身（修前 = preloadRpcClientFactory，
+      // 无 window.dshForge 环境 invoke 缺席抛 → 被吞 → 本用例必红）
+      const open = dockDocOpener(mirror, 'p1')
+      expect(open).toBeDefined()
+      open!('docs/x/proposal.md')
+      // Typert 通路多一跳 invokeRemote await 链——宏任务兜底等稳
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(openResource).toHaveBeenCalledTimes(1)
+      expect(openResource).toHaveBeenCalledWith(
+        sessionFileAddress('sess-1', joinForgeDocPath(forgeDirFixture, 'docs/x/proposal.md')),
+        { kind: 'text' },
+      )
+    } finally {
+      delete (globalThis as Record<string, unknown>)[FORGE_REMOTE_FACE_ANCHOR_KEY]
+    }
+  })
+
+  it('数据路失败 → 可见错误不吞（2.13）：onError 文案含「文档开出失败」+ 失败原因；openResource 零调用', async () => {
+    const { mirror, openResource } = makeSidebarRight()
+    const onError = vi.fn()
+    const open = dockDocOpener(
+      mirror,
+      'p1',
+      onError,
+      (() => ({ facts: async () => { throw new Error('forgeDirs 通道不可达') } })) as unknown as DirFactsClientFactory,
+    )
+    open!('a.md')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(openResource).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0]?.[0]).toContain('文档开出失败')
+    expect(onError.mock.calls[0]?.[0]).toContain('forgeDirs 通道不可达')
+  })
+
   it('forgeDocFileAddress/joinForgeDocPath 纯面：win 反斜杠归一 + 尾分隔符收口 + 空格/CJK 逐段编码', () => {
     expect(joinForgeDocPath('Z:/proj/.forge/', 'docs\\a b\\设计.md')).toBe('Z:/proj/.forge/docs/a b/设计.md')
     const address = forgeDocFileAddress('sess 1', 'Z:\\proj\\.forge', 'docs/a.md')
@@ -131,30 +184,36 @@ describe('官方渠道文档开出（2.8——ctx.sidebarRight.openResource + �
     expect(joinForgeDocPath('Z:/w', '')).toBe('Z:/w')
   })
 
-  it('任一缺席 → undefined（服务/项目锚）；sessionId 缺席或 forgeDir 解析缺席 → 不开出 fail-soft', async () => {
-    expect(dockDocOpener(undefined, 'p1', makeClientOf(forgeDirFixture))).toBeUndefined()
-    expect(dockDocOpener(makeSidebarRight().mirror, null, makeClientOf(forgeDirFixture))).toBeUndefined()
+  it('任一缺席 → undefined（服务/项目锚）；sessionId 缺席或 forgeDir 行缺席 → 不开出 + onError 可见', async () => {
+    expect(dockDocOpener(undefined, 'p1', undefined, makeDirFactsOf(forgeDirFixture))).toBeUndefined()
+    expect(dockDocOpener(makeSidebarRight().mirror, null, undefined, makeDirFactsOf(forgeDirFixture))).toBeUndefined()
     const noSession = makeSidebarRight()
     ;(noSession.mirror.mounted as { getSnapshot: () => string | undefined }).getSnapshot = () => undefined
-    dockDocOpener(noSession.mirror, 'p1', makeClientOf(forgeDirFixture))!('a.md')
+    dockDocOpener(noSession.mirror, 'p1', undefined, makeDirFactsOf(forgeDirFixture))!('a.md')
     await Promise.resolve()
     await Promise.resolve()
     expect(noSession.openResource).not.toHaveBeenCalled()
     const noForgeDir = makeSidebarRight()
-    dockDocOpener(noForgeDir.mirror, 'p1', makeClientOf(null))!('a.md')
+    const noForgeDirError = vi.fn()
+    dockDocOpener(noForgeDir.mirror, 'p1', noForgeDirError, makeDirFactsOf(null))!('a.md')
     await Promise.resolve()
     await Promise.resolve()
     expect(noForgeDir.openResource).not.toHaveBeenCalled()
+    expect(noForgeDirError.mock.calls[0]?.[0]).toContain('forgeDir 行缺席')
   })
 
-  it('官方 openResource 抛错（无在场面）= fail-soft 不外溢', () => {
+  it('官方 openResource 抛错（无在场面）= 不外溢 + onError 可见（fail-soft 不吞调用期异常）', async () => {
     const throwing: DockSidebarRightMirror = {
       openResource: () => {
         throw new Error('no session surface is mounted')
       },
       mounted: { getSnapshot: () => 'sess-1' },
     }
-    expect(() => dockDocOpener(throwing, 'p1', makeClientOf(forgeDirFixture))!('a.md')).not.toThrow()
+    const onError = vi.fn()
+    expect(() => dockDocOpener(throwing, 'p1', onError, makeDirFactsOf(forgeDirFixture))!('a.md')).not.toThrow()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(onError.mock.calls[0]?.[0]).toContain('no session surface is mounted')
   })
 })
 
@@ -169,6 +228,11 @@ describe('结构钉（2.8 AC②）：project ui 源码零 DSWF_DOC_TAB_KIND 注�
     // 官方渠道缝在场（sessionFileAddress 官方构造器单源 + kind 'text'）
     expect(src).toContain('sessionFileAddress')
     expect(src).toContain("{ kind: 'text' }")
+  })
+  it('2.13 调用期异常可见面在场：OverviewDockBody ErrorBar 装配（数据路失败 → 错误条呈现——不静默吞）', () => {
+    expect(src).toContain('data-dswf-ov-doc-error')
+    expect(src).toContain('onError')
+    expect(src, '零 preload 工厂依赖（2.13——数据路缺省走 forgeDirs Typert facts）').not.toContain('preloadRpcClientFactory')
   })
 })
 

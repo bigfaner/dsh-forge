@@ -13,8 +13,9 @@
 // 文本/图片/pdf/office 渲染）；地址 = 官方 sessionFileAddress(sessionId, join(forgeDir,
 // docRel))（@deepseek-ai/dsh-util-workspace-path 构造器单源，禁手拼字符串）；openResource
 // 内部 require() 自取当前挂载会话动作面（概览 tab 在会话面板内则必成功），sessionId 取
-// 服务 `mounted` 在屏会话快照。forgeDir = forge:projects/get 行 forge_dir 键（overview-data
-// 同源——点击时现查非缓存）。ForgeDocsTab 文档 tab body 与 DSWF_DOC_TAB_KIND 注册/打开
+// 服务 `mounted` 在屏会话快照。forgeDir = forgeDirs Typert facts dirKey 'forgeDir' 行
+// （官方 gateway 面单源，overview-data/dir-rows 同源——点击时现查非缓存；零 preload 依赖：
+// overview-dockkit-alignment 2.13 前置取数与打开动作同走 Typert 通路）。ForgeDocsTab 文档 tab body 与 DSWF_DOC_TAB_KIND 注册/打开
 // 路径退役（forge:docs/read 文档 tab 读取用途随之退役）；DSWF_DOC_ADDRESS_PREFIX/
 // forgeDocAddress/parseForgeDocAddress 保留 = 自宿主 legacy 壳（apps/web ShellHost
 // openDocResource 路径 + 壳侧同源 pin）兼容面，官方宿主零打开径。
@@ -29,8 +30,9 @@ import { useCallback, useEffect, Fragment, useRef, useState, useSyncExternalStor
 import type { TaskStatus } from '@dsh-forge/contracts'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
-import { EmptyState } from '../components.js'
-import { preloadRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
+import { EmptyState, ErrorBar } from '../components.js'
+import type { RpcClientFactory } from './rpc-channels.js'
+import { preloadDirFactsClientFactory, type DirFactsClientFactory } from './overview/dir-rows.js'
 import { anchorProjectResolver } from './anchor-resolver.js'
 import { KEYED_SECTION_M2_KNOWLEDGE_DIR_SLOT } from '../keyed-section.js'
 import './docs/docs.css'
@@ -99,26 +101,31 @@ export function forgeDocFileAddress(sessionId: string, forgeDir: string, docRel:
  * 文档开出动作推导（官方渠道缝）：右栏导航服务与项目锚齐备 → `(docRel) => openResource(
  * forgeDocFileAddress(...), { kind: 'text' })`——官方 documentpreview（kind 'text'，
  * session 作用域）打开。sessionId = 服务 `mounted` 在屏会话快照（点击时点现取）；forgeDir
- * = forge:projects/get 行 forge_dir 键（overview-data 同源，点击时现查非缓存）。任一缺席
- * → undefined（概览文档行/抽屉参考 chip 非交互呈现）。解析/开出异常 fail-soft（warn 留痕
- * ——client bundle 诊断豁免面，同 official-seams 口径），不外溢。
+ * = forgeDirs Typert facts dirKey 'forgeDir' 行（官方 gateway 面唯一数据源——2.13 修口：
+ * 缺省 preloadDirFactsClientFactory 零 preload/window.dshForge 依赖，与打开动作同通路）。
+ * 任一服务缺席 → undefined（概览文档行/抽屉参考 chip 非交互呈现——仅此缺席降级属 fail-soft）。
+ * 调用期异常（数据路不可达/forgeDir 行缺席/openResource 抛错）不吞：经 onError 呈现可见
+ * 错误条（文案含失败原因）+ console.warn 留痕（client bundle 诊断豁免面）。
  */
 export function dockDocOpener(
   sidebarRight: DockSidebarRightMirror | undefined,
   projectId: string | null,
-  makeClient: RpcClientFactory = preloadRpcClientFactory,
+  onError?: (message: string) => void,
+  makeDirFacts: DirFactsClientFactory = preloadDirFactsClientFactory,
 ): ((docRel: string) => void) | undefined {
   if (sidebarRight === undefined || projectId === null) return undefined
   return (docRel: string): void => {
     void (async (): Promise<void> => {
       const sessionId = sidebarRight.mounted?.getSnapshot() ?? ''
       if (sessionId === '') throw new Error('sidebarRight.mounted 缺席——无在屏会话')
-      const project = await makeClient().projects.get(projectId)
-      const forgeDir = project === null ? '' : project.forgeDir
-      if (forgeDir === '') throw new Error(`项目 forgeDir 解析缺席（projectId=${projectId}）`)
+      const rows = await makeDirFacts().facts(projectId)
+      const forgeDir = rows.find((row) => row.dirKey === 'forgeDir')?.dir ?? ''
+      if (forgeDir === '') throw new Error(`forgeDirs facts forgeDir 行缺席（projectId=${projectId}）`)
       sidebarRight.openResource(forgeDocFileAddress(sessionId, forgeDir, docRel), { kind: 'text' })
     })().catch((error: unknown) => {
-      console.warn(`[dsh-forge/project] 文档开出失败（官方 documentpreview 渠道 fail-soft，projectId=${projectId}）`, error)
+      const reason = error instanceof Error ? error.message : String(error)
+      console.warn(`[dsh-forge/project] 文档开出失败（projectId=${projectId}）`, error)
+      onError?.(`文档开出失败：${reason}`)
     })
   }
 }
@@ -167,7 +174,7 @@ export interface OverviewDockAssemblyProps {
   readonly taskFocus?: ForgeTaskFocus | null
   /** feature 选中释放（4.2——用户 pill 菜单切换即释放聚焦覆盖，恢复本地切换） */
   readonly onFeatureUserSwitch?: () => void
-  /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
+  /** RPC client 构造器（缺省 overviewRpcClientFactory Typert 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
 
@@ -262,7 +269,7 @@ export interface OverviewDockBodyProps {
   readonly openSession?: OpenSessionOrchestrator
   /** Bug 行「添加到会话中」（composer-bug-reference 1.4——插件 inject face；缺席 = 按钮不呈现） */
   readonly addBugToSession?: BugQuickAddFn
-  /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
+  /** RPC client 构造器（缺省 overviewRpcClientFactory Typert 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
 }
 
@@ -319,10 +326,26 @@ export function OverviewDockBody({
     [addBugToSession, overview.workspaceId],
   )
 
-  const onOpenDoc = dockDocOpener(sidebarRight, overview.projectId, makeClient)
+  // 文档开出调用期异常可见面（2.13——fail-soft 不吞数据路异常）：dockDocOpener onError
+  // 写回 → ErrorBar 错误条（文案含失败原因；下一次成功开出即清）
+  const [docOpenError, setDocOpenError] = useState<string | null>(null)
+  const handleDocOpenError = useCallback((message: string): void => {
+    setDocOpenError(message)
+  }, [])
+
+  const onOpenDoc = dockDocOpener(sidebarRight, overview.projectId, handleDocOpenError)
 
   return (
-    <OverviewDockAssembly
+    <>
+      {docOpenError !== null ? (
+        <ErrorBar
+          className="dswf-ov-error"
+          message={docOpenError}
+          retryClassName="dswf-ov-retry"
+          anchor="data-dswf-ov-doc-error"
+        />
+      ) : null}
+      <OverviewDockAssembly
       projectId={overview.projectId}
       sessionCount={overview.sessionCount}
       onOpenDoc={onOpenDoc}
@@ -336,7 +359,8 @@ export function OverviewDockBody({
       taskFocus={appliedFocus}
       onFeatureUserSwitch={handleFeatureUserSwitch}
       makeClient={makeClient}
-    />
+      />
+    </>
   )
 }
 
@@ -358,7 +382,7 @@ export interface ForgeOverviewTabProps {
   readonly openSession?: OpenSessionOrchestrator
   /** Bug 行「添加到会话中」（composer-bug-reference 1.4 插件 inject face；缺席 = 按钮不呈现） */
   readonly addBugToSession?: BugQuickAddFn
-  /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
+  /** RPC client 构造器（缺省 overviewRpcClientFactory Typert 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
   /** 概览锚自解析服务缝（fix-11 缺陷 A——桥缺席/桥锚 null 时插件自解析退路；缺席 = 无退路） */
   readonly selfAnchor?: SelfAnchorServices
