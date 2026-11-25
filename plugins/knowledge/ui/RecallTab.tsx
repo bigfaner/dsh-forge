@@ -61,6 +61,7 @@ import {
   recallCallHead,
   recallDatetimeLabel,
   recallScoreLabel,
+  recallSnapshotMeta,
   recallStatsOf,
   recallTurnsOf,
 } from './recall-model.js'
@@ -781,14 +782,31 @@ export function RecallSnapshotDialog({ title, contentSnap, onClose }: {
   )
 }
 
-/** 快照 dialog 内容（纯渲染、无 Modal——头行 + MarkdownDoc 渲染正文 + 快照语义注记） */
+/** 快照 dialog 内容（纯渲染、无 Modal——与就地详情同形：元数据行 + 标题/摘要 + MarkdownDoc 渲染正文；
+ *  字段全部取自召回时点快照，缺席即不渲染该行） */
 export function RecallSnapshotContent({ contentSnap }: { readonly contentSnap: string }): ReactNode {
   const parts = recallSnapshotParts(contentSnap)
+  const snap = recallSnapshotMeta(parts.body)
+  const rows: ReactNode[] = []
+  if (snap.status !== null) {
+    rows.push(
+      <div className="dswf-recall-entrymrow" key="status"><span className="dswf-recall-entrymk">状态</span><span><StateChip status={snap.status} /></span></div>,
+    )
+  }
+  if (snap.keywords.length > 0) {
+    rows.push(
+      <div className="dswf-recall-entrymrow" key="keywords"><span className="dswf-recall-entrymk">关键词</span><span className="dswf-recall-entrykws">
+        {snap.keywords.map((keyword) => <Tag key={keyword} tone="info">{keyword}</Tag>)}
+      </span></div>,
+    )
+  }
   return (
     <div className="dswf-recall-snap" data-dswf-recall-snap="">
-      {parts.head !== '' ? <div className="dswf-recall-snaphead">{parts.head}</div> : null}
+      {rows.length > 0 ? <div className="dswf-recall-entrymetas">{rows}</div> : null}
+      {snap.title !== null ? <h3 className="dswf-recall-entrytitle">{snap.title}</h3> : null}
+      {snap.summary !== null ? <p className="dswf-recall-entryabs">{snap.summary}</p> : null}
       <div className="dswf-recall-snapbody">
-        <MarkdownDoc text={parts.body} variant="body" labels={MD_PREVIEW_MARKDOWN_LABELS} />
+        <MarkdownDoc text={snap.body} variant="body" labels={MD_PREVIEW_MARKDOWN_LABELS} />
       </div>
       <div className="dswf-recall-snapnote">召回时点快照，非实时读源文档。</div>
     </div>

@@ -374,22 +374,9 @@
   width: min(950px, 100%);
 }
 
-/* 快照全文块（render 头行 + Markdown 渲染正文块 + 快照语义注记） */
-.dswf-recall-snaphead {
-  padding: 4px 8px; /* dsw-raw 头行贴排刻度 */
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-1);
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-secondary);
-}
-
+/* 快照 dialog 正文块（MarkdownDoc 官方排版自带——分区只管滚动容器内留白，同详情 dialog 正文区） */
 .dswf-recall-snapbody {
-  max-height: 60vh; /* 快照块滚动上界（视口比例刻度） */
-  margin: 8px 0 0; /* 头行/正文贴排刻度 */
-  padding: 12px;
-  overflow-y: auto;
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-2);
+  margin-top: 8px;
 }
 
 .dswf-recall-snapnote {

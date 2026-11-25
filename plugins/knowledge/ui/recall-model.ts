@@ -220,3 +220,63 @@ export function recallDatetimeLabel(iso: string): string {
 export function recallScoreLabel(score: number | null): string | null {
   return score === null ? null : `(score ${score.toFixed(2)})`
 }
+
+/** read 快照 frontmatter 可呈现字段（缺省 null/空 = 快照未携带，渲染层宁缺不假） */
+export interface RecallSnapshotMeta {
+  readonly title: string | null
+  readonly summary: string | null
+  readonly keywords: readonly string[]
+  readonly status: string | null
+  /** 剥离 frontmatter 后的正文 */
+  readonly body: string
+}
+
+const FM_OPEN = /^---\r?\n/
+const FM_CLOSE = /^(?:---|\.\.\.)\r?$/
+const FM_KEY = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/
+
+/** 去成对引号包裹 */
+function fmValue(raw: string): string {
+  const s = raw.trim()
+  return s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))
+    ? s.slice(1, -1)
+    : s
+}
+
+/**
+ * 拆 read 快照开头的 YAML frontmatter（容错：只认 `key: value` 与 `keywords:` 下 `- 项` 列表；
+ * 未闭合 fence 视为无 frontmatter，全文归正文——不吞正文）。
+ */
+export function recallSnapshotMeta(contentSnap: string): RecallSnapshotMeta {
+  const none = { title: null, summary: null, keywords: [], status: null }
+  if (!FM_OPEN.test(contentSnap)) return { ...none, body: contentSnap }
+  const lines = contentSnap.split('\n')
+  const close = lines.findIndex((line, i) => i > 0 && FM_CLOSE.test(line))
+  if (close === -1) return { ...none, body: contentSnap }
+  const meta: { title: string | null; summary: string | null; keywords: string[]; status: string | null } = {
+    title: null,
+    summary: null,
+    keywords: [],
+    status: null,
+  }
+  let inKeywords = false
+  for (const line of lines.slice(1, close)) {
+    const item = /^\s+-\s*(.+)$/.exec(line)
+    if (inKeywords && item !== null) {
+      meta.keywords.push(fmValue(item[1] ?? ''))
+      continue
+    }
+    inKeywords = false
+    const kv = FM_KEY.exec(line)
+    const key = kv?.[1]
+    const value = kv?.[2] ?? ''
+    if (key === 'keywords' && value === '') inKeywords = true
+    else if (key === 'keywords') {
+      meta.keywords = value.replace(/^\[|\]$/g, '').split(/[,，]/).map((k) => fmValue(k)).filter((k) => k !== '')
+    }
+    else if (key === 'title') meta.title = fmValue(value) || null
+    else if (key === 'summary') meta.summary = fmValue(value) || null
+    else if (key === 'status') meta.status = fmValue(value) || null
+  }
+  return { ...meta, body: lines.slice(close + 1).join('\n').replace(/^\r?\n/, '') }
+}

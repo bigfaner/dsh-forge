@@ -26,7 +26,7 @@ import {
   submitRecallFeedback,
   type RecallLoadState,
 } from './RecallTab.js'
-import { recallTurnsOf } from './recall-model.js'
+import { recallSnapshotMeta, recallTurnsOf } from './recall-model.js'
 import type { ForgeRpcClient } from './rpc-channels.js'
 
 const hit = (over: Partial<RecallGroupHit>): RecallGroupHit => ({
@@ -247,7 +247,30 @@ describe('recallSnapshotParts（read 快照头行拆分——Modal 承载归装�
     expect(markup).not.toContain('title: x')
     expect(markup).toContain('<h2')
     expect(markup).toContain('<strong>粗</strong>')
-    expect(markup).toContain('标题 (id, confirmed, ts)')
+  })
+
+  it('快照 dialog 与就地详情同形：frontmatter 字段升为状态/关键词行 + 标题/摘要，正文不含 frontmatter', () => {
+    const markup = renderToStaticMarkup(
+      <RecallSnapshotContent
+        contentSnap={'# 旧头 (id, confirmed, ts)\n---\ntitle: 条目标题\nsummary: 摘要一句\nkeywords:\n  - 插件装载\n  - client-bundle\nstatus: confirmed\n---\n\n## 结构事实\n正文'}
+      />,
+    )
+    expect(markup).toContain('条目标题')
+    expect(markup).toContain('摘要一句')
+    expect(markup).toContain('插件装载')
+    expect(markup).toContain('client-bundle')
+    expect(markup).toContain('召回时点快照，非实时读源文档。')
+    expect(markup).not.toContain('summary:')
+    expect(markup).not.toContain('keywords:')
+    expect(markup).not.toContain('<pre')
+  })
+
+  it('快照无 frontmatter / fence 未闭合：全文归正文，不渲染元数据行', () => {
+    expect(recallSnapshotMeta('纯正文')).toMatchObject({ title: null, keywords: [], body: '纯正文' })
+    const unclosed = '---\ntitle: x\n正文标题\n内容'
+    expect(recallSnapshotMeta(unclosed)).toMatchObject({ title: null, body: unclosed })
+    const quotes = '---\ntitle: "带引号"\nkeywords: [a, b]\nstatus: \'draft\'\n---\n正文'
+    expect(recallSnapshotMeta(quotes)).toEqual({ title: '带引号', summary: null, keywords: ['a', 'b'], status: 'draft', body: '正文' })
   })
 })
 
