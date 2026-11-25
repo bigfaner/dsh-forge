@@ -575,11 +575,6 @@ export interface SettleStageInput {
    * 在场且非空 = 欠账卡指示「比对 E2E_BASELINE_RED 行」；缺席/空 = 兜底文案。
    */
   readonly e2eBaselineRedCases?: readonly string[]
-  /**
-   * 容器 → 提案 id 映射（机械④——review-wave-N 检查点 proposal_id 归属锚；循环径由
-   * loop.proposalId 透传。缺席 = recordWaveCheckpoint 惰性不判，行为零变化）。
-   */
-  readonly proposalId?: string
 }
 
 /** settle 阶段返回（DispatchTaskResult 的 spawned/失败/halted 三分支 + killed——killed 仅
@@ -613,7 +608,6 @@ export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreEx
     ...(input.worktreeCwd !== undefined ? { worktreeCwd: input.worktreeCwd } : {}),
     ...(input.docsRoot !== undefined ? { docsRoot: input.docsRoot } : {}),
     ...(input.e2eBaselineRedCases !== undefined ? { e2eBaselineRedCases: input.e2eBaselineRedCases } : {}),
-    ...(input.proposalId !== undefined ? { proposalId: input.proposalId } : {}),
     ...(deps.reportRecovery !== undefined ? { reportRecovery: deps.reportRecovery } : {}),
   });
   if (settlement.case === "settled") {

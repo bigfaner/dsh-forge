@@ -27,7 +27,7 @@ import { createTriageHook } from "../triage/triage.js";
 import { createRecurrenceFaces, type RecurrenceBugsFace } from "../dispatch-core/recurrence-faces.js";
 import { forgeDirOfWorkspace, workspaceDocsRoot } from "@dsh-forge/lib-path";
 import { join } from "node:path";
-import { createSettleReportRecovery } from "../dispatch-core/settle.js";
+import { createSettleReportRecovery, type SettleReportRecoveryDeps } from "../dispatch-core/settle.js";
 import { createUnionToolNamesProbe, type AgentPresetsFace, type ToolsSchemasReader } from "@dsh-forge/contracts";
 import {
   adaptAgentNarrationChannel,
@@ -72,6 +72,12 @@ export interface ToolFamilyAssembly {
   readonly tools: readonly TaskToolDefinition[];
   /** 循环内核卸载收口（driver.dispose——活循环同步终态注销；插件 disposer 组成员） */
   readonly disposeLoop: () => void;
+  /**
+   * AC7 结算报告回收钩子（bug a31b96a2 回归锚观测面）：tasksHome 注入形态下的生产回收缝
+   * （specsIssuesDir/taskLogsDir 注入单源）。装配回归锚经真实结算核消费它断言落点；
+   * tasksHome 缺席（单装缺省形态）= undefined。
+   */
+  readonly reportRecovery?: SettleReportRecoveryDeps;
 }
 
 /** agents 注册表现查（AGENTS 1.6——调用期求值不缓存；缺席/劣形/抛错 = undefined） */
@@ -337,5 +343,5 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     event: "task-loop-tools",
     message: `单装工具族装配完成：${String(tools.length)} 员（10 任务动词 + batch_add_tasks + impl_checkpoint 三员 + dispatch/stop）`,
   });
-  return { tools, disposeLoop: () => driver.dispose() };
+  return { tools, disposeLoop: () => driver.dispose(), reportRecovery };
 }

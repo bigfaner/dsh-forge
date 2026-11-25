@@ -3,7 +3,7 @@
 //   ② 服务常驻 provider：db 打开即 provide forgeTasks/forgeCheckpoints 具名服务（方法面完整）；
 //   ③ 任务目录缺省约定：home 缺省 = env DSH_HOME（显式 config.home 覆写；双缺 = 降级零 provide）。
 // 附：启动对账接线（loop_sourced in_progress → interrupted 收敛）+ 具名服务 provide/降级径。
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -17,6 +17,10 @@ import {
   resolveTaskLoopHome,
 } from "../../host/assembly/default-assembly.js";
 import { listDistinctProjectKeys } from "../../host/domain/tasks/query.js";
+import { settleWorkerRun } from "../../host/dispatch-core/settle.js";
+import { assembleTaskLoopToolFamily } from "../../host/assembly/tool-family.js";
+import type { TaskSnapshot } from "../../host/domain/tasks/types.js";
+import type { SpawnWorkerHandle } from "../../host/dispatch-core/spawn.js";
 import { TASK_LOOP_DB_DEFAULT_DIR, TASK_LOOP_DB_FILENAME } from "../../shared/contract-constants.js";
 
 const dirs: string[] = [];
@@ -266,6 +270,85 @@ describe("bug 四动词白名单（装配接线结构锚——bug 044a310c 同�
       const toolsLine = md.split("\n").find((l) => l.startsWith("tools:")) ?? "";
       for (const name of required) expect(toolsLine.includes(name), `${rel} 缺 ${name}`).toBe(true);
       expect(md.match(/\b(getBug|listBugs|recordBug|resolveBug|aggregateBugs)\b/), `${rel} 驼峰旧名残留`).toBeNull();
+    }
+  });
+});
+
+describe("结算报告回收装配回归锚（bug a31b96a2——proposalId 门退役 + 落点锚）", () => {
+  const PROJECT_KEY = "p-recovery";
+
+  /** tasksHome 注入形态装配（回收缝单源：真实 services + tool-family 装配产物） */
+  function assembleWithRecovery(ws: string, tasksHome: string, entries: Array<{ level?: string; message?: string }>) {
+    const { ctx } = stubCtx();
+    (ctx as { emit?: unknown }).emit = (_event: string, payload: { level?: string; message?: string }) => {
+      entries.push(payload);
+    };
+    const services = assembleTaskLoopServices({
+      home: tmpHome(),
+      dbFile: ":memory:",
+      tasksHome,
+      resolveWsPath: (key) => (key === PROJECT_KEY ? ws : ""),
+    })!;
+    const family = assembleTaskLoopToolFamily({ services, ctx, diag: () => {} });
+    return { services, family };
+  }
+
+  function okHandle(): SpawnWorkerHandle {
+    return {
+      workerSessionId: "worker-1",
+      result: Promise.resolve({ stopReason: "end_turn", output: "done" }),
+      dispose: async () => {},
+    };
+  }
+
+  it("真实结算核：tasksHome 运行时任务目录顶层 .md 结算后复制进 <ws>/.forge/specs/<slug>/issues/<localId>/；预置 spec.md 不被覆盖", async () => {
+    const ws = tmpHome();
+    const tasksHome = tmpHome();
+    const entries: Array<{ level?: string; message?: string }> = [];
+    const { services, family } = assembleWithRecovery(ws, tasksHome, entries);
+    try {
+      // 装配锚：tasksHome 注入形态下回收缝在场（漏接变异即红）
+      expect(family.reportRecovery).not.toBeUndefined();
+
+      // 运行时任务目录（真实 mkdtemp 树）顶层放 .md 报告——localId 随真实任务编号
+      const derivedKey = services.db.projectKeyOf(ws);
+      const specMd = join(ws, ".forge", "specs", "alpha", "spec.md");
+      mkdirSync(join(ws, ".forge", "specs", "alpha"), { recursive: true });
+      writeFileSync(specMd, "# 既有 Spec 正本\n", "utf8");
+
+      // 真实任务域：add → claim → submit（success 结算落 completed）
+      await services.tasks.addTask({ projectKey: PROJECT_KEY, slug: "alpha", title: "T", type: "doc" });
+      const claimed = await services.tasks.claimTask({ projectKey: PROJECT_KEY, sessionId: "s-1", source: { slug: "alpha" } });
+      const task = claimed.task as TaskSnapshot;
+      const runtimeDir = join(tasksHome, derivedKey, "logs", "alpha", task.localId);
+      mkdirSync(runtimeDir, { recursive: true });
+      writeFileSync(join(runtimeDir, "settle-report.md"), "# 结算回收证明\n", "utf8");
+      await services.tasks.submitTask({
+        projectKey: PROJECT_KEY,
+        taskRef: { slug: "alpha", localId: task.localId },
+        result: "success",
+        summary: "done",
+      });
+
+      // 经 assembleTaskLoopToolFamily 装配的生产回收缝驱动真实结算核
+      const settlement = await settleWorkerRun(
+        { tasks: services.tasks, reportRecovery: family.reportRecovery!, diag: (p) => entries.push(p) },
+        { projectId: PROJECT_KEY, task, digest: "d", handle: okHandle(), spawnStartedAt: Date.now() },
+      );
+      expect(settlement.case).toBe("settled");
+      if (settlement.case !== "settled") return;
+      expect(settlement.result.outcome).toBe("success");
+
+      // 回收落点断言（tool-family 落点改回 docs/proposals 或删掉 specsIssuesDir 注入 → 本断言红）
+      const issuesDir = join(ws, ".forge", "specs", "alpha", "issues", task.localId);
+      expect(readFileSync(join(issuesDir, "settle-report.md"), "utf8")).toBe("# 结算回收证明\n");
+      // 既有 Spec 文档不被覆盖
+      expect(readFileSync(specMd, "utf8")).toBe("# 既有 Spec 正本\n");
+      // 运行时原件不动（复制非移动）
+      expect(existsSync(join(runtimeDir, "settle-report.md"))).toBe(true);
+    } finally {
+      family.disposeLoop();
+      services.dispose();
     }
   });
 });

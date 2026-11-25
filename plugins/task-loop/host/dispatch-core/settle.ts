@@ -28,8 +28,7 @@ import type { DispatchSpawnedResult } from "./result.js";
 // 提案 forge-verification-hardening M5「标记体系」：每轮 review/走查修正波结算落
 // review-wave-N 检查点（Blocker 返工批 / fix 链收口），附标记时刻四列累计计数快照
 // （tasks_total / commits_total / fixes_total / evidence_debts_total——提案统计口径）。
-// fail-soft：标记失败 diag 告警留痕，不回滚已定结算；依赖缺席（checkpoints 面 /
-// proposalId 映射）= 机制惰性不判，行为零变化。
+// fail-soft：标记失败 diag 告警留痕，不回滚已定结算；依赖缺席（checkpoints 面）= 机制惰性不判，行为零变化。
 
 /** checkpoints 域服务的结算侧消费面（AppendCheckpointInput 同形单源——插件内结构兼容注入） */
 export interface SettleCheckpointsFace {
@@ -117,14 +116,14 @@ async function recordWaveCheckpoint(
   ctx: {
     readonly projectId: string
     readonly task: TaskSnapshot
-    readonly proposalId?: string
     readonly worktreeCwd?: string
     readonly submitCommitHash?: string
     readonly outcome: "success" | "blocked"
   },
 ): Promise<void> {
   try {
-    if (deps.checkpoints === undefined || ctx.proposalId === undefined) return;
+    // proposalId 门已退役（bug a31b96a2——proposal 域下线，检查点服务已改 containerSlug 归属）
+    if (deps.checkpoints === undefined) return;
     if (!isReviewWavePoint(ctx.task, ctx.outcome)) return;
     const headCommit =
       (ctx.worktreeCwd !== undefined ? await (deps.resolveHeadCommit ?? gitHeadCommit)(ctx.worktreeCwd) : undefined) ??
@@ -311,7 +310,8 @@ export async function recoverSettleReports(
     });
     if (runtimeDir === undefined || issuesDir === undefined) {
       emitForgeDiag(deps.diag, {
-        level: "info",
+        // warn（bug a31b96a2——装配漏接 = 生产回收恒不触发，不得静默 info）
+        level: "warn",
         event: "forge-settle",
         message: `forge settle: report recovery skipped (path resolution unavailable) for ${taskKey}`,
         projectId: ctx.projectId,
@@ -515,7 +515,7 @@ export async function settleWorkerRun(
     readonly diag?: ForgeDiagEmitFace
     /**
      * AC7 结算旁挂回收缝（loop-recurrence-hardening §2.4——可选；缺席 = 机制惰性不判，
-     * 行为零变化）。success 结算 + proposalId 在场时后置回收，fail-soft 不影响结算态。
+     * 行为零变化）。success 结算后置回收，fail-soft 不影响结算态。
      */
     readonly reportRecovery?: SettleReportRecoveryDeps
     /**
@@ -546,11 +546,6 @@ export async function settleWorkerRun(
     readonly docsRoot?: string
     /** 本轮 claim 简报红灯清单（改进7——欠账卡文案一致性判据；缺席/空 = 兜底文案） */
     readonly e2eBaselineRedCases?: readonly string[]
-    /**
-     * 容器 → 提案 id 映射（机械④——review-wave-N 检查点 proposal_id 归属；由装配/循环侧
-     * 经提案谱系解析传入。缺席 = 不落修正波标记，行为零变化）。
-     */
-    readonly proposalId?: string
     readonly handle: SpawnWorkerHandle
     /** spawn 起点（durationMs 基准） */
     readonly spawnStartedAt: number
@@ -642,15 +637,16 @@ export async function settleWorkerRun(
     {
       projectId: ctx.projectId,
       task: ctx.task,
-      proposalId: ctx.proposalId,
       worktreeCwd: ctx.worktreeCwd,
       submitCommitHash: submit.commitHash,
       outcome,
     },
   );
   // AC7 旁挂回收（结算成功后置——不进结算事务）：success 结算回收运行时目录顶层 .md 报告
-  // 进 specs 卷宗 issues；fail-soft（内部全路径诊断留痕），结算态零影响
-  if (outcome === "success" && deps.reportRecovery !== undefined && ctx.proposalId !== undefined) {
+  // 进 specs 卷宗 issues；fail-soft（内部全路径诊断留痕），结算态零影响。
+  // proposalId 门已退役（bug a31b96a2——proposal 域下线，装配层从未注入 resolveProposalId
+  // 导致生产恒不触发）；现 success + reportRecovery 在场即执行。
+  if (outcome === "success" && deps.reportRecovery !== undefined) {
     await recoverSettleReports(
       { recovery: deps.reportRecovery, diag: deps.diag },
       { projectId: ctx.projectId, task: ctx.task },

@@ -5,7 +5,7 @@
 // append-only 双触发器在场）+ createCheckpointsService 真实实现（mark 词汇 / wave_seq
 // max+1 自动递增 / 里程碑唯一预检 / 容器 slug 弱引用零 FK），经 LoopDriverDeps.checkpoints
 // 注入——断言真实落行与唯一约束兜底（重复 append 抛错被 fail-soft 吞、下轮自愈）。
-// resolveProposalId/resolveHeadCommit 同 index.ts 装配形态注入——first-pass-complete 与
+// resolveHeadCommit 同 index.ts 装配形态注入——first-pass-complete 与
 // review-wave-N 各至少一例真实落行。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AddTaskInput } from '../../host/domain/tasks/add.js'
@@ -202,7 +202,6 @@ function build(options: { claim: ClaimTaskResult[]; stats?: TaskStats[]; lists?:
     narrator,
     events: sink,
     checkpoints: options.face ?? seam.face,
-    resolveProposalId: async () => 'prop-1',
     resolveHeadCommit: async () => 'head-9',
     commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
     delays: { backoffBaseMs: 1, patiencePauseMs: 1, quiescenceWindowMs: 1, quiescencePollMs: 1 },

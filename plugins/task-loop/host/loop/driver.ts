@@ -511,12 +511,6 @@ export interface LoopDriverDeps {
    */
   readonly checkpoints?: LoopCheckpointsFace;
   /**
-   * 容器 → 提案 id 解析（结算核 review-wave 标记的 proposalId 归属透传——装配面经提案谱系
-   * 注入；缺席/未命中 = 机制惰性不判，行为零变化。slug 化：checkpoints 域锚已改 containerSlug，
-   * 本面仅服务 dispatch-core 结算核入参透传，主会话统一收口）
-   */
-  readonly resolveProposalId?: (projectId: string, source: ContainerRef) => Promise<string | undefined>;
-  /**
    * 容器分支 HEAD 解析器（标记时点 base_commit_hash——缺省回落 gitHeadCommit 真解析；
    * 单测注入桩。worktree 缺席或解析故障 = 回落最近一次结算 commit hash，双缺席 = 标记跳过）
    */
@@ -642,8 +636,6 @@ interface ActiveLoop {
   readonly e2eAttributed: Set<string>;
   /** 轮数总量计数（生命周期总量——resume 续用不清零；达 maxRounds 即终局） */
   rounds: number;
-  /** 机械③：提案 id（start 时解析一次的结算核 review-wave 归属透传锚；缺席 = 机制惰性不判） */
-  proposalId?: string;
   /** 机械③：最近一次 success 结算 commit hash（标记时点 HEAD 的回落锚——worktree 缺席径） */
   lastCommitHash?: string;
   /**
@@ -1251,19 +1243,6 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         return { ok: true, loopId: id };
       }
       emitLoopDiag(loop, "info", "loop-start", `容器 ${source.slug} 派发循环启动`); // 启动里程碑
-      // 机械③：提案 id 解析（结算核 review-wave 归属透传锚——fail-soft，缺席 = 机制惰性不判）
-      if (deps.resolveProposalId !== undefined) {
-        try {
-          loop.proposalId = await deps.resolveProposalId(projectId, source);
-        } catch (cause) {
-          emitLoopDiag(
-            loop,
-            "warn",
-            "loop-proposal-id",
-            `forge loop proposal id resolve failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
-          );
-        }
-      }
       // e2e 红灯基线门（改进7/bug 006d8bfe 后台化）：基线跑批移入循环 fiber——
       // start 立即返回启动回执（工具调用面零阻塞——长跑/挂死套件曾把 start 卡满全量窗）。
       // runRound 首领任务前 await ensureE2eBaseline（in-flight 去重 + 实例缓存同源——挂起/
@@ -1837,9 +1816,6 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     // 在场时欠账卡才指示「比对 E2E_BASELINE_RED 行」；无红灯/基线未接线 = 兜底文案
     // （不指示真机不存在的简报行）
     ...(baseline !== undefined && baseline.redCases.length > 0 ? { e2eBaselineRedCases: baseline.redCases } : {}),
-    // 机械④（bug 548ea94b 装配断链修复）：提案 id 归属锚随结算输入透传——recordWaveCheckpoint
-    // 的 proposalId 缺席短路恒不触发，此映射是修正波标记的真实结算路径开关
-    ...(loop.proposalId !== undefined ? { proposalId: loop.proposalId } : {}),
   });
   record.inFlight = undefined; // 结算已定（success/blocked/killed/失败同径）——在飞清位
   if (signal.aborted) return unwindOutcome(loop); // stop 径终态注销 / pause 径挂起保留登记
