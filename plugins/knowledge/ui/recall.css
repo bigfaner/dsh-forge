@@ -367,18 +367,14 @@
 
 /* ── read 快照 / 就地详情 / 负反馈说明 三 dialog（官方 Modal 卡面——产品内容面）── */
 
-/* 召回 tab 双知识 dialog 放宽（用户裁决：默认卡面 380px 过窄，×2.5 = 950px——
- * read 快照全文与条目详情 Markdown 正文的长行可读性；先例同 dswt-create/risk-modal） */
-.dswf-recall-snapmodal,
+/* 召回 tab 知识 dialog 放宽（用户裁决：默认卡面 380px 过窄，×2.5 = 950px——
+ * read 快照全文与条目详情 Markdown 正文的长行可读性；先例同 dswt-create/risk-modal）。
+ * read 快照 dialog 与就地详情 dialog 同用 entrymodal（布局逐位对齐） */
 .dswf-recall-entrymodal {
   width: min(950px, 100%);
 }
 
-/* 快照 dialog 正文块（MarkdownDoc 官方排版自带——分区只管滚动容器内留白，同详情 dialog 正文区） */
-.dswf-recall-snapbody {
-  margin-top: 8px;
-}
-
+/* 快照 dialog 尾行注记（与就地详情 dialog 的唯一差异） */
 .dswf-recall-snapnote {
   margin-top: 8px; /* dsw-raw 注记贴排刻度 */
   font: var(--dsw-font-xxs-12);

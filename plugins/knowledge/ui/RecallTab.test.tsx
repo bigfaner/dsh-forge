@@ -18,6 +18,7 @@ import {
   recallFeedbackFailureText,
   RecallCardView,
   recallSnapshotParts,
+  RecallEntryDialogBody,
   RecallSnapshotContent,
   RecallTab,
   RecallTabBody,
@@ -239,6 +240,8 @@ describe('recallSnapshotParts（read 快照头行拆分——Modal 承载归装�
   it('快照 dialog 正文经 MarkdownDoc 渲染（非 pre 原文）：frontmatter 剥离、标题成 h2', () => {
     const markup = renderToStaticMarkup(
       <RecallSnapshotContent
+        title="标题"
+        domain="lessons"
         contentSnap={'# 标题 (id, confirmed, ts)\n---\ntitle: x\n---\n\n## 结构事实\n正文 **粗**'}
       />,
     )
@@ -249,28 +252,54 @@ describe('recallSnapshotParts（read 快照头行拆分——Modal 承载归装�
     expect(markup).toContain('<strong>粗</strong>')
   })
 
-  it('快照 dialog 与就地详情同形：frontmatter 字段升为状态/关键词行 + 标题/摘要，正文不含 frontmatter', () => {
+  it('快照 dialog 与就地详情同形：frontmatter 字段升为域/状态/作者/关键词四行 + 标题/摘要，正文不含 frontmatter', () => {
     const markup = renderToStaticMarkup(
       <RecallSnapshotContent
-        contentSnap={'# 旧头 (id, confirmed, ts)\n---\ntitle: 条目标题\nsummary: 摘要一句\nkeywords:\n  - 插件装载\n  - client-bundle\nstatus: confirmed\n---\n\n## 结构事实\n正文'}
+        title="兜底标题"
+        domain="lessons"
+        contentSnap={'# 旧头 (id, confirmed, ts)\n---\ntitle: 条目标题\nsummary: 摘要一句\nkeywords:\n  - 插件装载\n  - client-bundle\nstatus: confirmed\nauthors: 张三\n---\n\n## 结构事实\n正文'}
       />,
     )
-    expect(markup).toContain('条目标题')
-    expect(markup).toContain('摘要一句')
-    expect(markup).toContain('插件装载')
-    expect(markup).toContain('client-bundle')
+    for (const text of ['域', 'lessons', '状态', 'confirmed', '作者', '张三', '条目标题', '摘要一句', '插件装载', 'client-bundle']) {
+      expect(markup).toContain(text)
+    }
+    expect(markup).not.toContain('兜底标题')
     expect(markup).toContain('召回时点快照，非实时读源文档。')
     expect(markup).not.toContain('summary:')
     expect(markup).not.toContain('keywords:')
     expect(markup).not.toContain('<pre')
   })
 
-  it('快照无 frontmatter / fence 未闭合：全文归正文，不渲染元数据行', () => {
+  it('快照字段缺席降级「—」（域/状态/作者/关键词恒四行，标题退命中行标题）', () => {
+    const markup = renderToStaticMarkup(
+      <RecallSnapshotContent title="命中标题" domain="" contentSnap="纯正文" />,
+    )
+    expect(markup).toContain('命中标题')
+    // 域/状态/作者/关键词 四行 + 摘要，共五处降级
+    expect(markup.match(/—/g)?.length).toBe(5)
+  })
+
+  it('布局逐位对齐就地详情 dialog ready 态：类名序列一致（快照仅多尾行注记）', () => {
+    const classNames = (html: string): string[] => Array.from(html.matchAll(/class="([^"]+)"/g), (m) => m[1] ?? '')
+    const snap = classNames(renderToStaticMarkup(
+      <RecallSnapshotContent title="标题" domain="lessons" contentSnap={'---\ntitle: 标题\nsummary: 摘要\nstatus: confirmed\n---\n正文'} />,
+    ))
+    const entry = classNames(renderToStaticMarkup(
+      <RecallEntryDialogBody
+        state={{ phase: 'ready', error: undefined, detail: { entryId: 1, title: '标题', summary: '摘要', keywords: [], status: 'confirmed', domainPath: 'lessons', authors: null, updated: '', body: '正文' } }}
+        retry={() => {}}
+      />,
+    ))
+    expect(snap.slice(0, -1)).toEqual(entry)
+    expect(snap.at(-1)).toBe('dswf-recall-snapnote')
+  })
+
+  it('快照无 frontmatter / fence 未闭合：全文归正文', () => {
     expect(recallSnapshotMeta('纯正文')).toMatchObject({ title: null, keywords: [], body: '纯正文' })
     const unclosed = '---\ntitle: x\n正文标题\n内容'
     expect(recallSnapshotMeta(unclosed)).toMatchObject({ title: null, body: unclosed })
     const quotes = '---\ntitle: "带引号"\nkeywords: [a, b]\nstatus: \'draft\'\n---\n正文'
-    expect(recallSnapshotMeta(quotes)).toEqual({ title: '带引号', summary: null, keywords: ['a', 'b'], status: 'draft', body: '正文' })
+    expect(recallSnapshotMeta(quotes)).toEqual({ title: '带引号', summary: null, keywords: ['a', 'b'], status: 'draft', authors: null, body: '正文' })
   })
 })
 

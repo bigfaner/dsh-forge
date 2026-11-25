@@ -769,43 +769,44 @@ export function recallSnapshotParts(contentSnap: string): { head: string; body: 
     : { head: '', body: contentSnap }
 }
 
-/** 快照 dialog 纯渲染（Modal 内内容——静态可测） */
-export function RecallSnapshotDialog({ title, contentSnap, onClose }: {
+/** 快照 dialog 纯渲染（Modal 内内容——Modal 类名同就地详情 dialog） */
+export function RecallSnapshotDialog({ title, contentSnap, domain, onClose }: {
   readonly title: string
   readonly contentSnap: string
+  readonly domain: string
   readonly onClose: () => void
 }): ReactNode {
   return (
-    <Modal open onClose={onClose} title={title} closeLabel="关闭" className="dswf-recall-snapmodal">
-      <RecallSnapshotContent contentSnap={contentSnap} />
+    <Modal open onClose={onClose} title={title} closeLabel="关闭" className="dswf-recall-entrymodal">
+      <RecallSnapshotContent title={title} domain={domain} contentSnap={contentSnap} />
     </Modal>
   )
 }
 
-/** 快照 dialog 内容（纯渲染、无 Modal——与就地详情同形：元数据行 + 标题/摘要 + MarkdownDoc 渲染正文；
- *  字段全部取自召回时点快照，缺席即不渲染该行） */
-export function RecallSnapshotContent({ contentSnap }: { readonly contentSnap: string }): ReactNode {
-  const parts = recallSnapshotParts(contentSnap)
-  const snap = recallSnapshotMeta(parts.body)
-  const rows: ReactNode[] = []
-  if (snap.status !== null) {
-    rows.push(
-      <div className="dswf-recall-entrymrow" key="status"><span className="dswf-recall-entrymk">状态</span><span><StateChip status={snap.status} /></span></div>,
-    )
-  }
-  if (snap.keywords.length > 0) {
-    rows.push(
-      <div className="dswf-recall-entrymrow" key="keywords"><span className="dswf-recall-entrymk">关键词</span><span className="dswf-recall-entrykws">
-        {snap.keywords.map((keyword) => <Tag key={keyword} tone="info">{keyword}</Tag>)}
-      </span></div>,
-    )
-  }
+/**
+ * 快照 dialog 内容（纯渲染、无 Modal）——布局与类名逐位同 RecallEntryDialogBody ready 态
+ * （域/状态/作者/关键词 四行 + 标题 + 摘要 + MarkdownDoc 正文）；字段取自召回时点快照
+ * （域取命中行），缺席降级「—」。尾行快照注记为唯一差异。
+ */
+export function RecallSnapshotContent({ title, domain, contentSnap }: {
+  readonly title: string
+  readonly domain: string
+  readonly contentSnap: string
+}): ReactNode {
+  const snap = recallSnapshotMeta(recallSnapshotParts(contentSnap).body)
   return (
-    <div className="dswf-recall-snap" data-dswf-recall-snap="">
-      {rows.length > 0 ? <div className="dswf-recall-entrymetas">{rows}</div> : null}
-      {snap.title !== null ? <h3 className="dswf-recall-entrytitle">{snap.title}</h3> : null}
-      {snap.summary !== null ? <p className="dswf-recall-entryabs">{snap.summary}</p> : null}
-      <div className="dswf-recall-snapbody">
+    <div className="dswf-recall-entry" data-dswf-recall-entry-phase="ready" data-dswf-recall-snap="">
+      <div className="dswf-recall-entrymetas">
+        <div className="dswf-recall-entrymrow"><span className="dswf-recall-entrymk">域</span><span>{domain === '' ? '—' : domain}</span></div>
+        <div className="dswf-recall-entrymrow"><span className="dswf-recall-entrymk">状态</span><span>{snap.status !== null ? <StateChip status={snap.status} /> : '—'}</span></div>
+        <div className="dswf-recall-entrymrow"><span className="dswf-recall-entrymk">作者</span><span>{snap.authors ?? '—'}</span></div>
+        <div className="dswf-recall-entrymrow"><span className="dswf-recall-entrymk">关键词</span><span className="dswf-recall-entrykws">
+          {snap.keywords.length > 0 ? snap.keywords.map((keyword) => <Tag key={keyword} tone="info">{keyword}</Tag>) : '—'}
+        </span></div>
+      </div>
+      <h3 className="dswf-recall-entrytitle">{snap.title ?? title}</h3>
+      <p className="dswf-recall-entryabs">{snap.summary ?? '—'}</p>
+      <div className="dswf-recall-entrybody">
         <MarkdownDoc text={snap.body} variant="body" labels={MD_PREVIEW_MARKDOWN_LABELS} />
       </div>
       <div className="dswf-recall-snapnote">召回时点快照，非实时读源文档。</div>
@@ -892,7 +893,7 @@ export function RecallTabBody({ state, retry, projectId, makeClient = defaultCli
   const [rejectNote, setRejectNote] = useState('')
   const [rejectBusy, setRejectBusy] = useState(false)
   const [feedbackError, setFeedbackError] = useState<string | undefined>(undefined)
-  const [snapshot, setSnapshot] = useState<{ title: string; contentSnap: string } | null>(null)
+  const [snapshot, setSnapshot] = useState<{ title: string; domain: string; contentSnap: string } | null>(null)
   const [entryId, setEntryId] = useState<number | null>(null)
   const [entryState, retryEntry] = useRecallEntryDetail(projectId, entryId, makeClient)
 
@@ -1069,7 +1070,7 @@ export function RecallTabBody({ state, retry, projectId, makeClient = defaultCli
             }}
             onCallUndo={runCallUndo}
             onOpenSnapshot={(group) => {
-              setSnapshot({ title: rowTitle(group.hits[0]?.title ?? null), contentSnap: group.contentSnap ?? '' })
+              setSnapshot({ title: rowTitle(group.hits[0]?.title ?? null), domain: group.hits[0]?.domainPath ?? '', contentSnap: group.contentSnap ?? '' })
             }}
             onOpenEntry={(id) => { setEntryId(id) }}
           />
@@ -1114,6 +1115,7 @@ export function RecallTabBody({ state, retry, projectId, makeClient = defaultCli
       {snapshot !== null ? (
         <RecallSnapshotDialog
           title={snapshot.title}
+          domain={snapshot.domain}
           contentSnap={snapshot.contentSnap}
           onClose={() => { setSnapshot(null) }}
         />

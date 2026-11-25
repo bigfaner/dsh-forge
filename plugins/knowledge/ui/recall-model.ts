@@ -227,6 +227,7 @@ export interface RecallSnapshotMeta {
   readonly summary: string | null
   readonly keywords: readonly string[]
   readonly status: string | null
+  readonly authors: string | null
   /** 剥离 frontmatter 后的正文 */
   readonly body: string
 }
@@ -248,16 +249,17 @@ function fmValue(raw: string): string {
  * 未闭合 fence 视为无 frontmatter，全文归正文——不吞正文）。
  */
 export function recallSnapshotMeta(contentSnap: string): RecallSnapshotMeta {
-  const none = { title: null, summary: null, keywords: [], status: null }
+  const none = { title: null, summary: null, keywords: [], status: null, authors: null }
   if (!FM_OPEN.test(contentSnap)) return { ...none, body: contentSnap }
   const lines = contentSnap.split('\n')
   const close = lines.findIndex((line, i) => i > 0 && FM_CLOSE.test(line))
   if (close === -1) return { ...none, body: contentSnap }
-  const meta: { title: string | null; summary: string | null; keywords: string[]; status: string | null } = {
+  const meta: { title: string | null; summary: string | null; keywords: string[]; status: string | null; authors: string | null } = {
     title: null,
     summary: null,
     keywords: [],
     status: null,
+    authors: null,
   }
   let inKeywords = false
   for (const line of lines.slice(1, close)) {
@@ -277,6 +279,7 @@ export function recallSnapshotMeta(contentSnap: string): RecallSnapshotMeta {
     else if (key === 'title') meta.title = fmValue(value) || null
     else if (key === 'summary') meta.summary = fmValue(value) || null
     else if (key === 'status') meta.status = fmValue(value) || null
+    else if (key === 'authors') meta.authors = fmValue(value) || null
   }
   return { ...meta, body: lines.slice(close + 1).join('\n').replace(/^\r?\n/, '') }
 }

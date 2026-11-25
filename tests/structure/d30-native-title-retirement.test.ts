@@ -186,6 +186,8 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   // stage④ 1.8：read 快照 dialog 组件标题文本 prop（RecallTab 就地快照呈现——标题文本
   // 非悬浮提示位；Modal 承载计入上行）
   RecallSnapshotDialog: 1,
+  // read 快照 dialog 内容件标题文本 prop（兜底标题——布局对齐就地详情，标题文本非悬浮提示位）
+  RecallSnapshotContent: 1,
   // 自绘 dialog 头标题文本 prop ×1（remote/ForgeRemoteEntry RemoteDialogHead——fix-19 ⑥
   // 标题读数，标题文本非悬浮提示位）
   // 官方 Rows 行标题文本 prop ×2（ForgeWorkspacePanel 项目行名称；ForgeEventEntries
