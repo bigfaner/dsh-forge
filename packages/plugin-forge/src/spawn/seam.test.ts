@@ -22,6 +22,16 @@ function requestOf(label: string, signal: AbortSignal = new AbortController().si
   return { prompt: 'P', parent: {}, signal, toolFilter: { deny: [] }, label }
 }
 
+/** 临时 git 仓收尾（best-effort）：Windows 真机上 git 子进程/索引句柄释放呈秒级迟滞——
+ *  rmSync 重试耗尽后 EPERM 残留不作为测试失败（临时目录机器级可弃）。 */
+function rmBestEffort(p: string): void {
+  try {
+    rmSync(p, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  } catch {
+    /* EPERM 迟滞残留容忍 */
+  }
+}
+
 /** 隔离 git 仓工作区（fs-write/git-commit 动作作用域） */
 function makeWs(): string {
   const ws = mkdtempSync(join(tmpdir(), 'forge-seam-ws-'))
@@ -102,9 +112,9 @@ describe('回放计划驱动器（taskKey × occurrence 匹配）', () => {
       const gitLog = execFileSync('git', ['log', '--format=%s'], { cwd: ws, encoding: 'utf8' })
       expect(gitLog).toContain('docs: out')
     } finally {
-      rmSync(ws, { recursive: true, force: true })
+      rmBestEffort(ws)
     }
-  })
+  }, 30_000)
 
   it('abort：句柄即回（spawn 成功）而 result 拒绝——无结算死亡面', async () => {
     const plan: ReplayPlan = {
@@ -155,9 +165,9 @@ describe('回放计划驱动器（taskKey × occurrence 匹配）', () => {
         spawn({ ...requestOf('f/1.1 · x'), workspaceCwd: join(ws, '..') }),
       ).rejects.toThrow(/\[replay-plan\] cwd 钉定冲突/)
     } finally {
-      rmSync(ws, { recursive: true, force: true })
+      rmBestEffort(ws)
     }
-  })
+  }, 30_000)
 
   it('fs-write 路径逃逸工作区 = 拒绝（围栏）', async () => {
     const ws = makeWs()
@@ -172,9 +182,9 @@ describe('回放计划驱动器（taskKey × occurrence 匹配）', () => {
       const handle = await createPlanReplaySpawn(plan, noopRunner)(requestOf('f/1.1 · x'))
       await expect(handle.result).rejects.toThrow('fs-write 路径逃逸工作区')
     } finally {
-      rmSync(ws, { recursive: true, force: true })
+      rmBestEffort(ws)
     }
-  })
+  }, 30_000)
 
   it('dispose 后续步拒绝（回放收尾中止）', async () => {
     const plan: ReplayPlan = {
@@ -255,7 +265,7 @@ describe('回放计划 · triage 处置代理 spawn（expert-squad-forge-2/fix-1
       writeFileSync(bare, JSON.stringify({ version: 1, workspaceDir: 'w', entries: [{ taskKey: 'f/1', occurrence: 1, behavior: 'script', actions: [] }] }), 'utf8')
       expect(() => loadReplayPlanFromEnv({ DSH_FORGE_REPLAY_PLAN: bare })).toThrow('动作列不可为空')
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rmBestEffort(dir)
     }
   })
 })
@@ -281,7 +291,7 @@ describe('回放计划载入（env 缝）', () => {
       writeReplayPlan(good, plan)
       expect(loadReplayPlanFromEnv({ DSH_FORGE_REPLAY_PLAN: good })).toEqual(plan)
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rmBestEffort(dir)
     }
   })
 })

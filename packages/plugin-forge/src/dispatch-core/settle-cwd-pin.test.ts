@@ -14,6 +14,16 @@ import { settleWorkerRun, gitCommitLanding } from './settle.js'
 import type { CommitLandingVerifier } from './settle.js'
 import type { SpawnWorkerHandle } from './spawn.js'
 
+/** 临时 git 仓收尾（best-effort）：Windows 真机上 git 子进程/索引句柄释放呈秒级迟滞——
+ *  rmSync 重试耗尽后 EPERM 残留不作为测试失败（临时目录机器级可弃）。 */
+function rmBestEffort(p: string): void {
+  try {
+    rmSync(p, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  } catch {
+    /* EPERM 迟滞残留容忍 */
+  }
+}
+
 function snapshot(over: Partial<TaskSnapshot> = {}): TaskSnapshot {
   return {
     taskId: 't-1',
@@ -260,9 +270,9 @@ describe('1.14 · gitCommitLanding 真核验（临时 git 仓）', () => {
       const hash = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
       await expect(gitCommitLanding(dir, hash)).resolves.toEqual({ ok: true, branch: 'feat-x' })
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rmBestEffort(dir)
     }
-  })
+  }, 30_000)
 
   it('提交只在其它分支（落错分支形态）→ ok:false 带两分支名', async () => {
     const dir = initRepo()
@@ -274,9 +284,9 @@ describe('1.14 · gitCommitLanding 真核验（临时 git 仓）', () => {
       const verdict = await gitCommitLanding(dir, hash)
       expect(verdict).toEqual({ ok: false, branch: 'feat-x', commitBranches: ['stray'] })
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rmBestEffort(dir)
     }
-  })
+  }, 30_000)
 
   it('detached HEAD（无检出分支）→ 抛出（落点判据不成立）', async () => {
     const dir = initRepo()
@@ -285,7 +295,7 @@ describe('1.14 · gitCommitLanding 真核验（临时 git 仓）', () => {
       const hash = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
       await expect(gitCommitLanding(dir, hash)).rejects.toThrow(/detached HEAD/)
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rmBestEffort(dir)
     }
-  })
+  }, 30_000)
 })

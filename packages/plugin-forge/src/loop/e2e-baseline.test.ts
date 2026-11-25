@@ -92,7 +92,7 @@ describe('runE2eBaseline（基线跑批）', () => {
 
 describe('createE2eBaselineFace（宿主装配面——真子进程）', () => {
   const dir = mkdtempSync(join(tmpdir(), 'forge-e2e-baseline-'))
-  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  afterAll(() => { try { rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } catch { /* Windows 真子进程句柄秒级迟滞——EPERM 残留容忍 */ } })
 
   it('runSuite：真子进程 reporter 输出 → 红灯清单（非零退出输出照常解析）', async () => {
     const face = createE2eBaselineFace({
@@ -312,7 +312,7 @@ describe('issueAttributionCard 生成侧标记（loop-phase-gate §2.9——CE-6
 
 describe('loadPersistedBaseline 豁免补点 debug emit（diag-milestone-coverage）', () => {
   const dir = mkdtempSync(join(tmpdir(), 'forge-e2e-baseline-diag-'))
-  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  afterAll(() => { try { rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } catch { /* Windows 真子进程句柄秒级迟滞——EPERM 残留容忍 */ } })
 
   it('缓存文件损坏 → undefined + debug 级 emit（event e2e-baseline，级别门由订阅侧过滤）', () => {
     const cachePath = join(dir, 'corrupt.json')
