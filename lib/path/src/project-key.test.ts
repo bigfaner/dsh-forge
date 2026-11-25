@@ -1,13 +1,14 @@
 // project-key 单测（forge-dirs-unification 2.1）：projectKeyOf = deriveDirName 原文口径
 // （空/空白抛 ProjectKeyDerivationError）+ resolveProjectKey 取法三径（注册表命中 /
-// git 现查归拢 / 双失败回退 cwd 键）+ 规范化先于键派生。
+// git 现查归拢 / 双失败回退 cwd 键）+ 规范化先于键派生 + 标记预检零 git 调用 + 非本仓回退。
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { deriveDirName } from './derive-dir.js'
 import {
   type GitPorcelainRunner,
+  MARKER_PATTERN,
   resolveProjectKey,
   ProjectKeyDerivationError,
   projectKeyOf,
@@ -37,8 +38,8 @@ describe('resolveProjectKey', () => {
       gitRunner,
     })
     expect(r.rolledUp).toBe(true)
-    expect(r.mainCheckoutPath).toBe('Z:/project/demo')
-    expect(r.projectKey).toBe(projectKeyOf('Z:/project/demo'))
+    expect(r.mainRoot).toBe('Z:/project/demo')
+    expect(r.key).toBe(projectKeyOf('Z:/project/demo'))
     expect(r.fallbackReason).toBeUndefined()
   })
 
@@ -58,8 +59,29 @@ describe('resolveProjectKey', () => {
       gitRunner: () => porcelain,
     })
     expect(r.rolledUp).toBe(true)
-    expect(r.mainCheckoutPath).toBe('Z:/project/demo')
-    expect(r.projectKey).toBe(projectKeyOf('Z:/project/demo'))
+    // 主根拼写随 cwd 改写（反斜杠风格）
+    expect(r.mainRoot).toBe('Z:\\project\\demo')
+    expect(r.key).toBe(projectKeyOf('Z:\\project\\demo'))
+  })
+
+  it('标记不命中 → 零 git 调用，原样 cwd 键，无回退原因', () => {
+    const spy = vi.fn<GitPorcelainRunner>()
+    const r = resolveProjectKey('Z:\\project\\demo', { registryQuery: () => undefined, gitRunner: spy })
+    expect(r).toEqual({ key: projectKeyOf('Z:\\project\\demo'), rolledUp: false })
+    expect(spy).not.toHaveBeenCalled()
+    expect(MARKER_PATTERN.test('Z:\\project\\demo\\.forge\\tmp')).toBe(false)
+    expect(MARKER_PATTERN.test('Z:/project/demo/.forge/worktrees/x')).toBe(true)
+  })
+
+  it('git 清单不含 cwd（非本仓 worktree）→ 回退 cwd 键 + 回退原因', () => {
+    const r = resolveProjectKey(WT_CWD, { registryQuery: () => undefined, gitRunner: () => 'worktree Z:/other/repo\n' })
+    expect(r.rolledUp).toBe(false)
+    expect(r.key).toBe(projectKeyOf(WT_CWD))
+    expect(r.fallbackReason).toBe('porcelain 清单不含 cwd（非本仓 worktree）——回退 cwd 键')
+  })
+
+  it('空 cwd → 派生拒绝原样上抛（标记不命中径）', () => {
+    expect(() => resolveProjectKey('', { registryQuery: () => undefined })).toThrowError(ProjectKeyDerivationError)
   })
 
   it('注册表缺席 + git fail-soft → 回退 cwd 键，rolledUp = false + fallbackReason', () => {
@@ -70,7 +92,7 @@ describe('resolveProjectKey', () => {
       },
     })
     expect(r.rolledUp).toBe(false)
-    expect(r.projectKey).toBe(projectKeyOf(WT_CWD))
+    expect(r.key).toBe(projectKeyOf(WT_CWD))
     expect(r.fallbackReason).toMatch(/git/)
   })
 
@@ -81,15 +103,15 @@ describe('resolveProjectKey', () => {
       registryQuery: () => real.toLowerCase(),
       canonicalize: (p) => (p === real.toLowerCase() ? real : p),
     })
-    expect(r.mainCheckoutPath).toBe(real)
-    expect(r.projectKey).toBe(projectKeyOf(real))
-    expect(r.projectKey).not.toBe(projectKeyOf(real.toLowerCase()))
+    expect(r.mainRoot).toBe(real)
+    expect(r.key).toBe(projectKeyOf(real))
+    expect(r.key).not.toBe(projectKeyOf(real.toLowerCase()))
   })
 
   it('默认规范化 = realpath（临时目录真实解析）', () => {
     const real = mkdtempSync(join(tmpdir(), 'pk-'))
     const r = resolveProjectKey(WT_CWD, { registryQuery: () => real })
-    expect(r.mainCheckoutPath).toBe(real)
-    expect(r.projectKey).toBe(projectKeyOf(real))
+    expect(r.mainRoot).toBe(real)
+    expect(r.key).toBe(projectKeyOf(real))
   })
 })

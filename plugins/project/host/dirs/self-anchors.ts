@@ -61,7 +61,7 @@ export function createSelfAnchorsOf(
       throw new Error(`self-anchors: workspace root unavailable (projectId=${projectId}——未注册或工作区面缺席)`);
     }
     const resolution = resolveProjectKey(wsPath, { registryQuery: deps.registryQuery ?? (() => undefined) });
-    const projectRoot = resolution.mainCheckoutPath ?? wsPath;
+    const projectRoot = resolution.mainRoot ?? wsPath;
     return { dshHome: dirname(deps.forgeHome), projectRoot, workspaceRoot: wsPath };
   };
 }
