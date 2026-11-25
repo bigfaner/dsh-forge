@@ -80,7 +80,7 @@ describe("盲试 fix 派发判别 + 「待建模」派生态现算", () => {
 });
 
 describe("T3 守卫（recurrenceEscalationGuard）两态", () => {
-  it("全边 ≥2 ∧ hasOpen ∧ 报告不在场 → 软拒绝（错误码 + 列表式载荷 + release 双轨解除指引）", async () => {
+  it("全边 ≥2 ∧ hasOpen ∧ 报告不在场 → 软拒绝（错误码 + 列表式载荷 + release probes 单轨解除指引）", async () => {
     const rejection = await recurrenceEscalationGuard({
       projectId: "p-1",
       task: snapshot(),
@@ -127,7 +127,7 @@ describe("T3 守卫（recurrenceEscalationGuard）两态", () => {
   });
   it("语义分界：探测面真缺席（false）仍拦截；face 整体缺席降级不变（拦截保守成立）", async () => {
     const candidates = () => [triggering(["b-root", "b-r1", "b-r2"])];
-    // 双轨目录均可读但无 .md = 真「报告不在场」→ 仍拦截
+    // 探测目录可读但无 .md = 真「报告不在场」→ 仍拦截
     expect(
       await recurrenceEscalationGuard({ projectId: "p-1", task: snapshot(), findRecurrenceCandidates: candidates, modelingReportPresent: () => false }),
     ).toBeDefined();
@@ -151,7 +151,7 @@ describe("T3 守卫（recurrenceEscalationGuard）两态", () => {
     expect(warn?.message).toContain("拦截未生效");
     expect(warn?.message).toContain("feat-x/fix-2");
   });
-  it("报告探测输入携 bugIds（命中链成员——probes/<bugId>/ 备选探测锚）", async () => {
+  it("报告探测输入携 bugIds（命中链成员——probes/<bugId>/ 顶层 .md 探测锚）", async () => {
     const inputs: unknown[] = [];
     await recurrenceEscalationGuard({
       projectId: "p-1",
@@ -270,7 +270,7 @@ describe("拒绝载荷形态（rejectionFailureOf——列表式 + top-5 限幅 
     expect(overflow).toContain("type-b×");
     expect(overflow).toContain("getBug");
   });
-  it("escalate 豁免：升级指引携链串摘要（因果链证据非甄别列表）；release 双轨路径模板 + .md + 重新 claim", () => {
+  it("escalate 豁免：升级指引携链串摘要（因果链证据非甄别列表）；release probes 单轨路径模板 + .md + 重新 claim", () => {
     const dto = rejectionFailureOf("feat-x/fix-2", [full(1)], 2, ["b-root", "b-r1", "b-r2"]);
     expect(dto.message).toContain("feat-x/fix-2");
     const escalate = dto.violations.find((v) => v.startsWith("escalate:"));

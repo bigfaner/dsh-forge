@@ -6,7 +6,7 @@
 // 触发公式（recurrence-signal-tiering 验收要点 2）：最长祖先径全边数 fullEdgeCount ≥ 2
 // ∧ 链内有 open 成员（hasOpen——终态过滤从 core 管线移除后的消费侧触发分量）∧ 本缝归属
 // （scope 归属过滤归 bugs 域，container_slug 列直接比较）∧ 卷宗建模报告不在场
-// （dossier issues 卷 / probes/<bugId>/ 备选双探测）。全 fixed 链对 T3 不拦（无 open 分量）。
+// （`.forge/docs/probes/<bugId>/` 顶层 .md 单探测——proposal 域已退役）。全 fixed 链对 T3 不拦（无 open 分量）。
 //
 // 拒绝载荷（渐进式披露）：列表式（八字段/条：bugId/summary/status/errorType/containerSlug/
 // suspectedLocation/lastSeenAt/recurrenceOf——甄别判据 = suspected 位置，agent 自行甄别后经
@@ -51,11 +51,11 @@ export type SameSeamRecurrenceFace = (
 
 /**
  * 卷宗建模报告在场探测面（T4 旁挂回收的守卫侧消费缝——注入可替换）三态：
- * true = 报告在场（解除判据满足）；false = 真「报告不在场」（双轨目录均可读但无报告 .md，
+ * true = 报告在场（解除判据满足）；false = 真「报告不在场」（探测目录可读但无报告 .md，
  * 拦截保守成立）；'error' = 探测 IO 故障（readdirSync 抛错等——机制失能，消费侧放行 + warn 留痕）。
  *
- * bugIds = 命中家族链成员 id（probes/<bugId>/ 备选探测锚——recurrence-signal-tiering 落点
- * 双轨：有关联提案落 dossier issues 卷，无关联落 probes 卷，任一在场即解除）。
+ * bugIds = 命中家族链成员 id（`.forge/docs/probes/<bugId>/` 顶层 .md 探测锚——
+ * 单轨：任一链成员的 probes 卷报告在场即解除）。
  */
 export type ModelingReportPresentFace = (input: {
   readonly projectId: string
@@ -235,7 +235,7 @@ export function recurrenceCandidateLines(
  * （recurrence-signal-tiering 渐进式披露）：候选列表式（八字段/条，lastSeenAt 降序 top-5
  * 限幅，超出按 errorType 计数）——甄别判据 = suspected 位置，agent 自行甄别后经 getBug
  * 深挖；escalate 豁免 = 链串摘要保留在升级指引（上浮主会话要的是因果链证据，非甄别列表）。
- * 解除指引三要件（事故判例 4545fde4 直接对策）：落点双轨顶层路径模板 + .md 形态 +
+ * 解除指引三要件（事故判例 4545fde4 直接对策）：probes 单轨顶层路径模板 + .md 形态 +
  * 报告在场后重新 claim 放行（防 unblock/resolve 死锁重演）。
  */
 export function rejectionFailureOf(
