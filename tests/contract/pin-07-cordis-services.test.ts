@@ -2,7 +2,7 @@
 // inject 消费（真实 cordis runtime 全链路自证）。
 // 权威：tech-design Appendix 契约面清单第 7 项 + Overview 关键缝（Cordis 服务模式——
 // workspaceRegistry/agentPresets 同型先例，进程内零 RPC）+ 上游公开面 `@deepseek-ai/cordis`
-// （host 锚；dsh 0.2.0-rc.2 栈闭包解析版本 = 4.0.4，独立版本线精确 pin——漂移即红）。
+// （host 锚；dsh 0.2.0-rc.2 栈闭包解析版本 = 4.1.0，独立版本线精确 pin——漂移即红）。
 // 我方镜像：packages/core/src/index.ts（forgeProjects provide——knowledge 域已随
 // knowledge-stage1-foundation 1.8 退役，forgeKnowledge 面移除）+
 // plugins/knowledge/host/index.ts（自有 knowledge 服务 provide）。
@@ -23,7 +23,7 @@ import knowledgePlugin from '../../plugins/knowledge/host/index.js'
 import { importUpstream, norm, readTypes, upstreamPkg } from './pins.js'
 
 /** cordis 版本线（dsh 0.2.0-rc.2 栈闭包解析版本——与 dsh 包版本线分立 pin） */
-const CORDIS_VERSION = '4.0.4'
+const CORDIS_VERSION = '4.1.0'
 
 /** cordis Context 结构化最小面（⑦ 消费位：reflect.provide / get / plugin / fiber） */
 interface PluginCtxFace {
@@ -219,7 +219,7 @@ describe('pin ⑦-3 运行期服务注入面（真实 cordis + 真实 core/knowl
       expect(ctx.get('forgeProjects')).toBeDefined()
       // core 卸载模拟改撤 core 自身 disposer（k-m 后 knowledge 硬注入 workspaceRegistry——
       // 撤共享 registry 会连带卸载 knowledge fiber，SC-2 隔离判据须走 core 专属出口）
-      const coreFiber = stopCore as { dispose(): Promise<void> }
+      const coreFiber = stopCore as unknown as { dispose(): Promise<void> }
       if (typeof coreFiber?.dispose === 'function') await coreFiber.dispose()
       else disposeWs()
       // 官方语义：unregistered (waking dependents)——core fiber 卸载、core 服务注销；
