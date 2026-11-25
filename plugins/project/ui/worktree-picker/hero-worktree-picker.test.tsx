@@ -185,4 +185,60 @@ describe('ForgeHeroWorkspacePicker mount 等待重取（评审 L 粘滞降级收
     expect(openAddProjectFlow, '落座重取后行集就位仍不弹添加项目').not.toHaveBeenCalled()
     expect(document.querySelector('.dswf-hero-picker-list'), '落座重取后弹层行集应呈现（Menu portal 面在 document）').not.toBeNull()
   })
+
+  it('变异 D 缺口钉死：closed 态首拉面缺席 → mark 落座即 silentRefresh（独立于开弹层重拉路径）', async () => {
+    // closed 渲染（open=false）：:134-136 开弹层静默重拉 effect 不触发，落座后 list 二调
+    // 即落座重取 effect（:141-150）触发的 silentRefresh——两条路径由此可区分。
+    let calls = 0
+    const makeRpc = (() => ({
+      projects: {
+        list: async () => {
+          calls++
+          if (calls === 1) throw new Error('官方 forge remote 面缺席（forgeProjects.list）——通道不可用（诚实降级）')
+          return [project]
+        },
+      },
+      worktree: { list: async () => ({ worktrees: [] }) },
+    })) as unknown as () => ForgeRpcClient
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    const flush = async () => {
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+    }
+
+    await act(async () => {
+      root.render(
+        <ForgeHeroWorkspacePicker open={false} onPick={() => {}} onClose={() => {}} makeRpc={makeRpc} />,
+      )
+    })
+    await flush()
+    expect(calls, '闭态首拉恰好一次（面缺席）').toBe(1)
+
+    await act(async () => {
+      markForgeRemoteMountSettled()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(calls, '落座重取 effect 必须独立触发 silentRefresh（list 二调）——整段删除该 effect 时此断言红').toBe(2)
+
+    // 落座行集就位后才打开弹层——开弹层静默重拉（list 三调）归 :134-136 路径，二者不混
+    await act(async () => {
+      root.render(
+        <ForgeHeroWorkspacePicker open onPick={() => {}} onClose={() => {}} makeRpc={makeRpc} />,
+      )
+    })
+    await flush()
+    expect(calls, '开弹层静默重拉路径仍在（:134-136 覆盖面保持）').toBe(3)
+    expect(document.querySelector('.dswf-hero-picker-list'), '落座后开弹层行集呈现').not.toBeNull()
+  })
 })
