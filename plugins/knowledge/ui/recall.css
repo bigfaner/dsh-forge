@@ -374,30 +374,22 @@
   width: min(950px, 100%);
 }
 
-/* 快照全文块（render 头行 + 代码字体正文块 12px/1.6 + 快照语义注记） */
+/* 快照全文块（render 头行 + Markdown 渲染正文块 + 快照语义注记） */
 .dswf-recall-snaphead {
   padding: 4px 8px; /* dsw-raw 头行贴排刻度 */
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; /* dsw-raw 代码族 */
-  font-size: 12px; /* dsw-raw 代码族 12px 刻度 */
-  line-height: 18px; /* dsw-raw 代码族 12/18 行高刻度 */
+  font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
 }
 
 .dswf-recall-snapbody {
-  max-height: 60vh; /* dsw-raw 快照块滚动上界（视口比例刻度） */
-  margin: 8px 0 0; /* dsw-raw 头行/正文贴排刻度 */
-  padding: 12px; /* dsw-raw 正文块内距（代码块 12px 内距族） */
+  max-height: 60vh; /* 快照块滚动上界（视口比例刻度） */
+  margin: 8px 0 0; /* 头行/正文贴排刻度 */
+  padding: 12px;
   overflow-y: auto;
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-2);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; /* dsw-raw 代码族 */
-  font-size: 12px; /* dsw-raw 代码族 12px 刻度 */
-  line-height: 1.6; /* dsw-raw 终稿快照正文行高 */
-  color: var(--dsw-alias-label-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .dswf-recall-snapnote {

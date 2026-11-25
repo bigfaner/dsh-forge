@@ -774,15 +774,24 @@ export function RecallSnapshotDialog({ title, contentSnap, onClose }: {
   readonly contentSnap: string
   readonly onClose: () => void
 }): ReactNode {
-  const parts = recallSnapshotParts(contentSnap)
   return (
     <Modal open onClose={onClose} title={title} closeLabel="关闭" className="dswf-recall-snapmodal">
-      <div className="dswf-recall-snap" data-dswf-recall-snap="">
-        {parts.head !== '' ? <div className="dswf-recall-snaphead">{`# ${parts.head}`}</div> : null}
-        <pre className="dswf-recall-snapbody">{parts.body}</pre>
-        <div className="dswf-recall-snapnote">召回时点快照，非实时读源文档。</div>
-      </div>
+      <RecallSnapshotContent contentSnap={contentSnap} />
     </Modal>
+  )
+}
+
+/** 快照 dialog 内容（纯渲染、无 Modal——头行 + MarkdownDoc 渲染正文 + 快照语义注记） */
+export function RecallSnapshotContent({ contentSnap }: { readonly contentSnap: string }): ReactNode {
+  const parts = recallSnapshotParts(contentSnap)
+  return (
+    <div className="dswf-recall-snap" data-dswf-recall-snap="">
+      {parts.head !== '' ? <div className="dswf-recall-snaphead">{parts.head}</div> : null}
+      <div className="dswf-recall-snapbody">
+        <MarkdownDoc text={parts.body} variant="body" labels={MD_PREVIEW_MARKDOWN_LABELS} />
+      </div>
+      <div className="dswf-recall-snapnote">召回时点快照，非实时读源文档。</div>
+    </div>
   )
 }
 

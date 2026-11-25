@@ -18,6 +18,7 @@ import {
   recallFeedbackFailureText,
   RecallCardView,
   recallSnapshotParts,
+  RecallSnapshotContent,
   RecallTab,
   RecallTabBody,
   recallLoadPlan,
@@ -233,6 +234,20 @@ describe('recallSnapshotParts（read 快照头行拆分——Modal 承载归装�
   it('render 头行拆分：首行 # 头 → head；其余为正文', () => {
     expect(recallSnapshotParts('# 标题 (id, draft, ts)\n正文')).toEqual({ head: '标题 (id, draft, ts)', body: '正文' })
     expect(recallSnapshotParts('无头行')).toEqual({ head: '', body: '无头行' })
+  })
+
+  it('快照 dialog 正文经 MarkdownDoc 渲染（非 pre 原文）：frontmatter 剥离、标题成 h2', () => {
+    const markup = renderToStaticMarkup(
+      <RecallSnapshotContent
+        contentSnap={'# 标题 (id, confirmed, ts)\n---\ntitle: x\n---\n\n## 结构事实\n正文 **粗**'}
+      />,
+    )
+    expect(markup).not.toContain('<pre')
+    expect(markup).not.toContain('---')
+    expect(markup).not.toContain('title: x')
+    expect(markup).toContain('<h2')
+    expect(markup).toContain('<strong>粗</strong>')
+    expect(markup).toContain('标题 (id, confirmed, ts)')
   })
 })
 
