@@ -153,6 +153,59 @@ export interface SlugCandidate {
   readonly slug: string
   /** 终态（feature completed/archived）= true */
   readonly done: boolean
+  /** 候选分组（2.18 spec/milestone/roadmap 三组——feature 域退役后挂载面给定；缺省 = 无分组标签） */
+  readonly group?: SlugCandidateGroup
+}
+
+/** 候选分组（呈现次序 = spec → milestone → roadmap——组内保持各自来源返回序） */
+export type SlugCandidateGroup = 'spec' | 'milestone' | 'roadmap'
+
+/** 三组聚合输入（每组分绍缺席 = 该来源拉取失败 fail-soft 降级——组缺席、其余组照常） */
+export interface GroupedSlugCandidateSource {
+  /** spec 清单（forgeSpecs/list slug 集） */
+  readonly specs: readonly { readonly slug: string }[]
+  /** roadmap 清单（逐 roadmap detail 聚合：milestone 无 slug 字段——领域判据 milestone 无
+   *  slug、寻径 = 父 slug + seq，候选值取 title 作 slug 形输入提示） */
+  readonly roadmaps: readonly {
+    readonly slug: string
+    readonly milestones: readonly { readonly title: string }[]
+  }[]
+}
+
+/**
+ * 三组 slug 候选聚合（2.18 纯函数单源）：输出次序 = 全部 spec slug → 全部 milestone
+ * slug → 全部 roadmap slug；组内保持各自来源返回序（milestone 按逐 roadmap detail
+ * 返回序、roadmap 间按 roadmaps 返回序）；同 slug 先见者留（跨组去重）；空 slug 跳过。
+ */
+export function collectGroupedSlugCandidates(source: GroupedSlugCandidateSource): readonly SlugCandidate[] {
+  const out: SlugCandidate[] = []
+  const seen = new Set<string>()
+  const push = (slug: string, group: SlugCandidateGroup): void => {
+    const key = slug.trim()
+    if (key === '' || seen.has(key)) return
+    seen.add(key)
+    out.push({ slug, done: false, group })
+  }
+  for (const spec of source.specs) push(spec.slug, 'spec')
+  for (const roadmap of source.roadmaps) {
+    for (const milestone of roadmap.milestones) push(milestone.title, 'milestone')
+  }
+  for (const roadmap of source.roadmaps) push(roadmap.slug, 'roadmap')
+  return out
+}
+
+/**
+ * projectRoot（ws_path）→ 项目 id 解析（specs/roadmaps 族寻址键）：wsPath trim + 分隔符
+ * 归一 + 大小写不敏感（Windows 路径保守口径——createConflicts 同判）；未命中 = undefined
+ * （调用方 fail-soft 空候选）。
+ */
+export function projectIdByWsPath(
+  summaries: readonly { readonly id: string; readonly wsPath: string }[],
+  projectRoot: string,
+): string | undefined {
+  const normalize = (value: string): string => value.trim().replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+  const needle = normalize(projectRoot)
+  return summaries.find((row) => normalize(row.wsPath) === needle)?.id
 }
 
 export function collectSlugCandidates(

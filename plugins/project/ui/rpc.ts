@@ -440,10 +440,41 @@ export interface SpecDetailDto extends SpecCardDto {
   readonly doc?: { readonly relPath: string; readonly dangling: boolean }
 }
 
-/** forgeSpecs/* 面方法集（spec 子 tab 读面——list 清单 + detail 展开元数据；写动词不上 UI 面） */
+/** forgeSpecs/* 面方法集（spec 子 tab 读面 + 2.18 worktree-picker slug 候选拉取——
+ *  list/detail 清单与展开、roadmaps/roadmapDetail 目标域；写动词不上 UI 面） */
 export interface ForgeSpecsRpc {
   list(q: { readonly projectId: string; readonly search?: string }): Promise<readonly SpecCardDto[]>
   detail(q: { readonly projectId: string; readonly slug: string }): Promise<SpecDetailDto>
+  /** roadmap 清单（M4a 端点族——slug 候选 roadmap 组源 + 逐行 roadmapDetail 寻址键） */
+  roadmaps(q: { readonly projectId: string }): Promise<readonly RoadmapRowDto[]>
+  /** roadmap 详情（milestone 内嵌——milestone 无独立列表端点，逐 roadmap 拉取聚合） */
+  roadmapDetail(q: { readonly projectId: string; readonly slug: string }): Promise<RoadmapDetailDto>
+}
+
+// ── Roadmap DTO 窄镜像（2.18——形状权威 = plugins/spec host/assembly/typert-remotes.ts
+//    RoadmapRow / RoadmapDetailDto；跨插件零 import 纪律 → 只镜像 UI 消费字段，SpecCardDto
+//    同法。milestone 无 slug 字段（领域判据：寻径 = 父 slug + seq）——候选值取 title）。
+
+/** Roadmap 行窄镜像（slug 候选 roadmap 组——slug/title/状态/时间戳消费切片） */
+export interface RoadmapRowDto {
+  readonly slug: string
+  readonly title: string
+  readonly roadmapStatus: string
+  readonly updatedAt: string
+}
+
+/** Milestone 行窄镜像（title = slug 形候选值；seq/status 备 UI 排序/徽标消费） */
+export interface RoadmapMilestoneDto {
+  readonly id: string
+  readonly seq: number
+  readonly title: string
+  readonly milestoneStatus: string
+}
+
+/** Roadmap 详情窄镜像（本体 + milestones 内嵌；achievement 不在消费面不镜像） */
+export interface RoadmapDetailDto {
+  readonly roadmap: RoadmapRowDto
+  readonly milestones: readonly RoadmapMilestoneDto[]
 }
 
 /**
@@ -457,6 +488,8 @@ export type WorktreeFacesRpc = {
   projects: ForgeRpcClient['projects']
   features: ForgeRpcClient['features']
   worktree: Omit<ForgeRpcClient['worktree'], 'followSeal'> & Partial<Pick<ForgeRpcClient['worktree'], 'followSeal'>>
+  /** spec 族（2.18 slug 候选三组拉取——spec 插件缺席 = 调用期 typed 拒绝，消费面 fail-soft） */
+  specs: ForgeRpcClient['specs']
 }
 
 /** forge RPC client（传输 = 官方 Typert remote face，installForgeRemoteFace 注入真身） */
@@ -508,6 +541,8 @@ export function createForgeRpcClient(): ForgeRpcClient {
     specs: {
       list: (q) => invokeRemote<readonly SpecCardDto[]>('forgeSpecs', 'list', [q]),
       detail: (q) => invokeRemote<SpecDetailDto>('forgeSpecs', 'detail', [q]),
+      roadmaps: (q) => invokeRemote<readonly RoadmapRowDto[]>('forgeSpecs', 'roadmaps', [q]),
+      roadmapDetail: (q) => invokeRemote<RoadmapDetailDto>('forgeSpecs', 'roadmapDetail', [q]),
     },
   }
 }

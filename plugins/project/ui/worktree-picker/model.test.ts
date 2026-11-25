@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   aheadBehindInline,
   aheadBehindSegments,
+  collectGroupedSlugCandidates,
   collectSlugCandidates,
   createConflicts,
   deleteBlockers,
@@ -16,6 +17,7 @@ import {
   isDeleteBlocked,
   joinWorktreePath,
   pendingAheadBehindPaths,
+  projectIdByWsPath,
   riskDialogNeeded,
   riskLatchConfirm,
   riskLatchMemoryOf,
@@ -153,6 +155,59 @@ describe('collectSlugCandidates（slug 候选：去重 + 未完成排前）', ()
   })
   it('空输入 = 空候选', () => {
     expect(collectSlugCandidates([])).toEqual([])
+  })
+})
+
+describe('collectGroupedSlugCandidates（2.18 三组聚合：spec → milestone → roadmap，组内保持返回序）', () => {
+  it('三组依序输出 + 各自 group 标记；milestone 按逐 roadmap detail 序、roadmap 间按清单序', () => {
+    const out = collectGroupedSlugCandidates({
+      specs: [{ slug: 'spec-a' }, { slug: 'spec-b' }],
+      roadmaps: [
+        { slug: 'rm-1', milestones: [{ title: 'm-1a' }, { title: 'm-1b' }] },
+        { slug: 'rm-2', milestones: [{ title: 'm-2a' }] },
+      ],
+    })
+    expect(out).toEqual([
+      { slug: 'spec-a', done: false, group: 'spec' },
+      { slug: 'spec-b', done: false, group: 'spec' },
+      { slug: 'm-1a', done: false, group: 'milestone' },
+      { slug: 'm-1b', done: false, group: 'milestone' },
+      { slug: 'm-2a', done: false, group: 'milestone' },
+      { slug: 'rm-1', done: false, group: 'roadmap' },
+      { slug: 'rm-2', done: false, group: 'roadmap' },
+    ])
+  })
+  it('单源失败降级（缺组输入 = 组缺席）：roadmaps 空 → 仅 spec 组；specs 空 → 仅 milestone/roadmap 组', () => {
+    expect(collectGroupedSlugCandidates({ specs: [{ slug: 's' }], roadmaps: [] })).toEqual([
+      { slug: 's', done: false, group: 'spec' },
+    ])
+    expect(collectGroupedSlugCandidates({ specs: [], roadmaps: [{ slug: 'rm', milestones: [{ title: 'm' }] }] })).toEqual([
+      { slug: 'm', done: false, group: 'milestone' },
+      { slug: 'rm', done: false, group: 'roadmap' },
+    ])
+  })
+  it('同 slug 先见者留（跨组去重）；空 slug 跳过；空输入 = 空候选不崩', () => {
+    expect(collectGroupedSlugCandidates({ specs: [{ slug: 'shared' }], roadmaps: [{ slug: 'shared', milestones: [] }] })).toEqual([
+      { slug: 'shared', done: false, group: 'spec' },
+    ])
+    expect(collectGroupedSlugCandidates({ specs: [{ slug: '  ' }], roadmaps: [] })).toEqual([])
+    expect(collectGroupedSlugCandidates({ specs: [], roadmaps: [] })).toEqual([])
+  })
+})
+
+describe('projectIdByWsPath（projectRoot → 项目 id 寻址——trim/分隔符/大小写归一保守口径）', () => {
+  const summaries = [
+    { id: 'p-1', wsPath: 'Z:\\proj\\alpha' },
+    { id: 'p-2', wsPath: '/srv/beta' },
+  ]
+  it('精确命中（Windows 反斜杠 vs 正斜杠、大小写、尾斜杠差异归一）', () => {
+    expect(projectIdByWsPath(summaries, 'Z:/proj/alpha')).toBe('p-1')
+    expect(projectIdByWsPath(summaries, 'z:\\proj\\alpha\\')).toBe('p-1')
+    expect(projectIdByWsPath(summaries, '/srv/beta/')).toBe('p-2')
+  })
+  it('未命中 → undefined（调用方 fail-soft 空候选）', () => {
+    expect(projectIdByWsPath(summaries, 'Z:/other')).toBeUndefined()
+    expect(projectIdByWsPath([], 'Z:/proj/alpha')).toBeUndefined()
   })
 })
 

@@ -77,7 +77,7 @@ export interface CreateWorktreeFieldsProps {
   readonly value: CreateWorktreeFormValue
   /** 分支清单（基准分支下拉数据源 + 分支同名冲突源——git for-each-ref refs/heads） */
   readonly branches: readonly string[]
-  /** slug 候选（分支下拉——提案/feature slug，未完成排前去重后由挂载面给定） */
+  /** slug 候选（分支下拉——spec/milestone/roadmap 三组，聚合排序后由挂载面给定；行右侧分组标签） */
   readonly slugCandidates?: readonly SlugCandidate[]
   /** 同名冲突集（弹窗层算定传入——Fields 只呈现告警） */
   readonly conflicts?: readonly CreateConflict[]
@@ -187,9 +187,19 @@ export function CreateWorktreeFields({
       slugCandidates.map((candidate) => ({
         id: candidate.slug,
         label: (
-          <span style={{ ...mono, fontSize: 13 }}>
-            {candidate.slug}
-            {candidate.done ? <span style={{ ...fieldOpt }}>　已完成</span> : null}
+          <span style={{ ...mono, fontSize: 13, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span>{candidate.slug}</span>
+            {candidate.done ? <span style={fieldOpt}>　已完成</span> : null}
+            {/* 分组标签（2.18）：右侧小一号弱化色——fontSize 12 + label-tertiary
+                （hero-workspace-picker/delete-dialog 次级灰字同令牌先例，零 opacity 裸值） */}
+            {candidate.group !== undefined ? (
+              <span
+                data-dswt-slug-group={candidate.group}
+                style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)' }}
+              >
+                {candidate.group}
+              </span>
+            ) : null}
           </span>
         ),
       })),
@@ -395,7 +405,7 @@ export interface CreateWorktreeDialogProps {
   readonly branches: readonly string[]
   /** 既有 worktree 名（同名冲突源——list RPC 行名集；缺省 = 不判 worktree 冲突） */
   readonly existingWorktreeNames?: readonly string[]
-  /** slug 候选（分支下拉——提案/feature slug，未完成排前去重；缺省 = 无候选） */
+  /** slug 候选（分支下拉——spec/milestone/roadmap 三组聚合；缺省 = 无候选） */
   readonly slugCandidates?: readonly SlugCandidate[]
   /** 基准分支默认值（主 worktree 判定/origin 默认分支——装配层给） */
   readonly defaultBranch?: string | undefined

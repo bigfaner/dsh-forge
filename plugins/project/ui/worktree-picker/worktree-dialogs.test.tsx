@@ -130,6 +130,48 @@ describe('分支 slug 下拉 + 同名冲突告警（提案裁决 2026-10-16）',
   })
 })
 
+describe('候选行分组标签（2.18 spec/milestone/roadmap 三组——右侧小一号弱化色）', () => {
+  const renderWithCandidates = (candidates: readonly { slug: string; done: boolean; group?: 'spec' | 'milestone' | 'roadmap' }[]): string =>
+    renderToStaticMarkup(
+      <CreateWorktreeFields
+        value={FORM}
+        branches={['main']}
+        slugCandidates={candidates}
+        worktreeDir="Z:/p/.forge/worktrees"
+        onChange={() => {}}
+        BranchCombobox={FakeCombobox2}
+      />,
+    )
+  const FakeCombobox2 = (props: { options: readonly { label: React.ReactNode }[] }): ReactNode => (
+    <div>{props.options.map((option, index) => <span key={index}>{option.label}</span>)}</div>
+  )
+
+  it('候选行右侧分组标签：data-dswt-slug-group 锚 + fontSize 12 + label-tertiary 令牌（零 opacity 裸值）', () => {
+    const markup = renderWithCandidates([
+      { slug: 'spec-a', done: false, group: 'spec' },
+      { slug: 'm-1', done: false, group: 'milestone' },
+      { slug: 'rm-1', done: false, group: 'roadmap' },
+    ])
+    expect(markup).toContain('spec-a')
+    expect(markup).toContain('data-dswt-slug-group="spec"')
+    expect(markup).toContain('data-dswt-slug-group="milestone"')
+    expect(markup).toContain('data-dswt-slug-group="roadmap"')
+    expect(markup).toContain('font-size:12px')
+    expect(markup).toContain('var(--dsw-alias-label-tertiary)')
+    expect(markup).not.toContain('opacity')
+  })
+
+  it('无分组候选（既有 {slug, done} 向下兼容）：零分组锚', () => {
+    const markup = renderWithCandidates([{ slug: 'legacy', done: false }])
+    expect(markup).toContain('legacy')
+    expect(markup).not.toContain('data-dswt-slug-group')
+  })
+
+  it('空候选不崩（零候选行渲染）', () => {
+    expect(renderWithCandidates([])).not.toContain('data-dswt-slug-group')
+  })
+})
+
 describe('分支组合框插槽（合并形态——slot 注入通用组合框，apps/web EditableCombobox 同形）', () => {
   const FakeCombobox = (props: { value: string; options: readonly { id: string }[] }): string =>
     renderToStaticMarkup(<div data-fake-combobox={props.value}>{props.options.map((option) => option.id).join(',')}</div>)

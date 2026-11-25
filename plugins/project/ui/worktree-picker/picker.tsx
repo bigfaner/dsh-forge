@@ -23,10 +23,17 @@ import { DeleteWorktreeDialog } from './delete-dialog.js'
 import { HeroWorktreePicker } from './hero-worktree-picker.js'
 import { StaleSelectionNotice } from '../session-badge/seal-notice.js'
 import { WorktreeRiskConfirmation } from './risk-confirm.js'
-import { isCrossBranchRisk, joinWorktreePath, type DeleteChecks } from './model.js'
+import {
+  collectGroupedSlugCandidates,
+  isCrossBranchRisk,
+  joinWorktreePath,
+  projectIdByWsPath,
+  type DeleteChecks,
+  type SlugCandidate,
+} from './model.js'
 import type { AheadBehind } from '@dsh-forge/contracts'
 import { EditableCombobox } from './EditableCombobox.js'
-import { createForgeRpcClient, type WorktreeFacesRpc } from '../rpc.js'
+import { createForgeRpcClient, forgeDiagEmit, type WorktreeFacesRpc } from '../rpc.js'
 import { dismissedOf, dismissedWriteOf, worktreePrefsFaceOf } from '../settings-section/index.js'
 import {
   riskDialogNeeded,
@@ -61,6 +68,10 @@ const rowsOf = (result: Awaited<ReturnType<WorktreeFacesRpc['worktree']['list']>
     isMain: entry.isMain,
     present: entry.present,
   }))
+
+/** 拉取失败文本化（diag 留痕——Error message 优先，非 Error 字符串化） */
+const causeTextOf = (cause: unknown): string =>
+  cause instanceof Error && cause.message !== '' ? cause.message : String(cause)
 
 /** forge:worktree/list 拉取相位（isGit 能力位 + 行集 + 所配目录——能力位条件渲染单源） */
 interface WorktreeListPhase {
@@ -134,6 +145,8 @@ export function ForgeHeroWorktreeMount({
   const [aheadBehind, setAheadBehind] = useState<ReadonlyMap<string, AheadBehind>>(new Map())
   const [createOpen, setCreateOpen] = useState(false)
   const [branches, setBranches] = useState<{ readonly defaultBranch: string; readonly names: readonly string[] }>({ defaultBranch: 'main', names: [] })
+  // slug 候选三组（2.18——spec/milestone/roadmap 聚合结果，弹窗打开即拉取后注入）
+  const [slugCandidates, setSlugCandidates] = useState<readonly SlugCandidate[]>([])
   const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
   // 选中态本地投影（host lastSelection 唯一事实源——本地态只是 host 态的 UI 镜像，挂载
@@ -369,8 +382,54 @@ export function ForgeHeroWorktreeMount({
         ),
       )
       .catch(() => {})
-    // slug 候选拉取退役（2.16——feature 域已随 G2 退役：清单通道不可达，候选
-    // 恒空集 = 死分支拔除；create-dialog slugCandidates 注入面保留，弹窗缺省 = 空集）
+    // slug 候选三组拉取（2.18——spec / milestone / roadmap；feature 域已随 G2 退役）：
+    // projectRoot → projectId（projects.list 寻址）→ specs.list ∥ specs.roadmaps →
+    // 逐 roadmap roadmapDetail（milestone 内嵌无独立列表端点）→ 纯函数聚合注入弹窗。
+    // 任一来源失败 fail-soft：该组缺席、其余组照常、diag 留痕，不炸弹窗。
+    const rpc = makeRpc()
+    let alive = true
+    void (async () => {
+      let projectId: string | undefined
+      try {
+        projectId = projectIdByWsPath(await rpc.projects.list(), projectRoot)
+      } catch (cause) {
+        forgeDiagEmit(`[worktree-create] slug 候选拉取失败（projectId 解析）——候选降级空集：${causeTextOf(cause)}`)
+      }
+      if (!alive) return
+      if (projectId === undefined) {
+        setSlugCandidates([])
+        return
+      }
+      let specs: readonly { readonly slug: string }[] = []
+      let roadmaps: readonly { readonly slug: string; readonly milestones: readonly { readonly title: string }[] }[] = []
+      try {
+        specs = await rpc.specs.list({ projectId })
+      } catch (cause) {
+        forgeDiagEmit(`[worktree-create] slug 候选拉取失败（group=spec）——该组缺席降级：${causeTextOf(cause)}`)
+      }
+      try {
+        const rows = await rpc.specs.roadmaps({ projectId })
+        const details = await Promise.all(
+          rows.map(async (row) => {
+            try {
+              return await rpc.specs.roadmapDetail({ projectId, slug: row.slug })
+            } catch (cause) {
+              forgeDiagEmit(`[worktree-create] slug 候选拉取失败（group=milestone roadmap=${row.slug}）——该 roadmap 里程碑缺席降级：${causeTextOf(cause)}`)
+              return null
+            }
+          }),
+        )
+        roadmaps = details
+          .filter((detail): detail is NonNullable<typeof detail> => detail !== null)
+          .map((detail) => ({ slug: detail.roadmap.slug, milestones: detail.milestones.map((m) => ({ title: m.title })) }))
+      } catch (cause) {
+        forgeDiagEmit(`[worktree-create] slug 候选拉取失败（group=roadmap）——milestone/roadmap 两组缺席降级：${causeTextOf(cause)}`)
+      }
+      if (alive) setSlugCandidates(collectGroupedSlugCandidates({ specs: specs.map((s) => ({ slug: s.slug })), roadmaps }))
+    })()
+    return () => {
+      alive = false
+    }
   }, [createOpen, projectRoot, makeRpc])
 
   // ahead/behind 懒加载器（组件展开才拉 + 本面缓存共享）
@@ -482,6 +541,7 @@ export function ForgeHeroWorktreeMount({
         open={createOpen}
         branches={branches.names}
         existingWorktreeNames={phase.rows.map((row) => row.worktreeName)}
+        slugCandidates={slugCandidates}
         defaultBranch={branches.defaultBranch}
         mainBranch={phase.rows.find((row) => row.isMain)?.branch ?? null}
         worktreeDir={phase.worktreeDir ?? ''}
