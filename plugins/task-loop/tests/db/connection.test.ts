@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BUSY_TIMEOUT_MS } from "@dsh-forge/lib-db";
 import { domainDbFileName, openDomainDb } from "../../host/db/connection.js";
-import { ProjectKeyDerivationError } from "../../host/db/repositories/project-key.js";
+import { ProjectKeyDerivationError } from "@dsh-forge/lib-path";
 
 const NOW = "2026-11-10T00:00:00.000Z";
 

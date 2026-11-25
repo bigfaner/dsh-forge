@@ -19,7 +19,7 @@
 import { taskFilesUnion } from "./files.js";
 import { FACETS_HINT_CONTEXT_KEY, FACETS_KEY } from "../../../shared/contract-constants.js";
 import { withTransaction } from "@dsh-forge/lib-db";
-import { ProjectKeyDerivationError } from "../../db/repositories/project-key.js";
+import { ProjectKeyDerivationError } from "@dsh-forge/lib-path";
 import {
   createSettlementRepo,
   FixRootResolutionError,

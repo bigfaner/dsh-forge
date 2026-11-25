@@ -14,7 +14,11 @@ import {
   type KnowledgeConnectionService,
 } from '../host/connection-rpc.js'
 import { CONNECTION_ENDPOINT_BY_CHANNEL } from '../shared/connection-rpc.js'
-import { projectKeyOf } from '../host/project-key.js'
+import { projectKeyOf as libProjectKeyOf } from '@dsh-forge/lib-path'
+import { canonicalWsPath } from '../host/storage/registry.js'
+
+// 被测口径 = knowledge 派生键（lib projectKeyOf · canonical 基准 ws_path）
+const projectKeyOf = (wsPath: string): string => libProjectKeyOf(canonicalWsPath(wsPath))
 
 /** 知识服务替身（KnowledgeConnectionService 结构切片——逐端点捕获） */
 function fakeService(overrides: Partial<KnowledgeConnectionService> = {}): KnowledgeConnectionService {

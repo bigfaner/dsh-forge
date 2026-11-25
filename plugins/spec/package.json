@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/spec",
-  "version": "0.20.11",
+  "version": "0.20.12",
   "private": true,
   "type": "module",
   "description": "规格与共识：把想法澄清成提案、目标与验收标准，为交付流水线提供唯一事实源。",

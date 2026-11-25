@@ -9,15 +9,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  deriveProjectKeyRolledUpGit,
+  resolveProjectKey,
   MARKER_PATTERN,
-  spawnGitPorcelain,
-  type GitPorcelainRunner,
-} from "../../host/assembly/worktree-rollup.js";
-import { deriveProjectKey } from "../../host/db/repositories/project-key.js";
+  projectKeyOf as deriveProjectKey,
+} from "@dsh-forge/lib-path";
+import { spawnGitWorktreePorcelain as spawnGitPorcelain, type GitPorcelainRunner } from "@dsh-forge/lib-path/project-root";
 import taskLoopPlugin from "../../host/index.js";
 
-describe("deriveProjectKeyRolledUpGit（git 现查归拢——runner 注入桩）", () => {
+const NO_REGISTRY = { registryQuery: () => undefined };
+
+describe("resolveProjectKey（git 现查归拢——runner 注入桩）", () => {
   const ROOT = "Z:\\ws\\proj";
   const WT = `${ROOT}\\.forge\\worktrees\\plugins`;
   const porcelain = [
@@ -33,21 +34,21 @@ describe("deriveProjectKeyRolledUpGit（git 现查归拢——runner 注入桩�
   const runner: GitPorcelainRunner = () => porcelain;
 
   it("marker 命中 + porcelain 现查 → 主根键 = porcelain 首条目派生（非路径剥取，分隔符随 cwd 拼写）", () => {
-    const result = deriveProjectKeyRolledUpGit(WT, runner);
+    const result = resolveProjectKey(WT, { ...NO_REGISTRY, gitRunner: runner });
     expect(result.rolledUp).toBe(true);
     expect(result.mainRoot).toBe(ROOT);
     expect(result.key).toBe(deriveProjectKey(ROOT));
   });
 
   it("worktree 树内子路径 cwd 同样归拢主根键", () => {
-    const result = deriveProjectKeyRolledUpGit(`${WT}\\host\\src`, runner);
+    const result = resolveProjectKey(`${WT}\\host\\src`, { ...NO_REGISTRY, gitRunner: runner });
     expect(result.rolledUp).toBe(true);
     expect(result.key).toBe(deriveProjectKey(ROOT));
   });
 
   it("非 worktree 形态 → 零 git 调用（runner 不触）+ 原样派生", () => {
     const spy = vi.fn<GitPorcelainRunner>(runner);
-    expect(deriveProjectKeyRolledUpGit(ROOT, spy).key).toBe(deriveProjectKey(ROOT));
+    expect(resolveProjectKey(ROOT, { ...NO_REGISTRY, gitRunner: spy }).key).toBe(deriveProjectKey(ROOT));
     expect(spy).not.toHaveBeenCalled();
     // 仅 .forge 一段 / worktrees 单段 / 大小写变体均不触发
     for (const cwd of [`${ROOT}\\.forge\\tmp`, `${ROOT}\\worktrees\\plugins`, `${ROOT}\\.Forge\\Worktrees\\plugins`]) {
@@ -59,21 +60,21 @@ describe("deriveProjectKeyRolledUpGit（git 现查归拢——runner 注入桩�
     const failing: GitPorcelainRunner = () => {
       throw new Error("git not found");
     };
-    const result = deriveProjectKeyRolledUpGit(WT, failing);
+    const result = resolveProjectKey(WT, { ...NO_REGISTRY, gitRunner: failing });
     expect(result.rolledUp).toBe(false);
     expect(result.key).toBe(deriveProjectKey(WT));
     expect(result.fallbackReason).toContain("git not found");
   });
 
   it("porcelain 清单不含 cwd → 回退 cwd 键（非本仓 worktree）", () => {
-    const result = deriveProjectKeyRolledUpGit(WT, () => "worktree Z:/other/repo\n");
+    const result = resolveProjectKey(WT, { ...NO_REGISTRY, gitRunner: () => "worktree Z:/other/repo\n" });
     expect(result.rolledUp).toBe(false);
     expect(result.key).toBe(deriveProjectKey(WT));
     expect(result.fallbackReason).toContain("非本仓 worktree");
   });
 
   it("空 cwd → 派生拒绝原样上抛（ProjectKeyDerivationError）", () => {
-    expect(() => deriveProjectKeyRolledUpGit("")).toThrowError(/ERR_PROJECT_KEY_DERIVATION/);
+    expect(() => resolveProjectKey("", NO_REGISTRY)).toThrowError(/ERR_PROJECT_KEY_DERIVATION/);
   });
 });
 

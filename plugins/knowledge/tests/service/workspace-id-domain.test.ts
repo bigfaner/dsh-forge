@@ -9,7 +9,11 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../host/storage/index.js'
 import { createKnowledgeService } from '../../host/service/service.js'
-import { projectKeyOf } from '../../host/project-key.js'
+import { projectKeyOf as libProjectKeyOf } from '@dsh-forge/lib-path'
+import { canonicalWsPath } from '../../host/storage/registry.js'
+
+// 被测口径 = knowledge 派生键（lib projectKeyOf · canonical 基准 ws_path）
+const projectKeyOf = (wsPath: string): string => libProjectKeyOf(canonicalWsPath(wsPath))
 import { registryProjectsSource, type WorkspaceRegistryFace } from '../../host/connection-rpc.js'
 import type { BrowseKnowledgeService } from '../../host/service/types.js'
 

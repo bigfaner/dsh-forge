@@ -3,12 +3,11 @@
 // 定位 = 装配缝合零域逻辑：工具薄封装消费本插件两域服务（tasks/checkpoints）；循环内核
 // 依赖按 AGENTS 1.6 可选消费现查（agents 注册表缺席 = 叙述通道 no-op 降级，循环正确性
 // 只依赖宿主事件）。返回注册清单 + 循环卸载收口（driver.dispose——活循环同步终态注销）。
-import { deriveProjectKeyRolledUpGit } from "./worktree-rollup.js";
 
 /**
  * worktree 归拢主根推导（2026-11-24 用户裁决：git 命令现查，禁自造路径剥取规则——
  * f5 键族缝回退主根单键时任务 tab 空数据真因修口，诊断留痕 .forge/task-logs/）：
- * marker 段仅作触发条件，主根 = `git worktree list --porcelain` 现查首条目（worktree-rollup
+ * marker 段仅作触发条件，主根 = `git worktree list --porcelain` 现查首条目（lib-path resolveProjectKey
  * 单源）。git 缺席/命令失败/cwd 不属清单 = fail-soft 回退 cwd 键 + 回退原因留痕（不静默）。
  * G-F3 收口门口径限定留痕：43f92e1b 收口门「porcelain spawn/parse 复本全仓 grep 零命中」
  * **限于归拢/清单面**（本模块与 spec/project 的归拢消费点，均走 lib-path/project-root
@@ -25,7 +24,7 @@ import { createInProcessDriverSpawn } from "../spawn/in-process-driver.js";
 import { defaultWorkerTreeGuard } from "../spawn/job-tree.js";
 import { createTriageHook } from "../triage/triage.js";
 import { createRecurrenceFaces, type RecurrenceBugsFace } from "../dispatch-core/recurrence-faces.js";
-import { forgeDirOfWorkspace, workspaceDocsRoot } from "@dsh-forge/lib-path";
+import { forgeDirOfWorkspace, resolveProjectKey as rollupProjectKey, workspaceDocsRoot } from "@dsh-forge/lib-path";
 import { join } from "node:path";
 import { taskLogsDirOf } from "../domain/tasks/task-logs-dir.js";
 import { createSettleReportRecovery, type SettleReportRecoveryDeps } from "../dispatch-core/settle.js";
@@ -138,7 +137,7 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
   const resolveProjectKey = (exec: TaskToolExecFace): string => {
     const session = sessionContextOf(exec as ToolExecFace);
     if (session.cwd === undefined) throw new WorkspaceNotRegisteredError({});
-    const rollup = deriveProjectKeyRolledUpGit(session.cwd);
+    const rollup = rollupProjectKey(session.cwd, { registryQuery: () => undefined });
     if (rollup.rolledUp) {
       emitForgeDiag(diagEmit, {
         level: "info",

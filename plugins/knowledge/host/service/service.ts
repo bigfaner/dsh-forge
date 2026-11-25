@@ -30,7 +30,7 @@ import type {
 import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/contracts'
 import { withImmediateTransaction } from '../storage/concurrency.js'
 import { canonicalWsPath, createKnowledgeRegistry } from '../storage/registry.js'
-import { projectKeyOf } from '../project-key.js'
+import { projectKeyOf } from '@dsh-forge/lib-path'
 import { rebuildKnowledgeIndex } from '../storage/rebuild.js'
 import { InvalidKnowledgeDirError as StorageInvalidKnowledgeDirError } from '../storage/scan.js'
 import {
@@ -295,7 +295,7 @@ export function createKnowledgeService(deps: KnowledgeServiceDeps): BrowseKnowle
     // 双 miss 时逐注册行反派生比对命中
     if (bound === undefined) {
       for (const r of selectRegistryWsPaths.all()) {
-        if (projectKeyOf(r.ws_path) === projectId) {
+        if (projectKeyOf(canonicalWsPath(r.ws_path)) === projectId) {
           bound = r.ws_path
           break
         }

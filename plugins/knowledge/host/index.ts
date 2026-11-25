@@ -28,10 +28,11 @@ import {
   resolveKnowledgeDbFile,
   globalKnowledgeDir,
 } from './storage/index.js'
+import { canonicalWsPath } from './storage/registry.js'
 import { dirname } from 'node:path'
 import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
 import { joinDirSegment } from '@dsh-forge/path-key'
-import { projectKeyOf } from './project-key.js'
+import { projectKeyOf } from '@dsh-forge/lib-path'
 import { defaultKnowledgeDirOf, resolveKnowledgeDir, type KnowledgeDirSetting } from './knowledge-dir.js'
 import {
   isForgeProjectsSource,
@@ -358,7 +359,7 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
               if (storage.registry.findByWsPath(row.path) !== undefined) continue
               await service.registerProject({
                 wsPath: row.path,
-                projectId: projectKeyOf(row.path),
+                projectId: projectKeyOf(canonicalWsPath(row.path)),
                 skipMaterialize: true,
               })
             } catch (cause) {

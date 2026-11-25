@@ -7,12 +7,12 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, mkdirSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveProjectKey } from "@dsh-forge/lib-path";
 import type { GitPorcelainRunner } from "@dsh-forge/lib-path/project-root";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
 import {
   createForgeSpecsService,
   deriveProjectKey,
-  deriveProjectKeyRolledUp,
   type ForgeSpecsService,
 } from "../../host/domain/specs/service.js";
 import { createForgeToolServices, type ForgeToolServices } from "../../host/domain/specs/tool-service.js";
@@ -39,9 +39,9 @@ const GOALS = [
   { title: "目标一", acs: ["判据 A"] },
 ];
 
-describe("deriveProjectKeyRolledUp（lib 单源消费面）", () => {
+describe("resolveProjectKey（lib 单源——runner 注入）", () => {
   it("marker 命中 → 归拢主根键（主根拼写随 cwd 反斜杠风格改写）", () => {
-    const r = deriveProjectKeyRolledUp(WT_CWD, porcelainRunner);
+    const r = resolveProjectKey(WT_CWD, { registryQuery: () => undefined, gitRunner: porcelainRunner });
     expect(r.rolledUp).toBe(true);
     expect(r.mainRoot).toBe("Z:\\ws\\proj");
     expect(r.key).toBe(deriveProjectKey("Z:\\ws\\proj"));
@@ -50,16 +50,16 @@ describe("deriveProjectKeyRolledUp（lib 单源消费面）", () => {
   it("非 marker cwd → 零 git 调用原样派生", () => {
     let calls = 0;
     const spy: GitPorcelainRunner = () => (calls += 1, "");
-    const r = deriveProjectKeyRolledUp("Z:\\project\\demo", spy);
+    const r = resolveProjectKey("Z:\\project\\demo", { registryQuery: () => undefined, gitRunner: spy });
     expect(r.rolledUp).toBe(false);
     expect(r.key).toBe(deriveProjectKey("Z:\\project\\demo"));
     expect(calls).toBe(0);
   });
 
   it("git 探针抛错 → fail-soft 回退 cwd 键 + fallbackReason", () => {
-    const r = deriveProjectKeyRolledUp(WT_CWD, () => {
+    const r = resolveProjectKey(WT_CWD, { registryQuery: () => undefined, gitRunner: () => {
       throw new Error("git not found");
-    });
+    } });
     expect(r.rolledUp).toBe(false);
     expect(r.key).toBe(deriveProjectKey(WT_CWD));
     expect(r.fallbackReason).toContain("fail-soft");

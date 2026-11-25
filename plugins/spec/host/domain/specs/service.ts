@@ -3,18 +3,18 @@
 // updateSpec 守卫族（必含 Goal / 归档冻结 / rel_path 跨 spec 重复）、transitionSpec
 // 状态机两写（现值 UPDATE + 台账 append 同事务）。
 // 依赖注入形态：SpecVerbDeps（db 动词零裸开；writeSpecDoc 文件写缝——装配面注真实现、
-// 测试注桩）；归属键 = cwd 派生 + worktree 归拢主根键（deriveProjectKeyRolledUp 单点，
-// 写读动词全量经此——marker 不命中零 git 调用，派生失败拒写）。
+// 测试注桩）；归属键 = cwd 派生 + worktree 归拢主根键（resolveSpecProjectKey 单点，
+// 写读动词全量经此——lib-path resolveProjectKey 单源，marker 不命中零 git 调用，派生失败
+// 转 spec 域错误拒写）。
 import { randomUUID } from "node:crypto";
 import type Database from "@dsh-forge/lib-db";
-import { deriveDirName } from "@dsh-forge/lib-path";
 import {
-  isInWorktreeTree,
-  matchPathSpelling,
-  resolveMainCheckoutRoot,
-  spawnGitWorktreePorcelain,
-  type GitPorcelainRunner,
-} from "@dsh-forge/lib-path/project-root";
+  ProjectKeyDerivationError,
+  type ProjectKeyResolution,
+  projectKeyOf,
+  resolveProjectKey,
+} from "@dsh-forge/lib-path";
+import type { GitPorcelainRunner } from "@dsh-forge/lib-path/project-root";
 import { withTransaction } from "@dsh-forge/lib-db";
 import type { DocsRepo } from "../../db/repositories/docs-repo.js";
 import type { MilestoneRepo } from "../../db/repositories/milestone-repo.js";
@@ -155,51 +155,37 @@ export function assertTiersValid(tiers: string[] | undefined): string[] {
   return value;
 }
 
-/** 归属键派生单源（lib/path）——cwd 空/空白即派生失败拒写（NOT NULL 无 default 的服务层前置门）。 */
+/**
+ * 归属键派生（lib-path projectKeyOf 单源）——spec 域对外的错误契约保持：空/空白 cwd
+ * 转 SpecError（ERR_SPEC_PROJECT_KEY_DERIVATION），服务层派生门拒写（NOT NULL 无 default）。
+ */
 export function deriveProjectKey(cwd: string): string {
-  const key = typeof cwd === "string" ? deriveDirName(cwd) : "";
-  if (!cwd.trim() || !key.trim()) {
+  try {
+    return projectKeyOf(cwd);
+  } catch (cause) {
+    if (!(cause instanceof ProjectKeyDerivationError)) throw cause;
     throw new SpecError("ERR_SPEC_PROJECT_KEY_DERIVATION", "归属键派生失败：cwd 缺失", {
       cwd,
     });
   }
-  return key;
-}
-
-/** worktree 检出形态触发 marker（主根归拢廉价预检——零 git 调用省费，task-loop 同径） */
-const WORKTREE_MARKER = /[\\/]\.forge[\\/]worktrees[\\/]/;
-
-/** worktree 归拢结果（rolledUp = git 推导成功；fallbackReason = fail-soft 回退原因） */
-export interface ProjectKeyRollupResult {
-  readonly key: string;
-  readonly rolledUp: boolean;
-  /** git 现查推导出的主检出根（rolledUp = true 时在场，deriveProjectKey 原文口径） */
-  readonly mainRoot?: string;
-  readonly fallbackReason?: string;
 }
 
 /**
- * worktree 归拢主根推导（M3 写侧归拢单点——lib-path project-root 单源消费，task-loop
- * tool-family 同形）：① marker 不命中 → 零 git 调用，原样 deriveProjectKey(cwd)；
- * ② marker 命中 → lib 单源 porcelain 现查；cwd 归属清单任一条目子树 → 主根 = 首条目
- * （git 主行恒先列）→ deriveProjectKey(主根)。键拼写语义（G-F2 改述）：键派生经
- * normalizeDirSpelling 归一——分隔符方向/尾分隔符不敏感、大小写仍敏感；主根经
- * matchPathSpelling 同形改写为 cwd 分隔符风格，写读两侧键字面全等双保险；③ git 失败/空清单/非本仓清单 = fail-soft 回退 cwd 键 + 回退原因
- * （调用方经诊断面留痕）。空 cwd 派生拒绝由 deriveProjectKey 原样上抛（marker 不命中径）。
+ * 归属键 worktree 归拢（lib-path resolveProjectKey 单源——M3 写侧归拢单点，写读动词
+ * 全量经此）：标记不命中零 git 调用原样 cwd 键；git 现查归拢主根键；git 失败 / 非本仓
+ * 回退 cwd 键 + 回退原因（调用方经诊断面留痕）。空 cwd 派生拒绝经 deriveProjectKey 转
+ * spec 域错误契约。
  */
-export function deriveProjectKeyRolledUp(cwd: string, runner: GitPorcelainRunner = spawnGitWorktreePorcelain): ProjectKeyRollupResult {
-  if (!WORKTREE_MARKER.test(cwd)) {
+export function resolveSpecProjectKey(cwd: string, runner?: GitPorcelainRunner): ProjectKeyResolution {
+  try {
+    return resolveProjectKey(cwd, {
+      registryQuery: () => undefined,
+      ...(runner !== undefined ? { gitRunner: runner } : {}),
+    });
+  } catch (cause) {
+    if (!(cause instanceof ProjectKeyDerivationError)) throw cause;
     return { key: deriveProjectKey(cwd), rolledUp: false };
   }
-  const probe = resolveMainCheckoutRoot(cwd, runner);
-  if (probe.entries === undefined) {
-    return { key: deriveProjectKey(cwd), rolledUp: false, fallbackReason: probe.reason };
-  }
-  if (!isInWorktreeTree(probe.entries, cwd)) {
-    return { key: deriveProjectKey(cwd), rolledUp: false, fallbackReason: "porcelain 清单不含 cwd（非本仓 worktree）——回退 cwd 键" };
-  }
-  const canonicalRoot = matchPathSpelling(cwd, probe.entries[0]!.path);
-  return { key: deriveProjectKey(canonicalRoot), rolledUp: true, mainRoot: canonicalRoot };
 }
 
 function assertGoalsValid(goals: GoalInput[]): void {
@@ -245,7 +231,7 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
   // 归属键派生单点（M3 写侧归拢——写读动词全量经此，worktree cwd 归拢主根键；
   // 归拢发生/回退经诊断面留痕，零 git 调用常态零噪声）
   const keyOf = (cwd: string): string => {
-    const rollup = deriveProjectKeyRolledUp(cwd, gitPorcelain);
+    const rollup = resolveSpecProjectKey(cwd, gitPorcelain);
     if (rollup.rolledUp) {
       diag?.(`[spec] 归属键归拢：worktree cwd 归拢主根键 cwd=${cwd} key=${rollup.key}`);
     } else if (rollup.fallbackReason !== undefined) {

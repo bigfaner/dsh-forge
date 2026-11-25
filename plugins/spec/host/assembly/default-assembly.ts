@@ -8,7 +8,7 @@ import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { openSpecDb, specDbFileName, type SpecDomainDb } from "../db/connection.js";
 import { SpecError } from "../domain/specs/errors.js";
-import { createForgeSpecsService, deriveProjectKeyRolledUp, type ForgeSpecsService } from "../domain/specs/service.js";
+import { createForgeSpecsService, resolveSpecProjectKey, type ForgeSpecsService } from "../domain/specs/service.js";
 
 export { specDbFileName };
 
@@ -95,7 +95,7 @@ export function assembleSpecServices(config: SpecAssemblyConfig = {}, diag?: Ass
       const write = createSpecDocWriter(
         config.resolveWsPath ?? ((key) => {
           if (cwd === "") return undefined;
-          const rollup = deriveProjectKeyRolledUp(cwd, config.gitPorcelain);
+          const rollup = resolveSpecProjectKey(cwd, config.gitPorcelain);
           return key === rollup.key ? (rollup.mainRoot ?? cwd) : undefined;
         }),
       );

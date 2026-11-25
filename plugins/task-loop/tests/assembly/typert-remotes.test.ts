@@ -22,7 +22,7 @@ import {
   type TypertAssemblyCtxFace,
 } from "../../host/assembly/typert-remotes.js";
 import { createTasksHarness, seedTask, type TasksHarness } from "../domain-tasks/harness.js";
-import { deriveProjectKey } from "../../host/db/repositories/project-key.js";
+import { projectKeyOf } from "@dsh-forge/lib-path";
 import type { ForgeWorktreesFamilyFace } from "../../host/assembly/typert-remotes.js";
 
 let h: TasksHarness;
@@ -473,7 +473,7 @@ describe("入参身份 host 半解析（projectId → project_key）", () => {
 // ── 键族聚合（f5——worktree 任务主根概览可见：快照族按键族合并，写面单键不外溢） ──
 
 const WT_PATH = "Z:\\ws\\domain-tasks\\.forge\\worktrees\\plugins";
-const WT_KEY = deriveProjectKey(WT_PATH);
+const WT_KEY = projectKeyOf(WT_PATH);
 
 /** forge.worktrees 键族缝替身（list entries[].path——主根 wsPath 下单 worktree 行） */
 function worktreesFaceOf(pathsOf: (projectRoot: string) => readonly string[]): ForgeWorktreesFamilyFace {

@@ -20,7 +20,7 @@ import type { ObjectiveWrite } from "./objective-lifecycle.js";
 import * as roadmaps from "./roadmap-service.js";
 import type { RoadmapAchievementDto } from "./roadmap-service.js";
 import { acceptSpec } from "./spec-lifecycle.js";
-import { deriveProjectKeyRolledUp, type ForgeSpecsService, type GoalInput } from "./service.js";
+import { type ForgeSpecsService, type GoalInput, resolveSpecProjectKey } from "./service.js";
 import type { GitPorcelainRunner } from "@dsh-forge/lib-path/project-root";
 import { specStats, type SpecStatsPayload } from "./spec-stats.js";
 
@@ -147,7 +147,7 @@ export interface ForgeToolServices {
 export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
   // 归属键派生单点（M3 写侧归拢——工具面动词全量经此，worktree cwd 归拢主根键；
   // 域服务径由 service 层 keyOf 单点承担，本面只覆盖 repo 直读动词与投影查询键）
-  const projectKeyOf = (cwd: string): string => deriveProjectKeyRolledUp(cwd, deps.gitPorcelain).key;
+  const projectKeyOf = (cwd: string): string => resolveSpecProjectKey(cwd, deps.gitPorcelain).key;
 
   function parseAc(raw: readonly unknown[] | undefined, allowAddress: boolean): AcEntry[] | undefined {
     if (raw === undefined) return undefined;

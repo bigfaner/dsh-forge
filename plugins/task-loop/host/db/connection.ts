@@ -13,7 +13,7 @@ import {
   taskTableNames,
   type TaskDbTables,
 } from "./migrations/version-1.js";
-import { deriveProjectKey } from "./repositories/project-key.js";
+import { projectKeyOf } from "@dsh-forge/lib-path";
 
 export interface DomainDbOpts {
   /** 库文件覆盖（':memory:' 供域逻辑测试；缺省 = {home}/forge/db/task-loop/task-loop.db） */
@@ -49,6 +49,6 @@ export function openDomainDb(home: string, opts: DomainDbOpts = {}): DomainDb {
   return {
     db,
     tables: taskTableNames(),
-    projectKeyOf: deriveProjectKey,
+    projectKeyOf,
   };
 }
