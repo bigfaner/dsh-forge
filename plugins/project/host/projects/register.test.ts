@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { openDomainDb, PROJECT_DB_PREFIX, type DomainDb } from '../db/connection.js'
 import type { ProjectRow, WorkspaceRow } from '../db/row-types.js'
-import { classifyRegistrationCollision } from '@dsh-forge/lib-path'
+import { classifyRegistrationCollision, projectKeyOf } from '@dsh-forge/lib-path'
 import { ProjectsRegisterService, isWsPathUniqueCollision } from './register.js'
 import type { ProjectRegistryPort } from './registry-adapter.js'
 import { SuspectedMoveError, WorkspaceCreateError, ProjectWriteError, CompensationError } from './errors.js'
@@ -146,7 +146,7 @@ describe('ProjectsRegisterService（五步补偿链）', () => {
       })
       expect(result.attachedToExisting).toBe(false)
       const row = domain.repos.projects.get(result.projectId)!
-      expect(row.projectKey).toBe(domain.repos.projects.projectKeyOf('Z:\\ws\\alpha'))
+      expect(row.projectKey).toBe(projectKeyOf('Z:\\ws\\alpha'))
       expect(row.forgeDirExternal).toBe(false)
       const main = domain.repos.workspaces.getMain(result.projectId)!
       expect(main.workspaceId).toBe(result.workspaceId)

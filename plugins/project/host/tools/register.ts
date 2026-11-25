@@ -2,7 +2,7 @@
 // task-loop registerToolFamily 同配方）：cwd → projectId 解析器装配 + 四员逐枚注册 +
 // unmount 全撤回。缝缺席/劣形 = 工具面零注册 + warn 留痕（降级诚实不阻载——bug 写径
 // 对本宿主不可达的根因即缝缺席，非静默失联）。
-import { normalizeFsPath } from "@dsh-forge/lib-path";
+import { normalizeFsPath, projectKeyOf } from "@dsh-forge/lib-path";
 import {
   isInWorktreeTree,
   matchPathSpelling,
@@ -48,7 +48,6 @@ export function createBugProjectIdResolver(deps: {
     const norm = normalizeFsPath(cwd);
     const db = deps.db;
     if (db !== undefined) {
-      const projectKeyOf = db.repos.projects.projectKeyOf;
       let key = projectKeyOf(cwd);
       if (WORKTREE_MARKER.test(cwd)) {
         const probe = resolveMainCheckoutRoot(cwd, deps.gitPorcelain ?? spawnGitWorktreePorcelain);

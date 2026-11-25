@@ -44,11 +44,6 @@ export class ProjectsRepo {
     this.#tables = tables
   }
 
-  /** 归属键纯函数投影 f(wsPath) 单源（lib-path deriveDirName = flatten@hash8）。 */
-  projectKeyOf(wsPath: string): string {
-    return deriveDirName(wsPath)
-  }
-
   insert(row: ProjectRow): void {
     this.#db
       .prepare(

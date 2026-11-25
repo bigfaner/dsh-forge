@@ -2,6 +2,7 @@
 // NULL 垫底）+ 归档过滤 + 标题对齐（registry title 读面）；读路径自证：project_key ≠
 // f(main 行 ws_path) 投影 = suspected-move 语义——emitDiag warn 留痕 + 拒自动改（显式迁移动词面）。
 import type { Project, ProjectSummary } from '@dsh-forge/lib-api'
+import { projectKeyOf } from '@dsh-forge/lib-path'
 import type { DiagEventPayload } from '@dsh-forge/lib-diag'
 import type { ProjectsRepo, WorkspacesRepo } from '../db/repositories/index.js'
 import { diag } from './errors.js'
@@ -94,7 +95,7 @@ export class ProjectsQueryService {
    */
   private selfCertify(projectKey: string, projectId: string, mainWsPath: string | undefined): void {
     if (mainWsPath === undefined) return
-    const expected = this.#deps.projects.projectKeyOf(mainWsPath)
+    const expected = projectKeyOf(mainWsPath)
     if (expected === projectKey) return
     diag(this.#deps.onDiag, {
       level: 'warn',

@@ -6,19 +6,18 @@
 // 替身纪律：替身落 DomainDb repos 端口缝（测试侧组合根构造——零生产口）。
 import { describe, expect, it, vi } from "vitest";
 import type { DomainDb } from "../db/connection.js";
+import { projectKeyOf } from "@dsh-forge/lib-path";
 import { createBugTools } from "./bug-tools.js";
 import { createBugProjectIdResolver, registerBugTools } from "./register.js";
 
 /** 最小 DomainDb 替身（只塑 resolver 消费的四方法——其余零实现） */
 function fakeDb(input: {
-  keyOf?: (cwd: string) => string;
   byKey?: Record<string, { id: string }>;
   mains?: Record<string, string>;
 }): DomainDb {
   return {
     repos: {
       projects: {
-        projectKeyOf: input.keyOf ?? ((cwd: string) => `key:${cwd}`),
         getByKey: (key: string) => input.byKey?.[key],
         list: () => [...Object.values(input.byKey ?? {}), ...Object.keys(input.mains ?? {}).map((id) => ({ id }))],
       },
@@ -38,8 +37,7 @@ const PORCELAIN_WS_FIRST = "worktree X:/ws\n\nworktree X:/ws/.forge/worktrees/wt
 describe("createBugProjectIdResolver（三腿解析）", () => {
   it("腿①：projectKeyOf 派生键 getByKey 命中即返回（不进 core 退路）", async () => {
     const db = fakeDb({
-      keyOf: (cwd) => `key:${cwd}`,
-      byKey: { "key:X:/ws": { id: "p-key" } },
+      byKey: { [projectKeyOf("X:/ws")]: { id: "p-key" } },
       mains: { "p-key": "X:/nowhere" },
     });
     const coreProjects = vi.fn();
@@ -50,8 +48,7 @@ describe("createBugProjectIdResolver（三腿解析）", () => {
 
   it("腿①-worktree：marker cwd 归拢主根键命中（审计 M6——porcelain 现查，主根行先列）", async () => {
     const db = fakeDb({
-      keyOf: (p) => `key:${p}`,
-      byKey: { "key:X:\\ws": { id: "p-wt" } },
+      byKey: { [projectKeyOf("X:\\ws")]: { id: "p-wt" } },
     });
     const runner = vi.fn(() => PORCELAIN_WS_FIRST);
     const diag = vi.fn();
@@ -63,8 +60,7 @@ describe("createBugProjectIdResolver（三腿解析）", () => {
 
   it("腿①-worktree fail-soft：git 探针抛错 → 回退 cwd 键（行为同修口前）+ 回退留痕", async () => {
     const db = fakeDb({
-      keyOf: (p) => `key:${p}`,
-      byKey: { "key:X:\\ws\\.forge\\worktrees\\wt": { id: "p-fb" } },
+      byKey: { [projectKeyOf("X:\\ws\\.forge\\worktrees\\wt")]: { id: "p-fb" } },
     });
     const runner = vi.fn(() => {
       throw new Error("git absent");
@@ -77,8 +73,7 @@ describe("createBugProjectIdResolver（三腿解析）", () => {
 
   it("腿①-worktree 非本仓清单（cwd 不属条目子树）→ fail-soft 回退 cwd 键", async () => {
     const db = fakeDb({
-      keyOf: (p) => `key:${p}`,
-      byKey: { "key:X:\\ws\\.forge\\worktrees\\wt": { id: "p-foreign" } },
+      byKey: { [projectKeyOf("X:\\ws\\.forge\\worktrees\\wt")]: { id: "p-foreign" } },
     });
     const resolve = createBugProjectIdResolver({
       db,
@@ -129,8 +124,7 @@ describe("createBugProjectIdResolver（三腿解析）", () => {
 describe("worktree cwd record_bug 全链（审计 M6）", () => {
   it("worktree cwd 会话 record_bug → 归拢主根键命中项目行，服务收主根 projectId（不再 ERR_WORKSPACE_NOT_REGISTERED）", async () => {
     const db = fakeDb({
-      keyOf: (p) => `key:${p}`,
-      byKey: { "key:X:\\ws": { id: "p-wt" } },
+      byKey: { [projectKeyOf("X:\\ws")]: { id: "p-wt" } },
     });
     const registerBug = vi.fn().mockResolvedValue({});
     const tools = Object.fromEntries(

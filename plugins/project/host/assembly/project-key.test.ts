@@ -2,6 +2,7 @@
 // 恒抛 ERR_BUG_PROJECT_KEY_REQUIRED 行集恒空）：core 代 projectId 经 registry 官方锚
 // （get(id).path）→ projectKeyOf 派生 + 惰性回写归属行（attachExisting 同语义）。
 import { describe, expect, it } from 'vitest'
+import { projectKeyOf } from '@dsh-forge/lib-path'
 import { openDomainDb, PROJECT_DB_PREFIX, type DomainDb } from '../db/connection.js'
 import type { OfficialRegistryFace } from '../projects/registry-adapter.js'
 import { createBugsService } from '../bugs/service.js'
@@ -59,7 +60,7 @@ describe('createProjectKeyResolver：归属键真源解析链（b5707fe4）', ()
     const db = makeDb()
     const registry = fakeRegistry({ 'ws-core-1': { path: 'Z:\\ws\\alpha', title: 'alpha' } })
     const resolve = createProjectKeyResolver({ domainDb: db, registry })
-    const expected = db.repos.projects.projectKeyOf('Z:\\ws\\alpha')
+    const expected = projectKeyOf('Z:\\ws\\alpha')
     await expect(resolve('ws-core-1')).resolves.toBe(expected)
     // 惰性回写：本库行 + main 关系行在库（attachExisting 同语义——后续链全绿）
     expect(db.repos.projects.get('ws-core-1')?.projectKey).toBe(expected)
@@ -85,7 +86,7 @@ describe('createProjectKeyResolver：归属键真源解析链（b5707fe4）', ()
       coreProjects: coreProjects as () => undefined,
       registry,
     })
-    const expected = db.repos.projects.projectKeyOf('Z:\\ws\\core-ws')
+    const expected = projectKeyOf('Z:\\ws\\core-ws')
     await expect(resolve('core-uuid-1')).resolves.toBe(expected)
     // 回写 main 关系行 workspaceId = core 行 workspaceId（关系真值保留）
     expect(db.repos.workspaces.getMain('core-uuid-1')?.workspaceId).toBe('reg-ws-1')
@@ -103,7 +104,7 @@ describe('createProjectKeyResolver：归属键真源解析链（b5707fe4）', ()
       coreProjects: coreProjects as () => undefined,
       registry,
     })
-    await expect(resolve('core-uuid-2')).resolves.toBe(db.repos.projects.projectKeyOf('Z:\\ws\\core-path'))
+    await expect(resolve('core-uuid-2')).resolves.toBe(projectKeyOf('Z:\\ws\\core-path'))
     expect(registry.getCalls).toEqual([])
     db.db.close()
   })
@@ -121,7 +122,7 @@ describe('createProjectKeyResolver：归属键真源解析链（b5707fe4）', ()
       coreProjects: throwingCore as () => undefined,
       registry,
     })
-    await expect(resolve('core-uuid-3')).resolves.toBe(db.repos.projects.projectKeyOf('Z:\\ws\\fallback'))
+    await expect(resolve('core-uuid-3')).resolves.toBe(projectKeyOf('Z:\\ws\\fallback'))
     const bothAbsent = createProjectKeyResolver({ domainDb: db, coreProjects: () => undefined, registry: fakeRegistry({}) })
     await expect(bothAbsent('core-uuid-4')).resolves.toBeNull()
     db.db.close()
@@ -132,7 +133,7 @@ describe('createProjectKeyResolver：归属键真源解析链（b5707fe4）', ()
     const stamp = '2026-01-01T00:00:00.000Z'
     db.repos.projects.insert({
       id: 'p-native',
-      projectKey: db.repos.projects.projectKeyOf('Z:\\ws\\alpha'),
+      projectKey: projectKeyOf('Z:\\ws\\alpha'),
       title: 'alpha-native',
       forgeDir: 'Z:\\ws\\alpha',
       forgeDirExternal: false,
@@ -153,7 +154,7 @@ describe('createProjectKeyResolver：归属键真源解析链（b5707fe4）', ()
     })
     const registry = fakeRegistry({ 'ws-core-2': { path: 'Z:\\ws\\alpha' } })
     const resolve = createProjectKeyResolver({ domainDb: db, registry })
-    await expect(resolve('ws-core-2')).resolves.toBe(db.repos.projects.projectKeyOf('Z:\\ws\\alpha'))
+    await expect(resolve('ws-core-2')).resolves.toBe(projectKeyOf('Z:\\ws\\alpha'))
     expect(db.repos.projects.get('ws-core-2')).toBeUndefined()
     db.db.close()
   })
