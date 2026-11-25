@@ -4,3 +4,4 @@
 export * from './path-key.js'
 export * from './derive-dir.js'
 export * from './dir-segments.js'
+export * from './forge-dirs.js'
