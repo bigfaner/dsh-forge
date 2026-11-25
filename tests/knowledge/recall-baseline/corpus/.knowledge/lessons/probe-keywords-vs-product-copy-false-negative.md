@@ -1,0 +1,43 @@
+---
+title: 探针断言关键词须与产品文案先对齐再跑
+summary: >-
+  走查「启动里程碑在场」断言用关键词「启动/从头」命中失败，实为产品以「循环执行中 +
+  起止时间区间」承载启动语义——先对齐探针关键词与产品文案再断言，否则产出假阴性偏差记录污染验收结论。
+keywords:
+  - 探针
+  - 关键词断言
+  - 假阴性
+  - 里程碑
+  - 走查
+domainPath: .knowledge/lessons/
+来源容器: loop-message-consolidation
+来源任务: first-pass 复盘（1.8）
+bug id: 无
+id: probe-keywords-vs-product-copy-false-negative
+status: unconfirmed
+type: pitfalls
+version_ts: '2026-11-05T00:00:00.000Z'
+---
+
+# 探针断言关键词须与产品文案先对齐再跑
+
+## 翻车点
+
+1.4 复跑埋点核对：`milestoneHitsA.startup=false`（探针找「启动/从头」），但卡头以「循环执行中 + 起止时间区间」表达启动语义——功能在、断言空转，如实记录为「非缺陷备注」仍消耗了一轮判定成本。
+
+## 判例
+
+- 断言关键词取自产品文案本体（先读模板/组件文案再写探针），不取自提案措辞。
+- 语义改承载方式时（如启动语义并入卡头区间），同步更新探针口径。
+- 假阴性结果先做「文案对齐」归因，再判「功能缺位」。
+
+## 判例二（断言工具陈旧：字面匹配器跟不上预期渲染演进）
+
+triage-progress-row 1.5 走查：probe AC5③ 检查 FAIL，因其字面匹配器找「处置分析」串，而 fix-4 后终态组卡预期渲染为「决策文本 + 完成态」（终态语义折入决策文本）——功能在（DOM 审计：任务行与 triage 行独立聚合键并存，card-audit.json 全档），工具断言陈旧。处置：AC 判定以 DOM 审计证据为准，probe FAIL 如实上报为「工具断言陈旧」而非返工产品或静默放行。
+
+- 探针字面匹配器对「预期渲染形态变化」脆弱：终态/摘要类语义折入其它承载（note、决策文本）时，字面串匹配即失效。
+- 探针 FAIL ≠ 功能缺位 ≠ 自动放行——三态要显式区分，判定权交给结构性 DOM 审计证据，工具债如实留痕。
+
+## 出处
+
+walkthrough/1-4/rerun-20261028.md 埋点核对行；diag-14-progress-card-a.txt；proposals/triage-progress-row/walkthrough/record.md §二（消息面循环事件卡行，card-audit.json）。
