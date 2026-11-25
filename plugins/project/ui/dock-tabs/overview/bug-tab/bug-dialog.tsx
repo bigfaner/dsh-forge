@@ -25,7 +25,8 @@ import {
   type DrawerModalPosition,
 } from '../drawer/collapse.js'
 import { taskDrawerHeadDragProps, useTaskDrawerEscape, type TaskDrawerDragKind } from '../drawer/index.js'
-import { preloadRpcClientFactory, type RpcClientFactory } from '../../rpc-channels.js'
+import { type RpcClientFactory } from '../../rpc-channels.js'
+import { overviewRpcClientFactory } from '../overview-client.js'
 import './bug-dialog.css'
 
 /** 弹框宽（结构刻度：440 任务弹窗两倍——2026-10-14 用户裁决「宽度放大一倍」；
@@ -178,7 +179,7 @@ export interface BugDialogProps {
   readonly sessionTitleOf?: (sessionId: string) => string | undefined
   /** 项目锚（fixed 证据变更文件拉取参——缺席 = 变更控件不呈现） */
   readonly projectId?: string
-  /** RPC client 构造器（缺省 preload 真身；注入 = 测试面） */
+  /** RPC client 构造器（缺省 overviewRpcClientFactory——概览 Typert 单通路；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
   /** 复发链条目（时间正序、链根在前——listBugs 行集链投影注入；缺席/单条 = 无链区零变化） */
   readonly chain?: readonly BugCard[]
@@ -198,7 +199,7 @@ interface FilesState {
  *  链注入时 = 当前条本地态（activeId 初始为打开条；点链节点同框切换全卡）。 */
 export function BugDialog({ bug, onClose, onOpenSession, sessionTitleOf, projectId, makeClient, chain }: BugDialogProps): ReactNode {
   useTaskDrawerEscape(bug.bugId, onClose)
-  const clientFactory = makeClient ?? preloadRpcClientFactory
+  const clientFactory = makeClient ?? overviewRpcClientFactory
   // 链同框切换态：chain ≥ 2 条在场 = 链区呈现 + activeId 切换（缺席/孤条 = 恒打开条零链区）
   const chainEntries = chain !== undefined && chain.length >= 2 ? chain : undefined
   const [activeId, setActiveId] = useState(bug.bugId)

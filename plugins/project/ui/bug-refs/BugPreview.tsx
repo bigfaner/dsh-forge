@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { BUG_STATUS_LABELS, type BugCard } from '@dsh-forge/contracts'
 import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState } from '../components.js'
-import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc.js'
+import { createForgeRpcClient, type RpcClientFactory } from '../rpc.js'
 import { TabInfoReader, type UseDockTabInfoMirror } from './dock-tab-mirrors.js'
 import './bug-preview.css'
 
@@ -138,7 +138,7 @@ export function BugPreviewUnavailable({ missing }: { readonly missing: boolean }
 /** 预览体：地址解析 → bugs.list 现查（时点 = openReference 开出时刻）→ 三分支投影 */
 function BugPreviewBody({ contentId, makeClient }: { readonly contentId: string; readonly makeClient?: RpcClientFactory }): ReactNode {
   const parsed = parseForgeBugAddress(contentId)
-  const clientFactory = makeClient ?? preloadRpcClientFactory
+  const clientFactory = makeClient ?? createForgeRpcClient
   const [load, setLoad] = useState<BugLoad>({ phase: 'loading' })
   const seqRef = useRef(0)
   useEffect(() => {

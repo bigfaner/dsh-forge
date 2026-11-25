@@ -26,7 +26,7 @@ import {
   joinWorktreePath,
   type DeleteChecks,
 } from '../worktree-picker/model.js'
-import { preloadRpcClientFactory, type WorktreeFacesRpc } from '../rpc.js'
+import { createForgeRpcClient, type WorktreeFacesRpc } from '../rpc.js'
 import { AddProjectFlow, openAddProjectFlow } from '../add-project/index.js'
 
 /** 本插件详情页 worktree 管理面 list 登记 id（list slot 判同键；e2e/排障锚）。 */
@@ -99,7 +99,7 @@ export function ProjectWorktreesSection(props: {
 
   const rpcOf = useCallback((): WorktreeFacesRpc | undefined => {
     try {
-      return (makeRpc ?? preloadRpcClientFactory)();
+      return (makeRpc ?? createForgeRpcClient)();
     } catch {
       return undefined // 传输构造失败（载体形状漂移）——面板降级
     }

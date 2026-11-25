@@ -7,8 +7,8 @@
 // 为什么读源码而不渲染：既有用例全部注入 makeClient 替身，绕过缺省值——替身永远绿、
 // 真机恒炸（本容器「替身绕过生产路径」判例族）。本钉直接对源码文本断言缺省值归属，
 // 不经任何注入面，任一工厂退回 preload 即红。
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const DIR = import.meta.dirname
@@ -123,6 +123,42 @@ describe('任务子 tab 数据装载缺省 client 工厂（生产默认值——
       const s = src('../../../worktree-picker/picker.tsx')
       expect(s, 'features.list 消费零残留').not.toMatch(/\bfeatures\.list\b/)
       expect(s, 'slug 候选拉取死分支已拔除').not.toContain('collectSlugCandidates')
+    })
+  })
+
+  // ── 2.16 全仓收口门（用户裁决 2026-11-25：preload 消费点全量修复收尾）——扫描
+  //    plugins/project/ui 全部非测试源码，preloadRpcClientFactory 字面量仅允许出现在
+  //    定义本身（ui/rpc.ts、dock-tabs/rpc-channels.ts）、sidebar 再导出面与
+  //    overview-client.ts 的 bugs.list preload 优先回落（Typert fail-soft 色底）。
+  //    任一消费点回引 preload 工厂即红。──
+  describe('全仓收口门（plugins/project/ui 非测试源码 preload 调用零残留）', () => {
+    const UI_ROOT = join(DIR, '../../..')
+    const LEGIT = new Set(['rpc.ts', 'dock-tabs/rpc-channels.ts', 'sidebar/index.ts', 'dock-tabs/overview/overview-client.ts'])
+
+    it('收口后 3 消费点零 preload 字面量且缺省 = Typert 工厂（bug-dialog/detail-section/BugPreview）', () => {
+      const s = src('../bug-tab/bug-dialog.tsx')
+      expect(s, 'bug-dialog 零 preload 工厂引用').not.toMatch(/\bpreloadRpcClientFactory\b/)
+      expect(s, 'bug-dialog 缺省 = 概览 Typert 工厂').toContain('overviewRpcClientFactory')
+      for (const rel of ['../../../detail-section/index.tsx', '../../../bug-refs/BugPreview.tsx']) {
+        const s2 = src(rel)
+        expect(s2, `${rel} 零 preload 工厂引用`).not.toMatch(/\bpreloadRpcClientFactory\b/)
+        expect(s2, `${rel} 数据通路 = Typert 切片工厂`).toContain('createForgeRpcClient')
+      }
+    })
+
+    it('plugins/project/ui 非测试源码 preloadRpcClientFactory 字面量仅剩四处合法保留', () => {
+      const hits: string[] = []
+      const walk = (dir: string): void => {
+        for (const e of readdirSync(dir, { withFileTypes: true })) {
+          const p = join(dir, e.name)
+          if (e.isDirectory()) walk(p)
+          else if (/\.tsx?$/.test(e.name) && !/\.test\./.test(e.name) && readFileSync(p, 'utf8').includes('preloadRpcClientFactory')) {
+            hits.push(relative(UI_ROOT, p).replaceAll('\\', '/'))
+          }
+        }
+      }
+      walk(UI_ROOT)
+      expect(hits.filter((h) => !LEGIT.has(h)), `preload 残留消费点（合法保留 = ${[...LEGIT].join(', ')}）`).toEqual([])
     })
   })
 })
