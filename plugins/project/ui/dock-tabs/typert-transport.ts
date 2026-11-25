@@ -4,14 +4,14 @@
 // dock tab 零渲染。本适配把通道字符串（forge:<seg>/<method>，contracts 常量单源）映射到
 // 官方 Typert remote face 的 namespace 方法（installForgeRemoteFace 页内锚解析缝逐调用
 // 现查；namespace 取法 = rpc.ts namespaceFaceOf 归一——Map/对象/顶层三形态零漂移）：
-// 在场通道照常送达；缺席通道（forge:tasks/docs/knowledge/settings——官方宿主无对应
-// namespace）= typed 拒绝信封（RpcErr 形），消费面既有错误相位收敛，零槽渲染崩溃。
+// 在场通道照常送达；缺席通道（官方宿主无对应 namespace，如 docs/knowledge/settings；或可选
+// 族插件缺席，如 specs/tasks）= typed 拒绝信封（RpcErr 形），消费面既有错误相位收敛，零槽渲染崩溃。
 // 在 dsh-forge 集成态行为不变性：apply 期 installForgeRemoteFace 与 host preload 面
 // 同源装配，适配面同样命中——两宿主单通路。
 import { createForgeRpcClient, type ForgeTransport } from './rpc-channels.js'
 import { forgeRemoteFaceOf, namespaceFaceOf, type ForgeRemoteFace } from '../rpc.js'
 
-/** 通道 seg → Typert namespace（六族在场集；contracts channels 常量的 seg 单源映射） */
+/** 通道 seg → Typert namespace（contracts channels 常量的 seg 单源映射；specs/tasks 为可选族） */
 const SEG_NAMESPACE: Readonly<Record<string, keyof ForgeRemoteFace>> = {
   projects: 'forgeProjects',
   fs: 'forgeFs',
@@ -20,6 +20,7 @@ const SEG_NAMESPACE: Readonly<Record<string, keyof ForgeRemoteFace>> = {
   features: 'forgeFeatures',
   dirs: 'forgeDirs',
   specs: 'forgeSpecs', // G3 spec 子 tab（spec 插件缺席 = namespace 缺席 → typed 拒绝信封，可选边）
+  tasks: 'forgeTasks', // 任务子 tab + drawer（task-loop 插件缺席 = namespace 缺席 → typed 拒绝信封，可选边）
 }
 
 /** 通道字符串解析（forge:<seg>/<method>——形状漂移 = null 调用方 typed 降级） */

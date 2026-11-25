@@ -45,6 +45,34 @@ afterEach(() => {
   delete (globalThis as Record<string, unknown>)[FORGE_REMOTE_FACE_ANCHOR_KEY]
 })
 
+describe('typertTransport tasks 通道（SEG_NAMESPACE tasks 行 pin）', () => {
+  const TASKS_METHODS = ['transition', 'query', 'validateFeatureTasks', 'list', 'stats', 'graph', 'detail', 'sessionLinks'] as const
+
+  it('forge:tasks/<method> 八通道全部命中 forgeTasks.<method>（载荷单参透传）', async () => {
+    const calls: string[] = []
+    const table: Record<string, (arg: unknown) => unknown> = {}
+    for (const m of TASKS_METHODS) {
+      table[`forgeTasks.${m}`] = (arg) => {
+        calls.push(`${m}:${JSON.stringify(arg)}`)
+        return { ok: true, value: `v-${m}` }
+      }
+    }
+    installForgeRemoteFace(() => stubFace(table, ['forgeTasks']))
+    const transport = typertTransport()
+    for (const m of TASKS_METHODS) {
+      await expect(transport(`forge:tasks/${m}`, { projectId: 'p-1' })).resolves.toEqual({ ok: true, data: `v-${m}` })
+    }
+    expect(calls).toEqual(TASKS_METHODS.map((m) => `${m}:{"projectId":"p-1"}`))
+  })
+
+  it('forgeTasks 缺席（task-loop 插件缺席）→ typed 拒绝信封（可选边降级不抛构造错）', async () => {
+    installForgeRemoteFace(() => stubFace({})) // 无 forgeTasks
+    const result = await typertTransport()('forge:tasks/list', { projectId: 'p-1' })
+    expect(result.ok).toBe(false)
+    expect((result as { ok: false; error: { message: string } }).error.message).toContain('forge:tasks/list')
+  })
+})
+
 describe('typertTransport specs 通道（SEG_NAMESPACE specs 行 pin）', () => {
   it('forge:specs/list 命中 forgeSpecs.list：载荷单参透传 + value → data 信封投影', async () => {
     const list = vi.fn(() => ({ ok: true, value: [{ slug: 'demo', title: 'Demo', specStatus: 'confirmed' }] }))
