@@ -7,7 +7,7 @@
 // 2.8 退役测试随迁留痕（不静默删）：原 docs/index.test.tsx（DocsTab 自绘预览/格式分流
 // docFormatOf/fetchDocContent/DocsTab 装载胶水用例）与 dock-tabs.test 原 ForgeDocsTab
 // describe 随 forge:docs/read 文档 tab 读取用途退役——去向 = 官方
-// @deepseek-ai/dsh-client-ui-sidebar-documentpreview（kind 'text'）内置渲染；本文件
+// @deepseek-ai/dsh-client-ui-sidebar-documentpreview 内置渲染（按后缀自动选，不点名 kind）；本文件
 // 「结构钉」describe 承接退役后的结构面（DSWF_DOC_TAB_KIND 零注册/打开路径）。
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -106,7 +106,7 @@ describe('官方渠道文档开出（2.8 openResource + 2.13 数据路 forgeDirs
     }
   }
 
-  it('文档行点击 → openResource(官方 dsh-resource://file/session 地址, {kind:"text"})——地址 = 官方 sessionFileAddress 真实产物（禁手拼）', async () => {
+  it('文档行点击 → openResource(官方 dsh-resource://file/session 地址，不点名 kind——注册表按后缀选渲染器)——地址 = 官方 sessionFileAddress 真实产物（禁手拼）', async () => {
     const { mirror, openResource } = makeSidebarRight()
     const open = dockDocOpener(mirror, 'p1', undefined, makeDirFactsOf(forgeDirFixture))
     expect(open).toBeDefined()
@@ -114,10 +114,11 @@ describe('官方渠道文档开出（2.8 openResource + 2.13 数据路 forgeDirs
     await Promise.resolve()
     await Promise.resolve()
     expect(openResource).toHaveBeenCalledTimes(1)
-    // 期望地址 = 官方构造器真实产物形状（sessionId 内嵌 + forgeDir/docRel join 绝对路径）
+    // 期望地址 = 官方构造器真实产物形状（sessionId 内嵌 + forgeDir/docRel join 绝对路径）；
+    // 实参仅地址一个（强制 kind:'text' = 绕过注册表排序落纯文本兜底——图片/PDF 被按文本开）
+    expect(openResource.mock.calls[0]?.length).toBe(1)
     expect(openResource).toHaveBeenCalledWith(
       sessionFileAddress('sess-1', joinForgeDocPath(forgeDirFixture, 'docs/x/proposal.md')),
-      { kind: 'text' },
     )
     expect(openResource.mock.calls[0]?.[0]).toMatch(/^dsh-resource:\/\/file\/session\//)
     expect(openResource.mock.calls[0]?.[0]).toBe(
@@ -149,9 +150,9 @@ describe('官方渠道文档开出（2.8 openResource + 2.13 数据路 forgeDirs
       // Typert 通路多一跳 invokeRemote await 链——宏任务兜底等稳
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(openResource).toHaveBeenCalledTimes(1)
+      expect(openResource.mock.calls[0]?.length).toBe(1)
       expect(openResource).toHaveBeenCalledWith(
         sessionFileAddress('sess-1', joinForgeDocPath(forgeDirFixture, 'docs/x/proposal.md')),
-        { kind: 'text' },
       )
     } finally {
       delete (globalThis as Record<string, unknown>)[FORGE_REMOTE_FACE_ANCHOR_KEY]
@@ -225,9 +226,10 @@ describe('结构钉（2.8 AC②）：project ui 源码零 DSWF_DOC_TAB_KIND 注�
     expect(src, '零 DocsTab import/渲染（自绘预览退役——注释指称豁免）').not.toMatch(/import \{ DocsTab|<DocsTab/)
     expect(src, '零 docs/index 依赖').not.toMatch(/from '\.\/docs\/index\.js'/)
     expect(src, '零 ForgeDocsTab 导出（文档 tab body 退役）').not.toMatch(/export (function|interface) ForgeDocsTab/)
-    // 官方渠道缝在场（sessionFileAddress 官方构造器单源 + kind 'text'）
+    // 官方渠道缝在场（sessionFileAddress 官方构造器单源）；零强制 kind（点名 'text' = 落纯文本兜底，
+    // 官方文件树口径 = openResource(address) 不传 kind）
     expect(src).toContain('sessionFileAddress')
-    expect(src).toContain("{ kind: 'text' }")
+    expect(src, '文档开出不得强制 kind').not.toMatch(/openResource\([^)]*\{\s*kind:/)
   })
   it('2.13 调用期异常可见面在场：OverviewDockBody ErrorBar 装配（数据路失败 → 错误条呈现——不静默吞）', () => {
     expect(src).toContain('data-dswf-ov-doc-error')

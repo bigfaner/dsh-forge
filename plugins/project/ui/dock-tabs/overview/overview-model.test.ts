@@ -40,7 +40,7 @@ describe('OVERVIEW_SUBTABS（spec | 任务 | Bug 有序三枚——对齐 apps/w
 })
 
 describe('spec 文档区目录列举纯投影（1.2——格式分流 + rel 拼装）', () => {
-  it('specFileFormatOf：扩展名分流（md/html/文本白名单/二进制降级）', () => {
+  it('specFileFormatOf：扩展名归类（md/html/图片/PDF/文本白名单/其余 = other）', () => {
     expect(specFileFormatOf('spec.md')).toBe('markdown')
     expect(specFileFormatOf('prototype.HTML')).toBe('html')
     expect(specFileFormatOf('page.htm')).toBe('html')
@@ -48,15 +48,19 @@ describe('spec 文档区目录列举纯投影（1.2——格式分流 + rel 拼�
     expect(specFileFormatOf('data.json')).toBe('text')
     expect(specFileFormatOf('theme.css')).toBe('text')
     expect(specFileFormatOf('cfg.yaml')).toBe('text')
-    expect(specFileFormatOf('logo.bin')).toBe('binary')
-    expect(specFileFormatOf('archive.tar.gz')).toBe('binary')
-    expect(specFileFormatOf('Makefile')).toBe('binary')
+    expect(specFileFormatOf('logo.PNG')).toBe('image')
+    expect(specFileFormatOf('arch.svg')).toBe('image')
+    expect(specFileFormatOf('print.pdf')).toBe('pdf')
+    expect(specFileFormatOf('logo.bin')).toBe('other')
+    expect(specFileFormatOf('archive.tar.gz')).toBe('other')
+    expect(specFileFormatOf('Makefile')).toBe('other')
   })
 
-  it('SPEC_FILE_FORMAT_LABELS：四键封闭 + 中文词汇', () => {
-    expect(Object.keys(SPEC_FILE_FORMAT_LABELS)).toEqual(['markdown', 'html', 'text', 'binary'])
+  it('SPEC_FILE_FORMAT_LABELS：六键封闭 + 中文词汇', () => {
+    expect(Object.keys(SPEC_FILE_FORMAT_LABELS)).toEqual(['markdown', 'html', 'text', 'image', 'pdf', 'other'])
     expect(SPEC_FILE_FORMAT_LABELS.text).toBe('文本')
-    expect(SPEC_FILE_FORMAT_LABELS.binary).toBe('二进制')
+    expect(SPEC_FILE_FORMAT_LABELS.image).toBe('图片')
+    expect(SPEC_FILE_FORMAT_LABELS.other).toBe('文件')
   })
 
   it('specDocDirOf / joinSpecFileRel / absSpecDirOf：rel 与绝对入参拼装（posix 归一）', () => {

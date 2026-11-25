@@ -3,6 +3,8 @@
 // 失败两支分开（typed 拒绝 = 错误条 + emitDiag 面 error 留痕；ok([]) = 静默空态 + info 留痕）。
 // 数据路 = makeSpecsClient 注入替身（forgeSpecs 消费切片同型）。
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -280,7 +282,7 @@ describe('SpecTab（数据路 + 失败两支分开 + 行形态）', () => {
       expect(files!.textContent).not.toContain('spec.md') // 本体行保留既有文档入口，不重复列举
       expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/prototype.html"]')?.textContent).toContain('HTML')
       expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/notes.txt"]')?.textContent).toContain('文本')
-      expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/logo.bin"]')?.textContent).toContain('二进制')
+      expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/logo.bin"]')?.textContent).toContain('文件')
     })
     it('目录空支（entries: [] → files 区 「—」占位——rpcStubOf 缺省 entries 零成本补，评审 E③）', async () => {
       const host = await renderWithFiles({})
@@ -311,19 +313,18 @@ describe('SpecTab（数据路 + 失败两支分开 + 行形态）', () => {
     // 读取路径闭环锚（评审 D 观察②）：文件 rel 由 listDir 所列同一 dirRel 派生
     //（joinSpecFileRel），onOpenDoc 收到的 rel 与 spec-tab 文档行 doc.relPath 同一
     // relPath 空间——docs.read 按该 rel 解析（canonical(forge_dir) 派生同源，见 spec-tab.tsx 判定留痕）。
-    it('查看通道分流：html/文本 → onOpenDoc（dock 文档 tab 现状）；二进制 → openExternal 降级', async () => {
+    it('查看通道不分流：html/图片/无扩展名文件全部 → onOpenDoc（官方渠道按后缀选渲染器）；零 openExternal 入口', async () => {
       const onOpenDoc = vi.fn()
-      const onOpenExternal = vi.fn()
       const host = await renderSpecTab({
         makeSpecsClient: specsClientOf(async () => CARDS, async () => DOC_DETAIL),
         makeRpc: rpcStubOf({
           entries: [
             { name: 'prototype.html', path: 'Z:/ws/.forge/specs/spec-a/prototype.html' },
-            { name: 'logo.bin', path: 'Z:/ws/.forge/specs/spec-a/logo.bin' },
+            { name: 'logo.png', path: 'Z:/ws/.forge/specs/spec-a/logo.png' },
+            { name: 'data.bin', path: 'Z:/ws/.forge/specs/spec-a/data.bin' },
           ],
         }),
         onOpenDoc,
-        onOpenExternal,
       })
       const toggle = host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-toggle="spec-a"]')
       await act(async () => {
@@ -335,16 +336,26 @@ describe('SpecTab（数据路 + 失败两支分开 + 行形态）', () => {
       await act(async () => {
         await Promise.resolve()
       })
-      await act(async () => {
-        host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-file-open=".forge/specs/spec-a/prototype.html"]')!.click()
-      })
-      await act(async () => {
-        host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-file-external=".forge/specs/spec-a/logo.bin"]')!.click()
-      })
-      expect(onOpenDoc).toHaveBeenCalledTimes(1)
-      expect(onOpenDoc).toHaveBeenCalledWith('.forge/specs/spec-a/prototype.html')
-      expect(onOpenExternal).toHaveBeenCalledTimes(1)
-      expect(onOpenExternal).toHaveBeenCalledWith('.forge/specs/spec-a/logo.bin')
+      expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/logo.png"]')?.textContent).toContain('图片')
+      expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/data.bin"]')?.textContent).toContain('文件')
+      // 每个文件行都是「查看」→ onOpenDoc；不存在另一路入口
+      expect(host.querySelector('[data-dswf-ov-spec-file-external]')).toBeNull()
+      expect(host.querySelector('[data-dswf-ov-spec-file=".forge/specs/spec-a/logo.png"]')?.textContent).not.toContain('在编辑器中打开')
+      for (const rel of ['prototype.html', 'logo.png', 'data.bin']) {
+        await act(async () => {
+          host.querySelector<HTMLButtonElement>(`[data-dswf-ov-spec-file-open=".forge/specs/spec-a/${rel}"]`)!.click()
+        })
+      }
+      expect(onOpenDoc.mock.calls.map((call) => call[0])).toEqual([
+        '.forge/specs/spec-a/prototype.html',
+        '.forge/specs/spec-a/logo.png',
+        '.forge/specs/spec-a/data.bin',
+      ])
+    })
+
+    it('源码零 forge:docs/openExternal 依赖（官方宿主无此通道——原回退触发即忘 = 点击无反应）', () => {
+      const src = readFileSync(join(import.meta.dirname, 'spec-tab.tsx'), 'utf8')
+      expect(src).not.toMatch(/openExternal/)
     })
 
     it('目录列举失败 = fail-soft 单行降级 + diag 留痕（元数据区不阻断）', async () => {

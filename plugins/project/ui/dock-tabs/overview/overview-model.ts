@@ -179,26 +179,31 @@ export function activeFeatureSlug(features: readonly FeatureCard[]): string | un
 
 // ── spec 文档区目录列举（overview-dockkit-alignment 1.2——格式分流纯投影）──
 // spec 展开文档区除 spec.md 外逐行呈现目录其余文件（文件名 + 格式 tag + 查看入口）；
-// 查看通道按格式分流：markdown/html/文本 → dock 文档 tab（DocsTab 内按扩展名分流渲染），
-// 二进制/未知 → openExternal 降级入口（触发即忘）。
+// 查看入口不分流：全部文件走官方 documentpreview（按后缀自动选渲染器——markdown/html/
+// 图片/PDF/Office，无专属渲染器落纯文本兜底）；格式 tag 仅呈现。
 
-/** spec 目录文件格式（分流值域——docs.read 通道零改动，read 后按扩展名分流渲染） */
-export type SpecFileFormat = 'markdown' | 'html' | 'text' | 'binary'
+/** spec 目录文件格式（纯呈现值域——查看通道不依赖它） */
+export type SpecFileFormat = 'markdown' | 'html' | 'text' | 'image' | 'pdf' | 'other'
 
-/** 文本格式扩展名白名单（小写、无点；白名单外含扩展名 = binary 降级） */
+/** 文本格式扩展名白名单（小写、无点；白名单外含扩展名 = other） */
 const SPEC_TEXT_EXTS = new Set([
   'txt', 'json', 'yaml', 'yml', 'css', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'sh', 'py', 'toml', 'xml', 'csv', 'log', 'ini', 'conf',
 ])
 
-/** 扩展名 → 格式分流（纯投影；无扩展名/白名单外 = binary） */
+/** 图片扩展名（官方 documentpreview 内置图片渲染器 IMAGE_EXTENSIONS 同集） */
+const SPEC_IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg'])
+
+/** 扩展名 → 格式（纯投影；无扩展名/白名单外 = other） */
 export function specFileFormatOf(name: string): SpecFileFormat {
   const dot = name.lastIndexOf('.')
-  if (dot <= 0) return 'binary'
+  if (dot <= 0) return 'other'
   const ext = name.slice(dot + 1).toLowerCase()
   if (ext === 'md' || ext === 'markdown') return 'markdown'
   if (ext === 'html' || ext === 'htm') return 'html'
+  if (ext === 'pdf') return 'pdf'
+  if (SPEC_IMAGE_EXTS.has(ext)) return 'image'
   if (SPEC_TEXT_EXTS.has(ext)) return 'text'
-  return 'binary'
+  return 'other'
 }
 
 /** 格式中文名（格式 tag 显示单源） */
@@ -206,7 +211,9 @@ export const SPEC_FILE_FORMAT_LABELS: Readonly<Record<SpecFileFormat, string>> =
   markdown: 'Markdown',
   html: 'HTML',
   text: '文本',
-  binary: '二进制',
+  image: '图片',
+  pdf: 'PDF',
+  other: '文件',
 }
 
 /** doc.relPath → 所在目录 rel（posix 归一；无目录段 = ''） */
@@ -216,7 +223,7 @@ export function specDocDirOf(relPath: string): string {
   return at === -1 ? '' : norm.slice(0, at)
 }
 
-/** 目录 rel + 文件名 → 文件 rel（docs.read / openExternal 同 rel 语义） */
+/** 目录 rel + 文件名 → 文件 rel（onOpenDoc 同 rel 语义） */
 export function joinSpecFileRel(dirRel: string, name: string): string {
   return dirRel === '' ? name : `${dirRel}/${name}`
 }

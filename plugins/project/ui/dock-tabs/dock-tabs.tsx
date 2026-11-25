@@ -7,10 +7,11 @@
 //   - 概览 tab 占用者经 `sidebar.right.pane.tab` keyed 槽装载（inject 自解析缝——
 //     overview-dock-face.ts 装配）；文档开出经具名服务缝（见 dockDocOpener 头注）。
 // 2.8 文档开出退役自绘渠道（用户裁决 2026-11-24：文档打开沿用官方渠道，AGENTS 1.2 复用
-// 优先）：概览/Spec 文档行点击 = `ctx.sidebarRight.openResource(地址, { kind: 'text' })`
-// ——官方 documentpreview（@deepseek-ai/dsh-client-ui-sidebar-documentpreview，kind
-// 'text'，patterns `dsh-resource://file/**` + canOpen session scope，内置 markdown/html/
-// 文本/图片/pdf/office 渲染）；地址 = 官方 sessionFileAddress(sessionId, join(forgeDir,
+// 优先）：概览/Spec 文档行点击 = `ctx.sidebarRight.openResource(地址)`——官方
+// documentpreview（@deepseek-ai/dsh-client-ui-sidebar-documentpreview，patterns
+// `dsh-resource://file/**` + canOpen session scope，内置 markdown/html/
+// 文本/图片/pdf/office 渲染）；不点名 kind：注册表按文件后缀自动选渲染器，无专属渲染器时
+// 落纯文本兜底（强制 kind 'text' = 绕过排序，图片/PDF 被按文本开；官方文件树同口径）；地址 = 官方 sessionFileAddress(sessionId, join(forgeDir,
 // docRel))（@deepseek-ai/dsh-util-workspace-path 构造器单源，禁手拼字符串）；openResource
 // 内部 require() 自取当前挂载会话动作面（概览 tab 在会话面板内则必成功），sessionId 取
 // 服务 `mounted` 在屏会话快照。forgeDir = forgeDirs Typert facts dirKey 'forgeDir' 行
@@ -99,10 +100,12 @@ export function forgeDocFileAddress(sessionId: string, forgeDir: string, docRel:
 
 /**
  * 文档开出动作推导（官方渠道缝）：右栏导航服务与项目锚齐备 → `(docRel) => openResource(
- * forgeDocFileAddress(...), { kind: 'text' })`——官方 documentpreview（kind 'text'，
- * session 作用域）打开。sessionId = 服务 `mounted` 在屏会话快照（点击时点现取）；forgeDir
- * = forgeDirs Typert facts dirKey 'forgeDir' 行（官方 gateway 面唯一数据源——2.13 修口：
- * 缺省 preloadDirFactsClientFactory 零 preload/window.dshForge 依赖，与打开动作同通路）。
+ * forgeDocFileAddress(...))`——官方 documentpreview 打开（不点名 kind：注册表按文件
+ * 后缀自动选渲染器——markdown/html/图片/PDF/Office，无专属渲染器时落纯文本兜底；
+ * 与官方文件树 openResource(address) 同口径）。sessionId = 服务 `mounted` 在屏会话快照
+ * （点击时点现取）；forgeDir = forgeDirs Typert facts dirKey 'forgeDir' 行（官方 gateway
+ * 面唯一数据源——缺省 preloadDirFactsClientFactory 零 preload/window.dshForge 依赖，与
+ * 打开动作同通路）。
  * 任一服务缺席 → undefined（概览文档行/抽屉参考 chip 非交互呈现——仅此缺席降级属 fail-soft）。
  * 调用期异常（数据路不可达/forgeDir 行缺席/openResource 抛错）不吞：经 onError 呈现可见
  * 错误条（文案含失败原因）+ console.warn 留痕（client bundle 诊断豁免面）。
@@ -121,7 +124,7 @@ export function dockDocOpener(
       const rows = await makeDirFacts().facts(projectId)
       const forgeDir = rows.find((row) => row.dirKey === 'forgeDir')?.dir ?? ''
       if (forgeDir === '') throw new Error(`forgeDirs facts forgeDir 行缺席（projectId=${projectId}）`)
-      sidebarRight.openResource(forgeDocFileAddress(sessionId, forgeDir, docRel), { kind: 'text' })
+      sidebarRight.openResource(forgeDocFileAddress(sessionId, forgeDir, docRel))
     })().catch((error: unknown) => {
       const reason = error instanceof Error ? error.message : String(error)
       console.warn(`[dsh-forge/project] 文档开出失败（projectId=${projectId}）`, error)
