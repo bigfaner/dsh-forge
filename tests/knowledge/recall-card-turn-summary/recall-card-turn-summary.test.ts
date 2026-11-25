@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../plugins/knowledge/host/storage/index.js'
 import { createKnowledgeService } from '../../../plugins/knowledge/host/service/service.js'
 import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/types.js'
-import type { RecallGroup } from '../../../contracts/src/index.js'
+import type { RecallGroup } from '../../../packages/contracts/src/index.js'
 
 const root = mkdtempSync(join(tmpdir(), 'knowledge-j-j2-'))
 const ws = join(root, 'ws')
