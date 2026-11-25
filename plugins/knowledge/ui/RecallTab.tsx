@@ -406,7 +406,7 @@ export interface RecallCardViewProps {
   readonly onCallReject: (group: RecallGroup) => void
   /** 事件级批撤销（整批已呈👎时再点 = 撤销） */
   readonly onCallUndo: (group: RecallGroup) => void
-  /** read 快照 dialog 打开（contentSnap 唯一呈现位） */
+  /** read 快照 dialog 打开（仅条目 id 缺席时的降级呈现位） */
   readonly onOpenSnapshot: (group: RecallGroup) => void
   /** 就地详情 dialog 打开（entryDetail 按需拉取） */
   readonly onOpenEntry: (entryId: number) => void
@@ -556,7 +556,7 @@ function RecallCallSection({
   )
 }
 
-/** read 节 result：文档名称文字链接 → 快照 dialog（contentSnap 缺席降级 entryDetail dialog） */
+/** read 节 result：文档名称文字链接 → 就地详情 dialog（与 search 命中同面；条目 id 缺席降级快照 dialog） */
 function ReadSectionBody({
   group,
   onOpenSnapshot,
@@ -580,13 +580,14 @@ function ReadSectionBody({
       {stale ? (
         <span className="dswf-recall-hitmain">{label}<span className="dswf-recall-stale">索引未命中</span></span>
       ) : (
-        <Tooltip label={group.contentSnap !== null ? '查看召回时点快照全文' : '查看知识详情'} portal>
+        <Tooltip label="查看知识详情" portal>
           <button
             type="button"
             className="dswf-recall-hitmain is-link"
             onClick={() => {
-              if (group.contentSnap !== null) onOpenSnapshot(group)
-              else if (hit?.entryId !== undefined && hit.entryId !== null) onOpenEntry(hit.entryId)
+              // 与 search/abstract/browse 命中同走就地详情 dialog；快照 dialog 仅条目 id 缺席时降级
+              if (hit?.entryId !== undefined && hit.entryId !== null) onOpenEntry(hit.entryId)
+              else if (group.contentSnap !== null) onOpenSnapshot(group)
             }}
           >
             {label}
