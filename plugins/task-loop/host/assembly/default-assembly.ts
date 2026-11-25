@@ -16,7 +16,7 @@ import { createForgeEventBus } from "../events/bus.js";
 import { attachForgeLogListener } from "../events/log-listener.js";
 import { createForgeEventSink, type ForgeEventSink } from "../events/sink.js";
 import type { DiagLevel } from "@dsh-forge/lib-diag";
-import type { TaskEvents } from "../domain/tasks/types.js";
+import type { TaskEvents, TasksVerbDeps } from "../domain/tasks/types.js";
 
 export { domainDbFileName };
 
@@ -36,6 +36,19 @@ export interface TaskLoopAssemblyConfig {
    * deriveTaskStoreDir 单源派生（{tasksHome}/{flatten}@{hash8}——插件不复制派生算法）。
    */
   readonly tasksHome?: string;
+  /**
+   * 专家档案取用面（bug 044a310c——worker persona 专家人格段缺席判例）：claim 期经
+   * resolveExpertProfile(taskType, expertKey) 取档案合成人格段「你是<title>」；缺席 =
+   * persona 仅程序段形态兼容（service.ts 同语义注记）。装配单源 = faces.createExpertProfileResolver
+   * （tool-family.ts resolveWorkerProfile 同源——同一 resolver 两链消费：工具白名单链
+   * 早已接线，persona 链此前漏接）。experts 服务缺席（单装无 expert-squad）= 不注入。
+   */
+  readonly resolveExpertProfile?: TasksVerbDeps["resolveExpertProfile"];
+  /**
+   * worker 任务目录锚点节渲染（claim 期 persona 尾部追加——spec/docs 路径锚，S2a）。
+   * 缺席 = persona 零追加。单源 = lib-path deriveTaskStoreDir + taskDocRelPath。
+   */
+  readonly resolveWorkerContext?: TasksVerbDeps["resolveWorkerContext"];
 }
 
 type AssemblyDiag = (line: string, level?: DiagLevel) => void;
@@ -68,6 +81,12 @@ export interface TaskLoopAssembly {
   readonly tasks: TasksService;
   readonly checkpoints: CheckpointsService;
   readonly events: ReturnType<typeof createTaskEvents>;
+  /**
+   * projectKey → 项目工作区根（装配期定稿的 resolveWsPath——config 注入或空串缺省）。
+   * 暴露给装配面：recurrence faces 的卷宗探测（T3 建模报告在场判定）需要项目根解析，
+   * 与 git 查找同源同值。
+   */
+  readonly resolveWsPath: (projectKey: string) => string;
   /**
    * forge 事件发射器（bug a93c1277——tasksHome 注入时装配，emit 直通 bus；监听器唯一写者
    * 落盘 logs/{slug}.jsonl）。缺席 = 事件链零装配（单装缺省形态，行为零变化）。
@@ -103,10 +122,13 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     return undefined;
   }
   const events = createTaskEvents();
+  const resolveWsPath = config.resolveWsPath ?? ((): string => "");
   const tasks = createTasksService({
     db: db.db,
     events,
-    resolveWsPath: config.resolveWsPath ?? ((): string => ""),
+    resolveWsPath,
+    ...(config.resolveExpertProfile !== undefined ? { resolveExpertProfile: config.resolveExpertProfile } : {}),
+    ...(config.resolveWorkerContext !== undefined ? { resolveWorkerContext: config.resolveWorkerContext } : {}),
   });
   const checkpoints = createCheckpointsService({ db: db.db, events });
   // forge 事件日志链（bug a93c1277——AC「组合器 config 下发 tasksHome 即落盘闭环」）：
@@ -137,6 +159,7 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     tasks,
     checkpoints,
     events,
+    resolveWsPath,
     ...(forgeEvents !== undefined ? { forgeEvents } : {}),
     ...(containerDirOf !== undefined ? { containerDirOf } : {}),
     async reconcile(): Promise<void> {

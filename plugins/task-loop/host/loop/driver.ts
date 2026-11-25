@@ -490,6 +490,8 @@ export interface LoopDriverDeps {
   readonly resolveModelReasoning?: DispatchCoreDeps["resolveModelReasoning"];
   /** 专家档案工具/模型取用面——透传 dispatch-core spawn 组装；缺席 = 形态兼容 */
   readonly resolveWorkerProfile?: DispatchCoreDeps["resolveWorkerProfile"];
+  /** bug 四动词在场现查缝——透传 dispatch-core deriveWorkerToolFilter（缺席 = 四动词剔除 + warn）。 */
+  readonly bugsPresent?: DispatchCoreDeps["bugsPresent"];
   /**
    * 全局工具注册名读取面（透传 dispatch-core spawn 组装求交基准；
    * 缺席 = 回落 parent 探针 + 金丝雀子域判定，行为零变化）
@@ -1157,6 +1159,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
           ...(deps.settings !== undefined ? { settings: deps.settings } : {}),
           ...(deps.resolveModelReasoning !== undefined ? { resolveModelReasoning: deps.resolveModelReasoning } : {}),
           ...(deps.resolveWorkerProfile !== undefined ? { resolveWorkerProfile: deps.resolveWorkerProfile } : {}),
+    ...(deps.bugsPresent !== undefined ? { bugsPresent: deps.bugsPresent } : {}),
           // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints/HEAD 解析器随 loop.core 透传
           // 结算核——settleClaimed → settleWorkerRun → recordWaveCheckpoint 的 review-wave-N
           // 落行依赖此二依赖（缺席 = 机制惰性不判，行为零变化）

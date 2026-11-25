@@ -3,13 +3,14 @@
 //
 // · findRecurrenceCandidates = bugs 域服务只读聚合的结构化消费（四域互禁不破——链构建与
 //   scope 口径归 bugs 域层定义）；
-// · modelingReportPresent = 结算旁挂回收（settle.ts）同源的卷宗路径派生，探测双轨
-//   （recurrence-signal-tiering 落点双轨）：卷宗 .forge/docs/proposals/<slug>/issues/<localId>/
-//   顶层 或 probes 卷 .forge/docs/probes/<bugId>/ 顶层（命中链任一成员）存在报告 .md 即 true
-//   （非递归——incident 等子目录不扫，零清单配置）。探测面只读、三态：双轨目录均可读
-//   但无报告 = false（真报告不在场，T3 拦截保守成立）；readdirSync 抛错（IO 故障）= 'error'
+// · modelingReportPresent = probes 卷路径派生（结算旁挂回收同源 docs 根），探测
+//   .forge/docs/probes/<bugId>/ 顶层（关联锚 = recurrence 链成员 bugId——命中链任一成员
+//   存在报告 .md 即 true；非递归——incident 等子目录不扫，零清单配置）。proposals/
+//   <slug>/issues/<localId>/ 轨已随 proposal 域退役（proposal-domain-retirement 机检——
+//   .forge/ 下无 proposals 目录）。探测面只读、三态：probes 卷可读但无报告 = false
+//   （真报告不在场，T3 拦截保守成立）；readdirSync 抛错（IO 故障）= 'error'
 //   （机制失能——消费侧 claim 放行 + warn 留痕，用户裁决：fail-soft 统一向「放行 + 可观测」）。
-//   路径派生经注入面消费（@dsh-forge/project/host-dirs 消费门——运行期取值走 deps 注入；
+//   路径派生经注入面消费（workspaceDocsRoot——运行期取值走 deps 注入；
 //   派生缝缺席 = 机制失能同 'error' 形态——消费侧放行 + warn 留痕，不静默恒拦）。
 //
 // T2 疑似同族警示（submitTask）/ T3 同缝拦截（claim 守卫）/ triage 两信号 / add-fix
@@ -39,8 +40,6 @@ export interface RecurrenceFacesDeps {
   readonly bugs: RecurrenceBugsFace
   /** projectId → 项目工作区根（settle.ts resolveDir 同源 projects face 派生——缺席 = 探测 false） */
   readonly resolveProjectDir: (projectId: string) => string | undefined
-  /** 卷宗 issues 目录派生注入（dossierIssuesDirOf 同形——proposals/<slug>/issues/<localId>；缺席 = 机制失能） */
-  readonly dossierIssuesDir?: (ws: string, slug: string, localId: string) => string
   /** docs 根派生注入（workspaceDocsRoot 同形——<ws>/.forge/docs；缺席 = 机制失能） */
   readonly workspaceDocsRoot?: (ws: string) => string;
 }
@@ -60,27 +59,26 @@ function hasTopLevelReport(dir: string): boolean {
 }
 
 /**
- * 卷宗建模报告探测（双轨非递归——与结算旁挂回收同源路径派生，三态：在场 true / 真缺席
- * false / IO 故障或派生缝缺席 'error'）：① 卷宗 issues/<localId>/ 顶层；② probes 卷
- * probes/<bugId>/ 顶层（命中链任一成员——recurrence-signal-tiering 落点双轨，报告落 probes
- * 即解除）。
+ * 建模报告探测（probes 卷非递归——三态：在场 true / 真缺席 false / IO 故障或派生缝缺席
+ * 'error'）：probes/<bugId>/ 顶层（命中链任一成员——关联锚 = recurrence 链成员 bugId，
+ * 与 investigate-bug 技能 Step 3 落卷 `probes/<bugId>/` 同径，报告落 probes 即解除）。
+ * proposals/<slug>/issues/<localId>/ 轨已随 proposal 域退役（proposal-domain-retirement
+ * 机检——.forge/ 下无 proposals 目录，该轨恒不存在）。
  */
 function modelingReportPresentOf(deps: RecurrenceFacesDeps): ModelingReportPresentFace {
   return (input) => {
     try {
       const ws = deps.resolveProjectDir(input.projectId);
       if (ws === undefined || ws === "") return false;
-      if (deps.dossierIssuesDir === undefined || deps.workspaceDocsRoot === undefined) {
+      if (deps.workspaceDocsRoot === undefined) {
         return "error"; // 路径派生缝缺席 = 机制失能（消费侧 claim 放行 + warn 留痕，不恒拦）
       }
-      const issuesDir = deps.dossierIssuesDir(ws, input.slug, input.localId);
-      if (existsSync(issuesDir) && hasTopLevelReport(issuesDir)) return true;
       const docsRoot = deps.workspaceDocsRoot(ws);
       for (const bugId of input.bugIds) {
         const probesDir = join(docsRoot, "probes", bugId);
         if (existsSync(probesDir) && hasTopLevelReport(probesDir)) return true;
       }
-      return false; // 双轨均可读且无报告 .md = 真「报告不在场」（拦截保守成立）
+      return false; // probes 卷可读且无报告 .md = 真「报告不在场」（拦截保守成立）
     } catch {
       return "error"; // fail-soft：IO 故障 = 机制失能（消费侧 claim 放行 + warn 留痕，不抛）
     }

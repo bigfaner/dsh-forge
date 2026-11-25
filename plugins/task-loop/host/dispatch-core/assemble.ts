@@ -141,12 +141,13 @@ export const WORKER_GENERIC_EXECUTION_TOOLS: readonly string[] = [
 ]
 
 /**
- * bug 三动词必备集（模块④跨域条件段——WORKER_FORGE_TOOLS bug 域子集锚，字面量对齐）：
- * recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径。bug 域服务归拢 plugins/project
- * host/bugs——本插件不依赖该包，三动词是否入 allow = project bugs 服务在场现查
- * （调用期求值，检测结果不缓存）裁定。
+ * bug 四动词必备集（模块④跨域条件段——字面量对齐 @deepseek-ai 工具名蛇形）：
+ * record_bug / resolve_bug 两写径 + get_bug 链上下文读径 + list_bugs 台账检索读径
+ *（fix-bug 技能「dedup-before-record」先查重 + 类似检索）。bug 域服务归拢 plugins/project
+ * host/bugs——本插件不依赖该包，四动词是否入 allow = project bugs 服务在场现查
+ *（调用期求值，检测结果不缓存）裁定。
  */
-export const WORKER_BUG_ESSENTIAL_TOOLS: readonly string[] = ["record_bug", "resolve_bug", "get_bug"]
+export const WORKER_BUG_ESSENTIAL_TOOLS: readonly string[] = ["record_bug", "resolve_bug", "get_bug", "list_bugs"]
 
 /**
  * deriveWorkerToolFilter 现查/留痕选项（模块④——跨域条件段的取数与诊断缝）：

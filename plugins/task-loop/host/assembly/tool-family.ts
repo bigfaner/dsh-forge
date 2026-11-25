@@ -24,6 +24,8 @@ import { createNarrator } from "../notify/narrator.js";
 import { createInProcessDriverSpawn } from "../spawn/in-process-driver.js";
 import { defaultWorkerTreeGuard } from "../spawn/job-tree.js";
 import { createTriageHook } from "../triage/triage.js";
+import { createRecurrenceFaces, type RecurrenceBugsFace } from "../dispatch-core/recurrence-faces.js";
+import { workspaceDocsRoot } from "@dsh-forge/lib-path";
 import { createUnionToolNamesProbe, type AgentPresetsFace, type ToolsSchemasReader } from "@dsh-forge/contracts";
 import {
   adaptAgentNarrationChannel,
@@ -209,8 +211,46 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
       expertKey,
     );
   };
+  // bugs 域服务面现查（seams 键 'forge.bugs'——project 插件提供；本插件不依赖该包）。
+  // 两个消费位同源：bugsPresent（四动词入 allow 的在场裁定）+ recurrenceFaces（T2/T3 两
+  // face 的台账读面）。每次调用现查不缓存（AGENTS 1.6）；缺席/劣形 = undefined。
+  const bugsFaceOf = (): RecurrenceBugsFace | undefined => {
+    try {
+      const hostCtx2 = input.ctx as { forgeBugs?: unknown; reflect?: { get?(name: string): unknown } };
+      const bugs = (hostCtx2.forgeBugs ?? hostCtx2.reflect?.get?.("forge.bugs")) as RecurrenceBugsFace | undefined;
+      return typeof bugs?.findRecurrenceCandidates === "function" ? bugs : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  // bug 四动词在场现查缝（bug 044a310c 同族——装配漏接判例）：deriveWorkerToolFilter 的
+  // bugsPresent 此前从未注入 → 四动词恒被剔除 + warn。缺席 = false（既有降级语义不变）。
+  const bugsPresent = (): boolean => bugsFaceOf() !== undefined;
+  // recurrence 两 face 生产接线（loop-recurrence-hardening §2.2 T2/T3——bug 0db72bcb 同族：
+  // plugin-forge→task-loop 迁移时 createRecurrenceFaces 未迁，两 face 恒缺席 → T2 警示 /
+  // T3 同缝拦截静默关停。建模报告探测 = probes 单轨（proposal 域已退役），docs 根派生 =
+  // lib-path workspaceDocsRoot（算法单源）；projectKey → ws 根 = services.resolveWsPath
+  //（装配期定稿，与 git 查找同源——空串 = 探测 false，机制惰性不拦）。
+  const recurrenceFaces = createRecurrenceFaces({
+    bugs: {
+      findRecurrenceCandidates: (projectId, scope) =>
+        bugsFaceOf()?.findRecurrenceCandidates(projectId, scope) ?? Promise.resolve([]),
+    },
+    resolveProjectDir: (projectId) => {
+      const dir = services.resolveWsPath(projectId);
+      return dir === "" ? undefined : dir;
+    },
+    workspaceDocsRoot: (ws) => workspaceDocsRoot(ws),
+  });
   const narrator = createNarrator({ channel: narrationChannel });
-  const triage = createTriageHook({ tasks: services.tasks, spawn, globalToolNames, ...(diagEmit !== undefined ? { diag: diagEmit } : {}) });
+  const triage = createTriageHook({
+    tasks: services.tasks,
+    spawn,
+    globalToolNames,
+    // triage 两信号同源 recurrence face（T2 疑似同族——triage.ts 消费位；T3 建模在场归 claim 守卫）
+    ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
+    findRecurrenceCandidates: recurrenceFaces.findRecurrenceCandidates,
+  });
   const driver: LoopDriver = createLoopDriver({
     registry,
     tasks: services.tasks,
@@ -220,6 +260,10 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     triage,
     globalToolNames,
     resolveWorkerProfile,
+    bugsPresent,
+    // T2/T3 复发拦截两 face（生产路径的装配前提——缺席即机制静默关停）
+    findRecurrenceCandidates: recurrenceFaces.findRecurrenceCandidates,
+    modelingReportPresent: recurrenceFaces.modelingReportPresent,
     // 事件日志链透传（bug a93c1277）：tasksHome 注入时 forgeEvents（sink）+ containerDirOf
     // 同注——循环里程碑/台账经 bus→监听器落盘 logs/{slug}.jsonl；缺席 = 零透传零行为变化。
     ...(services.forgeEvents !== undefined ? { events: services.forgeEvents } : {}),

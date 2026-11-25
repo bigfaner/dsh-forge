@@ -255,8 +255,8 @@ export function rejectionFailureOf(
     violations: [
       `escalate: 同缝全边 ≥2 ∧ 链内有 open——建议先升级排查建模（链串摘要（豁免呈现）：${chain.join(" → ")}；` +
         `判别实验清单逐条排除后再开修；委派目标由主会话自行决定，本提示零专家键）`,
-      "release: 在 .forge/docs/proposals/<slug>/issues/<localId>/ 顶层或 .forge/docs/probes/<bugId>/ 顶层" +
-        "落排查建模报告（.md），报告在场后重新 claim 本任务即放行",
+      "release: 在 .forge/docs/probes/<bugId>/ 顶层落排查建模报告（.md——bugId = 链上任一成员；" +
+        "investigate-bug 技能 Step 3 落卷即解除），报告在场后重新 claim 本任务即放行",
     ],
   }
 }

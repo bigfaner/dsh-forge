@@ -34,7 +34,7 @@ import {
   type ForgeTasksRemoteDeps,
   type TypertAssemblyCtxFace,
 } from "./assembly/typert-remotes.js";
-import { createDiagEmitter, emitForgeDiag, FORGE_PACKAGE_NAME } from "./faces.js";
+import { createDiagEmitter, createExpertProfileResolver, emitForgeDiag, FORGE_PACKAGE_NAME, type ExpertProfileResolver, type ExpertsServiceFace } from "./faces.js";
 import { withSessionIdentity } from "./tools/faces.js";
 import type { TasksService } from "./domain/tasks/service.js";
 
@@ -296,10 +296,42 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
   // INV-3 安装互斥 loud-fail 守卫（bug ef3e92ea）——任何装配副作用之前首查。
   assertInstallMutex(ctx, config, "@dsh-forge/task-loop");
   const diag = config.diag ?? consoleDiagFallback;
+  // forge 诊断发射面（payload 面——createExpertProfileResolver / typert 桥接共用；ctx.emit
+  // 在场即 typed emit，缺席 console 兜底）。纯构造无副作用，前移到装配之前供 persona 接线消费。
+  const diagEmit = createDiagEmitter((ctx as TaskLoopPluginCtx).emit);
   // 随包内置专家档案注册（experts.registerRoot 装配行——experts 缺席 fail-soft 不阻载）
   registerBuiltinExpertsRoot(ctx, diag);
+  // worker persona 专家人格段取用面（bug 044a310c 判例——同一 resolver 两链消费）：
+  // tool-family.ts 的 resolveWorkerProfile（工具白名单链）早已接 createExpertProfileResolver，
+  // claim 链的 resolveExpertProfile（persona 人格段）此前从未注入 → worker persona 恒仅
+  // 程序段、无「你是<title>」。experts 每次消费现查不缓存（AGENTS 1.6）——experts 缺席
+  // （单装无 expert-squad）= 不注入，claim 侧「仅程序段」形态兼容不变。
+  const expertsFaceOf = (): ExpertsServiceFace | undefined => {
+    try {
+      const viaInject = (ctx as { experts?: unknown }).experts as ExpertsServiceFace | undefined;
+      if (viaInject !== undefined && typeof viaInject.get === "function") return viaInject;
+    } catch {
+      // 注入服务未就绪 = 降级 reflect 通道
+    }
+    try {
+      const viaReflect = (ctx as { reflect?: { get?(name: string): unknown } }).reflect?.get?.("experts") as ExpertsServiceFace | undefined;
+      if (viaReflect !== undefined && typeof viaReflect.get === "function") return viaReflect;
+    } catch {
+      // reflect 通道异常 = 缺席
+    }
+    return undefined;
+  };
+  const resolveExpertProfile = (): ExpertProfileResolver | undefined => {
+    const experts = expertsFaceOf();
+    if (experts === undefined) return undefined;
+    return createExpertProfileResolver({ experts, diag: diagEmit });
+  };
+  const profileResolver = resolveExpertProfile();
   // 单装缺省装配（三件单源——home 缺席/db 打开失败 = 整体降级零 provide）
-  const services = assembleTaskLoopServices(config, diag);
+  const services = assembleTaskLoopServices(
+    { ...config, ...(profileResolver !== undefined ? { resolveExpertProfile: profileResolver } : {}) },
+    diag,
+  );
   // 单装工具族注册（官方 tools 缝——apply 期注册、unmount 撤回；域服务缺席 = 零注册降级）
   let disposeToolFamily: (() => void) | undefined;
   if (services !== undefined) {
@@ -316,8 +348,7 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
     });
   }
   // forgeTasks Typert 通道挂载（CONTROLLERS 注册表 → 根 ctx plugin 注册——注册三态可观测
-  // + 自探针；诊断 emit 桥接：ctx.emit 在场即 typed emit，缺席 console 兜底）。
-  const diagEmit = createDiagEmitter((ctx as TaskLoopPluginCtx).emit);
+  // + 自探针；诊断 emit 桥接：diagEmit 已在装配前创建，此处直接消费）。
   const remoteDeps: ForgeTasksRemoteDeps = {
     tasks: lazyTasksFace(ctx),
     projects: lazyProjectsFace(ctx),
