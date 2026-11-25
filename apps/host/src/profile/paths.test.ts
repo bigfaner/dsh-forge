@@ -85,7 +85,7 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     expect(existsSync(join(paths.specSkillsDir!, 'investigate-bug', 'SKILL.md'))).toBe(true)
     expect(existsSync(join(paths.specSkillsDir!, 'loop-blocking', 'SKILL.md'))).toBe(false) // 退役（rescue-task-loop 替代）
     // skills-blitz 退役（1.9——grilling 迁 spec）：blitzSkillsDir 锚随迁移除
-    expect((paths as Record<string, unknown>).blitzSkillsDir).toBeUndefined()
+    expect((paths as unknown as Record<string, unknown>).blitzSkillsDir).toBeUndefined()
     // knowledge 技能面由下方 fixture 驱动专项覆盖（dev 树 pnpm 虚拟仓库不 hoist knowledge 链接——
     // installAnchor 树上溯在 vitest 环境不达，原基线此断言位于前置失败行之后从未执行）
   })

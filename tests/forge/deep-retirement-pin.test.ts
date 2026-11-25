@@ -75,7 +75,7 @@ describe("结构 pin ②——freshness 门在 bundle 打包链生效（归属�
   });
 
   describe("门禁功能（合成包反例红/正例绿——freshness 门真实生效）", () => {
-    let fixtureRoot
+    let fixtureRoot: string
     beforeEach(() => {
       fixtureRoot = mkdtempSync(join(tmpdir(), "dshf-freshness-"))
       mkdirSync(join(fixtureRoot, "plugins", "alpha", "dist", "host"), { recursive: true })
@@ -84,7 +84,7 @@ describe("结构 pin ②——freshness 门在 bundle 打包链生效（归属�
       rmSync(fixtureRoot, { recursive: true, force: true })
     })
 
-    function writeAlphaPackage(markerVersion) {
+    function writeAlphaPackage(markerVersion: string) {
       const dir = join(fixtureRoot, "plugins", "alpha")
       writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "@dsh-forge/alpha", version: "1.2.3" }, null, 2))
       writeFileSync(join(dir, "dist", "client.js"), `/* @dsh-forge-generation:@dsh-forge/alpha@${markerVersion}*/\nexport const x = 1\n`)

@@ -303,6 +303,7 @@ test.describe('forge-npm-profile-minchain（旅程 2——CT-NPM-*）', () => {
     // DB 行级锚（双单装库新行 + 共库零新行）归真机收口轮交互段补做（SMOKE-LEDGER §8）。
     const copyForgeDir = process.env.FORGE_COMBO_COPY_FORGE_DIR
     test.skip(copyForgeDir === undefined || copyForgeDir === '', 'config 缺失变体（仓外副本）未构造——scripts/build-forge-copy-variant.mjs --strip-config 出树后置 FORGE_COMBO_COPY_FORGE_DIR——SMOKE-LEDGER §8')
+    if (copyForgeDir === undefined || copyForgeDir === '') return
     const copyProfile = 'forge-copy'
 
     // 前置行为锚（bug 63a9a2b8）：副本五件 entry 自解析基冷启动可达（闭包断裂即停取证）

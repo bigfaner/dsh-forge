@@ -7,10 +7,9 @@ import {
   type ProjectService,
   type ProjectSummary,
   type RemoteProgressSnapshot,
-  type TaskCard,
   type TaskStats,
 } from '@dsh-forge/contracts'
-import type { TasksService } from '@dsh-forge/task-loop'
+import type { TaskCard, TasksService } from '@dsh-forge/task-loop'
 import {
   REMOTE_HTTP_RPC_PATH,
   authorizeRemoteRpc,
@@ -58,7 +57,19 @@ function fakeRes(): FakeRes {
 }
 
 const TASKS: Pick<TasksService, 'listTasks' | 'taskStats'> = {
-  listTasks: async () => [{ taskId: 't-1', title: 'X', taskStatus: 'in_progress' } as TaskCard],
+  listTasks: async () => [
+    {
+      taskId: 't-1',
+      slug: 'demo/t-1',
+      localId: 't-1',
+      title: 'X',
+      taskType: 'coding-feature',
+      taskStatus: 'in_progress',
+      prerequisites: [],
+      sessionCount: 0,
+      containerSlug: 'demo',
+    } satisfies TaskCard,
+  ],
   taskStats: async () => ({ total: 1, byStatus: { in_progress: 1 } as TaskStats['byStatus'], unmetPending: 0, gatedPending: 0 }),
 }
 const PROJECTS: Pick<ProjectService, 'listProjects' | 'getProject'> = {

@@ -23,14 +23,19 @@ function project(partial: Partial<ProjectSummary>): ProjectSummary {
 }
 
 function clientOf(projects: ProjectSummary[] | Error): RpcClientFactory {
-  return () => ({
+  // 只读节单测仅消费 projects.list——其余 RPC 族以 never 桩填形（ForgeRpcClient 形状完备性）
+  const client = {
     projects: {
       list: () => (projects instanceof Error ? Promise.reject(projects) : Promise.resolve(projects)),
       get: () => Promise.resolve(null),
+      register: () => Promise.reject(new Error('unused in test')),
+      update: () => Promise.reject(new Error('unused in test')),
+      reconcile: () => Promise.reject(new Error('unused in test')),
     },
     knowledge: {} as never,
     worktree: {} as never,
-  })
+  } as unknown as ReturnType<RpcClientFactory>
+  return () => client
 }
 
 describe('loadKnowledgeDirAnchor 锚解析（纯异步面）', () => {

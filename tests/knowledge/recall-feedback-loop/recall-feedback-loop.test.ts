@@ -15,7 +15,7 @@ import { KNOWLEDGE_HEAT_TERM } from '../../../plugins/knowledge/host/service/int
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../plugins/knowledge/host/storage/index.js'
 import { createKnowledgeService } from '../../../plugins/knowledge/host/service/service.js'
 import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/types.js'
-import type { RecallFeedbackOutcome, RecallFeedbackResult } from '../../../contracts/src/index.js'
+import type { RecallFeedbackOutcome, RecallFeedbackResult } from '../../../packages/contracts/src/index.js'
 
 const root = mkdtempSync(join(tmpdir(), 'knowledge-j-j3-'))
 const ws = join(root, 'ws')
@@ -124,7 +124,7 @@ describe('J3-CT-03 事件级 👎 批动作（O-批成功含 👍 行/O-整批�
     const states = (ids: readonly string[]): Map<string, number> => {
       const q = db.prepare(`SELECT e.id AS id, l.feedback AS fb FROM knowledge_recall_logs l JOIN knowledge_entries e ON e.rowid = l.entry_id WHERE l.call_id = 'fb-call-1'`)
       const m = new Map<string, number>()
-      for (const r of q.all() as readonly { id: string; fb: number }[]) if (ids.includes(r.id) && !m.has(r.id)) m.set(r.id, r.fb)
+      for (const r of q.all() as unknown as readonly { id: string; fb: number }[]) if (ids.includes(r.id) && !m.has(r.id)) m.set(r.id, r.fb)
       return m
     }
     const after = states(['j3-fb-a', 'j3-fb-b'])

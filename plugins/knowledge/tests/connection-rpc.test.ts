@@ -117,7 +117,7 @@ describe('knowledgeRpcHandler 端点分发（case 集 = client 映射表值集�
 
   it('recallFeedback：row 动作透传 + feedback 越界请求级拒收', async () => {
     const seen: unknown[] = []
-    const service = fakeService({ recallFeedback: (async (q: unknown) => { seen.push(q); return { outcome: 'success' } }) })
+    const service = fakeService({ recallFeedback: (async (q: unknown) => { seen.push(q); return { results: [] } }) })
     const handler = knowledgeRpcHandler({ service, projects: () => undefined })
     await call(handler, 'knowledge.recallFeedback', { projectId: 'p-1', action: 'row', rowId: 3, feedback: 1 })
     expect(seen).toEqual([{ projectId: 'p-1', action: 'row', rowId: 3, feedback: 1 }])
@@ -219,7 +219,7 @@ describe('registerKnowledgeConnectionRpc 注册/注销语义（/api 精确路由
     registerKnowledgeConnectionRpc({
       fetch: {
         register: (r) => {
-          if (r.path === '/api/projects.list') route = r.fetch
+          if (r.path === '/api/projects.list') route = r.fetch as typeof route
           return () => {}
         },
       },

@@ -178,7 +178,7 @@ export function staleVirtualStoreCopies(profileNodeModules: string): readonly Vi
   const violations: VirtualStoreStaleViolation[] = []
   for (const entry of readdirSync(storeRoot, { withFileTypes: true })) {
     if (!entry.isDirectory() || !entry.name.startsWith('@dsh-forge+') || !entry.name.includes('@fil')) continue
-    const bare = entry.name.slice('@dsh-forge+'.length).split('@')[0]
+    const bare = entry.name.slice('@dsh-forge+'.length).split('@')[0]!
     const storeDir = join(storeRoot, entry.name)
     const pkgDir = join(storeDir, 'node_modules', '@dsh-forge', bare)
     const pkgFile = join(pkgDir, 'package.json')
@@ -619,7 +619,7 @@ export function clientBundleFiles(nodeModules: string): readonly { pkg: string; 
       return typeof rel === 'string' && rel !== '' ? rel : undefined
     }).find((p) => p !== undefined)
     if (face === undefined) return { pkg, urlSeg, file: '(未声明)', exists: false }
-    const root = roots.find((r) => existsSync(join(installedPkgDir(r, pkg), ...face.replace(/^\.\//, '').split('/')))) ?? roots[0]
+    const root = roots.find((r) => existsSync(join(installedPkgDir(r, pkg), ...face.replace(/^\.\//, '').split('/')))) ?? roots[0]!
     const file = join(installedPkgDir(root, pkg), ...face.replace(/^\.\//, '').split('/'))
     return { pkg, urlSeg, file, exists: existsSync(file) }
   })
@@ -647,7 +647,7 @@ export function sqliteTables(file: string): readonly string[] {
   try {
     const rows = db
       .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
-      .all() as readonly { name: string }[]
+      .all() as unknown as readonly { name: string }[]
     return rows.map((r) => r.name)
   } finally {
     db.close()

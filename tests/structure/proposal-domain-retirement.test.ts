@@ -151,8 +151,9 @@ describe('proposal 域下线机检（plugin-spec/1.11 三族名单钉死——�
     for (const file of pinFiles) {
       const src = readFileSync(file, 'utf8')
       for (const m of src.matchAll(positivePin)) {
+        const pin = m[1] ?? ''
         for (const token of VERB_TOKENS) {
-          if (m[1].includes(token)) hits.push(`${file} → toContain('${m[1]}')（含退役标识符 ${token}）`)
+          if (pin.includes(token)) hits.push(`${file} → toContain('${pin}')（含退役标识符 ${token}）`)
         }
       }
     }

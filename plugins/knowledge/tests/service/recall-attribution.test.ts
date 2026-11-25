@@ -9,6 +9,7 @@ import type { DiagEventPayload } from '@dsh-forge/contracts'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../host/storage/index.js'
 import { createKnowledgeService, truncateTriggerSnap } from '../../host/service/service.js'
 import type { BrowseKnowledgeService } from '../../host/service/types.js'
+import type { RecallFeedbackOutcome, RecallFeedbackResult } from '../../host/service/types.js'
 
 let home: string
 let service: BrowseKnowledgeService

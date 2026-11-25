@@ -2,7 +2,6 @@
 // KnowledgeCardGrid 单测 —— UF-6 卡片网格 + 主体四态（AC2/AC3/AC4）。
 // AC3：卡片字段 frontmatter 驱动 + 热度徽章 = card.heat 原样（使用事件计数——UI 零再推导）。
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error —— 插件包 tsconfig types 不含 node；node:fs 仅测试内读取样式表源文
 import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { KnowledgeCard } from '@dsh-forge/contracts'

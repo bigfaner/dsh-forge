@@ -174,7 +174,7 @@ describe('J1-CT-01 O-零命中（B1 终裁——破坏性用例置于尾部）',
       clearKnowledgeIndexByWsPath: (db: unknown, wsPath: string) => void
     }
     // 两注册行索引全清（全局库行存在但条目行清空——信号不被既有注册行掩蔽）+ 项目库 FS 空
-    const rows = world.db.prepare(`SELECT ws_path FROM knowledge_registry`).all() as readonly { ws_path: string }[]
+    const rows = world.db.prepare(`SELECT ws_path FROM knowledge_registry`).all() as unknown as readonly { ws_path: string }[]
     for (const r of rows) clearKnowledgeIndexByWsPath(world.db, r.ws_path)
     rmSync(world.projectDir, { recursive: true, force: true })
     world.events.length = 0

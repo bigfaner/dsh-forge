@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { defaultKnowledgeDirOf, resolveKnowledgeDir } from '../host/knowledge-dir.js'
 import knowledgePlugin, { KNOWLEDGE_SERVICE_NAME } from '../host/index.js'
-import type { KnowledgePromptSection, KnowledgeToolDefinition } from '../host/tools/index.js'
+import type { KnowledgePromptSection, KnowledgeToolDefinition, KnowledgeContextFace } from '../host/tools/index.js'
 import type { BrowseKnowledgeService } from '../host/service/index.js'
 import type { DiagEventPayload } from '@dsh-forge/contracts'
 
@@ -50,7 +50,7 @@ describe('resolveKnowledgeDir 三态（AC1）', () => {
 /** 假宿主 ctx（plugin.test.ts TempRuntime 窄化——emit 捕获 diag 埋点） */
 function makeRt(): {
   dbFile: () => string
-  ctx: () => Record<string, unknown>
+  ctx: () => KnowledgeContextFace
   provided: Map<string, unknown>
   diagEvents: DiagEventPayload[]
   cleanup: () => void
@@ -58,7 +58,7 @@ function makeRt(): {
   let dir: string | undefined
   const provided = new Map<string, unknown>()
   const diagEvents: DiagEventPayload[] = []
-  const ctx = (): Record<string, unknown> => ({
+  const ctx = (): KnowledgeContextFace => ({
     tools: { register: (_d: KnowledgeToolDefinition) => () => {} },
     systemPrompt: { section: (_s: KnowledgePromptSection) => () => {} },
     on: (_e: string, _h: unknown) => () => {},
