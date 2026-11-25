@@ -7,10 +7,13 @@
 //      （组合器 patch config 下发 {DSH_HOME}/forge/projects）时装配 bus→sink→监听器三件；
 //      缺席（单装缺省形态）= 整链零装配零行为变化（AC4 回归锚）。
 // home 缺席 / db 打开失败 = 整体降级缺席（返回 undefined——零 provide，fail-soft 诊断留痕不阻载）。
-import { deriveTaskStoreDir } from "@dsh-forge/lib-path";
+import { mkdirSync } from "node:fs";
+import { deriveTaskStoreDir, forgeDirOfWorkspace } from "@dsh-forge/lib-path";
 import { domainDbFileName, openDomainDb, type DomainDb } from "../db/connection.js";
 import { createCheckpointsService, type CheckpointsService } from "../domain/checkpoints/service.js";
 import { listDistinctProjectKeys } from "../domain/tasks/query.js";
+import { renderWorkerContext } from "../domain/tasks/worker-context.js";
+import { taskLogsDirOf } from "../domain/tasks/task-logs-dir.js";
 import { createTasksService, type TasksService } from "../domain/tasks/service.js";
 import { createForgeEventBus } from "../events/bus.js";
 import { attachForgeLogListener } from "../events/log-listener.js";
@@ -52,6 +55,40 @@ export interface TaskLoopAssemblyConfig {
 }
 
 type AssemblyDiag = (line: string, level?: DiagLevel) => void;
+
+/**
+ * worker 任务目录锚点节缺省真身（bug 26dff330——供给端收口）：此前 resolveWorkerContext
+ * 从未在生产装配注入，worker 简报恒无任务目录锚点段、{forge.task_logs_dir} 占位符无值，
+ * worker 自行猜测落点（<ws>/.forge/task-logs/ 等漂移拼写）→ 回收钩子恒 runtime dir absent。
+ * 缺省真身 = containerDirOf 单源容器目录 → taskLogsDirOf 派生任务日志目录（与回收钩子
+ * taskLogsDir 注入、forgeResolvePath(taskLogs) 同源三口径）+ 开工前 mkdirRecursive（fail-soft
+ * warn 留痕——目录在场，worker 不自建）+ renderWorkerContext 锚点节。config.resolveWorkerContext
+ * 显式注入时优先（组合器覆写单装缺省）。tasksHome 缺席（containerDirOf 缺席）= undefined，
+ * persona 零追加形态兼容不变。
+ */
+export function createDefaultResolveWorkerContext(deps: {
+  readonly containerDirOf: (projectKey: string) => string;
+  readonly resolveWsPath: (projectKey: string) => string;
+  readonly diag?: AssemblyDiag;
+}): NonNullable<TasksVerbDeps["resolveWorkerContext"]> {
+  return (projectKey, source, localId) => {
+    const containerDir = deps.containerDirOf(projectKey);
+    const taskLogsDir = taskLogsDirOf(containerDir, source.slug, localId);
+    try {
+      mkdirSync(taskLogsDir, { recursive: true });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      deps.diag?.(`[task-loop] 任务日志目录创建失败（fail-soft 不阻载）：${taskLogsDir}——${message}`, "warn");
+    }
+    const ws = deps.resolveWsPath(projectKey);
+    return renderWorkerContext({
+      forgeDir: ws === "" ? "" : forgeDirOfWorkspace(ws),
+      containerDir,
+      localId,
+      source,
+    });
+  };
+}
 
 /** 任务域写后事件发射器（装配单例——写动词闭包尾部 emitTasksChanged；订阅面留给 events sink/UI follow）。 */
 export function createTaskEvents(): TaskEvents & { onTasksChanged(listener: (projectKey: string) => void): () => void } {
@@ -123,21 +160,36 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
   }
   const events = createTaskEvents();
   const resolveWsPath = config.resolveWsPath ?? ((): string => "");
+  // forge 事件日志链（bug a93c1277——AC「组合器 config 下发 tasksHome 即落盘闭环」）：
+  // tasksHome 在场（非空白）= bus→sink→监听器三件装配单例；缺席 = 整链零装配零行为变化。
+  const tasksHome = typeof config.tasksHome === "string" && config.tasksHome.trim() !== "" ? config.tasksHome : undefined;
+  // projectKey = deriveDirName(ws) 同名制（db/repositories/project-key 单源）——容器目录
+  // = {tasksHome}/{projectKey}（lib-path joinHome 同口径：连接符随 home 拼写）。
+  // （bug 26dff330：提前定稿——worker 锚点节缺省真身与事件链同消费。）
+  const containerDirDefaultOf =
+    tasksHome !== undefined
+      ? (projectKey: string): string => {
+          const home2 = tasksHome.replace(/[\\/]+$/, "");
+          const sep = tasksHome.includes("\\") ? "\\" : "/";
+          return `${home2}${sep}${projectKey}`;
+        }
+      : undefined;
   const tasks = createTasksService({
     db: db.db,
     events,
     resolveWsPath,
     ...(config.resolveExpertProfile !== undefined ? { resolveExpertProfile: config.resolveExpertProfile } : {}),
-    ...(config.resolveWorkerContext !== undefined ? { resolveWorkerContext: config.resolveWorkerContext } : {}),
+    // worker 任务目录锚点节（bug 26dff330——缺省真身接线；显式注入优先）
+    ...(config.resolveWorkerContext !== undefined
+      ? { resolveWorkerContext: config.resolveWorkerContext }
+      : containerDirDefaultOf !== undefined
+        ? { resolveWorkerContext: createDefaultResolveWorkerContext({ containerDirOf: containerDirDefaultOf, resolveWsPath, diag }) }
+        : {}),
   });
   const checkpoints = createCheckpointsService({ db: db.db, events });
-  // forge 事件日志链（bug a93c1277——AC「组合器 config 下发 tasksHome 即落盘闭环」）：
-  // tasksHome 在场（非空白）= bus→sink→监听器三件装配单例；缺席 = 整链零装配零行为变化。
-  const tasksHome = typeof config.tasksHome === "string" && config.tasksHome.trim() !== "" ? config.tasksHome : undefined;
   let forgeEvents: ForgeEventSink | undefined;
-  let containerDirOf: ((projectKey: string) => string) | undefined;
   let detachLogListener: (() => void) | undefined;
-  if (tasksHome !== undefined) {
+  if (tasksHome !== undefined && containerDirDefaultOf !== undefined) {
     const bus = createForgeEventBus();
     const sink = createForgeEventSink({
       bus,
@@ -145,13 +197,6 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     });
     detachLogListener = attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) });
     forgeEvents = sink;
-    // projectKey = deriveDirName(ws) 同名制（db/repositories/project-key 单源）——容器目录
-    // = {tasksHome}/{projectKey}（lib-path joinHome 同口径：连接符随 home 拼写）。
-    containerDirOf = (projectKey) => {
-      const home2 = tasksHome.replace(/[\\/]+$/, "");
-      const sep = tasksHome.includes("\\") ? "\\" : "/";
-      return `${home2}${sep}${projectKey}`;
-    };
     diag?.("[task-loop] forge 事件日志链装配（tasksHome 注入）——logs/{slug}.jsonl 落盘启用", "info");
   }
   return {
@@ -161,7 +206,7 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     events,
     resolveWsPath,
     ...(forgeEvents !== undefined ? { forgeEvents } : {}),
-    ...(containerDirOf !== undefined ? { containerDirOf } : {}),
+    ...(containerDirDefaultOf !== undefined ? { containerDirOf: containerDirDefaultOf } : {}),
     async reconcile(): Promise<void> {
       // 启动对账（装配时点进程内循环登记表恒空 = registryEmpty true）——全域键逐容器收敛
       // in_progress ∧ loop_sourced 中断态；失败 = 降级 warn 留痕（AGENTS §7 不静默）。

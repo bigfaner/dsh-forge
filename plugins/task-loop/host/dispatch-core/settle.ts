@@ -323,7 +323,8 @@ export async function recoverSettleReports(
       entries = await readdir(runtimeDir, { withFileTypes: true });
     } catch {
       emitForgeDiag(deps.diag, {
-        level: "info",
+        // warn（bug 26dff330——供给端收口后目录应恒在：口径漏接/目录缺席不得静默 info）
+        level: "warn",
         event: "forge-settle",
         message: `forge settle: report recovery skipped (runtime dir absent) for ${taskKey} at ${runtimeDir}`,
         projectId: ctx.projectId,

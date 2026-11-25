@@ -527,3 +527,23 @@ describe("createSettleReportRecovery 工厂（resolveDir 闭包派生 + 路径�
     await expect(bare.resolveSpecsIssuesDir({ projectId: "p-1", slug: "s", localId: "1" })).resolves.toBeUndefined();
   });
 });
+
+describe("recoverSettleReports·runtime dir absent 诊断分级（bug 26dff330——口径漏接不得静默 info）", () => {
+  it("运行时目录缺席 = warn 级留痕（升格锚——回退 info 该断言即红）", async () => {
+    const entries: { level: string; message: string }[] = [];
+    const { recoverSettleReports } = await import("../../host/dispatch-core/settle.js");
+    await recoverSettleReports(
+      {
+        recovery: {
+          resolveRuntimeTaskDir: async () => join("Z:", "absent-dir"),
+          resolveSpecsIssuesDir: async () => join("Z:", "absent-issues"),
+        },
+        diag: (payload) => entries.push({ level: payload.level, message: payload.message }),
+      },
+      { projectId: "p-1", task: { slug: "s", localId: "1" } as never },
+    );
+    const absent = entries.find((e) => e.message.includes("runtime dir absent"));
+    expect(absent).toBeDefined();
+    expect(absent!.level).toBe("warn");
+  });
+});

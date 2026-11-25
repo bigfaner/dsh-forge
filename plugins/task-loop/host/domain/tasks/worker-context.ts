@@ -6,6 +6,7 @@
 import { readdirSync, type Dirent } from "node:fs";
 import { join, sep } from "node:path";
 import { docsRootOfForgeDir } from "@dsh-forge/lib-path";
+import { taskLogsDirOf } from "./task-logs-dir.js";
 import type { ContainerRef } from "./types.js";
 
 /** 目录树深度上限 */
@@ -73,19 +74,22 @@ function scanLines(abs: string, prefix: string, depth: number, lines: string[]):
 
 /**
  * worker 任务目录锚点节（fail-soft 纯读）：logs 双锚恒出；容器文档锚点（slug 容器化——
- * features 目录在盘优先，否则 proposals 目录）在盘才出。logsRoot = <任务库>/logs；
- * 任务日志目录 = logsRoot/<slug>/<localId>。
+ * features 目录在盘优先，否则 proposals 目录）在盘才出。任务库容器目录 containerDir =
+ * {tasksHome}/{projectKey}（containerDirOf 单源）；任务日志目录 = taskLogsDirOf
+ * （containerDir/logs/<slug>/<localId>——bug 26dff330 三处口径同源单点）。
  */
 export function renderWorkerContext(input: {
   forgeDir: string;
-  logsRoot: string;
+  containerDir: string;
   localId: string;
   source: ContainerRef;
 }): string {
-  const { forgeDir, logsRoot, localId, source } = input;
+  const { forgeDir, containerDir, localId, source } = input;
   const blocks: string[] = [];
   const docsRoot = docsRootOfForgeDir(forgeDir);
-  const taskLogsDir = join(logsRoot, source.slug, localId);
+  // 任务日志目录派生单点（bug 26dff330——三处口径同源：worker 锚点 / 回收钩子 / 事故台账）
+  const logsRoot = join(containerDir, "logs");
+  const taskLogsDir = taskLogsDirOf(containerDir, source.slug, localId);
   // slug 容器化：features 目录在盘优先（远征血统），否则 proposals 目录——fail-soft 探测序
   const featureDir = join(docsRoot, "features", source.slug);
   const proposalDir = join(docsRoot, "proposals", source.slug);

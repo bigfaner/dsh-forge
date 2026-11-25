@@ -10,6 +10,7 @@
 // fail-soft：容器目录缺席/文件面故障 = 返回 undefined 不抛（叙述照发、详情行省略）。
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { taskLogsDirOf } from "../domain/tasks/task-logs-dir.js";
 
 /** 事件子文件夹内聚文件名（同一事件三件套） */
 export const INCIDENT_ERROR_FILE = "error.log";
@@ -63,9 +64,9 @@ export interface IncidentStoreDeps {
   taskLogsDirOf?(taskHome: string, slug: string, taskKey: string): string;
 }
 
-/** taskLogs 目录缺省解析（注入缺席时的结构等价兜底——join(taskHome, 'logs', slug, taskKey)） */
+/** taskLogs 目录缺省解析（bug 26dff330——派生单点 taskLogsDirOf 消费，零本地复制） */
 function defaultTaskLogsDirOf(taskHome: string, slug: string, taskKey: string): string {
-  return join(taskHome, "logs", slug, taskKey)
+  return taskLogsDirOf(taskHome, slug, taskKey)
 }
 
 /** 路径段净化（slug/taskKey/事件类型限定 [A-Za-z0-9._-]，其余折叠为连字符） */

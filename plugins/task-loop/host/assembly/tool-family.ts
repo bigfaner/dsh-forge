@@ -27,6 +27,7 @@ import { createTriageHook } from "../triage/triage.js";
 import { createRecurrenceFaces, type RecurrenceBugsFace } from "../dispatch-core/recurrence-faces.js";
 import { forgeDirOfWorkspace, workspaceDocsRoot } from "@dsh-forge/lib-path";
 import { join } from "node:path";
+import { taskLogsDirOf } from "../domain/tasks/task-logs-dir.js";
 import { createSettleReportRecovery, type SettleReportRecoveryDeps } from "../dispatch-core/settle.js";
 import { createUnionToolNamesProbe, type AgentPresetsFace, type ToolsSchemasReader } from "@dsh-forge/contracts";
 import {
@@ -271,7 +272,8 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
             }),
           },
           ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
-          taskLogsDir: (containerDir, slug, localId) => join(containerDir, "logs", slug, localId),
+          // bug 26dff330——派生单点 taskLogsDirOf（与 worker 锚点节、事故台账同源三口径）
+          taskLogsDir: (containerDir, slug, localId) => taskLogsDirOf(containerDir, slug, localId),
           specsIssuesDir: (ws, slug, localId) => join(forgeDirOfWorkspace(ws), "specs", slug, "issues", localId),
         })
       : undefined;
