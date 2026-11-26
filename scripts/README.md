@@ -37,6 +37,28 @@ node scripts/migrate-state-db.mjs --bundle --skip-bundle-bugs --skip-bundle-task
 - 幂等：`bundle_migrate_state` 逐步 fingerprint，源未变重跑自动跳过。
 - 人工清单/诊断日志落 `forge/db/forge/bundle-migrate-manual-review.md`、`migrate-bundle-diag.log`。
 
+### `--forge-dirs` 段：存量目录并轨 forge 根（forge-dirs-unification §2.8）
+
+独立模式，一参即可跑；只跑本段，不触①-④与 bundle 段。人工执行，执行前关闭 dsh desktop。
+
+```powershell
+node scripts/migrate-state-db.mjs --forge-dirs [--home <DSH_HOME>] [--registry <snapshot.json>] [--stamp <YYYYMMDDTHHmmss>]
+```
+
+搬什么：
+
+| 步 | 源 → 目标 | 说明 |
+|---|---|---|
+| experts | `{DSH_HOME}/experts` → `{DSH_HOME}/forge/experts` | 整目录搬迁 |
+| projects 并入 | `{DSH_HOME}/forge/projects/` 下按工作树路径派生命名的目录 → 以项目 projectKey 命名的目录 | 日志并入同名不覆盖：冲突方改名 `原文件名.conflict-<时间戳>` 保留 |
+
+安全纪律：
+
+- 完成标记 = `{DSH_HOME}/forge/migrate-forge-dirs.json`，逐项记录已完成搬迁；写标记在旧目录改名之前。
+- 旧目录成功后改名 `原目录名.pre-migrate-<时间戳>` 保留，不删除；改名失败即中止。
+- 幂等：已完成项重跑跳过；目标目录在场且无完成标记时拒绝执行并报错。
+- 不迁移：旧 `{DSH_HOME}/knowledge/knowledge.db`（内容已全部在现行库）与两个空的 knowledge-global 目录。
+
 ## 其它脚本
 
 - `bump-version.mjs`：插件版本 bump 唯一正道（node JSON 往返；禁文本替换——eaea8cea 判例）。
