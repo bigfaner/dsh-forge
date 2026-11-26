@@ -14,7 +14,7 @@ import {
   forgeDirOfWorkspace,
   resolveForgeDirs,
   resolveProjectKey,
-  type ForgeDirs,
+  type ForgeDirDeclaration,
 } from "@dsh-forge/lib-path";
 import { domainDbFileName, openDomainDb, type DomainDb } from "../db/connection.js";
 import { createCheckpointsService, type CheckpointsService } from "../domain/checkpoints/service.js";
@@ -88,6 +88,8 @@ type AssemblyDiag = (line: string, level?: DiagLevel) => void;
  * 反射缺席/声明拉取失败/解析报错（缺依赖/撞名等）= undefined——锚点节规格段降级省略，
  * 其余锚不变（fail-soft 不阻载）。逐条形状校验 = lib/path dirKeyEntryShapeError 单源
  *（与 project 侧同一套——bug 32532117）：坏形状跳过 + warn 诊断，forge.* 保留名拒绝。
+ * 声明按声明方逐条收集（bug fb3777a4——不并入单一对象静默后到者胜），撞名由注册表报错
+ * 点名两方 + warn 诊断降级。
  */
 function resolveSpecDirViaRegistry(input: {
   readonly reflectOf?: () => unknown;
@@ -96,7 +98,7 @@ function resolveSpecDirViaRegistry(input: {
   readonly slug: string;
   readonly diag?: AssemblyDiag;
 }): string | undefined {
-  const declared: Partial<ForgeDirs> = {};
+  const declarations: ForgeDirDeclaration[] = [];
   try {
     const reflect = input.reflectOf?.() as
       | { props?: Record<string, unknown>; get?(name: string): unknown }
@@ -109,30 +111,39 @@ function resolveSpecDirViaRegistry(input: {
           if (typeof declaration === "object" && declaration !== null) {
             // 形状校验与 project 侧同源单份（lib/path dirKeyEntryShapeError——bug 32532117）：
             // 坏形状跳过 + warn 诊断；forge.* 保留名拒绝（本体权威 = lib-path）
+            const entries: Record<string, unknown> = {};
             for (const [key, entry] of Object.entries(declaration as Record<string, unknown>)) {
               const shapeError = dirKeyEntryShapeError(key, entry);
               if (shapeError !== undefined) {
                 input.diag?.(`[task-loop] dirKeys 声明降级：${name} 条目 malformed 跳过（${shapeError}）`, "warn");
                 continue;
               }
-              (declared as Record<string, unknown>)[key] = entry;
+              entries[key] = entry;
             }
+            // 按声明方保留来源（对齐 project 侧 anchors.ts——bug fb3777a4）：不并入单一对象
+            // 静默后到者胜；撞名由 resolveForgeDirs 注册表报错点名两个声明方（下方 catch warn）
+            if (Object.keys(entries).length > 0) declarations.push({ source: name, entries });
           }
         } catch {
           // 单声明拉取失败 = 跳过该声明方（声明缺席留痕语义，不炸锚点节）
         }
       }
     }
-    const resolved = resolveForgeDirs(
-      [
-        { source: "forge.base", entries: FORGE_BASE_DIR_ENTRIES },
-        { source: "dirKeys.declared", entries: declared },
-      ],
-      // forge.spec_dir 依赖链只触及 workspaceRoot（forge.docs_root）；dshHome/projectRoot
-      // 为本体条目的依赖完备性补齐（projectRoot 与 workspaceRoot 同源——规格目录不依赖归拢）。
-      { dshHome: input.dshHome, projectRoot: input.workspaceRoot, workspaceRoot: input.workspaceRoot },
-      { slug: input.slug },
-    );
+    let resolved: Record<string, string>;
+    try {
+      resolved = resolveForgeDirs(
+        [{ source: "forge.base", entries: FORGE_BASE_DIR_ENTRIES }, ...declarations],
+        // forge.spec_dir 依赖链只触及 workspaceRoot（forge.docs_root）；dshHome/projectRoot
+        // 为本体条目的依赖完备性补齐（projectRoot 与 workspaceRoot 同源——规格目录不依赖归拢）。
+        { dshHome: input.dshHome, projectRoot: input.workspaceRoot, workspaceRoot: input.workspaceRoot },
+        { slug: input.slug },
+      );
+    } catch (cause) {
+      // 撞名/成环/缺依赖报错不静默（bug fb3777a4——撞名消息点名两个声明方，Spec §2.2 同口径）
+      const message = cause instanceof Error ? cause.message : String(cause);
+      input.diag?.(`[task-loop] dirKeys 声明解析降级：${message}`, "warn");
+      return undefined;
+    }
     return resolved["forge.spec_dir"];
   } catch {
     return undefined;

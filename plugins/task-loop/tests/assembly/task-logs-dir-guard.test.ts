@@ -142,6 +142,30 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
     expect(textMissing).toContain("forge.task_logs_dir");
   });
 
+  it("两个声明方同名键 → warn 诊断点名两个声明方（bug fb3777a4——拉取缝不静默后到者胜）", async () => {
+    const container = mkdtempSync(join(tmpdir(), "task-loop-spec-collide-"));
+    const okEntry = { description: "x", deps: ["workspaceRoot"], resolve: () => "x" };
+    const diag: Array<{ line: string; level?: string }> = [];
+    const reflect = {
+      props: {
+        "dirKeys.alpha": { "knowledge.root": okEntry },
+        "dirKeys.beta": { "knowledge.root": okEntry },
+      },
+      get: (name: string) => (reflect.props as Record<string, unknown>)[name],
+    };
+    const resolve = createDefaultResolveWorkerContext({
+      containerDirOf: () => container,
+      resolveWsPath: () => ws,
+      reflectOf: () => reflect,
+      dshHome: "T:\\dsh-home",
+      diag: (line, level) => diag.push({ line, level }),
+    });
+    await resolve("proj-key", { slug: "feat-x" }, "3.0");
+    // Spec §2.2 同口径（project 侧 anchors.ts）：撞名报错并点名两个声明方，不取先到/后到者
+    const hit = diag.find((d) => d.level === "warn" && d.line.includes("dirKeys.alpha") && d.line.includes("dirKeys.beta"));
+    expect(hit).toBeDefined();
+  });
+
   it("dirKeys 声明逐条形状校验（lib/path 单源——bug 32532117）：坏形状跳过 + warn 诊断；forge.* 保留名拒绝", async () => {
     const container = mkdtempSync(join(tmpdir(), "task-loop-spec-shape-"));
     mkdirSync(join(ws, ".forge", "docs", "specs", "feat-x"), { recursive: true });
