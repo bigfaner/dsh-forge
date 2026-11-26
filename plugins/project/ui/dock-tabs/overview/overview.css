@@ -93,7 +93,7 @@
 
 .dswf-ov-info-k {
   flex: none;
-  width: 96px; /* dsw-raw 键列宽刻度（六字键名/英文混排键名单行对齐——用户裁定 2026-11-14） */
+  width: 140px; /* 键列宽刻度：容纳最长十字键名（项目运行时产物根目录 ≈130px）+ 列间距——键值不重叠，全行单列对齐 */
   text-align: start; /* 键列左对齐显式锚（apps/web ov-head 同形态——不随宿主继承 text-align 漂移） */
   white-space: nowrap; /* 键名单行——不换行（值列恒省略号，键列不折行兜底） */
   font: var(--dsw-font-xs-13);
