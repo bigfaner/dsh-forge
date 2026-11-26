@@ -306,11 +306,23 @@ export function ForgeHeroWorktreeMount({
     [phase, riskDismissed, riskConfirmedLatch, applySelection],
   )
 
-  // 1.17 默认回填（展示层回填，零会话副作用）：清单就绪且无用户记忆/显式回填时按
-  // 「host 选中记忆（forge:worktree/selected 读镜像）→ 锚定链」回填。记忆经 RPC 响应式
-  // 读（会话面整域重挂后 projectRoot 到位即补读，跨重挂恢复用户选中意图——host 唯一
-  // 事实源）。回填零编排；会话创建在官方 create 调用点
-  // （host 建会话通道消费选中记忆——创建时点即绑选中树，缺席重路由兜底）。
+  // 1.17 默认回填：清单就绪且无用户记忆/显式回填时按「host 选中记忆（forge:worktree/
+  // selected 读镜像）→ 锚定链」回填。记忆经 RPC 响应式读（会话面整域重挂后 projectRoot
+  // 到位即补读，跨重挂恢复用户选中意图——host 唯一事实源）。
+  // bug c6e124c2：回填落定 = 完整选中（applySelection——openWorkspace 切主视图到该树），
+  // 非主树不得只写显示——否则 chip 显示树与主视图 blank 分叉，直接发送即绑错树（AGENTS
+  // 3.4 所见即所得）。主树回填零编排（主视图缺省即主树——冗余 openWorkspace 会无谓
+  // 重挂主视图 blank）。
+  // 回填落定单源：显示写入 + 非主树时完整选中（openWorkspace 切主视图）。
+  const settleBackfill = useCallback(
+    (backfill: string | undefined): void => {
+      if (backfill === undefined) return
+      setLocalSelectedPath((prev) => prev ?? backfill)
+      const isMain = phase.rows.find((row) => row.path === backfill)?.isMain === true
+      if (!isMain) applySelection(backfill)
+    },
+    [phase.rows, applySelection],
+  )
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
     if (phase.root !== projectRoot) return // bug 70188b91：错配帧（旧项目清单 × 新项目根）不回填
@@ -318,15 +330,15 @@ export function ForgeHeroWorktreeMount({
     makeRpc()
       .worktree.selected({ projectRoot })
       .then((result) => {
-        if (alive) setLocalSelectedPath((prev) => prev ?? result.path ?? anchorDefaultWorktreePath(phase.rows))
+        if (alive) settleBackfill(result.path ?? anchorDefaultWorktreePath(phase.rows))
       })
       .catch(() => {
-        if (alive) setLocalSelectedPath((prev) => prev ?? anchorDefaultWorktreePath(phase.rows))
+        if (alive) settleBackfill(anchorDefaultWorktreePath(phase.rows))
       })
     return () => {
       alive = false
     }
-  }, [phase, projectRoot, makeRpc])
+  }, [phase, projectRoot, makeRpc, settleBackfill])
 
   // 陈旧选中自愈（bug 4a30b193 UI 面）：清单就绪后发现选中行盘上缺席（present=false 或
   // 行已消失——外部强制删除）→ 两层选中态同清（本地投影 / host 推送清除）+ chip

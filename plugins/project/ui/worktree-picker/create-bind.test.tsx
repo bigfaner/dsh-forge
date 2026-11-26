@@ -142,7 +142,7 @@ describe('bug 70188b91：projectRoot 变更清退本地选中投影', () => {
     delete (globalThis as unknown as Record<string, unknown>)[OPEN_KEY]
   })
 
-  it('项目 B 选中 wt-b 后切到项目 A：零伪失效 notice、零强制 openWorkspace、锚不残留 B 树路径', async () => {
+  it('项目 B 选中 wt-b 后切到项目 A：零伪失效 notice、回填主行零 openWorkspace、锚不残留 B 树路径', async () => {
     const rootA = 'C:/proj-a'
     const rootB = 'C:/proj-b'
     const wtB = 'C:/proj-b/.forge/worktrees/wt-b'
@@ -208,8 +208,93 @@ describe('bug 70188b91：projectRoot 变更清退本地选中投影', () => {
       await Promise.resolve()
     })
     expect(document.querySelector('[data-dswt-stale-selection-notice]'), '零伪失效 notice').toBeNull()
-    expect(opened, '零强制 openWorkspace（回填锚定链零编排）').toEqual(['ws-b-wt'])
+    // bug c6e124c2：回填落定 = 完整选中（显示 = 生效）——A 项目回填解析为主行，主行回填
+    // 零编排（主视图缺省即主树）；非主树回填才 openWorkspace（见下方 c6e124c2 组）
+    expect(opened, '回填主行零 openWorkspace（非主树回填才切主视图）').toEqual(['ws-b-wt'])
     const anchor = (globalThis as unknown as Record<string, unknown>)[ANCHOR_KEY]
     expect(anchor, 'window 锚不残留 B 树路径（按 A 锚定链重新落定）').toBe(mainA)
+  })
+})
+
+describe('bug c6e124c2：默认回填显示树 = 主视图树（所见即所得）', () => {
+  afterEach(() => {
+    document.body.replaceChildren()
+    delete (globalThis as unknown as Record<string, unknown>)[OPEN_KEY]
+    delete (globalThis as unknown as Record<string, unknown>)[ANCHOR_KEY]
+  })
+
+  it('host 选中记忆回填非主树 → chip 显示该树且 openWorkspace 切主视图到该树', async () => {
+    const root = 'Z:/proj'
+    const wt = 'Z:/proj/.forge/worktrees/plugins'
+    const rpc = (() =>
+      ({
+        projects: { list: async () => [] },
+        settings: { get: async () => ({}), set: async () => undefined },
+        worktree: {
+          list: async () => ({
+            isGit: true,
+            worktreeDir: 'Z:/proj/.forge/worktrees',
+            entries: [
+              { path: root, branch: 'main', worktreeName: 'proj', workspaceId: 'ws-main', isMain: true, present: true },
+              { path: wt, branch: 'plugins', worktreeName: 'plugins', workspaceId: 'ws-plugins', isMain: false, present: true },
+            ],
+          }),
+          selected: async () => ({ path: wt }),
+          select: async () => ({}),
+          branches: async () => ({ defaultBranch: 'main', branches: ['main'] }),
+          aheadBehind: async () => ({}),
+        },
+      }) as unknown as WorktreeFacesRpc)
+    const opened: string[] = []
+    ;(globalThis as unknown as Record<string, unknown>)[OPEN_KEY] = (workspaceId: string): void => {
+      opened.push(workspaceId)
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const rootEl = createRoot(host)
+    await act(async () => {
+      rootEl.render(<ForgeHeroWorktreeMount projectRoot={root} makeRpc={rpc} />)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await Promise.resolve()
+    })
+    expect((globalThis as unknown as Record<string, unknown>)[ANCHOR_KEY], 'chip 显示记忆树').toBe(wt)
+    expect(opened, '主视图随显示切到记忆树 workspace').toEqual(['ws-plugins'])
+    expect(host.textContent, 'chip 文案显示记忆树').toContain('plugins')
+  })
+
+  it('记忆树 = 主树 → 回填落定不重开主视图（无冗余 openWorkspace）', async () => {
+    const root = 'Z:/proj'
+    const rpc = (() =>
+      ({
+        projects: { list: async () => [] },
+        settings: { get: async () => ({}), set: async () => undefined },
+        worktree: {
+          list: async () => ({
+            isGit: true,
+            entries: [{ path: root, branch: 'main', worktreeName: 'proj', workspaceId: 'ws-main', isMain: true, present: true }],
+          }),
+          selected: async () => ({}),
+          select: async () => ({}),
+          branches: async () => ({ defaultBranch: 'main', branches: ['main'] }),
+          aheadBehind: async () => ({}),
+        },
+      }) as unknown as WorktreeFacesRpc)
+    const opened: string[] = []
+    ;(globalThis as unknown as Record<string, unknown>)[OPEN_KEY] = (workspaceId: string): void => {
+      opened.push(workspaceId)
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const rootEl = createRoot(host)
+    await act(async () => {
+      rootEl.render(<ForgeHeroWorktreeMount projectRoot={root} makeRpc={rpc} />)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await Promise.resolve()
+    })
+    expect(opened, '主树回填零 openWorkspace').toEqual([])
   })
 })
