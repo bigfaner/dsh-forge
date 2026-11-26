@@ -5,6 +5,7 @@ import { deriveDirName } from './derive-dir.js'
 import {
   FORGE_BASE_DIR_ENTRIES,
   FORGE_DIR_KEYS,
+  dirKeyEntryShapeError,
   isValidDirParam,
   resolveForgeDirs,
   type ForgeDirDeclaration,
@@ -154,3 +155,16 @@ describe('参数校验函数（AC5）', () => {
 
 /** 本体十条（实现导出的登记条目，forge_dirs/forge_resolve_path 同源） */
 const BASE = FORGE_BASE_DIR_ENTRIES
+
+describe('dirKeyEntryShapeError（拉取缝形状校验单源——plugins/project 与 plugins/task-loop 共用）', () => {
+  const ok = { description: 'x', deps: ['workspaceRoot'] as const, resolve: () => 'x' }
+
+  it('合格条目 = undefined；forge.* 保留名 / 无命名空间前缀 / 坏形状各点名问题', () => {
+    expect(dirKeyEntryShapeError('knowledge.root', ok)).toBeUndefined()
+    expect(dirKeyEntryShapeError('forge.custom', ok)).toMatch(/forge\.\* 保留命名空间/)
+    expect(dirKeyEntryShapeError('nodot', ok)).toMatch(/命名空间/)
+    expect(dirKeyEntryShapeError('bad.resolve', { ...ok, resolve: 42 })).toMatch(/resolve 须为函数/)
+    expect(dirKeyEntryShapeError('bad.deps', { ...ok, deps: [] })).toMatch(/deps/)
+    expect(dirKeyEntryShapeError('not.object', null)).toMatch(/须为对象/)
+  })
+})

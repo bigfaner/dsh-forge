@@ -101,6 +101,34 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
     expect(text).not.toContain("forge.specs_dir");
     expect(text).toContain("forge.task_logs_dir");
   });
+
+  it("dirKeys 声明逐条形状校验（lib/path 单源——bug 32532117）：坏形状跳过 + warn 诊断；forge.* 保留名拒绝", async () => {
+    const container = mkdtempSync(join(tmpdir(), "task-loop-spec-shape-"));
+    mkdirSync(join(ws, ".forge", "docs", "specs", "feat-x"), { recursive: true });
+    const diag: Array<{ line: string; level?: string }> = [];
+    const reflect = {
+      props: {
+        "dirKeys.knowledge": {
+          "forge.custom": { description: "x", deps: ["workspaceRoot"], resolve: () => "x" }, // 保留名拒绝
+          "bad.resolve": { description: "x", deps: ["workspaceRoot"], resolve: 42 }, // 坏形状跳过
+        },
+      },
+      get: (name: string) => reflect.props[name],
+    };
+    const resolve = createDefaultResolveWorkerContext({
+      containerDirOf: () => container,
+      resolveWsPath: () => ws,
+      reflectOf: () => reflect,
+      dshHome: "T:\\dsh-home",
+      diag: (line, level) => diag.push({ line, level }),
+    });
+    const text = await resolve("proj-key", { slug: "feat-x" }, "3.0");
+    // 两条声明全坏 → 第三方零贡献，规格段仍由本体 forge.spec_dir 解析（锚在盘，不缺席）
+    expect(text).toContain(`${join(ws, ".forge", "docs", "specs", "feat-x")}\\`);
+    // 诊断留痕：保留名与坏形状各自 warn（不静默——AGENTS §7）
+    expect(diag.some((d) => d.level === "warn" && d.line.includes("forge.custom") && d.line.includes("保留命名空间"))).toBe(true);
+    expect(diag.some((d) => d.level === "warn" && d.line.includes("bad.resolve"))).toBe(true);
+  });
 });
 
 describe("消费位源码钉（改用别的派生即红）", () => {

@@ -177,6 +177,28 @@ interface ForgeDirEntryLoose {
 const asLoose = (entry: unknown): ForgeDirEntryLoose => entry as ForgeDirEntryLoose
 
 /**
+ * 第三方 dirKey 条目形状校验（forge-dirs-unification §2.2/§2.3 拉取缝单源——plugins/project
+ * 与 plugins/task-loop 两条拉取缝共用，校验逻辑只有一份）：返回错误消息，undefined = 合格。
+ * 键须带声明方前缀命名空间且不得占用 forge.* 保留名；条目须为对象且 description/deps/resolve
+ * 完整（params 可选，仅 slug/localId 子集）。
+ */
+export function dirKeyEntryShapeError(key: string, entry: unknown): string | undefined {
+  if (key === '' || !key.includes('.')) return `目录键 '${key}' 须带声明方前缀命名空间（如 'knowledge.root'）`
+  if (key.startsWith('forge.')) return `目录键 '${key}' 占用 forge.* 保留命名空间（本体权威 = @dsh-forge/lib-path）`
+  const e = entry as { description?: unknown; deps?: unknown; params?: unknown; resolve?: unknown } | null
+  if (e === null || typeof e !== 'object') return '条目须为对象（description/deps/resolve）'
+  if (typeof e.description !== 'string' || e.description.trim() === '') return `条目 '${key}' description 须为非空字符串`
+  if (!Array.isArray(e.deps) || e.deps.length === 0 || !e.deps.every((d) => typeof d === 'string')) {
+    return `条目 '${key}' deps 须为非空字符串数组`
+  }
+  if (e.params !== undefined && (!Array.isArray(e.params) || !e.params.every((p) => p === 'slug' || p === 'localId'))) {
+    return `条目 '${key}' params 须为 'slug'/'localId' 子集`
+  }
+  if (typeof e.resolve !== 'function') return `条目 '${key}' resolve 须为函数`
+  return undefined
+}
+
+/**
  * 解析当次合并到的全部条目：按 deps 拓扑排序后逐键 resolve。
  * 成环报错并点名环上全部键；依赖缺席报错并点名缺席的键；同名键撞名报错并点名两个声明方——
  * 三种情况都抛错，不返回路径。参数缺席的带参条目跳过（无参形态调用，如 forge_dirs）；

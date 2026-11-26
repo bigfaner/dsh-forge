@@ -11,6 +11,7 @@ import {
   declaredDirKeys,
   declaredEntryOf,
   mergeDeclarations,
+  resolveDeclaredDirs,
   workspacePartitionsOf,
   type DirKeysPullDiagFace,
   type ReflectDeclarePullFace,
@@ -147,15 +148,21 @@ describe('dirKeys.* 反向拉取缝（collectDeclaredDirKeys——消费点现�
     expect(onDiag.messages().some((m) => m.includes('cannot get property'))).toBe(true)
   })
 
-  it('撞名键跨声明方去重：先到者胜出 + warn（fail-soft 合并面，硬失败留给查询期）', () => {
+  it('撞名键不吞：两条声明原样收集，解析当次报错点名两个声明方（bug 32532117——不取先到者）', () => {
     const onDiag = diagSpy()
     const reflect = reflectOf({
       'dirKeys.first': { 'knowledge.root': knowledgeRootEntry },
       'dirKeys.second': { 'knowledge.root': knowledgeRootEntry },
     })
+    // 原断言「先到者胜出（只收 dirKeys.first）+ 撞名 warn」已废——撞名不吞是新口径
     const pulled = collectDeclaredDirKeys(reflect, onDiag)
-    expect(pulled.map((d) => d.source)).toEqual(['dirKeys.first'])
-    expect(onDiag.messages().some((m) => m.includes('撞名') && m.includes('dirKeys.first'))).toBe(true)
+    expect(pulled.map((d) => d.source)).toEqual(['dirKeys.first', 'dirKeys.second'])
+    expect(pulled.every((d) => 'knowledge.root' in d.entries)).toBe(true)
+    expect(onDiag.calls).toHaveLength(0) // 撞名不再是拉取缝降级径——零 warn
+    // 当次解析调用报错并点名两个声明方（注册表撞名报错——拒绝取先到者）
+    expect(() => resolveDeclaredDirs(mergeDeclarations(pulled), SOURCES)).toThrow(
+      /撞名：knowledge\.root 同时由声明方 dirKeys\.first 与 dirKeys\.second 提供/,
+    )
   })
 
   it('约定名前缀常量 pin（跨插件装配契约）', () => {

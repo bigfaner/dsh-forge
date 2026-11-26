@@ -3,8 +3,10 @@
 // `reflect.provide('dirKeys.<声明方>', entries)` 反向拉取合并——查询时现拉，不缓存不落注册表。
 // 本模块只做三件事：
 //   ① 基座声明常量 + 解析入口薄封装（resolveForgeDirs 直通 lib/path 单源）；
-//   ② dirKeys.* 声明拉取缝（形状校验 fail-soft：malformed/forge.* 保留名/撞名跳过并 warn
-//      ——诊断经装配期注入的 DirKeysPullDiagFace，不直落 console，AGENTS §7）；
+//   ② dirKeys.* 声明拉取缝（形状校验 fail-soft 单源 = lib/path dirKeyEntryShapeError：
+//      malformed/forge.* 保留名跳过并 warn——诊断经装配期注入的 DirKeysPullDiagFace，不直落
+//      console，AGENTS §7；同名键不去重不吞——两条声明原样收集，解析期注册表撞名报错点名
+//      两方，bug 32532117）；
 //   ③ 工作区分区派生（workspacePartitionsOf——.forge 初始化与审计的分区/允许集由键表
 //      派生，无独立目录清单常量；解析失败 warn 降级本体键集）。
 // workspace/docs 相对派生 helpers 自 lib/path dir-segments 再导出（本域消费单入口）。
@@ -16,6 +18,7 @@ import { join } from 'node:path'
 import {
   FORGE_BASE_DIR_ENTRIES,
   FORGE_DIR_KEYS,
+  dirKeyEntryShapeError,
   isValidDirParam,
   resolveForgeDirs,
   type ForgeDirDeclaration,
@@ -57,37 +60,22 @@ export interface ReflectDeclarePullFace {
  */
 export type DirKeysPullDiagFace = (payload: { readonly level: 'warn'; readonly event: string; readonly message: string }) => void
 
-/** 条目形状校验（fail-soft 拉取缝用——返回错误消息或 undefined = 合格） */
-function entryShapeError(key: string, entry: unknown): string | undefined {
-  if (key === '' || !key.includes('.')) return `目录键 '${key}' 须带声明方前缀命名空间（如 'knowledge.root'）`
-  if (key.startsWith('forge.')) return `目录键 '${key}' 占用 forge.* 保留命名空间（本体权威 = @dsh-forge/lib-path）`
-  const e = entry as { description?: unknown; deps?: unknown; params?: unknown; resolve?: unknown } | null
-  if (e === null || typeof e !== 'object') return '条目须为对象（description/deps/resolve）'
-  if (typeof e.description !== 'string' || e.description.trim() === '') return `条目 '${key}' description 须为非空字符串`
-  if (!Array.isArray(e.deps) || e.deps.length === 0 || !e.deps.every((d) => typeof d === 'string')) {
-    return `条目 '${key}' deps 须为非空字符串数组`
-  }
-  if (e.params !== undefined && (!Array.isArray(e.params) || !e.params.every((p) => p === 'slug' || p === 'localId'))) {
-    return `条目 '${key}' params 须为 'slug'/'localId' 子集`
-  }
-  if (typeof e.resolve !== 'function') return `条目 '${key}' resolve 须为函数`
-  return undefined
-}
+/** 条目形状校验单源 = lib/path dirKeyEntryShapeError（两条拉取缝共用——再导出供域内测试/工具引用） */
+export { dirKeyEntryShapeError }
 
 /**
  * 反向拉取第三方目录键声明（AGENTS 1.6 在场性现查——每个消费点现查，检测结果不缓存）：
  * 枚举 reflect.props 中 `dirKeys.` 前缀约定名，逐名现取条目对象（键 = 目录键），
- * 逐条形状校验（malformed 跳过不抛——查询面 fail-soft；声明方装配质量由其自测把关）；
- * forge.* 保留名与跨声明方撞名键跳过（先到者胜 + warn 留痕，不取先到不遮蔽报错语义——
- * 拉取缝是 fail-soft 合并面，硬失败留给 resolveForgeDirs 的查询期撞名报错）。
- * reflect 缺席 / 读取抛 / 约定名无值 = 该名零贡献零抛——降级径经 onDiag warn 留痕。
+ * 逐条形状校验（lib/path dirKeyEntryShapeError 单源——malformed/forge.* 保留名跳过不抛，
+ * warn 留痕）；同名键不吞不去重——两条声明各自原样收集，撞名由解析期注册表报错点名
+ * 两个声明方（bug 32532117——不取先到者）。reflect 缺席 / 读取抛 / 约定名无值 = 该名
+ * 零贡献零抛——降级径经 onDiag warn 留痕。
  */
 export function collectDeclaredDirKeys(
   reflect: ReflectDeclarePullFace | undefined,
   onDiag?: DirKeysPullDiagFace,
 ): readonly ForgeDirDeclaration[] {
   const collected: ForgeDirDeclaration[] = []
-  const knownSource = new Map<string, string>(FORGE_DIR_KEYS.map((key) => [key, 'forge 本体']))
   const props = reflect?.props
   if (props === undefined) {
     if (reflect !== undefined) {
@@ -112,21 +100,16 @@ export function collectDeclaredDirKeys(
     }
     const entries: Record<string, ForgeDirEntry<readonly never[], readonly never[]>> = {}
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      const shapeError = entryShapeError(key, entry)
+      const shapeError = dirKeyEntryShapeError(key, entry)
       if (shapeError !== undefined) {
         onDiag?.({ level: 'warn', event: 'forge-dirs-declare', message: `声明拉取缝降级：约定名 ${name} 条目 malformed 跳过（${shapeError}）` })
         continue
       }
-      if (knownSource.has(key)) {
-        onDiag?.({ level: 'warn', event: 'forge-dirs-declare', message: `声明拉取缝降级：目录键 ${key} 与既有声明撞名（${knownSource.get(key)} 已声明）——先到者胜出，${name} 该键跳过` })
-        continue
-      }
-      knownSource.set(key, name)
       entries[key] = entry as ForgeDirEntry<readonly never[], readonly never[]>
     }
     if (Object.keys(entries).length > 0) collected.push({ source: name, entries })
     else {
-      onDiag?.({ level: 'warn', event: 'forge-dirs-declare', message: `声明拉取缝零产出：约定名 ${name} 无一条可用条目（取值非对象/malformed/保留名/撞名）` })
+      onDiag?.({ level: 'warn', event: 'forge-dirs-declare', message: `声明拉取缝零产出：约定名 ${name} 无一条可用条目（取值非对象/malformed/保留名）` })
     }
   }
   return collected
