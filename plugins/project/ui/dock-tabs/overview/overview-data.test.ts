@@ -128,17 +128,11 @@ describe('loadOverviewHead（头路并发——projects 单点 + features/stats 
     expect(calls.find((c) => c.channel === FEATURES_CHANNELS.list)).toBeDefined()
   })
 
-  it('基本信息区五行：dirRows 键投影；workspaceRoot/forgeDir 项目行回退；其余缺席 = 「—」', async () => {
+  it('基本信息区：dirRows 缺席 = 零行（键集来自目录事实服务，无写死清单可占位）', async () => {
     const { client } = headOkClient()
     const out = await loadOverviewHead(client, 'p-1')
     expect(out.ok).toBe(true)
-    if (out.ok) {
-      const rows = overviewHeadRows(out.data)
-      expect(rows.map((r) => r.label)).toEqual(['工作区根', '.forge 目录', '文档位置', '项目运行产物', 'Worktree根目录'])
-      expect(rows.find((r) => r.label === '工作区根')?.value).toBe('Z:/ws/demo')
-      expect(rows.find((r) => r.label === '.forge 目录')?.value).toBe('Z:/ws/demo/.forge')
-      expect(rows.filter((r) => r.value === '—')).toHaveLength(3)
-    }
+    if (out.ok) expect(overviewHeadRows(out.data)).toEqual([])
   })
 
   it('fix-15 官方宿主降级：features/stats 通道 typed 失败 = 头路空增强值照常落 head（projects.get 单点权威）', async () => {
@@ -168,23 +162,25 @@ describe('loadOverviewHead（头路并发——projects 单点 + features/stats 
     if (out.ok) expect(out.data.projectName).toBe('demo')
   })
 
-  it('dirRows 在场 = host 下发原样值逐行投影（UI 零拼接）', async () => {
+  it('dirRows 在场 = host 下发原样值逐行投影（UI 零拼接；隐藏集键不列示）', async () => {
     const { client } = headOkClient()
     const out = await loadOverviewHead(client, 'p-1')
     expect(out.ok).toBe(true)
     if (out.ok) {
       const rows = overviewHeadRows(out.data, [
         { dirKey: 'workspaceRoot', dir: 'HOST/ws', description: '' },
-        { dirKey: 'forgeDir', dir: 'HOST/ws/.forge', description: '' },
+        { dirKey: 'forge.home', dir: 'HOST/dsh/forge', description: '' },
+        { dirKey: 'forge.tmp', dir: 'HOST/dsh/forge/tmp', description: '' },
+        { dirKey: 'knowledge.store', dir: 'HOST/dsh/forge/knowledge', description: '' },
+        { dirKey: 'forge.project_runtime_dir', dir: 'HOST/dsh/forge/projects/demo', description: '' },
+        { dirKey: 'forge.task_runtime_dir', dir: 'HOST/tasks@a1b2c3d4', description: '' },
         { dirKey: 'forge.docs_root', dir: 'HOST/ws/.forge/docs', description: '' },
-        { dirKey: 'forge.task_home', dir: 'HOST/tasks@a1b2c3d4', description: '' },
         { dirKey: 'forge.worktrees', dir: 'HOST/ws/.forge/worktrees', description: '' },
       ])
       expect(rows.map((r) => r.value)).toEqual([
-        'HOST/ws',
-        'HOST/ws/.forge',
-        'HOST/ws/.forge/docs',
+        'HOST/dsh/forge/projects/demo',
         'HOST/tasks@a1b2c3d4',
+        'HOST/ws/.forge/docs',
         'HOST/ws/.forge/worktrees',
       ])
     }

@@ -1,29 +1,32 @@
-// 基本信息区（用户裁定 2026-11-13）：forge 相关目录行共五行，数据源 = plugins/project
-// host/dirs 锚注册表（DIR_KEY_REGISTRY 单源）经 host 侧解析后 forgeDirs Typert namespace
-// 下发；UI 面只渲染、禁自行拼接目录路径。forge.tmp 与 forge.project_home 不列示（host
-// 半永不越过本键集下发）。装载拆独立路（不经 channels 头路——Typert 为官方宿主唯一通路），
-// fail-soft：face 缺席/单键解析失败 = 该行「—」，不阻断 ov-head 其余内容。
+// 基本信息区（spec forge-dirs-unification §2.7）：目录行取自目录事实服务（forgeDirs
+// Typert namespace 下发的 facts 全量行），UI 面只渲染、禁自行拼接目录路径；界面源码
+// 零写死目录键清单——显示规则 = 界面层过滤：隐藏集常量（forge.home/forge.db/forge.tmp）
+// + 标签表（显示键白名单，插件键不在表内自然隐藏）。装载拆独立路（不经 channels 头路
+// ——Typert 为官方宿主唯一通路），fail-soft：face 缺席/单键解析失败 = 该行「—」，不
+// 阻断 ov-head 其余内容。
 import { useEffect, useRef, useState } from 'react'
 import type { DirFactRow } from '@dsh-forge/contracts'
 import { createForgeRpcClient } from '../../rpc.js'
 
-/** 列示键集（有序——与 host 半 DIR_FACTS_PRESENTED_KEYS + 项目行两键成对；测试 pin 锁定） */
-export const DIR_FACTS_ROW_KEYS = ['workspaceRoot', 'forgeDir', 'forge.docs_root', 'forge.task_home', 'forge.worktrees'] as const
+/** 隐藏集（界面层展示规则——forge_dirs 工具照常返回这些键，界面不列示） */
+const HIDDEN_DIR_KEYS: ReadonlySet<string> = new Set(['forge.home', 'forge.db', 'forge.tmp'])
 
-export type DirFactRowKey = (typeof DIR_FACTS_ROW_KEYS)[number]
-
-/** 行标签（zh——ov-head 展开路径详情呈现面） */
-const DIR_FACTS_ROW_LABELS: Record<DirFactRowKey, string> = {
-  workspaceRoot: '工作区根',
-  forgeDir: '.forge 目录',
+/** 行标签表（显示键白名单 + 标签——表外键 = 隐藏；zh——ov-head 展开路径详情呈现面） */
+const DIR_FACTS_ROW_LABELS: Record<string, string> = {
+  'forge.project_runtime_dir': '项目运行时产物根目录',
+  'forge.task_runtime_dir': '任务运行时产物目录',
   'forge.docs_root': '文档位置',
-  'forge.task_home': '项目运行产物',
   'forge.worktrees': 'Worktree根目录',
 }
 
 /** 行标签取法（overview-data overviewHeadRows 消费——标签单源） */
-export function dirFactRowLabel(dirKey: DirFactRowKey): string {
-  return DIR_FACTS_ROW_LABELS[dirKey]
+export function dirFactRowLabel(dirKey: string): string {
+  return DIR_FACTS_ROW_LABELS[dirKey] ?? dirKey
+}
+
+/** 显示判定（隐藏集 + 标签表白名单——两表都小时零写死键清单外的机制） */
+function isDisplayedDirKey(dirKey: string): boolean {
+  return dirKey in DIR_FACTS_ROW_LABELS && !HIDDEN_DIR_KEYS.has(dirKey)
 }
 
 /** forge:dirs facts 消费切片（测试替身同型——ForgeRpcClient['dirs'] 结构满足） */
@@ -40,14 +43,17 @@ export function preloadDirFactsClientFactory(): DirFactsRpcFace {
 }
 
 /**
- * 五行目录事实（纯函数）：dirRows 键查找投影 → {label, value}；行缺席/解析失败
- * （dir null）= 「—」。值恒为 host 下发原样字符串——本函数零路径拼接。
+ * 基本信息区目录事实行（纯函数）：facts 下发行按显示规则过滤（隐藏集 + 标签表白名单，
+ * 保 host 下发序）→ {label, value}；行缺席/解析失败（dir null）= 「—」。值恒为 host
+ * 下发原样字符串——本函数零路径拼接；rows undefined = 零行（键清单来自服务，无键可占位）。
  */
 export function dirHeadRows(rows: readonly DirFactRow[] | undefined): readonly { readonly label: string; readonly value: string }[] {
-  return DIR_FACTS_ROW_KEYS.map((dirKey) => ({
-    label: dirFactRowLabel(dirKey),
-    value: rows?.find((row) => row.dirKey === dirKey)?.dir ?? '—',
-  }))
+  return (rows ?? [])
+    .filter((row) => isDisplayedDirKey(row.dirKey))
+    .map((row) => ({
+      label: dirFactRowLabel(row.dirKey),
+      value: row.dir ?? '—',
+    }))
 }
 
 /**

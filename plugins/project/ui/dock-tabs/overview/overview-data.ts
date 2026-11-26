@@ -18,7 +18,7 @@ import { typertRpcClientFactory } from '../typert-transport.js'
 import { overviewRpcClientFactory } from './overview-client.js'
 import { RpcClientError } from '../rpc-channels.js'
 import { rpcUiState, type RpcUiStateKind } from '../rpc-channels.js'
-import { DIR_FACTS_ROW_KEYS, dirHeadRows } from './dir-rows.js'
+import { dirHeadRows } from './dir-rows.js'
 import { bugStatusCounts, searchQueryOf, type OverviewSort, type OverviewSubtab } from './overview-model.js'
 import { docsRootOf } from './message-format.js'
 
@@ -44,9 +44,9 @@ export function mapOverviewError(error: unknown): OverviewErrorInfo {
 /** ov-head 信息束（projects.get + 无参 feature 列表 + 七态计数 + 基本信息区五行目录事实） */
 export interface OverviewHeadBundle {
   readonly projectName: string
-  /** 项目工作区根（workspaceRoot 行回退源——host 下发 dirRows 缺席时兜底） */
+  /** 项目工作区根（@ 锚文档根 docsRootOf 推导源） */
   readonly workspaceDir: string
-  /** 本工作区 .forge 目录（forgeDir 行回退源——同上） */
+  /** 本工作区 .forge 目录（@ 锚文档根 docsRootOf 推导源） */
   readonly forgeDir: string
   /** 无搜索全量 feature 卡（task-tab feature pill 数据源） */
   readonly features: readonly FeatureCard[]
@@ -55,22 +55,15 @@ export interface OverviewHeadBundle {
 }
 
 /**
- * 概览 ov-head 基本信息区五行（用户裁定 2026-11-13：工作区根 / .forge 目录 / 文档位置 /
- * 任务清单 / 派发工作树区——数据源 = host 侧锚注册表解析经 forgeDirs Typert 下发的
- * dirRows，UI 只渲染零拼接）。投影单源 = dirHeadRows（dir-rows.ts——T1-head 双实现归一），
- * 本函数只叠加项目行回退：dirRows 缺席行以 projects.get 项目行回退（workspaceRoot/forgeDir
- * 两键——同为 host 下发事实，非 UI 拼接），其余行缺席 = 「—」。
+ * 概览 ov-head 基本信息区目录行（spec forge-dirs-unification §2.7：行取自目录事实服务
+ * 下发的 dirRows，显示/隐藏 = dir-rows 界面层过滤——投影单源 dirHeadRows，本函数直通；
+ * head 参保留为 OverviewTab 既有调用形状，不参与投影）。
  */
 export function overviewHeadRows(
-  head: OverviewHeadBundle,
+  _head: OverviewHeadBundle,
   dirRows?: readonly DirFactRow[],
 ): readonly { readonly label: string; readonly value: string }[] {
-  return dirHeadRows(dirRows).map((row, index) => {
-    const dirKey = DIR_FACTS_ROW_KEYS[index]
-    const fallback =
-      dirKey === 'workspaceRoot' ? head.workspaceDir : dirKey === 'forgeDir' ? head.forgeDir : undefined
-    return { label: row.label, value: row.value !== '—' || fallback === undefined || fallback === '' ? row.value : fallback }
-  })
+  return dirHeadRows(dirRows)
 }
 
 /** 任务七态零计数（官方宿主 degraded tasks 族回退值——plugin-forge loop driver ZERO_STATS 同形） */
@@ -118,7 +111,7 @@ export async function loadOverviewHead(client: ForgeRpcClient, projectId: string
         projectName: project.name,
         workspaceDir: project.wsPath,
         // list 回退行（ProjectSummary）无 forgeDir 字段（host get 路由缺席场景）——空串，
-        // 五行 forgeDir 行由 forgeDirs dirRows 真值补位（overviewHeadRows fallback 链）
+        // forgeDir 仅供 docsRootOf 推导（目录行真值由 forgeDirs dirRows 下发）
         forgeDir: 'forgeDir' in project ? project.forgeDir : '',
         features,
         stats,
