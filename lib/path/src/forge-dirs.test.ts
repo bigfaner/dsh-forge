@@ -59,7 +59,7 @@ describe('ForgeDirs 本体键（AC1——十个键，不包含其它键）', () 
     const slug = 'forge-dirs-unification'
     const localId = '1.1'
     const declared = resolveForgeDirs([own('lib/path', { ...BASE })], SOURCES, { slug, localId })
-    expect(declared['forge.spec_dir']).toBe(join(SOURCES.workspaceRoot, '.forge', 'docs', 'specs', slug))
+    expect(declared['forge.spec_dir']).toBe(join(SOURCES.workspaceRoot, '.forge', 'specs', slug))
     expect(declared['forge.dossier_dir']).toBe(
       join(SOURCES.workspaceRoot, '.forge', 'specs', slug, 'issues', localId),
     )

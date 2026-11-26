@@ -137,7 +137,7 @@ function resolveSpecDirViaRegistry(input: {
     try {
       resolved = resolveForgeDirs(
         [{ source: "forge.base", entries: FORGE_BASE_DIR_ENTRIES }, ...declarations],
-        // forge.spec_dir 依赖链只触及 workspaceRoot（forge.docs_root）；dshHome/projectRoot
+        // forge.spec_dir 依赖链只触及 workspaceRoot；dshHome/projectRoot
         // 为本体条目的依赖完备性补齐（projectRoot 与 workspaceRoot 同源——规格目录不依赖归拢）。
         { dshHome: input.dshHome, projectRoot: input.workspaceRoot, workspaceRoot: input.workspaceRoot },
         { slug: input.slug },

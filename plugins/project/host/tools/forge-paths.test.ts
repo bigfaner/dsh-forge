@@ -81,7 +81,7 @@ describe("forge_resolve_path（带参条目解析——枚举/参数/校验由�
     const taskRuntime = (await createForgeDirsTool(faceOf(), RESOLVER).execute({ dirKey: "forge.task_runtime_dir" }, EXEC)) as { paths: { dir: string }[] };
     const container = taskRuntime.paths[0]!.dir;
     const cases: readonly [string, Record<string, string>, string][] = [
-      ["forge.spec_dir", { slug: "demo" }, join(SOURCES.workspaceRoot, ".forge", "docs", "specs", "demo")],
+      ["forge.spec_dir", { slug: "demo" }, join(SOURCES.workspaceRoot, ".forge", "specs", "demo")],
       ["forge.dossier_dir", { slug: "demo", localId: "fix-1" }, join(SOURCES.workspaceRoot, ".forge", "specs", "demo", "issues", "fix-1")],
       ["forge.task_logs_dir", { slug: "demo", localId: "1.1" }, join(container, "logs", "demo", "1.1")],
     ];

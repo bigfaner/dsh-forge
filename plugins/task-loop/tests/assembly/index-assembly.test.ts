@@ -478,9 +478,9 @@ describe("生产装配 resolveWsPath 接缝（bug 9b3c9a9b——零 config 注�
     const PROJECT_KEY = deriveDirName(ws);
     const tasksHome = tmpHome();
     // 规格锚在盘（forge 根锚点节 fail-soft 探测的前置；落点 = 注册表 forge.spec_dir
-    // 解析真相 = {ws}/.forge/docs/specs/{slug}——forge-dirs-unification §2.3）
-    mkdirSync(join(ws, ".forge", "docs", "specs", "alpha"), { recursive: true });
-    writeFileSync(join(ws, ".forge", "docs", "specs", "alpha", "spec.md"), "# 既有 Spec 正本\n", "utf8");
+    // 解析真相 = {ws}/.forge/specs/{slug}——forge-dirs-unification §2.3）
+    mkdirSync(join(ws, ".forge", "specs", "alpha"), { recursive: true });
+    writeFileSync(join(ws, ".forge", "specs", "alpha", "spec.md"), "# 既有 Spec 正本\n", "utf8");
     const { ctx, services } = stubCtx();
     let projectRegistered = true;
     // forge.projects 缝替身（plugins/project 五缝同形——惰性工厂产 ProjectsServicePort 窄面）
@@ -502,8 +502,8 @@ describe("生产装配 resolveWsPath 接缝（bug 9b3c9a9b——零 config 注�
       const briefDir = /`([^`]+)`/.exec(seg.slice(seg.indexOf("`")))?.[1] ?? "";
       const expectedDir = join(tasksHome, PROJECT_KEY, "logs", "alpha", task.localId);
       expect(briefDir).toBe(`${expectedDir}\\`);
-      // ② worker 简报规格目录锚点（经注册表 forge.spec_dir 解析 = {ws}/.forge/docs/specs/<slug>——不缺席）
-      expect(claimed.persona).toContain(join(ws, ".forge", "docs", "specs", "alpha"));
+      // ② worker 简报规格目录锚点（经注册表 forge.spec_dir 解析 = {ws}/.forge/specs/<slug>——不缺席）
+      expect(claimed.persona).toContain(join(ws, ".forge", "specs", "alpha"));
 
       // ③ 回收钩子（生产装配产物 family）把 projectId 解析出运行时任务目录，与 worker 简报直接比较相等
       const family = assembleTaskLoopToolFamily({

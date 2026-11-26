@@ -68,7 +68,7 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
   const ws = mkdtempSync(join(tmpdir(), "task-loop-spec-ws-"));
 
   it("renderWorkerContext 消费 specDir 入参（注册表解析产物）；缺席 = 锚点规格段省略，零自拼", () => {
-    const specDir = join(ws, ".forge", "docs", "specs", "feat-x");
+    const specDir = join(ws, ".forge", "specs", "feat-x");
     mkdirSync(specDir, { recursive: true }); // 锚点段为在盘 fail-soft 探测——先落盘再断言
     const withSpec = renderWorkerContext({ forgeDir: join(ws, ".forge", "docs"), containerDir: "T:\\c", localId: "1", source: { slug: "feat-x" }, specDir });
     expect(withSpec).toContain("forge.specs_dir");
@@ -80,7 +80,7 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
 
   it("createDefaultResolveWorkerContext 经反射 dirKeys.* 拉缝 + 注册表解析规格目录（与本体重组合并同源）", async () => {
     const container = mkdtempSync(join(tmpdir(), "task-loop-spec-reg-"));
-    mkdirSync(join(ws, ".forge", "docs", "specs", "feat-x"), { recursive: true }); // 在盘探测前置
+    mkdirSync(join(ws, ".forge", "specs", "feat-x"), { recursive: true }); // 在盘探测前置
     const reflect = {
       props: { "dirKeys.knowledge": {} },
       get: (name: string) => reflect.props[name],
@@ -92,13 +92,13 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
       dshHome: "T:\\dsh-home",
     });
     const text = await resolve("proj-key", { slug: "feat-x" }, "3.0");
-    // 注册表 forge.spec_dir = join(workspaceRoot/.forge/docs, 'specs', slug)——非 task-loop 自拼
-    expect(text).toContain(`${join(ws, ".forge", "docs", "specs", "feat-x")}\\`);
+    // 注册表 forge.spec_dir = join(workspaceRoot/.forge, 'specs', slug)——非 task-loop 自拼
+    expect(text).toContain(`${join(ws, ".forge", "specs", "feat-x")}\\`);
   });
 
   it("正式装配入口行为级接线（host/index.ts）：claim 期间经反射拉 dirKeys.*（不手工注入被测缝——删 index.ts reflectOf 缺省注入即红）", async () => {
     const wsEntry = mkdtempSync(join(tmpdir(), "task-loop-spec-entry-"));
-    mkdirSync(join(wsEntry, ".forge", "docs", "specs", "feat-x"), { recursive: true });
+    mkdirSync(join(wsEntry, ".forge", "specs", "feat-x"), { recursive: true });
     const tasksHome = mkdtempSync(join(tmpdir(), "task-loop-spec-entry-home-"));
     const provided = new Map<string, unknown>();
     // forge.projects 身份缝（生产 resolveWsPathAsync 消费面——getProject().wsPath 供 ws 根）
@@ -137,13 +137,13 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
     // 删 index.ts 注入行（reflectOf 落 undefined）或改回自拼 = 本断言红
     expect(getSpy).toHaveBeenCalledWith("dirKeys.knowledge");
     // 值锚：worker persona 规格段 = 注册表 forge.spec_dir 解析值
-    expect(claimed.persona).toContain(`${join(wsEntry, ".forge", "docs", "specs", "feat-x")}\\`);
+    expect(claimed.persona).toContain(`${join(wsEntry, ".forge", "specs", "feat-x")}\\`);
     dispose();
   });
 
   it("resolveWorkerContext 期间经 reflect 拉 dirKeys.* 声明（spy 现查），规格目录 = 注册表解析值（非自拼——§2.3）", async () => {
     const container = mkdtempSync(join(tmpdir(), "task-loop-spec-spy-"));
-    mkdirSync(join(ws, ".forge", "docs", "specs", "feat-x"), { recursive: true }); // 在盘探测前置
+    mkdirSync(join(ws, ".forge", "specs", "feat-x"), { recursive: true }); // 在盘探测前置
     const reflect = {
       props: { "dirKeys.knowledge": {} } as Record<string, unknown>,
       get: (name: string) => reflect.props[name],
@@ -175,12 +175,12 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
   it("reflect 缺席 = 本体 forge.spec_dir 仍解析（在盘即出锚；规格段省略的真因 = 目录不在盘的在盘探测，非 reflect 缺席）", async () => {
     const container = mkdtempSync(join(tmpdir(), "task-loop-spec-absent-"));
     const wsOnDisk = mkdtempSync(join(tmpdir(), "task-loop-spec-ws-ondisk-"));
-    mkdirSync(join(wsOnDisk, ".forge", "docs", "specs", "feat-x"), { recursive: true });
+    mkdirSync(join(wsOnDisk, ".forge", "specs", "feat-x"), { recursive: true });
     const resolve = createDefaultResolveWorkerContext({ containerDirOf: () => container, resolveWsPath: () => wsOnDisk });
     const text = await resolve("proj-key", { slug: "feat-x" }, "3.0");
     // 反映射缺席仍走本体基座解析——规格目录在盘即出锚（可失败：注册表缝断裂 = 此红）
     expect(text).toContain("forge.specs_dir");
-    expect(text).toContain(`${join(wsOnDisk, ".forge", "docs", "specs", "feat-x")}\\`);
+    expect(text).toContain(`${join(wsOnDisk, ".forge", "specs", "feat-x")}\\`);
     // 对照径：规格目录不在盘 → 锚点规格段省略（renderDirBlock 在盘探测承担，logs 双锚恒出）
     const wsMissing = mkdtempSync(join(tmpdir(), "task-loop-spec-ws-miss-"));
     const resolveMissing = createDefaultResolveWorkerContext({ containerDirOf: () => container, resolveWsPath: () => wsMissing });
@@ -215,7 +215,7 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
 
   it("dirKeys 声明逐条形状校验（lib/path 单源——bug 32532117）：坏形状跳过 + warn 诊断；forge.* 保留名拒绝", async () => {
     const container = mkdtempSync(join(tmpdir(), "task-loop-spec-shape-"));
-    mkdirSync(join(ws, ".forge", "docs", "specs", "feat-x"), { recursive: true });
+    mkdirSync(join(ws, ".forge", "specs", "feat-x"), { recursive: true });
     const diag: Array<{ line: string; level?: string }> = [];
     const reflect = {
       props: {
@@ -235,7 +235,7 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
     });
     const text = await resolve("proj-key", { slug: "feat-x" }, "3.0");
     // 两条声明全坏 → 第三方零贡献，规格段仍由本体 forge.spec_dir 解析（锚在盘，不缺席）
-    expect(text).toContain(`${join(ws, ".forge", "docs", "specs", "feat-x")}\\`);
+    expect(text).toContain(`${join(ws, ".forge", "specs", "feat-x")}\\`);
     // 诊断留痕：保留名与坏形状各自 warn（不静默——AGENTS §7）
     expect(diag.some((d) => d.level === "warn" && d.line.includes("forge.custom") && d.line.includes("保留命名空间"))).toBe(true);
     expect(diag.some((d) => d.level === "warn" && d.line.includes("bad.resolve"))).toBe(true);
