@@ -4,8 +4,8 @@
 //     路径抛 ProjectKeyDerivationError（ERR_PROJECT_KEY_DERIVATION）。
 //   · resolveProjectKey(cwd, deps)：会话所属项目主检出归拢——先查注入的项目注册表查询函数
 //     取该项目主工作区行；查不到 → 标记预检（cwd 不落 .forge/worktrees 段 = 零 git 调用，
-//     原样 cwd 键）→ resolveMainCheckoutRoot git 现查归拢 → 清单不含 cwd（非本仓 worktree）
-//     回退 cwd 键。归拢成功的主根先改写为 cwd 同分隔符拼写，再做规范化（真实路径与大小写——
+//     原样 cwd 预检，键派生先规范化）→ resolveMainCheckoutRoot git 现查归拢 → 清单不含 cwd（非本仓 worktree）
+//     回退 cwd 键（派生同先规范化——bug 24954442 各分支统一口径）。归拢成功的主根先改写为 cwd 同分隔符拼写，再做规范化（真实路径与大小写——
 //     projectKey 大小写敏感）后算 projectKey。回退原因由调用方经诊断面留痕（AGENTS §7）。
 // 键拼写语义承袭 derive-dir：normalizeDirSpelling 归一（分隔符/尾分隔符不敏感，大小写敏感）。
 import { realpathSync } from 'node:fs'
@@ -78,14 +78,15 @@ export function resolveProjectKey(cwd: string, deps: ProjectKeyDeps): ProjectKey
     return { key: projectKeyOf(main), mainRoot: main, rolledUp: true }
   }
   if (!MARKER_PATTERN.test(cwd)) {
-    return { key: projectKeyOf(cwd), rolledUp: false }
+    // 各分支先规范化再派生（bug 24954442——「消费点已规范化」全分支成立）
+    return { key: projectKeyOf(canonicalize(cwd)), rolledUp: false }
   }
   const probe = resolveMainCheckoutRoot(cwd, deps.gitRunner)
   if (probe.entries === undefined) {
-    return { key: projectKeyOf(cwd), rolledUp: false, fallbackReason: probe.reason }
+    return { key: projectKeyOf(canonicalize(cwd)), rolledUp: false, fallbackReason: probe.reason }
   }
   if (!isInWorktreeTree(probe.entries, cwd)) {
-    return { key: projectKeyOf(cwd), rolledUp: false, fallbackReason: NON_MEMBER_FALLBACK_REASON }
+    return { key: projectKeyOf(canonicalize(cwd)), rolledUp: false, fallbackReason: NON_MEMBER_FALLBACK_REASON }
   }
   const main = canonicalize(matchPathSpelling(cwd, probe.entries[0]!.path))
   return { key: projectKeyOf(main), mainRoot: main, rolledUp: true }

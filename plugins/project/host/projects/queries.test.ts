@@ -1,7 +1,10 @@
 // queries 测试（plugin-project 1.10）：四键字典序读面 + 归档过滤 + 标题对齐（registry 读面）+
 // 读路径自证 suspected-move warn 拒自动改（fake registry / onDiag 构造注入）。
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { deriveDirName } from '@dsh-forge/lib-path'
+import { canonicalizePath, deriveDirName, projectKeyOf } from '@dsh-forge/lib-path'
 import { openDomainDb, PROJECT_DB_PREFIX, type DomainDb } from '../db/connection.js'
 import type { ProjectRow, WorkspaceRow } from '../db/row-types.js'
 import { ProjectsQueryService } from './queries.js'
@@ -111,6 +114,36 @@ describe('ProjectsQueryService（查询面）', () => {
       expect(domain.repos.projects.get('p1')!.projectKey).toBe('stale-key@00000000')
     } finally {
       domain.db.close()
+    }
+  })
+
+  it('读路径自证口径（bug 24954442）：注册拼写与磁盘大小写不同 → 规范化后同键，不发 suspected-move 警告', async () => {
+    const real = mkdtempSync(join(tmpdir(), 'query-case-'))
+    try {
+      // 造与磁盘大小写不同的拼写段（realpathSync.native 收敛真实大小写）
+      const base = basename(real)
+      const flipped = base === base.toLowerCase() ? base.toUpperCase() : base.toLowerCase()
+      const spelled = join(dirname(real), flipped)
+      expect(realpathSync.native(spelled)).not.toBe(spelled) // 前置：拼写确与真实路径不同
+      const domain = mem()
+      try {
+        // 库行键 = register 写行口径（canonicalizePath 规范化后派生——bug 3467e146）
+        seedProject(domain, { id: 'p1', projectKey: projectKeyOf(canonicalizePath(spelled)) })
+        seedMain(domain, 'p1', spelled, 'ws-1')
+        const diags: unknown[] = []
+        const svc = new ProjectsQueryService({
+          projects: domain.repos.projects,
+          workspaces: domain.repos.workspaces,
+          onDiag: (p) => diags.push(p),
+        })
+        svc.listProjects()
+        await svc.getProject('p1')
+        expect(diags).toEqual([])
+      } finally {
+        domain.db.close()
+      }
+    } finally {
+      rmSync(real, { recursive: true, force: true })
     }
   })
 

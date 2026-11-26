@@ -25,7 +25,7 @@ import type { Context } from "@deepseek-ai/cordis";
 import { rootCtxOf } from "@dsh-forge/lib-util";
 import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/contracts";
 import { FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
-import { projectKeyOf } from "@dsh-forge/lib-path";
+import { canonicalizePath, projectKeyOf } from "@dsh-forge/lib-path";
 import type { Envelope } from "../../shared/result.js";
 import type { SessionTaskLinkCard, TaskCard, TaskSnapshot } from "../domain/tasks/types.js";
 import type { QueryTaskResult } from "../domain/tasks/query.js";
@@ -419,7 +419,8 @@ export class ForgeTasksRemote extends TypertRemoteService {
     try {
       const project = await projects.getProject(projectId);
       if (project !== null && project !== undefined && typeof project.wsPath === "string" && project.wsPath !== "") {
-        return { wsPath: project.wsPath, key: projectKeyOf(project.wsPath) };
+        // 键先规范化再派生（bug 24954442 读侧——与写行键 3467e146 口径同源）
+        return { wsPath: project.wsPath, key: projectKeyOf(canonicalizePath(project.wsPath)) };
       }
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
@@ -453,7 +454,7 @@ export class ForgeTasksRemote extends TypertRemoteService {
     }
     try {
       const result = await worktrees.list({ projectRoot: main.wsPath });
-      const keys = [main.key, ...result.entries.map((entry) => projectKeyOf(entry.path))];
+      const keys = [main.key, ...result.entries.map((entry) => projectKeyOf(canonicalizePath(entry.path)))];
       return [...new Set(keys)];
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);

@@ -2,7 +2,7 @@
 // NULL 垫底）+ 归档过滤 + 标题对齐（registry title 读面）；读路径自证：project_key ≠
 // f(main 行 ws_path) 投影 = suspected-move 语义——emitDiag warn 留痕 + 拒自动改（显式迁移动词面）。
 import type { Project, ProjectSummary } from '@dsh-forge/lib-api'
-import { projectKeyOf } from '@dsh-forge/lib-path'
+import { canonicalizePath, projectKeyOf } from '@dsh-forge/lib-path'
 import type { DiagEventPayload } from '@dsh-forge/lib-diag'
 import type { ProjectsRepo, WorkspacesRepo } from '../db/repositories/index.js'
 import { diag } from './errors.js'
@@ -92,10 +92,12 @@ export class ProjectsQueryService {
   /**
    * 读路径自证（design-key-flows §2）：project_key ≠ f(main 行 ws_path) 投影 = suspected-move
    * 语义——emitDiag warn 留痕 + 拒自动改（更新走显式迁移动词 updateMainPath，读面零写）。
+   * f(ws_path) 先 canonicalizePath 规范化再派生（bug 24954442 读侧同写行键 3467e146 口径——
+   * 注册拼写 ≠ 磁盘大小写时原样派生恒不相等，误发疑似移动警告）。
    */
   private selfCertify(projectKey: string, projectId: string, mainWsPath: string | undefined): void {
     if (mainWsPath === undefined) return
-    const expected = projectKeyOf(mainWsPath)
+    const expected = projectKeyOf(canonicalizePath(mainWsPath))
     if (expected === projectKey) return
     diag(this.#deps.onDiag, {
       level: 'warn',

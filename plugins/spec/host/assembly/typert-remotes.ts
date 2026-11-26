@@ -454,7 +454,8 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     }
     try {
       const result = await worktrees.list({ projectRoot: root.wsPath });
-      const family = [root, ...result.entries.map((entry) => ({ wsPath: entry.path, projectKey: projectKeyOf(entry.path) }))];
+      // worktree 键先规范化再派生（bug 24954442 读侧——与写行键 3467e146 口径同源）
+      const family = [root, ...result.entries.map((entry) => ({ wsPath: entry.path, projectKey: projectKeyOf(canonicalizePath(entry.path)) }))];
       const seen = new Set<string>();
       return family.filter((row) => (seen.has(row.projectKey) ? false : (seen.add(row.projectKey), true)));
     } catch (cause) {
