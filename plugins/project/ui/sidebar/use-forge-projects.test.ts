@@ -2,6 +2,7 @@
 // 1.6 随 sidebar 族注册面自 apps/web 平移本包，数据源改接 Typert（ui/rpc face）；本件测
 // 纯异步映射 fetchProjectsPhase（成功/typed error/face 缺席归一）。hook 的 effect 胶水不在
 // SSR 测面（renderToStaticMarkup 不跑 effect—— ForgeSidebarSlot.test 已证骨架相位）。
+// effect 胶面的竞速重取经 real DOM 链路单测（use-forge-projects-mount-race.test.tsx）。
 import { describe, expect, it } from 'vitest'
 import { createForgeRpcClient, RpcClientError, type ForgeRpcClient } from '../rpc.js'
 import { fetchProjectsPhase } from './use-forge-projects.js'

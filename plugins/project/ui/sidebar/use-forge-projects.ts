@@ -9,7 +9,7 @@
 // 1.38 正典化口径），官方宿主/壳宿主双态同一通路。
 import { useCallback, useEffect, useState } from 'react'
 import type { ProjectSummary } from '@dsh-forge/contracts'
-import { createForgeRpcClient, type RpcClientFactory } from '../rpc.js'
+import { createForgeRpcClient, forgeRemoteMountSettled, waitForRemoteMountSettled, type RpcClientFactory } from '../rpc.js'
 
 /** 项目列表相位 */
 export type ProjectsPhase =
@@ -31,7 +31,8 @@ export async function fetchProjectsPhase(makeClient: RpcClientFactory): Promise<
 }
 
 /**
- * 拉取 forge:projects/list（mount + refreshKey 变化 + 显式重试 + 静默重拉）。
+ * 拉取 forge:projects/list（mount + refreshKey 变化 + 显式重试 + 静默重拉；remote
+ * contribution 未落座期的首拉失败不算错误——保持 loading，落座后重取一次）。
  * @param refreshKey - 刷新锚（workspace 归属快照对象——身份变化即重拉）
  * @param makeClient - RPC client 构造器（缺省 = Typert 真身；注入 = 测试面）
  */
@@ -43,9 +44,18 @@ export function useForgeProjects(
   const [nonce, setNonce] = useState(0)
   useEffect(() => {
     let alive = true
-    void fetchProjectsPhase(makeClient).then((next) => {
+    void (async () => {
+      let next = await fetchProjectsPhase(makeClient)
+      // 装配时序竞速窗口（插件重载后侧栏先于 remote $mount 落座首拉必失败）：mount 未落座的
+      // 失败保持 loading 相位，等落座后重取一次（waitForRemoteMountSettled——订阅页内 mount
+      // 终态锚，禁自造轮询）；落座后的失败 = 真不可用，照常 error 相位（错误条 + 重试承接）。
+      if (next.phase === 'error' && !forgeRemoteMountSettled()) {
+        await waitForRemoteMountSettled()
+        if (!alive) return
+        next = await fetchProjectsPhase(makeClient)
+      }
       if (alive) setState(next)
-    })
+    })()
     return () => {
       alive = false
     }

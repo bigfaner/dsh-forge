@@ -113,6 +113,14 @@ export function markForgeRemoteMountSettled(): void {
   }
 }
 
+/**
+ * mount 终态锚复位（projectClient.apply 每次 $mount 前调用——插件重载会重跑 $mount，上一代
+ * 留下的终态锚若不清 = 新一代落座前的面缺席被误判为「落座后的真缺席」，竞速窗口失守）。
+ */
+export function resetForgeRemoteMountSettled(): void {
+  delete globalScopeOf()[FORGE_REMOTE_MOUNT_SETTLED_ANCHOR_KEY]
+}
+
 /** 页内 mount 等待者锚键（写读双注：mark 侧逐份唤醒——跨 bundle 副本共享同一 Set） */
 export const FORGE_REMOTE_MOUNT_WAITERS_KEY = '__dshForgeRemoteMountWaiters'
 

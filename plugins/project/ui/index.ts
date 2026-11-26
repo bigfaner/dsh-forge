@@ -180,7 +180,7 @@ export * from './session-actions.js'
 import { registerOfficialSeamFaces, revokeOfficialSeamGlobals } from './official-seams.js'
 import { registerOverviewDockFace } from './overview-dock-face.js'
 import { FORGE_REMOTE_CONTRIBUTION } from './remote.js'
-import { FORGE_REMOTE_NAMESPACES, forgeFaceOf, installForgeRemoteFace, markForgeRemoteMountSettled } from './rpc.js'
+import { FORGE_REMOTE_NAMESPACES, forgeFaceOf, installForgeRemoteFace, markForgeRemoteMountSettled, resetForgeRemoteMountSettled } from './rpc.js'
 import { installWorktreePrefsFace, type ConfigFormsFace } from './settings-section/index.js'
 import { registerSettingsSection } from './settings-section/index.js'
 import { registerWorktreeDetailSection } from './detail-section/index.js'
@@ -270,6 +270,8 @@ export const projectClient = {
         | { $mount?: (contribution: unknown) => Promise<unknown> }
         | undefined
       if (remote !== undefined && typeof remote.$mount === 'function') {
+        // 重载会重跑 $mount：先复位上一代终态锚，落座前的面缺席才算竞速窗口
+        resetForgeRemoteMountSettled()
         void Promise.resolve(remote.$mount(FORGE_REMOTE_CONTRIBUTION))
           .then(() => {
             markForgeRemoteMountSettled()
