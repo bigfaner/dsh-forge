@@ -7,8 +7,13 @@
 // 注册侧正本 = plugins/project/host/dirs/anchors.ts taskLogsDirOf（本插件零依赖不 import，
 // 形状逐字节等价——tests/assembly/task-logs-dir-guard.test.ts 把守两侧一致）。
 import { join } from "node:path";
+import { assertValidDirParam } from "@dsh-forge/lib-path";
 
-/** 容器目录 → 任务执行日志目录（= forge.task_logs_dir；join 单源拼接，平台拼写随容器目录）。 */
+/** 容器目录 → 任务执行日志目录（= forge.task_logs_dir；join 单源拼接，平台拼写随容器目录）。
+ *  落盘前参数校验（forge-dirs-unification §2.2——lib/path 校验函数单源：slug/localId 须匹配
+ *  `^[A-Za-z0-9][A-Za-z0-9._-]*$`，不含路径分隔符与 `..`；不合法 fail-loud 点名参数）。 */
 export function taskLogsDirOf(containerDir: string, slug: string, localId: string): string {
+  assertValidDirParam("slug", slug);
+  assertValidDirParam("localId", localId);
   return join(containerDir, "logs", slug, localId);
 }

@@ -2,16 +2,10 @@
 // 职责（code-design §2）：appendSettlement 唯一写径（seq 同 task_id 链内 max+1、id 纯 UUID
 // 写入点生成——排序单调性由 (created_at, seq) 承担，id 降尾位 tiebreaker）+ 读面排序钉死
 // `ORDER BY created_at, seq, id`（禁 ORDER BY id——entities.md §3.2 机检 grep 门）。
-// 隔离区（formal-verification I10）：派生失败拒写的结算载荷降级暂存
-// {DSH_HOME}/forge/db/task-loop/pending/ 原子写 jsonl（同目录 tmp+rename），重放携原时戳
-// 与 (task_id, seq) 身份表达、禁原样回写暂存 id（重放恒新 UUID）；fix 链身份以
-// fixChainRef=(task_id, seq) 表达，重放落库后解析回链首结算行 id；重放幂等判据 =
-// (task_id, seq) 行级去重（crash 任意时点至多重复不丢失）。
+// （forge-dirs-unification §2.9：结算隔离区（pending/ 暂存 + 重放）已删——暂存从未被注入、
+// 重放无调用方，触发分支在产品路径上不可达；迁移脚本自身的隔离区表是另一回事，不在此列。）
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import type Database from "@dsh-forge/lib-db";
-import { isFixTask } from "../../domain/tasks/fix-predicate.js";
 import type { TaskAcResult } from "../../domain/tasks/types.js";
 
 /** 结算 evidence 载荷键面（submit gates/证据 debt 聚合位——entities.md §3.2 evidence_json）。 */
@@ -52,9 +46,7 @@ export interface SettlementInsert {
   readonly commitHash?: string;
   readonly evidence: SettlementEvidence;
   readonly fixRootId?: string | null;
-  /** 隔离区重放保原值径（缺省 = 链内 max+1）。 */
-  readonly seq?: number;
-  /** 隔离区重放携原结算时戳回写（缺省 = 当前时刻）。 */
+  /** 原结算时戳回写（缺省 = 当前时刻）。 */
   readonly createdAt?: string;
 }
 
@@ -133,10 +125,8 @@ export interface SettlementRepo {
   listByContainer(projectKey: string, slug: string): SettlementRow[];
   /** 根任务触发派生的链首结算（result='blocked' 最新一行——fix_root_id 解析取径）。 */
   latestBlockedByTask(taskId: string): SettlementRow | undefined;
-  /** (task_id, seq) 定位（重放幂等判据 + fixChainRef 解析）。 */
+  /** (task_id, seq) 定位。 */
   findByTaskAndSeq(taskId: string, seq: number): SettlementRow | undefined;
-  /** (task_id, created_at, result) 定位（无 seq 暂存载荷的幂等判据）。 */
-  findByTaskCreatedAt(taskId: string, createdAt: string, result: "success" | "blocked"): SettlementRow | undefined;
   /**
    * 批量最新结算行读（typert forgeTasks DTO 聚合 AC 进度的数据源）：project_key + slug IN
    * 任务集每 task 取最新一行（关联子查询按排序锚逆序 LIMIT 1）——一条 SQL 零 N+1。
@@ -155,7 +145,7 @@ export function createSettlementRepo(db: Database.Database): SettlementRepo {
   return {
     appendSettlement(input) {
       assertEvidenceShape(input.result, input.evidence);
-      const seq = input.seq ?? nextSeq(input.taskId);
+      const seq = nextSeq(input.taskId);
       const createdAt = input.createdAt ?? new Date().toISOString();
       const id = randomUUID();
       db.prepare(
@@ -216,14 +206,6 @@ export function createSettlementRepo(db: Database.Database): SettlementRepo {
         .get(taskId, seq);
     },
 
-    findByTaskCreatedAt(taskId, createdAt, result) {
-      return db
-        .prepare<unknown[], SettlementRow>(
-          `SELECT ${SETTLEMENT_COLUMNS} FROM task_settlements WHERE task_id = ? AND created_at = ? AND result = ?${ORDER_ANCHOR}`,
-        )
-        .get(taskId, createdAt, result);
-    },
-
     latestSettlementsByTask(projectKey, slugs) {
       if (slugs.length === 0) return [];
       const placeholders = slugs.map(() => "?").join(", ");
@@ -243,134 +225,4 @@ export function createSettlementRepo(db: Database.Database): SettlementRepo {
         .all(projectKey, ...slugs);
     },
   };
-}
-
-// ───────────── 隔离区（pending/ 原子 jsonl 暂存 + 重放） ─────────────
-
-/**
- * 隔离区暂存载荷（禁携带 id——重放恒写入点新生成，禁原样回写暂存 id）。
- * 身份表达：(taskId, seq) 可解析时随携；派生失败态以 taskRef 表达、重放解析回 taskId；
- * fix 链身份以 fixChainRef=(taskId, seq) 表达，重放落库后解析回链首结算行 id。
- */
-export interface PendingSettlementPayload {
-  readonly taskId?: string;
-  readonly taskRef?: { readonly slug: string; readonly localId: string };
-  readonly seq?: number;
-  readonly result: "success" | "blocked";
-  readonly acResults: readonly TaskAcResult[];
-  readonly commitHash?: string;
-  readonly evidence: SettlementEvidence;
-  /** 原结算时戳（重放携回写——处方 8）。 */
-  readonly createdAt: string;
-  readonly fixChainRef?: { readonly taskId: string; readonly seq: number };
-}
-
-/** 隔离区落点：{DSH_HOME}/forge/db/task-loop/pending/（数据树内 db 域旁路——forge/tmp 禁入数据树）。 */
-export function pendingDirOf(home: string): string {
-  return join(home, "forge", "db", "task-loop", "pending");
-}
-
-/** 原子暂存：同目录 tmp 写 + rename（crash 至多残 .tmp 不会被重放扫描）。返回落盘文件路径。 */
-export function stagePendingSettlement(home: string, payload: PendingSettlementPayload): string {
-  const dir = pendingDirOf(home);
-  mkdirSync(dir, { recursive: true });
-  const file = join(dir, `pending-${randomUUID()}.jsonl`);
-  const tmp = `${file}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(payload)}\n`, "utf8");
-  renameSync(tmp, file);
-  return file;
-}
-
-export interface PendingReplayReport {
-  readonly replayed: number;
-  readonly skipped: number;
-  readonly failed: readonly { readonly file: string; readonly message: string }[];
-}
-
-/** 暂存载荷 → 任务行解析（taskId 直查；taskRef 跨 project 解析——恰一行命中，零/多行即失败）。 */
-function resolvePendingTask(db: Database.Database, payload: PendingSettlementPayload): { id: string; fix_of_task_id: string | null } | undefined {
-  if (payload.taskId !== undefined) {
-    return (
-      db.prepare<unknown[], { id: string; fix_of_task_id: string | null }>(`SELECT id, fix_of_task_id FROM task_tasks WHERE id = ?`)
-        .get(payload.taskId) ?? undefined
-    );
-  }
-  if (payload.taskRef !== undefined) {
-    const rows = db
-      .prepare<unknown[], { id: string; fix_of_task_id: string | null }>(
-        `SELECT id, fix_of_task_id FROM task_tasks WHERE slug = ? AND local_id = ? ORDER BY created_at, id`,
-      )
-      .all(payload.taskRef.slug, payload.taskRef.localId);
-    return rows.length === 1 ? rows[0] : undefined;
-  }
-  return undefined;
-}
-
-/** 单行重放：幂等去重 → fixChainRef 解析回链首 id → appendSettlement（新 UUID id + 原时戳）。 */
-function replayOne(db: Database.Database, repo: SettlementRepo, payload: PendingSettlementPayload): "landed" | "skipped" {
-  const task = resolvePendingTask(db, payload);
-  if (task === undefined) {
-    throw new Error("暂存载荷任务身份未命中（taskId/taskRef 均无法解析恰一行）");
-  }
-  // 幂等判据（I10）：有 seq 按 (task_id, seq) 去重；无 seq 按 (task_id, created_at, result) 去重。
-  const landed =
-    payload.seq !== undefined
-      ? repo.findByTaskAndSeq(task.id, payload.seq)
-      : repo.findByTaskCreatedAt(task.id, payload.createdAt, payload.result);
-  if (landed !== undefined) return "skipped";
-
-  let fixRootId: string | null = null;
-  if (isFixTask(task)) {
-    if (payload.fixChainRef === undefined) {
-      throw new Error("fix 任务结算暂存载荷缺 fixChainRef（(task_id, seq) 链身份表达缺失）");
-    }
-    const head = repo.findByTaskAndSeq(payload.fixChainRef.taskId, payload.fixChainRef.seq);
-    if (head === undefined) {
-      throw new Error(`fixChainRef 链首结算行未落库（task ${payload.fixChainRef.taskId} seq ${payload.fixChainRef.seq}）`);
-    }
-    fixRootId = head.id;
-  }
-
-  repo.appendSettlement({
-    taskId: task.id,
-    ...(payload.seq !== undefined ? { seq: payload.seq } : {}),
-    result: payload.result,
-    acResults: payload.acResults,
-    ...(payload.commitHash !== undefined ? { commitHash: payload.commitHash } : {}),
-    evidence: payload.evidence,
-    fixRootId,
-    createdAt: payload.createdAt,
-  });
-  return "landed";
-}
-
-/**
- * 隔离区重放：逐文件逐行落库（幂等去重），文件全行处理成功后删除（隔离区清空）。
- * 单文件失败保留在盘（其余文件照常处理；已落行下次重放被 (task_id, seq) 去重——至多重复不丢失）。
- */
-export function replayPendingSettlements(db: Database.Database, home: string): PendingReplayReport {
-  const dir = pendingDirOf(home);
-  const repo = createSettlementRepo(db);
-  const failed: { file: string; message: string }[] = [];
-  let replayed = 0;
-  let skipped = 0;
-  if (!existsSync(dir)) return { replayed, skipped, failed };
-  const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".jsonl"))
-    .sort();
-  for (const name of files) {
-    const file = join(dir, name);
-    try {
-      const lines = readFileSync(file, "utf8").split("\n").filter((l) => l.trim() !== "");
-      for (const line of lines) {
-        const outcome = replayOne(db, repo, JSON.parse(line) as PendingSettlementPayload);
-        if (outcome === "skipped") skipped += 1;
-        else replayed += 1;
-      }
-      rmSync(file);
-    } catch (cause) {
-      failed.push({ file: name, message: cause instanceof Error ? cause.message : String(cause) });
-    }
-  }
-  return { replayed, skipped, failed };
 }

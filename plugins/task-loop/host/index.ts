@@ -354,6 +354,9 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
       // bug 9b3c9a9b——resolveWsPath 生产真身接线（forge.projects 缝异步解析；显式 config
       // 注入优先，缺省即接缝——生产不再恒空串，回收钩子/worker 锚点节恢复可解析）
       resolveWsPathAsync: config.resolveWsPathAsync ?? resolveWsPathAsyncOf(ctx),
+      // dirKeys.* 目录声明反射拉缝（forge-dirs-unification §2.3——worker 规格目录经注册表
+      // forge.spec_dir 解析；显式 config 注入优先，缺省即接宿主 reflect 面，每次消费点现查）
+      reflectOf: config.reflectOf ?? (() => (ctx as { reflect?: unknown }).reflect),
       ...(profileResolver !== undefined ? { resolveExpertProfile: profileResolver } : {}),
     },
     diag,

@@ -155,11 +155,6 @@ export interface TasksVerbDeps {
     projectKey: string,
     scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] },
   ) => Promise<readonly BugRecurrenceCandidate[]> | readonly BugRecurrenceCandidate[];
-  /**
-   * 结算隔离区暂存缝（可选注入——派生失败拒写时降级暂存待重放；缺席 = 纯拒写 fail-loud）。
-   * 装配面落点 = stagePendingSettlement(pendingDirOf(home), payload)（settlement-repo 单源）。
-   */
-  readonly stagePendingSettlement?: (payload: import("../../db/repositories/settlement-repo.js").PendingSettlementPayload) => void;
   /** 诊断发射缝（降级径留痕；缝缺席 = 装配方 console 按级兜底）。 */
   readonly onDiag?: (payload: DiagEventPayload) => void;
 }

@@ -6,7 +6,13 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { deriveDirName, deriveTaskStoreDir } from "@dsh-forge/lib-path";
+import {
+  deriveDirName,
+  deriveTaskStoreDir,
+  FORGE_BASE_DIR_ENTRIES,
+  resolveForgeDirs,
+  resolveProjectKey,
+} from "@dsh-forge/lib-path";
 import { assembleTaskLoopServices } from "../../host/assembly/default-assembly.js";
 import { assembleTaskLoopToolFamily } from "../../host/assembly/tool-family.js";
 
@@ -66,6 +72,36 @@ describe("双记忆缝同目录性（prepare deriveTaskStoreDir × containerDirO
     const recorded = services.forgeEvents!.dirOf("s-seam");
     expect(recorded, `记忆未落：dirOf("s-seam") 缺席（执行结局=${outcome}）`).not.toBeUndefined();
     expect(recorded, `目录不等：dirOf=${recorded} ≠ containerDirOf=${expected}`).toBe(expected);
+    services.dispose();
+  });
+
+  it("forge-dirs-unification §2.6 AC：task-loop 落盘目录 ≡ 注册表 forge.task_runtime_dir（同一注入事实）", async () => {
+    const dshHome = mkdtempSync(join(tmpdir(), "task-loop-seam-dsh-"));
+    const tasksHome = join(dshHome, "forge", "projects");
+    const mainRoot = "Z:\\project\\main-checkout";
+    // 同一注入事实：cwd 经 resolveProjectKey 归拢主检出（registryQuery 命中即采信）
+    const resolution = resolveProjectKey(mainRoot, { registryQuery: () => mainRoot });
+    expect(resolution.rolledUp).toBe(true);
+    expect(resolution.mainRoot).toBe(mainRoot);
+    expect(resolution.key).toBe(deriveDirName(mainRoot));
+    const registryDirs = resolveForgeDirs(
+      [{ source: "forge.base", entries: FORGE_BASE_DIR_ENTRIES }],
+      { dshHome, projectRoot: resolution.mainRoot!, workspaceRoot: mainRoot },
+    );
+    const services = assembleTaskLoopServices({
+      home: mkdtempSync(join(tmpdir(), "task-loop-seam-reg-")),
+      dbFile: ":memory:",
+      tasksHome,
+      registryQuery: () => mainRoot,
+    })!;
+    expect(services.forgeEvents).not.toBeUndefined();
+    // 落盘径 ①：sink prepare 记忆（会话 cwd → 主检出归拢键 → 容器目录）
+    await services.forgeEvents!.prepare({ sessionId: "s-reg", cwd: mainRoot, agentPreset: undefined });
+    // 落盘径 ②：containerDirOf（projectKey 直拼）
+    const expected = services.containerDirOf!(resolution.key);
+    expect(services.forgeEvents!.dirOf("s-reg")).toBe(expected);
+    // 同一注入事实下与注册表解析结果同一路径
+    expect(expected).toBe(registryDirs["forge.task_runtime_dir"]);
     services.dispose();
   });
 });

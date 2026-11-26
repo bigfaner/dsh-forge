@@ -5,7 +5,7 @@
 //      plugins/project 侧自有 anchors.test.ts 把守，本件把守 task-loop 三处一致）
 //   ③ 事故台账缺省目录（incident-log → taskLogsDirOf）
 // 任一处改用别的派生（例如回退 <ws>/.forge/task-logs/ 或 <slug>-<localId> 拼接）即红。
-import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,6 +61,48 @@ describe("worker 简报锚点与钩子运行时目录同径（bug 26dff330 AC）
   });
 });
 
+describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-unification §2.3 AC）", () => {
+  const ws = mkdtempSync(join(tmpdir(), "task-loop-spec-ws-"));
+
+  it("renderWorkerContext 消费 specDir 入参（注册表解析产物）；缺席 = 锚点规格段省略，零自拼", () => {
+    const specDir = join(ws, ".forge", "docs", "specs", "feat-x");
+    mkdirSync(specDir, { recursive: true }); // 锚点段为在盘 fail-soft 探测——先落盘再断言
+    const withSpec = renderWorkerContext({ forgeDir: join(ws, ".forge", "docs"), containerDir: "T:\\c", localId: "1", source: { slug: "feat-x" }, specDir });
+    expect(withSpec).toContain("forge.specs_dir");
+    expect(withSpec).toContain(`${specDir}\\`);
+    const withoutSpec = renderWorkerContext({ forgeDir: join(ws, ".forge", "docs"), containerDir: "T:\\c", localId: "1", source: { slug: "feat-x" } });
+    expect(withoutSpec).not.toContain("forge.specs_dir");
+    expect(withoutSpec).toContain("forge.task_logs_dir");
+  });
+
+  it("createDefaultResolveWorkerContext 经反射 dirKeys.* 拉缝 + 注册表解析规格目录（与本体重组合并同源）", async () => {
+    const container = mkdtempSync(join(tmpdir(), "task-loop-spec-reg-"));
+    mkdirSync(join(ws, ".forge", "docs", "specs", "feat-x"), { recursive: true }); // 在盘探测前置
+    const reflect = {
+      props: { "dirKeys.knowledge": {} },
+      get: (name: string) => reflect.props[name],
+    };
+    const resolve = createDefaultResolveWorkerContext({
+      containerDirOf: () => container,
+      resolveWsPath: () => ws,
+      reflectOf: () => reflect,
+      dshHome: "T:\\dsh-home",
+    });
+    const text = await resolve("proj-key", { slug: "feat-x" }, "3.0");
+    // 注册表 forge.spec_dir = join(workspaceRoot/.forge/docs, 'specs', slug)——非 task-loop 自拼
+    expect(text).toContain(`${join(ws, ".forge", "docs", "specs", "feat-x")}\\`);
+  });
+
+  it("reflect 缺席 = 锚点规格段降级省略（logs 双锚恒出，行为不炸）", async () => {
+    const container = mkdtempSync(join(tmpdir(), "task-loop-spec-absent-"));
+    const wsAbsent = mkdtempSync(join(tmpdir(), "task-loop-spec-ws-absent-")); // 独立 ws——规格目录不在盘
+    const resolve = createDefaultResolveWorkerContext({ containerDirOf: () => container, resolveWsPath: () => wsAbsent });
+    const text = await resolve("proj-key", { slug: "feat-x" }, "3.0");
+    expect(text).not.toContain("forge.specs_dir");
+    expect(text).toContain("forge.task_logs_dir");
+  });
+});
+
 describe("消费位源码钉（改用别的派生即红）", () => {
   const readHost = (rel: string): string => readFileSync(join(HERE, "..", "..", "host", rel), "utf-8");
 
@@ -72,6 +114,10 @@ describe("消费位源码钉（改用别的派生即红）", () => {
 
   it("worker 锚点节消费 taskLogsDirOf（worker-context.ts）", () => {
     expect(readHost(join("domain", "tasks", "worker-context.ts"))).toContain("taskLogsDirOf(containerDir");
+  });
+
+  it("worker 规格目录不再自行拼接（join(...'specs'...) 自拼退役——经 specDir 入参）", () => {
+    expect(readHost(join("domain", "tasks", "worker-context.ts"))).not.toContain(`"specs"`);
   });
 
   it("事故台账缺省目录消费 taskLogsDirOf（incident-log.ts）", () => {

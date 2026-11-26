@@ -83,17 +83,19 @@ export function renderWorkerContext(input: {
   containerDir: string;
   localId: string;
   source: ContainerRef;
+  /** 规格目录（注册表 forge.spec_dir 解析产物——§2.3；缺席 = 锚点规格段省略，不自行拼接） */
+  specDir?: string;
 }): string {
-  const { forgeDir, containerDir, localId, source } = input;
+  const { forgeDir, containerDir, localId, source, specDir } = input;
   const blocks: string[] = [];
   const docsRoot = docsRootOfForgeDir(forgeDir);
   // 任务日志目录派生单点（bug 26dff330——三处口径同源：worker 锚点 / 回收钩子 / 事故台账）
   const logsRoot = join(containerDir, "logs");
   const taskLogsDir = taskLogsDirOf(containerDir, source.slug, localId);
-  // slug 容器化：features 目录在盘优先（远征血统），否则 specs 卷宗目录（specs 替代
-  // proposals——用户裁定 2026-11-25；proposal_dir 命名退役，bug 9b3c9a9b 同批收口）
+  // slug 容器化：features 目录在盘优先（远征血统），否则规格目录（注册表 forge.spec_dir
+  // 解析产物——specs 替代 proposals，用户裁定 2026-11-25；task-loop 不自行拼接该路径，
+  // 注册表缺席 = 锚点段省略）。提案目录命名退役，bug 9b3c9a9b 同批收口。
   const featureDir = join(docsRoot, "features", source.slug);
-  const specsDir = join(forgeDir, "specs", source.slug);
   let featureInDisk = false;
   try {
     readdirSync(featureDir);
@@ -101,9 +103,12 @@ export function renderWorkerContext(input: {
   } catch {
     featureInDisk = false;
   }
-  const main = featureInDisk
-    ? renderDirBlock("feature_dir", featureDir, DIR_ROLE_NOTES.feature_dir!)
-    : renderDirBlock("forge.specs_dir", specsDir, DIR_ROLE_NOTES["forge.specs_dir"]!);
+  const main =
+    featureInDisk
+      ? renderDirBlock("feature_dir", featureDir, DIR_ROLE_NOTES.feature_dir!)
+      : specDir !== undefined
+        ? renderDirBlock("forge.specs_dir", specDir, DIR_ROLE_NOTES["forge.specs_dir"]!)
+        : undefined;
   if (main !== undefined) blocks.push(main);
   blocks.push(renderLogsRootBlock(logsRoot), renderTaskLogsBlock(taskLogsDir));
   return [

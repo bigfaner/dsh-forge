@@ -68,11 +68,13 @@ describe("createForgeEventSink（emit + 会话目录记忆）", () => {
     expect(failing.dirOf("s-3")).toBeUndefined();
   });
 
-  it("cwd 缺席 / 空串 sessionId / 空结果 = 不记忆；未知会话 dirOf = undefined", async () => {
+  it("cwd 缺席 = fail-loud 缺少项目主检出；空串 sessionId / 空结果 = 不记忆；未知会话 dirOf = undefined", async () => {
     const bus = createForgeEventBus();
     const sink = createForgeEventSink({ bus, resolveDir: async () => "D:\\c" });
     await sink.prepare({ sessionId: "", cwd: "C:\\ws\\a", agentPreset: undefined });
-    await sink.prepare({ sessionId: "s-4", cwd: undefined, agentPreset: undefined });
+    // 会话目录缺席不再静默（forge-dirs-unification §2.6）——报错并说明缺少项目主检出
+    await expect(sink.prepare({ sessionId: "s-4", cwd: undefined, agentPreset: undefined })).rejects.toThrow(/缺少项目主检出/);
+    await expect(sink.prepare({ sessionId: "s-4b", cwd: "  ", agentPreset: undefined })).rejects.toThrow(/缺少项目主检出/);
     expect(sink.dirOf("s-4")).toBeUndefined();
     expect(sink.dirOf("unknown")).toBeUndefined();
     const empty = createForgeEventSink({ bus, resolveDir: async () => "" });

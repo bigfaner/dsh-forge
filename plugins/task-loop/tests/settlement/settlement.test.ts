@@ -113,19 +113,18 @@ describe("submitTask 单事务两写（模块②终态）", () => {
   it("appendSettlement 唯一写径：seq 链内 max+1 单调 + listByTask 排序锚 created_at, seq, id", async () => {
     const t = await inFlightTask();
     const repo = createSettlementRepo(h.db);
-    // 隔离区重放形态直写：原时戳早于后续 append（保 seq 原值）→ 排序仍按 created_at, seq, id
+    // 原时戳直写（createdAt 缝）：早于后续 append 时戳 → 排序仍按 created_at, seq, id
     repo.appendSettlement({
       taskId: t.taskId,
-      seq: 5,
       result: "blocked",
       acResults: [],
       evidence: { reason: "早" },
       createdAt: "2025-01-01T00:00:00.000Z",
     });
     const r2 = repo.appendSettlement({ taskId: t.taskId, result: "success", acResults: [], evidence: { summary: "晚" } });
-    expect(r2.seq).toBe(6);
+    expect(r2.seq).toBe(2);
     const rows = repo.listByTask(t.taskId);
-    expect(rows.map((r) => r.seq)).toEqual([5, 6]); // created_at 首键：2025-01-01 在前
+    expect(rows.map((r) => r.seq)).toEqual([1, 2]); // created_at 首键：2025-01-01 在前
     expect(rows.map((r) => r.result)).toEqual(["blocked", "success"]);
   });
 });

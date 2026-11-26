@@ -8,8 +8,8 @@
 // blocked = {reason 必填, gates?, files?, fields?}）；ac_results_json 单列同位快照
 // （[{criterion, met, evidence?}] 逐字判据）；fix 链结算行 fix_root_id 事务内
 // resolveFixRoot 解析（isFixTask 单源谓词 settle 消费点）。
-// 派生失败拒写（projectKey 空）→ 隔离区暂存（deps.stagePendingSettlement 在场时），
-// 不丢结算证据。
+// 派生失败拒写（projectKey 空）= fail-loud（ProjectKeyDerivationError；隔离区暂存已删——
+// forge-dirs-unification §2.9）。
 //
 // 单事务全成全败（Hard Rule）：行解析 → 输入面校验（blocked reason 必带 / success summary
 // 必带 / T2 归类必带）→ 双门（gate 摘要门 → AC 证据门——均仅挂 success 结算）→ agent 面
@@ -23,7 +23,6 @@ import { ProjectKeyDerivationError } from "@dsh-forge/lib-path";
 import {
   createSettlementRepo,
   FixRootResolutionError,
-  type PendingSettlementPayload,
   type SettlementEvidence,
   type SettlementEvidenceBlocked,
   type SettlementEvidenceSuccess,
@@ -322,27 +321,8 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
   const db = deps.db;
   const now = new Date().toISOString();
 
-  // ⓪ 归属键派生失败拒写（cwd 推导不出 project_key）——结算载荷降级隔离区暂存
-  //   （stagePendingSettlement face 在场时；缺席 = 纯拒写 fail-loud），不丢结算证据。
-  if (input.projectKey.trim() === "") {
-    const payload: PendingSettlementPayload = {
-      ...(input.taskRef.slug !== undefined ? { taskRef: input.taskRef } : {}),
-      result: input.result,
-      acResults: input.acceptanceCriteria ?? [],
-      ...(input.commitHash !== undefined ? { commitHash: input.commitHash } : {}),
-      evidence: buildEvidence(input),
-      createdAt: now,
-    };
-    if (deps.stagePendingSettlement !== undefined) {
-      deps.stagePendingSettlement(payload);
-      emitDiagOrFallback(deps.onDiag, {
-        level: "warn",
-        event: "settlement-quarantined",
-        message: `submitTask 归属键派生失败——结算载荷隔离区暂存待重放（${input.taskRef.slug}/${input.taskRef.localId}）`,
-      });
-    }
-    throw new ProjectKeyDerivationError();
-  }
+  // ⓪ 归属键派生失败拒写（cwd 推导不出 project_key）——纯拒写 fail-loud，不静默不暂存。
+  if (input.projectKey.trim() === "") throw new ProjectKeyDerivationError();
 
   const repo = createSettlementRepo(db);
   const result = withTransaction(db, (): SubmitTaskResult => {

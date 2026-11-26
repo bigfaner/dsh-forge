@@ -8,7 +8,13 @@
 //      缺席（单装缺省形态）= 整链零装配零行为变化（AC4 回归锚）。
 // home 缺席 / db 打开失败 = 整体降级缺席（返回 undefined——零 provide，fail-soft 诊断留痕不阻载）。
 import { mkdirSync } from "node:fs";
-import { deriveTaskStoreDir, forgeDirOfWorkspace } from "@dsh-forge/lib-path";
+import {
+  FORGE_BASE_DIR_ENTRIES,
+  forgeDirOfWorkspace,
+  resolveForgeDirs,
+  resolveProjectKey,
+  type ForgeDirs,
+} from "@dsh-forge/lib-path";
 import { domainDbFileName, openDomainDb, type DomainDb } from "../db/connection.js";
 import { createCheckpointsService, type CheckpointsService } from "../domain/checkpoints/service.js";
 import { listDistinctProjectKeys } from "../domain/tasks/query.js";
@@ -40,12 +46,23 @@ export interface TaskLoopAssemblyConfig {
   readonly resolveWsPathAsync?: (projectKey: string) => Promise<string | undefined>;
   /**
    * 任务目录派生根（bug a93c1277——组合器 patch config 下发 {DSH_HOME}/forge/projects，
-   * 对齐主提案产物树「以 slug 为单位管理运行产物」）：forge 事件日志链装配门——
-   * 在场（非空白）= bus→sink→监听器三件装配 + logs/{slug}.jsonl 落盘启用；
-   * 缺席（单装缺省形态）= 整链零装配，行为零变化。容器目录 = lib-path
-   * deriveTaskStoreDir 单源派生（{tasksHome}/{flatten}@{hash8}——插件不复制派生算法）。
-   */
+    * 对齐主提案产物树「以 slug 为单位管理运行产物」）：forge 事件日志链装配门——
+    * 在场（非空白）= bus→sink→监听器三件装配 + logs/{slug}.jsonl 落盘启用；
+    * 缺席（单装缺省形态）= 整链零装配，行为零变化。容器目录 = forge-dirs-unification §2.6
+    * 单源派生：{tasksHome}/{projectKey}——projectKey 由 lib/path resolveProjectKey 按主检出
+    * 归拢（与注册表 forge.task_runtime_dir 对同一注入事实解析出同一路径，插件不复制派生算法）。
+    */
   readonly tasksHome?: string;
+  /**
+   * resolveProjectKey 注册表查询缝（cwd → 该项目主工作区行；缺席 = git 现查归拢——
+   * lib/path 单源兜底）。生产接线归 project 插件项目注册表，task-loop 零依赖声明不 import。
+   */
+  readonly registryQuery?: (cwd: string) => string | undefined;
+  /**
+   * 宿主反射面取用缝（dirKeys.* 目录声明反射拉缝——worker 规格目录经注册表 forge.spec_dir
+   * 解析，forge-dirs-unification §2.3；缺席/劣形 = 锚点节规格段降级省略，其余锚不变）。
+   */
+  readonly reflectOf?: () => unknown;
   /**
    * 专家档案取用面（bug 044a310c——worker persona 专家人格段缺席判例）：claim 期经
    * resolveExpertProfile(taskType, expertKey) 取档案合成人格段「你是<title>」；缺席 =
@@ -64,12 +81,60 @@ export interface TaskLoopAssemblyConfig {
 type AssemblyDiag = (line: string, level?: DiagLevel) => void;
 
 /**
+ * 规格目录注册表解析缝（forge-dirs-unification §2.3——task-loop 不再自行拼接规格路径）：
+ * dirKeys.* 反射拉缝（枚举宿主 reflect props 约定名现取第三方声明，在场性每消费点现查、
+ * 零缓存——AGENTS 1.6）+ lib/path 本体十条合并 → resolveForgeDirs 按 forge.spec_dir 解析。
+ * 反射缺席/声明拉取失败/解析报错（缺依赖/撞名等）= undefined——锚点节规格段降级省略，
+ * 其余锚不变（fail-soft 不阻载）。
+ */
+function resolveSpecDirViaRegistry(input: {
+  readonly reflectOf?: () => unknown;
+  readonly dshHome: string;
+  readonly workspaceRoot: string;
+  readonly slug: string;
+}): string | undefined {
+  const declared: Partial<ForgeDirs> = {};
+  try {
+    const reflect = input.reflectOf?.() as
+      | { props?: Record<string, unknown>; get?(name: string): unknown }
+      | undefined;
+    if (reflect?.props !== undefined) {
+      for (const name of Object.keys(reflect.props)) {
+        if (!name.startsWith("dirKeys.")) continue;
+        try {
+          const declaration = typeof reflect.get === "function" ? reflect.get(name) : reflect.props[name];
+          if (typeof declaration === "object" && declaration !== null) {
+            Object.assign(declared, declaration as Partial<ForgeDirs>);
+          }
+        } catch {
+          // 单声明拉取失败 = 跳过该声明方（声明缺席留痕语义，不炸锚点节）
+        }
+      }
+    }
+    const resolved = resolveForgeDirs(
+      [
+        { source: "forge.base", entries: FORGE_BASE_DIR_ENTRIES },
+        { source: "dirKeys.declared", entries: declared },
+      ],
+      // forge.spec_dir 依赖链只触及 workspaceRoot（forge.docs_root）；dshHome/projectRoot
+      // 为本体条目的依赖完备性补齐（projectRoot 与 workspaceRoot 同源——规格目录不依赖归拢）。
+      { dshHome: input.dshHome, projectRoot: input.workspaceRoot, workspaceRoot: input.workspaceRoot },
+      { slug: input.slug },
+    );
+    return resolved["forge.spec_dir"];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * worker 任务目录锚点节缺省真身（bug 26dff330——供给端收口）：此前 resolveWorkerContext
  * 从未在生产装配注入，worker 简报恒无任务目录锚点段、{forge.task_logs_dir} 占位符无值，
  * worker 自行猜测落点（<ws>/.forge/task-logs/ 等漂移拼写）→ 回收钩子恒 runtime dir absent。
  * 缺省真身 = containerDirOf 单源容器目录 → taskLogsDirOf 派生任务日志目录（与回收钩子
  * taskLogsDir 注入、forgeResolvePath(taskLogs) 同源三口径）+ 开工前 mkdirRecursive（fail-soft
- * warn 留痕——目录在场，worker 不自建）+ renderWorkerContext 锚点节。config.resolveWorkerContext
+ * warn 留痕——目录在场，worker 不自建）+ renderWorkerContext 锚点节。规格目录 = 注册表
+ * forge.spec_dir 解析（resolveSpecDirViaRegistry——§2.3，不再自行拼接）。config.resolveWorkerContext
  * 显式注入时优先（组合器覆写单装缺省）。tasksHome 缺席（containerDirOf 缺席）= undefined，
  * persona 零追加形态兼容不变。
  */
@@ -77,6 +142,8 @@ export function createDefaultResolveWorkerContext(deps: {
   readonly containerDirOf: (projectKey: string) => string;
   readonly resolveWsPath: (projectKey: string) => string;
   readonly resolveWsPathAsync?: (projectKey: string) => Promise<string | undefined>;
+  readonly reflectOf?: () => unknown;
+  readonly dshHome?: string;
   readonly diag?: AssemblyDiag;
 }): NonNullable<TasksVerbDeps["resolveWorkerContext"]> {
   return async (projectKey, source, localId) => {
@@ -90,11 +157,21 @@ export function createDefaultResolveWorkerContext(deps: {
     }
     // ws 根解析：异步缝在场即优先（生产 forge.projects 接线——bug 9b3c9a9b），缺席退同步缝
     const ws = deps.resolveWsPathAsync !== undefined ? ((await deps.resolveWsPathAsync(projectKey)) ?? "") : deps.resolveWsPath(projectKey);
+    const specDir =
+      ws === ""
+        ? undefined
+        : resolveSpecDirViaRegistry({
+            reflectOf: deps.reflectOf,
+            dshHome: deps.dshHome ?? "",
+            workspaceRoot: ws,
+            slug: source.slug,
+          });
     return renderWorkerContext({
       forgeDir: ws === "" ? "" : forgeDirOfWorkspace(ws),
       containerDir,
       localId,
       source,
+      ...(specDir !== undefined ? { specDir } : {}),
     });
   };
 }
@@ -174,8 +251,9 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
   // forge 事件日志链（bug a93c1277——AC「组合器 config 下发 tasksHome 即落盘闭环」）：
   // tasksHome 在场（非空白）= bus→sink→监听器三件装配单例；缺席 = 整链零装配零行为变化。
   const tasksHome = typeof config.tasksHome === "string" && config.tasksHome.trim() !== "" ? config.tasksHome : undefined;
-  // projectKey = deriveDirName(ws) 同名制（db/repositories/project-key 单源）——容器目录
-  // = {tasksHome}/{projectKey}（lib-path joinHome 同口径：连接符随 home 拼写）。
+  // projectKey = lib/path resolveProjectKey 派生（forge-dirs-unification §2.6 单源）——容器
+  // 目录 = {tasksHome}/{projectKey}，与注册表 forge.task_runtime_dir（join(project_runtime_dir,
+  // deriveDirName(主检出))）对同一注入事实解析出同一路径；任务行归属键同名制。
   // （bug 26dff330：提前定稿——worker 锚点节缺省真身与事件链同消费。）
   const containerDirDefaultOf =
     tasksHome !== undefined
@@ -185,6 +263,14 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
           return `${home2}${sep}${projectKey}`;
         }
       : undefined;
+  // 主检出归拢缝（§2.6）：cwd → resolveProjectKey 归拢主检出后派生 projectKey；会话目录
+  // 缺席 = fail-loud 拒解析（不静默——错误说明缺少项目主检出）。
+  const projectKeyOfCwd = (workspaceDir: string): string => {
+    if (workspaceDir.trim() === "") {
+      throw new Error("forge.task_runtime_dir 拒绝解析：会话目录缺席——缺少项目主检出，无法派生归属键");
+    }
+    return resolveProjectKey(workspaceDir, { registryQuery: config.registryQuery ?? (() => undefined) }).key;
+  };
   const tasks = createTasksService({
     db: db.db,
     events,
@@ -199,6 +285,8 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
               containerDirOf: containerDirDefaultOf,
               resolveWsPath,
               ...(config.resolveWsPathAsync !== undefined ? { resolveWsPathAsync: config.resolveWsPathAsync } : {}),
+              ...(config.reflectOf !== undefined ? { reflectOf: config.reflectOf } : {}),
+              dshHome: home,
               diag,
             }),
           }
@@ -211,7 +299,10 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     const bus = createForgeEventBus();
     const sink = createForgeEventSink({
       bus,
-      resolveDir: async (workspaceDir) => deriveTaskStoreDir(tasksHome, workspaceDir),
+      // 会话 cwd → 主检出归拢键 → 容器目录（§2.6——与 containerDirOf、注册表
+      // forge.task_runtime_dir 同一 projectKey 派生；解析异常 = fail-soft 不记忆，
+      // 会话目录缺席的 fail-loud 由 projectKeyOfCwd 上抛、sink.prepare 直通）。
+      resolveDir: async (workspaceDir) => containerDirDefaultOf!(projectKeyOfCwd(workspaceDir)),
     });
     detachLogListener = attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) });
     forgeEvents = sink;
