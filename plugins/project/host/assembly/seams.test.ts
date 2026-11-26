@@ -103,7 +103,7 @@ describe('provider 可替换性（每缝 fake 注入 → 消费面行为随 fake
   it('forge.dirFacts：fake 注入后 listAnchors 随 fake 变化', async () => {
     const { ctx } = ctxStub({
       [PROJECT_SEAM_KEYS.dirFacts]: () => ({
-        listAnchors: async () => [{ dirKey: 'forge.task_logs_dir', dir: 'Z:/logs', description: 'fake' }],
+        listAnchors: async () => [{ dirKey: 'task_loop.task_dir', dir: 'Z:/logs', description: 'fake' }],
         resolveDestination: async () => 'Z:/logs/x',
         audit: () => ({ missingPartitions: [], misplacedDirs: [], strayFiles: [] }),
         docStyleSection: () => '',

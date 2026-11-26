@@ -1,24 +1,22 @@
-// 日志监听器 = logs/{slug}.jsonl 唯一写者（任务 3.3；tech-design Interface 3 + 图 5 节点 D–H）。
+// task-loop 派发日志监听器 = {slug}/dispatch.jsonl 唯一写者（派发/执行/结算事件流；任务 3.3；tech-design Interface 3 + 图 5 节点 D–H）。
 // 链路：tool 执行 emit → 总线（bus.ts）→ 本监听器（标准化 → 归属判定）→ 容器维度追加落盘。
 // 归属三分支（监听器归属判定——图 5 节点 E）：事件带任务 → 任务容器 slug
 // （taskKey = 'slug/localId' 复合自然键前缀，与 task_records 追溯键同口径）；无任务 →
 // contextSlug（no-ready-task 载荷语境；缺省回落信封 slug = 发射侧语境回声）；皆无 →
 // '_pool' 兜底。标准行 slug 恒 = 归属判定产物——串联读法「slug 过滤 = 容器全程」的单源。
-// 路径：{容器目录}/logs/{slug}.jsonl——容器目录 = {tasksHome}/{flatten}@{hash8} 经注入解析
+// 路径：{容器目录}/{slug}/dispatch.jsonl——容器目录 = {tasksHome}/{flatten}@{hash8} 经注入解析
 // （workspace paths 同源；derive-dir 单源在 core，插件不复制——事件 → 工作区映射归装配方闭包）。
 // 敏感度边界（Security ③ / Hard Rules）：载荷面只承载 digest（dispatchDigest）——不含凭据、
 // 不含 dispatchPrompt 全文；logs = agent 面执行运营日志，UI 面状态审计 = feature_records/
 // task_records（DB）——两纪律不混不重复。
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
-import { FORGE_LOGS_DIR } from "@dsh-forge/contracts";
+import { FORGE_DISPATCH_LOG_FILE } from "@dsh-forge/contracts";
 import type { ForgePluginEvent } from "@dsh-forge/contracts";
-// logs 段名单源迁 contracts forge-dir-segments（§2.8——core 侧裸字符串同源收编）；
-// 此处再导出维持既有消费面 import 路径稳定。
-export { FORGE_LOGS_DIR };
+// 派发事件日志文件名单源 = contracts forge-dir-segments。
 import type { ForgeEventBus } from "./bus.js";
 
-/** 兜底文件 slug（logs/_pool.jsonl——皆无归属事件的纯兜底面） */
+/** 兜底文件 slug（{_pool}/dispatch.jsonl——皆无归属事件的纯兜底面） */
 export const FORGE_LOG_POOL_SLUG = "_pool";
 
 /** 归属三分支判定（图 5 节点 E——监听器单源；畸形输入防御性落 _pool） */
@@ -45,9 +43,9 @@ export function standardizeEvent(event: ForgePluginEvent): ForgePluginEvent {
   return { ...event, slug: resolveLogSlug(event) };
 }
 
-/** 日志文件路径（{containerDir}/logs/{slug}.jsonl） */
+/** 日志文件路径（{containerDir}/{slug}/dispatch.jsonl） */
 export function forgeLogFileOf(containerDir: string, slug: string): string {
-  return join(containerDir, FORGE_LOGS_DIR, `${slug}.jsonl`);
+  return join(containerDir, slug, FORGE_DISPATCH_LOG_FILE);
 }
 
 /** 监听器依赖（注入的 tasksHome 语境——workspace paths 同源） */

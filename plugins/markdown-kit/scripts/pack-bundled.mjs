@@ -1,6 +1,6 @@
 // 打包链（零运行时依赖形态，bug d00302ef 终局修）：dependencies 收敛为零 + host 半
 // 构建期全 bundling 后，传递闭包为空——staging hoisted 物化步退役，打包链简化为
-//   1. staging 目录（forge.tmp，过程产物不入 git）：package.json JSON 往返（零依赖
+//   1. staging 目录（工作区临时区 project.tmp_dir，过程产物不入 git）：package.json JSON 往返（零依赖
 //      声明面）+ dist 全量 + cordis.patch.yml；
 //   2. pnpm pack——tarball 自含（解析面全在 dist 内联闭包，零 registry 解析径）；
 //   3. tarball 断言（自读 tgz，无子进程）：node_modules 全零（依赖声明面收敛防回归）+

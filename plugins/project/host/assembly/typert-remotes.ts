@@ -92,7 +92,7 @@ export interface ForgeTypertDeps {
   readonly selfDerive?: LazyDomainService;
   /** workspaceRoot 解析缝（projectId → 工作区根——fix-1 插件自装配：官方宿主工作区面，零 core face），缺席 typed unavailable */
   readonly dirsWorkspaceRoot?: LazyDomainService;
-  /** DirFactsPort 缝（锚注册表解析——forge.docs_root/task_home/worktrees 行事实源），缺席 typed unavailable */
+  /** DirFactsPort 缝（注册表解析——project.docs_dir / project.tmp_dir / project.worktrees_dir 等无参键行事实源），缺席 typed unavailable */
   readonly dirFacts?: () => DirFactsPort | undefined;
   /** followSeal 重估间隔 ms（缺省 SEAL_FOLLOW_INTERVAL_MS——单测注入收敛节拍） */
   readonly followIntervalMs?: number;

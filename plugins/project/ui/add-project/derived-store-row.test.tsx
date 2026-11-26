@@ -105,9 +105,9 @@ describe('未映射失败兜底（4.3 接线增态：error → 通用错误条�
 
 describe('AC-3 props 驱动（三态全由 phase 注入——组件无本地推导）', () => {
   it('行标签三态恒在场（任务清单行上下文沿 RegisterForm 既有文案）', () => {
-    expect(render({ state: 'loading' })).toContain('任务运行时产物目录（自动派生 · 无需填写）')
-    expect(render({ state: 'ready', dir: DERIVED_DIR })).toContain('任务运行时产物目录（自动派生 · 无需填写）')
-    expect(render({ state: 'suspected-move', data: MOVE_DATA })).toContain('任务运行时产物目录（自动派生 · 无需填写）')
+    expect(render({ state: 'loading' })).toContain('项目运行时产物目录（自动派生 · 无需填写）')
+    expect(render({ state: 'ready', dir: DERIVED_DIR })).toContain('项目运行时产物目录（自动派生 · 无需填写）')
+    expect(render({ state: 'suspected-move', data: MOVE_DATA })).toContain('项目运行时产物目录（自动派生 · 无需填写）')
   })
 
   it('三态互斥呈现（容器相位锚各态独占）', () => {

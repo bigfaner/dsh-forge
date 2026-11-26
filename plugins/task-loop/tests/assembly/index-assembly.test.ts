@@ -20,6 +20,7 @@ import { listDistinctProjectKeys } from "../../host/domain/tasks/query.js";
 import { deriveDirName, resolveProjectKey } from "@dsh-forge/lib-path";
 import { settleWorkerRun } from "../../host/dispatch-core/settle.js";
 import { assembleTaskLoopToolFamily } from "../../host/assembly/tool-family.js";
+import { SPEC_DIR_ENTRIES } from "../../../spec/host/forge-dir-entries.js";
 import type { TaskSnapshot } from "../../host/domain/tasks/types.js";
 import type { SpawnWorkerHandle } from "../../host/dispatch-core/spawn.js";
 import { TASK_LOOP_DB_DEFAULT_DIR, TASK_LOOP_DB_FILENAME } from "../../shared/contract-constants.js";
@@ -78,6 +79,10 @@ function stubCtx(initial?: Record<string, unknown>) {
       },
       get(name: string) {
         return services[name];
+      },
+      // 宿主声明枚举面（cordis reflect.props 同形——dirKeys.* 声明方经此枚举）
+      get props() {
+        return services;
       },
     },
     plugin(options: { name: string }) {
@@ -352,7 +357,7 @@ describe("结算报告回收装配回归锚（bug a31b96a2——proposalId 门�
       await services.tasks.addTask({ projectKey: PROJECT_KEY, slug: "alpha", title: "T", type: "doc" });
       const claimed = await services.tasks.claimTask({ projectKey: PROJECT_KEY, sessionId: "s-1", source: { slug: "alpha" } });
       const task = claimed.task as TaskSnapshot;
-      const runtimeDir = join(tasksHome, derivedKey, "logs", "alpha", task.localId);
+      const runtimeDir = join(tasksHome, derivedKey, "alpha", task.localId);
       mkdirSync(runtimeDir, { recursive: true });
       writeFileSync(join(runtimeDir, "settle-report.md"), "# 结算回收证明\n", "utf8");
       await services.tasks.submitTask({
@@ -396,7 +401,7 @@ describe("结算报告回收装配回归锚（bug a31b96a2——proposalId 门�
       const cards = await services.tasks.listTasks({ projectKey: PROJECT_KEY, slug: "alpha" });
       const localId = cards[0]!.localId;
       // 预置运行时回收源（结算前落 .md 报告——localId 随真实任务编号）
-      const runtimeDir = join(tasksHome, derivedKey, "logs", "alpha", localId);
+      const runtimeDir = join(tasksHome, derivedKey, "alpha", localId);
       mkdirSync(runtimeDir, { recursive: true });
       writeFileSync(join(runtimeDir, "settle-report.md"), "# driver 透传回收证明\n", "utf8");
       fakeSpawnState.submit = () =>
@@ -460,10 +465,10 @@ describe("回收钩子目录归拢（bug 245bacf3——worktree 会话同目录�
         localId: "1.0",
       });
       // 事件链落盘目录 = resolveDir 同一归拢取法（default-assembly projectKeyOfCwd）→ 同容器目录
-      const eventChainDir = join(tasksHome, rolledKey, "logs", "alpha", "1.0");
+      const eventChainDir = join(tasksHome, rolledKey, "alpha", "1.0");
       expect(runtimeDir).toBe(eventChainDir);
       // 防假绿：未归拢的 worktree 键目录 ≠ 归拢目录
-      expect(runtimeDir).not.toBe(join(tasksHome, deriveDirName(wt), "logs", "alpha", "1.0"));
+      expect(runtimeDir).not.toBe(join(tasksHome, deriveDirName(wt), "alpha", "1.0"));
     } finally {
       family.disposeLoop();
       services.dispose();
@@ -477,11 +482,12 @@ describe("生产装配 resolveWsPath 接缝（bug 9b3c9a9b——零 config 注�
     // projectKey = deriveDirName(ws) 同名制（dual-memory-seam 单源——生产任务键派生同径）
     const PROJECT_KEY = deriveDirName(ws);
     const tasksHome = tmpHome();
-    // 规格锚在盘（forge 根锚点节 fail-soft 探测的前置；落点 = 注册表 forge.spec_dir
-    // 解析真相 = {ws}/.forge/specs/{slug}——forge-dirs-unification §2.3）
+    // 规格锚在盘（forge 根锚点节 fail-soft 探测的前置；落点 = 注册表 spec.dir
+    // 解析真相 = {ws}/.forge/specs/{slug}——forge-dirs-unification §2.3；键归 plugins/spec
+    // 声明——宿主声明面替身预置 dirKeys.spec）
     mkdirSync(join(ws, ".forge", "specs", "alpha"), { recursive: true });
     writeFileSync(join(ws, ".forge", "specs", "alpha", "spec.md"), "# 既有 Spec 正本\n", "utf8");
-    const { ctx, services } = stubCtx();
+    const { ctx, services } = stubCtx({ "dirKeys.spec": SPEC_DIR_ENTRIES });
     let projectRegistered = true;
     // forge.projects 缝替身（plugins/project 五缝同形——惰性工厂产 ProjectsServicePort 窄面）
     services["forge.projects"] = () => ({
@@ -497,12 +503,12 @@ describe("生产装配 resolveWsPath 接缝（bug 9b3c9a9b——零 config 注�
       await tasks.addTask({ projectKey: PROJECT_KEY, slug: "alpha", title: "T", type: "doc" });
       const claimed = await tasks.claimTask({ projectKey: PROJECT_KEY, sessionId: "s-1", source: { slug: "alpha" } });
       const task = claimed.task as TaskSnapshot;
-      // ① worker 简报任务日志目录字符串（经 resolveWorkerContext 产物 = persona 尾部锚点节取）
-      const seg = claimed.persona.slice(claimed.persona.indexOf("forge.task_logs_dir——"));
+      // ① worker 简报任务目录字符串（经 resolveWorkerContext 产物 = persona 尾部锚点节取）
+      const seg = claimed.persona.slice(claimed.persona.indexOf("task_loop.task_dir——"));
       const briefDir = /`([^`]+)`/.exec(seg.slice(seg.indexOf("`")))?.[1] ?? "";
-      const expectedDir = join(tasksHome, PROJECT_KEY, "logs", "alpha", task.localId);
+      const expectedDir = join(tasksHome, PROJECT_KEY, "alpha", task.localId);
       expect(briefDir).toBe(`${expectedDir}\\`);
-      // ② worker 简报规格目录锚点（经注册表 forge.spec_dir 解析 = {ws}/.forge/specs/<slug>——不缺席）
+      // ② worker 简报规格目录锚点（经注册表 spec.dir 解析 = {ws}/.forge/specs/<slug>——不缺席）
       expect(claimed.persona).toContain(join(ws, ".forge", "specs", "alpha"));
 
       // ③ 回收钩子（生产装配产物 family）把 projectId 解析出运行时任务目录，与 worker 简报直接比较相等

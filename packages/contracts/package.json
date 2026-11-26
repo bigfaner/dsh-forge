@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/contracts",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "description": "跨工件类型/常量兼容面（plugin-project 1.7 归并锚：DTO/词汇/错误码/通道常量本体迁 @dsh-forge/lib-api，本包 re-export 兼容面）与工具注册面投影/求交纯逻辑（tool-projection）——剩余本体保持运行期零依赖（兼容面边除外，退役收口另有任务）。",

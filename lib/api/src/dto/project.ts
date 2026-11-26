@@ -126,9 +126,9 @@ export interface DirFactsQuery {
 
 /**
  * 基本信息区目录事实行（forgeDirs Typert facts 下发形态）：
- * host 侧锚注册表（DIR_KEY_REGISTRY）解析后下发，UI 面只渲染零拼接。
- * 五行键 = workspaceRoot / forgeDir / forge.docs_root / forge.task_home / forge.worktrees
- * （forge.tmp 与 forge.project_home 不列示——用户裁决 2026-11-13）；
+ * host 侧目录键注册表（各插件声明的条目合并解析）后下发，UI 面只渲染零拼接。
+ * 前两行固定 = workspaceRoot / forgeDir，其后为无参目录键全量行（基座 + project 四键 +
+ * 已装载插件的键——project.docs_dir / project.tmp_dir / project.worktrees_dir 等）；
  * 单键解析失败 fail-soft = dir null（UI 呈现「—」，不阻断其余行）。
  */
 export interface DirFactRow {

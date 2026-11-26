@@ -36,6 +36,7 @@ import {
 } from "./assembly/typert-remotes.js";
 import { createDiagEmitter, createExpertProfileResolver, emitForgeDiag, FORGE_PACKAGE_NAME, type ExpertProfileResolver, type ExpertsServiceFace } from "./faces.js";
 import { withSessionIdentity } from "./tools/faces.js";
+import { TASK_LOOP_DIR_ENTRIES, TASK_LOOP_DIR_KEYS_SERVICE_NAME } from "./forge-dir-entries.js";
 import type { TasksService } from "./domain/tasks/service.js";
 
 import { assertInstallMutex } from "./install-mutex.js";
@@ -196,6 +197,29 @@ export function selfProbeOf(
   };
 }
 
+/**
+ * task-loop 目录键声明登记（根 scope `reflect.provide('dirKeys.task_loop', entries)`——
+ * project 汇总工具 forge_dirs / forge_resolve_path 查询时枚举 dirKeys.* 现取；
+ * plugins/knowledge / plugins/spec 同款）。reflect/provide 缺席或抛 = 声明零生效零抛
+ * （fail-soft，不阻载本插件）。
+ * @returns 注销器（未登记时 no-op）——并入插件 disposer。
+ */
+function declareTaskLoopDirKeys(ctx: unknown, diag: (line: string, level?: DiagLevel) => void): () => void {
+  const reflect = (ctx as TaskLoopPluginCtx).reflect;
+  if (typeof reflect?.provide !== "function") {
+    diag("[task-loop] ctx.reflect.provide 缺席——目录键 task_loop.runtime_dir / task_loop.task_dir 未登记（forge_dirs 两键缺席，降级不阻载）", "warn");
+    return () => {};
+  }
+  try {
+    const dispose = reflect.provide(TASK_LOOP_DIR_KEYS_SERVICE_NAME, TASK_LOOP_DIR_ENTRIES);
+    return typeof dispose === "function" ? () => void dispose() : () => {};
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    diag(`[task-loop] 目录键声明登记失败（task_loop.* 零生效零抛）：${message}`, "warn");
+    return () => {};
+  }
+}
+
 /** 具名服务 provide（常驻 provider——装配期一次，零 provide 降级径由装配面承担）。 */
 function provideResidentServices(ctx: unknown, services: TaskLoopAssembly, diag: (line: string, level?: DiagLevel) => void): void {
   const reflect = (ctx as TaskLoopPluginCtx).reflect;
@@ -347,6 +371,8 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
     return createExpertProfileResolver({ experts, diag: diagEmit });
   };
   const profileResolver = resolveExpertProfile();
+  // 目录键声明登记（task_loop.* ——纯声明不依赖 db，恒登记；先于服务装配）
+  const disposeDirKeys = declareTaskLoopDirKeys(ctx, diag);
   // 单装缺省装配（三件单源——home 缺席/db 打开失败 = 整体降级零 provide）
   const services = assembleTaskLoopServices(
     {
@@ -355,7 +381,7 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
       // 注入优先，缺省即接缝——生产不再恒空串，回收钩子/worker 锚点节恢复可解析）
       resolveWsPathAsync: config.resolveWsPathAsync ?? resolveWsPathAsyncOf(ctx),
       // dirKeys.* 目录声明反射拉缝（forge-dirs-unification §2.3——worker 规格目录经注册表
-      // forge.spec_dir 解析；显式 config 注入优先，缺省即接宿主 reflect 面，每次消费点现查）
+      // spec.dir 解析；显式 config 注入优先，缺省即接宿主 reflect 面，每次消费点现查）
       reflectOf: config.reflectOf ?? (() => (ctx as { reflect?: unknown }).reflect),
       ...(profileResolver !== undefined ? { resolveExpertProfile: profileResolver } : {}),
     },
@@ -390,8 +416,9 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
   };
   registerForgeTasksRemote(ctx as TypertAssemblyCtxFace, remoteDeps);
   return () => {
-    // 工具族注销（官方 tools 缝 disposer 全量回收 + 循环内核活循环终态注销）
+    // 工具族注销（官方 tools 缝 disposer 全量回收 + 循环内核活循环终态注销）+ 目录键声明撤回
     disposeToolFamily?.();
+    disposeDirKeys();
     // 库句柄关闭（cordis provide 注销面由宿主管辖——本插件自持资源仅 db 句柄）
     services?.dispose();
   };

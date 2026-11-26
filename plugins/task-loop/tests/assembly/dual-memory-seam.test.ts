@@ -16,6 +16,10 @@ import {
 } from "@dsh-forge/lib-path";
 import { assembleTaskLoopServices } from "../../host/assembly/default-assembly.js";
 import { assembleTaskLoopToolFamily } from "../../host/assembly/tool-family.js";
+import { TASK_LOOP_DIR_ENTRIES } from "../../host/forge-dir-entries.js";
+// 跨插件契约锚（仅测试面——host 代码零跨插件 import）：project 条目正本 + task-loop 条目
+// 合并解析 ≡ 落盘派生（task-loop d.ts 镜像声明的 project.runtime_dir 漂移即红）
+import { PROJECT_DIR_ENTRIES } from "../../../project/host/dirs/project-entries.js";
 
 function config(tasksHome: string): { home: string; dbFile: string; tasksHome: string } {
   return { home: mkdtempSync(join(tmpdir(), "task-loop-seam-")), dbFile: ":memory:", tasksHome };
@@ -108,7 +112,7 @@ describe("双记忆缝同目录性（prepare deriveTaskStoreDir × containerDirO
     services.dispose();
   });
 
-  it("forge-dirs-unification §2.6 AC：task-loop 落盘目录 ≡ 注册表 forge.task_runtime_dir（同一注入事实）", async () => {
+  it("forge-dirs-unification §2.6 AC：task-loop 落盘目录 ≡ 注册表 project.runtime_dir（同一注入事实）；task_loop.task_dir ≡ {slug}/{localId} 落盘派生", async () => {
     const dshHome = mkdtempSync(join(tmpdir(), "task-loop-seam-dsh-"));
     const tasksHome = join(dshHome, "forge", "projects");
     const mainRoot = "Z:\\project\\main-checkout";
@@ -118,8 +122,13 @@ describe("双记忆缝同目录性（prepare deriveTaskStoreDir × containerDirO
     expect(resolution.mainRoot).toBe(mainRoot);
     expect(resolution.key).toBe(deriveDirName(mainRoot));
     const registryDirs = resolveForgeDirs(
-      [{ source: "forge.base", entries: FORGE_BASE_DIR_ENTRIES }],
+      [
+        { source: "forge.base", entries: FORGE_BASE_DIR_ENTRIES },
+        { source: "dirKeys.project", entries: PROJECT_DIR_ENTRIES },
+        { source: "dirKeys.task_loop", entries: TASK_LOOP_DIR_ENTRIES },
+      ],
       { dshHome, projectRoot: resolution.mainRoot!, workspaceRoot: mainRoot },
+      { slug: "feat-x", localId: "2.1" },
     );
     const services = assembleTaskLoopServices({
       home: mkdtempSync(join(tmpdir(), "task-loop-seam-reg-")),
@@ -134,7 +143,10 @@ describe("双记忆缝同目录性（prepare deriveTaskStoreDir × containerDirO
     const expected = services.containerDirOf!(resolution.key);
     expect(services.forgeEvents!.dirOf("s-reg")).toBe(expected);
     // 同一注入事实下与注册表解析结果同一路径
-    expect(expected).toBe(registryDirs["forge.task_runtime_dir"]);
+    expect(expected).toBe(registryDirs["project.runtime_dir"]);
+    // 任务目录：注册表 task_loop.task_dir = 落盘派生 {containerDir}/{slug}/{localId}
+    expect(registryDirs["task_loop.runtime_dir"]).toBe(join(expected, "feat-x"));
+    expect(registryDirs["task_loop.task_dir"]).toBe(join(expected, "feat-x", "2.1"));
     services.dispose();
   });
 

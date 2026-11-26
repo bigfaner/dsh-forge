@@ -1,6 +1,6 @@
 // 基本信息区（spec forge-dirs-unification §2.7）：目录行取自目录事实服务（forgeDirs
 // Typert namespace 下发的 facts 全量行），UI 面只渲染、禁自行拼接目录路径；界面源码
-// 零写死目录键清单——显示规则 = 界面层过滤：隐藏集常量（forge.home/forge.db/forge.tmp）
+// 零写死目录键清单——显示规则 = 界面层过滤：隐藏集常量（forge.home/project.tmp_dir）
 // + 标签表（显示键白名单，插件键不在表内自然隐藏）。装载拆独立路（不经 channels 头路
 // ——Typert 为官方宿主唯一通路），fail-soft：face 缺席/单键解析失败 = 该行「—」，不
 // 阻断 ov-head 其余内容。
@@ -9,14 +9,13 @@ import type { DirFactRow } from '@dsh-forge/contracts'
 import { createForgeRpcClient } from '../../rpc.js'
 
 /** 隐藏集（界面层展示规则——forge_dirs 工具照常返回这些键，界面不列示） */
-const HIDDEN_DIR_KEYS: ReadonlySet<string> = new Set(['forge.home', 'forge.db', 'forge.tmp'])
+const HIDDEN_DIR_KEYS: ReadonlySet<string> = new Set(['forge.home', 'project.tmp_dir'])
 
 /** 行标签表（显示键白名单 + 标签——表外键 = 隐藏；zh——ov-head 展开路径详情呈现面） */
 const DIR_FACTS_ROW_LABELS: Record<string, string> = {
-  'forge.project_runtime_dir': '项目运行时产物根目录',
-  'forge.task_runtime_dir': '任务运行时产物目录',
-  'forge.docs_root': '文档位置',
-  'forge.worktrees': 'Worktree根目录',
+  'project.runtime_dir': '项目运行时产物根目录',
+  'project.docs_dir': '文档位置',
+  'project.worktrees_dir': 'Worktree根目录',
 }
 
 /** 行标签取法（overview-data overviewHeadRows 消费——标签单源） */

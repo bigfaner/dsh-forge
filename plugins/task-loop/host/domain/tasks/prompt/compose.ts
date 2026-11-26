@@ -107,9 +107,9 @@ export interface TestBaselineBrief {
 /** 断点续跑进度文件名（单点收敛 domain/tasks/evidence-pointer.ts——此处转出口兼容既有消费面） */
 export { RESUME_POINTER_FILE } from "../evidence-pointer.js";
 
-/** `<resume>` 续跑规则段（fresh 形态——路径只引用变量 `{forge.task_logs_dir}`） */
+/** `<resume>` 续跑规则段（fresh 形态——路径只引用变量 `{task_loop.task_dir}`） */
 export const RESUME_SECTION = `<resume>
-续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {forge.task_logs_dir}/resume.md（效度域内的进度台账——其效度戳已与本轮效度域比对一致，可复用）。
+续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {task_loop.task_dir}/resume.md（效度域内的进度台账——其效度戳已与本轮效度域比对一致，可复用）。
 1. 首步读取该文件：内容为「已完成 / 进行中 / 待办」三项；将未完成项转入 todo_write 后继续执行，不得重做已完成部分。
 2. 同目录下按编号命名的子文件夹（如 001-login-fail/）为此前各轮产物：先核对内容，再决定沿用或重跑；未核对不得覆盖。
 3. 遇到阻塞性问题时覆盖写入该文件，仅保留最新状态。
@@ -118,7 +118,7 @@ export const RESUME_SECTION = `<resume>
 
 /** `<resume>` stale 规则段（效度域漂移形态——证据降级历史记录，强制重跑） */
 export const RESUME_STALE_SECTION = `<resume>
-续跑说明：本任务存在历史进度文件 {forge.task_logs_dir}/resume.md，但其效度戳与当前效度域（HEAD commit / 基线签名）比对不一致——证据已跨效度域，不得复用。
+续跑说明：本任务存在历史进度文件 {task_loop.task_dir}/resume.md，但其效度戳与当前效度域（HEAD commit / 基线签名）比对不一致——证据已跨效度域，不得复用。
 1. 该文件降级为历史记录（只叙不判）：可读以了解此前做过什么，但其「已完成」声明一律不可信，不得据此跳过任何步骤或虚报进度。
 2. 同目录编号子文件夹中的证据类产物（测试输出、截图、票据）一律重跑重取；代码结论须以当前树现读为准。
 3. 从零建立 todo_write 待办并全量执行；结算前覆盖写入该文件，仅保留最新状态。

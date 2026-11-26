@@ -170,16 +170,14 @@ describe('loadOverviewHead（头路并发——projects 单点 + features/stats 
       const rows = overviewHeadRows(out.data, [
         { dirKey: 'workspaceRoot', dir: 'HOST/ws', description: '' },
         { dirKey: 'forge.home', dir: 'HOST/dsh/forge', description: '' },
-        { dirKey: 'forge.tmp', dir: 'HOST/dsh/forge/tmp', description: '' },
+        { dirKey: 'project.tmp_dir', dir: 'HOST/ws/.forge/tmp', description: '' },
         { dirKey: 'knowledge.global', dir: 'HOST/dsh/forge/knowledge/global', description: '' },
-        { dirKey: 'forge.project_runtime_dir', dir: 'HOST/dsh/forge/projects/demo', description: '' },
-        { dirKey: 'forge.task_runtime_dir', dir: 'HOST/tasks@a1b2c3d4', description: '' },
-        { dirKey: 'forge.docs_root', dir: 'HOST/ws/.forge/docs', description: '' },
-        { dirKey: 'forge.worktrees', dir: 'HOST/ws/.forge/worktrees', description: '' },
+        { dirKey: 'project.runtime_dir', dir: 'HOST/dsh/forge/projects/demo', description: '' },
+        { dirKey: 'project.docs_dir', dir: 'HOST/ws/.forge/docs', description: '' },
+        { dirKey: 'project.worktrees_dir', dir: 'HOST/ws/.forge/worktrees', description: '' },
       ])
       expect(rows.map((r) => r.value)).toEqual([
         'HOST/dsh/forge/projects/demo',
-        'HOST/tasks@a1b2c3d4',
         'HOST/ws/.forge/docs',
         'HOST/ws/.forge/worktrees',
       ])

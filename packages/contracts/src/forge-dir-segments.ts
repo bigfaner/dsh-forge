@@ -10,5 +10,8 @@ export const FORGE_DIR_SEGMENT = '.forge'
 /** forge 文档根段名（forgeDir/docs） */
 export const FORGE_DOCS_SEGMENT = 'docs'
 
-/** 容器库内日志目录段名（{taskHome}/logs/{slug}/{localId}——FORGE_LOGS_DIR 跨包单源） */
+/** 容器库内日志目录段名（FORGE_LOGS_DIR 跨包单源） */
 export const FORGE_LOGS_DIR = 'logs'
+
+/** task-loop 派发日志文件名（{taskHome}/{slug}/dispatch.jsonl——派发/执行/结算事件流，task-loop 事件日志链唯一写者落点） */
+export const FORGE_DISPATCH_LOG_FILE = 'dispatch.jsonl'

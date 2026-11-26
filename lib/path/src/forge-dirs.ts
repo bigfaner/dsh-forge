@@ -1,8 +1,9 @@
-// ForgeDirs 基座：目录键接口 + 本体十条 + 运行期注册表（拓扑解析，成环/缺依赖/撞名报错）
-// + slug/localId 参数校验。纯函数，不做 IO——三个运行时事实（ForgeDirSources）由装配层注入。
+// ForgeDirs 基座：目录键接口 + 基座键（forge.home）+ 运行期注册表（拓扑解析，成环/缺依赖/
+// 撞名报错）+ slug/localId 参数校验。纯函数，不做 IO——三个运行时事实（ForgeDirSources）由
+// 装配层注入。业务目录键归使用它的插件就近声明（接口声明合并 + dirKeys.<插件名> 登记），
+// 基座不定义业务目录；forge_dirs / forge_resolve_path 只汇总各插件声明。
 // 接口形状见 .forge/specs/forge-dirs-unification/spec.md §2.1、§2.2；注释随类型一并维护。
 import { join } from 'node:path'
-import { deriveDirName } from './derive-dir.js'
 
 /** 三个不可再派生的运行时事实，由装配层注入 */
 export interface ForgeDirSources {
@@ -13,6 +14,9 @@ export interface ForgeDirSources {
   /** 当前工作区 */
   workspaceRoot: string
 }
+
+/** 三个运行时事实的键名（依赖闭包计算的「非目录键」判据单源） */
+export const FORGE_DIR_SOURCE_KEYS: readonly (keyof ForgeDirSources)[] = ['dshHome', 'projectRoot', 'workspaceRoot']
 
 /** 调用方传入的参数名 */
 export type DirParam = 'slug' | 'localId'
@@ -36,47 +40,18 @@ export interface ForgeDirEntry<Deps extends readonly ForgeDirDep[], Params exten
   resolve(deps: { [K in Deps[number]]: string }, params: { [K in Params[number]]: string }): string
 }
 
-/** ForgeDirs 本体：forge.* 十个键；各插件用声明合并追加自己的键（带插件前缀） */
+/** ForgeDirs：基座键 + 各插件经声明合并追加的键（带插件前缀） */
 export interface ForgeDirs {
-  /** forge 根 */
+  /** forge 根（多插件共同依赖的根锚，故留基座） */
   'forge.home': ForgeDirEntry<['dshHome']>
-  /** 数据库根 */
-  'forge.db': ForgeDirEntry<['forge.home']>
-  /** 项目运行时产物根 */
-  'forge.project_runtime_dir': ForgeDirEntry<['forge.home']>
-  /** 某项目的任务运行时产物目录 */
-  'forge.task_runtime_dir': ForgeDirEntry<['forge.project_runtime_dir', 'projectRoot']>
-  /** 工作区文档根 */
-  'forge.docs_root': ForgeDirEntry<['workspaceRoot']>
-  /** 工作区临时区 */
-  'forge.tmp': ForgeDirEntry<['workspaceRoot']>
-  /** 工作区工作树 */
-  'forge.worktrees': ForgeDirEntry<['workspaceRoot']>
-  /** 工作区 .forge/specs/{slug}（bug 0955603f——规格文档与任务报告 issues 的正本落点） */
-  'forge.spec_dir': ForgeDirEntry<['workspaceRoot'], ['slug']>
-  /** 规格目录下 issues/{localId}（与回收钩子同落点） */
-  'forge.dossier_dir': ForgeDirEntry<['forge.spec_dir'], ['slug', 'localId']>
-  /** 任务运行时目录下的 logs/{slug}/{localId} */
-  'forge.task_logs_dir': ForgeDirEntry<['forge.task_runtime_dir'], ['slug', 'localId']>
 }
 
-/** 本体键清单（运行期供枚举/审计用，不含插件键） */
-export const FORGE_DIR_KEYS = [
-  'forge.home',
-  'forge.db',
-  'forge.project_runtime_dir',
-  'forge.task_runtime_dir',
-  'forge.docs_root',
-  'forge.tmp',
-  'forge.worktrees',
-  'forge.spec_dir',
-  'forge.dossier_dir',
-  'forge.task_logs_dir',
-] as const satisfies readonly (keyof ForgeDirs)[]
+/** 基座键清单（运行期供枚举/审计用，不含插件键） */
+export const FORGE_DIR_KEYS = ['forge.home'] as const satisfies readonly (keyof ForgeDirs)[]
 
 const pathJoin = (...segments: readonly string[]): string => join(...segments)
 
-/** 本体十条登记条目：forge_dirs / forge_resolve_path 与各消费面同源，不存第二份目录数据 */
+/** 基座登记条目：forge_dirs / forge_resolve_path 与各消费面同源，不存第二份目录数据 */
 export const FORGE_BASE_DIR_ENTRIES: {
   [K in keyof ForgeDirs]: ForgeDirs[K]
 } = {
@@ -84,54 +59,6 @@ export const FORGE_BASE_DIR_ENTRIES: {
     description: 'forge 根',
     deps: ['dshHome'],
     resolve: (deps) => pathJoin(deps.dshHome, 'forge'),
-  },
-  'forge.db': {
-    description: '数据库根',
-    deps: ['forge.home'],
-    resolve: (deps) => pathJoin(deps['forge.home'], 'db'),
-  },
-  'forge.project_runtime_dir': {
-    description: '项目运行时产物根目录',
-    deps: ['forge.home'],
-    resolve: (deps) => pathJoin(deps['forge.home'], 'projects'),
-  },
-  'forge.task_runtime_dir': {
-    description: '任务运行时产物目录',
-    deps: ['forge.project_runtime_dir', 'projectRoot'],
-    resolve: (deps) => pathJoin(deps['forge.project_runtime_dir'], deriveDirName(deps.projectRoot)),
-  },
-  'forge.docs_root': {
-    description: '文档位置',
-    deps: ['workspaceRoot'],
-    resolve: (deps) => pathJoin(deps.workspaceRoot, '.forge', 'docs'),
-  },
-  'forge.tmp': {
-    description: '工作区临时区',
-    deps: ['workspaceRoot'],
-    resolve: (deps) => pathJoin(deps.workspaceRoot, '.forge', 'tmp'),
-  },
-  'forge.worktrees': {
-    description: 'Worktree根目录',
-    deps: ['workspaceRoot'],
-    resolve: (deps) => pathJoin(deps.workspaceRoot, '.forge', 'worktrees'),
-  },
-  'forge.spec_dir': {
-    description: '规格目录：.forge/specs/{slug}',
-    deps: ['workspaceRoot'],
-    params: ['slug'],
-    resolve: (deps, params) => pathJoin(deps.workspaceRoot, '.forge', 'specs', params.slug),
-  },
-  'forge.dossier_dir': {
-    description: '任务卷宗目录：规格目录下 issues/{localId}',
-    deps: ['forge.spec_dir'],
-    params: ['slug', 'localId'],
-    resolve: (deps, params) => pathJoin(deps['forge.spec_dir'], 'issues', params.localId),
-  },
-  'forge.task_logs_dir': {
-    description: '任务运行日志目录',
-    deps: ['forge.task_runtime_dir'],
-    params: ['slug', 'localId'],
-    resolve: (deps, params) => pathJoin(deps['forge.task_runtime_dir'], 'logs', params.slug, params.localId),
   },
 }
 
@@ -162,7 +89,7 @@ export function assertValidDirParam(name: DirParam, value: string): string {
 export interface ForgeDirDeclaration {
   /** 声明方名字（撞名报错时点名两方） */
   source: string
-  /** 该声明方提供的条目（含本体十条） */
+  /** 该声明方提供的条目（基座声明即基座键） */
   entries: Partial<ForgeDirs>
 }
 

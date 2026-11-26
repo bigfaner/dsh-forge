@@ -30,7 +30,7 @@ export interface ForgeEventSink {
   prepare(session: ToolSessionContext): Promise<void>;
   /**
    * 直记会话 → 容器库目录（宿主派发循环径——循环不经 tool 执行点，prepare 的 cwd 缝
-   * 不可达；装配面在循环启动时点以 projectId 反解容器库目录直记，logs/<slug>.jsonl
+   * 不可达；装配面在循环启动时点以 projectId 反解容器库目录直记，<slug>/dispatch.jsonl
    * 里程碑不断流。幂等——已记忆会话不覆写，tool 径 prepare 语义优先。）
    */
   remember(sessionId: string, dir: string): void;
@@ -48,9 +48,9 @@ export function createForgeEventSink(deps: ForgeEventSinkDeps): ForgeEventSink {
     async prepare(session): Promise<void> {
       if (session.sessionId === "" || dirs.has(session.sessionId)) return;
       // 会话目录缺席 = fail-loud（forge-dirs-unification §2.6——不静默：缺少项目主检出，
-      // 无法派生 forge.task_runtime_dir）；resolveDir 其余解析异常仍 fail-soft 丢行。
+      // 无法派生 project.runtime_dir）；resolveDir 其余解析异常仍 fail-soft 丢行。
       if (session.cwd === undefined || session.cwd.trim() === "") {
-        throw new Error("forge 事件 sink：会话目录缺席——缺少项目主检出，无法解析 forge.task_runtime_dir");
+        throw new Error("forge 事件 sink：会话目录缺席——缺少项目主检出，无法解析 project.runtime_dir");
       }
       try {
         const dir = await deps.resolveDir(session.cwd);

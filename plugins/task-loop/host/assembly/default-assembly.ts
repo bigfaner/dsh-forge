@@ -3,13 +3,14 @@
 //   ② 服务常驻 provider：db 打开即装配 forgeTasks/forgeCheckpoints 两域服务（无缝门控——
 //      常驻形态，宿主集成态同源消费）；
 //   ③ 任务目录缺省约定：home 缺省 = env DSH_HOME（project 插件实况同径；显式 config.home 覆写）；
-//   ④ forge 事件日志链（bug a93c1277——logs/{slug}.jsonl 派发运营日志落盘）：tasksHome 注入
+//   ④ forge 事件日志链（bug a93c1277——{slug}/dispatch.jsonl 派发运营日志落盘）：tasksHome 注入
 //      （组合器 patch config 下发 {DSH_HOME}/forge/projects）时装配 bus→sink→监听器三件；
 //      缺席（单装缺省形态）= 整链零装配零行为变化（AC4 回归锚）。
 // home 缺席 / db 打开失败 = 整体降级缺席（返回 undefined——零 provide，fail-soft 诊断留痕不阻载）。
 import { mkdirSync } from "node:fs";
 import {
   FORGE_BASE_DIR_ENTRIES,
+  FORGE_DIR_SOURCE_KEYS,
   dirKeyEntryShapeError,
   forgeDirOfWorkspace,
   resolveForgeDirs,
@@ -48,10 +49,10 @@ export interface TaskLoopAssemblyConfig {
   /**
    * 任务目录派生根（bug a93c1277——组合器 patch config 下发 {DSH_HOME}/forge/projects，
     * 对齐主提案产物树「以 slug 为单位管理运行产物」）：forge 事件日志链装配门——
-    * 在场（非空白）= bus→sink→监听器三件装配 + logs/{slug}.jsonl 落盘启用；
+    * 在场（非空白）= bus→sink→监听器三件装配 + {slug}/dispatch.jsonl 落盘启用；
     * 缺席（单装缺省形态）= 整链零装配，行为零变化。容器目录 = forge-dirs-unification §2.6
     * 单源派生：{tasksHome}/{projectKey}——projectKey 由 lib/path resolveProjectKey 按主检出
-    * 归拢（与注册表 forge.task_runtime_dir 对同一注入事实解析出同一路径，插件不复制派生算法）。
+    * 归拢（与注册表 project.runtime_dir 对同一注入事实解析出同一路径，插件不复制派生算法）。
     */
   readonly tasksHome?: string;
   /**
@@ -60,8 +61,8 @@ export interface TaskLoopAssemblyConfig {
    */
   readonly registryQuery?: (cwd: string) => string | undefined;
   /**
-   * 宿主反射面取用缝（dirKeys.* 目录声明反射拉缝——worker 规格目录经注册表 forge.spec_dir
-   * 解析，forge-dirs-unification §2.3；缺席/劣形 = 锚点节规格段降级省略，其余锚不变）。
+   * 宿主反射面取用缝（dirKeys.* 目录声明反射拉缝——worker 规格目录经注册表 spec.dir
+   * 解析，forge-dirs-unification §2.3；缺席/劣形/spec 未声明 = 锚点节规格段降级省略，其余锚不变）。
    */
   readonly reflectOf?: () => unknown;
   /**
@@ -81,13 +82,20 @@ export interface TaskLoopAssemblyConfig {
 
 type AssemblyDiag = (line: string, level?: DiagLevel) => void;
 
+/** worker 规格目录锚点取用的目录键（归 plugins/spec 声明——未装载即缺席，不自拼路径） */
+const SPEC_DIR_KEY = "spec.dir";
+
+/** 运行时事实键集（lib/path 单源——依赖闭包计算的「非目录键」判据） */
+const RUNTIME_SOURCE_KEYS: ReadonlySet<string> = new Set(FORGE_DIR_SOURCE_KEYS);
+
 /**
  * 规格目录注册表解析缝（forge-dirs-unification §2.3——task-loop 不再自行拼接规格路径）：
  * dirKeys.* 反射拉缝（枚举宿主 reflect props 约定名现取第三方声明，在场性每消费点现查、
- * 零缓存——AGENTS 1.6）+ lib/path 本体十条合并 → resolveForgeDirs 按 forge.spec_dir 解析。
- * 反射缺席/声明拉取失败/解析报错（缺依赖/撞名等）= undefined——锚点节规格段降级省略，
- * 其余锚不变（fail-soft 不阻载）。逐条形状校验 = lib/path dirKeyEntryShapeError 单源
- *（与 project 侧同一套——bug 32532117）：坏形状跳过 + warn 诊断，forge.* 保留名拒绝。
+ * 零缓存——AGENTS 1.6）→ 只取目标键 spec.dir 及其依赖闭包内的条目，与 lib/path 基座键
+ * 合并后经 resolveForgeDirs 解析。
+ * 反射缺席/声明拉取失败/目标键未声明/解析报错（缺依赖/撞名等）= undefined——锚点节规格段
+ * 降级省略，其余锚不变（fail-soft 不阻载）。逐条形状校验 = lib/path dirKeyEntryShapeError
+ * 单源（与 project 侧同一套——bug 32532117）：坏形状跳过 + warn 诊断，forge.* 保留名拒绝。
  * 声明按声明方逐条收集（bug fb3777a4——不并入单一对象静默后到者胜），撞名由注册表报错
  * 点名两方 + warn 诊断降级。
  */
@@ -133,12 +141,36 @@ function resolveSpecDirViaRegistry(input: {
         }
       }
     }
+    // 目标键及其依赖闭包（目录键依赖逐层纳入；运行时事实 dshHome/projectRoot/workspaceRoot
+    // 由 sources 注入，不在声明集内）——声明集只收闭包内的条目：其它插件的键依赖不在
+    // 闭包内的键（如 task_loop.* 依赖 project.runtime_dir）时不被牵连报「依赖缺席」。
+    const needed = new Set<string>([SPEC_DIR_KEY]);
+    for (const key of needed) {
+      const hit = declarations.find((d) => key in d.entries) as
+        | { entries: Record<string, { deps?: readonly unknown[] } | undefined> }
+        | undefined;
+      for (const dep of hit?.entries[key]?.deps ?? []) {
+        if (typeof dep === "string" && !(RUNTIME_SOURCE_KEYS as ReadonlySet<string>).has(dep)) needed.add(dep);
+      }
+    }
+    // 闭包内条目按声明方原样保留（同名键不去重——撞名由 resolveForgeDirs 报错点名两方）
+    const closure: ForgeDirDeclaration[] = [];
+    for (const declaration of declarations) {
+      const entries: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(declaration.entries)) {
+        if (needed.has(key)) entries[key] = entry;
+      }
+      if (Object.keys(entries).length > 0) closure.push({ source: declaration.source, entries } as ForgeDirDeclaration);
+    }
+    if (!declarations.some((d) => SPEC_DIR_KEY in d.entries)) {
+      // spec 插件未装载/未声明 = 规格目录键缺席（未装载即缺席——不自拼路径）
+      input.diag?.(`[task-loop] 目录键 ${SPEC_DIR_KEY} 未被任何声明方提供（spec 插件未装载？）——锚点节规格段省略`, "warn");
+      return undefined;
+    }
     let resolved: Record<string, string>;
     try {
       resolved = resolveForgeDirs(
-        [{ source: "forge.base", entries: FORGE_BASE_DIR_ENTRIES }, ...declarations],
-        // forge.spec_dir 依赖链只触及 workspaceRoot；dshHome/projectRoot
-        // 为本体条目的依赖完备性补齐（projectRoot 与 workspaceRoot 同源——规格目录不依赖归拢）。
+        [{ source: "forge.base", entries: FORGE_BASE_DIR_ENTRIES }, ...closure],
         { dshHome: input.dshHome, projectRoot: input.workspaceRoot, workspaceRoot: input.workspaceRoot },
         { slug: input.slug },
       );
@@ -148,7 +180,7 @@ function resolveSpecDirViaRegistry(input: {
       input.diag?.(`[task-loop] dirKeys 声明解析降级：${message}`, "warn");
       return undefined;
     }
-    return resolved["forge.spec_dir"];
+    return resolved[SPEC_DIR_KEY];
   } catch (cause) {
     // 外层拉取缝异常不静默（对齐 project 侧——诊断留痕后降级）
     const message = cause instanceof Error ? cause.message : String(cause);
@@ -159,12 +191,12 @@ function resolveSpecDirViaRegistry(input: {
 
 /**
  * worker 任务目录锚点节缺省真身（bug 26dff330——供给端收口）：此前 resolveWorkerContext
- * 从未在生产装配注入，worker 简报恒无任务目录锚点段、{forge.task_logs_dir} 占位符无值，
+ * 从未在生产装配注入，worker 简报恒无任务目录锚点段、{task_loop.task_dir} 占位符无值，
  * worker 自行猜测落点（<ws>/.forge/task-logs/ 等漂移拼写）→ 回收钩子恒 runtime dir absent。
  * 缺省真身 = containerDirOf 单源容器目录 → taskLogsDirOf 派生任务日志目录（与回收钩子
  * taskLogsDir 注入、forgeResolvePath(taskLogs) 同源三口径）+ 开工前 mkdirRecursive（fail-soft
  * warn 留痕——目录在场，worker 不自建）+ renderWorkerContext 锚点节。规格目录 = 注册表
- * forge.spec_dir 解析（resolveSpecDirViaRegistry——§2.3，不再自行拼接）。config.resolveWorkerContext
+ * spec.dir 解析（resolveSpecDirViaRegistry——§2.3，不再自行拼接）。config.resolveWorkerContext
  * 显式注入时优先（组合器覆写单装缺省）。tasksHome 缺席（containerDirOf 缺席）= undefined，
  * persona 零追加形态兼容不变。
  */
@@ -245,7 +277,7 @@ export interface TaskLoopAssembly {
   readonly resolveWsPathAsync?: (projectKey: string) => Promise<string | undefined>;
   /**
    * forge 事件发射器（bug a93c1277——tasksHome 注入时装配，emit 直通 bus；监听器唯一写者
-   * 落盘 logs/{slug}.jsonl）。缺席 = 事件链零装配（单装缺省形态，行为零变化）。
+   * 落盘 {slug}/dispatch.jsonl）。缺席 = 事件链零装配（单装缺省形态，行为零变化）。
    */
   readonly forgeEvents?: ForgeEventSink;
   /**
@@ -289,8 +321,8 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
   // tasksHome 在场（非空白）= bus→sink→监听器三件装配单例；缺席 = 整链零装配零行为变化。
   const tasksHome = typeof config.tasksHome === "string" && config.tasksHome.trim() !== "" ? config.tasksHome : undefined;
   // projectKey = lib/path resolveProjectKey 派生（forge-dirs-unification §2.6 单源）——容器
-  // 目录 = {tasksHome}/{projectKey}，与注册表 forge.task_runtime_dir（join(project_runtime_dir,
-  // deriveDirName(主检出))）对同一注入事实解析出同一路径；任务行归属键同名制。
+  // 目录 = {tasksHome}/{projectKey}，与注册表 project.runtime_dir（join(forge.home,
+  // 'projects', deriveDirName(主检出))）对同一注入事实解析出同一路径；任务行归属键同名制。
   // （bug 26dff330：提前定稿——worker 锚点节缺省真身与事件链同消费。）
   const containerDirDefaultOf =
     tasksHome !== undefined
@@ -304,7 +336,7 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
   // 缺席 = fail-loud 拒解析（不静默——错误说明缺少项目主检出）。
   const projectKeyOfCwd = (workspaceDir: string): string => {
     if (workspaceDir.trim() === "") {
-      throw new Error("forge.task_runtime_dir 拒绝解析：会话目录缺席——缺少项目主检出，无法派生归属键");
+      throw new Error("project.runtime_dir 拒绝解析：会话目录缺席——缺少项目主检出，无法派生归属键");
     }
     return resolveProjectKey(workspaceDir, { registryQuery: config.registryQuery ?? (() => undefined) }).key;
   };
@@ -337,13 +369,13 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     const sink = createForgeEventSink({
       bus,
       // 会话 cwd → 主检出归拢键 → 容器目录（§2.6——与 containerDirOf、注册表
-      // forge.task_runtime_dir 同一 projectKey 派生；解析异常 = fail-soft 不记忆，
+      // project.runtime_dir 同一 projectKey 派生；解析异常 = fail-soft 不记忆，
       // 会话目录缺席的 fail-loud 由 projectKeyOfCwd 上抛、sink.prepare 直通）。
       resolveDir: async (workspaceDir) => containerDirDefaultOf!(projectKeyOfCwd(workspaceDir)),
     });
     detachLogListener = attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) });
     forgeEvents = sink;
-    diag?.("[task-loop] forge 事件日志链装配（tasksHome 注入）——logs/{slug}.jsonl 落盘启用", "info");
+    diag?.("[task-loop] forge 事件日志链装配（tasksHome 注入）——{slug}/dispatch.jsonl 落盘启用", "info");
   }
   return {
     db,

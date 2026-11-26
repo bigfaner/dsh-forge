@@ -44,7 +44,7 @@ export interface ForgePathToolDefinition {
 export interface ForgePathsToolFace {
   /** projectId → 三运行时事实（dirs/self-anchors 装配缝产物） */
   anchorsOf(projectId: string): Promise<ForgeDirSources>;
-  /** 声明集现查（forge 本体十条 + dirKeys.* 拉取声明——每次调用现拉不缓存） */
+  /** 声明集现查（基座键 + project 条目 + dirKeys.* 拉取声明——每次调用现拉不缓存） */
   declarations(): readonly ForgeDirDeclaration[];
 }
 
@@ -126,11 +126,11 @@ export function createForgeDirsTool(face: ForgePathsToolFace, resolveProjectId: 
   return {
     name: DIRS_TOOL,
     description:
-      "Query forge directory facts — the single source of truth for directory paths. Omit dirKey to list all parameterless entries (dirKey + absolute dir + description, including third-party keys declared via the dirKeys.* convention); give dirKey for one entry. Parameterized dirs (forge.spec_dir / forge.dossier_dir / forge.task_logs_dir and any declared ones) use forge_resolve_path instead. Read-only.",
+      "Query forge directory facts — the single source of truth for directory paths. Omit dirKey to list all parameterless entries (dirKey + absolute dir + description, including third-party keys declared via the dirKeys.* convention); give dirKey for one entry. Parameterized dirs (declared by the plugin that owns them, e.g. spec.dir / spec.dossier_dir / task_loop.runtime_dir / task_loop.task_dir, and any declared ones) use forge_resolve_path instead. Read-only.",
     parameters: {
       type: "object",
       properties: {
-        dirKey: { type: "string", description: "Optional directory key to look up (e.g. forge.task_runtime_dir); omitted = list all parameterless dirs." },
+        dirKey: { type: "string", description: "Optional directory key to look up (e.g. project.runtime_dir); omitted = list all parameterless dirs." },
       },
     },
     output: { schema: FORGE_DIRS_OUTPUT_SCHEMA, render: renderForgeDirs },
@@ -203,7 +203,7 @@ export function createForgeResolvePathTool(face: ForgePathsToolFace, resolveProj
       properties: {
         dest: {
           type: "string",
-          description: `Directory key with params — controlled enum generated from the registry at call time (e.g. forge.spec_dir (requires slug); forge.dossier_dir (requires slug, localId)). Unknown dest is rejected with the legal set.`,
+          description: `Directory key with params — controlled enum generated from the registry at call time (e.g. spec.dir (requires slug); spec.dossier_dir (requires slug, localId)). Unknown dest is rejected with the legal set.`,
         },
         slug: { type: "string", description: "Container slug (feature directory name or proposal slug) — required by entries listing slug." },
         localId: { type: "string", description: "Task local id (e.g. 1.1 / fix-1) — required by entries listing localId." },

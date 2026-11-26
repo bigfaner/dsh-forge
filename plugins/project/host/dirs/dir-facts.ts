@@ -1,9 +1,9 @@
 // host/dirs · DirFactsPort provider 族（plugin-project 1.12——proposal seam 表
 // `forge.dirFacts` + code-design §6「服务装配层重订：一 service 多 provider」）：
-//   · 常驻 provider createDirFactsPort(deps)——三运行时事实解析缝 + 声明集（forge 本体十条 +
-//     dirKeys.* 拉取声明）全量目录事实；
-//   · 兜底 provider minimalDirFactsPort(deps)——本体声明 + 同一声明拉取（reflectOf 注入，
-//     缺席 = 仅本体）：独立模式/注入缺席时的最小查询面。
+//   · 常驻 provider createDirFactsPort(deps)——三运行时事实解析缝 + 声明集（基座键 + project
+//     条目 + dirKeys.* 拉取声明）全量目录事实；
+//   · 兜底 provider minimalDirFactsPort(deps)——内置声明 + 同一声明拉取（reflectOf 注入，
+//     缺席 = 仅内置）：独立模式/注入缺席时的最小查询面。
 // 输出完全由注册表条目派生（resolveForgeDirs——lib/path 单源）：listAnchors = 声明集逐键
 // resolve + description；resolveDestination = 带参条目（dest 即键名）派生枚举与参数校验。
 // 本模块只做契约实现与结构适配，零 cordis 依赖。
@@ -82,7 +82,7 @@ export function createDirFactsPort(deps: DirFactsProviderDeps): DirFactsPort {
 }
 
 /**
- * 最小兜底 provider：声明 = 本体十条 + dirKeys.* 反向拉取（reflectOf 缺席 = 仅本体）——
+ * 最小兜底 provider：声明 = 内置声明（基座 + project）+ dirKeys.* 反向拉取（reflectOf 缺席 = 仅内置）——
  * 独立模式/注入缺席时退此实现（seam 表「兜底 = 最小 provider」）。
  */
 export function minimalDirFactsPort(deps: {

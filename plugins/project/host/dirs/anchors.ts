@@ -1,37 +1,32 @@
 // dirKey 声明缝（forge-dirs-unification §2.2/§2.5——目录事实单源 = @dsh-forge/lib-path
-// ForgeDirs 基座）：本体十条（FORGE_BASE_DIR_ENTRIES）为基座声明，第三方插件经根 scope
-// `reflect.provide('dirKeys.<声明方>', entries)` 反向拉取合并——查询时现拉，不缓存不落注册表。
+// ForgeDirs 基座）：基座键（FORGE_BASE_DIR_ENTRIES）+ project 自身条目（project-entries.ts）
+// 为内置声明，其它插件经根 scope `reflect.provide('dirKeys.<声明方>', entries)` 反向拉取
+// 合并——查询时现拉，不缓存不落注册表。
 // 本模块只做三件事：
-//   ① 基座声明常量 + 解析入口薄封装（resolveForgeDirs 直通 lib/path 单源）；
+//   ① 声明合并（mergeDeclarations：基座 + project + 拉取声明）+ 解析入口薄封装
+//      （resolveForgeDirs 直通 lib/path 单源）；
 //   ② dirKeys.* 声明拉取缝（形状校验 fail-soft 单源 = lib/path dirKeyEntryShapeError：
 //      malformed/forge.* 保留名跳过并 warn——诊断经装配期注入的 DirKeysPullDiagFace，不直落
 //      console，AGENTS §7；同名键不去重不吞——两条声明原样收集，解析期注册表撞名报错点名
 //      两方，bug 32532117）；
 //   ③ 工作区分区派生（workspacePartitionsOf——.forge 初始化与审计的分区/允许集由键表
-//      派生，无独立目录清单常量；解析失败 warn 降级本体键集）。
+//      派生，无独立目录清单常量；解析失败 warn 降级内置声明集）。
 // workspace/docs 相对派生 helpers 自 lib/path dir-segments 再导出（本域消费单入口）。
 // 推式登记缝（服务键 forgeDirs 的 registerDirKeys/declareDirKeys/createDirKeyRegistry）
 // 与独立目的地表（DIR_DESTINATIONS/ForgeDirDestinations/proposalDir）已删——forge_resolve_path
 // 的枚举/参数/校验全部由带参条目派生（§2.3）。
 import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
 import { join } from 'node:path'
-import {
-  FORGE_BASE_DIR_ENTRIES,
-  FORGE_DIR_KEYS,
-  dirKeyEntryShapeError,
-  isValidDirParam,
-  resolveForgeDirs,
-  type ForgeDirDeclaration,
-  type ForgeDirEntry,
-  type ForgeDirSources,
-} from '@dsh-forge/lib-path'
+import type { ForgeDirDeclaration, ForgeDirEntry, ForgeDirSources } from '@dsh-forge/lib-path'
+import { dirKeyEntryShapeError, FORGE_BASE_DIR_ENTRIES, FORGE_DIR_KEYS, isValidDirParam, resolveForgeDirs } from '@dsh-forge/lib-path'
+import { PROJECT_DIRS_DECLARATION } from './project-entries.js'
 
 export { forgeDirOfWorkspace, docsRootOfForgeDir, workspaceDocsRoot } from '@dsh-forge/lib-path'
 
-/** 本体键清单再导出（枚举/测试/界面派生单源——lib/path FORGE_DIR_KEYS） */
+/** 基座键清单再导出（测试/界面派生单源——lib/path FORGE_DIR_KEYS） */
 export { FORGE_DIR_KEYS }
 
-/** forge 本体十条声明（基座单源直通——forge_dirs / dirFacts / init / audit 同一声明拉取的起点） */
+/** 基座声明（lib/path 单源直通——forge_dirs / dirFacts / init / audit 同一声明拉取的起点） */
 export const FORGE_DIRS_BASE_DECLARATION: ForgeDirDeclaration = {
   source: 'forge 本体（@dsh-forge/lib-path）',
   entries: FORGE_BASE_DIR_ENTRIES,
@@ -115,12 +110,13 @@ export function collectDeclaredDirKeys(
   return collected
 }
 
-/** 合并声明视图（本体在前 + 拉取声明追加——逐查询现算，不落注册表） */
+/** 合并声明视图（基座 + project 条目 + 拉取声明追加——逐查询现算，不落注册表；project 即
+ *  汇总工具所在插件，自身条目直接并入，不走 dirKeys.* 反射拉取） */
 export function mergeDeclarations(pulled: readonly ForgeDirDeclaration[]): readonly ForgeDirDeclaration[] {
-  return [FORGE_DIRS_BASE_DECLARATION, ...pulled]
+  return [FORGE_DIRS_BASE_DECLARATION, PROJECT_DIRS_DECLARATION, ...pulled]
 }
 
-/** 已声明键清单（声明序——本体十条在前、第三方按拉取序追加） */
+/** 已声明键清单（声明序——基座键、project 键在前、第三方按拉取序追加） */
 export function declaredDirKeys(declarations: readonly ForgeDirDeclaration[]): readonly string[] {
   const keys: string[] = []
   for (const declaration of declarations) keys.push(...Object.keys(declaration.entries))
@@ -159,8 +155,8 @@ const toPosix = (p: string): string => p.replaceAll('\\', '/')
  * 工作区分区派生（AC：.forge 初始化与审计的目录清单由 ForgeDirs 键表派生，无独立清单常量）：
  * 以 {workspaceRoot, dshHome:'', projectRoot:''} 注入解析全部声明键，取解析结果中落在
  * `{workspaceRoot}/{FORGE_DIR_SEGMENT}/` 下的键为分区（.forge 前缀 posix 相对路径，声明序）。
- * 解析失败 = warn 降级本体键集（本体工作区键只依赖 workspaceRoot，恒可解析）；
- * 工作区外键（如 knowledge.root = {workspaceRoot}/.knowledge）不入分区。
+ * 解析失败 = warn 降级内置声明集（基座 + project——工作区三个分区键只依赖 workspaceRoot，
+ * 恒可解析）；工作区外键（如 knowledge.root = {workspaceRoot}/.knowledge）不入分区。
  */
 export function workspacePartitionsOf(
   workspaceRoot: string,
@@ -173,8 +169,8 @@ export function workspacePartitionsOf(
     resolved = resolveForgeDirs(declarations, sources)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    onDiag?.({ level: 'warn', event: 'forge-dirs-declare', message: `目录键解析降级（${message}）——回退本体键集派生分区` })
-    resolved = resolveForgeDirs([FORGE_DIRS_BASE_DECLARATION], sources)
+    onDiag?.({ level: 'warn', event: 'forge-dirs-declare', message: `目录键解析降级（${message}）——回退内置声明集（基座 + project）派生分区` })
+    resolved = resolveForgeDirs(mergeDeclarations([]), sources)
   }
   const prefix = toPosix(join(workspaceRoot, FORGE_DIR_SEGMENT)) + '/'
   const partitions: string[] = []

@@ -266,7 +266,7 @@ export interface SettleReportRecoveryDeps {
 }
 
 /**
- * 生产装配工厂：运行时目录 = deriveTaskStoreDir 单源 + logs/<slug>/<localId>；specs 卷宗
+ * 生产装配工厂：运行时目录 = deriveTaskStoreDir 单源 + <slug>/<localId>；specs 卷宗
  * 路径根 = forgeDirOfWorkspace(wsPath)/specs/<slug>/issues/<localId>（@dsh-forge/lib-path
  * forgeDirOfWorkspace 单源派生 .forge 根——specs 替代 proposals）。路径派生经注入面消费
  * （运行期取值走 deps 注入，宿主迟到面）。两跳解析失败/项目未注册/派生缝缺席 = undefined

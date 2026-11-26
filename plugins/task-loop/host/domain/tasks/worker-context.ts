@@ -1,7 +1,7 @@
 // worker 任务目录锚点节（core forge/workspace/worker-context.ts 直迁——plugin-task-loop
 // 1.7 内联 + slug 容器化改造）。经 TasksVerbDeps 注入 claim（核心动词零 IO 纪律），claim
 // 合成 persona 后追加——persona 通道 worker 独享。fail-soft：容器目录缺席/读失败 → 省该锚点段
-// （logs 双锚恒出）。slug 化改造面：source_kind 判别词退役——容器文档锚点 = features 目录在盘
+// （运行时目录双锚恒出）。slug 化改造面：source_kind 判别词退役——容器文档锚点 = features 目录在盘
 // 优先，否则 specs 卷宗目录（fail-soft 探测序）；检出根唯一权威 = worker 会话 cwd。
 import { readdirSync, type Dirent } from "node:fs";
 import { join, sep } from "node:path";
@@ -16,10 +16,10 @@ const TREE_ENTRY_CAP = 60;
 
 /** 锚点介绍行文本 */
 const DIR_ROLE_NOTES: Readonly<Record<string, string>> = {
-  "forge.specs_dir": "Spec 卷宗目录：本任务的 Spec 正本（spec.md）与 issues 回收卷宗（<ws>/.forge/specs/<slug>/issues/<localId>）所在。",
+  "spec.dir": "Spec 卷宗目录：本任务的 Spec 正本（spec.md）与 issues 回收卷宗（<ws>/.forge/specs/<slug>/issues/<localId>）所在。",
   feature_dir: "特性文档目录：prd/（需求与用户故事）、design/（技术设计）、test/（测试规划）。",
-  "forge.project_logs_dir":
-    "forge 运行日志目录：任务日志存放的根目录（位于工作区仓库之外，属 dsh-forge 运行数据——不进 git）。",
+  "task_loop.runtime_dir":
+    "任务循环运行时目录：本任务所属 spec 的运行时数据根（dispatch.jsonl 派发日志与各任务目录在此；位于工作区仓库之外，属 dsh-forge 运行数据——不进 git）。",
 };
 
 /** 锚点段（目录缺席/读失败 → undefined） */
@@ -35,16 +35,16 @@ function renderDirBlock(label: string, abs: string, note: string): string | unde
   return lines.join("\n");
 }
 
-/** logs 根锚点段：恒出 */
-function renderLogsRootBlock(abs: string): string {
-  return [`forge.project_logs_dir——${DIR_ROLE_NOTES["forge.project_logs_dir"]}`, `  \`${abs}${sep}\``].join("\n");
+/** 任务循环运行时目录锚点段：恒出 */
+function renderLoopRuntimeDirBlock(abs: string): string {
+  return [`task_loop.runtime_dir——${DIR_ROLE_NOTES["task_loop.runtime_dir"]}`, `  \`${abs}${sep}\``].join("\n");
 }
 
 /** 任务日志锚点段：恒出；树仅任务目录在盘时追加 */
 function renderTaskLogsBlock(abs: string): string {
   const note =
-    "任务日志目录：{forge.task_logs_dir} = {forge.project_logs_dir}/{slug}/{local_id}；本轮任务的证据子文件夹与 resume.md 进度文件（随附 resume.validity.json 效度戳——跨 HEAD/基线漂移的证据强制重跑）存储在此。";
-  const lines: string[] = [`forge.task_logs_dir——${note}`, `  \`${abs}${sep}\``];
+    "任务目录：{task_loop.task_dir} = {task_loop.runtime_dir}/{local_id}；本轮任务的证据子文件夹与 resume.md 进度文件（随附 resume.validity.json 效度戳——跨 HEAD/基线漂移的证据强制重跑）存储在此。";
+  const lines: string[] = [`task_loop.task_dir——${note}`, `  \`${abs}${sep}\``];
   scanLines(abs, "  ", 1, lines);
   return lines.join("\n");
 }
@@ -73,26 +73,26 @@ function scanLines(abs: string, prefix: string, depth: number, lines: string[]):
 }
 
 /**
- * worker 任务目录锚点节（fail-soft 纯读）：logs 双锚恒出；容器文档锚点（slug 容器化——
+ * worker 任务目录锚点节（fail-soft 纯读）：运行时目录双锚恒出；容器文档锚点（slug 容器化——
  * features 目录在盘优先，否则 specs 卷宗目录）在盘才出。任务库容器目录 containerDir =
- * {tasksHome}/{projectKey}（containerDirOf 单源）；任务日志目录 = taskLogsDirOf
- * （containerDir/logs/<slug>/<localId>——bug 26dff330 三处口径同源单点）。
+ * {tasksHome}/{projectKey}（containerDirOf 单源）；任务目录 = taskLogsDirOf
+ * （containerDir/<slug>/<localId>——bug 26dff330 三处口径同源单点）。
  */
 export function renderWorkerContext(input: {
   forgeDir: string;
   containerDir: string;
   localId: string;
   source: ContainerRef;
-  /** 规格目录（注册表 forge.spec_dir 解析产物——§2.3；缺席 = 锚点规格段省略，不自行拼接） */
+  /** 规格目录（注册表 spec.dir 解析产物——§2.3；缺席 = 锚点规格段省略，不自行拼接） */
   specDir?: string;
 }): string {
   const { forgeDir, containerDir, localId, source, specDir } = input;
   const blocks: string[] = [];
   const docsRoot = docsRootOfForgeDir(forgeDir);
-  // 任务日志目录派生单点（bug 26dff330——三处口径同源：worker 锚点 / 回收钩子 / 事故台账）
-  const logsRoot = join(containerDir, "logs");
+  // 任务目录派生单点（bug 26dff330——三处口径同源：worker 锚点 / 回收钩子 / 事故台账）
+  const loopRuntimeDir = join(containerDir, source.slug);
   const taskLogsDir = taskLogsDirOf(containerDir, source.slug, localId);
-  // slug 容器化：features 目录在盘优先（远征血统），否则规格目录（注册表 forge.spec_dir
+  // slug 容器化：features 目录在盘优先（远征血统），否则规格目录（注册表 spec.dir
   // 解析产物——specs 替代 proposals，用户裁定 2026-11-25；task-loop 不自行拼接该路径，
   // 注册表缺席 = 锚点段省略）。提案目录命名退役，bug 9b3c9a9b 同批收口。
   const featureDir = join(docsRoot, "features", source.slug);
@@ -107,10 +107,10 @@ export function renderWorkerContext(input: {
     featureInDisk
       ? renderDirBlock("feature_dir", featureDir, DIR_ROLE_NOTES.feature_dir!)
       : specDir !== undefined
-        ? renderDirBlock("forge.specs_dir", specDir, DIR_ROLE_NOTES["forge.specs_dir"]!)
+        ? renderDirBlock("spec.dir", specDir, DIR_ROLE_NOTES["spec.dir"]!)
         : undefined;
   if (main !== undefined) blocks.push(main);
-  blocks.push(renderLogsRootBlock(logsRoot), renderTaskLogsBlock(taskLogsDir));
+  blocks.push(renderLoopRuntimeDirBlock(loopRuntimeDir), renderTaskLogsBlock(taskLogsDir));
   return [
     "## 任务目录锚点",
     "本任务领取的目录锚点（首行职责介绍；缩进行为绝对路径与目录内容）：",

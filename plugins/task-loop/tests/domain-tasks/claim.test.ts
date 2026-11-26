@@ -169,6 +169,6 @@ describe("dispatchPrompt 合成（新简报形态）+ digest", () => {
     };
     const r = await claimTask(deps, { projectKey: h.projectKey, sessionId: "s", source: { slug: "alpha" } });
     expect(r.dispatchPrompt).toContain("<resume>");
-    expect(r.dispatchPrompt).toContain("{forge.task_logs_dir}/resume.md");
+    expect(r.dispatchPrompt).toContain("{task_loop.task_dir}/resume.md");
   });
 });

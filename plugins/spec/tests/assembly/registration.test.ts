@@ -10,6 +10,7 @@ import { assembleSpecServices, createSpecDocWriter } from "../../host/assembly/d
 import { FORGE_SPEC_TOOL_NAMES } from "../../host/tools/index.js";
 import { projectKeyOf as deriveProjectKey } from "@dsh-forge/lib-path";
 import { FORGE_SPECS_SERVICE_KEY, FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
+import { SPEC_DIR_KEYS_SERVICE_NAME } from "../../host/forge-dir-entries.js";
 
 /** cordis ctx 桩（provide/register 记录面 + reflect.get 投影缝消费面） */
 function ctxStub(opts: { tools?: boolean; taskLoop?: boolean } = {}) {
@@ -58,7 +59,8 @@ describe("default plugin（cordis 装配入口——三态可观测）", () => {
       const t = ctxStub();
       const c = config(tempRoot);
       const dispose = specPlugin(t.ctx, c);
-      expect(t.provided.map((p) => p.name)).toEqual([FORGE_SPECS_SERVICE_KEY]);
+      // 目录键声明（dirKeys.spec）先于域服务 provide——纯声明不依赖 db
+      expect(t.provided.map((p) => p.name)).toEqual([SPEC_DIR_KEYS_SERVICE_NAME, FORGE_SPECS_SERVICE_KEY]);
       expect(t.registered).toEqual([...FORGE_SPEC_TOOL_NAMES]);
       dispose();
       expect(t.registered).toEqual([]);

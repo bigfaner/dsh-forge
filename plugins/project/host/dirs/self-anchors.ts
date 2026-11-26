@@ -4,8 +4,8 @@
 // warn 诊断——经装配期注入的诊断发射面，不直落 console）；workspaceRoot 经官方宿主工作区面
 // （插件 project.db main 行 + workspaceRegistry 直探，wsPathOf 注入）；projectRoot 取 lib/path
 // resolveProjectKey 归拢的项目主检出路径（规范化后——projectKey 大小写敏感，不规范化会让同一
-// 项目分裂两个键）。任务库根由 lib/path 目录注册表（forge.project_runtime_dir /
-// forge.task_runtime_dir）派生——经注册表注入的工作区根与项目主检出取得。
+// 项目分裂两个键）。项目运行时产物目录由 lib/path 目录注册表（project.runtime_dir）
+// 派生——经注册表注入的工作区根与项目主检出取得。
 // 注册表/forge_dirs/task-loop 落盘共用同一次解析（sourcesOf 单点）。
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -59,11 +59,11 @@ export function createSelfAnchorsOf(
   return async (projectId) => {
     const wsPath = await deps.wsPathOf(projectId);
     if (typeof wsPath !== "string" || wsPath.trim() === "") {
-      throw new Error(`self-anchors: workspace root unavailable (projectId=${projectId}——未注册或工作区面缺席：缺少项目主检出，无法解析 forge.task_runtime_dir)`);
+      throw new Error(`self-anchors: workspace root unavailable (projectId=${projectId}——未注册或工作区面缺席：缺少项目主检出，无法解析 project.runtime_dir)`);
     }
     const resolution = resolveProjectKey(wsPath, { registryQuery: deps.registryQuery ?? (() => undefined) });
     // 未归拢分支同样规范化（bug 55ab9a8f——projectKey 大小写敏感，未规范化 wsPath 会让
-    // forge.task_runtime_dir 目录名与 resolveProjectKey 的 key 分裂）。
+    // project.runtime_dir 目录名与 resolveProjectKey 的 key 分裂）。
     const projectRoot = resolution.mainRoot ?? canonicalizePath(wsPath);
     return { dshHome: dirname(deps.forgeHome), projectRoot, workspaceRoot: wsPath };
   };

@@ -474,7 +474,7 @@ export interface LoopDriverDeps {
   readonly commitLanding?: DispatchCoreDeps["commitLanding"];
   /** 叙述面（notify createNarrator 产物——notice/followup/blocked 三出口 + 落盘委派） */
   readonly narrator: Narrator;
-  /** 事件发射面（可选——透传 dispatch-core 事件闭包，logs/<slug>.jsonl 里程碑不断流） */
+  /** 事件发射面（可选——透传 dispatch-core 事件闭包，<slug>/dispatch.jsonl 里程碑不断流） */
   readonly events?: DispatchCoreDeps["events"];
   /**
    * projectKey → 容器库目录（可选——bug a93c1277 事件日志链装配缝：与 events 同注，
@@ -1002,7 +1002,7 @@ function emitLoopDiag(loop: ActiveLoop, level: LoopDiagPayload["level"], event: 
 }
 
 /**
- * 处置台账总线发射（logs/{slug}.jsonl 唯一写者同流追加：
+ * 处置台账总线发射（{slug}/dispatch.jsonl 唯一写者同流追加：
  * triage-decided 挂新决策产出点（执行前）、triage-outcome 挂每次执行尝试点（执行后）。
  * fail-soft：面缺席/emit 链断 = 零发射不外溢（台账非循环正确性依赖；账面 jsonl 与活面
  * forge/progress 两链零耦合，消费以账面为准）。
@@ -1131,7 +1131,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         ...(input.docsRoot !== undefined ? { docsRoot: input.docsRoot } : {}),
         takeoverSessions: new Set<string>(), // 接管集（登记绑定——remove 随之蒸发）
       };
-      // 事件日志容器目录直记（bug a93c1277——logs/{slug}.jsonl 归属记忆）：循环径不经
+      // 事件日志容器目录直记（bug a93c1277——{slug}/dispatch.jsonl 归属记忆）：循环径不经
       // tool 执行点，prepare 的 cwd 缝不可达——启动时点以 containerDirOf 解析直记；
       // 缝缺席 = 零直记零行为变化。
       if (deps.events !== undefined && deps.containerDirOf !== undefined) {

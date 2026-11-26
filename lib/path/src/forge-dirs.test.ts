@@ -1,8 +1,7 @@
-// ForgeDirs 基座单测：本体十键、拓扑解析、成环/缺依赖/撞名、参数校验（spec §2.1、§2.2）
+// ForgeDirs 基座单测：基座键、插件键依赖链解析、成环/缺依赖/撞名、参数校验（spec §2.1、§2.2）
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { deriveDirName } from './derive-dir.js'
-import { forgeDirOfWorkspace } from './dir-segments.js'
 import {
   FORGE_BASE_DIR_ENTRIES,
   FORGE_DIR_KEYS,
@@ -24,67 +23,67 @@ const PROJECT_KEY = deriveDirName(SOURCES.projectRoot)
 const own = (source: string, entries: Record<string, unknown>): ForgeDirDeclaration =>
   ({ source, entries }) as unknown as ForgeDirDeclaration
 
-describe('ForgeDirs 本体键（AC1——十个键，不包含其它键）', () => {
-  it('键集恰为七个无参 + 三个带参', () => {
-    expect([...FORGE_DIR_KEYS].sort()).toEqual(
-      [
-        'forge.home',
-        'forge.db',
-        'forge.project_runtime_dir',
-        'forge.task_runtime_dir',
-        'forge.docs_root',
-        'forge.tmp',
-        'forge.worktrees',
-        'forge.spec_dir',
-        'forge.dossier_dir',
-        'forge.task_logs_dir',
-      ].sort(),
-    )
+describe('ForgeDirs 基座键', () => {
+  it('键集恰为 forge.home 一个（业务目录键归各插件声明）', () => {
+    expect(FORGE_DIR_KEYS).toEqual(['forge.home'])
+    expect(Object.keys(FORGE_BASE_DIR_ENTRIES)).toEqual(['forge.home'])
   })
 
-  it('依赖关系符合键表：db/project_runtime_dir 依赖 forge.home；task_runtime_dir 依赖 project_runtime_dir + projectRoot', () => {
+  it('forge.home 依赖 dshHome', () => {
     const declared = resolveForgeDirs([own('lib/path', { ...BASE })], SOURCES)
     expect(declared['forge.home']).toBe(join(SOURCES.dshHome, 'forge'))
-    expect(declared['forge.db']).toBe(join(SOURCES.dshHome, 'forge', 'db'))
-    expect(declared['forge.project_runtime_dir']).toBe(join(SOURCES.dshHome, 'forge', 'projects'))
-    expect(declared['forge.task_runtime_dir']).toBe(
-      join(SOURCES.dshHome, 'forge', 'projects', PROJECT_KEY),
-    )
-    expect(declared['forge.docs_root']).toBe(join(SOURCES.workspaceRoot, '.forge', 'docs'))
-    expect(declared['forge.tmp']).toBe(join(SOURCES.workspaceRoot, '.forge', 'tmp'))
-    expect(declared['forge.worktrees']).toBe(join(SOURCES.workspaceRoot, '.forge', 'worktrees'))
+  })
+})
+
+describe('插件键经注册表解析（基座键 + 插件声明依赖链）', () => {
+  /** 样例插件声明：项目目录 → spec 运行时目录 → 任务目录（三级依赖链 + 带参） */
+  const SAMPLE = {
+    'sample.project_dir': {
+      description: '样例项目目录',
+      deps: ['forge.home', 'projectRoot'],
+      resolve: (deps: Record<string, string>) => join(deps['forge.home'], 'projects', deriveDirName(deps.projectRoot)),
+    },
+    'sample.runtime_dir': {
+      description: '样例运行时目录',
+      deps: ['sample.project_dir'],
+      params: ['slug'],
+      resolve: (deps: Record<string, string>, params: Record<string, string>) => join(deps['sample.project_dir'], params.slug!),
+    },
+    'sample.task_dir': {
+      description: '样例任务目录',
+      deps: ['sample.runtime_dir'],
+      params: ['slug', 'localId'],
+      resolve: (deps: Record<string, string>, params: Record<string, string>) => join(deps['sample.runtime_dir'], params.localId!),
+    },
+  }
+
+  it('无参形态（forge_dirs）：带参条目参数缺席时跳过，基座键与无参插件键逐键解析', () => {
+    const declared = resolveForgeDirs([own('lib/path', { ...BASE }), own('dirKeys.sample', SAMPLE)], SOURCES)
+    expect(Object.keys(declared)).toEqual(['forge.home', 'sample.project_dir'])
+    expect(declared['sample.project_dir']).toBe(join(SOURCES.dshHome, 'forge', 'projects', PROJECT_KEY))
   })
 
-  it('带参目录：spec_dir(slug)、dossier_dir(slug+localId)、task_logs_dir(slug+localId)', () => {
+  it('带参形态（forge_resolve_path）：依赖链上每级取被依赖条目的解析结果', () => {
     const slug = 'forge-dirs-unification'
     const localId = '1.1'
-    const declared = resolveForgeDirs([own('lib/path', { ...BASE })], SOURCES, { slug, localId })
-    expect(declared['forge.spec_dir']).toBe(join(SOURCES.workspaceRoot, '.forge', 'specs', slug))
-    expect(declared['forge.dossier_dir']).toBe(
-      join(SOURCES.workspaceRoot, '.forge', 'specs', slug, 'issues', localId),
+    const declared = resolveForgeDirs(
+      [own('lib/path', { ...BASE }), own('dirKeys.sample', SAMPLE)],
+      SOURCES,
+      { slug, localId },
     )
-    expect(declared['forge.task_logs_dir']).toBe(
-      join(SOURCES.dshHome, 'forge', 'projects', PROJECT_KEY, 'logs', slug, localId),
-    )
+    const projectDir = join(SOURCES.dshHome, 'forge', 'projects', PROJECT_KEY)
+    expect(declared['sample.runtime_dir']).toBe(join(projectDir, slug))
+    expect(declared['sample.task_dir']).toBe(join(projectDir, slug, localId))
   })
 
-  it('dossier_dir 与 task-loop 结算回收钩子落点逐字相同（bug 14e3a500——specs 替代 proposals）', () => {
-    const slug = 'forge-dirs-unification'
-    const localId = '7.2'
-    const declared = resolveForgeDirs([own('lib/path', { ...BASE })], SOURCES, { slug, localId })
-    // 回收钩子同形派生：join(forgeDirOfWorkspace(ws), 'specs', slug, 'issues', localId)
-    const hookDir = join(forgeDirOfWorkspace(SOURCES.workspaceRoot), 'specs', slug, 'issues', localId)
-    expect(declared['forge.dossier_dir']).toBe(hookDir)
+  it('插件键依赖的键未被任何声明方提供：点名缺席的键（声明集不完整不静默）', () => {
+    expect(() => resolveForgeDirs([own('lib/path', { ...BASE }), own('dirKeys.sample', { 'sample.task_dir': SAMPLE['sample.task_dir'] })], SOURCES, { slug: 's', localId: '1' })).toThrow(
+      /依赖缺席.*sample\.runtime_dir/,
+    )
   })
 })
 
 describe('运行期注册表', () => {
-  it('无参形态调用（forge_dirs）：参数缺席时带参条目跳过', () => {
-    const declared = resolveForgeDirs([own('lib/path', { ...BASE })], SOURCES)
-    expect(declared['forge.docs_root']).toContain('.forge')
-    expect('forge.spec_dir' in declared).toBe(false)
-  })
-
   it('成环报错并点名环上全部键，不返回路径', () => {
     const loop = {
       'custom.a': {
@@ -135,11 +134,20 @@ describe('运行期注册表', () => {
   })
 
   it('参数不合法：拒绝并点名不合法的参数', () => {
+    const PARAMED = {
+      'custom.dir': {
+        description: '带参样例',
+        deps: ['workspaceRoot'],
+        params: ['slug', 'localId'],
+        resolve: (deps: Record<string, string>, params: Record<string, string>) =>
+          join(deps.workspaceRoot, params.slug!, params.localId!),
+      },
+    }
     expect(() =>
-      resolveForgeDirs([own('lib/path', { ...BASE })], SOURCES, { slug: '../evil', localId: '1.1' }),
+      resolveForgeDirs([own('p', PARAMED)], SOURCES, { slug: '../evil', localId: '1.1' }),
     ).toThrow(/slug/)
     expect(() =>
-      resolveForgeDirs([own('lib/path', { ...BASE })], SOURCES, { slug: 's', localId: 'a/b' }),
+      resolveForgeDirs([own('p', PARAMED)], SOURCES, { slug: 's', localId: 'a/b' }),
     ).toThrow(/localId/)
   })
 })

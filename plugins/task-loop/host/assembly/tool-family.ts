@@ -339,7 +339,7 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     // files/evidenceDebt 全语义载荷；缺席 = 载荷面降级）
     settlements,
     // 事件日志链透传（bug a93c1277）：tasksHome 注入时 forgeEvents（sink）+ containerDirOf
-    // 同注——循环里程碑/台账经 bus→监听器落盘 logs/{slug}.jsonl；缺席 = 零透传零行为变化。
+    // 同注——循环里程碑/台账经 bus→监听器落盘 {slug}/dispatch.jsonl；缺席 = 零透传零行为变化。
     ...(services.forgeEvents !== undefined ? { events: services.forgeEvents } : {}),
     ...(services.forgeEvents !== undefined && services.containerDirOf !== undefined ? { containerDirOf: services.containerDirOf } : {}),
     ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
@@ -365,7 +365,7 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
   ];
   // 会话 → 容器目录记忆缝（bug a93c1277）：forgeEvents 在场时逐员包 execute——执行前
   // prepare（exec 会话 cwd → deriveTaskStoreDir 派生容器目录记忆）。worker 会话继承父
-  // cwd，同链命中同一容器目录（logs/{slug}.jsonl 归属不断流）；缺席 = 零包装零行为变化。
+  // cwd，同链命中同一容器目录（{slug}/dispatch.jsonl 归属不断流）；缺席 = 零包装零行为变化。
   const forgeEvents = services.forgeEvents;
   const tools: readonly TaskToolDefinition[] =
     forgeEvents === undefined

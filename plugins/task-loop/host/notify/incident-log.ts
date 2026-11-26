@@ -2,7 +2,7 @@
 // 一次问题事件一个子文件夹：`logs/<slug>/<taskKey>/<序号>-<事件类型>/`（如 001-blocked/、
 // 002-worker-aborted/——自增序号+事件类型后缀自明）。同一事件的 error.log（原因/错误全文）/
 // settlement.json（结算载荷）/triage.md（处置记录）内聚，多轮问题互不混档；多模态可扩展。
-// 路径与既有容器事件流同根同维度（#26——{容器目录}/logs/ 下与 logs/<slug>.jsonl 并存，
+// 路径与既有容器事件流同根同维度（#26——任务循环运行时目录 {容器目录}/<slug>/ 下与 dispatch.jsonl 并存，
 // 零新增中间层；FORGE_LOGS_DIR 单源复用）。叙述面只携带本面返回的事件子文件夹**绝对路径**
 // （forge-paths taskLogs 目的地解析器拼接——forge.task_home 绝对锚，无裸 logs/ 相对形态；
 // notification-samples.md 详情行口径）；分级呈现三档 = 叙述摘要 /
@@ -59,7 +59,7 @@ export interface IncidentStoreDeps {
   /**
    * taskLogs 目录解析缝（host-dirs taskLogsDirOf 同形——迁移注入面：本插件零 @dsh-forge/
    * project 运行期依赖，目录事实经装配方注入；缺席 = node:path join 结构等价缺省——
-   * join(taskHome, 'logs', slug, taskKey)，与 forge.task_logs_dir 原生拼写逐字节等价）。
+   * join(taskHome, slug, taskKey)，与 task_loop.task_dir 原生拼写逐字节等价）。
    */
   taskLogsDirOf?(taskHome: string, slug: string, taskKey: string): string;
 }

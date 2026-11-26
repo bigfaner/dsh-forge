@@ -108,16 +108,16 @@ describe('ForgeDirsRemote.facts（fix-1——core 缺席插件自装配：worksp
       dirFacts: () =>
         ({
           listAnchors: async () => [
-            { dirKey: 'forge.docs_root', dir: 'dir:forge.docs_root', description: 'd' },
-            { dirKey: 'forge.worktrees', dir: 'dir:forge.worktrees', description: 'd' },
+            { dirKey: 'project.docs_dir', dir: 'dir:project.docs_dir', description: 'd' },
+            { dirKey: 'project.worktrees_dir', dir: 'dir:project.worktrees_dir', description: 'd' },
           ],
         }) as never,
     })
     const rows = await svc.facts({ projectId: 'p-1' })
-    expect(rows.map((r) => r.dirKey)).toEqual(['workspaceRoot', 'forgeDir', 'forge.docs_root', 'forge.worktrees'])
+    expect(rows.map((r) => r.dirKey)).toEqual(['workspaceRoot', 'forgeDir', 'project.docs_dir', 'project.worktrees_dir'])
     expect(rows[0]).toEqual({ dirKey: 'workspaceRoot', dir: WS, description: '项目工作区根' })
     expect(rows[1]).toEqual({ dirKey: 'forgeDir', dir: `${WS}\\.forge`, description: '本工作区 .forge 目录' })
-    expect(rows[2]).toEqual({ dirKey: 'forge.docs_root', dir: 'dir:forge.docs_root', description: 'd' })
+    expect(rows[2]).toEqual({ dirKey: 'project.docs_dir', dir: 'dir:project.docs_dir', description: 'd' })
   })
 
   it('键表行 = dirFacts 全量下发（零写死键清单）；键表解析抛 = 键表段 fail-soft 留空不阻断项目行', async () => {

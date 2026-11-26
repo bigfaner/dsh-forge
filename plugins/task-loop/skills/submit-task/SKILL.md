@@ -89,7 +89,7 @@ ac_results: [
 `result=blocked`，`reason` 带具体原因，按简报的失败分诊归类（挺过约 3 次内联尝试的简单/瞬时问题，或复杂/复发问题——不要循环）。组织方式：你尝试了什么、什么失败了、拿什么证据（命令输出摘录、错误文本）。结算按固定三步次序执行：
 
 1. **先提交**——把过质量门的完成部分 git commit（消息带任务键；暂存与提交规范同上「提交规范」节，不含过程文件）；
-2. **再写 resume.md**——把 {forge.task_logs_dir}/resume.md 覆盖写为固定三段——「已完成（含 commit hash）／进行中／待办」，仅保留最新状态（commit hash 供接手 worker 从 hash diff 续跑不重做）；
+2. **再写 resume.md**——把 {task_loop.task_dir}/resume.md 覆盖写为固定三段——「已完成（含 commit hash）／进行中／待办」，仅保留最新状态（commit hash 供接手 worker 从 hash diff 续跑不重做）；
 3. **后结算**——`result=blocked`，`reason` 附 commit hash 与剩余范围描述。
 
 **不自派 fix 任务**：任务派生权限归主会话与循环处置层——blocked 只如实结算（原因+证据），后继 fix 任务由处置方派生。执行会话调用 `addTask` 会被拒（`ERR_WORKER_ADDTASK_DENIED`）；这不是需要绕行的错误，是流程边界——正确动作就是本节的 blocked 结算。

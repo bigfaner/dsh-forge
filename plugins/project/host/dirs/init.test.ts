@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FORGE_DIR_KEYS } from './anchors.js'
+import { PROJECT_DIR_KEYS } from './project-entries.js'
 import {
   createForgeDirInitHandler,
   declaredDeclarationsOf,
@@ -51,8 +52,8 @@ describe('forge-dir-init handler（workspace-artifact-governance §2.5）', () =
     expect(FORGE_DIR_INIT_NAME).toBe('forge-dir-init')
   })
 
-  it('声明拉取缝：reflect 缺席 = 仅本体声明（键序 = FORGE_DIR_KEYS）', () => {
-    expect(declaredDeclarationsOf({}).map((d) => Object.keys(d.entries))).toEqual([FORGE_DIR_KEYS])
+  it('声明拉取缝：reflect 缺席 = 仅内置声明（基座键序 = FORGE_DIR_KEYS，其后 project 四键）', () => {
+    expect(declaredDeclarationsOf({}).map((d) => Object.keys(d.entries))).toEqual([FORGE_DIR_KEYS, [...PROJECT_DIR_KEYS]])
   })
 
   it('分区与 gitignore 条目由键表派生：gitignoreEntriesOf 排除 docs 文档树', () => {

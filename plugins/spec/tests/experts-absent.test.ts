@@ -15,6 +15,7 @@ import {
   type ForgeSpecsService,
 } from "../host/domain/specs/service.js";
 import { FORGE_SPECS_SERVICE_KEY } from "../shared/contract-constants.js";
+import { SPEC_DIR_KEYS_SERVICE_NAME } from "../host/forge-dir-entries.js";
 
 const CWD = "Z:\\project\\demo";
 
@@ -147,7 +148,7 @@ describe("装配面 expert-squad 缺席（experts 服务缺席 = 单装常态）
         expect(expertWarns).toHaveLength(1);
         expect(expertWarns[0]!.level).toBe("warn");
         // 本体零影响：域服务 provide 与工具族注册不受 experts 缺席牵连
-        expect(provided.map((p) => p.name)).toEqual([FORGE_SPECS_SERVICE_KEY]);
+        expect(provided.map((p) => p.name)).toEqual([SPEC_DIR_KEYS_SERVICE_NAME, FORGE_SPECS_SERVICE_KEY]);
         expect(registered.length).toBeGreaterThan(0);
       } finally {
         dispose();

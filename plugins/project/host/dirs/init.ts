@@ -42,9 +42,9 @@ export interface DirCommandResult {
 /** 指令名（无 input 描述符——无参指令，composer 不展示占位） */
 export const FORGE_DIR_INIT_NAME = 'forge-dir-init'
 
-/** init/audit 共用声明缝（同一声明拉取——reflect 现查 + 降级 warn；缺席 = 仅本体键集） */
+/** init/audit 共用声明缝（同一声明拉取——reflect 现查 + 降级 warn；缺席 = 仅内置声明集） */
 export interface ForgeDirsCommandDeps {
-  /** reflect 现查取法（缺席 = 声明拉取缝零贡献——仅本体十条） */
+  /** reflect 现查取法（缺席 = 声明拉取缝零贡献——仅内置声明：基座 + project） */
   readonly reflectOf?: () => ReflectDeclarePullFace | undefined
   /** 降级诊断发射缝（声明拉取/键解析降级 warn——缺席零发射，不直落 console） */
   readonly onDiag?: DirKeysPullDiagFace

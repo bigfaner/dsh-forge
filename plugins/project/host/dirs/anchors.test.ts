@@ -16,6 +16,7 @@ import {
   type DirKeysPullDiagFace,
   type ReflectDeclarePullFace,
 } from './anchors.js'
+import { PROJECT_DIR_ENTRIES, PROJECT_DIR_KEYS } from './project-entries.js'
 
 const WS = 'Z:\\ws\\proj'
 const SOURCES: ForgeDirSources = { dshHome: 'X:\\dsh-home', projectRoot: 'Z:\\ws\\proj-main', workspaceRoot: WS }
@@ -40,40 +41,27 @@ function diagSpy(): { calls: { level: string; event: string; message: string }[]
   }) as never
 }
 
-describe('基座声明（lib/path 单源直通）', () => {
-  it('本体十条键序 pin（FORGE_DIR_KEYS 单源——含 forge.project_runtime_dir/forge.task_runtime_dir 改名）', () => {
-    expect(FORGE_DIR_KEYS).toEqual([
-      'forge.home',
-      'forge.db',
-      'forge.project_runtime_dir',
-      'forge.task_runtime_dir',
-      'forge.docs_root',
-      'forge.tmp',
-      'forge.worktrees',
-      'forge.spec_dir',
-      'forge.dossier_dir',
-      'forge.task_logs_dir',
-    ])
+describe('内置声明（lib/path 基座 + project 条目）', () => {
+  it('基座键仅 forge.home；project 四键登记序 pin', () => {
+    expect(FORGE_DIR_KEYS).toEqual(['forge.home'])
     expect(FORGE_DIRS_BASE_DECLARATION.source).toContain('forge')
+    expect(Object.keys(PROJECT_DIR_ENTRIES)).toEqual([...PROJECT_DIR_KEYS])
   })
 
   it('同一组注入事实驱动注册表与解析器：逐键输出相同（AC 单测同源判据）', () => {
     const declarations = mergeDeclarations([knowledgeDeclaration])
     const resolved = resolveForgeDirs(declarations, SOURCES)
-    // 无参条目 = 本体七个无参键 + 第三方键（带参条目参数缺席跳过——无参形态）
-    const parameterless = ['forge.home', 'forge.db', 'forge.project_runtime_dir', 'forge.task_runtime_dir', 'forge.docs_root', 'forge.tmp', 'forge.worktrees', 'knowledge.root']
+    // 无参条目 = 基座键 + project 四键 + 第三方键（project 条目内置并入，不走 dirKeys.* 拉取）
+    const parameterless = ['forge.home', 'project.runtime_dir', 'project.docs_dir', 'project.tmp_dir', 'project.worktrees_dir', 'knowledge.root']
     expect(Object.keys(resolved)).toEqual(parameterless)
-    const taskRuntime = `${SOURCES.dshHome}\\forge\\projects\\${deriveDirName(SOURCES.projectRoot)}`
+    const projectRuntime = `${SOURCES.dshHome}\\forge\\projects\\${deriveDirName(SOURCES.projectRoot)}`
     expect(resolved['forge.home']).toBe('X:\\dsh-home\\forge')
-    expect(resolved['forge.db']).toBe('X:\\dsh-home\\forge\\db')
-    expect(resolved['forge.project_runtime_dir']).toBe('X:\\dsh-home\\forge\\projects')
-    expect(resolved['forge.task_runtime_dir']).toBe(taskRuntime)
-    expect(resolved['forge.docs_root']).toBe(`${WS}\\.forge\\docs`)
-    expect(resolved['forge.tmp']).toBe(`${WS}\\.forge\\tmp`)
-    expect(resolved['forge.worktrees']).toBe(`${WS}\\.forge\\worktrees`)
-    expect(resolved['forge.spec_dir']).toBeUndefined() // 带参条目参数缺席跳过（无参形态）
+    expect(resolved['project.runtime_dir']).toBe(projectRuntime)
+    expect(resolved['project.docs_dir']).toBe(`${WS}\\.forge\\docs`)
+    expect(resolved['project.tmp_dir']).toBe(`${WS}\\.forge\\tmp`)
+    expect(resolved['project.worktrees_dir']).toBe(`${WS}\\.forge\\worktrees`)
     // declaredDirKeys/declaredEntryOf 与解析器同源同键序
-    expect(declaredDirKeys(declarations)).toEqual([...FORGE_DIR_KEYS, 'knowledge.root'])
+    expect(declaredDirKeys(declarations)).toEqual([...FORGE_DIR_KEYS, ...PROJECT_DIR_KEYS, 'knowledge.root'])
     expect(declaredEntryOf(declarations, 'knowledge.root')!.description).toBe(knowledgeRootEntry.description)
     expect(declaredEntryOf(declarations, 'forge.nope')).toBeUndefined()
   })
@@ -91,7 +79,11 @@ describe('基座声明（lib/path 单源直通）', () => {
       entries: { [name]: { description: 'x', deps: deps as never, resolve: () => 'x' } },
     })
     expect(() => resolveForgeDirs([cycle('a.key', ['b.key']), cycle('b.key', ['a.key'])], SOURCES)).toThrow(/依赖成环/)
-    expect(() => resolveForgeDirs([FORGE_DIRS_BASE_DECLARATION], SOURCES, { slug: '../evil' })).toThrow(/slug/)
+    const paramed: ForgeDirDeclaration = {
+      source: 'dirKeys.paramed',
+      entries: { 'paramed.dir': { description: 'x', deps: ['workspaceRoot'], params: ['slug', 'localId'], resolve: () => 'x' } },
+    }
+    expect(() => resolveForgeDirs([FORGE_DIRS_BASE_DECLARATION, paramed], SOURCES, { slug: '../evil' })).toThrow(/slug/)
   })
 })
 
@@ -178,7 +170,7 @@ describe('工作区分区派生（workspacePartitionsOf——init/audit 键表�
     expect(onDiag.calls).toHaveLength(0)
   })
 
-  it('解析失败 = warn 降级本体键集（分区仍派生，不炸消费面）', () => {
+  it('解析失败 = warn 降级内置声明集（基座 + project——分区仍派生，不炸消费面）', () => {
     const broken: ForgeDirDeclaration = {
       source: 'dirKeys.broken',
       entries: { 'broken.key': { description: 'x', deps: ['missing.dep'] as never, resolve: () => 'x' } },

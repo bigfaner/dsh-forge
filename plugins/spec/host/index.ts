@@ -32,6 +32,7 @@ import {
 } from "./assembly/typert-remotes.js"
 import { CORDIS_ROOT } from "@dsh-forge/lib-util";
 import type { TransitionActor } from "./db/row-types.js";
+import { SPEC_DIR_ENTRIES, SPEC_DIR_KEYS_SERVICE_NAME } from "./forge-dir-entries.js";
 import { createForgeToolServices } from "./domain/specs/tool-service.js";
 import type { SpecContextFace } from "./faces.js";
 import {
@@ -126,6 +127,28 @@ function provideSpecsService(ctx: unknown, services: SpecAssembly, diag: (line: 
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause)
     diag(`[spec] 域服务 provide 失败——降级不阻载：${message}`, "error")
+  }
+}
+
+/**
+ * spec 目录键声明登记（根 scope `reflect.provide('dirKeys.spec', entries)`——project 汇总
+ * 工具 forge_dirs / forge_resolve_path 查询时枚举 dirKeys.* 现取；plugins/knowledge 同款）。
+ * reflect/provide 缺席或抛 = 声明零生效零抛（fail-soft，不阻载本插件）。
+ * @returns 注销器（未登记时 no-op）——并入插件 disposer。
+ */
+function declareSpecDirKeys(ctx: unknown, diag: (line: string, level?: DiagLevel) => void): () => void {
+  const reflect = (ctx as SpecPluginCtx).reflect
+  if (typeof reflect?.provide !== "function") {
+    diag("[spec] ctx.reflect.provide 缺席——目录键 spec.dir / spec.dossier_dir 未登记（forge_dirs 两键缺席，降级不阻载）", "warn")
+    return () => {}
+  }
+  try {
+    const dispose = reflect.provide(SPEC_DIR_KEYS_SERVICE_NAME, SPEC_DIR_ENTRIES)
+    return typeof dispose === "function" ? () => void dispose() : () => {}
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause)
+    diag(`[spec] 目录键声明登记失败（spec.dir / spec.dossier_dir 零生效零抛）：${message}`, "warn")
+    return () => {}
   }
 }
 
@@ -328,6 +351,8 @@ const specCordisPlugin: SpecCordisPlugin = (ctx: unknown, config: SpecHostConfig
   registerBuiltinExpertsRoot(ctx, diag)
   // 提示段注册恒在（A1 自含——1.8 面零变化；段注册无条件、text 运行期按装配求值）
   const disposePromptSections = registerSpecPromptSectionsFromCordis(ctx, config)
+  // 目录键声明登记（spec.dir / spec.dossier_dir——纯声明不依赖 db，恒登记）
+  const disposeDirKeys = declareSpecDirKeys(ctx, diag)
   // 单装缺省装配（home 缺席/db 打开失败 = 整体降级零 provide）
   const services = assembleSpecServices(config, diag)
   let disposeToolFamily: (() => void) | undefined
@@ -337,11 +362,12 @@ const specCordisPlugin: SpecCordisPlugin = (ctx: unknown, config: SpecHostConfig
     registerSpecTypertFromCordis(ctx, services, diag)
   }
   return () => {
-    // 工具族注销（官方 tools 缝 disposer 全量回收）+ 提示段摘除 + 库句柄关闭
+    // 工具族注销（官方 tools 缝 disposer 全量回收）+ 目录键声明撤回 + 提示段摘除 + 库句柄关闭
     disposeToolFamily?.()
+    disposeDirKeys()
     disposePromptSections()
     services?.dispose()
-    diag("[spec] 插件卸载收口完成（工具族/提示段/db 句柄）", "info")
+    diag("[spec] 插件卸载收口完成（工具族/目录键声明/提示段/db 句柄）", "info")
   }
 }
 
