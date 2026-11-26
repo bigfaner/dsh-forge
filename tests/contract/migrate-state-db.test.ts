@@ -9,14 +9,14 @@
 //   ⑤ source_task_id 逐条核验失败 → 人工清单（原值照搬，禁置 NULL）；
 //   ⑥ 幂等重跑安全（marker + NOT EXISTS——计数零漂移）；
 //   ⑦ forge-workspaces 搬迁：staged copy + 文件数/字节/哈希校验 + 原目录改名保留 + 同卷断言。
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from '@dsh-forge/lib-db'
 import { afterEach, describe, expect, it } from 'vitest'
-import { deriveDirName } from '../../lib/path/src/index.js'
+import { deriveDirName, projectKeyOf } from '../../lib/path/src/index.js'
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url))
 const SCRIPT = join(REPO_ROOT, 'scripts', 'migrate-state-db.mjs')
@@ -267,5 +267,131 @@ describe('migrate-state-db.mjs（plugin-project 1.18）', () => {
     expect(row.recurrence_of).toBeNull()
     expect(row.container_slug).toBeNull()
     conn.close()
+  })
+})
+
+// ════════ --forge-dirs 段（forge-dirs-unification §2.8——真脚本子进程 + 临时目录夹具） ════════
+
+/** 临时 git 项目（主检出 + worktree——projectKey 归拢需真实 git worktree list 现查）。 */
+function buildGitProject(): { main: string; wt: string } {
+  const main = mkdtempSync(join(tmpdir(), 'migrate-fd-main-'))
+  execFileSync('git', ['init'], { cwd: main, encoding: 'utf8' })
+  execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '--allow-empty', '-m', 'init'], { cwd: main, encoding: 'utf8' })
+  const wt = join(main, '.forge', 'worktrees', 'wt1')
+  mkdirSync(dirname(wt), { recursive: true })
+  execFileSync('git', ['worktree', 'add', wt, '-b', 'wt1'], { cwd: main, encoding: 'utf8' })
+  return { main, wt }
+}
+
+/** forge-dirs 段夹具：experts 旧目录 + forge/projects 下 worktree 派生目录 + projectKey 目录同名冲突件 + knowledge.db 哨兵。 */
+function buildForgeDirsHome(): { home: string; mainKey: string; wtDirName: string } {
+  const home = tmpHome()
+  const { main, wt } = buildGitProject()
+  const mainReal = realpathSync.native(main)
+  const wtReal = realpathSync.native(wt)
+  const mainKey = projectKeyOf(mainReal)
+  const wtDirName = deriveDirName(wtReal)
+  mkdirSync(join(home, 'experts', 'profiles'), { recursive: true })
+  writeFileSync(join(home, 'experts', 'profiles', 'alice.json'), '{"name":"alice"}', 'utf8')
+  mkdirSync(join(home, 'forge', 'projects', wtDirName, 'logs'), { recursive: true })
+  writeFileSync(join(home, 'forge', 'projects', wtDirName, 'logs', 'run-1.txt'), 'from-worktree', 'utf8')
+  // projectKey 目录预置同名件 → 冲突判例（不覆盖不跳过：被并入那份改名 .conflict-<时间戳>）
+  mkdirSync(join(home, 'forge', 'projects', mainKey, 'logs'), { recursive: true })
+  writeFileSync(join(home, 'forge', 'projects', mainKey, 'logs', 'run-1.txt'), 'from-main', 'utf8')
+  mkdirSync(join(home, 'knowledge'), { recursive: true })
+  writeFileSync(join(home, 'knowledge', 'knowledge.db'), 'knowledge-bytes', 'utf8')
+  // registry 快照：worktree 目录名 → 工作树路径（真实注册表口径同 state.db projects 行）
+  writeFileSync(join(home, 'registry.json'), JSON.stringify([{ id: 'ws-wt1', path: wtReal }]), 'utf8')
+  return { home, mainKey, wtDirName }
+}
+
+function runForgeDirsScript(home: string, extra: readonly string[] = []): { status: number; stdout: string; stderr: string } {
+  const r = spawnSync(
+    process.execPath,
+    [SCRIPT, '--home', home, '--forge-dirs', '--registry', join(home, 'registry.json'), '--skip-process-check', ...extra],
+    { encoding: 'utf8', cwd: REPO_ROOT },
+  )
+  return { status: r.status ?? -1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+}
+
+function readMarker(home: string): { items: Record<string, Record<string, unknown>> } {
+  return JSON.parse(readFileSync(join(home, 'forge', 'migrate-forge-dirs.json'), 'utf8'))
+}
+
+describe('migrate-state-db.mjs --forge-dirs 段（forge-dirs-unification §2.8）', () => {
+  it('⑨ experts 搬迁 + worktree 运行时目录并入 projectKey 目录 + 同名冲突改名 + knowledge.db 不动', () => {
+    const { home, mainKey, wtDirName } = buildForgeDirsHome()
+    const knowledgeBefore = readFileSync(join(home, 'knowledge', 'knowledge.db'), 'utf8')
+
+    const r = runForgeDirsScript(home)
+    expect(r.status).toBe(0)
+
+    // 完成标记：逐项记录 + 时间戳格式 YYYYMMDDTHHmmss
+    const marker = readMarker(home)
+    expect(marker.items['experts']).toMatchObject({ status: 'done' })
+    const step = `project-runtime:${wtDirName}`
+    expect(marker.items[step]).toMatchObject({ status: 'done', projectKey: mainKey, conflicts: 1 })
+    const ts = marker.items['experts']!.done_at as string
+    expect(ts).toMatch(/^[0-9]{8}T[0-9]{6}$/)
+    expect((marker.items[step]!.done_at as string)).toBe(ts)
+
+    // (a) experts 搬迁：目标在场、staged 已清、原目录改名保留
+    expect(readFileSync(join(home, 'forge', 'experts', 'profiles', 'alice.json'), 'utf8')).toBe('{"name":"alice"}')
+    expect(existsSync(join(home, 'experts'))).toBe(false)
+    expect(existsSync(join(home, 'experts.staged-migrate'))).toBe(false)
+    expect(readdirSync(home).filter((n) => n.startsWith('experts.pre-migrate-'))).toHaveLength(1)
+
+    // (b) 日志并入 projectKey 目录：目标同名件不覆盖；被并入那份改名 .conflict-<ts> 保留
+    const targetLogs = join(home, 'forge', 'projects', mainKey, 'logs')
+    expect(readFileSync(join(targetLogs, 'run-1.txt'), 'utf8')).toBe('from-main')
+    expect(readFileSync(join(targetLogs, `run-1.txt.conflict-${ts}`), 'utf8')).toBe('from-worktree')
+    expect(readdirSync(join(home, 'forge', 'projects')).filter((n) => n === `${wtDirName}.pre-migrate-${ts}`)).toHaveLength(1)
+    expect(existsSync(join(home, 'forge', 'projects', wtDirName))).toBe(false)
+
+    // 不处理 knowledge/knowledge.db
+    expect(readFileSync(join(home, 'knowledge', 'knowledge.db'), 'utf8')).toBe(knowledgeBefore)
+  })
+
+  it('⑩ 重跑安全：已完成项跳过（零新增改名 + 标记零漂移）', () => {
+    const { home } = buildForgeDirsHome()
+    expect(runForgeDirsScript(home).status).toBe(0)
+    const markerBefore = readFileSync(join(home, 'forge', 'migrate-forge-dirs.json'), 'utf8')
+    const homeEntries = readdirSync(home)
+    const projectsEntries = readdirSync(join(home, 'forge', 'projects'))
+
+    const r = runForgeDirsScript(home) // 重跑
+    expect(r.status).toBe(0)
+    expect(r.stdout).toContain('跳过')
+    expect(readFileSync(join(home, 'forge', 'migrate-forge-dirs.json'), 'utf8')).toBe(markerBefore)
+    expect(readdirSync(home)).toEqual(homeEntries)
+    expect(readdirSync(join(home, 'forge', 'projects'))).toEqual(projectsEntries)
+  })
+
+  it('⑪ 目标目录在场且无完成标记 → 拒绝执行并报错（不覆盖）', () => {
+    const { home } = buildForgeDirsHome()
+    mkdirSync(join(home, 'forge', 'experts'), { recursive: true })
+    writeFileSync(join(home, 'forge', 'experts', 'sentinel.txt'), 'keep-me', 'utf8')
+
+    const r = runForgeDirsScript(home)
+    expect(r.status).not.toBe(0)
+    expect(r.stderr).toContain('目标目录已在场且无完成标记')
+    expect(readFileSync(join(home, 'forge', 'experts', 'sentinel.txt'), 'utf8')).toBe('keep-me')
+    expect(existsSync(join(home, 'forge', 'migrate-forge-dirs.json'))).toBe(false)
+  })
+
+  it('⑫ 旧目录改名失败 → 中止且不删除任何目录（完成标记已在改名前写入）', () => {
+    const { home } = buildForgeDirsHome()
+    const stamp = '20260101T000000'
+    // 预置同名保留目录 → renameSync(experts → experts.pre-migrate-<stamp>) 必然失败（测试缝 --stamp）
+    mkdirSync(join(home, `experts.pre-migrate-${stamp}`), { recursive: true })
+
+    const r = runForgeDirsScript(home, ['--stamp', stamp])
+    expect(r.status).not.toBe(0)
+    // 不删除任何目录：旧目录原地留着（含数据）、staged 留在场、目标缺席
+    expect(readFileSync(join(home, 'experts', 'profiles', 'alice.json'), 'utf8')).toBe('{"name":"alice"}')
+    expect(existsSync(join(home, 'forge', 'experts.staged-migrate'))).toBe(true)
+    expect(existsSync(join(home, 'forge', 'experts'))).toBe(false)
+    // 完成标记在改名之前写入（写入后中断 → 重跑跳过，旧目录原地留着不丢数据）
+    expect(readMarker(home).items['experts']).toMatchObject({ status: 'done' })
   })
 })

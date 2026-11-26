@@ -78,6 +78,8 @@
 //        [--bundle] [--source <旧home>] [--home <桌面home>] [--skip-bundle-bugs] [--skip-bundle-tasks] [--skip-bundle-specs]
 //   bundle 一参速用（缺省目标 = %APPDATA%\dsh-desktop\harness，缺省源 = %APPDATA%\dsh-forge）：
 //   node scripts/migrate-state-db.mjs --bundle
+// forge-dirs 段（forge-dirs-unification §2.8——独立模式，一参即可跑；人工执行，执行前须关闭 dsh desktop）：
+//   node scripts/migrate-state-db.mjs --forge-dirs [--home <DSH_HOME>] [--registry <snapshot.json>] [--stamp <YYYYMMDDTHHmmss>]
 // 诊断：JSONL 追加 {home}/forge/db/project/migrate-state-db-diag.log（emitDiag 等价面——
 // 脚本态无 cordis ctx，落盘 JSONL + stdout；字段与 DIAG_EVENT 同形）。
 import { spawnSync } from 'node:child_process'
@@ -88,6 +90,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -99,6 +102,11 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import Database from '@dsh-forge/lib-db'
+// 归属键单源（lib/path——forge-dirs-unification §2.6）：projectKeyOf / resolveMainCheckoutRoot
+// 从构建产物 dist 引入（脚本态纯 node 无法加载 TS src——node 类型剥离不重写 .js 说明符），
+// dist = lib/path/src 的 tsc 产物（pnpm -C lib/path build），键派生算法与 src 单源同锚。
+import { projectKeyOf as libProjectKeyOf } from '../lib/path/dist/index.js'
+import { resolveMainCheckoutRoot } from '../lib/path/dist/project-root.js'
 
 // ── SQLite 驱动（1.40：better-sqlite3 退役——node:sqlite 适配层 @dsh-forge/lib-db
 //    Database，transaction/readonly/fileMustExist 形状兼容，零原生模块） ──
@@ -136,6 +144,8 @@ function parseArgs(argv) {
     skipBundleBugs: false,
     skipBundleTasks: false,
     skipBundleSpecs: false,
+    forgeDirs: false,
+    stamp: null,
   }
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i]
@@ -151,6 +161,8 @@ function parseArgs(argv) {
     else if (a === '--skip-bundle-bugs') args.skipBundleBugs = true
     else if (a === '--skip-bundle-tasks') args.skipBundleTasks = true
     else if (a === '--skip-bundle-specs') args.skipBundleSpecs = true
+    else if (a === '--forge-dirs') args.forgeDirs = true
+    else if (a === '--stamp') args.stamp = argv[++i]
     else throw new Error(`未知参数：${a}`)
   }
   args.source = args.source ?? join(homedir(), 'AppData', 'Roaming', 'dsh-forge')
@@ -1189,6 +1201,7 @@ function openReadonly(file) {
 export function main(argv) {
   const args = parseArgs(argv)
   const nowIso = new Date().toISOString()
+  if (args.forgeDirs) return runForgeDirsMigration(args)
   if (args.bundle) return runBundleMigration(args, nowIso)
   mkdirSync(args.projectDbDir, { recursive: true })
   diagFile = join(args.projectDbDir, 'migrate-state-db-diag.log')
@@ -1690,6 +1703,256 @@ export function runBundleMigration(args, nowIso) {
     tasks: summary.tasks?.skipped ? 'skipped' : `moved=${summary.tasks.moved} feature=${summary.tasks.skippedFeature} project=${summary.tasks.skippedProject} dup=${summary.tasks.skippedDuplicate}`,
     specs: summary.specs?.skipped ? 'skipped' : `moved=${summary.specs.moved} terminal=${summary.specs.skippedTerminal} project=${summary.specs.skippedProject} conflict=${summary.specs.skippedConflict}`,
   })}`)
+  return summary
+}
+
+// ════════ forge-dirs 段（forge-dirs-unification §2.8——--forge-dirs 门控启用，独立模式） ════════
+// 人工执行；执行前须关闭 dsh desktop（observeHostProcesses 留痕不阻断）。处理两样：
+//   (a) {home}/experts → {home}/forge/experts（staged copy + 校验 + 原目录改名保留，做法同 ③ relocateWorkspaces）；
+//   (b) {home}/forge/projects/ 下按工作树路径派生命名（{flatten}@{hash8}）的运行时目录，
+//       日志并入以项目 projectKey 命名的目录——projectKey = lib/path projectKeyOf 对主检出路径
+//       （git worktree list 现查归拢 resolveMainCheckoutRoot + realpath 规范化）算出。
+// 规则（Spec §2.8 规则表）：
+//   · 完成标记 = 文件 {home}/forge/migrate-forge-dirs.json，逐项记录已完成的搬迁；
+//   · 时间戳格式 YYYYMMDDTHHmmss（本地时间；--stamp 显式覆盖为测试缝）；
+//   · 完成标记在旧目录改名之前写入——写入后中断重跑跳过该项，旧目录原地留着不丢数据；
+//   · 旧目录成功后改名 原目录名.pre-migrate-<时间戳> 保留，不删除；
+//   · 重跑：已完成项跳过；目标目录在场且无完成标记 → 拒绝执行并报错；
+//   · 改名失败 → 中止，不删除任何目录；
+//   · 日志同名冲突：不覆盖也不跳过——被并入的那份改名 原文件名.conflict-<时间戳> 保留，数量写入标记文件；
+//   · 不处理 {home}/knowledge/knowledge.db（旧库 291 条已全在现行库）。
+// 工作树路径解析链（目录名 → 工作树路径）：state.db projects 行映射 → --registry 快照
+// （deriveDirName 同算法键对齐）→ flatten 反构重建（含 '-' 路径名歧义，以目录在场性裁决）。
+// 归属键单源：projectKeyOf / resolveMainCheckoutRoot 从 lib/path 构建产物 dist 引入（脚本态
+// 纯 node 无法加载 TS src——node 类型剥离不重写 .js 说明符；dist = src 的 tsc 产物）。
+
+/** 时间戳 YYYYMMDDTHHmmss（本地时间；--stamp 测试缝显式覆盖）。 */
+function forgeDirsStamp(override) {
+  if (override !== null) return override
+  const d = new Date()
+  const p2 = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}T${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`
+}
+
+/** realpath 规范化（真实路径与大小写——projectKey 大小写敏感；不可达原样返回）。 */
+function canonicalizeRealPath(p) {
+  try {
+    return realpathSync.native(p)
+  } catch {
+    return p
+  }
+}
+
+function readForgeDirsMarker(markerPath) {
+  try {
+    const parsed = JSON.parse(readFileSync(markerPath, 'utf8'))
+    if (parsed !== null && typeof parsed === 'object' && parsed.items !== null && typeof parsed.items === 'object') return parsed
+  } catch {
+    /* 首次运行——标记文件缺席 */
+  }
+  return { items: {} }
+}
+
+function writeForgeDirsMarker(markerPath, marker) {
+  mkdirSync(dirname(markerPath), { recursive: true })
+  writeFileSync(markerPath, JSON.stringify(marker, null, 2), 'utf8')
+}
+
+/** (a) {home}/experts → {home}/forge/experts（staged copy + 校验 + 标记先写 + 改名保留）。 */
+function migrateExpertsDir(args, ts, marker, markerPath) {
+  const step = 'experts'
+  const from = join(args.home, 'experts')
+  const to = join(args.home, 'forge', 'experts')
+  if (marker.items[step] !== undefined) {
+    emitDiag('info', 'forge-dirs-migrate', `experts 搬迁已完成（标记在场）——跳过：${from} → ${to}`)
+    return { status: 'skipped' }
+  }
+  if (!existsSync(from)) {
+    emitDiag('info', 'forge-dirs-migrate', `源目录缺席（${from}）——experts 搬迁跳过`)
+    marker.items[step] = { status: 'absent-source', done_at: ts, from, to }
+    writeForgeDirsMarker(markerPath, marker)
+    return { status: 'absent-source' }
+  }
+  if (existsSync(to)) {
+    throw new Error(`目标目录已在场且无完成标记：${to}——请人工确认后处理（禁覆盖）`)
+  }
+  const staged = `${to}.staged-migrate`
+  rmSync(staged, { recursive: true, force: true })
+  mkdirSync(dirname(to), { recursive: true })
+  mkdirSync(staged, { recursive: true })
+  const volTarget = volumeRootOf(to)
+  const volStaged = volumeRootOf(staged)
+  if (volTarget.toLowerCase() !== volStaged.toLowerCase()) {
+    throw new Error(`同卷断言失败：staged ${volStaged} ≠ 目标 ${volTarget}`)
+  }
+  // staged copy + 校验（文件数 / 字节 / 哈希逐件比对——做法同 ③ relocateWorkspaces）
+  const manifest = []
+  for (const f of walkFiles(from)) {
+    const src = join(from, ...f.rel.split('/'))
+    const dst = join(staged, ...f.rel.split('/'))
+    mkdirSync(dirname(dst), { recursive: true })
+    copyFileSync(src, dst)
+    const hash = sha256File(src)
+    manifest.push({ rel: f.rel, size: f.size, sha256: hash })
+    if (statSync(dst).size !== f.size) throw new Error(`staged copy 字节数不一致：${f.rel}`)
+  }
+  const stagedFiles = walkFiles(staged)
+  if (stagedFiles.length !== manifest.length) throw new Error(`staged 校验失败：文件数 ${stagedFiles.length} ≠ ${manifest.length}`)
+  let stagedBytes = 0
+  for (const f of stagedFiles) stagedBytes += statSync(join(staged, ...f.rel.split('/'))).size
+  const sourceBytes = manifest.reduce((s, f) => s + f.size, 0)
+  if (stagedBytes !== sourceBytes) throw new Error(`staged 校验失败：字节 ${stagedBytes} ≠ ${sourceBytes}`)
+  for (const f of manifest) {
+    if (sha256File(join(staged, ...f.rel.split('/'))) !== f.sha256) throw new Error(`staged 校验失败：哈希不一致 ${f.rel}`)
+  }
+  // 完成标记在旧目录改名之前写入（写入后中断 → 重跑跳过，旧目录原地留着不丢数据）
+  const keptOriginal = `${from}.pre-migrate-${ts}`
+  marker.items[step] = { status: 'done', done_at: ts, from, to, keptOriginal, fileCount: manifest.length, totalBytes: sourceBytes, conflicts: 0 }
+  writeForgeDirsMarker(markerPath, marker)
+  renameSync(from, keptOriginal) // 改名失败 → 中止（标记已写，重跑跳过），不删除任何目录
+  try {
+    renameSync(staged, to)
+  } catch (cause) {
+    renameSync(keptOriginal, from) // 回滚
+    throw new Error(`staged → 目标改名失败（已回滚原目录）：${cause.message}`)
+  }
+  emitDiag('info', 'forge-dirs-migrate', `experts 搬迁完成：${manifest.length} 文件 / ${sourceBytes} 字节，${from} → ${to}（原目录改名保留 ${keptOriginal}）`)
+  return { status: 'done', fileCount: manifest.length, totalBytes: sourceBytes, keptOriginal }
+}
+
+/** 目录名 → 工作树路径解析链：ws_path 映射 → flatten 反构重建（在场性裁决；不可得 = null）。 */
+function resolveWsPathForDirName(dirName, dirNameToWsPath) {
+  const mapped = dirNameToWsPath.get(dirName)
+  if (mapped !== undefined && existsSync(mapped)) return mapped
+  const at = dirName.lastIndexOf('@')
+  if (at <= 0) return null
+  const flat = dirName.slice(0, at)
+  const withDrive = /^[A-Za-z]/.test(flat) ? `${flat[0]}:${flat.slice(1)}` : flat
+  const rebuilt = withDrive.replaceAll('-', sep)
+  return existsSync(rebuilt) ? rebuilt : null
+}
+
+/** 冲突名唯一化（同名 .conflict-<ts> 已在场 → 追加 -2/-3 序号——跨轮中断重跑防覆盖）。 */
+function conflictPathFor(targetFile, ts) {
+  let candidate = `${targetFile}.conflict-${ts}`
+  let n = 2
+  while (existsSync(candidate)) {
+    candidate = `${targetFile}.conflict-${ts}-${n}`
+    n += 1
+  }
+  return candidate
+}
+
+/**
+ * (b) {home}/forge/projects/ 下按工作树路径派生命名的运行时目录 → 日志并入 projectKey 目录。
+ * 逐文件拷贝并入（同名冲突改名保留），完成标记先写，源目录改名 .pre-migrate-<ts> 保留。
+ */
+function mergeProjectRuntimeDirs(args, ts, marker, markerPath, dirNameToWsPath) {
+  const projectsRoot = join(args.home, 'forge', 'projects')
+  if (!existsSync(projectsRoot)) {
+    emitDiag('info', 'forge-dirs-migrate', `projects 根缺席（${projectsRoot}）——运行时目录并入跳过`)
+    return []
+  }
+  const summaries = []
+  const dirs = readdirSync(projectsRoot, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort()
+  for (const dirName of dirs) {
+    const step = `project-runtime:${dirName}`
+    if (marker.items[step] !== undefined) {
+      emitDiag('info', 'forge-dirs-migrate', `运行时目录并入已完成（标记在场）——跳过：${dirName}`)
+      continue
+    }
+    if (!DIR_NAME_RE.test(dirName)) {
+      emitDiag('warn', 'forge-dirs-migrate', `目录名非 {flatten}@{hash8} 派生制——跳过：${dirName}`)
+      continue
+    }
+    const srcDir = join(projectsRoot, dirName)
+    const wsPath = resolveWsPathForDirName(dirName, dirNameToWsPath)
+    if (wsPath === null) {
+      emitDiag('warn', 'forge-dirs-migrate', `工作树路径不可解析（无 ws_path 映射且 flatten 反构不在场）——跳过：${dirName}`)
+      continue
+    }
+    const probe = resolveMainCheckoutRoot(wsPath)
+    if (probe.entries === undefined || probe.entries.length === 0) {
+      emitDiag('warn', 'forge-dirs-migrate', `主检出归拢失败（${probe.reason ?? 'porcelain 清单为空'}）——跳过：${dirName}`)
+      continue
+    }
+    const mainRoot = canonicalizeRealPath(probe.entries[0].path)
+    let projectKey
+    try {
+      projectKey = libProjectKeyOf(mainRoot)
+    } catch {
+      emitDiag('warn', 'forge-dirs-migrate', `projectKey 派生失败（主检出根空）——跳过：${dirName}`)
+      continue
+    }
+    const targetDir = join(projectsRoot, projectKey)
+    if (projectKey === dirName) {
+      // 目录本身即以 projectKey 命名（主检出运行时目录）——无并入面
+      marker.items[step] = { status: 'already-project-key', done_at: ts, dir: srcDir, projectKey }
+      writeForgeDirsMarker(markerPath, marker)
+      emitDiag('info', 'forge-dirs-migrate', `目录已以 projectKey 命名——跳过：${dirName}`)
+      continue
+    }
+    // 逐文件并入（拷贝 + 字节校验；同名冲突 → 被并入那份改名 .conflict-<ts> 保留，不覆盖不跳过）
+    let conflicts = 0
+    let files = 0
+    for (const f of walkFiles(srcDir)) {
+      const src = join(srcDir, ...f.rel.split('/'))
+      const dst = join(targetDir, ...f.rel.split('/'))
+      const finalDst = existsSync(dst) ? conflictPathFor(dst, ts) : dst
+      if (finalDst !== dst) conflicts += 1
+      mkdirSync(dirname(finalDst), { recursive: true })
+      copyFileSync(src, finalDst)
+      if (statSync(finalDst).size !== f.size) throw new Error(`并入拷贝字节数不一致：${f.rel}`)
+      files += 1
+    }
+    // 完成标记在旧目录改名之前写入
+    const keptOriginal = join(projectsRoot, `${dirName}.pre-migrate-${ts}`)
+    marker.items[step] = { status: 'done', done_at: ts, from: srcDir, to: targetDir, projectKey, mainRoot, keptOriginal, fileCount: files, conflicts }
+    writeForgeDirsMarker(markerPath, marker)
+    renameSync(srcDir, keptOriginal) // 改名失败 → 中止（不删除任何目录；标记已写，重跑跳过）
+    emitDiag('info', 'forge-dirs-migrate', `运行时目录并入完成：${dirName} → ${projectKey}（${files} 文件，同名冲突 ${conflicts}；原目录改名保留 ${keptOriginal}）`)
+    summaries.push({ dirName, projectKey, fileCount: files, conflicts })
+  }
+  return summaries
+}
+
+/** forge-dirs 段主流程（--forge-dirs 独立模式——只跑本段，不触①-④与 bundle 段）。 */
+export function runForgeDirsMigration(args) {
+  const forgeDir = join(args.home, 'forge')
+  mkdirSync(join(forgeDir, 'db', 'project'), { recursive: true })
+  diagFile = join(forgeDir, 'db', 'project', 'migrate-state-db-diag.log')
+  emitDiag('info', 'forge-dirs-migrate', `forge-dirs 迁移开始：home=${args.home}`)
+  if (!args.skipProcessCheck) observeHostProcesses()
+  const ts = forgeDirsStamp(args.stamp)
+  const markerPath = join(forgeDir, 'migrate-forge-dirs.json')
+  const marker = readForgeDirsMarker(markerPath)
+  // ws_path 映射（state.db projects 行——判据同 ② 段）+ --registry 快照（deriveDirName 同算法键对齐）
+  const dirNameToWsPath = new Map()
+  if (existsSync(args.stateDb)) {
+    const legacy = openExclusive(args.stateDb)
+    try {
+      if (hasTable(legacy, 'projects')) {
+        for (const r of legacy.prepare(`SELECT ws_path FROM projects`).all()) {
+          dirNameToWsPath.set(`${flattenWorkspacePath(r.ws_path)}@${hash8OfPath(r.ws_path)}`, r.ws_path)
+        }
+      }
+    } finally {
+      legacy.close()
+    }
+  }
+  if (args.registry !== null) {
+    const snapshot = JSON.parse(readFileSync(args.registry, 'utf8'))
+    if (!Array.isArray(snapshot)) throw new Error('--registry 快照非数组（期望 [{ id, path }]）')
+    for (const e of snapshot) {
+      const key = libProjectKeyOf(e.path)
+      if (!dirNameToWsPath.has(key)) dirNameToWsPath.set(key, e.path)
+    }
+  }
+  const summary = {
+    experts: migrateExpertsDir(args, ts, marker, markerPath),
+    projects: mergeProjectRuntimeDirs(args, ts, marker, markerPath, dirNameToWsPath),
+  }
+  emitDiag('info', 'forge-dirs-migrate', `forge-dirs 迁移完成：experts=${summary.experts.status}，运行时目录并入 ${summary.projects.length} 项（标记：${markerPath}）`)
   return summary
 }
 
