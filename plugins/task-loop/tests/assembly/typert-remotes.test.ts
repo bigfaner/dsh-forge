@@ -166,9 +166,37 @@ describe("快照方法族 DTO 聚合（AC 进度批水化）", () => {
       acceptanceCriteria: [{ criterion: "唯一判据", met: true, evidence: "绿" }],
     });
     const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, projects: () => projectsFaceOf("Z:\\ws\\domain-tasks") });
-    const graph = await remote.graph({ projectId: h.projectKey, slug: "alpha" });
+    const graph = await remote.graph({ projectId: h.projectKey, source: { kind: "feature", slug: "alpha" } });
     expect(graph.tasks[0]?.acProgress).toEqual({ done: 1, total: 1 });
     expect(graph.edges).toEqual([]);
+  });
+
+  it("list/stats/graph：入参按界面契约携带 source（projectId + source），容器筛选经 source.slug 生效（bug 553ec45a）", async () => {
+    const svc = buildService();
+    await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "alpha", title: "A", type: "coding-feature" });
+    await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "beta", title: "B", type: "coding-feature" });
+    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, projects: () => projectsFaceOf("Z:\\ws\\domain-tasks") });
+    // 界面实际发送形态（plugins/project/ui/dock-tabs/overview/task-tab/task-tab-data.ts）：
+    // 不带 slug，带 source = ContainerRef{kind, slug}（lib/api DTO 契约）
+    const source = { kind: "feature", slug: "alpha" } as const;
+    const [cards, stats, graph] = await Promise.all([
+      remote.list({ projectId: h.projectKey, source }),
+      remote.stats({ projectId: h.projectKey, source }),
+      remote.graph({ projectId: h.projectKey, source }),
+    ]);
+    expect(cards.map((c) => c.title)).toEqual(["A"]);
+    expect(stats.total).toBe(1);
+    expect(graph.tasks.map((t) => t.title)).toEqual(["A"]);
+  });
+
+  it("validateFeatureTasks：入参按界面契约携带 featureSlug（projectId + featureSlug），域侧经 slug 命中该容器（bug 553ec45a 同类）", async () => {
+    const svc = buildService();
+    await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "alpha", title: "A", type: "coding-feature" });
+    const remote = new ForgeTasksRemote(fakeCtx(), { tasks: () => svc, projects: () => projectsFaceOf("Z:\\ws\\domain-tasks") });
+    // 界面实际发送形态（plugins/project/ui/dock-tabs/overview/task-tab/task-tab.tsx）：
+    // { projectId, featureSlug }（lib/api ValidateFeatureTasksInput 契约）
+    const report = await remote.validateFeatureTasks({ projectId: h.projectKey, featureSlug: "alpha" });
+    expect(report.checked).toEqual({ slug: "alpha", tasks: 1 });
   });
 
   it("stats/query/sessionLinks：域读面原样透传（裸值直返）", async () => {
@@ -190,11 +218,11 @@ describe("typed unavailable 与 follow 快照钩", () => {
     for (const [name, run] of [
       ["list", () => remote.list({ projectId: "p" })],
       ["stats", () => remote.stats({ projectId: "p" })],
-      ["graph", () => remote.graph({ projectId: "p", slug: "alpha" })],
+      ["graph", () => remote.graph({ projectId: "p", source: { kind: "feature", slug: "alpha" } })],
       ["detail", () => remote.detail({ projectId: "p", taskId: "t-1" })],
       ["query", () => remote.query({ projectId: "p", taskRef: { slug: "alpha", localId: "1" } })],
       ["sessionLinks", () => remote.sessionLinks({ projectId: "p" })],
-      ["validateFeatureTasks", () => remote.validateFeatureTasks({ projectId: "p", slug: "alpha" })],
+      ["validateFeatureTasks", () => remote.validateFeatureTasks({ projectId: "p", featureSlug: "alpha" })],
       ["transition", () => remote.transition({ projectId: "p", taskId: "t-1", toStatus: "completed", reason: "r" })],
     ] as const) {
       const failure = await failureOf(run);
@@ -411,7 +439,7 @@ describe("入参身份 host 半解析（projectId → project_key）", () => {
     expect(listed).toHaveLength(1);
     const stats = await remote.stats({ projectId: "uuid-1" });
     expect(stats.total).toBe(1);
-    const graph = await remote.graph({ projectId: "uuid-1", slug: "alpha" });
+    const graph = await remote.graph({ projectId: "uuid-1", source: { kind: "feature", slug: "alpha" } });
     expect(graph.tasks).toHaveLength(1);
   });
 
@@ -425,7 +453,7 @@ describe("入参身份 host 半解析（projectId → project_key）", () => {
     const stats = await remote.stats({ projectId: "uuid-2" });
     expect(stats.total).toBe(0);
     expect(Object.keys(stats.byStatus)).toHaveLength(8);
-    const graph = await remote.graph({ projectId: "uuid-2", slug: "alpha" });
+    const graph = await remote.graph({ projectId: "uuid-2", source: { kind: "feature", slug: "alpha" } });
     expect(graph).toEqual({ tasks: [], edges: [] });
     const frames: unknown[] = [];
     for await (const frame of remote.follow({ projectId: "uuid-2" })) frames.push(frame);
@@ -448,7 +476,7 @@ describe("入参身份 host 半解析（projectId → project_key）", () => {
       ["detail", () => remote.detail({ projectId: "p", taskId: "t-1" })],
       ["query", () => remote.query({ projectId: "p", taskRef: { slug: "alpha", localId: "1" } })],
       ["sessionLinks", () => remote.sessionLinks({ projectId: "p" })],
-      ["validateFeatureTasks", () => remote.validateFeatureTasks({ projectId: "p", slug: "alpha" })],
+      ["validateFeatureTasks", () => remote.validateFeatureTasks({ projectId: "p", featureSlug: "alpha" })],
       ["transition", () => remote.transition({ projectId: "p", taskId: "t-1", toStatus: "completed", reason: "r" })],
     ] as const) {
       const failure = await failureOf(run);
@@ -524,7 +552,7 @@ describe("键族聚合（2026-11-24 方案 A——快照族多键合并）", () 
       taskGraph: () => ({ tasks: [], edges: [{ taskId: "t-alpha-1", prerequisiteId: "t-alpha-1", origin: "manual" }] }),
     });
     const remote = familyRemote(svc);
-    const graph = await remote.graph({ projectId: "uuid-1", slug: "alpha" });
+    const graph = await remote.graph({ projectId: "uuid-1", source: { kind: "feature", slug: "alpha" } });
     expect(graph.edges).toEqual([{ taskId: "t-alpha-1", prerequisiteId: "t-alpha-1", origin: "manual" }]);
   });
 
@@ -565,7 +593,7 @@ describe("键族聚合（2026-11-24 方案 A——快照族多键合并）", () 
     // wt 键边行（worktree 键子图——并集判据：主键边集为空、wt 键边恰一条）
     await h.db.prepare(`INSERT INTO task_edges (task_id, prerequisite_id, origin, created_at, updated_at) VALUES (?, ?, 'manual', ?, ?)`).run(wtTaskId, wtTaskId, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
     const remote = familyRemote(svc);
-    const graph = await remote.graph({ projectId: "uuid-1", slug: "alpha" });
+    const graph = await remote.graph({ projectId: "uuid-1", source: { kind: "feature", slug: "alpha" } });
     expect(graph.tasks.map((t) => t.taskId).sort()).toEqual([mainId, wtTaskId].sort());
     expect(graph.edges).toHaveLength(1);
   });
@@ -687,11 +715,11 @@ describe("生产形状双层不可再发（host 裸值 → serve 单层 → clie
     const values: Record<string, unknown> = {
       list: await remote.list({ projectId: h.projectKey }),
       stats: await remote.stats({ projectId: h.projectKey }),
-      graph: await remote.graph({ projectId: h.projectKey, slug: "alpha" }),
+      graph: await remote.graph({ projectId: h.projectKey, source: { kind: "feature", slug: "alpha" } }),
       detail: await remote.detail({ projectId: h.projectKey, taskId: settled.taskId }),
       query: await remote.query({ projectId: h.projectKey, taskRef: { slug: "alpha", localId: settled.localId } }),
       sessionLinks: await remote.sessionLinks({ projectId: h.projectKey }),
-      validateFeatureTasks: await remote.validateFeatureTasks({ projectId: h.projectKey, slug: "alpha" }),
+      validateFeatureTasks: await remote.validateFeatureTasks({ projectId: h.projectKey, featureSlug: "alpha" }),
       transition: await remote.transition({ projectId: h.projectKey, taskId: pending.taskId, toStatus: "in_progress", reason: "r" }),
       acSettlements: await remote.acSettlements({ projectId: h.projectKey, criteria: ["判据 A"] }),
     };

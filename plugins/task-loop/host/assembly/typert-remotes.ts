@@ -26,22 +26,19 @@ import { rootCtxOf } from "@dsh-forge/lib-util";
 import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/contracts";
 import { FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
 import { canonicalizePath, projectKeyOf } from "@dsh-forge/lib-path";
+// 快照族入参的 wire 契约单源（lib/api TasksChannelRequests——界面侧同此契约）：身份 projectId，
+// 容器引用 source{kind,slug}。bug 553ec45a：此前入参从域层查询类型拼出只认 slug，界面发
+// source / featureSlug——graph 缺必填 slug 触发协议包边界校验失败、list/stats 的 source 被忽略
+// （容器筛选失效）、validateFeatureTasks 的 featureSlug 被忽略。入参类型一律取契约表，不再手拼。
+import type { ContainerRef, TasksChannelRequests } from "@dsh-forge/lib-api";
 import type { Envelope } from "../../shared/result.js";
 import type { SessionTaskLinkCard, TaskCard, TaskSnapshot } from "../domain/tasks/types.js";
 import type { QueryTaskResult } from "../domain/tasks/query.js";
-import type { TaskDetail, TaskDetailQuery } from "../domain/tasks/detail.js";
-import type {
-  ListTasksQuery,
-  TaskGraphEdge,
-  TaskGraphQuery,
-  TaskStats,
-  TaskStatsQuery,
-} from "../domain/tasks/list.js";
-import type { SessionLinksQuery } from "../domain/tasks/session-links.js";
+import type { TaskDetail } from "../domain/tasks/detail.js";
+import type { TaskGraphEdge, TaskStats } from "../domain/tasks/list.js";
 import type { AcSettlementsAggregate } from "../domain/tasks/ac-match.js";
 import type { TasksService } from "../domain/tasks/service.js";
-import type { TransitionTaskInput } from "../domain/tasks/transition.js";
-import type { ValidateContainerTasksInput, ValidateReport } from "../domain/tasks/validate.js";
+import type { ValidateReport } from "../domain/tasks/validate.js";
 
 /** follow 流重估间隔 ms（任务面无跨进程事件源——收敛定时重估推送，project SEAL 节拍同型） */
 export const TASKS_FOLLOW_INTERVAL_MS = 3_000;
@@ -121,45 +118,34 @@ export interface ForgeProjectsIdentityFace {
   getProject(projectId: string): Promise<{ readonly wsPath: string } | null>;
 }
 
-/** remote 面查询（list 同形——身份换 projectId） */
-export interface TasksRemoteListQuery extends Omit<ListTasksQuery, "projectKey"> {
-  readonly projectId: string;
+/** remote 面查询（list 同形——wire 契约 = lib/api ListTasksQuery：projectId + source?） */
+export type TasksRemoteListQuery = TasksChannelRequests["list"];
+
+/** remote 面查询（stats 同形——wire 契约 = lib/api TaskStatsQuery：projectId + source?） */
+export type TasksRemoteStatsQuery = TasksChannelRequests["stats"];
+
+/** remote 面查询（graph 同形——wire 契约 = lib/api TaskGraphQuery：projectId + source） */
+export type TasksRemoteGraphQuery = TasksChannelRequests["graph"];
+
+/** 容器引用 → 域层 slug（域查询只认 slug；source 缺席 = 不按容器筛选） */
+function slugOf(source: ContainerRef | undefined): string | undefined {
+  return source?.slug;
 }
 
-/** remote 面查询（stats 同形——身份换 projectId） */
-export interface TasksRemoteStatsQuery extends Omit<TaskStatsQuery, "projectKey"> {
-  readonly projectId: string;
-}
+/** remote 面查询（detail 同形——wire 契约 = lib/api TaskDetailQuery） */
+export type TasksRemoteDetailQuery = TasksChannelRequests["detail"];
 
-/** remote 面查询（graph 同形——身份换 projectId） */
-export interface TasksRemoteGraphQuery extends Omit<TaskGraphQuery, "projectKey"> {
-  readonly projectId: string;
-}
+/** remote 面查询入参（query 同形——wire 契约 = lib/api QueryTaskInput） */
+export type TasksRemoteQueryRequest = TasksChannelRequests["query"];
 
-/** remote 面查询（detail 同形——身份换 projectId） */
-export interface TasksRemoteDetailQuery extends Omit<TaskDetailQuery, "projectKey"> {
-  readonly projectId: string;
-}
+/** remote 面查询（sessionLinks 同形——wire 契约 = lib/api SessionLinksQuery） */
+export type TasksRemoteSessionLinksQuery = TasksChannelRequests["sessionLinks"];
 
-/** remote 面查询入参（query 同形——身份换 projectId） */
-export interface TasksRemoteQueryRequest extends Omit<TasksQueryRequest, "projectKey"> {
-  readonly projectId: string;
-}
+/** remote 面入参（validateFeatureTasks 同形——wire 契约 = lib/api ValidateFeatureTasksInput：projectId + featureSlug） */
+export type TasksRemoteValidateInput = TasksChannelRequests["validateFeatureTasks"];
 
-/** remote 面查询（sessionLinks 同形——身份换 projectId） */
-export interface TasksRemoteSessionLinksQuery extends Omit<SessionLinksQuery, "projectKey"> {
-  readonly projectId: string;
-}
-
-/** remote 面入参（validateFeatureTasks 同形——身份换 projectId） */
-export interface TasksRemoteValidateInput extends Omit<ValidateContainerTasksInput, "projectKey"> {
-  readonly projectId: string;
-}
-
-/** remote 面入参（transition 同形——身份换 projectId） */
-export interface TasksRemoteTransitionInput extends Omit<TransitionTaskInput, "projectKey"> {
-  readonly projectId: string;
-}
+/** remote 面入参（transition 同形——wire 契约 = lib/api TransitionTaskInput） */
+export type TasksRemoteTransitionInput = TasksChannelRequests["transition"];
 
 /** remote 面查询（follow 同形——身份换 projectId） */
 export interface TasksRemoteFollowQuery extends Omit<TasksFollowQuery, "projectKey"> {
@@ -472,6 +458,7 @@ export class ForgeTasksRemote extends TypertRemoteService {
     const keys = await this.keyFamilyOf(q.projectId);
     if (keys.length === 0) return [];
     const lists: TaskCardDto[][] = [];
+    const slug = slugOf(q.source);
     for (const key of keys) {
       lists.push(
         await hydrateCards(
@@ -479,7 +466,7 @@ export class ForgeTasksRemote extends TypertRemoteService {
           key,
           await svc.listTasks({
             projectKey: key,
-            ...(q.slug !== undefined ? { slug: q.slug } : {}),
+            ...(slug !== undefined ? { slug } : {}),
             ...(q.statusFilter !== undefined ? { statusFilter: q.statusFilter } : {}),
             ...(q.search !== undefined ? { search: q.search } : {}),
             ...(q.sort !== undefined ? { sort: q.sort } : {}),
@@ -499,8 +486,9 @@ export class ForgeTasksRemote extends TypertRemoteService {
     const keys = await this.keyFamilyOf(q.projectId);
     if (keys.length === 0) return zeroStats();
     const rows: TaskStats[] = [];
+    const slug = slugOf(q.source);
     for (const key of keys) {
-      rows.push(await svc.taskStats({ projectKey: key, ...(q.slug !== undefined ? { slug: q.slug } : {}) }));
+      rows.push(await svc.taskStats({ projectKey: key, ...(slug !== undefined ? { slug } : {}) }));
     }
     return sumStats(rows);
   }
@@ -515,8 +503,9 @@ export class ForgeTasksRemote extends TypertRemoteService {
     if (keys.length === 0) return { tasks: [], edges: [] };
     const tasks: TaskCardDto[][] = [];
     const edges: TaskGraphEdge[] = [];
+    const slug = slugOf(q.source) ?? "";
     for (const key of keys) {
-      const graph = await svc.taskGraph({ projectKey: key, slug: q.slug });
+      const graph = await svc.taskGraph({ projectKey: key, slug });
       tasks.push(await hydrateCards(svc, key, graph.tasks));
       edges.push(...graph.edges);
     }
@@ -567,7 +556,8 @@ export class ForgeTasksRemote extends TypertRemoteService {
     if (svc === undefined) unavailableFailure("validateFeatureTasks");
     const projectKey = await this.keyOf(input.projectId);
     if (projectKey === undefined) unresolvedFailure(input.projectId);
-    return svc.validateFeatureTasks({ ...input, projectKey });
+    // wire 契约携带 featureSlug（容器 slug）；域入参只认 slug
+    return svc.validateFeatureTasks({ projectKey, slug: input.featureSlug });
   }
 
   /** 人类纠偏转移（写面透传——域服务 face 在场才可调用；缺席 typed unavailable） */
