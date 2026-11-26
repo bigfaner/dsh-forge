@@ -261,6 +261,29 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     }
   };
 
+  // 目录键声明登记（forge-dirs-unification 3.4——根 scope dirKeys.expert_squad 约定名；
+  // 消费侧枚举 dirKeys.* 现拉合并；bug 83729990：`() => disposeDirKeys()` 惯用法把注销器
+  // 在 apply 当场执行——provide 后立即注销，props 名表残留而 store 已删，真机消费缝
+  // strict reflect.get 恒 undefined 命中「取值非对象」降级零贡献。修复 = 登记迁入 apply
+  // 同步前缀（knowledge 同缝同步登记先例同款 provide.call 绑定形态）+ 注销器经
+  // ctx.effect 并入插件生命周期（execute 返回注销器函数本体）。provide 缺席或抛 =
+  // 声明零生效零抛 + warn 留痕，不阻载本插件。
+  {
+    const declareReflect = (ctx as { reflect?: { provide?(name: string, value: unknown): unknown } })
+      .reflect;
+    const declareProvide = declareReflect?.provide;
+    if (typeof declareProvide !== "function") {
+      diag("warn", "expert-squad-dirkeys-declare-absent", "ctx.reflect/provide absent——dirKeys.expert_squad 声明未提供（forge_dirs 目录键零贡献，fail-soft 不阻载）");
+    } else {
+      try {
+        const disposeDirKeys = declareProvide.call(declareReflect, DIR_KEYS_SERVICE_NAME, EXPERT_SQUAD_DIR_ENTRIES);
+        if (typeof disposeDirKeys === "function") ctx.effect(() => () => void disposeDirKeys());
+      } catch (cause) {
+        diag("warn", "expert-squad-dirkeys-declare-fail", `dirKeys.expert_squad 提供失败（声明零生效零抛，不阻载）：${String(cause)}`);
+      }
+    }
+  }
+
   let state: ExpertSquadState | undefined;
   // storage = 可选服务（宿主组合不供）：ctx.storage 属性读被 cordis 守卫拦截
   // （未声明 inject 即抛），且声明 inject 会让 fiber 永久 pending（服务缺席）——
@@ -598,19 +621,6 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       },
     };
     reflectLayer.provide(EXPERTS_SERVICE_KEY, expertsService);
-  }
-  // 目录键声明登记（forge-dirs-unification 3.4——根 scope dirKeys.expert_squad 约定名；
-  // 消费侧枚举 dirKeys.* 现拉合并）。provide 缺席或抛 = 声明零生效零抛 + warn 留痕，
-  // 不阻载本插件；注销器经 ctx.effect 并入插件生命周期。
-  if (reflectLayer?.provide === undefined) {
-    diag("warn", "expert-squad-dirkeys-declare-absent", "ctx.reflect/provide absent——dirKeys.expert_squad 声明未提供（forge_dirs 目录键零贡献，fail-soft 不阻载）");
-  } else {
-    try {
-      const disposeDirKeys = reflectLayer.provide(DIR_KEYS_SERVICE_NAME, EXPERT_SQUAD_DIR_ENTRIES);
-      if (typeof disposeDirKeys === "function") ctx.effect(() => disposeDirKeys());
-    } catch (cause) {
-      diag("warn", "expert-squad-dirkeys-declare-fail", `dirKeys.expert_squad 提供失败（声明零生效零抛，不阻载）：${String(cause)}`);
-    }
   }
   if (toolsFace === undefined) {
     diag("warn", "expert-squad-tools-absent", "ctx.tools absent——tool 面未注册（管理/委派工具不可用）");
