@@ -13,7 +13,7 @@
 // plugin load 时点先于一切会话装配，首轮请求即在场；bug be4bac44 判例）+ 动态段
 // forge:knowledge-domains(911) scoped 接线（stage③ C2：agent/created 时刻在该会话
 // scope 注册——service/session-prompt.ts）+
-// knowledge.root 目录键声明（根 scope provide('dirKeys.knowledge', entries)
+// knowledge 目录键声明（root/store/global 三键——根 scope provide('dirKeys.knowledge', entries)
 // 约定名——跨 scope 反向拉取终态缝，bug 04d445f4）；交出合并 disposer。
 // projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
 // 数据源（bindingsFile 文件与刷新缝退役）；服务面两级解析 projectId→wsPath→注册行。
@@ -25,14 +25,14 @@ import { registerKnowledgeScopedPrompt } from './service/session-prompt.js'
 import { createKnowledgeService } from './service/index.js'
 import {
   startSelfHostedStorage,
-  resolveKnowledgeDbFile,
+  resolveForgeRootOf,
   globalKnowledgeDir,
+  type DshHomePathProbe,
 } from './storage/index.js'
 import { canonicalWsPath } from './storage/registry.js'
-import { dirname } from 'node:path'
 import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
 import { joinDirSegment } from '@dsh-forge/path-key'
-import { projectKeyOf } from '@dsh-forge/lib-path'
+import { projectKeyOf, type ForgeDirs } from '@dsh-forge/lib-path'
 import { defaultKnowledgeDirOf, resolveKnowledgeDir, type KnowledgeDirSetting } from './knowledge-dir.js'
 import {
   isForgeProjectsSource,
@@ -91,34 +91,31 @@ export interface KnowledgePlugin {
   readonly inject: readonly string[]
 }
 
-// ─────────────────── knowledge.root 目录键声明（forgeDirs declare merge 首个第三方声明者） ───────────────────
-
-/** forgeDir 锚 → 工作区根（剥末段 .forge——forgeDirOfWorkspace 的逆向派生，纯字符串） */
-export function workspaceRootOfForgeDir(forgeDir: string): string {
-  const dir = forgeDir.replace(/[\\/]+$/, '')
-  const root = dir.replace(/[\\/]\.forge$/, '')
-  if (root === dir) {
-    throw new Error(`knowledge: forgeDir anchor '${forgeDir}' missing trailing .forge segment`)
-  }
-  return root
-}
+// ─────────────────── knowledge 目录键声明（forge-dirs-unification §2.2/§2.5） ───────────────────
 
 /**
- * knowledge.root 声明项（工作区知识库根 .knowledge/——learn 技能三类沉淀所在；
- * dirKey 词汇进 forgeDirs 全量查询，description 与工具输出同源）。
- * resolve 纯函数零 IO：forgeDir 锚剥 .forge 段得工作区根，再连 .knowledge。
+ * knowledge 三个目录键（声明合并 host/forge-dirs.d.ts 的运行期登记面——键与声明逐一
+ * 相同，satisfies Partial<ForgeDirs> 编译期受检；description 与 forge_dirs 输出同源；
+ * resolve 纯函数零 IO，deps 由注册表先解析）。
  */
-export const KNOWLEDGE_ROOT_DIR_KEY = {
-  dirKey: 'knowledge.root',
-  description: '工作区知识库根（.knowledge/——conventions/lessons/examples 三类沉淀所在）',
-  resolve: (ctx: { readonly forgeDir?: string }): string => {
-    if (typeof ctx.forgeDir !== 'string' || ctx.forgeDir.trim() === '') {
-      throw new Error('knowledge: knowledge.root resolve requires the forgeDir anchor (absent from resolve context)')
-    }
-    return joinDirSegment(workspaceRootOfForgeDir(ctx.forgeDir), '.knowledge')
+export const KNOWLEDGE_DIR_ENTRIES = {
+  'knowledge.root': {
+    description: '项目知识库（.knowledge/——conventions/lessons/examples 三类沉淀所在）',
+    deps: ['workspaceRoot'],
+    resolve: (deps: { workspaceRoot: string }): string => joinDirSegment(deps.workspaceRoot, '.knowledge'),
   },
-  declaredBy: 'knowledge',
-} as const
+  'knowledge.store': {
+    description: 'knowledge 库文件所在目录（{forge.db}/knowledge——单装库文件 knowledge.db 同目录）',
+    deps: ['forge.db'],
+    resolve: (deps: { 'forge.db': string }): string => joinDirSegment(deps['forge.db'], 'knowledge'),
+  },
+  'knowledge.global': {
+    description: '全局知识库目录（{forge.home}/knowledge/global——只随 forge 根，不随库文件路径）',
+    deps: ['forge.home'],
+    resolve: (deps: { 'forge.home': string }): string =>
+      joinDirSegment(joinDirSegment(deps['forge.home'], 'knowledge'), 'global'),
+  },
+} as const satisfies Partial<ForgeDirs>
 
 /**
  * 装配期声明（bug 04d445f4 裁定：反向拉取缝——跨 scope 装配形态下推式注册不可达）：
@@ -140,7 +137,7 @@ function declareKnowledgeRootDirKey(ctx: KnowledgeContextFace): () => void {
   const provide = reflect?.provide
   if (typeof provide !== 'function') return () => {}
   try {
-    const dispose = provide.call(reflect, DIR_KEYS_SERVICE_NAME, [KNOWLEDGE_ROOT_DIR_KEY])
+    const dispose = provide.call(reflect, DIR_KEYS_SERVICE_NAME, KNOWLEDGE_DIR_ENTRIES)
     return typeof dispose === 'function' ? () => dispose() : () => {}
   } catch {
     return () => {} // provide 抛（同名已注册等）= 零生效零抛
@@ -247,23 +244,50 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
     // 随包内置专家档案注册（experts.registerRoot 装配行——experts 缺席 fail-soft 不阻载；
     // 先于自持存储装配：存储降级早退不吞注册）
     registerBuiltinExpertsRoot(ctx, diagEmit)
-    // 自持存储自启 + 首启轻量种子迁移（开库失败 fail-soft 降级零注册——锚缺席（裸环境）
-    // 不自启，不向 ~/.dsh 静默落盘）
+    // 自持存储自启 + 首启轻量种子迁移（开库失败 fail-soft 降级零注册——dbFile 显式与
+    // dshHomePath 服务双缺（裸环境）不自启，不向 ~/.dsh 静默落盘）。forge 根消费点现查
+    // （AGENTS 1.6）：dshHomePath('forge') 服务 > 降级 ~/.dsh/forge + warn（含「dshHomePath
+    // 缺席」字样，经诊断发射面——不直落 console，AGENTS §7）。
+    const dshHomePathOf: DshHomePathProbe = (): string | undefined => {
+      try {
+        const svc: unknown = ctx.reflect?.get?.('dshHomePath')
+        if (typeof svc !== 'function') return undefined
+        const p = (svc as (segment: string) => unknown).call(svc, 'forge')
+        return typeof p === 'string' ? p : undefined
+      } catch {
+        return undefined
+      }
+    }
+    const forgeRootDegradedWarn = (): void => {
+      diagEmit?.({
+        event: 'knowledge-forge-root-fallback',
+        level: 'warn',
+        message: `dshHomePath 缺席——knowledge forge 根降级 ~/.dsh/forge（${resolveForgeRootOf(dshHomePathOf)}）`,
+        process: 'main',
+      })
+    }
+    if (dshHomePathOf() === undefined) forgeRootDegradedWarn()
     const storage = startSelfHostedStorage(
-      { dbFile: config.dbFile, legacyStateDb: config.legacyStateDb, emit: diagEmit },
+      { dbFile: config.dbFile, legacyStateDb: config.legacyStateDb, emit: diagEmit, dshHomePathOf },
     )
     if (storage === undefined) return () => {}
 
-    // SC-1 全局库装配期自启注册（幂等——boot 时序先于服务消费：判例 5e5592dc 注册行
-    // 缺 boot 回填致存量项目报不存在，全局行必须在本工厂同步段内落行）。全局目录 =
-    // 库文件数据域根/knowledge-global/（与库文件同数据域派生——config.dbFile 显式时
-    // 测试/替代宿主不写宿主缺省数据域）。失败 fail-soft + error 埋点，不阻载插件。
+    // SC-1 全局库装配期自启注册（幂等——boot 时序先于服务消费：判例 5e5592dc）。全局目录
+    // 只随 forge 根（{forgeRoot}/knowledge/global——不再从库文件路径上推，config.dbFile
+    // 显式时也不变）。dshHomePath 服务缺席 = 零全局注册 + warn 留痕（不向 ~/.dsh 兜底
+    // 数据域落盘——测试/替代宿主不写宿主缺省域）。失败 fail-soft + error 埋点，不阻载插件。
     try {
-      const dbFilePath = resolveKnowledgeDbFile({ dbFile: config.dbFile })
-      storage.registry.registerGlobalIfAbsent(
-        globalKnowledgeDir(dirname(dirname(dbFilePath))),
-        diagEmit,
-      )
+      const forgeRoot = dshHomePathOf() // 消费点现查（不缓存——AGENTS 1.6）
+      if (forgeRoot !== undefined) {
+        storage.registry.registerGlobalIfAbsent(globalKnowledgeDir(forgeRoot), diagEmit)
+      } else {
+        diagEmit?.({
+          event: 'knowledge-register',
+          level: 'warn',
+          message: 'dshHomePath 缺席——全局知识库目录降级缺省 ~/.dsh/forge/knowledge/global，本装配零全局注册（不向兜底路径落盘）',
+          process: 'main',
+        })
+      }
     } catch (cause) {
       diagEmit?.({
         event: 'knowledge-register',

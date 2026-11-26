@@ -32,15 +32,15 @@ export function canonicalWsPath(wsPath: string): string {
   }
 }
 
-// ── 全局库（stage④ 1.4 SC-1）：ws_path = canonical(<data>/knowledge-global/)——
-// 常量导出（knowledge_domains 与 rebuild 逐注册行扫描的关联键同源） ──
+// ── 全局库（stage④ 1.4 SC-1；forge-dirs-unification §2.4：全局目录只随 forge 根，
+// 不再从库文件路径上推——ws_path = canonical(<forgeRoot>/knowledge/global/)） ──
 
-/** 全局库目录段（宿主数据域根下的固定子目录） */
-export const KNOWLEDGE_GLOBAL_DIR_SEGMENT = 'knowledge-global'
+/** 全局库目录段（forge 根下 knowledge/global——knowledge.global 条目同口径） */
+export const KNOWLEDGE_GLOBAL_DIR_SEGMENT = 'global'
 
-/** 全局库 ws_path/knowledge_dir 派生：<data>/knowledge-global/（canonical 化在注册时点做） */
-export function globalKnowledgeDir(dataRoot: string): string {
-  return resolve(dataRoot, KNOWLEDGE_GLOBAL_DIR_SEGMENT)
+/** 全局库 ws_path/knowledge_dir 派生：<forgeRoot>/knowledge/global/（canonical 化在注册时点做） */
+export function globalKnowledgeDir(forgeRoot: string): string {
+  return resolve(forgeRoot, 'knowledge', KNOWLEDGE_GLOBAL_DIR_SEGMENT)
 }
 
 /** 全局行注册终态 */

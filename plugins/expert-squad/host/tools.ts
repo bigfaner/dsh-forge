@@ -89,7 +89,7 @@ const recruitParams = z.object({
     .enum(["user", "project"])
     .describe(
       "Archive layer. ASK THE USER which layer before calling: " +
-        '"user" = 跨项目共享（$DSH_HOME/experts，角标「用户」）；' +
+        '"user" = 跨项目共享（{DSH_HOME}/forge/experts，角标「用户」）；' +
         '"project" = 本项目共享（项目根 .dsh/experts，角标「项目」）',
     ),
   personaMd: z

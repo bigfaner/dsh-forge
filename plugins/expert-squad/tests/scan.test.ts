@@ -91,11 +91,29 @@ describe("root 解析（D3 三层物理位置）", () => {
     expect(resolveProjectRootFor(plain)).toBe(plain);
   });
 
-  it("resolveUserExpertsRoot：$DSH_HOME/experts；缺省回落 ~/.dsh/experts", () => {
-    expect(resolveUserExpertsRoot({ DSH_HOME: "/dsh-home" })).toBe(
-      join("/dsh-home", "experts"),
+  it("resolveUserExpertsRoot：dshHomePath('forge') 现查 → {forgeRoot}/experts（消费点现查）", () => {
+    let served: string | undefined = "/svc-home/forge";
+    const probe = (): string | undefined => served;
+    expect(resolveUserExpertsRoot({ DSH_HOME: "/dsh-home" }, { dshHomePathOf: probe })).toBe(
+      join("/svc-home", "forge", "experts"),
     );
-    expect(resolveUserExpertsRoot({}).endsWith(join(".dsh", "experts"))).toBe(true);
+    served = "/other/forge";
+    expect(resolveUserExpertsRoot({}, { dshHomePathOf: probe })).toBe(
+      join("/other", "forge", "experts"),
+    );
+  });
+
+  it("resolveUserExpertsRoot：服务缺席 → env DSH_HOME/forge/experts（离线降级径）", () => {
+    expect(resolveUserExpertsRoot({ DSH_HOME: "/dsh-home" })).toBe(
+      join("/dsh-home", "forge", "experts"),
+    );
+  });
+
+  it("resolveUserExpertsRoot：全缺 → 降级 ~/.dsh/forge/experts + 含「dshHomePath 缺席」warn", () => {
+    const messages: string[] = [];
+    const dir = resolveUserExpertsRoot({}, { onDegraded: (m) => messages.push(m) });
+    expect(dir.endsWith(join(".dsh", "forge", "experts"))).toBe(true);
+    expect(messages.some((m) => m.includes("dshHomePath 缺席"))).toBe(true);
   });
 
   it("resolvePluginExpertsRoot：解析为包内 experts/ 路径（零内置——目录可缺席）", () => {

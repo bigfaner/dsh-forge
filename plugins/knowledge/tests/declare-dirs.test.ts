@@ -1,14 +1,14 @@
-// forge-dirs-query-tool 1.2 —— 首个第三方声明者（declare merge）单测：
-// knowledge 插件装配期经根 scope 约定服务名 dirKeys.knowledge provide 声明数组
-// （bug 04d445f4 裁定反向拉取缝——跨 scope 装配形态下推式注册被隔离过滤不可达，
-// plugin-forge 消费点枚举 dirKeys.* 现取）；reflect/provide 缺席环境零生效零抛
-// （AGENTS 1.6 在场性现查 fail-soft）；声明后 forgeDirs 全量查询可见（集成断言——
-// forge 侧反向拉取合并 + forgeDirs 全量查询行为在本测试内同构模拟）。
+// forge-dirs-unification 3.4 —— knowledge 目录键声明合并单测：
+// knowledge 插件装配期经根 scope 约定服务名 dirKeys.knowledge provide 条目对象
+// （Record<目录键, ForgeDirEntry>——plugin-forge collectDeclaredDirKeys 消费面同构）；
+// 反射/提供缺席环境零生效零抛（AGENTS 1.6 在场性现查 fail-soft）；声明后经注册表
+// 解析可查（resolveForgeDirs + 注入 ForgeDirSources 事实断言——forge-dirs 基座单源）。
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import knowledgePlugin, { KNOWLEDGE_ROOT_DIR_KEY } from '../host/index.js'
+import knowledgePlugin, { KNOWLEDGE_DIR_ENTRIES } from '../host/index.js'
+import { FORGE_BASE_DIR_ENTRIES, resolveForgeDirs, type ForgeDirSources } from '@dsh-forge/lib-path'
 import type { KnowledgePromptSection, KnowledgeToolDefinition } from '../host/tools/index.js'
 
 // 自持存储锚摘除（hermetic——plugin.test.ts 同口径）：装配走显式 dbFile。
@@ -66,90 +66,77 @@ function makeFakeReflect() {
   }
 }
 
-/** forge 侧同构模拟：本体五键 + 反向拉取合并（tools/forge-paths.ts mergedDirKeyEntries 同构） */
-function makeFakeForgeDirs() {
-  const forgeAnchors = [
-    'forge.project_home',
-    'forge.task_home',
-    'forge.docs_root',
-    'forge.tmp',
-    'forge.worktrees',
-  ].map((dirKey) => ({ dirKey, description: `${dirKey} 桩`, resolve: () => `D:\\stub\\${dirKey}` }))
-  const merged = new Map(forgeAnchors.map((e) => [e.dirKey, e]))
-  return {
-    /** 反向拉取合并视图（既有键胜出去重——消费点现算不落注册表） */
-    mergeDeclared(reflect: { props: Record<string, unknown>; get(name: string): unknown }) {
-      for (const name of Object.keys(reflect.props)) {
-        if (!name.startsWith('dirKeys.')) continue
-        const value = reflect.get(name)
-        if (!Array.isArray(value)) continue
-        for (const entry of value) {
-          const e = entry as { dirKey: string }
-          if (!merged.has(e.dirKey)) merged.set(e.dirKey, entry as (typeof forgeAnchors)[number])
-        }
-      }
-    },
-    /** forgeDirs 全量查询同构（tools/forge-paths.ts execute 全量分支） */
-    listAll(anchors: object): { dirKey: string; dir: string; description: string }[] {
-      return [...merged.values()].map((e) => {
-        const entry = e as { dirKey: string; description: string; resolve(ctx: object): string }
-        return { dirKey: entry.dirKey, dir: entry.resolve(anchors), description: entry.description }
-      })
-    },
-  }
+const SOURCES: ForgeDirSources = {
+  dshHome: 'X:\\dsh-home',
+  projectRoot: 'Z:\\ws\\proj-main',
+  workspaceRoot: 'Z:\\ws\\proj',
 }
 
-const ANCHORS = {
-  projectHome: 'D:\\tasksHome',
-  taskHome: 'D:\\tasksHome\\ws@ab12cd34',
-  forgeDir: 'Z:\\ws\\proj\\.forge',
+/** 注册表解析（lib/path resolveForgeDirs 单源——本体基座声明 + dirKeys.knowledge 声明合并） */
+function resolveDeclaredEntries(sources: ForgeDirSources = SOURCES): Record<string, string> {
+  return resolveForgeDirs(
+    [
+      { source: 'forge 本体（@dsh-forge/lib-path）', entries: FORGE_BASE_DIR_ENTRIES },
+      { source: 'dirKeys.knowledge', entries: KNOWLEDGE_DIR_ENTRIES },
+    ],
+    sources,
+  )
 }
 
-describe('knowledge.root 声明项形状（注册面校验规则同构）', () => {
-  it('dirKey = knowledge.root（插件前缀命名空间，非 forge.* 保留段）', () => {
-    expect(KNOWLEDGE_ROOT_DIR_KEY.dirKey).toBe('knowledge.root')
-    expect(KNOWLEDGE_ROOT_DIR_KEY.dirKey.startsWith('forge.')).toBe(false)
-    expect(KNOWLEDGE_ROOT_DIR_KEY.dirKey.includes('.')).toBe(true)
+describe('knowledge 目录键声明形状（satisfies Partial<ForgeDirs> 编译期受检 + 运行期断言）', () => {
+  it('登记键 = knowledge.root / knowledge.store / knowledge.global（带插件前缀，非 forge.* 保留段）', () => {
+    expect(Object.keys(KNOWLEDGE_DIR_ENTRIES).sort()).toEqual([
+      'knowledge.global',
+      'knowledge.root',
+      'knowledge.store',
+    ])
+    for (const key of Object.keys(KNOWLEDGE_DIR_ENTRIES)) {
+      expect(key.startsWith('forge.')).toBe(false)
+      expect(key.includes('.')).toBe(true)
+    }
   })
 
-  it('description 非空 + resolve 为函数（forgeDirs 输出 description 同源）', () => {
-    expect(KNOWLEDGE_ROOT_DIR_KEY.description.trim()).not.toBe('')
-    expect(typeof KNOWLEDGE_ROOT_DIR_KEY.resolve).toBe('function')
-    expect(KNOWLEDGE_ROOT_DIR_KEY.declaredBy).toBe('knowledge')
+  it('deps：root 依赖 workspaceRoot；store 依赖 forge.db；global 依赖 forge.home（与声明合并文件逐一相同）', () => {
+    expect(KNOWLEDGE_DIR_ENTRIES['knowledge.root'].deps).toEqual(['workspaceRoot'])
+    expect(KNOWLEDGE_DIR_ENTRIES['knowledge.store'].deps).toEqual(['forge.db'])
+    expect(KNOWLEDGE_DIR_ENTRIES['knowledge.global'].deps).toEqual(['forge.home'])
   })
 
-  it('resolve：forgeDir 锚派生工作区根 + .knowledge（Windows 与 POSIX 各一）', () => {
-    expect(KNOWLEDGE_ROOT_DIR_KEY.resolve({ forgeDir: 'Z:\\ws\\proj\\.forge' })).toBe('Z:\\ws\\proj\\.knowledge')
-    expect(KNOWLEDGE_ROOT_DIR_KEY.resolve({ forgeDir: '/ws/proj/.forge' })).toBe('/ws/proj/.knowledge')
+  it('注册表解析（注入事实断言）：root = {workspaceRoot}/.knowledge；store = {forge.db}/knowledge；global 只随 forge 根 = {forge.home}/knowledge/global', () => {
+    const resolved = resolveDeclaredEntries()
+    expect(resolved['knowledge.root']).toBe(join('Z:\\ws\\proj', '.knowledge'))
+    expect(resolved['knowledge.store']).toBe(join('X:\\dsh-home', 'forge', 'db', 'knowledge'))
+    expect(resolved['knowledge.global']).toBe(join('X:\\dsh-home', 'forge', 'knowledge', 'global'))
   })
 
-  it('resolve：forgeDir 缺席 fail-loud（装配缺口不静默）', () => {
-    expect(() => KNOWLEDGE_ROOT_DIR_KEY.resolve({})).toThrow(/forgeDir/)
-    expect(() => KNOWLEDGE_ROOT_DIR_KEY.resolve({ forgeDir: 'Z:\\ws\\proj' })).toThrow(/\.forge/)
+  it('全局目录只随 forge 根，不随库文件路径（换 dbFile 事实不影响 global 解析）', () => {
+    const a = resolveDeclaredEntries({ ...SOURCES, dshHome: 'X:\\dsh-home' })
+    const b = resolveDeclaredEntries({ ...SOURCES, dshHome: 'Y:\\other-home' })
+    expect(a['knowledge.global']).toBe(join('X:\\dsh-home', 'forge', 'knowledge', 'global'))
+    expect(b['knowledge.global']).toBe(join('Y:\\other-home', 'forge', 'knowledge', 'global'))
+    expect(a['knowledge.store']).not.toBe(b['knowledge.store'])
   })
 })
 
 describe('装配期声明（根 scope provide——bug 04d445f4 反向拉取缝）', () => {
-  it('reflect.provide 在场：dirKeys.knowledge 收到声明数组 [knowledge.root]', () => {
+  it('reflect.provide 在场：dirKeys.knowledge 收到条目对象 KNOWLEDGE_DIR_ENTRIES', () => {
     const reflect = makeFakeReflect()
     const dispose = knowledgePlugin(makeCtx({ reflectProvide: reflect.provide }) as never, { dbFile: tempDbFile() })
-    expect(reflect.get('dirKeys.knowledge')).toEqual([KNOWLEDGE_ROOT_DIR_KEY])
+    expect(reflect.get('dirKeys.knowledge')).toEqual(KNOWLEDGE_DIR_ENTRIES)
     dispose()
     expect(reflect.size()).toBe(0) // provide 注销随插件 dispose
   })
 
-  it('集成断言：反向拉取合并后 forgeDirs 全量查询可见 knowledge.root（dir = 工作区根/.knowledge）', () => {
+  it('集成断言：声明对象经注册表解析后三键全可见（dirKey + dir + description 同源）', () => {
     const reflect = makeFakeReflect()
-    const fake = makeFakeForgeDirs()
     const dispose = knowledgePlugin(makeCtx({ reflectProvide: reflect.provide }) as never, { dbFile: tempDbFile() })
-    fake.mergeDeclared(reflect) // plugin-forge 消费点同构：枚举 dirKeys.* 现取合并
-    const all = fake.listAll(ANCHORS)
-    expect(all.map((p) => p.dirKey)).toContain('knowledge.root')
-    const knowledgeEntry = all.find((p) => p.dirKey === 'knowledge.root')
-    expect(knowledgeEntry?.dir).toBe('Z:\\ws\\proj\\.knowledge')
-    expect(knowledgeEntry?.description).toBe(KNOWLEDGE_ROOT_DIR_KEY.description)
-    // forge 本体五键不被遮蔽
-    expect(all).toHaveLength(6)
+    const pulled = reflect.get('dirKeys.knowledge') as Record<string, { description: string }>
+    const resolved = resolveDeclaredEntries({ ...SOURCES, dshHome: '', projectRoot: '' })
+    for (const key of Object.keys(KNOWLEDGE_DIR_ENTRIES)) {
+      expect(Object.keys(resolved)).toContain(key)
+      expect(typeof pulled[key].description).toBe('string')
+      expect(pulled[key].description.trim()).not.toBe('')
+    }
     dispose()
   })
 

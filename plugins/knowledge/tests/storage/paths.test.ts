@@ -1,69 +1,89 @@
-// A2 路径解析单测：config 可配优先；缺省宿主数据域子目录（dsh-forge / dsh desktop /
-// ~/.dsh 兜底三形态）；自启判定（锚缺席不自启——不向 ~/.dsh 静默落盘）。
+// A2 路径解析单测（forge-dirs-unification 3.4 改基座取值）：config.dbFile 显式照用；
+// 缺省库文件 = {forgeRoot}/db/knowledge/knowledge.db（forge 根 = dshHomePath('forge')
+// 现查 > 降级 ~/.dsh/forge + warn 含「dshHomePath 缺席」）；不再读环境变量
+// DSH_FORGE_TASKS_HOME / DSH_HOME（旧口径退役）；自启判定（双缺不自启——不向 ~/.dsh
+// 静默落盘）。
 import { describe, expect, it } from 'vitest'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import {
   autoStartDbFile,
-  resolveKnowledgeDataRoot,
+  resolveForgeRootOf,
   resolveKnowledgeDbFile,
 } from '../../host/storage/paths.js'
 
-describe('A2 缺省宿主数据域子目录（两形态 + 兜底）', () => {
-  it('dsh-forge 形态：DSH_FORGE_TASKS_HOME 非空 → dirname（数据域根）/knowledge/knowledge.db', () => {
-    const tasksHome = join('D:', 'data', 'forge-workspaces')
-    expect(resolveKnowledgeDataRoot({ DSH_FORGE_TASKS_HOME: tasksHome })).toBe(dirname(tasksHome))
-    expect(resolveKnowledgeDbFile({}, { DSH_FORGE_TASKS_HOME: tasksHome })).toBe(
-      join(dirname(tasksHome), 'knowledge', 'knowledge.db'),
+describe('forge 根解析（§2.4：dshHomePath 现查 > 降级 ~/.dsh/forge + warn）', () => {
+  it('服务在场：dshHomePath("forge") 结果即 forge 根', () => {
+    expect(resolveForgeRootOf(() => 'Y:\\svc-home\\forge')).toBe('Y:\\svc-home\\forge')
+  })
+
+  it('服务缺席：降级 ~/.dsh/forge + 含「dshHomePath 缺席」字样的 warn（经注入诊断面）', () => {
+    const messages: string[] = []
+    expect(resolveForgeRootOf(undefined, (m) => messages.push(m))).toBe(
+      join(homedir(), '.dsh', 'forge'),
     )
+    expect(messages.some((m) => m.includes('dshHomePath 缺席'))).toBe(true)
   })
 
-  it('dsh desktop 形态：DSH_HOME → DSH_HOME/knowledge/knowledge.db', () => {
-    expect(resolveKnowledgeDataRoot({ DSH_HOME: 'C:\\dsh-home' })).toBe('C:\\dsh-home')
-    expect(resolveKnowledgeDbFile({}, { DSH_HOME: 'C:\\dsh-home' })).toBe(
-      join('C:\\dsh-home', 'knowledge', 'knowledge.db'),
-    )
+  it('服务返回空串/非字符串形态（probe 返 undefined）视同缺席', () => {
+    expect(resolveForgeRootOf(() => undefined)).toBe(join(homedir(), '.dsh', 'forge'))
   })
 
-  it('双锚在场 dsh-forge 优先（forge 形态数据域为UserData、desktop 为 DSH_HOME）', () => {
-    expect(
-      resolveKnowledgeDataRoot({ DSH_FORGE_TASKS_HOME: 'D:\\ud\\forge-workspaces', DSH_HOME: 'C:\\dsh-home' }),
-    ).toBe('D:\\ud')
-  })
-
-  it('全锚缺席兜底 ~/.dsh（expert-squad resolveUserExpertsRoot 同构）', () => {
-    expect(resolveKnowledgeDataRoot({})).toBe(join(homedir(), '.dsh'))
-  })
-
-  it('空串锚视同缺席（宿主路径解析同语义——空串不压过次优先级）', () => {
-    expect(resolveKnowledgeDataRoot({ DSH_FORGE_TASKS_HOME: '', DSH_HOME: 'C:\\dh' })).toBe('C:\\dh')
-    expect(resolveKnowledgeDataRoot({ DSH_FORGE_TASKS_HOME: '', DSH_HOME: '' })).toBe(join(homedir(), '.dsh'))
+  it('消费点现查：probe 每次调用即时求值（本单测内换桩换结果——不缓存）', () => {
+    let served: string | undefined = 'X:\\a\\forge'
+    const probe = (): string | undefined => served
+    expect(resolveForgeRootOf(probe)).toBe('X:\\a\\forge')
+    served = 'Y:\\b\\forge'
+    expect(resolveForgeRootOf(probe)).toBe('Y:\\b\\forge')
   })
 })
 
-describe('A2 config 可配路径（裁决①）', () => {
-  it('config.dbFile 显式优先于一切缺省（相对路径词法 resolve）', () => {
-    expect(resolveKnowledgeDbFile({ dbFile: 'X:\\cfg\\my.db' }, { DSH_HOME: 'C:\\dh' })).toBe('X:\\cfg\\my.db')
-    expect(resolveKnowledgeDbFile({ dbFile: 'rel/my.db' })).toBe(join(process.cwd(), 'rel', 'my.db'))
+describe('A2 库文件解析（config 显式照用 / 缺省随 forge 根）', () => {
+  it('单装缺省：{forgeRoot}/db/knowledge/knowledge.db（= {DSH_HOME}/forge/db/knowledge/knowledge.db）', () => {
+    expect(resolveKnowledgeDbFile({}, 'C:\\dsh-home\\forge')).toBe(
+      join('C:\\dsh-home\\forge', 'db', 'knowledge', 'knowledge.db'),
+    )
+  })
+
+  it('config.dbFile 显式优先于一切缺省（组合安装 patch 下发 / 测试替代宿主照用；相对路径词法 resolve）', () => {
+    expect(resolveKnowledgeDbFile({ dbFile: 'X:\\cfg\\my.db' }, 'C:\\dsh-home\\forge')).toBe('X:\\cfg\\my.db')
+    expect(resolveKnowledgeDbFile({ dbFile: 'rel/my.db' }, 'C:\\dsh-home\\forge')).toBe(join(process.cwd(), 'rel', 'my.db'))
   })
 
   it('config.dbFile 空串视同缺席 → 缺省解析', () => {
-    expect(resolveKnowledgeDbFile({ dbFile: '  ' }, { DSH_HOME: 'C:\\dh' })).toBe(
-      join('C:\\dh', 'knowledge', 'knowledge.db'),
+    expect(resolveKnowledgeDbFile({ dbFile: '  ' }, 'C:\\dsh-home\\forge')).toBe(
+      join('C:\\dsh-home\\forge', 'db', 'knowledge', 'knowledge.db'),
     )
   })
 })
 
-describe('A2 自启判定（双态缝——锚缺席不自启）', () => {
-  it('无 config.dbFile 且双锚缺席 → undefined（裸环境不向 ~/.dsh 静默落盘）', () => {
-    expect(autoStartDbFile({}, {})).toBeUndefined()
+describe('A2 自启判定（双态缝——双缺不自启）', () => {
+  it('无 config.dbFile 且 dshHomePath 服务缺席 → undefined（裸环境不向 ~/.dsh 静默落盘）', () => {
+    expect(autoStartDbFile({}, undefined)).toBeUndefined()
+    expect(autoStartDbFile({}, () => undefined)).toBeUndefined()
   })
 
-  it('config.dbFile / 任一宿主锚在场 → 解析出库路径自启', () => {
-    expect(autoStartDbFile({ dbFile: 'X:\\a.db' }, {})).toBe('X:\\a.db')
-    expect(autoStartDbFile({}, { DSH_FORGE_TASKS_HOME: 'D:\\ud\\forge-workspaces' })).toBe(
-      join('D:\\ud', 'knowledge', 'knowledge.db'),
+  it('config.dbFile 显式 / dshHomePath 服务在场 → 解析出库路径自启', () => {
+    expect(autoStartDbFile({ dbFile: 'X:\\a.db' }, undefined)).toBe('X:\\a.db')
+    expect(autoStartDbFile({}, () => 'C:\\dh\\forge')).toBe(
+      join('C:\\dh\\forge', 'db', 'knowledge', 'knowledge.db'),
     )
-    expect(autoStartDbFile({}, { DSH_HOME: 'C:\\dh' })).toBe(join('C:\\dh', 'knowledge', 'knowledge.db'))
+  })
+
+  it('不再读环境变量 DSH_FORGE_TASKS_HOME / DSH_HOME（env 残留不影响自启与解析）', () => {
+    const prev = { TASKS: process.env.DSH_FORGE_TASKS_HOME, HOME: process.env.DSH_HOME }
+    process.env.DSH_FORGE_TASKS_HOME = 'D:\\ud\\forge-workspaces'
+    process.env.DSH_HOME = 'C:\\legacy-home'
+    try {
+      expect(autoStartDbFile({}, undefined)).toBeUndefined()
+      expect(autoStartDbFile({}, () => 'C:\\dh\\forge')).toBe(
+        join('C:\\dh\\forge', 'db', 'knowledge', 'knowledge.db'),
+      )
+    } finally {
+      for (const [k, v] of Object.entries({ DSH_FORGE_TASKS_HOME: prev.TASKS, DSH_HOME: prev.HOME })) {
+        if (v === undefined) delete process.env[k]
+        else process.env[k] = v
+      }
+    }
   })
 })

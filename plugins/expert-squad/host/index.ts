@@ -18,6 +18,7 @@ import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type { AgentPresetRegistry } from "@deepseek-ai/dsh-agent-preset-registry";
 import type { SkillRegistry } from "@deepseek-ai/dsh-skill";
 import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
+import type { ForgeDirs } from "@dsh-forge/lib-path";
 import type { Volatile } from "@deepseek-ai/cordis";
 import Schema from "@deepseek-ai/schemastery";
 import { parseExpertFile } from "./store/frontmatter.js";
@@ -60,6 +61,25 @@ import { ExpertWatchManager, makeFsObservedInvalidator, type FsObservedTarget } 
 
 /** 包名（实例 ID 前缀——本包 experts/ 随包档案的实例 ID = `@dsh-forge/expert-squad#键`）。 */
 export const EXPERT_SQUAD_PACKAGE_NAME = '@dsh-forge/expert-squad' as const
+
+// ---------------------------------------------------------------------------
+// 目录键声明合并登记（forge-dirs-unification 3.4）：根 scope
+// `reflect.provide('dirKeys.expert_squad', entries)`（plugin-forge 消费点枚举 dirKeys.*
+// 现取——查询时现拉不缓存）；条目形状受 satisfies Partial<ForgeDirs> 编译期受检，
+// 成员键与 host/forge-dirs.d.ts 声明合并逐一相同。声明失败零生效零抛 + warn 留痕。
+// ---------------------------------------------------------------------------
+
+/** expert_squad.experts 条目：用户层专家目录（{forge.home}/experts）。 */
+export const EXPERT_SQUAD_DIR_ENTRIES = {
+  "expert_squad.experts": {
+    description: "用户层专家目录（{forge.home}/experts——recruit_expert target=user 落点）",
+    deps: ["forge.home"],
+    resolve: (deps: { "forge.home": string }): string => join(deps["forge.home"], "experts"),
+  },
+} as const satisfies Partial<ForgeDirs>;
+
+/** dirKeys.expert_squad 约定服务名（dirKeys.* 反向拉取缝声明方前缀同款）。 */
+export const DIR_KEYS_SERVICE_NAME = "dirKeys.expert_squad" as const;
 
 // ---------------------------------------------------------------------------
 // cordis Config 二字段（proposal expert-squad-default-routing 承载裁决）：
@@ -161,12 +181,13 @@ interface ExpertSquadCtx {
 /** 三层 root（D3/D4 + 本裁决：无 worktree 层——project 层锚项目根）：fetch 路由的
  *  workspace 参数 = 面板当前选中工作区（可为链接 worktree）；project 层经
  *  resolveProjectRootFor 解析回项目根（worktree 的 `.git` 文件 → 主检出），档案
- *  落主检出不随 worktree 生灭；user/plugin 层按 scan 模块正门解析。 */
-function expertRootsFor(workspace: string): ExpertRoot[] {
+ *  落主检出不随 worktree 生灭；user 层 = userRoot 现查（dshHomePath 消费点现查，
+ *  AGENTS 1.6——闭包由装配传入）。 */
+function expertRootsFor(workspace: string, userRoot: () => string): ExpertRoot[] {
   const projectRoot = resolveProjectRootFor(workspace);
   return [
     { origin: "project", dir: join(projectRoot, ".dsh", "experts") },
-    { origin: "user", dir: resolveUserExpertsRoot() },
+    { origin: "user", dir: userRoot() },
     { origin: "plugin", dir: resolvePluginExpertsRoot(), pluginName: EXPERT_SQUAD_PACKAGE_NAME },
   ];
 }
@@ -179,11 +200,11 @@ function expertRootsFor(workspace: string): ExpertRoot[] {
  * root（user/plugin 层照常）；注册工作区锚（fetch 路由显式 workspace 参数，D4
  * 钉死为注册项目根）不经此校验，维持直挂语义。
  */
-function cwdExpertRoots(): ExpertRoot[] {
+function cwdExpertRoots(userRoot: () => string): ExpertRoot[] {
   const projectDir = resolveCwdProjectExpertsRoot(process.cwd());
   return [
     ...(projectDir !== null ? [{ origin: "project" as const, dir: projectDir }] : []),
-    { origin: "user", dir: resolveUserExpertsRoot() },
+    { origin: "user", dir: userRoot() },
     { origin: "plugin", dir: resolvePluginExpertsRoot(), pluginName: EXPERT_SQUAD_PACKAGE_NAME },
   ];
 }
@@ -284,9 +305,26 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
   let presetSyncHook: (() => void) | undefined;
   // bug a7bdf03f：workspace 锚 = 进程 cwd（兜底形态）时走 cwdExpertRoots 合理性
   // 校验；显式注册工作区锚照旧。registry 扫描与 watch manager 同源，roots 一致。
+  // user 层 root = dshHomePath('forge') 消费点现查（AGENTS 1.6 不缓存）；服务缺席
+  // 降级 ~/.dsh/forge/experts + warn 留痕（scan.resolveUserExpertsRoot onDegraded）。
+  const dshHomePathOf = (): string | undefined => {
+    try {
+      const svc: unknown = readOptionalService(ctx, "dshHomePath");
+      if (typeof svc !== "function") return undefined;
+      const p = (svc as (segment: string) => unknown).call(svc, "forge");
+      return typeof p === "string" ? p : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const userExpertsRoot = (): string =>
+    resolveUserExpertsRoot(process.env, {
+      dshHomePathOf,
+      onDegraded: (message) => diag("warn", "expert-squad-dsh-home-degraded", message),
+    });
   const rootsFor = (workspace: string): ExpertRoot[] => {
     const base =
-      resolve(workspace) === resolve(process.cwd()) ? cwdExpertRoots() : expertRootsFor(workspace);
+      resolve(workspace) === resolve(process.cwd()) ? cwdExpertRoots(userExpertsRoot) : expertRootsFor(workspace, userExpertsRoot);
     // 共享插件内置层 root（registerRoot 传播面）：服务键实例族（cwd registry）与面板
     // 路由实例族（workspace registry）是两族实例——外部插件（plugin-forge 等）经
     // experts.registerRoot 注册的内置目录若只落服务实例，面板永不可见（forge 55 档案
@@ -430,7 +468,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       const expertsDir =
         effectiveOrigin === "project"
           ? join(resolveProjectRootFor(input.workspace), ".dsh", "experts")
-          : resolveUserExpertsRoot();
+          : userExpertsRoot();
       // 只读硬闸（AGENTS 1.2 语义收口）：目标目录解析后落进任一注册内置层（本包随包
       // experts/ 或第三方 registerRoot 目录）→ fail-loud 拒写。origin 判定即便漂移，
       // 内置层也不可被写——只读由结构保证而非约定。
@@ -561,6 +599,19 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     };
     reflectLayer.provide(EXPERTS_SERVICE_KEY, expertsService);
   }
+  // 目录键声明登记（forge-dirs-unification 3.4——根 scope dirKeys.expert_squad 约定名；
+  // 消费侧枚举 dirKeys.* 现拉合并）。provide 缺席或抛 = 声明零生效零抛 + warn 留痕，
+  // 不阻载本插件；注销器经 ctx.effect 并入插件生命周期。
+  if (reflectLayer?.provide === undefined) {
+    diag("warn", "expert-squad-dirkeys-declare-absent", "ctx.reflect/provide absent——dirKeys.expert_squad 声明未提供（forge_dirs 目录键零贡献，fail-soft 不阻载）");
+  } else {
+    try {
+      const disposeDirKeys = reflectLayer.provide(DIR_KEYS_SERVICE_NAME, EXPERT_SQUAD_DIR_ENTRIES);
+      if (typeof disposeDirKeys === "function") ctx.effect(() => disposeDirKeys());
+    } catch (cause) {
+      diag("warn", "expert-squad-dirkeys-declare-fail", `dirKeys.expert_squad 提供失败（声明零生效零抛，不阻载）：${String(cause)}`);
+    }
+  }
   if (toolsFace === undefined) {
     diag("warn", "expert-squad-tools-absent", "ctx.tools absent——tool 面未注册（管理/委派工具不可用）");
     return;
@@ -664,7 +715,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
   }
   registerExpertTools(toolsFace, {
     registry,
-    userRoot: resolveUserExpertsRoot,
+    userRoot: userExpertsRoot,
     // 召唤 target="project" 落点：cwd 项目根（合理性校验同径——应用目录形态返 null，
     // tool 侧报错引导回落 user 层）
     projectRoot: () => resolveCwdProjectExpertsRoot(process.cwd()),

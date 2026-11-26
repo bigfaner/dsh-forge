@@ -8,12 +8,13 @@ export {
 } from './schema.js'
 export {
   autoStartDbFile,
-  KNOWLEDGE_DATA_DIR_SEGMENT,
+  KNOWLEDGE_DB_DIR_SEGMENT,
   KNOWLEDGE_DB_FILE_NAME,
-  resolveKnowledgeDataRoot,
+  resolveForgeRootOf,
   resolveKnowledgeDbFile,
+  type DshHomePathProbe,
+  type DshHomePathService,
   type KnowledgeStorageConfig,
-  type KnowledgeStorageEnv,
 } from './paths.js'
 export { ensureKnowledgeDbDir, KNOWLEDGE_DB_DIR_MODE, openKnowledgeDatabase } from './open.js'
 export {

@@ -1,7 +1,7 @@
 // store/scan —— 三层 root 扫描与同名遮蔽索引（tech-design §5 / AD3 / D3 已核销）。
 // 三层 root（同构 skill-filesystem）：project = <projectRoot>/.dsh/experts/（cwd 向上
-// 解析至 git 根）；user = $DSH_HOME/experts/（缺省 ~/.dsh/experts/）；plugin 内置 =
-// 随包 experts/。遮蔽定序 project > user > plugin（同键低层不可见，非合并），origin
+// 解析至 git 根）；user = {forgeRoot}/experts/（forge 根 = dshHomePath('forge') 现查 >
+// env DSH_HOME/forge > 降级 ~/.dsh/forge/experts/）；plugin 内置 = 随包 experts/。遮蔽定序 project > user > plugin（同键低层不可见，非合并），origin
 // 标记在取用结果上。快照语义：单次同步扫描产出完整一代冻结索引——热刷新中（watch
 // 层换代进行时）取用方持有的仍是上代完整快照，无半代索引（§9 FMEA）。
 // 降级：root 不可读（存在但读失败）→ warn + 跳过该 root；坏档案 → 单文件跳过，
@@ -12,7 +12,13 @@ import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { dshHomePath } from "@deepseek-ai/dsh-home-paths";
 import { parseExpertFile, type ExpertRecord } from "./frontmatter.js";
+
+/** 官方 dshHomePath 函数类型（type-only import——官方包类型依赖，运行期经服务现查） */
+export type DshHomePathService = typeof dshHomePath;
+/** 防御读取缝：dshHomePath('forge') 每消费点现查（AGENTS 1.6 不缓存），缺席/抛 = undefined */
+export type DshHomePathProbe = () => string | undefined;
 
 /** 三层来源（优先级 project > user > plugin，AD3）。 */
 export type ExpertOrigin = "project" | "user" | "plugin";
@@ -141,13 +147,26 @@ export function resolveCwdProjectExpertsRoot(cwd: string): string | null {
 }
 
 /**
- * user 层 experts 目录：`$DSH_HOME/experts/`，缺省 `~/.dsh/experts/`（D3，同构
- * skill-filesystem 用户根）。env 参数注入以便测试。
+ * user 层 experts 目录（forge-dirs-unification 3.4）：`{forgeRoot}/experts/`（forge 根
+ * = dshHomePath('forge') 服务现查 > env DSH_HOME/forge > 降级 `~/.dsh/forge/experts/`，
+ * 服务缺席时经 onDegraded 留含「dshHomePath 缺席」字样的 warn）。env 参数注入以便测试；
+ * probe 每消费点现查不缓存（AGENTS 1.6）。
  */
 export function resolveUserExpertsRoot(
   env: Record<string, string | undefined> = process.env,
+  deps: { dshHomePathOf?: DshHomePathProbe; onDegraded?: (message: string) => void } = {},
 ): string {
-  return join(env.DSH_HOME ?? join(homedir(), ".dsh"), "experts");
+  const viaService = deps.dshHomePathOf?.();
+  if (typeof viaService === "string" && viaService.trim() !== "") {
+    return join(viaService, "experts");
+  }
+  const envHome = env.DSH_HOME;
+  if (typeof envHome === "string" && envHome.trim() !== "") {
+    return join(envHome, "forge", "experts");
+  }
+  const fallbackForge = join(homedir(), ".dsh", "forge");
+  deps.onDegraded?.(`dshHomePath 缺席——用户层专家目录降级 ${join(fallbackForge, "experts")}`);
+  return join(fallbackForge, "experts");
 }
 
 /** plugin 内置层 experts 目录：随包（package.json files 已含 experts/）根下 experts/。 */

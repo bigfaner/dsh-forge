@@ -1,26 +1,28 @@
-// 自持库路径解析（裁决① 2026-11-19）：单文件应用级库——config 可配路径；缺省按宿主
-// 数据域子目录（插件域派生，dsh desktop / dsh-forge 两形态可用）：
-//   · dsh-forge 形态：env DSH_FORGE_TASKS_HOME（= {userData}/forge-workspaces）非空 →
-//     数据域根 = dirname（userData）→ {数据域}/knowledge/knowledge.db；
-//   · dsh desktop 形态：DSH_HOME（宿主 main.ts `??=` 恒注入）→ {DSH_HOME}/knowledge/knowledge.db；
-//   · 兜底：~/.dsh（expert-squad resolveUserExpertsRoot 同构口径）。
+// 自持库路径解析（forge-dirs-unification §2.4——落点改基座取值）：forge 根由官方
+// dshHomePath 服务现查（dshHomePath('forge')，消费点现查不缓存——AGENTS 1.6）；服务
+// 缺席降级 ~/.dsh/forge + onDegraded 留痕（含「dshHomePath 缺席」字样）。不再读环境
+// 变量 DSH_FORGE_TASKS_HOME / 直读 DSH_HOME（旧口径随 forge 目录统一退役——packages/core
+// 与旧宿主 apps/host 仍读 env，不在本方案范围，与新栈并存不冲突）。
+//   · 单装缺省库文件：{forgeRoot}/db/knowledge/knowledge.db（= 基座 forge.db +
+//     knowledge/knowledge.db——knowledge.store 条目同口径）；
+//   · config.dbFile 显式照用（组合安装 patch 下发 / 测试替代宿主，裁决① 2026-11-19）。
 // 路径归一含 realpath 维（判例 c773c09f）：注册表键归一见 registry.ts canonicalWsPath——
-// 本文件只做缺省派生，不做比对归一（normalizeFsPath 仅盘符/大小写维度，落库键须 realpath）。
+// 本文件只做缺省派生，不做比对归一。
 import { homedir } from 'node:os'
-import { dirname, resolve } from 'node:path'
-import { joinDirSegment } from '@dsh-forge/path-key'
+import { join, resolve } from 'node:path'
+import type { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 
-/** 插件域子目录段（宿主数据域下的 knowledge 子目录） */
-export const KNOWLEDGE_DATA_DIR_SEGMENT = 'knowledge'
+/** 官方 dshHomePath 函数类型（type-only import——官方包类型依赖，运行期经 cordis 服务现查） */
+export type DshHomePathService = typeof dshHomePath
+
+/** 防御读取缝：每次消费点现查（反射 get dshHomePath 服务），缺席/非函数/抛 = undefined */
+export type DshHomePathProbe = () => string | undefined
+
+/** 库文件所在目录段（forge.db 下的 knowledge 子目录——knowledge.store 条目同口径） */
+export const KNOWLEDGE_DB_DIR_SEGMENT = 'knowledge'
 
 /** 库文件名（单文件应用级库——全表同库） */
 export const KNOWLEDGE_DB_FILE_NAME = 'knowledge.db'
-
-/** 宿主环境锚子面（process.env 结构兼容——注入以便测试） */
-export interface KnowledgeStorageEnv {
-  readonly DSH_FORGE_TASKS_HOME?: string
-  readonly DSH_HOME?: string
-}
 
 /** config 可配路径子面（KnowledgePluginConfig 存储子域结构兼容） */
 export interface KnowledgeStorageConfig {
@@ -33,37 +35,42 @@ function nonEmpty(v: string | undefined): boolean {
   return typeof v === 'string' && v.trim() !== ''
 }
 
-/** 缺省数据域根：DSH_FORGE_TASKS_HOME > DSH_HOME > ~/.dsh（两宿主形态 + 兜底） */
-export function resolveKnowledgeDataRoot(env: KnowledgeStorageEnv = process.env): string {
-  if (nonEmpty(env.DSH_FORGE_TASKS_HOME)) return dirname(env.DSH_FORGE_TASKS_HOME as string)
-  if (nonEmpty(env.DSH_HOME)) return env.DSH_HOME as string
-  return joinDirSegment(homedir(), '.dsh')
+/**
+ * forge 根解析（§2.4 单点）：dshHomePath('forge') 服务现查 > 降级 ~/.dsh/forge
+ * （onDegraded 输出含「dshHomePath 缺席」字样的 warn 留痕——降级不静默）。
+ */
+export function resolveForgeRootOf(
+  probe?: DshHomePathProbe,
+  onDegraded?: (message: string) => void,
+): string {
+  const viaService = probe?.()
+  if (nonEmpty(viaService)) return viaService as string
+  const fallback = join(homedir(), '.dsh', 'forge')
+  onDegraded?.(`dshHomePath 缺席——forge 根降级 ${fallback}`)
+  return fallback
 }
 
-/** 库文件完整解析：config.dbFile 显式优先；缺省 = 数据域根/knowledge/knowledge.db */
+/** 库文件完整解析：config.dbFile 显式优先（照用）；缺省 = {forgeRoot}/db/knowledge/knowledge.db */
 export function resolveKnowledgeDbFile(
   config: KnowledgeStorageConfig = {},
-  env: KnowledgeStorageEnv = process.env,
+  forgeRoot: string,
 ): string {
   if (nonEmpty(config.dbFile)) return resolve(config.dbFile as string)
-  return joinDirSegment(
-    joinDirSegment(resolveKnowledgeDataRoot(env), KNOWLEDGE_DATA_DIR_SEGMENT),
-    KNOWLEDGE_DB_FILE_NAME,
-  )
+  return join(forgeRoot, 'db', KNOWLEDGE_DB_DIR_SEGMENT, KNOWLEDGE_DB_FILE_NAME)
 }
 
 /**
- * 自启判定（双态缝——旧服务在场时以自持库为数据面准备）：config.dbFile 显式、或任一
- * 宿主数据域锚（DSH_FORGE_TASKS_HOME / DSH_HOME）在场才自启；双锚全缺席（裸测试/无宿主
- * 环境）不自启——不向 ~/.dsh 兜底路径静默落盘（core forgeKnowledge 旧服务已随 1.8 退役，
- * 自持库自启即唯一供数面）。
+ * 自启判定（双态缝——自持库为唯一供数面）：config.dbFile 显式、或 dshHomePath 服务
+ * 现查在场才自启；双缺（裸测试/无宿主环境）不自启——不向 ~/.dsh 兜底路径静默落盘
+ * （服务缺席但 dbFile 显式的降级 warn 由装配面 onDegraded 承担；core forgeKnowledge
+ * 旧服务已随 1.8 退役）。
  */
 export function autoStartDbFile(
   config: KnowledgeStorageConfig = {},
-  env: KnowledgeStorageEnv = process.env,
+  probe?: DshHomePathProbe,
 ): string | undefined {
-  if (nonEmpty(config.dbFile) || nonEmpty(env.DSH_FORGE_TASKS_HOME) || nonEmpty(env.DSH_HOME)) {
-    return resolveKnowledgeDbFile(config, env)
-  }
+  if (nonEmpty(config.dbFile)) return resolveKnowledgeDbFile(config, '')
+  const forgeRoot = probe?.()
+  if (nonEmpty(forgeRoot)) return resolveKnowledgeDbFile(config, forgeRoot as string)
   return undefined
 }

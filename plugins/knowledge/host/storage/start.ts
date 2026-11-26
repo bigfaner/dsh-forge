@@ -4,7 +4,7 @@
 // （diag.ts——AGENTS §7 禁直落 console）。
 import type Database from '@dsh-forge/lib-db'
 import { openKnowledgeDatabase } from './open.js'
-import { autoStartDbFile, type KnowledgeStorageConfig, type KnowledgeStorageEnv } from './paths.js'
+import { autoStartDbFile, type DshHomePathProbe, type KnowledgeStorageConfig } from './paths.js'
 import { createKnowledgeRegistry, type KnowledgeRegistry } from './registry.js'
 import { runSeedMigration, type SeedMigrationResult } from './migrate.js'
 import { emitStorageDiag, storageDiag, type DiagEmitter } from './diag.js'
@@ -18,21 +18,21 @@ export interface SelfHostedStorage {
   close(): void
 }
 
-/** 自启入参（emit = 装配期注入诊断发射面——缺席走 diag.ts 兜底） */
+/** 自启入参（emit = 装配期注入诊断发射面——缺席走 diag.ts 兜底；dshHomePathOf = 官方
+ * dshHomePath 服务现查缝——消费点现查不缓存） */
 export interface StartSelfHostedStorageOptions extends KnowledgeStorageConfig {
   readonly emit?: DiagEmitter
-  readonly env?: KnowledgeStorageEnv
+  readonly dshHomePathOf?: DshHomePathProbe
 }
 
 /**
- * 自启入口：锚缺席（裸环境）或开库失败 → undefined（fail-soft 不阻载）。
- * 成功 → 打开的库 + 注册表面 + 种子迁移终态（调用方并入 disposer close）。
+ * 自启入口：dbFile 显式与 dshHomePath 服务双缺（裸环境）或开库失败 → undefined
+ * （fail-soft 不阻载）。成功 → 打开的库 + 注册表面 + 种子迁移终态（调用方并入 disposer close）。
  */
 export function startSelfHostedStorage(
   config: StartSelfHostedStorageOptions = {},
-  env: KnowledgeStorageEnv = process.env,
 ): SelfHostedStorage | undefined {
-  const file = autoStartDbFile(config, env)
+  const file = autoStartDbFile(config, config.dshHomePathOf)
   if (file === undefined) return undefined
   try {
     const db = openKnowledgeDatabase(file)

@@ -373,7 +373,7 @@ describe("来源保持（用户裁决 2026-10-31）：编辑不换层、不新�
     const prior = stubDshHome();
     try {
       const ws = makeWorkspace();
-      const userRoot = join(process.env.DSH_HOME!, "experts");
+      const userRoot = join(process.env.DSH_HOME!, "forge", "experts");
       mkdirSync(userRoot, { recursive: true });
       const USER_KEY = "solo-user-expert";
       writeFileSync(join(userRoot, `${USER_KEY}.md`), expertMd(USER_KEY, "用户层评审"));
@@ -447,7 +447,7 @@ describe("来源保持（用户裁决 2026-10-31）：编辑不换层、不新�
       const entry = result.json as { origin?: string; title?: string };
       // user 层覆写生效（遮蔽 plugin）——键不变，非新建专家
       expect(entry.title).toBe("内置一号（覆写）");
-      const userRoot = join(process.env.DSH_HOME!, "experts");
+      const userRoot = join(process.env.DSH_HOME!, "forge", "experts");
       expect(readFileSync(join(userRoot, "builtin-one.md"), "utf8")).toContain("内置一号（覆写）");
       // project 层零落盘
       expect(readdirSync(join(ws, ".dsh", "experts"))).toEqual([`${KEY}.md`]);
