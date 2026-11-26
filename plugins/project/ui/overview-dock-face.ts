@@ -181,7 +181,7 @@ export function registerOverviewDockFace(
       console.warn('[dsh-forge/project] ctx.sidebarRight.openResource absent——文档开出缝不开（文档行非交互降级）')
     }
     const inject = (): Record<string, unknown> => {
-      // Bug 行「添加到会话中」快速路径（composer-bug-reference 1.4）：uiWorkspace 不在 inject
+      // Bug 行「添加到会话」快速路径（composer-bug-reference 1.4）：uiWorkspace 不在 inject
       // 边——reflect.get 只读反射现查（cordis 属性读取未 inject 服务即抛；缺席/异常 =
       // undefined，AGENTS 1.6 调用期现查）。sessions 缺席 = 按钮不呈现（行语言零变化），
       // 快照落缓存缝缺席 = 不落（bugSourceCacheOf 现查）。

@@ -142,7 +142,7 @@ export function BugStatusChips({ counts, active, onToggle, onClear }: BugStatusC
 /** 单 Bug 行（提案行同构——dswf-ov-item/parent flex：状态点[色区分状态] + summary 标题
  *  靠左 + error_type chip 右靠；无展开/无状态文字/无时间。onOpenBug 在场 = 整行可点
  *  role=button 键盘可达，点击上抛开详情弹框；缺席 = 静态呈现。onAddBugToSession 在场 =
- *  行内纯增「添加到会话中」控件（composer-bug-reference 1.4——stopPropagation 不触发
+ *  行内纯增「添加到会话」控件（composer-bug-reference 1.4——stopPropagation 不触发
  *  行点击；缺席 = 行语言零变化） */
 function BugRow({
   bug,
@@ -190,7 +190,7 @@ function BugRow({
             }}
             onKeyDown={stop}
           >
-            添加到会话中
+            添加到会话
           </button>
         ) : null}
       </div>
@@ -208,7 +208,7 @@ export interface BugListProps {
   readonly onClearStatuses?: () => void
   /** 行点击 → 详情弹框回调（后续切片接线；缺席 = 行静态呈现） */
   readonly onOpenBug?: (bugId: string) => void
-  /** 行「添加到会话中」上抛（1.4——装配注入；缺席 = 按钮不呈现） */
+  /** 行「添加到会话」上抛（1.4——装配注入；缺席 = 按钮不呈现） */
   readonly onAddBugToSession?: (bug: BugCard) => void
   /** 空态标题（缺省「暂无 Bug」；搜索在场由帧侧注入「无匹配…」） */
   readonly emptyTitle?: string

@@ -30,7 +30,7 @@ const { test } = createSharedLaunchFixture({
   launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
 })
 
-test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加到会话中」→ chip 落当前会话、零新会话', async ({ sharedLaunch }) => {
+test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加到会话」→ chip 落当前会话、零新会话', async ({ sharedLaunch }) => {
   // 验收②（转录含消息文本 = 用户消息入转录投影）挂官方栈世代门（族① gate-environment 先例——
   // input-history-plugin 等 13 spec 同径）：rc.2 世代用户消息不入转录，整代 co-upgrade 后复跑。
   test.skip(!officialStackConverged(), OFFICIAL_STACK_GATE_NOTE)
@@ -49,7 +49,7 @@ test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加�
         `INSERT INTO bugs (id, summary, bug_desc, trigger_desc, expected, actual, suspected, error_type,
                            bug_status, source_task_id, report_session_id, reporter, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, NULL, 'e2e-walkthrough', ?, ?)`,
-      ).run(bugId, '双效走查 Bug', '走查复现体', '点「添加到会话中」', '单效', '历史曾双效', null, 'walkthrough', now, now)
+      ).run(bugId, '双效走查 Bug', '走查复现体', '点「添加到会话」', '单效', '历史曾双效', null, 'walkthrough', now, now)
     } finally {
       db.close()
     }
@@ -71,7 +71,7 @@ test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加�
     const bugRow = page.locator(`[data-dswf-ov-bugrow="${bugId}"]`).first()
     await expect(bugRow, '台账 bug 行在场').toBeVisible({ timeout: 30_000 })
     const addBtn = bugRow.locator('[data-dswf-ov-bugrow-add]')
-    await expect(addBtn, '「添加到会话中」按钮在场').toBeVisible({ timeout: 15_000 })
+    await expect(addBtn, '「添加到会话」按钮在场').toBeVisible({ timeout: 15_000 })
 
     // ── 单次点击（台账复现动作）──
     const sessionRowsBefore = await page.locator(SESSION_ROW_ANY).count()
@@ -98,7 +98,7 @@ test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加�
       '',
       `- 日期：${new Date().toISOString()}`,
       `- bugId（台账）：2d5434d1-8929-4ca6-aa90-68d6a64b04b9；台账行（夹具）：${bugId}`,
-      '- 条件：当前会话有历史（composer 直发先落地一条消息）→ Bug 子 tab 单次点击「添加到会话中」',
+      '- 条件：当前会话有历史（composer 直发先落地一条消息）→ Bug 子 tab 单次点击「添加到会话」',
       '- 结果：① chip 落当前会话 composer；② 转录保持当前会话、侧栏会话行数不变、无预填新会话',
       '- 截图：bug-2d5434d1-single-effect.png',
       '',

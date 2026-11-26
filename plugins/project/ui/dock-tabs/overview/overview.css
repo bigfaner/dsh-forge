@@ -388,7 +388,7 @@
   flex: none;
 }
 
-/* Bug 行「添加到会话中」（composer-bug-reference 1.4 纯增行内控件——dswf-ov-act 同款式
+/* Bug 行「添加到会话」（composer-bug-reference 1.4 纯增行内控件——dswf-ov-act 同款式
  * 族：右靠小钮、常现（不随行 hover 显隐），不扰既有行语言） */
 .dswf-ov-bugrow-add {
   flex: none;

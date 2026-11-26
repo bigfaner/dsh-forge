@@ -516,7 +516,7 @@ export function buildOpenSessionOrchestrator(
   return createOpenSessionOrchestrator(openSessionPlatformFrom(services))
 }
 
-/** Bug 快速路径输入（1.4——Bug 子 tab 行「添加到会话中」；summary = chip label 主键） */
+/** Bug 快速路径输入（1.4——Bug 子 tab 行「添加到会话」；summary = chip label 主键） */
 export interface BugQuickAddInput {
   readonly bugId: string
   readonly summary: string

@@ -95,7 +95,7 @@ export interface OverviewFrameProps {
   readonly onRetry: () => void
   /** Bug 行点击 → 详情弹框（fix-bug 收尾——选中即开，帧侧透传 BugList；缺席 = 行静态呈现） */
   readonly onOpenBug?: (bugId: string) => void
-  /** Bug 行「添加到会话中」（composer-bug-reference 1.4——装配注入；缺席 = 按钮不呈现，行语言零变化） */
+  /** Bug 行「添加到会话」（composer-bug-reference 1.4——装配注入；缺席 = 按钮不呈现，行语言零变化） */
   readonly onAddBugToSession?: (bug: BugCard) => void
   /** 文档行点击（dock 开 tab——装配传参兼容保留；feature 子 tab 退役后消费面归零，
    *  spec 子 tab 打开入口归 G3 接线） */
@@ -326,7 +326,7 @@ export interface OverviewTabProps {
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** 会话 pill 跳转（ShellHost 递达面——任务抽屉同缝；缺席 = Bug 弹框 pill 非交互） */
   readonly onOpenSession?: (sessionId: string) => void
-  /** Bug 行「添加到会话中」（1.4——装配注入 addBugToSession；缺席 = 按钮不呈现） */
+  /** Bug 行「添加到会话」（1.4——装配注入 addBugToSession；缺席 = 按钮不呈现） */
   readonly onAddBugToSession?: (bug: BugCard) => void
   /** 会话名解析器（dsh 账本快照 displayTitle 窄读——任务抽屉同缝；缺席 = pill 回退 id） */
   readonly sessionTitleOf?: (sessionId: string) => string | undefined

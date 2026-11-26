@@ -165,7 +165,7 @@ export interface OverviewDockAssemblyProps {
   readonly onStartSession?: (request: SessionOpenRequest) => void
   /** ⟞ 打开 worker 执行子会话（S5 列表行——插件 inject face；缺席 = 按钮不呈现） */
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
-  /** Bug 行「添加到会话中」（composer-bug-reference 1.4——插件 inject face；缺席 = 按钮不呈现） */
+  /** Bug 行「添加到会话」（composer-bug-reference 1.4——插件 inject face；缺席 = 按钮不呈现） */
   readonly onAddBugToSession?: (bug: { readonly bugId: string; readonly summary: string }) => void
   /** 弹窗开着的任务（null = 关——三视图行高亮源；弹窗本体挂载在 ShellHost[D23 挂载独立]） */
   readonly drawerTaskId: string | null
@@ -270,7 +270,7 @@ export interface OverviewDockBodyProps {
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
-  /** Bug 行「添加到会话中」（composer-bug-reference 1.4——插件 inject face；缺席 = 按钮不呈现） */
+  /** Bug 行「添加到会话」（composer-bug-reference 1.4——插件 inject face；缺席 = 按钮不呈现） */
   readonly addBugToSession?: BugQuickAddFn
   /** RPC client 构造器（缺省 overviewRpcClientFactory Typert 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory
@@ -383,7 +383,7 @@ export interface ForgeOverviewTabProps {
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /** 打开新会话编排器（4.6 插件 inject face；缺席 = 行头/诊断/派发入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
-  /** Bug 行「添加到会话中」（composer-bug-reference 1.4 插件 inject face；缺席 = 按钮不呈现） */
+  /** Bug 行「添加到会话」（composer-bug-reference 1.4 插件 inject face；缺席 = 按钮不呈现） */
   readonly addBugToSession?: BugQuickAddFn
   /** RPC client 构造器（缺省 overviewRpcClientFactory Typert 真身；注入 = 测试面） */
   readonly makeClient?: RpcClientFactory

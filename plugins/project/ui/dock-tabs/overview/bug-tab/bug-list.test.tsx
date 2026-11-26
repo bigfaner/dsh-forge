@@ -108,7 +108,7 @@ describe('BugList（行形态 + 空态 + 行点击上抛）', () => {
   })
 })
 
-describe('BugList 行「添加到会话中」（composer-bug-reference 1.4——纯增行内控件）', () => {
+describe('BugList 行「添加到会话」（composer-bug-reference 1.4——纯增行内控件）', () => {
   const handlers = { onToggleStatus: () => {} }
 
   it('onAddBugToSession 在场 = 行内纯增按钮（1.4）；缺席 = 行语言零变化', () => {
@@ -123,13 +123,13 @@ describe('BugList 行「添加到会话中」（composer-bug-reference 1.4——
       />,
     )
     expect(withAdd).toContain('data-dswf-ov-bugrow-add')
-    expect(withAdd).toContain('添加到会话中')
+    expect(withAdd).toContain('添加到会话')
     expect(withAdd).toContain('dswf-ov-bugrow-add')
     const withoutAdd = renderToStaticMarkup(
       <BugList bugs={[bug('b1', 'open')]} counts={COUNTS} activeStatuses={new Set()} {...handlers} />,
     )
     expect(withoutAdd).not.toContain('data-dswf-ov-bugrow-add')
-    expect(withoutAdd).not.toContain('添加到会话中')
+    expect(withoutAdd).not.toContain('添加到会话')
     // 既有行语言零变化：整行 role=button 语义与 error_type chip 位不受扰
     expect(withAdd).toContain('role="button"')
     expect(withAdd).toContain('data-dswf-ov-bugrow-type="api"')

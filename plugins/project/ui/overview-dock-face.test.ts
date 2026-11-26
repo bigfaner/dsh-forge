@@ -182,7 +182,7 @@ describe('registerOverviewDockFace（裁决 1——project 概览拥有者两段
     expect(slots.occupants.filter((e) => e.key === OVERVIEW_KEY)).toEqual([])
   })
 
-  it('Bug 行「添加到会话中」装配：入座时 sessions + uiWorkspace 在场 = inject 面递达 addBugToSession；uiWorkspace 缺席 = 键缺席（按钮不呈现）', () => {
+  it('Bug 行「添加到会话」装配：入座时 sessions + uiWorkspace 在场 = inject 面递达 addBugToSession；uiWorkspace 缺席 = 键缺席（按钮不呈现）', () => {
     const mount = (services: Record<string, unknown>): Record<string, unknown> => {
       const slots = officialishSlots()
       let face: (() => Record<string, unknown>) | undefined
