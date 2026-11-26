@@ -123,6 +123,10 @@ function resolveSpecDirViaRegistry(input: {
             // 按声明方保留来源（对齐 project 侧 anchors.ts——bug fb3777a4）：不并入单一对象
             // 静默后到者胜；撞名由 resolveForgeDirs 注册表报错点名两个声明方（下方 catch warn）
             if (Object.keys(entries).length > 0) declarations.push({ source: name, entries });
+            else {
+              // 对齐 project 侧 anchors.ts：零产出约定名留痕，不静默跳过（bug 24954442 顺带）
+              input.diag?.(`[task-loop] dirKeys 声明零产出：${name} 无一条可用条目（取值非对象/malformed/保留名）`, "warn");
+            }
           }
         } catch {
           // 单声明拉取失败 = 跳过该声明方（声明缺席留痕语义，不炸锚点节）
@@ -145,7 +149,10 @@ function resolveSpecDirViaRegistry(input: {
       return undefined;
     }
     return resolved["forge.spec_dir"];
-  } catch {
+  } catch (cause) {
+    // 外层拉取缝异常不静默（对齐 project 侧——诊断留痕后降级）
+    const message = cause instanceof Error ? cause.message : String(cause);
+    input.diag?.(`[task-loop] dirKeys 声明拉取缝异常降级：${message}`, "warn");
     return undefined;
   }
 }
