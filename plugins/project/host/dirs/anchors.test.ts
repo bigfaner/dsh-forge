@@ -125,12 +125,12 @@ describe('dirKeys.* 反向拉取缝（collectDeclaredDirKeys——消费点现�
           'forge.custom': knowledgeRootEntry, // 保留名
           'nodot': knowledgeRootEntry, // 无前缀
           'bad.resolve': { ...knowledgeRootEntry, resolve: 42 }, // resolve 非函数
-          'knowledge.store': { description: '库文件所在目录', deps: ['forge.db'], resolve: () => 'X:\\store' },
+          'knowledge.global': { description: '全局知识库目录', deps: ['forge.home'], resolve: () => 'X:\\global' },
         },
       }),
       onDiag,
     )
-    expect(Object.keys(pulled[0]!.entries)).toEqual(['knowledge.store'])
+    expect(Object.keys(pulled[0]!.entries)).toEqual(['knowledge.global'])
     expect(onDiag.messages().filter((m) => m.includes('保留命名空间'))).toHaveLength(1)
     expect(onDiag.messages().filter((m) => m.includes('malformed'))).toHaveLength(3) // 保留名 warn 亦经 malformed 包装
   })

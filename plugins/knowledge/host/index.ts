@@ -94,7 +94,7 @@ export interface KnowledgePlugin {
 // ─────────────────── knowledge 目录键声明（forge-dirs-unification §2.2/§2.5） ───────────────────
 
 /**
- * knowledge 三个目录键（声明合并 host/forge-dirs.d.ts 的运行期登记面——键与声明逐一
+ * knowledge 两个目录键（声明合并 host/forge-dirs.d.ts 的运行期登记面——键与声明逐一
  * 相同，satisfies Partial<ForgeDirs> 编译期受检；description 与 forge_dirs 输出同源；
  * resolve 纯函数零 IO，deps 由注册表先解析）。
  */
@@ -103,11 +103,6 @@ export const KNOWLEDGE_DIR_ENTRIES = {
     description: '项目知识库（.knowledge/——conventions/lessons/examples 三类沉淀所在）',
     deps: ['workspaceRoot'],
     resolve: (deps: { workspaceRoot: string }): string => joinDirSegment(deps.workspaceRoot, '.knowledge'),
-  },
-  'knowledge.store': {
-    description: 'knowledge 库文件所在目录（{forge.db}/knowledge——单装库文件 knowledge.db 同目录）',
-    deps: ['forge.db'],
-    resolve: (deps: { 'forge.db': string }): string => joinDirSegment(deps['forge.db'], 'knowledge'),
   },
   'knowledge.global': {
     description: '全局知识库目录（{forge.home}/knowledge/global——只随 forge 根，不随库文件路径）',

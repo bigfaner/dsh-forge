@@ -1,4 +1,4 @@
-// knowledge 插件 ForgeDirs 声明合并（forge-dirs-unification §2.5）：三个插件键追加进
+// knowledge 插件 ForgeDirs 声明合并（forge-dirs-unification §2.5）：两个插件键追加进
 // @dsh-forge/lib-path 的 ForgeDirs 接口——成员键与 host/index.ts 运行期登记
 // （KNOWLEDGE_DIR_ENTRIES，dirKeys.knowledge provide）逐一相同；写错键名/依赖在本包
 // 编译期即报错。插件之间不互相 import——本追加只对加载到它的编译单元可见。
@@ -11,8 +11,6 @@ declare module "@dsh-forge/lib-path" {
   interface ForgeDirs {
     /** 项目知识库（{workspaceRoot}/.knowledge——conventions/lessons/examples 三类沉淀所在） */
     "knowledge.root": ForgeDirEntry<["workspaceRoot"]>;
-    /** knowledge 库文件所在目录（{forge.db}/knowledge） */
-    "knowledge.store": ForgeDirEntry<["forge.db"]>;
     /** 全局知识库目录（{forge.home}/knowledge/global——只随 forge 根，不随库文件路径） */
     "knowledge.global": ForgeDirEntry<["forge.home"]>;
   }

@@ -84,11 +84,10 @@ function resolveDeclaredEntries(sources: ForgeDirSources = SOURCES): Record<stri
 }
 
 describe('knowledge 目录键声明形状（satisfies Partial<ForgeDirs> 编译期受检 + 运行期断言）', () => {
-  it('登记键 = knowledge.root / knowledge.store / knowledge.global（带插件前缀，非 forge.* 保留段）', () => {
+  it('登记键 = knowledge.root / knowledge.global（带插件前缀，非 forge.* 保留段）', () => {
     expect(Object.keys(KNOWLEDGE_DIR_ENTRIES).sort()).toEqual([
       'knowledge.global',
       'knowledge.root',
-      'knowledge.store',
     ])
     for (const key of Object.keys(KNOWLEDGE_DIR_ENTRIES)) {
       expect(key.startsWith('forge.')).toBe(false)
@@ -96,16 +95,14 @@ describe('knowledge 目录键声明形状（satisfies Partial<ForgeDirs> 编译�
     }
   })
 
-  it('deps：root 依赖 workspaceRoot；store 依赖 forge.db；global 依赖 forge.home（与声明合并文件逐一相同）', () => {
+  it('deps：root 依赖 workspaceRoot；global 依赖 forge.home（与声明合并文件逐一相同）', () => {
     expect(KNOWLEDGE_DIR_ENTRIES['knowledge.root'].deps).toEqual(['workspaceRoot'])
-    expect(KNOWLEDGE_DIR_ENTRIES['knowledge.store'].deps).toEqual(['forge.db'])
     expect(KNOWLEDGE_DIR_ENTRIES['knowledge.global'].deps).toEqual(['forge.home'])
   })
 
-  it('注册表解析（注入事实断言）：root = {workspaceRoot}/.knowledge；store = {forge.db}/knowledge；global 只随 forge 根 = {forge.home}/knowledge/global', () => {
+  it('注册表解析（注入事实断言）：root = {workspaceRoot}/.knowledge；global 只随 forge 根 = {forge.home}/knowledge/global', () => {
     const resolved = resolveDeclaredEntries()
     expect(resolved['knowledge.root']).toBe(join('Z:\\ws\\proj', '.knowledge'))
-    expect(resolved['knowledge.store']).toBe(join('X:\\dsh-home', 'forge', 'db', 'knowledge'))
     expect(resolved['knowledge.global']).toBe(join('X:\\dsh-home', 'forge', 'knowledge', 'global'))
   })
 
@@ -114,7 +111,7 @@ describe('knowledge 目录键声明形状（satisfies Partial<ForgeDirs> 编译�
     const b = resolveDeclaredEntries({ ...SOURCES, dshHome: 'Y:\\other-home' })
     expect(a['knowledge.global']).toBe(join('X:\\dsh-home', 'forge', 'knowledge', 'global'))
     expect(b['knowledge.global']).toBe(join('Y:\\other-home', 'forge', 'knowledge', 'global'))
-    expect(a['knowledge.store']).not.toBe(b['knowledge.store'])
+    expect(a['knowledge.global']).not.toBe(b['knowledge.global'])
   })
 })
 

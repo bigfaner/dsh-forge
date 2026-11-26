@@ -11,7 +11,7 @@ const ROWS: readonly DirFactRow[] = [
   { dirKey: 'forge.home', dir: 'C:\\dsh\\forge', description: '' },
   { dirKey: 'forge.db', dir: 'C:\\dsh\\forge\\db', description: '' },
   { dirKey: 'forge.tmp', dir: 'C:\\dsh\\forge\\tmp', description: '' },
-  { dirKey: 'knowledge.store', dir: 'C:\\dsh\\forge\\knowledge', description: '' },
+  { dirKey: 'knowledge.global', dir: 'C:\\dsh\\forge\\knowledge\\global', description: '' },
   { dirKey: 'forge.project_runtime_dir', dir: 'C:\\dsh\\forge\\projects\\demo', description: '' },
   { dirKey: 'forge.task_runtime_dir', dir: 'D:\\tasks\\demo@abcd1234', description: '' },
   { dirKey: 'forge.docs_root', dir: 'Z:\\ws\\demo\\.forge\\docs', description: '' },

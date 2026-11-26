@@ -4,7 +4,7 @@
 // 变量 DSH_FORGE_TASKS_HOME / 直读 DSH_HOME（旧口径随 forge 目录统一退役——packages/core
 // 与旧宿主 apps/host 仍读 env，不在本方案范围，与新栈并存不冲突）。
 //   · 单装缺省库文件：{forgeRoot}/db/knowledge/knowledge.db（= 基座 forge.db +
-//     knowledge/knowledge.db——knowledge.store 条目同口径）；
+//     knowledge/knowledge.db——库文件位置由配置决定，不设目录键）；
 //   · config.dbFile 显式照用（组合安装 patch 下发 / 测试替代宿主，裁决① 2026-11-19）。
 // 路径归一含 realpath 维（判例 c773c09f）：注册表键归一见 registry.ts canonicalWsPath——
 // 本文件只做缺省派生，不做比对归一。
@@ -18,7 +18,7 @@ export type DshHomePathService = typeof dshHomePath
 /** 防御读取缝：每次消费点现查（反射 get dshHomePath 服务），缺席/非函数/抛 = undefined */
 export type DshHomePathProbe = () => string | undefined
 
-/** 库文件所在目录段（forge.db 下的 knowledge 子目录——knowledge.store 条目同口径） */
+/** 库文件所在目录段（forge.db 下的 knowledge 子目录——库文件位置由配置决定，不设目录键） */
 export const KNOWLEDGE_DB_DIR_SEGMENT = 'knowledge'
 
 /** 库文件名（单文件应用级库——全表同库） */

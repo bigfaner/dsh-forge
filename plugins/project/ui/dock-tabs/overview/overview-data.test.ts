@@ -171,7 +171,7 @@ describe('loadOverviewHead（头路并发——projects 单点 + features/stats 
         { dirKey: 'workspaceRoot', dir: 'HOST/ws', description: '' },
         { dirKey: 'forge.home', dir: 'HOST/dsh/forge', description: '' },
         { dirKey: 'forge.tmp', dir: 'HOST/dsh/forge/tmp', description: '' },
-        { dirKey: 'knowledge.store', dir: 'HOST/dsh/forge/knowledge', description: '' },
+        { dirKey: 'knowledge.global', dir: 'HOST/dsh/forge/knowledge/global', description: '' },
         { dirKey: 'forge.project_runtime_dir', dir: 'HOST/dsh/forge/projects/demo', description: '' },
         { dirKey: 'forge.task_runtime_dir', dir: 'HOST/tasks@a1b2c3d4', description: '' },
         { dirKey: 'forge.docs_root', dir: 'HOST/ws/.forge/docs', description: '' },
