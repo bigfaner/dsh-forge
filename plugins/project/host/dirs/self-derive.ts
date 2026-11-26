@@ -1,8 +1,7 @@
 // host/dirs · self-derive——deriveTaskStoreDir 单装态自 derivation 兜底缝（plugin-task-loop/1.32②）：
 // core forgeProjects face 缺席的宿主（dsh desktop 单装态）添加项目向导派生行恒 typed unavailable
 // ——本缝在插件内承接同语义动词：tasksHome 两级解析（config.tasksHome > forge 根派生
-// {forgeHome}/projects——§2.4 forge 根单点，env DSH_FORGE_TASKS_HOME 与 {home}/forge-workspaces
-// 分支已删）+ lib-path 单源算法（deriveTaskStoreDir/classifyRegistrationCollision——core 同链
+// {forgeHome}/projects——§2.4 forge 根单点）+ lib-path 单源算法（deriveTaskStoreDir/classifyRegistrationCollision——core 同链
 // 同语义，零复制）+ 碰撞三态同收口（suspected-move → ERR_SUSPECTED_MOVE typed 拒绝；在册项目
 // 任务库消歧——core verb registeredStoreDirs 同语义，行源 = 插件 project.db）。
 // 优先级纪律（bug 8de6b903 教训——不遮蔽真失败）：core face 在场恒委托 core，本缝只在

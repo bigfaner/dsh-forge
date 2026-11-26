@@ -4,8 +4,9 @@
 // warn 诊断——经装配期注入的诊断发射面，不直落 console）；workspaceRoot 经官方宿主工作区面
 // （插件 project.db main 行 + workspaceRegistry 直探，wsPathOf 注入）；projectRoot 取 lib/path
 // resolveProjectKey 归拢的项目主检出路径（规范化后——projectKey 大小写敏感，不规范化会让同一
-// 项目分裂两个键）。注册表/forge_dirs/task-loop 落盘共用同一次解析（sourcesOf 单点）。
-// 环境变量 DSH_FORGE_TASKS_HOME 与 {home}/forge-workspaces 分支已删（§2.9 清理）。
+// 项目分裂两个键）。任务库根由 lib/path 目录注册表（forge.project_runtime_dir /
+// forge.task_runtime_dir）派生——经注册表注入的工作区根与项目主检出取得。
+// 注册表/forge_dirs/task-loop 落盘共用同一次解析（sourcesOf 单点）。
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { canonicalizePath, resolveProjectKey, type ForgeDirSources, type ProjectKeyDeps } from "@dsh-forge/lib-path";

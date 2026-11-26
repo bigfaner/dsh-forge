@@ -1,8 +1,7 @@
 // 自持库路径解析（forge-dirs-unification §2.4——落点改基座取值）：forge 根由官方
 // dshHomePath 服务现查（dshHomePath('forge')，消费点现查不缓存——AGENTS 1.6）；服务
-// 缺席降级 ~/.dsh/forge + onDegraded 留痕（含「dshHomePath 缺席」字样）。不再读环境
-// 变量 DSH_FORGE_TASKS_HOME / 直读 DSH_HOME（旧口径随 forge 目录统一退役——packages/core
-// 与旧宿主 apps/host 仍读 env，不在本方案范围，与新栈并存不冲突）。
+// 缺席降级 ~/.dsh/forge + onDegraded 留痕（含「dshHomePath 缺席」字样）；knowledge 的
+// 库文件与全局目录均由该 forge 根派生。
 //   · 单装缺省库文件：{forgeRoot}/db/knowledge/knowledge.db（= 基座 forge.db +
 //     knowledge/knowledge.db——库文件位置由配置决定，不设目录键）；
 //   · config.dbFile 显式照用（组合安装 patch 下发 / 测试替代宿主，裁决① 2026-11-19）。
