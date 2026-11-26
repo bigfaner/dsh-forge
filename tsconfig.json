@@ -44,12 +44,6 @@
       "path": "plugins/knowledge"
     },
     {
-      "path": "packages/plugin-forge"
-    },
-    {
-      "path": "packages/plugin-forge-spec"
-    },
-    {
       "path": "plugins/forge"
     },
     {
