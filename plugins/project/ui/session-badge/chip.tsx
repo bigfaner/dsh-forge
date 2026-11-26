@@ -2,11 +2,13 @@
 // sealed 失效变体）与挂载面 ForgeSessionWorktreeChip（WorktreeFaces 尾段拆出）。
 // 样式对齐官方 AgentPresetLabel（模式标签）一体形态——radius-xs pill + fill-tsp-secondary
 // 底 + 14px 分支图标（opacity .7）+ 12px 文本。完整信息卡（分支/worktree 名/
-// 完整路径/项目根/ahead-behind/封存警示）经官方 HoverCard（inline + fitContent）呈现：
+// 完整路径/项目根/ahead-behind/封存警示）经官方 HoverCard（inline + fitContent）呈现，
+// 卡面宽度上限由 ./chip.css 解除（贴合内容、仅留视口上限，各行不换行）：
 // 悬停或键盘聚焦展开，卡片 portal 到 body（官方头容器 overflow:clip 不再裁切——原自绘
 // absolute 卡片整张落在裁剪区外只剩边线），指针可停驻卡片阅读选中，Escape/失焦收起。
 // 封存态 = 失效变体（警示色 + 删除线）；非 git 项目零注入。
 import { useEffect, useState, type ReactNode } from 'react'
+import './chip.css'
 import { aheadBehindInline, aheadBehindSegments } from '../worktree-picker/model.js'
 import type { AheadBehind } from '@dsh-forge/contracts'
 import { IconBranchOutlineRegular } from '../icons.js'

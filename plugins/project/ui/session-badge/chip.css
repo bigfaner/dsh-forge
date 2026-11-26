@@ -1,0 +1,16 @@
+/* 会话头分支 chip 信息卡宽度。
+ * 卡面 = 官方 HoverCard（inline + fitContent）portal 到 body，类名为 CSS Module 哈希、无 data-* 钩子；
+ * 稳定命中钩子只有本插件自己的内容根 data-dswt-session-chip-popover（卡面的直接子元素），
+ * 经 :has() 反选其父 = 卡面。 */
+div:has(> [data-dswt-session-chip-popover]) {
+  /* 官方 inline 模式以常量 INLINE_PREVIEW_WIDTH = 300 经内联 style 写入 max-width，长 worktree
+   * 路径一行放不下。用户裁定豁免：仅此一张卡面解除该上限、改为贴合内容（width: max-content
+   * 由官方 .fitContent 承担），只保留视口级上限——官方定位边距为两侧各 8px，故取 100vw - 16px。
+   * 官方为内联 style，须 !important。 */
+  max-width: calc(100vw - 16px) !important;
+}
+
+/* 卡面各行不换行（值行与封存警示行；宽度贴合内容后不出横向滚动） */
+[data-dswt-session-chip-popover] {
+  white-space: nowrap;
+}

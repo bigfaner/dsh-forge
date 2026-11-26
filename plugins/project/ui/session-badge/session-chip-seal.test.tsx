@@ -104,6 +104,13 @@ describe('SessionWorktreeInfoCard（HoverCard 承载的完整信息卡）', () =
     expect(markup).toContain('已被删除，会话已封存——可查看历史，不可发送消息')
   })
 
+  it('各行不换行 + 卡面宽度贴合内容：chip.css 经内容根反选官方卡面解除 300 宽度上限、仅留视口上限', () => {
+    const css = readFileSync(join(import.meta.dirname, 'chip.css'), 'utf8')
+    expect(css).toContain('div:has(> [data-dswt-session-chip-popover])')
+    expect(css).toMatch(/max-width:\s*calc\(100vw - 16px\)\s*!important/)
+    expect(css).toMatch(/\[data-dswt-session-chip-popover\]\s*\{[^}]*white-space:\s*nowrap/)
+  })
+
   it('可选行缺席不占位（worktreePath/projectRoot/aheadBehind 缺省）', () => {
     const markup = renderToStaticMarkup(<SessionWorktreeInfoCard branch="b" worktreeName="w" />)
     expect(markup).not.toContain('工作区')
