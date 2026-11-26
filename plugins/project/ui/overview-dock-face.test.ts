@@ -68,6 +68,7 @@ function officialishSlots(): SectionSlotsFace & {
  *  官方 SidebarRightTabRegistry 同型：register disposer 内 refresh()→notify） */
 function fakeCtx(taken: readonly string[] = []): {
   get(name: string): unknown
+  reflect: { get(name: string): unknown }
   effects: [string, () => (() => void) | undefined][]
   notifyRegistry(): void
   releaseOverviewType(): void
@@ -179,6 +180,33 @@ describe('registerOverviewDockFace（裁决 1——project 概览拥有者两段
     expect(bodyEffect).not.toBeUndefined()
     bodyEffect?.[1]()?.()
     expect(slots.occupants.filter((e) => e.key === OVERVIEW_KEY)).toEqual([])
+  })
+
+  it('Bug 行「添加到会话中」装配：入座时 sessions + uiWorkspace 在场 = inject 面递达 addBugToSession；uiWorkspace 缺席 = 键缺席（按钮不呈现）', () => {
+    const mount = (services: Record<string, unknown>): Record<string, unknown> => {
+      const slots = officialishSlots()
+      let face: (() => Record<string, unknown>) | undefined
+      const original = slots.register
+      slots.register = (options, component) => {
+        const o = options as { inject?: () => Record<string, unknown> }
+        if (o.inject !== undefined) face = o.inject
+        return original(options, component)
+      }
+      const ctx = fakeCtx()
+      const baseGet = ctx.get.bind(ctx)
+      ctx.get = (name: string) => services[name] ?? baseGet(name)
+      ctx.reflect = { get: (name: string) => services[name] }
+      registerOverviewDockFace(ctx as never, slots)
+      expect(face).toBeTypeOf('function')
+      return face!()
+    }
+    const sessions = { list: () => [] }
+    const workspaces = { list: () => [] }
+    expect(mount({ sessions, workspaces }).addBugToSession).toBeUndefined()
+    expect(
+      mount({ sessions, workspaces, uiWorkspace: { openSession: () => {}, openWorkspace: () => Promise.resolve() } })
+        .addBugToSession,
+    ).toBeTypeOf('function')
   })
 
   it('registerKeyedSection 直用对照：slots 劣形返回 undefined（fail-soft 不注册）', () => {

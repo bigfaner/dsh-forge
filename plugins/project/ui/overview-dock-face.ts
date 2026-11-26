@@ -22,8 +22,15 @@
 import { PRIORITY_PROJECT_OVERVIEW_OWNER } from '@dsh-forge/lib-ui'
 import { DSWF_OVERVIEW_TAB_KIND, ForgeOverviewSectionHost, OVERVIEW_SECTIONS_CHILDREN } from './dock-tabs/dock-tabs.js'
 import { registerKeyedSection, type SectionSlotsFace } from './keyed-section.js'
-import type { ForgeSessionsService, ForgeWorkspacesService } from './session-actions.js'
-import { SIDEBAR_RIGHT_PANE_TAB_SLOT, type OfficialSeamCtx } from './official-seams.js'
+import {
+  buildBugQuickAdder,
+  buildOpenSessionOrchestrator,
+  type BugQuickAddFn,
+  type ForgeSessionsService,
+  type ForgeUiWorkspaceService,
+  type ForgeWorkspacesService,
+} from './session-actions.js'
+import { SIDEBAR_RIGHT_PANE_TAB_SLOT, bugSourceCacheOf, type OfficialSeamCtx } from './official-seams.js'
 
 /** 概览页型标题（guide 入口卡与 tab chip 同词——壳侧退役词条同源字面） */
 const OVERVIEW_TAB_TITLE = '项目概览'
@@ -173,12 +180,33 @@ export function registerOverviewDockFace(
     if (sidebarRight === undefined) {
       console.warn('[dsh-forge/project] ctx.sidebarRight.openResource absent——文档开出缝不开（文档行非交互降级）')
     }
-    const inject = (): Record<string, unknown> => ({
-      ...(sessions !== undefined && workspaces !== undefined
-        ? { selfAnchor: { sessions, workspaces } }
-        : {}),
-      ...(sidebarRight !== undefined ? { sidebarRight } : {}),
-    })
+    const inject = (): Record<string, unknown> => {
+      // Bug 行「添加到会话中」快速路径（composer-bug-reference 1.4）：uiWorkspace 不在 inject
+      // 边——reflect.get 只读反射现查（cordis 属性读取未 inject 服务即抛；缺席/异常 =
+      // undefined，AGENTS 1.6 调用期现查）。sessions 缺席 = 按钮不呈现（行语言零变化），
+      // 快照落缓存缝缺席 = 不落（bugSourceCacheOf 现查）。
+      const uiWorkspace = ((): ForgeUiWorkspaceService | undefined => {
+        try {
+          return ctx.reflect?.get('uiWorkspace') as ForgeUiWorkspaceService | undefined
+        } catch {
+          return undefined
+        }
+      })()
+      let addBugToSession: BugQuickAddFn | undefined
+      if (sessions !== undefined && uiWorkspace !== undefined) {
+        const orchestrator = buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions, workspaces)
+        addBugToSession = buildBugQuickAdder(ctx, sessions, orchestrator, (bug) => {
+          bugSourceCacheOf()?.cacheBugSnapshot(bug)
+        })
+      }
+      return {
+        ...(sessions !== undefined && workspaces !== undefined
+          ? { selfAnchor: { sessions, workspaces } }
+          : {}),
+        ...(sidebarRight !== undefined ? { sidebarRight } : {}),
+        ...(addBugToSession !== undefined ? { addBugToSession } : {}),
+      }
+    }
     const dispose = registerKeyedSection(slots, {
       slot: SIDEBAR_RIGHT_PANE_TAB_SLOT,
       key: DSWF_OVERVIEW_TAB_KIND,
