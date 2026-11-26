@@ -134,14 +134,24 @@ describe("结算行读缝生产装配（bug 23507eb5——装配漏接回归锚�
       expect(settlement.case).toBe("landing-rejected");
       if (settlement.case !== "landing-rejected") return;
       expect(settlement.cause.message).toContain("[settle-cwd-pin]");
-      // 反向锚：落点命中 → settled（核验通过不误伤）
+      // 反向锚：落点命中 → settled（新任务径——landing-rejected 已把上一任务真化 interrupted，
+      // 二次结算读非终态为 failed noSettlement 不可复用）。断言加严：成功结算且 commitHash 在场。
+      const okTask = await claimedTask(services, "delta");
+      await services.tasks.submitTask({
+        projectKey: PROJECT_KEY,
+        taskRef: { slug: "delta", localId: okTask.localId },
+        result: "success",
+        summary: "done",
+        commitHash: "cafe5678",
+      });
       const settled = await settleWorkerRun(
         { tasks: services.tasks, settlements: driverDepsCapture.deps!.settlements!, commitLanding: okLanding },
-        { projectId: PROJECT_KEY, task, digest: "d", handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: "Z:\\wt" },
+        { projectId: PROJECT_KEY, task: okTask, digest: "d", handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: "Z:\\wt" },
       );
-      // landing-rejected 已把任务真化 interrupted——二次结算读到非终态 = failed（noSettlement），
-      // 断言只核「非 landing-rejected」：核验 ok 不再触发拒绝
-      expect(settled.case === "landing-rejected").toBe(false);
+      expect(settled.case).toBe("settled");
+      if (settled.case !== "settled") return;
+      expect(settled.result.outcome).toBe("success");
+      expect(settled.result.commitHash).toBe("cafe5678");
     } finally {
       family.disposeLoop();
       services.dispose();

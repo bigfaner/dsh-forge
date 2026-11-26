@@ -9,7 +9,8 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, statSync } from "node
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { FORGE_BASE_DIR_ENTRIES, resolveForgeDirs } from "@dsh-forge/lib-path";
 import { assembleTaskLoopServices, createDefaultResolveWorkerContext } from "../../host/assembly/default-assembly.js";
 import { taskLogsDirOf } from "../../host/domain/tasks/task-logs-dir.js";
 import { renderWorkerContext } from "../../host/domain/tasks/worker-context.js";
@@ -93,13 +94,52 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
     expect(text).toContain(`${join(ws, ".forge", "docs", "specs", "feat-x")}\\`);
   });
 
-  it("reflect 缺席 = 锚点规格段降级省略（logs 双锚恒出，行为不炸）", async () => {
-    const container = mkdtempSync(join(tmpdir(), "task-loop-spec-absent-"));
-    const wsAbsent = mkdtempSync(join(tmpdir(), "task-loop-spec-ws-absent-")); // 独立 ws——规格目录不在盘
-    const resolve = createDefaultResolveWorkerContext({ containerDirOf: () => container, resolveWsPath: () => wsAbsent });
+  it("resolveWorkerContext 期间经 reflect 拉 dirKeys.* 声明（spy 现查），规格目录 = 注册表解析值（非自拼——§2.3）", async () => {
+    const container = mkdtempSync(join(tmpdir(), "task-loop-spec-spy-"));
+    mkdirSync(join(ws, ".forge", "docs", "specs", "feat-x"), { recursive: true }); // 在盘探测前置
+    const reflect = {
+      props: { "dirKeys.knowledge": {} } as Record<string, unknown>,
+      get: (name: string) => reflect.props[name],
+    };
+    const getSpy = vi.fn((name: string) => reflect.props[name]);
+    reflect.get = getSpy;
+    const resolve = createDefaultResolveWorkerContext({
+      containerDirOf: () => container,
+      resolveWsPath: () => ws,
+      reflectOf: () => reflect,
+      dshHome: "T:\\dsh-home",
+    });
     const text = await resolve("proj-key", { slug: "feat-x" }, "3.0");
-    expect(text).not.toContain("forge.specs_dir");
-    expect(text).toContain("forge.task_logs_dir");
+    // 拉缝行为锚：resolveWorkerContext 期间对 dirKeys.* 声明名现查 reflect.get——
+    // 自行拼接实现不触反射（删 index.ts reflectOf 注入 / 改回自拼 = 本断言红）
+    expect(getSpy).toHaveBeenCalledWith("dirKeys.knowledge");
+    // 值锚：规格目录 = 注册表 resolveForgeDirs 解析值（同一合并事实在测试侧独立复算）
+    const registry = resolveForgeDirs(
+      [
+        { source: "forge.base", entries: FORGE_BASE_DIR_ENTRIES },
+        { source: "dirKeys.declared", entries: reflect.props["dirKeys.knowledge"] as Record<string, never> },
+      ],
+      { dshHome: "T:\\dsh-home", projectRoot: ws, workspaceRoot: ws },
+      { slug: "feat-x" },
+    );
+    expect(text).toContain(`${registry["forge.spec_dir"]}\\`);
+  });
+
+  it("reflect 缺席 = 本体 forge.spec_dir 仍解析（在盘即出锚；规格段省略的真因 = 目录不在盘的在盘探测，非 reflect 缺席）", async () => {
+    const container = mkdtempSync(join(tmpdir(), "task-loop-spec-absent-"));
+    const wsOnDisk = mkdtempSync(join(tmpdir(), "task-loop-spec-ws-ondisk-"));
+    mkdirSync(join(wsOnDisk, ".forge", "docs", "specs", "feat-x"), { recursive: true });
+    const resolve = createDefaultResolveWorkerContext({ containerDirOf: () => container, resolveWsPath: () => wsOnDisk });
+    const text = await resolve("proj-key", { slug: "feat-x" }, "3.0");
+    // 反映射缺席仍走本体基座解析——规格目录在盘即出锚（可失败：注册表缝断裂 = 此红）
+    expect(text).toContain("forge.specs_dir");
+    expect(text).toContain(`${join(wsOnDisk, ".forge", "docs", "specs", "feat-x")}\\`);
+    // 对照径：规格目录不在盘 → 锚点规格段省略（renderDirBlock 在盘探测承担，logs 双锚恒出）
+    const wsMissing = mkdtempSync(join(tmpdir(), "task-loop-spec-ws-miss-"));
+    const resolveMissing = createDefaultResolveWorkerContext({ containerDirOf: () => container, resolveWsPath: () => wsMissing });
+    const textMissing = await resolveMissing("proj-key", { slug: "feat-x" }, "3.0");
+    expect(textMissing).not.toContain("forge.specs_dir");
+    expect(textMissing).toContain("forge.task_logs_dir");
   });
 
   it("dirKeys 声明逐条形状校验（lib/path 单源——bug 32532117）：坏形状跳过 + warn 诊断；forge.* 保留名拒绝", async () => {
@@ -150,5 +190,15 @@ describe("消费位源码钉（改用别的派生即红）", () => {
 
   it("事故台账缺省目录消费 taskLogsDirOf（incident-log.ts）", () => {
     expect(readHost(join("notify", "incident-log.ts"))).toContain("taskLogsDirOf(taskHome, slug, taskKey)");
+  });
+
+  it("worker 规格目录经注册表解析缝（default-assembly.ts 消费 resolveSpecDirViaRegistry——自拼退役，改回 join 自拼即红）", () => {
+    const assembly = readHost(join("assembly", "default-assembly.ts"));
+    expect(assembly).toContain("resolveSpecDirViaRegistry");
+    expect(assembly).not.toContain('"specs", source.slug');
+  });
+
+  it("worker 规格目录反射拉缝生产接线（index.ts reflectOf 缺省注入宿主 reflect 面——删注入行即红）", () => {
+    expect(readHost("index.ts")).toContain("reflectOf: config.reflectOf ??");
   });
 });

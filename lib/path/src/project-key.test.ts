@@ -1,10 +1,10 @@
 // project-key 单测（forge-dirs-unification 2.1）：projectKeyOf = deriveDirName 原文口径
 // （空/空白抛 ProjectKeyDerivationError）+ resolveProjectKey 取法三径（注册表命中 /
 // git 现查归拢 / 双失败回退 cwd 键）+ 规范化先于键派生 + 标记预检零 git 调用 + 非本仓回退。
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { deriveDirName } from './derive-dir.js'
 import {
   type GitPorcelainRunner,
@@ -15,6 +15,12 @@ import {
 } from './project-key.js'
 
 const WT_CWD = 'Z:\\project\\demo\\.forge\\worktrees\\wt-a'
+
+/** 临时目录登记（afterAll 统一清理——不留盘污染临时区） */
+const tempDirs: string[] = []
+afterAll(() => {
+  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+})
 
 describe('projectKeyOf', () => {
   it('任意工作区路径 → projectKey = deriveDirName 同键', () => {
@@ -98,6 +104,7 @@ describe('resolveProjectKey', () => {
 
   it('主检出路径先规范化（真实路径与大小写）再算键', () => {
     const real = mkdtempSync(join(tmpdir(), 'pk-'))
+    tempDirs.push(real)
     // 注入 canonicalize 模拟 realpath 大小写收敛：注册表行给小写盘符拼写，规范化后异键
     const r = resolveProjectKey(WT_CWD, {
       registryQuery: () => real.toLowerCase(),
@@ -110,6 +117,7 @@ describe('resolveProjectKey', () => {
 
   it('默认规范化 = realpath（临时目录真实解析）', () => {
     const real = mkdtempSync(join(tmpdir(), 'pk-'))
+    tempDirs.push(real)
     const r = resolveProjectKey(WT_CWD, { registryQuery: () => real })
     expect(r.mainRoot).toBe(real)
     expect(r.key).toBe(projectKeyOf(real))

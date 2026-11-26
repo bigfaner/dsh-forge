@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import knowledgePlugin, { KNOWLEDGE_DIR_ENTRIES } from '../host/index.js'
-import { FORGE_BASE_DIR_ENTRIES, resolveForgeDirs, type ForgeDirSources } from '@dsh-forge/lib-path'
+import { FORGE_BASE_DIR_ENTRIES, resolveForgeDirs, type ForgeDirSources, type ForgeDirs } from '@dsh-forge/lib-path'
 import type { KnowledgePromptSection, KnowledgeToolDefinition } from '../host/tools/index.js'
 
 // 自持存储锚摘除（hermetic——plugin.test.ts 同口径）：装配走显式 dbFile。
@@ -83,6 +83,17 @@ function resolveDeclaredEntries(sources: ForgeDirSources = SOURCES): Record<stri
   )
 }
 
+/** 经插件装配现拉 pulled 声明（reflect.get 产物）注册表解析——装配声明对象为唯一被测输入 */
+function resolvePulledEntries(pulled: unknown, sources: ForgeDirSources = SOURCES): Record<string, string> {
+  return resolveForgeDirs(
+    [
+      { source: 'forge 本体（@dsh-forge/lib-path）', entries: FORGE_BASE_DIR_ENTRIES },
+      { source: 'dirKeys.knowledge', entries: pulled as Partial<ForgeDirs> },
+    ],
+    sources,
+  )
+}
+
 describe('knowledge 目录键声明形状（satisfies Partial<ForgeDirs> 编译期受检 + 运行期断言）', () => {
   it('登记键 = knowledge.root / knowledge.global（带插件前缀，非 forge.* 保留段）', () => {
     expect(Object.keys(KNOWLEDGE_DIR_ENTRIES).sort()).toEqual([
@@ -106,12 +117,22 @@ describe('knowledge 目录键声明形状（satisfies Partial<ForgeDirs> 编译�
     expect(resolved['knowledge.global']).toBe(join('X:\\dsh-home', 'forge', 'knowledge', 'global'))
   })
 
-  it('全局目录只随 forge 根，不随库文件路径（换 dbFile 事实不影响 global 解析）', () => {
-    const a = resolveDeclaredEntries({ ...SOURCES, dshHome: 'X:\\dsh-home' })
-    const b = resolveDeclaredEntries({ ...SOURCES, dshHome: 'Y:\\other-home' })
+  it('全局目录只随 forge 根，不随库文件路径（换 dbFile 装配两实例，pulled 声明解析的 global 不变）', () => {
+    const globalOf = (dbFile: string): Record<string, string> => {
+      const reflect = makeFakeReflect()
+      const dispose = knowledgePlugin(makeCtx({ reflectProvide: reflect.provide }) as never, { dbFile })
+      const pulled = reflect.get('dirKeys.knowledge')
+      // global 的依赖面 pin：只依赖 forge.home——改回从库文件路径上推（deps 变化）即红
+      expect((pulled as Partial<ForgeDirs>)['knowledge.global']?.deps).toEqual(['forge.home'])
+      const resolved = resolvePulledEntries(pulled)
+      dispose()
+      return resolved
+    }
+    const a = globalOf(tempDbFile())
+    const b = globalOf(tempDbFile())
     expect(a['knowledge.global']).toBe(join('X:\\dsh-home', 'forge', 'knowledge', 'global'))
-    expect(b['knowledge.global']).toBe(join('Y:\\other-home', 'forge', 'knowledge', 'global'))
-    expect(a['knowledge.global']).not.toBe(b['knowledge.global'])
+    // 库文件路径已变（tempDbFile 两次独立 mkdtemp），global 解析不变
+    expect(b['knowledge.global']).toBe(a['knowledge.global'])
   })
 })
 
@@ -124,15 +145,16 @@ describe('装配期声明（根 scope provide——bug 04d445f4 反向拉取缝�
     expect(reflect.size()).toBe(0) // provide 注销随插件 dispose
   })
 
-  it('集成断言：声明对象经注册表解析后三键全可见（dirKey + dir + description 同源）', () => {
+  it('集成断言：装配现拉的声明对象（pulled）经注册表解析后三键全可见（resolved 消费 pulled——非静态常量）', () => {
     const reflect = makeFakeReflect()
     const dispose = knowledgePlugin(makeCtx({ reflectProvide: reflect.provide }) as never, { dbFile: tempDbFile() })
     const pulled = reflect.get('dirKeys.knowledge') as Record<string, { description: string }>
-    const resolved = resolveDeclaredEntries({ ...SOURCES, dshHome: '', projectRoot: '' })
+    const resolved = resolvePulledEntries(pulled, { ...SOURCES, dshHome: '', projectRoot: '' })
     for (const key of Object.keys(KNOWLEDGE_DIR_ENTRIES)) {
       expect(Object.keys(resolved)).toContain(key)
       expect(typeof pulled[key].description).toBe('string')
       expect(pulled[key].description.trim()).not.toBe('')
+      expect(resolved[key]).not.toBe('')
     }
     dispose()
   })

@@ -49,6 +49,15 @@ interface RecordRowProjection {
 
 interface SnapshotShape {
   readonly projectKey: string;
+  readonly records: {
+    readonly task_id: string;
+    readonly verb: string;
+    readonly from_status: string | null;
+    readonly to_status: string | null;
+    readonly actor: string;
+    readonly created_at: string;
+  }[];
+  readonly projectKey: string;
   readonly success: {
     readonly result: { readonly taskId: string; readonly status: string };
     readonly task: TaskRowProjection;
@@ -109,9 +118,17 @@ function normalize(snapshot: {
     evidence_json: r.evidence_json,
     created_at: maskTs(r.created_at),
   });
-  void snapshot.rawRecords; // records 行为轨迹面（verb/actor 不随本改造变化）——快照主面为结算输出
+  const record = (r: RecordRowProjection) => ({
+    task_id: sym(r.task_id)!,
+    verb: r.verb,
+    from_status: r.from_status,
+    to_status: r.to_status,
+    actor: r.actor,
+    created_at: maskTs(r.created_at),
+  });
   return {
     projectKey: snapshot.projectKey,
+    records: snapshot.rawRecords.map(record),
     success: {
       result: { taskId: sym(snapshot.results.success.taskId)!, status: snapshot.results.success.status },
       task: task(snapshot.rawTasks.find((t) => t.id === snapshot.results.success.taskId)!),
@@ -192,13 +209,12 @@ async function buildActual(): Promise<SnapshotShape> {
       h.db.prepare(`SELECT id, task_id, seq, fix_root_id, result, ac_results_json, commit_hash, evidence_json, created_at FROM task_settlements ORDER BY created_at, seq, id`).all() as SettlementRowProjection[];
     const readRecords = (id: string): RecordRowProjection =>
       h.db.prepare(`SELECT task_id, verb, from_status, to_status, actor, created_at FROM task_records WHERE task_id = ? AND verb = 'submit'`).get(id) as RecordRowProjection;
-    void readRecords;
 
     return normalize({
       projectKey: h.projectKey,
       rawTasks: [readTasks(feature), readTasks(blockedTask), readTasks(root), readTasks(fix)],
       rawSettlements: readSettlements(),
-      rawRecords: [],
+      rawRecords: [readRecords(feature), readRecords(blockedTask), readRecords(root), readRecords(fix)],
       results: {
         success: { taskId: feature, status: success.status },
         blocked: { taskId: blockedTask, status: blocked.status },
@@ -211,9 +227,14 @@ async function buildActual(): Promise<SnapshotShape> {
 }
 
 describe("submit_task 结算输出快照（forge-dirs-unification 3.3 比对基准）", () => {
-  it("固定输入结算输出与快照逐字段一致（id/时戳掩码归一化）", async () => {
+  it("固定输入结算输出与快照逐字段一致（id/时戳掩码归一化；records 逐项入比对）", async () => {
     const actual = await buildActual();
     if (WRITE_MODE) {
+      // 写入模式：显式跳过快照比对（录制会覆盖基线文件）——但先断言比对面非空并打印条数留痕
+      expect(actual.records.length).toBe(4);
+      console.log(
+        `[snapshot] 写入模式：比对跳过，快照已重写——records=${actual.records.length} tasks=4 settlements=3`,
+      );
       writeFileSync(SNAPSHOT_FILE, `${JSON.stringify(actual, null, 2)}\n`, "utf8");
       return;
     }

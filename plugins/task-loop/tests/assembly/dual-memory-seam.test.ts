@@ -2,10 +2,11 @@
 // sink.resolveDir → core deriveTaskStoreDir 单源派生容器目录记忆）与 containerDirOf 缝
 // （projectKey 直拼 {tasksHome}/{projectKey}——projectKey = deriveProjectKey(cwd) 同名制）
 // 必须对同一 cwd 产出同目录：projectKey 派生漂移（flatten/hash8 任意一段分叉）即红。
-import { mkdtempSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   deriveDirName,
   deriveTaskStoreDir,
@@ -18,6 +19,38 @@ import { assembleTaskLoopToolFamily } from "../../host/assembly/tool-family.js";
 
 function config(tasksHome: string): { home: string; dbFile: string; tasksHome: string } {
   return { home: mkdtempSync(join(tmpdir(), "task-loop-seam-")), dbFile: ":memory:", tasksHome };
+}
+
+const gitDirs: string[] = [];
+afterEach(() => {
+  for (const dir of gitDirs.splice(0)) {
+    // git 对象库文件带只读位——Windows rmSync 对只读文件 EPERM，先整树清只读再删
+    try {
+      execSync(`attrib -R "${dir}\\*" /S /D`, { stdio: "ignore" });
+    } catch {
+      // attrib 缺席/失败不阻清理——rmSync 重试兜底
+    }
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  }
+});
+
+/** hermetic git worktree fixture：临时主检出（含提交）+ 独立路径工作树，返回工作树 cwd。 */
+function gitWorktreeCwd(tag: string): { mainRoot: string; wtCwd: string } {
+  const run = (args: string, cwd: string): void => {
+    execSync(`git ${args}`, { cwd, stdio: "ignore" });
+  };
+  const mainRoot = mkdtempSync(join(tmpdir(), `task-loop-seam-git-${tag}-`));
+  gitDirs.push(mainRoot);
+  run("init -b main", mainRoot);
+  run("config user.email t@t", mainRoot);
+  run("config user.name t", mainRoot);
+  writeFileSync(join(mainRoot, "README.md"), "seed\n", "utf8");
+  run("add README.md", mainRoot);
+  run("commit -m seed", mainRoot);
+  // 工作树落主检出的 .forge/worktrees 段内——命中归拢标记预检（MARKER_PATTERN）才走 git 现查径
+  const wtCwd = join(mainRoot, ".forge", "worktrees", `wt-${tag}`);
+  run(`worktree add "${wtCwd}" -b wt-${tag}`, mainRoot);
+  return { mainRoot, wtCwd };
 }
 
 /** 路径形状覆盖：反斜杠 / 正斜杠 / 尾分隔符 / 嵌套深径（deriveDirName 归一口径的输入域）。 */
@@ -103,5 +136,26 @@ describe("双记忆缝同目录性（prepare deriveTaskStoreDir × containerDirO
     // 同一注入事实下与注册表解析结果同一路径
     expect(expected).toBe(registryDirs["forge.task_runtime_dir"]);
     services.dispose();
+  });
+
+  it("工作树 cwd：事件落盘目录 = 主检出归拢键的容器目录（git 现查归拢径——归拢去掉即红）", async () => {
+    const tasksHome = mkdtempSync(join(tmpdir(), "task-loop-seam-wt-"));
+    const { mainRoot, wtCwd } = gitWorktreeCwd("wtb");
+    const services = assembleTaskLoopServices(config(tasksHome))!;
+    try {
+      expect(services.forgeEvents).not.toBeUndefined();
+      // 独立复算归拢（同一 lib-path 单源）：注册表缺席 → git 现查归拢主检出
+      const resolution = resolveProjectKey(wtCwd, { registryQuery: () => undefined });
+      expect(resolution.rolledUp).toBe(true);
+      expect([mainRoot, realpathSync.native(mainRoot)]).toContain(resolution.mainRoot);
+      // 落盘记忆：会话 cwd = 工作树 → 容器目录必须取主检出键（非工作树键）
+      await services.forgeEvents!.prepare({ sessionId: "s-wt", cwd: wtCwd, agentPreset: undefined });
+      const mainDir = services.containerDirOf!(resolution.key);
+      const wtKey = deriveDirName(wtCwd);
+      expect(mainDir).not.toBe(services.containerDirOf!(wtKey)); // 归拢真分叉（防恒真）
+      expect(services.forgeEvents!.dirOf("s-wt")).toBe(mainDir);
+    } finally {
+      services.dispose();
+    }
   });
 });

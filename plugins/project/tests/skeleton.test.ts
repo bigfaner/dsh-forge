@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 // 结构镜像测试（expert-squad bundle-structure 先例——激活链结构面在单测 pin，
@@ -130,6 +131,30 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(pattern.test("@deepseek-ai/cordis")).toBe(true);
     // 其余官方件仍内联（豁免面不外溢）
     expect(pattern.test("@deepseek-ai/dsh-client-connection")).toBe(false);
+  });
+
+  it("内联豁免判定行为断言（执行 onResolve 判定逻辑——删 INLINE_EXEMPT.test 判定行即红，非只钉常量文本）", () => {
+    const script = readFileSync(resolve(pkgDir, "scripts", "bundle-host.mjs"), "utf8");
+    const block = /const INLINE_OFFICIAL_FILTER[\s\S]*?\n\};/m.exec(script)?.[0];
+    expect(block, "inlineOfficial 插件块缺席").toBeDefined();
+    const inlineOfficial = new Function("createRequire", "join", "pkgDir", `${block}; return inlineOfficial;`)(
+      createRequire,
+      join,
+      pkgDir,
+    ) as { setup: (build: { onResolve: (opts: unknown, cb: unknown) => void }) => void };
+    let onResolve: ((args: { path: string; importer: string }) => unknown) | undefined;
+    inlineOfficial.setup({
+      onResolve: (_opts, cb) => {
+        onResolve = cb as typeof onResolve;
+      },
+    });
+    expect(onResolve).toBeTypeOf("function");
+    // 豁免面 → undefined（外置落回默认解析）——判定行删除则此处拿到内联对象即红
+    expect(onResolve!({ path: "@deepseek-ai/cordis", importer: "" })).toBeUndefined();
+    expect(onResolve!({ path: "@deepseek-ai/dsh-typert-protocol/remote-methods", importer: "" })).toBeUndefined();
+    // 其余官方件 → 内联（createRequire 解析出绝对路径对象）
+    const inlined = onResolve!({ path: "@deepseek-ai/dsh-client-connection", importer: "" }) as { path?: string };
+    expect(typeof inlined?.path).toBe("string");
   });
 
   it("host 半 default 导出为 Plugin.Function（loader 只认 default 导出）", () => {
