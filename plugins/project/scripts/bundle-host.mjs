@@ -63,15 +63,20 @@ const EXTERNAL = ["@deepseek-ai/*"];
 // 已内联件的传递依赖与源码直连件以外部 import 面残留，profile @deepseek-ai 为空即
 // MODULE_NOT_FOUND）：@deepseek-ai/* 一律内联，唯 cordis 豁免（Service/Context 值导入
 // 保持外置——内联第二副本分裂官方单例语义，依赖宿主 peer providers 注入单例）。
+// dsh-typert-protocol 同豁免（bug d19122cc）：TypertRemoteService 构造期在 root ctx 上
+// 装 invocation accessor，取 root 的写法随宿主构建而异——官方 dsh web 宿主自带的
+// protocol 用符号 ctx[Context.root]，npm 发布件用字符串 ctx.root，后者在该宿主的
+// cordis 上恒被 inject 门控拦下（Typert 控制器 fiber 全体 FAILED）。内联即把 npm 写法
+// 带进宿主；外置 = 运行期取宿主那份，与宿主自身 Typert 机械同源（spec 同型）。
 // importer 侧解析：内联件的传递依赖（connection→schemastery/dsh-credentials/dsh-scope 等）
 // 不在本包声明链内，以 importer 所在包解析才命中（dsh-brand 判例同径）。
 const INLINE_OFFICIAL_FILTER = /^@deepseek-ai\//;
-const INLINE_EXEMPT = /^@deepseek-ai\/cordis(?:\/|$)/;
+const INLINE_EXEMPT = /^@deepseek-ai\/(?:cordis|dsh-typert-protocol)(?:\/|$)/;
 const inlineOfficial = {
   name: "inline-dsh-official",
   setup(build) {
     build.onResolve({ filter: INLINE_OFFICIAL_FILTER }, (args) => {
-      if (INLINE_EXEMPT.test(args.path)) return undefined; // cordis peer 外置，落回默认解析
+      if (INLINE_EXEMPT.test(args.path)) return undefined; // cordis / typert-protocol 外置，落回默认解析
       return { path: createRequire(args.importer || join(pkgDir, "package.json")).resolve(args.path) };
     });
   },
@@ -162,7 +167,8 @@ if (violations.length > 0) {
 }
 
 // 离手门补强（bug c48f2b6b）：dist/host 外部 @deepseek-ai import 面收敛断言——仅允许
-// cordis peer。声明面 lint 迁移若再漏内联，构建即红（防复发联动门）。
+// cordis peer 与 dsh-typert-protocol（宿主同源外置，见 INLINE_EXEMPT）。声明面 lint
+// 迁移若再漏内联，构建即红（防复发联动门）。
 const EXTERNAL_SPEC = /(?:from\s*|import\s*\(\s*|require\s*\(\s*)["'](@deepseek-ai\/[^"']+)["']/g;
 const residualSpecs = new Set();
 const scanImports = (dir) => {
@@ -175,9 +181,9 @@ const scanImports = (dir) => {
   }
 };
 scanImports(resolve(pkgDir, "dist/host"));
-const nonPeer = [...residualSpecs].filter((s) => !s.startsWith("@deepseek-ai/cordis"));
+const nonPeer = [...residualSpecs].filter((s) => !INLINE_EXEMPT.test(s));
 if (nonPeer.length > 0) {
-  console.error(`[bundle-host] 离手门失败：dist/host 外部 @deepseek-ai import 面仅允许 cordis peer，残留 ${nonPeer.length} 处`);
+  console.error(`[bundle-host] 离手门失败：dist/host 外部 @deepseek-ai import 面仅允许 cordis peer 与 dsh-typert-protocol，残留 ${nonPeer.length} 处`);
   for (const s of nonPeer.sort()) console.error(`  - ${s}`);
   process.exit(1);
 }

@@ -120,6 +120,18 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(script).not.toMatch(/["']@dsh-forge\/[^"']*["']\s*(?:,|\])/);
   });
 
+  it("bundle-host.mjs 内联豁免含 dsh-typert-protocol（bug d19122cc——内联 npm 件用字符串 ctx.root，官方 dsh web 宿主上 Typert 控制器 fiber 全体 FAILED）", () => {
+    const script = readFileSync(resolve(pkgDir, "scripts", "bundle-host.mjs"), "utf8");
+    const exempt = /const INLINE_EXEMPT = (.+);/.exec(script)?.[1];
+    expect(exempt, "INLINE_EXEMPT 常量缺席").toBeDefined();
+    const pattern = new RegExp(exempt!.replace(/^\/|\/$/g, ""));
+    expect(pattern.test("@deepseek-ai/dsh-typert-protocol")).toBe(true);
+    expect(pattern.test("@deepseek-ai/dsh-typert-protocol/remote-methods")).toBe(true);
+    expect(pattern.test("@deepseek-ai/cordis")).toBe(true);
+    // 其余官方件仍内联（豁免面不外溢）
+    expect(pattern.test("@deepseek-ai/dsh-client-connection")).toBe(false);
+  });
+
   it("host 半 default 导出为 Plugin.Function（loader 只认 default 导出）", () => {
     expect(projectPlugin).toBeTypeOf("function");
   });
