@@ -12,7 +12,7 @@
  * 999px（官方 Tag 同值刻度）/ 卡片圆角 8px / 卡片行距 6px / 卡头内距 8px 10px /
  * meta 内距 8px 12px 12px 24px = M3.1 原型结构刻度（官方主题无间距标尺令牌——
  * sidebar.css/knowledge.css 同款豁免先例）；块级留白取行高令牌刻度；D44 状态 chip 统一宽
- * （S6 加宽 78→90px）/ 横向 padding 2px / chip 内距 6px = 用户等长裁决刻度（原 auto 宽 +
+ * （S6 加宽 78→90px，4 字 label + 三位计数再加宽至 118px）/ 横向 padding 10px / chip 内距 6px = 用户等长裁决刻度（原 auto 宽 +
  * 整行高令牌对照——行注逐位记账）。 */
 
 /* ── 面板骨架：ov-head + sticky + 内容区（内容区独占滚动；M3.1 D12 弹性填满整 tab） ── */
@@ -222,9 +222,9 @@
   align-items: center;
   justify-content: center; /* D44 固定宽内容居中——3 字 + 点 + 两位计数不截断（三族同值） */
   gap: 6px; /* D44 chip 内点/字/计距收窄（dsw-raw 新裁决刻度——原值整行高令牌对照：var(--dsw-font-xs-13-line-height)；与行 gap 6px 同刻度） */
-  width: 90px; /* D44 固定统一宽 + S6 加宽（dsw-raw 新裁决刻度——原 auto 宽内容自适应形态退役：3 字 39 + 点 8 + 两位计数 ~15 + chip 内距 gap 12 + 横向 padding 4 + 边框 2 ≈ 80，原 78px 档实测溢出致内部换行，加宽至 90px 档容纳；两族同值零漂移互指：dswf-ov-phchip） */
+  width: 118px; /* D44 固定统一宽（dsw-raw 新裁决刻度——原值 90px 档实测 4 字 label「无法复现」+ 点 + 三位计数溢出贴边，加宽至 118px 档：4 字 52 + 点 8 + 三位计数 ~24 + chip 内距 gap 12 = 96，余 22 居中留白；阶段族 dswf-ov-phchip 已退役，本值单源） */
   height: 24px; /* dsw-raw 原型 chip 行刻度 */
-  padding: 0 2px; /* D44 横向收窄档（dsw-raw 新裁决刻度——原值整行高令牌 0 13px 对照：固定宽居中下仅溢出护栏；✕ 重置钮原形制在 -clear 保持） */
+  padding: 0 10px; /* D44 横向留白（dsw-raw 新裁决刻度——原值 2px 档内容贴边框，计数数字不贴右框；✕ 重置钮原形制在 -clear 保持） */
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值（矩形 radius-xs 退役——M3.1 D14） */
   background: var(--dsw-alias-bg-base);
