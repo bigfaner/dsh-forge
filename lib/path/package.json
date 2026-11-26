@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/lib-path",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "private": true,
   "type": "module",
   "description": "公共 path 子包：路径比对归一键（path-key 归并迁入）+ normalize 单源（web normalizeDirPath 与 core normalizeDirSpelling 收敛）+ derive-dir 派生（{flatten}@{hash8} 与注册碰撞三态分类器）+ forge 目录段派生（dir-segments 下沉）。",

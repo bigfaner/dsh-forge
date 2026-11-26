@@ -54,8 +54,8 @@ export interface ForgeDirs {
   'forge.worktrees': ForgeDirEntry<['workspaceRoot']>
   /** 文档根下的 specs/{slug} */
   'forge.spec_dir': ForgeDirEntry<['forge.docs_root'], ['slug']>
-  /** 文档根下的 proposals/{slug}/issues/{localId} */
-  'forge.dossier_dir': ForgeDirEntry<['forge.docs_root'], ['slug', 'localId']>
+  /** 工作区 .forge/specs/{slug}/issues/{localId}（specs 替代 proposals，与回收钩子同落点） */
+  'forge.dossier_dir': ForgeDirEntry<['workspaceRoot'], ['slug', 'localId']>
   /** 任务运行时目录下的 logs/{slug}/{localId} */
   'forge.task_logs_dir': ForgeDirEntry<['forge.task_runtime_dir'], ['slug', 'localId']>
 }
@@ -122,10 +122,10 @@ export const FORGE_BASE_DIR_ENTRIES: {
     resolve: (deps, params) => pathJoin(deps['forge.docs_root'], 'specs', params.slug),
   },
   'forge.dossier_dir': {
-    description: '任务卷宗目录',
-    deps: ['forge.docs_root'],
+    description: '任务卷宗目录（工作区 .forge/specs/{slug}/issues/{localId}）',
+    deps: ['workspaceRoot'],
     params: ['slug', 'localId'],
-    resolve: (deps, params) => pathJoin(deps['forge.docs_root'], 'proposals', params.slug, 'issues', params.localId),
+    resolve: (deps, params) => pathJoin(deps.workspaceRoot, '.forge', 'specs', params.slug, 'issues', params.localId),
   },
   'forge.task_logs_dir': {
     description: '任务运行日志目录',

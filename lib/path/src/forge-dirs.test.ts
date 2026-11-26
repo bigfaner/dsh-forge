@@ -2,6 +2,7 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { deriveDirName } from './derive-dir.js'
+import { forgeDirOfWorkspace } from './dir-segments.js'
 import {
   FORGE_BASE_DIR_ENTRIES,
   FORGE_DIR_KEYS,
@@ -60,11 +61,20 @@ describe('ForgeDirs 本体键（AC1——十个键，不包含其它键）', () 
     const declared = resolveForgeDirs([own('lib/path', { ...BASE })], SOURCES, { slug, localId })
     expect(declared['forge.spec_dir']).toBe(join(SOURCES.workspaceRoot, '.forge', 'docs', 'specs', slug))
     expect(declared['forge.dossier_dir']).toBe(
-      join(SOURCES.workspaceRoot, '.forge', 'docs', 'proposals', slug, 'issues', localId),
+      join(SOURCES.workspaceRoot, '.forge', 'specs', slug, 'issues', localId),
     )
     expect(declared['forge.task_logs_dir']).toBe(
       join(SOURCES.dshHome, 'forge', 'projects', PROJECT_KEY, 'logs', slug, localId),
     )
+  })
+
+  it('dossier_dir 与 task-loop 结算回收钩子落点逐字相同（bug 14e3a500——specs 替代 proposals）', () => {
+    const slug = 'forge-dirs-unification'
+    const localId = '7.2'
+    const declared = resolveForgeDirs([own('lib/path', { ...BASE })], SOURCES, { slug, localId })
+    // 回收钩子同形派生：join(forgeDirOfWorkspace(ws), 'specs', slug, 'issues', localId)
+    const hookDir = join(forgeDirOfWorkspace(SOURCES.workspaceRoot), 'specs', slug, 'issues', localId)
+    expect(declared['forge.dossier_dir']).toBe(hookDir)
   })
 })
 
