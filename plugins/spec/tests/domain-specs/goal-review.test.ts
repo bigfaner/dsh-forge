@@ -3,7 +3,8 @@
 // failed→in_progress 同事务三写）/ reviewObjective 不驱动（只落报告行）。
 import { describe, expect, it } from "vitest";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
-import { createForgeSpecsService, deriveProjectKey } from "../../host/domain/specs/service.js";
+import { createForgeSpecsService } from "../../host/domain/specs/service.js";
+import { projectKeyOf as deriveProjectKey } from "@dsh-forge/lib-path";
 import { advanceGoalsIfDue, type GoalVerbDeps } from "../../host/domain/specs/goal-advance.js";
 import { reviewGoal, reviewObjective } from "../../host/domain/specs/goal-review.js";
 import type { AcSettlementsFace } from "../../host/tools/projection.js";

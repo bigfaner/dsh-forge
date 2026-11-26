@@ -26,12 +26,12 @@ import { Remote, RemoteError, TypertRemoteService } from "@deepseek-ai/dsh-typer
 import type { RemoteErrorCode } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
 import { rootCtxOf } from "@dsh-forge/lib-util";
+import { ProjectKeyDerivationError, projectKeyOf } from "@dsh-forge/lib-path";
 import type { WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   isSpecError,
-  deriveProjectKey,
   type ForgeSpecsService,
 } from "../domain/specs/service.js";
 import { SpecError } from "../domain/specs/errors.js";
@@ -175,6 +175,7 @@ function failureOf(cause: unknown): never {
     throw cause;
   }
   if (isSpecError(cause)) typedFailure(cause.code, cause.message);
+  if (cause instanceof ProjectKeyDerivationError) typedFailure(cause.code, cause.message);
   typedFailure(FAILED_CODE, cause instanceof Error ? cause.message : String(cause));
 }
 
@@ -458,7 +459,7 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     }
     try {
       const result = await worktrees.list({ projectRoot: root.wsPath });
-      const family = [root, ...result.entries.map((entry) => ({ wsPath: entry.path, projectKey: deriveProjectKey(entry.path) }))];
+      const family = [root, ...result.entries.map((entry) => ({ wsPath: entry.path, projectKey: projectKeyOf(entry.path) }))];
       const seen = new Set<string>();
       return family.filter((row) => (seen.has(row.projectKey) ? false : (seen.add(row.projectKey), true)));
     } catch (cause) {
@@ -477,7 +478,7 @@ export class ForgeSpecsRemote extends TypertRemoteService {
       return main;
     }
     const rootPath = matchPathSpelling(main.wsPath, probe.root!);
-    return { wsPath: rootPath, projectKey: deriveProjectKey(rootPath) };
+    return { wsPath: rootPath, projectKey: projectKeyOf(rootPath) };
   }
 
   /**
@@ -994,7 +995,7 @@ export function forgeProjectsIdentityOf(
         const project = await face.getProject(projectId);
         const wsPath = typeof project?.wsPath === "string" && project.wsPath !== "" ? project.wsPath : undefined;
         if (wsPath !== undefined) {
-          return { wsPath, projectKey: deriveProjectKey(wsPath) };
+          return { wsPath, projectKey: projectKeyOf(wsPath) };
         }
       }
     } catch {
@@ -1007,7 +1008,7 @@ export function forgeProjectsIdentityOf(
         const ws = await registry.get(projectId as WorkspaceId);
         const path = typeof ws?.path === "string" && ws.path !== "" ? ws.path : undefined;
         if (path !== undefined) {
-          return { wsPath: path, projectKey: deriveProjectKey(path) };
+          return { wsPath: path, projectKey: projectKeyOf(path) };
         }
       }
     } catch {

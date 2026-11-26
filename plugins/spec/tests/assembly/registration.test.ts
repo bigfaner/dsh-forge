@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import specPlugin, { registerSpecToolFamily } from "../../host/index.js";
 import { assembleSpecServices, createSpecDocWriter } from "../../host/assembly/default-assembly.js";
 import { FORGE_SPEC_TOOL_NAMES } from "../../host/tools/index.js";
-import { deriveProjectKey } from "../../host/domain/specs/service.js";
+import { projectKeyOf as deriveProjectKey } from "@dsh-forge/lib-path";
 import { FORGE_SPECS_SERVICE_KEY, FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
 
 /** cordis ctx 桩（provide/register 记录面 + reflect.get 投影缝消费面） */

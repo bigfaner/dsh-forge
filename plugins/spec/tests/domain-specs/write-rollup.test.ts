@@ -7,12 +7,11 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, mkdirSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveProjectKey } from "@dsh-forge/lib-path";
+import { resolveProjectKey, projectKeyOf as deriveProjectKey } from "@dsh-forge/lib-path";
 import type { GitPorcelainRunner } from "@dsh-forge/lib-path/project-root";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
 import {
   createForgeSpecsService,
-  deriveProjectKey,
   type ForgeSpecsService,
 } from "../../host/domain/specs/service.js";
 import { createForgeToolServices, type ForgeToolServices } from "../../host/domain/specs/tool-service.js";

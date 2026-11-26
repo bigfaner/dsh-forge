@@ -12,8 +12,9 @@ import { realpathSync } from 'node:fs'
 import { deriveDirName } from './derive-dir.js'
 import { isInWorktreeTree, matchPathSpelling, resolveMainCheckoutRoot, type GitPorcelainRunner } from './project-root.js'
 
-/** projectKey 派生失败（空/空白路径——无归属可派生，fail-loud）。 */
+/** projectKey 派生失败（空/空白路径——无归属可派生，fail-loud；typed 码 ERR_PROJECT_KEY_DERIVATION）。 */
 export class ProjectKeyDerivationError extends Error {
+  readonly code = 'ERR_PROJECT_KEY_DERIVATION'
   constructor() {
     super('project_key derivation failed: empty cwd (ERR_PROJECT_KEY_DERIVATION)')
     this.name = 'ProjectKeyDerivationError'

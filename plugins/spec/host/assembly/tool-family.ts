@@ -42,8 +42,8 @@ export function acSettlementsFaceOf(ctx: unknown): () => AcSettlementsFace | und
 /**
  * 单装工具族装配：22 动词 tool 定义（tools.md 总表逐行——M3 六 + roadmap 5 + milestone 6
  * + acceptSpec/finalizeGoal + 复核 2 + spec_stats）。
- * projectKey 路由 = exec 会话 cwd → 服务层 deriveProjectKey 派生（tool 面 cwd 缺席 =
- * ERR_SPEC_PROJECT_KEY_DERIVATION typed 拒绝自解释）。
+ * projectKey 路由 = exec 会话 cwd → lib-path projectKeyOf 派生（tool 面 cwd 缺席 =
+ * ERR_PROJECT_KEY_DERIVATION typed 拒绝自解释）。
  */
 export function assembleSpecToolFamily(input: ToolFamilyAssemblyInput): { readonly tools: readonly SpecToolDefinition[] } {
   const verbs = createForgeToolServices({

@@ -1,6 +1,6 @@
 // spec host tools 结构化最小面（plugin-spec 1.4——task-loop tools/faces 同构平移：
 // 对 dsh tools 注册面与 tool 定义形状的锚定；插件零 dsh 运行时包依赖，真实现结构兼容）。
-import { SpecError } from "../domain/specs/errors.js";
+import { ProjectKeyDerivationError } from "@dsh-forge/lib-path";
 
 
 /** 参数 schema（注册面消费的编译后 JSON Schema 形状子集；type 固定 object 根） */
@@ -56,17 +56,13 @@ export function sessionContextOf(exec: SpecToolExecFace): SpecToolSessionContext
 }
 
 /**
- * 会话 → cwd 归属路由（六 tool 共用路由口）：cwd 缺席 = spec 域 typed 拒绝
- *（ERR_SPEC_PROJECT_KEY_DERIVATION——服务层派生门同码，tool 面提前拦截同因）。
+ * 会话 → cwd 归属路由（六 tool 共用路由口）：cwd 缺席 = typed 拒绝
+ *（ProjectKeyDerivationError——与服务层派生门同码 ERR_PROJECT_KEY_DERIVATION，tool 面提前拦截同因）。
  */
 export function requireSessionCwd(exec: SpecToolExecFace): string {
   const { cwd } = sessionContextOf(exec);
   if (cwd === undefined || cwd === "") {
-    throw new SpecError(
-      "ERR_SPEC_PROJECT_KEY_DERIVATION",
-      "spec tools: no session workspace in this call context — the spec project cannot be located",
-      {},
-    );
+    throw new ProjectKeyDerivationError();
   }
   return cwd;
 }

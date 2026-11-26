@@ -83,7 +83,7 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_SPEC_TIERS_INVALID: 'error-bar',
   ERR_SPEC_DUPLICATE_SLUG: 'error-bar',
   ERR_SPEC_DUPLICATE_DOC_PATH: 'error-bar',
-  ERR_SPEC_PROJECT_KEY_DERIVATION: 'error-bar',
+  ERR_PROJECT_KEY_DERIVATION: 'error-bar',
   ERR_SPEC_ARCHIVED_FROZEN: 'error-bar',
   ERR_SPEC_ILLEGAL_TRANSITION: 'error-bar',
   ERR_SPEC_REJECT_NOTE_REQUIRED: 'error-bar',

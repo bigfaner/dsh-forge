@@ -4,7 +4,8 @@
 // 竞窗自愈回退六例 + Spec 链式收口 + emitDiag 桩逐字段断言。
 import { describe, expect, it } from "vitest";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
-import { createForgeSpecsService, deriveProjectKey } from "../../host/domain/specs/service.js";
+import { createForgeSpecsService } from "../../host/domain/specs/service.js";
+import { projectKeyOf as deriveProjectKey } from "@dsh-forge/lib-path";
 import {
   advanceGoalsIfDue,
   decideAdvance,

@@ -92,7 +92,7 @@ export const ERROR_CODES = [
   'ERR_SPEC_TIERS_INVALID', // → SpecError：tiers 越界值（封闭四值 ui/api/pure-logic/docs 外——400）
   'ERR_SPEC_DUPLICATE_SLUG', // → SpecError：slug 重复（UNIQUE 冲突——409）
   'ERR_SPEC_DUPLICATE_DOC_PATH', // → SpecError：文档登记路径跨 spec 重复（409）
-  'ERR_SPEC_PROJECT_KEY_DERIVATION', // → SpecError：归属键 cwd 派生失败（400；NOT NULL 无 default 服务层前置门）
+  'ERR_PROJECT_KEY_DERIVATION', // → ProjectKeyDerivationError（lib-path）：归属键 cwd 派生失败（400；task-loop/spec 共用——NOT NULL 无 default 服务层前置门）
   'ERR_SPEC_NOT_FOUND', // → SpecError：spec slug 未命中（404）
   'ERR_SPEC_ARCHIVED_FROZEN', // → SpecError：归档态冻结快照写面拒绝（409）
   'ERR_SPEC_ILLEGAL_TRANSITION', // → SpecError：状态机非法边（携 from/to；409）

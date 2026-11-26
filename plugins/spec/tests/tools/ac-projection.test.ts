@@ -8,7 +8,8 @@
 //      不落库）+ 无 memoize（两次查询间桩态翻转 → 投影跟随）。
 import { describe, expect, it } from "vitest";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
-import { createForgeSpecsService, deriveProjectKey, type ForgeSpecsService } from "../../host/domain/specs/service.js";
+import { createForgeSpecsService, type ForgeSpecsService } from "../../host/domain/specs/service.js";
+import { projectKeyOf as deriveProjectKey } from "@dsh-forge/lib-path";
 import { createForgeToolServices, type ForgeToolServices } from "../../host/domain/specs/tool-service.js";
 import { createSpecTools, type SpecToolDeps, type SpecTools } from "../../host/tools/index.js";
 import type { SpecToolExecFace } from "../../host/tools/faces.js";

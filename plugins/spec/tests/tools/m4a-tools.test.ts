@@ -11,7 +11,8 @@ import { describe, expect, it } from "vitest";
 import { isForgeToolFailure, type ForgeToolFailure } from "@dsh-forge/lib-api";
 import type { DiagEventPayload } from "@dsh-forge/lib-diag";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
-import { createForgeSpecsService, deriveProjectKey } from "../../host/domain/specs/service.js";
+import { createForgeSpecsService } from "../../host/domain/specs/service.js";
+import { projectKeyOf as deriveProjectKey } from "@dsh-forge/lib-path";
 import { createForgeToolServices } from "../../host/domain/specs/tool-service.js";
 import { createSpecTools, FORGE_SPEC_TOOL_NAMES } from "../../host/tools/index.js";
 import type { SpecToolExecFace } from "../../host/tools/faces.js";
@@ -74,7 +75,7 @@ describe("AC-2 入参纪律（工具面零 projectKey / 零 actor——22 员全
     }
   });
 
-  it("cwd 缺席调用 = ERR_SPEC_PROJECT_KEY_DERIVATION typed 拒绝（服务层派生门）", async () => {
+  it("cwd 缺席调用 = ERR_PROJECT_KEY_DERIVATION typed 拒绝（服务层派生门）", async () => {
     const h = harness();
     try {
       const result = (await h.tools.createRoadmap.execute(
@@ -82,7 +83,7 @@ describe("AC-2 入参纪律（工具面零 projectKey / 零 actor——22 员全
         {} as SpecToolExecFace,
       )) as ForgeToolFailure;
       expect(isForgeToolFailure(result)).toBe(true);
-      expect(result.code).toBe("ERR_SPEC_PROJECT_KEY_DERIVATION");
+      expect(result.code).toBe("ERR_PROJECT_KEY_DERIVATION");
     } finally {
       h.close();
     }

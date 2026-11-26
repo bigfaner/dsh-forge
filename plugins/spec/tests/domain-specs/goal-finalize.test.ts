@@ -2,7 +2,8 @@
 // 合法边表逐格（合法边 + 非法枚举）/ note 必填 / human-only actor 守卫 / 单事务两写。
 import { describe, expect, it } from "vitest";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
-import { createForgeSpecsService, deriveProjectKey } from "../../host/domain/specs/service.js";
+import { createForgeSpecsService } from "../../host/domain/specs/service.js";
+import { projectKeyOf as deriveProjectKey } from "@dsh-forge/lib-path";
 import { advanceGoalsIfDue, type GoalVerbDeps } from "../../host/domain/specs/goal-advance.js";
 import { assertHumanActor, finalizeGoal } from "../../host/domain/specs/goal-finalize.js";
 import { reviewGoal } from "../../host/domain/specs/goal-review.js";

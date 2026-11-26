@@ -3,17 +3,11 @@
 // updateSpec 守卫族（必含 Goal / 归档冻结 / rel_path 跨 spec 重复）、transitionSpec
 // 状态机两写（现值 UPDATE + 台账 append 同事务）。
 // 依赖注入形态：SpecVerbDeps（db 动词零裸开；writeSpecDoc 文件写缝——装配面注真实现、
-// 测试注桩）；归属键 = cwd 派生 + worktree 归拢主根键（resolveSpecProjectKey 单点，
-// 写读动词全量经此——lib-path resolveProjectKey 单源，marker 不命中零 git 调用，派生失败
-// 转 spec 域错误拒写）。
+// 测试注桩）；归属键 = cwd 派生 + worktree 归拢主根键（lib-path resolveProjectKey 单源，
+// 写读动词全量经此——marker 不命中零 git 调用，派生失败抛 ProjectKeyDerivationError 拒写）。
 import { randomUUID } from "node:crypto";
 import type Database from "@dsh-forge/lib-db";
-import {
-  ProjectKeyDerivationError,
-  type ProjectKeyResolution,
-  projectKeyOf,
-  resolveProjectKey,
-} from "@dsh-forge/lib-path";
+import { resolveProjectKey } from "@dsh-forge/lib-path";
 import type { GitPorcelainRunner } from "@dsh-forge/lib-path/project-root";
 import { withTransaction } from "@dsh-forge/lib-db";
 import type { DocsRepo } from "../../db/repositories/docs-repo.js";
@@ -155,39 +149,6 @@ export function assertTiersValid(tiers: string[] | undefined): string[] {
   return value;
 }
 
-/**
- * 归属键派生（lib-path projectKeyOf 单源）——spec 域对外的错误契约保持：空/空白 cwd
- * 转 SpecError（ERR_SPEC_PROJECT_KEY_DERIVATION），服务层派生门拒写（NOT NULL 无 default）。
- */
-export function deriveProjectKey(cwd: string): string {
-  try {
-    return projectKeyOf(cwd);
-  } catch (cause) {
-    if (!(cause instanceof ProjectKeyDerivationError)) throw cause;
-    throw new SpecError("ERR_SPEC_PROJECT_KEY_DERIVATION", "归属键派生失败：cwd 缺失", {
-      cwd,
-    });
-  }
-}
-
-/**
- * 归属键 worktree 归拢（lib-path resolveProjectKey 单源——M3 写侧归拢单点，写读动词
- * 全量经此）：标记不命中零 git 调用原样 cwd 键；git 现查归拢主根键；git 失败 / 非本仓
- * 回退 cwd 键 + 回退原因（调用方经诊断面留痕）。空 cwd 派生拒绝经 deriveProjectKey 转
- * spec 域错误契约。
- */
-export function resolveSpecProjectKey(cwd: string, runner?: GitPorcelainRunner): ProjectKeyResolution {
-  try {
-    return resolveProjectKey(cwd, {
-      registryQuery: () => undefined,
-      ...(runner !== undefined ? { gitRunner: runner } : {}),
-    });
-  } catch (cause) {
-    if (!(cause instanceof ProjectKeyDerivationError)) throw cause;
-    return { key: deriveProjectKey(cwd), rolledUp: false };
-  }
-}
-
 function assertGoalsValid(goals: GoalInput[]): void {
   if (!Array.isArray(goals) || goals.length < 1) {
     throw new SpecError("ERR_SPEC_GOALS_EMPTY", "Spec 必含至少一个 Goal", { goals });
@@ -230,8 +191,13 @@ export function createForgeSpecsService(deps: SpecVerbDeps): ForgeSpecsService {
 
   // 归属键派生单点（M3 写侧归拢——写读动词全量经此，worktree cwd 归拢主根键；
   // 归拢发生/回退经诊断面留痕，零 git 调用常态零噪声）
+  // 回退原因由调用方经诊断面留痕；空 cwd 派生拒绝上抛 ProjectKeyDerivationError
+  // （ERR_PROJECT_KEY_DERIVATION——lib-path typed 码）。
   const keyOf = (cwd: string): string => {
-    const rollup = resolveSpecProjectKey(cwd, gitPorcelain);
+    const rollup = resolveProjectKey(cwd, {
+      registryQuery: () => undefined,
+      ...(gitPorcelain !== undefined ? { gitRunner: gitPorcelain } : {}),
+    });
     if (rollup.rolledUp) {
       diag?.(`[spec] 归属键归拢：worktree cwd 归拢主根键 cwd=${cwd} key=${rollup.key}`);
     } else if (rollup.fallbackReason !== undefined) {

@@ -15,7 +15,7 @@ declare module "@deepseek-ai/dsh-typert-protocol" {
     "ERR_SPEC_TIERS_INVALID": object;
     "ERR_SPEC_DUPLICATE_SLUG": object;
     "ERR_SPEC_DUPLICATE_DOC_PATH": object;
-    "ERR_SPEC_PROJECT_KEY_DERIVATION": object;
+    "ERR_PROJECT_KEY_DERIVATION": object;
     "ERR_SPEC_NOT_FOUND": object;
     "ERR_SPEC_ARCHIVED_FROZEN": object;
     "ERR_SPEC_ILLEGAL_TRANSITION": object;

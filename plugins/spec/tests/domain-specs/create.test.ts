@@ -1,7 +1,7 @@
 // createSpec 域逻辑单测（plugin-spec 1.3，TDD 域逻辑先行）——
 // 校验门四分支（纯 deps 桩，零 fs）+ 单事务原子性（文件写缝抛错 → 四表零行）。
 import { describe, expect, it } from "vitest";
-import { deriveDirName } from "@dsh-forge/lib-path";
+import { deriveDirName, ProjectKeyDerivationError } from "@dsh-forge/lib-path";
 import { openSpecDb, type SpecDomainDb } from "../../host/db/connection.js";
 import { createForgeSpecsService, SpecError, isSpecError } from "../../host/domain/specs/service.js";
 
@@ -185,13 +185,14 @@ describe("createSpec 校验门（事务外拒收，零落库）", () => {
     }
   });
 
-  it("cwd 空白 → ERR_SPEC_PROJECT_KEY_DERIVATION（派生失败拒写）", () => {
+  it("cwd 空白 → ERR_PROJECT_KEY_DERIVATION（派生失败拒写）", () => {
     const h = harness();
     try {
       for (const bad of ["", "   "]) {
         const input = h.validInput();
         input.cwd = bad;
-        expect(codeOf(() => h.service.createSpec(input))).toBe("ERR_SPEC_PROJECT_KEY_DERIVATION");
+        expect(() => h.service.createSpec(input)).toThrowError(ProjectKeyDerivationError);
+        expect(() => h.service.createSpec(input)).toThrowError(/ERR_PROJECT_KEY_DERIVATION/);
       }
       expect(h.counts()).toEqual({ specs: 0, goals: 0, acs: 0, docs: 0 });
     } finally {

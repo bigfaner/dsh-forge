@@ -20,7 +20,8 @@ import {
   type TypertAssemblyCtxFace,
 } from "../../host/assembly/typert-remotes.js";
 import { assembleSpecServices, type SpecAssembly } from "../../host/assembly/default-assembly.js";
-import { createForgeSpecsService, deriveProjectKey } from "../../host/domain/specs/service.js";
+import { createForgeSpecsService } from "../../host/domain/specs/service.js";
+import { projectKeyOf as deriveProjectKey } from "@dsh-forge/lib-path";
 import { createForgeToolServices } from "../../host/domain/specs/tool-service.js";
 import { FORGE_SPECS_SERVICE_KEY } from "../../shared/contract-constants.js";
 
