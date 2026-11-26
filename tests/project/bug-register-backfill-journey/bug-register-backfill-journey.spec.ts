@@ -23,7 +23,7 @@
 //   - J3-B1/B2/B3/B5（终态再 resolve 拒绝 / 缺 commit_hash 拒绝 / 悬空 recurrence 拒写 /
 //     降级态 ErrUnavailable）：工具面校验与状态机由 bugs 域单测 pin（service.test）——留痕 skip；
 //   - J3-B4 chip 序列化重启还原：需会话消息内 bug 引用（模型产生）——留痕 skip。
-import { createRequire } from 'node:module'
+import DatabaseDefault from '@dsh-forge/lib-db'
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,7 +39,8 @@ const { deriveDirName } = (await import(
 )) as { deriveDirName(workspaceDir: string): string }
 
 // ── project.db 直查面（{dshHome}/forge/db/project/project.db——台账事实注入/终态直改） ──
-const requireFromCore = createRequire(join(ROOT, 'packages', 'core', 'package.json'))
+// lib-db exports "." 仅 import 条件（ESM-only）——静态 ESM import，禁 CJS require。
+const ProjectDbCtor = DatabaseDefault as unknown as new (path: string) => Db
 
 interface Db {
   prepare(sql: string): { run(...args: unknown[]): unknown; get(...args: unknown[]): unknown }
@@ -51,7 +52,7 @@ function dbFile(dshHome: string): string {
 }
 
 function seedBugRow(dshHome: string, bugId: string, projectKey: string, summary: string): void {
-  const db = new (requireFromCore('@dsh-forge/lib-db') as new (path: string) => Db)(dbFile(dshHome))
+  const db = new ProjectDbCtor(dbFile(dshHome))
   try {
     db.prepare(
       `INSERT INTO project_bugs (id, project_key, summary, bug_desc, trigger_desc, expected, actual, suspected, error_type, bug_status, reporter, created_at, updated_at)
@@ -76,7 +77,7 @@ function seedBugRow(dshHome: string, bugId: string, projectKey: string, summary:
 }
 
 function resolveBugRow(dshHome: string, bugId: string, commitHash: string): void {
-  const db = new (requireFromCore('@dsh-forge/lib-db') as new (path: string) => Db)(dbFile(dshHome))
+  const db = new ProjectDbCtor(dbFile(dshHome))
   try {
     db.prepare(
       `UPDATE project_bugs SET bug_status = 'fixed', commit_hash = ?, fix_approach = ?, updated_at = ? WHERE id = ?`,
@@ -87,7 +88,7 @@ function resolveBugRow(dshHome: string, bugId: string, commitHash: string): void
 }
 
 function deleteBugRow(dshHome: string, bugId: string): void {
-  const db = new (requireFromCore('@dsh-forge/lib-db') as new (path: string) => Db)(dbFile(dshHome))
+  const db = new ProjectDbCtor(dbFile(dshHome))
   try {
     db.prepare('DELETE FROM project_bugs WHERE id = ?').run(bugId)
   } finally {

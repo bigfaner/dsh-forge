@@ -13,14 +13,13 @@
 // feedback=-1 计 0——热度预置事件 verb 恒 'read'（采纳事件），score 落 1.0。
 import { realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { createRequire } from 'node:module'
+import DatabaseDefault from '@dsh-forge/lib-db'
 import { join } from 'node:path'
-import { ROOT } from './launch.js'
 import { resolveKnowledgeDbFile } from '../../plugins/knowledge/host/storage/paths.js'
 import type { SeedDb } from '../../packages/core/src/testutil/db-seeds.js'
 
-const requireFromCore = createRequire(join(ROOT, 'packages', 'core', 'package.json'))
 type SqliteCtor = new (path: string) => SeedDb
+const SqliteDatabase = DatabaseDefault as unknown as SqliteCtor
 
 /**
  * 打开 knowledge 插件自持库（路径解析单源 = 插件 storage/paths.ts——e2e 净化态实际落位
@@ -35,7 +34,7 @@ export function openKnowledgeDb(userData: string): SeedDb {
       DSH_HOME: join(userData, 'dsh-home'),
     },
   )
-  const db = new (requireFromCore('@dsh-forge/lib-db') as SqliteCtor)(file)
+  const db = new SqliteDatabase(file)
   db.pragma('busy_timeout = 5000')
   return db
 }

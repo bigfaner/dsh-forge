@@ -21,17 +21,18 @@
 //   - CT-J2-B8 project.db 降级态：库不可用注入无缝（fail-soft 装配面由单测 pin）——留痕 skip；
 //   - CT-J2-G2 O-row-deferred-selfheal / O-git-fail：registry/关系行失败注入无缝——留痕 skip。
 import { execFileSync } from 'node:child_process'
-import { createRequire } from 'node:module'
+import DatabaseDefault from '@dsh-forge/lib-db'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
-import { ROOT, closeApp, launchHost } from '../../../e2e/support/launch.js'
+import { closeApp, launchHost } from '../../../e2e/support/launch.js'
 import { forgeInvoke } from '../../../e2e/support/rpc.js'
 import { rmDirBestEffort } from '../../../e2e/support/cleanup.js'
 
 // ── project.db 直查面（{dshHome}/forge/db/project/project.db） ──
-const requireFromCore = createRequire(join(ROOT, 'packages', 'core', 'package.json'))
+// lib-db exports "." 仅 import 条件（ESM-only）——静态 ESM import，禁 CJS require。
+const Database = DatabaseDefault as unknown as new (path: string) => ProjectDb
 
 interface ProjectDb {
   prepare(sql: string): { get(...args: unknown[]): unknown; all(...args: unknown[]): unknown[] }
@@ -41,7 +42,7 @@ interface ProjectDb {
 function workspaceRowFor(dshHome: string, wsPath: string): { member_role: string } | undefined {
   const file = join(dshHome, 'forge', 'db', 'project', 'project.db')
   if (!existsSync(file)) return undefined
-  const db = new (requireFromCore('@dsh-forge/lib-db') as new (path: string) => ProjectDb)(file)
+  const db = new Database(file)
   try {
     return db.prepare('SELECT member_role FROM project_workspaces WHERE ws_path = ?').get(wsPath) as
       | { member_role: string }

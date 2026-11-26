@@ -28,7 +28,7 @@
 //     舞台管理（官方宿主为 harness 域外进程——a-faces CT-J2-E5 同判例）。
 //   - AN-11 diag 日志面取证：emitDiag → main appender 日志文件 = 宿主进程域面，
 //     本 harness 无已核销日志定位通道——真机收口轮承载。
-import { createRequire } from 'node:module'
+import DatabaseDefault from '@dsh-forge/lib-db'
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -51,7 +51,8 @@ test.describe.configure({ mode: 'serial' })
 
 const HERE = fileURLToPath(import.meta.url)
 const KNOWLEDGE_PKG_DIR = join(HERE, '..', '..', '..', '..', 'plugins', 'knowledge')
-const requireFromCore = createRequire(join(HERE, '..', '..', '..', '..', 'packages', 'core', 'package.json'))
+// lib-db exports "." 仅 import 条件（ESM-only）——静态 ESM import，禁 CJS require。
+const KnowledgeDbCtor = DatabaseDefault as unknown as new (path: string) => KnowledgeDb
 
 let harness: Awaited<ReturnType<typeof openOfficialPage>>
 const setupLog: string[] = []
@@ -92,8 +93,7 @@ function findKnowledgeDb(root: string, depth: number): string | undefined {
 function registryRows(dshHome: string): readonly { ws_path: string; scope: string }[] | undefined {
   const dbFile = findKnowledgeDb(dshHome, 0)
   if (dbFile === undefined) return undefined
-  const Db = requireFromCore('@dsh-forge/lib-db') as new (path: string) => KnowledgeDb
-  const db = new Db(dbFile)
+  const db = new KnowledgeDbCtor(dbFile)
   try {
     return db.prepare('SELECT ws_path, scope FROM knowledge_registry').all() as readonly {
       ws_path: string

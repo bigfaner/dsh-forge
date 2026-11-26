@@ -23,19 +23,20 @@
 // 环境形态注记：launchHost 缺省 directoryPickerOff=true（preload 桥降级开关）——本 spec
 // 全部用例走桥缺席形态（内嵌目录浏览器起步，CT-J1-B7 承载）；桥在册 OS 对话框形态见留痕 skip。
 import { execFileSync } from 'node:child_process'
-import { createRequire } from 'node:module'
+import DatabaseDefault from '@dsh-forge/lib-db'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
-import { ROOT, closeApp, launchHost } from '../../../e2e/support/launch.js'
+import { closeApp, launchHost } from '../../../e2e/support/launch.js'
 import { ensureNoBlockingDialog } from '../../../e2e/support/modals.js'
 import { forgeInvoke } from '../../../e2e/support/rpc.js'
 import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../../../e2e/support/navigation.js'
 import { CTA_ADD_PROJECT, NAV_ADD_PROJECT, addProjectPhase, DSR_DIR, rfField } from '../../../e2e/support/anchors.js'
 
-// ── project.db 直查面（{dshHome}/forge/db/project/project.db——better-sqlite3 自 core 闭包解析） ──
-const requireFromCore = createRequire(join(ROOT, 'packages', 'core', 'package.json'))
+// ── project.db 直查面（{dshHome}/forge/db/project/project.db）──
+// lib-db exports "." 仅 import 条件（ESM-only）——静态 ESM import，禁 CJS require。
+const Db = DatabaseDefault as unknown as new (path: string) => ProjectDb
 
 interface ProjectDb {
   prepare(sql: string): { get(...args: unknown[]): unknown; all(...args: unknown[]): unknown[] }
@@ -45,7 +46,6 @@ interface ProjectDb {
 function openProjectDb(dshHome: string): ProjectDb | undefined {
   const file = join(dshHome, 'forge', 'db', 'project', 'project.db')
   if (!existsSync(file)) return undefined
-  const Db = requireFromCore('@dsh-forge/lib-db') as new (path: string) => ProjectDb
   return new Db(file)
 }
 
