@@ -26,7 +26,7 @@ import { Remote, RemoteError, TypertRemoteService } from "@deepseek-ai/dsh-typer
 import type { RemoteErrorCode } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
 import { rootCtxOf } from "@dsh-forge/lib-util";
-import { ProjectKeyDerivationError, projectKeyOf } from "@dsh-forge/lib-path";
+import { ProjectKeyDerivationError, projectKeyOf, resolveProjectKey } from "@dsh-forge/lib-path";
 import type { WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -56,17 +56,12 @@ import {
   type AcSettlementsFace,
 } from "../tools/projection.js";
 import {
-  isInWorktreeTree,
   matchPathSpelling,
-  resolveMainCheckoutRoot,
   spawnGitWorktreePorcelain,
   type GitPorcelainRunner,
 } from "@dsh-forge/lib-path/project-root";
 import { FORGE_SPECS_SERVICE_KEY } from "../../shared/contract-constants.js";
 import type { Envelope } from "../../shared/result.js";
-
-/** worktree 检出形态触发 marker（主根归拢廉价预检——零 git 调用省费，task-loop 同径） */
-const WORKTREE_MARKER = /[\\/]\.forge[\\/]worktrees[\\/]/;
 
 /** 封存 follow 流重估间隔 ms（盘面/db 无跨进程事件源，轮询收敛为快照推送） */
 export const SPEC_FOLLOW_INTERVAL_MS = 3_000;
@@ -469,16 +464,17 @@ export class ForgeSpecsRemote extends TypertRemoteService {
     }
   }
 
-  /** 主根归拢消费面（lib-path project-root 单源——marker 触发 + fail-soft 原样 + 留痕） */
+  /** 主根归拢消费面（lib-path resolveProjectKey 单源——marker 触发 + fail-soft 原样 + 留痕） */
   private rollupMainRoot(main: SpecIdentityResolution): SpecIdentityResolution {
-    if (!WORKTREE_MARKER.test(main.wsPath)) return main;
-    const probe = resolveMainCheckoutRoot(main.wsPath, this.gitPorcelain);
-    if (probe.entries === undefined || !isInWorktreeTree(probe.entries, main.wsPath)) {
-      this.diagLine?.(`[spec-typert] 主根归拢 fail-soft（lib porcelain 现查未命中）——快照族回退注册行键：wsPath=${main.wsPath}${probe.reason !== undefined ? `：${probe.reason}` : ""}`);
+    const resolved = resolveProjectKey(main.wsPath, { registryQuery: () => undefined, gitRunner: this.gitPorcelain });
+    if (!resolved.rolledUp || resolved.mainRoot === undefined) {
+      if (resolved.fallbackReason !== undefined) {
+        this.diagLine?.(`[spec-typert] 主根归拢 fail-soft（lib porcelain 现查未命中）——快照族回退注册行键：wsPath=${main.wsPath}：${resolved.fallbackReason}`);
+      }
       return main;
     }
-    const rootPath = matchPathSpelling(main.wsPath, probe.root!);
-    return { wsPath: rootPath, projectKey: projectKeyOf(rootPath) };
+    const rootPath = matchPathSpelling(main.wsPath, resolved.mainRoot);
+    return { wsPath: rootPath, projectKey: resolved.key };
   }
 
   /**

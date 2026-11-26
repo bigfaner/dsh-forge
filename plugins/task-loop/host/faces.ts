@@ -583,39 +583,6 @@ export interface ProjectContainerDirs {
   warm(projectIds: readonly string[]): void
 }
 
-/** 建解析缝（装配单例——装配方闭包持有，incident 仓 resolveContainerDir 消费） */
-export function createProjectContainerDirs(projects: ProjectDirServiceFace): ProjectContainerDirs {
-  const dirs = new Map<string, string>()
-  const warm = (projectId: string): void => {
-    if (dirs.has(projectId)) return
-    dirs.set(projectId, '') // 解析中占位（并发重复触发收敛为单跳；失败即清除重试）
-    void (async () => {
-      const project = await projects.getProject(projectId)
-      if (project === null) {
-        dirs.delete(projectId) // 未注册项目 = 未记忆（后续绑定增量注册后可再解析）
-        return
-      }
-      const derived = await projects.deriveTaskStoreDir({ workspaceDir: project.wsPath })
-      // 派生空不覆盖占位：'' 永驻 Map，后续 warm 的 has 短路——不重试（空结果策略分叉点：
-      // 另一侧 ProjectWorkspaceRoots 空 = delete 可重试）
-      if (derived.dir !== '') dirs.set(projectId, derived.dir)
-    })().catch(() => {
-      dirs.delete(projectId) // fail-soft：解析失败 = 未记忆（下次事件再触发懒解析，零外抛）
-    })
-  }
-  return {
-    resolve(projectId) {
-      const memo = dirs.get(projectId)
-      if (memo !== undefined && memo !== '') return memo
-      warm(projectId)
-      return undefined
-    },
-    warm(projectIds) {
-      for (const id of projectIds) warm(id)
-    },
-  }
-}
-
 // ─────────────────── 项目工作区根记忆缝（bug 8b041612——T3 卷宗探测 dir 语义修正） ───────────────────
 
 /** 项目域服务收窄面（工作区根缝消费单法：getProject 反查 ws_path——单法面收窄） */

@@ -2,21 +2,12 @@
 // task-loop registerToolFamily 同配方）：cwd → projectId 解析器装配 + 四员逐枚注册 +
 // unmount 全撤回。缝缺席/劣形 = 工具面零注册 + warn 留痕（降级诚实不阻载——bug 写径
 // 对本宿主不可达的根因即缝缺席，非静默失联）。
-import { normalizeFsPath, projectKeyOf } from "@dsh-forge/lib-path";
-import {
-  isInWorktreeTree,
-  matchPathSpelling,
-  resolveMainCheckoutRoot,
-  spawnGitWorktreePorcelain,
-  type GitPorcelainRunner,
-} from "@dsh-forge/lib-path/project-root";
+import { normalizeFsPath, resolveProjectKey } from "@dsh-forge/lib-path";
+import { spawnGitWorktreePorcelain, type GitPorcelainRunner } from "@dsh-forge/lib-path/project-root";
 import type { BugsServicePort, ProjectsServicePort } from "@dsh-forge/lib-api";
 import type { DomainDb } from "../db/connection.js";
 import { createBugTools, type BugToolDefinition, type BugToolsDeps } from "./bug-tools.js";
 import type { BugProjectIdResolver } from "./session.js";
-
-/** worktree 检出形态触发 marker（主根归拢廉价预检——零 git 调用省费，task-loop/spec 同径） */
-const WORKTREE_MARKER = /[\\/]\.forge[\\/]worktrees[\\/]/;
 
 /** 官方 tools 缝防御读取（cordis inject 门：属性访问未被 inject 声明即抛——try/catch
  *  fail-soft 归 undefined；inject 名单由 index.ts 显式声明 "tools" 承担门内可达） */
@@ -31,8 +22,8 @@ function toolsFaceOf(ctx: unknown): { register?(definition: unknown): () => void
 
 /**
  * cwd → projectId 解析器（bug 工具面路由单源）：
- * ① own project.db 归拢键派生（projects.projectKeyOf 同函数口径；worktree marker cwd
- *    经 lib-path porcelain 现查归拢主检出根再派生——审计 M6 修口，worktree 会话不再
+ * ① own project.db 归拢键派生（lib-path resolveProjectKey 单源——worktree marker cwd
+ *    经 porcelain 现查归拢主检出根再派生——审计 M6 修口，worktree 会话不再
  *    miss；git 失败/非本仓清单 = fail-soft 回退 cwd 键 + diag 留痕）；
  * ② own db main 行路径直配（normalizeFsPath 归一比较——主检出行 cwd 直配径）；
  * ③ core forgeProjects 行退路（宿主集成态注册真源在 core 库——listProjects wsPath 匹配）；
@@ -48,19 +39,18 @@ export function createBugProjectIdResolver(deps: {
     const norm = normalizeFsPath(cwd);
     const db = deps.db;
     if (db !== undefined) {
-      let key = projectKeyOf(cwd);
-      if (WORKTREE_MARKER.test(cwd)) {
-        const probe = resolveMainCheckoutRoot(cwd, deps.gitPorcelain ?? spawnGitWorktreePorcelain);
-        if (probe.entries !== undefined && isInWorktreeTree(probe.entries, cwd)) {
-          const mainRoot = matchPathSpelling(cwd, probe.entries[0]!.path);
-          key = projectKeyOf(mainRoot);
-          deps.diag?.(`[project] bug 工具面 cwd 归拢主根键：cwd=${cwd} mainRoot=${mainRoot} key=${key}`, "info");
-        } else {
-          deps.diag?.(
-            `[project] bug 工具面归拢 fail-soft 回退 cwd 键：${probe.reason ?? "porcelain 清单不含 cwd"}（cwd=${cwd}）`,
-            "warn",
-          );
-        }
+      const resolved = resolveProjectKey(cwd, {
+        registryQuery: () => undefined,
+        gitRunner: deps.gitPorcelain ?? spawnGitWorktreePorcelain,
+      });
+      const key = resolved.key;
+      if (resolved.mainRoot !== undefined) {
+        deps.diag?.(`[project] bug 工具面 cwd 归拢主根键：cwd=${cwd} mainRoot=${resolved.mainRoot} key=${key}`, "info");
+      } else if (resolved.fallbackReason !== undefined) {
+        deps.diag?.(
+          `[project] bug 工具面归拢 fail-soft 回退 cwd 键：${resolved.fallbackReason}（cwd=${cwd}）`,
+          "warn",
+        );
       }
       const byKey = db.repos.projects.getByKey(key);
       if (byKey !== undefined) return byKey.id;

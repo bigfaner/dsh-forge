@@ -53,7 +53,7 @@ export interface IncidentStoreDeps {
   /**
    * projectId+任务源 slug → 容器库目录（{tasksHome}/{flatten}@{hash8}）。反向解析缝
    * （1.11 装配接线收口）：projectId→workspaceDir 反查 + deriveTaskStoreDir 单源派生
-   * 归装配方（faces.createProjectContainerDirs 记忆化桥接异步解析）；undefined = 不落盘。
+   * 归装配方（projectId→workspaceDir 反查 + deriveTaskStoreDir 记忆化桥接异步解析）；undefined = 不落盘。
    */
   resolveContainerDir(projectId: string | undefined, sourceSlug: string): string | undefined;
   /**

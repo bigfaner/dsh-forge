@@ -175,8 +175,8 @@ export class ForgeProjectsRemote extends TypertRemoteService {
    * 任务库派生行（lib-path 单源真派生端点——占位已退役）：core face 在场（宿主集成态）
    * 恒委托 core（bug 8de6b903——不遮蔽真失败纪律，集成态派生根与注册闭包同 core 单源
    * 不分叉）；core face 缺席/劣形（单装态）= selfDerive 插件自链兜底（1.32②——tasksHome
-   * 三级解析与官方 forge.project_home 锚同口径：config.tasksHome > env DSH_FORGE_TASKS_HOME
-   * > 宿主 forge-workspaces 数据域约定）；兜底亦缺席 = typed unavailable 诚实拒绝。
+   * 两级解析与官方 forge.project_home 锚同口径：config.tasksHome > forge 根派生
+   * {forgeHome}/projects）；兜底亦缺席 = typed unavailable 诚实拒绝。
    * 派生失败 fail-soft 观测面（AGENTS §7）：typed 错误原样上抛（UI 派生行降级「—」）+
    * diagEmit event=project-derive-store-dir 留痕——失败不静默，成功路径零发射。
    */

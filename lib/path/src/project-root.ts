@@ -4,7 +4,8 @@
 //   （git 恒先列主检出/bare 行）；git 缺席 / 命令失败 / 空清单 = fail-soft
 //   （root/entries = undefined + reason 可诊断错误面）。
 // node-only 子面（node:child_process）——经 '@dsh-forge/lib-path/project-root' 子路径
-// 导出；根入口保持浏览器安全（'./path-key' 安全子面先例同径）。
+// 导出；根入口经 project-key 引入 node:fs（realpath 规范化），已非浏览器安全——
+// 浏览器安全子面仍走 '@dsh-forge/lib-path/path-key'（'./path-key' 安全子面先例同径）。
 import { spawnSync } from 'node:child_process'
 import { normalizeFsPath } from './path-key.js'
 

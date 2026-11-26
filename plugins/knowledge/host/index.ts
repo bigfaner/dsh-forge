@@ -13,7 +13,7 @@
 // plugin load 时点先于一切会话装配，首轮请求即在场；bug be4bac44 判例）+ 动态段
 // forge:knowledge-domains(911) scoped 接线（stage③ C2：agent/created 时刻在该会话
 // scope 注册——service/session-prompt.ts）+
-// knowledge 目录键声明（root/store/global 三键——根 scope provide('dirKeys.knowledge', entries)
+// knowledge 目录键声明（root/global 两键——根 scope provide('dirKeys.knowledge', entries)
 // 约定名——跨 scope 反向拉取终态缝，bug 04d445f4）；交出合并 disposer。
 // projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
 // 数据源（bindingsFile 文件与刷新缝退役）；服务面两级解析 projectId→wsPath→注册行。
