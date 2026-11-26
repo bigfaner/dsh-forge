@@ -1,0 +1,85 @@
+{
+  "projectKey": "Z-ws-domain-tasks@9f07fc40",
+  "success": {
+    "result": {
+      "taskId": "id-1",
+      "status": "completed"
+    },
+    "task": {
+      "id": "id-1",
+      "slug": "alpha",
+      "local_id": "1.0",
+      "task_type": "coding-feature",
+      "task_status": "completed",
+      "project_key": "Z-ws-domain-tasks@9f07fc40",
+      "fix_of_task_id": null,
+      "updated_at": "<iso>"
+    },
+    "settlement": {
+      "id": "<uuid>",
+      "task_id": "id-1",
+      "seq": 1,
+      "fix_root_id": null,
+      "result": "success",
+      "ac_results_json": "[{\"criterion\":\"C1\",\"met\":true,\"evidence\":\"e1\"}]",
+      "commit_hash": "abc1234",
+      "evidence_json": "{\"summary\":\"全载荷结算\",\"gates\":{\"compile\":true,\"fmt\":true,\"lint\":true,\"test\":true},\"files\":[\"src/a.ts\",\"src/b.ts\"],\"fields\":{\"filesCreated\":[\"src/a.ts\"],\"filesModified\":[\"src/b.ts\"],\"keyDecisions\":[\"d1\"],\"testsPassed\":7,\"testsFailed\":0,\"coverage\":0.9,\"notes\":\"n\",\"facets\":[\"pure-logic\"]}}",
+      "created_at": "<iso>"
+    }
+  },
+  "blocked": {
+    "result": {
+      "taskId": "id-2",
+      "status": "blocked"
+    },
+    "task": {
+      "id": "id-2",
+      "slug": "beta",
+      "local_id": "1.0",
+      "task_type": "coding-feature",
+      "task_status": "blocked",
+      "project_key": "Z-ws-domain-tasks@9f07fc40",
+      "fix_of_task_id": null,
+      "updated_at": "<iso>"
+    },
+    "settlement": {
+      "id": "<uuid>",
+      "task_id": "id-2",
+      "seq": 1,
+      "fix_root_id": null,
+      "result": "blocked",
+      "ac_results_json": "[]",
+      "commit_hash": null,
+      "evidence_json": "{\"reason\":\"缺依赖\",\"gates\":{\"lint\":false},\"fields\":{\"blockClassification\":{\"kind\":\"new-problem\"}}}",
+      "created_at": "<iso>"
+    }
+  },
+  "fixChain": {
+    "result": {
+      "taskId": "id-3",
+      "status": "completed"
+    },
+    "rootSettlement": {
+      "id": "<uuid>",
+      "task_id": "id-4",
+      "seq": 1,
+      "fix_root_id": null,
+      "result": "blocked",
+      "ac_results_json": "[]",
+      "commit_hash": null,
+      "evidence_json": "{\"reason\":\"根因\",\"fields\":{\"blockClassification\":{\"kind\":\"same-family-recurrence\"}}}",
+      "created_at": "<iso>"
+    },
+    "fixSettlement": {
+      "id": "<uuid>",
+      "task_id": "id-3",
+      "seq": 1,
+      "fix_root_id": "id-5",
+      "result": "success",
+      "ac_results_json": "[{\"criterion\":\"R1\",\"met\":true,\"evidence\":\"re\"}]",
+      "commit_hash": "cafe000",
+      "evidence_json": "{\"summary\":\"修复核销\",\"gates\":{\"compile\":true,\"fmt\":true,\"lint\":true,\"test\":true}}",
+      "created_at": "<iso>"
+    }
+  }
+}
