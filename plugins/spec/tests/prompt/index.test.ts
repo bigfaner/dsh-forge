@@ -126,7 +126,7 @@ describe('renderSpecPipelineSection——唯一模式（四模板删远征两份
   it('{{ 引用零残留（目录真值 = 工具查询指引，段文本不再依赖 {{forge_docs_root}}）', () => {
     for (const v of [MAIN_RENDER, renderSpecPipelineSection({ subagent: true })]) {
       expect(v.match(/\{\{/g)).toBeNull()
-      expect(v).toContain('forgeDirs')
+      expect(v).toContain('forge_dirs')
     }
   })
 })

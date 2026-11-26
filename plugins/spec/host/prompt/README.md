@@ -15,5 +15,5 @@
 唯一模式：主/子会话两份自包含模板，Spec/Goal/AC 词汇，目录树 `.forge/specs/{slug}/`；
 模式概念退役——本包零 `mode` 配置键、零双模板分流面。
 
-注意：SystemPrompt 段文本默认插值——本段文本零 `{{` 引用（目录真值 = forgeDirs /
-forgeResolvePath 工具查询，AGENTS 1.7）。
+注意：SystemPrompt 段文本默认插值——本段文本零 `{{` 引用（目录真值 = forge_dirs /
+forge_resolve_path 工具查询，AGENTS 1.7）。

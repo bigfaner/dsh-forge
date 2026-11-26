@@ -1,21 +1,16 @@
-// forge 契约测试②：单行自插 config 行物化面——!!js 表达式与 assembly 延伸常量同源
-// （静态双检：patch home 表达式由 host/assembly.ts 延伸常量同源拼出，漂移即红）。
+// forge 契约测试②：单行自插 config 行物化面——!!js 表达式 = 官方 dshHomePath 服务写法
+// （静态双检：forge 根统一 dshHomePath('forge')，由 boot 提供该服务——官方安装版 patch
+// 同款；缺席降级由各插件消费端降级链承接，spec forge-dirs-unification §2.4）。
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-  DSH_HOME_ENV,
-  FORGE_HOME_SUFFIX,
-} from "../host/assembly.js";
 
 const FORGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const patchYaml = readFileSync(resolve(FORGE_ROOT, "cordis.patch.yml"), "utf8");
 
-/** 派发单源同源期望式（静态双检正本——assembly 常量拼装，非字面量复制；
- * DSH_HOME 缺席兜底 undefined 非 false——bug 674119f2 desktop 实证：false 穿透
- * 消费端 `??` 缺省（project.db 收到 boolean 崩溃），undefined 才能触发缺省腿）。 */
-const HOME_EXPR = `(process.env.${DSH_HOME_ENV} || undefined) && (process.env.${DSH_HOME_ENV} + '${FORGE_HOME_SUFFIX}')`;
+/** forge 根官方写法（spec §2.4——dshHomePath('forge')） */
+const HOME_EXPR = `dshHomePath('forge')`;
 
 /** 抽取 forge 行 home 键的 !!js 表达式（id = forge-bundle 异 id——bug 1102d9d8；缺失 = undefined）。 */
 function extractHomeExpr(): string | undefined {
@@ -23,38 +18,34 @@ function extractHomeExpr(): string | undefined {
   return block?.[0]?.match(/^\s+home:\s*!!js\s+(.+)$/m)?.[1];
 }
 
-/** 在受控 env 下求值 !!js 表达式（不触真实 process——物化语义纯函数化验证）。 */
-function evalExpr(expr: string, env: Record<string, string | undefined>): unknown {
-  const fakeProcess = { env };
-  return new Function("process", `"use strict"; return (${expr});`)(fakeProcess);
-}
-
-describe("forge patch config 行物化面（与派发单源同源）", () => {
-  it("home !!js 表达式 = assembly 延伸常量同源拼装（静态双检——字面量漂移即红）", () => {
+describe("forge patch config 行物化面（与官方 dshHomePath 写法同源）", () => {
+  it("forge 行 home !!js 表达式 = dshHomePath('forge')（静态双检——字面量漂移即红）", () => {
     expect(extractHomeExpr()).toBe(HOME_EXPR);
   });
 
-  it("物化语义 = {DSH_HOME}/forge（forge home 缺省派生——直写正本缺省分支）", () => {
-    expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "Z:\\mock-dsh-home" })).toBe("Z:\\mock-dsh-home/forge");
-    expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "/data/dsh" })).toBe("/data/dsh/forge");
+  it("五件插行派发 config 全走 dshHomePath（project home = 运行时根下发 + 四 dbFile = forge.db + tasksHome = projects）", () => {
+    const dispatch = [...patchYaml.matchAll(/^        (\w+): !!js (dshHomePath.+)$/gm)].map((m) => [m[1]!, m[2]!] as const);
+    expect(dispatch).toEqual([
+      ["home", "dshHomePath('forge')"], // forge-bundle
+      ["home", "dshHomePath('forge')"], // project 运行时根
+      ["dbFile", "dshHomePath('forge', 'db/forge/forge.db')"], // project
+      ["dbFile", "dshHomePath('forge', 'db/forge/forge.db')"], // spec
+      ["dbFile", "dshHomePath('forge', 'db/forge/forge.db')"], // task-loop
+      ["tasksHome", "dshHomePath('forge', 'projects')"], // task-loop
+      ["dbFile", "dshHomePath('forge', 'db/forge/forge.db')"], // knowledge——组合安装库文件 = {DSH_HOME}/forge/db/forge/forge.db
+    ]);
   });
 
-  it("DSH_HOME 缺席 → home = undefined（消费端 `??` 缺省腿恢复生效——bug 674119f2：false 穿透 `??` 致 project.db 收到 boolean 崩溃，undefined 才触发缺省）", () => {
-    expect(evalExpr(extractHomeExpr()!, {})).toBeUndefined();
-    expect(evalExpr(extractHomeExpr()!, { DSH_HOME: "" })).toBeUndefined();
-  });
-
-  it("全 patch 派发表达式缺省派生封闭：DSH_HOME 派生点缺席一律产 undefined（false 漂移即红——bug 674119f2；preset 子树技能混合锚 IIFE 双腿形单列——兜底腿含 DSH_HOME 但形态为 try/catch 探测，非 `|| undefined &&` 派生面）", () => {
+  it("全 patch 非锚派发表达式封闭：零 DSH_HOME env 派生点（旧 `(env || undefined) &&` 形退役——降级链归各插件消费端）", () => {
     const envPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(.+)$/gm)].map((m) => m[1]!).filter((p) => p.includes("process.env.DSH_HOME") && !p.startsWith("(()=>{"));
-    expect(envPoints.length).toBeGreaterThanOrEqual(6);
-    for (const expr of envPoints) {
-      expect(expr, `缺省派生 undefined 形态：${expr}`).toMatch(/^\(process\.env\.DSH_HOME \|\| undefined\) && /);
-      expect(evalExpr(expr, {})).toBeUndefined();
-      expect(evalExpr(expr, { DSH_HOME: "" })).toBeUndefined();
+    expect(envPoints).toEqual([]);
+    const dispatchPoints = [...patchYaml.matchAll(/^        (\w+): !!js (.+)$/gm)].map((m) => m[2]!);
+    for (const expr of dispatchPoints) {
+      expect(expr, `派发表达式 = dshHomePath 写法：${expr}`).toMatch(/^dshHomePath\(/);
     }
   });
 
-  it("preset 子树技能混合锚封闭：五成员锚 IIFE try/catch 双腿形（baseUrl 解析优先 + DSH_HOME generation 探测兜底，desktop profile 根 baseUrl 必失败落兜底），零 throw 冒泡（1.34 技能预设独占收敛）", () => {
+  it("preset 子树技能混合锚封闭：五成员锚 IIFE try/catch 双腿形（baseUrl 解析优先 + DSH_HOME generation 探测兜底，零 throw 冒泡；1.34 技能预设独占收敛）", () => {
     const anchorPoints = [...patchYaml.matchAll(/^(?!#).*!!js\s+(\(\(\)=>\{.*\}\)\(\))$/gm)].map((m) => m[1]!);
     expect(anchorPoints, "五成员混合锚逐件在场（preset-forge ×5 + preset-headhunter expert-squad ×1）").toHaveLength(6);
     for (const member of ["project", "spec", "task-loop", "expert-squad", "knowledge"] as const) {
@@ -85,9 +76,8 @@ describe("forge patch config 行物化面（与派发单源同源）", () => {
     const skillAnchors = jsPoints.filter((p) => p.startsWith("(()=>{"));
     expect(skillAnchors).toHaveLength(6);
     const otherPoints = jsPoints.slice(1).filter((p) => !p.startsWith("(()=>{"));
-    // 非自锚点 = 五件插行派发 config 表达式 ×6（home/dbFile/tasksHome——静态直检归
-    // tests/forge/skills-rows-contract.test.ts）+ 官方 preset 底稿 platform 禁用
-    // 表达式 ×2 + plugin-manager profileContext ×1。
+    // 非自锚点 = 五件插行派发 config 表达式 ×6（home/dbFile/tasksHome）+ 官方 preset 底稿
+    // platform 禁用表达式 ×2 + plugin-manager profileContext ×1。
     expect(otherPoints).toHaveLength(9);
     expect(otherPoints.filter((p) => p.startsWith("process.platform"))).toHaveLength(2);
     expect(otherPoints.filter((p) => p.includes("profileContext"))).toHaveLength(1);

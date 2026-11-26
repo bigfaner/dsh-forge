@@ -843,8 +843,8 @@ const forgePlugin: ForgePlugin = Object.assign(
       registerToolLoud(tools.listImplCheckpoints),
       registerToolLoud(tools.pauseTask),
       registerToolLoud(tools.unblockTask),
-      registerToolLoud(tools.forgeDirs),
-      registerToolLoud(tools.forgeResolvePath),
+      registerToolLoud(tools.forge_dirs),
+      registerToolLoud(tools.forge_resolve_path),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       () => disposeDispatchLoop(), // forge:dispatch-loop 段——插件卸载级摘除（section() 返回 Cordis disposer）
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）

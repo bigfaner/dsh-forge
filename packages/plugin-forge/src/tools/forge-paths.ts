@@ -1,8 +1,8 @@
-// forgeDirs + forgeResolvePath 双查询工具（forge-dirs-query-tool §2.3/§2.6——目录口径
+// forge_dirs + forge_resolve_path 双查询工具（forge-dirs-unification §2.3/§2.6——目录口径
 // 代码化的 agent 查询面）。面分治：只读、主会话 + worker 双面可用（contracts
 // WORKER_FORGE_TOOLS 六员之一；查询零副作用）。数据源 = forge-paths.ts 注册表单源：
-// forgeDirs 锚级查询（dirKey 可选/缺省全量——含 declare merge 第三方键；输出 =
-// dirKey + dir（绝对路径）+ description，与注册表同源生成零二次维护）；forgeResolvePath
+// forge_dirs 锚级查询（dirKey 可选/缺省全量——含 declare merge 第三方键；输出 =
+// dirKey + dir（绝对路径）+ description，与注册表同源生成零二次维护）；forge_resolve_path
 // 目的地解析（dest 受控枚举 + slug/localId 按 requires——schema 即证无锚选择面无自由
 // 路径面）。受控面拒绝（未知 dirKey/dest、requires 缺参）= typed ERR_DIR_PATH_INVALID
 // 拒绝并列举法集（ForgeDirPathInvalidError——callToolFace 路由转失败 DTO）。
@@ -16,8 +16,8 @@ import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureV
 import { requireProjectId, sessionContextOf } from './session.js'
 import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 
-const DIRS_TOOL = 'forgeDirs'
-const RESOLVE_TOOL = 'forgeResolvePath'
+const DIRS_TOOL = 'forge_dirs'
+const RESOLVE_TOOL = 'forge_resolve_path'
 
 /** 锚解析 + 合并注册表消费面（index.ts 装配注入——缺席 = 执行期 fail-loud 拒绝，同 features 可选降级模式） */
 export interface ForgePathsToolFace {
@@ -146,7 +146,7 @@ export function createForgeDirsTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: DIRS_TOOL,
     description:
-      'Query forge directory anchors — the single source of truth for directory facts. Omit dirKey to list all anchors (dirKey + absolute dir + description, including third-party keys declared via the forgeDirs service); give dirKey for one entry. Derived paths (dossier/taskLogs/proposalDir) use forgeResolvePath instead. Read-only; available to main agent and workers.',
+      'Query forge directory anchors — the single source of truth for directory facts. Omit dirKey to list all anchors (dirKey + absolute dir + description, including third-party keys declared via the forgeDirs service); give dirKey for one entry. Derived paths (dossier/taskLogs/proposalDir) use forge_resolve_path instead. Read-only; available to main agent and workers.',
     parameters: {
       type: 'object',
       properties: {

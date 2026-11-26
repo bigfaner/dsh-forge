@@ -200,10 +200,10 @@ describe("forge patch 六插行（静态直检——直写正本）", () => {
   /** forge 自插行 id（异 id——bug 1102d9d8：≠ 官方 experimental-forge-bundle 服务行 id；
    * 用户裁定 2026-11-22 自 dshforge 改名 forge-bundle——官方同款构词） */
   const FORGE_ROW_ID = "forge-bundle";
-  it("insert 块 id 序 = forge-bundle（forge 壳异 id——bug 1102d9d8）+ 五件，name = @dsh-forge/<pkg>", () => {
+  it("insert 块 id 序 = expert-squad（装配序修正——builtin-redistribution 裁决②）+ forge-bundle（forge 壳异 id——bug 1102d9d8）+ 四件，name = @dsh-forge/<pkg>", () => {
     const insertBody = FORGE_PATCH.slice(FORGE_PATCH.indexOf("- insert:"), FORGE_PATCH.indexOf("\n    - id: preset-forge"));
     const ids = [...insertBody.matchAll(/^    - id: (.+)$/gm)].map((m) => m[1]!);
-    expect(ids).toEqual([FORGE_ROW_ID, ...MEMBERS]);
+    expect(ids).toEqual(["expert-squad", FORGE_ROW_ID, ...MEMBERS.filter((m) => m !== "expert-squad")]);
     expect(insertBody).toContain(`- id: ${FORGE_ROW_ID}\n      name: '@dsh-forge/forge'`);
     for (const id of MEMBERS) {
       expect(insertBody).toContain(`- id: ${id}\n      name: '@dsh-forge/${id}'`);
@@ -243,6 +243,7 @@ describe("forge patch 六插行（静态直检——直写正本）", () => {
       }
       expect(exprs.length, `${member} 派发表达式非空`).toBeGreaterThan(0);
       for (const [key, expr] of exprs) {
+        if (expr.startsWith("dshHomePath(")) continue; // 官方 dshHomePath 服务写法（boot 提供——无环境派生分支，官方 patch 同款）
         expect(expr, `${member}.${key} && 兜底`).toContain("&&");
       }
     }

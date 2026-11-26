@@ -131,7 +131,7 @@ export interface ForgeToolDeps {
    */
   projects?: ProjectDirServiceFace
   /**
-   * dirKey 数据源消费面（forge-dirs-query-tool——可选：缺席 = forgeDirs/forgeResolvePath
+   * dirKey 数据源消费面（forge-dirs-unification——可选：缺席 = forge_dirs/forge_resolve_path
    * 两 tool 执行期 fail-loud 拒绝（同 features 可选降级模式），其余 tool 零影响。
    * 装配径 = faces.createForgePathsAnchors 锚解析缝 + forge-paths.createDirKeyRegistry
    * 合并注册表（declare merge 面同实例），见 src/index.ts。
@@ -165,15 +165,15 @@ export interface ForgeTools {
   readonly listImplCheckpoints: ReturnType<typeof createListImplCheckpointsTool>
   readonly pauseTask: ReturnType<typeof createPauseTaskTool>
   readonly unblockTask: ReturnType<typeof createUnblockTaskTool>
-  readonly forgeDirs: ReturnType<typeof createForgeDirsTool>
-  readonly forgeResolvePath: ReturnType<typeof createForgeResolvePathTool>
+  readonly forge_dirs: ReturnType<typeof createForgeDirsTool>
+  readonly forge_resolve_path: ReturnType<typeof createForgeResolvePathTool>
 }
 
 /** 注册面全集（二十 tool——M3 六员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
  *  两 bug 读径 + aggregateBugs 聚合读径（recurrence-signal-tiering）+ stopTaskLoop 停止入口
  *  （3b——dispatch-loop-hardening 改进 3b③）+ pauseTask
  *  单任务暂停入口（task-pause-primitive）+ unblockTask blocked→pending 出口
- *  （blocked-verdict-restore-primitive）+ forgeDirs/forgeResolvePath 目录查询双只读径
+ *  （blocked-verdict-restore-primitive）+ forge_dirs/forge_resolve_path 目录查询双只读径
  *  （forge-dirs-query-tool §2.3——主 + worker 双面）；面分治：listBugs
  *  仅主 agent，getBug 主 + worker，aggregateBugs 主 + triage（聚合只读，worker 面 deny
  *  ——assemble.ts FORGE_DENY_IN_WORKER），addTask 仅主 agent（worker 面不注入——
@@ -198,8 +198,8 @@ export const FORGE_TOOL_NAMES = [
   'listImplCheckpoints',
   'pauseTask',
   'unblockTask',
-  'forgeDirs',
-  'forgeResolvePath',
+  'forge_dirs',
+  'forge_resolve_path',
 ] as const
 
 export type ForgeToolName = (typeof FORGE_TOOL_NAMES)[number]
@@ -224,8 +224,8 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     ...createImplCheckpointTools(deps),
     pauseTask: createPauseTaskTool(deps),
     unblockTask: createUnblockTaskTool(deps),
-    forgeDirs: createForgeDirsTool(deps),
-    forgeResolvePath: createForgeResolvePathTool(deps),
+    forge_dirs: createForgeDirsTool(deps),
+    forge_resolve_path: createForgeResolvePathTool(deps),
   }
 }
 

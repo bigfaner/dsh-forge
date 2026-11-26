@@ -110,7 +110,7 @@ describe('AC1 inject 面（对 core 的依赖 = forgeTasks + forgeProjects 两�
   })
 })
 
-describe('注册面集合 pin（二十 tool：M3 六员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug 两 bug 读径 + aggregateBugs 聚合读径（recurrence-signal-tiering）+ 3b stopTaskLoop 停止入口 + unblockTask blocked→pending 出口 + forgeDirs/forgeResolvePath 目录查询双只读径）', () => {
+describe('注册面集合 pin（二十 tool：M3 六员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug 两 bug 读径 + aggregateBugs 聚合读径（recurrence-signal-tiering）+ 3b stopTaskLoop 停止入口 + unblockTask blocked→pending 出口 + forge_dirs/forge_resolve_path 目录查询双只读径）', () => {
   it('二十 tool 注册且名 = FORGE_TOOL_NAMES 列序（单源——远征三 tool 随提案域退役移除）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
@@ -134,8 +134,8 @@ describe('注册面集合 pin（二十 tool：M3 六员 + recordBug/resolveBug �
       'listImplCheckpoints',
       'pauseTask',
       'unblockTask',
-      'forgeDirs',
-      'forgeResolvePath',
+      'forge_dirs',
+      'forge_resolve_path',
     ])
     dispose()
   })

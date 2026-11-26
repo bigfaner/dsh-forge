@@ -387,7 +387,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   } catch (cause) {
     diag(`[project-typert] Typert 遥控器装配异常（fail-soft 不阻载）：${String(cause)}`);
   }
-  // forgeDirs/forgeResolvePath 双 agent 只读工具注册（官方 tools 缝——目录事实查询面；
+  // forge_dirs/forge_resolve_path 双 agent 只读工具注册（官方 tools 缝——目录事实查询面；
   // 数据源 = dirs/anchors.ts 注册表单源 + dirKeys.* 反向拉取 declare merge 现查）。
   // 装配期同名守卫：tools 面已存同名定义即跳过 + diag warn（先在者胜，不缓存）。
   const disposePathTools = registerForgePathsTools(

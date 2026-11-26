@@ -10,7 +10,7 @@
 //     jobs        job_list/job_output/job_kill（dsh-tool-jobs）
 //     read-image  read_image（dsh-tool-fs——独立族）
 //     web         web_fetch/web_search（dsh-tool-web）
-//     forge       submitTask/recordBug/resolveBug/getBug/forgeDirs/forgeResolvePath（我方 WORKER_FORGE_TOOLS 六员——bug 写径 + 链读径 + 目录查询双只读径放行）
+//     forge       submitTask/recordBug/resolveBug/getBug/forge_dirs/forge_resolve_path（我方 WORKER_FORGE_TOOLS 六员——bug 写径 + 链读径 + 目录查询双只读径放行）
 //   全局拒绝（WORKER_GLOBAL_DENY_TOOLS——fix-1/drift #10 实面实名 + worker-lean-execution
 //   S5 迁移：todo_write 解禁 / goal 三件套入拒）：
 //     ask_user_question（tool-ask-user）· subagent_fork（delegation 行 provider:fork 的
@@ -332,8 +332,8 @@ describe('pin ⑳-5 收窄矩阵常量（Interface 2 逐格——G1 层常驻复
   })
 
 
-    it('worker forge 面 = 六员（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径 + forgeDirs/forgeResolvePath 目录查询双只读径——forge-dirs-query-tool §2.3 查询零副作用；addTask 不入 worker 面——任务派生权限归主会话；dispatchTask/queryTask/listBugs 不入 worker 面——与 contracts worker-matrix 判别单测同锚）', () => {
-    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'recordBug', 'resolveBug', 'getBug', 'forgeDirs', 'forgeResolvePath'])
+    it('worker forge 面 = 六员（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径 + forge_dirs/forge_resolve_path 目录查询双只读径——forge-dirs-unification §2.3 查询零副作用；addTask 不入 worker 面——任务派生权限归主会话；dispatchTask/queryTask/listBugs 不入 worker 面——与 contracts worker-matrix 判别单测同锚）', () => {
+    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'recordBug', 'resolveBug', 'getBug', 'forge_dirs', 'forge_resolve_path'])
     expect(WORKER_FORGE_TOOLS).not.toContain('addTask')
   })
 

@@ -3,8 +3,8 @@
 // Spec/Goal/AC 词汇——双模板面（mode 键与分模式分流）不迁入本包，目录树改 .forge/specs/{slug}/。
 // 结构铁律沿用：不抽公共文本——主/子会话模板各自自包含；docs 块为函数内局部 const、
 // 插值自占一行、尾部单换行。
-// 目录口径（AGENTS 1.7）：目录占位统一 dirKey/相对根记法，实际绝对路径一律经 forgeDirs /
-// forgeResolvePath 工具查询——目录真值唯一事实源 = 工具查询，段文本零 {{var}} 依赖
+// 目录口径（AGENTS 1.7）：目录占位统一 dirKey/相对根记法，实际绝对路径一律经 forge_dirs /
+// forge_resolve_path 工具查询——目录真值唯一事实源 = 工具查询，段文本零 {{var}} 依赖
 // （{{forge_docs_root}} 变量随 plugin-forge 残本一并退役，段文本禁用一切裸 {{。
 // presetBinding 注入判据（核销报告 research/official-verification.md §3）：
 // 缺省（spec 行 config 无 presetBinding）= 无条件注入；presetBinding=forge 绑定（M5
@@ -97,7 +97,7 @@ function gitRule(): string {
 function docsBlock(): string {
   return `### 文档位置与存储约束
 
-文档根：\`.forge/\`（相对项目根；实际绝对路径经 forgeDirs 工具查询）
+文档根：\`.forge/\`（相对项目根；实际绝对路径经 forge_dirs 工具查询）
 
 \`\`\`text
 .forge/
@@ -119,7 +119,7 @@ function docsBlock(): string {
 - **临时文件纪律**：临时文件（调试脚本、一次性探针、中间转储、临时截图）禁止丢在工作目录任意位置——统一放临时区，用完即清，绝不入 git。
 - **生命周期纪律**：过程文档按「交付 → 复盘 → 知识沉淀 → 提请批准清理」时序管理，批准后删除或归档；\`probes/\`、\`walkthrough/\` 等过程文档永不进 git。
 
-以上各目录的实际绝对路径一律经 forgeDirs 工具查询获取（dirKey 直接查锚目录；卷宗/任务日志等具体路径经 forgeResolvePath 目的地解析）——目录树承载结构规范，路径真值以工具查询为准。
+以上各目录的实际绝对路径一律经 forge_dirs 工具查询获取（dirKey 直接查锚目录；卷宗/任务日志等具体路径经 forge_resolve_path 目的地解析）——目录树承载结构规范，路径真值以工具查询为准。
 `
 }
 

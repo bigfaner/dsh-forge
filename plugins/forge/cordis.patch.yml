@@ -5,7 +5,8 @@
 #    替换官方服务行 → 官方 forge/forgeSession 服务缺席 → forge-session/forge-panel
 #    pending → StartupError。改 id 后 user 层既有启停 override 以旧 id `forge` 键的
 #    行随迁移改键（旧键残留会落回官方服务行语义，禁留））+ { home } 唯一键——Workbench 生长面）+ 五件插行各携带派发
-#    config !!js 行（bundle 档唯一输入 = DSH_HOME 缺省派生分支；静态守卫
+#    config !!js 行（bundle 档 forge 根 = 官方 dshHomePath('forge') 写法——由 boot 提供
+#    该服务，官方安装版 patch 同款；静态守卫
 #    tests/forge/skills-rows-contract.test.ts + plugins/forge/tests/config-contract.test.ts）。
 #    INV-3 安装互斥守卫判据（bug ef3e92ea）：五件插行各携 comboMark: true（组合装载
 #    标记——solo patch 行同 id 键合并越装缺此键，成员 apply 守卫现查 forgeCombo 组合
@@ -31,10 +32,8 @@
 #    1.35 宿主债务口径。
 # 顶层 skills 行不属本 patch（谁带谁自持；bundle 通道顶层禁承带——技能预设独占走
 # preset 子树实例，scripts/package-release.mjs 机检守卫）。
-# 全部派发表达式自带 && 短路兜底（直写不变量——防裸表达式异常冒泡打断行激活）；
-# DSH_HOME 缺席兜底 undefined 非 false（bug 674119f2 desktop 实证：false 穿透消费端
-# `??` 缺省致 project.db 收到 boolean 崩溃；`(env || undefined) &&` 形——undefined
-# 在 cordis config 面即键缺省语义，消费端 `??` 缺省腿恢复生效）。
+# 全部派发表达式 = 官方 dshHomePath 服务调用（boot 提供，缺席由消费端降级链承接——
+# spec §2.4；preset 子树技能混合锚 IIFE 仍自带 try/catch 双腿兜底）。
 # ⑤ persona suffix 缺席判例（desktop 2026-11-22）：{{cwd}} 变量 desktop 宿主未注册
 #    （deployment 渲染注册变量仅 provider/model——官方语义：working directory 走
 #    user context 而非变量），suffix 行全预设退役；cwd 变量注入归 1.41（官方
@@ -55,29 +54,29 @@
     - id: forge-bundle
       name: '@dsh-forge/forge'
       config:
-        home: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge')
+        home: !!js dshHomePath('forge')
     - id: project
       name: '@dsh-forge/project'
       config:
         comboMark: true
-        home: !!js (process.env.DSH_HOME || undefined) && process.env.DSH_HOME
-        dbFile: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        home: !!js dshHomePath('forge')
+        dbFile: !!js dshHomePath('forge', 'db/forge/forge.db')
     - id: spec
       name: '@dsh-forge/spec'
       config:
         comboMark: true
-        dbFile: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        dbFile: !!js dshHomePath('forge', 'db/forge/forge.db')
     - id: task-loop
       name: '@dsh-forge/task-loop'
       config:
         comboMark: true
-        dbFile: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
-        tasksHome: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/projects')
+        dbFile: !!js dshHomePath('forge', 'db/forge/forge.db')
+        tasksHome: !!js dshHomePath('forge', 'projects')
     - id: knowledge
       name: '@dsh-forge/knowledge'
       config:
         comboMark: true
-        dbFile: !!js (process.env.DSH_HOME || undefined) && (process.env.DSH_HOME + '/forge/db/forge/forge.db')
+        dbFile: !!js dshHomePath('forge', 'db/forge/forge.db')
     - id: preset-forge
       name: '@deepseek-ai/dsh-agent-preset'
       config:

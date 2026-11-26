@@ -1,14 +1,14 @@
-// forgeDirs/forgeResolvePath 双工具单测（forge-dirs-unification §2.3——输出完全由注册表
+// forge_dirs/forge_resolve_path 双工具单测（forge-dirs-unification §2.3——输出完全由注册表
 // 条目派生）：   ① 受控面 typed 拒绝四支（未知 dirKey / 未知 dest / 缺参 / 参数不合法）；
 //   ② 无参条目查询（缺省全量 + 单 key 解析——逐条取条目 resolve 与 description）；
-//   ③ 声明合并第三方键经 forgeDirs 全量可见（与本体键去重不双列）；
+//   ③ 声明合并第三方键经 forge_dirs 全量可见（与本体键去重不双列）；
 //   ④ 装配期同名守卫（现查 tools 面已存同名定义即跳过 + diag warn 先在者胜）；
 //   ⑤ 缝缺席降级（register 缺席 = 零注册 warn no-op disposer）；
 //   ⑥ createForgePathsToolFace 装配闭包：reflectOf 惰性现查不缓存 + onDeclareDiag 桥接。
 import { describe, expect, it, vi } from "vitest";
 import { join } from "node:path";
 import type { ForgeDirDeclaration, ForgeDirSources } from "@dsh-forge/lib-path";
-import { FORGE_DIR_KEYS, FORGE_DIRS_BASE_DECLARATION, mergeDeclarations, type ReflectDeclarePullFace } from "../dirs/anchors.js";
+import { FORGE_DIRS_BASE_DECLARATION, mergeDeclarations, type ReflectDeclarePullFace } from "../dirs/anchors.js";
 import {
   ForgeDirPathInvalidError,
   createForgeDirsTool,
@@ -45,7 +45,7 @@ function faceOf(pulled: readonly ForgeDirDeclaration[] = []): ForgePathsToolFace
   return { anchorsOf: async () => SOURCES, declarations: () => declarations };
 }
 
-describe("forgeDirs（无参条目查询）", () => {
+describe("forge_dirs（无参条目查询）", () => {
   it("缺省全量：本体十条 + 第三方键逐一解析（dirKey/dir/description 三件套与声明同源）", async () => {
     const tool = createForgeDirsTool(faceOf([knowledgeDeclaration]), RESOLVER);
     const value = (await tool.execute({}, EXEC)) as { ok: true; paths: { dirKey: string; dir: string }[] };
@@ -75,7 +75,7 @@ describe("forgeDirs（无参条目查询）", () => {
   });
 });
 
-describe("forgeResolvePath（带参条目解析——枚举/参数/校验由条目生成）", () => {
+describe("forge_resolve_path（带参条目解析——枚举/参数/校验由条目生成）", () => {
   it("合法 dest 解析：dest 即键名，基目录取被依赖条目解析结果", async () => {
     const tool = createForgeResolvePathTool(faceOf(), RESOLVER);
     const taskRuntime = (await createForgeDirsTool(faceOf(), RESOLVER).execute({ dirKey: "forge.task_runtime_dir" }, EXEC)) as { paths: { dir: string }[] };
@@ -132,7 +132,7 @@ describe("注册缝（官方 tools 缝——同名守卫先在者胜）", () => 
     };
     const diag = vi.fn();
     const handle = registerForgePathsTools(ctx, { face: faceOf(), resolveProjectId: RESOLVER }, diag);
-    expect(registered).toEqual(["forgeDirs", "forgeResolvePath"]);
+    expect(registered).toEqual(["forge_dirs", "forge_resolve_path"]);
     handle.dispose();
     expect(registered).toEqual([]);
   });
@@ -145,13 +145,13 @@ describe("注册缝（官方 tools 缝——同名守卫先在者胜）", () => 
           registered.push(d.name);
           return () => {};
         },
-        get: (name: string) => (name === "forgeDirs" ? { name } : undefined),
+        get: (name: string) => (name === "forge_dirs" ? { name } : undefined),
       },
     };
     const diag = vi.fn();
     const handle = registerForgePathsTools(ctx, { face: faceOf(), resolveProjectId: RESOLVER }, diag);
-    expect(registered).toEqual(["forgeResolvePath"]);
-    expect(diag).toHaveBeenCalledWith(expect.stringContaining("'forgeDirs' 已存在同名定义"), "warn");
+    expect(registered).toEqual(["forge_resolve_path"]);
+    expect(diag).toHaveBeenCalledWith(expect.stringContaining("'forge_dirs' 已存在同名定义"), "warn");
     handle.dispose();
   });
 

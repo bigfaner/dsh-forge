@@ -1,10 +1,10 @@
-// forgeDirs + forgeResolvePath 双 agent 只读查询工具（plugin-project 挂载缝——官方宿主
+// forge_dirs + forge_resolve_path 双 agent 只读查询工具（plugin-project 挂载缝——官方宿主
 // 目录事实查询面）：输出完全由注册表条目派生（@dsh-forge/lib-path ForgeDirs 基座声明 +
 // dirKeys.* 反向拉取声明——resolveForgeDirs 单源解析），本文件只做参数收窄 / 受控面
 // typed 拒绝 / 官方 tools 缝注册，工具内不存在第二份目录数据。
-// - forgeDirs：无参条目查询（dirKey 可选/缺省全量——逐条取条目 resolve 与 description；
+// - forge_dirs：无参条目查询（dirKey 可选/缺省全量——逐条取条目 resolve 与 description；
 //   含第三方键经声明拉取缝现查合并）。
-// - forgeResolvePath：带参条目解析（枚举、所需参数与校验由条目自动生成，dest 即条目键名，
+// - forge_resolve_path：带参条目解析（枚举、所需参数与校验由条目自动生成，dest 即条目键名，
 //   基目录取自被依赖条目的解析结果——resolveForgeDirs 拓扑解析）。
 // - 受控面拒绝（未知 dirKey/dest、缺参、参数不合法）= typed ERR_DIR_PATH_INVALID 拒绝并
 //   列举法集/点名所缺或不合法参数（ForgeDirPathInvalidError——contracts errors.ts 词表）。
@@ -25,8 +25,8 @@ import type { BugProjectIdResolver, BugToolExecFace } from "./session.js";
 import type { BugToolParametersSchema } from "./bug-tools.js";
 import { requireProjectId, sessionContextOf } from "./session.js";
 
-const DIRS_TOOL = "forgeDirs";
-const RESOLVE_TOOL = "forgeResolvePath";
+const DIRS_TOOL = "forge_dirs";
+const RESOLVE_TOOL = "forge_resolve_path";
 
 /** 注册面 tool 定义（官方 ToolDefinition 消费字段子集——bug-tools 同形） */
 export interface ForgePathToolDefinition {
@@ -76,7 +76,7 @@ export class ForgeDirPathInvalidError extends Error {
   }
 }
 
-// ── forgeDirs ──
+// ── forge_dirs ──
 
 /** agent 面参数（dirKey 可选——缺省全量无参条目清单） */
 export interface ForgeDirsToolArgs {
@@ -121,12 +121,12 @@ function renderForgeDirs(_args: unknown, value: unknown): readonly { type: "text
   ];
 }
 
-/** tool 定义工厂（forgeDirs——无参条目查询，dirKey 可选/缺省全量） */
+/** tool 定义工厂（forge_dirs——无参条目查询，dirKey 可选/缺省全量） */
 export function createForgeDirsTool(face: ForgePathsToolFace, resolveProjectId: BugProjectIdResolver): ForgePathToolDefinition {
   return {
     name: DIRS_TOOL,
     description:
-      "Query forge directory facts — the single source of truth for directory paths. Omit dirKey to list all parameterless entries (dirKey + absolute dir + description, including third-party keys declared via the dirKeys.* convention); give dirKey for one entry. Parameterized dirs (forge.spec_dir / forge.dossier_dir / forge.task_logs_dir and any declared ones) use forgeResolvePath instead. Read-only.",
+      "Query forge directory facts — the single source of truth for directory paths. Omit dirKey to list all parameterless entries (dirKey + absolute dir + description, including third-party keys declared via the dirKeys.* convention); give dirKey for one entry. Parameterized dirs (forge.spec_dir / forge.dossier_dir / forge.task_logs_dir and any declared ones) use forge_resolve_path instead. Read-only.",
     parameters: {
       type: "object",
       properties: {
@@ -155,7 +155,7 @@ export function createForgeDirsTool(face: ForgePathsToolFace, resolveProjectId: 
   };
 }
 
-// ── forgeResolvePath ──
+// ── forge_resolve_path ──
 
 /** agent 面参数（dest 必填 + slug/localId 按条目 params） */
 export interface ForgeResolvePathToolArgs {
@@ -193,7 +193,7 @@ function parameterizedKeysOf(declarations: readonly ForgeDirDeclaration[]): read
   return declaredDirKeys(declarations).filter((key) => (declaredEntryOf(declarations, key)!.params?.length ?? 0) > 0);
 }
 
-/** tool 定义工厂（forgeResolvePath——带参条目解析，枚举/参数/校验由条目生成） */
+/** tool 定义工厂（forge_resolve_path——带参条目解析，枚举/参数/校验由条目生成） */
 export function createForgeResolvePathTool(face: ForgePathsToolFace, resolveProjectId: BugProjectIdResolver): ForgePathToolDefinition {
   return {
     name: RESOLVE_TOOL,
@@ -265,7 +265,7 @@ export function registerForgePathsTools(
   const toolsFace = toolsFaceOf(ctx);
   const register = typeof toolsFace?.register === "function" ? toolsFace.register.bind(toolsFace) : undefined;
   if (register === undefined) {
-    diag("[project] ctx.tools.register 缺席（官方 tools 缝缺失）——forgeDirs/forgeResolvePath 零注册（目录查询面对本宿主不可达，降级不阻载）", "warn");
+    diag("[project] ctx.tools.register 缺席（官方 tools 缝缺失）——forge_dirs/forge_resolve_path 零注册（目录查询面对本宿主不可达，降级不阻载）", "warn");
     return { dispose: () => {} };
   }
   const definitions: readonly ForgePathToolDefinition[] = [

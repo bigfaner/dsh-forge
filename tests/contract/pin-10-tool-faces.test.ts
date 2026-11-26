@@ -37,7 +37,7 @@ function toolNameLiterals(dir: string): Map<string, string> {
 describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写落定——drift #1）', () => {
   const coreLiterals = toolNameLiterals(CORE_TOOLS_DIR)
 
-  it('核心包常量面 = 二十员：dispatchTask 在场（Interface 4 列序 + 1.4 三新员 + fix-bug 两写径 + bug-recurrence-chain 两读径 + aggregateBugs 聚合读径（recurrence-signal-tiering）+ 3b stopTaskLoop 停止入口 + main pauseTask 暂停入口 + unblockTask blocked→pending 出口（blocked-verdict-restore-primitive）+ forgeDirs/forgeResolvePath 目录查询双只读径（forge-dirs-query-tool §2.3）——createProposal/transitionProposal/transitionFeature 三件已退役（提案域收口，fix-13 pin 源更新））', () => {
+  it('核心包常量面 = 二十员：dispatchTask 在场（Interface 4 列序 + 1.4 三新员 + fix-bug 两写径 + bug-recurrence-chain 两读径 + aggregateBugs 聚合读径（recurrence-signal-tiering）+ 3b stopTaskLoop 停止入口 + main pauseTask 暂停入口 + unblockTask blocked→pending 出口（blocked-verdict-restore-primitive）+ forge_dirs/forge_resolve_path 目录查询双只读径（forge-dirs-unification §2.3）——createProposal/transitionProposal/transitionFeature 三件已退役（提案域收口，fix-13 pin 源更新））', () => {
     expect([...FORGE_TOOL_NAMES]).toEqual([
       'addTask',
       'submitTask',
@@ -57,8 +57,8 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
       'listImplCheckpoints',
       'pauseTask',
       'unblockTask',
-      'forgeDirs',
-      'forgeResolvePath',
+      'forge_dirs',
+      'forge_resolve_path',
     ])
     expect(FORGE_TOOL_NAMES).toContain('dispatchTask')
   })
