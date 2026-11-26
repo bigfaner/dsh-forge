@@ -23,7 +23,7 @@ Spec `forge-dirs-unification`（forge 系列目录根统一与声明合并登记
 | 3 | Goal 3 AC8 | 现有测试的**断言保持不变**，只改引用来源 | 只改引用来源；**明示例外三处**（钉旧错误码的断言改新码；lib/path 自身新增测试随返回字段命名调整；task-loop 事件落盘用例随行为变更调整）。除此之外断言不改 |
 | 4 | Goal 6 AC2 | 界面源码中**不存在写死的目录键清单** | **取数**不得写死目录键清单；显示与隐藏规则以界面层的隐藏集与行标签表表达，不属于取数键清单 |
 | 5 | Goal 7 AC4 | **目标目录已存在且无完成标记时拒绝**执行（未区分两种处理） | **整目录搬迁**适用该检查；**运行时目录并入段不适用**（目标目录预先存在是并入的前提） |
-| 6 | Goal 1 AC4 | forge.dossier_dir **依赖 forge.docs_root**、参数为 slug 与 localId | forge.dossier_dir **依赖 forge.spec_dir**、参数为 slug 与 localId（落在 `.forge/specs/{slug}/issues/{localId}`） |
+| 6 | Goal 1 AC4 | forge.dossier_dir **依赖 forge.docs_root**、参数为 slug 与 localId | forge.spec_dir **依赖 workspaceRoot**（落在 `.forge/specs/{slug}`）；forge.dossier_dir **依赖 forge.spec_dir**、参数为 slug 与 localId（落在 `.forge/specs/{slug}/issues/{localId}`） |
 
 ## 理由
 
@@ -64,12 +64,14 @@ Spec `forge-dirs-unification`（forge 系列目录根统一与声明合并登记
 - 实现现状：experts 搬迁段已实现该检查（`scripts/migrate-state-db.mjs` 约 1776 行），并入段没有。修订后实现与判据一致，不需要改代码。
 - 证据：复核报告 Goal 7 AC4 与歧义第 2 条。
 
-### 6. Goal 1 AC4「forge.dossier_dir 依赖 forge.docs_root」
+### 6. Goal 1 AC4「forge.spec_dir / forge.dossier_dir 的依赖」
 
-- 该条判据把任务报告卷宗目录定义在文档根下（`docs/proposals/{slug}/issues/{localId}`），沿用提案域下线前的口径。用户 2026-11-25 已明确裁决：「`.forge/docs/proposals/{slug}/issues/{localId}` 更改为 `.forge/specs/{slug}/issues/{localId}`；以后 specs 替代 proposals」。当时该裁决落到了 task-loop 的结算报告回收钩子，目录注册表里的目的地漏改，形成工具报的位置与报告实际位置不一致（bug 14e3a500）。
-- 修复把 `forge.dossier_dir` 改为依赖 `forge.spec_dir`（`{工作区}/.forge/specs/{slug}`）、模板 `issues/{localId}`，与回收钩子逐字一致。判据若不同步，修复落地即判不满足，形成「按用户裁决修反而验收不过」的矛盾。
-- 这是用户既有裁决的补充落实，不是本次新做的取舍；功能要求（卷宗位置唯一、工具与实现一致）不变。
-- 证据：bug 14e3a500；`lib/path/src/forge-dirs.ts` 的 forge.dossier_dir 条目；`plugins/task-loop/host/assembly/tool-family.ts` 约 286 行。
+- 原判据把两个带参目录都挂在文档根下：`forge.spec_dir` = `docs_root/specs/{slug}`，`forge.dossier_dir` = `docs_root/proposals/{slug}/issues/{localId}`。两处都与仓内既定约定不符：
+  - 规格文档的位置是 `.forge/specs/{slug}/spec.md`（forge 管线系统提示段的明文约定；主检出下该目录在场、其下已有 `issues/` 子目录），`.forge/docs/specs` 不存在。这是 Spec 设计阶段（本会话 grilling 成文时）把规格目录误挂到文档根下，属于设计错误，在验收复核时才暴露。
+  - 用户 2026-11-25 已明确裁决：「`.forge/docs/proposals/{slug}/issues/{localId}` 更改为 `.forge/specs/{slug}/issues/{localId}`；以后 specs 替代 proposals」。当时该裁决落到了 task-loop 的结算报告回收钩子，目录注册表漏改，形成工具报的位置与报告实际位置不一致（bug 14e3a500）。
+- 修订后：`forge.spec_dir` 依赖 `workspaceRoot`，落在 `{工作区}/.forge/specs/{slug}`；`forge.dossier_dir` 依赖 `forge.spec_dir`，落在其下的 `issues/{localId}`。两个条目对同一目录只算一遍，后者是前者的纯派生。
+- 连带影响：task-loop 写入 worker 提示的「规格目录」取自 `forge.spec_dir`，修订前 worker 被告知的路径不正确；修订后随之纠正。
+- 证据：主检出 `.forge/specs/` 在场、`.forge/docs/specs` 不存在；`lib/path/src/forge-dirs.ts` 第 118 到 129 行；`plugins/task-loop/host/assembly/default-assembly.ts` 的 resolveSpecDirViaRegistry；bug 14e3a500 及其复核发现。
 
 ## 影响
 
