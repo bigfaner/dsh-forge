@@ -27,7 +27,8 @@ import { createRecurrenceFaces, type RecurrenceBugsFace } from "../dispatch-core
 import { forgeDirOfWorkspace, resolveProjectKey as rollupProjectKey, workspaceDocsRoot } from "@dsh-forge/lib-path";
 import { join } from "node:path";
 import { taskLogsDirOf } from "../domain/tasks/task-logs-dir.js";
-import { createSettleReportRecovery, type SettleReportRecoveryDeps } from "../dispatch-core/settle.js";
+import { createSettleReportRecovery, type LastSettlementView, type SettleReportRecoveryDeps } from "../dispatch-core/settle.js";
+import { createSettlementRepo, type SettlementEvidence } from "../db/repositories/settlement-repo.js";
 import { createUnionToolNamesProbe, type AgentPresetsFace, type ToolsSchemasReader } from "@dsh-forge/contracts";
 import {
   adaptAgentNarrationChannel,
@@ -282,6 +283,31 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
           specsIssuesDir: (ws, slug, localId) => join(forgeDirOfWorkspace(ws), "specs", slug, "issues", localId),
         })
       : undefined;
+  // 结算行读缝生产接线（bug 23507eb5——装配漏接家族：driver.ts 声明并透传 settlements，
+  // 但生产装配从未赋值 → submit 载荷面整体降级「blocking reason not recorded」/ commitHash
+  // 落点核验恒不执行）。settlement-repo lastByTask 末条投影（SettleSettlementsFace 形态，
+  // settle.ts 结构兼容注释明示装配侧派生）；evidence_json 畸形负载降级缺席（fail-soft 不炸读面）。
+  const settlements = {
+    lastByTask: (taskId: string): LastSettlementView | undefined => {
+      const rows = createSettlementRepo(services.db.db).listByTask(taskId);
+      const last = rows[rows.length - 1];
+      if (last === undefined) return undefined;
+      let evidence: SettlementEvidence | undefined;
+      try {
+        const parsed = JSON.parse(last.evidence_json ?? "") as SettlementEvidence | null;
+        if (parsed !== null && typeof parsed === "object") evidence = parsed;
+      } catch {
+        // evidence_json 缺席/畸形 = 载荷面降级（终态判定不受影响）
+      }
+      // evidence 不可解析 = 整行载荷面降级（LastSettlementView.evidence 必形——返回缺席）
+      if (evidence === undefined) return undefined;
+      return {
+        result: last.result,
+        ...(last.commit_hash !== null && last.commit_hash !== "" ? { commitHash: last.commit_hash } : {}),
+        evidence,
+      };
+    },
+  };
   const narrator = createNarrator({ channel: narrationChannel });
   const triage = createTriageHook({
     tasks: services.tasks,
@@ -306,6 +332,9 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     modelingReportPresent: recurrenceFaces.modelingReportPresent,
     // AC7 结算旁挂回收缝（specs 卷宗落点生产接线——缺席 = 机制惰性不判）
     ...(reportRecovery !== undefined ? { reportRecovery } : {}),
+    // 结算行读缝（bug 23507eb5 生产接线——settle submit 载荷源：blocked reason/commitHash/
+    // files/evidenceDebt 全语义载荷；缺席 = 载荷面降级）
+    settlements,
     // 事件日志链透传（bug a93c1277）：tasksHome 注入时 forgeEvents（sink）+ containerDirOf
     // 同注——循环里程碑/台账经 bus→监听器落盘 logs/{slug}.jsonl；缺席 = 零透传零行为变化。
     ...(services.forgeEvents !== undefined ? { events: services.forgeEvents } : {}),
