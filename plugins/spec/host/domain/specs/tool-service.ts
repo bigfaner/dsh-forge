@@ -1,5 +1,5 @@
 // tool-service（plugin-spec-roadmaps 1.8，tools.md 入参纪律）——工具面组合根：
-// 归属键 = 服务层 cwd 纯函数派生单源（deriveProjectKey，M3 先例同径）；actor 由调用径
+// 归属键 = 服务层 cwd 纯函数派生单源（specProjectKeyOf——lib resolveProjectKey 包装）；actor 由调用径
 // 判定（对话 tool 径 = plugin-tool——agent 从不手填，防伪装人类径缝）；milestone 寻径 =
 // roadmapSlug + milestoneId（id = UUID 稳定锚，调序/改名不变；seq 不作寻址入参）；goal
 // 寻径 = specSlug + goalSeq（goal 不重排 seq 稳定）。域逻辑零重复——全部薄委托
@@ -148,7 +148,7 @@ export interface ForgeToolServices {
 export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
   // 归属键派生单点（M3 写侧归拢——工具面动词全量经此，worktree cwd 归拢主根键；
   // 域服务径由 service 层 keyOf 单点承担，本面只覆盖 repo 直读动词与投影查询键）
-  const projectKeyOf = (cwd: string): string =>
+  const specProjectKeyOf = (cwd: string): string =>
     resolveProjectKey(cwd, {
       registryQuery: () => undefined,
       ...(deps.gitPorcelain !== undefined ? { gitRunner: deps.gitPorcelain } : {}),
@@ -184,7 +184,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     specs: deps.specs,
 
     async updateSpec(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const spec = deps.specs.updateSpec({
         cwd: i.cwd,
         slug: i.slug,
@@ -198,14 +198,14 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     async replaceGoals(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const spec = deps.specs.replaceGoals({ cwd: i.cwd, slug: i.slug, goals: i.goals });
       await advanceTail(projectKey, i.slug, i.cwd);
       return spec;
     },
 
     createRoadmap(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       return roadmaps.createRoadmap(deps, {
         projectKey,
         slug: i.slug,
@@ -216,7 +216,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     updateRoadmap(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       return roadmaps.updateRoadmap(deps, {
         projectKey,
         slug: i.slug,
@@ -227,7 +227,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     transitionRoadmap(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const roadmap = requireRoadmapBySlug(deps, projectKey, i.roadmapSlug);
       return roadmaps.transitionRoadmap(deps, {
         roadmapId: roadmap.id,
@@ -238,7 +238,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     queryRoadmap(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const include = assertInclude(i.include, ["achievement"]);
       const roadmap = roadmaps.getRoadmapBySlug(deps, { projectKey, slug: i.slug });
       if (roadmap === undefined) {
@@ -252,11 +252,11 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     listRoadmaps(i) {
-      return roadmaps.listRoadmaps(deps, projectKeyOf(i.cwd));
+      return roadmaps.listRoadmaps(deps, specProjectKeyOf(i.cwd));
     },
 
     createMilestone(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const roadmap = requireRoadmapBySlug(deps, projectKey, i.roadmapSlug);
       return milestones.createMilestone(deps, {
         roadmapId: roadmap.id,
@@ -267,7 +267,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     updateMilestone(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const roadmap = requireRoadmapBySlug(deps, projectKey, i.roadmapSlug);
       requireMilestoneOfRoadmap(deps, roadmap.id, i.milestoneId);
       return milestones.updateMilestone(deps, {
@@ -279,7 +279,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     moveMilestone(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const roadmap = requireRoadmapBySlug(deps, projectKey, i.roadmapSlug);
       requireMilestoneOfRoadmap(deps, roadmap.id, i.milestoneId);
       return milestones.moveMilestone(deps, {
@@ -293,7 +293,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     transitionMilestone(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const roadmap = requireRoadmapBySlug(deps, projectKey, i.roadmapSlug);
       requireMilestoneOfRoadmap(deps, roadmap.id, i.milestoneId);
       return milestones.transitionMilestone(deps, {
@@ -305,7 +305,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     queryMilestone(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const include = assertInclude(i.include, ["specs", "achievement"]);
       const roadmap = requireRoadmapBySlug(deps, projectKey, i.roadmapSlug);
       const milestone = requireMilestoneOfRoadmap(deps, roadmap.id, i.milestoneId);
@@ -325,13 +325,13 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     listMilestones(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const roadmap = requireRoadmapBySlug(deps, projectKey, i.roadmapSlug);
       return milestones.listMilestones(deps, roadmap.id);
     },
 
     acceptSpec(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const result = acceptSpec(deps, {
         projectKey,
         specSlug: i.slug,
@@ -343,7 +343,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     finalizeGoal(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const spec = requireSpec(deps, projectKey, i.slug);
       const goal = goalBySeq(spec.id, deps.repos.specs.listGoalsBySpec(spec.id), i.goalSeq);
       const result = finalizeGoal(deps, {
@@ -358,7 +358,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     reviewGoal(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const spec = requireSpec(deps, projectKey, i.slug);
       const goal = goalBySeq(spec.id, deps.repos.specs.listGoalsBySpec(spec.id), i.goalSeq);
       const result = reviewGoal(deps, {
@@ -374,7 +374,7 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     reviewObjective(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const roadmap = requireRoadmapBySlug(deps, projectKey, i.roadmapSlug);
       const entityId = i.targetKind === "milestone"
         ? requireMilestoneOfRoadmap(deps, roadmap.id, i.milestoneId ?? "").id
@@ -391,11 +391,11 @@ export function createForgeToolServices(deps: ToolVerbDeps): ForgeToolServices {
     },
 
     async specStats(i) {
-      return specStats(deps, { projectKey: projectKeyOf(i.cwd) });
+      return specStats(deps, { projectKey: specProjectKeyOf(i.cwd) });
     },
 
     async querySpec(i) {
-      const projectKey = projectKeyOf(i.cwd);
+      const projectKey = specProjectKeyOf(i.cwd);
       const include = assertInclude(i.include, ["goals", "acProjection", "latestReviews", "transitions"]);
       const chain = deps.repos.specs.parentChain(projectKey, i.slug);
       if (chain === undefined) {
