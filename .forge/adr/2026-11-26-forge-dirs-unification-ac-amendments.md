@@ -1,4 +1,4 @@
-# ADR：forge-dirs-unification 验收判据修订备案（5 条）
+# ADR：forge-dirs-unification 验收判据修订备案（6 条）
 
 日期：2026-11-26
 状态：已采纳（用户 2026-11-26 裁定：可以改判据，但必须备案，有充足的理由）
@@ -10,7 +10,7 @@ Spec `forge-dirs-unification`（forge 系列目录根统一与声明合并登记
 
 - 完全满足：Goal 2（13 条）、Goal 4（2 条）、Goal 5（4 条）、Goal 8（3 条）。
 - 存在真实代码缺口：Goal 1、Goal 3、Goal 7 各有若干条——这些**不改判据，改代码**，已登记缺陷并派修复（bug 55ab9a8f、75cbf10f、14e3a500、a4e19672、0cb51984）。
-- 判据文字本身与实现意图或彼此之间存在矛盾、或对现状的描述不准确：共 5 条，见下。这 5 条的实现已满足功能意图，未满足的是判据的字面。本 ADR 为这 5 条修订留痕。
+- 判据文字本身与实现意图或彼此之间存在矛盾、或对现状的描述不准确：共 6 条，见下。前 5 条的实现已满足功能意图，未满足的是判据的字面；第 6 条是用户既有裁决的补充落实，由修复任务同步实现。本 ADR 为这 6 条修订留痕。
 
 修订原则：只改与事实不符或自相矛盾的措辞，不放宽功能要求；每条给出证据。
 
@@ -23,6 +23,7 @@ Spec `forge-dirs-unification`（forge 系列目录根统一与声明合并登记
 | 3 | Goal 3 AC8 | 现有测试的**断言保持不变**，只改引用来源 | 只改引用来源；**明示例外三处**（钉旧错误码的断言改新码；lib/path 自身新增测试随返回字段命名调整；task-loop 事件落盘用例随行为变更调整）。除此之外断言不改 |
 | 4 | Goal 6 AC2 | 界面源码中**不存在写死的目录键清单** | **取数**不得写死目录键清单；显示与隐藏规则以界面层的隐藏集与行标签表表达，不属于取数键清单 |
 | 5 | Goal 7 AC4 | **目标目录已存在且无完成标记时拒绝**执行（未区分两种处理） | **整目录搬迁**适用该检查；**运行时目录并入段不适用**（目标目录预先存在是并入的前提） |
+| 6 | Goal 1 AC4 | forge.dossier_dir **依赖 forge.docs_root**、参数为 slug 与 localId | forge.dossier_dir **依赖 forge.spec_dir**、参数为 slug 与 localId（落在 `.forge/specs/{slug}/issues/{localId}`） |
 
 ## 理由
 
@@ -63,10 +64,17 @@ Spec `forge-dirs-unification`（forge 系列目录根统一与声明合并登记
 - 实现现状：experts 搬迁段已实现该检查（`scripts/migrate-state-db.mjs` 约 1776 行），并入段没有。修订后实现与判据一致，不需要改代码。
 - 证据：复核报告 Goal 7 AC4 与歧义第 2 条。
 
+### 6. Goal 1 AC4「forge.dossier_dir 依赖 forge.docs_root」
+
+- 该条判据把任务报告卷宗目录定义在文档根下（`docs/proposals/{slug}/issues/{localId}`），沿用提案域下线前的口径。用户 2026-11-25 已明确裁决：「`.forge/docs/proposals/{slug}/issues/{localId}` 更改为 `.forge/specs/{slug}/issues/{localId}`；以后 specs 替代 proposals」。当时该裁决落到了 task-loop 的结算报告回收钩子，目录注册表里的目的地漏改，形成工具报的位置与报告实际位置不一致（bug 14e3a500）。
+- 修复把 `forge.dossier_dir` 改为依赖 `forge.spec_dir`（`{工作区}/.forge/specs/{slug}`）、模板 `issues/{localId}`，与回收钩子逐字一致。判据若不同步，修复落地即判不满足，形成「按用户裁决修反而验收不过」的矛盾。
+- 这是用户既有裁决的补充落实，不是本次新做的取舍；功能要求（卷宗位置唯一、工具与实现一致）不变。
+- 证据：bug 14e3a500；`lib/path/src/forge-dirs.ts` 的 forge.dossier_dir 条目；`plugins/task-loop/host/assembly/tool-family.ts` 约 286 行。
+
 ## 影响
 
-- 验收口径：以上 5 条按修订后文字判定；其余 48 条不变。
-- 不改实现的：第 1、3、4、5 条——实现已满足修订后的判据。
+- 验收口径：以上 6 条按修订后文字判定；其余 47 条不变。
+- 不改实现的：第 1、3、4、5 条——实现已满足修订后的判据。第 6 条由修复任务同步实现（bug 14e3a500）。
 - 需要真机补证的：第 2 条的后半（归拢证据）在最终构建上已有（4.2-web-r2）；若后续构建再变，需随构建重取。
 - 不受本 ADR 影响、仍按原判据修复的：Goal 1 AC11 的规范化缺口（bug 55ab9a8f）、Goal 3 AC7 的报错措辞（bug 75cbf10f）、Goal 3 AC3 的本地包装重名（任务 7.1）。
 - 未修订但已知的近似问题，另案处理：旧包 `packages/plugin-forge` 仍含推式登记缝与旧工具实现的残留（已从编译与测试配置摘出，等待整体退役）；`rescue-task-loop` 技能文档的 dest 示例值过时（bug a4e19672）。
