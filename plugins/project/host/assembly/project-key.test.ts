@@ -2,7 +2,10 @@
 // 恒抛 ERR_BUG_PROJECT_KEY_REQUIRED 行集恒空）：core 代 projectId 经 registry 官方锚
 // （get(id).path）→ projectKeyOf 派生 + 惰性回写归属行（attachExisting 同语义）。
 import { describe, expect, it } from 'vitest'
-import { projectKeyOf } from '@dsh-forge/lib-path'
+import { basename, dirname, join } from 'node:path'
+import { mkdtempSync, rmSync, realpathSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { projectKeyOf, resolveProjectKey } from '@dsh-forge/lib-path'
 import { openDomainDb, PROJECT_DB_PREFIX, type DomainDb } from '../db/connection.js'
 import type { OfficialRegistryFace } from '../projects/registry-adapter.js'
 import { createBugsService } from '../bugs/service.js'
@@ -194,5 +197,29 @@ describe('createProjectKeyResolver：归属键真源解析链（b5707fe4）', ()
     // 行集读面：listBugs 命中登记行（修复前恒空）
     await expect(service.listBugs({ projectId: 'ws-core-3' })).resolves.toHaveLength(1)
     db.db.close()
+  })
+
+  it('写行/派生键口径（bug 3467e146）：锚路径拼写与磁盘大小写不同 → 派生键 = resolveProjectKey 规范化后同键', async () => {
+    const real = mkdtempSync(join(tmpdir(), 'projkey-resolver-case-'))
+    try {
+      const base = basename(real)
+      const flipped = base === base.toLowerCase() ? base.toUpperCase() : base.toLowerCase()
+      const spelled = join(dirname(real), flipped)
+      expect(realpathSync.native(spelled)).not.toBe(spelled)
+      const db = makeDb()
+      try {
+        const registry = fakeRegistry({ 'ws-case-1': { path: spelled, title: 'case' } })
+        const resolve = createProjectKeyResolver({ domainDb: db, registry })
+        const consumed = resolveProjectKey(spelled, { registryQuery: () => spelled }).key
+        const key = await resolve('ws-case-1')
+        expect(key).toBe(consumed)
+        // 回写归属行同键
+        expect(db.repos.projects.get('ws-case-1')?.projectKey).toBe(consumed)
+      } finally {
+        db.db.close()
+      }
+    } finally {
+      rmSync(real, { recursive: true, force: true })
+    }
   })
 })

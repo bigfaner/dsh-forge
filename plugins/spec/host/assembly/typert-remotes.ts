@@ -26,7 +26,7 @@ import { Remote, RemoteError, TypertRemoteService } from "@deepseek-ai/dsh-typer
 import type { RemoteErrorCode } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
 import { rootCtxOf } from "@dsh-forge/lib-util";
-import { ProjectKeyDerivationError, projectKeyOf, resolveProjectKey } from "@dsh-forge/lib-path";
+import { ProjectKeyDerivationError, canonicalizePath, projectKeyOf, resolveProjectKey } from "@dsh-forge/lib-path";
 import type { WorkspaceId } from "@deepseek-ai/dsh-workspace";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -991,7 +991,8 @@ export function forgeProjectsIdentityOf(
         const project = await face.getProject(projectId);
         const wsPath = typeof project?.wsPath === "string" && project.wsPath !== "" ? project.wsPath : undefined;
         if (wsPath !== undefined) {
-          return { wsPath, projectKey: projectKeyOf(wsPath) };
+          // 键先规范化再派生（bug 3467e146——与 resolveProjectKey 消费点同口径）
+          return { wsPath, projectKey: projectKeyOf(canonicalizePath(wsPath)) };
         }
       }
     } catch {
@@ -1004,7 +1005,7 @@ export function forgeProjectsIdentityOf(
         const ws = await registry.get(projectId as WorkspaceId);
         const path = typeof ws?.path === "string" && ws.path !== "" ? ws.path : undefined;
         if (path !== undefined) {
-          return { wsPath: path, projectKey: projectKeyOf(path) };
+          return { wsPath: path, projectKey: projectKeyOf(canonicalizePath(path)) };
         }
       }
     } catch {

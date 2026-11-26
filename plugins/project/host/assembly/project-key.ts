@@ -13,7 +13,7 @@
 // 各锚 try/catch fail-soft——派生失败返回 null，I5 拒写语义不变（core 缺席时原路径零变化）。
 // 归属：assembly 装配面（域间零横向 import 机检①——bugs 服务只认 resolveProjectKey 缝）。
 import type { DiagEventPayload } from '@dsh-forge/lib-diag'
-import { projectKeyOf } from '@dsh-forge/lib-path'
+import { canonicalizePath, projectKeyOf } from '@dsh-forge/lib-path'
 import type { ProjectsServicePort } from '@dsh-forge/lib-api'
 import type { DomainDb } from '../db/connection.js'
 import type { OfficialRegistryFace } from '../projects/registry-adapter.js'
@@ -94,7 +94,8 @@ export function createProjectKeyResolver(
     if (typeof own === 'string' && own !== '') return own
     const anchor = await resolveWsPath(deps, projectId)
     if (anchor === null) return null
-    const key = projectKeyOf(anchor.wsPath)
+    // 键先规范化再派生（bug 3467e146——与 resolveProjectKey 消费点同口径，写行/返回同键）
+    const key = projectKeyOf(canonicalizePath(anchor.wsPath))
     // 同路径已有他 id main 行 → 键空间自然合流（同函数同值），零新行
     const converged = workspaces.getKeyByMainPath(anchor.wsPath)
     if (converged !== undefined) return converged

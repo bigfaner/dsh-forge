@@ -5,7 +5,7 @@
 // （只回滚 registry——挂接/既有实体永不补偿）。
 // 不变量承袭：R4 双行同事务（DAO 单方法）；R1 撞键判据错误码级指 project_workspaces.ws_path
 // （SQLITE_CONSTRAINT_UNIQUE + 表名模板），撞键 → 重入步骤 1 自愈一次。
-import { classifyRegistrationCollision, projectKeyOf, type RegistrationCollision } from '@dsh-forge/lib-path'
+import { canonicalizePath, classifyRegistrationCollision, projectKeyOf, type RegistrationCollision } from '@dsh-forge/lib-path'
 import type { RegisterProjectInput, RegisterResult, SuspectedMoveData } from '@dsh-forge/lib-api'
 import type { DiagEventPayload } from '@dsh-forge/lib-diag'
 import type { ProjectsRepo, WorkspacesRepo } from '../db/repositories/index.js'
@@ -110,7 +110,9 @@ export class ProjectsRegisterService {
     const stamp = now()
     const projectRow = {
       id,
-      projectKey: projectKeyOf(wsPath), // project_key 现算 = main ws_path 投影（f 单源 lib-path）
+      // project_key 现算 = main ws_path 投影（f 单源 lib-path）；键先规范化再派生（bug
+      // 3467e146——与 resolveProjectKey 消费点同口径：realpath 收敛真实路径与大小写）
+      projectKey: projectKeyOf(canonicalizePath(wsPath)),
       title,
       forgeDir: input.forgeDir,
       forgeDirExternal: deriveForgeDirExternal(input.forgeDir, wsPath),

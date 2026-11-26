@@ -2,9 +2,12 @@
 // 构造注入（S3 单测态）：R4 单事务双行 / R1 撞键判据（错误码级指 project_workspaces）/
 // 补偿边界（挂接/既有实体永不补偿）/ 碰撞复检零副作用 / 幂等归并与悬空自愈。
 import { describe, expect, it } from 'vitest'
+import { basename, dirname, join } from 'node:path'
+import { mkdtempSync, rmSync, realpathSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { openDomainDb, PROJECT_DB_PREFIX, type DomainDb } from '../db/connection.js'
 import type { ProjectRow, WorkspaceRow } from '../db/row-types.js'
-import { classifyRegistrationCollision, projectKeyOf } from '@dsh-forge/lib-path'
+import { classifyRegistrationCollision, projectKeyOf, resolveProjectKey } from '@dsh-forge/lib-path'
 import { ProjectsRegisterService, isWsPathUniqueCollision } from './register.js'
 import type { ProjectRegistryPort } from './registry-adapter.js'
 import { SuspectedMoveError, WorkspaceCreateError, ProjectWriteError, CompensationError } from './errors.js'
@@ -429,6 +432,29 @@ describe('ProjectsRegisterService（五步补偿链）', () => {
       expect(classifyRegistrationCollision('Z:\\nonexistent-tasks', 'Z:\\ws\\x').state).toBe('normal')
     } finally {
       domain.db.close()
+    }
+  })
+
+  it('写行 projectKey 口径（bug 3467e146）：登记路径拼写与磁盘大小写不同 → 库行键 = resolveProjectKey 规范化后同键', async () => {
+    const real = mkdtempSync(join(tmpdir(), 'projkey-case-'))
+    try {
+      // 造与磁盘大小写不同的拼写段（realpathSync.native 收敛真实大小写）
+      const base = basename(real)
+      const flipped = base === base.toLowerCase() ? base.toUpperCase() : base.toLowerCase()
+      const spelled = join(dirname(real), flipped)
+      expect(realpathSync.native(spelled)).not.toBe(spelled) // 前置：拼写确与真实路径不同
+      const domain = mem()
+      try {
+        const svc = service(domain, fakeRegistry())
+        const result = await svc.register({ workspaceDir: spelled, name: 'case', forgeDir: join(spelled, '.forge') })
+        const row = domain.repos.projects.get(result.projectId)!
+        const consumed = resolveProjectKey(spelled, { registryQuery: () => spelled }).key
+        expect(row.projectKey).toBe(consumed)
+      } finally {
+        domain.db.close()
+      }
+    } finally {
+      rmSync(real, { recursive: true, force: true })
     }
   })
 })

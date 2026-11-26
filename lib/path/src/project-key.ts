@@ -33,8 +33,8 @@ export const MARKER_PATTERN = /[\\/]\.forge[\\/]worktrees[\\/]/
 /** 非本仓回退原因（git 清单不含 cwd） */
 const NON_MEMBER_FALLBACK_REASON = 'porcelain 清单不含 cwd（非本仓 worktree）——回退 cwd 键'
 
-/** 默认规范化：realpath 收敛真实路径与大小写（junction/subst/8.3 同径）；不可达原样返回 */
-function canonicalizePath(p: string): string {
+/** 默认规范化（bug 3467e146 写行口径复用单源）：realpath 收敛真实路径与大小写（junction/subst/8.3 同径）；不可达原样返回 */
+export function canonicalizePath(p: string): string {
   try {
     return realpathSync.native(p)
   } catch {

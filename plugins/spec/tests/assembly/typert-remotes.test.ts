@@ -6,7 +6,7 @@
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { remoteErrorOf, remoteMethods } from "@deepseek-ai/dsh-typert-protocol";
 import { Context } from "@deepseek-ai/cordis";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -21,7 +21,7 @@ import {
 } from "../../host/assembly/typert-remotes.js";
 import { assembleSpecServices, type SpecAssembly } from "../../host/assembly/default-assembly.js";
 import { createForgeSpecsService } from "../../host/domain/specs/service.js";
-import { projectKeyOf as deriveProjectKey } from "@dsh-forge/lib-path";
+import { projectKeyOf as deriveProjectKey, resolveProjectKey } from "@dsh-forge/lib-path";
 import { createForgeToolServices } from "../../host/domain/specs/tool-service.js";
 import { FORGE_SPECS_SERVICE_KEY } from "../../shared/contract-constants.js";
 
@@ -508,6 +508,24 @@ describe("forgeProjectsIdentityOf（identity 双源缝：forge.projects 点分�
     await face("p-1");
     expect(seen).toContain("forge.projects");
     expect(seen).not.toContain("forgeProjects");
+  });
+
+  it("identity projectKey 口径（bug 3467e146）：wsPath 拼写与磁盘大小写不同 → key = resolveProjectKey 规范化后同键", async () => {
+    const real = mkdtempSync(join(tmpdir(), "spec-identity-case-"));
+    try {
+      const base = real.split(/[\\/]/).pop()!;
+      const flipped = base === base.toLowerCase() ? base.toUpperCase() : base.toLowerCase();
+      const spelled = join(real.slice(0, real.length - base.length), flipped);
+      expect(realpathSync.native(spelled)).not.toBe(spelled);
+      const seam = forgeProjectsSeam({ "p-case": { wsPath: spelled } });
+      const { face } = identityOf(ctxWithSeam(seam.factory));
+      const identity = await face("p-case");
+      expect(identity).not.toBeNull();
+      const consumed = resolveProjectKey(spelled, { registryQuery: () => spelled }).key;
+      expect(identity!.projectKey).toBe(consumed);
+    } finally {
+      rmSync(real, { recursive: true, force: true });
+    }
   });
 
   it("缝缺席 → 回落 workspaceRegistry（纯官方 workspaceId 语境——registry.get(id).path 命中）", async () => {
