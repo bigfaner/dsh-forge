@@ -8,7 +8,7 @@
 // 环境变量 DSH_FORGE_TASKS_HOME 与 {home}/forge-workspaces 分支已删（§2.9 清理）。
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { resolveProjectKey, type ForgeDirSources, type ProjectKeyDeps } from "@dsh-forge/lib-path";
+import { canonicalizePath, resolveProjectKey, type ForgeDirSources, type ProjectKeyDeps } from "@dsh-forge/lib-path";
 
 /** 非空字符串判读（trim 空 = 未注入） */
 const nonEmpty = (v: string | undefined): string | undefined =>
@@ -58,10 +58,12 @@ export function createSelfAnchorsOf(
   return async (projectId) => {
     const wsPath = await deps.wsPathOf(projectId);
     if (typeof wsPath !== "string" || wsPath.trim() === "") {
-      throw new Error(`self-anchors: workspace root unavailable (projectId=${projectId}——未注册或工作区面缺席)`);
+      throw new Error(`self-anchors: workspace root unavailable (projectId=${projectId}——未注册或工作区面缺席：缺少项目主检出，无法解析 forge.task_runtime_dir)`);
     }
     const resolution = resolveProjectKey(wsPath, { registryQuery: deps.registryQuery ?? (() => undefined) });
-    const projectRoot = resolution.mainRoot ?? wsPath;
+    // 未归拢分支同样规范化（bug 55ab9a8f——projectKey 大小写敏感，未规范化 wsPath 会让
+    // forge.task_runtime_dir 目录名与 resolveProjectKey 的 key 分裂）。
+    const projectRoot = resolution.mainRoot ?? canonicalizePath(wsPath);
     return { dshHome: dirname(deps.forgeHome), projectRoot, workspaceRoot: wsPath };
   };
 }

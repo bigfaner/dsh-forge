@@ -2,7 +2,11 @@
 // forgeHome = resolveForgeHome 单点（patch 下发 > tasksHome dirname > dshHomePath 服务现查 >
 // 降级 ~/.dsh/forge + 「dshHomePath 缺席」warn）；workspaceRoot 经注入缝；projectRoot 取
 // resolveProjectKey 归拢的项目主检出（registryQuery 注入免 git）。
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { canonicalizePath, projectKeyOf, resolveProjectKey } from '@dsh-forge/lib-path'
 import { createSelfAnchorsOf, resolveForgeHome } from './self-anchors.js'
 
 describe('resolveForgeHome（forge 根四级解析单点）', () => {
@@ -50,8 +54,20 @@ describe('createSelfAnchorsOf（ForgeDirSources 自装配派生链）', () => {
     expect(anchors.projectRoot).toBe('Z:\\ws\\proj-main')
   })
 
-  it('workspaceRoot 缺席 / 空串 = fail-loud（调用方按行 fail-soft 收口——锚缺口不静默）', async () => {
+  it('未归拢分支 projectRoot 也经规范化（bug 55ab9a8f——与磁盘大小写不同的 wsPath，projectKeyOf(projectRoot) = resolveProjectKey 的 key）', async () => {
+    const real = canonicalizePath(await mkdtemp(join(tmpdir(), 'self-anchors-')))
+    // 构造与磁盘拼写不同的工作区路径（首段字母翻转大小写——不落 .forge/worktrees 标记 = 未归拢分支）
+    const cased = real.replace(/([a-z])/, (c) => (c === c.toUpperCase() ? c.toLowerCase() : c.toUpperCase()))
+    expect(canonicalizePath(cased)).toBe(real)
+    const anchors = await createSelfAnchorsOf(depsOf(cased, 'X:\\dsh\\forge'))('p-1')
+    expect(anchors.projectRoot).toBe(real)
+    expect(projectKeyOf(anchors.projectRoot)).toBe(resolveProjectKey(cased, { registryQuery: () => undefined }).key)
+  })
+
+  it('workspaceRoot 缺席 / 空串 = fail-loud（错误说明缺少项目主检出——与 task-loop 措辞一致）', async () => {
     await expect(createSelfAnchorsOf(depsOf(null, 'X:\\f'))('p-x')).rejects.toThrow(/workspace root unavailable/)
     await expect(createSelfAnchorsOf(depsOf('', 'X:\\f'))('p-x')).rejects.toThrow(/workspace root unavailable/)
+    await expect(createSelfAnchorsOf(depsOf(null, 'X:\\f'))('p-x')).rejects.toThrow(/缺少项目主检出/)
+    await expect(createSelfAnchorsOf(depsOf('', 'X:\\f'))('p-x')).rejects.toThrow(/缺少项目主检出/)
   })
 })
