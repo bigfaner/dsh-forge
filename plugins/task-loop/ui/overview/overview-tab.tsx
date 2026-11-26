@@ -7,7 +7,7 @@
 // （契约测试锚 = tests/ui/overview.test.tsx 零转移控件断言 + host transition 面无
 // completed 快捷方法机检）。
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { createForgeTasksClient, type ForgeTasksRpc, type TaskBoardDtoView, type TaskCardView } from "../tasks-rpc.js";
+import { createForgeTasksClient, type ForgeTasksRpc, type TaskBoardDtoView, type TaskCardView, type TasksFollowQuery } from "../tasks-rpc.js";
 import { createTasksBoardHub, TASKS_HUB_MERGE_MS, type TasksBoardHub } from "../tasks-hub.js";
 import "./overview.css";
 
@@ -145,12 +145,14 @@ export interface OverviewTabProps {
   readonly projectId: string | undefined;
   /** RPC client（缺省 = forgeTasks Typert 真身；注入 = 测试面） */
   readonly makeClient?: () => ForgeTasksRpc;
-  /** 容器限定（可选——缺省全项目板） */
-  readonly slug?: string;
+  /** 容器限定（可选——ContainerRef 契约形态 source{kind,slug}，bug 553ec45a/0cb51984
+   *  修型：零 slug 键——宿主边界校验剥离 slug 即容器筛选静默失效。kind 取该容器卡
+   *  自身值；无卡可取时调用侧以 feature 回退，与 project 任务子 tab 回退口径一致） */
+  readonly source?: TasksFollowQuery["source"];
 }
 
 /** 概览 tab body（状态 + 装载胶水——follow hub 订阅单源 + 降级重取 nonce） */
-export function OverviewTab({ projectId, makeClient, slug }: OverviewTabProps): ReactNode {
+export function OverviewTab({ projectId, makeClient, source }: OverviewTabProps): ReactNode {
   const [board, setBoard] = useState<TaskBoardDtoView | undefined>(undefined);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | undefined>(undefined);
@@ -172,7 +174,7 @@ export function OverviewTab({ projectId, makeClient, slug }: OverviewTabProps): 
     try {
       hub = createTasksBoardHub({
         client,
-        query: { projectId, ...(slug !== undefined ? { slug } : {}) },
+        query: { projectId, ...(source !== undefined ? { source } : {}) },
         onSnapshot: (snapshot) => {
           if (cancelled) return;
           setBoard(snapshot);
@@ -184,7 +186,7 @@ export function OverviewTab({ projectId, makeClient, slug }: OverviewTabProps): 
       });
       hub.start();
       void client
-        .list({ projectId, ...(slug !== undefined ? { slug } : {}) })
+        .list({ projectId, ...(source !== undefined ? { source } : {}) })
         .then((cards) => {
           if (cancelled) return;
           setBoard((prev) => prev ?? { projectKey: projectId, cards, stats: { total: cards.length, byStatus: {} } });
@@ -203,7 +205,7 @@ export function OverviewTab({ projectId, makeClient, slug }: OverviewTabProps): 
       cancelled = true;
       hub?.dispose();
     };
-  }, [projectId, slug, nonce, makeClient]);
+  }, [projectId, source, nonce, makeClient]);
 
   const handleToggleStatus = useCallback((status: OverviewStatus) => {
     setActiveStatuses((prev) => new Set(prev).add(status));

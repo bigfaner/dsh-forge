@@ -67,6 +67,8 @@ export function createTasksBoardHub(options: TasksBoardHubOptions): TasksBoardHu
     diag(`follow 流不可达（${reason}）——降级终态：静默定时重取（${TASKS_HUB_FALLBACK_POLL_MS}ms）`);
     const tick = (): void => {
       if (disposed) return;
+      // 轮询重取 = list 契约形态直投（query 即 TasksChannelRequests["list"] 兼容切片——
+      // source{kind,slug}，bug 553ec45a/0cb51984 修型：零 slug 键）
       void options.client
         .list(options.query)
         .then((cards) => {
@@ -97,7 +99,10 @@ export function createTasksBoardHub(options: TasksBoardHubOptions): TasksBoardHu
       controller = new AbortController();
       void (async (): Promise<void> => {
         try {
-          for await (const frame of options.client.follow(options.query)) {
+          // follow 流宿主半 wire 契约仍持 slug 键（host TasksRemoteFollowQuery）——
+          // 发送侧归一：hub query 的 source{kind,slug} → follow slug（list 轮询走 source）
+          const wire = { projectId: options.query.projectId, ...(options.query.source !== undefined ? { slug: options.query.source.slug } : {}) };
+          for await (const frame of options.client.follow(wire)) {
             if (disposed) return;
             enqueue(frame.snapshot);
           }

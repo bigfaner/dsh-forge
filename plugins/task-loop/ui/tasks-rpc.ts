@@ -8,6 +8,7 @@
 // 经 gateway 下发，子 fiber 停驻至 namespace 在场后激活）；缺席宿主 = 调用期诚实降级
 // （typed Error + 诊断留痕，不炸组合）。泛型基型实例化点单点收口：方法签名/DTO 载荷/
 // Result 信封均以本文件为 client 半唯一实例化面（code-design §2 类型面守则）。
+import type { ContainerRef, TasksChannelRequests } from "@dsh-forge/lib-api";
 import { RpcClientError, forgeRemoteFaceOf, namespaceFaceOf, type ForgeRemoteFace, type ForgeRemoteNamespaceFace } from "./rpc.js";
 
 // ── 聚合 DTO 结构镜像（host 半 host/assembly/typert-remotes.ts 单源——client 束自含纪律：
@@ -55,19 +56,15 @@ export interface TasksBoardEnvelope {
   readonly snapshot: TaskBoardDtoView;
 }
 
-/** list 查询参（host TasksRemoteListQuery 消费切片——身份官方语境 projectId，bug 9407ff29
- *  修型：客户端零投影零派生，host 半 forge.projects 缝解析归属键） */
-export interface TasksListQuery {
-  readonly projectId: string;
-  readonly slug?: string;
-  readonly search?: string;
-  readonly sort?: "created" | "priority";
-}
+/** list 查询参（wire 契约单源 = lib/api TasksChannelRequests["list"]——bug 553ec45a/0cb51984
+ *  修型：界面侧零手拼，容器引用 = source{kind,slug}，slug 键宿主边界校验剥离即失效） */
+export type TasksListQuery = TasksChannelRequests["list"];
 
-/** follow 查询参（list 同形作用域——容器限定可选） */
+/** follow 查询参（list 同形作用域——容器限定可选 source；follow 流宿主半 wire 仍持 slug
+ *  键，发送侧归一归 tasks-hub） */
 export interface TasksFollowQuery {
   readonly projectId: string;
-  readonly slug?: string;
+  readonly source?: ContainerRef;
 }
 
 /** forgeTasks namespace 方法族消费切片（host ForgeTasksRemote 同形——快照读 + follow 流） */
