@@ -3,7 +3,7 @@
 // listTasks search/statusFilter/sort 透传）+ AC5「taskGraph 按 source 容器拉取」（DAG
 // 视图增拉 graph，边集源）+ channels 录制断言（fetch 纯异步面；hook effect 编排归 4.1
 // 装配 + 5.2 e2e——renderToStaticMarkup 不跑 effect，同 overview-data 口径）。
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { TaskCard, TaskGraph, TaskStats } from '@dsh-forge/contracts'
 import { RpcClientError } from '../../rpc-channels.js'
 import type { ForgeRpcClient } from '../../rpc-channels.js'
@@ -151,6 +151,67 @@ describe('fetchTasksTabData（唯一装载面——查询参透传）', () => {
     })
   })
 
+  describe('全部容器作用域（「全部任务」——搜索/筛选跨容器）', () => {
+    const REFS = [
+      { kind: 'feature' as const, slug: 'spec-a' },
+      { kind: 'proposal' as const, slug: 'spec-b' },
+    ]
+
+    it('列表/泳道：list/stats 不带 source（项目全域），search/statusFilter/sort 仍透传', async () => {
+      const { client, calls } = recordingClient({})
+      const out = await fetchTasksTabData(client, {
+        projectId: 'p-1',
+        source: undefined,
+        statusFilter: ['pending'],
+        search: ' 网关 ',
+        sort: 'created',
+        view: 'list',
+        containerRefs: REFS,
+      })
+      expect(out.ok).toBe(true)
+      expect(calls.map((c) => c.channel)).toEqual(['tasks.list', 'tasks.stats'])
+      expect(calls.find((c) => c.channel === 'tasks.list')?.payload).toEqual({
+        projectId: 'p-1',
+        statusFilter: ['pending'],
+        search: '网关',
+        sort: 'created',
+      })
+      expect(calls.find((c) => c.channel === 'tasks.stats')?.payload).toEqual({ projectId: 'p-1' })
+    })
+
+    it('DAG：逐容器 tasks.graph（source = 各容器 kind 原样回传）合并——tasks 按 taskId 去重 + 边并集', async () => {
+      const a1 = cardFixture({ taskId: 'a1', slug: 'spec-a' })
+      const b1 = cardFixture({ taskId: 'b1', slug: 'spec-b' })
+      const edgeA = { taskId: 'a1', prerequisiteId: 'b1', origin: 'manual' as const }
+      const bySlug = new Map<string, TaskGraph>([
+        ['spec-a', { tasks: [a1, b1], edges: [edgeA] }],
+        ['spec-b', { tasks: [b1], edges: [] }],
+      ])
+      const { client, calls } = recordingClient({})
+      const seen: string[] = []
+      vi.spyOn(client.tasks, 'graph').mockImplementation(((q: { source: { slug: string } }) => {
+        seen.push(q.source.slug)
+        return Promise.resolve(bySlug.get(q.source.slug) ?? { tasks: [], edges: [] })
+      }) as never)
+      const out = await fetchTasksTabData(client, {
+        projectId: 'p-1',
+        source: undefined,
+        statusFilter: [],
+        search: '',
+        sort: 'active',
+        view: 'dag',
+        containerRefs: REFS,
+      })
+      expect(out.ok).toBe(true)
+      if (out.ok) {
+        expect(out.graph?.tasks.map((t) => t.taskId)).toEqual(['a1', 'b1'])
+        expect(out.graph?.edges).toEqual([edgeA])
+      }
+      expect(seen.sort()).toEqual(['spec-a', 'spec-b'])
+      expect(calls).toHaveLength(2) // list + stats；graph 经 spy 录制在 seen
+    })
+  })
+
   it('任一通道 typed error → 归一错误（RpcClientError → rpcUiState 映射）', async () => {
     const { client } = recordingClient({
       list: () => Promise.reject(new RpcClientError({ code: 'ERR_WORKSPACE_DB_UNAVAILABLE', message: '库不可用' })),
@@ -197,15 +258,16 @@ describe('装载态落点（纯函数——hook 消费形）', () => {
     })
   })
 
-  it('tasksTabLoadKey：容器/视图/过滤/搜索/排序/nonce 全入键（双轨 kind 可辨）', () => {
+  it('tasksTabLoadKey：容器/视图/过滤/搜索/排序/nonce 全入键（容器键 = slug）', () => {
     const base = { projectId: 'p-1', source: { kind: 'feature' as const, slug: 'f' }, view: 'list' as const, statusFilter: [], search: '', sort: 'active' as const, nonce: 0 }
-    expect(tasksTabLoadKey(base)).toBe('p-1#feature:f#list#||active#0')
-    expect(tasksTabLoadKey({ ...base, statusFilter: ['completed', 'blocked'] })).toBe('p-1#feature:f#list#completed,blocked||active#0')
+    expect(tasksTabLoadKey(base)).toBe('p-1#f#list#||active#0')
+    expect(tasksTabLoadKey({ ...base, statusFilter: ['completed', 'blocked'] })).toBe('p-1#f#list#completed,blocked||active#0')
     expect(tasksTabLoadKey({ ...base, view: 'dag' })).not.toBe(tasksTabLoadKey(base))
     expect(tasksTabLoadKey({ ...base, search: 'fix' })).not.toBe(tasksTabLoadKey(base))
     expect(tasksTabLoadKey({ ...base, nonce: 1 })).not.toBe(tasksTabLoadKey(base))
     // 同 slug 双轨（成链降级）键可辨——AC5 容器参数路由
-    expect(tasksTabLoadKey({ ...base, source: { kind: 'proposal', slug: 'f' } })).toBe('p-1#proposal:f#list#||active#0')
+    expect(tasksTabLoadKey({ ...base, source: { kind: 'proposal', slug: 'f' } })).toBe(tasksTabLoadKey(base)) // kind 不入键
+    expect(tasksTabLoadKey({ ...base, source: undefined })).not.toBe(tasksTabLoadKey(base)) // 全部容器作用域可辨
   })
 
   it('pendingTasksTab：清场（容器切换）= 归零骨架；否则旧内容 + busy', () => {

@@ -1,5 +1,6 @@
 // 读面（list/query/stats/graph/detail/session-links）+ phase-gate 随迁测试（plugin-task-loop 1.7）。
 import { beforeEach, describe, expect, it } from "vitest";
+import { TASK_STATUS_LABELS } from "@dsh-forge/contracts";
 import { addTask } from "../../host/domain/tasks/add.js";
 import { claimTask } from "../../host/domain/tasks/claim.js";
 import {
@@ -26,6 +27,44 @@ beforeEach(() => {
 });
 
 const claim = () => claimTask(h.verbDeps, { projectKey: h.projectKey, sessionId: "sess-1", source: { slug: "alpha" } });
+
+describe("listTasks search（关键词筛选——大小写不敏感子串；匹配键 = 标题/slug/localId/复合键 + 类型/状态中英标签）", () => {
+  let gateway = "";
+  let docs = "";
+  let other = "";
+
+  beforeEach(async () => {
+    gateway = (await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "spec-pay", title: "网关重试 Gateway Retry", type: "coding-fix" })).localId;
+    docs = (await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "spec-pay", title: "文档补全", type: "doc" })).localId;
+    other = (await addTask(h.verbDeps, { projectKey: h.projectKey, slug: "spec-search", title: "另一个 spec 的任务", type: "coding-feature" })).localId;
+  });
+
+  const search = (q: string | undefined) => listTasks(h.verbDeps, { projectKey: h.projectKey, ...(q === undefined ? {} : { search: q }) });
+  const byLocalId = async (q: string | undefined) => (await search(q)).map((c) => c.localId).sort();
+
+  it("标题子串（中/英、大小写不敏感）", async () => {
+    expect((await search("网关")).map((c) => c.title)).toEqual(["网关重试 Gateway Retry"]);
+    expect((await search("GATEWAY")).map((c) => c.title)).toEqual(["网关重试 Gateway Retry"]);
+  });
+
+  it("slug / localId / 复合键 / 类型与状态中英标签", async () => {
+    expect(await byLocalId("spec-pay")).toEqual([docs, gateway].sort());
+    // localId 跨容器可重号（1.1）——裸 localId 命中多容器，复合键 slug/localId 才唯一
+    expect(await byLocalId(gateway)).toEqual([gateway, other].sort());
+    expect(await byLocalId(`spec-pay/${gateway}`)).toEqual([gateway]);
+    expect((await search("coding-fix")).map((c) => c.localId)).toEqual([gateway]);
+    expect(await byLocalId(TASK_STATUS_LABELS.pending.en)).toEqual([docs, gateway, other].sort());
+    expect(await byLocalId(TASK_STATUS_LABELS.pending.zh)).toEqual([docs, gateway, other].sort());
+  });
+
+  it("空/纯空白 = 全量放行；无命中 = 空；与容器 slug 作用域正交叠加", async () => {
+    expect(await search(undefined)).toHaveLength(3);
+    expect(await search("   ")).toHaveLength(3);
+    expect(await search("不存在词")).toEqual([]);
+    const scoped = await listTasks(h.verbDeps, { projectKey: h.projectKey, slug: "spec-pay", search: "文档" });
+    expect(scoped.map((c) => c.localId)).toEqual([docs]);
+  });
+});
 
 describe("listTasks / taskStats / taskGraph", () => {
   it("TaskCard 水化：prerequisites/sessionCount/sourceTask/containerSlug（run-dag 判别面 slug 化）", async () => {

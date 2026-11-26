@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TaskCard, TaskGraph, TaskStatus, TaskStats } from '@dsh-forge/contracts'
-import { TasksTabBody, TasksTab, containerMenuItems, runDispatchRoute, subgraphDiagContainer } from './task-tab.js'
+import { TasksTabBody, TasksTab, containerMenuItems, containerMenuPick, runDispatchRoute, subgraphDiagContainer } from './task-tab.js'
 import { formatDiagMessage } from '../message-format.js'
 import { docsRootOf } from '../message-format.js'
 import type { TaskContainerOption } from './container-pill.js'
@@ -93,9 +93,12 @@ describe('TasksTabBody · ov-taskbar 布局（插入点断言）', () => {
   it('工具栏 = 容器 pill（双轨点 + chip）+ 视图下拉（pill 右侧）+ 右簇 [诊断][派发] 最右端（DOM 序）', () => {
     const html = render()
     expect(html).toContain('data-dswf-tt-taskbar=""')
-    expect(html).toContain('data-dswf-tt-contpill="feature:m2-pipeline"')
+    expect(html).toContain('data-dswf-tt-contpill="m2-pipeline"')
     expect(html).toContain('class="dswf-tt-contdot" data-mode="expedition"')
     expect(html).toContain('1/2')
+    // kind 词汇不入界面（容器统一为 spec）
+    expect(html).not.toContain('突击提案')
+    expect(html).not.toContain('feature · 远征')
     const pillAt = html.indexOf('data-dswf-tt-contpill')
     const viewAt = html.indexOf('data-dswf-tt-viewbtn="list"')
     const diagAt = html.indexOf('data-dswf-tt-diag=""')
@@ -106,16 +109,34 @@ describe('TasksTabBody · ov-taskbar 布局（插入点断言）', () => {
     expect(html).toContain('data-dswf-tt-rightbar') // 右簇容器
   })
 
-  it('突击提案容器：琥珀点 + 「突击提案」chip + 无「诊断」按钮 + 零过程注释', () => {
+  it('卡携 proposal kind 的容器：pill 按 slug 选中 + 统一 done/total chip + 零 kind 词汇/标记 + 零过程注释', () => {
     const html = render({ container: BLITZ_CONTAINER })
-    expect(html).toContain('data-dswf-tt-contpill="proposal:legacy-eval-retire"')
-    expect(html).toContain('class="dswf-tt-contdot" data-mode="blitz"')
-    expect(html).toContain('突击提案 · 2 任务')
+    expect(html).toContain('data-dswf-tt-contpill="legacy-eval-retire"')
+    expect(html).toContain('1/2') // stats 单源 done/total（修前 =「突击提案 · 2 任务」）
+    expect(html).not.toContain('突击提案')
     expect(html).not.toContain('title=') // 计数注归官方 Tooltip label
     expect(html).not.toContain('data-dswf-tt-count') // 正文零计数注
     expect(html).not.toContain('无 feature 阶段')
-    expect(html).not.toContain('data-dswf-tt-diag') // validateFeatureTasks 为 feature 域校验
     expect(html).toContain('data-dswf-tt-dispatch=') // 派发按钮仍可用面
+  })
+
+  it('「全部任务」作用域：pill = 全部任务 + done/total，菜单首项「全部任务 · N 任务」，诊断/派发不呈现，任务卡跨容器渲染', () => {
+    const html = render({ container: undefined, allContainers: true, load: load({ cards: [...AGG_CARDS] }) })
+    expect(html).toContain('data-dswf-tt-contpill="all"')
+    expect(html).toContain('1/2')
+    expect(html).toContain('data-dswf-tt-item="t-1"')
+    expect(html).toContain('data-dswf-tt-item="t-3"')
+    expect(html).not.toContain('data-dswf-tt-diag=')
+    expect(html).not.toContain('data-dswf-tt-dispatch=')
+    const items = containerMenuItems(OPTIONS)
+    expect(items.map((entry) => entry.id)).toEqual(['all', 'legacy-eval-retire', 'm2-pipeline'])
+    expect(renderToStaticMarkup(menuRowLabel(items, 0))).toContain('全部任务')
+    expect(renderToStaticMarkup(menuRowLabel(items, 0))).toContain('4 任务')
+  })
+
+  it('「全部任务」作用域搜索无匹配 = 无匹配空态（跨容器搜索）', () => {
+    const html = render({ container: undefined, allContainers: true, search: '不存在', load: load({ cards: [...AGG_CARDS].slice(0, 0), stats: STATS }) })
+    expect(html).toContain('无匹配「不存在」的任务')
   })
 
   it('feature 容器：「诊断」按钮在场 + 派发按钮', () => {
@@ -232,31 +253,38 @@ describe('TasksTabBody · 三态面与空态', () => {
 })
 
 describe('容器菜单与解析纯函数', () => {
-  it('containerMenuItems：行集 = slug + 突击标记 + N 任务（计数即选项自身聚合——features 查找退役）', () => {
+  it('containerMenuItems：首行「全部任务」+ 各行 slug + N 任务（计数即选项自身聚合；kind 标记不入行）', () => {
     const items = containerMenuItems(OPTIONS)
-    expect(items.map((entry) => entry.id)).toEqual(['proposal:legacy-eval-retire', 'feature:m2-pipeline'])
-    const blitzRow = renderToStaticMarkup(menuRowLabel(items, 0))
-    expect(blitzRow).toContain('legacy-eval-retire（突击提案）')
-    expect(blitzRow).toContain('2 任务')
-    const featureRow = renderToStaticMarkup(menuRowLabel(items, 1))
+    expect(items.map((entry) => entry.id)).toEqual(['all', 'legacy-eval-retire', 'm2-pipeline'])
+    const row = renderToStaticMarkup(menuRowLabel(items, 1))
+    expect(row).toContain('legacy-eval-retire')
+    expect(row).not.toContain('突击提案')
+    expect(row).toContain('2 任务')
+    const featureRow = renderToStaticMarkup(menuRowLabel(items, 2))
     expect(featureRow).toContain('m2-pipeline')
     expect(featureRow).toContain('2 任务')
   })
 
   it('containerMenuSelect：id → 选项；未知 id = undefined', () => {
-    expect(containerMenuSelect(OPTIONS, 'proposal:legacy-eval-retire')?.slug).toBe('legacy-eval-retire')
+    expect(containerMenuSelect(OPTIONS, 'legacy-eval-retire')?.slug).toBe('legacy-eval-retire')
     expect(containerMenuSelect(OPTIONS, 'ghost')).toBeUndefined()
   })
 
-  it('containerPillChip：stats 单源优先；突击 = 突击提案·N 任务', () => {
+  it('containerMenuPick：all → 全部作用域；slug → 单容器；未知 = undefined', () => {
+    expect(containerMenuPick(OPTIONS, 'all')).toEqual({ all: true })
+    expect(containerMenuPick(OPTIONS, 'legacy-eval-retire')).toEqual({ all: false, option: BLITZ_CONTAINER })
+    expect(containerMenuPick(OPTIONS, 'ghost')).toBeUndefined()
+  })
+
+  it('containerPillChip：stats 单源优先；在途回退聚合任务数（容器不分 kind）', () => {
     expect(containerPillChip(FEATURE_CONTAINER, '1/2')).toBe('1/2')
     expect(containerPillChip(FEATURE_CONTAINER, undefined)).toBe('2 任务')
-    expect(containerPillChip(BLITZ_CONTAINER, '1/2')).toBe('突击提案 · 2 任务')
+    expect(containerPillChip(BLITZ_CONTAINER, '1/2')).toBe('1/2')
   })
 
   it('resolveContainer：显式命中优先；未命中回退首项（稳定序）；零选项 = undefined', () => {
     expect(resolveContainer(OPTIONS, { kind: 'proposal', slug: 'legacy-eval-retire' })?.slug).toBe('legacy-eval-retire')
-    expect(resolveContainer(OPTIONS, { kind: 'feature', slug: 'ghost' })?.slug).toBe('legacy-eval-retire') // 首项
+    expect(resolveContainer(OPTIONS, { kind: 'proposal', slug: 'ghost' })?.slug).toBe('legacy-eval-retire') // 首项
     expect(resolveContainer(OPTIONS, undefined)?.slug).toBe('legacy-eval-retire')
     expect(resolveContainer([], undefined)).toBeUndefined()
   })
@@ -373,19 +401,19 @@ describe('subgraphDiagContainer（子图诊断容器水化——@ 锚数据驱�
 
 // ─────────────────────────── 装载壳（effect 面——createRoot + act） ───────────────────────────
 
-/** 装载壳 client 桩：tasks.list 按有无 source 路由（池全域聚合 / 容器过滤）+ stats/graph */
+/** 装载壳 client 桩：tasks.list 按有无 source 路由（池全域 / 容器过滤——仅按 slug，kind 不参与）+ stats/graph */
 function shellClient(): {
   readonly client: ForgeRpcClient
-  readonly listCalls: { source: { kind: string; slug: string } | undefined }[]
+  readonly listCalls: { source: { kind: string; slug: string } | undefined; search?: string }[]
 } {
-  const listCalls: { source: { kind: string; slug: string } | undefined }[] = []
+  const listCalls: { source: { kind: string; slug: string } | undefined; search?: string }[] = []
   const fail = (): Promise<never> => Promise.reject(new Error('不应调用'))
   const client = {
     tasks: {
-      list: async (q: { projectId: string; source?: { kind: string; slug: string } }) => {
-        listCalls.push({ source: q.source })
+      list: async (q: { projectId: string; source?: { kind: string; slug: string }; search?: string }) => {
+        listCalls.push({ source: q.source, ...(q.search !== undefined ? { search: q.search } : {}) })
         if (q.source === undefined) return [...AGG_CARDS] as never
-        return (AGG_CARDS.filter((c) => c.source?.kind === q.source?.kind && c.source?.slug === q.source?.slug) as never)
+        return (AGG_CARDS.filter((c) => c.slug === q.source?.slug) as never)
       },
       stats: async () => STATS,
       graph: async () => GRAPH,
@@ -482,10 +510,54 @@ describe('TasksTab 装载壳（容器来源 = 任务数据聚合——AC①②�
     const { client, listCalls } = shellClient()
     const view = await mountTasksTab(client, { featureSlug: 'legacy-eval-retire' })
     const html = view.html()
-    expect(html).toContain('data-dswf-tt-contpill="proposal:legacy-eval-retire"')
-    expect(html).toContain('data-dswf-tt-item="t-3"') // blitz 容器任务卡
+    expect(html).toContain('data-dswf-tt-contpill="legacy-eval-retire"')
+    expect(html).toContain('data-dswf-tt-item="t-3"') // 该 spec 容器任务卡
     const containerCall = listCalls.find((c) => c.source !== undefined)
     expect(containerCall?.source).toEqual({ kind: 'proposal', slug: 'legacy-eval-retire' })
     await view.cleanup()
+  })
+
+  it('AC⑤ 关键词筛选：搜索原文归一后随容器 scope 入 tasks.list（服务端过滤入口在场）', async () => {
+    const { client, listCalls } = shellClient()
+    const view = await mountTasksTab(client, { search: ' 网关 ' })
+    const containerCall = listCalls.find((c) => c.source !== undefined)
+    expect(containerCall).toEqual({ source: { kind: 'proposal', slug: 'legacy-eval-retire' }, search: '网关' })
+    await view.cleanup()
+  })
+
+  it('AC⑥ pill 菜单选「全部任务」→ tasks.list/stats 不带 source（跨容器搜索/筛选成立）', async () => {
+    const { client, listCalls } = shellClient()
+    const statsCalls: unknown[] = []
+    const base = client.tasks.stats as (q: unknown) => Promise<unknown>
+    vi.spyOn(client.tasks, 'stats').mockImplementation(((q: unknown) => {
+      statsCalls.push(q)
+      return base(q)
+    }) as never)
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    await act(async () => {
+      root.render(<TasksTab projectId="p-1" search="网关" sort="active" activeStatuses={new Set<TaskStatus>()} statusFilter={[]} onToggleStatus={NOOP} onClearStatuses={NOOP} makeClient={() => client} />)
+    })
+    const pill = host.querySelector('[data-dswf-tt-contpill]') as HTMLElement
+    await act(async () => {
+      pill.click()
+    })
+    const allRow = document.querySelector('[data-dswf-tt-mcont="all"]') as HTMLElement | null
+    expect(allRow, '菜单须渲染「全部任务」行').not.toBeNull()
+    const item = (allRow as HTMLElement).closest('[role="menuitem"], li, button') ?? (allRow as HTMLElement)
+    await act(async () => {
+      item.click()
+    })
+    expect(host.querySelector('[data-dswf-tt-contpill="all"]')).not.toBeNull()
+    const scoped = listCalls.filter((c) => c.search !== undefined)
+    expect(scoped.at(-1)).toEqual({ source: undefined, search: '网关' }) // 修前：恒带容器 source——关键词只能搜当前容器
+    expect(statsCalls.at(-1)).toEqual({ projectId: 'p-1' })
+    expect(host.innerHTML).toContain('data-dswf-tt-item="t-1"') // 另一容器任务卡可见
+    expect(host.innerHTML).toContain('data-dswf-tt-item="t-3"')
+    await act(async () => {
+      root.unmount()
+      host.remove()
+    })
   })
 })

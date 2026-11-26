@@ -90,7 +90,7 @@ export function searchQueryOf(text: string): string | undefined {
 
 /** 搜索框占位文案（原型 ov-q placeholder 逐子 tab 口径；spec 位 = G3 交付时细化） */
 export function searchPlaceholderOf(subtab: OverviewSubtab): string {
-  if (subtab === 'tasks') return '搜索标题/类型/状态(中英)…'
+  if (subtab === 'tasks') return '搜索标题/slug/类型/状态(中英)…'
   if (subtab === 'spec') return '搜索 spec…'
   return '搜索 Bug 摘要/错误类型…'
 }

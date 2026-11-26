@@ -190,8 +190,10 @@ describe('resolveContainer（容器选中解析——显式命中优先，缺省
   const feature = { kind: 'feature', slug: 'feat-a', title: 'A', mode: 'expedition', taskCount: 3, statusCounts: {} } as const
   const proposal = { kind: 'proposal', slug: 'blitz-p', title: 'P', mode: 'blitz', taskCount: 2, statusCounts: {} } as const
 
-  it('显式注入优先（任意容器——taskFocus 聚焦/用户本地切换）', () => {
+  it('显式注入按 slug 命中（kind 不参与——taskFocus 聚焦/用户本地切换）', () => {
     expect(resolveContainer([feature, proposal], { kind: 'proposal', slug: 'blitz-p' })?.slug).toBe('blitz-p')
+    // 聚焦载荷 kind 与选项不一致仍按 slug 命中（修前：kind 不等即回落首项——错容器）
+    expect(resolveContainer([feature, proposal], { kind: 'feature', slug: 'blitz-p' })?.slug).toBe('blitz-p')
   })
 
   it('显式未命中 = 回落首项（稳定排序——slug 聚合序）', () => {
@@ -215,6 +217,11 @@ describe('tasksEmptyView（空态分派——总 0/搜索/过滤组合）', () =
   it('feature 总数 0 = 本容器暂无任务', () => {
     const view = tasksEmptyView({ ...base, total: 0, cards: [] })
     expect(view?.title).toBe('本容器暂无任务')
+  })
+
+  it('全部容器作用域总数 0 = 暂无任务（不称「容器」）', () => {
+    const view = tasksEmptyView({ ...base, total: 0, cards: [], allContainers: true })
+    expect(view?.title).toBe('暂无任务')
   })
 
   it('搜索在场空结果 = 无匹配', () => {

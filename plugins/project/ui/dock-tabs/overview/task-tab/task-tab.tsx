@@ -1,10 +1,10 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // 任务子 tab 组装（定位：业务——4.6 交付面：OverviewFrame renderTasksTab 槽注入体）。
-// 工具栏布局：容器 pill（选项 = 任务数据自身 slug 聚合——taskContainerOptionsFromCards，
-// 判例 2026-11-25：features/提案域容器模型随 G2 退役）+ 视图下拉（ViewDropdown——pill 右侧）
-// + 右簇 [诊断]+[派发] 固定最右端同行不换行 + 七态 chips（StatusChips 复用）+ 三视图分派 + 三态面。
-// 诊断两路之一（feature 子图）：「诊断」按钮（仅 feature 容器——validateFeatureTasks 为
-// feature 域校验）→ RPC 只读校验 → DiagToast 双档（成功 1s/失败 5s + 发送给 agent →
+// 工具栏布局：容器 pill（选项 = 任务数据自身 slug 聚合——taskContainerOptionsFromCards，首项
+// 「全部任务」= 项目全域作用域，搜索/chips 跨容器生效；容器统一为 spec，kind 仅作 wire 回传）
+// + 视图下拉（ViewDropdown——pill 右侧）+ 右簇 [诊断]+[派发]（单容器作用域）固定最右端
+// 同行不换行 + 七态 chips（StatusChips 复用）+ 三视图分派 + 三态面。
+// 诊断两路之一（容器子图）：「诊断」按钮（validateFeatureTasks 按容器 slug 只读校验）→ RPC（成功 1s/失败 5s + 发送给 agent →
 // formatDiagMessage 自动发送·远征）。任务失败诊断（blocked/rejected）= 抽屉内「诊断失败」
 // 按钮（drawer 4.6 接线——同 toast 同发送机制）。派发按钮（DispatchButton 4.4）：终态判定
 // stats 单源 + 双路由（runDispatchRoute——执行中在场跳转既有派发会话[taskDetail.sessions
@@ -39,8 +39,8 @@ import {
   type TaskViewMode,
 } from './task-tab-model.js'
 import {
-  containerHasSubgraphDiag,
-  containerMenuMark,
+  ALL_CONTAINERS_LABEL,
+  ALL_CONTAINERS_MENU_ID,
   taskContainerOptionsFromCards,
   type TaskContainerOption,
 } from './container-pill.js'
@@ -91,19 +91,42 @@ export function subgraphDiagContainer(
   }
 }
 
-/** 容器菜单行集：slug + 突击标记（突击提案）+ N 任务（计数 = 选项自身聚合单源） */
-export function containerMenuItems(
-  options: readonly TaskContainerOption[],
-): readonly MenuEntry[] {
-  return options.map((option) => ({
-    id: containerKeyOf(option),
+/**
+ * 容器菜单行集：首项「全部任务」（项目全域——搜索/筛选跨容器）+ 各容器 slug + N 任务
+ * （计数 = 选项自身聚合单源；kind 不入行）。
+ */
+export function containerMenuItems(options: readonly TaskContainerOption[]): readonly MenuEntry[] {
+  const all: MenuEntry = {
+    id: ALL_CONTAINERS_MENU_ID,
     label: (
-      <span className="dswf-tt-mrow" data-dswf-tt-mcont={containerKeyOf(option)}>
-        <span className="dswf-tt-mkey">{`${option.slug}${containerMenuMark(option)}`}</span>
-        <span className="dswf-tt-mchip">{`${option.taskCount} 任务`}</span>
+      <span className="dswf-tt-mrow" data-dswf-tt-mcont={ALL_CONTAINERS_MENU_ID}>
+        <span className="dswf-tt-mkey">{ALL_CONTAINERS_LABEL}</span>
+        <span className="dswf-tt-mchip">{`${options.reduce((n, option) => n + option.taskCount, 0)} 任务`}</span>
       </span>
     ),
-  }))
+  }
+  return [
+    all,
+    ...options.map((option) => ({
+      id: containerKeyOf(option),
+      label: (
+        <span className="dswf-tt-mrow" data-dswf-tt-mcont={containerKeyOf(option)}>
+          <span className="dswf-tt-mkey">{option.slug}</span>
+          <span className="dswf-tt-mchip">{`${option.taskCount} 任务`}</span>
+        </span>
+      ),
+    })),
+  ]
+}
+
+/** 容器菜单选中结果（all = 全部容器作用域；option = 单容器） */
+export type ContainerMenuPick = { readonly all: true } | { readonly all: false; readonly option: TaskContainerOption }
+
+/** 菜单行 id → 选中结果（「全部任务」/ 具体容器；未知 id = undefined 不派发） */
+export function containerMenuPick(options: readonly TaskContainerOption[], id: string): ContainerMenuPick | undefined {
+  if (id === ALL_CONTAINERS_MENU_ID) return { all: true }
+  const option = containerMenuSelect(options, id)
+  return option === undefined ? undefined : { all: false, option }
 }
 
 /** 派发双路由执行输入（AC4——runDispatchRoute 数据面） */
@@ -168,10 +191,12 @@ export interface TasksTabBodyProps {
   readonly onClearStatuses: () => void
   // ── task-tab 本地态（装载壳注入——受控面） ──
   readonly container: TaskContainerOption | undefined
+  /** 「全部任务」作用域（项目全域——container 缺席且本值 true 时渲染全域面） */
+  readonly allContainers?: boolean
   readonly view: TaskViewMode
   readonly containerMenuOpen: boolean
   readonly viewMenuOpen: boolean
-  readonly onContainerSelect: (option: TaskContainerOption) => void
+  readonly onContainerSelect: (pick: ContainerMenuPick) => void
   readonly onViewChange: (view: TaskViewMode) => void
   readonly onContainerMenuOpenChange: (open: boolean) => void
   readonly onViewMenuOpenChange: (open: boolean) => void
@@ -212,6 +237,7 @@ export function TasksTabBody({
   onToggleStatus,
   onClearStatuses,
   container,
+  allContainers = false,
   view,
   containerMenuOpen,
   viewMenuOpen,
@@ -237,8 +263,9 @@ export function TasksTabBody({
   const searchActive = searchQueryOf(search) !== undefined
   const hasStatusFilter = hasActiveStatusFilter(activeStatuses)
 
-  // 容器三分派：选项源在途 = 骨架（真真空未定谳不谎报空态）；真真空 = 容器空态
-  if (container === undefined) {
+  // 作用域三分派：选项源在途 = 骨架（真真空未定谳不谎报空态）；真真空 = 容器空态
+  //（「全部任务」作用域不依赖具体容器——container 缺席仍渲染）
+  if (container === undefined && !allContainers) {
     if (containersLoading === true) {
       return (
         <div className="dswf-tt" data-dswf-tt="">
@@ -262,12 +289,16 @@ export function TasksTabBody({
 
   const cards = load.cards
   const stats = load.stats
-  const pillChip = containerPillChip(
-    container,
-    stats === undefined ? undefined : `${stats.byStatus.completed ?? 0}/${stats.total}`,
-  )
-  // 计数注 = 帧侧 taskCountNote 原值（m3.1 D18：收进容器 pill 悬停——正文零计数注；
-  // D26「无 feature 阶段」过程注废除沿袭）
+  // pill 选中面：全部容器 = 全域 label + stats done/total；单容器 = slug + done/total（stats
+  // 在途回退聚合任务数）
+  const wholeProject = allContainers || container === undefined
+  const doneOverTotal = stats === undefined ? undefined : `${stats.byStatus.completed ?? 0}/${stats.total}`
+  const pillLabel = wholeProject ? ALL_CONTAINERS_LABEL : (container as TaskContainerOption).slug
+  const pillChip = wholeProject
+    ? (doneOverTotal ?? `${options.reduce((n, option) => n + option.taskCount, 0)} 任务`)
+    : containerPillChip(container as TaskContainerOption, doneOverTotal)
+  const pillKey = wholeProject ? ALL_CONTAINERS_MENU_ID : containerKeyOf(container as TaskContainerOption)
+  // 计数注（收进容器 pill 悬停——正文零计数注）
   const countNote = stats === undefined ? undefined : taskCountNote(searchActive, cards?.length ?? 0, stats.total)
 
   // 内容区分派：骨架（首装/清场）→ 错误（无旧内容）→ DAG graph 在途 → 空态 → 三视图
@@ -308,6 +339,7 @@ export function TasksTabBody({
       searchActive,
       search,
       hasStatusFilter,
+      allContainers,
     })
     if (empty !== undefined) {
       content = <EmptyState className="dswf-tt-empty" title={empty.title} description={empty.description} />
@@ -339,7 +371,7 @@ export function TasksTabBody({
           portal
           side="bottom"
           items={containerMenuItems(options)}
-          selectedId={containerKeyOf(container)}
+          selectedId={pillKey}
           selection="fill"
           listClassName="dswf-tt-menu"
           onClose={() => {
@@ -347,12 +379,12 @@ export function TasksTabBody({
           }}
           onSelect={(id) => {
             onContainerMenuOpenChange(false)
-            const option = containerMenuSelect(options, id)
-            if (option !== undefined) onContainerSelect(option)
+            const pick = containerMenuPick(options, id)
+            if (pick !== undefined) onContainerSelect(pick)
           }}
           anchor={
             <Tooltip
-              label={`任务容器：${container.slug}（${container.kind === 'feature' ? 'feature · 远征' : '突击提案 · 突击'}）${countNote === undefined ? '' : ` · ${countNote}`}`}
+              label={`任务范围：${pillLabel}${allContainers || container === undefined ? '（全部容器）' : ''}${countNote === undefined ? '' : ` · ${countNote}`}`}
               portal
             >
               {/* fix-7：官方 Pill 非 ref 转发面（forwardRef 缺席）——Tooltip cloneElement 锚 ref
@@ -361,15 +393,17 @@ export function TasksTabBody({
               <span className="dswf-tipwrap">
                 <Pill
                   className="dswf-tt-featpill"
-                  data-dswf-tt-contpill={containerKeyOf(container)}
+                  data-dswf-tt-contpill={pillKey}
                   aria-haspopup="menu"
                   aria-expanded={containerMenuOpen}
                   onClick={() => {
                     onContainerMenuOpenChange(!containerMenuOpen)
                   }}
                 >
-                  <span className="dswf-tt-contdot" data-mode={container.mode} aria-hidden="true" />
-                  <span className="dswf-tt-featname">{container.slug}</span>
+                  {allContainers || container === undefined ? null : (
+                    <span className="dswf-tt-contdot" data-mode={container.mode} aria-hidden="true" />
+                  )}
+                  <span className="dswf-tt-featname">{pillLabel}</span>
                   <span className="dswf-tt-featchip">{pillChip}</span>
                   <span aria-hidden="true">▾</span>
                 </Pill>
@@ -380,10 +414,11 @@ export function TasksTabBody({
         <ViewDropdown view={view} open={viewMenuOpen} onViewChange={onViewChange} onOpenChange={onViewMenuOpenChange} />
         <span className="dswf-tt-spacer" />
         <div className="dswf-tt-rightbar" data-dswf-tt-rightbar="">
-          {containerHasSubgraphDiag(container) ? (
+          {/* 诊断/派发均为单容器动作——「全部任务」作用域不呈现 */}
+          {allContainers || container === undefined ? null : (
             <span className="dswf-tt-diagwrap" data-dswf-tt-diagwrap="">
               <DiagToast result={diagResult} onDismiss={onDiagDismiss} {...(onDiagSend !== undefined ? { onSend: onDiagSend } : {})} />
-              <Tooltip label="诊断——validateFeatureTasks 只读校验当前 feature 子图（五类检查）" portal>
+              <Tooltip label="诊断——validateFeatureTasks 只读校验当前容器子图（五类检查）" portal>
                 <button
                   type="button"
                   className="dswf-tt-diagbtn"
@@ -396,11 +431,13 @@ export function TasksTabBody({
                 </button>
               </Tooltip>
             </span>
-          ) : null}
-          <span className="dswf-tt-diagwrap">
-            <DiagToast result={dispatchNotice} onDismiss={onDispatchNoticeDismiss} />
-            <DispatchButton stats={stats} onDispatch={onDispatch} />
-          </span>
+          )}
+          {allContainers || container === undefined ? null : (
+            <span className="dswf-tt-diagwrap">
+              <DiagToast result={dispatchNotice} onDismiss={onDispatchNoticeDismiss} />
+              <DispatchButton stats={stats} onDispatch={onDispatch} />
+            </span>
+          )}
         </div>
       </div>
       <StatusChips
@@ -492,6 +529,8 @@ export function TasksTab({
   const [containers, { retry: retryContainers }] = useTaskContainerCards(projectId, makeClient)
   const options = useMemo(() => taskContainerOptionsFromCards(containers.cards ?? []), [containers.cards])
   const [localContainer, setLocalContainer] = useState<TaskContainerSel | undefined>(undefined)
+  // 「全部任务」作用域（pill 菜单首项——搜索/筛选跨容器；用户显式选择，受控聚焦时复位）
+  const [allScope, setAllScope] = useState(false)
   const [view, setView] = useState<TaskViewMode>('list')
   const [containerMenuOpen, setContainerMenuOpen] = useState(false)
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
@@ -501,12 +540,32 @@ export function TasksTab({
     options,
     localContainer ?? (controlledFeature !== undefined ? { kind: 'feature', slug: controlledFeature } : undefined),
   )
-  const source = resolved === undefined ? undefined : { kind: resolved.kind, slug: resolved.slug }
-  const [load, { retry }] = useTasksTabLoad(projectId, source, view, statusFilter, search, sort, makeClient)
+  // 装载作用域：全部容器 = source 缺席（list/stats 项目全域；DAG 逐容器 graph 合并——
+  // 各容器 source.kind 取任务卡自身值原样回传）；单容器 = 该容器 source
+  const containerRefs = useMemo(
+    () => options.map((option) => ({ kind: option.kind, slug: option.slug })),
+    [options],
+  )
+  const source = useMemo(
+    () => (allScope || resolved === undefined ? undefined : { kind: resolved.kind, slug: resolved.slug }),
+    [allScope, resolved],
+  )
+  const [load, { retry }] = useTasksTabLoad(
+    projectId,
+    source,
+    view,
+    statusFilter,
+    search,
+    sort,
+    containerRefs,
+    makeClient,
+    source !== undefined || (allScope && options.length > 0),
+  )
 
   const handleContainerSelect = useCallback(
-    (option: TaskContainerOption): void => {
-      setLocalContainer({ kind: option.kind, slug: option.slug })
+    (pick: ContainerMenuPick): void => {
+      setAllScope(pick.all)
+      setLocalContainer(pick.all ? undefined : { kind: pick.option.kind, slug: pick.option.slug })
       onFeatureUserSwitch?.() // 4.2：用户显式切换——装配侧释放聚焦覆盖（受控让位本地）
     },
     [onFeatureUserSwitch],
@@ -517,7 +576,7 @@ export function TasksTab({
 
   // 诊断两路之一（feature 子图）：重跑即重现零陈旧滞留 = 整体替换 result（新诊断新计时）
   const handleDiagnose = useCallback(async (): Promise<void> => {
-    if (resolved === undefined || resolved.kind !== 'feature') return
+    if (resolved === undefined || allScope) return
     try {
       const report = await makeClient().tasks.validateFeatureTasks({ projectId, featureSlug: resolved.slug })
       if (report.violations.length === 0) {
@@ -528,7 +587,7 @@ export function TasksTab({
     } catch (error) {
       setDiagResult(diagServiceError(error instanceof Error ? error.message : String(error)))
     }
-  }, [resolved, projectId, makeClient, docsRoot])
+  }, [resolved, allScope, projectId, makeClient, docsRoot])
   const handleDiagDismiss = useCallback((): void => {
     setDiagResult(undefined)
   }, [])
@@ -541,7 +600,7 @@ export function TasksTab({
   )
 
   const handleDispatch = useCallback(async (): Promise<void> => {
-    if (resolved === undefined) return
+    if (resolved === undefined || allScope) return
     await runDispatchRoute(
       { projectId, container: resolved, client: makeClient() },
       {
@@ -559,7 +618,7 @@ export function TasksTab({
         },
       },
     )
-  }, [resolved, projectId, makeClient, onOpenSession, onStartSession])
+  }, [resolved, allScope, projectId, makeClient, onOpenSession, onStartSession])
   const handleDispatchNoticeDismiss = useCallback((): void => {
     setDispatchNotice(undefined)
   }, [])
@@ -627,7 +686,8 @@ export function TasksTab({
       containersLoading={containers.cards === undefined && containers.error === undefined}
       onToggleStatus={onToggleStatus}
       onClearStatuses={onClearStatuses}
-      container={resolved}
+      container={allScope ? undefined : resolved}
+      allContainers={allScope && options.length > 0}
       view={view}
       containerMenuOpen={containerMenuOpen}
       viewMenuOpen={viewMenuOpen}

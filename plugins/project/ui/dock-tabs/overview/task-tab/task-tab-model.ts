@@ -117,13 +117,13 @@ export interface TaskContainerSel {
   readonly slug: string
 }
 
-/** 容器选中键（`feature:slug` / `proposal:slug`——成链降级等同名双轨可辨） */
+/** 容器选中键（= 容器 slug——容器统一为 spec，slug 即容器；kind 不入键） */
 export function containerKeyOf(sel: TaskContainerSel): string {
-  return `${sel.kind}:${sel.slug}`
+  return sel.slug
 }
 
 /**
- * 容器解析：显式注入优先（taskFocus 聚焦 / 用户本地切换）——命中选项集才生效；
+ * 容器解析：显式注入优先（taskFocus 聚焦 / 用户本地切换）——按 slug 命中选项集才生效；
  * 未命中/缺省回落首项（选项集 = slug 聚合稳定排序——缺省选中确定可复现）；
  * 零选项 = undefined（真真空容器空态——任务列表空唯一判据）。
  */
@@ -132,7 +132,7 @@ export function resolveContainer(
   explicit: TaskContainerSel | undefined,
 ): TaskContainerOption | undefined {
   if (explicit !== undefined) {
-    const hit = options.find((option) => option.kind === explicit.kind && option.slug === explicit.slug)
+    const hit = options.find((option) => option.slug === explicit.slug)
     if (hit !== undefined) return hit
   }
   return options[0]
@@ -143,28 +143,29 @@ export function containerMenuSelect(options: readonly TaskContainerOption[], id:
   return options.find((option) => containerKeyOf(option) === id)
 }
 
-/** 容器 pill chip 文案（feature = 状态 done/total——任务域 stats 单源；突击 = 突击提案·N 任务） */
+/** 容器 pill chip 文案（任务域 stats 单源 done/total；stats 在途回退聚合任务数） */
 export function containerPillChip(option: TaskContainerOption, statsDoneOverTotal: string | undefined): string {
-  if (option.kind === 'feature') {
-    return statsDoneOverTotal ?? `${option.taskCount} 任务`
-  }
-  return `突击提案 · ${option.taskCount} 任务`
+  return statsDoneOverTotal ?? `${option.taskCount} 任务`
 }
 
-/** 空态视图（三分派：容器总数 0 / 搜索无匹配 / 过滤组合空；有卡 = undefined 非空） */
+/** 空态视图（三分派：作用域总数 0 / 搜索无匹配 / 过滤组合空；有卡 = undefined 非空） */
 export interface TasksEmptyInput {
   readonly cards: readonly TaskCard[]
-  /** 容器任务总数（stats.total——0 = 本容器无任务） */
+  /** 作用域任务总数（stats.total——0 = 本作用域无任务） */
   readonly total: number
   readonly searchActive: boolean
   readonly search: string
   readonly hasStatusFilter: boolean
+  /** 全部容器作用域（空态文案不称「容器」） */
+  readonly allContainers?: boolean
 }
 
 export function tasksEmptyView(input: TasksEmptyInput): { readonly title: string; readonly description?: string } | undefined {
   if (input.cards.length > 0) return undefined
   if (input.total === 0) {
-    return { title: '本容器暂无任务', description: '任务由 add_task 产生' }
+    return input.allContainers === true
+      ? { title: '暂无任务', description: '任务由 add_task 产生' }
+      : { title: '本容器暂无任务', description: '任务由 add_task 产生' }
   }
   if (input.searchActive) {
     return { title: `无匹配「${input.search.trim()}」的任务` }

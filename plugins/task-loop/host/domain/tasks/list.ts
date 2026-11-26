@@ -53,7 +53,8 @@ function readTaskRows(db: Database.Database, projectKey: string, q: { slug?: str
   return db.prepare<unknown[], TaskStorageRow>(`SELECT ${TASK_COLUMNS} FROM task_tasks WHERE ${clauses.join(" AND ")}`).all(...params);
 }
 
-/** search 匹配键集（标题/自然键/复合键 + 类型/状态中英标签——标签常量 = contracts 单源） */
+/** search 匹配键集（标题/自然键/复合键 + 类型/状态中英标签 + 类型/状态原始码——标签与码
+ * 均为 contracts 单源；界面副行直出原始类型码，码不可搜即「可见词搜不到」） */
 export function taskSearchKeys(card: {
   slug: string;
   localId: string;
@@ -66,6 +67,8 @@ export function taskSearchKeys(card: {
     card.slug,
     card.localId,
     `${card.slug}/${card.localId}`,
+    card.taskType,
+    card.taskStatus,
     TASK_TYPE_LABELS[card.taskType].zh,
     TASK_TYPE_LABELS[card.taskType].en,
     TASK_STATUS_LABELS[card.taskStatus].zh,
