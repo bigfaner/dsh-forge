@@ -188,7 +188,7 @@ describe("S4 · 解析缝端到端（1.11 装配接线收口——真实事件�
   it("projectId→容器目录解析命中：blocked 叙述带详情行且事件子文件夹真实生成", async () => {
     home = mkdtempSync(join(tmpdir(), "forge-notify-narrator-"))
     const channel = recordingChannel()
-    // 装配缝同形：projectId → 容器目录（真仓 = faces.createProjectContainerDirs 的产物位）
+    // 装配缝同形：projectId → 容器目录（incident store resolveContainerDir 注入缝——生产由容器目录派生面供服）
     const narrator = createNarrator({
       channel,
       incidents: createIncidentStore({ resolveContainerDir: (projectId) => (projectId === "p-1" ? home : undefined) }),

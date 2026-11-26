@@ -128,10 +128,16 @@ describe('knowledge 目录键声明形状（satisfies Partial<ForgeDirs> 编译�
       dispose()
       return resolved
     }
-    const a = globalOf(tempDbFile())
-    const b = globalOf(tempDbFile())
-    expect(a['knowledge.global']).toBe(join('X:\\dsh-home', 'forge', 'knowledge', 'global'))
-    // 库文件路径已变（tempDbFile 两次独立 mkdtemp），global 解析不变
+    const expectedGlobal = join('X:\\dsh-home', 'forge', 'knowledge', 'global')
+    const dbA = tempDbFile()
+    const dbB = tempDbFile()
+    // 真对照前置：两组库文件路径确实不同（独立 mkdtemp——对照组成立的前提）
+    expect(dbA).not.toBe(dbB)
+    const a = globalOf(dbA)
+    const b = globalOf(dbB)
+    // 库文件路径已变而 global 解析不变（两组各自锚同一 forge.home 派生值）
+    expect(a['knowledge.global']).toBe(expectedGlobal)
+    expect(b['knowledge.global']).toBe(expectedGlobal)
     expect(b['knowledge.global']).toBe(a['knowledge.global'])
   })
 })

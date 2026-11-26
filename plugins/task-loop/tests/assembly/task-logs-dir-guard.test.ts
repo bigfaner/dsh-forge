@@ -11,7 +11,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { FORGE_BASE_DIR_ENTRIES, resolveForgeDirs } from "@dsh-forge/lib-path";
+import { FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
 import { assembleTaskLoopServices, createDefaultResolveWorkerContext } from "../../host/assembly/default-assembly.js";
+import taskLoopPlugin from "../../host/index.js";
 import { taskLogsDirOf } from "../../host/domain/tasks/task-logs-dir.js";
 import { renderWorkerContext } from "../../host/domain/tasks/worker-context.js";
 
@@ -92,6 +94,51 @@ describe("worker 规格目录经注册表 forge.spec_dir 解析（forge-dirs-uni
     const text = await resolve("proj-key", { slug: "feat-x" }, "3.0");
     // 注册表 forge.spec_dir = join(workspaceRoot/.forge/docs, 'specs', slug)——非 task-loop 自拼
     expect(text).toContain(`${join(ws, ".forge", "docs", "specs", "feat-x")}\\`);
+  });
+
+  it("正式装配入口行为级接线（host/index.ts）：claim 期间经反射拉 dirKeys.*（不手工注入被测缝——删 index.ts reflectOf 缺省注入即红）", async () => {
+    const wsEntry = mkdtempSync(join(tmpdir(), "task-loop-spec-entry-"));
+    mkdirSync(join(wsEntry, ".forge", "docs", "specs", "feat-x"), { recursive: true });
+    const tasksHome = mkdtempSync(join(tmpdir(), "task-loop-spec-entry-home-"));
+    const provided = new Map<string, unknown>();
+    // forge.projects 身份缝（生产 resolveWsPathAsync 消费面——getProject().wsPath 供 ws 根）
+    provided.set("forge.projects", () => ({ getProject: async () => ({ wsPath: wsEntry }) }));
+    const getSpy = vi.fn((name: string) => provided.get(name));
+    const ctx = {
+      reflect: {
+        provide: (name: string, service: unknown) => {
+          provided.set(name, service);
+          return () => provided.delete(name);
+        },
+      get: getSpy,
+      // 宿主 reflect.props 形（cordis 声明枚举面——resolveSpecDirViaRegistry 经 props 枚举
+      // dirKeys.* 声明方再逐个 get；声明方集合 = knowledge 插件在生产宿主 provide 的同键）
+      get props() {
+        return { "dirKeys.knowledge": {} };
+      },
+    },
+    emit: () => {},
+      tools: { register: () => () => {} },
+    };
+    const dispose = taskLoopPlugin(ctx as never, {
+      home: join(tmpdir(), "task-loop-spec-entry-db"),
+      dbFile: ":memory:",
+      tasksHome,
+      resolveWsPath: () => wsEntry,
+      diag: () => {},
+    });
+    const tasks = provided.get(FORGE_TASKS_SERVICE_KEY) as {
+      addTask(input: { projectKey: string; slug: string; title: string; type: string }): Promise<{ localId: string }>;
+      claimTask(input: { projectKey: string; sessionId: string; taskRef: { slug: string; localId: string } }): Promise<{ persona: string }>;
+    };
+    const added = await tasks.addTask({ projectKey: "proj-key", slug: "feat-x", title: "t", type: "coding-feature" });
+    const claimed = await tasks.claimTask({ projectKey: "proj-key", sessionId: "s-1", taskRef: { slug: "feat-x", localId: added.localId } });
+    // 拉缝行为锚：生产装配（index.ts reflectOf 缺省注入宿主 reflect 面）下 claim 现查反射 dirKeys.*——
+    // 删 index.ts 注入行（reflectOf 落 undefined）或改回自拼 = 本断言红
+    expect(getSpy).toHaveBeenCalledWith("dirKeys.knowledge");
+    // 值锚：worker persona 规格段 = 注册表 forge.spec_dir 解析值
+    expect(claimed.persona).toContain(`${join(wsEntry, ".forge", "docs", "specs", "feat-x")}\\`);
+    dispose();
   });
 
   it("resolveWorkerContext 期间经 reflect 拉 dirKeys.* 声明（spy 现查），规格目录 = 注册表解析值（非自拼——§2.3）", async () => {
