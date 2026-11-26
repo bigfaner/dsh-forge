@@ -6,7 +6,7 @@
 // 写路径（recruit/update）经 store/frontmatter 校验（parseExpertFile /
 // validateExpertUpdate）：必填字段、禁裸 {{、name 建档后不可改、撞名 fail-loud。
 
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import matter from "gray-matter";
 import { z } from "zod";
@@ -427,6 +427,8 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
       const content = serializeExpertMd(p, p.personaMd);
       const verdict = parseExpertFile(file, content);
       if (!verdict.ok) throw new ExpertToolError(`recruit_expert: ${verdict.reason}`);
+      // 首次使用时创建：目标 experts 目录（user/project 两分支同写点）不在盘时 recursive 建满父链。
+      mkdirSync(rootDir, { recursive: true });
       writeFileSync(file, content, "utf8");
       await registry.refresh(); // 所见即所得：返回时点快照已含新档案（不等 watch 异步失效）
       return recruitResult.parse({ name: p.name, path: file });

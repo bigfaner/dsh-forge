@@ -280,6 +280,32 @@ describe("recruit_expert — 写路径经 frontmatter 校验", () => {
     expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(false);
   });
 
+  it("目录不存在时首次 recruit（target=user）按需创建目录并落盘成功", async () => {
+    await refresh();
+    rmSync(userRoot, { recursive: true, force: true }); // 模拟 {forge.home}\experts 不在盘
+    const tools = makeTools();
+    const result = (await tools.recruit_expert!.execute(RECRUIT_ARGS)) as { path: string };
+    expect(result.path).toBe(join(userRoot, "code-reviewer.md"));
+    expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(true);
+  });
+
+  it("目录不存在时首次 recruit（target=project）按需创建目录并落盘成功", async () => {
+    await refresh();
+    const projectDir = join(dir, "experts-project-absent");
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        projectRoot: () => projectDir,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.recruit_expert!.execute({ ...RECRUIT_ARGS, target: "project" })) as {
+      path: string;
+    };
+    expect(result.path).toBe(join(projectDir, "code-reviewer.md"));
+    expect(existsSync(join(projectDir, "code-reviewer.md"))).toBe(true);
+  });
+
   it("target=project 但宿主 cwd 非项目根（projectRoot=null）→ fail-loud 引导回落 user", async () => {
     await refresh();
     const tools = Object.fromEntries(
