@@ -254,7 +254,8 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     workspaceDocsRoot: (ws) => workspaceDocsRoot(ws),
   });
   // AC7 结算报告回收钩子生产接线（bug 8dcbe845——哑钩子收口）：运行时目录 = 容器库目录
-  //（containerDirOf ≡ deriveTaskStoreDir 单源，dual-memory-seam 同目录性锚）+ logs/<slug>/
+  //（containerDirOf(projectKeyOfCwd(workspaceDir))——主检出归拢取法与事件链 sink.resolveDir、
+  // worker 锚点节同源单点，bug 245bacf3）+ logs/<slug>/
   //<localId>；specs 卷宗落点 = forgeDirOfWorkspace(wsPath)/specs/<slug>/issues/<localId>
   //（= <ws>/.forge/specs/<slug>/issues/<localId>——@dsh-forge/lib-path forgeDirOfWorkspace
   //.forge 根单源派生，与 Spec 文档 .forge/specs/{slug}/spec.md 同根；specs 替代 proposals，
@@ -274,7 +275,9 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
               return ws === "" ? null : { wsPath: ws };
             },
             deriveTaskStoreDir: async ({ workspaceDir }) => ({
-              dir: services.containerDirOf!(services.db.projectKeyOf(workspaceDir)),
+              // bug 245bacf3——主检出归拢取法单源（projectKeyOfCwd ≡ 事件链 sink.resolveDir
+              // 同一派生；不得绕开归拢直派 worktree 键，worktree 会话下与落盘目录分叉）
+              dir: services.containerDirOf!(services.projectKeyOfCwd(workspaceDir)),
             }),
           },
           ...(diagEmit !== undefined ? { diag: diagEmit } : {}),

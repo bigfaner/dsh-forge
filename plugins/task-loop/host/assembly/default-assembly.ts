@@ -10,6 +10,7 @@
 import { mkdirSync } from "node:fs";
 import {
   FORGE_BASE_DIR_ENTRIES,
+  dirKeyEntryShapeError,
   forgeDirOfWorkspace,
   resolveForgeDirs,
   resolveProjectKey,
@@ -85,13 +86,15 @@ type AssemblyDiag = (line: string, level?: DiagLevel) => void;
  * dirKeys.* 反射拉缝（枚举宿主 reflect props 约定名现取第三方声明，在场性每消费点现查、
  * 零缓存——AGENTS 1.6）+ lib/path 本体十条合并 → resolveForgeDirs 按 forge.spec_dir 解析。
  * 反射缺席/声明拉取失败/解析报错（缺依赖/撞名等）= undefined——锚点节规格段降级省略，
- * 其余锚不变（fail-soft 不阻载）。
+ * 其余锚不变（fail-soft 不阻载）。逐条形状校验 = lib/path dirKeyEntryShapeError 单源
+ *（与 project 侧同一套——bug 32532117）：坏形状跳过 + warn 诊断，forge.* 保留名拒绝。
  */
 function resolveSpecDirViaRegistry(input: {
   readonly reflectOf?: () => unknown;
   readonly dshHome: string;
   readonly workspaceRoot: string;
   readonly slug: string;
+  readonly diag?: AssemblyDiag;
 }): string | undefined {
   const declared: Partial<ForgeDirs> = {};
   try {
@@ -104,7 +107,16 @@ function resolveSpecDirViaRegistry(input: {
         try {
           const declaration = typeof reflect.get === "function" ? reflect.get(name) : reflect.props[name];
           if (typeof declaration === "object" && declaration !== null) {
-            Object.assign(declared, declaration as Partial<ForgeDirs>);
+            // 形状校验与 project 侧同源单份（lib/path dirKeyEntryShapeError——bug 32532117）：
+            // 坏形状跳过 + warn 诊断；forge.* 保留名拒绝（本体权威 = lib-path）
+            for (const [key, entry] of Object.entries(declaration as Record<string, unknown>)) {
+              const shapeError = dirKeyEntryShapeError(key, entry);
+              if (shapeError !== undefined) {
+                input.diag?.(`[task-loop] dirKeys 声明降级：${name} 条目 malformed 跳过（${shapeError}）`, "warn");
+                continue;
+              }
+              (declared as Record<string, unknown>)[key] = entry;
+            }
           }
         } catch {
           // 单声明拉取失败 = 跳过该声明方（声明缺席留痕语义，不炸锚点节）
@@ -165,6 +177,7 @@ export function createDefaultResolveWorkerContext(deps: {
             dshHome: deps.dshHome ?? "",
             workspaceRoot: ws,
             slug: source.slug,
+            ...(deps.diag !== undefined ? { diag: deps.diag } : {}),
           });
     return renderWorkerContext({
       forgeDir: ws === "" ? "" : forgeDirOfWorkspace(ws),
@@ -222,6 +235,12 @@ export interface TaskLoopAssembly {
    * 循环径不经 tool 执行点，prepare 的 cwd 缝不可达）。与 forgeEvents 同门装配/缺席。
    */
   readonly containerDirOf?: (projectKey: string) => string;
+  /**
+   * 会话 cwd → 主检出归拢 projectKey（forge-dirs-unification §2.6——projectKeyOfCwd 单源：
+   * 事件链 sink.resolveDir 与结算回收钩子 deriveTaskStoreDir 共消费同一归拢取法——bug
+   * 245bacf3：钩子不得绕开归拢直派 worktree 键。会话目录缺席 = fail-loud 拒解析）。
+   */
+  readonly projectKeyOfCwd: (workspaceDir: string) => string;
   /** 启动对账（reconcileInterrupted 全域——fail-soft 降级不阻载，诊断留痕）。 */
   readonly reconcile: () => Promise<void>;
   /** 库句柄关闭（插件 disposer 透传）。 */
@@ -317,6 +336,7 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     ...(config.resolveWsPathAsync !== undefined ? { resolveWsPathAsync: config.resolveWsPathAsync } : {}),
     ...(forgeEvents !== undefined ? { forgeEvents } : {}),
     ...(containerDirDefaultOf !== undefined ? { containerDirOf: containerDirDefaultOf } : {}),
+    projectKeyOfCwd,
     async reconcile(): Promise<void> {
       // 启动对账（装配时点进程内循环登记表恒空 = registryEmpty true）——全域键逐容器收敛
       // in_progress ∧ loop_sourced 中断态；失败 = 降级 warn 留痕（AGENTS §7 不静默）。

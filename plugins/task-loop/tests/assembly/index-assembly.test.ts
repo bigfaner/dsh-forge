@@ -17,7 +17,7 @@ import {
   resolveTaskLoopHome,
 } from "../../host/assembly/default-assembly.js";
 import { listDistinctProjectKeys } from "../../host/domain/tasks/query.js";
-import { deriveDirName } from "@dsh-forge/lib-path";
+import { deriveDirName, resolveProjectKey } from "@dsh-forge/lib-path";
 import { settleWorkerRun } from "../../host/dispatch-core/settle.js";
 import { assembleTaskLoopToolFamily } from "../../host/assembly/tool-family.js";
 import type { TaskSnapshot } from "../../host/domain/tasks/types.js";
@@ -429,6 +429,46 @@ describe("结算报告回收装配回归锚（bug a31b96a2——proposalId 门�
       services.dispose();
     }
   }, 30_000);
+});
+
+describe("回收钩子目录归拢（bug 245bacf3——worktree 会话同目录性）", () => {
+  it("worktree 会话：回收钩子定位目录 = 事件链落盘目录（主检出归拢取法单源，非未归拢 worktree 键）", async () => {
+    const mainRoot = tmpHome();
+    const wt = join(mainRoot, ".forge", "worktrees", "wt-1");
+    mkdirSync(wt, { recursive: true });
+    const tasksHome = tmpHome();
+    const PROJECT_KEY = deriveDirName(mainRoot);
+    const entries: Array<{ level?: string; message?: string }> = [];
+    const { ctx } = stubCtx();
+    (ctx as { emit?: unknown }).emit = (_event: string, payload: { level?: string; message?: string }) => {
+      entries.push(payload);
+    };
+    const services = assembleTaskLoopServices({
+      home: tmpHome(),
+      dbFile: ":memory:",
+      tasksHome,
+      resolveWsPath: (key) => (key === PROJECT_KEY ? wt : ""),
+      registryQuery: (cwd) => (cwd === wt ? mainRoot : undefined),
+    })!;
+    const family = assembleTaskLoopToolFamily({ services, ctx, diag: () => {} });
+    try {
+      expect(family.reportRecovery).not.toBeUndefined();
+      const rolledKey = resolveProjectKey(wt, { registryQuery: (cwd) => (cwd === wt ? mainRoot : undefined) }).key;
+      const runtimeDir = await family.reportRecovery!.resolveRuntimeTaskDir({
+        projectId: PROJECT_KEY,
+        slug: "alpha",
+        localId: "1.0",
+      });
+      // 事件链落盘目录 = resolveDir 同一归拢取法（default-assembly projectKeyOfCwd）→ 同容器目录
+      const eventChainDir = join(tasksHome, rolledKey, "logs", "alpha", "1.0");
+      expect(runtimeDir).toBe(eventChainDir);
+      // 防假绿：未归拢的 worktree 键目录 ≠ 归拢目录
+      expect(runtimeDir).not.toBe(join(tasksHome, deriveDirName(wt), "logs", "alpha", "1.0"));
+    } finally {
+      family.disposeLoop();
+      services.dispose();
+    }
+  });
 });
 
 describe("生产装配 resolveWsPath 接缝（bug 9b3c9a9b——零 config 注入、只给 tasksHome）", () => {
