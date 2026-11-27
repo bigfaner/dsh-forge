@@ -51,7 +51,7 @@ ac_results: [
 工作区测试策略文档（结算时探测常规约定目录）在场则遵从其细则，缺席不破环——本节正文自含结算判据，不硬编码任何仓内路径；项目特化由拆解期解析进任务简报。以下只谈结算口径，与工作区策略一致、不分叉：
 
 - **旅程/契约任务（`test-gen-journeys` / `test-gen-contracts`）**：
-  - `ac_results` 的 `evidence` 引契约路径（`proposals/<slug>/testing/<旅程名>/` 下的 journey.md 与 contracts/）；
+  - `ac_results` 的 `evidence` 引契约路径（所属容器目录的 `testing/<旅程名>/` 下的 journey.md 与 contracts/；容器目录经 forge_resolve_path 解析——spec 容器 `dest=spec.dir`（入参 slug），feature 容器为文档根下 `features/<slug>/`——不硬编码仓内路径）；
   - 结算证据须列**覆盖的明确行为清单**并逐条标注**分层正当性**——每条旅程回答「为何值得一条 E2E、单元测试为何覆盖不了」（价值标准把门：空契约/恒真断言/单元测试可覆盖的旅程不可 success）。
 - **脚本任务（`test-gen-scripts`）**：
   - `evidence` 引落盘的 spec 路径；每条断言须带**断言-契约溯源标注**（来源契约条目 id）；

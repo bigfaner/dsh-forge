@@ -56,7 +56,7 @@ skills: []
 
 ### 拆解期锁定与修订口径
 
-- 契约在**拆解期锁定**为行为基准版本，产物随提案 `proposals/<slug>/testing/<旅程名>/contracts/` 落盘。
+- 契约在**拆解期锁定**为行为基准版本，产物随所属容器目录的 `testing/<旅程名>/contracts/` 落盘（spec 容器目录经 forge_resolve_path（dest=spec.dir，入参 slug）解析）。
 - 实现期**语义修订只经 fix/disc 链**承载并留痕；禁止任何 worker 在 coding 任务内顺手改契约文档。
 - 锚值回填（`last_anchor_sync`）不属语义修订，由脚本任务在核实后承担。
 
