@@ -91,8 +91,12 @@ export function parseForgeDirsArgs(args: unknown): ForgeDirsToolArgs {
   return dirKey === undefined ? {} : { dirKey };
 }
 
+// output.schema 受官方 tools.register 的 JSON Schema 方言约束（@deepseek-ai/dsh-tools
+// assertSupportedJsonSchema）：type 只能是单个类型字符串（可空用 oneOf），object 节点必须显式
+// 声明布尔 additionalProperties——违反即注册被拒、工具静默缺席（契约测试 forge-paths.schema.test.ts 钉住）。
 const FORGE_DIRS_OUTPUT_SCHEMA = {
   type: "object",
+  additionalProperties: false,
   properties: {
     ok: { type: "boolean", description: "true = directory listing resolved." },
     paths: {
@@ -101,9 +105,15 @@ const FORGE_DIRS_OUTPUT_SCHEMA = {
         "Every declared directory key, in declaration order. Parameterless entries carry the resolved absolute dir; parameterized entries carry dir = null plus the params they require — resolve those with forge_resolve_path.",
       items: {
         type: "object",
+        additionalProperties: false,
         properties: {
           dirKey: { type: "string", description: "Directory key (declared by its owning plugin)." },
-          dir: { type: ["string", "null"], description: "Resolved absolute directory path; null for parameterized entries." },
+          dir: {
+            oneOf: [
+              { type: "string", description: "Resolved absolute directory path (parameterless entries)." },
+              { type: "null", description: "Parameterized entries carry null — resolve them with forge_resolve_path." },
+            ],
+          },
           params: { type: "array", items: { type: "string" }, description: "Required parameter names — present only on parameterized entries." },
           description: { type: "string", description: "One-line semantics, same source as the registry entry." },
         },
@@ -197,13 +207,15 @@ export function parseForgeResolvePathArgs(args: unknown): ForgeResolvePathToolAr
 
 const FORGE_RESOLVE_PATH_OUTPUT_SCHEMA = {
   type: "object",
+  additionalProperties: false,
   properties: {
     ok: { type: "boolean", description: "true = parameterized dir resolved." },
     dest: { type: "string", description: "The directory key that was resolved." },
     params: {
       type: "object",
+      // 动态键（目的地声明的参数名）——方言要求 additionalProperties 为布尔，取 true
+      additionalProperties: true,
       description: "The parameters this destination requires, with the values used (extra args are not echoed).",
-      additionalProperties: { type: "string" },
     },
     dir: { type: "string", description: "Resolved absolute path of the directory key (params come from the entry declaration, not caller choice)." },
   },
