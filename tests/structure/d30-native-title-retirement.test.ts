@@ -121,7 +121,6 @@ const PROJECT_UI = [
   join(ROOT, 'plugins/project/ui/bug-refs'),
   join(ROOT, 'plugins/project/ui/dock-tabs'),
   join(ROOT, 'plugins/project/ui/event-node'),
-  join(ROOT, 'plugins/project/ui/remote-entry'),
   join(ROOT, 'plugins/project/ui/sidebar'),
   join(ROOT, 'plugins/knowledge/ui'),
 ]
@@ -175,14 +174,14 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   //（feature-tab 位已随 feature 子 tab 退役出清单）
   // 2.8 减一位：docs/index.tsx DocsTab 悬空占位 EmptyState 随自绘预览退役（文件删除）
   EmptyState: 15,
-  // 对话框标题（Modal 头部标题文本）×11：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
+  // 对话框标题（Modal 头部标题文本）×9：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
   // + D45 停止并归档确认）/AddProjectFlow +
-  // remote/ForgeRemoteEntry×2（手机远程 dialog 头 + 1.107 PSK 轮换确认弹窗）+
   // knowledge-review-ui 面×2（KnowledgeToolbar 批量裁决确认 + EntryDrawer SC-G 驳回确认
   // ——知识详情承载改自持可拖移 dialog，自绘头行非 Modal 标题 prop）+
   // stage④ 1.8 召回 tab×3（负反馈说明 + read 快照 + 就地详情——ui/card-design.md 官方
   // Modal 形态；详情就地化后 onOpenEntry 桥缝退役）
-  Modal: 11,
+  //（remote/ForgeRemoteEntry×2 位随远程入口死组件整改删除出清单）
+  Modal: 9,
   // stage④ 1.8：read 快照 dialog 组件标题文本 prop（RecallTab 就地快照呈现——标题文本
   // 非悬浮提示位；Modal 承载计入上行）
   RecallSnapshotDialog: 1,
@@ -196,9 +195,9 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   // 1.13 迁移退役：ForgeEventEntries 折叠组随迁 task-loop——DisclosureRow title 位余 ForgeWorkspacePanel 项目行 1 位
   DisclosureRow: 1,
   // 抽屉分块折叠头标题 ×2（任务内容/时间线——drawer/index）
+  //（RemoteDialogHead ×1 位——remote/ForgeRemoteEntry 自绘 dialog 头——随远程入口死组件
+  // 整改删除出清单）
   DrawerSection: 2,
-  // 自绘 dialog 头标题 prop（fix-19 ⑥——标题文本非悬浮提示位）
-  RemoteDialogHead: 1,
 }
 
 /** D36 ⑤ + D37 Tooltip 退役锚（采纳锚位 1:1 对位迁移——零 Tooltip 在场；27 walk 位恒数：

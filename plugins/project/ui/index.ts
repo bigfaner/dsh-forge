@@ -154,9 +154,9 @@ export * from './bug-refs/dock-tab-mirrors.js'
 export * from './rpc.js'
 
 // ── 手机远程状态模型（1.40 自壳侧迁入）：底行入口注册面已退役（用户裁决 2026-11-22——
-// 官方宿主底行已有同形手机入口，产品行 'dswf-remote' 不再注册；组件族留 remote-entry/
-// 供未来重锚，host 侧 forge:remote/* 缝零改动）──
-export * from './remote-entry/remote-status.js'
+// 官方宿主底行已有同形手机入口，产品行 'dswf-remote' 不再注册；组件族随整改批删除，
+// remote-status 纯模型保留；host 侧 forge:remote/* 缝零改动）──
+export * from './remote-status.js'
 
 // ── 对话面注册面（1.13 迁移退役：dispatchTask 工具行 + 事件折叠组三段迁 @dsh-forge/task-loop
 //    （ui/conversation-views-face.ts + ui/event-node/ + ui/dispatch-tool-row/）；本包只余

@@ -4,8 +4,8 @@
 // 审计面（机械断言）：
 //   1. tunnel/ 模块在场；外部交互（fetch/spawn）零散逸——全经 TunnelDeps 注入缝；
 //   2. /pair/verify 路由注册在场 + 限速常量单源（pairing.ts 唯一定义，child.ts 零复制）；
-//   3. 互联网 tab 非 disabled 占位（testid 在场 + onSelect 缝）；
-//   4. 隧道相关测试零 skip/todo/only。
+//   3. 隧道相关测试零 skip/todo/only。（原 pin 18-3 互联网 tab UI 面断言随远程入口死组件
+//      整改退役——组件已删，断言对象不复存在。）
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -81,7 +81,7 @@ describe('pin 18-2 /pair/verify 路由 + 限速常量单源', () => {
   })
 
   it('限速常量零二处定义（PIN_MAX/RATE/LOCKOUT 的 `=` 赋值只出现在 pairing.ts）', () => {
-    const other = hostSrc('boot/child.ts') + readFileSync(join(ROOT, 'plugins/project/ui/remote-entry/ForgeRemoteEntry.tsx'), 'utf8')
+    const other = hostSrc('boot/child.ts')
     for (const name of ['PIN_MAX_FAILURES', 'PIN_RATE_WINDOW_MS', 'PIN_LOCKOUT_MS', 'PIN_TTL_MS']) {
       expect(other, `${name} 在 pairing.ts 外重复定义`).not.toMatch(
         new RegExp(`(const|let|var)\\s+${name}\\s*=`),
@@ -99,25 +99,6 @@ describe('pin 18-2 /pair/verify 路由 + 限速常量单源', () => {
     expect(src, '限速状态机不得在装配面复制（failures/lockUntil 私有于 pinIssuer）').not.toMatch(
       /\blockUntil\b|\bfailures\b/,
     )
-  })
-})
-
-describe('pin 18-3 互联网 tab 非 disabled 占位（testid 在场 + 受控缝）', () => {
-  it('tab-internet testid 在场且带 onSelect 缝（1.4 真实启用——非静态占位）', () => {
-    const src = readFileSync(join(ROOT, 'plugins/project/ui/remote-entry/ForgeRemoteEntry.tsx'), 'utf8')
-    expect(src).toContain('data-testid="dswf-remote-tab-internet"')
-    expect(src).toMatch(/data-testid="dswf-remote-tab-internet"[\s\S]{0,400}?onSelect\('internet'\)/)
-    expect(src).toContain("onSelect('lan')")
-  })
-
-  it('双 tab 按钮块零静态 disabled 占位（fix-7 占位不得回潮；fix-18④ 受控防重入锁 = disabled={disabled === true} 在场为合法）', () => {
-    const src = readFileSync(join(ROOT, 'plugins/project/ui/remote-entry/ForgeRemoteEntry.tsx'), 'utf8')
-    const tabs = src.match(/<div className="dswf-remote-tabs"[\s\S]*?<\/div>\s*\n\s*\)/)
-    expect(tabs, 'dswf-remote-tabs 块未找到').toBeTruthy()
-    const block = tabs?.[0] ?? ''
-    // 受控锁（表达式绑定）在场 = fix-18④ 防重入缝；静态裸 disabled（无值占位）= 回潮即红
-    expect(block).toMatch(/disabled=\{disabled === true\}/)
-    expect(block).not.toMatch(/disabled(?!\s*=)/)
   })
 })
 

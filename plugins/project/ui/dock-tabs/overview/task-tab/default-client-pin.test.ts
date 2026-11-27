@@ -170,8 +170,6 @@ describe('任务子 tab 数据装载缺省 client 工厂（生产默认值——
     const LEGIT: Record<string, Partial<Record<string, number>>> = {
       // bugs.list 本地缝回落（preload 优先、Typert fail-soft 兜底）——恰 1 处消费（import+调用）
       'dock-tabs/overview/overview-client.ts': { preloadTransport: 2 },
-      // remote-entry Harness 桥缝真身（Electron 宿主 relaunch/safe-mode/showLog 三缝——非 RPC 传输面）
-      'remote-entry/ForgeRemoteEntry.tsx': { dshForge: 3 },
     }
     /** 定义文件整文件豁免（preloadTransport / dshForge 真身唯一合法落点） */
     const DEFINITION_FILES = new Set(['dock-tabs/rpc-channels.ts'])
