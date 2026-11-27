@@ -14,10 +14,11 @@ keywords:
   - dsh-web
   - 同版本异码
 id: bundle-host-dsh-typert-protocol-ctx-root-dsh-web
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-26T08:26:23.762Z'
 updated: '2026-11-26T08:26:23.762Z'
 type: pitfalls
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 ## 结论
 

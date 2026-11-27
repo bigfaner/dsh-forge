@@ -13,11 +13,12 @@ keywords:
   - dispatch
   - to-tasks
 id: type-fail-loud-unknown-task-type
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-24T03:26:06.398Z'
 updated: '2026-11-24T03:26:06.398Z'
 type: pitfalls
 supersedes: '2026-11-23T17:08:35.028Z'
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 # 同族复发
 

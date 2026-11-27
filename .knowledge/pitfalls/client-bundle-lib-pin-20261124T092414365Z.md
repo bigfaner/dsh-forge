@@ -12,13 +12,14 @@ keywords:
   - lib-util
   - self-contained
 id: client-bundle-lib-pin
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-24T09:24:14.365Z'
 updated: '2026-11-24T09:24:14.365Z'
 type: pitfalls
 procedure: true
 candidate_of: packaging-pipeline
 slug_hint: client-bundle-no-node-deps-mirror-triplet
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 # client bundle 禁入 lib 混合入口——纯函数件走「lib 正本 + ui 逐字内联副本 + 镜像 pin」三件套
 

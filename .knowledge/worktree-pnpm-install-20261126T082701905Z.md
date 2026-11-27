@@ -13,11 +13,12 @@ keywords:
   - 依赖污染
   - ' Already up to date'
 id: worktree-pnpm-install
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-26T08:27:01.905Z'
 updated: '2026-11-26T08:27:01.905Z'
 type: pitfalls
 candidate_of: forge
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 ## 结论
 

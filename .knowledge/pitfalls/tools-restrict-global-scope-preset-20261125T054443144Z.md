@@ -14,13 +14,14 @@ keywords:
   - preset-row
   - expert-squad
 id: tools-restrict-global-scope-preset
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-25T05:44:43.144Z'
 updated: '2026-11-25T05:44:43.144Z'
 type: pitfalls
 procedure: true
 supersedes: '2026-11-24T09:23:51.070Z'
 slug_hint: tools-restrict-global-mask-unknown-name-throws
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 # tools.restrict 的掩码边界——只掩 viewing scope 祖先层，own 层豁免
 

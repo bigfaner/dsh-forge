@@ -17,11 +17,12 @@ keywords:
   - 静默缺席
   - 契约测试
 id: tools-register-output-schema
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-27T16:03:50.619Z'
 updated: '2026-11-27T16:03:50.619Z'
 type: pitfalls
 candidate_of: forge-pluginization-architecture
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 # 官方 tools.register 会拒收不合方言的 output.schema——工具静默缺席
 

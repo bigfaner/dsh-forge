@@ -12,11 +12,12 @@ keywords:
   - 注销器
   - 登记
 id: cordis-ctx-effect-dispose
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-26T08:26:23.714Z'
 updated: '2026-11-26T08:26:23.714Z'
 type: pitfalls
 candidate_of: quote-plugins-architecture
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 ## 结论
 

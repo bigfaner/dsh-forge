@@ -12,11 +12,12 @@ keywords:
   - 形状校验
   - 运行期注册表
 id: declaration-merging-dirkeys
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-26T08:26:23.750Z'
 updated: '2026-11-26T08:26:23.750Z'
 type: lessons
 procedure: true
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 ## 结论
 

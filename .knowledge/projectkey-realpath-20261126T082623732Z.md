@@ -13,11 +13,12 @@ keywords:
   - 核对清单
   - 口径修复
 id: projectkey-realpath
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-26T08:26:23.732Z'
 updated: '2026-11-26T08:26:23.732Z'
 type: lessons
 procedure: true
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 ## 结论
 

@@ -16,12 +16,13 @@ keywords:
   - lib-path
   - probes
 id: specs-proposals-forge
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-27T02:22:03.276Z'
 updated: '2026-11-27T02:22:03.276Z'
 type: conventions
 procedure: true
 supersedes: '2026-11-25T15:45:28.777Z'
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 # 约定
 

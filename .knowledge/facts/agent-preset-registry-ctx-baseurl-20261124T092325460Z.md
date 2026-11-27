@@ -11,13 +11,14 @@ keywords:
   - plugin-mount
   - dsh-forge
 id: agent-preset-registry-ctx-baseurl
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-24T09:23:25.460Z'
 updated: '2026-11-24T09:23:25.460Z'
 type: facts
 procedure: true
 candidate_of: dirkey
 slug_hint: preset-row-resolution-base-registry-ctx
+confirmed_at: '2026-11-27T16:09:03.019Z'
 ---
 # 官方 agent preset 子树行解析基座 = registry 服务 ctx（非声明插件）
 
