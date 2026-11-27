@@ -94,6 +94,9 @@ tmp/
 .forge/docs/**/*/walkthrough/*
 .vitest/
 .forge/docs/probes/
+# 探针与 spike：.forge 正式分区（目录键 project.probes_dir / project.spikes_dir）——探索产物不入 git
+.forge/probes/
+.forge/spikes/
 .forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/app.js
 .forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/data.js
 .forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/index.html
