@@ -116,7 +116,7 @@ export interface DispatchPromptInput {
   /**
    * 续跑指针（worker-exec-evidence-replay 1.3：`logs/<slug>/<localId>/resume.md` 相对路径，
    * 调用方领取瞬间探测证据位注入；缺席 = 首跑零段。在场即重入语境：简报注入 `<resume>`
-   * 续跑规则段（路径引用变量 `{forge.project_logs_dir}`——值由任务目录锚点节承载）。
+   * 续跑规则段（路径引用变量 `{task_loop.runtime_dir}`——值由任务目录锚点节承载）。
    */
   evidencePointer?: string
   /**
@@ -147,12 +147,12 @@ export const RESUME_POINTER_FILE = 'resume.md'
 
 /**
  * `<resume>` 续跑规则段（重入命中整段注入简报——键值行之后、`<goal>` 之前；规则本体
- * 自洽，worker 不回翻系统面即可执行）。路径只引用变量 `{forge.project_logs_dir}`
+ * 自洽，worker 不回翻系统面即可执行）。路径只引用变量 `{task_loop.runtime_dir}`
  * （绝对路径由 agent 提示词任务目录锚点节承载——简报零日志路径）。落盘侧对应实现：
  * plugin-forge notify/incident-log（NNN 前缀 max+1 自增，永不覆盖）。
  */
 export const RESUME_SECTION = `<resume>
-续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {forge.task_logs_dir}/resume.md（效度域内的进度台账——其效度戳已与本轮效度域比对一致，可复用）。
+续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {task_loop.task_dir}/resume.md（效度域内的进度台账——其效度戳已与本轮效度域比对一致，可复用）。
 1. 首步读取该文件：内容为「已完成 / 进行中 / 待办」三项；将未完成项转入 todo_write 后继续执行，不得重做已完成部分。
 2. 同目录下按编号命名的子文件夹（如 001-login-fail/）为此前各轮产物：先核对内容，再决定沿用或重跑；未核对不得覆盖。
 3. 遇到阻塞性问题时覆盖写入该文件，仅保留最新状态。
@@ -165,7 +165,7 @@ export const RESUME_SECTION = `<resume>
  * 1.16 二次 blocked 短路：陈旧证据复用上抛，本段封死该通道）。
  */
 export const RESUME_STALE_SECTION = `<resume>
-续跑说明：本任务存在历史进度文件 {forge.task_logs_dir}/resume.md，但其效度戳与当前效度域（HEAD commit / 基线签名）比对不一致——证据已跨效度域，不得复用。
+续跑说明：本任务存在历史进度文件 {task_loop.task_dir}/resume.md，但其效度戳与当前效度域（HEAD commit / 基线签名）比对不一致——证据已跨效度域，不得复用。
 1. 该文件降级为历史记录（只叙不判）：可读以了解此前做过什么，但其「已完成」声明一律不可信，不得据此跳过任何步骤或虚报进度。
 2. 同目录编号子文件夹中的证据类产物（测试输出、截图、票据）一律重跑重取；代码结论须以当前树现读为准。
 3. 从零建立 todo_write 待办并全量执行；结算前覆盖写入该文件，仅保留最新状态。

@@ -490,7 +490,7 @@ describe('1.3 <resume> 续跑规则段（重入派发简报整段注入——规
     expect(prompt).toContain('<resume>')
     expect(prompt).toContain('</resume>')
     // 路径零绝对值——只引用变量（值由 agent 提示词任务目录锚点节承载）
-    expect(prompt).toContain('{forge.task_logs_dir}/resume.md')
+    expect(prompt).toContain('{task_loop.task_dir}/resume.md')
     expect(prompt).not.toContain('logs/m2-pipeline/2.2/resume.md')
     // 四条规则锚
     expect(prompt).toContain('本任务已有部分进度')

@@ -14,7 +14,7 @@
 // 文案语言裁决（2026-10-12）：除术语（todo_write/submitTask/TDD/SPEC-CODE SCAN/AC/
 // result=blocked/COVERAGE=maintain/AGENTS.md 等）外一律中文；行文统一祈使句分点风格。
 // 目标导向强制：领取后第一步用 todo_write 建待办清单（§7 单源），全 completed 才
-// submitTask。临时产物（含 e2e/验收证据票据）统一落盘 forge.project_logs_dir（任务目录
+// submitTask。临时产物（含 e2e/验收证据票据）统一落盘 task_loop.runtime_dir（任务目录
 // 锚点节承载值——worker-context.ts 按轮追加不覆盖）。
 // 任务元数据不入 persona：类型/复杂度由任务级简报 TYPE 键承载，persona 只
 // 出现路由**结果**（门禁裁剪事实）。结算面从简：只指 submit-task 技能，
@@ -46,7 +46,7 @@ export const ANTI_CHURN_ANCHORS: readonly string[] = [
  * 恒定核心段（①执行骨架 ②高效执行×6 ③失败处理 ④产物落盘 ⑤如实上报 ⑥提交纪律
  * ⑦歧义处置 + AC 逐项核查不变量）——段序即执行动线：规划 → 执行 → 异常 → 证据 →
  * 上报 → 收口。通用纪律——无代码/测试/文档域内容（域专属语义由档案 personaMd 承载）。
- * 产物/续跑路径只引用花括号变量 {forge.task_logs_dir}/{issue-key}
+ * 产物/续跑路径只引用花括号变量 {task_loop.task_dir}/{issue-key}
  * （值由任务目录锚点节承载——worker-context.ts claim 期渲染，同类型系统面逐字稳定）。
  */
 export const PERSONA_CORE_SECTION = `## 核心纪律
@@ -67,7 +67,7 @@ ${ANTI_CHURN_ANCHORS.map((a, i) => `${i + 1}. ${a}`).join('\n')}
 - 不反复尝试同一失败方案。
 
 ### 4. 产物落盘
-- 一切跑批与证据产物统一写入 {forge.task_logs_dir}/{issue-key}/。{issue-key} = 本轮序号-事件关键词（如 001-login-fail/）；按轮追加、永不覆盖——失败轮记录在盘可考。
+- 一切跑批与证据产物统一写入 {task_loop.task_dir}/{issue-key}/。{issue-key} = 本轮序号-事件关键词（如 001-login-fail/）；按轮追加、永不覆盖——失败轮记录在盘可考。
 - 截图（含视觉验收证据）；长命令输出与探针工件；e2e/验收测试的证据票据（trace、error-context、失败摘录）。
 - 结构约定：一个任务一个文件夹，一个事件一个子文件夹。
 - 先落盘再继续：确保证据在手，避免失败后从头复跑。
@@ -76,7 +76,7 @@ ${ANTI_CHURN_ANCHORS.map((a, i) => `${i + 1}. ${a}`).join('\n')}
 - 按实测结果报告，绝不伪造门禁或测试证据；门禁布尔值零妥协：false 就是 false。
 - 报告实际发生了什么；每条 AC 判定必须给出证据。
 - 对话与 summary 中只携带子文件夹路径，不粘贴长输出。
-- 断点续跑约束：当遇到阻塞性问题时，按固定次序三步——①先把过质量门的完成部分 git commit（消息带任务键，提交规范按 AGENTS.md，不含过程文件）；②再把「已完成（含 commit hash）／进行中／待办」覆盖写入 {forge.task_logs_dir}/resume.md，仅保留最新状态（commit hash 供接手 worker 从 hash diff 续跑不重做）；③然后以 result=blocked 结算，附 commit hash 与剩余范围描述。
+- 断点续跑约束：当遇到阻塞性问题时，按固定次序三步——①先把过质量门的完成部分 git commit（消息带任务键，提交规范按 AGENTS.md，不含过程文件）；②再把「已完成（含 commit hash）／进行中／待办」覆盖写入 {task_loop.task_dir}/resume.md，仅保留最新状态（commit hash 供接手 worker 从 hash diff 续跑不重做）；③然后以 result=blocked 结算，附 commit hash 与剩余范围描述。
 
 ### 6. 提交纪律
 - 门禁全部通过、AC 逐项核查完成后，才用 submit-task 技能（submitTask）结算。

@@ -39,7 +39,7 @@ describe('composePersona 程序段（×20 类型 ×3 复杂度）', () => {
         }
         expect(persona).toContain('AC 逐项核查不变量')
         // 产物/续跑路径只引用花括号变量（值由任务目录锚点节承载——persona 零绝对路径）
-        expect(persona).toContain('{forge.task_logs_dir}')
+        expect(persona).toContain('{task_loop.task_dir}')
         expect(persona).toContain('## 质量门禁')
       }
     }

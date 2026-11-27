@@ -882,7 +882,7 @@ describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 �
     const r = await claim({ projectId: P(), sessionId: 's-new', adopt: { slug: 'f', localId: '1.1' } })
     expect(r.reclaimed).toBe(true)
     expect(r.dispatchPrompt).toContain('<resume>')
-    expect(r.dispatchPrompt).toContain('{forge.task_logs_dir}/resume.md')
+    expect(r.dispatchPrompt).toContain('{task_loop.task_dir}/resume.md')
     expect(r.dispatchPrompt).toContain('不得重做已完成部分')
     expect(seen).toEqual([{ slug: 'f', localId: '1.1', checkoutRoot: undefined }]) // 领取瞬间取数——探测按目标行进行
   })
@@ -955,7 +955,7 @@ describe('persona 领取瞬间追加：任务目录锚点节（worker 独享，�
         '  工作区仓库根——代码、测试与配置所在；检索与改动均在此树内。',
         'feature_dir: Z:\\ws\\.forge\\docs\\features\\f/',
         '  特性文档目录——prd/（需求与用户故事）、design/（技术设计）、test/（测试规划）。',
-        'forge.project_logs_dir: C:\\ws-home\\logs\\f\\1.1/',
+        'task_loop.runtime_dir: C:\\ws-home\\logs\\f\\1.1/',
         '  任务运行产物根——按编号命名的各轮证据子文件夹与 resume.md 进度文件所在。',
       ].join('\n'),
     )
