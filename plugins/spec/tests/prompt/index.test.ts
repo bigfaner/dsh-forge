@@ -79,6 +79,22 @@ describe('renderSpecPipelineSection——唯一模式（四模板删远征两份
     expect(MAIN_RENDER).not.toContain('features/{slug}/')
   })
 
+  it('探索指引（探针与 Spike）：先检索后探索 + 触发情形 + 产物落点按键 + 必备结论文件；主/子会话双模板同在', () => {
+    for (const v of [MAIN_RENDER, renderSpecPipelineSection({ subagent: true })]) {
+      expect(v).toContain('探索（探针与 Spike）')
+      expect(v).toContain('`knowledge_search` 已有结论即复用')
+      // 触发情形
+      expect(v).toContain('复现缺陷、判别根因、核验外部或官方机械的承重假设')
+      expect(v).toContain('对接外部系统、引入第三方库或新机制之前')
+      // 产物落点 = 目录键（不写死绝对/相对路径）
+      expect(v).toContain('`project.probes_dir`')
+      expect(v).toContain('`project.spikes_dir`')
+      expect(v).toContain('顶层必须有 `.md` 结论')
+      expect(v).toContain('必须有 `README.md`')
+      expect(v).toContain('两目录均不入 git')
+    }
+  });
+
   it('唯一模式：双模板面零残留（远征/突击词汇、mode 键、分模式标题禁现）', () => {
     for (const v of [MAIN_RENDER, renderSpecPipelineSection({ subagent: true })]) {
       expect(v).not.toContain('远征')
