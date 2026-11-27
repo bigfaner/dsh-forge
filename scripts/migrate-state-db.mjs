@@ -1104,14 +1104,29 @@ function volumeRootOf(p) {
   const r = resolve(p)
   return r.startsWith('\\\\') ? r.split(sep).slice(0, 4).join(sep) : r.slice(0, r.indexOf(sep) + 1)
 }
-function walkFiles(root, rel = '') {
+/**
+ * 递归列出普通文件（rel 正斜杠相对路径 + 字节数）。skipDir(relPath) 命中的条目整棵不入结果
+ * （先于类型判断——目标已失效的目录链接在 Dirent 里不是目录，同样按路径名跳过）。
+ * 子目录结果逐个追加——`push(...子结果)` 在十万级文件的目录上超出单次调用实参上限（RangeError）。
+ */
+function walkFiles(root, rel = '', skipDir = null) {
   const out = []
   for (const e of readdirSync(join(root, rel), { withFileTypes: true })) {
     const relPath = rel === '' ? e.name : `${rel}/${e.name}`
-    if (e.isDirectory()) out.push(...walkFiles(root, relPath))
-    else out.push({ rel: relPath, size: statSync(join(root, ...relPath.split('/'))).size })
+    if (skipDir !== null && skipDir(relPath)) continue
+    if (e.isDirectory()) {
+      for (const f of walkFiles(root, relPath, skipDir)) out.push(f)
+    } else out.push({ rel: relPath, size: statSync(join(root, ...relPath.split('/'))).size })
   }
   return out
+}
+/**
+ * ③ 段不随迁的目录：logs 祖先目录下的 node_modules（历次验证遗留的依赖树——非状态数据，
+ * 含大量 pnpm 目录链接；原目录改名保留，不丢）。
+ */
+function isSkippedWorkspaceDir(relPath) {
+  const segments = relPath.split('/')
+  return segments[segments.length - 1] === 'node_modules' && segments.includes('logs')
 }
 function sha256File(file) {
   return createHash('sha256').update(readFileSync(file)).digest('hex')
@@ -1142,9 +1157,14 @@ function relocateWorkspaces(args, db, nowIso) {
     throw new Error(`同卷断言失败：staged ${volStaged} ≠ 目标 ${volTarget}`)
   }
 
-  // staged copy + manifest（文件数/字节）
+  // staged copy + manifest（文件数/字节；logs 下 node_modules 不随迁——跳过项记入 manifest）
+  const skippedDirs = []
   const manifest = []
-  for (const f of walkFiles(args.workspacesFrom)) {
+  for (const f of walkFiles(args.workspacesFrom, '', (relPath) => {
+    if (!isSkippedWorkspaceDir(relPath)) return false
+    skippedDirs.push(relPath)
+    return true
+  })) {
     const src = join(args.workspacesFrom, ...f.rel.split('/'))
     const dst = join(staged, ...f.rel.split('/'))
     mkdirSync(dirname(dst), { recursive: true })
@@ -1179,10 +1199,14 @@ function relocateWorkspaces(args, db, nowIso) {
     keptOriginal: keepOriginal,
     fileCount: manifest.length,
     totalBytes: sourceBytes,
+    skippedDirs,
     files: manifest,
   }, null, 2), 'utf8')
   db.prepare(`INSERT OR REPLACE INTO project_migrate_state (step, fingerprint, done_at, summary_json) VALUES (?, ?, ?, ?)`)
-    .run(step, `${manifest.length}:${sourceBytes}`, nowIso, JSON.stringify({ from: args.workspacesFrom, to: args.workspacesTo, keptOriginal: keepOriginal }))
+    .run(step, `${manifest.length}:${sourceBytes}`, nowIso, JSON.stringify({ from: args.workspacesFrom, to: args.workspacesTo, keptOriginal: keepOriginal, skippedDirs }))
+  if (skippedDirs.length > 0) {
+    emitDiag('warn', 'project-migrate', `forge-workspaces 搬迁跳过 ${skippedDirs.length} 个 logs 下 node_modules 目录（未随迁，原目录改名保留）：${skippedDirs.join('; ')}`)
+  }
   emitDiag('info', 'project-migrate', `forge-workspaces 搬迁完成：${manifest.length} 文件 / ${sourceBytes} 字节，${args.workspacesFrom} → ${args.workspacesTo}（原目录改名保留 ${keepOriginal}）`)
   return { skipped: false, fileCount: manifest.length, totalBytes: sourceBytes, keptOriginal: keepOriginal }
 }
