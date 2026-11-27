@@ -63,8 +63,6 @@
             name: '@deepseek-ai/dsh-skill-filesystem'
             config:
               customSkillDirs:
-                - "{{plugin-forge-skills}}"
-                - "{{plugin-forge-spec-skills}}"
                 - "{{expert-squad-skills}}"
                 - "{{knowledge-skills}}"
           - id: tool-skill
@@ -160,11 +158,3 @@
           - id: tool-plugin-market
             name: '@deepseek-ai/dsh-plugin-market/tools'
             disabled: true
-          - id: plugin-forge
-            name: '@dsh-forge/plugin-forge'
-            config:
-              bindingsFile: "{{plugin-forge-bindings}}"
-          - id: plugin-forge-spec
-            name: '@dsh-forge/plugin-forge-spec'
-            config:
-              bindingsFile: "{{plugin-forge-bindings}}"

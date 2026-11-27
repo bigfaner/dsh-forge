@@ -67,11 +67,6 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
 /** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件。
  *  export = 精确集钉死断言（installer-pipeline 声明集 pin——评审 1.17 Minor-1）消费面 */
 export const STAGING_EXTRAS = {
-  // plugin-forge 内置专家档案已按插件域重组迁出（expert-builtin-redistribution——随包
-  // root 注册归各归属插件 host，plugin-forge 零内置档案）；skills/ = 约定目录占位
-  // （plugin-spec 1.9 技能全数迁出；README 占位保持目录声明面）
-  'plugin-forge': { files: ['skills'], keyFiles: [] },
-  'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
   // expert-squad（零内置专家——expert-builtin-redistribution 删除随包 experts/ 档案，
   // c6f8f1dc；内置层归各归属插件 host registerRoot）+ 技能面 skills/roundtable
   // （customSkillDirs[squad] 挂载源——fix-1 迁入）

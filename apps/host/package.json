@@ -51,8 +51,6 @@
     "@dsh-forge/markdown-kit": "workspace:*",
     "@dsh-forge/mobile-bridge": "workspace:*",
     "@dsh-forge/path-key": "workspace:*",
-    "@dsh-forge/plugin-forge": "workspace:*",
-    "@dsh-forge/plugin-forge-spec": "workspace:*",
     "@dsh-forge/project": "workspace:*",
     "@dsh-forge/spec": "workspace:*",
     "@dsh-forge/task-loop": "workspace:*",
