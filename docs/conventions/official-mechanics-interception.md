@@ -45,4 +45,4 @@ flowchart TB
 ## 交付要求
 
 - 介入类改动必须在任务/提案中列出：所用缝、核销证据、失败路径语义（fail-open/closed）、非介入面影响审计；
-- 官方包升级后，依赖清单中的承重假设逐条重核销（探针基线留 `.forge/docs/probes/`）。
+- 官方包升级后，依赖清单中的承重假设逐条重核销（探针基线留 `.forge/probes/`——目录键 `project.probes_dir`）。

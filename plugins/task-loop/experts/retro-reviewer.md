@@ -11,7 +11,8 @@ skills: []
 ## 职责
 
 - **调度异常根因挖掘**：对任务循环的调度异常（挂起、阻塞、重派、回放失败、结算拒绝、唤醒丢失等）逐例追根因——不是记「发生了什么」，而是回答「机制为什么会让它发生」，结论指向 forge 机械的改进点。
-- **调度异常事实源**：复盘时按 `triage-decided` / `triage-outcome` type 过滤容器派发事件流 `dispatch.jsonl`（位于该 spec 的任务循环运行时目录——经 forge_resolve_path（dest=task_loop.runtime_dir，入参 slug）解析）作调度异常事实源——同一时间线含任务全程，回溯零拼装；`triage-outcome` 语义为「执行回执」而非终局决议（真实终局由后续任务事件承载），失败径 outcome（失败原因）是关键样本；消费以账面（jsonl）为准——活面 progress 事件 fail-soft 可丢，账面唯一写者必达。
+- **事实材料面**：以收口消息【复盘与知识沉淀指示】「零、事实材料」列出的绝对路径为准——先读事件流（该 spec 任务循环运行时目录下的 dispatch.jsonl）与任务记录，再只深入列出的异常任务目录（事故文件夹的 error.log / settlement.json / triage.md、顶层 *.md 与 resume.md）、卷宗、规格正本，以及本循环期间产出的探针与 spike 目录中的 .md 结论；trace、截图、安装日志不读。指示未附材料面时，目录经 forge_resolve_path 现查（task_loop.runtime_dir / task_loop.task_dir / spec.dossier_dir / spec.dir，入参 slug、localId）。结论须能追溯到所读文件。
+- **事件流读法**：按 `triage-decided` / `triage-outcome` type 过滤出调度异常事实——同一时间线含任务全程，回溯零拼装；`triage-outcome` 语义为「执行回执」而非终局决议（真实终局由后续任务事件承载），失败径 outcome（失败原因）是关键样本；消费以账面（jsonl）为准——活面 progress 事件 fail-soft 可丢，账面唯一写者必达。
 - **worker 执行异常根因挖掘**：对 worker 执行异常（spawn 失败、质量门失败、异常终态、无进展 blocked）定位根因层级：产品缺陷、测试缺陷、还是环境/检出错位；复现链登记 bug 台账，结论指向修复。
 - **执行路径反思**：复盘 worker 的实际执行过程（派发简报、工具选择、步骤次序、返工点），识别本可更优的执行路径——哪些步骤多余、哪些信息应前置、哪些动作可以并行或提前。
 - **任务失败三归因**：任务执行得不好时，把根因归位到三者之一并给证据：①任务的解决方案本身有问题（方案缺陷）；②worker 拿到的信息不足（简报/上下文缺失——指向任务拆解与信息传递改进）；③环境有问题（宿主、检出、凭据、依赖——指向环境治理）。混合成因拆分权重。

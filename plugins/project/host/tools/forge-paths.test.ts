@@ -89,7 +89,16 @@ describe("forge_dirs（目录键发现面——全部声明键逐行）", () => 
     const tool = createForgeDirsTool(faceOf([knowledgeDeclaration]), RESOLVER);
     const value = (await tool.execute({}, EXEC)) as { ok: true; paths: { dirKey: string; dir: string }[] };
     expect(value.ok).toBe(true);
-    expect(value.paths.map((p) => p.dirKey)).toEqual(["forge.home", "project.runtime_dir", "project.docs_dir", "project.tmp_dir", "project.worktrees_dir", "knowledge.root"]);
+    expect(value.paths.map((p) => p.dirKey)).toEqual([
+      "forge.home",
+      "project.runtime_dir",
+      "project.docs_dir",
+      "project.probes_dir",
+      "project.spikes_dir",
+      "project.tmp_dir",
+      "project.worktrees_dir",
+      "knowledge.root",
+    ]);
     const byKey = new Map(value.paths.map((p) => [p.dirKey, p.dir]));
     expect(byKey.get("forge.home")).toBe("X:\\home\\forge");
     expect(byKey.get("project.runtime_dir")).toContain("X:\\home\\forge\\projects\\");
@@ -115,7 +124,7 @@ describe("forge_dirs（目录键发现面——全部声明键逐行）", () => 
       description: "文档位置",
     });
     const text = tool.output.render({}, value).map((c) => c.text).join("\n");
-    expect(text).toContain("✓ 5 dir(s) + 2 parameterized");
+    expect(text).toContain("✓ 7 dir(s) + 2 parameterized");
     expect(text).toContain("- spec.dir: (requires: slug) → forge_resolve_path — 规格目录");
     expect(text).toContain("- spec.dossier_dir: (requires: slug, localId) → forge_resolve_path — 任务卷宗目录");
     expect(text).not.toContain("null");
@@ -124,7 +133,7 @@ describe("forge_dirs（目录键发现面——全部声明键逐行）", () => 
   it("无带参键时渲染条数不出现 parameterized 段", async () => {
     const tool = createForgeDirsTool(faceOf(), RESOLVER);
     const text = tool.output.render({}, await tool.execute({}, EXEC)).map((c) => c.text).join("\n");
-    expect(text.split("\n")[0]).toBe("✓ 5 dir(s)");
+    expect(text.split("\n")[0]).toBe("✓ 7 dir(s)");
   });
 
   it("单 dirKey 查询：仅返回该条（description 取条目同源）；带参键返回值留空行", async () => {

@@ -96,6 +96,6 @@ describe('DirFactsPort provider（forge.dirFacts seam——常驻 + 最小兜底
   it('audit：分区由键表派生（缺失分区/越位目录与 init 同源）', () => {
     const port = createDirFactsPort(depsOf(BUILTIN))
     const diff = port.audit('Z:\\ws')
-    expect(diff.missingPartitions).toEqual(['.forge/docs', '.forge/tmp', '.forge/worktrees'])
+    expect(diff.missingPartitions).toEqual(['.forge/docs', '.forge/probes', '.forge/spikes', '.forge/tmp', '.forge/worktrees'])
   })
 })

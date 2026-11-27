@@ -20,6 +20,16 @@ export const PROJECT_DIR_ENTRIES = {
     deps: ["workspaceRoot"],
     resolve: (deps: { workspaceRoot: string }): string => join(deps.workspaceRoot, ".forge", "docs"),
   },
+  "project.probes_dir": {
+    description: "探针目录（一次性验证脚本与取证产物，按 <bugId> 分子目录）",
+    deps: ["workspaceRoot"],
+    resolve: (deps: { workspaceRoot: string }): string => join(deps.workspaceRoot, ".forge", "probes"),
+  },
+  "project.spikes_dir": {
+    description: "Spike 目录（探索验证的结论与脚本，按 <slug> 分子目录）",
+    deps: ["workspaceRoot"],
+    resolve: (deps: { workspaceRoot: string }): string => join(deps.workspaceRoot, ".forge", "spikes"),
+  },
   "project.tmp_dir": {
     description: "工作区临时区",
     deps: ["workspaceRoot"],
@@ -33,7 +43,14 @@ export const PROJECT_DIR_ENTRIES = {
 } as const satisfies Partial<ForgeDirs>;
 
 /** project.* 键清单（登记序） */
-export const PROJECT_DIR_KEYS = ["project.runtime_dir", "project.docs_dir", "project.tmp_dir", "project.worktrees_dir"] as const;
+export const PROJECT_DIR_KEYS = [
+  "project.runtime_dir",
+  "project.docs_dir",
+  "project.probes_dir",
+  "project.spikes_dir",
+  "project.tmp_dir",
+  "project.worktrees_dir",
+] as const;
 
 /** project 声明（汇总工具合并序第二位——基座之后、dirKeys.* 拉取声明之前） */
 export const PROJECT_DIRS_DECLARATION = {

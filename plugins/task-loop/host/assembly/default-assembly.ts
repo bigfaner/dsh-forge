@@ -8,6 +8,7 @@
 //      缺席（单装缺省形态）= 整链零装配零行为变化（AC4 回归锚）。
 // home 缺席 / db 打开失败 = 整体降级缺席（返回 undefined——零 provide，fail-soft 诊断留痕不阻载）。
 import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import {
   FORGE_BASE_DIR_ENTRIES,
   FORGE_DIR_SOURCE_KEYS,
@@ -26,6 +27,7 @@ import { createTasksService, type TasksService } from "../domain/tasks/service.j
 import { createForgeEventBus } from "../events/bus.js";
 import { attachForgeLogListener } from "../events/log-listener.js";
 import { createForgeEventSink, type ForgeEventSink } from "../events/sink.js";
+import { scanRetroMaterials, type RetroMaterials } from "../loop/retro-materials.js";
 import type { DiagLevel } from "@dsh-forge/lib-diag";
 import type { TaskEvents, TasksVerbDeps } from "../domain/tasks/types.js";
 
@@ -286,6 +288,13 @@ export interface TaskLoopAssembly {
    */
   readonly containerDirOf?: (projectKey: string) => string;
   /**
+   * 收口复盘事实材料面（循环收口指示段「零、事实材料」数据源）：运行时目录 =
+   * {containerDirOf(projectKey)}/{slug}（与 task_loop.runtime_dir 同径——派生单点 taskLogsDirOf
+   * 的上级），规格目录经注册表 spec.dir 解析（resolveSpecDirViaRegistry——未声明/读失败 =
+   * 卷宗与规格正本不列）；读盘扫描归 loop/retro-materials.ts。与 containerDirOf 同门装配/缺席。
+   */
+  readonly retroMaterialsOf?: (projectKey: string, slug: string) => Promise<RetroMaterials | undefined>;
+  /**
    * 会话 cwd → 主检出归拢 projectKey（forge-dirs-unification §2.6——projectKeyOfCwd 单源：
    * 事件链 sink.resolveDir 与结算回收钩子 deriveTaskStoreDir 共消费同一归拢取法——bug
    * 245bacf3：钩子不得绕开归拢直派 worktree 键。会话目录缺席 = fail-loud 拒解析）。
@@ -377,6 +386,30 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     forgeEvents = sink;
     diag?.("[task-loop] forge 事件日志链装配（tasksHome 注入）——{slug}/dispatch.jsonl 落盘启用", "info");
   }
+  // 收口复盘事实材料面（与 containerDirOf 同门）：运行时目录 + 规格目录 → 读盘扫描
+  const retroMaterialsOf =
+    containerDirDefaultOf !== undefined
+      ? async (projectKey: string, slug: string): Promise<RetroMaterials> => {
+          // ws 根解析：异步缝在场即优先（生产 forge.projects 接线），缺席退同步缝——worker 锚点节同口径
+          const ws = config.resolveWsPathAsync !== undefined ? ((await config.resolveWsPathAsync(projectKey)) ?? "") : resolveWsPath(projectKey);
+          const specDir =
+            ws === ""
+              ? undefined
+              : resolveSpecDirViaRegistry({
+                  reflectOf: config.reflectOf,
+                  dshHome: home,
+                  workspaceRoot: ws,
+                  slug,
+                  ...(diag !== undefined ? { diag } : {}),
+                });
+          return scanRetroMaterials({
+            runtimeDir: join(containerDirDefaultOf(projectKey), slug),
+            slug,
+            ...(specDir !== undefined ? { specDir } : {}),
+            ...(ws === "" ? {} : { workspaceRoot: ws }),
+          });
+        }
+      : undefined;
   return {
     db,
     tasks,
@@ -386,6 +419,7 @@ export function assembleTaskLoopServices(config: TaskLoopAssemblyConfig = {}, di
     ...(config.resolveWsPathAsync !== undefined ? { resolveWsPathAsync: config.resolveWsPathAsync } : {}),
     ...(forgeEvents !== undefined ? { forgeEvents } : {}),
     ...(containerDirDefaultOf !== undefined ? { containerDirOf: containerDirDefaultOf } : {}),
+    ...(retroMaterialsOf !== undefined ? { retroMaterialsOf } : {}),
     projectKeyOfCwd,
     async reconcile(): Promise<void> {
       // 启动对账（装配时点进程内循环登记表恒空 = registryEmpty true）——全域键逐容器收敛

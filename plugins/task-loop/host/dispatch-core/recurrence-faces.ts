@@ -3,14 +3,14 @@
 //
 // · findRecurrenceCandidates = bugs 域服务只读聚合的结构化消费（四域互禁不破——链构建与
 //   scope 口径归 bugs 域层定义）；
-// · modelingReportPresent = probes 卷路径派生（结算旁挂回收同源 docs 根），探测
-//   .forge/docs/probes/<bugId>/ 顶层（关联锚 = recurrence 链成员 bugId——命中链任一成员
+// · modelingReportPresent = probes 卷路径派生，探测 .forge/probes/<bugId>/ 顶层
+//   （目录键 project.probes_dir 同径；关联锚 = recurrence 链成员 bugId——命中链任一成员
 //   存在报告 .md 即 true；非递归——incident 等子目录不扫，零清单配置）。proposals/
 //   <slug>/issues/<localId>/ 轨已随 proposal 域退役（proposal-domain-retirement 机检——
 //   .forge/ 下无 proposals 目录）。探测面只读、三态：probes 卷可读但无报告 = false
 //   （真报告不在场，T3 拦截保守成立）；readdirSync 抛错（IO 故障）= 'error'
 //   （机制失能——消费侧 claim 放行 + warn 留痕，用户裁决：fail-soft 统一向「放行 + 可观测」）。
-//   路径派生经注入面消费（workspaceDocsRoot——运行期取值走 deps 注入；
+//   路径派生经注入面消费（probesDirOf——运行期取值走 deps 注入；
 //   派生缝缺席 = 机制失能同 'error' 形态——消费侧放行 + warn 留痕，不静默恒拦）。
 //
 // T2 疑似同族警示（submitTask）/ T3 同缝拦截（claim 守卫）/ triage 两信号 / add-fix
@@ -40,8 +40,8 @@ export interface RecurrenceFacesDeps {
   readonly bugs: RecurrenceBugsFace
   /** projectId → 项目工作区根（settle.ts resolveDir 同源 projects face 派生——缺席 = 探测 false） */
   readonly resolveProjectDir: (projectId: string) => string | undefined
-  /** docs 根派生注入（workspaceDocsRoot 同形——<ws>/.forge/docs；缺席 = 机制失能） */
-  readonly workspaceDocsRoot?: (ws: string) => string;
+  /** probes 根派生注入（目录键 project.probes_dir 同形——<ws>/.forge/probes；缺席 = 机制失能） */
+  readonly probesDirOf?: (ws: string) => string;
 }
 
 export interface RecurrenceFaces {
@@ -70,12 +70,12 @@ function modelingReportPresentOf(deps: RecurrenceFacesDeps): ModelingReportPrese
     try {
       const ws = deps.resolveProjectDir(input.projectId);
       if (ws === undefined || ws === "") return false;
-      if (deps.workspaceDocsRoot === undefined) {
+      if (deps.probesDirOf === undefined) {
         return "error"; // 路径派生缝缺席 = 机制失能（消费侧 claim 放行 + warn 留痕，不恒拦）
       }
-      const docsRoot = deps.workspaceDocsRoot(ws);
+      const probesRoot = deps.probesDirOf(ws);
       for (const bugId of input.bugIds) {
-        const probesDir = join(docsRoot, "probes", bugId);
+        const probesDir = join(probesRoot, bugId);
         if (existsSync(probesDir) && hasTopLevelReport(probesDir)) return true;
       }
       return false; // probes 卷可读且无报告 .md = 真「报告不在场」（拦截保守成立）

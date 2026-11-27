@@ -10,9 +10,11 @@ const ROOT = join(import.meta.dirname, "..", "..", "..", "..");
 const doc = readFileSync(join(ROOT, "plugins", "spec", "skills", "investigate-bug", "SKILL.md"), "utf8");
 
 describe("investigate-bug SKILL.md 落卷落点契约（probes 单轨）", () => {
-  it("落卷锚 = probes/<bugId>/ 单轨：含 forgeDirs 解析锚 .forge/docs/probes/<bugId>/", () => {
-    expect(doc).toContain(".forge/docs/probes/<bugId>/");
+  it("落卷锚 = .forge/probes/<bugId>/ 单轨：含 forge_dirs 目录键 project.probes_dir；旧落点 .forge/docs/probes 零残留", () => {
+    expect(doc).toContain(".forge/probes/<bugId>/");
     expect(doc).toContain("probes/<bugId>/");
+    expect(doc).toContain("project.probes_dir");
+    expect(doc).not.toContain("docs/probes");
   });
 
   it("旧双轨落点 token 零残留：不含 proposals/、issues/<localId>、「双轨」", () => {

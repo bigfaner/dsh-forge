@@ -278,7 +278,7 @@ describe("拒绝载荷形态（rejectionFailureOf——列表式 + top-5 限幅 
     expect(escalate!).toContain("b-root → b-r1 → b-r2"); // 链串摘要豁免保留
     const release = dto.violations.find((v) => v.startsWith("release:"));
     expect(release).toBeDefined();
-    expect(release!).toContain(".forge/docs/probes/<bugId>/"); // probes 单轨（proposal 域已退役）
+    expect(release!).toContain(".forge/probes/<bugId>/"); // probes 单轨（proposal 域已退役）
     expect(release!).not.toContain("proposals/");
     expect(release!).toContain(".md");
     expect(release!).toContain("重新 claim");

@@ -19,7 +19,7 @@ import {
 const createdDirs: string[] = []
 
 /** 键表派生分区（docs/tmp/worktrees——与 init/workspacePartitionsOf 同源基准） */
-const PARTITIONS = ['.forge/docs', '.forge/tmp', '.forge/worktrees'] as const
+const PARTITIONS = ['.forge/docs', '.forge/probes', '.forge/spikes', '.forge/tmp', '.forge/worktrees'] as const
 
 function workspaceOf(label: string): string {
   const dir = mkdtempSync(join(tmpdir(), `forge-dir-audit-${label}-`))

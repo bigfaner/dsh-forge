@@ -49,6 +49,7 @@ import { emitForgeDiag, type ForgeDiagEmitFace } from "../faces.js";
 import type { Narrator } from "../notify/index.js";
 import { renderNarrative, summarizeReason } from "../notify/index.js";
 import { renderEndOfLoop, type InjectionPayload } from "./injection.js";
+import { renderRetroMaterials, type RetroMaterials } from "./retro-materials.js";
 import type { ForgeProgressCounts, ForgeProgressEventData, ForgeProgressScenario, ProgressAppendFace } from "../progress/index.js";
 import { FORGE_PROGRESS_SCENARIO, FORGE_PROGRESS_SCENARIOS } from "../progress/index.js";
 import { createLoopRegistry, type LoopInFlight, type LoopInstanceId, type LoopRecord, type LoopRegistry, type LoopSourceRef, type SuspendedPayload } from "./registry.js";
@@ -291,13 +292,20 @@ export function flywheelMetricsOf(rows: readonly LoopCheckpointRowLite[], thresh
  * settings 键）、多 agent 交叉核验要求、learn 技能调用要求与 retro-done 收口标记要求；
  * 越阈时硬门要求完成复盘沉淀与 specs 卷宗登记（bug fe8d5cb5——提案口径已退役）。纯函数（指标由 rows 直算），零状态。
  */
-export function renderRetroInstruction(slug: string, rows: readonly LoopCheckpointRowLite[], threshold: number): string {
+export function renderRetroInstruction(
+  slug: string,
+  rows: readonly LoopCheckpointRowLite[],
+  threshold: number,
+  materials?: RetroMaterials,
+): string {
   const m = flywheelMetricsOf(rows, threshold);
   const pct = (x: number): string => `${(x * 100).toFixed(1)}%`;
   return [
     "【复盘与知识沉淀指示】（交叉评审与结论处理完成后执行——不派生任务卡，由你直接完成；评审发现的判例/翻车点须进入本次沉淀）",
     "执行顺序硬门：「一、复盘」三项全部完成后，方可进行「二、知识沉淀」；知识沉淀完成后，方可落「三、收口标记」——不得跳步、不得并行。",
     "",
+    // 零、事实材料（运行时目录扫描产物——真实绝对路径；材料面缺席 = 本节省略，复盘照常）
+    ...(materials !== undefined ? [...renderRetroMaterials(materials), ""] : []),
     "一、复盘（三项依次完成，全部完成后才进入下一步）：",
     `1. 飞轮硬指标解读（检查点标记快照直算）：一次通过率 ${m.passRate === 1 ? "1（尚无 merged 帧，基线即当前）" : pct(m.passRate)}；` +
       `返工增量比 ${pct(m.reworkRatio)}；修正波次 ${String(m.waveCount)}；fix 密度 ${pct(m.fixDensity)}。`,
@@ -393,7 +401,21 @@ async function retroSectionOf(loop: ActiveLoop): Promise<string> {
   try {
     const rows = await checkpoints.listCheckpoints({ projectKey: loop.scope.projectId, slug: loop.record.source.slug });
     const threshold = await reviewWaveThresholdOf(loop);
-    return renderRetroInstruction(loop.record.source.slug, rows, threshold);
+    // 事实材料面（运行时目录扫描——零节真实路径；缝缺席/扫描失败 = 材料节缺席，复盘照常）
+    let materials: RetroMaterials | undefined;
+    if (loop.deps.retroMaterialsOf !== undefined) {
+      try {
+        materials = await loop.deps.retroMaterialsOf(loop.scope.projectId, loop.record.source.slug);
+      } catch (cause) {
+        emitLoopDiag(
+          loop,
+          "warn",
+          "loop-retro",
+          `forge loop retro materials scan failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+        );
+      }
+    }
+    return renderRetroInstruction(loop.record.source.slug, rows, threshold, materials);
   } catch (cause) {
     emitLoopDiag(
       loop,
@@ -482,6 +504,12 @@ export interface LoopDriverDeps {
    * 缺席 = 零直记零行为变化）
    */
   readonly containerDirOf?: (projectId: string) => string;
+  /**
+   * 收口复盘事实材料面（可选——机械③指示段「零、事实材料」数据源：循环收口时点扫描本
+   * 容器运行时目录，给出事件流/异常任务目录/卷宗/规格正本的绝对路径。装配面注入
+   * （default-assembly：containerDirOf + spec.dir 注册表解析 + 读盘）；缺席 = 材料节缺席）。
+   */
+  readonly retroMaterialsOf?: (projectId: string, slug: string) => Promise<RetroMaterials | undefined>;
   /**
    * 循环进度 append 面（可选——'forge/progress' 会话事件流内交错；缺席/链断 =
    * 零发射 fail-soft，循环正确性零依赖。非模型面：不进模型上下文、零回合唤醒。）

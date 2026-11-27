@@ -14,7 +14,7 @@ description: 用户点名触发的 bug 深挖工作流——定锚 → 物料侦
 <HARD-RULE>
 
 1. 方案文档不落卷 = 深挖未完成（Step 3 强制）。
-2. 落点单轨：`probes/<bugId>/`（bugId = 复发链上任一成员；proposal 域已退役）。
+2. 落点单轨：探针目录下 `<bugId>/`（目录经 forge_dirs 查 `project.probes_dir`，即 `.forge/probes/<bugId>/`；bugId = 复发链上任一成员）。
 3. 主会话不自行消化全链——Step 1-2 委派 bug-investigator，大上下文消耗隔离在子会话。
 
 </HARD-RULE>
@@ -48,7 +48,7 @@ description: 用户点名触发的 bug 深挖工作流——定锚 → 物料侦
 - **修复策略**：分层对应——根治级（承重假设核销 + 脆弱面评估）与症状级（兜底），显式取舍；
 - **回归面**：修复波及的测试与守卫清单。
 
-<HARD-RULE> 落卷（必答）：方案文档写成即落卷——落 `probes/<bugId>/` 顶层（.md——bugId = 复发链上任一成员；目录经 forge_dirs 查询 docs 根解析 `.forge/docs/probes/<bugId>/`）。落卷后深挖才算完成；后续该链派 fix 任务时，T3 拦截的建模报告探测与 T4 anchor 预检都认这一处卷宗路径（报告落 probes 顶层即解除）。 </HARD-RULE>
+<HARD-RULE> 落卷（必答）：方案文档写成即落卷——落 `.forge/probes/<bugId>/` 顶层（.md——bugId = 复发链上任一成员；目录经 forge_dirs 查 `project.probes_dir`）。落卷后深挖才算完成；后续该链派 fix 任务时，T3 拦截的建模报告探测与 T4 anchor 预检都认这一处卷宗路径（报告落 probes 顶层即解除）。 </HARD-RULE>
 
 **产出摘要**（回呈用户）：
 

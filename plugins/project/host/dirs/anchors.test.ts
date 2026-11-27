@@ -52,7 +52,7 @@ describe('内置声明（lib/path 基座 + project 条目）', () => {
     const declarations = mergeDeclarations([knowledgeDeclaration])
     const resolved = resolveForgeDirs(declarations, SOURCES)
     // 无参条目 = 基座键 + project 四键 + 第三方键（project 条目内置并入，不走 dirKeys.* 拉取）
-    const parameterless = ['forge.home', 'project.runtime_dir', 'project.docs_dir', 'project.tmp_dir', 'project.worktrees_dir', 'knowledge.root']
+    const parameterless = ['forge.home', 'project.runtime_dir', 'project.docs_dir', 'project.probes_dir', 'project.spikes_dir', 'project.tmp_dir', 'project.worktrees_dir', 'knowledge.root']
     expect(Object.keys(resolved)).toEqual(parameterless)
     const projectRuntime = `${SOURCES.dshHome}\\forge\\projects\\${deriveDirName(SOURCES.projectRoot)}`
     expect(resolved['forge.home']).toBe('X:\\dsh-home\\forge')
@@ -166,7 +166,7 @@ describe('工作区分区派生（workspacePartitionsOf——init/audit 键表�
   it('.forge 下的键入分区（声明序）；docs/tmp/worktrees 三员；工作区外键不入（knowledge.root）', () => {
     const onDiag = diagSpy()
     const partitions = workspacePartitionsOf(WS, mergeDeclarations([knowledgeDeclaration]), onDiag)
-    expect(partitions).toEqual(['.forge/docs', '.forge/tmp', '.forge/worktrees'])
+    expect(partitions).toEqual(['.forge/docs', '.forge/probes', '.forge/spikes', '.forge/tmp', '.forge/worktrees'])
     expect(onDiag.calls).toHaveLength(0)
   })
 
@@ -177,7 +177,7 @@ describe('工作区分区派生（workspacePartitionsOf——init/audit 键表�
     }
     const onDiag = diagSpy()
     const partitions = workspacePartitionsOf(WS, [FORGE_DIRS_BASE_DECLARATION, broken], onDiag)
-    expect(partitions).toEqual(['.forge/docs', '.forge/tmp', '.forge/worktrees'])
+    expect(partitions).toEqual(['.forge/docs', '.forge/probes', '.forge/spikes', '.forge/tmp', '.forge/worktrees'])
     expect(onDiag.messages().some((m) => m.includes('解析降级'))).toBe(true)
   })
 })

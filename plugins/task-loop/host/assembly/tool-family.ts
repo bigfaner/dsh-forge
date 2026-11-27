@@ -24,7 +24,7 @@ import { createInProcessDriverSpawn } from "../spawn/in-process-driver.js";
 import { defaultWorkerTreeGuard } from "../spawn/job-tree.js";
 import { createTriageHook } from "../triage/triage.js";
 import { createRecurrenceFaces, type RecurrenceBugsFace } from "../dispatch-core/recurrence-faces.js";
-import { forgeDirOfWorkspace, resolveProjectKey as rollupProjectKey, workspaceDocsRoot } from "@dsh-forge/lib-path";
+import { forgeDirOfWorkspace, resolveProjectKey as rollupProjectKey } from "@dsh-forge/lib-path";
 import { join } from "node:path";
 import { taskLogsDirOf } from "../domain/tasks/task-logs-dir.js";
 import { createSettleReportRecovery, type LastSettlementView, type SettleReportRecoveryDeps } from "../dispatch-core/settle.js";
@@ -239,8 +239,9 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
   const bugsPresent = (): boolean => bugsFaceOf() !== undefined;
   // recurrence 两 face 生产接线（loop-recurrence-hardening §2.2 T2/T3——bug 0db72bcb 同族：
   // plugin-forge→task-loop 迁移时 createRecurrenceFaces 未迁，两 face 恒缺席 → T2 警示 /
-  // T3 同缝拦截静默关停。建模报告探测 = probes 单轨（proposal 域已退役），docs 根派生 =
-  // lib-path workspaceDocsRoot（算法单源）；projectKey → ws 根 = services.resolveWsPath
+  // T3 同缝拦截静默关停。建模报告探测 = probes 单轨（proposal 域已退役），probes 根派生 =
+  // <ws>/.forge/probes（目录键 project.probes_dir 同径——forgeDirOfWorkspace 单源 + probes 段）；
+  // projectKey → ws 根 = services.resolveWsPath
   //（装配期定稿，与 git 查找同源——空串 = 探测 false，机制惰性不拦）。
   const recurrenceFaces = createRecurrenceFaces({
     bugs: {
@@ -251,7 +252,7 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
       const dir = services.resolveWsPath(projectId);
       return dir === "" ? undefined : dir;
     },
-    workspaceDocsRoot: (ws) => workspaceDocsRoot(ws),
+    probesDirOf: (ws) => join(forgeDirOfWorkspace(ws), "probes"),
   });
   // AC7 结算报告回收钩子生产接线（bug 8dcbe845——哑钩子收口）：运行时目录 = 容器库目录
   //（containerDirOf(projectKeyOfCwd(workspaceDir))——主检出归拢取法与事件链 sink.resolveDir、
@@ -341,6 +342,8 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     // 同注——循环里程碑/台账经 bus→监听器落盘 {slug}/dispatch.jsonl；缺席 = 零透传零行为变化。
     ...(services.forgeEvents !== undefined ? { events: services.forgeEvents } : {}),
     ...(services.forgeEvents !== undefined && services.containerDirOf !== undefined ? { containerDirOf: services.containerDirOf } : {}),
+    // 收口复盘事实材料面（机械③指示段「零、事实材料」——运行时目录扫描；缺席 = 材料节缺席）
+    ...(services.retroMaterialsOf !== undefined ? { retroMaterialsOf: services.retroMaterialsOf } : {}),
     ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
   });
 

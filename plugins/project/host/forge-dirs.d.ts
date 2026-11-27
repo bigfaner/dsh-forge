@@ -12,6 +12,10 @@ declare module "@dsh-forge/lib-path" {
     "project.runtime_dir": ForgeDirEntry<["forge.home", "projectRoot"]>;
     /** 工作区文档根（{workspaceRoot}/.forge/docs） */
     "project.docs_dir": ForgeDirEntry<["workspaceRoot"]>;
+    /** 探针目录（{workspaceRoot}/.forge/probes——一次性验证脚本与取证产物） */
+    "project.probes_dir": ForgeDirEntry<["workspaceRoot"]>;
+    /** Spike 目录（{workspaceRoot}/.forge/spikes——探索验证的结论与脚本） */
+    "project.spikes_dir": ForgeDirEntry<["workspaceRoot"]>;
     /** 工作区临时区（{workspaceRoot}/.forge/tmp） */
     "project.tmp_dir": ForgeDirEntry<["workspaceRoot"]>;
     /** 工作区工作树（{workspaceRoot}/.forge/worktrees） */

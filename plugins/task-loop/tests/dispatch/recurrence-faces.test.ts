@@ -1,6 +1,6 @@
 // bug 0db72bcb 生产装配面单测——createRecurrenceFaces（台账 recurrence 只读 face + 建模
 // 报告在场探测的生产实现工厂）：装配径接线断言走工厂真实现（非手写 face 桩），T3 拦截/
-// 解除判据经生产 face + 真实 probes 目录全径验证。路径派生经注入面消费（workspaceDocsRoot）。
+// 解除判据经生产 face + 真实 probes 目录全径验证。路径派生经注入面消费（probesDirOf）。
 // proposals/<slug>/issues/<localId>/ 轨已随 proposal 域退役（proposal-domain-retirement
 // 机检——.forge/ 下无 proposals 目录）——探测唯一位 = probes/<bugId>/，关联锚 = 链成员 bugId。
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -15,9 +15,9 @@ const CHAIN3: readonly BugRecurrenceCandidate[] = [
   { bugId: "b-r2", summary: "根", chain: ["b-root", "b-r1", "b-r2"], fullEdgeCount: 2, hasOpen: true },
 ];
 
-/** 路径派生注入（workspaceDocsRoot 同形闭包——<ws>/.forge/docs） */
+/** 路径派生注入（probesDirOf 同形闭包——<ws>/.forge/probes） */
 const pathDeps = {
-  workspaceDocsRoot: (ws: string): string => join(ws, ".forge", "docs"),
+  probesDirOf: (ws: string): string => join(ws, ".forge", "probes"),
 };
 
 /** 报告探测输入（bugIds = 命中链成员——probes/<bugId>/ 探测锚） */
@@ -67,7 +67,7 @@ describe("createRecurrenceFaces（bug 0db72bcb 生产装配工厂）", () => {
 
   it("modelingReportPresent：probes/<bugId>/ 顶层 .md 在场 = true（链任一成员——报告落 probes 即解除）", () => {
     ws = mkdtempSync(join(tmpdir(), "recurrence-faces-"));
-    const probesDir = join(ws, ".forge", "docs", "probes", "b-r1");
+    const probesDir = join(ws, ".forge", "probes", "b-r1");
     mkdirSync(probesDir, { recursive: true });
     writeFileSync(join(probesDir, "investigation.md"), "# 判别实验清单\n");
     const faces = createRecurrenceFaces({ bugs: noBugs, resolveProjectDir: () => ws, ...pathDeps });
@@ -84,7 +84,7 @@ describe("createRecurrenceFaces（bug 0db72bcb 生产装配工厂）", () => {
 
   it("modelingReportPresent：probes 子目录 .md 不计（顶层非递归）；探测面只读 fail-soft 缺席 false", () => {
     ws = mkdtempSync(join(tmpdir(), "recurrence-faces-"));
-    const probesSub = join(ws, ".forge", "docs", "probes", "b-r1", "evidence");
+    const probesSub = join(ws, ".forge", "probes", "b-r1", "evidence");
     mkdirSync(probesSub, { recursive: true });
     writeFileSync(join(probesSub, "dump.md"), "x");
     const faces = createRecurrenceFaces({ bugs: noBugs, resolveProjectDir: () => ws, ...pathDeps });
@@ -103,7 +103,7 @@ describe("createRecurrenceFaces（bug 0db72bcb 生产装配工厂）", () => {
     expect(faces.modelingReportPresent(probeInput("feat-x", "2.1"))).toBe(false);
   });
 
-  it("派生缝缺席（workspaceDocsRoot 未注入）= 'error' 机制失能形态——消费侧放行不恒拦", () => {
+  it("派生缝缺席（probesDirOf 未注入）= 'error' 机制失能形态——消费侧放行不恒拦", () => {
     ws = mkdtempSync(join(tmpdir(), "recurrence-faces-"));
     const faces = createRecurrenceFaces({ bugs: noBugs, resolveProjectDir: () => ws });
     expect(faces.modelingReportPresent(probeInput("feat-x", "2.1"))).toBe("error");
@@ -113,22 +113,22 @@ describe("createRecurrenceFaces（bug 0db72bcb 生产装配工厂）", () => {
     ws = mkdtempSync(join(tmpdir(), "recurrence-faces-"));
     const faces = createRecurrenceFaces({ bugs: noBugs, resolveProjectDir: () => ws, ...pathDeps });
     // IO 正常缺席：probes 卷目录存在但链成员目录无 .md = 真「报告不在场」（仍拦截）
-    mkdirSync(join(ws, ".forge", "docs", "probes", "b-r1"), { recursive: true });
+    mkdirSync(join(ws, ".forge", "probes", "b-r1"), { recursive: true });
     expect(faces.modelingReportPresent(probeInput("feat-x", "2.1"))).toBe(false);
     // IO 正常在场：链成员目录落报告
-    writeFileSync(join(ws, ".forge", "docs", "probes", "b-r1", "r.md"), "x");
+    writeFileSync(join(ws, ".forge", "probes", "b-r1", "r.md"), "x");
     expect(faces.modelingReportPresent(probeInput("feat-x", "2.1"))).toBe(true);
     // IO 故障模拟：链成员路径被文件占位 → existsSync 真、readdirSync 抛（ENOTDIR）——机制失能
-    rmSync(join(ws, ".forge", "docs", "probes", "b-r1"), { recursive: true, force: true });
-    writeFileSync(join(ws, ".forge", "docs", "probes", "b-r1"), "not a dir");
+    rmSync(join(ws, ".forge", "probes", "b-r1"), { recursive: true, force: true });
+    writeFileSync(join(ws, ".forge", "probes", "b-r1"), "not a dir");
     expect(faces.modelingReportPresent(probeInput("feat-x", "2.1"))).toBe("error");
   });
 
   it("IO 故障降级（守卫全径）：生产 face 返回 'error' → claim 消费为放行 + warn 留痕", async () => {
     ws = mkdtempSync(join(tmpdir(), "recurrence-faces-"));
     // 链成员路径被文件占位 → existsSync 真、readdirSync ENOTDIR
-    mkdirSync(join(ws, ".forge", "docs", "probes"), { recursive: true });
-    writeFileSync(join(ws, ".forge", "docs", "probes", "b-r1"), "not a dir");
+    mkdirSync(join(ws, ".forge", "probes"), { recursive: true });
+    writeFileSync(join(ws, ".forge", "probes", "b-r1"), "not a dir");
     const faces = createRecurrenceFaces({ bugs: { findRecurrenceCandidates: async () => CHAIN3 }, resolveProjectDir: () => ws, ...pathDeps });
     const diags: Array<{ level: string; event: string; message: string }> = [];
     const rejection = await recurrenceEscalationGuard({
@@ -171,7 +171,7 @@ describe("createRecurrenceFaces（bug 0db72bcb 生产装配工厂）", () => {
       modelingReportPresent: faces.modelingReportPresent,
     };
     expect(await recurrenceEscalationGuard(input)).toBeDefined(); // 无报告 → 软拒绝
-    const probesDir = join(ws, ".forge", "docs", "probes", "b-r1");
+    const probesDir = join(ws, ".forge", "probes", "b-r1");
     mkdirSync(probesDir, { recursive: true });
     writeFileSync(join(probesDir, "investigation.md"), "# 判别实验清单\n");
     expect(await recurrenceEscalationGuard(input)).toBeUndefined(); // 报告落 probes 即解除
@@ -187,7 +187,7 @@ describe("createRecurrenceFaces（bug 0db72bcb 生产装配工厂）", () => {
       modelingReportPresent: faces.modelingReportPresent,
     });
     const release = rejection?.failure.violations.find((v) => v.startsWith("release:")) ?? "";
-    expect(release).toContain(".forge/docs/probes/<bugId>/");
+    expect(release).toContain(".forge/probes/<bugId>/");
     expect(release).not.toContain("proposals/");
   });
 });

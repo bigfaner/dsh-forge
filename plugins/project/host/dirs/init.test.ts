@@ -21,7 +21,7 @@ import {
 const createdDirs: string[] = []
 
 /** 键表派生分区（docs/tmp/worktrees——与 handler 同一派生函数的事实对齐基准） */
-const PARTITIONS = ['.forge/docs', '.forge/tmp', '.forge/worktrees'] as const
+const PARTITIONS = ['.forge/docs', '.forge/probes', '.forge/spikes', '.forge/tmp', '.forge/worktrees'] as const
 
 function workspaceOf(label: string): string {
   const dir = mkdtempSync(join(tmpdir(), `forge-dir-init-${label}-`))
@@ -57,7 +57,8 @@ describe('forge-dir-init handler（workspace-artifact-governance §2.5）', () =
   })
 
   it('分区与 gitignore 条目由键表派生：gitignoreEntriesOf 排除 docs 文档树', () => {
-    expect(gitignoreEntriesOf(PARTITIONS)).toEqual(['.forge/tmp/', '.forge/worktrees/'])
+    // docs 文档树可提交；探针与 spike 属过程产物，与其余分区一样 git 外
+    expect(gitignoreEntriesOf(PARTITIONS)).toEqual(['.forge/probes/', '.forge/spikes/', '.forge/tmp/', '.forge/worktrees/'])
     expect(gitignoreEntriesOf(['.forge/docs', '.forge/docs/probes', '.forge/tmp'])).toEqual(['.forge/tmp/'])
   })
 
