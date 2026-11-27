@@ -30,13 +30,12 @@ const readText = (f: string) => readFileSync(join(FORGE_ROOT, f), "utf8");
 const texts = new Map(sourceFiles.map((f) => [f, readText(f)]));
 
 describe("forge 边界门（静态四查 / 阶段一最小化包面）", () => {
-  it("包内容面恰十五件骨架工件（声明面 + 双 tsconfig + 六脚本（含 freshness 门）+ host 薄 apply/派发单源/tools-exclude 遗留面 + ui 入口——零 read/orchestrate/shared 占位目录；skills/experts 资产子树另行守卫）", () => {
+  it("包内容面恰十四件骨架工件（声明面 + 双 tsconfig + 六脚本（含 freshness 门）+ host 薄 apply/派发单源 + ui 入口——零 read/orchestrate/shared 占位目录；skills/experts 资产子树另行守卫）", () => {
     expect(sourceFiles).toEqual([
       "README.md",
       "cordis.patch.yml",
       "host/assembly.ts",
       "host/index.ts",
-      "host/tools-exclude.ts",
       "package.json",
       "scripts/bundle-client.mjs",
       "scripts/bundle-host.mjs",
@@ -120,8 +119,8 @@ describe("forge 声明面守卫（package.json 骨架期全量）", () => {
     expect(pkg.types).toBe("./dist/host/index.d.ts");
   });
 
-  it("exports 恰四键（./package.json + . + ./client + ./tools-exclude 遗留面）且零 typert 工件键（圆桌共识 2——聚合方法长在五件，forge 纯消费；./package.json 出口 = skills 自锚 resolve 面——P0 #5 处方 C）", () => {
-    expect(Object.keys(pkg.exports ?? {})).toEqual(["./package.json", "./tools-exclude", ".", "./client"]);
+  it("exports 恰三键（./package.json + . + ./client）且零 typert 工件键（圆桌共识 2——聚合方法长在五件，forge 纯消费；./package.json 出口 = skills 自锚 resolve 面——P0 #5 处方 C）", () => {
+    expect(Object.keys(pkg.exports ?? {})).toEqual(["./package.json", ".", "./client"]);
     expect(pkg.exports?.["./package.json"]).toBe("./package.json");
     expect(pkg.exports?.["."]).toEqual({
       types: "./dist/host/index.d.ts",
