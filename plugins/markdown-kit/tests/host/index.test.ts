@@ -1,8 +1,8 @@
 // 1.4 单测 —— 插件入口自注册（注册 pin，镜像 plugin-forge-spec/plugin.test.ts 模式：
 // 结构化最小面替身 ToolRuntime 断言注册面）。覆盖：
-// - AC1：插件 apply 内 ctx.tools.register(validateMermaid) 恰一注册（注册名与列序）
+// - AC1：插件 apply 内 ctx.tools.register(validate_mermaid) 恰一注册（注册名与列序）
 // - AC2：ctx 经 faces.ts 结构化窄类型——包零 @deepseek-ai 运行时依赖（package.json 锚）
-// - AC3：工具名 validateMermaid 字面量单源导出
+// - AC3：工具名 validate_mermaid 字面量单源导出
 // - AC4：source/docRel 入参经形状校验路由到 ./validate 裁决（壳零业务逻辑 + typed error 归一）
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -57,19 +57,19 @@ describe('AC2 faces 结构化窄类型（零 dsh 运行时依赖）', () => {
   })
 })
 
-describe('AC1/AC3 注册面 pin：恰三 tool（validateMermaid + convertDocument + getOutline 字面量单源）', () => {
-  it('apply 内恰三注册且名 = 字面量单源（validateMermaid + convertDocument + getOutline 各一）', () => {
+describe('AC1/AC3 注册面 pin：恰三 tool（validate_mermaid + convert_document + get_outline 字面量单源）', () => {
+  it('apply 内恰三注册且名 = 字面量单源（validate_mermaid + convert_document + get_outline 各一）', () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
     expect(rt.registeredTools.map((t) => t.name)).toEqual([MERMAID_TOOL_NAME, CONVERT_TOOL_NAME, GET_MD_OUTLINE])
-    expect(MERMAID_TOOL_NAME).toBe('validateMermaid')
-    expect(CONVERT_TOOL_NAME).toBe('convertDocument')
-    expect(GET_MD_OUTLINE).toBe('getOutline')
+    expect(MERMAID_TOOL_NAME).toBe('validate_mermaid')
+    expect(CONVERT_TOOL_NAME).toBe('convert_document')
+    expect(GET_MD_OUTLINE).toBe('get_outline')
     dispose()
     expect(rt.disposedCount()).toBe(3)
   })
 
-  it('validateMermaid 形状不变：description / object 根 parameters / output schema+render / execute', () => {
+  it('validate_mermaid 形状不变：description / object 根 parameters / output schema+render / execute', () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
     const tool = rt.registeredTools.find((t) => t.name === MERMAID_TOOL_NAME)
@@ -82,7 +82,7 @@ describe('AC1/AC3 注册面 pin：恰三 tool（validateMermaid + convertDocumen
     dispose()
   })
 
-  it('convertDocument 形状齐备：params required docRel + output schema+render', () => {
+  it('convert_document 形状齐备：params required docRel + output schema+render', () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
     const tool = rt.registeredTools.find((t) => t.name === CONVERT_TOOL_NAME)
@@ -204,7 +204,7 @@ describe('AC4 入参形状校验（双模互斥）与 typed error 归一', () =>
     dispose()
   })
 
-  it('bug e6787e6e: docRel 路径穿越四面拒绝（../ 段 / 盘符绝对 / UNC / POSIX 绝对）→ ERR_IO，守卫与 convertDocument/getOutline 同构单源', async () => {
+  it('bug e6787e6e: docRel 路径穿越四面拒绝（../ 段 / 盘符绝对 / UNC / POSIX 绝对）→ ERR_IO，守卫与 convert_document/get_outline 同构单源', async () => {
     const rt = new TempRuntime()
     let readAttempts = 0
     const dispose = mdMermaidPlugin(rt.ctx(), {
@@ -224,7 +224,7 @@ describe('AC4 入参形状校验（双模互斥）与 typed error 归一', () =>
     dispose()
   })
 
-  it('bug e6787e6e: session.cwd 缺席 → ERR_IO 拒绝（不猜测根、零读取；convertDocument/getOutline 同构）', async () => {
+  it('bug e6787e6e: session.cwd 缺席 → ERR_IO 拒绝（不猜测根、零读取；convert_document/get_outline 同构）', async () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
     const tool = rt.registeredTools[0]

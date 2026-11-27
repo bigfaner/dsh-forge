@@ -1,11 +1,11 @@
-// validateMermaid tool 壳（定位：装配——schema（source?/docRel?/format? 双模互斥）+
+// validate_mermaid tool 壳（定位：装配——schema（source?/docRel?/format? 双模互斥）+
 // 路由到 ./validate 裁决 + typed error 归一（tool-error 语义）。壳零业务逻辑：
 // fence 提取/头词探测/引擎裁决全在 ./validate 单源——本文件只做入参形状收窄、
 // docRel 文件读取缝（注入缺省 node:fs）与裁决值透传。typed error 统一
 // ValidateMermaidError（code 承载，plugin-forge format.ts errorCodeOf 同径——
 // code ∈ 本包错误码闭集；dsh tool 面捕获 typed 错误即 tool-error 语义）。
 // bug e6787e6e 收口：docRel 读取锚 = session.cwd（exec.agent.session.header.cwd，
-// convertDocument/getOutline 同构取数位，缺席即 ERR_IO 拒绝）+ 路径穿越守卫
+// convert_document/get_outline 同构取数位，缺席即 ERR_IO 拒绝）+ 路径穿越守卫
 // （workspace.ts 单源 assertRelUnderRoot——F-2 DRY 收口），四面反例拒绝先于任何 IO。
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -14,7 +14,7 @@ import { validateDocFences, validateSource, type DocVerdict, type SourceVerdict 
 import { assertRelUnderRoot, isRelPathError, sessionCwdOf } from './workspace.js'
 
 /** 工具名（字面量单源导出——后续 deny 名单/技能文案引用点同源） */
-export const MERMAID_TOOL_NAME = 'validateMermaid' as const
+export const MERMAID_TOOL_NAME = 'validate_mermaid' as const
 
 /** 本包 tool 面 typed 错误码闭集（错误码统一口径：读盘/锚位失败 = ERR_IO；ERR_INVALID_ARGS 保留给参数形状） */
 export type MermaidToolErrorCode = 'ERR_INVALID_ARGS' | 'ERR_MERMAID_ENGINE' | 'ERR_IO'
@@ -179,7 +179,7 @@ export function createValidateMermaidTool(deps: ValidateMermaidToolDeps = {}): M
           return await validateSource(parsed.source, { format: parsed.format })
         }
         const docRel = parsed.docRel as string
-        // bug e6787e6e：docRel 读取锚 = session.cwd（convertDocument/getOutline 同构取数位）
+        // bug e6787e6e：docRel 读取锚 = session.cwd（convert_document/get_outline 同构取数位）
         const cwd = sessionCwdOf(exec)
         if (cwd === undefined || cwd.trim() === '') {
           throw new ValidateMermaidError(

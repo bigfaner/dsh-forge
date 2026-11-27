@@ -1,8 +1,8 @@
-// getOutline tool 壳（定位：装配——schema 收窄（docRel 必填 + depth? 截断层级）+
+// get_outline tool 壳（定位：装配——schema 收窄（docRel 必填 + depth? 截断层级）+
 // 路由到 ./outline 纯逻辑单源 + typed error 归一 + 成功/失败 emitDiag（md-outline
 // 前缀，零静默）。壳零业务逻辑：ATX 解析/围栏跳过/setext 标注/depth 截断全在
 // ./outline 单源。读取锚 = session.cwd（workspace.ts sessionCwdOf 单源——
-// convertDocument/validateMermaid 同构取数位，缺席即 ERR_IO 拒绝）+ 注入 fs 缝
+// convert_document/validate_mermaid 同构取数位，缺席即 ERR_IO 拒绝）+ 注入 fs 缝
 // （缺省 node:fs）；读取失败按错误码统一口径映射 ERR_IO + cannot read document
 // 语义（读盘失败 = IO 域——三 tool 同码裁定，ERR_INVALID_ARGS 保留给参数形状）。
 // 可选键 undefined 剔除后整值返回（lossless JSON 整值边界——判例 223ba5b3 径）。
@@ -14,7 +14,7 @@ import { emitConvertDiag, type DiagEmitter } from '../convert/diag.js'
 import { assertRelUnderRoot, isRelPathError, sessionCwdOf } from './workspace.js'
 
 /** 工具名（字面量单源导出——MERMAID_TOOL_NAME 同法） */
-export const GET_MD_OUTLINE = 'getOutline' as const
+export const GET_MD_OUTLINE = 'get_outline' as const
 
 /** 本 tool typed 错误码闭集 */
 export type GetOutlineToolErrorCode = 'ERR_INVALID_ARGS' | 'ERR_IO'
@@ -47,7 +47,7 @@ export interface GetOutlineToolArgs {
   readonly depth?: number
 }
 
-/** 参数防御性收窄（形状全在此一步——convertDocument 同法） */
+/** 参数防御性收窄（形状全在此一步——convert_document 同法） */
 export function parseGetOutlineArgs(args: unknown): GetOutlineToolArgs {
   const tool = GET_MD_OUTLINE
   if (typeof args !== 'object' || args === null) {

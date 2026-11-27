@@ -1,4 +1,4 @@
-// getOutline 单测（契约 get-outline.md GO-1/GO-2/GO-3 + goal 双向判决面）：
+// get_outline 单测（契约 get-outline.md GO-1/GO-2/GO-3 + goal 双向判决面）：
 // - 纯逻辑单源（parseMarkdownOutline）：嵌套树/行号锚/跳级/空文档/围栏零误判/
 //   setext 显式标注/depth 双向截断
 // - 壳（createGetOutlineTool）：schema 收窄 typed error 闭环 + cwd 锚 + 注入 fs 缝 +
@@ -105,9 +105,9 @@ describe('parseMarkdownOutline（纯逻辑单源）', () => {
   })
 })
 
-describe('getOutline 壳（schema 收窄 + cwd 锚 + fs 缝 + typed error + diag）', () => {
+describe('get_outline 壳（schema 收窄 + cwd 锚 + fs 缝 + typed error + diag）', () => {
   it('工具名常量字面量单源 + description/parameters 形状', () => {
-    expect(GET_MD_OUTLINE).toBe('getOutline')
+    expect(GET_MD_OUTLINE).toBe('get_outline')
     const tool = createGetOutlineTool()
     expect(tool.name).toBe(GET_MD_OUTLINE)
     expect(tool.parameters.required).toEqual(['docRel'])

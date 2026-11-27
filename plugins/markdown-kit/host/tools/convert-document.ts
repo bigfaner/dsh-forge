@@ -1,4 +1,4 @@
-// convertDocument tool 壳（定位：装配——schema 收窄 + 路由到 ./convert 分派单源 +
+// convert_document tool 壳（定位：装配——schema 收窄 + 路由到 ./convert 分派单源 +
 // typed error 归一 + 成功/失败 emitDiag（doc-convert 前缀，零静默）。壳零业务逻辑：
 // 分派/引擎/图片策略/落盘边界全在 ./convert 单源。落盘锚 = session.cwd（exec.agent
 // .session.header.cwd，knowledge resolveProjectId(session.cwd) 同构取数位——缺席即
@@ -19,7 +19,7 @@ import { sessionCwdOf } from './workspace.js'
 export { sessionCwdOf }
 
 /** 工具名（字面量单源导出） */
-export const CONVERT_TOOL_NAME = 'convertDocument' as const
+export const CONVERT_TOOL_NAME = 'convert_document' as const
 
 /** 本 tool typed 错误码闭集（re-export convert/errors 闭集——壳层命名同源） */
 export type ConvertDocumentToolErrorCode = ConvertToolErrorCode

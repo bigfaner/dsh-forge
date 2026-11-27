@@ -1,4 +1,4 @@
-// convertDocument tool 壳单测（装配面：schema 收窄 / 路由零业务逻辑 / typed error 归一 /
+// convert_document tool 壳单测（装配面：schema 收窄 / 路由零业务逻辑 / typed error 归一 /
 // session.cwd 锚 / emitDiag 成功失败双路径 / lossless JSON 整值边界）。
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -126,8 +126,8 @@ describe('lossless JSON 整值边界（可选键 undefined 剔除——判例 22
 describe('注册面形状（双 tool 并存 + schema/render 面）', () => {
   it('tool 定义形状齐备（name/params required docRel/output schema+render）', () => {
     const tool: MermaidToolDefinition = createConvertDocumentTool()
-    expect(CONVERT_TOOL_NAME).toBe('convertDocument')
-    expect(tool.name).toBe('convertDocument')
+    expect(CONVERT_TOOL_NAME).toBe('convert_document')
+    expect(tool.name).toBe('convert_document')
     expect(tool.description.length).toBeGreaterThan(20)
     expect(tool.parameters.type).toBe('object')
     expect(Object.keys(tool.parameters.properties).sort()).toEqual(['docRel', 'format', 'images', 'outRel'])

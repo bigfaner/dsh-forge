@@ -1,4 +1,4 @@
-// workspace 守卫单源单测（F-2 DRY 收口——convertDocument/getOutline/validateMermaid
+// workspace 守卫单源单测（F-2 DRY 收口——convert_document/get_outline/validate_mermaid
 // 三 tool 共用的 session.cwd 锚解析 + 路径穿越守卫唯一事实源）：
 // - sessionCwdOf：header.cwd 正门 / 顶层 cwd 兼容位 / 缺席 undefined
 // - assertRelUnderRoot 四面反例（../ 段 / 盘符绝对 / UNC / POSIX 绝对）→ RelPathError ERR_IO；
@@ -74,10 +74,10 @@ describe('assertRelUnderRoot（路径穿越守卫单源——四面反例可红�
 
   it('错误消息携带 tool/field/输入值（可归因诊断面）', () => {
     try {
-      assertRelUnderRoot(ROOT, '../x.md', { tool: 'getOutline', field: 'docRel' })
+      assertRelUnderRoot(ROOT, '../x.md', { tool: 'get_outline', field: 'docRel' })
       expect.unreachable()
     } catch (e) {
-      expect((e as Error).message).toContain('getOutline')
+      expect((e as Error).message).toContain('get_outline')
       expect((e as Error).message).toContain('docRel')
       expect((e as Error).message).toContain('../x.md')
     }

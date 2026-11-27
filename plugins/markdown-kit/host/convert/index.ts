@@ -1,4 +1,4 @@
-// convertDocument 分派与落盘边界单源（定位：业务——docx/pdf 机械分派 + 路径穿越
+// convert_document 分派与落盘边界单源（定位：业务——docx/pdf 机械分派 + 路径穿越
 // 守卫 + fs 缝 + 图片策略落盘）。壳（tools/convert-document.ts）只做 schema 收窄与
 // 路由，零业务逻辑；本文件承担提案 §二全部工具面语义：
 //   - 分派：format auto = 按扩展名机械分派（.docx → docx 引擎 / .pdf → pdf 引擎），
@@ -61,7 +61,7 @@ export interface ConvertDocumentSummary {
  */
 export function assertRelUnderRoot(rootAbs: string, rel: string, field: string): string {
   try {
-    return assertWorkspaceRelPath(rootAbs, rel, { tool: 'convertDocument', field })
+    return assertWorkspaceRelPath(rootAbs, rel, { tool: 'convert_document', field })
   } catch (e) {
     if (isRelPathError(e)) throw new ConvertDocumentError('ERR_IO', e.message)
     throw e
@@ -83,12 +83,12 @@ export function defaultOutRelOf(docRel: string): string {
 }
 
 /**
- * convertDocument 业务单源执行体：分派 → 引擎转换（图片策略）→ 落盘 → 成功摘要。
+ * convert_document 业务单源执行体：分派 → 引擎转换（图片策略）→ 落盘 → 成功摘要。
  * 全部失败路径 typed error（拒绝先于 IO——失败零落盘）。
  */
 export async function convertDocumentWorkspaceFile(input: ConvertDocumentInput, deps: ConvertDocumentDeps): Promise<ConvertDocumentSummary> {
   const fs = deps.fs ?? defaultConvertFs
-  const tool = 'convertDocument'
+  const tool = 'convert_document'
   const rootAbs = resolve(deps.cwd)
   const srcAbs = assertRelUnderRoot(rootAbs, input.docRel, 'docRel')
 
