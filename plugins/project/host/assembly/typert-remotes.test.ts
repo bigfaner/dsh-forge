@@ -61,9 +61,9 @@ describe('端点面 pin（gateway SRC 端点真源——strict 生成贡献锁�
     expect(endpointsOf(svc)).toEqual(['list', 'register', 'deriveTaskStoreDir', 'update'])
   })
 
-  it('forgeBugs：list/commitFiles/fileDiff 三端点', () => {
+  it('forgeBugs：list 单端点', () => {
     const svc = new ForgeBugsRemote(fakeCtx(), {})
-    expect(endpointsOf(svc)).toEqual(['list', 'commitFiles', 'fileDiff'])
+    expect(endpointsOf(svc)).toEqual(['list'])
   })
 
   it('forgeFs：listDir 单端点', () => {

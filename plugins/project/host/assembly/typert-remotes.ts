@@ -28,8 +28,6 @@ import type {
 } from "@dsh-forge/lib-api";
 import type {
   BugCard,
-  BugCommitFilesQuery,
-  BugFileDiffQuery,
   DeriveTaskStoreDirResult,
   DirFactRow,
   DirFactsQuery,
@@ -214,7 +212,7 @@ export class ForgeProjectsRemote extends TypertRemoteService {
   }
 }
 
-// ── forge:bugs 族（BugsServicePort list 读面；commitFiles/fileDiff 变更读面归宿主 git 面）──
+// ── forge:bugs 族（BugsServicePort list 读面；变更读面归宿主 git 面）──
 
 export class ForgeBugsRemote extends TypertRemoteService {
   private readonly port: () => BugsServicePort | undefined;
@@ -231,25 +229,6 @@ export class ForgeBugsRemote extends TypertRemoteService {
     const port = this.port();
     if (port === undefined) throw unavailable("list", "bugs");
     return await port.listBugs(query);
-  }
-
-  /**
-   * 【退役面登记】占位端点（Bug 变更读面归宿主 git 面——本插件 typed unavailable）：
-   * 官方宿主 git 真实现落位时须归并/删除，face 合同含本端点——防占位转永久。
-   */
-  @Remote
-  async commitFiles(input: BugCommitFilesQuery, signal?: AbortSignal): Promise<never> {
-    signal?.throwIfAborted();
-    void input;
-    throw unavailable("commitFiles", "bugs");
-  }
-
-  /** 【退役面登记】占位端点（同 commitFiles——官方宿主 git 面落位时归并/删除） */
-  @Remote
-  async fileDiff(input: BugFileDiffQuery, signal?: AbortSignal): Promise<never> {
-    signal?.throwIfAborted();
-    void input;
-    throw unavailable("fileDiff", "bugs");
   }
 }
 
