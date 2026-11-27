@@ -531,10 +531,11 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
   if (typeof o.port !== 'number' || !Number.isInteger(o.port) || o.port <= 0) return undefined
   const credentialsPath =
     typeof o.credentialsPath === 'string' && o.credentialsPath !== '' ? o.credentialsPath : undefined
-  // 3.4 M2 装配两缝（可选——缺席/空串 = 不注入：core M2 四域降级 / plugin-forge 技能面降级）
+  // 3.4 M2 装配缝（可选——缺席/空串 = 不注入：core M2 四域降级 / 技能面降级；
+  // skillsDir = 旧包锚冻结透传面（M1 阶段B 退役：消费侧已除，main.ts/main 侧字面量冻结））
   const tasksHome = typeof o.tasksHome === 'string' && o.tasksHome !== '' ? o.tasksHome : undefined
   const skillsDir = typeof o.skillsDir === 'string' && o.skillsDir !== '' ? o.skillsDir : undefined
-  // M3 3.7：spec skills 物化锚（预设 customSkillDirs[spec]——远征组合携带；缺席 = spec 技能面降级）
+  // M3 3.7：spec skills 物化锚（@dsh-forge/spec 活包——缺席 = spec 技能面降级）
   const specSkillsDir = typeof o.specSkillsDir === 'string' && o.specSkillsDir !== '' ? o.specSkillsDir : undefined
   // squad skills 物化锚（预设 customSkillDirs[squad]——expert-squad 专家域技能；缺席 = squad 技能面降级）
   const squadSkillsDir = typeof o.squadSkillsDir === 'string' && o.squadSkillsDir !== '' ? o.squadSkillsDir : undefined

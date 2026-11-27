@@ -43,11 +43,11 @@ export const RUNTIME_PACKAGES: Readonly<Record<string, string>> = {
 }
 
 /**
- * 产品插件闭包（3.4 M2 起步；M3 3.7 增 plugin-forge-spec——预设装配远征组合 in-preset 行
- * 的 loader 解析面；knowledge-stage1 1.9 A5 增 @dsh-forge/knowledge——用户层全局行插件，dev 锚树供应面
+ * 产品插件闭包（3.4 M2 起步；knowledge-stage1 1.9 A5 增 @dsh-forge/knowledge——用户层全局行插件，dev 锚树供应面
  * + skills/learn 技能目录解析源（paths.ts resolvePackageSkillsDir 同树）；
  * md-mermaid 迁居批 1.2：装载通道转 cordis.patch.yml 全局行（plugins/markdown-kit/cordis.patch.yml，
- * knowledge/expert-squad 同构）——in-preset 双组合行退役，validateMermaid 全组合在场）。
+ * knowledge/expert-squad 同构）——in-preset 双组合行退役，validateMermaid 全组合在场；
+ * 旧包 @dsh-forge/plugin-forge[+spec] 已随 M1 阶段B 退役出清）。
  *   · dev 锚树：apps/host/package.json dependencies workspace 链接（本清单同门供应面
  *     ——paths.ts resolvePackageSkillsDir 亦自此解析 skills 目录）；
  *   · dev profile 树：apps/host/profile.dev/package.json link 行（loader 行 import 锚）；
@@ -58,8 +58,6 @@ export const RUNTIME_PACKAGES: Readonly<Record<string, string>> = {
  * installer-pipeline pin 禁声明 @dsh-forge/*，无 npm 分发形态）。
  */
 export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = [
-  '@dsh-forge/plugin-forge',
-  '@dsh-forge/plugin-forge-spec',
   '@dsh-forge/markdown-kit',
   '@dsh-forge/knowledge',
   '@dsh-forge/project', // 1.17 批二卸旧装新：boot 链静态 import + overlay 注行（接替 git-worktree）

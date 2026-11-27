@@ -53,10 +53,8 @@ export interface HostPaths {
   /** 设置域存储文件（M3 3.8：boot overlay 注 core 行 config.settingsFile——恒与 state.db
    *  同居 {userData}（core 路径守卫基准 = dirname(dbFile)，异目录即插件构造拒启）） */
   settingsFile: string
-  /** plugin-forge skills 物理挂载目录（M3 3.7 起仅作预设装配 customSkillDirs[core] 物化锚
-   *  ——产品裁决 2026-10-09：全局 skill-filesystem 行已废除，标准模式零 forge 技能；
-   *  dev = workspace 链接解析 packages/plugin-forge/skills，packaged = runtime/node_modules
-   *  邻接树。解析失败 = undefined 不注入（预设技能目录剔除 fail-soft——不抛断启动） */
+  /** 旧包 @dsh-forge/plugin-forge skills 挂载锚（M1 阶段B 退役：解析已除，恒 undefined
+   *  ——字段保留 = main.ts 冻结面透传） */
   skillsDir?: string
   /** @dsh-forge/spec skills 物理挂载目录（plugin-spec 1.9：预设装配 customSkillDirs[spec]
    *  ——grilling/fix-bug/investigate-bug 随 spec 包分发（loop-blocking 已退役，循环阻塞
@@ -144,7 +142,8 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
     bindingsFile: join(userData, 'knowledge-bindings.json'),
     tasksHome: resolveTasksHome(env, userData),
     settingsFile: join(userData, 'forge-settings.json'),
-    skillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge'),
+    // 旧包 @dsh-forge/plugin-forge 已退役（M1 阶段B）——skillsDir 解析移除；字段保留
+    // = main.ts 冻结面透传（恒 undefined，零下发）。
     specSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/spec'),
     squadSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/expert-squad'),
     knowledgeSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/knowledge'),
@@ -162,8 +161,8 @@ function resolveTasksHome(env: PathEnv, userData: string): string {
 }
 
 /** 产品包 skills 目录解析（installAnchor 树锚定——与 loader 插件行解析同源逻辑：自
- *  anchor 所在目录逐级上溯探 node_modules/@dsh-forge/<pkg>/<sub>；3.4 plugin-forge 起，
- *  M3 3.7 增 plugin-forge-spec 同法；1.9 spec 锚改指 @dsh-forge/spec（skills 随新包分发）。
+ *  anchor 所在目录逐级上溯探 node_modules/@dsh-forge/<pkg>/<sub>；1.9 spec 锚指
+ *  @dsh-forge/spec（skills 随 spec 包分发）。
  *  dev = apps/host 树 workspace 链接（junction 透传到 packages/<pkg> 子目录）；
  *  packaged = runtime/node_modules 邻接（anchor = {resources}/runtime/package.json，首探
  *  即中）。不走 require.resolve：产品包 ESM-only（exports 无 require 条件，CJS 解析恒拒）。

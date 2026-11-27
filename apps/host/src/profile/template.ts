@@ -112,10 +112,9 @@ export const PROFILE_TEMPLATE_FILES: Readonly<Record<string, string>> = {
     '# ── 产品插件行（4.2 转正启用——SMOKE-LEDGER §5 转正条件落位）──',
     '# 行成员 = PRODUCT_PLUGINS 配置（contracts——userLayerRow 门；core = 单 SQLite 句柄',
     '# 双服务 ctx.forgeProjects / ctx.forgeKnowledge，M2 起 tasksHome 注入时增四域服务）。',
-    '# plugin-forge 行已移出用户层（产品裁决 2026-10-09：标准模式零 forge 面——用户层/',
-    '# overlay 全局行对一切组合生效（含 dsh 出厂标准预设）＝泄漏；forge 工具/技能仅',
-    '# 远征/突击预设组合携带，预设底稿行内增量行自带 bindingsFile config，自足）。',
-    '# config 不在用户层书写（dbFile / tasksHome / bindingsFile 与 skills 物理挂载目录',
+    '# 旧包 plugin-forge[+spec] 行已退役（M1 阶段B：产品裁决 2026-10-09 标准模式零 forge 面',
+    '# 的收口——用户层/overlay 全局行对一切组合生效（含 dsh 出厂标准预设）＝泄漏）。',
+    '# config 不在用户层书写（dbFile / tasksHome 与活包技能目录',
     '# 均属应用装配期路径——boot overlay 按 userData/形态逐启生成）。',
     '- insert:',
     ...USER_LAYER_ROW_PLUGINS.flatMap(([key]) => {

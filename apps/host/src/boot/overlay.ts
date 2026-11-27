@@ -14,9 +14,9 @@
 // M2 3.4 装配缝：core 行增 tasksHome（M2 派生根注入——四域服务装配门）。
 // 产品裁决（2026-10-09：标准模式零 forge 面）：全局 plugin-forge 行与全局 skill-filesystem
 // 行（3.4/5.4 形态）废除——全局 patch 行对一切组合生效（含 dsh 出厂标准预设）＝ forge
-// 工具/技能泄漏进标准会话。forge 面仅远征/突击预设组合携带：plugin-forge[+spec] 行与
-// skills 物理挂载目录（customSkillDirs——形态化绝对路径：dev = workspace 链接、
-// packaged = runtime/node_modules 邻接）均在预设底稿行内增量行承载（官方 cordis 预设的
+// 工具/技能泄漏进标准会话。旧包 @dsh-forge/plugin-forge[+spec] 已退役（M1 阶段B）——
+// 预设底稿仅 skill-filesystem customSkillDirs 承载活包技能目录（expert-squad/knowledge，
+// 形态化绝对路径：dev = workspace 链接、packaged = runtime/node_modules 邻接）（官方 cordis 预设的
 // !!js 表达式形制在打包形态不可解析——baseUrl 只见 {userData} profile 链，无
 // installAnchor BFS，故物化锚仍经本缝注入）。用户裁决（2026-11-01）：标准模式放开
 // expert-squad 技能面——基础渲染 skill-filesystem 行 customSkillDirs 仅挂 squad 目录
@@ -28,12 +28,9 @@
 // 用户，两径不混）。customSkillDirs 物化分叉：占位符解析为当形态绝对路径（dev = repo /
 // packaged = resources 物化路径）；!!js 全形态死刑（spike S5-4 判决反转）——物化输出零
 // 表达式残留（平台门行就地求值具体布尔，路径 only 绝对路径）。
-// fix-1（drift #9）：预设行内 plugin-forge[+spec] 增量行携带 bindingsFile 占位符——物化
-// 单源 = PresetOverlayInput.bindingsFile（预设会话行内实例须自带 config：config-less 行内实例
-// 遮蔽配置实例的 cwd 路由断链处置）。
 // knowledge-stage1 1.7（Q19 裁决）：knowledge 行 config 注入退役——knowledge 插件不再
-// 消费 bindingsFile（projectId→wsPath 纯 config 静态注入；绑定表文件继续服务 plugin-forge
-// Interface 8 cwd 路由，预设行内物化照旧）。
+// 消费 bindingsFile（projectId→wsPath 纯 config 静态注入；绑定表文件由 host 写侧继续
+// 维护——数据缝保留，旧包占位符下发已随 M1 阶段B 退役）。
 // 产物：{userData}/boot-overlay.yml（每启重写，非用户层状态）。
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -80,38 +77,22 @@ export interface BootOverlayInput {
   readonly port?: number
 }
 
-/** 预设装配输入（3.7）：四底稿全文 + customSkillDirs 双目录物化锚 + bindingsFile 物化锚（fix-1） */
+/** 预设装配输入（3.7）：四底稿全文 + customSkillDirs 活包技能目录物化锚（旧包 plugin-forge[+spec]
+ *  锚与 bindingsFile 占位符下发已随 M1 阶段B 退役） */
 export interface PresetOverlayInput extends PresetPatches {
-  /** plugin-forge skills 当形态绝对路径（customSkillDirs[core]；缺席 = 剔除该目录行） */
-  readonly coreSkillsDir?: string
-  /** @dsh-forge/spec skills 当形态绝对路径（customSkillDirs[spec]；缺席 = 剔除
-   *  ——spec 技能面降级 fail-soft，突击/blitz 本就物理不含） */
-  readonly specSkillsDir?: string
   /** expert-squad skills 当形态绝对路径（customSkillDirs[squad]；缺席 = 剔除——squad
    *  技能面降级 fail-soft） */
   readonly squadSkillsDir?: string
   /** knowledge skills 当形态绝对路径（knowledge-stage1 1.9 A5：customSkillDirs[knowledge]
    *  ——skills/learn 沉淀技能；缺席 = 剔除 fail-soft，knowledge tool/段面不受牵连） */
   readonly knowledgeSkillsDir?: string
-  /** cwd 绑定表文件（fix-1/drift #9：预设行内 plugin-forge[+spec] 增量行 config 物化锚
-   *  ——plugin-forge Interface 8 cwd 路由数据缝；knowledge 消费面已随 Q19 退役） */
-  readonly bindingsFile: string
 }
 
 /** 底稿占位符（customSkillDirs 项——物化替换为当形态绝对路径双引号标量） */
 const PRESET_SKILL_DIR_TOKENS = {
-  core: '{{plugin-forge-skills}}',
-  spec: '{{plugin-forge-spec-skills}}',
   squad: '{{expert-squad-skills}}',
   knowledge: '{{knowledge-skills}}',
 } as const
-
-/**
- * 预设行内产品行 bindingsFile 占位行（fix-1/drift #9：config-less 行内实例在预设会话
- * 遮蔽全局配置实例 → forge 动词 cwd 路由整体断链；行内行携带同 config 处置）。物化替换为
- * 与全局 plugin-forge 行同值的绑定表路径双引号标量（renderBootOverlay input.bindingsFile 单源）。
- */
-const PRESET_BINDINGS_LINE_TOKEN = 'bindingsFile: "{{plugin-forge-bindings}}"'
 
 /**
  * 标准模式 skill-filesystem 基础渲染行（用户裁决 2026-11-01：expert-squad 技能面挂载）
@@ -149,16 +130,6 @@ function materializePresetLines(patch: string, input: PresetOverlayInput): strin
   for (const line of patch.split('\n')) {
     if (/^\s*#/.test(line)) continue // 底稿头注释不进 overlay（行块本体零注释）
     const trimmed = line.trim()
-    const coreToken = `- "${PRESET_SKILL_DIR_TOKENS.core}"`
-    const specToken = `- "${PRESET_SKILL_DIR_TOKENS.spec}"`
-    if (trimmed === coreToken) {
-      if (input.coreSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.coreSkillsDir)}`)
-      continue
-    }
-    if (trimmed === specToken) {
-      if (input.specSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.specSkillsDir)}`)
-      continue
-    }
     const squadToken = `- "${PRESET_SKILL_DIR_TOKENS.squad}"`
     if (trimmed === squadToken) {
       if (input.squadSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.squadSkillsDir)}`)
@@ -167,10 +138,6 @@ function materializePresetLines(patch: string, input: PresetOverlayInput): strin
     const knowledgeToken = `- "${PRESET_SKILL_DIR_TOKENS.knowledge}"`
     if (trimmed === knowledgeToken) {
       if (input.knowledgeSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.knowledgeSkillsDir)}`)
-      continue
-    }
-    if (trimmed === PRESET_BINDINGS_LINE_TOKEN) {
-      out.push(`${line.slice(0, line.length - trimmed.length)}bindingsFile: ${yamlQuote(input.bindingsFile)}`)
       continue
     }
     const gate = PLATFORM_GATE_ROWS.find((row) => row.match === trimmed)

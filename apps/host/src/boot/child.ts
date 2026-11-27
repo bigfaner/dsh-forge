@@ -368,8 +368,9 @@ async function main(): Promise<void> {
   // M3 3.7 预设装配：三底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
   // 注行产品工件（customSkillDirs 物化当形态绝对路径）；底稿缺席 fail-soft 不注行；
   // 猎头模式预设自 expert-squad 0.30.0 起随插件包 bundle patch 注行（不在 overlay 面）。
-  // 产品裁决（2026-10-09）：skillsDir 仅作预设 customSkillDirs[core] 物化锚——无全局
-  // forge 技能行（forge 技能/工具仅预设组合）；用户裁决（2026-11-01）：标准模式放开
+  // 产品裁决（2026-10-09）：旧包 plugin-forge[+spec] 行与 {{plugin-forge-skills}}/
+  // {{plugin-forge-bindings}} 占位符下发已随 M1 阶段B 退役——预设底稿仅 squad/knowledge
+  // 技能目录物化；用户裁决（2026-11-01）：标准模式放开
   // expert-squad 技能面——基础渲染 skill-filesystem 行仅挂 squadSkillsDir（overlay.ts）。
   const presetPatches = loadPresetPatches()
   // mobile-remote-approval fix-3（重启生效形态）：手机远程暴露开关 = 产品自有配置
@@ -422,11 +423,8 @@ async function main(): Promise<void> {
       ? {
           presets: {
             ...presetPatches,
-            coreSkillsDir: options.skillsDir, // customSkillDirs[core]（plugin-forge skills 同源）
-            specSkillsDir: options.specSkillsDir, // customSkillDirs[spec]（缺席 = spec 技能面降级）
             squadSkillsDir: options.squadSkillsDir, // customSkillDirs[squad]（expert-squad——缺席 = squad 技能面降级）
             knowledgeSkillsDir: options.knowledgeSkillsDir, // customSkillDirs[knowledge]（1.9 A5——缺席 = knowledge 技能面降级）
-            bindingsFile: options.bindingsFile, // fix-1/drift #9：预设行内产品行 config 物化（与全局行同值单源）
           },
         }
       : {}),

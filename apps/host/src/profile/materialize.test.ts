@@ -266,9 +266,9 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')
     expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../plugins/knowledge')
     expect(dev.dependencies['@dsh-forge/contracts']).toBe('link:../../../packages/contracts')
-    expect(dev.dependencies['@dsh-forge/plugin-forge']).toBe('link:../../../packages/plugin-forge')
-    // M3 3.7：远征组合 in-preset plugin-forge-spec 行的 loader 解析锚（预设装配 dev 供应面）
-    expect(dev.dependencies['@dsh-forge/plugin-forge-spec']).toBe('link:../../../packages/plugin-forge-spec')
+    // 旧包 @dsh-forge/plugin-forge[+spec] link 已退役（M1 阶段B——依赖出清）
+    expect(dev.dependencies['@dsh-forge/plugin-forge']).toBeUndefined()
+    expect(dev.dependencies['@dsh-forge/plugin-forge-spec']).toBeUndefined()
     // md-mermaid 迁居批 1.2：root 级 plugins/ 树 link（'/plugins' 前缀推导——project 同型）
     expect(dev.dependencies['@dsh-forge/markdown-kit']).toBe('link:../../../plugins/markdown-kit')
     // expert-squad 批1 包归位（root 级 plugins/ 树）——host 装载表值直拼（批3 pin 姊妹面）

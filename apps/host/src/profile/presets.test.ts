@@ -61,9 +61,9 @@ function lineOf(block: string, key: string): string | undefined {
 const expeditionPersona = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.expedition), 'utf8')
 const blitzPersona = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.blitz), 'utf8')
 
-/** 产品分叉行（镜像 diff 豁免——差集断言另立）与产品增量行（上游没有） */
+/** 产品分叉行（镜像 diff 豁免——差集断言另立）与产品增量行（上游没有；旧包行已随 M1 阶段B 退役——集空） */
 const FORKED_ROWS = new Set(['persona', 'skill-filesystem'])
-const PRODUCT_ROWS = new Set(['plugin-forge', 'plugin-forge-spec'])
+const PRODUCT_ROWS = new Set<string>()
 /** 猎头工程面移除集（纯对话配置——命令/进程/文件/技能/计划/委派/目标/present 整体移除；
  *  tool-office desktop 组合 never started → preset broken 判例 2026-11-22——office 行不入
  *  preset 子树，office 能力由宿主全局行提供） */
@@ -165,32 +165,23 @@ for (const preset of ['expedition', 'blitz'] as const) {
       expect(line).toBe(lineOf(blitzPersona, '行为纪律：'))
     })
 
-    it('plugin-forge 行 config 零 mode 键（plugin-spec 1.8 模式概念退役——唯一模式，双模板面不迁）', () => {
-      const row = rows.get('plugin-forge')!
-      expect(row).not.toContain('mode:')
-      expect(row).toContain('bindingsFile: "{{plugin-forge-bindings}}"')
+    it('旧包行退役（M1 阶段B）：零 plugin-forge[+spec] 行、零 bindingsFile 占位符（数据缝写入侧保留在 host，预设底稿零下发）', () => {
+      const body = text.split('\n').filter((line) => !line.startsWith('#')).join('\n') // 头注释历史叙事不计
+      expect(rows.has('plugin-forge')).toBe(false)
+      expect(rows.has('plugin-forge-spec')).toBe(false)
+      expect(body).not.toContain('@dsh-forge/plugin-forge')
+      expect(body).not.toContain('bindingsFile')
     })
 
     it('skill-filesystem 分叉：customSkillDirs 占位符（物化锚——!!js 全形态死刑，物化只出绝对路径）', () => {
       const skill = rows.get('skill-filesystem')!
-      expect(skill).toContain('                - "{{plugin-forge-skills}}"')
       expect(skill).toContain('                - "{{expert-squad-skills}}"') // expert-squad 专家域技能（roundtable）——双预设同挂
       expect(skill).toContain('                - "{{knowledge-skills}}"') // knowledge 技能（skills/learn）——1.9 A5 双预设同挂（插件本体走用户层全局行）
-      if (isExpedition) {
-        expect(skill).toContain('                - "{{plugin-forge-spec-skills}}"')
-      } else {
-        expect(skill).not.toContain('{{plugin-forge-spec-skills}}')
-      }
+      // 旧包技能目录占位符退役（M1 阶段B）
+      expect(skill).not.toContain('{{plugin-forge-skills}}')
+      expect(skill).not.toContain('{{plugin-forge-spec-skills}}')
       // plugin-spec 1.9：skills-blitz 退役（grilling 迁 spec 包）——blitz 占位符零残留
       expect(skill).not.toContain('{{plugin-forge-blitz-skills}}')
-    })
-
-    it(`产品增量行：plugin-forge 恒携${isExpedition ? ' + plugin-forge-spec（远征 spec 全量）' : '，物理无 plugin-forge-spec（Story 6：L1 物理隔离）'}`, () => {
-      expect(rows.has('plugin-forge')).toBe(true)
-      expect(text).toContain("            name: '@dsh-forge/plugin-forge'")
-      expect(rows.has('plugin-forge-spec')).toBe(isExpedition)
-      if (isExpedition) expect(text).toContain("            name: '@dsh-forge/plugin-forge-spec'")
-      else expect(text).not.toContain('@dsh-forge/plugin-forge-spec')
     })
 
     it('markdown-kit in-preset 行退役（迁居批 1.2：装载通道转 cordis.patch.yml 全局行——预设底稿零残留，防双注册）', () => {
@@ -198,13 +189,6 @@ for (const preset of ['expedition', 'blitz'] as const) {
       expect(rows.has('md-mermaid')).toBe(false)
       expect(text).not.toContain('@dsh-forge/markdown-kit')
       expect(text).not.toContain('@dsh-forge/md-mermaid')
-    })
-
-    it('增量行携带 bindingsFile 同 config（fix-1/drift #9：占位符物化——config-less 行内实例遮蔽全局配置实例断链的处置）', () => {
-      // 行内产品行逐行形：config.bindingsFile 占位符（renderBootOverlay 物化与全局行同值）
-      expect(text).toContain('            config:\n              bindingsFile: "{{plugin-forge-bindings}}"')
-      const tokenRows = text.split('\n').filter((l) => l.trim() === 'bindingsFile: "{{plugin-forge-bindings}}"')
-      expect(tokenRows).toHaveLength(isExpedition ? 2 : 1) // 远征 = plugin-forge + plugin-forge-spec；突击 = 恰 plugin-forge
     })
 
     it('底稿零 dogfood 专用行（llm-pi-ai/agent-default-model 不入产品底稿——spike 叠层专属）', () => {

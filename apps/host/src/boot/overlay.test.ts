@@ -5,7 +5,8 @@
 // 3.4 M2 装配缝：core 行 tasksHome / settingsFile。knowledge 行 config 注入退役（1.7 Q19——
 // knowledge 插件零 host 注入 config，自持库按宿主数据域锚自启）。产品裁决
 // （2026-10-09：标准模式零 forge 面）：全局 plugin-forge 行与全局 skill-filesystem 行
-// 废除——forge 工具/技能仅远征/突击预设组合携带（预设行内增量行 + customSkillDirs）。
+// 废除；旧包 @dsh-forge/plugin-forge[+spec] 已退役（M1 阶段B）——预设底稿仅活包
+// 技能目录（squad/knowledge）占位符物化。
 // M3 3.7 预设装配：registry default 覆写 + 远征/突击/HR 预设行每启注行（物化分叉——
 // customSkillDirs 当形态绝对路径；!!js 全形态死刑零表达式残留；缺席 fail-soft 不注行）。
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -241,15 +242,12 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
   const base = { stateDb: '/x/s.db' }
   // 真实三底稿（src 同邻装载——presets.test.ts 另 pin 底稿契约面；猎头预设随 expert-squad 包不在本面）
   const patches = loadPresetPatches()!
-  const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string; squadSkillsDir?: string; knowledgeSkillsDir?: string } = {}) => ({
+  const withPresets = (over: { squadSkillsDir?: string; knowledgeSkillsDir?: string } = {}) => ({
     ...base,
     presets: {
       ...patches,
-      coreSkillsDir: '/c/skills',
-      specSkillsDir: '/c/spec-skills',
       squadSkillsDir: '/c/squad-skills',
       knowledgeSkillsDir: '/c/knowledge-skills', // 1.9 A5：customSkillDirs[knowledge]（skills/learn）
-      bindingsFile: '/x/b.json', // fix-1：预设行内产品行 config 物化锚（plugin-forge Interface 8 数据缝）
       ...over,
     },
   })
@@ -264,33 +262,30 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(text).toContain('        id: blitz\n        name: 突击模式')
     expect(text).toContain('        order: 2')
     expect(text).not.toContain('preset-headhunter')
+    // 旧包退役（M1 阶段B）：物化产物零 plugin-forge[+spec] 行、零 bindingsFile 占位符下发
+    expect(text).not.toContain('@dsh-forge/plugin-forge')
+    expect(text).not.toContain('bindingsFile')
     // 预设顺序 = 声明序（registry 菜单 order 排序数据面）
     expect(text.indexOf('preset-expedition')).toBeLessThan(text.indexOf('preset-blitz'))
   })
 
-  it('物化绝对路径（AC2）：customSkillDirs 占位符 → 当形态绝对路径双引号标量——远征 [core,spec] / 突击 [core]（1.9 skills-blitz 退役——突击零专属技能目录）', () => {
+  it('物化绝对路径（AC2）：customSkillDirs 占位符 → 当形态绝对路径双引号标量——双预设均挂 [squad, knowledge]（旧包 core/spec 占位符已随 M1 阶段B 退役——底稿零残留）', () => {
     const text = renderBootOverlay(
-      withPresets({ coreSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills', specSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\spec\\skills', squadSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\expert-squad\\skills', knowledgeSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\knowledge\\skills' }),
+      withPresets({ squadSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\expert-squad\\skills', knowledgeSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\knowledge\\skills' }),
     )
-    const core = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge\\\\skills"'
-    const spec = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\spec\\\\skills"'
     const squad = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\expert-squad\\\\skills"'
     const knowledge = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\knowledge\\\\skills"'
-    expect(text).toContain(core)
-    expect(text).toContain(spec)
     expect(text).toContain(squad)
     expect(text).toContain(knowledge) // 1.9 A5：knowledge skills/learn 物化（双预设同挂）
-    // 段级物理隔离（L1）：远征段物理不含突击专属路径；突击段物理不含 spec 路径（skills-blitz 已退役）
+    // 段级物理隔离（L1）：远征段与突击段各自物化 squad/knowledge 两目录
     const expeditionSection = text.slice(text.indexOf('preset-expedition'), text.indexOf('preset-blitz'))
     const blitzSection = text.slice(text.indexOf('preset-blitz'))
-    expect(expeditionSection).toContain(core)
-    expect(expeditionSection).toContain(spec)
+    expect(expeditionSection).toContain(squad)
     expect(expeditionSection).toContain(knowledge)
-    expect(blitzSection).toContain(core)
-    expect(blitzSection).not.toContain(spec)
+    expect(blitzSection).toContain(squad)
     expect(blitzSection).not.toContain('skills-blitz')
     expect(blitzSection).toContain(knowledge)
-    expect(text).not.toContain('{{plugin-forge') // 占位符零残留
+    expect(text).not.toContain('{{plugin-forge') // 旧包占位符零残留
     expect(text).not.toContain('{{expert-squad')
     expect(text).not.toContain('{{knowledge')
   })
@@ -302,35 +297,12 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
       "- id: skill-filesystem\n  name: '@deepseek-ai/dsh-skill-filesystem'\n  config:\n    customSkillDirs:\n      - \"/c/squad-skills\"",
     )
     expect(text).not.toContain('{{expert-squad') // 物化链复用：占位符零残留
-    // forge 技能仍零：基础渲染段零 plugin-forge 系技能目录（core/spec/blitz 仅预设行内；
-    // knowledge 技能亦仅预设行内——标准模式 learn 技能面不在本缝）
-    const baseSection = text.slice(0, text.indexOf('preset-expedition'))
-    expect(baseSection).not.toContain('/c/skills')
-    expect(baseSection).not.toContain('/c/spec-skills')
-    expect(baseSection).not.toContain('/c/knowledge-skills')
-    // 预设行为零变化：远征行内 core 目录仍物化（既有 10 空缩进预设行形态）
-    expect(text).toContain('customSkillDirs:\n                - "/c/skills"')
+    // 预设行内 squad + knowledge 目录仍物化（既有 10 空缩进预设行形态——双预设同序）
+    expect(text).toContain('customSkillDirs:\n                - "/c/squad-skills"\n                - "/c/knowledge-skills"')
     // 缺席 fail-soft：squadSkillsDir undefined → 基础渲染行整行剔除、无占位符残留
     const absent = renderBootOverlay(withPresets({ squadSkillsDir: undefined }))
     expect(absent).not.toContain('- id: skill-filesystem\n  name:')
     expect(absent).not.toContain('{{expert-squad')
-  })
-
-  it('预设行内产品行携同 config（fix-1/drift #9）：plugin-forge[+spec] 行 bindingsFile 物化 = PresetOverlayInput.bindingsFile 单源（产品裁决 2026-10-09：全局 plugin-forge 行已废除——预设行内实例是唯一 forge 工具面；knowledge 全局行已随 1.7 Q19 退役）', () => {
-    const text = renderBootOverlay(withPresets())
-    const row = (name: string) =>
-      [
-        `          - id: ${name}`,
-        `            name: '@dsh-forge/${name}'`,
-        '            config:',
-        '              bindingsFile: "/x/b.json"',
-      ].join('\n')
-    expect(text).toContain(row('plugin-forge'))
-    expect(text).toContain(row('plugin-forge-spec'))
-    // 同值行计数：远征行内 plugin-forge/plugin-forge-spec 两行 + 突击行内 plugin-forge 一行 = 恰 3
-    //（knowledge 全局行已退役——1.7 Q19；全局 plugin-forge 行废除——预设会话行内实例自足 cwd 路由）
-    expect(text.split('\n').filter((l) => l.trim() === 'bindingsFile: "/x/b.json"')).toHaveLength(3)
-    expect(text).not.toContain('{{plugin-forge-bindings}}')
   })
 
   it('!!js 全形态死刑（AC5）：物化输出零表达式残留——平台门行就地求值具体布尔', () => {
@@ -342,39 +314,30 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(text).toContain(`disabled: ${String(!win32)}`) // tool-pwsh（非 win32 禁）
   })
 
-  it('spec 目录缺席 fail-soft：远征 customSkillDirs 仅 [core]（spec 行剔除·无空列表残留）', () => {
-    const text = renderBootOverlay(withPresets({ specSkillsDir: undefined }))
-    expect(text).toContain('customSkillDirs:\n                - "/c/skills"')
-    expect(text).not.toContain('/c/spec-skills')
-    expect(text).not.toContain('{{plugin-forge')
-  })
-
-  it('blitz 目录退役（plugin-spec 1.9）：突击 customSkillDirs 无 blitz 专属行（grilling 迁 spec——spec 行仍物理不含突击段）', () => {
+  it('blitz 目录退役（plugin-spec 1.9）：突击 customSkillDirs 无 blitz 专属行（grilling 迁 spec）', () => {
     const text = renderBootOverlay(withPresets())
     expect(text).not.toContain('skills-blitz')
     expect(text).not.toContain('/c/blitz-skills')
     const blitzSection = text.slice(text.indexOf('preset-blitz'))
-    expect(blitzSection).not.toContain('/c/spec-skills')
-    expect(text).not.toContain('{{plugin-forge')
+    expect(blitzSection).toContain('/c/squad-skills')
   })
 
   it('squad 目录缺席 fail-soft：双预设 customSkillDirs 剔除 expert-squad 行（squad 技能面降级·无占位符残留）', () => {
     const text = renderBootOverlay(withPresets({ squadSkillsDir: undefined }))
     expect(text).not.toContain('/c/squad-skills')
     expect(text).not.toContain('{{expert-squad')
-    expect(text).toContain('/c/skills') // core 锚不受牵连
+    expect(text).toContain('/c/knowledge-skills') // knowledge 锚不受牵连
   })
 
   it('knowledge 目录缺席 fail-soft（1.9 A5）：双预设 customSkillDirs 剔除 knowledge 行（knowledge 技能面降级·无占位符残留；其余锚不受牵连）', () => {
     const text = renderBootOverlay(withPresets({ knowledgeSkillsDir: undefined }))
     expect(text).not.toContain('/c/knowledge-skills')
     expect(text).not.toContain('{{knowledge')
-    expect(text).toContain('/c/skills') // core 锚不受牵连
     expect(text).toContain('/c/squad-skills') // squad 锚不受牵连
   })
 
   it('全目录皆缺席：预设内 skill-filesystem 行回归上游裸形态（config 空块整除——schema 面零残留）', () => {
-    const text = renderBootOverlay(withPresets({ coreSkillsDir: undefined, specSkillsDir: undefined, squadSkillsDir: undefined, knowledgeSkillsDir: undefined }))
+    const text = renderBootOverlay(withPresets({ squadSkillsDir: undefined, knowledgeSkillsDir: undefined }))
     expect(text).toContain(
       "          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill",
     )

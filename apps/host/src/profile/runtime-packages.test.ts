@@ -36,13 +36,14 @@ describe('运行时包集合（S1 闭包）', () => {
   })
 })
 
-// 3.4 产品插件闭包：@dsh-forge/plugin-forge 入运行时闭包——dev 锚树经 apps/host deps
-// workspace 链接供应（真实版本在包 manifest；打包形态 = assemble 自 packages/ 真实拷贝，
-// profile.install 禁声明 @dsh-forge/*——installer-pipeline pin）。
+// 3.4 产品插件闭包：产品插件以 workspace 链接入 apps/host deps 供应（真实版本在包 manifest；
+// 打包形态 = assemble 自真实拷贝，profile.install 禁声明 @dsh-forge/*——installer-pipeline pin）。
+// 旧包 @dsh-forge/plugin-forge[+spec] 已随 M1 阶段B 出清——闭包零残留。
 describe('产品插件闭包（3.4 M2）', () => {
-  it('闭包成员全部以 workspace 链接入 apps/host dependencies（锚树供应）', () => {
-    expect(PRODUCT_PLUGIN_PACKAGES).toContain('@dsh-forge/plugin-forge')
+  it('闭包成员全部以 workspace 链接入 apps/host dependencies（锚树供应）；旧包零残留', () => {
     expect(PRODUCT_PLUGIN_PACKAGES).toContain('@dsh-forge/markdown-kit')
+    expect(PRODUCT_PLUGIN_PACKAGES).not.toContain('@dsh-forge/plugin-forge')
+    expect(PRODUCT_PLUGIN_PACKAGES).not.toContain('@dsh-forge/plugin-forge-spec')
     for (const name of PRODUCT_PLUGIN_PACKAGES) {
       expect(hostPkg.dependencies[name], `${name} 缺席 apps/host dependencies（锚树供应断裂）`).toBe('workspace:*')
       // 不混入 npm 精确 pin 池（profile.install 消费——无 npm 分发形态）
