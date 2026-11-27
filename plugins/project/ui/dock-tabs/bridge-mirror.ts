@@ -104,7 +104,10 @@ export interface DshForgeWorkbenchGlobal {
  * nav 闭包绑定官方 layout.selectPanel）。快照源为最小 store（身份稳定；订阅同步通知）。
  * 发布与创建一体：桥的本体即页内全局。
  */
-export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
+export function createWorkbenchBridge(
+  nav: ForgeCenterNav,
+  options?: { readonly publish?: boolean },
+): WorkbenchBridge {
   let snapshot: ForgeWorkbenchSnapshot = {
     drawerEntryId: null,
     overview: initialOverviewContext(),
@@ -165,7 +168,11 @@ export function createWorkbenchBridge(nav: ForgeCenterNav): WorkbenchBridge {
       notify()
     },
   }
-  ;(globalThis as DshForgeWorkbenchGlobal).__DSH_FORGE_WORKBENCH__ = bridge
+  // publish=false：不落页内全局（无壳宿主的任务弹窗本地桥——knowledge/task-loop 读
+  // 该全局取项目锚，本地桥不得冒充锚源）
+  if (options?.publish !== false) {
+    ;(globalThis as DshForgeWorkbenchGlobal).__DSH_FORGE_WORKBENCH__ = bridge
+  }
   return bridge
 }
 

@@ -14,12 +14,13 @@ keywords:
   - 迁移值域映射
   - AC注入
 id: quick-tasks-ac-spec-reviewer
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-18T11:53:49.528Z'
 updated: '2026-11-18T11:53:49.528Z'
 type: lessons
 procedure: true
 supersedes: '2026-11-18T04:39:14.475Z'
+confirmed_at: '2026-11-22T15:34:52.583Z'
 ---
 # 判例：拆解漏承接提案触点表交付项（bug 92686d15 → a968006d + 欠账变体 4d34bf0b/90562813）
 

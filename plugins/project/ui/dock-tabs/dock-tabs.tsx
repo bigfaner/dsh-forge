@@ -45,8 +45,12 @@ import type { SessionOpenRequest } from './overview/message-format.js'
 import type { OpenSessionOrchestrator } from '../open-session.js'
 import type { BugQuickAddFn } from '../session-actions.js'
 import { TasksTab } from './overview/task-tab/task-tab.js'
-import type { TransitionTaskView } from './overview/drawer/transition-dialog.js'
+import { TransitionDialog, type TransitionTaskView } from './overview/drawer/transition-dialog.js'
+import { TaskDrawer, useTaskDetail } from './overview/drawer/index.js'
+import { useProjectDocsRoot } from './overview/overview-data.js'
 import {
+  createWorkbenchBridge,
+  type ForgeCenterNav,
   initialOverviewContext,
   type ForgeOverviewContext,
   type ForgeTaskFocus,
@@ -184,8 +188,9 @@ export interface OverviewDockAssemblyProps {
 /**
  * 概览 dock 装配体（纯渲染）：无锚空态 | OverviewTab（renderTasksTab 槽 = TasksTab 全
  * 接线[onOpenTask/onTransition/activeTaskId/featureSlug 聚焦/会话通道]）。
- * m3.1 D21/D23：任务详情弹窗与转移对话框退役于本装配体——迁 ShellHost 常驻树（挂载
- * 独立于 dock，对话中直接打开）；任务行/DAG 节点/泳道卡片三途径经 onOpenTask 汇于
+ * m3.1 D21/D23：任务详情弹窗与转移对话框退役于本装配体——壳宿主面迁 ShellHost 常驻树
+ * （挂载独立于 dock，对话中直接打开）；无壳官方宿主面由 ForgeOverviewTab 桥订阅层自挂载。
+ * 任务行/DAG 节点/泳道卡片三途径经 onOpenTask 汇于
  * 桥 openTaskDrawer；会话头挂接 pill（4.2）经 taskFocus 注入（feature 选中 + 子 tab 切换）。
  */
 export function OverviewDockAssembly({
@@ -373,7 +378,8 @@ export function OverviewDockBody({
  * 缺席（inject 缝缺席/SSR 单测）= 文档开出降级（文档行非交互），概览主体照常呈现。
  */
 export interface ForgeOverviewTabProps {
-  /** 工作台桥（插件 inject face——锚定上下文订阅源 + 弹窗/对话框写面；缺席 = 无锚空态） */
+  /** 工作台桥（插件 inject face——锚定上下文订阅源 + 弹窗/对话框写面；缺席 = 无壳宿主：
+   *  锚走自解析缝、弹窗/对话框由本 tab body 自挂载） */
   readonly bridge?: Pick<WorkbenchBridge, 'subscribe' | 'getSnapshot' | 'openTaskDrawer' | 'openTaskTransition'>
   /** 官方右栏导航服务（插件 inject face——文档开出缝；缺席 = 文档行非交互呈现） */
   readonly sidebarRight?: DockSidebarRightMirror
@@ -443,18 +449,25 @@ export function ForgeOverviewSectionHost({ renderSlot, ...tabProps }: ForgeOverv
     </>
   )
 }
+/** 无壳宿主本地桥导航位（官方宿主无 layout 桥面——弹窗路径零消费，占位不动作） */
+const LOCAL_BRIDGE_NAV: ForgeCenterNav = { showKnowledge: () => {}, showSession: () => {} }
+
+type OverviewBridgeSource = NonNullable<ForgeOverviewTabProps['bridge']>
+
 /** 概览 tab body 桥订阅层（useSyncExternalStore 读锚定上下文 + 任务聚焦 + 弹窗受控态
- *  ——ShellHost/pill 点击写回驱动；任务行 → 弹窗/对话框经桥写面[D23 跨树通道]） */
+ *  ——ShellHost/pill 点击写回驱动；任务行 → 弹窗/对话框经桥写面[D23 跨树通道]）。
+ *  无壳宿主（桥注入缺席——官方 web/desktop）：任务详情弹窗与转移对话框由本层自挂载
+ *  ——插件本地桥（不发布页内全局）承载受控态；壳宿主在场维持 ShellHost 挂载，零行为差异。 */
 function OverviewTabWithBridge(props: ForgeOverviewTabProps): ReactNode {
-  const bridge = props.bridge
+  const shellBridge = props.bridge
+  const [localBridge] = useState(() => createWorkbenchBridge(LOCAL_BRIDGE_NAV, { publish: false }))
+  const local = shellBridge === undefined
+  const bridge: OverviewBridgeSource = shellBridge ?? localBridge
   const subscribe = useCallback(
-    (onChange: () => void): (() => void) => (bridge === undefined ? () => {} : bridge.subscribe(onChange)),
+    (onChange: () => void): (() => void) => bridge.subscribe(onChange),
     [bridge],
   )
-  const readSnapshot = useCallback(
-    () => (bridge === undefined ? null : bridge.getSnapshot()),
-    [bridge],
-  )
+  const readSnapshot = useCallback(() => bridge.getSnapshot(), [bridge])
   const snapshot = useSyncExternalStore(subscribe, readSnapshot, readSnapshot)
   const bridgeOverview = snapshot?.overview ?? initialOverviewContext()
   // 概览锚自解析补位（fix-11 缺陷 A；bug 41a19182 斩传输）：桥锚 projectId 非空 = 桥裁决
@@ -466,33 +479,147 @@ function OverviewTabWithBridge(props: ForgeOverviewTabProps): ReactNode {
     bridgeOverview.projectId === null && self !== null
       ? { projectId: self.projectId, workspaceId: self.workspaceId, sessionCount: self.sessionCount }
       : bridgeOverview
-  // 任务行 → 弹窗 / ⋯ 转移 → 对话框（桥写面——弹窗与对话框挂 ShellHost[D23 挂载独立]）
+  // 任务行 → 弹窗 / ⋯ 转移 → 对话框（桥写面——壳宿主面挂 ShellHost[D23 挂载独立]，
+  // 无壳宿主面挂本层下文）
   const openTask = useCallback(
     (taskId: string): void => {
-      bridge?.openTaskDrawer(taskId)
+      bridge.openTaskDrawer(taskId)
     },
     [bridge],
   )
   const openTransition = useCallback(
     (taskId: string, toStatus?: TaskStatus): void => {
-      bridge?.openTaskTransition({ taskId, ...(toStatus !== undefined ? { toStatus } : {}) })
+      bridge.openTaskTransition({ taskId, ...(toStatus !== undefined ? { toStatus } : {}) })
     },
     [bridge],
   )
+
   return (
-    <OverviewDockBody
-      overview={overview}
-      taskFocus={snapshot?.taskFocus ?? null}
-      drawerTaskId={snapshot?.drawerTaskId ?? null}
-      onOpenTask={openTask}
-      onOpenTransition={openTransition}
-      sidebarRight={props.sidebarRight}
-      onOpenSession={props.onOpenSession}
-      onOpenWorkerSession={props.onOpenWorkerSession}
-      openSession={props.openSession}
-      addBugToSession={props.addBugToSession}
-      makeClient={props.makeClient}
-    />
+    <>
+      <OverviewDockBody
+        overview={overview}
+        taskFocus={snapshot?.taskFocus ?? null}
+        drawerTaskId={snapshot?.drawerTaskId ?? null}
+        onOpenTask={openTask}
+        onOpenTransition={openTransition}
+        sidebarRight={props.sidebarRight}
+        onOpenSession={props.onOpenSession}
+        onOpenWorkerSession={props.onOpenWorkerSession}
+        openSession={props.openSession}
+        addBugToSession={props.addBugToSession}
+        makeClient={props.makeClient}
+      />
+      {local ? (
+        <TaskDialogOverlays
+          bridge={localBridge}
+          overview={overview}
+          {...(props.sidebarRight !== undefined ? { sidebarRight: props.sidebarRight } : {})}
+          {...(props.onOpenSession !== undefined ? { onOpenSession: props.onOpenSession } : {})}
+          {...(props.openSession !== undefined ? { openSession: props.openSession } : {})}
+          {...(props.makeClient !== undefined ? { makeClient: props.makeClient } : {})}
+        />
+      ) : null}
+    </>
+  )
+}
+
+/**
+ * 任务弹窗 + 转移对话框挂载面（壳侧 ShellHost 同形——无壳官方宿主由概览 tab body 自挂载）：
+ * 桥 drawerTaskId 受控条件挂载（关闭即卸载 = 几何逐开弃置）；⋯ 菜单/抽屉「转移状态」经桥
+ * transitionFocus（nonce 对照应用）→ 目标拉取后开对话框。
+ */
+export interface TaskDialogOverlaysProps {
+  /** 受控桥（subscribe/getSnapshot + 关闭写面） */
+  readonly bridge: Pick<WorkbenchBridge, 'subscribe' | 'getSnapshot' | 'closeTaskDrawer'>
+  /** 锚定项目上下文（projectId null = 两窗均不挂载——不猜项目） */
+  readonly overview: ForgeOverviewContext
+  /** 官方右栏导航服务（文档开出缝；缺席 = 弹窗文档 chip 非交互） */
+  readonly sidebarRight?: DockSidebarRightMirror
+  readonly onOpenSession?: (sessionId: string) => void
+  readonly openSession?: OpenSessionOrchestrator
+  /** RPC client 构造器（缺省各组件 Typert 真身；注入 = 测试面） */
+  readonly makeClient?: RpcClientFactory
+}
+
+export function TaskDialogOverlays({ bridge, overview, sidebarRight, onOpenSession, openSession, makeClient }: TaskDialogOverlaysProps): ReactNode {
+  const subscribe = useCallback(
+    (onChange: () => void): (() => void) => bridge.subscribe(onChange),
+    [bridge],
+  )
+  const readSnapshot = useCallback(() => bridge.getSnapshot(), [bridge])
+  const snapshot = useSyncExternalStore(subscribe, readSnapshot, readSnapshot)
+  const drawerTaskId = snapshot.drawerTaskId
+  const [transitionTaskId, setTransitionTaskId] = useState<string | null>(null)
+  const [transitionPreset, setTransitionPreset] = useState<TaskStatus | undefined>(undefined)
+  const appliedTransitionNonceRef = useRef(-1)
+  const transitionFocus = snapshot.transitionFocus
+  useEffect(() => {
+    const apply = nextTaskFocusApply(appliedTransitionNonceRef.current, transitionFocus)
+    if (apply === null) return
+    appliedTransitionNonceRef.current = apply.nonce
+    setTransitionTaskId(apply.taskId)
+    setTransitionPreset(apply.toStatus)
+  }, [transitionFocus])
+  const handleCloseTransition = useCallback((): void => {
+    setTransitionTaskId(null)
+    setTransitionPreset(undefined)
+  }, [])
+  const [dialogLoad] = useTaskDetail(overview.projectId ?? '', transitionTaskId, makeClient)
+  const transitionTarget: TransitionTarget | null =
+    transitionTaskId !== null && dialogLoad.detail !== undefined
+      ? {
+          task: dialogLoad.detail,
+          allowedTransitions: dialogLoad.detail.allowedTransitions,
+          ...(transitionPreset !== undefined ? { presetToStatus: transitionPreset } : {}),
+        }
+      : null
+  const docsRoot = useProjectDocsRoot(drawerTaskId !== null ? overview.projectId : null)
+  const handleStartSession = useCallback(
+    (request: SessionOpenRequest): void => {
+      if (overview.workspaceId === null || openSession === undefined) return
+      void openSession.openSessionWithPreset({
+        workspaceId: overview.workspaceId,
+        ...(request.mode !== undefined ? { mode: request.mode } : {}),
+        prefill: request.prefill,
+        ...(request.autosend === true ? { autosend: true } : {}),
+      })
+    },
+    [overview.workspaceId, openSession],
+  )
+  const handleDrawerDocOpenError = useCallback((message: string): void => {
+    console.warn(`[dsh-forge/project] 任务弹窗文档开出失败：${message}`)
+  }, [])
+  const projectId = overview.projectId
+  return (
+    <>
+      {drawerTaskId !== null && projectId !== null ? (
+        <TaskDrawer
+          projectId={projectId}
+          taskId={drawerTaskId}
+          onClose={bridge.closeTaskDrawer}
+          {...(sidebarRight !== undefined
+            ? { onOpenDoc: dockDocOpener(sidebarRight, projectId, handleDrawerDocOpenError) }
+            : {})}
+          {...(onOpenSession !== undefined ? { onOpenSession } : {})}
+          {...(makeClient !== undefined ? { makeClient } : {})}
+          {...(openSession !== undefined ? { onStartSession: handleStartSession } : {})}
+          {...(docsRoot !== undefined ? { docsRoot } : {})}
+        />
+      ) : null}
+      {transitionTarget !== null && projectId !== null ? (
+        <TransitionDialog
+          projectId={projectId}
+          task={transitionTarget.task}
+          allowedTransitions={transitionTarget.allowedTransitions}
+          {...(transitionTarget.presetToStatus !== undefined
+            ? { presetToStatus: transitionTarget.presetToStatus }
+            : {})}
+          onCancel={handleCloseTransition}
+          onDone={handleCloseTransition}
+          {...(makeClient !== undefined ? { makeClient } : {})}
+        />
+      ) : null}
+    </>
   )
 }
 

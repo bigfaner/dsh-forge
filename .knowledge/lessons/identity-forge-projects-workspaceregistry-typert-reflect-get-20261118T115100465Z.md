@@ -16,11 +16,12 @@ keywords:
   - 点分键
   - reflect.get
 id: identity-forge-projects-workspaceregistry-typert-reflect-get
-status: unconfirmed
+status: confirmed
 version_ts: '2026-11-18T11:51:00.465Z'
 updated: '2026-11-18T11:51:00.465Z'
 type: lessons
 procedure: true
+confirmed_at: '2026-11-22T15:34:52.583Z'
 ---
 # 判例：forgeSpecs identity 缝官方宿主两轮返工（bug b990aa94 → ac27ab1a）
 

@@ -1,6 +1,9 @@
 ---
 title: typert strict 迁移配方要点（插件包接入官方 generator 生成链）
-summary: '插件包以 @deepseek-ai/dsh-typert-generator 双半生成替代手写 descriptor 表的配方：host 半改 @Remote 装饰器源码形态、双 face tsconfig 聚合、bundle-free writePackageArtifacts 生成步、client 半消费 ./remote 投影、生成物完整性钉替双表 pin、传输 client 镜像族收敛单源。'
+summary: >-
+  插件包以 @deepseek-ai/dsh-typert-generator 双半生成替代手写 descriptor 表的配方：host 半改
+  @Remote 装饰器源码形态、双 face tsconfig 聚合、bundle-free writePackageArtifacts
+  生成步、client 半消费 ./remote 投影、生成物完整性钉替双表 pin、传输 client 镜像族收敛单源。
 keywords:
   - typert
   - strict
@@ -13,10 +16,11 @@ domainPath: docs/conventions/
 来源任务: 1.3/1.4/1.5/1.6（收口核验 1.7 沉淀）
 bug id: 无
 id: typert-strict-migration-recipe-plugin-package
-status: unconfirmed
+status: confirmed
 type: conventions
 version_ts: '2026-11-16T00:00:00.000Z'
 related_doc: .forge/docs/proposals/typert-strict-migration/proposal.md
+confirmed_at: '2026-11-22T15:34:52.583Z'
 ---
 
 # typert strict 迁移配方要点（插件包接入官方 generator 生成链）

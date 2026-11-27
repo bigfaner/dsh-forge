@@ -390,7 +390,7 @@ export function TasksTabBody({
               {/* fix-7：官方 Pill 非 ref 转发面（forwardRef 缺席）——Tooltip cloneElement 锚 ref
                   落空即气泡恒不挂（D18 计数注悬停面失活）。dswf-tipwrap 包裹 span = 官方 Tooltip
                   锚定包裹机制（components.css 单源）——锚 = 包裹矩形，Pill 满贴零形变 */}
-              <span className="dswf-tipwrap">
+              <span className="dswf-tipwrap dswf-tt-contwrap">
                 <Pill
                   className="dswf-tt-featpill"
                   data-dswf-tt-contpill={pillKey}

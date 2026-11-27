@@ -79,6 +79,18 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* 容器 pill 的 Menu 根包裹（官方 Menu root span = 工具栏 flex 项）+ Tooltip 锚定包裹：
+   两层均可收缩（min-width 0）——行超宽时让位序 = spacer → pill 截断（featname 省略号），
+   视图钮恒不收缩。缺此 = 包裹层最小宽钉在 pill 内容宽，视图钮被挤到逐字换行。 */
+.dswf-tt-taskbar > span:has(.dswf-tt-contwrap),
+.dswf-tt-contwrap {
+  min-width: 0;
+}
+
+.dswf-tt-contwrap {
+  display: inline-flex;
+}
+
 .dswf-tt-featpill {
   max-width: 220px; /* dsw-raw 原型 feature pill 限宽刻度（dock 窄列保护） */
   display: inline-flex;
@@ -549,6 +561,8 @@ body[data-ds-dark-theme] .dswf-tt-card {
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
   height: 22px; /* dsw-raw 原型 seg 行刻度（dswf-tt-seg-btn 同值——同款式族） */
+  flex: none; /* 工具栏行恒不收缩——CJK 文本可逐字断行，收缩即标签换行 */
+  white-space: nowrap;
   padding: 0 var(--dsw-font-xs-13-line-height);
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-xs);
