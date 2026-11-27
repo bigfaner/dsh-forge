@@ -61,9 +61,6 @@ flowchart TD
 
 会议结束后落纪要，只写结论性事实，不留过程叙事。
 
-**双归宿路径**：
-
-- 议题挂提案/feature → `proposals/<slug>/roundtable.md`；
-- 议题无关 → `roundtables/<slug>/roundtable.md`（文档根新增与 proposals/probes 平行目录）。
+**落点（单轨）**：纪要一律落 `roundtables/<slug>/roundtable.md`（文档根下，与 probes / spikes 平行；slug = 议题挂接的 spec，无挂接则取议题主题）。
 
 **纪要结构**：议题共识 / 参会专家与分工方向 / 各方立场 / 交锋点 / 结论与分歧残留。
