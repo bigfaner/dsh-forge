@@ -12,6 +12,7 @@
 //   声明拉取缝降级经 onDeclareDiag warn 留痕（AGENTS 1.6/§7）。
 import type { ForgeDirDeclaration, ForgeDirSources } from "@dsh-forge/lib-path";
 import {
+  DECLARED_DIR_KEYS_PREFIX,
   declaredDirKeys,
   declaredEntryOf,
   isValidDirParam,
@@ -300,53 +301,129 @@ function toolsFaceOf(ctx: unknown): { register?(definition: unknown): () => void
   }
 }
 
-/** 双工具注册（官方 tools 缝——apply 期注册、unmount 撤回；零注册降级 = no-op disposer）。
+/** 双工具注册句柄（dispose = 卸载全撤回；refresh = 目录键声明变化后重注册，见下） */
+export interface ForgePathsToolsHandle {
+  dispose: () => void;
+  /**
+   * 目录键声明变化后重注册：forge_resolve_path 的 dest 枚举与描述按当次声明集重新生成
+   * （带参目的地清单未变 = 不重注册，返回 false）。同名守卫只对非本插件持有的定义生效。
+   */
+  refresh: () => boolean;
+}
+
+/** 带参目的地清单签名（声明序——refresh 的变更判据） */
+function destinationsSignatureOf(face: ForgePathsToolFace): string {
+  return describeDestinations(face.declarations());
+}
+
+/** 双工具注册（官方 tools 缝——apply 期注册、unmount 撤回；零注册降级 = no-op 句柄）。
  *  同名守卫：逐工具现查 tools 面已存同名定义（tools.get）——先在者胜，本插件跳过并
  *  diag warn（不缓存——每次装配注册期现求值，跨插件服务在场性消费点现查口径）。 */
 export function registerForgePathsTools(
   ctx: unknown,
   deps: { readonly face: ForgePathsToolFace; readonly resolveProjectId: BugProjectIdResolver },
   diag: (line: string, level?: "info" | "warn" | "error") => void,
-): { dispose: () => void } {
+): ForgePathsToolsHandle {
   const toolsFace = toolsFaceOf(ctx);
   const register = typeof toolsFace?.register === "function" ? toolsFace.register.bind(toolsFace) : undefined;
   if (register === undefined) {
     diag("[project] ctx.tools.register 缺席（官方 tools 缝缺失）——forge_dirs/forge_resolve_path 零注册（目录查询面对本宿主不可达，降级不阻载）", "warn");
-    return { dispose: () => {} };
+    return { dispose: () => {}, refresh: () => false };
   }
-  const definitions: readonly ForgePathToolDefinition[] = [
-    createForgeDirsTool(deps.face, deps.resolveProjectId),
-    createForgeResolvePathTool(deps.face, deps.resolveProjectId),
-  ];
-  const disposers: (() => void)[] = [];
-  for (const definition of definitions) {
-    // 同名守卫现查（先在者胜——官方宿主可能已有同名注册，跳过不覆盖）
-    let existing: unknown;
-    try {
-      existing = toolsFace?.get?.(definition.name);
-    } catch {
-      existing = undefined;
+  /** 本插件持有的注销器（按工具名——refresh 先撤旧再注册新，同名守卫对自有定义放行） */
+  let owned = new Map<string, () => void>();
+  const withdraw = (): void => {
+    for (const dispose of owned.values()) {
+      try {
+        dispose();
+      } catch {
+        // 宿主注销面异常隔离——卸载收口不外抛
+      }
     }
-    if (existing !== undefined && existing !== null) {
-      diag(`[project] tool '${definition.name}' 已存在同名定义——先在者胜，本插件跳过注册（forge-paths 目录查询面让位）`, "warn");
-      continue;
-    }
-    try {
-      disposers.push(register(definition));
-    } catch (cause) {
-      diag(`[project] forge-paths tool register failed (${definition.name}): ${cause instanceof Error ? cause.message : String(cause)}`, "error");
-    }
-  }
-  diag(`[project] forge-paths 双工具注册完成：${String(disposers.length)}/2 员经官方 ctx.tools.register（unmount 全撤回）`, "info");
-  return {
-    dispose: () => {
-      for (const dispose of disposers) {
+    owned = new Map();
+  };
+  const registerAll = (): void => {
+    const definitions: readonly ForgePathToolDefinition[] = [
+      createForgeDirsTool(deps.face, deps.resolveProjectId),
+      createForgeResolvePathTool(deps.face, deps.resolveProjectId),
+    ];
+    for (const definition of definitions) {
+      if (!owned.has(definition.name)) {
+        // 同名守卫现查（先在者胜——官方宿主可能已有同名注册，跳过不覆盖）
+        let existing: unknown;
         try {
-          dispose();
+          existing = toolsFace?.get?.(definition.name);
         } catch {
-          // 宿主注销面异常隔离——卸载收口不外抛
+          existing = undefined;
+        }
+        if (existing !== undefined && existing !== null) {
+          diag(`[project] tool '${definition.name}' 已存在同名定义——先在者胜，本插件跳过注册（forge-paths 目录查询面让位）`, "warn");
+          continue;
         }
       }
+      try {
+        owned.set(definition.name, register(definition));
+      } catch (cause) {
+        diag(`[project] forge-paths tool register failed (${definition.name}): ${cause instanceof Error ? cause.message : String(cause)}`, "error");
+      }
+    }
+    diag(`[project] forge-paths 双工具注册完成：${String(owned.size)}/2 员经官方 ctx.tools.register（unmount 全撤回）`, "info");
+  };
+  registerAll();
+  let signature = destinationsSignatureOf(deps.face);
+  let active = true;
+  return {
+    dispose: () => {
+      active = false;
+      withdraw();
+    },
+    refresh: (): boolean => {
+      // 卸载后到达的声明变化事件不再重注册（晚到回调防护）
+      if (!active) return false;
+      const next = destinationsSignatureOf(deps.face);
+      if (next === signature) return false;
+      signature = next;
+      withdraw();
+      registerAll();
+      return true;
     },
   };
+}
+
+/**
+ * 目录键声明变化监听（官方 cordis `internal/service` 事件——服务提供与注销时各发一次，
+ * 声明方在 apply 期 provide 的于其激活时点补发；载荷 = 服务名 + 当前值）。只对
+ * `dirKeys.<声明方>` 约定名触发回调；同轮多个事件合并为一次回调（微任务合并）。
+ * 事件面缺席/订阅抛 = 不监听零抛（fail-soft——工具仍可按注册期枚举工作）。
+ * @returns 退订器（未订阅时 no-op）
+ */
+export function watchDirKeysDeclarations(ctx: unknown, onChange: () => void): () => void {
+  const on = (ctx as { on?: (name: string, listener: (...args: unknown[]) => void) => unknown }).on;
+  if (typeof on !== "function") return () => {};
+  let scheduled = false;
+  let subscribed = true;
+  let listener: ((name: unknown) => void) | undefined;
+  try {
+    listener = (name: unknown): void => {
+      if (!subscribed || typeof name !== "string" || !name.startsWith(DECLARED_DIR_KEYS_PREFIX)) return;
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(() => {
+        scheduled = false;
+        if (!subscribed) return; // 退订后排空的合并回调不再触发
+        try {
+          onChange();
+        } catch {
+          // 回调异常隔离——监听面不因单次刷新失败而失效
+        }
+      });
+    };
+    const off = on.call(ctx, "internal/service", listener);
+    return () => {
+      subscribed = false;
+      if (typeof off === "function") void off();
+    };
+  } catch {
+    return () => {};
+  }
 }

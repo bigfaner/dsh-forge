@@ -61,7 +61,7 @@ import {
 } from "./assembly/typert-remotes.js";
 import { isGitWorktreeServiceFace, createWorktreesResident, type WorktreesRegistryFace } from "./assembly/worktrees-port.js";
 import { registerBugTools, createBugProjectIdResolver } from "./tools/register.js";
-import { createForgePathsToolFace, registerForgePathsTools } from "./tools/forge-paths.js";
+import { createForgePathsToolFace, registerForgePathsTools, watchDirKeysDeclarations } from "./tools/forge-paths.js";
 import type { ReflectDeclarePullFace } from "./dirs/anchors.js";
 import { consoleDiagFallback, DIAG_EVENT, emitDiagOrFallback, type DiagEventPayload } from "@dsh-forge/lib-diag";
 import { assertInstallMutex } from "./install-mutex.js";
@@ -390,7 +390,7 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
   // forge_dirs/forge_resolve_path 双 agent 只读工具注册（官方 tools 缝——目录事实查询面；
   // 数据源 = dirs/anchors.ts 注册表单源 + dirKeys.* 反向拉取 declare merge 现查）。
   // 装配期同名守卫：tools 面已存同名定义即跳过 + diag warn（先在者胜，不缓存）。
-  const disposePathTools = registerForgePathsTools(
+  const pathTools = registerForgePathsTools(
     face,
     {
       face: createForgePathsToolFace({
@@ -401,13 +401,22 @@ const projectPlugin: ProjectPlugin = (ctx: unknown, config: ProjectHostConfig = 
       resolveProjectId: createBugProjectIdResolver({ db: domainDb, coreProjects: coreProjectsOf }),
     },
     (line, level) => diag(line, level),
-  ).dispose;
+  );
+  // 目录键声明变化跟随（官方 internal/service 事件——dirKeys.<声明方> 提供或注销时，
+  // 含晚于本插件装载的声明方）：forge_resolve_path 的 dest 枚举按当次声明集重注册。
+  // 事件面缺席 = 不跟随（工具按注册期枚举工作，执行期校验仍现算）。
+  const unwatchDirKeys = watchDirKeysDeclarations(ctx, () => {
+    if (pathTools.refresh()) {
+      diag("[project] 目录键声明变化——forge_dirs/forge_resolve_path 已按当次声明集重注册", "info");
+    }
+  });
   // worktree 域插件组合装载（诊断缝透传——装配失败/能力缺席语义归插件自身 fail-soft 面）
   const disposeWorktrees = worktreePlugin(ctx, { diag: (line) => diag(line) });
   return () => {
     disposeWorktrees();
     disposeBugTools?.();
-    disposePathTools?.();
+    unwatchDirKeys();
+    pathTools.dispose();
     // provider 生命周期归 scope（cordis provide 注销面由宿主管辖——本插件零自持资源）
   };
 };

@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import type { ForgeDirDeclaration, ForgeDirSources } from "@dsh-forge/lib-path";
-import { FORGE_DIRS_BASE_DECLARATION, mergeDeclarations, type ReflectDeclarePullFace } from "../dirs/anchors.js";
+import { FORGE_DIRS_BASE_DECLARATION, collectDeclaredDirKeys, mergeDeclarations, type ReflectDeclarePullFace } from "../dirs/anchors.js";
 import { PROJECT_DIRS_DECLARATION } from "../dirs/project-entries.js";
 import {
   ForgeDirPathInvalidError,
@@ -17,6 +17,7 @@ import {
   createForgePathsToolFace,
   createForgeResolvePathTool,
   registerForgePathsTools,
+  watchDirKeysDeclarations,
   type ForgePathsToolFace,
 } from "./forge-paths.js";
 
@@ -281,12 +282,120 @@ describe("注册缝（官方 tools 缝——同名守卫先在者胜）", () => 
     handle.dispose();
   });
 
-  it("register 缝缺席 = 零注册 + warn 留痕（no-op disposer 调用方零分支）", () => {
+  it("register 缝缺席 = 零注册 + warn 留痕（no-op 句柄调用方零分支）", () => {
     const diag = vi.fn();
     const handle = registerForgePathsTools({}, { face: faceOf(), resolveProjectId: RESOLVER }, diag);
     expect(handle.dispose).toBeTypeOf("function");
     expect(() => handle.dispose()).not.toThrow();
+    expect(handle.refresh()).toBe(false);
     expect(diag).toHaveBeenCalledWith(expect.stringContaining("ctx.tools.register 缺席"), "warn");
+  });
+});
+
+describe("目录键声明变化跟随（refresh——dest 枚举按当次声明集重注册）", () => {
+  /** tools 缝替身：按名保存最近一次注册的定义，注销即删 */
+  function toolsStub() {
+    const defs = new Map<string, { name: string; parameters: { properties: { dest: { enum?: string[] } } } }>();
+    let registerCalls = 0;
+    return {
+      defs,
+      registerCalls: () => registerCalls,
+      ctx: {
+        tools: {
+          register: (d: { name: string; parameters: { properties: { dest: { enum?: string[] } } } }) => {
+            registerCalls += 1;
+            defs.set(d.name, d);
+            return () => void defs.delete(d.name);
+          },
+          get: (name: string) => defs.get(name),
+        },
+      },
+    };
+  }
+
+  it("晚装载的声明方：refresh 后 dest 枚举包含新键；清单未变则不重注册；卸载后 refresh 无效", () => {
+    const props: Record<string, unknown> = {};
+    const reflect: ReflectDeclarePullFace = { props, get: (name) => props[name] };
+    const face: ForgePathsToolFace = { anchorsOf: async () => SOURCES, declarations: () => mergeDeclarations(collectDeclaredDirKeys(reflect)) };
+    const stub = toolsStub();
+    const handle = registerForgePathsTools(stub.ctx, { face, resolveProjectId: RESOLVER }, () => {});
+    const destEnum = (): string[] | undefined => stub.defs.get("forge_resolve_path")!.parameters.properties.dest.enum;
+    expect(destEnum()).toBeUndefined(); // 注册期无带参声明
+    props["dirKeys.spec"] = specDeclaration.entries; // 声明方晚于工具注册上线
+    expect(destEnum()).toBeUndefined(); // 未 refresh 前枚举滞后
+    expect(handle.refresh()).toBe(true);
+    expect(destEnum()).toEqual(["spec.dir", "spec.dossier_dir"]);
+    expect(stub.defs.get("forge_dirs")).toBeDefined(); // 双工具整体重注册
+    const calls = stub.registerCalls();
+    expect(handle.refresh()).toBe(false); // 清单未变——零重注册
+    expect(stub.registerCalls()).toBe(calls);
+    delete props["dirKeys.spec"]; // 声明方注销
+    expect(handle.refresh()).toBe(true);
+    expect(destEnum()).toBeUndefined();
+    handle.dispose();
+    expect(stub.defs.size).toBe(0);
+    props["dirKeys.spec"] = specDeclaration.entries;
+    expect(handle.refresh()).toBe(false); // 卸载后晚到事件不复活工具
+    expect(stub.defs.size).toBe(0);
+  });
+
+  it("同名守卫对自有定义放行：外来同名 forge_dirs 恒让位，自有 forge_resolve_path 照常重注册", () => {
+    const props: Record<string, unknown> = {};
+    const face: ForgePathsToolFace = {
+      anchorsOf: async () => SOURCES,
+      declarations: () => mergeDeclarations(collectDeclaredDirKeys({ props, get: (name) => props[name] })),
+    };
+    const stub = toolsStub();
+    stub.defs.set("forge_dirs", { name: "forge_dirs", parameters: { properties: { dest: {} } } }); // 先在者占名
+    const diag = vi.fn();
+    const handle = registerForgePathsTools(stub.ctx, { face, resolveProjectId: RESOLVER }, diag);
+    expect([...stub.defs.keys()]).toEqual(["forge_dirs", "forge_resolve_path"]);
+    props["dirKeys.spec"] = specDeclaration.entries;
+    expect(handle.refresh()).toBe(true);
+    expect(stub.defs.get("forge_resolve_path")!.parameters.properties.dest.enum).toEqual(["spec.dir", "spec.dossier_dir"]);
+    expect(stub.defs.has("forge_dirs")).toBe(true); // 先在者仍在场（未被本插件撤回）
+    handle.dispose();
+    expect(stub.defs.has("forge_dirs")).toBe(true); // 只撤自有
+    expect(stub.defs.has("forge_resolve_path")).toBe(false);
+  });
+});
+
+describe("watchDirKeysDeclarations（官方 internal/service 事件——dirKeys.* 变化回调）", () => {
+  it("只对 dirKeys.* 约定名触发；同轮多事件合并为一次回调；退订后不再触发", async () => {
+    let listener: ((name: unknown) => void) | undefined;
+    let offs = 0;
+    const ctx = {
+      on: (name: string, l: (n: unknown) => void) => {
+        expect(name).toBe("internal/service");
+        listener = l;
+        return () => void (offs += 1);
+      },
+    };
+    const onChange = vi.fn();
+    const off = watchDirKeysDeclarations(ctx, onChange);
+    listener!("forgeTasks"); // 非约定名
+    listener!("dirKeys.spec");
+    listener!("dirKeys.task_loop");
+    expect(onChange).not.toHaveBeenCalled(); // 微任务合并前
+    await Promise.resolve();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    off();
+    expect(offs).toBe(1);
+    listener!("dirKeys.spec");
+    await Promise.resolve();
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("事件面缺席 / 订阅抛 / 回调抛 = 不监听零抛或监听不失效", async () => {
+    expect(() => watchDirKeysDeclarations({}, () => {})()).not.toThrow();
+    const throwing = { on: () => { throw new Error("inject gate"); } };
+    expect(() => watchDirKeysDeclarations(throwing, () => {})()).not.toThrow();
+    let listener: ((name: unknown) => void) | undefined;
+    watchDirKeysDeclarations({ on: (_n: string, l: (n: unknown) => void) => void (listener = l) }, () => {
+      throw new Error("boom");
+    });
+    expect(() => listener!("dirKeys.spec")).not.toThrow();
+    await Promise.resolve();
   });
 });
 
