@@ -38,8 +38,8 @@ export {
  * FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS（单测同步守护）——十三员全集中
  * worker 可见 = 四动词，其余九员 deny（updateTask/taskStats/listTasks/listBugs 等仅主
  * agent 面——listBugs 台账查询面分治主 agent）。
- * validateMermaid = markdown-kit 插件工具单源锚（plugins/markdown-kit/host/
- * tools/validate-mermaid.ts 导出 MERMAID_TOOL_NAME = 'validateMermaid'——工具面仅主 agent，
+ * validate_mermaid = markdown-kit 插件工具单源锚（plugins/markdown-kit/host/
+ * tools/validate-mermaid.ts 导出 MERMAID_TOOL_NAME = 'validate_mermaid'——工具面仅主 agent，
  * 附录 F deny 约束；本包不反依赖插件包，字面量 + 锚注释对齐）。plugin-forge-spec 三动词不入本 deny：其注册面
  * 预设相依（突击组合物理缺席），driver 的 toolFilter 对未知名 loud 校验会拆 spawn——
  * spec 面收口归 5.1 工具名映射 pin（OQ#2）。
@@ -59,12 +59,12 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'listImplCheckpoints',
   'pauseTask', // task-pause-primitive——单任务暂停入口仅主 agent 面（worker 拒）
   'unblockTask', // blocked-verdict-restore-primitive——blocked→pending 出口仅主 agent 面（worker 拒）
-  'validateMermaid', // markdown-kit 插件工具（MERMAID_TOOL_NAME 单源锚，见上注）
+  'validate_mermaid', // markdown-kit 插件工具（MERMAID_TOOL_NAME 单源锚，见上注）
   // knowledge 归并双 tool（knowledge-stage2-followups #2——用户裁决 2026-11-05「入 deny +
   // distill 专属专家放行」：归并是裁决动词，不随默认面放行——对一切 spawn worker 默认禁；
   // 唯一放行径 = 专家档案 tools 白名单（见 WORKER_EXPERT_RELEASABLE_DENY）或主会话。
   // 工具名单源锚 = plugins/knowledge/host/tools/supersede.ts / reinstate.ts
-  //（followups #1 重命名后名——本包不反依赖插件包，字面量 + 锚注释对齐，同 validateMermaid 先例）。
+  //（followups #1 重命名后名——本包不反依赖插件包，字面量 + 锚注释对齐，同 validate_mermaid 先例）。
   'knowledge_supersede',
   'knowledge_reinstate',
 ]
@@ -73,7 +73,7 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
  * 档案可放行 deny 名单（knowledge-stage2-followups #2 用户裁决 2026-11-05）：deny 默认
  * 面中唯一可经专家档案 tools 白名单显式解锁的名——档案（如项目层 distill 专家）tools 含
  * 该名时从 deny 剔除（keep-only allow 本就全量约束，deny 残留只会拆 spawn）。刻意收窄
- * 名单而非通用「档案在即解锁」：addTask/validateMermaid 等其余 deny 名不随档案放行
+ * 名单而非通用「档案在即解锁」：addTask/validate_mermaid 等其余 deny 名不随档案放行
  * （结构测试钉死），防止任何档案白名单变相扩权。
  */
 export const WORKER_EXPERT_RELEASABLE_DENY: readonly string[] = ['knowledge_supersede', 'knowledge_reinstate']
@@ -254,7 +254,7 @@ const TRIAGE_FORGE_DENY: readonly string[] = FORGE_DENY_IN_WORKER.filter(
  * 两只读台账工具放行（问题分类器自主深挖缺陷背景与 errorType 语义归类；缺陷写面/任务域
  * 写动词/shell/fs 恒 deny——越权动作结构性不可达；输出契约 = 终态 output 文本内的 JSON
  * 决策，由宿主解析忠实执行）。deny 全集 = worker 名表 17 名 − getBug + forge 动词
- * （含 validateMermaid，listBugs 已剔除）+ 全局拒绝集 − {getBug, listBugs}。
+ * （含 validate_mermaid，listBugs 已剔除）+ 全局拒绝集 − {getBug, listBugs}。
  * registeredTools 参数（bug 989997bd）：真机已注册全局工具名在场 = deny 与其求交——官方
  * restrict 未知名 fail-closed loud 校验语义正确，错在滤器产出真机不存在的名（win 域
  * dsh-tool-bash 平台 disabled，名表照收 'bash' 拆 spawn）；缺席（取数缝失败/极简 profile）

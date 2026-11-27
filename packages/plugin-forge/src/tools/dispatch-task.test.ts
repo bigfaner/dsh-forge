@@ -247,7 +247,7 @@ describe('poolOf + classifyPool（池态三分）', () => {
 
 describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）', () => {
   it('当前名表（5.1 全表——OQ#2 上游 standard 组合枚举）：全局拒绝集 + forge 闭环 + 族收窄逐型', () => {
-    // 全局十 + forge 闭环（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS + validateMermaid，含 3b
+    // 全局十 + forge 闭环（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS + validate_mermaid，含 3b
     // stopTaskLoop）为共同底座；族收窄增量 = 名表五上游族按矩阵逐格进 deny
     const base = [
       'aggregateBugs',
@@ -275,7 +275,7 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'unblockTask',
       'update_goal',
       'updateTask',
-      'validateMermaid',
+      'validate_mermaid',
       'workflow',
     ]
     // coding：web ✗（fs/shell/jobs/read-image ✓）——fix-bug 两 bug 写径（recordBug/resolveBug）
@@ -344,11 +344,11 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(triageDeny.has('addTask')).toBe(false)
   })
 
-  it('validateMermaid deny（md-mermaid 插件工具仅主 agent——全 taskType + triage 全收窄形）', () => {
+  it('validate_mermaid deny（md-mermaid 插件工具仅主 agent——全 taskType + triage 全收窄形）', () => {
     for (const t of TASK_TYPES) {
-      expect(deriveWorkerToolFilter(t).deny, `${t} worker deny 应含 validateMermaid`).toContain('validateMermaid')
+      expect(deriveWorkerToolFilter(t).deny, `${t} worker deny 应含 validate_mermaid`).toContain('validate_mermaid')
     }
-    expect(deriveTriageToolFilter().deny).toContain('validateMermaid')
+    expect(deriveTriageToolFilter().deny).toContain('validate_mermaid')
   })
 
   // ───────── knowledge 归并双 tool 裁决（knowledge-stage2-followups #2——用户裁决 2026-11-05） ─────────
@@ -388,10 +388,10 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(allow!.filter((n) => deny.includes(n))).toEqual([])
   })
 
-  it('可放行面收窄钉死：其余 deny 名不随档案解锁（addTask/validateMermaid 即便写入档案 tools 仍在 deny）；未列双 tool 的普通档案默认 deny 不失守', () => {
-    const { deny } = deriveWorkerToolFilter('doc', undefined, ['addTask', 'validateMermaid', ...DISTILL_EXPERT_TOOLS])
+  it('可放行面收窄钉死：其余 deny 名不随档案解锁（addTask/validate_mermaid 即便写入档案 tools 仍在 deny）；未列双 tool 的普通档案默认 deny 不失守', () => {
+    const { deny } = deriveWorkerToolFilter('doc', undefined, ['addTask', 'validate_mermaid', ...DISTILL_EXPERT_TOOLS])
     expect(deny).toContain('addTask')
-    expect(deny).toContain('validateMermaid')
+    expect(deny).toContain('validate_mermaid')
     const plain = deriveWorkerToolFilter('doc', undefined, ['read', 'grep'])
     expect(plain.deny).toContain('knowledge_supersede')
     expect(plain.deny).toContain('knowledge_reinstate')
@@ -405,7 +405,7 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'getBug', 'glob', 'grep', 'job_kill', 'job_list', 'job_output', 'listBugs', 'listTasks',
       'present', 'pwsh', 'queryTask', 'read', 'read_image', 'recordBug', 'resolveBug',
       'send_message', 'skill', 'submitTask', 'subagent_fork', 'todo_write', 'updateTask',
-      'validateMermaid', 'web_fetch', 'web_search', 'workflow', 'write',
+      'validate_mermaid', 'web_fetch', 'web_search', 'workflow', 'write',
       'stopTaskLoop', 'taskStats', 'list_agents', 'interrupt_agent', 'create_goal', 'get_goal',
       'update_goal', 'recordImplCheckpoint', 'queryImplCheckpoint', 'listImplCheckpoints',
     ]
@@ -417,7 +417,7 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     // 收窄语义不回退：真机在场的 forge 动词与 shell（pwsh）仍全 deny
     expect(filtered.deny).toContain('pwsh')
     expect(filtered.deny).toContain('submitTask')
-    expect(filtered.deny).toContain('validateMermaid')
+    expect(filtered.deny).toContain('validate_mermaid')
     // 注册面缺席 = 既有全表形态（行为兼容——loud fail 面保持）
     expect(deriveTriageToolFilter().deny).toContain('bash')
   })
