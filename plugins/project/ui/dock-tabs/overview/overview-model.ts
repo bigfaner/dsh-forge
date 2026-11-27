@@ -233,3 +233,15 @@ export function absSpecDirOf(workspaceRoot: string, dirRel: string): string {
   const root = workspaceRoot.replaceAll('\\', '/').replace(/\/+$/, '')
   return dirRel === '' ? root : `${root}/${dirRel}`
 }
+
+/**
+ * spec 文档 rel（基准 = 项目根，含 `.forge/` 前缀）→ onOpenDoc 入参 rel（基准 = forgeDir，
+ * dockDocOpener 与 feature 文档同口径）。
+ * Root cause: 两域 relPath 基准不同（spec = 项目根 / feature = forgeDir），spec-tab 曾把
+ * 项目根基准 rel 直传 forgeDir 基准开出径 → 路径多拼一层 `.forge`（bug 8196003a）。
+ * 仅剥 `.forge/` 段前缀；不在 .forge 下的自定义 doc_path 原样返回（由开出径自行判存）。
+ */
+export function specForgeDocRelOf(relPath: string): string {
+  const norm = relPath.replaceAll('\\', '/')
+  return norm.startsWith('.forge/') ? norm.slice('.forge/'.length) : norm
+}

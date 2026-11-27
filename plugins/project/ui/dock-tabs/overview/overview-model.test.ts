@@ -21,6 +21,7 @@ import {
   searchQueryOf,
   specDocDirOf,
   specFileFormatOf,
+  specForgeDocRelOf,
   statusFilterParam,
   switchSubtab,
   toggleHead,
@@ -71,6 +72,15 @@ describe('spec 文档区目录列举纯投影（1.2——格式分流 + rel 拼�
     expect(joinSpecFileRel('', 'x.txt')).toBe('x.txt')
     expect(absSpecDirOf('Z:\\ws\\demo', '.forge/specs/spec-a')).toBe('Z:/ws/demo/.forge/specs/spec-a')
     expect(absSpecDirOf('Z:/ws/', '')).toBe('Z:/ws')
+  })
+
+  it('bug 8196003a：specForgeDocRelOf 剥 `.forge/` 前缀（项目根基准 → forgeDir 基准），其余原样', () => {
+    expect(specForgeDocRelOf('.forge/specs/spec-a/spec.md')).toBe('specs/spec-a/spec.md')
+    expect(specForgeDocRelOf('.forge\\specs\\spec-a\\spec.md')).toBe('specs/spec-a/spec.md')
+    expect(specForgeDocRelOf('docs/custom/spec.md')).toBe('docs/custom/spec.md')
+    expect(specForgeDocRelOf('spec.md')).toBe('spec.md')
+    // 段前缀敏感：`.forge-x/` 非同段，不改写
+    expect(specForgeDocRelOf('.forge-x/spec.md')).toBe('.forge-x/spec.md')
   })
 })
 

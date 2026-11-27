@@ -189,9 +189,10 @@ describe('SpecTab（数据路 + 失败两支分开 + 行形态）', () => {
 
   it('展开行：detail 按需装载 → 元数据（标识/档位/Goal·AC/更新）+ 文档区行点击上抛 onOpenDoc', async () => {
     const detail: SpecDetailDto = { ...CARDS[0]!, goals: [{ title: 'g1', acs: [{ criterion: 'c1' }] }], doc: { relPath: '.forge/specs/spec-a/spec.md', dangling: false } }
+    const onOpenDoc = vi.fn()
     const host = await renderSpecTab({
       now: 1_800_000_000_000,
-      onOpenDoc: () => {},
+      onOpenDoc,
       makeSpecsClient: specsClientOf(async () => CARDS, async () => detail),
     })
     const toggle = host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-toggle="spec-a"]')
@@ -209,6 +210,28 @@ describe('SpecTab（数据路 + 失败两支分开 + 行形态）', () => {
     expect(meta!.textContent).toContain('2 · 5')
     const docOpen = host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-doc-open]')
     expect(docOpen?.textContent).toContain('.forge/specs/spec-a/spec.md')
+    // bug 8196003a：doc.relPath 基准 = 项目根，onOpenDoc 基准 = forgeDir——上抛须剥 `.forge/`
+    // 前缀，否则开出路径多拼一层 .forge（文件不存在）；呈现文本仍为原 relPath
+    await act(async () => {
+      docOpen!.click()
+    })
+    expect(onOpenDoc.mock.calls.map((call) => call[0])).toEqual(['specs/spec-a/spec.md'])
+  })
+
+  it('bug 8196003a：doc.relPath 不在 .forge 下（自定义 doc_path）→ 上抛原样不改写', async () => {
+    const detail: SpecDetailDto = { ...CARDS[0]!, goals: [], doc: { relPath: 'docs/custom/spec.md', dangling: false } }
+    const onOpenDoc = vi.fn()
+    const host = await renderSpecTab({
+      onOpenDoc,
+      makeSpecsClient: specsClientOf(async () => CARDS, async () => detail),
+    })
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-toggle="spec-a"]')!.click()
+    })
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-dswf-ov-spec-doc-open]')!.click()
+    })
+    expect(onOpenDoc.mock.calls.map((call) => call[0])).toEqual(['docs/custom/spec.md'])
   })
 
   it('手动刷新：nonce 重取（list 调用次数递增——无 spec-changed 事件缝的兜底入口）', async () => {
@@ -346,10 +369,11 @@ describe('SpecTab（数据路 + 失败两支分开 + 行形态）', () => {
           host.querySelector<HTMLButtonElement>(`[data-dswf-ov-spec-file-open=".forge/specs/spec-a/${rel}"]`)!.click()
         })
       }
+      // bug 8196003a：上抛 forgeDir 基准 rel（剥 `.forge/` 前缀）
       expect(onOpenDoc.mock.calls.map((call) => call[0])).toEqual([
-        '.forge/specs/spec-a/prototype.html',
-        '.forge/specs/spec-a/logo.png',
-        '.forge/specs/spec-a/data.bin',
+        'specs/spec-a/prototype.html',
+        'specs/spec-a/logo.png',
+        'specs/spec-a/data.bin',
       ])
     })
 

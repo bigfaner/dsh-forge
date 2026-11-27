@@ -37,6 +37,7 @@ import {
   searchQueryOf,
   specDocDirOf,
   specFileFormatOf,
+  specForgeDocRelOf,
 } from './overview-model.js'
 import type { SessionOpenRequest } from './message-format.js'
 import './overview.css'
@@ -424,7 +425,7 @@ export function SpecTab({ projectId, search, onOpenDoc, onStartSession, makeSpec
                           className="dswf-ov-act"
                           data-dswf-ov-spec-doc-open={detail.doc.relPath}
                           onClick={() => {
-                            onOpenDoc?.(detail.doc!.relPath)
+                            onOpenDoc?.(specForgeDocRelOf(detail.doc!.relPath))
                           }}
                         >
                           {`📄 ${detail.doc.relPath}${detail.doc.dangling ? '（悬空）' : ''}`}
@@ -460,7 +461,7 @@ export function SpecTab({ projectId, search, onOpenDoc, onStartSession, makeSpec
                                       className="dswf-ov-act"
                                       data-dswf-ov-spec-file-open={entry.rel}
                                       onClick={() => {
-                                        onOpenDoc?.(entry.rel)
+                                        onOpenDoc?.(specForgeDocRelOf(entry.rel))
                                       }}
                                     >
                                       查看
