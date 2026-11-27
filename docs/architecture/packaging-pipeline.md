@@ -58,11 +58,11 @@ staging = BFS闭包( userLayerRow 插件
 ```
 
 - **新增产品包零配置**：被行/预设/依赖引用即自动随包；contracts/path-key 类闭包成员自动入场（e791a46「忘列 path-key」病理结构性消除）。
-- 带技能面的插件在 `STAGING_EXTRAS` 补 skills 物化与关键文件口径（plugin-forge / plugin-forge-spec）。
+- 带技能面与装配行的插件在 `STAGING_EXTRAS` 补 skills/experts 物化与关键文件口径（expert-squad / knowledge / markdown-kit / project / task-loop / spec，各携 cordis.patch.yml 组合装配行本体）。
 - 现值裁决：`knowledge` = `{ userLayerRow: false, staged: false }`——知识库功能不完整，打包形态暂不开放（dev 形态 profile.dev 仍含，开发时全量可用）。UI 面对齐：knowledge 不随包 = 宿主插件位 false = 知识 UI 三登记（左栏入口行/main 面板/召回页签）整组隐藏（bug 2ffb0a82 门控，见 [web-ui-composition.md](web-ui-composition.md) §2）。
 - 不受配置约束的两面：boot overlay 的插件行 config 注入按 profile 树**运行期探测**（[apps/host/src/boot/overlay.ts](../../apps/host/src/boot/overlay.ts) knowledgeRow 门——配置翻转后双形态自动自洽）；dev 形态手维文件不受限。
 
-守护测试：`tests/structure/installer-pipeline.test.ts`（推导集合 pin + 闭包自洽——kill-switch 误伤即红）、`apps/host/src/profile/materialize.test.ts`（模板行 ↔ 配置同步 pin）。
+守护测试：`tests/structure/installer-pipeline.test.ts`（推导集合 pin + 闭包自洽——kill-switch 误伤即红 + STAGING_EXTRAS 漂移守卫）、`apps/host/src/profile/materialize.test.ts`（模板行 ↔ 配置同步 pin）。
 
 ## 4. 运行期链（安装后首启 → 窗口）
 
@@ -76,7 +76,7 @@ staging = BFS闭包( userLayerRow 插件
      └─ bootDshHost：spawn boot child（ELECTRON_RUN_AS_NODE=1）
          ├─ loadBootChain（boot 链与插件树同拷贝解析——fix-20）
          ├─ loadProfileDirectory → boot overlay 每启重写（core 行 dbFile/tasksHome/settingsFile、
-         │  knowledge 行 bindingsFile（条件注行）、预设三底稿物化绝对路径、welcome ack 预确认）
+         │  knowledge 行 bindingsFile（条件注行）、预设底稿物化绝对路径、welcome ack 预确认）
          └─ runProfile → ready{url, injections, 服务在场位} → BrowserWindow 载入壳 dist
 ```
 
@@ -96,7 +96,7 @@ staging = BFS闭包( userLayerRow 插件
 
 | 层 | 手段 |
 |---|---|
-| 结构/推导 | `tests/structure/installer-pipeline.test.ts`（配置派生、闭包自洽、electron-builder 配置形状）+ `materialize.test.ts`（模板/幂等/ dev 同步） |
+| 结构/推导 | `tests/structure/installer-pipeline.test.ts`（配置派生、闭包自洽、STAGING_EXTRAS 漂移守卫、electron-builder 配置形状）+ `materialize.test.ts`（模板/幂等/ dev 同步） |
 | staging 自证 | `pnpm dist:check`（关键文件口径 = 推导派生；`staging-manifest.json` 随包分发可复验） |
 | 安装后实机 | `node scripts/assemble-installer-resources.mjs --check <resources-dir>`（4.3 冒烟对安装后 resources 同口径） |
 | 端到端 | `e2e/specs/p1mvp/installer-smoke.spec.ts`（NSIS 装后 exe 直启：boot manifest、首启落地、三区工作台、零页面错误） |
