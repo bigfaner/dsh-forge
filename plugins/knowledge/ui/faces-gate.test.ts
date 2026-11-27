@@ -6,7 +6,7 @@
 //   G-B reflect 现查分支已删除：官方宿主 client isolate 里 Node 侧服务永不可见（run3 真机
 //     事实 + 上游正本核销），reflect 分支结构性恒 false = 缝选错，非迟到问题。
 // 判据 = 契约 testing/contracts/shared-anchors-channels.md §3（fix-3 修订版）。
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { knowledgeGateOf, knowledgeClient, registerKnowledgeFaces, type KnowledgeFacesDiagnostics } from './faces.js'
 import type { SectionSlotsFace } from './keyed-section.js'
 import type { LocaleServiceFace } from './locale.js'
@@ -112,6 +112,40 @@ describe('registerKnowledgeFaces 编排（diag 读数 = A-KN-8 语义）', () =>
       'conversation.view:dswf-recall',
       'project.section.knowledge-dir:dswf-knowledge-dir',
     ])
+  })
+
+  it('fiber reload 重跑 apply：词典 disposer 经 ctx.effect 承接——旧登记随 fiber 释放，二次登记零 already has locale', () => {
+    // 官方 dsh-client-locale 语义同型：同 ns+locale 重复登记抛错，register 返回 disposer
+    const dicts = new Set<string>()
+    const locale = {
+      ...fakeLocale(),
+      register: (ns: string) => {
+        if (dicts.has(ns)) throw new Error(`locale namespace "${ns}" already has locale "zh"`)
+        dicts.add(ns)
+        return () => void dicts.delete(ns)
+      },
+    } as LocaleServiceFace & { namespaces: string[] }
+    const disposers: Array<() => void> = []
+    const ctx = {
+      slots: fakeSlots(),
+      locale,
+      effect: (setup: () => unknown) => {
+        const out = setup()
+        if (typeof out === 'function') disposers.push(out as () => void)
+        return out
+      },
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      knowledgeClient.apply(ctx)
+      expect(dicts.size).toBe(1)
+      for (const dispose of disposers.splice(0)) dispose() // fiber reload：旧 fiber effect 清理
+      knowledgeClient.apply(ctx)
+      expect(dicts.size).toBe(1)
+      expect(warn.mock.calls.map((c) => String(c[0])).some((line) => line.includes('already has locale'))).toBe(false)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('apply 编排（集成态壳缝 true）：同上四面落座（G-A 恒 true 路径行为等价）', () => {

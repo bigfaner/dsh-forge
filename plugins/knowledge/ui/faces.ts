@@ -193,11 +193,20 @@ export function registerKnowledgeDirSection(
   return { registered: true, knowledgeEnabled }
 }
 
-/** knowledge 词典登记（门控在场才登记——一次登记面，重复登记抛错 fail-soft 降级） */
-function registerKnowledgeLocale(locale: LocaleServiceFace): void {
+/**
+ * knowledge 词典登记（门控在场才登记；重复登记抛错 fail-soft 降级）：disposer 经
+ * ctx.effect 承接（官方 dsh-client-locale 自用同型 `ctx.effect(() => locale.register(...))`）
+ * ——裸调丢弃 disposer = fiber reload 重跑 apply 时旧登记残留，恒抛 already has locale。
+ */
+function registerKnowledgeLocale(locale: LocaleServiceFace, ctx: Record<string, unknown>): void {
   if (typeof locale.register !== 'function') return
   try {
-    locale.register(FORGE_KNOWLEDGE_LOCALE_NS, FORGE_KNOWLEDGE_LOCALE_DICTS)
+    const register = (): void => {
+      locale.register(FORGE_KNOWLEDGE_LOCALE_NS, FORGE_KNOWLEDGE_LOCALE_DICTS)
+    }
+    const effect = ctx['effect'] as ((setup: () => unknown) => unknown) | undefined
+    if (typeof effect === 'function') effect.call(ctx, register)
+    else register()
   } catch (error) {
     console.warn('[dsh-forge/knowledge] locale dict register failed——label 回退 ns 键名呈现', error)
   }
@@ -216,7 +225,7 @@ function applyKnowledgeFaces(ctx: unknown): void {
       console.warn('[dsh-forge/knowledge] ctx.locale absent; knowledge faces not mounted')
       return
     }
-    registerKnowledgeLocale(locale)
+    registerKnowledgeLocale(locale, rec ?? {})
     // fix-9 装配期运输面分流（一次求值——ctx.connection.rpc 在场走 connection 面，
     // 缺席回落 preload 面）：选定 factory ① 安装页内缺省缝（anchored-projects 镜像
     // pin 逐字面签名不动——useForgeProjects 缺省参经缝换面）；② inject 递达各数据

@@ -135,7 +135,14 @@ export const taskLoopClient: TaskLoopClientPlugin = {
     try {
       const locale = asRecord(rec)?.["locale"] as LocaleServiceFace | undefined;
       if (locale !== undefined && typeof locale.register === "function" && typeof locale.bind === "function") {
-        locale.register(FORGE_TASK_LOOP_LOCALE_NS, FORGE_TASK_LOOP_LOCALE_DICTS);
+        // disposer 经 ctx.effect 承接（官方 dsh-client-locale 自用同型）——裸调丢弃
+        // disposer = fiber reload 重跑 apply 时旧登记残留，恒抛 already has locale。
+        const register = (): void => {
+          locale.register(FORGE_TASK_LOOP_LOCALE_NS, FORGE_TASK_LOOP_LOCALE_DICTS);
+        };
+        const effect = asRecord(rec)?.["effect"] as ((setup: () => unknown) => unknown) | undefined;
+        if (typeof effect === "function") effect.call(rec, register);
+        else register();
       } else {
         console.warn("[dsh-forge/task-loop] ctx.locale absent; labels fall back to ns keys");
       }
