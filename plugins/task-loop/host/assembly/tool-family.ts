@@ -255,8 +255,7 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
   });
   // AC7 结算报告回收钩子生产接线（bug 8dcbe845——哑钩子收口）：运行时目录 = 容器库目录
   //（containerDirOf(projectKeyOfCwd(workspaceDir))——主检出归拢取法与事件链 sink.resolveDir、
-  // worker 锚点节同源单点，bug 245bacf3）+ logs/<slug>/
-  //<localId>；specs 卷宗落点 = forgeDirOfWorkspace(wsPath)/specs/<slug>/issues/<localId>
+  // worker 锚点节同源单点，bug 245bacf3）+ <slug>/<localId>；specs 卷宗落点 = forgeDirOfWorkspace(wsPath)/specs/<slug>/issues/<localId>
   //（= <ws>/.forge/specs/<slug>/issues/<localId>——@dsh-forge/lib-path forgeDirOfWorkspace
   //.forge 根单源派生，与 Spec 文档 .forge/specs/{slug}/spec.md 同根；specs 替代 proposals，
   //用户裁定 2026-11-25。不碰 <slug>/ 下既有 spec.md——回收只写 issues/<localId>/ 子目录）。

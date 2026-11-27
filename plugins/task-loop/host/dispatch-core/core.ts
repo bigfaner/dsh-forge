@@ -727,7 +727,7 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
         owner: sessionId, // 派发会话 id——owner Agent 销毁自动取消其 job（F7 生命周期耦合）
         run: (job) => {
           // 进度投影（§4.3——数据同源双写：appendLog 进 jobs 面板 live 流 +
-          // task-progress 事件经总线落 logs/<slug>.jsonl；模型消费读结构性滤除 log 块）。
+          // task-progress 事件经总线落 <slug>/dispatch.jsonl；模型消费读结构性滤除 log 块）。
           // claimed/spawned 为 job 启动前已过里程碑（后台径进度窗口自 job 启动始）。
           const progress = (phase: TaskProgressPhase, line: string): void => {
             job.appendLog(line);

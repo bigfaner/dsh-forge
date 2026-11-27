@@ -1,10 +1,10 @@
 // notify · 长内容落盘（S4 纯模块；decisions #24 再补充/#26）。一个任务一个文件夹、
-// 一次问题事件一个子文件夹：`logs/<slug>/<taskKey>/<序号>-<事件类型>/`（如 001-blocked/、
+// 一次问题事件一个子文件夹：`<slug>/<taskKey>/<序号>-<事件类型>/`（如 001-blocked/、
 // 002-worker-aborted/——自增序号+事件类型后缀自明）。同一事件的 error.log（原因/错误全文）/
 // settlement.json（结算载荷）/triage.md（处置记录）内聚，多轮问题互不混档；多模态可扩展。
 // 路径与既有容器事件流同根同维度（#26——任务循环运行时目录 {容器目录}/<slug>/ 下与 dispatch.jsonl 并存，
-// 零新增中间层；FORGE_LOGS_DIR 单源复用）。叙述面只携带本面返回的事件子文件夹**绝对路径**
-// （forge-paths taskLogs 目的地解析器拼接——forge.task_home 绝对锚，无裸 logs/ 相对形态；
+// 零新增中间层）。叙述面只携带本面返回的事件子文件夹**绝对路径**
+// （taskLogsDirOf 单源拼接——任务目录 task_loop.task_dir 绝对锚，无裸相对形态；
 // notification-samples.md 详情行口径）；分级呈现三档 = 叙述摘要 /
 // 事件子文件夹（人/agent 按需读）/ 裁决问询全文。
 // fail-soft：容器目录缺席/文件面故障 = 返回 undefined 不抛（叙述照发、详情行省略）。
@@ -34,7 +34,7 @@ export interface IncidentInput extends IncidentContent {
    * 接线收口；缺席 = 解析器自行裁决，缺省装配方按 undefined 不落盘）。
    */
   readonly projectId?: string;
-  /** 任务源 slug（路径第二段——logs/<slug>/） */
+  /** 任务源 slug（任务循环运行时目录段——{容器目录}/<slug>/） */
   readonly sourceSlug: string;
   /** 任务键（localId 口径——如「3.1」；slug 维度已由上级目录分解，样例口径） */
   readonly taskKey: string;
@@ -80,7 +80,7 @@ export function incidentDirNameOf(seq: number, eventType: string): string {
   return `${String(seq).padStart(3, "0")}-${suffix === "" ? "event" : suffix}`
 }
 
-/** 事件子文件夹绝对路径（叙述详情行口径——forge.task_home 绝对锚 + logs/<slug>/<taskKey>/<dir>/，数据源单源拼接） */
+/** 事件子文件夹绝对路径（叙述详情行口径——任务目录 task_loop.task_dir 绝对锚 + <dir>/，数据源单源拼接） */
 export function incidentAbsPathOf(
   containerDir: string,
   sourceSlug: string,

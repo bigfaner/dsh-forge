@@ -238,7 +238,7 @@ export async function disposeQuietly(handle: SpawnWorkerHandle): Promise<void> {
 }
 
 // ─────────────────────────── AC7 · 结算旁挂回收钩子（loop-recurrence-hardening 提案 §2.4） ───────────────────────────
-// 结算返回前同步后置钩子（结算事务外 fail-soft）：settleWorkerRun 内 await 同步执行，探测运行时任务目录 logs/<slug>/<localId>/ 顶层 .md 报告文件（非
+// 结算返回前同步后置钩子（结算事务外 fail-soft）：settleWorkerRun 内 await 同步执行，探测运行时任务目录 <slug>/<localId>/ 顶层 .md 报告文件（非
 // 递归——incident 等子目录不扫，零清单配置）复制进 specs 卷宗 <ws>/.forge/specs/<slug>/
 // issues/<localId>/（与 Spec 文档 .forge/specs/{slug}/spec.md 同根——proposals 旧轨已随
 // proposal 域退役，specs 替代 proposals，用户裁定 2026-11-25；不碰 <slug>/ 下既有文件）。
