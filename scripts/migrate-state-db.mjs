@@ -62,6 +62,8 @@
 //      proposal_status/mode/superseded_by/author 降档信息，created_at=decided_at）。
 //      状态映射：draft→draft / under-review→awaiting_approval / accepted→approved；
 //      project_key 无目标项目行或 slug 冲突 → 人工清单跳过。
+//      · rel_path 换算为 spec 口径（相对项目检出根——proposalDocRelPath）：旧值照搬即悬空；
+//        slug 冲突的既有 spec 文档行若仍是旧口径 → 重跑自愈。
 //   bundle 段纪律同①-④：staged VACUUM INTO 快照搬行 → 复验 → 原子替换（原库改名保留
 //   回滚点）；bundle_migrate_state 标记表逐步 fingerprint 幂等；行级 NOT EXISTS 守卫；
 //   目标库排他打开兜底（desktop 宿主在场时 open 即抛——迁移前须关闭 dsh desktop）。
@@ -1588,12 +1590,33 @@ const PROPOSAL_STATUS_TO_SPEC = {
 }
 const PROPOSAL_STATUS_SKIP = new Set(['rejected', 'superseded'])
 
+/**
+ * 旧 proposal rel_path → spec 文档口径。spec_docs.rel_path 约定 = 相对项目检出根（createSpec /
+ * updateSpec 同口径）；旧值三代基准并存，原样照搬即悬空：
+ *   · `.forge/` 起头 —— 已是项目根相对，原样；
+ *   · `docs/` 起头 —— .forge 根相对；
+ *   · 其余（如 `proposals/<slug>/proposal.md`）—— 旧 proposalDir（.forge/docs）根相对。
+ * 检出根可解析时以盘上在场者为准（后两代互为候选）；均不在场或根不可解析 → 按前缀规则。
+ */
+function proposalDocRelPath(relPath, projectRoot) {
+  if (relPath.startsWith('.forge/')) return relPath
+  const byPrefix = relPath.startsWith('docs/') ? `.forge/${relPath}` : `.forge/docs/${relPath}`
+  if (projectRoot !== null) {
+    const other = relPath.startsWith('docs/') ? `.forge/docs/${relPath}` : `.forge/${relPath}`
+    for (const candidate of [byPrefix, other]) {
+      if (existsSync(join(projectRoot, candidate))) return candidate
+    }
+  }
+  return byPrefix
+}
+
 function bundleMigrateProposals(db, args, nowIso) {
   const step = 'bundle:specs'
   const dirs = existsSync(args.sourceWorkspaces)
     ? readdirSync(args.sourceWorkspaces, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort()
     : []
-  const fp = dirs.map((d) => fileFingerprint(join(args.sourceWorkspaces, d, 'forge.db'))).join(',')
+  // `v2|`：文档路径口径换算入版——v1 写下的悬空 rel_path 靠重跑本段自愈（源未变也须重跑）
+  const fp = `v2|${dirs.map((d) => fileFingerprint(join(args.sourceWorkspaces, d, 'forge.db'))).join(',')}`
   const done = bundleStateGet(db, step)
   if (done !== undefined && done.fingerprint === fp) {
     emitDiag('info', 'bundle-migrate', `proposals→specs 搬行已完成且源未变（fingerprint 同）——跳过`)
@@ -1610,6 +1633,14 @@ function bundleMigrateProposals(db, args, nowIso) {
   let skippedTerminal = 0
   let skippedProject = 0
   let skippedConflict = 0
+  let docsHealed = 0
+  let docsAbsent = 0
+  const docOfFile = (relPath, projectRoot) => {
+    const rel = proposalDocRelPath(relPath, projectRoot)
+    // 无法核验（projectRoot 为 null）不计入「文件不在」
+    if (projectRoot !== null && !existsSync(join(projectRoot, rel))) docsAbsent += 1
+    return rel
+  }
   const apply = db.transaction(() => {
     for (const dirName of dirs) {
       const forgeDb = join(args.sourceWorkspaces, dirName, 'forge.db')
@@ -1620,6 +1651,18 @@ function bundleMigrateProposals(db, args, nowIso) {
         // project_key：孤目录名 `{flatten}@{hash8}` 自证（DIR_NAME_RE 同①段判据）
         if (!DIR_NAME_RE.test(dirName)) continue
         const projectKey = dirName
+        // 项目检出根（文档在盘核验用；不可解析 = null）：目标库 project_workspaces 的 main 行 ws_path 优先，
+        // 目录名 flatten 反推兜底（有损——项目路径含连字符即反推失败）
+        const mainRow = hasTable(db, 'project_workspaces')
+          ? db.prepare(
+            `SELECT w.ws_path FROM project_workspaces w JOIN project_projects p ON p.id = w.project_id
+             WHERE p.project_key = ? AND w.member_role = 'main'`,
+          ).get(projectKey)
+          : undefined
+        const projectRoot = mainRow !== undefined && existsSync(mainRow.ws_path)
+          ? mainRow.ws_path
+          : resolveWsPathForDirName(dirName, new Map())
+        if (projectRoot === null) emitDiag('info', 'bundle-migrate', `项目检出根不可解析（${dirName}）——文档在盘性未核验，路径按前缀规则换算`)
         for (const p of legacy.prepare(`SELECT * FROM proposals ORDER BY created_at ASC, id ASC`).all()) {
           if (PROPOSAL_STATUS_SKIP.has(p.proposal_status)) {
             skippedTerminal += 1
@@ -1634,18 +1677,29 @@ function bundleMigrateProposals(db, args, nowIso) {
             skippedProject += 1
             continue
           }
-          if (db.prepare(`SELECT 1 FROM spec_specs WHERE project_key = ? AND slug = ?`).get(projectKey, p.slug) !== undefined) {
+          const existing = db.prepare(
+            `SELECT s.id, d.rel_path FROM spec_specs s LEFT JOIN spec_docs d ON d.spec_id = s.id WHERE s.project_key = ? AND s.slug = ?`,
+          ).get(projectKey, p.slug)
+          if (existing !== undefined) {
             skippedConflict += 1
+            // 自愈：既有 spec 的文档行仍是旧 proposal 口径（非 .forge/ 起头）→ 换算为 spec 口径；已是 spec 口径不动
+            if (existing.rel_path !== null && !existing.rel_path.startsWith('.forge/')) {
+              const healed = docOfFile(existing.rel_path, projectRoot)
+              if (healed !== existing.rel_path) {
+                db.prepare(`UPDATE spec_docs SET rel_path = ?, updated_at = ? WHERE spec_id = ?`).run(healed, nowIso, existing.id)
+                docsHealed += 1
+              }
+            }
             continue
           }
           db.prepare(
             `INSERT INTO spec_specs (id, slug, title, spec_status, tiers_json, project_key, milestone_id, created_at, updated_at)
              VALUES (?, ?, ?, ?, '[]', ?, NULL, ?, ?)`,
           ).run(p.id, p.slug, p.title, toStatus, projectKey, p.created_at, p.updated_at)
-          // spec_docs（1:1 PK spec_id——rel_path 非空才挂）
+          // spec_docs（1:1 PK spec_id——rel_path 非空才挂；路径换算为 spec 口径）
           if (p.rel_path !== null && p.rel_path !== '') {
             db.prepare(`INSERT OR IGNORE INTO spec_docs (spec_id, rel_path, created_at, updated_at) VALUES (?, ?, ?, ?)`)
-              .run(p.id, p.rel_path, p.created_at, nowIso)
+              .run(p.id, docOfFile(p.rel_path, projectRoot), p.created_at, nowIso)
           }
           // transition 留痕行（降档信息 note 全量携带——mode/superseded_by/author 无承载列）
           const noteBits = [`legacy proposal 迁移：proposal_status=${p.proposal_status}`]
@@ -1666,8 +1720,10 @@ function bundleMigrateProposals(db, args, nowIso) {
   apply()
   const appended = appendBundleManualList(manualPath, manualList)
   if (appended > 0) emitDiag('warn', 'bundle-migrate', `人工清单 ${appended} 条：${manualPath}`)
-  bundleStatePut(db, step, fp, nowIso, JSON.stringify({ moved, skippedTerminal, skippedProject, skippedConflict, manual: manualList.length }))
-  return { skipped: false, moved, skippedTerminal, skippedProject, skippedConflict, manual: manualList.length }
+  if (docsHealed > 0) emitDiag('info', 'bundle-migrate', `proposals→specs：既有 spec 文档路径自愈 ${docsHealed} 条（旧 proposal 口径 → spec 口径）`)
+  if (docsAbsent > 0) emitDiag('warn', 'bundle-migrate', `proposals→specs：${docsAbsent} 条文档路径在项目检出根下无文件（文档已被清理——登记保留，读时呈现悬空）`)
+  bundleStatePut(db, step, fp, nowIso, JSON.stringify({ moved, skippedTerminal, skippedProject, skippedConflict, docsHealed, docsAbsent, manual: manualList.length }))
+  return { skipped: false, moved, skippedTerminal, skippedProject, skippedConflict, docsHealed, docsAbsent, manual: manualList.length }
 }
 
 // ── bundle 段主流程（staged 快照 → 三步搬行 → 复验 → 原子替换） ──
@@ -1725,7 +1781,7 @@ export function runBundleMigration(args, nowIso) {
   emitDiag('info', 'bundle-migrate', `bundle 迁移完成：${JSON.stringify({
     bugs: summary.bugs?.skipped ? 'skipped' : `moved=${summary.bugs.moved} quarantined=${summary.bugs.quarantined}`,
     tasks: summary.tasks?.skipped ? 'skipped' : `moved=${summary.tasks.moved} feature=${summary.tasks.skippedFeature} project=${summary.tasks.skippedProject} dup=${summary.tasks.skippedDuplicate}`,
-    specs: summary.specs?.skipped ? 'skipped' : `moved=${summary.specs.moved} terminal=${summary.specs.skippedTerminal} project=${summary.specs.skippedProject} conflict=${summary.specs.skippedConflict}`,
+    specs: summary.specs?.skipped ? 'skipped' : `moved=${summary.specs.moved} terminal=${summary.specs.skippedTerminal} project=${summary.specs.skippedProject} conflict=${summary.specs.skippedConflict} docsHealed=${summary.specs.docsHealed} docsAbsent=${summary.specs.docsAbsent}`,
   })}`)
   return summary
 }

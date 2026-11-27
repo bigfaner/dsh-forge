@@ -48,6 +48,8 @@ function buildTargetDb(file: string): void {
     db.prepare(`INSERT INTO project_projects (id, project_key, title) VALUES ('p1', 'Z-project-demo@dadf6b04', 'demo')`).run();
     // 既有 spec 行（slug 冲突判据用——UNIQUE(project_key, slug)）
     db.prepare(`INSERT INTO spec_specs (id, slug, title, spec_status, tiers_json, project_key, created_at, updated_at) VALUES ('sp-exist', 'expert-builtin-redistribution', '既有', 'completed', '[]', 'Z-project-demo@dadf6b04', ?, ?)`).run(T, T);
+    // 既有 spec 的文档行停在旧 proposal 口径（v1 迁移照搬 rel_path 的遗留）——重跑须自愈为 spec 口径
+    db.prepare(`INSERT INTO spec_docs (spec_id, rel_path, created_at, updated_at) VALUES ('sp-exist', 'proposals/expert-builtin-redistribution/proposal.md', ?, ?)`).run(T, T);
   } finally {
     db.close();
   }
@@ -164,19 +166,21 @@ describe("bundle 搬行段（migrate-state-db.mjs --bundle）", () => {
   });
 
   it("proposals→specs：三态映射 + transition 留痕 + doc 挂载；rejected/superseded 跳过；冲突跳过", () => {
-    expect(summary.specs).toMatchObject({ skipped: false, moved: 3, skippedTerminal: 2, skippedConflict: 1 });
+    expect(summary.specs).toMatchObject({ skipped: false, moved: 3, skippedTerminal: 2, skippedConflict: 1, docsHealed: 1 });
     const db = new Database(homes.args.bundleDb, { readonly: true });
     const statusOf = (slug: string) => db.prepare(`SELECT spec_status FROM spec_specs WHERE slug = ?`).get(slug)?.spec_status;
     expect(statusOf("prop-accepted")).toBe("approved");
     expect(statusOf("prop-under-review")).toBe("awaiting_approval");
     expect(statusOf("prop-draft")).toBe("draft");
+    // slug 冲突的既有 spec：旧 proposalDir 根相对口径自愈（检出根不在盘 → 按前缀规则）
+    expect(db.prepare(`SELECT rel_path FROM spec_docs WHERE spec_id = 'sp-exist'`).get().rel_path).toBe(".forge/docs/proposals/expert-builtin-redistribution/proposal.md");
     const tr = db.prepare(`SELECT note, created_at, actor FROM spec_transitions WHERE entity_id = 'pa'`).get() as any;
     expect(tr.note).toContain("proposal_status=accepted");
     expect(tr.note).toContain("mode=blitz");
     expect(tr.actor).toBe("plugin-tool");
     expect(tr.created_at).toBe("2026-02-01T00:00:00.000Z"); // decided_at 优先
-    expect(db.prepare(`SELECT rel_path FROM spec_docs WHERE spec_id = 'pa'`).get().rel_path).toBe("docs/proposals/prop-accepted/proposal.md");
-    expect(db.prepare(`SELECT count(*) c FROM spec_docs`).get().c).toBe(1); // rel_path null 不挂
+    expect(db.prepare(`SELECT rel_path FROM spec_docs WHERE spec_id = 'pa'`).get().rel_path).toBe(".forge/docs/proposals/prop-accepted/proposal.md"); // .forge 根相对旧值 → 项目根相对
+    expect(db.prepare(`SELECT count(*) c FROM spec_docs`).get().c).toBe(2); // rel_path null 不挂；既有 spec 的旧口径行自愈 1
     db.close();
   });
 
