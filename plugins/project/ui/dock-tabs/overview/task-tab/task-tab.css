@@ -20,7 +20,7 @@
   display: flex;
   align-items: center;
   flex-wrap: nowrap; /* v22：工具栏控件恒一行（概览 560px 宽下不换行） */
-  gap: var(--dsw-font-xs-13-line-height);
+  gap: calc(var(--dsw-font-xs-13-line-height) / 2); /* pill → 视图钮紧凑间距（与两钮内距同刻度）；其余项间为 spacer，不受影响 */
   padding: var(--dsw-font-xs-13-line-height) var(--dsw-font-s-14-line-height) 0;
   min-width: 0;
 }
@@ -80,11 +80,16 @@
 }
 
 /* 容器 pill 的 Menu 根包裹（官方 Menu root span = 工具栏 flex 项）+ Tooltip 锚定包裹：
-   两层均可收缩（min-width 0）——行超宽时让位序 = spacer → pill 截断（featname 省略号），
+   两层均可收缩（min-width 0）——行超宽时让位序 = spacer → pill 截断（featname 省略号；正文零计数），
    视图钮恒不收缩。缺此 = 包裹层最小宽钉在 pill 内容宽，视图钮被挤到逐字换行。 */
 .dswf-tt-taskbar > span:has(.dswf-tt-contwrap),
 .dswf-tt-contwrap {
   min-width: 0;
+}
+
+/* 收缩上限挂在 Menu 根（taskbar 的 flex 项）：百分比对其解析；上限保护 dock 窄列下视图钮与右簇不被挤 */
+.dswf-tt-taskbar > span:has(.dswf-tt-contwrap) {
+  max-width: 72%;
 }
 
 .dswf-tt-contwrap {
@@ -92,7 +97,8 @@
 }
 
 .dswf-tt-featpill {
-  max-width: 220px; /* dsw-raw 原型 feature pill 限宽刻度（dock 窄列保护） */
+  width: fit-content; /* 触发器随内容宽；下拉面板（.dswf-tt-pick 360px）独立定宽，左缘对齐 */
+  max-width: 360px; /* slug 尽量完整展示，超长行内省略号 */
   display: inline-flex;
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
@@ -106,12 +112,6 @@
   white-space: nowrap;
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-label-primary);
-}
-
-.dswf-tt-featchip {
-  flex: none;
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-tertiary);
 }
 
 .dswf-tt-spacer {
@@ -548,6 +548,36 @@ body[data-ds-dark-theme] .dswf-tt-card {
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* ── 容器菜单·过滤态（选项达阈值：门户面 document.body——样式走全局类）──
+   限高滚动（不再随选项数撑满面板）；过滤框 sticky 钉在滚动区顶，选项行在其下滚动；
+   Input 自带实底遮住滚过的行。 */
+/* 双类选择器：压过官方 .scrollable 的视口限高与 .list 的 360 上限（同特异性看载入序，不赌） */
+.dswf-tt-menu.dswf-tt-pick {
+  width: 360px; /* 面板独立定宽（触发器随内容宽）；超长 slug 行内省略号 */
+  min-width: min(360px, calc(100vw - 24px));
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: min(440px, calc(100dvh - 12px - max(12px, var(--dsw-frame-overlay-top, 12px))));
+}
+
+.dswf-tt-mfilter {
+  order: -1; /* 官方 Menu 先渲 items 后渲 children——视口为纵向 flex，提到行集之上 */
+  padding: 2px 6px 6px; /* 过滤框与面板边缘留白 */
+  position: sticky;
+  top: 0; /* 滚动区顶（官方 .viewport 零内距） */
+  z-index: 1;
+  display: flex;
+  flex: none;
+  background: var(--dsw-menu-surface-fill); /* 留白区遮住滚过的行（与面板材质同色） */
+}
+
+.dswf-tt-mfilter .dswf-tt-mfilter-input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 26px; /* 官方 Input 32px 收一档（菜单内紧凑刻度） */
+  padding-inline: 6px;
+}
+
 /* ─────────────────────────────────────────────────────────────
  * M3 4.4 UF-3 组件族：视图下拉 + 派发按钮（v24 视觉）+ DiagToast。
  * 令牌纪律同上（lint-tokens：色/字/距零裸值）。v24 深灰实底 = 原型 --dsw-fg-2 填充
@@ -559,11 +589,11 @@ body[data-ds-dark-theme] .dswf-tt-card {
 .dswf-tt-viewbtn {
   display: inline-flex;
   align-items: center;
-  gap: var(--dsw-font-xs-13-line-height);
+  gap: calc(var(--dsw-font-xs-13-line-height) / 2); /* 紧凑刻度（用户裁决）：内距与文字→箭头间距 = 行高之半 */
   height: 22px; /* dsw-raw 原型 seg 行刻度（dswf-tt-seg-btn 同值——同款式族） */
   flex: none; /* 工具栏行恒不收缩——CJK 文本可逐字断行，收缩即标签换行 */
   white-space: nowrap;
-  padding: 0 var(--dsw-font-xs-13-line-height);
+  padding: 0 calc(var(--dsw-font-xs-13-line-height) / 2);
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-xs);
   background: transparent;

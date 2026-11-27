@@ -1,6 +1,7 @@
 // 1.45 随 dock tab 族注册面自 apps/web 平移本包（装配缝归插件域，AGENTS §1.3）。
 // 任务子 tab 组装（定位：业务——4.6 交付面：OverviewFrame renderTasksTab 槽注入体）。
-// 工具栏布局：容器 pill（选项 = 任务数据自身 slug 聚合——taskContainerOptionsFromCards，首项
+// 工具栏布局：容器 pill（正文 = 模式点 + slug，零任务计数[done/total 收进悬停]；选项 = 任务数据自身
+// slug 聚合——taskContainerOptionsFromCards，首项
 // 「全部任务」= 项目全域作用域，搜索/chips 跨容器生效；容器统一为 spec，kind 仅作 wire 回传）
 // + 视图下拉（ViewDropdown——pill 右侧）+ 右簇 [诊断]+[派发]（单容器作用域）固定最右端
 // 同行不换行 + 七态 chips（StatusChips 复用）+ 三视图分派 + 三态面。
@@ -19,7 +20,14 @@ import {
   type SessionTaskLinkCard,
   type TaskStatus,
 } from '@dsh-forge/contracts'
-import { Menu, Pill, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  IconSearchOutlineRegular,
+  Input,
+  Menu,
+  Pill,
+  Tooltip,
+  type MenuEntry,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, SkeletonRows } from '../../../components.js'
 import { type ForgeRpcClient, type RpcClientFactory } from '../../rpc-channels.js'
 import { overviewRpcClientFactory } from '../overview-client.js'
@@ -32,9 +40,9 @@ import {
   resolveContainer,
   containerKeyOf,
   containerMenuSelect,
-  containerPillChip,
   taskCountNote,
   tasksEmptyView,
+  filterContainerOptions,
   type TaskContainerSel,
   type TaskViewMode,
 } from './task-tab-model.js'
@@ -92,32 +100,32 @@ export function subgraphDiagContainer(
 }
 
 /**
- * 容器菜单行集：首项「全部任务」（项目全域——搜索/筛选跨容器）+ 各容器 slug + N 任务
- * （计数 = 选项自身聚合单源；kind 不入行）。
+ * 容器菜单行集：各容器 slug + N 任务（计数 = 选项自身聚合单源；kind 不入行）；关键词
+ * 在场 = 仅 slug 命中行；零命中 = 「无匹配容器」标签行。过滤框（Menu children）经 CSS
+ * order 提到行集上方。
  */
-export function containerMenuItems(options: readonly TaskContainerOption[]): readonly MenuEntry[] {
-  const all: MenuEntry = {
-    id: ALL_CONTAINERS_MENU_ID,
+export function containerMenuItems(
+  options: readonly TaskContainerOption[],
+  filter = '',
+): readonly MenuEntry[] {
+  const matched = filterContainerOptions(options, filter)
+  const rows: readonly MenuEntry[] = matched.map((option) => ({
+    id: containerKeyOf(option),
     label: (
-      <span className="dswf-tt-mrow" data-dswf-tt-mcont={ALL_CONTAINERS_MENU_ID}>
-        <span className="dswf-tt-mkey">{ALL_CONTAINERS_LABEL}</span>
-        <span className="dswf-tt-mchip">{`${options.reduce((n, option) => n + option.taskCount, 0)} 任务`}</span>
+      <span className="dswf-tt-mrow" data-dswf-tt-mcont={containerKeyOf(option)}>
+        <span className="dswf-tt-mkey">{option.slug}</span>
+        <span className="dswf-tt-mchip">{`${option.taskCount} 任务`}</span>
       </span>
     ),
+  }))
+  if (rows.length === 0) {
+    return [{ type: 'label' as const, id: CONTAINER_NO_MATCH_ID, text: '无匹配容器' }]
   }
-  return [
-    all,
-    ...options.map((option) => ({
-      id: containerKeyOf(option),
-      label: (
-        <span className="dswf-tt-mrow" data-dswf-tt-mcont={containerKeyOf(option)}>
-          <span className="dswf-tt-mkey">{option.slug}</span>
-          <span className="dswf-tt-mchip">{`${option.taskCount} 任务`}</span>
-        </span>
-      ),
-    })),
-  ]
+  return rows
 }
+
+/** 容器菜单零命中标签行 id（非交互行——onSelect 永不派发） */
+export const CONTAINER_NO_MATCH_ID = 'dswf-tt-cont-nomatch'
 
 /** 容器菜单选中结果（all = 全部容器作用域；option = 单容器） */
 export type ContainerMenuPick = { readonly all: true } | { readonly all: false; readonly option: TaskContainerOption }
@@ -195,6 +203,9 @@ export interface TasksTabBodyProps {
   readonly allContainers?: boolean
   readonly view: TaskViewMode
   readonly containerMenuOpen: boolean
+  /** 容器菜单过滤关键词（受控——菜单内过滤框；选项达阈值才呈现） */
+  readonly containerFilter: string
+  readonly onContainerFilterChange: (filter: string) => void
   readonly viewMenuOpen: boolean
   readonly onContainerSelect: (pick: ContainerMenuPick) => void
   readonly onViewChange: (view: TaskViewMode) => void
@@ -240,6 +251,8 @@ export function TasksTabBody({
   allContainers = false,
   view,
   containerMenuOpen,
+  containerFilter,
+  onContainerFilterChange,
   viewMenuOpen,
   onContainerSelect,
   onViewChange,
@@ -262,6 +275,13 @@ export function TasksTabBody({
 }: TasksTabBodyProps): ReactNode {
   const searchActive = searchQueryOf(search) !== undefined
   const hasStatusFilter = hasActiveStatusFilter(activeStatuses)
+
+  // 容器菜单过滤框：菜单打开即聚焦（输入即过滤；Enter 选中首个命中）
+  const filterRef = useRef<HTMLInputElement>(null)
+  const filterActive = containerMenuOpen
+  useEffect(() => {
+    if (filterActive) filterRef.current?.focus()
+  }, [filterActive])
 
   // 作用域三分派：选项源在途 = 骨架（真真空未定谳不谎报空态）；真真空 = 容器空态
   //（「全部任务」作用域不依赖具体容器——container 缺席仍渲染）
@@ -289,14 +309,11 @@ export function TasksTabBody({
 
   const cards = load.cards
   const stats = load.stats
-  // pill 选中面：全部容器 = 全域 label + stats done/total；单容器 = slug + done/total（stats
-  // 在途回退聚合任务数）
+  // pill 选中面 = 作用域名（全部容器 = 全域 label；单容器 = slug）——正文零计数，done/total
+  // 与计数注收进悬停
   const wholeProject = allContainers || container === undefined
-  const doneOverTotal = stats === undefined ? undefined : `${stats.byStatus.completed ?? 0}/${stats.total}`
+  const doneOverTotal = stats === undefined ? undefined : `完成 ${stats.byStatus.completed ?? 0}/${stats.total}`
   const pillLabel = wholeProject ? ALL_CONTAINERS_LABEL : (container as TaskContainerOption).slug
-  const pillChip = wholeProject
-    ? (doneOverTotal ?? `${options.reduce((n, option) => n + option.taskCount, 0)} 任务`)
-    : containerPillChip(container as TaskContainerOption, doneOverTotal)
   const pillKey = wholeProject ? ALL_CONTAINERS_MENU_ID : containerKeyOf(container as TaskContainerOption)
   // 计数注（收进容器 pill 悬停——正文零计数注）
   const countNote = stats === undefined ? undefined : taskCountNote(searchActive, cards?.length ?? 0, stats.total)
@@ -370,10 +387,10 @@ export function TasksTabBody({
           open={containerMenuOpen}
           portal
           side="bottom"
-          items={containerMenuItems(options)}
+          items={containerMenuItems(options, containerFilter)}
           selectedId={pillKey}
           selection="fill"
-          listClassName="dswf-tt-menu"
+          listClassName="dswf-tt-menu dswf-tt-pick"
           onClose={() => {
             onContainerMenuOpenChange(false)
           }}
@@ -382,9 +399,34 @@ export function TasksTabBody({
             const pick = containerMenuPick(options, id)
             if (pick !== undefined) onContainerSelect(pick)
           }}
+          children={
+            // 菜单门户面（document.body）——样式走全局类；sticky 钉在滚动区顶，行在其下滚动
+            <span className="dswf-tt-mfilter" data-dswf-tt-contfilter="">
+              <Input
+                ref={filterRef}
+                icon={<IconSearchOutlineRegular size={13} />}
+                className="dswf-tt-mfilter-input"
+                type="text"
+                placeholder="输入名称筛选…"
+                aria-label="筛选任务容器"
+                value={containerFilter}
+                onChange={(event) => {
+                  onContainerFilterChange(event.target.value)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') return
+                  const first = filterContainerOptions(options, containerFilter)[0]
+                  if (first === undefined) return
+                  event.preventDefault()
+                  onContainerMenuOpenChange(false)
+                  onContainerSelect({ all: false, option: first })
+                }}
+              />
+            </span>
+          }
           anchor={
             <Tooltip
-              label={`任务范围：${pillLabel}${allContainers || container === undefined ? '（全部容器）' : ''}${countNote === undefined ? '' : ` · ${countNote}`}`}
+              label={`任务范围：${pillLabel}${allContainers || container === undefined ? '（全部容器）' : ''}${doneOverTotal === undefined ? '' : ` · ${doneOverTotal}`}${countNote === undefined ? '' : ` · ${countNote}`}`}
               portal
             >
               {/* fix-7：官方 Pill 非 ref 转发面（forwardRef 缺席）——Tooltip cloneElement 锚 ref
@@ -404,7 +446,6 @@ export function TasksTabBody({
                     <span className="dswf-tt-contdot" data-mode={container.mode} aria-hidden="true" />
                   )}
                   <span className="dswf-tt-featname">{pillLabel}</span>
-                  <span className="dswf-tt-featchip">{pillChip}</span>
                   <span aria-hidden="true">▾</span>
                 </Pill>
               </span>
@@ -532,7 +573,13 @@ export function TasksTab({
   // 「全部任务」作用域（pill 菜单首项——搜索/筛选跨容器；用户显式选择，受控聚焦时复位）
   const [allScope, setAllScope] = useState(false)
   const [view, setView] = useState<TaskViewMode>('list')
-  const [containerMenuOpen, setContainerMenuOpen] = useState(false)
+  const [containerMenuOpen, setOpenRaw] = useState(false)
+  const [containerFilter, setContainerFilter] = useState('')
+  // 菜单收拢即清过滤关键词（下次打开回全量）
+  const setContainerMenuOpen = useCallback((open: boolean): void => {
+    setOpenRaw(open)
+    if (!open) setContainerFilter('')
+  }, [])
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [diagResult, setDiagResult] = useState<DiagToastResult | undefined>(undefined)
   const [dispatchNotice, setDispatchNotice] = useState<DiagToastResult | undefined>(undefined)
@@ -690,6 +737,8 @@ export function TasksTab({
       allContainers={allScope && options.length > 0}
       view={view}
       containerMenuOpen={containerMenuOpen}
+      containerFilter={containerFilter}
+      onContainerFilterChange={setContainerFilter}
       viewMenuOpen={viewMenuOpen}
       onContainerSelect={handleContainerSelect}
       onViewChange={handleViewChange}

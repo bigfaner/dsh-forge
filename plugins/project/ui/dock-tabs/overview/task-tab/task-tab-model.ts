@@ -143,9 +143,14 @@ export function containerMenuSelect(options: readonly TaskContainerOption[], id:
   return options.find((option) => containerKeyOf(option) === id)
 }
 
-/** 容器 pill chip 文案（任务域 stats 单源 done/total；stats 在途回退聚合任务数） */
-export function containerPillChip(option: TaskContainerOption, statsDoneOverTotal: string | undefined): string {
-  return statsDoneOverTotal ?? `${option.taskCount} 任务`
+/** 容器选项关键词过滤（slug 包含匹配，大小写不敏感；空关键词 = 全量） */
+export function filterContainerOptions(
+  options: readonly TaskContainerOption[],
+  query: string,
+): readonly TaskContainerOption[] {
+  const needle = query.trim().toLowerCase()
+  if (needle === '') return options
+  return options.filter((option) => option.slug.toLowerCase().includes(needle))
 }
 
 /** 空态视图（三分派：作用域总数 0 / 搜索无匹配 / 过滤组合空；有卡 = undefined 非空） */

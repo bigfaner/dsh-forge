@@ -15,7 +15,7 @@ import { TasksTabBody, TasksTab, containerMenuItems, containerMenuPick, runDispa
 import { formatDiagMessage } from '../message-format.js'
 import { docsRootOf } from '../message-format.js'
 import type { TaskContainerOption } from './container-pill.js'
-import { containerMenuSelect, containerPillChip, resolveContainer } from './task-tab-model.js'
+import { containerMenuSelect, resolveContainer } from './task-tab-model.js'
 import { taskContainerOptionsFromCards } from './container-pill.js'
 import type { TasksTabLoadState } from './task-tab-data.js'
 import type { DiagToastResult } from './DiagToast.js'
@@ -77,6 +77,8 @@ const base = {
   onViewChange: NOOP,
   onContainerMenuOpenChange: NOOP,
   onViewMenuOpenChange: NOOP,
+  containerFilter: '',
+  onContainerFilterChange: NOOP,
   onRetry: NOOP,
   diagResult: undefined as DiagToastResult | undefined,
   onDiagnose: NOOP,
@@ -90,12 +92,13 @@ const render = (over: Partial<Parameters<typeof TasksTabBody>[0]> = {}): string 
   renderToStaticMarkup(<TasksTabBody {...base} load={load()} onOpenTask={NOOP} {...over} />)
 
 describe('TasksTabBody · ov-taskbar 布局（插入点断言）', () => {
-  it('工具栏 = 容器 pill（双轨点 + chip）+ 视图下拉（pill 右侧）+ 右簇 [诊断][派发] 最右端（DOM 序）', () => {
+  it('工具栏 = 容器 pill（模式点 + slug）+ 视图下拉（pill 右侧）+ 右簇 [诊断][派发] 最右端（DOM 序）', () => {
     const html = render()
     expect(html).toContain('data-dswf-tt-taskbar=""')
     expect(html).toContain('data-dswf-tt-contpill="m2-pipeline"')
+    expect(html).not.toContain('dswf-tt-featchip') // pill 正文零任务数量
+    expect(html).not.toContain('1/2')
     expect(html).toContain('class="dswf-tt-contdot" data-mode="expedition"')
-    expect(html).toContain('1/2')
     // kind 词汇不入界面（容器统一为 spec）
     expect(html).not.toContain('突击提案')
     expect(html).not.toContain('feature · 远征')
@@ -112,7 +115,6 @@ describe('TasksTabBody · ov-taskbar 布局（插入点断言）', () => {
   it('卡携 proposal kind 的容器：pill 按 slug 选中 + 统一 done/total chip + 零 kind 词汇/标记 + 零过程注释', () => {
     const html = render({ container: BLITZ_CONTAINER })
     expect(html).toContain('data-dswf-tt-contpill="legacy-eval-retire"')
-    expect(html).toContain('1/2') // stats 单源 done/total（修前 =「突击提案 · 2 任务」）
     expect(html).not.toContain('突击提案')
     expect(html).not.toContain('title=') // 计数注归官方 Tooltip label
     expect(html).not.toContain('data-dswf-tt-count') // 正文零计数注
@@ -120,18 +122,13 @@ describe('TasksTabBody · ov-taskbar 布局（插入点断言）', () => {
     expect(html).toContain('data-dswf-tt-dispatch=') // 派发按钮仍可用面
   })
 
-  it('「全部任务」作用域：pill = 全部任务 + done/total，菜单首项「全部任务 · N 任务」，诊断/派发不呈现，任务卡跨容器渲染', () => {
+  it('「全部任务」作用域（受控注入）：pill = 全部任务（零计数），诊断/派发不呈现，任务卡跨容器渲染', () => {
     const html = render({ container: undefined, allContainers: true, load: load({ cards: [...AGG_CARDS] }) })
     expect(html).toContain('data-dswf-tt-contpill="all"')
-    expect(html).toContain('1/2')
     expect(html).toContain('data-dswf-tt-item="t-1"')
     expect(html).toContain('data-dswf-tt-item="t-3"')
     expect(html).not.toContain('data-dswf-tt-diag=')
     expect(html).not.toContain('data-dswf-tt-dispatch=')
-    const items = containerMenuItems(OPTIONS)
-    expect(items.map((entry) => entry.id)).toEqual(['all', 'legacy-eval-retire', 'm2-pipeline'])
-    expect(renderToStaticMarkup(menuRowLabel(items, 0))).toContain('全部任务')
-    expect(renderToStaticMarkup(menuRowLabel(items, 0))).toContain('4 任务')
   })
 
   it('「全部任务」作用域搜索无匹配 = 无匹配空态（跨容器搜索）', () => {
@@ -253,16 +250,36 @@ describe('TasksTabBody · 三态面与空态', () => {
 })
 
 describe('容器菜单与解析纯函数', () => {
-  it('containerMenuItems：首行「全部任务」+ 各行 slug + N 任务（计数即选项自身聚合；kind 标记不入行）', () => {
+  it('containerMenuItems：各行 slug + N 任务（计数即选项自身聚合；kind 标记不入行；无「全部任务」行）', () => {
     const items = containerMenuItems(OPTIONS)
-    expect(items.map((entry) => entry.id)).toEqual(['all', 'legacy-eval-retire', 'm2-pipeline'])
-    const row = renderToStaticMarkup(menuRowLabel(items, 1))
+    expect(items.map((entry) => entry.id)).toEqual(['legacy-eval-retire', 'm2-pipeline'])
+    const row = renderToStaticMarkup(menuRowLabel(items, 0))
     expect(row).toContain('legacy-eval-retire')
     expect(row).not.toContain('突击提案')
     expect(row).toContain('2 任务')
-    const featureRow = renderToStaticMarkup(menuRowLabel(items, 2))
+    const featureRow = renderToStaticMarkup(menuRowLabel(items, 1))
     expect(featureRow).toContain('m2-pipeline')
     expect(featureRow).toContain('2 任务')
+  })
+
+  it('容器菜单过滤：过滤框恒在（面板顶）+ 关键词仅留 slug 命中行；零命中 = 标签行', () => {
+    const many: readonly TaskContainerOption[] = Array.from({ length: 8 }, (_, i) => ({
+      ...(i % 2 === 0 ? FEATURE_CONTAINER : BLITZ_CONTAINER),
+      slug: i % 2 === 0 ? `bug-fix-${i}` : `container-${i}`,
+    }))
+    const open = { containerMenuOpen: true, options: many }
+    const html = render({ ...open, containerFilter: 'BUG' })
+    expect(html).toContain('data-dswf-tt-contfilter=""')
+    expect(html).toContain('value="BUG"')
+    expect(html).toContain('data-dswf-tt-mcont="bug-fix-0"')
+    expect(html).not.toContain('data-dswf-tt-mcont="container-1"')
+    expect(html).not.toContain('data-dswf-tt-mcont="all"')
+    const unfiltered = render({ ...open })
+    expect(unfiltered).toContain('data-dswf-tt-mcont="container-1"')
+    expect(unfiltered).toContain('dswf-tt-pick') // 面板限高滚动 + 独立定宽
+    expect(unfiltered.indexOf('data-dswf-tt-contfilter')).toBeGreaterThan(unfiltered.indexOf('data-dswf-tt-mcont="bug-fix-0"')) // DOM 序：行在前、过滤框在后（CSS order 提前）
+    const items = containerMenuItems(many, 'zzz-none')
+    expect(items).toEqual([{ type: 'label', id: 'dswf-tt-cont-nomatch', text: '无匹配容器' }])
   })
 
   it('containerMenuSelect：id → 选项；未知 id = undefined', () => {
@@ -274,12 +291,6 @@ describe('容器菜单与解析纯函数', () => {
     expect(containerMenuPick(OPTIONS, 'all')).toEqual({ all: true })
     expect(containerMenuPick(OPTIONS, 'legacy-eval-retire')).toEqual({ all: false, option: BLITZ_CONTAINER })
     expect(containerMenuPick(OPTIONS, 'ghost')).toBeUndefined()
-  })
-
-  it('containerPillChip：stats 单源优先；在途回退聚合任务数（容器不分 kind）', () => {
-    expect(containerPillChip(FEATURE_CONTAINER, '1/2')).toBe('1/2')
-    expect(containerPillChip(FEATURE_CONTAINER, undefined)).toBe('2 任务')
-    expect(containerPillChip(BLITZ_CONTAINER, '1/2')).toBe('1/2')
   })
 
   it('resolveContainer：显式命中优先；未命中回退首项（稳定序）；零选项 = undefined', () => {
@@ -525,7 +536,7 @@ describe('TasksTab 装载壳（容器来源 = 任务数据聚合——AC①②�
     await view.cleanup()
   })
 
-  it('AC⑥ pill 菜单选「全部任务」→ tasks.list/stats 不带 source（跨容器搜索/筛选成立）', async () => {
+  it('AC⑥ pill 菜单选另一容器 → tasks.list/stats 切到该容器 source', async () => {
     const { client, listCalls } = shellClient()
     const statsCalls: unknown[] = []
     const base = client.tasks.stats as (q: unknown) => Promise<unknown>
@@ -543,16 +554,16 @@ describe('TasksTab 装载壳（容器来源 = 任务数据聚合——AC①②�
     await act(async () => {
       pill.click()
     })
-    const allRow = document.querySelector('[data-dswf-tt-mcont="all"]') as HTMLElement | null
-    expect(allRow, '菜单须渲染「全部任务」行').not.toBeNull()
-    const item = (allRow as HTMLElement).closest('[role="menuitem"], li, button') ?? (allRow as HTMLElement)
+    const row = document.querySelector('[data-dswf-tt-mcont="m2-pipeline"]') as HTMLElement | null
+    expect(row, '菜单须渲染目标容器行').not.toBeNull()
+    const item = (row as HTMLElement).closest('[role="menuitem"], li, button') ?? (row as HTMLElement)
     await act(async () => {
       item.click()
     })
-    expect(host.querySelector('[data-dswf-tt-contpill="all"]')).not.toBeNull()
+    expect(host.querySelector('[data-dswf-tt-contpill="m2-pipeline"]')).not.toBeNull()
     const scoped = listCalls.filter((c) => c.search !== undefined)
-    expect(scoped.at(-1)).toEqual({ source: undefined, search: '网关' }) // 修前：恒带容器 source——关键词只能搜当前容器
-    expect(statsCalls.at(-1)).toEqual({ projectId: 'p-1' })
+    expect(scoped.at(-1)).toEqual({ source: { kind: 'feature', slug: 'm2-pipeline' }, search: '网关' })
+    expect(statsCalls.at(-1)).toEqual({ projectId: 'p-1', source: { kind: 'feature', slug: 'm2-pipeline' } })
     expect(host.innerHTML).toContain('data-dswf-tt-item="t-1"') // 另一容器任务卡可见
     expect(host.innerHTML).toContain('data-dswf-tt-item="t-3"')
     await act(async () => {
