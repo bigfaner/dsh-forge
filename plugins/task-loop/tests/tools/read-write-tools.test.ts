@@ -73,6 +73,32 @@ describe("list_tasks slug 可选过滤 + statusFilter 词表收窄", () => {
     expect(scoped.cards[0].slug).toBe("alpha");
   });
 
+  it("返回值零显式 undefined 键（dsh harness 输出边界：显式 undefined 属性值 → 整结果 not lossless JSON 拒绝）", async () => {
+    // 三卡各触一条可选键分支：缺省（全 NULL） / 在场（priority + completed 耗时 + fix 源）
+    const src = seedTask(h, "alpha", "1");
+    seedTask(h, "alpha", "fix-1", { status: "completed", fixOfTaskId: src, priority: "P0" });
+    seedRecord(h, `t-alpha-fix-1`, { verb: "claim", createdAt: "2026-01-01T00:00:00.000Z" });
+    seedRecord(h, `t-alpha-fix-1`, { verb: "submit", createdAt: "2026-01-01T00:00:05.000Z" });
+    const value = (await toolOf("list").execute({}, {})) as Record<string, unknown>;
+    expect(value.cards).toHaveLength(2);
+    expect(value.cards[1]).toMatchObject({ priority: "P0", actualDurationMs: 5000, sourceTask: { slug: "alpha", localId: "1" } });
+    const undefKeys: string[] = [];
+    const walk = (x: unknown, path: string): void => {
+      if (x === null || typeof x !== "object") return;
+      for (const [k, v] of Object.entries(x)) {
+        if (v === undefined) undefKeys.push(path + k);
+        else walk(v, `${path}${k}.`);
+      }
+    };
+    walk(value, "");
+    expect(undefKeys).toEqual([]);
+    // 缺省卡：可选键缺席（非键在场值 undefined）
+    expect(Object.keys(value.cards[0]).sort()).toEqual(
+      ["containerSlug", "localId", "prerequisites", "sessionCount", "slug", "taskStatus", "taskId", "taskType", "title"].sort(),
+    );
+    expect(JSON.parse(JSON.stringify(value))).toStrictEqual(value); // 无损往返
+  });
+
   it("statusFilter 词表外元素拒", async () => {
     await expect(toolOf("list").execute({ statusFilter: ["doing"] }, {})).rejects.toThrow(/must only contain/);
   });

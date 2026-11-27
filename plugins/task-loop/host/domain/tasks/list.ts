@@ -116,6 +116,10 @@ function durationMs(firstClaim: string | null, lastSubmit: string | null): numbe
  * TaskCard 副行水化（单源单份——listTasks/taskGraph/taskDetail 三面共用；行序保持）。
  * 聚合读（全表 GROUP BY）：耗时（claim/submit 聚合 → 仅 completed）/ 前置摘要 / 挂接计数
  * （双源 UNION 去重）/ fix 源自然键（fix_of_task_id → TaskRef）。
+ *
+ * 可选字段缺省 = 键缺席而非键在场值 undefined（toTaskSnapshot 同口径）：list_tasks tool 把
+ * TaskCard 原样作为输出值返回，dsh harness 输出边界对显式 undefined 属性值判
+ * 「value is not lossless JSON」拒绝整个工具结果。
  */
 export function hydrateTaskCards(db: Database.Database, rows: readonly TaskStorageRow[]): TaskCard[] {
   const durations = new Map<string, number>();
@@ -177,12 +181,14 @@ export function hydrateTaskCards(db: Database.Database, rows: readonly TaskStora
     title: row.title,
     taskType: row.task_type,
     taskStatus: row.task_status,
-    priority: (row.priority as TaskCard["priority"]) ?? undefined,
-    estimatedTime: row.estimated_time ?? undefined,
-    actualDurationMs: row.task_status === "completed" ? durations.get(row.id) : undefined,
+    ...(row.priority !== null ? { priority: row.priority as TaskCard["priority"] } : {}),
+    ...(row.estimated_time !== null ? { estimatedTime: row.estimated_time } : {}),
+    ...(row.task_status === "completed" && durations.has(row.id) ? { actualDurationMs: durations.get(row.id) } : {}),
     prerequisites: prerequisites.get(row.id) ?? [],
     sessionCount: sessionCounts.get(row.id) ?? 0,
-    sourceTask: row.fix_of_task_id !== null ? sourceRefs.get(row.fix_of_task_id) : undefined,
+    ...(row.fix_of_task_id !== null && sourceRefs.has(row.fix_of_task_id)
+      ? { sourceTask: sourceRefs.get(row.fix_of_task_id) }
+      : {}),
     // run-dag 判别面终态（slug 容器——source_kind 判别词退役）
     containerSlug: row.slug,
   }));
