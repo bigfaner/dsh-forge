@@ -14,7 +14,7 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 
 ## 状态层纪律
 
-设计工件落盘后即用 `upsertFeatureDoc` 注册（机制语义见 forge:spec 系统提示段）。路径按 `<slug>` feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline 系统提示段「文档位置/目录树」。含 mermaid 图的工件自检纪律：图写完 → `validateMermaid` 自检 →再 `upsertFeatureDoc` 注册。
+设计工件落盘后即用 `upsertFeatureDoc` 注册（机制语义见 forge:spec 系统提示段）。路径按 `<slug>` feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline 系统提示段「文档位置/目录树」。含 mermaid 图的工件自检纪律：图写完 → `validate_mermaid` 自检 →再 `upsertFeatureDoc` 注册。
 
 | 工件 | 注册方式 |
 |---|---|

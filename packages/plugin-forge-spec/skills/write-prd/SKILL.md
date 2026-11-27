@@ -25,7 +25,7 @@ description: 通过协作对话把用户需求固化为结构化 PRD——按适
 upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "prd-spec", rel_path: "docs/features/<slug>/prd/prd-spec.md", summary: "<一句话>" }
 ```
 
-先写文件再注册（或先注册后立刻补写——行可能短暂悬空，但绝不留下未注册的产出文档）。含 mermaid 图的文档自检纪律：图写完 → `validateMermaid` 自检 → 再 `upsertFeatureDoc` 注册。没有 manifest 也没有索引要维护——状态层已取代二者。
+先写文件再注册（或先注册后立刻补写——行可能短暂悬空，但绝不留下未注册的产出文档）。含 mermaid 图的文档自检纪律：图写完 → `validate_mermaid` 自检 → 再 `upsertFeatureDoc` 注册。没有 manifest 也没有索引要维护——状态层已取代二者。
 
 <HARD-GATE> PRD 定稿并获用户批准之前，不得写任何代码、搭任何项目骨架或采取任何实施动作——先呈现 PRD，先拿批准。 </HARD-GATE>
 

@@ -13,7 +13,7 @@ description: 从 PRD 的 ui-functions 文档出发产出 UI 设计规格与 HTML
 
 文档注册表词表封闭于七种 kind 且**没有 ui-design kind**——`ui-design.md` 与原型文件是磁盘工件，不注册。不得在错配的 kind 下伪造注册（`ui-functions` 已命名 `prd/prd-ui-functions.md`；把它改指 `ui-design.md` 会丢掉 PRD 那一行）。存储布局（`<slug>` feature 目录树）见 forge-pipeline 系统提示段「文档位置」。
 
-本技能拥有的唯一状态层动作：每当本技能**回写 `prd/prd-ui-functions.md`**（第 2 步的导航架构回填、第 7 步的 PRD 对账），就重新注册它。回写内容含 mermaid 图时：图写完 → `validateMermaid` 自检 → 再重新注册：
+本技能拥有的唯一状态层动作：每当本技能**回写 `prd/prd-ui-functions.md`**（第 2 步的导航架构回填、第 7 步的 PRD 对账），就重新注册它。回写内容含 mermaid 图时：图写完 → `validate_mermaid` 自检 → 再重新注册：
 
 ```
 upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "ui-functions",
