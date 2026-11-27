@@ -7,7 +7,6 @@
 //     组合层 cordis.patch.yml 单行 insert 挂载）；
 //   ② bundle 管线验证锚：消费 @dsh-forge/lib-* devDependencies（scripts/bundle-host.mjs
 //     构建期内联进 dist——产物自含），self-containment 测试据此外置/内联两侧断言。
-import { errMessage } from "@dsh-forge/lib-util";
 import type {
   BugsServicePort,
   DirFactsPort,
@@ -495,13 +494,6 @@ function worktreesSvcOnceOf(resident: () => WorktreeServicePort): () => Worktree
 // 具名服务裁决）；五缝仍经 reflect 缝注册，gitWorktree 能力缝走防御读取（异步 provide 面）。
 // "tools" = 官方 dsh tools 注册缝（bug 工具族挂载正门——task-loop 同名单先例）。
 projectPlugin.inject = ["workspaceRegistry", "tools"] as const;
-
-/**
- * 装配失败诊断投影（bundle 管线验证锚——lib-util errMessage 消费点）。
- */
-export function describeSetupFailure(error: unknown): string {
-  return errMessage(error);
-}
 
 // ── host 侧装配面出口（apps/host 只留注册行，域装配符号自本包导入）──
 export {

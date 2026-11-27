@@ -2,8 +2,8 @@
 // 块随事件折叠组三段注册迁入本包——loop-message-consolidation 1.3 消费侧兜底数据通道）：
 // 'forge/progress' 事件经 stream 状态机 match 缝旁路录取（fold 主链零改动，match 纯观察）；
 // 官方 reader 对打开会话的日志全量重放即天然回放源。会话切换以 seq 回退判读重置（新会话
-// 日志 seq 从头）。壳侧 ShellHost（C 类常驻树）经本包窄子路径出口 client-ui/event-tap
-// 值面直供消费（bug-model 先例——bundle 自含纪律下的合法跨单元值面）。
+// 日志 seq 从头）。壳侧 ShellHost（C 类常驻树）经窄子路径出口值面直供消费
+// （bundle 自含纪律下的合法跨单元值面）。
 
 /** 进度事件条目（壳 DispatchEventsPanel DispatchEventEntry 同型镜像——bundle 自含纪律） */
 export interface DispatchEventEntry {

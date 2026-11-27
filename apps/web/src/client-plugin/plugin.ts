@@ -47,7 +47,7 @@ import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
 // ForgeUiConversationService 窄面已随事件折叠组注册面迁 @dsh-forge/project 退役——壳零消费。
 // fix-13 注记（1.41）：事件折叠组三段注册 + progress 回放录取面已迁 @dsh-forge/project
 // bundle（ui/conversation-views-face.ts + ui/event-node/progress-log-tap.ts）——壳消费
-// （ShellHost inject progressLog）改经包窄子路径出口值面直供（bug-model 先例）。
+// （ShellHost inject progressLog）改经包窄子路径出口值面直供。
 // fix-13 注记（1.41）：事件折叠组三段注册 + progress 回放录取面已迁 @dsh-forge/project
 // bundle（ui/conversation-views-face.ts + ui/event-node/progress-log-tap.ts）。1.13 注记：
 // 壳侧 forgeProgressLogSource 回放源消费随悬浮面板直挂退役摘除（面板正本迁 task-loop）。
@@ -57,7 +57,7 @@ import { createForgeRpcClient } from '@dsh-forge/project/client-ui/rpc'
 // fix-13 注记（1.45）：open-session 纯模块与会话动作纯函数族（编排器/Bug 快速路径/
 // 判读族/改名与行动作面）随 dock tab 族注册面迁 @dsh-forge/project（ui/open-session.ts
 // + ui/session-actions.ts）——壳侧消费面（shell.overlay inject 编排器与解析器）改经包窄
-// 子路径出口值面直供（bug-model 先例）。1.6 注记：waitForWorkspacePresent（sidebar
+// 子路径出口值面直供。1.6 注记：waitForWorkspacePresent（sidebar
 // startSession 基线门）与 sessionActionFaceOf（D45 注入面）消费随 sidebar.workspaces
 // 顶替注册迁 @dsh-forge/project（ui/sidebar-face.ts）——壳零消费。
 import {
@@ -591,7 +591,7 @@ function registerSidebarSlots(
 // tapForgeProgressEvent / 状态机 match 旁路包装）与事件折叠组三段注册
 // （registerEventEntriesNode）整体迁 @dsh-forge/project（ui/event-node/progress-log-tap.ts
 // + ui/conversation-views-face.ts）。壳侧消费（ShellHost inject progressLog）改经本包
-// 窄子路径出口 client-ui/event-tap 值面直供（bug-model 先例）。
+// 窄子路径出口值面直供。
 
 // ============================================================================
 // 手机远程入口注册（mobile-remote-approval 1.2/fix-3）——fix-13 迁移退役（1.40）：注册面

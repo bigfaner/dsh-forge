@@ -137,10 +137,9 @@ export type { AheadBehind } from '@dsh-forge/contracts'
 export * from './add-project/index.js'
 
 // ── bug 三件（1.14——BugGlyph / BugPreview / bug-source+chip-restore+ChipRestoreOverlay）：
-// 注册路由挂载声明收编本出口——组件本体经 ./bug-refs/views.ts 递达 apps/web 发布面
+// 注册路由挂载声明收编本出口——组件本体经本出口递达 apps/web 发布面
 // （product-views 引用改指本包出口，壳内自有源收缩为零；React 单例 = 发布件随壳 bundle
-// 渲染）；纯模型面（bug-source / chip-restore——零 react）另经 ./client-ui/bug-model 与
-// ./client-ui/chip-restore 窄子路径出口直供 client 插件 bundle（自含 classic script 内联）。
+// 渲染）；纯模型面（bug-source / chip-restore——零 react）随本出口 star-export 一并递达。
 export { ForgeBugGlyph, type ForgeBugGlyphProps } from './bug-refs/BugGlyph.js'
 export * from './bug-refs/BugPreview.js'
 export * from './bug-refs/ChipRestoreOverlay.js'
@@ -160,9 +159,8 @@ export * from './remote-status.js'
 
 // ── 对话面注册面（1.13 迁移退役：dispatchTask 工具行 + 事件折叠组三段迁 @dsh-forge/task-loop
 //    （ui/conversation-views-face.ts + ui/event-node/ + ui/dispatch-tool-row/）；本包只余
-//    worktree 切换闸标记行 ③；progress 回放录取面留本包（client-ui/event-tap 窄子路径出口）──
+//    worktree 切换闸标记行 ③；progress 回放录取面留本包──
 export * from './conversation-views-face.js'
-export * from './event-node/progress-log-tap.js'
 
 // ── 领域无关小件承载副本（apps/web src/components 同源镜像——迁移面渲染依赖）──
 export * from './components.js'
