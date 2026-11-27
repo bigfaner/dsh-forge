@@ -7,6 +7,7 @@
 //   ⑥ createForgePathsToolFace 装配闭包：reflectOf 惰性现查不缓存 + onDeclareDiag 桥接。
 import { describe, expect, it, vi } from "vitest";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import type { ForgeDirDeclaration, ForgeDirSources } from "@dsh-forge/lib-path";
 import { FORGE_DIRS_BASE_DECLARATION, mergeDeclarations, type ReflectDeclarePullFace } from "../dirs/anchors.js";
 import { PROJECT_DIRS_DECLARATION } from "../dirs/project-entries.js";
@@ -82,7 +83,7 @@ const taskLoopDeclaration: ForgeDirDeclaration = {
   },
 };
 
-describe("forge_dirs（无参条目查询）", () => {
+describe("forge_dirs（目录键发现面——全部声明键逐行）", () => {
   it("缺省全量：基座键 + project 四键 + 第三方键逐一解析（dirKey/dir/description 三件套与声明同源）", async () => {
     const tool = createForgeDirsTool(faceOf([knowledgeDeclaration]), RESOLVER);
     const value = (await tool.execute({}, EXEC)) as { ok: true; paths: { dirKey: string; dir: string }[] };
@@ -96,12 +97,44 @@ describe("forge_dirs（无参条目查询）", () => {
     expect(value.paths.every((p) => p.description.length > 0)).toBe(true);
   });
 
-  it("单 dirKey 查询：仅返回该条（description 取条目同源）", async () => {
+  it("带参键同列：值留空 + 标明所需参数（声明序）；渲染文本条数分开计并指向 forge_resolve_path", async () => {
+    const tool = createForgeDirsTool(faceOf([specDeclaration]), RESOLVER);
+    const value = (await tool.execute({}, EXEC)) as {
+      paths: { dirKey: string; dir: string | null; params?: string[]; description: string }[];
+    };
+    expect(value.paths.find((p) => p.dirKey === "spec.dir")).toEqual({
+      dirKey: "spec.dir",
+      dir: null,
+      params: ["slug"],
+      description: "规格目录",
+    });
+    expect(value.paths.find((p) => p.dirKey === "project.docs_dir")).toEqual({
+      dirKey: "project.docs_dir",
+      dir: "Z:\\ws\\.forge\\docs",
+      description: "文档位置",
+    });
+    const text = tool.output.render({}, value).map((c) => c.text).join("\n");
+    expect(text).toContain("✓ 5 dir(s) + 2 parameterized");
+    expect(text).toContain("- spec.dir: (requires: slug) → forge_resolve_path — 规格目录");
+    expect(text).toContain("- spec.dossier_dir: (requires: slug, localId) → forge_resolve_path — 任务卷宗目录");
+    expect(text).not.toContain("null");
+  });
+
+  it("无带参键时渲染条数不出现 parameterized 段", async () => {
     const tool = createForgeDirsTool(faceOf(), RESOLVER);
+    const text = tool.output.render({}, await tool.execute({}, EXEC)).map((c) => c.text).join("\n");
+    expect(text.split("\n")[0]).toBe("✓ 5 dir(s)");
+  });
+
+  it("单 dirKey 查询：仅返回该条（description 取条目同源）；带参键返回值留空行", async () => {
+    const tool = createForgeDirsTool(faceOf([specDeclaration]), RESOLVER);
     const value = (await tool.execute({ dirKey: "project.docs_dir" }, EXEC)) as { paths: { dirKey: string; dir: string; description: string }[] };
     expect(value.paths).toHaveLength(1);
     expect(value.paths[0]!.dirKey).toBe("project.docs_dir");
     expect(value.paths[0]!.dir).toBe("Z:\\ws\\.forge\\docs");
+    const paramed = (await tool.execute({ dirKey: "spec.dossier_dir" }, EXEC)) as { paths: { dir: string | null; params?: string[] }[] };
+    expect(paramed.paths[0]!.dir).toBeNull();
+    expect(paramed.paths[0]!.params).toEqual(["slug", "localId"]);
   });
 
   it("未知 dirKey typed 拒绝并列出全部合法键（含第三方键——ERR_DIR_PATH_INVALID）", async () => {
@@ -123,8 +156,45 @@ describe("forge_resolve_path（带参条目解析——枚举/参数/校验由�
       ["task_loop.task_dir", { slug: "demo", localId: "1.1" }, join(container, "demo", "1.1")],
     ];
     for (const [dest, args, expected] of cases) {
-      const value = (await tool.execute({ dest, ...args }, EXEC)) as { ok: true; dir: string };
-      expect(value).toEqual({ ok: true, dir: expected });
+      const value = (await tool.execute({ dest, ...args }, EXEC)) as { ok: true; dest: string; params: object; dir: string };
+      // 返回元信息：dest + 该目的地声明所需参数（多余实参不回显）+ dir
+      expect(value).toEqual({ ok: true, dest, params: args, dir: expected });
+    }
+    // 多余实参不回显
+    const extra = (await tool.execute({ dest: "spec.dir", slug: "demo", localId: "unused" }, EXEC)) as { params: object };
+    expect(extra.params).toEqual({ slug: "demo" });
+    // 渲染文本：dest / params / dir 三行
+    const text = tool.output
+      .render({}, { ok: true, dest: "task_loop.task_dir", params: { slug: "demo", localId: "1.1" }, dir: join(container, "demo", "1.1") })
+      .map((c) => c.text)
+      .join("\n");
+    expect(text.split("\n")).toEqual([
+      "✓ dir resolved",
+      "- dest: task_loop.task_dir",
+      "- params: slug=demo, localId=1.1",
+      `- dir: ${join(container, "demo", "1.1")}`,
+    ]);
+  });
+
+  it("dest 枚举与描述在注册时从声明集生成（零手写键名——声明变即变）", () => {
+    const withPlugins = createForgeResolvePathTool(faceOf([specDeclaration, taskLoopDeclaration]), RESOLVER).parameters;
+    const dest = (withPlugins.properties as { dest: { enum?: string[]; description: string } }).dest;
+    expect(dest.enum).toEqual(["spec.dir", "spec.dossier_dir", "task_loop.runtime_dir", "task_loop.task_dir"]);
+    expect(dest.description).toBe(
+      "Directory key with params — controlled enum generated from the declared entries: " +
+        "spec.dir (requires: slug); spec.dossier_dir (requires: slug, localId); task_loop.runtime_dir (requires: slug); task_loop.task_dir (requires: slug, localId). " +
+        "Unknown dest is rejected with the legal set.",
+    );
+    // 无带参声明：不挂空枚举（JSON Schema 空 enum 拒绝一切值），描述如实说明
+    const bare = (createForgeResolvePathTool(faceOf(), RESOLVER).parameters.properties as { dest: { enum?: string[]; description: string } }).dest;
+    expect(bare.enum).toBeUndefined();
+    expect(bare.description).toContain("no parameterized directory key is currently declared");
+  });
+
+  it("工具源码零手写目录键（不感知其它插件——forge.home 基座键名除外，仅作无参 dest 反例）", () => {
+    const src = readFileSync(join(import.meta.dirname, "forge-paths.ts"), "utf8");
+    for (const key of ["spec.dir", "dossier_dir", "task_loop", "project.runtime_dir", "project.docs_dir", "knowledge.root", "expert_squad"]) {
+      expect(src).not.toContain(key);
     }
   });
 

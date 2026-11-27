@@ -96,12 +96,14 @@ const FORGE_DIRS_OUTPUT_SCHEMA = {
     ok: { type: "boolean", description: "true = directory listing resolved." },
     paths: {
       type: "array",
-      description: "Entries: dirKey + absolute dir + description (base forge.* entries plus declared third-party keys), each derived from its registry entry resolve + description.",
+      description:
+        "Every declared directory key, in declaration order. Parameterless entries carry the resolved absolute dir; parameterized entries carry dir = null plus the params they require — resolve those with forge_resolve_path.",
       items: {
         type: "object",
         properties: {
-          dirKey: { type: "string", description: "Directory key (forge.* namespace or a declared plugin-prefixed key)." },
-          dir: { type: "string", description: "Resolved absolute directory path." },
+          dirKey: { type: "string", description: "Directory key (declared by its owning plugin)." },
+          dir: { type: ["string", "null"], description: "Resolved absolute directory path; null for parameterized entries." },
+          params: { type: "array", items: { type: "string" }, description: "Required parameter names — present only on parameterized entries." },
           description: { type: "string", description: "One-line semantics, same source as the registry entry." },
         },
         required: ["dirKey", "dir", "description"],
@@ -111,26 +113,38 @@ const FORGE_DIRS_OUTPUT_SCHEMA = {
   required: ["ok", "paths"],
 } as const;
 
-function renderForgeDirs(_args: unknown, value: unknown): readonly { type: "text"; text: string }[] {
-  const v = value as { ok: true; paths: readonly { dirKey: string; dir: string; description: string }[] };
-  return [
-    {
-      type: "text",
-      text: [`✓ ${v.paths.length} dir(s)`, ...v.paths.map((p) => `- ${p.dirKey}: ${p.dir} — ${p.description}`)].join("\n"),
-    },
-  ];
+/** forge_dirs 行（声明集派生——无参键带绝对路径，带参键值留空并列所需参数） */
+interface ForgeDirsRow {
+  readonly dirKey: string;
+  readonly dir: string | null;
+  readonly params?: readonly string[];
+  readonly description: string;
 }
 
-/** tool 定义工厂（forge_dirs——无参条目查询，dirKey 可选/缺省全量） */
+function renderForgeDirs(_args: unknown, value: unknown): readonly { type: "text"; text: string }[] {
+  const v = value as { ok: true; paths: readonly ForgeDirsRow[] };
+  const resolvedCount = v.paths.filter((p) => p.dir !== null).length;
+  const parameterizedCount = v.paths.length - resolvedCount;
+  const head =
+    parameterizedCount > 0 ? `✓ ${resolvedCount} dir(s) + ${parameterizedCount} parameterized` : `✓ ${resolvedCount} dir(s)`;
+  const lines = v.paths.map((p) =>
+    p.dir !== null
+      ? `- ${p.dirKey}: ${p.dir} — ${p.description}`
+      : `- ${p.dirKey}: (requires: ${(p.params ?? []).join(", ")}) → ${RESOLVE_TOOL} — ${p.description}`,
+  );
+  return [{ type: "text", text: [head, ...lines].join("\n") }];
+}
+
+/** tool 定义工厂（forge_dirs——目录键发现面：全部声明键逐行，带参键标明所需参数） */
 export function createForgeDirsTool(face: ForgePathsToolFace, resolveProjectId: BugProjectIdResolver): ForgePathToolDefinition {
   return {
     name: DIRS_TOOL,
     description:
-      "Query forge directory facts — the single source of truth for directory paths. Omit dirKey to list all parameterless entries (dirKey + absolute dir + description, including third-party keys declared via the dirKeys.* convention); give dirKey for one entry. Parameterized dirs (declared by the plugin that owns them, e.g. spec.dir / spec.dossier_dir / task_loop.runtime_dir / task_loop.task_dir, and any declared ones) use forge_resolve_path instead. Read-only.",
+      "Query forge directory facts — the single source of truth for directory paths and the discovery face for every declared directory key. Omit dirKey to list all declared keys: parameterless entries come with their absolute dir; parameterized entries list the params they need and are resolved with forge_resolve_path. Give dirKey for one entry. Read-only.",
     parameters: {
       type: "object",
       properties: {
-        dirKey: { type: "string", description: "Optional directory key to look up (e.g. project.runtime_dir); omitted = list all parameterless dirs." },
+        dirKey: { type: "string", description: "Directory key to look up (any key from the full listing); omitted = list all entries." },
       },
     },
     output: { schema: FORGE_DIRS_OUTPUT_SCHEMA, render: renderForgeDirs },
@@ -140,17 +154,23 @@ export function createForgeDirsTool(face: ForgePathsToolFace, resolveProjectId: 
       const projectId = await requireProjectId(resolveProjectId, session);
       const declarations = face.declarations();
       const sources = await face.anchorsOf(projectId);
+      // 无参形态解析：带参条目参数缺席被解析器跳过（不报错）——行集仍逐键列出
       const resolved = resolveDeclaredDirs(declarations, sources);
-      // 输出 = 无参条目（带参条目参数缺席被解析器跳过——§2.3 forge_dirs 口径）
-      const keys = declaredDirKeys(declarations).filter((key) => key in resolved);
+      const rowOf = (key: string): ForgeDirsRow => {
+        const entry = declaredEntryOf(declarations, key)!;
+        const params = entry.params ?? [];
+        return params.length > 0
+          ? { dirKey: key, dir: null, params, description: entry.description }
+          : { dirKey: key, dir: resolved[key]!, description: entry.description };
+      };
+      const keys = declaredDirKeys(declarations);
       if (parsed.dirKey !== undefined) {
-        const entry = declaredEntryOf(declarations, parsed.dirKey);
-        if (entry === undefined) {
-          throw new ForgeDirPathInvalidError(`unknown dirKey '${parsed.dirKey}' — legal keys: ${declaredDirKeys(declarations).join(", ")}`);
+        if (declaredEntryOf(declarations, parsed.dirKey) === undefined) {
+          throw new ForgeDirPathInvalidError(`unknown dirKey '${parsed.dirKey}' — legal keys: ${keys.join(", ")}`);
         }
-        return { ok: true, paths: [{ dirKey: parsed.dirKey, dir: resolved[parsed.dirKey]!, description: entry.description }] };
+        return { ok: true, paths: [rowOf(parsed.dirKey)] };
       }
-      return { ok: true, paths: keys.map((key) => ({ dirKey: key, dir: resolved[key]!, description: declaredEntryOf(declarations, key)!.description })) };
+      return { ok: true, paths: keys.map(rowOf) };
     },
   };
 }
@@ -178,14 +198,28 @@ const FORGE_RESOLVE_PATH_OUTPUT_SCHEMA = {
   type: "object",
   properties: {
     ok: { type: "boolean", description: "true = parameterized dir resolved." },
+    dest: { type: "string", description: "The directory key that was resolved." },
+    params: {
+      type: "object",
+      description: "The parameters this destination requires, with the values used (extra args are not echoed).",
+      additionalProperties: { type: "string" },
+    },
     dir: { type: "string", description: "Resolved absolute path of the directory key (params come from the entry declaration, not caller choice)." },
   },
-  required: ["ok", "dir"],
+  required: ["ok", "dest", "params", "dir"],
 } as const;
 
 function renderForgeResolvePath(_args: unknown, value: unknown): readonly { type: "text"; text: string }[] {
-  const v = value as { ok: true; dir: string };
-  return [{ type: "text", text: [`✓ dir resolved`, `- dir: ${v.dir}`].join("\n") }];
+  const v = value as { ok: true; dest: string; params: Readonly<Record<string, string>>; dir: string };
+  const params = Object.entries(v.params)
+    .map(([name, val]) => `${name}=${val}`)
+    .join(", ");
+  return [
+    {
+      type: "text",
+      text: [`✓ dir resolved`, `- dest: ${v.dest}`, ...(params === "" ? [] : [`- params: ${params}`]), `- dir: ${v.dir}`].join("\n"),
+    },
+  ];
 }
 
 /** 带参条目键清单（声明序——枚举/校验由条目自动生成的单点） */
@@ -193,17 +227,33 @@ function parameterizedKeysOf(declarations: readonly ForgeDirDeclaration[]): read
   return declaredDirKeys(declarations).filter((key) => (declaredEntryOf(declarations, key)!.params?.length ?? 0) > 0);
 }
 
+/** 「目的地（所需参数）」清单文案（声明集派生——注册期生成 dest 的枚举与描述，零手写键名） */
+function describeDestinations(declarations: readonly ForgeDirDeclaration[]): string {
+  return parameterizedKeysOf(declarations)
+    .map((key) => `${key} (requires: ${declaredEntryOf(declarations, key)!.params!.join(", ")})`)
+    .join("; ");
+}
+
 /** tool 定义工厂（forge_resolve_path——带参条目解析，枚举/参数/校验由条目生成） */
 export function createForgeResolvePathTool(face: ForgePathsToolFace, resolveProjectId: BugProjectIdResolver): ForgePathToolDefinition {
+  // 枚举与目的地清单在注册时从声明集生成（工具不感知任何插件——零手写键名）；执行期校验
+  // 仍按当次声明集现算，注册后才装载的插件不会被错误拒绝或放行。
+  const declared = face.declarations();
+  const paramed = parameterizedKeysOf(declared);
+  const destDescription =
+    paramed.length > 0
+      ? `Directory key with params — controlled enum generated from the declared entries: ${describeDestinations(declared)}. Unknown dest is rejected with the legal set.`
+      : "Directory key with params — no parameterized directory key is currently declared; any dest is rejected with the (empty) legal set.";
   return {
     name: RESOLVE_TOOL,
-    description: `Resolve a parameterized forge directory key to its absolute form. dest is a controlled enum auto-generated from the declared entries with params; give slug/localId as the entry declares. The dependency chain (base dir of a parameterized key) resolves through the same registry — you cannot pick an anchor or pass a free-form path. Read-only.`,
+    description: `Resolve a parameterized forge directory key to its absolute form. dest is a controlled enum generated from the declared entries with params; give slug/localId as the entry declares. The dependency chain (base dir of a parameterized key) resolves through the same registry — you cannot pick an anchor or pass a free-form path. Read-only.`,
     parameters: {
       type: "object",
       properties: {
         dest: {
           type: "string",
-          description: `Directory key with params — controlled enum generated from the registry at call time (e.g. spec.dir (requires slug); spec.dossier_dir (requires slug, localId)). Unknown dest is rejected with the legal set.`,
+          ...(paramed.length > 0 ? { enum: [...paramed] } : {}),
+          description: destDescription,
         },
         slug: { type: "string", description: "Container slug (feature directory name or proposal slug) — required by entries listing slug." },
         localId: { type: "string", description: "Task local id (e.g. 1.1 / fix-1) — required by entries listing localId." },
@@ -216,14 +266,9 @@ export function createForgeResolvePathTool(face: ForgePathsToolFace, resolveProj
       const session = sessionContextOf(exec);
       const projectId = await requireProjectId(resolveProjectId, session);
       const declarations = face.declarations();
-      const paramed = parameterizedKeysOf(declarations);
       const entry = declaredEntryOf(declarations, parsed.dest);
-      if (entry === undefined || !paramed.includes(parsed.dest)) {
-        throw new ForgeDirPathInvalidError(
-          `unknown dest '${parsed.dest}' — legal destinations: ${paramed
-            .map((key) => `${key} (requires: ${declaredEntryOf(declarations, key)!.params!.join(", ")})`)
-            .join("; ")}`,
-        );
+      if (entry === undefined || !parameterizedKeysOf(declarations).includes(parsed.dest)) {
+        throw new ForgeDirPathInvalidError(`unknown dest '${parsed.dest}' — legal destinations: ${describeDestinations(declarations)}`);
       }
       const requires = entry.params ?? [];
       const missing = requires.filter((r) => parsed[r] === undefined);
@@ -237,7 +282,8 @@ export function createForgeResolvePathTool(face: ForgePathsToolFace, resolveProj
       }
       const sources = await face.anchorsOf(projectId);
       const resolved = resolveDeclaredDirs(declarations, sources, { slug: parsed.slug, localId: parsed.localId });
-      return { ok: true, dir: resolved[parsed.dest]! };
+      const used = Object.fromEntries(requires.map((name) => [name, parsed[name]!]));
+      return { ok: true, dest: parsed.dest, params: used, dir: resolved[parsed.dest]! };
     },
   };
 }
