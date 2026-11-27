@@ -2295,6 +2295,7 @@ describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
     const built = build({
       claim: [NO_TASK],
       stats: [wait, wait, wait, wait, statsOf({ pending: 2, completed: 4 })],
+      checkpointRows: [], // 检查点域在场 → 非干净收口亦附复盘指示段
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
@@ -2304,6 +2305,8 @@ describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
     expect(timeout?.wakeup).toBe(true) // ⑮ 结算单点唤醒（AC）
     expect(timeout?.text).toContain('完成 4 · 阻塞 0 · 待处理 2')
     expect(timeout?.text).toContain('提示用户"稍后重新执行 /run-dag-tasks feat-x"')
+    // 非干净收口（等待超时）同样附复盘指示段
+    expect(timeout?.text).toContain('【复盘与知识沉淀指示】')
   })
 })
 
@@ -3744,6 +3747,7 @@ describe('3c 终止条件全集（no-task/用户终止/死锁/超时/最大轮�
       claim: [claimed('2.5'), claimed('2.6'), claimed('2.7'), claimed('2.8'), claimed('2.9')],
       stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
       limits: { maxRounds: 3 },
+      checkpointRows: [], // 检查点域在场 → 非干净收口亦附复盘指示段
     })
     const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     expect(started).toEqual({ ok: true, loopId: expect.any(String) })
@@ -3752,6 +3756,8 @@ describe('3c 终止条件全集（no-task/用户终止/死锁/超时/最大轮�
     const end = built.calls.at(-1)
     expect(end?.text).toContain('[forge·循环结束]')
     expect(end?.text).toContain('达到最大轮次上限')
+    // 非干净收口（轮次封顶）同样附复盘指示段——残留阻塞/未结任务时照常复盘沉淀
+    expect(end?.text).toContain('【复盘与知识沉淀指示】')
   })
 
   it('最大轮次计数为生命周期总量（ActiveLoop——resume 续用不清零）：挂起耗尽末轮，resume 即 ⑮ 收口零续领', async () => {

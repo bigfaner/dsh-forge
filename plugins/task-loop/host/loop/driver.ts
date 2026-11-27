@@ -1489,6 +1489,15 @@ async function announceStartup(loop: ActiveLoop): Promise<void> {
   emitProgress(loop, { verb: "startup", status: "running", scenario: "startup/from-scratch" });
 }
 
+/**
+ * 结束叙述 + 复盘指示段（非干净收口两径共用：轮次封顶 / 等待超时——仍有阻塞或未结任务时
+ * 事故材料最多，复盘与知识沉淀照常进行；指示段缺席/渲染失败 = 仅结束叙述）。
+ */
+async function settleTextWithRetro(loop: ActiveLoop, narrative: string): Promise<string> {
+  const retroSection = await retroSectionOf(loop);
+  return retroSection === "" ? narrative : `${narrative}\n\n${retroSection}`;
+}
+
 /** 循环体（启动后 fire-and-forget——异常兜底告警 + 终局登记注销双保证；挂起退出 =
  *  保留登记与运行时状态，终局收口（登记注销）仅在非挂起退出时执行） */
 async function runLoop(loop: ActiveLoop): Promise<void> {
@@ -1505,15 +1514,18 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
         const stats = await statsFailSoft(loop);
         await loop.deps.narrator.settle(
           record.ownerSessionId,
-          renderNarrative("finished-timeout", {
-            sourceSlug: record.source.slug,
-            reason: "达到最大轮次上限",
-            completed: stats.byStatus.completed,
-            blocked: stats.byStatus.blocked,
-            pending: stats.byStatus.pending,
-            instruction: loopInstructionOf("timeout", record.source.slug),
-            taskSummaries: taskSummaryLines(loop),
-          }),
+          await settleTextWithRetro(
+            loop,
+            renderNarrative("finished-timeout", {
+              sourceSlug: record.source.slug,
+              reason: "达到最大轮次上限",
+              completed: stats.byStatus.completed,
+              blocked: stats.byStatus.blocked,
+              pending: stats.byStatus.pending,
+              instruction: loopInstructionOf("timeout", record.source.slug),
+              taskSummaries: taskSummaryLines(loop),
+            }),
+          ),
         );
         // 结束（等待超时）——循环级进度事件（轮次封顶径与耐心耗尽径同码）
         emitProgress(loop, { verb: "timeout", status: "blocked", scenario: "loop/timeout", note: "达到最大轮次上限" });
@@ -2657,18 +2669,21 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
   loop.waitRounds += 1;
   if (loop.waitRounds >= LOOP_PATIENCE_MAX_WAIT_ROUNDS) {
     const stats = await statsFailSoft(loop);
-    // 等待超时收口 = settlement 形态
+    // 等待超时收口 = settlement 形态（附复盘指示段——残留阻塞/未结任务时照常复盘沉淀）
     await loop.deps.narrator.settle(
       loop.record.ownerSessionId,
-      renderNarrative("finished-timeout", {
-        sourceSlug: loop.record.source.slug,
-        reason: "等待超时",
-        completed: stats.byStatus.completed,
-        blocked: stats.byStatus.blocked,
-        pending: stats.byStatus.pending,
-        instruction: loopInstructionOf("timeout", loop.record.source.slug),
-        taskSummaries: taskSummaryLines(loop),
-      }),
+      await settleTextWithRetro(
+        loop,
+        renderNarrative("finished-timeout", {
+          sourceSlug: loop.record.source.slug,
+          reason: "等待超时",
+          completed: stats.byStatus.completed,
+          blocked: stats.byStatus.blocked,
+          pending: stats.byStatus.pending,
+          instruction: loopInstructionOf("timeout", loop.record.source.slug),
+          taskSummaries: taskSummaryLines(loop),
+        }),
+      ),
     );
     // 结束（等待超时）——循环级进度事件（耐心耗尽径）
     emitProgress(loop, { verb: "timeout", status: "blocked", scenario: "loop/timeout", note: "等待超时" });

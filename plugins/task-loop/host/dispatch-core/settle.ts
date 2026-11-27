@@ -16,6 +16,7 @@ import { noteHostOwnedChild } from "../spawn/job-tree.js";
 import { emitForgeDiag } from "../faces.js";
 import type { ForgeDiagEmitFace, ProjectDirServiceFace } from "../faces.js";
 import type { TasksService } from "../domain/tasks/service.js";
+import { RESUME_POINTER_FILE } from "../domain/tasks/evidence-pointer.js";
 import type { ContainerRef, TaskRef, TaskSnapshot } from "../domain/tasks/types.js";
 import type { AppendCheckpointInput } from "../domain/checkpoints/service.js";
 import type { SettlementEvidence } from "../db/repositories/settlement-repo.js";
@@ -355,8 +356,11 @@ export async function recoverSettleReports(
       });
       return [];
     }
-    // 顶层 .md 非递归探测（零清单配置——目录内报告文件即清单）
-    const reports = entries.filter((e) => e.isFile() && e.name.endsWith(".md")).map((e) => e.name);
+    // 顶层 .md 非递归探测（零清单配置——目录内报告文件即清单）；resume.md 是进度台账不是
+    // 报告，排除（否则被当报告回收到卷宗）
+    const reports = entries
+      .filter((e) => e.isFile() && e.name.endsWith(".md") && e.name !== RESUME_POINTER_FILE)
+      .map((e) => e.name);
     if (reports.length === 0) {
       emitForgeDiag(deps.diag, {
         level: "info",

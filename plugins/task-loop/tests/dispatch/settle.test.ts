@@ -408,7 +408,7 @@ function captureDiags(): { diag: ForgeDiagEmitFace; entries: Array<{ level: stri
 }
 
 describe("AC7 · 结算旁挂回收钩子（settleWorkerRun）", () => {
-  it("成功结算探测运行时目录顶层 .md 复制进卷宗——非递归（incident 子目录不扫）且非 .md 不收", async () => {
+  it("成功结算探测运行时目录顶层 .md 复制进卷宗——非递归（incident 子目录不扫）且非 .md 不收；resume.md 是进度台账不回收", async () => {
     const home = mkdtempSync(join(tmpdir(), "forge-recover-"));
     const runtimeDir = join(home, "logs", PROPOSAL_SLUG, "2.4");
     const issuesDir = join(home, ".forge", "specs", PROPOSAL_SLUG, "issues", "2.4");
@@ -417,6 +417,7 @@ describe("AC7 · 结算旁挂回收钩子（settleWorkerRun）", () => {
     writeFileSync(join(runtimeDir, "verification-report.md"), "# 判别实验清单\n\n- exp1", "utf8");
     writeFileSync(join(runtimeDir, "raw-data.txt"), "not a report", "utf8");
     writeFileSync(join(runtimeDir, "incident", "inner.md"), "# 子目录不收", "utf8");
+    writeFileSync(join(runtimeDir, "resume.md"), "# 已完成 / 进行中 / 待办", "utf8");
     const recovery = recordingRecovery(runtimeDir, issuesDir);
     const settlement = await settleWorkerRun(
       { tasks: completedHarness(), reportRecovery: recovery.deps },
@@ -425,10 +426,11 @@ describe("AC7 · 结算旁挂回收钩子（settleWorkerRun）", () => {
     expect(settlement.case).toBe("settled");
     if (settlement.case !== "settled") return;
     expect(settlement.result.outcome).toBe("success");
-    // 卷宗正本在场且内容一致；非 .md 与子目录文件不收
+    // 卷宗正本在场且内容一致；非 .md 与子目录文件不收；resume.md 不进卷宗
     expect(readFileSync(join(issuesDir, "verification-report.md"), "utf8")).toBe("# 判别实验清单\n\n- exp1");
     expect(existsSync(join(issuesDir, "raw-data.txt"))).toBe(false);
     expect(existsSync(join(issuesDir, "incident"))).toBe(false);
+    expect(existsSync(join(issuesDir, "resume.md"))).toBe(false);
     // 运行时原件不动（复制非移动）
     expect(existsSync(join(runtimeDir, "verification-report.md"))).toBe(true);
   });
