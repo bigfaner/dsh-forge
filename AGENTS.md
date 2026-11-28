@@ -62,6 +62,7 @@
 - **CDP 调试脚本统一放 `cdp/` 目录**（真机取证/驱动 renderer 的 eval、截图、探测脚本等），不散落 `.forge/tmp` 等临时位置；过程产物（截图、解压转储）不进 git（§5.2）。
 - **进程名区分（dev 清理/重启防误伤安装包）**：安装包形态的宿主进程名为 `dsh-forge`，dev 形态为 `dsh-forge-dev`。清理/重启 dev 实例的**全流程**（杀进程、启动、验证）都只允许作用于 `dsh-forge-dev`——过滤条件必须精确匹配（`Get-Process dsh-forge-dev` / `-like 'dsh-forge-dev*'`），**禁用 `dsh-forge*` 前缀通配与裸 `Stop-Process -Name dsh-forge`**（通配会同时命中安装包进程；判例 2026-10-31：清理 dev 孤儿进程时误用 `dsh-forge*` 全量 Stop-Process，幸被中断未遂）。杀进程前先 `Get-Process` 回显目标清单核对，再执行；dev 重启完成后回显确认安装包 `dsh-forge` 进程仍在、未受影响。
 - **dev 宿主经 profile.dev junction 装载插件——junction 绑定的是目录，不是分支**：`apps/host/profile.dev/node_modules/@dsh-forge/<pkg>` 用 Windows junction 链接包源（dev 态零拷贝即时生效），junction 指谁就读谁、目标停在旧分支/旧 worktree 不报错。**worktree 合回 main 后必须把指向该 worktree 的 junction 改指 main 检出**，否则 dev 实例永远装载旧产物——症状（改源码/提交/重启 dev 均「UI 不变」）与 Git/构建层无关，极易误诊。判例 2026-10-27：expert-squad junction 残留指向 expert-squad worktree，五次「提交到 main 但 dev 界面无变化」实为装载面读旧检出。诊断口诀：`Get-Item profile.dev\node_modules\@dsh-forge\<pkg>` 看 `Target`；修正 = `rmdir` 旧 junction + `New-Item -ItemType Junction -Target <main 检出包路径>`。
+- **子进程不得包 cmd 壳，shell 包装必须隐藏窗口**（用户裁决 2026-11-28）：仓库代码与 agent 下发的命令一律不包 `cmd /c`（含 `cmd /k`、`ComSpec`）；确需 shell 包装时（pnpm/npm 的 `.cmd` 垫片解析等），同一调用必须带 `windowsHide: true`——Windows 上 shell 包装即 `cmd.exe /d /s /c`，不隐藏即弹出可见控制台窗口，长命令就是常驻黑窗。机械面全在 `lints/lint-shell-spawn.mjs`（入根 `pnpm lint`）；无等价非壳形态时行尾注 `// shell-spawn-exempt: <理由>` 豁免。agent 侧：命令用 PowerShell 原生形态，不以 `cmd /c` 包装。
 
 ## 3. UI 与设计
 
@@ -93,7 +94,7 @@
 |---|---|---|
 | compile | `pnpm lint:types`（= `tsc -b`） | 全量类型编译；完整产物构建用 `pnpm build` |
 | fmt | `npx oxlint -c oxlint.config.ts --fix <路径>` | 无独立 formatter；oxlint --fix 承担自动修复 |
-| lint | `pnpm lint` | 全量门 = ox + imports + tokens + selftest + types + test-types；快速单项用 `pnpm lint:ox` |
+| lint | `pnpm lint` | 全量门 = ox + imports + tokens + shell-spawn + selftest + types + test-types；快速单项用 `pnpm lint:ox` |
 | test | `npx vitest run <受影响的测试文件或目录>` | **针对性执行受影响功能的单元测试，不跑全局**；契约测试用 `pnpm test:contract`；e2e 用 `pnpm test:e2e` |
 
 - **test 纪律**：`pnpm test`（全局 `vitest run`）只作参考口径；agent 执行质量门时按本次改动定位受影响的测试文件/项目，针对性运行；全局跑仅在跨包重构或收口验收时使用。
