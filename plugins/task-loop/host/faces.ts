@@ -225,33 +225,6 @@ export interface DispatchJobsRegistryFace {
   }): string
 }
 
-/** 适配层 channel 硬编码点（全仓唯一——F4 观察者专属通道） */
-const LOG_CHANNEL = 'log' as const
-
-/**
- * 适配层：上游注册表结构面 → 收窄 DispatchJobsFace（channel:'log' 全仓单点硬编码）。
- * spec.run 收到的句柄只有 appendLog——内部闭包把 line 转投 job.append(line,
- * { channel: LOG_CHANNEL })；默认通道与 updateProgress 对消费方结构性不可达。
- */
-export function adaptDispatchJobs(registry: DispatchJobsRegistryFace): DispatchJobsFace {
-  return {
-    start(spec) {
-      const jobId = registry.start({
-        kind: spec.kind,
-        label: spec.label,
-        ...(spec.owner !== undefined ? { owner: spec.owner } : {}),
-        run: (job) =>
-          spec.run({
-            appendLog: (line) => {
-              job.append(line, { channel: LOG_CHANNEL })
-            },
-          }),
-      })
-      return { jobId }
-    },
-  }
-}
-
 /** 插件对宿主 ctx 的结构化消费面（真 Context 结构兼容；容器语义 slug 化——bugs 域
  *  服务面随退役批移出本包：forgeBugs→project、forgeProjects→project） */
 export interface ForgeContextFace {

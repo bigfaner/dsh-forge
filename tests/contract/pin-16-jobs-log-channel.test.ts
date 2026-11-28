@@ -5,7 +5,7 @@
 // 三事实（行号锚 = 2026-10-10 HEAD 的 dsh-tool-jobs lib/index.js）：
 //   ① renderModelDelta 滤 log 块（:61-70——visibility 门 = 全文件唯一 `channel !== "log"` 谓词）；
 //   ② 未知名 channel 视同缺席喂模型（滤除仅 log 一名；拼错通道名即静默入模型面——F4 泄露向，
-//     plugin 侧以 DispatchJobRunHandle 收窄句柄 + adaptDispatchJobs 单点硬编码结构性封死）；
+//     plugin 侧以 DispatchJobRunHandle 收窄句柄结构性封死）；
 //   ③ publicJob 经 jobDetail 以 `progress ?? detail` 折叠（:20-39——公共投影无 progress 字段名，
 //     progress 在场时值折叠进 detail 仍可达模型 → dispatchTask 恒不调 updateProgress 的根据）。
 // Hard Rule 相容声明：pin 池纪律「只 pin 上游公开面，不 pin 内部实现细节（防脆断）」——本 pin 对象
