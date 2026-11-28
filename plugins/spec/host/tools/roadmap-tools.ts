@@ -6,12 +6,14 @@ import {
   formatFailure,
   formatOk,
   isForgeToolFailure,
+  withFailureVariant,
+} from "@dsh-forge/lib-api/tools/format";
+import {
   optionalString,
   requireArgsObject,
   requiredEnum,
   requiredString,
-  withFailureVariant,
-} from "@dsh-forge/lib-api";
+} from "@dsh-forge/lib-api/tools/args";
 import type { MilestoneRow, ObjectiveStatus, RoadmapRow } from "../db/row-types.js";
 import { OBJECTIVE_STATUSES, ROADMAP_STATES } from "../domain/status-machines.js";
 import type { ForgeToolServices } from "../domain/specs/tool-service.js";

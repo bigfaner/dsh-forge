@@ -7,10 +7,9 @@ import {
   callToolFace,
   formatFailure,
   isForgeToolFailure,
-  requireArgsObject,
-  requiredString,
   withFailureVariant,
-} from "@dsh-forge/lib-api";
+} from "@dsh-forge/lib-api/tools/format";
+import { requireArgsObject, requiredString } from "@dsh-forge/lib-api/tools/args";
 import type { ForgeToolServices } from "../domain/specs/tool-service.js";
 import { requireSessionCwd, type SpecToolDefinition, type SpecToolExecFace } from "./faces.js";
 import { optionalStringArrayField } from "./parse-fields.js";

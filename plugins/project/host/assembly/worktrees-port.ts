@@ -1,6 +1,6 @@
 // host/assembly · worktrees 缝常驻组装面（与 projects-port.ts 同构——host/index.ts
 // 零域装配逻辑，本面持有 worktrees 域 Port 投影与惰性单例）。
-import type { WorktreeServicePort } from "@dsh-forge/lib-api";
+import type { WorktreeServicePort } from "@dsh-forge/lib-api/ports";
 import type { OfficialRegistryFace } from "../projects/registry-adapter.js";
 import {
   createWorktreeRpcService,

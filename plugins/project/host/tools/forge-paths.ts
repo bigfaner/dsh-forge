@@ -21,7 +21,7 @@ import {
   resolveDeclaredDirs,
   type ReflectDeclarePullFace,
 } from "../dirs/anchors.js";
-import { optionalString, requireArgsObject, requiredString } from "@dsh-forge/lib-api";
+import { optionalString, requireArgsObject, requiredString } from "@dsh-forge/lib-api/tools/args";
 import type { BugProjectIdResolver, BugToolExecFace } from "./session.js";
 import type { BugToolParametersSchema } from "./bug-tools.js";
 import { requireProjectId, sessionContextOf } from "./session.js";

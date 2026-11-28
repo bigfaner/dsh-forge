@@ -13,7 +13,7 @@ import type {
   ProjectResolutionPort,
   ProjectsServicePort,
   WorktreeServicePort,
-} from "@dsh-forge/lib-api";
+} from "@dsh-forge/lib-api/ports";
 import type { OfficialRegistryFace } from "./projects/registry-adapter.js";
 import {
   registerProjectSeams,

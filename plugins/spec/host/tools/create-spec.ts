@@ -1,8 +1,9 @@
 // create_spec tool（plugin-spec 1.4——域动词薄封装：域逻辑单一事实源 = forgeSpecs 服务层
 // createSpec 单事务原子落库；本文件只做入参防御收窄 + doc_path 缺省派生（lib/api
 // forge-paths 单源）+ 双友好返回面投影）。
-import { specDocRelPath } from "@dsh-forge/lib-api";
-import { callToolFace, formatFailure, formatOk, isForgeToolFailure, optionalStringArray, requireArgsObject, requiredString, withFailureVariant } from "@dsh-forge/lib-api";
+import { specDocRelPath } from "@dsh-forge/lib-api/tools/forge-paths";
+import { optionalStringArray, requireArgsObject, requiredString } from "@dsh-forge/lib-api/tools/args";
+import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant } from "@dsh-forge/lib-api/tools/format";
 import type { SpecRow } from "../db/row-types.js";
 import type { ForgeSpecsService } from "../domain/specs/service.js";
 import { SPEC_TIERS } from "../domain/specs/service.js";

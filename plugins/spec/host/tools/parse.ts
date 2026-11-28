@@ -1,6 +1,6 @@
 // spec tool 入参解析共享面（plugin-spec 1.4——goals 全集/tiers 词表防御收窄；
 // 原语单源 lib/api tools/args，本文件只做 spec 域形状组装）。
-import { requiredString, optionalString, ToolArgsError } from "@dsh-forge/lib-api";
+import { requiredString, optionalString, ToolArgsError } from "@dsh-forge/lib-api/tools/args";
 
 /** Goal 输入形状（域 GoalInput 同形——tools 层零 import 域类型的入参镜像禁令不含此面：
  *  tools → domain 单向依赖合法，但入参经防御收窄后组装，域类型由服务层签名承接） */

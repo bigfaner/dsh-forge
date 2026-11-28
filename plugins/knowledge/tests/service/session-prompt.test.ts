@@ -76,8 +76,10 @@ describe('未绑定 / 无会话上下文（自然退场）', () => {
     const text = createKnowledgeDomainsText(r.deps)
     expect(text({})).toBe('')
     expect(text({ agent: {} })).toBe('')
-    expect(text({ agent: { session: { id: 's-1' } } })).toBe('')
-    expect(text({ agent: { session: { id: 's-1', header: { cwd: '' } } } })).toBe('')
+    const sessionOnlyId = { id: 's-1' }
+    expect(text({ agent: { session: sessionOnlyId } })).toBe('')
+    const sessionIdAndEmptyCwd = { id: 's-1', header: { cwd: '' } }
+    expect(text({ agent: { session: sessionIdAndEmptyCwd } })).toBe('')
   })
 
   it('Session 顶层 cwd 兼容位（结构面允许双读）同样可解析', () => {

@@ -24,7 +24,7 @@ export interface KnowledgePromptBindDeps {
 /** 官方 AssembleContext 运行期子面（dsh-agent assembleContextFor 携带 agent；agent.session.header.cwd = 会话工作区根） */
 export interface KnowledgeAssembleContext {
   readonly agent?: {
-    readonly session?: { readonly header?: { readonly cwd?: unknown }; readonly cwd?: unknown }
+    readonly session?: { readonly id?: unknown; readonly header?: { readonly cwd?: unknown }; readonly cwd?: unknown }
   }
 }
 

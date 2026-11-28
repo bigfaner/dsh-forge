@@ -11,9 +11,10 @@
 //   失败 DTO 转写面为旧宿主 callToolFace 形态，本面不复制）。
 // - source_task_id 注入径归 task-loop 派发上下文（worker 来源任务注册表），本插件
 //   跨包不可达——键恒缺席（候选检索 container_slug 直比降级，standalone 同语义）。
-import type { BugCard, BugsServicePort, GetBugResponse, RegisterBugResult } from "@dsh-forge/lib-api";
-import { BUG_CARD_SUCCESS_SCHEMA } from "@dsh-forge/lib-api";
-import { optionalString, requireArgsObject, requiredString } from "@dsh-forge/lib-api";
+import type { BugCard, GetBugResponse, RegisterBugResult } from "@dsh-forge/lib-api/dto/bugs";
+import type { BugsServicePort } from "@dsh-forge/lib-api/ports";
+import { BUG_CARD_SUCCESS_SCHEMA } from "@dsh-forge/lib-api/dto/bugs";
+import { optionalString, requireArgsObject, requiredString } from "@dsh-forge/lib-api/tools/args";
 import type { BugToolExecFace, BugProjectIdResolver } from "./session.js";
 import { optionalSessionId, requireProjectId, sessionContextOf } from "./session.js";
 

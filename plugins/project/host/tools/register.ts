@@ -4,7 +4,7 @@
 // 对本宿主不可达的根因即缝缺席，非静默失联）。
 import { normalizeFsPath, resolveProjectKey } from "@dsh-forge/lib-path";
 import { spawnGitWorktreePorcelain, type GitPorcelainRunner } from "@dsh-forge/lib-path/project-root";
-import type { BugsServicePort, ProjectsServicePort } from "@dsh-forge/lib-api";
+import type { BugsServicePort, ProjectsServicePort } from "@dsh-forge/lib-api/ports";
 import type { DomainDb } from "../db/connection.js";
 import { createBugTools, type BugToolDefinition, type BugToolsDeps } from "./bug-tools.js";
 import type { BugProjectIdResolver } from "./session.js";

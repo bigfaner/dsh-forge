@@ -8,13 +8,15 @@ import {
   formatFailure,
   formatOk,
   isForgeToolFailure,
+  withFailureVariant,
+} from "@dsh-forge/lib-api/tools/format";
+import {
   optionalString,
   requireArgsObject,
   requiredEnum,
   requiredString,
   ToolArgsError,
-  withFailureVariant,
-} from "@dsh-forge/lib-api";
+} from "@dsh-forge/lib-api/tools/args";
 import type { ReviewRow } from "../db/row-types.js";
 import type { ForgeToolServices } from "../domain/specs/tool-service.js";
 import { requireSessionCwd, type SpecToolDefinition, type SpecToolExecFace } from "./faces.js";

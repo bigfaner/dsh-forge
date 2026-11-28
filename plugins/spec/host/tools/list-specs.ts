@@ -5,10 +5,9 @@ import {
   formatFailure,
   formatOk,
   isForgeToolFailure,
-  optionalEnum,
-  requireArgsObject,
   withFailureVariant,
-} from "@dsh-forge/lib-api";
+} from "@dsh-forge/lib-api/tools/format";
+import { optionalEnum, requireArgsObject } from "@dsh-forge/lib-api/tools/args";
 import { SPEC_STATUSES, type SpecRow, type SpecStatus } from "../db/row-types.js";
 import type { ForgeSpecsService } from "../domain/specs/service.js";
 import { requireSessionCwd, type SpecToolDefinition, type SpecToolExecFace } from "./faces.js";

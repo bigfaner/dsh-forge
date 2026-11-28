@@ -6,11 +6,9 @@ import {
   formatFailure,
   formatOk,
   isForgeToolFailure,
-  optionalStringArray,
-  requireArgsObject,
-  requiredString,
   withFailureVariant,
-} from "@dsh-forge/lib-api";
+} from "@dsh-forge/lib-api/tools/format";
+import { optionalStringArray, requireArgsObject, requiredString } from "@dsh-forge/lib-api/tools/args";
 import type { SpecRow } from "../db/row-types.js";
 import type { ForgeToolServices } from "../domain/specs/tool-service.js";
 import { requireSessionCwd, type SpecToolDefinition, type SpecToolExecFace } from "./faces.js";

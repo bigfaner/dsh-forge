@@ -61,7 +61,6 @@ function makeRt(): {
   const ctx = (): KnowledgeContextFace => ({
     tools: { register: (_d: KnowledgeToolDefinition) => () => {} },
     systemPrompt: { section: (_s: KnowledgePromptSection) => () => {} },
-    on: (_e: string, _h: unknown) => () => {},
     emit: (_event: string, payload: unknown) => {
       diagEvents.push(payload as DiagEventPayload)
     },

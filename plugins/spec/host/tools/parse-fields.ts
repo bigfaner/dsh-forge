@@ -1,7 +1,7 @@
 // tool 入参解析共享面（plugin-spec-roadmaps 1.8——原语单源 lib/api tools/args，本文件只做
 // spec 域形状组装：可选字符串键 / 可选字符串数组键 / ac_json 原样数组透传——结构校验
 // 单点在服务层 parseAcEntries，工具面只做数组形防御收窄）。
-import { optionalString, requireArgsObject, ToolArgsError } from "@dsh-forge/lib-api";
+import { optionalString, requireArgsObject, ToolArgsError } from "@dsh-forge/lib-api/tools/args";
 
 /** 必填正整数（goal_seq 寻径形——0/负数/非整数/非 number 拒）。 */
 export function requiredPositiveInteger(a: Record<string, unknown>, key: string): number {

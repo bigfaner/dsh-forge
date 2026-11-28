@@ -8,12 +8,14 @@ import {
   formatFailure,
   formatOk,
   isForgeToolFailure,
+  withFailureVariant,
+} from "@dsh-forge/lib-api/tools/format";
+import {
   optionalString,
   requireArgsObject,
   requiredEnum,
   requiredString,
-  withFailureVariant,
-} from "@dsh-forge/lib-api";
+} from "@dsh-forge/lib-api/tools/args";
 import { SPEC_STATUSES, type SpecRow, type SpecStatus } from "../db/row-types.js";
 import { SPEC_STATES } from "../domain/status-machines.js";
 import type { ForgeSpecsService } from "../domain/specs/service.js";

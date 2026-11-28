@@ -36,26 +36,18 @@ afterEach(() => {
 })
 
 /** 结构化 ctx 子面收集器（faces.ts 官方面结构兼容——记录注册/段/provide/诊断流） */
-type AgentCreatedHandler = (payload: { agent: unknown }) => unknown
-
 function fakeCtx(): {
   ctx: KnowledgeContextFace
   tools: KnowledgeToolDefinition[]
   sections: KnowledgePromptSection[]
   provides: Map<string, unknown>
   diag: DiagEventPayload[]
-  agentCreated: AgentCreatedHandler[]
 } {
   const tools: KnowledgeToolDefinition[] = []
   const sections: KnowledgePromptSection[] = []
   const provides = new Map<string, unknown>()
   const diag: DiagEventPayload[] = []
-  const agentCreated: AgentCreatedHandler[] = []
   const ctx: KnowledgeContextFace = {
-    on: ((event: string, handler: AgentCreatedHandler) => {
-      if (event === 'agent/created') agentCreated.push(handler)
-      return () => {}
-    }) as KnowledgeContextFace['on'],
     tools: { register: (definition) => (tools.push(definition), () => {}) },
     systemPrompt: { section: (s) => (sections.push(s), () => {}) },
     reflect: {
@@ -66,7 +58,7 @@ function fakeCtx(): {
       if (event === DIAG_EVENT) diag.push(payload)
     },
   }
-  return { ctx, tools, sections, provides, diag, agentCreated }
+  return { ctx, tools, sections, provides, diag }
 }
 
 function registryRowCount(dbFile: string): number {
@@ -81,7 +73,7 @@ describe('CT-isolated-profile-1（J3-1：仅 knowledge 行 → 装配面在场�
   it('success（面①②）：装配后 tool 面含 knowledge tool schema（结构可判定）+ 提示词段注册 + knowledge 服务 provide', () => {
     const root = tmpRoot()
     const dbFile = join(root, 'knowledge', 'knowledge.db')
-    const { ctx, tools, sections, provides, agentCreated } = fakeCtx()
+    const { ctx, tools, sections, provides } = fakeCtx()
     const dispose = knowledgePlugin(ctx, {
       dbFile,
       projects: [{ wsPath: join(root, 'ws'), projectId: 'p-iso' }],
@@ -96,11 +88,11 @@ describe('CT-isolated-profile-1（J3-1：仅 knowledge 行 → 装配面在场�
       expect(typeof tool.output.render).toBe('function')
       expect(typeof tool.execute).toBe('function')
     }
-    // 提示词接线（fix-11 裁决 B 侧 Interface 3：静态段 forge:knowledge(910) 装配期
-    // 全局注册（首轮请求即在场——bug 90d9b515 判例）；动态段走 agent/created 时刻
-    // scoped 注册。装配面锚 = 全局段恰静态段一份 + 订阅在场）
-    expect(sections.map((s) => s.name)).toEqual(['forge:knowledge'])
-    expect(agentCreated).toHaveLength(1)
+    // 提示词接线（域树提示词段改全局注册裁决：静态段 forge:knowledge(910) + 动态段
+    // forge:knowledge-domains(911) 均装配期全局注册，text 每步按装配上下文现取会话 cwd
+    // 求值——会话 scope 零闭包，插件卸载后旧会话不再持有已关库的求值函数。装配面锚
+    // = 全局段恰两段一份）
+    expect(sections.map((s) => s.name)).toEqual(['forge:knowledge', 'forge:knowledge-domains'])
     // 'knowledge' 服务 provide（host 五通道句柄来源——在场判定键）
     expect(provides.has(KNOWLEDGE_SERVICE_KEY)).toBe(true)
     // knowledge.root 目录键声明（dirKeys.knowledge 反向拉取缝）
@@ -169,8 +161,7 @@ describe('CT-isolated-profile-2（J3-2：重复装配幂等）', () => {
     const second = fakeCtx()
     const d2 = knowledgePlugin(second.ctx, { dbFile })
     expect(second.tools.map((t) => t.name).sort()).toEqual(first.tools.map((t) => t.name).sort())
-    expect(second.sections.map((s) => s.name)).toEqual(['forge:knowledge']) // fix-11 裁决：装配期全局段恰静态段一份（幂等零堆积锚）
-    expect(second.agentCreated).toHaveLength(1)
+    expect(second.sections.map((s) => s.name)).toEqual(['forge:knowledge', 'forge:knowledge-domains']) // 装配期全局段恰两段一份（幂等零堆积锚）
     d2()
 
     // 注册表行数不变（零重复注册行——幂等；全局行零注册——dshHomePath 服务缺席降级）
@@ -178,11 +169,11 @@ describe('CT-isolated-profile-2（J3-2：重复装配幂等）', () => {
   })
 })
 
-// 评审 Major 补强：装配→订阅→注册全链断言——fakeCtx 派发 agent/created 后断言两段
-// 实际落位（非仅订阅计数）；兼作 F1（1.7 真机发现）回归锚：注册径触发 rebuild，
-// 绑定会话首 turn 动态段非空（不经 listEntries 静默重建）。
-describe('CT-isolated-profile-1 补强（agent/created 派发全链——两段实际落位：静态全局 + 动态 scoped）', () => {
-  it('success：注册库在场时派发 agent/created → 全局静态段 910 + 该会话 scope 动态段 911 落位且 text 实值非空；首 turn 动态段含顶域行（F1 注册径 rebuild）', async () => {
+// 评审 Major 补强：装配→求值→注册全链断言——动态段（全局注册）text 按装配上下文
+// 现取会话 cwd 求值后断言实值非空（非仅段计数）；兼作 F1（1.7 真机发现）回归锚：
+// 注册径触发 rebuild，绑定会话求值动态段非空（不经 listEntries 静默重建）。
+describe('CT-isolated-profile-1 补强（两段全局注册 + text 每步求值全链：静态段 910 + 动态段 911）', () => {
+  it('success：注册库在场时动态段 text 求值（绑定 cwd 装配上下文）实值非空且含顶域行（F1 注册径 rebuild）', async () => {
     const root = tmpRoot()
     const dbFile = join(root, 'knowledge', 'knowledge.db')
     const ws = join(root, 'ws')
@@ -204,51 +195,39 @@ describe('CT-isolated-profile-1 补强（agent/created 派发全链——两段�
       ].join('\n'),
       'utf8',
     )
-    const { ctx, provides, agentCreated, sections } = fakeCtx()
+    const { ctx, provides, sections } = fakeCtx()
     const dispose = knowledgePlugin(ctx, {
       dbFile,
       projects: [{ wsPath: ws, projectId: 'p-iso-chain' }],
     })
-    expect(agentCreated).toHaveLength(1)
+    expect(sections.map((s) => s.name)).toEqual(['forge:knowledge', 'forge:knowledge-domains'])
 
-    // 注册径（F1：触发入库 rebuild——首 turn 动态段供数就位）
+    // 注册径（F1：触发入库 rebuild——求值动态段供数就位）
     const service = provides.get(KNOWLEDGE_SERVICE_KEY) as KnowledgeService & {
       registerProject: (input: { wsPath: string; projectId?: string }) => Promise<void>
     }
     await expect(service.registerProject({ wsPath: ws, projectId: 'p-iso-chain' })).resolves.toBeUndefined()
 
-    // 派发 agent/created（绑定 cwd + agent-scoped systemPrompt 捕获面）→ 动态段落位
-    const scoped: KnowledgePromptSection[] = []
-    const agent = {
-      session: { id: 's-iso', header: { cwd: ws } },
-      ctx: { systemPrompt: { section: (s: KnowledgePromptSection) => (scoped.push(s), () => {}) } },
-    }
-    for (const h of agentCreated) h({ agent: agent as never })
-    expect(sections.map((s) => s.name)).toEqual(['forge:knowledge']) // 全局段恰静态段一份（fix-11 裁决锚）
+    // 两段全局落位锚 + 动态段按装配上下文现取会话 cwd 求值
     expect(sections[0]?.order).toBe(910)
     expect(sections[0]!.text).toContain('<knowledge-base>')
-    expect(scoped.map((s) => s.name)).toEqual(['forge:knowledge-domains']) // 会话 scope 恰动态段一份
-    expect(scoped[0]?.order).toBe(911)
+    expect(sections[1]?.order).toBe(911)
+    const domainsText = sections[1]!.text as (context: unknown) => string
     // 首 turn 动态段非空（F1：注册径 rebuild 已入库，零 listEntries 调用）
-    expect((scoped[0]!.text as () => string)()).toContain('frontend(1 篇) — <无简介>')
+    expect(domainsText({ agent: { session: { id: 's-iso', header: { cwd: ws } } } })).toContain('frontend(1 篇) — <无简介>')
     dispose()
   })
 
-  it('对照：未绑定 cwd 派发 agent/created → 该会话 scope 零段落位', () => {
+  it('对照：未绑定 cwd 装配上下文求值动态段 → 空串', () => {
     const root = tmpRoot()
     const ws = join(root, 'ws')
-    const { ctx, agentCreated } = fakeCtx()
+    const { ctx, sections } = fakeCtx()
     const dispose = knowledgePlugin(ctx, {
       dbFile: join(root, 'knowledge', 'knowledge.db'),
       projects: [{ wsPath: ws, projectId: 'p-iso-unbound' }],
     })
-    const scoped: KnowledgePromptSection[] = []
-    const agent = {
-      session: { id: 's-x', header: { cwd: join(root, 'elsewhere') } },
-      ctx: { systemPrompt: { section: (s: KnowledgePromptSection) => (scoped.push(s), () => {}) } },
-    }
-    for (const h of agentCreated) h({ agent: agent as never })
-    expect(scoped).toEqual([])
+    const domainsText = sections.find((s) => s.name === 'forge:knowledge-domains')!.text as (context: unknown) => string
+    expect(domainsText({ agent: { session: { id: 's-x', header: { cwd: join(root, 'elsewhere') } } } })).toBe('')
     dispose()
   })
 })

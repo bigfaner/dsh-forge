@@ -30,7 +30,7 @@ import { canonicalizePath, projectKeyOf } from "@dsh-forge/lib-path";
 // 容器引用 source{kind,slug}。bug 553ec45a：此前入参从域层查询类型拼出只认 slug，界面发
 // source / featureSlug——graph 缺必填 slug 触发协议包边界校验失败、list/stats 的 source 被忽略
 // （容器筛选失效）、validateFeatureTasks 的 featureSlug 被忽略。入参类型一律取契约表，不再手拼。
-import type { ContainerRef, TasksChannelRequests } from "@dsh-forge/lib-api";
+import type { ContainerRef, TasksChannelRequests } from "@dsh-forge/lib-api/dto/forge";
 import type { Envelope } from "../../shared/result.js";
 import type { SessionTaskLinkCard, TaskCard, TaskSnapshot } from "../domain/tasks/types.js";
 import type { QueryTaskResult } from "../domain/tasks/query.js";

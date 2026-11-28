@@ -22,17 +22,14 @@ import { Remote, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import { rootCtxOf } from "@dsh-forge/lib-util";
 import { Peer } from "@deepseek-ai/dsh-client-connection";
 import type { Context } from "@deepseek-ai/cordis";
-import type {
-  BugsServicePort,
-  ProjectsServicePort,
-} from "@dsh-forge/lib-api";
+import type { BugsServicePort, ProjectsServicePort } from "@dsh-forge/lib-api/ports";
 import type { BugCard, ListBugsQuery } from "@dsh-forge/lib-api/dto/bugs";
 import type { DeriveTaskStoreDirResult } from "@dsh-forge/lib-api/dto/forge";
 import type { DirFactRow, DirFactsQuery, Project, ProjectPatch, RegisterProjectInput, RegisterResult, ProjectSummary } from "@dsh-forge/lib-api/dto/project";
 import type { DirListing } from "@dsh-forge/lib-api/dto/fs";
 import type { WorktreeAheadBehindRequest, WorktreeAheadBehindResult, WorktreeBranchesRequest, WorktreeBranchesResult, WorktreeChecksRequest, WorktreeChecksResult, WorktreeCreateRequest, WorktreeCreateResult, WorktreeDeleteRequest, WorktreeDeleteResult, WorktreeEnsureWorkspaceRequest, WorktreeEnsureWorkspaceResult, WorktreeListRequest, WorktreeListResult, WorktreeResolveRequest, WorktreeResolveResult, WorktreeSealRequest, WorktreeSealResult, WorktreeSelectRequest, WorktreeSelectResult } from "@dsh-forge/lib-api/dto/worktree";
 import type { FeatureCard, ListFeaturesQuery } from "@dsh-forge/lib-api/dto/forge";
-import type { DirFactsPort } from "@dsh-forge/lib-api";
+import type { DirFactsPort } from "@dsh-forge/lib-api/ports";
 import { forgeDirOfWorkspace } from "../dirs/anchors.js";
 import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";

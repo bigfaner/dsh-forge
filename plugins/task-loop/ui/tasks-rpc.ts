@@ -8,7 +8,7 @@
 // 经 gateway 下发，子 fiber 停驻至 namespace 在场后激活）；缺席宿主 = 调用期诚实降级
 // （typed Error + 诊断留痕，不炸组合）。泛型基型实例化点单点收口：方法签名/DTO 载荷/
 // Result 信封均以本文件为 client 半唯一实例化面（code-design §2 类型面守则）。
-import type { ContainerRef, TasksChannelRequests } from "@dsh-forge/lib-api";
+import type { ContainerRef, TasksChannelRequests } from "@dsh-forge/lib-api/dto/forge";
 import { RpcClientError, forgeRemoteFaceOf, namespaceFaceOf, type ForgeRemoteFace, type ForgeRemoteNamespaceFace } from "./rpc.js";
 
 // ── 聚合 DTO 结构镜像（host 半 host/assembly/typert-remotes.ts 单源——client 束自含纪律：

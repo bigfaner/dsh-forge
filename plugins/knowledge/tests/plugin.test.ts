@@ -13,7 +13,8 @@ import { canonicalWsPath } from '../host/storage/registry.js'
 
 // 被测口径 = knowledge 派生键（lib projectKeyOf · canonical 基准 ws_path）
 const projectKeyOf = (wsPath: string): string => libProjectKeyOf(canonicalWsPath(wsPath))
-import type { KnowledgeAssembleContext, KnowledgePromptSection, KnowledgeToolDefinition } from '../host/index.js'
+import type { KnowledgeAssembleContext } from '../host/index.js'
+import type { KnowledgePromptSection, KnowledgeToolDefinition } from '../host/tools/index.js'
 import type { BrowseKnowledgeService } from '../host/service/index.js'
 import type { DiagEventPayload } from '@dsh-forge/lib-api/diag'
 
@@ -246,8 +247,10 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + 提示词两段全
       }
       await service.registerProject({ wsPath: wsDir, projectId: 'p-5' })
       const text = rt.sections.find((s) => s.name === 'forge:knowledge-domains')!.text as (context: KnowledgeAssembleContext) => string
-      const assemble = (cwd: string | undefined): string =>
-        text({ agent: { session: { id: 's', ...(cwd === undefined ? {} : { header: { cwd } }) } } })
+      const assemble = (cwd: string | undefined): string => {
+        const session = { id: 's', ...(cwd === undefined ? {} : { header: { cwd } }) }
+        return text({ agent: { session } })
+      }
       // 绑定 + 注册库在场 → 域树段（空知识库零域 → 空串；求值不抛即链路通）
       expect(() => assemble(wsDir)).not.toThrow()
       // 未绑定 cwd → 空串（不触库解析失败）
