@@ -17,6 +17,9 @@ import { bootDshHost } from './run.js'
 import { hostRoot, resolveHostPaths } from '../profile/paths.js'
 import { WORKTREE_CHANNELS } from '@dsh-forge/lib-api/channels'
 
+/** DSH 派生会话（DSH_SHELL=1）下 Electron 子进程写临时目录及其清理均 EPERM（沙箱环境边界）——真机 boot 冒烟仅在独立终端执行 */
+const inDshShell = process.env.DSH_SHELL === '1'
+
 async function freePort(): Promise<number> {
   const { createServer } = await import('node:net')
   return new Promise((resolve, reject) => {
@@ -29,7 +32,7 @@ async function freePort(): Promise<number> {
   })
 }
 
-it(
+it.skipIf(inDshShell)(
   'fix-4 e2e：真实宿主 git 项目 forge:worktree/list isGit:true + 主仓 entry（插件行 insert 注入 + 官方面 provide + 具名消费）',
   async () => {
     // ── 前置门（fail-loud）──

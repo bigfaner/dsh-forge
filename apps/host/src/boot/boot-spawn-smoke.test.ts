@@ -22,6 +22,9 @@ import type { DshHostHandle } from './run.js'
 import { bootDshHost } from './run.js'
 import { hostRoot, resolveHostPaths } from '../profile/paths.js'
 
+/** DSH 派生会话（DSH_SHELL=1）下 Electron 子进程写临时目录及其清理均 EPERM（沙箱环境边界）——真机 boot 冒烟仅在独立终端执行 */
+const inDshShell = process.env.DSH_SHELL === '1'
+
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer()
@@ -33,7 +36,7 @@ async function freePort(): Promise<number> {
   })
 }
 
-it(
+it.skipIf(inDshShell)(
   '3.4 冒烟：electron child boot → 标准组合零 forge 工具 + 四域服务在场 + dispose 净场',
   async () => {
     // ── 前置门（fail-loud：装配缺口显形为红灯，不静默跳过）──
