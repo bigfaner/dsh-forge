@@ -31,7 +31,6 @@ export type { SpecErrorCode, SpecErrorData } from "./errors.js";
 
 /** tiers 交付档位封闭四值（提案 §二 裁决；应用层校验——DDL 只保 JSON 良构）。 */
 export const SPEC_TIERS = ["ui", "api", "pure-logic", "docs"] as const;
-export type SpecTier = (typeof SPEC_TIERS)[number];
 
 export interface GoalInput {
   title: string;
