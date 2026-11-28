@@ -2,12 +2,6 @@
 // 本文件只剩在场守卫消费的具名服务键与 forge config 类型；派发映射原 derivePluginConfigs
 // 面已随生成器退役，cordis.patch.yml 即手写正本）。
 
-// ── 延伸常量（patch !!js 表达式同源参照——静态双检锚 plugins/forge/tests/config-contract.test.ts）
-/** DSH_HOME 环境键（forge home 缺省派生锚——{DSH_HOME}/forge） */
-export const DSH_HOME_ENV = 'DSH_HOME'
-/** forge home 缺省后缀（{DSH_HOME} → {DSH_HOME}/forge） */
-export const FORGE_HOME_SUFFIX = '/forge'
-
 /** forge 统一 schema（最终形：home 唯一键——不设 db/tasksHome 覆写键） */
 export interface ForgeConfig {
   home?: string
