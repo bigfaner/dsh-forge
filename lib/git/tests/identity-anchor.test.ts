@@ -104,6 +104,10 @@ describe('selectMainWorktree（主 worktree 判定）', () => {
     const candidates = [c('a', 'x', null), c('b', 'y', '2020-01-01'), c('c3', 'z', '2021-01-01')]
     expect(selectMainWorktree(candidates, { originDefaultBranch: null, now })).toBe('b')
   })
+
+  it('全缺省 createdAt → 行序首个（双缺省 → 行序首个）', () => {
+    expect(selectMainWorktree([c('a', 'dev'), c('b', 'feat')], { originDefaultBranch: null, now })).toBe('a')
+  })
 })
 
 describe('sameAnchor（归并键比对）', () => {

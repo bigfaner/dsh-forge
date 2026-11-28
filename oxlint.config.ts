@@ -65,7 +65,7 @@ export default defineConfig({
           {
             patterns: [
               { regex: '^\\.\\./forge/', message: MSG_BASE },
-              { regex: '^@dsh-forge/(core|plugin-forge)', message: MSG_BASE },
+              { regex: '^@dsh-forge/core', message: MSG_BASE },
             ],
           },
         ],

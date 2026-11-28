@@ -10,7 +10,7 @@ import { openDatabase } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { createProjectService, defaultWorktreeDir, type ProjectServiceDeps, type RegisteredProject } from './project-service.js'
 import { deriveDirName, normalizeFsPath } from '@dsh-forge/lib-path'
-import { selectMainWorktree, type GitIdentityPort, type WorktreeEntry } from '@dsh-forge/lib-git'
+import { type GitIdentityPort, type WorktreeEntry } from '@dsh-forge/lib-git'
 import { SuspectedMoveError } from './workspace/errors.js'
 import type { WorkspaceRenamePort } from './registry.js'
 // registry 桩（G1 pin 4 语义）——fix-34 收编 testutil 单份（注入面 superset）；
@@ -939,39 +939,6 @@ class StubGitIdentity implements GitIdentityPort {
 const ROOT = resolve(join(WS, 'repo-root')) // 主 worktree（根）
 const WTA = resolve(join(WS, 'wt-a')) // 附属 worktree
 const ANCHOR = resolve(join(WS, '.git-common')) // 仓库锚（桩内任意恒同值）
-
-describe('1.5 selectMainWorktree 纯判定（短路唯一 / origin 优先 / main>master / 首观察时间）', () => {
-  const c = (id: string, branch: string | null, createdAt: string | null = null) => ({ id, branch, createdAt })
-  const opts = (origin: string | null = null, now = '2026-06-01T00:00:00.000Z') => ({
-    originDefaultBranch: origin,
-    now,
-  })
-
-  it('① 同锚活跃行唯一 → 短路即主（单行根 worktree 切分支后不误判缺失）', () => {
-    expect(selectMainWorktree([c('root', 'feat/x')], opts('main'))).toBe('root')
-  })
-
-  it('② 检出 origin 默认分支者优先（origin/HEAD 解析）', () => {
-    const candidates = [c('a', 'feat/a', '2020-01-01'), c('b', 'main', '2021-01-01')]
-    expect(selectMainWorktree(candidates, opts('main'))).toBe('b')
-  })
-
-  it('③ 无 origin/HEAD → 本地 main 检出 > master 检出', () => {
-    const candidates = [c('a', 'master', '2020-01-01'), c('b', 'main', '2021-01-01')]
-    expect(selectMainWorktree(candidates, opts())).toBe('b')
-    expect(selectMainWorktree([c('a', 'master', '2021-01-01'), c('b', 'dev', '2020-01-01')], opts())).toBe('a')
-  })
-
-  it('④ 退首观察时间最早；created_at 缺省 = 当前时间（git 无创建时间字段）', () => {
-    const candidates = [c('new', 'dev'), c('old', 'feat', '2020-01-01')]
-    expect(selectMainWorktree(candidates, opts())).toBe('old')
-    expect(selectMainWorktree([c('a', 'dev'), c('b', 'feat')], opts())).toBe('a') // 双缺省 → 行序首个
-  })
-
-  it('空候选集 → null', () => {
-    expect(selectMainWorktree([], opts())).toBeNull()
-  })
-})
 
 describe('1.5 身份归并层（注册链 attachExistingRow 之前——同锚 worktree 解析主项目行）', () => {
   it('同锚 worktree 路径注册 → 解析主项目既有行：不新增行、不撞 UNIQUE(ws_path)、零 create（短路唯一行——根切分支不误判缺失）', async () => {

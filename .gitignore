@@ -11,10 +11,11 @@ docs/features/*/testing/results/
 tests/results/
 docs/proposals/dsh-desktop/proposal.md
 
-# Node / spikes runtime artifacts (lockfiles ARE committed)
+# Node
 node_modules/
-spikes/s1-thin-host/.dsh-home/
-spikes/s1-thin-host/profile/cordis.yml
+
+# Spikes (探索产物留盘不进 git)
+spikes/
 
 # TS build outputs (tsc -b emits; web declarations -> dist-types)
 **/dist/
@@ -51,7 +52,6 @@ tmp-ui-review/
 
 # Logs (S1 spike run logs ARE committed as evidence — exception keeps convention)
 *.log
-!spikes/**/*.log
 
 # Env & key material hygiene (product handles credentials; dsh .env fallbacks)
 .env

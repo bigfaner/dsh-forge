@@ -20,7 +20,7 @@ domains: [conventions, observability]
 
 ## 豁免面（不适用）
 
-- client 束（`*/src-client`、`*/src/client`、`*/web`）：无宿主事件总线，保留 console。
+- client 束（`*/src-client`、`*/src/client`、`*/web`、`plugins/*/ui`）：无宿主事件总线，保留 console。
 - apps/host main 早窗（telemetry 装配前的接线/缺省）：装配前 emit 无落点。
 
 ## 判据（正反例）

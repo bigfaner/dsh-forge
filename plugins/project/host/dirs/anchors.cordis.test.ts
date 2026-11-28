@@ -45,7 +45,7 @@ describe('a) 跨 scope 反向拉取可达性（拉取缝主缝钉）', () => {
       const scoped = c.isolate('forgeDirs') // 每调用独立隔离 scope（label 缺省 = 唯一 symbol）
       await scoped.plugin(((c2: CordisContext) => {
         isolatedReflect = c2.reflect as ReflectDeclarePullFace
-      }) as NamedPlugin, { name: 'plugin-forge-isolated' })
+      }) as NamedPlugin, { name: 'isolation-scope-plugin' })
     }) as unknown as NamedPlugin, { name: 'session-runtime' })
     expect(isolatedReflect).toBeDefined()
     expect(Object.keys(isolatedReflect!.props ?? {})).toContain('dirKeys.contract-test')
@@ -65,7 +65,7 @@ describe('b) 对照：推式缝跨 scope 不可达（bug 04d445f4 机制钉）',
       const scoped = c.isolate('forgeDirs')
       await scoped.plugin(((c2: CordisContext) => {
         c2.reflect.provide('forgeDirs', { registerDirKeys: () => {} })
-      }) as NamedPlugin, { name: 'plugin-forge-isolated-y' })
+      }) as NamedPlugin, { name: 'isolation-scope-plugin-y' })
     }) as unknown as NamedPlugin, { name: 'session-runtime-y' })
     expect(fired).toEqual([]) // 隔离 provide 被滤——推式注册/事件跨 scope 不可达
   })
