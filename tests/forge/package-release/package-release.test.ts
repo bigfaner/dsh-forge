@@ -401,7 +401,7 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
   it('正例·成员 files[] 未声明 skills（零技能成员）：skills 目录缺席不设锚、不红', () => {
     const betaPkgPath = join(root, 'plugins', 'beta', 'package.json')
     const beta = JSON.parse(readFileSync(betaPkgPath, 'utf8'))
-    beta.files = beta.files.filter((entry) => entry !== 'skills')
+    beta.files = (beta.files as string[]).filter((entry) => entry !== 'skills')
     writeFileSync(betaPkgPath, JSON.stringify(beta, null, 2))
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     expect(existsSync(join(outDir, 'bundle/members/beta/skills'))).toBe(false)
