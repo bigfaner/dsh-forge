@@ -13,25 +13,6 @@ export function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`)
 }
 
-/**
- * 域前缀可选的缓存行读取（undefined = 全域；空串 = 根域；尾 '/' 归一——search 与
- * listEntries 同口径：= 前缀 或 前缀/… 子域，段前缀不做子串误匹配）。
- */
-export function selectRowsByDomain<R>(
-  selectAll: { all(wsPath: string): R[] },
-  selectByDomain: { all(wsPath: string, prefix: string, pattern: string): R[] },
-  q: { wsPath: string; domainPrefix?: string },
-): R[] {
-  if (q.domainPrefix === undefined) return selectAll.all(q.wsPath)
-  const prefix = q.domainPrefix.replace(/\/+$/, '')
-  return selectByDomain.all(q.wsPath, prefix, `${escapeLike(prefix)}/%`)
-}
-
-/** 索引行 keywords 列解码（存储态 JSON 字符串 → string[]——写入面单一来源保证形状可解析） */
-export function parseKeywords(stored: string): string[] {
-  return JSON.parse(stored) as string[]
-}
-
 /** 非空字符串判定（空串/纯空白视同缺失） */
 export function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim() !== ''
