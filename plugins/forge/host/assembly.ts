@@ -31,8 +31,6 @@ export type ComposedKey = keyof typeof PRESENCE_SERVICE_KEYS
  * （no-cross-plugin-imports 红线）——同值字面量对账 pin 归 tests/install-mutex.test.ts。
  */
 export const FORGE_COMBO_SERVICE_KEY = 'forgeCombo'
-/** 五件 skills 聚合子目录名（= COMPOSED key——聚合面 forge/dist/skills/<member>/，构建期物化生成物） */
-export const SKILL_MEMBER_DIRS = ['project', 'spec', 'task-loop', 'expert-squad', 'knowledge'] as const
 
 // ── skills 自锚（P0 核销 #5 处方 C——forge-deep-pack 1.6；1.14 返工落点 dist）──
 /** forge 包说明符（skills 自锚 resolve 锚——只依赖 forge 自己，三档通吃） */

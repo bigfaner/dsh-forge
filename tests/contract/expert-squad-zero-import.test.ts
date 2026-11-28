@@ -4,7 +4,7 @@
 // 口径：expert-squad 自身除外豁免；forge 为 bundle 聚合包，package.json 依赖面
 // 天然含 expert-squad（file:../expert-squad 聚合安装），不在依赖面断言范围——
 // 本测试只钉 host 非测试源 import 面（完整说明符 @dsh-forge/expert-squad；
-// 注释、字符串文案与同名值字面量不计——SKILL_MEMBER_DIRS 'expert-squad' 键判例）。
+// 注释、字符串文案与同名值字面量不计——同名值字面量判例）。
 import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
