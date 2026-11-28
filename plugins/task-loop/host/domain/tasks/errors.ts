@@ -593,8 +593,3 @@ export function emitDiagOrFallback(
 ): void {
   onDiag?.(payload);
 }
-
-/** gate 载荷形状守卫（submitTask ②b 判据面共用） */
-export function isGateReport(value: unknown): value is TaskGateReport {
-  return typeof value === "object" && value !== null;
-}
