@@ -55,6 +55,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'lib/api',
         'lib/db',
         'lib/diag',
+        // M1 阶段C1：worktree identity 公共库入拓扑（core/project/host 消费）
+        'lib/git',
         'lib/path',
         // plugin-spec-roadmaps 1.1：泛型状态机公共包入拓扑
         'lib/status-machine',
@@ -88,7 +90,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['packages/contracts', ['lib/api']],
     // knowledge-stage1 1.8：core 知识域退役——过渡型 plugins/knowledge 引用随迁收口
     // plugin-project 1.6：path-key 归并 lib/path——core refs 改指 lib/path（path-key 退役待删）
-    ['packages/core', ['lib/db', 'lib/diag', 'lib/path', 'lib/util', 'packages/contracts']],
+    ['packages/core', ['lib/db', 'lib/diag', 'lib/git', 'lib/path', 'lib/util', 'packages/contracts']],
     // fix-33 ⑯：knowledge ../core 引用删除——build 面零 core import（残留引用无消费）；
     // 测试面 core 源相对引入由 tsconfig.test.json 承载（不经 references）
     // knowledge 迁移批1.3：root 级 plugins/knowledge 三目录制——references 增 client 面

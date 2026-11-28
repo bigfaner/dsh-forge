@@ -291,7 +291,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // spec = staged:true 覆写种子（plugin-spec 1.10 docs 域收编：core dist 装配行静态 import
     // @dsh-forge/spec——forgeDocs factory 改指新包，缺席即 boot ESM 解析断裂）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/markdown-kit', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
+      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/git', 'lib/path', 'lib/util', 'path-key', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/markdown-kit', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
     )
   })
 
