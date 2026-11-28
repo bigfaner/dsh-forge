@@ -156,15 +156,6 @@ export function splitQuoteSegments(draft: string): readonly QuoteSegment[] {
   return segments
 }
 
-/** 菜单键盘键 → 官方 arbitrate key（同壳键盘词汇——ArrowUp/Down 归一）。 */
-export function mentionKeyOf(key: string): "up" | "down" | "enter" | "escape" | null {
-  if (key === "ArrowUp") return "up"
-  if (key === "ArrowDown") return "down"
-  if (key === "Enter") return "enter"
-  if (key === "Escape") return "escape"
-  return null
-}
-
 /** active 判据：加 chip ∨ 草稿非空 ∨ 有消息（proposal 状态机表 S1 进入条件）。 */
 export function isCardActive(props: Pick<MiniComposerProps, "draft" | "chipCount" | "messages">): boolean {
   return props.chipCount > 0 || props.draft.trim() !== "" || props.messages.length > 0

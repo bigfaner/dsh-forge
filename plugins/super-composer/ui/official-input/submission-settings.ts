@@ -11,9 +11,6 @@ export interface ConfigForm<T> {
   set(key: string, value: unknown): unknown
 }
 
-/** Settings namespace owned by the conversation plugin. */
-export const CONVERSATION_SETTINGS_NAMESPACE = 'ui-conversation'
-
 /** Field carrying the delivery mode for plain Enter while an agent is busy. */
 export const BUSY_ENTER_FIELD = 'busyEnter'
 
