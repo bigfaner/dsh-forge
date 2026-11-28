@@ -5,7 +5,7 @@
 // 表驱动覆盖新态）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { TaskStatus } from '@dsh-forge/contracts'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import { StatusChips } from './status-chips.js'
 
 const COUNTS: Record<TaskStatus, number> = {

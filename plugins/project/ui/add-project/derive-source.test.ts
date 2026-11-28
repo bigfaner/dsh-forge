@@ -4,7 +4,8 @@
 // 「未映射码 → 通用错误条」永不裸 code 泄漏）+ 缺省 RPC 真身（1.38 正典化——官方
 // forgeProjects.deriveTaskStoreDir Typert remote 面；face 缺席收敛为 error 相位，不炸壳）。
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DeriveTaskStoreDirResult, SuspectedMoveData } from '@dsh-forge/contracts'
+import type { DeriveTaskStoreDirResult } from '@dsh-forge/lib-api/dto/forge'
+import type { SuspectedMoveData } from '@dsh-forge/lib-api/errors'
 import { installForgeRemoteFace, RpcClientError, type ForgeRemoteFace } from '../rpc.js'
 import { fetchDerivePhase, rpcDeriveSource } from './derive-source.js'
 

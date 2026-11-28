@@ -3,7 +3,8 @@
 // 摘要）+ fetchProjectTreePhase 相位映射（Typert 注入桩——成功 / projects.list 失败 /
 // face 缺席归一 / 单项目清单失败节点保留）。
 import { describe, expect, it } from 'vitest'
-import type { ProjectSummary, WorktreeEntryDto, WorktreeListResult } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
+import type { WorktreeEntryDto, WorktreeListResult } from '@dsh-forge/lib-api/dto/worktree'
 import { createForgeRpcClient, type ForgeRpcClient } from '../rpc.js'
 import { projectWorktreeTreeOf } from './projection.js'
 import { fetchProjectTreePhase } from './use-project-tree.js'

@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { KNOWLEDGE_CHANNELS } from '@dsh-forge/contracts'
+import { KNOWLEDGE_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { createForgeRpcClient } from './rpc-channels.js'
 
 const ROOT = new URL('../../../../', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1/')

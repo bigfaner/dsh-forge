@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { TaskSnapshot, TransitionTaskInput } from '@dsh-forge/contracts'
+import type { TaskSnapshot, TransitionTaskInput } from '@dsh-forge/lib-api/dto/forge'
 import { RpcClientError } from '../../rpc-channels.js'
 import type { ForgeRpcClient } from '../../rpc-channels.js'
 import { detailFixture } from './detail-model.test.js'

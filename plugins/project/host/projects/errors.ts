@@ -2,7 +2,7 @@
 // ERROR_CODES 单源（禁本地词表复制）；RPC 边界经宿主序列化为 RpcErrorPayload（code/message/data）。
 import { DIAG_EVENT, emitDiagOrFallback } from '@dsh-forge/lib-diag'
 import type { DiagEmitFace, DiagEventPayload } from '@dsh-forge/lib-diag'
-import type { ErrorCode, SuspectedMoveData } from '@dsh-forge/lib-api'
+import type { ErrorCode, SuspectedMoveData } from '@dsh-forge/lib-api/errors'
 
 type DiagPayload = Omit<DiagEventPayload, 'process'>
 

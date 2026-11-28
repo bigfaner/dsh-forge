@@ -1,7 +1,7 @@
 // 2.8 目录数据源封装单测 —— 相位映射（AC4：错误归一不出浏览器态）+ 缺省 RPC 真身
 // （1.38 正典化——官方 forgeFs.listDir Typert remote 面；face 缺席收敛为错误相位，不炸壳）。
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DirListing } from '@dsh-forge/contracts'
+import type { DirListing } from '@dsh-forge/lib-api/dto/fs'
 import { fetchDirListing, rpcDirSource } from './dir-source.js'
 import { installForgeRemoteFace, type ForgeRemoteFace } from '../rpc.js'
 

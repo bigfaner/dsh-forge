@@ -6,7 +6,8 @@
 // 人工转移蓝环（类位吃状态令牌——drawer.css）。
 import { Fragment, type ReactNode } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import { TASK_STATUS_LABELS, type SessionTaskLinkCard, type TaskDetail, type TaskRecordEntry, type TaskRecordVerb } from '@dsh-forge/contracts'
+import { TASK_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
+import { type SessionTaskLinkCard, type TaskDetail, type TaskRecordEntry, type TaskRecordVerb } from '@dsh-forge/lib-api/dto/forge'
 import { isoTimeLabelZh } from '../../../components.js'
 import { evalScoreOf, gateSummary, latestSubmitGateOf, prereqFullName, sessionTitleOfOrId, taskKeyLabel, varsText } from './detail-model.js'
 import { CollapsibleText, Fold } from './collapsible-text.js'

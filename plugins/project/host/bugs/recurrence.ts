@@ -8,17 +8,9 @@
 //   container_slug 列直比候选归属（链任一成员落本缝即整链入选——双向语义）；
 // · parseBugCoverageDeclaration：T4 覆盖声明协议行解析（前缀常量单源 = lib/api dto/bugs）；
 // · parseTaskContainerSlug：退役兼容层——harness `t-` 形制纯函数边界保留。
-import type {
-  BugCard,
-  BugChainContext,
-  BugRecurrenceCandidate,
-  BugRecurrenceScope,
-  GetBugResponse,
-} from '@dsh-forge/contracts'
-import {
-  BUG_COVERAGE_ANCHOR_PREFIX,
-  BUG_COVERAGE_DECLARATION_PREFIX,
-} from '@dsh-forge/contracts'
+import type { BugCard, BugChainContext, BugRecurrenceScope, GetBugResponse } from '@dsh-forge/lib-api/dto/bugs'
+import type { BugRecurrenceCandidate } from '@dsh-forge/lib-api/dto/forge'
+import { BUG_COVERAGE_ANCHOR_PREFIX, BUG_COVERAGE_DECLARATION_PREFIX } from '@dsh-forge/lib-api/dto/bugs'
 import { BugNotFoundError } from './errors.js'
 import type { BugRow } from '../db/row-types.js'
 

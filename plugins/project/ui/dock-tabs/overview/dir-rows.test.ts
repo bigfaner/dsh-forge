@@ -3,7 +3,7 @@
 // + e2e——overview-data 同口径）。
 import { describe, expect, it } from 'vitest'
 import { dirFactRowLabel, dirHeadRows } from './dir-rows.js'
-import type { DirFactRow } from '@dsh-forge/contracts'
+import type { DirFactRow } from '@dsh-forge/lib-api/dto/project'
 
 const ROWS: readonly DirFactRow[] = [
   { dirKey: 'workspaceRoot', dir: 'Z:\\ws\\demo', description: '' },

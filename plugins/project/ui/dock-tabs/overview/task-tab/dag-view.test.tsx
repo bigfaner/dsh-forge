@@ -5,7 +5,7 @@
 // 双载体、画布尺寸透传、图例。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { TaskGraph } from '@dsh-forge/contracts'
+import type { TaskGraph } from '@dsh-forge/lib-api/dto/forge'
 import { cardFixture } from './task-tab-model.test.js'
 import { DagView } from './dag-view.js'
 

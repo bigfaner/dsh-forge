@@ -3,7 +3,8 @@
 // 最长路径分层——原型 flowSvg 已验证语义」。面：回边检测（灰→灰）/分层（链·菱形·回边
 // 不炸·缺端点边跳过）/几何（行主序坐标 + 画布尺寸）/边路径（贝塞尔 + 完成边 done 标）。
 import { describe, expect, it } from 'vitest'
-import type { TaskCard, TaskStatus, TaskGraphEdge } from '@dsh-forge/contracts'
+import type { TaskCard, TaskGraphEdge } from '@dsh-forge/lib-api/dto/forge'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import {
   DAG_GAP_X,
   DAG_GAP_Y,

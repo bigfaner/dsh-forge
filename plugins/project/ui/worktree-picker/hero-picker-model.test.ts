@@ -3,7 +3,7 @@
 // + 直达判据）。worktree 域纯函数（确认闩锁/「不再提示」/陈旧自愈）在
 // 本目录 model.test.ts（1.15 拆迁归位）。
 import { describe, expect, it } from 'vitest'
-import type { ProjectSummary } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import {
   heroPickerPlan,
   heroDefaultPickId,

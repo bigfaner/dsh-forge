@@ -23,7 +23,7 @@
 // ——主根项目形态下 .forge/specs 归主根；worktree 检出形态的同构错位（主根 vs worktree
 // .forge 归属）归 f5-task-key-family 聚合修口，本任务只做联动声明不重复修。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { DirListing } from '@dsh-forge/contracts'
+import type { DirListing } from '@dsh-forge/lib-api/dto/fs'
 import { Tag, Tooltip, StateDot, type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, isoTimeLabelZh } from '../../components.js'
 import { createForgeRpcClient, forgeDiagEmit, type ForgeRpcClient, type SpecCardDto, type SpecDetailDto } from '../../rpc.js'

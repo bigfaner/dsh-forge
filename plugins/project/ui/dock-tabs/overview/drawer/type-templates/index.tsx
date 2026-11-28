@@ -3,7 +3,7 @@
 // ../index.tsx：目标/结果对行 → 类型模板 → 覆盖率 → 备注[v14 置底]）。
 // 任务无文档（v7 立场）：内容 = tasks 行结构化负载（vars 具体化）——抽屉只渲染结构化数据。
 import type { ReactNode } from 'react'
-import type { TaskDetail } from '@dsh-forge/contracts'
+import type { TaskDetail } from '@dsh-forge/lib-api/dto/forge'
 import { templateFamilyOf } from './routing.js'
 import { CodingTemplate } from './coding.js'
 import { FixTemplate } from './fix.js'

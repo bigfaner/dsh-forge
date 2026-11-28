@@ -34,10 +34,10 @@ describe('tarball 解包审计——包元数据依赖形态（manifest 面）',
   it('workspace:/file:/link: 协议依赖 = 违规（安装期产生指向检出树的链接）', () => {
     const violations = auditTarballManifest({
       ...CLEAN_MANIFEST,
-      dependencies: { ...CLEAN_MANIFEST.dependencies, '@dsh-forge/contracts': 'workspace:*' },
+      dependencies: { ...CLEAN_MANIFEST.dependencies, '@dsh-forge/lib-util': 'workspace:*' },
       devDependencies: { '@dsh-forge/lib-util': 'link:../lib-util', x: 'file:../x' },
     })
-    expect(violations.some((v) => v.includes('@dsh-forge/contracts') && v.includes('workspace:'))).toBe(true)
+    expect(violations.some((v) => v.includes('@dsh-forge/lib-util') && v.includes('workspace:'))).toBe(true)
     expect(violations.some((v) => v.includes('@dsh-forge/lib-util') && v.includes('link:'))).toBe(true)
     expect(violations.some((v) => v.includes('file:'))).toBe(true)
   })
@@ -83,11 +83,11 @@ describe('tarball 一站式审计 auditTarballFile（tgz → 解包 → manifest
     mkdirSync(src, { recursive: true })
     writeFileSync(join(src, 'package.json'), JSON.stringify({
       ...CLEAN_MANIFEST,
-      dependencies: { ...CLEAN_MANIFEST.dependencies, '@dsh-forge/contracts': 'workspace:*' },
+      dependencies: { ...CLEAN_MANIFEST.dependencies, '@dsh-forge/lib-util': 'workspace:*' },
     }))
     writeFileSync(join(src, 'index.js'), 'export {}\n')
     const violations = auditTarballFile(packTgz(join(tmpRoot, 'badmanifest')))
-    expect(violations.some((v) => v.includes('@dsh-forge/contracts') && v.includes('workspace:'))).toBe(true)
+    expect(violations.some((v) => v.includes('@dsh-forge/lib-util') && v.includes('workspace:'))).toBe(true)
   })
   // 说明：symlink 入 tgz 的形态由 auditTarballTree 单测覆盖（bsdtar 打包时对
   // junction 做解引用，本地 tar 往返无法构造携 symlink 条目的 tgz——真实 tgz 由

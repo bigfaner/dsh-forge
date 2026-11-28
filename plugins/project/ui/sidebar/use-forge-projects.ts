@@ -8,7 +8,7 @@
 // remote face——forgeProjects/list 正典通道；旧自造 channels face 于官方宿主静默不可达，
 // 1.38 正典化口径），官方宿主/壳宿主双态同一通路。
 import { useCallback, useEffect, useState } from 'react'
-import type { ProjectSummary } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import { createForgeRpcClient, forgeRemoteMountSettled, waitForRemoteMountSettled, type RpcClientFactory } from '../rpc.js'
 
 /** 项目列表相位 */

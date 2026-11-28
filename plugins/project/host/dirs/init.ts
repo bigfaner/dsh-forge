@@ -7,7 +7,7 @@
 // 零模型消息、零任务循环改动（§2.6——gitignore 环境边界兜底，任务流程零感知）。
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
+import { FORGE_DIR_SEGMENT } from '@dsh-forge/lib-api/forge-dir-segments'
 import {
   collectDeclaredDirKeys,
   mergeDeclarations,

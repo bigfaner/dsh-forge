@@ -16,7 +16,7 @@
 // 不依赖 configForms：apply 期直接注册 detail.section（槽缺席/劣形 fail-soft 退无面板）。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { WorktreeEntryDto, WorktreeListResult } from '@dsh-forge/contracts'
+import type { WorktreeEntryDto, WorktreeListResult } from '@dsh-forge/lib-api/dto/worktree'
 import { DETAIL_SECTION_SLOT, PROJECT_PKG } from '../settings-section/index.js'
 import { registerKeyedSection, type SectionSlotsFace } from '../keyed-section.js'
 import { CreateWorktreeDialog, type CreateWorktreeRequest } from '../worktree-picker/create-dialog.js'

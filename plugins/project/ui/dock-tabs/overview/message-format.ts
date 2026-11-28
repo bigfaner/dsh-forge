@@ -11,8 +11,9 @@
 // 词汇口径注记：阶段/状态短语以 PRD 示例与 UF-4.1 chips 词汇为准（阶段「任务/已完成」——
 // contracts FEATURE_STATUS_LABELS 的 chips 词汇「任务分解」为 M2 概览行用法，两 vocabulary
 // 并存各自单源；提案状态 = PROPOSAL_STATUS_LABELS zh（示例①「评审中」同源）。
-import type { FeatureStatus, ProposalStatus, TaskStatus, ViolationKind } from '@dsh-forge/contracts'
-import { PROPOSAL_STATUS_LABELS, TASK_STATUS_LABELS } from '@dsh-forge/contracts'
+import type { FeatureStatus, ProposalStatus, TaskStatus } from '@dsh-forge/lib-api/labels'
+import type { ViolationKind } from '@dsh-forge/lib-api/dto/forge'
+import { PROPOSAL_STATUS_LABELS, TASK_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
 
 /**
  * 消息体容器描述（@path 锚 + 标题/摘要 + 状态|阶段）。

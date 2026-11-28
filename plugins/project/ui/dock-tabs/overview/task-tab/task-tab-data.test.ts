@@ -4,7 +4,7 @@
 // 视图增拉 graph，边集源）+ channels 录制断言（fetch 纯异步面；hook effect 编排归 4.1
 // 装配 + 5.2 e2e——renderToStaticMarkup 不跑 effect，同 overview-data 口径）。
 import { describe, expect, it, vi } from 'vitest'
-import type { TaskCard, TaskGraph, TaskStats } from '@dsh-forge/contracts'
+import type { TaskCard, TaskGraph, TaskStats } from '@dsh-forge/lib-api/dto/forge'
 import { RpcClientError } from '../../rpc-channels.js'
 import type { ForgeRpcClient } from '../../rpc-channels.js'
 import {

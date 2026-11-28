@@ -16,22 +16,9 @@
 // - fixed 证据反查：commit_hash 锚 porcelain 匹配 → 回退 branch --contains → 双败照落。
 import { randomUUID } from 'node:crypto'
 import { execFile as execFileCallback } from 'node:child_process'
-import type {
-  BugCard,
-  BugCommitFile,
-  BugCommitFilesQuery,
-  BugErrorTypeAggregate,
-  BugFileDiffQuery,
-  BugRecurrenceCandidate,
-  BugRecurrenceScope,
-  GetBugQuery,
-  GetBugResponse,
-  ListBugsQuery,
-  RegisterBugInput,
-  RegisterBugResult,
-  ResolveBugInput,
-} from '@dsh-forge/contracts'
-import { BUG_STATUS_LABELS } from '@dsh-forge/contracts'
+import type { BugCard, BugCommitFile, BugCommitFilesQuery, BugFileDiffQuery, BugRecurrenceScope, GetBugQuery, GetBugResponse, ListBugsQuery, RegisterBugInput, RegisterBugResult, ResolveBugInput } from '@dsh-forge/lib-api/dto/bugs'
+import type { BugErrorTypeAggregate, BugRecurrenceCandidate } from '@dsh-forge/lib-api/dto/forge'
+import { BUG_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
 import { emitDiagOrFallback, type DiagEventPayload } from '@dsh-forge/lib-diag'
 import type { BugsRepo, BugResolvePatch } from '../db/repositories/bugs.js'
 import type { BugRow } from '../db/row-types.js'

@@ -8,7 +8,10 @@
 // 排序/过滤为视图本地态（任务子 tab 三视图 = renderTasksTab 槽——3.6 注入；缺省呈现
 // chips 过滤接口）；文档行点击经 props 回调上抛（dock 开 tab——4.1 接线）。
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { BugCard, BugStatus, DirFactRow, FeatureCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { BugCard } from '@dsh-forge/lib-api/dto/bugs'
+import type { BugStatus, TaskStatus } from '@dsh-forge/lib-api/labels'
+import type { DirFactRow } from '@dsh-forge/lib-api/dto/project'
+import type { FeatureCard, TaskStats } from '@dsh-forge/lib-api/dto/forge'
 import { type RpcClientFactory } from '../rpc-channels.js'
 import { overviewRpcClientFactory } from './overview-client.js'
 import { useDirFactRows } from './dir-rows.js'

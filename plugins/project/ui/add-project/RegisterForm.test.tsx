@@ -8,7 +8,7 @@
 // 派生/联动/校验语义面在 form-model.test。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { SuspectedMoveData } from '@dsh-forge/contracts'
+import type { SuspectedMoveData } from '@dsh-forge/lib-api/errors'
 import type { BrowserSelection } from './browser-model.js'
 import { initialFormState, type FormIssue, type FormValues } from './form-model.js'
 import { BrowsePanel, RegisterForm, RegisterFormView } from './RegisterForm.js'

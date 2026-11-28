@@ -13,7 +13,8 @@
 //   ④ 头路 Typert 单通路（T1-head）：projects.list 走 forgeProjects namespace——preload
 //     通道零调用（window.dshForge 缺席环境解析成立）。
 import { afterEach, describe, expect, it } from 'vitest'
-import { BUGS_CHANNELS, type ListBugsQuery } from '@dsh-forge/contracts'
+import { BUGS_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type ListBugsQuery } from '@dsh-forge/lib-api/dto/bugs'
 import { openDomainDb, PROJECT_DB_PREFIX, type DomainDb } from '../../../host/db/connection.js'
 import { createBugsService } from '../../../host/bugs/service.js'
 import { installForgeRemoteFace } from '../../rpc.js'

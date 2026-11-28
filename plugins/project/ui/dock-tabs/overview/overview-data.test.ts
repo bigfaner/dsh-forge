@@ -4,13 +4,11 @@
 // 归一 + typed error 三态映射 + 落点纯函数。
 // 口径沿 use-knowledge-browse 先例：effect 胶水不在 Node 测面；纯异步面全量单测。
 import { describe, expect, it } from 'vitest'
-import type { BugCard, BugStatus, FeatureCard, FeatureDocumentRow, Project, TaskStatus } from '@dsh-forge/contracts'
-import {
-  BUGS_CHANNELS,
-  FEATURES_CHANNELS,
-  PROJECTS_CHANNELS,
-  TASKS_CHANNELS,
-} from '@dsh-forge/contracts'
+import type { BugCard } from '@dsh-forge/lib-api/dto/bugs'
+import type { BugStatus, TaskStatus } from '@dsh-forge/lib-api/labels'
+import type { FeatureCard, FeatureDocumentRow } from '@dsh-forge/lib-api/dto/forge'
+import type { Project } from '@dsh-forge/lib-api/dto/project'
+import { BUGS_CHANNELS, FEATURES_CHANNELS, PROJECTS_CHANNELS, TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { createForgeRpcClient, type ForgeRpcClient } from '../rpc-channels.js'
 import { RpcClientError } from '../rpc-channels.js'
 import {

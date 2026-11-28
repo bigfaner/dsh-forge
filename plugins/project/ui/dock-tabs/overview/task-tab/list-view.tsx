@@ -6,12 +6,8 @@
 // 行集/选中映射经 rowMenuItems/rowMenuSelect 纯函数直测（开面归 4.1/5.2 e2e——
 // SessionTaskPills 同口径）。身份双轨：taskId = 锚/key，slug/localId = 展示。
 import { useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import {
-  TASK_STATUSES,
-  TASK_STATUS_LABELS,
-  type TaskCard,
-  type TaskStatus,
-} from '@dsh-forge/contracts'
+import { TASK_STATUSES, TASK_STATUS_LABELS, type TaskStatus } from '@dsh-forge/lib-api/labels'
+import { type TaskCard } from '@dsh-forge/lib-api/dto/forge'
 import {
   Button,
   IconRightUpOutlineRegular,

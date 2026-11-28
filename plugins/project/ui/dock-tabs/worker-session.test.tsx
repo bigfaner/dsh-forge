@@ -3,7 +3,7 @@
 // （悬浮面板 UI 已由 DispatchEventsPanel 接替退役；概览任务 tab 仍消费本模块解析面：
 // taskDetail 挂接双源卡 → 执行会话 + 库侧权威父，fail-soft）。
 import { describe, expect, it, vi } from 'vitest'
-import type { SessionTaskLinkCard } from '@dsh-forge/contracts'
+import type { SessionTaskLinkCard } from '@dsh-forge/lib-api/dto/forge'
 import {
   fetchWorkerSession,
   parentSessionOf,

@@ -6,7 +6,7 @@
 // （查看详情 + 转移预设）。渲染面 = renderToStaticMarkup（点击链 = 4.1/5.2 e2e）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { TASK_STATUSES } from '@dsh-forge/contracts'
+import { TASK_STATUSES } from '@dsh-forge/lib-api/labels'
 import { cardFixture } from './task-tab-model.test.js'
 import { ListViewBody, rowMenuItems, rowMenuSelect } from './list-view.js'
 

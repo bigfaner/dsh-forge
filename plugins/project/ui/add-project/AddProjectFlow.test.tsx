@@ -6,7 +6,8 @@
 // 静态渲染不可达——发布缝时序见 flow-open 单测，壳 JSX 行余量同 2.9 记录口径。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { DirListing, RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
+import type { DirListing } from '@dsh-forge/lib-api/dto/fs'
+import type { RegisterProjectInput, RegisterResult } from '@dsh-forge/lib-api/dto/project'
 import type { BrowserSelection } from './browser-model.js'
 import {
   AddProjectFlow,

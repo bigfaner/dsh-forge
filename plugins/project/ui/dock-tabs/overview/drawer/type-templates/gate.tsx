@@ -3,7 +3,7 @@
 // 场景由块首「目标」承载——ui-design 块一表）。gate 载荷 = 最近 submit 记录 gate_json
 //（四项布尔 → M/N 计数——detail-model gateSummary，与现状条「质量门 M/N」同源）。
 import type { ReactNode } from 'react'
-import type { TaskDetail } from '@dsh-forge/contracts'
+import type { TaskDetail } from '@dsh-forge/lib-api/dto/forge'
 import { gateSummary, latestSubmitGateOf, varsList } from '../detail-model.js'
 import { Checklist, StepsList, SubTitle } from './parts.js'
 

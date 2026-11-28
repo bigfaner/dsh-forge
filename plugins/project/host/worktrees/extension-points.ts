@@ -7,7 +7,7 @@
 //   ① provider 注册值非函数（形状校验拒收）；② 实例化/取值抛错（try/catch）；
 //   ③ 首调抛错（调用期守卫退默认面）。
 import { join } from 'node:path'
-import type { ProjectResolution, ProjectResolutionPort } from '@dsh-forge/lib-api'
+import type { ProjectResolution, ProjectResolutionPort } from '@dsh-forge/lib-api/ports'
 
 /** 归属解析结果（lib/api 单源——兼容 re-export，消费面 import 零改动） */
 export type { ProjectResolution }

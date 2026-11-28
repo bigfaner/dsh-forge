@@ -31,7 +31,7 @@ import {
   type DeleteChecks,
   type SlugCandidate,
 } from './model.js'
-import type { AheadBehind } from '@dsh-forge/contracts'
+import type { AheadBehind } from '@dsh-forge/lib-api/dto/worktree'
 import { EditableCombobox } from './EditableCombobox.js'
 import { createForgeRpcClient, forgeDiagEmit, type WorktreeFacesRpc } from '../rpc.js'
 import { dismissedOf, dismissedWriteOf, worktreePrefsFaceOf } from '../settings-section/index.js'

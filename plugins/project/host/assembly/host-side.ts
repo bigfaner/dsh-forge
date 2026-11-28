@@ -10,7 +10,7 @@
 //      具名取法——provide 晚于本装配段可达）；
 //   ③ 缺席/失败 = 零装配 fail-soft（通道未注册、拦截不接线——宿主不受影响）。
 // 外部行为不变：装配逻辑逐字自 child.ts 平移（能力解析留痕 8s / 60s 拦截放弃门全保留）。
-import type { ProjectService } from '@dsh-forge/contracts'
+import type { ProjectService } from '@dsh-forge/lib-api/dto/project'
 import {
   createHostWorktreeRpc,
   GIT_WORKTREE_IDENTITY_SERVICE,

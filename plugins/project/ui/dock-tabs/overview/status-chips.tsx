@@ -6,7 +6,7 @@
 // S3（run-tasks-host-command）：词汇七态 → 八态（+interrupted——表驱动，chips/泳道/
 // 转移菜单自动覆盖新态；仅语义映射表需显式补行）。
 import type { ReactNode } from 'react'
-import { TASK_STATUSES, TASK_STATUS_LABELS, type TaskStatus } from '@dsh-forge/contracts'
+import { TASK_STATUSES, TASK_STATUS_LABELS, type TaskStatus } from '@dsh-forge/lib-api/labels'
 import { StateDot, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { hasActiveStatusFilter, isChipDisabled } from './overview-model.js'
 import './overview.css'

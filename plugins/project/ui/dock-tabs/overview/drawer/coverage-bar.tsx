@@ -4,7 +4,7 @@
 // 呈现门控归 ../index.tsx 块组装）。小数(0–1) → 百分比 = contracts 口径（coverage REAL
 // 阈值小数 + gate_json coverage 小数）；实际值源 = 最近 submit 记录 gate（v9 修订沿袭）。
 import type { ReactNode } from 'react'
-import type { TaskDetail } from '@dsh-forge/contracts'
+import type { TaskDetail } from '@dsh-forge/lib-api/dto/forge'
 import { latestSubmitGateOf } from './detail-model.js'
 
 /** 判定（pass = ✓达标 / fail = 未达标 / none = 未执行——无实际值） */

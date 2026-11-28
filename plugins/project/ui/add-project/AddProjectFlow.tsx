@@ -23,7 +23,7 @@ import {
   Tag,
   TextShimmer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ProjectSummary, RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
+import type { ProjectSummary, RegisterProjectInput, RegisterResult } from '@dsh-forge/lib-api/dto/project'
 import { createForgeRpcClient } from '../rpc.js'
 import { registeredPathsOf, type BrowserSelection } from './browser-model.js'
 import { DirectoryBrowser } from './DirectoryBrowser.js'

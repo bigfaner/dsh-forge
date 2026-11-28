@@ -3,7 +3,8 @@
 // suspended + S3 interrupted——与相位推导机口径同源·终态 = completed/skipped/rejected）+
 // stats 单源计数（未过滤——chips/搜索过滤不改判）+ runningTaskOf 双路由第一判据（最新 in_progress）。
 import { describe, expect, it } from 'vitest'
-import type { TaskCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { TaskCard, TaskStats } from '@dsh-forge/lib-api/dto/forge'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import {
   NON_TERMINAL_TASK_STATUSES,
   TERMINAL_TASK_STATUSES,

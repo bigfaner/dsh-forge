@@ -18,7 +18,8 @@
 //（dock 开 tab，弹窗保持）；挂接会话 pill → onOpenSession + 关弹窗（原型 m31-tm-sess
 // 语义：跳对应对话面板——两动作一体）。
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { TASK_STATUS_LABELS, type TaskDetail, type TaskDetailQuery } from '@dsh-forge/contracts'
+import { TASK_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
+import { type TaskDetail, type TaskDetailQuery } from '@dsh-forge/lib-api/dto/forge'
 import { Button, IconCloseFillRegular, StateDot, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState, ErrorBar, SkeletonRows } from '../../../components.js'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc-channels.js'

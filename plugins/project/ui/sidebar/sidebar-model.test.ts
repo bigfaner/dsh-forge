@@ -2,7 +2,7 @@
 // 会话列表实时读 dsh 账本；AC5：空态判据输入）。纯函数面：快照进、视图行出、零持有。
 import { describe, expect, it } from 'vitest'
 import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
-import type { ProjectSummary } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import {
   buildSidebarTree,
   FORGE_LOOP_SCENARIO_PHASE,

@@ -22,7 +22,7 @@ export function preloadTransport(): ForgeTransport {
   const bridge = (globalThis as { dshForge?: DshForgeInvokeGlobal }).dshForge
   if (bridge === undefined || typeof bridge.invoke !== 'function') {
     throw new Error(
-      'dsh-forge web: window.dshForge.invoke 缺席——宿主 preload 未接 RPC 面（forge:* 通道常量 = @dsh-forge/contracts channels）',
+      'dsh-forge web: window.dshForge.invoke 缺席——宿主 preload 未接 RPC 面（forge:* 通道常量 = @dsh-forge/lib-api channels）',
     )
   }
   return (channel, payload) => bridge.invoke(channel, payload)
@@ -32,7 +32,8 @@ export function preloadTransport(): ForgeTransport {
 // RPC 客户端错误（信封 RpcErr 的反序列化面，AC2 边界保真的 renderer 侧半边）：
 // main 侧 serializeRpcError 序列化 { code, message, data } → 本类还原为可捕获 typed error：
 // UI 消费约定 = catch RpcClientError → rpcUiState(code) 选状态组件（见 ui-state 与 README）。
-import type { ErrorCode, RpcErrorPayload, TasksChangedEvent } from '@dsh-forge/contracts'
+import type { ErrorCode, RpcErrorPayload } from '@dsh-forge/lib-api/errors'
+import type { TasksChangedEvent } from '@dsh-forge/lib-api/dto/forge'
 import { forgeRemoteFaceOf, namespaceFaceOf } from '../rpc.js'
 
 /** typed error 的 renderer 侧形态（code ∈ contracts 六码；data = 结构化附载原样保真） */
@@ -365,92 +366,14 @@ export function subscribeTasksChanged(listener: TasksChangedListener, underlying
 // 新族（Forge设置 读写——forgeSettings 服务单门）；恒不在面的写动词收窄为 addTask/submitTask
 // （claimTask 退役并入 dispatchTask——仅存 core 服务 API）。提案域通道族已随 proposal 域
 // 整域下线批整体退役（plugin-spec/1.11）。
-import {
-  BUGS_CHANNELS,
-  DOCS_CHANNELS,
-  FEATURES_CHANNELS,
-  FS_CHANNELS,
-  KNOWLEDGE_CHANNELS,
-  PROJECTS_CHANNELS,
-  SETTINGS_CHANNELS,
-  TASKS_CHANNELS,
-  WORKTREE_CHANNELS,
-  type WorktreeAheadBehindRequest,
-  type WorktreeAheadBehindResult,
-  type WorktreeBranchesRequest,
-  type WorktreeBranchesResult,
-  type WorktreeChecksRequest,
-  type WorktreeChecksResult,
-  type WorktreeCreateRequest,
-  type WorktreeCreateResult,
-  type WorktreeDeleteRequest,
-  type WorktreeDeleteResult,
-  type WorktreeListRequest,
-  type WorktreeListResult,
-  type WorktreeSealRequest,
-  type WorktreeSelectRequest,
-  type WorktreeSelectResult,
-  type WorktreeEnsureWorkspaceRequest,
-  type WorktreeEnsureWorkspaceResult,
-  type WorktreeResolveRequest,
-  type WorktreeResolveResult,
-  type WorktreeSealResult,
-  type DirListing,
-  type DomainNode,
-  type EntryDetail,
-  type EntryActionReceipt,
-  type EntryActionRequest,
-  type EntryDetailQuery,
-  type BugCard,
-  type BugCommitFile,
-  type BugCommitFilesQuery,
-  type BugFileDiffQuery,
-  type FeatureCard,
-  type FeatureDocumentRow,
-  type FeatureRow,
-  type ForgeSettings,
-  type GetProjectRequest,
-  type KnowledgeCard,
-  type ListDirRequest,
-  type ListBugsQuery,
-  type ListFeatureDocsQuery,
-  type ListEntriesQuery,
-  type ListFeaturesQuery,
-  type ListTasksQuery,
-  type Project,
-  type ProjectPatch,
-  type ProjectSummary,
-  type QueryTaskInput,
-  type QueryTaskResult,
-  type ReadDocRequest,
-  type RecallFeedbackOutcome,
-  type RecallFeedbackRequest,
-  type RecallGroup,
-  type RegisterFeatureInput,
-  type RegisterProjectInput,
-  type RegisterResult,
-  type ReconcileReport,
-  type RpcResult,
-  type SessionLinksQuery,
-  type SessionRecallQuery,
-  type SessionTaskLinkCard,
-  type SetForgeSettingsInput,
-  type TaskCard,
-  type TaskDetail,
-  type TaskDetailQuery,
-  type TaskGraph,
-  type TaskGraphQuery,
-  type TaskSnapshot,
-  type TaskStats,
-  type TaskStatsQuery,
-  type TransitionFeatureInput,
-  type TransitionTaskInput,
-  type UpdateProjectRequest,
-  type UpsertFeatureDocInput,
-  type ValidateFeatureTasksInput,
-  type ValidateReport,
-  type DocContent,
-} from '@dsh-forge/contracts'
+import { BUGS_CHANNELS, DOCS_CHANNELS, FEATURES_CHANNELS, FS_CHANNELS, KNOWLEDGE_CHANNELS, PROJECTS_CHANNELS, SETTINGS_CHANNELS, TASKS_CHANNELS, WORKTREE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type WorktreeAheadBehindRequest, type WorktreeAheadBehindResult, type WorktreeBranchesRequest, type WorktreeBranchesResult, type WorktreeChecksRequest, type WorktreeChecksResult, type WorktreeCreateRequest, type WorktreeCreateResult, type WorktreeDeleteRequest, type WorktreeDeleteResult, type WorktreeListRequest, type WorktreeListResult, type WorktreeSealRequest, type WorktreeSelectRequest, type WorktreeSelectResult, type WorktreeEnsureWorkspaceRequest, type WorktreeEnsureWorkspaceResult, type WorktreeResolveRequest, type WorktreeResolveResult, type WorktreeSealResult } from '@dsh-forge/lib-api/dto/worktree'
+import { type DirListing, type ListDirRequest } from '@dsh-forge/lib-api/dto/fs'
+import { type DomainNode, type EntryDetail, type EntryActionReceipt, type EntryActionRequest, type EntryDetailQuery, type KnowledgeCard, type ListEntriesQuery, type RecallFeedbackOutcome, type RecallFeedbackRequest, type RecallGroup, type SessionRecallQuery } from '@dsh-forge/lib-api/dto/knowledge'
+import { type BugCard, type BugCommitFile, type BugCommitFilesQuery, type BugFileDiffQuery, type ListBugsQuery } from '@dsh-forge/lib-api/dto/bugs'
+import { type FeatureCard, type FeatureDocumentRow, type FeatureRow, type ForgeSettings, type ListFeatureDocsQuery, type ListFeaturesQuery, type ListTasksQuery, type QueryTaskInput, type QueryTaskResult, type ReadDocRequest, type RegisterFeatureInput, type SessionLinksQuery, type SessionTaskLinkCard, type SetForgeSettingsInput, type TaskCard, type TaskDetail, type TaskDetailQuery, type TaskGraph, type TaskGraphQuery, type TaskSnapshot, type TaskStats, type TaskStatsQuery, type TransitionFeatureInput, type TransitionTaskInput, type UpsertFeatureDocInput, type ValidateFeatureTasksInput, type ValidateReport, type DocContent } from '@dsh-forge/lib-api/dto/forge'
+import { type GetProjectRequest, type Project, type ProjectPatch, type ProjectSummary, type RegisterProjectInput, type RegisterResult, type ReconcileReport, type UpdateProjectRequest } from '@dsh-forge/lib-api/dto/project'
+import { type RpcResult } from '@dsh-forge/lib-api/dto/rpc'
 
 async function invokeRpc<T>(transport: ForgeTransport, channel: string, payload?: unknown): Promise<T> {
   const raw = await transport(channel, payload)

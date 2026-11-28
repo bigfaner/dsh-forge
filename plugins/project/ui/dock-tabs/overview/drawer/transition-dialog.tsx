@@ -7,7 +7,8 @@
 // TransitionDialog = 装载壳（受控状态 + Esc 层序 + rpc 提交）；打开/关闭由 props 受控
 // （入口 = 抽屉「转移状态…」与 ⋯ 菜单回调；接线在 4.1）。
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { TASK_STATUS_LABELS, type TaskSnapshot, type TaskStatus, type TransitionTaskInput } from '@dsh-forge/contracts'
+import { TASK_STATUS_LABELS, type TaskStatus } from '@dsh-forge/lib-api/labels'
+import { type TaskSnapshot, type TransitionTaskInput } from '@dsh-forge/lib-api/dto/forge'
 import { Button, StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { rpcUiState, type RpcUiStateKind } from '../../rpc-channels.js'
 import { RpcClientError } from '../../rpc-channels.js'

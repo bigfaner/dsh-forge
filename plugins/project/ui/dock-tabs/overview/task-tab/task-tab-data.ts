@@ -7,7 +7,8 @@
 // 序号守卫 + 缓存先行（搜索键入不清场——IME 安全配套）；feature/项目切换 = 清场骨架。
 // 事件刷新 = subscribeTasksChanged（drawer 同口径——projectId 匹配才重取）。
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ContainerRef, TaskCard, TaskGraph, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { ContainerRef, TaskCard, TaskGraph, TaskStats } from '@dsh-forge/lib-api/dto/forge'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import {
   subscribeTasksChanged,
   type ForgeRpcClient,

@@ -6,11 +6,12 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import type { FeatureCard, TaskStatus } from '@dsh-forge/contracts'
+import type { FeatureCard } from '@dsh-forge/lib-api/dto/forge'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import { initialOverviewFilter, type OverviewFilterState } from './overview-model.js'
 import type { OverviewHeadBundle, OverviewListData } from './overview-data.js'
 import { OverviewBugDialogMount, OverviewFrame, OverviewTab, openBugCardOf } from './OverviewTab.js'
-import type { BugCard } from '@dsh-forge/contracts'
+import type { BugCard } from '@dsh-forge/lib-api/dto/bugs'
 
 const NOW = Date.parse('2026-10-06T12:00:00.000Z')
 const CREATED = '2026-10-01T08:00:00.000Z'

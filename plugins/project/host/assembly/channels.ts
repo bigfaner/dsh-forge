@@ -1,21 +1,10 @@
 // @dsh-forge/project · host/assembly/channels.ts —— forge:worktree/* 通道注册
 //（plugin-project 1.17 批二自 apps/host/src/ipc/worktree-rpc.ts 迁入——通道键映射属
 // 插件域装配缝，AGENTS 1.3 插件可移植性；信封机制（typed error → RpcResult 序列化）
-// 留宿主，经 envelope 依赖缝注入——零反向依赖）。键单源 = @dsh-forge/contracts
+// 留宿主，经 envelope 依赖缝注入——零反向依赖）。键单源 = @dsh-forge/lib-api
 // WORKTREE_CHANNELS，键键对应 contracts dto/worktree.ts 负载映射。
-import {
-  WORKTREE_CHANNELS,
-  type WorktreeAheadBehindRequest,
-  type WorktreeBranchesRequest,
-  type WorktreeChecksRequest,
-  type WorktreeCreateRequest,
-  type WorktreeDeleteRequest,
-  type WorktreeEnsureWorkspaceRequest,
-  type WorktreeListRequest,
-  type WorktreeSealRequest,
-  type WorktreeSelectRequest,
-  type WorktreeResolveRequest,
-} from '@dsh-forge/contracts'
+import { WORKTREE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type WorktreeAheadBehindRequest, type WorktreeBranchesRequest, type WorktreeChecksRequest, type WorktreeCreateRequest, type WorktreeDeleteRequest, type WorktreeEnsureWorkspaceRequest, type WorktreeListRequest, type WorktreeSealRequest, type WorktreeSelectRequest, type WorktreeResolveRequest } from '@dsh-forge/lib-api/dto/worktree'
 import type { WorktreeRpcService } from '../worktrees/rpc-service.js'
 
 /** 宿主 ipc 注册窄面（方法式声明——结构兼容真 ForgeIpc.allowlist 门面） */

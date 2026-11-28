@@ -3,7 +3,7 @@
 // chips 计数单源 / AC5 视图词汇与空态分派 / AC6 feature 解析与 DAG 可见集（chips 过滤
 // 三视图统一的数据面——list 结果 = vis 集单源，graph 供边）。
 import { describe, expect, it } from 'vitest'
-import type { TaskCard, TaskGraph } from '@dsh-forge/contracts'
+import type { TaskCard, TaskGraph } from '@dsh-forge/lib-api/dto/forge'
 import {
   TASK_VIEWS,
   dagVisibleSet,

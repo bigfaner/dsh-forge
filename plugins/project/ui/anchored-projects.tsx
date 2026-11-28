@@ -12,7 +12,7 @@
 // KitSelectorHook 本地声明（knowledge shared/kit-types.ts 持下沉副本，pin 对账）。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
-import type { WorktreeResolveRequest, WorktreeResolveResult } from '@dsh-forge/contracts'
+import type { WorktreeResolveRequest, WorktreeResolveResult } from '@dsh-forge/lib-api/dto/worktree'
 import type { LedgerWorkspacesSnapshot } from './sidebar/sidebar-model.js'
 import { useForgeProjects, type ProjectsPhase } from './sidebar/use-forge-projects.js'
 import { createForgeRpcClient } from './rpc.js'

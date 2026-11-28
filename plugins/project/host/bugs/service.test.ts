@@ -6,7 +6,7 @@
 // 签名零特判），测试不依赖真实 git 二进制。两表制口径差：project.db 无 tasks 表——
 // container_slug 登记径恒留空（投影降级），候选归属走 scope.slug 列直比。
 import { describe, expect, it } from 'vitest'
-import type { BugCard } from '@dsh-forge/contracts'
+import type { BugCard } from '@dsh-forge/lib-api/dto/bugs'
 import { openDomainDb, PROJECT_DB_PREFIX, type DomainDb } from '../db/connection.js'
 import { createBugsService, ERROR_TYPE_SUGGESTIONS_LIMIT, type GitExecFile } from './service.js'
 import { parseTaskContainerSlug } from './recurrence.js'

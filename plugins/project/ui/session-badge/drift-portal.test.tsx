@@ -13,7 +13,7 @@ import {
   markForgeRemoteMountSettled,
   type WorktreeFacesRpc,
 } from '../rpc.js'
-import type { WorktreeAheadBehindResult, WorktreeSealResult } from '@dsh-forge/contracts'
+import type { WorktreeAheadBehindResult, WorktreeSealResult } from '@dsh-forge/lib-api/dto/worktree'
 import { ForgeSessionWorktreeChip } from './chip.js'
 import { ForgeWorktreeSealOverlay } from './seal-notice.js'
 

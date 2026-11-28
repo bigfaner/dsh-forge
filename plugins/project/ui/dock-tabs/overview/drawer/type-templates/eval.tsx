@@ -4,7 +4,7 @@
 // 承载（index.tsx 结果投影）；空态注记 = AC3「eval 类空态注记——M2 无技能写入」——
 // vars.score 缺席（无结构化得分）时呈现，M3 eval 技能接管时结构化[tech-design]）。
 import type { ReactNode } from 'react'
-import type { TaskDetail } from '@dsh-forge/contracts'
+import type { TaskDetail } from '@dsh-forge/lib-api/dto/forge'
 import { evalScoreOf, varsRubric, varsText } from '../detail-model.js'
 import { CodeSpan, KvRow, SubTitle } from './parts.js'
 

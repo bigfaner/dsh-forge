@@ -5,7 +5,8 @@
 // + path）+ HTML 节点层（原型同构——绝对定位卡片承载富内容）+ 图例。节点双载体
 // （onOpenTask 在场 = 可点 role=button；缺席 = 静态）。
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
-import { TASK_STATUS_LABELS, type TaskCard, type TaskGraph } from '@dsh-forge/contracts'
+import { TASK_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
+import { type TaskCard, type TaskGraph } from '@dsh-forge/lib-api/dto/forge'
 import { StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { STATUS_DOT_STATE } from '../status-chips.js'
 import { formatActualDuration, taskKeyLabel } from '../drawer/detail-model.js'

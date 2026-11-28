@@ -1,7 +1,7 @@
 // browser-actions 单测 —— 交互转移语义（静态标记测不了的面）：导航落位/选中清零/canonical
 // 对账（AC1）、失败拦截与重试口径（AC4）、竞态守卫、选中唯一（AC3）、上一级判据。
 import { describe, expect, it } from 'vitest'
-import type { DirListing } from '@dsh-forge/contracts'
+import type { DirListing } from '@dsh-forge/lib-api/dto/fs'
 import { browserActions, type BrowserActionsDeps } from './browser-actions.js'
 import { initialBrowserState, selectEntry, type BrowserState } from './browser-model.js'
 import type { DirSource, ListingPhase } from './dir-source.js'

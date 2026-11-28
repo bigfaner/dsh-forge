@@ -3,7 +3,7 @@
 // 词汇表 = contracts TASK_TYPES（20 值 = 21 模板 − fix-record-missed）；族划分锚 ui-design
 // 块一模板表 + tech-design §Interface 9 §7-6 映射定稿。类别色族 = Design System 六色
 //（编码=蓝/文档=紫/测试=青/评估=红/验证=琥珀/质量门=绿——紫/青无语义令牌，最近似映射见 drawer.css）。
-import type { TaskType } from '@dsh-forge/contracts'
+import type { TaskType } from '@dsh-forge/lib-api/labels'
 
 /** 模板族（六族 + generic 回退） */
 export type TemplateFamily = 'coding' | 'fix' | 'doc' | 'gate' | 'test' | 'eval' | 'generic'

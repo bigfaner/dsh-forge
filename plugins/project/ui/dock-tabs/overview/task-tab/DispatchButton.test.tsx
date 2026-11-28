@@ -6,7 +6,8 @@
 // 模式 + 指令单行）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { SessionTaskLinkCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { SessionTaskLinkCard, TaskStats } from '@dsh-forge/lib-api/dto/forge'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import {
   DispatchButton,
   dispatchCommandOf,

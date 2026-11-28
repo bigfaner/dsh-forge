@@ -7,42 +7,13 @@
 // 信封拆装：RemoteResult → data（value 原样），failure → 抛 RpcClientError（typed error
 // 反序列化），形状非法 fail-loud。descriptor/codec 由构建期生成物锁定（1.5——client 半
 // 生成化：$mount 贡献 = generator 产出 ./remote TYPERT_REMOTE，手写表退役）。
-import {
-  type BugCard,
-  type DeriveTaskStoreDirResult,
-  type DirFactRow,
-  type DirListing,
-  type FeatureCard,
-  type ListBugsQuery,
-  type ListFeaturesQuery,
-  type Project,
-  type ProjectPatch,
-  type ProjectSummary,
-  type RegisterProjectInput,
-  type RegisterResult,
-  type RpcErrorPayload,
-  type RpcResult,
-  type WorktreeAheadBehindRequest,
-  type WorktreeAheadBehindResult,
-  type WorktreeBranchesRequest,
-  type WorktreeBranchesResult,
-  type WorktreeChecksRequest,
-  type WorktreeChecksResult,
-  type WorktreeCreateRequest,
-  type WorktreeCreateResult,
-  type WorktreeDeleteRequest,
-  type WorktreeDeleteResult,
-  type WorktreeEnsureWorkspaceRequest,
-  type WorktreeEnsureWorkspaceResult,
-  type WorktreeListRequest,
-  type WorktreeListResult,
-  type WorktreeResolveRequest,
-  type WorktreeResolveResult,
-  type WorktreeSelectRequest,
-  type WorktreeSelectResult,
-  type WorktreeSealRequest,
-  type WorktreeSealResult,
-} from '@dsh-forge/contracts'
+import { type BugCard, type ListBugsQuery } from '@dsh-forge/lib-api/dto/bugs'
+import { type DeriveTaskStoreDirResult, type FeatureCard, type ListFeaturesQuery } from '@dsh-forge/lib-api/dto/forge'
+import { type DirFactRow, type Project, type ProjectPatch, type ProjectSummary, type RegisterProjectInput, type RegisterResult } from '@dsh-forge/lib-api/dto/project'
+import { type DirListing } from '@dsh-forge/lib-api/dto/fs'
+import { type RpcErrorPayload } from '@dsh-forge/lib-api/errors'
+import { type RpcResult } from '@dsh-forge/lib-api/dto/rpc'
+import { type WorktreeAheadBehindRequest, type WorktreeAheadBehindResult, type WorktreeBranchesRequest, type WorktreeBranchesResult, type WorktreeChecksRequest, type WorktreeChecksResult, type WorktreeCreateRequest, type WorktreeCreateResult, type WorktreeDeleteRequest, type WorktreeDeleteResult, type WorktreeEnsureWorkspaceRequest, type WorktreeEnsureWorkspaceResult, type WorktreeListRequest, type WorktreeListResult, type WorktreeResolveRequest, type WorktreeResolveResult, type WorktreeSelectRequest, type WorktreeSelectResult, type WorktreeSealRequest, type WorktreeSealResult } from '@dsh-forge/lib-api/dto/worktree'
 
 /** typed error 的客户端形态（code ∈ contracts 六码域；data = 结构化附载原样保存） */
 export class RpcClientError extends Error {

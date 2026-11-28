@@ -9,7 +9,8 @@
 //   · 其余失败（preload 缺席/服务未注册/未映射码/data 载荷畸形）→ error 兜底
 //     （tech-design Propagation「未映射码 → 通用错误条」——message 归一，永无裸 code
 //     泄漏；非阻断确认位——注册闭包复检恒权威）。
-import type { DeriveTaskStoreDirResult, SuspectedMoveData } from '@dsh-forge/contracts'
+import type { DeriveTaskStoreDirResult } from '@dsh-forge/lib-api/dto/forge'
+import type { SuspectedMoveData } from '@dsh-forge/lib-api/errors'
 import { createForgeRpcClient, RpcClientError } from '../rpc.js'
 import type { DerivedTaskStorePhase } from './derived-store-row.js'
 

@@ -10,8 +10,8 @@
 // 锚定：absolute 定位贴触发钮左侧（css right:100%——4.6 将本件置于「诊断」钮 relative
 // 包裹内；ui-design v5 ⑨ 裁决：右缘贴按钮左缘 + 垂直对齐）。
 import { useEffect, type ReactNode } from 'react'
-import type { TaskStatus } from '@dsh-forge/contracts'
-import { TASK_STATUS_LABELS } from '@dsh-forge/contracts'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
+import { TASK_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
 import {
   DIAG_CHECK_NAMES,
   FAILURE_STATUS_PHRASES,

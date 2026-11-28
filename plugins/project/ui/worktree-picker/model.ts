@@ -2,7 +2,7 @@
 // 来源标记推断（所配 worktree 目录内 = DSH）、worktree 名派生、ahead/behind 徽标拆分、
 // 删除拦截判定（未提交变更 / 挂靠会话 → 确认钮禁用；仅未 push → 警示放行）、
 // ahead/behind 懒加载待拉清单（展开才拉、缓存免重拉）。
-import type { AheadBehind } from '@dsh-forge/contracts'
+import type { AheadBehind } from '@dsh-forge/lib-api/dto/worktree'
 
 /** hero 选择菜单行（一行一 worktree——一体两属性：分支名为行属性 + worktree 名） */
 export interface WorktreeRow {

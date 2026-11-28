@@ -5,7 +5,8 @@
 // data.compensated 存在 = 补偿已执行，core ForgeErrorData 口径）。
 // Hard Rules（取消 = 安全边界）：本模型的取消路径只产「关闭通知」，不触达 register/补偿——
 // 调用侧唯一入口 = flow-actions.confirm（form 相位守卫）。
-import type { ErrorCode, RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
+import type { ErrorCode } from '@dsh-forge/lib-api/errors'
+import type { RegisterProjectInput, RegisterResult } from '@dsh-forge/lib-api/dto/project'
 import { RpcClientError } from '../rpc.js'
 import type { BrowserSelection } from './browser-model.js'
 

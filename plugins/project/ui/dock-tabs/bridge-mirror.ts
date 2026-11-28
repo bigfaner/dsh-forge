@@ -1,9 +1,9 @@
 // 工作台桥消费切片镜像（1.45 随 dock tab 族注册面自 apps/web 平移本包）：桥本体 =
 // 壳 C 类域（apps/web workbench/workbench-bridge.ts——ShellHost 侧真桥不随迁），本件为
 // 结构同型镜像窄面（knowledge-face workbenchBridgeOf 同纪律）；TaskStatus 类型 import
-// '@dsh-forge/contracts' 保持。createWorkbenchBridge/publishWorkbenchBridge 工厂镜像 =
+// '@dsh-forge/lib-api' 保持。createWorkbenchBridge/publishWorkbenchBridge 工厂镜像 =
 // dock-tabs.test 单测锚（真桥写面消费——语义与壳侧正本逐字同源，漂移由两侧 pin 对账）。
-import type { TaskStatus } from '@dsh-forge/contracts'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 
 /** 官方面板导航窄面（插件侧绑定 layout.selectPanel——null = 回官方会话面板） */
 export interface ForgeCenterNav {

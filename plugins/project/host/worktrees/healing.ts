@@ -5,7 +5,7 @@
 //     durable 挂账，推导制读面）；
 //   · resolveWorkspaceId：present 行 resolveByPath 只读解析（workspaceId 随行）。
 // 依赖方向：service 单向（type-only import 协作面）。
-import type { WorktreeEntryDto } from '@dsh-forge/contracts'
+import type { WorktreeEntryDto } from '@dsh-forge/lib-api/dto/worktree'
 import type { WorktreeServiceContext } from './service.js'
 
 export interface Healing {

@@ -5,7 +5,7 @@
 //   构造期即抛——头数据路不再依赖 preload 通道。
 //   bugs 列路保留 fix-20 本地读缝（dsh-forge host 本地 forgeBugs 供数缝单源；本地缝不可达
 //   时 Typert fail-soft 回落——原语义不动）。
-import { BUGS_CHANNELS } from '@dsh-forge/contracts'
+import { BUGS_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { createForgeRpcClient, preloadTransport, type ForgeRpcClient, type ForgeTransport } from '../rpc-channels.js'
 import { createForgeRpcClient as createTypertForgeRpcClient, type ForgeSpecsRpc } from '../../rpc.js'
 import { typertTransport } from '../typert-transport.js'

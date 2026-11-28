@@ -8,10 +8,11 @@
 // 基宽 560；挂点 = 官方 Modal className 卡片（fix-7 回炉：不再挂内容层））、
 // fix-14 原生选取相位机（beginNativePick 在途防双开 + endNativePick 回落起源零副作用）。
 import { describe, expect, it } from 'vitest'
-import type { ErrorCode, RegisterResult } from '@dsh-forge/contracts'
+import type { ErrorCode } from '@dsh-forge/lib-api/errors'
+import type { RegisterResult } from '@dsh-forge/lib-api/dto/project'
 import { RpcClientError } from '../rpc.js'
 import type { BrowserSelection } from './browser-model.js'
-import type { RegisterProjectInput } from '@dsh-forge/contracts'
+import type { RegisterProjectInput } from '@dsh-forge/lib-api/dto/project'
 import {
   backToBrowser,
   beginExecute,

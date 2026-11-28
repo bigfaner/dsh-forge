@@ -2,7 +2,8 @@
 // AC 映射：导航与面包屑（AC1）/ 单击选中唯一 + 未选中禁用（AC3）/ ws_path 集合匹配与
 // 挂接语义预演（AC2）。拦截语义（AC4）：列举失败时导航态保持原状（组件层只补错误条，
 // 不切出浏览器态）——无独立转移函数，见 DirectoryBrowser 装配注释。
-import type { DirListing, ProjectSummary } from '@dsh-forge/contracts'
+import type { DirListing } from '@dsh-forge/lib-api/dto/fs'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 
 /** 浏览器导航态（cwd = 当前目录；selected = 单击选中项，null = 未选） */
 export interface BrowserState {

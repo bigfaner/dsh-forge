@@ -2,7 +2,7 @@
 // 定位：装配缝——把 1.10 四件（register / queries / reconcile / registry-adapter）与
 // repositories 组装成 ProjectsServicePort（dto ProjectService 六动词单源形状），零域逻辑
 // （五步补偿链/对账矩阵/查询口径全部归属 host/projects 域本体，此处只做委托组装）。
-import type { Project, ProjectPatch, ProjectService, ProjectSummary, RegisterProjectInput, RegisterResult, ReconcileReport } from '@dsh-forge/lib-api'
+import type { Project, ProjectPatch, ProjectService, ProjectSummary, RegisterProjectInput, RegisterResult, ReconcileReport } from '@dsh-forge/lib-api/dto/project'
 import type { DiagEventPayload } from '@dsh-forge/lib-diag'
 import { archiveLegacyWindowDb, isLegacyWindowDb, openDomainDb, domainDbFileName, type DomainDb } from '../db/connection.js'
 import type { ProjectRow } from '../db/row-types.js'

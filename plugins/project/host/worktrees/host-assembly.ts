@@ -6,7 +6,7 @@
 // 边界保位（提案 §2 裁决）：ctx.on('session/created') 监听装配与 forge:proxy/session-create
 // guardedCreate 硬门留 host——经注入缝（onSessionCreated）与既有 host 代码承载，本文件零触及。
 // 零行为变化：装配逻辑逐字自 child.ts 平移（能力解析留痕/8s 缺席诊断/60s 拦截放弃门全保留）。
-import type { ForgeBindingMismatchEvent } from '@dsh-forge/contracts'
+import type { ForgeBindingMismatchEvent } from '@dsh-forge/lib-api/dto/worktree'
 import {
   createWorktreeRpcService,
   type GitWorktreeServiceFace,

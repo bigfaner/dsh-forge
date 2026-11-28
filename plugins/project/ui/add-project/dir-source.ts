@@ -1,7 +1,7 @@
 // 目录数据源封装（定位：业务——UF-3 段一目录数据获取；Hard Rules：本机目录读取经 RPC
 // （forge:fs/listDir），renderer 不开 Node fs 通道）。相位映射纯异步面（同 2.7
 // use-forge-projects 的 fetchProjectsPhase 形制：错误归一为 error 相位，永不 reject）。
-import type { DirListing } from '@dsh-forge/contracts'
+import type { DirListing } from '@dsh-forge/lib-api/dto/fs'
 import { createForgeRpcClient } from '../rpc.js'
 
 /** 目录数据源（注入面：RPC 真身 rpcDirSource() / 测试内存替身） */

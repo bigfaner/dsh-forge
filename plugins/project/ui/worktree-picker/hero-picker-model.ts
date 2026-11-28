@@ -6,7 +6,7 @@
 //   - 选中映射：owner selectedId（workspaceId）↔ 行 id（= project.workspaceId）恒等对照，
 //     未绑定/已归档工作区无命中行（零高亮）；
 //   - 空集 + 账面已定 → 「添加」为唯一入口（官方 addIsTheOnlyEntry 语义对齐）。
-import type { ProjectSummary } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 
 /** 弹层项目行（id = workspaceId——owner 契约 selectedId/onPick 零变化走官方链；wsPath = 树 ws 判据源） */
 export interface HeroPickerRow {

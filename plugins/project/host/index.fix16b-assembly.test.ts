@@ -14,7 +14,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import type { OfficialRegistryFace } from './projects/registry-adapter.js'
 import type { SeamCtxFace } from './assembly/seams.js'
 import { injectProjectSeam, PROJECT_SEAM_KEYS, stubProjectsService } from './assembly/seams.js'
-import type { Project, ProjectSummary } from '@dsh-forge/contracts'
+import type { Project, ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import projectPlugin from './index.js'
 
 /** fake registry（同形 OfficialRegistryFace——Map 承载，fix8 同款） */

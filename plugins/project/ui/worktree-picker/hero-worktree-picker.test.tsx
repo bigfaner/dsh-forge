@@ -18,7 +18,7 @@ import {
   type ForgeRpcClient,
 } from '../rpc.js'
 import { openAddProjectFlow } from '../add-project/flow-open.js'
-import type { ProjectSummary } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 
 vi.mock('../add-project/flow-open.js', () => ({ openAddProjectFlow: vi.fn() }))
 

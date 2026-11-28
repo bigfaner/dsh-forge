@@ -3,7 +3,7 @@
 // 渲染面 = renderToStaticMarkup；verb 词汇 = contracts TASK_RECORD_VERBS（六值封闭）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { TASK_RECORD_VERBS, type TaskRecordEntry } from '@dsh-forge/contracts'
+import { TASK_RECORD_VERBS, type TaskRecordEntry } from '@dsh-forge/lib-api/dto/forge'
 import { detailFixture } from './detail-model.test.js'
 import {
   AcItem,

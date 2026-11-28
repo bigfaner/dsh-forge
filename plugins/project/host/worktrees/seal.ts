@@ -2,7 +2,7 @@
 // 绑定 = header.cwd——实时 branch + 盘上在场性（evaluateSeal）+ aheadBehind 现算；
 // G7② 判序：request.cwd 在场时先查项目能力缓存——判非 git 直接返回（零会话日志读）。
 // 依赖方向：service 单向（type-only import 协作面）；留痕惰性补写经 bind-events 注入实例。
-import type { WorktreeSealRequest, WorktreeSealResult } from '@dsh-forge/contracts'
+import type { WorktreeSealRequest, WorktreeSealResult } from '@dsh-forge/lib-api/dto/worktree'
 import { aheadBehind } from './worktree-ops.js'
 import { evaluateSeal, normalizePathForCompare } from './seal-guard.js'
 import { readLatestWorktreeBind } from './session-attach.js'

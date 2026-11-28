@@ -5,7 +5,8 @@
 // 状态点 + 展开区时间正序子行 + 零链行语言不变）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { BugCard, BugStatus } from '@dsh-forge/contracts'
+import type { BugCard } from '@dsh-forge/lib-api/dto/bugs'
+import type { BugStatus } from '@dsh-forge/lib-api/labels'
 import { bugChainGroups, BugList, BugStatusChips } from './bug-list.js'
 
 const CREATED = '2026-10-13T09:30:00.000Z'

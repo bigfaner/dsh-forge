@@ -8,7 +8,8 @@
 // kind 双轨沿 contracts CONTAINER_KINDS 仅为 wire 契约回传保留（tasks.list/stats/graph 的
 // source.kind 必填）——取任务卡自身 kind 原样回传，缺席卡回退 'feature'；kind 不参与分组、
 // 排序与呈现（容器统一为 spec，slug 即容器）。
-import { type ContainerKind, type Mode, type TaskCard, type TaskStatus } from '@dsh-forge/contracts'
+import { type ContainerKind, type Mode, type TaskCard } from '@dsh-forge/lib-api/dto/forge'
+import { type TaskStatus } from '@dsh-forge/lib-api/labels'
 
 /** 任务容器选项（pill 选中 + 菜单行 + 派发/诊断语境的单源投影） */
 export interface TaskContainerOption {

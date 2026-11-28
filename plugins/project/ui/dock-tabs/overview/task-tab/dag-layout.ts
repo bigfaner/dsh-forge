@@ -5,7 +5,7 @@
 // 零第三方图形/布局库。边语义 = contracts TaskGraphEdge（taskId 依赖 prerequisiteId；
 // 前置在上、箭头指向后续）。环防御：core 写动词增量环校验保证无环，但布局对历史
 // 漂移数据不炸（回边剔除后分层仍可结算）。
-import type { TaskCard, TaskGraphEdge } from '@dsh-forge/contracts'
+import type { TaskCard, TaskGraphEdge } from '@dsh-forge/lib-api/dto/forge'
 
 /** 节点尺寸/间距（原型 renderTaskDag 结构刻度——布局几何非视觉令牌面；D29 刻度对齐 W190/H72） */
 export const DAG_NODE_W = 190

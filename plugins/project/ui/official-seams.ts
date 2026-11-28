@@ -6,7 +6,7 @@
 //
 // bundle 自含纪律：官方面（slots/sidebarRightTabs/sidebarRight/inputTriggers/workspaces/
 // sessions/conversation）以结构同型镜像承载（keyed-section 先例）；RPC 通道常量出自
-// @dsh-forge/contracts（本 bundle esbuild 内联——自含审计口径：产物零裸 import）。
+// @dsh-forge/lib-api（本 bundle esbuild 内联——自含审计口径：产物零裸 import）。
 // 注册条件门控：list 槽行（scope session）由槽 runtime 在会话视图内声明递达 sessionId——
 // 本面只做登记，门控语义归官方槽 runtime（与壳侧登记行同形）。
 import { ForgeBugPreview } from './bug-refs/BugPreview.js'

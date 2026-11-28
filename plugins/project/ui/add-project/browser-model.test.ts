@@ -1,7 +1,8 @@
 // 2.8 段一纯模型单测 —— 导航/选中/面包屑/已注册标记（AC1 路径正确 / AC2 ws_path 匹配 /
 // AC3 单击选中唯一 + 未选中禁用 / AC4 拦截不出浏览器态=状态保持）。
 import { describe, expect, it } from 'vitest'
-import type { DirListing, ProjectSummary } from '@dsh-forge/contracts'
+import type { DirListing } from '@dsh-forge/lib-api/dto/fs'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import {
   applyListing,
   canConfirm,

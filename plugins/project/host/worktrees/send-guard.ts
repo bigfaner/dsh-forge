@@ -4,7 +4,7 @@
 // 判定——不消费切换时点快照；回调执行前删树（git worktree remove）发送仍被拒（TOCTOU
 // 窗口不存在的判据面，send-guard.test.ts 临时 git 仓 fixture 锚）。
 // 依赖方向红线：零 apps/host/* import，官方控制器一律经 SessionControllerFace 注入。
-import type { WorktreeSealResult } from '@dsh-forge/contracts'
+import type { WorktreeSealResult } from '@dsh-forge/lib-api/dto/worktree'
 import { assertSendable } from './seal-guard.js'
 import { consoleDiagFallback } from './diag-fallback.js'
 import type { SessionControllerFace } from './service.js'

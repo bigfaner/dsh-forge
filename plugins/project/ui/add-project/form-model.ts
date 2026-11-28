@@ -7,7 +7,7 @@
 // 4.3：任务清单派生（flattenWorkspacePath/deriveTaskStoreDir 前端自算）废除——Hard Rule
 // 派生行单源 = core deriveTaskStoreDir（RPC forge:projects/deriveTaskStoreDir 下发，
 // derive-source 装配；本模块零路径派生残留）。
-import type { RegisterProjectInput } from '@dsh-forge/contracts'
+import type { RegisterProjectInput } from '@dsh-forge/lib-api/dto/project'
 import { dirSeparatorOf, normalizeDirPath } from '@dsh-forge/lib-path/path-key'
 import type { BrowserSelection } from './browser-model.js'
 

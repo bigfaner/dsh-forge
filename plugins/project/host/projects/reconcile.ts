@@ -4,7 +4,7 @@
 // （不自动清理——孤儿工作区只提示不删）。三层防御：单项降级 → 整体降级 → 记账失败吞掉，
 // 永不抛断启动；全程异常经 emitDiag。
 import { existsSync } from 'node:fs'
-import type { ReconcileReport } from '@dsh-forge/lib-api'
+import type { ReconcileReport } from '@dsh-forge/lib-api/dto/project'
 import type { DiagEventPayload } from '@dsh-forge/lib-diag'
 import type { ProjectsRepo, WorkspacesRepo } from '../db/repositories/index.js'
 import { diag } from './errors.js'

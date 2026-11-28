@@ -15,7 +15,8 @@
 // 首行；当前条底色高亮 +「本条」标记 + recurrenceOf → 前一条定位词标注；点其他节点同框
 // 切换该条全卡（链区当前条随 activeId 重算）。chain 缺席/单条 = 无链区、既有面零变化。
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { BUG_STATUS_LABELS, type BugCard, type BugCommitFile } from '@dsh-forge/contracts'
+import { BUG_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
+import { type BugCard, type BugCommitFile } from '@dsh-forge/lib-api/dto/bugs'
 import { Button, IconCloseFillRegular, StateDot, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { fullStampOf, diagStampOf } from '../message-format.js'
 import { BUG_STATUS_DOT_STATE, chainEntryKind } from './bug-list.js'

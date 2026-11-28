@@ -14,7 +14,7 @@
 // 路由纯派生（dispatchRouteOf——AC6 双路由分支测试锚）。
 // Hard Rule（v22 ㊳）：无单任务直接执行入口——本族组件零任务行/详情动作。
 import type { ReactNode } from 'react'
-import type { Mode, SessionTaskLinkCard, TaskStats } from '@dsh-forge/contracts'
+import type { Mode, SessionTaskLinkCard, TaskStats } from '@dsh-forge/lib-api/dto/forge'
 import { DISPATCH_COMMAND_PREFIX } from '../message-format.js'
 import { hasNonTerminalTask } from './terminal-state.js'
 import './task-tab.css'

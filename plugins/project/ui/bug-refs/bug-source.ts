@@ -3,7 +3,7 @@
 //
 // bundle 自含纪律（client-plugin 经典 script 形状，open-session.ts 先例）：本文件零外部
 // import——官方 input-trigger 契约面（InputTriggerSource/ReferenceCodec/InputTriggerCandidate/
-// ReferenceInsert/PickOutcome）与 @dsh-forge/contracts 的 BugCard/ListBugsQuery 均以结构
+// ReferenceInsert/PickOutcome）与 @dsh-forge/lib-api 的 BugCard/ListBugsQuery 均以结构
 // 同型镜像承载（结构化类型：contracts BugCard 直接赋形兼容）。
 //
 // 快照语义（提案共存约束③）：pick 时落 BugCard 快照；serialize 快照优先、现查回退、

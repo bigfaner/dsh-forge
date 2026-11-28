@@ -4,7 +4,7 @@
 // 已由 DispatchEventsPanel（进度流面板）接替退役；本模块仅保留概览任务 tab 仍在消费的
 // worker 解析纯函数：taskDetail 挂接双源卡 → 执行会话 + 库侧权威父）。
 // 数据纪律（4.2 Integration #2 承袭）：唯一通道 = forge:tasks/detail；错误 fail-soft。
-import type { SessionTaskLinkCard, TaskDetailQuery } from '@dsh-forge/contracts'
+import type { SessionTaskLinkCard, TaskDetailQuery } from '@dsh-forge/lib-api/dto/forge'
 import type { ForgeRpcClient } from './rpc-channels.js'
 
 /**

@@ -14,12 +14,8 @@
 // 容器选中：受控注入（4.2 taskFocus featureSlug）优先，否则本地切换；数据装载归
 // useTasksTabLoad（source 容器参数路由——AC5）。
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import {
-  type FeatureCard,
-  type Mode,
-  type SessionTaskLinkCard,
-  type TaskStatus,
-} from '@dsh-forge/contracts'
+import { type FeatureCard, type Mode, type SessionTaskLinkCard } from '@dsh-forge/lib-api/dto/forge'
+import { type TaskStatus } from '@dsh-forge/lib-api/labels'
 import {
   IconSearchOutlineRegular,
   Input,

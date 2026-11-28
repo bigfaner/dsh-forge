@@ -15,7 +15,7 @@
 // 推式登记缝（服务键 forgeDirs 的 registerDirKeys/declareDirKeys/createDirKeyRegistry）
 // 与独立目的地表（DIR_DESTINATIONS/ForgeDirDestinations/proposalDir）已删——forge_resolve_path
 // 的枚举/参数/校验全部由带参条目派生（§2.3）。
-import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
+import { FORGE_DIR_SEGMENT } from '@dsh-forge/lib-api/forge-dir-segments'
 import { join } from 'node:path'
 import type { ForgeDirDeclaration, ForgeDirEntry, ForgeDirSources } from '@dsh-forge/lib-path'
 import { dirKeyEntryShapeError, FORGE_BASE_DIR_ENTRIES, FORGE_DIR_KEYS, isValidDirParam, resolveForgeDirs } from '@dsh-forge/lib-path'

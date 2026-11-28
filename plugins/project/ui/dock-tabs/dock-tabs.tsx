@@ -28,7 +28,7 @@
 // 三签不动（Hard Rule）：零左栏/中区/conversation.view 改动；概览内容禁编排逻辑（纯视图
 // 组合多域读——编排归 core）。
 import { useCallback, useEffect, Fragment, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import type { TaskStatus } from '@dsh-forge/contracts'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { DSWF_OVERVIEW_TAB_KEY } from '@dsh-forge/lib-ui'
 import { EmptyState, ErrorBar } from '../components.js'

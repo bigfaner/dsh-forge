@@ -11,31 +11,7 @@
 // 整句 type import 被 tsc 完全消隐，「零 dsh-forge 依赖」在产物面成立。
 import { mkdirSync, readdirSync, existsSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
-import type {
-  WorktreeAheadBehindRequest,
-  WorktreeAheadBehindResult,
-  WorktreeBranchesRequest,
-  WorktreeBranchesResult,
-  WorktreeChecksRequest,
-  WorktreeChecksResult,
-  WorktreeCreateRequest,
-  WorktreeCreateResult,
-  ForgeBindingMismatchEvent,
-  WorktreeDeleteRequest,
-  WorktreeDeleteResult,
-  WorktreeEnsureWorkspaceRequest,
-  WorktreeEnsureWorkspaceResult,
-  WorktreeEntryDto,
-  WorktreeListRequest,
-  WorktreeListResult,
-  WorktreeSealRequest,
-  WorktreeSealResult,
-  WorktreeSelectRequest,
-  WorktreeSelectResult,
-  WorktreeResolveRequest,
-  WorktreeResolveEntry,
-  WorktreeResolveResult,
-} from '@dsh-forge/contracts'
+import type { WorktreeAheadBehindRequest, WorktreeAheadBehindResult, WorktreeBranchesRequest, WorktreeBranchesResult, WorktreeChecksRequest, WorktreeChecksResult, WorktreeCreateRequest, WorktreeCreateResult, ForgeBindingMismatchEvent, WorktreeDeleteRequest, WorktreeDeleteResult, WorktreeEnsureWorkspaceRequest, WorktreeEnsureWorkspaceResult, WorktreeEntryDto, WorktreeListRequest, WorktreeListResult, WorktreeSealRequest, WorktreeSealResult, WorktreeSelectRequest, WorktreeSelectResult, WorktreeResolveRequest, WorktreeResolveEntry, WorktreeResolveResult } from '@dsh-forge/lib-api/dto/worktree'
 import {
   createWorktree,
   defaultBranch as defaultBranchOp,

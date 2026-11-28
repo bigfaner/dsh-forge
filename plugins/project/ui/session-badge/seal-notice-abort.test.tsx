@@ -15,7 +15,7 @@ import {
   markForgeRemoteMountSettled,
   type WorktreeFacesRpc,
 } from '../rpc.js'
-import type { WorktreeSealResult } from '@dsh-forge/contracts'
+import type { WorktreeSealResult } from '@dsh-forge/lib-api/dto/worktree'
 import {
   ForgeWorktreeSealOverlay,
   isContributionUnloadAbort,

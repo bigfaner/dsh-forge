@@ -4,14 +4,8 @@
 // chips 过滤三视图统一（AC4）的数据面：tasks.list（服务端 statusFilter+search+sort）
 // 结果 = 三视图共同 vis 集单源；DAG 的边集由 taskGraph 补充（graph 查询无过滤参——
 // 全子图拓扑 + vis 集客户端交集，原型 vis 层同语义）。视图本地零 RPC 零 effect。
-import {
-  TASK_STATUS_LABELS,
-  TASK_STATUSES,
-  type TaskCard,
-  type TaskGraph,
-  type TaskGraphEdge,
-  type TaskStatus,
-} from '@dsh-forge/contracts'
+import { TASK_STATUS_LABELS, TASK_STATUSES, type TaskStatus } from '@dsh-forge/lib-api/labels'
+import { type TaskCard, type TaskGraph, type TaskGraphEdge } from '@dsh-forge/lib-api/dto/forge'
 import { formatActualDuration } from '../drawer/detail-model.js'
 import { type TaskContainerOption } from './container-pill.js'
 

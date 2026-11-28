@@ -12,7 +12,10 @@
 // 竞态守卫 = 序号递增（快速连续键入不串台）；相位机 loading → ready | error（typed error
 // 经 rpcUiState 三态映射）。effect 仅编排胶水（Node 测面外，归 4.1 装配 + e2e）。
 import { useEffect, useRef, useState } from 'react'
-import type { BugCard, BugStatus, DirFactRow, FeatureCard, TaskStats } from '@dsh-forge/contracts'
+import type { BugCard } from '@dsh-forge/lib-api/dto/bugs'
+import type { BugStatus } from '@dsh-forge/lib-api/labels'
+import type { DirFactRow } from '@dsh-forge/lib-api/dto/project'
+import type { FeatureCard, TaskStats } from '@dsh-forge/lib-api/dto/forge'
 import { subscribeTasksChanged, type ForgeRpcClient, type RpcClientFactory } from '../rpc-channels.js'
 import { typertRpcClientFactory } from '../typert-transport.js'
 import { overviewRpcClientFactory } from './overview-client.js'

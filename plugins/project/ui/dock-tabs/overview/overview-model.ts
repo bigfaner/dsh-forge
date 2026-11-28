@@ -7,14 +7,9 @@
 // 归 core，见 small-domains list-utils sortByActiveThenCreated）。
 // 切换语义（AC3）：子 tab 切换 = 清空搜索 + 清空 chips + 收起全部展开态
 // （ov-head 展开态跨子 tab 保持——路径详情与内容区正交）。
-import {
-  BUG_STATUSES,
-  TASK_STATUSES,
-  type BugCard,
-  type BugStatus,
-  type FeatureCard,
-  type TaskStatus,
-} from '@dsh-forge/contracts'
+import { BUG_STATUSES, TASK_STATUSES, type BugStatus, type TaskStatus } from '@dsh-forge/lib-api/labels'
+import { type BugCard } from '@dsh-forge/lib-api/dto/bugs'
+import { type FeatureCard } from '@dsh-forge/lib-api/dto/forge'
 
 /** 三子 tab（对齐 apps/web：spec | 任务 | Bug 有序三枚；feature 子 tab 已退役，
  *  spec 子 tab 本体由 G3 任务交付） */

@@ -7,7 +7,7 @@
 // 输出完全由注册表条目派生（resolveForgeDirs——lib/path 单源）：listAnchors = 声明集逐键
 // resolve + description；resolveDestination = 带参条目（dest 即键名）派生枚举与参数校验。
 // 本模块只做契约实现与结构适配，零 cordis 依赖。
-import type { DirAnchorFact, DirAuditDiff, DirFactsPort } from '@dsh-forge/lib-api'
+import type { DirAnchorFact, DirAuditDiff, DirFactsPort } from '@dsh-forge/lib-api/ports'
 import {
   FORGE_DIRS_BASE_DECLARATION,
   collectDeclaredDirKeys,

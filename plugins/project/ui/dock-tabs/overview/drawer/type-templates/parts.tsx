@@ -4,7 +4,7 @@
 // 官方件复用优先：无对应官方原子时自绘吃令牌（样式归 ../drawer.css——类前缀 dswf-td-*）。
 import type { ReactNode } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { TaskDocRef } from '@dsh-forge/contracts'
+import type { TaskDocRef } from '@dsh-forge/lib-api/dto/forge'
 
 /** 子标题（目标/结果/参考文档/改动范围/验收标准/症状/命令…——12/600 次色阶梯的类位） */
 export function SubTitle({ children }: { readonly children: ReactNode }): ReactNode {

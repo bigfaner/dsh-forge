@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { StateChip } from '../components.js'
-import type { RegisterProjectInput } from '@dsh-forge/contracts'
+import type { RegisterProjectInput } from '@dsh-forge/lib-api/dto/project'
 import type { BrowserSelection } from './browser-model.js'
 import { DerivedTaskStoreRow, type DerivedTaskStorePhase } from './derived-store-row.js'
 import { DirectoryBrowser } from './DirectoryBrowser.js'

@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { act } from 'react'
 import { installForgeRemoteFace } from '../../rpc.js'
 import type { ForgeRpcClient, SpecCardDto, SpecDetailDto } from '../../rpc.js'
-import type { DirListing } from '@dsh-forge/contracts'
+import type { DirListing } from '@dsh-forge/lib-api/dto/fs'
 import {
   SPEC_STATUSES,
   SPEC_STATUS_LABELS,

@@ -2,7 +2,8 @@
 // overview-model 单测 —— AC3（子 tab 切换清空三态）+ AC5（chips 过滤接口）+ AC1（默认折叠）
 // + 排序/搜索参归一（Hard Rule 服务端承载的模型侧锚：关键词只转查询参，不做本地过滤）。
 import { describe, expect, it } from 'vitest'
-import { BUG_STATUSES, TASK_STATUSES, type BugCard, type BugStatus, type TaskStatus } from '@dsh-forge/contracts'
+import { BUG_STATUSES, TASK_STATUSES, type BugStatus, type TaskStatus } from '@dsh-forge/lib-api/labels'
+import { type BugCard } from '@dsh-forge/lib-api/dto/bugs'
 import {
   OVERVIEW_SORT_LABELS,
   bugStatusCounts,

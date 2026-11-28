@@ -14,7 +14,7 @@
 // 归属：assembly 装配面（域间零横向 import 机检①——bugs 服务只认 resolveProjectKey 缝）。
 import type { DiagEventPayload } from '@dsh-forge/lib-diag'
 import { canonicalizePath, projectKeyOf } from '@dsh-forge/lib-path'
-import type { ProjectsServicePort } from '@dsh-forge/lib-api'
+import type { ProjectsServicePort } from '@dsh-forge/lib-api/ports'
 import type { DomainDb } from '../db/connection.js'
 import type { OfficialRegistryFace } from '../projects/registry-adapter.js'
 

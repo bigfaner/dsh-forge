@@ -5,7 +5,7 @@
 // ——Typert 为官方宿主唯一通路），fail-soft：face 缺席/单键解析失败 = 该行「—」，不
 // 阻断 ov-head 其余内容。
 import { useEffect, useRef, useState } from 'react'
-import type { DirFactRow } from '@dsh-forge/contracts'
+import type { DirFactRow } from '@dsh-forge/lib-api/dto/project'
 import { createForgeRpcClient } from '../../rpc.js'
 
 /** 隐藏集（界面层展示规则——forge_dirs 工具照常返回这些键，界面不列示） */

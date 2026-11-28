@@ -3,7 +3,7 @@
 // 按 slug 聚合）：聚合判据（计数/状态分布/稳定排序 slug）+ kind 不参与分组（容器统一为
 // spec——仅 wire 回传用、取卡自身值原样保留、缺席回退 feature）。
 import { describe, expect, it } from 'vitest'
-import type { TaskCard } from '@dsh-forge/contracts'
+import type { TaskCard } from '@dsh-forge/lib-api/dto/forge'
 import { ALL_CONTAINERS_LABEL, ALL_CONTAINERS_MENU_ID, taskContainerOptionsFromCards } from './container-pill.js'
 import { cardFixture } from './task-tab-model.test.js'
 

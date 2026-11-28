@@ -13,7 +13,7 @@ import {
   stubProjectsService,
   type SeamCtxFace,
 } from './seams.js'
-import type { ProjectsServicePort, WorktreeServicePort } from '@dsh-forge/lib-api'
+import type { ProjectsServicePort, WorktreeServicePort } from '@dsh-forge/lib-api/ports'
 
 /** cordis reflect 窄面桩（provide 记账 + get 可编程——index.test.ts ctxStub 同构） */
 function ctxStub(injected: Record<string, unknown> = {}, provideFail = false): {

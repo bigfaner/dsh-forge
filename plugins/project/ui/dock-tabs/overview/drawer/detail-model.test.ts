@@ -2,7 +2,8 @@
 // detail-model 单测 —— TaskDetail → 抽屉投影纯函数（AC1 kv chips / AC4 目标·结果与改动范围 /
 // AC6 实际耗时格式）。数据形状 = contracts TaskDetail（2.6 core taskDetail 水化口径）。
 import { describe, expect, it } from 'vitest'
-import type { TaskDetail, TaskDocRef, TaskRecordEntry, TaskType } from '@dsh-forge/contracts'
+import type { TaskDetail, TaskDocRef, TaskRecordEntry } from '@dsh-forge/lib-api/dto/forge'
+import type { TaskType } from '@dsh-forge/lib-api/labels'
 import {
   actualScopeOf,
   formatActualDuration,

@@ -5,7 +5,8 @@
 //（运行期边界①），本地镜像声明（ModeChip MODES 同先例）；值漂移由 5.1 契约 pin 与
 // e2e 对账承接。判据输入纪律：**stats 单源**（tasks.stats 未过滤七态计数）——load.cards
 // 是服务端 statusFilter/search 过滤集，不可作可用态判据（过滤出未终态 ≠ 容器有未终态）。
-import type { TaskCard, TaskStatus, TaskStats } from '@dsh-forge/contracts'
+import type { TaskCard, TaskStats } from '@dsh-forge/lib-api/dto/forge'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 
 /** 终态集（相位推导机口径同源镜像：completed/skipped/rejected——rejected 不满足前置但计入终态） */
 export const TERMINAL_TASK_STATUSES: readonly TaskStatus[] = ['completed', 'skipped', 'rejected']

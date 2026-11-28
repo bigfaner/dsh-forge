@@ -10,7 +10,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import './chip.css'
 import { aheadBehindInline, aheadBehindSegments } from '../worktree-picker/model.js'
-import type { AheadBehind } from '@dsh-forge/contracts'
+import type { AheadBehind } from '@dsh-forge/lib-api/dto/worktree'
 import { IconBranchOutlineRegular } from '../icons.js'
 import { HoverCard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useWorktreeSeal } from './seal-notice.js'

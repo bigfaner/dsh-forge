@@ -8,7 +8,7 @@
 // 封存 overlay 挂载面 ForgeWorktreeSealOverlay + branch 漂移 banner。
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import type { WorktreeSealResult } from '@dsh-forge/contracts'
+import type { WorktreeSealResult } from '@dsh-forge/lib-api/dto/worktree'
 import { IconWarningTriangleOutlineRegular } from '../icons.js'
 import {
   createForgeRpcClient,

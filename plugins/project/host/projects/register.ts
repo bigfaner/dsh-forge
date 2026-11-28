@@ -6,7 +6,8 @@
 // 不变量承袭：R4 双行同事务（DAO 单方法）；R1 撞键判据错误码级指 project_workspaces.ws_path
 // （SQLITE_CONSTRAINT_UNIQUE + 表名模板），撞键 → 重入步骤 1 自愈一次。
 import { canonicalizePath, classifyRegistrationCollision, projectKeyOf, type RegistrationCollision } from '@dsh-forge/lib-path'
-import type { RegisterProjectInput, RegisterResult, SuspectedMoveData } from '@dsh-forge/lib-api'
+import type { RegisterProjectInput, RegisterResult } from '@dsh-forge/lib-api/dto/project'
+import type { SuspectedMoveData } from '@dsh-forge/lib-api/errors'
 import type { DiagEventPayload } from '@dsh-forge/lib-diag'
 import type { ProjectsRepo, WorkspacesRepo } from '../db/repositories/index.js'
 import { CompensationError, ProjectWriteError, SuspectedMoveError, WorkspaceCreateError, diag } from './errors.js'

@@ -10,14 +10,8 @@
 // 消费面统一 injectProjectSeam（ctx.inject 路径）：注入缺席/劣形三形态（注册值非函数 /
 //   实例化抛错 / 首调抛错）fail-soft 退兜底——劣形清单程序化可识别（code-design §6 S1）。
 import type { DiagLevel } from '@dsh-forge/lib-diag'
-import type {
-  BugsServicePort,
-  DirFactsPort,
-  ProjectResolutionPort,
-  ProjectsServicePort,
-  WorktreeSealResult,
-  WorktreeServicePort,
-} from '@dsh-forge/lib-api'
+import type { BugsServicePort, DirFactsPort, ProjectResolutionPort, ProjectsServicePort, WorktreeServicePort } from '@dsh-forge/lib-api/ports'
+import type { WorktreeSealResult } from '@dsh-forge/lib-api/dto/worktree'
 import { createDefaultExtensionPoints } from '../worktrees/extension-points.js'
 import { WORKTREE_DIR_RELATIVE } from '../worktrees/service.js'
 

@@ -5,7 +5,8 @@
 // 重跑零陈旧滞留 = 受控 result（undefined = 不呈现；新结果整体替换——计时随 result 重置）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { TaskStatus, ViolationKind } from '@dsh-forge/contracts'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
+import type { ViolationKind } from '@dsh-forge/lib-api/dto/forge'
 import type { DiagRecordLine, MessageContainer, TaskFailureDiagInput } from '../message-format.js'
 import {
   DIAG_TOAST_FAIL_MS,

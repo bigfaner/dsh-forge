@@ -11,7 +11,8 @@
 // commit 短哈希，点击开该条详情）。链数据自 listBugs 响应 BugCard.recurrenceOf 前驱指针
 // 查询期展开（零链行语言完全不变）。
 import { useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import { BUG_STATUSES, BUG_STATUS_LABELS, type BugCard, type BugStatus } from '@dsh-forge/contracts'
+import { BUG_STATUSES, BUG_STATUS_LABELS, type BugStatus } from '@dsh-forge/lib-api/labels'
+import { type BugCard } from '@dsh-forge/lib-api/dto/bugs'
 import { StateDot, Tag, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState } from '../../../components.js'
 import { diagStampOf } from '../message-format.js'

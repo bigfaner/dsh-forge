@@ -18,8 +18,8 @@ import {
   ProjectWorktreesSection,
   registerWorktreeDetailSection,
 } from './index.js'
-import type { ProjectSummary } from '@dsh-forge/contracts'
-import type { WorktreeEntryDto } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
+import type { WorktreeEntryDto } from '@dsh-forge/lib-api/dto/worktree'
 import type { WorktreeFacesRpc } from '../rpc.js'
 
 const ROOT = 'C:/repo'

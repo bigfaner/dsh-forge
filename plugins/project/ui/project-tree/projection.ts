@@ -9,7 +9,8 @@
 // fail-soft 口径：单项目 worktree.list 失败 = 该项目 worktrees 空列（行保留——项目行
 // 不因单侧数据链断裂消失），错误摘要挂 node.error 供上层 diag/空态呈现；projects.list
 // 失败归调用面 phase（use-project-tree）。
-import type { ProjectSummary, WorktreeEntryDto, WorktreeListResult } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
+import type { WorktreeEntryDto, WorktreeListResult } from '@dsh-forge/lib-api/dto/worktree'
 
 /** 层级投影行：项目行 + 其 worktree 清单（列表序 = projects 入参序） */
 export interface ProjectWorktreeNode {

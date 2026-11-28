@@ -5,11 +5,8 @@
 // 列序 = contracts TASK_STATUSES 单源（swimColumnsOf 投影）；卡片双载体（onOpenTask
 // 在场 = 可点 role=button；缺席 = 静态）。
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
-import {
-  TASK_STATUS_LABELS,
-  type TaskCard,
-  type TaskStatus,
-} from '@dsh-forge/contracts'
+import { TASK_STATUS_LABELS, type TaskStatus } from '@dsh-forge/lib-api/labels'
+import { type TaskCard } from '@dsh-forge/lib-api/dto/forge'
 import { StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { STATUS_DOT_STATE } from '../status-chips.js'
 import { formatActualDuration, taskKeyLabel } from '../drawer/detail-model.js'

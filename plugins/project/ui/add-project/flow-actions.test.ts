@@ -7,7 +7,8 @@
 // reveal 开表单相位模态 + 取消干净退出 + 在途重入守卫 + 桥缺席现行形态零变化。
 // setState 同形内存替身直落转移语义（form-actions.test 同形制）；register = 计数桩。
 import { describe, expect, it } from 'vitest'
-import type { DirListing, RegisterProjectInput, RegisterResult } from '@dsh-forge/contracts'
+import type { DirListing } from '@dsh-forge/lib-api/dto/fs'
+import type { RegisterProjectInput, RegisterResult } from '@dsh-forge/lib-api/dto/project'
 import { RpcClientError } from '../rpc.js'
 import type { BrowserSelection } from './browser-model.js'
 import { flowActions, type FlowActions, type FlowActionsDeps, type RegisterSource } from './flow-actions.js'

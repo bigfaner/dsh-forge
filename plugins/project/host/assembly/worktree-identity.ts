@@ -20,9 +20,9 @@
 // devDependencies 承载（bundle-host.mjs 构建期内联进 dist——产物自含，EXTERNAL 仅 @deepseek-ai/*）。
 import { join } from 'node:path'
 import { createGitIdentityPort } from '@dsh-forge/lib-git'
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { normalizeFsPath } from '@dsh-forge/lib-path'
 import { resolveMainCheckoutRoot, spawnGitWorktreePorcelain, type GitPorcelainRunner } from '@dsh-forge/lib-path/project-root'
-import type { Project, ProjectService, ProjectSummary } from '@dsh-forge/contracts'
+import type { Project, ProjectService, ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 
 /** GitIdentityPort 归并键窄面（结构化本地声明——锚查询，零包类型依赖） */
 interface GitAnchorFace {

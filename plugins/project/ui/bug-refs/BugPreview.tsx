@@ -7,7 +7,8 @@
 // commit/worktree/branch、unresolved 未修原因、open 无证据区。样式沿 bug-dialog.css
 // 行语言（双列表单 + 官方令牌，dswf-br-* 自持皮——pane 体非 dialog，零拖移壳）。
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { BUG_STATUS_LABELS, type BugCard } from '@dsh-forge/contracts'
+import { BUG_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
+import { type BugCard } from '@dsh-forge/lib-api/dto/bugs'
 import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState } from '../components.js'
 import { createForgeRpcClient, type RpcClientFactory } from '../rpc.js'

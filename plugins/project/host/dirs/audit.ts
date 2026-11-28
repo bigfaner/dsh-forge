@@ -10,7 +10,7 @@
 // 诊断发射与声明拉取降级均经装配期注入缝（零上游 import、不直落 console）。
 import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
+import { FORGE_DIR_SEGMENT } from '@dsh-forge/lib-api/forge-dir-segments'
 import type { ForgeDirDeclaration } from '@dsh-forge/lib-path'
 import { workspacePartitionsOf, type DirKeysPullDiagFace } from './anchors.js'
 import { declaredDeclarationsOf, type DirCommandInvocation, type DirCommandResult, type ForgeDirsCommandDeps } from './init.js'

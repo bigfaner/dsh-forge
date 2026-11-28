@@ -3,7 +3,8 @@
 // 参考文档 chip 点击锚（refs 水化 = core taskDetail）。渲染面 = renderToStaticMarkup。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { TASK_TYPES, type TaskDocRef } from '@dsh-forge/contracts'
+import { TASK_TYPES } from '@dsh-forge/lib-api/labels'
+import { type TaskDocRef } from '@dsh-forge/lib-api/dto/forge'
 import { detailFixture } from './detail-model.test.js'
 import {
   TASK_TYPE_FAMILY,

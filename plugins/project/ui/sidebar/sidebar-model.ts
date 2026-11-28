@@ -6,7 +6,7 @@
 //     SessionListState / WorkspaceSnapshot——插件侧真身注入，禁 import dsh 运行期包，
 //     与 shell/dsh-globals.d.ts 同一镜像纪律）。
 // 状态点四态 = 官方 StateDot 语义（warning 用户注意 / done 完成 / ongoing 进行 / idle 静默）。
-import type { ProjectSummary } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { normalizeFsPath } from '@dsh-forge/lib-path/path-key'
 import { timeLabelZh } from '../components.js'

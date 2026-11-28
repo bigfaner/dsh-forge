@@ -13,7 +13,7 @@
 // 错误文案复用 ErrorBar 形制（components/ErrorBar——onRetry 缺席 = 纯呈现面）；
 // 骨架复用 SkeletonRows（单行）。样式归 form.css（dswf-dsr-* 域节——本域零样式散置）。
 import type { ReactNode } from 'react'
-import type { SuspectedMoveData } from '@dsh-forge/contracts'
+import type { SuspectedMoveData } from '@dsh-forge/lib-api/errors'
 import { ErrorBar, SkeletonRows } from '../components.js'
 import './form.css'
 

@@ -10,7 +10,8 @@ import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { errMessage } from "@dsh-forge/lib-util";
 import { classifyRegistrationCollision, deriveTaskStoreDir as deriveStoreDir } from "@dsh-forge/lib-path";
-import type { DeriveTaskStoreDirResult, SuspectedMoveData } from "@dsh-forge/contracts";
+import type { DeriveTaskStoreDirResult } from "@dsh-forge/lib-api/dto/forge";
+import type { SuspectedMoveData } from "@dsh-forge/lib-api/errors";
 
 /**
  * ERR_SUSPECTED_MOVE typed 拒绝（形状 = projects/errors SuspectedMoveError 同构——

@@ -6,7 +6,7 @@
 // git 失败回退记录语由 core 填入——单元素审计行直接呈现）。
 import type { ReactNode } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { TaskDetail } from '@dsh-forge/contracts'
+import type { TaskDetail } from '@dsh-forge/lib-api/dto/forge'
 import { actualScopeOf, isTerminalStatus, scopeDiff, varsList } from '../detail-model.js'
 import { Checklist, PlainList, RefChips, SubTitle } from './parts.js'
 

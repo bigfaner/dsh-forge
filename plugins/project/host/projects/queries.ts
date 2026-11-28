@@ -1,7 +1,7 @@
 // queries——项目查询面（plugin-project 1.10）：四键字典序读面（sort_order→created_at→id，
 // NULL 垫底）+ 归档过滤 + 标题对齐（registry title 读面）；读路径自证：project_key ≠
 // f(main 行 ws_path) 投影 = suspected-move 语义——emitDiag warn 留痕 + 拒自动改（显式迁移动词面）。
-import type { Project, ProjectSummary } from '@dsh-forge/lib-api'
+import type { Project, ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import { canonicalizePath, projectKeyOf } from '@dsh-forge/lib-path'
 import type { DiagEventPayload } from '@dsh-forge/lib-diag'
 import type { ProjectsRepo, WorkspacesRepo } from '../db/repositories/index.js'

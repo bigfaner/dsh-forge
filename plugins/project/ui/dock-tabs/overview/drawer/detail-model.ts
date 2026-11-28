@@ -3,7 +3,8 @@
 // AC6 实际耗时格式；数据形状 = contracts TaskDetail——2.6 core taskDetail 水化口径）。
 // 载荷语义锚 ui-design v15（实际耗时仅 completed、core 水化 actualDurationMs——UI 只格式化）/
 // v10（改动范围：预期声明 ↔ 实际 commit 查找，无提交回退记录语）/ v13（目标/结果上下展示）。
-import { TASK_STATUS_LABELS, type TaskDetail, type TaskGateReport, type TaskPrerequisiteSummary, type TaskPriority, type TaskRecordEntry } from '@dsh-forge/contracts'
+import { TASK_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
+import { type TaskDetail, type TaskGateReport, type TaskPrerequisiteSummary, type TaskPriority, type TaskRecordEntry } from '@dsh-forge/lib-api/dto/forge'
 
 /** 任务自然键呈现（界面展示 = slug/localId——身份解析约定） */
 export function taskKeyLabel(slug: string, localId: string): string {

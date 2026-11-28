@@ -62,7 +62,7 @@ describe("包骨架结构（提案 §二「目录布局」三目录单包）", (
       include?: string[];
     };
     expect(host.include).toEqual(["host"]);
-    // AheadBehind 已落 @dsh-forge/contracts dto——ui 面经 contracts 消费纯类型，
+    // AheadBehind 已落 @dsh-forge/lib-api dto——ui 面经 lib-api 消费纯类型，
     // client 链不再收编 host/worktrees（face 纯度恢复）。
     expect(client.include).toEqual(["ui"]);
     expect(host.references?.map((r) => r.path)).toContain("./tsconfig.client.json");

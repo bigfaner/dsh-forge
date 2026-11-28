@@ -3,7 +3,7 @@
 // （同 2.6/2.7 组件测法）；导航/选中转移的语义面在 browser-model.test、数据源在 dir-source.test。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { DirListing } from '@dsh-forge/contracts'
+import type { DirListing } from '@dsh-forge/lib-api/dto/fs'
 import { DirectoryBrowser, DirectoryBrowserView } from './DirectoryBrowser.js'
 import { initialBrowserState, selectEntry } from './browser-model.js'
 import type { ListingPhase } from './dir-source.js'
