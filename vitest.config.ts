@@ -59,6 +59,8 @@ export default defineConfig({
       { test: { name: 'lib-util', include: ['lib/util/src/**/*.test.ts'] } },
       { test: { name: 'lib-diag', include: ['lib/diag/src/**/*.test.ts'] } },
       { test: { name: 'lib-path', include: ['lib/path/src/**/*.test.ts'] } },
+      // plugins-remediation-m1 3.1：lib/git（identity-anchor 迁入单测——tests/ 域池）
+      { test: { name: 'lib-git', include: ['lib/git/tests/**/*.test.ts'] } },
       // host-integration-fixes 1.2：lib/ui（slot 键 + priority 约定具名常量单源）
       { test: { name: 'lib-ui', include: ['lib/ui/src/**/*.test.ts'] } },
       // plugin-spec-roadmaps 1.1：lib/status-machine（泛型状态机 lib 本体单测）

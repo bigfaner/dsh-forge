@@ -382,6 +382,16 @@ importers:
         specifier: 24.19.0
         version: 24.19.0
 
+  lib/git:
+    dependencies:
+      '@dsh-forge/lib-path':
+        specifier: workspace:*
+        version: link:../path
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
+
   lib/path:
     dependencies:
       '@dsh-forge/contracts':

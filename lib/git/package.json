@@ -1,0 +1,27 @@
+{
+  "name": "@dsh-forge/lib-git",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "公共 git 子包：身份归并锚（identity-anchor 自 core 迁入）——common dir 锚、worktree 清单（porcelain 解析复用 @dsh-forge/lib-path/project-root 单源）、主 worktree 判定。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@dsh-forge/lib-path": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0"
+  }
+}

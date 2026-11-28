@@ -17,6 +17,9 @@
       "path": "lib/path"
     },
     {
+      "path": "lib/git"
+    },
+    {
       "path": "lib/ui"
     },
     {
