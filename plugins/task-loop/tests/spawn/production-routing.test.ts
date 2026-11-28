@@ -1,6 +1,6 @@
 // 生产装配路径单测（bug 14984d4f——「单测桩路径 ≠ 生产装配路径」封口）：既有单测注入
 // 桩 spawn，桩绿不证真机——本文件走**真装配链**：真实 faces 档案取用缝（resolver）→
-// 真实 WorkerDispatchProfile 投影（createWorkerProfileProjection——index.ts 装配同源）→
+// 真实 WorkerDispatchProfile 投影（faces 装配同源）→
 // 真实 spawnClaimed 组装（workerAgentOptionsOf + reconcileWorkerReasoning）→ 真实
 // createInProcessDriverSpawn 适配层 → 上游 startInProcessRun 请求捕获。仅上游官方包
 // 边界（外部依赖装配面，正本 docs/conventions/external-dependency-verification.md）以
