@@ -22,7 +22,7 @@
   font-variant-numeric: tabular-nums;
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .trigger[aria-expanded='true'] {

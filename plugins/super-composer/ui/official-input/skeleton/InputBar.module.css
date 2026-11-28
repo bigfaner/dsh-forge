@@ -97,7 +97,7 @@
    inside the rounded box prevents clipped corner pixels from reading heavier. */
 .cardWorkspaceTrigger {
   --dsw-elevation-stroke-color: transparent;
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .cardWorkspaceTrigger::after {
@@ -250,7 +250,7 @@
 }
 
 .input[aria-haspopup='menu'] {
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 /* Hero (centered empty-state) keeps the 2-line floor (figma min-h 52 = ~2 × 24
@@ -345,7 +345,7 @@
   corner-shape: round;
   background: var(--dsw-specific-selector);
   color: var(--dsw-alias-label-primary);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 @media (hover: hover) {
@@ -378,7 +378,7 @@
   line-height: 20px;
   font-weight: 500;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   appearance: none;
 }
 
@@ -409,7 +409,7 @@
   /* On-color ink, not the foreground token: the arrow stays white on the blue
      fill in both themes (design 34:10465). */
   color: var(--dsw-alias-label-on-color);
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
   transition: background-color 100ms ease;
   /* Opts out of the row's 2px downward shift (.row top pad): the send circle
      keeps its original seat while the smaller chips sit lower. Transform, not
@@ -462,7 +462,7 @@
   background: transparent;
   color: inherit;
   font-size: 12px;
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .standardControls { display: flex; align-items: center; gap: 12px; min-width: 0; }

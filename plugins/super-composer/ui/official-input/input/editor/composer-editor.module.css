@@ -16,7 +16,7 @@
 }
 
 .openable {
-  cursor: pointer;
+  cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .textRef {
