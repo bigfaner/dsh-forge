@@ -13,7 +13,7 @@ import { canonicalWsPath } from '../host/storage/registry.js'
 
 // 被测口径 = knowledge 派生键（lib projectKeyOf · canonical 基准 ws_path）
 const projectKeyOf = (wsPath: string): string => libProjectKeyOf(canonicalWsPath(wsPath))
-import type { KnowledgePromptSection, KnowledgeToolDefinition, ScopedAgentFace } from '../host/tools/index.js'
+import type { KnowledgeAssembleContext, KnowledgePromptSection, KnowledgeToolDefinition } from '../host/index.js'
 import type { BrowseKnowledgeService } from '../host/service/index.js'
 import type { DiagEventPayload } from '@dsh-forge/lib-api/diag'
 
@@ -32,13 +32,12 @@ afterAll(() => {
   }
 })
 
-/** 临时 runtime：服务表 + 注册捕获 + provide 捕获 + disposer 记账（stage③ C2：全局段注册退役——段改走 agent/created scoped 接线） */
+/** 临时 runtime：服务表 + 注册捕获 + provide 捕获 + disposer 记账（提示词两段均全局注册——section 捕获面统一） */
 class TempRuntime {
   readonly registeredTools: KnowledgeToolDefinition[] = []
   readonly sections: KnowledgePromptSection[] = []
   readonly provided = new Map<string, unknown>()
-  readonly agentHandlers: Array<(payload: { agent: ScopedAgentFace }) => unknown> = []
-  private readonly disposed = { tools: 0, sections: 0, listeners: 0 }
+  private readonly disposed = { tools: 0, sections: 0 }
   private readonly disposedServices: string[] = []
   private dir: string | undefined
 
@@ -65,15 +64,6 @@ class TempRuntime {
             this.disposed.sections += 1
           }
         },
-      },
-      on: (event: string, handler: (payload: { agent: ScopedAgentFace }) => unknown) => {
-        // 仅记账 agent/created 订阅（internal/service 等其它事件域订阅——如
-        // registerBuiltinExpertsRoot 迟到补偿挂点——不属本 fake 的记账面）。
-        if (event !== 'agent/created') return () => {}
-        this.agentHandlers.push(handler)
-        return () => {
-          this.disposed.listeners += 1
-        }
       },
       reflect: {
         get: () => undefined,
@@ -208,8 +198,8 @@ describe('AC3 inject 面（零 core 依赖——A2 服务切换后仅 dsh 官方
   })
 })
 
-describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词接线（stage③ C2）', () => {
-  it('默认装配（自持库 dbFile）：provide knowledge 服务（八法 + 写门三法）+ 六 tool + 静态段全局注册 + agent/created 订阅', () => {
+describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + 提示词两段全局注册', () => {
+  it('默认装配（自持库 dbFile）：provide knowledge 服务（八法 + 写门三法）+ 六 tool + 静态段与动态段各全局注册一次', () => {
     const rt = freshRt()
     const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
     const service = rt.provided.get(KNOWLEDGE_SERVICE_NAME) as BrowseKnowledgeService
@@ -228,18 +218,19 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词�
     ])
     // 静态段全局注册（fix-11 裁决 B 侧 Interface 3 静态回归——plugin load 时点先于一切
     // 会话装配，首轮请求即在场；bug be4bac44 判例：scoped 注册晚于首轮装配）
-    expect(rt.sections).toHaveLength(1)
-    expect(rt.sections[0]?.name).toBe('forge:knowledge')
+    expect(rt.sections.map((s) => s.name)).toEqual(['forge:knowledge', 'forge:knowledge-domains'])
     expect(rt.sections[0]?.order).toBe(910)
-    expect(typeof rt.sections[0]!.text).toBe('string')
+    expect(typeof rt.sections[0]?.text).toBe('string')
     expect(rt.sections[0]!.text as string).toContain('<knowledge-base>')
     expect(rt.sections[0]!.text as string).not.toContain('knowledge_write') // 写入面零工具说明（检索面指针行豁免）
     expect(rt.sections[0]!.text as string).not.toContain('knowledge_supersede')
-    expect(rt.agentHandlers).toHaveLength(1) // agent/created 订阅在场（scoped 接线——动态段）
+    // 动态段全局注册（order 911，text 函数形态——每步按装配上下文求值）
+    expect(rt.sections[1]?.order).toBe(911)
+    expect(typeof rt.sections[1]?.text).toBe('function')
     dispose()
   })
 
-  it('scoped 接线两态：绑定会话（cwd 命中绑定行 + 注册库在场）在该会话 scope 注册动态段 911；未绑定会话零注册', async () => {
+  it('动态段两态：绑定会话（cwd 命中绑定行 + 注册库在场）每步按 context.agent 求值得域树；未绑定会话空串', async () => {
     const rt = freshRt()
     const root = mkdtempSync(join(tmpdir(), 'dsh-forge-kn-scoped-'))
     try {
@@ -254,35 +245,28 @@ describe('AC1/AC2 装配：服务 provide + 六 tool 注册 + scoped 提示词�
         registerProject(q: { wsPath: string; projectId: string }): Promise<unknown>
       }
       await service.registerProject({ wsPath: wsDir, projectId: 'p-5' })
-      const fire = (cwd: string | undefined): KnowledgePromptSection[] => {
-        const sections: KnowledgePromptSection[] = []
-        const agent = {
-          session: { id: 's', ...(cwd === undefined ? {} : { header: { cwd } }) },
-          ctx: { systemPrompt: { section: (s: KnowledgePromptSection) => (sections.push(s), () => undefined) } },
-        }
-        for (const h of rt.agentHandlers) h({ agent })
-        return sections
-      }
-      // 绑定 + 注册库在场 → 动态段（静态段已全局注册，scoped 不重复）
-      const bound = fire(wsDir)
-      expect(bound.map((s) => s.name)).toEqual(['forge:knowledge-domains'])
-      expect(bound[0]?.order).toBe(911)
-      // 未绑定 cwd → 零注册
-      expect(fire(join(root, 'other'))).toEqual([])
-      // 无 cwd → 零注册
-      expect(fire(undefined)).toEqual([])
+      const text = rt.sections.find((s) => s.name === 'forge:knowledge-domains')!.text as (context: KnowledgeAssembleContext) => string
+      const assemble = (cwd: string | undefined): string =>
+        text({ agent: { session: { id: 's', ...(cwd === undefined ? {} : { header: { cwd } }) } } })
+      // 绑定 + 注册库在场 → 域树段（空知识库零域 → 空串；求值不抛即链路通）
+      expect(() => assemble(wsDir)).not.toThrow()
+      // 未绑定 cwd → 空串（不触库解析失败）
+      expect(assemble(join(root, 'other'))).toBe('')
+      // 无 cwd / 无 agent → 空串
+      expect(assemble(undefined)).toBe('')
+      expect(text({})).toBe('')
       dispose()
     } finally {
       rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 
-  it('disposer 全注销（服务 provide + tool×7 + 静态全局段 + agent/created 订阅×1，各恰一次；自持库关闭）', () => {
+  it('disposer 全注销（服务 provide + tool×7 + 全局段×2，各恰一次；自持库关闭）', () => {
     const rt = freshRt()
     const dispose = knowledgePlugin(rt.ctx(), { dbFile: rt.dbFile() })
     dispose()
     expect(rt.provided.size).toBe(0)
-    expect(rt.disposedCounts()).toEqual({ tools: 7, sections: 1, listeners: 1, services: [KNOWLEDGE_SERVICE_NAME, 'dirKeys.knowledge'] })
+    expect(rt.disposedCounts()).toEqual({ tools: 7, sections: 2, services: [KNOWLEDGE_SERVICE_NAME, 'dirKeys.knowledge'] })
   })
 
   it('config.projects 绑定表进入解析链（装配缝消费验证——工具面 cwd→projectId）', async () => {

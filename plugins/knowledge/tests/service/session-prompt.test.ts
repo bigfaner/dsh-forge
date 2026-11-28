@@ -1,33 +1,21 @@
-// stage③ C2 单测——session-bind scoped 注册接线（提案 §2.2 裁决 #9）：
-// 绑定会话在该会话 scope 注册动态段（闭包捕获 ws_path）、未绑定不注册、
-// 注册库消失动态段空返 ''、fail-soft。静态段归插件工厂全局注册
-//（fix-11 裁决 B 侧 Interface 3 静态注册——plugin.test.ts 钉），不经 scoped 缝。
-import { describe, expect, it } from 'vitest'
-import {
-  KNOWLEDGE_DOMAINS_SECTION_NAME,
-  KNOWLEDGE_DOMAINS_SECTION_ORDER,
-} from '../../host/prompt/index.js'
-import { bindKnowledgePromptSections, registerKnowledgeScopedPrompt } from '../../host/service/session-prompt.js'
-import type { KnowledgePromptSection, ScopedAgentFace } from '../../host/tools/faces.js'
+// 单测——forge:knowledge-domains 动态段每步求值（stage③ C2 / 提案 §2.2 裁决 #9）：
+// 全局注册一处，text(context) 每步按 context.agent 现取会话 cwd → 解析项目 → 域树实时聚合；
+// 未绑定 / 注册库缺席 / agent 缺席空返 ''、求值抛错 fail-soft 留痕。规则段 forge:knowledge
+// 为静态全局注册（plugin.test.ts 钉），不经本文件。
+import { describe, expect, it, vi } from 'vitest'
+import { KNOWLEDGE_DOMAINS_SECTION_ORDER } from '../../host/prompt/index.js'
+import { createKnowledgeDomainsText, type KnowledgePromptBindDeps } from '../../host/service/session-prompt.js'
 import type { DomainIndexRow } from '../../host/service/internal.js'
 
 const WS = 'C:/ws/a'
 const OTHER = 'C:/ws/other'
 
-/** 假装配：捕获 agent/created 订阅器；注册库集合与顶域供数可变（实时求值断言用） */
+/** 假供数面：注册库集合与顶域聚合可变（每步求值断言用） */
 function mount() {
-  const handlers: Array<(payload: { agent: ScopedAgentFace }) => unknown> = []
   const registered = new Set<string>([WS])
   const stats: DomainIndexRow[] = [{ domainPath: 'conventions', entryCount: 3, depth: 1, description: '约束' }]
   const topCalls: string[] = []
-  let offCalls = 0
-  const dispose = registerKnowledgeScopedPrompt({
-    on: (_event, handler) => {
-      handlers.push(handler)
-      return () => {
-        offCalls += 1
-      }
-    },
+  const deps: KnowledgePromptBindDeps = {
     resolveProjectId: (cwd) => (cwd === WS ? 'p-1' : undefined),
     resolveWsPath: (projectId) => (projectId === 'p-1' ? WS : undefined),
     isRegistered: (wsPath) => registered.has(wsPath),
@@ -35,113 +23,85 @@ function mount() {
       topCalls.push(wsPath)
       return [...stats]
     },
-  })
-  /** 模拟一次 agent/created：返回该 agent scope 捕获到的段集 */
-  const fire = (agent: unknown): KnowledgePromptSection[] => {
-    const sections: KnowledgePromptSection[] = []
-    const scoped = agent as { ctx?: { systemPrompt?: { section(s: KnowledgePromptSection): () => void } } }
-    const real = scoped.ctx?.systemPrompt
-    if (real !== undefined) {
-      // 借真注册面：以捕获包装层替换（保持 agent 结构不动）
-      const wrapped = { section: (s: KnowledgePromptSection) => (sections.push(s), () => undefined) }
-      ;(scoped.ctx as { systemPrompt: unknown }).systemPrompt = wrapped
-    }
-    for (const h of handlers) h({ agent: agent as ScopedAgentFace })
-    if (real !== undefined) (scoped.ctx as { systemPrompt: unknown }).systemPrompt = real
-    return sections
   }
-  /** 构造假 agent（session cwd + agent-scoped ctx 段捕获面） */
-  const agent = (cwd: string | undefined, withCtx = true): unknown => ({
-    session: { id: 's-1', ...(cwd === undefined ? {} : { header: { cwd } }) },
-    ...(withCtx
-      ? { ctx: { systemPrompt: { section: (s: KnowledgePromptSection) => (([] as KnowledgePromptSection[]).push(s), () => undefined) } } }
-      : {}),
-  })
-  return { dispose, off: () => offCalls, fire, agent, registered, stats, topCalls }
+  return { deps, registered, stats, topCalls }
 }
 
-describe('绑定会话注入（session-bind 时刻 scoped 注册）', () => {
-  it('cwd 命中绑定行且注册库在场 → 该会话 scope 注册动态段 911；text 闭包实时求值（顶域聚合经 ws_path）', () => {
+const agentOf = (cwd: unknown) => ({ agent: { session: { id: 's-1', header: { cwd } } } })
+
+describe('绑定会话注入（每步按 context.agent 现取 cwd）', () => {
+  it('cwd 命中绑定行且注册库在场 → 渲染域树（顶域聚合经解析出的 ws_path）', () => {
     const r = mount()
-    const sections = r.fire(r.agent(WS))
-    expect(sections.map((s) => s.name)).toEqual([KNOWLEDGE_DOMAINS_SECTION_NAME])
-    expect(sections[0]?.order).toBe(911)
-    const dynamic = (sections[0]!.text as () => string)()
-    expect(dynamic).toContain('conventions(3 篇) — 约束')
-    expect(r.topCalls).toEqual([WS]) // 闭包捕获 ws_path——每 turn 求值透传
+    const text = createKnowledgeDomainsText(r.deps)
+    expect(text(agentOf(WS))).toContain('conventions(3 篇) — 约束')
+    expect(r.topCalls).toEqual([WS])
+    expect(KNOWLEDGE_DOMAINS_SECTION_ORDER).toBe(911)
   })
 
-  it('注册库消失（注销后）动态段空返 \'\'（空段在官方装配期自然退场）', () => {
+  it('实时性：域树随顶域聚合变化（write 新域 → 下一步求值得新清单，非首步冻结）', () => {
     const r = mount()
-    const sections = r.fire(r.agent(WS))
-    r.registered.delete(WS)
-    expect((sections[0]!.text as () => string)()).toBe('')
-  })
-
-  it('实时性：动态段随顶域聚合变化（write 新域 → 下一 turn 求值得新清单，非注册时点冻结）', () => {
-    const r = mount()
-    const sections = r.fire(r.agent(WS))
+    const text = createKnowledgeDomainsText(r.deps)
+    expect(text(agentOf(WS))).not.toContain('fresh')
     r.stats.push({ domainPath: 'fresh', entryCount: 1, depth: 1, description: null })
-    const dynamic = (sections[0]!.text as () => string)()
-    expect(dynamic).toContain('conventions(3 篇) — 约束')
-    expect(dynamic).toContain('fresh(1 篇) — <无简介>')
+    const next = text(agentOf(WS))
+    expect(next).toContain('conventions(3 篇) — 约束')
+    expect(next).toContain('fresh(1 篇) — <无简介>')
+  })
+
+  it('实时性：同一 text 函数对不同会话各按自身 cwd 求值（不缓存首步的会话绑定）', () => {
+    const r = mount()
+    const text = createKnowledgeDomainsText(r.deps)
+    expect(text(agentOf(OTHER))).toBe('')
+    expect(r.topCalls).toEqual([])
+    expect(text(agentOf(WS))).toContain('conventions')
+    r.registered.delete(WS)
+    expect(text(agentOf(WS))).toBe('') // 注册库消失（注销后）空返退场
   })
 })
 
-describe('未绑定不注册（自然退场）', () => {
-  it('cwd 无绑定行 → 该会话 scope 零注册', () => {
+describe('未绑定 / 无会话上下文（自然退场）', () => {
+  it('cwd 无绑定行 → 空串', () => {
     const r = mount()
-    expect(r.fire(r.agent(OTHER))).toEqual([])
+    expect(createKnowledgeDomainsText(r.deps)(agentOf(OTHER))).toBe('')
   })
 
-  it('无会话 cwd（非 agent 上下文）→ 零注册', () => {
-    const r = mount()
-    expect(r.fire(r.agent(undefined))).toEqual([])
-  })
-
-  it('绑定行在但注册库缺席（无注册库）→ 动态段仍注册但 text 空返 \'\'（空段退场）', () => {
+  it('绑定行在但注册库缺席（无注册库）→ 空串', () => {
     const r = mount()
     r.registered.clear()
-    const sections = r.fire(r.agent(WS))
-    expect(sections.map((s) => s.name)).toEqual([KNOWLEDGE_DOMAINS_SECTION_NAME])
-    expect((sections[0]!.text as () => string)()).toBe('')
+    expect(createKnowledgeDomainsText(r.deps)(agentOf(WS))).toBe('')
   })
 
-  it('agent.ctx / systemPrompt 结构面缺席 → fail-soft 零注册不抛', () => {
+  it('agent 缺席 / 无会话 cwd（非 agent 装配）→ 空串不抛', () => {
     const r = mount()
-    expect(() => r.fire(r.agent(WS, false))).not.toThrow()
-    expect(r.fire(r.agent(WS, false))).toEqual([])
+    const text = createKnowledgeDomainsText(r.deps)
+    expect(text({})).toBe('')
+    expect(text({ agent: {} })).toBe('')
+    expect(text({ agent: { session: { id: 's-1' } } })).toBe('')
+    expect(text({ agent: { session: { id: 's-1', header: { cwd: '' } } } })).toBe('')
   })
-})
 
-describe('订阅生命周期', () => {
-  it('插件 disposer 注销 agent/created 订阅（各会话 scope 内注册随 agent scope 自然 unwind，无手写清理）', () => {
+  it('Session 顶层 cwd 兼容位（结构面允许双读）同样可解析', () => {
     const r = mount()
-    r.dispose()
-    expect(r.off()).toBe(1)
+    expect(createKnowledgeDomainsText(r.deps)({ agent: { session: { header: {}, cwd: WS } } })).toContain('conventions')
   })
 })
 
-describe('bindKnowledgePromptSections disposer 锚（评审 Minor 补强）', () => {
-  it('返回的 disposer 注销动态段：注册一次、注销一次', () => {
-    const ops: string[] = []
-    const systemPrompt = {
-      section: (s: KnowledgePromptSection) => {
-        ops.push(`reg:${s.name}`)
-        return () => {
-          ops.push(`off:${s.name}`)
-        }
-      },
-    }
-    const dispose = bindKnowledgePromptSections(systemPrompt, { isRegistered: () => true, topDomains: () => [] }, WS)
-    expect(ops).toEqual([`reg:${KNOWLEDGE_DOMAINS_SECTION_NAME}`])
-    dispose()
-    expect(ops).toEqual([`reg:${KNOWLEDGE_DOMAINS_SECTION_NAME}`, `off:${KNOWLEDGE_DOMAINS_SECTION_NAME}`])
+describe('fail-soft（段失败只让本段缺席，不炸整轮装配）', () => {
+  it('求值抛错 → 空串且诊断留痕一次', () => {
+    const r = mount()
+    const onError = vi.fn()
+    const text = createKnowledgeDomainsText(
+      { ...r.deps, topDomains: () => { throw new Error('statement has been finalized') } },
+      onError,
+    )
+    expect(text(agentOf(WS))).toBe('')
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(String(vi.mocked(onError).mock.calls[0]?.[0])).toContain('statement has been finalized')
   })
-})
 
-describe('段常量经注册面透出（order 位次互指锚）', () => {
-  it('静态段（全局）紧前于动态段（910 < 911——<knowledge-base> 声明与 <knowledge-domains> 块同 turn 相邻在场）', () => {
-    expect(910).toBeLessThan(KNOWLEDGE_DOMAINS_SECTION_ORDER)
+  it('onError 缺席 → 静默空返不抛', () => {
+    const r = mount()
+    const text = createKnowledgeDomainsText({ ...r.deps, resolveProjectId: () => { throw new Error('x') } })
+    expect(text(agentOf(WS))).toBe('')
   })
 })

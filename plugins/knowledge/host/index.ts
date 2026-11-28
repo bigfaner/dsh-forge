@@ -8,11 +8,11 @@
 //   承担——project host 同款先例；运行期存在性检查仍承担 fail-soft）。
 // 装配：自持存储自启（失败/锚缺席 fail-soft 降级零注册）→ 'knowledge' 服务 provide →
 // 六 tool 注册（tools/register——search/readAbstract/write/read/supersede/reinstate，
-// 裁决 #1 修订 2026-11-05：supersede/reinstate 开为 agent tool）+ 提示词两段装配：
-// 静态段 forge:knowledge(910) 全局注册（fix-11 裁决 B 侧 Interface 3 静态注册——
+// 裁决 #1 修订 2026-11-05：supersede/reinstate 开为 agent tool）+ 提示词两段装配（均全局
+// 注册，随插件 fiber 注销）：静态段 forge:knowledge(910)（fix-11 裁决 B 侧 Interface 3——
 // plugin load 时点先于一切会话装配，首轮请求即在场；bug be4bac44 判例）+ 动态段
-// forge:knowledge-domains(911) scoped 接线（stage③ C2：agent/created 时刻在该会话
-// scope 注册——service/session-prompt.ts）+
+// forge:knowledge-domains(911)（text(context) 每步按 context.agent 现取会话 cwd 求值——
+// service/session-prompt.ts）+
 // knowledge 目录键声明（root/global 两键——根 scope provide('dirKeys.knowledge', entries)
 // 约定名——跨 scope 反向拉取终态缝，bug 04d445f4）；交出合并 disposer。
 // projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
@@ -21,10 +21,16 @@ import { createKnowledgeTools, createProjectResolver, createWsPathResolver } fro
 // 声明合并文件随源引入（跨程序编译——tests/e2e 传递包含本文件时不经包级 include，
 // 不引入则 ForgeDirs 增强缺席 satisfies 受检失效）
 import type {} from './forge-dirs.js'
-import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeStaticSection } from './prompt/index.js'
+import {
+  KNOWLEDGE_DOMAINS_SECTION_NAME,
+  KNOWLEDGE_DOMAINS_SECTION_ORDER,
+  KNOWLEDGE_SECTION_NAME,
+  KNOWLEDGE_SECTION_ORDER,
+  renderKnowledgeStaticSection,
+} from './prompt/index.js'
 import type { ProjectIdResolver, WsPathResolver } from './tools/index.js'
 import { domainTreeIndexOf } from './service/internal.js'
-import { registerKnowledgeScopedPrompt } from './service/session-prompt.js'
+import { createKnowledgeDomainsText, type KnowledgePromptBindDeps } from './service/session-prompt.js'
 import { createKnowledgeService } from './service/index.js'
 import {
   startSelfHostedStorage,
@@ -350,10 +356,12 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       resolveDefaultKnowledgeDir,
       ...(config.backflow !== undefined ? { backflow: config.backflow } : {}),
     })
-    /** 注册库在场判定 + 顶域实时聚合（动态段 turn 期门控 + 供数面——静态段无条件注入） */
-    const promptBindDeps = {
-      isRegistered: (wsPath: string) => storage.registry.findByWsPath(wsPath) !== undefined,
-      topDomains: (wsPath: string) => domainTreeIndexOf(storage.db, wsPath),
+    /** 注册库在场判定 + 顶域实时聚合（动态段每步求值供数面——两段均全局注册） */
+    const promptBindDeps: KnowledgePromptBindDeps = {
+      resolveProjectId,
+      resolveWsPath,
+      isRegistered: (wsPath) => storage.registry.findByWsPath(wsPath) !== undefined,
+      topDomains: (wsPath) => domainTreeIndexOf(storage.db, wsPath),
     }
 
     // 装载期项目行回填（提案裁决 6——bug d927e8dc）：官方宿主 registerProject 零调用方致
@@ -485,14 +493,27 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       () => storage.close(),
       provideKnowledgeService(),
       declareKnowledgeRootDirKey(ctx),
-      // 静态段全局注册（fix-11 裁决 B 侧 Interface 3 静态注册——能力性指引固定文本零会话
-      // 信息，plugin load 时点注册先于一切会话装配，首轮请求即在场；scoped 注册晚于会话
-      // 首轮装配的判例 bug be4bac44——首个请求提示词不含后注册段）。动态域段走 scoped
-      // 缝（session-prompt 接线），两段不双注入。
+      // 静态段全局注册（fix-11 裁决 B 侧 Interface 3——能力性指引固定文本零会话信息，
+      // plugin load 时点注册先于一切会话装配，首轮请求即在场；bug be4bac44 判例）。
       ctx.systemPrompt.section({
         name: KNOWLEDGE_SECTION_NAME,
         order: KNOWLEDGE_SECTION_ORDER,
         text: renderKnowledgeStaticSection(),
+      }),
+      // 动态域段：全局注册，text(context) 每步按 context.agent 现取会话 cwd 求值（规则段
+      // 紧前于域段，同 turn 相邻在场）。求值抛错只让本段缺席，诊断留痕不炸整轮装配。
+      ctx.systemPrompt.section({
+        name: KNOWLEDGE_DOMAINS_SECTION_NAME,
+        order: KNOWLEDGE_DOMAINS_SECTION_ORDER,
+        text: createKnowledgeDomainsText(promptBindDeps, (cause) => {
+          diagEmit?.({
+            event: 'knowledge-domains',
+            level: 'warn',
+            message: `域树段求值失败（本段缺席，不阻装配）：${String(cause)}`,
+            process: 'main',
+            stack: cause instanceof Error ? cause.stack : undefined,
+          })
+        }),
       }),
       ctx.tools.register(tools.search),
       ctx.tools.register(tools.browse),
@@ -501,12 +522,6 @@ const knowledgePlugin: KnowledgePlugin = Object.assign(
       ctx.tools.register(tools.read),
       ctx.tools.register(tools.supersede),
       ctx.tools.register(tools.reinstate),
-      // stage③ C2 scoped 注册接线：session-bind 时刻在该会话 scope 注册
-      // forge:knowledge(910)/forge:knowledge-domains(911) 两段（闭包捕获 ws_path、
-      // 未绑定不注册、重绑随 scope 移除）；on 缺席（旧宿主/桩）= 零 scoped 接线 fail-soft
-      ...(typeof ctx.on === 'function'
-        ? [registerKnowledgeScopedPrompt({ on: ctx.on, resolveProjectId, resolveWsPath, ...promptBindDeps })]
-        : []),
     ]
     return () => {
       for (const dispose of [...disposers, ...connectionDisposers]) dispose()
@@ -526,11 +541,8 @@ export {
   renderKnowledgeDomainsSection,
   renderKnowledgeStaticSection,
 } from './prompt/index.js'
-export {
-  bindKnowledgePromptSections,
-  registerKnowledgeScopedPrompt,
-} from './service/session-prompt.js'
-export type { KnowledgePromptBindDeps, ScopedPromptWiringInput } from './service/session-prompt.js'
+export { createKnowledgeDomainsText } from './service/session-prompt.js'
+export type { KnowledgeAssembleContext, KnowledgePromptBindDeps } from './service/session-prompt.js'
 export { createKnowledgeTools, createProjectResolver, createWsPathResolver } from './tools/index.js'
 export type {
   KnowledgeTools,
