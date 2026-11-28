@@ -35,14 +35,3 @@ export const FORGE_COMBO_SERVICE_KEY = 'forgeCombo'
 // ── skills 自锚（P0 核销 #5 处方 C——forge-deep-pack 1.6；1.14 返工落点 dist）──
 /** forge 包说明符（skills 自锚 resolve 锚——只依赖 forge 自己，三档通吃） */
 export const FORGE_PKG_SPECIFIER = '@dsh-forge/forge'
-
-/**
- * skills 自锚单表达式（!!js 方言——official userPatchesSchema 核销同款 baseUrl 形态）：
- * resolve('@dsh-forge/forge/package.json') → 包根 → join('dist', 'skills', '<member>')
- * （构建期生成物——build 链 bundle 后物化，freshness 门天然覆盖）。
- * 跨包锚三硬前提（缺席包 MODULE_NOT_FOUND 无 fail-soft、./package.json 出口缺失、
- * 层序覆盖脆弱）由「只依赖 forge 自己」单表达式根除——P0 #5 处方 C 定谳。
- */
-export function skillDirSelfAnchorExpr(member: string): string {
-  return `process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('${FORGE_PKG_SPECIFIER}/package.json')), 'dist', 'skills', '${member}')`
-}
