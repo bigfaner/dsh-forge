@@ -179,14 +179,3 @@ export function requireProjectId(resolver: ProjectIdResolver, session: ToolSessi
   if (projectId === undefined) throw new WorkspaceNotRegisteredError({ cwd: session.cwd });
   return projectId;
 }
-
-/**
- * 会话 → 执行会话 id（claim/submit 写源键——links upsert 与 records.session_id）。
- * 无 agent 会话（空串）→ 拒：空会话键会落不可归属的 link/record 行（防御收窄）。
- */
-export function requireSessionId(session: ToolSessionContext): string {
-  if (session.sessionId === "") {
-    throw new Error("forge tools: no agent session in this call context — claim/submit record the executing session id");
-  }
-  return session.sessionId;
-}
