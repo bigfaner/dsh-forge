@@ -5,9 +5,9 @@
 //     keyed 槽声明（scope session + inject SidebarRightTabInjected——useTabInfo 恒递达占用者）；
 //   - 同包 `lib/types/client/index.d.ts`：Context.sidebarRightTabs（SidebarRightTabRegistry——
 //     两段注册第一段）+ `tab-registry.d.ts` 类型定义面（multiple/patterns/guide/order）；
-//   - 同包 `lib/client.js` 运行期契约：GuideBody 入口卡拾取 = `tab.actions.openTab(kind,
-//     {replaceTab:true})`（原位替换开始 tab——产品零代码载体）+ 官方入口卡 order 先例
-//     10/20/30（files/terminal/browser——产品 order 0 排最前的依据）；
+//   - 同包 `lib/client.js` 运行期行为（GuideBody 拾取原位替换 / 入口卡 order 10/20/30）：
+//     实现细节文本锚随 0.2.2-rc.5 重写除名退役——公开面（guide/order 类型契约）由
+//     tab-registry.d.ts 断言承担（本 pin ⑯-3）；
 //   - dsh-client-ui-conversation `lib/types/client/contract/slots.d.ts`：
 //     `conversation.session.header.actions` list 槽声明（4.2 挂接 pill 的槽面依据——本 pin
 //     先锚上游声明在场）。
@@ -91,20 +91,6 @@ describe('pin ⑯-3 sidebarRightTabs 注册表服务面（两段注册第一段�
     const registry = readUpstream('profile', '@deepseek-ai/dsh-client-ui-sidebar-right', 'lib/types/client/tab-registry.d.ts')
     expect(registry).toContain('Stable identity of the content, which is the address itself')
     expect(registry).toContain('Two opens of the same address are the same tab')
-  })
-
-  it('GuideBody 拾取 = 原位替换开始 tab（replaceTab——上游运行期契约；AC2 载体）', () => {
-    const client = readUpstream('profile', '@deepseek-ai/dsh-client-ui-sidebar-right', 'lib/client.js')
-    expect(client).toContain('openTab(selected.kind, { replaceTab: true })')
-  })
-
-  it('官方入口卡 order 先例 = 10/20/30（产品 order 0 排最前的对照面）', () => {
-    const files = readUpstream('profile', '@deepseek-ai/dsh-client-ui-sidebar-files', 'lib/client.js')
-    expect(files).toMatch(/order: 10/)
-    const terminal = readUpstream('profile', '@deepseek-ai/dsh-client-ui-sidebar-terminal', 'lib/client.js')
-    expect(terminal).toMatch(/order: 20/)
-    const browser = readUpstream('profile', '@deepseek-ai/dsh-client-ui-sidebar-browser', 'lib/client.js')
-    expect(browser).toMatch(/order: 30/)
   })
 
   it('dsh.client 依赖声明：ui-sidebar-right 组合在场（服务装载链）', () => {

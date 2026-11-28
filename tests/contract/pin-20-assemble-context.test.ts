@@ -214,7 +214,7 @@ describe('pin ⑳-4 fork/seed 创建路径不继承 origin（官方公开面可�
     }
   })
 
-  it('fork meta 文本审计（controller 公开入口 lib/index.js）：fork 的 create meta 枚举无 origin——origin 进 fork header 的唯一上游位', () => {
+  it('fork meta 文本审计（controller 公开入口 lib/index.js）：fork 的 create meta 枚举无 origin、无 parentSession（rc.5 fork 不落 lineage/meta 枚举仅 cwd?+isSeeded+agentPreset?——我方契约不依赖 fork lineage：seal 绑定走 header.cwd、subagent-assemble 零 lineage 依赖）', () => {
     const indexJs = readFileSync(join(CONTROLLER_DIR, 'lib/index.js'), 'utf8')
     const forkStart = indexJs.indexOf('async fork(request)')
     expect(forkStart, 'dsh-api-session-controller 公开入口未找到 fork(request) 实现').toBeGreaterThanOrEqual(0)
@@ -224,8 +224,8 @@ describe('pin ⑳-4 fork/seed 创建路径不继承 origin（官方公开面可�
     expect(metaStart).toBeGreaterThanOrEqual(0)
     expect(metaEnd, 'fork 实现的 create meta 块形状漂移（meta:/agentOptions: 锚缺失）').toBeGreaterThan(metaStart)
     const metaLiteral = forkBody.slice(metaStart, metaEnd)
-    expect(metaLiteral, 'fork 丢失 lineage 字段（“shares the lineage field”）').toContain('parentSession:')
     expect(metaLiteral).toContain('isSeeded: true')
+    expect(metaLiteral, 'fork meta 出现 parentSession——lineage 字段回流（重裁决本 pin 口径）').not.toContain('parentSession')
     expect(metaLiteral, 'fork meta 出现 origin——fork 开始继承 origin，承重假设失效方向被打开').not.toContain('origin')
   })
 })

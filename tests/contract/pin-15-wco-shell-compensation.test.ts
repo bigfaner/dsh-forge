@@ -43,15 +43,15 @@ describe('pin ⑮-2 ui-layout WCO 补偿面（D1 对冲目标 + frame 结构事�
     )
   })
 
-  it('WCO 收起轨宽 0（collapsedWidth 三元——D2 覆层轨的动因：grid 内联 0 轨不可 CSS 对冲）', () => {
+  it('WCO 收起轨宽 0（collapsedWidth 三元——D2 覆层轨的动因：grid 内联 0 轨不可 CSS 对冲；rc.5 起 drawer 形态同收 0 轨）', () => {
     expect(client).toMatch(
-      /collapsedWidth = darwin \|\| document\.documentElement\.hasAttribute\("data-windows-titlebar"\) \? 0 : 56/,
+      /collapsedWidth\s*=\s*drawer\s*\|\|\s*darwin\s*\|\|\s*windowsTitlebar\s*\?\s*0\s*:\s*56/,
     )
   })
 
   it('frame 直标 data-sidebar-collapsed + overlayLayer [data-shell-overlay]（偏离块状态/结构锚）', () => {
-    expect(client).toContain('"data-sidebar-collapsed": sidebarCollapsed || void 0')
-    expect(client).toContain('"data-shell-overlay": true')
+    expect(client).toMatch(/"data-sidebar-collapsed"\s*:\s*sidebarCollapsed\s*\|\|\s*void 0/)
+    expect(client).toMatch(/"data-shell-overlay"\s*:\s*true/)
   })
 
   it('frame 带本体 = :before 拖拽条（app-region:drag）；:after 官方未占用（D31 带内段落点——升级窗口占用即红）', () => {
@@ -84,8 +84,10 @@ describe('pin ⑮-2 ui-layout WCO 补偿面（D1 对冲目标 + frame 结构事�
 describe('pin ⑮-3 ui-sidebar WCO 收起形态（D2 对冲目标）', () => {
   const client = readUpstream('profile', '@deepseek-ai/dsh-client-ui-sidebar', LAYOUT)
 
-  it('WCO 收起即 collapsed 态（wide 三元——rail 内容按收起态渲染）', () => {
-    expect(client).toContain('const wide = windowsTitlebar ? !collapsed : !collapsed || !settled')
+  it('WCO 收起即 collapsed 态（wide 三元——rail 内容按收起态渲染；rc.5 起 drawer 形态恒 wide）', () => {
+    expect(client).toMatch(
+      /const wide\s*=\s*drawer\s*\|\|\s*\(windowsTitlebar\s*\?\s*!collapsed\s*:\s*!collapsed\s*\|\|\s*!settled\)/,
+    )
   })
 
   it('WCO 收起隐藏三区（panelList/regionArea/footArea display:none——un-hide 对冲目标）', () => {
@@ -110,8 +112,8 @@ describe('pin ⑮-4 ui-renderer SlotOutlet 洞锚（偏离块 [data-slot] 结构
   const client = readUpstream('profile', '@deepseek-ai/dsh-client-ui-renderer', LAYOUT)
 
   it('每洞渲染包裹 [data-slot] 锚 div（display:contents——布局零参与、纯可寻址面）', () => {
-    expect(client).toContain('"data-slot": slotKey')
-    expect(client).toContain('display: "contents"')
+    expect(client).toMatch(/"data-slot"\s*:\s*slotKey/)
+    expect(client).toMatch(/ANCHOR_STYLE\s*=\s*\{\s*display\s*:\s*[`"']contents[`"']\s*\}/)
   })
 })
 
@@ -219,14 +221,14 @@ describe('pin ⑮-6 本仓偏离块（wco.css——D1/D2/D31/D32 规则面 + 记
     // ——toggle 非 darwin 分支尾随渲染（children 末位），brand.mark 槽位在 logoRow JSX 段内
     const sidebarClient = readUpstream('profile', '@deepseek-ai/dsh-client-ui-sidebar', LAYOUT)
     const rowAt = sidebarClient.indexOf('SidebarRoot_module_css_default.logoRow')
-    const toggleTailAt = sidebarClient.indexOf('!darwinDesktop && toggle]')
+    const toggleTailAt = sidebarClient.search(/!darwinDesktop\s*&&\s*toggle\]/)
     expect(rowAt, 'logoRow JSX 在场').toBeGreaterThan(0)
     expect(toggleTailAt, 'toggle 为 logoRow children 末位').toBeGreaterThan(rowAt)
     expect(sidebarClient.slice(rowAt, toggleTailAt), 'brand 先于 toggle（列序 = brand 右侧落点）').toContain(
       'sidebar.brand.mark',
     )
     // 展开态 logoRow 双 button 结构事实（last-child 锚的动因——brand 钮首子不受 D40 波及）
-    expect(sidebarClient).toMatch(/_module_css_default\.brand, \w+_module_css_default\.wide\)/)
+    expect(sidebarClient).toMatch(/_module_css_default\.brand,\s*\w+_module_css_default\.wide\)/)
   })
 
   it('D32 光标面退役：wco.css 零 cursor:url 行（2026-10-11 全局面接任——资产迁 styles/cursors.css，机械面 pin ⑰）', () => {

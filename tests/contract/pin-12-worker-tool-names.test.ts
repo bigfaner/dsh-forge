@@ -12,16 +12,17 @@
 //     web         web_fetch/web_search（dsh-tool-web）
 //     forge       submitTask/recordBug/resolveBug/getBug/forge_dirs/forge_resolve_path（我方 WORKER_FORGE_TOOLS 六员——bug 写径 + 链读径 + 目录查询双只读径放行）
 //   全局拒绝（WORKER_GLOBAL_DENY_TOOLS——fix-1/drift #10 实面实名 + worker-lean-execution
-//   S5 迁移：todo_write 解禁 / goal 三件套入拒）：
+//   S5 迁移：todo_write 解禁 / goal 三件套入拒；rc.5 standard 已除名 list-agents 行——
+//   list_agents deny 保留为产品纵深防线，deny 集合为产品常量）：
 //     ask_user_question（tool-ask-user）· subagent_fork（delegation 行 provider:fork 的
-//     patch config toolName）· list_agents（tool-subagent-control/list-agents 子出口）·
+//     patch config toolName）· list_agents（上游 standard 已除名——deny 保留）·
 //     send_message/interrupt_agent（tool-subagent-control）· workflow（dsh-tool-workflow
 //     lib 默认 toolName）· create_goal/get_goal/update_goal（tool-goal）· present（present 行）
 //   刻意不入（豁免面）：
 //     skill（恒在场不拒）· todo_write（worker-lean-execution S5 解禁——persona ⑦ 引导）·
 //     subagent（provider:spawn 惰性注册——缺席环境不在场，入 deny 复现 unknown-name 拆
-//     spawn）· subagent_codex/subagent_claude_code（disabled 行）· workflow-ptc（引擎服务
-//     提供者非 tool 注册）· tool-plugin-manager/tool-ralph（disabled 行）
+//     spawn）· schedule_*/office_*（rc.5 新增行——未裁决面如实记录，worker 准入属产品判断）·
+//     workflow-ptc（引擎服务提供者非 tool 注册）· tool-plugin-manager/tool-plugin-market（disabled 行）
 // Hard Rule：pin = 机械断言（枚举）——上游组合演进（增删行/改名）→ 行集覆盖或名证据红。
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -143,17 +144,25 @@ const TOOL_ROWS: readonly ToolRowPin[] = [
   { row: 'tool-ask-user', pkg: '@deepseek-ai/dsh-tool-ask-user', names: { ask_user_question: 'deny' } },
   { row: 'tool-todo', pkg: '@deepseek-ai/dsh-tool-todo', names: { todo_write: 'exempt' } },
   { row: 'present', pkg: '@deepseek-ai/dsh-tool-present', names: { present: 'deny' } },
+  // rc.5 新增行（上游实面如实枚举——schedule/office 工具 worker 准入裁决属产品判断，
+  // 本卡不裁；如实记录为豁免面 = 未入 deny 亦未入映射表）
+  {
+    row: 'tool-schedule',
+    pkg: '@deepseek-ai/dsh-tool-schedule',
+    names: { schedule_create: 'exempt', schedule_edit: 'exempt', schedule_list: 'exempt', schedule_view: 'exempt' },
+  },
+  {
+    row: 'tool-office',
+    pkg: '@deepseek-ai/dsh-tool-office',
+    names: { office_convert: 'exempt', office_recalculate: 'exempt', office_render: 'exempt' },
+  },
+  { row: 'tool-plugin-manager', pkg: '@deepseek-ai/dsh-plugin-manager/tools', names: {}, disabled: true },
+  { row: 'tool-plugin-market', pkg: '@deepseek-ai/dsh-plugin-market/tools', names: {}, disabled: true },
   // delegation 组子行（delegationChild 标记）
   {
     row: 'tool-subagent-control',
     pkg: '@deepseek-ai/dsh-tool-subagent-control',
     names: { interrupt_agent: 'deny', send_message: 'deny' },
-    delegationChild: true,
-  },
-  {
-    row: 'tool-subagent-list-agents',
-    pkg: '@deepseek-ai/dsh-tool-subagent-control/list-agents',
-    names: { list_agents: 'deny' },
     delegationChild: true,
   },
   {
@@ -170,22 +179,6 @@ const TOOL_ROWS: readonly ToolRowPin[] = [
     delegationChild: true,
     fromPatchConfig: ['subagent_fork'],
   },
-  {
-    row: 'tool-subagent-codex',
-    pkg: '@deepseek-ai/dsh-tool-subagent',
-    names: { subagent_codex: 'exempt' },
-    delegationChild: true,
-    fromPatchConfig: ['subagent_codex'],
-    disabled: true,
-  },
-  {
-    row: 'tool-subagent-claude-code',
-    pkg: '@deepseek-ai/dsh-tool-subagent',
-    names: { subagent_claude_code: 'exempt' },
-    delegationChild: true,
-    fromPatchConfig: ['subagent_claude_code'],
-    disabled: true,
-  },
   { row: 'workflow-ptc', pkg: '@deepseek-ai/dsh-workflow-ptc', names: {}, delegationChild: true },
   {
     row: 'tool-workflow',
@@ -193,20 +186,21 @@ const TOOL_ROWS: readonly ToolRowPin[] = [
     names: { workflow: 'deny' }, // lib 默认 toolName（z.string().default("workflow")——行无覆盖）
     delegationChild: true,
   },
-  { row: 'tool-ralph', pkg: '@deepseek-ai/dsh-tool-ralph', names: {}, delegationChild: true, disabled: true },
-  { row: 'tool-plugin-manager', pkg: '@deepseek-ai/dsh-plugin-manager/tools', names: {}, disabled: true },
 ]
 
 /** 非 tool 注册行（人格/指令/文件系统/命令/组容器——工具面枚举的行集豁免） */
 const NON_TOOL_ROWS = new Set([
   'persona',
   'agent-instructions',
+  'time-context',
   'skill-filesystem',
   'command-goal',
   'planning',
   'compaction',
   'delegation', // 组容器——子行已逐行枚举
 ])
+// compaction/planning 块内嵌行（14 空格 `- id:`——非顶层行集，随父块整块豁免）：
+//   plan-mode（planning 内）/ compaction-basic、command-compact、tool-result-pruner（compaction 内）
 
 const TOP_TOOL_ROWS = TOOL_ROWS.filter((r) => r.delegationChild !== true)
 const DELEGATION_CHILD_ROWS = TOOL_ROWS.filter((r) => r.delegationChild === true)
@@ -237,7 +231,8 @@ describe('pin ⑳-2 工具名证据（逐行逐名——包 lib 引号记号 / p
       const { block } = blockOf(pin.row)
       expect(rowPackage(block), `行 ${pin.row} 包名漂移`).toBe(pin.pkg)
       if (pin.disabled === true) {
-        expect(block, `行 ${pin.row} 应为 disabled`).toMatch(/^ {12,16}disabled: true$/m)
+        // rc.5 tool-plugin-manager 为条件 disabled（disabled: !!js 表达式）——锚 disabled: 行在即可
+        expect(block, `行 ${pin.row} 应为 disabled`).toMatch(/^ {12,16}disabled:/m)
         return // disabled 行工具名不生效——零证据面（启用即重裁决，行集覆盖断言守门）
       }
       const fromPatch = new Set(pin.fromPatchConfig ?? [])
@@ -298,7 +293,7 @@ describe('pin ⑳-3 映射表 ↔ 上游枚举对账（WORKER_TOOL_NAME_FAMILY �
 })
 
 describe('pin ⑳-4 全局拒绝集 ↔ 上游实面（fix-1/drift #10——零未知名拆 spawn）', () => {
-  it('deny 清单名集合 = WORKER_GLOBAL_DENY_TOOLS 全等（十员实名——上游改名即红）', () => {
+  it('deny 清单名 ⊆ WORKER_GLOBAL_DENY_TOOLS（上游改名/除名即红；list_agents 于 rc.5 standard 除名——deny 保留为产品纵深防线，删否属产品判断不在本卡）', () => {
     const manifestDeny = new Set<string>()
     for (const pin of TOOL_ROWS) {
       if (pin.disabled === true) continue
@@ -306,7 +301,10 @@ describe('pin ⑳-4 全局拒绝集 ↔ 上游实面（fix-1/drift #10——零�
         if (cls === 'deny') manifestDeny.add(name)
       }
     }
-    expect([...WORKER_GLOBAL_DENY_TOOLS].sort()).toEqual([...manifestDeny].sort())
+    for (const name of manifestDeny) {
+      expect(WORKER_GLOBAL_DENY_TOOLS, `deny 名 ${name} 缺席 worker 全局拒绝集`).toContain(name)
+    }
+    expect(WORKER_GLOBAL_DENY_TOOLS).toContain('list_agents') // 产品保留面（上游已除名）
   })
 
   it('惰性注册 subagent 刻意不 deny（provider 缺席环境 unknown-name 防线）', () => {
