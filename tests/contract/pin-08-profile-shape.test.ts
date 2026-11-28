@@ -160,7 +160,7 @@ describe('pin ⑧-5 profile 目录形状（S1 pin 的文件级事实 × profile.
       'package.json',
       'pnpm-workspace.yaml',
     ])
-    expect(DSH_STACK_VERSION).toBe('0.2.0-rc.2')
+    expect(DSH_STACK_VERSION).toBe('0.2.2-rc.5')
     const templateYaml = norm(PROFILE_TEMPLATE_FILES['pnpm-workspace.yaml'] ?? '')
     expect(templateYaml).toContain('nodeLinker: hoisted')
     expect(templateYaml).toContain('autoInstallPeers: false')

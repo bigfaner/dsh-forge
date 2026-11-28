@@ -40,13 +40,16 @@ describe('pin ③-1 版本锚（profile 组合物化：boot manifest 经 profile
   })
 })
 
-describe('pin ③-2 壳洞名全集（SlotMap 增强块 7 洞）', () => {
-  it('洞名全集 = 7 洞（toggle.badge / brand.mark / brand.name / panellist / workspaces / settings / footer.action）', () => {
+describe('pin ③-2 壳洞名全集（SlotMap 增强块 10 洞）', () => {
+  it('洞名全集 = 10 洞（panel.icon / toggle.badge / brand.mark / brand.name / panellist / panellist.actions / workspaces / settings / footer.action / session.action）', () => {
     expect(slotMapKeys(rawSlots())).toEqual([
       'sidebar.brand.mark',
       'sidebar.brand.name',
       'sidebar.footer.action',
+      'sidebar.panel.icon',
       'sidebar.panellist',
+      'sidebar.panellist.actions',
+      'sidebar.session.action',
       'sidebar.settings',
       'sidebar.toggle.badge',
       'sidebar.workspaces',
@@ -91,7 +94,7 @@ describe('pin ③-4 根槽 sidebar（布局拥有的壳列挂载位）', () => {
   it("ui-layout SlotMap 声明 'sidebar' 洞 = single/root/SidebarOwnerProps（壳列挂载位）", () => {
     const layout = readTypes('profile', '@deepseek-ai/dsh-client-ui-layout', 'lib/types/client/index.d.ts')
     expect(layout).toContain("'sidebar': { kind: 'single'; scope: 'root'; owner: SidebarOwnerProps; }")
-    expect(layout).toContain('receives the frame\'s live column state')
+    expect(layout).toContain("The occupant receives the frame's collapsed state, width and drawer mode")
   })
 })
 

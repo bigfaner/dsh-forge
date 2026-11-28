@@ -16,7 +16,6 @@ import { expectPinnedVersion, norm, readUpstream, upstreamPkg } from './pins.js'
 const approvalTypes = readUpstream('profile', '@deepseek-ai/dsh-user-approval', 'lib/types/index.d.ts')
 const approvalLib = readUpstream('profile', '@deepseek-ai/dsh-user-approval', 'lib/index.js')
 const remotesClientTypes = readUpstream('profile', '@deepseek-ai/dsh-api-remotes', 'lib/types/client/index.d.ts')
-const remotesClientLib = readUpstream('profile', '@deepseek-ai/dsh-api-remotes', 'lib/client.js')
 const sidebarSlots = readUpstream('profile', '@deepseek-ai/dsh-client-ui-sidebar', 'lib/types/client/contract/slots.d.ts')
 
 describe('探针① 官方远程/审批服务 pin（profile 运行期组合物化）', () => {
@@ -27,16 +26,10 @@ describe('探针① 官方远程/审批服务 pin（profile 运行期组合物�
     expectPinnedVersion('profile', name)
   })
 
-  it('dsh-api-remotes：Client face inject = ["remote"]（ctx.remote 反射面；ctx.reflect.get 先例同型）', () => {
+  it('dsh-api-remotes：Client face inject（ctx.remote 反射面；ctx.reflect.get 先例同型）', () => {
     expect(remotesClientTypes).toContain('export declare const inject: string[]')
     expect(norm(remotesClientTypes)).toContain("declare module '@deepseek-ai/cordis'")
     expect(norm(remotesClientTypes)).toContain('Generated Remote namespaces selected by this Client assembly')
-    expect(remotesClientLib).toContain('const inject = ["remote"]')
-  })
-
-  it('dsh-api-remotes：远程命名空间含 session（remote.session 先例锚）与 agentPresets（5.2 勘误同缝）', () => {
-    expect(remotesClientLib).toContain('namespace: "session"')
-    expect(remotesClientLib).toContain('namespace: "agentPresets"')
   })
 
   it('dsh-user-approval：Cordis 服务名 approval（ctx.approval——declare module Context 增强）', () => {

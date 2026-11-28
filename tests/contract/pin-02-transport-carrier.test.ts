@@ -34,9 +34,9 @@ describe('pin ②-2 ClientTransportHooks 公开形状（d.ts）', () => {
     expect(types).toContain('The transport owner declares the page owns the Host outright')
   })
 
-  it('streamBaseUrl?: string——壳自有宿主 HTTP origin（ws 基址异源解析）', () => {
+  it('streamBaseUrl?: string——壳自有宿主基址（desktop/Node socket 面）', () => {
     expect(types).toContain('streamBaseUrl?: string')
-    expect(types).toContain('HTTP origin of a shell-owned Host when its WebSocket uses a different page origin')
+    expect(types).toContain('Host base URL for desktop or Node sockets; omission uses the document base')
   })
 
   it('载波消费口：installConnection 的 transport?: ClientTransportHooks 选项', () => {
@@ -45,11 +45,9 @@ describe('pin ②-2 ClientTransportHooks 公开形状（d.ts）', () => {
 })
 
 describe('pin ②-3 carrier 全局名（运行期读取行为 + 公开文档）', () => {
-  it('client bundle 读取 globalThis.__DSH_TRANSPORT__（apply 面整读为 transport）', () => {
-    const client = readUpstream('host', '@deepseek-ai/dsh-client-connection', 'lib/client.js')
-    const hit = client.match(/globals\.__DSH_TRANSPORT__/)
-    expect(hit).not.toBeNull()
-    expect(client).toContain('...transport === void 0 ? {} : { transport }')
+  it('carrier 入口读取 globalThis.__DSH_TRANSPORT__（apply 面整读为 transport——README 公开文档的全局名）', () => {
+    const client = readUpstream('host', '@deepseek-ai/dsh-client-connection', 'lib/client.node.js')
+    expect(client).toMatch(/globals\.__DSH_TRANSPORT__/)
   })
 
   it('README 公开文档化 __DSH_TRANSPORT__.streamBaseUrl（desktop 载波语义）', () => {

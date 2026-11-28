@@ -52,8 +52,8 @@ describe('pin ①-3 host 产出口签名（collectIndexInjections——{url, inj
   const index = readTypes('host', '@deepseek-ai/dsh-host-webserver', 'lib/types/index.d.ts')
 
   it('collectIndexInjections(): IndexInjection[]（一表双渲染的收集口）', () => {
-    expect(index).toContain('collectIndexInjections(): IndexInjection[]')
-    expect(index).toContain("Gather the structured injection table: one `webserver/index-inject` emit")
+    expect(index).toContain('collectIndexInjections(peer: PeerScope): IndexInjection[]')
+    expect(index).toContain('Gather the structured injection table for one Peer: one `webserver/index-inject` emit')
   })
 
   it('renderIndexInjections(html, rows) 服务端渲染同表（served 形态）', () => {

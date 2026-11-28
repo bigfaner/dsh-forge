@@ -17,7 +17,7 @@ import { expect } from 'vitest'
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 /** 上游 dsh 公开栈精确 pin 版本（tech-design Dependencies：P1 期不开升级窗口） */
-export const PIN_VERSION = '0.2.0-rc.2'
+export const PIN_VERSION = '0.2.2-rc.5'
 
 export type Anchor = 'host' | 'web' | 'profile'
 

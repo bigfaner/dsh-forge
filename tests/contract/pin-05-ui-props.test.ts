@@ -3,9 +3,9 @@
 // 权威：tech-design Appendix 契约面清单第 5 项 + S2 清点（spikes/s2-web-shell-inventory.md §2/§3）。
 //
 // ── 已入池（本文件 + pin-03）───────────────────────────────────────────────────
-// ① ui-chat：dsh.client 声明（inject 11 包 + platform web——S2 文档计「12」系笔误，实装 11）；
-//    自有槽 6 洞全集；ChatViewInjected 成员集（11 成员——mount props 注入面）
-// ② ui-conversation：dsh.client 声明（inject 8 包）；槽面已文档化子集（含 conversation.view
+// ① ui-chat：dsh.client 声明（inject 14 包 + platform web）；自有槽 14 洞全集；
+//    ChatViewInjected 成员集（13 成员——mount props 注入面）
+// ② ui-conversation：dsh.client 声明（inject 9 包）；槽面已文档化子集（含 conversation.view
 //    = list/session——产品视图注册目标位）；ConversationStoreState = {draft, view, viewRequest}
 //    （视图偏好/聚焦请求语义）
 // ③ ui-trajectory：dsh.client 声明（inject 5 包）；TrajectoryContribution 8 类 kind 全集 +
@@ -15,10 +15,9 @@
 // （S2 残留 #1 sidebar 槽位 props 已由 pin-03 入池——处置完成）
 //
 // ── 3.9 收口（Open Question ① 全量处置记录：入池 / 显式豁免及理由）───────────────
-// R1 → 入池（⑤-7）：四包 apply 级运行期 inject 数组——lib/client.js 保留源注释
-//      「Services required by … plugin」与 `inject = [...]` 字面量（稳定锚；S2 期
-//      「无随包分发稳定文本锚」判定修正）；含 dsh.client 包级清单（⑤-2~⑤-5）未见的
-//      运行期服务名（remote / remote.session / sidebarRight / configForms）。
+// R1 → 退役：ui-* bundle apply 级 `inject = [...]` 数组文本锚——0.2.2-rc.5 起上游
+//      bundle 不再携带该字面量与注释（运行期服务装配面无随包文本锚）；运行期服务名
+//      的公开面 = 各包 client d.ts（⑤-2~⑤-5 已入池），bundle 文本匹配按池规则删除。
 // R2 → 入池（⑤-8）：uiConversation 快照通道类型面——assembly.d.ts（ConversationBinding
 //      4 成员 + UiConversation extends Service + binding 签名）+ index.d.ts（Context 双属性行
 //      conversation + uiConversation——S2 §2.2「ctx.uiConversation」单属性表述修正）+
@@ -60,13 +59,14 @@ describe('pin ⑤-1 版本锚（profile 组合物化）', () => {
 describe('pin ⑤-2 ui-chat（S2 §2.1：conversation.view 注册面 + ChatViewInjected）', () => {
   const raw = readUpstream('profile', '@deepseek-ai/dsh-client-ui-chat', 'lib/types/client/contract/slots.d.ts')
 
-  it('dsh.client：platform=web + inject 11 包（S2 计「12」系笔误——实装清单为 11）', () => {
+  it('dsh.client：platform=web + inject 14 包（0.2.2-rc.5 实装清单，按上游声明序）', () => {
     const decl = dshClientDecl('profile', '@deepseek-ai/dsh-client-ui-chat')
     expect(decl['platform']).toBe('web')
     expect(decl['immediately']).toBeUndefined()
     expect(decl['inject']).toEqual([
       '@deepseek-ai/dsh-api-session-controller',
       '@deepseek-ai/dsh-api-workspace-controller',
+      '@deepseek-ai/dsh-client-connection',
       '@deepseek-ai/dsh-client-locale',
       '@deepseek-ai/dsh-client-ui-conversation',
       '@deepseek-ai/dsh-client-ui-input-trigger',
@@ -76,24 +76,36 @@ describe('pin ⑤-2 ui-chat（S2 §2.1：conversation.view 注册面 + ChatViewI
       '@deepseek-ai/dsh-client-ui-settings',
       '@deepseek-ai/dsh-client-ui-sidebar-right',
       '@deepseek-ai/dsh-client-ui-workspace',
+      '@deepseek-ai/dsh-client-ui-file-drag',
+      '@deepseek-ai/dsh-client-ui-context-menu',
     ])
   })
 
-  it('自有槽 6 洞全集（chat.node / message.images / commandview / turnTail / assistant-actions / quota-notice）', () => {
+  it('自有槽 14 洞全集（0.2.2-rc.5 SlotMap 实装：flow/text-interaction/markdown.fence/reasoning/user.* 新面 + 原六洞）', () => {
     expect(slotMapKeys(raw)).toEqual([
       'conversation.chat.assistant-actions',
       'conversation.chat.commandview',
+      'conversation.chat.flow',
+      'conversation.chat.markdown.fence',
+      'conversation.chat.message.images',
       'conversation.chat.node',
+      'conversation.chat.reasoning.body',
+      'conversation.chat.reasoning.content',
+      'conversation.chat.text-interaction',
       'conversation.chat.turnTail',
-      'conversation.message.images',
+      'conversation.chat.user.before',
+      'conversation.chat.user.content',
+      'conversation.chat.user.images',
       'shell.quota-notice',
     ])
   })
 
-  it('ChatViewInjected 成员集 = 11（hooks / keyedHooks / 动作面 9——mount props 注入面）', () => {
+  it('ChatViewInjected 成员集 = 13（hooks / keyedHooks / 动作面——mount props 注入面）', () => {
     expect(interfaceMembers(raw, 'ChatViewInjected')).toEqual([
       'chatScroll',
-      'fileMentions',
+      'consumeOlder',
+      'dispatchInteraction',
+      'fileDrag',
       'forkAt',
       'hooks',
       'keyedHooks',
@@ -102,14 +114,14 @@ describe('pin ⑤-2 ui-chat（S2 §2.1：conversation.view 注册面 + ChatViewI
       'loadThrough',
       'openExternalLink',
       'openFile',
-      'openSkill',
+      'resolveFilePath',
     ])
   })
 
   it('ChatViewSlotProps 组装 = PropsRuntime<conversation.view> + 子槽渲染 + store + inject + locale', () => {
     const types = norm(raw)
     expect(types).toContain(
-      "PropsRuntime<'conversation.view'> & PropsRenderSlots<'conversation.chat.node' | 'conversation.message.images'>",
+      "PropsRuntime<'conversation.view'> & PropsRenderSlots<'conversation.chat.flow' | 'conversation.chat.text-interaction' | 'conversation.chat.markdown.fence'>",
     )
   })
 })
@@ -118,7 +130,7 @@ describe('pin ⑤-3 ui-conversation（S2 §2.2：槽面全集 + 视图偏好语�
   const raw = readUpstream('profile', '@deepseek-ai/dsh-client-ui-conversation', 'lib/types/client/contract/slots.d.ts')
   const viewTypes = readUpstream('profile', '@deepseek-ai/dsh-client-ui-conversation', 'lib/types/client/contract/views.d.ts')
 
-  it('dsh.client：platform=web + inject 8 包', () => {
+  it('dsh.client：platform=web + inject 9 包（0.2.2-rc.5 实装清单，按上游声明序）', () => {
     const decl = dshClientDecl('profile', '@deepseek-ai/dsh-client-ui-conversation')
     expect(decl['platform']).toBe('web')
     expect(decl['inject']).toEqual([
@@ -130,6 +142,7 @@ describe('pin ⑤-3 ui-conversation（S2 §2.2：槽面全集 + 视图偏好语�
       '@deepseek-ai/dsh-client-ui-session',
       '@deepseek-ai/dsh-client-ui-settings',
       '@deepseek-ai/dsh-client-ui-workspace',
+      '@deepseek-ai/dsh-client-ui-context-menu',
     ])
   })
 
@@ -217,13 +230,14 @@ describe('pin ⑤-4 ui-trajectory（S2 §2.3：官方轨迹 tab 数据源契约�
 })
 
 describe('pin ⑤-5 ui-theme（S2 §2.4：令牌供体——唯一 immediately 预取行）', () => {
-  it('dsh.client：platform=web + inject 5 包 + immediately:true（stage-one 预取层，按上游声明序）', () => {
+  it('dsh.client：platform=web + inject 6 包 + immediately:true（stage-one 预取层，按上游声明序）', () => {
     const decl = dshClientDecl('profile', '@deepseek-ai/dsh-client-ui-theme')
     expect(decl['platform']).toBe('web')
     expect(decl['immediately']).toBe(true)
     expect(decl['inject']).toEqual([
       '@deepseek-ai/dsh-client-connection',
       '@deepseek-ai/dsh-client-locale',
+      '@deepseek-ai/dsh-client-shortcuts',
       '@deepseek-ai/dsh-client-ui-renderer',
       '@deepseek-ai/dsh-client-ui-settings',
       '@deepseek-ai/dsh-api-remotes',
@@ -239,15 +253,7 @@ describe('pin ⑤-6 ui-dockkit（S2 §2.5：零 cordis 静态库——非 boot �
   })
 })
 
-// ── 3.9 M1 批：R1/R2 收口入池（处置台账见文件头）──────────────────────────────
-
-/** 提取 client bundle 内全部 `inject = [...]` 数组字面量（apply 级运行期依赖清单） */
-function bundleInjectArrays(name: string): string[][] {
-  const text = readUpstream('profile', name, 'lib/client.js')
-  return [...text.matchAll(/inject = \[\s*((?:"[^"]+"\s*,?\s*)*)\]/g)].map((m) =>
-    [...(m[1] ?? '').matchAll(/"([^"]+)"/g)].map((x) => x[1] as string),
-  )
-}
+// ── 3.9 M1 批：R1/R2 收口（处置台账见文件头；R1 文本锚已按池规则删除）──────────
 
 /** 提取 interface 成员名集合（属性 + 方法 + 泛型方法行——interfaceMembers 的方法面本地扩展） */
 function faceMembers(rawTypes: string, interfaceName: string): string[] {
@@ -267,54 +273,6 @@ function snapshotMapRow(rawTypes: string, row: string): boolean {
   const block = rawTypes.match(/interface ConversationViewSnapshotMap \{([\s\S]*?)\n    \}/)?.[1]
   return block !== undefined && block.includes(`${row};`)
 }
-
-describe('pin ⑤-7 R1 收口：apply 级运行期 inject 数组（bundle 注释锚「Services required by」）', () => {
-  it('ui-chat：10 服务（dsh.client 包级 11 包之外——运行期服务名含 remote.session / sidebarRight）', () => {
-    expect(bundleInjectArrays('@deepseek-ai/dsh-client-ui-chat')).toContainEqual([
-      'slots',
-      'sessions',
-      'uiWorkspace',
-      'uiSession',
-      'uiConversation',
-      'locale',
-      'configForms',
-      'remote',
-      'remote.session',
-      'sidebarRight',
-    ])
-  })
-
-  it('ui-conversation：7 服务（S2 §2.2 服务注入面原清单）', () => {
-    expect(bundleInjectArrays('@deepseek-ai/dsh-client-ui-conversation')).toContainEqual([
-      'slots',
-      'sessions',
-      'fileUpload',
-      'uiSession',
-      'uiWorkspace',
-      'locale',
-      'configForms',
-    ])
-  })
-
-  it('ui-trajectory：5 服务（无自有服务，仅官方注入面）', () => {
-    expect(bundleInjectArrays('@deepseek-ai/dsh-client-ui-trajectory')).toContainEqual([
-      'slots',
-      'sessions',
-      'uiSession',
-      'uiConversation',
-      'locale',
-    ])
-  })
-
-  it('ui-theme：4 服务（令牌供体的注册期依赖）', () => {
-    expect(bundleInjectArrays('@deepseek-ai/dsh-client-ui-theme')).toContainEqual([
-      'slots',
-      'locale',
-      'remote',
-      'configForms',
-    ])
-  })
-})
 
 describe('pin ⑤-8 R2 收口：uiConversation 快照通道类型面（binding().target() 数据源契约）', () => {
   const assembly = readUpstream('profile', '@deepseek-ai/dsh-client-ui-conversation', 'lib/types/client/conversation/assembly.d.ts')
