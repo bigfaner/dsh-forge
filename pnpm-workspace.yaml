@@ -29,7 +29,8 @@ allowBuilds:
   # 4.1 electron-builder 传递依赖（Squirrel.Windows 目标专用）：P1 仅 NSIS 目标，
   # 构建脚本无需执行——显式置 false 消 ignored-builds 门
   electron-winstaller: false
-  better-sqlite3: set this to true or false
+  # better-sqlite3 原生包：与 koffi / node-pty 同款，构建脚本允许执行
+  better-sqlite3: true
 
 overrides:
   # 全仓 cordis pin 统一 4.1.0（bug 1103261e：override 滞留 4.0.4 曾致 lock importer 段脱钩 manifest）——
