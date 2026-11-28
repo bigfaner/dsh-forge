@@ -424,11 +424,6 @@ const taskLoopPlugin: TaskLoopPlugin = (ctx: unknown, config: TaskLoopHostConfig
   };
 };
 
-/** 装配失败诊断投影（bundle 管线验证锚——lib-util errMessage 消费点）。 */
-export function describeSetupFailure(error: unknown): string {
-  return errMessage(error);
-}
-
 // ── 类型出口（host 类型锚单源——宿主桥白名单/通道族/remote 只读切片 satisfies 锚定本面，
 //    1.14 host 改指批：宿主禁再引 contracts 旧 ForgeTasksService face）──
 export type { TasksService } from "./domain/tasks/service.js";
