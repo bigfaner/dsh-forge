@@ -13,9 +13,6 @@ export const FORGE_CHECKPOINTS_SERVICE_KEY = "forgeCheckpoints";
 export const TASK_LOOP_DB_DEFAULT_DIR = "forge/db/task-loop";
 export const TASK_LOOP_DB_FILENAME = "task-loop.db";
 
-/** 集成/单装两形态统一表名前缀（单套 DDL 消灭两形态分叉——db 级命名空间防撞）。 */
-export const TASK_LOOP_TABLE_PREFIX = "task_";
-
 /** AC 核销快照键（submit_task 入参 `ac_results`——契约冻结：ac_results_json 单列同位）。 */
 export const AC_RESULTS_KEY = "ac_results";
 
