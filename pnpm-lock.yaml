@@ -370,9 +370,9 @@ importers:
 
   lib/db:
     dependencies:
-      '@dsh-forge/contracts':
+      '@dsh-forge/lib-api':
         specifier: workspace:*
-        version: link:../../packages/contracts
+        version: link:../api
     devDependencies:
       '@types/node':
         specifier: 24.19.0
@@ -380,9 +380,9 @@ importers:
 
   lib/diag:
     dependencies:
-      '@dsh-forge/contracts':
+      '@dsh-forge/lib-api':
         specifier: workspace:*
-        version: link:../../packages/contracts
+        version: link:../api
     devDependencies:
       '@types/node':
         specifier: 24.19.0
@@ -400,9 +400,9 @@ importers:
 
   lib/path:
     dependencies:
-      '@dsh-forge/contracts':
+      '@dsh-forge/lib-api':
         specifier: workspace:*
-        version: link:../../packages/contracts
+        version: link:../api
     devDependencies:
       '@types/node':
         specifier: 24.19.0
