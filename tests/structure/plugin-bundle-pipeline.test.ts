@@ -24,7 +24,7 @@ function wiredPluginShorts(): string[] {
 }
 
 describe('dev 启动 ensure 清单通用覆盖（bug 021d2655 回归守卫）', () => {
-  it('bug: dev ensure 清单硬编码漏包——启动重建序列必须覆盖 packages/plugins/* 全部含 build 的插件包 + plugin-forge 本体', async () => {
+  it('bug: dev ensure 清单硬编码漏包——启动重建序列必须覆盖 packages/plugins/* 全部含 build 的插件包', async () => {
     // 事实源 = scripts/dev-ensure-packages.mjs 的扫描函数（dev.mjs 启动期 ensure 消费同一清单）
     const { ensurePackages } = await import('../../scripts/dev-ensure-packages.mjs')
     const ensured = ensurePackages(ROOT)
@@ -38,7 +38,6 @@ describe('dev 启动 ensure 清单通用覆盖（bug 021d2655 回归守卫）', 
         return Boolean(scripts?.build)
       })
       .map((name) => `packages/plugins/${name}`)
-    expected.push('packages/plugin-forge')
 
     const missing = expected.filter((pkg) => !ensured.includes(pkg))
     expect(missing).toEqual([])

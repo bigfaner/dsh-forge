@@ -10,9 +10,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { createForgeEventBus } from '../../../packages/plugin-forge/src/events/bus.js'
-import { createForgeEventSink } from '../../../packages/plugin-forge/src/events/sink.js'
-import { attachForgeLogListener, forgeLogFileOf, readForgeEventLog } from '../../../packages/plugin-forge/src/events/log-listener.js'
+import { createForgeEventBus } from '../../../plugins/task-loop/host/events/bus.js'
+import { createForgeEventSink } from '../../../plugins/task-loop/host/events/sink.js'
+import { attachForgeLogListener, forgeLogFileOf, readForgeEventLog } from '../../../plugins/task-loop/host/events/log-listener.js'
 import type { ForgePluginEvent } from '../../../packages/contracts/src/dto/forge.js'
 
 const containerDir = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-logchain-'))
@@ -54,8 +54,8 @@ describe('M3 5.2 logs/{slug}.jsonl 串联（support 夹具——真实 bus/sink/
       const D = 'e2e-logchain-dispatch-s1'
       const W = 'e2e-logchain-worker-w1'
       // sink.prepare 先行（dispatchTask 首 emit 前 await——产品调用序同构）
-      await chain.sink.prepare({ sessionId: D, cwd: join(containerDir, 'ws') })
-      await chain.sink.prepare({ sessionId: W, cwd: join(containerDir, 'ws') })
+      await chain.sink.prepare({ sessionId: D, cwd: join(containerDir, 'ws'), agentPreset: 'expedition' })
+      await chain.sink.prepare({ sessionId: W, cwd: join(containerDir, 'ws'), agentPreset: 'expedition' })
       emitLifecycle(chain, TASK_KEY, D, W)
 
       const file = forgeLogFileOf(containerDir, 'sc-logchain')
@@ -92,7 +92,7 @@ describe('M3 5.2 logs/{slug}.jsonl 串联（support 夹具——真实 bus/sink/
     const chain = wireChain()
     try {
       const KNOWN = 'e2e-logchain-known'
-      await chain.sink.prepare({ sessionId: KNOWN, cwd: join(containerDir, 'ws') })
+      await chain.sink.prepare({ sessionId: KNOWN, cwd: join(containerDir, 'ws'), agentPreset: 'expedition' })
       // 无任务事件：payload.contextSlug 承载归属（信封 slug 语境回声被判定覆盖）
       chain.emit({ ts: Date.now(), sessionId: KNOWN, slug: '_pool', type: 'no-ready-task', payload: { contextSlug: 'sc-pool-scope' } })
       const poolEvents = readForgeEventLog(forgeLogFileOf(containerDir, 'sc-pool-scope'))

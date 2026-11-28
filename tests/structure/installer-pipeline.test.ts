@@ -152,7 +152,7 @@ describe('AC2 profile.install 安装树清单 = 运行时并集（漂移守卫�
     ...RUNTIME_PACKAGES,
     '@deepseek-ai/dsh-base': '0.2.0-rc.2', // profile 模板 bundles（tech-design「profile 组装与插件分发」）
     '@deepseek-ai/dsh-web-app': '0.2.0-rc.2',
-    '@deepseek-ai/dsh-session': '0.2.0-rc.2', // @dsh-forge/plugin-forge 原生依赖（bug 62211111 同类——progress/dist 静态 import 面）
+    '@deepseek-ai/dsh-session': '0.2.0-rc.2', // profile 模板 bundles（tech-design「profile 组装与插件分发」）
     '@deepseek-ai/dsh-client-connection': '0.2.2-rc.5', // @dsh-forge/knowledge + project 原生依赖（053f3215 dsh 系统一 rc.5 升位——plugin 声明 0.2.2-rc.5，安装树同版即零漂移）
     'chokidar': '5.0.0', // @dsh-forge/expert-squad 原生依赖（bug 62211111 同类——档案热刷新 watch 面）
     'gray-matter': '4.0.3',
@@ -227,21 +227,11 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@dsh-forge/knowledge/dist/host/index.js',
       'runtime/node_modules/@dsh-forge/knowledge/skills/learn/SKILL.md',
       'runtime/node_modules/@dsh-forge/knowledge/skills/distill/SKILL.md',
-      'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
-      // plugin-spec 1.9 skill 面迁移：plugin-forge 技能全数迁出（grilling/fix-bug/investigate-bug
-      // 迁 spec 包、brainstorm 退役、skills-blitz 随迁清理）——本包 skills/ 仅 README 占位
       // spec 包技能面（1.9 迁入三技能——customSkillDirs[spec] 挂载源；缺席即远征组合技能面静默缺失；
       // loop-blocking 已退役——task-loop 域 rescue-task-loop 单入口承载）
       'runtime/node_modules/@dsh-forge/spec/skills/grilling/SKILL.md',
       'runtime/node_modules/@dsh-forge/spec/skills/fix-bug/SKILL.md',
       'runtime/node_modules/@dsh-forge/spec/skills/investigate-bug/SKILL.md',
-      // M3 3.8 packaging 三处同步（TECH-packaging-001）：plugin-forge-spec 新包——漏列 =
-      // 打包形态 boot ESM 解析断裂（远征预设行装载失败，TECH-packaging-001 症状面）
-      'runtime/node_modules/@dsh-forge/plugin-forge-spec/package.json',
-      'runtime/node_modules/@dsh-forge/plugin-forge-spec/dist/index.js',
-      // M3 3.2 规格技能迁移落地：spec skills 入物化清单与关键文件口径（3.8 曾注记
-      // 「随 3.2 落地后补列」——缺席即远征组合技能面静默缺失）
-      'runtime/node_modules/@dsh-forge/plugin-forge-spec/skills/write-prd/SKILL.md',
       // 1.17 批二卸旧装新：host dist boot 链（child/run/m2-wiring/bindings）静态 import
       // 本包——缺席即打包主进程 ERR_MODULE_NOT_FOUND 启动即崩（staged:true 覆写物化；
       // 旧 @dsh-forge/git-worktree 包退役，staged 种子自 plugins/git-worktree 迁 plugins/project）
@@ -288,10 +278,11 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
   )
 
   it('staging 集合自动推导：种子（行插件 + 预设携带 + staged:true）∪ @dsh-forge/* 依赖闭包——contracts/path-key 闭包成员自动入场，新增产品包零配置', () => {
-    // 预设携带面真源 = 底稿文件扫描（plugin-forge/-spec——远征/突击组合行；md-mermaid
+    // 预设携带面真源 = 底稿文件扫描（M1 阶段B 旧包退役后预设零插件携带行——md-mermaid
     // 迁居批 1.2 起 in-preset 行退役转用户层全局行——expert-squad/knowledge 同径）
-    expect(presetCarriedPlugins()).toEqual(['plugin-forge', 'plugin-forge-spec'])
-    // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
+    expect(presetCarriedPlugins()).toEqual([])
+    // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除；
+    // M1 阶段B 后 path-key 经 staged:true 覆写续闭包——host dist ipc/bindings 静态 import 面）
     // project = staged:true 覆写种子（1.17 批二卸旧装新：host dist boot 链静态 import 面——
     // 自 plugins/git-worktree 种子迁入；旧包退役）
     // knowledge = userLayerRow 种子（1.9 A5 重开放——用户层全局行 + skills/learn 技能面）
@@ -300,14 +291,15 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // spec = staged:true 覆写种子（plugin-spec 1.10 docs 域收编：core dist 装配行静态 import
     // @dsh-forge/spec——forgeDocs factory 改指新包，缺席即 boot ESM 解析断裂）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/markdown-kit', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
+      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/path', 'lib/util', 'path-key', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/markdown-kit', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
     )
   })
 
   it('closure：预设携带插件 ⊆ staging 集合（发版新增产品插件 → 老用户升级自动补行闭环的 assemble 侧半——预设引用越界即红并报出插件名与来源预设文件）', () => {
     // staged 集合 = stagedProductPackages 推导（userLayerRow/预设种子/staged:true ∪ 闭包 −
     // kill-switch）；预设携带面真源 = 底稿文件逐文件扫描（与 presetCarriedPlugins 同口径，
-    // 自扫为取「来源预设文件」用于 fail 报文）。
+    // 自扫为取「来源预设文件」用于 fail 报文）。M1 阶段B 后预设零插件携带行（携带面 =
+    // stagedProductPackages 推导），本断言守「底稿一旦恢复携带行必须已入 staging 集合」。
     const presetsDir = join(ROOT, 'apps', 'host', 'src', 'profile', 'presets')
     const stagedShorts = new Set(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).map((k) => k.split('/').pop()))
     const orphans: string[] = []
@@ -319,7 +311,6 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
         if (!stagedShorts.has(short)) orphans.push(`${short}（来源 presets/${file}）`)
       }
     }
-    expect(presetCarriedPlugins().length, '预设扫描面失效即假绿（扫描到 0 个携带插件）').toBeGreaterThan(0)
     expect(orphans, `预设携带插件未入 staging 集合（预设/配置面漂移）：${orphans.join('; ')}`).toEqual([])
   })
 
@@ -361,11 +352,10 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     }
     expect(problems, problems.join('\n')).toEqual([])
     // 现值锚：内置专家档案按插件域重组（expert-builtin-redistribution）——task-loop 22 档
-    // 承接 a2a54922 病理面；plugin-forge 零内置档案（experts 物化随迁出拆除）
+    // 承接 a2a54922 病理面（plugin-forge 旧包已退役，experts 物化随迁出拆除）
     const taskLoopKey = Object.keys(staged).find((k) => k.endsWith('/task-loop') || k === 'task-loop')
     expect(taskLoopKey, 'task-loop 未入 staging 闭包').toBeDefined()
     expect(staged[taskLoopKey!]).toContain('experts')
-    expect(staged['plugin-forge'] ?? []).not.toContain('experts')
   })
 
   it('bug: host dist 静态 @dsh-forge/* import 面 ⊆ staging 闭包（打包形态主进程 ESM 上溯 runtime/node_modules——漏包即 ERR_MODULE_NOT_FOUND 启动崩，2026-10-18 安装版实证 git-worktree）', () => {
@@ -436,13 +426,6 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
         `runtime/node_modules/@dsh-forge/${name}/${entry}`,
       )
     }
-  })
-
-  it('M3 3.8+3.2：plugin-forge-spec 入闭包（PRODUCT_PACKAGES 物化 + --check 口径双件全 + skills 技能面（3.2 规格技能迁移落地补列））', () => {
-    expect(stagedPackages.has('plugin-forge-spec'), 'plugin-forge-spec 缺席 staging 闭包（TECH-packaging-001：漏列即打包形态 boot ESM 解析断裂）').toBe(true)
-    expect(KEY_FILES, 'plugin-forge-spec skills 技能面口径缺席（远征组合 customSkillDirs[spec] 挂载源）').toContain(
-      'runtime/node_modules/@dsh-forge/plugin-forge-spec/skills/write-prd/SKILL.md',
-    )
   })
 
   it('knowledge 重开放 pin（knowledge-stage1-foundation 1.9 A5：用户层全局行 + staging 种子随包 + skills/learn 技能面口径）', () => {
@@ -621,7 +604,7 @@ describe('STAGING_EXTRAS 白名单自动比对守卫（stagingExtrasDrift——s
   })
 
   it('Minor-1 钉死断言：STAGING_EXTRAS 声明集精确 pin（键集 + 代表插件 files/keyFiles 全集）——增删即红（评审 1.17）', () => {
-    expect(Object.keys(STAGING_EXTRAS).sort(), 'STAGING_EXTRAS 键集漂移（新增/移除带技能面插件须同步本 pin）').toEqual(['expert-squad', 'knowledge', 'markdown-kit', 'plugin-forge', 'plugin-forge-spec', 'project', 'spec', 'task-loop'])
+    expect(Object.keys(STAGING_EXTRAS).sort(), 'STAGING_EXTRAS 键集漂移（新增/移除带技能面插件须同步本 pin）').toEqual(['expert-squad', 'knowledge', 'markdown-kit', 'project', 'spec', 'task-loop'])
     expect([...STAGING_EXTRAS['expert-squad'].files].sort(), 'expert-squad files 精确集漂移（experts 内置层已迁出——expert-builtin-redistribution）').toEqual(['cordis.patch.yml', 'skills'])
     expect([...STAGING_EXTRAS['expert-squad'].keyFiles].sort(), 'expert-squad keyFiles 精确集漂移').toEqual(['cordis.patch.yml', 'skills/roundtable/SKILL.md'])
     expect(STAGING_EXTRAS['markdown-kit'], 'markdown-kit 精确集漂移（md-mermaid 迁居批 1.2 改名随迁）').toEqual({ files: ['cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] })

@@ -87,8 +87,8 @@ export const STAGING_EXTRAS = {
   'markdown-kit': { files: ['cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] },
   // project（1.17 批二卸旧装新，自 git-worktree staged 种子接替）：组合装配行本体
   // cordis.patch.yml（package.json dsh.bundle.patch 声明指向——loader 按声明读包内该文件
-  // 触发 apply 注册，缺席即 ENOENT，bug a1f13abf 同径）+ skills 约定目录占位（.gitkeep）
-  project: { files: ['skills', 'cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] },
+  // 触发 apply 注册，缺席即 ENOENT，bug a1f13abf 同径；skills/ 空技能注册随 A5 退役出清单）
+  project: { files: ['cordis.patch.yml'], keyFiles: ['cordis.patch.yml'] },
   // task-loop（plugin-task-loop 1.15 staging 闭包登记）：组合装配行本体 cordis.patch.yml
   // （package.json dsh.bundle.patch 声明指向）+ skills 技能面（to-tasks 拆解技能 + 自
   // plugin-forge 迁入的 submit-task 结算技能——customSkillDirs 挂载源）+ experts 内置

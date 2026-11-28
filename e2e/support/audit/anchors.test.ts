@@ -52,7 +52,7 @@ describe('5.3 审计锚②：规则自证（负样例种植 → 拦截断言—�
     }
     write('packages/core/src/forge/tasks/watch-impl.ts', `import { watch } from 'node:fs'\nfs.watch(dir, cb)\nsetInterval(() => rescan(), 5000)\n`)
     write('packages/core/src/forge/workspace/backflow-sync.ts', 'export const x = 1\n')
-    write('packages/plugin-forge/src/bad.ts', `import chokidar from 'chokidar'\n`)
+    write('packages/core/src/forge/bad.ts', `import chokidar from 'chokidar'\n`)
     const findings = auditForgeNoWatchBackflow(root)
     const rules = new Set(findings.map((f) => f.detail.match(/\[([a-z-]+)\]/)?.[1]))
     expect(findings.length).toBeGreaterThanOrEqual(4)
@@ -120,8 +120,8 @@ describe('5.3 审计锚②：规则自证（负样例种植 → 拦截断言—�
       mkdirSync(join(root, rel, '..'), { recursive: true })
       writeFileSync(join(root, rel), content, 'utf8')
     }
-    mkdirSync(join(root, 'packages/plugin-forge/skills/fix-bug'), { recursive: true })
-    writeFileSync(join(root, 'packages/plugin-forge/skills/fix-bug/SKILL.md'), '# fix-bug\n', 'utf8')
+    mkdirSync(join(root, 'plugins/spec/skills/fix-bug'), { recursive: true })
+    writeFileSync(join(root, 'plugins/spec/skills/fix-bug/SKILL.md'), '# fix-bug\n', 'utf8')
     write('docs/conventions/testing/core.md', '# testing core\n')
     write(
       'plugins/task-loop/experts/ok-ref.md',

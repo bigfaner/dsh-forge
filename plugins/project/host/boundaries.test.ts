@@ -4,8 +4,9 @@
 //     assembly → 域服务为唯一合法向下方向。
 //   ② 裸 SQL 白名单唯一 repositories：prepare()/SQL 关键词只允许出现在 db/（repositories
 //     行级门 + migrations DDL + connection 装配），域服务零直持 SQL。
-//   ③ tool 零域逻辑复写：plugin-forge 消费面只认服务缝——对 plugins/project 域内部模块
-//     零 import（唯一白名单 = host-dirs DirFactsPort 常驻 provider 注册行）。
+//   ③ （原：tool 零域逻辑复写——旧包 plugin-forge 消费面对 plugins/project 域内部零触达。
+//     旧包随 M1 阶段B 退役，消费面消失，该机检整段随之删除；现役消费面 = task-loop/expert-squad
+//     经服务缝（lib/api ports），域内部零触达边界由 ① 承载。）
 //   ④ 零 projectId 概念词：worktrees 域归属键 = ws_path/projectRoot（行级归属键
 //     project_key 归 bugs/projects 域）——worktrees 域 projectId 概念词白名单外零命中。
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -75,23 +76,6 @@ describe('boundaries 机检 ②：裸 SQL 白名单唯一 repositories', () => {
         }
       }
     }
-    expect(violations).toEqual([])
-  })
-})
-
-describe('boundaries 机检 ③：tool 零域逻辑复写', () => {
-  it('plugin-forge 对 plugins/project 仅允许 host-dirs 注册行 import（域内部零触达）', () => {
-    const violations: string[] = []
-    const allowed = /@dsh-forge\/project\/host-dirs/
-    const scan = (dir: string): void => {
-      for (const f of tsFiles(dir)) {
-        const src = read(f)
-        for (const m of src.matchAll(/from '(@dsh-forge\/project[^']*)'/g)) {
-          if (!allowed.test(m[1])) violations.push(`${f} -> ${m[1]}`)
-        }
-      }
-    }
-    scan('packages/plugin-forge/src')
     expect(violations).toEqual([])
   })
 })

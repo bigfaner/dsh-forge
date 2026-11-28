@@ -137,7 +137,7 @@ test('@web-e2e @m3 突击直达链·冒烟：features 注册容器 → 直挂任
     const overlay = sharedOverlayText(udDir)
     const blitzDirs = presetSkillDirs(overlay, 'blitz')
     expect(blitzDirs.every((d) => !d.toLowerCase().includes('skills-blitz')), 'plugin-spec 1.9 skills-blitz 退役：突击组合零专属技能目录（grilling 迁 spec）').toBe(true)
-    expect(blitzDirs.some((d) => d.toLowerCase().includes('plugin-forge')), '突击组合含 core 技能目录（成员资格式，expert-squad 可装卸不断总数）').toBe(true)
+    expect(blitzDirs.every((d) => !d.toLowerCase().includes('plugin-forge')), '旧包技能目录物理缺席（M1 阶段B 退役——枚举面即证）').toBe(true)
     expect(blitzDirs.every((d) => !d.toLowerCase().includes('plugin-forge-spec')), '规格技能目录物理缺席（七者零在场——枚举面即证）').toBe(true)
     expect(overlay.includes('!!js'), '物化零 !!js（绝对路径 only）').toBe(false)
 

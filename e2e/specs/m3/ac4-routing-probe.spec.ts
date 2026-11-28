@@ -4,7 +4,7 @@
 //   case1 基座：expert-squad cordis patch（DSH_FORGE_PATCH_FILES 叠层）defaultAgentOptions
 //        {zai-coding-cn/glm-5.3-flash/reasoning: high}，doc 任务（tech-writer 档案无路由）
 //        → 期望 route=zai-coding-cn/glm-5.3-flash/high（③基座命中）
-//   case2 override：同一基座 + experts['@dsh-forge/plugin-forge#tech-writer'].agentOptions
+//   case2 override：同一基座 + experts['@dsh-forge/expert-squad#tech-writer'].agentOptions
 //        {同 provider/model, reasoning: low} → 期望 route=…/low（①条目压过③；档位取模型支持集内值——medium 不在 glm-5.3-flash 支持集会被 reconcile 剥离）
 // 取证锚：host stderr [forge-spawn-routing]（in-process-driver.ts:184）+ worker 会话 dump。
 // 证据保留（keepEvidence）：userData/wsRoot/overlay 不清理，路径打点供归档拷贝。
@@ -73,7 +73,7 @@ function squadPatchRow(o: { readonly withOverride: boolean }): string {
   if (o.withOverride) {
     lines.push(
       '    experts:',
-      '      "@dsh-forge/plugin-forge#tech-writer":',
+      '      "@dsh-forge/expert-squad#tech-writer":',
       '        agentOptions:',
       `          provider: ${DOGFOOD_PROVIDER}`,
       `          model: ${DOGFOOD_MODEL}`,

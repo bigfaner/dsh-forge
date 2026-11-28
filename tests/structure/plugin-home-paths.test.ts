@@ -34,7 +34,6 @@ const WHITELIST_MARKERS = [
   'plugins/project/ui/dock-tabs/docs/index.tsx',
   'apps/web/src/views/docs/README.md',
   'apps/host/src/profile/template.ts',
-  'packages/plugin-forge/src/dispatch-core/assemble.ts',
   'plugins/super-composer/ui/official-input/PROVENANCE.md',
 ]
 

@@ -46,9 +46,10 @@ function blockKeys(block: string): Set<string> {
 const upstreamText = existsSync(UPSTREAM) ? readFileSync(UPSTREAM, 'utf8') : ''
 const upstreamRows = pluginRowBlocks(upstreamText)
 
-/** 产品分叉行（镜像 diff 豁免）与产品增量行（上游没有）——口径与 3.7 presets.test.ts 一致 */
+/** 产品分叉行（镜像 diff 豁免）与产品增量行（上游没有）——口径与 3.7 presets.test.ts 一致。
+ *  M1 阶段B 旧包退役后预设零产品增量行（plugin-forge[+spec] 行随 18a68d86 删除） */
 const FORKED_ROWS = new Set(['persona', 'skill-filesystem'])
-const PRODUCT_ROWS = new Set(['plugin-forge', 'plugin-forge-spec'])
+const PRODUCT_ROWS = new Set<string>()
 
 describe('pin ⑲ 前置（环境门——上游物化树在场）', () => {
   it('上游 standard.patch.yml 在场且行集非空（缺席 = 环境缺口，先 pnpm -C apps/host/profile.dev install）', () => {
@@ -82,9 +83,9 @@ for (const preset of ['expedition', 'blitz'] as const) {
       }
     })
 
-    it('产品增量行在场（镜像面之外的产品行——plugin-forge[+spec] 归属 3.7 分叉断言，此处只锚行集边界）', () => {
-      expect(rows.has('plugin-forge')).toBe(true)
-      expect(rows.has('plugin-forge-spec')).toBe(preset === 'expedition')
+    it('产品增量行零残留（M1 阶段B：底稿行集 = 上游行集——退役行复活即红）', () => {
+      expect(rows.has('plugin-forge')).toBe(false)
+      expect(rows.has('plugin-forge-spec')).toBe(false)
     })
 
     it('markdown-kit in-preset 行零残留（迁居批 1.3：装载通道转全局行——组合后注册表恰含一次的集成断言另立）', () => {

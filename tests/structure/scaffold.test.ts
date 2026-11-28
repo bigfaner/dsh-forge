@@ -26,10 +26,6 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['packages/core', '@dsh-forge/core'],
     ['plugins/knowledge', '@dsh-forge/knowledge'],
     ['packages/path-key', '@dsh-forge/path-key'],
-    // M2 3.2：第六工件 plugin-forge（tool 半身 + forge:pipeline 系统提示段）
-    ['packages/plugin-forge', '@dsh-forge/plugin-forge'],
-    // M3 3.1：第八工件 plugin-forge-spec（spec 三 tool + forge:spec 系统提示段——仅远征组合装配）
-    ['packages/plugin-forge-spec', '@dsh-forge/plugin-forge-spec'],
   ] as const
 
   it.each(artifacts)('%s 包名 %s 就位', (dir, name) => {
@@ -49,7 +45,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ).toBe(true)
   })
 
-  it('根 solution tsconfig references 十五工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；plugin-spec 建位 plugins/spec——提示段迁入批；md-mermaid/input-history/expert-squad/quote-reference/mobile-bridge 先后入 packages/plugins/ 子居所，super-composer 迁根级 plugins/ 三目录制；1.17 批二 git-worktree 旧包退役）', () => {
+  it('根 solution tsconfig references 工件拓扑（tsc -b 全拓扑入口；md-mermaid/input-history/expert-squad/quote-reference/mobile-bridge 先后入 packages/plugins/ 子居所，super-composer 迁根级 plugins/ 三目录制；1.17 批二 git-worktree 旧包退役；M1 阶段B plugin-forge[-spec] 旧包退役出拓扑）', () => {
     const refs = ((readJson('tsconfig.json').references ?? []) as { path: string }[]).map((r) => rel(r.path))
     expect([...refs].sort()).toEqual(
       [
@@ -75,8 +71,6 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'plugins/spec',
         'plugins/knowledge',
         'packages/path-key',
-        'packages/plugin-forge',
-        'packages/plugin-forge-spec',
         // forge-deep-pack 1.3：forge 组合器包骨架建位（双链构建链随批入拓扑）
         'plugins/forge',
         'plugins/expert-squad',
@@ -100,12 +94,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     // knowledge 迁移批1.3：root 级 plugins/knowledge 三目录制——references 增 client 面
     // （tsconfig.client.json，exports["./client"] 类型链）
     ['plugins/knowledge', ['plugins/knowledge/tsconfig.client.json', 'packages/contracts', 'packages/path-key']],
-    // M2 3.2：plugin-forge 同 knowledge 型（deps 仅 contracts + path-key——零 core 边）
-    // plugin-project 1.7：bug tool 壳消费 lib/api——增 lib/api 引用
     // typert 迁移 1.3：project tsconfig.json 改双 face solution 壳——composite 消费面直指 host 叶
-    ['packages/plugin-forge', ['lib/api', 'packages/contracts', 'packages/path-key', 'plugins/project/tsconfig.host.json']],
-    // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
-    ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
     // plugin-task-loop 1.14：host tasks 域改指 @dsh-forge/task-loop——plugins/task-loop host 叶入 references
     ['apps/host', ['packages/contracts', 'packages/core', 'plugins/knowledge', 'plugins/project/tsconfig.host.json', 'plugins/task-loop/tsconfig.host.json']],
     // 1.6：web normalize/path-key 消费改指 @dsh-forge/lib-path/path-key——增 lib/path 引用
@@ -231,11 +220,8 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
     'packages/core/src/forge',
     'plugins/knowledge/host/tools',
     'plugins/knowledge/host/prompt',
-    'packages/plugin-forge/src/tools',
-    // plugin-spec 1.8 提示段迁入——plugin-forge src/prompt 退役，prompt 定位归 plugins/spec/host/prompt
+    // plugin-spec 1.8 提示段迁入——prompt 定位归 plugins/spec/host/prompt
     'plugins/spec/host/prompt',
-    'packages/plugin-forge-spec/src/tools',
-    'packages/plugin-forge-spec/src/prompt',
     'packages/contracts/src/dto',
   ] as const
 
@@ -252,9 +238,7 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
       'packages/contracts/src/index.ts',
       'packages/core/src/index.ts',
       'plugins/knowledge/host/index.ts',
-      'packages/plugin-forge/src/index.ts',
       'plugins/spec/host/index.ts',
-      'packages/plugin-forge-spec/src/index.ts',
     ]) {
       expect(existsSync(join(ROOT, f))).toBe(true)
     }

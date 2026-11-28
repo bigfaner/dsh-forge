@@ -1,7 +1,7 @@
 // grilling SKILL.md 快照契约测试（plugin-spec 1.9——复刻 task-loop to-tasks 形态）：
 // SKILL.md 收尾模板动词 token ↔ create_spec 工具 schema 文本级对读（只锁 token 不锁文案）
 // + 单次全批调用形态断言 + 禁散调 grep + 迁移技能注册面结构 pin（skills 目录文件清单）。
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createCreateSpecTool } from "../../plugins/spec/host/tools/create-spec.js";
@@ -68,15 +68,6 @@ describe("迁移技能注册面结构 pin（skills 目录文件清单）", () =>
       expect(skill).toMatch(new RegExp(`^---\\nname: ${name}\n`));
       expect(skill).toMatch(/^description: /m);
     }
-  });
-
-  it("brainstorm 退役：plugin-forge skills/brainstorm 与 skills-blitz 零残留；skills 目录无残留 SKILL.md", () => {
-    expect(existsSync(join(ROOT, "packages", "plugin-forge", "skills", "brainstorm"))).toBe(false);
-    expect(existsSync(join(ROOT, "packages", "plugin-forge", "skills-blitz"))).toBe(false);
-    const remaining = readdirSync(join(ROOT, "packages", "plugin-forge", "skills")).filter(
-      (name) => existsSync(join(ROOT, "packages", "plugin-forge", "skills", name, "SKILL.md")),
-    );
-    expect(remaining).toEqual([]);
   });
 
   it("fix-bug / investigate-bug 逐字迁入（台账两阶段 + 原子提交关键 token 与源一致）", () => {

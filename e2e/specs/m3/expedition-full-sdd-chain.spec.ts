@@ -19,7 +19,7 @@
 //     幂等更新；
 //   - 任务域账 = task-loop.db（openTaskLoopDbFull——task_tasks/task_settlements 域账单源；
 //     slug 容器弱引用，source_kind/mode 列随容器 slug 化退役）；
-//   - 核心包技能目录（fs）：packages/plugin-forge/skills——git-commit/git-checkout 零条目。
+//   - spec 技能目录（fs）：plugins/spec/skills——迁移技能族随包分发。
 //
 // 退役面（plugin-spec proposal 域下线 + 概览 feature 消费门关闭）：
 //   - 原 Step2b/2c（打回循环 + superseded 演进链——纯提案 verdict 流转面）整测删除；
@@ -41,12 +41,9 @@
 //
 // Assertion depth: 40/44 behavioral（91%），其中 deep 18/40（45%）——两阈均过。
 
-import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
 import { expect } from '@playwright/test'
 import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { ROOT } from '../../support/launch.js'
 import { createSharedLaunchFixture, openOverviewSubtab, sharedOverlayText } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
@@ -172,13 +169,11 @@ test('@web-e2e @m3 远征全链·冒烟：features 注册 → 三类规格文档
     await expect(page.locator(ttItemOf(t1.taskId)).first(), '任务行甲 = 已完成').toContainText('已完成', { timeout: 30_000 })
     await expect(page.locator(ttItemOf(t2.taskId)).first(), '任务行乙 = 已完成').toContainText('已完成', { timeout: 30_000 })
 
-    // ── Step1b：远征组合技能目录（数据直证——spec 全量挂载 + core 无退役技能）──
+    // ── Step1b：远征组合技能目录（数据直证——spec 全量挂载 + 退役技能目录零残留）──
     const overlay = sharedOverlayText(udDir)
     const expDirs = presetSkillDirs(overlay, 'expedition')
-    expect(expDirs.filter((d) => d.toLowerCase().includes('plugin-forge-spec')).length, '远征组合 spec 技能目录全量挂载').toBe(1)
-    const coreEntries = readdirSync(join(ROOT, 'packages', 'plugin-forge', 'skills')).filter((e) => e !== 'README.md')
-    expect(coreEntries, 'core 包无 git-commit（移除断言）').not.toContain('git-commit')
-    expect(coreEntries, 'core 包无 git-checkout（未迁断言）').not.toContain('git-checkout')
+    expect(expDirs.some((d) => /@dsh-forge[/\\]spec[/\\]skills/.test(d)), '远征组合 spec 技能目录全量挂载').toBe(true)
+    expect(expDirs.every((d) => !d.toLowerCase().includes('plugin-forge')), '旧包技能目录物理缺席（M1 阶段B 退役）').toBe(true)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {

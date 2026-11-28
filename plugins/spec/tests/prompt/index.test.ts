@@ -3,7 +3,7 @@
 // presetBinding 注入判据两态（缺省无条件 / forge 绑定会话预设命中才注入、未命中
 // 空串过滤——核销报告 research/official-verification.md §3：每次组装现求值 + 事件
 // 回放投影不读裸出生头）、注册胶水、A1 自含形态禁词机检。
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -270,26 +270,6 @@ describe('禁词机检——config.mode/presetModeOf 双模板面零残留（AC6
       read(join(SPEC_ROOT, 'cordis.patch.yml'))
     for (const banned of ['expedition', 'blitz', '远征', '突击', 'presetModeOf', 'config.mode']) {
       expect(src, `禁词「${banned}」命中 spec 包源码`).not.toContain(banned)
-    }
-  })
-
-  it('plugin-forge 残本退役：src/prompt 目录已删、presetModeOf/ForgePipelineMode/config.mode 零残留', () => {
-    const forgeSrc = join(REPO_ROOT, 'packages', 'plugin-forge', 'src')
-    expect(existsSync(join(forgeSrc, 'prompt'))).toBe(false)
-    const walk = (dir: string): string[] => {
-      const out: string[] = []
-      for (const name of readdirSync(dir)) {
-        const p = join(dir, name)
-        if (statSync(p).isDirectory()) out.push(...walk(p))
-        else if (p.endsWith('.ts')) out.push(p)
-      }
-      return out
-    }
-    for (const file of walk(forgeSrc)) {
-      const content = read(file)
-      for (const banned of ['presetModeOf', 'ForgePipelineMode', 'config.mode']) {
-        expect(content, `${file} 命中禁词「${banned}」`).not.toContain(banned)
-      }
     }
   })
 

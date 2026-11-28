@@ -53,7 +53,7 @@ import {
 import { findFixtureSession, waitForSessionEvents } from '../../support/session-files.js'
 import { awaitNoLateModals, newBlankSession } from '../../support/m3.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, OV_TASK_PANEL, ovRowOf } from '../../support/anchors.js'
-import { writeReplayPlan, type ReplayPlan } from '../../../packages/plugin-forge/src/spawn/seam.js'
+import { writeReplayPlan, type ReplayPlan } from '../../../plugins/task-loop/host/spawn/seam.js'
 import { projectKeyOf } from '../../support/project-key.js'
 
 const FEATURE = 'dsh-forge-m3.5-knowledge-consolidation'

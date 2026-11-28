@@ -1,53 +1,12 @@
 // M3 5.2 SC2 worker 面（support 夹具层——Hard Rule 禁真实模型的 e2e 承载面）：
-//   · toolFilter 断言：deriveWorkerToolFilter 实函数 × 四任务型 deny 期望集（5.1 OQ#2
-//     名表全表激活后的族收窄口径——fix-1 W 用例 deny 探针口径随迁；运行期真实 worker
-//     探针 = 3.9 W / 5.3 dogfood）；
 //   · worker model 与 Forge设置 一致（组装面）：workerAgentOptionsOf（已配置显式携带 /
 //     未配置 undefined 回退父会话继承两态）；
-//   · dispatchPrompt 组装面零进上下文裁剪无涉（dispatch-task 源码纪律）——本件不重复。
-// 期望集独立硬编码（非引常量——deny 泄漏检查须对插件源独立，不与被检面同源；W 用例同纪律）。
+//   · worker toolFilter 族收窄断言随旧包 plugin-forge dispatch-task 退役整段删除——
+//     继任实函数 deriveWorkerToolFilter（plugins/task-loop host/dispatch-core）的 deny
+//     矩阵断言 = plugins/task-loop/tests/dispatch/assemble.test.ts（模块④单测池）。
+// workerAgentOptionsOf 期望集独立硬编码（非引常量——投影公式漂移可判）。
 import { describe, expect, it } from 'vitest'
-import { deriveWorkerToolFilter, workerAgentOptionsOf } from '../../../packages/plugin-forge/src/tools/dispatch-task.js'
-
-/** 全局 deny 十员（WORKER_GLOBAL_DENY_TOOLS 实面实名——drift #10/fix-1 + worker-lean-execution S5） */
-const GLOBAL_DENY = ['ask_user_question', 'subagent_fork', 'list_agents', 'send_message', 'interrupt_agent', 'workflow', 'present', 'create_goal', 'get_goal', 'update_goal']
-/** forge 闭环禁入动词（addTask 任务派生权限归主会话/循环处置层——dispatch-loop-hardening 改进 5 eeb7d447 有意收口 + updateTask/taskStats/listTasks/listBugs 仅主 agent 面 + recordImplCheckpoint/queryImplCheckpoint/listImplCheckpoints 实现检查点三工具仅主 agent + pauseTask/unblockTask 单任务暂停与 blocked 出口仅主 agent + validate_mermaid 插件面 + stopTaskLoop 循环停止面主 agent 专属——getBug 自 bug-recurrence-chain 1.3 起 worker 放行 + aggregateBugs 聚合检索面仅主 agent）。createProposal/transitionProposal/transitionFeature 三件已退役（提案域收口）——不入 deny 名表（fix-13 pin 源更新） */
-const FORGE_DENY = ['addTask', 'queryTask', 'dispatchTask', 'stopTaskLoop', 'updateTask', 'taskStats', 'listTasks', 'listBugs', 'aggregateBugs', 'recordImplCheckpoint', 'queryImplCheckpoint', 'listImplCheckpoints', 'pauseTask', 'unblockTask', 'validate_mermaid', 'knowledge_supersede', 'knowledge_reinstate'] // + knowledge 归并双 tool（followups #2 用户裁决 2026-11-05：默认 deny，仅 distill 专家档案面放行）
-
-describe('M3 5.2 SC2 worker toolFilter（deriveWorkerToolFilter 实函数——族收窄 deny 集）', () => {
-  it('coding：基座 deny 集 + web 二名（web 族收窄）', () => {
-    const { deny } = deriveWorkerToolFilter('coding-feature')
-    expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'web_fetch', 'web_search'].sort())
-  })
-
-  it('doc：+job 三名 + read_image + web 二名', () => {
-    const { deny } = deriveWorkerToolFilter('doc')
-    expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'job_list', 'job_output', 'job_kill', 'read_image', 'web_fetch', 'web_search'].sort())
-  })
-
-  it('gate：+read_image + web 二名', () => {
-    const { deny } = deriveWorkerToolFilter('gate')
-    expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'read_image', 'web_fetch', 'web_search'].sort())
-  })
-
-  it('validation：恰基座 deny 集（零族收窄）', () => {
-    const { deny } = deriveWorkerToolFilter('validation-code')
-    expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY].sort())
-    const evalDeny = deriveWorkerToolFilter('eval-contract').deny
-    expect([...evalDeny].sort(), 'eval 族同 validation 收窄（恰基座）').toEqual([...GLOBAL_DENY, ...FORGE_DENY].sort())
-  })
-
-  it('worker 面放行面：submitTask/fs 族不在 deny（矩阵 forge 族恰两员 + 基座工具可达；addTask 已入 deny——任务派生权限归主会话）', () => {
-    for (const type of ['coding-feature', 'doc', 'gate', 'validation-code'] as const) {
-      const { deny } = deriveWorkerToolFilter(type)
-      expect(deny, `${type}：submitTask 放行（worker 自结算）`).not.toContain('submitTask')
-      expect(deny, `${type}：addTask 入 deny（任务派生权限归主会话——eeb7d447 有意收口）`).toContain('addTask')
-      expect(deny, `${type}：read 在场（fs 基座）`).not.toContain('read')
-      expect(deny, `${type}：edit 在场（fs 基座）`).not.toContain('edit')
-      expect(deny, `${type}：bash/pwsh 在场（shell 基座）`).not.toContain('bash')
-    }
-  })
-})
+import { workerAgentOptionsOf } from '../../../packages/contracts/src/subagent-assemble.js'
 
 describe('M3 5.2 SC2 worker 路由组装（experts 折叠路由——workerAgentOptionsOf）', () => {
   it('折叠应答在场：显式携带（provider/model/reasoning 直映射——优先于父会话继承）', () => {

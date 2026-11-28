@@ -1,5 +1,6 @@
 // experts 服务双源契约对齐（proposal expert-squad-default-routing 1.18——architect 中危项收敛）：
-// plugin-forge ExpertsServiceFace（faces.ts——消费侧结构收窄面，本插件不依赖 expert-squad）
+// task-loop ExpertsServiceFace（host/faces.ts——消费侧结构收窄面，本插件不依赖 expert-squad；
+// 旧包 plugin-forge faces.ts 随 M1 阶段B 退役，消费面正本 = task-loop 域）
 // ↔ expert-squad ExpertsService/ExpertEntry（registry.ts——实现面）。两源已发生过一次同步
 // 扩张（reasoning 位两处各加一遍），本测试以编译期 satisfies 断言收敛：
 //   ① 实现面 ⊇ 消费面：ExpertsService satisfies ExpertsServiceFace（registerRoot ctx 参数
@@ -8,7 +9,7 @@
 //      （reasoning 位等同步字段被此向覆盖——单侧加/删/改键即 tsc 编译错，
 //      lint:types / lint:test-types 门红）。
 // 机械断言（type-only 直引两包源码，零依赖边、零运行时装配——两包互不依赖，不加依赖边）。
-import type { ExpertsServiceFace } from '../../packages/plugin-forge/src/faces.js'
+import type { ExpertsServiceFace } from '../../plugins/task-loop/host/faces.js'
 import type { ExpertEntry, ExpertsService } from '../../plugins/expert-squad/host/registry.js'
 import { describe, expect, it } from 'vitest'
 
@@ -33,7 +34,7 @@ export const FACE_PROJECTION_KEYS = [
   'reasoning',
 ] as const satisfies readonly (keyof FaceProjection)[]
 
-describe('experts 服务双源契约对齐（plugin-forge ExpertsServiceFace ↔ expert-squad ExpertsService）', () => {
+describe('experts 服务双源契约对齐（task-loop ExpertsServiceFace ↔ expert-squad ExpertsService）', () => {
   it('face 投影键面 = 七员（reasoning 位在覆盖内——任一侧漂移先编译错，本断言给运行期红面）', () => {
     expect([...FACE_PROJECTION_KEYS]).toEqual([
       'name',

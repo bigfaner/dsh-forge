@@ -1,9 +1,8 @@
 // 3.4 冒烟（AC5）：boot 后 tool 面经 spawn 链路可达——spawn ELECTRON_RUN_AS_NODE=1 +
 // stdio:['ipc'] 沿 P1 boot 链（fix-1 child 形态，官方 Desktop 同款）。单用例贯通四装配缝：
-//   · AC5 tool 面（产品裁决 2026-10-09 反转）：默认组合（= 标准模式同栈）零 forge 工具
-//     ——FORGE_TOOL_NAMES 全体缺席（plugin-forge 移出用户层/overlay 全局行，仅远征/突击
-//     预设组合携带——预设会话装配面由 e2e m3 池承载）；inject forgeTasks
-//     解析 = tasksHome 注入链 + core 四域 provide 的联证（服务面不随 forge 面收窄变化）
+//   · AC5 tool 面：默认组合零 forge 闭环工具（旧包 plugin-forge 已随 M1 阶段B 退役——
+//     工具面只装现役包；inject forgeTasks 解析 = tasksHome 注入链 + core 四域 provide 的
+//     联证（服务面不随装配收窄变化）
 //   · AC3 tasksHome：env DSH_FORGE_TASKS_HOME 生效 + deriveTaskStoreDir 单源（{tasksHome}/
 //     {flatten}@{hash8}）+ listTasks 惰性开工作区库（forge.db 落 tasksHome）
 //   · AC2 bindingsFile 生产端：withKnowledgeBindingsRefresh 包装 registerProject →
@@ -11,8 +10,8 @@
 //   · AC4 dispose 链：shutdown → 子侧 ProcessShutdown → cordis fiber disposer → core
 //     disposer → store.dispose——工作区库 WAL 副产物（forge.db-wal）净场
 // 环境前置（fail-loud，缺席即红——先 just compile / pnpm install）：
-//   apps/host/dist/boot/child.js（tsc -b 产物——child 入口真实文件）；profile.dev 安装树
-//   （含 @dsh-forge/plugin-forge link）；electron dist 二进制（devDep）。
+//   apps/host/dist/boot/child.js（tsc -b 产物——child 入口真实文件）；profile.dev 安装树；
+//   electron dist 二进制（devDep）。
 // 隔离：独立 userData/tasksHome/DSH_HOME（临时目录）；独占端口（listen(0) 探测）——
 // 不持应用单实例锁（无 Electron main），与 e2e 单实例纪律零冲突。
 import { createRequire } from 'node:module'
@@ -21,7 +20,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:net'
 import { expect, it } from 'vitest'
-import { FORGE_TOOL_NAMES } from '@dsh-forge/plugin-forge'
 import type { DshHostHandle } from './run.js'
 import { bootDshHost } from './run.js'
 import { hostRoot, resolveHostPaths } from '../profile/paths.js'
@@ -47,11 +45,6 @@ it(
     // ── 前置门（fail-loud：装配缺口显形为红灯，不静默跳过）──
     const childEntry = join(hostRoot(), 'dist', 'boot', 'child.js')
     expect(existsSync(childEntry), `boot child 入口缺席（先 just compile）：${childEntry}`).toBe(true)
-    const profileDev = join(hostRoot(), 'profile.dev')
-    expect(
-      existsSync(join(profileDev, 'node_modules', '@dsh-forge', 'plugin-forge', 'package.json')),
-      'profile.dev 缺 @dsh-forge/plugin-forge 链接（先 pnpm -C apps/host/profile.dev install）',
-    ).toBe(true)
     const electronExe = createRequire(join(hostRoot(), 'package.json'))('electron') as unknown as string
     expect(existsSync(electronExe), `electron 二进制缺席（dist 未下载）：${electronExe}`).toBe(true)
 
@@ -71,7 +64,6 @@ it(
       userData,
     )
     expect(paths.tasksHome).toBe(tasksHome) // env > {userData}/forge-workspaces（AC3 优先级）
-    expect(paths.skillsDir).toBeDefined() // skills 挂载目录解析（workspace 链接树）
     const previousDshHome = process.env.DSH_HOME
     process.env.DSH_HOME = paths.dshHome // 数据隔离（child 经 spawn env 继承——main.ts 同径）
 
@@ -91,11 +83,10 @@ it(
         { execPath: electronExe, childEntry }, // vitest(node/src) 驱动：electron 二进制 + dist child 入口（spawn 链路同款：ELECTRON_RUN_AS_NODE=1 + stdio ipc）
       )
 
-      // AC5（产品裁决 2026-10-09 反转）：默认组合（= 标准模式同栈）零 forge 工具——
-      // plugin-forge 已移出用户层/overlay 全局行（仅远征/突击预设组合携带）。任一
-      // forge 动词在场 = 全局行泄漏回归（标准模式不带 forge 工具/技能）。
-      for (const name of FORGE_TOOL_NAMES) {
-        expect(host.toolNames, `标准组合零 forge 面：${name} 不应注册（全局行泄漏回归——产品裁决 2026-10-09）`).not.toContain(name)
+      // AC5：默认组合零 forge 闭环工具（旧包 plugin-forge 已退役——工具面只装现役包）。
+      // 任一旧 forge 闭环动词在场 = 装配回归（标准组合不带闭环工具/技能）。
+      for (const name of ['addTask', 'claimTask', 'dispatchTask', 'submitTask', 'createProposal'] as const) {
+        expect(host.toolNames, `默认组合零 forge 闭环面：${name} 不应注册`).not.toContain(name)
       }
       // M2 四域 + P1 双服务 + M3 设置域全在场（tasksHome/settingsFile 注入 → core provide 联证；
       // forgeProposals 随 plugin-spec/1.11 提案域下线零注册——不在场清单）
