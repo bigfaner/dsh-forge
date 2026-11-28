@@ -8,9 +8,6 @@ import type { ForgeCommandInvocation, ForgeCommandResult, ForgeDiagEmitFace } fr
 import { emitForgeDiag } from "../faces.js";
 import type { LoopDriver } from "../loop/driver-face.js";
 
-/** 指令名（无 input 描述符——无参指令，composer 不展示占位） */
-export const STOP_DAG_TASKS_NAME = "stop-dag-tasks";
-
 /** 本会话无活循环的 no-op 回执（逐字口径——零归属信息） */
 export const NO_ACTIVE_LOOP_TEXT = "本会话没有派发任务";
 
