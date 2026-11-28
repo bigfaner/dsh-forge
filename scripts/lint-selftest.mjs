@@ -64,6 +64,12 @@ const FIXTURES = [
     imp: ['plugins 只依赖 lib'],
   },
   {
+    // lib-api 裸根禁令：plugins/* import @dsh-forge/lib-api 裸根（无子路径）即违规，只许 lib-api/<域>
+    path: 'plugins/forge/host/_lintneg_lib_api_bare_root.ts',
+    code: `import { api } from '@dsh-forge/lib-api'\nexport const v = api\n`,
+    imp: ['lib-api 裸根'],
+  },
+  {
     path: 'apps/web/src/styles/_lintneg_tokens.css',
     code: `.x { color: #ff0000; font-size: 12px; padding: 4px 8px; }\n`,
     token: true,
