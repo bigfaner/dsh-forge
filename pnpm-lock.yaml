@@ -361,6 +361,9 @@ importers:
 
   lib/api:
     devDependencies:
+      '@deepseek-ai/dsh-agent-preset-registry':
+        specifier: 0.2.0-rc.2
+        version: 0.2.0-rc.2(356b39924bbd10a5e58cafe8ded8ce29)
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
