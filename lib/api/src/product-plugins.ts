@@ -68,12 +68,6 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层：boot overlay presence 门注行
   // （dev 同径单源）。旧 @dsh-forge/git-worktree 域已归并本包，staged 种子随迁。
   project: { userLayerRow: false, staged: true },
-  // path-key（M1 阶段B 闭包补径，project 同款 staged 覆写）：旧包 plugin-forge[+spec] 是其
-  // 唯一 runtime dependencies 声明方（knowledge/project 声明在 devDependencies——不入闭包
-  // BFS），旧包退役即出闭包；host dist boot 链（ipc/bindings normalizeFsPath）静态 import
-  // 本包——缺席即安装版主进程 ERR_MODULE_NOT_FOUND 启动即崩。纯逻辑库形态（零装载行，
-  // librarySeed——dev 装载行漂移对账豁免）。
-  'path-key': { userLayerRow: false, staged: true, librarySeed: true },
   // task-loop（plugin-task-loop 1.15 退役批 staging 闭包登记，project 同款）：host dist boot
   // 链（bridge/run/remote-rpc/tasks-rpc/test-bridge）静态 import 本包（1.14 host 改指）——
   // 缺席即安装版主进程 ERR_MODULE_NOT_FOUND 启动即崩。行装载不走用户层（组合装配行 =

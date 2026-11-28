@@ -10,7 +10,7 @@
 //
 // 跨端直引先例：tests/structure/installer-pipeline.test.ts（apps/host 源面直引）。
 import { describe, expect, it } from 'vitest'
-import { normalizeFsPath } from '../../packages/path-key/src/index.js'
+import { normalizeFsPath } from '../../lib/path/src/path-key.js'
 import { createWorktreeIdentity, type ForgeProjectsIdentityFace } from '../../plugins/project/host/assembly/worktree-identity.js'
 import { selectMasterRow } from '../../apps/web/src/client-plugin/start-session-wrap.js'
 

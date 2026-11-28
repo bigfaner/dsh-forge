@@ -277,12 +277,12 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     }),
   )
 
-  it('staging 集合自动推导：种子（行插件 + 预设携带 + staged:true）∪ @dsh-forge/* 依赖闭包——contracts/path-key 闭包成员自动入场，新增产品包零配置', () => {
+  it('staging 集合自动推导：种子（行插件 + 预设携带 + staged:true）∪ @dsh-forge/* 依赖闭包——闭包成员自动入场，新增产品包零配置', () => {
     // 预设携带面真源 = 底稿文件扫描（M1 阶段B 旧包退役后预设零插件携带行——md-mermaid
     // 迁居批 1.2 起 in-preset 行退役转用户层全局行——expert-squad/knowledge 同径）
     expect(presetCarriedPlugins()).toEqual([])
-    // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除；
-    // M1 阶段B 后 path-key 经 staged:true 覆写续闭包——host dist ipc/bindings 静态 import 面）
+    // 闭包成员自动入场（e791a46 病理：闭包成员漏列致打包形态 ESM 解析断裂——推导制下
+    // 结构性消除；path-key 旧包退役归并 lib/path，host dist 静态 import 面改指 lib-path）
     // project = staged:true 覆写种子（1.17 批二卸旧装新：host dist boot 链静态 import 面——
     // 自 plugins/git-worktree 种子迁入；旧包退役）
     // knowledge = userLayerRow 种子（1.9 A5 重开放——用户层全局行 + skills/learn 技能面）
@@ -291,7 +291,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // spec = staged:true 覆写种子（plugin-spec 1.10 docs 域收编：core dist 装配行静态 import
     // @dsh-forge/spec——forgeDocs factory 改指新包，缺席即 boot ESM 解析断裂）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['core', 'lib/api', 'lib/db', 'lib/diag', 'lib/git', 'lib/path', 'lib/util', 'path-key', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/markdown-kit', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
+      ['core', 'lib/api', 'lib/db', 'lib/diag', 'lib/git', 'lib/path', 'lib/util', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/markdown-kit', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
     )
   })
 
@@ -397,7 +397,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
   })
 
   it('闭包自洽：已 staging 产品包的 @dsh-forge/* 运行时依赖均在场（kill-switch 误伤即红——boot child ESM 解析断裂→双服务灭→forge:* 通道全未注册）', () => {
-    // Root cause 实证（安装版 Electron 实测）：core dist import '@dsh-forge/path-key' 落空——
+    // Root cause 实证（安装版 Electron 实测）：core dist import 缺席的闭包成员落空——
     // 历史病理 = staging 硬编码清单漏列闭包成员；推导制下本断言守 kill-switch 不误伤。
     const missing: string[] = []
     for (const name of [...stagedPackages].sort()) {

@@ -14,7 +14,6 @@
 // 插件侧惰性 reflect.get 消费（激活早于 provide 不受阻），缺席 = 插件退默认实现
 //（独立 worktree 模式）。结构化类型本地声明——零反向依赖。
 // identity 依赖 @dsh-forge/lib-git（git 归并锚——M1 阶段 C 自 core 迁入公共库）+
-// @dsh-forge/path-key（路径归一）+ 
 // @dsh-forge/lib-path project-root（主检出根归拢单源——2026-11-24 用户裁决：porcelain 现查
 // 归拢推导抽 lib 三插件共享，本域附属 worktree 身份归属面消费单源零本地复本）——项目包
 // devDependencies 承载（bundle-host.mjs 构建期内联进 dist——产物自含，EXTERNAL 仅 @deepseek-ai/*）。

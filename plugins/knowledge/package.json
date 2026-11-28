@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/knowledge",
-  "version": "0.37.7",
+  "version": "0.37.8",
   "private": true,
   "type": "module",
   "description": "知识库：沉淀项目的约定、决策与踩坑经验，会话中按域检索随时查阅。",
@@ -39,7 +39,6 @@
     "@deepseek-ai/dsh-home-paths": "0.2.2-rc.5",
     "@dsh-forge/lib-db": "workspace:*",
     "@dsh-forge/lib-path": "workspace:*",
-    "@dsh-forge/path-key": "workspace:*",
     "@types/node": "24.19.0",
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.0",

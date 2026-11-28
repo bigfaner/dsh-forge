@@ -2,8 +2,8 @@
 //
 // 装载契约（dsh-dev 审计 2026-11 · bug 6a46cc75）：官方 dsh-plugin-manager 安装 =
 // profile 目录裸跑 `pnpm add <spec>`，无 workspace 协议改写/依赖闭包解析/打包步骤
-// ——插件产物必须自含（dependencies 全 registry 可解析）。@dsh-forge/lib-api 与
-// @dsh-forge/path-key 是 private workspace 包，不可 registry 安装 → host 面值依赖
+// ——插件产物必须自含（dependencies 全 registry 可解析）。@dsh-forge/lib-api 是
+// private workspace 包，不可 registry 安装 → host 面值依赖
 // （DIAG_EVENT 信封常量 / joinDirSegment 纯函数族，运行期零传递依赖）在构建期闭包
 // 内联进 bundle；官方机械（@deepseek-ai/*）与真实外部依赖（better-sqlite3/gray-matter）
 // 外置。

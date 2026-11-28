@@ -44,7 +44,7 @@ describe('SC-2 插件零 core / 零 expert-squad 依赖（构建图机械自证�
     }
   })
 
-  it('tsconfig references = contracts+path-key（零 core / 零 expert-squad 边——build 面零外业务 import）', () => {
+  it('tsconfig references = lib-api（零 core / 零 expert-squad 边——build 面零外业务 import）', () => {
     const ts = JSON.parse(readFileSync(join(PKG_DIR, 'tsconfig.json'), 'utf8')) as {
       references?: { path: string }[]
     }

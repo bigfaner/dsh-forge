@@ -170,9 +170,6 @@ importers:
       '@dsh-forge/mobile-bridge':
         specifier: workspace:*
         version: link:../../packages/plugins/mobile-bridge
-      '@dsh-forge/path-key':
-        specifier: workspace:*
-        version: link:../../packages/path-key
       '@dsh-forge/project':
         specifier: workspace:*
         version: link:../../plugins/project
@@ -453,16 +450,6 @@ importers:
         specifier: 24.19.0
         version: 24.19.0
 
-  packages/path-key:
-    dependencies:
-      '@dsh-forge/lib-path':
-        specifier: workspace:*
-        version: link:../../lib/path
-    devDependencies:
-      '@types/node':
-        specifier: 24.19.0
-        version: 24.19.0
-
   packages/plugins/mobile-bridge:
     devDependencies:
       '@types/node':
@@ -657,9 +644,6 @@ importers:
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path
-      '@dsh-forge/path-key':
-        specifier: workspace:*
-        version: link:../../packages/path-key
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
@@ -766,9 +750,6 @@ importers:
       '@dsh-forge/lib-util':
         specifier: workspace:*
         version: link:../../lib/util
-      '@dsh-forge/path-key':
-        specifier: workspace:*
-        version: link:../../packages/path-key
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0

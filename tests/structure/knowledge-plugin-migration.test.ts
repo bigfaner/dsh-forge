@@ -52,7 +52,7 @@ describe('验收1 结构门——plugins/knowledge 三目录制齐备', () => {
     expect(pkg.scripts.prepack).toContain('self-containment')
     expect(pkg.peerDependencies?.['@deepseek-ai/cordis'], 'cordis peerDep 补齐').toBeDefined()
     expect(pkg.devDependencies?.['@dsh-forge/lib-api'], 'lib-api devDeps（构建期内联）').toBeDefined()
-    expect(pkg.devDependencies?.['@dsh-forge/path-key'], 'path-key devDeps（构建期内联）').toBeDefined()
+    expect(pkg.devDependencies?.['@dsh-forge/lib-path'], 'lib-path devDeps（构建期内联）').toBeDefined()
     expect(pkg.dependencies?.['better-sqlite3'], 'better-sqlite3 依赖零残留（1.40 node:sqlite 迁移）').toBeUndefined()
     expect(pkg.devDependencies?.['@dsh-forge/lib-db'], 'lib-db 持久层保持 devDependencies（bundle 内联闭包）').toBeDefined()
   })

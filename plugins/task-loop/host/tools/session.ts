@@ -9,7 +9,7 @@
 //   ② cwd → projectId：绑定表解析（cwd 数据缝 = 插件 config.projects 静态供给——
 //      projectId 为运行期注册产物，Interface 1/3 服务面不含路径反查、Hard Rule 禁
 //      core 实现 import——绑定数据经插件 config 进入，插件不触 core 实现）。
-// 归一口径收编 @dsh-forge/path-key 单一来源（fix-30：与 core 注册链同源——同一
+// 归一口径收编 @dsh-forge/lib-path 单一来源（fix-30：与 core 注册链同源——同一
 // 变体拼写在 core 命中既有行 ⟺ 在此命中绑定行）。
 import type { ToolExecFace, ToolSessionEventFace, ToolSessionFace } from "../faces.js";
 

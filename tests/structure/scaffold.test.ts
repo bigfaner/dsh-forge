@@ -24,7 +24,6 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['apps/web', '@dsh-forge/web'],
     ['packages/core', '@dsh-forge/core'],
     ['plugins/knowledge', '@dsh-forge/knowledge'],
-    ['packages/path-key', '@dsh-forge/path-key'],
   ] as const
 
   it.each(artifacts)('%s 包名 %s 就位', (dir, name) => {
@@ -57,7 +56,6 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         // plugin-spec：spec 插件包（提示段迁入批建位——forge:pipeline/forge:doc-style 段归属）
         'plugins/spec',
         'plugins/knowledge',
-        'packages/path-key',
         // forge-deep-pack 1.3：forge 组合器包骨架建位（双链构建链随批入拓扑）
         'plugins/forge',
         'plugins/expert-squad',
@@ -72,13 +70,13 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
 
   it.each([
     // knowledge-stage1 1.8：core 知识域退役——过渡型 plugins/knowledge 引用随迁收口
-    // plugin-project 1.6：path-key 归并 lib/path——core refs 改指 lib/path（path-key 退役待删）
+    // plugin-project 1.6：path-key 归并 lib/path——core refs 改指 lib/path（旧包退役）
     ['packages/core', ['lib/api', 'lib/db', 'lib/diag', 'lib/git', 'lib/path', 'lib/util']],
     // fix-33 ⑯：knowledge ../core 引用删除——build 面零 core import（残留引用无消费）；
     // 测试面 core 源相对引入由 tsconfig.test.json 承载（不经 references）
     // knowledge 迁移批1.3：root 级 plugins/knowledge 三目录制——references 增 client 面
     // （tsconfig.client.json，exports["./client"] 类型链）
-    ['plugins/knowledge', ['plugins/knowledge/tsconfig.client.json', 'lib/api', 'packages/path-key']],
+    ['plugins/knowledge', ['plugins/knowledge/tsconfig.client.json', 'lib/api']],
     // typert 迁移 1.3：project tsconfig.json 改双 face solution 壳——composite 消费面直指 host 叶
     // plugin-task-loop 1.14：host tasks 域改指 @dsh-forge/task-loop——plugins/task-loop host 叶入 references
     ['apps/host', ['lib/api', 'packages/core', 'plugins/knowledge', 'plugins/project/tsconfig.host.json', 'plugins/task-loop/tsconfig.host.json']],

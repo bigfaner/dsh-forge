@@ -8,7 +8,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { normalizeFsPath } from '@dsh-forge/lib-path'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../host/storage/index.js'
 import type { ToolExecFace } from '../../host/tools/faces.js'
 import { createProjectResolver, createWsPathResolver, sessionContextOf, unboundSessionError } from '../../host/tools/session.js'
@@ -58,7 +58,7 @@ describe('createProjectResolver（cwd → projectId 静态绑定表——Q19 纯
     expect(resolver('/ws/demo')).toBe(expected)
   })
 
-  // fix-30 同源口径 pin：绑定表解析与注册链共消费 @dsh-forge/path-key——同一变体拼写
+  // fix-30 同源口径 pin：绑定表解析与注册链共消费 @dsh-forge/lib-path——同一变体拼写
   //（盘符大小写/正反斜杠/尾分隔符）注册链命中既有行 ⟺ 此处命中绑定行
   it('变体拼写矩阵与归一化同源（normalizeFsPath 键等价即命中）', () => {
     const resolver = createProjectResolver([{ wsPath: 'Z:\\learn', projectId: 'p-learn' }])
