@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/markdown-kit",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "private": true,
   "type": "module",
   "description": "dsh 插件：markdown-kit——mermaid 渲染与图源校验 + 文档转换枢纽（mermaid 依赖全仓唯一引用方；host 半 = validateMermaid/convertDocument tool + 引擎适配，ui 半 = React DOM 渐进增强器）",

@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/knowledge",
-  "version": "0.37.3",
+  "version": "0.37.4",
   "private": true,
   "type": "module",
   "description": "知识库：沉淀项目的约定、决策与踩坑经验，会话中按域检索随时查阅。",
