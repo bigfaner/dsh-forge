@@ -193,7 +193,7 @@ describe("delegate_expert 派发", () => {
     const spec = subagents.specs[0]! as SubagentActivationSpec & {
       request?: { parent?: unknown; agentPreset?: string; agentOptions?: unknown; prompt?: unknown };
     };
-    expect(spec.request).toBeDefined();
+    expect(Object.keys(spec.request!).sort()).toEqual(["agentOptions", "agentPreset", "parent", "prompt"]);
     expect(spec.request!.parent).toBe(parentAgent);
     expect(spec.request!.agentPreset).toBe("code-reviewer");
     expect(spec.request!.agentOptions).toEqual({ provider: "anthropic", model: "sonnet" });

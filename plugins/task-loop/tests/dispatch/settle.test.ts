@@ -308,9 +308,8 @@ describe("机械④ · review-wave-N 修正波标记（settleWorkerRun）", () =
       { ...RUN },
     );
     expect(settlement.case).toBe("settled");
-    const skip = diagCalls.find((d) => String(d.message).includes("review-wave mark skipped"));
-    expect(skip).toBeDefined();
-    expect(skip?.level).toBe("info");
+    expect(diagCalls.filter((d) => String(d.message).includes("review-wave mark skipped")), "review-wave mark skipped 诊断在案").toHaveLength(1);
+    expect(diagCalls.find((d) => String(d.message).includes("review-wave mark skipped"))?.level).toBe("info");
   });
 
   it("标记失败 fail-soft：appendCheckpoint 抛出不回滚已定结算", async () => {
@@ -593,8 +592,7 @@ describe("recoverSettleReports·runtime dir absent 诊断分级（bug 26dff330�
       },
       { projectId: "p-1", task: { slug: "s", localId: "1" } as never },
     );
-    const absent = entries.find((e) => e.message.includes("runtime dir absent"));
-    expect(absent).toBeDefined();
-    expect(absent!.level).toBe("warn");
+    expect(entries.filter((e) => e.message.includes("runtime dir absent")), "runtime dir absent 诊断在案").toHaveLength(1);
+    expect(entries.find((e) => e.message.includes("runtime dir absent"))!.level).toBe("warn");
   });
 });

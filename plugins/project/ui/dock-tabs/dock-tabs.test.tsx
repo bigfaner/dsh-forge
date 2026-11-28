@@ -109,7 +109,7 @@ describe('官方渠道文档开出（2.8 openResource + 2.13 数据路 forgeDirs
   it('文档行点击 → openResource(官方 dsh-resource://file/session 地址，不点名 kind——注册表按后缀选渲染器)——地址 = 官方 sessionFileAddress 真实产物（禁手拼）', async () => {
     const { mirror, openResource } = makeSidebarRight()
     const open = dockDocOpener(mirror, 'p1', undefined, makeDirFactsOf(forgeDirFixture))
-    expect(open).toBeDefined()
+    expect(typeof open).toBe('function')
     open!('docs/x/proposal.md')
     await Promise.resolve()
     await Promise.resolve()
@@ -145,7 +145,7 @@ describe('官方渠道文档开出（2.8 openResource + 2.13 数据路 forgeDirs
       // 第三/第四参零注入——走缺省 forgeDirs Typert 真身（修前 = preloadRpcClientFactory，
       // 无 window.dshForge 环境 invoke 缺席抛 → 被吞 → 本用例必红）
       const open = dockDocOpener(mirror, 'p1')
-      expect(open).toBeDefined()
+      expect(typeof open).toBe('function')
       open!('docs/x/proposal.md')
       // Typert 通路多一跳 invokeRemote await 链——宏任务兜底等稳
       await new Promise((resolve) => setTimeout(resolve, 0))

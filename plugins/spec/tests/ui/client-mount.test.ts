@@ -42,7 +42,7 @@ afterEach(resetAnchor);
 
 describe("specClient remote.$mount 装载契约（forgeSpecs client 半贡献）", () => {
   it("$mount 贡献 = generator 产 forgeSpecs 投影（package = @dsh-forge/spec + forgeSpecs/* descriptor 族含 list）", () => {
-    expect(FORGE_SPECS_REMOTE_CONTRIBUTION).toBeTruthy();
+    expect(FORGE_SPECS_REMOTE_CONTRIBUTION).toBeTypeOf("object");
     const info = FORGE_SPECS_REMOTE_CONTRIBUTION as { spec?: { package?: string; methods?: Record<string, unknown> } };
     expect(info.spec?.package).toBe("@dsh-forge/spec");
     const methods = Object.keys(info.spec?.methods ?? {});

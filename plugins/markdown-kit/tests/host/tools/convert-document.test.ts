@@ -132,7 +132,12 @@ describe('注册面形状（双 tool 并存 + schema/render 面）', () => {
     expect(tool.parameters.type).toBe('object')
     expect(Object.keys(tool.parameters.properties).sort()).toEqual(['docRel', 'format', 'images', 'outRel'])
     expect(tool.parameters.required).toEqual(['docRel'])
-    expect(tool.output.schema).toBeDefined()
+    expect(Object.keys(tool.output.schema), 'convert_document output schema').toEqual([
+      'type',
+      'additionalProperties',
+      'properties',
+      'required',
+    ])
     expect(typeof tool.output.render).toBe('function')
     expect(typeof tool.execute).toBe('function')
   })

@@ -33,7 +33,7 @@ function gatewayMapFace(): Record<string, unknown> {
 describe('forgeFaceOf 形状归一（bug 145b3d3b）', () => {
   it('gateway rc.2 Map 形态（electron dev 断点）→ face 解析成功、五族方法可达', () => {
     const face = forgeFaceOf({ remote: gatewayMapFace() })
-    expect(face).toBeDefined()
+    expect(face).toBeTypeOf('object')
     for (const ns of FIVE_NS) {
       const service = namespaceFaceOf(face as ForgeRemoteFace, ns)
       expect(typeof service?.probe).toBe('function')
@@ -42,14 +42,14 @@ describe('forgeFaceOf 形状归一（bug 145b3d3b）', () => {
 
   it('顶层属性形态（官方 web 舞台）→ face 解析成功（回归钉）', () => {
     const face = forgeFaceOf({ remote: topLevelFace() })
-    expect(face).toBeDefined()
+    expect(face).toBeTypeOf('object')
     expect(typeof (face as Record<string, unknown>).forgeProjects).toBe('object')
   })
 
   it('namespaces 普通对象形态（非 Map holder）→ face 解析成功', () => {
     const holder: Record<string, unknown> = { namespaces: {} }
     for (const ns of FIVE_NS) (holder.namespaces as Record<string, unknown>)[ns] = { probe: () => null }
-    expect(forgeFaceOf({ remote: holder })).toBeDefined()
+    expect(forgeFaceOf({ remote: holder })).toBeTypeOf('object')
   })
 
   it('缺一族（Map 形态）→ undefined 诚实降级', () => {
@@ -72,7 +72,7 @@ describe('forgeFaceOf 形状归一（bug 145b3d3b）', () => {
 
   it('可选族缺席不阻断五族门控（Map 形态，五族在场 + 可选族全缺）→ face defined、归一面不含可选族', () => {
     const face = forgeFaceOf({ remote: gatewayMapFace() })
-    expect(face).toBeDefined()
+    expect(face).toBeTypeOf('object')
     expect((face as unknown as Record<string, unknown>).forgeDirs).toBeUndefined()
     expect((face as unknown as Record<string, unknown>).forgeSpecs).toBeUndefined()
   })
@@ -92,7 +92,7 @@ describe('forgeFaceOf 形状归一（bug 145b3d3b）', () => {
     remote.forgeDirs = { facts: () => ({ ok: true, value: [{ dir: 'docs' }] }) }
     remote.forgeSpecs = { list: () => ({ ok: true, value: [{ slug: 'a' }] }) }
     const face = forgeFaceOf({ remote }) as ForgeRemoteFace
-    expect(face).toBeDefined()
+    expect(face).toBeTypeOf('object')
     expect(typeof namespaceFaceOf(face, 'forgeDirs')?.facts).toBe('function')
     expect(typeof namespaceFaceOf(face, 'forgeSpecs')?.list).toBe('function')
     expect(typeof namespaceFaceOf(face, 'forgeProjects')?.probe).toBe('function')

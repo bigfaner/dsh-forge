@@ -124,7 +124,7 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
   it("bundle-host.mjs 内联豁免含 dsh-typert-protocol（bug d19122cc——内联 npm 件用字符串 ctx.root，官方 dsh web 宿主上 Typert 控制器 fiber 全体 FAILED）", () => {
     const script = readFileSync(resolve(pkgDir, "scripts", "bundle-host.mjs"), "utf8");
     const exempt = /const INLINE_EXEMPT = (.+);/.exec(script)?.[1];
-    expect(exempt, "INLINE_EXEMPT 常量缺席").toBeDefined();
+    expect(typeof exempt, "INLINE_EXEMPT 常量缺席").toBe("string");
     const pattern = new RegExp(exempt!.replace(/^\/|\/$/g, ""));
     expect(pattern.test("@deepseek-ai/dsh-typert-protocol")).toBe(true);
     expect(pattern.test("@deepseek-ai/dsh-typert-protocol/remote-methods")).toBe(true);
@@ -136,7 +136,7 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
   it("内联豁免判定行为断言（执行 onResolve 判定逻辑——删 INLINE_EXEMPT.test 判定行即红，非只钉常量文本）", () => {
     const script = readFileSync(resolve(pkgDir, "scripts", "bundle-host.mjs"), "utf8");
     const block = /const INLINE_OFFICIAL_FILTER[\s\S]*?\n\};/m.exec(script)?.[0];
-    expect(block, "inlineOfficial 插件块缺席").toBeDefined();
+    expect(typeof block, "inlineOfficial 插件块缺席").toBe("string");
     const inlineOfficial = new Function("createRequire", "join", "pkgDir", `${block}; return inlineOfficial;`)(
       createRequire,
       join,

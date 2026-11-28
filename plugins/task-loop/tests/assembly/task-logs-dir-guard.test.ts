@@ -248,8 +248,7 @@ describe("worker 规格目录经注册表 spec.dir 解析（forge-dirs-unificati
     });
     await resolve("proj-key", { slug: "feat-x" }, "3.0");
     // Spec §2.2 同口径（project 侧 anchors.ts）：撞名报错并点名两个声明方，不取先到/后到者
-    const hit = diag.find((d) => d.level === "warn" && d.line.includes("dirKeys.alpha") && d.line.includes("dirKeys.beta"));
-    expect(hit).toBeDefined();
+    expect(diag.filter((d) => d.level === "warn" && d.line.includes("dirKeys.alpha") && d.line.includes("dirKeys.beta")), "撞名 warn 点名两个声明方").toHaveLength(1);
   });
 
   it("dirKeys 声明逐条形状校验（lib/path 单源——bug 32532117）：坏形状跳过 + warn 诊断；forge.* 保留名拒绝", async () => {

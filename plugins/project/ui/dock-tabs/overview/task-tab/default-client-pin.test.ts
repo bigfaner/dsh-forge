@@ -27,7 +27,7 @@ const src = (f: string): string => readFileSync(join(DIR, f), 'utf8')
 const assertTypertRpcImport = (s: string, label: string): void => {
   const imports = [...s.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)]
   const fromTypertRpc = imports.find((m) => /(^|[\s,])createForgeRpcClient[\s,]/.test(` ${m[1]} `) && m[2].endsWith('rpc.js'))
-  expect(fromTypertRpc, `${label} createForgeRpcClient 须 import 自 ui/rpc.js（Typert 切片）`).toBeTruthy()
+  expect(fromTypertRpc?.[2], `${label} createForgeRpcClient 须 import 自 ui/rpc.js（Typert 切片）`).toMatch(/(?:^|\/)rpc\.js$/)
   const fromChannels = imports.find((m) => /(^|[\s,])createForgeRpcClient[\s,]/.test(` ${m[1]} `) && m[2].endsWith('rpc-channels.js'))
   expect(fromChannels, `${label} 不得 import 通道式 rpc-channels.js 同名导出`).toBeUndefined()
 }

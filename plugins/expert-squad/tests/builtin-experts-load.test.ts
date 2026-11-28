@@ -100,9 +100,8 @@ describe("真实 scan 链装载四插件随包 experts/ 目录", () => {
       expect(loaded.size, `plugin ${pluginName} 键数`).toBe(readdirSync(dir).filter((f) => f.endsWith(".md")).length);
       for (const key of expectedKeys) {
         const entry = reg.get(key);
-        expect(entry, `plugin ${pluginName} 键 ${key}`).toBeDefined();
-        expect(entry.instanceId).toBe(`${pluginName}#${key}`);
-        expect(entry.title, `plugin ${pluginName} 键 ${key} title`).toBeTruthy();
+        expect(entry?.instanceId, `plugin ${pluginName} 键 ${key}`).toBe(`${pluginName}#${key}`);
+        expect(entry.title.length, `plugin ${pluginName} 键 ${key} title 非空`).toBeGreaterThan(0);
         expect(entry.sourcePath.endsWith(`${key}.md`)).toBe(true);
       }
     }
@@ -136,8 +135,8 @@ describe("真实 scan 链装载四插件随包 experts/ 目录", () => {
     expect(taskLoop.size).toBe(22);
     for (const key of taskLoop) {
       const entry = reg.get(key);
-      expect(entry, `task-loop 键 ${key}`).toBeDefined();
-      expect(entry.title, `task-loop 键 ${key} title`).toBeTruthy();
+      expect(entry?.instanceId.startsWith("task-loop#"), `task-loop 键 ${key}`).toBe(true);
+      expect(entry.title.length, `task-loop 键 ${key} title 非空`).toBeGreaterThan(0);
     }
     // 装载零降级：真实档案不得触发 warning（缺必需 frontmatter 会在 warnings 留痕）
     expect(reg.warnings, `scan warnings: ${reg.warnings.join(" | ")}`).toEqual([]);

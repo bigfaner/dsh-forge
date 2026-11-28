@@ -125,7 +125,7 @@ describe('loadOverviewHead（头路并发——projects 单点 + features/stats 
         stats: STATS,
       },
     })
-    expect(calls.find((c) => c.channel === FEATURES_CHANNELS.list)).toBeDefined()
+    expect(calls.filter((c) => c.channel === FEATURES_CHANNELS.list), 'features.list 通道在调').toHaveLength(1)
   })
 
   it('基本信息区：dirRows 缺席 = 零行（键集来自目录事实服务，无写死清单可占位）', async () => {
@@ -288,7 +288,7 @@ describe('落点纯函数', () => {
     const withList = { ...base, list: { kind: 'bugs' as const, bugs: [], counts: { open: 0, fixed: 0, unresolved: 0 } } }
     const errored = applyOverviewHead(withList, { ok: false, error: { message: 'x', uiState: 'error-bar' as const } })
     expect(errored.phase).toBe('error')
-    expect(errored.list).toBeDefined()
+    expect(errored.list).toBe(withList.list)
   })
 
   it('pendingOverviewList：清场 = 掏空列 + busy；非清场 = 旧行保持 + busy（缓存先行）', () => {
@@ -296,7 +296,7 @@ describe('落点纯函数', () => {
     const withList = { ...base, list: { kind: 'bugs' as const, bugs: [], counts: { open: 0, fixed: 0, unresolved: 0 } } }
     expect(pendingOverviewList(withList, true).list).toBeUndefined()
     expect(pendingOverviewList(withList, true).busy).toBe(true)
-    expect(pendingOverviewList(withList, false).list).toBeDefined()
+    expect(pendingOverviewList(withList, false).list).toBe(withList.list)
     expect(pendingOverviewList(withList, false).busy).toBe(true)
   })
 
@@ -309,8 +309,8 @@ describe('落点纯函数', () => {
     })
     expect(ok.error).toBeUndefined()
     const err = applyOverviewList(withList, { ok: false, error: { message: 'y', uiState: 'error-bar' as const } })
-    expect(err.error).toBeDefined()
-    expect(err.list).toBeDefined()
+    expect(err.error).toEqual({ message: 'y', uiState: 'error-bar' })
+    expect(err.list).toBe(withList.list)
   })
 
   it('overviewListPlan：键变 = 重拉；子 tab/项目切换 = 清场（同键 = 零装载）', () => {

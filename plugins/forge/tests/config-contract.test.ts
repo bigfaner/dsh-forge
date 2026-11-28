@@ -50,7 +50,10 @@ describe("forge patch config 行物化面（与官方 dshHomePath 写法同源�
     expect(anchorPoints, "五成员混合锚逐件在场（preset-forge ×5 + preset-headhunter expert-squad ×1）").toHaveLength(6);
     for (const member of ["project", "spec", "task-loop", "expert-squad", "knowledge"] as const) {
       const expr = anchorPoints.find((p) => p.includes(`'@dsh-forge/${member}/package.json'`));
-      expect(expr, `${member} 锚在场`).toBeDefined();
+      expect(
+        anchorPoints.filter((p) => p.includes(`'@dsh-forge/${member}/package.json'`)),
+        `${member} 锚在场（preset-forge ×5 + preset-headhunter expert-squad ×1）`,
+      ).toHaveLength(member === "expert-squad" ? 2 : 1);
       expect(expr, `${member} baseUrl 腿`).toContain(`createRequire(baseUrl).resolve('@dsh-forge/${member}/package.json')`);
       expect(expr, `${member} DSH_HOME generation 探测兜底腿`).toContain("process.env.DSH_HOME");
       expect(expr, `${member} 零裸 throw`).not.toContain("throw ");

@@ -76,7 +76,7 @@ describe('AC1/AC3 注册面 pin：恰三 tool（validate_mermaid + convert_docum
     expect(tool?.description.length).toBeGreaterThan(20)
     expect(tool?.parameters.type).toBe('object')
     expect(Object.keys(tool?.parameters.properties ?? {}).sort()).toEqual(['docRel', 'format', 'source'])
-    expect(tool?.output.schema).toBeDefined()
+    expect(Object.keys(tool?.output.schema ?? {}), 'validate_mermaid output schema').toEqual(['oneOf'])
     expect(typeof tool?.output.render).toBe('function')
     expect(typeof tool?.execute).toBe('function')
     dispose()
@@ -88,7 +88,12 @@ describe('AC1/AC3 注册面 pin：恰三 tool（validate_mermaid + convert_docum
     const tool = rt.registeredTools.find((t) => t.name === CONVERT_TOOL_NAME)
     expect(tool?.parameters.required).toEqual(['docRel'])
     expect(Object.keys(tool?.parameters.properties ?? {}).sort()).toEqual(['docRel', 'format', 'images', 'outRel'])
-    expect(tool?.output.schema).toBeDefined()
+    expect(Object.keys(tool?.output.schema ?? {}), 'convert_document output schema').toEqual([
+      'type',
+      'additionalProperties',
+      'properties',
+      'required',
+    ])
     dispose()
   })
 

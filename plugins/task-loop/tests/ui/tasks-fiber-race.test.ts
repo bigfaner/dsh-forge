@@ -60,7 +60,7 @@ function resetSeams(): void {
 /** 断言 forgeTasksFaceOf 可达且 list/stats 读面为 function */
 function expectTasksFaceReachable(): void {
   const face = forgeTasksFaceOf();
-  expect(face).toBeDefined();
+  expect(face).toBeTypeOf("object");
   expect(face?.list).toBeTypeOf("function");
   expect(face?.stats).toBeTypeOf("function");
 }

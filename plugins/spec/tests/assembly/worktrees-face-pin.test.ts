@@ -28,7 +28,7 @@ describe("lazyWorktreesFace 组合根 pin（三级劣形收窄 + 点分键取法
     const { ctx } = ctxOf(() => GOOD_FACE);
     const worktrees = lazyWorktreesFace(ctx);
     const face = worktrees();
-    expect(face).toBeDefined();
+    expect(face).toEqual(GOOD_FACE);
     await expect(face!.list({ projectRoot: "Z:/ws" })).resolves.toEqual({ entries: [{ path: "Z:/ws" }] });
   });
 
@@ -45,7 +45,7 @@ describe("lazyWorktreesFace 组合根 pin（三级劣形收窄 + 点分键取法
     const worktrees = lazyWorktreesFace(ctx);
     expect(worktrees()).toBeUndefined();
     provided = () => GOOD_FACE;
-    expect(worktrees()).toBeDefined();
+    expect(worktrees()).toEqual(GOOD_FACE);
     expect(keys.length).toBe(2);
   });
 

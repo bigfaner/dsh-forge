@@ -130,7 +130,7 @@ describe("三谓词（五件 skills 自持行——id 互异 ∩ ≠ base id ∩
     const names = allSkillsRows.map((r) => /^\s*providerName:\s*(\S+)/m.exec(r.body)?.[1]);
     for (const row of allSkillsRows) {
       const name = /^\s*providerName:\s*(\S+)/m.exec(row.body)?.[1];
-      expect(name, `${row.pkg} providerName 在场`).toBeDefined();
+      expect(typeof name, `${row.pkg} providerName 在场`).toBe("string");
       expect(name, `${row.pkg} providerName`).toBe(`filesystem-${row.pkg}`);
     }
     expect(new Set(names).size, "providerName 互异").toBe(names.length);
@@ -145,13 +145,13 @@ describe("自锚面（customSkillDirs 本包锚 + && 短路兜底 + ./package.js
     for (const pkg of FIVE) {
       if (pkg === "spec" || (PRESET_NESTED as readonly string[]).includes(pkg) || (TOP_ZERO as readonly string[]).includes(pkg)) continue;
       const expr = /!!js\s+(.+)$/m.exec(skillsRows(pkg)[0]!.body)?.[1];
-      expect(expr, `${pkg} !!js 锚表达式在场`).toBeDefined();
+      expect(typeof expr, `${pkg} !!js 锚表达式在场`).toBe("string");
       expect(expr).toContain(`resolve('${PKG_NAME[pkg]}/package.json')`);
       expect(expr, `${pkg} 锚定 skills/`).toMatch(/,\s*'skills'\)/);
       expect(expr, `${pkg} && 短路兜底`).toContain("&&");
     }
     const specExpr = /!!js\s+(.+)$/m.exec(skillsRows("spec")[0]!.body)?.[1];
-    expect(specExpr, "spec 锚表达式在场").toBeDefined();
+    expect(typeof specExpr, "spec 锚表达式在场").toBe("string");
     expect(specExpr).toContain(`resolve('${PKG_NAME.spec}/package.json')`);
     expect(specExpr, "spec 锚定 skills/").toMatch(/,\s*'skills'\)/);
   });
@@ -160,7 +160,7 @@ describe("自锚面（customSkillDirs 本包锚 + && 短路兜底 + ./package.js
     for (const pkg of PRESET_NESTED) {
       const body = presetNestedSkillRow(patchText[pkg], EXPECTED_ID[pkg]);
       const expr = /!!js\s+(.+)$/m.exec(body)?.[1];
-      expect(expr, `${pkg} !!js 混合锚表达式在场`).toBeDefined();
+      expect(typeof expr, `${pkg} !!js 混合锚表达式在场`).toBe("string");
       expect(expr, `${pkg} IIFE try/catch 形`).toMatch(/^\(\(\)=>\{try\{return /);
       expect(expr, `${pkg} baseUrl 腿（resolve 本包 package.json）`).toContain(`createRequire(baseUrl).resolve('${PKG_NAME[pkg]}/package.json')`);
       expect(expr, `${pkg} DSH_HOME generation 探测兜底腿`).toContain("process.env.DSH_HOME");
@@ -268,7 +268,7 @@ describe("forge patch 六插行（静态直检——直写正本）", () => {
     // generation 探测兜底，desktop profile 根 baseUrl 必失败落兜底），零裸 throw
     for (const member of MEMBERS) {
       const expr = instanceBody.split("\n").find((l) => l.includes(`'@dsh-forge/${member}/package.json'`));
-      expect(expr, `${member} 锚行在场`).toBeDefined();
+      expect(typeof expr, `${member} 锚行在场`).toBe("string");
       expect(expr, `${member} IIFE try/catch 形`).toMatch(/\(\(\)=>\{try\{return .+catch\(e\)\{/);
       expect(expr, `${member} baseUrl 腿`).toContain(`createRequire(baseUrl).resolve('@dsh-forge/${member}/package.json')`);
       expect(expr, `${member} DSH_HOME generation 探测兜底腿`).toContain("process.env.DSH_HOME");

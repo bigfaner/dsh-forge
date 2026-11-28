@@ -334,7 +334,7 @@ describe("目录键声明变化跟随（refresh——dest 枚举按当次声明�
     expect(destEnum()).toBeUndefined(); // 未 refresh 前枚举滞后
     expect(handle.refresh()).toBe(true);
     expect(destEnum()).toEqual(["spec.dir", "spec.dossier_dir"]);
-    expect(stub.defs.get("forge_dirs")).toBeDefined(); // 双工具整体重注册
+    expect(stub.defs.has("forge_dirs"), "双工具整体重注册").toBe(true);
     const calls = stub.registerCalls();
     expect(handle.refresh()).toBe(false); // 清单未变——零重注册
     expect(stub.registerCalls()).toBe(calls);

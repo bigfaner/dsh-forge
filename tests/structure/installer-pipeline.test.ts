@@ -354,7 +354,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // 现值锚：内置专家档案按插件域重组（expert-builtin-redistribution）——task-loop 22 档
     // 承接 a2a54922 病理面（plugin-forge 旧包已退役，experts 物化随迁出拆除）
     const taskLoopKey = Object.keys(staged).find((k) => k.endsWith('/task-loop') || k === 'task-loop')
-    expect(taskLoopKey, 'task-loop 未入 staging 闭包').toBeDefined()
+    expect(typeof taskLoopKey, 'task-loop 未入 staging 闭包').toBe('string')
     expect(staged[taskLoopKey!]).toContain('experts')
   })
 
