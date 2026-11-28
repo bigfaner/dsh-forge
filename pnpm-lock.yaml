@@ -149,15 +149,15 @@ importers:
       '@deepseek-ai/dsh-workspace':
         specifier: 0.2.2-rc.5
         version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-session-persistence@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-brand@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-session@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-timeout@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-session@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-storage-domain@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-storage@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-storage@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-typert-protocol@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))
-      '@dsh-forge/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
       '@dsh-forge/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@dsh-forge/knowledge':
         specifier: workspace:*
         version: link:../../plugins/knowledge
+      '@dsh-forge/lib-api':
+        specifier: workspace:*
+        version: link:../../lib/api
       '@dsh-forge/lib-git':
         specifier: workspace:*
         version: link:../../lib/git
@@ -192,9 +192,9 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: 0.2.0-rc.2
         version: 0.2.0-rc.2(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-scope@0.2.0-rc.2(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-invariants@0.2.0-rc.2(@deepseek-ai/cordis@4.1.0)))
-      '@dsh-forge/contracts':
+      '@dsh-forge/lib-api':
         specifier: workspace:*
-        version: link:../../packages/contracts
+        version: link:../../lib/api
       '@dsh-forge/markdown-kit':
         specifier: workspace:*
         version: link:../../plugins/markdown-kit
@@ -210,9 +210,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@dsh-forge/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
       '@dsh-forge/expert-squad':
         specifier: workspace:*
         version: link:../../plugins/expert-squad
@@ -222,6 +219,9 @@ importers:
       '@dsh-forge/knowledge':
         specifier: workspace:*
         version: link:../../plugins/knowledge
+      '@dsh-forge/lib-api':
+        specifier: workspace:*
+        version: link:../../lib/api
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path
@@ -437,9 +437,9 @@ importers:
 
   packages/core:
     dependencies:
-      '@dsh-forge/contracts':
+      '@dsh-forge/lib-api':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../../lib/api
       '@dsh-forge/lib-db':
         specifier: workspace:*
         version: link:../../lib/db
@@ -557,9 +557,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: 3.18.4
         version: 3.18.4
-      '@dsh-forge/contracts':
+      '@dsh-forge/lib-api':
         specifier: workspace:*
-        version: link:../../packages/contracts
+        version: link:../../lib/api
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path
@@ -658,9 +658,9 @@ importers:
       '@deepseek-ai/dsh-home-paths':
         specifier: 0.2.2-rc.5
         version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
-      '@dsh-forge/contracts':
+      '@dsh-forge/lib-api':
         specifier: workspace:*
-        version: link:../../packages/contracts
+        version: link:../../lib/api
       '@dsh-forge/lib-db':
         specifier: workspace:*
         version: link:../../lib/db
@@ -755,9 +755,6 @@ importers:
       '@deepseek-ai/dsh-util-workspace-path':
         specifier: 0.2.2-rc.5
         version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
-      '@dsh-forge/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
       '@dsh-forge/lib-api':
         specifier: workspace:*
         version: link:../../lib/api
@@ -825,9 +822,6 @@ importers:
       '@deepseek-ai/dsh-workspace':
         specifier: 0.2.2-rc.5
         version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-session-persistence@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-brand@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-session@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-timeout@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-session@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-storage-domain@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-storage@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-storage@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-typert-protocol@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))
-      '@dsh-forge/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
       '@dsh-forge/lib-api':
         specifier: workspace:*
         version: link:../../lib/api
@@ -949,9 +943,6 @@ importers:
       '@deepseek-ai/dsh-typert-protocol':
         specifier: 0.2.2-rc.5
         version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
-      '@dsh-forge/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
       '@dsh-forge/lib-api':
         specifier: workspace:*
         version: link:../../lib/api
