@@ -38,7 +38,7 @@ const SCAN = [
 /** plugins 只依赖 lib：非 lib- 前缀的 @dsh-forge/* 子路径即违规（import / dynamic import / require 三形） */
 const RE_PLUGINS_LIB = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"]@dsh-forge\/(?!lib-)[\w-]*/
 /** lib-api 裸根禁令：@dsh-forge/lib-api 裸根（无子路径）即违规，只许 @dsh-forge/lib-api/<域> */
-const RE_LIB_API_BARE = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"]@dsh-forge\/lib-api['"]/
+const RE_LIB_API_BARE = /(?:from\s*|import\s*\(\s*|require\s*\(\s*)['"]@dsh-forge\/lib-api['"]/
 /** plugins 扫描面：四源码目录，排除测试与产物（测试可 import contracts 做断言——合理，不禁） */
 const PLUGINS_SUBDIRS = ['host', 'ui', 'shared', 'src']
 

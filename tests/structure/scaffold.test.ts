@@ -149,6 +149,8 @@ describe('AC2–AC4 G0 规则面（oxlint 三铁律 + SC2 watch 禁令 + 令牌 
     // lib-api 裸根禁令：plugins/* 只许 @dsh-forge/lib-api/<域>，裸根即违规；其它 lib-* 裸根不限
     expect(imp).toContain('lib-api 裸根')
     expect(imp).toMatch(/lib-api\['"\]/)
+    // 零空白形态也拦截：from 分支收紧为 from\s*（判例 bug 44d09edd——`from'@dsh-forge/lib-api'` 曾绕过）
+    expect(imp).toMatch(/from\\s\*\|import\\s\*\\\(\\s\*\|require\\s\*\\\(\\s\*\)\['"\]@dsh-forge\\\/lib-api/)
     // 扫描面含 plugins/*（host/ui/shared/src 四目录）
     expect(imp).toMatch(/dir:\s*'plugins\/\*'/)
     // 负样例自证在场（lint-selftest FIXTURES 含 plugins 铁律与 lib-api 裸根负样例）

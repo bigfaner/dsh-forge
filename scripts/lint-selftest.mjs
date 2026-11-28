@@ -70,6 +70,12 @@ const FIXTURES = [
     imp: ['lib-api 裸根'],
   },
   {
+    // lib-api 裸根禁令零空白形态：`export { x } from'@dsh-forge/lib-api'`（合法 JS，无空白）
+    path: 'plugins/forge/host/_lintneg_lib_api_bare_root_zero_space.ts',
+    code: `export { api } from'@dsh-forge/lib-api'\nexport const v = api\n`,
+    imp: ['lib-api 裸根'],
+  },
+  {
     path: 'apps/web/src/styles/_lintneg_tokens.css',
     code: `.x { color: #ff0000; font-size: 12px; padding: 4px 8px; }\n`,
     token: true,
