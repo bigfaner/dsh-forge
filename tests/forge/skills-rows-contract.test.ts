@@ -72,7 +72,10 @@ function skillsRows(pkg: Five): { id: string; body: string }[] {
 const PRESET_NESTED = ["expert-squad"] as const;
 const PRESET_OF: Record<(typeof PRESET_NESTED)[number], string> = { "expert-squad": "preset-headhunter" };
 
-const allSkillsRows = FIVE.map((p) => ({
+/** project 顶层行退役（plugins-remediation M1 阶段 A——空技能注册行与 skills/ 目录删除，零顶层行、无子树实例）。 */
+const TOP_ZERO = ["project"] as const;
+
+const allSkillsRows = FIVE.filter((p) => !(TOP_ZERO as readonly string[]).includes(p)).map((p) => ({
   pkg: p,
   id: EXPECTED_ID[p],
   body: (PRESET_NESTED as readonly string[]).includes(p)
@@ -95,11 +98,15 @@ function presetNestedSkillRow(yaml: string, id: string): string {
 }
 
 describe("三谓词（五件 skills 自持行——id 互异 ∩ ≠ base id ∩ providerName 互异 ≠ 默认名）", () => {
-  it("四件恰一条顶层 skills 行 id = skill-filesystem-<pkg>；expert-squad 顶层行退役（preset-headhunter 子树实例承载）", () => {
+  it("三件恰一条顶层 skills 行 id = skill-filesystem-<pkg>；expert-squad 顶层行退役（preset-headhunter 子树实例承载）；project 顶层行退役（空技能注册删除，零子树实例）", () => {
     for (const pkg of FIVE) {
       const rows = skillsRows(pkg);
       if ((PRESET_NESTED as readonly string[]).includes(pkg)) {
         expect(rows, `${pkg} 顶层 skills 行退役（子树实例承载）`).toHaveLength(0);
+        continue;
+      }
+      if ((TOP_ZERO as readonly string[]).includes(pkg)) {
+        expect(rows, `${pkg} 顶层 skills 行退役（零子树实例）`).toHaveLength(0);
         continue;
       }
       expect(rows, `${pkg} 顶层 skills 行数`).toHaveLength(1);
@@ -134,9 +141,9 @@ describe("三谓词（五件 skills 自持行——id 互异 ∩ ≠ base id ∩
 });
 
 describe("自锚面（customSkillDirs 本包锚 + && 短路兜底 + ./package.json 出口前提）", () => {
-  it("四件新增行 customSkillDirs 表达式自锚本包 skills/，且携 && 短路兜底（防锚解析异常冒泡打断行激活；spec 既有行表达式不动）", () => {
+  it("三件新增行 customSkillDirs 表达式自锚本包 skills/，且携 && 短路兜底（防锚解析异常冒泡打断行激活；spec 既有行表达式不动；project 顶层行已退役）", () => {
     for (const pkg of FIVE) {
-      if (pkg === "spec" || (PRESET_NESTED as readonly string[]).includes(pkg)) continue;
+      if (pkg === "spec" || (PRESET_NESTED as readonly string[]).includes(pkg) || (TOP_ZERO as readonly string[]).includes(pkg)) continue;
       const expr = /!!js\s+(.+)$/m.exec(skillsRows(pkg)[0]!.body)?.[1];
       expect(expr, `${pkg} !!js 锚表达式在场`).toBeDefined();
       expect(expr).toContain(`resolve('${PKG_NAME[pkg]}/package.json')`);
