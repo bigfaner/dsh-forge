@@ -139,7 +139,7 @@ function docsBlock(): string {
 
 /**
  * 主会话段模板（自包含，唯一模式）。
- * 总纲 = Spec/Goal/AC 词汇（状态库/AC 对齐键/completed 拆解前置锚/流转确认两分/隐式赞同）。
+ * 总纲 = Spec/Goal/AC 词汇（状态库/AC 对齐键/状态机逐态表 + human-only 边/流转确认两分/隐式赞同）。
  */
 function mainSection(isGitRepo: boolean): string {
   const git = isGitRepo ? gitRule() : ''
@@ -150,8 +150,31 @@ function mainSection(isGitRepo: boolean): string {
 - 状态存于 spec 管线的状态库（Spec/Goal/AC/文档登记四域，按工作区注册）；一切状态判断以管线工具（forgeSpecs 查询族）的结果为准，不以盘上文件或记忆推断。
 - Spec 身份 = slug；Spec 文档目录 = .forge/specs/{slug}/；Goal/AC 经 querySpec 父链追溯（spec → goals → acs）查询，不凭记忆复述。
 - AC 判据 = 投影对齐键：判据文本逐字精确存储，匹配层 trim + 全半角折叠后精确相等即命中——任务侧承接面 = 自带 acceptance_criteria，拆解时与 AC 判据逐字一致（抄写漂移即投影 unmatched）。
-- Spec 状态机 draft → awaiting_approval → approved → in_progress → awaiting_acceptance → completed；awaiting_acceptance → completed 仅由用户动作写入（human-only）且为拆解前置锚——仅 completed 态 Spec 可拆解派发任务；驳回（awaiting_approval → draft）与退回（awaiting_acceptance → in_progress）附理由留痕。
-- 阶段流转确认两分——用户动作即赞同、模糊才反问：用户消息明确指向下一阶段（送审、接受、拆解、开跑、归档等）即视为赞同，直接调用管线工具流转 Spec 状态并推进，不再反问；语义模糊（未明确指向阶段推进、存在多个候选下一阶段、无阶段指向词的短指令如「继续」「好」）一律归模糊，维持 ask_user_question 显式确认。
+- Spec 状态机 draft → awaiting_approval → approved → in_progress → awaiting_acceptance → completed；驳回（awaiting_approval → draft）与退回（awaiting_acceptance → in_progress）附理由留痕。各态含义与推进条件见下表；completed = 实现验收通过后的冻结快照，不是拆解前置。
+
+| 状态 | 含义 | 进入条件 | 本环节做什么 | 输入 | 输出 |
+|---|---|---|---|---|---|
+| draft | 文档草稿 | create_spec 创建，或被驳回 | grilling：追问到共识，写 spec.md 与 Goal/AC | 用户想法 | spec.md、Goal、AC |
+| awaiting_approval | 文档待评审 | 用户要求送审 | 不推进实现，等用户评审 | draft 终稿 | 用户裁决：通过 / 驳回 |
+| approved | 文档定稿，可拆解 | 用户批准 | 拆解：to-tasks，AC 判据逐字落任务 acceptance_criteria，单次 batch_add_tasks | 已批准 spec 的 AC 清单 | 任务清单 |
+| in_progress | 实现中 | 开始派发（approved → in_progress 机械边） | 派发循环执行任务，逐条结算 AC | 任务清单 | 代码、提交、AC 证据 |
+| awaiting_acceptance | 实现完成，待验收 | Goals 全 completed 时链式收口进入 | 呈交证据，不做新改动，等用户验收 | AC 投影、提交清单 | 用户裁决：接受 / 退回 |
+| completed | 验收通过，冻结 | 用户明示接受（agent 须有显式授权） | 不再改动、不再拆解；后续需求走新 spec | 用户接受 | 冻结快照 |
+
+| 边 | 触发方 | 条件 |
+|---|---|---|
+| draft → awaiting_approval | agent | 用户要求送审 |
+| awaiting_approval → draft | agent，附理由 | 用户驳回 |
+| awaiting_approval → approved | agent | 用户批准（指向实现的指令如「拆解」「开做」亦算批准） |
+| approved → in_progress | agent | 拆解并开始派发 |
+| in_progress → awaiting_acceptance | 链式收口 | Goals 全 completed |
+| awaiting_acceptance → in_progress | agent，附理由 | 用户退回 |
+| awaiting_acceptance → completed | 用户，或经用户显式授权的 agent（human-only） | 用户明示验收通过 |
+| completed 之后 | 无出边 | — |
+
+- human-only 边：spec / milestone / roadmap 的 awaiting_acceptance → completed，以及 Goal 的 finalize_goal 确认。agent 只有在人类对该边显式授权后才可代写（如「验收通过」「标 completed」并点名对象）；无显式授权不得自写，也不得以「后续步骤需要」为由推断授权。
+- 阶段流转确认两分——用户动作即赞同、模糊才反问：用户消息明确指向某一阶段（送审、批准、拆解、开跑、退回等）即视为赞同，调用管线工具流转并推进，不再反问；语义模糊（未明确指向阶段推进、存在多个候选下一阶段、无阶段指向词的短指令如「继续」「好」）一律归模糊，维持 ask_user_question 显式确认。
+- 逐边推进：一次用户指令只走它指向的那一环及其后的机械边，禁止连推多态；human-only 边只认显式授权，不适用隐式赞同。
 - 隐式流转约定：隐式赞同流转后，在对话纪要与流转后回复中注明「隐式赞同：<用户动作>」；驳回态 Spec 不触发隐式翻转——该例外为提示词层软约束。${git}
 - 大需求走 Roadmap/Milestone 目标层级：Roadmap（产品级）→ Milestone（模块级）→ Spec（批次级，可选 milestone_id 挂链）；Milestone 达成 = 挂链 specs 全 completed（聚合派生查询期现算），验收确认 = transition_milestone / transition_roadmap（human-only 边）。
 - 里程诊断工具缝：里程碑收口或派发推进时点调用一次 \`spec_stats\` 自报里程（N Spec / M Goal / K AC / 投影态分布）——查询期现算零落库，agent 主动调用，零新服务登记。
@@ -163,10 +186,11 @@ ${docsBlock()}
 flowchart LR
     A[grilling] -->|"spec.md + createSpec"| B{用户评审}
     B -->|"驳回退 draft"| A
-    B -->|"approved"| C["实现推进 in_progress"]
-    C --> D["验收 awaiting_acceptance"]
-    D -->|"completed（仅用户确认）"| E["to-tasks 拆解（仅 completed 态）"]
-    E -->|"任务清单"| F["/run-dag-tasks 派发"]
+    B -->|"approved"| E["to-tasks 拆解（approved 态）"]
+    E -->|"任务清单"| F["/run-dag-tasks 派发（in_progress）"]
+    F -->|"Goals 全 completed"| D["验收 awaiting_acceptance"]
+    D -->|"completed（仅用户确认）"| G["冻结"]
+    D -->|"退回"| F
 \`\`\`
 `
 }

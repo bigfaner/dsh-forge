@@ -11,6 +11,7 @@ description: 把共识终态（spec / 用户直接拆解）转化为任务容器
 - 前置：
   - 容器 slug 已定（任务容器 = slug 本身；向用户确认或从上下文取用，不得臆造）。
   - spec 在场时，以其 AC 判据清单为拆解输入；task 侧零 spec 感知——判据经拆解逐字下发到任务 `acceptance_criteria`。
+  - 拆解只对 `approved` 态的 spec：`awaiting_approval` 态须先经用户批准，`completed` 态冻结不可拆解（后续需求走新 spec）。
 
 ## 二、spec 在场探测分叉
 

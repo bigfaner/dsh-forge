@@ -55,7 +55,7 @@ describe('段名/段序（knowledge 500 之后 forge 段族）', () => {
 describe('renderSpecPipelineSection——唯一模式（四模板删远征两份、突击两份改写为 Spec 词汇）', () => {
   const MAIN_RENDER = renderSpecPipelineSection({ isGitRepo: true })
 
-  it('主会话全文：总纲（Spec 状态库 / AC 对齐键 / completed 拆解前置锚）三段结构在场', () => {
+  it('主会话全文：总纲（Spec 状态库 / AC 对齐键 / 状态机逐态表 + human-only 边）三段结构在场', () => {
     expect(MAIN_RENDER).toContain('## Forge 任务管线')
     expect(MAIN_RENDER).toContain('### 总纲与核心规则')
     expect(MAIN_RENDER).toContain('### 文档位置与存储约束')
@@ -112,6 +112,14 @@ describe('renderSpecPipelineSection——唯一模式（四模板删远征两份
     expect(MAIN_RENDER).toContain('createSpec')
     expect(MAIN_RENDER).toContain('to-tasks')
     expect(MAIN_RENDER).toContain('run-dag-tasks')
+    // 拆解挂 approved；completed = 验收冻结，非拆解前置
+    expect(MAIN_RENDER).toContain('to-tasks 拆解（approved 态）')
+    expect(MAIN_RENDER).not.toContain('completed 拆解前置锚')
+    expect(MAIN_RENDER).not.toContain('仅 completed 态')
+    expect(MAIN_RENDER).toContain('| completed | 验收通过，冻结 |')
+    expect(MAIN_RENDER).toContain('agent 只有在人类对该边显式授权后才可代写')
+    expect(MAIN_RENDER).toContain('human-only 边只认显式授权，不适用隐式赞同')
+    expect(MAIN_RENDER).toContain('禁止连推多态')
   })
 
   it('Milestone/Roadmap 词汇 + spec_stats 工具缝引导行在场（主会话；子会话裁剪版不含总纲词汇）', () => {
