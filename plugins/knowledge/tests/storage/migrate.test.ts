@@ -9,7 +9,7 @@ import { openKnowledgeDatabase } from '../../host/storage/open.js'
 import { runSeedMigration } from '../../host/storage/migrate.js'
 import { canonicalWsPath } from '../../host/storage/registry.js'
 import { KNOWLEDGE_MIGRATE_EVENT, type DiagEmitter } from '../../host/storage/index.js'
-import type { DiagEventPayload } from '@dsh-forge/contracts'
+import type { DiagEventPayload } from '@dsh-forge/lib-api/diag'
 
 const roots: string[] = []
 function tmpRoot(): string {

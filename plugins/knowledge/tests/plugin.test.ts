@@ -15,7 +15,7 @@ import { canonicalWsPath } from '../host/storage/registry.js'
 const projectKeyOf = (wsPath: string): string => libProjectKeyOf(canonicalWsPath(wsPath))
 import type { KnowledgePromptSection, KnowledgeToolDefinition, ScopedAgentFace } from '../host/tools/index.js'
 import type { BrowseKnowledgeService } from '../host/service/index.js'
-import type { DiagEventPayload } from '@dsh-forge/contracts'
+import type { DiagEventPayload } from '@dsh-forge/lib-api/diag'
 
 // 自持存储自启的宿主环境锚摘除（hermetic）：本文件全部装配走显式 config.dbFile——
 // 开发机 shell 携带 DSH_HOME/DSH_FORGE_TASKS_HOME 时避免缺省锚落盘真数据域。

@@ -21,7 +21,7 @@
 // ④拖拽落位 toast 在 hook 执行面出票（「{标题} 从{from} 移动到 {to}」域名实读，同官方 Toast）。
 import type { ReactNode } from 'react'
 import { Checkbox, StateDot, Tag, Toast, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { KnowledgeCard } from '@dsh-forge/contracts'
+import type { KnowledgeCard } from '@dsh-forge/lib-api/dto/knowledge'
 import type { RpcUiStateKind } from './rpc-channels.js'
 import { EmptyState, ErrorBar, SkeletonRows } from './components.js'
 import { IconFlameFillRegular } from './components-mirror.js'

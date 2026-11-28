@@ -1,5 +1,5 @@
 // 知识服务域 typed errors（1.7 随迁自 core——RPC 边界序列化为 RpcErrorPayload
-// { code, message, data }，UI 按 code 映射状态；code 字面量锚定 @dsh-forge/contracts
+// { code, message, data }，UI 按 code 映射状态；code 字面量锚定 @dsh-forge/lib-api
 // ERROR_CODES）。InvalidKnowledgeDirError 已在 storage/scan.ts（1.5 自持拷单源）。
 /** 知识域错误附载（RpcErrorPayload.data 的形状：标识 + 失败原因） */
 export interface KnowledgeErrorData {

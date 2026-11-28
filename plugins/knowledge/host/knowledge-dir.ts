@@ -7,7 +7,7 @@
 //     （消费点 fail-soft 回退缺省 + warn 埋点——不静默，AGENTS §7）。
 // 物化时序（AC2）：本解析不做任何建目录 IO——消费点（registerProjectRow /
 // registerKnowledge 读时 mkdir recursive）承担 WYSIWYG + ACL 时序，不在 apply 期预建。
-import { joinDirSegment } from '@dsh-forge/path-key'
+import { joinDirSegment } from '@dsh-forge/lib-path'
 
 /** 缺省目录段（{projectDir}/.knowledge——与 lib-path deriveKnowledgeDir 客户端派生同字面） */
 export const KNOWLEDGE_DIR_DEFAULT_SEGMENT = '.knowledge'

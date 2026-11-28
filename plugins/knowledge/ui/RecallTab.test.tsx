@@ -7,7 +7,7 @@
 // 渲染面用 react-dom/server（折叠态/展开卡全相位静态可测；hook 装载与反馈交互效应面归 e2e）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { RecallGroup, RecallGroupHit } from '@dsh-forge/contracts'
+import type { RecallGroup, RecallGroupHit } from '@dsh-forge/lib-api/dto/knowledge'
 import { RpcClientError } from './rpc-channels.js'
 import {
   applyRecallOutcome,

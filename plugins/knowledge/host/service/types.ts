@@ -3,20 +3,7 @@
 // contracts 为单一来源（web/host 通道面消费不变）；本文件只持服务方法签名与其专有
 // 入出参（IndexReport/SearchQuery/SearchHit/ReadAbstractQuery/EntryAbstract）。
 // 定位铁律：纯类型，零逻辑（类型依赖仅 contracts 信封）。
-import type {
-  DomainNode,
-  EntryActionFailureCode,
-  EntryActionResult,
-  EntryDetail,
-  EntryDetailQuery,
-  HeatByEntry,
-  KnowledgeCard,
-  ListEntriesQuery,
-  RecallFeedbackOutcome,
-  RecallFeedbackRequest,
-  RecallGroup,
-  SessionRecallQuery,
-} from '@dsh-forge/contracts'
+import type { DomainNode, EntryActionFailureCode, EntryActionResult, EntryDetail, EntryDetailQuery, HeatByEntry, KnowledgeCard, ListEntriesQuery, RecallFeedbackOutcome, RecallFeedbackRequest, RecallGroup, SessionRecallQuery } from '@dsh-forge/lib-api/dto/knowledge'
 
 // contracts 信封码集/回执类型再导出（service.ts 消费单源——类型仍以 contracts 为单一来源）
 export type { EntryActionFailureCode, EntryActionResult }
@@ -474,12 +461,7 @@ export type KnowledgeCreateDomainOutcome =
  * 本文件再导出维持服务面签名引用零漂移）。通道层只承担 IPC 载荷形状防线；
  * 越界/缺 note/unconfirmed 业务校验归本服务域（service/feedback.ts）。
  */
-export type {
-  RecallFeedbackFailureCode,
-  RecallFeedbackOutcome,
-  RecallFeedbackRequest,
-  RecallFeedbackResult,
-} from '@dsh-forge/contracts'
+export type { RecallFeedbackFailureCode, RecallFeedbackOutcome, RecallFeedbackRequest, RecallFeedbackResult } from '@dsh-forge/lib-api/dto/knowledge'
 
 /** 回流配置面（§2.4：阈值归插件 config，非代码常量）。
  *  分阈迁移提示（stage③ C1 跨内核校准）：两档阈值缺省已由旧词面核 1 校准为 0.25

@@ -15,7 +15,7 @@
 // browseActions——browser-actions 同形制）；effect 仅剩编排胶水（Node 测面外的部分沿
 // use-forge-projects 先例，归 3.8 装配 + e2e）。
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import type { DomainNode, EntryActionReceipt, EntryActionRequest, KnowledgeCard } from '@dsh-forge/contracts'
+import type { DomainNode, EntryActionReceipt, EntryActionRequest, KnowledgeCard } from '@dsh-forge/lib-api/dto/knowledge'
 import { currentDefaultRpcClientFactory, rpcUiState, RpcClientError, type ForgeRpcClient, type RpcClientFactory, type RpcUiStateKind } from './rpc-channels.js'
 
 /** 缺省工厂（页内缺省缝——apply 期装配分流安装；模块级常量保引用稳定——hook deps 安全） */

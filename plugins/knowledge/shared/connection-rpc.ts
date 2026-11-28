@@ -9,7 +9,7 @@
 export const KNOWLEDGE_RPC_CHANNEL = '/api'
 
 /**
- * forge:* 通道常量 → connection endpoint 映射表（键 = @dsh-forge/contracts 通道字面）。
+ * forge:* 通道常量 → connection endpoint 映射表（键 = @dsh-forge/lib-api 通道字面）。
  * knowledge 七通道（KNOWLEDGE_CHANNELS 全集）+ projects 两通道（knowledge UI 消费切片
  * list/get）。worktree.resolve 不入表——knowledge UI 零消费（anchored-projects 镜像
  * 窄面注记）；未映射通道 client 侧 typed 拒绝信封降级。

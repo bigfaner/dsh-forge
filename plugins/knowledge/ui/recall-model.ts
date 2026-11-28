@@ -19,13 +19,7 @@
 //     契约（S1–S12）内——卡片按宁缺不假降级呈现（字段补齐须先修订契约再进实现）。
 //   - 展开态归因区时间 = 该轮末次调用时点 LocaleDatetime（YYYY/MM/DD HH:mm:ss 本地时刻）。
 // 边界：时间标签不依赖相对时刻（卡片为历史台账——绝对时刻自含，不随刷新漂移）。
-import type {
-  EntryScope,
-  RecallGroup,
-  RecallGroupHit,
-  RecallQuerySnapshot,
-  RecallVerb,
-} from '@dsh-forge/contracts'
+import type { EntryScope, RecallGroup, RecallGroupHit, RecallQuerySnapshot, RecallVerb } from '@dsh-forge/lib-api/dto/knowledge'
 
 /** 单个动词计数（卡片 L2 工具统计 chip 数据） */
 export interface RecallVerbCount {

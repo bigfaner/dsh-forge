@@ -33,8 +33,8 @@ import {
   type DshHomePathProbe,
 } from './storage/index.js'
 import { canonicalWsPath } from './storage/registry.js'
-import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/contracts'
-import { joinDirSegment } from '@dsh-forge/path-key'
+import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/lib-api/diag'
+import { joinDirSegment } from '@dsh-forge/lib-path'
 import { projectKeyOf, type ForgeDirs } from '@dsh-forge/lib-path'
 import { defaultKnowledgeDirOf, resolveKnowledgeDir, type KnowledgeDirSetting } from './knowledge-dir.js'
 import {

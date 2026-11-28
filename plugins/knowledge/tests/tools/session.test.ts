@@ -123,7 +123,7 @@ describe('unboundSessionError（未绑定失败口径——agent 回落检索原
 })
 
 // ── stage④ 1.5 会话归因派生（roundtable2 B2——核销卷 review/session-events-verification.md） ──
-import type { DiagEventPayload } from '@dsh-forge/contracts'
+import type { DiagEventPayload } from '@dsh-forge/lib-api/diag'
 import type { SessionEventFace, ToolSessionEventsFace } from '../../host/tools/faces.js'
 import { deriveTurnContext } from '../../host/tools/session.js'
 

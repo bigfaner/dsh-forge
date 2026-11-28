@@ -1,9 +1,9 @@
 // 通道键结构 pin（CT-KN-CH 双侧同钉——knowledge-plugin-migration 1.4）：三面发起的全部
-// RPC 通道键集合逐字等于 @dsh-forge/contracts KNOWLEDGE_CHANNELS 本尊导出面（迁移零改键，
+// RPC 通道键集合逐字等于 @dsh-forge/lib-api/channels KNOWLEDGE_CHANNELS 本尊导出面（迁移零改键，
 // 宿主侧 provider 不动）。独立可红：任一键缺失/多出/字面漂移即红。
 // search/readAbstract 不在面——agent 面唯一门 = knowledge 插件 tool（双门分工）。
 import { describe, expect, it } from 'vitest'
-import { KNOWLEDGE_CHANNELS } from '@dsh-forge/contracts'
+import { KNOWLEDGE_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { createForgeRpcClient } from './rpc-channels.js'
 
 const noopTransport = async (): Promise<unknown> => ({ ok: true, data: null })

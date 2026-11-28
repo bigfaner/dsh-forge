@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { KnowledgeDirSectionView, KNOWLEDGE_DIR_SECTION_KEY, loadKnowledgeDirAnchor } from './knowledge-dir-section.js'
 import { registerKnowledgeDirSection } from './faces.js'
 import type { SectionSlotsFace } from './keyed-section.js'
-import type { ProjectSummary } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import type { RpcClientFactory } from './rpc-channels.js'
 
 function project(partial: Partial<ProjectSummary>): ProjectSummary {

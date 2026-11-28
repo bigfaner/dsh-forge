@@ -2,7 +2,7 @@
 // 信封形状（typed error 带内返回）+ projects 数据源两形态（core 服务 / workspaceRegistry
 // 投影）+ registerKnowledgeConnectionRpc 注册/注销语义。
 import { describe, expect, it } from 'vitest'
-import type { ProjectSummary } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import { EntryNotFoundError } from '../host/service/errors.js'
 import {
   isForgeProjectsSource,

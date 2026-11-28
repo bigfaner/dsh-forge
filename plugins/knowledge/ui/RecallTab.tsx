@@ -25,14 +25,7 @@
 // 壳侧 ConversationViews 不迁，ForgeRecallViewProps/KitSelectorHook 依赖类型本地/kit-types
 // 最小抽出；注册面 knowledge-face 三 import 之一即本件）。
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import type {
-  EntryDetail,
-  RecallFeedbackFailureCode,
-  RecallFeedbackRequest,
-  RecallGroup,
-  RecallGroupHit,
-  SessionRecallQuery,
-} from '@dsh-forge/contracts'
+import type { EntryDetail, RecallFeedbackFailureCode, RecallFeedbackRequest, RecallGroup, RecallGroupHit, SessionRecallQuery } from '@dsh-forge/lib-api/dto/knowledge'
 import {
   Button,
   IconDislikeFillRegular,

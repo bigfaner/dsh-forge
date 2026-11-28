@@ -5,7 +5,7 @@
 // 首显不被数据装载阻塞——翻卡归 effect 后的 ready 相位，e2e 面 3.8/4.2）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { DomainNode, KnowledgeCard } from '@dsh-forge/contracts'
+import type { DomainNode, KnowledgeCard } from '@dsh-forge/lib-api/dto/knowledge'
 import { KnowledgeBrowse, KnowledgeBrowseBody } from './KnowledgeBrowse.js'
 import { EMPTY_FILTER, EMPTY_MULTI_SELECT } from './browse-model.js'
 import type { KnowledgeBrowseActions, KnowledgeBrowseState } from './use-knowledge-browse.js'

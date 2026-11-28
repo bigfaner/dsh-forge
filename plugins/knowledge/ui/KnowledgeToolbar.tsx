@@ -12,7 +12,7 @@
 // 多选功能组五钮仅多选模式在场——「多选」↔「取消」同位切换 + 已选 N/共 M + 通过/驳回/全选，
 // 同刻度胶囊实线描边（语义色：通过 accent / 驳回 error / 其余中性）；驳回必过确认框。
 import { useCallback, useState, type ReactNode } from 'react'
-import type { EntryStatusFilter } from '@dsh-forge/contracts'
+import type { EntryStatusFilter } from '@dsh-forge/lib-api/dto/knowledge'
 import {
   Button,
   IconChevronDownOutlineRegular,

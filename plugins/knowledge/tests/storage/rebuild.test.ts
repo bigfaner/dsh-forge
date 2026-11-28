@@ -10,7 +10,7 @@ import { openKnowledgeDatabase } from '../../host/storage/open.js'
 import { createKnowledgeRegistry } from '../../host/storage/registry.js'
 import { rebuildKnowledgeIndex, deriveEffectiveRank } from '../../host/storage/rebuild.js'
 import { KNOWLEDGE_PURGE_EVENT, KNOWLEDGE_REBUILD_EVENT, type DiagEmitter } from '../../host/storage/index.js'
-import type { DiagEventPayload } from '@dsh-forge/contracts'
+import type { DiagEventPayload } from '@dsh-forge/lib-api/diag'
 
 const roots: string[] = []
 function tmpRoot(): string {

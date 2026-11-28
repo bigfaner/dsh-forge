@@ -14,20 +14,9 @@ import { mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import matter from 'gray-matter'
 import type Database from '@dsh-forge/lib-db'
-import { joinDirSegment } from '@dsh-forge/path-key'
-import type {
-  DomainNode,
-  EntryDetail,
-  EntryScope,
-  HeatByEntry,
-  KnowledgeCard,
-  ListEntriesQuery,
-  RecallGroup,
-  RecallQuerySnapshot,
-  RecallVerb,
-  SessionRecallQuery,
-} from '@dsh-forge/contracts'
-import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/contracts'
+import { joinDirSegment } from '@dsh-forge/lib-path'
+import type { DomainNode, EntryDetail, EntryScope, HeatByEntry, KnowledgeCard, ListEntriesQuery, RecallGroup, RecallQuerySnapshot, RecallVerb, SessionRecallQuery } from '@dsh-forge/lib-api/dto/knowledge'
+import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/lib-api/frontmatter'
 import { withImmediateTransaction } from '../storage/concurrency.js'
 import { canonicalWsPath, createKnowledgeRegistry } from '../storage/registry.js'
 import { projectKeyOf } from '@dsh-forge/lib-path'

@@ -22,7 +22,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { basename, dirname, join, relative } from 'node:path'
 import matter from 'gray-matter'
 import type Database from '@dsh-forge/lib-db'
-import type { EntryActionFailureCode, EntryActionResult } from '@dsh-forge/contracts'
+import type { EntryActionFailureCode, EntryActionResult } from '@dsh-forge/lib-api/dto/knowledge'
 import { withImmediateTransaction } from '../storage/concurrency.js'
 import { normalizeTitleNorm } from '../storage/rebuild.js'
 import {

@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { KnowledgeCard } from '@dsh-forge/contracts'
+import type { KnowledgeCard } from '@dsh-forge/lib-api/dto/knowledge'
 import { KnowledgeCardGrid, isEntryConfirmable } from './KnowledgeCardGrid.js'
 
 const NOW = Date.parse('2026-10-02T12:00:00.000Z')

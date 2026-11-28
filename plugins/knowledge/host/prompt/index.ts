@@ -11,9 +11,9 @@
 //     展示无则省略；双限截断）。
 // 两段经 scoped 注册缝随会话绑定注入（service/session-prompt.ts——AssembleContext
 // 无会话信息，绑定经 session-bind 时刻 scoped 注册闭包承载）。
-// 契约单一来源：域层级上限取 @dsh-forge/contracts 常量插值；本模块零工具定义引用。
+// 契约单一来源：域层级上限取 @dsh-forge/lib-api 常量插值；本模块零工具定义引用。
 // 注意：SystemPrompt 段文本默认 {{var}} 插值（未知引用会炸渲染）——两段文本禁用裸 {{。
-import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/contracts'
+import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/lib-api/frontmatter'
 import type { DomainIndexRow } from '../service/internal.js'
 
 /** 静态段名（提案 §7 审核稿定死） */

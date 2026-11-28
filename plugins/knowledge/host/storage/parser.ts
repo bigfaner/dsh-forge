@@ -3,11 +3,7 @@
 // 域超 3 层 → 条目不入索引（调用方报告计数），不硬拒。
 import { createHash } from 'node:crypto'
 import matter from 'gray-matter'
-import {
-  FRONTMATTER_DOMAIN_MAX_DEPTH,
-  FRONTMATTER_STATUS_DEFAULT,
-  type KnowledgeFrontmatter,
-} from '@dsh-forge/contracts'
+import { FRONTMATTER_DOMAIN_MAX_DEPTH, FRONTMATTER_STATUS_DEFAULT, type KnowledgeFrontmatter } from '@dsh-forge/lib-api/frontmatter'
 
 /** 拒收原因（报告只计数量；reason 供测试与日志诊断） */
 export type ParseRejectReason = 'frontmatter' | 'summary' | 'keywords' | 'domain-depth'

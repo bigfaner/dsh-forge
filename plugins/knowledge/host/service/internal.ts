@@ -4,7 +4,7 @@
 // 关键异常降级：core 走 app_key_logs；自持域经 storage/diag.ts 事件面（rebuild 事件
 // 已含成败路径——SC-10），本文件不再另设关键日志表。
 import type Database from '@dsh-forge/lib-db'
-import type { DomainNode, KnowledgeCard, RecallGroup, RecallQuerySnapshot, RecallVerb } from '@dsh-forge/contracts'
+import type { DomainNode, KnowledgeCard, RecallGroup, RecallQuerySnapshot, RecallVerb } from '@dsh-forge/lib-api/dto/knowledge'
 import { canonicalWsPath } from '../storage/registry.js'
 import { isSafeRelPath } from '../storage/index.js'
 

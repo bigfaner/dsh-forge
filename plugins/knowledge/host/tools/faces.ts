@@ -162,7 +162,7 @@ export interface KnowledgeContextFace {
    * Cordis 事件发射面子面（可选结构面——真 Context 结构兼容）：storage 域埋点经装配期
    * 注入的诊断发射面（DIAG_EVENT 类型化 emit——docs/conventions/diagnostic-emit-discipline.md）。
    */
-  readonly emit?: (event: 'diag/log', payload: import('@dsh-forge/contracts').DiagEventPayload) => void
+  readonly emit?: (event: 'diag/log', payload: import('@dsh-forge/lib-api/diag').DiagEventPayload) => void
   /**
    * 官方 agent/created 事件订阅子面（可选结构面——stage③ C2 scoped 注册缝）：
    * session-bind 时刻在该会话 scope 注册动态域索引段（闭包捕获 ws_path）。缺席 =

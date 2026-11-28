@@ -1,7 +1,7 @@
 // stage③ C2 单测——提示词两段函数化（提案 §2.2 裁决 #3/#9 + §7 审核稿；域细分改造
 // 2026-11-05：静态段中文归档规则 + 动态段目录树渲染/双限截断）。
 import { describe, expect, it } from 'vitest'
-import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/contracts'
+import { FRONTMATTER_DOMAIN_MAX_DEPTH } from '@dsh-forge/lib-api/frontmatter'
 import {
   KNOWLEDGE_DOMAINS_MAX_ROWS,
   KNOWLEDGE_DOMAINS_ROWS_PER_TOP,

@@ -8,7 +8,7 @@
 // 待审核徽记（官方 Tag warning 数字形态——未过滤口径，不随 statusFilter 抖动）。
 // 「全部域」根行 = 无域过滤（非落点——targetDomain 必须是具体域）。
 import { useState, type CSSProperties, type DragEvent, type ReactNode } from 'react'
-import type { DomainNode } from '@dsh-forge/contracts'
+import type { DomainNode } from '@dsh-forge/lib-api/dto/knowledge'
 import { Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   DOMAIN_MAX_DEPTH,

@@ -10,7 +10,7 @@ import { defaultKnowledgeDirOf, resolveKnowledgeDir } from '../host/knowledge-di
 import knowledgePlugin, { KNOWLEDGE_SERVICE_NAME } from '../host/index.js'
 import type { KnowledgePromptSection, KnowledgeToolDefinition, KnowledgeContextFace } from '../host/tools/index.js'
 import type { BrowseKnowledgeService } from '../host/service/index.js'
-import type { DiagEventPayload } from '@dsh-forge/contracts'
+import type { DiagEventPayload } from '@dsh-forge/lib-api/diag'
 
 // ───────────────── resolveKnowledgeDir 纯函数三态 ─────────────────
 

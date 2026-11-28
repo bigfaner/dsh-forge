@@ -24,7 +24,7 @@
 // （dswf-dlg-err 同型行）；UI 基准 = walkthrough/mockup.html + SC-G。
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { Button, IconCloseFillRegular, Modal, Pill, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { EntryDetail } from '@dsh-forge/contracts'
+import type { EntryDetail } from '@dsh-forge/lib-api/dto/knowledge'
 import { EmptyState, ErrorBar, StateChip } from './components.js'
 import { MD_PREVIEW_MARKDOWN_LABELS, MarkdownDoc } from './components-mirror.js'
 import { currentDefaultRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from './rpc-channels.js'

@@ -19,7 +19,9 @@
 // 非 typed 异常收敛 internal（连接 RPC 面无 Electron 拒绝通道，fail-loud 上抛只会
 // 变成传输层失败——信封带内返回保 UI 错误相位可辨）。
 import { API_PATH, clientRequestSchema } from '@deepseek-ai/dsh-client-connection'
-import { ERROR_CODES, type EntryActionRequest, type EntryActionRequestReject, type EntryDetailQuery, type ListEntriesQuery, type Project, type ProjectSummary, type RecallFeedbackOutcome, type RecallFeedbackRequest, type SessionRecallQuery } from '@dsh-forge/contracts'
+import { ERROR_CODES } from '@dsh-forge/lib-api/errors'
+import { type EntryActionRequest, type EntryActionRequestReject, type EntryDetailQuery, type ListEntriesQuery, type RecallFeedbackOutcome, type RecallFeedbackRequest, type SessionRecallQuery } from '@dsh-forge/lib-api/dto/knowledge'
+import { type Project, type ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import { CONNECTION_ENDPOINT_BY_CHANNEL } from '../shared/connection-rpc.js'
 import { projectKeyOf } from '@dsh-forge/lib-path'
 import { canonicalWsPath } from './storage/registry.js'

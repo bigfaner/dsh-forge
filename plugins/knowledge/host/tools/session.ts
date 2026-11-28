@@ -12,7 +12,7 @@
 //     无文件读取、无运行期刷新）。
 // 两级解析（projectId→wsPath→注册行）第一级 = createWsPathResolver（同表反向）；
 // 第二级 = storage/registry.ts findByWsPath（canonical 键）。
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { normalizeFsPath } from '@dsh-forge/lib-path'
 import { KNOWLEDGE_DERIVE_EVENT, emitStorageDiag, storageDiag, type DiagEmitter } from '../storage/diag.js'
 import type { SessionEventFace, ToolExecFace, ToolSessionEventsFace } from './faces.js'
 

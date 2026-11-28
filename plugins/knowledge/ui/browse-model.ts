@@ -7,14 +7,7 @@
 //     执行，本模块零客户端过滤语义，不引入其它过滤维度）；
 //   - 关键词 = keywords 维度细分（同样服务端执行——工具栏输入原样传递）。
 import { isoTimeLabelZh } from './components-mirror.js'
-import type {
-  DomainNode,
-  EntryActionFailureCode,
-  EntryActionReceipt,
-  EntryScopeFilter,
-  EntryStatusFilter,
-  ListEntriesQuery,
-} from '@dsh-forge/contracts'
+import type { DomainNode, EntryActionFailureCode, EntryActionReceipt, EntryScopeFilter, EntryStatusFilter, ListEntriesQuery } from '@dsh-forge/lib-api/dto/knowledge'
 
 /** 浏览过滤态（域 = 目录路径前缀；关键词 = 工具栏输入原样；状态片 = statusFilter 服务端执行） */
 export interface BrowseFilter {

@@ -6,94 +6,15 @@
 // 镜像面 = errors.ts（RpcClientError）+ ui-state.ts（rpcUiState 全码表）+ transport.ts
 // （preloadTransport）+ client.ts 的 knowledge/projects 消费切片（get/list——知识族
 // 装载链唯一消费的 projects 两法）。
-import {
-  BUGS_CHANNELS,
-  DOCS_CHANNELS,
-  FEATURES_CHANNELS,
-  FS_CHANNELS,
-  KNOWLEDGE_CHANNELS,
-  PROJECTS_CHANNELS,
-  SETTINGS_CHANNELS,
-  TASKS_CHANNELS,
-  WORKTREE_CHANNELS,
-  type DirListing,
-  type DocContent,
-  type DomainNode,
-  type EntryActionReceipt,
-  type EntryActionRequest,
-  type EntryDetail,
-  type EntryDetailQuery,
-  type ErrorCode,
-  type FeatureCard,
-  type FeatureDocumentRow,
-  type FeatureRow,
-  type ForgeSettings,
-  type BugCard,
-  type BugCommitFile,
-  type BugCommitFilesQuery,
-  type BugFileDiffQuery,
-  type GetProjectRequest,
-  type KnowledgeCard,
-  type ListDirRequest,
-  type ListBugsQuery,
-  type ListEntriesQuery,
-  type ListFeatureDocsQuery,
-  type ListFeaturesQuery,
-  type ListTasksQuery,
-  type Project,
-  type ProjectPatch,
-  type ProjectSummary,
-  type QueryTaskInput,
-  type QueryTaskResult,
-  type ReadDocRequest,
-  type RecallFeedbackOutcome,
-  type RecallFeedbackRequest,
-  type RecallGroup,
-  type RegisterFeatureInput,
-  type RegisterProjectInput,
-  type RegisterResult,
-  type ReconcileReport,
-  type RpcErrorPayload,
-  type RpcResult,
-  type SessionLinksQuery,
-  type SessionRecallQuery,
-  type SessionTaskLinkCard,
-  type SetForgeSettingsInput,
-  type TaskCard,
-  type TaskDetail,
-  type TaskDetailQuery,
-  type TaskGraph,
-  type TaskGraphQuery,
-  type TaskSnapshot,
-  type TaskStats,
-  type TaskStatsQuery,
-  type TransitionFeatureInput,
-  type TransitionTaskInput,
-  type UpdateProjectRequest,
-  type UpsertFeatureDocInput,
-  type ValidateFeatureTasksInput,
-  type ValidateReport,
-  type WorktreeAheadBehindRequest,
-  type WorktreeAheadBehindResult,
-  type WorktreeBranchesRequest,
-  type WorktreeBranchesResult,
-  type WorktreeChecksRequest,
-  type WorktreeChecksResult,
-  type WorktreeCreateRequest,
-  type WorktreeCreateResult,
-  type WorktreeDeleteRequest,
-  type WorktreeDeleteResult,
-  type WorktreeEnsureWorkspaceRequest,
-  type WorktreeEnsureWorkspaceResult,
-  type WorktreeListRequest,
-  type WorktreeListResult,
-  type WorktreeResolveRequest,
-  type WorktreeResolveResult,
-  type WorktreeSealRequest,
-  type WorktreeSealResult,
-  type WorktreeSelectRequest,
-  type WorktreeSelectResult,
-} from '@dsh-forge/contracts'
+import { BUGS_CHANNELS, DOCS_CHANNELS, FEATURES_CHANNELS, FS_CHANNELS, KNOWLEDGE_CHANNELS, PROJECTS_CHANNELS, SETTINGS_CHANNELS, TASKS_CHANNELS, WORKTREE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type DirListing, type ListDirRequest } from '@dsh-forge/lib-api/dto/fs'
+import { type DocContent, type FeatureCard, type FeatureDocumentRow, type FeatureRow, type ForgeSettings, type ListFeatureDocsQuery, type ListFeaturesQuery, type ListTasksQuery, type QueryTaskInput, type QueryTaskResult, type ReadDocRequest, type RegisterFeatureInput, type SessionLinksQuery, type SessionTaskLinkCard, type SetForgeSettingsInput, type TaskCard, type TaskDetail, type TaskDetailQuery, type TaskGraph, type TaskGraphQuery, type TaskSnapshot, type TaskStats, type TaskStatsQuery, type TransitionFeatureInput, type TransitionTaskInput, type UpsertFeatureDocInput, type ValidateFeatureTasksInput, type ValidateReport } from '@dsh-forge/lib-api/dto/forge'
+import { type DomainNode, type EntryActionReceipt, type EntryActionRequest, type EntryDetail, type EntryDetailQuery, type KnowledgeCard, type ListEntriesQuery, type RecallFeedbackOutcome, type RecallFeedbackRequest, type RecallGroup, type SessionRecallQuery } from '@dsh-forge/lib-api/dto/knowledge'
+import { type ErrorCode, type RpcErrorPayload } from '@dsh-forge/lib-api/errors'
+import { type BugCard, type BugCommitFile, type BugCommitFilesQuery, type BugFileDiffQuery, type ListBugsQuery } from '@dsh-forge/lib-api/dto/bugs'
+import { type GetProjectRequest, type Project, type ProjectPatch, type ProjectSummary, type RegisterProjectInput, type RegisterResult, type ReconcileReport, type UpdateProjectRequest } from '@dsh-forge/lib-api/dto/project'
+import { type RpcResult } from '@dsh-forge/lib-api/dto/rpc'
+import { type WorktreeAheadBehindRequest, type WorktreeAheadBehindResult, type WorktreeBranchesRequest, type WorktreeBranchesResult, type WorktreeChecksRequest, type WorktreeChecksResult, type WorktreeCreateRequest, type WorktreeCreateResult, type WorktreeDeleteRequest, type WorktreeDeleteResult, type WorktreeEnsureWorkspaceRequest, type WorktreeEnsureWorkspaceResult, type WorktreeListRequest, type WorktreeListResult, type WorktreeResolveRequest, type WorktreeResolveResult, type WorktreeSealRequest, type WorktreeSealResult, type WorktreeSelectRequest, type WorktreeSelectResult } from '@dsh-forge/lib-api/dto/worktree'
 import { CONNECTION_ENDPOINT_BY_CHANNEL, KNOWLEDGE_RPC_CHANNEL } from '../shared/connection-rpc.js'
 
 export { CONNECTION_ENDPOINT_BY_CHANNEL, KNOWLEDGE_RPC_CHANNEL }
@@ -271,7 +192,7 @@ export function preloadTransport(): ForgeTransport {
   const bridge = (globalThis as { dshForge?: DshForgeInvokeGlobal }).dshForge
   if (bridge === undefined || typeof bridge.invoke !== 'function') {
     throw new Error(
-      'dsh-forge web: window.dshForge.invoke 缺席——宿主 preload 未接 RPC 面（forge:* 通道常量 = @dsh-forge/contracts channels）',
+      'dsh-forge web: window.dshForge.invoke 缺席——宿主 preload 未接 RPC 面（forge:* 通道常量 = @dsh-forge/lib-api channels）',
     )
   }
   return (channel, payload) => bridge.invoke(channel, payload)

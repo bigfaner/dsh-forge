@@ -2,7 +2,7 @@
 // 经装配期注入的发射面 + DIAG_EVENT 类型化 emit（contracts 单源——禁裸字符串）。
 // 发射面缺席兜底按级分流（error → console.error，其余 → console.warn——expert-squad 口径），
 // 不采用「缺席 = 零 emit」。
-import type { DiagEventPayload, DiagLevel } from '@dsh-forge/contracts'
+import type { DiagEventPayload, DiagLevel } from '@dsh-forge/lib-api/diag'
 
 /** 迁移事件域（proposal §2.3：start / 里程碑 / cutover / fail） */
 export const KNOWLEDGE_MIGRATE_EVENT = 'knowledge-migrate'

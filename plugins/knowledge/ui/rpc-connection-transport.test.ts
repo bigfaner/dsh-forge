@@ -2,7 +2,7 @@
 // resolveRpcClientFactory 装配期分流（connection 在场→connection 面；缺席→preload 面
 // 回落；两缺 = 现行 fail-loud）+ 缺省 factory 页内缝。既有 preload 路径零回归断言在列。
 import { afterEach, describe, expect, it } from 'vitest'
-import { KNOWLEDGE_CHANNELS, PROJECTS_CHANNELS } from '@dsh-forge/contracts'
+import { KNOWLEDGE_CHANNELS, PROJECTS_CHANNELS } from '@dsh-forge/lib-api/channels'
 import {
   CONNECTION_ENDPOINT_BY_CHANNEL,
   KNOWLEDGE_RPC_CHANNEL,

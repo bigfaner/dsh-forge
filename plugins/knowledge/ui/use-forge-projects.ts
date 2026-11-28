@@ -5,7 +5,7 @@
 // 刷新锚 = workspace 归属快照身份变化（注册/删除 workspace 会改变快照对象身份）——挂项目
 // 后自动对齐，无需 2.10 额外接线；projects 为应用侧数据（SC2 零副本纪律只约 dsh 账本面）。
 import { useCallback, useEffect, useState } from 'react'
-import type { ProjectSummary } from '@dsh-forge/contracts'
+import type { ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import { currentDefaultRpcClientFactory, type RpcClientFactory } from './rpc-channels.js'
 
 /** 项目列表相位 */
