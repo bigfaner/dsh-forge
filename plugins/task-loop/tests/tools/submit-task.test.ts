@@ -136,6 +136,42 @@ describe("证据真实性门（bug faf0ca57——evidence 引用文件在场性�
     });
     expect(r.status).toBe("completed");
   });
+
+  // ── bug 01de430b：token 识别误伤三形态（含空格路径被切 / 统计数字当路径 / 裸文件名叙述）──
+  // 门目的是拦「信封指认缺席路径」，不是从散文里猜路径。拿不准的 token 一律不核。
+  const settleOk = async (evidence: string) => {
+    seedInProgress(["A"]);
+    return exec({
+      result: "success",
+      summary: "done",
+      gate_compile: true,
+      gate_fmt: true,
+      gate_lint: true,
+      gate_test: true,
+      ac_results: [{ criterion: "A", met: true, evidence }],
+    });
+  };
+
+  it("含空格的绝对路径（盘上在场）整段识别，不在空白处切断", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "evidence gate spaces-"));
+    const present = join(dir, "result.txt");
+    writeFileSync(present, "ok", "utf8");
+    expect(dir).toMatch(/ /); // 前提：目录名确含空格（否则用例空转）
+    const r = await settleOk(`输出见 ${present}`);
+    expect(r.status).toBe("completed");
+  });
+
+  it("evidence 里的统计数字（0/5 类）与裸文件名叙述不当路径核验", async () => {
+    const r = await settleOk("numstat blitz 0/5、expedition 0/10；oxlint 0 warnings，详见 lint.log");
+    expect(r.status).toBe("completed");
+  });
+
+  it("含空格的绝对路径缺席仍拦（门未削弱）", async () => {
+    const missing = join(tmpdir(), "evidence gate absent dir", "no-such.md");
+    expect(missing).toMatch(/ /);
+    await expect(settleOk(`输出见 ${missing}`)).rejects.toThrow(/evidence authenticity gate/);
+    expect(missing).toContain("evidence gate absent dir");
+  });
 });
 
 describe("facets 更名（两跳终态——旧 runtime_surface/runtime_face 入参被拒）", () => {

@@ -31,22 +31,47 @@ const TOOL = "submit_task";
  * 证据文件在场性核验（bug faf0ca57①——结算证据真实性门）：success 结算的
  * runtime_evidence_artifacts 逐条 + ac_results[].evidence（met=true）内引用文件必须落盘在场，
  * 缺席 = 拒结算（信封指认缺席路径）——「取证文件在场」先于「核销快照落库」。
- * 路径识别（保守启发式，零误伤优先）：绝对路径 / . .. 前缀相对路径 / 含分隔符的相对路径 /
- * 无分隔符但带常见工件扩展名的裸文件名（walk-010b.md 类判例——真机 b1 失实结算即此形）。
- * 判据文本/命令行混排中不含路径形 token 的 evidence 不核验（documented limitation）。
+ *
+ * 路径识别（bug 01de430b 收紧——只认「写明是路径」的形态，拿不准一律不核）：
+ *   - 绝对路径：盘符 `X:\…` / `X:/…`、home `~/…`、行首或空白后的 POSIX `/…`
+ *   - 显式相对路径：`./…`、`../…`
+ * 不认：无 `./` 前缀的裸 `a/b`（统计数字 `0/5` 会撞）、裸文件名叙述（「详见 lint.log」）——
+ * 门目的是拦「信封指认缺席路径」，不是从散文里猜路径；真要造假的会放一个在盘的空文件，
+ * 这个门拦不住他，它拦的全是诚实结算。
+ *
+ * 含空格路径（`D:/My Files/x.md`）与「路径后紧跟散文」用单条正则无法兼得——贪婪吃空格会把
+ * 散文吃进路径，不贪婪会在路径内部切断。故只取路径**起点**，再由 pathFromStart 从起点向行尾
+ * 逐步扩展候选，取第一个在盘的最长前缀。
+ * Root cause: faf0ca57① 的修复用「任何含分隔符的 token」当路径并在空白处切断，把散文里的
+ * 非路径 token 一并核验、把含空格的真实路径切坏。
  */
-const ARTIFACT_EXTS = "md|log|json|png|jpg|jpeg|gif|svg|txt|html|css|ts|tsx|js|mjs|cjs|yaml|yml|csv|xml|har|tgz|zip|pdf";
-const PATH_TOKEN = /(?:[A-Za-z]:[\\/][^\s,;，。；()（）]+|\.{1,2}[\\/][^\s,;，。；()（）]+|[^\s,;，。；()（）]*[\\/][^\s,;，。；()（）]+)/g;
-const BARE_ARTIFACT = new RegExp(`[^\\s,;，。；()（）]+\\.(?:${ARTIFACT_EXTS})`, "gi");
+const PATH_START = /(?:[A-Za-z]:[\\/]|\.{1,2}[\\/]|~[\\/]|(?<=^|\s)\/)/g;
 
-function referencedPathsOf(evidence: string): string[] {
-  const tokens = [...evidence.matchAll(PATH_TOKEN)].map((m) => m[0]);
-  if (tokens.length === 0) {
-    // 无分隔符路径 token 时退一级：裸工件文件名（带扩展名整 token）——仅当 evidence 全串
-    // 含扩展名 token（walk-010b.md 形），命令行混排（无扩展名 token）不误伤。
-    for (const m of evidence.matchAll(BARE_ARTIFACT)) tokens.push(m[0]);
+/** 路径起点 → 实际路径：从起点向行尾逐字符扩展，取第一个在盘的最长候选；全不在盘 = 到首个空白的候选（缺席指认用） */
+function pathFromStart(evidence: string, start: number, cwd: string | undefined): string | undefined {
+  const lineEnd = evidence.indexOf("\n", start);
+  const segment = evidence.slice(start, lineEnd === -1 ? undefined : lineEnd).replace(/[\s"'')\]】》。，、；:：]+$/u, "");
+  const cut = segment.search(/[\s,;，。；()（）]/);
+  const firstWord = cut === -1 ? segment : segment.slice(0, cut);
+  // 自尾向头逐字符回退：命中在盘即返回（最长在盘前缀）
+  for (let end = segment.length; end >= 1; end--) {
+    const candidate = segment.slice(0, end).replace(/[\s"'')\]】》。，、；:：]+$/u, "");
+    if (candidate.length === 0) break;
+    const abs = isAbsolute(candidate) ? candidate : resolve(cwd ?? process.cwd(), candidate);
+    if (existsSync(abs)) return candidate;
+    if (end - 1 <= firstWord.length && firstWord.length > 0) break;
   }
-  return tokens;
+  return firstWord.length > 0 ? firstWord : undefined;
+}
+
+/** evidence 散文 → 引用的路径清单（每个路径起点经 pathFromStart 解析；无起点 = 空数组不核验） */
+function referencedPathsOf(evidence: string, cwd: string | undefined): string[] {
+  const out: string[] = [];
+  for (const m of evidence.matchAll(PATH_START)) {
+    const path = pathFromStart(evidence, m.index ?? 0, cwd);
+    if (path !== undefined) out.push(path);
+  }
+  return out;
 }
 
 /** evidence/artifacts 引用文件缺席清单（相对路径按会话 cwd 解析；缺席 = 绝对路径原样回显） */
@@ -271,7 +296,7 @@ export function createSubmitTaskTool(deps: {
         const claimed: string[] = (acResults ?? [])
           .filter((ac) => ac.met === true && ac.evidence !== undefined)
           .map((ac) => ac.evidence as string)
-          .flatMap(referencedPathsOf);
+          .flatMap((evidence) => referencedPathsOf(evidence, cwd));
         const missing = missingEvidenceFiles([...new Set(claimed)], cwd);
         if (missing.length > 0) {
           throw new Error(
