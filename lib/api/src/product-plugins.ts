@@ -12,7 +12,7 @@
 //   种子 = userLayerRow 插件 ∪ 预设底稿携带插件（presets/*.patch.yml `name:
 //   '@dsh-forge/<短名>'` 行扫描）∪ staged:true 覆写，闭包 = 种子的
 //   @dsh-forge/* 运行时依赖（packages/<dir>/package.json dependencies BFS），
-//   再剔除 staged:false——contracts/path-key 等依赖闭包成员由此自动随包，
+//   再剔除 staged:false——staged:false 之外的全部依赖闭包成员由此自动随包，
 //   「忘列闭包成员」类缺陷（e791a46 path-key 漏列）结构性消除。
 // 键 = 包短名（packages/<短名> 平铺；packages/plugins/<短名> 子居所由脚本探测）。
 // 消费面：

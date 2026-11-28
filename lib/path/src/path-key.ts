@@ -1,5 +1,5 @@
-// @dsh-forge/lib-path —— 路径归一单源（plugin-project 1.6：自旧 path-key 包归并迁入，
-// 原 packages/path-key 已标记退役待删、留 re-export 兼容面）。定位：基础·零依赖纯函数，
+// @dsh-forge/lib-path —— 路径归一单源（plugin-project 1.6 归并自 path-key 包）。
+// 定位：基础·零依赖纯函数，
 // contracts 零逻辑铁律与 knowledge「生产面禁 import core」边界之间的共享逻辑唯一去处。
 // fix-30 口径单一来源：core 注册链（① 预检 / fix-27 自愈查询 / 真新建结构判据的比对键）
 // 与 knowledge 绑定表解析（cwd → projectId）同源消费——同一变体拼写（盘符大小写/正反斜杠/
