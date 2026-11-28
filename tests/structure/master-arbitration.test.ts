@@ -113,8 +113,13 @@ describe('INV-U 选主谓词统一契约（bug 0c677db2：同锚集合两半边�
   })
 
   it('主树判缺席（多 worktree 行互不为祖先）→ 同锚集合退 createdAt 仲裁（统一契约②——两半边同退路）', async () => {
-    // host 半边：无主树行注册（仅 worktree 行）→ 锚匹配首个真 git 行（created_at 序首行）
-    const identity = createWorktreeIdentity(stubProjects([{ id: 'p-wt', wsPath: WT_A, name: 'wt' }]), gitStub)
+    // host 半边：无主树行注册（仅 worktree 行）→ 锚匹配首个真 git 行（created_at 序首行）。
+    // 「真 git 行」核验走主树判据①之外的退路②（本仓 worktree 清单）——锚 C:/repo/.git 不在
+    // 行 ws_path（wt-a）内；清单探针经 porcelainRun 缝注桩（生产 = spawn 真探针；桩路径为
+    // 虚构盘符，真探针 cwd 不存在即 ENOENT fail-soft false，核验不可达）。
+    const porcelainStub = (): string =>
+      [ROOT, WT_A, WT_B].map((path) => `worktree ${path}\nHEAD 0000000000000000000000000000000000000000\n`).join('\n')
+    const identity = createWorktreeIdentity(stubProjects([{ id: 'p-wt', wsPath: WT_A, name: 'wt' }]), gitStub, () => {}, porcelainStub)
     expect(await identity.resolveProject(WT_B)).toMatchObject({ projectId: 'p-wt' })
 
     // wrap 半边：主树行缺席 → createdAt 最新（残留重复行仲裁既有语义零回归）

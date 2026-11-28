@@ -120,7 +120,6 @@ const PROJECT_UI = [
   join(ROOT, 'plugins/project/ui/add-project'),
   join(ROOT, 'plugins/project/ui/bug-refs'),
   join(ROOT, 'plugins/project/ui/dock-tabs'),
-  join(ROOT, 'plugins/project/ui/event-node'),
   join(ROOT, 'plugins/project/ui/sidebar'),
   join(ROOT, 'plugins/knowledge/ui'),
 ]
