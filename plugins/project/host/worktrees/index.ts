@@ -20,8 +20,6 @@ import {
   type GitWorktreeExtensionPoints,
 } from './extension-points.js'
 
-export const GIT_WORKTREE_PLUGIN_NAME = 'git-worktree' as const
-
 /** 集成层注入缝服务名（host boot/child.ts provide ↔ 本插件惰性 get——双侧同锚常量） */
 export const GIT_WORKTREE_IDENTITY_SERVICE = 'forgeWorktreeIdentity' as const
 
