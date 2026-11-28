@@ -576,34 +576,6 @@ export interface ProjectWorkspaceRoots {
   warm(projectIds: readonly string[]): void
 }
 
-/** 建工作区根记忆缝（装配单例——recurrenceFaces.modelingReportPresent 消费） */
-export function createProjectWorkspaceRoots(projects: ProjectWsRootServiceFace): ProjectWorkspaceRoots {
-  const roots = new Map<string, string>()
-  const warm = (projectId: string): void => {
-    if (roots.has(projectId)) return
-    roots.set(projectId, '') // 解析中占位（并发单跳；失败清除重试）
-    void (async () => {
-      const project = await projects.getProject(projectId)
-      if (project !== null && project.wsPath.trim() !== '') roots.set(projectId, project.wsPath)
-      // 空（未注册 / ws_path 空白）= 未记忆可重试——与 ContainerDirs 派生空永驻相反（分叉点）
-      else roots.delete(projectId)
-    })().catch(() => {
-      roots.delete(projectId) // fail-soft：解析失败 = 未记忆（下次再触发，零外抛）
-    })
-  }
-  return {
-    resolve(projectId) {
-      const memo = roots.get(projectId)
-      if (memo !== undefined && memo !== '') return memo
-      warm(projectId)
-      return undefined
-    },
-    warm(projectIds) {
-      for (const id of projectIds) warm(id)
-    },
-  }
-}
-
 // ─────────────────────────── 专家团装配面（experts 服务可选消费——AGENTS 1.6 配方） ───────────────────────────
 
 // 随包预设专家档案目录（FORGE_EXPERTS_ROOT_DIR）随 expert-squad 收回另立子提案移出本包；
