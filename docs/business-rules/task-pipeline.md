@@ -59,7 +59,7 @@ domains: [task, state-machine, dispatch, audit, fix-chain, worker, ac-gate]
 
 ### BIZ-task-008: 人类通道与 agent 通道面分治
 
-**Rule**: transitionTask / transitionFeature = 人类逃生通道（UI 直调 RPC，不封装 tool——插件 0 注册，代码审计断言；M3 起 transitionFeature 维持收窄不进 tool 面，setProposalMode 亦 = UI 专属正门且 agent tool 面无模式改写动词）；addTask / submitTask / createProposal / registerFeature / upsertFeatureDoc / validateFeatureTasks = agent tool 面（M3 拆两包分置：核心六 tool 含 dispatchTask；spec 三 tool）；transitionProposal = 双面（M3 修订：tool + RPC forge:proposals/transition——评审发生在 agent 会话时技能代笔）；claimTask tool 已退役并入 dispatchTask 复合动词（M3——core API 保留，由 dispatchTask/桥/回放消费；dispatchTask = dispatcher 专用，worker 面不含）；actor 由通道语境服务端推断（tool = 'plugin-tool' + exec ctx sessionId；RPC = 'ui'），输入面不收（防越权标注）。
+**Rule**: transitionTask / transitionFeature = 人类逃生通道（UI 直调 RPC，不封装 tool——插件 0 注册，代码审计断言；M3 起 transitionFeature 维持收窄不进 tool 面）；addTask / submitTask / createProposal / registerFeature / upsertFeatureDoc / validateFeatureTasks = agent tool 面（M3 拆两包分置：核心六 tool 含 dispatchTask；spec 三 tool）；transitionProposal = agent tool 面（评审发生在 agent 会话时技能代笔——RPC 双面随 M2-α proposals 通道退役）；claimTask tool 已退役并入 dispatchTask 复合动词（M3——core API 保留，由 dispatchTask/桥/回放消费；dispatchTask = dispatcher 专用，worker 面不含）；actor 由通道语境服务端推断（tool = 'plugin-tool' + exec ctx sessionId；RPC = 'ui'），输入面不收（防越权标注）。
 **Context**: 两个薄 Controller 汇于同一 core 动词门（单一写入路径的准确表述 = 面分治）；SC7 断言面；M3 drift 修订（tech-design §Interface 4·drift 记账 1/2）。
 **Source**: feature/dsh-forge-m2-pipeline BIZ-009（prd-spec §In Scope ①② / tech-design §Interface 7-8·§交互四）+ feature/dsh-forge-m3-bootstrap-presets（tech-design §Interface 4，drift 修订）
 

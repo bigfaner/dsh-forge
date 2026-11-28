@@ -1,4 +1,4 @@
-﻿// @feature:dsh-forge-m2-pipeline @web-e2e
+// @feature:dsh-forge-m2-pipeline @web-e2e
 // 5.2 SC-branch 疑似移动拒绝 + 派生行逐字一致（AC6）。
 //   · 疑似移动拒绝（Story 7）：tasksHome 预置同 flatten 异 hash8 目录（构造口径 = 4.3
 //     台账：core derive-dir 分类器 suspected-move 面）→ 表单预检 ERR_SUSPECTED_MOVE →
@@ -8,7 +8,7 @@
 //     RPC deriveTaskStoreDir 返回 ≡ core deriveTaskStoreDir 单源计算 ≡ 实际建库位置
 //     （注册成功后 forge.db 恰在该路径）。
 // 锚迁移台账（plugin-spec/fix-8 族④B）：悬空容错用例（原 T1）退役——发现面呈现依赖
-// forge:proposals 读口与概览提案/feature 子 tab（a4664ccb 域下线 + 1.13 概览接管退役面），
+// proposals RPC 读口与概览提案/feature 子 tab（a4664ccb 域下线 + 1.13 概览接管退役面），
 // 文档 tab 悬空占位面承接测试归 docs 接管批（不在本批重写）；注册入口 NAV_ADD_PROJECT
 // 随 37fef243 收敛退役 → 会话相位径 = hero 芯片弹层 footer「添加项目…」。
 // e2e-fast-shared-launch 存量迁移（1.16 补迁移）：共享 launch 形态；tasksHome 惰性播种

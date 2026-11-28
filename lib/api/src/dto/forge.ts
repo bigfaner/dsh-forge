@@ -1602,23 +1602,6 @@ export interface FeaturesChannelResponses {
   listDocs: FeatureDocumentRow[]
 }
 
-/** forge:proposals/* 请求负载（键 = PROPOSALS_CHANNELS 键；M3：transition 双面上 RPC（drift 修订）+
- *  setMode（UI 专属正门）+ listDocs（文档区读）；createProposal 恒 tool 专属不上 RPC） */
-export interface ProposalsChannelRequests {
-  list: ListProposalsQuery
-  transition: TransitionProposalInput
-  setMode: SetProposalModeInput
-  listDocs: ListProposalDocsQuery
-}
-
-/** forge:proposals/* 响应负载（键 = PROPOSALS_CHANNELS 键） */
-export interface ProposalsChannelResponses {
-  list: ProposalCard[]
-  transition: TransitionProposalResult
-  setMode: ProposalRow
-  listDocs: ProposalDocRow[]
-}
-
 /** forge:settings/* 请求负载（键 = SETTINGS_CHANNELS 键——get 无参） */
 export interface SettingsChannelRequests {
   get: void

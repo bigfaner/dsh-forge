@@ -4,10 +4,11 @@
 // 重新注册/引用 proposal 域任何标识符」。
 //
 // 显式豁免（边界声明，防误报与假绿）：
-// - lib/api（contracts）proposal DTO/通道词汇面、apps/host/src/boot/bridge.ts 服务名与方法
-//   白名单、ipc/proposals-rpc.ts 通道注册面（含 ipc/index.ts 再导出行）：三者依存 contracts
-//   类型，随 core 解散批退役——1.11 显式豁免三件，不入扫描范围；boot child ready 位
-//   forgeProposals 恒 false 为 bridge 全名记录类型的伴生位，随白名单同族豁免；
+// - lib/api（contracts）proposal DTO 词汇面与 apps/host/src/boot/bridge.ts 服务名与方法
+//   白名单依存 core 提案服务（forgeProposals 服务键随 core 解散批退役——1.11 显式豁免，
+//   不入扫描范围；boot child ready 位 forgeProposals 恒 false 为 bridge 全名记录类型的
+//   伴生位，随白名单同族豁免）；ipc/proposals-rpc.ts 通道注册面已随 M2-α 整体下线
+//   （常量/handler/再导出/负载映射类型四件全删），不再豁免；
 // - e2e/specs 归档走查脚本（历史旅程证据，M5 归档收尾批处理）；
 // - *.test.* 与 tests/：机检断言本体（not.toContain 禁词）合法出现禁词 token；
 // - core tasks/features 域的 proposals 表 SQL 与容器 kind 'proposal' 词汇（容器语义在役，
@@ -31,9 +32,6 @@ const VERB_TOKENS = [
   'listProposals',
   'listProposalDocs',
   'listDerivedProposals',
-  'PROPOSALS_CHANNELS',
-  'forge:proposals/',
-  'registerProposalsChannels',
   'ProposalsTab',
   'ProposalVerdictDialog',
   'ProposalModeDialog',
@@ -143,7 +141,7 @@ describe('proposal 域下线机检（plugin-spec/1.11 三族名单钉死——�
   })
 
   it('族①契约 pin 面正向 pin 残留（tests/contract 含测试文件——退役标识符只许 not.toContain 退役断言形态）', () => {
-    // bug 392c6929 判例：pin-14 正向 pin 已拆除的 registerProposalsChannels 装配行——
+    // bug 392c6929 判例：pin-14 正向 pin 已拆除的 proposals 装配行——
     // 同族漏扫根因之一即 SCAN_TARGETS 缺 tests/contract/。此面禁词只查正向 pin 形态
     // （toContain('退役token')），not.toContain 退役反转断言合法放行。
     const positivePin = /(?<!\.not\s*\.)toContain\(\s*['"`]([^'"`]+)['"`]/g

@@ -1,4 +1,4 @@
-﻿// @feature:dsh-forge-m2-pipeline @web-e2e
+// @feature:dsh-forge-m2-pipeline @web-e2e
 // 5.1 录制-回放执行器运行面自证（回放基建——AC1/AC2/AC4/AC5 运行判据；spec 面 = 5.2 消费同径）：
 //   ① 主侧测试钩子在位（env DSH_FORGE_TEST_BRIDGE=1 门控）——globalThis 挂点经
 //      electronApp.evaluate 主进程面可达，经 host.services 桥代理直调写动词；
@@ -11,8 +11,8 @@
 //      转发缺口范围外上报，bug 16b58953 台账承接）；≤500ms 计时归 5.2 同退役；
 //   ⑤ G1 pin 相容口径（AC5）：钩子在位时产品 RPC 面仍拒绝写动词（preload allowlist 守卫
 //      运行面自证）+ env 缺席启动 = 挂点零注册（发布构建零痕迹——缺席态审计）；
-//   ⑥ 备选通道（AC2）：forge.db 直插——proposals 域随 a4664ccb 整域下线，直插读口
-//      forge:proposals/list 退役；直读保证改经 tasks 域单发重取承载（③ 同径）。
+//   ⑥ 备选通道（AC2）：forge.db 直插——proposals 域随 a4664ccb 整域下线，list 读口 RPC
+//      退役；直读保证改经 tasks 域单发重取承载（③ 同径）。
 // M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。

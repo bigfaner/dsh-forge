@@ -3,14 +3,14 @@
 // §Interface 7（负载映射键 = 通道族键）。接口形状为编译期面——期望断言锚键结构，
 // expectTypeOf 锚经 lint:test-types（tsc -p packages/contracts/tsconfig.test.json）机械执行。
 // 1.1（M3）增补：mode 词汇/ContainerRef/settings DTO 判别 + 服务签名容器化改写 +
-// ForgePluginEvent 两层联合 exhaustiveness + proposals/settings 负载映射扩池。
+// ForgePluginEvent 两层联合 exhaustiveness + settings 负载映射扩池（proposals 通道负载映射
+// 已随 M2-α proposals RPC 面退役删除）。
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   DOCS_CHANNELS,
   FEATURES_CHANNELS,
   FORGE_EVENT_CHANNELS,
   PROJECTS_M2_CHANNELS,
-  PROPOSALS_CHANNELS,
   REMOTE_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
@@ -65,7 +65,6 @@ import type {
   RemoteChannelResponses,
   RemoteProgressSnapshot,
   ProposalDocRow,
-  ProposalsChannelRequests,
   ProposalRow,
   QueryTaskResult,
   SessionTaskLinkCard,
@@ -204,13 +203,11 @@ describe('AC1 服务面方法签名锚（Interface 1–5 逐项在场）', () =>
 })
 
 describe('AC2 通道负载映射键 = 通道族键（三处一体的 DTO 侧）', () => {
-  it('四族 + projects 扩族请求/响应映射键集与族常量逐一对齐', () => {
+  it('三族 + projects 扩族请求/响应映射键集与族常量逐一对齐', () => {
     expectTypeOf<Exclude<keyof TasksChannelRequests, keyof typeof TASKS_CHANNELS>>().toEqualTypeOf<never>()
     expectTypeOf<Exclude<keyof typeof TASKS_CHANNELS, keyof TasksChannelRequests>>().toEqualTypeOf<never>()
     expectTypeOf<Exclude<keyof FeaturesChannelRequests, keyof typeof FEATURES_CHANNELS>>().toEqualTypeOf<never>()
     expectTypeOf<Exclude<keyof typeof FEATURES_CHANNELS, keyof FeaturesChannelRequests>>().toEqualTypeOf<never>()
-    expectTypeOf<Exclude<keyof ProposalsChannelRequests, keyof typeof PROPOSALS_CHANNELS>>().toEqualTypeOf<never>()
-    expectTypeOf<Exclude<keyof typeof PROPOSALS_CHANNELS, keyof ProposalsChannelRequests>>().toEqualTypeOf<never>()
     expectTypeOf<Exclude<keyof DocsChannelRequests, keyof typeof DOCS_CHANNELS>>().toEqualTypeOf<never>()
     expectTypeOf<Exclude<keyof typeof DOCS_CHANNELS, keyof DocsChannelRequests>>().toEqualTypeOf<never>()
     expectTypeOf<keyof typeof PROJECTS_M2_CHANNELS>().toEqualTypeOf<'deriveTaskStoreDir'>()
@@ -220,14 +217,9 @@ describe('AC2 通道负载映射键 = 通道族键（三处一体的 DTO 侧）'
     expectTypeOf<TasksChannelRequests>().not.toHaveProperty('addTask')
     expectTypeOf<TasksChannelRequests>().not.toHaveProperty('claimTask')
     expectTypeOf<TasksChannelRequests>().not.toHaveProperty('submitTask')
-    expectTypeOf<ProposalsChannelRequests>().not.toHaveProperty('createProposal')
-    // M3 drift 修订：transitionProposal 双面上 RPC（Interface 4）——负载映射含 transition 键
-    expectTypeOf<ProposalsChannelRequests>().toHaveProperty('transition')
   })
 
-  it('M3 扩池：proposals 负载映射四键 + settings 负载映射两键（键 = 族常量键）', () => {
-    expectTypeOf<Exclude<keyof ProposalsChannelRequests, keyof typeof PROPOSALS_CHANNELS>>().toEqualTypeOf<never>()
-    expectTypeOf<Exclude<keyof typeof PROPOSALS_CHANNELS, keyof ProposalsChannelRequests>>().toEqualTypeOf<never>()
+  it('M3 扩池：settings 负载映射两键（键 = 族常量键）', () => {
     expectTypeOf<Exclude<keyof SettingsChannelRequests, keyof typeof SETTINGS_CHANNELS>>().toEqualTypeOf<never>()
     expectTypeOf<Exclude<keyof typeof SETTINGS_CHANNELS, keyof SettingsChannelRequests>>().toEqualTypeOf<never>()
     expectTypeOf<SettingsChannelRequests['get']>().toEqualTypeOf<void>()

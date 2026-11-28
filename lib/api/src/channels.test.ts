@@ -1,11 +1,13 @@
 // 1.3 AC3 —— 通道名常量 pin（Interface 4：Web RPC 面，两域全通道）。
 // 2.8 增补：`forge:fs/*` 宿主文件系统浏览面（任务 2.8 Hard Rules——目录读取经 RPC，
 // renderer 不开 Node fs 通道；只读列举）。
-// 1.1（M2）增补：Interface 7 五族——forge:tasks|features|proposals|docs/* +
+// 1.1（M2）增补：Interface 7 四族——forge:tasks|features|docs/* +
 // forge:projects/deriveTaskStoreDir 扩族 + forge:events/tasks-changed 推送面；
 // 写动词 add/claim/submit/createProposal/transitionProposal 恒不上 RPC（SC7 断言面）。
-// 1.1（M3）增补：Interface 4 扩池——proposals 三新键（transition 双面/setMode/listDocs）+
-// forge:settings/{get,set} 新族；allowlist 28 → 33；transitionProposal 移出 RPC 拒绝集（drift 修订）。
+// 1.1（M3）增补：Interface 4 扩池——forge:settings/{get,set} 新族；
+// transitionProposal 移出 RPC 拒绝集（drift 修订）。
+// M2-α 增补：proposals 四通道 RPC 面整体退役（插件零消费，装配已于 4206f66e 拆除）——
+// contracts 词汇面随之删除，allowlist 52 → 48（RPC 通道面零 proposals 族）。
 // fix-bug 增补：forge:bugs/list 新族（Bug 子 tab 列表读面）；recordBug/resolveBug 写动词恒不上 RPC（拒绝集 pin 扩充）。
 // plugin-project 1.11 归拢锚：bug 域服务归拢 plugins/project host/bugs（服务缝 = lib/api
 // ports BugsServicePort）——本 pin 的面分治断言（bug 两写径 tool 专属恒不上 RPC）随迁保持。
@@ -24,7 +26,6 @@ import {
   KNOWLEDGE_CHANNELS,
   PROJECTS_CHANNELS,
   PROJECTS_M2_CHANNELS,
-  PROPOSALS_CHANNELS,
   REMOTE_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
@@ -84,15 +85,6 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
     })
   })
 
-  it('forge:proposals/* 四通道（M3 Interface 4 扩池：list + transition 双面 drift 修订 + setMode UI 正门 + listDocs 文档区读）', () => {
-    expect(PROPOSALS_CHANNELS).toEqual({
-      list: 'forge:proposals/list',
-      transition: 'forge:proposals/transition',
-      setMode: 'forge:proposals/setMode',
-      listDocs: 'forge:proposals/listDocs',
-    })
-  })
-
   it('forge:settings/* 两通道（M3 Interface 4 扩池：Forge设置 读写——forgeSettings 单门）', () => {
     expect(SETTINGS_CHANNELS).toEqual({
       get: 'forge:settings/get',
@@ -137,9 +129,9 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
 })
 
 describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
-  it('allowlist = 十二 invoke 族 52 通道全列、无重复（knowledge 六通道[+entryAction 人工裁决写面 + stage④ 1.7 recallFeedback 召回反馈动作写面] + worktree 十一通道[1.30 增 select、bug 9eb9d6cb 增 selected 读镜像、bug 82e92933 退役 session-create、bug 9d2b7e6a 增 ensure-workspace 懒物化]；main 侧 allowlist 校验唯一源）', () => {
-    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(52)
-    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(52)
+  it('allowlist = 十一 invoke 族 48 通道全列、无重复（knowledge 六通道[+entryAction 人工裁决写面 + stage④ 1.7 recallFeedback 召回反馈动作写面] + worktree 十一通道[1.30 增 select、bug 9eb9d6cb 增 selected 读镜像、bug 82e92933 退役 session-create、bug 9d2b7e6a 增 ensure-workspace 懒物化]；main 侧 allowlist 校验唯一源）', () => {
+    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(48)
+    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(48)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(
       [
         ...Object.values(PROJECTS_CHANNELS),
@@ -148,7 +140,6 @@ describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
         ...Object.values(FS_CHANNELS),
         ...Object.values(TASKS_CHANNELS),
         ...Object.values(FEATURES_CHANNELS),
-        ...Object.values(PROPOSALS_CHANNELS),
         ...Object.values(SETTINGS_CHANNELS),
         ...Object.values(BUGS_CHANNELS),
         ...Object.values(DOCS_CHANNELS),
@@ -183,7 +174,6 @@ describe('AC2 面分治 pin（写动词不上 RPC + 推送面不入 invoke）', 
       FS_CHANNELS,
       TASKS_CHANNELS,
       FEATURES_CHANNELS,
-      PROPOSALS_CHANNELS,
       SETTINGS_CHANNELS,
       BUGS_CHANNELS,
       DOCS_CHANNELS,

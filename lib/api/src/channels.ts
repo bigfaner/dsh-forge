@@ -21,6 +21,7 @@ export const PROJECTS_CHANNELS = {
   list: 'forge:projects/list',
   get: 'forge:projects/get',
   update: 'forge:projects/update',
+  // 待观察：host 已接、UI 零调用（M2-α 裁决保留，评审日期 2026-11-28）
   reconcile: 'forge:projects/reconcile',
 } as const
 
@@ -44,6 +45,7 @@ export const KNOWLEDGE_CHANNELS = {
   browse: 'forge:knowledge/browse',
   listEntries: 'forge:knowledge/listEntries',
   entryDetail: 'forge:knowledge/entryDetail',
+  // 待观察：host 已接、UI 零调用（M2-α 裁决保留，评审日期 2026-11-28）
   heat: 'forge:knowledge/heat',
   sessionRecall: 'forge:knowledge/sessionRecall',
   entryAction: 'forge:knowledge/entryAction',
@@ -63,12 +65,14 @@ export type FsChannel = (typeof FS_CHANNELS)[keyof typeof FS_CHANNELS]
 /** forge:tasks/*（Interface 7：RPC 人类面 + 读面；add/claim/submit = agent tool 专属不上 RPC） */
 export const TASKS_CHANNELS = {
   transition: 'forge:tasks/transition',
+  // 待观察：host 已接、UI 零调用（M2-α 裁决保留，评审日期 2026-11-28）
   query: 'forge:tasks/query',
   validateFeatureTasks: 'forge:tasks/validateFeatureTasks',
   list: 'forge:tasks/list',
   stats: 'forge:tasks/stats',
   graph: 'forge:tasks/graph',
   detail: 'forge:tasks/detail',
+  // 待观察：host 已接、UI 零调用（M2-α 裁决保留，评审日期 2026-11-28）
   sessionLinks: 'forge:tasks/sessionLinks',
 } as const
 
@@ -77,31 +81,24 @@ export type TasksChannel = (typeof TASKS_CHANNELS)[keyof typeof TASKS_CHANNELS]
 /** forge:features/*（register/transition/upsertDoc/list/listDocs——UI 直调；M2 仅 core API + RPC，tool 封装 = M3）。
  *  listDocs = feature_documents 列举读面（fix-2：概览 feature 子 tab 文档行数据源）。 */
 export const FEATURES_CHANNELS = {
+  // 待观察：host 已接、UI 零调用（M2-α 裁决保留，评审日期 2026-11-28）
   register: 'forge:features/register',
+  // 待观察：host 已接、UI 零调用（M2-α 裁决保留，评审日期 2026-11-28）
   transition: 'forge:features/transition',
+  // 待观察：host 已接、UI 零调用（M2-α 裁决保留，评审日期 2026-11-28）
   upsertDoc: 'forge:features/upsertDoc',
   list: 'forge:features/list',
+  // 待观察：host 已接、UI 零调用（M2-α 裁决保留，评审日期 2026-11-28）
   listDocs: 'forge:features/listDocs',
 } as const
 
 export type FeaturesChannel = (typeof FEATURES_CHANNELS)[keyof typeof FEATURES_CHANNELS]
 
-/** forge:proposals/*（M3 Interface 4 扩池：transition 双面上 RPC（UF-1 人工裁决——M2「tool 专属」
- *  纪律 drift 修订）+ setMode（律三唯一正门·UI 专属——agent tool 面无模式改写动词）+
- *  listDocs（UF-1 提案文档区读·目录扫描）；createProposal 恒 tool 专属不上 RPC） */
-export const PROPOSALS_CHANNELS = {
-  list: 'forge:proposals/list',
-  transition: 'forge:proposals/transition',
-  setMode: 'forge:proposals/setMode',
-  listDocs: 'forge:proposals/listDocs',
-} as const
-
-export type ProposalsChannel = (typeof PROPOSALS_CHANNELS)[keyof typeof PROPOSALS_CHANNELS]
-
 /** forge:settings/*（M3 Interface 4 扩池：Forge设置 读写——forgeSettings 服务单门，UI 分区消费；
  *  host 接线归 3.8，web client 归 4.1） */
 export const SETTINGS_CHANNELS = {
   get: 'forge:settings/get',
+  // 待观察：host 已接、UI 零调用（M2-α 裁决保留，评审日期 2026-11-28）
   set: 'forge:settings/set',
 } as const
 
@@ -188,10 +185,6 @@ export const FORGE_CHANNELS = {
   featuresUpsertDoc: FEATURES_CHANNELS.upsertDoc,
   featuresList: FEATURES_CHANNELS.list,
   featuresListDocs: FEATURES_CHANNELS.listDocs,
-  proposalsList: PROPOSALS_CHANNELS.list,
-  proposalsTransition: PROPOSALS_CHANNELS.transition,
-  proposalsSetMode: PROPOSALS_CHANNELS.setMode,
-  proposalsListDocs: PROPOSALS_CHANNELS.listDocs,
   settingsGet: SETTINGS_CHANNELS.get,
   settingsSet: SETTINGS_CHANNELS.set,
   bugsList: BUGS_CHANNELS.list,
@@ -222,7 +215,6 @@ export type ForgeChannel =
   | FsChannel
   | TasksChannel
   | FeaturesChannel
-  | ProposalsChannel
   | SettingsChannel
   | BugsChannel
   | DocsChannel

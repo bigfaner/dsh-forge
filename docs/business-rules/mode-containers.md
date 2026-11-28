@@ -45,6 +45,6 @@ domains: [mode, container, proposal, chaining, snapshot]
 
 ### BIZ-mode-006: 提案五态流转、双面同门与谱系取代链
 
-**Rule**: 提案五态封闭（draft/under-review/accepted/rejected/superseded）；UI 人工裁决（RPC forge:proposals/transition）与 agent 面 transitionProposal tool 双面写库一致（同门动词）；superseded 转移必带 supersededBy（目标提案在场校验 → proposals.superseded_by 自引用列）；提案文档读面 = listProposalDocs 只读目录扫描（docs/proposals/<slug>/ 全部 .md，零状态零写径、文件系统为事实源）。
+**Rule**: 提案五态封闭（draft/under-review/accepted/rejected/superseded）；提案人工裁决经 transitionProposal agent tool 写库（同门动词——UI RPC 双面随 M2-α proposals 通道退役）；superseded 转移必带 supersededBy（目标提案在场校验 → proposals.superseded_by 自引用列）；提案文档读面 = listProposalDocs 只读目录扫描（docs/proposals/<slug>/ 全部 .md，零状态零写径、文件系统为事实源）。
 **Context**: 评审工作流有家；谱系三成分（proposal_id 谱系 + 取代链 + mode 溯源）数据面完整（tech-design 评审缺口 #1/#5 处置）。
 **Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-006（prd-spec §Goals SC6 / tech-design §Interface 1·Interface 4）
