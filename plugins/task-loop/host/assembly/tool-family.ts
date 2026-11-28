@@ -17,6 +17,7 @@
 
 import type { TaskLoopAssembly } from "./default-assembly.js";
 import { createLoopDriver } from "../loop/driver.js";
+import { LOOP_REVIEW_EXPERT_KEYS } from "../loop/injection.js";
 import type { LoopDriver } from "../loop/driver-face.js";
 import { createLoopRegistry, type LoopRegistry } from "../loop/registry.js";
 import { createNarrator } from "../notify/narrator.js";
@@ -120,6 +121,24 @@ export function expertsFaceOf(ctx: unknown): ExpertsServiceFace | undefined {
     // 反射通道异常 = 缺席
   }
   return undefined;
+}
+
+/**
+ * 循环收口评审指示的专家在场探测（LOOP_REVIEW_EXPERT_KEYS 三评审键逐键 get——不存在/禁用
+ * 由实现侧 fail-loud 抛错 = 该键缺席）。experts 面缺席/劣形/任一键缺席 = false。
+ * 每次调用现查不缓存（AGENTS 1.6）。
+ */
+export function reviewExpertsPresent(ctx: unknown): boolean {
+  const experts = expertsFaceOf(ctx);
+  if (experts === undefined) return false;
+  return LOOP_REVIEW_EXPERT_KEYS.every((key) => {
+    try {
+      experts.get(key);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -326,6 +345,9 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     globalToolNames,
     resolveWorkerProfile,
     bugsPresent,
+    // 循环收口评审指示专家版单选缝（bug 31cc76f5）：三评审键在场现查；缺席 = subagent 回落措辞。
+    // 装配回归锚 tests/assembly/review-experts-wiring.test.ts。
+    expertsPresent: () => reviewExpertsPresent(input.ctx),
     // T2/T3 复发拦截两 face（生产路径的装配前提——缺席即机制静默关停）
     findRecurrenceCandidates: recurrenceFaces.findRecurrenceCandidates,
     modelingReportPresent: recurrenceFaces.modelingReportPresent,
