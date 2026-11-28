@@ -10,7 +10,6 @@
 //   · unreadable  tasksHome 不可读证据——emitDiag warn 留痕（onDiag 注入缝），禁静默当空集
 //     （静默空集会把「不可读」误判成「未注册」，R3 判据面）。
 import { join } from 'node:path'
-import { deriveDirName } from '@dsh-forge/lib-path'
 
 /** git 盘面探针（构造注入缝——anchor 零 git/文件系统直触，测试以 fake probe 注入） */
 export interface GitProbe {
@@ -67,6 +66,3 @@ export async function resolveProjectKey(cwd: string, deps: AnchorDeps): Promise<
   if (!present) return { kind: 'degraded' } // 主行在册、实体缺席——降级零注入
   return { kind: 'attached', projectKey, projectRoot: cwd }
 }
-
-/** 默认 dirNameOf：deriveDirName 单源（注册闭包同基准——拼写敏感有意设计，见 lib/path） */
-export const defaultDirNameOf = (cwd: string): string | null => deriveDirName(cwd)
