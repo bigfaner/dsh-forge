@@ -1,4 +1,4 @@
-﻿// @feature:dsh-forge-m2-pipeline @web-e2e
+// @feature:dsh-forge-m2-pipeline @web-e2e
 // gen-test-scripts 产物 —— Journey: interrupted-dispatch-recovery（T-test-gen-scripts）。
 // 断言源 = docs/features/dsh-forge-m2-pipeline/testing/interrupted-dispatch-recovery/contracts/
 //   step-{1..3}-*.md（eval-contract 857/1100 通过）。

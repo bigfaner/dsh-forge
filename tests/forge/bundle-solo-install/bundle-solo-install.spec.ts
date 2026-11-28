@@ -1,4 +1,4 @@
-﻿// e2e 旅程 spec：solo 单装零 forge 依赖（bundle-solo-install——forge-aggregate-bundle 1.8）。
+// e2e 旅程 spec：solo 单装零 forge 依赖（bundle-solo-install——forge-aggregate-bundle 1.8）。
 // journey = .forge/docs/proposals/forge-aggregate-bundle/testing/bundle-solo-install/journey.md
 // contract = 同目录 contracts/bundle-solo.md（断言标注 CT-BSo-*；五件逐一单装串行成例——
 // 每件成例前回落干净 profile；spec 双改行（skill-filesystem-spec/filesystem-spec，fefd5149

@@ -1,4 +1,4 @@
-﻿// @feature:dsh-forge-m2-pipeline @web-e2e
+// @feature:dsh-forge-m2-pipeline @web-e2e
 // gen-test-scripts 产物 —— Journey: workspace-registration-derived-path（T-test-gen-scripts）。
 // 断言源 = docs/features/dsh-forge-m2-pipeline/testing/workspace-registration-derived-path/
 //   contracts/step-{1..3}-*.md（eval-contract 944/1100 通过）。
