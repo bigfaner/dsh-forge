@@ -219,7 +219,7 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@deepseek-ai/dsh-base/package.json',
       'runtime/node_modules/@deepseek-ai/dsh-web-app/package.json',
       'runtime/node_modules/@dsh-forge/core/dist/index.js',
-      'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
+      'runtime/node_modules/@dsh-forge/lib-api/dist/index.js',
       // knowledge 1.9 A5 重开放：用户层全局行 + skills/learn 技能面（customSkillDirs[knowledge]
       // 挂载源——STAGING_EXTRAS 承载）；stage② 1.5 增 skills/distill 整合技能（随包交付面同步）
       // knowledge 迁移批1.3：root 级 plugins/knowledge 三目录制——dist 入口随
@@ -287,11 +287,11 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // 自 plugins/git-worktree 种子迁入；旧包退役）
     // knowledge = userLayerRow 种子（1.9 A5 重开放——用户层全局行 + skills/learn 技能面）
     // lib/* = 闭包成员（plugin-project 1.2/1.6/1.7：core 依赖 lib-util/lib-diag/lib-path/lib-db，
-    // contracts 兼容面依赖 lib-api——lib/ 子居所自动入场）
+    // 消费方改指后 lib/api 直入闭包（contracts 壳退役收口另批））
     // spec = staged:true 覆写种子（plugin-spec 1.10 docs 域收编：core dist 装配行静态 import
     // @dsh-forge/spec——forgeDocs factory 改指新包，缺席即 boot ESM 解析断裂）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'lib/api', 'lib/db', 'lib/diag', 'lib/git', 'lib/path', 'lib/util', 'path-key', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/markdown-kit', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
+      ['core', 'lib/api', 'lib/db', 'lib/diag', 'lib/git', 'lib/path', 'lib/util', 'path-key', 'plugins/expert-squad', 'plugins/knowledge', 'plugins/markdown-kit', 'plugins/spec', 'plugins/task-loop', 'root:plugins/project'].sort(),
     )
   })
 

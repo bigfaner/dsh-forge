@@ -65,7 +65,7 @@ describe('pin ㉒-2 host ipc 面（注册行逐通道机械审计）', () => {
     expect(src).toContain('ipc.register(SETTINGS_CHANNELS.get,')
     expect(src).toContain('ipc.register(SETTINGS_CHANNELS.set,')
     expect(src.match(/ipc\.register\(/g)).toHaveLength(2)
-    expect(src).toContain("from '@dsh-forge/contracts'")
+    expect(src).toMatch(/from '@dsh-forge\/lib-api\/channels'/)
   })
 
   it('features-rpc.ts：listDocs 在族注册面（五通道整族——含 M3 UF-4 消费面）', () => {
