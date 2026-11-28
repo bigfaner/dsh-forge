@@ -47,7 +47,6 @@ export interface ExpertsEntryPatch {
  *   层副本、来源翻「用户」）；
  * - 不可写：name（身份键）/ instanceId / origin / enabled（enabled 走配置半 disabled 位）。
  */
-export const CONFIG_HALF_FIELDS = ["provider", "model", "reasoning", "tools", "skills"] as const;
 export const CONTENT_HALF_FIELDS = ["title", "description", "personaMd"] as const;
 
 /**
