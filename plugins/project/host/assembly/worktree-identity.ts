@@ -2,7 +2,7 @@
 // 分层」右块 → 左块连线）。两扩展点在此实现并注入通用层（host/worktrees 域——
 // plugin-project 1.17 批二自 apps/host/src/ipc/worktree-identity.ts 运行时等价下沉，
 // 装配段消费面 = assembly/host-side.ts）：
-//   ① resolveProject(cwd)：归并实现——消费 core 身份归并结果（createGitIdentityPort 的
+//   ① resolveProject(cwd)：归并实现——消费 lib-git 身份归并结果（createGitIdentityPort 的
 //      common dir realpath 锚 = 归并键）+ forgeProjects 行集（ws_path 归一比对）；cwd 同锚
 //      的 projects 行即主项目归属（精确 ws_path 命中优先；存量双行仲裁归 core 注册链——
 //      读面恒取首条锚命中行）。非 git / 无同锚行 / 任何失败 = null（fail-soft）。
@@ -13,17 +13,18 @@
 // 装配方 = assembly/host-side.ts（runProfile 后 ctx.reflect.provide('forgeWorktreeIdentity', …)）；
 // 插件侧惰性 reflect.get 消费（激活早于 provide 不受阻），缺席 = 插件退默认实现
 //（独立 worktree 模式）。结构化类型本地声明——零反向依赖。
-// identity 依赖 @dsh-forge/core（git 归并锚）+ @dsh-forge/path-key（路径归一）+ 
+// identity 依赖 @dsh-forge/lib-git（git 归并锚——M1 阶段 C 自 core 迁入公共库）+
+// @dsh-forge/path-key（路径归一）+ 
 // @dsh-forge/lib-path project-root（主检出根归拢单源——2026-11-24 用户裁决：porcelain 现查
 // 归拢推导抽 lib 三插件共享，本域附属 worktree 身份归属面消费单源零本地复本）——项目包
 // devDependencies 承载（bundle-host.mjs 构建期内联进 dist——产物自含，EXTERNAL 仅 @deepseek-ai/*）。
 import { join } from 'node:path'
-import { createGitIdentityPort } from '@dsh-forge/core'
+import { createGitIdentityPort } from '@dsh-forge/lib-git'
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import { resolveMainCheckoutRoot, spawnGitWorktreePorcelain, type GitPorcelainRunner } from '@dsh-forge/lib-path/project-root'
 import type { Project, ProjectService, ProjectSummary } from '@dsh-forge/contracts'
 
-/** core GitIdentityPort 归并键窄面（结构化本地声明——锚查询，零包类型依赖） */
+/** GitIdentityPort 归并键窄面（结构化本地声明——锚查询，零包类型依赖） */
 interface GitAnchorFace {
   commonDirAnchor(dir: string): Promise<string | null>
 }
@@ -53,7 +54,7 @@ export type ForgeProjectsIdentityFace = Pick<ProjectService, 'listProjects' | 'g
 
 /**
  * 集成层扩展点实现（归并 resolveProject + worktree_dir 提供者）。
- * git 探针默认 core createGitIdentityPort（真机 git CLI）；单测可注入桩。
+ * git 探针默认 lib-git createGitIdentityPort（真机 git CLI）；单测可注入桩。
  */
 export function createWorktreeIdentity(
   projects: ForgeProjectsIdentityFace,

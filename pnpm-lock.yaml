@@ -158,6 +158,9 @@ importers:
       '@dsh-forge/knowledge':
         specifier: workspace:*
         version: link:../../plugins/knowledge
+      '@dsh-forge/lib-git':
+        specifier: workspace:*
+        version: link:../../lib/git
       '@dsh-forge/markdown-kit':
         specifier: workspace:*
         version: link:../../plugins/markdown-kit
@@ -440,6 +443,9 @@ importers:
       '@dsh-forge/lib-diag':
         specifier: workspace:*
         version: link:../../lib/diag
+      '@dsh-forge/lib-git':
+        specifier: workspace:*
+        version: link:../../lib/git
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path
@@ -749,9 +755,6 @@ importers:
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@dsh-forge/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@dsh-forge/lib-api':
         specifier: workspace:*
         version: link:../../lib/api
@@ -761,6 +764,9 @@ importers:
       '@dsh-forge/lib-diag':
         specifier: workspace:*
         version: link:../../lib/diag
+      '@dsh-forge/lib-git':
+        specifier: workspace:*
+        version: link:../../lib/git
       '@dsh-forge/lib-path':
         specifier: workspace:*
         version: link:../../lib/path

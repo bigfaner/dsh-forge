@@ -1,7 +1,6 @@
 // 跨插件 import 禁面机检（plugin-spec 1.18——doc-style 单源下沉 lib/api 后收口）：
 // plugins/project 源码树零跨插件 import @dsh-forge/<plugin>/*——插件间共享契约一律经
-// @dsh-forge/lib-api（含 lib-* 族）、@dsh-forge/contracts、@dsh-forge/core、path-key 消费；
-// 命中即红。
+// @dsh-forge/lib-api（含 lib-* 族）、@dsh-forge/contracts、path-key 消费；命中即红。
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -10,10 +9,10 @@ const pkgDir = join(import.meta.dirname, "..");
 const SELF = "@dsh-forge/project";
 const ALLOWED = new Set([
   "@dsh-forge/contracts",
-  "@dsh-forge/core",
   "@dsh-forge/lib-api",
   "@dsh-forge/lib-db",
   "@dsh-forge/lib-diag",
+  "@dsh-forge/lib-git",
   "@dsh-forge/lib-path",
   "@dsh-forge/lib-ui",
   "@dsh-forge/lib-util",

@@ -10,7 +10,7 @@ import { openDatabase } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { createProjectService, defaultWorktreeDir, type ProjectServiceDeps, type RegisteredProject } from './project-service.js'
 import { deriveDirName, normalizeFsPath } from '@dsh-forge/lib-path'
-import { selectMainWorktree, type GitIdentityPort, type WorktreeEntry } from './workspace/identity-anchor.js'
+import { selectMainWorktree, type GitIdentityPort, type WorktreeEntry } from '@dsh-forge/lib-git'
 import { SuspectedMoveError } from './workspace/errors.js'
 import type { WorkspaceRenamePort } from './registry.js'
 // registry 桩（G1 pin 4 语义）——fix-34 收编 testutil 单份（注入面 superset）；

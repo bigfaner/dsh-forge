@@ -1,4 +1,4 @@
-// worktree-branch-management 1.7 装配层集成测试：真机 git CLI + core GitIdentityPort +
+// worktree-branch-management 1.7 装配层集成测试：真机 git CLI + lib-git GitIdentityPort +
 // 集成层扩展点实现（assembly/worktree-identity.ts）。真实仓库/worktree 落临时目录（外部依赖装配面
 // ——真机取证口径：fake 全绿不算交付，此处 git 链全真）。
 // 1.17 批二：自 apps/host/src/ipc/worktree-identity.test.ts 随域下沉迁入；装配段
@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createGitIdentityPort } from '@dsh-forge/core'
+import { createGitIdentityPort } from '@dsh-forge/lib-git'
 import { createWorktreeIdentity, type ForgeProjectsIdentityFace } from './worktree-identity.js'
 import { assembleProjectHostSide } from './host-side.js'
 

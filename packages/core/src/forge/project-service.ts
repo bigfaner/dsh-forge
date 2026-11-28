@@ -55,7 +55,7 @@ import { CompensationError, ProjectSortOrderInvalidError, ProjectWriteError, Wor
 import { recordKeyLog } from './key-logs.js'
 import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
 import { classifyRegistrationCollision, deriveTaskStoreDir as deriveStoreDir, type RegistrationCollision } from '@dsh-forge/lib-path'
-import { selectMainWorktree, sameAnchor, type GitIdentityPort, type MainWorktreeCandidate } from './workspace/identity-anchor.js'
+import { selectMainWorktree, sameAnchor, type GitIdentityPort, type MainWorktreeCandidate } from '@dsh-forge/lib-git'
 import { SuspectedMoveError } from './workspace/errors.js'
 
 /**

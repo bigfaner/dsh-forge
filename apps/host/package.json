@@ -35,6 +35,7 @@
     "@deepseek-ai/dsh-session-projection": "0.2.2-rc.5",
     "@deepseek-ai/dsh-session-query": "0.2.2-rc.5",
     "@deepseek-ai/dsh-session-telemetry": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-session-title-first-prompt-llm": "0.2.2-rc.5",
     "@deepseek-ai/dsh-session-title-llm": "0.2.2-rc.5",
     "@deepseek-ai/dsh-shell": "0.2.2-rc.5",
     "@deepseek-ai/dsh-spill": "0.2.2-rc.5",
@@ -48,13 +49,13 @@
     "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/core": "workspace:*",
     "@dsh-forge/knowledge": "workspace:*",
+    "@dsh-forge/lib-git": "workspace:*",
     "@dsh-forge/markdown-kit": "workspace:*",
     "@dsh-forge/mobile-bridge": "workspace:*",
     "@dsh-forge/path-key": "workspace:*",
     "@dsh-forge/project": "workspace:*",
     "@dsh-forge/spec": "workspace:*",
-    "@dsh-forge/task-loop": "workspace:*",
-    "@deepseek-ai/dsh-session-title-first-prompt-llm": "0.2.2-rc.5"
+    "@dsh-forge/task-loop": "workspace:*"
   },
   "devDependencies": {
     "electron": "44.0.0"

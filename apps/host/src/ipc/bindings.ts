@@ -17,7 +17,7 @@
 // 知识插件 unbound 失败信息自述）。
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { createGitIdentityPort } from '@dsh-forge/core'
+import { createGitIdentityPort } from '@dsh-forge/lib-git'
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { ProjectService, ProjectSummary } from '@dsh-forge/contracts'
 import type { KnowledgeRegistryWriter } from '@dsh-forge/knowledge'
@@ -33,7 +33,7 @@ export interface KnowledgeBindingsFile {
 /** worktree 现算派生端口（ws_path → 在场 worktree 路径清单；null = 探测失败）。 */
 export type WorktreeLister = (wsPath: string) => Promise<readonly string[] | null>
 
-/** 默认派生端口：core GitIdentityPort 薄封装（git worktree list --porcelain，fail-soft null）。 */
+/** 默认派生端口：lib-git GitIdentityPort 薄封装（git worktree list --porcelain，fail-soft null）。 */
 export const defaultWorktreeLister: WorktreeLister = async (wsPath) => {
   const entries = await createGitIdentityPort().worktrees(wsPath)
   return entries === null ? null : entries.map((wt) => wt.path)
