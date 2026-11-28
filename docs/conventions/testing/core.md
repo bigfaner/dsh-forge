@@ -11,12 +11,11 @@ domains: [testing, conventions]
 
 | 层 | 工具 | vitest 项目 | 位置 | 职责与边界 |
 |---|---|---|---|---|
-| 单元测试 | vitest | `core` / `knowledge` / `plugin-forge` / `plugin-forge-spec` / `contracts` / `path-key` / `git-worktree` / `md-mermaid` / `host` / `web` | 各包源码树内 `*.test.ts(x)` | 模块契约面。web 面 SSR 直渲（`react-dom/server`）——交互回调体与 useEffect 不强行单测，归 e2e |
+| 单元测试 | vitest | `lib-util` / `lib-diag` / `lib-path` / `lib-git` / `lib-ui` / `lib-status-machine` / `lib-api` / `lib-db` / `core` / `knowledge` / `markdown-kit` / `input-history` / `expert-squad` / `project` / `project-domain` / `task-loop` / `quote-reference` / `super-composer` / `forge-combo` / `spec` / `host` / `mobile` / `web` | 各包源码树内 `*.test.ts(x)` | 模块契约面。web 面 SSR 直渲（`react-dom/server`）——交互回调体与 useEffect 不强行单测，归 e2e |
 | 集成测试 | vitest | 与单元同项目（include 命名命中） | 各包源码树内 `*.integration.test.ts` | 跨模块/跨包组装与接口契约：测试进程内组装真实模块（组合根在测试侧），进程外依赖可接口级 fake 也可用真实实例（fake 为可选非必须），正式装配组合根不触碰 |
 | 结构 pin | vitest | `structure` | `tests/structure/` | 机械守卫（行数上限/import 白名单/目录布局/装配纪律/打包闭包 pin）——只断言结构，不测行为 |
-| 契约测试 | vitest | `contract`（跨包 RPC 面）/ `contracts`（DTO）/ `plugin-forge-contract` | `tests/contract/` 及包内 | 跨包契约与工具 schema 面；`pnpm test:contract` 为跨包门 |
-| e2e 支撑 | vitest | `e2e-support` | `e2e/support/**` | e2e 基建单测（审计锚/readiness/replay 夹具）——随 e2e 面演化，不在 `pnpm test:contract` 门内 |
-| 回放取证 | vitest | `plugin-forge-e2e` | `packages/plugin-forge/e2e/**` | 派发循环 dogfood 形态回放（真循环驱动器/注入投影/结算通道 + 域全桩、零模型参与）——名字带 e2e，实为 vitest 回放层 |
+| 契约测试 | vitest | `contract`（跨包 RPC 面；DTO 契约面随 `lib-api` 单测池） | `tests/contract/` 及包内 | 跨包契约与工具 schema 面；`pnpm test:contract` 为跨包门 |
+| Journey 回归池 | vitest | `mobile-journeys` / `knowledge-journeys` / `forge-combo-journeys` / `e2e-support` | `tests/mobile|knowledge|forge/`、`e2e/support/` | 回放 fixtures 驱动的表面 Journey 回归（断言-契约溯源）与 e2e 基建单测（审计锚/readiness/replay 夹具）——真机面归 Playwright，不在 `pnpm test:contract` 门内 |
 | e2e | Playwright（`_electron` 基座） | — | `e2e/specs/`（唯一执行树，testDir 配置） | 真机旅程取证：交互链路、官方件实机形态对照、外部依赖装配面（AGENTS.md §1.4 的结算门） |
 
 - Journey 叙事与 Contract 文档落所属容器目录的 `testing/`（远征 feature 树 / 突击 `.forge/specs/<slug>/testing/`——容器目录经 forge_resolve_path 按 `spec.dir` 解析）；测试脚本只落上表执行树，不设暂存区。
@@ -26,7 +25,7 @@ domains: [testing, conventions]
 
 - **命名**：集成测试落模块源码树内，命名 `*.integration.test.ts`——vitest 既有项目 include 直接命中，零新增项目。
 - **独立子树升级条件（三缺一不可，同提交）**：确需独立集成子树时——①已有首用例；②本策略文档明示该子树；③vitest project 注册完成。三者齐备前一律以命名区分落源码树内。
-- **目录判读规则**：`packages/<pkg>/src/**`、`apps/*/src/**` 内的测试 = 单元或集成（按命名判层）；根级执行树（`tests/<moduleName>/<journey>/`、`e2e/specs/`）= e2e。`tests/contract/`、`tests/structure/`、`e2e/support/`、`packages/plugin-forge/e2e/` 为既有专项执行树，判层见分层模型表。
+- **目录判读规则**：`packages/<pkg>/src/**`、`apps/*/src/**` 内的测试 = 单元或集成（按命名判层）；根级执行树（`tests/<moduleName>/<journey>/`、`e2e/specs/`）= e2e。`tests/contract/`、`tests/structure/`、`e2e/support/` 为既有专项执行树，判层见分层模型表。
 - 本节为本仓约定，不通用——他项目以各自测试策略正本与生态规范为准（通用判据见 forge 测试链插件档案，不在本文重复）。
 
 ## 契约先行任务化流程
@@ -146,6 +145,7 @@ flowchart LR
 ├── tests/
 │   ├── structure/                  # 结构 pin（vitest 项目 structure）
 │   ├── contract/                   # 跨包契约（vitest 项目 contract；门 = pnpm test:contract）
+│   ├── mobile|knowledge|forge/     # 表面 Journey 回归池（vitest 项目 mobile-journeys 等）
 │   └── <moduleName>/<journey>/     # 旅程测试新约定树（monorepo 必带 moduleName；首个新旅程落地时启用）
 ├── e2e/
 │   ├── specs/                      # Playwright 旅程执行树（存量；testDir）——根级基建冒烟 + 里程碑子目录
@@ -154,12 +154,12 @@ flowchart LR
 │   ├── support/                    # e2e 基建（readiness/审计锚/replay 夹具——vitest 项目 e2e-support）
 │   ├── playwright.config.ts        # testDir ./specs、并发 ≤2、globalSetup
 │   └── SMOKE-LEDGER.md             # 冒烟台账（条件跳过项唯一留痕处）
-├── packages/<pkg>/src/**/*.test.ts         # 单元测试（vitest 项目按包名：core/knowledge/plugin-forge/…）
-│   └── 同树 `*.integration.test.ts`        # 集成测试（同项目 include 命名命中）
-├── packages/plugin-forge/tests/contract/   # 插件工具 schema 契约（项目 plugin-forge-contract）
-├── packages/plugin-forge/e2e/              # 派发循环回放取证（项目 plugin-forge-e2e——vitest 回放层，非 Playwright）
-├── apps/host/src/**/*.test.ts              # host 单元（项目 host）
-└── apps/web/src/**/*.test.tsx              # web 单元（项目 web——SSR 直渲）
+├── lib/*/src|tests/**/*.test.ts              # lib 单元测试（vitest 项目按包：lib-util/lib-diag/…）
+│   └── 同树 `*.integration.test.ts`          # 集成测试（同项目 include 命名命中）
+├── packages/core/src/**/*.test.ts            # core 单元测试（项目 core）
+├── plugins/*/tests|host|ui/**/*.test.ts(x)   # 插件包单测（项目按插件名：knowledge/task-loop/…）
+├── apps/host/src/**/*.test.ts                # host 单元（项目 host）
+└── apps/web/src/**/*.test.tsx                # web 单元（项目 web——SSR 直渲）
 ```
 
 vitest 项目全集与 include 清单 = `vitest.config.ts`（新增测试位置须落在既有项目的 include 内，否则不入跑批）。
