@@ -47,7 +47,7 @@ type KnPlugin = Plugin.Function<{ dbFile?: string }>
 const knPlugin = knowledgePlugin as unknown as KnPlugin
 const consumerPlugin = ((c2: CordisContext) => {
   consumerReflect = c2.reflect
-}) as unknown as KnPlugin
+}) as unknown as Plugin.Function
 const sessionPlugin = (async (c: CordisContext) => {
   const scoped = c.isolate('forgeDirs')
   await scoped.plugin(consumerPlugin)

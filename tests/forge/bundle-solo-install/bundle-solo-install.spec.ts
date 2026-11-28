@@ -38,9 +38,10 @@ const env = comboEnv()
 const memberTarball = (member: string): string => packTarball(join(requireBundleSource(env), '..', member))
 
 test.beforeAll(async () => {
+  test.setTimeout(SUITE_HOOK_TIMEOUT_MS)
   // Workers=2 并行互扰修复：bundle 四套件对隔离 home/profile 独占敏感——跨套件互斥锁串行化
   await acquireSuiteLock(env, 'bundle-solo-install')
-}, SUITE_HOOK_TIMEOUT_MS)
+})
 test.afterAll(() => {
   releaseSuiteLock(env, 'bundle-solo-install')
 })

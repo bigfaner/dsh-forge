@@ -158,8 +158,8 @@ describe('装配期声明（根 scope provide——bug 04d445f4 反向拉取缝�
     const resolved = resolvePulledEntries(pulled, { ...SOURCES, dshHome: '', projectRoot: '' })
     for (const key of Object.keys(KNOWLEDGE_DIR_ENTRIES)) {
       expect(Object.keys(resolved)).toContain(key)
-      expect(typeof pulled[key].description).toBe('string')
-      expect(pulled[key].description.trim()).not.toBe('')
+      expect(typeof pulled[key]!.description).toBe('string')
+      expect(pulled[key]!.description.trim()).not.toBe('')
       expect(resolved[key]).not.toBe('')
     }
     dispose()

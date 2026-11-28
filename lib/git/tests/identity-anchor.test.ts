@@ -106,7 +106,7 @@ describe('selectMainWorktree（主 worktree 判定）', () => {
   })
 
   it('全缺省 createdAt → 行序首个（双缺省 → 行序首个）', () => {
-    expect(selectMainWorktree([c('a', 'dev'), c('b', 'feat')], { originDefaultBranch: null, now })).toBe('a')
+    expect(selectMainWorktree([c('a', 'dev', null), c('b', 'feat', null)], { originDefaultBranch: null, now })).toBe('a')
   })
 })
 

@@ -18,6 +18,9 @@
 // projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
 // 数据源；服务面两级解析 projectId→wsPath→注册行。
 import { createKnowledgeTools, createProjectResolver, createWsPathResolver } from './tools/index.js'
+// 声明合并文件随源引入（跨程序编译——tests/e2e 传递包含本文件时不经包级 include，
+// 不引入则 ForgeDirs 增强缺席 satisfies 受检失效）
+import type {} from './forge-dirs.js'
 import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeStaticSection } from './prompt/index.js'
 import type { ProjectIdResolver, WsPathResolver } from './tools/index.js'
 import { domainTreeIndexOf } from './service/internal.js'

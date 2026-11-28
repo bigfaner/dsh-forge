@@ -62,9 +62,10 @@ async function expectUninstallSettled(): Promise<void> {
 }
 
 test.beforeAll(async () => {
+  test.setTimeout(SUITE_HOOK_TIMEOUT_MS)
   // Workers=2 并行互扰修复：bundle 四套件对隔离 home/profile 独占敏感——跨套件互斥锁串行化
   await acquireSuiteLock(env, 'bundle-uninstall-fallback')
-}, SUITE_HOOK_TIMEOUT_MS)
+})
 test.afterEach(stopHost)
 test.afterAll(async () => {
   await stopHost()

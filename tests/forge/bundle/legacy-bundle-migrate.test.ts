@@ -148,8 +148,8 @@ describe("bundle 搬行段（migrate-state-db.mjs --bundle）", () => {
   it("bugs：同项目行直迁、无项目行进隔离区、断链 recurrence 留人工清单", () => {
     expect(summary.bugs).toMatchObject({ skipped: false, moved: 2, quarantined: 1 });
     const db = new Database(homes.args.bundleDb, { readonly: true });
-    expect(db.prepare(`SELECT count(*) c FROM project_bugs`).get().c).toBe(2);
-    expect(db.prepare(`SELECT count(*) c FROM project_bugs_quarantine`).get().c).toBe(1);
+    expect(db.prepare(`SELECT count(*) c FROM project_bugs`).get()!.c).toBe(2);
+    expect(db.prepare(`SELECT count(*) c FROM project_bugs_quarantine`).get()!.c).toBe(1);
     db.close();
     const manual = readFileSync(join(dirname(homes.args.bundleDb), "bundle-migrate-manual-review.md"), "utf8");
     expect(manual).toContain("b3");
@@ -158,10 +158,10 @@ describe("bundle 搬行段（migrate-state-db.mjs --bundle）", () => {
   it("tasks：feature/无项目剔除、fix 前驱闭合、edges 端点守卫、records 随迁", () => {
     expect(summary.tasks).toMatchObject({ skipped: false, moved: 3, skippedFeature: 1, skippedProject: 1 });
     const db = new Database(homes.args.bundleDb, { readonly: true });
-    expect(db.prepare(`SELECT fix_of_task_id FROM task_tasks WHERE id = 't2'`).get().fix_of_task_id).toBe("t1");
-    expect(db.prepare(`SELECT fix_of_task_id FROM task_tasks WHERE id = 't5'`).get().fix_of_task_id).toBeNull(); // 前驱在剔除集 → NULL
-    expect(db.prepare(`SELECT count(*) c FROM task_edges`).get().c).toBe(1); // 仅 t2→t1
-    expect(db.prepare(`SELECT count(*) c FROM task_records`).get().c).toBe(1); // 仅 r1
+    expect(db.prepare(`SELECT fix_of_task_id FROM task_tasks WHERE id = 't2'`).get()!.fix_of_task_id).toBe("t1");
+    expect(db.prepare(`SELECT fix_of_task_id FROM task_tasks WHERE id = 't5'`).get()!.fix_of_task_id).toBeNull(); // 前驱在剔除集 → NULL
+    expect(db.prepare(`SELECT count(*) c FROM task_edges`).get()!.c).toBe(1); // 仅 t2→t1
+    expect(db.prepare(`SELECT count(*) c FROM task_records`).get()!.c).toBe(1); // 仅 r1
     db.close();
   });
 
@@ -173,14 +173,14 @@ describe("bundle 搬行段（migrate-state-db.mjs --bundle）", () => {
     expect(statusOf("prop-under-review")).toBe("awaiting_approval");
     expect(statusOf("prop-draft")).toBe("draft");
     // slug 冲突的既有 spec：旧 proposalDir 根相对口径自愈（检出根不在盘 → 按前缀规则）
-    expect(db.prepare(`SELECT rel_path FROM spec_docs WHERE spec_id = 'sp-exist'`).get().rel_path).toBe(".forge/docs/proposals/expert-builtin-redistribution/proposal.md");
+    expect(db.prepare(`SELECT rel_path FROM spec_docs WHERE spec_id = 'sp-exist'`).get()!.rel_path).toBe(".forge/docs/proposals/expert-builtin-redistribution/proposal.md");
     const tr = db.prepare(`SELECT note, created_at, actor FROM spec_transitions WHERE entity_id = 'pa'`).get() as any;
     expect(tr.note).toContain("proposal_status=accepted");
     expect(tr.note).toContain("mode=blitz");
     expect(tr.actor).toBe("plugin-tool");
     expect(tr.created_at).toBe("2026-02-01T00:00:00.000Z"); // decided_at 优先
-    expect(db.prepare(`SELECT rel_path FROM spec_docs WHERE spec_id = 'pa'`).get().rel_path).toBe(".forge/docs/proposals/prop-accepted/proposal.md"); // .forge 根相对旧值 → 项目根相对
-    expect(db.prepare(`SELECT count(*) c FROM spec_docs`).get().c).toBe(2); // rel_path null 不挂；既有 spec 的旧口径行自愈 1
+    expect(db.prepare(`SELECT rel_path FROM spec_docs WHERE spec_id = 'pa'`).get()!.rel_path).toBe(".forge/docs/proposals/prop-accepted/proposal.md"); // .forge 根相对旧值 → 项目根相对
+    expect(db.prepare(`SELECT count(*) c FROM spec_docs`).get()!.c).toBe(2); // rel_path null 不挂；既有 spec 的旧口径行自愈 1
     db.close();
   });
 

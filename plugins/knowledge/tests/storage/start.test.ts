@@ -39,7 +39,7 @@ describe('startSelfHostedStorage（自启判定 + fail-soft）', () => {
   })
 
   it('dbFile 显式与 dshHomePath 服务双缺 → undefined（不自启，不向 ~/.dsh 落盘）', () => {
-    expect(startSelfHostedStorage({}, undefined)).toBeUndefined()
+    expect(startSelfHostedStorage({})).toBeUndefined()
   })
 
   it('开库失败 fail-soft → undefined（目录指向文件等不可建库形态不抛出）', () => {

@@ -87,6 +87,7 @@ test.afterAll(async () => {
 
 // CT-BIF-B8：世代冻结判据命中 → 整旅程条件 skip，SMOKE-LEDGER 留痕（不作失败亦不作正向取证）。
 test.beforeAll(async () => {
+  test.setTimeout(SUITE_HOOK_TIMEOUT_MS)
   // 跑批前置预检（commit charge ≥90% fail-loud 拒跑——windows-commit-exhaustion 判例配方）
   preflightCommitCharge()
   // Workers=2 并行互扰修复：bundle 四套件对宿主/profile 独占敏感——跨套件互斥锁串行化
@@ -94,7 +95,7 @@ test.beforeAll(async () => {
   test.skip(generationFrozen(env, PROFILE), '世代冻结判据命中（0b5230e1 判据族）——整旅程条件 skip，SMOKE-LEDGER 留痕')
   // bundle 正装共享建成（purge → add → 廉价代际门，已建成且复验通过即跳过——G1 复装幂等，断言面零变更）
   await ensureInstalledShared(env, PROFILE)
-}, SUITE_HOOK_TIMEOUT_MS)
+})
 
 test('CT-BIF-G1 #O-G1-1：一条命令六包全装（exit 0 + profile node_modules 六包齐备）', async () => {
   const source = requireBundleSource(env)

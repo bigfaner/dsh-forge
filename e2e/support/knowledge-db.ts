@@ -22,18 +22,13 @@ type SqliteCtor = new (path: string) => SeedDb
 const SqliteDatabase = DatabaseDefault as unknown as SqliteCtor
 
 /**
- * 打开 knowledge 插件自持库（路径解析单源 = 插件 storage/paths.ts——e2e 净化态实际落位
- * 为 DSH_HOME 派生 {userData}/dsh-home/knowledge/knowledge.db：main.ts `??=` 缺省隔离注入
- * DSH_HOME、DSH_FORGE_TASKS_HOME 在 e2e 未设；先前误按 tasksHome 派生位开库 = 目录不存在）。
+ * 打开 knowledge 插件自持库（路径解析单源 = 插件 storage/paths.ts——unification 3.4 后
+ * 以 forge 根为基座：dshHomePath('forge') = {DSH_HOME}/forge，e2e 净化态 main.ts `??=`
+ * 注入 DSH_HOME = {userData}/dsh-home → 库落位
+ * {userData}/dsh-home/forge/db/knowledge/knowledge.db）。
  */
 export function openKnowledgeDb(userData: string): SeedDb {
-  const file = resolveKnowledgeDbFile(
-    {},
-    {
-      DSH_FORGE_TASKS_HOME: process.env.DSH_FORGE_TASKS_HOME,
-      DSH_HOME: join(userData, 'dsh-home'),
-    },
-  )
+  const file = resolveKnowledgeDbFile({}, join(userData, 'dsh-home', 'forge'))
   const db = new SqliteDatabase(file)
   db.pragma('busy_timeout = 5000')
   return db

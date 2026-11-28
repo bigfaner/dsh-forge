@@ -43,11 +43,12 @@ const ensureHost = (): Promise<WebHost> => ensureHostShared(env, 19_680)
 const stopHost = (): Promise<void> => stopHostShared(env)
 
 test.beforeAll(async () => {
+  test.setTimeout(SUITE_HOOK_TIMEOUT_MS)
   // 跑批前置预检（commit charge ≥90% fail-loud 拒跑）+ 套件互斥锁 + 正装共享建成（已装且状态复验通过即跳过）
   preflightCommitCharge()
   await acquireSuiteLock(env, 'bundle-preset-forge-session')
   await ensureInstalledShared(env, PROFILE)
-}, SUITE_HOOK_TIMEOUT_MS)
+})
 test.afterEach(stopHost)
 test.afterAll(async () => {
   await stopHost()
