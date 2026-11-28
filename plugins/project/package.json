@@ -12,10 +12,6 @@
       "import": "./dist/host/index.js"
     },
     "./package.json": "./package.json",
-    "./host-dirs": {
-      "types": "./dist/host/dirs/index.d.ts",
-      "import": "./dist/host/dirs/index.js"
-    },
     "./client": {
       "types": "./dist/client/ui/index.d.ts",
       "default": "./dist/client.js"
