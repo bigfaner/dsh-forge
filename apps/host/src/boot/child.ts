@@ -82,7 +82,7 @@ import { createUserQuestionsBridge } from './user-questions-bridge.js'
 import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from './proxy-channels.js'
 import { apiLoopbackGuardListener } from './api-loopback-guard.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
-import { refreshKnowledgeBindings, withKnowledgeRegistryRow } from '../ipc/bindings.js'
+import { withKnowledgeRegistryRow } from '../ipc/bindings.js'
 // 1.17 批二卸旧装新：worktree 域 host 侧装配段已下沉 @dsh-forge/project
 // host/assembly/host-side.ts——apps/host 只留注册行（装配逻辑零内联，AGENTS 1.3）。
 import { assembleProjectHostSide } from '@dsh-forge/project'
@@ -411,8 +411,8 @@ async function main(): Promise<void> {
     stateDb: options.stateDb,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
-    // 1.7 Q19：knowledge 行 config 注入退役（bindingsFile 缺席——纯 config 静态注入；
-    // knowledgeRow 装载位另行上送 ready，不再注 overlay 行）
+    // knowledge 行 config 注入退役（纯 config 静态注入——knowledgeRow 装载位另行上送
+    // ready，不再注 overlay 行）
     gitWorktreeRow, // 1.17 @dsh-forge/project 插件行注行门（dev 树 link 在场才注）
     taskLoopRow, // 1.15 @dsh-forge/task-loop 插件行注行门（tasks 域随包装载——双形态探测同径）
     mobileBridgeRow, // mobile ask 桥插件行注行门（组合期 answerer 注册）
@@ -579,21 +579,18 @@ async function main(): Promise<void> {
   // 1.17 批二装配缝下沉（卸旧装新）：worktree 域 host 侧装配段——①扩展点注入
   // （forgeWorktreeIdentity provide）②forgeWorktree 桥服务装配（worktree RPC 通道域
   // 本体 + 发送拦截装配门 + 建会话 meta.cwd 注入 + 封存判定快照）——已整体下沉
-  // @dsh-forge/project host/assembly/host-side.ts；apps/host 只留注册行（知识绑定表
-  // 全量刷新 host 域本体经依赖缝注入——零反向依赖）。缺席/失败 = 零装配 fail-soft
+  // @dsh-forge/project host/assembly/host-side.ts；apps/host 只留注册行。缺席/失败 = 零装配 fail-soft
   // （通道未注册、拦截不接线——宿主不受影响）。
   let worktreeRpcService: ReturnType<typeof assembleProjectHostSide>['service']
   if (gitWorktreeRow) {
     try {
       const assembled = assembleProjectHostSide(ctx, {
-        bindingsFile: options.bindingsFile,
         diag: (line) => diag(line),
         bindWarnDiag: sessionBindWarnDiag,
         failOpenWarn: failOpenDiag,
         createDiag: worktreeCreateDiag,
         bindDiag: sessionBindDiag,
         bindDriftDiag: bindDriftDiag,
-        refreshKnowledgeBindings,
       })
       worktreeRpcService = assembled.service
       // G7① 发送拦截撤销缝（装配门在工厂内——能力解析后 install，关停链 revoke）

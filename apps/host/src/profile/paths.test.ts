@@ -21,9 +21,8 @@ describe('resolveHostPaths 双形态', () => {
     expect(paths.form).toBe('packaged')
     expect(paths.profileDir.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/profile')
     expect(paths.dshHome.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/dsh-home')
-    // 4.2 装配期路径：状态库 + knowledge 绑定表（boot overlay 注入 / host 维护）——应用私有面不随 fix-26 变
+    // 4.2 装配期路径：状态库（boot overlay 注入）——应用私有面不随 fix-26 变
     expect(paths.stateDb.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/state.db')
-    expect(paths.bindingsFile.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/knowledge-bindings.json')
     // 3.4 M2 派生根缺省：{userData}/forge-workspaces（tech-design Layer Placement host 行）
     expect(paths.tasksHome.replaceAll('\\', '/')).toBe('C:/app-data/dsh-forge/forge-workspaces')
     // M3 3.8 设置域存储：{userData}/forge-settings.json——恒与 state.db 同目录
@@ -74,8 +73,6 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
 
   it('@dsh-forge/spec skills 挂载目录：installAnchor 树上溯解析（customSkillDirs 源）——1.9 迁移后 spec 锚 = @dsh-forge/spec', () => {
     const paths = resolveHostPaths({ DSH_FORGE_DEV_PROFILE: 'dev' }, 'C:/ud')
-    // 旧包 @dsh-forge/plugin-forge skills 解析已退役（M1 阶段B）——skillsDir 恒 undefined（字段 = main.ts 冻结面透传）
-    expect(paths.skillsDir).toBeUndefined()
     // spec 技能面（plugin-spec 1.9 迁移：grilling/fix-bug/investigate-bug 随 spec 包分发）
     expect(paths.specSkillsDir).toBeDefined()
     expect(paths.specSkillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]spec[/\\]skills$/)
@@ -92,7 +89,6 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
   it('旧包 plugin-forge skills 挂载目录：解析已退役（M1 阶段B）——任意树恒 undefined（fail-soft 退役面，不抛）', () => {
     // 独立根（无 node_modules 树）显式 anchor → 上溯至文件系统根不中
     const isolated = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: 'X:\\nowhere\\anchor\\package.json' }, 'C:/ud')
-    expect(isolated.skillsDir).toBeUndefined()
     expect(isolated.squadSkillsDir).toBeUndefined() // squad 技能面降级（同法 fail-soft）
     expect(isolated.knowledgeSkillsDir).toBeUndefined() // knowledge 技能面降级（同法 fail-soft）
   })
@@ -133,7 +129,6 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
       const anchor = join(root, 'anchor', 'package.json')
       const specSkills = join(root, 'node_modules', '@dsh-forge', 'spec', 'skills')
       const absent = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
-      expect(absent.skillsDir).toBeUndefined() // 旧包锚已退役（M1 阶段B）
       expect(absent.specSkillsDir).toBeUndefined() // spec 技能面降级（fail-soft 不抛断启动）
       mkdirSync(specSkills, { recursive: true }) // spec 树落地（1.9 迁移后形态）→ 解析同法
       const present = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
@@ -191,7 +186,6 @@ describe('resolveHostPaths DSH_HOME 两层解析（fix-26）', () => {
     const paths = resolveHostPaths({ DSH_FORGE_USER_DATA: 'C:/e2e-ud' }, 'C:/e2e-ud')
     expect(paths.dshHome.replaceAll('\\', '/')).toBe('C:/e2e-ud/dsh-home')
     expect(paths.stateDb.replaceAll('\\', '/')).toBe('C:/e2e-ud/state.db')
-    expect(paths.bindingsFile.replaceAll('\\', '/')).toBe('C:/e2e-ud/knowledge-bindings.json')
   })
 
   it('DSH_FORGE_DSH_HOME 显式 > 缺省（绝对路径直取；空串视为缺省）', () => {

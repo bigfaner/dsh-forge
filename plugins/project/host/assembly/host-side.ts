@@ -9,8 +9,7 @@
 //      发送拦截装配门 + 建会话 meta.cwd 注入 + 封存判定快照；gitWorktree 能力服务惰性
 //      具名取法——provide 晚于本装配段可达）；
 //   ③ 缺席/失败 = 零装配 fail-soft（通道未注册、拦截不接线——宿主不受影响）。
-// 外部行为不变：装配逻辑逐字自 child.ts 平移（能力解析留痕 8s / 60s 拦截放弃门全保留）；
-// knowledge 绑定表刷新（host ipc/bindings 域——零反向依赖）经依赖缝注入。
+// 外部行为不变：装配逻辑逐字自 child.ts 平移（能力解析留痕 8s / 60s 拦截放弃门全保留）。
 import type { ProjectService } from '@dsh-forge/contracts'
 import {
   createHostWorktreeRpc,
@@ -36,17 +35,8 @@ interface HostSideCtxFace extends ServiceGetFace {
   emit?(event: string, payload: unknown): void
 }
 
-/** knowledge 绑定表全量刷新缝（host ipc/bindings 域本体——依赖缝注入，零反向 import） */
-export type KnowledgeBindingsRefresher = (
-  projects: Pick<ProjectService, 'listProjects'>,
-  bindingsFile: string,
-  log: (line: string) => void,
-) => Promise<unknown>
-
-/** 装配依赖缝（host 侧诊断 emit 面 + 绑定表失效锚——child.ts 既有 emitDiag 闭包透传） */
+/** 装配依赖缝（host 侧诊断 emit 面——child.ts 既有 emitDiag 闭包透传） */
 export interface ProjectHostSideDeps {
-  /** knowledge 绑定表文件（onWorktreeSetChanged 全量刷新锚——boot overlay 注入单值） */
-  readonly bindingsFile: string
   /** 诊断缝（child diag——桥 diag 消息 + console 双写） */
   readonly diag: (line: string) => void
   /** binding-derivation §2.2：留痕 append 失败诊断 emit 缝（warn 级） */
@@ -59,8 +49,6 @@ export interface ProjectHostSideDeps {
   readonly bindDiag: (message: string) => void
   /** binding-derivation §2.6：bind-drift 漂移埋点 emit 缝（info 级——触发与消除） */
   readonly bindDriftDiag: (message: string) => void
-  /** knowledge 绑定表全量刷新缝（host 域本体注入——缺席 = 零刷新面） */
-  readonly refreshKnowledgeBindings: KnowledgeBindingsRefresher
 }
 
 /** 装配返回面：service → forgeWorktree 桥服务；revokeSendGuard → 宿主关停链撤销缝 */
@@ -163,38 +151,6 @@ export function assembleProjectHostSide(
       sessionController,
       sessionPersistence,
       getWorkspaceRegistry: getWorkspaceRegistry as never,
-      // 绑定表失效锚（worktree 集合变化——建/删树）：
-      // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
-      // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。
-      // bug 9eb9d6cb 后续性能收口：带 worktreePath 的调用（预铸挂会话——每次新会话点击）
-      // 先查绑定行在册，在册即跳过（省 N×git worktree list + 文件重写，~百 ms/点击）；
-      // 缺席（新树首次使用/建删树无路径）才全量刷新。读失败 = 现状全量刷新（fail-soft）。
-      onWorktreeSetChanged: async (worktreePath?: string) => {
-        let projects: Pick<ProjectService, 'listProjects'> | undefined
-        try {
-          projects = servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects'> | undefined
-        } catch {
-          projects = undefined
-        }
-        if (projects === undefined) return
-        if (worktreePath !== undefined) {
-          try {
-            const { readFileSync } = await import('node:fs')
-            const raw = readFileSync(deps.bindingsFile, 'utf8')
-            const parsed = JSON.parse(raw) as { projects?: readonly { wsPath?: unknown }[] }
-            const normalized = worktreePath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
-            const present = (parsed.projects ?? []).some(
-              (row) =>
-                typeof row.wsPath === 'string' &&
-                row.wsPath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase() === normalized,
-            )
-            if (present) return // 绑定行已在册——锚目的（首次入表）已达成，零刷新
-          } catch {
-            // 读失败（首建/损坏）→ 落全量刷新现状
-          }
-        }
-        await deps.refreshKnowledgeBindings(projects, deps.bindingsFile, (line) => diag(line))
-      },
       // binding-derivation §2.2：留痕 append 失败诊断 emit 缝（warn 级）
       bindWarnDiag: deps.bindWarnDiag,
       // binding-derivation §2.2：session/created 监听装配缝（提案裁决：ctx.on 监听装配留

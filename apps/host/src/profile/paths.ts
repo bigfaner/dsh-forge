@@ -44,18 +44,12 @@ export interface HostPaths {
   installAnchor: string
   /** 应用状态库（core 插件 dbFile——boot overlay 行注入；4.2） */
   stateDb: string
-  /** knowledge 插件绑定表文件（会话 cwd → projectId；host 装配方维护，4.2。M2 起同为
-   *  plugin-forge 行 bindingsFile（Interface 8 cwd 路由数据缝——同一 {wsPath,projectId} 表） */
-  bindingsFile: string
   /** M2 派生根（3.4：env DSH_FORGE_TASKS_HOME > {userData}/forge-workspaces；boot overlay
    *  注入 core 行 config.tasksHome——缺席注入 = 四域降级，本值恒在场） */
   tasksHome: string
   /** 设置域存储文件（M3 3.8：boot overlay 注 core 行 config.settingsFile——恒与 state.db
    *  同居 {userData}（core 路径守卫基准 = dirname(dbFile)，异目录即插件构造拒启）） */
   settingsFile: string
-  /** 旧包 @dsh-forge/plugin-forge skills 挂载锚（M1 阶段B 退役：解析已除，恒 undefined
-   *  ——字段保留 = main.ts 冻结面透传） */
-  skillsDir?: string
   /** @dsh-forge/spec skills 物理挂载目录（plugin-spec 1.9：预设装配 customSkillDirs[spec]
    *  ——grilling/fix-bug/investigate-bug 随 spec 包分发（loop-blocking 已退役，循环阻塞
    *  处置由 task-loop 域 rescue-task-loop 承载）；dev = workspace 链接、
@@ -139,11 +133,8 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
     credentialsPath: resolveCredentialsBridge(env),
     installAnchor,
     stateDb: join(userData, 'state.db'),
-    bindingsFile: join(userData, 'knowledge-bindings.json'),
     tasksHome: resolveTasksHome(env, userData),
     settingsFile: join(userData, 'forge-settings.json'),
-    // 旧包 @dsh-forge/plugin-forge 已退役（M1 阶段B）——skillsDir 解析移除；字段保留
-    // = main.ts 冻结面透传（恒 undefined，零下发）。
     specSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/spec'),
     squadSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/expert-squad'),
     knowledgeSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/knowledge'),

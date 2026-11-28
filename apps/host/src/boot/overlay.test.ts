@@ -41,7 +41,6 @@ describe('renderBootOverlay（纯函数形状）', () => {
       stateDb: 'C:\\app-data\\dsh-forge\\state.db',
     })
     expect(text).not.toContain('dsh-forge-knowledge')
-    expect(text).not.toContain('bindingsFile')
   })
 
   it('worktree 域插件行注行门（1.17 批二卸旧装新：装载 @dsh-forge/project，旧 git-worktree 行退役）：gitWorktreeRow: true → loader 行以 insert 形态注入（新 id 裸行被 loader 补丁按 unknown target 静默跳过——fix-4）；默认门关零注行（config-less——扩展点注入走 ctx 服务缝非 config）', () => {
@@ -262,9 +261,8 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(text).toContain('        id: blitz\n        name: 突击模式')
     expect(text).toContain('        order: 2')
     expect(text).not.toContain('preset-headhunter')
-    // 旧包退役（M1 阶段B）：物化产物零 plugin-forge[+spec] 行、零 bindingsFile 占位符下发
+    // 旧包退役（M1 阶段B）：物化产物零 plugin-forge[+spec] 行、零旧包占位符下发
     expect(text).not.toContain('@dsh-forge/plugin-forge')
-    expect(text).not.toContain('bindingsFile')
     // 预设顺序 = 声明序（registry 菜单 order 排序数据面）
     expect(text.indexOf('preset-expedition')).toBeLessThan(text.indexOf('preset-blitz'))
   })

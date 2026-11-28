@@ -5,8 +5,6 @@
 //     联证（服务面不随装配收窄变化）
 //   · AC3 tasksHome：env DSH_FORGE_TASKS_HOME 生效 + deriveTaskStoreDir 单源（{tasksHome}/
 //     {flatten}@{hash8}）+ listTasks 惰性开工作区库（forge.db 落 tasksHome）
-//   · AC2 bindingsFile 生产端：withKnowledgeBindingsRefresh 包装 registerProject →
-//     绑定表文件落 {wsPath,projectId}（plugin-forge/knowledge 同一消费形制）
 //   · AC4 dispose 链：shutdown → 子侧 ProcessShutdown → cordis fiber disposer → core
 //     disposer → store.dispose——工作区库 WAL 副产物（forge.db-wal）净场
 // 环境前置（fail-loud，缺席即红——先 just compile / pnpm install）：
@@ -15,7 +13,7 @@
 // 隔离：独立 userData/tasksHome/DSH_HOME（临时目录）；独占端口（listen(0) 探测）——
 // 不持应用单实例锁（无 Electron main），与 e2e 单实例纪律零冲突。
 import { createRequire } from 'node:module'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:net'
@@ -23,10 +21,6 @@ import { expect, it } from 'vitest'
 import type { DshHostHandle } from './run.js'
 import { bootDshHost } from './run.js'
 import { hostRoot, resolveHostPaths } from '../profile/paths.js'
-import { withKnowledgeBindingsRefresh } from '../ipc/bindings.js'
-
-/** 归一比较（盘符大小写/分隔符两态——绑定行 wsPath 为 core canonical 化产物） */
-const norm = (p: string): string => realpathSync(p).replace(/\\/g, '/').toLowerCase()
 
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -40,7 +34,7 @@ async function freePort(): Promise<number> {
 }
 
 it(
-  '3.4 冒烟：electron child boot → 标准组合零 forge 工具 + 四域服务在场 + 绑定表生产 + dispose 净场',
+  '3.4 冒烟：electron child boot → 标准组合零 forge 工具 + 四域服务在场 + dispose 净场',
   async () => {
     // ── 前置门（fail-loud：装配缺口显形为红灯，不静默跳过）──
     const childEntry = join(hostRoot(), 'dist', 'boot', 'child.js')
@@ -75,10 +69,8 @@ it(
           installAnchor: paths.installAnchor,
           port: await freePort(),
           stateDb: paths.stateDb,
-          bindingsFile: paths.bindingsFile,
           tasksHome: paths.tasksHome,
           settingsFile: paths.settingsFile, // M3 3.8：设置域存储注入（core 行 config——forgeSettings 装配门）
-          skillsDir: paths.skillsDir,
         },
         { execPath: electronExe, childEntry }, // vitest(node/src) 驱动：electron 二进制 + dist child 入口（spawn 链路同款：ELECTRON_RUN_AS_NODE=1 + stdio ipc）
       )
@@ -104,22 +96,6 @@ it(
       expect(await host.services.forgeSettings!.get()).toEqual({ worker })
       const persisted = JSON.parse(readFileSync(paths.settingsFile, 'utf8')) as { worker?: { model?: string } }
       expect(persisted.worker?.model).toBe('demo-model') // 子进程 core 单写者落注入路径（boot overlay 注行联证）
-
-      // AC2：绑定表生产端（注册增量刷新——main.ts withKnowledgeBindingsRefresh 同款包装）
-      const projects = withKnowledgeBindingsRefresh(host.services.forgeProjects!, paths.bindingsFile)
-      const registered = await projects.registerProject({
-        workspaceDir: wsDir,
-        name: 'demo-ws',
-        forgeDir: join(wsDir, '.forge'),
-      })
-      const bindings = JSON.parse(readFileSync(paths.bindingsFile, 'utf8')) as {
-        version: number
-        projects: readonly { wsPath: string; projectId: string }[]
-      }
-      expect(bindings.version).toBe(1)
-      const row = bindings.projects.find((p) => p.projectId === registered.projectId)
-      expect(row, '绑定表行缺席（生产端断裂——plugin-forge cwd 路由数据缝无源）').toBeDefined()
-      expect(norm(row!.wsPath)).toBe(norm(wsDir))
 
       // AC3（1.14 改指新数据面）：derive 单源（projects 域，core 缝不变）+ task-loop 域
       // 装配自持库落 {DSH_HOME}/forge/db/task-loop/task-loop.db（fix-1 缺省装配三件单源；

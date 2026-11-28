@@ -3,7 +3,7 @@
 # 物理不含规格技能）+ 突击 persona + name 突击模式 + order 2（plugin-spec 1.9：blitz
 # 突击专属技能目录随 grilling 迁 spec 退役——突击无专属技能目录行）。镜像保真与契约 pin 同远征
 # （presets.test.ts 机械 diff + config 全集断言）；平台门行由物化就地求值。
-# fix-1/drift #9：尾部 plugin-forge 增量行携带 bindingsFile 同 config（占位符物化——与全局行
+# fix-1/drift #9：尾部 plugin-forge 增量行携带与全局行同值的装配 config（占位符物化——
 # 同值单源），预设会话行内实例自足 cwd 路由（config-less 行内实例遮蔽全局配置实例断链——3.9 实跑双证）。
 # knowledge-stage1 1.9 A5：customSkillDirs 增 knowledge 技能目录（skills/learn——
 # 知识沉淀技能；knowledge 插件本体走用户层全局行，非预设组合专行）。

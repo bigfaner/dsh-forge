@@ -8,8 +8,8 @@
 //     供 stale turn），fail-soft 双 NULL + warn diag（bug 0520cbaf——禁静默吞）；
 //     web/RPC 径无 session 恒双 NULL（正常降级，零 warn）。
 //   ② cwd → projectId：绑定表解析（装配期 config 静态供给）。用户裁决 Q19（2026-11-19）：
-//      bindingsFile 绑定表文件与刷新缝退役——projectId→wsPath 映射改纯 config 静态注入
-//     （本文件静态表为唯一数据源，无文件读取、无运行期刷新）。
+//      projectId→wsPath 映射 = 纯 config 静态注入（本文件静态表为唯一数据源，
+//     无文件读取、无运行期刷新）。
 // 两级解析（projectId→wsPath→注册行）第一级 = createWsPathResolver（同表反向）；
 // 第二级 = storage/registry.ts findByWsPath（canonical 键）。
 import { normalizeFsPath } from '@dsh-forge/path-key'

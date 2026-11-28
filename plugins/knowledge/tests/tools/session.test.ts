@@ -1,7 +1,7 @@
 // 会话上下文解析单测（sessionContextOf / createProjectResolver / createWsPathResolver /
 // unboundSessionError）。口径：官方 sessionCwd 同型（header.cwd 为读取位）；sessionId
 // 缺省空串 = 无会话上下文（SearchQuery.sessionId 注释）；绑定表归一整串相等（win32
-// 大小写/斜杠不敏感）。1.7 Q19：绑定表 = 纯 config 静态注入（bindingsFile 动态面退役）；
+// 大小写/斜杠不敏感）。1.7 Q19：绑定表 = 纯 config 静态注入（动态面已退役）；
 // 两级解析（projectId→wsPath→注册行）第一级 = createWsPathResolver，第二级联合
 // storage/registry（canonical 键命中）在本文件末组钉两级链路。
 import { mkdtempSync, rmSync } from 'node:fs'

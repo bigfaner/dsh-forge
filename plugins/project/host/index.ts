@@ -40,7 +40,6 @@ import worktreePlugin, {
 } from "./worktrees/index.js";
 import {
   assembleProjectHostSide,
-  type KnowledgeBindingsRefresher,
   type ProjectHostSideAssembly,
   type ProjectHostSideDeps,
 } from "./assembly/host-side.js";
@@ -498,7 +497,6 @@ projectPlugin.inject = ["workspaceRegistry", "tools"] as const;
 // ── host 侧装配面出口（apps/host 只留注册行，域装配符号自本包导入）──
 export {
   assembleProjectHostSide,
-  type KnowledgeBindingsRefresher,
   type ProjectHostSideAssembly,
   type ProjectHostSideDeps,
 };

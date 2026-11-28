@@ -1,7 +1,7 @@
 // 任务 2.7 测试 —— core forgeSettings 服务（tech-design §Interface 1 M3 + 图 11 设置单门）：
 // get/set/持久化往返 + 未配置态（文件缺席 → {} 不抛——UI ⚠ 显式占位判据）+ 路径守卫
 // （userData 域外拒）+ 原子写（tmp + rename 无残留）+ 写校验（worker 三项形状）。
-// 存储形状单测逐字节锚定（稳定序列化——同 host bindingsFile 先例口径）。
+// 存储形状单测逐字节锚定（稳定序列化口径）。
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

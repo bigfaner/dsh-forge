@@ -65,7 +65,7 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
     expect(patch).toContain('- id: client-hmr')
     expect(patch).toContain('disabled: true')
     // insert 块 = 配置派生全集（行 config 不在用户层书写——dbFile / tasksHome /
-    // bindingsFile / skills 挂载目录 = boot overlay 装配期注入）
+    // skills 挂载目录 = boot overlay 装配期注入）
     const expectedRows = Object.entries(PRODUCT_PLUGINS)
       .filter(([, toggle]) => toggle.userLayerRow)
       .flatMap(([key]) => {

@@ -2,7 +2,7 @@
 // worker 默认 LLM 三项（provider / model / reasoning——dispatchTask 组装 agentOptions 的
 // 唯一配置源，reasoning → agentOptions.effort 直映射）的单门读写。
 // 存储 = {userData}/forge-settings.json（路径经 boot overlay 注 core 行 config.settingsFile
-// ——bindingsFile 同型先例，host 注入面 = 3.8）；单写者 = core（Hard Rule：UI 设置分区
+// ——host 注入面 = 3.8）；单写者 = core（Hard Rule：UI 设置分区
 // （RPC）与 dispatchTask（服务注入）同门消费）——get 每调实时读文件、零缓存：改完即生效
 // 无重启。文件缺席 = 未配置态（get 返回 {} 不抛——UI ⚠ 显式占位判据；dispatchTask 不携带
 // agentOptions 回退父会话继承）。原子写 = 同目录 tmp + rename（崩溃无半写文件）。

@@ -165,12 +165,11 @@ for (const preset of ['expedition', 'blitz'] as const) {
       expect(line).toBe(lineOf(blitzPersona, '行为纪律：'))
     })
 
-    it('旧包行退役（M1 阶段B）：零 plugin-forge[+spec] 行、零 bindingsFile 占位符（数据缝写入侧保留在 host，预设底稿零下发）', () => {
+    it('旧包行退役（M1 阶段B）：零 plugin-forge[+spec] 行（预设底稿零 forge 数据缝下发）', () => {
       const body = text.split('\n').filter((line) => !line.startsWith('#')).join('\n') // 头注释历史叙事不计
       expect(rows.has('plugin-forge')).toBe(false)
       expect(rows.has('plugin-forge-spec')).toBe(false)
       expect(body).not.toContain('@dsh-forge/plugin-forge')
-      expect(body).not.toContain('bindingsFile')
     })
 
     it('skill-filesystem 分叉：customSkillDirs 占位符（物化锚——!!js 全形态死刑，物化只出绝对路径）', () => {
@@ -281,7 +280,6 @@ describe('headhunter 预设（expert-squad 0.30.0 起随包自带：plugins/expe
     expect(rows.has('md-mermaid')).toBe(false)
     expect(text).not.toContain('@dsh-forge/plugin-forge')
     expect(text).not.toContain('{{plugin-forge')
-    expect(text).not.toContain('bindingsFile')
     // skill-filesystem 随工程面移除集整体退役（猎头纯对话配置——档案读写走管理工具）
     expect(rows.has('skill-filesystem')).toBe(false)
   })

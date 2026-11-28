@@ -64,14 +64,8 @@ export interface BootDshOptions {
   port: number
   /** 应用状态库绝对路径（core 插件 dbFile——boot overlay 注入；4.2） */
   stateDb: string
-  /** knowledge 绑定表文件绝对路径（bindingsFile——host 写侧数据缝（project host-side 装配段
-   *  注入）；旧包预设行内占位符下发已随 M1 阶段B 退役） */
-  bindingsFile: string
   /** M2 派生根绝对路径（3.4：boot overlay 注 core 行 config.tasksHome；缺席 = M2 四域降级） */
   tasksHome?: string
-  /** 旧包 @dsh-forge/plugin-forge skills 锚（M1 阶段B 退役：解析与下发已除——字段保留
-   *  = main.ts 冻结面透传，恒 undefined） */
-  skillsDir?: string
   /** @dsh-forge/spec skills 物理挂载目录（plugin-spec 1.9 活包锚；预设底稿已无旧包占位符
    *  ——字段保留 = main.ts 冻结面透传） */
   specSkillsDir?: string

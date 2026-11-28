@@ -3,7 +3,7 @@
 # presets.test.ts）+ 产品分叉四处：persona prefix 增远征作风行（只谈作风）/ name·description·order /
 # skill-filesystem 行 customSkillDirs = [plugin-forge, plugin-forge-spec] 技能目录（占位符，
 # renderBootOverlay 物化当形态绝对路径）/ 尾部 plugin-forge + plugin-forge-spec 增量行
-#（fix-1/drift #9：两增量行携带 bindingsFile 同 config（占位符物化——与全局行同值单源），
+#（fix-1/drift #9：两增量行携带与全局行同值的装配 config（占位符物化——同值单源），
 # 预设会话行内实例自足 cwd 路由；config-less 行内实例会遮蔽全局配置实例致 forge 动词
 # ERR_WORKSPACE_NOT_REGISTERED——3.9 实跑双证）。
 # knowledge-stage1 1.9 A5：customSkillDirs 增 knowledge 技能目录（skills/learn——

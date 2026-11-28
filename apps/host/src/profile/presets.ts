@@ -11,7 +11,7 @@
 // assemble host-dist 递归随包）→ repo 回退 hostRoot()/src/profile/presets（dev electron
 // 形态兜底：tsc 不拷贝非 TS 资产，dist 邻位缺席时 repo src 在场）。两锚皆缺席（如打包
 // 形态未 stage）= undefined fail-soft
-// （预设面降级不抛断 boot——装配缺口由结构 pin/冒烟显形，同 paths.ts skillsDir 纪律）。
+// （预设面降级不抛断 boot——装配缺口由结构 pin/冒烟显形）。
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'

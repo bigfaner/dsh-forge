@@ -96,7 +96,7 @@ export interface CorePluginConfig {
   tasksHome?: string
   /**
    * M3 设置存储 {userData}/forge-settings.json（2.7——路径经 boot overlay 注 core 行 config，
-   * bindingsFile 同型先例；host 注入面 = 3.8）。缺席 = forgeSettings 服务降级缺席
+   * host 注入面 = 3.8）。缺席 = forgeSettings 服务降级缺席
    * （六服务形制不动——与 tasksHome 两缝各自独立降级）；在场时路径守卫基准 =
    * dirname(dbFile)（state.db 与设置文件同居 userData——双注入缝交叉校验）。
    */

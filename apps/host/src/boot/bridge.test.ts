@@ -109,7 +109,6 @@ describe('parseChildOptions（argv[2] BootDshOptions JSON）', () => {
     installAnchor: 'C:/a/package.json',
     port: 19400,
     stateDb: 'C:/ud/state.db',
-    bindingsFile: 'C:/ud/bindings.json',
   })
 
   it('合法 JSON → 完整选项', () => {
@@ -118,7 +117,6 @@ describe('parseChildOptions（argv[2] BootDshOptions JSON）', () => {
       installAnchor: 'C:/a/package.json',
       port: 19400,
       stateDb: 'C:/ud/state.db',
-      bindingsFile: 'C:/ud/bindings.json',
     })
   })
 
@@ -147,24 +145,21 @@ describe('parseChildOptions（argv[2] BootDshOptions JSON）', () => {
     expect(parseChildOptions(['electron.exe', 'child.js', valid])?.credentialsPath).toBeUndefined()
   })
 
-  it('M2 装配两缝可选透传（3.4：tasksHome / skillsDir；空串/缺席 = 不注入降级）', () => {
+  it('M2 装配缝可选透传（3.4：tasksHome；空串/缺席 = 不注入降级）', () => {
     const m2 = parseChildOptions([
       'electron.exe',
       'child.js',
-      JSON.stringify({ ...JSON.parse(valid), tasksHome: 'C:/ud/forge-workspaces', skillsDir: 'C:/pkg/skills' }),
+      JSON.stringify({ ...JSON.parse(valid), tasksHome: 'C:/ud/forge-workspaces' }),
     ])
     expect(m2?.tasksHome).toBe('C:/ud/forge-workspaces')
-    expect(m2?.skillsDir).toBe('C:/pkg/skills')
     const legacy = parseChildOptions(['electron.exe', 'child.js', valid]) // 旧载荷（3.4 前主进程）零破坏
     expect(legacy?.tasksHome).toBeUndefined()
-    expect(legacy?.skillsDir).toBeUndefined()
     const empty = parseChildOptions([
       'electron.exe',
       'child.js',
-      JSON.stringify({ ...JSON.parse(valid), tasksHome: '', skillsDir: '' }),
+      JSON.stringify({ ...JSON.parse(valid), tasksHome: '' }),
     ])
     expect(empty?.tasksHome).toBeUndefined()
-    expect(empty?.skillsDir).toBeUndefined()
   })
 
   it('M3 装配缝可选透传（3.7 specSkillsDir / 3.8 settingsFile；空串/缺席 = 不注入降级）', () => {

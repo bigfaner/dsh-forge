@@ -16,7 +16,7 @@
 // knowledge 目录键声明（root/global 两键——根 scope provide('dirKeys.knowledge', entries)
 // 约定名——跨 scope 反向拉取终态缝，bug 04d445f4）；交出合并 disposer。
 // projectId 解析缝（用户裁决 Q19）：纯 config 静态注入——config.projects 绑定表为唯一
-// 数据源（bindingsFile 文件与刷新缝退役）；服务面两级解析 projectId→wsPath→注册行。
+// 数据源；服务面两级解析 projectId→wsPath→注册行。
 import { createKnowledgeTools, createProjectResolver, createWsPathResolver } from './tools/index.js'
 import { KNOWLEDGE_SECTION_NAME, KNOWLEDGE_SECTION_ORDER, renderKnowledgeStaticSection } from './prompt/index.js'
 import type { ProjectIdResolver, WsPathResolver } from './tools/index.js'

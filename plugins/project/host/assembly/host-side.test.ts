@@ -194,14 +194,12 @@ describe('1.7 扩展点注入装配（集成层实现——真机 git 链）', (
 
 describe('1.17 批二 host-side 装配段（child.ts 513-670 平移面）', () => {
   const noDeps = () => ({
-    bindingsFile: join(ROOT, 'bindings.json'),
     diag: () => {},
     bindWarnDiag: () => {},
     failOpenWarn: () => {},
     createDiag: () => {},
     bindDiag: () => {},
     bindDriftDiag: () => {},
-    refreshKnowledgeBindings: async () => {},
   })
 
   it('forgeProjects 缺席 → 扩展点零注入 + 能力未解析 = 拦截零装配（fail-soft 不抛；桥服务壳恒在场同 host-assembly 契约）', () => {

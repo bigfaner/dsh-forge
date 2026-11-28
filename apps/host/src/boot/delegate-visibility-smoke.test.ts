@@ -62,10 +62,8 @@ it(
           installAnchor: paths.installAnchor,
           port: await freePort(),
           stateDb: paths.stateDb,
-          bindingsFile: paths.bindingsFile,
           tasksHome: paths.tasksHome,
           settingsFile: paths.settingsFile,
-          skillsDir: paths.skillsDir,
         },
         { execPath: electronExe, childEntry },
       )

@@ -8,10 +8,10 @@ import { bootDshHost } from './boot/index.js'
 import {
   backfillKnowledgeRegistryRows, BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, electronDirectoryDialog,
   electronHarnessActions, harnessLogPathOf, HARNESS_SAFE_MODE_ENV, noteHarnessLog,
-  parentWindowOf, refreshKnowledgeBindings, registerBootChannel, registerDirectoryPickerChannel,
+  parentWindowOf, registerBootChannel, registerDirectoryPickerChannel,
   registerFsChannels, registerHarnessChannels, registerKnowledgeChannels, registerM2Channels,
   registerProjectsChannels, removeHarnessChannels, removeTunnelChannel, runStartupReconcile,
-  registerTunnelChannel, withKnowledgeBindingsRefresh, withKnowledgeRegistryRow,
+  registerTunnelChannel, withKnowledgeRegistryRow,
 } from './ipc/index.js'
 import { ensureProfileMaterialized, ensureSafeModeProfile, isDevForm, isPackagedForm, resolveHostPaths } from './profile/index.js'
 import { attachHostTelemetry } from './telemetry/index.js'
@@ -87,9 +87,8 @@ void (async () => {
       installAnchor: paths.installAnchor,
       port,
       stateDb: paths.stateDb,
-      bindingsFile: paths.bindingsFile,
       tasksHome: paths.tasksHome, settingsFile: paths.settingsFile, // core 行 config 双注：3.4 派生根（四域装配门）+ 3.8 设置域（forgeSettings 装配门）
-      skillsDir: paths.skillsDir, specSkillsDir: paths.specSkillsDir, squadSkillsDir: paths.squadSkillsDir, // skills 物理挂载（M3 3.7：core/spec 两目录 + squad 专家域——预设 customSkillDirs 物化锚；1.9 skills-blitz 随 grilling 迁 spec 退役）
+      specSkillsDir: paths.specSkillsDir, squadSkillsDir: paths.squadSkillsDir, // skills 物理挂载（M3 3.7：spec/squad 两目录——预设 customSkillDirs 物化锚；1.9 skills-blitz 随 grilling 迁 spec 退役）
       knowledgeSkillsDir: paths.knowledgeSkillsDir, // knowledge 技能目录（1.9 A5：customSkillDirs[knowledge]——skills/learn 物化锚）
       credentialsPath: paths.credentialsPath, resourcesDir: paths.resourcesDir, // fix-26 隔离态凭据桥真 home + 4.1 打包资源根（boot child runtime/host-dist 入口）
     }, {
@@ -108,18 +107,13 @@ void (async () => {
     registerFsChannels(forgeIpc) // 宿主文件系统能力面（2.8 文件浏览器数据源，无 core 依赖即可注册）
     registerM2Channels(forgeIpc, host, () => mainWindow?.webContents, shell.openPath) // M2 四族+derive 注册（缺席 fail-soft 记 warn）+ 写推送事件广播（交互二）
     // 产品双服务接线（4.2 转正）：core 经 profile 装配 provide，boot 面世后注册
-    // forge:projects/* + forge:knowledge/*；绑定表随 boot 全量刷新 + 增量刷新（fail-soft，
-    // 1.7 Q19 后消费面 = plugin-forge Interface 8 cwd 路由——knowledge 已改纯 config 静态注入）。
+    // forge:projects/* + forge:knowledge/*。
     if (host.services.forgeProjects !== undefined) {
       registerProjectsChannels(
         forgeIpc,
         // 1.15 进表径：注册成功后向 knowledge 自持注册表落注册行（fail-soft；插件缺席透传）
-        withKnowledgeRegistryRow(
-          withKnowledgeBindingsRefresh(host.services.forgeProjects, paths.bindingsFile),
-          host.services.knowledge,
-        ),
+        withKnowledgeRegistryRow(host.services.forgeProjects, host.services.knowledge),
       )
-      void refreshKnowledgeBindings(host.services.forgeProjects, paths.bindingsFile)
       void backfillKnowledgeRegistryRows(host.services.forgeProjects, host.services.knowledge) // bug 5e5592dc：注册行 boot 回填——存量项目知识通道免「项目不存在」
       runStartupReconcile(host.services.forgeProjects) // fix-27：启动对账（§交互三）——悬空引用启动即修
     } else console.warn('[host] forgeProjects 服务缺席（core 插件行未装载）——forge:projects/* 通道未注册')

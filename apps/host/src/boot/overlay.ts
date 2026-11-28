@@ -1,5 +1,5 @@
 // boot overlay 生成（4.2；定位：基础）——产品插件行 config 的装配期注入面。
-// 动机：core 插件 dbFile 与 knowledge 插件 bindingsFile 均为应用数据目录派生的
+// 动机：core 插件 dbFile 为应用数据目录派生的
 // 绝对路径（e2e 隔离 userData 逐次变化、packaged 形态随安装机器变化）——静态
 // profile 模板（首启落地幂等不重写）无法承载；runProfile 的 patchFiles 叠层
 // （用户层之后应用，按 row id 整体替换 config）正是装配期覆盖缝。
@@ -28,9 +28,8 @@
 // 用户，两径不混）。customSkillDirs 物化分叉：占位符解析为当形态绝对路径（dev = repo /
 // packaged = resources 物化路径）；!!js 全形态死刑（spike S5-4 判决反转）——物化输出零
 // 表达式残留（平台门行就地求值具体布尔，路径 only 绝对路径）。
-// knowledge-stage1 1.7（Q19 裁决）：knowledge 行 config 注入退役——knowledge 插件不再
-// 消费 bindingsFile（projectId→wsPath 纯 config 静态注入；绑定表文件由 host 写侧继续
-// 维护——数据缝保留，旧包占位符下发已随 M1 阶段B 退役）。
+// knowledge-stage1 1.7（Q19 裁决）：knowledge 行 config 注入退役——knowledge 插件
+// 零 host 注入 config（projectId→wsPath 纯 config 静态注入）。
 // 产物：{userData}/boot-overlay.yml（每启重写，非用户层状态）。
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -78,7 +77,7 @@ export interface BootOverlayInput {
 }
 
 /** 预设装配输入（3.7）：四底稿全文 + customSkillDirs 活包技能目录物化锚（旧包 plugin-forge[+spec]
- *  锚与 bindingsFile 占位符下发已随 M1 阶段B 退役） */
+ *  锚下发已随 M1 阶段B 退役） */
 export interface PresetOverlayInput extends PresetPatches {
   /** expert-squad skills 当形态绝对路径（customSkillDirs[squad]；缺席 = 剔除——squad
    *  技能面降级 fail-soft） */
@@ -195,8 +194,8 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     `    dbFile: ${yamlQuote(input.stateDb)}`,
     ...(input.tasksHome !== undefined ? [`    tasksHome: ${yamlQuote(input.tasksHome)}`] : []),
     ...(input.settingsFile !== undefined ? [`    settingsFile: ${yamlQuote(input.settingsFile)}`] : []),
-    // 1.7 Q19：knowledge 行 config 注入退役（bindingsFile 消费面随绑定表退役——
-    // knowledge 插件零 host 注入 config，自持库按宿主数据域锚自启）。
+    // knowledge 行 config 注入退役（Q19 裁决——knowledge 插件零 host 注入 config，
+    // 自持库按宿主数据域锚自启）。
     // 产品裁决（2026-10-09：标准模式零 forge 面）：无全局 plugin-forge 行、无全局
     // skill-filesystem 行——forge 工具/技能仅预设组合携带（预设底稿行内增量行，下方）。
     ...(input.credentialsPath !== undefined
