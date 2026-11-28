@@ -41,19 +41,19 @@ describe('插件键经注册表解析（基座键 + 插件声明依赖链）', (
     'sample.project_dir': {
       description: '样例项目目录',
       deps: ['forge.home', 'projectRoot'],
-      resolve: (deps: Record<string, string>) => join(deps['forge.home'], 'projects', deriveDirName(deps.projectRoot)),
+      resolve: (deps: Record<string, string>) => join(deps['forge.home']!, 'projects', deriveDirName(deps.projectRoot!)),
     },
     'sample.runtime_dir': {
       description: '样例运行时目录',
       deps: ['sample.project_dir'],
       params: ['slug'],
-      resolve: (deps: Record<string, string>, params: Record<string, string>) => join(deps['sample.project_dir'], params.slug!),
+      resolve: (deps: Record<string, string>, params: Record<string, string>) => join(deps['sample.project_dir']!, params.slug!),
     },
     'sample.task_dir': {
       description: '样例任务目录',
       deps: ['sample.runtime_dir'],
       params: ['slug', 'localId'],
-      resolve: (deps: Record<string, string>, params: Record<string, string>) => join(deps['sample.runtime_dir'], params.localId!),
+      resolve: (deps: Record<string, string>, params: Record<string, string>) => join(deps['sample.runtime_dir']!, params.localId!),
     },
   }
 
@@ -140,7 +140,7 @@ describe('运行期注册表', () => {
         deps: ['workspaceRoot'],
         params: ['slug', 'localId'],
         resolve: (deps: Record<string, string>, params: Record<string, string>) =>
-          join(deps.workspaceRoot, params.slug!, params.localId!),
+          join(deps.workspaceRoot!, params.slug!, params.localId!),
       },
     }
     expect(() =>

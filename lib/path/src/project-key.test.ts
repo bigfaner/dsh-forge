@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { deriveDirName } from './derive-dir.js'
+import type { GitPorcelainRunner } from './project-root.js'
 import {
-  type GitPorcelainRunner,
   MARKER_PATTERN,
   resolveProjectKey,
   ProjectKeyDerivationError,
