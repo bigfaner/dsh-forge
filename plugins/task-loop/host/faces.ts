@@ -274,11 +274,6 @@ export interface ForgeCommandDefinition {
   handler(invocation: ForgeCommandInvocation): ForgeCommandResult | Promise<ForgeCommandResult>
 }
 
-/** dsh commands 注册表收窄面（官方 CommandRuntime.register——返回注销器；S2 经 reflect.get 防御读取） */
-export interface CommandRegisterFace {
-  register(definition: ForgeCommandDefinition): () => void
-}
-
 /** dsh agents 注册表收窄面（官方 AgentRegistry.get——活根解析：叙述通道 + 裁决问询 agent 随载） */
 export interface AgentLookupFace {
   get(id: string): unknown
