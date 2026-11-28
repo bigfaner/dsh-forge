@@ -1,8 +1,7 @@
 // milestone-service（plugin-spec-roadmaps 1.7，code-design §1 模块ⓐ）——Milestone 服务域
 // CRUD + 寻径：createMilestone（ac address 指向校验 → objective-lifecycle 写点单源委托）、
 // updateMilestone（同门结构校验）、getMilestone（父 roadmap slug + seq 寻径）、
-// listMilestones（uq 前缀 seq 序）、confirmMilestoneAchieved（human-only——前置守卫 =
-// 现值 awaiting_acceptance 且 deriveMilestoneAchieved）。
+// listMilestones（uq 前缀 seq 序）。
 // moveMilestone / transitionMilestone = objective-lifecycle（1.6 写点单源）薄重导出——
 // 互斥锚/锚点守卫/两步原子性/链式边沿零重复实现。
 import { withTransaction } from "@dsh-forge/lib-db";
@@ -125,43 +124,4 @@ export function getMilestone(
 
 export function listMilestones(deps: MilestoneVerbDeps, roadmapId: string): MilestoneRow[] {
   return deps.repos.milestones.listByRoadmap(roadmapId);
-}
-
-/**
- * human-only 验收确认（awaiting_acceptance → completed）——前置守卫 = milestoneMachine
- * humanOnly 边 + 挂链 specs 全 completed（deriveMilestoneAchieved 单列判定）；未达成拒
- *（ERR_SPEC_CONFIRM_NOT_ACHIEVED）。两写（现值 UPDATE + 统一台账 append）同事务。
- */
-export function confirmMilestoneAchieved(deps: MilestoneVerbDeps, input: ConfirmMilestoneAchievedInput): MilestoneRow {
-  if (input.actor !== "plugin-tool" && input.actor !== "ui") {
-    throw new SpecError("ERR_SPEC_ACTOR_INVALID", `非法动作者通道：${input.actor}`, { actor: input.actor });
-  }
-  const now = deps.now ?? (() => new Date().toISOString());
-  const generateId = deps.generateId ?? (() => crypto.randomUUID());
-  const milestone = requireMilestone(deps, input.milestoneId);
-  const humanOnlyEdge = milestoneMachine.canTransition(milestone.milestoneStatus, "completed").ok
-    && milestoneMachine.edgeMeta(milestone.milestoneStatus, "completed")?.humanOnly === true;
-  const achieved = deriveMilestoneAchieved(deps.repos.specs.specsByMilestone(milestone.id));
-  if (!humanOnlyEdge || !achieved) {
-    throw new SpecError(
-      "ERR_SPEC_CONFIRM_NOT_ACHIEVED",
-      `milestone 验收确认前置不满足（现值=${milestone.milestoneStatus}，聚合派生达成=${achieved}）`,
-      { milestoneId: milestone.id, fromStatus: milestone.milestoneStatus, derived: achieved },
-    );
-  }
-  const ts = now();
-  return withTransaction(deps.db, () => {
-    deps.repos.milestones.updateStatus(milestone.id, "completed", ts);
-    deps.repos.transitions.appendTransition({
-      id: generateId(),
-      entityKind: "milestone",
-      entityId: milestone.id,
-      fromStatus: milestone.milestoneStatus,
-      toStatus: "completed",
-      note: input.note ?? null,
-      actor: input.actor,
-      createdAt: ts,
-    });
-    return deps.repos.milestones.findById(milestone.id)!;
-  });
 }
