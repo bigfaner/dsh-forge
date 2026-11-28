@@ -225,39 +225,6 @@ export interface DispatchJobsRegistryFace {
   }): string
 }
 
-/** 插件对宿主 ctx 的结构化消费面（真 Context 结构兼容；容器语义 slug 化——bugs 域
- *  服务面随退役批移出本包：forgeBugs→project、forgeProjects→project） */
-export interface ForgeContextFace {
-  /** 任务域服务（本插件域内 provide——host/domain/tasks/service.ts；运行期 Cordis inject 具名契约） */
-  forgeTasks: TasksService
-  /** checkpoints 域服务（本插件域内 provide——host/domain/checkpoints/service.ts） */
-  forgeCheckpoints: CheckpointsService
-  /** dsh 官方 reflect 服务子面（3.4——可选服务防御读取：cordis 4.0.4 无 '?' 可选 inject
-   *  后缀，forgeSettings 缺席（settingsFile 未注入）经 reflect.get 降级读取而非 inject 阻载） */
-  readonly reflect?: {
-    get(name: string, strict?: boolean): unknown
-    /** 可选 provide 面（expert-squad-forge 1.2——档案取用面 'forgeExperts' 依赖注入；缺席 = 不提供） */
-    provide?(name: string, service: unknown): void
-    /** 已声明服务名表（bug 04d445f4 反向拉取缝——dirKeys.* 约定名枚举；缺席 = 零第三方键拉取） */
-    readonly props?: Readonly<Record<string, unknown>>
-  }
-  /** dsh 官方 tool 注册面 */
-  tools: ToolRegisterFace
-  /** dsh 官方系统提示词面 */
-  systemPrompt: SystemPromptSectionFace
-  /**
-   * dsh ctx.on 事件注册收窄面：'session/created'/'session/disposed' 生命周期事件
-   * （ForgeSessionLifecycleFace——官方 dsh-session Session 消费子面）。可选：
-   * 缺席 = 挂接面 fail-soft。
-   */
-  readonly on?: ForgeEventRegisterFace
-  /**
-   * dsh 官方事件发射收窄面（Context.emit——diag/log 事件域诊断埋点，expert-resolve 径
-   * 消费）。可选：缺席/发射故障 = 诊断 fail-soft 零埋点（诊断不构成取用正确性依赖）。
-   */
-  readonly emit?: (event: string, payload: Record<string, unknown>) => void
-}
-
 /** 官方 dsh-session Session 公告事件消费子面（header.cwd = 会话工作区根读位） */
 export interface ForgeSessionLifecycleFace {
   readonly id?: unknown
