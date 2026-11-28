@@ -1,5 +1,5 @@
 // 包内两半共享泛型基型（不出包——exports 基线不含 shared，host 半方法签名单点实例化）。
-// 复用优先侦察定谳：@dsh-forge/contracts 无同义 Result/Envelope 基型；plugins/project 同义形
+// 复用优先侦察定谳：@dsh-forge/lib-api 无同义 Result/Envelope 基型；plugins/project 同义形
 // （RemoteResult）属 typert 协议壳面、不承载业务 DTO——本文件为包内单源，实例化点收口于
 // host/assembly/typert-remotes.ts（禁重复手写具体形态、禁 any/unknown 退路）。
 

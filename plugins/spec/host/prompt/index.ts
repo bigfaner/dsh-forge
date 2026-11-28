@@ -14,7 +14,7 @@
 // 不读裸出生头）；官方 blank-only 切预设 + 每次组装现求值 → 回调无需自行处理中途翻转。
 // A1 自含形态：spec 包零预设知识——presetBinding 仅作不透明字符串比对，包内零预设词汇。
 // forge:commander 段不迁（已在 plugins/task-loop/host/prompt/commander.ts——本包不承载）。
-import { XML_TAGS } from '@dsh-forge/contracts'
+import { XML_TAGS } from '@dsh-forge/lib-api/xml-tags'
 import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, renderDocStyleSection } from '@dsh-forge/lib-api/tools/doc-style'
 import type { SpecAssembleContext, SpecSessionEventFace, SpecSessionFace } from '../faces.js'
 

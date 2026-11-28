@@ -19,7 +19,7 @@ import {
   sessionAgentPresetOf,
   specPipelineSectionText,
 } from '../../host/prompt/index.js'
-import { XML_TAGS } from '@dsh-forge/contracts'
+import { XML_TAGS } from '@dsh-forge/lib-api/xml-tags'
 
 // ─────────────────────────── 合成会话/装配上下文 ───────────────────────────
 

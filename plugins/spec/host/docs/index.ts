@@ -18,7 +18,7 @@
 // 字段保留（契约面不回退）但本读域不再水化。
 import { readFileSync, realpathSync, statSync } from 'node:fs'
 import { join, resolve as resolvePath, sep } from 'node:path'
-import type { DocContent, ForgeDocsService } from '@dsh-forge/contracts'
+import type { DocContent, ForgeDocsService } from '@dsh-forge/lib-api/dto/forge'
 import { DocPathInvalidError } from './errors.js'
 
 export interface DocsServiceDeps {

@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/spec",
-  "version": "0.23.4",
+  "version": "0.23.5",
   "private": true,
   "type": "module",
   "description": "规格与共识：把想法澄清成提案、目标与验收标准，为交付流水线提供唯一事实源。",
@@ -50,7 +50,6 @@
     "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-typert-generator": "0.2.2-rc.5",
     "@deepseek-ai/dsh-workspace": "0.2.2-rc.5",
-    "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/lib-api": "workspace:*",
     "@dsh-forge/lib-db": "workspace:*",
     "@dsh-forge/lib-diag": "workspace:*",
