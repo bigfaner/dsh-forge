@@ -2,7 +2,8 @@
 // 负样例自证（G0 组成部分）—— AC2/AC3/AC4 的机械自证：
 //   种植违规样例文件（`_lintneg_*` 前缀，落在真实目录树上以命中 override 文件域）
 //   → 分别断言被 oxlint（三条依赖铁律）/ lint-imports（SC2 watch + RPC 边界）/
-//     lint-tokens（令牌零裸值）拦截（含预期 message）
+//     lint-tokens（令牌零裸值）/ lint-shell-spawn（禁包 cmd 壳 + shell 包装须隐藏窗口）
+//     拦截（含预期 message）
 //   → 清理（finally；下次运行前还会先清扫残留）。
 // 对应任务 AC「违规样例文件被 lint 拦截（负样例自证后删除）」的自动化常驻版。
 import { spawnSync } from 'node:child_process'
@@ -84,6 +85,24 @@ const FIXTURES = [
     path: 'apps/web/src/components/_lintneg_tokens.tsx',
     code: `export const s = { fontSize: '12px', color: '#00ff00' } as const\n`,
     token: true,
+  },
+  {
+    // 禁包 cmd 壳：spawn/exec 族首实参为 cmd.exe 并经 /c 执行即违规
+    path: 'plugins/forge/host/_lintneg_cmd_shell_wrap.ts',
+    code: `import { spawnSync } from 'node:child_process'\nexport const r = () => spawnSync('cmd.exe', ['/d', '/s', '/c', 'dir'], { stdio: 'ignore' })\n`, // shell-spawn-exempt: shell-spawn-lint 负样例夹具
+    shell: ['禁包 cmd 壳'],
+  },
+  {
+    // shell 包装须隐藏窗口：调用的 shell 选项取非 false 值而同一实参区无 windowsHide: true 即违规
+    path: 'plugins/forge/host/_lintneg_shell_no_hide.ts',
+    code: `import { spawnSync } from 'node:child_process'\nexport const r = () => spawnSync('pnpm', ['build'], { cwd: '.', stdio: 'inherit', shell: true })\n`,
+    shell: ['shell 包装须隐藏窗口'],
+  },
+  {
+    // 正样例：行尾 shell-spawn-exempt 豁免（无等价非壳形态时使用——理由就地写明）
+    path: 'plugins/forge/host/_lintpos_shell_exempt.ts',
+    code: `import { spawnSync } from 'node:child_process'\nexport const r = () => spawnSync('cmd.exe', ['/d', '/s', '/c', 'chcp 65001>nul'], { stdio: 'ignore', windowsHide: true }) // shell-spawn-exempt: chcp 设控制台代码页，无等价非壳形态\n`,
+    shellExempt: true,
   },
   {
     // 正样例：行尾 dsw-raw 豁免（块注释剥离不吞判据——2.7 修复的行为 pin）
@@ -198,6 +217,35 @@ try {
     } else {
       verified++
       console.log(`[selftest] ok ${rel2} → dsw-raw 豁免放行`)
+    }
+  }
+  // —— 子进程壳包装面（禁包 cmd 壳 + shell 包装须隐藏窗口）：负样例断言拦截 + 豁免正样例断言放行 ——
+  const shellFixtures = FIXTURES.filter((f) => f.shell)
+  if (shellFixtures.length > 0) {
+    const sh = runNode('lints/lint-shell-spawn.mjs')
+    const shOut = `${sh.stdout ?? ''}${sh.stderr ?? ''}`
+    for (const f of shellFixtures) {
+      const rel2 = relative(ROOT, join(ROOT, f.path)).split('\\').join('/')
+      for (const msg of f.shell) {
+        const lineHit = shOut.split('\n').filter((l) => l.includes(rel2) && l.includes(msg))
+        if (sh.status === 0 || lineHit.length === 0) {
+          failed = true
+          console.error(`[selftest] FAIL ${f.path} 未被 shell-spawn-lint 拦截（期望「${msg}」，exit=${sh.status}）`)
+        } else {
+          verified++
+          console.log(`[selftest] ok ${f.path} → shell-spawn-lint 拦截「${msg}」`)
+        }
+      }
+    }
+    for (const fx of FIXTURES.filter((f) => f.shellExempt)) {
+      const rel2 = relative(ROOT, join(ROOT, fx.path)).split('\\').join('/')
+      if (shOut.includes(rel2)) {
+        failed = true
+        console.error(`[selftest] FAIL ${rel2} 行尾 shell-spawn-exempt 豁免未生效（被 shell-spawn-lint 误拦）`)
+      } else {
+        verified++
+        console.log(`[selftest] ok ${rel2} → shell-spawn-exempt 豁免放行`)
+      }
     }
   }
 } finally {
