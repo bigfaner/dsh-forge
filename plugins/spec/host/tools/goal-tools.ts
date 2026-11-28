@@ -225,13 +225,15 @@ export function createSpecStatsTool(verbs: ForgeToolServices): SpecToolDefinitio
         type: "object",
         additionalProperties: false,
         properties: {
+          // Root cause: 9a663d8e 给 payload 加 projectKey 时未回写本白名单——宿主 additionalProperties:false 校验整体拒绝
+          projectKey: { type: "string", description: "Project key the stats were computed for (derived from session cwd)." },
           specCount: { type: "number", description: "Spec count." },
           goalCount: { type: "number", description: "Goal count." },
           acCount: { type: "number", description: "AC count." },
           goalStatusCounts: { type: "object", description: "Goal status → count." },
           projectionStateCounts: { type: "object", description: "AC projection state → count (met/unmet/unmatched/no-task-data)." },
         },
-        required: ["specCount", "goalCount", "acCount", "goalStatusCounts", "projectionStateCounts"],
+        required: ["projectKey", "specCount", "goalCount", "acCount", "goalStatusCounts", "projectionStateCounts"],
       }),
       render(_a, value) {
         if (isForgeToolFailure(value)) return formatFailure(value);

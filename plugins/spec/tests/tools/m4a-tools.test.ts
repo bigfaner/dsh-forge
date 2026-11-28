@@ -531,4 +531,17 @@ describe("spec_stats（诊断——零新落库面）", () => {
       h.close();
     }
   });
+
+  it("bug cba70b03：返回值键集与成功支 schema 白名单双向相等（additionalProperties:false 下多一键即宿主 oneOf 校验整体拒绝）", async () => {
+    const h = harness();
+    try {
+      const value = (await h.tools.specStats.execute({}, execOf())) as Record<string, unknown>;
+      const success = (h.tools.specStats.output.schema as { oneOf: [{ properties: Record<string, unknown> }] }).oneOf[0];
+      const allowed = Object.keys(success.properties);
+      expect(Object.keys(value).filter((k) => !allowed.includes(k))).toEqual([]);
+      expect(allowed.filter((k) => !(k in value))).toEqual([]);
+    } finally {
+      h.close();
+    }
+  });
 });
