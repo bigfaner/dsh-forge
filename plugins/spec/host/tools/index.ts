@@ -85,8 +85,6 @@ export const FORGE_SPEC_TOOL_NAMES = [
   "spec_stats",
 ] as const;
 
-export type ForgeSpecToolName = (typeof FORGE_SPEC_TOOL_NAMES)[number];
-
 /** tool 定义组工厂（薄封装零域逻辑——域逻辑单一事实源在服务层/组合根） */
 export function createSpecTools(deps: SpecToolDeps): SpecTools {
   const verbs = deps.verbs;
