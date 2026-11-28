@@ -41,6 +41,19 @@
 ### 1.9 知识条目与正本文档同步
 - **`docs/` 正本文档改版时，同步更新对应知识条目**（`.knowledge/` 同名 id）：知识条目为自含全文形态，正本改版后条目不同步即静默过时——新增/修订/废止正本规则的同一提交内，同步 knowledge_write（version_of 链前进）或 supersede 收敛对应条目；无法同步时在提交说明中声明欠账与补齐时点。
 
+### 1.10 schema 库分工与工具定义
+- **官方 schema 库按用途分工，不混用、不自造**（用户裁决 2026-11-28）：
+  - **插件配置**（cordis 插件 `Config`、设置界面）用 `@deepseek-ai/schemastery`：`static Config = z.object({...})`。
+  - **工具的入参与输出 schema** 用 `@deepseek-ai/dsh-tools` 的 `defineTool` 及其内置 schema 写法（`ParameterSchemaSpec` / `ValueSchemaSpec`）：`defineTool({ parameters, output: { schema, render }, execute })`。
+  - zod 只用于包内部数据；不用 zod 或 schemastery 构造工具 schema，不写 schemastery/zod 到 JSON Schema 的转换层。
+- **工具一律经 `defineTool` 定义**：入参类型由 `parameters` 推导（`InferArgs`），返回值类型由 `output.schema` 推导（`InferValue`）——schema 是唯一真源，返回值少键、多顶层键由 `tsc` 拦截，不手写 JSON Schema 白名单。
+- **顶层严格、嵌套不剥键**：`output.schema` 成功支顶层 `additionalProperties: false`；嵌套行对象一律 `additionalProperties: true`（行对象经变量传入时 `tsc` 不查多余键，宿主按 `false` 会拒）。
+- **lint 落点**：`lints/lint-tool-schema.mjs`——工具必须经 `defineTool` 定义、嵌套 object 节点必须开放；未迁移工具走文件级基线，只减不增。
+
+### 1.11 约束落地优先级
+- **能程序实现的优先程序，其次 lint，最后才是 agent 约束**（用户裁决 2026-11-28）：一条规则落地时按此顺序选手段——类型推导、编译期断言、运行期校验能做到的不写 lint；lint 能机械拦截的不写进提示词/文档靠 agent 自觉；AGENTS.md 只收前两者做不到的行为约定。
+- **lint 脚本统一存放 `{project_root}/lints/`**，经根 `pnpm lint` 链执行，负样例自证接入 `lint:selftest`；文件级基线只减不增，缩空即删基线。
+
 ## 2. 工程环境（Windows）
 
 - **任务执行/质量门一律 run-once 命令，禁用 `--watch` 形态**（vite build --watch / tsc -b --watch 等）——worker 结束后 watch 子进程成孤儿持续吃 commit，已实证耗尽全局内存（判例 2026-10-16：两个孤儿 watch 共 3.5GB 触发连环原生崩溃误诊）。
