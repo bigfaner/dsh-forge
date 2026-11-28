@@ -14,8 +14,6 @@ import {
   type TaskType,
   workerAgentOptionsOf,
 } from '@dsh-forge/contracts'
-import type { TasksService } from './domain/tasks/service.js'
-import type { CheckpointsService } from './domain/checkpoints/service.js'
 import type { NarrationChannel, NarrationSendOptions } from './notify/index.js'
 import { forgeLoopSource } from './forge-loop-source.js'
 import type { ForgeLoopNarrationMeta } from './forge-loop-source.js'

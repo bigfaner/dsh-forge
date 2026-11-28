@@ -7,9 +7,7 @@
 import { withTransaction } from "@dsh-forge/lib-db";
 import type { SpecDomainDb } from "../../db/connection.js";
 import type { AcEntry, MilestoneRow, TransitionActor } from "../../db/row-types.js";
-import { milestoneMachine } from "../status-machines.js";
 import { assertAddressesKnown, parseAcEntries } from "./ac-entries.js";
-import { deriveMilestoneAchieved } from "./completed-derivation.js";
 import { SpecError } from "./errors.js";
 import {
   createMilestone as createMilestoneWrite,

@@ -9,7 +9,7 @@ import type {
   TaskStatus,
   TestEvidenceRequiredData,
 } from "@dsh-forge/contracts";
-import type { DiagEventPayload, TaskGateReport } from "./types.js";
+import type { DiagEventPayload } from "./types.js";
 
 /** 校验面（Interface 10）：human = 八态 − 当前态；agent = claim/submit 转移矩阵 */
 export type TransitionFace = "human" | "agent";

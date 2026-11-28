@@ -11,7 +11,6 @@
 //     组合层 cordis.patch.yml 单行 insert 挂载）；
 //   ② bundle 管线验证锚：消费 @dsh-forge/lib-* devDependencies（scripts/bundle-host.mjs
 //     构建期内联进 dist——产物自含，dist 零 @dsh-forge/lib-* 裸 import）。
-import { errMessage } from "@dsh-forge/lib-util";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { consoleDiagFallback, type DiagLevel } from "@dsh-forge/lib-diag";
