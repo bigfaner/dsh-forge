@@ -50,6 +50,7 @@ const result = spawnSync(
 	'pnpm exec electron-builder --mac --config electron-builder.config.mjs',
 	{
 		shell: true,
+		windowsHide: true,
 		stdio: 'inherit',
 		cwd: ROOT,
 		env: process.env
@@ -69,6 +70,7 @@ const check = spawnSync(
 	'node scripts/assemble-installer-resources.mjs --check',
 	{
 		shell: true,
+		windowsHide: true,
 		stdio: 'inherit',
 		cwd: ROOT,
 		env: process.env

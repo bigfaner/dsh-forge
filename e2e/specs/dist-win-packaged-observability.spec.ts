@@ -187,7 +187,7 @@ test.beforeAll(async () => {
       cwd: ROOT,
       encoding: 'utf8',
       timeout: 2_100_000,
-      shell: true,
+      shell: true, windowsHide: true,
       env: { ...process.env },
     })
     expect(build.status, `dist:win 构建失败：tail=${(build.stdout ?? '').slice(-2000)}${(build.stderr ?? '').slice(-2000)}`).toBe(0)

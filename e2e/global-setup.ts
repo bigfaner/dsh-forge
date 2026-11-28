@@ -57,7 +57,7 @@ export default async function globalSetup(): Promise<void> {
   // 每轮 e2e 都重建是纯浪费（判例：单 spec 批次起跑前 ~10 分钟全耗在 build）；web 源码
   // 未变时（常态：改动面在插件包）秒级过门。git checkout 会刷新 src mtime，不会假跳过。
   if (process.env.DSH_FORGE_E2E_SKIP_WEB_BUILD !== '1' && webDistStale()) {
-    const build = spawnSync('pnpm', ['build:vite'], { cwd: WEB_DIR, shell: true, stdio: 'inherit' })
+    const build = spawnSync('pnpm', ['build:vite'], { cwd: WEB_DIR, shell: true, windowsHide: true, stdio: 'inherit' })
     if (build.status !== 0) {
       throw new Error(`e2e global-setup: apps/web build:vite 失败（exit ${String(build.status)}）——壳 dist 是 e2e 的确定性前置`)
     }

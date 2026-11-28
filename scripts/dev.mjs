@@ -43,7 +43,7 @@ function killTree(child) {
 
 function start(name, cmd, env = {}) {
 	const p = spawn(cmd, {
-		shell: true,
+		shell: true, windowsHide: true,
 		stdio: 'inherit',
 		cwd: ROOT,
 		env: { ...process.env, ...env }
@@ -94,7 +94,7 @@ for (const pkg of ensurePackages(ROOT)) {
 	const ensurePluginClientBundle = spawnSync(
 		'pnpm',
 		['-C', pkg, 'build'],
-		{ stdio: 'inherit', shell: true, cwd: ROOT }
+		{ stdio: 'inherit', shell: true, windowsHide: true, cwd: ROOT }
 	);
 	if (ensurePluginClientBundle.status !== 0) {
 		console.error(
@@ -110,7 +110,7 @@ for (const pkg of ensurePackages(ROOT)) {
 // 必为本次源码产物。构建失败 fail-soft 不拦 dev（electron 沿旧 dist 呈旧态 + 显性告警）。
 const ensureViteBuild = spawnSync('pnpm', ['-C', 'apps/web', 'run', 'build:vite'], {
 	stdio: 'inherit',
-	shell: true,
+	shell: true, windowsHide: true,
 	cwd: ROOT
 });
 if (ensureViteBuild.status !== 0) {
@@ -124,7 +124,7 @@ if (ensureViteBuild.status !== 0) {
 // 旧 bundle）。与 vite 同款两段式：run-once 全量 → watch 增量；子进程入 procs 由 bye() 杀树。
 const ensureMobileBuild = spawnSync('pnpm', ['-C', 'apps/mobile', 'run', 'build'], {
 	stdio: 'inherit',
-	shell: true,
+	shell: true, windowsHide: true,
 	cwd: ROOT
 });
 if (ensureMobileBuild.status !== 0) {
@@ -295,7 +295,7 @@ setTimeout(() => {
 	// 的 INFO:CONSOLE 行）向 stderr 恒写 UTF-8 字节——GBK 控制台直读即乱码（「绑定失配」呈
 	// 「缁戝畾澶遍厤」）。electron 拉起前 chcp 65001 归一；管道形态（无控制台）下失败静默 fail-soft。
 	if (process.platform === 'win32') {
-		spawnSync('cmd.exe', ['/d', '/s', '/c', 'chcp 65001>nul'], { stdio: 'ignore' });
+		spawnSync('cmd.exe', ['/d', '/s', '/c', 'chcp 65001>nul'], { stdio: 'ignore', windowsHide: true }) ; // shell-spawn-exempt: chcp 设控制台代码页，无等价非壳形态
 	}
 	const p = spawn(electronSpawnExe, [HOST_DIR, ...healSwitches, ...extraArgs], {
 		stdio: 'inherit',

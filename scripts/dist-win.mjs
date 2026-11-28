@@ -37,7 +37,7 @@ process.env.ELECTRON_BUILDER_BINARIES_MIRROR ??= 'https://npmmirror.com/mirrors/
 console.log(`[dist:win] ELECTRON_MIRROR=${process.env.ELECTRON_MIRROR}（默认 npmmirror，GitHub 直连过慢；可用环境变量覆盖）`)
 
 const result = spawnSync('pnpm exec electron-builder --win --config electron-builder.config.mjs', {
-  shell: true,
+  shell: true, windowsHide: true,
   stdio: 'inherit',
   cwd: ROOT,
   env: process.env,
@@ -50,7 +50,7 @@ if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1)
 // 校验通过：输出 PACKAGING_CHECK_OK 可辨识行。
 console.log('[dist:win] electron-builder 成功，末端自动关键文件复核（--check）...')
 const check = spawnSync('node scripts/assemble-installer-resources.mjs --check', {
-  shell: true,
+  shell: true, windowsHide: true,
   stdio: 'inherit',
   cwd: ROOT,
   env: process.env,

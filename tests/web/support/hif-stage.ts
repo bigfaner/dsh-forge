@@ -26,7 +26,7 @@ export function buildPkgTarball(pkgDir: string, log: string[]): { tarball: strin
     cwd: pkgDir,
     encoding: 'utf8',
     timeout: 300_000,
-    shell: true,
+    shell: true, windowsHide: true,
   })
   const filename = out.trim().split(/\r?\n/).at(-1) ?? ''
   const tarball = join(pkgDir, filename)

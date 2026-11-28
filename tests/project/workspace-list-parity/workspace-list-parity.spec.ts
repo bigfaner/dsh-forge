@@ -266,7 +266,7 @@ function mkE1FixtureDir(): string {
   const wsDir = join(tmpdir(), 'disc4-e1ws-' + String(Date.now()))
   mkdirSync(wsDir, { recursive: true })
   const git = (args: string[]): string =>
-    execFileSync('git', args, { cwd: wsDir, encoding: 'utf8', timeout: 30_000, shell: true })
+    execFileSync('git', args, { cwd: wsDir, encoding: 'utf8', timeout: 30_000, shell: true, windowsHide: true })
   git(['init', '-b', 'main'])
   writeFileSync(join(wsDir, 'README.md'), 'disc4 e1 fixture\n', 'utf8')
   git(['-c', 'user.email=spec@forge.test', '-c', 'user.name=spec', 'add', '-A'])

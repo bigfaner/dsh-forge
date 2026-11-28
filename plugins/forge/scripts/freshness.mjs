@@ -94,7 +94,7 @@ export function runFreshnessGate({ repoRoot, forgeDir, members = COMPOSED_MEMBER
   if (!skipRebuild) {
     for (const [label, dir] of dirs) {
       log(`freshness 门：pnpm -C ${relative(repoRoot, dir) || "."} build（run-once）…`);
-      const r = spawnSync("pnpm", ["-C", dir, "build"], { cwd: repoRoot, stdio: "inherit", shell: true });
+      const r = spawnSync("pnpm", ["-C", dir, "build"], { cwd: repoRoot, stdio: "inherit", shell: true, windowsHide: true });
       if (r.status !== 0) throw new Error(`${label} 自动编译失败（exit ${r.status}）——freshness 门中止`);
     }
   } else {

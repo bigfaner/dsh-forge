@@ -125,5 +125,5 @@ for (const guard of stale) {
   }
 }
 // 全图重建（根 references 已含 plugins——tsc -b 一次性更新所有 dist，防部分 stale）
-const build = spawnSync('pnpm exec tsc -b', { shell: true, stdio: 'inherit', cwd: ROOT })
+const build = spawnSync('pnpm exec tsc -b', { shell: true, windowsHide: true, stdio: 'inherit', cwd: ROOT })
 process.exit(build.status ?? 1)

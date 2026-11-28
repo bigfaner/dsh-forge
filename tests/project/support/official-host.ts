@@ -50,7 +50,7 @@ export function buildProjectTarball(log: string[]): { tarball: string; version: 
     cwd: PROJECT_PKG_DIR,
     encoding: 'utf8',
     timeout: 300_000,
-    shell: true,
+    shell: true, windowsHide: true,
   })
   const filename = out.trim().split(/\r?\n/).at(-1) ?? ''
   const tarball = join(PROJECT_PKG_DIR, filename)
