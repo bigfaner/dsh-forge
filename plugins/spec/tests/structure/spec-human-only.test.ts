@@ -33,9 +33,10 @@ describe("human-only 机检（spec_status completed 写点单文件）", () => {
       .map((f) => f.replace(/\\/g, "/").split("/").slice(-2).join("/"))
       .sort();
     // objective 验收确认动词（code-design §1 confirm*Achieved）为各自实体 kind 的
-    // human-only completed 写点单源——roadmap/milestone 侧与 spec 侧（spec-lifecycle）
-    // 分域对偶，spec_status 锚不变。
-    expect(callers).toEqual(["specs/milestone-service.ts", "specs/roadmap-service.ts", "specs/spec-lifecycle.ts"]);
+    // human-only completed 写点单源——roadmap 侧与 spec 侧（spec-lifecycle）分域对偶，
+    // spec_status 锚不变。（milestone 侧写点 confirmMilestoneAchieved 已随 M2-α 死面退役删除——
+    // spec §3.2 零消费导出；completed 写点面随之收敛。）
+    expect(callers).toEqual(["specs/roadmap-service.ts", "specs/spec-lifecycle.ts"]);
     const lifecycle = readFileSync(join(hostDir, "domain/specs/spec-lifecycle.ts"), "utf8");
     expect(lifecycle.includes("updateStatus(")).toBe(true);
     expect(lifecycle.includes("decision === \"completed\" ? \"completed\"")).toBe(true);
