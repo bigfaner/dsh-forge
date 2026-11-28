@@ -11,6 +11,9 @@
 
 ### 1.3 插件可移植性
 - **装配缝归属插件域**：插件包（`packages/plugins/*` 与根级 `plugins/*`，如 git-worktree、task-loop）的装配缝（编排逻辑、与官方机械的缝合面）属于插件自身——插件面向一切满足 dsh 规范的应用，不只服务 dsh-forge。宿主只做 wiring（通道注册 / service provide / Face 注入）。正本见 `docs/conventions/plugin-portability.md`（目标分层、判据、现状漂移面）。
+- **plugins 只依赖 lib，不依赖 packages（铁律）**：插件对仓内件的依赖只经 `lib/` 基座（`@dsh-forge/lib-*`），不碰 `packages/*` 的实现、契约或基元——契约与基元归 lib，插件才可能脱离 dsh-forge 的 packages 独立发版。**机械面全在 lint**（`scripts/lint-imports.mjs`：前缀白名单只放 `lib-*`，存量经 `scripts/lint-imports.plugins-baseline.json` 文件级基线只减不增，清账缩空即删基线），本文不重复规则本体。本文只记 lint 管不了的两条：
+  - **例外**：行尾 `// raw-import` 豁免须在执行记录说明理由，且不得用于「契约/基元改走 lib」这类本该修依赖边的事——豁免只给真正的过渡期兼容，不给绕路。
+  - **新增插件姿势**：依赖只写 `@dsh-forge/lib-*` 子路径 + 官方 `@deepseek-ai/*` + peer cordis；跨插件协作走 ctx 服务键（`EXPERTS_SERVICE_KEY` 先例），不走 import 另一插件。
 
 ### 1.4 外部依赖装配面取证
 - **外部依赖装配面结算门 = 真机端到端取证**：子进程/网络/外部文件系统/上游闭源机械的装配代码，fake 契约测试全绿不算交付。正本见 `docs/conventions/external-dependency-verification.md`（适用范围/取证方式/边界）。

@@ -156,6 +156,20 @@ describe('AC2–AC4 G0 规则面（oxlint 三铁律 + SC2 watch 禁令 + 令牌 
     expect(imp).toContain('(?:core|knowledge)')
   })
 
+  it('plugins 只依赖 lib 铁律就位（plugins/* 禁 import 非 lib-* 的 @dsh-forge/*；存量走基线收敛）', () => {
+    const imp = read('scripts/lint-imports.mjs')
+    expect(imp).toContain('plugins 只依赖 lib')
+    // 规则本体：非 lib- 前缀的 @dsh-forge/* 即违规（白名单只放 lib-*）
+    expect(imp).toMatch(/\(\?!lib-\)/)
+    // 存量基线：文件级冻结 + 违规数只减不增（M2 清账逐批收缩，缩空即删）
+    expect(existsSync(join(ROOT, 'scripts/lint-imports.plugins-baseline.json'))).toBe(true)
+    expect(imp).toContain('plugins-baseline.json')
+    // 扫描面含 plugins/*（host/ui/shared/src 四目录）
+    expect(imp).toMatch(/dir:\s*'plugins\/\*'/)
+    // 负样例自证在场（lint-selftest FIXTURES 含 plugins 负样例）
+    expect(read('scripts/lint-selftest.mjs')).toContain('plugins 只依赖 lib')
+  })
+
   it('令牌 lint 脚本就位且入 G0（pnpm lint 串）', () => {
     expect(existsSync(join(ROOT, 'scripts/lint-tokens.mjs'))).toBe(true)
     expect(readScripts()).toMatchObject({

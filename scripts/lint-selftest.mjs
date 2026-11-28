@@ -52,6 +52,18 @@ const FIXTURES = [
     imp: ['运行期边界'],
   },
   {
+    // plugins 只依赖 lib 铁律：plugins/* import 非 lib-* 的 @dsh-forge/* 即违规
+    path: 'plugins/forge/host/_lintneg_plugins_to_contracts.ts',
+    code: `import { TASK_TYPES } from '@dsh-forge/contracts'\nexport const v = TASK_TYPES\n`,
+    imp: ['plugins 只依赖 lib'],
+  },
+  {
+    // 注释剥离盲区（stripComments bug）：行注释里出现 /* 不得误开块注释吞掉后面的违规 import
+    path: 'plugins/forge/host/_lintneg_comment_fake_block_opener.ts',
+    code: `// 说明（/* 这里是行注释里的字面星号，不是块注释开头）\nimport { TASK_TYPES } from '@dsh-forge/contracts'\nexport const v = TASK_TYPES\n`,
+    imp: ['plugins 只依赖 lib'],
+  },
+  {
     path: 'apps/web/src/styles/_lintneg_tokens.css',
     code: `.x { color: #ff0000; font-size: 12px; padding: 4px 8px; }\n`,
     token: true,
@@ -71,7 +83,7 @@ const FIXTURES = [
 
 function sweep() {
   // 清扫可能的历史残留（前缀约定；.gitignore 亦兜底——含正样例 _lintpos_ 前缀）
-  for (const base of ['apps', 'packages']) {
+  for (const base of ['apps', 'packages', 'plugins']) {
     const stack = [join(ROOT, base)]
     while (stack.length > 0) {
       const dir = stack.pop()
