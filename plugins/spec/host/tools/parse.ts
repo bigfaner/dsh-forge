@@ -38,9 +38,3 @@ export function parseGoals(args: Record<string, unknown>, tool: string): ParsedG
     };
   });
 }
-
-/** 目标字段解析前置（对象根检查 + slug 必填——各 tool 首步共用） */
-export function requireSlug(args: unknown, tool: string): Record<string, unknown> & { slug: string } {
-  const a = requireArgsObject(args, tool);
-  return { ...a, slug: requiredString(a, "slug", tool) } as Record<string, unknown> & { slug: string };
-}
