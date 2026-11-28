@@ -6,7 +6,7 @@
 // XML 标签本地图常量（lib/api 依赖铁律：运行期零包依赖——contracts 侧 xml-tags.test
 // 以对检锚 pin DOC_STYLE_XML_TAG === XML_TAGS.docStyle，漂移即红）。
 
-/** doc-style 裸标签名（与 @dsh-forge/contracts XML_TAGS.docStyle 对检 pin 同源） */
+/** doc-style 裸标签名（与旧 contracts XML_TAGS.docStyle 对检 pin 同源） */
 export const DOC_STYLE_XML_TAG = 'doc-style'
 
 /** doc-style 独立段名（dual-mode-overhaul——文档风格公约拆段） */

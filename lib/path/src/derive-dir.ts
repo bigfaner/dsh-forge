@@ -23,7 +23,7 @@
 //   suspected-move（同扁平化主体异 hash8 → ERR_SUSPECTED_MOVE + 手工指引，拒绝注册零副作用）。
 import { createHash } from 'node:crypto'
 import { readdirSync } from 'node:fs'
-import type { SuspectedMoveData } from '@dsh-forge/contracts'
+import type { SuspectedMoveData } from '@dsh-forge/lib-api/errors'
 import { normalizeDirSpelling } from './path-key.js'
 
 /** hash8 后缀形态锚（8 位小写 hex——同主体目录判定：`${flatten}@${hash8}` 名制） */

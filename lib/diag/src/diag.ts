@@ -2,13 +2,13 @@
 // core telemetry（packages/core/src/telemetry/diag-events.ts）与 git-worktree
 // diag-fallback（packages/plugins/git-worktree/src/diag-fallback.ts）逐字同逻辑的
 // console 兜底在此单源；DIAG_EVENT / DiagLevel / DiagProcess / DiagEventPayload
-// 单源仍经 @dsh-forge/contracts（归并 lib/api 在后续任务），本包只 re-export 不复制。
+// 单源在 @dsh-forge/lib-api/diag（contracts 已归并 lib-api），本包 re-export 不复制。
 // 埋点归一单面：所有诊断埋点 = 一次 cordis `ctx.emit`（复用优先纪律：不自造事件总线）；
 // emit 侧零对 appender 的静态依赖——appender 为 `diag/log` 事件域的唯一订阅者。
 // cordis Events 接口的类型化扩充（declare module）留在 host 侧（唯一 augmentation 点）。
-import { DIAG_EVENT, type DiagEventPayload, type DiagLevel } from '@dsh-forge/contracts'
+import { DIAG_EVENT, type DiagEventPayload, type DiagLevel } from '@dsh-forge/lib-api/diag'
 
-export { DIAG_EVENT, type DiagLevel, type DiagProcess, type DiagEventPayload } from '@dsh-forge/contracts'
+export { DIAG_EVENT, type DiagLevel, type DiagProcess, type DiagEventPayload } from '@dsh-forge/lib-api/diag'
 
 /** 结构化 emit 最小面（cordis Context.emit 的结构子集——消费方免 cordis 编译期依赖） */
 export interface DiagEmitFace {

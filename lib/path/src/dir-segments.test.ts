@@ -3,7 +3,7 @@
 // 留在 packages/core/src/forge/workspace/dir-segments.test.ts。
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { FORGE_DIR_SEGMENT, FORGE_LOGS_DIR } from '@dsh-forge/contracts'
+import { FORGE_DIR_SEGMENT, FORGE_LOGS_DIR } from '@dsh-forge/lib-api/forge-dir-segments'
 import { joinDirSegment } from './path-key.js'
 import { docsRootOfForgeDir, forgeDirOfWorkspace, workspaceDocsRoot } from './dir-segments.js'
 

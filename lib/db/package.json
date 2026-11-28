@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/lib-db",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "公共 db 子包：openDatabase / transaction / db errors / schema 迁移整套（WAL/指纹守卫/迁移前备份/逐连接 foreign_keys 断言，挂 node:sqlite DatabaseSync（better-sqlite3 形状兼容适配层，1.40））——自 packages/core/src/db 归并迁入（plugin-project 1.7）。",
@@ -23,7 +23,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@dsh-forge/contracts": "workspace:*"
+    "@dsh-forge/lib-api": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.19.0"

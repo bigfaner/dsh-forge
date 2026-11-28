@@ -2,7 +2,7 @@
 // 前向单向：只追加新版本 Migration（不直改已发布版本）；旧应用打开新 schema 由版本门明确拒绝。
 // 本文件为机制层零域语义代码：表名/列名是蓝本蓝图本身，不含任何表消费逻辑。
 // `.forge` 段名字面消费 contracts 单源常量（§2.8 收编——语句文本逐字节不变）。
-import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
+import { FORGE_DIR_SEGMENT } from '@dsh-forge/lib-api/forge-dir-segments'
 
 /**
  * 守卫语句：SQLite 无 ADD/DROP COLUMN IF [NOT] EXISTS——columnGuard 命中（table.column 已在场）时

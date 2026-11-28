@@ -1,4 +1,4 @@
-// @dsh-forge/contracts —— worktree/branch 管理 DTO。
+// worktree/branch 管理 DTO（旧 contracts 包域归并）。
 // 通道族 forge:worktree/*（九通道：list/create/delete/ahead-behind/branches/checks/
 // seal/select/resolve）的请求/响应载荷唯一源（三处一体：contracts → web/rpc
 // → host ipc worktree-rpc；域实现 = packages/plugins/git-worktree——host ipc 装配透传）。

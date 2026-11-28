@@ -1,4 +1,4 @@
-// db 层机制错误（非业务错误码——业务错误面归 @dsh-forge/contracts，本模块零域语义）。
+// db 层机制错误（非业务错误码——业务错误面归 lib-api/errors，本模块零域语义）。
 
 /** 库内 schema 版本超出本应用支持上限（前向单向迁移：旧应用打开新 schema 不支持，明确拒绝）。 */
 export class UnsupportedSchemaVersionError extends Error {

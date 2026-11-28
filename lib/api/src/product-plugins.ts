@@ -16,7 +16,7 @@
 //   「忘列闭包成员」类缺陷（e791a46 path-key 漏列）结构性消除。
 // 键 = 包短名（packages/<短名> 平铺；packages/plugins/<短名> 子居所由脚本探测）。
 // 消费面：
-//   · apps/host template.ts 经 @dsh-forge/contracts import（编译期常量进 host dist）。
+//   · apps/host template.ts 经 lib-api/product-plugins import（编译期常量进 host dist）。
 //   · scripts/assemble-installer-resources.mjs 经 packages/contracts/dist 动态 import
 //     （前置 = pnpm build——物化脚本本就 fail-loud 前置构建产物）。
 // 不受本表约束的面：

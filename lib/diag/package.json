@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/lib-diag",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
-  "description": "公共 diag 子包：诊断事件域发射面（emitDiag / emitDiagOrFallback / DIAG_EVENT）与 console 兜底（按级分流 error→console.error、其余→console.warn）——core telemetry 与 git-worktree diag-fallback 双源归一；DIAG_EVENT/类型单源仍经 @dsh-forge/contracts re-export（归并在后续任务）。",
+  "description": "公共 diag 子包：诊断事件域发射面（emitDiag / emitDiagOrFallback / DIAG_EVENT）与 console 兜底（按级分流 error→console.error、其余→console.warn）——core telemetry 与 git-worktree diag-fallback 双源归一；DIAG_EVENT/类型单源自 lib-api/diag re-export。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -19,7 +19,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@dsh-forge/contracts": "workspace:*"
+    "@dsh-forge/lib-api": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.19.0"
