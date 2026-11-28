@@ -20,6 +20,7 @@ import { createLoopDriver } from "../loop/driver.js";
 import type { LoopDriver } from "../loop/driver-face.js";
 import { createLoopRegistry, type LoopRegistry } from "../loop/registry.js";
 import { createNarrator } from "../notify/narrator.js";
+import { adaptSessionProgressAppend } from "../progress/index.js";
 import { createInProcessDriverSpawn } from "../spawn/in-process-driver.js";
 import { defaultWorkerTreeGuard } from "../spawn/job-tree.js";
 import { createTriageHook } from "../triage/triage.js";
@@ -342,6 +343,11 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
     // 同注——循环里程碑/台账经 bus→监听器落盘 {slug}/dispatch.jsonl；缺席 = 零透传零行为变化。
     ...(services.forgeEvents !== undefined ? { events: services.forgeEvents } : {}),
     ...(services.forgeEvents !== undefined && services.containerDirOf !== undefined ? { containerDirOf: services.containerDirOf } : {}),
+    // 循环进度 append 面（'forge/progress' 会话事件——chatview 进度卡唯一数据源）：agents 注册表
+    // 在场即注入；缺席 = 零发射 fail-soft（循环正确性零依赖）。可观测性面自身不可静默漏接——
+    // 装配回归锚 tests/assembly/progress-wiring.test.ts。
+    // Root cause: 76224990 派发内核自 plugin-forge 直迁时 progress 模块随迁、装配注入行漏迁。
+    ...(agents !== undefined ? { progress: adaptSessionProgressAppend(agents, diagEmit) } : {}),
     // 收口复盘事实材料面（机械③指示段「零、事实材料」——运行时目录扫描；缺席 = 材料节缺席）
     ...(services.retroMaterialsOf !== undefined ? { retroMaterialsOf: services.retroMaterialsOf } : {}),
     ...(diagEmit !== undefined ? { diag: diagEmit } : {}),
