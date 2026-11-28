@@ -25,6 +25,7 @@ import { createInProcessDriverSpawn } from "../spawn/in-process-driver.js";
 import { defaultWorkerTreeGuard } from "../spawn/job-tree.js";
 import { createTriageHook } from "../triage/triage.js";
 import { createRecurrenceFaces, type RecurrenceBugsFace } from "../dispatch-core/recurrence-faces.js";
+import { resolveBugsFace } from "./bugs-face.js";
 import { forgeDirOfWorkspace, resolveProjectKey as rollupProjectKey } from "@dsh-forge/lib-path";
 import { join } from "node:path";
 import { taskLogsDirOf } from "../domain/tasks/task-logs-dir.js";
@@ -223,18 +224,12 @@ export function assembleTaskLoopToolFamily(input: ToolFamilyAssemblyInput): Tool
       expertKey,
     );
   };
-  // bugs 域服务面现查（seams 键 'forge.bugs'——project 插件提供；本插件不依赖该包）。
-  // 两个消费位同源：bugsPresent（四动词入 allow 的在场裁定）+ recurrenceFaces（T2/T3 两
-  // face 的台账读面）。每次调用现查不缓存（AGENTS 1.6）；缺席/劣形 = undefined。
-  const bugsFaceOf = (): RecurrenceBugsFace | undefined => {
-    try {
-      const hostCtx2 = input.ctx as { forgeBugs?: unknown; reflect?: { get?(name: string): unknown } };
-      const bugs = (hostCtx2.forgeBugs ?? hostCtx2.reflect?.get?.("forge.bugs")) as RecurrenceBugsFace | undefined;
-      return typeof bugs?.findRecurrenceCandidates === "function" ? bugs : undefined;
-    } catch {
-      return undefined;
-    }
-  };
+  // bugs 域服务面现查：插件缝 'forge.bugs'（project 提供，工厂形态）优先，缺席/劣形退 core
+  // 'forgeBugs'——与宿主 child.ts forgeBugsServiceOf 同序（bug 3a776ecc：旧取法 core 在前且把
+  // 插件工厂当服务查方法，插件在场恒读 core 或判缺席）。取法单源 bugs-face.ts；本插件不依赖
+  // project 包。两个消费位同源：bugsPresent（四动词入 allow 的在场裁定）+ recurrenceFaces
+  // （T2/T3 两 face 的台账读面）。每次调用现查不缓存（AGENTS 1.6）；缺席/劣形 = undefined。
+  const bugsFaceOf = (): RecurrenceBugsFace | undefined => resolveBugsFace(input.ctx as Parameters<typeof resolveBugsFace>[0]);
   // bug 四动词在场现查缝（bug 044a310c 同族——装配漏接判例）：deriveWorkerToolFilter 的
   // bugsPresent 此前从未注入 → 四动词恒被剔除 + warn。缺席 = false（既有降级语义不变）。
   const bugsPresent = (): boolean => bugsFaceOf() !== undefined;

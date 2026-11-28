@@ -283,11 +283,16 @@ describe("bug 四动词白名单（装配接线结构锚——bug 044a310c 同�
     for (const name of WORKER_BUG_ESSENTIAL_TOOLS) expect(name).toMatch(/^[a-z_]+$/);
   });
 
-  it("tool-family 装配 createLoopDriver 时传 bugsPresent（reflect 'forge.bugs' 现查）", () => {
+  it("tool-family 装配 createLoopDriver 时传 bugsPresent（bugs 面取法单源 bugs-face.ts——bug 3a776ecc）", () => {
     const src = read("host/assembly/tool-family.ts");
     const call = src.slice(src.indexOf("createLoopDriver({"));
     expect(call.slice(0, call.indexOf("});")).includes("bugsPresent")).toBe(true);
-    expect(src.includes('reflect?.get?.("forge.bugs")')).toBe(true);
+    // 取法单源：tool-family 只消费 resolveBugsFace，不再内联取法（插件缝优先/工厂解包/core 兜底
+    // 的行为断言见 bugs-face.test.ts——源码字符串锚放走过本 bug，不再单独承担正确性）
+    expect(src).toMatch(/import \{ resolveBugsFace \} from "\.\/bugs-face\.js"/);
+    expect(src.includes("forgeBugs ??")).toBe(false);
+    const face = read("host/assembly/bugs-face.ts");
+    expect(face.includes('reflect?.get?.("forge.bugs")')).toBe(true);
   });
 
   it("driver.ts LoopDriverDeps 声明并透传 bugsPresent 到 DispatchCoreDeps", () => {
