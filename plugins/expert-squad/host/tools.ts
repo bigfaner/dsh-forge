@@ -10,18 +10,12 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { join } from "node:path";
 import matter from "gray-matter";
 import { z } from "zod";
-import {
-  createUnionToolNamesProbe,
-  unionAcrossPresets,
-  type AgentPresetsFace,
-  type CatalogEntry,
-  type ToolsSchemasReader,
-} from "@dsh-forge/contracts";
+import { createUnionToolNamesProbe, unionAcrossPresets, type AgentPresetsFace, type CatalogEntry, type ToolsSchemasReader } from "@dsh-forge/lib-api/tool-projection";
 import type { ExpertsRegistry } from "./registry.js";
 import { parseExpertFile, validateExpertUpdate, type ExpertReasoning } from "./store/frontmatter.js";
 
 // 工具注册面投影/求交族单源（bug a5b12254 集中化——contracts tool-projection.ts）。
-export type { AgentPresetsFace, CatalogEntry, ToolsSchemasReader } from "@dsh-forge/contracts";
+export type { AgentPresetsFace, CatalogEntry, ToolsSchemasReader } from "@dsh-forge/lib-api/tool-projection";
 
 // ---------------------------------------------------------------------------
 // faces（官方 dsh-tools ToolDefinition 消费字段子面——md-mermaid faces.ts 同法）
@@ -213,7 +207,7 @@ export function createKnownToolsProbe(
 }
 
 /**
- * 候选/白名单排除集（bug c19eb719 最终口径）——定义真源已迁 @dsh-forge/contracts
+ * 候选/白名单排除集（bug c19eb719 最终口径）——定义真源已迁 @dsh-forge/lib-api
  * expert-squad.ts（语义注释随迁），本包经 shared/constants.ts 转发，此处 re-export
  * 保持既有 import ../tools.js 消费面零改动。
  */

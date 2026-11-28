@@ -1,5 +1,5 @@
 // 跨插件契约常量快照契约测试（code-design §2.2——task-loop 对检锚）：
-// import 硬锚包内转发位 ../shared/constants（值真源 = @dsh-forge/contracts 定义位）。
+// import 硬锚包内转发位 ../shared/constants（值真源 = @dsh-forge/lib-api 定义位）。
 // 改值即红，双包同提交协定；排除集快照顺序敏感（白名单求交投影顺序即契约）。
 
 import { describe, expect, it } from "vitest";

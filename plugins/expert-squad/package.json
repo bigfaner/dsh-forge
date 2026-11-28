@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/expert-squad",
-  "version": "0.34.6",
+  "version": "0.34.7",
   "private": true,
   "type": "module",
   "description": "专家团：把一句用人需求澄清成可直接差遣的专家档案——招募、修改、启停、查询专家，一键委派任务给专家执行。",
@@ -56,7 +56,6 @@
     "@deepseek-ai/dsh-subagent": "0.2.2-rc.5",
     "@deepseek-ai/dsh-workspace": "0.2.2-rc.5",
     "@deepseek-ai/schemastery": "3.18.4",
-    "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/lib-path": "workspace:*",
     "@types/node": "24.19.0",
     "@types/react": "18.3.12",
@@ -64,6 +63,7 @@
     "esbuild": "0.24.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "zod": "4.6.6"
+    "zod": "4.6.6",
+    "@dsh-forge/lib-api": "workspace:*"
   }
 }

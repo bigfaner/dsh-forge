@@ -25,7 +25,7 @@
 // 禁用/移除撤行；注册/求交失败 = diag warn 跳过该专家，不炸同步、不阻载插件。
 
 import type { PresetDefinition } from "@deepseek-ai/dsh-agent-preset-registry";
-import { composePersonaText } from "@dsh-forge/contracts";
+import { composePersonaText } from "@dsh-forge/lib-api/subagent-assemble";
 import type { ExpertEntry, ExpertsService } from "./registry.js";
 import type { DiagEmit } from "./registry.js";
 import { resolveToolAllow, type KnownToolsProbe } from "./dispatch/compose.js";

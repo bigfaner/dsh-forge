@@ -82,7 +82,7 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
       expect(range, `${name} 使用 workspace/file 协议，独立安装形态断链`).not.toMatch(/^(workspace|file|link):/);
       expect(name.startsWith("@dsh-forge/"), "@dsh-forge/* private 包不可 registry 解析，不得入 dependencies").toBe(false);
     }
-    expect(Object.keys(pkg.devDependencies ?? {})).toContain("@dsh-forge/contracts");
+    expect(Object.keys(pkg.devDependencies ?? {})).toContain("@dsh-forge/lib-api");
   });
 
   // 产物面断言（dist 构建后在场才跑——CI/本地 build 后恒在场）。
@@ -90,8 +90,8 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     const distEntry = resolve(pkgDir, "dist", "host", "index.js");
     if (!existsSync(distEntry)) return; // 未构建（纯 src 测试树）——结构面其余用例已覆盖声明面
     const bundled = readFileSync(distEntry, "utf8");
-    expect(bundled).not.toContain("@dsh-forge/contracts"); // 内联后字面量残留 = bundle 未生效
-    expect(bundled).toContain("intersectToolNames"); // contracts 纯逻辑族闭包内联锚
+    expect(bundled).not.toContain("@dsh-forge/lib-api"); // 内联后字面量残留 = bundle 未生效
+    expect(bundled).toContain("intersectToolNames"); // lib-api 纯逻辑族闭包内联锚
     expect(bundled).toContain("composePersonaText");
     expect(bundled).toMatch(/["']@deepseek-ai\//); // 官方机械外置保留（内联第二副本分裂单例语义）
     expect(bundled).toMatch(/["']chokidar["']/); // 真实外部依赖外置保留（registry 可装）

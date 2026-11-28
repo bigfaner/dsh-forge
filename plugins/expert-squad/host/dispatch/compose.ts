@@ -20,7 +20,7 @@
 // parent/signal/delivery 等 3 面（派发上下文/结算策略）由下游通道一调用方补齐，
 // 不在档案映射内。
 
-import { intersectToolNames } from "@dsh-forge/contracts";
+import { intersectToolNames } from "@dsh-forge/lib-api/tool-projection";
 import type { ExpertsService } from "../registry.js";
 import { ExpertToolError } from "../tools.js";
 import { EXCLUDED_EXPERT_TOOL_NAMES } from "../../shared/constants.js";

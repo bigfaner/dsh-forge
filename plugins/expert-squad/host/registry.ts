@@ -45,8 +45,8 @@ export interface ExpertsConfigFace {
 }
 
 /** 诊断发射面（host 侧接线 = `diag/log` 事件域 emitDiag；缺席 = 装配层 console 兜底）。
- * 级别类型单源 @dsh-forge/contracts DiagLevel（diag-milestone-coverage——本地重复定义收编）。 */
-export type DiagEmit = (level: import("@dsh-forge/contracts").DiagLevel, event: string, message: string) => void;
+ * 级别类型单源 @dsh-forge/lib-api/diag DiagLevel（diag-milestone-coverage——本地重复定义收编）。 */
+export type DiagEmit = (level: import("@dsh-forge/lib-api/diag").DiagLevel, event: string, message: string) => void;
 
 /** 取用 API 业务错基类：消息恒含专家键名（AD1 fail-loud）。 */
 export class ExpertAccessError extends Error {
