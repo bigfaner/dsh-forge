@@ -689,8 +689,8 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
   it("draftOf 预填 reasoning（生效值）；configKeyOf 取实例 ID（缺席 = undefined）", () => {
     expect(draftOf(entry({ reasoning: "medium" })).reasoning).toBe("medium");
     expect(draftOf(entry()).reasoning).toBe("");
-    expect(configKeyOf(entry({ instanceId: "@dsh-forge/plugin-forge#code-reviewer" } as Partial<ExpertView> as ExpertView))).toBe(
-      "@dsh-forge/plugin-forge#code-reviewer",
+    expect(configKeyOf(entry({ instanceId: "@dsh-forge/task-loop#code-reviewer" } as Partial<ExpertView> as ExpertView))).toBe(
+      "@dsh-forge/task-loop#code-reviewer",
     );
     expect(configKeyOf(entry())).toBeUndefined();
   });
@@ -702,13 +702,13 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
       update: async (_name, draft) => {
         updates.push(draft);
         // 回包 = 换新视图（registry.refresh 后 list 透出，恒携 instanceId）
-        return entry({ instanceId: "@dsh-forge/plugin-forge#code-reviewer" } as Partial<ExpertView> as ExpertView);
+        return entry({ instanceId: "@dsh-forge/task-loop#code-reviewer" } as Partial<ExpertView> as ExpertView);
       },
       writeExpertsConfig: async (instanceId, patch) => {
         writes.push([instanceId, patch]);
       },
     });
-    ctl.open(entry({ instanceId: "@dsh-forge/plugin-forge#code-reviewer" } as Partial<ExpertView> as ExpertView));
+    ctl.open(entry({ instanceId: "@dsh-forge/task-loop#code-reviewer" } as Partial<ExpertView> as ExpertView));
     ctl.startEdit();
     // 内容半脏（岗位改动）→ update 档案径照常；路由半照写配置条目
     ctl.setField("title", "首席评审");
@@ -723,7 +723,7 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     // 配置半：实例 ID 寻址 + Agent选项/工具/技能条目
     expect(writes).toEqual([
       [
-        "@dsh-forge/plugin-forge#code-reviewer",
+        "@dsh-forge/task-loop#code-reviewer",
         {
           agentOptions: { provider: "deepseek", model: "reasoner", reasoning: "high" },
           tools: ["read", "edit"],
@@ -741,13 +741,13 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     const ctl = new ExpertDetailController({
       update: async () => {
         updates += 1;
-        return idEntry({ origin: "user", instanceId: "@dsh-forge/plugin-forge#code-reviewer" });
+        return idEntry({ origin: "user", instanceId: "@dsh-forge/task-loop#code-reviewer" });
       },
       writeExpertsConfig: async (instanceId, patch) => {
         writes.push([instanceId, patch]);
       },
     });
-    ctl.open(idEntry({ origin: "plugin", instanceId: "@dsh-forge/plugin-forge#code-reviewer" }));
+    ctl.open(idEntry({ origin: "plugin", instanceId: "@dsh-forge/task-loop#code-reviewer" }));
     ctl.startEdit();
     ctl.setField("provider", "deepseek");
     ctl.setField("model", "reasoner");
@@ -757,7 +757,7 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     // 仅配置写：experts.<实例ID> 条目，锚 = 保存时点内置实例（无漂移）
     expect(writes).toEqual([
       [
-        "@dsh-forge/plugin-forge#code-reviewer",
+        "@dsh-forge/task-loop#code-reviewer",
         {
           agentOptions: { provider: "deepseek", model: "reasoner" },
           tools: ["read", "edit"],
@@ -779,7 +779,7 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
         writes.push([instanceId, patch]);
       },
     });
-    ctl.open(entry({ instanceId: "@dsh-forge/plugin-forge#code-reviewer" } as Partial<ExpertView> as ExpertView));
+    ctl.open(entry({ instanceId: "@dsh-forge/task-loop#code-reviewer" } as Partial<ExpertView> as ExpertView));
     ctl.startEdit();
     // 内容半脏（岗位改动）→ update 发生，回包实例 ID 漂移；配置写键随换新视图
     ctl.setField("title", "首席评审");

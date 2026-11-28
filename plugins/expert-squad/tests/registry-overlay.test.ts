@@ -89,10 +89,10 @@ describe("实例 ID：装载时生成并经 list/get 透出", () => {
     await writeFile(join(builtin, "bug-hunter.md"), expertMd({ name: "bug-hunter" }));
     roots = [
       { origin: "project", dir: project },
-      { origin: "plugin", dir: builtin, pluginName: "@dsh-forge/plugin-forge" },
+      { origin: "plugin", dir: builtin, pluginName: "@dsh-forge/task-loop" },
     ];
     const reg = await makeRegistry();
-    expect(reg.get("bug-hunter").instanceId).toBe("@dsh-forge/plugin-forge#bug-hunter");
+    expect(reg.get("bug-hunter").instanceId).toBe("@dsh-forge/task-loop#bug-hunter");
 
     const anon = join(dir, "anon");
     await mkdir(anon);

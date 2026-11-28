@@ -50,8 +50,8 @@ describe("originBadgeLabel（plugin 层具名「内置 · <插件名>」——so
       originBadgeLabel({ origin: "plugin", sourcePath: "Z:/repo/packages/plugins/md-mermaid/experts/a.md" }),
     ).toBe("内置 · md-mermaid");
     expect(
-      originBadgeLabel({ origin: "plugin", sourcePath: "Z:/repo/packages/plugin-forge/experts/a.md" }),
-    ).toBe("内置 · plugin-forge");
+      originBadgeLabel({ origin: "plugin", sourcePath: "Z:/repo/plugins/task-loop/experts/a.md" }),
+    ).toBe("内置 · task-loop");
     expect(
       originBadgeLabel({ origin: "plugin", sourcePath: "Z:/res/node_modules/@dsh-forge/expert-squad/experts/a.md" }),
     ).toBe("内置 · @dsh-forge/expert-squad");

@@ -110,5 +110,5 @@ domains: [task, state-machine, dispatch, audit, fix-chain, worker, ac-gate]
 ### BIZ-task-015: 派发按 DAG 就绪序——容器绑定认领（source 限定），无单任务直接执行入口
 
 **Rule**: 任务派发只支持按 DAG 依赖顺序领取就绪任务（dispatchTask 就绪选择机械序——含 fix 优先键，见 BIZ-task-004）；**`/run-dag-tasks <任务源 slug>` 绑定容器只派该容器**（宿主派发循环唯一入口——dispatchTask 携带 slug 必填参数（容器 = slug 本身）——schema 强制缺失即拒绝，claim 限定该容器就绪池 + 会话重入仅同容器 in_progress + 无任务事件归属随 slug；用户裁决 2026-10-08 同日改判）；容器内无指定单个任务直接执行的入口（UI 与 tool 面同语义）；停止入口 = `stopTaskLoop` 工具 + `/stop-dag-tasks` 指令（运行中仅 owner 可停、挂起态任意会话可停，被拒场景自解释）。
-**Context**: 消灭跳序执行旁路（DAG 序不变）；容器绑定消灭跨容器误领（事件归属由 source_slug 兼任——无独立归属参数）；派发入口两途（GUI 派发按钮 / 会话内 `/run-dag-tasks` 指令）汇入同一宿主派发循环——run-tasks 会话技能已退役（dispatch-loop-hardening 3a），派发循环协议正本 = 本文档（BIZ-task-003 fix 链 / BIZ-task-014 worker 授权）+ 处置注入模板 `packages/plugin-forge/src/triage/prompt.ts`。
+**Context**: 消灭跳序执行旁路（DAG 序不变）；容器绑定消灭跨容器误领（事件归属由 source_slug 兼任——无独立归属参数）；派发入口两途（GUI 派发按钮 / 会话内 `/run-dag-tasks` 指令）汇入同一宿主派发循环——run-tasks 会话技能已退役（dispatch-loop-hardening 3a），派发循环协议正本 = 本文档（BIZ-task-003 fix 链 / BIZ-task-014 worker 授权）+ 处置注入模板 `plugins/task-loop/host/triage/prompt.ts`。
 **Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-010（prd-spec §In Scope ②·§Flow Description 流程四 1 / prd-user-stories Story 4A）；改判 = proposal/dispatch-container-scoped-claim（2026-10-08，core M3 2.4 容器限定盲选管道接线）

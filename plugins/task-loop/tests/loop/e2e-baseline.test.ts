@@ -54,13 +54,13 @@ describe('parseE2eRedCases（套件输出 → 红灯用例清单）', () => {
     const output = [
       ' RUN  v5.0.3 Z:/repo',
       '',
-      ' ❯ |plugin-forge| packages/plugin-forge/src/__probe__/red.test.ts (1 test | 1 failed) 7ms',
+      ' ❯ |task-loop| plugins/task-loop/tests/__probe__/red.test.ts (1 test | 1 failed) 7ms',
       '   ❯ probe-red (1)',
       '     × fails for baseline probe 6ms',
       '',
       ' Test Files  1 failed (1)',
     ].join('\n')
-    expect(parseE2eRedCases(output)).toEqual(['packages/plugin-forge/src/__probe__/red.test.ts'])
+    expect(parseE2eRedCases(output)).toEqual(['plugins/task-loop/tests/__probe__/red.test.ts'])
   })
 })
 

@@ -5,14 +5,14 @@ domains: [conventions, observability]
 
 # 诊断发射口径统一（禁直落 console）
 
-> 宿主侧包（core / plugin-forge / plugins 主进程 / git-worktree 等）的一切诊断输出——失败降级、fail-soft 吞没告警、成功里程碑——必须经官方 cordis `diag/log` 事件域发射（订阅侧零改动、JSONL 落盘可查）；禁止新增直落 `console.warn` / `console.error` 的诊断站点。复发背景：存量 ~72 处 console 直落站点不进统一订阅面，评审后整批迁移（proposal diag-face-consolidation）。
+> 宿主侧包（core / task-loop / plugins 主进程 / git-worktree 等）的一切诊断输出——失败降级、fail-soft 吞没告警、成功里程碑——必须经官方 cordis `diag/log` 事件域发射（订阅侧零改动、JSONL 落盘可查）；禁止新增直落 `console.warn` / `console.error` 的诊断站点。复发背景：存量 ~72 处 console 直落站点不进统一订阅面，评审后整批迁移（proposal diag-face-consolidation）。
 
 ## 规则
 
 | 面 | 要求 |
 |---|---|
 | 发射 | 装配期注入诊断发射面，`ctx.emit(DIAG_EVENT, payload)` 类型化发射；`DIAG_EVENT` / `DiagEventPayload` 自 `packages/core` 类型单源 import，禁止裸字符串 `'diag/log'` 与 `as unknown as {emit}` 强转 |
-| process | 每站点按宿主进程位填 `process`（core / plugin-forge / git-worktree = `child`，expert-squad 主进程 = `main`）——漏填则跨进程 trace 链归属错 |
+| process | 每站点按宿主进程位填 `process`（core / task-loop / git-worktree = `child`，expert-squad 主进程 = `main`）——漏填则跨进程 trace 链归属错 |
 | 兜底 | 发射面缺席统一按级分流：error→`console.error`、其余→`console.warn`（expert-squad index.ts 口径）；不采用「缺席 = 零 emit」 |
 | 分级 | 失败路径 / 降级 = `warn`，关键降级（防线失能等）= `error`，成功里程碑 = `info`；新错误源 = 新增 emit 点，订阅侧零改动 |
 | event | 功能域前缀命名（如 `job-tree`、`worktree-create`、`loop-finish`）；payload 就地携带可得字段（projectId / slug / taskKey / traceId） |
