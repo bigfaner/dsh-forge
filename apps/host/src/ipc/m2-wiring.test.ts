@@ -4,17 +4,8 @@
 // 1.1 扩池：forge:remote/* 两通道（progress/approval——随 forgeTasks 在场接线）。
 // main.ts 单行编排的装配逻辑全量锚定于此（~100 行纪律的配套测试面）。
 import { describe, expect, it, vi } from 'vitest'
-import {
-  BUGS_CHANNELS,
-  DOCS_CHANNELS,
-  FEATURES_CHANNELS,
-  FORGE_EVENT_CHANNELS,
-  PROJECTS_M2_CHANNELS,
-  REMOTE_CHANNELS,
-  SETTINGS_CHANNELS,
-  TASKS_CHANNELS,
-  type TasksChangedEvent,
-} from '@dsh-forge/contracts'
+import { BUGS_CHANNELS, DOCS_CHANNELS, FEATURES_CHANNELS, FORGE_EVENT_CHANNELS, PROJECTS_M2_CHANNELS, REMOTE_CHANNELS, SETTINGS_CHANNELS, TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type TasksChangedEvent } from '@dsh-forge/lib-api/dto/forge'
 import type { DshHostServices } from '../boot/index.js'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { registerM2Channels } from './m2-wiring.js'

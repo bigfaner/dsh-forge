@@ -1,5 +1,5 @@
 // 1.4 AC3 机制面 pin：{url, injections} boot 通道注册（renderer receipt 由 e2e 自证）。
-import { FORGE_CHANNEL_ALLOWLIST } from '@dsh-forge/contracts'
+import { FORGE_CHANNEL_ALLOWLIST } from '@dsh-forge/lib-api/channels'
 import { describe, expect, it } from 'vitest'
 import { buildBootManifest } from '../boot/index.js'
 import { BOOT_CHANNEL, registerBootChannel } from './boot-channel.js'

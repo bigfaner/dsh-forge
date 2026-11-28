@@ -32,7 +32,7 @@
 // 目录树：深 3 层、条目上限 60、跳 `.` 开头项；目录子项在前、同名码序。
 import { readdirSync, type Dirent } from 'node:fs'
 import { join, sep } from 'node:path'
-import type { ContainerRef } from '@dsh-forge/contracts'
+import type { ContainerRef } from '@dsh-forge/lib-api/dto/forge'
 import { docsRootOfForgeDir } from '@dsh-forge/lib-path'
 
 /** 目录树深度上限（相对锚点根；超过截断） */

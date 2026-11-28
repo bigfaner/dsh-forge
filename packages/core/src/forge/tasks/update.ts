@@ -26,7 +26,8 @@
 // 闭包尾部（提交后）emitTasksChanged。一律 prepared
 // statements（Hard Rule）。任务状态不改 → 相位域不变（相位推导机输入 = docKinds +
 // taskStatuses），守卫与重算整体跳过。
-import type { TaskSnapshot, TaskStatus, UpdateTaskInput } from '@dsh-forge/contracts'
+import type { TaskSnapshot, UpdateTaskInput } from '@dsh-forge/lib-api/dto/forge'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import { withTransaction } from '../../db/transaction.js'
 import type { TasksVerbDeps } from './add.js'
 import { findPathThroughOutEdges, naturalKeysByIds } from './add.js'

@@ -24,7 +24,7 @@
 // 不变量——一切裁剪不触碰。Coding/Testing Strategy 一切复杂度常驻（TDD 统一）。
 // paths（claim 领取瞬间注入）：产物落盘/续跑指针行填充绝对路径。persona 文本禁裸
 // `{{`（上游严格插值防护）。
-import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
+import { TASK_TYPES, type TaskType } from '@dsh-forge/lib-api/labels'
 
 /** 复杂度分级（保底门第二维；low 裁剪只触及保底门分级，不触及核心段与 AC 核查） */
 export type PersonaComplexity = 'low' | 'medium' | 'high'

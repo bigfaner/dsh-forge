@@ -9,7 +9,7 @@
 //     ('forge:events/tasks-changed', { projectId })——主→渲染单向，载荷只读（Hard Rule）；
 //   · 5.1 env 门控测试钩子注册（DSH_FORGE_TEST_BRIDGE=1——写动词回放传输面；内聚于此
 //     使 main.ts 零改动保持 ~100 行纪律；缺席 = 零注册零痕迹，见 test-bridge.ts 头注）。
-import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
+import { FORGE_EVENT_CHANNELS } from '@dsh-forge/lib-api/channels'
 import type { DshHostHandle } from '../boot/index.js'
 import type { ForgeIpc } from './forge-channels.js'
 import { registerBugsChannels } from './bugs-rpc.js'

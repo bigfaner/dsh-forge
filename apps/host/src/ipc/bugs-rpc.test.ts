@@ -5,8 +5,8 @@
 // 本测试面只行使 list 读法——commitFiles/fileDiff 证据读法语义在 core bugs 域测试，
 // 此处以 no-op 桩补齐 BugsChannelService 全面（d4644b86 扩面后的类型补齐）。
 import { describe, expect, it, vi } from 'vitest'
-import { BUGS_CHANNELS } from '@dsh-forge/contracts'
-import type { BugCard } from '@dsh-forge/contracts'
+import { BUGS_CHANNELS } from '@dsh-forge/lib-api/channels'
+import type { BugCard } from '@dsh-forge/lib-api/dto/bugs'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { registerBugsChannels, type BugsChannelService } from './bugs-rpc.js'
 

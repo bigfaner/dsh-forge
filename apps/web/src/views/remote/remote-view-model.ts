@@ -5,7 +5,8 @@
 // 仅决策转发、产品不自持审批状态）→ 待审批项 = taskStatus 'blocked'（阻塞等待人工处置），
 // 高亮置顶；正式审批请求高亮面待 1.4 审批桥接落地后由通道扩面承接，本层排序键单点替换。
 
-import { TASK_STATUSES, type RemoteProgressSnapshot, type TaskCard, type TaskStatus } from '@dsh-forge/contracts'
+import { TASK_STATUSES, type TaskStatus } from '@dsh-forge/lib-api/labels'
+import { type RemoteProgressSnapshot, type TaskCard } from '@dsh-forge/lib-api/dto/forge'
 
 /** 受限视图行带（待审批高亮置顶 / 进行中派发 / 其余） */
 export type RemoteRowBand = 'approval' | 'active' | 'rest'

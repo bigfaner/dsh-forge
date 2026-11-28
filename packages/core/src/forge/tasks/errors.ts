@@ -11,25 +11,14 @@
 // M3 2.6 扩池（Interface 6 · 图 8 双门）：ERR_TEST_EVIDENCE_REQUIRED（AC 任务 success
 // 结算缺测试证据·data 带清单原样带回）+ ERR_GATE_SUMMARY_REQUIRED（type='gate' 任务
 // 缺数字摘要）——双门仅挂 success 结算，blocked submit 不经（C4 失败分诊走 fix 链）。
-// code 字面量锚定 @dsh-forge/contracts ERROR_CODES，类名/name 手写字面量（contracts 不持
+// code 字面量锚定 @dsh-forge/lib-api/errors ERROR_CODES，类名/name 手写字面量（contracts 不持
 // 运行期名映射——表 Name 列为文档性对照）；RPC 边界（3.1）序列化为 RpcErrorPayload
 // { code, message, data }，UI 按 code 映射状态。后续动词动词错误（DEPENDENCIES_* 等）
 // 随 2.4–2.5 同文件扩池。与 small-domains/errors.ts 的 FeatureNotFoundError 同 code 异类：
 // 四域互禁 import 彼此（Hard Rule），typed 类按域就近落位，跨 IPC 以 code 判别。
-import type {
-  AcCriteriaMismatchData,
-  AcNotMetData,
-  BeforeSuccessorInvalidData,
-  BlockSourceInProgressData,
-  BlockSourceTerminalData,
-  DependenciesUnmetData,
-  FilesUnionMismatchData,
-  PhaseGateUnsettledData,
-  RuntimeEvidenceRequiredData,
-  TaskRef,
-  TaskStatus,
-  TestEvidenceRequiredData,
-} from '@dsh-forge/contracts'
+import type { AcCriteriaMismatchData, AcNotMetData, BeforeSuccessorInvalidData, BlockSourceInProgressData, BlockSourceTerminalData, DependenciesUnmetData, FilesUnionMismatchData, PhaseGateUnsettledData, RuntimeEvidenceRequiredData, TestEvidenceRequiredData } from '@dsh-forge/lib-api/errors'
+import type { TaskRef } from '@dsh-forge/lib-api/dto/forge'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 
 /** 校验面（Interface 10）：human = 七态 − 当前态（UI 菜单与服务端同源）；agent = claim/submit 转移矩阵 */
 export type TransitionFace = 'human' | 'agent'

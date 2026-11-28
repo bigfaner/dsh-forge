@@ -5,7 +5,7 @@
 //   · backfillKnowledgeRegistryRows：boot 期存量项目逐个幂等 upsert（bug 5e5592dc）
 // 失败口径：落表失败只降级记日志，永不抛断注册/启动流程（对齐 Error Handling
 // 传播策略「关键异常永不抛断用户流程」；后果 = 该项目知识面无注册行降级）。
-import type { ProjectService, ProjectSummary } from '@dsh-forge/contracts'
+import type { ProjectService, ProjectSummary } from '@dsh-forge/lib-api/dto/project'
 import type { KnowledgeRegistryWriter } from '@dsh-forge/knowledge'
 
 /**

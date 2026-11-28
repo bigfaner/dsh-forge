@@ -2,7 +2,8 @@
 // 通道信封归一：forwarded=true / unavailable / 非 ok / 传输抛错四径）+ 三态状态机
 // （idle → submitting → success|error；提交冻结、成功复位、失败可重试——settings 五态口径同型）。
 import { describe, expect, it } from 'vitest'
-import { REMOTE_CHANNELS, type RemoteApprovalDecision } from '@dsh-forge/contracts'
+import { REMOTE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type RemoteApprovalDecision } from '@dsh-forge/lib-api/dto/forge'
 import type { ForgeTransport } from '../../rpc/transport.js'
 import {
   beginApproval,

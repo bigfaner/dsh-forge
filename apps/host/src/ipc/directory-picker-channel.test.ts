@@ -1,7 +1,7 @@
 // fix-14 机制面 pin：__DSH_DIRECTORY_PICKER__ 桥 main 侧通道（官方契约同形零 fork）。
 // pick 语义三支（选中绝对路径 / 取消 null / 系统错误 reject = 错误面）对照官方
 // dsh-client-ui-directory-picker-native lib/client.js:41-48 消费面（onPicked/onCancel/onError）。
-import { FORGE_CHANNEL_ALLOWLIST } from '@dsh-forge/contracts'
+import { FORGE_CHANNEL_ALLOWLIST } from '@dsh-forge/lib-api/channels'
 import { describe, expect, it } from 'vitest'
 import {
   DIRECTORY_PICKER_CHANNEL,

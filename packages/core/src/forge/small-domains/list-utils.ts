@@ -1,7 +1,7 @@
 // 三小域列表面共用纯助手（任务 2.7）——search 匹配与 active/created 排序的域内单源。
 // 定位：业务（三小域合并目录内部共用——不外溢 forge/ 其他域）。
-import type { FeatureStatus } from '@dsh-forge/contracts'
-import { FEATURE_STATUS_LABELS } from '@dsh-forge/contracts'
+import type { FeatureStatus } from '@dsh-forge/lib-api/labels'
+import { FEATURE_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
 
 /**
  * search 匹配（服务端 core 过滤——Interface 1 listTasks「中英双语，标签常量匹配」同口径

@@ -4,7 +4,8 @@
 // 由组件触发 forge:remote/progress 重 poll，桌面工作台与手机侧同读（无本地副本）。
 // 三态口径（settings 五态同型）：idle → submitting（提交冻结）→ success（成功回显，
 // 组件定时复位）| error（错误可重试——动作恢复，再 begin 即重发）。
-import { REMOTE_CHANNELS, type RemoteApprovalDecision, type RemoteApprovalDecisionInput } from '@dsh-forge/contracts'
+import { REMOTE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type RemoteApprovalDecision, type RemoteApprovalDecisionInput } from '@dsh-forge/lib-api/dto/forge'
 import type { ForgeTransport } from '../../rpc/transport.js'
 
 /** 审批动作反馈三态（idle = 无在途动作；submitting = 提交冻结；success/error = 回显态） */

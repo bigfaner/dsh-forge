@@ -32,14 +32,8 @@
 // ⇔ 容器实现链终态合取；分支延续优先不越过门（validation 族出局①落②全局池）；
 // adopt 定向恢复径与幂等重入径豁免（adopt 豁免附带目标态断言 ∈ {in_progress, interrupted}）。
 import type Database from '@dsh-forge/lib-db'
-import type {
-  ClaimTaskInput,
-  ClaimTaskResult,
-  ContainerRef,
-  TaskPriority,
-  TaskPrerequisiteSummary,
-} from '@dsh-forge/contracts'
-import { VALIDATION_TASK_TYPES } from '@dsh-forge/contracts'
+import type { ClaimTaskInput, ClaimTaskResult, ContainerRef, TaskPriority, TaskPrerequisiteSummary } from '@dsh-forge/lib-api/dto/forge'
+import { VALIDATION_TASK_TYPES } from '@dsh-forge/lib-api/labels'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { DependenciesUnmetError, InvalidTransitionError, TaskNotFoundError } from './errors.js'
@@ -47,7 +41,7 @@ import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 import { GATE_SQL, assertContainerChainSettled } from './phase-gate.js'
 import { composeDispatchPrompt } from './prompt/compose.js'
 import { assertNoBareInterpolation, composePersona, composePersonaWithProfile } from './prompt/persona.js'
-import type { TaskType } from '@dsh-forge/contracts'
+import type { TaskType } from '@dsh-forge/lib-api/labels'
 import { dispatchDigest } from './prompt/digest.js'
 import {
   TASK_COLUMNS,

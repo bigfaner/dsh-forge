@@ -1,10 +1,10 @@
 // forge:tasks/* 八通道注册（3.1 注册行；定位：基础——通道面装配，域语义归 task-loop 任务域）。
-// 通道名仅出自 @dsh-forge/contracts TASKS_CHANNELS（键名沿用 C1 裁决）；服务类型锚 =
+// 通道名仅出自 @dsh-forge/lib-api/channels TASKS_CHANNELS（键名沿用 C1 裁决）；服务类型锚 =
 // @dsh-forge/task-loop 包出口 TasksService（1.14 host 改指——contracts 旧 ForgeTasksService
 // face 退役面禁再引用），经参数注入（结构类型——host 禁 import 插件域源码内联）。
 // 面分治（SC7 Hard Rule）：写动词 addTask/claimTask/submitTask = agent tool 专属，
 // 不入 RPC 面——注入类型收窄为八法 Pick（类型级禁令，knowledge-rpc.ts 同形制）。
-import { TASKS_CHANNELS } from '@dsh-forge/contracts'
+import { TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
 import type { TasksService } from '@dsh-forge/task-loop'
 import type { ForgeIpc } from './forge-channels.js'
 import { rpcEnvelope } from './rpc-envelope.js'

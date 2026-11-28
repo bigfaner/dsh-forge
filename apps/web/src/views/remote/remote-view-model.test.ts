@@ -1,7 +1,7 @@
 // 受限视图模型单测（mobile-remote-approval 1.3）——置顶排序（待审批高亮组 > 进行中 > 其余）、
 // 受限入口判定、进度信封 → 视图快照派生（零本地副本——信封原样读数）。
 import { describe, expect, it } from 'vitest'
-import type { RemoteProgressSnapshot, TaskCard } from '@dsh-forge/contracts'
+import type { RemoteProgressSnapshot, TaskCard } from '@dsh-forge/lib-api/dto/forge'
 import { isRestrictedRemoteViewCookie, isRestrictedRemoteViewLocation, mergeRemoteSnapshots, remoteListRowsOf, remoteViewDecisionLine, remoteViewDecisionOf } from './remote-view-model.js'
 
 function taskOf(partial: Partial<TaskCard> & Pick<TaskCard, 'taskId' | 'taskStatus'>): TaskCard {

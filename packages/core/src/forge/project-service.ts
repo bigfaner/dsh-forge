@@ -35,18 +35,8 @@ import { mkdirSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, relative, sep } from 'node:path'
 import type Database from '@dsh-forge/lib-db'
-import type {
-  DeriveTaskStoreDirRequest,
-  DeriveTaskStoreDirResult,
-  Project,
-  ProjectPatch,
-  ProjectServiceM2,
-  ProjectSummary,
-  ReconcileRepair,
-  ReconcileReport,
-  RegisterProjectInput,
-  RegisterResult,
-} from '@dsh-forge/contracts'
+import type { DeriveTaskStoreDirRequest, DeriveTaskStoreDirResult, ProjectServiceM2 } from '@dsh-forge/lib-api/dto/forge'
+import type { Project, ProjectPatch, ProjectSummary, ReconcileRepair, ReconcileReport, RegisterProjectInput, RegisterResult } from '@dsh-forge/lib-api/dto/project'
 import { forgeDirOfWorkspace, joinDirSegment, normalizeFsPath } from '@dsh-forge/lib-path'
 import { errMessage } from '../util.js'
 import { ensureDirReadable } from '../fs-ensure.js'

@@ -29,16 +29,8 @@
 // 同步核心（非 async）：better-sqlite3 天然同步；发现面 post-ingestion 挂点为同步回调
 // （fail-soft try/catch 包装），异步 Promise 的逃逸拒绝会绕过记账——装配层（index.ts）直调
 // 本同步核心；服务面（service.ts）以 async 签名包装满足 Interface 1 契约。
-import type {
-  DocKind,
-  FeatureStatus,
-  TaskRef,
-  TaskStatus,
-  TaskType,
-  ValidateFeatureTasksInput,
-  ValidateReport,
-  Violation,
-} from '@dsh-forge/contracts'
+import type { DocKind, TaskRef, ValidateFeatureTasksInput, ValidateReport, Violation } from '@dsh-forge/lib-api/dto/forge'
+import type { FeatureStatus, TaskStatus, TaskType } from '@dsh-forge/lib-api/labels'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { CycleDetectedError, TasksFeatureNotFoundError } from './errors.js'
 import { deriveFeaturePhase, PhaseInvariantViolationError } from './phase-deriver.js'

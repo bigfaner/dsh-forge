@@ -2,7 +2,7 @@
 // ②HTTP 传输走相对路径同源 POST /remote/__rpc（会话 cookie 同源自携）；
 // ③回退判定校准（首请求竞态不回退——重试后仍失败才 unreachable）。
 import { afterEach, describe, expect, it } from 'vitest'
-import { REMOTE_CHANNELS } from '@dsh-forge/contracts'
+import { REMOTE_CHANNELS } from '@dsh-forge/lib-api/channels'
 import {
   REMOTE_HTTP_RPC_ENDPOINT,
   createHttpTransport,

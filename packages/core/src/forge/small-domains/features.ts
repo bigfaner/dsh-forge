@@ -34,22 +34,8 @@
 // forge/tasks/phase-deriver，装配层（index.ts）注入同函数引用，零第二实现）。
 import { randomUUID } from 'node:crypto'
 import type Database from '@dsh-forge/lib-db'
-import {
-  FEATURE_STATUSES,
-  TASK_STATUSES,
-  type DocKind,
-  type FeatureCard,
-  type FeatureDocumentRow,
-  type FeatureRecordVerb,
-  type FeatureRow,
-  type FeatureStatus,
-  type ForgeFeaturesService,
-  type RegisterFeatureInput,
-  type TaskActor,
-  type TaskStatus,
-  type TransitionFeatureInput,
-  type UpsertFeatureDocInput,
-} from '@dsh-forge/contracts'
+import { FEATURE_STATUSES, TASK_STATUSES, type FeatureStatus, type TaskStatus } from '@dsh-forge/lib-api/labels'
+import { type DocKind, type FeatureCard, type FeatureDocumentRow, type FeatureRecordVerb, type FeatureRow, type ForgeFeaturesService, type RegisterFeatureInput, type TaskActor, type TransitionFeatureInput, type UpsertFeatureDocInput } from '@dsh-forge/lib-api/dto/forge'
 import { withTransaction } from '../../db/transaction.js'
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'

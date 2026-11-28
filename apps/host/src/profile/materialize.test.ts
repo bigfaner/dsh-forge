@@ -265,7 +265,7 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     // dev 直链 workspace 构建产物（4.2：装载面 = loader 行 import 以 profileDir 为锚）
     expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')
     expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../plugins/knowledge')
-    expect(dev.dependencies['@dsh-forge/contracts']).toBe('link:../../../packages/contracts')
+    expect(dev.dependencies['@dsh-forge/lib-api']).toBe('link:../../../lib/api')
     // 旧包 @dsh-forge/plugin-forge[+spec] link 已退役（M1 阶段B——依赖出清）
     expect(dev.dependencies['@dsh-forge/plugin-forge']).toBeUndefined()
     expect(dev.dependencies['@dsh-forge/plugin-forge-spec']).toBeUndefined()

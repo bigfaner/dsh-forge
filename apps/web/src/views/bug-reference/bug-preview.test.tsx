@@ -5,7 +5,7 @@
 // ui/official-seams.test.ts（壳侧 plugin.ts 常量镜像已退役）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { BugCard } from '@dsh-forge/contracts'
+import type { BugCard } from '@dsh-forge/lib-api/dto/bugs'
 import type { RpcClientFactory } from '@dsh-forge/project/client-ui'
 import {
   BugPreviewReady,

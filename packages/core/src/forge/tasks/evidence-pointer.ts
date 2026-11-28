@@ -26,7 +26,7 @@
 // 侧镜像同规则——四域/包互禁 import，规则文本以本文件为 core 单源）。fail-soft：任何缺席/
 // 故障 = undefined，绝不抛。
 import { RESUME_POINTER_FILE } from './prompt/compose.js'
-import { FORGE_LOGS_DIR } from '@dsh-forge/contracts'
+import { FORGE_LOGS_DIR } from '@dsh-forge/lib-api/forge-dir-segments'
 
 export { RESUME_POINTER_FILE }
 

@@ -2,13 +2,9 @@
 // 会话门（authorize=false 不触服务）/ 通道 allowlist / progress 装配 / approval 转发 /
 // diag 落链 / 错误归一信封。
 import { describe, expect, it } from 'vitest'
-import {
-  REMOTE_CHANNELS,
-  type ProjectService,
-  type ProjectSummary,
-  type RemoteProgressSnapshot,
-  type TaskStats,
-} from '@dsh-forge/contracts'
+import { REMOTE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type ProjectService, type ProjectSummary } from '@dsh-forge/lib-api/dto/project'
+import { type RemoteProgressSnapshot, type TaskStats } from '@dsh-forge/lib-api/dto/forge'
 import type { TaskCard, TasksService } from '@dsh-forge/task-loop'
 import {
   REMOTE_HTTP_RPC_PATH,

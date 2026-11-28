@@ -10,7 +10,7 @@
 // 成员资格）——构造漂移样本可抓。
 import { describe, expect, it } from 'vitest'
 import type Database from '@dsh-forge/lib-db'
-import type { TaskStatus } from '@dsh-forge/contracts'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import { createTasksHarness, seedEdge, seedFeature, seedRecord, seedTask } from './harness.js'
 import { TasksFeatureNotFoundError } from './errors.js'
 import { validateFeatureTasks } from './validate.js'

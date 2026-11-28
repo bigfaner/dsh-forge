@@ -9,7 +9,6 @@
     "watch": "vite build --watch --no-emptyOutDir"
   },
   "dependencies": {
-    "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/expert-squad": "workspace:*",
     "@dsh-forge/input-history": "workspace:*",
     "@dsh-forge/knowledge": "workspace:*",
@@ -18,7 +17,8 @@
     "@dsh-forge/project": "workspace:*",
     "@dsh-forge/quote-reference": "workspace:*",
     "@dsh-forge/super-composer": "workspace:*",
-    "react-qr-code": "2.2.0"
+    "react-qr-code": "2.2.0",
+    "@dsh-forge/lib-api": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",

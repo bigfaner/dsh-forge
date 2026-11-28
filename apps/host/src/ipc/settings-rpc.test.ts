@@ -1,7 +1,7 @@
 // M3 3.8 forge:settings/* 注册 pin：两通道（get/set——Interface 4 扩池表）+ 负载映射
 // 端到端（替身层）+ 单门读写语义锚（get 每调实时读零缓存；set 整体覆写 worker 段）。
 import { describe, expect, it, vi } from 'vitest'
-import { SETTINGS_CHANNELS } from '@dsh-forge/contracts'
+import { SETTINGS_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { registerSettingsChannels, type SettingsChannelService } from './settings-rpc.js'
 

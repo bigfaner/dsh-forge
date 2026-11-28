@@ -3,7 +3,7 @@
 // 内容（title/creed/gate 指引/workflow 叙述）已迁专家档案（persona-migration-audit.md
 // 留痕）——本文件断言程序段零类型内容残留与两段组装语义。
 import { describe, expect, it } from 'vitest'
-import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
+import { TASK_TYPES, type TaskType } from '@dsh-forge/lib-api/labels'
 import {
   ANTI_CHURN_ANCHORS,
   CODING_STRATEGY_SECTION,

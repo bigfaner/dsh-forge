@@ -13,7 +13,9 @@
 // 解密前 channel 字面量不进 diag（定长标记替代——日志注入/枚举分型消解）。
 // 日志：每请求经 diag（/__rvdiag 同链——diag 桥 → harness.log）落一行（结算态 + 脱敏通道）。
 // 纯 handler（fake req/res 可测）——socket/装配归 child.ts。
-import { REMOTE_CHANNELS, PROJECTS_CHANNELS, type ProjectService, type RemoteApprovalDecisionInput, type RemoteApprovalForwardResult, type RemoteProgressQuery } from '@dsh-forge/contracts'
+import { REMOTE_CHANNELS, PROJECTS_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type ProjectService } from '@dsh-forge/lib-api/dto/project'
+import { type RemoteApprovalDecisionInput, type RemoteApprovalForwardResult, type RemoteProgressQuery } from '@dsh-forge/lib-api/dto/forge'
 // 1.14 host 改指：读面类型锚改指 task-loop 包出口（forgeTasks 服务 = task-loop 插件 provide）。
 import type { TasksService } from '@dsh-forge/task-loop'
 import { isPskEnforcedHost, writeConstant401 } from './psk.js'

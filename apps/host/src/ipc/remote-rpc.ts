@@ -1,16 +1,11 @@
 // forge:remote/* 通道注册（mobile-remote-approval 1.1——bugs-rpc.ts 同径：通道常量/注册/
-// 装配三处一体：contracts → web/rpc → host ipc）。通道名仅出自 @dsh-forge/contracts
+// 装配三处一体：contracts → web/rpc → host ipc）。通道名仅出自 @dsh-forge/lib-api
 // REMOTE_CHANNELS。面分治：progress = 远程只读进度读面（复用既有 forge 只读 rpc 口径——
 // 直读 forgeTasks listTasks/taskStats，零本地副本零新查询机械）；approval = 审批动作转发
 // （产品不自持审批状态，官方 user-approval 面经桥转发——转发器缺席 = fail-soft
 // unavailable，remote.session 先例同型；通道层零认证逻辑，暴露策略归官方配对）。
-import {
-  REMOTE_CHANNELS,
-  type RemoteApprovalDecisionInput,
-  type RemoteApprovalForwardResult,
-  type RemoteDisconnectResult,
-  type RemoteProgressQuery,
-} from '@dsh-forge/contracts'
+import { REMOTE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type RemoteApprovalDecisionInput, type RemoteApprovalForwardResult, type RemoteDisconnectResult, type RemoteProgressQuery } from '@dsh-forge/lib-api/dto/forge'
 // 1.14 host 改指：读面类型锚改指 task-loop 包出口（forgeTasks 服务 = task-loop 插件 provide）。
 import type { TasksService } from '@dsh-forge/task-loop'
 import type { ForgeIpc } from './forge-channels.js'

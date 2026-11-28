@@ -1,9 +1,9 @@
 // forge/workspace 域 typed error（tech-design §Error Handling：ERR_WORKSPACE_DB_UNAVAILABLE——
 // 惰性开库/迁移失败 → 工作区隔离态，503；任务 1.4 增 ERR_SUSPECTED_MOVE——注册碰撞三态拒绝面，
-// 409）。code 字面量锚定 @dsh-forge/contracts ERROR_CODES，
+// 409）。code 字面量锚定 @dsh-forge/lib-api/errors ERROR_CODES，
 // 类名/name 手写字面量（contracts 不持运行期名映射——fix-34 后表 Name 列为文档性对照）；
 // RPC 边界序列化为 RpcErrorPayload { code, message, data }，UI 按 code 映射工作区隔离态。
-import type { SuspectedMoveData } from '@dsh-forge/contracts'
+import type { SuspectedMoveData } from '@dsh-forge/lib-api/errors'
 
 /** 工作区库不可用附载（RpcErrorPayload.data 形状：标识 + 失败原因 + 处置结果；
  *  type 别名非 interface——对象字面量形状可隐式索引签名，直入 WorkspaceKeyLogEntry.data） */

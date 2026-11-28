@@ -14,22 +14,16 @@
 //   app_key_logs（warn，scope=tasks），不阻断注册整体；
 // - frontmatter 薄解析自实现（import 边纪律禁 import knowledge 内部实现——forge/ ↛ knowledge/
 //   oxlint 铁律③；manifest/proposal 均纯标量键值面，不引 gray-matter；status 缺省与词汇经
-//   @dsh-forge/contracts 常量对齐）。
+//   @dsh-forge/lib-api 常量对齐）。
 // post-ingestion 挂点：对新入库 feature 逐个送校（2.5 validateFeatureTasks 接线）；失败
 // fail-soft 记账（warn）不抛不断链。
 import { randomUUID } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type Database from '@dsh-forge/lib-db'
-import {
-  DOC_KINDS,
-  FEATURE_STATUSES,
-  FRONTMATTER_STATUS_DEFAULT,
-  PROPOSAL_STATUSES,
-  type DocKind,
-  type FeatureStatus,
-  type ProposalStatus,
-} from '@dsh-forge/contracts'
+import { DOC_KINDS, type DocKind } from '@dsh-forge/lib-api/dto/forge'
+import { FEATURE_STATUSES, PROPOSAL_STATUSES, type FeatureStatus, type ProposalStatus } from '@dsh-forge/lib-api/labels'
+import { FRONTMATTER_STATUS_DEFAULT } from '@dsh-forge/lib-api/frontmatter'
 import { docsRootOfForgeDir } from '@dsh-forge/lib-path'
 import { withTransaction } from '../../db/transaction.js'
 import { emitDiagOrFallback, type DiagEventPayload } from '../../telemetry/diag-events.js'

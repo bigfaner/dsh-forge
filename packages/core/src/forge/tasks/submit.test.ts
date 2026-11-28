@@ -28,7 +28,7 @@ import {
   type TasksHarness,
 } from './harness.js'
 import { createBugsService } from '../small-domains/bugs.js'
-import type { BugRecurrenceCandidate } from '@dsh-forge/contracts'
+import type { BugRecurrenceCandidate } from '@dsh-forge/lib-api/dto/forge'
 import { queryTask } from './query.js'
 import { submitTask } from './submit.js'
 

@@ -26,12 +26,7 @@
 // 边界注记：gate 载荷原样落账不服务内判红（gate 执行归 executor 技能纪律——失败分诊 = blocked
 // 走 fix 链，C4）；blocked_reason 列不在本动词写面（reason 落 append-only 记录为审计单源——
 // 与 transitionTask 2.5 同裁决）；files/gate 缺省 = 列 NULL（files 回填归读面 git 查找）。
-import type {
-  BugRecurrenceCandidate,
-  SubmitTaskInput,
-  SubmitTaskResult,
-  TaskRecurrenceAdvisory,
-} from '@dsh-forge/contracts'
+import type { BugRecurrenceCandidate, SubmitTaskInput, SubmitTaskResult, TaskRecurrenceAdvisory } from '@dsh-forge/lib-api/dto/forge'
 import { taskFilesUnion } from './files.js'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'

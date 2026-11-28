@@ -7,7 +7,7 @@
 // taskStats.unmetPending（池快照派生——含 fix 链边形态）。
 // S3（run-tasks-host-command）：sort +interrupted（中断序——updated_at 升序恢复取数序）。
 import { afterEach, describe, expect, it } from 'vitest'
-import type { TaskStatus } from '@dsh-forge/contracts'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import { LINKS_BY_SESSION_SQL } from './session-links.js'
 import { listTasks, SQL_STATS_BY_CONTAINER, SQL_TASKS_BY_CONTAINER, taskGraph, taskSettlements, taskStats } from './list.js'
 import { RECORDS_BY_TASK_SQL } from './query.js'

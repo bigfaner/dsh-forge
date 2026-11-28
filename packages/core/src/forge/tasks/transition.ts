@@ -13,7 +13,8 @@
 // 记录 → 恢复钩子（→completed/skipped 同挂——C3 与 submitTask 钩子同族，2.4 复用本导出）→
 // 相位重算；闭包尾部（提交后）emitTasksChanged。一律 prepared statements。
 import type Database from '@dsh-forge/lib-db'
-import type { TaskRef, TaskSnapshot, TaskStatus, TransitionTaskInput } from '@dsh-forge/contracts'
+import type { TaskRef, TaskSnapshot, TransitionTaskInput } from '@dsh-forge/lib-api/dto/forge'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { ReasonRequiredError } from './errors.js'

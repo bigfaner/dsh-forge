@@ -25,21 +25,12 @@
 // 一切 SQL prepared statements。
 import { randomUUID } from 'node:crypto'
 import { execFile as execFileCallback } from 'node:child_process'
-import type {
-  BugCard,
-  BugChainContext,
-  BugCommitFile,
-  BugCommitFilesQuery,
-  BugFileDiffQuery,
-  BugErrorTypeAggregate,
-  BugRecurrenceCandidate,
-  BugRecurrenceDanglingData,
-  BugStatus,
-  GetBugQuery,
-  GetBugResponse,
-  ListBugsQuery,
-} from '@dsh-forge/contracts'
-import { BUG_COVERAGE_ANCHOR_PREFIX, BUG_COVERAGE_DECLARATION_PREFIX, BUG_STATUS_LABELS } from '@dsh-forge/contracts'
+import type { BugCard, BugChainContext, BugCommitFile, BugCommitFilesQuery, BugFileDiffQuery, GetBugQuery, GetBugResponse, ListBugsQuery } from '@dsh-forge/lib-api/dto/bugs'
+import type { BugErrorTypeAggregate, BugRecurrenceCandidate } from '@dsh-forge/lib-api/dto/forge'
+import type { BugRecurrenceDanglingData } from '@dsh-forge/lib-api/errors'
+import type { BugStatus } from '@dsh-forge/lib-api/labels'
+import { BUG_COVERAGE_ANCHOR_PREFIX, BUG_COVERAGE_DECLARATION_PREFIX } from '@dsh-forge/lib-api/dto/bugs'
+import { BUG_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
 import { withTransaction } from '../../db/transaction.js'
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'

@@ -1,5 +1,5 @@
 // 1.4 AC4 pin：forge:* 通道注册走 contracts 通道常量 + allowlist 校验（负样例自证）。
-import { FORGE_CHANNELS, FORGE_CHANNEL_ALLOWLIST } from '@dsh-forge/contracts'
+import { FORGE_CHANNELS, FORGE_CHANNEL_ALLOWLIST } from '@dsh-forge/lib-api/channels'
 import { describe, expect, it } from 'vitest'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 

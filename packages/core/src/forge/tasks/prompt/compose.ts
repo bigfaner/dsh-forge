@@ -7,15 +7,8 @@
 // submit-task 技能正本——简报零重复；TASK_ID 键行恒在场即参数本体。
 // 定位铁律：纯函数禁 IO（BLOCKERS/PHASE_SUMMARY 等动态值由调用方领取瞬间取数注入——
 // 2.4 claimTask 接线；「快照取领取瞬间而非渲染时」）。
-import {
-  TASK_TYPES,
-  type ContainerRef,
-  type TaskPriority,
-  type TaskPrerequisiteSummary,
-  type TaskRef,
-  type TaskType,
-  type TestBaselineBrief,
-} from '@dsh-forge/contracts'
+import { TASK_TYPES, type TaskType } from '@dsh-forge/lib-api/labels'
+import { type ContainerRef, type TaskPriority, type TaskPrerequisiteSummary, type TaskRef, type TestBaselineBrief } from '@dsh-forge/lib-api/dto/forge'
 
 // ─────────────────────────── CATEGORY 映射（老 forge CategoryForType 平移） ───────────────────────────
 

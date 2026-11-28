@@ -10,7 +10,6 @@
     "@deepseek-ai/dsh-web-app": "0.2.2-rc.5",
     "@deepseek-ai/dsh-api-session-controller": "0.2.2-rc.5",
     "@deepseek-ai/dsh-api-workspace-controller": "0.2.2-rc.5",
-    "@dsh-forge/contracts": "link:../../../packages/contracts",
     "@dsh-forge/core": "link:../../../packages/core",
     "@dsh-forge/knowledge": "link:../../../plugins/knowledge",
     "@dsh-forge/markdown-kit": "link:../../../plugins/markdown-kit",
@@ -18,7 +17,8 @@
     "gray-matter": "4.0.3",
     "@dsh-forge/project": "link:../../../plugins/project",
     "@dsh-forge/spec": "link:../../../plugins/spec",
-    "@dsh-forge/task-loop": "link:../../../plugins/task-loop"
+    "@dsh-forge/task-loop": "link:../../../plugins/task-loop",
+    "@dsh-forge/lib-api": "link:../../../lib/api"
   },
   "dsh": {
     "profile": {

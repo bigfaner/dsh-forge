@@ -1,7 +1,7 @@
 # components/
 
 定位：**基础** —— 领域无关组件：吃 `--dsw-*` 令牌、零业务逻辑、不发起 RPC（props 原始形状）。
-填充：2.6。边界：禁 import `views/`、`flows/`（依赖铁律①）与 `rpc/`、`@dsh-forge/contracts`
+填充：2.6。边界：禁 import `views/`、`flows/`（依赖铁律①）与 `rpc/`、`@dsh-forge/lib-api`
 （零业务语义，tests/structure/web-shell.test.ts 机械 pin）。
 
 > 复用纪律（用户裁决 2026-10-16）：写 UI 前先查 `DESIGN.md`「自建组件清单」与下方条目——

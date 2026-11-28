@@ -14,7 +14,8 @@
 // e2e 消费面 = Playwright electronApp.evaluate（主进程面读 globalThis 挂点——函数不可
 // 序列化，消费侧逐调用 evaluate，见 e2e/support/replay/executor.ts）。本文件零 electron
 // import（纯装配逻辑，单测注入替身）。
-import { FORGE_EVENT_CHANNELS, type TasksChangedEvent } from '@dsh-forge/contracts'
+import { FORGE_EVENT_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type TasksChangedEvent } from '@dsh-forge/lib-api/dto/forge'
 import type { DshHostHandle } from '../boot/index.js'
 
 /** env 门控开关名（e2e 回放启动 env——`DSH_FORGE_TEST_BRIDGE=1` 恰此一形开门） */

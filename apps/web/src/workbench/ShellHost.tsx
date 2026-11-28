@@ -36,7 +36,7 @@ import {
   useProjectDocsRoot,
 } from '@dsh-forge/project/client-ui/dock-tabs'
 import type { OpenSessionOrchestrator } from '@dsh-forge/project/client-ui/open-session'
-import type { TaskStatus } from '@dsh-forge/contracts'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 // 1.6 注记：账本快照窄类型随 sidebar 族迁 @dsh-forge/project（ui/sidebar/）——壳消费经
 // 包窄子路径出口类型直供（event-tap/session-actions 先例；纯 type import 零运行时载荷）。
 import { MainSessionAnchor, useAnchoredProjects, useWorkspaceProjectMap } from './anchored-projects.js'

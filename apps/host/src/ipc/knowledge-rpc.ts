@@ -1,5 +1,5 @@
 // forge:knowledge/* 六通道注册（3.5 注册行；定位：基础——通道面装配，域语义归 knowledge
-// 插件服务域）。1.7 A2 服务切换：通道名仅出自 @dsh-forge/contracts KNOWLEDGE_CHANNELS
+// 插件服务域）。1.7 A2 服务切换：通道名仅出自 @dsh-forge/lib-api/channels KNOWLEDGE_CHANNELS
 //（三处一体：contracts → web/rpc → knowledge 插件服务域；Interface 2 浏览面 ↔ Interface 4
 // 通道一一对应）；句柄来源 = knowledge 插件 provide 'knowledge' 服务（boot 桥面世，
 // main 只 wiring——编排零下沉）。通道面不含 search/readAbstract（agent 面唯一门 =
@@ -13,17 +13,8 @@
 // stage④ 1.7：recallFeedback 第七通道挂接（召回反馈动作写面）——Pick 面扩 recallFeedback
 // 法；通道层 = 判别联合形状校验（action 判别键 + feedback 三值/二值 + 字段类型）+ 纯透传
 //（越界/缺 note/unconfirmed 业务校验归插件服务域）；缺席同判定缝整体不挂。
-import {
-  KNOWLEDGE_CHANNELS,
-  type EntryActionReceipt,
-  type EntryActionRequest,
-  type EntryActionRequestReject,
-  type EntryDetailQuery,
-  type ListEntriesQuery,
-  type RecallFeedbackOutcome,
-  type RecallFeedbackRequest,
-  type SessionRecallQuery,
-} from '@dsh-forge/contracts'
+import { KNOWLEDGE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type EntryActionReceipt, type EntryActionRequest, type EntryActionRequestReject, type EntryDetailQuery, type ListEntriesQuery, type RecallFeedbackOutcome, type RecallFeedbackRequest, type SessionRecallQuery } from '@dsh-forge/lib-api/dto/knowledge'
 import type { BrowseKnowledgeService } from '@dsh-forge/knowledge'
 import type { ForgeIpc } from './forge-channels.js'
 import { rpcEnvelope } from './rpc-envelope.js'

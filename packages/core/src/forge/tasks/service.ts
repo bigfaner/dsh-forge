@@ -7,44 +7,7 @@
 // submit.ts/transition.ts/validate.ts/list.ts/detail.ts/session-links.ts + git-lookup.ts——
 // git 唯一调用点单文件审计面）。validateFeatureTasks 以 async 包装同步核心（Interface 1
 // 契约面；发现面挂点直调同步核心——防逃逸 Promise 拒绝绕过 fail-soft 记账，见 validate.ts 头注）。
-import type {
-  AddTaskInput,
-  AddTaskResult,
-  BugRecurrenceCandidate,
-  ClaimTaskInput,
-  ClaimTaskResult,
-  ContainerRef,
-  ForgeTasksService,
-  ListTasksQuery,
-  MarkE2eAttributionInput,
-  QueryTaskInput,
-  QueryTaskResult,
-  ReadUnsettledChainInput,
-  ReadUnsettledChainResult,
-  RecordSpawnInput,
-  ReconcileInterruptedInput,
-  ReconcileInterruptedResult,
-  SessionLinksQuery,
-  SessionTaskLinkCard,
-  SubmitTaskInput,
-  SubmitTaskResult,
-  TaskCard,
-  TaskDetail,
-  TaskDetailQuery,
-  TaskGraph,
-  TaskGraphQuery,
-  TaskSnapshot,
-  TaskSettlementRow,
-  TaskSettlementsQuery,
-  TaskStats,
-  TaskStatsQuery,
-  TransitionTaskInput,
-  UpdateTaskInput,
-  UnblockTaskInput,
-  UnblockTaskResult,
-  ValidateFeatureTasksInput,
-  ValidateReport,
-} from '@dsh-forge/contracts'
+import type { AddTaskInput, AddTaskResult, BugRecurrenceCandidate, ClaimTaskInput, ClaimTaskResult, ContainerRef, ForgeTasksService, ListTasksQuery, MarkE2eAttributionInput, QueryTaskInput, QueryTaskResult, ReadUnsettledChainInput, ReadUnsettledChainResult, RecordSpawnInput, ReconcileInterruptedInput, ReconcileInterruptedResult, SessionLinksQuery, SessionTaskLinkCard, SubmitTaskInput, SubmitTaskResult, TaskCard, TaskDetail, TaskDetailQuery, TaskGraph, TaskGraphQuery, TaskSnapshot, TaskSettlementRow, TaskSettlementsQuery, TaskStats, TaskStatsQuery, TransitionTaskInput, UpdateTaskInput, UnblockTaskInput, UnblockTaskResult, ValidateFeatureTasksInput, ValidateReport } from '@dsh-forge/lib-api/dto/forge'
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { addTask } from './add.js'

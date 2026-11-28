@@ -86,7 +86,7 @@ import { withKnowledgeRegistryRow } from '../ipc/bindings.js'
 // 1.17 批二卸旧装新：worktree 域 host 侧装配段已下沉 @dsh-forge/project
 // host/assembly/host-side.ts——apps/host 只留注册行（装配逻辑零内联，AGENTS 1.3）。
 import { assembleProjectHostSide } from '@dsh-forge/project'
-import { type ProjectService } from '@dsh-forge/contracts'
+import { type ProjectService } from '@dsh-forge/lib-api/dto/project'
 import { MIME, resolveMobileDistDir } from '../window/web-document.js'
 import { isDevProfile } from '../profile/paths.js'
 import { loadPresetPatches } from '../profile/presets.js'

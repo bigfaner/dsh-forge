@@ -9,7 +9,8 @@
 // 消费侧（addTask/claimTask/submitTask/transitionTask/upsertFeatureDoc 写动词事务内重算 +
 // 增量断言）由 2.3/2.4/2.5/2.7 接线；validateFeatureTasks 的 'phase-invariant' 批量对照面（2.5）
 // 亦经本单源。定位铁律：纯函数禁 IO（输入 = 调用方在事务内读出的行集快照）。
-import type { DocKind, FeatureStatus, TaskStatus } from '@dsh-forge/contracts'
+import type { DocKind } from '@dsh-forge/lib-api/dto/forge'
+import type { FeatureStatus, TaskStatus } from '@dsh-forge/lib-api/labels'
 
 /** doc_kind → phase 映射（§6-28 单源：{prd-spec, user-stories, ui-functions}→prd；{tech-design,
  *  er-diagram, sql-schema, page-map}→design）。Record<DocKind, …> = 编译期穷尽——加 kind 即

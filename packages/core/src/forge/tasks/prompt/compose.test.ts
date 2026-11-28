@@ -6,7 +6,7 @@
 // 简报字节级 pin（digest 契约回归面：任何键/行序改动都在快照 diff 显形）。
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { TASK_TYPES, type TaskType } from '@dsh-forge/contracts'
+import { TASK_TYPES, type TaskType } from '@dsh-forge/lib-api/labels'
 import {
   composeDispatchPrompt,
   resolveCoverage,

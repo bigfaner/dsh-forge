@@ -2,7 +2,7 @@
 // 负载映射端到端（替身层）+ allowlist 校验正/负样例（正：两通道注册通过；负：未列通道拒绝）+
 // 审批转发器缺席 fail-soft（unavailable——remote.session 先例同型）。
 import { describe, expect, it, vi } from 'vitest'
-import { REMOTE_CHANNELS } from '@dsh-forge/contracts'
+import { REMOTE_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { registerRemoteChannels, type RemoteChannelService } from './remote-rpc.js'
 

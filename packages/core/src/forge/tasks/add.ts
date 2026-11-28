@@ -18,22 +18,10 @@
 // + mode 快照 + ac_json）→ 相位重算（单调只进推导机单源）。
 import { randomUUID } from 'node:crypto'
 import type Database from '@dsh-forge/lib-db'
-import type {
-  AddTaskInput,
-  AddTaskResult,
-  BugRecurrenceCandidate,
-  ContainerRef,
-  DocKind,
-  FeatureStatus,
-  Mode,
-  TaskStatus,
-  TaskType,
-} from '@dsh-forge/contracts'
-import {
-  BEFORE_SUCCESSOR_ALLOWED_STATUSES,
-  E2E_ATTRIBUTION_COLUMN,
-  FIX_CHAIN_DEPTH_LIMIT,
-} from '@dsh-forge/contracts'
+import type { AddTaskInput, AddTaskResult, BugRecurrenceCandidate, ContainerRef, DocKind, Mode } from '@dsh-forge/lib-api/dto/forge'
+import type { FeatureStatus, TaskStatus, TaskType } from '@dsh-forge/lib-api/labels'
+import { BEFORE_SUCCESSOR_ALLOWED_STATUSES, FIX_CHAIN_DEPTH_LIMIT } from '@dsh-forge/lib-api/dto/forge'
+import { E2E_ATTRIBUTION_COLUMN } from '@dsh-forge/lib-api/labels'
 import { withTransaction } from '../../db/transaction.js'
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'

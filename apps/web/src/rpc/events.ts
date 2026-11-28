@@ -8,7 +8,7 @@
 // 形状权威 = apps/host/src/ipc/preload-api.ts 的 window.dshForge.onForgeTasksChanged
 //（结构同型镜像，运行期边界禁互引源码）；preload 面缺席（非 Electron 载体）= 静默降级
 // no-op 订阅（交互重取兜底——与 core 侧 direct 形态缺席静默同口径）。
-import type { TasksChangedEvent } from '@dsh-forge/contracts'
+import type { TasksChangedEvent } from '@dsh-forge/lib-api/dto/forge'
 
 /** 事件订阅回调（载荷只读 { projectId }——Hard Rule） */
 export type TasksChangedListener = (payload: TasksChangedEvent) => void

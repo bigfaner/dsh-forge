@@ -5,15 +5,7 @@
 // 「SC7 六类：…transition from≠to+transitionTargets」+ db-schema §3.1 矩阵。
 // S3（run-tasks-host-command）：矩阵 +in_progress→interrupted（对账/循环主动终态真化）
 // 与 interrupted→in_progress（adopt 定向恢复领取）两新边；词汇七态 → 八态。
-import {
-  FEATURE_STATUSES,
-  FEATURE_STATUS_LABELS,
-  PROPOSAL_STATUSES,
-  PROPOSAL_STATUS_LABELS,
-  TASK_STATUSES,
-  TASK_STATUS_LABELS,
-  type TaskStatus,
-} from '@dsh-forge/contracts'
+import { FEATURE_STATUSES, FEATURE_STATUS_LABELS, PROPOSAL_STATUSES, PROPOSAL_STATUS_LABELS, TASK_STATUSES, TASK_STATUS_LABELS, type TaskStatus } from '@dsh-forge/lib-api/labels'
 import { describe, expect, it } from 'vitest'
 import { InvalidTransitionError, isInvalidTransitionError } from './errors.js'
 import { AGENT_TRANSITION_MATRIX, assertTransitionAllowed, transitionTargets } from './state-machine.js'

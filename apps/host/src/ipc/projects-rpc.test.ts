@@ -7,7 +7,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { FORGE_CHANNELS, PROJECTS_CHANNELS, type ProjectService } from '@dsh-forge/contracts'
+import { FORGE_CHANNELS, PROJECTS_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type ProjectService } from '@dsh-forge/lib-api/dto/project'
 // core 源码相对引入（测试面专用——见文件头注）
 import { openDatabase } from '../../../../packages/core/src/db/index.js'
 import {

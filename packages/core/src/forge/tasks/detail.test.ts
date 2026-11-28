@@ -5,7 +5,7 @@
 // （vars·description 锚点 → feature_documents ∪ proposals docRel 匹配；命中链接态、未命中置灰）。
 // git 只读查找经注入桩受控断言（ENOENT/失败同路回退记录语归 git-lookup.test）。
 import { afterEach, describe, expect, it } from 'vitest'
-import { TASK_STATUSES } from '@dsh-forge/contracts'
+import { TASK_STATUSES } from '@dsh-forge/lib-api/labels'
 import { GIT_LOOKUP_FALLBACK_ENTRY, type GitExecFile } from './git-lookup.js'
 import { taskDetail } from './detail.js'
 import { TaskNotFoundError } from './errors.js'

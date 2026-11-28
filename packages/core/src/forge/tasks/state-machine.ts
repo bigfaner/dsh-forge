@@ -3,7 +3,7 @@
 // （taskDetail.allowedTransitions → 转移对话框选项集）与服务端校验（transitionTask 先验
 // toStatus ∈ transitionTargets(current,'human')）共用本纯函数，禁复制第二实现（零漂移）。
 // 定位铁律：纯函数禁 IO（实现注记——消费侧接线在 2.4/2.5）。
-import { TASK_STATUSES, type TaskStatus } from '@dsh-forge/contracts'
+import { TASK_STATUSES, type TaskStatus } from '@dsh-forge/lib-api/labels'
 import { InvalidTransitionError, type TransitionFace } from './errors.js'
 
 export type { TransitionFace }

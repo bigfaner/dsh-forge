@@ -6,7 +6,7 @@
 // errorType 参考集合（高频优先限量）；零机械归类断言（集合只作参考）。
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from '@dsh-forge/lib-db'
-import type { BugCard } from '@dsh-forge/contracts'
+import type { BugCard } from '@dsh-forge/lib-api/dto/bugs'
 import { createBugsService, ERROR_TYPE_SUGGESTIONS_LIMIT, parseTaskContainerSlug, type BugsServiceDeps, type GitExecFile } from './bugs.js'
 import { ReasonRequiredError } from './errors.js'
 import { createHarness, type SmallDomainHarness } from './harness.js'

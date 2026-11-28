@@ -3,7 +3,10 @@
 // 断言（无会话对话、知识库、文档入口——提案验收 6 的组件层承载）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { PROJECTS_CHANNELS, REMOTE_CHANNELS, type ProjectSummary, type RemoteProgressSnapshot, type RpcResult, type TaskCard } from '@dsh-forge/contracts'
+import { PROJECTS_CHANNELS, REMOTE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type ProjectSummary } from '@dsh-forge/lib-api/dto/project'
+import { type RemoteProgressSnapshot, type TaskCard } from '@dsh-forge/lib-api/dto/forge'
+import { type RpcResult } from '@dsh-forge/lib-api/dto/rpc'
 import { ForgeRemoteView, loadRemoteSnapshot, RemoteApprovalActionsView, RemotePairingGuide, RemoteProgressList } from './ForgeRemoteView.js'
 import { beginApproval, initialApprovalState, resolveApproval } from './remote-approval-model.js'
 import { remoteListRowsOf } from './remote-view-model.js'

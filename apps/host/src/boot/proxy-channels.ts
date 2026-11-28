@@ -14,14 +14,10 @@
 // 纯 handler（fake 服务可测）——装配归 child.ts。
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import type {
-  ProjectService,
-  ProjectSummary,
-  RemoteApprovalDecisionInput,
-  RemoteApprovalForwardResult,
-  WorktreeEntryDto,
-} from '@dsh-forge/contracts'
-import { REMOTE_CHANNELS, WORKTREE_CHANNELS } from '@dsh-forge/contracts'
+import type { ProjectService, ProjectSummary } from '@dsh-forge/lib-api/dto/project'
+import type { RemoteApprovalDecisionInput, RemoteApprovalForwardResult } from '@dsh-forge/lib-api/dto/forge'
+import type { WorktreeEntryDto } from '@dsh-forge/lib-api/dto/worktree'
+import { REMOTE_CHANNELS, WORKTREE_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { listWorkspaceFiles } from './file-list.js'
 import type { ReadCursorStore } from './read-cursor-store.js'
 import { typertDispatch, typertSessionDescriptor } from './typert-dispatch.js'

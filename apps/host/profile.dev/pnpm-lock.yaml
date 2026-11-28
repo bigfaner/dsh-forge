@@ -26,9 +26,6 @@ importers:
       '@deepseek-ai/dsh-web-app':
         specifier: 0.2.2-rc.5
         version: 0.2.2-rc.5(51596e3b6dde5de598df1d583b03b0d5)
-      '@dsh-forge/contracts':
-        specifier: link:../../../packages/contracts
-        version: link:../../../packages/contracts
       '@dsh-forge/core':
         specifier: link:../../../packages/core
         version: link:../../../packages/core
@@ -38,6 +35,9 @@ importers:
       '@dsh-forge/knowledge':
         specifier: link:../../../plugins/knowledge
         version: link:../../../plugins/knowledge
+      '@dsh-forge/lib-api':
+        specifier: link:../../../lib/api
+        version: link:../../../lib/api
       '@dsh-forge/markdown-kit':
         specifier: link:../../../plugins/markdown-kit
         version: link:../../../plugins/markdown-kit

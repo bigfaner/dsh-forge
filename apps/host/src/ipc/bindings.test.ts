@@ -1,6 +1,6 @@
 // knowledge 注册行维护 pin：registerProject 进表径（1.15）+ boot 回填径（bug 5e5592dc）。
 // fail-soft 口径 + 双径覆盖幂等 + 非注册方法透传。
-import type { ProjectService, ProjectSummary, RegisterResult } from '@dsh-forge/contracts'
+import type { ProjectService, ProjectSummary, RegisterResult } from '@dsh-forge/lib-api/dto/project'
 import {
   backfillKnowledgeRegistryRows,
   withKnowledgeRegistryRow,

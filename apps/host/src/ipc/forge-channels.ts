@@ -1,7 +1,7 @@
 // forge:* RPC 通道注册机制 + allowlist 校验（定位：基础——机制与骨架；
-// 通道 handler 本体属 core，2.4/3.5 注册）。allowlist 唯一源 = @dsh-forge/contracts
+// 通道 handler 本体属 core，2.4/3.5 注册）。allowlist 唯一源 = @dsh-forge/lib-api
 // channels.ts（Interface 4；electron-ipc-security 约定：未列通道拒绝）。
-import { FORGE_CHANNEL_ALLOWLIST, type ForgeChannel } from '@dsh-forge/contracts'
+import { FORGE_CHANNEL_ALLOWLIST, type ForgeChannel } from '@dsh-forge/lib-api/channels'
 
 /** Electron ipcMain 结构面（测试注入 fake；真身由 main 传入） */
 export interface IpcMainLike {
@@ -27,7 +27,7 @@ export function createForgeIpc(ipcMain: IpcMainLike): ForgeIpc {
     register(channel, handler) {
       if (!allow.has(channel)) {
         throw new Error(
-          `[host:ipc] 通道不在 allowlist，拒绝注册：${channel}（唯一源 = @dsh-forge/contracts channels；新通道须三处一体：contracts → web/rpc → core 域）`,
+          `[host:ipc] 通道不在 allowlist，拒绝注册：${channel}（唯一源 = @dsh-forge/lib-api channels；新通道须三处一体：contracts → web/rpc → core 域）`,
         )
       }
       if (channels.has(channel)) throw new Error(`[host:ipc] 通道重复注册：${channel}`)

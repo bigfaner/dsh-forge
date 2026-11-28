@@ -1,6 +1,6 @@
 // forge:docs/* 两通道注册（3.1 注册行；定位：基础——通道面装配；read 域语义归 core
 // 文档读域，openExternal = 宿主原生能力行（shell.openPath，boot-channel/fs-rpc 同类））。
-// 通道名仅出自 @dsh-forge/contracts DOCS_CHANNELS（三处一体）。
+// 通道名仅出自 @dsh-forge/lib-api/channels DOCS_CHANNELS（三处一体）。
 //
 // openExternal 安全面（Security Mitigations ②——威胁：shell.openPath 滥用）：
 //   · 仅 main 侧执行（renderer 恒无 shell 面）；
@@ -14,11 +14,8 @@
 //     契约扩法（文档清单枚举面）。
 //   · openPath 失败（无关联应用等）→ typed ERR_DOC_PATH_INVALID 经 RpcErr 信封
 //     （contracts DocsChannelResponses 注记：openExternal = 触发即忘——失败经 RpcErr）。
-import {
-  DOCS_CHANNELS,
-  type ForgeDocsService,
-  type ReadDocRequest,
-} from '@dsh-forge/contracts'
+import { DOCS_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type ForgeDocsService, type ReadDocRequest } from '@dsh-forge/lib-api/dto/forge'
 import type { ForgeIpc } from './forge-channels.js'
 import { rpcEnvelope } from './rpc-envelope.js'
 

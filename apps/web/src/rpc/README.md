@@ -5,7 +5,7 @@
 
 ## 机制（2.4 RPC 面）
 
-- **通道名唯一源** = `@dsh-forge/contracts` `channels.ts`（client 禁字面量；preload/main 两侧 allowlist 守门，纵深防御）。
+- **通道名唯一源** = `@dsh-forge/lib-api` `channels.ts`（client 禁字面量；preload/main 两侧 allowlist 守门，纵深防御）。
 - **信封契约** = contracts `dto/rpc.ts` `RpcResult<T>`：成功 `{ ok: true, data }`；typed error `{ ok: false, error: { code, message, data } }`（错误不走 promise 拒绝——Electron invoke 拒绝抹平结构）。
 - **消费方式**：`preloadRpcClientFactory()`（= `createForgeRpcClient(preloadTransport())` 单一缺省构造，fix-36 收敛）→ `client.projects.register/list/get/update/reconcile/deriveTaskStoreDir` + `client.{tasks,features,proposals,docs}.*`（typed 结果）；失败抛 `RpcClientError`（code ∈ contracts 全码，data 原样保真）。
 - **传输注入**：`ForgeTransport = (channel, payload) => Promise<unknown>`——preload 真身 / 测试替身同型。

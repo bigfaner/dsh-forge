@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { FS_CHANNELS, FORGE_CHANNEL_ALLOWLIST } from '@dsh-forge/contracts'
+import { FS_CHANNELS, FORGE_CHANNEL_ALLOWLIST } from '@dsh-forge/lib-api/channels'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { listDir, registerFsChannels } from './fs-rpc.js'
 

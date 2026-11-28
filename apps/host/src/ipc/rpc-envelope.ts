@@ -7,7 +7,8 @@
 // 均落诊断事件（含栈），消除「捕获即静默」面（评审 Blocker-1 + Note-1 同文件闭合）；
 // 链 A trace_id：preload invoke 面单点生成的第三参在信封读入诊断 ALS——handler 内全部
 // 日志自动携带（appender 订阅侧消费）。
-import { ERROR_CODES, type ErrorCode, type RpcErrorPayload, type RpcResult } from '@dsh-forge/contracts'
+import { ERROR_CODES, type ErrorCode, type RpcErrorPayload } from '@dsh-forge/lib-api/errors'
+import { type RpcResult } from '@dsh-forge/lib-api/dto/rpc'
 import type { DiagContextStore } from '../telemetry/diag-context.js'
 import { runWithDiagContext } from '../telemetry/diag-context.js'
 import type { DiagEventPayload } from '../telemetry/diag-events.js'

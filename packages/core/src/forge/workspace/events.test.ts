@@ -1,7 +1,7 @@
 // 任务 1.2 测试 —— 事件发射器底座（AC5：emitTasksChanged(projectId) 挂点 + 桥事件信封
 // process.send 防护发送；direct 形态 IPC 缺席静默降级）。
 import { describe, expect, it, vi } from 'vitest'
-import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
+import { FORGE_EVENT_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { createForgeTaskEvents } from './events.js'
 
 describe('AC5 事件发射器底座（emitTasksChanged 挂点）', () => {

@@ -2,12 +2,12 @@
 // 权威：tech-design「profile 组装与插件分发」——产品 profile 模板（cordis.patch.yml：
 // 官方行 + 产品插件 insert 行）随应用资源分发，首启落地
 // {app-data}/dsh-forge/profile/，此后每次启动 loadProfileDirectory 加载。
-// 插件行成员 = 配置化单一源 PRODUCT_PLUGINS（@dsh-forge/contracts——userLayerRow 门）：
+// 插件行成员 = 配置化单一源 PRODUCT_PLUGINS（@dsh-forge/lib-api——userLayerRow 门）：
 // 某插件进不进打包用户层 = 只翻配置布尔，不改本文件（现值：core / expert-squad /
 // knowledge 开——knowledge 1.9 A5 重开放：阶段①地基落位，全局装载 + 随包）。
 // dev 形态同义文件 = apps/host/profile.dev/（pnpm 需真实可安装目录，两处由
 // materialize.test.ts 同步 pin 机械对齐）。
-import { PRODUCT_PLUGINS } from '@dsh-forge/contracts'
+import { PRODUCT_PLUGINS } from '@dsh-forge/lib-api/product-plugins'
 
 /** 上游 dsh 公开栈精确 pin（1.25 用户指令 2026-11 统一 0.2.2-rc.5） */
 export const DSH_STACK_VERSION = '0.2.2-rc.5'

@@ -4,9 +4,9 @@
 //   · env 缺席 = 零注册零痕迹（globalThis 挂点不设——发布构建在场零暴露）；
 //   · 可达面封闭：非三动词（含 RPC 面动词 transitionTask / 读面 listTasks）一律拒绝。
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { FORGE_CHANNEL_ALLOWLIST, FORGE_EVENT_CHANNELS, TASKS_CHANNELS } from '@dsh-forge/contracts'
+import { FORGE_CHANNEL_ALLOWLIST, FORGE_EVENT_CHANNELS, TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
 import type { DshHostServices } from '../boot/index.js'
-import type { TasksChangedEvent } from '@dsh-forge/contracts'
+import type { TasksChangedEvent } from '@dsh-forge/lib-api/dto/forge'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { registerM2Channels } from './m2-wiring.js'
 import {

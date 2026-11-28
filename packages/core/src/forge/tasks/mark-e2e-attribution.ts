@@ -4,7 +4,7 @@
 // 参数暴露——contracts AddTaskInput 硬约束）。零状态效应（不转移、不重算相位、不写 records）；
 // 未命中 fail-loud（resolveTaskRef 单一拒绝面 ERR_TASK_NOT_FOUND——归因卡无标记等于无豁免）；
 // 幂等重写无害（UPDATE 恒置 1）。
-import type { MarkE2eAttributionInput } from '@dsh-forge/contracts'
+import type { MarkE2eAttributionInput } from '@dsh-forge/lib-api/dto/forge'
 import type { TasksVerbDeps } from './add.js'
 import { resolveTaskRef } from './query.js'
 

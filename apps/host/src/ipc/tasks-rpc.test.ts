@@ -2,7 +2,8 @@
 // 映射端到端（替身层）+ SC7 面分治（add/claim/submit 不入注入面——类型级禁律 + 通道面
 // 零写动词）+ typed error 经信封保真（ERR_INVALID_TRANSITION）。
 import { describe, expect, it, vi } from 'vitest'
-import { TASKS_CHANNELS, type TaskSnapshot } from '@dsh-forge/contracts'
+import { TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type TaskSnapshot } from '@dsh-forge/lib-api/dto/forge'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { registerTasksChannels, type TasksChannelService } from './tasks-rpc.js'
 

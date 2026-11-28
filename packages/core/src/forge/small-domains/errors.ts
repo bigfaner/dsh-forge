@@ -1,5 +1,5 @@
 // forge 三小域（features/proposals/docs——2.7 合并单目录承载，服务面四分是契约、文件布局
-// 非契约）typed errors。code 字面量锚定 @dsh-forge/contracts ERROR_CODES（tech-design
+// 非契约）typed errors。code 字面量锚定 @dsh-forge/lib-api/errors ERROR_CODES（tech-design
 // §Error Handling 表：ERR_FEATURE_NOT_FOUND / ERR_FEATURE_EXISTS / ERR_PROPOSAL_NOT_FOUND /
 // ERR_DOC_PATH_INVALID / ERR_INVALID_TRANSITION（feature/proposal 非法转移复用——from≠to
 // 校验同源）/ ERR_REASON_REQUIRED（transitionFeature 空因））；类名/name 手写字面量

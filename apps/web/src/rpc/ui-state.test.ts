@@ -3,7 +3,7 @@
 // 疑似移动 → 错误条+指引留场 / 库不可用 → 工作区隔离态（横幅）；未映射码 → 通用
 // 错误条兜底（永无裸 code 泄漏——运行期版本错配面）。
 import { describe, expect, it } from 'vitest'
-import { ERROR_CODES, type ErrorCode } from '@dsh-forge/contracts'
+import { ERROR_CODES, type ErrorCode } from '@dsh-forge/lib-api/errors'
 import { RPC_UI_STATE_BY_CODE, rpcUiState, type RpcUiStateKind } from './ui-state.js'
 
 const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {

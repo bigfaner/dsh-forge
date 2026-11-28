@@ -8,17 +8,11 @@
 // 与桌面工作台同读同一状态层（结果一致性单源）。暴露面边界（提案验收 6）：本页零会话对
 // 话/知识库/文档入口——渲染面仅进度列表 + 审批动作，ForgeRemoteView.test 边界断言钉死。
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import {
-  PROJECTS_CHANNELS,
-  REMOTE_CHANNELS,
-  REMOTE_APPROVAL_DECISIONS,
-  TASK_STATUS_LABELS,
-  type ProjectSummary,
-  type RemoteApprovalDecision,
-  type RemoteProgressSnapshot,
-  type RpcResult,
-  type TaskStats,
-} from '@dsh-forge/contracts'
+import { PROJECTS_CHANNELS, REMOTE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { REMOTE_APPROVAL_DECISIONS, type RemoteApprovalDecision, type RemoteProgressSnapshot, type TaskStats } from '@dsh-forge/lib-api/dto/forge'
+import { TASK_STATUS_LABELS } from '@dsh-forge/lib-api/labels'
+import { type ProjectSummary } from '@dsh-forge/lib-api/dto/project'
+import { type RpcResult } from '@dsh-forge/lib-api/dto/rpc'
 import { StateChip } from '../../components/index.js'
 import type { ForgeTransport } from '../../rpc/transport.js'
 import {

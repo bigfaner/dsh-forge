@@ -14,21 +14,10 @@
 //     {code,message,data} 上桥；主侧双形态解码重建带 code/data 的 Error——经
 //     rpcEnvelope 判型后走带内 RpcErr 信封（child 形态下 UI 六码文案映射的通路半边）
 // 零 node:child_process 依赖——纯函数逐项单测锚定（bridge.test.ts）。
-import {
-  ERROR_CODES,
-  FORGE_EVENT_CHANNELS,
-  type BridgeEventMessage,
-  type ForgeBugsService,
-  type ForgeDocsService,
-  type ForgeFeaturesService,
-  type ForgeProposalsService,
-  type ForgeSettingsService,
-  type ProjectService,
-  type ProjectServiceM2,
-  type RemoteApprovalDecisionInput,
-  type RemoteApprovalForwardResult,
-  type TasksChangedEvent,
-} from '@dsh-forge/contracts'
+import { ERROR_CODES } from '@dsh-forge/lib-api/errors'
+import { FORGE_EVENT_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type BridgeEventMessage, type ForgeBugsService, type ForgeDocsService, type ForgeFeaturesService, type ForgeProposalsService, type ForgeSettingsService, type ProjectServiceM2, type RemoteApprovalDecisionInput, type RemoteApprovalForwardResult, type TasksChangedEvent } from '@dsh-forge/lib-api/dto/forge'
+import { type ProjectService } from '@dsh-forge/lib-api/dto/project'
 // 1.14 host 改指：tasks 域类型锚改指 task-loop 包出口（forgeTasks 服务 = @dsh-forge/task-loop
 // 插件 provide——core 旧域停供，contracts 旧 tasks face 退役面禁再引用）。
 import type { TasksService } from '@dsh-forge/task-loop'

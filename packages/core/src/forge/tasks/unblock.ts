@@ -12,7 +12,7 @@
 // 'unblock' 审计行（复用 submit 记录管道语义：reason 列承载裁决理由，零 summary/gate/ac 负载）；
 // **不挂恢复钩子**（pending ∉ 满足集 {completed, skipped}——runRestoreHook 判定集结构性不命中）
 // → 相位重算；闭包尾部（提交后）emitTasksChanged。一律 prepared statements。
-import type { TaskRef } from '@dsh-forge/contracts'
+import type { TaskRef } from '@dsh-forge/lib-api/dto/forge'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { ReasonRequiredError } from './errors.js'

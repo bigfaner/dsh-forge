@@ -1,18 +1,11 @@
 // forge:projects/* 五通道注册（2.4 注册行；定位：基础——通道面装配，域语义归 core 服务）。
-// 通道名仅出自 @dsh-forge/contracts PROJECTS_CHANNELS（三处一体：contracts → web/rpc →
+// 通道名仅出自 @dsh-forge/lib-api/channels PROJECTS_CHANNELS（三处一体：contracts → web/rpc →
 // core forge 域服务面 Interface 1↔4 一一对应）；服务经参数注入（contracts ProjectService
 // 结构类型——host 禁 import core 源码，tests/structure/host-main pin；真实装配于 main
 // boot 后接 ctx.forgeProjects，查询面 2.3 并齐后全五通道实跑）。
-import {
-  PROJECTS_CHANNELS,
-  PROJECTS_M2_CHANNELS,
-  type DeriveTaskStoreDirRequest,
-  type GetProjectRequest,
-  type ProjectService,
-  type ProjectServiceM2,
-  type RegisterProjectInput,
-  type UpdateProjectRequest,
-} from '@dsh-forge/contracts'
+import { PROJECTS_CHANNELS, PROJECTS_M2_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type DeriveTaskStoreDirRequest, type ProjectServiceM2 } from '@dsh-forge/lib-api/dto/forge'
+import { type GetProjectRequest, type ProjectService, type RegisterProjectInput, type UpdateProjectRequest } from '@dsh-forge/lib-api/dto/project'
 import type { ForgeIpc } from './forge-channels.js'
 import { rpcEnvelope } from './rpc-envelope.js'
 

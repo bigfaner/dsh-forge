@@ -2,7 +2,8 @@
 // emitTasksChanged → process.send（缺席静默）→ run.ts event 分支 → webContents.send →
 // renderer 订阅重取 ≤500ms）。信封形状 = contracts BridgeEventMessage（1.1 定稿）——
 // 扩消息变体 = 契约面变更，禁私改。channel 常量唯一源 = FORGE_EVENT_CHANNELS。
-import { FORGE_EVENT_CHANNELS, type BridgeEventMessage, type TasksChangedEvent } from '@dsh-forge/contracts'
+import { FORGE_EVENT_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type BridgeEventMessage, type TasksChangedEvent } from '@dsh-forge/lib-api/dto/forge'
 
 /** 事件发射器底座（四域写动词闭包尾部挂点——emitTasksChanged 同通道同载荷） */
 export interface ForgeTaskEvents {

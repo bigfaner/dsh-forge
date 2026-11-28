@@ -7,22 +7,10 @@
 // M3 4.1 扩池（AC1）：forge:settings/{get,set}——通道常量本尊、负载形状、typed 返回；
 // SC7 收口面随 M3 drift 修订（恒不在面 = addTask/submitTask）。
 import { describe, expect, it, vi } from 'vitest'
-import {
-  DOCS_CHANNELS,
-  FEATURES_CHANNELS,
-  FS_CHANNELS,
-  KNOWLEDGE_CHANNELS,
-  PROJECTS_CHANNELS,
-  PROJECTS_M2_CHANNELS,
-  SETTINGS_CHANNELS,
-  TASKS_CHANNELS,
-  type DirListing,
-  type DomainNode,
-  type EntryDetail,
-  type KnowledgeCard,
-  type RecallGroup,
-  type RpcResult,
-} from '@dsh-forge/contracts'
+import { DOCS_CHANNELS, FEATURES_CHANNELS, FS_CHANNELS, KNOWLEDGE_CHANNELS, PROJECTS_CHANNELS, PROJECTS_M2_CHANNELS, SETTINGS_CHANNELS, TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type DirListing } from '@dsh-forge/lib-api/dto/fs'
+import { type DomainNode, type EntryDetail, type KnowledgeCard, type RecallGroup } from '@dsh-forge/lib-api/dto/knowledge'
+import { type RpcResult } from '@dsh-forge/lib-api/dto/rpc'
 import { createForgeRpcClient } from './client.js'
 import { RpcClientError } from './errors.js'
 

@@ -13,8 +13,8 @@
 // 守卫时点语义（design 红旗 R2）：守卫运行在事务外纯读段，判定以守卫时点快照为准——
 // 与既有 TOCTOU 防线同风格的快照窗口，不做事务内重判。
 import type Database from '@dsh-forge/lib-db'
-import type { PhaseGateUnsettledData, UnmetDependency } from '@dsh-forge/contracts'
-import { E2E_ATTRIBUTION_COLUMN, IMPLEMENTATION_TASK_TYPES, VALIDATION_TASK_TYPES } from '@dsh-forge/contracts'
+import type { PhaseGateUnsettledData, UnmetDependency } from '@dsh-forge/lib-api/errors'
+import { E2E_ATTRIBUTION_COLUMN, IMPLEMENTATION_TASK_TYPES, VALIDATION_TASK_TYPES } from '@dsh-forge/lib-api/labels'
 import { PhaseGateUnsettledError } from './errors.js'
 import type { TaskStorageRow } from './query.js'
 

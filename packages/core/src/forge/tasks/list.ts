@@ -23,25 +23,8 @@
 // SQL_STATS_BY_CONTAINER（chips 七态分布同索引）/ RECORDS_BY_TASK_SQL（query.ts →
 // idx_records_task）/ LINKS_BY_SESSION_SQL（session-links.ts → idx_tsl_session）。
 import type Database from '@dsh-forge/lib-db'
-import {
-  TASK_STATUSES,
-  TASK_STATUS_LABELS,
-  TASK_TYPE_LABELS,
-  type ContainerRef,
-  type ListTasksQuery,
-  type TaskCard,
-  type TaskGraph,
-  type TaskGraphEdge,
-  type TaskGraphQuery,
-  type TaskPrerequisiteSummary,
-  type TaskRef,
-  type TaskSettlementRow,
-  type TaskSettlementsQuery,
-  type TaskStats,
-  type TaskStatsQuery,
-  type TaskStatus,
-  type TaskType,
-} from '@dsh-forge/contracts'
+import { TASK_STATUSES, TASK_STATUS_LABELS, TASK_TYPE_LABELS, type TaskStatus, type TaskType } from '@dsh-forge/lib-api/labels'
+import { type ContainerRef, type ListTasksQuery, type TaskCard, type TaskGraph, type TaskGraphEdge, type TaskGraphQuery, type TaskPrerequisiteSummary, type TaskRef, type TaskSettlementRow, type TaskSettlementsQuery, type TaskStats, type TaskStatsQuery } from '@dsh-forge/lib-api/dto/forge'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { TASK_COLUMNS, type TaskStorageRow } from './query.js'
 import { countGatedPending } from './phase-gate.js'

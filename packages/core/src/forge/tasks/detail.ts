@@ -14,7 +14,7 @@
 //     proposals docRel 匹配——命中 = 链接态（title = proposals.title ∣ feature_documents.
 //     summary），未命中 = 置灰（resolved=false——文档移除/改名后的诚实呈现）。
 import type Database from '@dsh-forge/lib-db'
-import type { TaskDetail, TaskDetailQuery, TaskDocRef, TaskPrerequisiteSummary } from '@dsh-forge/contracts'
+import type { TaskDetail, TaskDetailQuery, TaskDocRef, TaskPrerequisiteSummary } from '@dsh-forge/lib-api/dto/forge'
 import { taskFilesUnion } from './files.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { listCommitFiles, type GitExecFile } from './git-lookup.js'

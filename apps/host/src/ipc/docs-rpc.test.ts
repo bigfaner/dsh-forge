@@ -3,7 +3,8 @@
 // read 的 canonical(forge_dir) 前缀守卫本体 = core docs.test.ts 锚（此处替身模拟其
 // typed error 形状——通道面只验透传与信封保真）。
 import { describe, expect, it, vi } from 'vitest'
-import { DOCS_CHANNELS, type DocContent } from '@dsh-forge/contracts'
+import { DOCS_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type DocContent } from '@dsh-forge/lib-api/dto/forge'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { openExternalDoc, registerDocsChannels, type DocsChannelService } from './docs-rpc.js'
 

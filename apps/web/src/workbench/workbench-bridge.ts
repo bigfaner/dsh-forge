@@ -15,7 +15,7 @@
 // 桥由插件 apply 期经发布面工厂创建（createWorkbenchBridge——nav 闭包绑定官方
 // layout.selectPanel）；缺席期（插件未激活）导航/跳转 fail-soft no-op。
 import { KNOWLEDGE_PANEL_KEY } from './panel-model.js'
-import type { TaskStatus } from '@dsh-forge/contracts'
+import type { TaskStatus } from '@dsh-forge/lib-api/labels'
 
 /** 官方面板导航窄面（插件侧绑定 layout.selectPanel——null = 回官方会话面板） */
 export interface ForgeCenterNav {

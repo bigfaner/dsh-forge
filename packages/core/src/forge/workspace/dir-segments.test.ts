@@ -3,7 +3,7 @@
 // node:path join / 裸字面形态逐字节一致）。
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { FORGE_DIR_SEGMENT } from '@dsh-forge/contracts'
+import { FORGE_DIR_SEGMENT } from '@dsh-forge/lib-api/forge-dir-segments'
 import { docsRootOfForgeDir, forgeDirOfWorkspace } from '@dsh-forge/lib-path'
 import { defaultWorktreeDir } from '../project-service.js'
 import { WORKTREE_DIR_BACKFILL_SQL } from '../../db/schema.js'

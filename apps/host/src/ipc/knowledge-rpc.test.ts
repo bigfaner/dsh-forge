@@ -12,16 +12,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import {
-  KNOWLEDGE_CHANNELS,
-  type EntryActionRequest,
-  type EntryDetail,
-  type EntryDetailQuery,
-  type KnowledgeCard,
-  type ListEntriesQuery,
-  type RecallGroup,
-  type SessionRecallQuery,
-} from '@dsh-forge/contracts'
+import { KNOWLEDGE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type EntryActionRequest, type EntryDetail, type EntryDetailQuery, type KnowledgeCard, type ListEntriesQuery, type RecallGroup, type SessionRecallQuery } from '@dsh-forge/lib-api/dto/knowledge'
 // 插件源码相对引入（测试面专用——见文件头注）
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../../plugins/knowledge/host/storage/index.js'
 import { createKnowledgeService } from '../../../../plugins/knowledge/host/service/index.js'

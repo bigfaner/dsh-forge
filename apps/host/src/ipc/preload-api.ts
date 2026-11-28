@@ -4,13 +4,8 @@
 // invoke 守 allowlist（FORGE_CHANNEL_ALLOWLIST 唯一源）——renderer 侧第一道拒绝，
 // main 侧 createForgeIpc 注册面为第二道（纵深防御，electron-ipc-security 约定：最小面）。
 // 事件订阅守 FORGE_EVENT_CHANNELS 值域（推送面不进 invoke allowlist——方向相异）。
-import {
-  FORGE_CHANNEL_ALLOWLIST,
-  FORGE_EVENT_CHANNELS,
-  type ForgeChannel,
-  type ForgeEventChannel,
-  type TasksChangedEvent,
-} from '@dsh-forge/contracts'
+import { FORGE_CHANNEL_ALLOWLIST, FORGE_EVENT_CHANNELS, type ForgeChannel, type ForgeEventChannel } from '@dsh-forge/lib-api/channels'
+import { type TasksChangedEvent } from '@dsh-forge/lib-api/dto/forge'
 import { BOOT_CHANNEL } from './boot-channel.js'
 import { PIN_CONSENT_CHANNEL, PIN_RESET_CHANNEL, PSK_READ_CHANNEL, PSK_ROTATE_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL } from './tunnel-channel.js'
 import {
@@ -56,7 +51,7 @@ export function subscribeForgeEvent<T extends TasksChangedEvent>(
 ): () => void {
   if (!(Object.values(FORGE_EVENT_CHANNELS) as readonly string[]).includes(channel)) {
     throw new Error(
-      `[preload] forge 事件通道不在 allowlist，拒绝订阅：${channel}（唯一源 = @dsh-forge/contracts FORGE_EVENT_CHANNELS）`,
+      `[preload] forge 事件通道不在 allowlist，拒绝订阅：${channel}（唯一源 = @dsh-forge/lib-api/channels FORGE_EVENT_CHANNELS）`,
     )
   }
   const onMessage = (_event: unknown, payload: unknown): void => {
@@ -132,7 +127,7 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
     invoke: (channel: ForgeChannel, payload?: unknown): Promise<unknown> => {
       if (!(FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(channel)) {
         throw new Error(
-          `[preload] forge RPC 通道不在 allowlist，拒绝调用：${channel}（唯一源 = @dsh-forge/contracts channels；新通道须三处一体：contracts → web/rpc → core 域）`,
+          `[preload] forge RPC 通道不在 allowlist，拒绝调用：${channel}（唯一源 = @dsh-forge/lib-api channels；新通道须三处一体：contracts → web/rpc → core 域）`,
         )
       }
       return invokeFace.invoke(channel, payload, newTraceId(), Date.now())

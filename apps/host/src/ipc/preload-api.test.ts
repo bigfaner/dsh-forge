@@ -4,7 +4,7 @@
 // 3.1 事件订阅面 onForgeTasksChanged（Interface 7 forge:events/*——allowlist 守卫 +
 // 载荷形状守卫 + 退订）。
 import { describe, expect, it, vi } from 'vitest'
-import { FORGE_CHANNEL_ALLOWLIST, FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
+import { FORGE_CHANNEL_ALLOWLIST, FORGE_EVENT_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { BOOT_CHANNEL } from './boot-channel.js'
 import { PIN_RESET_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL } from './tunnel-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'

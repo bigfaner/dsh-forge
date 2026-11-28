@@ -3,7 +3,7 @@
 // M3 3.7 增量补行：ui-settings 开关行（hero 预设座位显示开关）id 键控补写——老用户
 // 升级补写、已存在不覆盖（此后归用户运行时，设置 UI 保存不被拒）；与文件级幂等分层
 //（文件不重写 ≠ 行不补——补行只在行缺席时发生，写后行在场即稳态）。
-import { PRODUCT_PLUGINS } from '@dsh-forge/contracts'
+import { PRODUCT_PLUGINS } from '@dsh-forge/lib-api/product-plugins'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { PROFILE_ROOT_BOOTSTRAP, PROFILE_TEMPLATE_FILES, productUserLayerInsertEntry, UI_SETTINGS_PRESET_ROW } from './template.js'

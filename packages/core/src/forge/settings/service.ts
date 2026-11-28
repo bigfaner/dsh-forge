@@ -13,18 +13,8 @@
 // userData——host resolveHostPaths 单源，双注入缝交叉校验坏装配）。
 import { readFileSync, realpathSync } from 'node:fs'
 import { basename, dirname, join, resolve as resolvePath, sep } from 'node:path'
-import {
-  FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT,
-  REASONING_LEVELS,
-  TASK_TYPES,
-  type ExpertsSettings,
-  type ForgeSettings,
-  type ForgeSettingsService,
-  type RemoteApprovalSettings,
-  type SetForgeSettingsInput,
-  type WorktreeSettings,
-  type WorkerSettings,
-} from '@dsh-forge/contracts'
+import { FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT, REASONING_LEVELS, type ExpertsSettings, type ForgeSettings, type ForgeSettingsService, type RemoteApprovalSettings, type SetForgeSettingsInput, type WorktreeSettings, type WorkerSettings } from '@dsh-forge/lib-api/dto/forge'
+import { TASK_TYPES } from '@dsh-forge/lib-api/labels'
 import { errMessage } from '../../util.js'
 import { atomicWriteJson } from '@dsh-forge/lib-util'
 import { InvalidSettingsInputError, SettingsPathInvalidError } from './errors.js'

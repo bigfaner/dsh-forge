@@ -4,7 +4,7 @@
 // actor 由通道推断恒 'ui'）/ →completed·skipped 恢复钩子（前置全满足才 auto-restore，
 // 边不删，actor 'core'）/ 相位重算 + 写前增量断言回滚 / 写后事件单发。
 import type Database from '@dsh-forge/lib-db'
-import { TASK_STATUSES } from '@dsh-forge/contracts'
+import { TASK_STATUSES } from '@dsh-forge/lib-api/labels'
 import { describe, expect, it } from 'vitest'
 import { addTask } from './add.js'
 import { InvalidTransitionError, ReasonRequiredError, TaskNotFoundError } from './errors.js'

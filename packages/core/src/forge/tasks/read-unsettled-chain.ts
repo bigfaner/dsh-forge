@@ -3,7 +3,7 @@
 // readUnsettledChain（与 GATE_SQL 第④支同判据同执行体）——消费方（plugin-forge driver
 // suspend 载荷）经本动词取数，零第二实现、载荷零复制。纯读：零状态效应、零事件；
 // 容器未命中 = 空清单（读面零 404 同口径，list.ts resolveContainerScope）。
-import type { ReadUnsettledChainInput, ReadUnsettledChainResult } from '@dsh-forge/contracts'
+import type { ReadUnsettledChainInput, ReadUnsettledChainResult } from '@dsh-forge/lib-api/dto/forge'
 import type { TasksVerbDeps } from './add.js'
 import { resolveContainerScope } from './list.js'
 import { readUnsettledChain as readUnsettledChainRows } from './phase-gate.js'

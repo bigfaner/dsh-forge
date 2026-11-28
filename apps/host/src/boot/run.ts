@@ -14,14 +14,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type {
-  ForgeBugsService,
-  ForgeDocsService,
-  ForgeFeaturesService,
-  ForgeSettingsService,
-  ProjectServiceM2,
-  TasksChangedEvent,
-} from '@dsh-forge/contracts'
+import type { ForgeBugsService, ForgeDocsService, ForgeFeaturesService, ForgeSettingsService, ProjectServiceM2, TasksChangedEvent } from '@dsh-forge/lib-api/dto/forge'
 // 1.14 host 改指：tasks 域类型锚改指 task-loop 包出口（forgeTasks 服务 = task-loop 插件
 // provide——core 旧域停供，contracts 旧 tasks face 退役面禁再引用）。
 import type { TasksService } from '@dsh-forge/task-loop'

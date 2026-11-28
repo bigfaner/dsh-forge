@@ -2,7 +2,8 @@
 // Interface 7 裁决：feature 域三写法为人类表单动作）+ 负载映射端到端（替身层）。
 // fix-2 增 listDocs（feature_documents 列举读面——文档行数据源）。
 import { describe, expect, it, vi } from 'vitest'
-import { FEATURES_CHANNELS, type FeatureRow, type ForgeFeaturesService } from '@dsh-forge/contracts'
+import { FEATURES_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type FeatureRow, type ForgeFeaturesService } from '@dsh-forge/lib-api/dto/forge'
 import { createForgeIpc, type IpcMainLike } from './forge-channels.js'
 import { registerFeaturesChannels } from './features-rpc.js'
 

@@ -7,7 +7,8 @@
 // （satisfies/覆盖完备性——服务面改名/漂移编译期显形）。
 import { assertType, describe, expect, it, vi } from 'vitest'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval/types'
-import { FORGE_EVENT_CHANNELS, type RemoteApprovalDecisionInput } from '@dsh-forge/contracts'
+import { FORGE_EVENT_CHANNELS } from '@dsh-forge/lib-api/channels'
+import { type RemoteApprovalDecisionInput } from '@dsh-forge/lib-api/dto/forge'
 import {
   approvalWaterfallAnswer,
   APPROVAL_SERVICE_METHODS,

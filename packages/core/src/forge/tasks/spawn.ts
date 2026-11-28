@@ -4,7 +4,7 @@
 // verb='spawn' / session_id = worker 子会话 id。此前执行会话首次落库在 submit——
 // 进行中任务无执行会话行，UI 只能账本父反查启发式解析（进行中 worker 同父多子时错乱，
 // bug 661bce2b）。claim 幂等重入再派发时旧行保留（append-only），执行会话解析取最新行。
-import type { RecordSpawnInput } from '@dsh-forge/contracts'
+import type { RecordSpawnInput } from '@dsh-forge/lib-api/dto/forge'
 import { withTransaction } from '../../db/transaction.js'
 import type { TasksVerbDeps } from './add.js'
 import { resolveTaskById } from './query.js'

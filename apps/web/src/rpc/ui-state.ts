@@ -2,7 +2,7 @@
 // 三态口径出自 tech-design Propagation Strategy：「UI 按 code 映射状态（空态/错误条/横幅）」。
 // Record<ErrorCode,…> 全码穷举：contracts 增码即编译红（映射不失约）。
 
-import type { ErrorCode } from '@dsh-forge/contracts'
+import type { ErrorCode } from '@dsh-forge/lib-api/errors'
 
 /** UI 状态三态（组件选型：EmptyState / 表单/面板错误条 / 应用级横幅） */
 export type RpcUiStateKind = 'error-bar' | 'banner' | 'empty-state'

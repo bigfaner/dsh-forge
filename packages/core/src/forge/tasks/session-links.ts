@@ -6,7 +6,7 @@
 // 分型呈现不做合并解释（§6-24④ 诚实审计）：link = task_session_links 行（派发会话——claim
 // upsert-ignore 唯一写源）/ record = task_records.session_id（执行会话——submit/transition
 // 记录）；同任务同会话双侧参与 → 两卡并存。
-import type { SessionLinksQuery, SessionTaskLinkCard } from '@dsh-forge/contracts'
+import type { SessionLinksQuery, SessionTaskLinkCard } from '@dsh-forge/lib-api/dto/forge'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 
 /** 读面装配依赖（service.ts 装配面结构传入） */

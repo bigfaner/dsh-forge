@@ -2,13 +2,8 @@
 // 相位不变量断言（AC4：写事务内增量——受影响 feature 漂移防护）+ 相位侧词汇 exhaustive 对齐
 // （AC5）。权威来源：db-schema §6-28「登记即推进」/ §6-29「task-driven 补全」/ §5-9 派生不变量
 // + tech-design §Interface 1「相位重算」/ §Interface 2「单调只进」。
-import {
-  DOC_KINDS,
-  FEATURE_STATUSES,
-  TASK_STATUSES,
-  type DocKind,
-  type TaskStatus,
-} from '@dsh-forge/contracts'
+import { DOC_KINDS, type DocKind } from '@dsh-forge/lib-api/dto/forge'
+import { FEATURE_STATUSES, TASK_STATUSES, type TaskStatus } from '@dsh-forge/lib-api/labels'
 import { describe, expect, it } from 'vitest'
 import {
   ACTIVE_TASK_STATUSES,

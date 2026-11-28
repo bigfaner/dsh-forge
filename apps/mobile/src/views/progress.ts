@@ -12,7 +12,7 @@
  */
 import type { RemoteRpc } from '../core/rpc.ts'
 import { PROXY_SESSION_PROJECTIONS_CHANNEL } from '../core/rpc.ts'
-import { SESSION_PROJECTION_KEYS } from '@dsh-forge/contracts'
+import { SESSION_PROJECTION_KEYS } from '@dsh-forge/lib-api/channels'
 import { el } from '../widgets/msg-cards.ts'
 
 // ---------------------------------------------------------------------------

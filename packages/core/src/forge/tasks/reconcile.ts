@@ -19,12 +19,8 @@
 // 转移 UPDATE + transition 记录 → 受影响 feature 相位重算（律四：proposal 容器无相位域跳过）；
 // 闭包尾部（提交后）emitTasksChanged（零命中 = 纯读零写入不发射）。一律 prepared statements
 // （Hard Rule）。
-import type { FeatureStatus } from '@dsh-forge/contracts'
-import type {
-  ReconcileInterruptedInput,
-  ReconcileInterruptedResult,
-  TaskRef,
-} from '@dsh-forge/contracts'
+import type { FeatureStatus } from '@dsh-forge/lib-api/labels'
+import type { ReconcileInterruptedInput, ReconcileInterruptedResult, TaskRef } from '@dsh-forge/lib-api/dto/forge'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'

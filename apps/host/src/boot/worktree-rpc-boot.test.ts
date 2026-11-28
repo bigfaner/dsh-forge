@@ -15,7 +15,7 @@ import { expect, it } from 'vitest'
 import type { DshHostHandle } from './run.js'
 import { bootDshHost } from './run.js'
 import { hostRoot, resolveHostPaths } from '../profile/paths.js'
-import { WORKTREE_CHANNELS } from '@dsh-forge/contracts'
+import { WORKTREE_CHANNELS } from '@dsh-forge/lib-api/channels'
 
 async function freePort(): Promise<number> {
   const { createServer } = await import('node:net')
