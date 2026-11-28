@@ -15,7 +15,7 @@
 //
 // Assertion depth: 33/36 behavioral（92%），其中 deep 14/33（42%）——两阈均过。
 
-import { FEATURES_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { FEATURES_CHANNELS, TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { createSharedLaunchFixture, sharedOverlayText } from '../../support/fixtures.js'
 import { expect } from '@playwright/test'
 import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'

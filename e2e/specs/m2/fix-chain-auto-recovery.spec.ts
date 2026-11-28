@@ -38,8 +38,8 @@
 import { mkdirSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { expect, type Page } from '@playwright/test'
-import { FEATURES_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import type { AddTaskResult, ClaimTaskResult, SubmitTaskResult, TaskCard, TaskDetail } from '../../../packages/contracts/src/dto/forge.js'
+import { FEATURES_CHANNELS, TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
+import type { AddTaskResult, ClaimTaskResult, SubmitTaskResult, TaskCard, TaskDetail } from '@dsh-forge/lib-api/dto/forge'
 // e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（spec 级单次冷启 + 用例间重播种）
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'

@@ -51,7 +51,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
-import type { ProjectSummary, RegisterResult } from '../../../packages/contracts/src/dto/project.js'
+import type { ProjectSummary, RegisterResult } from '@dsh-forge/lib-api/dto/project'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { dismissOnboardingModals, ensureNoBlockingDialog } from '../../support/modals.js'
 import { forgeInvoke } from '../../support/rpc.js'

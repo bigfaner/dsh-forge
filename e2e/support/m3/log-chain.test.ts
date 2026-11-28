@@ -13,7 +13,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { createForgeEventBus } from '../../../plugins/task-loop/host/events/bus.js'
 import { createForgeEventSink } from '../../../plugins/task-loop/host/events/sink.js'
 import { attachForgeLogListener, forgeLogFileOf, readForgeEventLog } from '../../../plugins/task-loop/host/events/log-listener.js'
-import type { ForgePluginEvent } from '../../../packages/contracts/src/dto/forge.js'
+import type { ForgePluginEvent } from '@dsh-forge/lib-api/dto/forge'
 
 const containerDir = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-logchain-'))
 afterAll(() => {

@@ -55,7 +55,7 @@ dev 形态完全正常（profile.dev link 七件全量在场）。
 
 ## Related Files
 
-- `packages/contracts/src/product-plugins.ts`（staged 种子单一源）
+- `lib/api/src/product-plugins.ts`（staged 种子单一源——contracts 壳退役后归并位）
 - `scripts/assemble-installer-resources.mjs`（stagedProductPackages 推导）
 - `apps/host/src/profile/paths.ts`（productPackagePresent 双形态探针）
 - `apps/host/src/boot/child.ts`（gitWorktreeRow 门 + 装配段）

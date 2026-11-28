@@ -44,7 +44,7 @@ import { refetchOnce, createBridgeDriver, type ReplayWriteDriver } from '../../.
 import { openOverviewDock, revealRightbar } from '../../../e2e/support/navigation.js'
 import { DOCKKIT_STRIP_TAB, RIGHTBAR_COL } from '../../../e2e/support/anchors.js'
 import { openTaskLoopDb } from '../../../e2e/support/sqlite.js'
-import { TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
 
 // 归属键派生单源复用（lib-path deriveDirName——tests 树无 workspace dep 解析径，经插件侧
 // node_modules 显式文件路径 ESM 动态 import；与 task-loop db project-key 同函数同值）

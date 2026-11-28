@@ -12,7 +12,7 @@
 // （版本策略 = tech-design Open Question「首录后定」——本模块只锁「不兼容即拒」的机械面，
 // 兼容口径（迁移/跳过）留待首录后裁决，届时只改本文件）。
 // 纯逻辑零依赖零 electron——单测直载；e2e/support 全体 tsconfig 面 = e2e/tsconfig.json。
-import { FORGE_EVENT_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { FORGE_EVENT_CHANNELS } from '@dsh-forge/lib-api/channels'
 
 /** 夹具格式标识（header.format 判别值） */
 export const REPLAY_FORMAT = 'dsh-forge-replay'

@@ -10,5 +10,5 @@
   },
   "include": ["host", "shared"],
   "exclude": ["**/*.test.ts", "**/*.test.tsx"],
-  "references": [{ "path": "./tsconfig.client.json" }, { "path": "../../packages/contracts" }]
+  "references": [{ "path": "./tsconfig.client.json" }, { "path": "../../lib/api" }]
 }

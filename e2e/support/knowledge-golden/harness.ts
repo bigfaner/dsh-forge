@@ -7,8 +7,8 @@
 // 通道分发镜像 apps/host/src/ipc/knowledge-rpc.ts 的注册行 1:1（browse/listEntries/
 // entryDetail/heat/sessionRecall → 服务法调用同形）；通道响应载荷 = 通道 handler 的域
 // 返回体（RpcResult 信封为全通道统一外层，不属域载荷，不录入）。
-import { KNOWLEDGE_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import type { KnowledgeChannel } from '../../../packages/contracts/src/channels.js'
+import { KNOWLEDGE_CHANNELS } from '@dsh-forge/lib-api/channels'
+import type { KnowledgeChannel } from '@dsh-forge/lib-api/channels'
 import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/index.js'
 
 /** golden 语料（六条目 / 三域 + 根域；全部显式 updated——录制/比对确定性口径） */

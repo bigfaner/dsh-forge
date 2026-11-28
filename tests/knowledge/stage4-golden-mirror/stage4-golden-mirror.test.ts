@@ -1,5 +1,5 @@
 // stage④ 1.2 golden 零漂移对照（J2-CT-04——契约↔golden 形状一致）。
-// 迁移自 packages/contracts/src/dto/knowledge.test.ts（bug c8a50d50）：运行期 fixture 对照
+// 迁移自旧 contracts 包 dto/knowledge.test.ts（bug c8a50d50）：运行期 fixture 对照
 // 违反 dto 测试自述「纯类型零逻辑零依赖」，且 e2e/support import 越出 contracts 测试
 // tsconfig rootDir（TS6059）——按执行树归位 tests/knowledge（vitest knowledge-journeys
 // 工程；tests/tsconfig 无 rootDir 锁）。
@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { assertSameStructure } from '../../../e2e/support/knowledge-golden/compare.js'
-import type { KnowledgeCard, RecallFeedbackOutcome, RecallGroup } from '../../../packages/contracts/src/dto/knowledge.js'
+import type { KnowledgeCard, RecallFeedbackOutcome, RecallGroup } from '@dsh-forge/lib-api/dto/knowledge'
 
 const STAGE4_FIXTURES = join(import.meta.dirname, '../../../e2e/support/knowledge-golden/fixtures/stage4')
 

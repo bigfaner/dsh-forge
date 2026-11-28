@@ -19,9 +19,9 @@ domains: [knowledge, recall, frontmatter, heat, index, agentic-search]
 
 ### BIZ-knowledge-002: frontmatter 最小契约与解析容错
 
-**Rule**: 知识条目必填 `summary`（string）与 `keywords`（string[]）；`title` 缺省 = 文件名去扩展名；`status` 缺省 `draft`；`updated` 缺省取文件 mtime；域 = 目录路径派生（无 frontmatter 字段，单一事实源），层级 ≤3；缺必填或超层的条目不入索引（rebuild 报告计数 + UI 空态提示），硬拒收归后续写入面里程碑。契约常量唯一源在 `packages/contracts/frontmatter.ts`（应用与技能共享契约的子集）。
+**Rule**: 知识条目必填 `summary`（string）与 `keywords`（string[]）；`title` 缺省 = 文件名去扩展名；`status` 缺省 `draft`；`updated` 缺省取文件 mtime；域 = 目录路径派生（无 frontmatter 字段，单一事实源），层级 ≤3；缺必填或超层的条目不入索引（rebuild 报告计数 + UI 空态提示），硬拒收归后续写入面里程碑。契约常量唯一源在 `@dsh-forge/lib-api/frontmatter`（应用与技能共享契约的子集）。
 **Context**: 应用与 forge 技能共享同一知识文件面，契约须稳定且宽容（知识目录可能被外部工具写入）。
-**Source**: feature/dsh-forge-p1-mvp BIZ-014（tech-design §frontmatter 最小契约 / packages/contracts/src/frontmatter.ts）
+**Source**: feature/dsh-forge-p1-mvp BIZ-014（tech-design §frontmatter 最小契约 / lib/api/src/frontmatter.ts）
 
 ## 召回定位
 

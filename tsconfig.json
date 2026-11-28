@@ -35,9 +35,6 @@
       "path": "plugins/spec"
     },
     {
-      "path": "packages/contracts"
-    },
-    {
       "path": "packages/path-key"
     },
     {

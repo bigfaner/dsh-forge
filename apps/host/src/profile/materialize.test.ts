@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ensureProfileMaterialized } from './materialize.js'
 import { DSH_STACK_VERSION, PROFILE_ROOT_BOOTSTRAP, PROFILE_TEMPLATE_FILES, productUserLayerInsertEntry, UI_SETTINGS_PRESET_ROW } from './template.js'
-import { PRODUCT_PLUGINS } from '../../../../packages/contracts/src/product-plugins.js'
+import { PRODUCT_PLUGINS } from '@dsh-forge/lib-api/product-plugins'
 
 let dir: string
 beforeAll(() => {

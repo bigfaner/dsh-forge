@@ -18,11 +18,11 @@ import {
   FORGE_CHANNEL_ALLOWLIST,
   FORGE_CHANNELS,
   SETTINGS_CHANNELS,
-} from '../../packages/contracts/src/channels.js'
+} from '@dsh-forge/lib-api/channels'
 import type {
   FeaturesChannelRequests,
   SettingsChannelRequests,
-} from '../../packages/contracts/src/dto/forge.js'
+} from '@dsh-forge/lib-api/dto/forge'
 import { ROOT } from './pins.js'
 
 const host = (rel: string): string => readFileSync(join(ROOT, 'apps/host/src/ipc', rel), 'utf8')

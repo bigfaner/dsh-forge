@@ -34,8 +34,8 @@ import {
   WORKER_TOOL_FAMILIES,
   WORKER_TOOL_MATRIX,
   WORKER_TOOL_NAME_FAMILY,
-} from '../../packages/contracts/src/worker-matrix.js'
-import { TASK_TYPES } from '../../packages/contracts/src/labels.js'
+} from '@dsh-forge/lib-api/worker-matrix'
+import { TASK_TYPES } from '@dsh-forge/lib-api/labels'
 import { readUpstream, upstreamDir } from './pins.js'
 
 const UPSTREAM_PKG = '@deepseek-ai/dsh-web-app'

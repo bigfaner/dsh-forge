@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { PRODUCT_PLUGINS } from '../../packages/contracts/src/product-plugins.js'
+import { PRODUCT_PLUGINS } from '@dsh-forge/lib-api/product-plugins'
 import { presetCarriedPlugins } from '../../scripts/assemble-installer-resources.mjs'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../')

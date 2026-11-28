@@ -65,4 +65,4 @@ flowchart TD
 
 ## 条目契约
 
-frontmatter 元数据（id/version_ts/supersedes/candidate_of/type/procedure）由 `knowledge_write` 自动生成回写；调用方只给 title/summary/keywords/body/type/slug_hint/version_of/necessity。格式正本 = knowledge 插件 frontmatter 契约（`packages/contracts/src/frontmatter.ts`），不发明平行字段。
+frontmatter 元数据（id/version_ts/supersedes/candidate_of/type/procedure）由 `knowledge_write` 自动生成回写；调用方只给 title/summary/keywords/body/type/slug_hint/version_of/necessity。格式正本 = knowledge 插件 frontmatter 契约（`@dsh-forge/lib-api/frontmatter`），不发明平行字段。

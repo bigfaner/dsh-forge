@@ -23,13 +23,13 @@ domains: [rpc, contracts, channel, sqlite, service-injection, event, settings]
 
 ### TECH-rpc-002: 共享类型唯一源（contracts）
 
-**Requirement**: 跨工件类型与常量全部定义于 `packages/contracts`——RPC DTO、frontmatter 契约常量、错误码、IPC 通道名；两侧各自引包（防 schema 漂移）。定位铁律：纯类型与纯常量，零逻辑零依赖（「描述业务形状但不实现业务」）。
-**Source**: feature/dsh-forge-p1-mvp TECH-006（tech-design §包间协作规则第 4 条 / packages/contracts/src/*.ts）
+**Requirement**: 跨工件类型与常量全部定义于 `@dsh-forge/lib-api`（按域子路径；旧同名壳包已退役）——RPC DTO、frontmatter 契约常量、错误码、IPC 通道名；两侧各自引包（防 schema 漂移）。定位铁律：纯类型与纯常量，零逻辑零依赖（「描述业务形状但不实现业务」）。
+**Source**: feature/dsh-forge-p1-mvp TECH-006（tech-design §包间协作规则第 4 条 / lib/api/src/*.ts）
 
 ### TECH-rpc-003: IPC 通道族与 allowlist
 
 **Requirement**: 产品 RPC 通道八族 + 事件单向推送：`forge:projects/*`（register/list/get/update/reconcile + M2 扩 deriveTaskStoreDir）、`forge:knowledge/*`（browse/listEntries/entryDetail/heat/sessionRecall——仅浏览面）、`forge:fs/*`（listDir——文件浏览器只读目录列举，本机目录读取经 RPC，renderer 不开 Node fs 通道）、`forge:tasks/*`（transition/query/validateFeatureTasks/list/stats/graph/detail/sessionLinks——人类面 + 读面）、`forge:features/*`（register/transition/upsertDoc/list/listDocs——M3 扩 listDocs 分层文档读面）、`forge:settings/*`（M3 新族：get/set——forgeSettings 服务单门）、`forge:docs/*`（read/openExternal——后者 main 侧执行）+ `forge:events/tasks-changed`（主→渲染单向，preload 订阅面 allowlist 守卫）；通道名常量归 contracts，main 侧 allowlist 唯一源校验、未知通道拒绝（electron-ipc-security 约定：contextIsolation、无 remote content）；`search` / `readAbstract` 与 add/submit/createProposal/registerFeature/upsertFeatureDoc 走 agent 面插件 tool 不经 web RPC（双门分工；transitionProposal 为 agent tool 专属动词——RPC 双面随 M2-α proposals 通道退役；claim 已并入 dispatchTask——tool 专属）；dsh 自有面经 `__DSH_TRANSPORT__` carrier（M3 起 agentPreset.select 同载体）。
-**Source**: feature/dsh-forge-p1-mvp TECH-007（tech-design §Interface 4 / packages/contracts/src/channels.ts）+ feature/dsh-forge-m2-pipeline（tech-design §Interface 7，drift 修订：三族 → 七族 + 事件）+ feature/dsh-forge-m3-bootstrap-presets（tech-design §Interface 4，drift 修订：七族 → 八族 + proposals/settings 扩族）
+**Source**: feature/dsh-forge-p1-mvp TECH-007（tech-design §Interface 4 / lib/api/src/channels.ts）+ feature/dsh-forge-m2-pipeline（tech-design §Interface 7，drift 修订：三族 → 七族 + 事件）+ feature/dsh-forge-m3-bootstrap-presets（tech-design §Interface 4，drift 修订：七族 → 八族 + proposals/settings 扩族）
 
 ## 服务注入缝
 

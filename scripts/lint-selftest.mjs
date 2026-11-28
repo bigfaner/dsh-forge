@@ -53,14 +53,14 @@ const FIXTURES = [
   },
   {
     // plugins 只依赖 lib 铁律：plugins/* import 非 lib-* 的 @dsh-forge/* 即违规
-    path: 'plugins/forge/host/_lintneg_plugins_to_contracts.ts',
-    code: `import { TASK_TYPES } from '@dsh-forge/contracts'\nexport const v = TASK_TYPES\n`,
+    path: 'plugins/forge/host/_lintneg_plugins_to_core.ts',
+    code: `import { coreSvc } from '@dsh-forge/core'\nexport const v = coreSvc\n`,
     imp: ['plugins 只依赖 lib'],
   },
   {
     // 注释剥离盲区（stripComments bug）：行注释里出现 /* 不得误开块注释吞掉后面的违规 import
     path: 'plugins/forge/host/_lintneg_comment_fake_block_opener.ts',
-    code: `// 说明（/* 这里是行注释里的字面星号，不是块注释开头）\nimport { TASK_TYPES } from '@dsh-forge/contracts'\nexport const v = TASK_TYPES\n`,
+    code: `// 说明（/* 这里是行注释里的字面星号，不是块注释开头）\nimport { coreSvc } from '@dsh-forge/core'\nexport const v = coreSvc\n`,
     imp: ['plugins 只依赖 lib'],
   },
   {

@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { DIAG_EVENT, type DiagEventPayload } from '../../../packages/contracts/src/index.js'
+import { DIAG_EVENT, type DiagEventPayload } from '@dsh-forge/lib-api/diag'
 import knowledgePlugin from '../../../plugins/knowledge/host/index.js'
 import type {
   KnowledgeContextFace,

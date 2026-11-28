@@ -19,7 +19,7 @@
  *                        app/{main.js 装载器, package.json}, staging-manifest.json}
  *   —— runtime/package.json = 合成 anchor 清单 = 打包形态 installAnchor；runtime/host-dist
  *   = 宿主 dist 真实文件（main + boot child——与 node_modules 同容器保 ESM 上溯解析邻接；
- *   宿主 dist 运行期 import @dsh-forge/contracts，不能留在 app 目录）。
+ *   宿主 dist 运行期 import @dsh-forge/lib-api，不能留在 app 目录）。
  */
 
 import { readFileSync } from 'node:fs'

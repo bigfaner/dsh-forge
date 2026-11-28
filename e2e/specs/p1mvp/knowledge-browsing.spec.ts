@@ -31,7 +31,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
-import type { KnowledgeCard } from '../../../packages/contracts/src/dto/knowledge.js'
+import type { KnowledgeCard } from '@dsh-forge/lib-api/dto/knowledge'
 import { bridgeDispatch, closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { dismissOnboardingModals } from '../../support/modals.js'
 import { forgeInvoke } from '../../support/rpc.js'

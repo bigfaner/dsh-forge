@@ -16,7 +16,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { KNOWLEDGE_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { KNOWLEDGE_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { openKnowledgeDatabase, createKnowledgeRegistry } from '../../../plugins/knowledge/host/storage/index.js'
 import { createKnowledgeService } from '../../../plugins/knowledge/host/service/index.js'
 import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/index.js'

@@ -1,7 +1,7 @@
 // 1.1 AC1/AC2/AC5 —— forge 四域 DTO / 通道负载映射 / 桥事件信封 pin。
 // 权威来源：tech-design §Interface 1–5（方法签名与身份双轨）/ §Interface 6（BridgeEventMessage）/
 // §Interface 7（负载映射键 = 通道族键）。接口形状为编译期面——期望断言锚键结构，
-// expectTypeOf 锚经 lint:test-types（tsc -p packages/contracts/tsconfig.test.json）机械执行。
+// expectTypeOf 锚经 lint:test-types（tsc -p lib/api/tsconfig.test.json）机械执行。
 // 1.1（M3）增补：mode 词汇/ContainerRef/settings DTO 判别 + 服务签名容器化改写 +
 // ForgePluginEvent 两层联合 exhaustiveness + settings 负载映射扩池（proposals 通道负载映射
 // 已随 M2-α proposals RPC 面退役删除）。

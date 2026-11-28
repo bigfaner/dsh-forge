@@ -64,7 +64,7 @@ describe('build-forge-copy-variant: copyVariantRootDeps（union 闭包物化清�
     seedMiniRepo(root, {
       project: {
         dependencies: { '@dsh-forge/project': 'file:../project', '@dsh-forge/lib-db': 'workspace:*', 'zod': '4.6.6' },
-        devDependencies: { '@dsh-forge/contracts': 'workspace:*' },
+        devDependencies: { '@dsh-forge/lib-api': 'workspace:*' },
       },
     })
     const deps = copyVariantRootDeps(root)

@@ -24,7 +24,7 @@ import { COLLAPSE_RIGHTBAR_BUTTON, AP_ANY, HERO_WORKSPACE_CHIP_NAME, OV_PANEL, R
 import { openOverviewDock } from './navigation.js'
 import { newBlankSession } from './m3.js'
 import { ensureNoBlockingDialog } from './modals.js'
-import { PROJECTS_CHANNELS } from '../../packages/contracts/src/channels.js'
+import { PROJECTS_CHANNELS } from '@dsh-forge/lib-api/channels'
 
 /** 摘除 dir 子树内全部文件、保留全部目录（目录 inode 不变——watcher 句柄存续；dir
  *  缺席静默零操作）。夹具重播种专用：seedWorkspace recursive mkdir 容忍既有目录。 */

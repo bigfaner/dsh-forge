@@ -15,7 +15,7 @@ import { forgeInvoke } from '../../../e2e/support/rpc.js'
 import { refetchOnce, createBridgeDriver, type ReplayWriteDriver } from '../../../e2e/support/replay/executor.js'
 import { openTaskLoopDb } from '../../../e2e/support/sqlite.js'
 import { projectKeyOf } from '../../../e2e/support/project-key.js'
-import { TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
 
 const SLUG = 'task-loop-facets-hint'
 const HINT = 'ui,api' // 预填形：逗号分隔档位期望面（to-tasks SKILL.md 模板 `facets=<ui,api>` 同形）

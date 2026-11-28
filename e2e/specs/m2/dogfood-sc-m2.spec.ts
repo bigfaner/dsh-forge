@@ -43,7 +43,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
-import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { closeApp, launchHost, ROOT, type Launched } from '../../support/launch.js'
 import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
 import { realCredentials, seedDshHome, writeDogfoodOverlay } from '../../support/dogfood.js'

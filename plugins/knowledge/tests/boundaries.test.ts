@@ -49,7 +49,7 @@ describe('SC-2 插件零 core / 零 expert-squad 依赖（构建图机械自证�
       references?: { path: string }[]
     }
     const refs = (ts.references ?? []).map((r) => r.path)
-    expect(refs).toContain('../../packages/contracts')
+    expect(refs).toContain('../../lib/api')
     expect(refs).not.toContain('../../packages/core')
     expect(refs.filter((r) => r.includes('expert-squad'))).toEqual([])
   })

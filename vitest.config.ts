@@ -84,7 +84,6 @@ export default defineConfig({
       // forge 组合器旅程池（plugin-forge-combo fix-8——tests/forge 旅程支持层单测：
       // CT-NPM-03 零缺席判据正反自证；真机 spec 归 Playwright desktop-journeys 池）
       { test: { name: 'forge-combo-journeys', include: ['tests/forge/**/*.test.ts'] } },
-      { test: { name: 'contracts', include: ['packages/contracts/src/**/*.test.ts'] } },
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
       // knowledge 插件包（UI 三面归位 1.4：ui 面 .test 随迁本池——组件消费官方 primitives，
       // css 副产物走 vite 转换管道 inline，git-worktree 判例同构）

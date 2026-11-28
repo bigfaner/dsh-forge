@@ -4,7 +4,7 @@
 // typed DTO（纯类型单源，两侧各自引包防 schema 漂移——TECH-rpc-002）。
 import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
-import type { ProjectSummary, RegisterResult } from '../../packages/contracts/src/dto/project.js'
+import type { ProjectSummary, RegisterResult } from '@dsh-forge/lib-api/dto/project'
 import { COMPOSER_INPUT, HERO_WORKSPACE_CHIP_NAME, TAB_ITEM, workbenchOfView } from './anchors.js'
 import { ensureNoBlockingDialog } from './modals.js'
 

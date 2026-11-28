@@ -17,7 +17,7 @@
   ],
   "references": [
     {
-      "path": "../contracts"
+      "path": "../../lib/api"
     },
     {
       "path": "../../lib/db"

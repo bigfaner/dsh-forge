@@ -10,12 +10,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { DiagEventPayload } from '../../../packages/contracts/src/index.js'
+import type { DiagEventPayload } from '@dsh-forge/lib-api/diag'
 import { KNOWLEDGE_HEAT_TERM } from '../../../plugins/knowledge/host/service/internal.js'
 import { createKnowledgeRegistry, openKnowledgeDatabase } from '../../../plugins/knowledge/host/storage/index.js'
 import { createKnowledgeService } from '../../../plugins/knowledge/host/service/service.js'
 import type { BrowseKnowledgeService } from '../../../plugins/knowledge/host/service/types.js'
-import type { RecallFeedbackOutcome, RecallFeedbackResult } from '../../../packages/contracts/src/index.js'
+import type { RecallFeedbackOutcome, RecallFeedbackResult } from '@dsh-forge/lib-api/dto/knowledge'
 
 const root = mkdtempSync(join(tmpdir(), 'knowledge-j-j3-'))
 const ws = join(root, 'ws')

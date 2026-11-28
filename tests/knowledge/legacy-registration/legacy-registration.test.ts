@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { DiagEventPayload } from '../../../packages/contracts/src/index.js'
+import type { DiagEventPayload } from '@dsh-forge/lib-api/diag'
 import { startSelfHostedStorage } from '../../../plugins/knowledge/host/storage/start.js'
 import { rebuildKnowledgeIndex } from '../../../plugins/knowledge/host/storage/rebuild.js'
 import { createKnowledgeService } from '../../../plugins/knowledge/host/service/index.js'

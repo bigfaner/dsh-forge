@@ -27,7 +27,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
-import { SETTINGS_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { SETTINGS_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { ROOT } from '../../support/launch.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createSharedLaunchFixture, requireInSharedUdRoot } from '../../support/fixtures.js'

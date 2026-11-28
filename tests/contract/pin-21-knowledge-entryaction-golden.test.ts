@@ -13,7 +13,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { KNOWLEDGE_CHANNELS } from '../../packages/contracts/src/channels.js'
+import { KNOWLEDGE_CHANNELS } from '@dsh-forge/lib-api/channels'
 import type { BrowseKnowledgeService } from '../../plugins/knowledge/host/service/types.js'
 import { ROOT } from './pins.js'
 

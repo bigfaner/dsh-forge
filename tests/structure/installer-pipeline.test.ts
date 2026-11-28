@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_PACKAGES, PRODUCT_PLUGIN_PACKAGE_DIRS } from '../../apps/host/src/profile/runtime-packages.js'
 import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedManifestParityViolations, stagedProductPackages, stagedPkgShort, STAGING_EXTRAS, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
-import { PRODUCT_PLUGINS } from '../../packages/contracts/src/product-plugins.js'
+import { PRODUCT_PLUGINS } from '@dsh-forge/lib-api/product-plugins'
 import { createElectronBuilderConfig } from '../../electron-builder.config.mjs'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')

@@ -29,7 +29,7 @@
       "path": "../../lib/path"
     },
     {
-      "path": "../../packages/contracts"
+      "path": "../../lib/api"
     },
     {
       "path": "../../plugins/markdown-kit"

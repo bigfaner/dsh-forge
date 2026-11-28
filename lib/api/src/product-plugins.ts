@@ -17,7 +17,7 @@
 // 键 = 包短名（packages/<短名> 平铺；packages/plugins/<短名> 子居所由脚本探测）。
 // 消费面：
 //   · apps/host template.ts 经 lib-api/product-plugins import（编译期常量进 host dist）。
-//   · scripts/assemble-installer-resources.mjs 经 packages/contracts/dist 动态 import
+//   · scripts/assemble-installer-resources.mjs 经 lib/api/dist 动态 import
 //     （前置 = pnpm build——物化脚本本就 fail-loud 前置构建产物）。
 // 不受本表约束的面：
 //   · dev 形态（apps/host/profile.dev/cordis.patch.yml 手维文件——dev 直链

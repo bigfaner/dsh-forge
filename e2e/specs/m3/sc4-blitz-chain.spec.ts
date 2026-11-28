@@ -9,7 +9,7 @@
 // 提案卡 taskCount / 提案子 tab 行状态等提案域断言面随域退役，不再重建）。
 import { expect } from '@playwright/test'
 import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
-import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { FEATURES_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'

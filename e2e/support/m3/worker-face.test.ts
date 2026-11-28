@@ -6,7 +6,7 @@
 //     矩阵断言 = plugins/task-loop/tests/dispatch/assemble.test.ts（模块④单测池）。
 // workerAgentOptionsOf 期望集独立硬编码（非引常量——投影公式漂移可判）。
 import { describe, expect, it } from 'vitest'
-import { workerAgentOptionsOf } from '../../../packages/contracts/src/subagent-assemble.js'
+import { workerAgentOptionsOf } from '@dsh-forge/lib-api/subagent-assemble'
 
 describe('M3 5.2 SC2 worker 路由组装（experts 折叠路由——workerAgentOptionsOf）', () => {
   it('折叠应答在场：显式携带（provider/model/reasoning 直映射——优先于父会话继承）', () => {

@@ -22,7 +22,6 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
   const artifacts = [
     ['apps/host', '@dsh-forge/host'],
     ['apps/web', '@dsh-forge/web'],
-    ['packages/contracts', '@dsh-forge/contracts'],
     ['packages/core', '@dsh-forge/core'],
     ['plugins/knowledge', '@dsh-forge/knowledge'],
     ['packages/path-key', '@dsh-forge/path-key'],
@@ -30,19 +29,6 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
 
   it.each(artifacts)('%s 包名 %s 就位', (dir, name) => {
     expect(readJson(join(dir, 'package.json')).name).toBe(name)
-  })
-
-  it('contracts 兼容面依赖收敛（plugin-project 1.7：DTO/词汇/错误码/通道常量本体迁 @dsh-forge/lib-api，dependencies 仅允许该兼容面边；devDependencies 仅允许 @types/node 与官方包 type-only——dsh-agent-preset-registry）', () => {
-    const pkg = readJson('packages/contracts/package.json')
-    expect(Object.keys((pkg.dependencies as Record<string, unknown>) ?? {})).toEqual(['@dsh-forge/lib-api'])
-    for (const key of ['peerDependencies', 'optionalDependencies']) {
-      expect(Object.keys((pkg[key] as Record<string, unknown>) ?? {})).toHaveLength(0)
-    }
-    expect(
-      Object.keys((pkg.devDependencies as Record<string, unknown>) ?? {}).every(
-        (k) => k === '@types/node' || k === '@deepseek-ai/dsh-agent-preset-registry',
-      ),
-    ).toBe(true)
   })
 
   it('根 solution tsconfig references 工件拓扑（tsc -b 全拓扑入口；md-mermaid/input-history/expert-squad/quote-reference/mobile-bridge 先后入 packages/plugins/ 子居所，super-composer 迁根级 plugins/ 三目录制；1.17 批二 git-worktree 旧包退役；M1 阶段B plugin-forge[-spec] 旧包退役出拓扑）', () => {
@@ -63,7 +49,6 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         // lib/ui 公共包（概览槽键族单源——tsconfig refs 实际在位，pin 随合并补记）
         'lib/ui',
         'lib/util',
-        'packages/contracts',
         'packages/core',
         // plugin-project：project 插件包（1.3 建位——tsc -b 全拓扑入口补记）
         'plugins/project',
@@ -86,23 +71,21 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
   })
 
   it.each([
-    // plugin-project 1.7：api/db 归并——contracts 兼容面引 lib/api；core 兼容面引 lib/db
-    ['packages/contracts', ['lib/api']],
     // knowledge-stage1 1.8：core 知识域退役——过渡型 plugins/knowledge 引用随迁收口
     // plugin-project 1.6：path-key 归并 lib/path——core refs 改指 lib/path（path-key 退役待删）
-    ['packages/core', ['lib/db', 'lib/diag', 'lib/git', 'lib/path', 'lib/util', 'packages/contracts']],
+    ['packages/core', ['lib/api', 'lib/db', 'lib/diag', 'lib/git', 'lib/path', 'lib/util']],
     // fix-33 ⑯：knowledge ../core 引用删除——build 面零 core import（残留引用无消费）；
     // 测试面 core 源相对引入由 tsconfig.test.json 承载（不经 references）
     // knowledge 迁移批1.3：root 级 plugins/knowledge 三目录制——references 增 client 面
     // （tsconfig.client.json，exports["./client"] 类型链）
-    ['plugins/knowledge', ['plugins/knowledge/tsconfig.client.json', 'packages/contracts', 'packages/path-key']],
+    ['plugins/knowledge', ['plugins/knowledge/tsconfig.client.json', 'lib/api', 'packages/path-key']],
     // typert 迁移 1.3：project tsconfig.json 改双 face solution 壳——composite 消费面直指 host 叶
     // plugin-task-loop 1.14：host tasks 域改指 @dsh-forge/task-loop——plugins/task-loop host 叶入 references
-    ['apps/host', ['packages/contracts', 'packages/core', 'plugins/knowledge', 'plugins/project/tsconfig.host.json', 'plugins/task-loop/tsconfig.host.json']],
+    ['apps/host', ['lib/api', 'packages/core', 'plugins/knowledge', 'plugins/project/tsconfig.host.json', 'plugins/task-loop/tsconfig.host.json']],
     // 1.6：web normalize/path-key 消费改指 @dsh-forge/lib-path/path-key——增 lib/path 引用
     // 1.14 UI 迁入：add-project/bug-refs 组件本体消费 @dsh-forge/project client ui
     // 1.17 批二：git-worktree 旧包退役——web 引用面收 project 单源
-    ['apps/web', ['lib/path', 'packages/contracts', 'plugins/markdown-kit', 'plugins/project/tsconfig.host.json']],
+    ['apps/web', ['lib/api', 'lib/path', 'plugins/markdown-kit', 'plugins/project/tsconfig.host.json']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
     const ts = readJson(join(dir, 'tsconfig.json')) as {
       compilerOptions?: { composite?: boolean }
@@ -238,7 +221,6 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
     'plugins/knowledge/host/prompt',
     // plugin-spec 1.8 提示段迁入——prompt 定位归 plugins/spec/host/prompt
     'plugins/spec/host/prompt',
-    'packages/contracts/src/dto',
   ] as const
 
   it.each(submodules)('%s/ 定位标注 README 就位', (dir) => {
@@ -251,7 +233,6 @@ describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {
       'apps/web/src/main.ts',
       'apps/web/index.html',
       'apps/web/vite.config.ts',
-      'packages/contracts/src/index.ts',
       'packages/core/src/index.ts',
       'plugins/knowledge/host/index.ts',
       'plugins/spec/host/index.ts',

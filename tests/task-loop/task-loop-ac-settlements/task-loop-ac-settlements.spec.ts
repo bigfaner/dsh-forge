@@ -15,7 +15,7 @@ import { forgeInvoke } from '../../../e2e/support/rpc.js'
 import { refetchOnce, createBridgeDriver, type ReplayWriteDriver } from '../../../e2e/support/replay/executor.js'
 import { openTaskLoopDb } from '../../../e2e/support/sqlite.js'
 import { projectKeyOf } from '../../../e2e/support/project-key.js'
-import { TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { TASKS_CHANNELS } from '@dsh-forge/lib-api/channels'
 
 const SLUG = 'task-loop-ac-settlements'
 const AC_A = '判据甲：AC 结算聚合数据链真机可达'

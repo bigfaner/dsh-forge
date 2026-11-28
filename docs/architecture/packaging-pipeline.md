@@ -41,7 +41,7 @@ release/app/                    electron-builder 应用目录（asar:false）
 
 ## 3. 产品插件启停：意图开关 + 自动推导
 
-单一配置源 = `packages/contracts/src/product-plugins.ts`（`PRODUCT_PLUGINS`——**只承载意图，不列举闭包成员**）：
+单一配置源 = `lib/api/src/product-plugins.ts`（`@dsh-forge/lib-api/product-plugins`）（`PRODUCT_PLUGINS`——**只承载意图，不列举闭包成员**）：
 
 | 字段 | 语义 | 消费面 |
 |---|---|---|

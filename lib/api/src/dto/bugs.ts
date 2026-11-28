@@ -1,5 +1,5 @@
 // fix-bug Bug 域 DTO（三既有子 tab 同构——proposals 面仿写）：
-// 归并锚（plugin-project 1.7）：自 packages/contracts/src/dto/bugs.ts git mv 迁入（零语义改动，
+// 归并锚（plugin-project 1.7）：自旧 contracts 包同位文件 git mv 迁入（零语义改动，
 // 增 BUG_CARD_SUCCESS_SCHEMA 单源收口——原 plugin-forge 手写镜像退役）。
 // BugStatus 词汇 / BugCard 列表卡 / ListBugsQuery 查询参 + BUGS_CHANNELS 负载映射。
 // 载荷映射键 = channels.ts BUGS_CHANNELS 键——三处一体的 DTO 侧落点。

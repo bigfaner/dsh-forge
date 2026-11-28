@@ -6,7 +6,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { KNOWLEDGE_CHANNELS } from '../../packages/contracts/src/channels.js'
+import { KNOWLEDGE_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { createForgeRpcClient } from '../../plugins/knowledge/ui/rpc-channels.js'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')

@@ -11,7 +11,7 @@ import {
   type ForgePluginEvent,
   type ForgePluginEventEnvelope,
   type ForgePluginEventType,
-} from '../../packages/contracts/src/dto/forge.js'
+} from '@dsh-forge/lib-api/dto/forge'
 
 describe('pin ㉑-1 判别联合 ↔ 运行期枚举全等（两层抽象）', () => {
   it('事件类型全集 = 十事件初集（FORGE_PLUGIN_EVENT_TYPES 常量本尊）', () => {

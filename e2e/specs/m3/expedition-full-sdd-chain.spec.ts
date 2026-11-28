@@ -43,7 +43,7 @@
 
 import { expect } from '@playwright/test'
 import { OFFICIAL_STACK_GATE_NOTE, officialStackConverged } from '../../support/official-stack-gate.js'
-import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
+import { FEATURES_CHANNELS } from '@dsh-forge/lib-api/channels'
 import { createSharedLaunchFixture, openOverviewSubtab, sharedOverlayText } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'

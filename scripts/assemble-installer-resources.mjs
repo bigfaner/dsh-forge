@@ -26,7 +26,7 @@
  *     staging-manifest.json   物化清单（节文件数/字节 + 关键文件自证 + sqlite prebuild 证据）
  *   release/app/              electron-builder 应用目录（asar: false）：main.js 装载器
  *                             （apps/host/installer/app-loader.mjs）+ deps-free package.json
- *                             ——宿主 dist 运行期 import @dsh-forge/contracts（6 处），
+ *                             ——宿主 dist 运行期 import @dsh-forge/lib-api（6 处），
  *                             真实 main 须在 runtime/host-dist（node_modules 解析邻接）
  *
  * 产物含 4.3 冒烟脚本挂点：staging-manifest.json 随包分发（resources/ 下可直接校验），
@@ -50,7 +50,7 @@ const RUNTIME = join(STAGING, 'runtime')
 const APP_DIR = join(ROOT, 'release', 'app')
 const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
 /**
- * 产品插件物化 = 配置意图开关 + 自动推导（单一源 = @dsh-forge/contracts
+ * 产品插件物化 = 配置意图开关 + 自动推导（单一源 = @dsh-forge/lib-api/product-plugins
  * PRODUCT_PLUGINS——本脚本零硬编码插件清单，新增产品包零配置）：
  *   staging 集合 = 种子（userLayerRow 插件 ∪ 预设底稿携带插件 ∪ staged:true 覆写）
  *   的 @dsh-forge/* 运行时依赖闭包（packages/<dir>/package.json BFS），剔除
@@ -324,14 +324,14 @@ export function requiredKeyFiles(plugins, root = ROOT) {
   return files
 }
 
-/** 产品插件启停配置装载（单一源 = contracts dist；前置 = pnpm build——本就 fail-loud 前置） */
+/** 产品插件启停配置装载（单一源 = lib-api dist；前置 = pnpm build——本就 fail-loud 前置） */
 async function loadProductPlugins() {
   try {
-    const contracts = await import('../packages/contracts/dist/index.js')
+    const contracts = await import('../lib/api/dist/index.js')
     if (contracts.PRODUCT_PLUGINS === undefined) throw new Error('PRODUCT_PLUGINS 未导出')
     return contracts.PRODUCT_PLUGINS
   } catch (cause) {
-    fail(`产品插件配置装载失败（packages/contracts/dist——先执行：pnpm build（tsc -b 全拓扑））：${String(cause)}`)
+    fail(`产品插件配置装载失败（lib/api/dist——先执行：pnpm build（tsc -b 全拓扑））：${String(cause)}`)
   }
 }
 
@@ -522,7 +522,7 @@ async function stage() {
   sections.icon = copyTree(join(ROOT, 'build', 'icon.png'), join(STAGING, 'icon.png'))
 
   // 5) electron-builder 应用目录（asar: false；deps-free）：装载器 + 清单——真实 main
-  //    在 runtime/host-dist（宿主 dist 运行期 import @dsh-forge/contracts，须与
+  //    在 runtime/host-dist（宿主 dist 运行期 import @dsh-forge/lib-api，须与
   //    node_modules 同容器；见 apps/host/installer/app-loader.mjs 注记）
   const loader = join(ROOT, 'apps/host/installer/app-loader.mjs')
   if (!existsSync(loader)) fail(`${loader} 未就位（安装包应用装载器）`)
