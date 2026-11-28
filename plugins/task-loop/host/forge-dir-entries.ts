@@ -27,12 +27,3 @@ export const TASK_LOOP_DIR_ENTRIES = {
       join(deps["task_loop.runtime_dir"], params.localId),
   },
 } as const satisfies Partial<ForgeDirs>;
-
-/** task_loop.* 键清单（登记序） */
-export const TASK_LOOP_DIR_KEYS = ["task_loop.runtime_dir", "task_loop.task_dir"] as const;
-
-/** task-loop 声明（dirKeys.task_loop 约定名下的条目对象） */
-export const TASK_LOOP_DIRS_DECLARATION = {
-  source: TASK_LOOP_DIR_KEYS_SERVICE_NAME,
-  entries: TASK_LOOP_DIR_ENTRIES,
-} as const;
