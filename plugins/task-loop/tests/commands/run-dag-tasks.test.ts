@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import { createRunDagTasksHandler, nonTerminalSourcesOf } from "../../host/commands/run-dag-tasks.js";
 import { createStopDagTasksHandler, NO_ACTIVE_LOOP_TEXT } from "../../host/commands/stop-dag-tasks.js";
 import type { LoopDriver } from "../../host/loop/driver-face.js";
-import type { TaskCard, TaskStatus } from "@dsh-forge/contracts";
+import type { TaskCard } from "@dsh-forge/lib-api/dto/forge";
+import type { TaskStatus } from "@dsh-forge/lib-api/labels";
 
 // ─────────────────────────── fake 面 ───────────────────────────
 

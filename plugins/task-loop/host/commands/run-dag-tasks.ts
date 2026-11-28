@@ -19,7 +19,7 @@ import type { ContainerRef, TaskCard } from "../domain/tasks/types.js";
 import { emitForgeDiag } from "../faces.js";
 import type { ForgeCommandInvocation, ForgeCommandResult, ForgeDiagEmitFace, ForgeDiagPayload } from "./faces.js";
 import { NO_ACTIVE_LOOP_TEXT } from "./stop-dag-tasks.js";
-import { TASK_STATUS_LABELS, type TaskStatus } from "@dsh-forge/contracts";
+import { TASK_STATUS_LABELS, type TaskStatus } from "@dsh-forge/lib-api/labels";
 
 /** 指令名（GUI 派发按钮换值锚——'/run-dag-tasks '） */
 export const RUN_DAG_TASKS_NAME = "run-dag-tasks";

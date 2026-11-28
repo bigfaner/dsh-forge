@@ -2,7 +2,7 @@
 // 落注册面 schema 层）：add_task / update_task 的 type 参数必须携 TASK_TYPES 全集 enum；
 // batch_add_tasks 因 items 为 JSON 串（schema 不可达）以描述文本承载族名警示。
 import { describe, expect, it } from "vitest";
-import { TASK_TYPES } from "@dsh-forge/contracts";
+import { TASK_TYPES } from "@dsh-forge/lib-api/labels";
 import { createAddTaskTool } from "../../host/tools/add-task.js";
 import { createBatchAddTasksTool } from "../../host/tools/batch-add-tasks.js";
 import { createUpdateTaskTool } from "../../host/tools/update-task.js";

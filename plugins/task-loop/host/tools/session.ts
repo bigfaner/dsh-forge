@@ -35,7 +35,7 @@ export interface WorkspaceNotRegisteredData {
 
 /**
  * tool 面 cwd 无匹配项目（tech-design §Error Handling 表 400 行）。
- * code 字面量锚定 @dsh-forge/contracts ERROR_CODES；类定义落位插件侧
+ * code 字面量锚定 @dsh-forge/lib-api/errors ERROR_CODES；类定义落位插件侧
  * （contracts 不持运行期名映射；插件禁 import core——core 侧无同名类，跨面以 code 判别）。
  */
 export class WorkspaceNotRegisteredError extends Error {

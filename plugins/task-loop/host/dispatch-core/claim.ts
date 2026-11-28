@@ -15,7 +15,7 @@
 //
 // 与 ERR_BLOCK_SOURCE_REQUIRED（域层 add.ts 建链守卫，0a25720c）语义对偶：新问题径建 fix
 // 链须 block_source=true；同族复发径盲试 fix 派发被本守卫软拒绝转升级。
-import type { BugRecurrenceCandidate } from "@dsh-forge/contracts";
+import type { BugRecurrenceCandidate } from "@dsh-forge/lib-api/dto/forge";
 import type { TaskSnapshot } from "../domain/tasks/types.js";
 import { emitForgeDiag } from "../faces.js";
 import type { ForgeDiagEmitFace } from "../faces.js";

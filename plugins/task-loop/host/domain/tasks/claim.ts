@@ -15,8 +15,8 @@
 // upsert-ignore；闭包尾部（提交后）emitTasksChanged。就绪选择仅扫 pending 池（Hard Rule）；
 // 无就绪任务 → { task: null } Z1 出口信号（纯读零写入，不发射事件）。
 import type Database from "@dsh-forge/lib-db";
-import type { TaskStatus } from "@dsh-forge/contracts";
-import { VALIDATION_TASK_TYPES } from "@dsh-forge/contracts";
+import type { TaskStatus } from "@dsh-forge/lib-api/labels";
+import { VALIDATION_TASK_TYPES } from "@dsh-forge/lib-api/labels";
 import { withTransaction } from "@dsh-forge/lib-db";
 import { DependenciesUnmetError, InvalidTransitionError, TaskNotFoundError } from "./errors.js";
 import { GATE_SQL, assertContainerChainSettled } from "./phase-gate.js";

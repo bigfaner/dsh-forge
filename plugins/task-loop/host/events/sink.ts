@@ -6,7 +6,7 @@
 // resolveContainerDir 经 dirOf 消费同一记忆。失败语义：解析失败/缺席 = 不记忆（监听器
 // fail-soft 丢行——日志缺席不拖垮工具执行闭包）；emit 面零吞（bus 信封守卫 fail-loud）。
 // 时间戳单源 Date.now()（信封 ts epoch 毫秒）。
-import type { ForgePluginEvent } from "@dsh-forge/contracts";
+import type { ForgePluginEvent } from "@dsh-forge/lib-api/dto/forge";
 import type { ForgeEventBus } from "./bus.js";
 import type { ForgeToolFailure } from "../tools/format.js";
 import type { ToolSessionContext } from "../tools/session.js";

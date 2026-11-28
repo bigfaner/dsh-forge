@@ -19,8 +19,8 @@
 // auto-block = 写路径内聚的系统效果，actor 'core'。
 import { randomUUID } from "node:crypto";
 import type Database from "@dsh-forge/lib-db";
-import type { TaskStatus } from "@dsh-forge/contracts";
-import { BEFORE_SUCCESSOR_ALLOWED_STATUSES, FIX_CHAIN_DEPTH_LIMIT } from "@dsh-forge/contracts";
+import type { TaskStatus } from "@dsh-forge/lib-api/labels";
+import { BEFORE_SUCCESSOR_ALLOWED_STATUSES, FIX_CHAIN_DEPTH_LIMIT } from "@dsh-forge/lib-api/dto/forge";
 import { withTransaction } from "@dsh-forge/lib-db";
 import {
   BeforeSuccessorInvalidError,

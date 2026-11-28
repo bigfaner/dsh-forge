@@ -6,14 +6,10 @@
 // 零实现级 import（可独立发版前提）。参数 schema 面恒取官方 enforced subset 标量形
 // （string/integer/number/boolean + 数组）——嵌套负载（gate/include/vars）在 tool 面
 // 平铺为显式参数（Interface 8 snake_case + 任务定位两显式参口径的延伸）。
-import {
-  DEFAULT_EXPERT_MAPPING,
-  DIAG_EVENT,
-  type DiagLevel,
-  type ForgeSettingsService,
-  type TaskType,
-  workerAgentOptionsOf,
-} from '@dsh-forge/contracts'
+import { DEFAULT_EXPERT_MAPPING, type ForgeSettingsService } from '@dsh-forge/lib-api/dto/forge'
+import { DIAG_EVENT, type DiagLevel } from '@dsh-forge/lib-api/diag'
+import { type TaskType } from '@dsh-forge/lib-api/labels'
+import { workerAgentOptionsOf } from '@dsh-forge/lib-api/subagent-assemble'
 import type { NarrationChannel, NarrationSendOptions } from './notify/index.js'
 import { forgeLoopSource } from './forge-loop-source.js'
 import type { ForgeLoopNarrationMeta } from './forge-loop-source.js'
@@ -422,7 +418,7 @@ export function adaptAgentNarrationChannel(agents: AgentLookupFace, activate?: N
 
 // ─────────────────────────── 诊断发射面（AGENTS §7——diag/log 事件域类型化 emit 单面） ───────────────────────────
 
-// DIAG_EVENT 单源在 @dsh-forge/contracts（bug 5f7d7ebd——faces.ts 镜像常量已删，
+// DIAG_EVENT 单源在 @dsh-forge/lib-api（bug 5f7d7ebd——faces.ts 镜像常量已删，
 // 与 core telemetry 消费同一事件域，杜绝双份字面量漂移）。
 
 /** 诊断发射基础载荷（contracts DiagEventPayload 结构子面——process 进程位由发射缝统一补齐） */

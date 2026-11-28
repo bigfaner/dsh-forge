@@ -5,7 +5,7 @@
 // 读源 = task_settlements（success 结算 commit_hash——settlements 单源化前向兼容）。
 // search = 服务端过滤（中英双语）；sort：active 活跃度权重序 / created 创建降序。
 import type Database from "@dsh-forge/lib-db";
-import { TASK_STATUSES, TASK_STATUS_LABELS, TASK_TYPE_LABELS, type TaskStatus } from "@dsh-forge/contracts";
+import { TASK_STATUSES, TASK_STATUS_LABELS, TASK_TYPE_LABELS, type TaskStatus } from "@dsh-forge/lib-api/labels";
 import { TASK_COLUMNS, type TaskStorageRow } from "./query.js";
 import { countGatedPending } from "./phase-gate.js";
 import type {

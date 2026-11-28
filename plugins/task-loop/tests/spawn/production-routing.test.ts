@@ -8,7 +8,7 @@
 // 断言面：档案 provider+model 成对在场时，settings.worker 缺席不拦截——agentOptions
 // 路由对必须抵达上游请求（真机此前整链回退 inherit 的装配丢失位，此测试即红）。
 import { describe, expect, it, vi } from 'vitest'
-import type { ForgePluginEvent } from '@dsh-forge/contracts'
+import type { ForgePluginEvent } from '@dsh-forge/lib-api/dto/forge'
 import type { TasksService } from '../../host/domain/tasks/service.js'
 import type { TaskSnapshot } from '../../host/domain/tasks/types.js'
 import { createExpertProfileResolver, resolveWorkerProfile as resolveWorkerRouteProfile } from '../../host/faces.js'

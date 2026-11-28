@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { BugRecurrenceCandidate } from "@dsh-forge/contracts";
+import type { BugRecurrenceCandidate } from "@dsh-forge/lib-api/dto/forge";
 import { createRecurrenceFaces } from "../../host/dispatch-core/recurrence-faces.js";
 import { recurrenceEscalationGuard } from "../../host/dispatch-core/claim.js";
 

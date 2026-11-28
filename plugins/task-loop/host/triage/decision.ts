@@ -10,7 +10,7 @@
 // 解析纪律（decisions #8/#16/R2）：无效输出（非 JSON/结构错/字段型错）与越权输出（action
 // 越出封闭枚举）一律抛 TriageDecisionInvalidError——宿主计一次处置失败入重试上限，绝不
 // 猜测兜底（忠实执行封闭枚举 = 模型失误爆炸半径有界的第一道闸）。
-import { TASK_TYPES, type TaskType } from "@dsh-forge/contracts";
+import { TASK_TYPES, type TaskType } from "@dsh-forge/lib-api/labels";
 import type { LoopTriageDecision } from "../loop/index.js";
 
 /** 无效/越权处置决策（宿主忠实执行纪律的拒绝面——计处置失败入重试上限，driver 消费） */

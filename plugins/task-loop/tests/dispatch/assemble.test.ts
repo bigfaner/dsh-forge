@@ -103,7 +103,7 @@ describe("workerAgentOptionsOf：reasoning 三级合成（① 条目 > ② 档�
 
 // ─────────────────────────── 模块④：deriveWorkerToolFilter 路由档位收敛 ───────────────────────────
 
-import type { TaskType } from "@dsh-forge/contracts";
+import type { TaskType } from "@dsh-forge/lib-api/labels";
 import type { WorkerRouteProfile } from "../../host/faces.js";
 import {
   deriveWorkerToolFilter,

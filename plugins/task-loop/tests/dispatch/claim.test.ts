@@ -4,7 +4,7 @@
 // face 缺席/异常 = fail-soft 放行（先例 stampEvidenceValidity）。
 // slug 化锚：TaskSnapshot 用本插件域层（fixOfTaskId = fix 链前驱 uuid——盲试 fix 判别第二条件）。
 import { describe, expect, it } from "vitest";
-import type { BugRecurrenceCandidate } from "@dsh-forge/contracts";
+import type { BugRecurrenceCandidate } from "@dsh-forge/lib-api/dto/forge";
 import type { TaskSnapshot } from "../../host/domain/tasks/types.js";
 import {
   ERR_RECURRENCE_ESCALATION_REQUIRED,

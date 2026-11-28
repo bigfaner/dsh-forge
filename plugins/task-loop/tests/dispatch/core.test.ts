@@ -7,7 +7,7 @@
 // slug 化锚：source = { slug }；claim/taskStats 入参 projectKey；submit 载荷经 settlements
 // 读缝（v1 列面——records 行纯轨迹）；模块④：路由档位（generic 兜底 allow = 管线必备 ∪ 执行基础集）。
 import { describe, expect, it } from "vitest";
-import type { ForgePluginEvent } from "@dsh-forge/contracts";
+import type { ForgePluginEvent } from "@dsh-forge/lib-api/dto/forge";
 import type { TaskSnapshot } from "../../host/domain/tasks/types.js";
 import type { TaskStats, TaskStatus, TaskType } from "../../host/domain/tasks/list.js";
 import type { ClaimTaskResult } from "../../host/domain/tasks/claim.js";

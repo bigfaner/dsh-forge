@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { ForgePluginEvent, TaskProgressPhase, TriageDecidedPayload, TriageOutcomePayload } from "@dsh-forge/contracts";
+import type { ForgePluginEvent, TaskProgressPhase, TriageDecidedPayload, TriageOutcomePayload } from "@dsh-forge/lib-api/dto/forge";
 import { createForgeEventBus } from "../../host/events/bus.js";
 import {
   attachForgeLogListener,

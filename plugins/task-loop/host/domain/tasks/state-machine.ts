@@ -2,7 +2,7 @@
 // plugin-task-loop 1.7 内联）。Hard Rule：UI 菜单（taskDetail.allowedTransitions → 转移对话框
 // 选项集）与服务端校验（transitionTask 先验 toStatus ∈ transitionTargets(current,'human)）共用
 // 本纯函数，禁复制第二实现（零漂移）。定位铁律：纯函数禁 IO。
-import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/contracts";
+import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/lib-api/labels";
 import { InvalidTransitionError, type TransitionFace } from "./errors.js";
 
 export type { TransitionFace };

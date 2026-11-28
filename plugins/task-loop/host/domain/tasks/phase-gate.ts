@@ -9,7 +9,7 @@
 // 门对所有 slug 容器同构生效）；③ e2e_attribution 豁免支退役（v1 列面零该列——归因标记
 // 随列退役）。守卫时点语义：守卫运行在事务外纯读段，判定以守卫时点快照为准。
 import type Database from "@dsh-forge/lib-db";
-import { IMPLEMENTATION_TASK_TYPES, VALIDATION_TASK_TYPES } from "@dsh-forge/contracts";
+import { IMPLEMENTATION_TASK_TYPES, VALIDATION_TASK_TYPES } from "@dsh-forge/lib-api/labels";
 import { PhaseGateUnsettledError } from "./errors.js";
 import type { TaskStorageRow } from "./query.js";
 

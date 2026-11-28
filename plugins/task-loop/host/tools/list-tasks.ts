@@ -2,7 +2,7 @@
 // 直迁 + slug 化改造：旧 source_kind/source_slug 成对 → 单参 slug（可选作用域过滤，缺席 =
 // 全库）。定位 = 域动词薄封装：listTasks（list.ts，search/sort/statusFilter/slug 全透传），
 // 本文件只做 snake_case 入参收窄 + TaskCard 文本投影（前置摘要投影为 localId 数组——照旧）。
-import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/contracts";
+import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/lib-api/labels";
 import { listTasks } from "../domain/tasks/list.js";
 import type { TaskCard, TasksVerbDeps } from "../domain/tasks/types.js";
 import { optionalEnum, optionalString, optionalStringArray, requireArgsObject } from "./args.js";

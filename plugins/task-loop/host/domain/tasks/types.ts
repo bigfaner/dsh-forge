@@ -2,7 +2,7 @@
 // slug 化改造，code-design §1/§6）。contracts 同名 DTO 的容器双轨面（source_kind/source_id/
 // mode/surface）在本域退役：容器 = slug 本身（通用执行容器，project_key 内唯一）——
 // 本文件为包内 host 面 DTO 单源（C2 裁决：包内两半共享载荷留包内不出包）。
-import type { TaskStatus, TaskType } from "@dsh-forge/contracts";
+import type { TaskStatus, TaskType } from "@dsh-forge/lib-api/labels";
 
 export type { TaskStatus, TaskType };
 

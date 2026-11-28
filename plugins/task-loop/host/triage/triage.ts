@@ -15,7 +15,7 @@
 // 场 = settings.experts.mapping?.triage 覆盖 > 预设键（键链原样）；取用缝缺席（experts
 // 服务缺席，AGENTS 1.6 现查不缓存）= fail-soft 走程序段缺省人格 GENERIC_TRIAGE_PERSONA
 // + emitDiag info 留痕；取用缝在场但档案键坏 = fail-loud 上抛（现有行为）。
-import type { ForgeSettingsService } from "@dsh-forge/contracts";
+import type { ForgeSettingsService } from "@dsh-forge/lib-api/dto/forge";
 import {
   deriveTriageToolFilter,
   poolOf,

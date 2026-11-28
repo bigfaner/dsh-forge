@@ -3,7 +3,7 @@
 // knowledge/host/tools/faces.ts 同构先例）。
 
 /** 参数 schema（注册面消费的编译后 JSON Schema 形状子集；type 固定 object 根） */
-import { TASK_TYPES } from "@dsh-forge/contracts";
+import { TASK_TYPES } from "@dsh-forge/lib-api/labels";
 
 /** 任务 type 封闭词表 enum 单源（schema 层校验面共用——add_task/update_task 参数与
  *  测试 pin 同消费本常量，禁各处展开复制 [...TASK_TYPES]） */

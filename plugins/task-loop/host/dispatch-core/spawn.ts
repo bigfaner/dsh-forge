@@ -1,7 +1,7 @@
 // dispatch-core · spawn 契约（S1a 可拆卸壳分层——implementation-blueprint §3「spawn 契约」）。
 // worker spawn 请求/句柄/绑定类型的结构化最小面：核心面、工具壳、in-process driver 真绑定
 // 三方共享。真绑定 = spawn/in-process-driver.ts（装配注入 deps.spawn；单测注入桩）。
-import type { ReasoningEffortLevel } from "@dsh-forge/contracts";
+import type { ReasoningEffortLevel } from "@dsh-forge/lib-api/dto/forge";
 
 /** worker spawn 请求（dispatchPrompt 全文 = worker 首条用户消息——零进本会话上下文） */
 export interface SpawnWorkerRequest {

@@ -11,8 +11,8 @@
 // task_records（DB）——两纪律不混不重复。
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
-import { FORGE_DISPATCH_LOG_FILE } from "@dsh-forge/contracts";
-import type { ForgePluginEvent } from "@dsh-forge/contracts";
+import { FORGE_DISPATCH_LOG_FILE } from "@dsh-forge/lib-api/forge-dir-segments";
+import type { ForgePluginEvent } from "@dsh-forge/lib-api/dto/forge";
 // 派发事件日志文件名单源 = contracts forge-dir-segments。
 import type { ForgeEventBus } from "./bus.js";
 

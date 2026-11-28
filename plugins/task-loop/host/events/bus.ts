@@ -6,7 +6,7 @@
 // import（结构化最小面纪律——deps 恒 contracts + path-key，boundaries pin）。
 // 工具执行零日志代码（AC4）：tool 面只 emit 事件（emit 点随 3.4/3.5 工具路径接入），
 // 落盘归监听器（log-listener.ts——唯一写者）。
-import { FORGE_PLUGIN_EVENT_TYPES, type ForgePluginEvent } from "@dsh-forge/contracts";
+import { FORGE_PLUGIN_EVENT_TYPES, type ForgePluginEvent } from "@dsh-forge/lib-api/dto/forge";
 
 /** 订阅面（信封级——两层抽象的外层入口；handler 抛错被总线隔离） */
 export type ForgeEventHandler = (event: ForgePluginEvent) => void;

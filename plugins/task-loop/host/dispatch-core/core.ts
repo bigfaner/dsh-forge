@@ -19,13 +19,8 @@
 // 依赖方向硬约束：工具壳 → 核心面单向；核心面零 import 工具壳（tools/**）——文件边界即
 // 工具壳下线边界。核心面对插件内共享基础设施的合法依赖：contracts / events/sink（事件发射
 // 面——非工具壳）/ faces（结构化最小面类型——非工具壳）/ domain/tasks（任务域服务类型）。
-import type {
-  ForgePluginEvent,
-  TaskProgressPhase,
-  TriageDecidedPayload,
-  TriageOutcomePayload,
-} from "@dsh-forge/contracts";
-import type { TaskType } from "@dsh-forge/contracts";
+import type { ForgePluginEvent, TaskProgressPhase, TriageDecidedPayload, TriageOutcomePayload } from "@dsh-forge/lib-api/dto/forge";
+import type { TaskType } from "@dsh-forge/lib-api/labels";
 import { emitToolError } from "../events/sink.js";
 import type { ForgeEventSink } from "../events/sink.js";
 import type { DispatchJobOutcome, DispatchJobsFace, ForgeDiagEmitFace, WorkerRouteProfile } from "../faces.js";

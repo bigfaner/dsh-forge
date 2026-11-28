@@ -23,7 +23,7 @@
 import { Remote, RemoteError, TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import type { Context } from "@deepseek-ai/cordis";
 import { rootCtxOf } from "@dsh-forge/lib-util";
-import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/contracts";
+import { TASK_STATUSES, type TaskStatus } from "@dsh-forge/lib-api/labels";
 import { FORGE_TASKS_SERVICE_KEY } from "../../shared/contract-constants.js";
 import { canonicalizePath, projectKeyOf } from "@dsh-forge/lib-path";
 // 快照族入参的 wire 契约单源（lib/api TasksChannelRequests——界面侧同此契约）：身份 projectId，

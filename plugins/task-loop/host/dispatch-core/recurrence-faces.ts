@@ -18,7 +18,7 @@
 // createTriageHook 生产 deps（index.ts 装配缝）。
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { BugRecurrenceCandidate } from "@dsh-forge/contracts";
+import type { BugRecurrenceCandidate } from "@dsh-forge/lib-api/dto/forge";
 import type { ModelingReportPresentFace, SameSeamRecurrenceFace } from "./claim.js";
 
 /** bugs 域服务的插件侧结构化消费面收窄（本工厂消费位——结构兼容注入） */

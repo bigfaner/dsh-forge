@@ -4,7 +4,7 @@
 // （getBug/listBugs 放行、写面恒 deny）；终态 output 产出结构化四动作决策（含 escalate
 // 升级载荷）；无效/越权输出 → TriageDecisionInvalidError（计处置失败）。
 import { describe, expect, it } from "vitest";
-import type { BugRecurrenceCandidate, ForgeSettingsService } from "@dsh-forge/contracts";
+import type { BugRecurrenceCandidate, ForgeSettingsService } from "@dsh-forge/lib-api/dto/forge";
 import type { TasksService } from "../../host/domain/tasks/service.js";
 import type { QueryTaskResult } from "../../host/domain/tasks/query.js";
 import type { TaskRecordEntry, TaskSnapshot, TaskStatus } from "../../host/domain/tasks/types.js";

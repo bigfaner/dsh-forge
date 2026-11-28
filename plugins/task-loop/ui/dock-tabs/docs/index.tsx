@@ -16,7 +16,7 @@
 // （唯一引用方 = @dsh-forge/markdown-kit）；openExternal 触发即忘（失败吞——不炸 tab）；
 // 官方件零改写（PathLabel/图标消费原样）。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { DocContent } from "@dsh-forge/contracts";
+import type { DocContent } from "@dsh-forge/lib-api/dto/forge";
 import { EmptyState, ErrorBar, SkeletonRows, StateChip } from "../../components.js";
 import { MD_PREVIEW_MARKDOWN_LABELS, MarkdownDoc } from "../../components-mirror.js";
 import { type ForgeRpcClient, type RpcClientFactory } from "../rpc-channels.js";

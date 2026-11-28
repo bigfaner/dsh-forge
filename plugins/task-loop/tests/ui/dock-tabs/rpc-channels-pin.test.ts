@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { TASKS_CHANNELS } from "@dsh-forge/contracts";
+import { TASKS_CHANNELS } from "@dsh-forge/lib-api/channels";
 import { createForgeRpcClient } from "../../../ui/dock-tabs/rpc-channels.js";
 
 const ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));

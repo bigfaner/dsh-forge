@@ -42,7 +42,7 @@ import {
   Tooltip,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 // 1.13 迁包注记（self-containment 纪律——dist/client 零 @dsh-forge/* 运行期引用 + 零
-// window.dshForge）：投影键字面量镜像（原 = @dsh-forge/contracts SESSION_PROJECTION_KEYS
+// window.dshForge）：投影键字面量镜像（原 = @dsh-forge/lib-api/channels SESSION_PROJECTION_KEYS
 // 单源；字面量漂移由 tests/ui 机检 pin 两侧同值）；账本快照窄类型改本地结构镜像
 // （原 = @dsh-forge/project client-ui/sidebar 纯 type import——迁包后零跨包依赖）。
 /** 账本快照窄类型（IWorkspaces/SessionsLedger 消费切片——结构同型镜像） */

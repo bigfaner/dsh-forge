@@ -28,8 +28,11 @@
 //    lazy 兜底（下个容器循环启动时校验补标记）。
 //
 // 依赖方向：loop → dispatch-core / notify / progress / domain 单向；零工具壳 import（可拆卸壳纪律）。
-import { FIX_CHAIN_DEPTH_LIMIT, FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from "@dsh-forge/contracts";
-import type { BugCard, DiagLevel, ForgePluginEvent, ForgeSettingsService, ListBugsQuery, TaskType, TriageDecidedPayload, TriageOutcomePayload } from "@dsh-forge/contracts";
+import { FIX_CHAIN_DEPTH_LIMIT, FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from "@dsh-forge/lib-api/dto/forge";
+import type { BugCard, ListBugsQuery } from "@dsh-forge/lib-api/dto/bugs";
+import type { DiagLevel } from "@dsh-forge/lib-api/diag";
+import type { ForgePluginEvent, ForgeSettingsService, TriageDecidedPayload, TriageOutcomePayload } from "@dsh-forge/lib-api/dto/forge";
+import type { TaskType } from "@dsh-forge/lib-api/labels";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { HALT_THRESHOLD, HALTED_REASON } from "../dispatch-core/index.js";

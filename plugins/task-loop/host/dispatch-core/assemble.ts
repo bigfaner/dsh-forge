@@ -10,17 +10,10 @@
 // bug 三动词（recordBug/resolveBug/
 // getBug）为跨域条件段：project bugs 服务在场现查（调用期求值，检测结果不缓存——AGENTS 1.6）
 // 在场才并入 essentials；缺席 = warn 留痕 + 剔除 + emitDiag。deny 矩阵两档位同构。
-import type { TaskType, WorkerToolFamily } from "@dsh-forge/contracts";
-import {
-  globalToolNamesOfToolsFace as readToolNamesOfToolsFace,
-  intersectToolNames,
-  probeIsSubdomain,
-  WORKER_GLOBAL_DENY_TOOLS,
-  WORKER_TASK_FAMILY_BY_TYPE,
-  WORKER_TOOL_FAMILIES,
-  WORKER_TOOL_MATRIX,
-  WORKER_TOOL_NAME_FAMILY,
-} from "@dsh-forge/contracts";
+import type { TaskType } from "@dsh-forge/lib-api/labels";
+import type { WorkerToolFamily } from "@dsh-forge/lib-api/worker-matrix";
+import { globalToolNamesOfToolsFace as readToolNamesOfToolsFace, intersectToolNames, probeIsSubdomain } from "@dsh-forge/lib-api/tool-projection";
+import { WORKER_GLOBAL_DENY_TOOLS, WORKER_TASK_FAMILY_BY_TYPE, WORKER_TOOL_FAMILIES, WORKER_TOOL_MATRIX, WORKER_TOOL_NAME_FAMILY } from "@dsh-forge/lib-api/worker-matrix";
 import type { ForgeDiagEmitFace, WorkerRouteProfile } from "../faces.js";
 
 /**
@@ -33,17 +26,13 @@ export const globalToolNamesOfToolsFace = readToolNamesOfToolsFace;
 
 // 工具注册面投影/求交族单源 re-export（bug a5b12254 集中化——contracts tool-projection.ts；
 // 既有消费面 import 路径零变化）：金丝雀守卫 / shell 同族候选 / 探针可信判定。
-export { PROBE_CANARY_TOOL, probeIsSubdomain, SHELL_TOOL_CANDIDATES } from "@dsh-forge/contracts";
+export { PROBE_CANARY_TOOL, probeIsSubdomain, SHELL_TOOL_CANDIDATES } from "@dsh-forge/lib-api/tool-projection";
 
 // agentOptions 折叠族单源 re-export（架构裁决 verification-report §5.1 ⑤ 最小增量——
 // contracts subagent-assemble.ts；既有消费面 import 路径零变化，行为逐字等价）：
 // workerAgentOptionsOf（三级 first-def 折叠公式）/ reconcileWorkerReasoning（异步纯折叠，
 // resolveModelReasoning 注入依赖）/ WorkerRouteLevel（路由级形状）。
-export {
-  reconcileWorkerReasoning,
-  workerAgentOptionsOf,
-  type WorkerRouteLevel,
-} from "@dsh-forge/contracts";
+export { reconcileWorkerReasoning, workerAgentOptionsOf, type WorkerRouteLevel } from "@dsh-forge/lib-api/subagent-assemble";
 
 /**
  * worker 面禁入的 forge 动词（矩阵 forge 族 = WORKER_FORGE_TOOLS 动词——submitTask +

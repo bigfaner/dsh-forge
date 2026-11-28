@@ -11,7 +11,7 @@ import { deriveDirName } from "@dsh-forge/lib-path";
 import { assembleTaskLoopServices } from "../../host/assembly/default-assembly.js";
 import { assembleTaskLoopToolFamily } from "../../host/assembly/tool-family.js";
 import { forgeLogFileOf, readForgeEventLog } from "../../host/events/log-listener.js";
-import type { ForgePluginEvent } from "@dsh-forge/contracts";
+import type { ForgePluginEvent } from "@dsh-forge/lib-api/dto/forge";
 
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), "task-loop-events-"));

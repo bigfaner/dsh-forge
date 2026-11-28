@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ForgePluginEvent } from "@dsh-forge/contracts";
+import type { ForgePluginEvent } from "@dsh-forge/lib-api/dto/forge";
 import { attachForgeLogListener, forgeLogFileOf, readForgeEventLog } from "../../host/events/log-listener.js";
 import { createForgeEventBus } from "../../host/events/bus.js";
 import { createForgeEventSink, emitToolError, slugOfToolArgs } from "../../host/events/sink.js";

@@ -6,7 +6,7 @@
 // 判别口径：code ∈ contracts ERROR_CODES（跨 IPC/序列化附载后仍可识别——与
 // isWorkspaceNotRegisteredError 同以 code 承载）；无 code 的意外错误（装配 bug/
 // 参数形状防御收窄抛出的普通 Error）不吞——原样重抛保持 fail-loud。
-import { ERROR_CODES, type ErrorCode } from "@dsh-forge/contracts";
+import { ERROR_CODES, type ErrorCode } from "@dsh-forge/lib-api/errors";
 import type { TextContentBlock } from "../faces.js";
 
 /** tool 失败 DTO（typed 服务错误的返回面形态——render 判别分支） */

@@ -21,7 +21,7 @@ import type { LoopCheckpointsFace, LoopDriverDeps } from '../../host/loop/index.
 import { createNarrator } from '../../host/notify/index.js'
 import type { NarrationChannel, Narrator } from '../../host/notify/index.js'
 import type { ForgeEventSink } from '../../host/events/sink.js'
-import type { ForgePluginEvent } from '@dsh-forge/contracts'
+import type { ForgePluginEvent } from '@dsh-forge/lib-api/dto/forge'
 import type { SpawnWorker, SpawnWorkerHandle } from '../../host/dispatch-core/index.js'
 import { resetExclusiveLoopSources } from '../../host/dispatch-core/index.js'
 

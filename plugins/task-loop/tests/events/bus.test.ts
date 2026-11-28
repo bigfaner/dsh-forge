@@ -3,7 +3,7 @@
 // events.ts 桥推送同纪律）。零上游 import 面由 boundaries.test.ts pin（deps 恒
 // contracts + path-key），此处不重复。
 import { describe, expect, it, vi } from "vitest";
-import type { ForgePluginEvent } from "@dsh-forge/contracts";
+import type { ForgePluginEvent } from "@dsh-forge/lib-api/dto/forge";
 import { assertForgeEventEnvelope, createForgeEventBus } from "../../host/events/bus.js";
 
 /** 合法事件基线（no-ready-task 最小载荷）；overrides 覆盖单字段构造非法变体

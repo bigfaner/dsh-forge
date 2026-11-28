@@ -10,7 +10,7 @@ import {
   recurrenceCandidateLines,
 } from "../dispatch-core/index.js";
 import type { PoolSnapshot } from "../dispatch-core/index.js";
-import type { BugRecurrenceCandidate } from "@dsh-forge/contracts";
+import type { BugRecurrenceCandidate } from "@dsh-forge/lib-api/dto/forge";
 import type { TaskBlockClassification, TaskRecordEntry, TaskSnapshot } from "../domain/tasks/types.js";
 
 /** fix 链深余量（改进 6④——driver 沿 sourceTask 链现算；缺席 = 链数据不可得，退化现状） */

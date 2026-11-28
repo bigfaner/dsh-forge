@@ -3,12 +3,9 @@
 // source_kind 对应表在场校验一并退役（slug = 通用执行容器弱引用，无容器主表可命中校验）；
 // TaskNotFoundData 作用域字段 featureSlug → containerSlug。code 字面量沿用 contracts
 // ERROR_CODES 词汇（跨 IPC 以 code 判别；类名/name 手写字面量）。
-import type {
-  AcNotMetData,
-  TaskRef,
-  TaskStatus,
-  TestEvidenceRequiredData,
-} from "@dsh-forge/contracts";
+import type { AcNotMetData, TestEvidenceRequiredData } from "@dsh-forge/lib-api/errors";
+import type { TaskRef } from "@dsh-forge/lib-api/dto/forge";
+import type { TaskStatus } from "@dsh-forge/lib-api/labels";
 import type { DiagEventPayload } from "./types.js";
 
 /** 校验面（Interface 10）：human = 八态 − 当前态；agent = claim/submit 转移矩阵 */

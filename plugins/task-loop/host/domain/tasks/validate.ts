@@ -6,7 +6,7 @@
 // 保留检查：① 同容器边约束 / ② cycle / ③ liveness / ④ record-chain / ⑤ topology。
 // 子图口径：该容器全部 tasks（project_key+slug 归属）/ edges（等待方 ∈ 子图）/ records。
 import type Database from "@dsh-forge/lib-db";
-import type { Violation } from "@dsh-forge/contracts";
+import type { Violation } from "@dsh-forge/lib-api/dto/forge";
 import { CycleDetectedError } from "./errors.js";
 import { SATISFYING_TASK_STATUSES } from "./state-machine.js";
 import type { TaskStatus, TaskType, TasksVerbDeps } from "./types.js";

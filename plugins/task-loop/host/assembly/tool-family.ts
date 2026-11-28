@@ -31,7 +31,7 @@ import { join } from "node:path";
 import { taskLogsDirOf } from "../domain/tasks/task-logs-dir.js";
 import { createSettleReportRecovery, type LastSettlementView, type SettleReportRecoveryDeps } from "../dispatch-core/settle.js";
 import { createSettlementRepo, type SettlementEvidence } from "../db/repositories/settlement-repo.js";
-import { createUnionToolNamesProbe, type AgentPresetsFace, type ToolsSchemasReader } from "@dsh-forge/contracts";
+import { createUnionToolNamesProbe, type AgentPresetsFace, type ToolsSchemasReader } from "@dsh-forge/lib-api/tool-projection";
 import {
   adaptAgentNarrationChannel,
   createDiagEmitter,

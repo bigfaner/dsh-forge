@@ -2,7 +2,7 @@
 // 内联，文案逐字直迁）。本文件只保留 forge 程序段：恒定核心段、反搅动锚 ×7、Coding/Testing
 // Strategy 共享段、复杂度分级保底门。档案人格段由 claim 链经注入的档案取用面取得。
 // 文案语言裁决（2026-10-12）：除术语外一律中文；行文统一祈使句分点风格。
-import { TASK_TYPES } from "@dsh-forge/contracts";
+import { TASK_TYPES } from "@dsh-forge/lib-api/labels";
 import type { TaskType } from "../types.js";
 
 /** 复杂度分级（保底门第二维；low 裁剪只触及保底门分级，不触及核心段与 AC 核查） */

@@ -1,6 +1,6 @@
 // 读面（list/query/stats/graph/detail/session-links）+ phase-gate 随迁测试（plugin-task-loop 1.7）。
 import { beforeEach, describe, expect, it } from "vitest";
-import { TASK_STATUS_LABELS } from "@dsh-forge/contracts";
+import { TASK_STATUS_LABELS } from "@dsh-forge/lib-api/labels";
 import { addTask } from "../../host/domain/tasks/add.js";
 import { claimTask } from "../../host/domain/tasks/claim.js";
 import {

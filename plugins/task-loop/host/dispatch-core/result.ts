@@ -4,7 +4,7 @@
 // 共享形状独立声明，结构兼容双向可赋值。
 // 容器语义 slug 化：TaskRef/TaskType 用本插件域层（host/domain/tasks/types.ts）；
 // mode 快照随容器双轨退役（slug 化终态——键退役）。
-import type { ErrorCode } from "@dsh-forge/contracts";
+import type { ErrorCode } from "@dsh-forge/lib-api/errors";
 import type { TaskRef, TaskType } from "../domain/tasks/types.js";
 import type { PoolSnapshot } from "./pool.js";
 

@@ -9,8 +9,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import type { DocContent } from "@dsh-forge/contracts";
-import { DOCS_CHANNELS } from "@dsh-forge/contracts";
+import type { DocContent } from "@dsh-forge/lib-api/dto/forge";
+import { DOCS_CHANNELS } from "@dsh-forge/lib-api/channels";
 import { createForgeRpcClient, type ForgeRpcClient } from "../../../ui/dock-tabs/rpc-channels.js";
 import { RpcClientError } from "../../../ui/dock-tabs/rpc-channels.js";
 import {

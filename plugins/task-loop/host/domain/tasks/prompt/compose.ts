@@ -11,7 +11,7 @@
 // slug 化退役面：SOURCE 行退役（容器即 slug——与 TASK_ID 冗余）；PHASE_SUMMARY 行退役
 // （feature 相位机数据源已断）；VARS → CONTEXT 行两级更名终态；`<goal>` 包裹撤除。
 // 定位铁律：纯函数禁 IO（BLOCKERS 等动态值由调用方领取瞬间取数注入）。
-import { TASK_TYPES } from "@dsh-forge/contracts";
+import { TASK_TYPES } from "@dsh-forge/lib-api/labels";
 import type { TaskPrerequisiteSummary, TaskScope, TaskType } from "../types.js";
 
 // ─────────────────────────── CATEGORY 映射 ───────────────────────────
