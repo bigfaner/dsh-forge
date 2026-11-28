@@ -415,8 +415,9 @@ export function verifyBundleClosure(bundleDir, { repoRoot = REPO_ROOT } = {}) {
     for (const rel of srcPkg.files ?? []) {
       if (!existsSync(join(entry.sourceDir, rel))) violations.push(`bundle: members/${short} files 声明条目源缺席（拷贝静默遗漏）：${rel}`)
     }
-    // skills 锚目录在场（交付 patch skills 行 customSkillDirs 自锚 members/<pkg>/skills——目录缺席锚落空）
-    if (!existsSync(join(dir, 'skills'))) violations.push(`bundle: members/${short} skills 锚目录缺席（交付 patch skills 行自锚落空）`)
+    // skills 锚目录在场（成员 files[] 声明 skills 即交付 patch skills 行 customSkillDirs 自锚
+    // members/<pkg>/skills——目录缺席锚落空；未声明 skills 的成员零技能，不设锚）
+    if ((srcPkg.files ?? []).includes('skills') && !existsSync(join(dir, 'skills'))) violations.push(`bundle: members/${short} skills 锚目录缺席（交付 patch skills 行自锚落空）`)
     for (const relFile of listFilesRel(entry.sourceDir).filter((f) => (srcPkg.files ?? []).some((e) => f === e || f.startsWith(`${e}/`)))) {
       if (!existsSync(join(dir, relFile))) violations.push(`bundle: members/${short} 闭包拷贝遗漏：${relFile}`)
     }

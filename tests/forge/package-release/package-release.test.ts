@@ -398,6 +398,17 @@ describe('自包含 bundle 交付目录（forge-aggregate-bundle 1.16——stagi
     expect(violations.some((v) => v.includes('members/alpha') && v.includes('skills 锚目录缺席'))).toBe(true)
   })
 
+  it('正例·成员 files[] 未声明 skills（零技能成员）：skills 目录缺席不设锚、不红', () => {
+    const betaPkgPath = join(root, 'plugins', 'beta', 'package.json')
+    const beta = JSON.parse(readFileSync(betaPkgPath, 'utf8'))
+    beta.files = beta.files.filter((entry) => entry !== 'skills')
+    writeFileSync(betaPkgPath, JSON.stringify(beta, null, 2))
+    assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
+    expect(existsSync(join(outDir, 'bundle/members/beta/skills'))).toBe(false)
+    const violations = verifyBundleClosure(join(outDir, 'bundle'), { repoRoot: root })
+    expect(violations.some((v) => v.includes('members/beta') && v.includes('skills 锚目录缺席'))).toBe(false)
+  })
+
   it('反例·依赖指称树外：file: 指向 members 外目录即红（staging 孤立复发构造）', () => {
     assembleRelease({ repoRoot: root, outDir, zip: false, freshness: false })
     const forgePath = join(outDir, 'bundle/package.json')

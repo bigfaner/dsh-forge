@@ -264,9 +264,10 @@ describe("forge patch 六插行（静态直检——直写正本）", () => {
     expect(FORGE_PATCH).toContain("providerName: filesystem-forge");
     const anchorStart = FORGE_PATCH.indexOf("- id: skill-filesystem-forge");
     const instanceBody = FORGE_PATCH.slice(anchorStart);
-    // 混合锚形态：五成员锚逐件 IIFE try/catch 双腿形（baseUrl 解析优先 + DSH_HOME
-    // generation 探测兜底，desktop profile 根 baseUrl 必失败落兜底），零裸 throw
-    for (const member of MEMBERS) {
+    // 混合锚形态：四成员锚逐件 IIFE try/catch 双腿形（baseUrl 解析优先 + DSH_HOME
+    // generation 探测兜底，desktop profile 根 baseUrl 必失败落兜底），零裸 throw；
+    // project 零技能（skills/ 目录不在场）——子树实例零 project 锚
+    for (const member of MEMBERS.filter((m) => !(TOP_ZERO as readonly string[]).includes(m))) {
       const expr = instanceBody.split("\n").find((l) => l.includes(`'@dsh-forge/${member}/package.json'`));
       expect(typeof expr, `${member} 锚行在场`).toBe("string");
       expect(expr, `${member} IIFE try/catch 形`).toMatch(/\(\(\)=>\{try\{return .+catch\(e\)\{/);
@@ -274,6 +275,9 @@ describe("forge patch 六插行（静态直检——直写正本）", () => {
       expect(expr, `${member} DSH_HOME generation 探测兜底腿`).toContain("process.env.DSH_HOME");
       expect(expr, `${member} generation 目录前缀探测`).toContain("dsh-forge+forge+");
       expect(expr, `${member} 零裸 throw`).not.toContain("throw ");
+    }
+    for (const member of TOP_ZERO) {
+      expect(instanceBody.split("\n").some((l) => l.includes(`'@dsh-forge/${member}/package.json'`)), `${member} 零技能——子树实例零 ${member} 锚`).toBe(false);
     }
   });
 });
